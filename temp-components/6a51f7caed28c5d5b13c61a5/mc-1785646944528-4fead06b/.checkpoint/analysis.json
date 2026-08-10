@@ -1,0 +1,173 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 82,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[0].body.children[0].children[*].children",
+        "message": "统计卡片（stat-tunnel/stat-bridge）内部的 label 和 value 使用了嵌套节点（type: label/value），增加了不必要的 DOM 深度和渲染层级。",
+        "suggestion": "建议将 label 和 value 提升为 stat-card 的直接属性（如 { label: '...', value: '...' }），在代码生成时直接渲染为文本，减少嵌套层级。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0].body.children[0] & layout.sections[1].body.children[*].body",
+        "message": "装饰图标（center-icon/icon）与统计卡片/数据项并列放置在 horizontal 布局中。在实际 flex 布局中，这会破坏等分布局（flex: 1），导致两侧内容宽度不一致或挤压。",
+        "suggestion": "建议将装饰图标改为绝对定位（absolute）或作为背景图；或者在布局中明确图标为固定宽度，两侧内容使用 flex: 1 自适应，避免布局错乱。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[0]",
+        "message": "流量预测区域的图表直接作为 body.children 节点，而当日总流量区域的图表被包裹在 chart-container（包含 header/body）中，组件内部图表结构不一致。",
+        "suggestion": "建议统一图表容器的结构规范。要么都使用 chart-container 包裹（便于统一管理图表标题和控件），要么都直接作为 body 的子节点。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[*].body.children[1]",
+        "message": "车型分布区域使用了 icon 作为装饰块，但 summary 中提到有'环形图表装饰'。如果设计稿中实际是环形图/饼图，仅用静态 icon 无法实现图表交互和数据展示。",
+        "suggestion": "如果设计稿中是环形图，建议将 type 改为 chart，chartType 设为 pie 或 doughnut，并补充相应的图表配置（如 series, legend 等）。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "chartDataHints[*].labels",
+        "message": "chartDataHints 中的 labels 包含了大量非图表坐标轴的文本（如'24小时'、'当日总流量'、'江阴大桥'等），这会导致生成代码时图表 X/Y 轴数据错误。",
+        "suggestion": "需要清洗 chartDataHints 数据，确保 labels 仅包含图表 X/Y 轴的实际刻度标签（如 0, 2, 4... 或 16时），values 仅包含对应的数据点数值。"
+      }
+    ],
+    "recommendations": [
+      "在代码生成阶段，严格遵守'宽度自适应约束'，对 stats-row 和 vehicle 布局使用 flex: 1，禁止使用固定 px 宽度，确保组件在不同屏幕下自适应。",
+      "确保所有 Tab（如地点切换）和 Select（如24小时）控件在代码中实现数据联动（watch 监听并更新 ECharts 数据），而不仅仅是样式切换。",
+      "清理 chartDataHints 中的冗余文本，确保 ECharts 配置中的 xAxis.data 和 series.data 准确无误，避免图表渲染异常。"
+    ],
+    "summary": "布局结构整体清晰，区域划分合理，能够支撑微码组件的生成需求，且正确识别了面板标题、下拉框和 Tab 等交互元素。但在局部细节上存在嵌套过深、装饰元素可能破坏 flex 布局、以及图表数据结构不一致的问题。此外，数据提示（chartDataHints）中存在较多冗余文本，需在代码生成前进行清洗。整体评价为良好，修正上述问题后可达到优秀标准。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1990ff",
+      "--colorWarning": "#fa8c16",
+      "--colorTextBase": "#333333",
+      "--colorBg": "#edf4fb",
+      "--colorSuccess": "#52c41a",
+      "--fontSize": "14px",
+      "--fontSizeLarge": "28px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#1990ff",
+      "@color-warning": "#fa8c16",
+      "@color-text-base": "#333333",
+      "@color-bg": "#edf4fb",
+      "@color-success": "#52c41a",
+      "@font-size-base": "14px",
+      "@font-size-large": "28px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "width": "100%",
+        "height": "100%",
+        "background-color": "var(--colorBg, #edf4fb)",
+        "color": "var(--colorTextBase, #333333)",
+        "font-size": "var(--fontSize, 14px)"
+      },
+      ".header-section": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "8px",
+        "padding": "16px"
+      },
+      ".diamond-icon": {
+        "width": "12px",
+        "height": "12px",
+        "background-color": "var(--colorPrimary, #1990ff)",
+        "transform": "rotate(45deg)"
+      },
+      ".stat-value": {
+        "font-size": "var(--fontSizeLarge, 28px)",
+        "font-weight": "bold",
+        "color": "var(--colorPrimary, #1990ff)",
+        "line-height": "1.2"
+      },
+      ".accuracy-text": {
+        "color": "var(--colorSuccess, #52c41a)",
+        "font-weight": "600"
+      },
+      ".center-glow-icon": {
+        "position": "absolute",
+        "top": "50%",
+        "left": "50%",
+        "transform": "translate(-50%, -50%)",
+        "filter": "drop-shadow(0 0 8px rgba(25, 144, 255, 0.6))"
+      },
+      ".ring-chart-decoration": {
+        "border": "2px solid var(--colorPrimary, #1990ff)",
+        "border-radius": "50%",
+        "opacity": "0.2"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 #1990ff 映射为 --colorPrimary，用于大号数值和主要装饰",
+      "背景色 #edf4fb 映射为 --colorBg，作为整体容器背景",
+      "基础文字色 #333333 映射为 --colorTextBase",
+      "绿色 #52c41a 映射为 --colorSuccess，专门用于准确率等正向指标文字",
+      "橙色 #fa8c16 映射为 --colorWarning，可用于辅助提示或次要数据",
+      "大号数值使用 --fontSizeLarge 和 --colorPrimary 组合强调",
+      "菱形图标通过 CSS transform rotate(45deg) 实现，背景色使用主色调"
+    ],
+    "elementStyleMap": {
+      "daily-total-flow": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-bridge": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stats-row": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "chart-tunnel-hourly": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "chart-bridge-hourly": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-type-distribution": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-bridge": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "flow-prediction": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "accuracy-stats": {
+        "display": "flex",
+        "flex-direction": "row"
+      }
+    }
+  }
+}

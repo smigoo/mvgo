@@ -1,0 +1,103 @@
+{
+  "stage": "codegen_done",
+  "brief": {
+    "layout": "垂直布局，从上到下依次为标题栏、数据表格、详情区域。详情区域内部为左右布局，左侧为文本信息，右侧为图片。整体居中对齐。",
+    "regions": [
+      {
+        "name": "标题栏",
+        "description": "包含标题'运单信息'、标签'苏A 12345'和关闭按钮",
+        "position": "top",
+        "size": "宽度100%，高度约10%"
+      },
+      {
+        "name": "数据表格",
+        "description": "展示运单列表，包含表头和三行数据",
+        "position": "center-top",
+        "size": "宽度100%，高度约35%"
+      },
+      {
+        "name": "详情区域",
+        "description": "包含'运单详情'标题，左侧为详细文本信息，右侧为车辆监控图片",
+        "position": "bottom",
+        "size": "宽度100%，高度约55%"
+      }
+    ],
+    "spacing": {
+      "outer": "弹窗四周有少量边距",
+      "gap": "各区域之间间距适中，表格行间距紧凑，详情文本行间距适中",
+      "padding": "各区域内部有适当的内边距"
+    },
+    "colors": {
+      "primary": "#00ffff",
+      "background": "#001a1a",
+      "surface": "#003333",
+      "text": "#ffffff",
+      "border": "#006666"
+    },
+    "typography": {
+      "size": "标题字号较大(约18px)，表头字号中等(约14px)，正文和表格内容字号较小(约12px)",
+      "weight": "标题和表头字重较粗，正文常规字重",
+      "lineHeight": "行高适中，保证阅读清晰度"
+    },
+    "components": [
+      "表格",
+      "文本标签",
+      "图片",
+      "关闭按钮"
+    ],
+    "textContent": [
+      "运单信息",
+      "苏A 12345",
+      "运单编号",
+      "危化品名称",
+      "超运地",
+      "实际发车时间",
+      "目的地",
+      "预计到达时间",
+      "满载情况",
+      "运输状态",
+      "3203502388...",
+      "烟花",
+      "江阴",
+      "2023-11-22 06:20:46",
+      "靖江",
+      "--",
+      "满载",
+      "在途",
+      "硫酸",
+      "无锡",
+      "泰州",
+      "2023-11-20 06:20:46",
+      "2023-11-19 06:20:46",
+      "运单详情",
+      "起运地 江苏省无锡市江阴市",
+      "分类名称 危险品(1类4项)",
+      "运输里程 200(KM)",
+      "发车时间 2023-11-22 06:20:46",
+      "满载情况 满载货物",
+      "驾驶员姓名 张悦",
+      "备注 栖霞大道浦口104国道桥宁马高速路路二桥百水桥栖霞大道",
+      "目的地 江苏省泰州市靖江市",
+      "预计到达时间 2023-11-22 12:04:21",
+      "总重量 9.8(吨)",
+      "驾驶员电话 13955086495"
+    ],
+    "visualDetails": [
+      "深色主题界面",
+      "表格行有交替背景色或悬停高亮效果(第一行高亮)",
+      "详情区域左侧文本分两列排列",
+      "右侧图片为监控截图，包含时间戳和车牌信息",
+      "标题栏左侧有菱形图标"
+    ],
+    "interactions": [
+      "关闭按钮(右上角)",
+      "表格行(可能支持点击或悬停)"
+    ]
+  },
+  "width": 796,
+  "height": 486,
+  "sourceType": "screenshot",
+  "componentType": "vue3",
+  "generationTier": "lite",
+  "vueCode": "<template>\n  <div class=\"container\">\n    <!-- 标题栏 -->\n    <div class=\"header\">\n      <div class=\"header-left\">\n        <span class=\"icon-diamond\"></span>\n        <span class=\"title\">运单信息</span>\n        <span class=\"tag\">苏A 12345</span>\n      </div>\n      <div class=\"header-right\">\n        <button class=\"close-btn\">×</button>\n      </div>\n    </div>\n\n    <!-- 数据表格 -->\n    <div class=\"table-section\">\n      <a-table\n        :columns=\"columns\"\n        :data-source=\"tableData\"\n        :pagination=\"false\"\n        row-key=\"id\"\n        :row-class-name=\"rowClassName\"\n        class=\"custom-table\"\n      />\n    </div>\n\n    <!-- 详情区域 -->\n    <div class=\"detail-section\">\n      <div class=\"detail-title\">\n        <span class=\"icon-diamond-small\"></span>\n        运单详情\n      </div>\n      \n      <div class=\"detail-content\">\n        <div class=\"detail-info\">\n          <div class=\"info-row\">\n            <div class=\"info-item\">\n              <span class=\"label\">起运地</span>\n              <span class=\"value\">江苏省无锡市江阴市</span>\n            </div>\n            <div class=\"info-item\">\n              <span class=\"label\">危险品名称</span>\n              <span class=\"value\">烟花</span>\n            </div>\n          </div>\n          <div class=\"info-row\">\n            <div class=\"info-item\">\n              <span class=\"label\">分类名称</span>\n              <span class=\"value\">危险品(1类4项)</span>\n            </div>\n            <div class=\"info-item\">\n              <span class=\"label\">目的地</span>\n              <span class=\"value\">江苏省泰州市靖江市</span>\n            </div>\n          </div>\n          <div class=\"info-row\">\n            <div class=\"info-item\">\n              <span class=\"label\">运输里程</span>\n              <span class=\"value\">200(KM)</span>\n            </div>\n            <div class=\"info-item empty\"></div>\n          </div>\n          <div class=\"info-row\">\n            <div class=\"info-item\">\n              <span class=\"label\">发车时间</span>\n              <span class=\"value\">2023-11-22 06:20:46</span>\n            </div>\n            <div class=\"info-item\">\n              <span class=\"label\">预计到达时间</span>\n              <span class=\"value\">2023-11-22 12:04:21</span>\n            </div>\n          </div>\n          <div class=\"info-row\">\n            <div class=\"info-item\">\n              <span class=\"label\">满载情况</span>\n              <span class=\"value\">满载货物</span>\n            </div>\n            <div class=\"info-item\">\n              <span class=\"label\">总重量</span>\n              <span class=\"value\">9.8(吨)</span>\n            </div>\n          </div>\n          <div class=\"info-row\">\n            <div class=\"info-item\">\n              <span class=\"label\">驾驶员姓名</span>\n              <span class=\"value\">张悦</span>\n            </div>\n            <div class=\"info-item\">\n              <span class=\"label\">驾驶员电话</span>\n              <span class=\"value\">13955086495</span>\n            </div>\n          </div>\n          <div class=\"info-row full-width\">\n            <div class=\"info-item\">\n              <span class=\"label\">备注</span>\n              <span class=\"value\">栖霞大道浦口104国道桥宁马高速路路二桥百水桥栖霞大道</span>\n            </div>\n          </div>\n        </div>\n        \n        <div class=\"detail-image-wrapper\">\n          <div class=\"monitor-image\">\n            <!-- 模拟监控图片内容 -->\n            <div class=\"img-overlay-top\">\n              <span>苏A12345 宁马高速K...</span>\n              <span>2023年11月22日 08:27:47.057</span>\n            </div>\n            <div class=\"img-content\">\n               <div class=\"truck-red\"></div>\n               <div class=\"truck-white\"></div>\n            </div>\n            <div class=\"img-overlay-bottom\">\n              <span>黄 苏APM32</span>\n            </div>\n          </div>\n        </div>\n      </div>\n    </div>\n  </div>\n</template>\n\n<script setup>\nimport { Table as ATable } from 'ant-design-vue';\n\nconst columns = [\n  { title: '运单编号', dataIndex: 'id', key: 'id' },\n  { title: '危化品名称', dataIndex: 'name', key: 'name' },\n  { title: '超运地', dataIndex: 'origin', key: 'origin' },\n  { title: '实际发车时间', dataIndex: 'startTime', key: 'startTime' },\n  { title: '目的地', dataIndex: 'dest', key: 'dest' },\n  { title: '预计到达时间', dataIndex: 'eta', key: 'eta' },\n  { title: '满载情况', dataIndex: 'loadStatus', key: 'loadStatus' },\n  { title: '运输状态', dataIndex: 'status', key: 'status' },\n];\n\nconst tableData = [\n  {\n    id: '3203502388...',\n    name: '烟花',\n    origin: '江阴',\n    startTime: '2023-11-22 06:20:46',\n    dest: '靖江',\n    eta: '--',\n    loadStatus: '满载',\n    status: '在途',\n  },\n  {\n    id: '3203502388...',\n    name: '硫酸',\n    origin: '无锡',\n    startTime: '2023-11-20 06:20:46',\n    dest: '泰州',\n    eta: '--',\n    loadStatus: '满载',\n    status: '在途',\n  },\n  {\n    id: '3203502388...',\n    name: '硫酸',\n    origin: '江阴',\n    startTime: '2023-11-19 06:20:46',\n    dest: '靖江',\n    eta: '--',\n    loadStatus: '满载',\n    status: '在途',\n  },\n];\n\nconst rowClassName = (record, index) => {\n  return index === 0 ? 'highlight-row' : '';\n};\n</script>\n\n<style scoped>\n:root {\n  --bg-color: #001a1a;\n  --surface-color: #003333;\n  --border-color: #006666;\n  --text-color: #ffffff;\n  --primary-color: #00ffff;\n  --highlight-bg: #004d4d;\n  --tag-bg: #d4a017; /* 近似黄色/金色 */\n  --tag-text: #000000;\n}\n\n.container {\n  background-color: #002222; /* 整体背景 */\n  color: #ffffff;\n  font-family: sans-serif;\n  padding: 10px;\n  width: 100%;\n  box-sizing: border-box;\n  min-height: 600px;\n  display: flex;\n  flex-direction: column;\n}\n\n/* 标题栏 */\n.header {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  background: linear-gradient(to bottom, #004444, #002222);\n  padding: 10px 15px;\n  border-bottom: 1px solid #006666;\n  margin-bottom: 15px;\n}\n\n.header-left {\n  display: flex;\n  align-items: center;\n  gap: 10px;\n}\n\n.icon-diamond {\n  width: 8px;\n  height: 8px;\n  background-color: #ffffff;\n  transform: rotate(45deg);\n  display: inline-block;\n}\n\n.title {\n  font-size: 18px;\n  font-weight: bold;\n  color: #ffffff;\n}\n\n.tag {\n  background-color: #d4a017; /* 苏A标签颜色 */\n  color: #000;\n  padding: 2px 8px;\n  border-radius: 2px;\n  font-size: 14px;\n  font-weight: bold;\n}\n\n.close-btn {\n  background: transparent;\n  border: 1px solid #006666;\n  color: #ffffff;\n  font-size: 16px;\n  cursor: pointer;\n  width: 24px;\n  height: 24px;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  border-radius: 2px;\n}\n\n.close-btn:hover {\n  background-color: #004444;\n}\n\n/* 表格区域 */\n.table-section {\n  margin-bottom: 20px;\n  background-color: #002b2b;\n  border: 1px solid #004444;\n}\n\n/* 覆盖 Ant Design 表格样式以匹配深色主题 */\n:deep(.ant-table) {\n  background-color: transparent;\n  color: #ffffff;\n}\n\n:deep(.ant-table-thead > tr > th) {\n  background-color: #004444;\n  color: #ffffff;\n  border-bottom: 1px solid #006666;\n  font-weight: bold;\n  text-align: center;\n}\n\n:deep(.ant-table-tbody > tr > td) {\n  background-color: #002222;\n  border-bottom: 1px solid #003333;\n  text-align: center;\n  color: #cccccc;\n}\n\n:deep(.ant-table-tbody > tr.highlight-row > td) {\n  background-color: #005555 !important; /* 第一行高亮 */\n  color: #ffffff;\n}\n\n:deep(.ant-table-tbody > tr:hover > td) {\n  background-color: #004444 !important;\n}\n\n/* 详情区域 */\n.detail-section {\n  flex: 1;\n  display: flex;\n  flex-direction: column;\n}\n\n.detail-title {\n  font-size: 16px;\n  font-weight: bold;\n  margin-bottom: 15px;\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  color: #ffffff;\n}\n\n.icon-diamond-small {\n  width: 6px;\n  height: 6px;\n  background-color: #ffffff;\n  transform: rotate(45deg);\n  display: inline-block;\n}\n\n.detail-content {\n  display: flex;\n  gap: 20px;\n  background-color: #001a1a;\n  padding: 10px;\n  border: 1px solid #003333;\n}\n\n.detail-info {\n  flex: 2;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n}\n\n.info-row {\n  display: flex;\n  gap: 40px; /* 列间距 */\n}\n\n.info-row.full-width {\n  margin-top: 10px;\n}\n\n.info-item {\n  flex: 1;\n  display: flex;\n  font-size: 13px;\n  line-height: 1.5;\n}\n\n.info-item.empty {\n  visibility: hidden;\n}\n\n.label {\n  color: #aaaaaa;\n  margin-right: 10px;\n  min-width: 80px;\n}\n\n.value {\n  color: #ffffff;\n}\n\n.detail-image-wrapper {\n  flex: 1;\n  display: flex;\n  justify-content: flex-end;\n  align-items: flex-start;\n}\n\n.monitor-image {\n  width: 100%;\n  max-width: 300px;\n  height: 200px;\n  background-color: #000000;\n  border: 1px solid #ffffff;\n  position: relative;\n  overflow: hidden;\n  display: flex;\n  flex-direction: column;\n}\n\n/* 模拟图片内容 */\n.img-overlay-top {\n  position: absolute;\n  top: 0;\n  left: 0;\n  right: 0;\n  background: rgba(0,0,0,0.5);\n  color: #fff;\n  font-size: 10px;\n  padding: 2px 5px;\n  display: flex;\n  justify-content: space-between;\n  z-index: 2;\n}\n\n.img-content {\n  flex: 1;\n  background: #333; /* 路面颜色 */\n  position: relative;\n  display: flex;\n  justify-content: center;\n  align-items: center;\n  gap: 20px;\n}\n\n/* 模拟卡车 */\n.truck-red {\n  width: 60px;\n  height: 80px;\n  background-color: #a52a2a;\n  border-radius: 4px;\n  position: relative;\n}\n.truck-red::after {\n  content: '';\n  position: absolute;\n  top: 10px; left: 10px; right: 10px; height: 20px;\n  background: #000; /* 挡风玻璃 */\n}\n\n.truck-white {\n  width: 40px;\n  height: 60px;\n  background-color: #eee;\n  border-radius: 4px;\n  position: relative;\n}\n.truck-white::after {\n  content: '';\n  position: absolute;\n  top: 10px; left: 5px; right: 5px; height: 15px;\n  background: #000;\n}\n\n.img-overlay-bottom {\n  position: absolute;\n  bottom: 0;\n  left: 0;\n  background: rgba(0,0,0,0.5);\n  color: #fff;\n  font-size: 10px;\n  padding: 2px 5px;\n  z-index: 2;\n}\n\n/* 道路标线模拟 */\n.img-content::before {\n  content: '';\n  position: absolute;\n  top: 0; bottom: 0;\n  left: 50%;\n  width: 2px;\n  background: #fff;\n  transform: translateX(-50%);\n}\n\n</style>"
+}

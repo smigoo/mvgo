@@ -1,0 +1,4113 @@
+{
+  "state": {
+    "href": "http://127.0.0.1:2610/preview/mv-1785691963555-bec4826c?type=vue3&groupId=6a51f7caed28c5d5b13c61a5",
+    "title": "组件预览 - 微码实施工程",
+    "status": "ready",
+    "errorType": null,
+    "stageRect": {
+      "width": 800,
+      "height": 600
+    },
+    "bodyText": "环境监测\n一氧化碳\n能见度\n洞内照明\n洞外光强\n6"
+  },
+  "consoleLogs": [
+    {
+      "type": "startGroup",
+      "text": "%cMicroCode·微码%c background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4, #feca57); background-size: 400% 400%; animation: gradient 3s ease infinite; color: white; padding: 4px 16px; border-radius: 8px; font-weight: bold; font-size: 14px; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); background: linear-gradient(45deg, #667eea, #764ba2); color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; margin-left: 8px;",
+      "location": {
+        "url": "http://127.0.0.1:2610/log/index.js?v=1785694589681",
+        "lineNumber": 22,
+        "columnNumber": 8
+      }
+    },
+    {
+      "type": "log",
+      "text": "%c版本: color: #E91E63; font-weight: bold; 当前版本：v1.0.17",
+      "location": {
+        "url": "http://127.0.0.1:2610/log/index.js?v=1785694589681",
+        "lineNumber": 23,
+        "columnNumber": 8
+      }
+    },
+    {
+      "type": "log",
+      "text": "%c环境: color: #E91E63; font-weight: bold; 生产环境",
+      "location": {
+        "url": "http://127.0.0.1:2610/log/index.js?v=1785694589681",
+        "lineNumber": 24,
+        "columnNumber": 8
+      }
+    },
+    {
+      "type": "log",
+      "text": "%c时间: color: #E91E63; font-weight: bold; 2026/8/3 02:16:29",
+      "location": {
+        "url": "http://127.0.0.1:2610/log/index.js?v=1785694589681",
+        "lineNumber": 30,
+        "columnNumber": 8
+      }
+    },
+    {
+      "type": "endGroup",
+      "text": "console.groupEnd",
+      "location": {
+        "url": "http://127.0.0.1:2610/log/index.js?v=1785694589681",
+        "lineNumber": 35,
+        "columnNumber": 8
+      }
+    },
+    {
+      "type": "debug",
+      "text": "[vite] connecting...",
+      "location": {
+        "url": "http://127.0.0.1:2610/@vite/client",
+        "lineNumber": 788,
+        "columnNumber": 8
+      }
+    },
+    {
+      "type": "debug",
+      "text": "[vite] connected.",
+      "location": {
+        "url": "http://127.0.0.1:2610/@vite/client",
+        "lineNumber": 911,
+        "columnNumber": 14
+      }
+    },
+    {
+      "type": "error",
+      "text": "Permissions policy violation: unload is not allowed in this document.",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 1201
+      }
+    },
+    {
+      "type": "log",
+      "text": "⏸️ 前端追踪已关闭（TRACING_ENABLED=false）",
+      "location": {
+        "url": "http://127.0.0.1:2610/src/utils/tracing.js",
+        "lineNumber": 195,
+        "columnNumber": 10
+      }
+    },
+    {
+      "type": "log",
+      "text": "[MvMap] Global $mapSdk registered for Vue 3",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/microvideo-map.js?v=b6d97b89",
+        "lineNumber": 25860,
+        "columnNumber": 44
+      }
+    },
+    {
+      "type": "log",
+      "text": "MvMap SDK init [object Object]",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/microvideo-map.js?v=b6d97b89",
+        "lineNumber": 143364,
+        "columnNumber": 37
+      }
+    },
+    {
+      "type": "log",
+      "text": "🎨 [Preview] 面板类型切换:  → ",
+      "location": {
+        "url": "http://127.0.0.1:2610/src/views/preview/index.vue",
+        "lineNumber": 165,
+        "columnNumber": 10
+      }
+    },
+    {
+      "type": "startGroup",
+      "text": "业务组件注册信息",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5539,
+        "columnNumber": 42
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:通用图例组,组件ID:mc-general-legend-group",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:通用图例,组件ID:mc-general-legend",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:微码样式demo组件,组件ID:c-mc-css-demo-event",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:c-mc-demo案例组件,组件ID:c-mc-demo",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:管辖范围,组件ID:mc-1784551081158-e8a04bd6",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:管辖范围,组件ID:mc-1784552183360-07177230",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:管辖范围,组件ID:mc-1784640165380-048aa5e5",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:管辖范围,组件ID:mc-1784642530978-b50cdfcc",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:mc-1784653963271-a99b5540,组件ID:mc-1784653963271-a99b5540",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:test-e2e-v2,组件ID:test-e2e-v2",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:test-e2e-v3,组件ID:test-e2e-v3",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:test-e2e-v4,组件ID:test-e2e-v4",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:mc-1784680576076-8317470b,组件ID:mc-1784680576076-8317470b",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:mc-1784688255317-d3aba4aa,组件ID:mc-1784688255317-d3aba4aa",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:mc-1784774080869-c537eb47,组件ID:mc-1784774080869-c537eb47",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:mc-1784779953514-a347f53e,组件ID:mc-1784779953514-a347f53e",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:mc-1784841909593-fb2bd4ac,组件ID:mc-1784841909593-fb2bd4ac",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:c-lljc-test,组件ID:c-lljc-test",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:mc-1784866519623-07f2451c,组件ID:mc-1784866519623-07f2451c",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:mc-1785154107233-dd52baa9,组件ID:mc-1785154107233-dd52baa9",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:mc-1785211709216-5482a61e,组件ID:mc-1785211709216-5482a61e",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:Frame 2136637714,组件ID:mc-1785216530606-8b051095",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:Frame 2136637714,组件ID:mc-1785227283098-28667766",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:Frame 2136637714,组件ID:mc-1785229659947-db5a1e80",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:cp-设备监测,组件ID:mc-1785238301016-77e87ecc",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:cp-设备监测,组件ID:mc-1785251092881-d9ef7d6d",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:cp-设备监测,组件ID:mc-1785304674750-ae730152",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:cp-设备监测,组件ID:mc-1785309141220-493d3a5e",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:96fa180f,组件ID:mc-1785342600980-96fa180f",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:da0cde23,组件ID:mc-1785390759361-da0cde23",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:7f2c4def,组件ID:mc-1785400257658-7f2c4def",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:3f758121,组件ID:mc-1785404257734-3f758121",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:c-环境监测,组件ID:c-环境监测",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:cp-设备监测,组件ID:c-设备监测",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:管辖范围,组件ID:phase2-1784537219959-fe0edc80",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:管辖范围,组件ID:phase2-1784538534188-78736980",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  组件注册成功，组件名称:管辖范围,组件ID:phase2-1784541662672-a8b60d4c",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5368,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "endGroup",
+      "text": "console.groupEnd",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5548,
+        "columnNumber": 42
+      }
+    },
+    {
+      "type": "startGroup",
+      "text": "业务图层注册信息",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5521,
+        "columnNumber": 38
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  图层组件读取成功，组件名称:lk-hn,组件标题:路况",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5341,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  图层组件读取成功，组件名称:sxj-hn,组件标题:摄像机",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5341,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  图层组件读取成功，组件名称:qbb-hn,组件标题:情报板",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5341,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  图层组件读取成功，组件名称:mj-hn,组件标题:门架",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5341,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  图层组件读取成功，组件名称:yjwz-hn,组件标题:应急物资",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5341,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  图层组件读取成功，组件名称:fwq-hn,组件标题:服务区",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5341,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  图层组件读取成功，组件名称:sfz-hn,组件标题:收费站",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5341,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  图层组件读取成功，组件名称:sn-hn,组件标题:枢纽",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5341,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  图层组件读取成功，组件名称:zyc-hn,组件标题:作业车",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5341,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  图层组件读取成功，组件名称:qzc-hn,组件标题:清障车",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5341,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  图层组件读取成功，组件名称:cxc-hn,组件标题:除雪车",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5341,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  图层组件读取成功，组件名称:xcc-hn,组件标题:巡查车",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5341,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  图层组件读取成功，组件名称:jc-hn,组件标题:警车",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5341,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  图层组件读取成功，组件名称:ql-hn,组件标题:桥梁",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5341,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  图层组件读取成功，组件名称:sd-hn,组件标题:隧道",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5341,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  图层组件读取成功，组件名称:qzc-wh,组件标题:危化品车",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5341,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  图层组件读取成功，组件名称:tq-hn,组件标题:天气",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5341,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  图层组件读取成功，组件名称:wdy-hn,组件标题:温度仪",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5341,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  图层组件读取成功，组件名称:jq-hn,组件标题:警情",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5341,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  图层组件读取成功，组件名称:wrj-hn,组件标题:无人机",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5341,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  图层组件读取成功，组件名称:sudden-hn,组件标题:突发",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5341,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  图层组件读取成功，组件名称:plan-hn,组件标题:计划",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5341,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  图层组件读取成功，组件名称:temporary-hn,组件标题:临时",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5341,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  图层组件读取成功，组件名称:gldw-hn,组件标题:管理单位",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5341,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  图层组件读取成功，组件名称:gs-zh,组件标题:桩号",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5341,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "log",
+      "text": "[%cDEBUG%c] <%cBusinessComponentStore%c>  color:green;font-weight: bold;  color:red;font-weight: bold;  图层组件读取成功，组件名称:gs-visibility,组件标题:收起",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5341,
+        "columnNumber": 19
+      }
+    },
+    {
+      "type": "endGroup",
+      "text": "console.groupEnd",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+        "lineNumber": 5525,
+        "columnNumber": 38
+      }
+    },
+    {
+      "type": "log",
+      "text": "Less has finished and no sheets were loaded.",
+      "location": {
+        "url": "http://127.0.0.1:2610/node_modules/.vite/deps/less.js?v=b6d97b89",
+        "lineNumber": 10012,
+        "columnNumber": 24
+      }
+    }
+  ],
+  "pageErrors": [],
+  "responses": [
+    {
+      "url": "http://127.0.0.1:2610/preview/mv-1785691963555-bec4826c?type=vue3&groupId=6a51f7caed28c5d5b13c61a5",
+      "status": 200,
+      "resourceType": "document"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/main.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.pnpm/vite@6.4.2_@types+node@22.8.7_jiti@2.7.0_less@4.2.2_lightningcss@1.32.0_terser@5.49.0/node_modules/vite/dist/client/env.mjs",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/utils/tracing.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/App.vue",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/vue.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/router/index.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/base-components/mv-recorder/index.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/directives/feature.ts",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/store/index.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/core/lazy-use.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.pnpm/vue3-colorpicker@2.3.0_@aesoper+normal-utils@0.1.5_@popperjs+core@2.11.8_@vueuse+core@1_426d57fbc65570191a4f5afcb2d876cd/node_modules/vue3-colorpicker/style.css",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.pnpm/ant-design-vue@4.2.6_vue@3.5.40_typescript@5.6.3_/node_modules/ant-design-vue/dist/reset.css",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/@opentelemetry_resources.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/router/permission.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/core/request.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/@opentelemetry_sdk-trace-web.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/utils/auto-import/common.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/@opentelemetry_api.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/@opentelemetry_exporter-trace-otlp-http.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/@opentelemetry_semantic-conventions.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/generator/AppHeader.vue",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/vue-router.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/pinia.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/generator/AppFooter.vue",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/ant-design-vue_es_locale_zh_CN.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/ant-design-vue_es.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/ant-design-vue.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/App.vue?vue&type=style&index=0&scoped=7a7a37b1&lang.less",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/generator/WorkflowMonitor.vue",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/generator/ConfigPanel.vue",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/App.vue?vue&type=style&index=1&lang.css",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/composables/useApiBindingBridge.ts",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/composables/useTheme.ts",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/views/ai-workspace/ApiBindingWizard.vue",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/router/basic-routes.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/router/dev-route.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/@microcode_designer.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-SNAQBZPT.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/router/component-routes.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/router/page-generator-routes.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/router/ai-workspace-routes.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/router/generator-routes.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/base-components/mv-recorder/components/Record.vue",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/base-components/mv-recorder/components/RecordView.vue",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-QBFXS774.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/stores/feature-flags.ts",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/router/mc-generator-routes.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/router/generate-route.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/base-components/mv-recorder/lib/init.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/pinia-plugin-persistedstate.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/store/modules/index.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.pnpm/@microcode+microcode-framework@2.5.5_@ant-design+icons-vue@7.0.1_vue@3.5.40_typescript@_8eca5f15ac2ec0d8c01f609912279bb9/node_modules/@microcode/microcode-framework/dist/style.css",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/base-components/mv-recorder/components/CircleProgress.vue",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.pnpm/@microcode+designer@0.0.33_@aesoper+normal-utils@0.1.5_@popperjs+core@2.11.8_@vueuse+co_ec6e4acd046cfa68b7f40162ff7d7897/node_modules/@microcode/designer/dist/designer.css",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/assets/styles/index.less",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/dayjs.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/dayjs_locale_zh-cn.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/utils/rem.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/@microcode_microcode-framework.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/config/index.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/microvideo-component.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/config/microcode-config.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/core/directive/index.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.pnpm/microvideo-map@2.0.6_@amap+amap-jsapi-loader@1.0.1_@babel+core@7.24.9_@types+node@22.8._472019e6c08bafd6bf32712bfd8147fb/node_modules/microvideo-map/dist/lib/style.css",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/nprogress.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-IRPDAIFO.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/utils/portlet.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/map-icon-config.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-3QPBZD7P.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/microvideo-request.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.pnpm/nprogress@0.2.0/node_modules/nprogress/nprogress.css",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/core/permission.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-447V3WOM.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/core/microcode/index.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/utils/auto-import/radash.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-YVBBIFVE.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/generator/AppHeader.vue?vue&type=style&index=0&scoped=f0ebf71d&lang.css",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-ISH6AKKV.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-PP44LFW6.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/generator/AppFooter.vue?vue&type=style&index=0&scoped=27d8cefc&lang.css",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-CHMP3ZBZ.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-BDFYQPFY.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-5OGCR4RX.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-YPHPKLJF.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-MSVKFCHV.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/echarts.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/api/component.ts",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/stores/config.ts",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-YNBKUDNP.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/generator/WorkflowMonitor.vue?vue&type=style&index=0&scoped=f7ee75be&lang.css",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/api/generator/generator.ts",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/generator/ConfigPanel.vue?vue&type=style&index=0&scoped=a9fbaccc&lang.css",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-YIESMC5C.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/@ant-design_icons-vue.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/views/ai-workspace/ApiBindingWizard.vue?vue&type=style&index=0&scoped=bbbc3394&lang.less",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/generator/ProgressDetailPanel.vue",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/base-components/mv-recorder/images/dark/microphone.svg?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/base-components/mv-recorder/images/light/microphone.svg?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/base-components/mv-recorder/components/Record.vue?vue&type=style&index=0&scoped=63e0dd2e&lang.less",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/views/ai-workspace/ApiBindingWizard.vue?vue&type=style&index=1&lang.less",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/config/feature-flags.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/base-components/mv-recorder/lib/core/main.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/store/modules/user.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/base-components/mv-recorder/components/CircleProgress.vue?vue&type=style&index=0&scoped=a2c502c9&lang.css",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/base-components/mv-recorder/components/RecordView.vue?vue&type=style&index=0&scoped=e95f0d3b&lang.less",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/store/modules/config.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.pnpm/microvideo-component@0.0.50_less-loader@12.2.0_less@4.2.2_webpack@5.108.4_lightningcss@_7a5e0bdcf1f198ce2a01b9b6b1a0feb7/node_modules/microvideo-component/lib/layout/components/Layout.vue",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.pnpm/microvideo-component@0.0.50_less-loader@12.2.0_less@4.2.2_webpack@5.108.4_lightningcss@_7a5e0bdcf1f198ce2a01b9b6b1a0feb7/node_modules/microvideo-component/lib/layout/components/LayoutChildContainer.vue",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7JHVJRUF.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/config/default-config.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-7IG4TAL2.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/config/theme-config.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/config/custom-config.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/core/vcf.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/core/directive/drag.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.pnpm/microvideo-component@0.0.50_less-loader@12.2.0_less@4.2.2_webpack@5.108.4_lightningcss@_7a5e0bdcf1f198ce2a01b9b6b1a0feb7/node_modules/microvideo-component/lib/chart/components/Chart.vue",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/core/directive/scrollx.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.pnpm/microvideo-component@0.0.50_less-loader@12.2.0_less@4.2.2_webpack@5.108.4_lightningcss@_7a5e0bdcf1f198ce2a01b9b6b1a0feb7/node_modules/microvideo-component/lib/layout/components/LayoutContainer.vue",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/microvideo-map.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/core/directive/permission.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/config/dev-config.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/accident-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/accident.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-NI66HULJ.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/bad-weather-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/bazw.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/bazw-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/bridge-monitoring-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/camera.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/bad-weather.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/bridge-monitoring.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/congested-road-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/construction.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/camera-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/construction-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/fwq.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/congested-road.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/fwq-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gldw-gls.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/geologic-hazard-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gantry.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gantry-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gldw-jkzx.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/geologic-hazard.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gldw-jyz.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gldw.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gldw-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gldw-kfd-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-bzrw.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-fwq-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gldw-gls-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-clgz-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-gldw-jkzx-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gldw-jkzx-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gldw-jyz-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-clgz.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-gldw-jyz.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-gldw-jyz-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-dll-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-dll.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-lsbz-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-dzzh-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-lsyh-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-gldw-kfd-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-dzzh.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-bzrw-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gldw-kfd.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-mj.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-qtls-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-gldw-gls-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-fwq.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-eltq-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-wdy-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-gldw-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-gldw-gls.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-sd-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-eltq.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-gldw-jkzx.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-gldw-kfd.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-gldw.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-wrecker.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-wrecker-off.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-zdsh.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-jtsg.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-zh-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-lsbz.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-jtsg-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-lsyh.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-znzc-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-ql-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-qt-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-qbb-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-mj-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-zyc-cxc.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-lsyhsg.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-zyc-cxc-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-zyc-xcc-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-qtls.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-qbb.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-sfz-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/hlwqx-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-ql.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/information-board-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-qt.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-sfz.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/information-board.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-sd.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/jq-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-sxj-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-sgyh-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-sgyh.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-sxj-gq-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-sn-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-sxj-gq-gz.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/lsbz-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/large-flow-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-sxj-gq-lx.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-sn.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-visibility.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-sxj-gq.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/lsbz.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-wdy.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/lsyh-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-wrecker-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-visibility-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/marker-wrjc-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-yjwz-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/mc-preview.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-wdy-lx-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-zaw.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/offline-wrj.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-wdy-lx.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-zyc-jc-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/hlwqx.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/plan-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-yjwz.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/qtls.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-zaw-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sn-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sudden-other.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-zh.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/large-flow.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-zdsh-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-znzc.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/lsbz-act.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/lsbz%20copy.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sxj-qiangji-lx-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sxj-qiuji-icon.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-zyc-xcc.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-zyc-jc.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/lsyh.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/icon-gd-car.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/marker-wrj-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/temporary.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/lsyhsg-act.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sxj-qiuji.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/marker-wrjc.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/marker-wrj.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/jq.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/whpc.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/obstacle-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/offline-wrj-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/zyc-cxc-lx.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/obstacle.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/qbb-mj-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sudden.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/zyc-qzc-lx.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/qtls-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/offline-wrjc-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/zyc-qzc.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sxj-qiangji-icon-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/offline-wrjc.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/zyc-xcc-lx.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sxj-qiangji-icon.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/plan-act.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/zyc-yhc.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sxj-qiangji.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sxj-qiuji-icon-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sxj-qiuji-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-qbb-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/plan.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-fwq-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/zyc-qzc-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-zyc-xcc.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-qbb.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-mj-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sxj-qiuji-lx.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/qbb-mj.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-ql.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/zyc-jc-ds.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/wdy-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sd.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/wdy.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sd-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/vehicle-fault.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-sd-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/weather.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sfz.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/wrecker-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sfz-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-sd.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sn.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/wrecker.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sudden-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/wrj.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/yhsg-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/zdshhd.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sudden-other-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/yjwz-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sxj-qiuji-lx-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sxj-qiangji-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sxj-qiangji-lx.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/zyc-jc-ds.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-sxj-gq-lx.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/zyc-qzc-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/temporary-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-yjwz-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/vehicle-fault-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-yjwz.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/weather-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/whpc-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-sfz-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-sn-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-sn.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/wrj-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-jtsg.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/zyc-qzc-lx.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/yhsg.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-dll-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/yjwz.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/zdshhd-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-zyc-cxc-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/zh-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-zyc-cxc.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/zh.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-dll.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/zyc-cxc-lx.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-qt.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/zyc-cxc-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/weather-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/zyc-cxc.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/weather.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/zyc-jc-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-gldw-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/zyc-jc-lx.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/zyc-jc.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-gldw-jyz-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/zyc-xcc-active.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-zyc-jc.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/zyc-xcc.png?import&url",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-zyc-xcc-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-gldw-jyz.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-sxj-gq-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-sxj-gq.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-zyc-jc-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-gldw-gls-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-wdy-lx.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-wdy-lx-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-mj.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/zyc-jc-lx.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-znzc-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-sfz.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-fwq.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-ql-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-zh.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/zyc-qzc.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sxj-qiangji-icon-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-zaw-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-jtsg-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sxj-qiangji-lx.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/zyc-xcc-lx.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-zaw.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-bzrw-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-wdy-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-lsbz.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-wdy.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-sxj-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-sgyh-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-zdsh.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/offline-wrjc.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sxj-qiuji-icon-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sxj-qiuji-icon.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-clgz-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sxj-qiangji-icon.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-zh-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-eltq-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-clgz.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-lsbz-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-eltq.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-lsyh-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-qt-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-dzzh-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-lsyhsg.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-dzzh.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-qtls.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-gldw.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-sgyh.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-gldw-kfd-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-zdsh-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/marker-wrj.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-gldw-kfd.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-gldw-gls.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/marker-wrjc-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-znzc.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sxj-qiuji-lx.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-bzrw.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-qtls-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/marker-wrj-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/offline-wrj.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/marker-wrjc.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/offline-wrjc-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/icon-gd-car.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/offline-wrj-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/axios.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/core/microcode/core.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/generator/ProgressDetailPanel.vue?vue&type=style&index=0&scoped=833d7063&lang.css",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/utils/auto-import/pretty-log.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/composables/useSsePool.ts",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/base-components/mv-recorder/lib/core/wsconnecter.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/base-components/mv-recorder/lib/config.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/chunk-5MEDJR6V.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/api/login.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/base-components/mv-recorder/utils/index.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.pnpm/microvideo-component@0.0.50_less-loader@12.2.0_less@4.2.2_webpack@5.108.4_lightningcss@_7a5e0bdcf1f198ce2a01b9b6b1a0feb7/node_modules/microvideo-component/lib/layout/components/Layout.vue?vue&type=style&index=0&scoped=a07fa8a2&lang.less",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.pnpm/microvideo-component@0.0.50_less-loader@12.2.0_less@4.2.2_webpack@5.108.4_lightningcss@_7a5e0bdcf1f198ce2a01b9b6b1a0feb7/node_modules/microvideo-component/utils/index.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.pnpm/microvideo-component@0.0.50_less-loader@12.2.0_less@4.2.2_webpack@5.108.4_lightningcss@_7a5e0bdcf1f198ce2a01b9b6b1a0feb7/node_modules/microvideo-component/lib/layout/components/LayoutChildContainer.vue?vue&type=style&index=0&scoped=6824aab3&lang.less",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/base-components/mv-recorder/lib/sonic-view/index.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/base-components/mv-recorder/lib/core/recorder-core.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/c-mc-css-demo-event/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/c-mc-demo/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784642530978-b50cdfcc/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784551081158-e8a04bd6/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/@mv-business-layers/mc-general-legend-group/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784640165380-048aa5e5/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784774080869-c537eb47/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784659162079-cd5132c7/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/@mv-business-layers/mc-general-legend/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784653963271-a99b5540/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784680576076-8317470b/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785342600980-96fa180f/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784657157871-92ff69e8/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784552183360-07177230/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784688255317-d3aba4aa/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785404257734-3f758121/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785400257658-7f2c4def/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784660884721-75a32051/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784866519623-07f2451c/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/page-page-1785047305483-e525beb3-2-7879/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/page-page-1784847100090-2c02e104-2-7879/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784779953514-a347f53e/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785227283098-28667766/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784841909593-fb2bd4ac/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.pnpm/vue-demi@0.14.10_vue@3.5.40_typescript@5.6.3_/node_modules/vue-demi/lib/index.mjs?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785304674750-ae730152/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/phase2-1784538534188-78736980/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785251092881-d9ef7d6d/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784860784841-ee53ff4d/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785154107233-dd52baa9/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/page-page-1785049023343-dc4245c3-2-7879/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785211709216-5482a61e/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785390759361-da0cde23/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785216530606-8b051095/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/phase2-1784541662672-a8b60d4c/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.pnpm/microvideo-component@0.0.50_less-loader@12.2.0_less@4.2.2_webpack@5.108.4_lightningcss@_7a5e0bdcf1f198ce2a01b9b6b1a0feb7/node_modules/microvideo-component/lib/chart/echarts-auto-tooltip.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/page-page-1785049023343-dc4245c3-2-8417/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785238301016-77e87ecc/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785309141220-493d3a5e/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/page-page-1784847100090-2c02e104-2-8417/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785229659947-db5a1e80/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/phase2-1784537219959-fe0edc80/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/index.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.pnpm/microvideo-component@0.0.50_less-loader@12.2.0_less@4.2.2_webpack@5.108.4_lightningcss@_7a5e0bdcf1f198ce2a01b9b6b1a0feb7/node_modules/microvideo-component/lib/chart/resize.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.pnpm/microvideo-component@0.0.50_less-loader@12.2.0_less@4.2.2_webpack@5.108.4_lightningcss@_7a5e0bdcf1f198ce2a01b9b6b1a0feb7/node_modules/microvideo-component/lib/layout/components/LayoutContainer.vue?vue&type=style&index=0&scoped=3419c87f&lang.less",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/core/microcode/utils.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/page-page-1785230057176-9a95c836-2-8417/declare.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/api/generator/index.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/core/microcode/mc-request-api.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/core/microcode/css.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/base-components/mv-recorder/lib/sonic-view/lib.fft.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/hooks/mc-map-legend.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/base-components/mv-recorder/lib/sonic-view/waveview.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/c-mc-css-demo-event/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/c-mc-css-demo-event/resources/config/css-vars.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/c-mc-demo/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/base-components/mv-recorder/lib/sonic-view/frequency.histogram.view.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/@mv-business-layers/mc-general-legend-group/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784551081158-e8a04bd6/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/c-mc-demo/resources/config/css-vars.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785342600980-96fa180f/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784640165380-048aa5e5/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784642530978-b50cdfcc/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784657157871-92ff69e8/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784774080869-c537eb47/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784688255317-d3aba4aa/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784659162079-cd5132c7/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/@mv-business-layers/mc-general-legend/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784660884721-75a32051/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/page-page-1785047305483-e525beb3-2-7879/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785404257734-3f758121/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784653963271-a99b5540/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784779953514-a347f53e/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784680576076-8317470b/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784552183360-07177230/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785227283098-28667766/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/page-page-1784847100090-2c02e104-2-7879/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785251092881-d9ef7d6d/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785400257658-7f2c4def/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/page-page-1785049023343-dc4245c3-2-7879/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/phase2-1784541662672-a8b60d4c/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784866519623-07f2451c/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785229659947-db5a1e80/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784841909593-fb2bd4ac/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785304674750-ae730152/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785309141220-493d3a5e/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785390759361-da0cde23/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/phase2-1784538534188-78736980/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784860784841-ee53ff4d/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785154107233-dd52baa9/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785238301016-77e87ecc/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785211709216-5482a61e/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/accident.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/bridge-monitoring.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785216530606-8b051095/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/fwq.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/page-page-1785049023343-dc4245c3-2-8417/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/camera.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gldw.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gantry.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/page-page-1784847100090-2c02e104-2-8417/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/geologic-hazard.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/congested-road.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/phase2-1784537219959-fe0edc80/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/hlwqx.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/zyc-xcc.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/large-flow.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/js/map-layer-api.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gantry-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/information-board.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/congested-road-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/bad-weather.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sn.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gldw-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/obstacle.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sd.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sfz.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gldw-kfd-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/zyc-cxc.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gldw-jkzx.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/bad-weather-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gldw-jyz.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/fwq-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/camera-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/geologic-hazard-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-lsyh.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/hlwqx-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/vehicle-fault.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gldw-gls.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/obstacle-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/wdy.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/plan-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gldw-jyz-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/wrecker.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gldw-kfd.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/yjwz.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sfz-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/jq.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sn-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/zyc-jc.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-visibility-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sxj-qiangji-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/accident-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sd-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/bridge-monitoring-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sudden-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/yjwz-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gldw-gls-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/wrecker-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sudden.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sxj-qiuji.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/zh.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gldw-jkzx-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/zyc-xcc-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/temporary-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/jq-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/temporary.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/gs-visibility.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/information-board-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/wrj.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/whpc.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/large-flow-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/zh-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/c-mc-demo/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/plan.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784551081158-e8a04bd6/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/@mv-business-layers/mc-general-legend/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sxj-qiangji.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784552183360-07177230/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/sxj-qiuji-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/c-mc-css-demo-event/resources/images/mc-preview-three.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/vehicle-fault-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784657157871-92ff69e8/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784653963271-a99b5540/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/wdy-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/whpc-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784860784841-ee53ff4d/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784680576076-8317470b/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784660884721-75a32051/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784688255317-d3aba4aa/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785216530606-8b051095/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784866519623-07f2451c/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/zyc-cxc-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785211709216-5482a61e/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785238301016-77e87ecc/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/zyc-jc-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785309141220-493d3a5e/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785251092881-d9ef7d6d/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/images/wrj-active.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785400257658-7f2c4def/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/@mv-business-layers/mc-general-legend-group/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/c-mc-css-demo-event/resources/images/mc-preview-two.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/page-page-1784847100090-2c02e104-2-7879/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784640165380-048aa5e5/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/page-page-1784847100090-2c02e104-2-8417/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/page-page-1785047305483-e525beb3-2-7879/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/c-mc-css-demo-event/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785404257734-3f758121/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/page-page-1785049023343-dc4245c3-2-7879/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784642530978-b50cdfcc/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/page-page-1785049023343-dc4245c3-2-8417/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784659162079-cd5132c7/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784774080869-c537eb47/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/page-page-1785230057176-9a95c836-2-8417/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784779953514-a347f53e/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/phase2-1784537219959-fe0edc80/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/vue3-components/6a51f7caed28c5d5b13c61a5/mv-1785238309893-52ac55c7/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/phase2-1784538534188-78736980/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785154107233-dd52baa9/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785227283098-28667766/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1784841909593-fb2bd4ac/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785229659947-db5a1e80/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/page-page-1785230057176-9a95c836-2-8417/declare.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785304674750-ae730152/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/vue3-components/6a51f7caed28c5d5b13c61a5/mv-1785387528776-e7c947df/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/vue3-components/6a51f7caed28c5d5b13c61a5/mc-1784983653821-529dcf40/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785390759361-da0cde23/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/api/mc-api.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/mc-1785342600980-96fa180f/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/api/dev-api-request.json?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/js/api.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/custom-components/phase2-1784541662672-a8b60d4c/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/workspace/vue3-components/6a51f7caed28c5d5b13c61a5/mv-1785229211692-a8a6a838/resources/images/mc-preview.png?import",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/pako.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/js/utils.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/layer-config/js/dictionaries.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/views/preview/index.vue",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/ErrorBoundary.vue",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/utils/loadVue3Runtime.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/views/preview/index.vue?vue&type=style&index=1&lang.css",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/views/preview/index.vue?vue&type=style&index=0&scoped=83a160aa&lang.css",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/ErrorBoundary.vue?vue&type=style&index=0&scoped=0455a002&lang.css",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/base-components/base-panel/index.vue",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/less.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/hooks/wujie-component.js",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/src/components/base-components/base-panel/index.vue?vue&type=style&index=0&scoped=71a63916&lang.css",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/node_modules/.vite/deps/vue3-sfc-loader.js?v=b6d97b89",
+      "status": 200,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:2610/__raw/workspace/vue3-components/6a51f7caed28c5d5b13c61a5/mv-1785691963555-bec4826c/package/index.vue?exists=1",
+      "status": 200,
+      "resourceType": "fetch"
+    },
+    {
+      "url": "http://127.0.0.1:2610/__raw/workspace/vue3-components/6a51f7caed28c5d5b13c61a5/mv-1785691963555-bec4826c/index.vue?exists=1",
+      "status": 200,
+      "resourceType": "fetch"
+    },
+    {
+      "url": "http://127.0.0.1:2610/__raw/workspace/vue3-components/6a51f7caed28c5d5b13c61a5/mv-1785691963555-bec4826c/index.vue",
+      "status": 200,
+      "resourceType": "fetch"
+    },
+    {
+      "url": "http://127.0.0.1:2610/__raw/workspace/vue3-components/6a51f7caed28c5d5b13c61a5/mv-1785691963555-bec4826c/resources/styles/index.less",
+      "status": 200,
+      "resourceType": "xhr"
+    },
+    {
+      "url": "http://127.0.0.1:2610/__raw/workspace/vue3-components/6a51f7caed28c5d5b13c61a5/mv-1785691963555-bec4826c/resources/styles/theme-vars.less",
+      "status": 200,
+      "resourceType": "xhr"
+    },
+    {
+      "url": "http://127.0.0.1:2610/__raw/workspace/vue3-components/6a51f7caed28c5d5b13c61a5/mv-1785691963555-bec4826c/resources/styles/common.less",
+      "status": 200,
+      "resourceType": "xhr"
+    },
+    {
+      "url": "http://127.0.0.1:2610/__raw/workspace/vue3-components/6a51f7caed28c5d5b13c61a5/mv-1785691963555-bec4826c/resources/images/g-7883.png",
+      "status": 200,
+      "resourceType": "image"
+    },
+    {
+      "url": "http://127.0.0.1:2610/__raw/workspace/vue3-components/6a51f7caed28c5d5b13c61a5/mv-1785691963555-bec4826c/resources/images/tabs-icon-43.png",
+      "status": 200,
+      "resourceType": "image"
+    }
+  ],
+  "failedRequests": []
+}

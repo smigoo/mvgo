@@ -1,0 +1,263 @@
+/* [Layout Refine] 根容器禁止 background，应用到 content */
+.c-mc-1785473296223-c4025de6-content {
+  display: flex;
+  flex-direction: column;
+  width: 420px;
+  height: 425px;
+  padding: 12px 6px 15px 6px;
+  /* [Style Refine] fills[0].color → rgba(237, 244, 251, 0.7) */
+  background: rgba(237, 244, 251, 0.7);
+  /* [Style Refine] effects[0] → box-shadow: 0px 4px 10px rgba(74, 116, 140, 0.25) */
+  box-shadow: 0px 4px 10px rgba(74, 116, 140, 0.25);
+}
+
+.c-mc-1785473296223-c4025de6-title-icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* [Style Refine] fills[0].gradientStops → linear-gradient(90deg, #1990ff, #5a7eff) */
+.c-mc-1785473296223-c4025de6-header-title {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 19px;
+  font-family: 'Noto Sans SC', sans-serif;
+  background: linear-gradient(90deg, #1990ff 0%, #5a7eff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.c-mc-1785473296223-c4025de6-header-stats {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 15px;
+}
+
+.c-mc-1785473296223-c4025de6-stat-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+.c-mc-1785473296223-c4025de6-stat-label {
+  font-size: 14px;
+  font-weight: 400;
+  color: #333333;
+  line-height: 21px;
+  font-family: 'Source Han Sans CN', sans-serif;
+}
+
+.c-mc-1785473296223-c4025de6-stat-value-blue {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1990ff;
+  line-height: 23px;
+  font-family: 'Roboto', sans-serif;
+}
+
+.c-mc-1785473296223-c4025de6-stat-value-green {
+  font-size: 20px;
+  font-weight: 700;
+  color: #08a3a5;
+  line-height: 23px;
+  font-family: 'Roboto', sans-serif;
+}
+
+.c-mc-1785473296223-c4025de6-switch {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  height: 65px;
+}
+
+.c-mc-1785473296223-c4025de6-card {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  width: 193px;
+  height: 65px;
+  padding: 0 12px;
+  gap: 10px;
+  flex-shrink: 0;
+  /* [Critical Fix] 背景图精确还原 */
+  background-size: 100% 100%center
+}
+
+.c-mc-1785473296223-c4025de6-card-icon {
+  width: 35px;
+  height: 28px;
+  flex-shrink: 0;
+}
+
+.c-mc-1785473296223-c4025de6-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.c-mc-1785473296223-c4025de6-card-title-white {
+  font-size: 20px;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 23px;
+  font-family: 'Roboto', sans-serif;
+}
+
+.c-mc-1785473296223-c4025de6-card-desc-white {
+  font-size: 12px;
+  font-weight: 400;
+  color: #ffffff;
+  line-height: 16px;
+  font-family: 'YouSheBiaoTiHei', sans-serif;
+}
+
+.c-mc-1785473296223-c4025de6-card-desc-red {
+  font-size: 20px;
+  font-weight: 700;
+  color: #e03434;
+  line-height: 23px;
+  font-family: 'Roboto', sans-serif;
+}
+
+.c-mc-1785473296223-c4025de6-card-title-dark {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1990ff;
+  line-height: 23px;
+  font-family: 'Roboto', sans-serif;
+}
+
+.c-mc-1785473296223-c4025de6-card-desc-dark {
+  font-size: 12px;
+  font-weight: 400;
+  color: #333333;
+  line-height: 16px;
+  font-family: 'Source Han Sans CN', sans-serif;
+}
+
+.c-mc-1785473296223-c4025de6-main-content {
+  display: flex;
+  flex-direction: row;
+  gap: 0;
+  flex: 1;
+  min-height: 0;
+}
+
+.c-mc-1785473296223-c4025de6-tabs {
+  display: flex;
+  flex-direction: column;
+  width: 46px;
+  gap: 2px;
+}
+
+.c-mc-1785473296223-c4025de6-tab-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  cursor: pointer;
+  position: relative;
+  /* [Style Refine] fills[0].gradientStops → linear-gradient(180deg, #85baff, #c0e2ff) */
+  background: linear-gradient(180deg, #85baff 0%, #c0e2ff 100%);
+  /* [Style Refine] strokes[0].color → #f0f5ff */
+  border: 1px solid #f0f5ff;
+}
+
+.c-mc-1785473296223-c4025de6-tab-active {
+  /* [Style Refine] fills[0].gradientStops → linear-gradient(180deg, #318aff, #70bfff) */
+  background: linear-gradient(180deg, #318aff 0%, #70bfff 100%);
+  border: 1px solid #f0f5ff;
+}
+
+.c-mc-1785473296223-c4025de6-tab-label {
+  font-size: 14px;
+  font-weight: 400;
+  color: #3b80e6;
+  line-height: 16px;
+  font-family: 'Source Han Sans CN', sans-serif;
+  /* [Layout Refine] Figma bbox 竖排文字 → writing-mode: vertical-rl */
+  writing-mode: vertical-rl;
+}
+
+.c-mc-1785473296223-c4025de6-tab-active .c-mc-1785473296223-c4025de6-tab-label {
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.c-mc-1785473296223-c4025de6-tab-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  /* [Style Refine] fills[0].color → #f53f3f */
+  background: #f53f3f;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 14px;
+  text-align: center;
+  border-radius: 7px;
+  font-family: 'Roboto', sans-serif;
+}
+
+.c-mc-1785473296223-c4025de6-device-grid {
+  display: grid;
+  /* [Layout Refine] Figma grid 3x4, 117x64, gap 10 */
+  grid-template-columns: repeat(3, 117px);
+  grid-template-rows: repeat(4, 64px);
+  gap: 10px;
+  flex: 1;
+  padding-left: 6px;
+}
+
+.c-mc-1785473296223-c4025de6-device-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  width: 117px;
+  height: 64px;
+  padding: 0 8px;
+  gap: 6px;
+  /* [Critical Fix] 背景图精确还原 */
+  background-size: 100% 100%center
+}
+
+.c-mc-1785473296223-c4025de6-device-icon {
+  width: 26px;
+  height: 32px;
+  flex-shrink: 0;
+}
+
+.c-mc-1785473296223-c4025de6-device-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.c-mc-1785473296223-c4025de6-device-label {
+  font-size: 12px;
+  font-weight: 400;
+  color: #333333;
+  line-height: 18px;
+  font-family: 'Source Han Sans CN', sans-serif;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* [Style Refine] fills[0].color → #ffffff (Figma 样式数据明确为白色，配合蓝色渐变背景) */
+.c-mc-1785473296223-c4025de6-device-value {
+  font-size: 16px;
+  font-weight: 500;
+  color: #ffffff;
+  line-height: 19px;
+  font-family: 'Roboto', sans-serif;
+  text-shadow: 0px 0px 0px rgba(0, 0, 0, 0.5);
+}

@@ -1,0 +1,111 @@
+.common() {
+  // 字体
+  @font-title: 'Noto Sans SC', sans-serif;
+  @font-body: 'Source Han Sans CN', sans-serif;
+  @font-num: 'Roboto', sans-serif;
+  @font-icon-label: 'YouSheBiaoTiHei', sans-serif;
+
+  // 字号
+  @font-size-sm: 12px;
+  @font-size-md: 14px;
+  @font-size-lg: 16px;
+  @font-size-xl: 20px;
+
+  // 间距
+  @spacing-xs: 4px;
+  @spacing-sm: 6px;
+  @spacing-md: 8px;
+  @spacing-lg: 12px;
+  @spacing-xl: 16px;
+
+  // 圆角
+  /* [Style Refine] Figma bg.cornerRadius=6 → @radius-md: 6px */
+  @radius-sm: 4px;
+  @radius-md: 6px;
+
+  // 过渡
+  @transition-base: all 0.2s ease;
+}
+
+.theme-light() {
+  // 面板背景
+  /* [Style Refine] Figma bg fills SOLID rgb(237,244,251) + DROP_SHADOW offset(0,4) radius10 color rgba(74,117,141,0.25) */
+  @bg-panel: #edf4fb;
+  @shadow-panel: 0 4px 10px 0 rgba(74, 117, 141, 0.25);
+
+  // 头部统计
+  /* [Style Refine] Figma 设备类型/设备总数/完好率 label fills SOLID rgb(51,51,51) */
+  @color-stat-label: #333333;
+  /* [Style Refine] Figma 28/68562 value fills GRADIENT_LINEAR stop0=rgb(225,240,255) stop1=rgb(0,204,255) + SOLID rgb(25,144,255) → 取 SOLID 底色 */
+  @color-stat-value: #1990ff;
+  /* [Style Refine] Figma 98% fills SOLID rgb(8,163,165) */
+  @color-stat-value-green: #08a3a5;
+
+  // Switch 激活态
+  /* [Style Refine] Figma active t-隧道设备 fills SOLID rgb(255,255,255) */
+  @color-switch-title-active: #ffffff;
+  /* [Style Refine] Figma default t-南北接线 fills SOLID rgb(51,51,51) */
+  @color-switch-title-default: #333333;
+  /* [Style Refine] Figma active t-总数:/t-异常数: fills SOLID rgb(255,255,255) */
+  @color-switch-data-label-active: #ffffff;
+  /* [Style Refine] Figma default t-总数: fills SOLID rgb(51,51,51) */
+  @color-switch-data-label-default: #333333;
+  /* [Style Refine] Figma active d-56302 fills SOLID rgb(255,255,255) */
+  @color-switch-data-value-active: #ffffff;
+  /* [Style Refine] Figma default d-1280 fills SOLID rgb(25,144,255) */
+  @color-switch-data-value-default: #1990ff;
+  /* [Style Refine] Figma active d-5 (异常数) fills SOLID rgb(224,52,52) */
+  @color-switch-data-value-error: #e03434;
+
+  // Tab 标签
+  /* [Style Refine] Figma tab-active t-监控 fills SOLID rgb(255,255,255) */
+  @color-tab-label-active: #ffffff;
+  /* [Style Refine] Figma tab d-照明/d-通风等 fills SOLID rgb(59,128,231) */
+  @color-tab-label-default: #3b80e7;
+  /* [Style Refine] Figma Frame2136638920 fills SOLID rgb(255,255,255) + DROP_SHADOW + stroke SOLID rgb(37,141,200) */
+  @color-tab-badge-bg-active: #ffffff;
+  @color-tab-badge-border-active: #258dc8;
+  /* [Style Refine] Figma d-3/3740 fills SOLID rgb(59,128,231) */
+  @color-tab-badge-text-active: #3b80e7;
+  /* [Style Refine] Figma Group1321315882 bg fills SOLID rgb(245,63,63) cornerRadius=29 */
+  @color-tab-badge-bg-alert: #f53f3f;
+  @color-tab-badge-text-alert: #ffffff;
+
+  // 设备卡片
+  /* [Style Refine] Figma 摄像机等 TEXT fills SOLID rgb(51,51,51) */
+  @color-device-name: #333333;
+  /* [Style Refine] Figma (2/484)等 TEXT fills SOLID rgb(255,255,255) */
+  @color-device-ratio: #ffffff;
+}
+
+.theme-dark() {
+  @bg-panel: #0d1a2e;
+  @shadow-panel: 0 4px 10px 0 rgba(0, 0, 0, 0.5);
+
+  @color-stat-label: rgba(255, 255, 255, 0.65);
+  @color-stat-value: #40a9ff;
+  @color-stat-value-green: #36cfc9;
+
+  @color-switch-title-active: #ffffff;
+  @color-switch-title-default: rgba(255, 255, 255, 0.65);
+  @color-switch-data-label-active: rgba(255, 255, 255, 0.85);
+  @color-switch-data-label-default: rgba(255, 255, 255, 0.65);
+  @color-switch-data-value-active: #ffffff;
+  @color-switch-data-value-default: #40a9ff;
+  @color-switch-data-value-error: #ff7875;
+
+  @color-tab-label-active: #ffffff;
+  @color-tab-label-default: rgba(255, 255, 255, 0.65);
+  @color-tab-badge-bg-active: rgba(64, 169, 255, 0.3);
+  @color-tab-badge-border-active: rgba(64, 169, 255, 0.6);
+  @color-tab-badge-text-active: #ffffff;
+  @color-tab-badge-bg-alert: #ff4d4f;
+  @color-tab-badge-text-alert: #ffffff;
+
+  @color-device-name: rgba(255, 255, 255, 0.85);
+  @color-device-ratio: #ffffff;
+}
+
+// 全局默认调用（light 主题 + common 变量）
+.theme-light();
+.common();

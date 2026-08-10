@@ -1,0 +1,246 @@
+```json
+{
+  "generatedAt": "2024-05-20T10:00:00.000Z",
+  "stage": "preview-analysis",
+  "componentName": "运单信息",
+  "componentTitle": "运单信息",
+  "analysisModel": "gpt-4-vision",
+  "sourceImage": {
+    "path": "resources/images/mc-preview.png",
+    "size": 0,
+    "mtimeMs": 0,
+    "sha1": ""
+  },
+  "summary": "深色主题弹窗组件，展示危化品运输运单信息。包含顶部标题栏（含车牌号标签）、运单列表表格（支持行选中）、以及选中运单的详细信息（文本字段与监控截图）。",
+  "layout": {
+    "type": "vertical-stack",
+    "direction": "vertical",
+    "sections": [
+      {
+        "id": "header-bar",
+        "name": "顶部标题栏",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "title-itself",
+        "slotCandidate": null,
+        "header": {
+          "title": "运单信息",
+          "controls": [
+            {
+              "id": "license-plate-badge",
+              "name": "车牌号标签",
+              "role": "label",
+              "value": "苏A 12345"
+            },
+            {
+              "id": "close-btn",
+              "name": "关闭按钮",
+              "role": "button",
+              "value": "X"
+            }
+          ]
+        },
+        "body": {
+          "layout": "horizontal",
+          "bgPlaceholder": "header-bg",
+          "children": [
+            {
+              "id": "title-text",
+              "name": "标题文字",
+              "role": "text",
+              "text": "运单信息"
+            },
+            {
+              "id": "plate-badge",
+              "name": "车牌Badge",
+              "role": "badge",
+              "text": "苏A 12345"
+            }
+          ]
+        }
+      },
+      {
+        "id": "transport-table",
+        "name": "运单列表表格",
+        "role": "常驻",
+        "layout": "vertical",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "header": {
+          "title": null,
+          "controls": []
+        },
+        "body": {
+          "layout": "table",
+          "bgPlaceholder": "table-bg",
+          "children": [
+            {
+              "id": "table-header-row",
+              "name": "表头",
+              "role": "table-header",
+              "columns": [
+                "运单编号",
+                "危化品名称",
+                "超运地",
+                "实际发车时间",
+                "目的地",
+                "预计到达时间",
+                "满载情况",
+                "运输状态"
+              ]
+            },
+            {
+              "id": "table-data-rows",
+              "name": "数据行",
+              "role": "table-body",
+              "rows": [
+                {
+                  "id": "row-1",
+                  "status": "selected",
+                  "data": [
+                    "3203502388...",
+                    "烟花",
+                    "江阴",
+                    "2023-11-22 06:20:46",
+                    "靖江",
+                    "--",
+                    "满载",
+                    "在途"
+                  ]
+                },
+                {
+                  "id": "row-2",
+                  "status": "normal",
+                  "data": [
+                    "3203502388...",
+                    "硫酸",
+                    "无锡",
+                    "2023-11-20 06:20:46",
+                    "泰州",
+                    "--",
+                    "满载",
+                    "在途"
+                  ]
+                },
+                {
+                  "id": "row-3",
+                  "status": "normal",
+                  "data": [
+                    "3203502388...",
+                    "硫酸",
+                    "江阴",
+                    "2023-11-19 06:20:46",
+                    "靖江",
+                    "--",
+                    "满载",
+                    "在途"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "order-details",
+        "name": "运单详情",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "header": {
+          "title": "运单详情",
+          "controls": []
+        },
+        "body": {
+          "layout": "horizontal-3-columns",
+          "bgPlaceholder": "detail-bg",
+          "children": [
+            {
+              "id": "detail-text-col-1",
+              "name": "详情文本列1",
+              "role": "text-group",
+              "layout": "vertical",
+              "items": [
+                { "label": "起运地", "value": "江苏省无锡市江阴市" },
+                { "label": "分类名称", "value": "危险品(1类4项)" },
+                { "label": "运输里程", "value": "200(KM)" },
+                { "label": "发车时间", "value": "2023-11-22 06:20:46" },
+                { "label": "满载情况", "value": "满载货物" },
+                { "label": "驾驶员姓名", "value": "张悦" },
+                { "label": "备注", "value": "栖霞大道浦口104国道桥宁马高速路路二桥百水桥栖霞大道" }
+              ]
+            },
+            {
+              "id": "detail-text-col-2",
+              "name": "详情文本列2",
+              "role": "text-group",
+              "layout": "vertical",
+              "items": [
+                { "label": "危化品名称", "value": "烟花" },
+                { "label": "目的地", "value": "江苏省泰州市靖江市" },
+                { "label": "预计到达时间", "value": "2023-11-22 12:04:21" },
+                { "label": "总重量", "value": "9.8(吨)" },
+                { "label": "驾驶员电话", "value": "13955086495" }
+              ]
+            },
+            {
+              "id": "detail-image",
+              "name": "监控截图",
+              "role": "image",
+              "src": "../resources/images/img-99044.png",
+              "description": "显示两辆卡车（一红一白）在高速公路上行驶的监控画面"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "styles": {
+    "theme": "深色科技监控风",
+    "colors": [
+      "#003032",
+      "#FFFFFF",
+      "#B07B00",
+      "#18FFCE"
+    ],
+    "background": "深青色/深蓝色背景 (#003032)",
+    "decorations": [
+      "标题左侧菱形装饰图标",
+      "表格行分隔线"
+    ],
+    "emphasis": [
+      "选中行高亮背景",
+      "车牌号黄色Badge"
+    ],
+    "backgroundBrightness": "dark"
+  },
+  "interactions": [
+    {
+      "target": "表格行",
+      "type": "click",
+      "description": "点击表格行切换下方运单详情显示",
+      "defaultState": "第一行默认选中",
+      "evidence": "第一行背景色高亮，下方详情对应第一行数据（烟花）"
+    },
+    {
+      "target": "右上角关闭按钮",
+      "type": "click",
+      "description": "关闭弹窗",
+      "defaultState": "常驻",
+      "evidence": "标准关闭图标 X"
+    }
+  ],
+  "charts": [],
+  "doNotInvent": [
+    "不要臆造表格的分页控件（图中未显示）",
+    "不要臆造详情的编辑功能",
+    "不要臆造图片的放大交互（虽然可能有，但图中未明确显示tooltip或按钮）"
+  ],
+  "notes": [
+    "表格第一行处于选中状态（高亮），对应下方详情展示的是'烟花'的信息。",
+    "详情区域布局为左中两列文本，右侧一张图片。",
+    "顶部标题'运单信息'左侧有一个菱形小图标装饰。"
+  ]
+}
+```

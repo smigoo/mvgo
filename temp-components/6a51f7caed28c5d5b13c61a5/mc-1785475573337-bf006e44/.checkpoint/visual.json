@@ -1,0 +1,429 @@
+{
+  "layoutStructure": {
+    "generatedAt": "2026-07-31T05:28:08.581Z",
+    "stage": "preview-analysis",
+    "componentName": "重点车辆监测面板",
+    "figmaNodeId": "Frame 2136637714",
+    "layout": {
+      "type": "vertical",
+      "gap": 12,
+      "padding": "12px 16px"
+    },
+    "style": {
+      "background": "rgba(237, 244, 251, 0.7)",
+      "borderRadius": "4px"
+    },
+    "header": {
+      "title": {
+        "text": "重点车辆监测",
+        "style": {
+          "color": "#1990ff",
+          "fontSize": "16px",
+          "fontWeight": "bold"
+        }
+      },
+      "headerSlots": [
+        {
+          "slotType": "header-right",
+          "elementType": "tab",
+          "content": "江阴靖江长江隧道",
+          "style": {
+            "background": "#1990ff",
+            "color": "#ffffff",
+            "borderRadius": "12px",
+            "padding": "4px 12px",
+            "fontSize": "12px"
+          },
+          "status": "active"
+        },
+        {
+          "slotType": "header-right",
+          "elementType": "tab",
+          "content": "江阴大桥",
+          "style": {
+            "background": "transparent",
+            "color": "#6680a0",
+            "border": "1px solid #6680a0",
+            "borderRadius": "12px",
+            "padding": "4px 12px",
+            "fontSize": "12px"
+          },
+          "status": "inactive"
+        }
+      ]
+    },
+    "content": {
+      "type": "vertical",
+      "children": [
+        {
+          "type": "row",
+          "alignItems": "center",
+          "gap": 8,
+          "children": [
+            {
+              "elementType": "icon",
+              "resourceFile": "../resources/images/icon-123.png",
+              "recommendedUsage": "decorativeBlock",
+              "style": {
+                "width": "18px",
+                "height": "18px"
+              }
+            },
+            {
+              "elementType": "text",
+              "content": "今日累计",
+              "style": {
+                "color": "#333333",
+                "fontSize": "14px",
+                "fontWeight": "bold"
+              }
+            }
+          ]
+        },
+        {
+          "type": "row",
+          "justifyContent": "space-between",
+          "gap": 12,
+          "children": [
+            {
+              "elementType": "card",
+              "style": {
+                "background": "url('../resources/images/bg-124.png') no-repeat center/cover",
+                "width": "120px",
+                "height": "74px",
+                "borderRadius": "4px",
+                "display": "flex",
+                "flexDirection": "column",
+                "alignItems": "center",
+                "justifyContent": "center",
+                "padding": "8px"
+              },
+              "children": [
+                {
+                  "type": "row",
+                  "alignItems": "center",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "elementType": "icon",
+                      "resourceFile": "../resources/images/icon-8036.png",
+                      "recommendedUsage": "imgSrc",
+                      "style": {
+                        "width": "32px",
+                        "height": "24px"
+                      }
+                    },
+                    {
+                      "elementType": "text",
+                      "content": "危化品车",
+                      "style": {
+                        "color": "#333333",
+                        "fontSize": "12px"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "row",
+                  "alignItems": "baseline",
+                  "gap": 4,
+                  "children": [
+                    {
+                      "elementType": "text",
+                      "content": "51",
+                      "style": {
+                        "color": "#ff3333",
+                        "fontSize": "20px",
+                        "fontWeight": "bold"
+                      }
+                    },
+                    {
+                      "elementType": "text",
+                      "content": "次",
+                      "style": {
+                        "color": "#666666",
+                        "fontSize": "12px"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "elementType": "card",
+              "style": {
+                "background": "url('../resources/images/bg-125.png') no-repeat center/cover",
+                "width": "120px",
+                "height": "74px",
+                "borderRadius": "4px",
+                "display": "flex",
+                "flexDirection": "column",
+                "alignItems": "center",
+                "justifyContent": "center",
+                "padding": "8px"
+              },
+              "children": [
+                {
+                  "type": "row",
+                  "alignItems": "center",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "elementType": "icon",
+                      "resourceFile": "../resources/images/icon-8070.png",
+                      "recommendedUsage": "imgSrc",
+                      "style": {
+                        "width": "32px",
+                        "height": "24px"
+                      }
+                    },
+                    {
+                      "elementType": "text",
+                      "content": "重型货车",
+                      "style": {
+                        "color": "#333333",
+                        "fontSize": "12px"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "row",
+                  "alignItems": "baseline",
+                  "gap": 4,
+                  "children": [
+                    {
+                      "elementType": "text",
+                      "content": "2",
+                      "style": {
+                        "color": "#1990ff",
+                        "fontSize": "20px",
+                        "fontWeight": "bold"
+                      }
+                    },
+                    {
+                      "elementType": "text",
+                      "content": "次",
+                      "style": {
+                        "color": "#666666",
+                        "fontSize": "12px"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "elementType": "card",
+              "style": {
+                "background": "url('../resources/images/bg-126.png') no-repeat center/cover",
+                "width": "120px",
+                "height": "74px",
+                "borderRadius": "4px",
+                "display": "flex",
+                "flexDirection": "column",
+                "alignItems": "center",
+                "justifyContent": "center",
+                "padding": "8px"
+              },
+              "children": [
+                {
+                  "type": "row",
+                  "alignItems": "center",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "elementType": "icon",
+                      "resourceFile": "../resources/images/icon-8049.png",
+                      "recommendedUsage": "imgSrc",
+                      "style": {
+                        "width": "32px",
+                        "height": "24px"
+                      }
+                    },
+                    {
+                      "elementType": "text",
+                      "content": "超高车辆",
+                      "style": {
+                        "color": "#333333",
+                        "fontSize": "12px"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "row",
+                  "alignItems": "baseline",
+                  "gap": 4,
+                  "children": [
+                    {
+                      "elementType": "text",
+                      "content": "19",
+                      "style": {
+                        "color": "#ff9900",
+                        "fontSize": "20px",
+                        "fontWeight": "bold"
+                      }
+                    },
+                    {
+                      "elementType": "text",
+                      "content": "次",
+                      "style": {
+                        "color": "#666666",
+                        "fontSize": "12px"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "backgroundImage": {
+        "src": null,
+        "recommendedUsage": "backgroundStyle"
+      },
+      "backgroundSize": "cover",
+      "backgroundPosition": "center",
+      "backgroundRepeat": "no-repeat"
+    },
+    "styles": {
+      "theme": "未知",
+      "colors": [],
+      "background": "",
+      "decorations": [],
+      "emphasis": [],
+      "backgroundBrightness": "dark"
+    },
+    "interactions": [],
+    "charts": [],
+    "_parseWarning": "质量门检测到解析结果全空，下游精修可能受限",
+    "coverageReport": {
+      "totalFigma": 60,
+      "matchedCount": 0,
+      "missingCount": 34,
+      "uncertainCount": 3,
+      "coverageRate": 0,
+      "missing": [
+        {
+          "name": "Frame 2136637714",
+          "type": "FRAME",
+          "depth": 0
+        },
+        {
+          "name": "header",
+          "type": "FRAME",
+          "depth": 1
+        },
+        {
+          "name": "tabs",
+          "type": "FRAME",
+          "depth": 2
+        },
+        {
+          "name": "Frame 2136638771",
+          "type": "FRAME",
+          "depth": 3
+        },
+        {
+          "name": "江阴靖江长江隧道",
+          "type": "TEXT",
+          "depth": 4
+        },
+        {
+          "name": "Frame 2136638769",
+          "type": "FRAME",
+          "depth": 3
+        },
+        {
+          "name": "江阴大桥",
+          "type": "TEXT",
+          "depth": 4
+        },
+        {
+          "name": "小标题",
+          "type": "GROUP",
+          "depth": 2
+        },
+        {
+          "name": "g",
+          "type": "GROUP",
+          "depth": 3
+        },
+        {
+          "name": "重点车辆监测",
+          "type": "TEXT",
+          "depth": 3
+        },
+        {
+          "name": "slot",
+          "type": "FRAME",
+          "depth": 1
+        },
+        {
+          "name": "Group 2136639043",
+          "type": "GROUP",
+          "depth": 2
+        },
+        {
+          "name": "bg",
+          "type": "FRAME",
+          "depth": 4
+        },
+        {
+          "name": "Group 2136638349",
+          "type": "GROUP",
+          "depth": 5
+        },
+        {
+          "name": "icon",
+          "type": "FRAME",
+          "depth": 4
+        }
+      ],
+      "uncertain": [
+        {
+          "name": "次",
+          "type": "TEXT"
+        },
+        {
+          "name": "次",
+          "type": "TEXT"
+        },
+        {
+          "name": "次",
+          "type": "TEXT"
+        }
+      ],
+      "summary": "需关注"
+    }
+  },
+  "visualElements": {
+    "theme": "未知",
+    "colors": [],
+    "background": "",
+    "decorations": [],
+    "emphasis": [],
+    "backgroundBrightness": "dark"
+  },
+  "interactions": [],
+  "charts": [],
+  "headerSlots": [],
+  "analysisType": "",
+  "analysisTarget": "",
+  "analysisDescription": "",
+  "analysisEvidence": [],
+  "headerValidation": {
+    "passed": true,
+    "headerElements": [],
+    "headerRightElements": [],
+    "suggestions": [],
+    "confidence": "low"
+  },
+  "headerSlotValidation": {
+    "validatedSlots": [],
+    "rejectedNodes": [],
+    "warnings": []
+  }
+}

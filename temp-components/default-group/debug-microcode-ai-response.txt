@@ -1,0 +1,47 @@
+{
+  "mode": "chunked-adaptive",
+  "complexity": "medium",
+  "chunks": [
+    {
+      "attempt": 1,
+      "files": [
+        "declare.json"
+      ],
+      "finishReason": "stop",
+      "isMaxTokens": false,
+      "truncationIssues": [],
+      "contentTail": "// === declare.json ===\n{\n  \"componentId\": \"mc-max-1785914729076-cbcc0aad\",\n  \"componentName\": \"cp-环境监测\",\n  \"version\": \"v1.0.0\",\n  \"attribute\": {\n    \"aspectRatio\": [\n      460,\n      138\n    ]\n  },\n  \"businessEvents\": {\n    \"mc-max-1785914729076-cbcc0aad-onload\": {\n      \"eventId\": \"mc-max-1785914729076-cbcc0aad-onload\",\n      \"eventName\": \"组件加载\",\n      \"eventDataSchema\": {}\n    }\n  },\n  \"businessStatuses\": {},\n  \"dataSources\": [],\n  \"formSources\": [],\n  \"layoutConfig\": {\n    \"default\": \"one\",\n    \"list\": [\n      {\n        \"name\": \"默认布局\",\n        \"key\": \"one\",\n        \"previewName\": \"mc-preview.png\"\n      }\n    ]\n  },\n  \"themeConfig\": {\n    \"default\": \"light\",\n    \"list\": [\n      {\n        \"name\": \"亮色主题\",\n        \"key\": \"light\"\n      },\n      {\n        \"name\": \"深色主题\",\n        \"key\": \"dark\"\n      }\n    ]\n  },\n  \"cssVariableConfig\": [],\n  \"businessConfig\": []\n}"
+    },
+    {
+      "attempt": 1,
+      "files": [
+        "package/index.vue"
+      ],
+      "finishReason": "stop",
+      "isMaxTokens": false,
+      "truncationIssues": [],
+      "contentTail": " 100%', backgroundPosition: 'center center', backgroundRepeat: 'no-repeat' }\"\n    >\n      <!-- 环境指标卡片 -->\n      <div class=\"c-mc-max-1785914729076-cbcc0aad-stats-grid\">\n        <div class=\"c-mc-max-1785914729076-cbcc0aad-stat-item\">\n          <img :src=\"icon1\" class=\"c-mc-max-1785914729076-cbcc0aad-stat-icon\" />\n          <div class=\"c-mc-max-1785914729076-cbcc0aad-stat-text\">\n            <span class=\"c-mc-max-1785914729076-cbcc0aad-stat-label\">温度</span>\n            <span class=\"c-mc-max-1785914729076-cbcc0aad-stat-value\">24.5<small>℃</small></span>\n          </div>\n        </div>\n        <div class=\"c-mc-max-1785914729076-cbcc0aad-stat-item\">\n          <img :src=\"icon2\" class=\"c-mc-max-1785914729076-cbcc0aad-stat-icon\" />\n          <div class=\"c-mc-max-1785914729076-cbcc0aad-stat-text\">\n            <span class=\"c-mc-max-1785914729076-cbcc0aad-stat-label\">湿度</span>\n            <span class=\"c-mc-max-1785914729076-cbcc0aad-stat-value\">65<small>%</small></span>\n          </div>\n        </div>\n      </div>\n\n      <!-- 趋势图表 -->\n      <div class=\"c-mc-max-1785914729076-cbcc0aad-chart-section\">\n        <div class=\"c-mc-max-1785914729076-cbcc0aad-chart-header\">\n          <span class=\"c-mc-max-1785914729076-cbcc0aad-section-title\">24小时环境趋势</span>\n        </div>\n        <div class=\"c-mc-max-1785914729076-cbcc0aad-chart-wrapper\">\n          <div ref=\"chartRef\" class=\"c-mc-max-1785914729076-cbcc0aad-chart-container\"></div>\n        </div>\n      </div>\n    </div>\n  </base-panel>\n</template>"
+    },
+    {
+      "attempt": 1,
+      "files": [
+        "package/index.vue"
+      ],
+      "finishReason": "stop",
+      "isMaxTokens": false,
+      "truncationIssues": [],
+      "contentTail": "mData,\n        itemStyle: { color: '#1890ff' },\n        lineStyle: { width: 2 },\n        areaStyle: {\n          color: {\n            type: 'linear',\n            x: 0, y: 0, x2: 0, y2: 1,\n            colorStops: [\n              { offset: 0, color: 'rgba(24, 144, 255, 0.3)' },\n              { offset: 1, color: 'rgba(24, 144, 255, 0.0)' }\n            ]\n          }\n        }\n      }\n    ]\n  }\n  chart.setOption(option, true)\n}\n\nconst initChart = () => {\n  if (!chartRef.value) return\n  const { clientWidth, clientHeight } = chartRef.value\n  if (clientWidth > 0 && clientHeight > 0) {\n    chart = echarts.init(chartRef.value)\n    updateChart()\n    return\n  }\n  chartObserver = new ResizeObserver((entries) => {\n    const { width, height } = entries[0].contentRect\n    if (width > 0 && height > 0 && !chart) {\n      chartObserver?.disconnect()\n      chart = echarts.init(chartRef.value)\n      updateChart()\n    }\n  })\n  chartObserver.observe(chartRef.value)\n}\n\nwatch(chartRef, (newRef) => {\n  if (newRef && !chart) initChart()\n})\n\nconst handleResize = () => {\n  if (chart) chart.resize()\n}\n\nonMounted(() => {\n  initChart()\n  window.addEventListener('resize', handleResize)\n  \n  if (runtimeBuilder) {\n    runtimeBuilder.publishEvent('mc-max-1785914729076-cbcc0aad-onload', {\n      componentId: 'mc-max-1785914729076-cbcc0aad',\n      timestamp: Date.now()\n    })\n  }\n})\n\nonUnmounted(() => {\n  window.removeEventListener('resize', handleResize)\n  chart?.dispose()\n  chartObserver?.disconnect()\n})\n</script>"
+    },
+    {
+      "attempt": 1,
+      "files": [
+        "resources/styles/common.less",
+        "resources/styles/themes/theme-vars.less"
+      ],
+      "finishReason": "stop",
+      "isMaxTokens": false,
+      "truncationIssues": [],
+      "contentTail": "\n    position: absolute;\n    left: 0;\n    top: 50%;\n    transform: translateY(-50%);\n    width: 8px;\n    height: 8px;\n    border-radius: 50%;\n    background: @success-color;\n    box-shadow: 0 0 8px @success-color;\n  }\n}\n\n.c-mc-max-1785914729076-cbcc0aad-chart-wrapper {\n  flex: 1;\n  position: relative;\n  width: 100%;\n}\n\n.c-mc-max-1785914729076-cbcc0aad-chart-container {\n  width: 100%;\n  height: 100%;\n  position: absolute;\n  top: 0;\n  left: 0;\n}\n\n// === resources/styles/themes/theme-vars.less ===\n.common() {\n  @font-family: 'Noto Sans SC', 'Source Han Sans CN', 'PingFang SC', sans-serif;\n  @border-radius-base: 4px;\n  @transition-base: all 0.3s ease;\n}\n\n.theme-light() {\n  @bg-color: #edf4fb;\n  @bg-color-secondary: #ffffff;\n  @primary-color: #559eff;\n  @success-color: #52c41a;\n  @danger-color: #f53f3f;\n  @text-color: #333333;\n  @text-color-secondary: #666666;\n  @text-color-disabled: #999999;\n  @border-color: rgba(0, 0, 0, 0.1);\n  @title-gradient-start: #1990ff;\n  @title-gradient-end: #5a7eff;\n  @shadow-color: rgba(74, 117, 141, 0.25);\n}\n\n.theme-dark() {\n  @bg-color: #1a2332;\n  @bg-color-secondary: #243042;\n  @primary-color: #559eff;\n  @success-color: #52c41a;\n  @danger-color: #f53f3f;\n  @text-color: #ffffff;\n  @text-color-secondary: rgba(255, 255, 255, 0.6);\n  @text-color-disabled: rgba(255, 255, 255, 0.3);\n  @border-color: rgba(255, 255, 255, 0.1);\n  @title-gradient-start: #1990ff;\n  @title-gradient-end: #5a7eff;\n  @shadow-color: rgba(0, 0, 0, 0.5);\n}\n\n.theme-light();\n.common();"
+    }
+  ]
+}

@@ -1,0 +1,146 @@
+{
+  "generatedAt": "2026-08-07T08:46:28.696Z",
+  "stage": "preview-analysis",
+  "layout": "horizontal",
+  "layoutStructure": null,
+  "sections": null,
+  "componentType": null,
+  "styles": {
+    "theme": "未知",
+    "colors": [],
+    "background": "",
+    "decorations": [],
+    "emphasis": [],
+    "backgroundBrightness": "dark"
+  },
+  "interactions": [],
+  "charts": [],
+  "_parseWarning": "质量门检测到解析结果全空，下游精修可能受限",
+  "coverageReport": {
+    "totalFigma": 364,
+    "matchedCount": 0,
+    "missingCount": 170,
+    "uncertainCount": 11,
+    "coverageRate": 0,
+    "missing": [
+      {
+        "name": "cp-流量监测",
+        "type": "FRAME",
+        "depth": 0
+      },
+      {
+        "name": "header-",
+        "type": "GROUP",
+        "depth": 1
+      },
+      {
+        "name": "g",
+        "type": "GROUP",
+        "depth": 2
+      },
+      {
+        "name": "流量监测",
+        "type": "TEXT",
+        "depth": 2
+      },
+      {
+        "name": "slot-当日总流量",
+        "type": "FRAME",
+        "depth": 1
+      },
+      {
+        "name": "sub-header",
+        "type": "FRAME",
+        "depth": 2
+      },
+      {
+        "name": "@ant/select",
+        "type": "GROUP",
+        "depth": 3
+      },
+      {
+        "name": "Group 1321316013",
+        "type": "GROUP",
+        "depth": 4
+      },
+      {
+        "name": "24小时",
+        "type": "TEXT",
+        "depth": 5
+      },
+      {
+        "name": "标题",
+        "type": "GROUP",
+        "depth": 3
+      },
+      {
+        "name": "当日总流量",
+        "type": "TEXT",
+        "depth": 4
+      },
+      {
+        "name": "icon",
+        "type": "GROUP",
+        "depth": 4
+      },
+      {
+        "name": "Group 2136636802",
+        "type": "GROUP",
+        "depth": 2
+      },
+      {
+        "name": "bg-[m]",
+        "type": "FRAME",
+        "depth": 3
+      },
+      {
+        "name": "Group 1321315135",
+        "type": "GROUP",
+        "depth": 4
+      }
+    ],
+    "uncertain": [
+      {
+        "name": "辆",
+        "type": "TEXT"
+      },
+      {
+        "name": "时",
+        "type": "TEXT"
+      },
+      {
+        "name": "辆",
+        "type": "TEXT"
+      },
+      {
+        "name": "时",
+        "type": "TEXT"
+      },
+      {
+        "name": "t",
+        "type": "TEXT"
+      },
+      {
+        "name": "d",
+        "type": "TEXT"
+      },
+      {
+        "name": "t",
+        "type": "TEXT"
+      },
+      {
+        "name": "d",
+        "type": "TEXT"
+      },
+      {
+        "name": "客车",
+        "type": "TEXT"
+      },
+      {
+        "name": "货车",
+        "type": "TEXT"
+      }
+    ],
+    "summary": "需关注"
+  }
+}

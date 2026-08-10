@@ -1,0 +1,60 @@
+{
+  "appliedAt": "2026-08-05T12:27:00.627Z",
+  "codeUpdated": true,
+  "backupFile": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mv-lite-1785921659215-9994b5ed/.cache/package-index.before-assets-1785932820625.vue",
+  "appliedPlacements": [
+    {
+      "figmaNodeId": "2:7880",
+      "resourceFile": "bg-7880.png",
+      "type": "bg",
+      "targetElement": "最外层容器 .container，作为整个组件的全局背景",
+      "targetSelector": ".container",
+      "usage": "backgroundImage",
+      "codeSuggestion": "<div class=\"container\" style=\"background-image: url('bg-7880.png'); background-size: cover; background-repeat: no-repeat;\">",
+      "confidence": "high",
+      "reason": "Figma 路径为 cp-环境监测/bg，尺寸 420x186 符合整体容器背景比例，描述提示为 bg区域，应作为最外层 .container 的背景图"
+    },
+    {
+      "figmaNodeId": "2:7890",
+      "resourceFile": "bg-7890.png",
+      "type": "bg",
+      "targetElement": "导航 Tab 列表容器 .tabs-container，作为 Tab 栏的整体背景",
+      "targetSelector": ".tabs-container",
+      "usage": "backgroundImage",
+      "codeSuggestion": "<div class=\"tabs-container\" style=\"background-image: url('bg-7890.png'); background-size: 100% 100%; background-repeat: no-repeat;\">",
+      "confidence": "high",
+      "reason": "Figma 路径为 tabs-list/bg，尺寸约 295x27 为横向长条，与 .tabs-container 的 Tab 列表区域形状吻合，作为 Tab 栏背景"
+    },
+    {
+      "figmaNodeId": "2:7891",
+      "resourceFile": "bg-tab-active-7891.png",
+      "type": "bg",
+      "targetElement": "当前激活状态的 Tab 项 .tab-item.active，作为选中 Tab 的背景",
+      "targetSelector": ".tab-item.active",
+      "usage": "backgroundImage",
+      "codeSuggestion": "<div class=\"tab-item\" :class=\"{ active: currentTab === tab }\" :style=\"currentTab === tab ? { backgroundImage: 'url(' + bgTabActive + ')', backgroundSize: '100% 100%' } : {}\">",
+      "confidence": "high",
+      "reason": "Figma 路径为 tabs-list/bg-tab-active，尺寸约 78x21，与单个 Tab 项尺寸匹配，明确用于激活态 Tab 的背景"
+    },
+    {
+      "figmaNodeId": "89:43",
+      "resourceFile": "tabs-icon-43.png",
+      "type": "icon",
+      "targetElement": "Tab 列表区域的装饰图标，需要在 .tabs-container 内新增一个图标元素",
+      "targetSelector": ".tabs-container .tabs-icon",
+      "usage": "imgSrc",
+      "codeSuggestion": "<div class=\"tabs-container\"><img :src=\"tabsIcon\" class=\"tabs-icon\" alt=\"tabs-icon\" /><div v-for=\"tab in tabs\" ...>",
+      "confidence": "medium",
+      "reason": "Figma 路径为 tabs-icon，尺寸 52x24，描述提示为 tabs-icon区域，模板中 .tabs-container 内没有对应图标元素，需要在 Tab 列表旁新增一个装饰性图标"
+    }
+  ],
+  "skippedPlacements": [],
+  "modifiedFiles": [
+    "package/index.vue"
+  ],
+  "validation": {
+    "sfcStructure": "passed",
+    "scriptSetupUnchanged": "passed",
+    "resourceReferences": "passed"
+  }
+}

@@ -1,0 +1,265 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 60,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0].header",
+        "message": "违反核心规范：禁止生成组件面板标题。`header.title` 为 '设备监测' 且 `headerRelation` 为 'title-itself'，组件标题应由 `base-panel` 通过 `componentName` 自动渲染，绝对禁止在内部重复生成。",
+        "suggestion": "移除 `header-stats` 中的 `header.title`，将 `headerRelation` 改为 'content-below-title'，或将统计指标直接作为无标题 section 的内容。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[*].body.backgroundImage",
+        "message": "背景图重复定义。三个 section 的 body 中均定义了相同的背景图 `bg-8788.png`，会导致 DOM 重复渲染和性能浪费，且可能产生视觉重叠。",
+        "suggestion": "移除子 section 中的重复背景图定义，统一由最外层容器或 `base-panel` 处理全局背景。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[*].children",
+        "message": "统计卡片内容顺序不符合常规阅读习惯。设备名称（如'隧道设备'）被放置在最后，而数值在前，导致视觉重心偏移。",
+        "suggestion": "调整 children 顺序，将设备名称（标题）放在首位，其次为总数，最后为异常数。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[1].body.children[*].children[1]",
+        "message": "嵌套层级过深。文本内容使用了 `content-group` 再次包裹 `label`，增加了不必要的 DOM 节点和渲染层级。",
+        "suggestion": "移除 `content-group` 包装层，直接在卡片容器下使用 flex 布局（flex-direction: column）排列各个 label 元素。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[0]",
+        "message": "侧边栏使用了固定宽度 `width: '60px'`，不符合宽度自适应约束中'禁止使用固定 px 宽度限制容器伸缩'的要求。",
+        "suggestion": "将固定宽度改为 flex 布局属性，如 `flex: 0 0 60px`，或根据设计稿比例使用相对值，确保在极端尺寸下不撑破父容器。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[*].body.children[*].iconResource",
+        "message": "图片资源引用方式存在风险。布局中大量使用 `resourceFile` 指向本地相对路径，在代码生成时极易触发 RUNTIME-004 运行时错误。",
+        "suggestion": "在代码生成阶段，必须将这些图片转换为 base64 内联或使用同源 URL，严禁使用 ESM import 引入本地图片文件。"
+      }
+    ],
+    "recommendations": [
+      "严格遵循'零装饰原则'和'禁止生成面板标题'规范，确保组件内容区不包含面板级标题、边框和背景，所有面板级样式交由 `base-panel` 处理。",
+      "优化 DOM 结构，减少不必要的包裹层（如 content-group），利用 CSS Flex/Grid 直接布局子元素，提升渲染性能并降低维护成本。",
+      "在代码生成前，统一处理所有图片资源，确保符合微码运行时的加载机制（base64 或同源路径），避免运行时加载失败。",
+      "关注 `coverageReport` 中极低的匹配率（0%），建议检查 Figma 设计稿的图层命名和结构，确保 AI 能够正确解析并匹配设计元素。"
+    ],
+    "summary": "该布局结构整体区域划分清晰，能够准确识别设备监测面板的核心功能模块（统计、卡片、分类Tab、设备网格）。但存在一个致命问题：违反了'禁止生成组件面板标题'的核心规范，将组件级标题作为了内部 section 的标题。此外，背景图重复定义、卡片内容顺序不合理、嵌套过深以及固定宽度等问题也需要优化。建议修正核心规范冲突后，进一步精简 DOM 结构并规范资源引用方式。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1990FF",
+      "--colorBg": "#EDF4FB",
+      "--colorTextBase": "#333333",
+      "--colorError": "#F53F3F",
+      "--colorSuccess": "#08A3A5",
+      "--fontSize": "14px",
+      "--fontSizeHeading": "24px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#1990FF",
+      "@color-bg": "#EDF4FB",
+      "@color-text-base": "#333333",
+      "@color-error": "#F53F3F",
+      "@color-success": "#08A3A5",
+      "@font-size-base": "14px",
+      "@font-size-heading": "24px",
+      "@border-radius-base": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "16px",
+        "background": "var(--colorBg, #EDF4FB)",
+        "color": "var(--colorTextBase, #333333)",
+        "font-size": "var(--fontSize, 14px)"
+      },
+      ".card": {
+        "background": "#FFFFFF",
+        "border-radius": "var(--borderRadius, 8px)",
+        "padding": "16px",
+        "box-shadow": "0 2px 8px rgba(0, 0, 0, 0.05)"
+      },
+      ".tab-item-active": {
+        "border-left": "3px solid var(--colorPrimary, #1990FF)",
+        "color": "var(--colorPrimary, #1990FF)",
+        "background": "rgba(25, 144, 255, 0.08)",
+        "font-weight": "600"
+      },
+      ".stat-value-primary": {
+        "font-size": "var(--fontSizeHeading, 24px)",
+        "font-weight": "700",
+        "color": "var(--colorPrimary, #1990FF)"
+      },
+      ".stat-value-error": {
+        "font-size": "var(--fontSizeHeading, 24px)",
+        "font-weight": "700",
+        "color": "var(--colorError, #F53F3F)"
+      }
+    },
+    "tokenCoverage": 1,
+    "mappingNotes": [
+      "主色调 #1990FF 映射为 --colorPrimary，用于左侧Tab选中高亮及蓝色大数值",
+      "背景色 #EDF4FB 映射为 --colorBg，作为整体容器背景",
+      "异常色 #F53F3F 映射为 --colorError，专门用于红色异常数强调",
+      "辅助色 #08A3A5 映射为 --colorSuccess，可用于正常状态或趋势指示",
+      "卡片圆角统一使用 --borderRadius (8px) 实现",
+      "容器背景应优先直接落地为 Figma 字面量值，避免关键可见背景只依赖 CSS 变量"
+    ],
+    "elementStyleMap": {
+      "header-stats": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "card-tunnel-content-group-x-1-label-总数:56302-0": {
+        "color": "#ffffff",
+        "font-size": 16,
+        "font-weight": "bold"
+      },
+      "card-tunnel-content-group-x-1-label-异常数:5-1": {
+        "color": "#f53f3f",
+        "font-size": 14
+      },
+      "card-tunnel-content-group-x-1-label-隧道设备-2": {
+        "color": "#ffffff",
+        "font-size": 12
+      },
+      "card-tunnel-content-group-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-tunnel": {
+        "background": "linear-gradient(270deg, #318aff 0%, #70bfff 100%)",
+        "border-radius": "8px",
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-north-south-content-group-x-1-label-总数:1280-0": {
+        "color": "#1990ff",
+        "font-size": 16,
+        "font-weight": "bold"
+      },
+      "card-north-south-content-group-x-1-label-异常数:3-1": {
+        "color": "#f53f3f",
+        "font-size": 14
+      },
+      "card-north-south-content-group-x-1-label-南北接线设备-2": {
+        "color": "#333333",
+        "font-size": 12
+      },
+      "card-north-south-content-group-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-north-south": {
+        "background": "#f0f5ff",
+        "border-radius": "8px",
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-8": {
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-content-group-x-11-label-总数:56302-0": {
+        "color": "#ffffff",
+        "font-size": 16,
+        "font-weight": "bold"
+      },
+      "el-content-group-x-11-label-异常数:5-1": {
+        "color": "#f53f3f",
+        "font-size": 14
+      },
+      "el-content-group-x-11-label-隧道设备-2": {
+        "color": "#ffffff",
+        "font-size": 12
+      },
+      "el-content-group-x-11": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-label-总数:56302-12": {
+        "color": "#ffffff",
+        "font-size": 16,
+        "font-weight": "bold"
+      },
+      "el-label-异常数:5-13": {
+        "color": "#f53f3f",
+        "font-size": 14
+      },
+      "el-label-隧道设备-14": {
+        "color": "#ffffff",
+        "font-size": 12
+      },
+      "el-content-group-x-17-label-总数:1280-0": {
+        "color": "#1990ff",
+        "font-size": 16,
+        "font-weight": "bold"
+      },
+      "el-content-group-x-17-label-异常数:3-1": {
+        "color": "#f53f3f",
+        "font-size": 14
+      },
+      "el-content-group-x-17-label-南北接线设备-2": {
+        "color": "#333333",
+        "font-size": 12
+      },
+      "el-content-group-x-17": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-label-总数:1280-18": {
+        "color": "#1990ff",
+        "font-size": 16,
+        "font-weight": "bold"
+      },
+      "el-label-异常数:3-19": {
+        "color": "#f53f3f",
+        "font-size": 14
+      },
+      "el-label-南北接线设备-20": {
+        "color": "#333333",
+        "font-size": 12
+      },
+      "main-content": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "sidebar-tabs": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-22": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  }
+}

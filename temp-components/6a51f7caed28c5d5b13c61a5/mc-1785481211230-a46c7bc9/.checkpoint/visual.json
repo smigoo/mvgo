@@ -1,0 +1,407 @@
+{
+  "layoutStructure": {
+    "generatedAt": "2026-07-31T07:02:03.048Z",
+    "stage": "preview-analysis",
+    "componentName": "cp-环境监测",
+    "width": 420,
+    "height": 186,
+    "backgroundColor": "#edf4fbb2",
+    "description": "环境监测面板，包含标题、Tab切换栏、右上角状态图标及ECharts折线面积图（展示CO浓度及预警线）。",
+    "headerSlots": [
+      {
+        "slotType": "title-left",
+        "elementType": "icon",
+        "content": "装饰性图标",
+        "resourceFile": "../resources/images/g-7883.png",
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "g"
+      },
+      {
+        "slotType": "header-right",
+        "elementType": "icon",
+        "content": "图表/列表切换图标",
+        "resourceFile": "../resources/images/tabs-icon-43.png",
+        "recommendedUsage": "decorativeBlock",
+        "figmaNodeId": "tabs-icon"
+      },
+      {
+        "slotType": "header-right",
+        "elementType": "statistic",
+        "content": "6",
+        "style": {
+          "backgroundColor": "#f53f3f",
+          "color": "#ffffff",
+          "borderRadius": "50%",
+          "width": "14px",
+          "height": "14px",
+          "fontSize": "10px",
+          "display": "flex",
+          "alignItems": "center",
+          "justifyContent": "center"
+        },
+        "figmaNodeId": "num"
+      }
+    ],
+    "elements": [
+      {
+        "type": "text",
+        "content": "环境监测",
+        "style": {
+          "fontSize": "16px",
+          "fontWeight": "bold",
+          "background": "linear-gradient(90deg, #1099b1 0%, #038fff 100%)",
+          "-webkit-background-clip": "text",
+          "-webkit-text-fill-color": "transparent",
+          "position": "absolute",
+          "top": "5px",
+          "left": "15px"
+        },
+        "figmaNodeId": "环境监测"
+      },
+      {
+        "type": "tabs",
+        "layout": "horizontal",
+        "items": [
+          {
+            "label": "一氧化碳",
+            "active": true,
+            "style": {
+              "background": "linear-gradient(90deg, #1099b1 0%, #038fff 100%)",
+              "color": "#ffffff",
+              "borderRadius": "12px",
+              "padding": "4px 12px"
+            }
+          },
+          {
+            "label": "能见度",
+            "active": false,
+            "style": {
+              "color": "#ffffff",
+              "padding": "4px 12px"
+            }
+          },
+          {
+            "label": "洞内照明",
+            "active": false,
+            "style": {
+              "color": "#ffffff",
+              "padding": "4px 12px"
+            }
+          },
+          {
+            "label": "洞外光强",
+            "active": false,
+            "style": {
+              "color": "#ffffff",
+              "padding": "4px 12px"
+            }
+          }
+        ],
+        "figmaNodeId": "tabs-list"
+      },
+      {
+        "type": "chart",
+        "chartType": "line/area",
+        "library": "echarts",
+        "config": {
+          "grid": {
+            "top": 30,
+            "bottom": 20,
+            "left": 30,
+            "right": 20
+          },
+          "xAxis": {
+            "type": "category",
+            "data": [
+              "2",
+              "4",
+              "6",
+              "8",
+              "10",
+              "12",
+              "14",
+              "16",
+              "18",
+              "20",
+              "22",
+              "24"
+            ],
+            "name": "时",
+            "nameLocation": "end",
+            "axisLine": {
+              "show": false
+            },
+            "axisTick": {
+              "show": false
+            },
+            "axisLabel": {
+              "color": "#a0aab5"
+            }
+          },
+          "yAxis": {
+            "type": "value",
+            "min": 0,
+            "max": 40,
+            "interval": 10,
+            "name": "辆",
+            "splitLine": {
+              "lineStyle": {
+                "type": "dashed",
+                "color": "rgba(255,255,255,0.2)"
+              }
+            },
+            "axisLabel": {
+              "color": "#a0aab5"
+            }
+          },
+          "series": [
+            {
+              "name": "zk3+785CO浓度",
+              "type": "line",
+              "smooth": true,
+              "symbol": "none",
+              "lineStyle": {
+                "color": "#5cdb95"
+              },
+              "areaStyle": {
+                "color": {
+                  "type": "linear",
+                  "x": 0,
+                  "y": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "colorStops": [
+                    {
+                      "offset": 0,
+                      "color": "rgba(92, 219, 149, 0.5)"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "rgba(92, 219, 149, 0.0)"
+                    }
+                  ]
+                }
+              },
+              "data": [
+                2,
+                3,
+                4,
+                3,
+                2,
+                2,
+                3,
+                5,
+                8,
+                12,
+                10,
+                8
+              ]
+            }
+          ],
+          "markLine": {
+            "symbol": "none",
+            "label": {
+              "formatter": "预警线",
+              "position": "end",
+              "color": "#f53f3f"
+            },
+            "lineStyle": {
+              "type": "dashed",
+              "color": "#f53f3f"
+            },
+            "data": [
+              {
+                "yAxis": 30
+              }
+            ]
+          },
+          "legend": {
+            "data": [
+              "zk3+785CO浓度"
+            ],
+            "right": 10,
+            "top": 0,
+            "textStyle": {
+              "color": "#5cdb95",
+              "fontSize": 10
+            },
+            "icon": "rect"
+          }
+        },
+        "figmaNodeId": "@echarts/line"
+      }
+    ],
+    "layout": {
+      "type": "vertical",
+      "direction": "top-to-bottom",
+      "sections": []
+    },
+    "styles": {
+      "theme": "未知",
+      "colors": [],
+      "background": "",
+      "decorations": [],
+      "emphasis": [],
+      "backgroundBrightness": "dark"
+    },
+    "interactions": [],
+    "charts": [],
+    "_parseWarning": "质量门检测到解析结果全空，下游精修可能受限",
+    "coverageReport": {
+      "totalFigma": 49,
+      "matchedCount": 0,
+      "missingCount": 26,
+      "uncertainCount": 2,
+      "coverageRate": 0,
+      "missing": [
+        {
+          "name": "cp-环境监测",
+          "type": "FRAME",
+          "depth": 0
+        },
+        {
+          "name": "header",
+          "type": "GROUP",
+          "depth": 1
+        },
+        {
+          "name": "g",
+          "type": "GROUP",
+          "depth": 2
+        },
+        {
+          "name": "环境监测",
+          "type": "TEXT",
+          "depth": 2
+        },
+        {
+          "name": "slot-con",
+          "type": "FRAME",
+          "depth": 1
+        },
+        {
+          "name": "@echarts/line",
+          "type": "GROUP",
+          "depth": 2
+        },
+        {
+          "name": "Group 2136637691",
+          "type": "GROUP",
+          "depth": 3
+        },
+        {
+          "name": "Frame 2136636709",
+          "type": "FRAME",
+          "depth": 4
+        },
+        {
+          "name": "40 30 20 10 0",
+          "type": "TEXT",
+          "depth": 4
+        },
+        {
+          "name": "预警线",
+          "type": "TEXT",
+          "depth": 4
+        },
+        {
+          "name": "Frame 2136636710",
+          "type": "FRAME",
+          "depth": 4
+        },
+        {
+          "name": "Frame 2136637694",
+          "type": "FRAME",
+          "depth": 3
+        },
+        {
+          "name": "Group 1321318245",
+          "type": "GROUP",
+          "depth": 4
+        },
+        {
+          "name": "zk3+785CO浓度",
+          "type": "TEXT",
+          "depth": 5
+        },
+        {
+          "name": "sub-t",
+          "type": "FRAME",
+          "depth": 2
+        }
+      ],
+      "uncertain": [
+        {
+          "name": "辆",
+          "type": "TEXT"
+        },
+        {
+          "name": "时",
+          "type": "TEXT"
+        }
+      ],
+      "summary": "需关注"
+    }
+  },
+  "visualElements": {
+    "theme": "未知",
+    "colors": [],
+    "background": "",
+    "decorations": [],
+    "emphasis": [],
+    "backgroundBrightness": "dark"
+  },
+  "interactions": [],
+  "charts": [],
+  "headerSlots": [
+    {
+      "slotType": "title-left",
+      "elementType": "icon",
+      "content": "装饰性图标",
+      "resourceFile": "../resources/images/g-7883.png",
+      "recommendedUsage": "imgSrc",
+      "figmaNodeId": "g"
+    },
+    {
+      "slotType": "header-right",
+      "elementType": "icon",
+      "content": "图表/列表切换图标",
+      "resourceFile": "../resources/images/tabs-icon-43.png",
+      "recommendedUsage": "decorativeBlock",
+      "figmaNodeId": "tabs-icon"
+    },
+    {
+      "slotType": "header-right",
+      "elementType": "statistic",
+      "content": "6",
+      "style": {
+        "backgroundColor": "#f53f3f",
+        "color": "#ffffff",
+        "borderRadius": "50%",
+        "width": "14px",
+        "height": "14px",
+        "fontSize": "10px",
+        "display": "flex",
+        "alignItems": "center",
+        "justifyContent": "center"
+      },
+      "figmaNodeId": "num"
+    }
+  ],
+  "analysisType": "",
+  "analysisTarget": "",
+  "analysisDescription": "环境监测面板，包含标题、Tab切换栏、右上角状态图标及ECharts折线面积图（展示CO浓度及预警线）。",
+  "analysisEvidence": [],
+  "headerValidation": {
+    "passed": true,
+    "headerElements": [],
+    "headerRightElements": [],
+    "suggestions": [],
+    "confidence": "low"
+  },
+  "headerSlotValidation": {
+    "validatedSlots": [],
+    "rejectedNodes": [],
+    "warnings": []
+  }
+}

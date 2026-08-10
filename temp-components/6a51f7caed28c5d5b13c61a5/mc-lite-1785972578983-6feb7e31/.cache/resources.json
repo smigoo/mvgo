@@ -1,0 +1,2701 @@
+{
+  "componentId": "mc-lite-1785972578983-6feb7e31",
+  "fileKey": "1t7Dmmpsl5i0PC8BJt2QLf",
+  "nodeId": "2:8417",
+  "upgradedAt": "2026-08-06T00:14:39.450Z",
+  "totalAssets": 38,
+  "assets": [
+    {
+      "name": "bg",
+      "ref": "2:8418",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/resources/bg-8418.png",
+      "downloadStatus": "success",
+      "type": "bg"
+    },
+    {
+      "name": "g",
+      "ref": "2:8421",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/resources/g-8421.png",
+      "downloadStatus": "success",
+      "type": "image"
+    },
+    {
+      "name": "Frame",
+      "ref": "2:8856",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/resources/Frame-8856.png",
+      "downloadStatus": "success",
+      "type": "image"
+    },
+    {
+      "name": "bg",
+      "ref": "2:8788",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/resources/bg-8788.png",
+      "downloadStatus": "success",
+      "type": "bg"
+    },
+    {
+      "name": "icon",
+      "ref": "2:8798",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/resources/icon-8798.png",
+      "downloadStatus": "success",
+      "type": "icon"
+    },
+    {
+      "name": "bg",
+      "ref": "2:8807",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/resources/bg-8807.png",
+      "downloadStatus": "success",
+      "type": "bg"
+    },
+    {
+      "name": "icon",
+      "ref": "2:8817",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/resources/icon-8817.png",
+      "downloadStatus": "success",
+      "type": "icon"
+    },
+    {
+      "name": "bg",
+      "ref": "2:8831",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/resources/bg-8831.png",
+      "downloadStatus": "success",
+      "type": "bg"
+    },
+    {
+      "name": "bg",
+      "ref": "2:8847",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/resources/bg-8847.png",
+      "downloadStatus": "success",
+      "type": "bg"
+    },
+    {
+      "name": "bg",
+      "ref": "2:8852",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/resources/bg-8852.png",
+      "downloadStatus": "success",
+      "type": "bg"
+    },
+    {
+      "name": "bg",
+      "ref": "2:8439",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/resources/bg-8439.png",
+      "downloadStatus": "success",
+      "type": "bg"
+    },
+    {
+      "name": "icon",
+      "ref": "2:8444",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/resources/icon-8444.png",
+      "downloadStatus": "success",
+      "type": "icon"
+    },
+    {
+      "name": "bg",
+      "ref": "2:8468",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/resources/bg-8468.png",
+      "downloadStatus": "success",
+      "type": "bg"
+    },
+    {
+      "name": "icon",
+      "ref": "2:8473",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/resources/icon-8473.png",
+      "downloadStatus": "success",
+      "type": "icon"
+    },
+    {
+      "name": "bg",
+      "ref": "2:8498",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/resources/bg-8498.png",
+      "downloadStatus": "success",
+      "type": "bg"
+    },
+    {
+      "name": "icon",
+      "ref": "2:8503",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/resources/icon-8503.png",
+      "downloadStatus": "success",
+      "type": "icon"
+    },
+    {
+      "name": "bg",
+      "ref": "2:8527",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/resources/bg-8527.png",
+      "downloadStatus": "success",
+      "type": "bg"
+    },
+    {
+      "name": "icon",
+      "ref": "2:8532",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/resources/icon-8532.png",
+      "downloadStatus": "success",
+      "type": "icon"
+    },
+    {
+      "name": "bg",
+      "ref": "2:8556",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/resources/bg-8556.png",
+      "downloadStatus": "success",
+      "type": "bg"
+    },
+    {
+      "name": "icon",
+      "ref": "2:8561",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/resources/icon-8561.png",
+      "downloadStatus": "success",
+      "type": "icon"
+    },
+    {
+      "name": "bg",
+      "ref": "2:8585",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/resources/bg-8585.png",
+      "downloadStatus": "success",
+      "type": "bg"
+    },
+    {
+      "name": "icon",
+      "ref": "2:8590",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/resources/icon-8590.png",
+      "downloadStatus": "success",
+      "type": "icon"
+    },
+    {
+      "name": "bg",
+      "ref": "2:8614",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/resources/bg-8614.png",
+      "downloadStatus": "success",
+      "type": "bg"
+    },
+    {
+      "name": "icon",
+      "ref": "2:8619",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/resources/icon-8619.png",
+      "downloadStatus": "success",
+      "type": "icon"
+    },
+    {
+      "name": "bg",
+      "ref": "2:8643",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/resources/bg-8643.png",
+      "downloadStatus": "success",
+      "type": "bg"
+    },
+    {
+      "name": "icon",
+      "ref": "2:8648",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/resources/icon-8648.png",
+      "downloadStatus": "success",
+      "type": "icon"
+    },
+    {
+      "name": "bg",
+      "ref": "2:8672",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/resources/bg-8672.png",
+      "downloadStatus": "success",
+      "type": "bg"
+    },
+    {
+      "name": "icon",
+      "ref": "2:8677",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/resources/icon-8677.png",
+      "downloadStatus": "success",
+      "type": "icon"
+    },
+    {
+      "name": "bg",
+      "ref": "2:8701",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/resources/bg-8701.png",
+      "downloadStatus": "success",
+      "type": "bg"
+    },
+    {
+      "name": "icon",
+      "ref": "2:8706",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/resources/icon-8706.png",
+      "downloadStatus": "success",
+      "type": "icon"
+    },
+    {
+      "name": "bg",
+      "ref": "2:8730",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/resources/bg-8730.png",
+      "downloadStatus": "success",
+      "type": "bg"
+    },
+    {
+      "name": "icon",
+      "ref": "2:8735",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/resources/icon-8735.png",
+      "downloadStatus": "success",
+      "type": "icon"
+    },
+    {
+      "name": "bg",
+      "ref": "2:8759",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/resources/bg-8759.png",
+      "downloadStatus": "success",
+      "type": "bg"
+    },
+    {
+      "name": "icon",
+      "ref": "2:8764",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/resources/icon-8764.png",
+      "downloadStatus": "success",
+      "type": "icon"
+    },
+    {
+      "name": "bg",
+      "ref": "2:8826",
+      "localPath": null,
+      "downloadStatus": "css",
+      "type": "image",
+      "cssValue": "linear-gradient(270deg, #318aff 0%, #70bfff 100%)"
+    },
+    {
+      "name": "bg",
+      "ref": "2:8834",
+      "localPath": null,
+      "downloadStatus": "css",
+      "type": "image",
+      "cssValue": "#f53f3f"
+    },
+    {
+      "name": "bg",
+      "ref": "2:8837",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/resources/bg-8831.png",
+      "downloadStatus": "success",
+      "type": "bg"
+    },
+    {
+      "name": "bg",
+      "ref": "2:8842",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/resources/bg-8831.png",
+      "downloadStatus": "success",
+      "type": "bg"
+    }
+  ],
+  "mapping": [
+    {
+      "figmaNodeId": "2:8418",
+      "resourceFile": "../resources/images/bg-8418.png",
+      "targetDomSelector": ".bg-container",
+      "downloadStatus": "success",
+      "role": "bg",
+      "recommendedUsage": "backgroundStyle"
+    },
+    {
+      "figmaNodeId": "2:8421",
+      "resourceFile": "../resources/images/g-8421.png",
+      "targetDomSelector": ".g-container",
+      "downloadStatus": "success",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8422",
+      "resourceFile": null,
+      "targetDomSelector": ".circle-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8423",
+      "resourceFile": null,
+      "targetDomSelector": ".circle-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8424",
+      "resourceFile": null,
+      "targetDomSelector": ".path-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8856",
+      "resourceFile": "../resources/images/Frame-8856.png",
+      "targetDomSelector": ".frame-container",
+      "downloadStatus": "success",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8857",
+      "resourceFile": null,
+      "targetDomSelector": ".vector-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8788",
+      "resourceFile": "../resources/images/bg-8788.png",
+      "targetDomSelector": ".bg-container",
+      "downloadStatus": "success",
+      "role": "bg",
+      "recommendedUsage": "backgroundBlock"
+    },
+    {
+      "figmaNodeId": "2:8798",
+      "resourceFile": "../resources/images/icon-8798.png",
+      "targetDomSelector": ".icon-container",
+      "downloadStatus": "success",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8799",
+      "resourceFile": null,
+      "targetDomSelector": "._6_-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8800",
+      "resourceFile": null,
+      "targetDomSelector": "._8-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8801",
+      "resourceFile": null,
+      "targetDomSelector": "._6__2-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8802",
+      "resourceFile": null,
+      "targetDomSelector": "._8_-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8803",
+      "resourceFile": null,
+      "targetDomSelector": "._6-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8804",
+      "resourceFile": null,
+      "targetDomSelector": ".-1-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8805",
+      "resourceFile": null,
+      "targetDomSelector": ".vector-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8807",
+      "resourceFile": "../resources/images/bg-8807.png",
+      "targetDomSelector": ".bg-container",
+      "downloadStatus": "success",
+      "role": "bg",
+      "recommendedUsage": "backgroundBlock"
+    },
+    {
+      "figmaNodeId": "2:8817",
+      "resourceFile": "../resources/images/icon-8817.png",
+      "targetDomSelector": ".icon-container",
+      "downloadStatus": "success",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8818",
+      "resourceFile": null,
+      "targetDomSelector": "._6_-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8819",
+      "resourceFile": null,
+      "targetDomSelector": "._8-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8820",
+      "resourceFile": null,
+      "targetDomSelector": "._6__2-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8821",
+      "resourceFile": null,
+      "targetDomSelector": "._8_-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8822",
+      "resourceFile": null,
+      "targetDomSelector": "._6-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8823",
+      "resourceFile": null,
+      "targetDomSelector": ".extension-cord-1-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8824",
+      "resourceFile": null,
+      "targetDomSelector": ".vector-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8826",
+      "resourceFile": null,
+      "targetDomSelector": ".bg-container",
+      "downloadStatus": "css",
+      "role": "bg",
+      "recommendedUsage": "backgroundBlock"
+    },
+    {
+      "figmaNodeId": "2:8831",
+      "resourceFile": "../resources/images/bg-8831.png",
+      "targetDomSelector": ".bg-container",
+      "downloadStatus": "success",
+      "role": "bg",
+      "recommendedUsage": "backgroundBlock"
+    },
+    {
+      "figmaNodeId": "2:8834",
+      "resourceFile": null,
+      "targetDomSelector": ".bg-container",
+      "downloadStatus": "css",
+      "role": "bg",
+      "recommendedUsage": "backgroundBlock"
+    },
+    {
+      "figmaNodeId": "2:8837",
+      "resourceFile": "../resources/images/bg-8831.png",
+      "targetDomSelector": ".bg-container",
+      "downloadStatus": "success",
+      "role": "bg",
+      "recommendedUsage": "backgroundBlock"
+    },
+    {
+      "figmaNodeId": "2:8842",
+      "resourceFile": "../resources/images/bg-8831.png",
+      "targetDomSelector": ".bg-container",
+      "downloadStatus": "success",
+      "role": "bg",
+      "recommendedUsage": "backgroundBlock"
+    },
+    {
+      "figmaNodeId": "2:8847",
+      "resourceFile": "../resources/images/bg-8847.png",
+      "targetDomSelector": ".bg-container",
+      "downloadStatus": "success",
+      "role": "bg",
+      "recommendedUsage": "backgroundBlock"
+    },
+    {
+      "figmaNodeId": "2:8852",
+      "resourceFile": "../resources/images/bg-8852.png",
+      "targetDomSelector": ".bg-container",
+      "downloadStatus": "success",
+      "role": "bg",
+      "recommendedUsage": "backgroundBlock"
+    },
+    {
+      "figmaNodeId": "2:8439",
+      "resourceFile": "../resources/images/bg-8439.png",
+      "targetDomSelector": ".bg-container",
+      "downloadStatus": "success",
+      "role": "bg",
+      "recommendedUsage": "backgroundBlock"
+    },
+    {
+      "figmaNodeId": "2:8444",
+      "resourceFile": "../resources/images/icon-8444.png",
+      "targetDomSelector": ".icon-container",
+      "downloadStatus": "success",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8447",
+      "resourceFile": null,
+      "targetDomSelector": "._4__3-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8448",
+      "resourceFile": null,
+      "targetDomSelector": "._4_-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8449",
+      "resourceFile": null,
+      "targetDomSelector": "._4__2-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8450",
+      "resourceFile": null,
+      "targetDomSelector": "._10-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8451",
+      "resourceFile": null,
+      "targetDomSelector": "._4__4-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8452",
+      "resourceFile": null,
+      "targetDomSelector": "._4-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8453",
+      "resourceFile": null,
+      "targetDomSelector": "._4__6-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8454",
+      "resourceFile": null,
+      "targetDomSelector": "._4__5-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8455",
+      "resourceFile": null,
+      "targetDomSelector": "._5-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8456",
+      "resourceFile": null,
+      "targetDomSelector": "._6-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8459",
+      "resourceFile": null,
+      "targetDomSelector": ".group-1321317970-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8465",
+      "resourceFile": null,
+      "targetDomSelector": ".frame-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8466",
+      "resourceFile": null,
+      "targetDomSelector": ".vector-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8468",
+      "resourceFile": "../resources/images/bg-8468.png",
+      "targetDomSelector": ".bg-container",
+      "downloadStatus": "success",
+      "role": "bg",
+      "recommendedUsage": "backgroundBlock"
+    },
+    {
+      "figmaNodeId": "2:8473",
+      "resourceFile": "../resources/images/icon-8473.png",
+      "targetDomSelector": ".icon-container",
+      "downloadStatus": "success",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8476",
+      "resourceFile": null,
+      "targetDomSelector": "._4__3-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8477",
+      "resourceFile": null,
+      "targetDomSelector": "._4_-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8478",
+      "resourceFile": null,
+      "targetDomSelector": "._4__2-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8479",
+      "resourceFile": null,
+      "targetDomSelector": "._10-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8480",
+      "resourceFile": null,
+      "targetDomSelector": "._4__4-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8481",
+      "resourceFile": null,
+      "targetDomSelector": "._4-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8482",
+      "resourceFile": null,
+      "targetDomSelector": "._4__6-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8483",
+      "resourceFile": null,
+      "targetDomSelector": "._4__5-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8484",
+      "resourceFile": null,
+      "targetDomSelector": "._5-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8485",
+      "resourceFile": null,
+      "targetDomSelector": "._6-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8488",
+      "resourceFile": null,
+      "targetDomSelector": ".group-1321317970-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8495",
+      "resourceFile": null,
+      "targetDomSelector": ".robotman-1-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8496",
+      "resourceFile": null,
+      "targetDomSelector": ".vector-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8498",
+      "resourceFile": "../resources/images/bg-8498.png",
+      "targetDomSelector": ".bg-container",
+      "downloadStatus": "success",
+      "role": "bg",
+      "recommendedUsage": "backgroundBlock"
+    },
+    {
+      "figmaNodeId": "2:8503",
+      "resourceFile": "../resources/images/icon-8503.png",
+      "targetDomSelector": ".icon-container",
+      "downloadStatus": "success",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8506",
+      "resourceFile": null,
+      "targetDomSelector": "._4__3-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8507",
+      "resourceFile": null,
+      "targetDomSelector": "._4_-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8508",
+      "resourceFile": null,
+      "targetDomSelector": "._4__2-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8509",
+      "resourceFile": null,
+      "targetDomSelector": "._10-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8510",
+      "resourceFile": null,
+      "targetDomSelector": "._4__4-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8511",
+      "resourceFile": null,
+      "targetDomSelector": "._4-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8512",
+      "resourceFile": null,
+      "targetDomSelector": "._4__6-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8513",
+      "resourceFile": null,
+      "targetDomSelector": "._4__5-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8514",
+      "resourceFile": null,
+      "targetDomSelector": "._5-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8515",
+      "resourceFile": null,
+      "targetDomSelector": "._6-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8518",
+      "resourceFile": null,
+      "targetDomSelector": ".group-1321317970-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8524",
+      "resourceFile": null,
+      "targetDomSelector": ".frame-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8525",
+      "resourceFile": null,
+      "targetDomSelector": ".vector-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8527",
+      "resourceFile": "../resources/images/bg-8527.png",
+      "targetDomSelector": ".bg-container",
+      "downloadStatus": "success",
+      "role": "bg",
+      "recommendedUsage": "backgroundBlock"
+    },
+    {
+      "figmaNodeId": "2:8532",
+      "resourceFile": "../resources/images/icon-8532.png",
+      "targetDomSelector": ".icon-container",
+      "downloadStatus": "success",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8535",
+      "resourceFile": null,
+      "targetDomSelector": "._4__3-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8536",
+      "resourceFile": null,
+      "targetDomSelector": "._4_-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8537",
+      "resourceFile": null,
+      "targetDomSelector": "._4__2-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8538",
+      "resourceFile": null,
+      "targetDomSelector": "._10-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8539",
+      "resourceFile": null,
+      "targetDomSelector": "._4__4-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8540",
+      "resourceFile": null,
+      "targetDomSelector": "._4-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8541",
+      "resourceFile": null,
+      "targetDomSelector": "._4__6-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8542",
+      "resourceFile": null,
+      "targetDomSelector": "._4__5-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8543",
+      "resourceFile": null,
+      "targetDomSelector": "._5-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8544",
+      "resourceFile": null,
+      "targetDomSelector": "._6-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8547",
+      "resourceFile": null,
+      "targetDomSelector": ".group-1321317970-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8553",
+      "resourceFile": null,
+      "targetDomSelector": ".frame-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8554",
+      "resourceFile": null,
+      "targetDomSelector": ".vector-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8556",
+      "resourceFile": "../resources/images/bg-8556.png",
+      "targetDomSelector": ".bg-container",
+      "downloadStatus": "success",
+      "role": "bg",
+      "recommendedUsage": "backgroundBlock"
+    },
+    {
+      "figmaNodeId": "2:8561",
+      "resourceFile": "../resources/images/icon-8561.png",
+      "targetDomSelector": ".icon-container",
+      "downloadStatus": "success",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8564",
+      "resourceFile": null,
+      "targetDomSelector": "._4__3-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8565",
+      "resourceFile": null,
+      "targetDomSelector": "._4_-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8566",
+      "resourceFile": null,
+      "targetDomSelector": "._4__2-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8567",
+      "resourceFile": null,
+      "targetDomSelector": "._10-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8568",
+      "resourceFile": null,
+      "targetDomSelector": "._4__4-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8569",
+      "resourceFile": null,
+      "targetDomSelector": "._4-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8570",
+      "resourceFile": null,
+      "targetDomSelector": "._4__6-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8571",
+      "resourceFile": null,
+      "targetDomSelector": "._4__5-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8572",
+      "resourceFile": null,
+      "targetDomSelector": "._5-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8573",
+      "resourceFile": null,
+      "targetDomSelector": "._6-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8576",
+      "resourceFile": null,
+      "targetDomSelector": ".group-1321317970-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8582",
+      "resourceFile": null,
+      "targetDomSelector": ".frame-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8583",
+      "resourceFile": null,
+      "targetDomSelector": ".vector-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8585",
+      "resourceFile": "../resources/images/bg-8585.png",
+      "targetDomSelector": ".bg-container",
+      "downloadStatus": "success",
+      "role": "bg",
+      "recommendedUsage": "backgroundBlock"
+    },
+    {
+      "figmaNodeId": "2:8590",
+      "resourceFile": "../resources/images/icon-8590.png",
+      "targetDomSelector": ".icon-container",
+      "downloadStatus": "success",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8593",
+      "resourceFile": null,
+      "targetDomSelector": "._4__3-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8594",
+      "resourceFile": null,
+      "targetDomSelector": "._4_-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8595",
+      "resourceFile": null,
+      "targetDomSelector": "._4__2-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8596",
+      "resourceFile": null,
+      "targetDomSelector": "._10-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8597",
+      "resourceFile": null,
+      "targetDomSelector": "._4__4-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8598",
+      "resourceFile": null,
+      "targetDomSelector": "._4-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8599",
+      "resourceFile": null,
+      "targetDomSelector": "._4__6-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8600",
+      "resourceFile": null,
+      "targetDomSelector": "._4__5-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8601",
+      "resourceFile": null,
+      "targetDomSelector": "._5-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8602",
+      "resourceFile": null,
+      "targetDomSelector": "._6-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8605",
+      "resourceFile": null,
+      "targetDomSelector": ".group-1321317970-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8611",
+      "resourceFile": null,
+      "targetDomSelector": ".frame-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8612",
+      "resourceFile": null,
+      "targetDomSelector": ".vector-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8614",
+      "resourceFile": "../resources/images/bg-8614.png",
+      "targetDomSelector": ".bg-container",
+      "downloadStatus": "success",
+      "role": "bg",
+      "recommendedUsage": "backgroundBlock"
+    },
+    {
+      "figmaNodeId": "2:8619",
+      "resourceFile": "../resources/images/icon-8619.png",
+      "targetDomSelector": ".icon-container",
+      "downloadStatus": "success",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8622",
+      "resourceFile": null,
+      "targetDomSelector": "._4__3-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8623",
+      "resourceFile": null,
+      "targetDomSelector": "._4_-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8624",
+      "resourceFile": null,
+      "targetDomSelector": "._4__2-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8625",
+      "resourceFile": null,
+      "targetDomSelector": "._10-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8626",
+      "resourceFile": null,
+      "targetDomSelector": "._4__4-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8627",
+      "resourceFile": null,
+      "targetDomSelector": "._4-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8628",
+      "resourceFile": null,
+      "targetDomSelector": "._4__6-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8629",
+      "resourceFile": null,
+      "targetDomSelector": "._4__5-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8630",
+      "resourceFile": null,
+      "targetDomSelector": "._5-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8631",
+      "resourceFile": null,
+      "targetDomSelector": "._6-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8634",
+      "resourceFile": null,
+      "targetDomSelector": ".group-1321317970-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8640",
+      "resourceFile": null,
+      "targetDomSelector": ".frame-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8641",
+      "resourceFile": null,
+      "targetDomSelector": ".vector-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8643",
+      "resourceFile": "../resources/images/bg-8643.png",
+      "targetDomSelector": ".bg-container",
+      "downloadStatus": "success",
+      "role": "bg",
+      "recommendedUsage": "backgroundBlock"
+    },
+    {
+      "figmaNodeId": "2:8648",
+      "resourceFile": "../resources/images/icon-8648.png",
+      "targetDomSelector": ".icon-container",
+      "downloadStatus": "success",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8651",
+      "resourceFile": null,
+      "targetDomSelector": "._4__3-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8652",
+      "resourceFile": null,
+      "targetDomSelector": "._4_-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8653",
+      "resourceFile": null,
+      "targetDomSelector": "._4__2-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8654",
+      "resourceFile": null,
+      "targetDomSelector": "._10-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8655",
+      "resourceFile": null,
+      "targetDomSelector": "._4__4-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8656",
+      "resourceFile": null,
+      "targetDomSelector": "._4-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8657",
+      "resourceFile": null,
+      "targetDomSelector": "._4__6-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8658",
+      "resourceFile": null,
+      "targetDomSelector": "._4__5-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8659",
+      "resourceFile": null,
+      "targetDomSelector": "._5-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8660",
+      "resourceFile": null,
+      "targetDomSelector": "._6-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8663",
+      "resourceFile": null,
+      "targetDomSelector": ".group-1321317970-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8669",
+      "resourceFile": null,
+      "targetDomSelector": ".frame-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8670",
+      "resourceFile": null,
+      "targetDomSelector": ".vector-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8672",
+      "resourceFile": "../resources/images/bg-8672.png",
+      "targetDomSelector": ".bg-container",
+      "downloadStatus": "success",
+      "role": "bg",
+      "recommendedUsage": "backgroundBlock"
+    },
+    {
+      "figmaNodeId": "2:8677",
+      "resourceFile": "../resources/images/icon-8677.png",
+      "targetDomSelector": ".icon-container",
+      "downloadStatus": "success",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8680",
+      "resourceFile": null,
+      "targetDomSelector": "._4__3-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8681",
+      "resourceFile": null,
+      "targetDomSelector": "._4_-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8682",
+      "resourceFile": null,
+      "targetDomSelector": "._4__2-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8683",
+      "resourceFile": null,
+      "targetDomSelector": "._10-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8684",
+      "resourceFile": null,
+      "targetDomSelector": "._4__4-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8685",
+      "resourceFile": null,
+      "targetDomSelector": "._4-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8686",
+      "resourceFile": null,
+      "targetDomSelector": "._4__6-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8687",
+      "resourceFile": null,
+      "targetDomSelector": "._4__5-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8688",
+      "resourceFile": null,
+      "targetDomSelector": "._5-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8689",
+      "resourceFile": null,
+      "targetDomSelector": "._6-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8692",
+      "resourceFile": null,
+      "targetDomSelector": ".group-1321317970-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8698",
+      "resourceFile": null,
+      "targetDomSelector": ".frame-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8699",
+      "resourceFile": null,
+      "targetDomSelector": ".union-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8701",
+      "resourceFile": "../resources/images/bg-8701.png",
+      "targetDomSelector": ".bg-container",
+      "downloadStatus": "success",
+      "role": "bg",
+      "recommendedUsage": "backgroundBlock"
+    },
+    {
+      "figmaNodeId": "2:8706",
+      "resourceFile": "../resources/images/icon-8706.png",
+      "targetDomSelector": ".icon-container",
+      "downloadStatus": "success",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8709",
+      "resourceFile": null,
+      "targetDomSelector": "._4__3-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8710",
+      "resourceFile": null,
+      "targetDomSelector": "._4_-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8711",
+      "resourceFile": null,
+      "targetDomSelector": "._4__2-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8712",
+      "resourceFile": null,
+      "targetDomSelector": "._10-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8713",
+      "resourceFile": null,
+      "targetDomSelector": "._4__4-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8714",
+      "resourceFile": null,
+      "targetDomSelector": "._4-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8715",
+      "resourceFile": null,
+      "targetDomSelector": "._4__6-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8716",
+      "resourceFile": null,
+      "targetDomSelector": "._4__5-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8717",
+      "resourceFile": null,
+      "targetDomSelector": "._5-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8718",
+      "resourceFile": null,
+      "targetDomSelector": "._6-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8721",
+      "resourceFile": null,
+      "targetDomSelector": ".group-1321317970-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8727",
+      "resourceFile": null,
+      "targetDomSelector": ".frame-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8728",
+      "resourceFile": null,
+      "targetDomSelector": ".vector-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8730",
+      "resourceFile": "../resources/images/bg-8730.png",
+      "targetDomSelector": ".bg-container",
+      "downloadStatus": "success",
+      "role": "bg",
+      "recommendedUsage": "backgroundBlock"
+    },
+    {
+      "figmaNodeId": "2:8735",
+      "resourceFile": "../resources/images/icon-8735.png",
+      "targetDomSelector": ".icon-container",
+      "downloadStatus": "success",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8738",
+      "resourceFile": null,
+      "targetDomSelector": "._4__3-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8739",
+      "resourceFile": null,
+      "targetDomSelector": "._4_-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8740",
+      "resourceFile": null,
+      "targetDomSelector": "._4__2-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8741",
+      "resourceFile": null,
+      "targetDomSelector": "._10-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8742",
+      "resourceFile": null,
+      "targetDomSelector": "._4__4-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8743",
+      "resourceFile": null,
+      "targetDomSelector": "._4-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8744",
+      "resourceFile": null,
+      "targetDomSelector": "._4__6-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8745",
+      "resourceFile": null,
+      "targetDomSelector": "._4__5-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8746",
+      "resourceFile": null,
+      "targetDomSelector": "._5-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8747",
+      "resourceFile": null,
+      "targetDomSelector": "._6-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8750",
+      "resourceFile": null,
+      "targetDomSelector": ".group-1321317970-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8756",
+      "resourceFile": null,
+      "targetDomSelector": ".frame-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8757",
+      "resourceFile": null,
+      "targetDomSelector": ".vector-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8759",
+      "resourceFile": "../resources/images/bg-8759.png",
+      "targetDomSelector": ".bg-container",
+      "downloadStatus": "success",
+      "role": "bg",
+      "recommendedUsage": "backgroundBlock"
+    },
+    {
+      "figmaNodeId": "2:8764",
+      "resourceFile": "../resources/images/icon-8764.png",
+      "targetDomSelector": ".icon-container",
+      "downloadStatus": "success",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8767",
+      "resourceFile": null,
+      "targetDomSelector": "._4__3-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8768",
+      "resourceFile": null,
+      "targetDomSelector": "._4_-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8769",
+      "resourceFile": null,
+      "targetDomSelector": "._4__2-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8770",
+      "resourceFile": null,
+      "targetDomSelector": "._10-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8771",
+      "resourceFile": null,
+      "targetDomSelector": "._4__4-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8772",
+      "resourceFile": null,
+      "targetDomSelector": "._4-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8773",
+      "resourceFile": null,
+      "targetDomSelector": "._4__6-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8774",
+      "resourceFile": null,
+      "targetDomSelector": "._4__5-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8775",
+      "resourceFile": null,
+      "targetDomSelector": "._5-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8776",
+      "resourceFile": null,
+      "targetDomSelector": "._6-3-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8779",
+      "resourceFile": null,
+      "targetDomSelector": ".group-1321317970-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8785",
+      "resourceFile": null,
+      "targetDomSelector": ".frame-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:8786",
+      "resourceFile": null,
+      "targetDomSelector": ".union-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    }
+  ],
+  "placementReport": {
+    "placements": [
+      {
+        "figmaNodeId": "2:8418",
+        "resourceFile": "bg-8418.png",
+        "type": "bg",
+        "targetElement": "组件最外层内容容器",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-content",
+        "usage": "backgroundImage",
+        "codeSuggestion": "style=\"background-image: url('bg-8418.png'); background-size: cover;\"",
+        "confidence": "high",
+        "reason": "420x425 尺寸匹配整个组件面板背景，作为最外层容器背景图最合适"
+      },
+      {
+        "figmaNodeId": "2:8421",
+        "resourceFile": "g-8421.png",
+        "type": "icon",
+        "targetElement": "顶部统计栏第一个统计项的图标占位",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-stat-icon",
+        "usage": "imgSrc",
+        "codeSuggestion": "<img src=\"g-8421.png\" class=\"c-mc-lite-1785972578983-6feb7e31-stat-icon\" />",
+        "confidence": "high",
+        "reason": "8x8 小图标，模板中 .stat-icon 是空 span 占位，正好用于设备类型统计项的图标"
+      },
+      {
+        "figmaNodeId": "2:8421",
+        "resourceFile": "g-8421.png",
+        "type": "icon",
+        "targetElement": "顶部标题旁的装饰图标（标题组内）",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-title-group",
+        "usage": "imgSrc",
+        "codeSuggestion": "<img src=\"g-8421.png\" class=\"title-deco-icon\" />",
+        "confidence": "medium",
+        "reason": "8x8 小图标可能作为标题前的装饰点，但模板中无明确占位元素，需新增"
+      },
+      {
+        "figmaNodeId": "2:8856",
+        "resourceFile": "Frame-8856.png",
+        "type": "icon",
+        "targetElement": "顶部标题旁的功能图标（如设置/刷新按钮）",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-header",
+        "usage": "imgSrc",
+        "codeSuggestion": "<img src=\"Frame-8856.png\" class=\"header-action-icon\" />",
+        "confidence": "medium",
+        "reason": "16x16 图标，位于 header 区域，可能作为标题栏右侧操作图标，模板中无明确占位需新增"
+      },
+      {
+        "figmaNodeId": "2:8788",
+        "resourceFile": "bg-8788.png",
+        "type": "bg",
+        "targetElement": "左侧导航栏激活状态的菜单项背景",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-menu-item.c-mc-lite-1785972578983-6feb7e31-active",
+        "usage": "backgroundImage",
+        "codeSuggestion": "style=\"background-image: url('bg-8788.png'); background-size: 100% 100%;\"",
+        "confidence": "high",
+        "reason": "193x65 尺寸匹配菜单项，active 状态背景图"
+      },
+      {
+        "figmaNodeId": "2:8798",
+        "resourceFile": "icon-8798.png",
+        "type": "icon",
+        "targetElement": "左侧导航栏激活状态菜单项的图标",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-menu-item.c-mc-lite-1785972578983-6feb7e31-active .c-mc-lite-1785972578983-6feb7e31-menu-text",
+        "usage": "imgSrc",
+        "codeSuggestion": "<img src=\"icon-8798.png\" class=\"menu-active-icon\" />",
+        "confidence": "medium",
+        "reason": "35x28 图标，对应激活菜单项前的图标，模板中无独立图标元素需新增"
+      },
+      {
+        "figmaNodeId": "2:8807",
+        "resourceFile": "bg-8807.png",
+        "type": "bg",
+        "targetElement": "左侧导航栏默认状态的菜单项背景",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-menu-item",
+        "usage": "backgroundImage",
+        "codeSuggestion": "style=\"background-image: url('bg-8807.png'); background-size: 100% 100%;\"",
+        "confidence": "high",
+        "reason": "193x65 尺寸匹配菜单项，default 状态背景图"
+      },
+      {
+        "figmaNodeId": "2:8817",
+        "resourceFile": "icon-8817.png",
+        "type": "icon",
+        "targetElement": "左侧导航栏默认状态菜单项的图标",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-menu-item .c-mc-lite-1785972578983-6feb7e31-menu-text",
+        "usage": "imgSrc",
+        "codeSuggestion": "<img src=\"icon-8817.png\" class=\"menu-default-icon\" />",
+        "confidence": "medium",
+        "reason": "35x28 图标，对应默认菜单项前的图标，模板中无独立图标元素需新增"
+      },
+      {
+        "figmaNodeId": "2:8439",
+        "resourceFile": "bg-8439.png",
+        "type": "bg",
+        "targetElement": "下方设备网格第一个设备项的背景",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-item",
+        "usage": "backgroundImage",
+        "codeSuggestion": "style=\"background-image: url('bg-8439.png'); background-size: 100% 100%;\"",
+        "confidence": "high",
+        "reason": "117x64 尺寸匹配网格设备项，作为设备卡片背景"
+      },
+      {
+        "figmaNodeId": "2:8444",
+        "resourceFile": "icon-8444.png",
+        "type": "icon",
+        "targetElement": "下方设备网格第一个设备项的图标",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-icon-area",
+        "usage": "imgSrc",
+        "codeSuggestion": "<img src=\"icon-8444.png\" class=\"device-icon\" />",
+        "confidence": "high",
+        "reason": "27x32 图标，对应设备网格中某个设备的图标，替换 emoji 占位"
+      },
+      {
+        "figmaNodeId": "2:8468",
+        "resourceFile": "bg-8468.png",
+        "type": "bg",
+        "targetElement": "下方设备网格第二个设备项的背景",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-item",
+        "usage": "backgroundImage",
+        "codeSuggestion": "style=\"background-image: url('bg-8468.png'); background-size: 100% 100%;\"",
+        "confidence": "high",
+        "reason": "117x64 尺寸匹配网格设备项背景"
+      },
+      {
+        "figmaNodeId": "2:8473",
+        "resourceFile": "icon-8473.png",
+        "type": "icon",
+        "targetElement": "下方设备网格第二个设备项的图标",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-icon-area",
+        "usage": "imgSrc",
+        "codeSuggestion": "<img src=\"icon-8473.png\" class=\"device-icon\" />",
+        "confidence": "high",
+        "reason": "27x32 图标，对应第二个设备项图标"
+      },
+      {
+        "figmaNodeId": "2:8498",
+        "resourceFile": "bg-8498.png",
+        "type": "bg",
+        "targetElement": "下方设备网格第三个设备项的背景",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-item",
+        "usage": "backgroundImage",
+        "codeSuggestion": "style=\"background-image: url('bg-8498.png'); background-size: 100% 100%;\"",
+        "confidence": "high",
+        "reason": "117x64 尺寸匹配网格设备项背景"
+      },
+      {
+        "figmaNodeId": "2:8503",
+        "resourceFile": "icon-8503.png",
+        "type": "icon",
+        "targetElement": "下方设备网格第三个设备项的图标",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-icon-area",
+        "usage": "imgSrc",
+        "codeSuggestion": "<img src=\"icon-8503.png\" class=\"device-icon\" />",
+        "confidence": "high",
+        "reason": "27x32 图标，对应第三个设备项图标"
+      },
+      {
+        "figmaNodeId": "2:8527",
+        "resourceFile": "bg-8527.png",
+        "type": "bg",
+        "targetElement": "下方设备网格第四个设备项的背景",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-item",
+        "usage": "backgroundImage",
+        "codeSuggestion": "style=\"background-image: url('bg-8527.png'); background-size: 100% 100%;\"",
+        "confidence": "high",
+        "reason": "117x64 尺寸匹配网格设备项背景"
+      },
+      {
+        "figmaNodeId": "2:8532",
+        "resourceFile": "icon-8532.png",
+        "type": "icon",
+        "targetElement": "下方设备网格第四个设备项的图标",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-icon-area",
+        "usage": "imgSrc",
+        "codeSuggestion": "<img src=\"icon-8532.png\" class=\"device-icon\" />",
+        "confidence": "high",
+        "reason": "27x32 图标，对应第四个设备项图标"
+      },
+      {
+        "figmaNodeId": "2:8556",
+        "resourceFile": "bg-8556.png",
+        "type": "bg",
+        "targetElement": "下方设备网格第五个设备项的背景",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-item",
+        "usage": "backgroundImage",
+        "codeSuggestion": "style=\"background-image: url('bg-8556.png'); background-size: 100% 100%;\"",
+        "confidence": "high",
+        "reason": "117x64 尺寸匹配网格设备项背景"
+      },
+      {
+        "figmaNodeId": "2:8561",
+        "resourceFile": "icon-8561.png",
+        "type": "icon",
+        "targetElement": "下方设备网格第五个设备项的图标",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-icon-area",
+        "usage": "imgSrc",
+        "codeSuggestion": "<img src=\"icon-8561.png\" class=\"device-icon\" />",
+        "confidence": "high",
+        "reason": "27x32 图标，对应第五个设备项图标"
+      },
+      {
+        "figmaNodeId": "2:8585",
+        "resourceFile": "bg-8585.png",
+        "type": "bg",
+        "targetElement": "下方设备网格第六个设备项的背景",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-item",
+        "usage": "backgroundImage",
+        "codeSuggestion": "style=\"background-image: url('bg-8585.png'); background-size: 100% 100%;\"",
+        "confidence": "high",
+        "reason": "117x64 尺寸匹配网格设备项背景"
+      },
+      {
+        "figmaNodeId": "2:8590",
+        "resourceFile": "icon-8590.png",
+        "type": "icon",
+        "targetElement": "下方设备网格第六个设备项的图标",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-icon-area",
+        "usage": "imgSrc",
+        "codeSuggestion": "<img src=\"icon-8590.png\" class=\"device-icon\" />",
+        "confidence": "high",
+        "reason": "27x32 图标，对应第六个设备项图标"
+      },
+      {
+        "figmaNodeId": "2:8614",
+        "resourceFile": "bg-8614.png",
+        "type": "bg",
+        "targetElement": "下方设备网格第七个设备项的背景",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-item",
+        "usage": "backgroundImage",
+        "codeSuggestion": "style=\"background-image: url('bg-8614.png'); background-size: 100% 100%;\"",
+        "confidence": "high",
+        "reason": "117x64 尺寸匹配网格设备项背景"
+      },
+      {
+        "figmaNodeId": "2:8619",
+        "resourceFile": "icon-8619.png",
+        "type": "icon",
+        "targetElement": "下方设备网格第七个设备项的图标",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-icon-area",
+        "usage": "imgSrc",
+        "codeSuggestion": "<img src=\"icon-8619.png\" class=\"device-icon\" />",
+        "confidence": "high",
+        "reason": "27x32 图标，对应第七个设备项图标"
+      },
+      {
+        "figmaNodeId": "2:8643",
+        "resourceFile": "bg-8643.png",
+        "type": "bg",
+        "targetElement": "下方设备网格第八个设备项的背景",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-item",
+        "usage": "backgroundImage",
+        "codeSuggestion": "style=\"background-image: url('bg-8643.png'); background-size: 100% 100%;\"",
+        "confidence": "high",
+        "reason": "117x64 尺寸匹配网格设备项背景"
+      },
+      {
+        "figmaNodeId": "2:8648",
+        "resourceFile": "icon-8648.png",
+        "type": "icon",
+        "targetElement": "下方设备网格第八个设备项的图标",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-icon-area",
+        "usage": "imgSrc",
+        "codeSuggestion": "<img src=\"icon-8648.png\" class=\"device-icon\" />",
+        "confidence": "high",
+        "reason": "27x32 图标，对应第八个设备项图标"
+      },
+      {
+        "figmaNodeId": "2:8672",
+        "resourceFile": "bg-8672.png",
+        "type": "bg",
+        "targetElement": "下方设备网格第九个设备项的背景",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-item",
+        "usage": "backgroundImage",
+        "codeSuggestion": "style=\"background-image: url('bg-8672.png'); background-size: 100% 100%;\"",
+        "confidence": "high",
+        "reason": "117x64 尺寸匹配网格设备项背景"
+      },
+      {
+        "figmaNodeId": "2:8677",
+        "resourceFile": "icon-8677.png",
+        "type": "icon",
+        "targetElement": "下方设备网格第九个设备项的图标",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-icon-area",
+        "usage": "imgSrc",
+        "codeSuggestion": "<img src=\"icon-8677.png\" class=\"device-icon\" />",
+        "confidence": "high",
+        "reason": "27x32 图标，对应第九个设备项图标"
+      },
+      {
+        "figmaNodeId": "2:8701",
+        "resourceFile": "bg-8701.png",
+        "type": "bg",
+        "targetElement": "下方设备网格第十个设备项的背景",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-item",
+        "usage": "backgroundImage",
+        "codeSuggestion": "style=\"background-image: url('bg-8701.png'); background-size: 100% 100%;\"",
+        "confidence": "high",
+        "reason": "117x64 尺寸匹配网格设备项背景"
+      },
+      {
+        "figmaNodeId": "2:8706",
+        "resourceFile": "icon-8706.png",
+        "type": "icon",
+        "targetElement": "下方设备网格第十个设备项的图标",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-icon-area",
+        "usage": "imgSrc",
+        "codeSuggestion": "<img src=\"icon-8706.png\" class=\"device-icon\" />",
+        "confidence": "high",
+        "reason": "27x32 图标，对应第十个设备项图标"
+      },
+      {
+        "figmaNodeId": "2:8730",
+        "resourceFile": "bg-8730.png",
+        "type": "bg",
+        "targetElement": "下方设备网格第十一个设备项的背景",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-item",
+        "usage": "backgroundImage",
+        "codeSuggestion": "style=\"background-image: url('bg-8730.png'); background-size: 100% 100%;\"",
+        "confidence": "high",
+        "reason": "117x64 尺寸匹配网格设备项背景"
+      },
+      {
+        "figmaNodeId": "2:8735",
+        "resourceFile": "icon-8735.png",
+        "type": "icon",
+        "targetElement": "下方设备网格第十一个设备项的图标",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-icon-area",
+        "usage": "imgSrc",
+        "codeSuggestion": "<img src=\"icon-8735.png\" class=\"device-icon\" />",
+        "confidence": "high",
+        "reason": "27x32 图标，对应第十一个设备项图标"
+      },
+      {
+        "figmaNodeId": "2:8759",
+        "resourceFile": "bg-8759.png",
+        "type": "bg",
+        "targetElement": "下方设备网格第十二个设备项的背景",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-item",
+        "usage": "backgroundImage",
+        "codeSuggestion": "style=\"background-image: url('bg-8759.png'); background-size: 100% 100%;\"",
+        "confidence": "high",
+        "reason": "117x64 尺寸匹配网格设备项背景"
+      },
+      {
+        "figmaNodeId": "2:8764",
+        "resourceFile": "icon-8764.png",
+        "type": "icon",
+        "targetElement": "下方设备网格第十二个设备项的图标",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-icon-area",
+        "usage": "imgSrc",
+        "codeSuggestion": "<img src=\"icon-8764.png\" class=\"device-icon\" />",
+        "confidence": "high",
+        "reason": "27x32 图标，对应第十二个设备项图标"
+      }
+    ],
+    "summary": "组件包含整体面板背景、顶部统计图标、左侧导航栏菜单项的激活/默认背景与图标、以及下方12个设备网格项各自的背景和设备图标。设备网格项通过 v-for 循环渲染，实际使用时需根据 index 动态绑定对应的 bg 和 icon 资源。",
+    "analyzedAt": "2026-08-06T00:10:17.999Z",
+    "model": "qwen3.7-plus"
+  },
+  "codeApplication": {
+    "codeUpdated": true,
+    "backupFile": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/package-index.before-assets-1785975279450.vue",
+    "appliedPlacements": [
+      {
+        "figmaNodeId": "2:8418",
+        "resourceFile": "bg-8418.png",
+        "type": "bg",
+        "targetElement": "组件最外层内容容器",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-content",
+        "usage": "backgroundImage",
+        "codeSuggestion": "style=\"background-image: url('bg-8418.png'); background-size: cover;\"",
+        "confidence": "high",
+        "reason": "420x425 尺寸匹配整个组件面板背景，作为最外层容器背景图最合适"
+      },
+      {
+        "figmaNodeId": "2:8421",
+        "resourceFile": "g-8421.png",
+        "type": "icon",
+        "targetElement": "顶部统计栏第一个统计项的图标占位",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-stat-icon",
+        "usage": "imgSrc",
+        "codeSuggestion": "<img src=\"g-8421.png\" class=\"c-mc-lite-1785972578983-6feb7e31-stat-icon\" />",
+        "confidence": "high",
+        "reason": "8x8 小图标，模板中 .stat-icon 是空 span 占位，正好用于设备类型统计项的图标"
+      },
+      {
+        "figmaNodeId": "2:8421",
+        "resourceFile": "g-8421.png",
+        "type": "icon",
+        "targetElement": "顶部标题旁的装饰图标（标题组内）",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-title-group",
+        "usage": "imgSrc",
+        "codeSuggestion": "<img src=\"g-8421.png\" class=\"title-deco-icon\" />",
+        "confidence": "medium",
+        "reason": "8x8 小图标可能作为标题前的装饰点，但模板中无明确占位元素，需新增"
+      },
+      {
+        "figmaNodeId": "2:8856",
+        "resourceFile": "Frame-8856.png",
+        "type": "icon",
+        "targetElement": "顶部标题旁的功能图标（如设置/刷新按钮）",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-header",
+        "usage": "imgSrc",
+        "codeSuggestion": "<img src=\"Frame-8856.png\" class=\"header-action-icon\" />",
+        "confidence": "medium",
+        "reason": "16x16 图标，位于 header 区域，可能作为标题栏右侧操作图标，模板中无明确占位需新增"
+      },
+      {
+        "figmaNodeId": "2:8788",
+        "resourceFile": "bg-8788.png",
+        "type": "bg",
+        "targetElement": "左侧导航栏激活状态的菜单项背景",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-menu-item.c-mc-lite-1785972578983-6feb7e31-active",
+        "usage": "backgroundImage",
+        "codeSuggestion": "style=\"background-image: url('bg-8788.png'); background-size: 100% 100%;\"",
+        "confidence": "high",
+        "reason": "193x65 尺寸匹配菜单项，active 状态背景图"
+      },
+      {
+        "figmaNodeId": "2:8798",
+        "resourceFile": "icon-8798.png",
+        "type": "icon",
+        "targetElement": "左侧导航栏激活状态菜单项的图标",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-menu-item.c-mc-lite-1785972578983-6feb7e31-active .c-mc-lite-1785972578983-6feb7e31-menu-text",
+        "usage": "imgSrc",
+        "codeSuggestion": "<img src=\"icon-8798.png\" class=\"menu-active-icon\" />",
+        "confidence": "medium",
+        "reason": "35x28 图标，对应激活菜单项前的图标，模板中无独立图标元素需新增"
+      },
+      {
+        "figmaNodeId": "2:8807",
+        "resourceFile": "bg-8807.png",
+        "type": "bg",
+        "targetElement": "左侧导航栏默认状态的菜单项背景",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-menu-item",
+        "usage": "backgroundImage",
+        "codeSuggestion": "style=\"background-image: url('bg-8807.png'); background-size: 100% 100%;\"",
+        "confidence": "high",
+        "reason": "193x65 尺寸匹配菜单项，default 状态背景图"
+      },
+      {
+        "figmaNodeId": "2:8817",
+        "resourceFile": "icon-8817.png",
+        "type": "icon",
+        "targetElement": "左侧导航栏默认状态菜单项的图标",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-menu-item .c-mc-lite-1785972578983-6feb7e31-menu-text",
+        "usage": "imgSrc",
+        "codeSuggestion": "<img src=\"icon-8817.png\" class=\"menu-default-icon\" />",
+        "confidence": "medium",
+        "reason": "35x28 图标，对应默认菜单项前的图标，模板中无独立图标元素需新增"
+      },
+      {
+        "figmaNodeId": "2:8439",
+        "resourceFile": "bg-8439.png",
+        "type": "bg",
+        "targetElement": "下方设备网格第一个设备项的背景",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-item",
+        "usage": "backgroundImage",
+        "codeSuggestion": "style=\"background-image: url('bg-8439.png'); background-size: 100% 100%;\"",
+        "confidence": "high",
+        "reason": "117x64 尺寸匹配网格设备项，作为设备卡片背景"
+      },
+      {
+        "figmaNodeId": "2:8444",
+        "resourceFile": "icon-8444.png",
+        "type": "icon",
+        "targetElement": "下方设备网格第一个设备项的图标",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-icon-area",
+        "usage": "imgSrc",
+        "codeSuggestion": "<img src=\"icon-8444.png\" class=\"device-icon\" />",
+        "confidence": "high",
+        "reason": "27x32 图标，对应设备网格中某个设备的图标，替换 emoji 占位"
+      },
+      {
+        "figmaNodeId": "2:8468",
+        "resourceFile": "bg-8468.png",
+        "type": "bg",
+        "targetElement": "下方设备网格第二个设备项的背景",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-item",
+        "usage": "backgroundImage",
+        "codeSuggestion": "style=\"background-image: url('bg-8468.png'); background-size: 100% 100%;\"",
+        "confidence": "high",
+        "reason": "117x64 尺寸匹配网格设备项背景"
+      },
+      {
+        "figmaNodeId": "2:8473",
+        "resourceFile": "icon-8473.png",
+        "type": "icon",
+        "targetElement": "下方设备网格第二个设备项的图标",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-icon-area",
+        "usage": "imgSrc",
+        "codeSuggestion": "<img src=\"icon-8473.png\" class=\"device-icon\" />",
+        "confidence": "high",
+        "reason": "27x32 图标，对应第二个设备项图标"
+      },
+      {
+        "figmaNodeId": "2:8498",
+        "resourceFile": "bg-8498.png",
+        "type": "bg",
+        "targetElement": "下方设备网格第三个设备项的背景",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-item",
+        "usage": "backgroundImage",
+        "codeSuggestion": "style=\"background-image: url('bg-8498.png'); background-size: 100% 100%;\"",
+        "confidence": "high",
+        "reason": "117x64 尺寸匹配网格设备项背景"
+      },
+      {
+        "figmaNodeId": "2:8503",
+        "resourceFile": "icon-8503.png",
+        "type": "icon",
+        "targetElement": "下方设备网格第三个设备项的图标",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-icon-area",
+        "usage": "imgSrc",
+        "codeSuggestion": "<img src=\"icon-8503.png\" class=\"device-icon\" />",
+        "confidence": "high",
+        "reason": "27x32 图标，对应第三个设备项图标"
+      },
+      {
+        "figmaNodeId": "2:8527",
+        "resourceFile": "bg-8527.png",
+        "type": "bg",
+        "targetElement": "下方设备网格第四个设备项的背景",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-item",
+        "usage": "backgroundImage",
+        "codeSuggestion": "style=\"background-image: url('bg-8527.png'); background-size: 100% 100%;\"",
+        "confidence": "high",
+        "reason": "117x64 尺寸匹配网格设备项背景"
+      },
+      {
+        "figmaNodeId": "2:8532",
+        "resourceFile": "icon-8532.png",
+        "type": "icon",
+        "targetElement": "下方设备网格第四个设备项的图标",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-icon-area",
+        "usage": "imgSrc",
+        "codeSuggestion": "<img src=\"icon-8532.png\" class=\"device-icon\" />",
+        "confidence": "high",
+        "reason": "27x32 图标，对应第四个设备项图标"
+      },
+      {
+        "figmaNodeId": "2:8556",
+        "resourceFile": "bg-8556.png",
+        "type": "bg",
+        "targetElement": "下方设备网格第五个设备项的背景",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-item",
+        "usage": "backgroundImage",
+        "codeSuggestion": "style=\"background-image: url('bg-8556.png'); background-size: 100% 100%;\"",
+        "confidence": "high",
+        "reason": "117x64 尺寸匹配网格设备项背景"
+      },
+      {
+        "figmaNodeId": "2:8561",
+        "resourceFile": "icon-8561.png",
+        "type": "icon",
+        "targetElement": "下方设备网格第五个设备项的图标",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-icon-area",
+        "usage": "imgSrc",
+        "codeSuggestion": "<img src=\"icon-8561.png\" class=\"device-icon\" />",
+        "confidence": "high",
+        "reason": "27x32 图标，对应第五个设备项图标"
+      },
+      {
+        "figmaNodeId": "2:8585",
+        "resourceFile": "bg-8585.png",
+        "type": "bg",
+        "targetElement": "下方设备网格第六个设备项的背景",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-item",
+        "usage": "backgroundImage",
+        "codeSuggestion": "style=\"background-image: url('bg-8585.png'); background-size: 100% 100%;\"",
+        "confidence": "high",
+        "reason": "117x64 尺寸匹配网格设备项背景"
+      },
+      {
+        "figmaNodeId": "2:8590",
+        "resourceFile": "icon-8590.png",
+        "type": "icon",
+        "targetElement": "下方设备网格第六个设备项的图标",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-icon-area",
+        "usage": "imgSrc",
+        "codeSuggestion": "<img src=\"icon-8590.png\" class=\"device-icon\" />",
+        "confidence": "high",
+        "reason": "27x32 图标，对应第六个设备项图标"
+      },
+      {
+        "figmaNodeId": "2:8614",
+        "resourceFile": "bg-8614.png",
+        "type": "bg",
+        "targetElement": "下方设备网格第七个设备项的背景",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-item",
+        "usage": "backgroundImage",
+        "codeSuggestion": "style=\"background-image: url('bg-8614.png'); background-size: 100% 100%;\"",
+        "confidence": "high",
+        "reason": "117x64 尺寸匹配网格设备项背景"
+      },
+      {
+        "figmaNodeId": "2:8619",
+        "resourceFile": "icon-8619.png",
+        "type": "icon",
+        "targetElement": "下方设备网格第七个设备项的图标",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-icon-area",
+        "usage": "imgSrc",
+        "codeSuggestion": "<img src=\"icon-8619.png\" class=\"device-icon\" />",
+        "confidence": "high",
+        "reason": "27x32 图标，对应第七个设备项图标"
+      },
+      {
+        "figmaNodeId": "2:8643",
+        "resourceFile": "bg-8643.png",
+        "type": "bg",
+        "targetElement": "下方设备网格第八个设备项的背景",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-item",
+        "usage": "backgroundImage",
+        "codeSuggestion": "style=\"background-image: url('bg-8643.png'); background-size: 100% 100%;\"",
+        "confidence": "high",
+        "reason": "117x64 尺寸匹配网格设备项背景"
+      },
+      {
+        "figmaNodeId": "2:8648",
+        "resourceFile": "icon-8648.png",
+        "type": "icon",
+        "targetElement": "下方设备网格第八个设备项的图标",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-icon-area",
+        "usage": "imgSrc",
+        "codeSuggestion": "<img src=\"icon-8648.png\" class=\"device-icon\" />",
+        "confidence": "high",
+        "reason": "27x32 图标，对应第八个设备项图标"
+      },
+      {
+        "figmaNodeId": "2:8672",
+        "resourceFile": "bg-8672.png",
+        "type": "bg",
+        "targetElement": "下方设备网格第九个设备项的背景",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-item",
+        "usage": "backgroundImage",
+        "codeSuggestion": "style=\"background-image: url('bg-8672.png'); background-size: 100% 100%;\"",
+        "confidence": "high",
+        "reason": "117x64 尺寸匹配网格设备项背景"
+      },
+      {
+        "figmaNodeId": "2:8677",
+        "resourceFile": "icon-8677.png",
+        "type": "icon",
+        "targetElement": "下方设备网格第九个设备项的图标",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-icon-area",
+        "usage": "imgSrc",
+        "codeSuggestion": "<img src=\"icon-8677.png\" class=\"device-icon\" />",
+        "confidence": "high",
+        "reason": "27x32 图标，对应第九个设备项图标"
+      },
+      {
+        "figmaNodeId": "2:8701",
+        "resourceFile": "bg-8701.png",
+        "type": "bg",
+        "targetElement": "下方设备网格第十个设备项的背景",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-item",
+        "usage": "backgroundImage",
+        "codeSuggestion": "style=\"background-image: url('bg-8701.png'); background-size: 100% 100%;\"",
+        "confidence": "high",
+        "reason": "117x64 尺寸匹配网格设备项背景"
+      },
+      {
+        "figmaNodeId": "2:8706",
+        "resourceFile": "icon-8706.png",
+        "type": "icon",
+        "targetElement": "下方设备网格第十个设备项的图标",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-icon-area",
+        "usage": "imgSrc",
+        "codeSuggestion": "<img src=\"icon-8706.png\" class=\"device-icon\" />",
+        "confidence": "high",
+        "reason": "27x32 图标，对应第十个设备项图标"
+      },
+      {
+        "figmaNodeId": "2:8730",
+        "resourceFile": "bg-8730.png",
+        "type": "bg",
+        "targetElement": "下方设备网格第十一个设备项的背景",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-item",
+        "usage": "backgroundImage",
+        "codeSuggestion": "style=\"background-image: url('bg-8730.png'); background-size: 100% 100%;\"",
+        "confidence": "high",
+        "reason": "117x64 尺寸匹配网格设备项背景"
+      },
+      {
+        "figmaNodeId": "2:8735",
+        "resourceFile": "icon-8735.png",
+        "type": "icon",
+        "targetElement": "下方设备网格第十一个设备项的图标",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-icon-area",
+        "usage": "imgSrc",
+        "codeSuggestion": "<img src=\"icon-8735.png\" class=\"device-icon\" />",
+        "confidence": "high",
+        "reason": "27x32 图标，对应第十一个设备项图标"
+      },
+      {
+        "figmaNodeId": "2:8759",
+        "resourceFile": "bg-8759.png",
+        "type": "bg",
+        "targetElement": "下方设备网格第十二个设备项的背景",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-item",
+        "usage": "backgroundImage",
+        "codeSuggestion": "style=\"background-image: url('bg-8759.png'); background-size: 100% 100%;\"",
+        "confidence": "high",
+        "reason": "117x64 尺寸匹配网格设备项背景"
+      },
+      {
+        "figmaNodeId": "2:8764",
+        "resourceFile": "icon-8764.png",
+        "type": "icon",
+        "targetElement": "下方设备网格第十二个设备项的图标",
+        "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-icon-area",
+        "usage": "imgSrc",
+        "codeSuggestion": "<img src=\"icon-8764.png\" class=\"device-icon\" />",
+        "confidence": "high",
+        "reason": "27x32 图标，对应第十二个设备项图标"
+      }
+    ],
+    "skippedPlacements": [],
+    "modifiedFiles": [
+      "package/index.vue"
+    ],
+    "validation": {
+      "sfcStructure": "passed",
+      "scriptSetupUnchanged": "passed",
+      "resourceReferences": "passed"
+    }
+  }
+}

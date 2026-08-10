@@ -1,0 +1,35 @@
+.common() {
+  @mc-font-family: 'Noto Sans SC', 'Source Han Sans CN', 'PingFang SC', 'Roboto', sans-serif;
+  @mc-border-radius-sm: 4px;
+  @mc-border-radius-md: 8px;
+  @mc-border-radius-lg: 12px;
+  @mc-border-radius-xl: 14px;
+  @mc-transition-duration: 0.3s;
+  @mc-transition-timing: ease;
+}
+
+.theme-light() {
+  @mc-bg-color: #edf4fb;
+  @mc-text-color-primary: #333333;
+  @mc-text-color-secondary: #666666;
+  @mc-text-color-tertiary: #999999;
+  @mc-border-color: rgba(255, 255, 255, 1);
+  @mc-shadow-color: rgba(74, 117, 141, 0.25);
+  @mc-tab-inactive-color: #2c9bea;
+  @mc-badge-bg-color: #f53f3f;
+}
+
+.theme-dark() {
+  @mc-bg-color: #1a2332;
+  @mc-text-color-primary: #ffffff;
+  @mc-text-color-secondary: rgba(255, 255, 255, 0.8);
+  @mc-text-color-tertiary: rgba(255, 255, 255, 0.6);
+  @mc-border-color: rgba(255, 255, 255, 0.1);
+  @mc-shadow-color: rgba(0, 0, 0, 0.5);
+  @mc-tab-inactive-color: rgba(255, 255, 255, 0.6);
+  @mc-badge-bg-color: #f53f3f;
+}
+
+// 默认调用主题变量
+.theme-light();
+.common();

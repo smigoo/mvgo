@@ -1,0 +1,167 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 72,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].body.items[*].content",
+        "message": "统计卡片内部嵌套层级过深（content -> elements -> value-row -> parts），达到了4-5层。对于简单的标签和数值展示，这种深度会导致生成的 DOM 节点冗余，增加渲染负担和维护成本。",
+        "suggestion": "简化卡片内部结构，将 label 和 value 扁平化。建议直接作为 card 的子元素，去除多余的 elements 数组和 value-row 包装层，使结构更清晰。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "coverageReport / layout.styles",
+        "message": "布局中定义了大量具体的装饰性样式（如 background, borderRadius, padding 等），但 coverageReport 显示 coverageRate 为 0，matchedCount 为 0。这严重违反了“样式证据优先”和“禁止自行添加任何装饰样式”的核心规范，存在极高的 AI 臆造样式风险。",
+        "suggestion": "重新核对 Figma 数据源，确保所有装饰性样式都有明确的 Figma 节点证据（如 fills, cornerRadius）。若无证据，必须严格遵循“零装饰原则”，移除这些臆造的样式，仅保留布局相关的 flex/gap 等属性。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[1].body",
+        "message": "布局指定了 horizontal-3-columns，但在实际代码生成时，若未正确处理自适应，容易导致固定宽度或溢出问题。",
+        "suggestion": "在生成代码时，必须确保三个统计卡片使用 `flex: 1` 进行等宽自适应，禁止使用固定 px 宽度，并为卡片容器设置 `min-width: 0` 和 `overflow: hidden` 防止内容挤压溢出。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "interactions[0]",
+        "message": "布局中正确识别了顶部地点 Tab 切换，但 JSON 结构中未体现数据联动的映射关系，容易在代码生成阶段被简化为纯 UI 样式切换。",
+        "suggestion": "在代码生成阶段，必须严格按照规范实现 Tab 切换的数据联动。使用 ref 维护当前激活状态，维护不同地点对应的数据源，并通过 watch 监听状态变化来动态更新下方统计卡片的数据，禁止仅做 active class 切换。"
+      }
+    ],
+    "recommendations": [
+      "大幅简化统计卡片的 JSON 结构，去除不必要的嵌套层级（如 elements, value-row），使生成的 DOM 结构更扁平、高效。",
+      "严格审查样式来源，清理所有缺乏 Figma 证据的装饰性样式（背景色、圆角、内边距等），确保符合“零装饰原则”，避免 AI 幻觉导致的 UI 偏差。",
+      "在代码生成阶段，确保 Tab 切换组件不仅实现 UI 状态切换，必须绑定数据源并实现下方统计数据的动态更新，满足数据联动约束。",
+      "确保三个统计卡片在横向排列时使用 Flex 布局自适应宽度（flex: 1），避免在小屏或不同分辨率下发生挤压或溢出。"
+    ],
+    "summary": "该布局结构整体区域划分清晰，正确识别了 Tab 切换和统计卡片的业务逻辑，面板插槽判断准确。但存在两个致命问题：一是统计卡片内部嵌套层级过深，导致结构冗余；二是样式覆盖率极低（0%），但布局中却包含大量具体样式，存在严重的 AI 臆造样式风险，违反了“样式证据优先”的核心规范。建议大幅简化卡片内部结构，并严格清理无证据的装饰性样式，以确保最终生成代码的准确性和可维护性。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorBg": "#edf4fb",
+      "--colorPrimary": "#1890ff",
+      "--colorPrimaryHover": "#1990ff",
+      "--colorDanger": "#ff4d4f",
+      "--colorWarning": "#fa8c16",
+      "--colorTextBase": "#333333",
+      "--fontSize": "14px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-bg": "#edf4fb",
+      "@color-primary": "#1890ff",
+      "@color-primary-hover": "#1990ff",
+      "@color-danger": "#ff4d4f",
+      "@color-warning": "#fa8c16",
+      "@color-text-base": "#333333",
+      "@font-size-base": "14px",
+      "@border-radius-base": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "16px",
+        "background": "var(--colorBg)",
+        "color": "var(--colorTextBase)"
+      },
+      ".card": {
+        "background": "#ffffff",
+        "border-radius": "var(--borderRadius)",
+        "padding": "16px",
+        "box-shadow": "0 2px 8px rgba(0, 0, 0, 0.05)"
+      },
+      ".title-icon": {
+        "width": "12px",
+        "height": "12px",
+        "background": "var(--colorPrimary)",
+        "transform": "rotate(45deg)",
+        "margin-right": "8px",
+        "flex-shrink": "0"
+      },
+      ".tab-active": {
+        "background": "var(--colorPrimary)",
+        "color": "#ffffff",
+        "border-radius": "4px",
+        "padding": "4px 12px",
+        "font-weight": "500"
+      },
+      ".emphasis-value": {
+        "font-size": "24px",
+        "font-weight": "bold",
+        "line-height": "1.2",
+        "font-family": "DIN Alternate, Arial, sans-serif"
+      },
+      ".emphasis-value--danger": {
+        "color": "var(--colorDanger)"
+      },
+      ".emphasis-value--warning": {
+        "color": "var(--colorWarning)"
+      },
+      ".emphasis-value--primary": {
+        "color": "var(--colorPrimary)"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主题色映射为--colorPrimary，选中Tab蓝色背景和主色调使用此颜色",
+      "背景色映射为--colorBg，整体采用浅色科技监测风 #edf4fb",
+      "提取了危险色(--colorDanger)和警告色(--colorWarning)用于大号彩色数值的语义化强调",
+      "菱形标题图标通过 .title-icon 类的 transform: rotate(45deg) 实现，若设计稿有具体图片则替换为 background-image",
+      "圆角卡片背景统一使用 .card 类，结合 --borderRadius 变量实现"
+    ],
+    "elementStyleMap": {
+      "section-tabs": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-stats": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-dangerous": {
+        "background": "rgba(237,244,251,0.5)",
+        "border-radius": "8px",
+        "padding": "10px",
+        "gap": "10px",
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-value-row-x-7": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-heavy": {
+        "background": "rgba(237,244,251,0.5)",
+        "border-radius": "8px",
+        "padding": "10px",
+        "gap": "10px",
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-value-row-x-10": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-oversize": {
+        "background": "rgba(237,244,251,0.5)",
+        "border-radius": "8px",
+        "padding": "10px",
+        "gap": "10px",
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-value-row-x-13": {
+        "display": "flex",
+        "flex-direction": "row"
+      }
+    }
+  }
+}

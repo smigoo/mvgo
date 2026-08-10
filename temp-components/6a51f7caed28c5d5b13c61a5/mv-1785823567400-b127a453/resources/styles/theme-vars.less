@@ -1,0 +1,56 @@
+// 主题变量与 mixin 定义
+// 仅定义变量与 mixin，不产出实际 class
+
+// Less 变量
+@color-bg: #003032;
+@color-primary: #18ffce;
+@color-text-base: #ffffff;
+@color-warning: #b07b00;
+@color-text-secondary: rgba(255, 255, 255, 0.6);
+@font-size-base: 14px;
+@border-radius-base: 4px;
+@spacing-sm: 4px;
+@spacing-md: 8px;
+@spacing-lg: 12px;
+@spacing-xl: 16px;
+
+// 通用 mixin
+.common() {
+  font-family: 'Source Han Sans CN', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  box-sizing: border-box;
+}
+
+// 深色主题变量
+.theme-dark() {
+  :root {
+    --color-bg: #003032;
+    --color-primary: #18ffce;
+    --color-text-base: #ffffff;
+    --color-text-secondary: rgba(255, 255, 255, 0.6);
+    --color-warning: #b07b00;
+    --color-border: rgba(255, 255, 255, 0.2);
+    --color-row-active-bg: rgba(0, 240, 255, 0.1);
+    --color-row-active-border: #18ffce;
+    --font-size-base: 14px;
+    --border-radius-base: 4px;
+  }
+}
+
+// 浅色主题变量（备用）
+.theme-light() {
+  :root {
+    --color-bg: #f0f5f5;
+    --color-primary: #00a89d;
+    --color-text-base: #1a1a1a;
+    --color-text-secondary: rgba(0, 0, 0, 0.6);
+    --color-warning: #d4930d;
+    --color-border: rgba(0, 0, 0, 0.15);
+    --color-row-active-bg: rgba(0, 168, 157, 0.08);
+    --color-row-active-border: #00a89d;
+    --font-size-base: 14px;
+    --border-radius-base: 4px;
+  }
+}
+
+// 默认使用深色主题
+.theme-dark();

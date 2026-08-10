@@ -1,0 +1,125 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 65,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "严重违反‘禁止生成组件面板标题’的核心规范。`section-header-title` 中包含了‘环境监测’文字，而根据规范，面板标题应由 `base-panel` 通过 `declare.json.componentName` 自动显示，组件内部禁止重复生成标题栏和标题文字。",
+        "suggestion": "删除整个 `section-header-title` 节点，组件内容应直接从 `section-tabs-toolbar` 开始。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "Figma 节点覆盖率极低（coverageRate: 0），缺失了 26 个关键节点，包括图表的坐标轴文本（'40 30 20 10 0'）、预警线文本、图例等。这将导致生成的图表丢失关键视觉元素，无法还原设计稿。",
+        "suggestion": "重新检查 Figma 解析逻辑或手动补充缺失的图表坐标轴、图例和预警线节点映射，确保图表配置完整。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "chartDataHints[0].labels[0]",
+        "message": "Y轴刻度被错误地解析为单个包含换行符的字符串 `'40\\n30\\n20\\n10\\n0'`。这不符合 ECharts 的 `yAxis.data` 数组结构，会导致图表配置生成失败或坐标轴显示异常。",
+        "suggestion": "将 Y 轴刻度拆分为独立的数组项，例如 `['40', '30', '20', '10', '0']`。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[1].body.children[1].children[2]",
+        "message": "消息 Badge (`badge-num`) 被作为 `icon-group` 的平级子节点放在水平布局中。在实际 UI 中，Badge 通常需要相对于其关联的图标进行绝对定位覆盖，平级放置会导致 Badge 占据独立空间，破坏图标组的紧凑布局。",
+        "suggestion": "将 `badge-num` 调整为关联图标的子元素，或在样式中通过绝对定位 (`position: absolute`) 将其覆盖在图标右上角，并移除其在文档流中的占位。"
+      }
+    ],
+    "recommendations": [
+      "严格遵循 `base-panel` 约束，移除组件内部的面板标题、边框、背景等重复样式和结构，让框架统一处理。",
+      "优化 Figma 到 JSON 的解析映射，确保图表的坐标轴、图例、标记线（如预警线）等细节元素被正确识别并转化为有效的 `chartDataHints`。",
+      "在处理图标和徽标（Badge）组合时，采用相对/绝对定位的布局策略，确保视觉上的层叠关系正确，避免流式布局导致的错位。"
+    ],
+    "summary": "该布局结构存在违反微码核心规范的问题（重复生成面板标题），且 Figma 节点覆盖率极低，导致图表关键元素（坐标轴、预警线等）缺失。此外，部分数据解析（如Y轴刻度）和布局细节（Badge位置）存在瑕疵。需要删除冗余的标题节点，修复数据解析错误，并补充缺失的图表元素映射后才能通过审查。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#038fff",
+      "--colorSecondary": "#1099b1",
+      "--colorBg": "#edf4fb",
+      "--colorSuccess": "#52c41a",
+      "--colorDanger": "#f53f3f",
+      "--colorTextBase": "#333333",
+      "--fontSize": "14px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#038fff",
+      "@color-secondary": "#1099b1",
+      "@color-bg": "#edf4fb",
+      "@color-success": "#52c41a",
+      "@color-danger": "#f53f3f",
+      "@color-text-base": "#333333",
+      "@font-size-base": "14px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "background-color": "#edf4fb",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)"
+      },
+      ".tab-active": {
+        "background": "linear-gradient(135deg, var(--colorPrimary), var(--colorSecondary))",
+        "color": "#ffffff",
+        "font-weight": "bold",
+        "border-radius": "4px"
+      },
+      ".chart-area-fill": {
+        "fill": "rgba(82, 196, 26, 0.2)",
+        "stroke": "var(--colorSuccess)"
+      },
+      ".warning-line": {
+        "border-top": "1px dashed var(--colorDanger)"
+      },
+      ".badge-danger": {
+        "background-color": "var(--colorDanger)",
+        "color": "#ffffff",
+        "border-radius": "50%",
+        "padding": "2px 6px",
+        "font-size": "12px",
+        "font-weight": "bold",
+        "line-height": "1"
+      }
+    },
+    "tokenCoverage": 1,
+    "mappingNotes": [
+      "主色调 #038fff 映射为 --colorPrimary，用于Tab选中高亮和主要交互元素",
+      "辅助色 #1099b1 映射为 --colorSecondary，与主色结合形成Tab选中项的蓝色渐变背景",
+      "背景色 #edf4fb 直接落地为容器背景字面量，同时映射为 --colorBg 和 @color-bg 保证主题一致性",
+      "成功色 #52c41a 映射为 --colorSuccess，用于图表绿色面积填充及正常状态指示",
+      "危险色 #f53f3f 映射为 --colorDanger，用于红色虚线预警线及红色Badge数字高亮",
+      "浅色主题下文字颜色推断为 #333333，以保证在浅灰蓝背景 (#edf4fb) 上的良好可读性"
+    ],
+    "elementStyleMap": {
+      "section-header-title": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-tabs-toolbar": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tab-list": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "toolbar-icons": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    }
+  }
+}

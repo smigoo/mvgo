@@ -1,0 +1,88 @@
+version: '3.8'
+
+# ============================================================
+# 感智晓界 — 本地开发/测试 docker-compose
+# ============================================================
+# 使用方式：
+#   docker compose up -d              # 启动全部服务
+#   docker compose up -d frontend     # 仅启动前端
+#   docker compose logs -f backend-java
+# ============================================================
+
+services:
+  # ─── Nginx 统一入口 ───
+  nginx:
+    image: nginx:alpine
+    container_name: mvgo-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d:ro
+    depends_on:
+      - frontend
+      - backend-node
+      - backend-java
+    restart: unless-stopped
+
+  # ─── MySQL ───
+  mysql:
+    image: mysql:8.0
+    container_name: mvgo-mysql
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: mvgo
+    volumes:
+      - mysql_data:/var/lib/mysql
+    restart: unless-stopped
+
+  # ─── Vue3 前端 ───
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: mvgo-frontend
+    ports:
+      - "2610:2610"
+    restart: unless-stopped
+    # 开发模式可直接 mount 源码：
+    # volumes:
+    #   - ./frontend/src:/app/src
+
+  # ─── Node.js 后端（AI 引擎 + Figma 管线 + SSE） ───
+  backend-node:
+    build:
+      context: ./backend-node
+      dockerfile: Dockerfile
+    container_name: mvgo-backend-node
+    ports:
+      - "13030:13030"
+    env_file:
+      - ./backend-node/.env
+    depends_on:
+      - mysql
+    restart: unless-stopped
+
+  # ─── Java 后端（业务 CRUD） ───
+  backend-java:
+    build:
+      context: ./backend-java
+      dockerfile: Dockerfile
+    container_name: mvgo-backend-java
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      MYSQL_URL: jdbc:mysql://mysql:3306/mvgo?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai
+      MYSQL_USERNAME: ${MYSQL_USERNAME:-root}
+      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      NODE_BACKEND_URL: http://backend-node:13030/api
+    depends_on:
+      - mysql
+      - backend-node
+    restart: unless-stopped
+
+volumes:
+  mysql_data:

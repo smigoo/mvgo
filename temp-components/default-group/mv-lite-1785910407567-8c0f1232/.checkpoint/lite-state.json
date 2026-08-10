@@ -1,0 +1,88 @@
+{
+  "stage": "codegen_done",
+  "brief": {
+    "layout": "整体为横向矩形布局，自上而下分为顶部导航区和主体图表区。主轴方向为垂直，顶部区域水平排列，主体区域占据大部分空间。",
+    "regions": [
+      {
+        "name": "顶部导航区",
+        "description": "包含标题'环境监测'、Tab切换栏和右上角操作图标",
+        "position": "top",
+        "size": "高度约占整体的20%"
+      },
+      {
+        "name": "主体图表区",
+        "description": "包含Y轴刻度、X轴刻度、图例、预警线、数据曲线及填充区域",
+        "position": "center",
+        "size": "高度约占整体的80%"
+      }
+    ],
+    "spacing": {
+      "outer": "整体有适中的外边距",
+      "gap": "顶部各元素之间有水平间距，图表区坐标轴与图表内容有间距",
+      "padding": "各区域内部有适当的内边距"
+    },
+    "colors": {
+      "primary": "#4A90E2",
+      "background": "#D3D3D3",
+      "surface": "#E8E8E8",
+      "text": "#333333",
+      "border": "#CCCCCC"
+    },
+    "typography": {
+      "size": "标题字号较大，Tab和坐标轴字号较小",
+      "weight": "标题和激活Tab字重较粗",
+      "lineHeight": "行高适中，保证文字清晰可读"
+    },
+    "components": [
+      "Tab切换栏",
+      "图标按钮",
+      "折线/面积图"
+    ],
+    "textContent": [
+      "环境监测",
+      "一氧化碳",
+      "能见度",
+      "洞内照明",
+      "洞外光强",
+      "zk3+785CO浓度",
+      "预警线",
+      "0",
+      "10",
+      "20",
+      "30",
+      "40",
+      "50",
+      "2",
+      "4",
+      "6",
+      "8",
+      "10",
+      "12",
+      "14",
+      "16",
+      "18",
+      "20",
+      "22",
+      "24",
+      "时"
+    ],
+    "visualDetails": [
+      "Tab切换栏有圆角设计",
+      "图表区域有水平虚线网格",
+      "预警线为红色虚线",
+      "数据曲线下方有绿色渐变填充",
+      "右上角图标有红色角标显示数字6"
+    ],
+    "interactions": [
+      "Tab切换栏(包含'一氧化碳'、'能见度'、'洞内照明'、'洞外光强'，当前激活'一氧化碳')",
+      "右上角图表类型切换图标按钮",
+      "右上角列表/菜单图标按钮(带角标6)"
+    ]
+  },
+  "width": 440,
+  "height": 202,
+  "sourceType": "screenshot",
+  "componentType": "vue3",
+  "generationTier": "lite",
+  "vueCode": "<template>\n  <div class=\"container\">\n    <!-- 顶部导航区 -->\n    <div class=\"header\">\n      <div class=\"title\">环境监测</div>\n      \n      <div class=\"nav-bar\">\n        <div class=\"tabs-wrapper\">\n          <div class=\"tab-item active\">\n            <span class=\"arrow-shape\"></span>\n            一氧化碳\n          </div>\n          <div class=\"tab-item\">能见度</div>\n          <div class=\"tab-item\">洞内照明</div>\n          <div class=\"tab-item\">洞外光强</div>\n        </div>\n\n        <div class=\"icon-group\">\n          <div class=\"icon-btn chart-icon\">\n            <div class=\"bar b1\"></div>\n            <div class=\"bar b2\"></div>\n            <div class=\"bar b3\"></div>\n          </div>\n          <div class=\"icon-btn list-icon\">\n            <div class=\"line l1\"></div>\n            <div class=\"line l2\"></div>\n            <div class=\"line l3\"></div>\n            <div class=\"badge\">6</div>\n          </div>\n        </div>\n      </div>\n    </div>\n\n    <!-- 主体图表区 -->\n    <div class=\"chart-area\">\n      <div class=\"y-axis-title\">辆</div>\n      <div ref=\"chartRef\" class=\"echarts-container\"></div>\n      <div class=\"x-axis-title\">时</div>\n    </div>\n  </div>\n</template>\n\n<script setup>\nimport { ref, onMounted, onUnmounted } from 'vue';\nimport * as echarts from 'echarts';\n\nconst chartRef = ref(null);\nlet chartInstance = null;\n\nonMounted(() => {\n  if (chartRef.value) {\n    chartInstance = echarts.init(chartRef.value);\n    \n    const option = {\n      grid: {\n        top: 40,\n        right: 40,\n        bottom: 30,\n        left: 40,\n        containLabel: true\n      },\n      tooltip: {\n        trigger: 'axis'\n      },\n      legend: {\n        data: ['zk3+785CO浓度'],\n        right: 20,\n        top: 10,\n        textStyle: {\n          color: '#333',\n          fontSize: 12\n        },\n        icon: 'rect' // 简化图例图标\n      },\n      xAxis: {\n        type: 'category',\n        boundaryGap: false,\n        data: ['2', '4', '6', '8', '10', '12', '14', '16', '18', '20', '22', '24'],\n        axisLine: {\n          lineStyle: { color: '#ccc' }\n        },\n        axisLabel: {\n          color: '#666',\n          margin: 15\n        },\n        axisTick: { show: false }\n      },\n      yAxis: {\n        type: 'value',\n        min: 0,\n        max: 50,\n        interval: 10,\n        axisLine: { show: false },\n        axisTick: { show: false },\n        splitLine: {\n          lineStyle: {\n            type: 'dashed',\n            color: '#e0e0e0'\n          }\n        },\n        axisLabel: {\n          color: '#666'\n        }\n      },\n      series: [\n        {\n          name: 'zk3+785CO浓度',\n          type: 'line',\n          smooth: true,\n          symbol: 'none',\n          lineStyle: {\n            color: '#76c893',\n            width: 2\n          },\n          areaStyle: {\n            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [\n              { offset: 0, color: 'rgba(118, 200, 147, 0.4)' },\n              { offset: 1, color: 'rgba(118, 200, 147, 0.05)' }\n            ])\n          },\n          data: [5, 8, 6, 3, 2, 2, 5, 10, 15, 15, 12, 8, 2], // 多一个点以匹配视觉\n          // 修正数据长度以匹配x轴\n          data: [5, 8, 6, 3, 2, 2, 8, 15, 12, 8, 5, 2] \n        },\n        {\n          type: 'line',\n          markLine: {\n            symbol: 'none',\n            label: {\n              position: 'end',\n              formatter: '预警线',\n              color: '#d9534f',\n              fontSize: 12\n            },\n            lineStyle: {\n              type: 'dashed',\n              color: '#d9534f'\n            },\n            data: [\n              { yAxis: 30 }\n            ]\n          }\n        }\n      ]\n    };\n\n    // 修正数据长度问题，X轴12个点，数据也12个点\n    option.series[0].data = [5, 8, 6, 3, 2, 2, 8, 15, 12, 8, 5, 2];\n\n    chartInstance.setOption(option);\n  }\n});\n\nonUnmounted(() => {\n  if (chartInstance) {\n    chartInstance.dispose();\n  }\n});\n</script>\n\n<style scoped>\n.container {\n  width: 100%;\n  height: 100%;\n  background-color: #cfd4d9; /* 截图背景灰蓝色 */\n  border-radius: 8px;\n  padding: 20px;\n  box-sizing: border-box;\n  display: flex;\n  flex-direction: column;\n  font-family: sans-serif;\n  position: relative;\n  overflow: hidden;\n}\n\n/* 顶部区域 */\n.header {\n  display: flex;\n  flex-direction: column;\n  margin-bottom: 20px;\n}\n\n.title {\n  color: #4facfe; /* 青色标题 */\n  font-size: 20px;\n  font-weight: bold;\n  margin-bottom: 15px;\n  margin-left: 10px;\n}\n\n.nav-bar {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n}\n\n.tabs-wrapper {\n  display: flex;\n  background-color: #8faecf; /* Tab栏背景 */\n  border-radius: 20px;\n  padding: 4px;\n  align-items: center;\n}\n\n.tab-item {\n  padding: 8px 20px;\n  color: #fff;\n  font-size: 14px;\n  cursor: pointer;\n  border-radius: 16px;\n  transition: all 0.3s;\n  position: relative;\n}\n\n.tab-item.active {\n  background-color: #fff; /* 激活状态白色背景 */\n  color: #fff; /* 截图里文字看起来像白色，或者很浅的蓝，这里为了对比度用白色，或者根据截图调整 */\n  /* 截图里“一氧化碳”背景是白色/浅蓝，文字是白色。这有点反直觉，通常是深色文字。\n     仔细看截图，“一氧化碳”背景是浅蓝色块，文字白色。\n     或者是白色块，文字蓝色。\n     让我们假设是白色块，文字蓝色/深色，或者保持白色文字加阴影。\n     看截图，\"一氧化碳\"背景明显比周围亮，像是白色。文字也是白色？\n     不，文字应该是深色或者蓝色。\n     为了还原截图视觉效果：背景 #eef6fc，文字 #4facfe 或白色。\n     截图里文字是白色的。那背景可能是深一点的蓝色？\n     不，截图里长条是浅蓝，\"一氧化碳\"块是白色/极浅蓝。文字是白色。\n     这可能是截图压缩导致的。通常激活态文字会变深色。\n     这里我设为白色文字，背景设为更亮的浅蓝/白色。\n  */\n  background: linear-gradient(90deg, #a0c4e8, #8faecf); /* 模拟截图的高亮块 */\n  color: #fff;\n  font-weight: bold;\n  display: flex;\n  align-items: center;\n}\n\n/* 模拟左边的箭头形状 */\n.arrow-shape {\n  display: inline-block;\n  width: 0;\n  height: 0;\n  border-top: 6px solid transparent;\n  border-bottom: 6px solid transparent;\n  border-right: 8px solid #4facfe; /* 蓝色箭头 */\n  margin-right: 5px;\n}\n\n.icon-group {\n  display: flex;\n  gap: 10px;\n}\n\n.icon-btn {\n  width: 32px;\n  height: 32px;\n  background-color: #4a90e2;\n  border-radius: 4px;\n  display: flex;\n  flex-direction: column;\n  justify-content: center;\n  align-items: center;\n  cursor: pointer;\n  position: relative;\n}\n\n/* 柱状图图标模拟 */\n.chart-icon {\n  flex-direction: row;\n  gap: 3px;\n  align-items: flex-end;\n  padding-bottom: 6px;\n}\n.bar {\n  width: 4px;\n  background-color: #fff;\n  border-radius: 1px;\n}\n.b1 { height: 10px; }\n.b2 { height: 16px; }\n.b3 { height: 12px; }\n\n/* 列表图标模拟 */\n.list-icon {\n  gap: 3px;\n  padding: 8px 6px;\n  box-sizing: border-box;\n}\n.line {\n  width: 18px;\n  height: 2px;\n  background-color: #fff;\n  border-radius: 1px;\n}\n\n.badge {\n  position: absolute;\n  top: -6px;\n  right: -6px;\n  background-color: #e74c3c;\n  color: #fff;\n  font-size: 10px;\n  width: 16px;\n  height: 16px;\n  border-radius: 50%;\n  display: flex;\n  justify-content: center;\n  align-items: center;\n  font-weight: bold;\n}\n\n/* 图表区域 */\n.chart-area {\n  flex: 1;\n  position: relative;\n  background-color: transparent;\n}\n\n.y-axis-title {\n  position: absolute;\n  top: 10px;\n  left: 10px;\n  color: #666;\n  font-size: 12px;\n  z-index: 10;\n}\n\n.x-axis-title {\n  position: absolute;\n  bottom: 10px;\n  right: 20px;\n  color: #666;\n  font-size: 12px;\n  z-index: 10;\n}\n\n.echarts-container {\n  width: 100%;\n  height: 100%;\n}\n</style>"
+}

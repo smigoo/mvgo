@@ -1,0 +1,238 @@
+```json
+{
+  "componentName": "重点车辆监测",
+  "componentType": "statistics",
+  "summary": "浅色背景面板，顶部包含标题和地点Tab切换（江阴靖江长江隧道/江阴大桥），下方展示今日累计的三类重点车辆统计数据（危化品车、重型货车、超高车辆），采用横向卡片布局。",
+  "layout": {
+    "type": "vertical-stack",
+    "direction": "vertical",
+    "sections": [
+      {
+        "id": "tabs-section",
+        "name": "地点切换",
+        "role": "tabs",
+        "layout": "horizontal",
+        "layoutDirection": "horizontal",
+        "widthRatio": 1.0,
+        "heightRatio": 0.15,
+        "headerRelation": "title-same-row",
+        "children": [
+          {
+            "role": "tab-item",
+            "name": "江阴靖江长江隧道",
+            "widthRatio": 0.6
+          },
+          {
+            "role": "tab-item",
+            "name": "江阴大桥",
+            "widthRatio": 0.4
+          }
+        ]
+      },
+      {
+        "id": "sub-header-section",
+        "name": "今日累计",
+        "role": "text",
+        "layout": "horizontal",
+        "layoutDirection": "horizontal",
+        "widthRatio": 1.0,
+        "heightRatio": 0.15,
+        "headerRelation": "content-below-title",
+        "children": [
+          {
+            "id": "sub-header-icon",
+            "role": "icon",
+            "widthRatio": 0.1,
+            "resourceFile": "../resources/images/icon-123.png",
+            "recommendedUsage": "decorativeBlock"
+          },
+          {
+            "role": "text",
+            "name": "今日累计",
+            "widthRatio": 0.9
+          }
+        ]
+      },
+      {
+        "id": "cards-section",
+        "name": "车辆统计卡片",
+        "role": "list",
+        "layout": "horizontal",
+        "layoutDirection": "horizontal",
+        "widthRatio": 1.0,
+        "heightRatio": 0.7,
+        "headerRelation": "content-below-title",
+        "children": [
+          {
+            "id": "card-1",
+            "role": "card",
+            "layout": "horizontal",
+            "layoutDirection": "horizontal",
+            "widthRatio": 0.33,
+            "heightRatio": 1.0,
+            "resourceFile": "../resources/images/bg-124.png",
+            "recommendedUsage": "backgroundBlock",
+            "children": [
+              {
+                "role": "icon",
+                "widthRatio": 0.35,
+                "resourceFile": "../resources/images/icon-8036.png",
+                "recommendedUsage": "imgSrc"
+              },
+              {
+                "role": "content-group",
+                "layout": "vertical",
+                "layoutDirection": "vertical",
+                "widthRatio": 0.65,
+                "children": [
+                  {
+                    "role": "text",
+                    "name": "危化品车"
+                  },
+                  {
+                    "role": "metric",
+                    "name": "51",
+                    "unit": "次"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "card-2",
+            "role": "card",
+            "layout": "horizontal",
+            "layoutDirection": "horizontal",
+            "widthRatio": 0.33,
+            "heightRatio": 1.0,
+            "resourceFile": "../resources/images/bg-125.png",
+            "recommendedUsage": "backgroundBlock",
+            "children": [
+              {
+                "role": "icon",
+                "widthRatio": 0.35,
+                "resourceFile": "../resources/images/icon-8049.png",
+                "recommendedUsage": "imgSrc"
+              },
+              {
+                "role": "content-group",
+                "layout": "vertical",
+                "layoutDirection": "vertical",
+                "widthRatio": 0.65,
+                "children": [
+                  {
+                    "role": "text",
+                    "name": "重型货车"
+                  },
+                  {
+                    "role": "metric",
+                    "name": "2",
+                    "unit": "次"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "card-3",
+            "role": "card",
+            "layout": "horizontal",
+            "layoutDirection": "horizontal",
+            "widthRatio": 0.34,
+            "heightRatio": 1.0,
+            "resourceFile": "../resources/images/bg-126.png",
+            "recommendedUsage": "backgroundBlock",
+            "children": [
+              {
+                "role": "icon",
+                "widthRatio": 0.35,
+                "resourceFile": "../resources/images/icon-8070.png",
+                "recommendedUsage": "imgSrc"
+              },
+              {
+                "role": "content-group",
+                "layout": "vertical",
+                "layoutDirection": "vertical",
+                "widthRatio": 0.65,
+                "children": [
+                  {
+                    "role": "text",
+                    "name": "超高车辆"
+                  },
+                  {
+                    "role": "metric",
+                    "name": "19",
+                    "unit": "次"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "styles": {
+    "theme": "light",
+    "background": "#edf4fb",
+    "backgroundBrightness": "light",
+    "textColor": "dark",
+    "colors": [
+      "#1990ff",
+      "#ff4d4f",
+      "#1890ff",
+      "#fa8c16",
+      "#333333"
+    ],
+    "decorations": [],
+    "emphasis": [
+      "#ff4d4f",
+      "#1890ff",
+      "#fa8c16"
+    ]
+  },
+  "charts": [],
+  "interactions": [
+    {
+      "type": "tab",
+      "items": [
+        "江阴靖江长江隧道",
+        "江阴大桥"
+      ],
+      "defaultActive": "江阴靖江长江隧道"
+    }
+  ],
+  "doNotInvent": [
+    "卡片内的图标为具体车辆插画，需使用提供的资源文件",
+    "卡片背景需使用提供的资源文件"
+  ],
+  "notes": [
+    "浅色统计面板",
+    "包含Tab切换",
+    "三个统计卡片横向排列"
+  ],
+  "imageEvidence": {
+    "dominantBgColor": "#edf4fb",
+    "backgroundImage": "",
+    "firstVisibleText": "重点车辆监测",
+    "specificElements": [
+      {
+        "type": "tab-button",
+        "position": "顶部中间",
+        "content": "江阴靖江长江隧道",
+        "color": "#1990ff"
+      },
+      {
+        "type": "text",
+        "position": "内容区顶部",
+        "content": "今日累计"
+      },
+      {
+        "type": "card",
+        "position": "底部左侧",
+        "content": "危化品车 51 次"
+      }
+    ]
+  }
+}
+```

@@ -1,0 +1,300 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 82,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[1].body",
+        "message": "巡检统计区域嵌套层级过深（body -> row -> group -> item -> label/value 达到5-6层），超出建议的≤3层标准，增加了DOM复杂度和维护成本。",
+        "suggestion": "扁平化DOM结构，移除冗余的 `stat-group` 包裹层，让 `stat-item` 直接作为 `patrol-data-row` 的子元素，利用 flex 的 gap 属性控制间距。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "`section-tabs` 被标记为 `header-right` 插槽，但在 `sections` 数组中作为独立节点与 body 区域并列，容易导致代码生成时将其错误地渲染在 body 流式布局中。",
+        "suggestion": "在代码生成阶段，需通过逻辑判断将 `slotCandidate === 'header-right'` 的节点提取，并渲染到 `<base-panel>` 的对应 header 插槽中，而非作为 body 的第一个元素。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "interactions[0]",
+        "message": "布局中仅描述了 Tab 的 UI 结构，未体现 Tab 切换与下方统计数据的联动约束，违反“Tab/Select 切换必须实现数据联动”的核心规范。",
+        "suggestion": "在代码生成时，必须使用 `ref` 维护激活状态，并通过 `watch` 监听状态变化以更新下方巡检和施工统计的数据，禁止仅做样式切换而不更新数据。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[1].body.children[0]",
+        "message": "布局中引用了多个本地图片资源（如 `img-27822.png`, `bg-27682.png`），若使用 ESM import 引入将直接触发 RUNTIME-004 运行时阻断错误。",
+        "suggestion": "严格遵守规范，禁止使用 `import` 引入本地图片。必须将图片转换为 base64 内联，或使用 `/workspace/custom-components/{id}/resources/images/...` 同源 URL 路径。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[0]",
+        "message": "施工状态卡片的布局未明确宽度自适应策略，若直接按设计稿固定宽度可能导致在不同屏幕尺寸下溢出或留白，违反“容器布局禁止固定宽度”规范。",
+        "suggestion": "建议为 `construction-cards` 容器设置 `flex: 1` 或 `width: 100%`，内部卡片使用 `flex: 1` 均分宽度，确保宽度自适应。"
+      }
+    ],
+    "recommendations": [
+      "在代码生成前，对布局 JSON 进行预处理，将 `slotCandidate` 不为 null 的节点从 `sections` 数组中剥离，单独映射到 `base-panel` 的插槽中，避免污染 body 流式布局。",
+      "针对 `stat-item` 和 `card` 等重复性高的数据展示组件，建议封装为独立的子组件，并使用 `defineProps` 接收数据，以减少主模板的冗余代码并提升可维护性。",
+      "确保所有背景图（`backgroundImage`）的容器具有明确的宽高或比例约束（如 `min-height`），避免图片加载前或加载失败时导致布局塌陷。",
+      "针对“累计病害数”等需要特殊强调的数值，建议在子组件中通过 props 传入 `highlight` 或 `status` 属性来动态控制颜色，而不是在布局中硬编码颜色值。"
+    ],
+    "summary": "整体布局结构清晰，区域划分合理，能够准确反映“养护管理”面板的业务逻辑和视觉层级。主要问题在于局部嵌套层级过深、插槽节点与流式节点混合可能导致渲染错位，以及缺乏对 Tab 数据联动和图片资源引入规范的显式约束。建议在代码生成阶段重点优化 DOM 扁平化、插槽提取逻辑，并严格遵守图片引入和 Tab 联动的微码规范，以确保最终产物的可运行性和交互完整性。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#18ffce",
+      "--colorBg": "#0a192f",
+      "--colorTextBase": "#ffffff",
+      "--colorSuccess": "#00ff80",
+      "--colorWarning": "#ffa500",
+      "--colorDanger": "#ff6464",
+      "--colorDecoration": "rgba(24, 255, 206, 0.15)",
+      "--fontSize": "14px",
+      "--borderRadius": "4px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "var(--colorPrimary, #18ffce)",
+      "@color-bg": "var(--colorBg, #0a192f)",
+      "@color-text-base": "var(--colorTextBase, #ffffff)",
+      "@color-success": "var(--colorSuccess, #00ff80)",
+      "@color-warning": "var(--colorWarning, #ffa500)",
+      "@color-danger": "var(--colorDanger, #ff6464)",
+      "@color-decoration": "var(--colorDecoration, rgba(24, 255, 206, 0.15))",
+      "@font-size-base": "var(--fontSize, 14px)",
+      "@border-radius-base": "var(--borderRadius, 4px)"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".dashboard-container": {
+        "width": "100%",
+        "height": "100%",
+        "background": "linear-gradient(135deg, #0a192f 0%, #020c1b 100%)",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)",
+        "position": "relative",
+        "overflow": "hidden"
+      },
+      ".section-header": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "8px",
+        "margin-bottom": "12px"
+      },
+      ".header-decoration-line": {
+        "width": "4px",
+        "height": "16px",
+        "background-color": "var(--colorPrimary)",
+        "border-radius": "2px"
+      },
+      ".progress-bar-track": {
+        "width": "100%",
+        "height": "8px",
+        "background-color": "rgba(255, 255, 255, 0.1)",
+        "border-radius": "4px",
+        "overflow": "hidden"
+      },
+      ".data-row-block": {
+        "background-color": "rgba(255, 255, 255, 0.05)",
+        "border": "1px solid rgba(255, 255, 255, 0.1)",
+        "border-radius": "var(--borderRadius)",
+        "padding": "12px"
+      },
+      ".text-highlight-primary": {
+        "color": "var(--colorPrimary)",
+        "font-weight": "bold"
+      },
+      ".text-highlight-success": {
+        "color": "var(--colorSuccess)",
+        "font-weight": "bold"
+      },
+      ".text-highlight-warning": {
+        "color": "var(--colorWarning)",
+        "font-weight": "bold"
+      },
+      ".text-highlight-danger": {
+        "color": "var(--colorDanger)",
+        "font-weight": "bold"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主题色映射为--colorPrimary，对应青色高亮和装饰线",
+      "容器背景应优先直接落地为 Figma 字面量值（深青色渐变），避免关键可见背景只依赖 CSS 变量",
+      "强调色（红、橙、绿）分别映射为 --colorDanger, --colorWarning, --colorSuccess，用于数据高亮",
+      "装饰元素（竖线、进度条、背景块）使用带透明度的主题色或基础色派生，保持科技风统一",
+      "科技大屏风通常采用较小的圆角（4px）和半透明叠加层来体现层次感"
+    ],
+    "elementStyleMap": {
+      "section-tabs": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-patrol-stats": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "patrol-data-row-stat-group-x-1-stat-item-x-0": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "patrol-data-row-stat-group-x-1-stat-item-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "patrol-data-row-stat-group-x-1-stat-item-x-2": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "patrol-data-row-stat-group-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "patrol-data-row": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-el-x-6-decoration-进度条背景-1": {
+        "position": "relative",
+        "background-image": "url(../resources/images/bg-27696.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-el-x-6-stat-item-累计病害数-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center",
+        "justify-content": "center"
+      },
+      "el-el-x-6": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-27682.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-stat-group-x-8-stat-item-x-0": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-group-x-8-stat-item-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-group-x-8-stat-item-x-2": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-group-x-8": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-stat-item-x-9": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-item-x-12": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-item-x-15": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-decoration-进度条背景-18": {
+        "position": "relative",
+        "background-image": "url(../resources/images/bg-27696.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-stat-item-累计病害数-19": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center",
+        "justify-content": "center"
+      },
+      "section-construction-stats": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "construction-cards-card-计划施工-0": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "construction-cards-card-已完成-1": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "construction-cards": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "construction-list-data-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "justify-content": "space-between"
+      },
+      "construction-list-data-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row",
+        "justify-content": "space-between"
+      },
+      "construction-list-data-row-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "justify-content": "space-between"
+      },
+      "construction-list": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-24": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-27682.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-card-计划施工-25": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-card-已完成-30": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-data-row-x-35": {
+        "display": "flex",
+        "flex-direction": "row",
+        "justify-content": "space-between"
+      },
+      "el-data-row-x-38": {
+        "display": "flex",
+        "flex-direction": "row",
+        "justify-content": "space-between"
+      },
+      "el-data-row-x-41": {
+        "display": "flex",
+        "flex-direction": "row",
+        "justify-content": "space-between"
+      }
+    }
+  }
+}

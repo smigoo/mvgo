@@ -1,0 +1,27 @@
+{
+  "componentId": "mc-max-1785989464992-3d0e83bb",
+  "componentName": "cp-设备监测",
+  "version": "v1.0.0",
+  "panelKey": "default-panel",
+  "attribute": {
+    "aspectRatio": [460, 138]
+  },
+  "themeConfig": {
+    "default": "dark",
+    "list": [
+      { "name": "深色主题", "key": "dark" },
+      { "name": "亮色主题", "key": "light" }
+    ]
+  },
+  "businessEvents": {
+    "mc-max-1785989464992-3d0e83bb-onload": {
+      "eventId": "mc-max-1785989464992-3d0e83bb-onload",
+      "eventName": "组件加载",
+      "eventDataSchema": {}
+    }
+  },
+  "businessStatuses": {},
+  "dataSources": [],
+  "formSources": [],
+  "businessConfig": []
+}

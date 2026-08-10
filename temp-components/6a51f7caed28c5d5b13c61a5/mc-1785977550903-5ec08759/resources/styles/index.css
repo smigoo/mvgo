@@ -1,0 +1,174 @@
+.c-mc-1785977550903-5ec08759-container {
+  width: 100%;
+  height: 100%;
+  padding: 16px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+.c-mc-1785977550903-5ec08759-stats-wrapper {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-around;
+  width: 100%;
+  gap: 16px;
+}
+.c-mc-1785977550903-5ec08759-stat-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+.c-mc-1785977550903-5ec08759-stat-icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+.c-mc-1785977550903-5ec08759-stat-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.c-mc-1785977550903-5ec08759-stat-label {
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 21px;
+  color: #333333;
+  white-space: nowrap;
+}
+.c-mc-1785977550903-5ec08759-stat-value {
+  font-family: 'Roboto', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 24px;
+  color: #1990FF;
+  white-space: nowrap;
+}
+.c-mc-1785977550903-5ec08759-stat-value--success {
+  color: #08A3A5;
+}
+.c-mc-1785977550903-5ec08759-stat-value--warning {
+  color: #FF7D00;
+}
+.c-mc-1785977550903-5ec08759-stat-value--danger {
+  color: #F53F3F;
+}
+.dark .c-mc-1785977550903-5ec08759-container {
+  width: 100%;
+  height: 100%;
+  padding: 16px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+.dark .c-mc-1785977550903-5ec08759-stats-wrapper {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-around;
+  width: 100%;
+  gap: 16px;
+}
+.dark .c-mc-1785977550903-5ec08759-stat-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+.dark .c-mc-1785977550903-5ec08759-stat-icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+.dark .c-mc-1785977550903-5ec08759-stat-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dark .c-mc-1785977550903-5ec08759-stat-label {
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 21px;
+  color: #ffffff;
+  white-space: nowrap;
+}
+.dark .c-mc-1785977550903-5ec08759-stat-value {
+  font-family: 'Roboto', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 24px;
+  color: #1990FF;
+  white-space: nowrap;
+}
+.dark .c-mc-1785977550903-5ec08759-stat-value--success {
+  color: #08A3A5;
+}
+.dark .c-mc-1785977550903-5ec08759-stat-value--warning {
+  color: #FF7D00;
+}
+.dark .c-mc-1785977550903-5ec08759-stat-value--danger {
+  color: #F53F3F;
+}
+.light .c-mc-1785977550903-5ec08759-container {
+  width: 100%;
+  height: 100%;
+  padding: 16px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+.light .c-mc-1785977550903-5ec08759-stats-wrapper {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-around;
+  width: 100%;
+  gap: 16px;
+}
+.light .c-mc-1785977550903-5ec08759-stat-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+.light .c-mc-1785977550903-5ec08759-stat-icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+.light .c-mc-1785977550903-5ec08759-stat-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.light .c-mc-1785977550903-5ec08759-stat-label {
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 21px;
+  color: #333333;
+  white-space: nowrap;
+}
+.light .c-mc-1785977550903-5ec08759-stat-value {
+  font-family: 'Roboto', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 24px;
+  color: #1990FF;
+  white-space: nowrap;
+}
+.light .c-mc-1785977550903-5ec08759-stat-value--success {
+  color: #08A3A5;
+}
+.light .c-mc-1785977550903-5ec08759-stat-value--warning {
+  color: #FF7D00;
+}
+.light .c-mc-1785977550903-5ec08759-stat-value--danger {
+  color: #F53F3F;
+}

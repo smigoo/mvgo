@@ -1,0 +1,304 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 72,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0].header",
+        "message": "生成了组件主标题“重点车辆监测”，违反了“禁止生成组件面板标题”规范。该标题应由 base-panel 通过 componentName 自动渲染，业务代码中不应重复生成。",
+        "suggestion": "移除 section-tabs 中的 header.title，仅保留 Tab 切换内容，或将该 section 仅作为 Tab 容器。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[2].body.items[*].style",
+        "message": "统计卡片使用了固定宽度 `width: 120px`，违反了“容器布局禁止固定宽度”规范，会导致组件在不同屏幕尺寸下无法自适应伸缩。",
+        "suggestion": "移除卡片 style 中的固定 width，改用 `flex: 1` 实现等宽自适应布局。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body.items[*].style",
+        "message": "卡片添加了 background、borderRadius、padding 等装饰样式，但 coverageReport 显示 Figma 覆盖率为 0，缺乏设计稿证据，违反了“零装饰原则”和“禁止默认卡片化”规范。",
+        "suggestion": "移除无证据的装饰样式，保持默认无背景、无圆角。除非有明确的 Figma 节点数据（如 fills、cornerRadius）支持，否则不要臆造样式。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "Tab 栏的 `headerRelation` 为 `title-same-row` 且 `slotCandidate` 为 `header-right`，但自身又作为独立的 section 存在，逻辑冲突。若 Tab 在标题右侧，应作为面板 header 控件；若在下方，则不应复用标题行。",
+        "suggestion": "若 Tab 在标题右侧，将其移入 base-panel 的 header controls 中；若 Tab 在标题下方，将 `headerRelation` 改为 `content-below-title` 并移除 header 中的 title。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[1]",
+        "message": "“今日累计”单独作为一个 section，且 body 仅包含图标和文本，增加了不必要的嵌套层级，结构略显冗余。",
+        "suggestion": "将“今日累计”合并为 `section-cards` 的 header，减少 section 数量，优化整体 DOM 结构。"
+      }
+    ],
+    "recommendations": [
+      "严格遵循“零装饰原则”，在 Figma 覆盖率极低的情况下，绝对不要臆造卡片背景、圆角和阴影等样式，保持代码纯净。",
+      "全面排查布局中的固定 px 宽度，统一替换为 flex 比例布局（如 flex: 1），确保组件在不同分辨率下的自适应能力。",
+      "理清面板插槽（slot）与独立 section 的关系，避免将本应属于 base-panel header 的控件（如右侧 Tab）错误地定义为独立的 body section。",
+      "合并冗余的 section，将相邻且逻辑关联紧密的标题与内容区（如“今日累计”与统计卡片）整合，降低嵌套深度。"
+    ],
+    "summary": "该布局结构基本还原了设计稿的业务模块划分，但在微码核心规范的遵守上存在明显缺陷。主要问题包括重复生成面板标题、使用固定宽度破坏自适应布局，以及在缺乏 Figma 证据的情况下臆造卡片装饰样式。此外，Tab 插槽的定位逻辑存在冲突，部分 section 划分略显冗余。建议重点修复固定宽度和标题重复问题，并严格遵循零装饰原则，以提升代码的规范性和可维护性。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "rgba(25,144,255,1)",
+      "--colorBg": "rgba(237,244,251,1)",
+      "--colorTextBase": "rgba(51,51,51,1)",
+      "--colorError": "rgba(255,77,79,1)",
+      "--colorWarning": "rgba(250,140,22,1)",
+      "--fontSize": "14px",
+      "--fontSizeLarge": "2.28em"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "rgba(25,144,255,1)",
+      "@color-bg": "rgba(237,244,251,1)",
+      "@color-text-base": "rgba(51,51,51,1)",
+      "@color-error": "rgba(255,77,79,1)",
+      "@color-warning": "rgba(250,140,22,1)",
+      "@font-size-base": "14px",
+      "@font-size-large": "2.28em"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "1.25em",
+        "background": "var(--colorBg)",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)"
+      },
+      ".header": {
+        "display": "flex",
+        "justify-content": "space-between",
+        "align-items": "center",
+        "color": "var(--colorTextBase)",
+        "font-weight": "600",
+        "margin-bottom": "1em"
+      },
+      ".metric-value": {
+        "font-size": "var(--fontSizeLarge)",
+        "font-weight": "700",
+        "color": "var(--colorPrimary)",
+        "line-height": "1.2",
+        "font-family": "DIN Alternate, Helvetica Neue, Helvetica, sans-serif"
+      },
+      ".metric-value--error": {
+        "color": "var(--colorError)"
+      },
+      ".metric-value--warning": {
+        "color": "var(--colorWarning)"
+      },
+      ".icon-diamond": {
+        "width": "0.75em",
+        "height": "0.75em",
+        "background-color": "var(--colorPrimary)",
+        "transform": "rotate(45deg)",
+        "display": "inline-block",
+        "margin-right": "0.5em"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "浅色科技监测风主题，背景采用极浅的蓝色 rgba(237,244,251,1)",
+      "主色调为科技蓝 rgba(25,144,255,1)，用于强调和主要交互元素",
+      "文本色采用深灰 rgba(51,51,51,1)，保证在浅色背景下的可读性",
+      "提取了错误色（红）和警告色（橙）用于数据状态指示",
+      "菱形图标通过CSS transform: rotate(45deg) 实现，保持矢量缩放特性",
+      "大号彩色数值通过 .metric-value 类实现，支持通过修饰符类切换颜色状态，并推荐使用DIN等宽数字字体"
+    ],
+    "elementStyleMap": {
+      "section-tabs": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-tab-江阴靖江长江隧道-2": {
+        "background-color": "rgba(25,144,255,1)",
+        "color": "#ffffff",
+        "border-radius": "10px",
+        "padding": "4px 12px",
+        "font-size": "12px"
+      },
+      "el-tab-江阴大桥-3": {
+        "background-color": "rgba(102,128,160,0.2)",
+        "color": "rgba(102,128,160,1)",
+        "border-radius": "10px",
+        "padding": "4px 12px",
+        "font-size": "12px"
+      },
+      "section-total-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-icon-x-5": {
+        "width": "18px",
+        "height": "18px"
+      },
+      "el-text-今日累计-6": {
+        "font-size": "14px",
+        "color": "rgba(51,51,51,1)",
+        "font-weight": "normal"
+      },
+      "card-dangerous-row-x-0-icon-x-0": {
+        "width": "40px",
+        "height": "30px",
+        "object-fit": "contain"
+      },
+      "card-dangerous-row-x-0-label-危化品车-1": {
+        "font-size": "12px",
+        "color": "rgba(51,51,51,1)",
+        "font-weight": "normal"
+      },
+      "card-dangerous-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "card-dangerous": {
+        "background": "rgba(255,255,255,0.5)",
+        "border-radius": "8px",
+        "padding": "12px",
+        "width": "120px",
+        "height": "74px",
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "flex-start"
+      },
+      "el-row-x-9-icon-x-0": {
+        "width": "40px",
+        "height": "30px",
+        "object-fit": "contain"
+      },
+      "el-row-x-9-label-危化品车-1": {
+        "font-size": "12px",
+        "color": "rgba(51,51,51,1)",
+        "font-weight": "normal"
+      },
+      "el-row-x-9": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-icon-x-10": {
+        "width": "40px",
+        "height": "30px",
+        "object-fit": "contain"
+      },
+      "el-label-危化品车-11": {
+        "font-size": "12px",
+        "color": "rgba(51,51,51,1)",
+        "font-weight": "normal"
+      },
+      "card-heavy-row-x-0-icon-x-0": {
+        "width": "40px",
+        "height": "30px",
+        "object-fit": "contain"
+      },
+      "card-heavy-row-x-0-label-重型货车-1": {
+        "font-size": "12px",
+        "color": "rgba(51,51,51,1)",
+        "font-weight": "normal"
+      },
+      "card-heavy-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "card-heavy": {
+        "background": "rgba(255,255,255,0.5)",
+        "border-radius": "8px",
+        "padding": "12px",
+        "width": "120px",
+        "height": "74px",
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "flex-start"
+      },
+      "el-row-x-14-icon-x-0": {
+        "width": "40px",
+        "height": "30px",
+        "object-fit": "contain"
+      },
+      "el-row-x-14-label-重型货车-1": {
+        "font-size": "12px",
+        "color": "rgba(51,51,51,1)",
+        "font-weight": "normal"
+      },
+      "el-row-x-14": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-icon-x-15": {
+        "width": "40px",
+        "height": "30px",
+        "object-fit": "contain"
+      },
+      "el-label-重型货车-16": {
+        "font-size": "12px",
+        "color": "rgba(51,51,51,1)",
+        "font-weight": "normal"
+      },
+      "card-oversize-row-x-0-icon-x-0": {
+        "width": "40px",
+        "height": "30px",
+        "object-fit": "contain"
+      },
+      "card-oversize-row-x-0-label-超高车辆-1": {
+        "font-size": "12px",
+        "color": "rgba(51,51,51,1)",
+        "font-weight": "normal"
+      },
+      "card-oversize-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "card-oversize": {
+        "background": "rgba(255,255,255,0.5)",
+        "border-radius": "8px",
+        "padding": "12px",
+        "width": "120px",
+        "height": "74px",
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "flex-start"
+      },
+      "el-row-x-19-icon-x-0": {
+        "width": "40px",
+        "height": "30px",
+        "object-fit": "contain"
+      },
+      "el-row-x-19-label-超高车辆-1": {
+        "font-size": "12px",
+        "color": "rgba(51,51,51,1)",
+        "font-weight": "normal"
+      },
+      "el-row-x-19": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-icon-x-20": {
+        "width": "40px",
+        "height": "30px",
+        "object-fit": "contain"
+      },
+      "el-label-超高车辆-21": {
+        "font-size": "12px",
+        "color": "rgba(51,51,51,1)",
+        "font-weight": "normal"
+      }
+    }
+  }
+}

@@ -1,0 +1,235 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 12,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections",
+        "message": "sections 数组为空，布局结构完全缺失，无任何可审查的 UI 区域划分。",
+        "suggestion": "根据实际组件需求补充 sections 内容，至少应包含一个有效的布局区块（如 header、body、footer 等）。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "root.degraded",
+        "message": "degraded=true，表明本次布局分析处于降级状态，实际布局未被正确生成。根因是 404 错误：请求的 AI 模型资源未找到（MODEL_NOT_FOUND）。",
+        "suggestion": "修复上游模型请求路径或更换为有效的模型标识，确保 preview-analysis 阶段能正常调用模型生成布局结构，再重新触发审查。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "styles.theme",
+        "message": "theme 值为 '未知'，无法判断组件适配的是 dark 还是 light 主题，后续样式生成将无法正确套用主题变量。",
+        "suggestion": "在生成布局时明确传入 theme 参数（'dark' 或 'light'），styles.theme 应为确定值。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "styles.colors",
+        "message": "colors 数组为空，无任何颜色信息，Preview 阶段最低样式标准（字号层级、颜色映射、背景色）均无法满足。",
+        "suggestion": "补充从设计稿或预览图中提取的关键颜色（主色、强调色、背景色），至少提供 2-3 个核心颜色值。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "styles.background",
+        "message": "background 字段为空字符串，组件背景未定义，将导致组件在容器中完全透明或继承错误背景。",
+        "suggestion": "根据 backgroundBrightness='dark' 的提示，至少提供一个深色背景值（如 #0d1b2a 或 rgba(0,0,0,0.8)）。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "interactions",
+        "message": "interactions 数组为空，无任何交互定义。若组件含 Tab/Select/图例等交互元素，此处必须声明。",
+        "suggestion": "根据实际设计稿补充交互定义；若组件确实无交互，此项可保留空数组，但需在 summary 中说明原因。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "charts",
+        "message": "charts 数组为空，无图表配置。若组件包含 ECharts 图表，必须在此声明图表类型、legendPosition 等元信息。",
+        "suggestion": "若组件含图表，补充 charts 配置（chartType、legendPosition、tooltip.trigger 等）；若确实无图表，保留空数组并说明。"
+      }
+    ],
+    "recommendations": [
+      "优先修复上游 MODEL_NOT_FOUND 错误，确保 preview-analysis 阶段能正常运行，这是所有其他问题的根因。",
+      "修复后重新生成布局，sections 中需至少包含一个有效区块，并明确每个 section 的 header/body 层级关系（headerRelation 字段）。",
+      "styles.theme 必须确定为 'dark' 或 'light'，并据此填充对应的 colors、background 等字段，满足 Preview 阶段最低样式标准。",
+      "若组件含图表，charts 数组中每个图表必须声明 legendPosition 和 tooltip.trigger，避免生成阶段遗漏关键配置。",
+      "若组件含 Tab 切换或 Select 下拉，interactions 中必须声明对应的交互类型和数据联动关系。",
+      "建议在 CI/CD 管道中对 degraded=true 的布局结果做硬拦截，不进入后续代码生成阶段，避免基于空结构生成无效组件代码。"
+    ],
+    "summary": "本次审查的布局结构因上游 MODEL_NOT_FOUND（404）错误进入降级模式，实际布局完全未生成：sections 为空、styles 全部缺失、interactions 和 charts 均为空。这不是一个布局设计问题，而是一个上游依赖故障导致的空数据问题。当前结构无任何可用信息，强行进入代码生成阶段将产生无内容的空组件。建议将此状态视为流水线阻断条件，修复模型请求路径后重新执行 preview-analysis 阶段，再进行正式的布局结构审查。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）—— 基于 dark 背景亮度，无具体颜色/装饰信息，提供暗色主题兜底默认值",
+      "--colorPrimary": "#3677f8",
+      "--colorPrimaryActive": "#3677f829",
+      "--colorPrimaryBg": "rgba(54,119,248,0.12)",
+      "--colorPrimaryBgHover": "#3677f829",
+      "--colorTextBase": "#ffffff",
+      "--colorTextSecondary": "rgba(255,255,255,0.65)",
+      "--colorTextDisabled": "rgba(255,255,255,0.35)",
+      "--colorBg": "#0d1117",
+      "--colorBgCard": "rgba(255,255,255,0.06)",
+      "--colorBgOverlay": "rgba(0,0,0,0.6)",
+      "--colorBorder": "rgba(255,255,255,0.12)",
+      "--colorDivider": "rgba(255,255,255,0.08)",
+      "--fontSize": "14px",
+      "--fontSizeSm": "12px",
+      "--fontSizeLg": "16px",
+      "--fontSizeXl": "20px",
+      "--fontWeightNormal": "400",
+      "--fontWeightStrong": "600",
+      "--borderRadius": "4px",
+      "--borderRadiusMd": "8px",
+      "--borderRadiusLg": "12px",
+      "--spacingXs": "4px",
+      "--spacingSm": "8px",
+      "--spacingMd": "16px",
+      "--spacingLg": "24px",
+      "--spacingXl": "32px",
+      "--transitionBase": "0.2s ease"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射（与 themeVars 一一对应，供 theme-vars.less 的 .common() mixin 使用）",
+      "@color-primary": "#3677f8",
+      "@color-primary-active": "#3677f829",
+      "@color-primary-bg": "rgba(54,119,248,0.12)",
+      "@color-primary-bg-hover": "#3677f829",
+      "@color-text-base": "#ffffff",
+      "@color-text-secondary": "rgba(255,255,255,0.65)",
+      "@color-text-disabled": "rgba(255,255,255,0.35)",
+      "@color-bg": "#0d1117",
+      "@color-bg-card": "rgba(255,255,255,0.06)",
+      "@color-bg-overlay": "rgba(0,0,0,0.6)",
+      "@color-border": "rgba(255,255,255,0.12)",
+      "@color-divider": "rgba(255,255,255,0.08)",
+      "@font-size-base": "14px",
+      "@font-size-sm": "12px",
+      "@font-size-lg": "16px",
+      "@font-size-xl": "20px",
+      "@font-weight-normal": "400",
+      "@font-weight-strong": "600",
+      "@border-radius-base": "4px",
+      "@border-radius-md": "8px",
+      "@border-radius-lg": "12px",
+      "@spacing-xs": "4px",
+      "@spacing-sm": "8px",
+      "@spacing-md": "16px",
+      "@spacing-lg": "24px",
+      "@spacing-xl": "32px",
+      "@transition-base": "0.2s ease"
+    },
+    "cssClasses": {
+      "comment": "通用暗色主题基础类，供业务组件复用",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "width": "100%",
+        "height": "100%",
+        "background": "var(--colorBg, @color-bg)",
+        "color": "var(--colorTextBase, @color-text-base)",
+        "font-size": "var(--fontSize, @font-size-base)"
+      },
+      ".card": {
+        "background": "var(--colorBgCard, @color-bg-card)",
+        "border": "1px solid var(--colorBorder, @color-border)",
+        "border-radius": "var(--borderRadiusMd, @border-radius-md)",
+        "padding": "var(--spacingMd, @spacing-md)"
+      },
+      ".card--flat": {
+        "background": "var(--colorBgCard, @color-bg-card)",
+        "border-radius": "var(--borderRadius, @border-radius-base)",
+        "padding": "var(--spacingSm, @spacing-sm)"
+      },
+      ".text-primary": {
+        "color": "var(--colorTextBase, @color-text-base)",
+        "font-size": "var(--fontSize, @font-size-base)"
+      },
+      ".text-secondary": {
+        "color": "var(--colorTextSecondary, @color-text-secondary)",
+        "font-size": "var(--fontSizeSm, @font-size-sm)"
+      },
+      ".text-title": {
+        "color": "var(--colorTextBase, @color-text-base)",
+        "font-size": "var(--fontSizeXl, @font-size-xl)",
+        "font-weight": "var(--fontWeightStrong, @font-weight-strong)"
+      },
+      ".text-highlight": {
+        "color": "var(--colorPrimary, @color-primary)",
+        "font-weight": "var(--fontWeightStrong, @font-weight-strong)"
+      },
+      ".divider": {
+        "width": "100%",
+        "height": "1px",
+        "background": "var(--colorDivider, @color-divider)"
+      },
+      ".divider--vertical": {
+        "width": "1px",
+        "height": "100%",
+        "background": "var(--colorDivider, @color-divider)"
+      },
+      ".flex-row": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      ".flex-col": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      ".flex-between": {
+        "display": "flex",
+        "justify-content": "space-between",
+        "align-items": "center"
+      },
+      ".btn-primary": {
+        "background": "var(--colorPrimary, @color-primary)",
+        "color": "#ffffff",
+        "border": "none",
+        "border-radius": "var(--borderRadius, @border-radius-base)",
+        "padding": "var(--spacingXs, @spacing-xs) var(--spacingMd, @spacing-md)",
+        "font-size": "var(--fontSize, @font-size-base)",
+        "cursor": "pointer",
+        "transition": "background var(--transitionBase, @transition-base)",
+        "&:hover": {
+          "background": "var(--colorPrimaryBgHover, @color-primary-bg-hover)"
+        },
+        "&:active": {
+          "background": "var(--colorPrimaryActive, @color-primary-active)"
+        }
+      },
+      ".btn-ghost": {
+        "background": "var(--colorPrimaryBg, @color-primary-bg)",
+        "color": "var(--colorPrimary, @color-primary)",
+        "border": "1px solid var(--colorPrimary, @color-primary)",
+        "border-radius": "var(--borderRadius, @border-radius-base)",
+        "padding": "var(--spacingXs, @spacing-xs) var(--spacingMd, @spacing-md)",
+        "font-size": "var(--fontSize, @font-size-base)",
+        "cursor": "pointer",
+        "transition": "background var(--transitionBase, @transition-base)"
+      },
+      ".overlay": {
+        "position": "absolute",
+        "inset": "0",
+        "background": "var(--colorBgOverlay, @color-bg-overlay)"
+      }
+    },
+    "tokenCoverage": 0.45,
+    "mappingNotes": [
+      "输入视觉元素为空（colors/background/decorations/emphasis 均为空），backgroundBrightness='dark' 是唯一有效信号",
+      "基于 dark 信号，所有颜色 token 以暗色系兜底值填充，确保组件在暗色环境下可直接渲染",
+      "tokenCoverage 约 0.45：仅 backgroundBrightness 一个维度有效，颜色/背景/装饰/强调均无具体映射依据，覆盖率偏低",
+      "建议补充设计稿具体颜色值后重新映射，以提升 tokenCoverage 至 0.85+",
+      "theme-vars.less 的 .theme-dark() 直接使用本次生成的暗色值；.theme-light() 应在获得浅色稿后单独提取",
+      "容器背景优先落地为 Figma 字面量值（#0d1117），避免关键可见背景只依赖 CSS 变量",
+      "所有 CSS 变量使用 camelCase 命名（--colorTextBase，非 --color-text-base）",
+      "Less 变量使用 kebab-case 命名（@color-text-base），与 CSS 变量在 .common() mixin 中一一映射"
+    ],
+    "elementStyleMap": {}
+  }
+}

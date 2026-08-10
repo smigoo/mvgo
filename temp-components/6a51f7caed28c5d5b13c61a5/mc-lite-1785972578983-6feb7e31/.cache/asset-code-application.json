@@ -1,0 +1,368 @@
+{
+  "appliedAt": "2026-08-06T00:14:39.451Z",
+  "codeUpdated": true,
+  "backupFile": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-lite-1785972578983-6feb7e31/.cache/package-index.before-assets-1785975279450.vue",
+  "appliedPlacements": [
+    {
+      "figmaNodeId": "2:8418",
+      "resourceFile": "bg-8418.png",
+      "type": "bg",
+      "targetElement": "组件最外层内容容器",
+      "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-content",
+      "usage": "backgroundImage",
+      "codeSuggestion": "style=\"background-image: url('bg-8418.png'); background-size: cover;\"",
+      "confidence": "high",
+      "reason": "420x425 尺寸匹配整个组件面板背景，作为最外层容器背景图最合适"
+    },
+    {
+      "figmaNodeId": "2:8421",
+      "resourceFile": "g-8421.png",
+      "type": "icon",
+      "targetElement": "顶部统计栏第一个统计项的图标占位",
+      "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-stat-icon",
+      "usage": "imgSrc",
+      "codeSuggestion": "<img src=\"g-8421.png\" class=\"c-mc-lite-1785972578983-6feb7e31-stat-icon\" />",
+      "confidence": "high",
+      "reason": "8x8 小图标，模板中 .stat-icon 是空 span 占位，正好用于设备类型统计项的图标"
+    },
+    {
+      "figmaNodeId": "2:8421",
+      "resourceFile": "g-8421.png",
+      "type": "icon",
+      "targetElement": "顶部标题旁的装饰图标（标题组内）",
+      "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-title-group",
+      "usage": "imgSrc",
+      "codeSuggestion": "<img src=\"g-8421.png\" class=\"title-deco-icon\" />",
+      "confidence": "medium",
+      "reason": "8x8 小图标可能作为标题前的装饰点，但模板中无明确占位元素，需新增"
+    },
+    {
+      "figmaNodeId": "2:8856",
+      "resourceFile": "Frame-8856.png",
+      "type": "icon",
+      "targetElement": "顶部标题旁的功能图标（如设置/刷新按钮）",
+      "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-header",
+      "usage": "imgSrc",
+      "codeSuggestion": "<img src=\"Frame-8856.png\" class=\"header-action-icon\" />",
+      "confidence": "medium",
+      "reason": "16x16 图标，位于 header 区域，可能作为标题栏右侧操作图标，模板中无明确占位需新增"
+    },
+    {
+      "figmaNodeId": "2:8788",
+      "resourceFile": "bg-8788.png",
+      "type": "bg",
+      "targetElement": "左侧导航栏激活状态的菜单项背景",
+      "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-menu-item.c-mc-lite-1785972578983-6feb7e31-active",
+      "usage": "backgroundImage",
+      "codeSuggestion": "style=\"background-image: url('bg-8788.png'); background-size: 100% 100%;\"",
+      "confidence": "high",
+      "reason": "193x65 尺寸匹配菜单项，active 状态背景图"
+    },
+    {
+      "figmaNodeId": "2:8798",
+      "resourceFile": "icon-8798.png",
+      "type": "icon",
+      "targetElement": "左侧导航栏激活状态菜单项的图标",
+      "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-menu-item.c-mc-lite-1785972578983-6feb7e31-active .c-mc-lite-1785972578983-6feb7e31-menu-text",
+      "usage": "imgSrc",
+      "codeSuggestion": "<img src=\"icon-8798.png\" class=\"menu-active-icon\" />",
+      "confidence": "medium",
+      "reason": "35x28 图标，对应激活菜单项前的图标，模板中无独立图标元素需新增"
+    },
+    {
+      "figmaNodeId": "2:8807",
+      "resourceFile": "bg-8807.png",
+      "type": "bg",
+      "targetElement": "左侧导航栏默认状态的菜单项背景",
+      "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-menu-item",
+      "usage": "backgroundImage",
+      "codeSuggestion": "style=\"background-image: url('bg-8807.png'); background-size: 100% 100%;\"",
+      "confidence": "high",
+      "reason": "193x65 尺寸匹配菜单项，default 状态背景图"
+    },
+    {
+      "figmaNodeId": "2:8817",
+      "resourceFile": "icon-8817.png",
+      "type": "icon",
+      "targetElement": "左侧导航栏默认状态菜单项的图标",
+      "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-menu-item .c-mc-lite-1785972578983-6feb7e31-menu-text",
+      "usage": "imgSrc",
+      "codeSuggestion": "<img src=\"icon-8817.png\" class=\"menu-default-icon\" />",
+      "confidence": "medium",
+      "reason": "35x28 图标，对应默认菜单项前的图标，模板中无独立图标元素需新增"
+    },
+    {
+      "figmaNodeId": "2:8439",
+      "resourceFile": "bg-8439.png",
+      "type": "bg",
+      "targetElement": "下方设备网格第一个设备项的背景",
+      "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-item",
+      "usage": "backgroundImage",
+      "codeSuggestion": "style=\"background-image: url('bg-8439.png'); background-size: 100% 100%;\"",
+      "confidence": "high",
+      "reason": "117x64 尺寸匹配网格设备项，作为设备卡片背景"
+    },
+    {
+      "figmaNodeId": "2:8444",
+      "resourceFile": "icon-8444.png",
+      "type": "icon",
+      "targetElement": "下方设备网格第一个设备项的图标",
+      "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-icon-area",
+      "usage": "imgSrc",
+      "codeSuggestion": "<img src=\"icon-8444.png\" class=\"device-icon\" />",
+      "confidence": "high",
+      "reason": "27x32 图标，对应设备网格中某个设备的图标，替换 emoji 占位"
+    },
+    {
+      "figmaNodeId": "2:8468",
+      "resourceFile": "bg-8468.png",
+      "type": "bg",
+      "targetElement": "下方设备网格第二个设备项的背景",
+      "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-item",
+      "usage": "backgroundImage",
+      "codeSuggestion": "style=\"background-image: url('bg-8468.png'); background-size: 100% 100%;\"",
+      "confidence": "high",
+      "reason": "117x64 尺寸匹配网格设备项背景"
+    },
+    {
+      "figmaNodeId": "2:8473",
+      "resourceFile": "icon-8473.png",
+      "type": "icon",
+      "targetElement": "下方设备网格第二个设备项的图标",
+      "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-icon-area",
+      "usage": "imgSrc",
+      "codeSuggestion": "<img src=\"icon-8473.png\" class=\"device-icon\" />",
+      "confidence": "high",
+      "reason": "27x32 图标，对应第二个设备项图标"
+    },
+    {
+      "figmaNodeId": "2:8498",
+      "resourceFile": "bg-8498.png",
+      "type": "bg",
+      "targetElement": "下方设备网格第三个设备项的背景",
+      "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-item",
+      "usage": "backgroundImage",
+      "codeSuggestion": "style=\"background-image: url('bg-8498.png'); background-size: 100% 100%;\"",
+      "confidence": "high",
+      "reason": "117x64 尺寸匹配网格设备项背景"
+    },
+    {
+      "figmaNodeId": "2:8503",
+      "resourceFile": "icon-8503.png",
+      "type": "icon",
+      "targetElement": "下方设备网格第三个设备项的图标",
+      "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-icon-area",
+      "usage": "imgSrc",
+      "codeSuggestion": "<img src=\"icon-8503.png\" class=\"device-icon\" />",
+      "confidence": "high",
+      "reason": "27x32 图标，对应第三个设备项图标"
+    },
+    {
+      "figmaNodeId": "2:8527",
+      "resourceFile": "bg-8527.png",
+      "type": "bg",
+      "targetElement": "下方设备网格第四个设备项的背景",
+      "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-item",
+      "usage": "backgroundImage",
+      "codeSuggestion": "style=\"background-image: url('bg-8527.png'); background-size: 100% 100%;\"",
+      "confidence": "high",
+      "reason": "117x64 尺寸匹配网格设备项背景"
+    },
+    {
+      "figmaNodeId": "2:8532",
+      "resourceFile": "icon-8532.png",
+      "type": "icon",
+      "targetElement": "下方设备网格第四个设备项的图标",
+      "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-icon-area",
+      "usage": "imgSrc",
+      "codeSuggestion": "<img src=\"icon-8532.png\" class=\"device-icon\" />",
+      "confidence": "high",
+      "reason": "27x32 图标，对应第四个设备项图标"
+    },
+    {
+      "figmaNodeId": "2:8556",
+      "resourceFile": "bg-8556.png",
+      "type": "bg",
+      "targetElement": "下方设备网格第五个设备项的背景",
+      "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-item",
+      "usage": "backgroundImage",
+      "codeSuggestion": "style=\"background-image: url('bg-8556.png'); background-size: 100% 100%;\"",
+      "confidence": "high",
+      "reason": "117x64 尺寸匹配网格设备项背景"
+    },
+    {
+      "figmaNodeId": "2:8561",
+      "resourceFile": "icon-8561.png",
+      "type": "icon",
+      "targetElement": "下方设备网格第五个设备项的图标",
+      "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-icon-area",
+      "usage": "imgSrc",
+      "codeSuggestion": "<img src=\"icon-8561.png\" class=\"device-icon\" />",
+      "confidence": "high",
+      "reason": "27x32 图标，对应第五个设备项图标"
+    },
+    {
+      "figmaNodeId": "2:8585",
+      "resourceFile": "bg-8585.png",
+      "type": "bg",
+      "targetElement": "下方设备网格第六个设备项的背景",
+      "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-item",
+      "usage": "backgroundImage",
+      "codeSuggestion": "style=\"background-image: url('bg-8585.png'); background-size: 100% 100%;\"",
+      "confidence": "high",
+      "reason": "117x64 尺寸匹配网格设备项背景"
+    },
+    {
+      "figmaNodeId": "2:8590",
+      "resourceFile": "icon-8590.png",
+      "type": "icon",
+      "targetElement": "下方设备网格第六个设备项的图标",
+      "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-icon-area",
+      "usage": "imgSrc",
+      "codeSuggestion": "<img src=\"icon-8590.png\" class=\"device-icon\" />",
+      "confidence": "high",
+      "reason": "27x32 图标，对应第六个设备项图标"
+    },
+    {
+      "figmaNodeId": "2:8614",
+      "resourceFile": "bg-8614.png",
+      "type": "bg",
+      "targetElement": "下方设备网格第七个设备项的背景",
+      "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-item",
+      "usage": "backgroundImage",
+      "codeSuggestion": "style=\"background-image: url('bg-8614.png'); background-size: 100% 100%;\"",
+      "confidence": "high",
+      "reason": "117x64 尺寸匹配网格设备项背景"
+    },
+    {
+      "figmaNodeId": "2:8619",
+      "resourceFile": "icon-8619.png",
+      "type": "icon",
+      "targetElement": "下方设备网格第七个设备项的图标",
+      "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-icon-area",
+      "usage": "imgSrc",
+      "codeSuggestion": "<img src=\"icon-8619.png\" class=\"device-icon\" />",
+      "confidence": "high",
+      "reason": "27x32 图标，对应第七个设备项图标"
+    },
+    {
+      "figmaNodeId": "2:8643",
+      "resourceFile": "bg-8643.png",
+      "type": "bg",
+      "targetElement": "下方设备网格第八个设备项的背景",
+      "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-item",
+      "usage": "backgroundImage",
+      "codeSuggestion": "style=\"background-image: url('bg-8643.png'); background-size: 100% 100%;\"",
+      "confidence": "high",
+      "reason": "117x64 尺寸匹配网格设备项背景"
+    },
+    {
+      "figmaNodeId": "2:8648",
+      "resourceFile": "icon-8648.png",
+      "type": "icon",
+      "targetElement": "下方设备网格第八个设备项的图标",
+      "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-icon-area",
+      "usage": "imgSrc",
+      "codeSuggestion": "<img src=\"icon-8648.png\" class=\"device-icon\" />",
+      "confidence": "high",
+      "reason": "27x32 图标，对应第八个设备项图标"
+    },
+    {
+      "figmaNodeId": "2:8672",
+      "resourceFile": "bg-8672.png",
+      "type": "bg",
+      "targetElement": "下方设备网格第九个设备项的背景",
+      "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-item",
+      "usage": "backgroundImage",
+      "codeSuggestion": "style=\"background-image: url('bg-8672.png'); background-size: 100% 100%;\"",
+      "confidence": "high",
+      "reason": "117x64 尺寸匹配网格设备项背景"
+    },
+    {
+      "figmaNodeId": "2:8677",
+      "resourceFile": "icon-8677.png",
+      "type": "icon",
+      "targetElement": "下方设备网格第九个设备项的图标",
+      "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-icon-area",
+      "usage": "imgSrc",
+      "codeSuggestion": "<img src=\"icon-8677.png\" class=\"device-icon\" />",
+      "confidence": "high",
+      "reason": "27x32 图标，对应第九个设备项图标"
+    },
+    {
+      "figmaNodeId": "2:8701",
+      "resourceFile": "bg-8701.png",
+      "type": "bg",
+      "targetElement": "下方设备网格第十个设备项的背景",
+      "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-item",
+      "usage": "backgroundImage",
+      "codeSuggestion": "style=\"background-image: url('bg-8701.png'); background-size: 100% 100%;\"",
+      "confidence": "high",
+      "reason": "117x64 尺寸匹配网格设备项背景"
+    },
+    {
+      "figmaNodeId": "2:8706",
+      "resourceFile": "icon-8706.png",
+      "type": "icon",
+      "targetElement": "下方设备网格第十个设备项的图标",
+      "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-icon-area",
+      "usage": "imgSrc",
+      "codeSuggestion": "<img src=\"icon-8706.png\" class=\"device-icon\" />",
+      "confidence": "high",
+      "reason": "27x32 图标，对应第十个设备项图标"
+    },
+    {
+      "figmaNodeId": "2:8730",
+      "resourceFile": "bg-8730.png",
+      "type": "bg",
+      "targetElement": "下方设备网格第十一个设备项的背景",
+      "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-item",
+      "usage": "backgroundImage",
+      "codeSuggestion": "style=\"background-image: url('bg-8730.png'); background-size: 100% 100%;\"",
+      "confidence": "high",
+      "reason": "117x64 尺寸匹配网格设备项背景"
+    },
+    {
+      "figmaNodeId": "2:8735",
+      "resourceFile": "icon-8735.png",
+      "type": "icon",
+      "targetElement": "下方设备网格第十一个设备项的图标",
+      "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-icon-area",
+      "usage": "imgSrc",
+      "codeSuggestion": "<img src=\"icon-8735.png\" class=\"device-icon\" />",
+      "confidence": "high",
+      "reason": "27x32 图标，对应第十一个设备项图标"
+    },
+    {
+      "figmaNodeId": "2:8759",
+      "resourceFile": "bg-8759.png",
+      "type": "bg",
+      "targetElement": "下方设备网格第十二个设备项的背景",
+      "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-item",
+      "usage": "backgroundImage",
+      "codeSuggestion": "style=\"background-image: url('bg-8759.png'); background-size: 100% 100%;\"",
+      "confidence": "high",
+      "reason": "117x64 尺寸匹配网格设备项背景"
+    },
+    {
+      "figmaNodeId": "2:8764",
+      "resourceFile": "icon-8764.png",
+      "type": "icon",
+      "targetElement": "下方设备网格第十二个设备项的图标",
+      "targetSelector": ".c-mc-lite-1785972578983-6feb7e31-grid-icon-area",
+      "usage": "imgSrc",
+      "codeSuggestion": "<img src=\"icon-8764.png\" class=\"device-icon\" />",
+      "confidence": "high",
+      "reason": "27x32 图标，对应第十二个设备项图标"
+    }
+  ],
+  "skippedPlacements": [],
+  "modifiedFiles": [
+    "package/index.vue"
+  ],
+  "validation": {
+    "sfcStructure": "passed",
+    "scriptSetupUnchanged": "passed",
+    "resourceReferences": "passed"
+  }
+}

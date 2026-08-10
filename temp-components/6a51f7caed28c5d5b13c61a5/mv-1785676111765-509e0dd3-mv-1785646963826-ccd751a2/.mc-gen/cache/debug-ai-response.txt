@@ -1,0 +1,315 @@
+```json
+{
+  "generatedAt": "2026-04-27T10:19:15.595Z",
+  "stage": "preview-analysis",
+  "componentName": "流量监测",
+  "componentTitle": "流量监测",
+  "analysisModel": "gpt-5.4",
+  "sourceImage": {
+    "path": "{outputPath}/c-lljc/resources/images/mc-preview.png",
+    "size": 709937,
+    "mtimeMs": 1777285034334,
+    "sha1": "4ef988ae2dbf004f8a071940c71e9b64e4a43dd7"
+  },
+  "summary": "流量监测面板，包含当日总流量统计与趋势图、车型分布统计、流量预测图表。整体为浅色背景，布局清晰，包含多个Echarts图表和Tab切换交互。",
+  "layout": {
+    "type": "vertical-stack",
+    "direction": "vertical",
+    "sections": [
+      {
+        "id": "section-daily-total",
+        "name": "当日总流量",
+        "role": "常驻",
+        "layout": "vertical",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "header": {
+          "title": "当日总流量",
+          "controls": [
+            {
+              "id": "time-selector",
+              "name": "时间选择",
+              "role": "dropdown",
+              "value": "24小时"
+            }
+          ]
+        },
+        "body": {
+          "layout": "vertical",
+          "bgPlaceholder": "section-bg-daily",
+          "children": [
+            {
+              "id": "stats-row",
+              "name": "总流量数值",
+              "role": "stat-row",
+              "layout": "horizontal-2-columns",
+              "children": [
+                {
+                  "id": "stat-tunnel",
+                  "name": "江阴靖江长江隧道",
+                  "role": "stat-card",
+                  "layout": "vertical",
+                  "children": [
+                    { "type": "label", "text": "江阴靖江长江隧道", "styles": { "fontSize": 14, "color": "#333333" } },
+                    { "type": "value", "text": "34,620", "styles": { "fontSize": 28, "color": "#1990ff", "fontWeight": "bold" } }
+                  ]
+                },
+                {
+                  "id": "stat-bridge",
+                  "name": "江阴大桥",
+                  "role": "stat-card",
+                  "layout": "vertical",
+                  "children": [
+                    { "type": "label", "text": "江阴大桥", "styles": { "fontSize": 14, "color": "#333333" } },
+                    { "type": "value", "text": "82,379", "styles": { "fontSize": 28, "color": "#1990ff", "fontWeight": "bold" } }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "chart-tunnel-flow",
+              "name": "江阴靖江长江隧道流量趋势",
+              "role": "chart-container",
+              "layout": "vertical",
+              "children": [
+                { "type": "chart-title", "text": "江阴靖江长江隧道" },
+                { "type": "chart", "chartType": "bar" }
+              ]
+            },
+            {
+              "id": "chart-bridge-flow",
+              "name": "江阴大桥流量趋势",
+              "role": "chart-container",
+              "layout": "vertical",
+              "children": [
+                { "type": "chart-title", "text": "江阴大桥" },
+                { "type": "chart", "chartType": "bar" }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "section-vehicle-type",
+        "name": "车型分布",
+        "role": "常驻",
+        "layout": "vertical",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "header": {
+          "title": "车型分布",
+          "controls": []
+        },
+        "body": {
+          "layout": "horizontal-2-columns",
+          "bgPlaceholder": "section-bg-vehicle",
+          "items": [
+            {
+              "id": "vehicle-tunnel",
+              "name": "江阴靖江长江隧道车型",
+              "layout": "vertical",
+              "bgPlaceholder": "card-bg-tunnel",
+              "children": [
+                { "type": "label", "text": "江阴靖江长江隧道", "position": "top" },
+                {
+                  "type": "row",
+                  "layout": "horizontal",
+                  "alignItems": "center",
+                  "justifyContent": "space-between",
+                  "children": [
+                    {
+                      "type": "stat-item",
+                      "layout": "vertical",
+                      "children": [
+                        { "type": "label", "text": "客车", "styles": { "color": "#666666" } },
+                        { "type": "value", "text": "22350", "styles": { "color": "#1990ff", "fontSize": 20, "fontWeight": "bold" } }
+                      ]
+                    },
+                    { "type": "icon", "resourceFile": "../resources/images/echarts-31.png", "recommendedUsage": "decorativeBlock", "width": 52, "height": 53 },
+                    {
+                      "type": "stat-item",
+                      "layout": "vertical",
+                      "children": [
+                        { "type": "label", "text": "货车", "styles": { "color": "#666666" } },
+                        { "type": "value", "text": "16270", "styles": { "color": "#f5a623", "fontSize": 20, "fontWeight": "bold" } }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "vehicle-bridge",
+              "name": "江阴大桥车型",
+              "layout": "vertical",
+              "bgPlaceholder": "card-bg-bridge",
+              "children": [
+                { "type": "label", "text": "江阴大桥", "position": "top" },
+                {
+                  "type": "row",
+                  "layout": "horizontal",
+                  "alignItems": "center",
+                  "justifyContent": "space-between",
+                  "children": [
+                    {
+                      "type": "stat-item",
+                      "layout": "vertical",
+                      "children": [
+                        { "type": "label", "text": "客车", "styles": { "color": "#666666" } },
+                        { "type": "value", "text": "66109", "styles": { "color": "#1990ff", "fontSize": 20, "fontWeight": "bold" } }
+                      ]
+                    },
+                    { "type": "icon", "resourceFile": "../resources/images/echarts-31.png", "recommendedUsage": "decorativeBlock", "width": 52, "height": 52 },
+                    {
+                      "type": "stat-item",
+                      "layout": "vertical",
+                      "children": [
+                        { "type": "label", "text": "货车", "styles": { "color": "#666666" } },
+                        { "type": "value", "text": "16270", "styles": { "color": "#f5a623", "fontSize": 20, "fontWeight": "bold" } }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "section-flow-prediction",
+        "name": "流量预测",
+        "role": "常驻",
+        "layout": "vertical",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "header": {
+          "title": "流量预测",
+          "controls": [
+            {
+              "id": "location-tab",
+              "name": "地点切换",
+              "role": "tab-switch",
+              "options": ["江阴靖江长江隧道", "江阴大桥"],
+              "activeIndex": 0
+            },
+            {
+              "id": "holiday-link",
+              "name": "节假日预测",
+              "role": "link",
+              "text": "节假日预测 >"
+            }
+          ]
+        },
+        "body": {
+          "layout": "vertical",
+          "bgPlaceholder": "section-bg-prediction",
+          "children": [
+            {
+              "id": "chart-prediction",
+              "name": "流量预测图表",
+              "role": "chart-container",
+              "layout": "vertical",
+              "children": [
+                { "type": "chart", "chartType": "area" }
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "styles": {
+    "theme": "浅色科技监测风",
+    "backgroundBrightness": "light",
+    "colors": [
+      "#edf4fb",
+      "#333333",
+      "#1990ff",
+      "#f5a623",
+      "#52c41a"
+    ],
+    "background": "浅灰蓝色背景 #edf4fb",
+    "decorations": [
+      "菱形标题图标",
+      "六边形背景块(车型分布)",
+      "环形仪表盘装饰(车型分布)"
+    ],
+    "emphasis": [
+      "大号蓝色数值(总流量)",
+      "绿色准确率文字(底部)"
+    ]
+  },
+  "interactions": [
+    {
+      "target": "当日总流量右侧“24小时”控件",
+      "type": "dropdown",
+      "description": "时间范围筛选",
+      "defaultState": "常驻，显示'24小时'",
+      "evidence": "右侧有向下箭头"
+    },
+    {
+      "target": "流量预测标题行Tab",
+      "type": "tab-switch",
+      "description": "切换地点查看预测",
+      "defaultState": "选中'江阴靖江长江隧道'",
+      "evidence": "蓝色背景高亮选中项"
+    },
+    {
+      "target": "节假日预测链接",
+      "type": "link",
+      "description": "跳转至节假日预测详情",
+      "defaultState": "常驻",
+      "evidence": "蓝色文字带箭头"
+    }
+  ],
+  "charts": [
+    {
+      "section": "section-daily-total",
+      "type": "bar",
+      "series": ["北京方向", "上海方向"],
+      "legend": ["北京方向", "上海方向"],
+      "legendPosition": "top-right",
+      "seriesColors": ["#2f74d6", "#5bc0de"],
+      "legendType": "horizontal",
+      "axes": "X轴为小时(0-24)，Y轴为车辆数(0-4000)",
+      "tooltip": "显示时间点(如16时)、北京方向辆数、上海方向辆数",
+      "notes": ["包含两个并排的柱状图，分别对应隧道和大桥"]
+    },
+    {
+      "section": "section-daily-total",
+      "type": "bar",
+      "series": ["北京方向", "上海方向"],
+      "legend": ["北京方向", "上海方向"],
+      "legendPosition": "top-right",
+      "seriesColors": ["#2f74d6", "#5bc0de"],
+      "legendType": "horizontal",
+      "axes": "X轴为小时(0-24)，Y轴为车辆数(0-4000)",
+      "tooltip": "显示时间点(如16时)、北京方向辆数、上海方向辆数",
+      "notes": ["第二个柱状图，对应江阴大桥"]
+    },
+    {
+      "section": "section-flow-prediction",
+      "type": "area",
+      "series": ["实际流量", "预测流量"],
+      "legend": ["实际流量", "预测流量"],
+      "legendPosition": "top-right",
+      "seriesColors": ["#2f74d6", "#5bc0de"],
+      "legendType": "horizontal",
+      "axes": "X轴为时间(2小时前至2小时后)，Y轴为车辆数(0-4000)",
+      "tooltip": "显示时间点和流量数值",
+      "notes": ["底部有绿色文字显示准确率(98%, 96%, 92%)"]
+    }
+  ],
+  "doNotInvent": [
+    "下拉框的具体选项列表（仅看到24小时）",
+    "图表的具体数据点数值（除tooltip所示外）",
+    "节假日预测的具体页面内容",
+    "车型分布环形图的具体交互（仅视为装饰或静态展示）"
+  ],
+  "notes": [
+    "背景色非常浅，接近白色但带有淡蓝色调 (#edf4fb)",
+    "车型分布中的环形图在Figma中标记为 @echarts，可能是Gauge或Pie图表的变体，视觉上作为装饰",
+    "流量预测图表底部有'准确率'文字，属于图表下方的标注"
+  ]
+}
+```

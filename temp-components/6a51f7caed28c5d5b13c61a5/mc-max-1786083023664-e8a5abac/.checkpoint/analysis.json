@@ -1,0 +1,172 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 75,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "chartDataHints",
+        "message": "图表数据提示(chartDataHints)存在严重的数据污染。labels 和 values 中混入了大量非图表区域的页面文本（如'24小时'、'当日总流量'、'江阴大桥'等），且 chartTitle 字段错误地使用了图表类型('bar'/'area')而非实际业务标题。这将导致 AI 生成图表时数据完全错乱。",
+        "suggestion": "重新校准图表数据提取逻辑，确保 labels 仅包含图表的 X/Y 轴标签或图例项，values 仅包含对应的数据点。chartTitle 应使用图表的实际业务标题或留空，严格隔离页面布局数据与图表数据。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].header",
+        "message": "section-hourly-trend 的 header.title 为 null，但 name 为'小时流量分布'。如果设计稿中存在该区域标题，则属于遗漏；如果不存在，name 和 title 的不一致可能导致生成时产生多余的标题 DOM 或语义混淆。",
+        "suggestion": "核实设计稿，若存在标题则补充至 header.title；若不存在，建议将 name 改为更中性的内部标识（如 'hourly-trend-area'），或在 header 中明确标记 title: null 的原因。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[1].body",
+        "message": "小时流量分布区域的嵌套层级较深（layout -> section -> body -> chart-container -> chart），达到了 4-5 层。过多的包裹层会增加不必要的 DOM 节点，影响渲染性能且增加代码生成复杂度。",
+        "suggestion": "简化 chart-container 结构，将图表标题（label）直接作为图表的 title 配置，或减少中间的包裹层，使核心业务嵌套深度尽量控制在 3 层以内。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body.children",
+        "message": "当日总流量区域的 body 中，stat-card 的 children 直接平铺了 label 和 value 文本节点。在微码规范中，建议将这类统计卡片抽象为更标准的组件结构，而不是直接嵌套基础文本节点。",
+        "suggestion": "将 stat-card 内部的 label 和 value 结构标准化，使用更语义化的字段（如 title 和 value 属性）来描述，减少直接的文本节点嵌套，提升结构的自解释性。"
+      }
+    ],
+    "recommendations": [
+      "严格分离页面布局数据与图表数据：确保 chartDataHints 仅包含图表相关的轴标签、图例和数据点，避免将页面其他区域的文本（如标题、筛选器选项、统计数值）混入其中。",
+      "统一 Section 的 Header 规范：确保每个 section 的 name 和 header.title 保持语义上的一致。如果某个 section 不需要显示标题，应明确区分其内部标识（name）和展示标题（title）。",
+      "优化图表容器嵌套：对于包含图表的区域，尽量减少不必要的中间包裹层（如 chart-container），将图表配置（如标题、图例）直接内聚到图表节点或 section 级别，以降低 DOM 深度。",
+      "增强数据结构的自解释性：在 chartDataHints 中，建议使用更明确的字段名（如 xAxisData, seriesData）替代模糊的 labels 和 values，以提高 AI 解析和代码生成的准确性。"
+    ],
+    "summary": "整体布局结构（sections、header、body 的划分）清晰合理，符合微码组件的基本规范，区域划分和父子关系正确。但 chartDataHints 存在严重的数据污染问题，将页面非图表文本错误地识别为图表数据，这会直接导致代码生成阶段图表数据错乱。此外，部分区域的嵌套层级略深，且 section 的 name 与 header.title 存在不一致的情况。建议重点修复图表数据提取逻辑，并适当优化嵌套深度。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1990ff",
+      "--colorInfo": "#13c2c2",
+      "--colorWarning": "#fa8c16",
+      "--colorTextBase": "#333333",
+      "--colorBg": "#edf4fb",
+      "--fontSize": "14px",
+      "--fontSizeLarge": "36px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#1990ff",
+      "@color-info": "#13c2c2",
+      "@color-warning": "#fa8c16",
+      "@color-text-base": "rgba(255, 255, 255, 1)",
+      "@color-bg": "#edf4fb",
+      "@font-size-base": "14px",
+      "@font-size-large": "36px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "16px",
+        "background": "var(--colorBg, #edf4fb)",
+        "color": "var(--colorTextBase, #333333)"
+      },
+      ".header": {
+        "display": "flex",
+        "justify-content": "space-between",
+        "align-items": "center",
+        "margin-bottom": "16px"
+      },
+      ".decoration-diamond": {
+        "width": "12px",
+        "height": "12px",
+        "background": "var(--colorPrimary, #1990ff)",
+        "transform": "rotate(45deg)"
+      },
+      ".decoration-ring": {
+        "width": "40px",
+        "height": "40px",
+        "border": "4px solid var(--colorInfo, #13c2c2)",
+        "border-radius": "50%"
+      },
+      ".value-large-blue": {
+        "font-size": "var(--fontSizeLarge, 36px)",
+        "font-weight": "bold",
+        "color": "var(--colorPrimary, #1990ff)"
+      },
+      ".value-orange": {
+        "font-size": "var(--fontSizeLarge, 36px)",
+        "font-weight": "bold",
+        "color": "var(--colorWarning, #fa8c16)"
+      }
+    },
+    "tokenCoverage": 1,
+    "mappingNotes": [
+      "主题色 #1990ff 映射为 --colorPrimary，用于大号蓝色数值及主色调",
+      "背景色 #edf4fb 映射为 --colorBg，容器背景应优先直接落地为 Figma 字面量值，避免关键可见背景只依赖 CSS 变量",
+      "辅助色 #13c2c2 映射为 --colorInfo，用于环形图装饰等科技风元素",
+      "强调色 #fa8c16 映射为 --colorWarning，用于橙色货车数值",
+      "基础文字色 #333333 映射为 --colorTextBase",
+      "装饰元素（菱形、环形）通过 CSS 类 .decoration-diamond 和 .decoration-ring 实现，便于复用"
+    ],
+    "elementStyleMap": {
+      "section-daily-total": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-tunnel": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "stat-bridge": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "section-hourly-trend": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "chart-tunnel-trend": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "chart-bridge-trend": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-vehicle-type": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-tunnel-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "vehicle-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-19": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "vehicle-bridge-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "vehicle-bridge": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-24": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-forecast": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    }
+  }
+}

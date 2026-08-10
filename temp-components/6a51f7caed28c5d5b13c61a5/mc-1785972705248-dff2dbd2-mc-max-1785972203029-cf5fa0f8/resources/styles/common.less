@@ -1,0 +1,318 @@
+@import './themes/theme-vars.less';
+
+/* [Layout Refine] Figma root frame 420x425, vertical stack */
+.c-mc-max-1785972203029-cf5fa0f8-content {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  /* [Style Refine] fills[0].color → rgb(237, 244, 251) */
+  background: @bg-color;
+  padding: 12px;
+  box-sizing: border-box;
+  min-height: 0;
+}
+
+/* [Layout Refine] Figma header GROUP, horizontal layout */
+.c-mc-max-1785972203029-cf5fa0f8-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 30px;
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+
+.c-mc-max-1785972203029-cf5fa0f8-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* [Style Refine] typography → fontSize: 16, fontWeight: 700, gradient fill */
+.c-mc-max-1785972203029-cf5fa0f8-header-title {
+  font-size: 16px;
+  font-weight: 700;
+  background: linear-gradient(180deg, #1990ff 0%, #5a7eff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.c-mc-max-1785972203029-cf5fa0f8-header-tip {
+  /* [Style Refine] typography → fontSize: 14, fontWeight: 400, gradient fill */
+  font-size: 14px;
+  font-weight: 400;
+  background: linear-gradient(180deg, #1990ff 0%, #5a7eff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.c-mc-max-1785972203029-cf5fa0f8-header-stats {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.c-mc-max-1785972203029-cf5fa0f8-stat-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* [Style Refine] typography → fontSize: 14, color: #333333 */
+.c-mc-max-1785972203029-cf5fa0f8-stat-label {
+  font-size: 14px;
+  color: @text-color;
+}
+
+/* [Style Refine] typography → fontSize: 20, fontWeight: 700, Roboto */
+.c-mc-max-1785972203029-cf5fa0f8-stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: 'Roboto', sans-serif;
+}
+
+.c-mc-max-1785972203029-cf5fa0f8-stat-value.primary {
+  /* [Style Refine] fills → gradient to #1990ff */
+  color: @primary-color;
+}
+
+.c-mc-max-1785972203029-cf5fa0f8-stat-value.success {
+  /* [Style Refine] fills → solid #08a3a5 */
+  color: @success-color;
+}
+
+/* [Layout Refine] Figma switch FRAME, horizontal 2 columns */
+.c-mc-max-1785972203029-cf5fa0f8-switch {
+  display: flex;
+  gap: 12px;
+  height: 65px;
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+
+.c-mc-max-1785972203029-cf5fa0f8-switch-card {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  box-sizing: border-box;
+  /* [Style Refine] cornerRadius: 6 */
+  border-radius: 6px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* [Style Refine] active bg → linear-gradient blue, stroke gradient */
+.c-mc-max-1785972203029-cf5fa0f8-switch-card.active {
+  background: linear-gradient(135deg, rgba(25, 144, 255, 0.8) 0%, rgba(25, 144, 255, 0.4) 100%);
+  border: 1px solid rgba(25, 144, 255, 0.6);
+  color: #ffffff;
+}
+
+/* [Style Refine] default bg → linear-gradient light blue, opacity 0.6 */
+.c-mc-max-1785972203029-cf5fa0f8-switch-card.default {
+  background: linear-gradient(135deg, rgba(147, 204, 255, 0.6) 0%, rgba(147, 204, 255, 0.2) 100%);
+  border: 1px solid rgba(147, 204, 255, 0.4);
+  color: @text-color;
+}
+
+.c-mc-max-1785972203029-cf5fa0f8-switch-title {
+  /* [Style Refine] typography → fontSize: 12 */
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.c-mc-max-1785972203029-cf5fa0f8-switch-info {
+  display: flex;
+  flex-direction: column;
+  margin-left: auto;
+  gap: 2px;
+}
+
+.c-mc-max-1785972203029-cf5fa0f8-switch-line {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  /* [Style Refine] typography → fontSize: 14 */
+  font-size: 14px;
+}
+
+.c-mc-max-1785972203029-cf5fa0f8-switch-val {
+  /* [Style Refine] typography → fontSize: 20, fontWeight: 700, Roboto */
+  font-size: 20px;
+  font-weight: 700;
+  font-family: 'Roboto', sans-serif;
+}
+
+.c-mc-max-1785972203029-cf5fa0f8-switch-val.error {
+  /* [Style Refine] fills → solid #f53f3f */
+  color: @danger-color;
+}
+
+/* [Layout Refine] Figma @antd/tab FRAME, horizontal layout */
+.c-mc-max-1785972203029-cf5fa0f8-main {
+  flex: 1;
+  display: flex;
+  gap: 8px;
+  min-height: 0;
+}
+
+/* [Layout Refine] Figma tabs FRAME, vertical layout, width 46 */
+.c-mc-max-1785972203029-cf5fa0f8-tabs {
+  width: 46px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.c-mc-max-1785972203029-cf5fa0f8-tab-item {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* [Style Refine] typography → fontSize: 14, fontWeight: 400 */
+  font-size: 14px;
+  font-weight: 400;
+  /* [Style Refine] fills → solid #3b80e6 */
+  color: #3b80e6;
+  /* [Style Refine] bg → linear-gradient light blue */
+  background: linear-gradient(180deg, rgba(133, 186, 255, 0.8) 0%, rgba(191, 226, 255, 0.8) 100%);
+  /* [Style Refine] strokes → solid #f0f5ff */
+  border: 1px solid #f0f5ff;
+  border-radius: 4px;
+  cursor: pointer;
+  position: relative;
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  letter-spacing: 2px;
+}
+
+/* [Style Refine] active tab bg → linear-gradient blue, color #fff */
+.c-mc-max-1785972203029-cf5fa0f8-tab-item.active {
+  background: linear-gradient(180deg, #318aff 0%, #70bfff 100%);
+  color: #ffffff;
+  font-weight: 700;
+  border: 1px solid #f0f5ff;
+}
+
+.c-mc-max-1785972203029-cf5fa0f8-tab-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 14px;
+  height: 14px;
+  /* [Style Refine] fills → solid #f53f3f */
+  background: @danger-color;
+  border-radius: 29px;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  writing-mode: horizontal-tb;
+}
+
+.c-mc-max-1785972203029-cf5fa0f8-tab-count {
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  /* [Style Refine] fills → solid #fff, strokes → solid #258dc8 */
+  background: #ffffff;
+  border: 1px solid #258dc8;
+  border-radius: 4px;
+  padding: 0 4px;
+  /* [Style Refine] typography → fontSize: 14, color #3b80e6 */
+  font-size: 14px;
+  font-weight: 500;
+  color: #3b80e6;
+  /* [Style Refine] effects → drop-shadow */
+  box-shadow: 0 1px 2px rgba(51, 100, 144, 0.4);
+  writing-mode: horizontal-tb;
+  white-space: nowrap;
+}
+
+/* [Layout Refine] Figma cons GROUP, grid 3x4 */
+.c-mc-max-1785972203029-cf5fa0f8-content-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  gap: 8px;
+  min-height: 0;
+}
+
+.c-mc-max-1785972203029-cf5fa0f8-device-card {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  box-sizing: border-box;
+  /* [Style Refine] cornerRadius: 4 (approx from vector) */
+  border-radius: 4px;
+  position: relative;
+  /* [Style Refine] bg → complex vector gradient simulated */
+  background: linear-gradient(135deg, rgba(71, 166, 250, 0.1) 0%, rgba(71, 166, 250, 0.5) 100%);
+  border: 1px solid rgba(71, 166, 250, 0.3);
+  overflow: hidden;
+}
+
+.c-mc-max-1785972203029-cf5fa0f8-device-icon {
+  width: 26px;
+  height: 32px;
+  margin-right: 8px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.c-mc-max-1785972203029-cf5fa0f8-device-info {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  flex: 1;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* [Style Refine] typography → fontSize: 12, color: #333333 */
+.c-mc-max-1785972203029-cf5fa0f8-device-name {
+  font-size: 12px;
+  font-weight: 400;
+  color: @text-color;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.c-mc-max-1785972203029-cf5fa0f8-device-stats {
+  display: flex;
+  align-items: baseline;
+  margin-top: 2px;
+}
+
+/* [Style Refine] typography → fontSize: 16, fontWeight: 500, Roboto, color: #fff, text-shadow */
+.c-mc-max-1785972203029-cf5fa0f8-device-online {
+  font-size: 16px;
+  font-weight: 500;
+  font-family: 'Roboto', sans-serif;
+  color: #ffffff;
+  line-height: 18px;
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+}
+
+.c-mc-max-1785972203029-cf5fa0f8-device-total {
+  font-size: 16px;
+  font-weight: 500;
+  font-family: 'Roboto', sans-serif;
+  color: #ffffff;
+  line-height: 18px;
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+}

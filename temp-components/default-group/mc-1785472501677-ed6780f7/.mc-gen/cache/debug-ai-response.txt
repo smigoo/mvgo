@@ -1,0 +1,333 @@
+```json
+{
+  "componentName": "cp-设备监测",
+  "figmaNodeId": "cp-设备监测",
+  "width": 420,
+  "height": 425,
+  "layout": "vertical",
+  "style": {
+    "background": "#edf4fbb2"
+  },
+  "headerSlots": [
+    {
+      "slotType": "title-left",
+      "elementType": "icon",
+      "content": "装饰图标",
+      "resourceFile": "../resources/images/g-8421.png",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "slotType": "title-right",
+      "elementType": "label",
+      "content": "设备监测",
+      "style": {
+        "color": "transparent",
+        "background": "linear-gradient(270deg, #318aff 0%, #70bfff 100%)",
+        "-webkit-background-clip": "text",
+        "fontSize": "16px",
+        "fontWeight": "bold"
+      }
+    },
+    {
+      "slotType": "header-right",
+      "elementType": "statistic",
+      "content": "设备类型 28",
+      "style": {
+        "color": "#333333",
+        "fontSize": "12px"
+      }
+    },
+    {
+      "slotType": "header-right",
+      "elementType": "statistic",
+      "content": "设备总数 68562",
+      "style": {
+        "color": "#333333",
+        "fontSize": "12px"
+      }
+    },
+    {
+      "slotType": "header-right",
+      "elementType": "statistic",
+      "content": "完好率 98%",
+      "style": {
+        "color": "#333333",
+        "fontSize": "12px"
+      }
+    },
+    {
+      "slotType": "header-right",
+      "elementType": "icon",
+      "content": "操作图标",
+      "resourceFile": "../resources/images/Frame-8856.png",
+      "recommendedUsage": "imgSrc"
+    }
+  ],
+  "children": [
+    {
+      "id": "header-stats",
+      "type": "container",
+      "layout": "horizontal",
+      "style": {
+        "justifyContent": "space-between",
+        "padding": "10px 15px",
+        "alignItems": "center"
+      },
+      "children": [
+        {
+          "type": "text",
+          "content": "设备类型",
+          "style": { "color": "#333333", "fontSize": "12px" }
+        },
+        {
+          "type": "text",
+          "content": "28",
+          "style": { "color": "#1990ff", "fontSize": "14px", "fontWeight": "bold" }
+        },
+        {
+          "type": "text",
+          "content": "设备总数",
+          "style": { "color": "#333333", "fontSize": "12px" }
+        },
+        {
+          "type": "text",
+          "content": "68562",
+          "style": { "color": "#1990ff", "fontSize": "14px", "fontWeight": "bold" }
+        },
+        {
+          "type": "text",
+          "content": "完好率",
+          "style": { "color": "#333333", "fontSize": "12px" }
+        },
+        {
+          "type": "text",
+          "content": "98%",
+          "style": { "color": "#08a3a5", "fontSize": "14px", "fontWeight": "bold" }
+        }
+      ]
+    },
+    {
+      "id": "slot-con",
+      "type": "container",
+      "layout": "vertical",
+      "style": { "padding": "10px" },
+      "children": [
+        {
+          "id": "switch-cards",
+          "type": "container",
+          "layout": "horizontal",
+          "style": { "gap": "10px", "marginBottom": "10px" },
+          "children": [
+            {
+              "id": "card-tunnel",
+              "type": "container",
+              "layout": "vertical",
+              "style": {
+                "flex": 1,
+                "backgroundImage": "url('../resources/images/bg-8439.png')",
+                "backgroundSize": "cover",
+                "borderRadius": "8px",
+                "padding": "10px",
+                "color": "#ffffff"
+              },
+              "children": [
+                {
+                  "type": "container",
+                  "layout": "horizontal",
+                  "style": { "alignItems": "center", "gap": "5px" },
+                  "children": [
+                    {
+                      "type": "image",
+                      "resourceFile": "../resources/images/icon-8798.png",
+                      "recommendedUsage": "imgSrc",
+                      "style": { "width": "24px", "height": "24px" }
+                    },
+                    {
+                      "type": "text",
+                      "content": "隧道设备",
+                      "style": { "fontSize": "12px", "color": "#ffffff" }
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "content": "总数:56302",
+                  "style": { "fontSize": "16px", "fontWeight": "bold", "marginTop": "5px" }
+                },
+                {
+                  "type": "text",
+                  "content": "异常数:5",
+                  "style": { "fontSize": "12px", "color": "#f53f3f" }
+                }
+              ]
+            },
+            {
+              "id": "card-north-south",
+              "type": "container",
+              "layout": "vertical",
+              "style": {
+                "flex": 1,
+                "background": "linear-gradient(270deg, #85baff 0%, #bfe2ff 100%)",
+                "borderRadius": "8px",
+                "padding": "10px",
+                "color": "#333333"
+              },
+              "children": [
+                {
+                  "type": "container",
+                  "layout": "horizontal",
+                  "style": { "alignItems": "center", "gap": "5px" },
+                  "children": [
+                    {
+                      "type": "image",
+                      "resourceFile": "../resources/images/icon-8817.png",
+                      "recommendedUsage": "imgSrc",
+                      "style": { "width": "24px", "height": "24px" }
+                    },
+                    {
+                      "type": "text",
+                      "content": "南北接线设备",
+                      "style": { "fontSize": "12px" }
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "content": "总数:1280",
+                  "style": { "fontSize": "16px", "fontWeight": "bold", "color": "#1990ff", "marginTop": "5px" }
+                },
+                {
+                  "type": "text",
+                  "content": "异常数:3",
+                  "style": { "fontSize": "12px", "color": "#f53f3f" }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "main-content",
+          "type": "container",
+          "layout": "horizontal",
+          "style": { "gap": "5px" },
+          "children": [
+            {
+              "id": "sidebar-tabs",
+              "type": "container",
+              "layout": "vertical",
+              "style": { "width": "46px", "gap": "5px" },
+              "children": [
+                {
+                  "type": "text",
+                  "content": "3/3740",
+                  "style": { "fontSize": "10px", "color": "#f53f3f", "marginBottom": "5px" }
+                },
+                {
+                  "type": "container",
+                  "style": { "background": "#1990ff", "color": "#fff", "padding": "5px 2px", "borderRadius": "4px", "textAlign": "center", "fontSize": "12px", "writingMode": "vertical-rl" },
+                  "content": "监控"
+                },
+                {
+                  "type": "container",
+                  "style": { "background": "#edf4fb", "color": "#333", "padding": "5px 2px", "borderRadius": "4px", "textAlign": "center", "fontSize": "12px", "writingMode": "vertical-rl", "position": "relative" },
+                  "content": "照明",
+                  "badge": { "content": "3", "color": "#f53f3f", "position": "top-right" }
+                },
+                {
+                  "type": "container",
+                  "style": { "background": "#edf4fb", "color": "#333", "padding": "5px 2px", "borderRadius": "4px", "textAlign": "center", "fontSize": "12px", "writingMode": "vertical-rl" },
+                  "content": "通风"
+                },
+                {
+                  "type": "container",
+                  "style": { "background": "#edf4fb", "color": "#333", "padding": "5px 2px", "borderRadius": "4px", "textAlign": "center", "fontSize": "12px", "writingMode": "vertical-rl" },
+                  "content": "供配电"
+                },
+                {
+                  "type": "container",
+                  "style": { "background": "#edf4fb", "color": "#333", "padding": "5px 2px", "borderRadius": "4px", "textAlign": "center", "fontSize": "12px", "writingMode": "vertical-rl" },
+                  "content": "消防"
+                },
+                {
+                  "type": "container",
+                  "style": { "background": "#edf4fb", "color": "#333", "padding": "5px 2px", "borderRadius": "4px", "textAlign": "center", "fontSize": "12px", "writingMode": "vertical-rl" },
+                  "content": "交通诱导"
+                }
+              ]
+            },
+            {
+              "id": "grid-content",
+              "type": "container",
+              "layout": "grid",
+              "style": {
+                "gridTemplateColumns": "repeat(3, 1fr)",
+                "gap": "8px",
+                "flex": 1
+              },
+              "children": [
+                {
+                  "type": "card",
+                  "style": { "background": "#eef4fb", "borderRadius": "6px", "padding": "8px", "textAlign": "center" },
+                  "children": [
+                    { "type": "image", "resourceFile": "../resources/images/icon-8444.png", "recommendedUsage": "imgSrc", "style": { "width": "20px", "height": "20px", "margin": "0 auto" } },
+                    { "type": "text", "content": "摄像机", "style": { "fontSize": "12px", "color": "#333" } },
+                    { "type": "text", "content": "(2/484)", "style": { "fontSize": "12px", "color": "#1990ff" } }
+                  ]
+                },
+                {
+                  "type": "card",
+                  "style": { "background": "#eef4fb", "borderRadius": "6px", "padding": "8px", "textAlign": "center" },
+                  "children": [
+                    { "type": "image", "resourceFile": "../resources/images/icon-8473.png", "recommendedUsage": "imgSrc", "style": { "width": "20px", "height": "20px", "margin": "0 auto" } },
+                    { "type": "text", "content": "风速风向仪", "style": { "fontSize": "12px", "color": "#333" } },
+                    { "type": "text", "content": "(1/484)", "style": { "fontSize": "12px", "color": "#f53f3f" } }
+                  ]
+                },
+                {
+                  "type": "card",
+                  "style": { "background": "#eef4fb", "borderRadius": "6px", "padding": "8px", "textAlign": "center" },
+                  "children": [
+                    { "type": "image", "resourceFile": "../resources/images/icon-8503.png", "recommendedUsage": "imgSrc", "style": { "width": "20px", "height": "20px", "margin": "0 auto" } },
+                    { "type": "text", "content": "超高检测器", "style": { "fontSize": "12px", "color": "#333" } },
+                    { "type": "text", "content": "(0/484)", "style": { "fontSize": "12px", "color": "#08a3a5" } }
+                  ]
+                },
+                {
+                  "type": "card",
+                  "style": { "background": "#eef4fb", "borderRadius": "6px", "padding": "8px", "textAlign": "center" },
+                  "children": [
+                    { "type": "image", "resourceFile": "../resources/images/icon-8532.png", "recommendedUsage": "imgSrc", "style": { "width": "20px", "height": "20px", "margin": "0 auto" } },
+                    { "type": "text", "content": "烟道机器人", "style": { "fontSize": "12px", "color": "#333" } },
+                    { "type": "text", "content": "(0/484)", "style": { "fontSize": "12px", "color": "#08a3a5" } }
+                  ]
+                },
+                {
+                  "type": "card",
+                  "style": { "background": "#eef4fb", "borderRadius": "6px", "padding": "8px", "textAlign": "center" },
+                  "children": [
+                    { "type": "image", "resourceFile": "../resources/images/icon-8561.png", "recommendedUsage": "imgSrc", "style": { "width": "20px", "height": "20px", "margin": "0 auto" } },
+                    { "type": "text", "content": "激光雷达", "style": { "fontSize": "12px", "color": "#333" } },
+                    { "type": "text", "content": "(0/484)", "style": { "fontSize": "12px", "color": "#08a3a5" } }
+                  ]
+                },
+                {
+                  "type": "card",
+                  "style": { "background": "#eef4fb", "borderRadius": "6px", "padding": "8px", "textAlign": "center" },
+                  "children": [
+                    { "type": "image", "resourceFile": "../resources/images/icon-8590.png", "recommendedUsage": "imgSrc", "style": { "width": "20px", "height": "20px", "margin": "0 auto" } },
+                    { "type": "text", "content": "CO₂传感器", "style": { "fontSize": "12px", "color": "#333" } },
+                    { "type": "text", "content": "(0/484)", "style": { "fontSize": "12px", "color": "#08a3a5" } }
+                  ]
+                },
+                {
+                  "type": "card",
+                  "style": { "background": "#eef4fb", "borderRadius": "6px", "padding": "8px", "textAlign": "center" },
+                  "children": [
+                    { "type": "image", "resourceFile": "../resources/images/icon-8619.png", "recommendedUsage": "imgSrc", "style": { "width": "20px", "height": "20px", "margin": "0 auto" } },
+                    { "type": "text", "content": "CO/VI检测器", "style": { "fontSize": "12px", "color": "#333" } },
+                    { "type": "text", "content": "(0/484)", "style": { "fontSize": "12px", "color": "#08a3a5" } }
+                  ]
+                },
+                {
+                  "type": "card",
+                  "style": { "background": "#eef4fb", "borderRadius": "6px", "padding": "8px

@@ -1,0 +1,209 @@
+```json
+{
+  "componentName": "重点车辆监测面板",
+  "description": "展示重点车辆（危化品车、重型货车、超高车辆）的今日累计监测数据，支持隧道/大桥切换。",
+  "layout": {
+    "type": "vertical",
+    "gap": "12px",
+    "padding": "16px"
+  },
+  "style": {
+    "background": "#edf4fbb2",
+    "borderRadius": "4px"
+  },
+  "headerSlots": [
+    {
+      "slotType": "title-left",
+      "elementType": "label",
+      "content": "重点车辆监测",
+      "style": {
+        "color": "#1990ff",
+        "fontSize": "16px",
+        "fontWeight": "bold"
+      }
+    },
+    {
+      "slotType": "header-right",
+      "elementType": "tab",
+      "content": "江阴靖江长江隧道",
+      "style": {
+        "background": "#1990ff",
+        "color": "#ffffff",
+        "borderRadius": "12px",
+        "padding": "4px 12px"
+      },
+      "status": "active"
+    },
+    {
+      "slotType": "header-right",
+      "elementType": "tab",
+      "content": "江阴大桥",
+      "style": {
+        "background": "transparent",
+        "color": "#6680a0",
+        "border": "1px solid #6680a0",
+        "borderRadius": "12px",
+        "padding": "4px 12px"
+      },
+      "status": "inactive"
+    }
+  ],
+  "children": [
+    {
+      "type": "container",
+      "layout": "horizontal",
+      "alignItems": "center",
+      "gap": "8px",
+      "marginBottom": "16px",
+      "children": [
+        {
+          "type": "image",
+          "resourceFile": "../resources/images/icon-123.png",
+          "recommendedUsage": "decorativeBlock",
+          "width": "18px",
+          "height": "18px"
+        },
+        {
+          "type": "text",
+          "content": "今日累计",
+          "style": {
+            "color": "#333333",
+            "fontSize": "14px"
+          }
+        }
+      ]
+    },
+    {
+      "type": "container",
+      "layout": "horizontal",
+      "justifyContent": "space-between",
+      "gap": "12px",
+      "children": [
+        {
+          "type": "card",
+          "style": {
+            "background": "rgba(255,255,255,0.5)",
+            "borderRadius": "8px",
+            "padding": "12px",
+            "flex": 1,
+            "display": "flex",
+            "flexDirection": "column",
+            "alignItems": "center"
+          },
+          "children": [
+            {
+              "type": "image",
+              "resourceFile": "../resources/images/icon-8049.png",
+              "recommendedUsage": "imgSrc",
+              "width": "40px",
+              "height": "30px",
+              "description": "危化品车图标"
+            },
+            {
+              "type": "text",
+              "content": "危化品车",
+              "style": {
+                "color": "#666666",
+                "fontSize": "12px",
+                "marginTop": "8px"
+              }
+            },
+            {
+              "type": "text",
+              "content": "51 次",
+              "style": {
+                "color": "#ff4d4f",
+                "fontSize": "20px",
+                "fontWeight": "bold",
+                "marginTop": "4px"
+              }
+            }
+          ]
+        },
+        {
+          "type": "card",
+          "style": {
+            "background": "rgba(255,255,255,0.5)",
+            "borderRadius": "8px",
+            "padding": "12px",
+            "flex": 1,
+            "display": "flex",
+            "flexDirection": "column",
+            "alignItems": "center"
+          },
+          "children": [
+            {
+              "type": "image",
+              "resourceFile": "../resources/images/icon-8036.png",
+              "recommendedUsage": "imgSrc",
+              "width": "40px",
+              "height": "30px",
+              "description": "重型货车图标"
+            },
+            {
+              "type": "text",
+              "content": "重型货车",
+              "style": {
+                "color": "#666666",
+                "fontSize": "12px",
+                "marginTop": "8px"
+              }
+            },
+            {
+              "type": "text",
+              "content": "2 次",
+              "style": {
+                "color": "#1890ff",
+                "fontSize": "20px",
+                "fontWeight": "bold",
+                "marginTop": "4px"
+              }
+            }
+          ]
+        },
+        {
+          "type": "card",
+          "style": {
+            "background": "rgba(255,255,255,0.5)",
+            "borderRadius": "8px",
+            "padding": "12px",
+            "flex": 1,
+            "display": "flex",
+            "flexDirection": "column",
+            "alignItems": "center"
+          },
+          "children": [
+            {
+              "type": "image",
+              "resourceFile": "../resources/images/icon-8070.png",
+              "recommendedUsage": "imgSrc",
+              "width": "40px",
+              "height": "30px",
+              "description": "超高车辆图标"
+            },
+            {
+              "type": "text",
+              "content": "超高车辆",
+              "style": {
+                "color": "#666666",
+                "fontSize": "12px",
+                "marginTop": "8px"
+              }
+            },
+            {
+              "type": "text",
+              "content": "19 次",
+              "style": {
+                "color": "#fa8c16",
+                "fontSize": "20px",
+                "fontWeight": "bold",
+                "marginTop": "4px"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```

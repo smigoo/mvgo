@@ -1,0 +1,76 @@
+import { ApifoxService } from '../apifox/apifox.service';
+import { BindApiDto, BindingSlotDto } from './dto/bind-api.dto';
+import { ApiBindingPreflightService } from './api-binding-preflight.service';
+import { WorkspaceTransactionService } from './workspace-transaction.service';
+import { IncrementalFileCleanupService } from './incremental-file-cleanup.service';
+import { AiConfigService } from '../config/config.service';
+export interface BindingRecord {
+    bindingId: string;
+    catalogId: string;
+    componentId: string;
+    componentName: string;
+    groupId: string;
+    slots: BindingSlotDto[];
+    boundAt: string;
+    componentDir: string;
+    modifiedFiles: string[];
+    snapshotDir?: string;
+    targetPaths?: string[];
+    sourceFingerprint?: string;
+}
+export declare class ApiBindingService {
+    private readonly apifoxService;
+    private readonly preflight;
+    private readonly workspaceTransaction;
+    private readonly cleanup;
+    private readonly aiConfigService?;
+    private readonly logger;
+    private readonly storePath;
+    constructor(apifoxService: ApifoxService, preflight: ApiBindingPreflightService, workspaceTransaction: WorkspaceTransactionService, cleanup: IncrementalFileCleanupService, aiConfigService?: AiConfigService | undefined);
+    bindApi(dto: BindApiDto): Promise<{
+        success: boolean;
+        bindingId: string;
+        modifiedFiles: string[];
+        previewUrl: string;
+    }>;
+    getBindings(componentId: string): BindingRecord[];
+    getBinding(bindingId: string): BindingRecord | null;
+    unbind(bindingId: string): Promise<{
+        success: boolean;
+        message: string;
+    }>;
+    private getComponentDir;
+    private generateApiModuleFile;
+    private generateMockFile;
+    private generateMockFromPreview;
+    private generateEnumsFile;
+    private generateStubFile;
+    private isCompositeChartSlot;
+    private getBindingDataName;
+    private getAdapterName;
+    private getStubExportName;
+    private toSafeIdentifier;
+    private generateCompositeChartMock;
+    private extractStaticData;
+    private scanExistingIdentifiers;
+    private classifyInjectableSlots;
+    private injectCodeIntoSFC;
+    private generateAdapterLines;
+    private findChartInstanceName;
+    private removeInjectedCode;
+    private capitalize;
+    private sameTargetSet;
+    private getComponentTargets;
+    private validateCatalogBindings;
+    private buildApiFunctionCall;
+    private generateMockData;
+    private resolveComponentEntry;
+    private removePreviousBindingModules;
+    private getApiModuleCleanupNames;
+    private cleanBindingFromSnapshot;
+    private runRuntimePreflight;
+    private readBindings;
+    private writeBindingsToPath;
+    private upsertBinding;
+    private autoFixBareConstInSFC;
+}

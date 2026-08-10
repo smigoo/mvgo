@@ -1,0 +1,65 @@
+{
+  "componentId": "mc-1785754491984-fcb7c5cd",
+  "componentName": "事件统计",
+  "version": "v1.0.0",
+  "attribute": {
+    "aspectRatio": [
+      460,
+      138
+    ],
+    "title": "事件统计",
+    "description": "事件统计"
+  },
+  "businessEvents": {
+    "mc-1785754491984-fcb7c5cd-onload": {
+      "eventId": "mc-1785754491984-fcb7c5cd-onload",
+      "eventName": "组件加载",
+      "eventDataSchema": {
+        "componentId": {
+          "key": "componentId",
+          "name": "组件ID",
+          "type": "string",
+          "required": true
+        },
+        "timestamp": {
+          "key": "timestamp",
+          "name": "时间戳",
+          "type": "number",
+          "required": true
+        }
+      }
+    }
+  },
+  "businessStatuses": {},
+  "dataSources": [],
+  "formSources": [],
+  "layoutConfig": {
+    "default": "one",
+    "list": [
+      {
+        "name": "默认布局",
+        "key": "one",
+        "previewName": "mc-preview.png"
+      }
+    ]
+  },
+  "themeConfig": {
+    "default": "dark",
+    "list": [
+      {
+        "name": "深色主题",
+        "key": "dark"
+      },
+      {
+        "name": "亮色主题",
+        "key": "light"
+      }
+    ]
+  },
+  "cssVariableConfig": [],
+  "businessConfig": [],
+  "size": {
+    "width": 460,
+    "height": 353
+  }
+}

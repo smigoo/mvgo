@@ -1,0 +1,44 @@
+{
+  "imageVerified": true,
+  "layoutStructure": {
+    "generatedAt": "2026-08-06T02:28:21.471Z",
+    "stage": "preview-analysis",
+    "degraded": true,
+    "degradeReason": "404 请求的资源未找到，请检查请求路径或联系管理员。\n\n\nTroubleshooting URL: https://js.langchain.com/docs/troubleshooting/errors/MODEL_NOT_FOUND/\n",
+    "layout": {
+      "type": "vertical",
+      "direction": "top-to-bottom",
+      "sections": []
+    },
+    "styles": {
+      "theme": "未知",
+      "colors": [],
+      "background": "",
+      "decorations": [],
+      "emphasis": [],
+      "backgroundBrightness": "dark"
+    },
+    "interactions": [],
+    "charts": []
+  },
+  "visualElements": {
+    "theme": "未知",
+    "colors": [],
+    "background": "",
+    "decorations": [],
+    "emphasis": [],
+    "backgroundBrightness": "dark"
+  },
+  "_visualElementList": [],
+  "interactions": [],
+  "charts": [],
+  "chartDataHints": [],
+  "headerSlots": [],
+  "analysisType": "",
+  "analysisTarget": "",
+  "analysisDescription": "",
+  "analysisEvidence": [],
+  "analysisFile": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mv-max-1785983291725-4b7c48f6/.mc-gen/config/preview-analysis.json",
+  "_cachedAt": 1785983301472,
+  "_cacheKey": "vision_1t7Dmmpsl5i0PC8BJt2QLf_2:7879"
+}

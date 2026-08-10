@@ -1,0 +1,57 @@
+{
+  "stage": "analysis_done",
+  "brief": {
+    "layout": "整体为深色背景上的左上角卡片布局，卡片内部采用两列网格布局展示数据项，主轴方向为垂直，数据项水平对齐。",
+    "regions": [
+      {
+        "name": "环境监测面板",
+        "description": "包含标题'环境监测'及四个环境指标数据（温度、湿度、CO浓度、能见度）",
+        "position": "top",
+        "size": "宽约40%，高约15%"
+      }
+    ],
+    "spacing": {
+      "outer": "面板距离页面顶部和左侧有一定边距",
+      "gap": "数据项之间水平间距较大，垂直间距适中",
+      "padding": "面板内部有均匀的内边距"
+    },
+    "colors": {
+      "primary": "#00bcd4",
+      "background": "#0d1117",
+      "surface": "#161b22",
+      "text": "#8b949e",
+      "border": "#30363d"
+    },
+    "typography": {
+      "size": "标题约14px，标签约12px，数值约16px",
+      "weight": "标题和数值字重中等，标签字重正常",
+      "lineHeight": "行高适中，约1.5倍字号"
+    },
+    "components": [
+      "文本标签",
+      "数值显示"
+    ],
+    "textContent": [
+      "环境监测",
+      "温度",
+      "24.5℃",
+      "湿度",
+      "62%",
+      "CO 浓度",
+      "15 ppm",
+      "能见度",
+      "850m"
+    ],
+    "visualDetails": [
+      "面板具有小圆角",
+      "面板有细边框",
+      "数值颜色区分状态（绿色和橙色）"
+    ],
+    "interactions": []
+  },
+  "width": 1440,
+  "height": 900,
+  "sourceType": "html",
+  "componentType": "vue3",
+  "generationTier": "lite"
+}

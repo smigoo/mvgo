@@ -1,0 +1,116 @@
+{
+  "stage": "codegen_done",
+  "brief": {
+    "layout": "整体为上下结构，顶部为全局数据概览栏。下方主体分为左右两栏，左侧为窄幅垂直导航菜单，右侧为宽幅内容展示区。右侧内容区又分为上下两部分：上方为两个并排的大型统计卡片，下方为3列3行的设备状态网格。",
+    "regions": [
+      {
+        "name": "顶部全局信息栏",
+        "description": "包含设备监测标题，设备类型28，设备总数68562，完好率98%。",
+        "position": "top",
+        "size": "宽度100%，高度约占10%"
+      },
+      {
+        "name": "左侧垂直导航",
+        "description": "包含监控、照明、通风、供配电、消防、交通诱导等导航项，当前选中监控，照明有红色角标3。",
+        "position": "left",
+        "size": "宽度约占15%，高度占剩余90%"
+      },
+      {
+        "name": "右侧上方统计卡片",
+        "description": "左侧蓝色卡片显示隧道设备总数56302，异常数5；右侧灰色卡片显示南北接线设备总数1280，异常数3。",
+        "position": "right-top",
+        "size": "宽度约占85%，高度约占30%"
+      },
+      {
+        "name": "右侧下方设备网格",
+        "description": "3x3网格排列的设备状态卡片，包含摄像机、风速风向仪等9种设备及其异常/总数数据。",
+        "position": "right-bottom",
+        "size": "宽度约占85%，高度约占60%"
+      }
+    ],
+    "spacing": {
+      "outer": "整体内容距离屏幕边缘有一定内边距",
+      "gap": "网格卡片之间间距均匀，约10-15px；左右区域间距约10px",
+      "padding": "各卡片内部有明显的内边距，文字与图标之间有适当间距"
+    },
+    "colors": {
+      "primary": "#3b82f6",
+      "background": "#1e293b",
+      "surface": "#334155",
+      "text": "#ffffff",
+      "border": "#475569"
+    },
+    "typography": {
+      "size": "总数数据字号最大(约24-28px)，标题次之(约16-18px)，说明文字最小(约12-14px)",
+      "weight": "数据数字和标题使用粗体，说明文字使用常规体",
+      "lineHeight": "行高适中，约1.5倍字号"
+    },
+    "components": [
+      "垂直导航菜单",
+      "统计卡片",
+      "带图标的列表项",
+      "角标"
+    ],
+    "textContent": [
+      "设备监测",
+      "设备类型28",
+      "设备总数68562",
+      "完好率98%",
+      "总数:56302",
+      "异常数:5",
+      "总数:1280",
+      "异常数:3",
+      "监控",
+      "照明",
+      "通风",
+      "供配电",
+      "消防",
+      "交通诱导",
+      "摄像机 (2/484)",
+      "风速风向仪 (1/484)",
+      "超高检测器 (0/484)",
+      "烟道机器人 (0/484)",
+      "激光雷达 (0/484)",
+      "CO传感器 (0/484)",
+      "CO/VI检测器 (0/484)",
+      "温湿度传感器 (0/484)",
+      "压力传感器 (0/484)",
+      "光照度变送器 (0/484)",
+      "紧急电话 (0/484)",
+      "水质监测设备 (0/484)"
+    ],
+    "visualDetails": [
+      "卡片具有圆角，约8px",
+      "左侧导航选中项有蓝色背景高亮",
+      "异常数据和角标使用红色高亮",
+      "每个设备卡片左侧有蓝色圆形图标背景，内含白色设备图标",
+      "顶部统计卡片有箭头形状的背景设计"
+    ],
+    "interactions": [
+      "左侧垂直导航栏(当前激活项: 监控)"
+    ]
+  },
+  "width": 440,
+  "height": 445,
+  "sourceType": "screenshot",
+  "componentType": "microcode",
+  "generationTier": "lite",
+  "vueCode": "<template>\n  <base-panel panelKey=\"default-panel\">\n    <div class=\"c-mc-lite-1785937559744-c90cdfd4-container\">\n      <!-- 顶部全局信息栏 -->\n      <div class=\"c-mc-lite-1785937559744-c90cdfd4-header\">\n        <div class=\"c-mc-lite-1785937559744-c90cdfd4-header-left\">\n          <div class=\"c-mc-lite-1785937559744-c90cdfd4-title-group\">\n            <span class=\"c-mc-lite-1785937559744-c90cdfd4-icon-monitor\"></span>\n            <span class=\"c-mc-lite-1785937559744-c90cdfd4-title\">设备监测</span>\n          </div>\n          <div class=\"c-mc-lite-1785937559744-c90cdfd4-stats-row\">\n            <span class=\"c-mc-lite-1785937559744-c90cdfd4-stat-item\">\n              <span class=\"c-mc-lite-1785937559744-c90cdfd4-icon-type\"></span>\n              设备类型 <span class=\"c-mc-lite-1785937559744-c90cdfd4-text-blue\">28</span>\n            </span>\n            <span class=\"c-mc-lite-1785937559744-c90cdfd4-stat-item\">\n              设备总数 <span class=\"c-mc-lite-1785937559744-c90cdfd4-text-blue\">68562</span>\n            </span>\n            <span class=\"c-mc-lite-1785937559744-c90cdfd4-stat-item\">\n              完好率 <span class=\"c-mc-lite-1785937559744-c90cdfd4-text-green\">98%</span>\n            </span>\n          </div>\n        </div>\n      </div>\n\n      <!-- 主体内容 -->\n      <div class=\"c-mc-lite-1785937559744-c90cdfd4-main\">\n        <!-- 左侧垂直导航 -->\n        <div class=\"c-mc-lite-1785937559744-c90cdfd4-sidebar\">\n          <div class=\"c-mc-lite-1785937559744-c90cdfd4-float-badge\">3/3740</div>\n          <div \n            v-for=\"(item, index) in navItems\" \n            :key=\"index\"\n            class=\"c-mc-lite-1785937559744-c90cdfd4-nav-item\"\n            :class=\"{ 'c-mc-lite-1785937559744-c90cdfd4-nav-active': item.active }\"\n            @click=\"selectNav(index)\"\n          >\n            <span class=\"c-mc-lite-1785937559744-c90cdfd4-nav-text\">{{ item.name }}</span>\n            <div v-if=\"item.badge\" class=\"c-mc-lite-1785937559744-c90cdfd4-nav-badge\">{{ item.badge }}</div>\n          </div>\n        </div>\n\n        <!-- 右侧内容区 -->\n        <div class=\"c-mc-lite-1785937559744-c90cdfd4-content-right\">\n          <!-- 上方统计卡片 -->\n          <div class=\"c-mc-lite-1785937559744-c90cdfd4-cards-row\">\n            <!-- 隧道设备卡片 -->\n            <div class=\"c-mc-lite-1785937559744-c90cdfd4-big-card c-mc-lite-1785937559744-c90cdfd4-card-blue\">\n              <div class=\"c-mc-lite-1785937559744-c90cdfd4-card-icon-wrap\">\n                <div class=\"c-mc-lite-1785937559744-c90cdfd4-icon-tunnel\"></div>\n                <span class=\"c-mc-lite-1785937559744-c90cdfd4-card-subtitle\">隧道设备</span>\n              </div>\n              <div class=\"c-mc-lite-1785937559744-c90cdfd4-card-data\">\n                <div class=\"c-mc-lite-1785937559744-c90cdfd4-data-row\">\n                  <span class=\"c-mc-lite-1785937559744-c90cdfd4-label\">总 数:</span>\n                  <span class=\"c-mc-lite-1785937559744-c90cdfd4-value-white\">56302</span>\n                </div>\n                <div class=\"c-mc-lite-1785937559744-c90cdfd4-data-row\">\n                  <span class=\"c-mc-lite-1785937559744-c90cdfd4-label\">异常数:</span>\n                  <span class=\"c-mc-lite-1785937559744-c90cdfd4-value-red\">5</span>\n                </div>\n              </div>\n            </div>\n\n            <!-- 南北接线设备卡片 -->\n            <div class=\"c-mc-lite-1785937559744-c90cdfd4-big-card c-mc-lite-1785937559744-c90cdfd4-card-grey\">\n              <div class=\"c-mc-lite-1785937559744-c90cdfd4-card-icon-wrap\">\n                <div class=\"c-mc-lite-1785937559744-c90cdfd4-icon-line\"></div>\n                <span class=\"c-mc-lite-1785937559744-c90cdfd4-card-subtitle\">南北接线<br>设备</span>\n              </div>\n              <div class=\"c-mc-lite-1785937559744-c90cdfd4-card-data\">\n                <div class=\"c-mc-lite-1785937559744-c90cdfd4-data-row\">\n                  <span class=\"c-mc-lite-1785937559744-c90cdfd4-label\">总 数:</span>\n                  <span class=\"c-mc-lite-1785937559744-c90cdfd4-value-blue\">1280</span>\n                </div>\n                <div class=\"c-mc-lite-1785937559744-c90cdfd4-data-row\">\n                  <span class=\"c-mc-lite-1785937559744-c90cdfd4-label\">异常数:</span>\n                  <span class=\"c-mc-lite-1785937559744-c90cdfd4-value-red\">3</span>\n                </div>\n              </div>\n            </div>\n          </div>\n\n          <!-- 下方设备网格 -->\n          <div class=\"c-mc-lite-1785937559744-c90cdfd4-grid\">\n            <div \n              v-for=\"(device, index) in devices\" \n              :key=\"index\"\n              class=\"c-mc-lite-1785937559744-c90cdfd4-grid-item\"\n            >\n              <div class=\"c-mc-lite-1785937559744-c90cdfd4-device-icon\">\n                <!-- 通用设备图标模拟 -->\n                <svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"c-mc-lite-1785937559744-c90cdfd4-svg-icon\">\n                  <circle cx=\"12\" cy=\"12\" r=\"10\"></circle>\n                  <path d=\"M12 8v4l3 3\"></path>\n                </svg>\n              </div>\n              <div class=\"c-mc-lite-1785937559744-c90cdfd4-device-info\">\n                <div class=\"c-mc-lite-1785937559744-c90cdfd4-device-name\">{{ device.name }}</div>\n                <div class=\"c-mc-lite-1785937559744-c90cdfd4-device-data\">\n                  <span class=\"c-mc-lite-1785937559744-c90cdfd4-text-red\">({{ device.error }}</span>\n                  <span class=\"c-mc-lite-1785937559744-c90cdfd4-text-blue\">/{{ device.total }})</span>\n                </div>\n              </div>\n            </div>\n          </div>\n        </div>\n      </div>\n    </div>\n  </base-panel>\n</template>\n\n<script setup>\nimport { ref } from 'vue';\n\nconst navItems = ref([\n  { name: '监控', active: true, badge: null },\n  { name: '照明', active: false, badge: 3 },\n  { name: '通风', active: false, badge: null },\n  { name: '供配电', active: false, badge: null },\n  { name: '消防', active: false, badge: null },\n  { name: '交通诱导', active: false, badge: null },\n]);\n\nconst devices = ref([\n  { name: '摄像机', error: 2, total: 484 },\n  { name: '风速风向仪', error: 1, total: 484 },\n  { name: '超高检测器', error: 0, total: 484 },\n  { name: '烟道机器人', error: 0, total: 484 },\n  { name: '激光雷达', error: 0, total: 484 },\n  { name: 'CO₂传感器', error: 0, total: 484 },\n  { name: 'CO/VI检测器', error: 0, total: 484 },\n  { name: '温湿度传感器', error: 0, total: 484 },\n  { name: '压力传感器', error: 0, total: 484 },\n  { name: '光照度变送器', error: 0, total: 484 },\n  { name: '紧急电话', error: 0, total: 484 },\n  { name: '水质监测设备', error: 0, total: 484 },\n]);\n\nconst selectNav = (index) => {\n  navItems.value.forEach((item, i) => {\n    item.active = i === index;\n  });\n};\n</script>\n\n<style scoped>\n.c-mc-lite-1785937559744-c90cdfd4-container {\n  width: 100%;\n  height: 100%;\n  background-color: #0f172a; /* 深蓝背景 */\n  color: #ffffff;\n  display: flex;\n  flex-direction: column;\n  padding: 10px;\n  box-sizing: border-box;\n  font-family: 'Microsoft YaHei', sans-serif;\n}\n\n/* 顶部栏 */\n.c-mc-lite-1785937559744-c90cdfd4-header {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  height: 40px;\n  margin-bottom: 10px;\n  background: rgba(30, 41, 59, 0.5);\n  padding: 0 10px;\n  border-radius: 4px;\n}\n\n.c-mc-lite-1785937559744-c90cdfd4-header-left {\n  display: flex;\n  align-items: center;\n  gap: 20px;\n  width: 100%;\n}\n\n.c-mc-lite-1785937559744-c90cdfd4-title-group {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  font-size: 16px;\n  font-weight: bold;\n  color: #60a5fa;\n}\n\n.c-mc-lite-1785937559744-c90cdfd4-icon-monitor {\n  display: inline-block;\n  width: 16px;\n  height: 16px;\n  background-color: #60a5fa;\n  border-radius: 50%;\n  /* 模拟图标 */\n  position: relative;\n}\n.c-mc-lite-1785937559744-c90cdfd4-icon-monitor::after {\n  content: '';\n  position: absolute;\n  top: 4px; left: 4px;\n  width: 8px; height: 8px;\n  background: #0f172a;\n  border-radius: 50%;\n}\n\n.c-mc-lite-1785937559744-c90cdfd4-stats-row {\n  display: flex;\n  gap: 20px;\n  font-size: 14px;\n  color: #94a3b8;\n}\n\n.c-mc-lite-1785937559744-c90cdfd4-stat-item {\n  display: flex;\n  align-items: center;\n  gap: 5px;\n}\n\n.c-mc-lite-1785937559744-c90cdfd4-icon-type {\n  display: inline-block;\n  width: 14px;\n  height: 14px;\n  background-color: #3b82f6;\n  border-radius: 2px;\n}\n\n.c-mc-lite-1785937559744-c90cdfd4-text-blue { color: #3b82f6; font-weight: bold; font-size: 16px; }\n.c-mc-lite-1785937559744-c90cdfd4-text-green { color: #10b981; font-weight: bold; font-size: 16px; }\n.c-mc-lite-1785937559744-c90cdfd4-text-red { color: #ef4444; font-weight: bold; }\n\n/* 主体布局 */\n.c-mc-lite-1785937559744-c90cdfd4-main {\n  display: flex;\n  flex: 1;\n  gap: 10px;\n  overflow: hidden;\n}\n\n/* 左侧导航 */\n.c-mc-lite-1785937559744-c90cdfd4-sidebar {\n  width: 60px;\n  display: flex;\n  flex-direction: column;\n  gap: 5px;\n  position: relative;\n}\n\n.c-mc-lite-1785937559744-c90cdfd4-float-badge {\n  position: absolute;\n  top: -5px;\n  left: 0;\n  background: #fff;\n  color: #333;\n  font-size: 10px;\n  padding: 2px 4px;\n  border-radius: 2px;\n  z-index: 10;\n  box-shadow: 0 2px 4px rgba(0,0,0,0.2);\n}\n\n.c-mc-lite-1785937559744-c90cdfd4-nav-item {\n  background: #334155;\n  color: #94a3b8;\n  display: flex;\n  justify-content: center;\n  align-items: center;\n  padding: 10px 0;\n  cursor: pointer;\n  position: relative;\n  border-radius: 4px;\n  flex: 1;\n}\n\n.c-mc-lite-1785937559744-c90cdfd4-nav-active {\n  background: #3b82f6;\n  color: #fff;\n  font-weight: bold;\n}\n\n.c-mc-lite-1785937559744-c90cdfd4-nav-text {\n  writing-mode: vertical-rl;\n  text-orientation: upright;\n  font-size: 14px;\n  letter-spacing: 2px;\n}\n\n.c-mc-lite-1785937559744-c90cdfd4-nav-badge {\n  position: absolute;\n  top: -5px;\n  right: -5px;\n  background: #ef4444;\n  color: #fff;\n  font-size: 10px;\n  width: 16px;\n  height: 16px;\n  border-radius: 50%;\n  display: flex;\n  justify-content: center;\n  align-items: center;\n  font-weight: bold;\n}\n\n/* 右侧内容 */\n.c-mc-lite-1785937559744-c90cdfd4-content-right {\n  flex: 1;\n  display: flex;\n  flex-direction: column;\n  gap: 10px;\n}\n\n/* 大卡片行 */\n.c-mc-lite-1785937559744-c90cdfd4-cards-row {\n  display: flex;\n  gap: 10px;\n  height: 120px;\n}\n\n.c-mc-lite-1785937559744-c90cdfd4-big-card {\n  flex: 1;\n  display: flex;\n  align-items: center;\n  padding: 10px 20px;\n  position: relative;\n  /* 箭头形状 */\n  clip-path: polygon(0 0, 95% 0, 100% 50%, 95% 100%, 0 100%);\n}\n\n.c-mc-lite-1785937559744-c90cdfd4-card-blue {\n  background: linear-gradient(90deg, #60a5fa 0%, #3b82f6 100%);\n}\n\n.c-mc-lite-1785937559744-c90cdfd4-card-grey {\n  background: linear-gradient(90deg, #94a3b8 0%, #64748b 100%);\n}\n\n.c-mc-lite-1785937559744-c90cdfd4-card-icon-wrap {\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  margin-right: 20px;\n  width: 60px;\n}\n\n.c-mc-lite-1785937559744-c90cdfd4-icon-tunnel,\n.c-mc-lite-1785937559744-c90cdfd4-icon-line {\n  width: 40px;\n  height: 40px;\n  background: #fff;\n  border-radius: 50%;\n  margin-bottom: 5px;\n  display: flex;\n  justify-content: center;\n  align-items: center;\n}\n/* 模拟内部图标 */\n.c-mc-lite-1785937559744-c90cdfd4-icon-tunnel::after { content: ''; font-size: 20px; }\n.c-mc-lite-1785937559744-c90cdfd4-icon-line::after { content: '️'; font-size: 20px; }\n\n.c-mc-lite-1785937559744-c90cdfd4-card-subtitle {\n  font-size: 12px;\n  text-align: center;\n  line-height: 1.2;\n}\n\n.c-mc-lite-1785937559744-c90cdfd4-card-data {\n  display: flex;\n  flex-direction: column;\n  gap: 10px;\n}\n\n.c-mc-lite-1785937559744-c90cdfd4-data-row {\n  display: flex;\n  align-items: baseline;\n  gap: 10px;\n}\n\n.c-mc-lite-1785937559744-c90cdfd4-label {\n  font-size: 14px;\n  opacity: 0.9;\n}\n\n.c-mc-lite-1785937559744-c90cdfd4-value-white {\n  font-size: 28px;\n  font-weight: bold;\n  color: #fff;\n}\n\n.c-mc-lite-1785937559744-c90cdfd4-value-blue {\n  font-size: 28px;\n  font-weight: bold;\n  color: #3b82f6; /* 在灰色背景上显示蓝色 */\n  /* 实际上截图里是浅蓝色/白色，这里用亮色 */\n  color: #e0f2fe; \n}\n\n.c-mc-lite-1785937559744-c90cdfd4-value-red {\n  font-size: 16px;\n  font-weight: bold;\n  color: #ef4444;\n}\n\n/* 网格区域 */\n.c-mc-lite-1785937559744-c90cdfd4-grid {\n  flex: 1;\n  display: grid;\n  grid-template-columns: repeat(3, 1fr);\n  grid-template-rows: repeat(4, 1fr); /* 3行数据，但截图有12个设备? 不，截图是3列x4行=12个? */\n  /* 重新数一下：摄像机, 风速, 超高 (3个); 烟道, 激光, CO2 (3个); CO/VI, 温湿度, 压力 (3个); 光照, 紧急, 水质 (3个)。共12个。 */\n  /* 截图显示 3列 x 4行 */\n  gap: 10px;\n}\n\n.c-mc-lite-1785937559744-c90cdfd4-grid-item {\n  background: rgba(51, 65, 85, 0.5);\n  border: 1px solid #475569;\n  border-radius: 8px;\n  display: flex;\n  align-items: center;\n  padding: 10px;\n  gap: 10px;\n}\n\n.c-mc-lite-1785937559744-c90cdfd4-device-icon {\n  width: 36px;\n  height: 36px;\n  background: #3b82f6;\n  border-radius: 50%;\n  display: flex;\n  justify-content: center;\n  align-items: center;\n  flex-shrink: 0;\n}\n\n.c-mc-lite-1785937559744-c90cdfd4-svg-icon {\n  width: 20px;\n  height: 20px;\n  color: #fff;\n}\n\n.c-mc-lite-1785937559744-c90cdfd4-device-info {\n  display: flex;\n  flex-direction: column;\n  gap: 5px;\n}\n\n.c-mc-lite-1785937559744-c90cdfd4-device-name {\n  font-size: 14px;\n  color: #cbd5e1;\n}\n\n.c-mc-lite-1785937559744-c90cdfd4-device-data {\n  font-size: 14px;\n  font-weight: bold;\n}\n\n</style>",
+  "declareJson": {
+    "componentId": "mc-lite-1785937559744-c90cdfd4",
+    "componentName": "mc-lite-1785937559744-c90cdfd4",
+    "panelType": "default-panel",
+    "defaultTheme": "dark",
+    "size": {
+      "width": 440,
+      "height": 445
+    },
+    "businessEvents": [],
+    "businessStatuses": [],
+    "dataSources": [],
+    "formSources": [],
+    "layoutConfig": {},
+    "themeConfig": {},
+    "businessConfig": {}
+  }
+}

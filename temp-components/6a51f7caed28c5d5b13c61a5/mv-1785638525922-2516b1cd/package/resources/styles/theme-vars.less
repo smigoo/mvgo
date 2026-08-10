@@ -1,0 +1,73 @@
+// 主题变量与 mixin 定义（仅变量，不产出实际 class）
+
+// 深色主题变量
+.theme-dark() {
+  :root {
+    --color-primary: #3677f8;
+    --color-bg: #141414;
+    --color-text-base: #ffffff;
+    --font-size-base: 14px;
+    --border-radius-base: 4px;
+    --color-panel-bg: #edf4fb;
+    --color-title-gradient-start: #1990ff;
+    --color-title-gradient-end: #5a7eff;
+    --color-value-gradient-start: #e1f0ff;
+    --color-value-gradient-end: #00ccff;
+    --color-text-secondary: #333333;
+    --color-card-bg: rgba(255, 255, 255, 0.05);
+    --color-active-bg: linear-gradient(270deg, #318aff 0%, #70bfff 100%);
+    --color-default-bg: linear-gradient(270deg, #85baff 0%, #bfe2ff 100%);
+    --color-tab-active-bg: rgba(25, 144, 255, 0.15);
+    --color-tab-text: #333333;
+    --color-tab-active-text: #1990ff;
+    --shadow-panel: 0 4px 10px 0 rgba(74, 117, 141, 0.25);
+  }
+}
+
+// 浅色主题变量
+.theme-light() {
+  :root {
+    --color-primary: #3677f8;
+    --color-bg: #f5f7fa;
+    --color-text-base: #333333;
+    --font-size-base: 14px;
+    --border-radius-base: 4px;
+    --color-panel-bg: #edf4fb;
+    --color-title-gradient-start: #1990ff;
+    --color-title-gradient-end: #5a7eff;
+    --color-value-gradient-start: #e1f0ff;
+    --color-value-gradient-end: #00ccff;
+    --color-text-secondary: #333333;
+    --color-card-bg: rgba(255, 255, 255, 0.6);
+    --color-active-bg: linear-gradient(270deg, #318aff 0%, #70bfff 100%);
+    --color-default-bg: linear-gradient(270deg, #85baff 0%, #bfe2ff 100%);
+    --color-tab-active-bg: rgba(25, 144, 255, 0.15);
+    --color-tab-text: #333333;
+    --color-tab-active-text: #1990ff;
+    --shadow-panel: 0 4px 10px 0 rgba(74, 117, 141, 0.25);
+  }
+}
+
+// 通用 mixin
+.common() {
+  .flex-row() {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+  }
+  .flex-col() {
+    display: flex;
+    flex-direction: column;
+  }
+  .text-gradient(@start, @end) {
+    background: linear-gradient(90deg, @start, @end);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+}
+
+// 默认使用深色主题
+.theme-dark();
+// 调用通用 mixin
+.common();

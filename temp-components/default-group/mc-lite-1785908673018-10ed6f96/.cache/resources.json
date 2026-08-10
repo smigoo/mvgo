@@ -1,0 +1,236 @@
+{
+  "componentId": "mc-lite-1785908673018-10ed6f96",
+  "fileKey": "1t7Dmmpsl5i0PC8BJt2QLf",
+  "nodeId": "2:7879",
+  "upgradedAt": "2026-08-05T08:48:11.100Z",
+  "totalAssets": 6,
+  "assets": [
+    {
+      "name": "bg",
+      "ref": "2:7880",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/default-group/mc-lite-1785908673018-10ed6f96/.cache/resources/bg-7880.png",
+      "downloadStatus": "success",
+      "type": "bg"
+    },
+    {
+      "name": "g",
+      "ref": "2:7883",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/default-group/mc-lite-1785908673018-10ed6f96/.cache/resources/g-7883.png",
+      "downloadStatus": "success",
+      "type": "image"
+    },
+    {
+      "name": "bg",
+      "ref": "2:7890",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/default-group/mc-lite-1785908673018-10ed6f96/.cache/resources/bg-7890.png",
+      "downloadStatus": "success",
+      "type": "bg"
+    },
+    {
+      "name": "bg-tab-active",
+      "ref": "2:7891",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/default-group/mc-lite-1785908673018-10ed6f96/.cache/resources/bg-tab-active-7891.png",
+      "downloadStatus": "success",
+      "type": "bg"
+    },
+    {
+      "name": "tabs-icon",
+      "ref": "89:43",
+      "localPath": "/Users/smigoo/工作/mvgo/temp-components/default-group/mc-lite-1785908673018-10ed6f96/.cache/resources/tabs-icon-43.png",
+      "downloadStatus": "success",
+      "type": "icon"
+    },
+    {
+      "name": "bg",
+      "ref": "2:7950",
+      "localPath": null,
+      "downloadStatus": "css",
+      "type": "image",
+      "cssValue": "#f53f3f"
+    }
+  ],
+  "mapping": [
+    {
+      "figmaNodeId": "2:7880",
+      "resourceFile": "../resources/images/bg-7880.png",
+      "targetDomSelector": ".bg-container",
+      "downloadStatus": "success",
+      "role": "bg",
+      "recommendedUsage": "backgroundStyle"
+    },
+    {
+      "figmaNodeId": "2:7883",
+      "resourceFile": "../resources/images/g-7883.png",
+      "targetDomSelector": ".g-container",
+      "downloadStatus": "success",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:7884",
+      "resourceFile": null,
+      "targetDomSelector": ".circle-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:7885",
+      "resourceFile": null,
+      "targetDomSelector": ".circle-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:7886",
+      "resourceFile": null,
+      "targetDomSelector": ".path-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:7890",
+      "resourceFile": "../resources/images/bg-7890.png",
+      "targetDomSelector": ".bg-container",
+      "downloadStatus": "success",
+      "role": "bg",
+      "recommendedUsage": "backgroundStyle"
+    },
+    {
+      "figmaNodeId": "2:7891",
+      "resourceFile": "../resources/images/bg-tab-active-7891.png",
+      "targetDomSelector": ".tab-active-container",
+      "downloadStatus": "success",
+      "role": "bg",
+      "recommendedUsage": "backgroundBlock"
+    },
+    {
+      "figmaNodeId": "89:43",
+      "resourceFile": "../resources/images/tabs-icon-43.png",
+      "targetDomSelector": ".tabs-icon-container",
+      "downloadStatus": "success",
+      "role": "icon",
+      "recommendedUsage": "decorativeBlock"
+    },
+    {
+      "figmaNodeId": "2:7941",
+      "resourceFile": null,
+      "targetDomSelector": ".icon-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:7943",
+      "resourceFile": null,
+      "targetDomSelector": "._filled-1-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:7944",
+      "resourceFile": null,
+      "targetDomSelector": ".vector-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:7945",
+      "resourceFile": null,
+      "targetDomSelector": ".icon-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:7947",
+      "resourceFile": null,
+      "targetDomSelector": ".--2-1-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:7948",
+      "resourceFile": null,
+      "targetDomSelector": ".vector-container",
+      "downloadStatus": "missing",
+      "role": "icon",
+      "recommendedUsage": "imgSrc"
+    },
+    {
+      "figmaNodeId": "2:7950",
+      "resourceFile": null,
+      "targetDomSelector": ".bg-container",
+      "downloadStatus": "css",
+      "role": "bg",
+      "recommendedUsage": "backgroundBlock"
+    }
+  ],
+  "placementReport": {
+    "placements": [
+      {
+        "figmaNodeId": "2:7880",
+        "resourceFile": "bg-7880.png",
+        "type": "bg",
+        "targetElement": "整个组件容器作为整体背景",
+        "targetSelector": ".mc-container",
+        "usage": "backgroundImage",
+        "codeSuggestion": "style=\"background-image: url('bg-7880.png'); background-size: cover;\"",
+        "confidence": "high",
+        "reason": "Figma 路径为 cp-环境监测/bg，尺寸 420x186 符合整体容器背景比例，应作为 .mc-container 的背景图"
+      },
+      {
+        "figmaNodeId": "2:7883",
+        "resourceFile": "g-7883.png",
+        "type": "icon",
+        "targetElement": "标题区的小图标装饰（标题旁边的图标）",
+        "targetSelector": ".header-section",
+        "usage": "imgSrc",
+        "codeSuggestion": "<img src=\"g-7883.png\" class=\"header-icon\" width=\"8\" height=\"8\" />",
+        "confidence": "medium",
+        "reason": "Figma 路径为 header/g，尺寸 8x8 为小图标，应放在标题区 .header-section 内作为装饰图标，但模板中无明确对应元素，需新增"
+      },
+      {
+        "figmaNodeId": "2:7890",
+        "resourceFile": "bg-7890.png",
+        "type": "bg",
+        "targetElement": "Tab 导航容器背景",
+        "targetSelector": ".tab-container",
+        "usage": "backgroundImage",
+        "codeSuggestion": "style=\"background-image: url('bg-7890.png'); background-size: cover;\"",
+        "confidence": "high",
+        "reason": "Figma 路径为 tabs-list/bg，尺寸约 295x27，与 .tab-container 的横向标签栏形状吻合，作为标签栏背景"
+      },
+      {
+        "figmaNodeId": "2:7891",
+        "resourceFile": "bg-tab-active-7891.png",
+        "type": "bg",
+        "targetElement": "当前激活的 Tab 项背景",
+        "targetSelector": ".tab-item.active",
+        "usage": "backgroundImage",
+        "codeSuggestion": "style=\"background-image: url('bg-tab-active-7891.png'); background-size: cover;\"",
+        "confidence": "high",
+        "reason": "Figma 路径为 tabs-list/bg-tab-active，尺寸约 78x21，与单个 tab-item 尺寸匹配，用于激活态 tab 的背景"
+      },
+      {
+        "figmaNodeId": "89:43",
+        "resourceFile": "tabs-icon-43.png",
+        "type": "icon",
+        "targetElement": "导航操作区的装饰图标（图表/列表按钮旁的装饰）",
+        "targetSelector": ".action-buttons",
+        "usage": "imgSrc",
+        "codeSuggestion": "<img src=\"tabs-icon-43.png\" class=\"tabs-icon\" width=\"52\" height=\"24\" />",
+        "confidence": "medium",
+        "reason": "Figma 路径为 tabs-icon，尺寸 52x24，属于导航操作区的装饰性图标，模板中 .action-buttons 区域可放置此图标"
+      }
+    ],
+    "summary": "本组件共 5 个有效素材需定位：整体容器背景、标题区小图标、Tab 栏背景、激活 Tab 背景、导航区装饰图标。其中 3 个背景类素材分别对应 .mc-container、.tab-container、.tab-item.active，2 个图标类素材需新增元素放置于标题区和操作按钮区。",
+    "analyzedAt": "2026-08-05T08:48:11.100Z",
+    "model": "qwen3.7-plus"
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "componentId": "mc-max-1786083023664-e8a5abac",
+  "componentName": "cp-流量监测",
+  "version": "v1.0.0",
+  "attribute": {
+    "aspectRatio": [
+      10,
+      3
+    ]
+  },
+  "businessEvents": {
+    "mc-max-1786083023664-e8a5abac-onload": {
+      "eventId": "mc-max-1786083023664-e8a5abac-onload",
+      "eventName": "组件加载",
+      "eventDataSchema": {}
+    }
+  },
+  "businessStatuses": {},
+  "dataSources": [],
+  "formSources": [],
+  "layoutConfig": {
+    "default": "one",
+    "list": [
+      {
+        "name": "默认布局",
+        "key": "one",
+        "previewName": "mc-preview.png"
+      }
+    ]
+  },
+  "themeConfig": {
+    "default": "dark",
+    "list": [
+      {
+        "name": "深色主题",
+        "key": "dark"
+      },
+      {
+        "name": "亮色主题",
+        "key": "light"
+      }
+    ]
+  },
+  "cssVariableConfig": [],
+  "businessConfig": []
+}

@@ -1,0 +1,62 @@
+{
+  "stage": "codegen_done",
+  "brief": {
+    "layout": "垂直布局，内容位于页面顶部，左对齐。",
+    "regions": [
+      {
+        "name": "统计卡片容器",
+        "description": "包含标题和图表占位区的深色卡片",
+        "position": "top",
+        "size": "宽度约占页面90%以上，高度固定"
+      },
+      {
+        "name": "标题区域",
+        "description": "显示'告警类型统计'文本",
+        "position": "top",
+        "size": "高度较小，宽度占满容器"
+      },
+      {
+        "name": "图表占位区域",
+        "description": "显示'[ECharts 柱状图]'文本的深色区域",
+        "position": "center",
+        "size": "占据容器剩余大部分高度"
+      }
+    ],
+    "spacing": {
+      "outer": "卡片容器距离页面边缘有一定边距",
+      "gap": "标题与下方图表区域之间有较小间距",
+      "padding": "卡片容器内部有内边距，图表占位区域内部也有内边距"
+    },
+    "colors": {
+      "primary": "#00d2ff",
+      "background": "#0d1117",
+      "surface": "#162436",
+      "text": "#8b949e",
+      "border": "#21364d"
+    },
+    "typography": {
+      "size": "12px-14px",
+      "weight": "normal",
+      "lineHeight": "1.5"
+    },
+    "components": [
+      "文本",
+      "卡片容器"
+    ],
+    "textContent": [
+      "告警类型统计",
+      "[ECharts 柱状图]"
+    ],
+    "visualDetails": [
+      "卡片容器有圆角和细边框",
+      "图表占位区域有较深的背景色和圆角"
+    ],
+    "interactions": []
+  },
+  "width": 1440,
+  "height": 900,
+  "sourceType": "html",
+  "componentType": "vue3",
+  "generationTier": "lite",
+  "vueCode": "<template>\n  <div class=\"page-container\">\n    <div class=\"stat-card\">\n      <div class=\"card-header\">\n        <span class=\"title-text\">告警类型统计</span>\n      </div>\n      <div class=\"chart-area\">\n        <span class=\"placeholder-text\">[ECharts 柱状图]</span>\n      </div>\n    </div>\n  </div>\n</template>\n\n<script setup>\n</script>\n\n<style scoped>\n.page-container {\n  background-color: #0d1117;\n  min-height: 100vh;\n  padding: 20px;\n  box-sizing: border-box;\n  display: flex;\n  flex-direction: column;\n  align-items: flex-start;\n}\n\n.stat-card {\n  background-color: #162436;\n  border: 1px solid #21364d;\n  border-radius: 4px;\n  width: 95%;\n  max-width: 1200px;\n  padding: 15px;\n  box-sizing: border-box;\n}\n\n.card-header {\n  border-bottom: 1px solid #21364d;\n  padding-bottom: 10px;\n  margin-bottom: 15px;\n}\n\n.title-text {\n  color: #00d2ff;\n  font-size: 14px;\n  font-weight: normal;\n  line-height: 1.5;\n}\n\n.chart-area {\n  background-color: #112030; /* 比卡片背景稍深 */\n  border: 1px solid #1c2e42;\n  border-radius: 2px;\n  height: 200px;\n  display: flex;\n  justify-content: center;\n  align-items: center;\n}\n\n.placeholder-text {\n  color: #8b949e;\n  font-size: 14px;\n  font-weight: normal;\n  line-height: 1.5;\n}\n</style>"
+}

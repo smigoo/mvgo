@@ -1,0 +1,224 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 82,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].body.items[*].style",
+        "message": "卡片的背景色（rgba(200, 220, 240, 0.3)）、圆角（8px）等样式在 notes 中明确标注为‘推测’，严重违反‘证据优先’和‘禁止默认卡片化’的核心规范。",
+        "suggestion": "严格遵循‘证据优先’原则，移除所有基于推测的卡片装饰样式。除非 Figma 节点数据中有明确的 fills 和 cornerRadius 证据，否则默认不添加任何背景、圆角和阴影。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[1].body.items[*].children",
+        "message": "卡片内部使用 `row` 和 `value-row` 进行二次包裹，导致 DOM 嵌套层级达到 5-6 层，存在冗余嵌套，不利于后续样式维护和渲染性能。",
+        "suggestion": "在代码生成阶段扁平化卡片内部结构，移除不必要的 `row` 包裹层，直接在卡片容器上使用 flex 布局（如 `justify-content: space-between` 或 `align-items: center`）实现图标、文字和数值的对齐。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "notes",
+        "message": "notes 中提到‘图标资源下载失败，使用资源清单中的icon-8049/8036/8070作为替代映射’，这可能导致最终 UI 图标显示与设计稿不符。",
+        "suggestion": "在代码生成前重新检查并修复图标资源的下载流程，确保资源路径正确且可访问。若确实无法获取，需在代码中使用明确的占位符并添加注释说明，避免静默失败。"
+      }
+    ],
+    "recommendations": [
+      "严格遵循‘证据优先’原则，清理布局 JSON 中所有基于‘推测’的装饰性样式（如 background、borderRadius、padding），保持零装饰默认状态。",
+      "在代码生成时优化卡片 DOM 结构，减少无意义的 div 嵌套，利用 CSS Flexbox 直接控制子元素对齐，提升渲染性能。",
+      "确保 Tab 切换组件在代码实现时，不仅切换激活态样式，还需通过 `watch` 监听 `activeTab` 变化，并联动更新下方三个统计卡片的数据（即使当前无图表，数据也需响应式变化）。",
+      "确认 `section-tabs` 的 `slotCandidate: 'header-right'` 在代码生成时正确映射到 `<base-panel>` 的 header 右侧插槽，避免生成额外的 header 容器导致与 base-panel 默认标题冲突。"
+    ],
+    "summary": "布局结构整体合理，正确识别了 base-panel 的 header-right 插槽用于放置 Tab，且区域划分（Tab区与统计区）清晰。主要问题在于部分卡片样式基于‘推测’而非 Figma 确切证据，违反了‘证据优先’和‘禁止默认卡片化’的核心规范。此外，卡片内部嵌套略深，建议在代码生成阶段进行扁平化优化以提升性能和可维护性。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorBg": "#EDF4FB",
+      "--colorPrimary": "#1990FF",
+      "--colorTextBase": "#333333",
+      "--colorTextSecondary": "#6680A0",
+      "--colorDanger": "#FF4D4F",
+      "--colorWarning": "#FA8C16",
+      "--fontSize": "14px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-bg": "#EDF4FB",
+      "@color-primary": "#1990FF",
+      "@color-text-base": "#333333",
+      "@color-text-secondary": "#6680A0",
+      "@color-danger": "#FF4D4F",
+      "@color-warning": "#FA8C16",
+      "@font-size-base": "14px",
+      "@border-radius-base": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "16px",
+        "background": "var(--colorBg)",
+        "border-radius": "var(--borderRadius)",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)"
+      },
+      ".header": {
+        "display": "flex",
+        "justify-content": "space-between",
+        "align-items": "center",
+        "margin-bottom": "16px",
+        "color": "var(--colorTextBase)"
+      },
+      ".icon-diamond": {
+        "width": "24px",
+        "height": "24px",
+        "background-color": "var(--colorPrimary)",
+        "transform": "rotate(45deg)",
+        "border-radius": "4px"
+      },
+      ".stat-value": {
+        "font-size": "2em",
+        "font-weight": "bold",
+        "line-height": "1.2"
+      },
+      ".stat-value--primary": {
+        "color": "var(--colorPrimary)"
+      },
+      ".stat-value--danger": {
+        "color": "var(--colorDanger)"
+      },
+      ".stat-value--warning": {
+        "color": "var(--colorWarning)"
+      },
+      ".text-secondary": {
+        "color": "var(--colorTextSecondary)",
+        "font-size": "0.85em"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "背景色 rgba(237,244,251,1) 映射为 --colorBg，呈现浅色科技监测风底色",
+      "主色调蓝色 rgba(25,144,255,1) 映射为 --colorPrimary，用于菱形图标及主要数据展示",
+      "辅助灰蓝色 rgba(102,128,160,1) 映射为 --colorTextSecondary，用于次要文本和标签",
+      "强调色红色 rgba(255,77,79,1) 和橙色 rgba(250,140,22,1) 分别映射为 --colorDanger 和 --colorWarning，用于大号彩色数值强调",
+      "大号彩色数值通过 .stat-value 结合修饰类（--primary/--danger/--warning）实现复用"
+    ],
+    "elementStyleMap": {
+      "section-tabs": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-today-stats": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-hazmat-row-x-0-icon-x-0": {
+        "object-fit": "contain"
+      },
+      "card-hazmat-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "card-hazmat-value-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-hazmat": {
+        "background": "rgba(200, 220, 240, 0.3)",
+        "border-radius": "8px",
+        "padding": "12px",
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-6-icon-x-0": {
+        "object-fit": "contain"
+      },
+      "el-row-x-6": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-icon-x-7": {
+        "object-fit": "contain"
+      },
+      "el-value-row-x-9": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-heavy-row-x-0-icon-x-0": {
+        "object-fit": "contain"
+      },
+      "card-heavy-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "card-heavy-value-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-heavy": {
+        "background": "rgba(200, 220, 240, 0.3)",
+        "border-radius": "8px",
+        "padding": "12px",
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-13-icon-x-0": {
+        "object-fit": "contain"
+      },
+      "el-row-x-13": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-icon-x-14": {
+        "object-fit": "contain"
+      },
+      "el-value-row-x-16": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-oversize-row-x-0-icon-x-0": {
+        "object-fit": "contain"
+      },
+      "card-oversize-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "card-oversize-value-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-oversize": {
+        "background": "rgba(200, 220, 240, 0.3)",
+        "border-radius": "8px",
+        "padding": "12px",
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-20-icon-x-0": {
+        "object-fit": "contain"
+      },
+      "el-row-x-20": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-icon-x-21": {
+        "object-fit": "contain"
+      },
+      "el-value-row-x-23": {
+        "display": "flex",
+        "flex-direction": "row"
+      }
+    }
+  }
+}

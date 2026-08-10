@@ -1,0 +1,44 @@
+{
+  "imageVerified": true,
+  "layoutStructure": {
+    "generatedAt": "2026-08-05T12:32:53.775Z",
+    "stage": "preview-analysis",
+    "degraded": true,
+    "degradeReason": "The \"path\" argument must be of type string or an instance of Buffer or URL. Received null",
+    "layout": {
+      "type": "vertical",
+      "direction": "top-to-bottom",
+      "sections": []
+    },
+    "styles": {
+      "theme": "未知",
+      "colors": [],
+      "background": "",
+      "decorations": [],
+      "emphasis": [],
+      "backgroundBrightness": "dark"
+    },
+    "interactions": [],
+    "charts": []
+  },
+  "visualElements": {
+    "theme": "未知",
+    "colors": [],
+    "background": "",
+    "decorations": [],
+    "emphasis": [],
+    "backgroundBrightness": "dark"
+  },
+  "_visualElementList": [],
+  "interactions": [],
+  "charts": [],
+  "chartDataHints": [],
+  "headerSlots": [],
+  "analysisType": "",
+  "analysisTarget": "",
+  "analysisDescription": "",
+  "analysisEvidence": [],
+  "analysisFile": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-max-1785931427277-447daf34/.mc-gen/config/preview-analysis.json",
+  "_cachedAt": 1785933173775,
+  "_cacheKey": "vision_1t7Dmmpsl5i0PC8BJt2QLf_2:7879"
+}

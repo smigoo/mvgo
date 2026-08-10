@@ -1,0 +1,716 @@
+{
+  "layoutStructure": {
+    "generatedAt": "2026-04-27T10:19:15.595Z",
+    "stage": "preview-analysis",
+    "componentName": "养护管理",
+    "componentTitle": "养护管理",
+    "analysisModel": "gpt-5.4",
+    "sourceImage": {
+      "path": "{outputPath}/c-lljc/resources/images/mc-preview.png",
+      "size": 709937,
+      "mtimeMs": 1777285034334,
+      "sha1": "4ef988ae2dbf004f8a071940c71e9b64e4a43dd7"
+    },
+    "summary": "包含顶部Tab切换（今日/本月/本年）、巡检统计（应巡/已巡/完成率/病害数）、施工统计（计划/完成/占道详情）",
+    "layout": {
+      "type": "vertical-stack",
+      "direction": "vertical",
+      "sections": [
+        {
+          "id": "section-tabs",
+          "name": "顶部Tab切换",
+          "role": "tabs",
+          "headerRelation": "title-same-row",
+          "slotCandidate": "header-right",
+          "children": [
+            {
+              "role": "tab",
+              "name": "今日",
+              "active": true
+            },
+            {
+              "role": "tab",
+              "name": "本月",
+              "active": false
+            },
+            {
+              "role": "tab",
+              "name": "本年",
+              "active": false
+            }
+          ]
+        },
+        {
+          "id": "section-inspection",
+          "name": "巡检统计",
+          "role": "常驻",
+          "layout": "vertical",
+          "headerRelation": "content-below-title",
+          "header": {
+            "title": "巡检统计",
+            "controls": []
+          },
+          "body": {
+            "layout": "vertical",
+            "bgPlaceholder": "body-bg-inspection",
+            "children": [
+              {
+                "id": "inspection-row-1",
+                "name": "巡检数据行",
+                "role": "data-row",
+                "layout": "horizontal-3-columns",
+                "children": [
+                  {
+                    "id": "stat-should-patrol",
+                    "name": "应巡",
+                    "role": "stat-item",
+                    "layout": "horizontal",
+                    "icon": {
+                      "placeholder": "icon-truck-yellow",
+                      "position": "left",
+                      "resourceFile": "../resources/images/img-27822.png",
+                      "recommendedUsage": "imgSrc",
+                      "width": 40,
+                      "height": 30
+                    },
+                    "content": {
+                      "layout": "vertical",
+                      "elements": [
+                        {
+                          "type": "label",
+                          "text": "应巡",
+                          "styles": {
+                            "fontSize": 14,
+                            "color": "rgba(255,255,255,0.7)"
+                          }
+                        },
+                        {
+                          "type": "value",
+                          "parts": [
+                            {
+                              "text": "7940.84",
+                              "type": "number",
+                              "styles": {
+                                "fontSize": 24,
+                                "color": "#ffffff",
+                                "fontWeight": "bold"
+                              }
+                            },
+                            {
+                              "text": "km",
+                              "type": "unit",
+                              "styles": {
+                                "fontSize": 12,
+                                "color": "rgba(255,255,255,0.7)"
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "stat-actual-patrol",
+                    "name": "已巡",
+                    "role": "stat-item",
+                    "layout": "vertical",
+                    "content": {
+                      "layout": "vertical",
+                      "elements": [
+                        {
+                          "type": "label",
+                          "text": "已巡",
+                          "styles": {
+                            "fontSize": 14,
+                            "color": "rgba(255,255,255,0.7)"
+                          }
+                        },
+                        {
+                          "type": "value",
+                          "parts": [
+                            {
+                              "text": "7940.84",
+                              "type": "number",
+                              "styles": {
+                                "fontSize": 28,
+                                "color": "#18ffce",
+                                "fontWeight": "bold"
+                              }
+                            },
+                            {
+                              "text": "km",
+                              "type": "unit",
+                              "styles": {
+                                "fontSize": 14,
+                                "color": "#18ffce"
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "stat-completion-rate",
+                    "name": "完成率",
+                    "role": "stat-item",
+                    "layout": "vertical",
+                    "content": {
+                      "layout": "vertical",
+                      "elements": [
+                        {
+                          "type": "label",
+                          "text": "完成率",
+                          "styles": {
+                            "fontSize": 14,
+                            "color": "rgba(255,255,255,0.7)"
+                          }
+                        },
+                        {
+                          "type": "value",
+                          "parts": [
+                            {
+                              "text": "90.3",
+                              "type": "number",
+                              "styles": {
+                                "fontSize": 28,
+                                "color": "#ffffff",
+                                "fontWeight": "bold"
+                              }
+                            },
+                            {
+                              "text": "%",
+                              "type": "unit",
+                              "styles": {
+                                "fontSize": 14,
+                                "color": "rgba(255,255,255,0.7)"
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "decoration-progress-bar",
+                "name": "进度条装饰",
+                "role": "decoration",
+                "type": "bar",
+                "styles": {
+                  "background": "linear-gradient(90deg, #18ffce 0%, rgba(24,255,206,0.1) 100%)",
+                  "height": "8px",
+                  "borderRadius": "4px",
+                  "width": "100%"
+                }
+              },
+              {
+                "id": "stat-disease-count",
+                "name": "累计病害数",
+                "role": "stat-item",
+                "layout": "horizontal",
+                "alignItems": "center",
+                "justifyContent": "center",
+                "content": {
+                  "layout": "horizontal",
+                  "elements": [
+                    {
+                      "type": "label",
+                      "text": "累计病害数",
+                      "styles": {
+                        "fontSize": 14,
+                        "color": "rgba(255,255,255,0.8)"
+                      }
+                    },
+                    {
+                      "type": "value",
+                      "parts": [
+                        {
+                          "text": "6",
+                          "type": "number",
+                          "styles": {
+                            "fontSize": 24,
+                            "color": "#ff4d4f",
+                            "fontWeight": "bold"
+                          }
+                        },
+                        {
+                          "text": "起",
+                          "type": "unit",
+                          "styles": {
+                            "fontSize": 14,
+                            "color": "rgba(255,255,255,0.8)"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            ],
+            "backgroundImage": {
+              "src": "../resources/images/bg-27682.png",
+              "recommendedUsage": "backgroundStyle"
+            },
+            "backgroundSize": "cover",
+            "backgroundPosition": "center",
+            "backgroundRepeat": "no-repeat"
+          }
+        },
+        {
+          "id": "section-construction",
+          "name": "施工统计",
+          "role": "常驻",
+          "layout": "vertical",
+          "headerRelation": "content-below-title",
+          "header": {
+            "title": "施工统计",
+            "controls": []
+          },
+          "body": {
+            "layout": "horizontal",
+            "bgPlaceholder": "body-bg-construction",
+            "children": [
+              {
+                "id": "construction-status-cards",
+                "name": "施工状态卡片",
+                "role": "card-group",
+                "layout": "horizontal-2-columns",
+                "children": [
+                  {
+                    "id": "card-planned",
+                    "name": "计划施工",
+                    "role": "stat-card",
+                    "layout": "vertical",
+                    "alignItems": "center",
+                    "bgPlaceholder": "card-bg-dark",
+                    "icon": {
+                      "placeholder": "icon-worker",
+                      "resourceFile": "../resources/images/img-27822.png",
+                      "recommendedUsage": "imgSrc",
+                      "width": 40,
+                      "height": 40
+                    },
+                    "content": {
+                      "layout": "vertical",
+                      "elements": [
+                        {
+                          "type": "label",
+                          "text": "计划施工",
+                          "styles": {
+                            "fontSize": 14,
+                            "color": "rgba(255,255,255,0.8)"
+                          }
+                        },
+                        {
+                          "type": "value",
+                          "parts": [
+                            {
+                              "text": "5",
+                              "type": "number",
+                              "styles": {
+                                "fontSize": 24,
+                                "color": "#faad14",
+                                "fontWeight": "bold"
+                              }
+                            },
+                            {
+                              "text": "处",
+                              "type": "unit",
+                              "styles": {
+                                "fontSize": 12,
+                                "color": "rgba(255,255,255,0.6)"
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "card-completed",
+                    "name": "已完成",
+                    "role": "stat-card",
+                    "layout": "vertical",
+                    "alignItems": "center",
+                    "bgPlaceholder": "card-bg-dark",
+                    "icon": {
+                      "placeholder": "icon-check",
+                      "resourceFile": "../resources/images/img-27837.png",
+                      "recommendedUsage": "imgSrc",
+                      "width": 40,
+                      "height": 40
+                    },
+                    "content": {
+                      "layout": "vertical",
+                      "elements": [
+                        {
+                          "type": "label",
+                          "text": "已完成",
+                          "styles": {
+                            "fontSize": 14,
+                            "color": "rgba(255,255,255,0.8)"
+                          }
+                        },
+                        {
+                          "type": "value",
+                          "parts": [
+                            {
+                              "text": "5",
+                              "type": "number",
+                              "styles": {
+                                "fontSize": 24,
+                                "color": "#52c41a",
+                                "fontWeight": "bold"
+                              }
+                            },
+                            {
+                              "text": "处",
+                              "type": "unit",
+                              "styles": {
+                                "fontSize": 12,
+                                "color": "rgba(255,255,255,0.6)"
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "construction-details-list",
+                "name": "占道详情列表",
+                "role": "data-list",
+                "layout": "vertical",
+                "children": [
+                  {
+                    "id": "detail-count",
+                    "name": "合计占道次数",
+                    "role": "data-row",
+                    "layout": "horizontal",
+                    "justifyContent": "space-between",
+                    "bgPlaceholder": "row-bg-dark",
+                    "content": {
+                      "layout": "horizontal",
+                      "elements": [
+                        {
+                          "type": "label",
+                          "text": "合计占道次数",
+                          "styles": {
+                            "fontSize": 14,
+                            "color": "rgba(255,255,255,0.8)"
+                          }
+                        },
+                        {
+                          "type": "value",
+                          "parts": [
+                            {
+                              "text": "8",
+                              "type": "number",
+                              "styles": {
+                                "fontSize": 18,
+                                "color": "#ffffff",
+                                "fontWeight": "bold"
+                              }
+                            },
+                            {
+                              "text": "次",
+                              "type": "unit",
+                              "styles": {
+                                "fontSize": 12,
+                                "color": "rgba(255,255,255,0.6)"
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "detail-duration",
+                    "name": "合计占道时长",
+                    "role": "data-row",
+                    "layout": "horizontal",
+                    "justifyContent": "space-between",
+                    "bgPlaceholder": "row-bg-dark",
+                    "content": {
+                      "layout": "horizontal",
+                      "elements": [
+                        {
+                          "type": "label",
+                          "text": "合计占道时长",
+                          "styles": {
+                            "fontSize": 14,
+                            "color": "rgba(255,255,255,0.8)"
+                          }
+                        },
+                        {
+                          "type": "value",
+                          "parts": [
+                            {
+                              "text": "1.5",
+                              "type": "number",
+                              "styles": {
+                                "fontSize": 18,
+                                "color": "#ffffff",
+                                "fontWeight": "bold"
+                              }
+                            },
+                            {
+                              "text": "h",
+                              "type": "unit",
+                              "styles": {
+                                "fontSize": 12,
+                                "color": "rgba(255,255,255,0.6)"
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "detail-distance",
+                    "name": "合计占道里程",
+                    "role": "data-row",
+                    "layout": "horizontal",
+                    "justifyContent": "space-between",
+                    "bgPlaceholder": "row-bg-dark",
+                    "content": {
+                      "layout": "horizontal",
+                      "elements": [
+                        {
+                          "type": "label",
+                          "text": "合计占道里程",
+                          "styles": {
+                            "fontSize": 14,
+                            "color": "rgba(255,255,255,0.8)"
+                          }
+                        },
+                        {
+                          "type": "value",
+                          "parts": [
+                            {
+                              "text": "0.8",
+                              "type": "number",
+                              "styles": {
+                                "fontSize": 18,
+                                "color": "#ffffff",
+                                "fontWeight": "bold"
+                              }
+                            },
+                            {
+                              "text": "km",
+                              "type": "unit",
+                              "styles": {
+                                "fontSize": 12,
+                                "color": "rgba(255,255,255,0.6)"
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ],
+            "backgroundImage": {
+              "src": "../resources/images/bg-27682.png",
+              "recommendedUsage": "backgroundStyle"
+            },
+            "backgroundSize": "cover",
+            "backgroundPosition": "center",
+            "backgroundRepeat": "no-repeat"
+          }
+        }
+      ]
+    },
+    "styles": {
+      "theme": "深色科技养护风",
+      "backgroundBrightness": "dark",
+      "colors": [
+        "#18ffce",
+        "#ffffff",
+        "#faad14",
+        "#52c41a",
+        "#ff4d4f",
+        "rgba(255,255,255,0.8)"
+      ],
+      "background": "深青色/黑色渐变背景",
+      "decorations": [
+        "顶部标题左侧青色短竖线装饰",
+        "巡检统计下方的青色进度条",
+        "数据行背景的深色圆角矩形"
+      ],
+      "emphasis": [
+        "已巡数值青色高亮",
+        "计划施工数值黄色高亮",
+        "已完成数值绿色高亮",
+        "病害数数值红色高亮"
+      ]
+    },
+    "interactions": [
+      {
+        "target": "顶部Tab切换控件",
+        "type": "tab-switch",
+        "description": "时间范围筛选（今日/本月/本年）",
+        "defaultState": "常驻，选中'今日'",
+        "evidence": "右上角有三个并排的按钮，'今日'背景高亮"
+      }
+    ],
+    "charts": [],
+    "doNotInvent": [
+      "具体的病害类型列表",
+      "具体的施工项目名称",
+      "Tab切换后的具体数据变化（仅展示今日数据）",
+      "进度条的具体交互（仅展示静态进度）"
+    ],
+    "notes": [
+      "Figma结构中'巡检统计'和'施工统计'的con节点下载失败，部分图标使用CSS替代或通用资源映射",
+      "标题图标使用 Group_4114 资源",
+      "施工统计卡片图标使用 img-27822 (工人) 和 img-27837 (勾选) 资源"
+    ],
+    "coverageReport": {
+      "totalFigma": 102,
+      "matchedCount": 0,
+      "missingCount": 46,
+      "uncertainCount": 0,
+      "coverageRate": 0,
+      "missing": [
+        {
+          "name": "养护管理",
+          "type": "GROUP",
+          "depth": 0
+        },
+        {
+          "name": "header",
+          "type": "FRAME",
+          "depth": 1
+        },
+        {
+          "name": "小标题",
+          "type": "GROUP",
+          "depth": 2
+        },
+        {
+          "name": "Frame 2136637420",
+          "type": "FRAME",
+          "depth": 3
+        },
+        {
+          "name": "点背景",
+          "type": "FRAME",
+          "depth": 4
+        },
+        {
+          "name": "Group 4272",
+          "type": "GROUP",
+          "depth": 5
+        },
+        {
+          "name": "分割线",
+          "type": "GROUP",
+          "depth": 4
+        },
+        {
+          "name": "Group 4114",
+          "type": "GROUP",
+          "depth": 3
+        },
+        {
+          "name": "常住人口",
+          "type": "TEXT",
+          "depth": 3
+        },
+        {
+          "name": "头部插槽",
+          "type": "GROUP",
+          "depth": 2
+        },
+        {
+          "name": "tabs",
+          "type": "GROUP",
+          "depth": 3
+        },
+        {
+          "name": "Frame 2136637713",
+          "type": "FRAME",
+          "depth": 4
+        },
+        {
+          "name": "Group 27",
+          "type": "GROUP",
+          "depth": 5
+        },
+        {
+          "name": "Group 1321317757",
+          "type": "GROUP",
+          "depth": 5
+        },
+        {
+          "name": "Group 1321315223",
+          "type": "GROUP",
+          "depth": 5
+        }
+      ],
+      "uncertain": [],
+      "summary": "需关注"
+    }
+  },
+  "visualElements": {
+    "theme": "深色科技养护风",
+    "backgroundBrightness": "dark",
+    "colors": [
+      "#18ffce",
+      "#ffffff",
+      "#faad14",
+      "#52c41a",
+      "#ff4d4f",
+      "rgba(255,255,255,0.8)"
+    ],
+    "background": "深青色/黑色渐变背景",
+    "decorations": [
+      "顶部标题左侧青色短竖线装饰",
+      "巡检统计下方的青色进度条",
+      "数据行背景的深色圆角矩形"
+    ],
+    "emphasis": [
+      "已巡数值青色高亮",
+      "计划施工数值黄色高亮",
+      "已完成数值绿色高亮",
+      "病害数数值红色高亮"
+    ]
+  },
+  "interactions": [
+    {
+      "target": "顶部Tab切换控件",
+      "type": "tab-switch",
+      "description": "时间范围筛选（今日/本月/本年）",
+      "defaultState": "常驻，选中'今日'",
+      "evidence": "右上角有三个并排的按钮，'今日'背景高亮"
+    }
+  ],
+  "charts": [],
+  "headerSlots": [],
+  "analysisType": "",
+  "analysisTarget": "",
+  "analysisDescription": "",
+  "analysisEvidence": [],
+  "headerValidation": {
+    "passed": true,
+    "headerElements": [],
+    "headerRightElements": [],
+    "suggestions": [],
+    "confidence": "low",
+    "componentType": "microcode"
+  },
+  "headerSlotValidation": {
+    "validatedSlots": [],
+    "rejectedNodes": [],
+    "warnings": []
+  }
+}

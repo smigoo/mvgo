@@ -1,0 +1,1625 @@
+
+
+---
+
+<!-- module: complete-example -->
+# 完整示例模块
+
+## 🔴 Few-shot 正例（**完全按此结构输出**）
+
+```json
+{
+  "componentName": "重点车辆统计",
+  "componentType": "statistics",
+  "summary": "深色面板，左右双环形图，左为客车统计，右为货车统计",
+  "layout": {
+    "type": "grid",
+    "direction": "horizontal",
+    "sections": [
+      {
+        "id": "passenger-vehicle-section",
+        "name": "客车统计",
+        "role": "chart",
+        "layout": "vertical",
+        "layoutDirection": "vertical",
+        "widthRatio": 0.5,
+        "heightRatio": 1.0,
+        "headerRelation": "content-below-title",
+        "children": []
+      },
+      {
+        "id": "cargo-vehicle-section",
+        "name": "货车统计",
+        "role": "chart",
+        "layout": "vertical",
+        "layoutDirection": "vertical",
+        "widthRatio": 0.5,
+        "heightRatio": 1.0,
+        "headerRelation": "content-below-title",
+        "children": []
+      }
+    ]
+  },
+  "styles": {
+    "theme": "dark",
+    "background": "#0a1a2e",
+    "backgroundBrightness": "dark",
+    "textColor": "light",
+    "colors": ["#00d4ff", "#ff6b6b", "#ffd93d"],
+    "decorations": [],
+    "emphasis": []
+  },
+  "charts": [
+    {
+      "section": "passenger-vehicle-section",
+      "type": "pie",
+      "series": ["大型客车", "中型客车", "小型客车"],
+      "seriesColors": ["#00d4ff", "#33e6ff", "#66f2ff"],
+      "legend": ["大型客车", "中型客车", "小型客车"],
+      "legendPosition": "right",
+      "legendType": "vertical",
+      "tooltip": "hover-trigger",
+      "notes": ["环形图（ring/donut 在项目中归类为 pie，按 pie 处理）"]
+    },
+    {
+      "section": "cargo-vehicle-section",
+      "type": "pie",
+      "series": ["危化品车", "重型货车", "普通货车"],
+      "seriesColors": ["#ff6b6b", "#ffd93d", "#a78bfa"],
+      "legend": ["危化品车", "重型货车", "普通货车"],
+      "legendPosition": "right",
+      "legendType": "vertical",
+      "tooltip": "hover-trigger",
+      "notes": []
+    }
+  ],
+  "interactions": [],
+  "doNotInvent": [
+    "客车/货车 series 系列名需从预览图图例真实抄取"
+  ],
+  "notes": ["深色统计面板，双环形图"],
+  "imageEvidence": {
+    "dominantBgColor": "#0a1a2e",
+    "backgroundImage": "",
+    "firstVisibleText": "重点车辆统计"
+  }
+}
+```
+
+## 🔴 Few-shot 反例（**绝对禁止**）
+
+```
+# Preview Analysis Response                  ← ❌ 额外标题
+## Analysis Result                            ← ❌ 额外章节
+
+```json                                       ← ❌ Markdown 围栏
+{
+  "panelType": "statistics-dashboard",       ← ❌ 用 componentType="statistics"
+  "overallLayout": "two-column-grid",        ← ❌ 删除
+  "backgroundBrightness": "dark",            ← ❌ 应在 styles.backgroundBrightness
+  "layout": {
+    "sections": [{
+      "position": "left",                    ← ❌ 删除
+      "width": "50%"                         ← ❌ 用 widthRatio: 0.5
+    }]
+  },
+  "charts": [{
+    "type": "ring",                          ← ❌ 用 type: "pie"
+    "dataSource": "passengerVehicles"        ← ❌ 用 series: [...]
+  }],
+  "data": {...}                              ← ❌ 删除，preview 不输出数据
+}
+```
+
+---
+
+<!-- module: base -->
+# 基础规则模块
+
+## 🔴 输出格式硬约束（任意大模型必读，违反 BLOCK）
+
+**输出必须是纯 JSON，首字符必须是 `{`，最后一字符必须是 `}`。**
+
+- ❌ 禁止 Markdown ` ```json ` 围栏（即使脚本能剥离）
+- ❌ 禁止任何 `# Analysis Result` / `## Visual Elements Details` 等额外章节
+- ❌ 禁止在 JSON 前后写说明文字
+- ✅ 直接 `{` 开头到 `}` 结尾
+
+## 🔴 字段名硬约束（按项目 schema，不按通用建模习惯）
+
+**项目 schema 文件**：`preview-analysis-schema.md`（同级目录）
+
+常见跨模型字段名错误对照表（脚本会自动修复，但请尽量按右列直接写）：
+
+| ❌ 通用习惯 | ✅ 项目 schema |
+|------------|---------------|
+| `panelType` | `componentType` |
+| `overallLayout` | （删除，用 `layout.direction`） |
+| `data: {...}` | （删除，preview 阶段不输出数据） |
+| `width: "50%"` | `widthRatio: 0.5` |
+| `height: "50%"` | `heightRatio: 0.5` |
+| `position: "left"` | （删除，用 `layout.direction` + ratio） |
+| `chart.type: "ring"` | `chart.type: "pie"` |
+| `chart.type: "donut"` | `chart.type: "pie"` |
+| `chart.dataSource: "..."` | （删除，用 `chart.series: [...]`） |
+| `backgroundBrightness` 在顶层 | 写在 `styles.backgroundBrightness` |
+| `textColor` 在顶层 | 写在 `styles.textColor` |
+| `interaction.type: "tabs"` | `interaction.type: "tab"` |
+| `interaction.type: "toggle"` | `interaction.type: "switch"` |
+| `componentType: "statistics-dashboard"` | `componentType: "statistics"` |
+| `layout.direction: "row"` | `layout.direction: "horizontal"` |
+| `layout.direction: "column"` | `layout.direction: "vertical"` |
+
+## 🔴 必填字段（缺失即 BLOCK，请逐项检查）
+
+| 字段路径 | 类型 | 示例 |
+|---------|------|------|
+| `componentName` | string | `"流量监测"` |
+| `componentType` | enum | `"statistics" \| "card" \| "chart" \| "table" \| "form" \| "list" \| "modal" \| "panel" \| "mixed"` |
+| `layout.type` | string | `"vertical-stack"` / `"grid"` / `"mixed"` |
+| `layout.sections` | array | 每个 section 必须有 `name` |
+| `styles.backgroundBrightness` | enum | `"light" \| "dark"` |
+| `styles.textColor` | string | `"light"` / `"dark"` |
+| `imageEvidence.dominantBgColor` | string | `"#0a1a2e"`（合法 HEX） |
+| `imageEvidence.firstVisibleText` | string | 图中第一段可见文字（不能是组件名） |
+| `charts[*].type` | enum | `"bar" \| "line" \| "pie" \| "area" \| ...` |
+| `charts[*].section` | string | 关联的 section.id |
+| `charts[*].series` | array | **从图例真实抄取，禁默认值** |
+
+
+---
+
+<!-- module: detailed-structure-example -->
+# 详细结构示例模块
+
+### 表格结构识别规则（CRITICAL）
+
+当识别到表格组件时，必须分析以下结构特征并输出到 `layout.tableFeatures`：
+
+**1. 可选择（rowSelection）**
+- 视觉特征：表头或每行开头有复选框（☑️）或单选框（⭕）
+- 多选 → `"rowSelection": "checkbox"`
+- 单选 → `"rowSelection": "radio"`
+- 无可选框 → `"rowSelection": null`
+
+**2. 树状表格（tree）**
+- 视觉特征：行前有缩进 + 展开/折叠图标（▶/▼），表示父子级关系
+- 与嵌套表格的区别：树状是同一表格内的层级，嵌套是展开后显示另一个表格
+- 输出：`"tree": true, "treeColumn": "名称"`
+
+**3. 可展开（expandable / nested）**
+- 视觉特征：某行点击后展开显示子表格或额外内容区域
+- 与树状的区别：展开后显示的是详情内容，不是同级子项
+- 输出：`"expandable": true, "expandColumn": "详情"`
+
+**4. 表头分组（header grouping）**
+- 视觉特征：表头有两层或多层，上层合并多个下层列
+- 示例：表头 "详情" 下方包含 "序号 | 字段标识 | 字段名称 | 字段类型 | 是否必填 | 字段描述"
+- 输出：`"headerGroups": [{ "title": "详情", "children": ["序号", "字段标识", ...] }]`
+
+**5. 行合并（rowSpan）**
+- 视觉特征：同一单元格内容跨越多行（如 "数据源列表" 对应5个接口标识）
+- 与单元格换行的区别：行合并有跨行边框或视觉连贯性
+- 输出：`"rowSpans": [{ "row": 5, "col": "类型", "span": 5 }]`
+
+**6. 列合并（colSpan）**
+- 视觉特征：某单元格内容横向跨越多个列
+- 输出：`"colSpans": [{ "row": 3, "col": "标识", "span": 2 }]`
+
+**7. 单元格内换行（wrap）**
+- 视觉特征：单元格内多行文字（非合并，只是内容换行）
+- 与行合并的区别：换行仍在同一行内，视觉上没有跨行边框
+- 输出：`"cellWraps": ["标识"]`
+
+**8. 斑马纹（striped）**
+- 视觉特征：相邻行背景色交替变化（如白/灰相间）
+- 与悬停态的区别：斑马纹是静态的，不依赖鼠标
+- 输出：`"striped": true, "stripeColors": ["#ffffff", "#fafafa"]`
+
+**9. 表头背景色（headerBgColor）**
+- 视觉特征：表头行有统一的背景色（与表体不同）
+- 输出：`"headerBgColor": "#eef2f8"`
+
+**10. 行背景色（rowBgColor）**
+- 视觉特征：数据行有统一的背景色（可能包含斑马纹）
+- 输出：`"rowBgColor": { "even": "#ffffff", "odd": "#fafafa", "hover": "#f5f7fa", "selected": "#e6f7ff" }`
+
+**11. 边框样式（borderStyle）**
+- 视觉特征：表格是否有边框、边框粗细和颜色
+- 输出：`"borderStyle": { "horizontal": true, "vertical": false, "color": "#e8e8e8", "width": 1 }`
+
+### 列表项内部布局识别方法（CRITICAL）
+
+**当 `role: "list"` 的 section 包含重复的列表项时，必须基于预览图实际观察识别每个列表项的内部布局结构。**
+
+#### 识别方法（按以下步骤逐步观察）
+
+**第1步：识别列表项内部有哪些视觉元素**
+- 从左到右扫描单个列表项
+- 列出所有可见元素：图标、标题、时间、详情、状态标签等
+- 记录每个元素的**实际位置关系**
+
+**第2步：判断元素之间的空间排列方向**
+- 观察相邻元素是**左右并列**还是**上下堆叠**
+- 注意：不要预设布局类型，而是描述实际看到的排列
+- 关键判断：某些元素（如标题+时间）是横向还是纵向组合？
+
+**第3步：识别元素的层级分组**
+- 哪些元素在视觉上形成了一个"组"？
+- 例如：标题和时间靠得很近，形成一个元信息组
+- 这个组与其他元素（图标、详情）的位置关系是什么？
+
+**第4步：转换为 children 结构**
+- 每个识别到的元素/元素组 → 一个 child 对象
+- 为每个 child 分配：
+  - `role`: 元素的语义角色（icon/title/time/detail/meta等）
+  - `layout`: 若该元素内部还有子元素，描述子元素的排列方向
+  - `widthRatio` 或 `heightRatio`: 根据视觉占比估算
+  - `children`: 若该元素是一个组，继续递归描述其内部元素
+
+#### 实际案例分析
+
+**案例：监测预警列表项**
+
+```
+第1步观察：
+[图标占位符] 环境温度           枫港大桥温度到达55°C
+               15:34
+
+识别到的元素：
+- 元素A：左侧方形图标占位符（带彩色边框）
+- 元素B：文字"环境温度"
+- 元素C：文字"15:34"
+- 元素D：文字"枫港大桥温度到达55°C"
+
+第2步判断排列方向：
+- A 和 B 的位置关系：A在最左侧，B在A的右侧 → 横向
+- B 和 C 的位置关系：C在B的正下方 → 纵向
+- (B+C)组 和 D 的位置关系：D在(B+C)的右侧 → 横向
+
+第3步识别分组：
+- 元素B和C靠得很近，形成一个"元信息组"（标题在上，时间在下）
+- 元素A、(B+C)组、元素D 三者横向排列
+
+第4步转换为 children：
+{
+  "role": "list-item",
+  "layout": "horizontal",
+  "children": [
+    {
+      "id": "item-icon",
+      "role": "icon",
+      "widthRatio": 0.15
+    },
+    {
+      "id": "item-meta",
+      "role": "meta",
+      "layout": "vertical",
+      "widthRatio": 0.25,
+      "children": [
+        {"role": "title", "heightRatio": 0.5},
+        {"role": "time", "heightRatio": 0.5}
+      ]
+    },
+    {
+      "id": "item-detail",
+      "role": "detail",
+      "widthRatio": 0.6
+    }
+  ]
+}
+```
+
+#### 禁止的错误做法
+
+❌ **不要预设模式**：看到列表就假设是"标题+详情"两列布局
+❌ **不要忽略层级**：把所有元素平铺在一层 children 中
+❌ **不要凭经验**：认为"时间一定在右上角"而忽略实际位置
+✅ **必须观察**：从左到右、从上到下逐个识别元素的实际位置
+
+## 🔴 卡片内部布局识别规则（CRITICAL — 横向 vs 纵向判断）
+
+**当识别到 `role: "card"` 的元素时，必须正确判断卡片内部的布局方向。这是最常见的识别错误。**
+
+### 判断步骤
+
+**第1步：识别卡片内部元素的位置关系**
+
+观察卡片内的图标、标题、数值的实际位置：
+
+| 布局类型 | 视觉特征 | layout | layoutDirection | children 结构 |
+|---------|---------|--------|----------------|-------------|
+| **横向布局** | 图标在**左侧**，文字内容在**右侧** | `horizontal` | `horizontal` | `[{role:"icon", widthRatio:0.3}, {role:"content-group", layout:"vertical", children:[...]}]` |
+| **纵向布局** | 图标在**上方**，文字内容在**下方** | `vertical` | `vertical` | `[{role:"icon", heightRatio:0.5}, {role:"text"}, {role:"metric"}]` |
+
+### 强制检查规则
+
+**在输出卡片的 layout 前，必须回答以下问题：**
+
+1. **图标与文字是左右关系还是上下关系？**
+   - 图标在文字的**左边** → `horizontal`
+   - 图标在文字的**上边** → `vertical`
+
+2. **如果是横向布局，文字内容是否需要分组？**
+   - 右侧有多个文字元素（标题+数值）**上下排列** → 需要 `content-group` 包裹，内部 `layout: "vertical"`
+   - 右侧只有一个元素 → 不需要分组
+
+### 正确示例（横向布局）
+
+```json
+{
+  "id": "card-1",
+  "role": "card",
+  "layout": "horizontal",
+  "layoutDirection": "horizontal",
+  "widthRatio": 0.33,
+  "children": [
+    {
+      "role": "icon",
+      "widthRatio": 0.3
+    },
+    {
+      "role": "content-group",
+      "layout": "vertical",
+      "widthRatio": 0.7,
+      "children": [
+        {"role": "text", "name": "危化品车"},
+        {"role": "metric", "name": "51"}
+      ]
+    }
+  ]
+}
+```
+
+### 错误示例（误判为纵向）
+
+```json
+{
+  "id": "card-1",
+  "layout": "vertical",           // ❌ 错误
+  "layoutDirection": "vertical",
+  "children": [
+    {"role": "icon", "heightRatio": 0.5},      // ❌ 实际图标在左侧，不是上方
+    {"role": "text", "heightRatio": 0.25},
+    {"role": "metric", "heightRatio": 0.25}
+  ]
+}
+```
+
+
+---
+
+<!-- module: layout-analysis-workflow -->
+# 布局分析工作流
+
+> 本文档定义了 preview-analysis 的核心任务和分析要求，是布局识别的指导性文档。
+
+---
+
+## 任务定义
+
+你的任务是将设计稿预览图转换为结构化 JSON 数据（preview-analysis.json），用于后续生成微码组件。
+
+分析必须遵循**从整体到局部**的层次：
+1. 先判断面板的整体布局方向（layoutDirection）
+2. 再识别面板内部的子区块划分（sections）
+3. 最后识别每个子区块的具体内容（图表/表格/列表/卡片等）
+
+---
+
+## 7 项分析要求
+
+### 1. 布局方向识别（layoutDirection）
+
+**判断面板标题下方的内容排列方向**：
+- `row`：内容横向排列（左右分栏）
+- `column`：内容纵向排列（上下堆叠）
+- `grid`：网格布局（2x2、3x3 等）
+- `absolute`：绝对定位（无明显规律）
+- `radial`：环形布局（中心放射）
+
+**关键判断点**：
+- 观察面板标题下方的第一个可见内容区域
+- 如果有多个子区块，判断它们的排列方向
+- 如果只有一个子区块，判断其内部元素的排列方向
+
+### 2. 子区块划分（sections）
+
+**识别面板内部的内容区块**：
+- 每个图表/表格/列表/卡片通常是一个独立的 section
+- 标题和装饰条也是独立的 section
+- 每个 section 必须有明确的 layout 属性
+
+**划分原则**：
+- 按视觉独立性划分（每个可识别的 UI 组件是一个 section）
+- 按功能独立性划分（标题、图表、图例、数据标签各自独立）
+
+### 3. 背景亮度识别（hasComplexBg / backgroundColor）
+
+**判断面板背景是否为复杂背景**：
+- `hasComplexBg: true`：背景是图片/渐变/纹理（需要 backgroundSize）
+- `hasComplexBg: false`：背景是纯色（只需要 backgroundColor）
+
+**背景颜色提取**：
+- 如果是纯色背景，提取具体的 HEX 色值（如 `"#1a1a2e"`）
+- 如果是渐变背景，提取主色调的 HEX 色值
+- 如果是图片背景，提取图片的 base64 或 URL（可选）
+
+### 4. 文字颜色识别（textColor）
+
+**提取面板内主要文字的颜色**：
+- 提取标题文字的颜色（如 `"#ffffff"`）
+- 提取正文文字的颜色（如 `"#cccccc"`）
+- 如果文字有多种颜色，提取最普遍的颜色
+
+**注意**：
+- 文字颜色必须从实际观察中提取，不能从 prompt 示例中复制
+- 如果文字在复杂背景上，确保颜色对比度足够
+
+### 5. 图表类型识别（chartType）
+
+**识别每个图表的具体类型**：
+- `line`：折线图
+- `bar`：柱状图
+- `pie`：饼图
+- `donut`：环形图
+- `area`：面积图
+- `scatter`：散点图
+- `radar`：雷达图
+- `gauge`：仪表盘
+- `table`：表格
+- `list`：列表
+- `card`：卡片
+- `stat-panel`：统计面板
+- `composite`：复合图表
+- `decoration`：装饰元素
+
+**判断依据**：
+- 观察图表的视觉特征（线条/柱子/扇区/点等）
+- 观察是否有坐标轴（折线图/柱状图有，饼图没有）
+- 观察是否有图例（说明数据系列）
+
+### 6. 数据系列识别（series）
+
+**识别图表中的数据系列**：
+- 每个数据系列通常对应一个图例项
+- 提取 series 的名称（从图例中）
+- 提取 series 的颜色（从图例色块中）
+- 提取 series 的数据点（从图表中观察）
+
+**注意**：
+- 数据点可以是具体数值（如 `1200`、`95`）
+- 也可以是字符串（如 `"2024-01"`、`"北京"`）
+- 如果看不清具体数值，用 `null` 或 `"?"` 占位
+
+### 7. Figma 设计信息提取（figmaDesign）
+
+**提取 Figma 设计稿中的关键信息**：
+- 面板尺寸（width / height）
+- 字体信息（fontFamily / fontSize / fontWeight）
+- 颜色信息（从 Figma 的 fills/strokes 中提取）
+- 间距信息（padding / gap / margin）
+
+**注意**：
+- 如果无法从 Figma 中提取，从预览图中估算
+- 尺寸单位统一为 px
+
+---
+
+## 易错场景对照表
+
+### 场景 1：单图表面板
+
+**视觉表现**：
+```
+┌─────────────────────┐
+│  面板标题           │
+│  ┌───────────────┐  │
+│  │   折线图      │  │
+│  └───────────────┘  │
+└─────────────────────┘
+```
+
+**正确分析**：
+- `layoutDirection: "column"`（标题在上，图表在下）
+- `sections: [标题 section, 图表 section]`
+
+**错误分析**：
+- ❌ `layoutDirection: "row"`（标题和图表不是左右排列）
+
+### 场景 2：左右分栏面板
+
+**视觉表现**：
+```
+┌─────────────────────┐
+│  面板标题           │
+│  ┌───────┐ ┌─────┐ │
+│  │折线图 │ │柱状图│ │
+│  └───────┘ └─────┘ │
+└─────────────────────┘
+```
+
+**正确分析**：
+- `layoutDirection: "row"`（两个图表左右排列）
+- `sections: [标题 section, 左图表 section, 右图表 section]`
+
+**错误分析**：
+- ❌ `layoutDirection: "column"`（两个图表不是上下排列）
+
+### 场景 3：标题覆盖在图表上
+
+**视觉表现**：
+```
+┌─────────────────────┐
+│  面板标题           │
+│  ┌───────────────┐  │
+│  │   折线图      │  │
+│  └───────────────┘  │
+└─────────────────────┘
+```
+
+**正确分析**：
+- `headerRelation: "overlapping"`（标题覆盖在图表区域上）
+
+**错误分析**：
+- ❌ `headerRelation: "above"`（标题和图表不是上下分离）
+
+---
+
+## 强制自查（分析完成后必须逐项确认）
+
+- [ ] layoutDirection 是否正确判断了排列方向？
+- [ ] sections 是否完整划分了所有可见的内容区块？
+- [ ] 每个 section 的 layout 是否正确判断？
+- [ ] hasComplexBg 是否正确判断？
+- [ ] backgroundColor 是否提取为具体色值？
+- [ ] textColor 是否提取为具体色值？
+- [ ] chartType 是否正确识别？
+- [ ] series 是否完整提取了所有数据系列？
+- [ ] figmaDesign 是否提取了关键设计信息？
+
+**任何一项不通过 → 重新分析，直到全部通过。**
+
+
+---
+
+<!-- module: ui-element-checklist -->
+# UI元素识别清单模块
+
+## 交互元素识别指南
+
+**目的：** 根据视觉特征准确识别交互元素的类型（role），避免将交互控件误识别为普通文字。
+
+### 下拉框（dropdown/selector）识别规则
+
+**必须同时满足以下特征才能识别为下拉框：**
+1. **有边框**：元素周围有明显的矩形边框（实线或虚线）
+2. **有文字内容**：显示当前选中的值（如"24小时"、"全部"、"请选择"等）
+3. **有下拉箭头**：右侧有向下的箭头图标（▼、▽、↓ 或类似符号）
+
+**role 值：** `"dropdown"` 或 `"selector"`
+
+**示例场景：**
+- 时间范围选择器："24小时 ▼"
+- 筛选条件："全部类型 ▼"
+- 状态选择："进行中 ▼"
+
+**易混淆情况：**
+- ❌ 只有文字，没有边框和箭头 → 识别为 `role: "text"`
+- ❌ 只有边框和文字，没有箭头 → 识别为 `role: "button"`
+- ✅ 边框 + 文字 + 箭头 → 识别为 `role: "dropdown"`
+
+### 其他交互元素识别规则
+
+| 元素类型 | 视觉特征 | role 值 |
+|---------|---------|---------|
+| **按钮** | 有边框/背景色 + 文字，无下拉箭头 | `"button"` |
+| **Tab切换** | 多个并列的文字/按钮，其中一个高亮 | `"tabs"` |
+| **进度指示器** | 包含数字序列（如0、1、2）+ 连线/进度条 | `"progress"` |
+| **环形图容器** | 包含环形图形 + 中心数字 + 分类列表 | `"ring-chart"` |
+| **链接** | 文字 + 下划线 或 文字 + 右箭头(>) | `"link"` |
+| **输入框** | 有边框 + 占位符文字 或 光标 | `"input"` |
+| **复选框** | 方形框 + 勾选标记 | `"checkbox"` |
+| **单选框** | 圆形框 + 圆点标记 | `"radio"` |
+
+### 图标识别规则（CRITICAL — 常见遗漏）
+
+**统计项、列表项、Tab 项前的图标/色块/圆点必须识别：**
+
+1. **图标存在判断**：
+   - 观察统计标签前是否有小图标、色块、圆点、箭头
+   - 观察列表项前是否有图标或标识
+   - 观察 Tab 项内是否有图标
+
+2. **识别后处理**：
+   - 在 `children` 中增加 `role: "icon"` 的子元素
+   - 记录图标的视觉特征（颜色、形状、位置）到 `notes` 中
+
+3. **常见遗漏场景**：
+   - ❌ 错误：只识别「事件总数: 6」，忽略前面的图标
+   - ✅ 正确：识别为「图标 + 事件总数 + 数值」三个子元素
+
+### Tab 类型区分规则（CRITICAL）
+
+**必须区分时间维度 Tab 和地点/分类维度 Tab：**
+
+| Tab 类型 | 典型文字 | 位置 | role |
+|---------|---------|------|------|
+| 时间维度 | 今日、本月、本年、近7天、近30天 | 面板头部（与标题同行） | `tab` |
+| 地点维度 | 江阴靖江长江隧道、江阴大桥、A区、B区 | 内容区顶部 | `tab` 或 `selector` |
+| 分类维度 | 全部、交通事故、车辆故障 | 内容区顶部/图表旁 | `tab` 或 `filter` |
+
+**禁止混淆**：
+- ❌ 将地点选择器（如「江阴靖江长江隧道」）识别为统计卡片标题
+- ✅ 若地点名称是可切换的，应识别为 `role: "tab"`，放在内容区 section 的 children 中
+
+### 图例排列方向识别（CRITICAL）
+
+**环形图/饼图必须识别图例的实际排列方向：**
+
+1. 观察图例相对于图表的位置：
+   - 图例在**图表右侧纵向排列** → `legendPosition: "right"`, `legendType: "vertical"`
+   - 图例在**图表右侧横向排列** → `legendPosition: "right"`, `legendType: "horizontal"`
+   - 图例在**图表下方横向排列** → `legendPosition: "bottom"`, `legendType: "horizontal"`
+   - 图例在**图表左侧纵向排列** → `legendPosition: "left"`, `legendType: "vertical"`
+   - 图例在**图表上方横向排列** → `legendPosition: "top"`, `legendType: "horizontal"`
+
+2. **禁止默认**把所有图例识别为 `legendPosition: "bottom-center"`
+3. **必须同时输出 `legendType`**：根据图例项的排列方向（左右=horizontal, 上下=vertical）
+
+### 🔴 图表 series 识别规则（CRITICAL — 决定柱/线条数量与颜色）
+
+**series 数组的取值必须从预览图中真实可见的视觉证据取，禁止用"常见做法"凭空写**
+
+#### 必读证据顺序
+1. **图例文字**：图表正上方/正侧方的"色块+文字"组对，文字就是 series 名
+2. **柱子/线条颜色数**：每根柱子分几节、每条线几种颜色，对应 series 数量
+3. **图表标题/单位**：辅助判断是车流量、电量、人数等业务维度
+
+#### 常见错误（必须避免）
+- ❌ 看到柱状图就默认写 `['小型车','中型车','大型车']`
+- ❌ 看到饼图就默认写四五个类别
+- ❌ 看到折线图就默认 `['实际','预测']`
+- ✅ 必须看清图例真实文字 → 一字不差抄到 series 里
+
+#### 示例
+```
+图例 = [蓝色方块"北京方向"][浅蓝方块"上海方向"]
+→ series: ["北京方向", "上海方向"]  ✅
+→ series: ["小型车","中型车","大型车"]  ❌（凭空臆造）
+
+图例 = [蓝色方块"客车"][橙色方块"货车"]
+→ series: ["客车", "货车"]  ✅
+```
+
+### 🔴 图表特效识别规则（CRITICAL — 决定 markLine/tooltip/stack）
+
+每个图表必须额外识别以下视觉特征并写入 `charts[n].notes` 数组：
+
+| 视觉特征 | 必须识别为 | notes 中写入 |
+|---------|----------|------------|
+| 图表内有**水平虚线带文字标签**（如"建议分流"，对应 y=3000） | `markLine` | `"markLine: y=3000, label=建议分流, style=dashed orange"` |
+| 图表内有**tooltip 浮层**（通常只是 hover 效果展示，有箭头指向数据点） | `hover-trigger` | `"tooltip: hover-trigger（设计稿展示 hover 状态）"` |
+| 图表内有**常驻 tooltip**（无边框/无箭头/位置偏离数据点） | `fixed-tooltip` | `"fixed-tooltip: x=16时, content=北京方向 825 上海方向 831"` |
+| 多个柱子**头尾相接堆叠成一根**（不是并排） | `stacked` | `"stacked: true"` |
+| 多个柱子**并排分组**（如 北京蓝柱+上海浅蓝柱，紧挨着但不堆叠） | `grouped` | `"grouped: true"` |
+| 折线**有数据点圆圈**（非纯线条） | `with-symbol` | `"symbol: circle"` |
+| 折线**带面积阴影**（线下方有渐变填充） | `area-style` | `"area-style: linear-gradient"` |
+| 图表**包含背景图/底图**（如地图水印、装饰底纹） | `background-image` | `"background-image: 地图水印（X路名）"` |
+| Y 轴/X 轴**刻度值明显**（如 0/1000/2000/3000/4000） | `axis-fixed-scale` | `"y-axis: 0~4000, step 1000"` |
+
+#### tooltip 字段单独要求
+- `tooltip` 字段值必须填以下之一：
+  - `"hover-trigger"` — 鼠标悬停才显示（**默认值**，设计稿中展示的 tooltip 浮层通常只是 hover 效果示例）
+  - `"fixed-on-chart"` — 设计稿中 tooltip 有明显常驻特征（如无边框浮层、箭头不指向任何数据点、位置固定不随数据变化）
+  - `"hidden"` — 完全不显示
+- **判断优先级**：
+  - 设计稿中 tooltip 浮层有**指向数据点的箭头** → `hover-trigger`（只是展示了 hover 后的状态）
+  - 设计稿中 tooltip **无边框/无箭头/位置偏离数据点** → 才考虑 `fixed-on-chart`
+  - **不确定时默认 `hover-trigger`**
+
+### 图例存在性判据（CRITICAL）
+
+**不是所有图表都有 ECharts 图例。必须根据预览图实际结构判断：**
+
+1. **有 ECharts 图例的证据（满足任一即可）**：
+   - 图例项有**彩色指示图形** + **文字标签**，指示图形包括但不限于：
+     - **圆点/圆圈**（● ○）
+     - **方块/矩形**（■ ▬）
+     - **短线/线段**（—）
+     - **其他小色块**（任意小彩色形状）
+   - 图例项**成组排列**（在图表同一区域形成 legend 组，至少 2 项）
+   - 图例项**有交互视觉特征**（可点击切换的样式）
+   - → 识别到 `charts[n].legend` 数组中，`legendPosition` 按实际方向填写
+   - → **禁止**将此情况写入 `doNotInvent`（这是标准图例，不是"非标准装饰"）
+
+2. **无 ECharts 图例的证据（全部满足才判定为无图例）**：
+   - 图表旁边只有**独立文字标签**（如环形图旁的"客车 22350"），**没有任何**彩色指示图形
+   - 文字标签**不成组**，而是与数据值混排（如"客车 22,350  货车 16,270"）
+   - 文字标签**是 stat-value 的一部分**，不是交互图例
+   - → `charts[n].legend` 设为空数组 `[]`，`legendPosition` 留空或省略
+
+3. **关键区分**：
+   -  把独立文字标签（stat-value）误认为图例 → 会导致代码生成多余的 ECharts legend
+   - ❌ 把"彩色指示图形 + 文字"误判为"非标准装饰"写入 doNotInvent → 导致图例被禁用
+   - ✅ 只要有彩色指示图形（圆点/方块/矩形/短线等任意形状）+ 文字标签，就是标准图例
+   - ✅ 只有真正的图例组（带彩色指示图形）才填入 `legend` 数组
+
+### 识别优先级
+
+当元素特征不明确时，按以下优先级判断：
+1. **有下拉箭头** → 优先识别为 dropdown
+2. **有多个并列项且一个高亮** → 优先识别为 tabs
+3. **有边框但无其他特征** → 保守识别为 button
+4. **无任何交互特征** → 识别为 text
+
+## 🔴 组件类型判断规则（CRITICAL — 决定技术栈选择）
+
+**必须根据预览图的主视觉特征判断组件类型，写入顶层 `componentType` 字段。此字段直接影响代码生成时使用哪个 UI 组件库。**
+
+### 类型定义
+
+| componentType | 视觉特征 | 技术栈 |
+|--------------|---------|--------|
+| `table` | 有行列数据、表头行、单元格、数据行 | `<a-table>` ant-design-vue |
+| `form` | 有输入框、下拉选择、复选框/单选框、提交按钮 | `<a-form>` ant-design-vue |
+| `chart` | 有折线/柱状/饼图/雷达等图表可视化区域 | ECharts |
+| `list` | 有列表项（每项结构相似）、可能带图标或描述 | 原生 div+CSS |
+| `card` | 有卡片容器（独立区块+标题+内容） | 原生 div+CSS |
+| `mixed` | 同时包含多种类型（如表格+图表组合） | 按各区域分别选型 |
+
+### 判断优先级
+1. **有明确的表格结构**（表头 + 数据行 + 单元格对齐）→ `table`
+2. **有输入控件组**（input/select/checkbox/radio 集群）→ `form`
+3. **有图表可视化**（坐标轴/扇形/趋势线）→ `chart`
+4. **以上都不匹配但有重复卡片结构** → `card`
+5. **有重复列表项** → `list`
+6. **包含多种上述特征** → `mixed`
+
+### 输出要求
+- **必须在 JSON 顶层输出 `componentType` 字段**
+- 值必须是上述 6 个枚举值之一
+- 不要输出 null 或空字符串
+
+
+---
+
+<!-- module: figma-css-style-mapping -->
+# Figma CSS样式映射模块
+
+## 🔴 [P1] Figma 精确还原规则
+
+> 本文件含 Figma 阶段独有的精确还原规则。通用零臆造规则见 do-not-invent.md。
+
+### 🔴 [P0] 容器型 bg 节点处理规则
+
+当 Figma 节点树中出现 `slot-con > bg(子节点含图片/渐变) + list(内容)` 模式时：
+1. **bg 是内容容器的背景层**，不是独立 DOM 元素
+2. 将 bg 子节点图片资源应用到父容器（slot-con）的 CSS `background-image`
+3. **禁止生成独立 `bg` DOM 元素**（`<div class="bg">` ❌）
+4. 多层背景按 Figma 层级合并为 CSS 多背景层
+
+```vue
+<!-- ✅ 正确：slot-con 作为内容容器，通过 CSS 应用背景 -->
+<div class="slot-con" :style="{ backgroundImage: `url(${bgImage})` }">
+  <div class="list"><!-- 内容 --></div>
+</div>
+```
+
+### 🔴 [P1] backgroundSize 精确计算规则（禁止统一写死 `100% 100%`）
+
+必须根据 Figma 原始尺寸与父容器尺寸的比例计算：
+
+| 场景 | 判断条件 | backgroundSize |
+|------|---------|---------------|
+| 完全匹配 | `0.9 ≤ 两比值 ≤ 1.1` | `100% 100%` |
+| 细长横条 | `heightRatio < 0.3` 且 `widthRatio ≥ 0.8` | `100% auto` |
+| 细长竖条 | `widthRatio < 0.3` 且 `heightRatio ≥ 0.8` | `auto 100%` |
+| 小图标/装饰 | 两比值均 `< 0.5` | `contain` |
+| 大图背景 | 任一比值 `> 1.2` | `cover` |
+| 重复纹理 | 父容器 >> 背景图 | `auto` + `backgroundRepeat: 'repeat'` |
+
+- ❌ 禁止只写 `backgroundImage` 不写 `backgroundSize`
+- ❌ 禁止不计算比例就统一使用 `100% 100%`
+- ❌ 禁止给背景图添加 `opacity` 降低透明度
+
+### 🟡 [P1] 尺寸还原规则
+
+- 布局容器默认用 `width: 100%` / `flex: 1` / `min-width: 0`，禁止直接写 Figma 像素宽度
+- Icon: 可保留 `width: Xpx; height: Ypx;` + `max-width: 100%`
+- 背景图: 优先挂到已有父容器，使用 `background-size: 100% 100%`/`contain`/`cover`
+- 禁止把 Figma 原始像素直接写到内部布局容器导致超出组件 root
+
+### 🟡 [P1] Figma 颜色精确提取规则
+
+转换公式：`r = Math.round(figmaColor.r * 255).toString(16).padStart(2, '0')` → `#RRGGBB`
+- ❌ 禁止近似取值（如 `#3b7fe6` 代替 Figma `#1990FF`）
+- ✅ 代码中标注来源：`/* Figma node: 2:3442, fills[0].color */`
+
+### 🔴 [P1] 强制使用 Figma 设计尺寸（禁止硬编码/估算）
+
+所有 `width`/`height` 必须来自 Figma 数据，优先级：
+1. `resource-dom-mapping.json` → `figmaBox.width/height`
+2. `dom-figma-mapping.json` → `absoluteBoundingBox.width/height`
+3. `env.json` → `layouts.figmaData.resources[].figmaBox`
+
+代码标注要求：`width: 76px; /* Figma 1:6311: figmaBox.width */`
+- ❌ 禁止使用图片原始像素尺寸（图片文件 ≠ Figma 设计尺寸）
+- ❌ 禁止估算尺寸（如 `width: 90px`）
+- ✅ 子组件中的尺寸也必须标注 Figma 来源
+
+
+---
+
+<!-- module: mixed-layout-examples -->
+# 混合布局识别规则
+
+> 防止将装饰性 UI 元素误识别为图表。
+
+## 非图表装饰条识别规则
+
+**当面板中出现细长条状结构时，必须先排除以下装饰性元素，才能判定为图表：**
+
+### 装饰条特征清单（非图表）
+
+| 特征 | 说明 |
+|------|------|
+| 单色/渐变色填充 | 没有数据系列，纯装饰 |
+| 无坐标轴 | 没有 X/Y 轴线或刻度 |
+| 无图例 | 没有 series 说明 |
+| 高度极小（< 20px） | 通常是分隔条/进度条/状态条 |
+| 重复排列的等宽色块 | 通常是步骤指示器/导航点 |
+
+### 胶囊形指示器 vs 真环形图
+
+**胶囊形步骤指示器**（不是环形图）：
+- 多个小圆形/胶囊形等距排列
+- 每个胶囊内有数字或图标
+- 当前激活项高亮，其余灰显
+- 通常 3-7 个，横向排列
+- 无 data/series 结构
+
+**真环形图（donut chart）**：
+- 有明确的圆弧/扇区
+- 有数据标签或百分比
+- 通常有中心文字
+- 有图例说明各扇区含义
+- data 数组有数值
+
+### 进度条 vs 柱状图
+
+**进度条**（不是柱状图）：
+- 单行/单列
+- 百分比填充
+- 无多组数据对比
+
+**柱状图**：
+- 多根柱子并排
+- 有坐标轴
+- 有数据系列
+
+### 装饰性分隔线 vs 表格行
+
+**分隔线**：
+- 全宽细线
+- 无内容对齐
+- 颜色与背景接近
+
+**表格行**：
+- 多列内容对齐
+- 有表头
+- 有数据内容
+
+## 背景图 vs 背景色识别规则
+
+**当面板背景看起来不是纯色时，必须区分是背景图还是背景色/渐变：**
+
+### 背景图（backgroundImage）特征
+- 有具体图案/纹理/照片
+- 复杂不规则细节
+- 不能用 CSS linear-gradient/radial-gradient 描述
+
+### 背景色/渐变（backgroundColor）特征
+- 纯色/线性渐变/径向渐变
+- 可用 CSS 渐变函数描述
+- 无具体图案
+
+### 判断方法
+1. 观察背景是否有"图案"（照片/纹理/插画） → 背景图
+2. 如果只是颜色过渡（深到浅/单色） → 背景色/渐变
+3. 如果不确定 → 优先判定为背景色（更安全）
+
+
+---
+
+<!-- module: self-checklist -->
+# 自检清单模块
+
+## 🔴 图片证据强制要求（CRITICAL — 防止未看图就生成分析）
+
+**在生成 preview-analysis.json 前，必须真正读取并观察预览图，在 imageEvidence 中提供具体、可验证的证据。**
+
+### imageEvidence 必须字段
+
+| 字段 | 类型 | 要求 | 正确示例 | 错误示例 |
+|------|------|------|---------|---------|
+| `firstVisibleText` | string | 图片中第一行可见的**完整文字**（不能是抽象描述） | "监测预警"、"交通流量统计" | ❌ "标题"、"组件名称"、"页面标题" |
+| `dominantBgColor` | string | 背景主色调的**具体色值**（HEX格式） | "#1a1a2e"、"#0a192f" | ❌ "深色"、"暗色调"、"直接观察到的背景色" |
+| `specificElements` | array | 至少3个可验证的视觉元素，每个包含 type/position/content 或 color | 见下方示例 | ❌ `[{"type": "某个按钮"}]` |
+
+### specificElements 格式要求
+
+每个元素必须包含：
+- `type`: 元素类型（tab-button / icon / text / chart / image / badge 等）
+- `position`: 具体位置（"顶部"、"左上角"、"第一条消息"、"右侧区域" 等）
+- `content`: 文字内容（如果有文字）
+- `color`: 颜色（如果是图标/色块）
+
+**正确示例**：
+```json
+"specificElements": [
+  {"type": "tab-button", "position": "顶部中间", "content": "全部"},
+  {"type": "icon", "position": "左上角", "color": "#00d4ff"},
+  {"type": "text", "position": "第一条消息标题", "content": "环境温度"}
+]
+```
+
+**错误示例（过于抽象，无法验证）**：
+```json
+"specificElements": [
+  {"type": "某个按钮", "position": "上方", "content": "按钮文字"},
+  {"type": "图标", "position": "左侧"},
+  {"type": "标题"}
+]
+```
+
+### 🔴 禁止行为
+
+- ❌ **基于组件名称猜测内容**（如 c-traffic → 猜测是交通图表）
+- ❌ **使用模板占位符**（如"直接观察到的..."、"页面主背景色"）
+- ❌ **从 prompt 示例中复制粘贴证据字段**
+- ❌ **在未看到图片的情况下凭空生成分析**
+
+### 🔴 写入前强制自检（必须全部通过）
+
+输出 JSON 前，必须能肯定回答以下问题：
+
+- [ ] 我是否**真正读取了预览图**？（不是基于组件名/尺寸猜测）
+- [ ] `firstVisibleText` 是否是图中**真实可见的完整文字**？（不是"标题"等占位符）
+- [ ] `dominantBgColor` 是否是**具体的色值**（#xxxxxx 格式）？（不是"深色"/"浅色"）
+- [ ] `specificElements` 是否包含**至少3个可验证的元素**？
+- [ ] 我能否在图片中**准确指出**每个 specificElements 的位置？
+- [ ] 所有证据字段是否**足够具体**，让其他人看到这些字段后能在图中找到对应位置？
+
+**如果任何一项回答"否"，禁止输出 JSON，必须重新观察图片。**
+
+---
+
+## 🔴 文字保真度三铁律（preview-analysis 必读）
+
+预览图识别时，所有文字必须严格按"像素级 OCR"标准抄写，禁止意译/简化/补全。
+
+### 铁律 1：单位独立（unit 必须从 value 分离）
+
+任何 `value` 字段后跟的单位字符（吨 / 万 / 元 / % / ㎡ / CO₂ / 标煤 / 升 / m³ 等），**一律不得写入 value**，必须拆到 `unit` 字段。
+
+| 图中显示 | ✅ 正确 | ❌ 错误 |
+|---------|--------|--------|
+| `1200吨` | `value: "1200", unit: "吨"` | `value: "1200吨"` |
+| `95.6%` | `value: "95.6", unit: "%"` | `value: "95.6%"` |
+| `2.5万` | `value: "2.5", unit: "万"` | `value: "2.5万"` |
+| `3600元` | `value: "3600", unit: "元"` | `value: "3600元"` |
+| `150㎡` | `value: "150", unit: "㎡"` | `value: "150㎡"` |
+
+### 铁律 2：逐字抄写（禁止任何形式的改写）
+
+预览图中看到的文字必须**逐字、逐字符**抄写，禁止以下任何改写：
+
+| 错误类型 | ❌ 错误 | ✅ 正确 |
+|---------|--------|--------|
+| 简写/缩写 | "环温" | "环境温度"（如图中写的是"环境温度"） |
+| 补全/脑补 | "今日车流量" | "车流量"（如图中只有"车流量"） |
+| 同义替换 | "总数量" | "总计"（如图中写的是"总计"） |
+| 繁简转换 | 简体转换繁体 | 保持原文繁简状态 |
+| 中英混排调整 | "PM2.5浓度" | 按图中实际显示抄写 |
+
+### 铁律 3：下标/上标/特殊字符识别
+
+| 图中显示 | ✅ 正确抄写 | ❌ 错误 |
+|---------|-----------|--------|
+| CO₂（2 是下标） | `"CO₂"`（Unicode U+2082） | `"CO2"` |
+| NO₂（2 是下标） | `"NO₂"` | `"NO2"` |
+| PM2.5 | `"PM2.5"` | `"pm2.5"` / `"PM25"` |
+| 100m²（2 是上标） | `"100m²"`（Unicode U+00B2） | `"100m2"` |
+| ≥ / ≤ | `"≥"` / `"≤"` | `">="` / `"<="` |
+| μg/m³ | `"μg/m³"` | `"ug/m3"` |
+
+**如果看不清某个字符，写入 `rawText` 时用 `[?]` 标注，禁止猜测。**
+
+### 不确定时
+
+- 文字看不清 → `rawText` 中用 `[?]` 替代不确定的字符
+- 无法判断是数字还是文字 → 在 `notes` 中标注"待确认"
+- 完全看不清 → `confidence` 降低，`issues` 中标注"部分文字无法识别"
+
+---
+
+## 🔴 最终自检清单（输出 JSON 前必须逐项通过）
+
+输出 preview-analysis.json 之前，必须逐项确认：
+
+- [ ] **格式**：输出是纯 JSON，无任何 Markdown 包裹、无任何前后说明文字
+- [ ] **字段名**：所有字段名使用 camelCase（不是 kebab-case / snake_case / PascalCase）
+- [ ] **必填字段**：componentType / layout / sections / header / data / figmaDesign 均已填写
+- [ ] **layout**：值为 row / column / grid / absolute / radial 之一
+- [ ] **componentType**：值为 chart / table / list / card / form / stat-panel / composite / decoration 之一
+- [ ] **sections[i].layout**：值为 row / column / grid / radial 之一
+- [ ] **imageEvidence**：firstVisibleText / dominantBgColor / specificElements 均已填写，且为具体值（非占位符）
+- [ ] **headerRelation**：值为 above / overlapping / inside-left / inside-top / none 之一
+- [ ] **文字保真度**：所有 text / rawText / label 均逐字抄写，单位已分离到 unit 字段
+- [ ] **无臆造**：所有样式/尺寸/颜色/布局均来自图片实际观察，未凭印象脑补
+- [ ] **JSON 合法性**：所有 key 和 string value 使用双引号（不是单引号）
+
+**任何一项不通过 → 停止输出，修正后再输出。**
+
+
+---
+
+<!-- module: do-not-invent -->
+# 零臆造规则模块
+
+## 🔴 图片读取强制验证（HIGHEST PRIORITY - 生成前必做）
+
+**在生成任何分析内容前，必须通过以下自检。如果任何一项回答"否"，立即停止并输出ERROR。**
+
+### 自检清单（必须全部回答"是"）
+
+1. **我是否真的看到了一张图片？**
+   - ❌ 如果回答"否"、"不确定"或"记不清" → 立即输出：
+     ```
+     ERROR: 未能读取到图片内容。请将预览图拖拽到对话框中。
+     ```
+   - ❌ 如果我无法确认图片内容 → 不要继续生成
+   
+2. **我能否说出图片左上角的具体文字内容？**
+   - 测试：图片左上角显示的第一行完整文字是什么？
+   - ❌ 如果我只能说"可能是标题"、"应该是组件名" → 停止
+   - ✅ 只有能说出具体文字（如"能耗监控"、"设备统计"）→ 继续
+
+3. **我的描述是基于实际观察还是基于记忆/推测？**
+   - ❌ 如果我发现自己在用：
+     - "可能是..."、"应该有..."、"通常会..."
+     - "根据组件名推测..."、"类似其他组件..."
+   - ✅ 只有使用"我看到..."、"图片中显示..."、"实际内容是..." → 继续
+
+### 禁止行为检测
+
+如果发现自己正在：
+- ❌ 使用其他组件的记忆内容
+- ❌ 基于组件名称（如c-tunnel-monitoring）推测内容
+- ❌ 使用常见模板（"监测预警"、"能耗统计"、"设备状态"等）
+- ❌ 复制之前生成过的类似结构
+
+→ **立即停止，输出ERROR: 检测到AI幻觉，无法确认图片内容**
+
+### 强制证据要求
+
+在生成的JSON中，`imageEvidence.specificElements` 必须包含：
+- 图片左上角第一个可见的完整文字（逐字抄写，不是"标题"、"组件名"这类抽象描述）
+- 图片右上角的元素具体描述（不是"装饰图标"，而是"蓝色圆形图标"）
+- 图片中心区域的主要内容（具体的图表类型、文字内容）
+
+**如果无法提供这些具体证据 → 说明我没有真正看到图片 → 必须输出ERROR**
+
+## 🔴 零fabrication约束（最高优先级，违反将导致重新生成）
+
+### 核心原则
+**禁止添加任何无视觉证据的装饰性样式和DOM元素。**
+
+在生成样式时，必须逐一对照预览图确认每个装饰性样式是否真实存在。
+"看起来应该有"、"常见UI模式"、"更美观" 都不是添加样式的理由。
+
+### 装饰性样式清单（需要视觉证据）
+
+以下样式属于装饰性样式，**必须在预览图中明确可见才能添加**：
+
+- ❌ **背景色/渐变**：`background`, `background-color`, `background-image`
+  - 判断方法：预览图中该区域是否有明显的背景色块或渐变效果？
+  - 注意：不要因为"section应该有背景"就自动添加
+
+- ❌ **边框和圆角**：`border`, `border-radius`, `box-shadow`
+  - 判断方法：预览图中该元素是否有明显的边框线或圆角？
+  - 注意：不要因为"卡片通常有圆角"就自动添加
+
+- ❌ **内外间距**：`padding`, `margin`（除非影响布局正确性）
+  - 判断方法：去掉这个间距，布局是否会崩溃？
+  - 如果只是"不好看"但布局不崩溃，使用`gap`代替或留到Figma阶段
+
+- ❌ **文字装饰**：`color`, `font-size`, `font-weight`（除非用于功能区分）
+  - 判断方法：这个样式是否用于区分功能层级（如标题vs正文）？
+  - 如果只是为了"好看"，留到Figma阶段
+
+### 判断原则
+
+**问自己三个问题**：
+1. 预览图中是否明确可见这个样式效果？
+2. 去掉这个样式，功能是否还能正常工作？
+3. 这个样式是否只是"常见UI模式"而非实际设计？
+
+**只有第1个问题答案是"是"，才能添加该样式。**
+
+### 违反后果
+
+如果生成的代码包含无视觉证据的装饰性样式：
+1. 代码将被拒绝
+2. 需要重新生成
+3. 浪费token和时间
+
+**请严格遵守此约束。**
+
+
+---
+
+<!-- module: header-relation-rules -->
+# headerRelation 判断规则模块
+
+### 🔴 headerRelation 判断规则（CRITICAL，必须为每个 section 输出）
+
+**`headerRelation` 决定 section 是否进入面板插槽，判断错误会导致内容区元素被错误移入标题栏。**
+
+#### 第零步：Figma 设计结构树归属校验（最高优先级，必须最先执行）
+
+**🔴 如果 prompt 中包含「设计结构树」或「Figma 节点树」信息，必须先按结构树判断，再按视觉 Y 坐标判断。结构树是结构归属的地面真值。**
+
+**判断流程：**
+1. 在设计结构树中定位该 section 对应的节点
+2. 查看该节点的**父级容器**是什么：
+   - 父级是 `header` group（或等效头部容器）→ **直接设为 `title-same-row`**，跳过第一步和第二步验证（header group 内的非标题元素无论类型，都归入标题行）
+   - 父级是 `slot-con` / `content` / `main`（或等效内容容器）→ **强制设为 `content-below-title`**，不需要再判断 Y 坐标
+   - 父级无法确定 → 退回到 Y 坐标同行校验（第一步）
+
+**关键规则：**
+- 🔴 **结构树中 `slot-con` 内的元素，即使视觉位置在标题行右侧或紧邻标题行，也禁止设为 `title-same-row`**
+- 🔴 **结构树中 `header` group 直接包含的元素，即使视觉位置看起来在下方，也应优先考虑为 `title-same-row`**
+- 结构树的父子关系和兄弟顺序是 DOM 结构的地面真值，视觉位置只用于辅助判断
+
+**示例：**
+```
+设计结构树：
+  cp-环境监测 [FRAME]
+    header [GROUP]        ← 只有标题"环境监测"
+    slot-con [FRAME]      ← 内容区
+      sub-t [FRAME]       ← tabs + icons + badge
+        tabs-list
+        tabs-icon
+        num
+      @echarts/line
+
+判断：sub-t 的父级是 slot-con（内容区），不是 header
+→ sub-t 的 headerRelation = "content-below-title"（无论视觉位置如何）
+→ sub-t 内的 tabs-icon 禁止进入 #header-right 插槽
+```
+
+#### 第一步：Y 坐标同行校验（第零步无法判定时执行）
+
+**判断 section 是否与面板标题文字在同一水平行：**
+
+| 判断方法 | 说明 |
+|---------|------|
+| **面板标题位置** | 预览图最顶部的文字标题（如"监测预警"、"设备监测"）就是面板标题 |
+| **标题行范围** | 面板标题文字上下 ±15px 的区域才算"同行" |
+| **内容区起始** | 标题行下方有任何间隔线/横幅/空白区域后的元素，都属于内容区 |
+
+**强制判断流程：**
+1. 在预览图上定位面板标题文字（通常是顶部最大的标题文字）
+2. 观察目标 section 的 Y 坐标位置：
+   - section 与面板标题文字 **在同一水平带（Y 坐标差 < 20px）** → 可能 `title-same-row`，继续下一步判断
+   - section 在面板标题 **下方**（即使只低一点点，或在渐变横幅下方） → **必须是 `content-below-title`**
+3. **如果无法确认 Y 坐标关系** → 保守设为 `content-below-title`
+
+#### 第二步：标题行 section 的进一步判断
+
+**只有通过了 Y 坐标同行校验的 section，才需要继续判断以下条件（同时满足才能设为 `"title-same-row"`）：**
+
+1. 该 section **没有自己的独立标题**（如"当日总流量"、"车型分布"等）
+2. 该 section 在面板标题文字的 **右侧**
+
+**否则一律设为 `"content-below-title"`。**
+
+> 🔴 **注意**：原"控件类才可同行"的限制已移除。统计指标、状态标签等数据展示类内容，只要在 header group 内且与标题同行，同样设为 `title-same-row`。
+
+#### 典型场景对照表
+
+| 场景 | Figma 结构树归属 | Y 坐标位置 | headerRelation | 原因 |
+|------|-----------------|-----------|---------------|------|
+| 面板标题右侧的统计指标 | header group 内 | 与标题同行 | `title-same-row` | 结构树+视觉均属于头部 |
+| 面板标题右侧的视图切换 Tab | header group 内 | 与标题同行 | `title-same-row` | 结构树+视觉均属于头部 |
+| 面板标题右侧的关闭按钮 | header group 内 | 与标题同行 | `title-same-row` | slotCandidate: "close" |
+| **装饰性图标（右上角）** | **slot-con 内** | **标题行下方（内容区第一行）** | **`content-below-title`** | **结构树属于内容区** |
+| **数据筛选 Tab（"全部/桥梁/边坡"）** | **slot-con 内** | **标题行下方（渐变横幅下）** | **`content-below-title`** | **结构树属于内容区** |
+| **内容区顶部的 Tab+图标组** | **slot-con 内** | **标题下方但视觉紧邻标题** | **`content-below-title`** | **🔴 结构树属于 slot-con，禁止进 #header-right** |
+| 统计卡片区域 | slot-con 内 | 内容区 | `content-below-title` | 数据展示 |
+| 图表区域 | slot-con 内 | 内容区 | `content-below-title` | 数据展示 |
+
+#### 常见错误
+
+**❌ 错误 1：把"内容区第一行"当成"标题行"**
+```
+预览图结构：
+┌─────────────────────────────────
+│  [面板标题]  "监测预警"          │  ← 标题行（Y ≈ 70px）
+├─────────────────────────────────┤
+│ [Tab全部][Tab桥梁]  [装饰图标]  │  ← 内容区第一行（Y ≈ 130px，与标题不同行！）
+│ [预警列表...]                    │
+└─────────────────────────────────
+```
+- Tab 和装饰图标都在标题行 **下方**，即使它们看起来在"顶部"，也必须是 `content-below-title`
+
+**❌ 错误 2：只看"在组件顶部"就判为 header**
+- "顶部" ≠ "标题行"，内容区第一行也在顶部，但它不是标题行
+
+**❌ 错误 3：有渐变横幅/蓝色条就判为 header**
+- 渐变横幅/蓝色条是内容区的视觉装饰，不是标题行的边界
+
+**❌ 错误 4：忽略 Figma 结构树，仅凭视觉位置判断归属（🔴 最严重）**
+```
+设计结构树：                        预览图视觉：
+  cp-环境监测                        ┌──────────────────────┐
+    header [GROUP] ← 只有标题        │ 环境监测    [图标][角标] │ ← 视觉上图标紧邻标题右侧
+    slot-con [FRAME] ← 内容区        │ [Tab1][Tab2][Tab3]    │
+      sub-t [FRAME] ← tabs+icons     │ [折线图...]            │
+        tabs-list                    └──────────────────────┘
+        tabs-icon  ← 这里！
+        num
+      @echarts/line
+
+错误判断：tabs-icon 视觉上在标题右侧 → 放入 #header-right
+正确判断：tabs-icon 的父级是 sub-t → sub-t 的父级是 slot-con（内容区）
+         → 禁止进入 #header-right，必须在内容区的 DOM 容器中渲染
+```
+- 🔴 **结构树归属是第一判据，视觉位置是辅助判据**
+- 🔴 **slot-con 内的元素，无论视觉位置如何紧邻标题行，都禁止设为 `title-same-row`**
+
+**✅ 正确：先查结构树，再看 Y 坐标**
+- 第零步：结构树中父级是 `header` → 可考虑 `title-same-row`；父级是 `slot-con` → 强制 `content-below-title`
+- 第一步：结构树无法判定时，才用 Y 坐标同行校验
+- 不同行 → 一律 `content-below-title`，不需要再判断其他条件
+
+**弹窗/模态框特殊规则：**
+- 弹窗的标题栏（含图标、关闭按钮、背景）如果是内容区上方的独立区域 → `content-below-title`
+- 弹窗标题栏上的图标若与面板标题同行 → `title-same-row`，`slotCandidate`: `title-left`
+- 弹窗标题栏上的关闭按钮若与面板标题同行 → `title-same-row`，`slotCandidate`: `close`
+- **禁止**把弹窗内容区标题栏误判为面板标题本身
+
+**典型错误**：
+- ❌ 有"当日总流量"标题的统计区 → 必须是 `content-below-title`，即使它在顶部
+- ❌ 有大数值（34,620）的统计卡片 → 必须是 `content-below-title`
+- ❌ 弹窗内部的标题栏（含渐变背景、关闭按钮）→ 是内容区 section，不是面板标题
+- ✅ 只有一个时间选择器下拉框，且与面板标题在同一行 → 可以是 `title-same-row`
+
+###  Tab 类型区分（CRITICAL — 必须区分头部 Tab 和内容区 Tab）
+
+**Tab 控件既可能位于 Header 也可能位于 Content，必须按以下规则严格区分：**
+
+| Tab 类型 | 典型文字 | Figma 结构树归属 | 位置特征 | headerRelation |
+|---------|---------|-----------------|---------|---------------|
+| **头部视图切换** | "列表/图表"、"日/周/月"、"视图 A/B" | header group 内 | 紧贴面板标题，尺寸小（高 < 30px） | `title-same-row` |
+| **内容区数据筛选** | "全部"、"桥梁监测"、"边坡监测"、"路段 A/B" | slot-con 内 | 在渐变头部横幅/蓝色条下方，尺寸较大 | `content-below-title` |
+| **内容区顶部 Tab+图标组** | 多个 Tab + 右侧图标/角标 | slot-con 内的子 frame | 视觉上可能紧邻标题行 | 🔴 `content-below-title` |
+
+**强制判断优先级（按顺序执行）：**
+1. 🔴 **看 Figma 结构树（最高优先级）**：若 Tab 所在 frame 的父级是 `slot-con`（内容区）→ **强制 `content-below-title`**，不需要再看其他条件
+2. **看位置**：若 Tab 在渐变横幅/装饰条/蓝色条下方 → `content-below-title`
+3. **看文字**：若 Tab 文字是地点/数据类型（如"全部/桥梁/边坡/路段"）→ `content-below-title`
+4. **看尺寸**：若 Tab 容器高度 > 40px 或宽度 > 80px → 通常是内容区 → `content-below-title`
+5. **看数量**：若 Tab 数量 ≥ 3 且包含"全部" → 通常是数据筛选 → `content-below-title`
+
+**典型错误**：
+- ❌ 将"全部/桥梁监测/边坡监测"等数据筛选 Tab 放入 `header-right`
+- ❌ 将位于渐变横幅下方的 Tab 视为标题行控件
+- 🔴 **将 slot-con 内的 Tab+图标组拆分，图标进 #header-right、Tab 留内容区**（结构树中它们属于同一 frame，禁止拆分到不同 DOM 容器）
+- ✅ 只有小型视图切换 Tab（如"列表/图表"）且结构树中属于 header group → 可以是 `title-same-row`
+
+
+---
+
+<!-- module(optional): common-errors -->
+# 常见错误与修复指南
+
+> 本文档汇总 preview-analysis 中最常见的错误场景，帮助 AI 避免重复犯错。
+
+---
+
+## 1. layoutDirection 误判
+
+### ❌ 错误场景
+将"左右分栏"识别为 `column`（垂直布局）。
+
+### ✅ 正确判断
+- **左右分栏** → `row`（水平布局）
+- **上下堆叠** → `column`（垂直布局）
+
+### 判断方法
+1. 观察面板标题下方的内容排列方向
+2. 如果是"标题 | 图表"左右排列 → `row`
+3. 如果是"标题 + 图表"上下堆叠 → `column`
+
+### 典型场景对照表
+
+| 视觉表现 | ✅ 正确 | ❌ 错误 |
+|---------|--------|--------|
+| 标题在左，图表在右 | `row` | `column` |
+| 标题在上，图表在下 | `column` | `row` |
+| 多个图表横向并排 | `row` | `column` |
+| 多个图表纵向堆叠 | `column` | `row` |
+| 网格布局（2x2） | `grid` | `row` / `column` |
+
+---
+
+## 2. headerRelation 误判
+
+### ❌ 错误场景
+- 标题在左、图表在右 → 错误识别为 `above`
+- 标题在图表内部左上角 → 错误识别为 `above`
+
+### ✅ 正确判断
+
+| 标题位置 | ✅ 正确 | 说明 |
+|---------|--------|------|
+| 标题在图表上方（独占一行） | `above` | 标题和图表是上下关系 |
+| 标题在图表左上角（与图表同行） | `overlapping` | 标题覆盖在图表区域上 |
+| 标题在图表内部左侧 | `inside-left` | 标题在图表容器内左侧 |
+| 标题在图表内部顶部 | `inside-top` | 标题在图表容器内顶部 |
+| 无标题 | `none` | 没有标题 |
+
+### 关键判断规则
+1. **先看 Y 坐标**：标题和图表是否在同一行？
+   - 同一行 → `overlapping` / `inside-left` / `inside-top`
+   - 不同行 → `above` / `none`
+2. **再看包含关系**：标题是否在图表容器内部？
+   - 在内部 → `inside-left` / `inside-top`
+   - 在外部 → `overlapping` / `above`
+
+---
+
+## 3. 图表类型误判
+
+### ❌ 错误场景
+- 将"装饰性圆弧"识别为环形图
+- 将"进度条"识别为柱状图
+
+### ✅ 正确判断
+
+| 视觉元素 | ✅ 正确类型 | ❌ 错误类型 | 判断依据 |
+|---------|-----------|-----------|---------|
+| 细长三角形色块（无数据标签） | `decoration` | `pie-chart` / `donut-chart` | 无数据系列、无图例 |
+| 单行进度填充 | `progress-bar` | `bar-chart` | 无多根柱子、无坐标轴 |
+| 胶囊形步骤指示器 | `step-indicator` | `donut-chart` | 多个小圆形等距排列、无圆弧 |
+
+---
+
+## 4. 图例方向误判
+
+### ❌ 错误场景
+将"横向排列的图例"识别为 `vertical`。
+
+### ✅ 正确判断
+- **图例项横向排列**（左右并排） → `horizontal`
+- **图例项纵向排列**（上下堆叠） → `vertical`
+
+### 判断方法
+1. 观察图例项的排列方向
+2. 如果图例项是"项目A | 项目B | 项目C"横向排列 → `horizontal`
+3. 如果图例项是"项目A / 项目B / 项目C"纵向排列 → `vertical`
+
+---
+
+## 5. sections.layout 误判
+
+### ❌ 错误场景
+将"图表 + 图例"的横向排列识别为 `column`。
+
+### ✅ 正确判断
+- **图表和图例左右排列** → `row`
+- **图表和图例上下排列** → `column`
+
+### 典型场景
+| 视觉表现 | ✅ 正确 | ❌ 错误 |
+|---------|--------|--------|
+| 图表在左，图例在右 | `row` | `column` |
+| 图表在上，图例在下 | `column` | `row` |
+
+---
+
+## 6. heightRatio / widthRatio 估算错误
+
+### ❌ 错误场景
+- 将所有面板的 heightRatio 都设为 `1`
+- 将左右分栏的两个面板 widthRatio 都设为 `0.5`（实际可能是 3:7）
+
+### ✅ 正确估算方法
+
+**heightRatio**（垂直方向占比）：
+- 观察面板在整个页面垂直方向的高度占比
+- 例如：页面分为上下 3 行，每行 heightRatio ≈ 0.33
+- 例如：页面分为上下 2 行，第一行占 60% → heightRatio = 0.6
+
+**widthRatio**（水平方向占比）：
+- 观察面板在父容器水平方向的宽度占比
+- 例如：左右分栏，左 30% 右 70% → widthRatio = 0.3 / 0.7
+- 例如：三列均分 → widthRatio = 0.33 / 0.33 / 0.34
+
+### 估算技巧
+1. 先确定父容器的 layout（row / column）
+2. 再估算每个子面板的占比
+3. 所有同级面板的 ratio 之和应 ≈ 1.0
+
+---
+
+## 7. 文字保真度错误
+
+### ❌ 错误场景
+- 将"环境温度"简写为"环温"
+- 将"PM2.5"写为"pm2.5"
+- 将"1200吨"写为 `value: "1200吨"`（单位未分离）
+
+### ✅ 正确做法
+- **逐字抄写**：按图中实际显示抄写，禁止简写/缩写/同义替换
+- **大小写保持**：PM2.5 不能写为 pm2.5
+- **单位分离**：`value: "1200", unit: "吨"`（不是 `value: "1200吨"`）
+- **特殊字符**：CO₂（下标 2）、m²（上标 2）必须使用 Unicode 字符
+
+---
+
+## 8. imageEvidence 占位符错误
+
+### ❌ 错误场景
+- `firstVisibleText: "标题"`（占位符，不是实际文字）
+- `dominantBgColor: "深色"`（描述性文字，不是色值）
+- `specificElements: [{"type": "某个按钮"}]`（过于抽象）
+
+### ✅ 正确做法
+- `firstVisibleText: "监测预警"`（具体可见的文字）
+- `dominantBgColor: "#1a1a2e"`（具体色值）
+- `specificElements: [{"type": "tab-button", "position": "顶部中间", "content": "全部"}]`（可验证的元素）
+
+---
+
+## 9. 字段名错误
+
+### ❌ 错误场景
+- `layout-direction`（kebab-case）
+- `LayoutDirection`（PascalCase）
+- `layout_direction`（snake_case）
+
+### ✅ 正确做法
+所有字段名必须使用 **camelCase**：
+- ✅ `layoutDirection`
+- ✅ `headerRelation`
+- ✅ `heightRatio`
+- ✅ `widthRatio`
+
+---
+
+## 10. JSON 格式错误
+
+### ❌ 错误场景
+- 使用单引号：`{'type': 'chart'}`
+- 包含 Markdown 包裹：```json { ... } ```
+- 包含前后说明文字："以下是分析结果：{ ... }"
+
+### ✅ 正确做法
+- **纯 JSON**：无任何 Markdown 包裹、无任何前后说明文字
+- **双引号**：所有 key 和 string value 使用双引号
+- **直接输出**：`{"type": "chart", ...}`
+
+---
+
+## 自检清单（输出前必须逐项确认）
+
+- [ ] layoutDirection 是否正确判断了排列方向？
+- [ ] headerRelation 是否正确判断了标题位置？
+- [ ] 图表类型是否正确识别（排除了装饰性元素）？
+- [ ] 图例方向是否正确判断？
+- [ ] sections.layout 是否正确判断？
+- [ ] heightRatio / widthRatio 是否合理估算？
+- [ ] 所有文字是否逐字抄写、单位已分离？
+- [ ] imageEvidence 是否为具体值（非占位符）？
+- [ ] 所有字段名是否为 camelCase？
+- [ ] 输出是否为纯 JSON（无 Markdown 包裹、无说明文字）？
+
+**任何一项不通过 → 停止输出，修正后再输出。**
+
+
+
+---
+
+## 📐 Figma 结构参考（交叉验证用）
+
+以下是从 Figma 设计稿提取的结构化数据。请结合预览图进行交叉验证：
+- **section 名称**应与 Figma 节点名称对应
+- **文字内容**（label/value）应参考 Figma 中的文本节点
+- **布局方向**应与 Figma 子节点的排列方式一致
+- **颜色值**应参考 Figma 中的填充色
+- **图标和背景**如果标注了 📎 资源文件，必须在对应位置使用该资源（img/:src 或 backgroundImage），不要用内联SVG/CSS渐变替代
+
+- Frame 2136637714 420x147
+  - bg 420x147 color=[rgba(237,244,251,1)] → ⚡ CSS: `background: #edf4fbb2` (无需图片)
+  - header 380x28
+    - tabs 204x18
+      [layout: horizontal, 2 children]
+      - Frame 2136638771 128x19 color=[rgba(25,144,255,1)]
+      - Frame 2136638769 68x19 color=[rgba(102,128,160,1)]
+    - 小标题 380x28
+      - Vector 1484 376x0
+      - g 8x8 → ⚡ CSS: `background: #edf4fbb2` (无需图片)
+        [layout: vertical, 3 children]
+      - Vector 1476 362x6 [has-gradient]
+      - 重点车辆监测 96x19 text="重点车辆监测" [has-gradient]
+      - *数据实时更新 91x21 [has-gradient]
+  - slot 377x86
+    - Group 2136639043 378x74
+      - 3 141x74 → ⛔ 下载失败(⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）)
+      - 2 120x74 → ⛔ 下载失败(⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）)
+        [layout: vertical, 4 children]
+      - 1 140x74 → ⛔ 下载失败(⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）)
+        [layout: vertical, 4 children]
+    - sub-header 86x24
+      [layout: horizontal, 2 children]
+      - icon 18x18 → 📎 ../resources/images/icon-123.png (变量: ?, 用法: decorativeBlock)
+        [layout: vertical, 3 children]
+      - 今日累计 64x24 text="今日累计" color=[rgba(51,51,51,1)]
+
+
+
+---
+
+## 🎨 已下载资源清单（必须使用，禁止替代）
+
+以下资源已成功下载，在输出 JSON 中遇到对应位置时，**必须使用 resourceFile 字段引用实际资源路径**，禁止使用 placeholder + CSS/SVG 替代。
+
+- **bg**: bg → bg区域 → ⚡ CSS: `background: #edf4fbb2` (无需图片)
+- **icon**: g → g区域 → 📎 ../resources/images/g-7961.png (变量: N/A, 用法: imgSrc)
+- **bg**: bg → bg区域 → 📎 ../resources/images/bg-126.png (变量: N/A, 用法: backgroundBlock)
+- **icon**: icon → icon区域 → 📎 ../resources/images/icon-123.png (变量: N/A, 用法: decorativeBlock)
+- **bg**: bg → bg区域 → 📎 ../resources/images/bg-124.png (变量: N/A, 用法: backgroundBlock)
+- **icon**: icon → icon区域 → 📎 ../resources/images/icon-8049.png (变量: N/A, 用法: imgSrc)
+- **bg**: bg → bg区域 → 📎 ../resources/images/bg-125.png (变量: N/A, 用法: backgroundBlock)
+- **icon**: icon → icon区域 → 📎 ../resources/images/icon-8036.png (变量: N/A, 用法: imgSrc)
+- **icon**: icon → icon区域 → 📎 ../resources/images/icon-8070.png (变量: N/A, 用法: imgSrc)
+
+⚠️ 输出规范：对 icon/bg/image 类元素，优先输出 "resourceFile" 和 "recommendedUsage" 字段，而非 "placeholder"。
+⚡ CSS 替代资源（标记为 CSS: background: ...）不要输出 resourceFile，直接在样式中使用 CSS 值。
+
+### 头部插槽识别（面板组件专用）
+
+如果检测到面板标题栏区域有交互控件或附加信息，请输出 "headerSlots" 数组，将它们映射到 base-panel 的具名插槽：
+
+- **#title-left**: 标题栏左侧（装饰图标、状态标识、小icon）
+- **#title-right**: 标题右侧紧邻（副标题、更新时间、单位标注）
+- **#header-right**: 标题右侧靠右（统计指标、Tab切换按钮、图标操作按钮）
+- **#close**: 最右侧关闭按钮（通常由面板默认提供，不需要输出）
+
+每个元素格式：{ "slotType": "title-left/title-right/header-right", "elementType": "icon/tab/statistic/label", "content": "具体内容", "figmaNodeId": "节点ID（如有）" }
+
+⚠️ **注释过滤（CRITICAL）**：以下文本节点属于设计师注释/标注，**不应**识别为UI内容或插槽元素：
+- 以 * 或 # 开头的文本（如「*数据实时更新」、「#备注说明」）
+- 包含 TODO / FIXME / 注 / 标注 / 备注 的文本
+- 字号小于 10px 且内容少于 10 个字符的文本节点
+- 纯重复符号（如 *** / --- / ===）
+
+
+# 输出规范（Schema 引用）
+
+
+
+
+---
+
+## 分析任务
+
+请分析以下微码组件的预览图：
+
+- **组件名称**: 
+
+请严格按照上述规范输出 JSON 格式的 preview-analysis 结果。

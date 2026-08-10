@@ -1,0 +1,96 @@
+{
+  "stage": "codegen_done",
+  "brief": {
+    "layout": "整体为横向矩形布局，自上而下分为标题区、导航Tab区和图表区。主轴方向为垂直，各区域水平对齐。图表区占据最大比例。",
+    "regions": [
+      {
+        "name": "标题区",
+        "description": "包含'环境监测'标题文字",
+        "position": "top",
+        "size": "高度较小，宽度占满"
+      },
+      {
+        "name": "导航Tab区",
+        "description": "包含'一氧化碳'、'能见度'等Tab选项及右侧功能按钮",
+        "position": "top",
+        "size": "高度适中，宽度占满"
+      },
+      {
+        "name": "图表区",
+        "description": "包含坐标轴、折线图、图例和预警线",
+        "position": "center/bottom",
+        "size": "高度最大，宽度占满"
+      }
+    ],
+    "spacing": {
+      "outer": "截图边缘有黑色边框",
+      "gap": "各区域间有适度间距，Tab项之间有间距",
+      "padding": "图表区内部有留白以容纳坐标轴标签"
+    },
+    "colors": {
+      "primary": "#4fa4d8",
+      "background": "#a0a5ab",
+      "surface": "#ffffff",
+      "text": "#333333",
+      "border": "#cccccc"
+    },
+    "typography": {
+      "size": "标题字号最大，Tab文字次之，坐标轴和图例文字较小",
+      "weight": "标题和激活Tab字重较粗",
+      "lineHeight": "行高适中，文字清晰可读"
+    },
+    "components": [
+      "Tab切换栏",
+      "图标按钮",
+      "折线图",
+      "角标"
+    ],
+    "textContent": [
+      "环境监测",
+      "一氧化碳",
+      "能见度",
+      "洞内照明",
+      "洞外光强",
+      "zk3+785CO浓度",
+      "预警线",
+      "辆",
+      "时",
+      "0",
+      "10",
+      "20",
+      "30",
+      "40",
+      "2",
+      "4",
+      "6",
+      "8",
+      "10",
+      "12",
+      "14",
+      "16",
+      "18",
+      "20",
+      "22",
+      "24",
+      "6"
+    ],
+    "visualDetails": [
+      "Tab栏左侧有箭头形状设计",
+      "当前激活Tab'一氧化碳'背景为蓝色，文字为白色",
+      "右上角按钮有红色圆形角标，内含数字'6'",
+      "图表背景有水平虚线网格",
+      "预警线为红色虚线",
+      "折线为绿色实线，下方有半透明绿色填充区域"
+    ],
+    "interactions": [
+      "Tab切换栏：包含'一氧化碳'(当前激活)、'能见度'、'洞内照明'、'洞外光强'",
+      "右上角图标按钮：柱状图图标和列表图标"
+    ]
+  },
+  "width": 880,
+  "height": 412,
+  "sourceType": "figma",
+  "componentType": "vue3",
+  "generationTier": "lite",
+  "vueCode": "<template>\n  <div class=\"container\">\n    <!-- 标题区 -->\n    <div class=\"header\">\n      <h1 class=\"title\">环境监测</h1>\n    </div>\n\n    <!-- 导航Tab区 -->\n    <div class=\"nav-bar\">\n      <div class=\"tabs-container\">\n        <div \n          v-for=\"tab in tabs\" \n          :key=\"tab\"\n          class=\"tab-item\"\n          :class=\"{ active: currentTab === tab }\"\n          @click=\"currentTab = tab\"\n        >\n          {{ tab }}\n        </div>\n      </div>\n      \n      <div class=\"actions\">\n        <div class=\"icon-btn\">\n          <svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#4fa4d8\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\">\n            <line x1=\"18\" y1=\"20\" x2=\"18\" y2=\"10\"></line>\n            <line x1=\"12\" y1=\"20\" x2=\"12\" y2=\"4\"></line>\n            <line x1=\"6\" y1=\"20\" x2=\"6\" y2=\"14\"></line>\n          </svg>\n        </div>\n        <div class=\"icon-btn relative\">\n          <svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#4fa4d8\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\">\n            <line x1=\"8\" y1=\"6\" x2=\"21\" y2=\"6\"></line>\n            <line x1=\"8\" y1=\"12\" x2=\"21\" y2=\"12\"></line>\n            <line x1=\"8\" y1=\"18\" x2=\"21\" y2=\"18\"></line>\n            <line x1=\"3\" y1=\"6\" x2=\"3.01\" y2=\"6\"></line>\n            <line x1=\"3\" y1=\"12\" x2=\"3.01\" y2=\"12\"></line>\n            <line x1=\"3\" y1=\"18\" x2=\"3.01\" y2=\"18\"></line>\n          </svg>\n          <div class=\"badge\">6</div>\n        </div>\n      </div>\n    </div>\n\n    <!-- 图表区 -->\n    <div class=\"chart-container\">\n      <div class=\"y-axis-label top-left\">辆</div>\n      <div class=\"x-axis-label bottom-right\">时</div>\n      <div ref=\"chartRef\" class=\"echarts-box\"></div>\n    </div>\n  </div>\n</template>\n\n<script setup>\nimport { ref, onMounted, onUnmounted } from 'vue';\nimport * as echarts from 'echarts';\n\nconst currentTab = ref('一氧化碳');\nconst tabs = ['一氧化碳', '能见度', '洞内照明', '洞外光强'];\nconst chartRef = ref(null);\nlet chartInstance = null;\n\nonMounted(() => {\n  if (chartRef.value) {\n    chartInstance = echarts.init(chartRef.value);\n    const option = {\n      grid: {\n        top: 40,\n        bottom: 30,\n        left: 40,\n        right: 40,\n        containLabel: false\n      },\n      xAxis: {\n        type: 'category',\n        data: ['2', '4', '6', '8', '10', '12', '14', '16', '18', '20', '22', '24'],\n        axisLine: { show: false },\n        axisTick: { show: false },\n        axisLabel: {\n          color: '#666',\n          margin: 15\n        },\n        splitLine: {\n          show: false\n        }\n      },\n      yAxis: {\n        type: 'value',\n        min: 0,\n        max: 40,\n        interval: 10,\n        axisLine: { show: false },\n        axisTick: { show: false },\n        axisLabel: {\n          color: '#666',\n          formatter: '{value}'\n        },\n        splitLine: {\n          lineStyle: {\n            type: 'dashed',\n            color: '#dcdcdc'\n          }\n        }\n      },\n      series: [\n        {\n          name: 'zk3+785CO浓度',\n          type: 'line',\n          smooth: true,\n          symbol: 'none',\n          lineStyle: {\n            color: '#4ade80', // 绿色\n            width: 2\n          },\n          areaStyle: {\n            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [\n              { offset: 0, color: 'rgba(74, 222, 128, 0.4)' },\n              { offset: 1, color: 'rgba(74, 222, 128, 0.05)' }\n            ])\n          },\n          data: [5, 7, 6, 4, 3, 5, 11, 14, 13, 11, 5, 1],\n          markLine: {\n            symbol: 'none',\n            label: {\n              position: 'end',\n              formatter: '预警线',\n              color: '#ef4444',\n              fontSize: 14,\n              offset: [0, -10]\n            },\n            lineStyle: {\n              type: 'dashed',\n              color: '#ef4444'\n            },\n            data: [\n              { yAxis: 30 }\n            ]\n          }\n        }\n      ],\n      legend: {\n        data: ['zk3+785CO浓度'],\n        right: 20,\n        top: 10,\n        textStyle: {\n          color: '#333'\n        },\n        icon: 'rect'\n      }\n    };\n    chartInstance.setOption(option);\n  }\n});\n\nonUnmounted(() => {\n  if (chartInstance) {\n    chartInstance.dispose();\n  }\n});\n</script>\n\n<style scoped>\n.container {\n  background-color: #9ba4ad;\n  width: 100%;\n  height: 100%;\n  min-height: 500px;\n  padding: 20px 30px;\n  box-sizing: border-box;\n  font-family: sans-serif;\n  position: relative;\n  display: flex;\n  flex-direction: column;\n}\n\n.header {\n  margin-bottom: 10px;\n}\n\n.title {\n  color: #5b9bd5;\n  font-size: 24px;\n  margin: 0;\n  font-weight: bold;\n  letter-spacing: 1px;\n}\n\n.nav-bar {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  margin-bottom: 20px;\n  position: relative;\n}\n\n.tabs-container {\n  display: flex;\n  background-color: #8cbce6; /* 浅蓝色长条背景 */\n  /* 模拟左侧箭头形状 */\n  clip-path: polygon(20px 0, 100% 0, 100% 100%, 20px 100%, 0 50%);\n  padding-left: 25px; /* 给箭头留空间 */\n  padding-right: 10px;\n  height: 40px;\n  align-items: center;\n  flex: 1;\n  max-width: 70%;\n  margin-right: 20px;\n}\n\n.tab-item {\n  padding: 0 20px;\n  color: #fff;\n  font-size: 16px;\n  cursor: pointer;\n  height: 100%;\n  display: flex;\n  align-items: center;\n  transition: all 0.3s;\n  white-space: nowrap;\n}\n\n.tab-item.active {\n  background-color: #2b7bb6; /* 深蓝色激活态 */\n  /* 激活项也需要稍微调整形状以匹配整体，这里简化处理，主要靠背景色区分 */\n  clip-path: polygon(15px 0, 100% 0, 100% 100%, 15px 100%, 0 50%);\n  margin-left: -15px; /* 向左偏移覆盖箭头 */\n  padding-left: 30px;\n  font-weight: bold;\n  z-index: 2;\n}\n\n.actions {\n  display: flex;\n  gap: 10px;\n}\n\n.icon-btn {\n  width: 36px;\n  height: 36px;\n  background-color: #fff;\n  border-radius: 6px;\n  display: flex;\n  justify-content: center;\n  align-items: center;\n  cursor: pointer;\n  box-shadow: 0 2px 4px rgba(0,0,0,0.1);\n}\n\n.icon-btn svg {\n  width: 20px;\n  height: 20px;\n}\n\n.relative {\n  position: relative;\n}\n\n.badge {\n  position: absolute;\n  top: -8px;\n  right: -8px;\n  background-color: #ef4444;\n  color: white;\n  font-size: 12px;\n  font-weight: bold;\n  width: 20px;\n  height: 20px;\n  border-radius: 50%;\n  display: flex;\n  justify-content: center;\n  align-items: center;\n  border: 2px solid #9ba4ad; /* 匹配背景色以产生镂空感 */\n}\n\n.chart-container {\n  flex: 1;\n  position: relative;\n  background: transparent;\n}\n\n.echarts-box {\n  width: 100%;\n  height: 100%;\n  min-height: 300px;\n}\n\n.y-axis-label {\n  position: absolute;\n  top: 10px;\n  left: 10px;\n  color: #666;\n  font-size: 14px;\n  z-index: 10;\n}\n\n.x-axis-label {\n  position: absolute;\n  bottom: 10px;\n  right: 10px;\n  color: #666;\n  font-size: 14px;\n  z-index: 10;\n}\n</style>"
+}

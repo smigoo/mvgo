@@ -1,0 +1,152 @@
+```json
+{
+  "componentName": "cp-环境监测",
+  "description": "环境监测数据面板，包含标题、Tab切换、图表展示及右上角操作图标。",
+  "dimensions": {
+    "width": 420,
+    "height": 186
+  },
+  "styles": {
+    "background": "#edf4fbb2",
+    "borderRadius": "4px"
+  },
+  "structure": {
+    "header": {
+      "title": "环境监测",
+      "titleStyle": {
+        "fontSize": "16px",
+        "fontWeight": "bold",
+        "color": "linear-gradient(90deg, #b5deff 0%, #d1ecff 100%)" 
+      },
+      "slots": [
+        {
+          "slotType": "title-left",
+          "elementType": "icon",
+          "content": "装饰图标",
+          "resourceFile": "../resources/images/g-7883.png",
+          "recommendedUsage": "imgSrc",
+          "dimensions": { "width": 8, "height": 8 }
+        }
+      ]
+    },
+    "content": {
+      "layout": "vertical",
+      "children": [
+        {
+          "section": "sub-t (Control Bar)",
+          "layout": "horizontal",
+          "justifyContent": "space-between",
+          "alignItems": "center",
+          "dimensions": { "width": 380, "height": 32 },
+          "children": [
+            {
+              "section": "tabs-list",
+              "elementType": "tabs",
+              "items": [
+                {
+                  "label": "一氧化碳",
+                  "active": true,
+                  "style": {
+                    "background": "linear-gradient(90deg, #1099b1 0%, #038fff 100%)",
+                    "color": "#ffffff",
+                    "borderRadius": "12px"
+                  }
+                },
+                { "label": "能见度", "active": false, "color": "#ffffff" },
+                { "label": "洞内照明", "active": false, "color": "#ffffff" },
+                { "label": "洞外光强", "active": false, "color": "#ffffff" }
+              ]
+            },
+            {
+              "section": "right-actions",
+              "layout": "horizontal",
+              "alignItems": "center",
+              "children": [
+                {
+                  "elementType": "icon-group",
+                  "content": "图表与列表切换图标",
+                  "resourceFile": "../resources/images/tabs-icon-43.png",
+                  "recommendedUsage": "decorativeBlock",
+                  "dimensions": { "width": 52, "height": 24 }
+                },
+                {
+                  "elementType": "badge",
+                  "content": "6",
+                  "style": {
+                    "backgroundColor": "#f53f3f",
+                    "color": "#ffffff",
+                    "borderRadius": "50%",
+                    "fontSize": "10px",
+                    "width": 14,
+                    "height": 14,
+                    "display": "flex",
+                    "justifyContent": "center",
+                    "alignItems": "center"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "section": "chart-area",
+          "elementType": "echarts-line",
+          "dimensions": { "width": 380, "height": 113 },
+          "config": {
+            "grid": { "top": 20, "bottom": 20, "left": 30, "right": 20 },
+            "xAxis": {
+              "type": "category",
+              "data": ["2", "4", "6", "8", "10", "12", "14", "16", "18", "20", "22", "24"],
+              "name": "时",
+              "nameLocation": "end",
+              "axisLine": { "show": false },
+              "axisTick": { "show": false }
+            },
+            "yAxis": {
+              "type": "value",
+              "min": 0,
+              "max": 40,
+              "interval": 10,
+              "name": "辆",
+              "nameLocation": "end",
+              "splitLine": { "lineStyle": { "type": "dashed", "color": "rgba(255,255,255,0.2)" } }
+            },
+            "series": [
+              {
+                "name": "zk3+785CO浓度",
+                "type": "line",
+                "smooth": true,
+                "symbol": "none",
+                "lineStyle": { "color": "#5cb85c", "width": 2 },
+                "areaStyle": {
+                  "color": {
+                    "type": "linear",
+                    "x": 0, "y": 0, "x2": 0, "y2": 1,
+                    "colorStops": [
+                      { "offset": 0, "color": "rgba(92, 184, 92, 0.5)" },
+                      { "offset": 1, "color": "rgba(92, 184, 92, 0.1)" }
+                    ]
+                  }
+                },
+                "data": [2, 3, 5, 4, 3, 3, 5, 8, 12, 10, 8, 5]
+              }
+            ],
+            "markLine": {
+              "symbol": "none",
+              "label": { "formatter": "预警线", "position": "end", "color": "#f53f3f" },
+              "lineStyle": { "type": "dashed", "color": "#f53f3f" },
+              "data": [{ "yAxis": 30 }]
+            },
+            "legend": {
+              "data": ["zk3+785CO浓度"],
+              "right": 0,
+              "top": 0,
+              "textStyle": { "color": "#5cb85c", "fontSize": 10 }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+```

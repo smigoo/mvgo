@@ -1,0 +1,17 @@
+{
+  "componentId": "mc-lite-1785901316110-534afcc6",
+  "componentName": "mc-lite-table-test",
+  "panelType": "default-panel",
+  "defaultTheme": "dark",
+  "size": {
+    "width": 796,
+    "height": 486
+  },
+  "businessEvents": [],
+  "businessStatuses": [],
+  "dataSources": [],
+  "formSources": [],
+  "layoutConfig": {},
+  "themeConfig": {},
+  "businessConfig": {}
+}

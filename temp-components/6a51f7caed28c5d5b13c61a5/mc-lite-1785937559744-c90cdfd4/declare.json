@@ -1,0 +1,17 @@
+{
+  "componentId": "mc-lite-1785937559744-c90cdfd4",
+  "componentName": "mc-lite-1785937559744-c90cdfd4",
+  "panelType": "default-panel",
+  "defaultTheme": "dark",
+  "size": {
+    "width": 440,
+    "height": 445
+  },
+  "businessEvents": [],
+  "businessStatuses": [],
+  "dataSources": [],
+  "formSources": [],
+  "layoutConfig": {},
+  "themeConfig": {},
+  "businessConfig": {}
+}

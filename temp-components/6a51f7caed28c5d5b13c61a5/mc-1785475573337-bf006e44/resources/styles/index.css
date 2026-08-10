@@ -1,0 +1,312 @@
+.c-mc-1785475573337-bf006e44-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 16px;
+}
+.c-mc-1785475573337-bf006e44-title-decor {
+  width: 8px;
+  height: 8px;
+}
+.c-mc-1785475573337-bf006e44-tabs {
+  display: flex;
+  gap: 8px;
+}
+.c-mc-1785475573337-bf006e44-tab {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 21px;
+}
+.c-mc-1785475573337-bf006e44-tab-active {
+  background: #1990ff;
+  color: #ffffff;
+  border: 0.73px solid #c7e0ff;
+}
+.c-mc-1785475573337-bf006e44-tab-inactive {
+  background: #6680a0;
+  color: #333333;
+  border: 0.73px solid #acc4e1;
+}
+.c-mc-1785475573337-bf006e44-sub-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.c-mc-1785475573337-bf006e44-sub-header-icon {
+  width: 18px;
+  height: 18px;
+}
+.c-mc-1785475573337-bf006e44-sub-header-text {
+  color: #333333;
+  font-size: 14px;
+  font-weight: bold;
+}
+.c-mc-1785475573337-bf006e44-cards-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.c-mc-1785475573337-bf006e44-card {
+  width: 120px;
+  height: 74px;
+  border-radius: 4px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.c-mc-1785475573337-bf006e44-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.c-mc-1785475573337-bf006e44-card-icon {
+  width: 32px;
+  height: 24px;
+}
+.c-mc-1785475573337-bf006e44-card-label {
+  color: #333333;
+  font-size: 12px;
+}
+.c-mc-1785475573337-bf006e44-card-bottom {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.c-mc-1785475573337-bf006e44-card-value-red {
+  color: #ff3333;
+  font-size: 20px;
+  font-weight: bold;
+}
+.c-mc-1785475573337-bf006e44-card-value-blue {
+  color: #1990ff;
+  font-size: 20px;
+  font-weight: bold;
+}
+.c-mc-1785475573337-bf006e44-card-value-orange {
+  color: #ff9900;
+  font-size: 20px;
+  font-weight: bold;
+}
+.c-mc-1785475573337-bf006e44-card-unit {
+  color: #666666;
+  font-size: 12px;
+}
+.dark .c-mc-1785475573337-bf006e44-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 16px;
+}
+.dark .c-mc-1785475573337-bf006e44-title-decor {
+  width: 8px;
+  height: 8px;
+}
+.dark .c-mc-1785475573337-bf006e44-tabs {
+  display: flex;
+  gap: 8px;
+}
+.dark .c-mc-1785475573337-bf006e44-tab {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 21px;
+}
+.dark .c-mc-1785475573337-bf006e44-tab-active {
+  background: #1990ff;
+  color: #ffffff;
+  border: 0.73px solid #c7e0ff;
+}
+.dark .c-mc-1785475573337-bf006e44-tab-inactive {
+  background: #6680a0;
+  color: #333333;
+  border: 0.73px solid #acc4e1;
+}
+.dark .c-mc-1785475573337-bf006e44-sub-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dark .c-mc-1785475573337-bf006e44-sub-header-icon {
+  width: 18px;
+  height: 18px;
+}
+.dark .c-mc-1785475573337-bf006e44-sub-header-text {
+  color: #333333;
+  font-size: 14px;
+  font-weight: bold;
+}
+.dark .c-mc-1785475573337-bf006e44-cards-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.dark .c-mc-1785475573337-bf006e44-card {
+  width: 120px;
+  height: 74px;
+  border-radius: 4px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.dark .c-mc-1785475573337-bf006e44-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dark .c-mc-1785475573337-bf006e44-card-icon {
+  width: 32px;
+  height: 24px;
+}
+.dark .c-mc-1785475573337-bf006e44-card-label {
+  color: #333333;
+  font-size: 12px;
+}
+.dark .c-mc-1785475573337-bf006e44-card-bottom {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.dark .c-mc-1785475573337-bf006e44-card-value-red {
+  color: #ff3333;
+  font-size: 20px;
+  font-weight: bold;
+}
+.dark .c-mc-1785475573337-bf006e44-card-value-blue {
+  color: #1990ff;
+  font-size: 20px;
+  font-weight: bold;
+}
+.dark .c-mc-1785475573337-bf006e44-card-value-orange {
+  color: #ff9900;
+  font-size: 20px;
+  font-weight: bold;
+}
+.dark .c-mc-1785475573337-bf006e44-card-unit {
+  color: #666666;
+  font-size: 12px;
+}
+.light .c-mc-1785475573337-bf006e44-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 16px;
+}
+.light .c-mc-1785475573337-bf006e44-title-decor {
+  width: 8px;
+  height: 8px;
+}
+.light .c-mc-1785475573337-bf006e44-tabs {
+  display: flex;
+  gap: 8px;
+}
+.light .c-mc-1785475573337-bf006e44-tab {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 21px;
+}
+.light .c-mc-1785475573337-bf006e44-tab-active {
+  background: #1990ff;
+  color: #ffffff;
+  border: 0.73px solid #c7e0ff;
+}
+.light .c-mc-1785475573337-bf006e44-tab-inactive {
+  background: #6680a0;
+  color: #333333;
+  border: 0.73px solid #acc4e1;
+}
+.light .c-mc-1785475573337-bf006e44-sub-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.light .c-mc-1785475573337-bf006e44-sub-header-icon {
+  width: 18px;
+  height: 18px;
+}
+.light .c-mc-1785475573337-bf006e44-sub-header-text {
+  color: #333333;
+  font-size: 14px;
+  font-weight: bold;
+}
+.light .c-mc-1785475573337-bf006e44-cards-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.light .c-mc-1785475573337-bf006e44-card {
+  width: 120px;
+  height: 74px;
+  border-radius: 4px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.light .c-mc-1785475573337-bf006e44-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.light .c-mc-1785475573337-bf006e44-card-icon {
+  width: 32px;
+  height: 24px;
+}
+.light .c-mc-1785475573337-bf006e44-card-label {
+  color: #333333;
+  font-size: 12px;
+}
+.light .c-mc-1785475573337-bf006e44-card-bottom {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.light .c-mc-1785475573337-bf006e44-card-value-red {
+  color: #ff3333;
+  font-size: 20px;
+  font-weight: bold;
+}
+.light .c-mc-1785475573337-bf006e44-card-value-blue {
+  color: #1990ff;
+  font-size: 20px;
+  font-weight: bold;
+}
+.light .c-mc-1785475573337-bf006e44-card-value-orange {
+  color: #ff9900;
+  font-size: 20px;
+  font-weight: bold;
+}
+.light .c-mc-1785475573337-bf006e44-card-unit {
+  color: #666666;
+  font-size: 12px;
+}

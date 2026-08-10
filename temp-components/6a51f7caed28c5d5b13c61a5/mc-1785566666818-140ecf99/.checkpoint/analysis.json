@@ -1,0 +1,249 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 68,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout",
+        "message": "顶层 layout.sections 为空数组，导致整体页面布局结构丢失，各 section 无法被正确挂载和渲染。",
+        "suggestion": "将 visualElements 中解析出的三个 section 正确映射并填充到 layout.sections 数组中，确保顶层布局结构完整。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "_parseWarning",
+        "message": "存在严重解析警告：'质量门检测到解析结果全空，下游精修可能受限'，表明底层设计稿解析或转换逻辑存在缺陷。",
+        "suggestion": "排查 Figma 解析插件或转换脚本，确保设计稿中的 Frame、Group 等节点被正确解析并转化为有效的布局数据。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "styles",
+        "message": "styles 数组的内容与 visualElements 完全重复，存在严重的数据冗余，增加了包体积和维护成本。",
+        "suggestion": "移除 styles 数组，或将其重构为纯粹的 CSS 样式映射表（如 class 到 style 的映射），避免与视觉元素树结构重复。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "visualElements[0].children[1].children[2]",
+        "message": "图表容器 (chart-container) 缺少 legendPosition 等详细的图表配置信息，不符合微码图表组件规范。",
+        "suggestion": "为 chart-container 补充 legendPosition、tooltip 触发方式、坐标轴样式等图表专属配置属性。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "visualElements[*].children[*].children[*]",
+        "message": "多处使用本地相对路径引用图片（如 '../resources/images/...'），在微码跨端、组件化或动态加载场景下极易导致资源 404。",
+        "suggestion": "将图片资源转换为 iconfont、SVG 内联，或统一上传至 CDN/资源中心，使用标准的资源 ID 或绝对 URL 进行引用。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "visualElements[*]",
+        "message": "各 section 节点缺少 headerRelation 字段，无法明确插槽与面板主头部的关联关系和层级逻辑。",
+        "suggestion": "为每个 section 补充 headerRelation 字段，明确其是作为独立面板、子面板还是与主 header 存在特定的联动关系。"
+      }
+    ],
+    "recommendations": [
+      "优先修复底层解析逻辑，确保 layout.sections 能够正确接收并渲染各个业务模块。",
+      "清理冗余的 styles 数组，保持 JSON 数据结构的精简和单一职责。",
+      "规范静态资源引用方式，摒弃本地相对路径，采用微码平台标准的资源管理方案。",
+      "完善图表组件的配置项，补充缺失的 legendPosition 等属性，提升图表渲染的准确性和可控性。",
+      "补充 headerRelation 等微码特有规范字段，确保组件结构完全符合微码引擎的解析要求。"
+    ],
+    "summary": "该布局结构在业务模块划分和视觉元素描述上较为清晰，能够准确表达“流量监测面板”的功能需求与数据层级。但存在致命的结构解析问题（layout.sections 为空且触发解析全空警告），直接导致组件无法正常渲染。此外，还存在数据冗余、资源引用不规范以及图表配置缺失等工程化问题。建议优先修复解析和顶层布局问题，并优化资源管理和数据结构，以达到微码组件的上线标准。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1890ff",
+      "--colorSecondary": "#13c2c2",
+      "--colorAccent": "#1990ff",
+      "--colorBg": "#f0f2f5",
+      "--colorCardBg": "#edf4fb",
+      "--colorTextBase": "#333333",
+      "--colorTextSecondary": "#666666",
+      "--fontSizeBase": "14px",
+      "--fontSizeTitle": "19px",
+      "--borderRadiusBase": "8px",
+      "--borderRadiusSm": "4px",
+      "--gradientBlue": "linear-gradient(135deg, #1890ff, #13c2c2)"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#1890ff",
+      "@color-secondary": "#13c2c2",
+      "@color-accent": "#1990ff",
+      "@color-bg": "#f0f2f5",
+      "@color-card-bg": "#edf4fb",
+      "@color-text-base": "rgba(255, 255, 255, 1)",
+      "@color-text-secondary": "#666666",
+      "@font-size-base": "14px",
+      "@font-size-title": "19px",
+      "@border-radius-base": "8px",
+      "@border-radius-sm": "4px",
+      "@gradient-blue": "linear-gradient(135deg, #1890ff, #13c2c2)"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".dashboard-container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "20px",
+        "background": "var(--colorBg)",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSizeBase)"
+      },
+      ".main-header": {
+        "display": "flex",
+        "align-items": "center",
+        "font-size": "var(--fontSizeTitle)",
+        "font-weight": "bold",
+        "background": "var(--gradientBlue)",
+        "-webkit-background-clip": "text",
+        "-webkit-text-fill-color": "transparent",
+        "background-clip": "text",
+        "margin-bottom": "20px"
+      },
+      ".main-header-icon": {
+        "width": "24px",
+        "height": "24px",
+        "margin-right": "10px"
+      },
+      ".section": {
+        "display": "flex",
+        "flex-direction": "column",
+        "margin-bottom": "24px"
+      },
+      ".section-header": {
+        "display": "flex",
+        "justify-content": "space-between",
+        "align-items": "center",
+        "margin-bottom": "16px"
+      },
+      ".section-title": {
+        "display": "flex",
+        "align-items": "center",
+        "font-size": "16px",
+        "font-weight": "bold",
+        "color": "var(--colorTextBase)"
+      },
+      ".section-title-icon": {
+        "width": "16px",
+        "height": "16px",
+        "margin-right": "8px"
+      },
+      ".custom-select": {
+        "border": "1px solid #ccc",
+        "border-radius": "var(--borderRadiusSm)",
+        "padding": "4px 8px",
+        "background": "#fff",
+        "color": "var(--colorTextBase)",
+        "outline": "none"
+      },
+      ".data-display-row": {
+        "display": "flex",
+        "justify-content": "space-around",
+        "align-items": "center",
+        "background": "var(--colorCardBg)",
+        "padding": "20px",
+        "border-radius": "var(--borderRadiusBase)",
+        "margin-bottom": "16px"
+      },
+      ".statistic-group": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      ".stat-value": {
+        "font-size": "24px",
+        "font-weight": "bold",
+        "color": "var(--colorPrimary)"
+      },
+      ".stat-value-secondary": {
+        "color": "var(--colorSecondary)"
+      },
+      ".stat-label": {
+        "font-size": "14px",
+        "color": "var(--colorTextSecondary)",
+        "margin-top": "8px"
+      },
+      ".chart-container": {
+        "background": "var(--colorCardBg)",
+        "padding": "16px",
+        "border-radius": "var(--borderRadiusBase)",
+        "margin-bottom": "16px"
+      },
+      ".distribution-cards": {
+        "display": "flex",
+        "gap": "16px"
+      },
+      ".distribution-card": {
+        "flex": "1",
+        "background": "var(--colorCardBg)",
+        "padding": "16px",
+        "border-radius": "var(--borderRadiusBase)",
+        "display": "flex",
+        "align-items": "center",
+        "justify-content": "space-around"
+      },
+      ".stat-box": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center",
+        "justify-content": "center",
+        "width": "80px",
+        "height": "80px",
+        "clip-path": "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)",
+        "background": "var(--colorPrimary)",
+        "color": "#fff",
+        "font-weight": "bold"
+      },
+      ".stat-box-orange": {
+        "background": "#fa8c16"
+      },
+      ".chart-donut-placeholder": {
+        "width": "100px",
+        "height": "100px",
+        "border-radius": "50%",
+        "border": "12px solid var(--colorPrimary)",
+        "border-right-color": "#fa8c16",
+        "border-bottom-color": "#fa8c16",
+        "box-sizing": "border-box"
+      },
+      ".tabs": {
+        "display": "flex",
+        "gap": "8px"
+      },
+      ".tab-item": {
+        "padding": "4px 12px",
+        "border-radius": "12px",
+        "cursor": "pointer",
+        "color": "var(--colorTextSecondary)",
+        "transition": "all 0.3s"
+      },
+      ".tab-item-active": {
+        "background": "var(--colorPrimary)",
+        "color": "#fff"
+      },
+      ".prediction-link": {
+        "color": "var(--colorAccent)",
+        "cursor": "pointer",
+        "font-size": "14px",
+        "text-decoration": "none"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调提取为--colorPrimary (#1890ff)，辅助色为--colorSecondary (#13c2c2)",
+      "卡片和区块背景统一使用--colorCardBg (#edf4fb)，适配浅色大屏风格",
+      "标题渐变色使用--gradientBlue结合background-clip实现",
+      "六边形统计盒(shape: hexagon)使用clip-path属性实现",
+      "环形图占位使用CSS border和border-radius组合实现",
+      "蓝色药丸Tab(blue-pill)使用border-radius: 12px实现胶囊样式"
+    ],
+    "elementStyleMap": {}
+  }
+}

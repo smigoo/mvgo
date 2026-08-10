@@ -1,0 +1,28 @@
+FROM node:22-alpine AS base
+
+RUN apk add --no-cache \
+    python3 make g++ \
+    chromium nss freetype harfbuzz ca-certificates ttf-freefont \
+    font-noto-cjk \
+    && rm -rf /var/cache/apk/*
+
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+COPY dist/ ./dist/
+
+RUN mkdir -p workspace data
+
+EXPOSE 13030
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -qO- http://localhost:13030/api/ >/dev/null 2>&1 || exit 1
+
+USER node
+
+CMD ["node", "dist/main.js"]

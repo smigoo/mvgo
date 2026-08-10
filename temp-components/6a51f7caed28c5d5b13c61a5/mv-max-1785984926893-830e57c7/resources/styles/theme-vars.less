@@ -1,0 +1,114 @@
+// 主题变量文件：仅定义 Less 变量与 mixin，不产出实际 class
+// 被各组件 @import 使用，禁止直接写裸 CSS 属性在 mixin 根级
+
+// ─── Less 变量定义 ───────────────────────────────────────────
+@color-primary:           #3677f8;
+@color-primary-active:    rgba(54, 119, 248, 0.16);
+@color-primary-bg:        rgba(54, 119, 248, 0.12);
+@color-primary-bg-hover:  rgba(54, 119, 248, 0.20);
+@color-text-base:         #ffffff;
+@color-text-secondary:    rgba(255, 255, 255, 0.65);
+@color-text-disabled:     rgba(255, 255, 255, 0.35);
+@color-bg:                #0f1626;
+@color-bg-container:      rgba(255, 255, 255, 0.04);
+@color-bg-elevated:       rgba(255, 255, 255, 0.08);
+@color-border:            rgba(255, 255, 255, 0.12);
+@color-border-secondary:  rgba(255, 255, 255, 0.06);
+@font-size-base:          14px;
+@font-size-sm:            12px;
+@font-size-lg:            16px;
+@font-size-xl:            20px;
+@font-weight-strong:      500;
+@border-radius-base:      4px;
+@border-radius-lg:        8px;
+@border-radius-sm:        2px;
+@box-shadow-base:         0 4px 16px rgba(0, 0, 0, 0.4);
+@box-shadow-card:         0 2px 8px rgba(0, 0, 0, 0.32);
+
+// ─── 公共 mixin（不产出 class，CSS 自定义属性必须放选择器内） ─
+.common() {
+  // 公共基础 token 映射，注入到 :root 方便 CSS var() 引用
+  :root {
+    --color-primary:          @color-primary;
+    --color-primary-active:   @color-primary-active;
+    --color-primary-bg:       @color-primary-bg;
+    --color-primary-bg-hover: @color-primary-bg-hover;
+    --color-text-base:        @color-text-base;
+    --color-text-secondary:   @color-text-secondary;
+    --color-text-disabled:    @color-text-disabled;
+    --color-bg:               @color-bg;
+    --color-bg-container:     @color-bg-container;
+    --color-bg-elevated:      @color-bg-elevated;
+    --color-border:           @color-border;
+    --color-border-secondary: @color-border-secondary;
+    --font-size-base:         @font-size-base;
+    --font-size-sm:           @font-size-sm;
+    --font-size-lg:           @font-size-lg;
+    --font-size-xl:           @font-size-xl;
+    --font-weight-strong:     @font-weight-strong;
+    --border-radius-base:     @border-radius-base;
+    --border-radius-lg:       @border-radius-lg;
+    --border-radius-sm:       @border-radius-sm;
+    --box-shadow-base:        @box-shadow-base;
+    --box-shadow-card:        @box-shadow-card;
+  }
+}
+
+// 暗色主题 mixin（当前组件为 dark 面板，使用此主题作为默认）
+.theme-dark() {
+  :root {
+    --colorPrimary:           #3677f8;
+    --colorPrimaryActive:     rgba(54, 119, 248, 0.16);
+    --colorPrimaryBg:         rgba(54, 119, 248, 0.12);
+    --colorPrimaryBgHover:    rgba(54, 119, 248, 0.20);
+    --colorTextBase:          #ffffff;
+    --colorTextSecondary:     rgba(255, 255, 255, 0.65);
+    --colorTextDisabled:      rgba(255, 255, 255, 0.35);
+    --colorBg:                #0f1626;
+    --colorBgContainer:       rgba(255, 255, 255, 0.04);
+    --colorBgElevated:        rgba(255, 255, 255, 0.08);
+    --colorBorder:            rgba(255, 255, 255, 0.12);
+    --colorBorderSecondary:   rgba(255, 255, 255, 0.06);
+    --fontSize:               14px;
+    --fontSizeSm:             12px;
+    --fontSizeLg:             16px;
+    --fontSizeXl:             20px;
+    --fontWeightStrong:       500;
+    --borderRadius:           4px;
+    --borderRadiusLg:         8px;
+    --borderRadiusSm:         2px;
+    --boxShadow:              0 4px 16px rgba(0, 0, 0, 0.4);
+    --boxShadowCard:          0 2px 8px rgba(0, 0, 0, 0.32);
+  }
+}
+
+// 亮色主题 mixin（保留结构，当前组件以暗色为主）
+.theme-light() {
+  :root {
+    --colorPrimary:           #1677ff;
+    --colorPrimaryActive:     rgba(22, 119, 255, 0.16);
+    --colorPrimaryBg:         rgba(22, 119, 255, 0.06);
+    --colorPrimaryBgHover:    rgba(22, 119, 255, 0.12);
+    --colorTextBase:          #1a1a1a;
+    --colorTextSecondary:     rgba(26, 26, 26, 0.65);
+    --colorTextDisabled:      rgba(26, 26, 26, 0.35);
+    --colorBg:                #f5f7fa;
+    --colorBgContainer:       #ffffff;
+    --colorBgElevated:        #ffffff;
+    --colorBorder:            rgba(0, 0, 0, 0.12);
+    --colorBorderSecondary:   rgba(0, 0, 0, 0.06);
+    --fontSize:               14px;
+    --fontSizeSm:             12px;
+    --fontSizeLg:             16px;
+    --fontSizeXl:             20px;
+    --fontWeightStrong:       500;
+    --borderRadius:           4px;
+    --borderRadiusLg:         8px;
+    --borderRadiusSm:         2px;
+    --boxShadow:              0 4px 16px rgba(0, 0, 0, 0.12);
+    --boxShadowCard:          0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+}
+
+// 末尾调用暗色主题作为默认值（组件面板 backgroundBrightness: dark）
+.theme-dark();

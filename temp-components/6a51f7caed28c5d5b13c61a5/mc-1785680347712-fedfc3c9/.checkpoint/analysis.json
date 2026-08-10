@@ -1,0 +1,197 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 65,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "违规生成了组件面板标题。`section-header` 中包含了标题文字（'环境监测'）和装饰元素。根据微码核心规范，组件使用 `<base-panel>` 包裹，面板标题已由 `default-panel` 统一处理，禁止在组件内容中重复生成标题栏。",
+        "suggestion": "删除 `section-header` 整个 section，组件根节点直接从 `section-tabs-controls`（监测指标切换栏）开始。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[0]",
+        "message": "图表容器使用了固定宽度。`echarts-line` 的 style 中设置了 `width: '380px'`，严重违反了'容器布局禁止固定宽度'及'图表边界约束'规范，会导致组件无法自适应容器宽度，在不同分辨率下出现留白或溢出。",
+        "suggestion": "将 `echarts-line` 的 `width` 修改为 `'100%'`，并确保其父容器设置了 `min-width: 0` 和 `overflow: hidden`。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[1]",
+        "message": "视图切换图标组使用了固定宽度。`view-icons` 设置了 `width: '52px'`，虽然图标允许固定宽度，但在小尺寸面板下可能导致右侧内容溢出或挤压 Tab 列表。",
+        "suggestion": "建议将 `view-icons` 的宽度改为 `auto`，内部子元素使用 flex 布局，或确保其具有 `flex-shrink: 0` 属性以防止被挤压。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[0]",
+        "message": "图表容器高度偏小。`echarts-line` 高度设置为 `113px`，对于包含坐标轴、图例和预警线的折线/面积图来说，可能导致内容拥挤，影响数据可读性。",
+        "suggestion": "建议将图表容器高度适当增加至 `160px` - `200px` 之间，以提供更好的数据展示空间。"
+      }
+    ],
+    "recommendations": [
+      "在代码生成阶段，务必确保 Tab 切换（一氧化碳、能见度等）与图表数据联动，使用 watch 监听 activeTab 变化并更新 ECharts 数据，禁止仅做样式切换。",
+      "图表的 Y 轴标签在 Figma 中识别为'辆'，但实际业务为 CO 浓度，代码生成时需修正 Y 轴单位（如 mg/m³ 或 ppm），避免模板残留错误。",
+      "右上角的视图切换图标和 Badge 需实现真实的交互逻辑，Badge 数字应支持动态更新，视图切换需联动图表/列表视图的显示状态。",
+      "确保 ECharts 配置中开启 `tooltip`（折线图使用 `trigger: 'axis'`），并设置 `grid.containLabel: true`，防止坐标轴文字超出容器边界。"
+    ],
+    "summary": "整体布局结构划分清晰，区域划分合理，但在微码核心规范遵守上存在明显违规。主要问题在于重复生成了面板标题（应由 base-panel 处理）以及图表容器使用了固定宽度（违反自适应原则）。此外，图表高度设置偏小，可能影响数据展示效果。由于存在违反 🔴 必须遵守规范的 Error 级别问题，建议修正后重新生成。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#038fff",
+      "--colorPrimaryHover": "#1099b1",
+      "--colorBgBase": "#edf4fb",
+      "--colorBgContainer": "rgba(237, 244, 251, 0.7)",
+      "--colorTextBase": "#333333",
+      "--colorWarning": "#f53f3f",
+      "--colorSuccess": "#52c41a",
+      "--fontSize": "14px",
+      "--borderRadius": "6px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#038fff",
+      "@color-primary-hover": "#1099b1",
+      "@color-bg-base": "#edf4fb",
+      "@color-bg-container": "rgba(237, 244, 251, 0.7)",
+      "@color-text-base": "#333333",
+      "@color-warning": "#f53f3f",
+      "@color-success": "#52c41a",
+      "@font-size-base": "14px",
+      "@border-radius-base": "6px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "background": "var(--colorBgContainer, rgba(237, 244, 251, 0.7))",
+        "border-radius": "var(--borderRadius, 6px)",
+        "padding": "16px",
+        "color": "var(--colorTextBase, #333333)"
+      },
+      ".title-gradient": {
+        "background": "linear-gradient(90deg, #1099b1, #038fff)",
+        "-webkit-background-clip": "text",
+        "-webkit-text-fill-color": "transparent",
+        "background-clip": "text",
+        "font-weight": "bold"
+      },
+      ".tab-active": {
+        "background": "linear-gradient(135deg, #038fff, #1099b1)",
+        "color": "#ffffff",
+        "border-radius": "4px",
+        "padding": "4px 12px"
+      },
+      ".warning-line": {
+        "border-top": "2px dashed var(--colorWarning, #f53f3f)",
+        "width": "100%",
+        "margin": "8px 0"
+      },
+      ".badge-danger": {
+        "background-color": "var(--colorWarning, #f53f3f)",
+        "color": "#ffffff",
+        "border-radius": "50%",
+        "min-width": "20px",
+        "height": "20px",
+        "display": "inline-flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "font-size": "12px",
+        "font-weight": "bold"
+      }
+    },
+    "tokenCoverage": 1,
+    "mappingNotes": [
+      "主色调 #038fff 映射为 --colorPrimary，用于主要交互和渐变起点",
+      "辅助科技色 #1099b1 映射为 --colorPrimaryHover，用于渐变终点和悬停态",
+      "背景色 #edf4fb 和半透明背景 rgba(237, 244, 251, 0.7) 分别映射为 --colorBgBase 和 --colorBgContainer",
+      "预警色 #f53f3f 映射为 --colorWarning，专门用于红色预警线和Badge数字强调",
+      "成功色 #52c41a 映射为 --colorSuccess，用于正常状态指示",
+      "浅色主题下基础文字色推断为 #333333，以保证在浅色背景上的高可读性",
+      "标题渐变文字和Tab选中态渐变背景通过 .title-gradient 和 .tab-active 类实现复用",
+      "所有视觉元素（5种颜色、1种背景、2种装饰、2种强调）均已100%映射"
+    ],
+    "elementStyleMap": {
+      "section-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "title-decoration": {
+        "width": "8px",
+        "height": "8px"
+      },
+      "title-text": {
+        "font-size": "16px",
+        "font-weight": "bold",
+        "color": "rgba(0,0,0,0.8)",
+        "background": "linear-gradient(90deg, #b5deff 0%, #d1ecff 100%)"
+      },
+      "section-tabs-controls": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tabs-list-tab-一氧化碳-0": {
+        "background": "linear-gradient(90deg, #1099b1 0%, #038fff 100%)",
+        "color": "#ffffff",
+        "border-radius": "4px"
+      },
+      "tabs-list-tab-能见度-1": {
+        "color": "rgba(0,0,0,0.6)"
+      },
+      "tabs-list-tab-洞内照明-2": {
+        "color": "rgba(0,0,0,0.6)"
+      },
+      "tabs-list-tab-洞外光强-3": {
+        "color": "rgba(0,0,0,0.6)"
+      },
+      "tabs-list": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-tab-一氧化碳-6": {
+        "background": "linear-gradient(90deg, #1099b1 0%, #038fff 100%)",
+        "color": "#ffffff",
+        "border-radius": "4px"
+      },
+      "el-tab-能见度-7": {
+        "color": "rgba(0,0,0,0.6)"
+      },
+      "el-tab-洞内照明-8": {
+        "color": "rgba(0,0,0,0.6)"
+      },
+      "el-tab-洞外光强-9": {
+        "color": "rgba(0,0,0,0.6)"
+      },
+      "view-icons-badge-6-2": {
+        "background": "#f53f3f",
+        "color": "#ffffff",
+        "border-radius": "10px",
+        "font-size": "10px"
+      },
+      "view-icons": {
+        "width": "52px",
+        "height": "24px",
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-badge-6-13": {
+        "background": "#f53f3f",
+        "color": "#ffffff",
+        "border-radius": "10px",
+        "font-size": "10px"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "echarts-line": {
+        "width": "380px",
+        "height": "113px"
+      }
+    }
+  }
+}

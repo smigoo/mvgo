@@ -1,0 +1,368 @@
+@import './themes/theme-vars.less';
+
+/* [Layout Refine] 根容器遵循 base-panel 禁令，不设置 background */
+.c-device-monitor-root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* [Style Refine] fills[0].color → rgb(237, 244, 251) #EDF4FB */
+.c-device-monitor-content {
+  width: 100%;
+  height: 100%;
+  padding: 8px 10px 10px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  background-color: @bg-color;
+  box-shadow: 0px 4px 10px rgba(74, 116, 140, 0.25);
+  min-height: 0;
+}
+
+/* [Layout Refine] Figma layoutMode=HORIZONTAL → flex-direction: row */
+.c-device-monitor-header {
+  height: 30px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 0 10px;
+  flex-shrink: 0;
+}
+
+/* [Style Refine] fills[0].gradientStops → linear-gradient(180deg, #1990FF 0%, #5A7DFF 100%) */
+.c-device-monitor-title {
+  font-family: @font-family;
+  font-size: 16px;
+  font-weight: 700;
+  background: @gradient-title;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  white-space: nowrap;
+}
+
+.c-device-monitor-stats {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 20px;
+  margin-left: 30px;
+}
+
+.c-device-monitor-stat-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+/* [Style Refine] fills[0].color → rgb(51, 51, 51) #333333 */
+.c-device-monitor-stat-label {
+  font-family: @font-family;
+  font-size: 14px;
+  font-weight: 400;
+  color: @text-color;
+  white-space: nowrap;
+}
+
+/* [Style Refine] fills[0].gradientStops → linear-gradient(180deg, #E1F0FF 0%, #00CCFF 100%) */
+.c-device-monitor-stat-value {
+  font-family: @number-font-family;
+  font-size: 20px;
+  font-weight: 700;
+  background: @gradient-value;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  white-space: nowrap;
+}
+
+/* [Style Refine] fills[0].color → rgb(8, 163, 165) #08A3A5 */
+.c-device-monitor-stat-value--rate {
+  background: none;
+  -webkit-text-fill-color: @success-color;
+}
+
+/* [Style Refine] fills[0].gradientStops → linear-gradient(180deg, #1990FF 0%, #5A7DFF 100%) */
+.c-device-monitor-update-tip {
+  margin-left: auto;
+  font-family: @font-family;
+  font-size: 14px;
+  font-weight: 400;
+  background: @gradient-title;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  white-space: nowrap;
+}
+
+/* [Layout Refine] Figma layoutMode=HORIZONTAL → flex-direction: row */
+.c-device-monitor-switch {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  margin-top: 8px;
+  flex-shrink: 0;
+}
+
+.c-device-monitor-switch-card {
+  flex: 1;
+  height: 65px;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 0 15px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* [Style Refine] fills[0].gradientStops → linear-gradient(180deg, #2B9BFF 0%, #299AFF 100%) */
+.c-device-monitor-switch-card--active {
+  background: @gradient-switch-active;
+}
+
+/* [Style Refine] fills[0].gradientStops + opacity → linear-gradient(180deg, #93CCFF 0%, #93CCFF 100%) */
+.c-device-monitor-switch-card--default {
+  background: @gradient-switch-default;
+  opacity: 0.8;
+}
+
+.c-device-monitor-card-icon {
+  width: 35px;
+  height: 28px;
+  margin-right: 10px;
+  flex-shrink: 0;
+}
+
+.c-device-monitor-card-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.c-device-monitor-card-title {
+  font-family: @font-family;
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.c-device-monitor-switch-card--active .c-device-monitor-card-title {
+  color: @white-color;
+}
+
+.c-device-monitor-switch-card--default .c-device-monitor-card-title {
+  color: @text-color;
+}
+
+.c-device-monitor-card-line {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.c-device-monitor-card-label {
+  font-family: @font-family;
+  font-size: 14px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.c-device-monitor-switch-card--active .c-device-monitor-card-label {
+  color: @white-color;
+}
+
+.c-device-monitor-switch-card--default .c-device-monitor-card-label {
+  color: @text-color;
+}
+
+.c-device-monitor-card-value {
+  font-family: @number-font-family;
+  font-size: 20px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.c-device-monitor-switch-card--active .c-device-monitor-card-value {
+  background: @gradient-value;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.c-device-monitor-switch-card--default .c-device-monitor-card-value {
+  color: @primary-color;
+  -webkit-text-fill-color: @primary-color;
+}
+
+/* [Style Refine] fills[0].color → rgb(224, 52, 52) #E03434 */
+.c-device-monitor-card-error {
+  font-family: @number-font-family;
+  font-size: 20px;
+  font-weight: 700;
+  color: #E03434;
+  -webkit-text-fill-color: #E03434;
+  white-space: nowrap;
+}
+
+/* [Layout Refine] Figma layoutMode=HORIZONTAL → flex-direction: row */
+.c-device-monitor-main {
+  display: flex;
+  flex-direction: row;
+  margin-top: 10px;
+  flex: 1;
+  min-height: 0;
+}
+
+/* [Layout Refine] Figma layoutMode=VERTICAL → flex-direction: column */
+.c-device-monitor-tabs {
+  width: 46px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.c-device-monitor-tab {
+  height: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  position: relative;
+  cursor: pointer;
+  border: 1px solid #F0F5FF;
+}
+
+/* [Style Refine] fills[0].gradientStops → linear-gradient(180deg, #318AFF 0%, #70BEFF 100%) */
+.c-device-monitor-tab--active {
+  background: @gradient-tab-active;
+}
+
+/* [Style Refine] fills[0].gradientStops → linear-gradient(180deg, #85BAFF 0%, #C0E2FF 100%) */
+.c-device-monitor-tab--inactive {
+  background: @gradient-tab-inactive;
+}
+
+.c-device-monitor-tab-text {
+  font-family: @font-family;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.c-device-monitor-tab--active .c-device-monitor-tab-text {
+  color: @white-color;
+  font-weight: 700;
+}
+
+/* [Style Refine] fills[0].color → rgb(59, 128, 230) #3B80E6 */
+.c-device-monitor-tab--inactive .c-device-monitor-tab-text {
+  color: #3B80E6;
+  font-weight: 400;
+}
+
+.c-device-monitor-tab-badge {
+  font-family: @font-family;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 0 2px;
+  border-radius: 2px;
+  margin-top: 2px;
+}
+
+/* [Style Refine] fills[0].color → rgb(255, 255, 255) #FFFFFF */
+.c-device-monitor-tab--active .c-device-monitor-tab-badge {
+  background: @white-color;
+  color: #3B80E6;
+  border: 1px solid #248DC8;
+  box-shadow: 0px 1px 2px rgba(51, 101, 144, 0.4);
+}
+
+/* [Style Refine] fills[0].color → rgb(245, 63, 63) #F53F3F */
+.c-device-monitor-tab-dot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 14px;
+  height: 14px;
+  background: @danger-color;
+  border-radius: 29px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: @white-color;
+  font-family: @number-font-family;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* [Layout Refine] Figma grid 3x4 → display: grid */
+.c-device-monitor-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  gap: 8px;
+  padding: 0 8px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.c-device-monitor-grid-item {
+  height: 64px;
+  border-radius: 4px;
+  /* [Style Refine] fills[0].gradientStops → linear-gradient(180deg, rgba(71, 166, 250, 0) 0%, rgba(71, 166, 250, 0.5) 100%) */
+  background: @gradient-grid-bg;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 0 12px;
+  position: relative;
+}
+
+.c-device-monitor-item-icon {
+  width: 26px;
+  height: 32px;
+  margin-right: 8px;
+  flex-shrink: 0;
+  /* [Style Refine] fills[0].gradientStops → linear-gradient(180deg, rgba(18, 123, 238, 0) 0%, rgba(18, 123, 238, 0.2) 100%) */
+  background: linear-gradient(180deg, rgba(18, 123, 238, 0) 0%, rgba(18, 123, 238, 0.2) 100%);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.c-device-monitor-item-icon img {
+  width: 16px;
+  height: 16px;
+}
+
+.c-device-monitor-item-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* [Style Refine] fills[0].color → rgb(51, 51, 51) #333333 */
+.c-device-monitor-item-name {
+  font-family: @font-family;
+  font-size: 12px;
+  font-weight: 400;
+  color: @text-color;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* [Style Refine] fills[0].color → rgb(255, 255, 255) #FFFFFF + drop-shadow */
+.c-device-monitor-item-value {
+  font-family: @number-font-family;
+  font-size: 16px;
+  font-weight: 500;
+  color: @white-color;
+  text-shadow: 0px 0px 0px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+}

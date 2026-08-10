@@ -1,0 +1,119 @@
+{
+  "stage": "codegen_done",
+  "brief": {
+    "layout": "整体为上下结构，顶部为全局统计栏，下方为左右结构（左侧垂直导航，右侧内容区）。右侧内容区又分为上下两部分：上方为两个并排的大型数据卡片，下方为3列4行的网格布局。主轴方向：顶部水平，左侧垂直，右侧内容区垂直。对齐方式：左对齐为主，部分居中对齐。",
+    "regions": [
+      {
+        "name": "顶部统计栏",
+        "description": "包含标题'设备监测'及设备类型、设备总数、完好率三个统计数据",
+        "position": "top",
+        "size": "宽度100%，高度约10%"
+      },
+      {
+        "name": "左侧导航栏",
+        "description": "垂直排列的菜单项：监控、照明、通风、供配电、消防、交通诱导",
+        "position": "left",
+        "size": "宽度约10%，高度约90%"
+      },
+      {
+        "name": "上方数据卡片区",
+        "description": "两个并排的卡片，分别显示'隧道设备'和'南北接线设备'的总数和异常数",
+        "position": "center-top",
+        "size": "宽度约90%，高度约20%"
+      },
+      {
+        "name": "下方设备网格区",
+        "description": "3列4行的网格，展示12种具体设备的异常数和总数",
+        "position": "center-bottom",
+        "size": "宽度约90%，高度约70%"
+      }
+    ],
+    "spacing": {
+      "outer": "整体有约10-20px的外边距",
+      "gap": "区域间距约15-20px，网格项间距约10-15px",
+      "padding": "卡片和网格项内部有约10-15px的内边距"
+    },
+    "colors": {
+      "primary": "#3b82f6",
+      "background": "#e2e8f0",
+      "surface": "#cbd5e1",
+      "text": "#1e293b",
+      "border": "#94a3b8"
+    },
+    "typography": {
+      "size": "标题和总数约24-32px，标签约14-16px，异常数约18-24px",
+      "weight": "总数和异常数较粗(bold)，标签常规(normal)",
+      "lineHeight": "行高约1.2-1.5"
+    },
+    "components": [
+      "文本",
+      "图标",
+      "卡片",
+      "网格项",
+      "侧边栏菜单项",
+      "徽章"
+    ],
+    "textContent": [
+      "设备监测",
+      "设备类型 28",
+      "设备总数 68562",
+      "完好率 98%",
+      "总数:56302",
+      "隧道设备 异常数:5",
+      "总数:1280",
+      "南北接线设备 异常数:3",
+      "3/3740",
+      "监控",
+      "照明",
+      "通风",
+      "供配电",
+      "消防",
+      "交通诱导",
+      "摄像机 (2/484)",
+      "风速风向仪 (1/484)",
+      "超高检测器 (0/484)",
+      "烟道机器人 (0/484)",
+      "激光雷达 (0/484)",
+      "CO2传感器 (0/484)",
+      "CO/VI检测器 (0/484)",
+      "温湿度传感器 (0/484)",
+      "压力传感器 (0/484)",
+      "光照度变送器 (0/484)",
+      "紧急电话 (0/484)",
+      "水质监测设备 (0/484)"
+    ],
+    "visualDetails": [
+      "圆角矩形卡片，圆角约8-12px",
+      "图标位于文本左侧或上方，大小约24-32px",
+      "红点徽章位于'照明'菜单项右上角，显示数字3",
+      "左侧导航栏当前选中项'监控'背景色为蓝色",
+      "上方左侧卡片背景色为蓝色，右侧为浅灰色"
+    ],
+    "interactions": [
+      "左侧导航栏 Tab 切换，当前激活项为'监控'"
+    ]
+  },
+  "width": 880,
+  "height": 890,
+  "sourceType": "figma",
+  "componentType": "microcode",
+  "generationTier": "lite",
+  "vueCode": "<template>\n  <base-panel panelKey=\"default-panel\">\n    <div class=\"c-mc-lite-1785972578983-6feb7e31-content\">\n      <!-- 顶部统计栏 -->\n      <div class=\"c-mc-lite-1785972578983-6feb7e31-header\">\n        <div class=\"c-mc-lite-1785972578983-6feb7e31-title-group\">\n          <span class=\"c-mc-lite-1785972578983-6feb7e31-main-title\">设备监测</span>\n        </div>\n        <div class=\"c-mc-lite-1785972578983-6feb7e31-stats-group\">\n          <div class=\"c-mc-lite-1785972578983-6feb7e31-stat-item\">\n            <span class=\"c-mc-lite-1785972578983-6feb7e31-stat-icon\"></span>\n            <span class=\"c-mc-lite-1785972578983-6feb7e31-stat-label\">设备类型</span>\n            <span class=\"c-mc-lite-1785972578983-6feb7e31-stat-value blue\">28</span>\n          </div>\n          <div class=\"c-mc-lite-1785972578983-6feb7e31-stat-item\">\n            <span class=\"c-mc-lite-1785972578983-6feb7e31-stat-label\">设备总数</span>\n            <span class=\"c-mc-lite-1785972578983-6feb7e31-stat-value blue\">68562</span>\n          </div>\n          <div class=\"c-mc-lite-1785972578983-6feb7e31-stat-item\">\n            <span class=\"c-mc-lite-1785972578983-6feb7e31-stat-label\">完好率</span>\n            <span class=\"c-mc-lite-1785972578983-6feb7e31-stat-value green\">98%</span>\n          </div>\n        </div>\n      </div>\n\n      <!-- 主体区域 -->\n      <div class=\"c-mc-lite-1785972578983-6feb7e31-body\">\n        <!-- 左侧导航栏 -->\n        <div class=\"c-mc-lite-1785972578983-6feb7e31-sidebar\">\n          <div class=\"c-mc-lite-1785972578983-6feb7e31-sidebar-tag\">3/3740</div>\n          <div \n            v-for=\"(item, index) in menuItems\" \n            :key=\"index\"\n            class=\"c-mc-lite-1785972578983-6feb7e31-menu-item\"\n            :class=\"{ 'c-mc-lite-1785972578983-6feb7e31-active': activeMenu === item }\"\n            @click=\"activeMenu = item\"\n          >\n            <span class=\"c-mc-lite-1785972578983-6feb7e31-menu-text\">{{ item }}</span>\n            <div v-if=\"item === '照明'\" class=\"c-mc-lite-1785972578983-6feb7e31-badge\">3</div>\n          </div>\n        </div>\n\n        <!-- 右侧内容区 -->\n        <div class=\"c-mc-lite-1785972578983-6feb7e31-main-content\">\n          <!-- 上方数据卡片 -->\n          <div class=\"c-mc-lite-1785972578983-6feb7e31-cards-row\">\n            <!-- 卡片1：隧道设备 -->\n            <div class=\"c-mc-lite-1785972578983-6feb7e31-card c-mc-lite-1785972578983-6feb7e31-card-blue\">\n              <div class=\"c-mc-lite-1785972578983-6feb7e31-card-icon-wrapper\">\n                <div class=\"c-mc-lite-1785972578983-6feb7e31-card-icon\">🔔</div>\n              </div>\n              <div class=\"c-mc-lite-1785972578983-6feb7e31-card-info\">\n                <div class=\"c-mc-lite-1785972578983-6feb7e31-card-row\">\n                  <span class=\"c-mc-lite-1785972578983-6feb7e31-card-label\">总 数:</span>\n                  <span class=\"c-mc-lite-1785972578983-6feb7e31-card-value\">56302</span>\n                </div>\n                <div class=\"c-mc-lite-1785972578983-6feb7e31-card-row\">\n                  <span class=\"c-mc-lite-1785972578983-6feb7e31-card-sub-label\">隧道设备</span>\n                  <span class=\"c-mc-lite-1785972578983-6feb7e31-card-sub-label\">异常数:</span>\n                  <span class=\"c-mc-lite-1785972578983-6feb7e31-card-value red\">5</span>\n                </div>\n              </div>\n            </div>\n\n            <!-- 卡片2：南北接线设备 -->\n            <div class=\"c-mc-lite-1785972578983-6feb7e31-card c-mc-lite-1785972578983-6feb7e31-card-gray\">\n              <div class=\"c-mc-lite-1785972578983-6feb7e31-card-icon-wrapper gray\">\n                <div class=\"c-mc-lite-1785972578983-6feb7e31-card-icon\">📟</div>\n              </div>\n              <div class=\"c-mc-lite-1785972578983-6feb7e31-card-info\">\n                <div class=\"c-mc-lite-1785972578983-6feb7e31-card-row\">\n                  <span class=\"c-mc-lite-1785972578983-6feb7e31-card-label dark\">总 数:</span>\n                  <span class=\"c-mc-lite-1785972578983-6feb7e31-card-value blue\">1280</span>\n                </div>\n                <div class=\"c-mc-lite-1785972578983-6feb7e31-card-row\">\n                  <span class=\"c-mc-lite-1785972578983-6feb7e31-card-sub-label dark\">南北接线设备</span>\n                  <span class=\"c-mc-lite-1785972578983-6feb7e31-card-sub-label dark\">异常数:</span>\n                  <span class=\"c-mc-lite-1785972578983-6feb7e31-card-value red\">3</span>\n                </div>\n              </div>\n            </div>\n          </div>\n\n          <!-- 下方设备网格 -->\n          <div class=\"c-mc-lite-1785972578983-6feb7e31-grid\">\n            <div \n              v-for=\"(device, index) in devices\" \n              :key=\"index\"\n              class=\"c-mc-lite-1785972578983-6feb7e31-grid-item\"\n            >\n              <div class=\"c-mc-lite-1785972578983-6feb7e31-grid-icon-area\">\n                <div class=\"c-mc-lite-1785972578983-6feb7e31-icon-base\"></div>\n                <div class=\"c-mc-lite-1785972578983-6feb7e31-icon-symbol\">{{ getIcon(device.name) }}</div>\n              </div>\n              <div class=\"c-mc-lite-1785972578983-6feb7e31-grid-text-area\">\n                <div class=\"c-mc-lite-1785972578983-6feb7e31-device-name\">{{ device.name }}</div>\n                <div class=\"c-mc-lite-1785972578983-6feb7e31-device-status\">\n                  <span :class=\"device.abnormal > 0 ? 'red' : 'blue'\">({{ device.abnormal }}/{{ device.total }})</span>\n                </div>\n              </div>\n            </div>\n          </div>\n        </div>\n      </div>\n    </div>\n  </base-panel>\n</template>\n\n<script setup>\nimport { ref } from 'vue';\n\nconst activeMenu = ref('监控');\nconst menuItems = ['监控', '照明', '通风', '供配电', '消防', '交通诱导'];\n\nconst devices = [\n  { name: '摄像机', abnormal: 2, total: 484 },\n  { name: '风速风向仪', abnormal: 1, total: 484 },\n  { name: '超高检测器', abnormal: 0, total: 484 },\n  { name: '烟道机器人', abnormal: 0, total: 484 },\n  { name: '激光雷达', abnormal: 0, total: 484 },\n  { name: 'CO2传感器', abnormal: 0, total: 484 },\n  { name: 'CO/VI检测器', abnormal: 0, total: 484 },\n  { name: '温湿度传感器', abnormal: 0, total: 484 },\n  { name: '压力传感器', abnormal: 0, total: 484 },\n  { name: '光照度变送器', abnormal: 0, total: 484 },\n  { name: '紧急电话', abnormal: 0, total: 484 },\n  { name: '水质监测设备', abnormal: 0, total: 484 },\n];\n\nconst iconMap = {\n  '摄像机': '📷',\n  '风速风向仪': '🌬️',\n  '超高检测器': '🚛',\n  '烟道机器人': '🤖',\n  '激光雷达': '📡',\n  'CO2传感器': '💨',\n  'CO/VI检测器': '☁️',\n  '温湿度传感器': '🌡️',\n  '压力传感器': '⏲️',\n  '光照度变送器': '💡',\n  '紧急电话': '📞',\n  '水质监测设备': '💧'\n};\n\nconst getIcon = (name) => iconMap[name] || '📦';\n</script>\n\n<style scoped>\n.c-mc-lite-1785972578983-6feb7e31-content {\n  width: 100%;\n  height: 100%;\n  background-color: #aebbc9; /* 截图整体背景偏灰蓝 */\n  display: flex;\n  flex-direction: column;\n  padding: 15px;\n  box-sizing: border-box;\n  font-family: 'Microsoft YaHei', sans-serif;\n  color: #1e293b;\n}\n\n/* Header */\n.c-mc-lite-1785972578983-6feb7e31-header {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  margin-bottom: 15px;\n  height: 40px;\n}\n\n.c-mc-lite-1785972578983-6feb7e31-main-title {\n  font-size: 24px;\n  font-weight: bold;\n  color: #3b82f6;\n  margin-right: 20px;\n}\n\n.c-mc-lite-1785972578983-6feb7e31-stats-group {\n  display: flex;\n  gap: 20px;\n  align-items: center;\n  font-size: 16px;\n}\n\n.c-mc-lite-1785972578983-6feb7e31-stat-item {\n  display: flex;\n  align-items: center;\n  gap: 5px;\n}\n\n.c-mc-lite-1785972578983-6feb7e31-stat-icon {\n  color: #3b82f6;\n  font-size: 18px;\n}\n\n.c-mc-lite-1785972578983-6feb7e31-stat-label {\n  color: #334155;\n  font-weight: normal;\n}\n\n.c-mc-lite-1785972578983-6feb7e31-stat-value {\n  font-weight: bold;\n  font-size: 20px;\n}\n\n.c-mc-lite-1785972578983-6feb7e31-stat-value.blue { color: #3b82f6; }\n.c-mc-lite-1785972578983-6feb7e31-stat-value.green { color: #10b981; }\n\n/* Body Layout */\n.c-mc-lite-1785972578983-6feb7e31-body {\n  display: flex;\n  flex: 1;\n  gap: 15px;\n  overflow: hidden;\n}\n\n/* Sidebar */\n.c-mc-lite-1785972578983-6feb7e31-sidebar {\n  width: 60px;\n  display: flex;\n  flex-direction: column;\n  gap: 10px;\n  position: relative;\n}\n\n.c-mc-lite-1785972578983-6feb7e31-sidebar-tag {\n  position: absolute;\n  top: -10px;\n  left: 0;\n  background: #fff;\n  color: #333;\n  font-size: 12px;\n  padding: 2px 6px;\n  border-radius: 4px;\n  z-index: 10;\n  box-shadow: 0 2px 4px rgba(0,0,0,0.1);\n}\n\n.c-mc-lite-1785972578983-6feb7e31-menu-item {\n  background: #e2e8f0;\n  border-radius: 8px;\n  padding: 10px 5px;\n  text-align: center;\n  cursor: pointer;\n  position: relative;\n  color: #64748b;\n  font-size: 14px;\n  writing-mode: vertical-rl;\n  text-orientation: mixed;\n  height: 60px;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  border: 1px solid #cbd5e1;\n  transition: all 0.3s;\n}\n\n.c-mc-lite-1785972578983-6feb7e31-menu-item.c-mc-lite-1785972578983-6feb7e31-active {\n  background: #3b82f6;\n  color: #fff;\n  border-color: #3b82f6;\n}\n\n.c-mc-lite-1785972578983-6feb7e31-menu-text {\n  letter-spacing: 2px;\n}\n\n.c-mc-lite-1785972578983-6feb7e31-badge {\n  position: absolute;\n  top: -5px;\n  right: -5px;\n  background: #ef4444;\n  color: #fff;\n  font-size: 10px;\n  width: 16px;\n  height: 16px;\n  border-radius: 50%;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  writing-mode: horizontal-tb;\n}\n\n/* Main Content */\n.c-mc-lite-1785972578983-6feb7e31-main-content {\n  flex: 1;\n  display: flex;\n  flex-direction: column;\n  gap: 15px;\n}\n\n/* Cards Row */\n.c-mc-lite-1785972578983-6feb7e31-cards-row {\n  display: flex;\n  gap: 15px;\n  height: 100px;\n}\n\n.c-mc-lite-1785972578983-6feb7e31-card {\n  flex: 1;\n  border-radius: 12px;\n  display: flex;\n  align-items: center;\n  padding: 15px;\n  position: relative;\n  overflow: hidden;\n}\n\n.c-mc-lite-1785972578983-6feb7e31-card-blue {\n  background: linear-gradient(90deg, #3b82f6 0%, #60a5fa 100%);\n  color: #fff;\n  clip-path: polygon(0 0, 95% 0, 100% 50%, 95% 100%, 0 100%);\n}\n\n.c-mc-lite-1785972578983-6feb7e31-card-gray {\n  background: #cbd5e1;\n  color: #1e293b;\n  clip-path: polygon(0 0, 95% 0, 100% 50%, 95% 100%, 0 100%);\n}\n\n.c-mc-lite-1785972578983-6feb7e31-card-icon-wrapper {\n  width: 60px;\n  height: 60px;\n  background: rgba(255,255,255,0.2);\n  border-radius: 50%;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  margin-right: 15px;\n  border: 2px solid rgba(255,255,255,0.5);\n}\n\n.c-mc-lite-1785972578983-6feb7e31-card-icon-wrapper.gray {\n  background: #fff;\n  border-color: #e2e8f0;\n}\n\n.c-mc-lite-1785972578983-6feb7e31-card-icon {\n  font-size: 24px;\n}\n\n.c-mc-lite-1785972578983-6feb7e31-card-info {\n  display: flex;\n  flex-direction: column;\n  gap: 10px;\n}\n\n.c-mc-lite-1785972578983-6feb7e31-card-row {\n  display: flex;\n  align-items: baseline;\n  gap: 10px;\n}\n\n.c-mc-lite-1785972578983-6feb7e31-card-label {\n  font-size: 18px;\n  opacity: 0.9;\n}\n\n.c-mc-lite-1785972578983-6feb7e31-card-label.dark {\n  color: #475569;\n}\n\n.c-mc-lite-1785972578983-6feb7e31-card-value {\n  font-size: 28px;\n  font-weight: bold;\n}\n\n.c-mc-lite-1785972578983-6feb7e31-card-value.red {\n  color: #ef4444;\n  font-size: 24px;\n}\n\n.c-mc-lite-1785972578983-6feb7e31-card-value.blue {\n  color: #3b82f6;\n}\n\n.c-mc-lite-1785972578983-6feb7e31-card-sub-label {\n  font-size: 14px;\n  opacity: 0.8;\n}\n\n.c-mc-lite-1785972578983-6feb7e31-card-sub-label.dark {\n  color: #475569;\n  font-weight: bold;\n}\n\n/* Grid */\n.c-mc-lite-1785972578983-6feb7e31-grid {\n  flex: 1;\n  display: grid;\n  grid-template-columns: repeat(3, 1fr);\n  grid-template-rows: repeat(4, 1fr);\n  gap: 10px;\n}\n\n.c-mc-lite-1785972578983-6feb7e31-grid-item {\n  background: #cbd5e1;\n  border-radius: 8px;\n  display: flex;\n  align-items: center;\n  padding: 10px 15px;\n  gap: 15px;\n  border: 1px solid #94a3b8;\n}\n\n.c-mc-lite-1785972578983-6feb7e31-grid-icon-area {\n  position: relative;\n  width: 40px;\n  height: 40px;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n}\n\n.c-mc-lite-1785972578983-6feb7e31-icon-base {\n  position: absolute;\n  bottom: 0;\n  width: 36px;\n  height: 12px;\n  background: linear-gradient(to bottom, #e2e8f0, #fff);\n  border-radius: 50%;\n  box-shadow: 0 2px 4px rgba(0,0,0,0.1);\n  z-index: 1;\n}\n\n.c-mc-lite-1785972578983-6feb7e31-icon-symbol {\n  position: relative;\n  z-index: 2;\n  font-size: 20px;\n  margin-bottom: 5px;\n  color: #3b82f6;\n}\n\n.c-mc-lite-1785972578983-6feb7e31-grid-text-area {\n  display: flex;\n  flex-direction: column;\n  gap: 5px;\n}\n\n.c-mc-lite-1785972578983-6feb7e31-device-name {\n  font-size: 14px;\n  color: #1e293b;\n}\n\n.c-mc-lite-1785972578983-6feb7e31-device-status {\n  font-size: 16px;\n  font-weight: bold;\n}\n\n.c-mc-lite-1785972578983-6feb7e31-device-status .red { color: #ef4444; }\n.c-mc-lite-1785972578983-6feb7e31-device-status .blue { color: #3b82f6; }\n\n</style>",
+  "declareJson": {
+    "componentId": "mc-lite-1785972578983-6feb7e31",
+    "componentName": "mc-lite-1785972578983-6feb7e31",
+    "panelType": "default-panel",
+    "defaultTheme": "dark",
+    "size": {
+      "width": 880,
+      "height": 890
+    },
+    "businessEvents": [],
+    "businessStatuses": [],
+    "dataSources": [],
+    "formSources": [],
+    "layoutConfig": {},
+    "themeConfig": {},
+    "businessConfig": {}
+  }
+}

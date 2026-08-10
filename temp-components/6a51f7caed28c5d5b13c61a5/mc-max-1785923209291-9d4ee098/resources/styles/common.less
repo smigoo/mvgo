@@ -1,0 +1,171 @@
+@import './themes/theme-vars.less';
+
+/* [Layout Refine] Figma root FRAME 420x186 → 固定宽高，flex column */
+.c-env-monitor-container {
+  width: 420px;
+  height: 186px;
+  display: flex;
+  flex-direction: column;
+  background-color: @bg-color;
+  box-shadow: 0px 4px 10px @shadow-color;
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* [Style Refine] fills[0].color → #EDF4FB, 背景图使用 100% 100% */
+.c-env-monitor-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url(../resources/images/bg-7880.png);
+  background-size: 100% 100%
+  z-index: 0;
+}
+
+/* [Layout Refine] Figma header GROUP y:875 h:28 → 固定高度 28px */
+.c-env-monitor-header {
+  height: 28px;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+}
+
+/* [Style Refine] fills[0].gradientStops → 渐变文字 */
+.c-env-monitor-title {
+  font-family: 'Noto Sans SC', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 19px;
+  background: linear-gradient(180deg, #1990FF 0%, rgba(90, 126, 255, 0.83) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* [Layout Refine] Figma slot-con FRAME y:898 h:145 → flex: 1, 内部垂直布局 */
+.c-env-monitor-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 0 20px;
+  position: relative;
+  z-index: 1;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+/* [Layout Refine] Figma sub-t FRAME h:32 → 固定高度 32px, 水平两端对齐 */
+.c-env-monitor-sub-t {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+/* [Layout Refine] Figma tabs-list GROUP w:295 h:27 → 固定宽高，水平布局 */
+.c-env-monitor-tabs-list {
+  width: 295px;
+  height: 27px;
+  display: flex;
+  align-items: center;
+  background: linear-gradient(180deg, #B5DDFF 0%, #D1ECFF 100%);
+  border: 0.72px solid #FFFFFF;
+  border-radius: 4px;
+  padding: 3px;
+  box-sizing: border-box;
+}
+
+/* [Style Refine] fills/strokes → 渐变背景，白色描边，文字颜色 #2C9BEA */
+.c-env-monitor-tab-item {
+  flex: 1;
+  height: 21px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: #2C9BEA;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.3s;
+  box-sizing: border-box;
+
+  /* [Style Refine] bg-tab-active fills/strokes → 选中态渐变，白色描边，文字阴影 */
+  &.is-active {
+    background: linear-gradient(180deg, #1099B1 0%, #048FFF 100%);
+    border: 0.6px solid #FFFFFF;
+    color: #FFFFFF;
+    text-shadow: 0px 0.6px 0px rgba(0, 111, 227, 1);
+  }
+}
+
+/* [Layout Refine] Figma tabs-icon FRAME w:52 h:24 → 水平布局，gap 4px */
+.c-env-monitor-tabs-icon {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* [Style Refine] Rectangle fills/strokes → 渐变背景，#A1CEFF 描边，圆角 4px */
+.c-env-monitor-icon-btn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #FFFFFF 0%, #E2F0FF 36%, #DEEEFF 69%, #FFFFFF 100%);
+  border: 1px solid @border-color;
+  border-radius: 4px;
+  position: relative;
+  cursor: pointer;
+  box-sizing: border-box;
+
+  img {
+    width: 18px;
+    height: 18px;
+  }
+}
+
+/* [Style Refine] num GROUP bg fills → #F53F3F, cornerRadius 29 */
+.c-env-monitor-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 14px;
+  height: 14px;
+  background: @danger-color;
+  border-radius: 29px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'PingFang SC', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  color: #FFFFFF;
+  line-height: 14px;
+}
+
+/* [Layout Refine] Figma @echarts/line GROUP h:113 → flex: 1, 相对定位 */
+.c-env-monitor-chart {
+  flex: 1;
+  width: 100%;
+  position: relative;
+  min-height: 0;
+  margin-top: 4px;
+}
+
+.c-env-monitor-chart-container {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+}

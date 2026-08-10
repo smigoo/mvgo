@@ -1,0 +1,228 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 680">
+  <defs>
+    <!-- Background gradient - soft pink to lavender -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFE5F0"/>
+      <stop offset="50%" style="stop-color:#F0E6FF"/>
+      <stop offset="100%" style="stop-color:#E8D5FF"/>
+    </linearGradient>
+    
+    <!-- Night sky gradient -->
+    <linearGradient id="skyGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a2e"/>
+      <stop offset="100%" style="stop-color:#16213e"/>
+    </linearGradient>
+    
+    <!-- Warm lamp glow -->
+    <radialGradient id="lampGlow" cx="50%" cy="50%">
+      <stop offset="0%" style="stop-color:#FFF9E6;stop-opacity:0.9"/>
+      <stop offset="50%" style="stop-color:#FFE4B5;stop-opacity:0.4"/>
+      <stop offset="100%" style="stop-color:#FFE4B5;stop-opacity:0"/>
+    </radialGradient>
+    
+    <!-- Screen glow -->
+    <radialGradient id="screenGlow" cx="50%" cy="50%">
+      <stop offset="0%" style="stop-color:#87CEEB;stop-opacity:0.3"/>
+      <stop offset="100%" style="stop-color:#87CEEB;stop-opacity:0"/>
+    </radialGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="680" height="680" fill="url(#bgGrad)"/>
+  
+  <!-- Decorative outer frame with rounded corners -->
+  <rect x="15" y="15" width="650" height="650" fill="none" stroke="#FFB6C1" stroke-width="5" rx="25"/>
+  <rect x="25" y="25" width="630" height="630" fill="none" stroke="#DDA0DD" stroke-width="3" rx="20" stroke-dasharray="10,5"/>
+  
+  <!-- Corner decorations -->
+  <circle cx="40" cy="40" r="8" fill="#FFB6C1"/>
+  <circle cx="640" cy="40" r="8" fill="#FFB6C1"/>
+  <circle cx="40" cy="640" r="8" fill="#FFB6C1"/>
+  <circle cx="640" cy="640" r="8" fill="#FFB6C1"/>
+  
+  <!-- Title area -->
+  <text x="340" y="70" font-family="'Comic Sans MS', cursive, sans-serif" font-size="36" font-weight="bold" fill="#9370DB" text-anchor="middle">工作的小确幸</text>
+  <text x="220" y="75" font-size="26">✨</text>
+  <text x="460" y="75" font-size="26">✨</text>
+  
+  <!-- Window frame (night sky scene) -->
+  <rect x="100" y="110" width="480" height="260" fill="url(#skyGrad)" rx="15"/>
+  
+  <!-- Window frame border -->
+  <rect x="100" y="110" width="480" height="260" fill="none" stroke="#DEB887" stroke-width="10" rx="15"/>
+  
+  <!-- Window dividers -->
+  <line x1="340" y1="110" x2="340" y2="370" stroke="#DEB887" stroke-width="8"/>
+  <line x1="100" y1="240" x2="580" y2="240" stroke="#DEB887" stroke-width="8"/>
+  
+  <!-- Moon (crescent) -->
+  <circle cx="500" cy="170" r="38" fill="#FFF8DC"/>
+  <circle cx="486" cy="160" r="33" fill="url(#skyGrad)"/>
+  
+  <!-- Stars scattered -->
+  <circle cx="160" cy="150" r="3" fill="#FFF" opacity="0.9"/>
+  <circle cx="210" cy="190" r="2.5" fill="#FFF" opacity="0.8"/>
+  <circle cx="420" cy="140" r="3" fill="#FFF" opacity="0.9"/>
+  <circle cx="460" cy="210" r="2" fill="#FFF" opacity="0.7"/>
+  <circle cx="190" cy="290" r="3.5" fill="#FFF" opacity="0.9"/>
+  <circle cx="530" cy="310" r="2.5" fill="#FFF" opacity="0.8"/>
+  <circle cx="140" cy="220" r="2" fill="#FFF" opacity="0.7"/>
+  <circle cx="390" cy="175" r="2" fill="#FFF" opacity="0.8"/>
+  
+  <!-- Twinkling star shapes -->
+  <text x="270" y="160" font-size="20" opacity="0.9">⭐</text>
+  <text x="150" y="320" font-size="16" opacity="0.8">✨</text>
+  <text x="540" y="260" font-size="18" opacity="0.9">✨</text>
+  
+  <!-- Curtains -->
+  <path d="M 90 110 Q 75 185 90 280 L 100 280 L 100 110 Z" fill="#FFB6C1" opacity="0.75"/>
+  <path d="M 590 110 Q 605 185 590 280 L 580 280 L 580 110 Z" fill="#FFB6C1" opacity="0.75"/>
+  
+  <!-- Curtain ties -->
+  <ellipse cx="95" cy="195" rx="8" ry="15" fill="#DDA0DD"/>
+  <ellipse cx="585" cy="195" rx="8" ry="15" fill="#DDA0DD"/>
+  
+  <!-- Desk surface -->
+  <rect x="70" y="410" width="540" height="200" fill="#8B4513" rx="8"/>
+  <rect x="70" y="410" width="540" height="35" fill="#654321" rx="8"/>
+  
+  <!-- Desk wood grain details -->
+  <line x1="120" y1="420" x2="580" y2="420" stroke="#5C3317" stroke-width="1" opacity="0.3"/>
+  <line x1="120" y1="430" x2="580" y2="430" stroke="#5C3317" stroke-width="1" opacity="0.3"/>
+  
+  <!-- Lamp glow effect (behind objects) -->
+  <ellipse cx="520" cy="430" rx="180" ry="120" fill="url(#lampGlow)"/>
+  
+  <!-- Desk lamp -->
+  <ellipse cx="520" cy="440" rx="35" ry="10" fill="#FFD700"/>
+  <rect x="515" y="370" width="10" height="70" fill="#FFD700" rx="5"/>
+  <path d="M 495 370 L 545 370 L 535 335 L 505 335 Z" fill="#FFD700"/>
+  <ellipse cx="520" cy="335" rx="25" ry="12" fill="#FFA500"/>
+  <ellipse cx="520" cy="335" rx="20" ry="10" fill="#FFFF00" opacity="0.6"/>
+  
+  <!-- Laptop -->
+  <rect x="220" y="450" width="140" height="90" fill="#2C2C2C" rx="6"/>
+  <rect x="228" y="458" width="124" height="74" fill="#1E90FF" rx="4"/>
+  <rect x="210" y="540" width="160" height="12" fill="#3C3C3C" rx="3"/>
+  
+  <!-- Screen glow effect -->
+  <ellipse cx="290" cy="495" rx="100" ry="60" fill="url(#screenGlow)"/>
+  
+  <!-- Code lines on screen -->
+  <rect x="240" y="470" width="70" height="6" fill="#90EE90" rx="3"/>
+  <rect x="240" y="482" width="90" height="6" fill="#FFB6C1" rx="3"/>
+  <rect x="240" y="494" width="60" height="6" fill="#87CEEB" rx="3"/>
+  <rect x="240" y="506" width="80" height="6" fill="#DDA0DD" rx="3"/>
+  <rect x="240" y="518" width="50" height="6" fill="#F0E68C" rx="3"/>
+  
+  <!-- Coffee cup -->
+  <rect x="410" y="470" width="45" height="50" fill="#FFFFFF" stroke="#E0E0E0" stroke-width="2" rx="4"/>
+  <ellipse cx="432.5" cy="520" rx="22.5" ry="6" fill="#E0E0E0"/>
+  <path d="M 455 485 Q 468 495 455 505" fill="none" stroke="#E0E0E0" stroke-width="3"/>
+  
+  <!-- Coffee steam -->
+  <path d="M 420 465 Q 415 450 420 435" fill="none" stroke="#D3D3D3" stroke-width="2.5" opacity="0.5" stroke-linecap="round"/>
+  <path d="M 432.5 465 Q 427.5 450 432.5 435" fill="none" stroke="#D3D3D3" stroke-width="2.5" opacity="0.5" stroke-linecap="round"/>
+  <path d="M 445 465 Q 440 450 445 435" fill="none" stroke="#D3D3D3" stroke-width="2.5" opacity="0.5" stroke-linecap="round"/>
+  
+  <!-- Stack of papers/books -->
+  <rect x="120" y="505" width="70" height="10" fill="#FFFFFF" stroke="#D0D0D0" stroke-width="1" rx="2"/>
+  <rect x="123" y="495" width="64" height="10" fill="#FFF8DC" stroke="#D0D0D0" stroke-width="1" rx="2"/>
+  <rect x="126" y="485" width="58" height="10" fill="#FFFFFF" stroke="#D0D0D0" stroke-width="1" rx="2"/>
+  <rect x="129" y="475" width="52" height="10" fill="#FFE4E1" stroke="#D0D0D0" stroke-width="1" rx="2"/>
+  
+  <!-- Plant pot -->
+  <rect x="100" y="540" width="55" height="45" fill="#CD853F" rx="4"/>
+  <ellipse cx="127.5" cy="540" rx="27.5" ry="10" fill="#8B4513"/>
+  
+  <!-- Plant leaves -->
+  <ellipse cx="115" cy="525" rx="18" ry="25" fill="#90EE90"/>
+  <ellipse cx="140" cy="520" rx="18" ry="28" fill="#98FB98"/>
+  <ellipse cx="127.5" cy="510" rx="22" ry="32" fill="#90EE90"/>
+  <ellipse cx="127.5" cy="505" rx="15" ry="25" fill="#7CFC00" opacity="0.7"/>
+  
+  <!-- Sticky notes -->
+  <rect x="500" y="510" width="40" height="40" fill="#FFFF99" rx="3" transform="rotate(5 520 530)"/>
+  <rect x="510" y="520" width="40" height="40" fill="#FFB6C1" rx="3" transform="rotate(-3 530 540)"/>
+  
+  <!-- Note lines -->
+  <line x1="505" y1="520" x2="535" y2="520" stroke="#FFD700" stroke-width="1"/>
+  <line x1="505" y1="528" x2="535" y2="528" stroke="#FFD700" stroke-width="1"/>
+  
+  <!-- Cute cat character (main subject) -->
+  <!-- Body -->
+  <ellipse cx="320" cy="490" rx="55" ry="50" fill="#FFD4A3"/>
+  
+  <!-- Head -->
+  <circle cx="320" cy="420" r="45" fill="#FFD4A3"/>
+  
+  <!-- Ears -->
+  <path d="M 290 395 L 282 370 L 302 388 Z" fill="#FFD4A3"/>
+  <path d="M 350 395 L 358 370 L 338 388 Z" fill="#FFD4A3"/>
+  <path d="M 293 393 L 287 375 L 299 389 Z" fill="#FFB6C1"/>
+  <path d="M 347 393 L 353 375 L 341 389 Z" fill="#FFB6C1"/>
+  
+  <!-- Face -->
+  <!-- Eyes (closed, happy curves) -->
+  <path d="M 303 415 Q 303 422 310 422" fill="none" stroke="#2C2C2C" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M 330 415 Q 337 422 337 422" fill="none" stroke="#2C2C2C" stroke-width="2.5" stroke-linecap="round"/>
+  
+  <!-- Glasses frames -->
+  <circle cx="307" cy="418" r="12" fill="none" stroke="#4A4A4A" stroke-width="2.5"/>
+  <circle cx="333" cy="418" r="12" fill="none" stroke="#4A4A4A" stroke-width="2.5"/>
+  <line x1="319" y1="418" x2="321" y2="418" stroke="#4A4A4A" stroke-width="2.5"/>
+  <line x1="295" y1="418" x2="288" y2="415" stroke="#4A4A4A" stroke-width="2"/>
+  <line x1="345" y1="418" x2="352" y2="415" stroke="#4A4A4A" stroke-width="2"/>
+  
+  <!-- Nose -->
+  <ellipse cx="320" cy="428" rx="4" ry="3.5" fill="#FF69B4"/>
+  
+  <!-- Mouth (happy smile) -->
+  <path d="M 312 434 Q 320 440 328 434" fill="none" stroke="#2C2C2C" stroke-width="2" stroke-linecap="round"/>
+  
+  <!-- Blush cheeks -->
+  <ellipse cx="290" cy="430" rx="10" ry="6" fill="#FFB6C1" opacity="0.6"/>
+  <ellipse cx="350" cy="430" rx="10" ry="6" fill="#FFB6C1" opacity="0.6"/>
+  
+  <!-- Whiskers -->
+  <line x1="285" y1="425" x2="265" y2="423" stroke="#8B7355" stroke-width="1"/>
+  <line x1="285" y1="430" x2="265" y2="432" stroke="#8B7355" stroke-width="1"/>
+  <line x1="355" y1="425" x2="375" y2="423" stroke="#8B7355" stroke-width="1"/>
+  <line x1="355" y1="430" x2="375" y2="432" stroke="#8B7355" stroke-width="1"/>
+  
+  <!-- Arms (typing pose) -->
+  <ellipse cx="285" cy="480" rx="18" ry="30" fill="#FFD4A3" transform="rotate(-25 285 480)"/>
+  <ellipse cx="355" cy="480" rx="18" ry="30" fill="#FFD4A3" transform="rotate(25 355 480)"/>
+  
+  <!-- Paws on keyboard -->
+  <circle cx="275" cy="505" r="10" fill="#FFD4A3"/>
+  <circle cx="365" cy="505" r="10" fill="#FFD4A3"/>
+  
+  <!-- Paw pads -->
+  <circle cx="272" cy="503" r="2" fill="#FFB6C1"/>
+  <circle cx="278" cy="503" r="2" fill="#FFB6C1"/>
+  <circle cx="275" cy="508" r="2" fill="#FFB6C1"/>
+  <circle cx="362" cy="503" r="2" fill="#FFB6C1"/>
+  <circle cx="368" cy="503" r="2" fill="#FFB6C1"/>
+  <circle cx="365" cy="508" r="2" fill="#FFB6C1"/>
+  
+  <!-- Tail -->
+  <path d="M 375 510 Q 410 500 420 470" fill="none" stroke="#FFD4A3" stroke-width="12" stroke-linecap="round"/>
+  
+  <!-- Floating decorative elements -->
+  <text x="170" y="430" font-size="24" opacity="0.9">💕</text>
+  <text x="490" y="420" font-size="22" opacity="0.85">⭐</text>
+  <text x="200" y="360" font-size="20" opacity="0.8">✨</text>
+  <text x="550" y="400" font-size="24" opacity="0.9">💫</text>
+  <text x="140" y="380" font-size="18" opacity="0.75">💭</text>
+  
+  <!-- Bottom message area -->
+  <rect x="170" y="620" width="340" height="40" fill="#FFFFFF" opacity="0.7" rx="20"/>
+  <text x="340" y="647" font-family="'KaiTi', 'STKaiti', serif" font-size="24" fill="#9370DB" text-anchor="middle" font-weight="500">努力工作，快乐生活</text>
+  
+  <!-- Small hearts scattered -->
+  <text x="120" y="600" font-size="16" opacity="0.6">💗</text>
+  <text x="560" y="630" font-size="16" opacity="0.6">💗</text>
+  <text x="170" y="650" font-size="14" opacity="0.5">💕</text>
+  <text x="510" y="660" font-size="14" opacity="0.5">💕</text>
+</svg>

@@ -1,0 +1,191 @@
+```json
+{
+  "generatedAt": "2024-05-20T10:00:00.000Z",
+  "stage": "preview-analysis",
+  "componentName": "运单信息",
+  "componentTitle": "运单信息",
+  "analysisModel": "gpt-4-vision",
+  "sourceImage": {
+    "path": "resources/images/mc-preview.png",
+    "size": 0,
+    "mtimeMs": 0,
+    "sha1": ""
+  },
+  "summary": "深色主题弹窗，展示运单列表表格及选中运单的详细信息（含文本字段和监控截图）。",
+  "layout": {
+    "type": "vertical-stack",
+    "direction": "vertical",
+    "sections": [
+      {
+        "id": "section-table",
+        "name": "运单列表表格",
+        "role": "table",
+        "layout": "vertical",
+        "headerRelation": "no-header",
+        "slotCandidate": null,
+        "body": {
+          "layout": "vertical",
+          "bgPlaceholder": "table-bg",
+          "children": [
+            {
+              "type": "table-header",
+              "layout": "horizontal",
+              "children": [
+                { "type": "text", "text": "运单编号", "styles": { "color": "#ffffff", "fontSize": 14 } },
+                { "type": "text", "text": "危化品名称", "styles": { "color": "#ffffff", "fontSize": 14 } },
+                { "type": "text", "text": "超运地", "styles": { "color": "#ffffff", "fontSize": 14 } },
+                { "type": "text", "text": "实际发车时间", "styles": { "color": "#ffffff", "fontSize": 14 } },
+                { "type": "text", "text": "目的地", "styles": { "color": "#ffffff", "fontSize": 14 } },
+                { "type": "text", "text": "预计到达时间", "styles": { "color": "#ffffff", "fontSize": 14 } },
+                { "type": "text", "text": "满载情况", "styles": { "color": "#ffffff", "fontSize": 14 } },
+                { "type": "text", "text": "运输状态", "styles": { "color": "#ffffff", "fontSize": 14 } }
+              ]
+            },
+            {
+              "type": "table-row",
+              "layout": "horizontal",
+              "state": "active",
+              "bgPlaceholder": "row-active-bg",
+              "children": [
+                { "type": "text", "text": "3203502388...", "styles": { "color": "#ffffff" } },
+                { "type": "text", "text": "烟花", "styles": { "color": "#ffffff" } },
+                { "type": "text", "text": "江阴", "styles": { "color": "#ffffff" } },
+                { "type": "text", "text": "2023-11-22 06:20:46", "styles": { "color": "#ffffff" } },
+                { "type": "text", "text": "靖江", "styles": { "color": "#ffffff" } },
+                { "type": "text", "text": "--", "styles": { "color": "#ffffff" } },
+                { "type": "text", "text": "满载", "styles": { "color": "#ffffff" } },
+                { "type": "text", "text": "在途", "styles": { "color": "#ffffff" } }
+              ]
+            },
+            {
+              "type": "table-row",
+              "layout": "horizontal",
+              "state": "normal",
+              "children": [
+                { "type": "text", "text": "3203502388...", "styles": { "color": "#ffffff" } },
+                { "type": "text", "text": "硫酸", "styles": { "color": "#ffffff" } },
+                { "type": "text", "text": "无锡", "styles": { "color": "#ffffff" } },
+                { "type": "text", "text": "2023-11-20 06:20:46", "styles": { "color": "#ffffff" } },
+                { "type": "text", "text": "泰州", "styles": { "color": "#ffffff" } },
+                { "type": "text", "text": "--", "styles": { "color": "#ffffff" } },
+                { "type": "text", "text": "满载", "styles": { "color": "#ffffff" } },
+                { "type": "text", "text": "在途", "styles": { "color": "#ffffff" } }
+              ]
+            },
+            {
+              "type": "table-row",
+              "layout": "horizontal",
+              "state": "normal",
+              "children": [
+                { "type": "text", "text": "3203502388...", "styles": { "color": "#ffffff" } },
+                { "type": "text", "text": "硫酸", "styles": { "color": "#ffffff" } },
+                { "type": "text", "text": "江阴", "styles": { "color": "#ffffff" } },
+                { "type": "text", "text": "2023-11-19 06:20:46", "styles": { "color": "#ffffff" } },
+                { "type": "text", "text": "靖江", "styles": { "color": "#ffffff" } },
+                { "type": "text", "text": "--", "styles": { "color": "#ffffff" } },
+                { "type": "text", "text": "满载", "styles": { "color": "#ffffff" } },
+                { "type": "text", "text": "在途", "styles": { "color": "#ffffff" } }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "section-details",
+        "name": "运单详情",
+        "role": "content",
+        "layout": "vertical",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "header": {
+          "title": "运单详情",
+          "controls": []
+        },
+        "body": {
+          "layout": "horizontal",
+          "bgPlaceholder": "details-bg",
+          "children": [
+            {
+              "type": "info-grid",
+              "layout": "grid",
+              "gridColumns": 2,
+              "children": [
+                { "type": "kv-pair", "label": "起运地", "value": "江苏省无锡市江阴市" },
+                { "type": "kv-pair", "label": "危化品名称", "value": "烟花" },
+                { "type": "kv-pair", "label": "分类名称", "value": "危险品(1类4项)" },
+                { "type": "kv-pair", "label": "目的地", "value": "江苏省泰州市靖江市" },
+                { "type": "kv-pair", "label": "运输里程", "value": "200(KM)" },
+                { "type": "kv-pair", "label": "发车时间", "value": "2023-11-22 06:20:46" },
+                { "type": "kv-pair", "label": "预计到达时间", "value": "2023-11-22 12:04:21" },
+                { "type": "kv-pair", "label": "满载情况", "value": "满载货物" },
+                { "type": "kv-pair", "label": "总重量", "value": "9.8(吨)" },
+                { "type": "kv-pair", "label": "驾驶员姓名", "value": "张悦" },
+                { "type": "kv-pair", "label": "驾驶员电话", "value": "13955086495" },
+                { "type": "kv-pair", "label": "备注", "value": "栖霞大道浦口104国道桥宁马高速路路二桥百水桥栖霞大道", "span": 2 }
+              ]
+            },
+            {
+              "type": "image",
+              "name": "监控截图",
+              "resourceFile": "../resources/images/img-99044.png",
+              "recommendedUsage": "imgSrc",
+              "width": 237,
+              "height": 155,
+              "style": {
+                "objectFit": "cover",
+                "border": "1px solid rgba(255,255,255,0.2)"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "styles": {
+    "theme": "深色科技监控风",
+    "backgroundBrightness": "dark",
+    "colors": [
+      "#003032",
+      "#18ffc6",
+      "#ffffff",
+      "#b07b00"
+    ],
+    "background": "深青色背景 (#003032)",
+    "decorations": [
+      "菱形标题图标",
+      "表格行高亮背景"
+    ],
+    "emphasis": [
+      "选中行高亮",
+      "黄色车牌标签"
+    ]
+  },
+  "interactions": [
+    {
+      "target": "表格行",
+      "type": "row-select",
+      "description": "点击表格行切换下方详情展示",
+      "defaultState": "第一行选中",
+      "evidence": "第一行背景色高亮，下方详情对应第一行数据（烟花）"
+    },
+    {
+      "target": "右上角关闭按钮",
+      "type": "button",
+      "description": "关闭弹窗",
+      "defaultState": "常驻",
+      "evidence": "右上角X图标"
+    }
+  ],
+  "charts": [],
+  "doNotInvent": [
+    "不要臆造表格分页控件（图中未显示）",
+    "不要臆造详情区域的编辑按钮",
+    "不要臆造监控视频播放控件（仅为静态截图）"
+  ],
+  "notes": [
+    "顶部标题栏包含车牌号标签 '苏A 12345'，背景为黄色/橙色。",
+    "详情区域布局为左侧文本信息（两列排列），右侧为监控图片。",
+    "表格第一行处于选中状态（Active），背景色较亮（青色/绿色）。"
+  ]
+}
+```

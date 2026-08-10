@@ -1,0 +1,17 @@
+{
+  "componentId": "mc-lite-1785901304491-fe9d52ad",
+  "componentName": "mc-lite-echarts-test",
+  "panelType": "default-panel",
+  "defaultTheme": "dark",
+  "size": {
+    "width": 440,
+    "height": 202
+  },
+  "businessEvents": [],
+  "businessStatuses": [],
+  "dataSources": [],
+  "formSources": [],
+  "layoutConfig": {},
+  "themeConfig": {},
+  "businessConfig": {}
+}

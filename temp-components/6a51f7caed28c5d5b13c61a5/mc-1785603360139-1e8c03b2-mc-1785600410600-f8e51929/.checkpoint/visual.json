@@ -1,0 +1,527 @@
+{
+  "layoutStructure": {
+    "generatedAt": "2026-04-27T10:19:15.595Z",
+    "stage": "preview-analysis",
+    "componentName": "重点车辆监测",
+    "componentTitle": "重点车辆监测",
+    "analysisModel": "gpt-5.4",
+    "sourceImage": {
+      "path": "{outputPath}/c-lljc/resources/images/mc-preview.png",
+      "size": 709937,
+      "mtimeMs": 1777285034334,
+      "sha1": "4ef988ae2dbf004f8a071940c71e9b64e4a43dd7"
+    },
+    "summary": "包含顶部地点Tab切换、今日累计标题及三个统计卡片（危化品车、重型货车、超高车辆）",
+    "layout": {
+      "type": "vertical-stack",
+      "direction": "vertical",
+      "sections": [
+        {
+          "id": "section-tabs",
+          "name": "地点切换Tab",
+          "role": "tabs",
+          "layout": "horizontal",
+          "headerRelation": "title-same-row",
+          "slotCandidate": "header-right",
+          "header": {
+            "title": null,
+            "controls": []
+          },
+          "body": {
+            "layout": "horizontal",
+            "bgPlaceholder": "transparent",
+            "children": [
+              {
+                "id": "tab-1",
+                "name": "江阴靖江长江隧道",
+                "role": "tab-item",
+                "type": "tab",
+                "active": true,
+                "styles": {
+                  "backgroundColor": "rgba(25,144,255,1)",
+                  "color": "#ffffff",
+                  "borderRadius": "10px",
+                  "padding": "4px 12px",
+                  "fontSize": "12px"
+                }
+              },
+              {
+                "id": "tab-2",
+                "name": "江阴大桥",
+                "role": "tab-item",
+                "type": "tab",
+                "active": false,
+                "styles": {
+                  "backgroundColor": "rgba(102,128,160,0.1)",
+                  "color": "rgba(102,128,160,1)",
+                  "borderRadius": "10px",
+                  "padding": "4px 12px",
+                  "fontSize": "12px"
+                }
+              }
+            ],
+            "backgroundImage": {
+              "src": null,
+              "recommendedUsage": "backgroundStyle"
+            },
+            "backgroundSize": "cover",
+            "backgroundPosition": "center",
+            "backgroundRepeat": "no-repeat"
+          }
+        },
+        {
+          "id": "section-today-stats",
+          "name": "今日累计",
+          "role": "常驻",
+          "layout": "vertical",
+          "bgPlaceholder": "section-bg-today",
+          "headerRelation": "content-below-title",
+          "slotCandidate": null,
+          "header": {
+            "title": "今日累计",
+            "controls": [],
+            "decoration": {
+              "type": "icon",
+              "resourceFile": "../resources/images/icon-123.png",
+              "recommendedUsage": "imgSrc",
+              "position": "left"
+            }
+          },
+          "body": {
+            "layout": "horizontal-3-columns",
+            "bgPlaceholder": "body-bg-today",
+            "gridColumns": 3,
+            "items": [
+              {
+                "id": "card-hazmat",
+                "name": "危化品车",
+                "role": "stat-card",
+                "layout": "vertical",
+                "bgPlaceholder": "card-bg-1",
+                "style": {
+                  "background": "rgba(200, 220, 240, 0.3)",
+                  "borderRadius": "8px",
+                  "padding": "12px"
+                },
+                "children": [
+                  {
+                    "type": "row",
+                    "layout": "horizontal",
+                    "alignItems": "center",
+                    "gap": "8px",
+                    "children": [
+                      {
+                        "type": "icon",
+                        "resourceFile": "../resources/images/icon-8049.png",
+                        "recommendedUsage": "imgSrc",
+                        "width": 40,
+                        "height": 30,
+                        "style": {
+                          "objectFit": "contain"
+                        }
+                      },
+                      {
+                        "type": "label",
+                        "text": "危化品车",
+                        "figmaNode": "label-hazmat",
+                        "styles": {
+                          "fontSize": "12px",
+                          "color": "rgba(102,128,160,1)",
+                          "fontWeight": "normal"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "type": "value-row",
+                    "layout": "horizontal",
+                    "alignItems": "baseline",
+                    "gap": "4px",
+                    "position": "bottom",
+                    "children": [
+                      {
+                        "type": "number",
+                        "text": "51",
+                        "figmaNode": "val-hazmat",
+                        "styles": {
+                          "fontSize": "24px",
+                          "color": "rgba(255,77,79,1)",
+                          "fontWeight": "bold"
+                        }
+                      },
+                      {
+                        "type": "unit",
+                        "text": "次",
+                        "figmaNode": "unit-hazmat",
+                        "styles": {
+                          "fontSize": "12px",
+                          "color": "rgba(102,128,160,1)",
+                          "fontWeight": "normal"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "card-heavy",
+                "name": "重型货车",
+                "role": "stat-card",
+                "layout": "vertical",
+                "bgPlaceholder": "card-bg-2",
+                "style": {
+                  "background": "rgba(200, 220, 240, 0.3)",
+                  "borderRadius": "8px",
+                  "padding": "12px"
+                },
+                "children": [
+                  {
+                    "type": "row",
+                    "layout": "horizontal",
+                    "alignItems": "center",
+                    "gap": "8px",
+                    "children": [
+                      {
+                        "type": "icon",
+                        "resourceFile": "../resources/images/icon-8036.png",
+                        "recommendedUsage": "imgSrc",
+                        "width": 40,
+                        "height": 30,
+                        "style": {
+                          "objectFit": "contain"
+                        }
+                      },
+                      {
+                        "type": "label",
+                        "text": "重型货车",
+                        "figmaNode": "label-heavy",
+                        "styles": {
+                          "fontSize": "12px",
+                          "color": "rgba(102,128,160,1)",
+                          "fontWeight": "normal"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "type": "value-row",
+                    "layout": "horizontal",
+                    "alignItems": "baseline",
+                    "gap": "4px",
+                    "position": "bottom",
+                    "children": [
+                      {
+                        "type": "number",
+                        "text": "2",
+                        "figmaNode": "val-heavy",
+                        "styles": {
+                          "fontSize": "24px",
+                          "color": "rgba(25,144,255,1)",
+                          "fontWeight": "bold"
+                        }
+                      },
+                      {
+                        "type": "unit",
+                        "text": "次",
+                        "figmaNode": "unit-heavy",
+                        "styles": {
+                          "fontSize": "12px",
+                          "color": "rgba(102,128,160,1)",
+                          "fontWeight": "normal"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "card-oversize",
+                "name": "超高车辆",
+                "role": "stat-card",
+                "layout": "vertical",
+                "bgPlaceholder": "card-bg-3",
+                "style": {
+                  "background": "rgba(200, 220, 240, 0.3)",
+                  "borderRadius": "8px",
+                  "padding": "12px"
+                },
+                "children": [
+                  {
+                    "type": "row",
+                    "layout": "horizontal",
+                    "alignItems": "center",
+                    "gap": "8px",
+                    "children": [
+                      {
+                        "type": "icon",
+                        "resourceFile": "../resources/images/icon-8070.png",
+                        "recommendedUsage": "imgSrc",
+                        "width": 40,
+                        "height": 30,
+                        "style": {
+                          "objectFit": "contain"
+                        }
+                      },
+                      {
+                        "type": "label",
+                        "text": "超高车辆",
+                        "figmaNode": "label-oversize",
+                        "styles": {
+                          "fontSize": "12px",
+                          "color": "rgba(102,128,160,1)",
+                          "fontWeight": "normal"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "type": "value-row",
+                    "layout": "horizontal",
+                    "alignItems": "baseline",
+                    "gap": "4px",
+                    "position": "bottom",
+                    "children": [
+                      {
+                        "type": "number",
+                        "text": "19",
+                        "figmaNode": "val-oversize",
+                        "styles": {
+                          "fontSize": "24px",
+                          "color": "rgba(250,140,22,1)",
+                          "fontWeight": "bold"
+                        }
+                      },
+                      {
+                        "type": "unit",
+                        "text": "次",
+                        "figmaNode": "unit-oversize",
+                        "styles": {
+                          "fontSize": "12px",
+                          "color": "rgba(102,128,160,1)",
+                          "fontWeight": "normal"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "backgroundImage": {
+              "src": null,
+              "recommendedUsage": "backgroundStyle"
+            },
+            "backgroundSize": "cover",
+            "backgroundPosition": "center",
+            "backgroundRepeat": "no-repeat"
+          }
+        }
+      ]
+    },
+    "styles": {
+      "theme": "浅色科技监测风",
+      "backgroundBrightness": "light",
+      "colors": [
+        "rgba(237,244,251,1)",
+        "rgba(25,144,255,1)",
+        "rgba(102,128,160,1)",
+        "rgba(255,77,79,1)",
+        "rgba(250,140,22,1)"
+      ],
+      "background": "rgba(237,244,251,1)",
+      "decorations": [
+        "菱形蓝色图标"
+      ],
+      "emphasis": [
+        "大号彩色数值（红/蓝/橙）"
+      ]
+    },
+    "interactions": [
+      {
+        "target": "顶部地点切换控件",
+        "type": "tab-switch",
+        "description": "切换监测地点：江阴靖江长江隧道 / 江阴大桥",
+        "defaultState": "常驻，选中江阴靖江长江隧道",
+        "options": [
+          "江阴靖江长江隧道",
+          "江阴大桥"
+        ],
+        "activeIndex": 0
+      }
+    ],
+    "charts": [],
+    "doNotInvent": [
+      "不要臆造点击Tab后的具体数据变化",
+      "不要臆造卡片的点击跳转功能",
+      "不要臆造'数据实时更新'的具体逻辑（虽然图中有灰色小字，但视为注释/装饰）"
+    ],
+    "notes": [
+      "Figma结构中提到'*数据实时更新'，根据规则以*开头视为注释过滤，不作为UI内容",
+      "卡片背景色推测为浅蓝灰色块，与主背景略有区分",
+      "图标资源下载失败，使用资源清单中的icon-8049/8036/8070作为替代映射"
+    ],
+    "headerSlots": [
+      {
+        "slotType": "header-right",
+        "elementType": "tab",
+        "content": "江阴靖江长江隧道 / 江阴大桥",
+        "figmaNodeId": "tabs"
+      }
+    ],
+    "coverageReport": {
+      "totalFigma": 60,
+      "matchedCount": 0,
+      "missingCount": 34,
+      "uncertainCount": 3,
+      "coverageRate": 0,
+      "missing": [
+        {
+          "name": "Frame 2136637714",
+          "type": "FRAME",
+          "depth": 0
+        },
+        {
+          "name": "header",
+          "type": "FRAME",
+          "depth": 1
+        },
+        {
+          "name": "tabs",
+          "type": "FRAME",
+          "depth": 2
+        },
+        {
+          "name": "Frame 2136638771",
+          "type": "FRAME",
+          "depth": 3
+        },
+        {
+          "name": "江阴靖江长江隧道",
+          "type": "TEXT",
+          "depth": 4
+        },
+        {
+          "name": "Frame 2136638769",
+          "type": "FRAME",
+          "depth": 3
+        },
+        {
+          "name": "江阴大桥",
+          "type": "TEXT",
+          "depth": 4
+        },
+        {
+          "name": "小标题",
+          "type": "GROUP",
+          "depth": 2
+        },
+        {
+          "name": "g",
+          "type": "GROUP",
+          "depth": 3
+        },
+        {
+          "name": "重点车辆监测",
+          "type": "TEXT",
+          "depth": 3
+        },
+        {
+          "name": "slot",
+          "type": "FRAME",
+          "depth": 1
+        },
+        {
+          "name": "Group 2136639043",
+          "type": "GROUP",
+          "depth": 2
+        },
+        {
+          "name": "bg",
+          "type": "FRAME",
+          "depth": 4
+        },
+        {
+          "name": "Group 2136638349",
+          "type": "GROUP",
+          "depth": 5
+        },
+        {
+          "name": "icon",
+          "type": "FRAME",
+          "depth": 4
+        }
+      ],
+      "uncertain": [
+        {
+          "name": "次",
+          "type": "TEXT"
+        },
+        {
+          "name": "次",
+          "type": "TEXT"
+        },
+        {
+          "name": "次",
+          "type": "TEXT"
+        }
+      ],
+      "summary": "需关注"
+    }
+  },
+  "visualElements": {
+    "theme": "浅色科技监测风",
+    "backgroundBrightness": "light",
+    "colors": [
+      "rgba(237,244,251,1)",
+      "rgba(25,144,255,1)",
+      "rgba(102,128,160,1)",
+      "rgba(255,77,79,1)",
+      "rgba(250,140,22,1)"
+    ],
+    "background": "rgba(237,244,251,1)",
+    "decorations": [
+      "菱形蓝色图标"
+    ],
+    "emphasis": [
+      "大号彩色数值（红/蓝/橙）"
+    ]
+  },
+  "interactions": [
+    {
+      "target": "顶部地点切换控件",
+      "type": "tab-switch",
+      "description": "切换监测地点：江阴靖江长江隧道 / 江阴大桥",
+      "defaultState": "常驻，选中江阴靖江长江隧道",
+      "options": [
+        "江阴靖江长江隧道",
+        "江阴大桥"
+      ],
+      "activeIndex": 0
+    }
+  ],
+  "charts": [],
+  "headerSlots": [
+    {
+      "slotType": "header-right",
+      "elementType": "tab",
+      "content": "江阴靖江长江隧道 / 江阴大桥",
+      "figmaNodeId": "tabs"
+    }
+  ],
+  "analysisType": "",
+  "analysisTarget": "",
+  "analysisDescription": "",
+  "analysisEvidence": [],
+  "headerValidation": {
+    "passed": true,
+    "headerElements": [],
+    "headerRightElements": [],
+    "suggestions": [],
+    "confidence": "low",
+    "componentType": "microcode"
+  },
+  "headerSlotValidation": {
+    "validatedSlots": [],
+    "rejectedNodes": [],
+    "warnings": []
+  }
+}

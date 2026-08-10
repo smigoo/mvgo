@@ -1,0 +1,117 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 15,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections",
+        "message": "sections 数组为空，没有任何布局区域定义。布局结构完全缺失，无法生成任何 UI 内容。",
+        "suggestion": "根据组件设计意图，补充至少一个 section，包含 header 和 body 层级划分。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "styles",
+        "message": "styles.theme 为「未知」，colors 数组为空，background 为空字符串，decorations 和 emphasis 均为空数组。样式信息完全缺失，无法推断任何主题颜色或视觉风格。",
+        "suggestion": "补充 theme（dark/light）、主色调 colors、背景色 background 等关键样式信息。若为暗色主题，backgroundBrightness 已标注为 dark，需同步补充对应的暗色色值。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "interactions",
+        "message": "interactions 数组为空，没有任何交互定义（Tab 切换、Select 下拉、图例联动等）。",
+        "suggestion": "若组件存在 Tab 切换或 Select 下拉，必须在此声明并实现对应数据联动，不能仅做样式切换。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "charts",
+        "message": "charts 数组为空，没有任何图表配置。若组件包含 ECharts 图表，tooltip、legend、grid 等配置均缺失。",
+        "suggestion": "补充图表配置，包括 tooltip（必须，禁止 show: false）、grid（containLabel: true）、legend（若有自定义图例需声明联动逻辑）。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "root",
+        "message": "degraded: true，降级原因为 404（MODEL_NOT_FOUND）。本次布局结构是在模型调用失败后的降级兜底产物，不代表任何真实的设计意图，所有字段均为默认空值，不可用于代码生成。",
+        "suggestion": "根本原因是模型请求路径错误（404）。需先修复 MODEL_NOT_FOUND 问题（检查模型 ID、API 路径、权限配置），再重新触发布局分析，得到有效的非降级结果后再进行审查。"
+      }
+    ],
+    "recommendations": [
+      "优先排查 404 / MODEL_NOT_FOUND 根因：检查请求的模型 ID 是否正确、API Endpoint 路径是否存在、鉴权 Token 是否有效，参考 https://js.langchain.com/docs/troubleshooting/errors/MODEL_NOT_FOUND/ 修复后重新分析。",
+      "修复后重新生成布局时，sections 必须至少包含一个有效区域，每个 section 需正确区分 header 层和 body 层，嵌套深度控制在 3 层以内。",
+      "styles.theme 必须明确为 dark 或 light，并补充对应的 colors 色值列表，以便生成 theme-vars.less 中的 .theme-dark() / .theme-light() mixin。",
+      "若组件含图表，charts 配置中必须声明 tooltip（禁止省略或 show: false），坐标系图表使用 trigger: axis，非坐标系图表使用 trigger: item。",
+      "若组件含 Tab 或 Select，interactions 中必须声明联动关系，确保切换后触发图表数据更新，而不仅是激活态样式变化。",
+      "当前 backgroundBrightness 为 dark，修复后生成代码时需确保 theme-vars.less 的 .theme-dark() 中使用暗色背景色值，且 index.vue 根节点绑定正确的 theme class。"
+    ],
+    "summary": "本次布局结构因上游模型调用 404 失败而完全降级（degraded: true），所有核心字段——sections、styles、interactions、charts——均为空值，不包含任何有效设计信息。这不是布局设计本身的问题，而是流水线前置步骤失败导致的无效产物。当前结果无法用于任何代码生成，评分 15 分（仅因 layout.type 和 direction 字段结构合法给予基础分）。必须先修复 MODEL_NOT_FOUND 错误，重新触发预览分析，获得有效布局结构后再进行实质性审查。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）— 基于 dark 背景亮度推断的基础变量集",
+      "--colorTextBase": "#ffffff",
+      "--colorTextSecondary": "rgba(255,255,255,0.65)",
+      "--colorTextDisabled": "rgba(255,255,255,0.35)",
+      "--colorBg": "#0f1117",
+      "--colorBgSecondary": "rgba(255,255,255,0.06)",
+      "--colorBorder": "rgba(255,255,255,0.12)",
+      "--colorPrimary": "#3677f8",
+      "--colorPrimaryBg": "rgba(54,119,248,0.15)",
+      "--fontSize": "14px",
+      "--borderRadius": "4px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射（对应 theme-vars.less 中的 .theme-dark()）",
+      "@color-text-primary": "#ffffff",
+      "@color-text-secondary": "rgba(255,255,255,0.65)",
+      "@color-text-disabled": "rgba(255,255,255,0.35)",
+      "@color-bg": "#0f1117",
+      "@color-bg-secondary": "rgba(255,255,255,0.06)",
+      "@color-border": "rgba(255,255,255,0.12)",
+      "@color-primary": "#3677f8",
+      "@color-primary-bg": "rgba(54,119,248,0.15)",
+      "@font-size-base": "14px",
+      "@border-radius-base": "4px"
+    },
+    "cssClasses": {
+      "comment": "基于 dark 背景亮度推断的通用容器类",
+      ".container": {
+        "width": "100%",
+        "height": "100%",
+        "display": "flex",
+        "flex-direction": "column",
+        "background": "var(--colorBg, @color-bg)",
+        "color": "var(--colorTextBase, @color-text-primary)",
+        "font-size": "var(--fontSize, @font-size-base)"
+      },
+      ".card": {
+        "background": "var(--colorBgSecondary, @color-bg-secondary)",
+        "border": "1px solid var(--colorBorder, @color-border)",
+        "border-radius": "var(--borderRadius, @border-radius-base)",
+        "padding": "1em"
+      },
+      ".text-primary": {
+        "color": "var(--colorTextBase, @color-text-primary)"
+      },
+      ".text-secondary": {
+        "color": "var(--colorTextSecondary, @color-text-secondary)"
+      },
+      ".text-disabled": {
+        "color": "var(--colorTextDisabled, @color-text-disabled)"
+      }
+    },
+    "tokenCoverage": 0.2,
+    "mappingNotes": [
+      "输入的视觉元素为空（colors/background/decorations/emphasis 均为空），theme 字段为'未知'",
+      "唯一可用信息为 backgroundBrightness: 'dark'，所有变量基于暗色背景最佳实践推断",
+      "tokenCoverage 仅 0.2，因无具体颜色/装饰/强调色可映射，建议补充完整设计稿后重新提取",
+      "dark 主题下文字颜色建议使用 rgba 透明度层次（100% / 65% / 35%）而非纯白多档色值",
+      "主色 #3677f8 为平台框架预设默认值，待设计稿确认后替换为实际品牌色",
+      "背景色 #0f1117 为暗色系常用基准值，应以实际设计稿 Figma 字面量为准"
+    ],
+    "elementStyleMap": {}
+  }
+}

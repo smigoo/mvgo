@@ -1,0 +1,33 @@
+// 主题变量与 mixin
+.theme-dark() {
+  :root {
+    --color-bg-base: #003032;
+    --color-primary: #18FFCE;
+    --color-warning: #B07B00;
+    --color-text-base: #FFFFFF;
+    --color-text-secondary: rgba(255,255,255,0.6);
+    --color-border: rgba(255,255,255,0.2);
+    --color-primary-bg: rgba(24,255,206,0.1);
+    --font-size-base: 14px;
+  }
+}
+
+.theme-light() {
+  :root {
+    --color-bg-base: #FFFFFF;
+    --color-primary: #1890FF;
+    --color-warning: #FAAD14;
+    --color-text-base: #333333;
+    --color-text-secondary: rgba(0,0,0,0.6);
+    --color-border: rgba(0,0,0,0.1);
+    --color-primary-bg: rgba(24,144,255,0.1);
+    --font-size-base: 14px;
+  }
+}
+
+.common() {
+  // 通用 mixin
+}
+
+// 默认调用深色主题
+.theme-dark();

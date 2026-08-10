@@ -1,0 +1,295 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 75,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[0].body.children[1].children",
+        "message": "图例的 dotColor 存在两两重复的情况（如交通事故与障碍物同为 #ff4d4f，车辆故障与大流量同为 #faad14 等）。这会导致用户在视觉上无法区分不同分类，尤其是当数值为0时，颜色相同会造成严重的语义混淆。",
+        "suggestion": "为每个图例项分配独立的颜色（如使用 Ant Design 的扩展色板），或者确保有数据的系列颜色唯一，无数据的系列使用统一的灰色/弱化色（如 rgba(255,255,255,0.3)）以示区分。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body & layout.sections[1].body",
+        "message": "上下两个 section 均独立设置了相同的背景图 bg-6177.png。在垂直堆叠布局中，这会导致背景图重复显示或出现明显的接缝，破坏整体大屏的视觉效果。",
+        "suggestion": "将背景图提取至最外层根容器（layout 级别）统一设置；或者确认设计稿中背景图确实是分块设计的，若是分块设计需确保图片边缘可无缝拼接。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body.children[1]",
+        "message": "stats-row 声明为 horizontal-5-items，但第一个子节点 stat-group 是复合结构（图标+文本），而后续节点是单一 stat-item。这种结构差异在等分布局下会导致视觉对齐和间距异常。",
+        "suggestion": "建议将 stats-row 的布局改为 flex，并通过 gap 控制间距；或者将 stat-group 拆解，使图标和文本与其他 stat-item 保持同级，统一布局结构。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[1].body.children[0].body.children[0]",
+        "message": "chart-container 内部仅包裹了一个 chart 节点，增加了不必要的 DOM 嵌套深度（当前已达 6 层以上），不符合微码建议的 ≤3 层嵌套原则，增加了渲染负担。",
+        "suggestion": "移除 chart-container 这一冗余层级，直接将 chart 节点作为 event-category body 的子节点；或者将 chart-container 作为普通的样式容器而不作为独立的布局节点。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "coverageReport",
+        "message": "当前布局的 Figma 节点覆盖率（coverageRate）为 0，缺失节点高达 57 个。这意味着大量设计稿细节（如装饰线、精确间距、微小图标等）未被识别和映射，可能导致最终 UI 还原度较低。",
+        "suggestion": "建议重新运行 Figma 解析或手动补充缺失的关键节点映射，特别是装饰性元素和精确的间距/尺寸数据，以提升布局的准确性和还原度。"
+      }
+    ],
+    "recommendations": [
+      "优化图例颜色配置，确保每个分类具有唯一且可区分的颜色，避免视觉和语义混淆。",
+      "统一背景图的管理方式，避免在子 section 中重复设置相同的背景图导致接缝问题，建议提升至根容器统一管理。",
+      "简化 DOM 结构，移除不必要的包裹层（如 chart-container），降低嵌套深度，提升渲染性能。",
+      "提高 Figma 节点覆盖率，补充缺失的装饰和细节节点，确保 UI 还原度符合大屏设计标准。"
+    ],
+    "summary": "该布局结构整体区域划分清晰，能够准确反映“事件统计”面板的核心业务逻辑（地点切换、统计概览、分类图表、救援信息）。但在细节处理上存在明显瑕疵：图例颜色重复导致视觉混淆，背景图重复设置可能产生接缝，且部分区域嵌套过深。此外，极低的 Figma 节点覆盖率表明当前结构可能遗漏了大量设计细节。建议重点修复图例颜色问题，优化背景图和嵌套结构，并补充 Figma 节点映射。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#00f0ff",
+      "--colorSuccess": "#52c41a",
+      "--colorError": "#ff4d4f",
+      "--colorWarning": "#faad14",
+      "--colorInfo": "#1890ff",
+      "--colorTextBase": "#ffffff",
+      "--colorTextSecondary": "rgba(255,255,255,0.6)",
+      "--colorBg": "#0a0e1a",
+      "--colorBorder": "rgba(0,240,255,0.3)",
+      "--fontSize": "14px",
+      "--fontSizeLarge": "32px",
+      "--borderRadius": "4px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#00f0ff",
+      "@color-success": "#52c41a",
+      "@color-error": "#ff4d4f",
+      "@color-warning": "#faad14",
+      "@color-info": "#1890ff",
+      "@color-text-base": "#ffffff",
+      "@color-text-secondary": "rgba(255,255,255,0.6)",
+      "@color-bg": "#0a0e1a",
+      "@color-border": "rgba(0,240,255,0.3)",
+      "@font-size-base": "14px",
+      "@font-size-large": "32px",
+      "@border-radius-base": "4px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".tech-container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "16px",
+        "background": "var(--colorBg)",
+        "border": "1px solid var(--colorBorder)",
+        "border-radius": "var(--borderRadius)",
+        "box-shadow": "0 0 10px rgba(0,240,255,0.1)"
+      },
+      ".tech-header": {
+        "display": "flex",
+        "justify-content": "space-between",
+        "align-items": "center",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)",
+        "border-bottom": "1px solid var(--colorBorder)",
+        "padding-bottom": "12px",
+        "margin-bottom": "16px"
+      },
+      ".data-divider": {
+        "height": "1px",
+        "background": "linear-gradient(90deg, transparent, var(--colorPrimary), transparent)",
+        "margin": "12px 0"
+      },
+      ".value-primary": {
+        "font-size": "var(--fontSizeLarge)",
+        "color": "var(--colorPrimary)",
+        "font-weight": "bold",
+        "text-shadow": "0 0 8px rgba(0,240,255,0.5)"
+      },
+      ".value-success": {
+        "font-size": "var(--fontSizeLarge)",
+        "color": "var(--colorSuccess)",
+        "font-weight": "bold"
+      },
+      ".value-error": {
+        "font-size": "var(--fontSizeLarge)",
+        "color": "var(--colorError)",
+        "font-weight": "bold"
+      },
+      ".text-secondary": {
+        "color": "var(--colorTextSecondary)",
+        "font-size": "var(--fontSize)"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调青色(#00f0ff)映射为--colorPrimary，用于高亮边框和核心数值",
+      "状态色(绿/红/黄)分别映射为--colorSuccess/--colorError/--colorWarning，用于业务数据强调",
+      "深色背景(#0a0e1a)和半透明青色边框(rgba(0,240,255,0.3))构建科技感基础容器",
+      "数据分隔线使用渐变实现科技感过渡效果",
+      "大号数值使用--fontSizeLarge配合text-shadow增强视觉冲击力",
+      "次要文本使用rgba(255,255,255,0.6)降低视觉层级"
+    ],
+    "elementStyleMap": {
+      "location-stats-overview": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "location-tabs-tab-江阴靖江长江隧道-0": {
+        "background": "linear-gradient(90deg, rgba(0,240,255,0.2) 0%, rgba(0,240,255,0) 100%)",
+        "color": "#ffffff"
+      },
+      "location-tabs-tab-江阴大桥-1": {
+        "background": "transparent",
+        "color": "rgba(255,255,255,0.6)"
+      },
+      "stats-row-stat-group-x-0-stat-item-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stats-row-stat-group-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "stats-row-stat-item-x-2": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stats-row-stat-item-x-3": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stats-row-stat-item-x-4": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-6177.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-tab-江阴靖江长江隧道-4": {
+        "background": "linear-gradient(90deg, rgba(0,240,255,0.2) 0%, rgba(0,240,255,0) 100%)",
+        "color": "#ffffff"
+      },
+      "el-tab-江阴大桥-5": {
+        "background": "transparent",
+        "color": "rgba(255,255,255,0.6)"
+      },
+      "el-stat-group-x-7-stat-item-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-group-x-7": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-stat-item-x-9": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-item-x-13": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-item-x-16": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-item-x-19": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "event-category": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "rescue-info": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-23": {
+        "background-image": "url(../resources/images/bg-6177.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-rescue-card-x-37-text-group-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-rescue-card-x-37": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-text-group-x-39": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-list-x-42-list-item-x-0-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-list-x-42-list-item-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "justify-content": "space-between"
+      },
+      "el-list-x-42-list-item-x-1-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-list-x-42-list-item-x-1": {
+        "display": "flex",
+        "flex-direction": "row",
+        "justify-content": "space-between"
+      },
+      "el-list-x-42": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-list-item-x-43-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-list-item-x-43": {
+        "display": "flex",
+        "flex-direction": "row",
+        "justify-content": "space-between"
+      },
+      "el-row-x-44": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-list-item-x-48-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-list-item-x-48": {
+        "display": "flex",
+        "flex-direction": "row",
+        "justify-content": "space-between"
+      },
+      "el-row-x-49": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      }
+    }
+  }
+}

@@ -1,0 +1,172 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 55,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "Figma节点匹配率为0（matchedCount: 0, coverageRate: 0），布局结构完全缺乏设计稿数据支撑。这严重违反了'样式证据优先'和'零装饰原则'，会导致代码生成时大量样式被臆造，最终UI与设计稿产生重大偏差。",
+        "suggestion": "重新执行Figma解析或检查节点映射逻辑，确保布局结构与Figma节点建立有效映射。所有关键样式（如背景、圆角、阴影、间距）必须从Figma数据中提取，提升覆盖率至合理水平（建议>80%）。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[1].body.children[*].children[1]",
+        "message": "统计卡片内部嵌套过深。当前结构为 stat-card -> content-group -> elements -> value -> parts，DOM层级达到5层，增加了不必要的渲染负担和代码复杂度。",
+        "suggestion": "建议扁平化卡片内部结构。移除冗余的 content-group 和 elements 包装层，将 label 和 value 直接作为 stat-card 的子元素，使DOM层级控制在3层以内。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "interactions[0]",
+        "message": "Tab切换交互仅描述了样式和状态切换，未明确数据联动要求。根据微码规范，Tab切换必须实现数据联动，当前描述可能导致代码生成时只实现样式切换而遗漏数据更新逻辑。",
+        "suggestion": "在 interactions 中补充数据联动说明，或在布局中增加 dataBinding 字段，明确提示代码生成时必须实现 Tab 切换与下方统计数据/图表的联动更新。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[1].body.children[*]",
+        "message": "三个统计卡片使用了独立的背景图资源（bg-124, bg-125, bg-126），在DOM中会生成多个背景图节点。如果图片未优化，会增加渲染负担和首屏加载时间。",
+        "suggestion": "确认背景图是否为必须的图片切片。如果差异不大，建议合并为一张背景图或使用CSS渐变/纯色替代；若必须使用独立背景图，确保在代码中通过 CSS background-image 引入，并压缩图片体积。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "地点切换栏（section-tabs）被识别为 header-right 插槽，但 Figma 缺失节点中包含 'tabs' (depth: 2)，说明该区域在 Figma 中的实际层级可能与预期不符，存在插槽误判风险。",
+        "suggestion": "核对 Figma 中 tabs 的实际层级。如果 Figma 中 tabs 是独立于 header 的内容区块，应将其作为独立的 section 放在内容区顶部，而非强行塞入 header-right 插槽。"
+      }
+    ],
+    "recommendations": [
+      "修复 Figma 节点映射问题，确保 matchedCount > 0，严格遵循'样式证据优先'原则，杜绝无依据的样式生成。",
+      "简化统计卡片的 DOM 结构，移除冗余的包装层，提升代码可维护性和渲染性能。",
+      "在代码生成阶段，严格遵循 Tab 切换的数据联动约束，确保切换地点时触发下方统计数据的动态更新。",
+      "确保所有背景图资源在代码中正确引入，并作为 CSS 背景使用，避免使用 <img> 标签导致布局错位。",
+      "检查 Figma 缺失节点（如 Frame 2136637714、header 等），补全基础框架节点的映射，确保整体布局骨架与设计稿一致。"
+    ],
+    "summary": "布局结构整体逻辑清晰，区域划分（Tab区与统计区）合理，且正确识别了 base-panel 的面板插槽机制。但存在致命缺陷：Figma 节点匹配率为 0，导致布局缺乏设计稿数据支撑，极易引发样式臆造问题。此外，卡片内部嵌套过深，且 Tab 切换未明确数据联动要求。建议重新解析 Figma 节点、简化 DOM 结构并完善交互约束后再进行代码生成。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1990ff",
+      "--colorBg": "#edf4fb",
+      "--colorTextBase": "#333333",
+      "--colorDanger": "#ff4d4f",
+      "--colorWarning": "#fa8c16",
+      "--fontSize": "14px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#1990ff",
+      "@color-bg": "#edf4fb",
+      "@color-text-base": "#333333",
+      "@color-danger": "#ff4d4f",
+      "@color-warning": "#fa8c16",
+      "@font-size-base": "14px",
+      "@border-radius-base": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "16px",
+        "background": "var(--colorBg)",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)"
+      },
+      ".header": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "8px",
+        "margin-bottom": "16px"
+      },
+      ".diamond-icon": {
+        "width": "12px",
+        "height": "12px",
+        "background": "var(--colorPrimary)",
+        "transform": "rotate(45deg)",
+        "border-radius": "2px"
+      },
+      ".card": {
+        "background": "#ffffff",
+        "border-radius": "var(--borderRadius)",
+        "padding": "16px",
+        "box-shadow": "0 2px 8px rgba(0, 0, 0, 0.05)"
+      },
+      ".stat-value": {
+        "font-size": "2em",
+        "font-weight": "bold",
+        "line-height": "1.2"
+      },
+      ".stat-value--red": {
+        "color": "var(--colorDanger)"
+      },
+      ".stat-value--blue": {
+        "color": "var(--colorPrimary)"
+      },
+      ".stat-value--orange": {
+        "color": "var(--colorWarning)"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 #1990ff 映射为 --colorPrimary，用于科技风强调和菱形图标",
+      "背景色 #edf4fb 映射为 --colorBg，作为整体浅色科技监测风底色",
+      "基础文字色 #333333 映射为 --colorTextBase",
+      "红色 #ff4d4f 和 橙色 #fa8c16 分别映射为 --colorDanger 和 --colorWarning，用于大号彩色数值强调",
+      "卡片圆角背景通过 .card 类实现，使用 --borderRadius 变量",
+      "菱形标题图标通过 .diamond-icon 类使用 transform: rotate(45deg) 实现"
+    ],
+    "elementStyleMap": {
+      "section-tabs": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-stats": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-dangerous-content-group-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-dangerous": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-content-group-x-7": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-heavy-content-group-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-heavy": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-content-group-x-12": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-overheight-content-group-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-overheight": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-content-group-x-17": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    }
+  }
+}

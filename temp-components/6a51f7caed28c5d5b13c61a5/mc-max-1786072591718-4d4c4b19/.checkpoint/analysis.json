@@ -1,0 +1,156 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 55,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "严重违反‘禁止生成组件面板标题和边框样式’的硬性规范。`section-header` 中包含了标题‘环境监测’和‘标题装饰线’，这些元素应由 `<base-panel>` 统一处理，重复生成会导致UI重叠和冗余。",
+        "suggestion": "删除 `section-header` 整个区块，或仅保留必要的业务内容，彻底移除面板标题和底部装饰线。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[0]",
+        "message": "违反‘容器布局禁止固定宽度’规范。`chart-area` 设置了固定宽度 `width: 380`，导致图表无法自适应容器宽度，在不同尺寸面板下会显示异常。",
+        "suggestion": "将 `width: 380` 移除，改为 `width: 100%` 或使用 `flex: 1` 实现自适应布局。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[0].chartData.yAxis",
+        "message": "数据语义识别严重错误。CO浓度图的Y轴单位被识别为‘辆’（车辆单位），且 `chartDataHints` 中的数值(600,400)与Y轴最大值(40)存在严重逻辑冲突。",
+        "suggestion": "修正Y轴单位为CO浓度的正确单位（如 mg/m³ 或 ppm），并重新核对、修正图表数据源。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections",
+        "message": "背景图资源重复引用且策略不当。`section-header` 和 `section-chart-container` 的 body 均引用了相同的背景图 `bg-7890.png` 且设置为 `cover`，在垂直堆叠布局中会导致背景图重复显示或拼接割裂，增加不必要的渲染负担。",
+        "suggestion": "将背景图提升至组件根容器统一设置，或根据设计稿确认是否真的需要每个 section 独立铺满背景，避免重复加载和渲染。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "Figma 节点覆盖率极低（0%），存在大量 missing 节点（如 `cp-环境监测`, `slot-con`, `@echarts/line` 等），说明当前布局结构未能准确还原设计稿的真实层级。",
+        "suggestion": "检查 Figma 解析过程，重新核对设计稿层级，补充缺失的节点结构，确保布局与设计稿高度一致。"
+      }
+    ],
+    "recommendations": [
+      "严格遵循‘base-panel约束’和‘零装饰原则’，绝对不要手动生成面板标题、边框、背景和装饰线，这些均由外层 `<base-panel>` 统一接管。",
+      "全面排查并清除布局中的固定 px 宽度（如图表的 width: 380），统一替换为 flex 比例或百分比，确保组件的完全自适应能力。",
+      "加强对图表数据语义的交叉校验，避免将其他业务场景的单位（如‘辆’）错误应用到当前环境监测指标上。",
+      "优化背景图的使用策略，避免在相邻的垂直区块中重复使用同一张 cover 背景图，建议提取到父容器统一管理。",
+      "重新运行 Figma 解析或人工核对缺失节点，提升 coverageReport 的覆盖率，确保生成的结构能真实反映设计稿意图。"
+    ],
+    "summary": "该布局结构存在严重的规范违反问题，特别是重复生成了应由 `base-panel` 处理的面板标题和装饰线，且图表区域使用了固定宽度，破坏了自适应布局。此外，图表数据的语义识别存在明显错误（CO浓度单位识别为‘辆’），且 Figma 节点覆盖率极低（0%）。整体结构不符合微码组件核心规范，建议打回重构。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorBg": "#EDF4FB",
+      "--colorPrimary": "#559EFF",
+      "--colorSuccess": "#52C41A",
+      "--colorError": "#F53F3F",
+      "--colorTextBase": "#333333",
+      "--fontSize": "14px",
+      "--borderRadius": "4px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-bg": "#EDF4FB",
+      "@color-primary": "#559EFF",
+      "@color-success": "#52C41A",
+      "@color-error": "#F53F3F",
+      "@color-text-base": "#333333",
+      "@font-size-base": "14px",
+      "@border-radius-base": "4px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "16px",
+        "background": "var(--colorBg, #EDF4FB)",
+        "color": "var(--colorTextBase, #333333)",
+        "font-size": "var(--fontSize, 14px)"
+      },
+      ".header": {
+        "position": "relative",
+        "padding-bottom": "8px",
+        "font-weight": "bold",
+        "font-size": "1.2em"
+      },
+      ".header::after": {
+        "content": "''",
+        "position": "absolute",
+        "bottom": "0",
+        "left": "0",
+        "width": "100%",
+        "height": "2px",
+        "background": "linear-gradient(90deg, var(--colorPrimary, #559EFF), transparent)"
+      },
+      ".tab-active": {
+        "background": "var(--colorPrimary, #559EFF)",
+        "color": "#ffffff",
+        "border-radius": "var(--borderRadius, 4px)",
+        "padding": "4px 12px"
+      },
+      ".chart-line-success": {
+        "stroke": "var(--colorSuccess, #52C41A)",
+        "fill": "rgba(82, 196, 26, 0.2)"
+      },
+      ".badge-error": {
+        "background": "var(--colorError, #F53F3F)",
+        "color": "#ffffff",
+        "border-radius": "50%",
+        "width": "16px",
+        "height": "16px",
+        "display": "inline-flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "font-size": "12px"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "浅灰蓝色背景 #EDF4FB 映射为 --colorBg，作为容器基础背景",
+      "科技蓝 #559EFF 映射为 --colorPrimary，用于Tab选中态及标题装饰线渐变",
+      "绿色 #52C41A 映射为 --colorSuccess，用于CO浓度曲线及填充区域",
+      "红色 #F53F3F 映射为 --colorError，用于预警线及Badge数字背景",
+      "深灰色 #333333 映射为 --colorTextBase，作为基础文本颜色",
+      "标题下方渐变装饰线通过 .header::after 伪元素结合 linear-gradient 实现",
+      "容器背景应优先直接落地为 Figma 字面量值，避免关键可见背景只依赖 CSS 变量"
+    ],
+    "elementStyleMap": {
+      "section-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "section-chart-container": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-6": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  }
+}

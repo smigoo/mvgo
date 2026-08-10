@@ -1,0 +1,125 @@
+@import './themes/theme-vars.less';
+
+.c-mc-1785980184402-c71ffb16-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  padding: 12px;
+  box-sizing: border-box;
+  gap: 16px;
+  background: @bg-color;
+}
+
+.c-mc-1785980184402-c71ffb16-stats-section {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  width: 100%;
+}
+
+.c-mc-1785980184402-c71ffb16-stat-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex: 1;
+  background: @card-bg;
+  border-radius: 8px;
+  padding: 12px 16px;
+  gap: 12px;
+  box-sizing: border-box;
+  transition: all 0.3s ease;
+
+  &:first-child {
+    background: linear-gradient(270deg, @card-active-bg-start 0%, @card-active-bg-end 100%);
+    
+    .c-mc-1785980184402-c71ffb16-stat-label {
+      color: #ffffff;
+    }
+    .c-mc-1785980184402-c71ffb16-stat-value {
+      color: #ffffff;
+    }
+  }
+
+  &:last-child {
+    .c-mc-1785980184402-c71ffb16-stat-label {
+      color: @text-color;
+    }
+    .c-mc-1785980184402-c71ffb16-stat-value {
+      color: @primary-color;
+    }
+  }
+}
+
+.c-mc-1785980184402-c71ffb16-stat-icon {
+  width: 35px;
+  height: 28px;
+  flex-shrink: 0;
+}
+
+.c-mc-1785980184402-c71ffb16-text-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.c-mc-1785980184402-c71ffb16-stat-label {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  color: @text-color;
+}
+
+.c-mc-1785980184402-c71ffb16-stat-value {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 24px;
+  color: @primary-color;
+  
+  &.is-error {
+    color: @error-color;
+    font-size: 14px;
+    font-weight: 400;
+  }
+}
+
+.c-mc-1785980184402-c71ffb16-chart-section {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 16px;
+  box-sizing: border-box;
+  box-shadow: 0 4px 10px 0 @shadow-color;
+}
+
+.c-mc-1785980184402-c71ffb16-section-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.c-mc-1785980184402-c71ffb16-section-title {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 20px;
+  background: linear-gradient(90deg, #1990ff 0%, #5a7eff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: transparent;
+}
+
+.c-mc-1785980184402-c71ffb16-chart-wrapper {
+  flex: 1;
+  position: relative;
+  width: 100%;
+}
+
+.c-mc-1785980184402-c71ffb16-chart-container {
+  width: 100%;
+  height: 100%;
+  min-height: 200px;
+}

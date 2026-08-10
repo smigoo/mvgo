@@ -1,0 +1,58 @@
+{
+  "stage": "codegen_done",
+  "brief": {
+    "layout": "垂直布局，内容集中在顶部，整体靠左上对齐",
+    "regions": [
+      {
+        "name": "顶部卡片容器",
+        "description": "包含标题和图表占位符的深色卡片",
+        "position": "top",
+        "size": "宽度接近屏幕宽度，高度约占屏幕1/3"
+      },
+      {
+        "name": "背景区域",
+        "description": "深色空白背景",
+        "position": "center/bottom",
+        "size": "占据剩余屏幕空间"
+      }
+    ],
+    "spacing": {
+      "outer": "卡片距离屏幕边缘有少量边距",
+      "gap": "标题与图表区域之间有少量间距",
+      "padding": "卡片内部有均匀的内边距"
+    },
+    "colors": {
+      "primary": "#00d2ff",
+      "background": "#0f1115",
+      "surface": "#111b26",
+      "text": "#8b9bb4",
+      "border": "#1c2e40"
+    },
+    "typography": {
+      "size": "12px-14px",
+      "weight": "normal",
+      "lineHeight": "1.5"
+    },
+    "components": [
+      "文本标签",
+      "容器/卡片",
+      "占位符区域"
+    ],
+    "textContent": [
+      "车流量趋势 (24小时)",
+      "[ECharts 折线图]"
+    ],
+    "visualDetails": [
+      "卡片有圆角",
+      "卡片有细微边框",
+      "内部图表区域有边框"
+    ],
+    "interactions": []
+  },
+  "width": 1440,
+  "height": 900,
+  "sourceType": "html",
+  "componentType": "vue3",
+  "generationTier": "lite",
+  "vueCode": "<template>\n  <div class=\"dashboard-container\">\n    <div class=\"top-card\">\n      <div class=\"card-header\">\n        <span class=\"header-title\">车流量趋势 (24小时)</span>\n      </div>\n      <div class=\"chart-placeholder\">\n        <span class=\"placeholder-text\">[ECharts 折线图]</span>\n      </div>\n    </div>\n  </div>\n</template>\n\n<script setup>\n</script>\n\n<style scoped>\n.dashboard-container {\n  width: 100%;\n  min-height: 100vh;\n  background-color: #0f1115;\n  padding: 8px;\n  box-sizing: border-box;\n  display: flex;\n  flex-direction: column;\n  align-items: flex-start;\n}\n\n.top-card {\n  width: 99%;\n  height: 32vh; /* 约占屏幕1/3 */\n  min-height: 200px;\n  background-color: #111b26;\n  border: 1px solid #1c2e40;\n  border-radius: 4px;\n  padding: 12px;\n  box-sizing: border-box;\n  display: flex;\n  flex-direction: column;\n}\n\n.card-header {\n  width: 100%;\n  padding-bottom: 8px;\n  margin-bottom: 12px;\n  border-bottom: 1px solid #1c2e40;\n}\n\n.header-title {\n  color: #00d2ff;\n  font-size: 14px;\n  font-weight: normal;\n  line-height: 1.5;\n}\n\n.chart-placeholder {\n  flex: 1;\n  background-color: #111b26;\n  border: 1px solid #1c2e40;\n  border-radius: 2px;\n  display: flex;\n  justify-content: center;\n  align-items: center;\n}\n\n.placeholder-text {\n  color: #8b9bb4;\n  font-size: 14px;\n  font-weight: normal;\n  line-height: 1.5;\n}\n</style>"
+}

@@ -1,0 +1,48 @@
+{
+  "stage": "codegen_done",
+  "brief": {
+    "layout": "极简布局，全屏深色背景，内容仅分布在左上角。",
+    "regions": [
+      {
+        "name": "顶部文本区域",
+        "description": "包含文本'Test'",
+        "position": "top-left",
+        "size": "极小，仅容纳单行文本"
+      }
+    ],
+    "spacing": {
+      "outer": "左上角有少量边距",
+      "gap": "无",
+      "padding": "无"
+    },
+    "colors": {
+      "primary": "",
+      "background": "#111111",
+      "surface": "",
+      "text": "#000000",
+      "border": ""
+    },
+    "typography": {
+      "size": "约16px-20px",
+      "weight": "normal",
+      "lineHeight": "normal"
+    },
+    "components": [
+      "Text"
+    ],
+    "textContent": [
+      "Test"
+    ],
+    "visualDetails": [
+      "背景为深灰色/黑色",
+      "文字颜色为黑色，与背景对比度极低，几乎不可见"
+    ],
+    "interactions": []
+  },
+  "width": 1440,
+  "height": 900,
+  "sourceType": "html",
+  "componentType": "vue3",
+  "generationTier": "lite",
+  "vueCode": "<template>\n  <div class=\"layout-container\">\n    <div class=\"text-content\">Test</div>\n  </div>\n</template>\n\n<script setup>\n</script>\n\n<style scoped>\n.layout-container {\n  width: 100%;\n  height: 100vh;\n  background-color: #111111;\n  position: relative;\n  box-sizing: border-box;\n  padding: 10px;\n}\n\n.text-content {\n  color: #000000;\n  font-size: 20px;\n  font-weight: normal;\n  line-height: normal;\n}\n</style>"
+}
