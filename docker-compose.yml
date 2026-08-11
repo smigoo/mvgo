@@ -61,11 +61,14 @@ services:
       - "13030:13030"
     env_file:
       - ./backend-node/.env
+    environment:
+      # 容器内通过服务名访问 Java（host 开发模式走代码默认 localhost:8080）
+      JAVA_BACKEND_URL: http://backend-java:8080/api
     depends_on:
       - mysql
     restart: unless-stopped
 
-  # ─── Java 后端（业务 CRUD） ───
+  # ─── Java 后端（业务 CRUD，持久化走 MongoDB，不接 MySQL） ───
   backend-java:
     build:
       context: ./backend-java
@@ -75,12 +78,12 @@ services:
       - "8080:8080"
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      MYSQL_URL: jdbc:mysql://mysql:3306/mvgo?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai
-      MYSQL_USERNAME: ${MYSQL_USERNAME:-root}
-      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      # 生产部署必须注入 MONGODB_URI（与 Node 共用同一库，含账号密码）。
+      # 例如：mongodb://root:***@dds-xxx.mongodb.rds.aliyuncs.com:3717/langgraph-server?replicaSet=...&authSource=admin
+      # 未注入时回退到默认值（仅本地/测试可用，生产务必覆盖）。
+      MONGODB_URI: ${MONGODB_URI:-mongodb://mongo:27017/langgraph-server}
       NODE_BACKEND_URL: http://backend-node:13030/api
     depends_on:
-      - mysql
       - backend-node
     restart: unless-stopped
 
