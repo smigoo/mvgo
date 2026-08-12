@@ -40,7 +40,8 @@ const permissionAdapterProvider =
 
 **请求**
 ```
-GET {PORTAL_PERMISSION_URL}?{PORTAL_PERMISSION_UID_PARAM}={uid}
+GET {PORTAL_BASE_URL}/getUserAuths?{PORTAL_PERMISSION_UID_PARAM}={uid}
+（权限中心地址由 PORTAL_BASE_URL 自动拼接为 `${PORTAL_BASE_URL}/getUserAuths`，兼容旧键 PORTAL_PERMISSION_URL）
 Authorization / Token: 复用门户 token（如门户需要）
 ```
 - `uid` 来源：本系统 `User.portalInfo.uid`（登录时由门户 token 校验响应写入）。
@@ -89,18 +90,19 @@ data.data.auths[] | data.data.list[] | data.data.permissions[] | data.data[] | d
 
 以下情况自动回落到本地 `GroupMember`（与 `NodePermissionAdapter` 行为一致），**保证可用性而非拒绝服务**：
 1. 用户无门户 `uid`（`portalInfo.uid` 为空，如本地注册账号、开发态用户）；
-2. `PORTAL_PERMISSION_URL` 未配置；
+2. `PORTAL_BASE_URL` / `PORTAL_PERMISSION_URL` 均未配置；
 3. 门户接口调用失败（网络/超时/解析错误）。
 
 因此：即便切换到 qs 模式但门户未就绪，**系统仍可正常登录与鉴权**（走本地私人组 admin）。
 
 ## 7. 启用步骤
 
-1. 在 `.env`（或 `.env.production`）确认门户权限接口地址；
+1. 在 `.env`（或 `.env.production`）确认门户 API 基准地址 `PORTAL_BASE_URL`；
 2. 设置：
    ```env
    PERMISSION_SOURCE=qs
-   PORTAL_PERMISSION_URL=https://go.microvideo.cn/portlet/api/getUserAuths
+   # 权限中心地址由 PORTAL_BASE_URL 自动拼接为 ${PORTAL_BASE_URL}/getUserAuths
+   PORTAL_BASE_URL=https://go.microvideo.cn/portlet/api
    QS_ADMIN_CODES=qs-admin
    QS_PERMISSION_MAPPING={"pl-co1de":["component:read"],"qs00001":["component:create","component:read"]}
    QS_DEFAULT_PERMISSIONS=component:read

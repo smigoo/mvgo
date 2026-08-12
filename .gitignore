@@ -22,3 +22,6 @@ docker-compose.override.yml
 
 # ==== 日志 ====
 *.log
+
+# ==== 临时组件目录 ====
+temp-components/
