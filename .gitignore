@@ -25,3 +25,12 @@ docker-compose.override.yml
 
 # ==== 临时组件目录 ====
 temp-components/
+
+# ==== 依赖 / 打包产物（不参与版本控制） ====
+node_modules/
+*.zip
+*.tar.gz
+dist/
+
+# ==== 生成的临时报告文档 ====
+artifacts/*.md
