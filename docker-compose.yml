@@ -1,11 +1,17 @@
 version: '3.8'
 
 # ============================================================
-# 感智晓界 — 本地开发/测试 docker-compose
+# 感智晓界 — docker-compose（生产部署编排）
 # ============================================================
+# 数据源约定：
+#   - MongoDB：Java 与 Node 共用根 .env 的 MONGODB_URI（生产为阿里云 RDS）
+#   - Node 生产密钥：backend-node 加载 ./backend-node/.env（Figma 参数）
+#                    + ./backend-node/.env.production（SESSION_SECRET/FIELD_ENCRYPTION_KEY 等），
+#                    二者均 gitignored，不入库；部署前需在本机准备好这两个文件。
+#   - MySQL：已下线（Java 不接 MySQL，Node 仅用 Mongo）
 # 使用方式：
-#   docker compose up -d              # 启动全部服务
-#   docker compose up -d frontend     # 仅启动前端
+#   cp .env.example .env && 编辑 .env   # 填入真实 MONGODB_URI
+#   docker compose up -d                # 启动全部服务
 #   docker compose logs -f backend-java
 # ============================================================
 
@@ -23,19 +29,6 @@ services:
       - frontend
       - backend-node
       - backend-java
-    restart: unless-stopped
-
-  # ─── MySQL ───
-  mysql:
-    image: mysql:8.0
-    container_name: mvgo-mysql
-    ports:
-      - "3306:3306"
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: mvgo
-    volumes:
-      - mysql_data:/var/lib/mysql
     restart: unless-stopped
 
   # ─── Vue3 前端 ───
@@ -60,12 +53,16 @@ services:
     ports:
       - "13030:13030"
     env_file:
+      # 基础：Figma 限流等参数（gitignored）
       - ./backend-node/.env
+      # 生产密钥：NODE_ENV=production + SESSION_SECRET / FIELD_ENCRYPTION_KEY /
+      #   MC_PREVIEW_BASE_URL / DEFAULT_ADMIN_UIDS / PORTAL_BASE_URL 等（gitignored，不入库）
+      - ./backend-node/.env.production
     environment:
+      # MongoDB 单一真相源：两端共用根 .env 的 MONGODB_URI（覆盖 .env.production 内同名字段）
+      MONGODB_URI: ${MONGODB_URI}
       # 容器内通过服务名访问 Java（host 开发模式走代码默认 localhost:8080）
       JAVA_BACKEND_URL: http://backend-java:8080/api
-    depends_on:
-      - mysql
     restart: unless-stopped
 
   # ─── Java 后端（业务 CRUD，持久化走 MongoDB，不接 MySQL） ───
@@ -86,6 +83,3 @@ services:
     depends_on:
       - backend-node
     restart: unless-stopped
-
-volumes:
-  mysql_data:

@@ -1,0 +1,519 @@
+.themeClass {
+  color: @env-monitor-text-primary;
+}
+
+.c-env-monitor-root {
+  width: 100%;
+  height: 100%;
+  min-height: 186px;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  color: @env-monitor-text-primary;
+  font-family: "Source Han Sans CN", "Noto Sans SC", "PingFang SC", Arial, sans-serif;
+  background-image: url(../resources/images/bg-7890.png), linear-gradient(135deg, #edf4fb 0%, lighten(#edf4fb, 2%) 48%, fade(#559eff, 16%) 100%);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  overflow: hidden;
+  position: relative;
+}
+
+.c-env-monitor-root::before {
+  content: "";
+  position: absolute;
+  left: 16px;
+  top: 14px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 62% 38%, #d6effc 0%, #559eff 48%, #1252fa 100%);
+  box-shadow: 0 0 0 2px fade(#000000, 10%), 0 0 8px fade(#559eff, 70%);
+  pointer-events: none;
+}
+
+.c-env-monitor-root::after {
+  content: "环境监测";
+  position: absolute;
+  left: 31px;
+  top: 8px;
+  height: 20px;
+  font-family: "Noto Sans SC", "Source Han Sans CN", sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 19.2px;
+  letter-spacing: 0;
+  color: #1990ff;
+  background: linear-gradient(90deg, #1990ff 0%, #5a7eff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 2px 8px fade(#559eff, 22%);
+  pointer-events: none;
+}
+
+.c-env-monitor-content {
+  width: 100%;
+  height: 100%;
+  min-height: 186px;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding: 36px 20px 10px;
+  gap: 6px;
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.c-env-monitor-tabs-area {
+  width: 295px;
+  height: 27px;
+  padding: 0px 8px;
+  gap: 8px;
+  background: linear-gradient(90deg, #b5deff 0%, #d1ecff 100%);
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(85, 158, 255, 0.45);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  box-sizing: border-box;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.65), 0 2px 8px fade(#559eff, 16%);
+}
+
+.c-env-monitor-tab-item {
+  font-size: 14px;
+  color: #559eff;
+  font-weight: 700;
+  line-height: 24px;
+  text-align: center;
+  background-color: transparent;
+  border-radius: 12px;
+  padding: 0px 8px;
+  border: 0;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  box-sizing: border-box;
+  white-space: nowrap;
+  cursor: pointer;
+  outline: none;
+  transition: color 0.2s ease, filter 0.2s ease, box-shadow 0.2s ease;
+
+  flex-direction: column;}
+
+.c-env-monitor-tab-item:hover {
+  color: #038fff;
+  filter: drop-shadow(0 0 4px fade(#559eff, 30%));
+}
+
+.c-env-monitor-tab-item-active {
+  font-size: 14px;
+  color: #ffffff;
+  font-weight: 700;
+  line-height: 24px;
+  text-align: center;
+  background-color: rgba(63, 169, 214, 0.95);
+  background-image: linear-gradient(90deg, #1099b1 0%, #038fff 100%);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-radius: 12px;
+  padding: 0px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  text-shadow: 0 0.6px 0 rgba(0, 111, 227, 1);
+  box-shadow: 0 2px 8px fade(#038fff, 30%), inset 0 0 8px fade(#ffffff, 18%);
+}
+
+.c-env-monitor-tab-icon {
+  width: 14px;
+  height: 14px;
+  display: block;
+  object-fit: contain;
+  flex: 0 0 auto;
+  filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.55));
+}
+
+.c-env-monitor-tab-label {
+  display: inline-block;
+  max-width: 70px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.c-env-monitor-main-area {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr) 92px;
+  grid-template-rows: 1fr;
+  gap: 9px;
+  align-items: stretch;
+  box-sizing: border-box;
+  position: relative;
+}
+
+.c-env-monitor-summary-area {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding-top: 1px;
+  box-sizing: border-box;
+}
+
+.c-env-monitor-summary-card {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  box-sizing: border-box;
+  border: 1px solid @env-monitor-card-border;
+  border-radius: 6px;
+  background: @env-monitor-card-bg;
+  box-shadow: inset 0 0 12px fade(#559eff, 10%);
+  overflow: hidden;
+
+  flex-direction: column;}
+
+.c-env-monitor-summary-icon-wrap {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: radial-gradient(circle, fade(#559eff, 22%) 0%, fade(#33c6a4, 12%) 66%, transparent 100%);
+  box-shadow: 0 0 9px fade(#559eff, 24%);
+
+  flex-direction: column;}
+
+.c-env-monitor-summary-icon {
+  width: 18px;
+  height: 18px;
+  display: block;
+  object-fit: contain;
+  filter: drop-shadow(0 0 4px fade(#559eff, 50%));
+}
+
+.c-env-monitor-summary-text-group {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+}
+
+.c-env-monitor-summary-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 12px;
+  color: @env-monitor-text-secondary;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.c-env-monitor-summary-value {
+  display: block;
+  font-family: Roboto, Arial, sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 18px;
+  color: @env-monitor-value-color;
+  text-shadow: 0 0 8px fade(#559eff, 22%);
+  white-space: nowrap;
+}
+
+.c-env-monitor-summary-unit {
+  margin-left: 2px;
+  font-family: "Source Han Sans CN", "Noto Sans SC", sans-serif;
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 12px;
+  color: @env-monitor-text-secondary;
+}
+
+.c-env-monitor-chart-section {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  box-sizing: border-box;
+  overflow: visible;
+}
+
+.c-env-monitor-section-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  height: 20px;
+  min-height: 20px;
+  box-sizing: border-box;
+  position: relative;
+}
+
+.c-env-monitor-section-title {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 20px;
+  color: @env-monitor-title-color;
+  white-space: nowrap;
+  text-shadow: 0 0 7px fade(#559eff, 24%);
+
+  flex-direction: column;}
+
+.c-env-monitor-section-title::before {
+  content: "";
+  width: 18px;
+  height: 2px;
+  margin-right: 5px;
+  background: #33c6a4;
+  border-radius: 1.6px;
+  box-shadow: 0 0 6px fade(#33c6a4, 55%);
+}
+
+.c-env-monitor-time-tabs {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 20px;
+  box-sizing: border-box;
+
+  flex-direction: column;}
+
+.c-env-monitor-time-tab {
+  height: 18px;
+  padding: 0 5px;
+  border: 1px solid fade(#559eff, 35%);
+  border-radius: 9px;
+  background: fade(#edf4fb, 18%);
+  color: @env-monitor-text-secondary;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 16px;
+  text-align: center;
+  cursor: pointer;
+  white-space: nowrap;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.c-env-monitor-time-tab-active {
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.55);
+  background: linear-gradient(90deg, #1099b1 0%, #038fff 100%);
+  box-shadow: 0 0 8px fade(#038fff, 28%);
+  text-shadow: 0 0.6px 0 rgba(0, 111, 227, 1);
+}
+
+.c-env-monitor-chart-wrapper {
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+  position: relative;
+  overflow: visible;
+  box-sizing: border-box;
+  padding: 2px 0px 0px 0px;
+  background: transparent;
+  border-radius: 0;
+}
+
+.c-env-monitor-chart-wrapper::before {
+  content: "";
+  width: 330px;
+  height: 72px;
+  position: absolute;
+  left: 18px;
+  top: 8px;
+  opacity: 1;
+  background: repeating-linear-gradient(to right, rgba(120,140,150,0.35) 0 4px, transparent 4px 8px), repeating-linear-gradient(to bottom, rgba(120,140,150,0.26) 0 1px, transparent 1px 17px);
+  pointer-events: none;
+}
+
+.c-env-monitor-chart-wrapper::after {
+  content: "预警线";
+  width: 330px;
+  height: 1px;
+  position: absolute;
+  left: 18px;
+  top: 31px;
+  opacity: 1;
+  background: repeating-linear-gradient(to right, rgba(205,80,105,0.75) 0 5px, transparent 5px 9px);
+  color: #d32f2f;
+  font-family: "Source Han Sans CN", sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 21.6px;
+  text-align: right;
+  text-indent: 338px;
+  text-shadow: 0 0 4px fade(#c65069, 28%);
+  pointer-events: none;
+}
+
+.c-env-monitor-chart-container {
+  width: 360px;
+  height: 105px;
+  padding: 2px 0px 0px 0px;
+  gap: 0px;
+  background: transparent;
+  border-radius: 0;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  box-sizing: border-box;
+}
+
+.c-env-monitor-chart-container::before {
+  content: "";
+  background: #33c6a4;
+  width: 330px;
+  height: 2px;
+  position: absolute;
+  left: 18px;
+  top: 50px;
+  opacity: 1;
+  box-shadow: 0 0 7px fade(#33c6a4, 60%);
+  transform: rotate(-1.8deg);
+  transform-origin: left center;
+  pointer-events: none;
+}
+
+.c-env-monitor-chart-container::after {
+  content: "zk3+785CO浓度";
+  position: absolute;
+  left: 122px;
+  bottom: 0;
+  height: 14px;
+  padding-left: 22px;
+  color: @env-monitor-text-secondary;
+  font-family: "Source Han Sans CN", sans-serif;
+  font-size: 9.6px;
+  font-weight: 400;
+  line-height: 14.4px;
+  background: linear-gradient(#33c6a4, #33c6a4) left center / 18px 2px no-repeat;
+  filter: drop-shadow(0 0 3px fade(#33c6a4, 42%));
+  pointer-events: none;
+}
+
+.c-env-monitor-status-section {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  box-sizing: border-box;
+  overflow: visible;
+}
+
+.c-env-monitor-status-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+.c-env-monitor-status-item {
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 0 5px;
+  box-sizing: border-box;
+  border: 1px solid @env-monitor-card-border;
+  border-radius: 5px;
+  background: @env-monitor-card-bg;
+  box-shadow: inset 0 0 10px fade(#559eff, 8%);
+
+  flex-direction: column;}
+
+.c-env-monitor-status-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 14px;
+  color: @env-monitor-text-secondary;
+}
+
+.c-env-monitor-status-badge {
+  min-width: 30px;
+  height: 16px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 8px;
+  background-color: #f53f3f;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  box-shadow: 0 0 7px fade(#f53f3f, 32%);
+
+  flex-direction: column;}
+
+.c-env-monitor-status-badge::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  margin-right: 3px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 0 4px rgba(255, 255, 255, 0.7);
+}
+
+@media (max-width: 420px) {
+  .c-env-monitor-content {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .c-env-monitor-main-area {
+    grid-template-columns: 94px minmax(0, 1fr) 82px;
+    gap: 6px;
+  }
+
+  .c-env-monitor-tabs-area {
+    width: 100%;
+    max-width: 295px;
+  }
+
+  .c-env-monitor-tab-item {
+    padding: 0 5px;
+  }
+
+  .c-env-monitor-tab-item-active {
+    padding: 0 8px;
+  }
+
+  .c-env-monitor-chart-container {
+    width: 100%;
+  }
+
+  .c-env-monitor-chart-wrapper::before,
+  .c-env-monitor-chart-wrapper::after,
+  .c-env-monitor-chart-container::before {
+    width: calc(100% - 20px);
+  }
+}

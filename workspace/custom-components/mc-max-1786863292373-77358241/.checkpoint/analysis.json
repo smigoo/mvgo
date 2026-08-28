@@ -1,0 +1,183 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 58,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.degraded / visualDegraded",
+        "message": "当前分析结果处于降级状态，视觉分析超时，styles、interactions、charts 等关键信息基本为空，无法可靠支撑后续微码生成。",
+        "suggestion": "重新执行视觉分析或补充 Figma 节点的尺寸、颜色、间距、图表配置、交互状态等结构化信息后再进入生成阶段。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "将“cp-环境监测”识别为 role=header 的独立 section，且内部又包含 header 与“环境监测”节点，存在重复生成组件面板标题的风险。根据规范，组件面板标题应由 base-panel/default-panel 与 declare.json.componentName 自动处理，不应作为业务内容重复生成。",
+        "suggestion": "将“环境监测”作为 declare.json.componentName 的来源；若该标题属于面板标题，应从业务 layout.sections 中移除，仅保留标题栏下方的实际业务内容。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[*].body.children",
+        "message": "当前嵌套深度约为 3 层，未明显超标，但 section -> body -> children 中的子节点均为泛化 item，缺少更明确的业务分组语义。",
+        "suggestion": "保持当前层级即可，但建议将 children 进一步标注为 tabsHeader、tabItem、chartLegend、chartCanvas 等语义节点，避免后续生成时依赖 Figma 原始名称猜测。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1]",
+        "message": "section 被标记为 role=tabs，但缺少面板插槽关系判断字段 headerRelation，也没有明确 tabs-list 中包含哪些 tab、默认激活项、切换目标或数据联动关系。",
+        "suggestion": "为 tabs 区域补充 headerRelation、tabList、activeKey、targetChartId/dataMap 等字段；若 tabs 控制图表，必须声明切换后更新图表数据。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[2] / charts",
+        "message": "存在 role=chart 且 name=@echarts/line 的图表区域，但顶层 charts 数组为空，缺少图表类型、series、xAxis/yAxis、tooltip、legendPosition、grid.containLabel 等必要信息。",
+        "suggestion": "补充 charts 配置对象，至少包含 chartId、type=line、series、axis 数据、tooltip.trigger='axis'、legend 信息、legendPosition、grid.containLabel=true 以及容器高度建议。"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "layout.sections[1].name / layout.sections[2].body.children",
+        "message": "命名存在较多设计工具或实现痕迹，如 slot-con、sub-t、tabs-list、Group 2136637691、Frame 2136637694，可读性和维护性较差。",
+        "suggestion": "将节点名称转换为稳定的业务语义命名，例如 monitorTabs、timeRangeTabs、chartLegend、environmentTrendChart、chartCanvas 等。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "styles",
+        "message": "styles.colors、background、decorations、emphasis 均为空，仅识别到 backgroundBrightness=dark，无法满足 Preview 阶段对字号层级、颜色映射、间距、激活态等最低样式标准。",
+        "suggestion": "补充主题色、文字层级、tab 激活态颜色、图表线条颜色、区块间距、图标尺寸等基础样式信息；若无法确定装饰样式，应遵循证据优先和零装饰原则。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[*]",
+        "message": "当前 DOM 节点数量不多，性能风险较低，但过多保留 Figma 原始 Group/Frame 作为 DOM 容器可能造成无意义嵌套。",
+        "suggestion": "生成阶段应合并无语义 Group/Frame，仅保留布局必要容器；整体采用纵向 flex，图表区域设置 width:100%、min-width:0、overflow:hidden。"
+      }
+    ],
+    "recommendations": [
+      "建议重新进行非降级的视觉分析，补齐尺寸、颜色、间距、图表与交互信息后再生成代码。",
+      "将“环境监测”作为 declare.json.componentName 使用，不要在组件模板中重复生成面板标题或标题栏。",
+      "tabs 区域需要明确 tab 列表、默认激活态、headerRelation 以及与图表数据的联动关系。",
+      "图表区域必须补充完整 ECharts 元数据，包括 tooltip、legendPosition、series、坐标轴、grid.containLabel 和 resize 约束。",
+      "将 Figma 原始命名转换为业务语义命名，减少 Group/Frame 泛化节点对代码可维护性的影响。",
+      "布局层级可维持 section -> body -> semantic children，不建议继续加深；无语义容器应在生成阶段合并。"
+    ],
+    "summary": "该布局的整体垂直分区思路基本清晰，嵌套深度也未明显超标，但由于当前结果为降级分析，关键信息缺失较多。主要问题集中在组件标题可能被重复生成、tabs 插槽和交互关系不完整、图表元数据为空、命名仍停留在 Figma 原始节点层面。若直接进入微码生成，较容易违反 base-panel 标题规范、Tab 数据联动规范和 ECharts 配置规范，因此本次审查建议判定为 reject，需要补充分析数据并重构语义字段后再继续。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）；视觉元素未提供明确色值，按backgroundBrightness=dark给出深色兜底主题Token",
+      "--colorPrimary": "#3677f8",
+      "--colorBg": "#0f0f0f",
+      "--colorBgContainer": "#1a1a2e",
+      "--colorTextBase": "#ffffff",
+      "--colorTextSecondary": "rgba(255, 255, 255, 0.65)",
+      "--colorBorder": "rgba(255, 255, 255, 0.16)",
+      "--fontSize": "14px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射；与CSS变量保持一一对应，可在theme-vars.less中作为var()回退或主题默认值使用",
+      "@color-primary": "#3677f8",
+      "@color-bg": "#0f0f0f",
+      "@color-bg-container": "#1a1a2e",
+      "@color-text-base": "#ffffff",
+      "@color-text-secondary": "rgba(255, 255, 255, 0.65)",
+      "@color-border": "rgba(255, 255, 255, 0.16)",
+      "@font-size-base": "14px",
+      "@border-radius-base": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类；当前设计输入缺少具体结构，提供深色背景场景下的基础容器、头部、内容区与强调态样式",
+      ".dark-container": {
+        "width": "100%",
+        "height": "100%",
+        "display": "flex",
+        "flex-direction": "column",
+        "box-sizing": "border-box",
+        "font-size": "var(--fontSize, @font-size-base)",
+        "color": "var(--colorTextBase, @color-text-base)",
+        "background": "var(--colorBg, @color-bg)"
+      },
+      ".dark-panel": {
+        "display": "flex",
+        "flex-direction": "column",
+        "border-radius": "var(--borderRadius, @border-radius-base)",
+        "border": "1px solid var(--colorBorder, @color-border)",
+        "background": "var(--colorBgContainer, @color-bg-container)",
+        "overflow": "hidden"
+      },
+      ".dark-header": {
+        "display": "flex",
+        "align-items": "center",
+        "justify-content": "space-between",
+        "color": "var(--colorTextBase, @color-text-base)",
+        "font-size": "calc(var(--fontSize, @font-size-base) * 1.1429)",
+        "font-weight": "600"
+      },
+      ".dark-content": {
+        "flex": "1 1 auto",
+        "min-height": "0",
+        "color": "var(--colorTextSecondary, @color-text-secondary)"
+      },
+      ".text-emphasis": {
+        "color": "var(--colorPrimary, @color-primary)",
+        "font-weight": "600"
+      },
+      ".bordered-block": {
+        "border": "1px solid var(--colorBorder, @color-border)",
+        "border-radius": "var(--borderRadius, @border-radius-base)",
+        "background": "rgba(255, 255, 255, 0.04)"
+      }
+    },
+    "tokenCoverage": 0.38,
+    "mappingNotes": [
+      "输入视觉元素中theme为未知、colors为空、background为空，因此无法从设计稿提取精确主题色，仅依据backgroundBrightness=dark建立深色兜底Token。",
+      "CSS变量使用camelCase命名，如--colorTextBase、--colorBgContainer，符合微码平台注入规范。",
+      "Less变量与CSS变量保持语义对应，业务样式建议使用var(--key, @fallback)形式。",
+      "未检测到资源、背景图、装饰或强调元素，因此未生成图片背景相关样式；如后续存在resource-dom-mapping.json，应优先引用真实资源而非渐变替代。",
+      "Token覆盖率较低是因为原始视觉信息缺失，仅能覆盖暗色亮度、基础文字、背景、边框、字号和圆角等通用样式Token。"
+    ],
+    "elementStyleMap": {
+      "figma-2": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "figma-3": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "figma-1",
+        "responsibility": "cp-环境监测（请按功能拆分）",
+        "elementCount": 2,
+        "title": "cp-环境监测"
+      },
+      {
+        "id": "figma-2",
+        "responsibility": "slot-con（请按功能拆分）",
+        "elementCount": 3,
+        "title": "slot-con"
+      },
+      {
+        "id": "figma-3",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 2,
+        "title": "@echarts/line"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 → 强制拆分"
+  }
+}

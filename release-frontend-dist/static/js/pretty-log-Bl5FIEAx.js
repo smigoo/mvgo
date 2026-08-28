@@ -1,0 +1,7 @@
+import{$ as i}from"./index-DOFhxMN3.js";const d=(r,a,n)=>{console.log(`%c ${r} %c ${a} %c`,`background:${n};border:1px solid ${n}; padding: 1px; border-radius: 2px 0 0 2px; color: #fff;`,`border:1px solid ${n}; padding: 1px; border-radius: 0 2px 2px 0; color: ${n};`,"background:transparent")},m=r=>{console.log(`%c ${r}`,"font-size: 20px; font-weight: bold; color: #333;")},h=(r,a)=>{console.groupCollapsed(r),console.table(a),console.groupEnd()},u=(r,a,n=1)=>{const s=new Image;s.crossOrigin="anonymous",s.onload=()=>{const p=document.createElement("canvas"),g=p.getContext("2d");if(g){p.width=s.width,p.height=s.height,g.drawImage(s,0,0);const l=p.toDataURL("image/png");console.log(`%c ${r}`,`font-size: 1px;
+         padding: ${Math.floor(s.height*n/2)}px ${Math.floor(s.width*n/2)}px;
+         background-image: url(${l});
+         background-repeat: no-repeat;
+         background-size: ${s.width*n}px ${s.height*n}px;
+         color: transparent;
+        `)}},s.src=a},x=()=>({info:(t,o="")=>{const e=i.isEmpty(o)?"Info":t,c=i.isEmpty(o)?t:o;d(e,c,"#909399")},error:(t,o="")=>{const e=i.isEmpty(o)?"Error":t,c=i.isEmpty(o)?t:o;d(e,c,"#F56C6C")},warning:(t,o="")=>{const e=i.isEmpty(o)?"Warning":t,c=i.isEmpty(o)?t:o;d(e,c,"#E6A23C")},success:(t,o="")=>{const e=i.isEmpty(o)?"Success":t,c=i.isEmpty(o)?t:o;d(e,c,"#67C23A")},title:t=>{m(t)},table:(t,o)=>{h(t,o)},image:(t,o)=>{u(t,o)}});$processEnv.VUE_APP_CURRENT_MODE==="dev"&&x();

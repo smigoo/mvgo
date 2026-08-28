@@ -1,0 +1,1 @@
+import{a2 as o,a3 as s}from"./index-Duo5GCfW.js";const t=o.create({baseURL:"/api",timeout:12e4,headers:{"Content-Type":"application/json"}});t.interceptors.request.use(e=>{const r=s();return r&&(e.headers.Token=r),e},e=>Promise.reject(e));t.interceptors.response.use(e=>e.data,e=>(console.error("Generator API Error:",e),Promise.reject(e)));

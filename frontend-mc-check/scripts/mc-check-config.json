@@ -1,0 +1,63 @@
+{
+  "specVersion": "v1.0.19-dev",
+  "componentBaseDir": "src/workspace/custom-components",
+  "panelBaseDir": "src/workspace/custom-panels",
+  "reportOutputDir": "aidocs/output/reports",
+  "reportFilePrefix": "mc-",
+  "reportFormat": ["html", "md"],
+  "specDocsDir": "../microcode-manage-web/src/views/document",
+
+  "skipDirs": [],
+  "apiWhitelist": ["c-mc-map"],
+
+  "naming": {
+    "componentIdPrefix": "c-",
+    "componentIdMaxLength": 50,
+    "componentNameMinLength": 2,
+    "componentNameMaxLength": 50,
+    "kebabCasePattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+    "camelCasePattern": "^[a-z][a-zA-Z0-9]*$",
+    "versionPattern": "^v\\d+\\.\\d+\\.\\d+$",
+    "previewImageName": "mc-preview.png",
+    "previewImagePrefix": "mc-preview"
+  },
+
+  "enums": {
+    "cssVariableTypes": ["color", "weight", "size", "number", "string", "select"],
+    "businessConfigTypes": ["string", "number", "boolean", "object", "array"],
+    "businessConfigRenderTypes": ["number", "input", "radio", "select", "json", "visualizeField"],
+    "eventDataSchemaTypes": ["string", "number", "boolean", "object", "array"],
+    "dataSourcesColumnKeys": ["name", "type", "comment", "defVal"],
+    "dataSourcesColumnTypes": ["string", "number"],
+    "dataSources_reservedColumns": [
+      "id",
+      "date_create_time",
+      "date_del_flag",
+      "version",
+      "inc_id",
+      "date_update_time"
+    ],
+    "forbiddenApis": ["createRequest", "axios", "this\\$http", "\\.fetch\\("],
+    "forbiddenApiIgnoreExts": [".esm.js", ".min.js"],
+    "frameworkEventPrefix": "mc-framework-",
+    "businessPropsPayloadWhitelist": ["payload"]
+  },
+
+  "scoring": {
+    "required": {
+      "M1_naming": 10,
+      "M2_files": 15,
+      "M3_declare": 25,
+      "M4_fileFormat": 10,
+      "M5_code": 30,
+      "M6_security": 10
+    },
+    "quality": {
+      "Q1_codeQuality": 25,
+      "Q2_style": 20,
+      "Q3_ux": 20,
+      "Q4_reusability": 20,
+      "Q5_performance": 15
+    }
+  }
+}
