@@ -9,7 +9,8 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-const NODE_BIN = '/Users/smigoo/.workbuddy/binaries/node/versions/22.22.2/bin/node';
+// 用当前运行 node 的绝对路径（process.execPath），避免 managed node 版本目录变化（如 22.22.2 → 22.22.2-2）导致 ENOENT
+const NODE_BIN = process.execPath;
 const BE_DIR = '/Users/smigoo/工作/mvgo/backend-node';
 const LOG = path.join(BE_DIR, 'server.log');
 
