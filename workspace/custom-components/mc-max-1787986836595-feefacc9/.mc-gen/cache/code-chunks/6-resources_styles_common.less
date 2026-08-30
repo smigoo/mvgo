@@ -1,0 +1,242 @@
+.c-monitor-root {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.c-monitor-header-stats {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 24px;
+}
+
+.c-monitor-header-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.c-monitor-header-stat-label {
+  color: #333333;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.c-monitor-header-stat-value {
+  color: #1990ff;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.c-monitor-header-stat-value-normal {
+  color: #08a3a5;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.c-monitor-stats-cards {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+}
+
+.c-monitor-stat-card {
+  border-radius: 8px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+.c-monitor-stat-card-tunnel {
+  background: linear-gradient(135deg, rgba(100, 180, 255, 0.3), rgba(100, 180, 255, 0.1));
+
+  .c-monitor-stat-label {
+    color: #ffffff;
+  }
+
+  .c-monitor-stat-value-total {
+    color: #ffffff;
+  }
+}
+
+.c-monitor-stat-card-north-south {
+  background: linear-gradient(135deg, rgba(200, 210, 220, 0.3), rgba(200, 210, 220, 0.1));
+
+  .c-monitor-stat-label {
+    color: #333333;
+  }
+
+  .c-monitor-stat-value-total {
+    color: #1990ff;
+  }
+}
+
+.c-monitor-stat-card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.c-monitor-stat-card-icon-img {
+  object-fit: contain;
+}
+
+.c-monitor-stat-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.c-monitor-stat-card-title {
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.c-monitor-stat-card-title-light {
+  color: #ffffff;
+}
+
+.c-monitor-stat-card-title-dark {
+  color: #333333;
+}
+
+.c-monitor-stat-line {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+.c-monitor-stat-label {
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.c-monitor-stat-value {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.c-monitor-stat-value-total {
+  // 颜色由父级卡片控制
+}
+
+.c-monitor-stat-value-abnormal {
+  color: #e03434;
+}
+
+.c-monitor-device-grid {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+}
+
+.c-monitor-nav-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.c-monitor-nav-tab {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  font-size: 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.c-monitor-nav-tab-active {
+  background: rgba(25, 144, 255, 1);
+  color: #ffffff;
+}
+
+.c-monitor-nav-tab-default {
+  background: rgba(200, 210, 220, 0.5);
+  color: rgba(51, 51, 51, 1);
+}
+
+.c-monitor-nav-tab-text {
+  font-size: 12px;
+}
+
+.c-monitor-nav-tab-count {
+  color: #3b80e7;
+  font-size: 14px;
+  font-weight: 500;
+
+  .c-monitor-nav-tab-active & {
+    color: #ffffff;
+  }
+}
+
+.c-monitor-nav-tab-dot {
+  background: #f53f3f;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 29px;
+  padding: 0 6px;
+  min-width: 20px;
+  text-align: center;
+  line-height: 20px;
+}
+
+.c-monitor-device-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px;
+  flex: 1;
+}
+
+.c-monitor-device-card {
+  background: rgba(220, 230, 240, 0.5);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 calc(20% - 12px);
+  min-width: 100px;
+}
+
+.c-monitor-device-card-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.c-monitor-device-card-label {
+  color: #333333;
+  font-size: 12px;
+  font-weight: 400;
+  text-align: center;
+}
+
+.c-monitor-device-card-value {
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 500;
+  text-align: center;
+  background: linear-gradient(#127bee, #127bee);
+  border-radius: 4px;
+  padding: 2px 8px;
+}
+
+.c-monitor-device-card-value-normal {
+  // 继承基础数值样式
+}
+
+.c-monitor-device-card-value-abnormal {
+  // 继承基础数值样式，异常状态可通过父级或额外逻辑区分
+}

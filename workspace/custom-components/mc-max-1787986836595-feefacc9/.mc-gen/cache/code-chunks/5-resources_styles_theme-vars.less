@@ -1,0 +1,52 @@
+// 主题变量定义文件
+// 面板默认主题为 light，light 中的颜色即组件默认展示色，与设计稿一致
+// 仅使用 Less 变量（@xxx），禁止 CSS 变量 var(--xxx)
+// 根级不调用任何主题 mixin，由系统生成的 dark.less/light.less 负责调用
+
+// 与主题无关的公共变量（尺寸、圆角、间距等）
+.common() {
+  // 圆角
+  @radius-card: 8px;
+  @radius-tab: 4px;
+  @radius-device: 8px;
+
+  // Tab 激活态颜色（设计稿固定品牌色，不随主题变化）
+  @tab-active-bg: rgba(25, 144, 255, 1);      // #1990ff
+  @tab-active-color: #ffffff;
+}
+
+// 深色主题
+.theme-dark() {
+  // 卡片背景（渐变）— 深色面板下加深底色，保留设计稿色相
+  @card-tunnel-bg: linear-gradient(135deg, rgba(100, 180, 255, 0.35), rgba(100, 180, 255, 0.12));
+  @card-north-south-bg: linear-gradient(135deg, rgba(80, 95, 115, 0.5), rgba(80, 95, 115, 0.2));
+
+  // Tab 未激活态
+  @tab-inactive-bg: rgba(80, 95, 115, 0.5);
+  @tab-inactive-color: rgba(220, 230, 240, 1);   // 深色面板禁止黑色系文字
+
+  // 设备卡片背景
+  @device-bg: rgba(60, 75, 95, 0.5);
+
+  // 通用文字色（深色面板禁止黑色系）
+  @text-primary: rgba(235, 240, 245, 1);
+  @text-secondary: rgba(180, 195, 210, 1);
+}
+
+// 浅色主题（默认主题，颜色必须与设计稿精确一致）
+.theme-light() {
+  // 卡片背景（渐变）— 从 Figma fills 精确转换
+  @card-tunel-bg: linear-gradient(135deg, rgba(100, 180, 255, 0.3), rgba(100, 180, 255, 0.1));
+  @card-north-south-bg: linear-gradient(135deg, rgba(200, 210, 220, 0.3), rgba(200, 210, 220, 0.1));
+
+  // Tab 未激活态
+  @tab-inactive-bg: rgba(200, 210, 220, 0.5);
+  @tab-inactive-color: rgba(51, 51, 1);      // #333333
+
+  // 设备卡片背景
+  @device-bg: rgba(220, 230, 240, 0.5);
+
+  // 通用文字色
+  @text-primary: rgba(51, 51, 1);            // #333333
+  @text-secondary: rgba(102, 102, 1);       // #666666
+}

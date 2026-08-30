@@ -1,1 +1,0 @@
-import{aa as e}from"./index-DOFhxMN3.js";import{W as o,X as t}from"./vendor-BvGxCj3d.js";import"./ant-design-DzROAqNQ.js";import"./microvideo-map-C3iSxrVm.js";const r={};function n(c,a){return o(),t("div",null,"next")}const f=e(r,[["render",n]]);export{f as default};
