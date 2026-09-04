@@ -26,7 +26,7 @@ try {
 
 // 构造干净环境：去掉代理变量（避免内网/本地连接被代理劫持），显式指定本地 MongoDB
 const env = { ...process.env };
-for (const k of ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy', 'ALL_PROXY', 'all_proxy']) {
+for (const k of ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy', 'ALL_PROXY', 'all_proxy', 'NODE_OPTIONS']) {
   delete env[k];
 }
 env.NODE_ENV = 'development';
