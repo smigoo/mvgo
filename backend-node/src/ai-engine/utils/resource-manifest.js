@@ -203,6 +203,8 @@ export function resourcesForSection(manifest, sectionIdOrTitle) {
  * 因此不影响 RESOURCE-001 全量资源使用校验。
  */
 export function scopedResourceDomMapping(resourceDomMapping, matchedSection) {
+  // Loop 0.D：无 matchedSection / 空 mapping → undefined（调用方不改 prompt）
+  // 有 matchedSection 但未命中归属 → []（fail-closed，禁止回全量）
   if (!matchedSection || !Array.isArray(resourceDomMapping) || resourceDomMapping.length === 0) {
     return undefined
   }
@@ -211,5 +213,5 @@ export function scopedResourceDomMapping(resourceDomMapping, matchedSection) {
   if (sectionRes.length > 0 && sectionRes.length < resourceDomMapping.length) {
     return sectionRes
   }
-  return undefined
+  return []
 }

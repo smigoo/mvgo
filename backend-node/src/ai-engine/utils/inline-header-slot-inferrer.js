@@ -88,21 +88,52 @@ export function inferHeaderSlotsFromInlineRows(analysisResult) {
   return slots;
 }
 
+function slotKey(s) {
+  return s?.figmaNodeId || s?.content || '';
+}
+
+function boxesIntersect(a, b) {
+  if (!a || !b) return true;
+  const ax = Number(a.x);
+  const ay = Number(a.y);
+  const aw = Number(a.w ?? a.width);
+  const ah = Number(a.h ?? a.height);
+  const bx = Number(b.x);
+  const by = Number(b.y);
+  const bw = Number(b.w ?? b.width);
+  const bh = Number(b.h ?? b.height);
+  if (![ax, ay, aw, ah, bx, by, bw, bh].every(Number.isFinite)) return true;
+  return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+}
+
 /**
  * 合并去重：保留既有 slot（section-inferred 等），追加无 content 冲突的 inline 推断结果。
+ * Loop 0.A：命中 rejectedKeys 或与 header 容器不相交（C-2）→ 不加。
  * @param {Array} existingSlots
  * @param {Array} inlineSlots
+ * @param {{ rejectedKeys?: Set, headerBBox?: object, slotsBBoxOf?: Function }} [opts]
  * @returns {Array}
  */
-export function mergeHeaderSlots(existingSlots, inlineSlots) {
+export function mergeHeaderSlots(existingSlots, inlineSlots, opts = {}) {
   const base = Array.isArray(existingSlots) ? existingSlots : [];
   const add = Array.isArray(inlineSlots) ? inlineSlots : [];
+  const rejectedKeys = opts?.rejectedKeys instanceof Set ? opts.rejectedKeys : new Set();
+  const headerBBox = opts?.headerBBox || null;
+  const slotsBBoxOf = typeof opts?.slotsBBoxOf === 'function' ? opts.slotsBBoxOf : null;
   const existingContents = new Set(
     base.map((s) => String(s?.content || '').trim()).filter(Boolean),
   );
-  const newSlots = add.filter(
-    (s) => s?.content && !existingContents.has(String(s.content).trim()),
-  );
+  const newSlots = add.filter((s) => {
+    if (!s?.content || existingContents.has(String(s.content).trim())) return false;
+    const key = slotKey(s);
+    if (key && rejectedKeys.has(key)) return false;
+    if (rejectedKeys.has(String(s.content).trim())) return false;
+    if (headerBBox && slotsBBoxOf) {
+      const bbox = slotsBBoxOf(s);
+      if (bbox && !boxesIntersect(bbox, headerBBox)) return false;
+    }
+    return true;
+  });
   if (newSlots.length === 0) return base;
   return [...base, ...newSlots];
 }

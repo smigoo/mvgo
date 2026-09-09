@@ -65,6 +65,7 @@ import { LessVariableChecker } from '../validators/less-variable-checker.js';
 import { LessCompileGate } from '../validators/less-compile-gate.js';
 import { HeaderRelationValidator } from '../validators/header-relation-validator.js';
 import { HeaderSlotValidator } from '../validators/header-slot-validator.js';
+import { applyHeaderSlotContractRewrite } from '../utils/header-slot-contract.js';
 import { validateDoNotInvent } from '../validators/do-not-invent-validator.js';
 //  P0-2: 结构顺序门禁（零 LLM，防区块颠倒）
 import { validateStructureOrder } from '../validators/structure-order-validator.js';

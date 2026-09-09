@@ -1,4 +1,26 @@
-import { repairScopedThirdPartySelectors, ensureFlexDirection, ensureFlexDirectionInVueSfc } from './css-sanitizer.js';
+import { repairScopedThirdPartySelectors, ensureFlexDirection, ensureFlexDirectionInVueSfc, sanitizeCssContent } from './css-sanitizer.js';
+
+describe('Loop 0.C sanitizeCssContent 粘合行', () => {
+  it('}==== 粘合分隔符时保留右括号并换行，less 可继续解析后续规则', () => {
+    const raw = `.a {\n  color: red;\n}==== package/index.vue ===\n.b {\n  color: blue;\n}`;
+    const out = sanitizeCssContent(raw, { isLessFile: true });
+    expect(out).toMatch(/\.a \{[\s\S]*color: red;[\s\S]*\}/);
+    expect(out).not.toMatch(/\}={3,}/);
+    expect(out).toContain('.b');
+    expect(out).toContain('color: blue;');
+    expect(out.indexOf('}')).toBeGreaterThan(-1);
+    const braceLine = out.split('\n').find((l) => l.trim() === '}');
+    expect(braceLine).toBeDefined();
+  });
+
+  it('}//=*{3,} 粘合注释分隔符时同样保留 } 并换行', () => {
+    const raw = `.root { display: flex; }// ===== chunk =====\n.child { flex: 1; }`;
+    const out = sanitizeCssContent(raw);
+    expect(out).not.toMatch(/\}\/\/[ \t]*={3,}/);
+    expect(out).toContain('display: flex;');
+    expect(out).toContain('.child');
+  });
+});
 
 describe('repairScopedThirdPartySelectors', () => {
   it('wraps bare Ant Design selectors inside scoped styles', () => {

@@ -86,12 +86,12 @@ describe('T6 chunk prompt 按 section 过滤资源清单（资源错绑治本·�
     expect(vars).not.toContain('icon3')
   })
 
-  test('T6d 未匹配 section 时 fail-open 返回 undefined（保留全量，不阻断生成）', async () => {
+  test('T6d Loop0.D 未匹配 section 时 fail-closed 返回 []（禁止回全量）', async () => {
     const fn = await tryRequire<any>('./utils/resource-manifest.js', 'scopedResourceDomMapping')
     if (!fn) return
     const rdm = loadJson('traffic/resource-dom-mapping.json')
     expect(fn(rdm, null)).toBeUndefined()
-    expect(fn(rdm, { id: 'nope', title: '不存在' })).toBeUndefined()
+    expect(fn(rdm, { id: 'nope', title: '不存在' })).toEqual([])
     expect(fn([], { id: 'x', title: '当日总流量' })).toBeUndefined()
   })
 })

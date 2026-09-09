@@ -206,6 +206,41 @@ export function semanticSegmentOf(componentId = '') {
   return s;
 }
 
+/**
+ * Loop 0.B：componentId 检查点解析（纯函数）。
+ * 读路径：内存 Map → declare.json.meta.checkpoint.componentId → 都 miss 才空（调用方新建）。
+ * 重试只读，禁止重掷随机中段。
+ */
+export function resolveComponentIdCheckpoint({
+  sessionId = '',
+  memoryId = '',
+  declareCheckpointId = '',
+} = {}) {
+  const sid = String(sessionId || '').trim();
+  const mem = String(memoryId || '').trim();
+  const disk = String(declareCheckpointId || '').trim();
+  if (!sid) return mem || disk || '';
+  if (mem) return mem;
+  if (disk) return disk;
+  return '';
+}
+
+/** 写入 declare.meta.checkpoint（不丢既有 meta 其它字段） */
+export function applyDeclareCheckpoint(declare, { sessionId, componentId, classPrefix } = {}) {
+  const d = declare && typeof declare === 'object' ? declare : {};
+  const sid = String(sessionId || '').trim();
+  const cid = String(componentId || '').trim();
+  if (!sid || !cid) return d;
+  const meta = d.meta && typeof d.meta === 'object' ? d.meta : {};
+  d.meta = meta;
+  meta.checkpoint = {
+    sessionId: sid,
+    componentId: cid,
+    classPrefix: String(classPrefix || '').trim() || undefined,
+  };
+  return d;
+}
+
 /** 判断字符串是否为「编码 sessionId 形态」（mc-/mv- 前缀 + 时间戳 + hex） */
 export function isEncodedSessionId(s = '') {
   return /^(mc|mv|cp|page)-(lite|max|gen)-?\d{13}-[a-f0-9]+$/i.test(

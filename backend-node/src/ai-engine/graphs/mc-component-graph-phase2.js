@@ -84,6 +84,7 @@ import { OrphanComponentDetector } from '../validators/orphan-component-detector
 import { LessVariableChecker } from '../validators/less-variable-checker.js';
 import { HeaderRelationValidator } from '../validators/header-relation-validator.js';
 import { HeaderSlotValidator } from '../validators/header-slot-validator.js';
+import { applyHeaderSlotContractRewrite } from '../utils/header-slot-contract.js';
 import { validateDoNotInvent } from '../validators/do-not-invent-validator.js';
 import { createLogger } from '../logger/index.js';
 import { subcomponentPlanner } from '../roles/subcomponent-planner.js';
@@ -845,57 +846,15 @@ export function createPhase2Graph(config = {}) {
       // 3. 合并：确定性推导（contractSlots）追加进 result.headerSlots，修复 vision 漏识别断点。
       const contractSlots = headerSlotValidation?.contractSlots || [];
       const rejectedNodes = headerSlotValidation?.rejectedNodes || [];
-      const rejectedKeys = new Set(
-        rejectedNodes
-          .map((r) => r?.figmaNodeId || r?.slotCandidate?.figmaNodeId || r?.slotCandidate?.content || '')
-          .filter(Boolean),
-      );
-      const derivedHasTab = contractSlots.some((s) =>
-        /tab|segmented|switch/i.test(String(s?.elementType || '')),
-      );
-      const existingAll = result.headerSlots || [];
-      let existing = existingAll.filter((s) => {
-        const et = String(s?.elementType || '').toLowerCase();
-        if (/tab|segmented|switch/.test(et)) return derivedHasTab;
-        return true;
+      const rewrite = applyHeaderSlotContractRewrite({
+        headerSlots: result.headerSlots || [],
+        contractSlots,
+        rejectedNodes,
       });
-      const beforeReject = existing.length;
-      existing = existing.filter((s) => {
-        const key = s?.figmaNodeId || s?.content || '';
-        return !rejectedKeys.has(key);
-      });
-      if (existing.length !== beforeReject) {
-        logger.warn(
-          `🛡️ headerSlots C-1 剔除：${beforeReject - existing.length} 个 vision 越界候选（内容区元素被误判为 header 插槽）`,
-          {
-            removed: existingAll
-              .filter((s) => rejectedKeys.has(s?.figmaNodeId || s?.content || ''))
-              .map((s) => `${s?.figmaNodeId || '?'}:${s?.content || '?'}`),
-          },
-        );
-      }
-      if (existing.length !== existingAll.length) {
-        logger.warn(
-          `🛡️ headerSlots 确定性纠错：剔除 ${
-            existingAll.length - existing.length
-          } 个 vision 误判的 tab/segmented/switch 类插槽（内容区控件被误判为 header 插槽）`,
-          {
-            removed: existingAll
-              .filter((s) =>
-                /tab|segmented|switch/i.test(String(s?.elementType || '')),
-              )
-              .map((s) => s?.content),
-          },
-        );
-      }
-      const seen = new Set(existing.map((s) => s?.figmaNodeId || s?.content));
-      result.headerSlots = [
-        ...existing,
-        ...contractSlots.filter((s) => !seen.has(s?.figmaNodeId || s?.content)),
-      ];
-      if (existingAll.length > 0 || contractSlots.length > 0) {
+      result.headerSlots = rewrite.headerSlots;
+      if (rewrite.existingAll > 0 || contractSlots.length > 0) {
         logger.info(
-          `✅ headerSlots 契约回写: vision ${existingAll.length}（纠错后 ${existing.length}）+ derived ${contractSlots.length} = ${result.headerSlots.length} 个`,
+          `✅ headerSlots 契约回写: vision ${rewrite.existingAll}（纠错后 ${rewrite.visionKept}）+ derived kept=${rewrite.derivedKept} = ${result.headerSlots.length} 个`,
         );
       }
 

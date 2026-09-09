@@ -102,6 +102,8 @@ import {
   semanticTokenFrom,
   isEncodedSessionId,
   zhToSemanticEn,
+  resolveComponentIdCheckpoint,
+  applyDeclareCheckpoint,
 } from '../utils/component-naming.js';
 // 🛡️ 2026-09-03（管线 A 方案）：写盘前把子组件类样式收敛进 common.less
 import { consolidateSubComponentClasses } from '../utils/style-class-consolidator.js';
@@ -3973,8 +3975,15 @@ export class MicrocodeEngineer extends BaseAgent {
     const _prefixId = classPrefixOf(d.componentId) || 'c-component';
 
     // 🛡️ P0（2026-09-08）：归一化后的 componentId 持久化到检查点，跨重试轮次共享。
-    if (_sessionId && d.componentId && !_componentIdCheckpoints.has(_sessionId)) {
-      _componentIdCheckpoints.set(_sessionId, d.componentId);
+    if (_sessionId && d.componentId) {
+      if (!_componentIdCheckpoints.has(_sessionId)) {
+        _componentIdCheckpoints.set(_sessionId, d.componentId);
+      }
+      applyDeclareCheckpoint(d, {
+        sessionId: _sessionId,
+        componentId: d.componentId,
+        classPrefix: _prefixId,
+      });
     }
 
     // componentName 兜底中文显示名（仅当缺失时填，避免覆盖 LLM 已给的有效中文名）

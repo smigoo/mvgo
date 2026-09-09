@@ -51,7 +51,8 @@ describe('T7 跨 section 资源错绑 BLOCK（绑定校验·治本）', () => {
     if (!fn || !buildResourceManifest) return
     const manifest = buildResourceManifest(rdm)
     const content = loadFile('traffic/VehicleTypeDistribution.vue')
-    const issues = fn(manifest, { 'package/components/VehicleTypeDistribution.vue': content }, null)
+    const file = 'package/components/VehicleTypeDistribution.vue'
+    const issues = fn(manifest, { [file]: content }, { [file]: 'slot-车型分布' })
     const ids = issues.map((i: any) => i.varName)
     expect(ids).toContain('icon1') // 归属当日总流量，被车型分布文件引用
     expect(issues.every((i: any) => i.severity === 'BLOCK')).toBe(true)
@@ -87,10 +88,12 @@ describe('T7 跨 section 资源错绑 BLOCK（绑定校验·治本）', () => {
     if (!fn || !buildResourceManifest) return
     const manifest = buildResourceManifest(rdm)
     const content = loadFile('traffic/VehicleTypeDistribution.vue')
+    const file = 'package/components/VehicleTypeDistribution.vue'
     const result = fn({
       resourceDomMapping: rdm,
-      files: { 'package/components/VehicleTypeDistribution.vue': content },
+      files: { [file]: content },
       sectionManifest: manifest,
+      fileSectionMap: { [file]: 'slot-车型分布' },
     })
     const cross = result.issues.filter((i: any) => i.id === 'RES-ATTR-CROSS-SECTION')
     expect(cross.length).toBeGreaterThan(0)
@@ -106,9 +109,10 @@ describe('T7 跨 section 资源错绑 BLOCK（绑定校验·治本）', () => {
     // 车型分布文件只引用车型分布资源（bg2/bg4/icon2）——这是合法产物
     const content = 'backgroundImage: url(${bg2}); url(${bg4}); <img :src="icon2">'
     const file = 'package/components/VehicleTypeDistribution.vue'
-    // ① 不传 fileSectionMap（启发式）：引用资源均属同一 section → 主 section=车型分布 → 不误报
+    // ① Loop 0.D：不传 fileSectionMap → 跳过启发式，只 WARN 未归因
     const byHeuristic = fn(manifest, { [file]: content }, null)
-    expect(byHeuristic).toEqual([])
+    expect(byHeuristic.every((i: any) => i.id === 'RES-ATTR-UNATTRIBUTED')).toBe(true)
+    expect(byHeuristic.every((i: any) => i.severity === 'WARN')).toBe(true)
     // ② 精确传入 fileSectionMap（来自 L6 资源过滤命中的 section 标识，解析成权威 key）
     const secKey = resolveSectionKey(manifest, 'slot-车型分布')
     const byExact = fn(manifest, { [file]: content }, { [file]: secKey })
@@ -156,8 +160,9 @@ describe('T7 跨 section 资源错绑 BLOCK（绑定校验·治本）', () => {
     const file = 'package/components/DeviceCardA.vue'
     // 合法产物：Group 2136637321 文件只引用本卡片 icon1
     const content = '<img :src="icon1">'
-    // ① 启发式（无 fileSectionMap）：单资源引用 → 主 section 即其归属 → 干净
-    expect(fn(manifest, { [file]: content }, null)).toEqual([])
+    // ① Loop 0.D：无 fileSectionMap → WARN 未归因，不再启发式假装干净
+    const unattributed = fn(manifest, { [file]: content }, null)
+    expect(unattributed.every((i: any) => i.id === 'RES-ATTR-UNATTRIBUTED')).toBe(true)
     // ② 精确模式：文件归属本卡片 Group → 同样干净，且确认细化 key 不会把同 slot-con 其他 Group 误判
     const issues = fn(manifest, { [file]: content }, { [file]: 'slot-con/Group 2136637321' })
     expect(issues).toEqual([])
@@ -172,11 +177,10 @@ describe('T7 跨 section 资源错绑 BLOCK（绑定校验·治本）', () => {
     const file = 'package/components/DeviceCardA.vue'
     // Group 2136637321 的文件错绑了 Group 2136637552 的 icon2（同 slot-con 内跨 Group 错绑）
     const content = '<img :src="icon1"> <img :src="icon2">'
-    // ① 启发式：slot-con 下 12 个 Group 各属独立 key，单文件引用 2 个不同 key → 保守拦截（这正是
-    //    为什么 device 必须配合 L6/L7 精确 fileSectionMap——同 antd Tab v-for 合法引用全部 icon 时
-    //    启发式会误伤，故精确模式是必要的）。此处断言启发式确实触发了拦截（确定性防线存在）。
+    // ① Loop 0.D：无 fileSectionMap 不再启发式 BLOCK（避免 tab v-for 误伤），只 WARN 未归因
     const byHeuristic = fn(manifest, { [file]: content }, null)
-    expect(byHeuristic.length).toBeGreaterThan(0)
+    expect(byHeuristic.every((i: any) => i.id === 'RES-ATTR-UNATTRIBUTED')).toBe(true)
+    expect(byHeuristic.every((i: any) => i.severity === 'WARN')).toBe(true)
     // ② 精确模式：文件精准归属 Group 2136637321 → 仅 icon2（属 Group 2136637552）被 BLOCK，icon1 合法
     const byExact = fn(manifest, { [file]: content }, { [file]: 'slot-con/Group 2136637321' })
     const ids = byExact.map((i: any) => i.varName)

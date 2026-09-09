@@ -945,47 +945,12 @@ export function autoMountUnusedBackgrounds(
       });
     }
     if (!target) {
-      const idx = allFiles['package/index.vue'];
-      if (typeof idx === 'string') {
-        const regionTag = pickNextRegionContainer(idx, usedSectionContainers);
-        if (regionTag) {
-          target = {
-            file: 'package/index.vue',
-            tag: regionTag,
-            keyword: '(region-fallback)',
-          };
-        } else {
-          // 🛡️ 修复（2026-08-31）：禁止回退到根容器
-          // 根容器是禁区，挂载背景会违反 CODE-014 门禁
-          // 原逻辑：找不到 region 容器时回退到 root
-          // 新逻辑：放弃挂载，交由资源未使用门禁明确报错
-          logger.warn('🛡️ 背景兜底挂载已放弃：找不到合适的容器且根容器是禁区', {
-            var: varName,
-            reason: 'root-container-forbidden',
-          });
-          continue; // 跳过挂载
-
-          // ❌ 旧逻辑（已禁用）：
-          // const root = findTemplateRootTag(idx);
-          // if (root) {
-          //   target = { file: 'package/index.vue', tag: root, keyword: '(root-fallback)' };
-          // } else {
-
-          // 保留宿主外壳检查（仍然有效）
-          const root = findTemplateRootTag(idx);
-          if (!root) {
-            logger.warn(
-              '🛡️ P0-5 背景兜底挂载已放弃：模板根是宿主外壳（base-panel），禁止挂业务背景',
-              {
-                var: varName,
-                bgRole: m.bgRole || null,
-                mountTarget: m.mountTarget || null,
-                resourceFile: m.resourceFile || m.name || null,
-              },
-            );
-          }
-        }
-      }
+      // Loop 0.D：关键词失败 → 不挂 region-fallback，记诊断。不要为「用完」乱挂。
+      logger.warn('🛡️ 背景兜底挂载已放弃：关键词未命中，禁止 region-fallback', {
+        var: varName,
+        reason: 'region-fallback-disabled',
+      });
+      continue;
     }
     if (!target) continue;
 
@@ -1132,36 +1097,15 @@ export function autoMountUnusedIcons(
     }
 
     if (!target) {
-      const idx = allFiles['package/index.vue'];
-      if (typeof idx === 'string') {
-        const regionTag = pickNextRegionContainer(idx, usedContainers);
-        if (regionTag) {
-          target = {
-            file: 'package/index.vue',
-            tag: regionTag,
-            keyword: '(region-fallback)',
-          };
-        } else {
-          const root = findTemplateRootTag(idx);
-          if (root) {
-            target = {
-              file: 'package/index.vue',
-              tag: root,
-              keyword: '(root-fallback)',
-            };
-          } else {
-            logger.warn(
-              '🛡️ P0-5 图标兜底挂载已放弃：模板根是宿主外壳（base-panel）',
-              {
-                var: varName,
-                role: m.previewAnalysisRole || null,
-                mountTarget: m.mountTarget || null,
-                resourceFile: m.resourceFile || m.name || null,
-              },
-            );
-          }
-        }
-      }
+      // Loop 0.D：关键词失败 → 不挂 region-fallback / root-fallback。
+      logger.warn('🛡️ 图标兜底挂载已放弃：关键词未命中，禁止 region-fallback', {
+        var: varName,
+        reason: 'region-fallback-disabled',
+        role: m.previewAnalysisRole || null,
+        mountTarget: m.mountTarget || null,
+        resourceFile: m.resourceFile || m.name || null,
+      });
+      continue;
     }
     if (!target) continue;
 

@@ -416,16 +416,102 @@ type Provenance = 'figma-direct' | 'inferred';
 - **文档内部矛盾**：第 5 节硬规则「不要在 microcode-engineer.js 继续堆逻辑」，但第 6 节 P0/D 半步恰恰在 `microcode-engineer.js` 加了 `rewriteSubcomponentResourceImportsToProps` + `forceAll` + `skipResourceVars` 三处调用。这半步与第 5 节直接冲突。
 - **建议**：P0/D 半步须标「临时态 + 删改判据」（最终由 `assemble(manifest, llmFiles)` 取代并删除），否则归类为文档自己批评过的补丁堆。
 
-### 8.5 修订后落地顺序（建议）
+### 8.5 修订后落地顺序（以 playbook 为准）
+
+可执行手册：`docs/pipeline-governance-playbook-2026-09-09.md`。
+
+**不要**先造 Golden 再止血。Golden 是独立裁判，比对的必须是「已经按契约写盘」的产物；乱写盘阶段上 Golden，噪声淹没信号。
 
 ```
-1. §8.1 Golden Manifest 数据模型 + figma-golden-extractor（独立于装配层）
-2. §8.1.2 ManifestAuditor（fail-closed，不依赖装配层）
-3. §8.3 provenance 字段 + 门禁消费规则
-4. 三样本 GM 生成 + 人类审核锁死 hash
-5. 此后才做 Loop 0（headerSlots/componentId/sanitizer）
-6. 再 Loop 1 收口（forceAll → forceContract，依赖 §8.1 contracts 字段就绪）
-7. §8.2 LLM retarget 通道（与 Loop 4 重试纪律合并，不前置）
+Loop 0    停自伤（headerSlots C-1、checkpoint 写盘、sanitizer、关 region-fallback）
+Loop 0.5  Working Manifest 扩展（resources[]/contracts[]/provenance）——仍不改写盘
+Loop 1    forceAll → forceContract，写盘吃契约
+          三样本肉眼过资源/插槽
+Loop 2    结构表（竖 tab、同行、slot 唯一）
+Loop 3    类名/尺寸由 Manifest 写出
+Loop 4    Golden + ManifestAuditor + LLM retarget + 拆补丁
 ```
 
-**不做 §8.1–§8.3 而直接 Loop 1 收口，会重演 09-07「文档说完成、实际没对齐」**：装配层再干净，也没有机器能发现它与 Figma 的偏差。Golden + Auditor 是治理闭环的缺失半环，优先级高于 Loop 1。
+§8.1–§8.3 的字段设计并入 Loop 0.5（Working）与 Loop 4（Golden 锁死）。  
+Loop 1 不依赖 Golden 提取器，依赖 0.5 的 `contracts[]`。
+
+### 8.6 Loop 顺序裁决 + P0/D 半步退出判据
+
+> 纯裁决，不动代码。基于 §8.1–§8.3 与第 6 节已落地的 P0/D 半步，给出**唯一锁死顺序**与**半步何时必须删**的硬判据。
+
+#### 8.6.1 当前运行态事实（登记，避免误判）
+
+| 项 | 落点 | 状态 | 与 §8/第 5 节的偏差 |
+|---|---|---|---|
+| `rewriteSubcomponentResourceImportsToProps` | `microcode-engineer.js:79` import + `:1530` 调用 | 已落 dist（PID 37977） | 在 microcode-engineer 堆逻辑，违反第 5 节"不要在 engineer 堆逻辑" |
+| 主组件 `forceAll: true` | `:2024` 门禁前 / `:5166` execute 兜底 / `:6129` 磁盘兜底 | 已落 | `forceAll` 传的是 `effectiveMapping`，非 §8.1 的 `forceContract(manifest, file)`，属全量 |
+| 子组件 `skipResourceVars` | **未启用**（`:1543+` 仍 `injectResourceImports(fixed, effectiveMapping, relBase)` 全量补回 import） | 缺口 | 第 6 节已自认"子组件仍会被全量补回 import"，尚未收口 |
+| `buildVarToMapping` 导出 | `resource-import-guard.js:59` export | 已落 | 纯工具，无偏差 |
+
+**结论**：P0/D 半步当前是"接线脚手架 + 主组件全量兜底 + 子组件未收口"，与 §8.1 的 `forceContract` 目标仍有 3 处 gap。
+
+#### 8.6.2 锁死顺序（含 §8，修正第 7 节跳步）
+
+```
+P0/D 半步（已落，临时态，见 8.6.3 退出判据）
+  └─ 维持运行，但标记为 TEMP，禁止在其上叠任何兄弟补丁
+        │
+        ▼
+[阶段 A] Golden 闭环（§8.1–§8.3，独立于装配层）
+  A1. Golden Manifest 数据模型 + figma-golden-extractor（独立模块）
+  A2. ManifestAuditor（fail-closed，不依赖装配层）
+  A3. provenance 字段 + 门禁消费规则
+  A4. 三样本 GM 生成 + 人类审核锁死 hash
+        │
+        ▼
+[阶段 B] Loop 0（第 4 节，此前被跳过，现补回）
+  B1. derived headerSlots 接 C-1/C-2
+  B2. componentId 写盘 checkpoint
+  B3. sanitizer 行锚定
+  B4. 完成标准：同 session 三轮重试 prefix 不变；无"纠错 0 + derived 3"；无 `}====`
+        │
+        ▼
+[阶段 C] Loop 1 收口（第 4 节 + §8.1 contracts 字段就绪后）
+  C1. `forceAll` → `forceContract(manifest, file)`：主组件只 import contracts 内 parentMustPass 并集 + panel 共享资源
+  C2. 子组件写盘 mapping = `resources.filter(ownerBlockId ∈ this.blocks)` + 启用 `skipResourceVars: true`
+  C3. autoWire 按 contract 强制 `:prop`，父未声明时由装配层插入 import（不 skip）
+  C4. autoMount 禁止换容器
+  C5. **同时删除 P0/D 半步**（见 8.6.3）
+        │
+        ▼
+[阶段 D] Loop 2 结构表（第 4 节，三样本对照过关后再动）
+        │
+        ▼
+[阶段 E] §8.2 LLM retarget 通道 + Loop 3/4（资源+结构肉眼过关后再做）
+```
+
+**禁止**：在 P0/D 半步（临时态）之上叠加新补丁；在阶段 A 完成前动手 Loop 1 收口（C1–C3 依赖 A4 的 contracts 数据）；在阶段 B 未达标时宣称 Loop 0 完成。
+
+#### 8.6.3 P0/D 半步退出判据（DELETE 触发器）
+
+半步**不是**治理目标，是撑住 CODE-019 的临时桥。满足以下全部 → **必须删除并替换为 C1–C3**：
+
+1. **数据就绪**：`buildResourceManifest` 已产出含 `contracts[]` + `resources[].ownerBlockId`（细到卡片）+ `ownerRole` 的 Manifest（§8.1.1 字段）。
+2. **收口等价**：`forceContract(manifest, file)` 在重放三样本时，CODE-019 收敛结果与当前 `forceAll` 一致或更好（不回退）。
+3. **子组件不再全量**：`skipResourceVars: true` 在子组件调用点启用后，产物子组件无本地资源 import、仅 defineProps 接收，且 validator 仍 `valid=true`。
+4. **独立校验绿**：ManifestAuditor 对三样本产物 `summary.pass=true`（结构级对齐 GM）。
+5. **无新补丁叠加**：半步运行期间未在其上堆过兄弟补丁（若有，先回滚再删）。
+
+**删除动作（一次性）**：
+- 移除 `microcode-engineer.js:79` 的 import 与 `:1530` 调用（契约改写交还装配层）。
+- 移除主组件三处 `forceAll` 调用（`:2024 / :5166 / :6129`），改 `forceContract`。
+- 子组件调用点（`:1543+`）补 `skipResourceVars: true`。
+- 保留 `rewriteSubcomponentResourceImportsToProps`（移入装配层或保留为离线校验工具，但不再由 engineer 调用）。
+
+**退出前若违反第 5 节硬规则**：半步在 `microcode-engineer.js` 堆逻辑本属违规，故删除优先级高于"先留着撑 CODE-019"——阶段 A 的 `forceContract` + `skipResourceVars` 必须接住，接不住则回滚半步删除并补 A 阶段。
+
+#### 8.6.4 验收闸门
+
+Loop 4 之前没有 GM，不得把 Auditor 设成 Loop 0 门槛。各 Loop 机器判据见 playbook；三样本预览是结构级对照（资源错绑/竖 tab/双份 header），不是「截图像素级人工过目」。
+
+- Loop 0：prefix 不变（含重启）+ 无「纠错 0 + derived 3」+ 无 `}====` + 无 `keyword: '(region-fallback)'`
+- Loop 0.5：Working Manifest fixture 能打印 contracts/ownerBlockId；写盘仍 forceAll
+- Loop 1：主组件 import 数 < success 总数；CODE-019 不回潮；跨 section 错绑被剥离
+- Loop 4：`ManifestAuditor.verifyProduct(Golden Manifest, 产物)` pass
+
+未过闸门不得进入下一阶段。

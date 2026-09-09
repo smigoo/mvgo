@@ -36,6 +36,9 @@ export function sanitizeCssContent(raw, options = {}) {
 
   // 2. 移除整行的分隔符标记 // === ... ===（行锚定，完整消费整行，避免懒汉截断）
   cleaned = cleaned.replace(/^[ \t]*\/\/[ \t]*={3,}[^\n]*$/gm, '')
+  // Loop 0.C：`}====` / `}//=*{3,}` 粘合行 — 保留 `}`，丢掉等号垃圾并换行
+  cleaned = cleaned.replace(/\}[ \t]*\/\/[ \t]*={3,}[^\n]*/g, '}\n')
+  cleaned = cleaned.replace(/\}[ \t]*={3,}[^\n]*/g, '}\n')
   // 移除残留的孤立 === 行（包括被截断后剩余的多个等号）
   cleaned = cleaned.replace(/^[ \t]*={3,}[^\n]*$/gm, '')
   // 移除孤立的路径碎片行（如 /styles/themes/light.less 单独成行）

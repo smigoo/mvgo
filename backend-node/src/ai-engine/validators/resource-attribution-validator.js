@@ -276,8 +276,8 @@ export function validateResourceAttribution({ resourceDomMapping, files, rootBox
  * - 构建 varName → 归属 section（来自 Manifest.sections）的映射。
  * - 对每个子组件 .vue 文件（排除 index.vue 根聚合），统计其引用的资源分属哪些 section。
  * - 若 fileSectionMap 提供（精确）：文件归属 section != 资源归属 section → BLOCK。
- * - 若未提供 fileSectionMap：以「引用资源数最多的 section」为主 section，其余 section 的资源 → BLOCK
- *   （防御性启发式；section 组件本应只引用单一 section 资源，跨 section 引用本身即可疑）。
+ * - Loop 0.D：未提供 fileSectionMap → 跳过自动挂载式启发式，不按「引用最多」猜主 section。
+ *   返回 WARN 级「未归因」诊断，禁止 fail-open 当 BLOCK。
  *
  * @param {Object} manifest - buildResourceManifest 的返回值（含 sections）
  * @param {Object|Array} files - 生成代码文件 map（path→content）或 [{path,content}]
@@ -312,15 +312,17 @@ export function detectCrossSectionResourceBindings(manifest, files, fileSectionM
     }
     if (referenced.length === 0) continue
 
-    // 主 section：精确模式用 fileSectionMap；否则用引用资源数最多的 section
-    let primarySec = null
-    if (fileSectionMap && fileSectionMap[p]) {
-      primarySec = fileSectionMap[p]
-    } else {
-      const countBySec = {}
-      for (const r of referenced) countBySec[r.section] = (countBySec[r.section] || 0) + 1
-      primarySec = Object.keys(countBySec).sort((a, b) => countBySec[b] - countBySec[a])[0]
+    // 主 section：精确模式必须有 fileSectionMap。无 map → 跳过启发式，只记未归因 WARN。
+    if (!fileSectionMap || !fileSectionMap[p]) {
+      issues.push({
+        id: 'RES-ATTR-UNATTRIBUTED',
+        severity: 'WARN',
+        message: `文件 ${p} 无 fileSectionMap，跳过跨 section 启发式拦截（Loop 0.D）`,
+        file: p,
+      })
+      continue
     }
+    const primarySec = fileSectionMap[p]
 
     for (const r of referenced) {
       if (r.section !== primarySec) {

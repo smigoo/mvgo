@@ -153,6 +153,82 @@ describe('P1 headerSlots figmaNodeId 传播（C-1 过滤前置）', () => {
     const contents = merged.map((s: any) => s.content).filter(Boolean)
     expect(new Set(contents).size).toBe(contents.length)
   })
+
+  test('P1-5 Loop0.A: C-1 rejected 的 inline slot 不得 merge 回来', async () => {
+    const mergeHeaderSlots = await tryRequire<any>(
+      './utils/inline-header-slot-inferrer.js',
+      'mergeHeaderSlots',
+    )
+    expect(typeof mergeHeaderSlots).toBe('function')
+    const existing: any[] = []
+    const inline = [
+      { slotType: 'header-right', elementType: 'statistic', content: '设备类型 28', figmaNodeId: 'n-stat' },
+      { slotType: 'header-right', elementType: 'icon', content: '设置', figmaNodeId: 'n-ok' },
+    ]
+    const merged = mergeHeaderSlots(existing, inline, {
+      rejectedKeys: new Set(['n-stat', '设备类型 28']),
+    })
+    expect(merged.map((s: any) => s.figmaNodeId)).toEqual(['n-ok'])
+    expect(merged.some((s: any) => s.figmaNodeId === 'n-stat')).toBe(false)
+  })
+
+  test('P1-6 Loop0.A: 契约回写不得把 C-1 rejected 的 derived 加回（纠错 0 + derived 3 → derived 0）', async () => {
+    const applyHeaderSlotContractRewrite = await tryRequire<any>(
+      './utils/header-slot-contract.js',
+      'applyHeaderSlotContractRewrite',
+    )
+    expect(typeof applyHeaderSlotContractRewrite).toBe('function')
+    const vision = [
+      { slotType: 'header-right', elementType: 'statistic', content: '设备类型 28', figmaNodeId: 'a' },
+      { slotType: 'header-right', elementType: 'statistic', content: '在线 12', figmaNodeId: 'b' },
+      { slotType: 'header-right', elementType: 'statistic', content: '离线 16', figmaNodeId: 'c' },
+    ]
+    const rejectedNodes = vision.map((s) => ({
+      figmaNodeId: s.figmaNodeId,
+      slotCandidate: { figmaNodeId: s.figmaNodeId, content: s.content },
+    }))
+    const out = applyHeaderSlotContractRewrite({
+      headerSlots: vision,
+      contractSlots: vision,
+      rejectedNodes,
+    })
+    expect(out.headerSlots).toEqual([])
+    expect(out.derivedKept).toBe(0)
+    expect(out.visionKept).toBe(0)
+  })
+
+  test('P1-7 Loop0.B: Map 空 + declare 有 checkpoint → 用盘上的 componentId', async () => {
+    const resolveComponentIdCheckpoint = await tryRequire<any>(
+      './utils/component-naming.js',
+      'resolveComponentIdCheckpoint',
+    )
+    const applyDeclareCheckpoint = await tryRequire<any>(
+      './utils/component-naming.js',
+      'applyDeclareCheckpoint',
+    )
+    expect(typeof resolveComponentIdCheckpoint).toBe('function')
+    expect(typeof applyDeclareCheckpoint).toBe('function')
+    const id = resolveComponentIdCheckpoint({
+      sessionId: 'mc-max-1-abcdef12',
+      memoryId: '',
+      declareCheckpointId: 'c-device-monitor-abcdef12',
+    })
+    expect(id).toBe('c-device-monitor-abcdef12')
+    const d: any = { componentId: 'c-device-monitor-abcdef12' }
+    applyDeclareCheckpoint(d, {
+      sessionId: 'mc-max-1-abcdef12',
+      componentId: 'c-device-monitor-abcdef12',
+      classPrefix: 'c-device-monitor',
+    })
+    expect(d.meta.checkpoint.componentId).toBe('c-device-monitor-abcdef12')
+    expect(d.meta.checkpoint.classPrefix).toBe('c-device-monitor')
+    const memWins = resolveComponentIdCheckpoint({
+      sessionId: 'mc-max-1-abcdef12',
+      memoryId: 'c-from-memory-abcdef12',
+      declareCheckpointId: 'c-from-disk-abcdef12',
+    })
+    expect(memWins).toBe('c-from-memory-abcdef12')
+  })
 })
 
 // ---------------------------------------------------------------------------

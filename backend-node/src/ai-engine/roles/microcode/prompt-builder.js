@@ -1424,14 +1424,13 @@ export function buildSubcomponentScopedInput(subPath, indexContent, input, optio
     // 4) 资源清单按 section 过滤（0907 L6 治本·资源错绑）
     // 根因：子组件 chunk prompt 全量下发 resourceDomMapping → LLM 在「全量资源里自由选名字相邻图」
     // → 跨 section 错绑。治本：只下发本 section 归属的资源（Manifest 单一事实源）。
-    // 未匹配到 section（fail-open）或过滤后无变化时不改，保留全量，不阻断生成。
-    // 注意：本过滤只影响 prompt 暴露给 LLM 的资源清单；写盘后的 import 注入仍走全量 effectiveMapping，
-    // 因此不破坏 RESOURCE-001 全量资源使用校验。
+    // Loop 0.D：未匹配 section 返回 [] → 子 chunk 不得再看到全量资源。
+    // 注意：本过滤只影响 prompt 暴露给 LLM 的资源清单；写盘后的 import 注入仍走全量 effectiveMapping（Loop 1 收口）。
     try {
       const scopedRdm = scopedResourceDomMapping(input?.resourceDomMapping, matchedSection);
-      if (scopedRdm) {
+      if (Array.isArray(scopedRdm)) {
         scoped.resourceDomMapping = scopedRdm;
-        report.resourceSection = `${matchedSection.title || matchedSection.id} (${scopedRdm.length}/${input.resourceDomMapping.length})`;
+        report.resourceSection = `${matchedSection?.title || matchedSection?.id || 'unmatched'} (${scopedRdm.length}/${input.resourceDomMapping.length})`;
         // 🔗 0907 L7 闭环（2026-09-09）：资源过滤命中 section 时，把该子组件归属的
         // section 标识（id/title）一并暴露给下游。microcode-engineer 据其解析出
         // Manifest 权威 key，构建 fileSectionMap 传给 L7 防御门禁，替换原有「引用资源数最多

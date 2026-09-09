@@ -7,6 +7,12 @@
 - 生产 ECS：nginx docker 80；Java 8080 是 `/api` 门面；Node 13030 是 AI 引擎/SSE；`/api/progress` 唯一直连 Node，必须放在 `/api` 路由前。nginx 容器内 proxy_pass 用 `192.168.112.1`，不用 localhost。
 - 生产必备 env：Java `PORTAL_BASE_URL=https://go.microvideo.cn/portlet/api`、`MONGODB_URI` 带 `authSource=admin`、`NODE_BACKEND_URL=http://192.168.112.1:13030/api`；Node `FIELD_ENCRYPTION_KEY` 固定不可变、`OPERATION_LOG_BACKEND=http://192.168.112.1:8080`、`MC_PREVIEW_BASE_URL=https://go.microvideo.cn`、`JAVA_BACKEND_URL=http://192.168.112.1:8080`。
 
+## 管线治理（2026-09-09）
+- 诊断：`docs/pipeline-governance-2026-09-09.md`。落地：`docs/pipeline-governance-playbook-2026-09-09.md`。
+- 顺序锁死：Loop 0 停自伤 → 0.5 Working Manifest 扩 `contracts[]`/`ownerBlockId`/`provenance`（不改写盘）→ Loop 1 `forceAll`→`forceContract` → Loop 2 结构表 → Loop 3 类名尺寸 → Loop 4 Golden+Auditor。
+- 冻结新 CODE/VERT/RESOURCE 与并行会话 Step 2（prompt/validator 适应 defineProps）。`forceAll` 是临时脚手架，Loop 1 前不拆。
+- 现有 `buildResourceManifest` 只有 `sections/panel/unassigned`，无 `contracts[]`。写盘子组件 `skipResourceVars`、主组件 `forceAll`（microcode-engineer ~1550/~2012）。
+
 ## 生成链路与微码契约
 - Phase2：Figma→预览/资源→Vision/LayoutReviewer/StyleMapper→子组件规划→MicrocodeEngineer→L0-B→重试/发布。
 - 微码产物：`package/index.vue`、`package/components/*.vue`、同级 `resources/styles/index.less`；主组件样式引 `../resources/styles/index.less`，子组件引 `../../resources/styles/index.less`。
