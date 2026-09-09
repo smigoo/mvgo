@@ -1,0 +1,58 @@
+<Slide paddingTop={20} paddingBottom={20} paddingLeft={64} paddingRight={64} style={{ width: '1280px', height: '720px', background: '#FFFFFF' }}>
+  <Box style={{ height: 88, flexDirection: 'row', alignItems: 'center', gap: 16, borderLeftWidth: 6, borderLeftStyle: 'solid', borderLeftColor: '#1E3A8A', paddingLeft: 18 }}>
+    <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#1E293B' }}>如何使用②：Lite 快速生成</Text>
+  </Box>
+
+  <Box style={{ flex: 1, flexDirection: 'column', gap: 12, marginTop: 10 }}>
+    <Box style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 18, background: '#F1F5F9', borderRadius: 12, paddingLeft: 24, paddingRight: 24 }}>
+      <Box style={{ width: 50, height: 50, borderRadius: 25, background: '#1E3A8A', justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#FFFFFF' }}>1</Text>
+      </Box>
+      <Box style={{ flex: 1 }}>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#1E293B' }}>入口</Text>
+        <Text style={{ fontSize: 18, color: '#475569', marginTop: 2 }}>同「生成」页，选 Lite 模式，贴页面 / 组件截图（或 Figma URL）。</Text>
+      </Box>
+    </Box>
+    <Box style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 18, background: '#F1F5F9', borderRadius: 12, paddingLeft: 24, paddingRight: 24 }}>
+      <Box style={{ width: 50, height: 50, borderRadius: 25, background: '#0EA5E9', justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#FFFFFF' }}>2</Text>
+      </Box>
+      <Box style={{ flex: 1 }}>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#1E293B' }}>产出</Text>
+        <Text style={{ fontSize: 18, color: '#475569', marginTop: 2 }}>简单布局 + 基础交互 + 图表，秒级出。</Text>
+      </Box>
+    </Box>
+    <Box style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 18, background: '#F1F5F9', borderRadius: 12, paddingLeft: 24, paddingRight: 24 }}>
+      <Box style={{ width: 50, height: 50, borderRadius: 25, background: '#1E3A8A', justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#FFFFFF' }}>3</Text>
+      </Box>
+      <Box style={{ flex: 1 }}>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#1E293B' }}>适用</Text>
+        <Text style={{ fontSize: 18, color: '#475569', marginTop: 2 }}>后台管理页、数据看板、表单页、图表卡、活动 / 落地页。</Text>
+      </Box>
+    </Box>
+    <Box style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 18, background: '#F1F5F9', borderRadius: 12, paddingLeft: 24, paddingRight: 24 }}>
+      <Box style={{ width: 50, height: 50, borderRadius: 25, background: '#0EA5E9', justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#FFFFFF' }}>4</Text>
+      </Box>
+      <Box style={{ flex: 1 }}>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#1E293B' }}>对比完整版</Text>
+        <Text style={{ fontSize: 18, color: '#475569', marginTop: 2 }}>Lite 快但不重细节；要还原度用完整版。</Text>
+      </Box>
+    </Box>
+    <Box style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 18, background: '#F1F5F9', borderRadius: 12, paddingLeft: 24, paddingRight: 24 }}>
+      <Box style={{ width: 50, height: 50, borderRadius: 25, background: '#F59E0B', justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#FFFFFF' }}>5</Text>
+      </Box>
+      <Box style={{ flex: 1 }}>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#1E293B' }}>要点</Text>
+        <Text style={{ fontSize: 18, color: '#475569', marginTop: 2 }}>先用 Lite 快速看到效果，再决定要不要升级到完整版。</Text>
+      </Box>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+    <Text style={{ fontSize: 14, color: '#64748B' }}>感智晓界工坊 · 前端开发使用培训</Text>
+    <Text style={{ fontSize: 14, color: '#64748B' }}>12 / 27</Text>
+  </Box>
+</Slide>

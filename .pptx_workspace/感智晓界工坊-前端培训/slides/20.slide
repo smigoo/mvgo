@@ -1,0 +1,25 @@
+<Slide paddingTop={20} paddingBottom={20} paddingLeft={64} paddingRight={64} style={{ width: '1280px', height: '720px', background: '#FFFFFF' }}>
+  <Box style={{ height: 80, flexDirection: 'row', alignItems: 'center', gap: 16, borderLeftWidth: 6, borderLeftStyle: 'solid', borderLeftColor: '#1E3A8A', paddingLeft: 18 }}>
+    <Text style={{ fontSize: 32, fontWeight: 'bold', color: '#1E293B' }}>Demo2：Lite 快速生成</Text>
+  </Box>
+
+  <Box style={{ marginTop: 14, background: '#F59E0B', borderRadius: 10, paddingTop: 14, paddingBottom: 14, paddingLeft: 24, paddingRight: 24 }}>
+    <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#FFFFFF' }}>【演示预留】</Text>
+  </Box>
+
+  <Box style={{ flex: 1, flexDirection: 'row', gap: 24, marginTop: 20 }}>
+    <Box style={{ flex: 1, background: '#F1F5F9', borderRadius: 14, paddingTop: 24, paddingBottom: 24, paddingLeft: 24, paddingRight: 24, flexDirection: 'column', justifyContent: 'center' }}>
+      <Text style={{ fontSize: 23, fontWeight: 'bold', color: '#1E3A8A' }}>建议素材</Text>
+      <Text style={{ fontSize: 19, color: '#475569', marginTop: 12, lineHeight: 1.5 }}>1 张后台管理页截图。</Text>
+    </Box>
+    <Box style={{ flex: 1, background: '#EFF6FF', borderRadius: 14, paddingTop: 24, paddingBottom: 24, paddingLeft: 24, paddingRight: 24, flexDirection: 'column', justifyContent: 'center' }}>
+      <Text style={{ fontSize: 23, fontWeight: 'bold', color: '#1E3A8A' }}>讲解要点</Text>
+      <Text style={{ fontSize: 19, color: '#475569', marginTop: 12, lineHeight: 1.5 }}>截图 / Figma URL → Lite 版；对比完整版，说明「快但不重细节」。</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+    <Text style={{ fontSize: 14, color: '#64748B' }}>感智晓界工坊 · 前端开发使用培训</Text>
+    <Text style={{ fontSize: 14, color: '#64748B' }}>20 / 27</Text>
+  </Box>
+</Slide>

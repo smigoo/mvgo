@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Figma 管线规范检查</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+      color: #1f2937;
+      background: #f9fafb;
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    h1 {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: #111827;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: #6b7280;
+      margin-bottom: 20px;
+    }
+
+    .status-card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .status-card.passed {
+      border-left: 4px solid #10b981;
+    }
+
+    .status-card.failed {
+      border-left: 4px solid #ef4444;
+    }
+
+    .status-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-title .icon {
+      font-size: 24px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .stat-item {
+      text-align: center;
+      padding: 12px;
+      background: #f9fafb;
+      border-radius: 8px;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .stat-value.error {
+      color: #ef4444;
+    }
+
+    .stat-value.warning {
+      color: #f59e0b;
+    }
+
+    .stat-value.info {
+      color: #3b82f6;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: #6b7280;
+    }
+
+    .section {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .section-header {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-header.error {
+      color: #ef4444;
+    }
+
+    .section-header.warning {
+      color: #f59e0b;
+    }
+
+    .section-header.info {
+      color: #3b82f6;
+    }
+
+    .issue-item {
+      padding: 12px;
+      background: #f9fafb;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      border-left: 3px solid #e5e7eb;
+    }
+
+    .issue-item.error {
+      border-left-color: #ef4444;
+    }
+
+    .issue-item.warning {
+      border-left-color: #f59e0b;
+    }
+
+    .issue-item.info {
+      border-left-color: #3b82f6;
+    }
+
+    .issue-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .issue-message {
+      font-size: 13px;
+      color: #4b5563;
+      margin-bottom: 8px;
+      line-height: 1.6;
+    }
+
+    .issue-suggestion {
+      font-size: 12px;
+      color: #059669;
+      background: #d1fae5;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-style: italic;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      background: #667eea;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      width: 100%;
+      justify-content: center;
+    }
+
+    .btn:hover {
+      background: #5568d3;
+      transform: translateY(-1px);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+    }
+
+    .btn-secondary {
+      background: #f3f4f6;
+      color: #374151;
+    }
+
+    .btn-secondary:hover {
+      background: #e5e7eb;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .btn-group button {
+      flex: 1;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px 20px;
+      color: #6b7280;
+    }
+
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid #e5e7eb;
+      border-top-color: #667eea;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 16px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .checklist {
+      margin-top: 20px;
+    }
+
+    .checklist-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px;
+      background: #f9fafb;
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+
+    .checkmark {
+      width: 20px;
+      height: 20px;
+      background: #e5e7eb;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 12px;
+      color: #6b7280;
+    }
+
+    .checklist-item.done .checkmark {
+      background: #10b981;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="loading">
+      <div class="loading-spinner"></div>
+      <div>正在检查 Figma 管线规范...</div>
+    </div>
+  </div>
+
+  <script>
+    let currentResults = null
+    let currentReportMd = ''
+
+    window.onmessage = (event) => {
+      const message = event.data.pluginMessage
+      if (!message) return
+
+      if (message.type === 'check-result') {
+        currentResults = message.results
+        currentReportMd = message.reportMd
+        renderResults(currentResults)
+      } else if (message.type === 'check-error') {
+        renderError(message.error)
+      }
+    }
+
+    function renderResults(results) {
+      const app = document.getElementById('app')
+      
+      const passed = results.passed
+      const totalNodes = results.totalNodes
+      const errors = results.errors
+      const warnings = results.warnings
+      const infos = results.infos
+
+      let html = `
+        <h1>Figma 管线规范检查</h1>
+        <p class="subtitle">检查节点总数：<strong>${totalNodes}</strong></p>
+
+        <div class="status-card ${passed ? 'passed' : 'failed'}">
+          <div class="status-title">
+            <span class="icon">${passed ? '✅' : ''}</span>
+            ${passed ? '检查通过' : '检查未通过'}
+          </div>
+          <p style="color: #6b7280; font-size: 13px;">
+            ${passed 
+              ? '恭喜！所有必查项均已符合规范，可以提交生成。' 
+              : `发现 <strong>${errors.length}</strong> 个错误，需要修复后才能提交生成。`}
+          </p>
+
+          <div class="stats-grid">
+            <div class="stat-item">
+              <div class="stat-value error">${errors.length}</div>
+              <div class="stat-label">错误</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value warning">${warnings.length}</div>
+              <div class="stat-label">警告</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value info">${infos.length}</div>
+              <div class="stat-label">建议</div>
+            </div>
+          </div>
+        </div>
+      `
+
+      // 错误列表
+      if (errors.length > 0) {
+        html += `
+          <div class="section">
+            <div class="section-header error">
+              ❌ 错误（${errors.length}）
+            </div>
+        `
+        errors.forEach((item, index) => {
+          html += `
+            <div class="issue-item error">
+              <div class="issue-title">${index + 1}. ${item.name}</div>
+              <div class="issue-message">${item.message}</div>
+              <div class="issue-suggestion">💡 ${item.suggestion}</div>
+            </div>
+          `
+        })
+        html += `</div>`
+      }
+
+      // 警告列表
+      if (warnings.length > 0) {
+        html += `
+          <div class="section">
+            <div class="section-header warning">
+              ⚠️ 警告（${warnings.length}）
+            </div>
+        `
+        warnings.forEach((item, index) => {
+          html += `
+            <div class="issue-item warning">
+              <div class="issue-title">${index + 1}. ${item.name}</div>
+              <div class="issue-message">${item.message}</div>
+              <div class="issue-suggestion">💡 ${item.suggestion}</div>
+            </div>
+          `
+        })
+        html += `</div>`
+      }
+
+      // 建议列表
+      if (infos.length > 0) {
+        html += `
+          <div class="section">
+            <div class="section-header info">
+              💡 建议（${infos.length}）
+            </div>
+        `
+        infos.forEach((item, index) => {
+          html += `
+            <div class="issue-item info">
+              <div class="issue-title">${index + 1}. ${item.name}</div>
+              <div class="issue-message">${item.message}</div>
+              <div class="issue-suggestion">💡 ${item.suggestion}</div>
+            </div>
+          `
+        })
+        html += `</div>`
+      }
+
+      // 操作按钮
+      html += `
+        <div class="section">
+          <div class="btn-group">
+            <button class="btn" onclick="copyReport()">
+              📋 复制检查报告
+            </button>
+            <button class="btn btn-secondary" onclick="rerunCheck()">
+              🔄 重新检查
+            </button>
+          </div>
+
+          <div class="checklist">
+            <h3 style="font-size: 14px; margin-bottom: 12px;">📋 提交前自检清单</h3>
+            <div class="checklist-item ${errors.filter(e => e.id === 'root-naming').length === 0 ? 'done' : ''}">
+              <div class="checkmark">${errors.filter(e => e.id === 'root-naming').length === 0 ? '✓' : '○'}</div>
+              <div>根容器语义化命名（不是 Frame 123 / bg）</div>
+            </div>
+            <div class="checklist-item ${errors.filter(e => e.id === 'icon-naming').length === 0 ? 'done' : ''}">
+              <div class="checkmark">${errors.filter(e => e.id === 'icon-naming').length === 0 ? '✓' : '○'}</div>
+              <div>所有图标命名为 icon / icon-*</div>
+            </div>
+            <div class="checklist-item ${warnings.filter(w => w.id === 'chart-marking').length === 0 ? 'done' : ''}">
+              <div class="checkmark">${warnings.filter(w => w.id === 'chart-marking').length === 0 ? '✓' : '○'}</div>
+              <div>图表区域标记 @echarts/*</div>
+            </div>
+            <div class="checklist-item ${errors.filter(e => e.id === 'auto-layout-root').length === 0 ? 'done' : ''}">
+              <div class="checkmark">${errors.filter(e => e.id === 'auto-layout-root').length === 0 ? '✓' : '○'}</div>
+              <div>根容器有 Auto Layout（Shift+A）</div>
+            </div>
+            <div class="checklist-item ${errors.filter(e => e.id === 'auto-layout-properties').length === 0 ? 'done' : ''}">
+              <div class="checkmark">${errors.filter(e => e.id === 'auto-layout-properties').length === 0 ? '✓' : '○'}</div>
+              <div>layoutMode 为 HORIZONTAL 或 VERTICAL</div>
+            </div>
+          </div>
+        </div>
+      `
+
+      app.innerHTML = html
+    }
+
+    function renderError(error) {
+      const app = document.getElementById('app')
+      app.innerHTML = `
+        <h1>❌ 检查失败</h1>
+        <div class="status-card failed">
+          <p style="color: #ef4444; font-size: 14px;">${error}</p>
+          <button class="btn" style="margin-top: 16px;" onclick="rerunCheck()">
+            🔄 重新检查
+          </button>
+        </div>
+      `
+    }
+
+    function copyReport() {
+      if (currentReportMd) {
+        navigator.clipboard.writeText(currentReportMd).then(() => {
+          alert('✅ 检查报告已复制到剪贴板')
+        }).catch(() => {
+          alert('❌ 复制失败，请手动截图')
+        })
+      }
+    }
+
+    function rerunCheck() {
+      parent.postMessage({
+        pluginMessage: { type: 'rerun-check' }
+      }, '*')
+    }
+  </script>
+</body>
+</html>

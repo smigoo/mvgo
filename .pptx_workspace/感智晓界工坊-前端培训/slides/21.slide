@@ -1,0 +1,25 @@
+<Slide paddingTop={20} paddingBottom={20} paddingLeft={64} paddingRight={64} style={{ width: '1280px', height: '720px', background: '#FFFFFF' }}>
+  <Box style={{ height: 80, flexDirection: 'row', alignItems: 'center', gap: 16, borderLeftWidth: 6, borderLeftStyle: 'solid', borderLeftColor: '#1E3A8A', paddingLeft: 18 }}>
+    <Text style={{ fontSize: 32, fontWeight: 'bold', color: '#1E293B' }}>Demo3：在线编辑 + 大模型交互迭代</Text>
+  </Box>
+
+  <Box style={{ marginTop: 14, background: '#F59E0B', borderRadius: 10, paddingTop: 14, paddingBottom: 14, paddingLeft: 24, paddingRight: 24 }}>
+    <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#FFFFFF' }}>【演示预留】</Text>
+  </Box>
+
+  <Box style={{ flex: 1, flexDirection: 'row', gap: 24, marginTop: 20 }}>
+    <Box style={{ flex: 1, background: '#F1F5F9', borderRadius: 14, paddingTop: 24, paddingBottom: 24, paddingLeft: 24, paddingRight: 24, flexDirection: 'column', justifyContent: 'center' }}>
+      <Text style={{ fontSize: 23, fontWeight: 'bold', color: '#1E3A8A' }}>建议素材</Text>
+      <Text style={{ fontSize: 19, color: '#475569', marginTop: 12, lineHeight: 1.5 }}>已生成的组件 + 一句自然语言修改指令（如「把背景改成蓝色、加个 tab」）。</Text>
+    </Box>
+    <Box style={{ flex: 1, background: '#EFF6FF', borderRadius: 14, paddingTop: 24, paddingBottom: 24, paddingLeft: 24, paddingRight: 24, flexDirection: 'column', justifyContent: 'center' }}>
+      <Text style={{ fontSize: 23, fontWeight: 'bold', color: '#1E3A8A' }}>讲解要点</Text>
+      <Text style={{ fontSize: 19, color: '#475569', marginTop: 12, lineHeight: 1.5 }}>在线改一句 → 大模型改一版 → 实时预览；「生成即迭代起点」；结合 P13 讲快照 / 回滚、沙盒。</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+    <Text style={{ fontSize: 14, color: '#64748B' }}>感智晓界工坊 · 前端开发使用培训</Text>
+    <Text style={{ fontSize: 14, color: '#64748B' }}>21 / 27</Text>
+  </Box>
+</Slide>

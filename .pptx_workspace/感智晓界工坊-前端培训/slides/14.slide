@@ -1,0 +1,46 @@
+<Slide paddingTop={20} paddingBottom={20} paddingLeft={64} paddingRight={64} style={{ width: '1280px', height: '720px', background: '#FFFFFF' }}>
+  <Box style={{ height: 88, flexDirection: 'row', alignItems: 'center', gap: 16, borderLeftWidth: 6, borderLeftStyle: 'solid', borderLeftColor: '#1E3A8A', paddingLeft: 18 }}>
+    <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#1E293B' }}>如何使用④：质量门禁</Text>
+    <Text style={{ fontSize: 20, color: '#64748B' }}>怎么看错 / 怎么修 / 强制预览</Text>
+  </Box>
+
+  <Box style={{ flex: 1, flexDirection: 'column', gap: 14, marginTop: 8 }}>
+    <Box style={{ flex: 1, flexDirection: 'row', gap: 16 }}>
+      <Box style={{ flex: 1, background: '#F1F5F9', borderRadius: 12, paddingTop: 14, paddingBottom: 14, paddingLeft: 18, paddingRight: 18, flexDirection: 'column', justifyContent: 'center' }}>
+        <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#1E3A8A' }}>是什么</Text>
+        <Text style={{ fontSize: 16, color: '#475569', marginTop: 5 }}>生成后平台自动跑质量门禁，按「规范 / 样式 / 结构」校验。</Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#F1F5F9', borderRadius: 12, paddingTop: 14, paddingBottom: 14, paddingLeft: 18, paddingRight: 18, flexDirection: 'column', justifyContent: 'center' }}>
+        <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#1E3A8A' }}>查什么</Text>
+        <Text style={{ fontSize: 16, color: '#475569', marginTop: 5 }}>组件规范、LESS 编译、SFC 结构、资源引用合法性（含禁止宿主 Tailwind 泄漏）。</Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#F1F5F9', borderRadius: 12, paddingTop: 14, paddingBottom: 14, paddingLeft: 18, paddingRight: 18, flexDirection: 'column', justifyContent: 'center' }}>
+        <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#1E3A8A' }}>结果</Text>
+        <Text style={{ fontSize: 16, color: '#475569', marginTop: 5 }}>通过 → 可交付；BLOCK → 拦截并自动重试修正。</Text>
+      </Box>
+    </Box>
+    <Box style={{ flex: 1, flexDirection: 'row', gap: 16 }}>
+      <Box style={{ flex: 1, background: '#F1F5F9', borderRadius: 12, paddingTop: 14, paddingBottom: 14, paddingLeft: 18, paddingRight: 18, flexDirection: 'column', justifyContent: 'center' }}>
+        <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#1E3A8A' }}>怎么看错</Text>
+        <Text style={{ fontSize: 16, color: '#475569', marginTop: 5 }}>报错带 文件 / 行 / 列 + 具体错误 + 代码上下文 + 修复建议，逐条定位。</Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#F1F5F9', borderRadius: 12, paddingTop: 14, paddingBottom: 14, paddingLeft: 18, paddingRight: 18, flexDirection: 'column', justifyContent: 'center' }}>
+        <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#1E3A8A' }}>怎么修</Text>
+        <Text style={{ fontSize: 16, color: '#475569', marginTop: 5 }}>在线编辑问题文件 → 保存（新快照）→ 重新校验 → 刷新预览。</Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#FFF7ED', borderRadius: 12, paddingTop: 14, paddingBottom: 14, paddingLeft: 18, paddingRight: 18, flexDirection: 'column', justifyContent: 'center' }}>
+        <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#F59E0B' }}>不合格也能预览</Text>
+        <Text style={{ fontSize: 16, color: '#475569', marginTop: 5 }}>即便门禁未过，也可「强制预览」看效果，先评估再决定改不改。</Text>
+      </Box>
+    </Box>
+  </Box>
+
+  <Box style={{ marginTop: 12, background: '#EFF6FF', borderRadius: 10, paddingTop: 12, paddingBottom: 12, paddingLeft: 20, paddingRight: 20 }}>
+    <Text style={{ fontSize: 18, color: '#1E293B' }}>提醒：门禁拦的是「规范 / 可编译」，业务逻辑仍由你确认。</Text>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+    <Text style={{ fontSize: 14, color: '#64748B' }}>感智晓界工坊 · 前端开发使用培训</Text>
+    <Text style={{ fontSize: 14, color: '#64748B' }}>14 / 27</Text>
+  </Box>
+</Slide>

@@ -1,0 +1,14 @@
+{
+  "name": "figma-naming-checker-v2",
+  "version": "2.0.0",
+  "description": "Figma 管线助手 - 智能整理 + 合规检查",
+  "scripts": {
+    "build": "tsc && cp ui.html dist/",
+    "watch": "tsc --watch",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "@figma/plugin-typings": "^1.94.0",
+    "typescript": "^5.0.0"
+  }
+}

@@ -1,0 +1,59 @@
+<Slide paddingTop={20} paddingBottom={20} paddingLeft={64} paddingRight={64} style={{ width: '1280px', height: '720px', background: '#FFFFFF' }}>
+  <Box style={{ height: 88, flexDirection: 'row', alignItems: 'center', gap: 16, borderLeftWidth: 6, borderLeftStyle: 'solid', borderLeftColor: '#1E3A8A', paddingLeft: 18 }}>
+    <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#1E293B' }}>如何使用①：完整生成</Text>
+    <Text style={{ fontSize: 20, color: '#64748B' }}>Figma URL → 业务组件</Text>
+  </Box>
+
+  <Box style={{ flex: 1, flexDirection: 'column', gap: 12, marginTop: 10 }}>
+    <Box style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 18, background: '#F1F5F9', borderRadius: 12, paddingLeft: 24, paddingRight: 24 }}>
+      <Box style={{ width: 50, height: 50, borderRadius: 25, background: '#1E3A8A', justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#FFFFFF' }}>1</Text>
+      </Box>
+      <Box style={{ flex: 1 }}>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#1E293B' }}>入口</Text>
+        <Text style={{ fontSize: 18, color: '#475569', marginTop: 2 }}>平台「生成」页，粘贴 Figma 组件 / 页面链接。</Text>
+      </Box>
+    </Box>
+    <Box style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 18, background: '#F1F5F9', borderRadius: 12, paddingLeft: 24, paddingRight: 24 }}>
+      <Box style={{ width: 50, height: 50, borderRadius: 25, background: '#0EA5E9', justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#FFFFFF' }}>2</Text>
+      </Box>
+      <Box style={{ flex: 1 }}>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#1E293B' }}>选择产物类型</Text>
+        <Text style={{ fontSize: 18, color: '#475569', marginTop: 2 }}>微码 / Vue3（按 P5 怎么选）。</Text>
+      </Box>
+    </Box>
+    <Box style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 18, background: '#F1F5F9', borderRadius: 12, paddingLeft: 24, paddingRight: 24 }}>
+      <Box style={{ width: 50, height: 50, borderRadius: 25, background: '#1E3A8A', justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#FFFFFF' }}>3</Text>
+      </Box>
+      <Box style={{ flex: 1 }}>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#1E293B' }}>开始生成</Text>
+        <Text style={{ fontSize: 18, color: '#475569', marginTop: 2 }}>平台按规范产出组件（含 index.vue / styles / declare 等文件）。</Text>
+      </Box>
+    </Box>
+    <Box style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 18, background: '#F1F5F9', borderRadius: 12, paddingLeft: 24, paddingRight: 24 }}>
+      <Box style={{ width: 50, height: 50, borderRadius: 25, background: '#0EA5E9', justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#FFFFFF' }}>4</Text>
+      </Box>
+      <Box style={{ flex: 1 }}>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#1E293B' }}>查看结果</Text>
+        <Text style={{ fontSize: 18, color: '#475569', marginTop: 2 }}>还原度、规范遵循即时可见。</Text>
+      </Box>
+    </Box>
+    <Box style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 18, background: '#F1F5F9', borderRadius: 12, paddingLeft: 24, paddingRight: 24 }}>
+      <Box style={{ width: 50, height: 50, borderRadius: 25, background: '#F59E0B', justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#FFFFFF' }}>5</Text>
+      </Box>
+      <Box style={{ flex: 1 }}>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#1E293B' }}>要点</Text>
+        <Text style={{ fontSize: 18, color: '#475569', marginTop: 2 }}>首次建议用一个真实、图层规范的 Figma 组件练手；强调「还原度 + 规范」而非「花哨」。</Text>
+      </Box>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+    <Text style={{ fontSize: 14, color: '#64748B' }}>感智晓界工坊 · 前端开发使用培训</Text>
+    <Text style={{ fontSize: 14, color: '#64748B' }}>11 / 27</Text>
+  </Box>
+</Slide>

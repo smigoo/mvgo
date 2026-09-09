@@ -1,0 +1,45 @@
+<Slide paddingTop={20} paddingBottom={20} paddingLeft={64} paddingRight={64} style={{ width: '1280px', height: '720px', background: '#FFFFFF' }}>
+  <Box style={{ height: 88, flexDirection: 'row', alignItems: 'center', gap: 16, borderLeftWidth: 6, borderLeftStyle: 'solid', borderLeftColor: '#1E3A8A', paddingLeft: 18 }}>
+    <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#1E293B' }}>平台计划讨论（含进阶学习路径）</Text>
+  </Box>
+
+  <Text style={{ fontSize: 21, fontWeight: 'bold', color: '#1E3A8A', marginTop: 6 }}>回顾平台演进方向</Text>
+  <Box style={{ flexDirection: 'row', gap: 14, marginTop: 8 }}>
+    <Box style={{ flex: 1, background: '#F1F5F9', borderRadius: 10, paddingTop: 12, paddingBottom: 12, paddingLeft: 16, paddingRight: 16 }}>
+      <Text style={{ fontSize: 18, color: '#1E293B' }}>① 管线可自定义</Text>
+    </Box>
+    <Box style={{ flex: 1, background: '#F1F5F9', borderRadius: 10, paddingTop: 12, paddingBottom: 12, paddingLeft: 16, paddingRight: 16 }}>
+      <Text style={{ fontSize: 18, color: '#1E293B' }}>② 模型路由降成本</Text>
+    </Box>
+    <Box style={{ flex: 1, background: '#F1F5F9', borderRadius: 10, paddingTop: 12, paddingBottom: 12, paddingLeft: 16, paddingRight: 16 }}>
+      <Text style={{ fontSize: 18, color: '#1E293B' }}>③ 后端代码生成</Text>
+    </Box>
+  </Box>
+  <Box style={{ flexDirection: 'row', gap: 14, marginTop: 12 }}>
+    <Box style={{ flex: 1, background: '#F1F5F9', borderRadius: 10, paddingTop: 12, paddingBottom: 12, paddingLeft: 16, paddingRight: 16 }}>
+      <Text style={{ fontSize: 18, color: '#1E293B' }}>④ 多规范扩展</Text>
+    </Box>
+    <Box style={{ flex: 1, background: '#F1F5F9', borderRadius: 10, paddingTop: 12, paddingBottom: 12, paddingLeft: 16, paddingRight: 16 }}>
+      <Text style={{ fontSize: 18, color: '#1E293B' }}>⑤ 生态互通</Text>
+    </Box>
+    <Box style={{ flex: 1, background: '#F1F5F9', borderRadius: 10, paddingTop: 12, paddingBottom: 12, paddingLeft: 16, paddingRight: 16 }}>
+      <Text style={{ fontSize: 18, color: '#1E293B' }}>⑥ 自我进化</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ flex: 1, flexDirection: 'row', gap: 20, marginTop: 16 }}>
+    <Box style={{ flex: 1, background: '#EFF6FF', borderRadius: 12, paddingTop: 18, paddingBottom: 18, paddingLeft: 22, paddingRight: 22, flexDirection: 'column', justifyContent: 'center', borderLeftWidth: 5, borderLeftStyle: 'solid', borderLeftColor: '#1E3A8A' }}>
+      <Text style={{ fontSize: 21, fontWeight: 'bold', color: '#1E3A8A' }}>试点征集</Text>
+      <Text style={{ fontSize: 18, color: '#475569', marginTop: 8, lineHeight: 1.5 }}>讨论各业务线下一阶段诉求与试点意向；明确共建方向、资源诉求（X 人周 MVP + 1 个试点业务线）；现场收集首批试点团队。</Text>
+    </Box>
+    <Box style={{ flex: 1, background: '#FFF7ED', borderRadius: 12, paddingTop: 18, paddingBottom: 18, paddingLeft: 22, paddingRight: 22, flexDirection: 'column', justifyContent: 'center', borderLeftWidth: 5, borderLeftStyle: 'solid', borderLeftColor: '#F59E0B' }}>
+      <Text style={{ fontSize: 21, fontWeight: 'bold', color: '#F59E0B' }}>进阶学习路径（未来计划）</Text>
+      <Text style={{ fontSize: 17, color: '#475569', marginTop: 8, lineHeight: 1.5 }}>平台使用文档精读、往共享库贡献组件 / Skill、参与管线与规范共建、模型与三方工具高阶配置、评分反哺机制（规划中）落地后参与反馈。</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+    <Text style={{ fontSize: 14, color: '#64748B' }}>感智晓界工坊 · 前端开发使用培训</Text>
+    <Text style={{ fontSize: 14, color: '#64748B' }}>26 / 27</Text>
+  </Box>
+</Slide>

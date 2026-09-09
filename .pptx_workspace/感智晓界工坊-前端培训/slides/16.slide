@@ -1,0 +1,45 @@
+<Slide paddingTop={20} paddingBottom={20} paddingLeft={64} paddingRight={64} style={{ width: '1280px', height: '720px', background: '#FFFFFF' }}>
+  <Box style={{ height: 88, flexDirection: 'row', alignItems: 'center', gap: 16, borderLeftWidth: 6, borderLeftStyle: 'solid', borderLeftColor: '#1E3A8A', paddingLeft: 18 }}>
+    <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#1E293B' }}>微码学习成本与 AI 配置化</Text>
+  </Box>
+
+  <Box style={{ flexDirection: 'row', gap: 24, marginTop: 8 }}>
+    <Box style={{ flex: 1, background: '#F1F5F9', borderRadius: 14, paddingTop: 20, paddingBottom: 20, paddingLeft: 22, paddingRight: 22, borderTopWidth: 6, borderTopStyle: 'solid', borderTopColor: '#64748B' }}>
+      <Text style={{ fontSize: 23, fontWeight: 'bold', color: '#475569' }}>微码有学习成本（实话）</Text>
+      <Text style={{ fontSize: 18, color: '#475569', marginTop: 10, lineHeight: 1.5 }}>declare 声明、样式变量（css-vars）、事件 / 状态、业务配置写法，初次上手不低。</Text>
+    </Box>
+    <Box style={{ flex: 1, background: '#EFF6FF', borderRadius: 14, paddingTop: 20, paddingBottom: 20, paddingLeft: 22, paddingRight: 22, borderTopWidth: 6, borderTopStyle: 'solid', borderTopColor: '#1E3A8A' }}>
+      <Text style={{ fontSize: 23, fontWeight: 'bold', color: '#1E3A8A' }}>微码的本质目的</Text>
+      <Text style={{ fontSize: 18, color: '#475569', marginTop: 10, lineHeight: 1.5 }}>高复用——一次开发，多页面 / 多业务线引用，靠「配置」适配差异。</Text>
+    </Box>
+  </Box>
+
+  <Text style={{ fontSize: 21, fontWeight: 'bold', color: '#1E3A8A', marginTop: 18 }}>AI 生成的价值：交付的同时把配置能力做进去（降低门槛 + 提升复用）</Text>
+  <Box style={{ flex: 1, flexDirection: 'column', gap: 8, marginTop: 10 }}>
+    <Box style={{ flexDirection: 'row', gap: 16 }}>
+      <Box style={{ flex: 1, background: '#F1F5F9', borderRadius: 10, paddingTop: 12, paddingBottom: 12, paddingLeft: 18, paddingRight: 18 }}>
+        <Text style={{ fontSize: 18, color: '#1E293B' }}>兼容一体化的 em：生成时带上一体化扩展点，便于后期纳入一体化体系</Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#F1F5F9', borderRadius: 10, paddingTop: 12, paddingBottom: 12, paddingLeft: 18, paddingRight: 18 }}>
+        <Text style={{ fontSize: 18, color: '#1E293B' }}>微码深浅主题色：自动注入 css-vars 主题变量，天然支持浅色 / 深色切换</Text>
+      </Box>
+    </Box>
+    <Box style={{ flexDirection: 'row', gap: 16 }}>
+      <Box style={{ flex: 1, background: '#F1F5F9', borderRadius: 10, paddingTop: 12, paddingBottom: 12, paddingLeft: 18, paddingRight: 18 }}>
+        <Text style={{ fontSize: 18, color: '#1E293B' }}>动态背景图：背景图做成可配置项，调用方传参即可换</Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#F1F5F9', borderRadius: 10, paddingTop: 12, paddingBottom: 12, paddingLeft: 18, paddingRight: 18 }}>
+        <Text style={{ fontSize: 18, color: '#1E293B' }}>tab 入参：把 tab 等可变项抽成组件入参，组件即参数化</Text>
+      </Box>
+    </Box>
+  </Box>
+
+  <Box style={{ marginTop: 12, background: '#FFF7ED', borderRadius: 10, paddingTop: 12, paddingBottom: 12, paddingLeft: 20, paddingRight: 20 }}>
+    <Text style={{ fontSize: 18, color: '#1E293B' }}>收口：AI 不只是「生成更快」，更帮你在交付时把「复用该有的配置基线」补齐。</Text>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+    <Text style={{ fontSize: 14, color: '#64748B' }}>感智晓界工坊 · 前端开发使用培训</Text>
+    <Text style={{ fontSize: 14, color: '#64748B' }}>16 / 27</Text>
+  </Box>
+</Slide>

@@ -1,0 +1,32 @@
+<Slide paddingTop={20} paddingBottom={20} paddingLeft={64} paddingRight={64} style={{ width: '1280px', height: '720px', background: '#FFFFFF' }}>
+  <Box style={{ height: 80, flexDirection: 'row', alignItems: 'center', gap: 16, borderLeftWidth: 6, borderLeftStyle: 'solid', borderLeftColor: '#1E3A8A', paddingLeft: 18 }}>
+    <Text style={{ fontSize: 32, fontWeight: 'bold', color: '#1E293B' }}>名词解释：平台核心概念（一）</Text>
+  </Box>
+
+  <Box style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginTop: 18 }}>
+    <Box style={{ width: 560, background: '#F8FAFC', borderRadius: 12, paddingTop: 18, paddingBottom: 18, paddingLeft: 20, paddingRight: 20, borderLeftWidth: 4, borderLeftStyle: 'solid', borderLeftColor: '#3B82F6' }}>
+      <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1E3A8A' }}>📦 管线（Pipeline）</Text>
+      <Text style={{ fontSize: 15, color: '#475569', marginTop: 8, lineHeight: 1.6 }}>Figma 设计稿 → AI 生成 → 质量门禁 → 可交付组件的自动化流水线。包含 Figma Connector、Visual Parser、Vue3/Microcode Engineer、L0-B 门禁等阶段。</Text>
+    </Box>
+
+    <Box style={{ width: 560, background: '#F8FAFC', borderRadius: 12, paddingTop: 18, paddingBottom: 18, paddingLeft: 20, paddingRight: 20, borderLeftWidth: 4, borderLeftStyle: 'solid', borderLeftColor: '#10B981' }}>
+      <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1E3A8A' }}>⚡ Lite快速生成</Text>
+      <Text style={{ fontSize: 15, color: '#475569', marginTop: 8, lineHeight: 1.6 }}>轻量级生成模式，从截图或 Figma URL 快速产出组件骨架，适合早期原型验证，细节还原度低于完整版（Max）。</Text>
+    </Box>
+
+    <Box style={{ width: 560, background: '#F8FAFC', borderRadius: 12, paddingTop: 18, paddingBottom: 18, paddingLeft: 20, paddingRight: 20, borderLeftWidth: 4, borderLeftStyle: 'solid', borderLeftColor: '#F59E0B' }}>
+      <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1E3A8A' }}>🧩 MC（微码组件）</Text>
+      <Text style={{ fontSize: 15, color: '#475569', marginTop: 8, lineHeight: 1.6 }}>Microcode Component 的缩写，以 `cp-` 或 `mc-` 为前缀的标准化 Vue3 组件。遵循 declare.json 元数据规范，支持 CSS Vars 主题化、资源变量注入、SFC 语义门禁等机制。</Text>
+    </Box>
+
+    <Box style={{ width: 560, background: '#F8FAFC', borderRadius: 12, paddingTop: 18, paddingBottom: 18, paddingLeft: 20, paddingRight: 20, borderLeftWidth: 4, borderLeftStyle: 'solid', borderLeftColor: '#8B5CF6' }}>
+      <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1E3A8A' }}>🅥 Vue3 组件</Text>
+      <Text style={{ fontSize: 15, color: '#475569', marginTop: 8, lineHeight: 1.6 }}>平台支持的另一种组件生成目标，基于 Vue 3 + Composition API。与 MC 的区别在于不强制 declare.json 元数据，适合更灵活的业务场景。</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+    <Text style={{ fontSize: 14, color: '#64748B' }}>感智晓界工坊 · 前端开发使用培训</Text>
+    <Text style={{ fontSize: 14, color: '#64748B' }}>28 / 30</Text>
+  </Box>
+</Slide>

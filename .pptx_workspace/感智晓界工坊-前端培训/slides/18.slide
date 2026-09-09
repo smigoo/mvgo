@@ -1,0 +1,44 @@
+<Slide paddingTop={20} paddingBottom={20} paddingLeft={64} paddingRight={64} style={{ width: '1280px', height: '720px', background: '#FFFFFF' }}>
+  <Box style={{ height: 88, flexDirection: 'row', alignItems: 'center', gap: 16, borderLeftWidth: 6, borderLeftStyle: 'solid', borderLeftColor: '#1E3A8A', paddingLeft: 18 }}>
+    <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#1E293B' }}>实操总览：全流程走查</Text>
+  </Box>
+
+  <Box style={{ marginTop: 6 }}>
+    <Text style={{ fontSize: 21, fontWeight: 'bold', color: '#1E3A8A' }}>本模块目标：走通「设计稿 → 可交付业务组件」完整链路</Text>
+  </Box>
+
+  <Box style={{ flex: 1, flexDirection: 'row', alignItems: 'stretch', gap: 8, marginTop: 18 }}>
+    <Box style={{ flex: 1, background: '#1E3A8A', borderRadius: 12, paddingTop: 20, paddingBottom: 20, paddingLeft: 12, paddingRight: 12, justifyContent: 'center', alignItems: 'center' }}>
+      <Text style={{ fontSize: 19, fontWeight: 'bold', color: '#FFFFFF', textAlign: 'center' }}>Figma 完整</Text>
+    </Box>
+    <Box style={{ justifyContent: 'center' }}><Text style={{ fontSize: 28, color: '#F59E0B', fontWeight: 'bold' }}>→</Text></Box>
+    <Box style={{ flex: 1, background: '#0EA5E9', borderRadius: 12, paddingTop: 20, paddingBottom: 20, paddingLeft: 12, paddingRight: 12, justifyContent: 'center', alignItems: 'center' }}>
+      <Text style={{ fontSize: 19, fontWeight: 'bold', color: '#FFFFFF', textAlign: 'center' }}>Lite</Text>
+    </Box>
+    <Box style={{ justifyContent: 'center' }}><Text style={{ fontSize: 28, color: '#F59E0B', fontWeight: 'bold' }}>→</Text></Box>
+    <Box style={{ flex: 1, background: '#1E3A8A', borderRadius: 12, paddingTop: 20, paddingBottom: 20, paddingLeft: 12, paddingRight: 12, justifyContent: 'center', alignItems: 'center' }}>
+      <Text style={{ fontSize: 19, fontWeight: 'bold', color: '#FFFFFF', textAlign: 'center' }}>在线迭代</Text>
+    </Box>
+    <Box style={{ justifyContent: 'center' }}><Text style={{ fontSize: 28, color: '#F59E0B', fontWeight: 'bold' }}>→</Text></Box>
+    <Box style={{ flex: 1, background: '#0EA5E9', borderRadius: 12, paddingTop: 20, paddingBottom: 20, paddingLeft: 12, paddingRight: 12, justifyContent: 'center', alignItems: 'center' }}>
+      <Text style={{ fontSize: 19, fontWeight: 'bold', color: '#FFFFFF', textAlign: 'center' }}>接口对接</Text>
+    </Box>
+    <Box style={{ justifyContent: 'center' }}><Text style={{ fontSize: 28, color: '#F59E0B', fontWeight: 'bold' }}>→</Text></Box>
+    <Box style={{ flex: 1, background: '#1E3A8A', borderRadius: 12, paddingTop: 20, paddingBottom: 20, paddingLeft: 12, paddingRight: 12, justifyContent: 'center', alignItems: 'center' }}>
+      <Text style={{ fontSize: 19, fontWeight: 'bold', color: '#FFFFFF', textAlign: 'center' }}>一键交付</Text>
+    </Box>
+    <Box style={{ justifyContent: 'center' }}><Text style={{ fontSize: 28, color: '#F59E0B', fontWeight: 'bold' }}>→</Text></Box>
+    <Box style={{ flex: 1, background: '#F59E0B', borderRadius: 12, paddingTop: 20, paddingBottom: 20, paddingLeft: 12, paddingRight: 12, justifyContent: 'center', alignItems: 'center' }}>
+      <Text style={{ fontSize: 19, fontWeight: 'bold', color: '#FFFFFF', textAlign: 'center' }}>产物集成</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ marginTop: 22, background: '#FFF7ED', borderRadius: 10, paddingTop: 16, paddingBottom: 16, paddingLeft: 20, paddingRight: 20 }}>
+    <Text style={{ fontSize: 19, color: '#1E293B' }}>远程学员：同步在自己浏览器操作，备好 Figma 链接 / 截图 + Git 账号。</Text>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+    <Text style={{ fontSize: 14, color: '#64748B' }}>感智晓界工坊 · 前端开发使用培训</Text>
+    <Text style={{ fontSize: 14, color: '#64748B' }}>18 / 27</Text>
+  </Box>
+</Slide>

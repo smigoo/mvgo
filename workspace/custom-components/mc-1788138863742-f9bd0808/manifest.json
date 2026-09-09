@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "sessionId": "mc-1788138863742-f9bd0808",
+  "componentId": "mc-1788138863742-f9bd0808",
+  "groupId": "6a7599af6eb9eebf9fba56cd",
+  "target": "microcode",
+  "revision": "r-9ba510f3-3ca6-4a3a-8111-10c340c6da37",
+  "status": "partial",
+  "createdAt": "2026-08-31T01:20:04.244Z",
+  "stage": "microcode-engineer",
+  "files": [
+    {
+      "path": "_figma-size.json",
+      "size": 98,
+      "hash": "99fdfa9e463bda2ca7008fb3f47673187244c486839af4e30469d4c570a7b014"
+    },
+    {
+      "path": "component-meta.json",
+      "size": 212,
+      "hash": "86afde510e9f4d723b7b1c1e5169bc67424819072dae9965f838c08dbf0d41a0"
+    },
+    {
+      "path": "component.js",
+      "size": 108,
+      "hash": "5e63b737d966ca8a66437c97598b3edaa6d323897bc2549dc6a7b17fbd469c6d"
+    },
+    {
+      "path": "declare.js",
+      "size": 210,
+      "hash": "f6e25593511d1169fa12fd00a10aca6e78fa61a55dde928397b09576fba93c6c"
+    },
+    {
+      "path": "declare.json",
+      "size": 1314,
+      "hash": "acbdb3213bd531f4f119a87fc04cd8aaa0ed067cc95477a75af7569f2e4de1c2"
+    },
+    {
+      "path": "package/components/ChartArea.vue",
+      "size": 4997,
+      "hash": "1162002666dc563da6e66c790cc7f34141a0f00087fe21acf05729813404bcb1"
+    },
+    {
+      "path": "package/index.vue",
+      "size": 1828,
+      "hash": "a742bcd3aece981d4baf65d126328262f75a6be298859fc9b5b534d23094713e"
+    },
+    {
+      "path": "resources/images/icon-7941.png",
+      "size": 1572,
+      "hash": "375c6772d482f1ad56f35e3d7b79fce19c40a7d15d8d695645c8f7dad94f1614"
+    },
+    {
+      "path": "resources/images/icon-7945.png",
+      "size": 1646,
+      "hash": "1007dd8ce76a9663755369706b6da44ca27708f7b2d39e72faf4ea43a343b605"
+    },
+    {
+      "path": "resources/images/mc-preview.png",
+      "size": 45806,
+      "hash": "dd5fa5a2a8acb1324559734a2e94733ecd1cfadd5029731de997895a58d0dd67"
+    },
+    {
+      "path": "resources/styles/common.less",
+      "size": 2887,
+      "hash": "ff1a5a2b2137fd848118da2ba60590e8e6209cdc9eacce899e0549f0d70a2254"
+    },
+    {
+      "path": "resources/styles/index.less",
+      "size": 585,
+      "hash": "1dcdf59a74548e9a919d1ac447c385561613aad4da7d67cbe8881786bf6171d9"
+    },
+    {
+      "path": "resources/styles/themes/dark.less",
+      "size": 196,
+      "hash": "ab26b22b41bcd721802cf1de3523d354788c6fa1501562d8009a0545cc3a95d4"
+    },
+    {
+      "path": "resources/styles/themes/light.less",
+      "size": 199,
+      "hash": "f4d9edea030900d0efb3ad882a15118e0566dbca3781f5044e685cd178a6a81f"
+    },
+    {
+      "path": "resources/styles/themes/theme-vars.less",
+      "size": 3196,
+      "hash": "ccaf7f61aec34c7e59805b5c30651d56e42d56e2868c1b749df9e114f6b275b7"
+    }
+  ],
+  "validation": {
+    "less": "passed",
+    "semantics": "passed",
+    "sfc": "passed",
+    "runtime": "pending"
+  },
+  "missingFiles": []
+}

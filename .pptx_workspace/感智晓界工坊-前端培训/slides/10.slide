@@ -1,0 +1,25 @@
+<Slide paddingTop={20} paddingBottom={20} paddingLeft={64} paddingRight={64} style={{ width: '1280px', height: '720px', background: '#FFFFFF' }}>
+  <Box style={{ height: 88, flexDirection: 'row', alignItems: 'center', gap: 16, borderLeftWidth: 6, borderLeftStyle: 'solid', borderLeftColor: '#1E3A8A', paddingLeft: 18 }}>
+    <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#1E293B' }}>平台智能体 vs 公司 MVP154《提示词工程》</Text>
+  </Box>
+
+  <Box style={{ flex: 1, flexDirection: 'row', gap: 24, marginTop: 10 }}>
+    <Box style={{ flex: 1, background: '#F1F5F9', borderRadius: 14, paddingTop: 24, paddingBottom: 24, paddingLeft: 24, paddingRight: 24, borderTopWidth: 6, borderTopStyle: 'solid', borderTopColor: '#64748B', flexDirection: 'column', justifyContent: 'center' }}>
+      <Text style={{ fontSize: 25, fontWeight: 'bold', color: '#475569' }}>MVP154《提示词工程》</Text>
+      <Text style={{ fontSize: 19, color: '#475569', marginTop: 14, lineHeight: 1.55 }}>串型单智能体：你写好一个 prompt，单一模型顺序执行 → 产出；质量取决于你 prompt 写得好不好。</Text>
+    </Box>
+    <Box style={{ flex: 1, background: '#EFF6FF', borderRadius: 14, paddingTop: 24, paddingBottom: 24, paddingLeft: 24, paddingRight: 24, borderTopWidth: 6, borderTopStyle: 'solid', borderTopColor: '#1E3A8A', flexDirection: 'column', justifyContent: 'center' }}>
+      <Text style={{ fontSize: 25, fontWeight: 'bold', color: '#1E3A8A' }}>本平台（多智能体协同）</Text>
+      <Text style={{ fontSize: 19, color: '#475569', marginTop: 14, lineHeight: 1.55 }}>一组专职 agent 分工协同完成生成与校验，你不需要像 MVP154 那样精调 prompt。</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ marginTop: 16, background: '#FFF7ED', borderRadius: 10, paddingTop: 16, paddingBottom: 16, paddingLeft: 20, paddingRight: 20 }}>
+    <Text style={{ fontSize: 19, color: '#1E293B' }}>对学员意味着什么：你只负责给业务输入（Figma / 截图 / 需求）+ 验收产物，把「写好 prompt + 多轮评审」固化进了管线。</Text>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+    <Text style={{ fontSize: 14, color: '#64748B' }}>感智晓界工坊 · 前端开发使用培训</Text>
+    <Text style={{ fontSize: 14, color: '#64748B' }}>10 / 27</Text>
+  </Box>
+</Slide>

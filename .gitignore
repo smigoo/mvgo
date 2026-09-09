@@ -26,6 +26,11 @@ docker-compose.override.yml
 # ==== 临时组件目录 ====
 temp-components/
 
+# ==== 运行时/工作区临时目录 ====
+workspace/
+.pptx_workspace/
+.slidep/
+
 # ==== 依赖 / 打包产物（不参与版本控制） ====
 node_modules/
 *.zip

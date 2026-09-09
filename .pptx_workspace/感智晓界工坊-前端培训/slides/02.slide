@@ -1,0 +1,57 @@
+<Slide paddingTop={20} paddingBottom={20} paddingLeft={64} paddingRight={64} style={{ width: '1280px', height: '720px', background: '#FFFFFF' }}>
+  <Box style={{ height: 88, flexDirection: 'row', alignItems: 'center', gap: 16, borderLeftWidth: 6, borderLeftStyle: 'solid', borderLeftColor: '#1E3A8A', paddingLeft: 18 }}>
+    <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#1E293B' }}>培训目的</Text>
+    <Text style={{ fontSize: 20, color: '#64748B' }}>本次培训教你会用</Text>
+  </Box>
+
+  <Box style={{ flex: 1, flexDirection: 'column', gap: 12, marginTop: 8 }}>
+    <Box style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 18, background: '#F1F5F9', borderRadius: 12, paddingLeft: 24, paddingRight: 24 }}>
+      <Box style={{ width: 52, height: 52, borderRadius: 26, background: '#1E3A8A', justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={{ fontSize: 26, fontWeight: 'bold', color: '#FFFFFF' }}>1</Text>
+      </Box>
+      <Box style={{ flex: 1 }}>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#1E293B' }}>学会把设计稿 / 需求直接生成可交付业务组件</Text>
+        <Text style={{ fontSize: 18, color: '#475569', marginTop: 2 }}>配置模型池与工具 → 统一生成 → 在线迭代 → 一键交付。</Text>
+      </Box>
+    </Box>
+
+    <Box style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 18, background: '#F1F5F9', borderRadius: 12, paddingLeft: 24, paddingRight: 24 }}>
+      <Box style={{ width: 52, height: 52, borderRadius: 26, background: '#0EA5E9', justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={{ fontSize: 26, fontWeight: 'bold', color: '#FFFFFF' }}>2</Text>
+      </Box>
+      <Box style={{ flex: 1 }}>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#1E293B' }}>掌握完整使用流程</Text>
+        <Text style={{ fontSize: 18, color: '#475569', marginTop: 2 }}>培训后能独立在平台完成「一次组件生成到推送 Git」。</Text>
+      </Box>
+    </Box>
+
+    <Box style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 18, background: '#F1F5F9', borderRadius: 12, paddingLeft: 24, paddingRight: 24 }}>
+      <Box style={{ width: 52, height: 52, borderRadius: 26, background: '#1E3A8A', justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={{ fontSize: 26, fontWeight: 'bold', color: '#FFFFFF' }}>3</Text>
+      </Box>
+      <Box style={{ flex: 1 }}>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#1E293B' }}>了解组件规范，知道产物怎么用</Text>
+        <Text style={{ fontSize: 18, color: '#475569', marginTop: 2 }}>了解 Vue3 / 微码 / 一体化规范，知道生成的产物怎么用到自己项目。</Text>
+      </Box>
+    </Box>
+
+    <Box style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 18, background: '#F1F5F9', borderRadius: 12, paddingLeft: 24, paddingRight: 24 }}>
+      <Box style={{ width: 52, height: 52, borderRadius: 26, background: '#0EA5E9', justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={{ fontSize: 26, fontWeight: 'bold', color: '#FFFFFF' }}>4</Text>
+      </Box>
+      <Box style={{ flex: 1 }}>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#1E293B' }}>知道遇到问题去哪看、怎么改</Text>
+        <Text style={{ fontSize: 18, color: '#475569', marginTop: 2 }}>遇到问题（还原度 / 门禁 / 接口）知道去哪看、怎么改。</Text>
+      </Box>
+    </Box>
+  </Box>
+
+  <Box style={{ marginTop: 10, background: '#FFF7ED', borderRadius: 10, paddingTop: 10, paddingBottom: 10, paddingLeft: 18, paddingRight: 18 }}>
+    <Text style={{ fontSize: 18, color: '#1E293B' }}>一句话：本次培训不是讲平台多厉害，而是教你「怎么把它用起来」。</Text>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+    <Text style={{ fontSize: 14, color: '#64748B' }}>感智晓界工坊 · 前端开发使用培训</Text>
+    <Text style={{ fontSize: 14, color: '#64748B' }}>02 / 27</Text>
+  </Box>
+</Slide>

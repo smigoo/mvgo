@@ -1,0 +1,37 @@
+<Slide paddingTop={20} paddingBottom={20} paddingLeft={64} paddingRight={64} style={{ width: '1280px', height: '720px', background: '#FFFFFF' }}>
+  <Box style={{ height: 88, flexDirection: 'row', alignItems: 'center', gap: 16, borderLeftWidth: 6, borderLeftStyle: 'solid', borderLeftColor: '#1E3A8A', paddingLeft: 18 }}>
+    <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#1E293B' }}>数据安全与资产归属</Text>
+  </Box>
+
+  <Box style={{ flex: 1, flexDirection: 'column', gap: 16, marginTop: 10 }}>
+    <Box style={{ flex: 1, flexDirection: 'row', gap: 16 }}>
+      <Box style={{ flex: 1, background: '#F1F5F9', borderRadius: 12, paddingTop: 18, paddingBottom: 18, paddingLeft: 22, paddingRight: 22, flexDirection: 'column', justifyContent: 'center', borderTopWidth: 5, borderTopStyle: 'solid', borderTopColor: '#1E3A8A' }}>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#1E3A8A' }}>输入</Text>
+        <Text style={{ fontSize: 18, color: '#475569', marginTop: 8, lineHeight: 1.5 }}>你提交的 Figma 链接 / 截图 / 需求文档，仅用于本次生成。</Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#F1F5F9', borderRadius: 12, paddingTop: 18, paddingBottom: 18, paddingLeft: 22, paddingRight: 22, flexDirection: 'column', justifyContent: 'center', borderTopWidth: 5, borderTopStyle: 'solid', borderTopColor: '#0EA5E9' }}>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#0EA5E9' }}>产物归属</Text>
+        <Text style={{ fontSize: 18, color: '#475569', marginTop: 8, lineHeight: 1.5 }}>生成的组件归团队 / 公司所有，沉淀进共享组件库，统一治理。</Text>
+      </Box>
+    </Box>
+    <Box style={{ flex: 1, flexDirection: 'row', gap: 16 }}>
+      <Box style={{ flex: 1, background: '#F1F5F9', borderRadius: 12, paddingTop: 18, paddingBottom: 18, paddingLeft: 22, paddingRight: 22, flexDirection: 'column', justifyContent: 'center', borderTopWidth: 5, borderTopStyle: 'solid', borderTopColor: '#1E3A8A' }}>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#1E3A8A' }}>存储与授权</Text>
+        <Text style={{ fontSize: 18, color: '#475569', marginTop: 8, lineHeight: 1.5 }}>走公司平台与已授权服务（Figma / APIFOX / GitLab 均用你授权的 token），不外传第三方。</Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#F1F5F9', borderRadius: 12, paddingTop: 18, paddingBottom: 18, paddingLeft: 22, paddingRight: 22, flexDirection: 'column', justifyContent: 'center', borderTopWidth: 5, borderTopStyle: 'solid', borderTopColor: '#F59E0B' }}>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#F59E0B' }}>涉密提示</Text>
+        <Text style={{ fontSize: 18, color: '#475569', marginTop: 8, lineHeight: 1.5 }}>涉密 / 离线页面建议走本地 AI，或脱敏后再生成，不在平台留敏感数据。</Text>
+      </Box>
+    </Box>
+  </Box>
+
+  <Box style={{ marginTop: 14, background: '#FFF7ED', borderRadius: 10, paddingTop: 14, paddingBottom: 14, paddingLeft: 20, paddingRight: 20 }}>
+    <Text style={{ fontSize: 19, color: '#1E293B' }}>结论：资产统一治理、不外传第三方；涉密场景请走本地 AI 或先脱敏。</Text>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+    <Text style={{ fontSize: 14, color: '#64748B' }}>感智晓界工坊 · 前端开发使用培训</Text>
+    <Text style={{ fontSize: 14, color: '#64748B' }}>24 / 27</Text>
+  </Box>
+</Slide>

@@ -1,0 +1,69 @@
+<Slide paddingTop={16} paddingBottom={16} paddingLeft={64} paddingRight={64} style={{ width: '1280px', height: '720px', background: '#FFFFFF' }}>
+  <Box style={{ height: 80, flexDirection: 'row', alignItems: 'center', gap: 16, borderLeftWidth: 6, borderLeftStyle: 'solid', borderLeftColor: '#1E3A8A', paddingLeft: 18 }}>
+    <Text style={{ fontSize: 32, fontWeight: 'bold', color: '#1E293B' }}>传统前端开发全景：有哪些事 + AI 如何提效</Text>
+  </Box>
+
+  <Box style={{ flex: 1, flexDirection: 'column', justifyContent: 'center', marginTop: 4 }}>
+    <Table
+      style={{ width: '100%' }}
+      defaultTextStyle={{ fontSize: 15, color: '#1E293B' }}
+      defaultCellStyle={{
+        borderLeftWidth: 1, borderLeftStyle: 'solid', borderLeftColor: '#E2E8F0',
+        borderRightWidth: 1, borderRightStyle: 'solid', borderRightColor: '#E2E8F0',
+        borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: '#E2E8F0',
+        borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: '#E2E8F0',
+        paddingTop: 7, paddingBottom: 7, paddingLeft: 12, paddingRight: 12,
+      }}
+      cells={[
+        [
+          { text: '工作项', textStyle: { bold: true, color: '#FFFFFF', fontSize: 17 }, cellStyle: { background: '#1E3A8A' } },
+          { text: '传统做法（人工为主）', textStyle: { bold: true, color: '#FFFFFF', fontSize: 17 }, cellStyle: { background: '#1E3A8A' } },
+          { text: 'AI 能怎么提效', textStyle: { bold: true, color: '#FFFFFF', fontSize: 17 }, cellStyle: { background: '#0EA5E9' } },
+        ],
+        [
+          { text: '① 视觉还原', textStyle: { bold: true, fontSize: 15 } },
+          '设计稿 → 手写 HTML/CSS，逐像素调',
+          { text: '按截图 / Figma 直接产出规范组件，省掉逐像素还原', textStyle: { color: '#0EA5E9', bold: true, fontSize: 15 } },
+        ],
+        [
+          { text: '② 组件/页面开发', textStyle: { bold: true, fontSize: 15 } },
+          '写交互逻辑、状态管理、复用组件',
+          { text: '生成骨架 + 交互 + 复用库代码，专注业务差异', textStyle: { color: '#0EA5E9', bold: true, fontSize: 15 } },
+        ],
+        [
+          { text: '③ 数据对接', textStyle: { bold: true, fontSize: 15 } },
+          '接口联调、请求封装、字段映射',
+          { text: 'APIFOX 自动生成接口调用与服务层，字段对齐', textStyle: { color: '#0EA5E9', bold: true, fontSize: 15 } },
+        ],
+        [
+          { text: '④ 工程化', textStyle: { bold: true, fontSize: 15 } },
+          '脚手架、构建、CI/CD、lint/format',
+          { text: '生成配置、脚手架、流水线模板，开箱即用', textStyle: { color: '#0EA5E9', bold: true, fontSize: 15 } },
+        ],
+        [
+          { text: '⑤ 联调与自测', textStyle: { bold: true, fontSize: 15 } },
+          '前后端联调、单测、调试',
+          { text: '分析报错、生成单测、定位问题', textStyle: { color: '#0EA5E9', bold: true, fontSize: 15 } },
+        ],
+        [
+          { text: '⑥ 文档与交付', textStyle: { bold: true, fontSize: 15 } },
+          '写组件说明、API 文档',
+          { text: '自动生成组件 / API 文档，与代码同源', textStyle: { color: '#0EA5E9', bold: true, fontSize: 15 } },
+        ],
+        [
+          { text: '⑦ 性能与体验', textStyle: { bold: true, fontSize: 15 } },
+          '首屏、兼容性、可访问性',
+          { text: '给优化建议、自动诊断', textStyle: { color: '#0EA5E9', bold: true, fontSize: 15 } },
+        ],
+      ]}
+    />
+    <Box style={{ marginTop: 12, background: '#FFF7ED', borderRadius: 10, paddingTop: 12, paddingBottom: 12, paddingLeft: 18, paddingRight: 18 }}>
+      <Text style={{ fontSize: 18, color: '#1E293B' }}>结论：AI 把 7 类工作里「重复、机械、易错」的部分自动化，人聚焦业务与判断。</Text>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+    <Text style={{ fontSize: 14, color: '#64748B' }}>感智晓界工坊 · 前端开发使用培训</Text>
+    <Text style={{ fontSize: 14, color: '#64748B' }}>08 / 27</Text>
+  </Box>
+</Slide>

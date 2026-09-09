@@ -1,0 +1,13 @@
+{
+  "name": "Figma 管线助手（智能整理 + 合规检查）",
+  "id": "figma-pipeline-assistant",
+  "api": "1.0.0",
+  "main": "dist/code.js",
+  "ui": "dist/ui.html",
+  "editorType": ["figma", "dev"],
+  "capabilities": ["inspect"],
+  "permissions": ["currentuser"],
+  "networkAccess": {
+    "allowedDomains": ["none"]
+  }
+}

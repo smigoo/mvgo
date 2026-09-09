@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13px; color: #1f2937; background: #f9fafb; padding: 16px; overflow-y: auto; }
+    h1 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+    .subtitle { font-size: 12px; color: #6b7280; margin-bottom: 16px; }
+    .card { background: white; border-radius: 10px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .card h2 { font-size: 14px; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+    .btn { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; background: #667eea; color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; width: 100%; transition: all 0.15s; }
+    .btn:hover { background: #5568d3; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-secondary { background: #f3f4f6; color: #374151; }
+    .btn-secondary:hover { background: #e5e7eb; }
+    .btn-success { background: #10b981; }
+    .btn-success:hover { background: #059669; }
+    .btn-group { display: flex; gap: 8px; }
+    .btn-group .btn { flex: 1; }
+    .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 10px 0; }
+    .stat { text-align: center; padding: 10px; background: #f9fafb; border-radius: 6px; }
+    .stat-val { font-size: 20px; font-weight: 700; }
+    .stat-val.err { color: #ef4444; }
+    .stat-val.warn { color: #f59e0b; }
+    .stat-val.ok { color: #10b981; }
+    .stat-lbl { font-size: 11px; color: #6b7280; }
+    .issue { padding: 10px; background: #f9fafb; border-radius: 6px; margin-bottom: 8px; border-left: 3px solid #e5e7eb; }
+    .issue.error { border-left-color: #ef4444; }
+    .issue.warning { border-left-color: #f59e0b; }
+    .issue.info { border-left-color: #3b82f6; }
+    .issue-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+    .issue-msg { font-size: 12px; color: #4b5563; margin-bottom: 6px; }
+    .issue-hint { font-size: 11px; color: #059669; background: #d1fae5; padding: 6px 10px; border-radius: 4px; }
+    .status-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+    .status-badge.pass { background: #d1fae5; color: #059669; }
+    .status-badge.fail { background: #fee2e2; color: #dc2626; }
+    .progress { text-align: center; padding: 30px; color: #6b7280; }
+    .progress .spinner { width: 32px; height: 32px; border: 3px solid #e5e7eb; border-top-color: #667eea; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .flow { display: flex; align-items: center; gap: 6px; margin: 12px 0; font-size: 12px; }
+    .flow-step { padding: 6px 12px; background: #e0e7ff; color: #4338ca; border-radius: 6px; font-weight: 500; }
+    .flow-arrow { color: #9ca3af; }
+    .flow-step.done { background: #d1fae5; color: #059669; }
+    .flow-step.active { background: #667eea; color: white; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <h1>🧩 Figma 管线助手</h1>
+    <p class="subtitle">智能整理 + 管线映射 + 合规检查 一体化</p>
+    
+    <div class="card">
+      <h2>📋 工作流</h2>
+      <div class="flow">
+        <span class="flow-step" id="step1">① 智能整理</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-step" id="step2">② 管线映射</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-step" id="step3">③ 合规检查</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>⚡ 快捷操作</h2>
+      <div class="btn-group" style="margin-bottom: 8px;">
+        <button class="btn" id="btnOrganize" onclick="doOrganize()">🧹 智能整理</button>
+        <button class="btn btn-secondary" id="btnCheck" onclick="doCheck()">🔍 合规检查</button>
+      </div>
+      <button class="btn btn-success" id="btnFixAll" onclick="doFixAll()">🛠️ 一键整理 + 检查</button>
+    </div>
+
+    <div id="results"></div>
+  </div>
+
+  <script>
+    function setStep(active) {
+      for (let i = 1; i <= 3; i++) {
+        const el = document.getElementById('step' + i)
+        el.className = 'flow-step' + (i < active ? ' done' : i === active ? ' active' : '')
+      }
+    }
+
+    function showProgress(text) {
+      document.getElementById('results').innerHTML = `<div class="card"><div class="progress"><div class="spinner"></div>${text}</div></div>`
+    }
+
+    function renderResults(result) {
+      const r = document.getElementById('results')
+      let html = `
+        <div class="card">
+          <h2>检查结果 <span class="status-badge ${result.passed ? 'pass' : 'fail'}">${result.passed ? '✅ 通过' : '❌ 未通过'}</span></h2>
+          <div class="stat-grid">
+            <div class="stat"><div class="stat-val ok">${result.totalNodes}</div><div class="stat-lbl">节点总数</div></div>
+            <div class="stat"><div class="stat-val err">${result.errors.length}</div><div class="stat-lbl">错误</div></div>
+            <div class="stat"><div class="stat-val warn">${result.warnings.length}</div><div class="stat-lbl">警告</div></div>
+            <div class="stat"><div class="stat-val" style="color:#3b82f6">${result.infos.length}</div><div class="stat-lbl">建议</div></div>
+          </div>
+        </div>
+      `
+      if (result.errors.length > 0) {
+        html += `<div class="card"><h2 style="color:#ef4444">❌ 错误（${result.errors.length}）</h2>`
+        result.errors.forEach((item, i) => {
+          html += `<div class="issue error"><div class="issue-title">${i+1}. ${item.name}</div><div class="issue-msg">${item.message}</div><div class="issue-hint">💡 ${item.suggestion}</div></div>`
+        })
+        html += `</div>`
+      }
+      if (result.warnings.length > 0) {
+        html += `<div class="card"><h2 style="color:#f59e0b">⚠️ 警告（${result.warnings.length}）</h2>`
+        result.warnings.forEach((item, i) => {
+          html += `<div class="issue warning"><div class="issue-title">${i+1}. ${item.name}</div><div class="issue-msg">${item.message}</div><div class="issue-hint">💡 ${item.suggestion}</div></div>`
+        })
+        html += `</div>`
+      }
+      if (result.infos.length > 0) {
+        html += `<div class="card"><h2 style="color:#3b82f6">💡 建议（${result.infos.length}）</h2>`
+        result.infos.forEach((item, i) => {
+          html += `<div class="issue info"><div class="issue-title">${i+1}. ${item.name}</div><div class="issue-msg">${item.message}</div><div class="issue-hint">💡 ${item.suggestion}</div></div>`
+        })
+        html += `</div>`
+      }
+      r.innerHTML = html
+    }
+
+    function doOrganize() {
+      setStep(1)
+      showProgress('正在智能整理...')
+      parent.postMessage({ pluginMessage: { type: 'organize' } }, '*')
+    }
+
+    function doCheck() {
+      setStep(3)
+      showProgress('正在合规检查...')
+      parent.postMessage({ pluginMessage: { type: 'check' } }, '*')
+    }
+
+    function doFixAll() {
+      setStep(1)
+      showProgress('正在一键整理 + 检查...')
+      parent.postMessage({ pluginMessage: { type: 'fix-all' } }, '*')
+    }
+
+    window.onmessage = (e) => {
+      const msg = e.data.pluginMessage
+      if (!msg) return
+      if (msg.type === 'organize-done') {
+        setStep(2)
+        const skipTxt = msg.stats.skippedCount > 0 ? `，跳过 ${msg.stats.skippedCount} 个不参与整理的节点（图片/切片等）` : ''
+        document.getElementById('results').innerHTML = `<div class="card"><h2>✅ 整理完成</h2><div class="stat-grid"><div class="stat"><div class="stat-val" style="color:#3b82f6">${msg.stats.scanned}</div><div class="stat-lbl">扫描</div></div><div class="stat"><div class="stat-val ok">${msg.stats.renamed}</div><div class="stat-lbl">重命名</div></div><div class="stat"><div class="stat-val ok">${msg.stats.sorted}</div><div class="stat-lbl">排序</div></div><div class="stat"><div class="stat-val ok">${msg.stats.cleaned}</div><div class="stat-lbl">清理</div></div></div><p style="font-size:12px;color:#6b7280;margin-top:8px;">整理完成${skipTxt}，可点击「合规检查」验证</p></div>`
+      }
+      if (msg.type === 'check-done' || msg.type === 'fix-done') {
+        setStep(3)
+        renderResults(msg.result)
+      }
+    }
+  </script>
+</body>
+</html>

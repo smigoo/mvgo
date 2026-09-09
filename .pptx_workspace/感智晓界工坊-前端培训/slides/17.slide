@@ -1,0 +1,41 @@
+<Slide paddingTop={20} paddingBottom={20} paddingLeft={64} paddingRight={64} style={{ width: '1280px', height: '720px', background: '#FFFFFF' }}>
+  <Box style={{ height: 88, flexDirection: 'row', alignItems: 'center', gap: 16, borderLeftWidth: 6, borderLeftStyle: 'solid', borderLeftColor: '#1E3A8A', paddingLeft: 18 }}>
+    <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#1E293B' }}>开课前准备 / 环境自检</Text>
+  </Box>
+
+  <Box style={{ flex: 1, flexDirection: 'row', gap: 20, marginTop: 10 }}>
+    <Box style={{ flex: 1, flexDirection: 'column', gap: 16 }}>
+      <Box style={{ flex: 1, background: '#F1F5F9', borderRadius: 12, paddingTop: 18, paddingBottom: 18, paddingLeft: 22, paddingRight: 22, flexDirection: 'column', justifyContent: 'center', borderLeftWidth: 5, borderLeftStyle: 'solid', borderLeftColor: '#1E3A8A' }}>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#1E3A8A' }}>账号</Text>
+        <Text style={{ fontSize: 18, color: '#475569', marginTop: 6 }}>已开通平台账号并登录成功（浏览器可访问平台）。</Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#F1F5F9', borderRadius: 12, paddingTop: 18, paddingBottom: 18, paddingLeft: 22, paddingRight: 22, flexDirection: 'column', justifyContent: 'center', borderLeftWidth: 5, borderLeftStyle: 'solid', borderLeftColor: '#0EA5E9' }}>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#0EA5E9' }}>素材</Text>
+        <Text style={{ fontSize: 18, color: '#475569', marginTop: 6 }}>准备 1 个 Figma 链接 或 1 张页面 / 组件截图 + 公司 Git 账号。</Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#F1F5F9', borderRadius: 12, paddingTop: 18, paddingBottom: 18, paddingLeft: 22, paddingRight: 22, flexDirection: 'column', justifyContent: 'center', borderLeftWidth: 5, borderLeftStyle: 'solid', borderLeftColor: '#1E3A8A' }}>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#1E3A8A' }}>目标</Text>
+        <Text style={{ fontSize: 18, color: '#475569', marginTop: 6 }}>现场产出并推送第一个组件。</Text>
+      </Box>
+    </Box>
+    <Box style={{ flex: 1, flexDirection: 'column', gap: 16 }}>
+      <Box style={{ flex: 1, background: '#F1F5F9', borderRadius: 12, paddingTop: 18, paddingBottom: 18, paddingLeft: 22, paddingRight: 22, flexDirection: 'column', justifyContent: 'center', borderLeftWidth: 5, borderLeftStyle: 'solid', borderLeftColor: '#0EA5E9' }}>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#0EA5E9' }}>Token / 授权</Text>
+        <Text style={{ fontSize: 18, color: '#475569', marginTop: 6 }}>Figma token 已配、APIFOX 已授权、GitLab 已绑定（个人首次需授权）。</Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#F1F5F9', borderRadius: 12, paddingTop: 18, paddingBottom: 18, paddingLeft: 22, paddingRight: 22, flexDirection: 'column', justifyContent: 'center', borderLeftWidth: 5, borderLeftStyle: 'solid', borderLeftColor: '#1E3A8A' }}>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#1E3A8A' }}>远程学员</Text>
+        <Text style={{ fontSize: 18, color: '#475569', marginTop: 6 }}>各自浏览器登录平台，实操环节同步跟练；网络 / 权限提前确认。</Text>
+      </Box>
+      <Box style={{ flex: 1, background: '#FFF7ED', borderRadius: 12, paddingTop: 18, paddingBottom: 18, paddingLeft: 22, paddingRight: 22, flexDirection: 'column', justifyContent: 'center', borderLeftWidth: 5, borderLeftStyle: 'solid', borderLeftColor: '#F59E0B' }}>
+        <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#F59E0B' }}>提示</Text>
+        <Text style={{ fontSize: 18, color: '#475569', marginTop: 6 }}>配置一次全员复用，个人首次需完成授权即可。</Text>
+      </Box>
+    </Box>
+  </Box>
+
+  <Box style={{ height: 40, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+    <Text style={{ fontSize: 14, color: '#64748B' }}>感智晓界工坊 · 前端开发使用培训</Text>
+    <Text style={{ fontSize: 14, color: '#64748B' }}>17 / 27</Text>
+  </Box>
+</Slide>

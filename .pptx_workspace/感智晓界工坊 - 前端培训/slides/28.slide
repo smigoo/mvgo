@@ -1,0 +1,41 @@
+<Slide paddingTop={20} paddingBottom={20} paddingLeft={64} paddingRight={64} style={{ width: '1280px', height: '720px', background: '#FFFFFF' }}>
+  <Box style={{ height: 88, flexDirection: 'row', alignItems: 'center', gap: 16, borderLeftWidth: 6, borderLeftStyle: 'solid', borderLeftColor: '#1E3A8A', paddingLeft: 18 }}>
+    <Text style={{ fontSize: 34, fontWeight: 'bold', color: '#1E293B' }}>名词解释：平台核心概念</Text>
+  </Box>
+
+  <Box style={{ flex: 1, marginTop: 24 }}>
+    <Box style={{ marginBottom: 16, padding: 14, background: '#F8FAFC', borderRadius: 8, borderLeftWidth: 4, borderLeftColor: '#3B82F6' }}>
+      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#1E40AF', marginBottom: 6 }}>📦 管线（Pipeline）</Text>
+      <Text style={{ fontSize: 14, color: '#475569', lineHeight: 1.6 }}>
+        Figma 设计稿 → AI 生成 → 质量门禁 → 可交付组件的自动化流水线。
+        包含 Vision（视觉解析）、LayoutReviewer（布局审核）、StyleMapper（样式映射）、MicrocodeEngineer（微码生成）、Vue3Engineer（Vue3 生成）等阶段。
+      </Text>
+    </Box>
+
+    <Box style={{ marginBottom: 16, padding: 14, background: '#F8FAFC', borderRadius: 8, borderLeftWidth: 4, borderLeftColor: '#10B981' }}>
+      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#065F46', marginBottom: 6 }}> Lite（快速生成）</Text>
+      <Text style={{ fontSize: 14, color: '#475569', lineHeight: 1.6 }}>
+        轻量级生成模式，适用于简单组件或快速原型。相比 Max 模式，Lite 使用更小的模型、更快的响应速度，但功能和保真度有限。
+        适合迭代初期快速验证或简单 UI 元素生成。
+      </Text>
+    </Box>
+
+    <Box style={{ marginBottom: 16, padding: 14, background: '#F8FAFC', borderRadius: 8, borderLeftWidth: 4, borderLeftColor: '#F59E0B' }}>
+      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#92400E', marginBottom: 6 }}> MC（Microcode · 微码组件）</Text>
+      <Text style={{ fontSize: 14, color: '#475569', lineHeight: 1.6 }}>
+        感智晓界自研的低代码组件规范，基于 Vue3 但更轻量。
+        采用声明式配置 + 资源变量注入，支持主题切换、国际化、响应式布局。
+        命名约定：mc-* 前缀（如 mc-button、mc-table）。
+      </Text>
+    </Box>
+
+    <Box style={{ marginBottom: 16, padding: 14, background: '#F8FAFC', borderRadius: 8, borderLeftWidth: 4, borderLeftColor: '#8B5CF6' }}>
+      <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#5B21B6', marginBottom: 6 }}> Vue3（标准组件）</Text>
+      <Text style={{ fontSize: 14, color: '#475569', lineHeight: 1.6 }}>
+        原生 Vue3 单文件组件（SFC），适用于复杂业务逻辑或需要完整 Vue 生态的场景。
+        相比 MC 更灵活，但需要手动管理依赖和样式。
+        产物：*.vue 文件，支持 Composition API、TypeScript、Scoped CSS。
+      </Text>
+    </Box>
+  </Box>
+</Slide>
