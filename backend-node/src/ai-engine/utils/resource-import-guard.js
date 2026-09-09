@@ -172,7 +172,7 @@ function collectDeclaredBindings(code) {
   for (const m of code.matchAll(/defineProps\s*(<|\()/g)) {
     const openCh = m[1]
     const closeCh = openCh === '<' ? '>' : ')'
-    const openIdx = m.index + m[0].length - 1
+    const openIdx = m.index + m[0].indexOf(openCh)
     let depth = 0
     let end = -1
     for (let i = openIdx; i < code.length; i += 1) {
@@ -186,7 +186,7 @@ function collectDeclaredBindings(code) {
     let arg = code.slice(openIdx + 1, end).trim()
     if (arg.startsWith('{') && arg.endsWith('}')) arg = arg.slice(1, -1)
     for (const part of splitTopLevel(arg, [',', ';'])) {
-      const name = part.trim().replace(/\?$/, '').split(':')[0]?.trim()
+      const name = part.trim().split(':')[0]?.trim().replace(/\?$/, '')
       if (name && /^[A-Za-z_$][\w$]*$/.test(name)) declared.add(name)
     }
   }

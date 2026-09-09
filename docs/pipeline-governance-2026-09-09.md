@@ -263,3 +263,169 @@ Vision 的职责降为：给 block 加 label / chartType 建议。几何冲突�
 3. 三样本重生成对照。过了再动 Loop 2 结构表。
 
 不做 Loop 3/4，直到资源+结构两件事在预览里肉眼过关。
+
+---
+
+## 8. 方案盲点修订（盲点一/二/三 补强，待过目后落地）
+
+> 本节为对第 0–7 节的补强，**不动代码**。核心结论：新装配架构缺**独立校验者**（产物由装配层写、门禁由装配层消费同一 Manifest 判定 → 恒真），且 Loop 4 的「弱化 LLM 重试」会把「丑但完成」变成「自信地错且完不成」。三处盲点统一由 **Golden Manifest（独立事实源）+ 独立 ManifestAuditor（不依赖装配层）+ 窄 LLM retarget 通道** 堵上。
+
+### 8.1 盲点一：自证闭环（产物=装配自写 → 门禁恒真）
+
+**问题重述（第 3 节架构的断点）：**
+新门禁判「产物 vs Manifest」，但 Manifest 与写盘逻辑来自同一台确定性机器。装配层按 Manifest 写、门禁按同一 Manifest 读 → 只要装配层不抽风，永远 `pass`。`codeValidationResult.pass=true` 会变成新的「无信息量」状态——只是来源从 fail-open 换成自证自洽。
+
+```
+Figma 真值 ──┐
+             ├─→ [同一机器] ─→ Manifest ─→ 装配层写盘 ─→ 产物
+             │                                      ↑
+             │                                      └─ 门禁判 产物 vs Manifest（同一机器输出，恒真）
+唯一独立裁判：产物 vs Figma 真值  ←─ 现靠人工对照，无快照、无机器判据
+```
+
+**修复：引入 Golden Manifest（GM）作为独立事实源，与装配层的「working manifest」分叉。**
+
+#### 8.1.1 Golden Manifest 字段设计
+
+GM 由**独立于装配层**的代码路径（或直接人工维护）从 Figma 真值离线生成、人类审核一次、版本化锁死。它不是装配层的即时输出，而是「Figma 设计意图的权威快照」。
+
+```jsonc
+{
+  "version": "1.0",
+  "figmaFileKey": "FigmaFileKey",
+  "generatedAt": "2026-09-10T00:00:00Z",
+  "generatedBy": "figma-golden-extractor@<commit>",   // 独立提取器，非装配层
+  "hash": "sha256:ab12...",                             // 锁死后不可变，改需新 version
+  "blocks": [
+    {
+      "id": "blk-header",
+      "figmaNodeId": "2:1234",
+      "bbox": { "x": 0, "y": 0, "w": 1440, "h": 96 },
+      "parent": null,
+      "layout": { "mode": "horizontal", "flex": "0 0 96px" },
+      "role": "chrome",                                  // chrome | content
+      "provenance": "figma-direct"                       // 见 8.3
+    }
+  ],
+  "resources": [
+    {
+      "var": "icon1",
+      "file": "resources/images/icon-1.png",
+      "ownerBlockId": "blk-card-camera",                 // 细到卡片，禁止停在 slot-con
+      "ownerRole": "parent-import",                      // parent-import | child-import
+      "semanticName": "摄像机",                          // 反推字段，provenance=inferred
+      "figmaNodeId": "2:8798",
+      "provenance": "inferred"
+    }
+  ],
+  "texts": [
+    { "figmaNodeId": "2:9001", "text": "实时车速", "isWhiteListed": true, "provenance": "figma-direct" }
+  ],
+  "slots": [ { "figmaNodeId": "2:1234", "landing": "header", "owner": "blk-header" } ],
+  "contracts": [
+    { "file": "package/components/HeaderIcons.vue", "blockIds": ["blk-header"], "resourceProps": ["icon1","icon2"], "parentMustPass": ["icon1","icon2"] }
+  ]
+}
+```
+
+关键字段差异 vs 现有 `buildResourceManifest`：
+- 新增 `blocks[].provenance`、`resources[].provenance`、`contracts[]`（现有仅有 `resources[]`，无 `contracts`、无 `ownerBlockId` 细化）。
+- GM 的 `hash` 是锁死锚点；装配层产出的 working manifest 与 GM `diff` 时，差异即「装配层错读 Figma」的证据。
+
+#### 8.1.2 独立校验器 ManifestAuditor 接口
+
+`manifest-auditor.js` **不 import 装配层任何模块**，只读 GM + 产物文件。对齐用 `figmaNodeId`/`bbox` 结构级匹配，非字符串 diff。
+
+```ts
+interface ManifestAuditor {
+  // GM 与装配层 working manifest 比对（结构级）
+  diff(golden: GoldenManifest, working: Manifest): AuditReport;
+  // 产物 .vue 文件与 GM 比对（结构级，非逐字节）
+  verifyProduct(golden: GoldenManifest, productPaths: string[]): VerifyReport;
+}
+
+interface AuditReport {
+  structural: { missing: Block[]; extra: Block[]; shifted: Block[] };  // shifted = bbox 位移超阈值(>8px 或 >5%)
+  resource:   { orphan: Resource[]; misbound: { var: string; expectedOwner: string; actualOwner: string }[] };
+  contract:   { missingPass: { file: string; prop: string }[] };
+  summary:    { pass: boolean; score: number };   // score = 1 - (缺陷权重/总项)
+}
+```
+
+判定纪律（fail-closed，结构类）：
+- `structural.shifted / resource.misbound / contract.missingPass` 任一非空 → `pass=false`，BLOCK。
+- 不读装配层代码，只认 GM 与磁盘产物 → 装配层错读 Figma 也能被拦（治本第 3 节「门禁不消费契约」的缺口）。
+
+#### 8.1.3 Golden 生成与版本纪律
+
+- 提取器 `figma-golden-extractor` 与装配层解耦，单独 commit、单独测试。
+- GM 生成后人类**审核一次**锁死 `hash`；后续 Figma 真值变更 → 新 `version`，旧 GM 留档可 diff。
+- 三样本（env/traffic/device）各一份 GM，作为「质量信号」的机器判据，替代「人工对照三样本」。
+
+### 8.2 盲点二：弱化 LLM 重试 → 窄 retarget 通道
+
+**问题重述（Loop 4 的隐含风险）：**
+Loop 4 写「装配可修项回写后不计 LLM attempt，重试只留给非装配项」。但 LLM 当前承担**交互逻辑 + echarts option + 把规划意图翻成 Vue 代码**——这三者装配层**完全不碰**。一旦装配骨架里 LLM 因弱化重试没调对 `setOption` 或事件绑定写错：
+- 旧模式：LLM 重试补出来，丑但完成。
+- 新模式：装配层判「这是 LLM 事」不回写；LLM 重试被冻结压住 → **直接 failed**。
+
+这是比补丁堆更隐蔽的失败：从「明显错但能完成」退化为「自信地错且完不成」。
+
+**修复：定义 LLM 可写区 / 冻结区，给 LLM 受约束的 retarget 通道。**
+
+```ts
+interface LLMRetargetGate {
+  // 判定失败项是否属 LLM 可控区
+  isLLMResponsibility(failure: AuditIssue): boolean;
+  writableRegions: ['<script> logic 段', 'echarts option 对象'];
+  frozenRegions:  ['layout css', 'resource import', 'class token', 'whitelisted text', 'slot structure'];
+}
+```
+
+纪律：
+- 装配层只写 `frozenRegions` + 骨架 DOM；LLM 只填 `writableRegions`。
+- 重试时复用一次生成产物，**只重跑 LLM 的 script 段**，不碰 frozen 区（避免重生成把装配写入冲掉）。
+- LLM retarget attempt 有独立上限（如 3），不计入「装配契约冲突」计数；超限才升级人工。
+- 冻结的是「新补丁规则」，不是「LLM 对交互/option 的迭代能力」。
+
+### 8.3 盲点三：Manifest provenance 来源漂移
+
+**问题重述：**
+文档错 1 核心断言是「每层重新猜」。但 Manifest 由 `buildResourceManifest` 从 Figma 解析生成——**生成这步本身就在猜**（节点名反推 semanticName、bbox 重叠≥50% 判 horizontal、组件名匹配 `@antd/tab`）。Manifest 当不可变事实源，上游却是它要取代的启发式。Loop 2 的确定性规则正是新的启发式，只是搬了位置。
+
+**修复：每条字段带 `provenance`，门禁对 `inferred` 字段不假装确定。**
+
+```ts
+type Provenance = 'figma-direct' | 'inferred';
+// figma-direct: Figma API 直采，可信
+// inferred:    反推/规则生成（semanticName 反推、bbox 重叠判 horizontal、tab 组件名匹配），需校验
+```
+
+消费规则（在 ManifestAuditor 内）：
+- `figma-direct` 字段：装配层**必须等于** GM，偏差即 BLOCK。
+- `inferred` 字段：装配层可偏离 GM，但须满足任一才放行：
+  - vision 双源一致（几何冲突时 Figma bbox 赢，见 Loop 2）；
+  - 或人类审核在 GM 标注 `accepted-inferred`。
+- 不满足则降级 **WARN（非 fail-open、非假装确定）**，记入诊断，不标 completed。
+
+这样「反推错了一路传到写盘、门禁拦不住」的链路被切断：inferred 字段永远带「待校验」标记，不会静默变成事实。
+
+### 8.4 待决议（阻塞落地，非盲点一二三，但须一并过目）
+
+- **盲点四（Loop 跳步）**：第 7 节顺序锁死「先 Loop 0 再 Loop 1」，但第 6 节的 `forceAll` 半步已落运行 dist，Loop 0（headerSlots 接 C-1/C-2、componentId 写盘、sanitizer 锚定）未做 → 当前是「Loop 1 脚手架 + 未做 Loop 0」的跳步态。
+- **文档内部矛盾**：第 5 节硬规则「不要在 microcode-engineer.js 继续堆逻辑」，但第 6 节 P0/D 半步恰恰在 `microcode-engineer.js` 加了 `rewriteSubcomponentResourceImportsToProps` + `forceAll` + `skipResourceVars` 三处调用。这半步与第 5 节直接冲突。
+- **建议**：P0/D 半步须标「临时态 + 删改判据」（最终由 `assemble(manifest, llmFiles)` 取代并删除），否则归类为文档自己批评过的补丁堆。
+
+### 8.5 修订后落地顺序（建议）
+
+```
+1. §8.1 Golden Manifest 数据模型 + figma-golden-extractor（独立于装配层）
+2. §8.1.2 ManifestAuditor（fail-closed，不依赖装配层）
+3. §8.3 provenance 字段 + 门禁消费规则
+4. 三样本 GM 生成 + 人类审核锁死 hash
+5. 此后才做 Loop 0（headerSlots/componentId/sanitizer）
+6. 再 Loop 1 收口（forceAll → forceContract，依赖 §8.1 contracts 字段就绪）
+7. §8.2 LLM retarget 通道（与 Loop 4 重试纪律合并，不前置）
+```
+
+**不做 §8.1–§8.3 而直接 Loop 1 收口，会重演 09-07「文档说完成、实际没对齐」**：装配层再干净，也没有机器能发现它与 Figma 的偏差。Golden + Auditor 是治理闭环的缺失半环，优先级高于 Loop 1。
