@@ -1,0 +1,96 @@
+// =============================================================
+// 管理页共享样式（操作日志 / 用户管理）
+// 统一头部、卡片区块、表格表头、间距与配色，避免各页重复定义
+// 使用方式：组件内沿用 .mg-* 类名即可，无需再写 scoped 基础样式
+// =============================================================
+
+.mg-root {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 20px 60px;
+}
+
+.mg-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  gap: 12px;
+}
+
+.mg-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.mg-sub {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.mg-readonly-tag {
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+// 卡片区块
+.mg-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg, 12px);
+  padding: 16px 18px 20px;
+  margin-bottom: 20px;
+}
+
+.mg-section:last-child {
+  margin-bottom: 0;
+}
+
+.mg-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.mg-section-title {
+  font-size: 16px;
+  font-weight: 650;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.mg-count {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.mg-search {
+  width: 260px;
+  max-width: 260px;
+  flex: none;
+}
+
+// 表格通用表头风格
+.mg-table {
+  .ant-table-thead > tr > th {
+    background: var(--bg-elevated, #fafafa);
+    color: var(--text-secondary);
+    font-weight: 600;
+  }
+}
+
+.mg-muted {
+  color: var(--text-secondary);
+}
+
+.mg-alert {
+  margin-top: 12px;
+}

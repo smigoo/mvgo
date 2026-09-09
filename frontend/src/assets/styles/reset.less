@@ -1,0 +1,79 @@
+/**********************************
+ * @Author: smigoo
+ * @LastEditor: smigoo
+ * @LastEditTime: 2024/04/24 21:26:38
+ * @Email: xsmigoo@gmail.com
+ * Copyright © 2024 Microvideo 
+ **********************************/
+
+html {
+  box-sizing: border-box;
+  font-size: 12px;
+}
+
+*,
+::before,
+::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: inherit;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+a:hover,
+a:link,
+a:visited,
+a:active {
+  text-decoration: none;
+}
+
+ol,
+ul {
+  list-style: none;
+}
+
+input,
+textarea {
+  outline: none;
+  border: none;
+  resize: none;
+}
+
+img,
+video {
+  max-width: 100%;
+  height: auto;
+}
+
+/* ========================================
+   全局滚动条样式 — 小巧圆角风格
+   ======================================== */
+::-webkit-scrollbar {
+  width: var(--scrollbar-size, 6px);
+  height: var(--scrollbar-size, 6px);
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track, transparent);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb, var(--c-gray-300));
+  border-radius: 3px;
+  transition: background 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover, var(--c-gray-500));
+}
+
+/* Firefox 滚动条 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb, var(--c-gray-300)) var(--scrollbar-track, transparent);
+}

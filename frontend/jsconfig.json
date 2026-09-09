@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "baseUrl": "./",
+    "moduleResolution": "node",
+    "jsx": "preserve",
+    "jsxImportSource": "vue",
+    "paths": {
+      "@/*": ["src/*"],
+      "~/*": ["./*"]
+    },
+    "allowJs": true,
+    "typeRoots": ["./node_modules/@types", "./src"]
+  },
+  "exclude": ["node_modules", "*dist"]
+}

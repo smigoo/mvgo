@@ -1,0 +1,74 @@
+# ==== OS / 编辑器 / AI 工具 ====
+.DS_Store
+.idea/
+.vscode/
+.trae/
+.lingma/
+.claude/
+.opencode/
+.workbuddy/
+.codex/
+.gemini/
+.qwen/
+.codebuddy/
+
+# ==== A4 安全整改：密钥/敏感配置 ====
+# .env 含明文 AI/Figma 密钥，严禁入库；仅提交 .env.example 模板
+.env
+.env.*
+!.env.example
+!.env.development.example
+!.env.production.example
+
+# ==== 依赖 ====
+node_modules/
+
+# ==== 构建产物 ====
+dist/
+dist-*.tar.gz
+
+# ==== 日志 ====
+logs/
+*.log
+server.log
+server.log.*
+
+# ==== 生成产物 / 临时 ====
+temp-components/
+output/
+workspace/
+data/*.json
+data/*.jsonl
+data/*.db
+data/*.tmp
+data/*.bak-*
+data/apifox-zips/
+# 微码解析失败 dump（运行时诊断产物，不入库）
+data/microcode-parse-fail-*.txt
+# Apifox 接口生成产物（个人隔离目录，不入库）
+data/apifox/
+data/apifox-tasks.json
+# API 绑定快照（运行时生成，不入库）
+data/api-binding-snapshots/
+
+# ==== 构建缓存 / 清理残留 ====
+# TypeScript 增量编译缓存
+*.tsbuildinfo
+# 文件清理/恢复工具产生的临时副本
+*.cleanup-*
+# tsc 编译 scripts/ 时产出的声明与 sourcemap
+scripts/*.d.ts
+scripts/*.js.map
+# 临时预览图目录
+temp-preview-images/
+
+# 服务端 AI 配置（含 API Key，严禁入库）
+data/ai-config.json
+
+# 本地连通性测试脚本可能含连接串，严禁入库
+test-mongo-remote.js
+
+# ==== 诊断/调试脚本（本地临时，不入库）====
+check-user-configs.cjs
+debug-*.mjs
+probe-*.mjs

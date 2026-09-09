@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>感智晓界工坊 · 全站能力拓扑图 · 关系版</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,-apple-system,sans-serif;background:#0a0e1a;color:#e4e4e7;min-height:100vh;overflow:auto}
+.bg{position:fixed;inset:0;background-image:radial-gradient(circle at 1px 1px,rgba(255,255,255,.02) 1px,transparent 0);background-size:32px 32px;pointer-events:none;z-index:0}
+
+.canvas-wrap{position:relative;z-index:1;overflow:auto;padding:24px 40px 60px}
+h1{font-size:24px;font-weight:600;color:#f4f4f5;text-align:center;margin-bottom:4px;letter-spacing:-.5px}
+.sub{text-align:center;color:#71717a;font-size:12px;margin-bottom:20px}
+
+.legend-bar{display:flex;flex-wrap:wrap;gap:14px;justify-content:center;margin-bottom:18px}
+.legend-bar .lg{display:flex;align-items:center;gap:5px;font-size:11px;color:#9ca3af}
+.legend-bar .lg i{width:24px;height:3px;border-radius:2px;display:block}
+.legend-bar .lg i.dash{background:repeating-linear-gradient(90deg,currentColor 0 5px,transparent 5px 9px)}
+
+.svg-canvas{display:block;margin:0 auto}
+.node-group{cursor:pointer}
+.node-group:hover .node-rect{filter:brightness(1.3)}
+.node-group.dimmed{opacity:.15;transition:opacity .2s}
+.node-group.highlighted .node-rect{filter:brightness(1.4);stroke-width:2}
+.conn-line{transition:opacity .2s}
+.conn-line.dimmed{opacity:.04!important}
+.conn-line.highlighted{opacity:1!important;stroke-width:2.5!important}
+
+.edge-label{font-size:9px;fill:#6b7280;pointer-events:none}
+.edge-label.highlighted{fill:#e4e4e7;font-weight:500}
+
+.layer-bg{rx:16;ry:16}
+.layer-title{font-size:11px;font-weight:600;letter-spacing:2px;fill:#4b5563}
+</style>
+</head>
+<body>
+<div class="bg"></div>
+<div class="canvas-wrap">
+  <h1>感智晓界工坊 · 全站能力关系拓扑</h1>
+  <p class="sub">hover 节点高亮关联关系 · 实线=数据调用 · 虚线=依赖关系 · 点线=管理控制</p>
+
+  <div class="legend-bar">
+    <div class="lg"><i style="background:#3b82f6"></i>数据调用</div>
+    <div class="lg"><i class="dash" style="color:#10b981"></i>依赖关系</div>
+    <div class="lg"><i class="dash" style="color:#f59e0b"></i>管理控制</div>
+    <div class="lg"><i style="background:#ef4444"></i>生成管线</div>
+    <div class="lg"><i class="dash" style="color:#8b5cf6"></i>反馈回路</div>
+    <div class="lg"><i class="dash" style="color:#ef4444;border:1px dashed #ef4444"></i>仅UI（功能未实装）</div>
+  </div>
+
+  <svg id="topo" class="svg-canvas"></svg>
+</div>
+
+<script>
+const NODES = [
+  // Layer 0: 用户入口
+  {id:'login',label:'登录注册',layer:0,color:'#6b7280',x:0,y:0},
+  {id:'workspace',label:'AI 工作台',layer:0,color:'#f59e0b',x:0,y:0},
+  {id:'intro',label:'使用介绍',layer:0,color:'#6b7280',x:0,y:0},
+
+  // Layer 1: 核心生成
+  {id:'comp-gen',label:'组件生成',sub:'Vue3 / 微码 双 target',layer:1,color:'#3b82f6',x:0,y:0},
+  {id:'page-gen',label:'页面生成',layer:1,color:'#3b82f6',x:0,y:0},
+  
+  // Layer 2: 能力增强
+  {id:'doc-analysis',label:'文档分析',layer:2,color:'#10b981',x:0,y:0},
+  {id:'doc-binding',label:'文档对接',layer:2,color:'#10b981',x:0,y:0},
+  {id:'auto-fix',label:'自动修复',layer:2,color:'#8b5cf6',x:0,y:0},
+  {id:'grounding',label:'Grounding',layer:2,color:'#f59e0b',x:0,y:0},
+  {id:'ai-compare',label:'AI 比对',layer:2,color:'#ef4444',x:0,y:0},
+  {id:'api-binding',label:'API 对接',layer:2,color:'#ec4899',x:0,y:0},
+
+  // Layer 3: 可视化编辑
+  {id:'screen',label:'大屏编辑器',layer:3,color:'#ef4444',x:0,y:0},
+  {id:'workflow',label:'工作流编辑器',layer:3,color:'#ef4444',x:0,y:0},
+
+  // Layer 3.5: 人工审核
+  {id:'human-review',label:'人工审核',sub:'通过 / 退回',layer:3,color:'#f97316',x:0,y:0},
+
+  // Layer 4: 管理
+  {id:'task-center',label:'任务中心',layer:4,color:'#f59e0b',x:0,y:0},
+  {id:'comp-lib',label:'组件库管理',layer:4,color:'#f59e0b',x:0,y:0},
+  {id:'api-mgr',label:'API 管理',layer:4,color:'#ec4899',x:0,y:0},
+  {id:'playground',label:'Playground',layer:4,color:'#06b6d4',x:0,y:0},
+  {id:'token-monitor',label:'Token 监控',layer:4,color:'#6b7280',x:0,y:0,stub:'仅UI'},
+  {id:'api-docs',label:'API 文档',layer:4,color:'#ec4899',x:0,y:0},
+  {id:'debug',label:'调试器',layer:4,color:'#6b7280',x:0,y:0},
+  {id:'admin',label:'后台管理',layer:4,color:'#6b7280',x:0,y:0,stub:'仅UI'},
+  {id:'group',label:'群组',layer:4,color:'#6b7280',x:0,y:0,stub:'仅UI'},
+
+  // Layer 4.5: 文档智能助手 / Git 推送（均未实装）
+  {id:'ai-workspace',label:'文档智能助手',sub:'辅助产品文档开发',layer:4,color:'#8b5cf6',x:0,y:0,stub:'仅UI'},
+  {id:'git-push',label:'Git 推送',sub:'凭证配置',layer:4,color:'#6b7280',x:0,y:0,stub:'仅UI'},
+
+  // Layer 5: 基础设施
+  {id:'preview',label:'预览引擎',layer:5,color:'#6b7280',x:0,y:0},
+  {id:'sse',label:'SSE 推送',layer:5,color:'#6b7280',x:0,y:0},
+  {id:'workspace-sync',label:'工作区同步',layer:5,color:'#6b7280',x:0,y:0},
+  {id:'jaeger',label:'Jaeger 追踪',layer:5,color:'#14b8a6',x:0,y:0},
+  {id:'figma',label:'Figma API',layer:5,color:'#a855f7',x:0,y:0},
+  {id:'apifox',label:'Apifox API',layer:5,color:'#ec4899',x:0,y:0},
+];
+
+// edges: {from, to, type:'call'|'dep'|'mgr'|'pipeline'|'feedback', label?}
+const EDGES = [
+  // 用户入口 → 核心生成
+  {from:'login',to:'workspace',type:'call',label:'认证'},
+  {from:'workspace',to:'comp-gen',type:'call',label:'路由'},
+  {from:'workspace',to:'page-gen',type:'call',label:'路由'},
+  {from:'workspace',to:'task-center',type:'call'},
+  {from:'workspace',to:'comp-lib',type:'call'},
+  {from:'workspace',to:'api-mgr',type:'call'},
+  {from:'workspace',to:'playground',type:'call',label:'路由'},
+  {from:'workspace',to:'token-monitor',type:'call',label:'路由'},
+  {from:'workspace',to:'api-docs',type:'call',label:'路由'},
+  {from:'workspace',to:'ai-workspace',type:'call',label:'路由'},
+  {from:'workspace',to:'group',type:'call',label:'路由'},
+  {from:'workspace',to:'git-push',type:'call',label:'路由'},
+
+  // 核心生成 → 能力增强 (管线内部调用)
+  {from:'comp-gen',to:'doc-analysis',type:'pipeline',label:'init 并行'},
+  {from:'comp-gen',to:'doc-binding',type:'pipeline',label:'路径B'},
+  {from:'comp-gen',to:'auto-fix',type:'pipeline',label:'engineer 后'},
+  {from:'comp-gen',to:'grounding',type:'pipeline',label:'adversarial'},
+  {from:'comp-gen',to:'ai-compare',type:'pipeline',label:'finish 后'},
+  {from:'page-gen',to:'comp-gen',type:'call',label:'批量调用'},
+
+  // 能力增强之间的反馈
+  {from:'ai-compare',to:'auto-fix',type:'feedback',label:'评分不达标→修复'},
+  {from:'grounding',to:'comp-gen',type:'feedback',label:'issue 回传'},
+  {from:'doc-analysis',to:'doc-binding',type:'dep',label:'分析产物'},
+
+  // API 对接依赖
+  {from:'api-binding',to:'api-mgr',type:'dep',label:'Apifox 目录'},
+  {from:'comp-gen',to:'api-binding',type:'dep',label:'生成后对接'},
+
+  // 管理关系
+  {from:'task-center',to:'comp-gen',type:'mgr',label:'暂停/恢复/终止'},
+  {from:'task-center',to:'page-gen',type:'mgr',label:'暂停/恢复/终止'},
+  {from:'comp-lib',to:'comp-gen',type:'dep',label:'组件记录'},
+  {from:'comp-lib',to:'ai-compare',type:'mgr',label:'触发分析'},
+
+  // 基础设施依赖
+  {from:'comp-gen',to:'sse',type:'dep',label:'实时进度'},
+  {from:'page-gen',to:'sse',type:'dep',label:'实时进度'},
+  {from:'comp-gen',to:'workspace-sync',type:'dep',label:'文件同步'},
+  {from:'comp-gen',to:'preview',type:'dep',label:'截图渲染'},
+  {from:'ai-compare',to:'preview',type:'dep',label:'截图对比'},
+  {from:'comp-gen',to:'jaeger',type:'dep',label:'链路追踪'},
+
+  // 大屏/工作流 → 组件库
+  {from:'screen',to:'comp-lib',type:'dep',label:'加载组件'},
+  {from:'workflow',to:'comp-gen',type:'dep',label:'编排节点'},
+
+  // 文档对接 → 文档分析
+  {from:'doc-binding',to:'doc-analysis',type:'dep',label:'复用分析结果'},
+
+  // 人工审核 → 组件生成
+  {from:'human-review',to:'comp-gen',type:'feedback',label:'审核结果'},
+
+  // 任务中心 → 人工审核
+  {from:'task-center',to:'human-review',type:'call',label:'触发审核'},
+
+  // 预览引擎 → 人工审核
+  {from:'preview',to:'human-review',type:'dep',label:'预览截图'},
+
+  // 组件库管理 → 预览引擎
+  {from:'comp-lib',to:'preview',type:'dep',label:'组件预览'},
+
+  // Playground → 预览引擎
+  {from:'playground',to:'preview',type:'call',label:'实时预览'},
+
+  // Token 监控 → Jaeger
+  {from:'token-monitor',to:'jaeger',type:'dep',label:'链路追踪'},
+
+  // API 文档 → API 对接
+  {from:'api-docs',to:'api-binding',type:'call',label:'查看文档'},
+
+  // API 文档 → API 管理
+  {from:'api-docs',to:'api-mgr',type:'mgr',label:'文档管理'},
+
+  // 调试器 → 预览引擎
+  {from:'debug',to:'preview',type:'call',label:'调试预览'},
+
+  // 后台管理 → 任务中心
+  {from:'admin',to:'task-center',type:'mgr',label:'任务管理'},
+
+  // Figma API → 文档分析
+  {from:'figma',to:'doc-analysis',type:'dep',label:'设计稿'},
+
+  // Figma API → 预览引擎
+  {from:'figma',to:'preview',type:'dep',label:'截图对比'},
+
+  // Apifox API → API 对接
+  {from:'apifox',to:'api-binding',type:'dep',label:'接口定义'},
+
+  // 群组 → 任务中心
+  {from:'group',to:'task-center',type:'mgr',label:'协作管理'},
+
+  // Git 推送 → 工作区同步
+  {from:'git-push',to:'workspace-sync',type:'dep',label:'代码推送'},
+
+  // 文档智能助手 → 文档分析
+  {from:'ai-workspace',to:'doc-analysis',type:'call',label:'文档协作'},
+];
+
+// Layout
+const NW = 116, NH = 52, GAP_X = 12, GAP_Y = 80;
+const LAYER_NAMES = ['用户入口','核心生成','能力增强','可视化编辑','工作台管理','基础设施'];
+const LAYER_COLORS = ['#f59e0b','#3b82f6','#10b981','#ef4444','#f59e0b','#6b7280'];
+const LAYER_PAD = 40;
+
+// Group nodes by layer
+const layerGroups = {};
+NODES.forEach(n => { if(!layerGroups[n.layer]) layerGroups[n.layer]=[]; layerGroups[n.layer].push(n); });
+const layerKeys = Object.keys(layerGroups).map(Number).sort((a,b)=>a-b);
+
+// Dynamic canvas width: use widest layer + padding
+let maxLayerW = 0;
+layerKeys.forEach(lk => {
+  const count = layerGroups[lk].length;
+  const w = count * NW + (count-1) * GAP_X;
+  if (w > maxLayerW) maxLayerW = w;
+});
+const CANVAS_W = Math.max(960, maxLayerW + LAYER_PAD * 2);
+
+// Compute positions
+let curY = 60;
+const layerMeta = {};
+layerKeys.forEach(lk => {
+  const nodes = layerGroups[lk];
+  const count = nodes.length;
+  const totalW = count * NW + (count-1) * GAP_X;
+  const startX = (CANVAS_W - totalW) / 2;
+  nodes.forEach((n,i) => {
+    n.x = startX + i * (NW + GAP_X);
+    n.y = curY;
+  });
+  layerMeta[lk] = {y: curY, h: NH};
+  curY += NH + GAP_Y + 20;
+});
+
+const CANVAS_H = curY + 20;
+
+// Build SVG
+const svg = document.getElementById('topo');
+svg.setAttribute('width', CANVAS_W);
+svg.setAttribute('height', CANVAS_H);
+svg.setAttribute('viewBox', `0 0 ${CANVAS_W} ${CANVAS_H}`);
+
+// Defs
+const defs = document.createElementNS('http://www.w3.org/2000/svg','defs');
+defs.innerHTML = `
+  <marker id="arr-call" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#3b82f6" stroke-width="1.5" stroke-linecap="round"/>
+  </marker>
+  <marker id="arr-dep" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#10b981" stroke-width="1.5" stroke-linecap="round"/>
+  </marker>
+  <marker id="arr-mgr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#f59e0b" stroke-width="1.5" stroke-linecap="round"/>
+  </marker>
+  <marker id="arr-pipeline" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#ef4444" stroke-width="1.5" stroke-linecap="round"/>
+  </marker>
+  <marker id="arr-feedback" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#8b5cf6" stroke-width="1.5" stroke-linecap="round"/>
+  </marker>
+`;
+svg.appendChild(defs);
+
+// Node map for lookup
+const nodeMap = {};
+NODES.forEach(n => nodeMap[n.id] = n);
+
+// Draw layer backgrounds
+layerKeys.forEach((lk, idx) => {
+  const m = layerMeta[lk];
+  const nodes = layerGroups[lk];
+  const minX = Math.min(...nodes.map(n=>n.x)) - LAYER_PAD;
+  const maxX = Math.max(...nodes.map(n=>n.x + NW)) + LAYER_PAD;
+  const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+  rect.setAttribute('x', minX);
+  rect.setAttribute('y', m.y - 18);
+  rect.setAttribute('width', maxX - minX);
+  rect.setAttribute('height', m.h + 30);
+  rect.setAttribute('fill', LAYER_COLORS[idx] || '#333');
+  rect.setAttribute('fill-opacity', '0.03');
+  rect.setAttribute('stroke', LAYER_COLORS[idx] || '#333');
+  rect.setAttribute('stroke-opacity', '0.08');
+  rect.setAttribute('stroke-width', '0.5');
+  rect.classList.add('layer-bg');
+  svg.appendChild(rect);
+
+  const txt = document.createElementNS('http://www.w3.org/2000/svg','text');
+  txt.setAttribute('x', minX + 10);
+  txt.setAttribute('y', m.y - 4);
+  txt.setAttribute('fill', LAYER_COLORS[idx] || '#555');
+  txt.setAttribute('font-size', '10');
+  txt.setAttribute('font-weight', '600');
+  txt.setAttribute('letter-spacing', '2');
+  txt.textContent = (LAYER_NAMES[idx]||'').toUpperCase();
+  svg.appendChild(txt);
+});
+
+// Draw edges first (under nodes)
+const edgeGroup = document.createElementNS('http://www.w3.org/2000/svg','g');
+edgeGroup.setAttribute('id','edges');
+svg.appendChild(edgeGroup);
+
+const EDGE_STYLES = {
+  call:     {stroke:'#3b82f6',dash:'',marker:'arr-call',opacity:.4},
+  dep:      {stroke:'#10b981',dash:'6,4',marker:'arr-dep',opacity:.3},
+  mgr:      {stroke:'#f59e0b',dash:'4,3',marker:'arr-mgr',opacity:.3},
+  pipeline: {stroke:'#ef4444',dash:'',marker:'arr-pipeline',opacity:.45},
+  feedback: {stroke:'#8b5cf6',dash:'8,4,2,4',marker:'arr-feedback',opacity:.35},
+};
+
+EDGES.forEach((e,idx) => {
+  const from = nodeMap[e.from];
+  const to = nodeMap[e.to];
+  if(!from || !to) return;
+
+  const style = EDGE_STYLES[e.type] || EDGE_STYLES.call;
+
+  // Determine connection points
+  let x1, y1, x2, y2;
+  const fcx = from.x + NW/2, fcy = from.y + NH/2;
+  const tcx = to.x + NW/2, tcy = to.y + NH/2;
+
+  if(from.layer === to.layer) {
+    // Same layer: connect sides
+    if(from.x < to.x) {
+      x1 = from.x + NW; y1 = fcy;
+      x2 = to.x; y2 = tcy;
+    } else {
+      x1 = from.x; y1 = fcy;
+      x2 = to.x + NW; y2 = tcy;
+    }
+  } else if(from.layer < to.layer) {
+    // Downward
+    x1 = fcx; y1 = from.y + NH;
+    x2 = tcx; y2 = to.y;
+  } else {
+    // Upward (feedback)
+    x1 = fcx; y1 = from.y;
+    x2 = tcx; y2 = to.y + NH;
+  }
+
+  // Bezier curve
+  const midY = (y1 + y2) / 2;
+  const dx = Math.abs(x2 - x1);
+  let cx1, cy1, cx2, cy2;
+  if(from.layer === to.layer) {
+    cx1 = (x1+x2)/2; cy1 = y1 - 20;
+    cx2 = (x1+x2)/2; cy2 = y2 - 20;
+  } else {
+    cx1 = x1; cy1 = midY;
+    cx2 = x2; cy2 = midY;
+  }
+
+  const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+  const d = `M${x1},${y1} C${cx1},${cy1} ${cx2},${cy2} ${x2},${y2}`;
+  path.setAttribute('d', d);
+  path.setAttribute('fill', 'none');
+  path.setAttribute('stroke', style.stroke);
+  path.setAttribute('stroke-width', '1.2');
+  path.setAttribute('opacity', style.opacity);
+  if(style.dash) path.setAttribute('stroke-dasharray', style.dash);
+  path.setAttribute('marker-end', `url(#${style.marker})`);
+  path.classList.add('conn-line');
+  path.dataset.from = e.from;
+  path.dataset.to = e.to;
+  path.dataset.idx = idx;
+  edgeGroup.appendChild(path);
+
+  // Edge label
+  if(e.label) {
+    const lx = (x1+x2)/2 + (from.layer===to.layer?0:8);
+    const ly = (y1+y2)/2 - 4;
+    const txt = document.createElementNS('http://www.w3.org/2000/svg','text');
+    txt.setAttribute('x', lx);
+    txt.setAttribute('y', ly);
+    txt.setAttribute('text-anchor', 'middle');
+    txt.classList.add('edge-label');
+    txt.dataset.from = e.from;
+    txt.dataset.to = e.to;
+    txt.textContent = e.label;
+    edgeGroup.appendChild(txt);
+  }
+});
+
+// Draw nodes
+const nodeGroup = document.createElementNS('http://www.w3.org/2000/svg','g');
+nodeGroup.setAttribute('id','nodes');
+svg.appendChild(nodeGroup);
+
+NODES.forEach(n => {
+  const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+  g.classList.add('node-group');
+  g.dataset.id = n.id;
+
+  const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+  rect.setAttribute('x', n.x);
+  rect.setAttribute('y', n.y);
+  rect.setAttribute('width', NW);
+  rect.setAttribute('height', NH);
+  rect.setAttribute('rx', '10');
+  rect.setAttribute('fill', n.color);
+  rect.setAttribute('fill-opacity', n.stub ? '0.05' : '0.1');
+  rect.setAttribute('stroke', n.color);
+  rect.setAttribute('stroke-opacity', n.stub ? '0.5' : '0.3');
+  rect.setAttribute('stroke-width', '1');
+  if(n.stub) rect.setAttribute('stroke-dasharray', '4 3');
+  rect.classList.add('node-rect');
+  g.appendChild(rect);
+
+  if(n.stub) {
+    const badge = document.createElementNS('http://www.w3.org/2000/svg','g');
+    const bw = 28, bh = 12;
+    const bx = n.x + NW - bw + 2;
+    const by = n.y - 2;
+    const bg = document.createElementNS('http://www.w3.org/2000/svg','rect');
+    bg.setAttribute('x', bx);
+    bg.setAttribute('y', by);
+    bg.setAttribute('width', bw);
+    bg.setAttribute('height', bh);
+    bg.setAttribute('rx', '3');
+    bg.setAttribute('fill', '#ef4444');
+    bg.setAttribute('fill-opacity', '0.85');
+    badge.appendChild(bg);
+    const bt = document.createElementNS('http://www.w3.org/2000/svg','text');
+    bt.setAttribute('x', bx + bw/2);
+    bt.setAttribute('y', by + bh/2);
+    bt.setAttribute('text-anchor', 'middle');
+    bt.setAttribute('dominant-baseline', 'central');
+    bt.setAttribute('fill', '#fff');
+    bt.setAttribute('font-size', '8');
+    bt.setAttribute('font-weight', '500');
+    bt.textContent = n.stub;
+    badge.appendChild(bt);
+    g.appendChild(badge);
+  }
+
+  const centerY = n.y + NH/2;
+  const txt = document.createElementNS('http://www.w3.org/2000/svg','text');
+  txt.setAttribute('x', n.x + NW/2);
+  txt.setAttribute('y', n.sub ? centerY - 6 : centerY);
+  txt.setAttribute('text-anchor', 'middle');
+  txt.setAttribute('dominant-baseline', 'central');
+  txt.setAttribute('fill', n.color);
+  txt.setAttribute('font-size', '12');
+  txt.setAttribute('font-weight', '500');
+  txt.textContent = n.label;
+  g.appendChild(txt);
+
+  if(n.sub) {
+    const sub = document.createElementNS('http://www.w3.org/2000/svg','text');
+    sub.setAttribute('x', n.x + NW/2);
+    sub.setAttribute('y', centerY + 9);
+    sub.setAttribute('text-anchor', 'middle');
+    sub.setAttribute('dominant-baseline', 'central');
+    sub.setAttribute('fill', n.color);
+    sub.setAttribute('font-size', '9');
+    sub.setAttribute('font-weight', '400');
+    sub.setAttribute('opacity', '0.7');
+    sub.textContent = n.sub;
+    g.appendChild(sub);
+  }
+
+  nodeGroup.appendChild(g);
+});
+
+// Hover interaction
+const allNodeGroups = svg.querySelectorAll('.node-group');
+const allEdges = svg.querySelectorAll('.conn-line');
+const allEdgeLabels = svg.querySelectorAll('.edge-label');
+
+allNodeGroups.forEach(ng => {
+  ng.addEventListener('mouseenter', () => {
+    const nid = ng.dataset.id;
+    // Find connected edges
+    const connectedNodeIds = new Set([nid]);
+    allEdges.forEach(el => {
+      if(el.dataset.from === nid || el.dataset.to === nid) {
+        el.classList.add('highlighted');
+        el.classList.remove('dimmed');
+        connectedNodeIds.add(el.dataset.from);
+        connectedNodeIds.add(el.dataset.to);
+      } else {
+        el.classList.add('dimmed');
+        el.classList.remove('highlighted');
+      }
+    });
+    allEdgeLabels.forEach(el => {
+      if(el.dataset.from === nid || el.dataset.to === nid) {
+        el.classList.add('highlighted');
+      } else {
+        el.classList.add('dimmed');
+      }
+    });
+    allNodeGroups.forEach(ng2 => {
+      if(connectedNodeIds.has(ng2.dataset.id)) {
+        ng2.classList.add('highlighted');
+        ng2.classList.remove('dimmed');
+      } else {
+        ng2.classList.add('dimmed');
+        ng2.classList.remove('highlighted');
+      }
+    });
+  });
+
+  ng.addEventListener('mouseleave', () => {
+    allEdges.forEach(el => { el.classList.remove('highlighted','dimmed'); });
+    allEdgeLabels.forEach(el => { el.classList.remove('highlighted','dimmed'); });
+    allNodeGroups.forEach(ng2 => { ng2.classList.remove('highlighted','dimmed'); });
+  });
+});
+</script>
+</body>
+</html>

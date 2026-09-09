@@ -1,0 +1,53 @@
+{
+  "name": "simple-code-gen",
+  "label": "简单代码生成工作流",
+  "description": "简单示例：分析 → 生成 → 验证 → 完成（带条件回路）",
+  "entryNode": "analyze",
+  "nodes": [
+    {
+      "id": "analyze",
+      "label": "需求分析",
+      "type": "agent",
+      "handler": "visual-parser",
+      "position": { "x": 100, "y": 200 },
+      "config": { "model": "claude-sonnet-4-6", "temperature": 0 }
+    },
+    {
+      "id": "generate",
+      "label": "代码生成",
+      "type": "agent",
+      "handler": "microcode-engineer",
+      "position": { "x": 350, "y": 200 },
+      "config": { "model": "claude-sonnet-4-6", "temperature": 0, "maxTokens": 8192 }
+    },
+    {
+      "id": "validate",
+      "label": "有效性验证",
+      "type": "condition",
+      "handler": "adversarial-checker",
+      "position": { "x": 600, "y": 200 },
+      "config": { "model": "claude-sonnet-4-6", "temperature": 0 }
+    },
+    {
+      "id": "revise",
+      "label": "修订代码",
+      "type": "agent",
+      "handler": "microcode-engineer",
+      "position": { "x": 600, "y": 350 },
+      "config": { "model": "claude-sonnet-4-6", "temperature": 0.2, "maxTokens": 8192 }
+    },
+    {
+      "id": "finish",
+      "label": "完成✅",
+      "type": "end",
+      "position": { "x": 850, "y": 200 }
+    }
+  ],
+  "edges": [
+    { "id": "e1", "source": "analyze", "target": "generate", "label": "分析结果" },
+    { "id": "e2", "source": "generate", "target": "validate", "label": "代码" },
+    { "id": "e3", "source": "validate", "target": "finish", "condition": "passed", "label": "通过" },
+    { "id": "e4", "source": "validate", "target": "revise", "condition": "failed", "label": "不通过" },
+    { "id": "e5", "source": "revise", "target": "validate", "label": "重新验证" }
+  ]
+}

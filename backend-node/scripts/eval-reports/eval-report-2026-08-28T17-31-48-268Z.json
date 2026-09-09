@@ -1,0 +1,43 @@
+{
+  "summary": {
+    "total": 2,
+    "scored": 0,
+    "avgSimilarity": null,
+    "ge80": 0,
+    "ge80Ratio": null,
+    "ge85": 0,
+    "gateBlocked": 0,
+    "failing": 0,
+    "noCompare": true
+  },
+  "results": [
+    {
+      "id": "mc-evaltest-fresh-0001",
+      "target": "microcode",
+      "groupId": "default-group",
+      "renderedImage": "/Users/smigoo/工作/mvgo/frontend/workspace/custom-components/mc-evaltest-fresh-0001/.mc-gen/screenshots/mc-evaltest-fresh-0001-rendered.png",
+      "isStaticFallback": false,
+      "gateStatus": "PASS",
+      "gateIssues": "",
+      "similarity": null,
+      "pass": null,
+      "compareIssueCount": 0,
+      "topIssues": "",
+      "designImage": "/Users/smigoo/工作/mvgo/frontend/workspace/custom-components/mc-evaltest-fresh-0001/resources/images/source-screenshot.png"
+    },
+    {
+      "id": "mc-lite-1785908673018-10ed6f96",
+      "target": "microcode",
+      "groupId": "default-group",
+      "renderedImage": "/Users/smigoo/工作/mvgo/frontend/workspace/custom-components/mc-lite-1785908673018-10ed6f96/.mc-gen/screenshots/mc-lite-1785908673018-10ed6f96-rendered.png",
+      "isStaticFallback": false,
+      "gateStatus": "PASS",
+      "gateIssues": "",
+      "similarity": null,
+      "pass": null,
+      "compareIssueCount": 0,
+      "topIssues": "",
+      "designImage": "/Users/smigoo/工作/mvgo/frontend/workspace/custom-components/mc-lite-1785908673018-10ed6f96/resources/images/source-screenshot.png"
+    }
+  ]
+}

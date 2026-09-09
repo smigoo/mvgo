@@ -1,0 +1,85 @@
+version: '3.8'
+
+# ============================================================
+# 感智晓界 — docker-compose（生产部署编排）
+# ============================================================
+# 数据源约定：
+#   - MongoDB：Java 与 Node 共用根 .env 的 MONGODB_URI（生产为阿里云 RDS）
+#   - Node 生产密钥：backend-node 加载 ./backend-node/.env（Figma 参数）
+#                    + ./backend-node/.env.production（SESSION_SECRET/FIELD_ENCRYPTION_KEY 等），
+#                    二者均 gitignored，不入库；部署前需在本机准备好这两个文件。
+#   - MySQL：已下线（Java 不接 MySQL，Node 仅用 Mongo）
+# 使用方式：
+#   cp .env.example .env && 编辑 .env   # 填入真实 MONGODB_URI
+#   docker compose up -d                # 启动全部服务
+#   docker compose logs -f backend-java
+# ============================================================
+
+services:
+  # ─── Nginx 统一入口 ───
+  nginx:
+    image: nginx:alpine
+    container_name: mvgo-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d:ro
+    depends_on:
+      - frontend
+      - backend-node
+      - backend-java
+    restart: unless-stopped
+
+  # ─── Vue3 前端 ───
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: mvgo-frontend
+    ports:
+      - "2610:2610"
+    restart: unless-stopped
+    # 开发模式可直接 mount 源码：
+    # volumes:
+    #   - ./frontend/src:/app/src
+
+  # ─── Node.js 后端（AI 引擎 + Figma 管线 + SSE） ───
+  backend-node:
+    build:
+      context: ./backend-node
+      dockerfile: Dockerfile
+    container_name: mvgo-backend-node
+    ports:
+      - "13030:13030"
+    env_file:
+      # 基础：Figma 限流等参数（gitignored）
+      - ./backend-node/.env
+      # 生产密钥：NODE_ENV=production + SESSION_SECRET / FIELD_ENCRYPTION_KEY /
+      #   MC_PREVIEW_BASE_URL / DEFAULT_ADMIN_UIDS / PORTAL_BASE_URL 等（gitignored，不入库）
+      - ./backend-node/.env.production
+    environment:
+      # MongoDB 单一真相源：两端共用根 .env 的 MONGODB_URI（覆盖 .env.production 内同名字段）
+      MONGODB_URI: ${MONGODB_URI}
+      # 容器内通过服务名访问 Java（host 开发模式走代码默认 localhost:8080）
+      JAVA_BACKEND_URL: http://backend-java:8080/api
+    restart: unless-stopped
+
+  # ─── Java 后端（业务 CRUD，持久化走 MongoDB，不接 MySQL） ───
+  backend-java:
+    build:
+      context: ./backend-java
+      dockerfile: Dockerfile
+    container_name: mvgo-backend-java
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      # 生产部署必须注入 MONGODB_URI（与 Node 共用同一库，含账号密码）。
+      # 例如：mongodb://root:***@dds-xxx.mongodb.rds.aliyuncs.com:3717/langgraph-server?replicaSet=...&authSource=admin
+      # 未注入时回退到默认值（仅本地/测试可用，生产务必覆盖）。
+      MONGODB_URI: ${MONGODB_URI:-mongodb://mongo:27017/langgraph-server}
+      NODE_BACKEND_URL: http://backend-node:13030/api
+    depends_on:
+      - backend-node
+    restart: unless-stopped

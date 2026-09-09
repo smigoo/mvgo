@@ -1,0 +1,27 @@
+{
+  "summary": {
+    "total": 2,
+    "scored": 0,
+    "avgSimilarity": null,
+    "ge80": 0,
+    "ge80Ratio": null,
+    "ge85": 0,
+    "gateBlocked": 2,
+    "failing": 2,
+    "noCompare": true
+  },
+  "results": [
+    {
+      "id": "mc-lite-1785908673018-10ed6f96",
+      "target": "microcode",
+      "groupId": "default-group",
+      "error": "微码预览入口不存在: /Users/smigoo/工作/mvgo/backend-node/workspace/custom-components/mc-lite-1785908673018-10ed6f96.quality-staging-60331-1787938139285-67a50c/package/index.vue"
+    },
+    {
+      "id": "mc-lite-1785941241031-4f1d5a5d",
+      "target": "microcode",
+      "groupId": "default-group",
+      "error": "微码预览入口不存在: /Users/smigoo/工作/mvgo/backend-node/workspace/custom-components/mc-lite-1785941241031-4f1d5a5d.quality-staging-60331-1787938139424-d3fd40/package/index.vue"
+    }
+  ]
+}

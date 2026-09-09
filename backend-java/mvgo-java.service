@@ -1,0 +1,16 @@
+[Unit]
+Description=Mvgo Java Backend
+After=network.target
+
+[Service]
+Type=simple
+User=mvbt
+WorkingDirectory=/home/mvbt/mvgo/backend-java
+EnvironmentFile=/home/mvbt/mvgo/backend-java/java-env
+ExecStart=/usr/bin/java -jar /home/mvbt/mvgo/backend-java/mvgo-app-1.0.0-SNAPSHOT.jar --spring.profiles.active=prod
+ExecStop=/bin/kill -TERM $MAINPID
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

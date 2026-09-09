@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json.schemastore.org/nest-cli",
+  "collection": "@nestjs/schematics",
+  "sourceRoot": "src",
+  "compilerOptions": {
+    "deleteOutDir": false,
+    "assets": [
+      {
+        "include": "**/*.js",
+        "outDir": "dist",
+        "watchAssets": true
+      },
+      {
+        "include": "../references/**/*",
+        "outDir": "dist",
+        "watchAssets": true
+      },
+      {
+        "include": "../config/**/*",
+        "outDir": "dist",
+        "watchAssets": true
+      },
+      {
+        "include": "ai-engine-v2/**/*.json",
+        "outDir": "dist",
+        "watchAssets": true
+      },
+      {
+        "include": "ai-engine-v2/**/*.md",
+        "outDir": "dist",
+        "watchAssets": true
+      },
+      {
+        "include": "ai-engine/prompts/**/*.md",
+        "outDir": "dist",
+        "watchAssets": true
+      }
+    ],
+    "watchAssets": true
+  }
+}

@@ -1,0 +1,1504 @@
+{
+  "imageVerified": true,
+  "layoutStructure": {
+    "generatedAt": "2025-01-12T00:00:00.000Z",
+    "stage": "preview-analysis",
+    "componentName": "设备监测",
+    "componentTitle": "设备监测",
+    "analysisModel": "claude-3-7-sonnet-20250219",
+    "sourceImage": {
+      "path": "mc-preview.png",
+      "size": 0,
+      "mtimeMs": 0,
+      "sha1": ""
+    },
+    "summary": "设备监测组件包含头部统计区、两个异常数据卡片、12个设备类型卡片网格，以及左侧导航栏",
+    "layout": {
+      "type": "vertical-stack",
+      "direction": "vertical",
+      "sections": [
+        {
+          "id": "header-stats",
+          "name": "头部统计区",
+          "role": "常驻",
+          "layout": "horizontal",
+          "headerRelation": "no-header",
+          "slotCandidate": null,
+          "bgPlaceholder": "header-stats-bg",
+          "body": {
+            "layout": "horizontal",
+            "children": [
+              {
+                "id": "title-group",
+                "name": "标题组",
+                "type": "text-group",
+                "layout": "horizontal",
+                "children": [
+                  {
+                    "type": "label",
+                    "text": "设备监测",
+                    "color": "rgba(64, 169, 255, 1)",
+                    "fontSize": 16
+                  }
+                ]
+              },
+              {
+                "id": "stat-type-count",
+                "name": "设备类型统计",
+                "type": "statistic",
+                "layout": "horizontal",
+                "children": [
+                  {
+                    "type": "label",
+                    "text": "设备类型",
+                    "color": "rgba(255, 255, 255, 0.8)",
+                    "fontSize": 14
+                  },
+                  {
+                    "type": "value",
+                    "text": "28",
+                    "color": "rgba(255, 255, 255, 1)",
+                    "fontSize": 16
+                  }
+                ]
+              },
+              {
+                "id": "stat-total-count",
+                "name": "设备总数统计",
+                "type": "statistic",
+                "layout": "horizontal",
+                "children": [
+                  {
+                    "type": "label",
+                    "text": "设备总数",
+                    "color": "rgba(255, 255, 255, 0.8)",
+                    "fontSize": 14
+                  },
+                  {
+                    "type": "value",
+                    "text": "68562",
+                    "color": "rgba(255, 255, 255, 1)",
+                    "fontSize": 16
+                  }
+                ]
+              },
+              {
+                "id": "stat-completion-rate",
+                "name": "完好率统计",
+                "type": "statistic",
+                "layout": "horizontal",
+                "children": [
+                  {
+                    "type": "label",
+                    "text": "完好率",
+                    "color": "rgba(255, 255, 255, 0.8)",
+                    "fontSize": 14
+                  },
+                  {
+                    "type": "value",
+                    "text": "98%",
+                    "color": "rgba(8, 163, 165, 1)",
+                    "fontSize": 16
+                  }
+                ]
+              }
+            ],
+            "backgroundImage": {
+              "src": "../resources/images/bg-8788.png",
+              "recommendedUsage": "backgroundBlock"
+            },
+            "backgroundSize": "100% 100%",
+            "backgroundPosition": "center center",
+            "backgroundRepeat": "no-repeat"
+          },
+          "styles": {
+            "flexGrow": 0.219,
+            "flexShrink": 1,
+            "flexBasis": 0,
+            "figmaHeightPx": 30
+          }
+        },
+        {
+          "id": "switch-tabs",
+          "name": "视图切换",
+          "role": "常驻",
+          "layout": "horizontal",
+          "headerRelation": "no-header",
+          "slotCandidate": null,
+          "body": {
+            "layout": "horizontal-2-columns",
+            "children": [
+              {
+                "id": "tab-active",
+                "name": "激活状态Tab",
+                "type": "tab-button",
+                "active": true,
+                "resourceFile": "../resources/images/bg-8788.png",
+                "children": [
+                  {
+                    "type": "icon",
+                    "resourceFile": "../resources/images/icon-8798.png",
+                    "width": 43,
+                    "height": 44
+                  },
+                  {
+                    "type": "label",
+                    "text": "隧道设备",
+                    "color": "rgba(255, 255, 255, 1)",
+                    "fontSize": 14
+                  },
+                  {
+                    "type": "label",
+                    "text": "异常数",
+                    "color": "rgba(255, 255, 255, 1)",
+                    "fontSize": 14
+                  },
+                  {
+                    "type": "value",
+                    "text": "5",
+                    "color": "rgba(255, 87, 87, 1)",
+                    "fontSize": 24
+                  },
+                  {
+                    "type": "stats-row",
+                    "layout": "horizontal",
+                    "children": [
+                      {
+                        "type": "label",
+                        "text": "总",
+                        "color": "rgba(255, 255, 255, 0.8)",
+                        "fontSize": 12
+                      },
+                      {
+                        "type": "label",
+                        "text": "数:",
+                        "color": "rgba(255, 255, 255, 0.8)",
+                        "fontSize": 12
+                      },
+                      {
+                        "type": "value",
+                        "text": "56302",
+                        "color": "rgba(255, 255, 255, 1)",
+                        "fontSize": 14
+                      }
+                    ]
+                  },
+                  {
+                    "type": "progress",
+                    "text": "3/3740",
+                    "color": "rgba(255, 255, 255, 0.8)",
+                    "fontSize": 10
+                  }
+                ],
+                "styles": {
+                  "flexGrow": 1.091,
+                  "flexShrink": 1,
+                  "flexBasis": 0,
+                  "figmaHeightPx": 65
+                }
+              },
+              {
+                "id": "tab-default",
+                "name": "默认状态Tab",
+                "type": "tab-button",
+                "active": false,
+                "resourceFile": "../resources/images/bg-8807.png",
+                "children": [
+                  {
+                    "type": "icon",
+                    "resourceFile": "../resources/images/icon-8817.png",
+                    "width": 43,
+                    "height": 44
+                  },
+                  {
+                    "type": "label",
+                    "text": "房屋建筑",
+                    "color": "rgba(255, 255, 255, 1)",
+                    "fontSize": 14
+                  },
+                  {
+                    "type": "label",
+                    "text": "设备",
+                    "color": "rgba(255, 255, 255, 1)",
+                    "fontSize": 14
+                  },
+                  {
+                    "type": "label",
+                    "text": "异常数",
+                    "color": "rgba(255, 255, 255, 1)",
+                    "fontSize": 14
+                  },
+                  {
+                    "type": "value",
+                    "text": "3",
+                    "color": "rgba(255, 87, 87, 1)",
+                    "fontSize": 24
+                  },
+                  {
+                    "type": "stats-row",
+                    "layout": "horizontal",
+                    "children": [
+                      {
+                        "type": "label",
+                        "text": "总",
+                        "color": "rgba(255, 255, 255, 0.8)",
+                        "fontSize": 12
+                      },
+                      {
+                        "type": "label",
+                        "text": "数:",
+                        "color": "rgba(255, 255, 255, 0.8)",
+                        "fontSize": 12
+                      },
+                      {
+                        "type": "value",
+                        "text": "1280",
+                        "color": "rgba(255, 255, 255, 1)",
+                        "fontSize": 14
+                      }
+                    ]
+                  }
+                ],
+                "styles": {
+                  "flexGrow": 0.909,
+                  "flexShrink": 1,
+                  "flexBasis": 0,
+                  "figmaHeightPx": 54
+                }
+              }
+            ]
+          },
+          "styles": {
+            "flexGrow": 0.472,
+            "flexShrink": 1,
+            "flexBasis": 0,
+            "figmaHeightPx": 65
+          }
+        },
+        {
+          "id": "device-grid",
+          "name": "设备类型网格",
+          "role": "常驻",
+          "layout": "grid",
+          "gridColumns": 3,
+          "headerRelation": "no-header",
+          "slotCandidate": null,
+          "bgPlaceholder": "device-grid-bg",
+          "body": {
+            "layout": "grid",
+            "gridColumns": 3,
+            "bgPlaceholder": "body-bg-device-grid",
+            "items": [
+              {
+                "id": "device-1",
+                "name": "摄像机",
+                "type": "device-card",
+                "resourceFile": "../resources/images/bg-8439.png",
+                "layout": "vertical",
+                "children": [
+                  {
+                    "type": "icon",
+                    "resourceFile": "../resources/images/icon-8444.png",
+                    "width": 40,
+                    "height": 40
+                  },
+                  {
+                    "type": "label",
+                    "text": "摄像机",
+                    "color": "rgba(255, 255, 255, 1)",
+                    "fontSize": 14
+                  },
+                  {
+                    "type": "stats",
+                    "layout": "horizontal",
+                    "children": [
+                      {
+                        "type": "abnormal-count",
+                        "text": "2",
+                        "color": "rgba(255, 87, 87, 1)",
+                        "fontSize": 18
+                      },
+                      {
+                        "type": "separator",
+                        "text": "/",
+                        "color": "rgba(255, 255, 255, 0.6)",
+                        "fontSize": 14
+                      },
+                      {
+                        "type": "total-count",
+                        "text": "484",
+                        "color": "rgba(255, 255, 255, 0.8)",
+                        "fontSize": 14
+                      }
+                    ]
+                  }
+                ],
+                "styles": {
+                  "flexGrow": 0.72,
+                  "flexShrink": 1,
+                  "flexBasis": 0,
+                  "figmaHeightPx": 18
+                }
+              },
+              {
+                "id": "device-2",
+                "name": "风速风向仪",
+                "type": "device-card",
+                "resourceFile": "../resources/images/bg-8439.png",
+                "layout": "vertical",
+                "children": [
+                  {
+                    "type": "icon",
+                    "resourceFile": "../resources/images/icon-8473.png",
+                    "width": 40,
+                    "height": 40
+                  },
+                  {
+                    "type": "label",
+                    "text": "风速风向仪",
+                    "color": "rgba(255, 255, 255, 1)",
+                    "fontSize": 14
+                  },
+                  {
+                    "type": "stats",
+                    "layout": "horizontal",
+                    "children": [
+                      {
+                        "type": "abnormal-count",
+                        "text": "1",
+                        "color": "rgba(255, 87, 87, 1)",
+                        "fontSize": 18
+                      },
+                      {
+                        "type": "separator",
+                        "text": "/",
+                        "color": "rgba(255, 255, 255, 0.6)",
+                        "fontSize": 14
+                      },
+                      {
+                        "type": "total-count",
+                        "text": "484",
+                        "color": "rgba(255, 255, 255, 0.8)",
+                        "fontSize": 14
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "device-3",
+                "name": "超高检测器",
+                "type": "device-card",
+                "resourceFile": "../resources/images/bg-8439.png",
+                "layout": "vertical",
+                "children": [
+                  {
+                    "type": "icon",
+                    "resourceFile": "../resources/images/icon-8503.png",
+                    "width": 40,
+                    "height": 40
+                  },
+                  {
+                    "type": "label",
+                    "text": "超高检测器",
+                    "color": "rgba(255, 255, 255, 1)",
+                    "fontSize": 14
+                  },
+                  {
+                    "type": "stats",
+                    "layout": "horizontal",
+                    "children": [
+                      {
+                        "type": "abnormal-count",
+                        "text": "0",
+                        "color": "rgba(255, 87, 87, 1)",
+                        "fontSize": 18
+                      },
+                      {
+                        "type": "separator",
+                        "text": "/",
+                        "color": "rgba(255, 255, 255, 0.6)",
+                        "fontSize": 14
+                      },
+                      {
+                        "type": "total-count",
+                        "text": "484",
+                        "color": "rgba(255, 255, 255, 0.8)",
+                        "fontSize": 14
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "device-4",
+                "name": "烟雾机器人",
+                "type": "device-card",
+                "resourceFile": "../resources/images/bg-8439.png",
+                "layout": "vertical",
+                "children": [
+                  {
+                    "type": "icon",
+                    "resourceFile": "../resources/images/icon-8532.png",
+                    "width": 40,
+                    "height": 40
+                  },
+                  {
+                    "type": "label",
+                    "text": "烟雾机器人",
+                    "color": "rgba(255, 255, 255, 1)",
+                    "fontSize": 14
+                  },
+                  {
+                    "type": "stats",
+                    "layout": "horizontal",
+                    "children": [
+                      {
+                        "type": "abnormal-count",
+                        "text": "0",
+                        "color": "rgba(255, 87, 87, 1)",
+                        "fontSize": 18
+                      },
+                      {
+                        "type": "separator",
+                        "text": "/",
+                        "color": "rgba(255, 255, 255, 0.6)",
+                        "fontSize": 14
+                      },
+                      {
+                        "type": "total-count",
+                        "text": "484",
+                        "color": "rgba(255, 255, 255, 0.8)",
+                        "fontSize": 14
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "device-5",
+                "name": "激光雷达",
+                "type": "device-card",
+                "resourceFile": "../resources/images/bg-8439.png",
+                "layout": "vertical",
+                "children": [
+                  {
+                    "type": "icon",
+                    "resourceFile": "../resources/images/icon-8561.png",
+                    "width": 40,
+                    "height": 40
+                  },
+                  {
+                    "type": "label",
+                    "text": "激光雷达",
+                    "color": "rgba(255, 255, 255, 1)",
+                    "fontSize": 14
+                  },
+                  {
+                    "type": "stats",
+                    "layout": "horizontal",
+                    "children": [
+                      {
+                        "type": "abnormal-count",
+                        "text": "0",
+                        "color": "rgba(255, 87, 87, 1)",
+                        "fontSize": 18
+                      },
+                      {
+                        "type": "separator",
+                        "text": "/",
+                        "color": "rgba(255, 255, 255, 0.6)",
+                        "fontSize": 14
+                      },
+                      {
+                        "type": "total-count",
+                        "text": "484",
+                        "color": "rgba(255, 255, 255, 0.8)",
+                        "fontSize": 14
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "device-6",
+                "name": "CO传感器",
+                "type": "device-card",
+                "resourceFile": "../resources/images/bg-8439.png",
+                "layout": "vertical",
+                "children": [
+                  {
+                    "type": "icon",
+                    "resourceFile": "../resources/images/icon-8590.png",
+                    "width": 40,
+                    "height": 40
+                  },
+                  {
+                    "type": "label",
+                    "text": "CO传感器",
+                    "color": "rgba(255, 255, 255, 1)",
+                    "fontSize": 14
+                  },
+                  {
+                    "type": "stats",
+                    "layout": "horizontal",
+                    "children": [
+                      {
+                        "type": "abnormal-count",
+                        "text": "0",
+                        "color": "rgba(255, 87, 87, 1)",
+                        "fontSize": 18
+                      },
+                      {
+                        "type": "separator",
+                        "text": "/",
+                        "color": "rgba(255, 255, 255, 0.6)",
+                        "fontSize": 14
+                      },
+                      {
+                        "type": "total-count",
+                        "text": "484",
+                        "color": "rgba(255, 255, 255, 0.8)",
+                        "fontSize": 14
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "device-7",
+                "name": "CO/VI检测器",
+                "type": "device-card",
+                "resourceFile": "../resources/images/bg-8439.png",
+                "layout": "vertical",
+                "children": [
+                  {
+                    "type": "icon",
+                    "resourceFile": "../resources/images/icon-8619.png",
+                    "width": 40,
+                    "height": 40
+                  },
+                  {
+                    "type": "label",
+                    "text": "CO/VI检测器",
+                    "color": "rgba(255, 255, 255, 1)",
+                    "fontSize": 14
+                  },
+                  {
+                    "type": "stats",
+                    "layout": "horizontal",
+                    "children": [
+                      {
+                        "type": "abnormal-count",
+                        "text": "0",
+                        "color": "rgba(255, 87, 87, 1)",
+                        "fontSize": 18
+                      },
+                      {
+                        "type": "separator",
+                        "text": "/",
+                        "color": "rgba(255, 255, 255, 0.6)",
+                        "fontSize": 14
+                      },
+                      {
+                        "type": "total-count",
+                        "text": "484",
+                        "color": "rgba(255, 255, 255, 0.8)",
+                        "fontSize": 14
+                      }
+                    ]
+                  }
+                ],
+                "styles": {
+                  "flexGrow": 1.28,
+                  "flexShrink": 1,
+                  "flexBasis": 0,
+                  "figmaHeightPx": 32
+                }
+              },
+              {
+                "id": "device-8",
+                "name": "温湿度传感器",
+                "type": "device-card",
+                "resourceFile": "../resources/images/bg-8439.png",
+                "layout": "vertical",
+                "children": [
+                  {
+                    "type": "icon",
+                    "resourceFile": "../resources/images/icon-8648.png",
+                    "width": 40,
+                    "height": 40
+                  },
+                  {
+                    "type": "label",
+                    "text": "温湿度传感器",
+                    "color": "rgba(255, 255, 255, 1)",
+                    "fontSize": 14
+                  },
+                  {
+                    "type": "stats",
+                    "layout": "horizontal",
+                    "children": [
+                      {
+                        "type": "abnormal-count",
+                        "text": "0",
+                        "color": "rgba(255, 87, 87, 1)",
+                        "fontSize": 18
+                      },
+                      {
+                        "type": "separator",
+                        "text": "/",
+                        "color": "rgba(255, 255, 255, 0.6)",
+                        "fontSize": 14
+                      },
+                      {
+                        "type": "total-count",
+                        "text": "484",
+                        "color": "rgba(255, 255, 255, 0.8)",
+                        "fontSize": 14
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "device-9",
+                "name": "压力传感器",
+                "type": "device-card",
+                "resourceFile": "../resources/images/bg-8439.png",
+                "layout": "vertical",
+                "children": [
+                  {
+                    "type": "icon",
+                    "resourceFile": "../resources/images/icon-8677.png",
+                    "width": 40,
+                    "height": 40
+                  },
+                  {
+                    "type": "label",
+                    "text": "压力传感器",
+                    "color": "rgba(255, 255, 255, 1)",
+                    "fontSize": 14
+                  },
+                  {
+                    "type": "stats",
+                    "layout": "horizontal",
+                    "children": [
+                      {
+                        "type": "abnormal-count",
+                        "text": "0",
+                        "color": "rgba(255, 87, 87, 1)",
+                        "fontSize": 18
+                      },
+                      {
+                        "type": "separator",
+                        "text": "/",
+                        "color": "rgba(255, 255, 255, 0.6)",
+                        "fontSize": 14
+                      },
+                      {
+                        "type": "total-count",
+                        "text": "484",
+                        "color": "rgba(255, 255, 255, 0.8)",
+                        "fontSize": 14
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "device-10",
+                "name": "光照度变送器",
+                "type": "device-card",
+                "resourceFile": "../resources/images/bg-8439.png",
+                "layout": "vertical",
+                "children": [
+                  {
+                    "type": "icon",
+                    "resourceFile": "../resources/images/icon-8706.png",
+                    "width": 40,
+                    "height": 40
+                  },
+                  {
+                    "type": "label",
+                    "text": "光照度变送器",
+                    "color": "rgba(255, 255, 255, 1)",
+                    "fontSize": 14
+                  },
+                  {
+                    "type": "stats",
+                    "layout": "horizontal",
+                    "children": [
+                      {
+                        "type": "abnormal-count",
+                        "text": "0",
+                        "color": "rgba(255, 87, 87, 1)",
+                        "fontSize": 18
+                      },
+                      {
+                        "type": "separator",
+                        "text": "/",
+                        "color": "rgba(255, 255, 255, 0.6)",
+                        "fontSize": 14
+                      },
+                      {
+                        "type": "total-count",
+                        "text": "484",
+                        "color": "rgba(255, 255, 255, 0.8)",
+                        "fontSize": 14
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "device-11",
+                "name": "紧急电话",
+                "type": "device-card",
+                "resourceFile": "../resources/images/bg-8439.png",
+                "layout": "vertical",
+                "children": [
+                  {
+                    "type": "icon",
+                    "resourceFile": "../resources/images/icon-8735.png",
+                    "width": 40,
+                    "height": 40
+                  },
+                  {
+                    "type": "label",
+                    "text": "紧急电话",
+                    "color": "rgba(255, 255, 255, 1)",
+                    "fontSize": 14
+                  },
+                  {
+                    "type": "stats",
+                    "layout": "horizontal",
+                    "children": [
+                      {
+                        "type": "abnormal-count",
+                        "text": "0",
+                        "color": "rgba(255, 87, 87, 1)",
+                        "fontSize": 18
+                      },
+                      {
+                        "type": "separator",
+                        "text": "/",
+                        "color": "rgba(255, 255, 255, 0.6)",
+                        "fontSize": 14
+                      },
+                      {
+                        "type": "total-count",
+                        "text": "484",
+                        "color": "rgba(255, 255, 255, 0.8)",
+                        "fontSize": 14
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "device-12",
+                "name": "水质监测设备",
+                "type": "device-card",
+                "resourceFile": "../resources/images/bg-8439.png",
+                "layout": "vertical",
+                "children": [
+                  {
+                    "type": "icon",
+                    "resourceFile": "../resources/images/icon-8764.png",
+                    "width": 40,
+                    "height": 40
+                  },
+                  {
+                    "type": "label",
+                    "text": "水质监测设备",
+                    "color": "rgba(255, 255, 255, 1)",
+                    "fontSize": 14
+                  },
+                  {
+                    "type": "stats",
+                    "layout": "horizontal",
+                    "children": [
+                      {
+                        "type": "abnormal-count",
+                        "text": "0",
+                        "color": "rgba(255, 87, 87, 1)",
+                        "fontSize": 18
+                      },
+                      {
+                        "type": "separator",
+                        "text": "/",
+                        "color": "rgba(255, 255, 255, 0.6)",
+                        "fontSize": 14
+                      },
+                      {
+                        "type": "total-count",
+                        "text": "484",
+                        "color": "rgba(255, 255, 255, 0.8)",
+                        "fontSize": 14
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          "styles": {
+            "flexGrow": 2.309,
+            "flexShrink": 1,
+            "flexBasis": 0,
+            "figmaHeightPx": 317
+          }
+        }
+      ]
+    },
+    "styles": {
+      "backgroundBrightness": "light",
+      "theme": "浅色科技监测风",
+      "colors": [
+        "rgba(64, 169, 255, 1)",
+        "rgba(255, 87, 87, 1)",
+        "rgba(8, 163, 165, 1)",
+        "rgba(255, 255, 255, 1)",
+        "rgba(255, 255, 255, 0.8)"
+      ],
+      "background": "浅灰蓝色渐变背景，卡片使用蓝色渐变",
+      "decorations": [
+        "左侧垂直导航栏（控、照明、通风、供电、消防、交通、信息）",
+        "异常数字使用红色高亮",
+        "激活的Tab有深蓝色渐变背景和图标"
+      ],
+      "emphasis": [
+        "异常数字用红色显示",
+        "头部统计数据用白色高亮",
+        "完好率用青绿色显示"
+      ]
+    },
+    "interactions": [
+      {
+        "target": "隧道设备/房屋建筑设备切换Tab",
+        "type": "tab-switch",
+        "description": "切换显示不同类别的设备统计",
+        "defaultState": "常驻，隧道设备为激活状态",
+        "evidence": "左侧Tab有蓝色渐变背景和图标高亮"
+      },
+      {
+        "target": "12个设备类型卡片",
+        "type": "click",
+        "description": "点击可能查看设备详情",
+        "defaultState": "常驻，可点击",
+        "evidence": "卡片具有独立背景和布局"
+      },
+      {
+        "target": "左侧导航栏",
+        "type": "navigation",
+        "description": "系统功能导航",
+        "defaultState": "常驻",
+        "evidence": "垂直排列的功能分类文字"
+      }
+    ],
+    "charts": [],
+    "headerSlots": [
+      {
+        "slotType": "header-right",
+        "elementType": "statistic",
+        "content": "设备类型 28"
+      },
+      {
+        "slotType": "header-right",
+        "elementType": "statistic",
+        "content": "设备总数 68562"
+      },
+      {
+        "slotType": "header-right",
+        "elementType": "statistic",
+        "content": "完好率 98%"
+      }
+    ],
+    "doNotInvent": [
+      "左侧导航栏的具体跳转链接",
+      "设备卡片点击后的详情页面内容",
+      "异常设备的具体告警规则",
+      "数据实时更新的刷新频率",
+      "设备总数和异常数的计算逻辑"
+    ],
+    "notes": [
+      "左侧有垂直导航栏，包含：控、照明、通风、供电、消防、交通、信息等功能分类",
+      "头部有设计师注释文字'*数据实时更新'，这是标注而非UI元素",
+      "两个大卡片使用了不同的背景图资源（激活态和默认态）",
+      "12个设备卡片使用统一的背景图资源和布局结构",
+      "所有卡片的图标都使用独立的图片资源",
+      "异常数字统一使用红色高亮显示",
+      "设备总数格式为'异常数/总数'的形式"
+    ],
+    "coverageReport": {
+      "totalFigma": 86,
+      "matchedCount": 39,
+      "missingCount": 17,
+      "uncertainCount": 0,
+      "coverageRate": 70,
+      "missing": [
+        {
+          "name": "switch",
+          "type": "FRAME",
+          "depth": 2
+        },
+        {
+          "name": "active",
+          "type": "GROUP",
+          "depth": 3
+        },
+        {
+          "name": "line1",
+          "type": "FRAME",
+          "depth": 4
+        },
+        {
+          "name": "line2",
+          "type": "FRAME",
+          "depth": 4
+        },
+        {
+          "name": "default",
+          "type": "GROUP",
+          "depth": 3
+        },
+        {
+          "name": "line1",
+          "type": "FRAME",
+          "depth": 4
+        },
+        {
+          "name": "line2",
+          "type": "FRAME",
+          "depth": 4
+        },
+        {
+          "name": "tabs",
+          "type": "FRAME",
+          "depth": 3
+        },
+        {
+          "name": "t-监控",
+          "type": "TEXT",
+          "depth": 5
+        },
+        {
+          "name": "d-照明",
+          "type": "TEXT",
+          "depth": 5
+        },
+        {
+          "name": "d-通风",
+          "type": "TEXT",
+          "depth": 5
+        },
+        {
+          "name": "d-消防",
+          "type": "TEXT",
+          "depth": 5
+        },
+        {
+          "name": "d-交通诱导",
+          "type": "TEXT",
+          "depth": 5
+        },
+        {
+          "name": "d-供配电",
+          "type": "TEXT",
+          "depth": 5
+        },
+        {
+          "name": "cons",
+          "type": "GROUP",
+          "depth": 3
+        }
+      ],
+      "uncertain": [],
+      "summary": "一般"
+    },
+    "textTruthValidation": {
+      "truthCount": 37,
+      "suspiciousTexts": [
+        {
+          "text": "两个异常数据卡片",
+          "suggest": null
+        },
+        {
+          "text": "以及左侧导航栏",
+          "suggest": null
+        },
+        {
+          "text": "头部统计区",
+          "suggest": null
+        },
+        {
+          "text": "常驻",
+          "suggest": null
+        },
+        {
+          "text": "标题组",
+          "suggest": null
+        },
+        {
+          "text": "视图切换",
+          "suggest": null
+        },
+        {
+          "text": "激活状态",
+          "suggest": null
+        },
+        {
+          "text": "默认状态",
+          "suggest": null
+        },
+        {
+          "text": "房屋建筑",
+          "suggest": null
+        },
+        {
+          "text": "烟雾机器人",
+          "suggest": "烟道机器人"
+        },
+        {
+          "text": "浅灰蓝色渐变背景",
+          "suggest": null
+        },
+        {
+          "text": "卡片使用蓝色渐变",
+          "suggest": null
+        },
+        {
+          "text": "左侧垂直导航栏",
+          "suggest": null
+        },
+        {
+          "text": "供电",
+          "suggest": "供配电"
+        },
+        {
+          "text": "信息",
+          "suggest": null
+        },
+        {
+          "text": "异常数字使用红色高亮",
+          "suggest": null
+        },
+        {
+          "text": "激活的",
+          "suggest": null
+        },
+        {
+          "text": "有深蓝色渐变背景和图标",
+          "suggest": null
+        },
+        {
+          "text": "异常数字用红色显示",
+          "suggest": null
+        },
+        {
+          "text": "头部统计数据用白色高亮",
+          "suggest": null
+        },
+        {
+          "text": "房屋建筑设备切换",
+          "suggest": null
+        },
+        {
+          "text": "切换显示不同类别的设备统计",
+          "suggest": null
+        },
+        {
+          "text": "左侧",
+          "suggest": null
+        },
+        {
+          "text": "有蓝色渐变背景和图标高亮",
+          "suggest": null
+        },
+        {
+          "text": "点击可能查看设备详情",
+          "suggest": null
+        },
+        {
+          "text": "可点击",
+          "suggest": null
+        },
+        {
+          "text": "卡片具有独立背景和布局",
+          "suggest": null
+        },
+        {
+          "text": "左侧导航栏",
+          "suggest": null
+        },
+        {
+          "text": "系统功能导航",
+          "suggest": null
+        },
+        {
+          "text": "垂直排列的功能分类文字",
+          "suggest": null
+        },
+        {
+          "text": "左侧导航栏的具体跳转链接",
+          "suggest": null
+        },
+        {
+          "text": "设备卡片点击后的详情页面内容",
+          "suggest": null
+        },
+        {
+          "text": "异常设备的具体告警规则",
+          "suggest": null
+        },
+        {
+          "text": "数据实时更新的刷新频率",
+          "suggest": null
+        },
+        {
+          "text": "左侧有垂直导航栏",
+          "suggest": null
+        },
+        {
+          "text": "包含",
+          "suggest": null
+        },
+        {
+          "text": "信息等功能分类",
+          "suggest": null
+        },
+        {
+          "text": "头部有设计师注释文字",
+          "suggest": null
+        },
+        {
+          "text": "数据实时更新",
+          "suggest": null
+        },
+        {
+          "text": "这是标注而非",
+          "suggest": null
+        },
+        {
+          "text": "元素",
+          "suggest": null
+        },
+        {
+          "text": "两个大卡片使用了不同的背景图资源",
+          "suggest": null
+        },
+        {
+          "text": "激活态和默认态",
+          "suggest": null
+        },
+        {
+          "text": "个设备卡片使用统一的背景图资源和布局结构",
+          "suggest": null
+        },
+        {
+          "text": "所有卡片的图标都使用独立的图片资源",
+          "suggest": null
+        },
+        {
+          "text": "异常数字统一使用红色高亮显示",
+          "suggest": null
+        },
+        {
+          "text": "的形式",
+          "suggest": null
+        },
+        {
+          "text": "一般",
+          "suggest": null
+        }
+      ],
+      "hasSuspicious": true
+    }
+  },
+  "visualElements": {
+    "backgroundBrightness": "light",
+    "theme": "浅色科技监测风",
+    "colors": [
+      "rgba(64, 169, 255, 1)",
+      "rgba(255, 87, 87, 1)",
+      "rgba(8, 163, 165, 1)",
+      "rgba(255, 255, 255, 1)",
+      "rgba(255, 255, 255, 0.8)"
+    ],
+    "background": "浅灰蓝色渐变背景，卡片使用蓝色渐变",
+    "decorations": [
+      "左侧垂直导航栏（控、照明、通风、供电、消防、交通、信息）",
+      "异常数字使用红色高亮",
+      "激活的Tab有深蓝色渐变背景和图标"
+    ],
+    "emphasis": [
+      "异常数字用红色显示",
+      "头部统计数据用白色高亮",
+      "完好率用青绿色显示"
+    ]
+  },
+  "_visualElementList": [
+    {
+      "id": "title-group",
+      "name": "标题组",
+      "type": "text-group",
+      "layout": "horizontal",
+      "children": [
+        {
+          "type": "label",
+          "text": "设备监测",
+          "color": "rgba(64, 169, 255, 1)",
+          "fontSize": 16
+        }
+      ]
+    },
+    {
+      "id": "stat-type-count",
+      "name": "设备类型统计",
+      "type": "statistic",
+      "layout": "horizontal",
+      "children": [
+        {
+          "type": "label",
+          "text": "设备类型",
+          "color": "rgba(255, 255, 255, 0.8)",
+          "fontSize": 14
+        },
+        {
+          "type": "value",
+          "text": "28",
+          "color": "rgba(255, 255, 255, 1)",
+          "fontSize": 16
+        }
+      ]
+    },
+    {
+      "id": "stat-total-count",
+      "name": "设备总数统计",
+      "type": "statistic",
+      "layout": "horizontal",
+      "children": [
+        {
+          "type": "label",
+          "text": "设备总数",
+          "color": "rgba(255, 255, 255, 0.8)",
+          "fontSize": 14
+        },
+        {
+          "type": "value",
+          "text": "68562",
+          "color": "rgba(255, 255, 255, 1)",
+          "fontSize": 16
+        }
+      ]
+    },
+    {
+      "id": "stat-completion-rate",
+      "name": "完好率统计",
+      "type": "statistic",
+      "layout": "horizontal",
+      "children": [
+        {
+          "type": "label",
+          "text": "完好率",
+          "color": "rgba(255, 255, 255, 0.8)",
+          "fontSize": 14
+        },
+        {
+          "type": "value",
+          "text": "98%",
+          "color": "rgba(8, 163, 165, 1)",
+          "fontSize": 16
+        }
+      ]
+    },
+    {
+      "id": "tab-active",
+      "name": "激活状态Tab",
+      "type": "tab-button",
+      "active": true,
+      "resourceFile": "../resources/images/bg-8788.png",
+      "children": [
+        {
+          "type": "icon",
+          "resourceFile": "../resources/images/icon-8798.png",
+          "width": 43,
+          "height": 44
+        },
+        {
+          "type": "label",
+          "text": "隧道设备",
+          "color": "rgba(255, 255, 255, 1)",
+          "fontSize": 14
+        },
+        {
+          "type": "label",
+          "text": "异常数",
+          "color": "rgba(255, 255, 255, 1)",
+          "fontSize": 14
+        },
+        {
+          "type": "value",
+          "text": "5",
+          "color": "rgba(255, 87, 87, 1)",
+          "fontSize": 24
+        },
+        {
+          "type": "stats-row",
+          "layout": "horizontal",
+          "children": [
+            {
+              "type": "label",
+              "text": "总",
+              "color": "rgba(255, 255, 255, 0.8)",
+              "fontSize": 12
+            },
+            {
+              "type": "label",
+              "text": "数:",
+              "color": "rgba(255, 255, 255, 0.8)",
+              "fontSize": 12
+            },
+            {
+              "type": "value",
+              "text": "56302",
+              "color": "rgba(255, 255, 255, 1)",
+              "fontSize": 14
+            }
+          ]
+        },
+        {
+          "type": "progress",
+          "text": "3/3740",
+          "color": "rgba(255, 255, 255, 0.8)",
+          "fontSize": 10
+        }
+      ],
+      "styles": {
+        "flexGrow": 1.091,
+        "flexShrink": 1,
+        "flexBasis": 0,
+        "figmaHeightPx": 65
+      }
+    },
+    {
+      "id": "tab-default",
+      "name": "默认状态Tab",
+      "type": "tab-button",
+      "active": false,
+      "resourceFile": "../resources/images/bg-8807.png",
+      "children": [
+        {
+          "type": "icon",
+          "resourceFile": "../resources/images/icon-8817.png",
+          "width": 43,
+          "height": 44
+        },
+        {
+          "type": "label",
+          "text": "房屋建筑",
+          "color": "rgba(255, 255, 255, 1)",
+          "fontSize": 14
+        },
+        {
+          "type": "label",
+          "text": "设备",
+          "color": "rgba(255, 255, 255, 1)",
+          "fontSize": 14
+        },
+        {
+          "type": "label",
+          "text": "异常数",
+          "color": "rgba(255, 255, 255, 1)",
+          "fontSize": 14
+        },
+        {
+          "type": "value",
+          "text": "3",
+          "color": "rgba(255, 87, 87, 1)",
+          "fontSize": 24
+        },
+        {
+          "type": "stats-row",
+          "layout": "horizontal",
+          "children": [
+            {
+              "type": "label",
+              "text": "总",
+              "color": "rgba(255, 255, 255, 0.8)",
+              "fontSize": 12
+            },
+            {
+              "type": "label",
+              "text": "数:",
+              "color": "rgba(255, 255, 255, 0.8)",
+              "fontSize": 12
+            },
+            {
+              "type": "value",
+              "text": "1280",
+              "color": "rgba(255, 255, 255, 1)",
+              "fontSize": 14
+            }
+          ]
+        }
+      ],
+      "styles": {
+        "flexGrow": 0.909,
+        "flexShrink": 1,
+        "flexBasis": 0,
+        "figmaHeightPx": 54
+      }
+    }
+  ],
+  "interactions": [
+    {
+      "target": "隧道设备/房屋建筑设备切换Tab",
+      "type": "tab-switch",
+      "description": "切换显示不同类别的设备统计",
+      "defaultState": "常驻，隧道设备为激活状态",
+      "evidence": "左侧Tab有蓝色渐变背景和图标高亮"
+    },
+    {
+      "target": "12个设备类型卡片",
+      "type": "click",
+      "description": "点击可能查看设备详情",
+      "defaultState": "常驻，可点击",
+      "evidence": "卡片具有独立背景和布局"
+    },
+    {
+      "target": "左侧导航栏",
+      "type": "navigation",
+      "description": "系统功能导航",
+      "defaultState": "常驻",
+      "evidence": "垂直排列的功能分类文字"
+    }
+  ],
+  "charts": [],
+  "chartDataHints": [],
+  "headerSlots": [
+    {
+      "slotType": "header-right",
+      "elementType": "statistic",
+      "content": "设备类型 28"
+    },
+    {
+      "slotType": "header-right",
+      "elementType": "statistic",
+      "content": "设备总数 68562"
+    },
+    {
+      "slotType": "header-right",
+      "elementType": "statistic",
+      "content": "完好率 98%"
+    }
+  ],
+  "analysisType": "stat-grid",
+  "analysisTarget": "",
+  "analysisDescription": "",
+  "analysisEvidence": [],
+  "analysisFile": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mc-max-1788745591890-50ae925f/.mc-gen/config/preview-analysis.json",
+  "_cachedAt": 1788746263944,
+  "_cacheKey": "vision_1t7Dmmpsl5i0PC8BJt2QLf_2:8417_microcode"
+}

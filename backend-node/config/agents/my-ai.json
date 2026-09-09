@@ -1,0 +1,29 @@
+{
+  "name": "my-ai",
+  "label": "我的AI分析",
+  "description": "AI测试",
+  "category": "分析",
+  "logicType": "llm",
+  "templateId": "llm-analyzer",
+  "inputs": [
+    {
+      "key": "input",
+      "type": "string",
+      "required": false
+    }
+  ],
+  "outputs": [
+    {
+      "key": "result",
+      "type": "object"
+    }
+  ],
+  "params": {
+    "prompt": "你是分析师，分析输入并输出JSON"
+  },
+  "model": "qwen3.7-plus",
+  "author": "anonymous",
+  "className": "DynamicAgent",
+  "modulePath": "roles/custom/my-ai.js",
+  "createdAt": 1787210852838
+}

@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>大屏骨架生成器 · 自适应 / 可预览 / 可调试</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --ui-bg: #1e2430; --ui-panel: #262d3a; --ui-line: #364052;
+    --ui-text: #d6dde8; --ui-dim: #8a97a8; --ui-accent: #4aa8ff; --ui-accent2: #36c2a8;
+    --ui-danger: #ff6b6b;
+  }
+  html, body { height: 100%; }
+  body {
+    font-family: system-ui, "Microsoft YaHei", sans-serif;
+    background: var(--ui-bg); color: var(--ui-text);
+    display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+  }
+  /* 顶栏 */
+  .topbar {
+    display: flex; align-items: center; gap: 10px; padding: 8px 14px;
+    background: var(--ui-panel); border-bottom: 1px solid var(--ui-line); flex: 0 0 auto;
+  }
+  .topbar h1 { font-size: 15px; font-weight: 600; margin-right: auto; color: #fff; }
+  .btn {
+    background: #313a4b; color: var(--ui-text); border: 1px solid var(--ui-line);
+    border-radius: 6px; padding: 6px 12px; font-size: 13px; cursor: pointer; white-space: nowrap;
+  }
+  .btn:hover { border-color: var(--ui-accent); }
+  .btn.primary { background: var(--ui-accent); color: #fff; border-color: var(--ui-accent); }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .btn.ghost { background: transparent; }
+  .btn.danger:hover { border-color: var(--ui-danger); color: var(--ui-danger); }
+  /* 主体三栏 */
+  .main { flex: 1; display: flex; min-height: 0; }
+  .col-settings, .col-debug {
+    background: var(--ui-panel); overflow-y: auto; flex: 0 0 280px; padding: 12px;
+  }
+  .col-settings { border-right: 1px solid var(--ui-line); }
+  .col-debug { border-left: 1px solid var(--ui-line); flex-basis: 320px; }
+  .col-stage { flex: 1; display: flex; flex-direction: column; min-width: 0; background: #11151c; }
+  .section-title { font-size: 12px; color: var(--ui-dim); text-transform: uppercase; letter-spacing: .04em; margin: 14px 0 8px; }
+  .section-title:first-child { margin-top: 0; }
+  label.field { display: block; margin-bottom: 8px; font-size: 12px; color: var(--ui-dim); }
+  label.field input, label.field select, label.field textarea {
+    width: 100%; margin-top: 4px; background: #1a2030; color: var(--ui-text);
+    border: 1px solid var(--ui-line); border-radius: 5px; padding: 6px 8px; font-size: 13px; font-family: inherit;
+  }
+  label.field textarea { resize: vertical; min-height: 70px; }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; }
+  .hint { font-size: 11px; color: var(--ui-dim); line-height: 1.5; margin-top: 4px; }
+  .thumb { width: 100%; border-radius: 6px; border: 1px solid var(--ui-line); margin-top: 6px; display: none; }
+  /* 舞台 */
+  .stage-toolbar {
+    display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+    background: #161b24; border-bottom: 1px solid var(--ui-line); flex: 0 0 auto;
+  }
+  .stage-toolbar .hint { margin: 0; }
+  .stage-area { flex: 1; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; padding: 16px; }
+  #frame { position: relative; box-shadow: 0 0 0 1px #2a3344, 0 10px 40px rgba(0,0,0,.5); background: #000; }
+  #stage { width: 100%; height: 100%; overflow: hidden; }
+  .ratio-btn { padding: 4px 9px; font-size: 12px; }
+  .ratio-btn.active { background: var(--ui-accent2); color: #04211b; border-color: var(--ui-accent2); }
+
+  /* ===== 骨架渲染（注入 #stage 内部） ===== */
+  .sk-screen {
+    width: 100%; height: 100%; display: flex; flex-direction: column;
+    font-family: system-ui, "Microsoft YaHei", sans-serif; overflow: hidden;
+  }
+  .sk-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 calc(24 * var(--vw)); z-index: 2;
+  }
+  .sk-title { font-weight: 600; }
+  .sk-tools { color: var(--ui-dim2, #6b7a8c); }
+  .sk-body { flex: 1; position: relative; overflow: hidden; }
+  .sk-map-layer { position: absolute; inset: 0; z-index: 0; padding: calc(12 * var(--vw)); }
+  .sk-map-ph {
+    width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+    border: calc(1 * var(--vw)) dashed var(--accent); border-radius: calc(6 * var(--vw));
+    font-size: calc(20 * var(--vw)); text-align: center;
+  }
+  .sk-sidebars {
+    position: relative; z-index: 1; height: 100%; padding: calc(12 * var(--vw));
+    display: flex; justify-content: space-between; gap: calc(12 * var(--vw)); pointer-events: none;
+  }
+  .sk-sidebar { display: flex; flex-direction: column; gap: calc(12 * var(--vw)); pointer-events: auto; }
+  .sk-panel {
+    border: calc(1 * var(--vw)) solid var(--accent); border-radius: calc(6 * var(--vw));
+    padding: calc(10 * var(--vh)) calc(12 * var(--vw)); overflow: hidden;
+    background: var(--panel); box-shadow: 0 calc(2 * var(--vw)) calc(8 * var(--vw)) rgba(0,0,0,.18);
+  }
+  .sk-panel.ph { display: flex; align-items: center; justify-content: center; text-align: center; }
+  .sk-panel-title { font-weight: 600; margin: 0 0 calc(8 * var(--vw)); }
+  .sk-panel-note { margin: 0; font-size: calc(13 * var(--vw)); opacity: .8; }
+  .sk-footer { z-index: 2; }
+
+  /* 调试面板组件项 */
+  .comp-item { border: 1px solid var(--ui-line); border-radius: 6px; padding: 8px; margin-bottom: 8px; background: #1f2532; }
+  .comp-item .ci-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .comp-item .ci-head .ci-name { flex: 1; font-size: 13px; font-weight: 600; }
+  .comp-item .ci-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .comp-item .ci-grid label { font-size: 11px; color: var(--ui-dim); display: block; }
+  .comp-item .ci-grid input, .comp-item .ci-grid select {
+    width: 100%; margin-top: 2px; background: #161b24; color: var(--ui-text);
+    border: 1px solid var(--ui-line); border-radius: 4px; padding: 4px 6px; font-size: 12px; font-family: inherit;
+  }
+  .ci-remove { background: transparent; border: none; color: var(--ui-danger); cursor: pointer; font-size: 16px; line-height: 1; }
+  .color-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .color-row label { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--ui-dim); }
+  .color-row input[type=color] { width: 28px; height: 22px; padding: 0; border: 1px solid var(--ui-line); border-radius: 4px; background: none; }
+  .ph-toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ui-dim); margin: 6px 0; }
+  .status { font-size: 12px; padding: 6px 10px; border-radius: 5px; margin-top: 8px; display: none; }
+  .status.ok { display: block; background: rgba(54,194,168,.15); color: var(--ui-accent2); }
+  .status.err { display: block; background: rgba(255,107,107,.15); color: var(--ui-danger); }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <h1>大屏骨架生成器</h1>
+  <button class="btn" id="btnImg">导入截图</button>
+  <button class="btn primary" id="btnAnalyze">LLM 分析</button>
+  <button class="btn" id="btnSample">示例数据</button>
+  <button class="btn" id="btnImportJson">导入JSON</button>
+  <button class="btn" id="btnExportSfc">导出 SFC</button>
+  <button class="btn" id="btnExportMd">导出清单</button>
+  <input type="file" id="fileImg" accept="image/*" style="display:none">
+  <input type="file" id="fileJson" accept=".json,application/json" style="display:none">
+</div>
+
+<div class="main">
+  <!-- 左：设置 + 原图 + 原始JSON -->
+  <div class="col-settings">
+    <div class="section-title">LLM 视觉分析配置</div>
+    <label class="field">API Base URL
+      <input id="apiBase" placeholder="https://xxx/v1" value="https://api.openai.com/v1">
+    </label>
+    <label class="field">API Key
+      <input id="apiKey" type="password" placeholder="sk-...">
+    </label>
+    <label class="field">模型名
+      <input id="apiModel" placeholder="gpt-4o-mini" value="gpt-4o-mini">
+    </label>
+    <div class="hint">OpenAI 兼容接口（含阿里云百炼、本地 Ollama 等）。浏览器直连可能受 CORS 限制；若报错，可把模型原始输出粘到下方文本框后点「解析粘贴」。</div>
+    <div class="status" id="status"></div>
+
+    <div class="section-title">原始截图</div>
+    <img id="thumb" class="thumb" alt="截图缩略">
+    <div class="hint" id="imgHint">未导入截图。点「导入截图」选择大屏图（建议 0.5–0.75 降采样，长边≤1440）。</div>
+
+    <div class="section-title">模型原始输出 / 手动粘贴</div>
+    <label class="field">在此粘贴模型返回的 JSON（CORS 受限时备用）
+      <textarea id="rawJson" placeholder="把 LLM 返回的内容粘到这里…"></textarea>
+    </label>
+    <button class="btn" id="btnParseRaw">解析粘贴</button>
+
+    <div class="section-title">当前结构 JSON（可编辑后应用）</div>
+    <label class="field">
+      <textarea id="dataJson" style="min-height:160px; font-family: ui-monospace, monospace; font-size:11px;"></textarea>
+    </label>
+    <button class="btn" id="btnApplyJson">应用 JSON</button>
+  </div>
+
+  <!-- 中：舞台 -->
+  <div class="col-stage">
+    <div class="stage-toolbar">
+      <span class="hint">预览比例：</span>
+      <button class="btn ratio-btn active" data-ratio="16:9">16:9</button>
+      <button class="btn ratio-btn" data-ratio="21:9">21:9</button>
+      <button class="btn ratio-btn" data-ratio="4:3">4:3</button>
+      <button class="btn ratio-btn" data-ratio="9:16">9:16 竖屏</button>
+      <span class="hint" id="frameInfo"></span>
+    </div>
+    <div class="stage-area" id="stageArea">
+      <div id="frame"><div id="stage"></div></div>
+    </div>
+  </div>
+
+  <!-- 右：调试面板 -->
+  <div class="col-debug">
+    <div class="section-title">全局布局</div>
+    <div class="row">
+      <label class="field">左栏宽%
+        <input id="gLeftW" type="number" min="0" max="50" value="22">
+      </label>
+      <label class="field">右栏宽%
+        <input id="gRightW" type="number" min="0" max="50" value="22">
+      </label>
+    </div>
+    <div class="row">
+      <label class="field">Header高
+        <input id="gHeaderH" type="number" value="60">
+      </label>
+      <label class="field">Footer高
+        <input id="gFooterH" type="number" value="36">
+      </label>
+    </div>
+    <label class="field">页面标题
+      <input id="gTitle" value="运行监测">
+    </label>
+    <div class="ph-toggle">
+      <input type="checkbox" id="gCenterPh" checked>
+      <label for="gCenterPh">中间为地图/孪生（压底占位）</label>
+    </div>
+
+    <div class="section-title">主题色</div>
+    <div class="color-row">
+      <label>背景<input type="color" id="cBg" value="#eef4f6"></label>
+      <label>面板<input type="color" id="cPanel" value="#ffffff"></label>
+      <label>文字<input type="color" id="cText" value="#1d4a5e"></label>
+      <label>强调<input type="color" id="cAccent" value="#a7cbdb"></label>
+      <label>头部<input type="color" id="cHead" value="#dcebf0"></label>
+      <label>底部<input type="color" id="cFoot" value="#dcebf0"></label>
+    </div>
+
+    <div class="section-title" style="display:flex;align-items:center;gap:8px;">
+      <span>组件列表</span>
+      <button class="btn ghost" id="btnAddComp" style="margin-left:auto;padding:2px 8px;font-size:12px;">+ 添加</button>
+    </div>
+    <div id="compList"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const DESIGN_W = 1920, DESIGN_H = 1080;
+const REGIONS = ["left", "right", "center"];
+const TYPES = ["card", "chart", "list", "map"];
+
+// ---- 状态 ----
+let state = { data: sampleData() };
+let imgDataUrl = null;
+let curRatio = 16 / 9;
+
+// ---- 工具 ----
+const $ = (id) => document.getElementById(id);
+function setStatus(msg, kind) {
+  const el = $("status");
+  el.textContent = msg || "";
+  el.className = "status" + (kind ? " " + kind : "");
+}
+function hexToRgb(h) {
+  h = h.replace("#", "");
+  if (h.length === 3) h = h.split("").map(c => c + c).join("");
+  return { r: parseInt(h.slice(0,2),16), g: parseInt(h.slice(2,4),16), b: parseInt(h.slice(4,6),16) };
+}
+function rgbToHex(r,g,b){ return "#" + [r,g,b].map(x=>x.toString(16).padStart(2,"0")).join(""); }
+// 浅色背景上文字需为深色：简单根据背景亮度反推（保留用户设定，这里仅用于占位文字色）
+function dimOf(hex){ const {r,g,b}=hexToRgb(hex); const l=(0.299*r+0.587*g+0.114*b)/255; return l>0.6 ? "#6b7a8c" : "#cfe0e8"; }
+
+// ---- 渲染骨架 ----
+function render() {
+  const d = state.data;
+  const stage = $("stage");
+  const frameW = $("frame").clientWidth, frameH = $("frame").clientHeight;
+  if (!frameW || !frameH) return;
+  stage.style.setProperty("--vw", (frameW / DESIGN_W) + "px");
+  stage.style.setProperty("--vh", (frameH / DESIGN_H) + "px");
+  stage.style.background = d.theme.bg;
+
+  const t = d.theme;
+  const left = d.components.filter(c => c.region === "left");
+  const right = d.components.filter(c => c.region === "right");
+  const center = d.components.filter(c => c.region === "center");
+  const dim = dimOf(t.bg);
+
+  let html = `<div class="sk-screen" style="color:${t.text};--panel:${t.panel};--accent:${t.accent};--ui-dim2:${dim};background:${t.bg};">`;
+  // header
+  html += `<header class="sk-header" style="height:calc(${d.layout.headerH}*var(--vh));background:${t.headerBg};border-bottom:calc(1*var(--vh)) solid ${t.accent};">`;
+  html += `<div class="sk-title" style="font-size:calc(28*var(--vw));color:${t.text};">${esc(d.layout.title)}</div>`;
+  html += `<div class="sk-tools" style="font-size:calc(16*var(--vw));">操作区</div></header>`;
+  // body
+  html += `<div class="sk-body">`;
+  if (d.layout.centerPlaceholder && center.length) {
+    html += `<div class="sk-map-layer"><div class="sk-map-ph" style="background:${t.panel};color:${dim};">`;
+    html += center.map(c => esc(c.name) + (c.placeholder ? "（占位）" : "")).join("<br>");
+    html += `</div></div>`;
+  }
+  html += `<div class="sk-sidebars">`;
+  const side = (arr, w) => {
+    if (!arr.length) return "";
+    let s = `<aside class="sk-sidebar" style="width:calc(${w}*var(--vw));">`;
+    s += arr.map(c => panelHtml(c, t, dim)).join("");
+    s += `</aside>`;
+    return s;
+  };
+  html += side(left, d.layout.leftSidebarW) + side(right, d.layout.rightSidebarW);
+  html += `</div></div>`;
+  // footer
+  html += `<footer class="sk-footer" style="height:calc(${d.layout.footerH}*var(--vh));background:${t.footerBg};border-top:calc(1*var(--vh)) solid ${t.accent};"></footer>`;
+  html += `</div>`;
+  stage.innerHTML = html;
+
+  $("frameInfo").textContent = `画布 ${frameW}×${frameH}px · 比例 ${(frameW/frameH).toFixed(2)}:1`;
+}
+
+function panelHtml(c, t, dim) {
+  const h = Math.max(2, c.heightRatio || 10);
+  if (c.placeholder) {
+    return `<section class="sk-panel ph" style="height:${h}%;border-color:${t.accent};background:${t.panel};color:${dim};">${esc(c.name)}（占位）</section>`;
+  }
+  let inner = `<h3 class="sk-panel-title" style="font-size:calc(18*var(--vw));color:${t.text};">${esc(c.name)}</h3>`;
+  if (c.note) inner += `<p class="sk-panel-note" style="color:${dim};">${esc(c.note)}</p>`;
+  return `<section class="sk-panel" style="height:${h}%;border-color:${t.accent};background:${t.panel};">${inner}</section>`;
+}
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g, m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m])); }
+
+// ---- 调试面板同步 ----
+function syncDebugFromState() {
+  const d = state.data;
+  $("gLeftW").value = d.layout.leftSidebarW;
+  $("gRightW").value = d.layout.rightSidebarW;
+  $("gHeaderH").value = d.layout.headerH;
+  $("gFooterH").value = d.layout.footerH;
+  $("gTitle").value = d.layout.title;
+  $("gCenterPh").checked = !!d.layout.centerPlaceholder;
+  $("cBg").value = normHex(d.theme.bg);
+  $("cPanel").value = normHex(d.theme.panel);
+  $("cText").value = normHex(d.theme.text);
+  $("cAccent").value = normHex(d.theme.accent);
+  $("cHead").value = normHex(d.theme.headerBg);
+  $("cFoot").value = normHex(d.theme.footerBg);
+  renderCompList();
+  $("dataJson").value = JSON.stringify(d, null, 2);
+}
+function normHex(h){ if(!h) return "#ffffff"; h=h.trim(); if(h[0]!=="#") h="#"+h; if(h.length===4) h="#"+h.slice(1).split("").map(c=>c+c).join(""); return h.toLowerCase(); }
+
+function renderCompList() {
+  const wrap = $("compList");
+  wrap.innerHTML = "";
+  state.data.components.forEach((c, i) => {
+    const div = document.createElement("div");
+    div.className = "comp-item";
+    div.innerHTML = `
+      <div class="ci-head">
+        <span class="ci-name">${esc(c.name || "未命名")}</span>
+        <button class="ci-remove" title="删除">×</button>
+      </div>
+      <div class="ci-grid">
+        <label>名称<input data-k="name" value="${esc(c.name)}"></label>
+        <label>区域<select data-k="region">${REGIONS.map(r=>`<option ${r===c.region?"selected":""}>${r}</option>`).join("")}</select></label>
+        <label>类型<select data-k="type">${TYPES.map(r=>`<option ${r===c.type?"selected":""}>${r}</option>`).join("")}</select></label>
+        <label>高度%<input data-k="heightRatio" type="number" value="${c.heightRatio}"></label>
+      </div>
+      <div class="ph-toggle"><input type="checkbox" data-k="placeholder" ${c.placeholder?"checked":""}><label>仅占位（不实现）</label></div>
+      <label class="field" style="font-size:11px;">备注/数据字段<input data-k="note" value="${esc(c.note||"")}" placeholder="可选，如 危化品车/重型货车"></label>
+    `;
+    div.querySelector(".ci-remove").addEventListener("click", () => {
+      state.data.components.splice(i, 1); syncDebugFromState(); render();
+    });
+    div.querySelectorAll("[data-k]").forEach(inp => {
+      const k = inp.dataset.k;
+      const ev = (inp.tagName === "SELECT" || inp.type === "checkbox") ? "change" : "input";
+      inp.addEventListener(ev, () => {
+        let v = inp.type === "checkbox" ? inp.checked : inp.value;
+        if (k === "heightRatio") v = parseFloat(v) || 0;
+        state.data.components[i][k] = v;
+        render();
+        $("dataJson").value = JSON.stringify(state.data, null, 2);
+      });
+    });
+    wrap.appendChild(div);
+  });
+}
+
+// 全局控件
+["gLeftW","gRightW","gHeaderH","gFooterH"].forEach(id => {
+  $(id).addEventListener("input", () => {
+    state.data.layout[id.replace("g","").replace(/^([A-Z])/,(m)=>m.toLowerCase())] =
+      parseFloat($(id).value) || 0;
+    render(); syncJson();
+  });
+});
+$("gTitle").addEventListener("input", e => { state.data.layout.title = e.target.value; render(); syncJson(); });
+$("gCenterPh").addEventListener("change", e => { state.data.layout.centerPlaceholder = e.target.checked; render(); syncJson(); });
+["cBg","cPanel","cText","cAccent","cHead","cFoot"].forEach(id => {
+  $(id).addEventListener("input", () => {
+    const map = { cBg:"bg", cPanel:"panel", cText:"text", cAccent:"accent", cHead:"headerBg", cFoot:"footerBg" };
+    state.data.theme[map[id]] = $(id).value;
+    render(); syncJson();
+  });
+});
+function syncJson(){ $("dataJson").value = JSON.stringify(state.data, null, 2); }
+
+$("btnAddComp").addEventListener("click", () => {
+  state.data.components.push({ name:"新组件", region:"left", type:"card", heightRatio:20, placeholder:false, note:"" });
+  syncDebugFromState(); render();
+});
+
+// ---- 比例切换 ----
+document.querySelectorAll(".ratio-btn").forEach(b => {
+  b.addEventListener("click", () => {
+    document.querySelectorAll(".ratio-btn").forEach(x => x.classList.remove("active"));
+    b.classList.add("active");
+    curRatio = b.dataset.ratio.split(":").reduce((a,c)=>a/parseFloat(c));
+    fitFrame();
+  });
+});
+function fitFrame() {
+  const area = $("stageArea");
+  const aw = area.clientWidth - 32, ah = area.clientHeight - 32;
+  let w, h;
+  if (aw / ah > curRatio) { h = ah; w = h * curRatio; } else { w = aw; h = w / curRatio; }
+  const f = $("frame"); f.style.width = w + "px"; f.style.height = h + "px";
+  render();
+}
+new ResizeObserver(fitFrame).observe($("stageArea"));
+
+// ---- 截图导入 ----
+$("btnImg").addEventListener("click", () => $("fileImg").click());
+$("fileImg").addEventListener("change", e => {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => { imgDataUrl = r.result; const t = $("thumb"); t.src = imgDataUrl; t.style.display = "block"; $("imgHint").textContent = "已导入：" + f.name; };
+  r.readAsDataURL(f);
+});
+
+// ---- LLM 分析 ----
+$("btnAnalyze").addEventListener("click", analyze);
+async function analyze() {
+  const base = $("apiBase").value.trim().replace(/\/$/, "");
+  const key = $("apiKey").value.trim();
+  const model = $("apiModel").value.trim();
+  if (!key) { setStatus("请先填写 API Key", "err"); return; }
+  if (!imgDataUrl) { setStatus("请先导入截图", "err"); return; }
+  setStatus("正在调用视觉模型分析…");
+  const prompt = `你是一名大屏/驾驶舱 UI 分析专家。用户给你一张大屏截图，请分析布局结构并只输出严格 JSON（不要 markdown、不要多余文字）：
+{"layout":{"title":"页面顶部主标题文字","headerH":头部高(像素估计,如60),"footerH":底部高(像素估计,如36),"leftSidebarW":左侧栏宽(占视口宽百分比,如22),"rightSidebarW":右侧栏宽(百分比,如22),"centerPlaceholder":true},
+"theme":{"bg":"页面主背景色hex","panel":"面板背景hex","text":"主文字色hex","accent":"强调/边框色hex","headerBg":"头部背景hex","footerBg":"底部背景hex"},
+"components":[{"name":"组件中文名(截图上的标题)","region":"left|right|center","type":"card|chart|list|map","heightRatio":占该侧栏高度百分比(整数),"placeholder":true表示仅占位不实现,"note":"可选数据字段说明"}]}
+规则：
+- region 为 left/right 是两侧数据面板；center 是中间地图/数字孪生（务必 placeholder:true）。
+- 同侧组件 heightRatio 之和尽量接近100。
+- type: 图表/趋势→chart；列表/事件流→list；纯数值卡片→card；地图/孪生→map。
+- 颜色从截图像素估算给 hex。
+- 只输出 JSON。`;
+  try {
+    const body = {
+      model, messages: [
+        { role: "system", content: "你是大屏 UI 结构分析器，只输出 JSON。" },
+        { role: "user", content: [
+          { type: "text", text: prompt },
+          { type: "image_url", image_url: { url: imgDataUrl } }
+        ]}
+      ], temperature: 0.2
+    };
+    const resp = await fetch(base + "/chat/completions", {
+      method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key }, body: JSON.stringify(body)
+    });
+    if (!resp.ok) throw new Error("HTTP " + resp.status + " " + (await resp.text()).slice(0,200));
+    const j = await resp.json();
+    const content = j.choices?.[0]?.message?.content || "";
+    applyModelContent(content);
+  } catch (err) {
+    setStatus("调用失败（可能 CORS 受限）：" + err.message + "。可把模型输出粘到左侧文本框后点「解析粘贴」。", "err");
+  }
+}
+function applyModelContent(content) {
+  const parsed = extractJson(content);
+  if (!parsed) { setStatus("未能解析出 JSON，请检查模型输出或手动粘贴。", "err"); $("rawJson").value = content; return; }
+  state.data = normalize(parsed);
+  syncDebugFromState(); render();
+  setStatus("分析完成，已生成骨架。可在右侧调试面板微调。", "ok");
+}
+function extractJson(s) {
+  if (!s) return null;
+  s = s.trim();
+  // 去 markdown 围栏
+  s = s.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
+  try { return JSON.parse(s); } catch (e) {}
+  const m = s.match(/\{[\s\S]*\}/);
+  if (m) { try { return JSON.parse(m[0]); } catch (e) {} }
+  return null;
+}
+$("btnParseRaw").addEventListener("click", () => applyModelContent($("rawJson").value));
+$("btnApplyJson").addEventListener("click", () => {
+  const p = extractJson($("dataJson").value);
+  if (!p) { setStatus("JSON 解析失败", "err"); return; }
+  state.data = normalize(p); syncDebugFromState(); render(); setStatus("已应用 JSON", "ok");
+});
+
+// ---- 归一化 / 示例 ----
+function normalize(d) {
+  d = d || {};
+  const L = d.layout || {};
+  const T = d.theme || {};
+  const comps = (d.components || []).map((c, i) => ({
+    name: c.name || ("组件" + (i+1)),
+    region: REGIONS.includes(c.region) ? c.region : "left",
+    type: TYPES.includes(c.type) ? c.type : "card",
+    heightRatio: parseFloat(c.heightRatio) || 10,
+    placeholder: !!c.placeholder,
+    note: c.note || ""
+  }));
+  return {
+    layout: {
+      title: L.title || "大屏标题",
+      headerH: parseFloat(L.headerH) || 60,
+      footerH: parseFloat(L.footerH) || 36,
+      leftSidebarW: parseFloat(L.leftSidebarW) || 22,
+      rightSidebarW: parseFloat(L.rightSidebarW) || 22,
+      centerPlaceholder: L.centerPlaceholder !== false
+    },
+    theme: {
+      bg: normHex(T.bg || "#eef4f6"), panel: normHex(T.panel || "#ffffff"),
+      text: normHex(T.text || "#1d4a5e"), accent: normHex(T.accent || "#a7cbdb"),
+      headerBg: normHex(T.headerBg || "#dcebf0"), footerBg: normHex(T.footerBg || "#dcebf0")
+    },
+    components: comps
+  };
+}
+function sampleData() {
+  return normalize({
+    layout: { title: "运行监测", headerH: 60, footerH: 36, leftSidebarW: 22, rightSidebarW: 22, centerPlaceholder: true },
+    theme: { bg:"#eef4f6", panel:"#ffffff", text:"#1d4a5e", accent:"#a7cbdb", headerBg:"#dcebf0", footerBg:"#dcebf0" },
+    components: [
+      { name:"当日总流量", region:"left", type:"card", heightRatio:15, note:"江阴靖江长江隧道 34,620 / 江阴大桥 82,379" },
+      { name:"24小时流量趋势", region:"left", type:"chart", heightRatio:25 },
+      { name:"车型分布", region:"left", type:"chart", heightRatio:20 },
+      { name:"流量预测", region:"left", type:"chart", heightRatio:20 },
+      { name:"重点车辆监测", region:"left", type:"card", heightRatio:20, note:"危化品车 / 重型货车 / 超限车辆" },
+      { name:"智能侦测", region:"right", type:"list", heightRatio:35, note:"交通态势 / 协同上报 / 异常停车" },
+      { name:"设备监测", region:"right", type:"card", heightRatio:30, note:"设备总数 / 在线 / 异常" },
+      { name:"环境监测", region:"right", type:"chart", heightRatio:35, note:"一氧化碳 / 能见度 / 洞内照明 / 洞外光强" },
+      { name:"地图区域", region:"center", type:"map", heightRatio:100, placeholder:true }
+    ]
+  });
+}
+$("btnSample").addEventListener("click", () => { state.data = sampleData(); syncDebugFromState(); render(); setStatus("已载入示例数据", "ok"); });
+
+// ---- 导入/导出 ----
+$("btnImportJson").addEventListener("click", () => $("fileJson").click());
+$("fileJson").addEventListener("change", e => {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => { const p = extractJson(r.result); if (p) { state.data = normalize(p); syncDebugFromState(); render(); setStatus("已导入 JSON", "ok"); } else setStatus("导入失败：不是合法 JSON", "err"); };
+  r.readAsText(f);
+});
+
+function buildSfc() {
+  const d = state.data, t = d.theme;
+  const L = (v) => `calc(${v} * var(--vw))`;
+  const V = (v) => `calc(${v} * var(--vh))`;
+  const left = d.components.filter(c=>c.region==="left");
+  const right = d.components.filter(c=>c.region==="right");
+  const center = d.components.filter(c=>c.region==="center");
+  const sideTpl = (arr, w) => arr.length ? `      <aside class="sidebar" style="width:${L(w)}">\n` +
+    arr.map(c => `        <section class="panel" :class="{ph:${!!c.placeholder}}" style="height:${Math.max(2,c.heightRatio)}%">\n          <h3 class="panel-title">${esc(c.name)}</h3>${c.note?`\n          <p class="panel-note">${esc(c.note)}</p>`:""}\n        </section>`).join("\n") + `\n      </aside>` : "";
+  const mapLayerHtml = (d.layout.centerPlaceholder && center.length)
+    ? '      <div class="map-layer"><div class="placeholder-map">' + center.map(c => esc(c.name)).join(" / ") + '（不实现，仅占位）</div></div>\n'
+    : "";
+  return `<template>
+  <div class="screen-fit">
+    <header class="dashboard-header">
+      <div class="dh-title">${esc(d.layout.title)}</div>
+      <div class="dh-tools">操作区</div>
+    </header>
+    <div class="dashboard-body">
+${mapLayerHtml}      <div class="sidebars">
+${sideTpl(left, d.layout.leftSidebarW)}
+${sideTpl(right, d.layout.rightSidebarW)}
+      </div>
+    </div>
+    <footer class="dashboard-footer"></footer>
+  </div>
+</template>
+
+<script setup lang="ts">
+// vw/vh 响应式骨架，无需 JS 缩放；宽高各自填满、不变形。
+<\/script>
+
+<style scoped lang="less">
+.screen-fit {
+  --vw: calc(100vw / 1920);
+  --vh: calc(100vh / 1080);
+  width: 100vw; height: 100vh; display: flex; flex-direction: column;
+  background: ${t.bg}; color: ${t.text}; font-family: system-ui, "Microsoft YaHei", sans-serif;
+}
+.dashboard-header {
+  height: ${V(d.layout.headerH)}; display: flex; align-items: center; justify-content: space-between;
+  padding: 0 ${L(24)}; background: ${t.headerBg}; border-bottom: calc(1 * var(--vh)) solid ${t.accent}; z-index: 2;
+}
+.dh-title { font-size: ${L(28)}; font-weight: 600; }
+.dh-tools { font-size: ${L(16)}; color: ${dimOf(t.bg)}; }
+.dashboard-body { flex: 1; position: relative; overflow: hidden; }
+.map-layer { position: absolute; inset: 0; z-index: 0; padding: ${L(12)}; }
+.placeholder-map {
+  width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+  background: ${t.panel}; color: ${dimOf(t.bg)}; border: calc(1 * var(--vw)) dashed ${t.accent};
+  border-radius: ${L(6)}; font-size: ${L(20)}; text-align: center;
+}
+.sidebars {
+  position: relative; z-index: 1; height: 100%; padding: ${L(12)};
+  display: flex; justify-content: space-between; gap: ${L(12)}; pointer-events: none;
+}
+.sidebar { display: flex; flex-direction: column; gap: ${L(12)}; pointer-events: auto; }
+.panel {
+  border: calc(1 * var(--vw)) solid ${t.accent}; border-radius: ${L(6)};
+  padding: ${V(10)} ${L(12)}; background: ${t.panel};
+  box-shadow: 0 ${L(2)} ${L(8)} rgba(0,0,0,.18); overflow: hidden;
+}
+.panel.ph { display: flex; align-items: center; justify-content: center; text-align: center; }
+.panel-title { font-size: ${L(18)}; font-weight: 600; margin: 0 0 ${L(8)}; color: ${t.text}; }
+.panel-note { font-size: ${L(13)}; color: ${dimOf(t.bg)}; margin: 0; }
+.dashboard-footer { height: ${V(d.layout.footerH)}; border-top: calc(1 * var(--vh)) solid ${t.accent}; background: ${t.footerBg}; z-index: 2; }
+</style>
+`;
+}
+function buildMd() {
+  const d = state.data;
+  let md = `# ${d.layout.title} · 组件清单\n\n`;
+  md += `> 由「大屏骨架生成器」产出。中间地图/孪生区域仅占位不实现。\n\n`;
+  md += `## 布局\n\n- 左栏宽：${d.layout.leftSidebarW}% ｜ 右栏宽：${d.layout.rightSidebarW}%\n`;
+  md += `- Header 高：${d.layout.headerH} ｜ Footer 高：${d.layout.footerH}\n`;
+  md += `- 中间：${d.layout.centerPlaceholder ? "地图/孪生压底占位" : "常规内容"}\n\n`;
+  md += `## 组件面板（${d.components.length}）\n\n`;
+  md += `| # | 名称 | 区域 | 类型 | 高度% | 占位 |\n|---|------|------|------|-------|------|\n`;
+  d.components.forEach((c, i) => {
+    md += `| ${i+1} | ${c.name} | ${c.region} | ${c.type} | ${c.heightRatio} | ${c.placeholder?"是":"否"} |\n`;
+  });
+  md += `\n## 主题色\n\n`;
+  md += `- 背景 ${d.theme.bg} ｜ 面板 ${d.theme.panel} ｜ 文字 ${d.theme.text} ｜ 强调 ${d.theme.accent}\n`;
+  return md;
+}
+function download(name, content, mime) {
+  const blob = new Blob([content], { type: mime || "text/plain;charset=utf-8" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+$("btnExportSfc").addEventListener("click", () => download("大屏骨架.vue", buildSfc(), "text/plain;charset=utf-8"));
+$("btnExportMd").addEventListener("click", () => download("组件清单.md", buildMd(), "text/markdown;charset=utf-8"));
+
+// ---- 初始化 ----
+syncDebugFromState();
+fitFrame();
+</script>
+</body>
+</html>

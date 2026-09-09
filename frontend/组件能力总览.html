@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>组件生成 · 六大核心能力总览</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#0a0e1a;color:#e4e4e7;min-height:100vh}
+.bg-grid{position:fixed;inset:0;background-image:radial-gradient(circle at 1px 1px,rgba(255,255,255,.03) 1px,transparent 0);background-size:40px 40px;pointer-events:none;z-index:0}
+.container{position:relative;z-index:1;max-width:1100px;margin:0 auto;padding:40px 24px 80px}
+h1{font-size:28px;font-weight:600;color:#f4f4f5;text-align:center;margin-bottom:8px;letter-spacing:-.5px}
+.subtitle{text-align:center;color:#71717a;font-size:14px;margin-bottom:48px;line-height:1.6}
+.pipeline{background:linear-gradient(135deg,#1e293b,#0f172a);border:1px solid #334155;border-radius:16px;padding:24px 32px;margin-bottom:48px;position:relative;overflow:hidden}
+.pipeline::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#3b82f6,#8b5cf6,#ec4899);opacity:.8}
+.pipeline-title{font-size:16px;font-weight:600;color:#f1f5f9;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.pipeline-title .dot{width:8px;height:8px;border-radius:50%;background:#3b82f6;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.pipeline-steps{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.step{background:#1e293b;border:1px solid #334155;border-radius:8px;padding:6px 14px;font-size:12px;color:#94a3b8;white-space:nowrap;transition:all .2s}
+.step.active{border-color:#3b82f6;color:#93c5fd;background:rgba(59,130,246,.1)}
+.step-arrow{color:#475569;font-size:14px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:48px}
+@media(max-width:768px){.grid{grid-template-columns:1fr}}
+.card{background:#111827;border:1px solid #1f2937;border-radius:16px;overflow:hidden;transition:all .3s;position:relative}
+.card:hover{border-color:#374151;transform:translateY(-2px)}
+.card-header{padding:20px 24px 0;position:relative}
+.card-badge{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:500;padding:3px 10px;border-radius:20px;margin-bottom:12px;letter-spacing:.5px}
+.card-title{font-size:18px;font-weight:600;color:#f9fafb;margin-bottom:4px}
+.card-desc{font-size:13px;color:#6b7280;line-height:1.5}
+.card-body{padding:16px 24px 20px}
+.feature-list{list-style:none}
+.feature-list li{display:flex;align-items:flex-start;gap:10px;padding:7px 0;font-size:13px;color:#d1d5db;line-height:1.5}
+.feature-list li::before{content:'';display:block;width:5px;height:5px;border-radius:50%;margin-top:7px;flex-shrink:0}
+.tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:4px;margin-top:8px;font-weight:500}
+.api-flow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:12px}
+.api-flow span{font-size:11px;background:#1f2937;border:1px solid #374151;border-radius:6px;padding:3px 10px;color:#9ca3af}
+.api-flow .arr{color:#4b5563;font-size:10px}
+.full-width{grid-column:1/-1}
+.status-bar{display:flex;gap:16px;margin-top:16px;flex-wrap:wrap}
+.status-item{display:flex;align-items:center;gap:6px;font-size:12px;color:#6b7280}
+.status-dot{width:6px;height:6px;border-radius:50%}
+.legend{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-bottom:40px}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:#9ca3af}
+.legend-dot{width:10px;height:10px;border-radius:3px}
+.layer-label{text-align:center;font-size:12px;color:#4b5563;margin-bottom:16px;letter-spacing:2px;text-transform:uppercase}
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+<div class="container">
+  <h1>组件生成 · 六大核心能力</h1>
+  <p class="subtitle">从 Figma 设计稿到可运行组件，覆盖文档驱动、自动修复、视觉校验、事实核查、接口对接全链路</p>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#3b82f6"></div>核心管线</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#10b981"></div>文档能力</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#8b5cf6"></div>质量保障</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div>校验核查</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div>视觉比对</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#ec4899"></div>接口对接</div>
+  </div>
+
+  <div class="pipeline">
+    <div class="pipeline-title"><span class="dot"></span>核心生成管线 · 端到端自动化</div>
+    <div class="pipeline-steps">
+      <span class="step active">init</span><span class="step-arrow">→</span>
+      <span class="step active">figma-connector</span><span class="step-arrow">→</span>
+      <span class="step active">visual-parser</span><span class="step-arrow">→</span>
+      <span class="step">layout-reviewer</span><span class="step-arrow">+</span>
+      <span class="step">style-mapper</span><span class="step-arrow">→</span>
+      <span class="step">engineer</span><span class="step-arrow">→</span>
+      <span class="step">adversarial-checker</span><span class="step-arrow">→</span>
+      <span class="step">finish</span>
+    </div>
+    <div class="status-bar">
+      <div class="status-item"><div class="status-dot" style="background:#10b981"></div>SSE 实时进度</div>
+      <div class="status-item"><div class="status-dot" style="background:#10b981"></div>暂停 / 恢复 / 重试</div>
+      <div class="status-item"><div class="status-dot" style="background:#10b981"></div>UI 缓存复用</div>
+      <div class="status-item"><div class="status-dot" style="background:#10b981"></div>工作区自动同步</div>
+    </div>
+  </div>
+
+  <div class="layer-label">六大能力</div>
+
+  <div class="grid">
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-badge" style="background:rgba(16,185,129,.12);color:#10b981">DOC ANALYSIS</div>
+        <div class="card-title">文档分析</div>
+        <div class="card-desc">上传需求文档，AI 自动提取七维结构化信息</div>
+      </div>
+      <div class="card-body">
+        <ul class="feature-list">
+          <li style="padding:0;border:0"><span style="color:#10b981">D0</span> 确定性提取：正则规则解析交互/数据绑定</li>
+          <li style="padding:0;border:0"><span style="color:#10b981">D1</span> 字段映射：组件 props 与数据模型对应</li>
+          <li style="padding:0;border:0"><span style="color:#10b981">D2</span> LLM 深度分析：业务语义理解</li>
+          <li style="padding:0;border:0"><span style="color:#10b981">缓存</span> 30分钟 TTL，相同文档秒级返回</li>
+        </ul>
+        <div class="tag" style="background:rgba(16,185,129,.1);color:#10b981">三层分析策略 · 自动降级</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-badge" style="background:rgba(16,185,129,.12);color:#10b981">DOC BINDING</div>
+        <div class="card-title">文档对接</div>
+        <div class="card-desc">文档驱动重新生成，路径 B 纠偏机制</div>
+      </div>
+      <div class="card-body">
+        <ul class="feature-list">
+          <li style="padding:0"><span style="color:#10b981">路径 B</span> UI 缓存复用，跳过 Figma + Vision</li>
+          <li style="padding:0"><span style="color:#10b981">纠偏</span> 新旧组件对比，确认覆盖</li>
+          <li style="padding:0"><span style="color:#10b981">注入</span> 四配置 / 数据绑定 / 交互逻辑</li>
+          <li style="padding:0"><span style="color:#10b981">并行</span> 文档分析与 Figma 解析同步执行</li>
+        </ul>
+        <div class="tag" style="background:rgba(16,185,129,.1);color:#10b981">重新生成效率提升 60%</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-badge" style="background:rgba(139,92,246,.12);color:#8b5cf6">AUTO FIX</div>
+        <div class="card-title">自动修复</div>
+        <div class="card-desc">多层修复链，从 JSON 到 CSS 到代码结构</div>
+      </div>
+      <div class="card-body">
+        <ul class="feature-list">
+          <li style="padding:0"><span style="color:#8b5cf6">JSON 修复链</span> 8 步容错：BOM / 注释 / 截断 / 控制字符</li>
+          <li style="padding:0"><span style="color:#8b5cf6">CSS 清洗</span> 跨行 @import / 语法修复 / Less 变量校验</li>
+          <li style="padding:0"><span style="color:#8b5cf6">结构修复</span> script 闭合 / style scoped / import 补齐</li>
+          <li style="padding:0"><span style="color:#8b5cf6">预编译修复</span> LESS→CSS 失败自动重试</li>
+        </ul>
+        <div class="tag" style="background:rgba(139,92,246,.1);color:#8b5cf6">生成后自动执行 · 无需人工干预</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-badge" style="background:rgba(245,158,11,.12);color:#f59e0b">GROUNDING</div>
+        <div class="card-title">Grounding 事实核查</div>
+        <div class="card-desc">对抗性检查 + 视觉覆盖率校验</div>
+      </div>
+      <div class="card-body">
+        <ul class="feature-list">
+          <li style="padding:0"><span style="color:#f59e0b">对抗性检查</span> 检测越权修改 / 幻觉代码</li>
+          <li style="padding:0"><span style="color:#f59e0b">覆盖率校验</span> Figma 视觉元素覆盖率</li>
+          <li style="padding:0"><span style="color:#f59e0b">Header 验证</span> 插槽关系完整性</li>
+          <li style="padding:0"><span style="color:#f59e0b">变更检测</span> issueCategories 分类输出</li>
+        </ul>
+        <div class="tag" style="background:rgba(245,158,11,.1);color:#f59e0b">8 分钟超时保护</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-badge" style="background:rgba(239,68,68,.12);color:#ef4444">AI COMPARISON</div>
+        <div class="card-title">AI 比对分析</div>
+        <div class="card-desc">生成组件 vs Figma 设计稿视觉相似度评估</div>
+      </div>
+      <div class="card-body">
+        <ul class="feature-list">
+          <li style="padding:0"><span style="color:#ef4444">视觉相似度</span> 截图对比，量化匹配百分比</li>
+          <li style="padding:0"><span style="color:#ef4444">运行时门禁</span> PASS / WARN / BLOCK 三级判定</li>
+          <li style="padding:0"><span style="color:#ef4444">问题列表</span> 视觉偏差精确定位</li>
+          <li style="padding:0"><span style="color:#ef4444">建议输出</span> 可操作的优化方向</li>
+        </ul>
+        <div class="tag" style="background:rgba(239,68,68,.1);color:#ef4444">质量评分阈值 75 分</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-badge" style="background:rgba(236,72,153,.12);color:#ec4899">API BINDING</div>
+        <div class="card-title">API 接口对接</div>
+        <div class="card-desc">Apifox 目录一键绑定，AST 级代码注入</div>
+      </div>
+      <div class="card-body">
+        <ul class="feature-list">
+          <li style="padding:0"><span style="color:#ec4899">三步向导</span> 选目录 → 分析绑定 → 结果确认</li>
+          <li style="padding:0"><span style="color:#ec4899">AST 注入</span> import / ref 声明 / onMounted 逻辑</li>
+          <li style="padding:0"><span style="color:#ec4899">L3 修复</span> 裸 const → ref() 自动转换</li>
+          <li style="padding:0"><span style="color:#ec4899">事务管理</span> 快照备份 + 一键解绑恢复</li>
+        </ul>
+        <div class="api-flow">
+          <span>Apifox</span><span class="arr">→</span>
+          <span>解析</span><span class="arr">→</span>
+          <span>注入</span><span class="arr">→</span>
+          <span>预检</span><span class="arr">→</span>
+          <span>完成</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="pipeline" style="margin-bottom:0">
+    <div class="pipeline-title"><span class="dot" style="background:#8b5cf6"></span>数据流向 · 端到端闭环</div>
+    <div style="display:flex;flex-direction:column;gap:12px;font-size:13px;color:#94a3b8;line-height:1.8">
+      <div><span style="color:#3b82f6;font-weight:500">1. 输入</span> Figma URL + 需求文档 → 并行解析</div>
+      <div><span style="color:#10b981;font-weight:500">2. 分析</span> 文档七维提取 + Figma 视觉分析 + 技术栈识别</div>
+      <div><span style="color:#8b5cf6;font-weight:500">3. 生成</span> 布局审查 → 样式映射 → 代码生成 → 自动修复</div>
+      <div><span style="color:#f59e0b;font-weight:500">4. 校验</span> 对抗性检查 + 视觉比对 + 覆盖率门禁</div>
+      <div><span style="color:#ec4899;font-weight:500">5. 对接</span> API 绑定 → AST 注入 → 运行时预检</div>
+      <div><span style="color:#e4e4e7;font-weight:500">6. 交付</span> LESS 预编译 → 工作区同步 → 组件可运行</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

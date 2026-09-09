@@ -1,0 +1,205 @@
+@bgColor: rgba(233, 240, 253, 0.8);
+@lightbgActive: #fff;
+@baseSize: 12px;
+@baseHeight: 10px;
+
+.bgTransition {
+  transition: background 0.8s ease-in;
+}
+
+.bgSize() {
+  background-size: 100% 100%;
+  width: @baseSize;
+  .bgTransition();
+}
+.base-panel:not(.component-active) {
+  .title {
+    // background: #000 linear-gradient(0deg, rgba(0, 140, 248, 0.75) 0%, rgba(121, 197, 255, 0.75) 100%);
+    // background-clip: text;
+    // color: transparent;
+  }
+  .base-panel-top {
+    .icon-left-img {
+      background: url(../images/dot.png) center no-repeat;
+      background-size: 100% 100%;
+    }
+    .bg-box {
+      height: 100%;
+
+      .left {
+        background: url(../images/title-l.png) top left no-repeat;
+        background-size: 100% 100%;
+        width: 402px;
+      }
+
+      .center {
+        background: url(../images/title-c.png) top left repeat-x;
+        background-size: auto 100%;
+        flex: 1;
+        width: calc(100% - 402px);
+        margin-left: -0.1px;
+      }
+
+      .right {
+        position: absolute;
+        background: url(../images/title-r.png) top repeat-x;
+        background-size: 100% 100%;
+        width: 3px;
+        top: 0;
+        right: 0;
+      }
+    }
+  }
+  .base-panel-bg.no-rem {
+    .top.no-rem {
+      align-items: flex-end;
+      height: @baseHeight;
+
+      .left {
+        background: url(../images/top-l.png) top left no-repeat;
+        background-size: 100% 100%;
+        width: @baseSize;
+        // .bgTransition();
+      }
+
+      .center {
+        background: url(../images/top.png) repeat-x;
+        background-size: auto 100%;
+        flex: 1;
+        // .bgTransition();
+      }
+
+      .right {
+        background: url(../images/top-r.png) top left no-repeat;
+        .bgSize();
+      }
+    }
+
+    .center.no-rem {
+      align-items: flex-end;
+      flex: 1;
+
+      .left {
+        background: url(../images/left.png) top left repeat-y;
+        .bgSize();
+      }
+
+      .center {
+        // .bgTransition();
+        background: @bgColor;
+        flex: 1;
+      }
+
+      .right {
+        background: url(../images/right.png) top left repeat-y;
+        .bgSize();
+      }
+    }
+
+    .bottom.no-rem {
+      height: @baseHeight;
+      align-items: stretch;
+
+      .left {
+        background: url(../images/bottom-l.png) bottom left;
+        .bgSize();
+      }
+
+      .center {
+        background: url(../images/bottom.png) repeat-x;
+        background-size: auto 100%;
+        flex: 1;
+        // .bgTransition();
+      }
+
+      .right {
+        background-color: @bgColor;
+        background: url(../images/bottom-r.png) bottom left no-repeat;
+        .bgSize();
+      }
+    }
+  }
+
+  // &:hover,
+  &.active,
+  &.second-active {
+    .base-panel-top {
+      .bg-box {
+        .left {
+          background: url(../images/title-l-active.png) top left no-repeat;
+          background-size: 100% 100%;
+          transition: all 0.3s;
+        }
+        .center {
+          background: url(../images/title-c-active.png) top left repeat-x;
+          background-size: auto 100%;
+          transition: all 0.3s;
+        }
+        .right {
+          background: url(../images/title-r-active.png) top repeat-x;
+          background-size: 100% 100%;
+          transition: all 0.3s;
+        }
+      }
+    }
+  }
+
+  &.active,
+  &.second-active {
+    .base-panel-bg.no-rem {
+      .top.no-rem {
+        .left {
+          background: url(../images/top-l-active.png) top left no-repeat;
+          background-size: 100% 100%;
+          transition: all 0.3s;
+        }
+
+        .center {
+          background: url(../images/top-active.png) repeat-x;
+          background-size: auto 100%;
+          transition: all 0.3s;
+        }
+
+        .right {
+          background: url(../images/top-r-active.png) top left no-repeat;
+          background-size: 100% 100%;
+          transition: all 0.3s;
+        }
+      }
+
+      .center.no-rem {
+        .left {
+          background: url(../images/left-active.png) top left repeat-y;
+          background-size: 100% 100%;
+          transition: all 0.3s;
+        }
+
+        .right {
+          background: url(../images/right-active.png) top left repeat-y;
+          background-size: 100% 100%;
+          transition: all 0.3s;
+        }
+      }
+
+      .bottom.no-rem {
+        .left {
+          background: url(../images/bottom-l-active.png) bottom left;
+          background-size: 100% 100%;
+          transition: all 0.3s;
+        }
+
+        .center {
+          background: url(../images/bottom-active.png) repeat-x;
+          background-size: auto 100%;
+          transition: all 0.3s;
+        }
+
+        .right {
+          background: url(../images/bottom-r-active.png) bottom left no-repeat;
+          background-size: 100% 100%;
+          transition: all 0.3s;
+        }
+      }
+    }
+  }
+}

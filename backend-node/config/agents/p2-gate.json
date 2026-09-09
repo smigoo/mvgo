@@ -1,0 +1,16 @@
+{
+  "name": "p2-gate",
+  "label": "失败阻断",
+  "description": "",
+  "category": "自定义",
+  "logicType": "tool",
+  "templateId": "l0b-fail",
+  "inputs": [],
+  "outputs": [],
+  "params": {},
+  "model": null,
+  "author": "anonymous",
+  "className": "DynamicAgent",
+  "modulePath": "roles/custom/p2-gate.js",
+  "createdAt": 1787211528254
+}

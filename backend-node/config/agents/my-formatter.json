@@ -1,0 +1,34 @@
+{
+  "name": "my-formatter",
+  "label": "格式化器",
+  "description": "HTTP测试",
+  "category": "转换",
+  "logicType": "tool",
+  "templateId": "formatter",
+  "inputs": [
+    {
+      "key": "name",
+      "type": "string",
+      "required": false
+    },
+    {
+      "key": "count",
+      "type": "number",
+      "required": false
+    }
+  ],
+  "outputs": [
+    {
+      "key": "text",
+      "type": "string"
+    }
+  ],
+  "params": {
+    "template": "组件 {name} 共 {count} 个"
+  },
+  "model": null,
+  "author": "anonymous",
+  "className": "DynamicAgent",
+  "modulePath": "roles/custom/my-formatter.js",
+  "createdAt": 1787210798205
+}

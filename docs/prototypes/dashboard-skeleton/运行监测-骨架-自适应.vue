@@ -1,0 +1,112 @@
+<template>
+  <div class="screen-fit">
+    <!-- ===== 顶部 Header：标题 + 天气 + 工具按钮 ===== -->
+    <header class="dashboard-header">
+      <div class="dh-title">运行监测</div>
+      <div class="dh-weather">晴转多云 26°C · 日期时间</div>
+      <div class="dh-tools">主页 / 应用中心 / 全屏 / 管理员 / 退出 / 2D / 高精</div>
+    </header>
+
+    <!-- ===== 主体：地图压底 + 侧栏浮层 ===== -->
+    <div class="dashboard-body">
+      <!-- 地图层：压在底部（背景层），不实现仅占位 -->
+      <div class="map-layer">
+        <div class="placeholder-map">地图区域（不实现，仅占位）</div>
+      </div>
+
+      <!-- 浮层：左右侧栏浮于地图之上 -->
+      <div class="sidebars">
+        <!-- 左侧栏：流量监测（约 5 个面板，高度按视觉比例估算） -->
+        <aside class="sidebar left">
+          <section class="panel" style="height:15%">
+            <h3 class="panel-title">当日总流量</h3>
+            <p class="panel-note">江阴靖江长江隧道 34,620 / 江阴大桥 82,379</p>
+          </section>
+          <section class="panel" style="height:25%">
+            <h3 class="panel-title">24小时流量趋势</h3>
+          </section>
+          <section class="panel" style="height:20%">
+            <h3 class="panel-title">车型分布</h3>
+          </section>
+          <section class="panel" style="height:20%">
+            <h3 class="panel-title">流量预测</h3>
+          </section>
+          <section class="panel" style="height:20%">
+            <h3 class="panel-title">重点车辆监测</h3>
+            <p class="panel-note">危化品车 / 重型货车 / 超限车辆</p>
+          </section>
+        </aside>
+
+        <!-- 右侧栏：监测面板（约 3 个面板，高度按视觉比例估算） -->
+        <aside class="sidebar right">
+          <section class="panel" style="height:35%">
+            <h3 class="panel-title">智能侦测</h3>
+            <p class="panel-note">交通态势 / 协同上报 / 异常停车 ...</p>
+          </section>
+          <section class="panel" style="height:30%">
+            <h3 class="panel-title">设备监测</h3>
+            <p class="panel-note">设备总数 / 在线 / 异常</p>
+          </section>
+          <section class="panel" style="height:35%">
+            <h3 class="panel-title">环境监测</h3>
+            <p class="panel-note">一氧化碳 / 能见度 / 洞内照明 / 洞外光强</p>
+          </section>
+        </aside>
+      </div>
+    </div>
+
+    <!-- ===== 底部 Footer（预留） ===== -->
+    <footer class="dashboard-footer"></footer>
+  </div>
+</template>
+
+<script setup lang="ts">
+// vw/vh 响应式：纯 CSS 自适应，无需 JS 缩放；宽高各自填满视口、不变形。
+</script>
+
+<style scoped lang="less">
+.screen-fit {
+  /* 设计基准 1920×1080：1 设计像素 = var(--vw) 视口宽 / var(--vh) 视口高 */
+  --vw: calc(100vw / 1920);
+  --vh: calc(100vh / 1080);
+  width: 100vw; height: 100vh;
+  display: flex; flex-direction: column;
+  background: linear-gradient(160deg, #eef4f6 0%, #e2edf0 100%);
+  color: #1d4a5e;
+  font-family: system-ui, "Microsoft YaHei", sans-serif;
+}
+.dashboard-header {
+  height: calc(60 * var(--vh));
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 calc(24 * var(--vw));
+  background: #dcebf0; border-bottom: calc(1 * var(--vh)) solid #bfd9e2; z-index: 2;
+}
+.dh-title { font-size: calc(28 * var(--vw)); font-weight: 600; color: #143d4f; }
+.dh-weather, .dh-tools { font-size: calc(16 * var(--vw)); color: #4f7484; }
+/* 主体：相对定位容器 */
+.dashboard-body { flex: 1; position: relative; overflow: hidden; }
+/* 地图层：压在底部（背景层） */
+.map-layer { position: absolute; inset: 0; z-index: 0; padding: calc(12 * var(--vw)); }
+.placeholder-map {
+  width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+  background: #e9f2f5; color: #7fa3b3; border: calc(1 * var(--vw)) dashed #a7cbdb;
+  border-radius: calc(6 * var(--vw)); font-size: calc(20 * var(--vw));
+}
+/* 浮层：左右侧栏浮于地图之上，中间露出地图 */
+.sidebars {
+  position: relative; z-index: 1; height: 100%; padding: calc(12 * var(--vw));
+  display: flex; justify-content: space-between; gap: calc(12 * var(--vw)); pointer-events: none;
+}
+.sidebar {
+  width: calc(422 * var(--vw)); /* 22% of 1920 */
+  display: flex; flex-direction: column; gap: calc(12 * var(--vw)); pointer-events: auto;
+}
+.panel {
+  border: calc(1 * var(--vw)) solid #cfe0e8; border-radius: calc(6 * var(--vw));
+  padding: calc(10 * var(--vh)) calc(12 * var(--vw));
+  background: rgba(255,255,255,.94); box-shadow: 0 calc(2 * var(--vw)) calc(8 * var(--vw)) rgba(120,160,180,.22); overflow: hidden;
+}
+.panel-title { font-size: calc(18 * var(--vw)); font-weight: 600; margin: 0 0 calc(8 * var(--vw)); color: #1d4a5e; }
+.panel-note { font-size: calc(14 * var(--vw)); color: #5b7a8a; margin: 0; }
+.dashboard-footer { height: calc(36 * var(--vh)); border-top: calc(1 * var(--vh)) solid #bfd9e2; background: #dcebf0; z-index: 2; }
+</style>

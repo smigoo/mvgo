@@ -1,0 +1,16 @@
+{
+  "name": "p2-shot",
+  "label": "截图渲染",
+  "description": "",
+  "category": "自定义",
+  "logicType": "tool",
+  "templateId": "screenshot",
+  "inputs": [],
+  "outputs": [],
+  "params": {},
+  "model": null,
+  "author": "anonymous",
+  "className": "DynamicAgent",
+  "modulePath": "roles/custom/p2-shot.js",
+  "createdAt": 1787211528203
+}

@@ -1,0 +1,57 @@
+{
+  "name": "figma-count",
+  "label": "Figma 组件分析管线",
+  "description": "输入 Figma 链接 → 自动解析 → 取设计稿数据 → 分析组件数量与清单",
+  "entryNode": "start",
+  "nodes": [
+    {
+      "id": "start",
+      "type": "start",
+      "label": "入口节点"
+    },
+    {
+      "id": "parse",
+      "type": "agent",
+      "handler": "url-parser-agent",
+      "label": "URL 解析",
+      "config": {}
+    },
+    {
+      "id": "fetch",
+      "type": "agent",
+      "handler": "figma-connector",
+      "label": "Figma 取数",
+      "config": {}
+    },
+    {
+      "id": "analyze",
+      "type": "agent",
+      "handler": "figma-analyzer",
+      "label": "组件分析",
+      "config": {}
+    },
+    {
+      "id": "end",
+      "type": "end",
+      "label": "结束节点"
+    }
+  ],
+  "edges": [
+    {
+      "source": "start",
+      "target": "parse"
+    },
+    {
+      "source": "parse",
+      "target": "fetch"
+    },
+    {
+      "source": "fetch",
+      "target": "analyze"
+    },
+    {
+      "source": "analyze",
+      "target": "end"
+    }
+  ]
+}

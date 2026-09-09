@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>组件工作台 · 高保真原型 (UI Designer)</title>
+<style>
+  /* ============================================================
+     设计令牌 — 直接复用工程 tokens.css (Layer1/2 + 圆角收敛规则)
+     原则：「越大越圆、越小越方」，最大圆角 --radius-xl:14px
+     ============================================================ */
+  :root {
+    --c-blue-50:#eff6ff; --c-blue-100:#dbeafe; --c-blue-400:#60a5fa; --c-blue-500:#3b82f6; --c-blue-600:#2563eb; --c-blue-700:#1d4ed8; --c-blue-800:#1e40af; --c-blue-900:#1e3a8a;
+    --c-gray-50:#f8fafc; --c-gray-100:#f1f5f9; --c-gray-200:#e2e8f0; --c-gray-300:#cbd5e1; --c-gray-400:#94a3b8;
+    --c-gray-500:#64748b; --c-gray-600:#475569; --c-gray-700:#334155; --c-gray-900:#0f172a;
+    --c-green-50:#f0fdf4; --c-green-100:#dcfce7; --c-green-200:#bbf7d0; --c-green-400:#4ade80;
+    --c-green-500:#22c55e; --c-green-600:#16a34a; --c-green-700:#15803d;
+    --c-red-50:#fef2f2; --c-red-100:#fee2e2; --c-red-200:#fecaca; --c-red-400:#f87171; --c-red-500:#ef4444; --c-red-600:#dc2626;
+    --c-orange-50:#fff7ed; --c-orange-100:#ffedd5; --c-orange-200:#fed7aa; --c-orange-300:#fdb74e;
+    --c-orange-400:#fb923c; --c-orange-500:#f97316; --c-orange-600:#ea580c;
+    --c-yellow-50:#fefce8; --c-yellow-400:#facc15;
+    --c-purple-50:#faf5ff; --c-purple-100:#f3e8ff; --c-purple-400:#c084fc; --c-purple-500:#a855f7; --c-purple-600:#9333ea; --c-purple-700:#7e22ce;
+
+    --brand:var(--c-blue-600); --brand-hover:var(--c-blue-700);
+    --bg-page:#f0f4fa; --bg-card:#fff; --bg-elevated:#fff; --bg-secondary:var(--c-gray-100);
+    --bg-hover:var(--c-gray-50); --bg-input:#fff; --bg-alt:var(--c-gray-100); --bg-disabled:var(--c-gray-100);
+    --text-primary:var(--c-gray-900); --text-secondary:var(--c-gray-600); --text-tertiary:var(--c-gray-500); --text-quaternary:#6b7280;
+    --text-disabled:var(--c-gray-400);
+    --border-default:var(--c-gray-200); --border-strong:var(--c-gray-300); --border-focus:var(--c-blue-500); --border-light:var(--c-gray-200);
+    --brand-cta:#237a57; --brand-cta-hover:#1d684a; --brand-vue3-focus:#42b883;
+    --component-vue3:#16a34a; --component-vue3-bg:rgba(22,163,74,.14); --component-vue3-border:rgba(22,163,74,.28);
+    --component-microcode:#2563eb; --component-microcode-bg:rgba(37,99,235,.14); --component-microcode-border:rgba(37,99,235,.28);
+    --task-running:#22c55e; --task-running-bg:#f0fdf4; --task-running-text:#166534;
+    --task-success:#15803d; --task-success-bg:var(--c-green-50); --task-success-text:#15803d;
+    --task-failed:#ef4444; --task-failed-bg:var(--c-red-50); --task-failed-text:var(--c-red-600);
+    --task-queued:#f59e0b; --task-queued-bg:#fff7ed; --task-queued-text:#b45309;
+
+    /* 设计决策：基础圆角统一 4px；仅「状态脉冲点 / 头像 / 指示圆点」保持圆形(--radius-dot) */
+    --radius-xs:4px; --radius-sm:4px; --radius-md:4px; --radius-lg:4px; --radius-xl:4px; --radius-full:4px; --radius-dot:999px;
+    --shadow-sm:0 2px 8px rgba(15,23,42,.06); --shadow-md:0 8px 16px rgba(15,23,42,.08); --shadow-lg:0 16px 34px rgba(15,23,42,.12);
+    --transition-fast:.15s ease; --transition-base:.2s ease; --transition-slow:.25s ease;
+  }
+  [data-theme="dark"] {
+    --bg-page:#0b1120; --bg-card:#1a2332; --bg-elevated:#283548; --bg-secondary:#131c2e;
+    --bg-hover:#243244; --bg-input:#1a2332; --bg-alt:#131c2e;
+    --text-primary:#e2e8f0; --text-secondary:#94a3b8; --text-tertiary:#64748b; --text-disabled:#475569;
+    --border-default:#2d3a4f; --border-strong:#3b4a63; --border-light:#2d3a4f;
+    --brand-cta:#2f9e6e; --brand-cta-hover:#3bb083;
+    --component-vue3-bg:rgba(74,222,128,.16); --component-microcode-bg:rgba(96,165,250,.14);
+    --task-running-bg:#052e16; --task-running-text:#bbf7d0;
+    --task-success-bg:rgba(34,197,94,.12); --task-success-text:#4ade80;
+    --task-failed-bg:rgba(239,68,68,.12); --task-failed-text:#f87171;
+    --task-queued-bg:#451a03; --task-queued-text:#fef3c7;
+    --shadow-sm:0 2px 8px rgba(0,0,0,.2); --shadow-md:0 8px 16px rgba(0,0,0,.25); --shadow-lg:0 16px 34px rgba(0,0,0,.3);
+  }
+
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html,body { height:100%; }
+  body {
+    font-family:'Inter','PingFang SC','Microsoft YaHei',system-ui,sans-serif;
+    background:var(--bg-page); color:var(--text-primary);
+    font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased;
+  }
+
+  /* ===================== 顶栏 ===================== */
+  .topbar {
+    height:52px; display:flex; align-items:center; gap:12px;
+    padding:0 20px; background:var(--bg-card); border-bottom:1px solid var(--border-default);
+    position:sticky; top:0; z-index:100;
+  }
+  .brand { display:flex; align-items:center; gap:8px; font-weight:700; font-size:15px; color:var(--text-primary); }
+  .brand-mark {
+    width:28px; height:28px; border-radius:var(--radius-md);
+    background:linear-gradient(135deg,var(--c-blue-500),var(--c-blue-700));
+    color:#fff; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:800;
+  }
+  .nav-links { display:flex; align-items:center; gap:4px; margin-left:8px; }
+  .nav-link {
+    padding:6px 14px; font-size:13px; font-weight:500; color:var(--text-secondary);
+    border-radius:var(--radius-md); cursor:pointer; transition:all var(--transition-fast); border:none; background:none;
+  }
+  .nav-link:hover { color:var(--text-primary); background:var(--bg-hover); }
+  .nav-link.active { color:var(--brand); background:color-mix(in srgb,var(--brand) 8%,transparent); font-weight:600; }
+  .topbar-spacer { flex:1; }
+  .topbar-right { display:flex; align-items:center; gap:10px; }
+  .topbar-btn {
+    display:inline-flex; align-items:center; gap:5px; height:32px; padding:0 10px;
+    border:1px solid var(--border-default); border-radius:var(--radius-md);
+    background:var(--bg-card); color:var(--text-secondary); cursor:pointer; font-size:12px;
+    transition:all var(--transition-fast);
+  }
+  .topbar-btn:hover { border-color:var(--border-strong); color:var(--text-primary); }
+  .avatar-dot {
+    width:30px; height:30px; border-radius:var(--radius-dot);
+    background:linear-gradient(135deg,var(--c-blue-400),var(--c-purple-500));
+    color:#fff; display:flex; align-items:center; justify-content:center;
+    font-size:11px; font-weight:700; cursor:pointer;
+  }
+  .theme-toggle {
+    display:inline-flex; align-items:center; gap:6px; height:32px; padding:0 12px;
+    border:1px solid var(--border-default); border-radius:var(--radius-md);
+    background:var(--bg-card); color:var(--text-secondary); cursor:pointer; font-size:12px;
+    transition:all var(--transition-fast);
+  }
+  .theme-toggle:hover { border-color:var(--border-strong); color:var(--text-primary); }
+
+  /* ===================== 整体布局：顶栏 + 工作区 + 全宽页脚 ===================== */
+  .app {
+    display:flex; flex-direction:column;
+    height:100vh; overflow:hidden;
+  }
+  .workbench-area {
+    flex:1; min-height:0; overflow:hidden;
+  }
+  .workbench {
+    display:grid; grid-template-columns:300px 1fr 340px;
+    height:100%; overflow:hidden;
+  }
+
+  /* 底部版权 —— 属于整体底部，横跨全宽，钉在视口最下方，不随内容滚动 */
+  .footer-bar {
+    flex-shrink:0;
+    text-align:center; padding:14px 20px; font-size:11.5px; color:var(--text-tertiary);
+    background:var(--bg-card);
+    border-top:1px solid var(--border-default);
+  }
+  [data-theme="dark"] .footer-bar { background:var(--bg-alt); }
+
+  /* ---------- 左栏：配置轨 ---------- */
+  .config-rail {
+    background:var(--bg-card); border-right:1px solid var(--border-default);
+    display:flex; flex-direction:column; padding:20px 18px; gap:18px; overflow-y:auto;
+  }
+  .rail-title { font-size:16px; font-weight:700; letter-spacing:.2px; }
+  .rail-sub { font-size:12px; color:var(--text-tertiary); margin-top:2px; }
+
+  .field-label {
+    font-size:12px; font-weight:600; color:var(--text-secondary);
+    text-transform:uppercase; letter-spacing:.4px; margin-bottom:8px; display:block;
+  }
+
+  /* 源 Tab */
+  .source-tabs {
+    display:grid; grid-template-columns:repeat(2,1fr); gap:4px; padding:4px;
+    background:var(--bg-secondary); border:1px solid var(--border-default); border-radius:var(--radius-lg);
+  }
+  .source-tab {
+    height:40px; display:flex; align-items:center; justify-content:center; gap:6px;
+    border:0; border-radius:var(--radius-md); background:transparent; color:var(--text-secondary);
+    font-size:12.5px; font-weight:500; cursor:pointer; transition:all var(--transition-fast);
+  }
+  .source-tab:hover { color:var(--text-primary); }
+  .source-tab.active { background:var(--bg-card); color:var(--brand); box-shadow:var(--shadow-sm); font-weight:600; }
+  .source-tab svg { width:15px; height:15px; }
+  .source-tab .badge {
+    font-size:9px; padding:1px 5px; border-radius:var(--radius-dot);
+    background:color-mix(in srgb,var(--text-tertiary) 20%,transparent); color:var(--text-tertiary);
+  }
+  /* HTML 入口已隐藏（与组件生成页一致：暂不支持 HTML 独立模式） */
+  .source-tab[data-src="html"], .source-tab[data-src="docx-html"] { display:none; }
+
+  /* 类型切换 V3/MC */
+  .type-toggle { display:flex; gap:8px; }
+  .type-opt {
+    flex:1; padding:12px; border:1px solid var(--border-default); border-radius:var(--radius-lg);
+    background:var(--bg-card); cursor:pointer; text-align:left; transition:all var(--transition-fast);
+  }
+  .type-opt:hover { border-color:var(--border-strong); }
+  .type-opt .opt-head { display:flex; align-items:center; gap:6px; font-weight:600; font-size:13px; }
+  .type-opt .opt-dot { width:8px; height:8px; border-radius:var(--radius-dot); }
+  .type-opt .opt-desc { font-size:11px; color:var(--text-tertiary); margin-top:3px; line-height:1.4; }
+  .type-opt.active[data-type="vue3"] { border-color:var(--component-vue3-border); background:var(--component-vue3-bg); }
+  .type-opt.active[data-type="vue3"] .opt-dot { background:var(--component-vue3); }
+  .type-opt.active[data-type="mc"] { border-color:var(--component-microcode-border); background:var(--component-microcode-bg); }
+  .type-opt.active[data-type="mc"] .opt-dot { background:var(--component-microcode); }
+
+  /* 能力层 Lite/Max */
+  .tier-toggle { display:flex; gap:8px; }
+  .tier-opt {
+    flex:1; padding:9px; border:1px solid var(--border-default); border-radius:var(--radius-md);
+    background:var(--bg-card); cursor:pointer; font-size:12px; font-weight:600; text-align:center;
+    transition:all var(--transition-fast); color:var(--text-secondary);
+  }
+  .tier-opt.active { border-color:var(--brand); color:var(--brand); background:var(--bg-hover); }
+
+  /* CTA 固定在底部 */
+  .rail-footer { margin-top:auto; }
+  .cta-btn {
+    width:100%; height:46px; border:0; border-radius:var(--radius-lg);
+    background:var(--brand-cta); color:#fff; font-size:14px; font-weight:600; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    box-shadow:0 4px 14px color-mix(in srgb,var(--brand-cta) 30%,transparent);
+    transition:all var(--transition-fast);
+  }
+  .cta-btn:hover:not(:disabled) { background:var(--brand-cta-hover); transform:translateY(-1px); box-shadow:0 6px 20px color-mix(in srgb,var(--brand-cta) 40%,transparent); }
+  .cta-btn:active:not(:disabled) { transform:translateY(0); }
+  .cta-btn:disabled { background:var(--bg-disabled); color:var(--text-disabled); cursor:not-allowed; box-shadow:none; }
+  .cta-hint { font-size:11px; color:var(--text-tertiary); text-align:center; margin-top:8px; }
+
+  /* ---------- 中栏：拖拽舞台 ---------- */
+  .stage-wrap { padding:24px; display:flex; flex-direction:column; min-width:0; }
+  .stage-head { margin-bottom:14px; }
+  .stage-head h2 { font-size:15px; font-weight:700; }
+  .stage-head p { font-size:12.5px; color:var(--text-tertiary); margin-top:2px; }
+
+  .drop-stage {
+    flex:1; border:2px dashed var(--border-strong); border-radius:var(--radius-xl);
+    background:color-mix(in srgb,var(--bg-card) 60%,var(--bg-page));
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;
+    text-align:center; padding:40px; transition:all var(--transition-base); position:relative; cursor:pointer;
+  }
+  .drop-stage:hover { border-color:var(--brand-vue3-focus); background:var(--bg-card); }
+  .drop-stage.dragging {
+    border-color:var(--brand-cta); background:color-mix(in srgb,var(--brand-cta) 6%,var(--bg-card));
+    transform:scale(1.005);
+    box-shadow:0 0 0 4px color-mix(in srgb,var(--brand-cta) 18%,transparent), inset 0 0 30px color-mix(in srgb,var(--brand-cta) 5%,transparent);
+  }
+  .stage-icon {
+    width:64px; height:64px; border-radius:var(--radius-xl);
+    background:color-mix(in srgb,var(--brand) 10%,transparent);
+    display:flex; align-items:center; justify-content:center; color:var(--brand);
+  }
+  .stage-icon svg { width:30px; height:30px; }
+  .stage-title { font-size:19px; font-weight:700; color:var(--text-primary); }
+  .stage-desc { font-size:13px; color:var(--text-secondary); max-width:360px; }
+  .source-chips { display:flex; gap:8px; }
+  .chip {
+    display:inline-flex; align-items:center; gap:6px; padding:6px 12px; font-size:12px; font-weight:500;
+    color:var(--text-secondary); background:var(--bg-secondary); border:1px solid var(--border-default);
+    border-radius:var(--radius-full);
+  }
+  .chip svg { width:13px; height:13px; }
+  .stage-hint { display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--text-tertiary); }
+  .stage-hint kbd {
+    font-family:inherit; font-size:11px; padding:1px 6px; border:1px solid var(--border-default);
+    border-radius:var(--radius-sm); background:var(--bg-card); color:var(--text-secondary);
+  }
+
+  /* ---------- 右栏：历史 + 上下文 ---------- */
+  .history-panel { background:var(--bg-card); border-left:1px solid var(--border-default); padding:20px 16px; overflow-y:auto; }
+  .panel-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+  .panel-head h3 { font-size:14px; font-weight:700; }
+  .panel-head .link { font-size:12px; color:var(--brand); cursor:pointer; }
+  .panel-head .link:hover { text-decoration:underline; }
+
+  /* 概览 mini stats */
+  .mini-stats { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; margin-bottom:18px; }
+  .mini-stat {
+    padding:10px 4px; border:1px solid var(--border-default); border-radius:var(--radius-md);
+    text-align:center; cursor:pointer; transition:all var(--transition-fast); background:var(--bg-card);
+  }
+  .mini-stat:hover { border-color:var(--border-strong); }
+  .mini-stat.active { border-color:var(--brand); background:var(--bg-hover); }
+  .mini-stat .num { font-size:17px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .mini-stat .lbl { font-size:10px; color:var(--text-tertiary); margin-top:2px; }
+  .mini-stat.s-total .num { color:var(--text-primary); }
+  .mini-stat.s-run .num { color:var(--task-running-text); }
+  .mini-stat.s-done .num { color:var(--task-success-text); }
+  .mini-stat.s-fail .num { color:var(--task-failed-text); }
+  .mini-stat.s-queue .num { color:var(--task-queued-text); }
+
+  /* 任务列表 */
+  .task-list { display:flex; flex-direction:column; gap:8px; }
+  .task-item {
+    display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--border-default);
+    border-radius:var(--radius-md); cursor:pointer; transition:all var(--transition-fast); background:var(--bg-card);
+  }
+  .task-item:hover { border-color:var(--border-strong); box-shadow:var(--shadow-sm); }
+  .task-item.is-failed { background:color-mix(in srgb,var(--task-failed) 4%,var(--bg-card)); }
+  .state-dot { width:9px; height:9px; border-radius:var(--radius-dot); flex-shrink:0; }
+  .state-dot.running { background:var(--task-running); animation:pulse-dot 1.8s ease-in-out infinite; }
+  .state-dot.success { background:var(--task-success-text); }
+  .state-dot.failed { background:var(--task-failed); }
+  @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:.35} }
+  .task-meta { min-width:0; flex:1; }
+  .task-name { font-size:13px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .task-time { font-size:11px; color:var(--text-tertiary); font-variant-numeric:tabular-nums; }
+  .task-tag { font-size:10px; padding:2px 7px; border-radius:var(--radius-dot); font-weight:600; flex-shrink:0; }
+  .tag-vue3 { background:var(--component-vue3-bg); color:var(--component-vue3); }
+  .tag-mc { background:var(--component-microcode-bg); color:var(--component-microcode); }
+  .task-err-btn {
+    font-size:11px; padding:3px 8px; border:1px solid var(--task-failed); color:var(--task-failed-text);
+    background:transparent; border-radius:var(--radius-sm); cursor:pointer; flex-shrink:0;
+  }
+  .task-err-btn:hover { background:var(--task-failed-bg); }
+
+  /* 空状态 */
+  .empty-state { display:flex; flex-direction:column; align-items:center; gap:8px; padding:36px 0; color:var(--text-tertiary); }
+  .empty-state svg { width:40px; height:40px; opacity:.4; }
+  .empty-state .es-text { font-size:13px; font-weight:500; color:var(--text-secondary); }
+  .empty-state .es-hint { font-size:11px; }
+
+  /* 快速上手（折叠） */
+  .guide-collapsed {
+    margin-top:18px; border-top:1px solid var(--border-default); padding-top:14px;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .guide-trigger { display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--text-secondary); cursor:pointer; font-weight:500; }
+  .guide-trigger:hover { color:var(--text-primary); }
+  .guide-trigger svg { width:14px; height:14px; transition:transform var(--transition-fast); }
+  .guide-collapsed.open .guide-trigger svg { transform:rotate(90deg); }
+  .guide-body { margin-top:12px; display:none; }
+  .guide-collapsed.open .guide-body { display:block; }
+  .guide-steps { display:flex; flex-direction:column; gap:10px; }
+  .g-step { display:flex; gap:10px; align-items:flex-start; }
+  .g-num {
+    width:20px; height:20px; border-radius:var(--radius-dot); flex-shrink:0;
+    background:var(--brand); color:#fff; font-size:11px; font-weight:700;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .g-txt { font-size:12px; color:var(--text-secondary); line-height:1.5; }
+  .g-txt b { color:var(--text-primary); font-weight:600; }
+
+  /* 可访问性：焦点环 */
+  .source-tab:focus-visible, .type-opt:focus-visible, .tier-opt:focus-visible,
+  .cta-btn:focus-visible, .mini-stat:focus-visible, .task-item:focus-visible, .theme-toggle:focus-visible {
+    outline:2px solid var(--border-focus); outline-offset:2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) { * { transition:none !important; animation:none !important; } }
+  @media (max-width:1100px) { .workbench { grid-template-columns:260px 1fr; } .history-panel { display:none; } }
+
+  /* 状态演示切换器（仅原型用） */
+  .demo-switcher {
+    position:fixed; bottom:60px; right:20px; z-index:200;
+    display:flex; flex-direction:column; gap:4px;
+  }
+  .demo-btn {
+    height:30px; padding:0 12px; border:1px solid var(--border-default);
+    border-radius:var(--radius-sm); background:var(--bg-card);
+    color:var(--text-secondary); font-size:11px; font-weight:600; cursor:pointer;
+    transition:all var(--transition-fast); box-shadow:var(--shadow-md);
+  }
+  .demo-btn:hover { border-color:var(--brand); color:var(--brand); }
+  .demo-btn.active { background:var(--brand); border-color:var(--brand); color:#fff; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- 顶栏 -->
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">感</span> 感智 | 晓界工坊</div>
+    <nav class="nav-links">
+      <button class="nav-link active">组件开发</button>
+      <button class="nav-link">页面</button>
+      <button class="nav-link">接口</button>
+      <button class="nav-link">任务中心</button>
+      <button class="nav-link">大屏布局</button>
+      <button class="nav-link">工作流编排</button>
+    </nav>
+    <div class="topbar-spacer"></div>
+    <div class="topbar-right">
+      <button class="topbar-btn">⋮ WorkSpace</button>
+      <button class="topbar-btn">帮助 / 升级</button>
+      <button class="topbar-btn" title="设置">⚙</button>
+      <button class="topbar-btn" title="通知">🔔</button>
+      <div class="avatar-dot" title="dev-local">DL</div>
+      <button class="theme-toggle" id="themeBtn" aria-label="切换主题">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"/></svg>
+        <span id="themeLabel">深色</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- 工作区（含三栏） -->
+  <div class="workbench-area">
+  <!-- 三栏工作台 -->
+  <main class="workbench">
+    <!-- 左：配置轨 -->
+    <aside class="config-rail">
+      <div>
+        <div class="rail-title">新建组件</div>
+        <div class="rail-sub">选择素材，系统自动产出可下载组件</div>
+      </div>
+
+      <div>
+        <span class="field-label">输入来源</span>
+        <div class="source-tabs" role="tablist">
+          <button class="source-tab active" data-src="shot" role="tab" aria-selected="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.5"/><path d="m21 15-5-5L5 20"/></svg>截图</button>
+          <button class="source-tab" data-src="figma" role="tab" aria-selected="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 3h4v6H8a3 3 0 0 1 0-6Z"/><path d="M12 3h4a3 3 0 0 1 0 6h-4V3Z"/><path d="M8 9h4v6H8a3 3 0 0 1 0-6Z"/><circle cx="16" cy="12" r="3"/><path d="M8 15h4v3a3 3 0 1 1-3-3Z"/></svg>Figma</button>
+          <button class="source-tab" data-src="html" role="tab" aria-selected="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v5h5"/></svg>HTML</button>
+          <button class="source-tab" data-src="docx-html" role="tab" aria-selected="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v5h5"/><path d="m11 13-2 2 2 2M15 13l2 2-2 2"/></svg>HTML+需求<span class="badge">映射</span></button>
+        </div>
+      </div>
+
+      <div>
+        <span class="field-label">组件类型</span>
+        <div class="type-toggle">
+          <div class="type-opt active" data-type="vue3" role="radio" aria-checked="true" tabindex="0">
+            <div class="opt-head"><span class="opt-dot"></span>Vue3 组件</div>
+            <div class="opt-desc">输出标准 .vue 单文件组件，直接集成现有 Vue 项目</div>
+          </div>
+          <div class="type-opt" data-type="mc" role="radio" aria-checked="false" tabindex="0">
+            <div class="opt-head"><span class="opt-dot"></span>微码组件</div>
+            <div class="opt-desc">输出平台标准化面板 / 弹窗 / Table，需配合 mc-gen 工具链</div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <span class="field-label">能力层级</span>
+        <div class="tier-toggle">
+          <div class="tier-opt" data-tier="lite">Lite · 轻量</div>
+          <div class="tier-opt active" data-tier="max">Max · 全量</div>
+        </div>
+      </div>
+
+      <div class="rail-footer">
+        <button class="cta-btn" id="ctaBtn" disabled>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          生成组件
+        </button>
+        <div class="cta-hint">上传素材后启用 · 或按 Enter 快捷提交</div>
+      </div>
+    </aside>
+
+    <!-- 中：拖拽舞台 -->
+    <section class="stage-wrap">
+      <div class="stage-head">
+        <h2>组件生成舞台</h2>
+        <p>将素材拖入下方区域，或点击选择文件</p>
+      </div>
+      <div class="drop-stage" id="dropStage" tabindex="0" role="button" aria-label="拖拽或点击上传素材">
+        <div class="stage-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 16V4m0 0L8 8m4-4 4 4"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+        </div>
+        <div class="stage-title">拖拽文件到此处开始</div>
+        <div class="stage-desc">系统会自动识别素材类型，拆分界面、挂载需求文档，并产出可下载的 Vue3 / 微码组件</div>
+        <div class="source-chips">
+          <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.5"/><path d="m21 15-5-5L5 20"/></svg>截图</span>
+          <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 3h4v6H8a3 3 0 0 1 0-6Z"/><circle cx="16" cy="12" r="3"/></svg>Figma</span>
+        </div>
+        <div class="stage-hint">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 3v2M15 3v2M5 8h14M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/></svg>
+          点击选择文件 · <kbd>Ctrl</kbd>+<kbd>V</kbd> 直接粘贴截图
+        </div>
+      </div>
+    </section>
+
+    <!-- 右：历史 + 上下文 -->
+    <aside class="history-panel">
+      <div class="panel-head">
+        <h3>最近任务</h3>
+        <span class="link">查看全部 →</span>
+      </div>
+
+      <!-- 概览 mini stats（复用统计，移出主视觉中心） -->
+      <div class="mini-stats">
+        <div class="mini-stat s-total active"><div class="num">25</div><div class="lbl">全部</div></div>
+        <div class="mini-stat s-run"><div class="num">1</div><div class="lbl">进行中</div></div>
+        <div class="mini-stat s-done"><div class="num">15</div><div class="lbl">已完成</div></div>
+        <div class="mini-stat s-fail"><div class="num">9</div><div class="lbl">失败</div></div>
+        <div class="mini-stat s-queue"><div class="num">3</div><div class="lbl">排队</div></div>
+      </div>
+
+      <!-- 任务列表（示例：含失败项 + 原因入口 + 空态切换） -->
+      <div class="task-list" id="taskList">
+        <div class="task-item">
+          <span class="state-dot running"></span>
+          <div class="task-meta"><div class="task-name">指标概览面板</div><div class="task-time">进行中 · 6m7s</div></div>
+          <span class="task-tag tag-vue3">V3</span>
+        </div>
+        <div class="task-item is-failed">
+          <span class="state-dot failed"></span>
+          <div class="task-meta"><div class="task-name">导航栏组件</div><div class="task-time">2 小时前</div></div>
+          <span class="task-tag tag-mc">MC</span>
+          <button class="task-err-btn" title="查看失败原因">原因</button>
+        </div>
+        <div class="task-item">
+          <span class="state-dot success"></span>
+          <div class="task-meta"><div class="task-name">列表卡片组件</div><div class="task-time">昨天 14:30</div></div>
+          <span class="task-tag tag-vue3">V3</span>
+        </div>
+        <!-- 空态示例（默认隐藏，可切换演示） -->
+      </div>
+      <div class="empty-state" id="emptyState" style="display:none;">
+        <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="8" width="32" height="24" rx="3" opacity=".5"/><path d="M12 18h16M12 24h10" stroke-linecap="round" opacity=".4"/></svg>
+        <span class="es-text">暂无任务记录</span>
+        <span class="es-hint">生成组件后将在此显示</span>
+      </div>
+
+      <!-- 快速上手（折叠，不占主视觉） -->
+      <div class="guide-collapsed open" id="guide">
+        <div class="guide-trigger" id="guideTrigger">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 6 6 6-6 6"/></svg>
+          快速上手
+        </div>
+        <div class="guide-body">
+          <div class="guide-steps">
+            <div class="g-step"><span class="g-num">1</span><div class="g-txt"><b>选择素材</b>：截图 或 Figma 设计稿</div></div>
+            <div class="g-step"><span class="g-num">2</span><div class="g-txt"><b>选组件类型</b>：Vue3 标准组件 或 平台微码组件</div></div>
+            <div class="g-step"><span class="g-num">3</span><div class="g-txt"><b>点击生成</b>：系统自动拆分界面并产出可下载组件</div></div>
+            <div class="g-step"><span class="g-num">4</span><div class="g-txt"><b>下载组件</b>：在任务详情中预览、导出或重试</div></div>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </main>
+  </div><!-- /workbench-area -->
+
+  <!-- 页脚：属于整体底部，横跨全宽，钉在视口最下方，不随内容滚动 -->
+  <div class="footer-bar">
+    © 2025 感智科技 · 通达科 | 智能工作室
+  </div>
+
+</div><!-- /app -->
+
+<!-- 演示切换器（仅原型用，可删除） -->
+<div class="demo-switcher" title="切换演示状态（仅演示）">
+  <button class="demo-btn active" onclick="toggleEmpty(false)">列表</button>
+  <button class="demo-btn" onclick="toggleEmpty(true)">空状态</button>
+</div>
+
+<script>
+  // 主题切换
+  const html = document.documentElement;
+  document.getElementById('themeBtn').addEventListener('click', () => {
+    const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    html.setAttribute('data-theme', next);
+    document.getElementById('themeLabel').textContent = next === 'dark' ? '浅色' : '深色';
+  });
+
+  // 源 Tab 切换
+  document.querySelectorAll('.source-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.source-tab').forEach(t => { t.classList.remove('active'); t.setAttribute('aria-selected','false'); });
+      tab.classList.add('active'); tab.setAttribute('aria-selected','true');
+    });
+  });
+
+  // 类型切换（单选）
+  const typeOpts = document.querySelectorAll('.type-opt');
+  typeOpts.forEach(opt => {
+    const select = () => {
+      typeOpts.forEach(o => { o.classList.remove('active'); o.setAttribute('aria-checked','false'); });
+      opt.classList.add('active'); opt.setAttribute('aria-checked','true');
+    };
+    opt.addEventListener('click', select);
+    opt.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(); } });
+  });
+
+  // 能力层切换
+  document.querySelectorAll('.tier-opt').forEach(t => {
+    t.addEventListener('click', () => {
+      document.querySelectorAll('.tier-opt').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+    });
+  });
+
+  // 概览 stat 选中
+  document.querySelectorAll('.mini-stat').forEach(s => {
+    s.addEventListener('click', () => {
+      document.querySelectorAll('.mini-stat').forEach(x => x.classList.remove('active'));
+      s.classList.add('active');
+    });
+  });
+
+  // 快速上手折叠
+  document.getElementById('guideTrigger').addEventListener('click', () => {
+    document.getElementById('guide').classList.toggle('open');
+  });
+
+  // 拖拽舞台交互演示
+  const stage = document.getElementById('dropStage');
+  const cta = document.getElementById('ctaBtn');
+  ['dragenter','dragover'].forEach(ev => stage.addEventListener(ev, e => { e.preventDefault(); stage.classList.add('dragging'); }));
+  ['dragleave','drop'].forEach(ev => stage.addEventListener(ev, e => { e.preventDefault(); stage.classList.remove('dragging'); }));
+  stage.addEventListener('drop', () => { cta.disabled = false; });
+  stage.addEventListener('click', () => { cta.disabled = !cta.disabled; }); // 演示：点击模拟已选文件
+  stage.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); cta.disabled = !cta.disabled; } });
+
+  // 演示：切换任务列表空状态
+  function toggleEmpty(empty) {
+    document.querySelectorAll('.demo-btn').forEach(b => b.classList.remove('active'));
+    event.currentTarget.classList.add('active');
+    document.getElementById('taskList').style.display = empty ? 'none' : 'flex';
+    document.getElementById('emptyState').style.display = empty ? 'flex' : 'none';
+  }
+</script>
+</body>
+</html>

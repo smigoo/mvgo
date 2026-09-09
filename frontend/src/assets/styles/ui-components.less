@@ -1,0 +1,873 @@
+/*
+ * UI 规范：22-feature-rich.html
+ * 功能富展示风格 - 按钮与控件样式
+ * 颜色变量统一定义在 themes/tokens.css，此处仅保留组件样式
+ */
+
+/* ========================================
+   按钮基础样式
+   ======================================== */
+.btn,
+.ant-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 24px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.5;
+  text-decoration: none;
+  border-radius: var(--radius-lg);
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  white-space: nowrap;
+  
+  &:hover {
+    transform: var(--hover-transform);
+  }
+  
+  &:active {
+    transform: translateY(0) scale(.97);
+  }
+  
+  &:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+    transform: none;
+  }
+}
+
+/* ========================================
+   主按钮 - Primary
+   ======================================== */
+.btn-primary,
+.ant-btn-primary {
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
+  border-color: var(--button-primary-border);
+  box-shadow: var(--button-primary-shadow);
+  
+  &:hover {
+    background: var(--button-primary-bg-hover);
+    border-color: var(--button-primary-border-hover);
+    box-shadow: var(--button-primary-shadow-hover);
+  }
+  
+  &:active {
+    background: var(--button-primary-bg-active);
+    border-color: var(--button-primary-border-hover);
+    box-shadow: var(--button-primary-shadow);
+  }
+}
+
+/* ========================================
+   次按钮 - Secondary/Outline
+   ======================================== */
+.btn-secondary,
+.ant-btn-default {
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
+  border-color: var(--button-secondary-border);
+  
+  &:hover {
+    background: var(--button-secondary-bg-hover);
+    border-color: var(--button-secondary-border-hover);
+    color: var(--button-secondary-text);
+    box-shadow: var(--shadow-sm);
+  }
+  
+  &:active {
+    background: color-mix(in srgb, var(--button-secondary-bg-hover) 72%, var(--button-secondary-bg));
+  }
+}
+
+/* ========================================
+   幽灵按钮 - Ghost
+   ======================================== */
+.btn-ghost,
+.ant-btn-link {
+  background: transparent;
+  color: var(--button-ghost-text);
+  border: none;
+  padding: 8px 16px;
+  font-weight: 500;
+  box-shadow: none;
+  
+  &:hover {
+    background: var(--button-ghost-bg-hover);
+    transform: none;
+    box-shadow: none;
+  }
+  
+  &:active {
+    background: var(--button-ghost-bg-active);
+  }
+}
+
+/* antd 内部用 .ant-btn.ant-btn-dangerous (特异性 0,2,0) 写 color/borderColor，
+   必须用同特异性甚至更高的选择器才能覆盖，否则被幽灵红字样式压回去 */
+.ant-btn.ant-btn-dangerous,
+.btn-danger {
+  color: var(--button-danger-text);
+  border-color: var(--button-danger-border);
+  background: var(--button-danger-bg);
+  box-shadow: var(--button-danger-shadow);
+
+  &:hover {
+    color: var(--button-danger-text);
+    background: var(--button-danger-bg-hover);
+    border-color: var(--button-danger-border-hover);
+    box-shadow: var(--button-danger-shadow-hover);
+  }
+
+  &:active {
+    background: var(--button-danger-bg-active);
+    box-shadow: var(--button-danger-shadow);
+  }
+}
+
+.ant-btn-text.ant-btn-dangerous,
+.ant-btn-link.ant-btn-dangerous {
+  color: var(--button-danger-soft-text);
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+
+  &:hover {
+    color: var(--button-danger-soft-text);
+    background: var(--button-danger-soft-bg-hover);
+    border-color: transparent;
+    box-shadow: none;
+  }
+
+  &:active {
+    background: var(--button-danger-soft-bg);
+  }
+}
+
+/* ========================================
+   文本按钮 - Text（低权重工具操作）
+   ======================================== */
+.btn-text {
+  background: transparent;
+  border: none;
+  color: var(--button-ghost-text);
+  padding: 6px 12px;
+  font-weight: 500;
+  box-shadow: none;
+
+  &:hover {
+    background: var(--button-ghost-bg-hover);
+    transform: none;
+    box-shadow: none;
+  }
+
+  &:active {
+    background: var(--button-ghost-bg-active);
+  }
+}
+
+/* ========================================
+   虚线按钮 - Dashed（仅“添加一个新对象”）
+   ======================================== */
+.btn-dashed {
+  background: transparent;
+  border: 1.5px dashed var(--border-strong);
+  color: var(--button-secondary-text);
+  box-shadow: none;
+
+  &:hover {
+    border-color: var(--brand);
+    color: var(--brand);
+    background: var(--brand-bg);
+    box-shadow: none;
+  }
+
+  &:active {
+    background: var(--brand-bg-active);
+  }
+}
+
+/* ========================================
+   块级按钮 - Block（登录/移动端底部/表单底部）
+   ======================================== */
+.btn-block {
+  display: flex;
+  width: 100%;
+  justify-content: center;
+}
+
+/* ========================================
+   图标按钮 - Icon（必须带 aria-label 或 tooltip）
+   ======================================== */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+
+  &:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    transform: none;
+  }
+
+  &:active {
+    transform: scale(0.94);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  &.icon-btn-danger {
+    color: var(--error-text);
+
+    &:hover {
+      background: var(--error-bg);
+      color: var(--error);
+    }
+  }
+}
+
+/* ========================================
+   禁用按钮 - Disabled
+   ======================================== */
+.btn-disabled,
+.ant-btn[disabled] {
+  background: var(--button-disabled-bg);
+  color: var(--button-disabled-text);
+  border-color: var(--button-disabled-border);
+  cursor: not-allowed;
+  
+  &:hover {
+    background: var(--button-disabled-bg);
+    color: var(--button-disabled-text);
+    border-color: var(--button-disabled-border);
+    transform: none;
+    box-shadow: none;
+  }
+}
+
+/* ========================================
+   按钮尺寸
+   ======================================== */
+.btn-sm,
+.ant-btn-sm {
+  padding: 6px 16px;
+  font-size: 13px;
+}
+
+.btn-lg,
+.ant-btn-lg {
+  padding: 14px 32px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* ========================================
+   表单控件 - Form Controls
+   ======================================== */
+.ant-input,
+.ant-select-selector,
+.ant-input-textarea {
+  background: var(--bg-input);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: 10px 16px;
+  font-size: 14px;
+  color: var(--text-primary);
+  transition: all var(--transition-fast);
+
+  &:hover {
+    border-color: var(--brand-light);
+  }
+
+  &:focus {
+    border-color: var(--brand);
+    box-shadow: var(--shadow-focus);
+    outline: none;
+  }
+
+  &::placeholder {
+    color: var(--text-tertiary);
+  }
+}
+
+/*
+ * 输入框 affix-wrapper（含前后缀图标的 .ant-input-affix-wrapper，如搜索框/密码框）：
+ * 外层不叠加垂直 padding——否则「外层 10px + 内部 .ant-input 10px」双层叠加，
+ * 高度明显高于并列的 .ant-select（selector 只有一层 padding），造成表头 select/search 高度不一致。
+ * 视觉 10px 间距改由内部 .ant-input 承担（padding: 10px 0），水平交给外层 16px。
+ */
+.ant-input-affix-wrapper {
+  background: var(--bg-input);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: 0 16px;
+  font-size: 14px;
+  color: var(--text-primary);
+  transition: all var(--transition-fast);
+
+  &:hover {
+    border-color: var(--brand-light);
+  }
+
+  &:focus-within {
+    border-color: var(--brand);
+    box-shadow: var(--shadow-focus);
+  }
+
+  // 内部输入框：透明无边框，垂直 padding 由自身承担，与外层不叠加
+  .ant-input {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 10px 0;
+  }
+}
+
+/*
+ * 控件高度统一（治本）：
+ * 根因——本项目 .ant-input 用 padding 10px 上下 + 行高 22px + 边框 2px 撑到 44px，
+ * 而 antd 的 .ant-select-selector 是 token.controlHeight 钉死的 32px（CSS 里改 padding 无效，
+ * 因为 height 是固定值、box-sizing:border-box）。并排时 select 矮 12px。
+ * 解法——以 --mg-control-height 为唯一事实源，把 input / affix-wrapper / select 全部钉到同一高度，
+ * 并同步 select 的文字行高与搜索输入高度，避免文字偏上。
+ * 注意：排除 -sm / -lg 尺寸变体（分页器、紧凑区的小控件不受影响）；input 只作用于 <input>，
+ * 不误伤 textarea 的高度自适应。
+ */
+input.ant-input:not(.ant-input-sm):not(.ant-input-lg),
+.ant-input-affix-wrapper:not(.ant-input-affix-wrapper-sm):not(.ant-input-affix-wrapper-lg) {
+  height: var(--mg-control-height, 44px);
+}
+
+.ant-select-single:not(.ant-select-sm):not(.ant-select-lg):not(.ant-select-customize-input)
+  .ant-select-selector {
+  height: var(--mg-control-height, 44px);
+}
+
+.ant-select-single:not(.ant-select-sm):not(.ant-select-lg) {
+  .ant-select-selection-item,
+  .ant-select-selection-placeholder {
+    line-height: calc(var(--mg-control-height, 44px) - 2px);
+  }
+
+  .ant-select-selection-search-input {
+    height: calc(var(--mg-control-height, 44px) - 2px);
+  }
+}
+
+// 多选：tag 高 24px + padding 9*2 + 边框 2 = 44px，与单选保持同一视觉高度
+.ant-select-multiple:not(.ant-select-sm):not(.ant-select-lg) .ant-select-selector {
+  min-height: var(--mg-control-height, 44px);
+  padding: 9px 8px;
+}
+
+// 例外：分页器的每页条数选择器与 32px 的翻页按钮同排，保持 antd 默认高度，不被统一高度撑大
+.ant-pagination .ant-select-single .ant-select-selector {
+  height: 32px;
+}
+
+.ant-pagination .ant-select-single {
+  .ant-select-selection-item,
+  .ant-select-selection-placeholder {
+    line-height: 30px;
+  }
+
+  .ant-select-selection-search-input {
+    height: 30px;
+  }
+}
+
+/*
+ * <a-input-search> 搜索按钮尺寸对齐（治本）：
+ * 不带 enter-button 时 antd 渲染一个 .ant-btn.ant-btn-icon-only.search-button，
+ * 内部 size=undefined→middle→32px，与 44px 输入框并排明显偏小。
+ * 这里把它钉到 --mg-control-height 同步 input 高度；同时去掉外层
+ * .ant-input-group-addon 的冗余 padding/边框/背景，让按钮直接贴齐输入框，
+ * 并把图标放大到 18px，避免在大按钮里显得「点了个寂寞」。
+ * 仅作用于默认尺寸，排除 -sm / -lg（TokenDashboard 等用 size="small" 的紧凑场景）。
+ */
+.ant-input-search-button.ant-btn-icon-only:not(.ant-btn-sm):not(.ant-btn-lg) {
+  height: var(--mg-control-height, 44px);
+  width: var(--mg-control-height, 44px);
+  // 项目 .ant-btn 全局 padding: 10px 24px 会让按钮宽度被内容撑开（box-sizing:border-box 下 min-content = padding+border+icon）
+  // 这里强制 padding:0 让 width 完全等于 --mg-control-height，呈现方形按钮
+  padding: 0;
+  border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+  font-size: 18px;
+}
+
+// 仅对默认尺寸的 a-input-search 群组：去 addon 冗余 + 让输入框右侧圆角归零，
+// 避免误伤 .ant-input-sm/.ant-input-affix-wrapper-sm 等紧凑用法。
+.ant-input-group:has(
+    .ant-input-search-button:not(.ant-btn-sm):not(.ant-btn-lg)
+  ):not(:has(.ant-input-affix-wrapper-sm)):not(:has(.ant-input-affix-wrapper-lg)) {
+  .ant-input-affix-wrapper {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+}
+
+.ant-input-group-addon:has(.ant-input-search-button:not(.ant-btn-sm):not(.ant-btn-lg)) {
+  padding: 0;
+  background: transparent;
+  border: none;
+}
+
+/* ========================================
+   表单标签 - Form Labels
+   ======================================== */
+.ant-form-item-label > label {
+  color: var(--text-primary);
+  font-weight: 500;
+  font-size: 14px;
+}
+
+/* ========================================
+   开关 - Switch
+   ======================================== */
+.ant-switch {
+  background: var(--border-default);
+  
+  &.ant-switch-checked {
+    background: var(--brand);
+  }
+  
+  &:hover:not(.ant-switch-checked) {
+    background: var(--text-secondary);
+  }
+}
+
+/* ========================================
+   徽章 - Badge
+   ======================================== */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid transparent;
+  
+  &.badge-new {
+    background: var(--brand-bg);
+    color: var(--brand);
+    border-color: var(--brand-border);
+  }
+  
+  &.badge-beta {
+    background: var(--feature-bg);
+    color: var(--feature);
+    border-color: color-mix(in srgb, var(--feature) 20%, transparent);
+  }
+  
+  &.badge-save {
+    background: var(--success-bg);
+    color: var(--success);
+    border-color: var(--success-border);
+  }
+}
+
+/* ========================================
+   卡片悬停效果 - Card Hover
+   ======================================== */
+.card-hover {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-slow);
+  
+  &:hover {
+    transform: var(--hover-transform);
+    box-shadow: var(--shadow-lg);
+  }
+}
+
+/* ========================================
+   页脚 - Footer
+   ======================================== */
+.footer-dark {
+  background: var(--bg-footer);
+  color: var(--text-on-footer);
+  padding: 3rem 0;
+  
+  a {
+    color: var(--text-on-footer);
+    text-decoration: none;
+    transition: color var(--transition-fast);
+    
+    &:hover {
+      color: var(--text-inverse);
+    }
+  }
+}
+
+/* ========================================
+   滚动条美化
+   ======================================== */
+::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: var(--radius-xs);
+  
+  &:hover {
+    background: var(--scrollbar-thumb-hover);
+  }
+}
+
+/* ========================================
+   通用工具类
+   ======================================== */
+.text-brand { color: var(--brand); }
+.text-feature { color: var(--feature); }
+.text-benefit { color: var(--success); }
+.text-problem { color: var(--warning); }
+.text-ink { color: var(--text-primary); }
+.text-muted { color: var(--text-secondary); }
+.text-running { color: var(--task-running); }
+.text-success { color: var(--task-success); }
+.text-queued { color: var(--task-queued); }
+.text-failed { color: var(--task-failed); }
+
+.bg-brand { background: var(--brand); }
+.bg-feature { background: var(--feature); }
+.bg-benefit { background: var(--success-bg); }
+.bg-problem { background: var(--warning-bg); }
+.bg-running { background: var(--task-running-bg); }
+.bg-success { background: var(--task-success-bg); }
+.bg-queued { background: var(--task-queued-bg); }
+.bg-failed { background: var(--task-failed-bg); }
+.bg-alt { background: var(--bg-alt); }
+
+/* ========================================
+   语义标签 - 状态 / 模块 / 能力层级
+   读取优先级：状态 > 模块 > 能力层级
+   ======================================== */
+.status-badge,
+.module-badge,
+.tier-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.6;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+/* 状态标签 */
+.status-badge.status-running {
+  background: var(--task-running-bg);
+  color: var(--task-running-text);
+  border-color: var(--task-running-border);
+}
+.status-badge.status-success {
+  background: var(--task-success-bg);
+  color: var(--task-success-text);
+  border-color: var(--task-success-border);
+}
+.status-badge.status-queued {
+  background: var(--task-queued-bg);
+  color: var(--task-queued-text);
+  border-color: var(--task-queued-border);
+}
+.status-badge.status-failed {
+  background: var(--task-failed-bg);
+  color: var(--task-failed-text);
+  border-color: var(--task-failed-border);
+}
+.status-badge.status-muted {
+  background: var(--task-muted-bg);
+  color: var(--task-muted-text);
+  border-color: var(--task-muted-border);
+}
+
+/* 模块标签（来源，只小面积使用） */
+.module-badge.module-microcode {
+  background: var(--module-microcode-bg);
+  color: var(--module-microcode-text);
+  border-color: var(--module-microcode-border);
+}
+.module-badge.module-vue3 {
+  background: var(--module-vue3-bg);
+  color: var(--module-vue3-text);
+  border-color: var(--module-vue3-border);
+}
+.module-badge.module-playground {
+  background: var(--module-playground-bg);
+  color: var(--module-playground-text);
+  border-color: var(--module-playground-border);
+}
+.module-badge.module-apifox {
+  background: var(--module-apifox-bg);
+  color: var(--module-apifox-text);
+  border-color: var(--module-apifox-border);
+}
+.module-badge.module-git {
+  background: var(--module-git-bg);
+  color: var(--module-git-text);
+  border-color: var(--module-git-border);
+}
+
+/* 能力层级标签（Lite 轻薄 / Max 厚重，不表达状态）→ 渐变胶囊 */
+.tier-badge.tier-lite {
+  background: var(--tier-lite-grad);
+  color: var(--tier-lite-text);
+  border-color: transparent;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, .12);
+}
+.tier-badge.tier-max {
+  background: var(--tier-max-grad);
+  color: var(--tier-max-text);
+  border-color: transparent;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, .12);
+}
+/* 档位标签统一为胶囊形态 */
+.tier-badge {
+  border-radius: var(--radius-full);
+}
+
+/* ═══ Lite/Max 胶囊切换（分段滑块） ═══ */
+.tier-toggle {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: 100%;
+  padding: 5px;
+  background: var(--tier-toggle-track, #EDF1F6);
+  border: 1px solid var(--border-default, #E2E8F0);
+  border-radius: var(--radius-full);
+  isolation: isolate;
+  user-select: none;
+
+  &__thumb {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    width: calc(50% - 5px);
+    height: calc(100% - 10px);
+    border-radius: var(--radius-full);
+    box-shadow: 0 4px 12px rgba(15, 23, 42, .16);
+    transition: transform .42s cubic-bezier(.22, 1, .36, 1), opacity .42s cubic-bezier(.22, 1, .36, 1);
+    will-change: transform, opacity;
+    pointer-events: none;
+
+    &--lite { background: var(--tier-lite-grad); opacity: 1; }
+    &--max  { background: var(--tier-max-grad);  opacity: 0; }
+  }
+
+  &.is-max .tier-toggle__thumb--lite { opacity: 0; }
+  &.is-max .tier-toggle__thumb--max  { opacity: 1; }
+  &.is-max .tier-toggle__thumb { transform: translateX(100%); }
+
+  &__opt {
+    position: relative;
+    z-index: 1;
+    appearance: none;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    font: 600 14px/1.2 inherit;
+    letter-spacing: .02em;
+    padding: 10px 0;
+    color: var(--text-secondary, #64748B);
+    transition: color .42s cubic-bezier(.22, 1, .36, 1);
+
+    &:disabled { cursor: not-allowed; }
+  }
+
+  &:not(.is-max) .tier-toggle__opt[data-val="lite"] { color: var(--tier-lite-text); }
+  &.is-max .tier-toggle__opt[data-val="max"] { color: var(--tier-max-text); }
+
+  &__opt:focus-visible {
+    outline: 2px solid var(--focus, #6D28D9);
+    outline-offset: 2px;
+    border-radius: 8px;
+  }
+
+  &.disabled { opacity: .55; pointer-events: none; }
+}
+
+/* ═══ 代码类型胶囊切换（V3 / MC，分段滑块） ═══ */
+.codetype-toggle {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: 100%;
+  padding: 5px;
+  background: var(--codetype-toggle-track, #EDF1F6);
+  border: 1px solid var(--border-default, #E2E8F0);
+  border-radius: var(--radius-full);
+  isolation: isolate;
+  user-select: none;
+
+  &__thumb {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    width: calc(50% - 5px);
+    height: calc(100% - 10px);
+    border-radius: var(--radius-full);
+    box-shadow: 0 4px 12px rgba(15, 23, 42, .16);
+    transition: transform .42s cubic-bezier(.22, 1, .36, 1), opacity .42s cubic-bezier(.22, 1, .36, 1);
+    will-change: transform, opacity;
+    pointer-events: none;
+
+    &--vue3 { background: var(--component-vue3); opacity: 1; }
+    &--microcode { background: var(--component-microcode); opacity: 0; }
+  }
+
+  &.is-microcode .codetype-toggle__thumb--vue3 { opacity: 0; }
+  &.is-microcode .codetype-toggle__thumb--microcode { opacity: 1; }
+  &.is-microcode .codetype-toggle__thumb { transform: translateX(100%); }
+
+  &__opt {
+    position: relative;
+    z-index: 1;
+    appearance: none;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    font: 600 14px/1.2 inherit;
+    letter-spacing: .02em;
+    padding: 10px 0;
+    color: var(--text-secondary, #64748B);
+    transition: color .42s cubic-bezier(.22, 1, .36, 1);
+
+    &:disabled { cursor: not-allowed; }
+  }
+
+  &:not(.is-microcode) .codetype-toggle__opt[data-val="vue3"] { color: var(--component-vue3-contrast, #FFFFFF); }
+  &.is-microcode .codetype-toggle__opt[data-val="microcode"] { color: var(--component-microcode-contrast, #FFFFFF); }
+
+  &__opt:focus-visible {
+    outline: 2px solid var(--focus, #6D28D9);
+    outline-offset: 2px;
+    border-radius: 8px;
+  }
+
+  &.disabled { opacity: .55; pointer-events: none; }
+}
+
+/* ═══ 状态徽章 / 进度 / 状态点（全站复用）═══ */
+.state-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.6;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.state-chip--running { background: var(--task-running-bg); color: var(--task-running-text); border-color: var(--task-running-border); }
+.state-chip--queued { background: var(--task-queued-bg); color: var(--task-queued-text); border-color: var(--task-queued-border); }
+.state-chip--failed { background: var(--task-failed-bg); color: var(--task-failed-text); border-color: var(--task-failed-border); }
+.state-chip--success { background: var(--task-success); color: #fff; border-color: var(--task-success); }
+.state-chip--info { background: var(--info); color: #fff; border-color: var(--info); }
+
+.state-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; display: inline-block;
+}
+.state-dot--running { background: var(--task-running); animation: status-pulse 1.6s ease-in-out infinite; }
+.state-dot--completed, .state-dot--success { background: var(--task-success); }
+.state-dot--failed { background: var(--task-failed); }
+.state-dot--queued { background: var(--task-queued); }
+.state-dot--muted { background: var(--task-muted); }
+@keyframes status-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .35; transform: scale(.82); }
+}
+
+.progress-bar {
+  position: relative;
+  width: 100%;
+  height: 8px;
+  background: var(--progress-track);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.progress-bar__fill {
+  position: absolute; top: 0; left: 0; height: 100%;
+  background: var(--progress-fill);
+  border-radius: 999px;
+  transition: width .3s ease;
+}
+.progress-bar__fill--success { background: var(--task-success); }
+
+/* ═══ 只读实心徽章（生成中左栏用，与 Toggle 视觉一致）═══ */
+.tier-badge-solid {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, .18);
+}
+.tier-badge-solid.lite { background: var(--tier-lite-grad); color: var(--tier-lite-text); }
+.tier-badge-solid.max { background: var(--tier-max-grad); color: var(--tier-max-text); }
+
+.codetype-badge-solid {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, .18);
+}
+.codetype-badge-solid.vue3 { background: var(--component-vue3); color: var(--component-vue3-contrast); }
+.codetype-badge-solid.microcode { background: var(--component-microcode); color: var(--component-microcode-contrast); }
+
+.shadow-sm { box-shadow: var(--shadow-sm); }
+.shadow-md { box-shadow: var(--shadow-md); }
+.shadow-lg { box-shadow: var(--shadow-lg); }
+.shadow-xl { box-shadow: var(--shadow-xl); }
+
+.rounded-sm { border-radius: var(--radius-sm); }
+.rounded-md { border-radius: var(--radius-md); }
+.rounded-lg { border-radius: var(--radius-lg); }
+.rounded-xl { border-radius: var(--radius-xl); }
+.rounded-full { border-radius: var(--radius-full); }
+
+.hover-up {
+  transition: transform var(--transition-base), box-shadow var(--transition-base);
+  
+  &:hover {
+    transform: var(--hover-transform);
+    box-shadow: var(--shadow-lg);
+  }
+}

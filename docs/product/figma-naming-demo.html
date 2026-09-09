@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="ish26EDj3JB4omSnXALWVB">
+<head data-page-node-id="z8EzDPAzO7uybcPZzZyCNa">
+  <meta charset="UTF-8" data-page-node-id="Bp3HfAcyjHmBvCXQDHtUYv">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="qivPYUdQHyJCUkUhCFk4bT">
+  <title>Figma 整理规范 Demo - 命名与 Auto Layout 示例</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 40px 20px;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      text-align: center;
+      color: white;
+      font-size: 32px;
+      margin-bottom: 16px;
+      font-weight: 700;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 16px;
+      margin-bottom: 40px;
+    }
+
+    .comparison {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 30px;
+      margin-bottom: 40px;
+    }
+
+    @media (max-width: 968px) {
+      .comparison {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .panel {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 2px solid #f0f0f0;
+    }
+
+    .panel-title {
+      font-size: 20px;
+      font-weight: 700;
+      flex: 1;
+    }
+
+    .panel-title.bad {
+      color: #dc2626;
+    }
+
+    .panel-title.good {
+      color: #16a34a;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .badge.bad {
+      background: #fee2e2;
+      color: #dc2626;
+    }
+
+    .badge.good {
+      background: #dcfce7;
+      color: #16a34a;
+    }
+
+    .figma-canvas {
+      background: #f8f9fa;
+      border: 2px dashed #e5e7eb;
+      border-radius: 12px;
+      padding: 20px;
+      min-height: 400px;
+      position: relative;
+    }
+
+    .component-root {
+      background: white;
+      border: 2px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 16px;
+      position: relative;
+      transition: all 0.3s ease;
+    }
+
+    .component-root:hover {
+      border-color: #667eea;
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+    }
+
+    .component-root.bad {
+      border-color: #fca5a5;
+      background: #fef2f2;
+    }
+
+    .component-root.good {
+      border-color: #86efac;
+      background: #f0fdf4;
+    }
+
+    .node-label {
+      position: absolute;
+      top: -10px;
+      left: 16px;
+      background: #667eea;
+      color: white;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .node-label.bad {
+      background: #dc2626;
+    }
+
+    .node-label.good {
+      background: #16a34a;
+    }
+
+    .node-content {
+      margin-top: 8px;
+    }
+
+    .title-section {
+      font-size: 18px;
+      font-weight: 600;
+      color: #1f2937;
+      margin-bottom: 12px;
+    }
+
+    .stat-cards {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .stat-card {
+      flex: 1;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 12px;
+      border-radius: 8px;
+      text-align: center;
+    }
+
+    .stat-card .value {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .stat-card .label {
+      font-size: 12px;
+      opacity: 0.9;
+    }
+
+    .chart-section {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+
+    .chart-bars {
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+      height: 120px;
+    }
+
+    .chart-bar {
+      flex: 1;
+      background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
+      border-radius: 4px 4px 0 0;
+      position: relative;
+    }
+
+    .filter-bar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .btn {
+      background: #667eea;
+      color: white;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn:hover {
+      background: #5568d3;
+      transform: translateY(-1px);
+    }
+
+    .btn-icon {
+      width: 16px;
+      height: 16px;
+      fill: white;
+    }
+
+    .icon-placeholder {
+      width: 20px;
+      height: 20px;
+      background: rgba(255, 255, 255, 0.3);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .input-box {
+      flex: 1;
+      background: white;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 14px;
+      color: #6b7280;
+    }
+
+    /* Tooltip Styles */
+    .tooltip-trigger {
+      position: relative;
+      cursor: help;
+    }
+
+    .tooltip-trigger:hover::after {
+      content: attr(data-tooltip);
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1f2937;
+      color: white;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      white-space: nowrap;
+      z-index: 100;
+      margin-bottom: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      max-width: 300px;
+      text-align: center;
+    }
+
+    .tooltip-trigger:hover::before {
+      content: '';
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 6px solid transparent;
+      border-top-color: #1f2937;
+      margin-bottom: -4px;
+      z-index: 101;
+    }
+
+    /* Annotation Section */
+    .annotations {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    }
+
+    .annotation-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 16px;
+      margin-top: 20px;
+    }
+
+    .annotation-card {
+      background: #f9fafb;
+      border-left: 4px solid #667eea;
+      padding: 16px;
+      border-radius: 8px;
+    }
+
+    .annotation-card h4 {
+      font-size: 14px;
+      font-weight: 600;
+      color: #1f2937;
+      margin-bottom: 8px;
+    }
+
+    .annotation-card p {
+      font-size: 13px;
+      color: #6b7280;
+      line-height: 1.6;
+    }
+
+    .annotation-card code {
+      background: #e5e7eb;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'Monaco', 'Consolas', monospace;
+      font-size: 12px;
+      color: #dc2626;
+    }
+
+    .annotation-card code.good {
+      color: #16a34a;
+      background: #dcfce7;
+    }
+
+    .checklist {
+      margin-top: 20px;
+      padding: 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 12px;
+      color: white;
+    }
+
+    .checklist h3 {
+      font-size: 18px;
+      margin-bottom: 16px;
+    }
+
+    .checklist-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 12px;
+      font-size: 14px;
+    }
+
+    .checkmark {
+      width: 20px;
+      height: 20px;
+      background: rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body data-page-node-id="lvhiV3KxaEzcedGYtkgT7M">
+  <div class="container" data-page-node-id="gPVj5qOly1yRea3DUsDfu1">
+    <h1 data-page-node-id="lKs6fUR97tEArSauGDqqAB">📐 Figma 整理规范 Demo</h1>
+    <p class="subtitle" data-page-node-id="15fpREF1IUMJhCWZODL5Uy">对比「整理前」与「整理后」的命名与 Auto Layout 差异</p>
+
+    <!-- Comparison Section -->
+    <div class="comparison" data-page-node-id="vm00WDx4cTUsgOhnmjLJD2">
+      <!-- Bad Example -->
+      <div class="panel" data-page-node-id="GAQbRaSvJU3lyMAvui3TIg">
+        <div class="panel-header" data-page-node-id="IRJcuvqA0l7MMPECYtbknQ">
+          <span class="panel-title bad" data-page-node-id="n5btPkwcxQhGoiAOpUpcn5">❌ 整理前（错误示范）</span>
+          <span class="badge bad" data-page-node-id="2Qbbisr7xkHTuleLPeSMdW">还原度 40-60%</span>
+        </div>
+        <div class="figma-canvas" data-page-node-id="uR7OSJYiXs3xgkSZqFYryl">
+          <div class="component-root bad tooltip-trigger" data-tooltip="问题：根容器无意义命名 + 无 Auto Layout → 布局错乱" data-page-node-id="ICJ8UzjdCw1gUPsreqEq9g">
+            <span class="node-label bad" data-page-node-id="jxhl0wnGzNbVSAMbv8TtZ9">Frame 123</span>
+            <div class="node-content" data-page-node-id="uUwMMu4ttHoSRznsqmuQSV">
+              <div class="title-section" data-page-node-id="IpD5y2Xrd8le0xuF8Hgwx7">流量监测</div>
+              
+              <div class="stat-cards" style="display: flex; gap: 0; margin-bottom: 12px;" data-page-node-id="xvzyxyabFB67tvBijovK1g">
+                <div class="stat-card" style="margin-right: 0;" data-page-node-id="nglFKB5H8w7551dplAg481">
+                  <div class="value" data-page-node-id="j9toNCBPAmCkdL15hwLMDt">12,345</div>
+                  <div class="label" data-page-node-id="ovxi93FtDjGDtK1BoqlIrH">今日流量</div>
+                </div>
+                <div class="stat-card" style="margin-right: 0;" data-page-node-id="oC5YFhqJ1PuCThaFPy52d6">
+                  <div class="value" data-page-node-id="1PYZlMKBD9pCmfkAeVQmZP">8,234</div>
+                  <div class="label" data-page-node-id="jWeJTmjyGVxTvtAbzBtLnE">昨日流量</div>
+                </div>
+                <div class="stat-card" style="margin-right: 0;" data-page-node-id="5wnDP5y0HY0RnT9zQWFHAl">
+                  <div class="value" data-page-node-id="SGJjcxxDikUfFQRyEix1k1">+15.3%</div>
+                  <div class="label" data-page-node-id="MlKhXvtNiHoBO4QhUF6Cfc">同比增长</div>
+                </div>
+              </div>
+
+              <div class="chart-section" data-page-node-id="YYKhcoE8eH3iPOhUthSFCU">
+                <div style="font-size: 12px; color: #6b7280; margin-bottom: 8px;" data-page-node-id="c8QvUT9UAyWLmY3eSQxAhA">流量趋势</div>
+                <div class="chart-bars" data-page-node-id="uUwPDLRWyl4C5ZDKXFYfGD">
+                  <div class="chart-bar" style="height: 60%;" data-page-node-id="K5q6WPTijHlCRIzqweP3IU"></div>
+                  <div class="chart-bar" style="height: 80%;" data-page-node-id="eXGhB8uFt0QFGy6KCGKqI5"></div>
+                  <div class="chart-bar" style="height: 45%;" data-page-node-id="WST5dLQW1XYmAqCwfFCQtB"></div>
+                  <div class="chart-bar" style="height: 90%;" data-page-node-id="m1l3azNMUvQmoHUSYmTABT"></div>
+                  <div class="chart-bar" style="height: 70%;" data-page-node-id="QIVuD1JtBjNPoefjbAj6oL"></div>
+                </div>
+              </div>
+
+              <div class="filter-bar" data-page-node-id="Rv78jzC7lHoRGaspWMSgVL">
+                <div class="btn tooltip-trigger" data-tooltip="问题：按钮未命名 → 识别为 unknown" data-page-node-id="05jWRevYrOigG1r8FtQBW4">
+                  <span class="icon-placeholder" data-page-node-id="MxNtdUF2m1eYMFLxNz9OD2">🔍</span>
+                  筛选
+                </div>
+                <div class="input-box" data-page-node-id="R4ER26vzHdoiJ85HD4bPei">搜索...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Good Example -->
+      <div class="panel" data-page-node-id="l2dwY3NpYFk1W9VADaWIS8">
+        <div class="panel-header" data-page-node-id="Ppn37BIi3nK7f5tpSkxaAe">
+          <span class="panel-title good" data-page-node-id="XCGiBuqQ71onSQ81qu7CoD">✅ 整理后（正确示范）</span>
+          <span class="badge good" data-page-node-id="t3YIMt7KGUBhY6dMsZXYWA">还原度 90%+</span>
+        </div>
+        <div class="figma-canvas" data-page-node-id="HkoLdkAer5pupEsgOzKFsQ">
+          <div class="component-root good tooltip-trigger" data-tooltip="✓ 语义化命名 + Auto Layout VERTICAL + padding 16 + itemSpacing 12" data-page-node-id="DSz1ZnBQ7zJSfvUjw9fusa">
+            <span class="node-label good" data-page-node-id="v4TwZIkDIwwNY5jF5Oxfi3">cp-流量监测</span>
+            <div class="node-content" data-page-node-id="0MBAF0CyyBZeNxFnSag0w5">
+              <div class="title-section" style="background: #f0fdf4; padding: 8px; border-radius: 4px; border-left: 3px solid #16a34a;" data-page-node-id="4fynUtbw58dldI9HPisl5n">
+                title
+              </div>
+              
+              <div class="stat-cards" style="display: flex; gap: 12px; margin-bottom: 12px;" data-page-node-id="99WzcMBIbAikt6GmxkuL5K">
+                <div class="stat-card tooltip-trigger" data-tooltip="✓ 统计卡容器：Auto Layout HORIZONTAL + itemSpacing 16" style="margin-right: 0;" data-page-node-id="E2S3Po3IPHZhIi9Gp3mb0G">
+                  <div class="value" data-page-node-id="sKTlE1Ztb46JFiryHghNPa">12,345</div>
+                  <div class="label" data-page-node-id="q2HFTgFO2LVARFmsm0QcA2">stat-card-1</div>
+                </div>
+                <div class="stat-card tooltip-trigger" data-tooltip="✓ 统计卡容器：Auto Layout HORIZONTAL + itemSpacing 16" style="margin-right: 0;" data-page-node-id="JVmIUqQBw5oK08m8b3n4DE">
+                  <div class="value" data-page-node-id="Sgwc8cwDwq5GWW6rKmNrlI">8,234</div>
+                  <div class="label" data-page-node-id="wtpmzMigVPurtZTBeZ8wwJ">stat-card-2</div>
+                </div>
+                <div class="stat-card tooltip-trigger" data-tooltip="✓ 统计卡容器：Auto Layout HORIZONTAL + itemSpacing 16" style="margin-right: 0;" data-page-node-id="wt3HcVI31KdoXhTiHmUCq4">
+                  <div class="value" data-page-node-id="24ElpDdpAQxEogatDpyxwH">+15.3%</div>
+                  <div class="label" data-page-node-id="SWUuyTDCkGElTzzLqY9fbB">stat-card-3</div>
+                </div>
+              </div>
+
+              <div class="chart-section tooltip-trigger" data-tooltip="✓ 图表区域：@echarts/bar（跳过资源导出，运行时渲染）" data-page-node-id="dmy9taEoqliJuGqAoPiseS">
+                <div style="font-size: 12px; color: #6b7280; margin-bottom: 8px;" data-page-node-id="iFeHXEVgpBX8HK3mXbhxUx">@echarts/bar</div>
+                <div class="chart-bars" data-page-node-id="3zqj4eoWtBV8fDfqa2vWbr">
+                  <div class="chart-bar" style="height: 60%;" data-page-node-id="db0C8HQu4zZlDncQZO8uuT"></div>
+                  <div class="chart-bar" style="height: 80%;" data-page-node-id="BuYsZNYhzZvxdG9ICg9LXy"></div>
+                  <div class="chart-bar" style="height: 45%;" data-page-node-id="JjaBOMCkuECmCG0nHBzFnE"></div>
+                  <div class="chart-bar" style="height: 90%;" data-page-node-id="AAEo0LmZaxlfT4chgUAMD9"></div>
+                  <div class="chart-bar" style="height: 70%;" data-page-node-id="POeQRaIuDKrf8FMmNPNbvA"></div>
+                </div>
+              </div>
+
+              <div class="filter-bar tooltip-trigger" data-tooltip="✓ 筛选栏：Auto Layout HORIZONTAL + itemSpacing 8" data-page-node-id="V7VC3fk5gaGG4wHfohArYM">
+                <div class="btn tooltip-trigger" data-tooltip="✓ 按钮：btn-filter + icon-filter（整体导出）" data-page-node-id="lp2SeI9wDrilgCuqFA6hbT">
+                  <span class="icon-placeholder" data-page-node-id="TGHelQMTvRCIgqTeGzHjCF">🔍</span>
+                  筛选
+                </div>
+                <div class="input-box tooltip-trigger" data-tooltip="✓ 输入框：search-input" data-page-node-id="sMBaYJF0EEqbKgib0cYNL7">搜索...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Annotations Section -->
+    <div class="annotations" data-page-node-id="JfAZoywuwctW0WukikHM33">
+      <h2 style="font-size: 24px; color: #1f2937; margin-bottom: 16px;" data-page-node-id="TuuGdUWRJXrKRSTwnO2yxU">📝 关键命名规则解析</h2>
+      <div class="annotation-grid" data-page-node-id="BoxgIyGURuYGHBXxMncVhA">
+        <div class="annotation-card" data-page-node-id="dy9jaqFuzTtXbwEja0xAJE">
+          <h4 data-page-node-id="XKltCqo2yLUX5hCVHE9JIU"> 根容器命名</h4>
+          <p data-page-node-id="IDDXT3lvelIO5p3ZU2CyhS">
+            ❌ 错误：<code data-page-node-id="GQebcjO7KRnaX1LpGF9YjI">Frame 123</code> / <code data-page-node-id="G11ZMgA8jfkSKjtRC3mcym">Group 456</code><br data-page-node-id="epybCRs6iLX3H4Iv7uwoMu">
+            ✅ 正确：<code data-page-node-id="5jIn3XAsTC0XDxgKiBdkBk">cp-流量监测</code> / <code data-page-node-id="5iOAfAcpbU5hqNOpA3fZui">cp-traffic-monitor</code>
+          </p>
+          <p style="margin-top: 8px;" data-page-node-id="qtsdz5VBAyKP3lDwKs2ByW">
+            <strong data-page-node-id="wpit0pALNOmL2tTc2A1Bke">影响：</strong>根容器命名决定组件整体标识，无意义命名导致代码可读性差
+          </p>
+        </div>
+
+        <div class="annotation-card" data-page-node-id="z2aEfrvfX8eoVm2yOkoBjc">
+          <h4 data-page-node-id="zw3K2vglsqD9Ap6AOEhK6t">② 背景图命名</h4>
+          <p data-page-node-id="lBbJRm75Bv4D0MDZLxV9Ck">
+            ❌ 错误：<code data-page-node-id="N8zpVsJf0MSVqlzFXnmvW5">Rectangle 45</code> / <code data-page-node-id="1cT8Outh1aQcQcF3Fcouew">Background</code><br data-page-node-id="RrvbOFS7gBWC0Dup36qw34">
+            ✅ 正确：<code data-page-node-id="xHFQl0Yjb3oZ51yp3lBEPY">bg</code> / <code data-page-node-id="zbNXxSO3BCCdIl2WBICPy2">bg-header</code> / <code data-page-node-id="PxJJCVbw6xQA0ByeQAbWUJ">bg-card</code>
+          </p>
+          <p style="margin-top: 8px;" data-page-node-id="FgWZT6xcXbjgZWjbFLFtCS">
+            <strong data-page-node-id="50smZgWn4LLoTS1uFBMmgm">管线行为：</strong>根节点 <code data-page-node-id="dL9JCtMHhKDOK1Pl6M7ZEs">bg</code> 跳过下载（透明底要求），嵌套 <code data-page-node-id="MpTCKXktGB9drjGZdRIMNp">bg</code> 挂载到父容器
+          </p>
+        </div>
+
+        <div class="annotation-card" data-page-node-id="PZJc8Vypeolm8zS612s8d7">
+          <h4 data-page-node-id="8cFYI6OdJmKOYyEsasxHKS">③ 图标命名</h4>
+          <p data-page-node-id="kGHR3KW8WDhNqIkkxVmoRA">
+            ❌ 错误：<code data-page-node-id="YyHsPuoEEZWYrlEwat0RpX">Vector 78</code> / <code data-page-node-id="xHm23P6jog1gugCc4ugIVq">Component 9</code><br data-page-node-id="UO08hEQKZzMQLltXUQV2pS">
+            ✅ 正确：<code data-page-node-id="EFDlZJDgwXDjjG8HOtT606">icon</code> / <code data-page-node-id="avYZCVuTOYWfk0PxeJoJ0l">icon-filter</code> / <code data-page-node-id="WIFHAoF28NZ5k4bf9VQbIz">icon-arrow-right</code>
+          </p>
+          <p style="margin-top: 8px;" data-page-node-id="Mwsmg8AbVOt1wekEQgdX30">
+            <strong data-page-node-id="CD1DYoqRUOE9M4gZUzgQgD">管线行为：</strong>命名级整体 icon 整体导出 1 张图，不钻内部 VECTOR 碎片
+          </p>
+        </div>
+
+        <div class="annotation-card" data-page-node-id="gao9A6V3EWveBGSHZ9OEGl">
+          <h4 data-page-node-id="DrseX0mERDZvAhiy4LjJ3y">④ 图表区域标记</h4>
+          <p data-page-node-id="8lqJtx2H0Fv5jACKHqy20K">
+            ❌ 错误：无标记 → 每个柱子被导出为独立 png<br data-page-node-id="KYuwPIxgaikmvbeeAyqBXh">
+            ✅ 正确：<code data-page-node-id="1LaZG7bm8rsNz1AZzxW8rb">@echarts/bar</code> / <code data-page-node-id="D6HyVZEe7HnDtdXDqHfqoQ">@echarts/line</code> / <code data-page-node-id="0HpFdkAfwfNvbFYj1hw7l1">@echarts/pie</code>
+          </p>
+          <p style="margin-top: 8px;" data-page-node-id="7qJNcvi7YohYmGr4MXDVJO">
+            <strong data-page-node-id="GmZaxW8ltv7BzuI1O7m3G9">管线行为：</strong>标记 <code data-page-node-id="ggVRXipe8Poqa8ZxVro2oL">@echarts</code> 的节点整棵子树跳过资源导出（运行时渲染）
+          </p>
+        </div>
+
+        <div class="annotation-card" data-page-node-id="CwJdZNxKDjUN6j5ImIO50E">
+          <h4 data-page-node-id="gAoV7RalAlvrbl7kM740yn">⑤ 按钮/Tab 命名</h4>
+          <p data-page-node-id="9mo7cNxjaECmdhe1SeamFF">
+            ❌ 错误：<code data-page-node-id="yIt05h7O2vP3ZskTCR4MDo">Button 1</code> / <code data-page-node-id="xWGyAn7s30sFiYRwE7635Q">Tab 2</code><br data-page-node-id="TJlAVfs290Ta4FIkkHaOKF">
+            ✅ 正确：<code data-page-node-id="dhQpPs2NldoFehzn1XkBB0">btn-submit</code> / <code data-page-node-id="gRCdGjzIz7WzoEOUA2xB4G">btn-cancel</code> / <code data-page-node-id="2Uh4tjIEf4sXXsDShNzaPv">tab-active</code>
+          </p>
+          <p style="margin-top: 8px;" data-page-node-id="vySbTXU9w7W7HJXrCwJtzA">
+            <strong data-page-node-id="dr7UXR43AFWMI0NyTZ6x7e">影响：</strong>语义化命名保留到生成代码，提升可读性与可维护性
+          </p>
+        </div>
+
+        <div class="annotation-card" data-page-node-id="tfVGVNvoW8hmyBf69BpyRi">
+          <h4 data-page-node-id="d0Z6GJd1BqAM8tmYTRVxNw">⑥ Auto Layout 属性</h4>
+          <p data-page-node-id="bDwfseiQBwnKJeAOPmfl8R">
+            ❌ 错误：无 Auto Layout → <code data-page-node-id="HaEZcLfi4CWZnSNGINQDuj">layoutMode=null</code><br data-page-node-id="qF3kHJaMJXivUDpCrZSYpG">
+            ✅ 正确：<code data-page-node-id="BcpcElpWs69LsMRui93NkH">layoutMode=HORIZONTAL/VERTICAL</code> + <code data-page-node-id="MbPhrQBbNXEEhaSaWW84gA">padding≥8px</code> + <code data-page-node-id="gbPiZEmFmFQrhhCJzbWSpF">itemSpacing≥8px</code>
+          </p>
+          <p style="margin-top: 8px;" data-page-node-id="ooedmoIKbwboyupo5SLvs7">
+            <strong data-page-node-id="BYaGccdUMslRcSwWsvzdFr">影响：</strong>布局完全错乱 vs 精确还原间距与对齐
+          </p>
+        </div>
+      </div>
+
+      <!-- Checklist -->
+      <div class="checklist" data-page-node-id="DGnqtGcwBFqblPvbZBQMCh">
+        <h3 data-page-node-id="BXGEzTXfHLZnNwCgUl1EEC">✅ 提交前 3 分钟自检清单</h3>
+        <div class="checklist-item" data-page-node-id="2tl78FpnQlFQ0WLQZKprtf">
+          <div class="checkmark" data-page-node-id="lAfcsZFsiY2ySMoxIYZ4kt">1</div>
+          <div data-page-node-id="IiDFJrIg9DGUSo9Dkk2EyD">根容器是否语义化命名？（不是 <code data-page-node-id="UmCx3MGEFbdzKsNDtSbuMk">Frame 123</code> / <code data-page-node-id="C9Uva4ELLzI5MtcUsB3gER">bg</code>）</div>
+        </div>
+        <div class="checklist-item" data-page-node-id="6lHkcMcnJvp9xe8LP68Abl">
+          <div class="checkmark" data-page-node-id="NW1UCC2Qx6xehfoxIfa0V7">2</div>
+          <div data-page-node-id="ZPBGZ0ioc9bSS7HzmNmGI3">所有图标是否命名为 <code data-page-node-id="lLBfEWbYxFA8odoYWb0KDG">icon</code> / <code data-page-node-id="P8NYA1pHl6XmuNOu4m2dxo">icon-*</code>？</div>
+        </div>
+        <div class="checklist-item" data-page-node-id="iVArz73Fbr1008DDfyCwr8">
+          <div class="checkmark" data-page-node-id="v0tcKhtsLnbUnDXQdDfIDZ">3</div>
+          <div data-page-node-id="WpD2fhZyrIG9cbVyI7hGKN">图表区域是否标记 <code data-page-node-id="l7Bd1Zj2gx0YMw3Dd1VmD8">@echarts/*</code>？</div>
+        </div>
+        <div class="checklist-item" data-page-node-id="m0p3j3KoyX1tHQK6O5L98C">
+          <div class="checkmark" data-page-node-id="JGVGb5bXnd3u94WJHxAJYc">4</div>
+          <div data-page-node-id="lYyxo6zlOapM7PlMIQuxaL">根容器是否有 Auto Layout？（Shift+A 检查）</div>
+        </div>
+        <div class="checklist-item" data-page-node-id="uJXlln6S97F3VkFRkWYyKZ">
+          <div class="checkmark" data-page-node-id="tH4MFCFYtAGFM2bJqhGFsf">5</div>
+          <div data-page-node-id="d5Ax4gV6FroinCH8ML1FVD">layoutMode 是否为 <code data-page-node-id="YLLeZWe4OykBAcdaCXxuoc">HORIZONTAL</code> 或 <code data-page-node-id="i0YgpweFrNlL1uoNmKU1TZ">VERTICAL</code>？</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

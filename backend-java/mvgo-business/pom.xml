@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.mvgo</groupId>
+        <artifactId>mvgo-parent</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>mvgo-business</artifactId>
+    <name>MVGO Business</name>
+    <description>业务逻辑层：认证、组件、分组、任务、工作流、文档、令牌、Apifox、大屏、页面、工作空间</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.mvgo</groupId>
+            <artifactId>mvgo-common</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.mvgo</groupId>
+            <artifactId>mvgo-data</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.mvgo</groupId>
+            <artifactId>mvgo-node</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+        </dependency>
+    </dependencies>
+</project>

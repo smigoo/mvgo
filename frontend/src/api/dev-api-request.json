@@ -1,0 +1,25 @@
+[
+  {
+    "componentId": "css-demo-event",
+    "type": "get",
+    "dsName": "getData",
+    "apiUrl": "/demo/list",
+    "headers": { "Mvcvc": "yth" }
+  },
+  {
+    "componentId": "mc-demo",
+    "type": "post",
+    "dsName": "uploadFile",
+    "apiUrl": "/demo/upload",
+    "headers": { "content-type": "multipart/form-data" }
+  },
+  {
+    "componentId": "mc-demo",
+    "type": "get",
+    "dsName": "downloadFile",
+    "apiUrl": "/demo/downloadGet",
+    "headers": {},
+    "responseType": "blob",
+    "whitelist": true
+  }
+]

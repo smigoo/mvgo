@@ -1,0 +1,206 @@
+[
+  {
+    "resourceFile": "../resources/images/icon-2:8444.png",
+    "figmaNodeId": "2:8444",
+    "figmaPath": "cp-设备监测/slot-con/@antd/tab/cons/Group 2136637321/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 1524,
+      "y": 566,
+      "width": 26.649499893188477,
+      "height": 32
+    },
+    "previewAnalysisRole": "icon",
+    "downloadStatus": "success",
+    "assignedVarName": "icon1",
+    "semanticVarName": null,
+    "recommendedUsage": "imgSrc"
+  },
+  {
+    "resourceFile": "../resources/images/icon-2:8473.png",
+    "figmaNodeId": "2:8473",
+    "figmaPath": "cp-设备监测/slot-con/@antd/tab/cons/Group 2136637552/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 1524,
+      "y": 643,
+      "width": 26.649499893188477,
+      "height": 32
+    },
+    "previewAnalysisRole": "icon",
+    "downloadStatus": "success",
+    "assignedVarName": "icon2",
+    "semanticVarName": null,
+    "recommendedUsage": "imgSrc"
+  },
+  {
+    "resourceFile": "../resources/images/icon-2:8503.png",
+    "figmaNodeId": "2:8503",
+    "figmaPath": "cp-设备监测/slot-con/@antd/tab/cons/Group 2136637555/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 1524,
+      "y": 720,
+      "width": 26.649499893188477,
+      "height": 32
+    },
+    "previewAnalysisRole": "icon",
+    "downloadStatus": "success",
+    "assignedVarName": "icon3",
+    "semanticVarName": null,
+    "recommendedUsage": "imgSrc"
+  },
+  {
+    "resourceFile": "../resources/images/icon-2:8532.png",
+    "figmaNodeId": "2:8532",
+    "figmaPath": "cp-设备监测/slot-con/@antd/tab/cons/Group 2136637558/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 1524,
+      "y": 797,
+      "width": 26.649499893188477,
+      "height": 32
+    },
+    "previewAnalysisRole": "icon",
+    "downloadStatus": "success",
+    "assignedVarName": "icon4",
+    "semanticVarName": null,
+    "recommendedUsage": "imgSrc"
+  },
+  {
+    "resourceFile": "../resources/images/icon-2:8561.png",
+    "figmaNodeId": "2:8561",
+    "figmaPath": "cp-设备监测/slot-con/@antd/tab/cons/Group 2136637550/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 1649,
+      "y": 643,
+      "width": 26.649499893188477,
+      "height": 32
+    },
+    "previewAnalysisRole": "icon",
+    "downloadStatus": "success",
+    "assignedVarName": "icon5",
+    "semanticVarName": null,
+    "recommendedUsage": "imgSrc"
+  },
+  {
+    "resourceFile": "../resources/images/icon-2:8590.png",
+    "figmaNodeId": "2:8590",
+    "figmaPath": "cp-设备监测/slot-con/@antd/tab/cons/Group 2136637553/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 1649,
+      "y": 566,
+      "width": 26.649499893188477,
+      "height": 32
+    },
+    "previewAnalysisRole": "icon",
+    "downloadStatus": "success",
+    "assignedVarName": "icon6",
+    "semanticVarName": null,
+    "recommendedUsage": "imgSrc"
+  },
+  {
+    "resourceFile": "../resources/images/icon-2:8619.png",
+    "figmaNodeId": "2:8619",
+    "figmaPath": "cp-设备监测/slot-con/@antd/tab/cons/Group 2136637556/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 1649,
+      "y": 720,
+      "width": 26.649499893188477,
+      "height": 32
+    },
+    "previewAnalysisRole": "icon",
+    "downloadStatus": "success",
+    "assignedVarName": "icon7",
+    "semanticVarName": null,
+    "recommendedUsage": "imgSrc"
+  },
+  {
+    "resourceFile": "../resources/images/icon-2:8648.png",
+    "figmaNodeId": "2:8648",
+    "figmaPath": "cp-设备监测/slot-con/@antd/tab/cons/Group 2136637559/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 1649,
+      "y": 797,
+      "width": 26.649499893188477,
+      "height": 32
+    },
+    "previewAnalysisRole": "icon",
+    "downloadStatus": "success",
+    "assignedVarName": "icon8",
+    "semanticVarName": null,
+    "recommendedUsage": "imgSrc"
+  },
+  {
+    "resourceFile": "../resources/images/icon-2:8677.png",
+    "figmaNodeId": "2:8677",
+    "figmaPath": "cp-设备监测/slot-con/@antd/tab/cons/Group 2136637551/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 1776,
+      "y": 566,
+      "width": 26.649499893188477,
+      "height": 32
+    },
+    "previewAnalysisRole": "icon",
+    "downloadStatus": "success",
+    "assignedVarName": "icon9",
+    "semanticVarName": null,
+    "recommendedUsage": "imgSrc"
+  },
+  {
+    "resourceFile": "../resources/images/icon-2:8706.png",
+    "figmaNodeId": "2:8706",
+    "figmaPath": "cp-设备监测/slot-con/@antd/tab/cons/Group 2136637554/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 1776,
+      "y": 643,
+      "width": 26.649499893188477,
+      "height": 32
+    },
+    "previewAnalysisRole": "icon",
+    "downloadStatus": "success",
+    "assignedVarName": "icon10",
+    "semanticVarName": null,
+    "recommendedUsage": "imgSrc"
+  },
+  {
+    "resourceFile": "../resources/images/icon-2:8735.png",
+    "figmaNodeId": "2:8735",
+    "figmaPath": "cp-设备监测/slot-con/@antd/tab/cons/Group 2136637557/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 1776,
+      "y": 720,
+      "width": 26.649499893188477,
+      "height": 32
+    },
+    "previewAnalysisRole": "icon",
+    "downloadStatus": "success",
+    "assignedVarName": "icon11",
+    "semanticVarName": null,
+    "recommendedUsage": "imgSrc"
+  },
+  {
+    "resourceFile": "../resources/images/icon-2:8764.png",
+    "figmaNodeId": "2:8764",
+    "figmaPath": "cp-设备监测/slot-con/@antd/tab/cons/Group 2136637560/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 1776,
+      "y": 797,
+      "width": 26.649499893188477,
+      "height": 32
+    },
+    "previewAnalysisRole": "icon",
+    "downloadStatus": "success",
+    "assignedVarName": "icon12",
+    "semanticVarName": null,
+    "recommendedUsage": "imgSrc"
+  }
+]

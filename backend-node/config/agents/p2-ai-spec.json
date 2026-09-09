@@ -1,0 +1,40 @@
+{
+  "name": "p2-ai-spec",
+  "label": "规范驱动分析",
+  "description": "带组件规范参考的AI节点",
+  "category": "分析",
+  "logicType": "llm",
+  "templateId": "llm-analyzer",
+  "inputs": [
+    {
+      "key": "componentName",
+      "type": "string",
+      "required": false
+    }
+  ],
+  "outputs": [
+    {
+      "key": "spec",
+      "type": "object"
+    }
+  ],
+  "params": {
+    "prompt": "你是组件开发规范专家，根据组件名和参考文档输出组件实现要点JSON"
+  },
+  "model": "qwen3.7-plus",
+  "referenceFiles": [
+    {
+      "name": "组件规范.md",
+      "url": "/Users/smigoo/工作/mvgo/backend-node/config/agent-resources/组件规范.md",
+      "type": "md",
+      "size": 76
+    }
+  ],
+  "author": "anonymous",
+  "className": "DynamicAgent",
+  "modulePath": "roles/custom/p2-ai-spec.js",
+  "requires": {
+    "vision": false
+  },
+  "createdAt": 1787212392735
+}

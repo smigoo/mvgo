@@ -1,0 +1,1601 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="cfAuCw0HDMxGZKUfVMZtZD">
+<head data-page-node-id="nD9eNLFukbOiDZb3KpGHIc">
+<meta charset="UTF-8" data-page-node-id="wKxAxrdemjnBO4aMd4f092" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="oknVSlBemi7RupQojKsWIa" />
+<title>感智晓界工坊平台 · 前端开发使用培训</title>
+<style>
+  :root{
+    --primary:#1E3A8A; --secondary:#1DD7B9; --accent:#F59E0B; --teal:#1DD7B9;
+    --text:#0F172A; --bg:#F8FAFC; --card:rgba(255,255,255,0.85); --border:#E2E8F0;
+    --foot:#64748B; --insight:#ECFEFF;
+    --card-shadow:0 4px 20px rgba(30,58,138,0.08);
+    --card-shadow-hover:0 8px 28px rgba(30,58,138,0.12);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{font-family:"PingFang SC","Microsoft YaHei","Hiragino Sans GB","Helvetica Neue",Arial,sans-serif;color:var(--text);background:#0B1220;letter-spacing:.01em;}
+  .deck{position:relative;width:100vw;height:100vh;overflow:hidden;}
+  .slide{display:none;height:100vh;flex-direction:column;padding:3.7vh 2.9vw 8.3vh;}
+  .slide.active{display:flex;}
+  .slide-dark{
+    background:
+      radial-gradient(circle at 20% 30%, rgba(29,215,185,0.18) 0%, transparent 35%),
+      radial-gradient(circle at 80% 70%, rgba(29,215,185,0.12) 0%, transparent 32%),
+      linear-gradient(135deg,#0D264F 0%,#05101F 100%);
+    color:#fff;position:relative;
+  }
+  /* 首页（封面）保持原样，不随深色风格改动 */
+  .slide-cover{
+    background:
+      radial-gradient(circle at 20% 30%, rgba(6,182,212,0.22) 0%, transparent 35%),
+      radial-gradient(circle at 80% 70%, rgba(45,212,191,0.16) 0%, transparent 30%),
+      radial-gradient(circle at 50% 50%, rgba(15,23,42,0) 0%, rgba(15,23,42,0.6) 100%),
+      linear-gradient(135deg,#0B1220 0%,#1E3A8A 55%,#0B1220 100%);
+  }
+  .slide-cover .cover-line{background:linear-gradient(90deg,#06B6D4,#2DD4BF);}
+  .slide-cover .cover-sub2{color:#06B6D4;}
+  .slide-dark::before{content:"";position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,0.07) 1px, transparent 1px);background-size:28px 28px;pointer-events:none;}
+  .slide-light{
+    background:
+      radial-gradient(circle at 20% 30%, rgba(29,215,185,0.05) 0%, transparent 40%),
+      radial-gradient(circle at 80% 70%, rgba(13,38,79,0.04) 0%, transparent 42%),
+      linear-gradient(180deg,#F0F5FA 0%,#DCE6EF 100%);
+    color:var(--text);
+    position:relative;
+  }
+  .slide-light::before{
+    content:"";
+    position:absolute;
+    inset:0;
+    background-image:radial-gradient(rgba(30,58,138,0.04) 1px, transparent 1px);
+    background-size:32px 32px;
+    pointer-events:none;
+  }
+  .content{max-width:1120px;width:100%;margin:0 auto;flex:1;display:flex;flex-direction:column;justify-content:safe center;}
+  /* title bar：小英文标签在上，大中文标题在下 */
+  .title-bar{display:flex;flex-direction:column;align-items:flex-start;gap:0.6vh;border-left:none;padding-left:0;margin-bottom:1.7vh;position:relative;}
+  .title-bar::before{content:"";width:48px;height:0.4vh;background:linear-gradient(90deg,var(--secondary),var(--teal));border-radius:0.2vh;margin-bottom:0.4vh;}
+  .title-bar h2{font-size:4.5vh;font-weight:800;color:var(--text);line-height:1.2;}
+  .title-bar .sub{order:-1;font-size:1.6vh;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--secondary);}
+  .slide-dark .title-bar h2{color:#fff;}
+  .slide-dark .title-bar .sub{color:#1DD7B9;}
+  .lead{font-size:2.0vh;color:var(--foot);font-style:italic;margin-bottom:1.1vh;}
+  /* glossary tabs */
+  .glossary-tabs{display:flex;gap:12px;margin-bottom:24px;border-bottom:2px solid var(--border);padding-bottom:0;}
+  .glossary-tab{
+    padding:10px 20px;
+    background:none;
+    border:none;
+    border-bottom:3px solid transparent;
+    cursor:pointer;
+    font-size:21.6px;
+    font-weight:600;
+    color:var(--foot);
+    transition:all .2s;
+    margin-bottom:-2px;
+  }
+  .glossary-tab:hover{color:var(--primary);}
+  .glossary-tab.active{color:var(--primary);border-bottom-color:var(--primary);}
+  .glossary-panel{display:none;}
+  .glossary-panel.active{display:block;}
+  /* footer */
+  .footer{height:3vh;display:flex;justify-content:space-between;align-items:center;font-size:1.6vh;color:var(--foot);}
+  .slide-dark .footer{color:#94A3B8;}
+  /* cards */
+  .card-grid{display:grid;gap:1.5vh;}
+  .grid-2{grid-template-columns:1fr 1fr;}
+  .grid-3{grid-template-columns:repeat(3,1fr);}
+  .card{
+    background:var(--card);
+    border-radius:1.5vh;
+    padding:1.5vh 1.7vw;
+    border:1px solid var(--border);
+    box-shadow:var(--card-shadow);
+    backdrop-filter:blur(8px);
+    transition:box-shadow .2s, transform .2s;
+  }
+  .card:hover{box-shadow:var(--card-shadow-hover);transform:translateY(-2px);}
+  .card h3{font-size:2.3vh;font-weight:800;background:linear-gradient(90deg,var(--primary),var(--secondary));-webkit-background-clip:text;color:transparent;margin-bottom:0.7vh;}
+  .card p,.card li{font-size:1.9vh;color:#475569;line-height:1.55;}
+  .card ul{margin-left:1.7vw;}
+  .slide-dark .card{background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.12);box-shadow:0 0.4vh 2.2vh rgba(0,0,0,0.2);}
+  .slide-dark .card:hover{box-shadow:0 0.8vh 2.8vh rgba(0,0,0,0.3);}
+  .slide-dark .card h3{color:#fff;background:none;-webkit-background-clip:initial;}
+  .slide-dark .card p,.slide-dark .card li{color:#CBD5E1;}
+  /* two col */
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:1.7vh;}
+  .col-box{
+    background:var(--card);
+    border-radius:1.5vh;
+    padding:1.5vh 1.7vw;
+    border:1px solid var(--border);
+    box-shadow:var(--card-shadow);
+    backdrop-filter:blur(8px);
+    transition:box-shadow .2s, transform .2s;
+  }
+  .col-box:hover{box-shadow:var(--card-shadow-hover);transform:translateY(-2px);}
+  .col-box.alt{background:linear-gradient(135deg,rgba(224,242,254,0.9),rgba(236,254,255,0.9));border-color:rgba(6,182,212,0.25);}
+  .col-box h3{font-size:2.3vh;font-weight:800;margin-bottom:0.7vh;color:var(--primary);}
+  .col-box.alt h3{color:#0E7490;}
+  .col-box p,.col-box li{font-size:1.9vh;color:#475569;line-height:1.55;}
+  .col-box ul{margin-left:1.7vw;}
+  .slide-dark .col-box{background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.12);}
+  .slide-dark .col-box:hover{box-shadow:0 0.8vh 2.8vh rgba(0,0,0,0.3);}
+  .slide-dark .col-box h3{color:#fff;}
+  .slide-dark .col-box p,.slide-dark .col-box li{color:#CBD5E1;}
+  /* step rows */
+  .steps{display:flex;flex-direction:column;gap:1.6vh;}
+  .step{
+    display:flex;
+    align-items:center;
+    gap:1.8vh;
+    background:var(--card);
+    border-radius:1.6vh;
+    padding:1.6vh 2vw;
+    border:1px solid var(--border);
+    box-shadow:var(--card-shadow);
+    backdrop-filter:blur(8px);
+    transition:box-shadow .2s, transform .2s;
+  }
+  .step:hover{box-shadow:var(--card-shadow-hover);transform:translateY(-1px);}
+  .step .num{
+    flex:0 0 5vh;
+    width:5vh;
+    height:5vh;
+    border-radius:50%;
+    background:linear-gradient(135deg,#1DD7B9,#0EA5E9);
+    color:#fff;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:2.3vh;
+    font-weight:800;
+    box-shadow:0 2px 8px rgba(30,58,138,0.2);
+  }
+  .step:nth-child(even) .num{background:linear-gradient(135deg,#0EA5E9,#1DD7B9);}
+  .step .body{flex:1;}
+  .step .body b{font-size:2.2vh;font-weight:700;color:var(--text);}
+  .step .body p{font-size:1.8vh;color:#475569;margin-top:0.3vh;line-height:1.5;}
+  .slide-dark .step{background:rgba(255,255,255,0.07);border-color:rgba(255,255,255,0.1);}
+  .slide-dark .step:hover{box-shadow:0 0.6vh 2vh rgba(0,0,0,0.3);}
+  .slide-dark .step .body b{color:#fff;}
+  .slide-dark .step .body p{color:#CBD5E1;}
+  /* insight */
+  .insight{background:rgba(236,254,255,0.7);border-left:0.4vh solid var(--secondary);border-radius:0.9vh;padding:0.9vh 1.5vw;margin-top:1.1vh;font-size:2.0vh;color:var(--text);backdrop-filter:blur(6px);}
+  /* table */
+  table{
+    width:100%;
+    border-collapse:separate;
+    border-spacing:0;
+    font-size:2.0vh;
+    margin-top:0.6vh;
+    background:var(--card);
+    border-radius:1.2vh;
+    overflow:hidden;
+    box-shadow:var(--card-shadow);
+    backdrop-filter:blur(8px);
+  }
+  th,td{
+    border:none;
+    border-bottom:1px solid var(--border);
+    padding:1.2vh 1.5vw;
+    text-align:left;
+    vertical-align:top;
+  }
+  tr:last-child td{border-bottom:none;}
+  th{
+    background:linear-gradient(135deg,var(--primary),var(--secondary));
+    color:#fff;
+    font-weight:600;
+    font-size:1.9vh;
+    letter-spacing:0.02em;
+  }
+  td:first-child{
+    font-weight:600;
+    color:var(--text);
+    background:rgba(248,250,252,0.5);
+  }
+  .two-col-table th:nth-child(2){background:var(--secondary);}
+  /* demo */
+  .demo-banner{background:linear-gradient(135deg,var(--primary),var(--secondary));color:#fff;border-radius:0.9vh;padding:0.9vh 1.7vw;font-size:2.3vh;font-weight:700;text-align:center;margin-bottom:1.1vh;box-shadow:0 0.4vh 1.5vh rgba(30,58,138,0.18);}
+  .demo-note{background:var(--card);border-radius:0.9vh;padding:1.1vh 1.7vw;margin-bottom:0.9vh;font-size:1.9vh;color:#475569;}
+  .demo-note b{color:var(--primary);}
+  /* cover */
+  .cover-content{justify-content:center;text-align:center;}
+  .cover-kicker{font-size:3.0vh;letter-spacing:0.4vw;color:#7DD3FC;font-weight:700;margin-bottom:1.3vh;}
+  .cover-content h1{font-size:7.6vh;font-weight:800;line-height:1.15;}
+  .cover-content h2{font-size:4.7vh;font-weight:600;margin-top:0.6vh;}
+  .cover-line{width:27vw;height:0.3vh;background:linear-gradient(90deg,var(--secondary),var(--teal));margin:2vh auto;}
+  .cover-sub{font-size:3.0vh;color:#BAE6FD;}
+  .cover-sub2{font-size:2.7vh;color:var(--secondary);font-weight:700;margin-top:0.7vh;}
+  .cover-meta{font-size:2.2vh;color:#CBD5E1;margin-top:2.6vh;}
+  .cover-logo-wrap{position:relative;width:6.3vw;height:6.3vw;margin:0 auto 18px;background:rgba(255,255,255,0.95);border-radius:2.2vh;padding:1.3vh;box-shadow:0 12px 32px rgba(0,0,0,0.25);}
+  .cover-logo{width:100%;height:100%;object-fit:contain;border-radius:1.5vh;}
+  .cover-sparkle{position:absolute;top:-0.9vh;right:-0.6vw;width:1.7vw;height:3vh;pointer-events:none;transform-origin:center;animation:sparkle-pulse 1.8s ease-in-out infinite;}
+  @keyframes sparkle-pulse{0%,100%{transform:scale(0.82);opacity:0.45;}45%{transform:scale(1.08);opacity:1;}70%{transform:scale(0.96);opacity:0.78;}}
+  .cover-typing{font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;font-size:2.3vh;color:#00ff00;margin-top:1.7vh;min-height:2.4vh;white-space:nowrap;}
+  .cover-typing .cursor{display:inline-block;width:0.4vw;height:1.3vh;margin-left:0.1vw;vertical-align:middle;background:#00ff00;animation:cursor-blink 1s step-end infinite;}
+  @keyframes cursor-blink{50%{opacity:0;}}
+  .topology-wrap{
+    margin-top:2vh;
+    background:linear-gradient(135deg,rgba(248,250,252,0.95),rgba(241,245,249,0.9));
+    border:1px solid var(--border);
+    border-radius:1.3vh;
+    padding:1.8vh 2vw;
+    overflow:visible;
+    box-shadow:var(--card-shadow);
+    backdrop-filter:blur(8px);
+  }
+  .topology-wrap svg{display:block;width:100%;height:auto;}
+  .topology-legend{
+    display:flex;
+    flex-wrap:wrap;
+    gap:1.5vh;
+    justify-content:center;
+    margin-top:1.2vh;
+    font-size:1.6vh;
+    color:#475569;
+    padding:0.9vh 1.5vw;
+    background:rgba(255,255,255,0.7);
+    border-radius:0.8vh;
+    border:1px solid var(--border);
+  }
+  .topology-legend span{display:flex;align-items:center;gap:6px;font-weight:500;}
+  .topology-legend i{width:1.4vw;height:0.35vh;border-radius:0.2vh;display:inline-block;box-shadow:0 1px 2px rgba(0,0,0,0.08);}
+  .topology-note{
+    margin-top:1.5vh;
+    padding:1.3vh 1.8vw;
+    background:linear-gradient(135deg,rgba(239,246,255,0.9),rgba(224,242,254,0.85));
+    border-radius:1vh;
+    border-left:0.5vh solid var(--secondary);
+    font-size:1.9vh;
+    color:#334155;
+    line-height:1.65;
+    box-shadow:0 2px 12px rgba(6,182,212,0.08);
+  }
+  .topology-note strong{color:var(--primary);font-weight:700;}
+  .screenshot{border-radius:0.9vh;box-shadow:0 0.4vh 1.1vh rgba(0,0,0,0.06);background:#fff;display:block;cursor:zoom-in;transition:box-shadow .15s,transform .15s;}
+  .screenshot:hover{box-shadow:0 0.6vh 1.7vh rgba(30,58,138,0.20);transform:translateY(-0.1vh);}
+  /* 截图画廊：标签切换 + 图文混排（截图在上、说明在下） */
+  .shot-gallery{margin-top:1.1vh;}
+  .shot-tabs{display:flex;flex-wrap:wrap;gap:0.7vh;margin-bottom:1.1vh;}
+  .shot-tab{padding:0.6vh 1.3vw;border:1px solid var(--border);border-radius:999px;background:#fff;cursor:pointer;font-size:1.6vh;color:var(--text);transition:all .15s;}
+  .shot-tab:hover{border-color:var(--secondary);color:var(--secondary);}
+  .shot-tab.active{background:linear-gradient(135deg,var(--primary),var(--secondary));border-color:var(--secondary);color:#fff;box-shadow:0 0.2vh 0.9vh rgba(6,182,212,0.25);}
+  .shot-panels{margin-top:0.2vh;}
+  .shot-panel{display:none;}
+  .shot-panel.active{display:flex;flex-direction:column;gap:1.3vh;align-items:stretch;}
+  .shot-figure{border:1px solid var(--border);border-radius:0.9vh;background:#fff;box-shadow:0 0.4vh 1.1vh rgba(0,0,0,0.06);overflow:hidden;display:flex;align-items:center;justify-content:center;max-height:46vh;}
+  .shot-figure .screenshot{display:block;max-width:100%;max-height:46vh;width:auto;height:auto;object-fit:contain;cursor:zoom-in;}
+  .shot-desc{font-size:1.9vh;line-height:1.75;color:#475569;}
+  .shot-desc p{margin-bottom:0.9vh;}
+  .shot-desc p:last-child{margin-bottom:0;}
+  .screenshot-hint{font-size:1.5vh;color:var(--secondary);text-align:center;margin-top:0.2vh;}
+  .steps.tight .step{padding:0.2vh 1vw;}
+  .steps.tight .num{width:1.4vw;height:2.4vh;font-size:1.8vh;flex:0 0 1.4vw;}
+  .steps.tight .body p{font-size:1.8vh;line-height:1.5;}
+  /* 完整生成页：步骤 + 按钮 + 占位截图左右布局 */
+  .feature-row{display:flex;align-items:stretch;gap:2.5vw;margin-top:2vh;flex:1;min-height:0;}
+  .feature-col{flex:0 0 45%;display:flex;flex-direction:column;gap:1.4vh;}
+  .feature-col .steps{gap:1.4vh;}
+  .feature-actions{display:flex;gap:1.2vh;margin-top:2vh;}
+  .feature-actions .btn{border:none;border-radius:999px;padding:1vh 1.8vw;font-size:1.8vh;font-weight:600;cursor:pointer;transition:transform .15s,box-shadow .15s;}
+  .feature-actions .btn:hover{transform:translateY(-1px);}
+  .feature-actions .btn-primary{background:linear-gradient(135deg,var(--secondary),var(--teal));color:#fff;box-shadow:0 0.3vh 1vh rgba(29,215,185,0.25);}
+  .feature-actions .btn-ghost{background:#fff;color:var(--secondary);border:1.5px solid var(--secondary);box-shadow:var(--card-shadow);}
+  .feature-actions .btn-ghost:hover{box-shadow:var(--card-shadow-hover);}
+  .feature-shot{flex:1;border-radius:1.2vh;background:#E8EDF2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.2vh;padding:1.8vh;color:#94A3B8;font-size:3.2vh;font-weight:500;box-shadow:inset 0 0 1.5vh rgba(13,38,79,0.06);min-height:0;overflow:hidden;}
+  .feature-shot img{max-width:100%;max-height:100%;flex:1;min-height:0;object-fit:contain;border-radius:1.2vh;}
+  .feature-shot .shot-desc{width:100%;text-align:left;margin-top:0.4vh;}
+  /* 画廊放进右栏时占满高度 */
+  .feature-shot .shot-gallery{width:100%;margin-top:0;display:flex;flex-direction:column;flex:1;min-height:0;}
+  .feature-shot .shot-panels{flex:1;min-height:0;}
+  .feature-shot .shot-panel.active{flex:1;min-height:0;}
+  .feature-shot .shot-figure{max-height:none;flex:1;min-height:0;width:100%;}
+  .feature-shot .shot-figure .screenshot{max-height:100%;}
+  @media(max-width:720px){
+    .feature-row{flex-direction:column;}
+    .feature-col{flex:0 0 auto;}
+    .feature-shot{min-height:28vh;}
+    .shot-tab{padding:5px 10px;font-size:1.5vh;}
+    .shot-figure{max-height:38vh;}
+    .shot-figure .screenshot{max-height:38vh;}
+    .shot-desc{font-size:1.8vh;line-height:1.6;}
+  }
+  /* 灯箱：点击截图看清晰原图 */
+  .lightbox{position:fixed;inset:0;background:rgba(15,23,42,0.92);display:none;align-items:center;justify-content:center;z-index:9999;padding:3vh;cursor:zoom-out;}
+  .lightbox.active{display:flex;}
+  .lightbox img{max-width:100%;max-height:100%;border-radius:0.7vh;box-shadow:0 0.9vh 3.7vh rgba(0,0,0,0.5);background:#fff;}
+  .lightbox-close{position:fixed;top:1.5vh;right:1.4vw;color:#fff;font-size:4.1vh;font-weight:700;cursor:pointer;line-height:1;z-index:10000;}
+  /* ending */
+  .end-content{justify-content:center;text-align:center;align-items:center;}
+  .end-content .big{font-size:5.0vh;font-weight:800;line-height:1.4;}
+  .end-content .next{font-size:2.7vh;color:var(--secondary);font-weight:700;margin-top:1.7vh;}
+  .end-content .contact{font-size:2.2vh;color:#CBD5E1;margin-top:1.3vh;}
+  /* nav */
+  .nav{position:fixed;bottom:1.7vh;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:1.3vh;background:rgba(15,23,42,.82);padding:0.7vh 1.5vw;border-radius:2.8vh;z-index:50;}
+  .nav button{background:linear-gradient(135deg,var(--primary),var(--secondary));color:#fff;border:none;border-radius:1.9vh;padding:0.7vh 1.5vw;font-size:1.9vh;cursor:pointer;transition:background .15s,box-shadow .15s;}
+  .nav button:hover{background:linear-gradient(135deg,var(--secondary),var(--teal));box-shadow:0 0.4vh 1.3vh rgba(6,182,212,0.3);}
+  .nav .ind{color:#E2E8F0;font-size:1.9vh;min-width:3.3vw;text-align:center;}
+  .progress{position:fixed;top:0;left:0;height:0.4vh;background:var(--secondary);width:0;z-index:60;transition:width .2s;}
+  .hint{position:fixed;bottom:1.7vh;right:0.9vw;color:#64748B;font-size:1.5vh;z-index:50;}
+  @media(max-width:720px){
+    .slide{padding:2.6vh 1.1vw 4.4vh;}
+    .title-bar h2{font-size:3.2vh;}
+    .grid-2,.grid-3,.two-col{grid-template-columns:1fr;}
+    .cover-content h1{font-size:4.7vh;}
+    table{font-size:1.6vh;} th,td{padding:0.6vh 0.7vw;}
+  }
+</style>
+</head>
+<body data-page-node-id="ZbheLMC8sWHzkG8inAM2dB">
+<div class="progress" id="progress" data-page-node-id="V5cNpoPGjiCSyT0ThXfPY0"></div>
+<div class="deck" id="deck" data-page-node-id="sETtCRISEjo9KHnHvDepTE">
+
+  <!-- P1 封面 -->
+  <section class="slide slide-dark slide-cover active" data-page-node-id="fmF0mrazbrLaRwEQQRzIFl">
+    <div class="content cover-content" data-page-node-id="Atwk7cuV1bc3VxNwSowj4t">
+      <div class="cover-logo-wrap" data-page-node-id="a1B2c3D4e5F6g7H8i9J0k1">
+        <img src="培训截图/P1-logo-official.jpg" alt="感智晓界工坊" class="cover-logo" data-page-node-id="l2M3n4O5p6Q7r8S9t0U1v2" />
+        <span class="cover-sparkle" aria-hidden="true" data-page-node-id="w3X4y5Z6a7B8c9D0e1F2g3">
+          <svg viewBox="0 0 24 24" width="100%" height="100%" fill="none">
+            <path d="M12 1.5L14.9 9.1L22.5 12L14.9 14.9L12 22.5L9.1 14.9L1.5 12L9.1 9.1L12 1.5Z" fill="#eff6ff" stroke="#2563eb" stroke-width="1.2" />
+          </svg>
+        </span>
+      </div>
+      <div class="cover-kicker" data-page-node-id="mQB7RSgA4KjQ62zClAPKNX">MICROVIDEO AGENT GO WORKSHOP</div>
+      <h1 data-page-node-id="wMf6CG2N8ndh0tnpXhmTyk">感智晓界工坊平台</h1>
+      <h2 data-page-node-id="Xcxt8Q1KhkGk5gzo3845EK">前端开发使用培训</h2>
+      <div class="cover-line" data-page-node-id="sAKDxFHiLiUhd16d4FJfmt"></div>
+      <p class="cover-sub" data-page-node-id="J2QgJFFiRHIXtmoulirld1">从设计稿到可交付业务组件</p>
+      <p class="cover-typing" id="cover-typing" data-page-node-id="h4I5j6K7l8M9n0O1p2Q3r4"><span class="cursor"></span></p>
+      <p class="cover-meta" data-page-node-id="a8L2POcfIv07g4ZvID3lby">2026-09-04 18:30–20:00（周五）｜南京·感动科技 4 楼培训教室</p>
+      <p class="cover-meta" data-page-node-id="88IBkmH7ONyNaEyhJQkRAe">主讲：周洁（前端架构师 · 平台核心开发）</p>
+    </div>
+    <div class="footer" data-page-node-id="SehUFC75KH29VHhuiX38Dk"><span data-page-node-id="BAzpC63tBMfUt1V4i2ebQ2">感智晓界工坊 · 前端开发使用培训</span><span data-page-node-id="eqaagZ1cXVrn04BqYUduBX">01 / 30</span></div>
+  </section>
+
+
+
+  <!-- P2 培训目的 -->
+  <section class="slide slide-light" data-page-node-id="I5ouUymil2c2bPx5xWw2ul">
+    <div class="content" data-page-node-id="nDpG4j5K0uUBZpECpabykJ">
+      <div class="title-bar" data-page-node-id="KzuBQAJATd8yeSaVM2LNty"><h2 data-page-node-id="kpM2FJk2JOn1yONy7P4psa">培训目的</h2></div>
+      <div class="steps" data-page-node-id="j2EXDq9EVSk8XVGAIwHDYw">
+        <div class="step" data-page-node-id="b4CtQiihfg3umAp5qqj2Jl"><div class="num" data-page-node-id="qMeEo7m7ySDCHwoWkExCrb">1</div><div class="body" data-page-node-id="iQ3FD3LT9tHZbw1RNn0Yzp"><b data-page-node-id="haViFMCiRpx7gkuM6eIaar">学会用平台把设计稿 / 需求直接生成可交付业务组件</b><p data-page-node-id="1SnlXua62mjmlVJZv5gCmK">配置模型池与工具 → 统一生成 → 在线迭代 → 一键交付</p></div></div>
+        <div class="step" data-page-node-id="5BHCkjTxgCzSawEWVMDO0V"><div class="num" data-page-node-id="UOgnCPTolcjeYvZ5W8wt0U">2</div><div class="body" data-page-node-id="p2kC7Ki2Vexb9Eexi3VKf2"><b data-page-node-id="XUtK9EuadNXGWbjmFNUnMa">掌握在线生成 API 接口数据，并与组件对接</b><p data-page-node-id="emeu1rIjzUoKs7lW3meEDJ">APIFOX 接口管理 → 自动生成调用层 → 组件绑定数据</p></div></div>
+        <div class="step" data-page-node-id="1KgGUf7sCOYLLzWaIaveXs"><div class="num" data-page-node-id="EiwXIRZQXkMMaId0Kaup9W">3</div><div class="body" data-page-node-id="gwmY3DSoDoHexPB8cTKcoz"><b data-page-node-id="6nm6vwCDjEeo9TqphHmCHH">掌握完整使用流程</b><p data-page-node-id="xsvKV4rAcpn5wgiwJ9B1GP">培训后能独立在平台上完成「一次组件生成到推送 Git」</p></div></div>
+        <div class="step" data-page-node-id="ZdOBRlPckdwPfVUk1K8jiI"><div class="num" data-page-node-id="un4LOURVBCgiuarbZdeAyB">4</div><div class="body" data-page-node-id="DmP08KTFnJC4a1DOzZBVHt"><b data-page-node-id="oZmilja3mDAspE5DBLoCfx">了解平台后期的迭代方向</b><p data-page-node-id="5hNiez8z0N434LfBhoBAPX">管线自定义 / 大模型路由 / 后端代码生成 / 数据飞轮</p></div></div>
+      </div>
+    </div>
+    <div class="footer" data-page-node-id="P6iEmSU3lWkBX761Ktfdir"><span data-page-node-id="08psGSTH2r1VgrRVAHUcpV">感智晓界工坊 · 前端开发使用培训</span><span data-page-node-id="Z68XtC2ep1tMj2gVku4rFu">02 / 30</span></div>
+  </section>
+
+  <!-- 目录页 -->
+  <section class="slide slide-light">
+    <div class="content">
+      <div class="title-bar" style="justify-content:center;border-left:none;padding-left:0;"><h2>培训目录</h2></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:24px;">
+        <div style="background:linear-gradient(135deg,#EFF6FF,#DBEAFE);border:2px solid #3B82F6;border-radius:14px;padding:20px 24px;">
+          <div style="font-size:1.6vh;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#3B82F6;margin-bottom:8px;">PART 1</div>
+          <div style="font-size:3.0vh;font-weight:800;color:#1E3A5F;margin-bottom:8px;">认识平台</div>
+          <div style="font-size:1.8vh;color:#475569;line-height:1.6;">理念 · 架构 · 传统 vs AI · 名词解释 · 对比 MVP154</div>
+        </div>
+        <div style="background:linear-gradient(135deg,#ECFDF5,#D1FAE5);border:2px solid #10B981;border-radius:14px;padding:20px 24px;">
+          <div style="font-size:1.6vh;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#10B981;margin-bottom:8px;">PART 2</div>
+          <div style="font-size:3.0vh;font-weight:800;color:#064E3B;margin-bottom:8px;">上手使用</div>
+          <div style="font-size:1.8vh;color:#475569;line-height:1.6;">配置 · Figma 规范 · 完整生成 · Lite · 在线迭代 · 质量门禁 · 交付 · Demo</div>
+        </div>
+        <div style="background:linear-gradient(135deg,#FFFBEB,#FEF3C7);border:2px solid #F59E0B;border-radius:14px;padding:20px 24px;">
+          <div style="font-size:1.6vh;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#F59E0B;margin-bottom:8px;">PART 3</div>
+          <div style="font-size:3.0vh;font-weight:800;color:#78350F;margin-bottom:8px;">进阶能力</div>
+          <div style="font-size:1.8vh;color:#475569;line-height:1.6;">批量生产 · Figma 整理演进 · 常见问题</div>
+        </div>
+        <div style="background:linear-gradient(135deg,#F5F3FF,#EDE9FE);border:2px solid #8B5CF6;border-radius:14px;padding:20px 24px;">
+          <div style="font-size:1.6vh;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#8B5CF6;margin-bottom:8px;">PART 4</div>
+          <div style="font-size:3.0vh;font-weight:800;color:#4C1D95;margin-bottom:8px;">未来展望</div>
+          <div style="font-size:1.8vh;color:#475569;line-height:1.6;">平台演进方向 · 共建邀请</div>
+        </div>
+      </div>
+    </div>
+    <div class="footer"><span>感智晓界工坊 · 前端开发使用培训</span><span>03 / 30</span></div>
+  </section>
+
+  <!-- PART 1 封面：认识平台 -->
+  <section class="slide slide-dark">
+    <div class="content" style="justify-content:center;align-items:center;text-align:center;">
+      <div style="font-size:1.9vh;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#2DD4BF;margin-bottom:1.5vh;">PART 1</div>
+      <h2 style="font-size:6.1vh;font-weight:800;color:#fff;line-height:1.3;margin-bottom:1.5vh;">认识平台</h2>
+      <div style="width:60px;height:3px;background:#2DD4BF;border-radius:2px;margin:0 auto 2vh;"></div>
+      <p style="font-size:2.4vh;color:#94A3B8;max-width:500px;line-height:1.6;">平台理念、基础架构、与传统前端的区别，以及核心名词解释</p>
+    </div>
+    <div class="footer"><span>感智晓界工坊 · 前端开发使用培训</span><span>04 / 30</span></div>
+  </section>
+
+  <!-- P3 理念 -->
+  <section class="slide slide-dark" data-page-node-id="Q3teTro2j1uNr4ea1n1ULa">
+    <div class="content" data-page-node-id="8G5QVIo9jA6UXsc9odxmsX">
+      <div class="title-bar" data-page-node-id="0gkXmzqAssopWbBgWDiSse"><h2 data-page-node-id="oUfu1fUsA69CHaIv4s0GcY">平台理念：统一生成 → 在线迭代 → 一键交付</h2></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;margin-top:24px;" data-page-node-id="frktLq4hEkYoYiLbyEQr4V">
+        <div style="background:rgba(30,58,138,.4);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:24px 20px;text-align:center;" data-page-node-id="IT0pPduYULLP2t1X7ZAwzv">
+          <div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#2DD4BF,#0EA5E9);display:flex;align-items:center;justify-content:center;font-size:27px;font-weight:700;color:#fff;margin:0 auto 14px;" data-page-node-id="DBBus5sMAAPSPNGkyWHxzZ">1</div>
+          <h3 style="color:#fff;text-align:center;font-size:2.4vh;font-weight:700;margin-bottom:16px;" data-page-node-id="kXH6TuiGCGinnSmdW45noE">统一生成</h3>
+          <div style="color:#BAE6FD;text-align:left;font-size:1.8vh;line-height:1.7;" data-page-node-id="SA8cV1eJNT0eFQSQFoY7d4">
+            <p style="margin-bottom:10px;"><b style="color:#2DD4BF;">• 多源统一</b><br/>Figma / 截图 / 需求文档 / HTML 统一产出</p>
+            <p><b style="color:#2DD4BF;">• 规范统一</b><br/>Vue3 / 微码遵循同一套质量标准与门禁</p>
+          </div>
+        </div>
+        <div style="background:rgba(30,58,138,.4);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:24px 20px;text-align:center;" data-page-node-id="W1P1h5D4krJYqEUJbLnQVi">
+          <div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#2DD4BF,#0EA5E9);display:flex;align-items:center;justify-content:center;font-size:27px;font-weight:700;color:#fff;margin:0 auto 14px;" data-page-node-id="M2y0Pk5XkkExxhaPgZGbb7">2</div>
+          <h3 style="color:#fff;text-align:center;font-size:2.4vh;font-weight:700;margin-bottom:16px;" data-page-node-id="YkVGFeMsDR08CgCtMIz04K">在线迭代</h3>
+          <div style="color:#BAE6FD;text-align:left;font-size:1.8vh;line-height:1.7;" data-page-node-id="yaiBVdOfznH8tSge66tHzb">
+            <p style="margin-bottom:10px;"><b style="color:#2DD4BF;">• 在线编辑</b><br/>生成不是终点，代码可在线持续打磨</p>
+            <p><b style="color:#2DD4BF;">• AI 交互</b><br/>Playground 对话式修改，快速调优细节</p>
+          </div>
+        </div>
+        <div style="background:rgba(30,58,138,.4);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:24px 20px;text-align:center;" data-page-node-id="xhukCQP5LqcsvaZxEU23ow">
+          <div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#2DD4BF,#0EA5E9);display:flex;align-items:center;justify-content:center;font-size:27px;font-weight:700;color:#fff;margin:0 auto 14px;" data-page-node-id="N874Q3vBlX37qWSZpGPrqj">3</div>
+          <h3 style="color:#fff;text-align:center;font-size:2.4vh;font-weight:700;margin-bottom:16px;" data-page-node-id="5SA8EXfPoIvnCj6AGrnzTw">一键交付</h3>
+          <div style="color:#BAE6FD;text-align:left;font-size:1.8vh;line-height:1.7;" data-page-node-id="tzAO6plQCONx9SI7Z8hYVi">
+            <p style="margin-bottom:10px;"><b style="color:#2DD4BF;">• 质量门禁</b><br/>代码校验通过后才允许下载或推 Git</p>
+            <p><b style="color:#2DD4BF;">• 真实对接</b><br/>对接真实接口，落地即可用</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="footer" data-page-node-id="aSADWBlz7A4NmDelO5TrcZ"><span data-page-node-id="PX5EVy3bS1y5WlFXaBwWRE">感智晓界工坊 · 前端开发使用培训</span><span data-page-node-id="SLqrkQQaAA5rTB5pZzqCvP">05 / 30</span></div>
+  </section>
+
+
+
+  <!-- P4 架构 -->
+  <section class="slide slide-light" data-page-node-id="bcJfGHhFYvRaN2gqCHac3E">
+    <div class="content" data-page-node-id="3RIFWxCt3PU4yp5ZyPHx6s">
+      <div class="title-bar" data-page-node-id="mq2mbcvWlBwxdP9kxxJQPY"><h2 data-page-node-id="IxWEgy68YGG2Z2I8HyQHA4">平台基础架构</h2></div>
+      <div class="lead" data-page-node-id="sqywzHCFKAW7EVJ2mnifwG">5 层架构，从生成到交付全链路覆盖。</div>
+      <div id="p6-topology" class="topology-wrap" data-page-node-id="t9U0v1W2x3Y4z5A6b7C8d9"></div>
+      <div class="topology-legend" data-page-node-id="e1F2g3H4i5J6k7L8m9N0o1">
+        <span data-page-node-id="p2Q3r4S5t6U7v8W9x0Y1z2"><i style="background:#2DD4BF" data-page-node-id="a3B4c5D6e7F8g9H0i1J2k3"></i>生成层</span>
+        <span data-page-node-id="l4M5n6O7p8Q9r0S1t2U3v4"><i style="background:#8B5CF6" data-page-node-id="w5X6y7Z8a9B0c1D2e3F4g5"></i>能力层</span>
+        <span data-page-node-id="h6I7j8K9l0M1n2O3p4Q5r6"><i style="background:#F59E0B" data-page-node-id="s7T8u9V0w1X2y3Z4a5B6c7"></i>编排层</span>
+        <span data-page-node-id="x8Y9z0A1b2C3d4E5f6G7h8"><i style="background:#10B981" data-page-node-id="i9J0k1L2m3N4o5P6q7R8s9"></i>业务层</span>
+        <span data-page-node-id="t0U1v2W3x4Y5z6A7b8C9d0"><i style="background:#64748B" data-page-node-id="e1F2g3H4i5J6k7L8m9N0o1"></i>基础层</span>
+      </div>
+    </div>
+    <div class="footer" data-page-node-id="JgIIPMuWZGRUQ8PEmha77D"><span data-page-node-id="pQCxJ81jUkU0yMMluhDIty">感智晓界工坊 · 前端开发使用培训</span><span data-page-node-id="pVvbiQd9XX7l2fEc8GCxoU">06 / 30</span></div>
+  </section>
+
+
+
+
+
+
+  <!-- P5 传统前端 -->
+  <section class="slide slide-light" data-page-node-id="NU65VviMlv57UG2KafQAQe">
+    <div class="content" data-page-node-id="G2TqD8I7FPOFbwCAzPoexE">
+      <div class="title-bar" data-page-node-id="AY4ZU0kt4s6T4F0LCkXGLW"><h2 data-page-node-id="Fqp0uUepoJXQ0mGHCTNMlH">传统前端 vs AI 提效</h2><span class="sub" data-page-node-id="GFmMlmdEH0o5hoGjRFDR2b">背景</span></div>
+      <div class="lead" data-page-node-id="cgzBpOlZdjxzYts0IoGvb7">看清前端在干什么，才能说清平台帮你省了哪一步。</div>
+      <table class="two-col-table" data-page-node-id="HPn81hvqlW3ke5C1a6FC30">
+        <tr data-page-node-id="dpC9GFHatqQ5PH8z4jv89o"><th data-page-node-id="fT6Tp43aP5ys5DIuPEjtdP" style="width:18%;">工作项</th><th data-page-node-id="SuQKwqMNdbD6PHDaWpfZVE" style="width:41%;">🕐 传统做法</th><th data-page-node-id="kLrBdkJ2NS3JuHUXJMUDbT" style="width:41%;">⚡ AI 提效</th></tr>
+        <tr data-page-node-id="GUOb7ZTc1ipWLhkHcDPSJM"><td data-page-node-id="QMj1XV9VcpQLmfKP4sX7Z9">UI 还原</td><td data-page-node-id="h772pi0pWVCgBnA1XCFMRD">设计稿 → 手写 HTML/CSS，逐像素调</td><td data-page-node-id="dMXLfDkWMaoCAG8rPtvRwn">Figma / 截图直接产出规范组件</td></tr>
+        <tr data-page-node-id="VBSCzA8Exzob6pybpoDhVu"><td data-page-node-id="JWm3ZeUV7xuXziqZItqdCb">交互实现</td><td data-page-node-id="tbmKxhWE3uaKHB1k3NLgUp">手写交互逻辑、状态管理、复用组件</td><td data-page-node-id="jJyU79P25I8LnMCvOiBW0Q">生成骨架 + 交互代码，专注业务差异</td></tr>
+        <tr data-page-node-id="D94NsyjRIs4qtC3YcJl91f"><td data-page-node-id="LcoZagH0wkj1h6QW3TGYkM">数据对接</td><td data-page-node-id="nPCGXlFYLX5Wm287eDCrFL">手动封装请求、逐字段映射</td><td data-page-node-id="EBCNDT2uZC6D7VwcnN6qOh">APIFOX 自动生成调用层，字段自动对齐</td></tr>
+        <tr data-page-node-id="46tiVi9RXIlkiwOs6lE7U7"><td data-page-node-id="3aAPQbha2ghKJALPOgFcdY">联调测试</td><td data-page-node-id="ZZnnwbeIvD12g67HsGL9Jf">前后端联调、手写单测、反复调试</td><td data-page-node-id="29BsXZ7L1NnJVdowkhC4ku">AI 分析报错、生成单测、定位问题</td></tr>
+        <tr data-page-node-id="VWTztAfRXNbYpKmRPIcegY"><td data-page-node-id="LxRY6l8Vv7eXTohKgRXDUR">性能体验</td><td data-page-node-id="YONgDV7AQNqLvGqLM6hj3G">手动排查首屏、兼容性、可访问性</td><td data-page-node-id="gn4LHVi1P7QEnEe2iBp8a5">自动诊断 + 优化建议</td></tr>
+      </table>
+    </div>
+    <div class="footer" data-page-node-id="umYSJTbQO88USNOAErFOwl"><span data-page-node-id="GNcQT6mQdQ4JO2nnrfPIMd">感智晓界工坊 · 前端开发使用培训</span><span data-page-node-id="qirTwUklQwGujubBKimjgE">07 / 30</span></div>
+  </section>
+
+  <!-- P6 名词解释（合并版，tab 切换） -->
+  <section class="slide slide-light" data-page-node-id="GlossaryMerged">
+    <div class="content" data-page-node-id="GlossaryMergedContent">
+      <div class="title-bar" data-page-node-id="GlossaryMergedTitle"><h2 data-page-node-id="GlossaryMergedH2">名词解释</h2></div>
+      <div class="glossary-tabs" data-page-node-id="GlossaryTabs">
+        <button class="glossary-tab active" data-tab="core" data-page-node-id="GlossaryTab1">核心概念</button>
+        <button class="glossary-tab" data-tab="tools" data-page-node-id="GlossaryTab2">工具平台</button>
+        <button class="glossary-tab" data-tab="dev" data-page-node-id="GlossaryTab3">开发环境</button>
+        <button class="glossary-tab" data-tab="ui" data-page-node-id="GlossaryTab4">生成界面</button>
+      </div>
+      <div class="glossary-panels" data-page-node-id="GlossaryPanels">
+        <div class="glossary-panel active" data-panel="core" data-page-node-id="GlossaryPanel1">
+          <div class="card-grid grid-2" style="margin-top:10px;">
+            <div class="card"><h3>📦 管线</h3><p>从设计稿到可交付组件的自动化流水线。输入 Figma / 截图 → AI 生成 → 质量门禁 → 产出代码。</p></div>
+            <div class="card"><h3>🤖 多智能体</h3><p>多个 AI 角色协作完成任务。如 Vision Parser 负责看图、Layout Reviewer 负责布局审查、Microcode Engineer 负责写代码，各司其职。</p></div>
+            <div class="card" style="grid-column: span 2;"><h3>⚡ 并行 | 对抗</h3><p><b>并行</b>：多个智能体同时工作，加快速度（如同时解析多个子组件）。<b>对抗</b>：生成者和审查者互相校验，生成者写代码、审查者挑问题，反复迭代提升质量。</p></div>
+          </div>
+        </div>
+        <div class="glossary-panel" data-panel="tools" data-page-node-id="GlossaryPanel2">
+          <div class="card-grid grid-2" style="margin-top:10px;">
+            <div class="card"><h3>🧠 模型池</h3><p>平台支持的 AI 大模型集合（如 qwen、deepseek、gpt 等），可按任务类型动态选择最合适的模型。</p></div>
+            <div class="card"><h3>🕸️ 图工程</h3><p>基于 LangGraph 的编排引擎，将多个 AI 步骤串成有向图，控制执行顺序、分支和重试逻辑。</p></div>
+            <div class="card"><h3>🎨 Figma</h3><p>设计稿来源平台。通过 API 拉取节点树（含布局、样式属性）和截图，作为 AI 生成的"真值"输入。</p></div>
+            <div class="card"><h3>📋 Apifox</h3><p>API 文档与 Mock 平台。支持绑定接口到组件，实现前后端联调前的数据模拟。</p></div>
+            <div class="card" style="grid-column: span 2;"><h3>🔀 GitLab</h3><p>代码托管与 MR 评审平台。生成产物通过 Git 提交到指定分支，MR 自动触发 CI 门禁。</p></div>
+          </div>
+        </div>
+        <div class="glossary-panel" data-panel="dev" data-page-node-id="GlossaryPanel3">
+          <div class="card-grid grid-2" style="margin-top:10px;">
+            <div class="card"><h3>🛡️ 沙盒</h3><p>组件生成与迭代的隔离运行环境。产物在沙盒内编译、预览、测试，不影响宿主应用，支持快照回滚。</p></div>
+            <div class="card"><h3>🛝 Playground</h3><p>交互式组件预览与 AI 对话式修改器。可用自然语言指令修改组件，集成 Monaco 编辑器。</p></div>
+            <div class="card" style="grid-column: span 2;"><h3>🚧 质量门禁</h3><p>组件生成后自动运行的检查流水线：import 白名单、SFC 语义校验、LESS 编译等。不通过则 BLOCK 并触发重试。</p></div>
+          </div>
+        </div>
+        <div class="glossary-panel" data-panel="ui" data-page-node-id="GlossaryPanel4">
+          <div class="card-grid grid-2" style="margin-top:10px;">
+            <div class="card"><h3>🔧 代码类型</h3><p><b>V3</b>：Vue 3 组件，灵活、适合业务场景。<b>MC</b>：微码组件，标准化、支持主题化。</p></div>
+            <div class="card"><h3>📏 生成规格</h3><p><b>Lite</b>：轻量快速，秒级出骨架，适合原型。<b>Max</b>：完整版，经过双路解析 + 完整门禁，适合交付。</p></div>
+            <div class="card" style="grid-column: span 2;"><h3>📥 输入源</h3><p><b>截图</b>：直接上传图片（快速）。<b>Figma</b>：通过 URL 解析节点树（推荐，信息更全）。<b>HTML</b>：上传现有原型（适合迁移）。</p></div>
+          </div>
+          <div class="demo-note" style="margin-top:12px;background:#FEF3C7;border-left:4px solid #F59E0B;">
+            <b>⏰ 立即提前测试 MC 组件、Vue3 组件的生成。</b>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="footer"><span>感智晓界工坊 · 前端开发使用培训</span><span>08 / 30</span></div>
+  </section>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  <!-- P7 为什么用 AI -->
+  <section class="slide slide-light" data-page-node-id="KeIB664IExg2VsG7NRhyzE">
+    <div class="content" data-page-node-id="0lIpjkN1vXhe8hVhVkx8I9">
+      <div class="title-bar" data-page-node-id="YAUY4upECPeo9VcjQicEAL"><h2 data-page-node-id="MB9q7wyc9wPZ2TuzQRtowE">微码/一体化组件+AI=事半功倍</h2><span class="sub" data-page-node-id="YNRxqajeycpCU8drI7lmsY">微码有学习成本，AI 让配置化事半功倍</span></div>
+      <div class="two-col" data-page-node-id="qUyGujS1LsZegY69OjcFjD">
+        <div class="col-box" data-page-node-id="cVc7R6UpUjL12tzx8ZJeHZ"><h3 data-page-node-id="Cy1ARZpE2ef9x9IYcN4f72">微码有学习成本</h3><p data-page-node-id="5K9aSjqqvH5pSojdsOhxtK">declare 声明、样式变量（css-vars）、事件 / 状态、业务配置写法，初次上手不低。</p><p style="margin-top:8px;" data-page-node-id="tQunPqELDTcLm6NaibiHcF"><b data-page-node-id="iqrsuCMEpfabYtu6NCbWoC">本质目的</b>：高复用——一次开发，多页面 / 多业务线引用，靠"配置"适配差异。</p></div>
+        <div class="col-box alt" data-page-node-id="lusQD0qHRCUVBXtBlCyyqS"><h3 data-page-node-id="MsnbXyMRO1qJuSOBgQb12O">AI 生成的价值：交付同时把配置做进去</h3><ul data-page-node-id="U5EjuyPpxxxYW3VoNPaCpD">
+          <li data-page-node-id="xja2meHkwDyQnNsFyqlHZF"><b data-page-node-id="L0AcPqfTQJdRHvg302g0gI">兼容一体化的 em</b>：生成时带上一体化扩展点，便于后期纳入一体化体系</li>
+          <li data-page-node-id="VEMvrTgFxjLPPBIYqOGWri"><b data-page-node-id="QTagiFuBGi3MoErnHSp1Le">微码深浅主题色</b>：自动注入 css-vars 主题变量，天然支持浅色 / 深色切换</li>
+          <li data-page-node-id="SEQAnW2eGlk20v1lAgj190"><b data-page-node-id="5jYH6ouvASfF2jmoByeJlr">动态背景图</b>：背景图做成可配置项，调用方传参即可换</li>
+          <li data-page-node-id="01bkqmLPCoClEiUG8TCU0o"><b data-page-node-id="XXzV8TejSCgaxgNoSKgK7z">tab 入参</b>：把 tab 等可变项抽成组件入参，组件即参数化</li>
+        </ul></div>
+      </div>
+    </div>
+    <div class="footer" data-page-node-id="JOzsIGKgn1HSvkrvEXYmcq"><span data-page-node-id="pvVHKXUNOEOlNgtZrrVjno">感智晓界工坊 · 前端开发使用培训</span><span data-page-node-id="DHDEUSAhWq3I2SHfpDI5t7">09 / 30</span></div>
+  </section>
+
+
+
+  <!-- P8 为什么用平台：优缺点对比 -->
+  <section class="slide slide-light" data-page-node-id="SFCiXltBM9J6Df06fYQyO5">
+    <div class="content" data-page-node-id="pMjTlg9t6LmUnEGOuZ619u">
+      <div class="title-bar" data-page-node-id="TBhHUH1EJuGdSUQv8eLG0W"><h2 data-page-node-id="KPO5qs1RpYXc3kVbRT5lSS">为什么用平台：本地 AI vs 感智晓界工坊</h2><span class="sub" data-page-node-id="fCXkutdzT52n0B26DJBtUL">一句话铺垫</span></div>
+      <div class="lead" data-page-node-id="xYB0yEFASEfWUG7GBbbB0H">给每人发更快的锤子（本地 AI） vs 建一座共用标准化工厂（平台）。</div>
+      <table class="two-col-table" data-page-node-id="8fZ2pxSqPhrmb7r41ead07">
+        <tr data-page-node-id="JIpbUkQBqE98DsGuY87YN8"><th data-page-node-id="lIQGPiPx2HaN2zXOBbKhvf" style="width:25%;">维度</th><th data-page-node-id="kBSABbi4KtBNuI9nWRFErR" style="width:37.5%;">🕐 本地 AI（个人）</th><th data-page-node-id="SKsiWRG1jVTYhEmujonB3i" style="width:37.5%;">⚡ 感智晓界工坊平台</th></tr>
+        <tr data-page-node-id="G0fi2e0Vn07ofRc82dNd26"><td data-page-node-id="v6pzlZBvSCHQcdoEkDqHPl">提效幅度</td><td data-page-node-id="gplVTnVgnB6ImbEj9Ljfm1">个人 +30~50%</td><td data-page-node-id="Am6ZhXfwSwIt0RpzFu0gpD">组织级倍增</td></tr>
+        <tr data-page-node-id="FN4TOuaxnAxHpNLZgfJHt6"><td data-page-node-id="J8Kj5ZKtbb93aLO7N7h1NL">规范一致性</td><td data-page-node-id="sC4nW3S2bBDX4phUJNzxLg">低（随人）</td><td data-page-node-id="W0FmlvqxVInxldTGito8xM">高（强制 Vue3/微码）</td></tr>
+        <tr data-page-node-id="qvjW0mPtjdN754ye4AcCSq"><td data-page-node-id="qYf627EeqGamFF9zEBWt31">资产沉淀</td><td data-page-node-id="KjfBGCBwyRJDCRr5AM54Zi">无（散落）</td><td data-page-node-id="lRXvci4kCsoz5ztk712Au7">强（共享库 + 评分反哺）</td></tr>
+        <tr data-page-node-id="TiUX8MSs2zjoHMPXmvn2Mv"><td data-page-node-id="vBD5CCJm3B5OD2E8ogVFsu">交付闭环</td><td data-page-node-id="qAcIEG35qeODB3qLGR10Jw">无</td><td data-page-node-id="eJN0TYrUPX3AYxkA390DHR">完整（门禁 + Git + 接口）</td></tr>
+        <tr data-page-node-id="NlpAiX9Gt2QLDYCtFlwESf"><td data-page-node-id="SyvzymOfBXy84eLcNceqm7">学习成本</td><td data-page-node-id="Gm2H3s9TKdaayYFXFvopQg">低</td><td data-page-node-id="DaRX2XABkSJGu0Df9XlXZe">中（一次配置全员复用）</td></tr>
+        <tr data-page-node-id="NlpAiX9Gt2QLDYCtFlwESf"><td data-page-node-id="SyvzymOfBXy84eLcNceqm7">迭代受益</td><td data-page-node-id="Gm2H3s9TKdaayYFXFvopQg">仅自己（改了只有自己用）</td><td data-page-node-id="DaRX2XABkSJGu0Df9XlXZe">一次迭代全员受益（管线优化、共享组件、规则修复全员生效）</td></tr>
+        <tr data-page-node-id="lDDaAlv5GvpVBdZeyRxbW3"><td data-page-node-id="szZaS4B7mYVkHC3RAP1SRp">适用场景</td><td data-page-node-id="yXt8cFXILEBZSWDT0p1ePU">个人原型 / 小工具</td><td data-page-node-id="h5repIxjYh6IE0tTqnOYHe">标准化业务组件</td></tr>
+      </table>
+    </div>
+    <div class="footer" data-page-node-id="Ne5ZUdEnY2ETpvRyVzF0LF"><span data-page-node-id="eu3KqlCXPJc4Ya5hk9HtDy">感智晓界工坊 · 前端开发使用培训</span><span data-page-node-id="TzykdFY5zGxrVP3JCL2dFb">10 / 30</span></div>
+  </section>
+
+
+
+  <!-- P8 MVP154 vs 平台 + 多智能体并行增量 -->
+  <section class="slide slide-light" data-page-node-id="U1Ffur0mQd0pbaMNSEGLfw">
+    <div class="content" data-page-node-id="KW2YCdtRbBTw10QIGIGt5c">
+      <div class="title-bar" data-page-node-id="GRO2Uftruor7BE4xCV1CtQ"><h2 data-page-node-id="6XHzJvmHEAome8nxoFAaPF">平台智能体 vs 公司 MVP154《提示词工程》</h2></div>
+
+      <!-- 主体：左对比表 + 右问题卡 -->
+      <div style="display:grid;grid-template-columns:1.35fr 0.65fr;gap:16px;margin-top:14px;align-items:stretch;">
+        <!-- 左：对比表格 -->
+        <div class="card" style="padding:0;overflow:hidden;border:1px solid #E2E8F0;display:flex;flex-direction:column;">
+          <table style="width:100%;border-collapse:collapse;font-size:16.2px;table-layout:fixed;">
+            <thead>
+              <tr>
+                <th style="padding:10px 8px;text-align:center;background:linear-gradient(135deg,#0D264F,#1E3A8A);color:#fff;font-weight:700;font-size:16.2px;border:none;width:18%;">维度</th>
+                <th style="padding:10px 12px;text-align:left;background:#FEE2E2;color:#991B1B;font-weight:700;font-size:16.2px;border:none;width:41%;">❌ MVP154</th>
+                <th style="padding:10px 12px;text-align:left;background:#CCFBF1;color:#0F766E;font-weight:700;font-size:16.2px;border:none;width:41%;">✅ 本平台</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="background:#fff;">
+                <td style="padding:9px 8px;border-bottom:1px solid #E2E8F0;color:#475569;font-weight:600;text-align:center;">执行模式</td>
+                <td style="padding:9px 12px;border-bottom:1px solid #E2E8F0;color:#7F1D1D;background:linear-gradient(90deg,#FEF2F2 0%,#fff 30%);">单一 LLM 顺序执行<br>一个 prompt 承载所有</td>
+                <td style="padding:9px 12px;border-bottom:1px solid #E2E8F0;color:#0F766E;background:linear-gradient(90deg,#F0FDFA 0%,#fff 30%);">多角色分工协作<br>（布局/样式/代码）</td>
+              </tr>
+              <tr style="background:#F8FAFC;">
+                <td style="padding:9px 8px;border-bottom:1px solid #E2E8F0;color:#475569;font-weight:600;text-align:center;">并发控制</td>
+                <td style="padding:9px 12px;border-bottom:1px solid #E2E8F0;color:#7F1D1D;">无事务机制<br>文件锁需手动实现</td>
+                <td style="padding:9px 12px;border-bottom:1px solid #E2E8F0;color:#0F766E;">数据库事务 + 分布式锁<br>增量写入</td>
+              </tr>
+              <tr style="background:#fff;">
+                <td style="padding:9px 8px;border-bottom:1px solid #E2E8F0;color:#475569;font-weight:600;text-align:center;">状态管理</td>
+                <td style="padding:9px 12px;border-bottom:1px solid #E2E8F0;color:#7F1D1D;">内存快照易丢失<br>无版本控制</td>
+                <td style="padding:9px 12px;border-bottom:1px solid #E2E8F0;color:#0F766E;">不可变快照<br>完整审计日志</td>
+              </tr>
+              <tr style="background:#F8FAFC;">
+                <td style="padding:9px 8px;border-bottom:1px solid #E2E8F0;color:#475569;font-weight:600;text-align:center;">调试追踪</td>
+                <td style="padding:9px 12px;border-bottom:1px solid #E2E8F0;color:#7F1D1D;">难以复现<br>race condition</td>
+                <td style="padding:9px 12px;border-bottom:1px solid #E2E8F0;color:#0F766E;">分布式追踪<br>完整日志链路</td>
+              </tr>
+              <tr style="background:#fff;">
+                <td style="padding:9px 8px;border-bottom:none;color:#475569;font-weight:600;text-align:center;">质量保障</td>
+                <td style="padding:9px 12px;border-bottom:none;color:#7F1D1D;">靠人反复调 prompt<br>模型不会自挑毛病</td>
+                <td style="padding:9px 12px;border-bottom:none;color:#0F766E;">对抗机制（互相找茬）<br>三角把关</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- 右：单模型问题 -->
+        <div class="card" style="background:linear-gradient(180deg,#FEF2F2 0%,#FFF5F5 100%);border:1px solid #FECACA;padding:14px;display:flex;flex-direction:column;justify-content:center;gap:8px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">
+            <span style="display:inline-flex;width:24px;height:24px;background:#DC2626;color:#fff;border-radius:50%;align-items:center;justify-content:center;font-size:16.2px;font-weight:700;">!</span>
+            <h4 style="font-size:17.6px;margin:0;color:#991B1B;font-weight:700;">单模型串行的 5 大问题</h4>
+          </div>
+          <div style="font-size:15.5px;line-height:1.5;color:#7F1D1D;">
+            <div style="padding:5px 0;border-bottom:1px dashed #FECACA;"><b>状态漂移</b>：每步基于临时产物而非稳定基线</div>
+            <div style="padding:5px 0;border-bottom:1px dashed #FECACA;"><b>覆盖式写入</b>：后步无意覆盖前步正确内容</div>
+            <div style="padding:5px 0;border-bottom:1px dashed #FECACA;"><b>错误累积</b>：前序错误传递给后续，放大问题</div>
+            <div style="padding:5px 0;border-bottom:1px dashed #FECACA;"><b>无法回滚</b>：失败后只能在脏状态上重试</div>
+            <div style="padding:5px 0;"><b>调试困难</b>：产物是多次覆盖结果，难定位源头</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 结论 -->
+      <div class="card" style="margin-top:14px;padding:13px 16px;background:linear-gradient(135deg,#0D264F,#1E3A8A);border:none;color:#fff;display:flex;align-items:center;gap:10px;box-shadow:0 4px 12px rgba(13,38,79,0.18);">
+        <span style="font-size:24.3px;">💡</span>
+        <span style="font-size:17.6px;line-height:1.5;"><b>结论：</b>平台通过多智能体协同 + 工程化基建，把质量上限从"个人能力"提升到"系统能力"。</span>
+      </div>
+    </div>
+    <div class="footer" data-page-node-id="UiRN9aNVtesjZxN1mNQZ59"><span data-page-node-id="4xTxzgu2E2Lij5Gu0EwKoh">感智晓界工坊 · 前端开发使用培训</span><span data-page-node-id="IuDh2nnSUCU1FRbTJoS4JQ">11 / 30</span></div>
+  </section>
+
+  <!-- PART 2 封面：上手使用 -->
+  <section class="slide slide-dark">
+    <div class="content" style="justify-content:center;align-items:center;text-align:center;">
+      <div style="font-size:1.9vh;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#2DD4BF;margin-bottom:1.5vh;">PART 2</div>
+      <h2 style="font-size:6.1vh;font-weight:800;color:#fff;line-height:1.3;margin-bottom:1.5vh;">上手使用</h2>
+      <div style="width:60px;height:3px;background:#2DD4BF;border-radius:2px;margin:0 auto 2vh;"></div>
+      <p style="font-size:2.4vh;color:#94A3B8;max-width:500px;line-height:1.6;">从配置到生成、迭代、交付，完整操作流程与实战演示</p>
+    </div>
+    <div class="footer"><span>感智晓界工坊 · 前端开发使用培训</span><span>12 / 30</span></div>
+  </section>
+
+  <!-- P11 怎么开始 -->
+  <section class="slide slide-light" data-page-node-id="VWD2CIWCvaxWlsThA9HcLy">
+    <div class="content" data-page-node-id="8xLGwl4C2Dnl9bJrXs6cxD">
+      <div class="title-bar" data-page-node-id="fG8wpKicodtGZZ2h6wY0v5"><h2 data-page-node-id="se87Au2XA4dVuAAlfQ5sIf">怎么开始：模型池 / 工具配置 + 三种使用方式</h2></div>
+      <div class="card" style="margin-bottom:16px;" data-page-node-id="fHQxRbAgt8k97crqea26TF"><h3 data-page-node-id="utFE7AyisjilaGVhulO9Mt">模型池与三方工具</h3><p data-page-node-id="lBaWul03276rocUkkZkAsf">Figma 连接器、APIFOX、GitLab、公司 Skills——配置一次，所有项目复用。</p></div>
+      <div class="shot-gallery">
+        <div class="shot-tabs">
+          <button class="shot-tab active">配置模型池</button>
+          <button class="shot-tab">自动识别模型能力</button>
+
+          <button class="shot-tab">选择模型</button>
+          <button class="shot-tab">第三方服务配置</button>
+          <button class="shot-tab">实际使用效果</button>
+        </div>
+        <div class="shot-panels">
+          <div class="shot-panel active">
+            <div class="shot-figure"><img class="screenshot" src="培训截图/P7-1.png" alt="配置模型池"></div>
+          </div>
+         <div class="shot-panel">
+            <div class="shot-figure"><img class="screenshot" src="培训截图/P7-3.png" alt="自动识别模型能力"></div>
+          </div>
+          <div class="shot-panel">
+            <div class="shot-figure"><img class="screenshot" src="培训截图/P7-2.png" alt="选择模型"></div>
+          </div>
+          <div class="shot-panel">
+            <div class="shot-figure"><img class="screenshot" src="培训截图/P7-4.png" alt="第三方服务配置"></div>
+          </div>
+          <div class="shot-panel">
+            <div class="shot-figure"><img class="screenshot" src="培训截图/P7-5.png" alt="实际使用效果"></div>
+          </div>
+        </div>
+      </div>
+      <div class="topology-note" style="margin-top:14px;background:#F0FDF4;border-left:4px solid #22C55E;">
+        <strong style="color:#16A34A;">✅ 模型池已在实际任务中使用：</strong>
+        <span style="color:#334155;">配置一次后，每次生成任务自动从模型池调度——qwen3.7-plus / glm-5.3-flash / deepseek-v4-flash / kimi-k2.7-code 等多模型按需切换，<b>无需排队等待</b>，效率显著提升。</span>
+      </div>
+    </div>
+    <div class="footer" data-page-node-id="jFndFcVLfjnYNqpNQxDigH"><span data-page-node-id="TxDkpjTHEU9RqRmVXOj3Sc">感智晓界工坊 · 前端开发使用培训</span><span data-page-node-id="iqyY6d6SE4Ij4DPeJAsOlC">13 / 30</span></div>
+  </section>
+
+
+
+  <!-- P12 Figma 整理规范 -->
+  <section class="slide slide-light" data-page-node-id="FigmaNorm20260901">
+    <div class="content" data-page-node-id="FigmaNormContent">
+      <div class="title-bar" data-page-node-id="FigmaNormTitle"><h2 data-page-node-id="FigmaNormH2">怎么开始：Figma 整理规范-生成前的 3 项必查</h2><span class="sub" data-page-node-id="FigmaNormSub">整理好 Figma，生成还原度提升 30%+</span></div>
+
+      <!-- 3 列等宽卡片：P0/P1 优先级分色 -->
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:14px;align-items:stretch;">
+        <div class="card" style="padding:0;overflow:hidden;display:flex;flex-direction:column;border-top:4px solid #0D264F;">
+          <div style="padding:12px 16px;background:linear-gradient(135deg,#0D264F,#1E3A8A);color:#fff;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+              <h3 style="font-size:20.2px;margin:0;font-weight:700;">① 资源命名</h3>
+              <span style="font-size:14.9px;background:rgba(255,255,255,0.2);padding:2px 8px;border-radius:999px;white-space:nowrap;">P0 必查</span>
+            </div>
+          </div>
+          <ul style="padding:14px 16px;font-size:16.2px;line-height:1.8;color:#475569;margin:0;list-style:none;flex:1;">
+            <li style="margin-bottom:6px;"><b style="color:#0D264F;">背景图</b> → <code>bg</code> / <code>bg-*</code> / 含「背景」</li>
+            <li style="margin-bottom:6px;"><b style="color:#0D264F;">图标</b> → <code>icon</code> / <code>icon-*</code> / <code>arrow</code></li>
+            <li style="margin-bottom:6px;"><b style="color:#0D264F;">图片</b> → <code>img</code> / <code>img-*</code> / 含「图片」「头像」</li>
+            <li style="color:#991B1B;">❌ 避免 <code>Frame 123</code> / <code>Rectangle 45</code> 等无意义命名</li>
+          </ul>
+        </div>
+
+        <div class="card" style="padding:0;overflow:hidden;display:flex;flex-direction:column;border-top:4px solid #1DD7B9;">
+          <div style="padding:12px 16px;background:linear-gradient(135deg,#1DD7B9,#0EA5E9);color:#fff;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+              <h3 style="font-size:20.2px;margin:0;font-weight:700;">② 组件结构整理</h3>
+              <span style="font-size:14.9px;background:rgba(255,255,255,0.2);padding:2px 8px;border-radius:999px;white-space:nowrap;">P1 建议</span>
+            </div>
+          </div>
+          <ul style="padding:14px 16px;font-size:16.2px;line-height:1.8;color:#475569;margin:0;list-style:none;flex:1;">
+            <li style="margin-bottom:6px;">按实际开发布局组织：<b style="color:#0F766E;">header / content / footer</b></li>
+            <li style="margin-bottom:6px;">合并重复元素：多个相同 icon 放 <code>icons</code> 容器</li>
+            <li>删除装饰性空图层、隐藏图层、重复备份</li>
+          </ul>
+        </div>
+
+        <div class="card" style="padding:0;overflow:hidden;display:flex;flex-direction:column;border-top:4px solid #0D264F;">
+          <div style="padding:12px 16px;background:linear-gradient(135deg,#0D264F,#1E3A8A);color:#fff;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+              <h3 style="font-size:20.2px;margin:0;font-weight:700;">③ 技术栈标记</h3>
+              <span style="font-size:14.9px;background:rgba(255,255,255,0.2);padding:2px 8px;border-radius:999px;white-space:nowrap;">P0 必查</span>
+            </div>
+          </div>
+          <ul style="padding:14px 16px;font-size:16.2px;line-height:1.8;color:#475569;margin:0;list-style:none;flex:1;">
+            <li style="margin-bottom:6px;"><b style="color:#0D264F;">图表区域</b> → <code>@echarts/折线图</code> / <code>@echarts/柱状图</code></li>
+            <li><b style="color:#0D264F;">Ant Design</b> → <code>@antd/Table</code> / <code>@antd/Modal</code></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="footer" data-page-node-id="FigmaNormFooter"><span data-page-node-id="FigmaNormF1">感智晓界工坊 · 前端开发使用培训</span><span data-page-node-id="FigmaNormF2">14 / 30</span></div>
+  </section>
+
+
+
+  <!-- P13 如何使用① -->
+  <section class="slide slide-light" data-page-node-id="AXWgvkCyBW0W8AbkfHFMmO">
+    <div class="content" data-page-node-id="tQtslYQB7ZJWGCvXVmgjF9">
+      <div class="title-bar" data-page-node-id="8EFOETWbvNCHiIiIB3ieeA"><h2 data-page-node-id="eSqDcEA5zi6xCfFm17GQKo">如何使用①：完整生成</h2><span class="sub" data-page-node-id="y2qLFOP6spBJS8YcVUD4Q0">Figma URL → 业务组件</span></div>
+
+      <!-- 左右分栏：左 2×3 紧凑步骤卡，右截图画廊 -->
+      <div class="feature-row" style="margin-top:12px;">
+        <div class="feature-col">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div class="card" style="padding:12px;" data-page-node-id="dOQmFdHaidHg2XjRD11msK">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                <span style="width:24px;height:24px;background:linear-gradient(135deg,#1DD7B9,#0EA5E9);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16.2px;font-weight:700;">1</span>
+                <b style="font-size:17.6px;color:#0F172A;" data-page-node-id="cHIQaTzxqURzIzAbMx3Zuk">入口</b>
+              </div>
+              <p style="font-size:15.5px;color:#475569;margin:0;line-height:1.5;" data-page-node-id="SALEKhw7hp1GGz593K7cOc">平台「生成」页，粘贴 Figma 组件 / 页面链接</p>
+            </div>
+            <div class="card" style="padding:12px;" data-page-node-id="ObjeG80xSlBpEoWCwItPfp">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                <span style="width:24px;height:24px;background:linear-gradient(135deg,#1DD7B9,#0EA5E9);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16.2px;font-weight:700;">2</span>
+                <b style="font-size:17.6px;color:#0F172A;" data-page-node-id="4hhc9kiIoYPVaRiAESPqI0">选择产物类型</b>
+              </div>
+              <p style="font-size:15.5px;color:#475569;margin:0;line-height:1.5;" data-page-node-id="nO4d12mzPcCB9mNPatpBM7">微码 / Vue3</p>
+            </div>
+            <div class="card" style="padding:12px;" data-page-node-id="J3A3UXBbaM3eCyE1zLDXjZ">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                <span style="width:24px;height:24px;background:linear-gradient(135deg,#1DD7B9,#0EA5E9);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16.2px;font-weight:700;">3</span>
+                <b style="font-size:17.6px;color:#0F172A;" data-page-node-id="qqN4xeya4FlTzYTAWcJLm5">开始生成</b>
+              </div>
+              <p style="font-size:15.5px;color:#475569;margin:0;line-height:1.5;" data-page-node-id="msLnDO98F5pWDpUNotbRrX">平台按规范产出组件（含 index.vue / styles / declare 等文件）</p>
+            </div>
+            <div class="card" style="padding:12px;" data-page-node-id="A5yOLIiAsYrFL5iED4M11Y">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                <span style="width:24px;height:24px;background:linear-gradient(135deg,#1DD7B9,#0EA5E9);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16.2px;font-weight:700;">4</span>
+                <b style="font-size:17.6px;color:#0F172A;" data-page-node-id="bFXzm3QDQ35f5f0aSmYZzZ">查看结果</b>
+              </div>
+              <p style="font-size:15.5px;color:#475569;margin:0;line-height:1.5;" data-page-node-id="YEKZ9anf6ZLVGRHb7bRPKg">还原度、规范遵循即时可见</p>
+            </div>
+            <div class="card" style="padding:12px;grid-column:1 / -1;" data-page-node-id="QHJ66BlYnlmx32xJZmhDyi">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                <span style="width:24px;height:24px;background:linear-gradient(135deg,#1DD7B9,#0EA5E9);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16.2px;font-weight:700;">5</span>
+                <b style="font-size:17.6px;color:#0F172A;" data-page-node-id="q493QlQD9m3sD5fnAPsTOe">要点</b>
+              </div>
+              <p style="font-size:15.5px;color:#475569;margin:0;line-height:1.5;" data-page-node-id="oe2UZexAseK9Y0HlzOLF4b">首次建议用一个真实、图层规范的 Figma 组件练手；强调"还原度 + 规范"而非"花哨"</p>
+            </div>
+          </div>
+        </div>
+        <div class="feature-shot">
+          <div class="shot-gallery">
+            <div class="shot-tabs">
+              <button class="shot-tab active">完整生成</button>
+              <button class="shot-tab">生成详情页</button>
+            </div>
+            <div class="shot-panels">
+              <div class="shot-panel active">
+                <div class="shot-figure"><img class="screenshot" src="培训截图/P11-1.jpg" alt="完整生成"></div>
+              </div>
+              <div class="shot-panel">
+                <div class="shot-figure"><img class="screenshot" src="培训截图/P11-2.png" alt="生成详情页"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="footer" data-page-node-id="E7XAPkohmDzIe7qwaE70fC"><span data-page-node-id="eDLvY3tIL88wVuK0g9tPUJ">感智晓界工坊 · 前端开发使用培训</span><span data-page-node-id="pRfTbbrbsAw8JO5oocnOiy">15 / 30</span></div>
+  </section>
+
+
+
+  <!-- P14 如何使用② -->
+  <section class="slide slide-light" data-page-node-id="5UHNQj5CwxBXVkOEF9MrBK">
+    <div class="content" data-page-node-id="2GeNi3xSahxLPfG4J7VL8T">
+      <div class="title-bar" data-page-node-id="SAFo6JDM3qMDiEORHphveJ"><h2 data-page-node-id="EZWkYXwJUI370MgDz04QK8">如何使用②：Lite 快速生成</h2></div>
+
+      <!-- 左右分栏：左 2×3 紧凑步骤卡，右截图 -->
+      <div class="feature-row" style="margin-top:12px;">
+        <div class="feature-col">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div class="card" style="padding:12px;" data-page-node-id="gbZnXXhoA8GNM4C9APHcbl">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                <span style="width:24px;height:24px;background:linear-gradient(135deg,#1DD7B9,#0EA5E9);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16.2px;font-weight:700;">1</span>
+                <b style="font-size:17.6px;color:#0F172A;" data-page-node-id="vqnqR6ayelGfgBAG63O2PF">入口</b>
+              </div>
+              <p style="font-size:15.5px;color:#475569;margin:0;line-height:1.5;" data-page-node-id="xGhcUJfpxzWOlSW4ev7XhK">同「生成」页，选 Lite 模式，贴页面 / 组件截图（或 Figma URL）</p>
+            </div>
+            <div class="card" style="padding:12px;" data-page-node-id="P5VGDZXINWM6hBNDlmcquT">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                <span style="width:24px;height:24px;background:linear-gradient(135deg,#1DD7B9,#0EA5E9);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16.2px;font-weight:700;">2</span>
+                <b style="font-size:17.6px;color:#0F172A;" data-page-node-id="BSawhR9NDpflsMfTBA9eWn">产出</b>
+              </div>
+              <p style="font-size:15.5px;color:#475569;margin:0;line-height:1.5;" data-page-node-id="qhB9I0Uz5IUho3JGwLL8ti">简单布局 + 基础交互 + 图表，秒级出</p>
+            </div>
+            <div class="card" style="padding:12px;" data-page-node-id="ncoe7yOI1K58HJrBDCpZj8">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                <span style="width:24px;height:24px;background:linear-gradient(135deg,#1DD7B9,#0EA5E9);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16.2px;font-weight:700;">3</span>
+                <b style="font-size:17.6px;color:#0F172A;" data-page-node-id="HUoKU4CkXA3IvHH95e0rRC">适用</b>
+              </div>
+              <p style="font-size:15.5px;color:#475569;margin:0;line-height:1.5;" data-page-node-id="ntZdMRcK8fdS6kiCbTmCXU">后台管理页、数据看板、表单页、图表卡、活动 / 落地页</p>
+            </div>
+            <div class="card" style="padding:12px;" data-page-node-id="6tIzCNLPB1Hfi8nTthQDlf">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                <span style="width:24px;height:24px;background:linear-gradient(135deg,#1DD7B9,#0EA5E9);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16.2px;font-weight:700;">4</span>
+                <b style="font-size:17.6px;color:#0F172A;" data-page-node-id="u8PAusJQLuvNgGrftwXhUz">对比完整版</b>
+              </div>
+              <p style="font-size:15.5px;color:#475569;margin:0;line-height:1.5;" data-page-node-id="XXvwSVlLHD60j8nlce1aDA">Lite 快但不重细节；要还原度用完整版</p>
+            </div>
+            <div class="card" style="padding:12px;grid-column:1 / -1;" data-page-node-id="AFrBWvbDGQ6BTUV3NFN3MG">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                <span style="width:24px;height:24px;background:linear-gradient(135deg,#1DD7B9,#0EA5E9);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16.2px;font-weight:700;">5</span>
+                <b style="font-size:17.6px;color:#0F172A;" data-page-node-id="d7EuYhzlHAQG27Zoh2ePJa">要点</b>
+              </div>
+              <p style="font-size:15.5px;color:#475569;margin:0;line-height:1.5;" data-page-node-id="J9coksvGgz9sNoPbIHUOXW">先用 Lite 快速看到效果，再决定要不要升级到完整版</p>
+            </div>
+          </div>
+        </div>
+        <div class="feature-shot">
+          <img class="screenshot" src="培训截图/P12-1.png" alt="Lite 快速生成">
+          <div class="shot-desc"><p>Lite 快速生成：贴页面 / 组件截图或 Figma URL，秒级出简单布局 + 基础交互 + 图表，适合先快速看效果。</p><p class="screenshot-hint">点击截图查看清晰原图</p></div>
+        </div>
+      </div>
+    </div>
+    <div class="footer" data-page-node-id="dqYxiKOWxMxVdfgAyZ5UE0"><span data-page-node-id="6dG6ShiEFekMJozAsaljLK">感智晓界工坊 · 前端开发使用培训</span><span data-page-node-id="y2uzgR7dSI7uFrHspvilJ1">16 / 30</span></div>
+  </section>
+
+
+
+  <!-- P15 如何使用③ -->
+  <section class="slide slide-light" data-page-node-id="DCwlIAxPrq0thoHXDPIUkL">
+    <div class="content" data-page-node-id="ZZkbpDblwt4gxSl42GFkwh">
+      <div class="title-bar" data-page-node-id="YySI1VAZP8BnHvtu8RGc6C"><h2 data-page-node-id="0hRfkIDWclUwxU1tHYihIx">如何使用③：在线迭代 + Playground / 沙盒</h2></div>
+      <div class="feature-row">
+        <div class="feature-col">
+          <div class="card"><h3>在线迭代 / Playground 沙盒</h3><p>组件工作台内置 Monaco IDE（格式化 + 行号），可在隔离沙盒里直接改代码；也支持用自然语言让 AI 对话式修改组件，改坏只影响沙盒，不影响线上。</p></div>
+          <div class="shot-desc"><p>两种迭代方式：① 工作台内手动改代码并实时预览；② AI 对话式修改，描述需求即可改组件。</p><p class="screenshot-hint">点击截图查看清晰原图</p></div>
+        </div>
+        <div class="feature-shot">
+          <div class="shot-gallery">
+            <div class="shot-tabs">
+              <button class="shot-tab active">组件工作台</button>
+              <button class="shot-tab">AI 对话式修改</button>
+            </div>
+            <div class="shot-panels">
+              <div class="shot-panel active">
+                <div class="shot-figure"><img class="screenshot" src="培训截图/P13-1.png" alt="Playground / 沙盒"></div>
+              </div>
+              <div class="shot-panel">
+                <div class="shot-figure"><img class="screenshot" src="培训截图/P13-2.png" alt="AI 对话式修改示例"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="footer" data-page-node-id="HCukcZ3uyJEsuwOAFZdIXR"><span data-page-node-id="VVlebSVT8iUUHskLrYxXHw">感智晓界工坊 · 前端开发使用培训</span><span data-page-node-id="4mLPN3R6nT7bdtyujPdmOx">17 / 30</span></div>
+  </section>
+
+
+
+  <!-- P16 如何使用④ -->
+  <section class="slide slide-light" data-page-node-id="2bMt259kqSjFMcyVzus2ri">
+    <div class="content" data-page-node-id="ldgL3i2gkUPQSYS1ZRCePu">
+      <div class="title-bar" data-page-node-id="RnhPdut0S0AwmHYBPmBca3"><h2 data-page-node-id="ziyyjAGcFx4ChddYPS8bXC">如何使用④：质量门禁</h2><span class="sub" data-page-node-id="51jktw5aEXIyu5kLouH8uc">怎么看错 / 怎么修 / 强制预览</span></div>
+      <div class="feature-row">
+        <div class="feature-col">
+          <div class="steps tight" data-page-node-id="bCGAYkX9yLJ3vsoX6dVk2l">
+            <div class="step" data-page-node-id="PlpiHlZImRE07VZRKacLUx"><div class="num" data-page-node-id="jCi6k1uMWcBdmHgZvQJZT6">1</div><div class="body" data-page-node-id="jomA6ruB3NwLSFRoo8l5Bi"><b data-page-node-id="nE6ncpEatPUl2oufQCQlb9">是什么</b><p data-page-node-id="WKzcRlgKLkqWmXGHQDnpBu">生成后平台自动跑质量门禁，按「规范 / 样式 / 结构」校验</p></div></div>
+            <div class="step" data-page-node-id="WbHDb8AwllFnocb57RX8lI"><div class="num" data-page-node-id="fDveBRVpCvBgSXItWZsY4a">2</div><div class="body" data-page-node-id="xJiV3DBskp3SwTH53Bsk0R"><b data-page-node-id="d7kZh2zEaNq4uu7nPLBo5s">查什么</b><p data-page-node-id="c9lbGiA96xV5jgF88aPaGr">组件规范（Vue3/微码/一体化）、LESS 编译、SFC 结构、资源引用合法性（含禁止宿主 Tailwind / 原子类泄漏）</p></div></div>
+            <div class="step" data-page-node-id="s8eI88M5tIleXV9SDVjsjc"><div class="num" data-page-node-id="6SDYKUcZtr3rhwLIy2ve8d">3</div><div class="body" data-page-node-id="6RtOkv2muAnEqH7qFAMf2H"><b data-page-node-id="R0xJou3v2EdBlWotPrUq3Q">结果</b><p data-page-node-id="yMQ235kGdGfSENt83BoM6b">通过 → 可交付；BLOCK → 拦截并自动重试修正（重试耗尽则禁止发布，避免劣质产物外流）</p></div></div>
+            <div class="step" data-page-node-id="CbfBRUGZez96ZpndNlC9Fk"><div class="num" data-page-node-id="KWekLRkaa6Xwo74XHwGJMG">4</div><div class="body" data-page-node-id="Sbu4JqHV5xmJwdKWhvOjD0"><b data-page-node-id="yFsR0Po26X59JWoEGhBXK4">怎么看错</b><p data-page-node-id="hj356jbPerkRT6CPI5JwvC">报错带 文件 / 行 / 列 + 具体错误 + 代码上下文 + 修复建议，逐条定位</p></div></div>
+            <div class="step" data-page-node-id="16jTtIvE0G61bNprDgZAbe"><div class="num" data-page-node-id="hyIaQZIKT5cEQW8S6duEfm">5</div><div class="body" data-page-node-id="UsBE9Vq9AiLhIHIswLJ0th"><b data-page-node-id="kK2InARqmSwjFJUBI04WEE">怎么修</b><p data-page-node-id="C73zeGqMuEC4aIUijcx61Q">在线编辑问题文件 → 保存（新快照）→ 重新校验 → 刷新预览，形成闭环</p></div></div>
+            <div class="step" data-page-node-id="qesPoQDgar0YQxDNqRIFDy"><div class="num" data-page-node-id="IaiZ716WEvBaEci5SZSIVG">6</div><div class="body" data-page-node-id="iwUHgVxoM1hUVbJ7iSmGyt"><b data-page-node-id="zIlZVqRHFs0O1EgRNPPYbk">不合格也能预览</b><p data-page-node-id="33BY8cQIpql9EASTAk636Y">即便门禁未过，也可「强制预览」看效果，先评估再决定改不改</p></div></div>
+          </div>
+        </div>
+        <div class="feature-shot">
+          <div class="shot-gallery">
+            <div class="shot-tabs">
+              <button class="shot-tab active">失败详情</button>
+              <button class="shot-tab">代码错误</button>
+              <button class="shot-tab">自动修复 1</button>
+              <button class="shot-tab">自动修复 2</button>
+            </div>
+            <div class="shot-panels">
+              <div class="shot-panel active">
+                <div class="shot-figure"><img class="screenshot" src="培训截图/P14-1.png" alt="失败详情门禁"></div>
+                <div class="shot-desc"><p>质量门禁 L0-B 未通过的失败详情：明确标出 BLOCK 项与涉及的规范 / 可编译检查。这是"对抗 + 审查"协同的硬落地——不过关直接拦下。</p><p class="screenshot-hint">点击截图查看清晰原图</p></div>
+              </div>
+              <div class="shot-panel">
+                <div class="shot-figure"><img class="screenshot" src="培训截图/P14-2.png" alt="代码错误"></div>
+                <div class="shot-desc"><p>每条报错带 文件 / 行 / 列 + 具体错误 + 代码上下文 + 修复建议，可逐条定位，不用自己猜。</p><p class="screenshot-hint">点击截图查看清晰原图</p></div>
+              </div>
+              <div class="shot-panel">
+                <div class="shot-figure"><img class="screenshot" src="培训截图/P14-3.png" alt="自动修复 1"></div>
+                <div class="shot-desc"><p>平台据报错自动重试修正：把错误回灌给生成 / 修复 agent，定位并改对应文件，再重新校验。</p><p class="screenshot-hint">点击截图查看清晰原图</p></div>
+              </div>
+              <div class="shot-panel">
+                <div class="shot-figure"><img class="screenshot" src="培训截图/P14-4.png" alt="自动修复 2"></div>
+                <div class="shot-desc"><p>修正结果回写并重新通过门禁；重试耗尽仍不过则禁止发布，避免劣质产物外流。你也可"强制预览"先看效果。</p><p class="screenshot-hint">点击截图查看清晰原图</p></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="footer" data-page-node-id="mQYeOxuXF66wWxUbxuiqGy"><span data-page-node-id="jQvZqTZ52LGM1GMGsxcYZU">感智晓界工坊 · 前端开发使用培训</span><span data-page-node-id="YlbMMEu6mq2tYQ8oGmo4m8">18 / 30</span></div>
+  </section>
+
+
+
+  <!-- P17 如何使用⑤ -->
+  <section class="slide slide-light" data-page-node-id="kOiCnBMGqBNijxxrXQ4AN5">
+    <div class="content" data-page-node-id="QsiUeB9pwUW6qeybsmSRVp">
+      <div class="title-bar" data-page-node-id="H1HOZJGB6BceedFXPtDCjG"><h2 data-page-node-id="clt2Pto9eivWsUzjic0PGN">如何使用⑤：一键交付 + 产物集成</h2></div>
+      <div class="feature-row">
+        <div class="feature-col">
+          <div class="steps tight" data-page-node-id="h3PE0KBiG2kyaV7c0KWQ9q">
+            <div class="step" data-page-node-id="QvSP8TZFROYGVkPEbv47dz"><div class="num" data-page-node-id="fa6U7U5H7M4d6sZOqlbCix">1</div><div class="body" data-page-node-id="oUAVjqHorWWSW75HaygH6Q"><b data-page-node-id="wLY37bygXpPF2bCd1lAMuS">获取产物</b><p data-page-node-id="fq4S6ajBND3znqCZQaUt8O">平台下载 zip，或一键推 Git（门禁通过后）</p></div></div>
+            <div class="step" data-page-node-id="MFghqFBjvZrWri7ROmsra5"><div class="num" data-page-node-id="V1jP1KuUPTI4KiCIdpT5H0">2</div><div class="body" data-page-node-id="ZXvYCZc7EMoUUAvnBs5E2I"><b data-page-node-id="4QpT58TaIpgVDXe22aDoB0">微码怎么用</b><p data-page-node-id="rri32H4hsrF3B9c0BCe0Rj">按平台组件引用方式，在业务页登记 / 引入组件，传参即可</p></div></div>
+            <div class="step" data-page-node-id="oQ7lnN6zHIojx70IEwEIhY"><div class="num" data-page-node-id="ANVrVQXGjA4GmAlQ1zvewb">3</div><div class="body" data-page-node-id="hfzG9P7FjexaE0eK2kijaY"><b data-page-node-id="5dIJ8WyjEzbv4zXAFQc7xE">Vue3 怎么用</b><p data-page-node-id="our2S0hStuDbRcffZqja9W">把生成目录拷入工程 <code data-page-node-id="fFgCgsZ12jXRBVHBsA73Yj">components/</code>，按普通 Vue3 组件 <code data-page-node-id="GHsTPL2R5lqQHAxN5DkqW5">import</code> 使用</p></div></div>
+            <div class="step" data-page-node-id="8HbqisFSgd2NdJwr5JbKCI"><div class="num" data-page-node-id="ZKUwlO0qQbDNeUQa9Lfib7">4</div><div class="body" data-page-node-id="isdFdtcsJm9dBmJqqLval1"><b data-page-node-id="zhvGTZtvCmwBfYAfKGFY31">对接接口</b><p data-page-node-id="3BLj48AErzATxNGMULYBGe">组件内已按 APIFOX 绑定真实接口字段，联调时核对字段即可</p></div></div>
+            <div class="step" data-page-node-id="98r1B8GFMMWbA0km4snuGg"><div class="num" data-page-node-id="l6vZIIjeGCoRZcWlRVp6fY">5</div><div class="body" data-page-node-id="O84yGP1md0haYQKwkctNid"><b data-page-node-id="64iVtEt2X3W9cXgdOAllWk">后续维护</b><p data-page-node-id="m8mXYhlRQ8wI5IPjWzh6i4">改样式 / 逻辑回到平台在线迭代，或本地改后重新推送，保持单一来源</p></div></div>
+          </div>
+        </div>
+        <div class="feature-shot">
+          <img class="screenshot" src="培训截图/P15-1.png" alt="一键推送到 Git">
+        </div>
+      </div>
+    </div>
+    <div class="footer" data-page-node-id="o7TCuxdBbWc37rY6FBmJWG"><span data-page-node-id="WvGzihV7HF5YOOuEerYnUq">感智晓界工坊 · 前端开发使用培训</span><span data-page-node-id="eALrrOdpjYehIW13kYfGeD">19 / 30</span></div>
+  </section>
+
+
+
+
+  <!-- P21 Demo1&2：生成 -->
+  <section class="slide slide-light" data-page-node-id="yyKJ6Gluz9wu0e0Rq4USh2">
+    <div class="content" data-page-node-id="xRFsvj04ENIUQORb2Duc1S">
+      <div class="title-bar" data-page-node-id="ysDxeD2RNB5wM38RiBJG5N"><h2 data-page-node-id="aZBUKZFwNBbC07AKRYdaUX">Demo1&amp;2：生成（完整生成 + Lite 快速生成）</h2></div>
+      <div class="demo-banner" data-page-node-id="rrUN9GUauzOqySnyJ7tpvC">【演示预留】</div>
+      <div class="demo-note" data-page-node-id="v9Cyk0RzDDdiV9wjxZLHho"><b data-page-node-id="rEfZCrZ90ERw9nzIuyfcMl">Demo1 建议素材</b>：1 个真实 Figma 组件 / 页面链接</div>
+      <div class="demo-note" data-page-node-id="pMVF9fW2w0l7fyUrl9UyR0"><b data-page-node-id="mg7UpyLBVWDQriUspneYMV">Demo1 讲解要点</b>：贴 URL → 选微码 / Vue3 → 生成 → 下载；强调还原度与规范遵循</div>
+      <div class="demo-note" data-page-node-id="tO7SuOkRKFoBCYQK1InvER"><b data-page-node-id="pW1dhkd5XycqjAGDcgGyus">Demo2 建议素材</b>：1 张后台管理页截图</div>
+      <div class="demo-note" data-page-node-id="JFHgXrt8AEnhBE9Zs5QctR"><b data-page-node-id="lRCDqvCoXTpvqOCXnxwd8h">Demo2 讲解要点</b>：截图 / Figma URL → Lite 版；对比完整版，说明"快但不重细节"</div>
+    </div>
+    <div class="footer" data-page-node-id="odHZkwNE0pQTTfaOuSOG75"><span data-page-node-id="Mjt3yjeFWGesfgqoFGOaB1">感智晓界工坊 · 前端开发使用培训</span><span data-page-node-id="kBFHGTa2FEykjnJDKksAAt">20 / 30</span></div>
+  </section>
+
+
+
+  <!-- P22 Demo3 -->
+  <section class="slide slide-light" data-page-node-id="vrZ8quhJoQtENmxnAUvtQG">
+    <div class="content" data-page-node-id="xR3oSJyFt1PGsX4aunAtHa">
+      <div class="title-bar" data-page-node-id="OYAbLrJ2FwPpCY4GI80TYK"><h2 data-page-node-id="Ol6VIClIa9nwZ9AeWPjh0I">Demo3：在线编辑 + 大模型交互迭代</h2></div>
+      <div class="demo-banner" data-page-node-id="dMeBqFfY3MXX9YyDAHdr6g">【演示预留】</div>
+      <div class="demo-note" data-page-node-id="uCKaJ0cI2kc9FArDUv3FD8"><b data-page-node-id="TdoFdr7r7QKsLJ1DncFkmg">讲解要点</b>：在线改一句 → 大模型改一版 → 实时预览；"生成即迭代起点"；结合 P19 讲快照/回滚、沙盒</div>
+    </div>
+    <div class="footer" data-page-node-id="6B8d8RITGNUOCZZDRqsWRg"><span data-page-node-id="R0fUad0OqZLLzjuQTIFKRL">感智晓界工坊 · 前端开发使用培训</span><span data-page-node-id="ygCUUGUxctkonbJXQhOow0">21 / 30</span></div>
+  </section>
+
+
+
+  <!-- P23 Demo4&5：交付 -->
+  <section class="slide slide-light" data-page-node-id="nWrObyKqdhDEuU2WdYQ5Y5">
+    <div class="content" data-page-node-id="eoYs4XyAdDYe7s3z8FdI5s">
+      <div class="title-bar" data-page-node-id="DrgFJmJDY8jNDo42CX1PSJ"><h2 data-page-node-id="edz27ssnOGoPwXHifU6E2R">Demo4&amp;5：交付（APIFOX 对接 + 一键 Git）</h2></div>
+      <div class="demo-banner">【演示预留】</div>
+      <div class="shot-gallery">
+        <div class="shot-tabs">
+          <button class="shot-tab active">API 接口生成</button>
+          <button class="shot-tab">接口详情页面</button>
+          <button class="shot-tab">下载的接口文件内容</button>
+        </div>
+        <div class="shot-panels">
+          <div class="shot-panel active">
+            <div class="shot-figure"><img class="screenshot" src="培训截图/P22-1.png" alt="API 接口生成"></div>
+            <div class="shot-desc"><p>在「AI 工作区」选 API 接口生成，绑定 APIFOX 目录或粘贴需求，平台据真实接口目录生成前端调用代码（含 service / 类型 / mock）。</p><p class="screenshot-hint">点击截图查看清晰原图</p></div>
+          </div>
+          <div class="shot-panel">
+            <div class="shot-figure"><img class="screenshot" src="培训截图/P22-2.png" alt="接口详情页面"></div>
+            <div class="shot-desc"><p>接口详情页展示生成的 service 函数、入参 / 出参类型、字段映射与 mock 数据，与 APIFOX 目录同源，便于联调核对。</p><p class="screenshot-hint">点击截图查看清晰原图</p></div>
+          </div>
+          <div class="shot-panel">
+            <div class="shot-figure"><img class="screenshot" src="培训截图/P22-3.png" alt="下载的接口文件内容"></div>
+            <div class="shot-desc"><p>可直接下载生成的接口文件（.ts / .js 等），拷贝进工程即用；字段按 APIFOX 对齐，减少手写出错。</p><p class="screenshot-hint">点击截图查看清晰原图</p></div>
+          </div>
+        </div>
+      </div>
+      <div class="demo-note" data-page-node-id="rzV7pQuHHGnoOPcilongmE"><b data-page-node-id="iAD8puRIyGZjzcBIi3KypI">Demo4 建议素材</b>：1 个 APIFOX 接口目录 + 1 份需求文档 / HTML 大屏</div>
+      <div class="demo-note" data-page-node-id="6h4Cv3vebwcrT87K44ZfAo"><b data-page-node-id="ab72KKVTopsnJf6a1GMv7F">Demo4 讲解要点</b>：绑定真实接口；需求文档驱动生成；说明兼容一体化组件</div>
+      <div class="demo-note" data-page-node-id="G1jlRBbB41xuDOICYBDFnY"><b data-page-node-id="uJOETt6KPfRVQVLMa9kOcy">Demo5 讲解要点</b>：质量门禁 → 推送 Git → 对接真实系统；远程学员同步操作</div>
+      <div class="demo-note" data-page-node-id="taJA91c0DLZ4BIIhJzXSHa"><b data-page-node-id="zUYDs7Fb9Mc9dydh23hXnL">Demo5 目标</b>：现场产出并推送第一个组件</div>
+    </div>
+    <div class="footer" data-page-node-id="GJNHFH4KpluDCfMPCVkLpZ"><span data-page-node-id="Troji5jBJR6KPKhwKBmopk">感智晓界工坊 · 前端开发使用培训</span><span data-page-node-id="EqjH3up36FAjVSOtPYV067">22 / 30</span></div>
+  </section>
+
+  <!-- P24 接口对接向导 -->
+  <section class="slide slide-light">
+    <div class="content">
+      <div class="title-bar"><h2>接口对接向导：AI 自动分析文档，选择并绑定接口</h2></div>
+      <div class="demo-banner">【演示预留】</div>
+      <div class="shot-gallery">
+        <div class="shot-tabs">
+          <button class="shot-tab active">Step1 · 选择分析方式</button>
+          <button class="shot-tab">Step2 · 调整绑定</button>
+        </div>
+        <div class="shot-panels">
+          <div class="shot-panel active">
+            <div class="shot-figure"><img class="screenshot" src="培训截图/P24-1.png" alt="选择分析方式"></div>
+            <div class="shot-desc">
+              <p>接口对接向导提供两种分析方式：</p>
+              <p><b>自动分析</b> — 自动扫描组件代码，识别数据槽并智能匹配 API 接口，适合结构清晰的组件，快速完成基础绑定。</p>
+              <p><b>需求文档分析</b> — 基于需求文档内容，AI 分析数据槽与 API 的对应关系，适合复杂业务场景，支持粘贴文档或上传 .md / .txt 文件。</p>
+              <p class="screenshot-hint">点击截图查看清晰原图</p>
+            </div>
+          </div>
+          <div class="shot-panel">
+            <div class="shot-figure"><img class="screenshot" src="培训截图/P24-2.png" alt="调整绑定"></div>
+            <div class="shot-desc">
+              <p>AI 分析完成后进入调整绑定页面：左侧展示组件数据槽（如 CHART chartData），右侧展示 API 目录（149 个接口，按模块分组）。</p>
+              <p>AI 已自动推荐接口映射（如 <code>device.getMonitor()</code>），并给出推荐理由。可逐项确认、跳过或模拟数据。</p>
+              <p class="screenshot-hint">点击截图查看清晰原图</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="demo-note"><b>讲解要点</b>：AI 自动分析文档内容 → 智能选择接口 → 人工确认调整 → 一键完成绑定；强调需求文档分析的准确性优势</div>
+    </div>
+    <div class="footer"><span>感智晓界工坊 · 前端开发使用培训</span><span>23 / 30</span></div>
+  </section>
+
+  <!-- P25 FAQ -->
+  <section class="slide slide-light" data-page-node-id="ZnJ3fgeXQCpfAex1Xaav5H">
+    <div class="content" data-page-node-id="3KcmyT7dXkirYvADQxYmVL">
+      <div class="title-bar" data-page-node-id="PGZVSshyO7dOqbMvbhu55e"><h2 data-page-node-id="ukuh7fPxj3AQpHoz2XPQAG">常见问题</h2></div>
+      <div class="card-grid grid-2" data-page-node-id="DITFuHfLyoeeHqcQCvApP2">
+        <div class="card" data-page-node-id="agp32gD7rGflwkzXQLp59W"><h3 data-page-node-id="uPmuE44Aqq2WWH2uJHhL76">Figma 还原度不足</h3><p data-page-node-id="zQ2FIwVPrCNaiMIKL0Sbol">检查设计稿图层 / 规范映射，人工调整不可少</p></div>
+        <div class="card" data-page-node-id="lQjDAnOwHGI2FqMVMUNQBU"><h3 data-page-node-id="00imTH54f1VU9XbTj7ZSdp">Lite 适用边界</h3><p data-page-node-id="LOCKOqtl1ORkmJbbRmGTU9">更适合后台管理系统，正式复杂页用完整版</p></div>
+        <div class="card" data-page-node-id="i4QmHDG3HV7Tv6g7lXf5UF"><h3 data-page-node-id="9x8VoJWQSAZ8hzaufwgIES">门禁 BLOCK 怎么处理</h3><p data-page-node-id="bAV9HcY7iwRIoMWJAbbH0H">看行列级报错 → 在线改 → 重校验 → 强制预览</p></div>
+        <div class="card" data-page-node-id="VgUufjuC5UXfecEs8nb6FP"><h3 data-page-node-id="tf6wJmrX53HUzgpD0cHpKZ">接口对接失败</h3><p data-page-node-id="fS9MWhw1N8VcC9VaNZYpgP">AI 推荐的接口不一定对，需要结合辅助文档核对</p></div>
+      </div>
+    </div>
+    <div class="footer" data-page-node-id="mYEuEOeqexvLGQPFhigEzi"><span data-page-node-id="7tMcypRIaAY42IJcENdbng">感智晓界工坊 · 前端开发使用培训</span><span data-page-node-id="pbtZLbxLAaYWQFLcdT6ceG">24 / 30</span></div>
+  </section>
+
+
+
+  <!-- PART 3 封面：进阶能力 -->
+  <section class="slide slide-dark">
+    <div class="content" style="justify-content:center;align-items:center;text-align:center;">
+      <div style="font-size:1.9vh;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#2DD4BF;margin-bottom:1.5vh;">PART 3</div>
+      <h2 style="font-size:6.1vh;font-weight:800;color:#fff;line-height:1.3;margin-bottom:1.5vh;">进阶能力</h2>
+      <div style="width:60px;height:3px;background:#2DD4BF;border-radius:2px;margin:0 auto 2vh;"></div>
+      <p style="font-size:2.4vh;color:#94A3B8;max-width:500px;line-height:1.6;">批量生产、Figma 整理自动化、常见问题解答</p>
+    </div>
+    <div class="footer"><span>感智晓界工坊 · 前端开发使用培训</span><span>25 / 30</span></div>
+  </section>
+
+  <!-- P27 从单组件到批量生产 -->
+  <section class="slide slide-light" data-page-node-id="BatchGen20260902">
+    <div class="content" data-page-node-id="BatchGenContent">
+      <div class="title-bar" data-page-node-id="BatchGenTitle"><h2 data-page-node-id="BatchGenH2">从单组件到批量生产</h2><span class="sub" data-page-node-id="BatchGenSub">行动路径：平台怎么做</span></div>
+
+      <!-- 上半部分：批量生产路线图 -->
+      <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin:12px 0 10px;">
+        <div style="background:#EFF6FF;border:2px solid #3B82F6;border-radius:12px;padding:12px 16px;text-align:center;min-width:150px;">
+          <div style="font-size:27px;margin-bottom:2px;">📄</div>
+          <div style="font-size:16.2px;font-weight:700;color:#1E40AF;">HTML 原型 + 需求文档</div>
+        </div>
+        <div style="font-size:27px;color:#94A3B8;">→</div>
+        <div style="background:#F0FDF4;border:2px solid #22C55E;border-radius:12px;padding:12px 16px;text-align:center;min-width:150px;">
+          <div style="font-size:27px;margin-bottom:2px;">🔍</div>
+          <div style="font-size:16.2px;font-weight:700;color:#16A34A;">AI 自动拆分组件</div>
+        </div>
+        <div style="font-size:27px;color:#94A3B8;">→</div>
+        <div style="background:#FEF3C7;border:2px solid #F59E0B;border-radius:12px;padding:12px 16px;text-align:center;min-width:150px;">
+          <div style="font-size:27px;margin-bottom:2px;">⚡</div>
+          <div style="font-size:16.2px;font-weight:700;color:#92400E;">批量生成组件</div>
+        </div>
+      </div>
+
+      <!-- 两张卡片：批量生产进展 -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+        <div class="card" style="background:#EFF6FF;padding:14px;">
+          <h4 style="font-size:17.6px;margin-bottom:6px;color:#1E40AF;">✅ 已实现：HTML 原型拆分</h4>
+          <ul style="font-size:15.5px;line-height:1.6;color:#475569;margin:0;padding-left:14px;">
+            <li>上传 HTML + 需求文档</li>
+            <li>AI 识别组件模块</li>
+            <li>生成组件清单 + 勾选导出</li>
+            <li>支持 Vue3 / 微码 / Lite / Max</li>
+          </ul>
+        </div>
+        <div class="card" style="background:#F0FDF4;padding:14px;">
+          <h4 style="font-size:17.6px;margin-bottom:6px;color:#16A34A;">🚧 计划：Figma 批量生产</h4>
+          <ul style="font-size:15.5px;line-height:1.6;color:#475569;margin:0;padding-left:14px;">
+            <li>输入 Figma 页面链接</li>
+            <li>AI 识别独立组件区域</li>
+            <li>批量生成组件清单</li>
+            <li>一键批量生成全部代码</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="footer" data-page-node-id="BatchGenFooter"><span data-page-node-id="BatchGenF1">感智晓界工坊 · 前端开发使用培训</span><span data-page-node-id="BatchGenF2">26 / 30</span></div>
+  </section>
+
+
+  <!-- P27 省略整理的演进路径 -->
+  <section class="slide slide-light" data-page-node-id="eV0lZ9kR2xWmQ7pN4hY8tB">
+    <div class="content" data-page-node-id="aB3cD4eF5gH6iJ7kL8mN9o">
+      <div class="title-bar" data-page-node-id="pQ1rS2tU3vW4xY5zA6bC7d"><h2 data-page-node-id="eF8gH9iJ0kL1mN2oP3qR4s">Figma 整理：从人工到自动</h2><span class="sub" data-page-node-id="tU5vW6xY7zA8bC9dE0fG1h">四阶段演进 · 插件已开发中</span></div>
+
+      <!-- 演进路线图（纯 HTML 替代 SVG） -->
+      <div style="display:flex;align-items:stretch;gap:0;margin-bottom:12px;">
+        <div style="flex:1;background:linear-gradient(135deg,#EF4444,#F97316);border-radius:12px 0 0 12px;padding:14px 10px;text-align:center;color:#fff;">
+          <div style="font-size:21.6px;font-weight:800;">🔴 现在</div>
+          <div style="font-size:16.2px;margin-top:4px;opacity:0.9;">人工整理 · 5-15min</div>
+        </div>
+        <div style="display:flex;align-items:center;padding:0 2px;color:#EF4444;font-size:27px;font-weight:800;">→</div>
+        <div style="flex:1;background:linear-gradient(135deg,#F59E0B,#EAB308);padding:14px 10px;text-align:center;color:#fff;border:3px solid #F59E0B;box-shadow:0 0 12px rgba(245,158,11,0.4);">
+          <div style="font-size:21.6px;font-weight:800;">🟡 短期 1-2周</div>
+          <div style="font-size:16.2px;margin-top:4px;opacity:0.9;">Figma 插件 · 2-3min</div>
+        </div>
+        <div style="display:flex;align-items:center;padding:0 2px;color:#F59E0B;font-size:27px;font-weight:800;">→</div>
+        <div style="flex:1;background:linear-gradient(135deg,#22C55E,#10B981);padding:14px 10px;text-align:center;color:#fff;">
+          <div style="font-size:21.6px;font-weight:800;">🟢 中期 1-2月</div>
+          <div style="font-size:16.2px;margin-top:4px;opacity:0.9;">Vision 增强 · 0-1min</div>
+        </div>
+        <div style="display:flex;align-items:center;padding:0 2px;color:#22C55E;font-size:27px;font-weight:800;">→</div>
+        <div style="flex:1;background:linear-gradient(135deg,#3B82F6,#06B6D4);border-radius:0 12px 12px 0;padding:14px 10px;text-align:center;color:#fff;">
+          <div style="font-size:21.6px;font-weight:800;"> 长期 3-6月</div>
+          <div style="font-size:16.2px;margin-top:4px;opacity:0.9;">端到端 · 0min</div>
+        </div>
+      </div>
+
+      <!-- Figma 插件介绍：左功能卡 + 右截图 两栏 -->
+      <div style="display:flex;gap:16px;margin-bottom:14px;align-items:stretch;">
+        <!-- 左：功能卡片 -->
+        <div class="card" style="flex:1;background:linear-gradient(135deg,#FEF3C7,#FFFBEB);border:2px solid #F59E0B;padding:16px;margin:0;display:flex;flex-direction:column;">
+          <h3 style="font-size:20.2px;margin-bottom:10px;color:#92400E;">🔌 Figma 辅助整理插件（开发中）</h3>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:16.2px;line-height:1.6;color:#475569;flex:1;">
+            <div>
+              <b>一键检查命名规范</b>：自动识别 bg / icon / img，标记不合规图层<br>
+              <b>自动补全布局属性</b>：检测 Auto Layout 缺失，一键修复<br>
+              <b>技术栈标记</b>：快速标记 @echarts / @antd 组件
+            </div>
+            <div>
+              <b>组件结构整理</b>：按 header / content / footer 自动归类<br>
+              <b>装饰图层清理</b>：一键删除隐藏图层、重复备份<br>
+              <b>导出前自检</b>：生成前自动校验，减少 BLOCK
+            </div>
+          </div>
+          <div style="margin-top:12px;padding:10px;background:#FEF3C7;border-radius:8px;font-size:16.2px;color:#92400E;text-align:center;">
+            <b>🎯 目标：</b>将 Figma 整理时间从 5-15 分钟降至 2-3 分钟
+          </div>
+        </div>
+        <!-- 右：插件截图 -->
+        <div style="flex:1;border-radius:10px;overflow:hidden;border:2px solid #F59E0B;background:#fff;display:flex;align-items:center;justify-content:center;padding:8px;min-height:0;">
+          <div class="shot-figure" style="max-height:none;border:none;border-radius:0;box-shadow:none;width:100%;">
+            <img class="screenshot" src="figma-plugin-screenshot.jpg" alt="Figma 管线助手插件截图" style="max-height:100%;max-width:100%;width:100%;object-fit:contain;cursor:zoom-in;">
+          </div>
+        </div>
+      </div>
+
+      <!-- 简化版对比表 -->
+      <table style="width:100%;border-collapse:collapse;font-size:16.2px;" data-page-node-id="lM6nO7pQ8rS9tU0vW1xY2z">
+        <thead>
+          <tr>
+            <th style="width:20%;background:linear-gradient(135deg,#1E3A8A,#3B82F6);color:#fff;font-weight:600;padding:8px 10px;text-align:left;border:none;">阶段</th>
+            <th style="width:25%;background:#EF4444;color:#fff;font-weight:600;padding:8px 10px;text-align:left;border:none;">🔴 现在</th>
+            <th style="width:25%;background:#F59E0B;color:#fff;font-weight:600;padding:8px 10px;text-align:left;border:none;">🟡 插件辅助</th>
+            <th style="width:30%;background:#22C55E;color:#fff;font-weight:600;padding:8px 10px;text-align:left;border:none;">🟢 Vision 增强</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding:7px 10px;border-bottom:1px solid #E2E8F0;font-weight:600;background:#F8FAFC;">整理耗时</td>
+            <td style="padding:7px 10px;border-bottom:1px solid #E2E8F0;">5-15 分钟/组件</td>
+            <td style="padding:7px 10px;border-bottom:1px solid #E2E8F0;">2-3 分钟/组件</td>
+            <td style="padding:7px 10px;border-bottom:1px solid #E2E8F0;">0-1 分钟/组件</td>
+          </tr>
+          <tr>
+            <td style="padding:7px 10px;border-bottom:1px solid #E2E8F0;font-weight:600;background:#F8FAFC;">命名规范</td>
+            <td style="padding:7px 10px;border-bottom:1px solid #E2E8F0;">必须人工规范</td>
+            <td style="padding:7px 10px;border-bottom:1px solid #E2E8F0;">插件自动检查</td>
+            <td style="padding:7px 10px;border-bottom:1px solid #E2E8F0;">Vision 兜底识别</td>
+          </tr>
+          <tr>
+            <td style="padding:7px 10px;border:none;font-weight:600;background:#F8FAFC;">还原度</td>
+            <td style="padding:7px 10px;border:none;">90%+（规范稿）</td>
+            <td style="padding:7px 10px;border:none;">90%+（规范稿）</td>
+            <td style="padding:7px 10px;border:none;">70-85%（任意稿）</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="footer" data-page-node-id="gH9iJ0kL1mN2oP3qR4sT5uV"><span data-page-node-id="wX6yZ7aB8cD9eF0gH1iJ2k">感智晓界工坊 · 前端开发使用培训</span><span data-page-node-id="lM3nO4pQ5rS6tU7vW8xY9z">27 / 30</span></div>
+  </section>
+
+
+  <!-- PART 4 封面：未来展望 -->
+  <section class="slide slide-dark">
+    <div class="content" style="justify-content:center;align-items:center;text-align:center;">
+      <div style="font-size:1.9vh;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#2DD4BF;margin-bottom:1.5vh;">PART 4</div>
+      <h2 style="font-size:6.1vh;font-weight:800;color:#fff;line-height:1.3;margin-bottom:1.5vh;">未来展望</h2>
+      <div style="width:60px;height:3px;background:#2DD4BF;border-radius:2px;margin:0 auto 2vh;"></div>
+      <p style="font-size:2.4vh;color:#94A3B8;max-width:500px;line-height:1.6;">平台演进方向与共建邀请</p>
+    </div>
+    <div class="footer"><span>感智晓界工坊 · 前端开发使用培训</span><span>28 / 30</span></div>
+  </section>
+
+  <!-- P28 平台演进方向 -->
+  <section class="slide slide-light" data-page-node-id="of1U4I8AitKJU4xUtwawRA">
+    <div class="content" data-page-node-id="SfexCB6aK7GzoypKvnym22">
+      <div class="title-bar" data-page-node-id="01d7yOG6iOc3LelJooWErc"><h2 data-page-node-id="861HotGoyuNpuknBMpVXDu">平台演进方向</h2><span class="sub" data-page-node-id="f67VFbLKUrROIsdLjB5qcn">宏观愿景：平台下一步做什么</span></div>
+
+      <!-- 演进时间线：渐变色块，去重边框 -->
+      <div style="display:flex;align-items:stretch;gap:0;margin-bottom:14px;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(13,38,79,0.08);">
+        <div style="flex:1;background:linear-gradient(135deg,#DBEAFE,#EFF6FF);padding:12px 10px;text-align:center;border-right:1px solid #BFDBFE;">
+          <div style="font-size:17.6px;font-weight:800;color:#1E40AF;">近期 1-2 周</div>
+          <div style="font-size:14.9px;color:#475569;margin-top:3px;">Figma 插件 · 管线自定义</div>
+        </div>
+        <div style="flex:1;background:linear-gradient(135deg,#D1FAE5,#F0FDF4);padding:12px 10px;text-align:center;border-right:1px solid #A7F3D0;">
+          <div style="font-size:17.6px;font-weight:800;color:#166534;">中期 1-2 月</div>
+          <div style="font-size:14.9px;color:#475569;margin-top:3px;">模型路由 · 需求文档驱动</div>
+        </div>
+        <div style="flex:1;background:linear-gradient(135deg,#FEF3C7,#FFFBEB);padding:12px 10px;text-align:center;">
+          <div style="font-size:17.6px;font-weight:800;color:#92400E;">远期 3-6 月</div>
+          <div style="font-size:14.9px;color:#475569;margin-top:3px;">数据飞轮 · 生态互通</div>
+        </div>
+      </div>
+
+      <!-- 两列能力卡片：统一卡片样式，顶部色条区分 -->
+      <div class="card-grid grid-2">
+        <div class="card" style="padding:0;overflow:hidden;border-top:4px solid #0D264F;">
+          <div style="padding:12px 16px;background:#F8FAFC;border-bottom:1px solid #E2E8F0;">
+            <h3 style="font-size:18.9px;margin:0;color:#0D264F;font-weight:700;">🔧 能力扩展</h3>
+          </div>
+          <ul style="padding:14px 16px;font-size:15.5px;line-height:1.7;color:#475569;margin:0;list-style:none;">
+            <li style="margin-bottom:5px;"><b style="color:#0D264F;">管线可自定义</b>：按业务线需求配置生成流程与质量门禁</li>
+            <li style="margin-bottom:5px;"><b style="color:#0D264F;">模型路由降成本</b>：简单任务用轻量模型，复杂任务用强模型</li>
+            <li style="margin-bottom:5px;"><b style="color:#0D264F;">其他编码规范</b>：支持更多前端框架与组件库</li>
+            <li style="margin-bottom:5px;"><b style="color:#0D264F;">更多开发能力</b>：代码校验、重复率检测、调试、重构、迁移</li>
+            <li style="margin-bottom:5px;"><b style="color:#0D264F;">后端代码生成</b>：前端组件反向生成接口定义与后端骨架</li>
+            <li><b style="color:#0D264F;">大屏与复杂布局</b>：响应式布局自动生成</li>
+          </ul>
+        </div>
+        <div class="card" style="padding:0;overflow:hidden;border-top:4px solid #1DD7B9;">
+          <div style="padding:12px 16px;background:#F8FAFC;border-bottom:1px solid #E2E8F0;">
+            <h3 style="font-size:18.9px;margin:0;color:#0F766E;font-weight:700;">🌐 生态与进化</h3>
+          </div>
+          <ul style="padding:14px 16px;font-size:15.5px;line-height:1.7;color:#475569;margin:0;list-style:none;">
+            <li style="margin-bottom:5px;"><b style="color:#0F766E;">生态互通</b>：接入感智系列的千数万问系统 Skill / 文档，能力复用</li>
+            <li style="margin-bottom:5px;"><b style="color:#0F766E;">自我进化</b>：日志 → 数据分析 → 自动优化 prompt 与管线</li>
+            <li style="margin-bottom:5px;"><b style="color:#0F766E;">需求文档驱动</b>：PRD → AI 识别组件 → 批量生产</li>
+            <li style="margin-bottom:5px;"><b style="color:#0F766E;">产品与设计协同</b>：设计规范沉淀为规则，变更自动同步</li>
+            <li><b style="color:#0F766E;">数据飞轮</b>：用户反馈 → 训练优化 → 质量持续提升</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- 数据飞轮循环图：圆形图标 + 箭头，收进一个卡片底栏 -->
+      <div style="margin-top:14px;display:flex;align-items:center;justify-content:center;gap:0;background:#fff;border-radius:12px;padding:12px 16px;box-shadow:0 2px 8px rgba(13,38,79,0.06);">
+        <div style="display:flex;align-items:center;gap:8px;min-width:110px;">
+          <div style="width:34px;height:34px;background:#EFF6FF;border:1.5px solid #3B82F6;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20.2px;">📝</div>
+          <div style="font-size:15.5px;font-weight:700;color:#1E40AF;">用户使用</div>
+        </div>
+        <div style="font-size:21.6px;color:#94A3B8;padding:0 8px;">→</div>
+        <div style="display:flex;align-items:center;gap:8px;min-width:110px;">
+          <div style="width:34px;height:34px;background:#F0FDF4;border:1.5px solid #22C55E;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20.2px;">📊</div>
+          <div style="font-size:15.5px;font-weight:700;color:#16A34A;">日志分析</div>
+        </div>
+        <div style="font-size:21.6px;color:#94A3B8;padding:0 8px;">→</div>
+        <div style="display:flex;align-items:center;gap:8px;min-width:110px;">
+          <div style="width:34px;height:34px;background:#FEF3C7;border:1.5px solid #F59E0B;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20.2px;">⚙️</div>
+          <div style="font-size:15.5px;font-weight:700;color:#92400E;">管线优化</div>
+        </div>
+        <div style="font-size:21.6px;color:#94A3B8;padding:0 8px;">→</div>
+        <div style="display:flex;align-items:center;gap:8px;min-width:110px;">
+          <div style="width:34px;height:34px;background:#F5F3FF;border:1.5px solid #8B5CF6;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20.2px;">🚀</div>
+          <div style="font-size:15.5px;font-weight:700;color:#6D28D9;">质量提升</div>
+        </div>
+        <div style="font-size:21.6px;color:#94A3B8;padding:0 8px;">→</div>
+        <div style="display:flex;align-items:center;gap:8px;min-width:110px;">
+          <div style="width:34px;height:34px;background:#FFF1F2;border:1.5px solid #F43F5E;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20.2px;">🔄</div>
+          <div style="font-size:15.5px;font-weight:700;color:#BE123C;">更多使用</div>
+        </div>
+      </div>
+    </div>
+    <div class="footer" data-page-node-id="ErOGOjEJ1yqEA5zJ32ZFcb"><span data-page-node-id="Zq6h9KXbECwX94ExeMpYd4">感智晓界工坊 · 前端开发使用培训</span><span data-page-node-id="xA0q47Nq8fF6ELB75a2Jyj">29 / 30</span></div>
+  </section>
+
+
+
+  <!-- P27 结束 -->
+  <section class="slide slide-dark" data-page-node-id="sBKpFCXn7InHYCeskkN3lh">
+    <div class="content" style="padding:20px 40px 16px;justify-content:center;align-items:center;" data-page-node-id="ujMaJ3qy8eJlsigxrL2jCO">
+
+      <!-- 主标题：Q&A -->
+      <div style="text-align:center;margin-bottom:18px;">
+        <div style="font-size:5.4vh;font-weight:800;color:#fff;margin-bottom:8px;">Q &amp; A</div>
+        <div style="font-size:2.4vh;color:#94A3B8;">欢迎大家提问、交流，任何使用中的问题都可以现在提出</div>
+      </div>
+
+      <!-- 需求建议卡片 -->
+      <div style="background:linear-gradient(135deg,rgba(34,211,238,.12),rgba(139,92,246,.12));border:1.5px solid rgba(34,211,238,.3);border-radius:14px;padding:18px 28px;text-align:center;max-width:520px;margin:0 auto 18px;">
+        <div style="font-size:2.2vh;font-weight:700;color:#22D3EE;margin-bottom:6px;">📋 需求建议</div>
+        <div style="font-size:1.8vh;color:#CBD5E1;line-height:1.7;">对感智晓界有任何意见、功能建议、使用痛点，欢迎随时反馈<br>你的每一条建议都会直接影响平台的下一步迭代方向</div>
+      </div>
+
+      <!-- 联系方式 -->
+      <div style="display:flex;gap:14px;align-items:stretch;max-width:600px;margin:0 auto;">
+        <div style="flex:1;background:rgba(255,255,255,.06);border-radius:12px;padding:14px 16px;border:1px solid rgba(255,255,255,.1);text-align:center;">
+          <div style="font-size:17.6px;color:#22D3EE;font-weight:700;margin-bottom:6px;">💬 企业微信</div>
+          <div style="font-size:15.5px;color:#94A3B8;">扫码添加，随时沟通反馈</div>
+        </div>
+        <div style="flex:1;background:rgba(255,255,255,.06);border-radius:12px;padding:14px 16px;border:1px solid rgba(255,255,255,.1);text-align:center;">
+          <div style="font-size:17.6px;color:#22D3EE;font-weight:700;margin-bottom:6px;">📧 企业邮箱</div>
+          <div style="font-size:15.5px;color:#94A3B8;">发送邮件，详细描述问题与建议</div>
+        </div>
+        <div style="flex:1;background:rgba(255,255,255,.06);border-radius:12px;padding:14px 16px;border:1px solid rgba(255,255,255,.1);text-align:center;">
+          <div style="font-size:17.6px;color:#22D3EE;font-weight:700;margin-bottom:6px;">📝 平台提意见</div>
+          <div style="font-size:15.5px;color:#94A3B8;">在快搭平台内直接提交建议</div>
+        </div>
+      </div>
+
+    </div>
+    <div class="footer" data-page-node-id="0Oc2o3BFCSsUbFQCMsax4r"><span data-page-node-id="y4mEOTvWuvZu67LpmpAbI1">感智晓界工坊 · 前端开发使用培训</span><span data-page-node-id="GhrIB2ENud0MahsFePLpk7">30 / 30</span></div>
+  </section>
+
+</div>
+
+<div class="lightbox" id="lightbox"><span class="lightbox-close" id="lightbox-close" title="关闭">&times;</span><img id="lightbox-img" src="" alt=""></div>
+
+<div class="nav" data-page-node-id="r5gqU67i372HvuoIEBL9vx">
+  <button id="prev" data-page-node-id="4HFRsxfTNpiOTg6VPvVqH7">← 上一页</button>
+  <span class="ind" id="ind" data-page-node-id="bjMtwsVnTVqW1iyG2hCbE4">01 / 30</span>
+  <button id="next" data-page-node-id="G2xOSYLIT6eP498WAnotaa">下一页 →</button>
+</div>
+<div class="hint" data-page-node-id="6e5J52IXwLRjZIkytHOq1Y">← → 翻页 · Home/End 跳首尾</div>
+
+<script>
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var cur = 0;
+  function show(i){
+    if(i<0) i=0; if(i>slides.length-1) i=slides.length-1;
+    cur = i;
+    slides.forEach(function(s,idx){ s.classList.toggle('active', idx===i); });
+    document.getElementById('ind').textContent = String(i+1).padStart(2,'0') + ' / ' + slides.length;
+    document.getElementById('progress').style.width = ((i+1)/slides.length*100) + '%';
+    window.scrollTo(0,0);
+  }
+  document.getElementById('prev').onclick = function(){ show(cur-1); };
+  document.getElementById('next').onclick = function(){ show(cur+1); };
+  document.addEventListener('keydown', function(e){
+    if(e.key==='ArrowRight'||e.key==='PageDown'){ show(cur+1); }
+    else if(e.key==='ArrowLeft'||e.key==='PageUp'){ show(cur-1); }
+    else if(e.key==='Home'){ show(0); }
+    else if(e.key==='End'){ show(slides.length-1); }
+  });
+  
+  // 封面打字机效果
+  (function(){
+    var phrases = ['$ 从设计稿到可交付业务组件','$ 统一生成 · 在线迭代 · 一键交付','$ Figma → Vue3组件 / 微码组件','$ 培训后独立跑通一次组件生成'];
+    var el = document.getElementById('cover-typing');
+    if(!el) return;
+    var cursor = document.createElement('span');
+    cursor.className = 'cursor';
+    var idx=0, ci=0, deleting=false, timer=null;
+    function type(){
+      var current = phrases[idx];
+      if(!deleting){
+        el.textContent = current.slice(0, ci+1);
+        el.appendChild(cursor);
+        ci++;
+        if(ci===current.length){ deleting=true; timer=setTimeout(type,2000); return; }
+        timer=setTimeout(type, 60+Math.random()*40);
+      }else{
+        el.textContent = current.slice(0, ci-1);
+        el.appendChild(cursor);
+        ci--;
+        if(ci===0){ deleting=false; idx=(idx+1)%phrases.length; timer=setTimeout(type,400); return; }
+        timer=setTimeout(type, 30+Math.random()*20);
+      }
+    }
+    type();
+  })();
+  // P4 平台架构图（5 层架构）
+  (function(){
+    var wrap = document.getElementById('p6-topology');
+    if(!wrap) return;
+    var W = 960, H = 540;
+    var layers = [
+      {name:'生成层', color:'#2DD4BF', nodes:[
+        {label:'组件生成', sub:'Vue3 / 微码 / 大屏'},
+        {label:'页面生成', sub:'稍后支持', disabled:true}
+      ]},
+      {name:'能力层', color:'#8B5CF6', nodes:[
+        {label:'文档分析'},{label:'文档对接'},{label:'自动修复'},
+        {label:'Grounding'},{label:'AI 比对', disabled:true},{label:'API 对接'}
+      ]},
+      {name:'编排层', color:'#F59E0B', nodes:[
+        {label:'大屏编辑器', disabled:true},{label:'工作流编辑器'}
+      ]},
+      {name:'业务层', color:'#10B981', nodes:[
+        {label:'调试器'},{label:'后台管理'},{label:'群组'},
+        {label:'Git 推送'},{label:'QS 权限系统'},{label:'API 文档'}
+      ]},
+      {name:'基础层', color:'#64748B', nodes:[
+        {label:'预览引擎'},{label:'SSE 推送'},{label:'工作区同步'},
+        {label:'Jaeger 追踪'},{label:'Figma API'},{label:'Apifox API'}
+      ]}
+    ];
+
+    var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg">';
+    svg += '<defs>';
+    svg += '<filter id="cardShadow" x="-4%" y="-10%" width="108%" height="125%"><feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#1E293B" flood-opacity="0.05"/></filter>';
+    svg += '</defs>';
+
+    // 整体背景卡片（白底 + 绿色边框）
+    svg += '<rect x="10" y="6" width="' + (W - 20) + '" height="' + (H - 12) + '" rx="12" fill="#FFFFFF" stroke="#10B981" stroke-width="2"/>';
+
+    var layerH = 80;
+    var gap = 8;
+    var startY = 20;
+    var padX = 20;
+    var labelW = 40;
+    var contentW = W - padX * 2 - labelW;
+
+    layers.forEach(function(layer, li){
+      var y = startY + li * (layerH + gap);
+      var bgH = layerH;
+      // 层级背景带
+      svg += '<rect x="' + padX + '" y="' + y + '" width="' + (W - padX * 2) + '" height="' + bgH + '" rx="8" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1"/>';
+      // 左侧彩色标签（竖排文字）
+      svg += '<rect x="' + padX + '" y="' + y + '" width="' + labelW + '" height="' + bgH + '" rx="8" fill="' + layer.color + '"/>';
+      // 竖排标签文字
+      var chars = layer.name.split('');
+      var charSpacing = bgH / (chars.length + 1);
+      chars.forEach(function(ch, ci){
+        svg += '<text x="' + (padX + labelW / 2) + '" y="' + (y + charSpacing * (ci + 1)) + '" text-anchor="middle" fill="#FFFFFF" font-size="14" font-weight="700" font-family="PingFang SC,Microsoft YaHei,sans-serif">' + ch + '</text>';
+      });
+
+      // 节点布局
+      var nodeCount = layer.nodes.length;
+      var cols = Math.min(nodeCount, 6);
+      var rows = Math.ceil(nodeCount / cols);
+      var cellW = contentW / cols;
+      var cellH = bgH / rows;
+      var nodeW = cellW - 16;
+      var nodeH = 36;
+
+      layer.nodes.forEach(function(n, ni){
+        var row = Math.floor(ni / cols);
+        var col = ni % cols;
+        var nx = padX + labelW + col * cellW + 8;
+        var ny = y + (cellH - nodeH) / 2;
+        var nw = nodeW;
+        var nh = nodeH;
+        // 节点卡片
+        var isDisabled = n.disabled;
+        var fill = isDisabled ? '#F1F5F9' : '#FFFFFF';
+        var strokeColor = isDisabled ? '#CBD5E1' : layer.color;
+        var strokeOpacity = isDisabled ? '0.3' : '1';
+        var strokeWidth = isDisabled ? '1' : '1.5';
+        svg += '<rect x="' + nx + '" y="' + ny + '" width="' + nw + '" height="' + nh + '" rx="8" fill="' + fill + '" stroke="' + strokeColor + '" stroke-width="' + strokeWidth + '" stroke-opacity="' + strokeOpacity + '"/>';
+        // 文字
+        var fontSize = nw < 110 ? 13 : 14;
+        var textY = n.sub ? (ny + nh / 2 - 3) : (ny + nh / 2 + 5);
+        var textColor = isDisabled ? '#94A3B8' : '#1E293B';
+        var textWeight = isDisabled ? '400' : '600';
+        svg += '<text x="' + (nx + nw / 2) + '" y="' + textY + '" text-anchor="middle" fill="' + textColor + '" font-size="' + fontSize + '" font-weight="' + textWeight + '" font-family="PingFang SC,Microsoft YaHei,sans-serif">' + n.label + '</text>';
+        if(n.sub){
+          var subColor = isDisabled ? '#CBD5E1' : '#94A3B8';
+          svg += '<text x="' + (nx + nw / 2) + '" y="' + (ny + nh / 2 + 14) + '" text-anchor="middle" fill="' + subColor + '" font-size="11" font-weight="400" font-family="PingFang SC,Microsoft YaHei,sans-serif">' + n.sub + '</text>';
+        }
+      });
+    });
+
+    svg += '</svg>';
+    wrap.innerHTML = svg;
+  })();
+  show(0);
+  // 截图画廊：标签切换 + 图文混排面板
+  (function(){
+    document.querySelectorAll('.shot-gallery').forEach(function(gallery){
+      var tabs = gallery.querySelectorAll('.shot-tab');
+      var panels = gallery.querySelectorAll('.shot-panel');
+      if(!tabs.length || !panels.length) return;
+      tabs.forEach(function(tab, idx){
+        tab.addEventListener('click', function(){
+          tabs.forEach(function(t){ t.classList.remove('active'); });
+          panels.forEach(function(p){ p.classList.remove('active'); });
+          tab.classList.add('active');
+          if(panels[idx]) panels[idx].classList.add('active');
+        });
+      });
+    });
+  })();
+  // 名词解释：tab 切换
+  (function(){
+    var tabs = document.querySelectorAll('.glossary-tab');
+    var panels = document.querySelectorAll('.glossary-panel');
+    tabs.forEach(function(tab){
+      tab.addEventListener('click', function(){
+        var target = this.getAttribute('data-tab');
+        tabs.forEach(function(t){ t.classList.remove('active'); });
+        panels.forEach(function(p){ p.classList.remove('active'); });
+        this.classList.add('active');
+        var panel = document.querySelector('.glossary-panel[data-panel="' + target + '"]');
+        if(panel) panel.classList.add('active');
+      });
+    });
+  })();
+  // 截图灯箱：点击舞台图看清晰原图
+  (function(){
+    var lb = document.getElementById('lightbox');
+    var lbImg = document.getElementById('lightbox-img');
+    function openLb(src){ lbImg.src = src; lb.classList.add('active'); }
+    function closeLb(){ lb.classList.remove('active'); lbImg.removeAttribute('src'); }
+    document.querySelectorAll('.screenshot').forEach(function(img){
+      img.addEventListener('click', function(){ openLb(img.getAttribute('src')); });
+    });
+    lb.addEventListener('click', closeLb);
+    document.getElementById('lightbox-close').addEventListener('click', function(e){ e.stopPropagation(); closeLb(); });
+    document.addEventListener('keydown', function(e){ if(e.key === 'Escape') closeLb(); });
+  })();
+</script>
+
+  </body>
+</html>

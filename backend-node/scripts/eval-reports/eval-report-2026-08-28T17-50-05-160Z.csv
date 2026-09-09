@@ -1,0 +1,2 @@
+id,target,groupId,similarity,pass,gateStatus,gateIssues,compareIssueCount,topIssues,renderedImage,designImage,error
+mc-evaltest-fresh-0001,microcode,default-group,,,PASS,,0,,/Users/smigoo/工作/mvgo/backend-node/scripts/eval-reports/shots/mc-evaltest-fresh-0001.png,/Users/smigoo/工作/mvgo/frontend/workspace/custom-components/mc-evaltest-fresh-0001/resources/images/source-screenshot.png,

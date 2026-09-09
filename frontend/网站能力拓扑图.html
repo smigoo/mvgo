@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>感智晓界工坊 · 全站能力拓扑图</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,-apple-system,sans-serif;background:#0a0e1a;color:#e4e4e7;min-height:100vh;overflow-x:hidden}
+.bg{position:fixed;inset:0;background-image:radial-gradient(circle at 1px 1px,rgba(255,255,255,.025) 1px,transparent 0);background-size:32px 32px;pointer-events:none;z-index:0}
+.topo{position:relative;z-index:1;width:1200px;margin:0 auto;padding:32px 0 60px}
+h1{font-size:26px;font-weight:600;color:#f4f4f5;text-align:center;margin-bottom:6px;letter-spacing:-.5px}
+.sub{text-align:center;color:#71717a;font-size:13px;margin-bottom:36px}
+svg.connections{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:1}
+svg.connections line{stroke-width:1.2;opacity:.35}
+svg.connections line.active{opacity:.8;stroke-width:2}
+
+.layers{position:relative;z-index:2}
+.layer{margin-bottom:28px}
+.layer-label{font-size:11px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:#4b5563;margin-bottom:14px;padding-left:12px}
+
+.row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+.node{position:relative;border-radius:12px;padding:16px 20px;cursor:pointer;transition:all .25s;min-width:160px;max-width:220px;flex:1;border:1px solid transparent}
+.node:hover{transform:translateY(-3px)}
+.node .icon{font-size:20px;margin-bottom:8px;display:block}
+.node .name{font-size:14px;font-weight:600;margin-bottom:4px;line-height:1.3}
+.node .desc{font-size:11px;line-height:1.5;opacity:.7}
+.node .tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
+.node .tag{font-size:10px;padding:2px 7px;border-radius:4px;font-weight:500}
+
+.node .detail{display:none;position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:8px;background:#1a1f2e;border:1px solid #2d3748;border-radius:10px;padding:14px 16px;min-width:260px;max-width:320px;z-index:100;box-shadow:0 8px 32px rgba(0,0,0,.4)}
+.node:hover .detail{display:block}
+.detail h4{font-size:13px;font-weight:600;margin-bottom:8px}
+.detail ul{list-style:none;padding:0}
+.detail li{font-size:12px;color:#9ca3af;padding:3px 0;display:flex;align-items:flex-start;gap:6px;line-height:1.4}
+.detail li .dot{width:4px;height:4px;border-radius:50%;margin-top:6px;flex-shrink:0}
+.detail .api-tag{font-size:10px;color:#6b7280;background:#111827;border:1px solid #1f2937;border-radius:4px;padding:2px 6px;display:inline-block;margin-top:6px}
+
+.c-blue{background:rgba(59,130,246,.08);border-color:rgba(59,130,246,.2)}
+.c-blue:hover{border-color:rgba(59,130,246,.5);box-shadow:0 0 20px rgba(59,130,246,.1)}
+.c-blue .name{color:#93c5fd} .c-blue .desc{color:#60a5fa} .c-blue .tag{background:rgba(59,130,246,.15);color:#93c5fd}
+.c-blue .detail h4{color:#93c5fd} .c-blue li .dot{background:#3b82f6}
+
+.c-green{background:rgba(16,185,129,.08);border-color:rgba(16,185,129,.2)}
+.c-green:hover{border-color:rgba(16,185,129,.5);box-shadow:0 0 20px rgba(16,185,129,.1)}
+.c-green .name{color:#6ee7b7} .c-green .desc{color:#34d399} .c-green .tag{background:rgba(16,185,129,.15);color:#6ee7b7}
+.c-green .detail h4{color:#6ee7b7} .c-green li .dot{background:#10b981}
+
+.c-purple{background:rgba(139,92,246,.08);border-color:rgba(139,92,246,.2)}
+.c-purple:hover{border-color:rgba(139,92,246,.5);box-shadow:0 0 20px rgba(139,92,246,.1)}
+.c-purple .name{color:#c4b5fd} .c-purple .desc{color:#a78bfa} .c-purple .tag{background:rgba(139,92,246,.15);color:#c4b5fd}
+.c-purple .detail h4{color:#c4b5fd} .c-purple li .dot{background:#8b5cf6}
+
+.c-amber{background:rgba(245,158,11,.08);border-color:rgba(245,158,11,.2)}
+.c-amber:hover{border-color:rgba(245,158,11,.5);box-shadow:0 0 20px rgba(245,158,11,.1)}
+.c-amber .name{color:#fcd34d} .c-amber .desc{color:#fbbf24} .c-amber .tag{background:rgba(245,158,11,.15);color:#fcd34d}
+.c-amber .detail h4{color:#fcd34d} .c-amber li .dot{background:#f59e0b}
+
+.c-red{background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.2)}
+.c-red:hover{border-color:rgba(239,68,68,.5);box-shadow:0 0 20px rgba(239,68,68,.1)}
+.c-red .name{color:#fca5a5} .c-red .desc{color:#f87171} .c-red .tag{background:rgba(239,68,68,.15);color:#fca5a5}
+.c-red .detail h4{color:#fca5a5} .c-red li .dot{background:#ef4444}
+
+.c-pink{background:rgba(236,72,153,.08);border-color:rgba(236,72,153,.2)}
+.c-pink:hover{border-color:rgba(236,72,153,.5);box-shadow:0 0 20px rgba(236,72,153,.1)}
+.c-pink .name{color:#f9a8d4} .c-pink .desc{color:#f472b6} .c-pink .tag{background:rgba(236,72,153,.15);color:#f9a8d4}
+.c-pink .detail h4{color:#f9a8d4} .c-pink li .dot{background:#ec4899}
+
+.c-teal{background:rgba(20,184,166,.08);border-color:rgba(20,184,166,.2)}
+.c-teal:hover{border-color:rgba(20,184,166,.5);box-shadow:0 0 20px rgba(20,184,166,.1)}
+.c-teal .name{color:#5eead4} .c-teal .desc{color:#2dd4bf} .c-teal .tag{background:rgba(20,184,166,.15);color:#5eead4}
+.c-teal .detail h4{color:#5eead4} .c-teal li .dot{background:#14b8a6}
+
+.c-gray{background:rgba(107,114,128,.08);border-color:rgba(107,114,128,.2)}
+.c-gray:hover{border-color:rgba(107,114,128,.5);box-shadow:0 0 20px rgba(107,114,128,.1)}
+.c-gray .name{color:#d1d5db} .c-gray .desc{color:#9ca3af} .c-gray .tag{background:rgba(107,114,128,.15);color:#d1d5db}
+.c-gray .detail h4{color:#d1d5db} .c-gray li .dot{background:#6b7280}
+
+.legend{display:flex;flex-wrap:wrap;gap:16px;justify-content:center;margin-bottom:32px}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:#6b7280}
+.legend-dot{width:10px;height:10px;border-radius:3px}
+
+.stats{display:flex;gap:24px;justify-content:center;margin-bottom:32px;flex-wrap:wrap}
+.stat{text-align:center}
+.stat .num{font-size:28px;font-weight:700;background:linear-gradient(135deg,#3b82f6,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.stat .label{font-size:11px;color:#6b7280;margin-top:2px}
+</style>
+</head>
+<body>
+<div class="bg"></div>
+<div class="topo">
+  <h1>感智晓界工坊 · 全站能力拓扑图</h1>
+  <p class="sub">hover 节点查看详细功能清单 · 展示模块间依赖与数据流向</p>
+
+  <div class="stats">
+    <div class="stat"><div class="num">39</div><div class="label">页面模块</div></div>
+    <div class="stat"><div class="num">361</div><div class="label">交互点</div></div>
+    <div class="stat"><div class="num">6</div><div class="label">核心能力</div></div>
+    <div class="stat"><div class="num">4</div><div class="label">系统层级</div></div>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#3b82f6"></div>生成引擎</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#10b981"></div>文档 & 数据</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#8b5cf6"></div>质量保障</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div>工作台</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div>可视化</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#ec4899"></div>接口管理</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#14b8a6"></div>运维监控</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#6b7280"></div>基础设施</div>
+  </div>
+
+  <div class="layers">
+
+    <div class="layer">
+      <div class="layer-label">用户入口层</div>
+      <div class="row">
+        <div class="node c-amber" data-id="login">
+          <span class="icon">🔐</span>
+          <div class="name">登录 / 注册</div>
+          <div class="desc">账号认证、密码管理</div>
+          <div class="tags"><span class="tag">登录</span><span class="tag">注册</span><span class="tag">改密</span></div>
+          <div class="detail">
+            <h4>登录 / 注册 / 修改密码</h4>
+            <ul>
+              <li><span class="dot"></span>用户名 + 密码登录</li>
+              <li><span class="dot"></span>新用户注册</li>
+              <li><span class="dot"></span>修改密码</li>
+              <li><span class="dot"></span>Token 管理 & 自动刷新</li>
+            </ul>
+          </div>
+        </div>
+        <div class="node c-amber" data-id="workspace">
+          <span class="icon">🏠</span>
+          <div class="name">AI 工作台</div>
+          <div class="desc">对话、项目、设置统一管理</div>
+          <div class="tags"><span class="tag">Chat</span><span class="tag">项目</span><span class="tag">设置</span></div>
+          <div class="detail">
+            <h4>AI 工作台 (AiWorkspaceLayout)</h4>
+            <ul>
+              <li><span class="dot"></span>侧边栏导航 + 路由切换</li>
+              <li><span class="dot"></span>ChatView 智能对话</li>
+              <li><span class="dot"></span>ProjectsView 项目管理</li>
+              <li><span class="dot"></span>SettingsView 全局设置</li>
+              <li><span class="dot"></span>SharedView 分享给我</li>
+            </ul>
+          </div>
+        </div>
+        <div class="node c-amber" data-id="intro">
+          <span class="icon">📖</span>
+          <div class="name">使用介绍</div>
+          <div class="desc">新手引导、API 文档</div>
+          <div class="tags"><span class="tag">Intro</span><span class="tag">ApiDocs</span></div>
+          <div class="detail">
+            <h4>使用介绍 & 文档</h4>
+            <ul>
+              <li><span class="dot"></span>平台功能介绍</li>
+              <li><span class="dot"></span>API 接口文档</li>
+              <li><span class="dot"></span>快速上手指引</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="layer">
+      <div class="layer-label">核心生成层</div>
+      <div class="row">
+        <div class="node c-blue" data-id="comp-gen">
+          <span class="icon">🧩</span>
+          <div class="name">组件生成</div>
+          <div class="desc">Figma → 代码 · 六大能力集成</div>
+          <div class="tags"><span class="tag">Vue3</span><span class="tag">微码</span><span class="tag">文档驱动</span></div>
+          <div class="detail">
+            <h4>组件生成 · 核心管线</h4>
+            <ul>
+              <li><span class="dot"></span>Figma URL 解析 → 视觉分析</li>
+              <li><span class="dot"></span>布局审查 + 样式映射</li>
+              <li><span class="dot"></span>代码生成 + 自动修复链</li>
+              <li><span class="dot"></span>Grounding 事实核查</li>
+              <li><span class="dot"></span>AI 视觉比对 + 门禁评分</li>
+              <li><span class="dot"></span>文档分析注入 (四配置/数据/交互)</li>
+              <li><span class="dot"></span>API 接口绑定 (AST 注入)</li>
+              <li><span class="dot"></span>双管线: mc-component-graph-phase2 / vue3</li>
+            </ul>
+            <span class="api-tag">POST /api/phase2/generate</span>
+          </div>
+        </div>
+        <div class="node c-blue" data-id="page-gen">
+          <span class="icon">📄</span>
+          <div class="name">页面生成</div>
+          <div class="desc">Figma 页面 → 多组件批量生成</div>
+          <div class="tags"><span class="tag">批量</span><span class="tag">串行/并行</span><span class="tag">SSE</span></div>
+          <div class="detail">
+            <h4>页面生成 · 批量管线</h4>
+            <ul>
+              <li><span class="dot"></span>Figma 页面 URL 解析</li>
+              <li><span class="dot"></span>cp-xxx 组件自动识别</li>
+              <li><span class="dot"></span>串行 / 并行模式可选</li>
+              <li><span class="dot"></span>并行度 1-10 可调</li>
+              <li><span class="dot"></span>SSE 实时进度推送</li>
+              <li><span class="dot"></span>BatchOrchestrator 编排</li>
+            </ul>
+            <span class="api-tag">POST /api/page-generator/generate</span>
+          </div>
+        </div>
+        <div class="node c-blue" data-id="mc-dev">
+          <span class="icon">⚙️</span>
+          <div class="name">微码开发</div>
+          <div class="desc">微码组件 IDE + 实时预览</div>
+          <div class="tags"><span class="tag">Monaco</span><span class="tag">实时预览</span><span class="tag">热更新</span></div>
+          <div class="detail">
+            <h4>微码开发 (mc-generator)</h4>
+            <ul>
+              <li><span class="dot"></span>Monaco Editor 代码编辑</li>
+              <li><span class="dot"></span>实时预览 iframe</li>
+              <li><span class="dot"></span>文件树管理</li>
+              <li><span class="dot"></span>保存 → 清缓存 → 重建</li>
+              <li><span class="dot"></span>declare.json 配置</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="layer">
+      <div class="layer-label">能力增强层</div>
+      <div class="row">
+        <div class="node c-green" data-id="doc-analysis">
+          <span class="icon">📋</span>
+          <div class="name">文档分析</div>
+          <div class="desc">需求文档 → 七维结构化提取</div>
+          <div class="tags"><span class="tag">D0</span><span class="tag">D1</span><span class="tag">D2</span><span class="tag">缓存</span></div>
+          <div class="detail">
+            <h4>文档分析 · 三层策略</h4>
+            <ul>
+              <li><span class="dot"></span>D0 确定性提取：正则+规则</li>
+              <li><span class="dot"></span>D1 字段映射：props↔数据模型</li>
+              <li><span class="dot"></span>D2 LLM 深度分析</li>
+              <li><span class="dot"></span>30min TTL 缓存</li>
+              <li><span class="dot"></span>无 AI 配置自动降级</li>
+            </ul>
+            <span class="api-tag">POST /api/phase2/analyze-doc</span>
+          </div>
+        </div>
+        <div class="node c-green" data-id="doc-binding">
+          <span class="icon">🔗</span>
+          <div class="name">文档对接</div>
+          <div class="desc">路径B纠偏 · 文档驱动重新生成</div>
+          <div class="tags"><span class="tag">路径B</span><span class="tag">缓存复用</span><span class="tag">纠偏</span></div>
+          <div class="detail">
+            <h4>文档对接 · 路径B</h4>
+            <ul>
+              <li><span class="dot"></span>UI 缓存复用 (跳过 Figma+Vision)</li>
+              <li><span class="dot"></span>新旧组件对比</li>
+              <li><span class="dot"></span>确认覆盖 / 取消</li>
+              <li><span class="dot"></span>文档分析产物注入</li>
+              <li><span class="dot"></span>效率提升 ~60%</li>
+            </ul>
+            <span class="api-tag">POST /api/phase2/regenerate-with-doc</span>
+          </div>
+        </div>
+        <div class="node c-purple" data-id="auto-fix">
+          <span class="icon">🔧</span>
+          <div class="name">自动修复</div>
+          <div class="desc">多层修复链 · 生成后自动执行</div>
+          <div class="tags"><span class="tag">JSON</span><span class="tag">CSS</span><span class="tag">结构</span><span class="tag">Less</span></div>
+          <div class="detail">
+            <h4>自动修复 · 多层修复链</h4>
+            <ul>
+              <li><span class="dot"></span>JSON 8步修复: BOM/注释/截断/控制字符</li>
+              <li><span class="dot"></span>CSS 清洗: 跨行@import / 语法修复</li>
+              <li><span class="dot"></span>结构修复: script闭合 / style scoped</li>
+              <li><span class="dot"></span>Less 变量校验 + 自动补齐</li>
+              <li><span class="dot"></span>预编译修复: LESS→CSS 失败重试</li>
+              <li><span class="dot"></span>declare.json 字段修复</li>
+              <li><span class="dot"></span>class name 截断修复</li>
+            </ul>
+          </div>
+        </div>
+        <div class="node c-amber" data-id="grounding">
+          <span class="icon">🛡️</span>
+          <div class="name">Grounding</div>
+          <div class="desc">事实核查 · 对抗性检查</div>
+          <div class="tags"><span class="tag">对抗性</span><span class="tag">覆盖率</span><span class="tag">Header验证</span></div>
+          <div class="detail">
+            <h4>Grounding 事实核查</h4>
+            <ul>
+              <li><span class="dot"></span>对抗性检查: 越权修改/幻觉代码</li>
+              <li><span class="dot"></span>视觉覆盖率校验</li>
+              <li><span class="dot"></span>Header 插槽完整性验证</li>
+              <li><span class="dot"></span>issueCategories 分类输出</li>
+              <li><span class="dot"></span>8分钟超时保护</li>
+            </ul>
+          </div>
+        </div>
+        <div class="node c-red" data-id="ai-compare">
+          <span class="icon">👁️</span>
+          <div class="name">AI 比对分析</div>
+          <div class="desc">视觉相似度 · 运行时门禁</div>
+          <div class="tags"><span class="tag">PASS</span><span class="tag">WARN</span><span class="tag">BLOCK</span></div>
+          <div class="detail">
+            <h4>AI 比对分析</h4>
+            <ul>
+              <li><span class="dot"></span>截图 vs Figma 视觉相似度</li>
+              <li><span class="dot"></span>运行时门禁: PASS/WARN/BLOCK</li>
+              <li><span class="dot"></span>视觉问题精确定位</li>
+              <li><span class="dot"></span>质量评分 (阈值75分)</li>
+              <li><span class="dot"></span>优化建议输出</li>
+            </ul>
+            <span class="api-tag">POST /api/component/:id/analyze-visual</span>
+          </div>
+        </div>
+        <div class="node c-pink" data-id="api-binding">
+          <span class="icon">🔌</span>
+          <div class="name">API 接口对接</div>
+          <div class="desc">Apifox → AST 注入 → 预检</div>
+          <div class="tags"><span class="tag">三步向导</span><span class="tag">AST</span><span class="tag">事务</span></div>
+          <div class="detail">
+            <h4>API 接口对接 · 三步向导</h4>
+            <ul>
+              <li><span class="dot"></span>Step 0: 选择 Apifox API 目录</li>
+              <li><span class="dot"></span>Step 1: 分析 + 绑定 (自动/文档)</li>
+              <li><span class="dot"></span>Step 2: 结果确认 + 撤回</li>
+              <li><span class="dot"></span>AST 注入: import/ref/onMounted</li>
+              <li><span class="dot"></span>L3 修复: 裸const→ref()</li>
+              <li><span class="dot"></span>快照备份 + 一键解绑</li>
+            </ul>
+            <span class="api-tag">POST /api/vue3/bind-api</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="layer">
+      <div class="layer-label">可视化 & 编辑层</div>
+      <div class="row">
+        <div class="node c-red" data-id="screen">
+          <span class="icon">🖥️</span>
+          <div class="name">大屏布局编辑器</div>
+          <div class="desc">拖拽 · 缩放 · 组件编排</div>
+          <div class="tags"><span class="tag">拖拽</span><span class="tag">缩放</span><span class="tag">右键菜单</span></div>
+          <div class="detail">
+            <h4>大屏布局编辑器</h4>
+            <ul>
+              <li><span class="dot"></span>组件拖拽放置</li>
+              <li><span class="dot"></span>画布缩放 + 平移</li>
+              <li><span class="dot"></span>右键上下文菜单</li>
+              <li><span class="dot"></span>属性面板实时编辑</li>
+              <li><span class="dot"></span>布局导出/导入</li>
+            </ul>
+          </div>
+        </div>
+        <div class="node c-red" data-id="workflow">
+          <span class="icon">🔀</span>
+          <div class="name">工作流编辑器</div>
+          <div class="desc">Vue Flow 图编辑器</div>
+          <div class="tags"><span class="tag">VueFlow</span><span class="tag">节点编排</span><span class="tag">连线</span></div>
+          <div class="detail">
+            <h4>工作流编辑器 (WorkflowEditor)</h4>
+            <ul>
+              <li><span class="dot"></span>Vue Flow 图引擎</li>
+              <li><span class="dot"></span>自定义节点类型</li>
+              <li><span class="dot"></span>连线 + 数据流配置</li>
+              <li><span class="dot"></span>工作流保存/加载</li>
+            </ul>
+          </div>
+        </div>
+        <div class="node c-red" data-id="doc-design">
+          <span class="icon">📝</span>
+          <div class="name">文档设计</div>
+          <div class="desc">可视化文档编辑</div>
+          <div class="tags"><span class="tag">Markdown</span><span class="tag">实时预览</span></div>
+          <div class="detail">
+            <h4>文档设计 (DocumentDesign)</h4>
+            <ul>
+              <li><span class="dot"></span>Markdown 编辑</li>
+              <li><span class="dot"></span>实时预览</li>
+              <li><span class="dot"></span>文档模板</li>
+            </ul>
+          </div>
+        </div>
+        <div class="node c-red" data-id="playground">
+          <span class="icon">🧪</span>
+          <div class="name">Playground</div>
+          <div class="desc">调试沙盒 · 实验场</div>
+          <div class="tags"><span class="tag">调试</span><span class="tag">实验</span></div>
+          <div class="detail">
+            <h4>Playground (demo/index)</h4>
+            <ul>
+              <li><span class="dot"></span>组件调试沙盒</li>
+              <li><span class="dot"></span>参数实时调整</li>
+              <li><span class="dot"></span>实验性功能测试</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="layer">
+      <div class="layer-label">工作台 & 管理层</div>
+      <div class="row">
+        <div class="node c-amber" data-id="task-center">
+          <span class="icon">📋</span>
+          <div class="name">任务中心</div>
+          <div class="desc">全生命周期任务管理</div>
+          <div class="tags"><span class="tag">暂停</span><span class="tag">恢复</span><span class="tag">重试</span><span class="tag">终止</span></div>
+          <div class="detail">
+            <h4>任务中心 (TaskCenter)</h4>
+            <ul>
+              <li><span class="dot"></span>任务列表 + 状态筛选</li>
+              <li><span class="dot"></span>暂停 / 恢复 / 终止</li>
+              <li><span class="dot"></span>重试 + 重新配置</li>
+              <li><span class="dot"></span>人工审核 + 撤回</li>
+              <li><span class="dot"></span>批量清理过期任务</li>
+              <li><span class="dot"></span>失败代码下载</li>
+            </ul>
+            <span class="api-tag">GET /api/tasks</span>
+          </div>
+        </div>
+        <div class="node c-amber" data-id="comp-lib">
+          <span class="icon">📦</span>
+          <div class="name">组件库管理</div>
+          <div class="desc">组件 CRUD + 详情</div>
+          <div class="tags"><span class="tag">列表</span><span class="tag">详情</span><span class="tag">预览</span></div>
+          <div class="detail">
+            <h4>组件库管理 (ComponentLibrary)</h4>
+            <ul>
+              <li><span class="dot"></span>组件列表 + 搜索筛选</li>
+              <li><span class="dot"></span>组件详情页</li>
+              <li><span class="dot"></span>预览图展示</li>
+              <li><span class="dot"></span>代码下载</li>
+              <li><span class="dot"></span>AI 分析入口</li>
+            </ul>
+          </div>
+        </div>
+        <div class="node c-pink" data-id="api-mgr">
+          <span class="icon">🌐</span>
+          <div class="name">API 管理</div>
+          <div class="desc">目录浏览 · 我的接口 · 生成接口</div>
+          <div class="tags"><span class="tag">Apifox</span><span class="tag">目录</span><span class="tag">生成</span></div>
+          <div class="detail">
+            <h4>API 管理</h4>
+            <ul>
+              <li><span class="dot"></span>ApiCatalogDetail 目录浏览</li>
+              <li><span class="dot"></span>MyApisView 我的接口</li>
+              <li><span class="dot"></span>GenerateApiView 生成接口</li>
+              <li><span class="dot"></span>Apifox 同步集成</li>
+            </ul>
+          </div>
+        </div>
+        <div class="node c-amber" data-id="token-dash">
+          <span class="icon">📊</span>
+          <div class="name">Token 仪表盘</div>
+          <div class="desc">用量统计 · 成本分析</div>
+          <div class="tags"><span class="tag">统计</span><span class="tag">成本</span></div>
+          <div class="detail">
+            <h4>Token 仪表盘 (TokenDashboard)</h4>
+            <ul>
+              <li><span class="dot"></span>Token 用量统计</li>
+              <li><span class="dot"></span>成本分析报表</li>
+              <li><span class="dot"></span>按模型/任务分类</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="layer">
+      <div class="layer-label">运维 & 监控层</div>
+      <div class="row">
+        <div class="node c-teal" data-id="jaeger">
+          <span class="icon">🔍</span>
+          <div class="name">Jaeger 追踪</div>
+          <div class="desc">链路追踪 · 性能分析</div>
+          <div class="tags"><span class="tag">Trace</span><span class="tag">Span</span><span class="tag">性能</span></div>
+          <div class="detail">
+            <h4>Jaeger 链路追踪</h4>
+            <ul>
+              <li><span class="dot"></span>请求链路可视化</li>
+              <li><span class="dot"></span>Span 耗时分析</li>
+              <li><span class="dot"></span>性能瓶颈定位</li>
+              <li><span class="dot"></span>权限控制 (jaeger-permission)</li>
+            </ul>
+          </div>
+        </div>
+        <div class="node c-teal" data-id="logs">
+          <span class="icon">📜</span>
+          <div class="name">生成日志</div>
+          <div class="desc">生成过程日志 · 错误排查</div>
+          <div class="tags"><span class="tag">日志</span><span class="tag">错误</span><span class="tag">排查</span></div>
+          <div class="detail">
+            <h4>生成日志 (Logs)</h4>
+            <ul>
+              <li><span class="dot"></span>生成过程完整日志</li>
+              <li><span class="dot"></span>错误堆栈查看</li>
+              <li><span class="dot"></span>按 sessionId 检索</li>
+            </ul>
+          </div>
+        </div>
+        <div class="node c-teal" data-id="admin">
+          <span class="icon">🛠️</span>
+          <div class="name">后台管理生成器</div>
+          <div class="desc">CRUD 页面自动生成</div>
+          <div class="tags"><span class="tag">表单</span><span class="tag">表格</span><span class="tag">ZIP下载</span></div>
+          <div class="detail">
+            <h4>后台管理生成器 (AdminGenerator)</h4>
+            <ul>
+              <li><span class="dot"></span>表单 + 表格配置</li>
+              <li><span class="dot"></span>预览源码</li>
+              <li><span class="dot"></span>生成并下载 ZIP</li>
+              <li><span class="dot"></span>调用 /api/admin/generate</li>
+            </ul>
+            <span class="api-tag">POST /api/admin/generate</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="layer">
+      <div class="layer-label">基础设施层</div>
+      <div class="row">
+        <div class="node c-gray" data-id="preview">
+          <span class="icon">👀</span>
+          <div class="name">预览引擎</div>
+          <div class="desc">Vue3/微码 实时预览</div>
+          <div class="tags"><span class="tag">iframe</span><span class="tag">缓存</span><span class="tag">invalidate</span></div>
+          <div class="detail">
+            <h4>预览引擎 (preview/index)</h4>
+            <ul>
+              <li><span class="dot"></span>Vue3: /__raw 直读</li>
+              <li><span class="dot"></span>微码: Vite SFC transform</li>
+              <li><span class="dot"></span>缓存失效: /__invalidate</li>
+              <li><span class="dot"></span>预览图: mc-preview.png</li>
+            </ul>
+          </div>
+        </div>
+        <div class="node c-gray" data-id="config">
+          <span class="icon">⚙️</span>
+          <div class="name">功能开关</div>
+          <div class="desc">feature-flags 配置系统</div>
+          <div class="tags"><span class="tag">Pinia</span><span class="tag">v-feature</span><span class="tag">路由守卫</span></div>
+          <div class="detail">
+            <h4>功能开关系统</h4>
+            <ul>
+              <li><span class="dot"></span>配置源: feature-flags.js</li>
+              <li><span class="dot"></span>Pinia store 响应式</li>
+              <li><span class="dot"></span>v-feature 指令</li>
+              <li><span class="dot"></span>ROUTE_FEATURE_MAP 路由守卫</li>
+            </ul>
+          </div>
+        </div>
+        <div class="node c-gray" data-id="progress">
+          <span class="icon">📡</span>
+          <div class="name">SSE 进度推送</div>
+          <div class="desc">实时进度 · 看门狗 · 断线恢复</div>
+          <div class="tags"><span class="tag">SSE</span><span class="tag">watchdog</span><span class="tag">recovery</span></div>
+          <div class="detail">
+            <h4>SSE 进度推送</h4>
+            <ul>
+              <li><span class="dot"></span>GET /progress/:sessionId</li>
+              <li><span class="dot"></span>30s 看门狗检测</li>
+              <li><span class="dot"></span>断线自动恢复</li>
+              <li><span class="dot"></span>ProgressService 统一管理</li>
+            </ul>
+            <span class="api-tag">GET /api/progress/:sessionId</span>
+          </div>
+        </div>
+        <div class="node c-gray" data-id="workspace-sync">
+          <span class="icon">🔄</span>
+          <div class="name">工作区同步</div>
+          <div class="desc">前后端 workspace 文件同步</div>
+          <div class="tags"><span class="tag">vue3-components</span><span class="tag">custom-components</span></div>
+          <div class="detail">
+            <h4>工作区同步机制</h4>
+            <ul>
+              <li><span class="dot"></span>前端 workspace: frontend/workspace/</li>
+              <li><span class="dot"></span>后端 workspace: backend-node/workspace/</li>
+              <li><span class="dot"></span>Vue3: vue3-components/{groupId}/{componentId}/</li>
+              <li><span class="dot"></span>微码: custom-components/{componentId}/</li>
+              <li><span class="dot"></span>生成后自动复制同步</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>任务中心 · 重新设计原型</title>
+<style>
+  :root{
+    --bg-page:#f5f6f8;
+    --bg-card:#ffffff;
+    --border:#e8eaed;
+    --border-strong:#d6d9de;
+    --text-1:#1a1d24;
+    --text-2:#5b626b;
+    --text-3:#9aa0a8;
+    --blue:#3b82f6;
+    --blue-soft:#eff4ff;
+    --green:#10b981;
+    --green-soft:#e9f9f1;
+    --red:#ef4444;
+    --red-soft:#fdeaea;
+    --amber:#f59e0b;
+    --amber-soft:#fff6e8;
+    --purple:#7c6cf0;
+    --purple-soft:#f1eefe;
+    --radius-l:14px;
+    --radius-m:10px;
+    --shadow-s:0 1px 2px rgba(16,24,40,.04),0 1px 3px rgba(16,24,40,.06);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg-page);
+    color:var(--text-1);
+    -webkit-font-smoothing:antialiased;
+  }
+  .app{
+    max-width:1000px;
+    height:calc(100vh - 24px);
+    margin:12px auto;
+    background:var(--bg-card);
+    border:1px solid var(--border);
+    border-radius:var(--radius-l);
+    box-shadow:var(--shadow-s);
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+
+  /* ===== Fixed top region (header + overview + toolbar) ===== */
+  .top-region{ flex:0 0 auto; }
+
+  /* Header */
+  .header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:18px 24px 14px;
+    border-bottom:1px solid var(--border);
+  }
+  .header h1{ font-size:18px; font-weight:600; letter-spacing:.2px; }
+  .header .sub{ font-size:12px; color:var(--text-3); margin-top:3px; }
+  .header-actions{ display:flex; gap:8px; }
+  .btn{
+    display:inline-flex; align-items:center; gap:5px;
+    padding:7px 13px; border-radius:8px; font-size:13px; font-weight:500;
+    border:1px solid var(--border-strong); background:#fff; color:var(--text-2);
+    cursor:pointer; transition:.15s;
+  }
+  .btn:hover{ background:#fafbfc; border-color:#c5c9cf; }
+  .btn-primary{ background:var(--blue); border-color:var(--blue); color:#fff; }
+  .btn-primary:hover{ background:#2f74e8; border-color:#2f74e8; }
+  .btn svg{ width:14px; height:14px; }
+
+  /* ===== Overview dashboard ===== */
+  .overview{
+    padding:18px 24px;
+    display:grid;
+    grid-template-columns:220px 1fr;
+    gap:18px;
+    background:linear-gradient(180deg,#fbfcfe 0%,#ffffff 60%);
+    border-bottom:1px solid var(--border);
+  }
+  /* hero completion ring */
+  .hero{
+    display:flex; align-items:center; gap:16px;
+    padding:18px;
+    border:1px solid var(--border);
+    border-radius:var(--radius-m);
+    background:radial-gradient(120% 120% at 0% 0%, #ffffff 40%, #f4f8ff 100%);
+  }
+  .ring{ position:relative; width:84px; height:84px; flex:0 0 auto; }
+  .ring svg{ transform:rotate(-90deg); }
+  .ring .pct{
+    position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+  }
+  .ring .pct b{ font-size:20px; font-weight:600; color:var(--green); line-height:1; }
+  .ring .pct small{ font-size:10px; color:var(--text-3); margin-top:2px; }
+  .hero-meta .label{ font-size:12px; color:var(--text-3); }
+  .hero-meta .total{ font-size:30px; font-weight:600; line-height:1.1; margin:2px 0 4px; }
+  .hero-meta .hint{ font-size:11px; color:var(--text-3); }
+
+  /* stat tiles */
+  .tiles{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+  .tile{
+    position:relative; overflow:hidden;
+    padding:14px 14px 12px;
+    border:1px solid var(--border);
+    border-radius:var(--radius-m);
+    background:#fff;
+  }
+  .tile::before{
+    content:""; position:absolute; left:0; top:0; bottom:0; width:3px;
+    background:var(--accent,var(--blue));
+  }
+  .tile .ic{
+    width:28px; height:28px; border-radius:8px;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--accent-soft,var(--blue-soft)); color:var(--accent,var(--blue));
+    margin-bottom:10px;
+  }
+  .tile .ic svg{ width:15px; height:15px; }
+  .tile .num{ font-size:24px; font-weight:600; line-height:1; }
+  .tile .name{ font-size:12px; color:var(--text-2); margin-top:4px; }
+  .tile .trend{ font-size:10px; margin-top:6px; color:var(--text-3); }
+  .tile .trend.up{ color:var(--green); }
+  .tile .trend.down{ color:var(--red); }
+
+  /* ===== Toolbar ===== */
+  .toolbar{
+    padding:12px 24px;
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+    border-bottom:1px solid var(--border);
+    background:#fff;
+  }
+  .tabs{ display:flex; gap:2px; background:#f1f2f4; padding:3px; border-radius:9px; }
+  .tab{
+    padding:5px 13px; font-size:13px; color:var(--text-2); border-radius:7px;
+    cursor:pointer; border:none; background:transparent; font-weight:500;
+  }
+  .tab.active{ background:#fff; color:var(--blue); box-shadow:var(--shadow-s); }
+  .sep{ width:1px; height:22px; background:var(--border); margin:0 4px; }
+  .select{
+    font-size:12px; padding:6px 28px 6px 10px; border:1px solid var(--border-strong);
+    border-radius:8px; color:var(--text-1); background:#fff; appearance:none;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239aa0a8' stroke-width='2'><path d='M6 9l6 6 6-6'/></svg>");
+    background-repeat:no-repeat; background-position:right 8px center; cursor:pointer;
+  }
+  .search{
+    margin-left:auto; position:relative;
+  }
+  .search svg{ position:absolute; left:9px; top:50%; transform:translateY(-50%); width:14px; height:14px; color:var(--text-3); }
+  .search input{
+    font-size:12px; padding:6px 10px 6px 30px; width:190px;
+    border:1px solid var(--border-strong); border-radius:8px; outline:none;
+  }
+  .search input:focus{ border-color:var(--blue); }
+
+  .bulkbar{
+    margin:0 24px 12px; display:flex; align-items:center; gap:10px;
+    padding:9px 14px; background:var(--blue-soft); border-radius:9px;
+  }
+  .bulkbar .count{ font-size:12px; color:var(--blue); background:#fff; padding:2px 9px; border-radius:5px; font-weight:500; }
+
+  /* ===== Scrollable list ===== */
+  .list-wrap{ flex:1 1 auto; overflow-y:auto; padding:4px 24px 8px; }
+  .list-wrap::-webkit-scrollbar{ width:8px; }
+  .list-wrap::-webkit-scrollbar-thumb{ background:#d3d7dd; border-radius:4px; border:2px solid #fff; }
+  .list-wrap::-webkit-scrollbar-thumb:hover{ background:#b9bec6; }
+  .list-wrap::-webkit-scrollbar-track{ background:transparent; }
+
+  .row{
+    display:flex; align-items:flex-start; gap:12px;
+    padding:13px 14px; margin:8px 0;
+    background:#fff; border:1px solid var(--border); border-radius:var(--radius-m);
+    cursor:pointer; transition:border-color .15s, box-shadow .15s;
+  }
+  .row:hover{ border-color:#bcd4fb; box-shadow:0 2px 8px rgba(59,130,246,.08); }
+  .row.s-running{ border-left:3px solid var(--blue); }
+  .row.s-failed{ border-left:3px solid var(--red); }
+  .row.s-done{ border-left:3px solid transparent; }
+
+  .chk{ width:16px; height:16px; border-radius:5px; border:1.5px solid #cfd3d9; flex:0 0 auto; margin-top:3px; cursor:pointer; }
+  .chk.on{ background:var(--blue); border-color:var(--blue); position:relative; }
+  .chk.on::after{ content:""; position:absolute; left:4.5px; top:1.5px; width:4px; height:8px; border:solid #fff; border-width:0 2px 2px 0; transform:rotate(45deg); }
+
+  .row-main{ flex:1; min-width:0; }
+  .row-top{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px; }
+  .tname{ font-size:13.5px; font-weight:600; color:var(--text-1); }
+  .badge{ display:inline-flex; align-items:center; padding:2px 8px; border-radius:5px; font-size:11px; font-weight:500; line-height:18px; }
+  .b-done{ color:var(--green); background:var(--green-soft); }
+  .b-run{ color:var(--blue); background:var(--blue-soft); }
+  .b-fail{ color:var(--red); background:var(--red-soft); }
+  .tag{ display:inline-flex; align-items:center; padding:1px 7px; border-radius:5px; font-size:10.5px; font-weight:600; }
+  .tag-v2{ color:var(--purple); background:var(--purple-soft); }
+  .tag-lite{ color:var(--blue); background:var(--blue-soft); }
+  .tag-max{ color:var(--red); background:var(--red-soft); }
+  .tag-mc{ color:var(--purple); background:var(--purple-soft); }
+  .tag-src{ color:var(--text-2); background:#f1f2f4; }
+
+  .row-sub{ display:flex; align-items:center; gap:10px; font-size:12px; color:var(--text-2); flex-wrap:wrap; }
+  .row-sub .dot-sep{ color:#d6d9de; }
+  .mini-progress{ display:flex; align-items:center; gap:6px; margin-left:4px; }
+  .mini-track{ width:90px; height:5px; background:#eef0f2; border-radius:3px; overflow:hidden; }
+  .mini-fill{ height:100%; border-radius:3px; }
+  .mini-pct{ font-size:11px; font-weight:600; }
+
+  .err-tag{
+    display:inline-flex; align-items:center; gap:4px; font-size:11px;
+    color:var(--red); background:var(--red-soft); padding:2px 8px; border-radius:5px;
+    max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .err-tag svg{ width:12px; height:12px; flex:0 0 auto; }
+  .expand{
+    font-size:11px; color:var(--text-3); cursor:pointer; padding:2px 7px; border-radius:5px; user-select:none;
+  }
+  .expand:hover{ background:#f1f2f4; color:var(--text-2); }
+  .detail{ display:none; margin-top:10px; padding-top:10px; border-top:1px dashed var(--border); }
+  .detail.open{ display:block; }
+  .detail pre{
+    background:var(--red-soft); border-radius:7px; padding:10px 12px;
+    font-size:11px; color:#8a1f1f; font-family:"SF Mono",Menlo,monospace; line-height:1.7; overflow:auto;
+  }
+  .detail .acts{ display:flex; gap:8px; margin-top:8px; }
+
+  .acts-row{ display:flex; align-items:center; gap:5px; opacity:0; transition:opacity .15s; flex:0 0 auto; }
+  .row:hover .acts-row{ opacity:1; }
+  .icon-btn{
+    width:30px; height:30px; border-radius:7px; border:1px solid var(--border);
+    background:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--text-2);
+  }
+  .icon-btn:hover{ background:#f7f8f9; border-color:#c5c9cf; }
+  .icon-btn svg{ width:14px; height:14px; }
+  .icon-btn.danger{ color:var(--red); border-color:#f6c9c9; }
+  .icon-btn.danger:hover{ background:var(--red-soft); }
+  .pg-btn{
+    display:inline-flex; align-items:center; justify-content:center; padding:5px 11px;
+    font-size:12px; border:1px solid var(--border-strong); border-radius:7px; background:#fff; cursor:pointer; color:var(--text-2);
+  }
+  .pg-btn:hover{ background:#f7f8f9; }
+  .pg-btn.cur{ background:var(--blue-soft); color:var(--blue); border-color:#bcd4fb; font-weight:600; }
+  .pg-btn[disabled]{ opacity:.4; cursor:not-allowed; }
+
+  .review-pill{
+    font-size:11px; color:var(--red); background:var(--red-soft);
+    padding:3px 9px; border-radius:6px; cursor:pointer; font-weight:500; flex:0 0 auto;
+  }
+
+  /* footer pagination */
+  .footer{
+    flex:0 0 auto; display:flex; align-items:center; justify-content:space-between;
+    padding:11px 24px; border-top:1px solid var(--border); background:#fff; font-size:12px; color:var(--text-2);
+  }
+  .footer .pg{ display:flex; gap:5px; align-items:center; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ===== Fixed top region ===== -->
+  <div class="top-region">
+    <div class="header">
+      <div>
+        <h1>任务中心</h1>
+        <div class="sub">查看所有生成任务状态，管理历史记录与执行结果</div>
+      </div>
+      <div class="header-actions">
+        <button class="btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          刷新
+        </button>
+        <button class="btn btn-primary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          新建任务
+        </button>
+      </div>
+    </div>
+
+    <!-- Overview dashboard -->
+    <div class="overview">
+      <!-- Hero: completion ring -->
+      <div class="hero">
+        <div class="ring">
+          <svg width="84" height="84" viewBox="0 0 84 84">
+            <circle cx="42" cy="42" r="36" fill="none" stroke="#eef0f2" stroke-width="9"/>
+            <circle cx="42" cy="42" r="36" fill="none" stroke="var(--green)" stroke-width="9"
+                    stroke-linecap="round" stroke-dasharray="226.2" stroke-dashoffset="135.7"/>
+          </svg>
+          <div class="pct"><b>40%</b><small>完成率</small></div>
+        </div>
+        <div class="hero-meta">
+          <div class="label">任务总数</div>
+          <div class="total">15</div>
+          <div class="hint">较昨日 +3</div>
+        </div>
+      </div>
+
+      <!-- Stat tiles -->
+      <div class="tiles">
+        <div class="tile" style="--accent:var(--green);--accent-soft:var(--green-soft)">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg></div>
+          <div class="num" style="color:var(--green)">4</div>
+          <div class="name">已完成</div>
+          <div class="trend up">↑ 较昨日 +2</div>
+        </div>
+        <div class="tile" style="--accent:var(--blue);--accent-soft:var(--blue-soft)">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"/></svg></div>
+          <div class="num" style="color:var(--blue)">1</div>
+          <div class="name">进行中</div>
+          <div class="trend">实时执行</div>
+        </div>
+        <div class="tile" style="--accent:var(--red);--accent-soft:var(--red-soft)">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg></div>
+          <div class="num" style="color:var(--red)">7</div>
+          <div class="name">失败</div>
+          <div class="trend down">↓ 待排查</div>
+        </div>
+        <div class="tile" style="--accent:var(--amber);--accent-soft:var(--amber-soft)">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg></div>
+          <div class="num" style="color:var(--amber)">10</div>
+          <div class="name">今日生成</div>
+          <div class="trend up">↑ 活跃</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <div class="tabs">
+        <button class="tab active">全部</button>
+        <button class="tab">进行中</button>
+        <button class="tab">已完成</button>
+        <button class="tab">失败</button>
+      </div>
+      <div class="sep"></div>
+      <select class="select"><option>全部类型</option><option>V2</option><option>Lite</option><option>Max</option></select>
+      <select class="select"><option>全部来源</option><option>Figma</option><option>手动创建</option></select>
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input placeholder="搜索任务名称...">
+      </div>
+      <select class="select"><option>最新优先</option><option>最早优先</option></select>
+    </div>
+
+    <div class="bulkbar">
+      <div class="chk"></div>
+      <span style="font-size:12px;color:var(--text-2)">全选</span>
+      <span class="count">已选 0 个任务</span>
+      <button class="btn" style="margin-left:auto;color:var(--red);border-color:#f6c9c9">批量删除</button>
+    </div>
+  </div>
+
+  <!-- ===== Scrollable list ===== -->
+  <div class="list-wrap" id="list"></div>
+
+  <!-- ===== Footer pagination ===== -->
+  <div class="footer">
+    <span>显示 1-15 / 共 15 条</span>
+    <div class="pg">
+      <button class="pg-btn" disabled>上一页</button>
+      <button class="pg-btn cur">1</button>
+      <button class="pg-btn" disabled>下一页</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ---- sample data: 15 rows ----
+  const data = [
+    {name:"mv-lite-178677230201-aft0ba39", status:"done", cls:"s-done", type:"v2", mode:"lite", src:"figma", comp:"mv-lite-17867720348-afb6ds3b", time:"8/15 16:05", dur:"2.8min"},
+    {name:"mc-max-17867751209-465da435", status:"run", cls:"s-running", type:"mc", mode:"max", src:"figma", comp:"mc-max-17867742598-456dd385", time:"8/15 16:58", dur:"进行中", prog:67},
+    {name:"mv-lite-17867739131-4a3d7581", status:"done", cls:"s-done", type:"v2", mode:"lite", src:"figma", comp:"mv-lite-17867739131-4a3d7581", time:"8/15 14:05", dur:"2.0min"},
+    {name:"mc-max-178677520598-416a4b4a", status:"fail", cls:"s-failed", type:"mc", mode:"max", src:"figma", comp:"mc-max-178677520598-416a4b4a", time:"8/15 15:38", dur:"30.5min", err:"运行时渲染框架 [RUNTIME-GOO] - 真实错误状态为: load-error", stack:"Stack: ComponentRenderService.render() @ line 842"},
+    {name:"mv-lite-178677124400-6082ead", status:"done", cls:"s-done", type:"v2", mode:"lite", src:"figma", comp:"mv-lite-178677124400-6082ead", time:"8/15 13:21", dur:"0.8min"},
+    {name:"mc-max-17867588416-70026e22", status:"fail", cls:"s-failed", type:"mc", mode:"max", src:"figma", comp:"mc-max-17867588416-70026e22", time:"8/15 11:46", dur:"21.8min", err:"运行时渲染框架 [RUNTIME-GOO] - 真实错误状态为: load-error", stack:"Stack: ComponentRenderService.render() @ line 842", review:true},
+    {name:"mv-lite-17867709012-33b1c7d", status:"done", cls:"s-done", type:"v2", mode:"lite", src:"manual", comp:"mv-lite-17867709012-33b1c7d", time:"8/15 10:12", dur:"1.4min"},
+    {name:"mc-max-17867654321-9f2a8c0", status:"fail", cls:"s-failed", type:"mc", mode:"max", src:"figma", comp:"mc-max-17867654321-9f2a8c0", time:"8/15 09:54", dur:"18.2min", err:"超时：生成阶段超过最大迭代次数", stack:"BatchOrchestrator.run() timeout after 3 iterations", review:true},
+    {name:"mv-lite-17867641298-7d4e510", status:"done", cls:"s-done", type:"v2", mode:"lite", src:"figma", comp:"mv-lite-17867641298-7d4e510", time:"8/14 22:30", dur:"3.1min"},
+    {name:"mc-max-17867620145-a1b9c33", status:"done", cls:"s-done", type:"mc", mode:"max", src:"figma", comp:"mc-max-17867620145-a1b9c33", time:"8/14 21:08", dur:"12.6min"},
+    {name:"mv-lite-17867599821-5c8f2e1", status:"fail", cls:"s-failed", type:"v2", mode:"lite", src:"manual", comp:"mv-lite-17867599821-5c8f2e1", time:"8/14 19:43", dur:"0.3min", err:"组件解析失败：declare.json 缺少必填字段", stack:"SchemaValidator.validate() @ line 211"},
+    {name:"mc-max-17867588120-2e7b904", status:"done", cls:"s-done", type:"mc", mode:"max", src:"figma", comp:"mc-max-17867588120-2e7b904", time:"8/14 18:25", dur:"9.7min"},
+    {name:"mv-lite-17867577003-8a3d115", status:"done", cls:"s-done", type:"v2", mode:"lite", src:"figma", comp:"mv-lite-17867577003-8a3d115", time:"8/14 17:02", dur:"2.2min"},
+    {name:"mc-max-17867566099-4f6b227", status:"fail", cls:"s-failed", type:"mc", mode:"max", src:"figma", comp:"mc-max-17867566099-4f6b227", time:"8/14 16:38", dur:"25.1min", err:"运行时渲染框架 [RUNTIME-GOO] - 真实错误状态为: load-error", stack:"Stack: ComponentRenderService.render() @ line 842", review:true},
+    {name:"mv-lite-17867555088-6c9e338", status:"done", cls:"s-done", type:"v2", mode:"lite", src:"manual", comp:"mv-lite-17867555088-6c9e338", time:"8/14 15:14", dur:"1.1min"},
+  ];
+
+  const stBadge = { done:["b-done","已完成"], run:["b-run","进行中"], fail:["b-fail","失败"] };
+  const typeTag = { v2:["tag-v2","V2"], mc:["tag-mc","MC"] };
+  const modeTag = { lite:["tag-lite","Lite"], max:["tag-max","Max"] };
+  const srcTag  = { figma:["tag-src","Figma"], manual:["tag-src","手动"] };
+
+  const iconDownload = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>';
+  const iconPlay = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3l14 9-14 9V3z"/></svg>';
+  const iconDel = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>';
+  const iconCancel = '<svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+  const iconWarn = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>';
+
+  function rowHTML(t){
+    const [sb,stxt] = stBadge[t.status];
+    const [tt,tv] = typeTag[t.type];
+    const [mt,mv] = modeTag[t.mode];
+    const [sr,sv] = srcTag[t.src];
+    let sub = `<span>${t.comp}</span><span class="dot-sep">|</span><span>${t.time}</span><span class="dot-sep">|</span><span>${t.dur}</span>`;
+    if(t.status==="run"){
+      sub += `<span class="mini-progress"><span class="mini-track"><span class="mini-fill" style="width:${t.prog}%;background:var(--blue)"></span></span><span class="mini-pct" style="color:var(--blue)">${t.prog}%</span></span>`;
+    }
+    let errBlock = "";
+    if(t.err){
+      errBlock = `<span class="err-tag" title="${t.err}">${iconWarn}${t.err.length>16?t.err.slice(0,16)+'…':t.err}</span><span class="expand" onclick="toggleDetail(this)">+ 详情</span>`;
+    }
+    let actions = "";
+    if(t.status==="run"){
+      actions = `<div class="acts-row" style="opacity:1"><button class="icon-btn" title="取消">${iconCancel}</button></div>`;
+    } else if(t.status==="fail"){
+      actions = `<div class="acts-row"><span class="review-pill" title="人工审核">人工审核</span><button class="icon-btn danger" title="删除">${iconDel}</button></div>`;
+    } else {
+      actions = `<div class="acts-row"><button class="icon-btn" title="下载">${iconDownload}</button><button class="icon-btn btn-pg" title="Playground" style="width:auto;padding:0 10px;gap:4px;color:var(--blue)">${iconPlay}PG</button><button class="icon-btn danger" title="删除">${iconDel}</button></div>`;
+    }
+    let detail = "";
+    if(t.err){
+      detail = `<div class="detail"><pre>${t.err}\n<span style="color:#9aa0a8">${t.stack}</span></pre><div class="acts"><button class="btn" style="font-size:11px;color:var(--red);border-color:#f6c9c9">重试</button><button class="btn" style="font-size:11px">查看日志</button></div></div>`;
+    }
+    return `<div class="row ${t.cls}">
+      <div class="chk"></div>
+      <div class="row-main">
+        <div class="row-top">
+          <span class="tname">${t.name}</span>
+          <span class="badge ${sb}">${stxt}</span>
+          <span class="tag ${tt}">${tv}</span>
+          <span class="tag ${mt}">${mv}</span>
+          <span class="tag ${sr}">${sv}</span>
+        </div>
+        <div class="row-sub">${sub}${errBlock}</div>
+        ${detail}
+      </div>
+      ${actions}
+    </div>`;
+  }
+
+  function toggleDetail(el){
+    const d = el.closest(".row").querySelector(".detail");
+    d.classList.toggle("open");
+    el.textContent = d.classList.contains("open") ? "− 详情" : "+ 详情";
+  }
+
+  document.getElementById("list").innerHTML = data.map(rowHTML).join("");
+
+  // checkbox interaction
+  document.querySelectorAll(".chk").forEach(c=>{
+    c.addEventListener("click",e=>{ e.stopPropagation(); c.classList.toggle("on"); });
+  });
+  // row hover shows actions already via CSS; tabs demo
+  document.querySelectorAll(".tab").forEach(t=>{
+    t.addEventListener("click",()=>{ document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active")); t.classList.add("active"); });
+  });
+</script>
+</body>
+</html>

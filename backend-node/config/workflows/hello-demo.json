@@ -1,0 +1,37 @@
+{
+  "name": "hello-demo",
+  "label": "Hello 示例管线",
+  "description": "最小智能体链路验证",
+  "entryNode": "start",
+  "nodes": [
+    {
+      "id": "start",
+      "type": "start",
+      "label": "入口节点"
+    },
+    {
+      "id": "hello",
+      "type": "agent",
+      "handler": "hello-agent",
+      "label": "Hello 示例 Agent",
+      "config": {
+        "greeting": "Hi"
+      }
+    },
+    {
+      "id": "end",
+      "type": "end",
+      "label": "结束节点"
+    }
+  ],
+  "edges": [
+    {
+      "source": "start",
+      "target": "hello"
+    },
+    {
+      "source": "hello",
+      "target": "end"
+    }
+  ]
+}

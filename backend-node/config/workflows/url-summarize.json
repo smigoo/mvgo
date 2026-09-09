@@ -1,0 +1,45 @@
+{
+  "name": "url-summarize",
+  "label": "URL 内容总结",
+  "entryNode": "start",
+  "nodes": [
+    {
+      "id": "start",
+      "type": "start",
+      "label": "入口节点"
+    },
+    {
+      "id": "fetch",
+      "type": "agent",
+      "handler": "my-fetch",
+      "label": "网页抓取",
+      "config": {}
+    },
+    {
+      "id": "sum",
+      "type": "agent",
+      "handler": "text-summarizer",
+      "label": "AI 总结",
+      "config": {}
+    },
+    {
+      "id": "end",
+      "type": "end",
+      "label": "结束节点"
+    }
+  ],
+  "edges": [
+    {
+      "source": "start",
+      "target": "fetch"
+    },
+    {
+      "source": "fetch",
+      "target": "sum"
+    },
+    {
+      "source": "sum",
+      "target": "end"
+    }
+  ]
+}

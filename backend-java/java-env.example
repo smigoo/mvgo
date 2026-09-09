@@ -1,0 +1,9 @@
+# 用途：mvgo-java.service 的环境变量文件
+# 路径：/home/mvbt/mvgo/backend-java/java-env
+# 权限建议：chmod 600 /home/mvbt/mvgo/backend-java/java-env
+
+SERVER__PORT=8080
+SPRING_PROFILES_ACTIVE=prod
+NODE_BACKEND_URL=http://127.0.0.1:13030/api
+MONGODB_URI=<YOUR_MONGODB_URI>
+PORTAL_BASE_URL=<YOUR_PORTAL_BASE_URL>

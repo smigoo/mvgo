@@ -1,0 +1,44 @@
+{
+  "name": "my-write",
+  "label": "写文件",
+  "description": "生成代码落盘",
+  "category": "转换",
+  "logicType": "tool",
+  "templateId": "text-writer",
+  "inputs": [
+    {
+      "key": "outputPath",
+      "type": "string",
+      "required": false
+    },
+    {
+      "key": "content",
+      "type": "string",
+      "required": false
+    }
+  ],
+  "outputs": [
+    {
+      "key": "written",
+      "type": "boolean"
+    },
+    {
+      "key": "path",
+      "type": "string"
+    },
+    {
+      "key": "ok",
+      "type": "boolean"
+    }
+  ],
+  "params": {},
+  "model": null,
+  "referenceFiles": [],
+  "author": "anonymous",
+  "className": "DynamicAgent",
+  "modulePath": "roles/custom/my-write.js",
+  "requires": {
+    "vision": false
+  },
+  "createdAt": 1787277420638
+}

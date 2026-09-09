@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en" style="height: 100%">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- 浏览器缓存问题 -->
+    <meta http-equiv="Expires" content="g" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Cache-control" content="no-cache" />
+    <meta http-equiv="Cache" content="no-cache" />
+    <link rel="icon" href="/favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <script>
+      window.MCServeInfo = {
+        time: '<%= pulishDateTime %>',
+        MCVersion: '<%= MCVersion %>',
+        title: '<%= title %>'
+      }
+    </script>
+    <!-- 配置项 -->
+    <script type="text/javascript" src="/config/index.js?v=<%= pulishDateTime %>"></script>
+    <script type="text/javascript" src="/log/index.js?v=<%= pulishDateTime %>"></script>
+
+    <title><%= title %><%= baseUrl %></title>
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+
+      #app {
+        height: 100%;
+      }
+    </style>
+  </head>
+
+  <body class="auto-bg">
+    <div id="app"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

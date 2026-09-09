@@ -1,0 +1,40 @@
+/**
+ * 统一响应式断点（2026-08-08 设计系统治理）
+ *
+ * 历史：各页面曾硬编码 1100 / 900 / 768 / 1280 等魔法数字。
+ * 现集中为语义化变量 + 媒体查询 mixin，所有页面复用。
+ *
+ * 断点策略：
+ *   sm   移动端竖屏            < 576
+ *   md   平板 / 窄屏           < 768
+ *   lg   双栏布局临界点        < 1024
+ *   xl   三栏 / 宽屏           < 1280
+ *   xxl  超大屏               < 1536
+ */
+
+@bp-sm: 576px;
+@bp-md: 768px;
+@bp-lg: 1024px;
+@bp-xl: 1280px;
+@bp-2xl: 1536px;
+
+/* max-width 媒体查询 */
+.mq-max(@bp; @rules) {
+  @media (max-width: @bp) {
+    @rules();
+  }
+}
+
+/* min-width 媒体查询 */
+.mq-min(@bp; @rules) {
+  @media (min-width: @bp) {
+    @rules();
+  }
+}
+
+/* 区间媒体查询 */
+.mq-between(@min; @max; @rules) {
+  @media (min-width: @min) and (max-width: @max) {
+    @rules();
+  }
+}

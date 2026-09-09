@@ -1,0 +1,51 @@
+# ==== OS / 编辑器 / AI 工具 ====
+*.local
+.DS_Store
+.idea/
+.vscode/
+.svn/
+.trae/
+.lingma/
+.claude/
+.opencode/
+.workbuddy/
+.codex/
+.gemini/
+.qwen/
+.codebuddy/
+
+# ==== 依赖 ====
+node_modules/
+
+# ==== 构建产物 ====
+dist/
+dist-release/
+mvgo-dist-*.zip
+
+# ==== 日志 ====
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ==== 锁文件 ====
+# --legacy-peer-deps 场景下保留 lock 文件有助于稳定安装
+# 如需忽略，取消下行注释：
+# package-lock.json
+yarn.lock
+
+# ==== 安全：密钥/敏感配置 ====
+.env
+.env.*
+!.env.example
+.env.gen
+aidocs/config/.env.gen
+
+# ==== 项目生成产物 ====
+settings.local.json
+scaffold-config
+.mc-gen/
+requirement.md
+
+# 生成组件工作区产物（generator 运行时产出，不纳入版本控制）
+workspace/

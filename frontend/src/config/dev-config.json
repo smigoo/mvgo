@@ -1,0 +1,36 @@
+{
+  "getToken": "AT-7592-jq3y4mPPeC7TEO5GHxnXCcUe-GQuid0Y",
+  "getUserInfo": {
+    "deptId": "qs00001",
+    "deptName": "基础研发部",
+    "mobile": "13999999999",
+    "name": "初始化",
+    "orgId": "qs00001",
+    "orgName": "南京感动科技有限公司",
+    "token": "AT-7592-jq3y4mPPeC7TEO5GHxnXCcUe-GQuid0Y",
+    "uid": "13999999999",
+    "workcode": "114514"
+  },
+  "getUserAuths": [
+    {
+      "children": null,
+      "code": "pl-co1de",
+      "icon": null,
+      "integrationType": 1,
+      "isShow": 0,
+      "name": "统计查询",
+      "type": "m",
+      "url": "/statistics-query"
+    },
+    {
+      "children": null,
+      "code": "qs00001",
+      "icon": null,
+      "integrationType": 1,
+      "isShow": 0,
+      "name": "统计查询",
+      "type": "m",
+      "url": "/statistics-query"
+    }
+  ]
+}

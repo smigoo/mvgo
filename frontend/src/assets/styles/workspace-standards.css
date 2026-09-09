@@ -1,0 +1,122 @@
+/**
+ * 工作台视觉统一规范
+ * 所有工作台页面（组件生成/任务中心/任务详情）共享的视觉参数
+ * 目标：让三页看起来像一个网站
+ */
+
+/* ── 页面框架参数 ── */
+:root {
+  /* 页头 */
+  --wpl-header-height: 48px;
+  --wpl-header-padding-y: 12px;
+  --wpl-header-padding-x: 20px;
+  --wpl-header-bg: var(--bg-card);
+  --wpl-header-border: var(--border-default);
+
+  /* 左侧栏 */
+  --wpl-sidebar-width: 300px;
+  --wpl-sidebar-bg: var(--bg-card);
+  --wpl-sidebar-border: var(--border-default);
+
+  /* 内容画布 */
+  --wpl-canvas-bg: var(--bg-page);
+  --wpl-content-max-width: 1400px;
+  --wpl-content-padding-y: 20px;
+  --wpl-content-padding-x: 24px;
+
+  /* 卡片 */
+  --wpl-card-bg: var(--bg-card);
+  --wpl-card-border: var(--border-light);
+  --wpl-card-radius: var(--radius-md);
+  --wpl-card-padding-y: 10px;
+  --wpl-card-padding-x: 12px;
+  --wpl-card-gap: 10px;
+
+  /* 标题 */
+  --wpl-title-size: 15px;
+  --wpl-title-weight: 600;
+  --wpl-desc-size: 12px;
+
+  /* 图标 */
+  --wpl-icon-size: 32px;
+  --wpl-icon-radius: var(--radius-md);
+  --wpl-icon-bg: var(--bg-alt);
+  --wpl-icon-border: var(--border-light);
+}
+
+/* ── 页头统一样式 ── */
+.wpl-header-shared {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: var(--wpl-header-padding-y) var(--wpl-header-padding-x);
+  min-height: var(--wpl-header-height);
+  background: var(--wpl-header-bg);
+  border-bottom: 1px solid var(--wpl-header-border);
+}
+.wpl-header-main-shared {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+.wpl-header-icon-shared {
+  width: var(--wpl-icon-size);
+  height: var(--wpl-icon-size);
+  border-radius: var(--wpl-icon-radius);
+  background: var(--wpl-icon-bg);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  flex-shrink: 0;
+  border: 1px solid var(--wpl-icon-border);
+}
+.wpl-title-shared {
+  font-size: var(--wpl-title-size);
+  font-weight: var(--wpl-title-weight);
+  color: var(--text-primary);
+  margin: 0 0 2px;
+  line-height: 1.3;
+}
+.wpl-desc-shared {
+  font-size: var(--wpl-desc-size);
+  color: var(--text-tertiary);
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* ── 卡片统一样式 ── */
+.wpl-card-shared {
+  background: var(--wpl-card-bg);
+  border: 1px solid var(--wpl-card-border);
+  border-radius: var(--wpl-card-radius);
+  padding: var(--wpl-card-padding-y) var(--wpl-card-padding-x);
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+.wpl-card-shared:hover {
+  border-color: var(--border-strong, var(--border-default));
+  box-shadow: 0 1px 4px var(--shadow-sm);
+}
+
+/* ── 左侧栏统一样式 ── */
+.wpl-sidebar-shared {
+  width: var(--wpl-sidebar-width);
+  flex-shrink: 0;
+  border-right: 1px solid var(--wpl-sidebar-border);
+  background: var(--wpl-sidebar-bg);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* ── 内容区统一样式 ── */
+.wpl-content-shared {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--wpl-canvas-bg);
+}

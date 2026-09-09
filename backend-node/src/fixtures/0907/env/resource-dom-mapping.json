@@ -1,0 +1,70 @@
+[
+  {
+    "resourceFile": "../resources/images/bg-2:7890.png",
+    "figmaNodeId": "2:7890",
+    "figmaPath": "cp-环境监测/slot-con/sub-t/tabs-list/bg",
+    "name": "bg",
+    "figmaBox": {
+      "x": 1495,
+      "y": 903.0000004565809,
+      "width": 295.00000118020694,
+      "height": 26.999999543419108
+    },
+    "previewAnalysisRole": "bg",
+    "downloadStatus": "success",
+    "assignedVarName": "bg2",
+    "semanticVarName": null,
+    "recommendedUsage": "backgroundBlock"
+  },
+  {
+    "resourceFile": "../resources/images/icon-2:7941.png",
+    "figmaNodeId": "2:7941",
+    "figmaPath": "cp-环境监测/slot-con/sub-t/tabs-icon/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 1816,
+      "y": 905,
+      "width": 24,
+      "height": 24
+    },
+    "previewAnalysisRole": "icon",
+    "downloadStatus": "success",
+    "assignedVarName": "icon1",
+    "semanticVarName": null,
+    "recommendedUsage": "imgSrc"
+  },
+  {
+    "resourceFile": "../resources/images/icon-2:7945.png",
+    "figmaNodeId": "2:7945",
+    "figmaPath": "cp-环境监测/slot-con/sub-t/tabs-icon/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 1844,
+      "y": 905,
+      "width": 24,
+      "height": 24
+    },
+    "previewAnalysisRole": "icon",
+    "downloadStatus": "success",
+    "assignedVarName": "icon2",
+    "semanticVarName": null,
+    "recommendedUsage": "imgSrc"
+  },
+  {
+    "resourceFile": "../resources/images/bg-2:7950.png",
+    "figmaNodeId": "2:7950",
+    "figmaPath": "cp-环境监测/slot-con/sub-t/num/bg",
+    "name": "bg",
+    "figmaBox": {
+      "x": 1861,
+      "y": 898,
+      "width": 14,
+      "height": 14
+    },
+    "previewAnalysisRole": "bg",
+    "downloadStatus": "success",
+    "assignedVarName": "bg3",
+    "semanticVarName": null,
+    "recommendedUsage": "backgroundBlock"
+  }
+]

@@ -1,0 +1,70 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: mvgo-server
+  profiles:
+    active: dev
+  # 当前 Java 侧业务（组件拆分）是无状态纯计算，不需要关系型数据库。
+  # mvgo-data 模块把 JPA / MyBatis-Plus / MySQL 驱动带进了 classpath，
+  # 若不排除，Spring Boot 会尝试初始化 DataSource 并因缺少 MySQL 而启动失败。
+  # 后续若需持久化，与 Node 保持一致统一接 MongoDB（见各 profile 下注释），
+  # 而不是再引入第二种数据库。
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration
+      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+
+---
+# dev profile
+spring:
+  config:
+    activate:
+      on-profile: dev
+  # 与 Node 共用同一个 MongoDB 实例与库（operation_logs 等集合）
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/langgraph-server
+      # 索引已由 Node schema 创建，避免启动时重复建索引尝试
+      auto-index-creation: false
+
+logging:
+  level:
+    com.mvgo: debug
+
+# Node.js 后端通信配置
+mvgo:
+  node:
+    base-url: http://localhost:13030/api
+    timeout: 30000
+  # 操作日志保留天数：超过该天数的旧日志由定时任务每天凌晨自动清理（默认 90）
+  operation:
+    log:
+      retention-days: 90
+
+---
+# prod profile
+spring:
+  config:
+    activate:
+      on-profile: prod
+  data:
+    mongodb:
+      # 与 Node 共用同一实例；生产建议通过环境变量 MONGODB_URI 注入（含账号密码）
+      uri: ${MONGODB_URI:mongodb://mongo:27017/langgraph-server}
+      auto-index-creation: false
+
+logging:
+  level:
+    com.mvgo: info
+
+mvgo:
+  node:
+    base-url: ${NODE_BACKEND_URL:http://backend-node:13030/api}
+    timeout: 30000
+  # 操作日志保留天数：超过该天数的旧日志由定时任务每天凌晨自动清理（默认 90）
+  operation:
+    log:
+      retention-days: 90

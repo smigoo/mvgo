@@ -1,0 +1,36 @@
+{
+  "name": "fmt-demo",
+  "label": "格式化器演示",
+  "entryNode": "start",
+  "nodes": [
+    {
+      "id": "start",
+      "type": "start",
+      "label": "入口节点"
+    },
+    {
+      "id": "fmt",
+      "type": "agent",
+      "handler": "my-formatter",
+      "label": "格式化器",
+      "config": {
+        "template": "组件 {name} 共 {count} 个"
+      }
+    },
+    {
+      "id": "end",
+      "type": "end",
+      "label": "结束节点"
+    }
+  ],
+  "edges": [
+    {
+      "source": "start",
+      "target": "fmt"
+    },
+    {
+      "source": "fmt",
+      "target": "end"
+    }
+  ]
+}

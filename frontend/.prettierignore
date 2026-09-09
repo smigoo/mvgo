@@ -1,0 +1,8 @@
+/node_modules/**
+/dist/*
+**/*.svg
+**/*.min.js
+GDPlayerPub.js
+/public/*
+/src/components/base-components/mv-recorder/*
+/src/utils/auto-import/radash.js

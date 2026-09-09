@@ -1,0 +1,71 @@
+{
+  "id": "vue3-js",
+  "label": "Vue3 (JS)",
+  "version": "1.0.0",
+  "description": "标准 Vue3 SFC 组件：props/emits + scoped less，自渲染外壳",
+  "artifacts": {
+    "entryFile": "index.vue",
+    "extraFiles": [],
+    "styleExt": "less",
+    "scriptLang": "js",
+    "hasReadme": true,
+    "hasIndexExport": true,
+    "resourceDir": "resources/images"
+  },
+  "naming": {
+    "componentDir": "PascalCase",
+    "componentFile": "PascalCase.vue",
+    "subComponent": "PascalCase",
+    "variable": "camelCase"
+  },
+  "binding": {
+    "mode": "props-emits",
+    "hasDeclareJson": false,
+    "reactiveApi": "ref/reactive",
+    "dataSlotMustReactive": true
+  },
+  "events": {
+    "emitStyle": "vue-emit",
+    "usePlatformRouter": false,
+    "allowsDirectControl": true
+  },
+  "panel": {
+    "hasPanelKey": false,
+    "stripOuterShell": false,
+    "selfRenderShell": true,
+    "acceptedPanelKeys": []
+  },
+  "style": {
+    "ext": "less",
+    "scoped": true,
+    "useCssVariables": false,
+    "importLocalImageForbidden": true,
+    "imageStrategy": "sameOriginUrl"
+  },
+  "promptInjection": {
+    "code-engineer": [
+      "references/constraints/ai-generation-constraints.md",
+      "references/vue3/component-development.md",
+      "references/vue3/naming-conventions.md",
+      "references/vue3/code-quality.md",
+      "references/standards/vue-style-standard.md"
+    ],
+    "adversarial-checker": [
+      "references/constraints/ai-generation-constraints.md",
+      "references/vue3/code-quality.md",
+      "references/vue3/naming-conventions.md"
+    ],
+    "style-mapper": [
+      "references/standards/vue-style-standard.md"
+    ],
+    "style-refiner": [
+      "references/standards/vue-style-standard.md",
+      "references/vue3/user-experience.md"
+    ],
+    "layout-refiner": [
+      "references/vue3/component-development.md"
+    ]
+  },
+  "validatorRuleSet": "vue3",
+  "engineerClass": "Vue3Engineer"
+}

@@ -1,0 +1,113 @@
+{
+  "summary": {
+    "total": 7,
+    "scored": 0,
+    "avgSimilarity": null,
+    "ge80": 0,
+    "ge80Ratio": null,
+    "ge85": 0,
+    "gateBlocked": 0,
+    "failing": 0,
+    "noCompare": true
+  },
+  "results": [
+    {
+      "id": "mc-evaltest-fresh-0001",
+      "target": "microcode",
+      "groupId": "default-group",
+      "renderedImage": "/Users/smigoo/工作/mvgo/backend-node/scripts/eval-reports/shots/mc-evaltest-fresh-0001.png",
+      "isStaticFallback": false,
+      "gateStatus": "PASS",
+      "gateIssues": "",
+      "similarity": null,
+      "pass": null,
+      "compareIssueCount": 0,
+      "topIssues": "",
+      "designImage": "/Users/smigoo/工作/mvgo/frontend/workspace/custom-components/mc-evaltest-fresh-0001/resources/images/source-screenshot.png"
+    },
+    {
+      "id": "mc-lite-1785908673018-10ed6f96",
+      "target": "microcode",
+      "groupId": "default-group",
+      "renderedImage": "/Users/smigoo/工作/mvgo/backend-node/scripts/eval-reports/shots/mc-lite-1785908673018-10ed6f96.png",
+      "isStaticFallback": false,
+      "gateStatus": "PASS",
+      "gateIssues": "",
+      "similarity": null,
+      "pass": null,
+      "compareIssueCount": 0,
+      "topIssues": "",
+      "designImage": "/Users/smigoo/工作/mvgo/frontend/workspace/custom-components/mc-lite-1785908673018-10ed6f96/resources/images/source-screenshot.png"
+    },
+    {
+      "id": "mc-lite-1785941241031-4f1d5a5d",
+      "target": "microcode",
+      "groupId": "default-group",
+      "renderedImage": "/Users/smigoo/工作/mvgo/backend-node/scripts/eval-reports/shots/mc-lite-1785941241031-4f1d5a5d.png",
+      "isStaticFallback": false,
+      "gateStatus": "PASS",
+      "gateIssues": "",
+      "similarity": null,
+      "pass": null,
+      "compareIssueCount": 0,
+      "topIssues": "",
+      "designImage": "/Users/smigoo/工作/mvgo/frontend/workspace/custom-components/mc-lite-1785941241031-4f1d5a5d/resources/images/source-screenshot.png"
+    },
+    {
+      "id": "v2-e2e-microcode-max-1786420688421",
+      "target": "microcode",
+      "groupId": "default-group",
+      "renderedImage": "/Users/smigoo/工作/mvgo/backend-node/scripts/eval-reports/shots/v2-e2e-microcode-max-1786420688421.png",
+      "isStaticFallback": false,
+      "gateStatus": "PASS",
+      "gateIssues": "",
+      "similarity": null,
+      "pass": null,
+      "compareIssueCount": 0,
+      "topIssues": "",
+      "designImage": "/Users/smigoo/工作/mvgo/frontend/workspace/custom-components/v2-e2e-microcode-max-1786420688421/source-d6239a5ce0a3.png"
+    },
+    {
+      "id": "v2-e2e-microcode-max-1786518174118",
+      "target": "microcode",
+      "groupId": "default-group",
+      "renderedImage": "/Users/smigoo/工作/mvgo/backend-node/scripts/eval-reports/shots/v2-e2e-microcode-max-1786518174118.png",
+      "isStaticFallback": false,
+      "gateStatus": "PASS",
+      "gateIssues": "",
+      "similarity": null,
+      "pass": null,
+      "compareIssueCount": 0,
+      "topIssues": "",
+      "designImage": "/Users/smigoo/工作/mvgo/frontend/workspace/custom-components/v2-e2e-microcode-max-1786518174118/source-f37520055fca.png"
+    },
+    {
+      "id": "v2-e2e-p2verify-1786520871372",
+      "target": "microcode",
+      "groupId": "default-group",
+      "renderedImage": "/Users/smigoo/工作/mvgo/backend-node/scripts/eval-reports/shots/v2-e2e-p2verify-1786520871372.png",
+      "isStaticFallback": false,
+      "gateStatus": "PASS",
+      "gateIssues": "",
+      "similarity": null,
+      "pass": null,
+      "compareIssueCount": 0,
+      "topIssues": "",
+      "designImage": "/Users/smigoo/工作/mvgo/frontend/workspace/custom-components/v2-e2e-p2verify-1786520871372/source-f37520055fca.png"
+    },
+    {
+      "id": "mv-lite-1785921659215-9994b5ed",
+      "target": "vue3",
+      "groupId": "6a51f7caed28c5d5b13c61a5",
+      "renderedImage": "/Users/smigoo/工作/mvgo/backend-node/scripts/eval-reports/shots/mv-lite-1785921659215-9994b5ed.png",
+      "isStaticFallback": false,
+      "gateStatus": "PASS",
+      "gateIssues": "",
+      "similarity": null,
+      "pass": null,
+      "compareIssueCount": 0,
+      "topIssues": "",
+      "designImage": "/Users/smigoo/工作/mvgo/frontend/workspace/vue3-components/6a51f7caed28c5d5b13c61a5/mv-lite-1785921659215-9994b5ed/resources/images/source-screenshot.png"
+    }
+  ]
+}

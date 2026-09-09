@@ -1,0 +1,41 @@
+{
+  "name": "p2-cmp",
+  "label": "双图比对",
+  "description": "",
+  "category": "自定义",
+  "logicType": "llm",
+  "templateId": "vision-compare",
+  "inputs": [
+    {
+      "key": "figmaImage",
+      "type": "image",
+      "required": false
+    },
+    {
+      "key": "renderedImage",
+      "type": "image",
+      "required": false
+    }
+  ],
+  "outputs": [
+    {
+      "key": "similarity",
+      "type": "number"
+    },
+    {
+      "key": "differences",
+      "type": "array"
+    }
+  ],
+  "params": {
+    "prompt": "对比两图输出similarity与differences"
+  },
+  "model": "qwen3.7-plus",
+  "author": "anonymous",
+  "className": "DynamicAgent",
+  "modulePath": "roles/custom/p2-cmp.js",
+  "requires": {
+    "vision": true
+  },
+  "createdAt": 1787211749536
+}

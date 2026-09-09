@@ -1,0 +1,113 @@
+{
+  "summary": {
+    "total": 7,
+    "scored": 7,
+    "avgSimilarity": 68,
+    "ge80": 0,
+    "ge80Ratio": 0,
+    "ge85": 0,
+    "gateBlocked": 0,
+    "failing": 7,
+    "noCompare": false
+  },
+  "results": [
+    {
+      "id": "mc-evaltest-fresh-0001",
+      "target": "microcode",
+      "groupId": "default-group",
+      "renderedImage": "/Users/smigoo/工作/mvgo/backend-node/scripts/eval-reports/shots/mc-evaltest-fresh-0001.png",
+      "isStaticFallback": false,
+      "gateStatus": "PASS",
+      "gateIssues": "",
+      "similarity": 72,
+      "pass": false,
+      "compareIssueCount": 7,
+      "topIssues": "[high]missing_element:设计稿中 Y 轴显示刻度值（40、30、20、10、0），渲染结果中未显示这些数值 | [high]missing_element:设计稿中 X 轴显示时间刻度（2、4、6、8...24），渲染结果中未显示这些数值 | [high]extra_element:渲染结果中增加了下拉选择框（显示'监测类型'和'使用默认'），设计稿中没有此元素",
+      "designImage": "/Users/smigoo/工作/mvgo/frontend/workspace/custom-components/mc-evaltest-fresh-0001/resources/images/source-screenshot.png"
+    },
+    {
+      "id": "mc-lite-1785908673018-10ed6f96",
+      "target": "microcode",
+      "groupId": "default-group",
+      "renderedImage": "/Users/smigoo/工作/mvgo/backend-node/scripts/eval-reports/shots/mc-lite-1785908673018-10ed6f96.png",
+      "isStaticFallback": false,
+      "gateStatus": "PASS",
+      "gateIssues": "",
+      "similarity": 72,
+      "pass": false,
+      "compareIssueCount": 7,
+      "topIssues": "[high]missing_element:设计稿中标题下方有灰色小字说明文本，渲染结果中缺失 | [high]extra_element:渲染结果中多出下拉选择框（显示'使用默认'），设计稿中没有此元素 | [high]layout:标签页形状差异明显，设计稿为箭头型连续标签，渲染结果为独立圆角矩形标签",
+      "designImage": "/Users/smigoo/工作/mvgo/frontend/workspace/custom-components/mc-lite-1785908673018-10ed6f96/resources/images/source-screenshot.png"
+    },
+    {
+      "id": "mc-lite-1785941241031-4f1d5a5d",
+      "target": "microcode",
+      "groupId": "default-group",
+      "renderedImage": "/Users/smigoo/工作/mvgo/backend-node/scripts/eval-reports/shots/mc-lite-1785941241031-4f1d5a5d.png",
+      "isStaticFallback": false,
+      "gateStatus": "PASS",
+      "gateIssues": "",
+      "similarity": 72,
+      "pass": false,
+      "compareIssueCount": 8,
+      "topIssues": "[high]missing_element:设计稿顶部包含设备类型、设备总数、完好率等完整信息栏，渲染结果缺失了设备总数和完好率显示 | [high]color:设计稿中两个统计卡片背景色分别为蓝色渐变和灰色渐变，渲染结果都是灰色 | [high]layout:设计稿中两个统计卡片有箭头形状衔接效果，渲染结果为普通圆角矩形",
+      "designImage": "/Users/smigoo/工作/mvgo/frontend/workspace/custom-components/mc-lite-1785941241031-4f1d5a5d/resources/images/source-screenshot.png"
+    },
+    {
+      "id": "v2-e2e-microcode-max-1786420688421",
+      "target": "microcode",
+      "groupId": "default-group",
+      "renderedImage": "/Users/smigoo/工作/mvgo/backend-node/scripts/eval-reports/shots/v2-e2e-microcode-max-1786420688421.png",
+      "isStaticFallback": false,
+      "gateStatus": "PASS",
+      "gateIssues": "",
+      "similarity": 72,
+      "pass": false,
+      "compareIssueCount": 7,
+      "topIssues": "[high]color:背景色不一致，设计稿为浅灰蓝色（#B8C5D0左右），渲染结果为深灰蓝色（#8A9AA8左右） | [high]missing_element:缺失Y轴刻度数值（50、40、30、20、10、0） | [high]missing_element:缺失X轴刻度单位标识'时'",
+      "designImage": "/Users/smigoo/工作/mvgo/frontend/workspace/custom-components/v2-e2e-microcode-max-1786420688421/source-d6239a5ce0a3.png"
+    },
+    {
+      "id": "v2-e2e-microcode-max-1786518174118",
+      "target": "microcode",
+      "groupId": "default-group",
+      "renderedImage": "/Users/smigoo/工作/mvgo/backend-node/scripts/eval-reports/shots/v2-e2e-microcode-max-1786518174118.png",
+      "isStaticFallback": false,
+      "gateStatus": "PASS",
+      "gateIssues": "",
+      "similarity": 72,
+      "pass": false,
+      "compareIssueCount": 8,
+      "topIssues": "[high]missing_element:设计稿中的关闭按钮（X图标）在渲染结果中缺失 | [high]missing_element:设计稿中的车辆实景照片在渲染结果中完全缺失 | [high]extra_element:渲染结果在顶部右侧多了两个控件（搜索框和下拉菜单），设计稿中没有这些元素",
+      "designImage": "/Users/smigoo/工作/mvgo/frontend/workspace/custom-components/v2-e2e-microcode-max-1786518174118/source-f37520055fca.png"
+    },
+    {
+      "id": "v2-e2e-p2verify-1786520871372",
+      "target": "microcode",
+      "groupId": "default-group",
+      "renderedImage": "/Users/smigoo/工作/mvgo/backend-node/scripts/eval-reports/shots/v2-e2e-p2verify-1786520871372.png",
+      "isStaticFallback": false,
+      "gateStatus": "PASS",
+      "gateIssues": "",
+      "similarity": 72,
+      "pass": false,
+      "compareIssueCount": 10,
+      "topIssues": "[high]missing_element:设计稿右上角的关闭按钮（X图标）在渲染结果中缺失 | [high]missing_element:设计稿左上角的图标（运单信息icon）在渲染结果中缺失 | [high]color:标题栏背景色不一致，设计稿为深青色渐变，渲染结果为纯色",
+      "designImage": "/Users/smigoo/工作/mvgo/frontend/workspace/custom-components/v2-e2e-p2verify-1786520871372/source-f37520055fca.png"
+    },
+    {
+      "id": "mv-lite-1785921659215-9994b5ed",
+      "target": "vue3",
+      "groupId": "6a51f7caed28c5d5b13c61a5",
+      "renderedImage": "/Users/smigoo/工作/mvgo/backend-node/scripts/eval-reports/shots/mv-lite-1785921659215-9994b5ed.png",
+      "isStaticFallback": false,
+      "gateStatus": "PASS",
+      "gateIssues": "",
+      "similarity": 45,
+      "pass": false,
+      "compareIssueCount": 8,
+      "topIssues": "[high]missing_element:设计稿中的标签页导航栏（二氧化碳/能见度/洞内照明/洞外光强）完全缺失 | [high]missing_element:设计稿中标题下方的灰色小字（6小时监测数据）在渲染结果中缺失 | [high]layout:设计稿中图标在标签页右侧，渲染结果中图标位置移到了右上角独立区域",
+      "designImage": "/Users/smigoo/工作/mvgo/frontend/workspace/vue3-components/6a51f7caed28c5d5b13c61a5/mv-lite-1785921659215-9994b5ed/resources/images/source-screenshot.png"
+    }
+  ]
+}

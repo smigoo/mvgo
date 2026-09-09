@@ -1,0 +1,37 @@
+{
+  "name": "figma-analyzer",
+  "label": "Figma 组件分析",
+  "description": "从 Figma 设计稿节点树分析组件数量与清单",
+  "category": "分析",
+  "logicType": "llm",
+  "templateId": "llm-analyzer",
+  "inputs": [
+    {
+      "key": "figmaNodeData",
+      "type": "object",
+      "required": false
+    }
+  ],
+  "outputs": [
+    {
+      "key": "componentCount",
+      "type": "number"
+    },
+    {
+      "key": "components",
+      "type": "array"
+    }
+  ],
+  "params": {
+    "prompt": "你是 Figma 设计稿分析师。从输入的节点树中识别出有几个独立的组件/模块（通常是顶层 FRAME 或命名含 component 的分组）。输出 JSON：componentCount（组件数量数字）、components（数组，每项含 name/type/description）。只输出 JSON 不要其他内容。"
+  },
+  "model": "qwen3.7-plus",
+  "referenceFiles": [],
+  "author": "anonymous",
+  "className": "DynamicAgent",
+  "modulePath": "roles/custom/figma-analyzer.js",
+  "requires": {
+    "vision": false
+  },
+  "createdAt": 1787220094551
+}

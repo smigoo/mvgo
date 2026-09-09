@@ -1,0 +1,1680 @@
+{
+ "fileKey": "1t7Dmmpsl5i0PC8BJt2QLf",
+ "nodeId": "2:8417",
+ "document": {
+  "id": "2:8417",
+  "name": "cp-设备监测",
+  "type": "FRAME",
+  "absoluteBoundingBox": {
+   "x": 1475,
+   "y": 433,
+   "width": 420,
+   "height": 425
+  },
+  "children": [
+   {
+    "id": "2:8419",
+    "name": "header",
+    "type": "GROUP",
+    "absoluteBoundingBox": {
+     "x": 1495,
+     "y": 441,
+     "width": 388,
+     "height": 30.08984375
+    },
+    "children": [
+     {
+      "id": "2:8426",
+      "name": "设备监测",
+      "type": "TEXT",
+      "absoluteBoundingBox": {
+       "x": 1495,
+       "y": 443,
+       "width": 64,
+       "height": 19
+      },
+      "characters": "设备监测"
+     },
+     {
+      "id": "2:8427",
+      "name": "*数据实时更新",
+      "type": "TEXT",
+      "absoluteBoundingBox": {
+       "x": 1782,
+       "y": 440,
+       "width": 91,
+       "height": 21
+      },
+      "characters": "*数据实时更新"
+     },
+     {
+      "id": "2:8428",
+      "name": "Frame 2136638825",
+      "type": "FRAME",
+      "absoluteBoundingBox": {
+       "x": 1595,
+       "y": 441,
+       "width": 80,
+       "height": 23
+      },
+      "layoutMode": "HORIZONTAL",
+      "children": [
+       {
+        "id": "2:8429",
+        "name": "设备类型",
+        "type": "TEXT",
+        "absoluteBoundingBox": {
+         "x": 1595,
+         "y": 442,
+         "width": 56,
+         "height": 21
+        },
+        "characters": "设备类型"
+       },
+       {
+        "id": "2:8430",
+        "name": "28",
+        "type": "TEXT",
+        "absoluteBoundingBox": {
+         "x": 1652,
+         "y": 441,
+         "width": 23,
+         "height": 23
+        },
+        "characters": "28"
+       }
+      ]
+     },
+     {
+      "id": "2:8431",
+      "name": "Frame 2136638826",
+      "type": "FRAME",
+      "absoluteBoundingBox": {
+       "x": 1681,
+       "y": 441,
+       "width": 115,
+       "height": 23
+      },
+      "layoutMode": "HORIZONTAL",
+      "children": [
+       {
+        "id": "2:8432",
+        "name": "设备总数",
+        "type": "TEXT",
+        "absoluteBoundingBox": {
+         "x": 1681,
+         "y": 442,
+         "width": 56,
+         "height": 21
+        },
+        "characters": "设备总数"
+       },
+       {
+        "id": "2:8433",
+        "name": "68562",
+        "type": "TEXT",
+        "absoluteBoundingBox": {
+         "x": 1738,
+         "y": 441,
+         "width": 58,
+         "height": 23
+        },
+        "characters": "68562"
+       }
+      ]
+     },
+     {
+      "id": "2:8434",
+      "name": "Frame 2136638827",
+      "type": "FRAME",
+      "absoluteBoundingBox": {
+       "x": 1802,
+       "y": 441,
+       "width": 81,
+       "height": 23
+      },
+      "layoutMode": "HORIZONTAL",
+      "children": [
+       {
+        "id": "2:8435",
+        "name": "完好率",
+        "type": "TEXT",
+        "absoluteBoundingBox": {
+         "x": 1802,
+         "y": 442,
+         "width": 42,
+         "height": 21
+        },
+        "characters": "完好率"
+       },
+       {
+        "id": "2:8436",
+        "name": "98%",
+        "type": "TEXT",
+        "absoluteBoundingBox": {
+         "x": 1845,
+         "y": 441,
+         "width": 38,
+         "height": 23
+        },
+        "characters": "98%"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "id": "89:40",
+    "name": "slot-con",
+    "type": "FRAME",
+    "absoluteBoundingBox": {
+     "x": 1475,
+     "y": 475.0001220703125,
+     "width": 407.3999328613281,
+     "height": 379.9998779296875
+    },
+    "children": [
+     {
+      "id": "89:38",
+      "name": "switch",
+      "type": "FRAME",
+      "absoluteBoundingBox": {
+       "x": 1486,
+       "y": 475.0001220703125,
+       "width": 396.3999328613281,
+       "height": 64.80017852783203
+      },
+      "children": [
+       {
+        "id": "2:8787",
+        "name": "active",
+        "type": "GROUP",
+        "absoluteBoundingBox": {
+         "x": 1485.9999971674945,
+         "y": 475.0001136165336,
+         "width": 193.39992043504458,
+         "height": 64.80017935221639
+        },
+        "children": [
+         {
+          "id": "2:8791",
+          "name": "t-隧道设备",
+          "type": "TEXT",
+          "absoluteBoundingBox": {
+           "x": 1500,
+           "y": 514.000244140625,
+           "width": 45,
+           "height": 16
+          },
+          "characters": "隧道设备"
+         },
+         {
+          "id": "2:8792",
+          "name": "line1",
+          "type": "FRAME",
+          "absoluteBoundingBox": {
+           "x": 1550,
+           "y": 481.00018310546875,
+           "width": 105,
+           "height": 23
+          },
+          "layoutMode": "HORIZONTAL",
+          "children": [
+           {
+            "id": "2:8793",
+            "name": "t-总数:",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1550,
+             "y": 482.00018310546875,
+             "width": 46,
+             "height": 21
+            },
+            "characters": "总数:"
+           },
+           {
+            "id": "2:8794",
+            "name": "d-56302",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1597,
+             "y": 481.00018310546875,
+             "width": 58,
+             "height": 23
+            },
+            "characters": "56302"
+           }
+          ]
+         },
+         {
+          "id": "2:8795",
+          "name": "line2",
+          "type": "FRAME",
+          "absoluteBoundingBox": {
+           "x": 1550,
+           "y": 510.00018310546875,
+           "width": 59,
+           "height": 23
+          },
+          "layoutMode": "HORIZONTAL",
+          "children": [
+           {
+            "id": "2:8796",
+            "name": "t-异常数:",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1550,
+             "y": 511.00018310546875,
+             "width": 46,
+             "height": 21
+            },
+            "characters": "异常数:"
+           },
+           {
+            "id": "2:8797",
+            "name": "d-5",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1597,
+             "y": 510.00018310546875,
+             "width": 12,
+             "height": 23
+            },
+            "characters": "5"
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "id": "2:8806",
+        "name": "default",
+        "type": "GROUP",
+        "absoluteBoundingBox": {
+         "x": 1688.9999971674945,
+         "y": 475.0001136165336,
+         "width": 193.39992043504458,
+         "height": 64.80017935221639
+        },
+        "children": [
+         {
+          "id": "2:8810",
+          "name": "line1",
+          "type": "FRAME",
+          "absoluteBoundingBox": {
+           "x": 1764,
+           "y": 481.00018310546875,
+           "width": 93,
+           "height": 23
+          },
+          "layoutMode": "HORIZONTAL",
+          "children": [
+           {
+            "id": "2:8811",
+            "name": "t-总数:",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1764,
+             "y": 482.00018310546875,
+             "width": 46,
+             "height": 21
+            },
+            "characters": "总数:"
+           },
+           {
+            "id": "2:8812",
+            "name": "d-1280",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1811,
+             "y": 481.00018310546875,
+             "width": 46,
+             "height": 23
+            },
+            "characters": "1280"
+           }
+          ]
+         },
+         {
+          "id": "2:8813",
+          "name": "line2",
+          "type": "FRAME",
+          "absoluteBoundingBox": {
+           "x": 1764,
+           "y": 510.00018310546875,
+           "width": 59,
+           "height": 23
+          },
+          "layoutMode": "HORIZONTAL",
+          "children": [
+           {
+            "id": "2:8814",
+            "name": "t-异常数:",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1764,
+             "y": 511.00018310546875,
+             "width": 46,
+             "height": 21
+            },
+            "characters": "异常数:"
+           },
+           {
+            "id": "2:8815",
+            "name": "d-3",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1811,
+             "y": 510.00018310546875,
+             "width": 12,
+             "height": 23
+            },
+            "characters": "3"
+           }
+          ]
+         },
+         {
+          "id": "2:8816",
+          "name": "t-南北接线 设备",
+          "type": "TEXT",
+          "absoluteBoundingBox": {
+           "x": 1703,
+           "y": 513.000244140625,
+           "width": 45,
+           "height": 20
+          },
+          "characters": "南北接线\n设备"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": "89:37",
+      "name": "@antd/tab",
+      "type": "FRAME",
+      "absoluteBoundingBox": {
+       "x": 1475,
+       "y": 538,
+       "width": 46,
+       "height": 317
+      },
+      "children": [
+       {
+        "id": "89:39",
+        "name": "tabs",
+        "type": "FRAME",
+        "absoluteBoundingBox": {
+         "x": 1475,
+         "y": 538,
+         "width": 46,
+         "height": 317
+        },
+        "children": [
+         {
+          "id": "2:8825",
+          "name": "tab-active",
+          "type": "GROUP",
+          "absoluteBoundingBox": {
+           "x": 1475,
+           "y": 538,
+           "width": 46,
+           "height": 54
+          },
+          "children": [
+           {
+            "id": "2:8827",
+            "name": "t-监控",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1484,
+             "y": 552,
+             "width": 15,
+             "height": 36
+            },
+            "characters": "监控"
+           },
+           {
+            "id": "2:8828",
+            "name": "Frame 2136638920",
+            "type": "FRAME",
+            "absoluteBoundingBox": {
+             "x": 1483,
+             "y": 538,
+             "width": 38,
+             "height": 18
+            },
+            "layoutMode": "HORIZONTAL",
+            "children": [
+             {
+              "id": "2:8829",
+              "name": "d-3/3740",
+              "type": "TEXT",
+              "absoluteBoundingBox": {
+               "x": 1485,
+               "y": 538,
+               "width": 34,
+               "height": 18
+              },
+              "characters": "3/3740"
+             }
+            ]
+           }
+          ]
+         },
+         {
+          "id": "2:8830",
+          "name": "tab",
+          "type": "GROUP",
+          "absoluteBoundingBox": {
+           "x": 1475,
+           "y": 591,
+           "width": 37,
+           "height": 44
+          },
+          "children": [
+           {
+            "id": "2:8832",
+            "name": "d-照明",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1484,
+             "y": 599,
+             "width": 15,
+             "height": 32
+            },
+            "characters": "照明"
+           },
+           {
+            "id": "2:8833",
+            "name": "Group 1321315882",
+            "type": "GROUP",
+            "absoluteBoundingBox": {
+             "x": 1498,
+             "y": 591,
+             "width": 14,
+             "height": 14
+            },
+            "children": [
+             {
+              "id": "2:8835",
+              "name": "d-3",
+              "type": "TEXT",
+              "absoluteBoundingBox": {
+               "x": 1501,
+               "y": 591,
+               "width": 7,
+               "height": 14
+              },
+              "characters": "3"
+             }
+            ]
+           }
+          ]
+         },
+         {
+          "id": "2:8836",
+          "name": "tab",
+          "type": "GROUP",
+          "absoluteBoundingBox": {
+           "x": 1475,
+           "y": 638,
+           "width": 34,
+           "height": 40
+          },
+          "children": [
+           {
+            "id": "2:8838",
+            "name": "d-通风",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1484,
+             "y": 642,
+             "width": 15,
+             "height": 32
+            },
+            "characters": "通风"
+           }
+          ]
+         },
+         {
+          "id": "2:8841",
+          "name": "tab",
+          "type": "GROUP",
+          "absoluteBoundingBox": {
+           "x": 1475,
+           "y": 740,
+           "width": 34,
+           "height": 40
+          },
+          "children": [
+           {
+            "id": "2:8843",
+            "name": "d-消防",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1484,
+             "y": 744,
+             "width": 15,
+             "height": 32
+            },
+            "characters": "消防"
+           }
+          ]
+         },
+         {
+          "id": "2:8846",
+          "name": "tab",
+          "type": "GROUP",
+          "absoluteBoundingBox": {
+           "x": 1475,
+           "y": 783,
+           "width": 34,
+           "height": 72
+          },
+          "children": [
+           {
+            "id": "2:8848",
+            "name": "d-交通诱导",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1483,
+             "y": 787,
+             "width": 17,
+             "height": 64
+            },
+            "characters": "交通诱导"
+           }
+          ]
+         },
+         {
+          "id": "2:8851",
+          "name": "tab",
+          "type": "GROUP",
+          "absoluteBoundingBox": {
+           "x": 1475,
+           "y": 681,
+           "width": 34,
+           "height": 56
+          },
+          "children": [
+           {
+            "id": "2:8853",
+            "name": "d-供配电",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1484,
+             "y": 685,
+             "width": 15,
+             "height": 48
+            },
+            "characters": "供配电"
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "id": "2:8437",
+        "name": "cons",
+        "type": "GROUP",
+        "absoluteBoundingBox": {
+         "x": 1518,
+         "y": 550,
+         "width": 367,
+         "height": 295
+        },
+        "children": [
+         {
+          "id": "2:8438",
+          "name": "Group 2136637321",
+          "type": "GROUP",
+          "absoluteBoundingBox": {
+           "x": 1518,
+           "y": 550,
+           "width": 117,
+           "height": 64
+          },
+          "children": [
+           {
+            "id": "2:8442",
+            "name": "摄像机",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1557,
+             "y": 563,
+             "width": 36,
+             "height": 18
+            },
+            "characters": "摄像机"
+           },
+           {
+            "id": "2:8443",
+            "name": "(2/484)",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1557,
+             "y": 585,
+             "width": 55,
+             "height": 21
+            },
+            "characters": "(2/484)"
+           },
+           {
+            "id": "2:8444",
+            "name": "icon",
+            "type": "GROUP",
+            "absoluteBoundingBox": {
+             "x": 1524,
+             "y": 566,
+             "width": 26.649499893188477,
+             "height": 32
+            },
+            "children": [
+             {
+              "id": "2:8446",
+              "name": "Group 2",
+              "type": "GROUP",
+              "absoluteBoundingBox": {
+               "x": 1524,
+               "y": 566,
+               "width": 26.649499893188477,
+               "height": 32
+              },
+              "children": [
+               {
+                "id": "2:8457",
+                "name": "文本",
+                "type": "TEXT",
+                "absoluteBoundingBox": {
+                 "x": 1537.3900146484375,
+                 "y": 566,
+                 "width": 0,
+                 "height": 3.1594982147216797
+                },
+                "characters": ""
+               },
+               {
+                "id": "2:8458",
+                "name": "文本",
+                "type": "TEXT",
+                "absoluteBoundingBox": {
+                 "x": 1537.3900146484375,
+                 "y": 571.9390258789062,
+                 "width": 0,
+                 "height": 3.1594982147216797
+                },
+                "characters": ""
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         },
+         {
+          "id": "2:8467",
+          "name": "Group 2136637552",
+          "type": "GROUP",
+          "absoluteBoundingBox": {
+           "x": 1518,
+           "y": 627,
+           "width": 117,
+           "height": 64
+          },
+          "children": [
+           {
+            "id": "2:8471",
+            "name": "烟道机器人",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1557,
+             "y": 640,
+             "width": 60,
+             "height": 18
+            },
+            "characters": "烟道机器人"
+           },
+           {
+            "id": "2:8472",
+            "name": "(0/484)",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1557,
+             "y": 662,
+             "width": 55,
+             "height": 21
+            },
+            "characters": "(0/484)"
+           },
+           {
+            "id": "2:8473",
+            "name": "icon",
+            "type": "GROUP",
+            "absoluteBoundingBox": {
+             "x": 1524,
+             "y": 643,
+             "width": 26.649499893188477,
+             "height": 32
+            },
+            "children": [
+             {
+              "id": "2:8475",
+              "name": "Group 2",
+              "type": "GROUP",
+              "absoluteBoundingBox": {
+               "x": 1524,
+               "y": 643,
+               "width": 26.649499893188477,
+               "height": 32
+              },
+              "children": [
+               {
+                "id": "2:8486",
+                "name": "文本",
+                "type": "TEXT",
+                "absoluteBoundingBox": {
+                 "x": 1537.3900146484375,
+                 "y": 643,
+                 "width": 0,
+                 "height": 3.1594982147216797
+                },
+                "characters": ""
+               },
+               {
+                "id": "2:8487",
+                "name": "文本",
+                "type": "TEXT",
+                "absoluteBoundingBox": {
+                 "x": 1537.3900146484375,
+                 "y": 648.9390258789062,
+                 "width": 0,
+                 "height": 3.1594982147216797
+                },
+                "characters": ""
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         },
+         {
+          "id": "2:8497",
+          "name": "Group 2136637555",
+          "type": "GROUP",
+          "absoluteBoundingBox": {
+           "x": 1518,
+           "y": 704,
+           "width": 117,
+           "height": 64
+          },
+          "children": [
+           {
+            "id": "2:8501",
+            "name": "CO/VI检测器",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1557,
+             "y": 717,
+             "width": 68,
+             "height": 18
+            },
+            "characters": "CO/VI检测器"
+           },
+           {
+            "id": "2:8502",
+            "name": "(0/484)",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1557,
+             "y": 739,
+             "width": 55,
+             "height": 21
+            },
+            "characters": "(0/484)"
+           },
+           {
+            "id": "2:8503",
+            "name": "icon",
+            "type": "GROUP",
+            "absoluteBoundingBox": {
+             "x": 1524,
+             "y": 720,
+             "width": 26.649499893188477,
+             "height": 32
+            },
+            "children": [
+             {
+              "id": "2:8505",
+              "name": "Group 2",
+              "type": "GROUP",
+              "absoluteBoundingBox": {
+               "x": 1524,
+               "y": 720,
+               "width": 26.649499893188477,
+               "height": 32
+              },
+              "children": [
+               {
+                "id": "2:8516",
+                "name": "文本",
+                "type": "TEXT",
+                "absoluteBoundingBox": {
+                 "x": 1537.3900146484375,
+                 "y": 720,
+                 "width": 0,
+                 "height": 3.1594982147216797
+                },
+                "characters": ""
+               },
+               {
+                "id": "2:8517",
+                "name": "文本",
+                "type": "TEXT",
+                "absoluteBoundingBox": {
+                 "x": 1537.3900146484375,
+                 "y": 725.9390258789062,
+                 "width": 0,
+                 "height": 3.1594982147216797
+                },
+                "characters": ""
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         },
+         {
+          "id": "2:8526",
+          "name": "Group 2136637558",
+          "type": "GROUP",
+          "absoluteBoundingBox": {
+           "x": 1518,
+           "y": 781,
+           "width": 117,
+           "height": 63.999996185302734
+          },
+          "children": [
+           {
+            "id": "2:8530",
+            "name": "光照度变送器",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1557,
+             "y": 794,
+             "width": 72,
+             "height": 18
+            },
+            "characters": "光照度变送器"
+           },
+           {
+            "id": "2:8531",
+            "name": "(0/484)",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1557,
+             "y": 816,
+             "width": 55,
+             "height": 21
+            },
+            "characters": "(0/484)"
+           },
+           {
+            "id": "2:8532",
+            "name": "icon",
+            "type": "GROUP",
+            "absoluteBoundingBox": {
+             "x": 1524,
+             "y": 797,
+             "width": 26.649499893188477,
+             "height": 32
+            },
+            "children": [
+             {
+              "id": "2:8534",
+              "name": "Group 2",
+              "type": "GROUP",
+              "absoluteBoundingBox": {
+               "x": 1524,
+               "y": 797,
+               "width": 26.649499893188477,
+               "height": 32
+              },
+              "children": [
+               {
+                "id": "2:8545",
+                "name": "文本",
+                "type": "TEXT",
+                "absoluteBoundingBox": {
+                 "x": 1537.3900146484375,
+                 "y": 797,
+                 "width": 0,
+                 "height": 3.1594982147216797
+                },
+                "characters": ""
+               },
+               {
+                "id": "2:8546",
+                "name": "文本",
+                "type": "TEXT",
+                "absoluteBoundingBox": {
+                 "x": 1537.3900146484375,
+                 "y": 802.9390258789062,
+                 "width": 0,
+                 "height": 3.1594982147216797
+                },
+                "characters": ""
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         },
+         {
+          "id": "2:8555",
+          "name": "Group 2136637550",
+          "type": "GROUP",
+          "absoluteBoundingBox": {
+           "x": 1643,
+           "y": 627,
+           "width": 117,
+           "height": 64
+          },
+          "children": [
+           {
+            "id": "2:8559",
+            "name": "激光雷达",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1682,
+             "y": 640,
+             "width": 48,
+             "height": 18
+            },
+            "characters": "激光雷达"
+           },
+           {
+            "id": "2:8560",
+            "name": "(0/484)",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1682,
+             "y": 662,
+             "width": 55,
+             "height": 21
+            },
+            "characters": "(0/484)"
+           },
+           {
+            "id": "2:8561",
+            "name": "icon",
+            "type": "GROUP",
+            "absoluteBoundingBox": {
+             "x": 1649,
+             "y": 643,
+             "width": 26.649499893188477,
+             "height": 32
+            },
+            "children": [
+             {
+              "id": "2:8563",
+              "name": "Group 2",
+              "type": "GROUP",
+              "absoluteBoundingBox": {
+               "x": 1649,
+               "y": 643,
+               "width": 26.649499893188477,
+               "height": 32
+              },
+              "children": [
+               {
+                "id": "2:8574",
+                "name": "文本",
+                "type": "TEXT",
+                "absoluteBoundingBox": {
+                 "x": 1662.3900146484375,
+                 "y": 643,
+                 "width": 0,
+                 "height": 3.1594982147216797
+                },
+                "characters": ""
+               },
+               {
+                "id": "2:8575",
+                "name": "文本",
+                "type": "TEXT",
+                "absoluteBoundingBox": {
+                 "x": 1662.3900146484375,
+                 "y": 648.9390258789062,
+                 "width": 0,
+                 "height": 3.1594982147216797
+                },
+                "characters": ""
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         },
+         {
+          "id": "2:8584",
+          "name": "Group 2136637553",
+          "type": "GROUP",
+          "absoluteBoundingBox": {
+           "x": 1643,
+           "y": 550,
+           "width": 117,
+           "height": 64
+          },
+          "children": [
+           {
+            "id": "2:8588",
+            "name": "风速风向仪",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1682,
+             "y": 563,
+             "width": 60,
+             "height": 18
+            },
+            "characters": "风速风向仪"
+           },
+           {
+            "id": "2:8589",
+            "name": "(1/484)",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1682,
+             "y": 585,
+             "width": 55,
+             "height": 21
+            },
+            "characters": "(1/484)"
+           },
+           {
+            "id": "2:8590",
+            "name": "icon",
+            "type": "GROUP",
+            "absoluteBoundingBox": {
+             "x": 1649,
+             "y": 566,
+             "width": 26.649499893188477,
+             "height": 32
+            },
+            "children": [
+             {
+              "id": "2:8592",
+              "name": "Group 2",
+              "type": "GROUP",
+              "absoluteBoundingBox": {
+               "x": 1649,
+               "y": 566,
+               "width": 26.649499893188477,
+               "height": 32
+              },
+              "children": [
+               {
+                "id": "2:8603",
+                "name": "文本",
+                "type": "TEXT",
+                "absoluteBoundingBox": {
+                 "x": 1662.3900146484375,
+                 "y": 566,
+                 "width": 0,
+                 "height": 3.1594982147216797
+                },
+                "characters": ""
+               },
+               {
+                "id": "2:8604",
+                "name": "文本",
+                "type": "TEXT",
+                "absoluteBoundingBox": {
+                 "x": 1662.3900146484375,
+                 "y": 571.9390258789062,
+                 "width": 0,
+                 "height": 3.1594982147216797
+                },
+                "characters": ""
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         },
+         {
+          "id": "2:8613",
+          "name": "Group 2136637556",
+          "type": "GROUP",
+          "absoluteBoundingBox": {
+           "x": 1643,
+           "y": 704,
+           "width": 117,
+           "height": 64
+          },
+          "children": [
+           {
+            "id": "2:8617",
+            "name": "温湿度传感器",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1682,
+             "y": 717,
+             "width": 72,
+             "height": 18
+            },
+            "characters": "温湿度传感器"
+           },
+           {
+            "id": "2:8618",
+            "name": "(0/484)",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1682,
+             "y": 739,
+             "width": 55,
+             "height": 21
+            },
+            "characters": "(0/484)"
+           },
+           {
+            "id": "2:8619",
+            "name": "icon",
+            "type": "GROUP",
+            "absoluteBoundingBox": {
+             "x": 1649,
+             "y": 720,
+             "width": 26.649499893188477,
+             "height": 32
+            },
+            "children": [
+             {
+              "id": "2:8621",
+              "name": "Group 2",
+              "type": "GROUP",
+              "absoluteBoundingBox": {
+               "x": 1649,
+               "y": 720,
+               "width": 26.649499893188477,
+               "height": 32
+              },
+              "children": [
+               {
+                "id": "2:8632",
+                "name": "文本",
+                "type": "TEXT",
+                "absoluteBoundingBox": {
+                 "x": 1662.390625,
+                 "y": 720,
+                 "width": 0,
+                 "height": 3.1594982147216797
+                },
+                "characters": ""
+               },
+               {
+                "id": "2:8633",
+                "name": "文本",
+                "type": "TEXT",
+                "absoluteBoundingBox": {
+                 "x": 1662.390625,
+                 "y": 725.93896484375,
+                 "width": 0,
+                 "height": 3.1594982147216797
+                },
+                "characters": ""
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         },
+         {
+          "id": "2:8642",
+          "name": "Group 2136637559",
+          "type": "GROUP",
+          "absoluteBoundingBox": {
+           "x": 1643,
+           "y": 781,
+           "width": 117,
+           "height": 63.999996185302734
+          },
+          "children": [
+           {
+            "id": "2:8646",
+            "name": "紧急电话",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1682,
+             "y": 794,
+             "width": 48,
+             "height": 18
+            },
+            "characters": "紧急电话"
+           },
+           {
+            "id": "2:8647",
+            "name": "(0/484)",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1682,
+             "y": 816,
+             "width": 55,
+             "height": 21
+            },
+            "characters": "(0/484)"
+           },
+           {
+            "id": "2:8648",
+            "name": "icon",
+            "type": "GROUP",
+            "absoluteBoundingBox": {
+             "x": 1649,
+             "y": 797,
+             "width": 26.649499893188477,
+             "height": 32
+            },
+            "children": [
+             {
+              "id": "2:8650",
+              "name": "Group 2",
+              "type": "GROUP",
+              "absoluteBoundingBox": {
+               "x": 1649,
+               "y": 797,
+               "width": 26.649499893188477,
+               "height": 32
+              },
+              "children": [
+               {
+                "id": "2:8661",
+                "name": "文本",
+                "type": "TEXT",
+                "absoluteBoundingBox": {
+                 "x": 1662.3900146484375,
+                 "y": 797,
+                 "width": 0,
+                 "height": 3.1594982147216797
+                },
+                "characters": ""
+               },
+               {
+                "id": "2:8662",
+                "name": "文本",
+                "type": "TEXT",
+                "absoluteBoundingBox": {
+                 "x": 1662.3900146484375,
+                 "y": 802.9390258789062,
+                 "width": 0,
+                 "height": 3.1594982147216797
+                },
+                "characters": ""
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         },
+         {
+          "id": "2:8671",
+          "name": "Group 2136637551",
+          "type": "GROUP",
+          "absoluteBoundingBox": {
+           "x": 1768,
+           "y": 550,
+           "width": 117,
+           "height": 64
+          },
+          "children": [
+           {
+            "id": "2:8675",
+            "name": "超高检测器",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1809,
+             "y": 563,
+             "width": 60,
+             "height": 18
+            },
+            "characters": "超高检测器"
+           },
+           {
+            "id": "2:8676",
+            "name": "(0/484)",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1809,
+             "y": 585,
+             "width": 55,
+             "height": 21
+            },
+            "characters": "(0/484)"
+           },
+           {
+            "id": "2:8677",
+            "name": "icon",
+            "type": "GROUP",
+            "absoluteBoundingBox": {
+             "x": 1776,
+             "y": 566,
+             "width": 26.649499893188477,
+             "height": 32
+            },
+            "children": [
+             {
+              "id": "2:8679",
+              "name": "Group 2",
+              "type": "GROUP",
+              "absoluteBoundingBox": {
+               "x": 1776,
+               "y": 566,
+               "width": 26.649499893188477,
+               "height": 32
+              },
+              "children": [
+               {
+                "id": "2:8690",
+                "name": "文本",
+                "type": "TEXT",
+                "absoluteBoundingBox": {
+                 "x": 1789.3900146484375,
+                 "y": 566,
+                 "width": 0,
+                 "height": 3.1594982147216797
+                },
+                "characters": ""
+               },
+               {
+                "id": "2:8691",
+                "name": "文本",
+                "type": "TEXT",
+                "absoluteBoundingBox": {
+                 "x": 1789.3900146484375,
+                 "y": 571.9390258789062,
+                 "width": 0,
+                 "height": 3.1594982147216797
+                },
+                "characters": ""
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         },
+         {
+          "id": "2:8700",
+          "name": "Group 2136637554",
+          "type": "GROUP",
+          "absoluteBoundingBox": {
+           "x": 1768,
+           "y": 627,
+           "width": 117,
+           "height": 64
+          },
+          "children": [
+           {
+            "id": "2:8704",
+            "name": "CO2传感器",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1809,
+             "y": 640,
+             "width": 56,
+             "height": 18
+            },
+            "characters": "CO2传感器"
+           },
+           {
+            "id": "2:8705",
+            "name": "(0/484)",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1809,
+             "y": 662,
+             "width": 55,
+             "height": 21
+            },
+            "characters": "(0/484)"
+           },
+           {
+            "id": "2:8706",
+            "name": "icon",
+            "type": "GROUP",
+            "absoluteBoundingBox": {
+             "x": 1776,
+             "y": 643,
+             "width": 26.649499893188477,
+             "height": 32
+            },
+            "children": [
+             {
+              "id": "2:8708",
+              "name": "Group 2",
+              "type": "GROUP",
+              "absoluteBoundingBox": {
+               "x": 1776,
+               "y": 643,
+               "width": 26.649499893188477,
+               "height": 32
+              },
+              "children": [
+               {
+                "id": "2:8719",
+                "name": "文本",
+                "type": "TEXT",
+                "absoluteBoundingBox": {
+                 "x": 1789.3900146484375,
+                 "y": 643,
+                 "width": 0,
+                 "height": 3.1594982147216797
+                },
+                "characters": ""
+               },
+               {
+                "id": "2:8720",
+                "name": "文本",
+                "type": "TEXT",
+                "absoluteBoundingBox": {
+                 "x": 1789.3900146484375,
+                 "y": 648.9390258789062,
+                 "width": 0,
+                 "height": 3.1594982147216797
+                },
+                "characters": ""
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         },
+         {
+          "id": "2:8729",
+          "name": "Group 2136637557",
+          "type": "GROUP",
+          "absoluteBoundingBox": {
+           "x": 1768,
+           "y": 704,
+           "width": 117,
+           "height": 64
+          },
+          "children": [
+           {
+            "id": "2:8733",
+            "name": "压力传感器",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1809,
+             "y": 717,
+             "width": 60,
+             "height": 18
+            },
+            "characters": "压力传感器"
+           },
+           {
+            "id": "2:8734",
+            "name": "(0/484)",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1809,
+             "y": 739,
+             "width": 55,
+             "height": 21
+            },
+            "characters": "(0/484)"
+           },
+           {
+            "id": "2:8735",
+            "name": "icon",
+            "type": "GROUP",
+            "absoluteBoundingBox": {
+             "x": 1776,
+             "y": 720,
+             "width": 26.649499893188477,
+             "height": 32
+            },
+            "children": [
+             {
+              "id": "2:8737",
+              "name": "Group 2",
+              "type": "GROUP",
+              "absoluteBoundingBox": {
+               "x": 1776,
+               "y": 720,
+               "width": 26.649499893188477,
+               "height": 32
+              },
+              "children": [
+               {
+                "id": "2:8748",
+                "name": "文本",
+                "type": "TEXT",
+                "absoluteBoundingBox": {
+                 "x": 1789.3900146484375,
+                 "y": 720,
+                 "width": 0,
+                 "height": 3.1594982147216797
+                },
+                "characters": ""
+               },
+               {
+                "id": "2:8749",
+                "name": "文本",
+                "type": "TEXT",
+                "absoluteBoundingBox": {
+                 "x": 1789.3900146484375,
+                 "y": 725.9390258789062,
+                 "width": 0,
+                 "height": 3.1594982147216797
+                },
+                "characters": ""
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         },
+         {
+          "id": "2:8758",
+          "name": "Group 2136637560",
+          "type": "GROUP",
+          "absoluteBoundingBox": {
+           "x": 1768,
+           "y": 781,
+           "width": 117,
+           "height": 64
+          },
+          "children": [
+           {
+            "id": "2:8762",
+            "name": "水质监测设备",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1809,
+             "y": 794,
+             "width": 72,
+             "height": 18
+            },
+            "characters": "水质监测设备"
+           },
+           {
+            "id": "2:8763",
+            "name": "(0/484)",
+            "type": "TEXT",
+            "absoluteBoundingBox": {
+             "x": 1809,
+             "y": 816,
+             "width": 55,
+             "height": 21
+            },
+            "characters": "(0/484)"
+           },
+           {
+            "id": "2:8764",
+            "name": "icon",
+            "type": "GROUP",
+            "absoluteBoundingBox": {
+             "x": 1776,
+             "y": 797,
+             "width": 26.649499893188477,
+             "height": 32
+            },
+            "children": [
+             {
+              "id": "2:8766",
+              "name": "Group 2",
+              "type": "GROUP",
+              "absoluteBoundingBox": {
+               "x": 1776,
+               "y": 797,
+               "width": 26.649499893188477,
+               "height": 32
+              },
+              "children": [
+               {
+                "id": "2:8777",
+                "name": "文本",
+                "type": "TEXT",
+                "absoluteBoundingBox": {
+                 "x": 1789.3900146484375,
+                 "y": 797,
+                 "width": 0,
+                 "height": 3.1594982147216797
+                },
+                "characters": ""
+               },
+               {
+                "id": "2:8778",
+                "name": "文本",
+                "type": "TEXT",
+                "absoluteBoundingBox": {
+                 "x": 1789.3900146484375,
+                 "y": 802.9390258789062,
+                 "width": 0,
+                 "height": 3.1594982147216797
+                },
+                "characters": ""
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

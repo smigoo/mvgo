@@ -1,0 +1,140 @@
+@import './light.less';
+.ellipsis() {
+  white-space: nowrap; /* 防止文本换行 */
+  overflow: hidden; /* 隐藏溢出的内容 */
+  text-overflow: ellipsis; /* 显示省略号来代表被修剪的文本 */
+}
+// 副标题样式
+.subhead() {
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 14px;
+  font-weight: 600;
+}
+.mz-panel {
+  position: relative;
+  // flex: 1;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  // overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+
+  &-top {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 3px;
+    margin-bottom: 5px;
+    height: 32px;
+    overflow: hidden;
+    padding: 0 5px 4px 26px;
+
+    &-left {
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+      margin-right: 5px;
+      z-index: 1;
+
+      .icon-left {
+        display: flex;
+
+        .icon-left-img {
+          width: 18px;
+          height: 18px;
+        }
+      }
+
+      .componentName {
+        .ellipsis();
+        // font-size: 16px;
+        // font-family: @font-componentName-family;
+        // font-weight: 400;
+        padding-right: 2px;
+        display: inline-block;
+        margin-right: 3px;
+        color: var(--text-inverse);
+        // line-height: 21px;
+        letter-spacing: 1.44px;
+        // text-shadow: 0px 2px 1px rgba(62, 80, 118, 0.69);
+
+        // background: #266bf4;
+        font-size: 16px;
+        font-weight: 700;
+        text-align: LEFT;
+        line-height: 20px;
+        color: #266bf4;
+        letter-spacing: 3px;
+        // background-clip: text;
+      }
+
+      .icon-info {
+        display: flex;
+
+        img {
+          width: 23.5px;
+        }
+      }
+    }
+
+    &-right {
+      flex-shrink: 0;
+      z-index: 1;
+    }
+
+    .bg-box {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      font-size: 0;
+    }
+  }
+
+  @contentLeft: 5.4px; // 距离左边的距离
+
+  &-content {
+    position: relative;
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    &-main {
+      display: flex;
+      height: 100%;
+      margin-left: @contentLeft;
+      position: relative;
+      overflow: hidden;
+      z-index: 1;
+      padding: 5px 10px 0 10px;
+    }
+  }
+
+  // background
+  .mz-panel-bg {
+    position: absolute;
+    top: 0;
+    left: @contentLeft;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    font-size: 0;
+    z-index: -1;
+  }
+
+  .bg-box {
+    display: flex;
+
+    > div {
+      height: 100%;
+    }
+  }
+}

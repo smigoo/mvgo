@@ -1,0 +1,625 @@
+/**
+ * 主题令牌系统 — 三层架构
+ *
+ * Layer 1: Primitive Tokens（原始色板，不可直接用于组件）
+ * Layer 2: Semantic Tokens（语义令牌，组件应引用这些）
+ * Layer 3: Ant Design Vue 通过 ConfigProvider theme.algorithm 同步
+ *
+ * 主题切换：<html data-theme="light|dark">
+ * 浅色为默认（:root），深色通过 [data-theme="dark"] 覆盖
+ */
+
+/* ========================================
+   Layer 1: Primitive Tokens — 浅色色板
+   ======================================== */
+:root {
+  /* 蓝色系 (品牌主色) */
+  --c-blue-50: #eff6ff;
+  --c-blue-100: #dbeafe;
+  --c-blue-200: #bfdbfe;
+  --c-blue-300: #93c5fd;
+  --c-blue-400: #60a5fa;
+  --c-blue-500: #3b82f6;
+  --c-blue-600: #2563eb;
+  --c-blue-700: #1d4ed8;
+  --c-blue-800: #1e40af;
+  --c-blue-900: #1e3a8a;
+
+  /* 灰色系 */
+  --c-gray-50: #f8fafc;
+  --c-gray-100: #f1f5f9;
+  --c-gray-200: #e2e8f0;
+  --c-gray-300: #cbd5e1;
+  --c-gray-400: #94a3b8;
+  --c-gray-500: #64748b;
+  --c-gray-600: #475569;
+  --c-gray-700: #334155;
+  --c-gray-800: #1e293b;
+  --c-gray-900: #0f172a;
+
+  /* 绿色系 */
+  --c-green-50: #f0fdf4;
+  --c-green-100: #dcfce7;
+  --c-green-200: #bbf7d0;
+  --c-green-400: #4ade80;
+  --c-green-500: #22c55e;
+  --c-green-600: #16a34a;
+  --c-green-700: #15803d;
+
+  /* 红色系 */
+  --c-red-50: #fef2f2;
+  --c-red-100: #fee2e2;
+  --c-red-200: #fecaca;
+  --c-red-400: #f87171;
+  --c-red-500: #ef4444;
+  --c-red-600: #dc2626;
+  --c-red-700: #b91c1c;
+
+  /* 橙色系 */
+  --c-orange-50: #fff7ed;
+  --c-orange-100: #ffedd5;
+  --c-orange-200: #fed7aa;
+  --c-orange-300: #fdba74;
+  --c-orange-400: #fb923c;
+  --c-orange-500: #f97316;
+  --c-orange-600: #ea580c;
+  --c-orange-700: #c2410c;
+
+  /* 黄色系 */
+  --c-yellow-50: #fefce8;
+  --c-yellow-100: #fef9c3;
+  --c-yellow-400: #facc15;
+  --c-yellow-500: #eab308;
+  --c-yellow-600: #ca8a04;
+
+  /* 紫色系 */
+  --c-purple-50: #faf5ff;
+  --c-purple-100: #f3e8ff;
+  --c-purple-300: #d8b4fe;
+  --c-purple-400: #c084fc;
+  --c-purple-500: #a855f7;
+  --c-purple-600: #9333ea;
+
+  /* 青色系 */
+  --c-teal-400: #2dd4bf;
+  --c-teal-500: #14b8a6;
+
+  /* 粉色系 */
+  --c-pink-400: #f472b6;
+  --c-purple-700: #7e22ce;
+
+  /* 青色系 */
+  --c-cyan-50: #ecfeff;
+  --c-cyan-100: #cffafe;
+  --c-cyan-400: #22d3ee;
+  --c-cyan-500: #06b6d4;
+  --c-cyan-600: #0891b2;
+
+  /* ========================================
+     Layer 2: Semantic Tokens — 浅色主题（默认）
+     ======================================== */
+
+  /* 品牌/主色 */
+  --brand: var(--c-blue-600);
+  --brand-hover: var(--c-blue-700);
+  --brand-active: var(--c-blue-800);
+  --brand-light: var(--c-blue-500);
+  --brand-bg: var(--c-blue-50);
+  --brand-bg-hover: rgba(37, 99, 235, 0.08);
+  --brand-bg-active: rgba(37, 99, 235, 0.12);
+  --brand-border: rgba(37, 99, 235, 0.2);
+  --brand-text: var(--c-blue-600);
+
+  /* 功能色 */
+  --feature: var(--c-purple-600);
+  --feature-bg: var(--c-purple-50);
+
+  /* 组件类型色：Vue3 / 微码（独立于品牌蓝与状态色） */
+  --component-vue3: #16a34a;
+  --component-vue3-strong: #15803d;
+  --component-vue3-bg: rgba(22, 163, 74, 0.14);
+  --component-vue3-border: rgba(22, 163, 74, 0.28);
+  --component-vue3-soft: color-mix(in srgb, #16a34a 14%, #ffffff);
+  --component-vue3-contrast: #ffffff;
+
+  --component-microcode: #2563eb;
+  --component-microcode-strong: #1d4ed8;
+  --component-microcode-bg: rgba(37, 99, 235, 0.14);
+  --component-microcode-border: rgba(37, 99, 235, 0.28);
+  --component-microcode-soft: color-mix(in srgb, #2563eb 14%, #ffffff);
+  --component-microcode-contrast: #ffffff;
+
+  /* 背景色 */
+  --bg-page: #f0f4fa;
+  --bg-card: #ffffff;
+  --bg-elevated: #ffffff;
+  --bg-floating: #f4f6f9;
+  --bg-sidebar: #ffffff;
+  --bg-header: #ffffff;
+  --bg-header-scrolled: rgba(255, 255, 255, 0.92);
+  --bg-footer: var(--c-gray-900);
+  --bg-alt: var(--c-gray-100);
+  --bg-secondary: var(--bg-alt);
+  --bg-hover: var(--c-gray-50);
+  --bg-active: var(--c-blue-50);
+  --bg-input: #ffffff;
+  --bg-disabled: var(--c-gray-100);
+  --bg-overlay: rgba(0, 0, 0, 0.45);
+  --codetype-toggle-track: var(--c-gray-100);
+  --tier-toggle-track: var(--c-gray-100);
+
+  /* 文字色 */
+  --text-primary: var(--c-gray-900);
+  --text-secondary: var(--c-gray-600);
+  --text-tertiary: var(--c-gray-500);
+  --text-quaternary: #6b7280;
+  --text-disabled: #6b7280;
+  --text-inverse: #ffffff;
+  --text-brand: var(--c-blue-600);
+  --text-on-brand: #ffffff;
+  --text-on-footer: rgba(255, 255, 255, 0.7);
+
+  /* 边框色 */
+  --border-default: var(--c-gray-200);
+  --border-light: #e5e5e5;
+  --border-strong: var(--c-gray-300);
+  --border-focus: var(--c-blue-500);
+  --border-brand: var(--c-blue-600);
+
+  /* 状态色 */
+  --success: var(--c-green-700);
+  --success-light: var(--c-green-600);
+  --success-bg: var(--c-green-50);
+  --success-border: var(--c-green-200);
+  --success-text: var(--c-green-700);
+
+  --warning: var(--c-orange-600);
+  --warning-light: var(--c-orange-500);
+  --warning-bg: var(--c-orange-50);
+  --warning-border: var(--c-orange-200);
+  --warning-text: #8c6900;
+
+  --error: var(--c-red-500);
+  --error-light: var(--c-red-400);
+  --error-bg: var(--c-red-50);
+  --error-border: var(--c-red-200);
+  --error-text: var(--c-red-600);
+
+  --info: var(--c-blue-500);
+  --info-bg: var(--c-blue-50);
+
+  /* 按钮语义 */
+  --button-primary-bg: linear-gradient(135deg, #3b82f6 0%, #2563eb 56%, #1d4ed8 100%);
+  --button-primary-bg-hover: linear-gradient(135deg, #60a5fa 0%, #2563eb 50%, #1e40af 100%);
+  --button-primary-bg-active: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+  --button-primary-border: #2563eb;
+  --button-primary-border-hover: #1d4ed8;
+  --button-primary-shadow: 0 10px 22px rgba(37, 99, 235, 0.24);
+  --button-primary-shadow-hover: 0 14px 30px rgba(37, 99, 235, 0.3);
+  --button-primary-text: var(--text-on-brand);
+  --button-secondary-bg: var(--bg-card);
+  --button-secondary-bg-hover: var(--bg-hover);
+  --button-secondary-border: var(--border-default);
+  --button-secondary-border-hover: var(--border-strong);
+  --button-secondary-text: var(--text-primary);
+  --button-ghost-text: var(--brand);
+  --button-ghost-bg-hover: var(--brand-bg-hover);
+  --button-ghost-bg-active: var(--brand-bg-active);
+  --button-danger-bg: linear-gradient(135deg, #ef4444 0%, #f97316 100%);
+  --button-danger-bg-hover: linear-gradient(135deg, #dc2626 0%, #ea580c 100%);
+  --button-danger-bg-active: linear-gradient(135deg, #b91c1c 0%, #c2410c 100%);
+  --button-danger-soft-bg: var(--error-bg);
+  --button-danger-soft-bg-hover: color-mix(in srgb, var(--error-bg) 76%, var(--bg-card));
+  --button-danger-border: #ef4444;
+  --button-danger-border-hover: #dc2626;
+  --button-danger-text: #ffffff;
+  --button-danger-soft-text: var(--error-text);
+  --button-danger-shadow: 0 12px 26px rgba(239, 68, 68, 0.18), 0 10px 22px rgba(249, 115, 22, 0.14);
+  --button-danger-shadow-hover: 0 16px 34px rgba(239, 68, 68, 0.24), 0 12px 26px rgba(249, 115, 22, 0.2);
+  --button-disabled-bg: var(--bg-disabled);
+  --button-disabled-border: var(--border-default);
+  --button-disabled-text: var(--text-disabled);
+
+  /* Playground 按钮 — 亮色：黑底白字 */
+  --playground-bg: #1a1a1a;
+  --playground-border: #2a2a2a;
+  --playground-color: #ffffff;
+  --playground-hover-bg: #333;
+  --playground-hover-border: #555;
+
+  /* 页面标题统一字号 */
+  --page-title-size: 24px;
+
+  /* 任务状态语义 */
+  --task-running: #3b82f6;
+  --task-running-bg: #eff6ff;
+  --task-running-border: #93c5fd;
+  --task-running-text: #1d4ed8;
+  --task-success: var(--success);
+  --task-success-bg: var(--success-bg);
+  --task-success-border: var(--success-border);
+  --task-success-text: var(--success);
+  --task-queued: #f59e0b;
+  --task-queued-bg: #fff7ed;
+  --task-queued-border: #fdba74;
+  --task-queued-text: #b45309;
+  --task-failed: var(--error);
+  --task-failed-bg: var(--error-bg);
+  --task-failed-border: var(--error-border);
+  --task-failed-text: var(--error-text);
+  --task-muted: var(--text-tertiary);
+  --task-muted-bg: var(--bg-alt);
+  --task-muted-border: var(--border-default);
+  --task-muted-text: var(--text-secondary);
+
+  --border-danger: var(--error-border);
+
+  /* 输入区状态机 token */
+  --input-border-empty: var(--border-default);
+  --input-border-high: var(--success);
+  --input-bg-high: var(--success-bg);
+  --input-border-confirm: var(--warning);
+  --input-bg-confirm: var(--warning-bg);
+  --input-border-mid: var(--info);
+  --input-bg-mid: color-mix(in srgb, var(--info) 12%, var(--bg-card));
+  --input-corner-high-bg: var(--success);
+  --input-corner-high-text: #ffffff;
+  --input-corner-confirm-bg: var(--warning);
+  --input-corner-confirm-text: #ffffff;
+  --input-corner-mid-bg: var(--info);
+  --input-corner-mid-text: #ffffff;
+
+  /* 执行日志面板 */
+  --log-bg: #1e293b;
+  --log-text: #e2e8f0;
+  --log-meta: #94a3b8;
+  --log-highlight: #fcd34d;
+  --log-font: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+
+  /* 进度填充 */
+  --progress-fill: linear-gradient(90deg, #f97316 0%, #ea580c 100%);
+  --progress-track: var(--bg-alt);
+
+  /* 模块色（来源标签，只允许小面积使用） */
+  --module-microcode: #2563eb;
+  --module-microcode-bg: #dbeafe;
+  --module-microcode-border: #93c5fd;
+  --module-microcode-text: #1e3a8a;
+
+  --module-vue3: #42b883;
+  --module-vue3-bg: #ecfdf5;
+  --module-vue3-border: #86efac;
+  --module-vue3-text: #35495e;
+
+  --module-playground: #111827;
+  --module-playground-bg: #f8fafc;
+  --module-playground-border: #cbd5e1;
+  --module-playground-text: #111827;
+  --module-playground-contrast: #ffffff;
+
+  --module-apifox: #ff4d6d;
+  --module-apifox-bg: #fff1f2;
+  --module-apifox-border: #fda4af;
+  --module-apifox-text: #9f1239;
+
+  --module-git: #475569;
+  --module-git-bg: #f1f5f9;
+  --module-git-border: #cbd5e1;
+  --module-git-text: #334155;
+
+  /* 能力层级色（Lite/Max，不参与状态判断） */
+  --tier-lite: #38bdf8;
+  --tier-lite-bg: #f0f9ff;
+  --tier-lite-border: #bae6fd;
+  --tier-lite-text: #0B3A2A;
+  --tier-lite-grad: linear-gradient(120deg, #e0f2e7 0%, #AEEAC9 48%, #7FE2D8 100%);
+
+  --tier-max: #6d28d9;
+  --tier-max-bg: #f3e8ff;
+  --tier-max-border: #c4b5fd;
+  --tier-max-text: #FFFFFF;
+  --tier-max-grad: linear-gradient(135deg, #905cec 0%, #6D28D9 48%, #4C1D95 100%);
+
+  /* 阴影 */
+  --shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 8px 16px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 16px 34px rgba(15, 23, 42, 0.12);
+  --shadow-xl: 0 24px 48px rgba(15, 23, 42, 0.16);
+  --shadow-focus: 0 0 0 2px rgba(37, 99, 235, 0.1);
+  --shadow-dropdown: 0 10px 40px rgba(0, 0, 0, 0.1);
+
+  /* 滚动条 — 小巧圆角风格 */
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: var(--c-gray-300);
+  --scrollbar-thumb-hover: var(--c-gray-500);
+  --scrollbar-size: 6px;
+
+  /* 圆角：统一 5 档，禁止再写硬编码值。
+     压缩策略（2026-08-04 UX 美学收敛）：原 4/6/8/12/16 → 2/4/6/10/14。
+     原则「越大越圆、越小越方」，让圆角本身承载层级，去除 AI 工具箱气泡感。 */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+  --radius-dot: 999px;
+  --radius-full: 999px;
+
+  /* 表单控件统一高度：antd 默认 controlHeight=32px，本项目 input 靠 padding(10+10)+行高(22)+边框(2)
+     撑到 44px，两者并排会差 12px。以该变量为唯一事实源，input / affix-wrapper / select 全部对齐。 */
+  --mg-control-height: 44px;
+
+  /* 过渡 */
+  --transition-fast: 0.15s ease;
+  --transition-base: 0.2s ease;
+  --transition-slow: 0.25s ease;
+
+  /* 交互 */
+  --hover-transform: translateY(-4px);
+
+  /* CTA 主色 + V3 上下文交互强调（2026-08-05 治理：原散落在 components.vue 的硬编码） */
+  --brand-cta: #237a57;          /* 生成按钮 / 主操作 CTA */
+  --brand-cta-hover: #1d684a;    /* CTA hover */
+  --brand-vue3-focus: #42b883;   /* V3 上下文交互强调：focus 描边 / hover 边框 */
+}
+
+/* ========================================
+   Layer 2: Semantic Tokens — 深色主题覆盖
+   ======================================== */
+[data-theme="dark"] {
+  /* 品牌/主色 — 深色模式下提亮以保持对比度 */
+  --brand: var(--c-blue-500);
+  --brand-hover: var(--c-blue-400);
+  --brand-active: var(--c-blue-300);
+  --brand-light: var(--c-blue-400);
+  --brand-bg: rgba(59, 130, 246, 0.12);
+  --brand-bg-hover: rgba(59, 130, 246, 0.18);
+  --brand-bg-active: rgba(59, 130, 246, 0.24);
+  --brand-border: rgba(59, 130, 246, 0.3);
+  --brand-text: var(--c-blue-400);
+
+  /* 功能色 */
+  --feature: var(--c-purple-400);
+  --feature-bg: rgba(168, 85, 247, 0.12);
+
+  /* 按钮语义 */
+  --button-primary-bg: linear-gradient(135deg, #60a5fa 0%, #3b82f6 54%, #2563eb 100%);
+  --button-primary-bg-hover: linear-gradient(135deg, #93c5fd 0%, #60a5fa 48%, #3b82f6 100%);
+  --button-primary-bg-active: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  --button-primary-border: #3b82f6;
+  --button-primary-border-hover: #60a5fa;
+  --button-primary-shadow: 0 12px 28px rgba(59, 130, 246, 0.2);
+  --button-primary-shadow-hover: 0 16px 36px rgba(96, 165, 250, 0.26);
+  --button-primary-text: var(--text-on-brand);
+  --button-secondary-bg: var(--bg-card);
+  --button-secondary-bg-hover: var(--bg-hover);
+  --button-secondary-border: var(--border-default);
+  --button-secondary-border-hover: var(--border-strong);
+  --button-secondary-text: var(--text-primary);
+  --button-ghost-text: var(--brand);
+  --button-ghost-bg-hover: var(--brand-bg-hover);
+  --button-ghost-bg-active: var(--brand-bg-active);
+  --button-danger-bg: linear-gradient(135deg, #f87171 0%, #fb923c 100%);
+  --button-danger-bg-hover: linear-gradient(135deg, #ef4444 0%, #f97316 100%);
+  --button-danger-bg-active: linear-gradient(135deg, #dc2626 0%, #ea580c 100%);
+  --button-danger-soft-bg: var(--error-bg);
+  --button-danger-soft-bg-hover: color-mix(in srgb, var(--error-bg) 76%, var(--bg-card));
+  --button-danger-border: #ef4444;
+  --button-danger-border-hover: #fb923c;
+  --button-danger-text: #ffffff;
+  --button-danger-soft-text: var(--error-text);
+  --button-danger-shadow: 0 12px 30px rgba(248, 113, 113, 0.16), 0 10px 24px rgba(251, 146, 60, 0.12);
+  --button-danger-shadow-hover: 0 16px 38px rgba(248, 113, 113, 0.22), 0 12px 28px rgba(251, 146, 60, 0.18);
+  --button-disabled-bg: var(--bg-disabled);
+  --button-disabled-border: var(--border-default);
+  --button-disabled-text: var(--text-disabled);
+
+  /* Playground 按钮 — 深色：白底黑字 */
+  --playground-bg: #f0f0f0;
+  --playground-border: #d0d0d0;
+  --playground-color: #1a1a1a;
+  --playground-hover-bg: #e0e0e0;
+  --playground-hover-border: #bbb;
+
+  /* 任务状态语义 */
+  --task-running: #3B82F6;
+  --task-running-bg: #172554;
+  --task-running-border: #2563EB;
+  --task-running-text: #93C5FD;
+  --task-success: var(--success);
+  --task-success-bg: var(--success-bg);
+  --task-success-border: var(--success-border);
+  --task-success-text: var(--success);
+  --task-queued: #FBBF24;
+  --task-queued-bg: #451A03;
+  --task-queued-border: #B45309;
+  --task-queued-text: #FEF3C7;
+  --task-failed: var(--error);
+  --task-failed-bg: var(--error-bg);
+  --task-failed-border: var(--error-border);
+  --task-failed-text: var(--error-text);
+  --task-muted: var(--text-tertiary);
+  --task-muted-bg: var(--bg-alt);
+  --task-muted-border: var(--border-default);
+  --task-muted-text: var(--text-secondary);
+
+  --border-danger: var(--error-border);
+
+  /* 输入区状态机 token（深色） */
+  --input-border-empty: var(--border-default);
+  --input-border-high: var(--success);
+  --input-bg-high: var(--success-bg);
+  --input-border-confirm: var(--warning);
+  --input-bg-confirm: var(--warning-bg);
+  --input-border-mid: var(--info);
+  --input-bg-mid: color-mix(in srgb, var(--info) 14%, var(--bg-card));
+  --input-corner-high-bg: var(--success);
+  --input-corner-high-text: #06281b;
+  --input-corner-confirm-bg: var(--warning);
+  --input-corner-confirm-text: #2a1700;
+  --input-corner-mid-bg: var(--info);
+  --input-corner-mid-text: #04162e;
+  --log-bg: #0f172a;
+  --log-text: #cbd5e1;
+  --log-meta: #64748b;
+  --log-highlight: #fcd34d;
+  --log-font: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+  --progress-fill: linear-gradient(90deg, #fb923c 0%, #f97316 100%);
+  --progress-track: var(--bg-alt);
+
+  /* 模块色（深色下提亮，仍只小面积使用） */
+  --module-microcode: #60a5fa;
+  --module-microcode-bg: #172554;
+  --module-microcode-border: #2563eb;
+  --module-microcode-text: #dbeafe;
+
+  --module-vue3: #86efac;
+  --module-vue3-bg: #052e16;
+  --module-vue3-border: #42b883;
+  --module-vue3-text: #d1fae5;
+
+  --module-playground: #ffffff;
+  --module-playground-bg: #020617;
+  --module-playground-border: #475569;
+  --module-playground-text: #f8fafc;
+  --module-playground-contrast: #0f172a;
+
+  --module-apifox: #fb7185;
+  --module-apifox-bg: #4c0519;
+  --module-apifox-border: #e11d48;
+  --module-apifox-text: #ffe4e6;
+
+  --module-git: #cbd5e1;
+  --module-git-bg: #1e293b;
+  --module-git-border: #64748b;
+  --module-git-text: #e2e8f0;
+
+  /* 能力层级色（深色下文字随胶囊配色，渐变沿用浅色定义） */
+  --tier-lite: #7dd3fc;
+  --tier-lite-bg: #082f49;
+  --tier-lite-border: #0284c7;
+  --tier-lite-text: #0B3A2A;
+
+  --tier-max: #c4b5fd;
+  --tier-max-bg: #2e1065;
+  --tier-max-border: #7c3aed;
+  --tier-max-text: #FFFFFF;
+
+  /* 组件类型色：深色主题下提亮，但仍避开品牌蓝 */
+  --component-vue3: #4ade80;
+  --component-vue3-strong: #86efac;
+  --component-vue3-bg: rgba(74, 222, 128, 0.16);
+  --component-vue3-border: rgba(74, 222, 128, 0.32);
+  --component-vue3-soft: rgba(74, 222, 128, 0.18);
+  --component-vue3-contrast: #052e24;
+
+  --component-microcode: #60a5fa;
+  --component-microcode-strong: #93c5fd;
+  --component-microcode-bg: rgba(96, 165, 250, 0.14);
+  --component-microcode-border: rgba(96, 165, 250, 0.3);
+  --component-microcode-soft: rgba(96, 165, 250, 0.16);
+  --component-microcode-contrast: #082f49;
+
+  /* 浅色阶覆盖 — 深色模式下使用深色透明色替代浅色 */
+  --c-blue-50: rgba(59, 130, 246, 0.08);
+  --c-blue-100: rgba(59, 130, 246, 0.15);
+  --c-blue-200: rgba(59, 130, 246, 0.25);
+  --c-blue-300: var(--c-blue-400);
+
+  --c-green-50: rgba(34, 197, 94, 0.08);
+  --c-green-100: rgba(34, 197, 94, 0.15);
+  --c-green-200: rgba(34, 197, 94, 0.25);
+
+  --c-orange-50: rgba(249, 115, 22, 0.08);
+  --c-orange-100: rgba(249, 115, 22, 0.15);
+  --c-orange-200: rgba(249, 115, 22, 0.25);
+
+  --c-red-50: rgba(239, 68, 68, 0.08);
+  --c-red-100: rgba(239, 68, 68, 0.15);
+  --c-red-200: rgba(239, 68, 68, 0.25);
+
+  --c-purple-50: rgba(168, 85, 247, 0.08);
+  --c-purple-100: rgba(168, 85, 247, 0.15);
+  --c-purple-200: rgba(168, 85, 247, 0.25);
+  --c-purple-300: var(--c-purple-400);
+
+  --c-yellow-50: rgba(234, 179, 8, 0.08);
+  --c-yellow-100: rgba(234, 179, 8, 0.15);
+
+  --c-teal-100: rgba(45, 212, 191, 0.15);
+  --c-teal-200: rgba(45, 212, 191, 0.25);
+
+  --c-cyan-50: rgba(6, 182, 212, 0.08);
+  --c-cyan-100: rgba(6, 182, 212, 0.15);
+
+  /* 背景色 */
+  --bg-page: #0b1120;
+  --bg-card: #1a2332;
+  --bg-elevated: #283548;
+  --bg-floating: #283548;
+  --bg-sidebar: #111827;
+  --bg-header: #111827;
+  --bg-header-scrolled: rgba(17, 24, 39, 0.92);
+  --bg-footer: #0b1120;
+  --bg-alt: #131c2e;
+  --bg-hover: #243244;
+  --bg-active: rgba(59, 130, 246, 0.12);
+  --bg-input: #1a2332;
+  --bg-disabled: #1e293b;
+  --bg-overlay: rgba(0, 0, 0, 0.6);
+  --codetype-toggle-track: #131c2e;
+  --tier-toggle-track: #131c2e;
+
+  /* 文字色 */
+  --text-primary: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-tertiary: #64748b;
+  --text-quaternary: #6b7a94;
+  --text-disabled: #6b7a94;
+  --text-inverse: #0f172a;
+  --text-brand: var(--c-blue-400);
+  --text-on-brand: #ffffff;
+  --text-on-footer: rgba(255, 255, 255, 0.6);
+
+  /* 边框色 */
+  --border-default: #2d3a4f;
+  --border-light: #334155;
+  --border-strong: #3b4a63;
+  --border-focus: var(--c-blue-400);
+  --border-brand: var(--c-blue-500);
+
+  /* 状态色 */
+  --success: var(--c-green-400);
+  --success-light: var(--c-green-500);
+  --success-bg: rgba(34, 197, 94, 0.12);
+  --success-border: rgba(34, 197, 94, 0.3);
+  --success-text: var(--c-green-400);
+
+  --warning: var(--c-orange-400);
+  --warning-light: var(--c-orange-500);
+  --warning-bg: rgba(249, 115, 22, 0.12);
+  --warning-border: rgba(249, 115, 22, 0.3);
+  --warning-text: var(--c-orange-300);
+
+  --error: var(--c-red-400);
+  --error-light: var(--c-red-500);
+  --error-bg: rgba(239, 68, 68, 0.12);
+  --error-border: rgba(239, 68, 68, 0.3);
+  --error-text: var(--c-red-400);
+
+  --info: var(--c-blue-400);
+  --info-bg: rgba(59, 130, 246, 0.12);
+
+  /* 阴影 — 深色模式减弱 */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 8px 16px rgba(0, 0, 0, 0.25);
+  --shadow-lg: 0 16px 34px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 24px 48px rgba(0, 0, 0, 0.35);
+  --shadow-focus: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  --shadow-dropdown: 0 10px 40px rgba(0, 0, 0, 0.4);
+
+  /* 滚动条 */
+  --scrollbar-track: #1a2332;
+  --scrollbar-thumb: #3b4a63;
+  --scrollbar-thumb-hover: #475569;
+}

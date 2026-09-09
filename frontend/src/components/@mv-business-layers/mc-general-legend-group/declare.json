@@ -1,0 +1,16 @@
+{
+  "componentId": "mc-general-legend-group",
+  "componentName": "通用图例组",
+  "version": "v1",
+  "versionCode": 1,
+  "attribute": {
+    "aspectRatio": [4, 9],
+    "title": "通用图例组",
+    "description": "通用图例组",
+    "imgUrl": null
+  },
+  "businessEvents": {},
+  "businessStatuses": {},
+  "dataSources": null,
+  "formsource": null
+}

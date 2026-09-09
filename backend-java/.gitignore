@@ -1,0 +1,33 @@
+# ==== 构建产物 ====
+target/
+*.class
+*.jar
+*.war
+
+# ==== Maven Wrapper ====
+.mvn/wrapper/maven-wrapper.jar
+
+# ==== 安全：密钥/敏感配置 ====
+.env
+.env.*
+!.env.example
+application-local.yml
+application-local.properties
+
+# ==== OS / 编辑器 / AI 工具 ====
+.DS_Store
+.idea/
+.vscode/
+.trae/
+.lingma/
+.claude/
+.opencode/
+.workbuddy/
+.codex/
+.gemini/
+.qwen/
+.codebuddy/
+
+# ==== 日志 ====
+*.log
+logs/

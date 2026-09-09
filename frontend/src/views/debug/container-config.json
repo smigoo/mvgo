@@ -1,0 +1,236 @@
+{
+  "id": "fd6296606f46900533bc77e524d14de4",
+  "customerClassName": "示例工程组件配置数据源",
+  "theme": "dark",
+  "runtimeParameters": "",
+  "layout": {
+    "id": "fd6296606f46900533bc77e524d14de4",
+    "customerClassName": "",
+    "customerStyle": {},
+    "interval": 0,
+    "layoutType": 0,
+    "pageConfig": null,
+    "compose": [
+      {
+        "size": {
+          "width": "auto",
+          "height": "max"
+        },
+        "adaptiveDirection": "cell",
+        "ratio": ["650", "1020"],
+        "grid": 12,
+        "width": "auto",
+        "height": "max",
+        "interval": 10,
+        "layoutType": "layout",
+        "componetIdSerialNumber": "",
+        "eventsIdSerialNumber": "",
+        "framePosition": "left",
+        "id": "3a5657cfa39406f64406311462430f8d",
+        "zIndex": 1,
+        "containerId": "fd6296606f46900533bc77e524d14de4",
+        "customerClassName": "",
+        "customerStyle": {},
+        "position": {
+          "top": "0",
+          "bottom": "",
+          "left": "0",
+          "right": ""
+        },
+        "layoutDirection": "cell",
+        "parentId": "fd6296606f46900533bc77e524d14de4",
+        "compose": [
+          {
+            "panelType": "",
+            "layoutType": "",
+            "themeType": "",
+            "unitDataVars": {},
+            "cssVars": {},
+            "unit": "px",
+            "span": "4",
+            "type": "component",
+            "styles": "{}",
+            "containerId": "fd6296606f46900533bc77e524d14de4",
+            "layoutId": "3a5657cfa39406f64406311462430f8d",
+            "componentId": "ai-square-org-statistic",
+            "componentSerialNumber": "1b3478",
+            "grid": 4,
+            "parentId": "3a5657cfa39406f64406311462430f8d",
+            "elementType": 2,
+            "size": {},
+            "compose": [],
+            "id": "c90502ca00e59b95b2daf53d71d36d14"
+          }
+        ],
+        "elementType": 1
+      },
+      {
+        "size": {
+          "width": "auto",
+          "height": "max"
+        },
+        "grid": 12,
+        "width": "auto",
+        "interval": 10,
+        "adaptiveDirection": "cell",
+        "ratio": [0, 0],
+        "height": "max",
+        "layoutType": "layout",
+        "componetIdSerialNumber": "",
+        "eventsIdSerialNumber": "",
+        "framePosition": "''",
+        "id": "07968b664395ada57499e8b42ac26081",
+        "zIndex": 2,
+        "containerId": "fd6296606f46900533bc77e524d14de4",
+        "customerClassName": "",
+        "customerStyle": {},
+        "position": {
+          "top": "0",
+          "bottom": "0",
+          "left": "#3a5657cfa39406f64406311462430f8d",
+          "right": "0"
+        },
+        "layoutDirection": "cell",
+        "parentId": "fd6296606f46900533bc77e524d14de4",
+        "compose": [
+          {
+            "panelType": "",
+            "layoutType": "",
+            "themeType": "",
+            "unitDataVars": {},
+            "cssVars": {},
+            "unit": "px",
+            "span": 8,
+            "type": "dynamic-component",
+            "styles": "{}",
+            "containerId": "fd6296606f46900533bc77e524d14de4",
+            "layoutId": "07968b664395ada57499e8b42ac26081",
+            "componentId": "average-speed-graph",
+            "componentSerialNumber": "a60439",
+            "grid": 8,
+            "parentId": "07968b664395ada57499e8b42ac26081",
+            "elementType": 2,
+            "size": { "width": 800, "height": 800 },
+            "compose": [],
+            "id": "9b86d45a36ba1da0020727789f25a756"
+          }
+        ],
+        "elementType": 1
+      },
+      {
+        "size": {
+          "width": "auto",
+          "height": "max"
+        },
+        "adaptiveDirection": "cell",
+        "ratio": [0, 0],
+        "grid": 3,
+        "width": "auto",
+        "height": "max",
+        "componetIdSerialNumber": "",
+        "defualtShow": false,
+        "interval": 0,
+        "layoutzIndex": "1",
+        "layoutType": "layout",
+        "eventsIdSerialNumber": "",
+        "id": "9af44f76bae9f400d0bb6707e81a0792",
+        "zIndex": 3,
+        "containerId": "fd6296606f46900533bc77e524d14de4",
+        "customerClassName": "",
+        "customerStyle": {},
+        "position": {
+          "top": "0",
+          "bottom": "0",
+          "left": "0",
+          "right": "0"
+        },
+        "layoutDirection": "cell",
+        "parentId": "fd6296606f46900533bc77e524d14de4",
+        "compose": [
+          {
+            "span": "3",
+            "type": "component",
+            "styles": "{}",
+            "area": "320000",
+            "center": "118.68661457, 32.65596873",
+            "id": "93e53cea1c80ce0c2fc578d9cec7bc4a",
+            "grid": 3,
+            "parentId": "9af44f76bae9f400d0bb6707e81a0792",
+            "componentId": "microcode-map",
+            "componentSerialNumber": "ada47a",
+            "layoutId": "9af44f76bae9f400d0bb6707e81a0792",
+            "containerId": "fd6296606f46900533bc77e524d14de4",
+            "compose": [],
+            "elementType": 3
+          }
+        ],
+        "elementType": 1
+      },
+      {
+        "size": {
+          "width": "auto",
+          "height": "auto"
+        },
+        "adaptiveDirection": "cell",
+        "ratio": ["80", "90"],
+        "grid": 3,
+        "width": "auto",
+        "height": "auto",
+        "componetIdSerialNumber": "",
+        "defualtShow": false,
+        "interval": 10,
+        "layoutzIndex": "",
+        "layoutType": "layout",
+        "eventsIdSerialNumber": "",
+        "id": "ca5d2b194204d1a8dc5591a2b2511e5c",
+        "zIndex": 4,
+        "containerId": "fd6296606f46900533bc77e524d14de4",
+        "customerClassName": "",
+        "customerStyle": {},
+        "position": {
+          "top": "0",
+          "bottom": "",
+          "left": "#3a5657cfa39406f64406311462430f8d",
+          "right": "0"
+        },
+        "layoutDirection": "cell",
+        "parentId": "fd6296606f46900533bc77e524d14de4",
+        "compose": [
+          {
+            "span": "3",
+            "type": "component",
+            "styles": "{}",
+            "containerId": "fd6296606f46900533bc77e524d14de4",
+            "layoutId": "ca5d2b194204d1a8dc5591a2b2511e5c",
+            "componentId": "mc-layer",
+            "componentSerialNumber": "cf170d",
+            "grid": 3,
+            "parentId": "ca5d2b194204d1a8dc5591a2b2511e5c",
+            "elementType": 2,
+            "size": {},
+            "compose": [],
+            "id": "76ea21bc0b580d5e4277b9b5e46f9872"
+          }
+        ],
+        "elementType": 1
+      }
+    ]
+  },
+  "interactiveRouting": [
+    {
+      "routeName": "route-7ec7b77d9b9406a5250907bd0913234c",
+      "occurrenceTime": "2025-07-02T09:58:18.063",
+      "sourceComponentId": "microcode-map",
+      "sourceComponentSerialNumber": "ada47a",
+      "eventTypeId": "layer-play-camera",
+      "targetComponentSerialNumber": "a60439",
+      "targetComponentId": "average-speed-graph",
+      "targetComponentStatus": "get-cameraId",
+      "dataStructureConvert": {
+        "configId": "functiondemoa7ec7b77d9b9406a5250907bd0913234c",
+        "configTyp": 1,
+        "functions": "(data)=>{return{cameraId:data.cameraId}}"
+      }
+    }
+  ]
+}

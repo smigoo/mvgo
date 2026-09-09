@@ -1,0 +1,2 @@
+id,target,groupId,similarity,pass,gateStatus,gateIssues,compareIssueCount,topIssues,renderedImage,designImage,error
+mc-lite-1785908673018-10ed6f96,microcode,default-group,,,PASS,,0,,/Users/smigoo/工作/mvgo/backend-node/scripts/eval-reports/shots/mc-lite-1785908673018-10ed6f96.png,/Users/smigoo/工作/mvgo/frontend/workspace/custom-components/mc-lite-1785908673018-10ed6f96/resources/images/source-screenshot.png,

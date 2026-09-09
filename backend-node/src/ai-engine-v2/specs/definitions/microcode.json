@@ -1,0 +1,78 @@
+{
+  "id": "microcode",
+  "label": "微码组件",
+  "version": "1.0.0",
+  "description": "微码平台组件：declare.json 声明 + 面板插槽 + 业务事件路由",
+  "artifacts": {
+    "entryFile": "package/index.vue",
+    "extraFiles": ["declare.json"],
+    "styleExt": "less",
+    "scriptLang": "js",
+    "hasReadme": false,
+    "hasIndexExport": false,
+    "resourceDir": "resources/images"
+  },
+  "naming": {
+    "componentDir": "kebab-case",
+    "componentFile": "index.vue",
+    "subComponent": "PascalCase",
+    "variable": "camelCase",
+    "idPrefix": "c-"
+  },
+  "binding": {
+    "mode": "declare-config",
+    "hasDeclareJson": true,
+    "reactiveApi": "none",
+    "dataSlotMustReactive": false
+  },
+  "events": {
+    "emitStyle": "business-event",
+    "usePlatformRouter": true,
+    "allowsDirectControl": false
+  },
+  "panel": {
+    "hasPanelKey": true,
+    "stripOuterShell": true,
+    "selfRenderShell": false,
+    "acceptedPanelKeys": ["default-panel", "model-panels", "empty"]
+  },
+  "style": {
+    "ext": "less",
+    "scoped": false,
+    "useCssVariables": true,
+    "importLocalImageForbidden": true,
+    "imageStrategy": "base64"
+  },
+  "promptInjection": {
+    "code-engineer": [
+      "references/constraints/ai-generation-constraints.md",
+      "references/patterns/code-patterns.md",
+      "references/specs/declare-json.md",
+      "references/specs/style-guide.md",
+      "references/specs/event-interaction-standard.md",
+      "references/standards/vue-style-standard.md",
+      "references/standards/less-naming-convention.md"
+    ],
+    "adversarial-checker": [
+      "references/constraints/ai-generation-constraints.md",
+      "references/patterns/code-patterns.md",
+      "references/specs/declare-json.md",
+      "references/specs/style-guide.md",
+      "references/specs/event-interaction-standard.md",
+      "references/rules/adversarial-l4-style-compliance.md"
+    ],
+    "style-mapper": [
+      "references/specs/style-guide.md",
+      "references/patterns/css-variable-pattern.md"
+    ],
+    "style-refiner": [
+      "references/specs/style-guide.md",
+      "references/standards/less-naming-convention.md"
+    ],
+    "layout-refiner": [
+      "references/specs/style-guide.md"
+    ]
+  },
+  "validatorRuleSet": "microcode",
+  "engineerClass": "MicrocodeEngineer"
+}

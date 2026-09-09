@@ -1,0 +1,16 @@
+{
+  "componentId": "mc-general-legend",
+  "componentName": "通用图例",
+  "version": "v1",
+  "versionCode": 1,
+  "attribute": {
+    "aspectRatio": [4, 9],
+    "title": "通用图例",
+    "description": "通用图例",
+    "imgUrl": null
+  },
+  "businessEvents": {},
+  "businessStatuses": {},
+  "dataSources": null,
+  "formsource": null
+}

@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>API 接口生成 · 原型 v2</title>
+<style>
+/* ============================================================
+   设计 Token —— 直接对齐 frontend/src/assets/styles/themes/tokens.css
+   （Layer1 原始色板 + Layer2 语义令牌，浅色默认 / 深色覆盖）
+   ============================================================ */
+:root{
+  --c-blue-50:#eff6ff; --c-blue-100:#dbeafe; --c-blue-500:#3b82f6; --c-blue-600:#2563eb; --c-blue-700:#1d4ed8; --c-blue-800:#1e40af;
+  --c-gray-50:#f8fafc; --c-gray-100:#f1f5f9; --c-gray-200:#e2e8f0; --c-gray-300:#cbd5e1; --c-gray-400:#94a3b8; --c-gray-500:#64748b; --c-gray-600:#475569; --c-gray-800:#1e293b; --c-gray-900:#0f172a;
+  --c-green-50:#f0fdf4; --c-green-200:#bbf7d0; --c-green-600:#16a34a; --c-green-700:#15803d;
+  --c-red-50:#fef2f2; --c-red-200:#fecaca; --c-red-500:#ef4444; --c-red-600:#dc2626;
+  --c-orange-50:#fff7ed; --c-orange-200:#fed7aa; --c-orange-600:#ea580c;
+
+  --brand:var(--c-blue-600); --brand-hover:var(--c-blue-700); --brand-bg:var(--c-blue-50); --brand-bg-active:rgba(37,99,235,.12); --brand-border:rgba(37,99,235,.2); --brand-text:var(--c-blue-600);
+
+  --bg-page:#f0f4fa; --bg-card:#fff; --bg-alt:var(--c-gray-100); --bg-hover:var(--c-gray-50); --bg-disabled:var(--c-gray-100);
+  --text-primary:var(--c-gray-900); --text-secondary:var(--c-gray-600); --text-tertiary:var(--c-gray-500); --text-quaternary:#6b7280;
+  --border-default:var(--c-gray-200); --border-light:#e5e5e5; --border-strong:var(--c-gray-300);
+
+  --success:var(--c-green-700); --success-bg:var(--c-green-50); --success-border:var(--c-green-200); --success-text:var(--c-green-700);
+  --warning:var(--c-orange-600); --warning-bg:var(--c-orange-50); --warning-border:var(--c-orange-200); --warning-text:#8c6900;
+  --error:var(--c-red-500); --error-bg:var(--c-red-50); --error-border:var(--c-red-200); --error-text:var(--c-red-600);
+
+  --shadow-sm:0 2px 8px rgba(15,23,42,.06); --shadow-md:0 8px 16px rgba(15,23,42,.08); --shadow-focus:0 0 0 2px rgba(37,99,235,.12);
+  --radius-xs:2px; --radius-sm:4px; --radius-md:6px; --radius-lg:10px; --radius-xl:14px; --radius-full:999px;
+  --transition-fast:.15s ease; --transition-base:.2s ease;
+}
+[data-theme="dark"]{
+  --c-gray-50:#131c2e; --c-blue-50:rgba(59,130,246,.08); --c-green-50:rgba(34,197,94,.12); --c-orange-50:rgba(249,115,22,.12); --c-red-50:rgba(239,68,68,.12);
+  --brand:var(--c-blue-500); --brand-bg:rgba(59,130,246,.12); --brand-bg-active:rgba(59,130,246,.24); --brand-border:rgba(59,130,246,.3); --brand-text:var(--c-blue-500);
+  --bg-page:#0b1120; --bg-card:#1a2332; --bg-alt:#131c2e; --bg-hover:#243244; --bg-disabled:#1e293b;
+  --text-primary:#e2e8f0; --text-secondary:#94a3b8; --text-tertiary:#64748b; --text-quaternary:#6b7a94;
+  --border-default:#2d3a4f; --border-light:#334155; --border-strong:#3b4a63;
+  --success:var(--c-green-200); --success-bg:rgba(34,197,94,.12); --success-border:rgba(34,197,94,.3); --success-text:var(--c-green-200);
+  --warning:var(--c-orange-200); --warning-bg:rgba(249,115,22,.12); --warning-border:rgba(249,115,22,.3); --warning-text:var(--c-orange-200);
+  --error:var(--c-red-200); --error-bg:rgba(239,68,68,.12); --error-border:rgba(239,68,68,.3); --error-text:var(--c-red-200);
+  --shadow-sm:0 2px 8px rgba(0,0,0,.2); --shadow-md:0 8px 16px rgba(0,0,0,.25); --shadow-focus:0 0 0 2px rgba(59,130,246,.2);
+}
+
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Roboto,Helvetica,Arial,sans-serif;
+  background:var(--bg-page); color:var(--text-primary);
+  display:flex; align-items:center; justify-content:center; padding:24px;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* 模拟浏览器外壳，仅用于给原型一个上下文 */
+.frame{
+  width:min(1240px,100%); height:min(760px,92vh);
+  background:var(--bg-card); border:1px solid var(--border-light);
+  border-radius:var(--radius-xl); overflow:hidden;
+  display:flex; flex-direction:column;
+  box-shadow:var(--shadow-md);
+}
+.frame-bar{
+  height:44px; flex:none; display:flex; align-items:center; gap:10px;
+  padding:0 14px; border-bottom:1px solid var(--border-light);
+  background:color-mix(in srgb,var(--bg-card) 92%,var(--bg-hover) 8%);
+}
+.frame-dots{display:flex; gap:6px}
+.frame-dots i{width:11px;height:11px;border-radius:50%;display:block}
+.frame-dots i:nth-child(1){background:#ff5f57}.frame-dots i:nth-child(2){background:#febc2e}.frame-dots i:nth-child(3){background:#28c840}
+.frame-url{
+  flex:1; height:26px; border-radius:var(--radius-full); background:var(--bg-hover);
+  display:flex; align-items:center; padding:0 12px; font-size:12px; color:var(--text-tertiary);
+}
+.frame-theme{
+  width:30px;height:30px;border-radius:var(--radius-md);border:1px solid var(--border-light);
+  background:var(--bg-card); color:var(--text-secondary); cursor:pointer; display:flex; align-items:center; justify-content:center;
+  transition:var(--transition-fast);
+}
+.frame-theme:hover{background:var(--bg-hover);color:var(--text-primary)}
+
+/* ===== 页面主体 ===== */
+.generate-api-view{display:flex;flex-direction:column;flex:1;min-height:0;color:var(--text-primary)}
+.workbench{display:flex;flex:1;min-height:0;overflow:hidden}
+.main-col{flex:1;min-width:0;display:flex;flex-direction:column;gap:20px;padding:28px 34px 32px;overflow-y:auto}
+.page-title{font-size:24px;font-weight:700;letter-spacing:-.02em;margin:0}
+.page-sub{font-size:14px;color:var(--text-secondary);margin:0;line-height:1.6}
+
+/* 配置条 */
+.config-bar{
+  display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 14px;
+  background:var(--bg-card);border:1px solid var(--border-light);border-radius:var(--radius-md);
+}
+.config-bar.connected{border-color:color-mix(in srgb,var(--success) 20%,var(--border-light));background:color-mix(in srgb,var(--success-bg) 70%,var(--bg-card) 30%)}
+.config-left{display:flex;align-items:center;gap:12px;min-width:0}
+.status-badge{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 10px;border-radius:var(--radius-full);background:var(--bg-alt);color:var(--text-secondary);font-size:12px;font-weight:600;flex:none}
+.connected .status-badge{background:color-mix(in srgb,var(--success) 12%,transparent);color:var(--success)}
+.config-copy{min-width:0}
+.config-status{font-size:14px;font-weight:600;line-height:1.3;margin-bottom:4px}
+.config-meta{display:flex;gap:10px;flex-wrap:wrap}
+.config-summary{font-size:12px;color:var(--text-tertiary);white-space:nowrap}
+.config-summary.warn{color:var(--warning-text)}
+.config-right{display:flex;gap:6px;flex:none}
+.text-btn{height:30px;padding:0 10px;border:none;border-radius:var(--radius-md);background:transparent;color:var(--text-secondary);font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:var(--transition-fast)}
+.text-btn:hover{background:var(--brand-bg-active);color:var(--text-primary)}
+
+/* 配置表单卡 */
+.config-form{padding:14px 16px;border:1px solid var(--border-light);border-radius:var(--radius-md);background:var(--bg-card)}
+.config-form-head{display:flex;flex-direction:column;gap:4px;margin-bottom:14px}
+.config-form-title{font-size:13px;font-weight:600}
+.config-form-desc{font-size:12px;color:var(--text-tertiary);line-height:1.6}
+.field{margin-bottom:14px}
+.field>label{display:block;font-size:13px;font-weight:600;margin-bottom:6px}
+.input{width:100%;height:36px;border-radius:var(--radius-md);border:1px solid var(--border-default);background:var(--bg-card);padding:0 12px;font-size:13px;color:var(--text-primary);transition:var(--transition-fast)}
+.input:focus{outline:none;border-color:var(--brand);box-shadow:var(--shadow-focus)}
+.field-hint{font-size:12px;color:var(--text-tertiary);margin-top:4px}
+.alert{border-radius:var(--radius-md);padding:10px 12px;font-size:12px;display:flex;gap:8px;align-items:flex-start}
+.alert.warn{background:var(--warning-bg);border:1px solid var(--warning-border);color:var(--warning-text)}
+.alert .a-title{font-weight:600}
+
+/* 来源 Tab */
+.source-tabs{display:flex;gap:4px;padding:4px;border-radius:var(--radius-lg);background:var(--bg-hover);box-shadow:inset 0 0 0 1px var(--border-light)}
+.source-tab{flex:1;height:40px;border:none;background:transparent;border-radius:var(--radius-md);color:var(--text-secondary);font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:var(--transition-fast)}
+.source-tab:hover{color:var(--text-primary)}
+.source-tab.active{background:var(--bg-card);box-shadow:var(--shadow-sm);color:var(--text-primary);font-weight:600}
+
+/* 配置卡 */
+.config-card{border:1px solid var(--border-light);border-radius:var(--radius-md);background:var(--bg-card);padding:18px 20px}
+.config-card-title{font-size:15px;font-weight:600;margin:0 0 6px}
+.config-card-desc{font-size:13px;color:var(--text-tertiary);line-height:1.6;margin:0 0 16px}
+
+/* CTA */
+.cta-row{display:flex}
+.cta{height:42px;padding:0 22px;border:none;border-radius:var(--radius-md);background:var(--brand);color:#fff;font-size:14px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:8px;box-shadow:0 8px 18px rgba(37,99,235,.22);transition:var(--transition-fast)}
+.cta:hover{background:var(--brand-hover);transform:translateY(-1px)}
+.cta:active{transform:translateY(0)}
+
+/* 结果卡 */
+.result-card{margin-top:6px;padding:16px;border:1px solid color-mix(in srgb,var(--success) 20%,var(--border-light));border-radius:var(--radius-md);background:color-mix(in srgb,var(--success-bg) 60%,var(--bg-card) 40%);display:flex;flex-direction:column;gap:12px}
+.result-head{display:flex;align-items:center;gap:10px}
+.result-icon{width:30px;height:30px;border-radius:var(--radius-md);background:color-mix(in srgb,var(--success) 12%,transparent);color:var(--success);display:inline-flex;align-items:center;justify-content:center;flex:none}
+.result-title{display:flex;flex-direction:column;font-size:15px;font-weight:600}
+.result-sub{font-size:12px;color:var(--text-tertiary);font-weight:400}
+.tag-row{display:flex;flex-wrap:wrap;gap:6px}
+.m-tag{font-size:12px;font-family:ui-monospace,Consolas,monospace;border-radius:var(--radius-full);padding:4px 9px;background:var(--brand-bg-active);border:1px solid var(--brand-border);color:var(--brand-text)}
+.result-actions{display:flex;gap:8px}
+.btn{border-radius:var(--radius-md);height:34px;padding:0 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;border:1px solid transparent;transition:var(--transition-fast)}
+.btn-primary{background:var(--brand);color:#fff}
+.btn-primary:hover{background:var(--brand-hover)}
+.btn-secondary{background:var(--bg-card);border-color:var(--border-default);color:var(--text-primary)}
+.btn-secondary:hover{background:var(--bg-hover)}
+
+/* ============ 右侧边栏（原型重点） ============ */
+.right-panel{
+  width:340px;flex:none;display:flex;flex-direction:column;gap:22px;min-height:0;
+  background:linear-gradient(180deg,var(--bg-card) 0%,color-mix(in srgb,var(--bg-card) 78%,var(--bg-hover) 22%) 100%);
+  border-left:1px solid var(--border-light);overflow:hidden;padding:26px 22px 24px;
+}
+.rp-section{display:flex;flex-direction:column;gap:12px;min-height:0}
+.rp-section.scroll{flex:1;min-height:0}
+.rp-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:0}
+.rp-title{font-size:12px;font-weight:700;color:var(--text-tertiary);margin:0;text-transform:uppercase;letter-spacing:.08em}
+.rp-badge{font-size:11px;font-weight:600;color:var(--text-quaternary);padding:2px 8px;border-radius:var(--radius-full);background:var(--bg-hover);line-height:1.4}
+
+/* 概览 stat 网格 */
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat-card{background:var(--bg-card);border:1px solid var(--border-light);border-radius:var(--radius-md);padding:14px;display:flex;flex-direction:column;gap:4px;transition:var(--transition-fast)}
+.stat-card:hover{box-shadow:var(--shadow-sm)}
+.stat-value{font-size:26px;font-weight:700;line-height:1;letter-spacing:-.02em}
+.stat-value.brand{color:var(--brand)} .stat-value.success{color:var(--success)}
+.stat-label{font-size:12px;color:var(--text-tertiary)}
+
+/* 最近项目卡 —— 上下结构，左侧品牌强调线 */
+.latest-card{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--bg-card);border:1px solid var(--border-light);border-left:2px solid var(--brand);border-radius:var(--radius-md);transition:var(--transition-fast)}
+.latest-card:hover{box-shadow:var(--shadow-sm)}
+.latest-icon{width:32px;height:32px;border-radius:var(--radius-md);background:var(--brand-bg);color:var(--brand);display:inline-flex;align-items:center;justify-content:center;font-size:15px;flex:none}
+.latest-meta{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.latest-eyebrow{font-size:11px;font-weight:600;color:var(--text-quaternary);text-transform:uppercase;letter-spacing:.04em}
+.latest-name{font-size:14px;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.type-tag{flex:none;font-size:11px;font-weight:600;line-height:18px;padding:0 8px;border-radius:var(--radius-full);color:var(--text-secondary);background:var(--bg-alt);border:1px solid var(--border-light);white-space:nowrap}
+.type-tag.full{color:var(--brand-text);background:var(--brand-bg);border-color:var(--brand-border)}
+
+/* 历史区 */
+.rp-scroll{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding-right:2px}
+.history-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;background:var(--bg-card);border:1px solid var(--border-light);border-radius:var(--radius-md);box-shadow:var(--shadow-sm)}
+.history-header-left{display:flex;align-items:center;gap:10px;min-width:0}
+.h-icon{width:32px;height:32px;border-radius:var(--radius-md);background:var(--bg-alt);border:1px solid var(--border-light);color:var(--text-secondary);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex:none}
+.history-copy{display:flex;flex-direction:column;min-width:0}
+.history-copy .t{font-size:15px;font-weight:600;line-height:1.25}
+.history-copy .d{font-size:12px;color:var(--text-tertiary);line-height:1.5}
+.icon-btn{width:30px;height:30px;border-radius:var(--radius-md);border:1px solid var(--border-light);background:var(--bg-card);color:var(--text-secondary);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:var(--transition-fast)}
+.icon-btn:hover{background:var(--bg-hover);color:var(--text-primary)}
+
+/* 历史卡片 */
+.history-card{background:var(--bg-card);border:1px solid var(--border-light);border-radius:var(--radius-md);padding:12px 14px;transition:var(--transition-fast);display:flex;flex-direction:column;gap:8px}
+.history-card:hover{box-shadow:var(--shadow-sm);border-color:var(--border-strong)}
+.history-card:focus-within{box-shadow:var(--shadow-focus);border-color:var(--brand)}
+.hc-head{display:flex;align-items:center;gap:8px}
+.hc-title-wrap{display:flex;align-items:center;gap:6px;min-width:0;flex:1}
+.hc-name{font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hc-time{margin-left:auto;font-size:12px;color:var(--text-quaternary);flex:none}
+.hc-sub{font-size:12px;color:var(--text-tertiary);font-family:ui-monospace,Consolas,monospace;word-break:break-all}
+.hc-meta{display:flex;gap:8px;flex-wrap:wrap}
+.meta-badge{font-size:11px;color:var(--brand-text);background:var(--brand-bg-active);padding:3px 8px;border-radius:var(--radius-full);white-space:nowrap}
+.meta-badge.file{color:var(--text-secondary);background:var(--bg-hover)}
+/* actions：hover/focus 才显形，保持卡片安静 */
+.hc-actions{display:flex;gap:4px;opacity:0;transform:translateY(2px);transition:var(--transition-fast);justify-content:flex-end}
+.history-card:hover .hc-actions,.history-card:focus-within .hc-actions{opacity:1;transform:none}
+.hc-actions .icon-btn{border:none;background:transparent;width:28px;height:28px}
+.hc-actions .icon-btn:hover{background:var(--bg-hover)}
+.hc-actions .icon-btn.danger:hover{background:var(--error-bg);color:var(--error)}
+
+/* 空态 */
+.empty{display:flex;flex-direction:column;align-items:center;gap:12px;padding:36px 16px;text-align:center;border:1px dashed var(--border-default);border-radius:var(--radius-md);background:color-mix(in srgb,var(--bg-hover) 50%,transparent)}
+.empty .e-icon{width:44px;height:44px;border-radius:var(--radius-lg);background:var(--bg-alt);color:var(--text-tertiary);display:inline-flex;align-items:center;justify-content:center;font-size:20px}
+.empty .e-title{font-size:14px;font-weight:600}
+.empty .e-desc{font-size:12px;color:var(--text-tertiary);line-height:1.6;max-width:240px}
+.tip-row{display:flex;flex-direction:column;gap:8px;width:100%}
+.tip{display:flex;gap:8px;font-size:12px;color:var(--text-tertiary);text-align:left;padding:8px 10px;background:var(--bg-hover);border-radius:var(--radius-md)}
+
+/* 滚动条 */
+.rp-scroll::-webkit-scrollbar{width:6px}
+.rp-scroll::-webkit-scrollbar-thumb{background:transparent;border-radius:3px}
+.rp-scroll:hover::-webkit-scrollbar-thumb{background:var(--c-gray-300)}
+
+/* 响应式：≤1100 堆叠；≤768 单列 */
+@media(max-width:1100px){.workbench{flex-direction:column}.right-panel{width:100%;border-left:none;border-top:1px solid var(--border-light);max-height:48vh}}
+@media(max-width:768px){.main-col{padding:20px 16px}.config-bar,.config-right,.history-header-left{flex-direction:column;align-items:stretch}.hc-head,.hc-actions{flex-wrap:wrap}}
+</style>
+</head>
+<body>
+<!-- SVG 图标库（inline symbol，零依赖） -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-link" viewBox="0 0 24 24"><path fill="currentColor" d="M3.9 12a3.1 3.1 0 0 1 3.1-3.1h4a1 1 0 1 0 0-2H7A5.1 5.1 0 0 0 2 12a5.1 5.1 0 0 0 5 5h4a1 1 0 1 0 0-2H7A3.1 3.1 0 0 1 3.9 12Zm5.1 1h6a1 1 0 1 0 0-2h-6a1 1 0 1 0 0 2Zm9.1-8a5.1 5.1 0 0 0-5 5v.1a1 1 0 1 0 2 0V9a3.1 3.1 0 0 1 3.1-3.1h1.9a1 1 0 1 0 0-2H18Z"/><path fill="currentColor" d="M21 12a5.1 5.1 0 0 0-5-5 1 1 0 1 0 0 2 3.1 3.1 0 0 1 3.1 3.1 1 1 0 1 0 2 0Zm-4 9.1a5.1 5.1 0 0 0 5-5.1 1 1 0 1 0-2 0 3.1 3.1 0 0 1-3.1 3.1H15a1 1 0 1 0 0 2h1Z"/></symbol>
+  <symbol id="i-setting" viewBox="0 0 24 24"><path fill="currentColor" d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm0 6a2 2 0 1 1 0-4 2 2 0 0 1 0 4Z"/><path fill="currentColor" d="m19.4 13 1.3.8a1 1 0 0 1 .3 1.3l-1.2 2.1a1 1 0 0 1-1.2.4l-1.5-.6a7.6 7.6 0 0 1-1 .6l-.2 1.6a1 1 0 0 1-1 1h-2.4a1 1 0 0 1-1-1l-.2-1.6a7.6 7.6 0 0 1-1-.6l-1.5.6a1 1 0 0 1-1.2-.4l-1.2-2.1a1 1 0 0 1 .3-1.3l1.3-.8a8 8 0 0 1 0-2l-1.3-.8a1 1 0 0 1-.3-1.3l1.2-2.1a1 1 0 0 1 1.2-.4l1.5.6c.3-.2.7-.4 1-.6l.2-1.6a1 1 0 0 1 1-1h2.4a1 1 0 0 1 1 1l.2 1.6c.3.2.7.4 1 .6l1.5-.6a1 1 0 0 1 1.2.4l1.2 2.1a1 1 0 0 1-.3 1.3L19.4 11a8 8 0 0 1 0 2Z" opacity=".0"/><path fill="currentColor" d="M19.4 12.3a1 1 0 0 1 .1 1.5l-1.3.8a1 1 0 0 1-1 .1 6 6 0 0 0-1.2.7 1 1 0 0 1-1.2 0l-1.3-.8a1 1 0 0 1-.5-1V12a1 1 0 0 1-.7-1 6 6 0 0 0 0-2 1 1 0 0 1 .7-1v-.6a1 1 0 0 1 .5-1l1.3-.8a1 1 0 0 1 1.2 0c.4.2.8.5 1.2.7a1 1 0 0 1 1 .1l1.3.8a1 1 0 0 1 .1 1.5l-.9 1.2a1 1 0 0 1 0 1.3l.9 1.1Z" opacity=".35"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><path fill="currentColor" d="M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 0h7v7h-7v-7Z"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24"><path fill="currentColor" d="M9.4 7.4 4.8 12l4.6 4.6a1 1 0 1 1-1.4 1.4l-5.3-5.3a1 1 0 0 1 0-1.4L8 6a1 1 0 0 1 1.4 1.4Zm5.2 0a1 1 0 0 1 1.4-1.4l5.3 5.3a1 1 0 0 1 0 1.4L16 17.9a1 1 0 1 1-1.4-1.4l4.6-4.6-4.6-4.5Z"/></symbol>
+  <symbol id="i-cloud" viewBox="0 0 24 24"><path fill="currentColor" d="M6.5 19a4.5 4.5 0 0 1-.9-8.9A6 6 0 0 1 17.6 10 4 4 0 0 1 18 19H6.5Zm.5-2h11a2 2 0 0 0 .3-4 1 1 0 0 0-.9-.5 1 1 0 0 1-1-1 4 4 0 0 0-7.8-1.2 1 1 0 0 1-.7 1.4 1 1 0 0 0-.7 1.2A2 2 0 0 0 7 17Z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path fill="currentColor" d="M10 15.2 6.3 11.5l-1.4 1.4 5.1 5.1 11-11-1.4-1.4L10 15.2Z"/></symbol>
+  <symbol id="i-filezip" viewBox="0 0 24 24"><path fill="currentColor" d="M4 4h10l6 6v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Zm9 1.5V9h3.5L13 5.5ZM8 13h1v1.5H8V16h1.5v-1.5H11V13h-1.5v-1.4H8V13Z"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path fill="currentColor" d="M4 4h7l6 6v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Zm7 1.5V9h3.5L11 5.5Z"/></symbol>
+  <symbol id="i-history" viewBox="0 0 24 24"><path fill="currentColor" d="M13 3a9 9 0 1 0 8.5 12 1 1 0 0 0-1.9-.6A7 7 0 1 1 13 5a7 7 0 0 1 6.3 4H17a1 1 0 1 0 0 2h4a1 1 0 0 0 1-1V6a1 1 0 1 0-2 0v1.6A9 9 0 0 0 13 3Zm-1 4a1 1 0 0 0-1 1v4a1 1 0 0 0 .4.8l3 2.2a1 1 0 0 0 1.2-1.6L13 11.5V8a1 1 0 0 0-1-1Z"/></symbol>
+  <symbol id="i-reload" viewBox="0 0 24 24"><path fill="currentColor" d="M12 5a7 7 0 0 1 6.3 3.9 1 1 0 0 0 1.7 1A9 9 0 0 0 3.6 8.2V6a1 1 0 1 0-2 0v5a1 1 0 0 0 1 1h5a1 1 0 1 0 0-2H4.7A7 7 0 0 1 12 5Zm8 8h-5a1 1 0 1 0 0 2h3.3A7 7 0 0 1 4.7 15a1 1 0 0 0-1.7-1A9 9 0 0 0 20.4 16v2a1 1 0 1 0 2 0v-5a1 1 0 0 0-1-1Z"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path fill="currentColor" d="M12 3a1 1 0 0 1 1 1v9.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-5 5a1 1 0 0 1-1.4 0l-5-5a1 1 0 1 1 1.4-1.4L11 13.6V4a1 1 0 0 1 1-1Zm-8 14a1 1 0 0 1 1 1v1h14v-1a1 1 0 1 1 2 0v2a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1Z"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path fill="currentColor" d="M9 3h6a1 1 0 0 1 1 1v1h4a1 1 0 1 1 0 2h-1v11a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7H5a1 1 0 1 1 0-2h4V4a1 1 0 0 1 1-1Zm1 5a1 1 0 0 0-1 1v9a1 1 0 1 0 2 0V9a1 1 0 0 0-1-1Zm4 0a1 1 0 0 0-1 1v9a1 1 0 1 0 2 0V9a1 1 0 0 0-1-1Z"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 24 24"><path fill="currentColor" d="M4 4h16a1 1 0 0 1 1 1v9a4 4 0 0 1-4 4h-1l-1.6 2.4a1 1 0 0 1-1.7 0L11 18H8a4 4 0 0 1-4-4V5a1 1 0 0 1 1-1Zm2 5v6a2 2 0 0 0 2 2h2v-3a1 1 0 0 1 2 0v3h2a2 2 0 0 0 2-2V9H6Z"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 15a1 1 0 1 1-2 0v-5a1 1 0 1 1 2 0v5Zm-1-8a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4Z"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path fill="currentColor" d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><path fill="currentColor" d="M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10Zm0-5a1 1 0 0 1 1 1v2a1 1 0 1 1-2 0V3a1 1 0 0 1 1-1Zm0 16a1 1 0 0 1 1 1v2a1 1 0 1 1-2 0v-2a1 1 0 0 1 1-1ZM4.2 4.2a1 1 0 0 1 1.4 0l1.4 1.4A1 1 0 0 1 5.6 7L4.2 5.6a1 1 0 0 1 0-1.4Zm12.8 12.8a1 1 0 0 1 1.4 0l1.4 1.4a1 1 0 0 1-1.4 1.4l-1.4-1.4a1 1 0 0 1 0-1.4ZM2 12a1 1 0 0 1 1-1h2a1 1 0 1 1 0 2H3a1 1 0 0 1-1-1Zm16 0a1 1 0 0 1 1-1h2a1 1 0 1 1 0 2h-2a1 1 0 0 1-1-1ZM4.2 19.8a1 1 0 0 1 0-1.4L5.6 17A1 1 0 0 1 7 18.4l-1.4 1.4a1 1 0 0 1-1.4 0ZM17 5.6 18.4 4.2a1 1 0 0 1 1.4 1.4L18.4 7A1 1 0 0 1 17 5.6Z"/></symbol>
+</svg>
+
+<div class="frame">
+  <div class="frame-bar">
+    <div class="frame-dots"><i></i><i></i><i></i></div>
+    <div class="frame-url">http://localhost:2610/#/workspace/generate-api</div>
+    <button class="frame-theme" id="themeBtn" title="切换浅/深色" aria-label="切换主题">
+      <svg width="16" height="16"><use href="#i-moon"/></svg>
+    </button>
+  </div>
+
+  <div class="generate-api-view">
+    <div class="workbench">
+      <!-- ===== 左：工作台 ===== -->
+      <main class="main-col">
+        <h1 class="page-title">API 接口生成</h1>
+        <p class="page-sub">从 Apifox 项目自动生成前端 API 模块代码，支持全量导出和按模块生成。</p>
+
+        <div class="config-bar connected">
+          <div class="config-left">
+            <span class="status-badge"><svg width="14" height="14"><use href="#i-link"/></svg>连接就绪</span>
+            <div class="config-copy">
+              <div class="config-status">Apifox 连接配置</div>
+              <div class="config-meta">
+                <div class="config-summary">项目 ID：8314342</div>
+                <div class="config-summary">Token：已配置</div>
+              </div>
+            </div>
+          </div>
+          <div class="config-right">
+            <button class="text-btn"><svg width="14" height="14"><use href="#i-setting"/></svg>Token 设置</button>
+            <button class="text-btn">项目配置</button>
+          </div>
+        </div>
+
+        <div class="config-form">
+          <div class="config-form-head">
+            <span class="config-form-title">项目参数</span>
+            <span class="config-form-desc">仅维护当前页使用的 Apifox 项目编号，Access Token 仍走全局配置。</span>
+          </div>
+          <div class="field">
+            <label>Apifox 项目 ID</label>
+            <input class="input" value="8314342" />
+            <div class="field-hint">在项目设置中查看项目 ID</div>
+          </div>
+        </div>
+
+        <div class="source-tabs" role="tablist" aria-label="生成模式">
+          <button class="source-tab active" role="tab" aria-selected="true"><svg width="16" height="16"><use href="#i-grid"/></svg>全量生成</button>
+          <button class="source-tab" role="tab" aria-selected="false"><svg width="16" height="16"><use href="#i-code"/></svg>单模块生成</button>
+        </div>
+
+        <div class="config-card">
+          <h4 class="config-card-title">导出整个 Apifox 项目的全部接口</h4>
+          <p class="config-card-desc">按模块自动分组，生成完整 API 目录。对接组件前需先全量生成，确保接口不缺失。</p>
+          <div class="field">
+            <label>项目名称</label>
+            <input class="input" placeholder="例如：江阴靖江长江隧道智慧化平台" value="江阴靖江长江隧道智慧化平台" />
+            <div class="field-hint">用于 catalog 显示与历史记录命名，请填写有辨识度的业务名称</div>
+          </div>
+        </div>
+
+        <div class="cta-row">
+          <button class="cta"><svg width="16" height="16"><use href="#i-cloud"/></svg>开始生成 API 模块</button>
+        </div>
+
+        <div class="result-card">
+          <div class="result-head">
+            <span class="result-icon"><svg width="18" height="18"><use href="#i-check"/></svg></span>
+            <div class="result-title">全量生成成功<span class="result-sub">12 个模块，86 个接口</span></div>
+          </div>
+          <div class="tag-row">
+            <span class="m-tag">flow（6）</span><span class="m-tag">tunnel（9）</span><span class="m-tag">monitor（11）</span><span class="m-tag">device（8）</span>
+          </div>
+          <div class="result-actions">
+            <button class="btn btn-primary"><svg width="14" height="14"><use href="#i-filezip"/></svg>下载 ZIP</button>
+            <button class="btn btn-secondary"><svg width="14" height="14"><use href="#i-file"/></svg>查看目录</button>
+          </div>
+        </div>
+      </main>
+
+      <!-- ===== 右：边栏（原型重点） ===== -->
+      <aside class="right-panel">
+        <section class="rp-section">
+          <header class="rp-head">
+            <h2 class="rp-title">生成概览</h2>
+            <span class="rp-badge">总览</span>
+          </header>
+          <div class="stat-grid">
+            <div class="stat-card"><span class="stat-value brand">12</span><span class="stat-label">总生成次数</span></div>
+            <div class="stat-card"><span class="stat-value success">3</span><span class="stat-label">今日生成</span></div>
+          </div>
+          <div class="latest-card" title="江阴靖江长江隧道智慧化平台">
+            <span class="latest-icon"><svg width="16" height="16"><use href="#i-file"/></svg></span>
+            <div class="latest-meta">
+              <span class="latest-eyebrow">最近项目</span>
+              <span class="latest-name">江阴靖江长江隧道智慧化平台</span>
+            </div>
+            <span class="type-tag full">全量</span>
+          </div>
+        </section>
+
+        <section class="rp-section scroll">
+          <header class="rp-head">
+            <h2 class="rp-title">生成历史</h2>
+            <span class="rp-badge">12 条</span>
+          </header>
+          <div class="rp-scroll">
+            <div class="history-header">
+              <div class="history-header-left">
+                <span class="h-icon"><svg width="16" height="16"><use href="#i-history"/></svg></span>
+                <div class="history-copy">
+                  <span class="t">最近导出</span>
+                  <span class="d">查看模块与项目快照</span>
+                </div>
+              </div>
+              <button class="icon-btn" title="刷新"><svg width="15" height="15"><use href="#i-reload"/></svg></button>
+            </div>
+
+            <!-- 卡片 1 -->
+            <div class="history-card" tabindex="0">
+              <div class="hc-head">
+                <div class="hc-title-wrap">
+                  <span class="type-tag full">全量</span>
+                  <span class="hc-name">江阴靖江长江隧道智慧化平台</span>
+                </div>
+                <span class="hc-time">08-15 14:30</span>
+              </div>
+              <div class="hc-meta">
+                <span class="meta-badge">86 个接口</span><span class="meta-badge file">12 个文件</span>
+              </div>
+              <div class="hc-actions">
+                <button class="icon-btn" title="查看详情"><svg width="15" height="15"><use href="#i-file"/></svg></button>
+                <button class="icon-btn" title="下载"><svg width="15" height="15"><use href="#i-download"/></svg></button>
+                <button class="icon-btn danger" title="删除"><svg width="15" height="15"><use href="#i-trash"/></svg></button>
+              </div>
+            </div>
+
+            <!-- 卡片 2 -->
+            <div class="history-card" tabindex="0">
+              <div class="hc-head">
+                <div class="hc-title-wrap">
+                  <span class="type-tag">单模块</span>
+                  <span class="hc-name">flow（流量监测）</span>
+                </div>
+                <span class="hc-time">08-15 11:20</span>
+              </div>
+              <div class="hc-sub">flow</div>
+              <div class="hc-meta">
+                <span class="meta-badge">6 个接口</span><span class="meta-badge file">3 个文件</span>
+              </div>
+              <div class="hc-actions">
+                <button class="icon-btn" title="下载"><svg width="15" height="15"><use href="#i-download"/></svg></button>
+                <button class="icon-btn danger" title="删除"><svg width="15" height="15"><use href="#i-trash"/></svg></button>
+              </div>
+            </div>
+
+            <!-- 卡片 3 -->
+            <div class="history-card" tabindex="0">
+              <div class="hc-head">
+                <div class="hc-title-wrap">
+                  <span class="type-tag">单模块</span>
+                  <span class="hc-name">tunnel（隧道结构）</span>
+                </div>
+                <span class="hc-time">08-14 17:45</span>
+              </div>
+              <div class="hc-sub">tunnel</div>
+              <div class="hc-meta">
+                <span class="meta-badge">9 个接口</span><span class="meta-badge file">4 个文件</span>
+              </div>
+              <div class="hc-actions">
+                <button class="icon-btn" title="下载"><svg width="15" height="15"><use href="#i-download"/></svg></button>
+                <button class="icon-btn danger" title="删除"><svg width="15" height="15"><use href="#i-trash"/></svg></button>
+              </div>
+            </div>
+
+            <!-- 卡片 4 -->
+            <div class="history-card" tabindex="0">
+              <div class="hc-head">
+                <div class="hc-title-wrap">
+                  <span class="type-tag full">全量</span>
+                  <span class="hc-name">城市生命线监测平台</span>
+                </div>
+                <span class="hc-time">08-12 09:10</span>
+              </div>
+              <div class="hc-meta">
+                <span class="meta-badge">20 个接口</span><span class="meta-badge file">12 个文件</span>
+              </div>
+              <div class="hc-actions">
+                <button class="icon-btn" title="查看详情"><svg width="15" height="15"><use href="#i-file"/></svg></button>
+                <button class="icon-btn" title="下载"><svg width="15" height="15"><use href="#i-download"/></svg></button>
+                <button class="icon-btn danger" title="删除"><svg width="15" height="15"><use href="#i-trash"/></svg></button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </aside>
+    </div>
+  </div>
+</div>
+
+<script>
+  const btn=document.getElementById('themeBtn');
+  const use=btn.querySelector('use');
+  btn.addEventListener('click',()=>{
+    const cur=document.documentElement.getAttribute('data-theme');
+    const next=cur==='dark'?'light':'dark';
+    document.documentElement.setAttribute('data-theme',next);
+    use.setAttribute('href', next==='dark'?'#i-sun':'#i-moon');
+  });
+  // Tab 切换（仅交互演示）
+  document.querySelectorAll('.source-tab').forEach(t=>{
+    t.addEventListener('click',()=>{
+      document.querySelectorAll('.source-tab').forEach(x=>{x.classList.remove('active');x.setAttribute('aria-selected','false')});
+      t.classList.add('active');t.setAttribute('aria-selected','true');
+    });
+  });
+</script>
+</body>
+</html>
