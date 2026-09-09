@@ -35,6 +35,7 @@ workspace/
 node_modules/
 *.zip
 *.tar.gz
+*.jar
 dist/
 
 # ==== 生成的临时报告文档 ====
