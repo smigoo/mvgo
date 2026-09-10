@@ -853,6 +853,64 @@ export function writeFiles(files, outputPath, options = {}) {
       }
     }
 
+    // 🛡️ 跨文件缺失变量全局兜底（2026-09-10 治本）：单文件写盘门禁是「逐文件 retry.valid 门禁」，
+    // 若某 .vue/.less 除缺失变量外还带其他错误（CODE-003 前缀缺失 / 注释未闭合等），retry.valid 为
+    // false → 走「跳过」分支 → 该文件缺失变量永不补 → 最终 index.less→index.css 编译失败降级 + LESS-COMPILE-001。
+    // 且 .less 文件本身从不被 P0-1（只遍历 .vue）或单文件门禁覆盖 → common.less 内 @color-tab-* 永远 undefined。
+    // 治本：落盘后扫一遍所有 .less + .vue 的 @var 引用，凡 theme-vars 未声明、非资源、非已声明 mixin 的，
+    // 统一注入 theme-vars.less（单一事实源），不依赖单文件 retry.valid。复用 P0-1 的 resMap 判据，避免误伤资源/主题变量。
+    try {
+      const resMap = {};
+      const resourceDomMapping = options.resourceDomMapping || [];
+      for (const m of resourceDomMapping) {
+        if (m && m.assignedVarName && m.resourceFile) {
+          resMap[m.assignedVarName] = String(m.resourceFile).split('/').pop();
+        }
+      }
+      const tvPath = 'resources/styles/themes/theme-vars.less';
+      const tvContentNow =
+        (files && typeof files[tvPath] === 'string'
+          ? files[tvPath]
+          : '') + pendingThemeVars;
+      const declaredSet = new Set();
+      for (const mm of tvContentNow.matchAll(/@([a-zA-Z][\w-]*)\s*[:]/g))
+        declaredSet.add(mm[1]);
+      const globalMissing = new Map();
+      for (const [p, c] of Object.entries(files || {})) {
+        if (typeof c !== 'string') continue;
+        if (!p.endsWith('.less') && !p.endsWith('.vue')) continue;
+        const styleBlocks = (
+          p.endsWith('.vue')
+            ? c.match(/<style\b[^>]*>([\s\S]*?)<\/style>/gi) || []
+            : [c]
+        ).join('\n');
+        for (const v of extractLessVarReferences(styleBlocks)) {
+          if (resMap[v]) continue; // 资源变量，跳过
+          if (declaredSet.has(v)) continue; // 已在 theme-vars 声明，跳过
+          if (isLessVarDeclared(styleBlocks, v)) continue; // 本文件已声明（局部），跳过
+          if (!globalMissing.has(v)) globalMissing.set(v, p);
+        }
+      }
+      if (globalMissing.size > 0) {
+        const decl = [...globalMissing.keys()]
+          .map((v) => `@${v}: ${safeLessVarValue('@' + v)};`)
+          .join('\n');
+        pendingThemeVars += `${decl}\n`;
+        if (logger) {
+          logger.warn('🛡️ 跨文件缺失 less 变量全局兜底（注入 theme-vars）', {
+            count: globalMissing.size,
+            vars: [...globalMissing.keys()],
+          });
+        }
+      }
+    } catch (gErr) {
+      if (logger) {
+        logger.warn('跨文件缺失变量全局兜底跳过（非致命）', {
+          error: gErr?.message || gErr,
+        });
+      }
+    }
+
     // 🛡️ 落盘后回写 theme-vars.less：把门禁自动补全的缺失变量落盘
     if (pendingThemeVars) {
       try {

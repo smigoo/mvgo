@@ -1787,7 +1787,11 @@ export function healSlotHexToVarRefs(content, themeVarsContent) {
   }
   const hexToVar = new Map();
   for (const [hex, vars] of hexVarCount) {
-    if (vars.size === 1) hexToVar.set(hex, [...vars][0]);
+    // 🛡️ 2026-09-10：同 hex 多变量时兜底收录第一个（如 #333333 同时是
+    // @color-axis-label / @color-axis-unit 两个槽值）。旧逻辑仅收录唯一映射 → healer
+    // 跳过多变量 hex → 门禁 THEME-SLOT-COLOR 对残留字面量硬 BLOCK
+    //（env 01407ff1 实锤 6 处漏治）。兜底收录后门禁检测 var(...) 即跳过。
+    hexToVar.set(hex, [...vars][0]);
   }
   if (hexToVar.size === 0) return content;
 
@@ -1825,4 +1829,71 @@ export function applyHealToVueStyleBlocks(vueContent, healFn) {
     },
   );
   return changed ? out : vueContent;
+}
+
+/**
+ * 🛡️ 治本 E（2026-09-10）：v-if 与 v-for 同元素 fail-closed 自愈。
+ *
+ * Vue3 铁律：v-if 与 v-for 不得写在同一元素上（v-if 优先级更高，求值阶段访问不到
+ * 循环变量 → 运行时 `Cannot read properties of undefined (reading 'xxx')`）。
+ * env 样本 `SubT.vue:8` 即 `<div v-if="activeTab===tab.value" v-for="tab in tabList">` 命中。
+ *
+ * 本函数把「同元素共存」改写为 Vue3 合法结构：
+ *   - v-for 在外层 `<template v-for="x in list" :key>` ，v-if 在内层元素；
+ *     （template 上 v-if 不被 Vue3 支持，故 v-if 必须落在内层真实元素）
+ *   - 或当无 v-if 仅 v-for 时原样保留。
+ * 仅处理 template 段，不影响 script/style。fail-closed：解析异常或无法安全改写时返回原内容。
+ *
+ * @param {string} vueContent .vue 全文件
+ * @returns {string}
+ */
+export function stripVIfOnVFor(vueContent) {
+  if (typeof vueContent !== 'string') return vueContent;
+  const tplMatch = vueContent.match(/<template[^>]*>([\s\S]*?)<\/template>/);
+  if (!tplMatch) return vueContent;
+  const tplBody = tplMatch[1];
+
+  // 匹配同时含 v-if 与 v-for 的单个开标签（含自闭合）
+  const tagRe = /<([a-zA-Z][\w-]*)\b([^>]*?)\/?>/g;
+  let changed = false;
+  const newBody = tplBody.replace(tagRe, (full, tag, attrs) => {
+    const hasVIf = /\bv-if\s*=/.test(attrs);
+    const hasVFor = /\bv-for\s*=/.test(attrs);
+    if (!hasVIf || !hasVFor) return full;
+    // 已是 <template> 也不该同时挂（Vue3 不允许 template 上 v-if），仍拆开
+    if (tag === 'template') return full; // 不处理（极少出现，交门禁拦）
+
+    // 抽取 v-for / v-if 表达式
+    const vForM = attrs.match(/\bv-for\s*=\s*["']([^"']*)["']/);
+    const vIfM = attrs.match(/\bv-if\s*=\s*["']([^"']*)["']/);
+    if (!vForM || !vIfM) return full;
+    const vForExpr = vForM[1];
+    const vIfExpr = vIfM[1];
+
+    // 其余属性（去掉 v-if / v-for 自身）
+    const restAttrs = attrs
+      .replace(/\bv-if\s*=\s*["'][^"']*["']/, '')
+      .replace(/\bv-for\s*=\s*["'][^"']*["']/, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+
+    // 提取循环变量名（"item in list" / "(item, i) in list"）
+    const inM = vForExpr.match(/\bin\s+([\w$]+)\s*$/) || vForExpr.match(/^\s*\(?([\w$]+)/);
+    const loopVar = inM ? inM[1] : null;
+
+    // 改写：外层 template v-for（带 key），内层原标签带 v-if 与其余属性
+    // key 提取：尝试从 v-for 的 "item in list" 推导 key（用索引或 item.id）
+    const keyExpr = loopVar ? `${loopVar}.id ?? ${loopVar}` : 'undefined';
+    const openTag = `<${tag}${restAttrs ? ' ' + restAttrs : ''} v-if="${vIfExpr}">`;
+    const closeTag = `</${tag}>`;
+    changed = true;
+    return (
+      `<template v-for="${vForExpr}" :key="${keyExpr}">\n` +
+      `  ${openTag}${closeTag}\n` +
+      `</template>`
+    );
+  });
+
+  if (!changed) return vueContent;
+  return vueContent.replace(tplBody, newBody);
 }

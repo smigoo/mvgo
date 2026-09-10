@@ -14,7 +14,7 @@ import { CodeStructureValidator } from '../validators/code-structure-validator.j
  * index.vue 组装（import + template 引用），应 0 缺失放行。
  */
 
-const plan = (sections: Array<{ id: string; title: string }>, isForced = true) => ({
+const plan = (sections: Array<Record<string, any>>, isForced = true) => ({
   effectiveSections: sections,
   isForced,
   minFiles: sections.length + 2,
@@ -191,6 +191,77 @@ import SummaryCards from './components/SummaryCards.vue'
     // 3 文件 < 5 section：数量不覆盖 → 豁免不触发
     const missing = detectMissingSections(FLOW_FILES, FLOW_PLAN)
     expect(missing.length).toBeGreaterThan(0)
+  })
+
+  it('list/grid 折叠 section：DeviceGrid 内 v-for + itemCount=12 → 0 缺失', () => {
+    const files = [
+      {
+        path: 'package/index.vue',
+        content: `<template>
+  <base-panel>
+    <HeaderStats />
+    <DeviceGrid />
+  </base-panel>
+</template>
+<script setup>
+import HeaderStats from './components/HeaderStats.vue'
+import DeviceGrid from './components/DeviceGrid.vue'
+</script>`,
+      },
+      { path: 'package/components/HeaderStats.vue', content: '<template><div>h</div></template>' },
+      {
+        path: 'package/components/DeviceGrid.vue',
+        content: `<template>
+  <div class="grid">
+    <div v-for="card in devices" :key="card.id" class="card">{{ card.name }}</div>
+  </div>
+</template>
+<script setup>
+const devices = Array(12)
+</script>`,
+      },
+    ]
+    const listPlan = plan([
+      { id: 'header-stats', title: '头部统计' },
+      {
+        id: 'device-grid',
+        title: '设备卡片网格',
+        type: 'grid',
+        collapsed: true,
+        renderHint: 'v-for',
+        itemCount: 12,
+        items: Array.from({ length: 12 }, (_, i) => ({ id: `card-${i}` })),
+      } as any,
+    ])
+    expect(detectMissingSections(files, listPlan)).toHaveLength(0)
+  })
+
+  it('list section 无 v-for 且无组件引用 → 仍缺失', () => {
+    const files = [
+      {
+        path: 'package/index.vue',
+        content: `<template>
+  <div class="root"><HeaderStats /></div>
+</template>
+<script setup>
+import HeaderStats from './components/HeaderStats.vue'
+</script>`,
+      },
+      { path: 'package/components/HeaderStats.vue', content: '<template><div>h</div></template>' },
+    ]
+    const listPlan = plan([
+      { id: 'header-stats', title: '头部统计' },
+      {
+        id: 'device-grid',
+        title: '设备卡片网格',
+        type: 'grid',
+        collapsed: true,
+        renderHint: 'v-for',
+        itemCount: 12,
+      },
+    ])
+    const missing = detectMissingSections(files, listPlan)
+    expect(missing.map((m) => m.id)).toContain('device-grid')
   })
 })
 

@@ -85,6 +85,7 @@ import { LessVariableChecker } from '../validators/less-variable-checker.js';
 import { HeaderRelationValidator } from '../validators/header-relation-validator.js';
 import { HeaderSlotValidator } from '../validators/header-slot-validator.js';
 import { applyHeaderSlotContractRewrite } from '../utils/header-slot-contract.js';
+import { resolveNodeExclusivity } from '../utils/node-exclusivity.js';
 import { validateDoNotInvent } from '../validators/do-not-invent-validator.js';
 import { createLogger } from '../logger/index.js';
 import { subcomponentPlanner } from '../roles/subcomponent-planner.js';
@@ -856,6 +857,30 @@ export function createPhase2Graph(config = {}) {
         logger.info(
           `✅ headerSlots 契约回写: vision ${rewrite.existingAll}（纠错后 ${rewrite.visionKept}）+ derived kept=${rewrite.derivedKept} = ${result.headerSlots.length} 个`,
         );
+      }
+
+      // 🛡️ Loop 2.1.C（2026-09-10）：header vs content 互斥（figmaNodeId 只落一次）。
+      // 同一 node 同时出现在 headerSlots 与 layout.sections → 二选一，避免 T09 双份渲染。
+      try {
+        const layout = result.layout || result.layoutStructure?.layout;
+        const sections = layout?.sections || result.layoutStructure?.sections || [];
+        if (result.headerSlots?.length > 0 && sections.length > 0) {
+          const exc = resolveNodeExclusivity(result.headerSlots, sections);
+          result.headerSlots = exc.slots;
+          if (layout) {
+            layout.sections = exc.sections;
+          } else if (result.layoutStructure) {
+            result.layoutStructure.sections = exc.sections;
+          }
+          if (exc.removedSlots.length > 0 || exc.removedContentNodes.length > 0) {
+            logger.info('🛡️ 2.1.C 互斥裁决：剔除重复 node', {
+              removedSlots: exc.removedSlots.length,
+              removedContentNodes: exc.removedContentNodes.length,
+            });
+          }
+        }
+      } catch (excErr) {
+        logger.warn('⚠️ 2.1.C 互斥裁决失败（非阻塞）', { error: excErr?.message });
       }
 
       state.onProgress?.({

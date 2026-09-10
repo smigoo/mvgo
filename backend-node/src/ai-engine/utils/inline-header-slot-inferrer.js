@@ -29,12 +29,12 @@ export function inferHeaderSlotsFromInlineRows(analysisResult) {
   for (const row of rows) {
     if (!row || typeof row !== 'object') continue;
     const rowName = String(row.componentName || row.name || row.id || '').toLowerCase();
-    // 只处理 header- 前缀的节点（标题栏相关）
-    if (
-      !rowName.startsWith('header-') &&
-      !rowName.startsWith('title-') &&
-      !/\bheader\b|\btitle\b|\btab\b/.test(rowName)
-    ) {
+    // Loop 2.0.D：只处理标题栏行。内容区 @antd/tab / tabs 不得编成 header-right。
+    const isTitleBarRow =
+      rowName.startsWith('header-') ||
+      rowName.startsWith('title-') ||
+      /\bheader\b|\btitle-bar\b|\btitle\b/.test(rowName);
+    if (!isTitleBarRow) {
       continue;
     }
 

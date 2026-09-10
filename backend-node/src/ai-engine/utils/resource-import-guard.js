@@ -360,7 +360,25 @@ export function injectResourceImports(code, resourceDomMapping, resourceRelBase 
   //     `:prop="prop"` 透传时引用。这是「资源归主组件 import，子组件只 defineProps 接收」契约的
   //     落地前提——父不 import 则透传无源，自动接线（autoWire）也无从连线。
   const forceAll = !!(options && options.forceAll)
-  if (forceAll) {
+  const contractMapping = options && Array.isArray(options.contractMapping) ? options.contractMapping : null
+
+  // 🎯 Loop 1：契约模式（contractMapping）。主组件只 import 契约允许的资源变量
+  // （∪ 全部子合同 parentMustPass ∪ panel success），不再 forceAll 全量。
+  // 空契约时回退 forceAll（Loop 0 临时桥），禁止在 Loop 1 后继续扩 forceAll。
+  const allowedNames = new Set()
+  if (contractMapping && contractMapping.length > 0) {
+    for (const c of contractMapping) {
+      for (const v of c.parentMustPass || []) if (v) allowedNames.add(v)
+    }
+  }
+  const hasContract = contractMapping && contractMapping.length > 0 && allowedNames.size > 0
+
+  if (hasContract) {
+    for (const m of available) {
+      const v = m.assignedVarName || m.semanticVarName
+      if (v && allowedNames.has(v)) usedVars.add(v)
+    }
+  } else if (forceAll) {
     for (const m of available) {
       const v = m.assignedVarName || m.semanticVarName
       if (v) usedVars.add(v)

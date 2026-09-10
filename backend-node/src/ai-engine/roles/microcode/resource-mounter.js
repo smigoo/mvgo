@@ -43,6 +43,7 @@ import {
   safeLessVarValue,
 } from './file-writer.js';
 import { join } from 'node:path';
+import { removeOverlappingSlotDom } from '../../utils/slot-dom-deduper.js';
 
 /**
  * 宿主外壳标签正则：base-panel / mc-panel（含变体后缀）。
@@ -2074,33 +2075,14 @@ export function ensureHeaderSlots(code, input, options = {}) {
   // 🛡️ P5 DOM 级清理（2026-09-09）：被 P1-3 过滤掉的 slot 若已有 <template #XXX> DOM → 移除整个模板
   // P1-3 仅在 slots 契约层面跳过注入，但 LLM 直接生成的/缓存恢复的 <template> 节点仍留在代码中。
   // 子组件已渲染相同内容 + 主组件 template 里也挂了同一内容 → 双份渲染（T09 重复渲染）。
-  // 此处扫描现有 DOM，对每个 slotType 检查内部内容是否与子组件文本重叠，是则移除整个模板。
+  // 🛡️ Loop 2.1.D（2026-09-10）：逻辑抽到 utils/slot-dom-deduper.js（纯函数、可单测），
+  // 与 2.1.C 互斥裁决配套——契约删了 DOM 也要删。
   if (subcomponentTexts.size > 0) {
-    const domBefore = code;
-    const slotTypesForDom = ['header-right', 'title-left', 'title-right'];
-    for (const st of slotTypesForDom) {
-      const tmplRe = new RegExp(
-        `<template\\s+#${st}\\s*>([\\s\\S]*?)</template>`,
-        'gi',
-      );
-      code = code.replace(tmplRe, (match, inner) => {
-        const cleanInner = inner.replace(/<!--[\s\S]*?-->/g, '').trim();
-        if (!cleanInner) return match; // 空/仅注释插槽 → 保留
-        const fragments = extractTextFragments(cleanInner);
-        for (const frag of fragments) {
-          if (subcomponentTexts.has(frag)) {
-            logger?.warn(
-              `🛡️ P5 DOM 清理：移除 <template #${st}>（内部内容 "${cleanInner.slice(0, 30)}..." 与子组件文本重叠，防双份渲染）`,
-            );
-            return ''; // 移除整个模板
-          }
-        }
-        return match; // 无重叠 → 保留
-      });
-    }
-    if (code !== domBefore) {
+    const domResult = removeOverlappingSlotDom(code, { subcomponentTexts });
+    if (domResult.removed > 0) {
+      code = domResult.code;
       logger?.warn(
-        '🛡️ T09 P5 已完成 DOM 级清理：移除与子组件内容重叠的 <template #header-right> 等模板节点',
+        `🛡️ T09 P5 已完成 DOM 级清理：移除 ${domResult.removed} 个与子组件内容重叠的 <template #header-right/title-left/title-right> 模板节点`,
       );
     }
   }

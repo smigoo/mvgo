@@ -12,6 +12,11 @@
  */
 
 import { createLogger } from '../logger/index.js';
+import { enforceTabStructure } from './tab-structure-guard.js';
+import {
+  collapseRepeatedSiblingSections,
+  isCollapsedListSection,
+} from '../utils/repeated-section-collapser.js';
 
 const logger = createLogger({ name: 'subcomponent-planner' });
 
@@ -716,16 +721,33 @@ export class SubcomponentPlanner {
     // P2': 合并图例 section 到相邻图表 section
     sections = mergeLegendSections(sections);
 
+    // 🛡️ 2026-09-10：同构重复卡片收成 list/grid（device 12 卡 + 12 装饰 → 1 个模板）
+    const beforeCollapse = sections.length;
+    sections = collapseRepeatedSiblingSections(sections);
+    if (sections.length !== beforeCollapse) {
+      logger.info('重复同构 section 已折叠为 list/grid', {
+        before: beforeCollapse,
+        after: sections.length,
+        collapsed: sections
+          .filter((s) => isCollapsedListSection(s))
+          .map((s) => ({ id: s.id, type: s.type, itemCount: s.itemCount })),
+      });
+    }
+
     // 🎯 Phase 2 方案1: 收集所有内部拆分的子组件
     const allInternalSubcomponents = [];
 
     const effectiveSections = sections.map((sec, idx) => {
-      const rawType = deriveSectionType(sec);
+      const collapsed = isCollapsedListSection(sec);
+      const rawType = collapsed ? String(sec.type || 'list') : deriveSectionType(sec);
       const title = sec.header?.title || sec.title || sec.name || '';
-      const elementCount = countElements(sec);
-      const responsibility =
-        TYPE_RESPONSIBILITY[rawType] ||
-        `${title || rawType || '区块'}（请按功能拆分）`;
+      const elementCount = collapsed
+        ? Number(sec.itemCount) || (Array.isArray(sec.items) ? sec.items.length : 0)
+        : countElements(sec);
+      const responsibility = collapsed
+        ? `${TYPE_RESPONSIBILITY[rawType] || '列表项布局区'}：1 个 item 模板 + v-for 渲染 ${elementCount} 项，禁止拆成 ${elementCount} 个子组件文件`
+        : TYPE_RESPONSIBILITY[rawType] ||
+          `${title || rawType || '区块'}（请按功能拆分）`;
 
       // 🎯 Phase 2 方案1: 计算复杂度评分
       const scoreResult = calculateSplitScore(sec);
@@ -734,8 +756,9 @@ export class SubcomponentPlanner {
       const layoutMetadata = extractLayoutMetadata(sec);
 
       // 🎯 Phase 2 方案1: 执行内部拆分（如果启用且评分达标）
+      // 已折叠的 list/grid 不再按密度拆成 N 个内部子组件
       let internalSubcomponents = [];
-      if (enableInternalSplit && scoreResult.shouldSplit) {
+      if (enableInternalSplit && scoreResult.shouldSplit && !collapsed) {
         internalSubcomponents = splitSectionInternally(sec, idx);
         allInternalSubcomponents.push(
           ...internalSubcomponents.map((sub) => ({
@@ -746,17 +769,39 @@ export class SubcomponentPlanner {
         );
       }
 
+      // 🛡️ Loop 2.1.B（2026-09-10）：@antd/tab / tabs / 竖 nav 强制 {nav, panels} 二元结构，
+      // nav 不得丢（device 左侧竖 tab 头曾整段消失）。非 tab/nav section 原样透传。
+      // 🎯 治本 A（2026-09-10）：横向顶部 tab（如 device 的 @antd/tab 监控/照明/通风条）
+      // 不应套竖向 nav 语义——orientation='horizontal' 时 type 用 'tabs'（横向 tab 条 + 下方内容），
+      // 不注入竖向 'nav' 职责描述，避免产物竖排。
+      const tabStructured = enforceTabStructure(sec);
+      const tabOrientation = tabStructured.tabStructure?.orientation || 'vertical'
+      const isHorizontalTab = tabStructured.tabStructure && tabOrientation === 'horizontal'
+
+      const effectiveType = isHorizontalTab ? 'tabs' : rawType
+      const effectiveResponsibility = isHorizontalTab
+        ? '标签页切换区（顶部横向 tab，下方为对应内容区，禁止竖向侧栏布局）'
+        : responsibility
+
       return {
         id: sec.id || `section-${idx + 1}`, // 优先用原始 id，便于 engineer 对照
-        responsibility,
+        responsibility: effectiveResponsibility,
         elementCount,
         title: String(title).trim().slice(0, 30),
+        type: effectiveType || undefined,
+        collapsed,
+        renderHint: collapsed ? 'v-for' : undefined,
+        itemCount: collapsed ? elementCount : undefined,
+        items: collapsed ? sec.items : undefined,
         // 🎯 Phase 2 方案1: 新增字段
         complexityScore: scoreResult.score,
         complexityReasons: scoreResult.reasons,
         layoutMetadata,
         internalSubcomponents, // 该 section 的内部子组件
-        shouldSplitInternally: scoreResult.shouldSplit,
+        shouldSplitInternally: collapsed ? false : scoreResult.shouldSplit,
+        // 🛡️ Loop 2.1.B：tab/nav section 的二元结构契约（nav + panels）
+        // 治本 A：横向 tab 显式标注 orientation，下游据此走 tabs 而非 nav 渲染
+        ...(tabStructured.tabStructure ? { tabStructure: tabStructured.tabStructure } : {}),
       };
     });
 

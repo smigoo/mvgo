@@ -72,8 +72,18 @@ import { healLessSource } from '../validators/less-compile-gate.js';
 import {
   validateResourceAttribution,
   generateAttributionGuidance,
+  stripCrossSectionResourceBindings,
 } from '../validators/resource-attribution-validator.js';
-import { buildResourceManifest, resolveSectionKey } from '../utils/resource-manifest.js';
+import {
+  buildResourceManifest,
+  buildContracts,
+  resolveSectionKey,
+} from '../utils/resource-manifest.js';
+import { isValidEchartsType, normalizeChartOptionType } from '../utils/chart-type-guard.js';
+import {
+  audit as auditManifest,
+  auditSelfConsistency,
+} from '../utils/manifest-auditor.js';
 import {
   autoWireSubComponentProps,
   rewriteSubcomponentResourceImportsToProps,
@@ -669,11 +679,12 @@ export class MicrocodeEngineer extends BaseAgent {
             effectiveSections.length + internalSubcomponents.length;
 
           p += `本组件**必须**拆分为 **${totalSubcomponents}** 个独立子组件文件：\n`;
-          p += `- **${effectiveSections.length}** 个 section 级子组件（每个 section 各一个文件）\n`;
+          p += `- **${effectiveSections.length}** 个 section 级子组件（每个 section 各一个文件；list/grid 折叠 section 只算 1 个文件）\n`;
           if (internalSubcomponents.length > 0) {
             p += `- **${internalSubcomponents.length}** 个内部子组件（section 内部拆分）\n`;
           }
-          p += `\n文件名和组件名由你根据语义自行命名（PascalCase），但**数量和对应关系不得缩减**。\n\n`;
+          p += `\n文件名和组件名由你根据语义自行命名（PascalCase），但**数量和对应关系不得缩减**。\n`;
+          p += `🚨 **重复卡片必须 v-for**：type=list|grid 或 collapsed=true 的 section，只生成 **1 个 item 模板** + \`v-for\`，**禁止**拆成 DeviceCard1..N / Deco1..N。COMP-001 按模板计数。\n\n`;
 
           p += `**Section 级子组件清单**：\n`;
           effectiveSections.forEach((sec, idx) => {
@@ -687,6 +698,19 @@ export class MicrocodeEngineer extends BaseAgent {
             }
 
             p += `\n`;
+
+            const listLike =
+              sec.collapsed === true ||
+              sec.renderHint === 'v-for' ||
+              ((sec.type === 'list' || sec.type === 'grid') &&
+                (Number(sec.itemCount) > 1 ||
+                  (Array.isArray(sec.items) && sec.items.length > 1)));
+            if (listLike) {
+              const n =
+                Number(sec.itemCount) ||
+                (Array.isArray(sec.items) ? sec.items.length : 0);
+              p += `   🚨 本 section 是 ${sec.type || 'list'}，含 ${n} 个同构 item。只生成 **1 个** 子组件文件（item 模板），用 \`v-for\` 渲染 ${n} 项。**禁止**拆成 DeviceCard1..${n} 或多个独立 .vue。\n`;
+            }
 
             // 🎯 Phase 2 方案1: 显示该 section 的内部子组件
             if (
@@ -813,6 +837,9 @@ export class MicrocodeEngineer extends BaseAgent {
             p += `- \`${sec.id}\` — ${sec.responsibility}${sec.title ? `（原标题「${sec.title}」）` : ''}`;
             if (sec.complexityScore !== undefined) {
               p += `，复杂度 ${sec.complexityScore}`;
+            }
+            if (sec.collapsed || sec.renderHint === 'v-for') {
+              p += `（1 个模板 + v-for，禁止拆成 N 个文件）`;
             }
             p += `\n`;
           });
@@ -1355,6 +1382,12 @@ export class MicrocodeEngineer extends BaseAgent {
     // 仅在资源确实按 section 收窄时才有值；为空时 L7 自动 fail-open 回退启发式。
     const fileSectionMap = {};
 
+    // 🆕 Loop 0.5：由 effectiveMapping 预构建 Working Manifest（含 sections / resources / contracts[]）。
+    // contracts[] 在子组件归属（fileSectionMap，line ~1589）填完后由 buildContracts 补算。
+    const workingManifest = buildResourceManifest(
+      effectiveMapping || input.resourceDomMapping || [],
+    );
+
     //并行子组件生成：子组件之间互相独立（仅依赖 index.vue 上下文），并发生成大幅提速。
     // 并发度默认 3（env: SUBCOMP_CONCURRENCY），每块独立校验/重试/落盘，互不影响。
     // 🔒 动态封顶：子组件并行 worker 的并发不得超过 AI 网关全局槽位（resolveRequestPolicy().requestConcurrency），
@@ -1615,6 +1648,15 @@ export class MicrocodeEngineer extends BaseAgent {
         } catch {
           /* 归属解析失败不阻断（L7 启发式兜底） */
         }
+      }
+      // 🆕 Loop 0.5：fileSectionMap 填完后，由 Working Manifest 生成 contracts[]（不反推 defineProps）。
+      // contracts[] 供 Loop 1 写盘 import 收窄（不再 forceAll 全量）与 autoWire 强制接线。
+      workingManifest.contracts = buildContracts(workingManifest, fileSectionMap);
+      if (workingManifest.contracts.length > 0) {
+        this.logger.info('🆕 Working Manifest contracts 已生成', {
+          count: workingManifest.contracts.length,
+          files: workingManifest.contracts.map((c) => c.file),
+        });
       }
       const workers = [];
       for (let i = 0; i < Math.min(CONCURRENCY, chunks.length); i++)
@@ -2018,12 +2060,20 @@ export class MicrocodeEngineer extends BaseAgent {
           // 子组件保持普通注入（只注入自身用到的，改写后主要为 vue 运行库 import）。
           // 主组件 forceAll 后，autoWire 才总能找到同名变量可传给子组件（CODE-019 收敛前提）。
           const isMainComp = /^package\/index\.vue$/.test(relPath);
+          // Loop 1：主组件走契约（parentMustPass ∪ panel），不再 forceAll 全量。
+          // 无 contracts 时不再回退 forceAll 全量风暴：改为注入「模板实际引用 + panel 级」资源
+          // （injectResourceImports 默认分支扫描代码内已用资源变量），既维持 CODE-019 父持有子透传，
+          // 又不把全部 success 资源强塞主组件 import。
+          const mainOpts =
+            isMainComp && workingManifest.contracts?.length > 0
+              ? { contractMapping: workingManifest.contracts }
+              : null;
           const injected = injectResourceImports(
             content,
             effectiveMapping,
             relBase,
             diag,
-            isMainComp ? { forceAll: true } : null,
+            isMainComp ? mainOpts : null,
           );
           if (diag.residual.length > 0 || diag.unmapped.length > 0) {
             placeholderDiag.push({ file: relPath, ...diag });
@@ -2310,6 +2360,26 @@ export class MicrocodeEngineer extends BaseAgent {
         ),
         fileSectionMap: Object.keys(fileSectionMap).length > 0 ? fileSectionMap : null,
       });
+
+      // 🛡️ 1.C 治本·跨 section 错绑确定性剥离（修，不只 BLOCK）：fileSectionMap 精确模式下，
+      // 把绑定到非归属 section 的 DOM 引用（url(${x}) / <img :src="x">）与对应 import 一并移除，
+      // 避免只为绿而 BLOCK 等 LLM 重试、又避免错绑资源视觉乱用。无 fileSectionMap 不删（Loop 0.D）。
+      if (_resourceAttribution && Object.keys(fileSectionMap).length > 0) {
+        const stripRes = stripCrossSectionResourceBindings(
+          buildResourceManifest(
+            resolveResourceDomMapping(input.resourceDomMapping, input.outputPath),
+          ),
+          allFiles,
+          fileSectionMap,
+        )
+        if (stripRes.removed.length > 0) {
+          for (const [p, c] of Object.entries(stripRes.files)) allFiles[p] = c
+          this.logger.warn(
+            `🛡️ 1.C 已剥离 ${stripRes.removed.length} 处跨 section 错绑: ` +
+              stripRes.removed.map((r) => `${r.file}:${r.varName}(${r.owningSection}≠${r.boundSection})`).join('、'),
+          )
+        }
+      }
 
       // #278 降级（2026-08-30）：bg/icon/img 未使用从 BLOCK 降为 WARN + 自愈。
       // 根因：LLM 可能把 N 个同类资源合并成 v-for 循环（如 14 个 tab icon → 12 项），
@@ -2651,6 +2721,9 @@ export class MicrocodeEngineer extends BaseAgent {
       return {
         success: true,
         files: allFiles,
+        // 🆕 Loop 0.5/1：把 Working Manifest（含 contracts[]）带回 execute 层，供落盘终验兜底
+        // 按契约注入主组件 import（避免 forceAll 冲掉收窄结果）。
+        workingManifest: workingManifest || { contracts: [] },
         degradedScriptParts: input._degradedScriptParts || [],
         // 🛡️ P1-4：坏文件隔离降级清单（与 degradedScriptParts 并列，语义不同）
         degradedFiles: input._degradedFiles || [],
@@ -3668,6 +3741,14 @@ export class MicrocodeEngineer extends BaseAgent {
   }
 
   /**
+   * 🛡️ 治本 E（2026-09-10）：v-if 与 v-for 同元素 → 拆为 template v-for + 内层 v-if。
+   * 交由 code-fix-rules 的 VUE-VIF-VFOR-001 在 STRUCTURE 阶段调用。
+   */
+  _stripVIfOnVFor(vueContent) {
+    return microcodeHealer.stripVIfOnVFor(vueContent);
+  }
+
+  /**
    * 🛡️ 确保 package/index.vue 根元素携带实例 ID 类 c-mc-max-{id}（用户要求的「最外层编码 id」）。
    * 仅对模板内首个元素注入；若已存在则跳过。非侵入式，不改变其它结构。
    *
@@ -3911,8 +3992,12 @@ export class MicrocodeEngineer extends BaseAgent {
     const _sessionId =
       String(opts.sessionId || (this && this._engineerSessionId) || '').trim();
     const _llmComponentId = String(d.componentId || '').trim();
-    // 🛡️ P0（2026-09-08）：检查点优先 —— 同一 sessionId 的首次归一化结果跨重试轮次持久化。
-    const _checkpointId = _componentIdCheckpoints.get(_sessionId);
+    // 🛡️ Loop 0.B：检查点优先 —— 内存 Map → declare.meta.checkpoint → 才新建。
+    const _checkpointId = resolveComponentIdCheckpoint({
+      sessionId: _sessionId,
+      memoryId: _componentIdCheckpoints.get(_sessionId) || '',
+      declareCheckpointId: d?.meta?.checkpoint?.componentId || '',
+    });
     // 重建留痕标志：函数级作用域（供末尾 4130 段使用）。绝不能放 else 块内 let ——
     // 命中检查点（走 if 分支、跳过 else）时块内 let 未执行 → 末尾引用抛 ReferenceError
     // （2026-09-09 实锤：告警 "无法解析 declare.json 进行后校验 {_forceChanged is not defined}"）。
@@ -5163,18 +5248,25 @@ export class MicrocodeEngineer extends BaseAgent {
         throw retryErr;
       }
 
-      // 1.5. 后处理：自动注入资源import语句（防止AI臆造文件名）
-      // 注意：此处注入已被 generateCode 内的前置注入覆盖，保留作为兜底。
-      // 🎯 P0/D 契约：主组件 forceAll 全量 import（子组件透传的唯一事实源）。
+      // 1.5. 后处理：兜底注入资源 import 语句（防止 AI 臆造文件名）。
+      // 注意：generateCode 内的前置注入已按契约完成主组件 import；此兜底只处理「主组件文件
+      // 确实没有任何资源 import」的残留空档。Loop 1：禁止 forceAll 全量，改为注入模板实际
+      // 引用的资源变量（panel + 已用资源），不冲掉 generateCode 的契约收窄。
       if (resourceDomMapping && codeResult?.files?.['package/index.vue']) {
-        codeResult.files['package/index.vue'] = injectResourceImports(
-          codeResult.files['package/index.vue'],
-          resourceDomMapping,
-          null,
-          null,
-          { forceAll: true },
-        );
-        this.logger.info('✅ 已自动注入资源import语句（execute 兜底，主组件全量）');
+        const _mainIdx = codeResult.files['package/index.vue'];
+        // 🎯 放宽判定：契约注入允许语义名（如 bgm / iconVehicle），不再只认 bg|icon|img+数字。
+        // 只要出现任一来自 resources/images 的资源 import 即视为已注入，避免误触发全量覆盖。
+        const _alreadyHasResImports = /from\s+['"]\.{1,2}\/resources\/images\//.test(_mainIdx);
+        if (!_alreadyHasResImports) {
+          codeResult.files['package/index.vue'] = injectResourceImports(
+            _mainIdx,
+            resourceDomMapping,
+            null,
+            null,
+            null, // 走默认「注入模板已引用资源变量」分支，不 forceAll
+          );
+          this.logger.info('✅ 已自动注入资源import语句（execute 兜底，仅已引用资源）');
+        }
       }
 
       // 1.6 theme-vars.less 路径纠偏：LLM 分块生成时可能把 theme-vars.less 写到
@@ -5340,6 +5432,49 @@ export class MicrocodeEngineer extends BaseAgent {
               `🎯 [mc] 图表 type 强约束：${fixedCount} 处 'bar' 强制改 '${targetType}'（vision types: ${[...visionTypes].join(',') || '无'}）`,
             );
           }
+        }
+
+        // 🛡️ Loop 2.1.E（2026-09-10）：非法 series.type 拒收（chartType 真值驱动）。
+        // 根因：traffic 产物 series.type:'分组柱状图'（中文别名，非 echarts 注册名）→ init 失败/空白。
+        // 治本：只允许注册名（bar/line/pie/…），中文别名一律按真值收敛；真值缺失则 fail-closed 回退。
+        try {
+          const _truthChartType = chartsArr[0]?.type
+            ? String(chartsArr[0].type).toLowerCase()
+            : null;
+          let _illegalFixed = 0;
+          for (const [fp, fc] of Object.entries(codeResult.files || {})) {
+            if (!fp.endsWith('.vue') || typeof fc !== 'string') continue;
+            const before = fc;
+            // 逐 series 项规范化：仅处理 `type: '...'` 紧跟于 series 数组内的写法
+            const after = before.replace(
+              /(series\s*:\s*\[[\s\S]*?\])(\s*[,}])/g,
+              (block, arr, tail) => {
+                const fixedArr = arr.replace(
+                  /type\s*:\s*(['"])([^'"]+)\1/g,
+                  (m2, q, raw) => {
+                    if (isValidEchartsType(raw, { chartType: _truthChartType })) return m2;
+                    const safe = normalizeChartOptionType(
+                      { series: [{ type: raw }] },
+                      { chartType: _truthChartType },
+                    ).series[0].type;
+                    if (safe !== String(raw).toLowerCase()) _illegalFixed += 1;
+                    return `type: ${q}${safe}${q}`;
+                  },
+                );
+                return fixedArr + tail;
+              },
+            );
+            if (after !== before) codeResult.files[fp] = after;
+          }
+          if (_illegalFixed > 0) {
+            this.logger.warn(
+              `🛡️ [mc] 2.1.E 非法 series.type 已收敛 ${_illegalFixed} 处（真值=${_truthChartType || 'none→line'}）`,
+            );
+          }
+        } catch (ctErr) {
+          this.logger.warn('⚠️ [mc] 2.1.E chartType 收敛失败（非阻塞）', {
+            error: ctErr?.message,
+          });
         }
 
         // 🎯 N1 数字字面量确定性剥离：vision TEXT 字符集 vs 产物数字字面量差集 → 标 TODO 占位
@@ -5991,6 +6126,7 @@ export default declareInfo
           try {
             const _awRes = autoWireSubComponentProps(allFiles, {
               resourceDomMapping: _awInput,
+              contracts: workingManifest?.contracts || [],
             });
             if (_awRes.fixes.length > 0) {
               Object.assign(allFiles, _awRes.files);
@@ -6128,14 +6264,16 @@ export default declareInfo
           const relBase = /^package\/components\//.test(fp)
             ? '../../resources/images/'
             : '../resources/images/';
-          // 🎯 P0/D 契约：主组件 forceAll 全量 import（子组件透传唯一事实源）
+          // 🎯 Loop 1：落盘终验兜底按契约注入主组件 import（不再 forceAll 全量）。
+          // 借用 generateCode 回传的 Working Manifest contracts，幂等补缺失 import。
           const isMain = /^package\/index\.vue$/.test(fp);
+          const _contracts = codeResult?.workingManifest?.contracts || workingManifest?.contracts || [];
           const injected = injectResourceImports(
             fc,
             _finalMapping,
             relBase,
             null,
-            isMain ? { forceAll: true } : null,
+            isMain ? { contractMapping: _contracts } : null,
           );
           if (injected !== fc) {
             finalTruthFiles[fp] = injected;
@@ -6235,6 +6373,56 @@ export default declareInfo
           sessionId: ctx?.sessionId,
         });
       }
+      // 🛡️ Loop 4 双裁判门禁接入（落盘前最后一道硬门禁）：
+      // 从最终事实源（finalTruthFiles）反推 Working Manifest，跑 manifest-auditor。
+      //  - 无 Golden（活流量）：只跑 auditSelfConsistency（契约声明即写入，verifyProduct 口径），
+      //    确定性、不误杀（audit(null) 会把每个资源判臆造而全量 BLOCK，故禁用）。
+      //  - 有 Golden（this.goldenManifest 由外部重建/CI 注入，与活流量零耦合）：
+      //    跑完整 audit（structural/resource/contract 三类 BLOCK）+ 产物 verifyProduct。
+      //  默认仅 WARN 记录（不打断正在测试的流程）；MANIFEST_AUDIT_ENFORCE=1 升级为 BLOCK（fail-closed，拒绝落盘）。
+      //  注：门禁自身异常（审计器故障）不视为业务阻断 → 捕获后仅告警，避免门禁 bug 拖垮生成。
+      let _auditBlocked = false
+      try {
+        const _auditWorking = {
+          ...(codeResult?.workingManifest || workingManifest || { contracts: [] }),
+          contracts:
+            codeResult?.workingManifest?.contracts ||
+            workingManifest?.contracts ||
+            [],
+        }
+        const _enforce = process.env.MANIFEST_AUDIT_ENFORCE === '1'
+        const _auditResult = this.goldenManifest
+          ? auditManifest(this.goldenManifest, _auditWorking, finalTruthFiles)
+          : auditSelfConsistency(_auditWorking, finalTruthFiles)
+        if (_auditResult && _auditResult.issues.length > 0) {
+          const _sev = _enforce ? 'BLOCK' : 'WARN'
+          this.logger[_enforce ? 'error' : 'warn'](
+            `🛡️ Loop4 双裁判门禁命中 ${_auditResult.summary.blocked} 项阻断 / 共 ${_auditResult.summary.total} 项（${_enforce ? 'ENFORCE=BLOCK' : '默认 WARN，不阻断'}）`,
+            { byCode: _auditResult.summary.byCode, enforce: _enforce },
+          );
+          for (const _iss of _auditResult.issues.slice(0, 12)) {
+            this.logger[_enforce ? 'error' : 'warn'](
+              `   · [${_sev}] ${_iss.code}: ${_iss.detail}`,
+            );
+          }
+          _auditBlocked = _enforce;
+        } else {
+          this.logger.info('✅ Loop4 双裁判门禁通过（无阻断项）', {
+            golden: Boolean(this.goldenManifest),
+          });
+        }
+      } catch (_auditErr) {
+        // 审计器自身异常（非业务 BLOCK）→ 不阻断生成成果，仅告警，避免门禁故障拖垮流程。
+        this.logger.warn('⚠️ Loop4 双裁判门禁执行异常（已跳过，不阻断）', {
+          error: _auditErr?.message || String(_auditErr),
+        });
+      }
+      if (_auditBlocked) {
+        throw new Error(
+          'Loop4 双裁判门禁 BLOCK（MANIFEST_AUDIT_ENFORCE=1）：拒绝统一终态落盘',
+        );
+      }
+
       const { written: finalTruthWritten, skipped: finalTruthSkipped } =
         _lockedForFinal
           ? { written: [], skipped: [] }

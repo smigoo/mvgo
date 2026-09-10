@@ -344,6 +344,80 @@ export function detectCrossSectionResourceBindings(manifest, files, fileSectionM
 }
 
 /**
+ * 跨 section 资源错绑确定性剥离（0907 L7 治本·1.C：修，不只 BLOCK）。
+ *
+ * 与 detectCrossSectionResourceBindings 配套的「自愈」变体：返回**修改后的 files**，
+ * 把被错误绑定到非归属 section 的 DOM 引用（url(${varName}) / <img :src="varName"> /
+ * background 引用）与对应的 import 语句一并移除，并记 WARN。不只为 BLOCK 等 LLM 重试。
+ *
+ * 仅当 fileSectionMap 精确传入时生效（Loop 0.D：无 map 不启发式，只 WARN 不删）。
+ * 返回 { files, removed: [{ file, varName, owningSection, boundSection }] }。
+ *
+ * @param {Object} manifest - buildResourceManifest 返回值（含 sections）
+ * @param {Object|Array} files - 生成代码文件 map（path→content）或 [{path,content}]
+ * @param {Object|null} [fileSectionMap] - path → 归属 section key（精确模式）
+ * @returns {{ files: Object, removed: Array }}
+ */
+export function stripCrossSectionResourceBindings(manifest, files, fileSectionMap = null) {
+  const varToSection = {}
+  for (const [sec, res] of Object.entries(manifest?.sections || {})) {
+    for (const m of res || []) {
+      const v = m?.assignedVarName || m?.semanticVarName
+      if (v) varToSection[v] = sec
+    }
+  }
+  if (Object.keys(varToSection).length === 0 || !fileSectionMap) {
+    return { files: Array.isArray(files) ? files : { ...files }, removed: [] }
+  }
+
+  const fileEntries = Array.isArray(files)
+    ? files.map((f) => ({ path: f?.path, content: f?.content }))
+    : Object.entries(files || {}).map(([p, c]) => ({ path: p, content: c }))
+
+  const out = {}
+  const removed = []
+
+  for (const f of fileEntries) {
+    const p = f?.path || ''
+    let c = typeof f?.content === 'string' ? f.content : ''
+    if (p.endsWith('.vue') && !/index\.vue$/.test(p) && fileSectionMap[p]) {
+      const primarySec = fileSectionMap[p]
+      const referenced = []
+      for (const [v, sec] of Object.entries(varToSection)) {
+        if (c.includes(v)) referenced.push({ varName: v, section: sec })
+      }
+      for (const r of referenced) {
+        if (r.section !== primarySec) {
+          // ① 移除 import 语句（import varName from '.../images/varName...'）
+          c = c.replace(
+            new RegExp(`\\n?\\s*import\\s+${r.varName}\\s+from\\s+['\"][^'\"]*['\"]\\s*;?`, 'g'),
+            '',
+          )
+          // ② 移除 <img ... :src="varName" ...> 整标签
+          c = c.replace(
+            new RegExp(`<img[^>]*\\s:src=["']${r.varName}["'][^>]*>`, 'g'),
+            '',
+          )
+          // ③ 移除 url(${varName}) / url(varName)
+          c = c.replace(new RegExp(`url\\(\\s*\\$?\\{?${r.varName}\\}?\\s*\\)`, 'g'), '')
+          // ④ 兜底：模板里裸 ${varName} / "varName" 字符串引用（如 :style 拼接）
+          c = c.replace(new RegExp(`\\$\\{${r.varName}\\}`, 'g'), '')
+          removed.push({
+            file: p,
+            varName: r.varName,
+            owningSection: r.section,
+            boundSection: primarySec,
+          })
+        }
+      }
+    }
+    out[p] = c
+  }
+
+  return { files: out, removed }
+}
+
+/**
  * 生成资源归属修订指导（WARN 级，供重试轮次注入 prompt，非阻断）。
  * @param {Array} issues validateResourceAttribution 返回的 issues
  * @param {Array} bgAttribution bg 资源权威归属映射（含 scope）

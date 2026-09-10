@@ -55,6 +55,28 @@ function normalizeSectionId(id) {
   return String(id || '').replace(/^section[-_]/, '');
 }
 
+function isListLikeSection(sec) {
+  if (!sec || typeof sec !== 'object') return false;
+  if (sec.collapsed === true || sec.renderHint === 'v-for') return true;
+  const t = String(sec.type || '').toLowerCase();
+  if ((t === 'list' || t === 'grid') && Array.isArray(sec.items) && sec.items.length > 1) {
+    return true;
+  }
+  return Array.isArray(sec.items) && sec.items.length > 1;
+}
+
+function sectionCoveredByVFor(tpl, reachable, itemCount) {
+  if (!/v-for\s*=/.test(tpl) && !/v-for\s*=/.test(reachable)) return false;
+  if (!Number.isFinite(itemCount) || itemCount < 2) return true;
+  const n = Math.trunc(itemCount);
+  const corpus = `${tpl}\n${reachable}`;
+  return (
+    corpus.includes(`Array(${n})`) ||
+    corpus.includes(`length: ${n}`) ||
+    new RegExp(`\\b${n}\\b`).test(corpus)
+  );
+}
+
 /**
  * 检测 componentPlan 中「规划了但未被 index.vue 组装」的 section。
  *
@@ -132,7 +154,16 @@ export function detectMissingSections(files, componentPlan) {
     const viaComponent =
       pascal && (usedTags.has(pascal) || importedNames.has(pascal));
     const viaTitle = title.length >= 2 && reachable.includes(title);
-    if (!viaComponent && !viaTitle) {
+    const viaListTemplate =
+      isListLikeSection(sec) &&
+      (viaComponent ||
+        viaTitle ||
+        sectionCoveredByVFor(
+          tpl,
+          reachable,
+          Number(sec.itemCount) || (Array.isArray(sec.items) ? sec.items.length : 0),
+        ));
+    if (!viaComponent && !viaTitle && !viaListTemplate) {
       missing.push({ id, title: title || id });
     }
   }

@@ -75,6 +75,8 @@ export { evaluateVisualTrustVerdict, VISUAL_VERDICTS } from '../utils/visual-tru
 // 纯函数抽到 utils/inline-row-rebuilder.js（无 import.meta，便于 jest 单测）；此处 import 复用并对外导出。
 import { rebuildSectionsPreservingInlineRows } from '../utils/inline-row-rebuilder.js'
 export { rebuildSectionsPreservingInlineRows }
+import { mergeInlineRowsIntoSections } from '../utils/inline-row-merger.js'
+export { mergeInlineRowsIntoSections }
 // 🛡️ P1（2026-09-09）：inlineCompositeRows → headerSlots 推断（纯函数，无 import.meta，jest 可 require）。
 // 单一事实源：visual-parser.js 不再内联实现，import 复用并对外导出。
 import {
@@ -1443,6 +1445,8 @@ ${analysisTask}`
 
     // 🛡️ L2 / P0-2（2026-09-07）：bbox 几何校验，确定性重建行内复合结构，
     // 挂到 vision 结果供下游 planner/engineer 优先采用（避免 vision 误拆竖排）。
+    // 🛡️ Loop 2.1.A（2026-09-10）：不止写旁路字段——把同行块**真正合并进 layout.sections**
+    // （horizontal block），否则下游 planner/engineer 不读旁路，结构纠正在写盘前丢失。
     if (figmaData) {
       try {
         const inlineRows = rebuildSectionsPreservingInlineRows(figmaData)
@@ -1450,6 +1454,16 @@ ${analysisTask}`
           parsed.inlineCompositeRows = inlineRows
           if (parsed.layoutStructure && !parsed.layoutStructure.inlineCompositeRows) {
             parsed.layoutStructure.inlineCompositeRows = inlineRows
+          }
+          // 真正改写结构表（顶层 layout）
+          if (parsed.layout) {
+            parsed.layout = mergeInlineRowsIntoSections(parsed.layout, inlineRows)
+          }
+          if (parsed.layoutStructure && parsed.layoutStructure.layout) {
+            parsed.layoutStructure.layout = mergeInlineRowsIntoSections(
+              parsed.layoutStructure.layout,
+              inlineRows,
+            )
           }
         }
       } catch (e) {

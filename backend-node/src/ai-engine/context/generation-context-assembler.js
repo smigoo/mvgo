@@ -16,6 +16,11 @@ function normalizeComponentPlan(plan) {
         title: section.title || null,
         responsibility: section.responsibility || null,
         elementCount: Number.isFinite(section.elementCount) ? section.elementCount : null,
+        type: section.type || null,
+        collapsed: section.collapsed === true,
+        renderHint: section.renderHint || null,
+        itemCount: Number.isFinite(section.itemCount) ? section.itemCount : null,
+        items: Array.isArray(section.items) ? section.items : undefined,
       }))
     : []
 

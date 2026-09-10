@@ -23,7 +23,7 @@
  * - detectMissingPropsWiring(files, options) → Array<{ id, severity, file, message }>
  */
 
-import { extractResourceVarNames, buildVarToMapping } from './resource-import-guard.js'
+import { extractResourceVarNames, buildVarToMapping, injectResourceImports } from './resource-import-guard.js'
 
 const NON_PROP_ATTRS = new Set([
   'class',
@@ -622,6 +622,26 @@ export function autoWireSubComponentProps(files = [], options = {}) {
   if (fileList.length === 0) return { files: {}, fixes }
 
   const opts = normalizeResourceOptions(options)
+  // 🆕 Loop 1：契约模式。contracts = [{ file, blockIds, resourceProps, parentMustPass }]
+  // 契约内的资源 prop 即使父组件当前未声明，也必须补父级 import + 接线（不臆造、但契约必达）。
+  const contracts = Array.isArray(opts.contracts) ? opts.contracts : []
+  const contractByFile = new Map()
+  for (const c of contracts) {
+    if (c && c.file) contractByFile.set(c.file, c)
+  }
+
+  // 🛡️ 治本（解 2026-09-10 CODE-019 死锁）：success 资源变量全集。
+  // 微码契约规定「资源只归主组件持有、子组件 defineProps + 父透传」，因此子组件实际使用的
+  // 资源 prop 必然是 success 资源变量之一。只要该 prop 在 mapping 中是成功资源变量，
+  // 父级就必须 import + 接线（不臆造数据源，bg1 是真实下载成功的资源）。
+  // 这与 Loop 1 契约归属无关——即便 fileSectionMap 精确归属未命中 bg1 所属 section，
+  // 也不应让子组件运行时 undefined。fail-closed 安全：仅对真实 success 资源变量生效。
+  const successResourceVars = new Set(
+    (opts.resourceDomMapping || [])
+      .filter((m) => m && m.downloadStatus === 'success')
+      .map((m) => m.assignedVarName || m.semanticVarName)
+      .filter(Boolean),
+  )
 
   // 子组件 props 事实（与 detectMissingPropsWiring 同源）
   const subcompProps = new Map()
@@ -679,18 +699,56 @@ export function autoWireSubComponentProps(files = [], options = {}) {
     return { content: mutated ? out : mainText, mutated }
   }
 
+  // 🆕 Loop 1 + 治本（2026-09-10）：契约内 resource prop 但父未声明 → 先注入父级 import
+  // （走 injectResourceImports，用「仅该 var」的 mapping 子集），确保 :prop 有源。
+  // 治本放宽：即便无契约（契约精确归属漏命中），只要 propName 是 success 资源变量（successResourceVars），
+  // 也强制从 mapping 子集补父级 import——与「资源只归主组件持有」契约一致，且不臆造数据源。
+  const ensureParentImport = (propName, contract) => {
+    if (wirable.has(propName)) return true
+    const isSuccessResource = successResourceVars.has(propName)
+    if (!contract && !isSuccessResource) return false
+    const mapping = (opts.resourceDomMapping || []).filter(
+      (m) =>
+        m &&
+        m.downloadStatus === 'success' &&
+        (m.assignedVarName === propName || m.semanticVarName === propName),
+    )
+    if (mapping.length === 0) return false
+    const relBase = '../resources/images/'
+    const before = mainContent
+    // 用「仅该 var」的 contractMapping 精确强制注入（默认分支只注入代码里已用到的变量，
+    // 而此处 propName 恰恰因父模板漏写而未出现 → 必须用契约模式指定 allowedNames）。
+    const injected = injectResourceImports(before, mapping, relBase, null, {
+      contractMapping: [{ file: mainPath.path, parentMustPass: [propName] }],
+    })
+    if (injected !== before) {
+      mainContent = injected
+      // 注入后 script 已含该 var → 更新 wirable
+      const newScript = extractBlock(mainContent, 'script')
+      for (const n of resolveWirableNames(newScript)) wirable.add(n)
+    }
+    return wirable.has(propName)
+  }
+
   for (const [compName, propInfo] of subcompProps) {
     const calls = componentCalls.get(compName)
     if (!calls) continue
+    const contract = contractByFile.get(propInfo.path) || null
 
     const requiredSet = new Set(propInfo.requiredProps)
     const missing = []
 
-    // 资源 props：父级若已声明同名变量（资源 import 注入后必有）→ 可接线
+    // 资源 props：父级若已声明同名变量（资源 import 注入后必有）→ 可接线；
+    // Loop 1 契约内资源 prop OR 该 prop 是真实 success 资源变量 → 父未声明也强制接线（先补 import）。
+    // 治本（2026-09-10）：契约归属（fileSectionMap 精确命中）可能漏掉子组件使用的资源，
+    // 导致「父模板未写 :bg1 → 父不 import bg1 → autoWire 补不上 → CODE-019」死锁。
+    // 只要该资源是 success 资源变量，就强制保证父级持有（与「资源只归主组件持有」契约一致）。
     for (const rp of propInfo.resourceProps) {
       if (requiredSet.has(rp)) continue
       if (hasPassedProp(calls, rp)) continue
-      if (wirable.has(rp)) missing.push({ prop: rp, reason: 'resource' })
+      const inContract = !!(contract && (contract.resourceProps || []).includes(rp))
+      const force = inContract || successResourceVars.has(rp)
+      if (wirable.has(rp) || force) missing.push({ prop: rp, reason: 'resource', force })
     }
     // required props：同样要求父级已声明同名变量才接线（不臆造 chartData/activeTab 数据源）
     for (const rp of propInfo.requiredProps) {
@@ -699,7 +757,10 @@ export function autoWireSubComponentProps(files = [], options = {}) {
     }
     if (missing.length === 0) continue
 
-    for (const { prop, reason } of missing) {
+    for (const { prop, reason, force } of missing) {
+      if (force) {
+        if (!ensureParentImport(prop, contract)) continue
+      }
       const { content, mutated } = doInject(mainContent, compName, prop)
       if (mutated) {
         mainContent = content

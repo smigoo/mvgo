@@ -66,6 +66,7 @@ import { LessCompileGate } from '../validators/less-compile-gate.js';
 import { HeaderRelationValidator } from '../validators/header-relation-validator.js';
 import { HeaderSlotValidator } from '../validators/header-slot-validator.js';
 import { applyHeaderSlotContractRewrite } from '../utils/header-slot-contract.js';
+import { resolveNodeExclusivity } from '../utils/node-exclusivity.js';
 import { validateDoNotInvent } from '../validators/do-not-invent-validator.js';
 //  P0-2: 结构顺序门禁（零 LLM，防区块颠倒）
 import { validateStructureOrder } from '../validators/structure-order-validator.js';
@@ -555,35 +556,41 @@ export function createPhase2Graph(config = {}) {
       // 的 vision 越界候选在此剔除，保证双端数据一致。
       const contractSlots = headerSlotValidation?.contractSlots || [];
       const rejectedNodes = headerSlotValidation?.rejectedNodes || [];
-      const rejectedKeys = new Set(
-        rejectedNodes
-          .map((r) => r?.figmaNodeId || r?.slotCandidate?.figmaNodeId || r?.slotCandidate?.content || '')
-          .filter(Boolean),
-      );
-      if (rejectedKeys.size > 0) {
-        const before = result.headerSlots?.length || 0;
-        result.headerSlots = (result.headerSlots || []).filter(
-          (s) => !rejectedKeys.has(s?.figmaNodeId || s?.content || ''),
-        );
-        if ((result.headerSlots?.length || 0) !== before) {
-          logger.warn(
-            `🛡️ headerSlots C-1 剔除(vue3)：${before - (result.headerSlots?.length || 0)} 个 vision 越界候选`,
-          );
-        }
-      }
-      if (contractSlots.length > 0) {
-        const existing = result.headerSlots || [];
-        const seen = new Set(existing.map((s) => s?.figmaNodeId || s?.content));
-        const merged = [
-          ...existing,
-          ...contractSlots.filter(
-            (s) => !seen.has(s?.figmaNodeId || s?.content),
-          ),
-        ];
-        result.headerSlots = merged;
+      const rewrite = applyHeaderSlotContractRewrite({
+        headerSlots: result.headerSlots || [],
+        contractSlots,
+        rejectedNodes,
+      });
+      result.headerSlots = rewrite.headerSlots;
+      if (rewrite.existingAll > 0 || contractSlots.length > 0) {
         logger.info(
-          `✅ headerSlots 契约回写(vue3): vision ${existing.length} + derived ${merged.length - existing.length} = ${merged.length} 个`,
+          `✅ headerSlots 契约回写(vue3): vision ${rewrite.existingAll}（纠错后 ${rewrite.visionKept}）+ derived kept=${rewrite.derivedKept} = ${result.headerSlots.length} 个`,
         );
+      }
+
+      // 🛡️ Loop 2.1.C（2026-09-10）：header vs content 互斥（figmaNodeId 只落一次）。
+      // 同一 node 同时出现在 headerSlots 与 layout.sections（如 header-stats）→ 二选一，
+      // 避免 T09 兜底注入后双份渲染。业务交互控件（tab/icon）保留在 slot。
+      try {
+        const layout = result.layout || result.layoutStructure?.layout;
+        const sections = layout?.sections || result.layoutStructure?.sections || [];
+        if (result.headerSlots?.length > 0 && sections.length > 0) {
+          const exc = resolveNodeExclusivity(result.headerSlots, sections)
+          result.headerSlots = exc.slots
+          if (layout) {
+            layout.sections = exc.sections
+          } else if (result.layoutStructure) {
+            result.layoutStructure.sections = exc.sections
+          }
+          if (exc.removedSlots.length > 0 || exc.removedContentNodes.length > 0) {
+            logger.info('🛡️ 2.1.C 互斥裁决：剔除重复 node', {
+              removedSlots: exc.removedSlots.length,
+              removedContentNodes: exc.removedContentNodes.length,
+            })
+          }
+        }
+      } catch (excErr) {
+        logger.warn('⚠️ 2.1.C 互斥裁决失败（非阻塞）', { error: excErr?.message })
       }
 
       state.onProgress?.({

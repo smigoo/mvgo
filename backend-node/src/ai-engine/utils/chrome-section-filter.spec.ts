@@ -130,4 +130,35 @@ describe('chrome-section-filter：base-panel chrome/content 分流', () => {
 
     expect(isChromeOnlySection(section)).toBe(false)
   })
+
+  it('Loop 2.0.C: headerRelation=sub-header 但含 stat-item → 不是 chrome-only', () => {
+    const section = {
+      id: 'header-stats',
+      name: 'sub-header',
+      headerRelation: 'sub-header',
+      header: {
+        controls: [
+          { type: 'stat-item', name: '设备类型', value: '28' },
+          { type: 'statistic', name: '完好率', value: '98%' },
+        ],
+      },
+    }
+    expect(isChromeOnlySection(section)).toBe(false)
+    const parsed: any = { layout: { sections: [section] } }
+    expect(stripChromeSectionsInPlace(parsed)).toHaveLength(0)
+    expect(parsed.layout.sections).toHaveLength(1)
+  })
+
+  it('Loop 2.0.C: headerRelation=title-same-row 且含业务 controls → 不是 chrome-only', () => {
+    const section = {
+      id: 'device-header-stats',
+      name: '顶部统计',
+      headerRelation: 'title-same-row',
+      header: {
+        controls: [{ type: 'stat-item', name: '设备总数', value: '68562' }],
+      },
+    }
+    expect(isChromeOnlySection(section)).toBe(false)
+  })
 })
+

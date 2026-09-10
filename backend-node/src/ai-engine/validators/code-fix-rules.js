@@ -771,6 +771,15 @@ export function registerBuiltinFixRules(pipeline, engineer, context = {}) {
     applyTo: VUE,
     fix: (content) => engineer._quoteBareObjectKeysInVue(content),
   });
+  // 🛡️ 治本 E（2026-09-10）：v-if 与 v-for 同元素 → 拆为 template v-for + 内层 v-if。
+  // 治本对象：env 样本 SubT.vue 同元素共存导致 runtime `Cannot read properties of undefined`。
+  pipeline.register({
+    id: 'VUE-VIF-VFOR-001',
+    name: 'v-if/v-for 同元素拆分（Vue3 铁律）',
+    phase: FIX_PHASE.STRUCTURE,
+    applyTo: VUE,
+    fix: (content) => engineer._stripVIfOnVFor(content),
+  });
 
   // ════════ 阶段 3：命名（NAMING）════════
   // 依赖实例 ID（从 componentName / outputPath 派生，不再依赖已被改写过的 componentName 变量）
@@ -1082,6 +1091,28 @@ export function registerBuiltinFixRules(pipeline, engineer, context = {}) {
     phase: FIX_PHASE.POLISH,
     applyTo: VUE,
     fix: (content, ctx) => engineer._stripOrphanControls(content, ctx),
+  });
+
+  // 🛡️ 治本 F1（2026-09-10）：`calc(var(--x, var(--x)) * n)` 默认值自引用双写无意义
+  // （ConsSection.vue:127 实测 `var(--fontSize, var(--fontSize))`）。改写为保留首个回退值：
+  // `calc(var(--x, DEF) * n)`，把第二个 `var(--x)` 还原为合理默认值（缺失时用 14px）。
+  // 纯正则，离线可验证；单条失败由 CodeFixPipeline 捕获跳过。
+  pipeline.register({
+    id: 'CSS-CALC-SELFREF-001',
+    name: 'calc 默认值自引用去掉双写',
+    phase: FIX_PHASE.STYLE,
+    applyTo: /\.(vue|less|css)$/i,
+    fix: (content) => {
+      if (typeof content !== 'string') return content;
+      const re = /calc\(\s*var\((--[\w-]+)\s*,\s*var\(\1\)\s*\)\s*\*([^)]+)\)/g;
+      let changed = false;
+      const out = content.replace(re, (_m, name, factor) => {
+        changed = true;
+        // 仅修正自引用双写；保留外层 calc 结构，默认值缺失时给 14px
+        return `calc(var(${name}, 14px) * ${factor})`;
+      });
+      return changed ? out : content;
+    },
   });
 
   // ════════ S1-P3（多区块高度按比例分配，治本，2026-08-29）════════

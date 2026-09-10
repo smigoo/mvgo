@@ -1,0 +1,93 @@
+# ============================================================
+# mvgo GitHub 单仓镜像 —— 忽略声明
+# 目标：GitHub 上 smigoo/mvgo 一个仓库包含全项目源码，
+#       排除依赖 / 构建产物 / 运行时产物 / 生成组件 / 数据与凭证
+# ============================================================
+
+# ---- 1. 依赖 ----
+node_modules/
+.pnpm-store/
+
+# ---- 2. 构建产物 ----
+dist/
+build/
+target/
+out/
+
+# ---- 3. 压缩 / 归档文件（全部忽略）----
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.gz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.iso
+*.dmg
+*.pkg
+*.jar
+*.war
+*.ear
+*.apk
+
+# ---- 4. 运行时产物 / 生成组件 ----
+workspace/
+temp-components/
+temp/
+logs/
+*.log
+outputs/
+artifacts/
+coverage/
+
+# ---- 5. 数据与凭证（AI provider keys、任务运行时数据）----
+/backend-node/data/
+/data/
+ai-config.json
+*.db
+*.sqlite
+.env
+.env.*
+!.env.example
+
+# ---- 6. 本地工具 / 会话数据（含敏感上下文，禁止上传）----
+.workbuddy/
+.pptx_workspace/
+.slidep/
+.claude/
+.codebuddy/
+.codex/
+.qwen/
+.trae/
+.lingma/
+.opencode/
+.gemini/
+
+# ---- 7. 不需要同步的目录 ----
+figma-plugins/
+docker/nginx/
+.archived/
+
+# ---- 8. 临时脚本 / 调试残留 / 缓存 ----
+*.tmp.mjs
+*.tmp.js
+*.tsbuildinfo
+server.log*
+temp-chat-attachments/
+temp-preview-images/
+probe-*.mjs
+debug-*.mjs
+audit-*.mjs
+test-component-l0b.json
+test-quota.md
+test-l0b-autofix.sh
+
+# ---- 9. 系统 / 编辑器 / 缓存 ----
+.DS_Store
+.idea/
+.vscode/
+*.swp
+.cache/
+.npm/

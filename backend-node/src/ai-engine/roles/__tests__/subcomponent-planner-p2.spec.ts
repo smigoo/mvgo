@@ -9,6 +9,12 @@
  * 5. 非图例特征不合并
  */
 
+jest.mock('../../config/backend-root', () => ({
+  getWorkspaceRoot: () => '/Users/smigoo/工作/mvgo/backend-node',
+  getLogsDir: () => '/tmp/mvgo-test-logs',
+  isDev: true,
+}));
+
 import { SubcomponentPlanner } from '../subcomponent-planner.js'
 
 describe("P2': 图例误识别为独立 section", () => {
@@ -297,3 +303,4 @@ describe('S3: 大分块拆分（多图表 section 二次拆分）', () => {
     expect(chunks.length).toBeLessThanOrEqual(1)
   })
 })
+

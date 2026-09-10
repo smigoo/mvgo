@@ -407,6 +407,56 @@ const props = defineProps<{ chartData: Array; bg2?: string }>()
     expect(res.fixes).toHaveLength(0);
   });
 
+  // 🛡️ 回归（2026-09-10 实锤 mc-max-1789002096933-a65c69f7 / c-env-monitor-wit1topz-a65c69f7）：
+  // 「父模板漏写 :bg1 → 父不 import bg1 → autoWire 补不上 → CODE-019 3×BLOCK 死锁」。
+  // 契约归属（fileSectionMap）漏命中 bg1 所属 section 时，inContract=false，
+  // 旧逻辑因父级未声明 bg1 而放弃接线 → 死锁。治本：bg1 是 success 资源变量 → 强制父级 import + 接线。
+  it('资源 prop 父级既未声明也未在契约内（契约漏命中）→ 仍强制补父级 import + 接线（解 CODE-019 死锁）', () => {
+    const mappingWithBg1 = [
+      { assignedVarName: 'bg2', resourceFile: 'bg-tab-active.png', downloadStatus: 'success' },
+      { assignedVarName: 'bg1', resourceFile: 'bg-7890.png', downloadStatus: 'success' },
+      { assignedVarName: 'icon1', resourceFile: 'icon-7941.png', downloadStatus: 'success' },
+    ];
+    const files = [
+      {
+        path: 'package/index.vue',
+        content: `<template>
+  <TabSwitcher :bg2="bg2" :icon1="icon1" />
+</template>
+<script setup>
+import bg2 from '../resources/images/bg-tab-active.png'
+import icon1 from '../resources/images/icon-7941.png'
+import TabSwitcher from './components/TabSwitcher.vue'
+</script>`,
+      },
+      {
+        path: 'package/components/TabSwitcher.vue',
+        content: `<template>
+  <div :style="{ backgroundImage: \`url(\${bg1})\` }"><img :src="icon1" /></div>
+</template>
+<script setup lang="ts">
+const props = defineProps<{ bg1?: string; bg2?: string; icon1?: string }>()
+</script>`,
+      },
+    ];
+    // contracts 为空（契约漏命中）→ 旧逻辑死锁
+    const res = autoWireSubComponentProps(files, {
+      resourceDomMapping: mappingWithBg1,
+      contracts: [],
+    });
+    const main = res.files['package/index.vue'] || '';
+    // 必须补出 bg1 的父级 import 与 :bg1 绑定
+    expect(main).toContain("import bg1 from '../resources/images/");
+    expect(main).toContain(':bg1="bg1"');
+    expect(res.fixes.some((f: any) => f.prop === 'bg1')).toBe(true);
+    // 修复后 CODE-019 检测归零
+    const issues = detectMissingPropsWiring(
+      Object.entries(res.files).map(([p, c]) => ({ path: p, content: c })),
+      { resourceDomMapping: mappingWithBg1 },
+    );
+    expect(issues).toHaveLength(0);
+  });
+
   it('幂等：父组件已显式传 props → 不重复注入', () => {
     const files = makeFiles(
       `<template>

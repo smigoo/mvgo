@@ -107,11 +107,16 @@ export function isChromeOnlySection(section) {
   if (!section || typeof section !== 'object') return false
 
   const rel = normalizedRelation(section)
-  if (CHROME_HEADER_RELATIONS.has(rel)) return true
-
   const role = textOf(section.role || section.type || section.header?.role || section.header?.type).trim()
   const txt = sectionText(section)
-  if (CHROME_NAME_RE.test(txt)) return true
+
+  // Loop 2.0.C：chrome 关系/名称早退前先看业务 controls/body，否则 P1-1 是死代码。
+  const looksChrome = CHROME_HEADER_RELATIONS.has(rel) || CHROME_NAME_RE.test(txt)
+  if (looksChrome) {
+    if (hasBusinessHeaderControls(section)) return false
+    if (hasBusinessBody(section)) return false
+    return true
+  }
 
   // 🛡️ P1-1：header 区有业务 controls（tab/stat/icon）→ 不是纯 chrome，保留 headerSlots 消费源
   if (CHROME_ROLES.test(role)) {

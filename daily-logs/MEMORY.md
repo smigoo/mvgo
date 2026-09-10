@@ -4,14 +4,17 @@
 - 根目录 `/Users/smigoo/工作/mvgo`；子仓：`backend-node`、`backend-java`、`frontend`、`docs`。本地端口：Node 13030、Java 8080、前端 2610。
 - 本地常驻服务用根目录 `start-node.js`/`start-frontend.js`/`start-java.js`；WorkBuddy Bash 起常驻 Node 要用 `env -i` 清 `NODE_OPTIONS`/代理环境。curl 本地接口常加 `--noproxy '*'`。
 - Node 构建：`rm -f tsconfig.build.tsbuildinfo && npm run build`，不删 `dist`。本地 `.env` 保持空占位，`.env.development` 放开发配置；本地勿设 `FIELD_ENCRYPTION_KEY`，AI 凭证在 `backend-node/data/ai-config.json`。
+- **构建验证守则（2026-09-10 实测）**：build 报错时 dist/main.js 时间戳也会刷新，勿以 mtime 判成功；改完必 grep dist 新符号 + 比对 dist/ai-engine 文件 mtime。
+- **bcrypt TS2307 阻断（2026-09-10 实锤）**：bcrypt@6 `main:"./bcrypt"`（无 .js/无 exports/无 types），`moduleResolution:nodenext` CJS 下 `@types/bcrypt` 不被自动发现 → `nest build` 全量编译失败、dist 陈旧。`paths` 别名（.d.ts 或目录）均无效；**唯一有效方案是 `src/types/bcrypt-shim.d.ts` 环境声明模块**（纯类型，勿删）。auth.service.ts/user.schema.ts 的 bcrypt import 依赖此 shim。
 - 生产 ECS：nginx docker 80；Java 8080 是 `/api` 门面；Node 13030 是 AI 引擎/SSE；`/api/progress` 唯一直连 Node，必须放在 `/api` 路由前。nginx 容器内 proxy_pass 用 `192.168.112.1`，不用 localhost。
 - 生产必备 env：Java `PORTAL_BASE_URL=https://go.microvideo.cn/portlet/api`、`MONGODB_URI` 带 `authSource=admin`、`NODE_BACKEND_URL=http://192.168.112.1:13030/api`；Node `FIELD_ENCRYPTION_KEY` 固定不可变、`OPERATION_LOG_BACKEND=http://192.168.112.1:8080`、`MC_PREVIEW_BASE_URL=https://go.microvideo.cn`、`JAVA_BACKEND_URL=http://192.168.112.1:8080`。
 
-## 管线治理（2026-09-09）
-- 诊断：`docs/pipeline-governance-2026-09-09.md`。落地：`docs/pipeline-governance-playbook-2026-09-09.md`。
-- 顺序锁死：Loop 0 停自伤 → 0.5 Working Manifest 扩 `contracts[]`/`ownerBlockId`/`provenance`（不改写盘）→ Loop 1 `forceAll`→`forceContract` → Loop 2 结构表 → Loop 3 类名尺寸 → Loop 4 Golden+Auditor。
-- 冻结新 CODE/VERT/RESOURCE 与并行会话 Step 2（prompt/validator 适应 defineProps）。`forceAll` 是临时脚手架，Loop 1 前不拆。
-- 现有 `buildResourceManifest` 只有 `sections/panel/unassigned`，无 `contracts[]`。写盘子组件 `skipResourceVars`、主组件 `forceAll`（microcode-engineer ~1550/~2012）。
+## 管线治理（2026-09-10 v2）
+- 执行权威：`docs/pipeline-governance-v2-2026-09-10.md`。09-09 诊断仍有效；playbook Loop 2/3/4 顺序作废。
+- 顺序锁死：Loop 2.0 停自伤（空契约禁全量、chrome 早退、tab 不进 headerSlots、contracts 提前到 LLM 前）→ 2.1 结构表改写 `sections` → Loop 3 类名/宿主高度 → Loop 4 Golden 才接入生成。
+- **禁止**：空契约 `return success`；给 chart-header 写 min-height:160；单测绿当完成；Loop 4 提前当治理完成。
+- Loop 0/0.5/1 代码在仓（7a1c585/93536dc）；**Loop 2.0 停自伤已落地（2026-09-10）**：`mappingForContract` 空契约→`[]`、`provenance` 改 `figma-tree`/`mapping-fallback`、chrome 早退前判业务 controls、`inferHeaderSlots` 移除 `\btab\b`、新增 `build-contracts.spec.ts`。5 套 spec 33/33 绿，dist 10:31 同步，13030 重启 PID 65242。三样本未在新代码上重跑 → **仍不算管线绿**。
+- Loop 2.0 完成标准只在 jest + dist + 重启；三样本重生成对照属 Loop 2.1，不得提前当 2.0 验收。
 
 ## 生成链路与微码契约
 - Phase2：Figma→预览/资源→Vision/LayoutReviewer/StyleMapper→子组件规划→MicrocodeEngineer→L0-B→重试/发布。

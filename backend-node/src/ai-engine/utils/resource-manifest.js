@@ -76,11 +76,32 @@ function sectionKeyOf(figmaPath, re) {
  */
 function withResourceOwner(mapping, ownerRole, ownerSectionId = null) {
   if (!mapping || typeof mapping !== 'object') return mapping
+  const ownerBlockId = ownerSectionId || null
+  const semanticName = inferSemanticName(mapping)
   return {
     ...mapping,
     ownerRole,
     ownerSectionId,
+    ownerBlockId,
+    semanticName,
+    provenance: mapping.figmaPath ? 'figma-tree' : 'mapping-fallback',
   }
+}
+
+/**
+ * 从 mapping 邻近 TEXT / figmaPath 最后非框架段填 semanticName。
+ * 填不出留空，禁止全叫 "icon" 还假装具名。
+ */
+function inferSemanticName(mapping) {
+  const pathName = String(mapping?.figmaPath || '')
+    .split('/')
+    .filter(Boolean)
+    .reverse()
+    .find((s) => !FRAMEWORK_SEGMENT_RE.test(s) && !/^slot-/i.test(s) && !/^Group\s/i.test(s) && s !== 'icon' && s !== 'bg' && s !== 'img')
+  if (pathName && !/^(icon|bg|img|image)$/i.test(pathName)) return pathName
+  const assigned = String(mapping?.assignedVarName || '').trim()
+  if (assigned && !/^(icon|bg|img)\d+$/i.test(assigned)) return assigned
+  return ''
 }
 
 /**
@@ -147,21 +168,132 @@ export function buildResourceManifest(mappings, options = {}) {
     sections[sec].push(m)
   }
 
-  return { sections, sectionOrder, panel, unassigned }
+  // 🆕 Loop 0.5：resources[]（扁平，含 ownerBlockId=ownerSectionId + provenance）。
+  // 注意：resource 对象经 annotateResourceOwnership 已带 ownerRole/ownerSectionId/ownerBlockId/
+  // semanticName/provenance 字段；此处仅做聚合扁平化，不再重写归属。
+  const resources = []
+  for (const key of sectionOrder) {
+    for (const m of sections[key] || []) resources.push(m)
+  }
+  for (const m of panel) resources.push(m)
+  for (const m of unassigned) resources.push(m)
+
+  return {
+    version: 'wm-1',
+    sections,
+    sectionOrder,
+    panel,
+    unassigned,
+    resources,
+    contracts: [],
+  }
 }
 
 /**
- * 把 chunk 的 section 标识（effectiveSection.title 或 id，可能带/不带 slot- 前缀）
- * 解析回 Manifest 中的 section key。供 L6 按 section 过滤资源清单。
+ * Loop 0.5：由 fileSectionMap 生成 contracts[]。
+ * 禁止从 defineProps 反推。无 fileSectionMap / 无 manifest → contracts=[]，不抛。
  *
- * 匹配优先级：
- *   1. 精确相等（含前缀）
- *   2. 两端都去掉 slot- 前缀后相等（大小写不敏感）
- *
- * @param {Object} manifest - buildResourceManifest 的返回值
- * @param {string} sectionIdOrTitle - chunk 的 section 标识
- * @returns {string|null} 命中的 section key，未命中返回 null
+ * @param {Object} manifest - buildResourceManifest 返回值（含 sections）
+ * @param {Object|null} fileSectionMap - path → section key
+ * @returns {Array<{file, blockIds, resourceProps, parentMustPass}>}
  */
+export function buildContracts(manifest, fileSectionMap) {
+  if (!manifest || !fileSectionMap || typeof fileSectionMap !== 'object') return []
+  const byFile = Object.create(null)
+  let any = false
+  for (const [file, key] of Object.entries(fileSectionMap)) {
+    if (!file || !key) continue
+    any = true
+    if (!byFile[file]) byFile[file] = []
+    if (!byFile[file].includes(key)) byFile[file].push(key)
+  }
+  if (!any) return []
+
+  const contracts = []
+  for (const [file, blockIds] of Object.entries(byFile)) {
+    const resourceProps = []
+    const seen = new Set()
+    for (const bid of blockIds) {
+      const resList = manifest.sections?.[bid] || []
+      for (const m of resList) {
+        if (!m || m.downloadStatus !== 'success') continue
+        const v = m.assignedVarName || m.semanticVarName
+        if (!v || seen.has(v)) continue
+        seen.add(v)
+        resourceProps.push(v)
+      }
+    }
+    contracts.push({
+      file,
+      blockIds,
+      resourceProps,
+      parentMustPass: [...resourceProps],
+    })
+  }
+  return contracts
+}
+
+/**
+ * Loop 1：按契约过滤 mapping（写盘 import 用）。
+ * - main：∪ contracts.parentMustPass ∪ panel（均 downloadStatus===success）
+ * - sub：ownerBlockId ∈ contract.blockIds 且 success（P0/D 阶段仍 skip 注入 import）
+ * - 其它 role：parentMustPass ∪ panel；allowed 为空返回 []（Loop 2.0.A，禁止 forceAll）
+ *
+ * 注意：ownerBlockId 由 annotateResourceOwnership 补在条目上；若调用方传入的 mapping
+ * 未走 annotate（例如来自磁盘的裸 mapping），先 buildResourceManifest 归一。
+ */
+export function mappingForContract(effectiveMapping, manifest, contract, role) {
+  const list = Array.isArray(effectiveMapping) ? effectiveMapping : []
+  const success = list.filter((m) => m && m.downloadStatus === 'success')
+  if (role === 'sub') {
+    if (!contract || !Array.isArray(contract.blockIds) || contract.blockIds.length === 0) return []
+    const blocks = new Set(contract.blockIds)
+    const out = []
+    for (const m of success) {
+      const bid = m.ownerBlockId || m.ownerSectionId
+      if (bid && blocks.has(bid)) out.push(m)
+    }
+    return out
+  }
+  // main / 其它：parentMustPass 并集 + panel
+  const allowed = new Set()
+  const addName = (v) => { if (v) allowed.add(v) }
+  if (contract && Array.isArray(contract.parentMustPass)) {
+    for (const v of contract.parentMustPass) addName(v)
+  }
+  for (const c of manifest?.contracts || []) {
+    for (const v of c.parentMustPass || []) addName(v)
+  }
+  for (const m of manifest?.panel || []) {
+    if (m && m.downloadStatus === 'success') addName(m.assignedVarName || m.semanticVarName)
+  }
+  // Loop 2.0.A：空契约禁止 forceAll。无 parentMustPass / contracts / panel 名时返回 []，
+  // 不得把跨区 success 全量灌回主组件。诊断由调用方记；本函数只保证 mapping 为空。
+  if (allowed.size === 0) return []
+  return success.filter(
+    (m) => allowed.has(m.assignedVarName) || allowed.has(m.semanticVarName),
+  )
+}
+
+/**
+ * 主组件合并后的 parentMustPass（∪ 全部子合同 + panel success）。
+ */
+export function mergedParentMustPass(manifest) {
+  const names = []
+  const seen = new Set()
+  const push = (v) => {
+    if (!v || seen.has(v)) return
+    seen.add(v)
+    names.push(v)
+  }
+  for (const c of manifest?.contracts || []) {
+    for (const v of c.parentMustPass || []) push(v)
+  }
+  for (const m of manifest?.panel || []) {
+    if (m && m.downloadStatus === 'success') push(m.assignedVarName || m.semanticVarName)
+  }
+  return names
+}
 export function resolveSectionKey(manifest, sectionIdOrTitle) {
   if (!manifest || !sectionIdOrTitle) return null
   const keys = manifest.sectionOrder || Object.keys(manifest.sections || {})

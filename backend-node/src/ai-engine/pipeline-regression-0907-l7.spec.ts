@@ -64,10 +64,17 @@ describe('T7 跨 section 资源错绑 BLOCK（绑定校验·治本）', () => {
     if (!fn || !buildResourceManifest) return
     const manifest = buildResourceManifest(rdm)
     const content = loadFile('traffic/DailyTotalFlow.vue')
-    const issues = fn(manifest, { 'package/components/DailyTotalFlow.vue': content }, null)
+    const file = 'package/components/DailyTotalFlow.vue'
+    // Loop 0.D：精确 map 才 BLOCK（无 map 只 WARN，不启发式猜归属）。
+    // DailyTotalFlow.vue 归属 slot-当日总流量；它引用的 icon2/bg2/bg4 属车型分布、icon3 属流量预测
+    // → 全部为跨 section 错绑，应 BLOCK。icon1 属本文件归属（当日总流量），不出现。
+    const issues = fn(manifest, { [file]: content }, { [file]: 'slot-当日总流量' })
     const ids = issues.map((i: any) => i.varName)
-    expect(ids).toContain('icon1') // 当日总流量
-    expect(ids).toContain('icon3') // 流量预测
+    expect(ids).not.toContain('icon1') // 当日总流量（本文件归属）——恒等，不应误报
+    expect(ids).toContain('icon2') // 车型分布（跨 section 错绑）
+    expect(ids).toContain('bg2') // 车型分布
+    expect(ids).toContain('bg4') // 车型分布
+    expect(ids).toContain('icon3') // 流量预测（跨 section 错绑）
     expect(issues.every((i: any) => i.severity === 'BLOCK')).toBe(true)
   })
 
@@ -76,10 +83,26 @@ describe('T7 跨 section 资源错绑 BLOCK（绑定校验·治本）', () => {
     const buildResourceManifest = await tryRequire<any>('./utils/resource-manifest.js', 'buildResourceManifest')
     if (!fn || !buildResourceManifest) return
     const manifest = buildResourceManifest(rdm)
-    // 车型分布文件只引用车型分布资源（bg2/bg4/icon2）
+    // 车型分布文件只引用车型分布资源（bg2/bg4/icon2），且传入精确 map
     const content = 'backgroundImage: url(${bg2}); url(${bg4}); <img :src="icon2">'
-    const issues = fn(manifest, { 'package/components/VehicleTypeDistribution.vue': content }, null)
+    const file = 'package/components/VehicleTypeDistribution.vue'
+    const issues = fn(manifest, { [file]: content }, { [file]: 'slot-车型分布' })
     expect(issues).toEqual([])
+  })
+
+  test('T7d2 Loop0.D：无 fileSectionMap 时不启发式 BLOCK，仅 UNATTRIBUTED WARN', async () => {
+    const fn = await tryRequire<any>('./validators/resource-attribution-validator.js', 'detectCrossSectionResourceBindings')
+    const buildResourceManifest = await tryRequire<any>('./utils/resource-manifest.js', 'buildResourceManifest')
+    if (!fn || !buildResourceManifest) return
+    const manifest = buildResourceManifest(rdm)
+    // 车型分布文件引用 icon1（跨 section），但无 fileSectionMap → 禁止启发式 BLOCK（护 Loop 0.D）
+    const content = 'backgroundImage: url(${icon1})'
+    const file = 'package/components/VehicleTypeDistribution.vue'
+    const issues = fn(manifest, { [file]: content }, null)
+    expect(issues.length).toBeGreaterThan(0)
+    expect(issues[0].id).toBe('RES-ATTR-UNATTRIBUTED')
+    expect(issues[0].severity).toBe('WARN')
+    expect(issues.every((i: any) => i.severity !== 'BLOCK')).toBe(true)
   })
 
   test('T7e 集成：validateResourceAttribution 传入 sectionManifest 后产出 BLOCK 问题', async () => {
