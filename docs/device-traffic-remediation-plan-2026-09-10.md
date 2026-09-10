@@ -10,29 +10,70 @@
 
 | 现象 | 触发 commit | 根因性质 |
 |---|---|---|
-| device 大 tab 竖排到左下 | `a78a980`（9-10 新增 `tab-structure-guard.js`） | 规则过度泛化：把横向 `@antd/tab` 误判为竖向 nav |
+| device「大 tab 应在最上」未满足 | `a78a980`（9-10 新增 `tab-structure-guard.js` 强制 `{nav,panels}`） | **层级拍平**（非方向误判）：planner 把 `slot-con` 子节点（switch 89:38 + @antd/tab 89:37 + cons）拍平成平级 section，switch 未横跨顶部。注：`89:37 @antd/tab` 真值 w=46/h=317 本就竖向，产物竖排**符合真值**，`inferTabOrientation` 为 fail-closed **不改** device 输出 |
 | device 顶部插槽/标题识别错 | `aacfa51`（9-10 移除 `\btab\b` 匹配） | 修 A 漏 B：为拦内容区 tab 误进 header，连顶部 tab 行也丢了 |
 | traffic 拆成 30+ 子组件 | `d5dc2be`（8-30 S3 多图表拆分） | 增强过度展开：S3 与 planner R1 正交叠加 |
 | env `v-if`+`v-for` 同元素 | 9-02 门禁收紧（正确拦截） | 非退化，是旧缺陷显形 |
 
-## 1. 治本 A：tab 横/竖方向判定（修 device 竖排）
+## 1. 治本 A：tab 横/竖方向判定（fail-closed 精度守卫，**非 device 竖排之因**）
+
+> ⚠️ **重要更正（2026-09-10 14:0x，figma.json 真值核实）**：device 的 `89:37 @antd/tab` 真值 **w=46 / h=317，本就是竖向侧栏**；`89:38 switch` 才是横向（w=396 / h=64.8）。因此：
+> - device 产物「tab 竖排」**符合 Figma 真值**，不是 A 要修的 bug；
+> - 用户所说「大 tab 应该最上」实指 **`switch(89:38)` 应横跨组件最顶部**，其下才是「tabs 竖栏 + cons」——根因是 **planner 把 `slot-con(89:40)` 的子节点拍平成平级 section**（层级归属丢失），属**布局分析阶段**，见 §9 待治本项。
+> - A 的真实价值：把「tab 契约是否套竖向 nav 语义」从**无脑强制**改为**按 bbox 宽高比判定**，且几何缺失时 fail-closed 回退竖向（与真值一致）。device 竖向场景走原路径、输出不变；对真正横向的 `@antd/tab` 才避免误套竖向契约。
 
 **文件**：`src/ai-engine/roles/tab-structure-guard.js`
 **函数**：`enforceTabStructure(section)` + 新增 `inferTabOrientation(section)`
 
-**改法**：
-1. 在 `isTabLike` 命中后，读取 `section.body.children` 各子节点 `absoluteBoundingBox`（`visual-parser` 已确认该字段存在，无需另造）。
-2. 取 nav 子节点（已用 `isNavNode` 找到的 `navNode`）与其相邻 panel 子节点的 bbox：
-   - 若 nav 节点宽度 `> 高度 * 1.5` → **横向顶部 tab**（device 的 `@antd/tab(89:37)` 即此）——不应套竖向 nav 契约。
-   - 否则 → 竖向侧栏 nav（保持原 `{nav, panels}` 二元结构）。
-3. 横向 tab 的 `tabStructure` 改为 `{ orientation: 'horizontal', nav: {present:true, figmaNode}, panels: [...] }`，**不**走 `nav` 竖向语义；planner 的 `TYPE_RESPONSIBILITY['nav']` 仅在竖向时生效。
-4. `subcomponent-planner.js:772-793` 处：消费 `tabStructure.orientation`，横向时把该 section 当普通 `tabs` 区块（横向 tab 条 + 下方内容），不再注入竖向 `nav` 职责描述。
+**改法（已落地）**：
+1. `isTabLike` 命中后，读 nav 子节点 `absoluteBoundingBox`（`visual-parser.js:453-468` 已确认该字段存在，无需另造）。
+2. 取 nav 节点 bbox：`width > height * 1.5` → `'horizontal'`；否则 `'vertical'`；**无 bbox → fail-closed 回退 `'vertical'`**（保守，与 device 真值一致）。
+3. `tabStructure` 增加 `orientation` 字段；`subcomponent-planner.js` plan() 消费：横向时 `effectiveType='tabs'`、职责描述「顶部横向 tab…禁止竖向侧栏布局」；竖向时保持 `{nav, panels}` 语义。
 
-**验证**：
-- 新增 `tab-structure-guard.spec.ts`：`@antd/tab` 宽>高1.5 → `orientation:'horizontal'`；窄高 nav → `orientation:'vertical'`。
-- device 重跑后 `MainContent.vue` 的 tab 栏回到顶部横向，不再 `width:46px; writing-mode:vertical-rl`。
+**验证（已落地）**：
+- `tab-structure-guard.spec.ts`：宽扁 `@antd/tab` → `orientation:'horizontal'`；窄高 nav → `'vertical'`。**6/6 通过**。
+- ⚠️ device 重跑后 tab 仍竖排是**正确的**（真值如此）；本条不改 device 输出。
 
-## 2. 治本 B：顶部 tab 行豁免进 headerSlots（修 device 插槽丢失）
+## 1b. 治本 A′：slot-con 子节点层级保留（device「大 tab 应在最上」的真因，**待落地**）
+
+> 本节为 §1 更正后确认的真实根因，**尚未实现**，列此以免遗漏。
+> **2026-09-10 14:5x 代码级审计定案**（实证，非推测）。
+
+**现象**：`switch(89:38)` 应与 `@antd/tab(89:37)`+cons 同属 `slot-con(89:40)` 容器，switch 横跨容器最上、tabs 竖栏在左。产物把三者拍成平级 section，switch 落进内容区顶、tabs 落左，空间归属错乱。
+
+**真值（`.checkpoint/figma.json`）**：`slot-con(89:40)` 为绝对定位 FRAME（x1475 y475 w407 h380），2 子节点：`switch(89:38)` y475(顶部,396×65) 与 `@antd/tab(89:37)` y538(下方,46×317)。容器链 `2:8417 cp-设备监测 → 89:40 slot-con → {89:38, 89:37}`。
+
+**⚠️ 真值二次取证（2026-09-10 12:59 checkpoint）推翻下方「plan() 不读 children」结论——务必先读：**
+
+对 `c-device-monitor-hnhl49no-1003d7d3/.checkpoint/{figma.json,visual.json}` 严格取证后，下方「关键纠正」段落的前提**被证伪**：
+- `visual.json` 的 `layoutStructure.layout.sections` 共 41 项，其中 **`89:40`(slot-con) 完全不存在**——既非顶层 section，也无任何 section 的 `children` 引用它（`children 里含 89:38/89:37 的 section: []`）。
+- `89:38`(switch) 与 `89:37`(@antd/tab) 是**各自因内部子节点左右并列**（switch.active/default、tab.tabs/cons）被 `inline-row-merger.js` 提升为**顶层平级 inline-row section**（layoutSource='inline-row'，各带 children）。
+- `89:40` 的两个直接子是**上下堆叠**（switch y475 h65；tab y538 h317；`yOverlap≈1.8`，远未达 merger 的 50% 阈值）→ 不满足 merger 的「左右并列」条件 → **容器层从未生成 section**。
+- 结论反转：`plan()` 根本没有「带 children 的容器 section」可透传；`89:40` 容器层在**视觉分区阶段**就被丢弃，`plan()` 只是背锅。原 #52「planner 携带 sec.children」方案**无效**（input 里根本没有该容器）。
+
+**真实根因**：device 的 `slot-con(89:40)` 容器层级在**视觉分区 / inline-row-merger 阶段**丢失——merger 只把「左右并列」的子节点提升为 section、把上下堆叠的容器父节点丢弃；下游 planner/engineer 拿到的是 `89:38`/`89:37` 两个平级 section，无从得知二者同属 `89:40` 且 **switch 在 tab 上方**的纵向归属 → LLM 把二者当平级区块重排（产物 `MainContent.vue` 把 tab 竖栏放最左、switch 放右区顶，而非 switch 横贯 slot-con 最顶部）。
+
+**治本方向（待重新确权，原 #52 落点已不适用）**：
+- **选项 A（上游保留容器）**：在 `inline-row-merger.js` / visual-parser 阶段，对「上下堆叠的直接子 + 自身非业务叶」的容器（如 slot-con）**保留为带 `children` 的嵌套 section**，而非丢弃父、仅提升子。改动面大、需视觉分区协同。
+- **选项 B（planner 重建关系）**：`plan()` 同时持有 `figmaData`，对平级 section 按 figma 真值回查父容器与 bbox 纵向顺序，重建「switch 在 tab 上方、二者同属 slot-con」的归属提示注入 prompt。改动限于 planner，但依赖 figma 真值可达性。
+- 两者都需 device 重跑（额度）验证；**均未实施**，原 #52 任务描述需按真实根因重定向。
+
+**验证**：device 重跑后，生成产物布局满足「switch 横贯组件内容区最顶部、其下左侧 tab 竖栏 + 右侧 cons」，与 `figma.json` 89:40 子树（switch y475 顶、@antd/tab y538 左、cons y550 右）一致，而非当前「tab 最左、switch 右区顶」。
+
+---
+
+**🚫 以下为被推翻的原始审计段落（保留作考古，勿按此实施）**：
+
+**关键纠正（与最初假设相反，已证伪）**：层级**并非**在 `inline-row-merger` 或 `visual-parser` 丢失——
+- ~~`inline-row-merger.js` 把 `slot-con` 的两个子节点（`89:38`/`89:37`）生成为**带 `children` 的 section**……~~（实测 `89:40` 根本没进 sections，谈不上「带 children 的容器 section」）
+- ~~真因在 **`subcomponent-planner.js:740` 的 `plan()`**……~~（`plan()` 没收到 `89:40`，无法背锅）
+- ~~下游按 flat `effectiveSections`……~~
+
+~~**文件**：`src/ai-engine/roles/subcomponent-planner.js`（`plan()` L740 `sections.map`）~~
+~~**治本方向（非改产物）**：`plan()` 在映射时携带 `sec.children` 进 `effectiveSections[i].children`……（无效，input 无容器）~~
+~~**验证**：device 重跑后 `subComponentPlan.effectiveSections` 中含 `slot-con(89:40)` 容器项……（前提不成立）~~
+
+## 2. 治本 B：顶部 tab 行豁免进 headerSlots（修设备小类插槽丢失，已落地）
 
 **文件**：`src/ai-engine/utils/inline-header-slot-inferrer.js`
 **函数**：`inferHeaderSlotsFromInlineRows(analysisResult)`
@@ -77,25 +118,16 @@
 - `code-healer` 单测：注入 `<div v-if x v-for y>` → 输出不含同元素 v-if+v-for。
 - env 重跑：`SubT.vue` 不再出现同元素冲突，runtime 门禁 `RUNTIME-004` 不触发。
 
-## 5. 治本 C：bg 节点下载失败 → 设备小类背景图塌缩（资源链函数级）
+## 5. 治本 C：设备小类背景图（经真值核实，判定为「非 bug，不改动」）
 
-**文件**：`src/ai-engine/roles/figma-connector.js`（下载链）+ `src/ai-engine/utils/resource-manifest.js`（资源事实源）+ `microcode-engineer.js`（注入兜底）
+**实测核实（2026-09-10 13:45，`c-device-monitor-hnhl49no-1003d7d3` 的 `figma.json` + `analysis.json`）**：
+- device 的 12 个 bg 节点在真值侧即 `deduplicated`（`figma-connector.js:2191` `matchedAsset.deduplicatedFrom` → 复用同一真身 `bg-8439`）。即 **Figma 设计稿本就 12 个 item 共用 1 张背景图**，资源链是**正确且诚实**的。
+- `resource-manifest.js:247/268/293` 的 `buildVarToMapping` **只收 `downloadStatus==='success'`**（见 memory「downloadStatus 契约」），deduplicated 节点不各自独立注入——符合契约。
+- `ConsSection.vue` 的 `bgList = [bg3, bg4, ...]` 里 `bg4~bg13` 未声明、`getItemBg` fallback 到 `bg3`，属于 **LLM 在生成时臆造了不存在的变量名**（模型缺陷，非资源链 bug）。真值侧只应注入 1 个 bg 变量（bg3），行为与真值一致。
 
-**现象（device 实测）**：`ConsSection.vue` 的 `bgList = [bg3, bg4, ... bg14]`，但只有 `bg3` 真正 `import bg3 from 'bg-8439.png'`，`bg4~bg13` 未声明 → `getItemBg(i>=1)` 全部 fallback 到 `bg3`；`MainContent.vue` 同样 `bg4~bg13 = bg3`。结果 **12 个设备小类全部共用同一张 `bg-8439`**，崩成 1 张背景。
+**结论**：C 原方案（connector 重试 + 诚实契约）**与事实不符，撤回**——资源链无需改动。唯一真实瑕疵是 LLM 臆造 `bg4~bg14` 变量名，属治本 E 之外的模型语义问题，靠 F2 的 prompt 约束 + 门禁兜底即可（见 5b-F2），不单独改 connector。
 
-**根因（两处叠加）**：
-1. **真值侧**：`visualElements.background="bg节点下载失败，使用CSS纯色替代"` —— 12 个 bg 节点只有 `bg-8439` 成功下载，其余在 `figma-connector` 下载阶段失败且**被静默回退**，未记录哪些节点缺失、也未重试。
-2. **注入侧**：`resource-manifest.js` 只把"成功下载"的 bg 注入为系统变量；失败节点既不进 `downloadStatus`，也不在 `declare.json`/`props` 暴露占位，导致 LLM 在生成时**臆造了 bg4~bg14 变量名**（引用不存在的 image，运行时塌缩到 bg3）。
-
-**改法（函数级，治本）**：
-1. `figma-connector.js` 下载 bg/image 节点处，新增 `downloadWithRetry(node, { retries: 2, backoffMs: 300 })`：失败重试 2 次；仍失败则记入 `failedNodes[]`，**不静默回退**。
-2. `resource-manifest.js` 在构建资源事实源时，对 `failedNodes` 每个节点生成 **fallbackHint**（从 mapping/fallback 提示取同组替代图，或明确标记 `missing`）；`downloadStatus` 如实回写 `success/failed/missing`，**禁止把失败当成 success 灌入白名单**。
-3. `microcode-engineer.js` 注入系统资源变量时，仅注入 `downloadStatus==='success'` 的图；对 `missing` 的 bg 节点**不臆造变量名**，改为在 contract 里标注 `placeholder: true`，让 LLM 用 `v-if="bgX"` 条件渲染、缺图时不绑定背景（而非引用不存在的 `bg4`）。
-4. 真值侧 12 个设备小类**本就共用同一张背景设计**（Figma 里 bg 节点可能为 1 个复用），需先用 `failedNodes[]` 确认是否真的 12 张都缺失；若真值就是 1 张复用，则 C 改法只保证"契约诚实"，不强行伪造 12 张。
-
-**验证**：
-- `figma-connector` 单测：模拟 bg 节点第 1 次失败、第 2 次成功 → `failedNodes` 不含该节点；连续失败 → 入 `failedNodes` 且 `downloadStatus:'failed'`（非 success）。
-- device 重跑后 `declare.json.resources` 与实际 `resources/images/*.png` 文件数一致；`ConsSection.vue` 的 `bgList` 只含真实存在的变量，无 `bg4~bg13` 臆造引用。
+**仍建议（非阻塞、可后续独立做）**：`figma-connector` 的 bg 下载失败（非 deduplicated 而是真 network_error）已有重试与 `downloadStatus='network_error'` 如实回写（`:2200`），契约已诚实，无需额外改动。
 
 ## 5b. 治本 F：设备小类样式/数据小瑕疵（漏项补全）
 
@@ -109,14 +141,16 @@
 - 改法：`microcode-engineer` 注入数据时，对「数字+单位/分母」结构用**数值字段** `{ anomaly: 2, total: 484 }`，模板里 `{{ item.anomaly }}/{{ item.total }}` 渲染；`validateVueScriptSemantics` 增加「统计类字段不得为纯字符串拼接」的软提示，或 `code-fix-rules` 加 `DATA-NUMERIC-001` 校验。
 - 验证：device 重跑后 `deviceItems` 为数值字段，模板无 `'/484'` 字面值。
 
-## 6. 实施顺序（对齐 Loop 锁序）
+## 6. 实施顺序（对齐 Loop 锁序，已落地部分）
 
-1. A（tab 方向判定）→ 先解 device 竖排。
-2. B（顶部 tab 行豁免）→ 解 device 插槽丢失，依赖 A 的 orientation 字段。
-3. C（bg 资源链重试 + 诚实契约）→ 解设备小类背景塌缩（含 F1/F2 同轮落地）。
-4. D（S3 互斥）→ 解 traffic 过细。
-5. E（v-if/v-for fail-closed）→ 解 env 运行时崩。
-6. 每项落地后：jest 单测 → `npm run build` → `env -i node start-node.js` 重启 13030 → 重跑三样本肉眼验收。
+1. ~~A（tab 方向判定）→ 先解 device 竖排~~ → **A 经真值核实为 fail-closed 精度守卫，不修 device 输出**（见 §1 更正）；A 代码已落地，对真横向 tab 生效。
+2. B（顶部 tab 行豁免）→ 已落地，解设备小类顶部插槽丢失（依赖 A 的 orientation 字段）。
+3. C（bg 资源链重试 + 诚实契约）→ **经真值核实撤回**：deduplicated 资源链诚实正确，bg4~bg13 是 LLM 臆造变量名（非资源链 bug）。不改动 connector。
+4. D（S3 互斥）→ 已落地，解 traffic 过细。
+5. E（v-if/v-for fail-closed）→ 已落地，解 env 运行时崩。
+6. F1/F2（calc 双写 + 数值字段）→ 已落地，解 device 小类样式/数据瑕疵。
+7. 待落地：**A′（slot-con 层级保留）**——device「大 tab 应在最上」的真实根因（层级拍平），属布局分析阶段，需独立立项。
+8. 每项落地后：jest 单测 → `npm run build` → `env -i node start-node.js` 重启 13030 → 重跑三样本肉眼验收（本轮因额度未擅自重跑）。
 
 ## 7. 禁止的补丁式处理（完成标准红线）
 
@@ -130,6 +164,7 @@
 
 ## 8. 当前状态
 
-- 本文为函数级治本方案，尚未改任何源码。
-- 待用户拍板 A/B/C/D/E/F 落地顺序后执行（C 已展开为函数级；F1/F2 为补全漏项）。
+- **A（fail-closed 守卫，已落地）/ B / D / E / F1 / F2（已落地）**：代码已改 + 单测 9/9 + 6/6 通过 + 三样本未重跑（额度待授权）。
+- **C 经真值核实撤回**（deduplicated 资源链诚实正确，bg4~bg13 为 LLM 臆造变量名，非资源链 bug，不改动 connector）。
+- **A′（slot-con 层级保留）待落地**：device「大 tab 应在最上」的真实根因（planner 把容器子节点拍平为平级 section），属布局分析阶段，需独立立项。
 - 关联文档：`traffic-device-monitor-root-cause-2026-09-10.md`（资源/结构/尺寸根因）、`pipeline-governance-v2-2026-09-10.md`（Loop 锁序）。

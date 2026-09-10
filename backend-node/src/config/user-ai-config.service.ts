@@ -71,4 +71,61 @@ export class UserAiConfigService {
       return null;
     }
   }
+
+  /**
+   * 🔒 读取该用户的模型实测通过记录（保存闸门事实源）。
+   * key = sha256(`${baseURL}|${apiKey}|${model}`)，value = { text, vision, at }。
+   */
+  async getModelVerifications(
+    userId: string,
+  ): Promise<Record<string, { text: boolean; vision: boolean; at: number }>> {
+    if (!userId) return {};
+    try {
+      const doc = await this.model
+        .findOne({ userId: new Types.ObjectId(userId) })
+        .select('verifiedModels')
+        .lean()
+        .exec();
+      return ((doc as any)?.verifiedModels || {}) as Record<
+        string,
+        { text: boolean; vision: boolean; at: number }
+      >;
+    } catch (e: any) {
+      this.logger.warn(
+        `[UserAiConfigService] 读取用户 ${userId} 实测记录失败: ${e?.message || e}`,
+      );
+      return {};
+    }
+  }
+
+  /** 记录一次模型实测结论（测试接口在文本/视觉任一维度跑通后调用） */
+  async recordModelVerification(
+    userId: string,
+    bindKey: string,
+    result: { text: boolean; vision: boolean },
+  ): Promise<void> {
+    if (!userId || !bindKey) return;
+    try {
+      await this.model
+        .updateOne(
+          { userId: new Types.ObjectId(userId) },
+          {
+            $set: {
+              [`verifiedModels.${bindKey}`]: {
+                text: !!result.text,
+                vision: !!result.vision,
+                at: Date.now(),
+              },
+            },
+          },
+          { upsert: true },
+        )
+        .exec();
+    } catch (e: any) {
+      // 记录失败不阻断测试流程，但会暴露在保存闸门（保存时无记录会被拦）
+      this.logger.warn(
+        `[UserAiConfigService] 记录模型实测结论失败(userId=${userId}): ${e?.message || e}`,
+      );
+    }
+  }
 }

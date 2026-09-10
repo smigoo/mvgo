@@ -115,4 +115,37 @@ describe('buildSectionHeightsMap (A4→CSS)', () => {
   it('顶层 sections < 2 → fail-open 返回 null', () => {
     expect(buildSectionHeightsMap(modelFiles, layoutWithHeights([65]), {})).toBeNull();
   });
+
+  it('嵌套容器不计高度槽：叶子对齐 2 子组件，容器自身不占槽', () => {
+    const avg = (100 + 300) / 2;
+    const layout = {
+      layout: {
+        sections: [
+          { id: '89:40', title: 'slot-con', styles: { flexGrow: 1 } },
+          { id: 'sec-0', title: '区块0', styles: { flexGrow: Number((100 / avg).toFixed(3)) } },
+          { id: 'sec-1', title: '区块1', styles: { flexGrow: Number((300 / avg).toFixed(3)) } },
+        ],
+      },
+    };
+    const params = {
+      subComponentPlan: {
+        effectiveSections: [
+          {
+            id: '89:40',
+            isLayoutContainer: true,
+            layoutSource: 'container-rebuild',
+            children: [
+              { id: 'sec-0', layoutMetadata: { height: 100 } },
+              { id: 'sec-1', layoutMetadata: { height: 300 } },
+            ],
+          },
+        ],
+      },
+    };
+    const map = buildSectionHeightsMap(modelFiles, layout, params);
+    expect(map).toEqual({
+      'c-monitor-overview-cards': 0.5,
+      'c-monitor-device-list': 1.5,
+    });
+  });
 });

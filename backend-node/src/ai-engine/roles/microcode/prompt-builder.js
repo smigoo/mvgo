@@ -42,6 +42,12 @@ import { buildRetryPrompt as buildRetryPromptBase } from '../../utils/retry-prom
 import { safeLogger } from '../../logger/safe-logger.js';
 // 🛡️ P0（2026-09-04）：注入 Figma 文字真值白名单，防止 LLM 臆造/OCR 误读文字
 import { collectFigmaTextTruth } from '../../utils/text-truth-guard.js';
+import {
+  collectLeafSections,
+  formatSectionTreeForPrompt,
+  findSectionById,
+  assignSectionComponentNames,
+} from '../../utils/section-tree.js';
 
 /**
  * 构建代码生成 Prompt（主入口）
@@ -1611,7 +1617,27 @@ export function extractFigmaColorEssentials(figmaNodeData, maxNodes = 220) {
     return lines.join('\n');
   }
 
-export function buildLayoutSkeleton(layoutStructure) {
+/**
+ * 🛡️ R1（2026-09-10）：从 input 解析 planner 的唯一权威树 effectiveSections。
+ * 事实源优先级：generationInput.componentPlan → input.subComponentPlan。
+ * 供 buildLayoutSkeleton / buildSubComponentNamingGuidance 共用，杜绝各写一套解析逻辑。
+ */
+export function resolvePlanSections(input) {
+  const genPlan = input?.generationInput?.componentPlan;
+  const subPlan = genPlan || input?.subComponentPlan;
+  return subPlan && typeof subPlan === 'object' && Array.isArray(subPlan.effectiveSections)
+    ? subPlan.effectiveSections
+    : [];
+}
+
+export function buildLayoutSkeleton(layoutStructure, planSections) {
+    // 🛡️ R1（2026-09-10）：结构树单一事实源。优先用 planner 的唯一权威树 effectiveSections
+    // （含容器嵌套 + layout 方向 + 内部拆分），用 formatSectionTreeForPrompt 格式化——
+    // 下游（模板段/脚本段/样式段）看到同一棵树，不再从 layoutStructure 重新推断（那是 Vision
+    // 语义壳，可能已失真/双结构 P1-8 / 被内联 P0-6）。
+    if (Array.isArray(planSections) && planSections.length > 0) {
+      return formatSectionTreeForPrompt(planSections);
+    }
     const sections = extractSections(layoutStructure);
     if (!sections || sections.length === 0) return '';
 
@@ -1784,18 +1810,24 @@ export function buildSubComponentResponsibilityTable(input) {
     // （normalizeComponentPlan 仅规范化 null 值，字段 id/title/responsibility/elementCount 不变）。
     const genPlan = input?.generationInput?.componentPlan;
     const subPlan = genPlan || input?.subComponentPlan;
-    const sections =
+    const treeSections =
       subPlan && typeof subPlan === 'object'
         ? subPlan.effectiveSections || []
         : [];
+    // 🛡️ A′ Phase 5：布局容器不占 .vue，职责表按叶子计数；树保留空间关系。
+    const sections = collectLeafSections(treeSections);
     const diagnosticsBlock = normalizePlannerDiagnostics(input);
     if (!sections.length) return diagnosticsBlock;
     const forced = !!subPlan?.isForced;
     let p = `${diagnosticsBlock}\n\n## 🧩 子组件职责边界（脚本生成必读）\n\n`;
+    const treeBlock = formatSectionTreeForPrompt(treeSections);
+    if (treeBlock) {
+      p += `嵌套树（容器不单独生成 .vue，index.vue 按 column 组装）：\n${treeBlock}\n\n`;
+    }
     p += forced
-      ? `本组件已**强制拆分**为 ${sections.length} 个独立子组件（\`package/components/*.vue\`）。`
+      ? `本组件已**强制拆分**为 ${sections.length} 个叶子子组件（\`package/components/*.vue\`）。布局容器不单独生成文件。`
       : `本组件存在以下子组件拆分。`;
-    p += ` 这些 section 的**状态/图表/事件/生命周期逻辑必须写在各自子组件文件内**，index.vue 只负责 import + 组合：\n`;
+    p += ` 这些**叶子** section 的**状态/图表/事件/生命周期逻辑必须写在各自子组件文件内**，index.vue 只负责 import + 按树组合：\n`;
     sections.forEach((sec, idx) => {
       p += `${idx + 1}. \`${sec.id}\` — ${sec.responsibility || ''}`;
       if (sec.title) p += `（原标题「${sec.title}」）`;
@@ -1815,55 +1847,37 @@ export function buildSubComponentResponsibilityTable(input) {
    * 基于 section 的 responsibility 和 children 内容，为 LLM 提供具体的命名建议。
    */
   export function buildSubComponentNamingGuidance(input) {
-    const genPlan = input?.generationInput?.componentPlan;
-    const subPlan = genPlan || input?.subComponentPlan;
-    const sections =
-      subPlan && typeof subPlan === 'object'
-        ? subPlan.effectiveSections || []
-        : [];
+    const treeSections = resolvePlanSections(input);
+    const sections = collectLeafSections(treeSections);
     const diagnosticsBlock = normalizePlannerDiagnostics(input);
     if (!sections.length) return diagnosticsBlock;
 
+    const nameOf = assignSectionComponentNames(treeSections);
+
     let p = `${diagnosticsBlock}\n\n## 🏷️ 子组件命名指导（template 生成必读）\n\n`;
-    p += `根据下方每个 section 的 \`responsibility\` 和实际内容，为子组件选择**语义精确**的 PascalCase 名称：\n\n`;
+    const treeBlock = formatSectionTreeForPrompt(treeSections);
+    if (treeBlock) {
+      p += `嵌套树（容器不单独命名 .vue）：\n${treeBlock}\n\n`;
+    }
+    p += `系统已为每个**叶子** section 分配了**确定名称**（PascalCase）。模板/脚本/子组件文件名**三者必须用同一名字**，禁止自创、禁止改动：\n\n`;
 
     sections.forEach((sec, idx) => {
-      const resp = (sec.responsibility || '').toLowerCase();
       const title = sec.title || '';
       const id = sec.id || '';
-
-      // 基于 responsibility 推断建议名称
-      let suggestedNames = [];
-      if (resp.includes('统计') || resp.includes('指标') || resp.includes('概览')) {
-        suggestedNames = ['OverviewCards', 'StatCards', 'MetricsGrid', 'StatusSummary'];
-      } else if (resp.includes('列表') || resp.includes('清单')) {
-        suggestedNames = ['DeviceListArea', 'EquipmentTable', 'ItemList'];
-      } else if (resp.includes('网格') || resp.includes('卡片')) {
-        suggestedNames = ['DeviceGrid', 'CardGrid', 'ItemGrid'];
-      } else if (resp.includes('图表') || resp.includes('可视化')) {
-        suggestedNames = ['TrendChart', 'PieChart', 'BarChart', 'DataVisualization'];
-      } else if (resp.includes('标题') || resp.includes('控件')) {
-        suggestedNames = ['HeaderControls', 'TitleBar', 'ActionBar'];
-      } else if (resp.includes('主内容') || resp.includes('主体')) {
-        // 对"主内容区"这种泛化描述，要求 LLM 从 children 推断更精确的名称
-        suggestedNames = ['（请根据内部实际内容推断，如 DeviceListArea / ChartArea / OperationPanel）'];
-      }
-
+      const assigned = nameOf.get(String(id)) || `Section${idx + 1}`;
       p += `${idx + 1}. section \`${id}\``;
       if (title) p += `（标题「${title}」）`;
       p += `\n`;
       p += `   - responsibility: ${sec.responsibility || '未指定'}\n`;
       p += `   - 元素数量: ${sec.elementCount || 0}\n`;
-      if (suggestedNames.length > 0) {
-        p += `   - 建议名称: ${suggestedNames.map(n => `\`${n}\``).join(' / ')}\n`;
-      }
+      p += `   - **强制名称: \`${assigned}\`**（模板用 \`<${assigned} />\`，脚本 \`import ${assigned} from './components/${assigned}.vue'\`）\n`;
       p += `\n`;
     });
 
     p += `**命名铁律**：\n`;
-    p += `- ✅ 名称必须反映**内容语义**（如 \`OverviewCards\` 表示统计卡片组）\n`;
-    p += `- 🚫 禁止使用**位置/布局泛称**（如 \`HeaderStats\`、\`MainContent\`、\`ContentArea\`）\n`;
+    p += `- 🔒 必须使用上方**系统分配的确定名称**，禁止自创、禁止改名（改名导致模板/脚本/文件名三者不一致 → CODE-021 死代码门禁 BLOCK）\n`;
     p += `- 🚫 禁止 header 插槽内容在 body 子组件中重复渲染（若数据已在 \`<template #header-xxx>\` 中展示，body 子组件不得再渲染相同数据）\n`;
+    p += `- 🚫 **禁止内联**：下方每个叶子 section 都必须在 index.vue 模板中用一个 \`<PascalCase组件名>\` 标签装配，**禁止把该 section 的 DOM 内联手写进 index.vue 模板**（内联会让对应子组件 import 变死代码，触发 CODE-021/COMP-001 门禁强制重试）\n`;
 
     return p;
   }
@@ -2589,7 +2603,7 @@ ${OUTPUT_FORMAT_WARNING_BRIEF}
 export function buildTemplateChunkMiddle(chunk, input) {
     const { componentName, panelType = 'default-panel' } = input;
     // 🧱 组件结构骨架：把顶层布局结构直接贴近模板生成指令（修复分块模式 LLM 忽略 layout 臆造结构）
-    const layoutSkeleton = buildLayoutSkeleton(input.layoutStructure);
+    const layoutSkeleton = buildLayoutSkeleton(input.layoutStructure, resolvePlanSections(input));
     const layoutBlock = layoutSkeleton
       ? `## 🧱 组件结构骨架（权威来源：视觉分析，必须100%还原）
 
@@ -2647,7 +2661,8 @@ ${layoutSkeleton}
   - 🆔 根容器的实例 id 类 \`c-mc-max-{INSTANCE_ID}\` 由**系统自动注入**，你无需手写；只给根元素一个语义 class（如 \`c-env-monitor-root\`）即可。
 - 资源变量白名单：${availVarsBlock}
 - 模板中用到的 ref 名称、事件名将在后续 \`<script>\` 批次中实现，请使用语义化命名
-- 🧩 **子组件拆分（复杂组件强烈建议）**：若组件包含 ≥3 个清晰业务区域（如"当日总流量 / 车型分布 / 流量预测"），请在模板中拆分为 \`<PascalCase组件名>\` 标签引用（如 \`<TotalTraffic />\`），并在 \`<script setup>\` 中 import 自 \`./components/Xxx.vue\`（子组件文件会由后续批次单独生成，体量小、不易截断）
+- 🧩 **子组件拆分（强制，禁止内联）**：本组件已被规划为多个业务区域（见下方「子组件命名指导」的叶子 section 清单）。**必须**在模板中用 \`<PascalCase组件名>\` 标签逐个装配这些区域，并在 \`<script setup>\` 中 import 自 \`./components/Xxx.vue\`（子组件文件由后续批次单独生成）。
+  - **🚫 禁止内联铁律**：**禁止把业务区域 DOM 内联手写在 index.vue 模板里**。内联会导致：已 import 的子组件全部成为死代码（CODE-021 门禁 BLOCK）、真实结构（纵向 tab / 大卡背景 / 卡片网格）整块丢失（COMP-001 门禁 BLOCK）——直接触发 L0-B 重试，浪费额度。模板中每个业务区域必须是对应子组件的标签引用（如 \`<DeviceGrid />\`），区域内部细节交给子组件文件。
   - **🚫 命名禁令**：禁止使用通用/泛化名称，必须基于内容语义命名
     - ❌ 禁用：\`HeaderStats\`、\`MainContent\`、\`Content\`、\`Container\`、\`Body\`、\`Section\`、\`Area\`、\`Block\`、\`Panel\`、\`Wrapper\`、\`Layout\`
     - ✅ 正确：\`OverviewCards\`（统计卡片组）、\`DeviceListArea\`（设备列表区）、\`TrafficChart\`（流量图表）、\`StatusSummary\`（状态汇总）
@@ -2686,7 +2701,7 @@ export function buildScriptChunkMiddle(chunk, input) {
     const { componentName } = input;
 
     // 🎯 方案1: 在 script 段重复注入布局骨架 - 防止分块生成时忘记约束
-    const layoutSkeleton = buildLayoutSkeleton(input.layoutStructure);
+    const layoutSkeleton = buildLayoutSkeleton(input.layoutStructure, resolvePlanSections(input));
     const layoutBlock = layoutSkeleton
       ? `## 🧱 组件结构参考（来自视觉分析，避免臆造结构）\n\n${layoutSkeleton}\n\n⚠️ **脚本生成注意事项**：\n- 只为 template 中实际存在的元素声明 ref 和状态\n- 禁止臆造 template 中不存在的图表、列表、统计项\n- 图表数量和位置必须与上述骨架一致\n`
       : '';
@@ -2758,7 +2773,7 @@ export function buildScriptChunkMiddlePart(chunk, input) {
     const part = chunk.scriptPart || 'state';
 
     // 🎯 方案1: 在脚本分段中重复注入布局骨架 - 防止三段拆分时忘记约束
-    const layoutSkeleton = buildLayoutSkeleton(input.layoutStructure);
+    const layoutSkeleton = buildLayoutSkeleton(input.layoutStructure, resolvePlanSections(input));
     const layoutBlock = layoutSkeleton
       ? `\n\n## 🧱 组件结构参考（来自视觉分析）\n\n${layoutSkeleton}\n\n⚠️ **关键提醒**：\n- 只为 template 中实际存在的元素声明变量和函数\n- 禁止臆造额外的图表、统计项、列表列\n- 图表数量必须与骨架标注一致\n`
       : '';

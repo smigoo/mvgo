@@ -247,43 +247,12 @@ function hasOnlyMissingAssetIssues(runtimeGate) {
   return issueIds.has('RUNTIME-007') && [...issueIds].every((id) => id === 'RUNTIME-007' || id === 'RUNTIME-010')
 }
 
-// 🛡️ P0 升级（2026-09-02，mv-max-1788359428498-ee0cbe69）：
-// 判断运行时门禁失败是否为「确定性运行时缺失」——`X is not defined` /
-// `Cannot read properties of undefined` 等只能由产物自身缺陷导致，重试/降级都无法自愈。
-// generate 模式此前把一切 RUNTIME BLOCK 降级 warning 照常发布 → 坏产物当成功任务交付。
-// 对确定性缺失升级硬 BLOCK。白名单式精确匹配（宁缺毋滥，避免误伤环境性/资源类错误）：
-const DETERMINISTIC_MISSING_PATTERNS = [
-  /is not defined/i, // ReferenceError: echarts is not defined（import 缺失/注释吞噬）
-  /Cannot read properties of undefined/i,
-  /Cannot read properties of null/i,
-  /Cannot set properties of undefined/i,
-  /Cannot set properties of null/i,
-  /ReferenceError/i, // 未捕获裸 ReferenceError（上一条的兜底）
-]
-
-export function hasDeterministicRuntimeMissing(runtimeGate) {
-  const issues = Array.isArray(runtimeGate?.issues) ? runtimeGate.issues : []
-  for (const issue of issues) {
-    // 只对页面异常 / 控制台错误 / 渲染错误类取证（RUNTIME-004 render-error / RUNTIME-009 pageerror / RUNTIME-010 console）
-    if (!/^(RUNTIME-004|RUNTIME-009|RUNTIME-010)$/.test(issue?.id || '')) continue
-    const evidence = issue?.evidence
-    const texts = []
-    // errors 数组（pageerror/console 的 errors 列表）
-    if (Array.isArray(evidence?.errors)) {
-      for (const entry of evidence.errors) {
-        texts.push(`${entry?.message || ''} ${entry?.text || ''} ${entry?.stack || ''}`)
-      }
-    }
-    // RUNTIME-004 的 evidence 是 previewState：renderError / loadError 含错误文本
-    if (evidence?.renderError) texts.push(`renderError: ${evidence.renderError}`)
-    if (evidence?.loadError) texts.push(`loadError: ${evidence.loadError}`)
-    if (evidence?.error) texts.push(`error: ${String(evidence.error)}`)
-    for (const text of texts) {
-      if (DETERMINISTIC_MISSING_PATTERNS.some((re) => re.test(text))) return true
-    }
-  }
-  return false
-}
+// 🛡️ P0 升级（2026-09-02，mv-max-1788359428498-ee0cbe69）+ 扩展（2026-09-10，立项统一治理运行时 JS 错误）：
+// 确定性运行时缺失判定（产物自身缺陷、重试/降级无法自愈）抽到无 import.meta 的纯函数模块，
+// 便于 jest 单测且可复用。详见 docs/runtime-js-error-governance-2026-09-10.md。
+import { hasDeterministicRuntimeMissing } from '../utils/runtime-error-classifier.js'
+// 保持对外导出不变：graph 层（phase2/vue3）仍从本模块 import 该函数。
+export { hasDeterministicRuntimeMissing }
 
 export function classifyRuntimeGate(runtimeGate) {
   const issues = Array.isArray(runtimeGate?.issues) ? runtimeGate.issues : []

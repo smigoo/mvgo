@@ -62,8 +62,10 @@ export interface ModelEntry {
   baseURL?: string
   model?: string
   providerType?: ProviderType
-  /** 能力标记：both=通用（文本+视觉）/ text=仅文本 / vision=仅视觉 */
-  capability?: ProviderRole
+  /** 能力标记：both=通用（文本+视觉）/ text=仅文本 / vision=仅视觉；空串/未设置 = 未检测（默认不支持任何能力） */
+  capability?: ProviderRole | ''
+  /** 连通性测试通过标记：必须点「自动识别能力」测试通过后才允许保存/入槽位 */
+  verified?: boolean
   /** 每分钟请求上限，0 = 不限 */
   rpm?: number
   /** 每分钟 Token 上限，0 = 不限 */

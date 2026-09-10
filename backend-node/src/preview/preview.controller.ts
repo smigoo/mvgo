@@ -10,9 +10,10 @@ import {
 import type { Response } from 'express';
 import { join, resolve, sep } from 'path';
 import { existsSync } from 'fs';
+import { resolveComponentDirStrict } from '../ai-engine/utils/component-resolver.js';
 import { readdir, stat } from 'fs/promises';
 import {
-  backendRoot,
+  workspaceRoot,
   customComponentsDir,
   vue3ComponentsDir,
   resolveFrontendWorkspacePath,
@@ -20,16 +21,13 @@ import {
 
 /**
  * 查找组件的候选根目录集合。
- * 发布器 (workspace-preview-publisher) 将产物写入 backend-node/workspace 与前端 workspace，
- * 而旧部署将产物写入 projectRoot/workspace，因此需要兼容多处查找。
+ * 🆕 S5（2026-09-10）：`customComponentsDir` 已统一为 backend-node/workspace/custom-components，
+ * 与发布器写入路径（workspaceRoot）、解析搜索根（componentSearchRoots）完全一致 —— 读写不再分叉。
+ * 前端 workspace 保留为镜像副本（dev/生产前端要读它）。
  */
 function collectComponentRoots(): string[] {
   const roots: string[] = [
-    // 发布器主路径：backend-node/workspace
-    join(backendRoot, 'workspace', 'custom-components'),
-    // 旧路径：projectRoot/workspace
-    customComponentsDir,
-    // 前端 workspace（发布器同步目标之一）
+    customComponentsDir, // = backend-node/workspace/custom-components（发布器写入路径）
     join(resolveFrontendWorkspacePath(), 'custom-components'),
   ];
   return [...new Set(roots)];
@@ -37,11 +35,11 @@ function collectComponentRoots(): string[] {
 
 /**
  * 查找页面骨架的候选根目录集合。
- * 与组件类似，优先 backend-node/workspace，再兼容前端 workspace 与旧路径。
+ * 与组件类似，优先 backend-node/workspace，再兼容前端 workspace。
  */
 function collectPageRoots(): string[] {
   const roots: string[] = [
-    join(backendRoot, 'workspace', 'vue3-pages'),
+    join(workspaceRoot, 'vue3-pages'),
     join(resolveFrontendWorkspacePath(), 'vue3-pages'),
   ];
   return [...new Set(roots)];
@@ -122,21 +120,32 @@ export class PreviewController {
     // 发布器可能写入 backend-node/workspace 或前端 workspace，需遍历所有候选根
     const basePaths = collectComponentRoots();
 
-    // 查找匹配的组件目录（因为目录名可能是 componentId 或 componentId-componentName 格式）
+    // 🎯 优先走统一严格解析：与 AI 修复写入 / 规范检查 / 下载打包同一事实源。
+    // 背景：collectComponentRoots() 的第一个根是 backend-node/workspace（历史副本），
+    // 而组件解析（写入/打包）用的是 /mvgo/workspace 与 /mvgo/frontend/workspace，
+    // 两者不是同一份 → AI 修复改了 B 副本、预览读 A 副本，表现为「改了预览不变」。
+    // 这里先按统一解析取目录，只有该文件在解析结果里不存在时才回退旧的遍历。
     let componentDir: string | null = null;
-    for (const basePath of basePaths) {
-      try {
-        const dirs = await readdir(basePath);
-        // 优先精确匹配，然后匹配前缀
-        const matchedDir =
-          dirs.find((dir) => dir === componentId) ||
-          dirs.find((dir) => dir.startsWith(`${componentId}-`));
-        if (matchedDir) {
-          componentDir = join(basePath, matchedDir);
-          break;
+    const strictDir = await resolveComponentDirStrict(componentId);
+    if (strictDir && existsSync(join(strictDir, filePath || ''))) {
+      componentDir = strictDir;
+    }
+
+    if (!componentDir) {
+      for (const basePath of basePaths) {
+        try {
+          const dirs = await readdir(basePath);
+          // 优先精确匹配，然后匹配前缀
+          const matchedDir =
+            dirs.find((dir) => dir === componentId) ||
+            dirs.find((dir) => dir.startsWith(`${componentId}-`));
+          if (matchedDir) {
+            componentDir = join(basePath, matchedDir);
+            break;
+          }
+        } catch (error) {
+          // 该 custom-components 目录不存在，继续尝试下一个候选
         }
-      } catch (error) {
-        // 该 custom-components 目录不存在，继续尝试下一个候选
       }
     }
 
@@ -144,9 +153,8 @@ export class PreviewController {
     // 找不到则兜底扫描该根下所有群组目录（与微码 custom-components 的跨根兜底对齐），
     // 避免前端漏传 / 错传 groupId 时整组件 404 空白。
     if (!componentDir) {
-      // 同样遍历多个候选根：发布器主路径 backend-node/workspace、旧路径 projectRoot/workspace、前端 workspace
+      // 🆕 S5：vue3ComponentsDir 已统一为 backend-node/workspace/vue3-components（= 发布器写入路径）
       const vue3Roots = [
-        join(backendRoot, 'workspace', 'vue3-components'),
         vue3ComponentsDir,
         join(resolveFrontendWorkspacePath(), 'vue3-components'),
       ];

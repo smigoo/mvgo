@@ -12,7 +12,7 @@
  * 路径对照（ECS 生产部署）：
  *   - backendRoot:     /home/mvbt/mvgo/backend-node
  *   - projectRoot:    /home/mvbt/mvgo
- *   - workspace:      /home/mvbt/mvgo/workspace（与 backend-node 同级，在 projectRoot 下）
+ *   - workspace:      /home/mvbt/mvgo/backend-node/workspace（🆕 S5：统一到后端副本根）
  *   - tempComponents: /home/mvbt/mvgo/temp-components
  *   - frontendWorkspace: /home/mvbt/mvgo/frontend/workspace
  */
@@ -34,8 +34,23 @@ export const projectRoot = dirname(backendRoot)
 
 // ========== workspace 路径 ==========
 
-/** workspace 在 projectRoot 下（与 backend-node 同级，如 /home/mvbt/mvgo/workspace） */
-export const workspaceRoot = join(projectRoot, 'workspace')
+/**
+ * 🆕 S5（2026-09-10）：统一到**后端副本根** backend-node/workspace，消除读写分叉。
+ *
+ * 分叉根因：写入侧有两套路径 ——
+ *   - `workspace-preview-publisher.js` 硬编码 `join(backendRoot, 'workspace')`
+ *   - 本文件的 `workspaceRoot` 原为 `projectRoot/workspace`
+ * 而读取侧 `componentSearchRoots()` 只扫 `projectRoot/workspace` + `frontend/workspace`，
+ * 于是 `backend-node/workspace` 里写进去的产物「写了但解析读不到」（曾实测：该根有 116 个
+ * 规范 c- 目录，全部读不到，直接造成 285 条「残留任务号目录」假象）。
+ *
+ * 现在 workspaceRoot 指向 backend-node/workspace：
+ *   - 读（componentSearchRoots / resolveComponentBaseDirs）与
+ *     写（publisher / phase2.copyToWorkspace / tasks.service）**共用同一个根**；
+ *   - `projectRoot/workspace` 退役（其 9 个目录 100% 是任务号名，属脏数据）；
+ *   - `frontend/workspace` 作为前端侧镜像副本保留（dev/生产前端要读它）。
+ */
+export const workspaceRoot = join(backendRoot, 'workspace')
 export const customComponentsDir = join(workspaceRoot, 'custom-components')
 export const vue3ComponentsDir = join(workspaceRoot, 'vue3-components')
 

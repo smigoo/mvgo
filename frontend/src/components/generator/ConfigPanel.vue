@@ -63,7 +63,7 @@
                   <span class="model-index" :title="m.name || m.model">
                     模型 #{{ idx + 1 }}<span v-if="m.name || m.model"> · {{ m.name || m.model }}</span>
                   </span>
-                  <span class="capability-badge capability-badge--mini" :class="m.capability || 'both'">{{ capabilityLabel(m.capability) }}</span>
+                  <span class="capability-badge capability-badge--mini" :class="(m.verified && m.capability) ? m.capability : 'unknown'">{{ modelStatusLabel(m) }}</span>
                   <span v-if="isModelInUse(m.id)" class="used-dot" title="已被槽位引用">●</span>
                 </span>
               </button>
@@ -87,13 +87,13 @@
               </div>
               <div class="config-group">
                 <label>Model <span class="required">*</span></label>
-                <input type="text" v-model="m.model" placeholder="claude-opus-4-8" autocomplete="off" autocapitalize="off" spellcheck="false" />
+                <input type="text" v-model="m.model" placeholder="claude-opus-4-8" autocomplete="off" autocapitalize="off" spellcheck="false" @input="markUnverified(m)" />
               </div>
             </div>
 
             <div class="config-group">
               <label>Base URL</label>
-              <input type="text" v-model="m.baseURL" placeholder="https://api.anthropic.com" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" />
+              <input type="text" v-model="m.baseURL" placeholder="https://api.anthropic.com" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" @input="markUnverified(m)" />
             </div>
 
             <div class="config-group">
@@ -109,6 +109,7 @@
                   data-lpignore="true"
                   data-1p-ignore="true"
                   data-bwignore="true"
+                  @input="markUnverified(m)"
                 />
                 <button
                   type="button"
@@ -126,7 +127,7 @@
             <div class="config-row">
               <div class="config-group">
                 <label>接口协议</label>
-                <select v-model="m.providerType" class="provider-select">
+                <select v-model="m.providerType" class="provider-select" @change="markUnverified(m)">
                   <option value="openai-compatible">OpenAI 兼容（/v1/chat/completions）</option>
                   <option value="anthropic">Anthropic 原生协议</option>
                   <option value="auto">Auto（自动识别）</option>
@@ -135,11 +136,11 @@
               <div class="config-group">
                 <label>能力</label>
                 <div class="capability-display">
-                  <span class="capability-badge" :class="m.capability || 'both'">
+                  <span class="capability-badge" :class="(m.verified && m.capability) ? m.capability : 'unknown'">
                     <svg class="capability-badge-icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                       <polyline points="20 6 9 17 4 12"/>
                     </svg>
-                    {{ capabilityLabel(m.capability) }}
+                    {{ modelStatusLabel(m) }}
                   </span>
                 </div>
                 <p v-if="!detectResults[m.id]" class="capability-hint">
@@ -215,7 +216,7 @@
                 <label>主模型 <span class="required">*</span></label>
                 <select v-model="formData.binding.unified.primaryId" class="provider-select">
                   <option value="" disabled>请选择主模型</option>
-                  <option v-for="c in slotCandidates('unified')" :key="c.id" :value="c.id">{{ c.name || c.model || c.id }}</option>
+                  <option v-for="c in slotOptions('unified')" :key="c.id" :value="c.id">{{ c.name || c.model || c.id }}</option>
                 </select>
               </div>
 
@@ -245,7 +246,7 @@
                 <label>主模型 <span class="required">*</span></label>
                 <select v-model="formData.binding.text.primaryId" class="provider-select">
                   <option value="" disabled>请选择主模型</option>
-                  <option v-for="c in slotCandidates('text')" :key="c.id" :value="c.id">{{ c.name || c.model || c.id }}</option>
+                  <option v-for="c in slotOptions('text')" :key="c.id" :value="c.id">{{ c.name || c.model || c.id }}</option>
                 </select>
               </div>
 
@@ -271,7 +272,7 @@
                 <label>主模型 <span class="required">*</span></label>
                 <select v-model="formData.binding.vision.primaryId" class="provider-select">
                   <option value="" disabled>请选择主模型</option>
-                  <option v-for="c in slotCandidates('vision')" :key="c.id" :value="c.id">{{ c.name || c.model || c.id }}</option>
+                  <option v-for="c in slotOptions('vision')" :key="c.id" :value="c.id">{{ c.name || c.model || c.id }}</option>
                 </select>
               </div>
 
@@ -589,6 +590,10 @@ function hideProviderTempTooltip() { tempTooltipVisible.value = false }
 
 // Tab 状态
 const activeTab = ref<'model' | 'service'>('model')
+
+// 环境判定：dev 模式保留「本地 + 后端合并」兜底，保护个人模型库不被共享 dev-local 覆盖；
+// prod 模式永远以后端为唯一源头，不先渲染 localStorage（避免错误数据闪烁）。
+const isDev = import.meta.env.DEV
 
 // 模型配置模式：'separate'（分别配置）或 'unified'（统一大模型）
 const modelMode = ref<'separate' | 'unified'>('separate')
@@ -945,17 +950,44 @@ function applyConfigToForm(cfg: any) {
   }
 }
 
-// 从后端加载配置（含模型库），异步覆盖 localStorage
-async function loadConfigFromBackend() {
+// 从后端加载配置（含模型库），异步与 localStorage 合并。
+// 🐛 关键修复（2026-09-10）：dev 模式下后端固定返回 dev-local 共享配置（1 个模型），
+// 若直接覆盖会清空用户 personal localStorage 里的 12 个模型（用户报「刷新后模型库变 1 个」）。
+// 规则：后端模型与本地模型按 id 合并；同 id 后端字段优先；本地独有模型保留；binding 同理优先后端，
+// 🏭 prod：后端为唯一源头，直接采用；🧪 dev：合并本地 + 后端，保护个人模型库不被共享 dev-local 覆盖。
+async function loadConfigFromBackend(localCfg: any) {
   try {
     const d: any = await http.get('/api/config/ai')
     const data = d?.data ?? d
     if (data?.config) {
-      applyConfigToForm(data.config)
-      console.log('[ConfigPanel] ✅ 已从后端加载配置（含模型库 models/binding）')
+      const cfg = data.config
+      const backendModels = Array.isArray(cfg.models) ? cfg.models : []
+      const localModels = Array.isArray(localCfg?.models) ? localCfg.models : []
+      const backendHasLegacy = !!(cfg.textModel || cfg.visionModel || cfg.unifiedModel)
+
+      if (isDev) {
+        // 🧪 dev 合并：后端 id 为基准，本地独有的模型追加保留（避免 dev-local 共享配置覆盖用户个人模型）
+        const mergedModelsMap = new Map<string, any>([...localModels, ...backendModels].map((m: any) => [m.id, m]))
+        const mergedModels = Array.from(mergedModelsMap.values())
+        const backendHasBinding = !!(cfg.binding?.unified?.primaryId || cfg.binding?.text?.primaryId || cfg.binding?.vision?.primaryId)
+        const mergedBinding = backendHasBinding ? cfg.binding : (localCfg?.binding || cfg.binding)
+        const mergedCfg = { ...cfg, models: mergedModels, binding: mergedBinding }
+        applyConfigToForm(mergedCfg)
+        console.log('[ConfigPanel] dev 已合并后端+本地模型库：后端', backendModels.length, '个，本地', localModels.length, '个，合并后', mergedModels.length, '个')
+      } else {
+        // 🏭 prod：后端唯一源头，不再合并本地（localStorage 仅作失败兜底）
+        applyConfigToForm(cfg)
+        console.log('[ConfigPanel] prod 已采用后端配置（后端', backendModels.length, '个模型）')
+      }
     }
   } catch (e: any) {
-    console.warn('[ConfigPanel] 从后端加载配置失败，回退本地:', e?.message)
+    // 后端拉取失败：fallback 到本地（dev/prod 通用），保证面板至少能渲染已保存数据
+    if (localCfg?.models?.length) {
+      applyConfigToForm(localCfg)
+      console.warn('[ConfigPanel] 后端加载失败，回退本地 localStorage:', e?.message)
+    } else {
+      console.warn('[ConfigPanel] 从后端加载配置失败且无本地兜底:', e?.message)
+    }
   }
 }
 
@@ -976,12 +1008,18 @@ watch(() => props.visible, (isVisible) => {
     }
     console.log('[ConfigPanel] 面板打开, localStorage 原始值:', saved?.substring(0, 200))
     console.log('[ConfigPanel] 解析后 cfg.modelMode:', cfg.modelMode, '| visionApiKey:', !!cfg.visionApiKey, '| textApiKey:', !!cfg.textApiKey)
-    
-    applyConfigToForm(cfg)
-    console.log('[ConfigPanel] 模式:', modelMode.value, '| unifiedApiKey:', !!formData.value.unifiedApiKey, '| unifiedBaseURL:', formData.value.unifiedBaseURL)
 
-    // 🆕 从后端加载配置（含模型库），覆盖 localStorage
-    loadConfigFromBackend()
+    if (isDev) {
+      // 🧪 dev：先以本地即时渲染（避免空面板），再由 loadConfigFromBackend 合并后端（保护个人模型库）
+      applyConfigToForm(cfg)
+      console.log('[ConfigPanel] dev 模式：本地即时渲染 + 后端合并兜底')
+      loadConfigFromBackend(cfg)
+    } else {
+      // 🏭 prod：永远以后端为唯一源头，不先渲染 localStorage（避免错误数据闪烁）。
+      // 仅当后端拉取失败才回退本地（loadConfigFromBackend 内部处理）。
+      console.log('[ConfigPanel] prod 模式：仅以后端为源头加载（localStorage 仅作失败兜底）')
+      loadConfigFromBackend(cfg)
+    }
 
     // 🆕 从后端加载 GitLab Token（加密存储）
     http
@@ -1109,6 +1147,8 @@ function confirmRemoveModel(id: string) {
 }
 
 // 添加模型（生成唯一 id，默认折叠）
+// 🔒 2026-09-10 口径：新模型默认「什么都不支持」（capability='' + verified=false），
+// 必须填写完整并点「自动识别能力」实测通过后才能入槽位/保存。
 function addModel() {
   const m: ModelEntry = {
     id: `m${Date.now()}_${Math.random().toString(16).slice(2, 6)}`,
@@ -1117,7 +1157,8 @@ function addModel() {
     baseURL: '',
     model: '',
     providerType: 'auto',
-    capability: 'both',
+    capability: '',
+    verified: false,
     rpm: 0,
     tpm: 0,
     weight: 10,
@@ -1154,23 +1195,69 @@ function slotCandidates(slot: 'unified' | 'text' | 'vision'): ModelEntry[] {
   return models.filter((m) => {
     // 未填写完成的模型不能作为槽位候选（避免刚添加的空卡片出现在主模型/模型池里）
     if (!m.apiKey?.trim() || !m.baseURL?.trim() || !m.model?.trim()) return false
-    const cap = m.capability || 'both'
+    // 🔒 未通过连通性测试的模型不能入槽位（默认什么都不支持）
+    if (!m.verified) return false
+    const cap = m.capability || ''
+    if (!cap) return false
     if (cap === 'both') return true
     return needVision ? cap === 'vision' : cap === 'text'
   })
+}
+
+// 槽位主模型下拉选项：在「合格候选」(slotCandidates) 基础上，若当前已绑定的 primaryId 模型
+// 不在候选中（例如实测无能力 cap='' 但仍被历史保存/直接绑定引用），也保留其选项，
+// 否则刷新后 <select> 找不到匹配项会回退「请选择主模型」，造成「已保存的主模型消失了」的错觉。
+// 仅用于展示已绑定项，不新增候选：用户仍不能把未检测模型「重新选」进槽位（由 slotCandidates 把关）。
+function slotOptions(slot: 'unified' | 'text' | 'vision'): ModelEntry[] {
+  const cands = slotCandidates(slot)
+  const pid = formData.value.binding?.[slot]?.primaryId
+  if (pid) {
+    const byId = new Map<string, any>((formData.value.models || []).map((m: any) => [m.id, m]))
+    const bound = byId.get(pid)
+    if (bound && !cands.some((c) => c.id === pid)) {
+      return [bound, ...cands]
+    }
+  }
+  return cands
+}
+
+// 🔒 关键凭据（Model / Base URL / API Key / 接口协议）变更 → 实测结论失效，须重新测试
+function markUnverified(m: ModelEntry) {
+  if (m.verified !== false || m.capability) {
+    m.verified = false
+    m.capability = ''
+    delete detectResults.value[m.id]
+  }
+}
+
+// 模型状态标签：区分「从未检测」与「已检测但无能力」
+function modelStatusLabel(m: ModelEntry): string {
+  if (!m.verified) return '未验证'
+  if (m.capability === 'vision') return '视觉'
+  if (m.capability === 'text') return '文本'
+  if (m.capability === 'both') return '文本 + 视觉'
+  return '无能力' // 已检测但未能识别出任何能力
 }
 
 // 能力标签（capability → 图标胶囊）
 function capabilityLabel(cap?: string): string {
   if (cap === 'vision') return '视觉'
   if (cap === 'text') return '文本'
-  return '文本 + 视觉'
+  if (cap === 'both') return '文本 + 视觉'
+  return '未检测'
 }
 
-// 池候选：排除主模型自身（主模型由 primaryId 单独引用，池只放额外成员）
+// 池候选：排除主模型自身（主模型由 primaryId 单独引用，池只放额外成员）。
+// 已绑定但不在合格候选中的池成员（如实测无能力的模型）也保留显示，避免刷新后复选框消失、绑定静默丢失。
 function poolCandidates(slot: 'unified' | 'text' | 'vision'): ModelEntry[] {
-  const primaryId = formData.value.binding?.[slot]?.primaryId
-  return slotCandidates(slot).filter((c) => c.id !== primaryId)
+  const b = formData.value.binding?.[slot]
+  const primaryId = b?.primaryId
+  const cands = slotCandidates(slot).filter((c) => c.id !== primaryId)
+  const byId = new Map<string, any>((formData.value.models || []).map((m: any) => [m.id, m]))
+  const extra = (b?.poolIds || [])
+    .filter((id: string) => id !== primaryId && byId.get(id) && !cands.some((c) => c.id === id))
+    .map((id: string) => byId.get(id))
+  return [...cands, ...extra]
 }
 
 // ─── 自动识别模型能力（三维：文本 / 视觉 / 推理） ───
@@ -1198,15 +1285,21 @@ async function detectModelCapability(m: ModelEntry) {
     const text = body?.text?.success === true
     if (vision && text) {
       m.capability = 'both'
+      m.verified = true
       message.success('识别完成：该模型支持视觉 + 文本（通用）')
     } else if (vision) {
       m.capability = 'vision'
+      m.verified = true
       message.success('识别完成：该模型仅支持视觉')
     } else if (text) {
       m.capability = 'text'
+      m.verified = true
       message.success('识别完成：该模型仅支持文本')
     } else {
-      message.error('检测失败，请检查 API Key / Base URL / Model 是否正确')
+      // 检测已完成但未能识别出任何能力：仍可保存，只是 capability='' 不会进入槽位候选
+      m.capability = ''
+      m.verified = true
+      message.warning('检测完成：该模型未能识别出文本或视觉能力，仍可保存，但不会出现在槽位候选中', 4)
     }
   } catch (e: any) {
     const msg = e?.data?.message || e?.message || String(e)
@@ -1295,11 +1388,37 @@ function buildSaveData(): any {
       weight: Number(m.weight) || 10,
       ...(m.temperature != null && m.temperature !== '' ? { temperature: Number(m.temperature) } : {}),
     })),
-    binding: {
-      unified: { primaryId: fd.binding?.unified?.primaryId || '', poolIds: [...(fd.binding?.unified?.poolIds || [])] },
-      text: { primaryId: fd.binding?.text?.primaryId || '', poolIds: [...(fd.binding?.text?.poolIds || [])] },
-      vision: { primaryId: fd.binding?.vision?.primaryId || '', poolIds: [...(fd.binding?.vision?.poolIds || [])] },
+    binding: this.normalizeBindingForSave(modelMode.value, fd.binding),
+  }
+}
+
+// 🧹 保存前按 modelMode 规范化 binding，防止旧模式槽位数据残留到后端
+function normalizeBindingForSave(
+  mode: 'separate' | 'unified' | string,
+  binding: any,
+): Record<string, { primaryId: string; poolIds: string[] }> {
+  const empty = () => ({ primaryId: '', poolIds: [] as string[] })
+  const b = binding || {}
+  if (mode === 'unified') {
+    return {
+      unified: {
+        primaryId: String(b.unified?.primaryId || ''),
+        poolIds: Array.isArray(b.unified?.poolIds) ? [...b.unified.poolIds] : [],
+      },
+      text: empty(),
+      vision: empty(),
+    }
+  }
+  return {
+    text: {
+      primaryId: String(b.text?.primaryId || ''),
+      poolIds: Array.isArray(b.text?.poolIds) ? [...b.text.poolIds] : [],
     },
+    vision: {
+      primaryId: String(b.vision?.primaryId || ''),
+      poolIds: Array.isArray(b.vision?.poolIds) ? [...b.vision.poolIds] : [],
+    },
+    unified: empty(),
   }
 }
 
@@ -1362,17 +1481,14 @@ async function saveConfig() {
       baseURL: trim(m.baseURL),
       model: trim(m.model),
       providerType: m.providerType || 'auto',
-      capability: m.capability || 'both',
+      capability: m.capability || '',
+      verified: m.verified === true,
       rpm: Number(m.rpm) || 0,
       tpm: Number(m.tpm) || 0,
       weight: Number(m.weight) || 10,
       ...(m.temperature != null && m.temperature !== '' ? { temperature: Number(m.temperature) } : {}),
     })),
-    binding: {
-      unified: { primaryId: formData.value.binding?.unified?.primaryId || '', poolIds: [...(formData.value.binding?.unified?.poolIds || [])] },
-      text: { primaryId: formData.value.binding?.text?.primaryId || '', poolIds: [...(formData.value.binding?.text?.poolIds || [])] },
-      vision: { primaryId: formData.value.binding?.vision?.primaryId || '', poolIds: [...(formData.value.binding?.vision?.poolIds || [])] },
-    },
+    binding: normalizeBindingForSave(modelMode.value, formData.value.binding),
   }
 
   console.log('[ConfigPanel] 💾 saveConfig, modelMode=', modelMode.value)
@@ -1397,6 +1513,25 @@ async function saveConfig() {
     const dup = [...nameCount.entries()].find(([, c]) => c > 1)
     if (dup) {
       message.error(`模型名称「${dup[0]}」重复，请改为唯一名称`)
+      return
+    }
+  }
+
+  // 🔒 保存闸门：每个填写完整的模型必须至少执行过一次「自动识别能力」服务端实测才能保存。
+  // 即使识别结果是「什么都不支持」，也允许保存（不会进入槽位候选）；未检测的模型一律拦截。
+  {
+    const undetected = (formData.value.models || []).filter(
+      (m: any) => m.apiKey?.trim() && m.baseURL?.trim() && m.model?.trim() && m.verified !== true,
+    )
+    if (undetected.length) {
+      const first = undetected[0]
+      expandedModels.value[first.id] = true
+      message.error(
+        undetected.length === 1
+          ? `模型「${first.name || first.model}」尚未执行检测：请填写完整后点击卡片内「自动识别能力」，完成检测后即可保存`
+          : `${undetected.length} 个模型尚未执行检测（${undetected.map((m: any) => m.name || m.model).join('、')}）：请逐一点击「自动识别能力」，完成检测后即可保存`,
+        6,
+      )
       return
     }
   }
@@ -1483,10 +1618,18 @@ async function saveConfig() {
       hasRunningTasks = d?.hasRunningTasks === true
       console.log('[ConfigPanel] ✅ 服务端 AI 配置已保存（接口保存）')
     } else {
-      console.warn('[ConfigPanel] 服务端配置保存失败:', d?.error || '未知错误')
+      // 信封结构：后端返回体在 data 内层（{ success, code, message, data: { error, details } }）
+      const inner = d?.data || {}
+      const errMsg = inner?.error || inner?.details?.[0] || d?.error || d?.message || '未知错误'
+      console.warn('[ConfigPanel] 服务端配置保存失败:', errMsg)
+      message.error(`配置保存失败：${typeof errMsg === 'string' ? errMsg : JSON.stringify(errMsg)}`, 6)
+      return
     }
   } catch (e: any) {
-    console.warn('[ConfigPanel] 服务端配置保存异常:', e?.message || e)
+    const errMsg = e?.data?.message || e?.data?.error || e?.message || e
+    console.warn('[ConfigPanel] 服务端配置保存异常:', errMsg)
+    message.error(`配置保存失败：${typeof errMsg === 'string' ? errMsg : JSON.stringify(errMsg)}`, 6)
+    return
   }
 
   // 同步 GitLab Token 到用户凭证接口（后端加密存储）
@@ -2938,6 +3081,16 @@ function clearConfig() {
   background: #f0f9ff;
   color: #0c4a6e;
   border-color: #bae6fd;
+}
+
+/* 🔒 未检测态（capability='' ）：灰色中性，明确表示「默认什么都不支持」 */
+.capability-badge.unknown {
+  background: #f4f4f5;
+  color: #71717a;
+  border-color: #d4d4d8;
+}
+.capability-badge.unknown .capability-badge-icon {
+  display: none;
 }
 
 .capability-badge--mini {

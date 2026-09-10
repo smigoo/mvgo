@@ -454,11 +454,30 @@ function getQueuedLabel(task: any): string {
   }
 }
 
-// ── 阶段管道（展开详情用）──
+// ── 阶段管道（展开详情用）── Max 管线（Figma → 视觉分析 → 精修 → 质量检查）
 const PIPELINE_STAGES = [
   '初始化', 'Figma数据获取', '视觉分析', '并行分析',
   '代码生成', '串行精修', '质量检查', '迭代修订', '完成'
 ]
+
+// ── Lite 管线（截图生成）专用阶段管道 ──
+// lite 只有 4 段：校验截图 → 视觉分析 → 代码生成 → 完成。
+// 若套用 Max 的 9 段，分母与阶段语义都对不上（会一直显示 x/8）。
+const LITE_PIPELINE_STAGES = ['校验截图', '视觉分析', '代码生成', '完成']
+
+// Lite 后端推送的是英文 stage（lite.service.ts：precheck / analyzing / analysis_done /
+// generating / codegen_done / upgrade-fetch）。这些此前不在任何映射表里 →
+// stages.indexOf('precheck') = -1 → getCurrentStage 兜底成 step:1，进度条恒定 1/8 不动。
+const LITE_NODE_STAGE_MAP: Record<string, string> = {
+  'precheck': '校验截图',
+  'analyzing': '视觉分析',
+  'analysis_done': '视觉分析',
+  'generating': '代码生成',
+  'codegen_done': '代码生成',
+  'upgrade-fetch': '代码生成',
+  'upgrade': '代码生成',
+  'complete': '完成',
+}
 
 // 后端节点 ID → 中文阶段名映射（后端发送的 stage 通常是节点原始 ID，与中文名不一致）
 const NODE_STAGE_MAP: Record<string, string> = {
@@ -482,20 +501,33 @@ const NODE_STAGE_MAP: Record<string, string> = {
   'complete': '完成',
 }
 
+/**
+ * 按档位取阶段管道与节点映射（须定义在两张映射表之后）。
+ * lite 与 max 是两套完全不同的管线，共用一套中文阶段表必然对不上。
+ */
+function getStageConfig(task: any): { stages: string[]; map: Record<string, string> } {
+  const isLite = getTaskTier(task) === 'lite'
+  return {
+    stages: isLite ? LITE_PIPELINE_STAGES : PIPELINE_STAGES,
+    map: isLite ? { ...NODE_STAGE_MAP, ...LITE_NODE_STAGE_MAP } : NODE_STAGE_MAP,
+  }
+}
+
 function getCurrentStage(task: any) {
   if (task.status !== 'running') return null
   const progress = task.progress
   if (!Array.isArray(progress) || progress.length === 0) return null
+  const { stages, map } = getStageConfig(task)
   for (let i = progress.length - 1; i >= 0; i--) {
     const p = progress[i]
     if (p.stage && p.status === 'running') {
-      const mappedStage = NODE_STAGE_MAP[p.stage] || p.stage
-      const stepIdx = PIPELINE_STAGES.indexOf(mappedStage)
+      const mappedStage = map[p.stage] || p.stage
+      const stepIdx = stages.indexOf(mappedStage)
       return {
         stage: mappedStage,
         message: (p.message || '').replace(/^[^\u4e00-\u9fa5a-zA-Z]+/, '').slice(0, 30),
         step: stepIdx >= 0 ? stepIdx + 1 : 1, // fallback 到 1 而非 0
-        total: PIPELINE_STAGES.length - 1,
+        total: stages.length - 1,
       }
     }
   }
@@ -574,11 +606,13 @@ function formatDuration(task: any) {
 function taskPipelineStages(task: any) {
   const progress = Array.isArray(task.progress) ? task.progress : []
   const currentStage = getCurrentStage(task)
-  const currentIdx = currentStage ? PIPELINE_STAGES.indexOf(currentStage.stage) : -1
+  // lite / max 用各自的阶段表，否则 lite 的 stage 全不在表里 → currentIdx 恒 -1 → 管道全空
+  const { stages, map } = getStageConfig(task)
+  const currentIdx = currentStage ? stages.indexOf(currentStage.stage) : -1
 
-  return PIPELINE_STAGES.map((name, idx) => {
+  return stages.map((name, idx) => {
     const p = progress.find(x => {
-      const mapped = NODE_STAGE_MAP[x.stage] || x.stage
+      const mapped = map[x.stage] || x.stage
       return mapped === name
     })
     let cls = ''

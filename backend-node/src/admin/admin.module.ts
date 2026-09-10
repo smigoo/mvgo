@@ -38,5 +38,7 @@ import { Component, ComponentSchema } from '../schemas/component.schema';
   ],
   controllers: [AdminController, AdminStatsController],
   providers: [AdminService],
+  // 供 McSpecModule 等复用统一的管理员判定（assertAdmin），避免各处重复实现
+  exports: [AdminService],
 })
 export class AdminModule {}

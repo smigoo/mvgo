@@ -327,8 +327,8 @@ export class Phase2Controller implements OnModuleInit {
     }
 
     // 检查并发槽位：如果已满，加入等待队列
-    if (this.queueService.getRunningCount() >= this.queueService.MAX_CONCURRENT) {
-      this.logger.log(`并发槽位已满 (${this.queueService.getRunningCount()}/${this.queueService.MAX_CONCURRENT})，任务加入等待队列`);
+    if (this.queueService.getRunningCount(userId) >= this.queueService.MAX_CONCURRENT) {
+      this.logger.log(`并发槽位已满 (${this.queueService.getRunningCount(userId)}/${this.queueService.MAX_CONCURRENT})，任务加入等待队列`);
       
       const queuedTask = this.tasksService.createTask(sessionId, {
         componentId: sessionId,
@@ -357,7 +357,7 @@ export class Phase2Controller implements OnModuleInit {
         message: queueResult.message,
         queue: {
           position: queueResult.queuePosition,
-          runningCount: this.queueService.getRunningCount(),
+          runningCount: this.queueService.getRunningCount(userId),
           maxConcurrent: this.queueService.MAX_CONCURRENT,
         },
       };
@@ -379,7 +379,7 @@ export class Phase2Controller implements OnModuleInit {
     });
 
     // 注册为运行中
-    this.queueService.registerRunning(sessionId);
+    this.queueService.registerRunning(sessionId, userId);
 
     // 启动异步生成任务，传入groupId和userId
     this.phase2Service.startGeneration(sessionId, dto, groupId, userId);
@@ -389,9 +389,9 @@ export class Phase2Controller implements OnModuleInit {
       sessionId,
       message: 'Phase 2 生成任务已开始',
       queue: {
-        runningCount: this.queueService.getRunningCount(),
+        runningCount: this.queueService.getRunningCount(userId),
         maxConcurrent: this.queueService.MAX_CONCURRENT,
-        availableSlots: this.queueService.getAvailableSlots(),
+        availableSlots: this.queueService.getAvailableSlots(userId),
       },
     };
   }

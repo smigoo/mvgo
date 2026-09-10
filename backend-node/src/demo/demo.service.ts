@@ -15,10 +15,12 @@ import {
   listModifications,
   hasInitialSnapshot,
 } from '../ai-engine/tools/snapshot-manager.js';
-import { resolveComponentDir } from '../ai-engine/utils/component-resolver.js';
+import { resolveComponentDirStrict } from '../ai-engine/utils/component-resolver.js';
 import { vue3ComponentsDir, frontendVue3ComponentsDir } from '../config/backend-root.js';
+import { EXCLUDED_PACKAGE_DIRS } from '../common/utils/package-filter';
 
-const SKIP_DIRS = new Set(['.snapshots', '.backups', '.mc-gen', 'node_modules', '.git']);
+// 交付包排除的内部目录：统一用共享常量，避免各处 SKIP_DIRS 漏项（曾漏 .cache/.checkpoint）
+const SKIP_DIRS = new Set(EXCLUDED_PACKAGE_DIRS);
 const AI_FIX_RENDER_ERROR_TIMEOUT_MS = 180_000;
 
 @Injectable()
@@ -258,7 +260,7 @@ ${stack || '无'}
     message?: string;
     error?: string;
   }> {
-    const componentDir = await resolveComponentDir(componentId);
+    const componentDir = await resolveComponentDirStrict(componentId);
     if (!componentDir) {
       return { valid: false, error: `组件目录不存在: ${componentId}` };
     }
@@ -483,7 +485,7 @@ ${stack || '无'}
   }
 
   private async legacyArchiveComponent(componentId: string, res: Response) {
-    const componentDir = await resolveComponentDir(componentId);
+    const componentDir = await resolveComponentDirStrict(componentId);
     if (!componentDir) {
       throw new NotFoundException(`组件目录不存在: ${componentId}`);
     }

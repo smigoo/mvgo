@@ -11,6 +11,7 @@ import { TaskQueueService } from '../queue/task-queue.service';
 import type { ProgressService } from '../progress/progress.service';
 import { ModuleRef } from '@nestjs/core';
 import { redactSecrets } from '../common/utils/redact';
+import { packageEntryFilter } from '../common/utils/package-filter';
 import { validateVueSfcDirectory } from '../ai-engine/utils/sfc-syntax-validation.js';
 import { markSessionLocked } from '../ai-engine/utils/session-lock-registry.js';
 
@@ -1189,7 +1190,8 @@ export class TasksService {
       archive.on('data', (chunk: Buffer) => chunks.push(chunk));
       archive.on('end', () => resolve(Buffer.concat(chunks)));
       archive.on('error', reject);
-      archive.directory(sourceDir, task.componentId);
+      // 🧹 与 phase2.packageComponent 同一套过滤：不交付 .snapshots/.backups/.cache/.checkpoint 等内部目录
+      archive.directory(sourceDir, task.componentId, packageEntryFilter());
       archive.finalize();
     });
 

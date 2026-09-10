@@ -171,13 +171,34 @@ export class TasksController {
     @Param('revision') revision: string,
     @Query('path') path: string,
     @Query('preview') preview: string,
+    @Query('exists') exists: string,
     @CurrentUser() userId: string,
     @Res() res: Response,
   ) {
     const sessionId = this.resolveSnapshotSessionId(rawId, userId);
-    this.assertSnapshotAccessible(sessionId, userId, revision);
     if (!path) throw new HttpException('缺少文件路径', HttpStatus.BAD_REQUEST);
     const isPreview = preview === '1';
+
+    // 🛡️ 探测模式（?exists=1）：只回答「文件是否存在」，且**永不返回 404**。
+    // 前端 loadVue3Runtime.injectGlobalIndexCssIfExists 用本协议探测 resources/styles/index.css；
+    // 该样式是 Max 管线的确定性编译产物，Lite 及其他管线组件目录下本就没有（SFC 内嵌 scoped 样式
+    // 即可渲染）。此前后端不识别 exists，探测请求退化成真实文件读取 → 缺失该文件的组件每次预览
+    // 都产生一次 404，既污染控制台，也会被运行时截图门禁记为 RUNTIME-007「HTTP 资源加载错误」
+    // 进而误判 BLOCK（2026-09-03 前端注释已明确要求后端配合）。
+    if (exists === '1') {
+      res.setHeader('Cache-Control', 'private, no-store');
+      try {
+        this.assertSnapshotAccessible(sessionId, userId, revision);
+        const probe = isPreview
+          ? this.taskCodeSnapshotService.readPreviewFile(sessionId, revision, path)
+          : this.taskCodeSnapshotService.readFile(sessionId, revision, path);
+        return res.json({ exists: !!probe && probe.length > 0 });
+      } catch {
+        return res.json({ exists: false });
+      }
+    }
+
+    this.assertSnapshotAccessible(sessionId, userId, revision);
     // 🛡️ 快照内不存在该文件（如 _figma-size.json 仅在 workspace、不在代码快照）时，
     // 返回干净的 404 而非 Unhandled 500，让前端 safeJson 捕获后走 declare.json 兜底。
     let content: Buffer;

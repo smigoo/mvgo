@@ -400,7 +400,7 @@ export class LiteController {
       };
 
       // 检查并发槽位
-      if (this.queueService && this.queueService.getAvailableSlots() <= 0) {
+      if (this.queueService && this.queueService.getAvailableSlots(userId) <= 0) {
         // 并发已满，入队等待
         const enqueueResult = await this.queueService.enqueue(
           {
@@ -429,7 +429,7 @@ export class LiteController {
 
       // 有空槽位，直接执行
       if (this.queueService) {
-        this.queueService.registerRunning(sessionId);
+        this.queueService.registerRunning(sessionId, userId);
       }
       // 异步执行，不阻塞返回
       executeMaxGeneration();
@@ -589,11 +589,11 @@ export class LiteController {
 
     // 配额充足，检查队列槽位
     if (this.queueService) {
-      const availableSlots = this.queueService.getAvailableSlots();
+      const availableSlots = this.queueService.getAvailableSlots(userId);
 
       if (availableSlots > 0) {
         // 有槽位，直接执行
-        this.queueService.registerRunning(sessionId);
+        this.queueService.registerRunning(sessionId, userId);
         this.tasksService.updateTask(sessionId, { status: 'running' });
 
         // 异步执行

@@ -55,6 +55,7 @@ import { detectTextOrderDrift } from '../utils/text-order-guard.js';
 // 🛡️ COMP-001（2026-09-02）：模块组装覆盖 —— 事实源在 section-coverage-guard.js
 // （规划的 section 必须全部组装进 index.vue，否则预览整块缺失）
 import { detectMissingSections } from '../utils/section-coverage-guard.js';
+import { collectLeafSections } from '../utils/section-tree.js';
 // 🛡️ TEXT-TRUTH（2026-09-02）：文字真值白名单 —— 事实源在 text-truth-guard.js
 // （产物文字必须落在 Figma characters 真值内，否则是 vision OCR 误读/臆造）
 import { detectUnknownText, resolveTextTruthSeverity } from '../utils/text-truth-guard.js';
@@ -384,9 +385,9 @@ export function extractTemplateClasses(files) {
   const classSet = new Set();
   for (const file of files) {
     if (!file || !file.content || !(file.path || '').endsWith('.vue')) continue;
-    const templateMatch = file.content.match(/<template[^>]*>([\s\S]*?)<\/template>/i);
-    if (!templateMatch) continue;
-    const templateContent = templateMatch[1];
+    // 🛡️ 用最外层模板提取（命名插槽 `<template #header-right>` 的 </template> 会截断 lazy 匹配）
+    const templateContent = extractTopLevelTemplate(file.content);
+    if (!templateContent) continue;
     // 提取所有 class="..." 属性值（支持单引号/双引号、多 class 空格分隔、:class 数组/对象字面量）
     const classAttrs = templateContent.match(/class\s*=\s*["']([^"']+)["']/gi) || [];
     for (const attr of classAttrs) {
@@ -420,6 +421,123 @@ export function checkClassHitRate(commonClasses, templateClasses) {
   const totalClasses = commonClasses.size;
   const hitRate = totalClasses > 0 ? (totalClasses - unusedClasses.length) / totalClasses : 1;
   return { hitRate, unusedClasses, totalClasses };
+}
+
+/**
+ * 提取 SFC 最外层 <template>...</template> 内容。
+ * 不能用 lazy `*?`——它会停在第一个内层 </template>（命名插槽 `<template #header-right>` 的闭合），
+ * 导致插槽外的子组件标签/class 全被漏掉 → CODE-020/021 误报（历史组件实锤）。
+ * 正确做法：第一个 <template 开标签 → 最后一个 </template> 闭合。
+ */
+function extractTopLevelTemplate(content = '') {
+  if (!content || typeof content !== 'string') return '';
+  const startMatch = content.match(/<template[\s>]/i);
+  if (!startMatch) return '';
+  const openTagEnd = content.indexOf('>', startMatch.index);
+  if (openTagEnd < 0) return '';
+  const lastCloseIdx = content.lastIndexOf('</template>');
+  if (lastCloseIdx <= openTagEnd) return '';
+  return content.slice(openTagEnd + 1, lastCloseIdx);
+}
+
+/**
+ * 🛡️ CODE-021（2026-09-10）：子组件死代码 import 检测 —— 治 device-0quu3hqa「模板内联手写整份
+ * DOM，7 个 ./components/X.vue import 全死代码」。
+ * index.vue 的 <script setup> 里 `import Xxx from './components/Xxx.vue'`，但 <template> 里
+ * 0 处 <Xxx> / <xxx-...> 引用 → 该 import 是死代码，真实结构只活在未挂载的子组件里。
+ * 纯正则、确定性高，fail-closed。
+ * @param {string} content - index.vue 内容
+ * @returns {string[]} 死代码子组件名（PascalCase 绑定名）
+ */
+export function findDeadSubComponentImports(content = '') {
+  if (!content || typeof content !== 'string') return [];
+  const templateBody = extractTopLevelTemplate(content);
+  const scriptMatch = content.match(/<script[^>]*>([\s\S]*?)<\/script>/i);
+  const scriptBody = scriptMatch ? scriptMatch[1] : '';
+  if (!scriptBody || !templateBody) return [];
+
+  const dead = [];
+  const importRe =
+    /import\s+([A-Za-z_$][\w$]*)\s+from\s*['"]\.\/components\/([^'"]+)\.vue['"]/g;
+  let m;
+  while ((m = importRe.exec(scriptBody))) {
+    const name = m[1];
+    const kebab = name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+    const usedPascal = new RegExp(`<${name}(?=[\\s/>])`).test(templateBody);
+    const usedKebab = new RegExp(`<${kebab}(?=[\\s/>])`).test(templateBody);
+    if (!usedPascal && !usedKebab) dead.push(name);
+  }
+  return dead;
+}
+
+/**
+ * 🛡️ CODE-022（2026-09-10）：资源变量 import 未挂载 —— 治 P0-6「bg / icon 只 import 不挂」。
+ * index.vue import 了 bg / icon / img 资源变量，但除 import 语句外 0 处引用 → 资源未挂，
+ * 大卡/标签背景整块丢失。只查「完全未引用」的变量（间接引用链不做，避免误报）。
+ * 纯正则 + 词边界计数，确定性高，fail-closed。
+ * @param {string} content - index.vue 内容
+ * @returns {string[]} 未挂载的资源变量名
+ */
+export function findUnmountedResourceVars(content = '') {
+  if (!content || typeof content !== 'string') return [];
+  const scriptMatch = content.match(/<script[^>]*>([\s\S]*?)<\/script>/i);
+  const scriptBody = scriptMatch ? scriptMatch[1] : '';
+  if (!scriptBody) return [];
+
+  const unmounted = [];
+  const importRe =
+    /import\s+([A-Za-z_$][\w$]*)\s+from\s*['"][^'"]*(?:bg|icon|img)[\w-]*\.(?:png|jpe?g|svg|gif|webp)['"]/gi;
+  // 计数前剔除注释（// 行注释 + /* 块注释），避免「// bg1, bg2, bg3 … 等变量已自动注入」这类
+  // 注释里的变量名被误判为「已引用」→ 资源真未挂载却漏报（P0-6 实锤：注释把 bg1/bg2 判成已引用）。
+  const stripComments = (s) =>
+    s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  let m;
+  while ((m = importRe.exec(scriptBody))) {
+    const name = m[1];
+    // 除 import 语句外，变量名以「词边界」出现次数（避免 bg1 误匹配 bg10）
+    const bodyWithoutImport = stripComments(content).replace(
+      new RegExp(`import\\s+${name}\\s+from[^\\n]*`),
+      '',
+    );
+    const refRe = new RegExp(`\\b${name}\\b`, 'g');
+    const refCount = (bodyWithoutImport.match(refRe) || []).length;
+    if (refCount === 0) unmounted.push(name);
+  }
+  return unmounted;
+}
+
+/**
+ * 🛡️ CODE-020（2026-09-10）：反向类名不命中 —— 治 P0-6「模板 class 漏前缀 → 样式选择器不命中」。
+ * 判据（2026-09-10 收紧，避免误报「figma 节点名当 class」）：
+ *   模板 class `cls`（以 c- 开头），CSS 里**精确**不存在，但存在「`xxx-{cls}`」形式（即 cls 是某
+ *   CSS class 的后缀，说明模板漏了组件前缀）→ BLOCK。若 CSS 里连后缀都没有，则是「不需要样式的
+ *   占位 class」（如 `c-device-monitor-frame-2136638825` 这类 figma 节点名直译）→ 不报。
+ * 豁免 c-mc-max-（实例根类，宿主注入）/ c-mc-（组件库通用）前缀。
+ * 纯正则、确定性高，fail-closed。
+ * @param {Array<{path:string, content:string}>} files
+ * @returns {string[]} 未定义的组件类名（模板漏前缀的真失真）
+ */
+export function findUndefinedComponentClasses(files) {
+  const list = Array.isArray(files) ? files : [];
+  const defined = new Set();
+  for (const f of list) {
+    const p = String(f?.path || '');
+    if (!/\.less$/.test(p)) continue;
+    for (const c of extractCommonLessClasses(f?.content || '')) defined.add(c);
+  }
+  const definedArr = [...defined];
+  const templateClasses = extractTemplateClasses(list);
+  const undefinedCls = [];
+  for (const cls of templateClasses) {
+    if (!cls.startsWith('c-')) continue; // 只查组件类
+    if (cls.startsWith('c-mc-max-') || cls.startsWith('c-mc-')) continue; // 豁免实例/组件库前缀
+    if (defined.has(cls)) continue; // 精确命中 → 不报
+    // 后缀命中：CSS 里存在 `xxx-{cls}`（模板漏了组件前缀）→ 报
+    const suffix = '-' + cls;
+    const hasSuffix = definedArr.some((d) => d.endsWith(suffix));
+    if (hasSuffix) undefinedCls.push(cls);
+  }
+  return undefinedCls;
 }
 
 /**
@@ -2018,8 +2136,8 @@ export class CodeStructureValidator {
         );
         if (missingSections.length > 0) {
           const total =
-            options.componentPlan.effectiveSections?.length ??
-            missingSections.length;
+            collectLeafSections(options.componentPlan.effectiveSections)
+              .length || missingSections.length;
           const titles = missingSections
             .map((s) => `「${s.title}」`)
             .join('、');
@@ -2166,6 +2284,107 @@ export class CodeStructureValidator {
           severity: 'WARN',
           file: '(semantic-binding-guard)',
           message: `语义元素错绑检测器执行异常（非阻断）：${err?.message || String(err)}`,
+        });
+      }
+    }
+
+    // ========== 🛡️ CODE-021: 子组件死代码 import（fail-closed BLOCK，2026-09-10）==========
+    // 事故 device-0quu3hqa：模板内联手写整份 DOM，7 个 ./components/X.vue import 全死代码，
+    // 真实结构（纵向 6 类 tab / 大卡 bg / 12 卡布局）只活在未挂载的子组件里。
+    // COMP-001 只拦「section 整块缺失」，不拦「import 了却 0 引用」；本检测纯正则、确定性高，
+    // 检测器异常也 BLOCK（fail-closed），不静默放行。
+    {
+      const indexVue = files.find(
+        (f) => f && (f.path || '').endsWith('package/index.vue'),
+      );
+      if (indexVue && indexVue.content) {
+        let deadImports = [];
+        try {
+          deadImports = findDeadSubComponentImports(indexVue.content);
+        } catch (err) {
+          issues.push({
+            id: 'CODE-021-ERROR',
+            severity: 'BLOCK',
+            file: 'package/index.vue',
+            message: `子组件死代码检测器执行异常（fail-closed）：${err?.message || String(err)}`,
+          });
+        }
+        if (deadImports.length > 0) {
+          issues.push({
+            id: 'CODE-021',
+            severity: 'BLOCK',
+            file: 'package/index.vue',
+            message: `子组件死代码：index.vue import 了 ${deadImports.length} 个子组件但模板 0 处引用（${deadImports.join('、')}）。请在模板中通过 <${deadImports[0]} /> 等标签装配这些子组件，或删除未使用的 import——当前真实结构只活在未挂载的子组件里，预览整块丢失`,
+            hint: {
+              suggestion:
+                '把 package/components/ 下已 import 的子组件装配进模板，或删除死代码 import',
+            },
+          });
+        }
+      }
+    }
+
+    // ========== 🛡️ CODE-022: 资源变量 import 未挂载（fail-closed BLOCK，2026-09-10）==========
+    // 事故 P0-6：bg-8788/bg-8807/bg-8439 import 后模板 0 处 background-image/:style → 大卡/标签背景整块丢失。
+    // 只查「import 后完全未引用」的变量（间接引用链不做，避免误报）；纯正则、fail-closed。
+    {
+      const indexVue = files.find(
+        (f) => f && (f.path || '').endsWith('package/index.vue'),
+      );
+      if (indexVue && indexVue.content) {
+        let unmounted = [];
+        try {
+          unmounted = findUnmountedResourceVars(indexVue.content);
+        } catch (err) {
+          issues.push({
+            id: 'CODE-022-ERROR',
+            severity: 'BLOCK',
+            file: 'package/index.vue',
+            message: `资源变量未挂载检测器执行异常（fail-closed）：${err?.message || String(err)}`,
+          });
+        }
+        if (unmounted.length > 0) {
+          issues.push({
+            id: 'CODE-022',
+            severity: 'BLOCK',
+            file: 'package/index.vue',
+            message: `资源变量未挂载：index.vue import 了 ${unmounted.length} 个资源变量但模板/脚本 0 处引用（${unmounted.join('、')}）。背景/图标资源只 import 不挂载会导致大卡/标签背景整块丢失，请在模板中用 :src="icon" 或 :style="{ backgroundImage: 'url(' + bg + ')' }" 挂载，或删除未使用的 import`,
+            hint: {
+              suggestion:
+                '用 :src 或 :style backgroundImage 把已 import 的资源变量挂载到对应元素，或删除未使用的 import',
+            },
+          });
+        }
+      }
+    }
+
+    // ========== 🛡️ CODE-020: 反向类名不命中（fail-closed BLOCK，2026-09-10）==========
+    // 事故 P0-6：模板 :class="['c-device-monitor-tab-item', ...]" 漏实例前缀，而 common.less 里是
+    // .c-device-monitor-0quu3hqa-c-device-monitor-tab-item → 选择器不命中、样式失效。
+    // 已有 CODE-003-HIT-RATE 只查「样式定义了模板没用」（正向死样式），缺「模板用了样式没定义」（反向）。
+    // 本检测补反向，纯正则、fail-closed。
+    {
+      let undefinedCls = [];
+      try {
+        undefinedCls = findUndefinedComponentClasses(files);
+      } catch (err) {
+        issues.push({
+          id: 'CODE-020-ERROR',
+          severity: 'BLOCK',
+          file: '(class-name-guard)',
+          message: `反向类名检测器执行异常（fail-closed）：${err?.message || String(err)}`,
+        });
+      }
+      if (undefinedCls.length > 0) {
+        issues.push({
+          id: 'CODE-020',
+          severity: 'BLOCK',
+          file: 'package/index.vue',
+          message: `模板类名未定义：${undefinedCls.length} 个组件 class 在 CSS（*.less）里找不到精确定义（${undefinedCls.slice(0, 6).join('、')}${undefinedCls.length > 6 ? ' 等' : ''}）。class 前缀不匹配会导致样式选择器不命中、整块样式失效，请统一模板与 CSS 的类名（使用完整组件前缀）`,
+          hint: {
+            suggestion:
+              '统一模板 class 与 common.less 里的类名：都用完整组件前缀（classPrefixOf + 语义名）',
+          },
         });
       }
     }

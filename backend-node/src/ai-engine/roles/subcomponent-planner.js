@@ -8,7 +8,9 @@
  *   - 不命名子组件（命名权交给 engineer LLM）
  *   - 按 section.id 强制拆分：isForced = 有效 sections 数 >= 3
  *   - 微码流程过滤 panel-header（base-panel 已自带标题栏），Vue3 不过滤
- *   - 产出：{ effectiveSections: [{id, responsibility, elementCount, title}], isForced, minFiles }
+ *   - 产出：{ effectiveSections: [{id, responsibility, elementCount, title, children?}], isForced, minFiles }
+ *   - 🛡️ A′ Phase 5（2026-09-10）：container-rebuild 容器保留嵌套，不 flatten。
+ *     容器 isLayoutContainer=true，不占独立 .vue 槽；minFiles / isForced 按叶子计数。
  */
 
 import { createLogger } from '../logger/index.js';
@@ -17,6 +19,12 @@ import {
   collapseRepeatedSiblingSections,
   isCollapsedListSection,
 } from '../utils/repeated-section-collapser.js';
+import {
+  isLayoutContainerSection,
+  collectLeafSections,
+} from '../utils/section-tree.js';
+
+export { isLayoutContainerSection, collectLeafSections };
 
 const logger = createLogger({ name: 'subcomponent-planner' });
 
@@ -676,6 +684,120 @@ function splitSectionInternally(section, sectionIndex) {
   return subcomponents;
 }
 
+function buildEffectiveSection(sec, idx, ctx) {
+  if (isLayoutContainerSection(sec)) {
+    const children = (sec.children || []).map((child, i) =>
+      buildEffectiveSection(child, i, ctx),
+    );
+    const title = sec.header?.title || sec.title || sec.name || '';
+    return {
+      id: sec.id || `container-${idx + 1}`,
+      responsibility:
+        '纵向布局容器（仅空间包裹，不单独生成 .vue 文件；子区块必须按 children 树在父模板内组装）',
+      elementCount: children.reduce((n, c) => n + (Number(c.elementCount) || 0), 0),
+      title: String(title).trim().slice(0, 30),
+      type: 'container',
+      isLayoutContainer: true,
+      layout: sec.layout || 'vertical',
+      layoutSource: 'container-rebuild',
+      children,
+      collapsed: false,
+      complexityScore: 0,
+      complexityReasons: {
+        elementCount: 0,
+        charts: 0,
+        interactions: 0,
+        maxDepth: 0,
+      },
+      layoutMetadata: extractLayoutMetadata({
+        ...sec,
+        layout: { direction: 'VERTICAL', layoutMode: 'VERTICAL' },
+      }),
+      internalSubcomponents: [],
+      shouldSplitInternally: false,
+    };
+  }
+
+  const collapsed = isCollapsedListSection(sec);
+  const rawType = collapsed ? String(sec.type || 'list') : deriveSectionType(sec);
+  const title = sec.header?.title || sec.title || sec.name || '';
+  const elementCount = collapsed
+    ? Number(sec.itemCount) || (Array.isArray(sec.items) ? sec.items.length : 0)
+    : countElements(sec);
+  const responsibility = collapsed
+    ? `${TYPE_RESPONSIBILITY[rawType] || '列表项布局区'}：1 个 item 模板 + v-for 渲染 ${elementCount} 项，禁止拆成 ${elementCount} 个子组件文件`
+    : TYPE_RESPONSIBILITY[rawType] ||
+      `${title || rawType || '区块'}（请按功能拆分）`;
+
+  const scoreResult = calculateSplitScore(sec);
+  const layoutMetadata = extractLayoutMetadata(sec);
+
+  let internalSubcomponents = [];
+  if (ctx.enableInternalSplit && scoreResult.shouldSplit && !collapsed) {
+    internalSubcomponents = splitSectionInternally(sec, idx);
+    ctx.allInternalSubcomponents.push(
+      ...internalSubcomponents.map((sub) => ({
+        ...sub,
+        parentSectionId: sec.id || `section-${idx + 1}`,
+        parentSectionTitle: title,
+      })),
+    );
+  }
+
+  const tabStructured = enforceTabStructure(sec);
+  const tabOrientation = tabStructured.tabStructure?.orientation || 'vertical';
+  const isHorizontalTab = tabStructured.tabStructure && tabOrientation === 'horizontal';
+
+  const effectiveType = isHorizontalTab ? 'tabs' : rawType;
+  const effectiveResponsibility = isHorizontalTab
+    ? '标签页切换区（顶部横向 tab，下方为对应内容区，禁止竖向侧栏布局）'
+    : responsibility;
+
+  return {
+    id: sec.id || `section-${idx + 1}`,
+    responsibility: effectiveResponsibility,
+    elementCount,
+    title: String(title).trim().slice(0, 30),
+    type: effectiveType || undefined,
+    collapsed,
+    renderHint: collapsed ? 'v-for' : undefined,
+    itemCount: collapsed ? elementCount : undefined,
+    items: collapsed ? sec.items : undefined,
+    complexityScore: scoreResult.score,
+    complexityReasons: scoreResult.reasons,
+    layoutMetadata,
+    internalSubcomponents,
+    shouldSplitInternally: collapsed ? false : scoreResult.shouldSplit,
+    ...(tabStructured.tabStructure ? { tabStructure: tabStructured.tabStructure } : {}),
+  };
+}
+
+function applyFlexGrowFallback(nodes) {
+  const withHeight = [];
+  const collect = (list) => {
+    if (!Array.isArray(list)) return;
+    for (const s of list) {
+      if (s.layoutMetadata?.height > 0) withHeight.push(s);
+      if (Array.isArray(s.children)) collect(s.children);
+    }
+  };
+  collect(nodes);
+  if (withHeight.length === 0) return;
+  const avg =
+    withHeight.reduce((sum, s) => sum + s.layoutMetadata.height, 0) / withHeight.length;
+  const apply = (list) => {
+    if (!Array.isArray(list)) return;
+    for (const s of list) {
+      const meta = s.layoutMetadata;
+      if (meta && !(meta.flexGrow > 0) && meta.height > 0 && avg > 0) {
+        meta.flexGrow = Math.round((meta.height / avg) * 1000) / 1000;
+      }
+      if (Array.isArray(s.children)) apply(s.children);
+    }
+  };
+  apply(nodes);
+}
+
 export class SubcomponentPlanner {
   /**
    * 基于 layoutStructure 产出子组件清单
@@ -734,132 +856,58 @@ export class SubcomponentPlanner {
       });
     }
 
-    // 🎯 Phase 2 方案1: 收集所有内部拆分的子组件
-    const allInternalSubcomponents = [];
-
-    const effectiveSections = sections.map((sec, idx) => {
-      const collapsed = isCollapsedListSection(sec);
-      const rawType = collapsed ? String(sec.type || 'list') : deriveSectionType(sec);
-      const title = sec.header?.title || sec.title || sec.name || '';
-      const elementCount = collapsed
-        ? Number(sec.itemCount) || (Array.isArray(sec.items) ? sec.items.length : 0)
-        : countElements(sec);
-      const responsibility = collapsed
-        ? `${TYPE_RESPONSIBILITY[rawType] || '列表项布局区'}：1 个 item 模板 + v-for 渲染 ${elementCount} 项，禁止拆成 ${elementCount} 个子组件文件`
-        : TYPE_RESPONSIBILITY[rawType] ||
-          `${title || rawType || '区块'}（请按功能拆分）`;
-
-      // 🎯 Phase 2 方案1: 计算复杂度评分
-      const scoreResult = calculateSplitScore(sec);
-
-      // 🎯 Phase 2 方案1: 提取布局元数据
-      const layoutMetadata = extractLayoutMetadata(sec);
-
-      // 🎯 Phase 2 方案1: 执行内部拆分（如果启用且评分达标）
-      // 已折叠的 list/grid 不再按密度拆成 N 个内部子组件
-      let internalSubcomponents = [];
-      if (enableInternalSplit && scoreResult.shouldSplit && !collapsed) {
-        internalSubcomponents = splitSectionInternally(sec, idx);
-        allInternalSubcomponents.push(
-          ...internalSubcomponents.map((sub) => ({
-            ...sub,
-            parentSectionId: sec.id || `section-${idx + 1}`,
-            parentSectionTitle: title,
+    // 🛡️ A′ Phase 5：保留 container-rebuild 嵌套。容器不 flatten、不占独立 .vue 槽。
+    const containerCount = sections.filter((s) => isLayoutContainerSection(s)).length;
+    if (containerCount > 0) {
+      logger.info('容器层级保留为嵌套 section', {
+        containers: sections
+          .filter((s) => isLayoutContainerSection(s))
+          .map((s) => ({
+            id: s.id,
+            name: s.name,
+            childIds: (s.children || []).map((c) => c.id),
           })),
-        );
-      }
-
-      // 🛡️ Loop 2.1.B（2026-09-10）：@antd/tab / tabs / 竖 nav 强制 {nav, panels} 二元结构，
-      // nav 不得丢（device 左侧竖 tab 头曾整段消失）。非 tab/nav section 原样透传。
-      // 🎯 治本 A（2026-09-10）：横向顶部 tab（如 device 的 @antd/tab 监控/照明/通风条）
-      // 不应套竖向 nav 语义——orientation='horizontal' 时 type 用 'tabs'（横向 tab 条 + 下方内容），
-      // 不注入竖向 'nav' 职责描述，避免产物竖排。
-      const tabStructured = enforceTabStructure(sec);
-      const tabOrientation = tabStructured.tabStructure?.orientation || 'vertical'
-      const isHorizontalTab = tabStructured.tabStructure && tabOrientation === 'horizontal'
-
-      const effectiveType = isHorizontalTab ? 'tabs' : rawType
-      const effectiveResponsibility = isHorizontalTab
-        ? '标签页切换区（顶部横向 tab，下方为对应内容区，禁止竖向侧栏布局）'
-        : responsibility
-
-      return {
-        id: sec.id || `section-${idx + 1}`, // 优先用原始 id，便于 engineer 对照
-        responsibility: effectiveResponsibility,
-        elementCount,
-        title: String(title).trim().slice(0, 30),
-        type: effectiveType || undefined,
-        collapsed,
-        renderHint: collapsed ? 'v-for' : undefined,
-        itemCount: collapsed ? elementCount : undefined,
-        items: collapsed ? sec.items : undefined,
-        // 🎯 Phase 2 方案1: 新增字段
-        complexityScore: scoreResult.score,
-        complexityReasons: scoreResult.reasons,
-        layoutMetadata,
-        internalSubcomponents, // 该 section 的内部子组件
-        shouldSplitInternally: collapsed ? false : scoreResult.shouldSplit,
-        // 🛡️ Loop 2.1.B：tab/nav section 的二元结构契约（nav + panels）
-        // 治本 A：横向 tab 显式标注 orientation，下游据此走 tabs 而非 nav 渲染
-        ...(tabStructured.tabStructure ? { tabStructure: tabStructured.tabStructure } : {}),
-      };
-    });
-
-    // 🎯 2026-09-07（0907 审计 L1）：flexGrow 归一化兜底
-    // vision 未下发 flexGrow（=0）时，按 Figma 高度归一化补齐（grow = 高度 / 平均高度，
-    // 比例 = 设计稿高度比）。统一 flex 事实源：内容区块 grow 用无单位系数，
-    // 禁止把像素高度写进 grow（root-container.md / chart-standards.md / constraints.md 已同步）。
-    {
-      const withHeight = effectiveSections.filter(
-        (s) => s.layoutMetadata?.height > 0,
-      );
-      if (withHeight.length > 0) {
-        const avg =
-          withHeight.reduce((sum, s) => sum + s.layoutMetadata.height, 0) /
-          withHeight.length;
-        for (const s of effectiveSections) {
-          const meta = s.layoutMetadata;
-          if (meta && !(meta.flexGrow > 0) && meta.height > 0 && avg > 0) {
-            meta.flexGrow = Math.round((meta.height / avg) * 1000) / 1000;
-          }
-        }
-      }
+      });
     }
 
-    // 强制拆判定：section 数量 ≥ minSections 或存在高复杂度 section
-    const hasComplexSection = effectiveSections.some(
-      (s) => s.shouldSplitInternally,
+    const allInternalSubcomponents = [];
+    const effectiveSections = sections.map((sec, idx) =>
+      buildEffectiveSection(sec, idx, { enableInternalSplit, allInternalSubcomponents }),
     );
-    const isForced =
-      effectiveSections.length >= minSections || hasComplexSection;
 
-    // 计算最小文件数：section 数量 + 内部拆分子组件数量
+    applyFlexGrowFallback(effectiveSections);
+
+    const leafSections = collectLeafSections(effectiveSections);
+    const hasComplexSection = leafSections.some((s) => s.shouldSplitInternally);
+    const isForced = leafSections.length >= minSections || hasComplexSection;
     const minFiles = isForced
-      ? effectiveSections.length + allInternalSubcomponents.length
+      ? leafSections.length + allInternalSubcomponents.length
       : 0;
 
     const reason = isForced
-      ? `有效 sections=${effectiveSections.length} ≥ ${minSections} 或存在高复杂度 section → 强制拆分`
-      : `有效 sections=${effectiveSections.length} < ${minSections} 且无高复杂度 section → 不强制拆分`;
+      ? `有效叶子 sections=${leafSections.length} ≥ ${minSections} 或存在高复杂度 section → 强制拆分`
+      : `有效叶子 sections=${leafSections.length} < ${minSections} 且无高复杂度 section → 不强制拆分`;
 
     const plan = {
       effectiveSections,
       isForced,
       minFiles,
       reason,
-      internalSubcomponents: allInternalSubcomponents, // 🎯 Phase 2 方案1: 返回所有内部子组件
+      internalSubcomponents: allInternalSubcomponents,
       diagnostics,
     };
 
     logger.info('子组件规划完成', {
       rawSectionsCount: rawSections.length,
       effectiveSectionsCount: effectiveSections.length,
+      leafSectionsCount: leafSections.length,
       filteredCount,
       isForced,
       minFiles,
       sectionIds: effectiveSections.map((s) => s.id),
-      internalSubcomponentsCount: allInternalSubcomponents.length, // 🎯 Phase 2 方案1
-      complexSections: effectiveSections
+      leafSectionIds: leafSections.map((s) => s.id),
+      internalSubcomponentsCount: allInternalSubcomponents.length,
+      complexSections: leafSections
         .filter((s) => s.shouldSplitInternally)
         .map((s) => ({
           id: s.id,
@@ -893,7 +941,7 @@ export const subcomponentPlanner = new SubcomponentPlanner();
  * @returns {Array<{segmentType: string, files: string[], title: string, sectionId: string, scopedInput?: Object}>}
  */
 export function splitMultiChartSectionIntoChunks(subComponentPlan) {
-  const sections = subComponentPlan?.effectiveSections || [];
+  const sections = collectLeafSections(subComponentPlan?.effectiveSections || []);
   if (!Array.isArray(sections) || sections.length === 0) return [];
 
   const chunks = [];
@@ -901,6 +949,45 @@ export function splitMultiChartSectionIntoChunks(subComponentPlan) {
   for (const sec of sections) {
     const subs = sec.internalSubcomponents || [];
     if (subs.length === 0) continue;
+
+    // 🎯 治本 D（2026-09-10）：S3 与 planner 内部拆分互斥。
+    // planner 已在 splitSectionInternally（R1 图表隔离 / R2 密度拆分）对该 section 做过
+    // 内部子组件拆分；若此处再按图表二次拆，会与 planner 的 chart-component 正交叠加，
+    // 导致 traffic 1 张图裂成 X轴/柱体/分组/tooltip/图例 各自成件（30+ 子组件）。
+    // 互斥规则：planner 已 shouldSplitInternally → S3 直接采用 planner 结果，跳过二次拆分；
+    // 否则回落到下方原生 S3 按图表切分（保留向后兼容）。
+    if (sec.shouldSplitInternally) {
+      // planner 已拆：把其 internalSubcomponents 直接映射为 chunk（不再按图表二次切）
+      const chartSubs = subs.filter(s => s.type === 'chart-component');
+      const nonChartSubs = subs.filter(s => s.type !== 'chart-component');
+      if (chartSubs.length === 0 && nonChartSubs.length === 0) continue;
+      for (const chart of chartSubs) {
+        const compName = pascalCase(chart.name || chart.id || 'Chart');
+        chunks.push({
+          segmentType: 'chart',
+          files: [`package/components/${compName}.vue`],
+          title: chart.name || chart.id || '图表',
+          sectionId: sec.id,
+          scopedInput: {
+            focusedChartId: chart.id,
+            focusedChartName: chart.name,
+          },
+        });
+      }
+      if (nonChartSubs.length > 0) {
+        chunks.push({
+          segmentType: 'misc',
+          files: nonChartSubs.map(s => {
+            const name = pascalCase(s.name || s.id || 'Misc');
+            return `package/components/${name}.vue`;
+          }),
+          title: `${sec.title || sec.id} 附属内容`,
+          sectionId: sec.id,
+          scopedInput: { nonChartSubcomponents: nonChartSubs },
+        });
+      }
+      continue;
+    }
 
     const chartSubs = subs.filter(s => s.type === 'chart-component');
     const nonChartSubs = subs.filter(s => s.type !== 'chart-component');

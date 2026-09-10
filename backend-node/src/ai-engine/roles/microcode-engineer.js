@@ -27,6 +27,11 @@ import {
 import { buildModelSuggestion } from '../utils/model-suggestion.js';
 import { buildSectionHeightsMap } from '../utils/figma-section-heights.js';
 import {
+  collectLeafSections,
+  formatSectionTreeForPrompt,
+  findSectionById,
+} from '../utils/section-tree.js';
+import {
   buildAllConstraintReinforcements,
   buildLayoutConstraintReinforcement,
   buildResourceConstraintReinforcement,
@@ -79,6 +84,10 @@ import {
   buildContracts,
   resolveSectionKey,
 } from '../utils/resource-manifest.js';
+import {
+  getIndexVueChunkBudgets,
+  getMaxIndexVueChunkBudget,
+} from './microcode/chunk-budget.js';
 import { isValidEchartsType, normalizeChartOptionType } from '../utils/chart-type-guard.js';
 import {
   audit as auditManifest,
@@ -391,20 +400,30 @@ export class MicrocodeEngineer extends BaseAgent {
       currentModel,
     );
 
-    if (suggestion.needUpgrade) {
-      // 🆕 能力识别前置：只有「已识别能力 且 真实上限可知」才硬报错；
-      // 否则视为静态表无法确认该模型真实上限 → 不报错，改为提示用户去「模型能力测试」识别。
+    // 🎯 治本（2026-09-10）：容量校验必须基于「真实 index.vue 分块预算」，而非整组件一次性估算。
+    // 进度编号 5/7 不是等权 token 分母；必须与 code-generator.generateIndexVue 共用同一预算函数，
+    // 覆盖 medium 的 template+script 路径，以及 xl 的 state/lifecycle/charts 路径。
+    const runCapacityCheck = (splitDecision) => {
+      const chunkBudgets = getIndexVueChunkBudgets(splitDecision);
+      const maxChunk = getMaxIndexVueChunkBudget(splitDecision);
+      const chunkCount = chunkBudgets.length;
+      const perCallTokens = maxChunk.estTokens;
+      const requestedMaxTokens = maxChunk.requestedMaxTokens;
+      const overPerCall = requestedMaxTokens > suggestion.currentLimit;
+      if (!suggestion.needUpgrade) return; // 未超限，直接放行
       const canHardFail = suggestion.identified && suggestion.limitKnown;
-
-      if (canHardFail) {
+      if (canHardFail && overPerCall) {
+        // 分块后单段仍超出模型上限 → 真超限，硬报错
         this.logger.warn('⚠️ 组件复杂度超出当前模型能力', {
           estimatedTokens: estimateResult.tokens,
+          perCallTokens,
+          requestedMaxTokens,
+          chunkCount: chunkBudgets.length,
+          maxChunk: maxChunk.segmentType,
           currentModel,
           currentLimit: suggestion.currentLimit,
           recommendedTier: suggestion.recommendedTier,
         });
-
-        // 向前端推送友好提示
         if (input.onProgress) {
           input.onProgress({
             stage: '模型能力检查',
@@ -413,46 +432,62 @@ export class MicrocodeEngineer extends BaseAgent {
             details: {
               suggestion: suggestion.message,
               estimatedTokens: estimateResult.tokens,
+              perCallTokens,
+              requestedMaxTokens,
+              maxChunk: maxChunk.segmentType,
+              chunkCount: chunkBudgets.length,
               currentLimit: suggestion.currentLimit,
-              overBy: estimateResult.tokens - suggestion.currentLimit,
+              overBy: requestedMaxTokens - suggestion.currentLimit,
             },
           });
         }
-
-        // 抛出友好错误，包含详细的模型推荐
         const error = new Error('组件复杂度超出当前模型能力');
         error.code = 'MODEL_CAPACITY_EXCEEDED';
         error.suggestion = suggestion;
         throw error;
       }
-
-      // 能力未识别 / 真实上限未知：不直接报错，提示用户去「模型能力测试」识别真实上限后再生效
-      this.logger.warn('⚠️ 模型能力未识别，跳过容量硬报错，提示用户去测试', {
-        estimatedTokens: estimateResult.tokens,
-        currentModel,
-        assumedLimit: suggestion.currentLimit,
-        capabilitySource: suggestion.capabilitySource,
-        identified: suggestion.identified,
-        limitKnown: suggestion.limitKnown,
-      });
-      if (input.onProgress) {
-        input.onProgress({
-          stage: '模型能力检查',
-          message:
-            '当前模型能力未识别（不在内置能力表，且未运行过「模型能力测试」），无法确认是否超出输出上限。已按保守默认上限放行生成；建议先在「模型设置」运行「模型能力测试」识别真实上限，复杂组件再据此判断是否需升级模型。',
-          status: 'warning',
-          details: {
-            estimatedTokens: estimateResult.tokens,
-            assumedLimit: suggestion.currentLimit,
-            capabilitySource: suggestion.capabilitySource,
-            identified: suggestion.identified,
-            limitKnown: suggestion.limitKnown,
-            action: 'test-model-capability',
-          },
+      if (!canHardFail) {
+        // 能力未识别 / 真实上限未知：不硬报错，提示去「模型能力测试」识别
+        this.logger.warn('⚠️ 模型能力未识别，跳过容量硬报错，提示用户去测试', {
+          estimatedTokens: estimateResult.tokens,
+          perCallTokens,
+          chunkCount: chunkBudgets.length,
+          maxChunk: maxChunk.segmentType,
+          currentModel,
+          assumedLimit: suggestion.currentLimit,
+          capabilitySource: suggestion.capabilitySource,
+        });
+        if (input.onProgress) {
+          input.onProgress({
+            stage: '模型能力检查',
+            message:
+              '当前模型能力未识别（不在内置能力表，且未运行过「模型能力测试」），无法确认是否超出输出上限。已按保守默认上限放行生成；建议先在「模型设置」运行「模型能力测试」识别真实上限，复杂组件再据此判断是否需升级模型。',
+            status: 'warning',
+            details: {
+              estimatedTokens: estimateResult.tokens,
+              perCallTokens,
+              chunkCount: chunkBudgets.length,
+              maxChunk: maxChunk.segmentType,
+              assumedLimit: suggestion.currentLimit,
+              capabilitySource: suggestion.capabilitySource,
+              identified: suggestion.identified,
+              limitKnown: suggestion.limitKnown,
+              action: 'test-model-capability',
+            },
+          });
+        }
+      } else {
+        // 已分块且单段在容量内：放行生成
+        // 实证：mc-max-1789036112943 整组件 44860 tokens，按真实预算最大块 template≈0.1*44860≈4486 < 32768 → 放行
+        this.logger.info('🧩 组件已分块，单段 token 在模型容量内，放行生成', {
+          perCallTokens,
+          requestedMaxTokens,
+          maxChunk: maxChunk.segmentType,
+          chunkCount: chunkBudgets.length,
+          currentLimit: suggestion.currentLimit,
         });
       }
-      // 不抛出 MODEL_CAPACITY_EXCEEDED，继续生成（静态估算可能误报，待用户实测后校准）
-    }
+    };
 
     const {
       _l0CodeRetryGuidance,
@@ -485,6 +520,9 @@ export class MicrocodeEngineer extends BaseAgent {
               reason: '未传入 subComponentPlan',
             };
     const effectiveSections = subPlan.effectiveSections || [];
+
+    // 🎯 A' Phase 5: 叶子遍历（布局容器不占 .vue 槽，只做纵向包裹）
+    const leafSections = collectLeafSections(effectiveSections);
 
     // 🎯 Phase 2 方案1: 内部子组件（来自增强子组件拆分）
     const internalSubcomponents = subPlan.internalSubcomponents || [];
@@ -524,12 +562,15 @@ export class MicrocodeEngineer extends BaseAgent {
       scriptSplit: splitDecision.scriptSplit,
       sizeTier: splitDecision.sizeTier,
       estTokens: splitDecision.estTokens,
-      // 🎯 Phase 2 方案1: 添加内部子组件信息
-      effectiveSections: effectiveSections.length,
+      // 🎯 Phase 2 方案1: 添加内部子组件信息（叶子计数，容器不占槽）
+      effectiveSections: leafSections.length,
       internalSubcomponents: internalSubcomponents.length,
       totalSubcomponents:
-        effectiveSections.length + internalSubcomponents.length,
+        leafSections.length + internalSubcomponents.length,
     });
+
+    // 🎯 治本：分块决策算完后，按「分块后单次调用 token」重做容量校验（替代前置整组件硬报错）
+    runCapacityCheck(splitDecision);
 
     //S8: 需求文档设计注入块（机械转换一次构建，所有分块共享）
     const docDesignBlock = this._buildDocDesignBlock(docAnalysis);
@@ -667,27 +708,27 @@ export class MicrocodeEngineer extends BaseAgent {
       //   改为 code/vue 均注入（template/script 段是生成 index.vue 的主体，必须看到拆分要求）。
       // 🎯 Phase 2 方案1: 集成内部子组件拆分
       if (
-        effectiveSections.length > 0 &&
+        leafSections.length > 0 &&
         (fileType === 'code' || fileType === 'vue')
       ) {
         if (subPlan.isForced) {
           p += `\n\n## 🚨 强制子组件拆分（必须遵守）\n\n`;
           p += `**强制原因**：${subPlan.reason}\n\n`;
 
-          // 计算总文件数：section 级 + 内部子组件
+          // 计算总文件数：叶子 section + 内部子组件（布局容器不占 .vue 槽）
           const totalSubcomponents =
-            effectiveSections.length + internalSubcomponents.length;
+            leafSections.length + internalSubcomponents.length;
 
           p += `本组件**必须**拆分为 **${totalSubcomponents}** 个独立子组件文件：\n`;
-          p += `- **${effectiveSections.length}** 个 section 级子组件（每个 section 各一个文件；list/grid 折叠 section 只算 1 个文件）\n`;
+          p += `- **${leafSections.length}** 个叶子 section 级子组件（每个叶子各一个文件；布局容器不单独生成 .vue；list/grid 折叠 section 只算 1 个文件）\n`;
           if (internalSubcomponents.length > 0) {
             p += `- **${internalSubcomponents.length}** 个内部子组件（section 内部拆分）\n`;
           }
           p += `\n文件名和组件名由你根据语义自行命名（PascalCase），但**数量和对应关系不得缩减**。\n`;
           p += `🚨 **重复卡片必须 v-for**：type=list|grid 或 collapsed=true 的 section，只生成 **1 个 item 模板** + \`v-for\`，**禁止**拆成 DeviceCard1..N / Deco1..N。COMP-001 按模板计数。\n\n`;
 
-          p += `**Section 级子组件清单**：\n`;
-          effectiveSections.forEach((sec, idx) => {
+          p += `**叶子 Section 级子组件清单**：\n`;
+          leafSections.forEach((sec, idx) => {
             p += `${idx + 1}. \`${sec.id}\` — ${sec.responsibility}`;
             if (sec.title) p += `（原标题「${sec.title}」）`;
             if (sec.elementCount) p += `，含 ${sec.elementCount} 个元素`;
@@ -747,8 +788,9 @@ export class MicrocodeEngineer extends BaseAgent {
             for (const [sectionId, subcomps] of Object.entries(
               groupedBySection,
             )) {
-              const parentSection = effectiveSections.find(
-                (s) => s.id === sectionId,
+              const parentSection = findSectionById(
+                effectiveSections,
+                sectionId,
               );
               const sectionTitle = parentSection?.title || sectionId;
 
@@ -799,15 +841,16 @@ export class MicrocodeEngineer extends BaseAgent {
           }
 
           p += `\n**关键约束**：\n`;
-          p += `- 每个 section 必须对应一个独立的 \`package/components/{YourName}.vue\` 文件\n`;
+          p += `- 每个**叶子** section 必须对应一个独立的 \`package/components/{YourName}.vue\` 文件\n`;
+          p += `- 标「容器」的节点只做纵向 flex 包裹，禁止为其单独建文件、禁止把 children 打平到根模板\n`;
           p += `- 每个内部子组件也必须是独立的 \`package/components/{YourName}.vue\` 文件\n`;
-          p += `- \`package/index.vue\` 必须 import 所有 section 级子组件并在 template 中引用\n`;
+          p += `- \`package/index.vue\` 必须 import 所有叶子子组件，并按嵌套树组装（容器的子组件出现在该容器对应的 DOM 内）\n`;
           p += `- section 级子组件 import 其内部子组件并在 template 中引用\n`;
-          p += `- 严禁将多个 section 合并到同一个文件\n`;
-          p += `- 严禁省略任何 section 的子组件或内部子组件\n`;
+          p += `- 严禁将多个叶子 section 合并到同一个文件\n`;
+          p += `- 严禁省略任何叶子 section 的子组件或内部子组件\n`;
 
-          // 🎯 Phase 2 方案1: 布局元数据提示
-          const sectionsWithLayout = effectiveSections.filter(
+          // 🎯 Phase 2 方案1: 布局元数据提示（只对叶子；容器不计高度槽）
+          const sectionsWithLayout = leafSections.filter(
             (s) => s.layoutMetadata,
           );
           if (sectionsWithLayout.length > 0) {
@@ -832,8 +875,10 @@ export class MicrocodeEngineer extends BaseAgent {
             });
           }
         } else {
-          p += `\n\n💡 **建议拆分子组件**（非强制）：以下 section 建议你按功能拆为独立 \`package/components/*.vue\`，可酌情合并：\n`;
-          effectiveSections.forEach((sec) => {
+          p += `\n\n💡 **建议拆分子组件**（非强制）：以下叶子 section 建议你按功能拆为独立 \`package/components/*.vue\`，可酌情合并：\n`;
+          const suggestTree = formatSectionTreeForPrompt(effectiveSections);
+          if (suggestTree) p += `${suggestTree}\n`;
+          leafSections.forEach((sec) => {
             p += `- \`${sec.id}\` — ${sec.responsibility}${sec.title ? `（原标题「${sec.title}」）` : ''}`;
             if (sec.complexityScore !== undefined) {
               p += `，复杂度 ${sec.complexityScore}`;
@@ -848,7 +893,7 @@ export class MicrocodeEngineer extends BaseAgent {
         // 🆕 V2（2026-09-01）：section 尺寸比例强制规则（无条件生效，无论是否强制拆分）
         // 事故 2 根因：tabs 等附属 section 挤压主图表，LLM 对附属区写死 height:100% 或对内容区不写 min-height:0。
         // 策略：附属区（tabs/toolbar/nav/footer）用 Figma 实测固定高，主内容区 flex:1 min-height:0。
-        const sectionsWithHeight = effectiveSections.filter(
+        const sectionsWithHeight = leafSections.filter(
           (s) => s.layoutMetadata?.height > 0,
         );
         if (sectionsWithHeight.length > 0) {

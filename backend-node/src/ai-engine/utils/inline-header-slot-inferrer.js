@@ -15,6 +15,31 @@
  */
 
 /**
+ * 🎯 治本 B（2026-09-10）：判定行是否位于组件顶部区域（顶部 15%）。
+ * 依据行 bbox 的 y 与根容器高度；任一缺失时 fail-closed 返回 false（不误收内容区行）。
+ * @param {object} row
+ * @param {object} [rootBBox] 根容器 bbox（含 height）
+ * @returns {boolean}
+ */
+function isInTopRegion(row, rootBBox) {
+  const b = row?.absoluteBoundingBox || row?.bbox || null;
+  const y = Number(b?.y);
+  const rootH = Number(rootBBox?.height);
+  if (Number.isFinite(y) && Number.isFinite(rootH) && rootH > 0) {
+    // 相对根顶部的偏移：row.y 可能是页面绝对坐标，这里用行高做保守判定
+    const rowH = Number(b?.height) || 0;
+    // 若 y < 根高的 15% 视为顶部区（y 为绝对坐标时该判定可能不中，故再叠加行高判定）
+    if (y >= 0 && y < rootH * 0.15) return true;
+    // 退化：行本身很矮且宽度明显大于高度（横向 tab 条）
+    const w = Number(b?.width);
+    if (Number.isFinite(w) && rowH > 0 && w > rowH * 3) return true;
+    return false;
+  }
+  // 无几何信息：fail-closed 不判为顶部（保持 Loop 2.0.D 原行为，不误收）
+  return false;
+}
+
+/**
  * 从 inlineCompositeRows 推断 headerSlots
  * @param {Object} analysisResult - visual-parser 分析结果（含 inlineCompositeRows）
  * @returns {Array} headerSlots（slotType/elementType/content/sectionId/figmaNodeId）
@@ -24,17 +49,26 @@ export function inferHeaderSlotsFromInlineRows(analysisResult) {
     ? analysisResult.inlineCompositeRows
     : [];
   if (rows.length === 0) return [];
+  const rootBBox =
+    analysisResult?.layoutStructure?.absoluteBoundingBox ||
+    analysisResult?.absoluteBoundingBox ||
+    null;
 
   const slots = [];
   for (const row of rows) {
     if (!row || typeof row !== 'object') continue;
     const rowName = String(row.componentName || row.name || row.id || '').toLowerCase();
     // Loop 2.0.D：只处理标题栏行。内容区 @antd/tab / tabs 不得编成 header-right。
+    // 🎯 治本 B（2026-09-10）：顶部 tab 行（组件顶部 15% 区）应作为 headerSlots 候选保留，
+    //   修复 aacfa51 移除 \btab\b 匹配后连顶部 tab 行也整段丢失的问题（device 顶部 @antd/tab 头）。
     const isTitleBarRow =
       rowName.startsWith('header-') ||
       rowName.startsWith('title-') ||
       /\bheader\b|\btitle-bar\b|\btitle\b/.test(rowName);
-    if (!isTitleBarRow) {
+    const isTopTabRow =
+      /tab|标签页|导航|标签/.test(rowName) &&
+      isInTopRegion(row, rootBBox);
+    if (!isTitleBarRow && !isTopTabRow) {
       continue;
     }
 
@@ -61,8 +95,10 @@ export function inferHeaderSlotsFromInlineRows(analysisResult) {
           /tab-switch|tab|icon-group|icon-button/.test(childType) ||
           /tab|导航|nav/.test(childName)
         ) {
+          // 🎯 治本 B：顶部 tab 行的 tab 子节点标记为 header-tabs（不混同 header-right 统计项）
+          const slotType = isTopTabRow ? 'header-tabs' : 'header-right';
           slots.push({
-            slotType: 'header-right',
+            slotType,
             elementType: /tab/.test(childType || childName) ? 'tab' : 'icon',
             content: childName,
             sectionId: row.id || '',
@@ -76,7 +112,7 @@ export function inferHeaderSlotsFromInlineRows(analysisResult) {
       const name = String(row.name || '').trim();
       if (name) {
         slots.push({
-          slotType: 'header-right',
+          slotType: isTopTabRow ? 'header-tabs' : 'header-right',
           elementType: 'statistic',
           content: name,
           sectionId: row.id || '',

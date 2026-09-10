@@ -18,6 +18,7 @@ import { readdir, readFile, writeFile, stat, mkdir, unlink, rename, rm } from 'f
 import { readFileSync, mkdirSync, writeFileSync, existsSync } from 'fs';
 import { join, extname, relative, dirname, resolve, sep } from 'path';
 import { resolveFrontendWorkspace } from '../config/workspace.config';
+import { resolveComponentDirStrict } from '../ai-engine/utils/component-resolver.js';
 import {
   customComponentsDir,
   vue3ComponentsDir,
@@ -595,6 +596,17 @@ export class ComponentService {
     location?: { groupId?: string; target?: string },
   ): Promise<string[]> {
     const dirs: string[] = [];
+
+    // 最高优先级：统一严格解析（任务号 → 真实组件目录），与 AI 修复写入 /
+    // 规范检查 / 下载打包 / GitLab 推送保持同一事实源。
+    // 否则用任务号打开 Playground 时会命中 temp 快照空壳（.task-code-snapshots/<id>/），
+    // 表现为「改了代码预览不出来 / 读到空目录」。
+    try {
+      const strict = await resolveComponentDirStrict(componentId);
+      if (strict) dirs.push(strict);
+    } catch {
+      /* 解析失败时继续走原有候选 */
+    }
 
     if (location?.target === 'vue3' && location.groupId) {
       dirs.push(

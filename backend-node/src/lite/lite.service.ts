@@ -33,6 +33,7 @@ const loadPreviewPublisher = () => import('../ai-engine/utils/workspace-preview-
 import sharp from 'sharp';
 import { VisionAgent } from '../ai-engine/agents/vision-agent.js';
 import { resolveVisionConfig } from '../ai-engine/utils/ai-defaults.js';
+import { resolveVisionCapability } from '../ai-engine/utils/model-config.js';
 import { resolveFrontendWorkspace } from '../config/workspace.config';
 import { workspaceRoot, customComponentsDir, vue3ComponentsDir, tempComponentsDir } from '../config/backend-root';
 import { InjectModel } from '@nestjs/mongoose';
@@ -1832,6 +1833,33 @@ ${originalCode}`;
       throw this.wrapError(
         LiteErrorCode.INTERNAL_ERROR,
         '视觉模型未配置 API Key，请在设置面板中配置视觉模型后重试',
+      );
+    }
+
+    // 🛡️ 生成闸门：视觉能力硬校验（2026-09-10）
+    // Lite 是「截图 → 组件」，第一步就是让模型看图。模型若不具备视觉能力，请求照样成功返回，
+    // 但模型根本没看到图 —— 产物与截图完全无关且不报任何错，用户无从判断是模型问题。
+    // 判定依据为实测结论（resolveVisionCapability），不依赖模型名白名单。
+    const visionModelName = String(model || '').trim();
+    if (!visionModelName) {
+      throw this.wrapError(
+        LiteErrorCode.INTERNAL_ERROR,
+        '未配置视觉模型，无法从截图生成组件，请到「设置 - 模型配置」中选择支持视觉的模型并保存',
+      );
+    }
+    const visionCap = resolveVisionCapability(visionModelName);
+    if (visionCap.vision === false) {
+      throw this.wrapError(
+        LiteErrorCode.INTERNAL_ERROR,
+        `模型「${visionModelName}」不支持视觉输入，无法从截图生成组件。` +
+          `请到「设置 - 模型配置」更换为支持视觉的模型（并点击「检测」确认）后重试`,
+      );
+    }
+    if (visionCap.vision !== true) {
+      throw this.wrapError(
+        LiteErrorCode.INTERNAL_ERROR,
+        `模型「${visionModelName}」的视觉能力尚未检测，无法确认其能否识别截图。` +
+          `请到「设置 - 模型配置」点击「检测」完成能力识别后重试（未检测不支持直接生成，避免产出与截图无关的结果）`,
       );
     }
 

@@ -53,7 +53,9 @@ public class NodeProxyController {
             "/api/vue3",
             "/api/phase2",
             "/api/v2",
-            "/api/progress"
+            "/api/progress",
+            // 微码组件规范检查（2026-09-10）：Node McSpecModule 承载
+            "/api/mc-spec"
     };
 
     @RequestMapping({
@@ -64,7 +66,8 @@ public class NodeProxyController {
             "/api/workflows/**", "/api/token-usage/**", "/api/user/**",
             "/api/models/**", "/api/demo/**", "/api/preview/**",
             "/api/vue3/**", "/api/phase2/**", "/api/v2/**",
-            "/api/progress/**"
+            "/api/progress/**",
+            "/api/mc-spec", "/api/mc-spec/**"
     })
     public void proxy(HttpServletRequest request, HttpServletResponse response) throws IOException {
         String path = request.getRequestURI();

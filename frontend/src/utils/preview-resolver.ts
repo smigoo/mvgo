@@ -85,7 +85,16 @@ export function resolvePreviewDescriptor(
 
 export function buildPreviewUrl(
   descriptor: PreviewDescriptor,
-  options: { width?: number; height?: number; cacheKey?: string | number } = {},
+  options: {
+    width?: number
+    height?: number
+    cacheKey?: string | number
+    /**
+     * 传 '0' 时预览强制走 workspace 源（跳过快照）。
+     * Playground / 编辑态用：代码与 AI 修复都写 workspace，走快照会看到旧内容。
+     */
+    snapshot?: string | number
+  } = {},
 ): string {
   const params = new URLSearchParams({
     type: descriptor.target,
@@ -99,14 +108,30 @@ export function buildPreviewUrl(
   if (options.width && options.width > 0) params.set('w', String(options.width))
   if (options.height && options.height > 0) params.set('h', String(options.height))
   if (options.cacheKey !== undefined) params.set('_t', String(options.cacheKey))
+  if (options.snapshot !== undefined) params.set('snapshot', String(options.snapshot))
   const token = getAuthToken()
   if (token) params.set('token', token)
   return `/preview/${encodeURIComponent(descriptor.componentId)}?${params.toString()}`
 }
 
-export function buildSnapshotFileUrl(sessionId: string, revision: string, path: string, preview = false): string {
+/**
+ * 快照内单个文件的 URL。
+ * 🔧 cacheKey（2026-09-10）：预览刷新时外层 iframe URL 带 _t，但内层文件 URL 若一成不变，
+ * 浏览器可能直接命中 HTTP 缓存返回旧代码 → 表现为「保存成功但预览还是旧的」。
+ * 传入 _t 让文件 URL 随刷新一起变化。
+ */
+export function buildSnapshotFileUrl(
+  sessionId: string,
+  revision: string,
+  path: string,
+  preview = false,
+  cacheKey?: string | number,
+): string {
   const query = new URLSearchParams({ path })
   if (preview) query.set('preview', '1')
+  if (cacheKey !== undefined && cacheKey !== null && cacheKey !== '') {
+    query.set('_t', String(cacheKey))
+  }
   const token = getAuthToken()
   if (token) query.set('token', token)
   return `/api/tasks/${encodeURIComponent(sessionId)}/code-snapshots/${encodeURIComponent(revision)}/file?${query.toString()}`

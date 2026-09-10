@@ -488,8 +488,8 @@ export class BatchController {
       return false;
     }
 
-    if (queue.getAvailableSlots() > 0) {
-      queue.registerRunning(sessionId);
+    if (queue.getAvailableSlots(meta.userId) > 0) {
+      queue.registerRunning(sessionId, meta.userId);
       return true;
     }
 

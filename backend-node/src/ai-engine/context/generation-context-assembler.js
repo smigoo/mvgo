@@ -8,20 +8,32 @@ import { compileDesignFacts } from './design-facts-compiler.js'
 import { resolveContextConflicts } from './context-conflict-resolver.js'
 import { applyContextBudget } from './context-budget.js'
 
+function normalizeSectionNode(section) {
+  if (!section || typeof section !== 'object') return null
+  const children = Array.isArray(section.children)
+    ? section.children.map(normalizeSectionNode).filter(Boolean)
+    : undefined
+  return {
+    id: section.id || null,
+    title: section.title || null,
+    responsibility: section.responsibility || null,
+    elementCount: Number.isFinite(section.elementCount) ? section.elementCount : null,
+    type: section.type || null,
+    collapsed: section.collapsed === true,
+    renderHint: section.renderHint || null,
+    itemCount: Number.isFinite(section.itemCount) ? section.itemCount : null,
+    items: Array.isArray(section.items) ? section.items : undefined,
+    isLayoutContainer: section.isLayoutContainer === true,
+    layout: section.layout || null,
+    layoutSource: section.layoutSource || null,
+    ...(children && children.length > 0 ? { children } : {}),
+  }
+}
+
 function normalizeComponentPlan(plan) {
   if (!plan || typeof plan !== 'object') return null
   const sections = Array.isArray(plan.effectiveSections)
-    ? plan.effectiveSections.map((section) => ({
-        id: section.id || null,
-        title: section.title || null,
-        responsibility: section.responsibility || null,
-        elementCount: Number.isFinite(section.elementCount) ? section.elementCount : null,
-        type: section.type || null,
-        collapsed: section.collapsed === true,
-        renderHint: section.renderHint || null,
-        itemCount: Number.isFinite(section.itemCount) ? section.itemCount : null,
-        items: Array.isArray(section.items) ? section.items : undefined,
-      }))
+    ? plan.effectiveSections.map(normalizeSectionNode).filter(Boolean)
     : []
 
   return {

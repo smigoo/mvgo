@@ -26,6 +26,22 @@ export class TaskQueueService implements OnModuleInit, OnModuleDestroy {
   
   // 最大并发执行任务数（可通过环境变量 TASK_MAX_CONCURRENT 配置，默认 2，允许范围 1-10）
   readonly MAX_CONCURRENT = TaskQueueService.resolveMaxConcurrent();
+
+  // 全局并发保护上限（env TASK_GLOBAL_MAX_CONCURRENT，默认 10）。
+  // 并发模型为 **per-user**：每个用户独享 MAX_CONCURRENT 个槽位，互不抢占。
+  // 但 N 个用户 × MAX_CONCURRENT 可能压垮单机，故再设一道全局天花板。
+  readonly GLOBAL_MAX_CONCURRENT = TaskQueueService.resolveGlobalMaxConcurrent();
+
+  /**
+   * 解析全局并发上限：env TASK_GLOBAL_MAX_CONCURRENT，非法值回退 10，且不得小于单用户上限
+   */
+  private static resolveGlobalMaxConcurrent(): number {
+    const raw = process.env.TASK_GLOBAL_MAX_CONCURRENT;
+    const parsed = Number.parseInt(raw ?? '', 10);
+    const perUser = TaskQueueService.resolveMaxConcurrent();
+    if (!Number.isFinite(parsed) || parsed < 1) return Math.max(10, perUser);
+    return Math.max(parsed, perUser);
+  }
   
   // 重试阶梯（秒）：第1次30秒，第2次60秒，第3次120秒...
   private readonly RETRY_BACKOFF_SECONDS = [30, 60, 120, 300, 600]; // 最大10分钟
@@ -36,6 +52,10 @@ export class TaskQueueService implements OnModuleInit, OnModuleDestroy {
   // 运行中任务追踪：sessionId -> 注册时间戳（用于幽灵任务健康检查）
   // 若任务注册后长时间未收到完成/失败通知，视为幽灵任务，定时释放槽位
   private runningTasks: Map<string, number> = new Map();
+
+  // 会话归属：sessionId -> userId。per-user 并发槽位记账的事实源。
+  // 未登录 / 拿不到 userId 时不记录，这类任务退化为「共享桶」（见 getRunningCount）。
+  private sessionOwners: Map<string, string> = new Map();
 
   // 运行中任务健康检查超时：超过该时长无完成/失败通知即强制释放槽位
   // 正常 LLM 生成单块最长 ~10 分钟（CHUNK_TIMEOUT_MS=600s），加上重试与精修，
@@ -202,16 +222,40 @@ export class TaskQueueService implements OnModuleInit, OnModuleDestroy {
    * 获取当前可用并发槽位数
    * 每次查询前先清理幽灵任务，避免崩溃残留占槽导致新任务误排队
    */
-  getAvailableSlots(): number {
+  /**
+   * 获取可用并发槽位数。
+   * 传入 userId 时按 **per-user** 计算（该用户独享 MAX_CONCURRENT，不受别的用户影响）；
+   * 不传时按全局计算。两者都再受 GLOBAL_MAX_CONCURRENT 天花板约束。
+   */
+  getAvailableSlots(userId?: string): number {
     this.reapStaleRunningTasks();
-    return Math.max(0, this.MAX_CONCURRENT - this.runningTasks.size);
+    const perUser = this.MAX_CONCURRENT - this.countRunningOf(userId);
+    const globalLeft = this.GLOBAL_MAX_CONCURRENT - this.runningTasks.size;
+    return Math.max(0, Math.min(perUser, globalLeft));
   }
 
   /**
-   * 获取当前运行中的任务数量
+   * 获取当前运行中的任务数量。
+   * 传入 userId 时只统计该用户的运行中任务；不传返回全局数量。
+   * 与 getAvailableSlots 一致，查询前先清理幽灵任务（此前两者口径不一致，
+   * 导致 controller 用 getRunningCount 判满时把幽灵槽位算进去、新任务误排队）。
    */
-  getRunningCount(): number {
-    return this.runningTasks.size;
+  getRunningCount(userId?: string): number {
+    this.reapStaleRunningTasks();
+    return this.countRunningOf(userId);
+  }
+
+  /**
+   * 统计运行中任务数：userId 为空 = 全局；否则只数属于该 user 的会话。
+   * 没有归属记录（未登录）的会话不计入任何 per-user 桶，只在全局口径下体现。
+   */
+  private countRunningOf(userId?: string): number {
+    if (!userId) return this.runningTasks.size;
+    let n = 0;
+    for (const sid of this.runningTasks.keys()) {
+      if (this.sessionOwners.get(sid) === userId) n++;
+    }
+    return n;
   }
 
   /**
@@ -227,11 +271,25 @@ export class TaskQueueService implements OnModuleInit, OnModuleDestroy {
    * 注册一个任务开始执行（占用并发槽位）
    * 在任务实际开始执行时调用
    */
-  registerRunning(sessionId: string): void {
+  registerRunning(sessionId: string, userId?: string): void {
     // 任务重新注册时清除终态标记，允许其再次完成（防御性，sessionId 正常唯一）
     this.terminalSessions.delete(sessionId);
+    // 记录归属，供 per-user 槽位记账
+    if (userId) this.sessionOwners.set(sessionId, userId);
     this.runningTasks.set(sessionId, Date.now());
-    this.logger.debug(`任务 ${sessionId} 注册为运行中，当前并发: ${this.runningTasks.size}/${this.MAX_CONCURRENT}`);
+    this.logger.debug(
+      `任务 ${sessionId} 注册为运行中（user=${userId || '匿名'}），` +
+        `该用户并发: ${this.countRunningOf(userId)}/${this.MAX_CONCURRENT}，全局: ${this.runningTasks.size}/${this.GLOBAL_MAX_CONCURRENT}`,
+    );
+  }
+
+  /**
+   * 内部统一释放入口：同时清理运行记录与归属记录。
+   * 所有释放路径都必须走这里，否则 sessionOwners 泄漏会让 per-user 计数只增不减。
+   */
+  private releaseSlotInternal(sessionId: string): boolean {
+    this.sessionOwners.delete(sessionId);
+    return this.runningTasks.delete(sessionId);
   }
 
   /**
@@ -257,7 +315,7 @@ export class TaskQueueService implements OnModuleInit, OnModuleDestroy {
     this.markTerminal(sessionId);
 
     // 🔒 无论后续调度是否异常，都必须释放槽位（delete 幂等，重复调用无副作用）
-    const wasRunning = this.runningTasks.delete(sessionId);
+    const wasRunning = this.releaseSlotInternal(sessionId);
     this.logger.log(
       `任务 ${sessionId} 已完成，释放并发槽位（${wasRunning ? '已释放' : '未找到条目'}），当前并发: ${this.runningTasks.size}/${this.MAX_CONCURRENT}`,
     );
@@ -283,7 +341,7 @@ export class TaskQueueService implements OnModuleInit, OnModuleDestroy {
     this.markTerminal(sessionId);
 
     // 🔒 无论后续调度是否异常，都必须释放槽位（delete 幂等，重复调用无副作用）
-    const wasRunning = this.runningTasks.delete(sessionId);
+    const wasRunning = this.releaseSlotInternal(sessionId);
     this.logger.log(
       `任务 ${sessionId} 失败，释放并发槽位（${wasRunning ? '已释放' : '未找到条目'}），当前并发: ${this.runningTasks.size}/${this.MAX_CONCURRENT}`,
     );
@@ -302,7 +360,7 @@ export class TaskQueueService implements OnModuleInit, OnModuleDestroy {
    */
   async releaseSlot(sessionId: string): Promise<void> {
     this.logger.log(`[releaseSlot] 尝试释放任务 ${sessionId} 的槽位，当前 runningTasks: ${Array.from(this.runningTasks.keys()).join(',')}`);
-    const deleted = this.runningTasks.delete(sessionId);
+    const deleted = this.releaseSlotInternal(sessionId);
     if (deleted) {
       this.logger.log(`[releaseSlot] ✅ 任务 ${sessionId} 释放成功，当前并发: ${this.runningTasks.size}/${this.MAX_CONCURRENT}，开始调度等待任务`);
     } else {
@@ -319,13 +377,16 @@ export class TaskQueueService implements OnModuleInit, OnModuleDestroy {
    * 用于 resumeTask 场景：恢复暂停的任务，重新进入运行队列
    * @returns true=已注册为运行中, false=槽位不足未注册
    */
-  tryReRegister(sessionId: string): boolean {
-    if (this.getAvailableSlots() <= 0) {
+  tryReRegister(sessionId: string, userId?: string): boolean {
+    if (this.getAvailableSlots(userId) <= 0) {
       this.logger.debug(`任务 ${sessionId} 恢复时无可用槽位，将排队等待`);
       return false;
     }
-    this.runningTasks.set(sessionId, Date.now());
-    this.logger.log(`任务 ${sessionId} 恢复运行，重新注册并发槽位，当前并发: ${this.runningTasks.size}/${this.MAX_CONCURRENT}`);
+    this.registerRunning(sessionId, userId);
+    this.logger.log(
+      `任务 ${sessionId} 恢复运行，重新注册并发槽位（user=${userId || '匿名'}），` +
+        `该用户并发: ${this.countRunningOf(userId)}/${this.MAX_CONCURRENT}`,
+    );
     return true;
   }
 
@@ -507,7 +568,7 @@ export class TaskQueueService implements OnModuleInit, OnModuleDestroy {
         this.logger.warn(
           `[幽灵任务] 任务 ${sessionId} 已运行 ${Math.round((now - registeredAt) / 1000)}s 无完成通知，强制释放并发槽位`,
         );
-        this.runningTasks.delete(sessionId);
+        this.releaseSlotInternal(sessionId);
         this.logger.log(`[幽灵任务] 释放槽位后并发: ${this.runningTasks.size}/${this.MAX_CONCURRENT}`);
         // 释放后立即尝试调度等待队列
         void this.scheduleNextWaiting();
@@ -598,9 +659,12 @@ export class TaskQueueService implements OnModuleInit, OnModuleDestroy {
     if (!task) return;
 
     this.waitingQueue.delete(sessionId);
-    this.runningTasks.set(sessionId, Date.now());
+    this.registerRunning(sessionId, task.userId);
 
-    this.logger.log(`手动调度等待任务 ${sessionId} 开始执行，当前并发: ${this.runningTasks.size}/${this.MAX_CONCURRENT}`);
+    this.logger.log(
+      `手动调度等待任务 ${sessionId} 开始执行（user=${task.userId || '匿名'}），` +
+        `该用户并发: ${this.countRunningOf(task.userId)}/${this.MAX_CONCURRENT}，全局: ${this.runningTasks.size}/${this.GLOBAL_MAX_CONCURRENT}`,
+    );
 
     const executor: (() => Promise<void>) | undefined =
       task.executeFn || this.executeFnRegistry.get(sessionId) || (this.executeCallback ?? undefined);
@@ -610,7 +674,7 @@ export class TaskQueueService implements OnModuleInit, OnModuleDestroy {
         this.logger.log(`等待任务 ${sessionId} 已触发执行函数`);
       } catch (error) {
         this.logger.error(`调度等待任务失败: ${sessionId}`, error);
-        this.runningTasks.delete(sessionId);
+        this.releaseSlotInternal(sessionId);
         task.status = 'queued';
         task.enqueuedAt = Date.now();
         this.waitingQueue.set(sessionId, task);
@@ -618,7 +682,7 @@ export class TaskQueueService implements OnModuleInit, OnModuleDestroy {
       }
     } else {
       this.logger.warn(`任务 ${sessionId} 既无 executeFn 也无全局回调，无法调度`);
-      this.runningTasks.delete(sessionId);
+      this.releaseSlotInternal(sessionId);
       this.waitingQueue.set(sessionId, task);
     }
   }
@@ -637,62 +701,75 @@ export class TaskQueueService implements OnModuleInit, OnModuleDestroy {
    */
   async scheduleNextWaiting(): Promise<{ dispatched: number; remaining: number }> {
     let scheduledCount = 0;
+    if (this.waitingQueue.size === 0) {
+      return { dispatched: 0, remaining: 0 };
+    }
 
-    while (this.getAvailableSlots() > 0 && this.waitingQueue.size > 0) {
-      // 按优先级 + 入队时间排序，取出第一个
-      let bestSessionId: string | null = null;
-      let bestPriority = -Infinity;
-      let bestEnqueuedAt = Infinity;
+    // 快照 + 排序（优先级降序 → 入队时间升序），per-user 场景下逐个判定槽位
+    const candidates = [...this.waitingQueue.values()].sort((a, b) => {
+      const pa = a.queuePriority || 0;
+      const pb = b.queuePriority || 0;
+      if (pa !== pb) return pb - pa;
+      return (a.enqueuedAt || 0) - (b.enqueuedAt || 0);
+    });
 
-      for (const [sessionId, task] of this.waitingQueue.entries()) {
-        const priority = task.queuePriority || 0;
-        const enqueuedAt = task.enqueuedAt || Infinity;
+    for (const task of candidates) {
+      const sessionId = task.sessionId;
+      // 本轮中该任务可能已被移除（并发调度/取消）
+      if (!this.waitingQueue.has(sessionId)) continue;
 
-        if (priority > bestPriority || (priority === bestPriority && enqueuedAt < bestEnqueuedAt)) {
-          bestSessionId = sessionId;
-          bestPriority = priority;
-          bestEnqueuedAt = enqueuedAt;
-        }
+      // 全局天花板：到顶就停止本轮调度
+      if (this.runningTasks.size >= this.GLOBAL_MAX_CONCURRENT) {
+        this.logger.debug(
+          `[scheduleNextWaiting] 全局并发到顶 ${this.runningTasks.size}/${this.GLOBAL_MAX_CONCURRENT}，停止本轮调度`,
+        );
+        break;
       }
 
-      if (!bestSessionId) break;
+      // 🔑 per-user 槽位：该用户自己的槽满了就跳过，**继续尝试后面的其他用户任务**，
+      // 不能像全局模型那样直接 break —— 否则 A 用户占满会堵死所有人的排队任务。
+      if (this.getAvailableSlots(task.userId) <= 0) {
+        this.logger.debug(
+          `[scheduleNextWaiting] 用户 ${task.userId || '匿名'} 槽位已满，任务 ${sessionId} 继续等待`,
+        );
+        continue;
+      }
 
-      const task = this.waitingQueue.get(bestSessionId);
-      if (!task) break;
+      // 从等待队列移除，注册为运行中（同时记录归属）
+      this.waitingQueue.delete(sessionId);
+      this.registerRunning(sessionId, task.userId);
 
-      // 从等待队列移除，注册为运行中
-      this.waitingQueue.delete(bestSessionId);
-      this.runningTasks.set(bestSessionId, Date.now());
-
-      this.logger.log(`调度等待任务 ${bestSessionId} 开始执行，当前并发: ${this.runningTasks.size}/${this.MAX_CONCURRENT}`);
+      this.logger.log(
+        `调度等待任务 ${sessionId} 开始执行（user=${task.userId || '匿名'}），` +
+          `该用户并发: ${this.countRunningOf(task.userId)}/${this.MAX_CONCURRENT}，全局: ${this.runningTasks.size}/${this.GLOBAL_MAX_CONCURRENT}`,
+      );
 
       // 优先用任务自带的 executeFn，其次用 registry，最后用全局回调
       const executor: (() => Promise<void>) | undefined =
-        task.executeFn || this.executeFnRegistry.get(bestSessionId) || (this.executeCallback ?? undefined);
+        task.executeFn || this.executeFnRegistry.get(sessionId) || (this.executeCallback ?? undefined);
 
       if (executor) {
         try {
           await executor();
           scheduledCount++;
-          this.logger.log(`等待任务 ${bestSessionId} 已触发执行函数`);
+          this.logger.log(`等待任务 ${sessionId} 已触发执行函数`);
         } catch (error) {
-          this.logger.error(`调度等待任务失败: ${bestSessionId}`, error);
-          this.runningTasks.delete(bestSessionId);
+          this.logger.error(`调度等待任务失败: ${sessionId}`, error);
+          this.releaseSlotInternal(sessionId);
           // 🔒 清除终态标记，否则下次该任务再失败时 markTaskFailed 会因幂等保护跳过槽位释放
-          this.terminalSessions.delete(bestSessionId);
+          this.terminalSessions.delete(sessionId);
           task.status = 'queued';
           task.enqueuedAt = Date.now();
-          this.waitingQueue.set(bestSessionId, task);
-          // 执行失败不继续调度本轮，避免雪崩
-          break;
+          this.waitingQueue.set(sessionId, task);
+          // per-user 模型下单个任务失败不应堵死其他用户，继续尝试下一个候选
+          continue;
         }
       } else {
-        this.logger.warn(`任务 ${bestSessionId} 既无 executeFn 也无全局回调，无法调度`);
-        this.runningTasks.delete(bestSessionId);
-        this.terminalSessions.delete(bestSessionId);
-        this.waitingQueue.set(bestSessionId, task);
-        // 无执行器也不继续
-        break;
+        this.logger.warn(`任务 ${sessionId} 既无 executeFn 也无全局回调，无法调度`);
+        this.releaseSlotInternal(sessionId);
+        this.terminalSessions.delete(sessionId);
+        this.waitingQueue.set(sessionId, task);
+        continue;
       }
     }
 

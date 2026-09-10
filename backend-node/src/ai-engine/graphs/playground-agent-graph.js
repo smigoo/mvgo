@@ -23,6 +23,7 @@ import {
   restoreBackup,
 } from '../tools/playground-tools.js'
 import { resolveTextConfig } from '../utils/ai-defaults.js'
+import { normalizeRequestTemperature } from '../utils/model-config.js'
 import { createLogger } from '../logger/index.js'
 import { attachUnifiedInvoke } from '../utils/ai-request-gateway.js'
 import { isOpenAICompatibleBaseURL } from '../utils/provider-utils.js'
@@ -51,9 +52,25 @@ function inferRequiresWrite(message) {
 }
 
 /**
+ * 端点不接受显式 temperature 的模型（2026-09-10 实锤）
+ *
+ * 现象：部分 Claude 中继端点返回 400「temperature is not supported for xxx
+ * when set to non-default values」—— 只能不传该字段（用服务端默认）。
+ * 命中一次即写入本集合，同进程后续请求直接跳过，避免每次都先撞一次 400。
+ */
+const TEMPERATURE_LOCKED_MODELS = new Set()
+
+/** 错误信息是否表示「该模型不接受显式 temperature」 */
+function isTemperatureUnsupportedError(error) {
+  const msg = String(error?.message || error || '')
+  return /temperature is not supported/i.test(msg)
+}
+
+/**
  * 创建 LLM 实例（支持 OpenAI 兼容 + Anthropic）
- * @param {object} [overrides] - 可选配置覆盖 { apiKey?, baseURL?, model? }
- *   优先级：前端传入 → 环境变量 → 硬编码默认
+ * @param {object} [overrides] - 可选配置覆盖
+ *   { apiKey?, baseURL?, model?, noTemperature?: boolean }
+ *   优先级：前端传入 → 环境变量 → 已保存配置 → 硬编码默认
  */
 function createLLM(overrides = {}) {
   const config = resolveTextConfig({
@@ -65,20 +82,35 @@ function createLLM(overrides = {}) {
 
   if (!apiKey) {
     throw new Error(
-      'API Key 未配置，请设置环境变量 MC_GEN_TEXT_API_KEY / TEXT_API_KEY / ANTHROPIC_API_KEY',
+      'API Key 未配置，请设置环境变量 MC_GEN_TEXT_API_KEY / TEXT_API_KEY / ANTHROPIC_API_KEY，或在「AI 设置」中配置文本模型',
     )
   }
 
   const isOpenAICompatible = isOpenAICompatibleBaseURL(baseURL)
 
+  // temperature 策略：
+  //   1) 端点/模型已确认不接受 → 不传（用服务端默认）
+  //   2) 配置里显式给了温度 → 用它（与生成管线一致）
+  //   3) 都没给 → 不传（交给 SDK/服务端默认），避免硬编码 0.2 触发 400
+  const locked =
+    overrides.noTemperature === true ||
+    TEMPERATURE_LOCKED_MODELS.has(String(model || '').toLowerCase())
+  const requested =
+    config.temperature !== undefined && config.temperature !== null && config.temperature !== ''
+      ? Number(config.temperature)
+      : undefined
+  const normalized = normalizeRequestTemperature(model, requested)
+  const temperature =
+    locked || normalized === undefined || Number.isNaN(normalized) ? undefined : normalized
+
   if (isOpenAICompatible) {
     // LangChain ChatOpenAI 会自动拼接 /chat/completions，需要去掉 baseURL 中已有的路径后缀
     const langChainBaseURL = extractBaseURLPrefix(baseURL)
-    logger.info('使用 OpenAI 兼容 API', { model, baseURL, langChainBaseURL })
+    logger.info('使用 OpenAI 兼容 API', { model, baseURL, langChainBaseURL, temperature })
     return attachUnifiedInvoke(
       new ChatOpenAI({
         modelName: model,
-        temperature: 0.7,
+        ...(temperature !== undefined ? { temperature } : {}),
         apiKey,
         configuration: { baseURL: langChainBaseURL },
       }),
@@ -90,11 +122,11 @@ function createLLM(overrides = {}) {
     )
   }
 
-  logger.info('使用 Anthropic API', { model })
+  logger.info('使用 Anthropic API', { model, baseURL: baseURL || '(默认)', temperature })
   return attachUnifiedInvoke(
     new ChatAnthropic({
       modelName: model,
-      temperature: 0.7,
+      ...(temperature !== undefined ? { temperature } : {}),
       anthropicApiKey: apiKey,
       anthropicApiUrl: baseURL || undefined,
       streaming: true,
@@ -211,7 +243,37 @@ export function createPlaygroundAgent(componentId, options = {}) {
   const { onToolCall, onToolResult, llmConfig } = options
 
   const tools = createTools(componentId)
-  const model = createLLM(llmConfig).bindTools(tools)
+
+  // 模型实例持有在闭包里：命中「端点不接受 temperature」时可原地重建（去掉温度）重试，
+  // 并把该模型记入 TEMPERATURE_LOCKED_MODELS，后续请求不再重复撞 400。
+  let currentModelName = ''
+  const buildBoundModel = (opts = {}) => {
+    const llm = createLLM({ ...llmConfig, ...opts })
+    currentModelName = String(llm.modelName || llm.model || '')
+    return llm.bindTools(tools)
+  }
+  let boundModel = buildBoundModel()
+
+  const invokeModel = async (messages) => {
+    const reqOpts = {
+      __mvgoRequestOptions: {
+        context: 'playground-agent',
+        model: currentModelName || 'unknown',
+      },
+    }
+    try {
+      return await boundModel.invoke(messages, reqOpts)
+    } catch (err) {
+      if (!isTemperatureUnsupportedError(err)) throw err
+      TEMPERATURE_LOCKED_MODELS.add(currentModelName.toLowerCase())
+      logger.warn('端点不接受显式 temperature，已去掉该字段重试', {
+        model: currentModelName,
+        error: err.message,
+      })
+      boundModel = buildBoundModel({ noTemperature: true })
+      return await boundModel.invoke(messages, reqOpts)
+    }
+  }
 
   const workflow = new StateGraph(AgentState)
 
@@ -265,12 +327,7 @@ ${state.attachments.length > 0 ? state.attachments.map((f) => `- ${f.name || '�
 
     const messages = [new SystemMessage(systemPrompt), ...state.messages]
 
-    const response = await model.invoke(messages, {
-      __mvgoRequestOptions: {
-        context: 'playground-agent',
-        model: model.modelName || model.model || 'unknown',
-      },
-    })
+    const response = await invokeModel(messages)
 
     return {
       messages: [response],

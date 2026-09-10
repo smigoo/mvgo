@@ -91,6 +91,10 @@
           >
             AI 对比分析
           </button>
+          <McSpecCheckButton
+            v-if="!isVue3Component && businessComponentId"
+            :component-id="businessComponentId"
+          />
           <button
             v-if="!isVue3Component"
             @click="toggleDocPanel"
@@ -246,6 +250,7 @@ import PublishToPoolModal from '@/components/PublishToPoolModal.vue'
 import { useUserStore } from '@/store'
 import { resolveComponentType } from '@/utils/task-actions'
 import ComponentAnalysisDrawer from '@/components/ComponentAnalysisDrawer.vue'
+import McSpecCheckButton from '@/components/McSpecCheckButton.vue'
 import DocComparePanel from '@/components/doc-binding/DocComparePanel.vue'
 import MonacoEditor from '@/components/MonacoEditor.vue'
 import PreviewErrorBanner from '@/components/PreviewErrorBanner.vue'

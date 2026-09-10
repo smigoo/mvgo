@@ -263,6 +263,80 @@ import HeaderStats from './components/HeaderStats.vue'
     const missing = detectMissingSections(files, listPlan)
     expect(missing.map((m) => m.id)).toContain('device-grid')
   })
+
+  it('嵌套容器不计缺失：叶子全组装时 89:40 不进 missing', () => {
+    const files = [
+      {
+        path: 'package/index.vue',
+        content: `<template>
+  <div class="root">
+    <HeaderStats />
+    <div class="slot-con">
+      <SwitchBar />
+      <TabPanel />
+    </div>
+  </div>
+</template>
+<script setup>
+import HeaderStats from './components/HeaderStats.vue'
+import SwitchBar from './components/SwitchBar.vue'
+import TabPanel from './components/TabPanel.vue'
+</script>`,
+      },
+      { path: 'package/components/HeaderStats.vue', content: '<template><div>头部统计</div></template>' },
+      { path: 'package/components/SwitchBar.vue', content: '<template><div>switch</div></template>' },
+      { path: 'package/components/TabPanel.vue', content: '<template><div>tab</div></template>' },
+    ]
+    const nestedPlan = plan([
+      { id: 'header-stats', title: '头部统计' },
+      {
+        id: '89:40',
+        title: 'slot-con',
+        isLayoutContainer: true,
+        layoutSource: 'container-rebuild',
+        children: [
+          { id: '89:38', title: 'switch' },
+          { id: '89:37', title: '@antd/tab' },
+        ],
+      },
+    ])
+    const missing = detectMissingSections(files, nestedPlan)
+    expect(missing).toHaveLength(0)
+    expect(missing.map((m) => m.id)).not.toContain('89:40')
+  })
+
+  it('嵌套容器下缺叶子仍报缺失，但不把容器当缺失模块', () => {
+    const files = [
+      {
+        path: 'package/index.vue',
+        content: `<template>
+  <div class="root"><HeaderStats /><SwitchBar /></div>
+</template>
+<script setup>
+import HeaderStats from './components/HeaderStats.vue'
+import SwitchBar from './components/SwitchBar.vue'
+</script>`,
+      },
+      { path: 'package/components/HeaderStats.vue', content: '<template><div>头部统计</div></template>' },
+      { path: 'package/components/SwitchBar.vue', content: '<template><div>switch</div></template>' },
+    ]
+    const nestedPlan = plan([
+      { id: 'header-stats', title: '头部统计' },
+      {
+        id: '89:40',
+        title: 'slot-con',
+        isLayoutContainer: true,
+        layoutSource: 'container-rebuild',
+        children: [
+          { id: '89:38', title: 'switch' },
+          { id: '89:37', title: '@antd/tab' },
+        ],
+      },
+    ])
+    const missing = detectMissingSections(files, nestedPlan)
+    expect(missing.map((m) => m.id)).toEqual(['89:37'])
+    expect(missing.map((m) => m.id)).not.toContain('89:40')
+  })
 })
 
 describe('COMP-001 L0-B 门禁集成', () => {

@@ -4178,8 +4178,11 @@ export function createPhase2Graph(config = {}) {
         // 🔧 generate 模式（写完即停）：与 phase2.service.ts:634「generate 模式跳过质量门禁」一致，
         // 运行时门禁失败不 fail-closed 抛错，产物仍发布到 workspace 供人工审查，避免 20+ 分钟成果作废。
         // 非 generate 模式（minimal/full）保留原 fail-closed 语义（service 层亦会据此标记 terminalError）。
-        // 🛡️ P0 升级（2026-09-02，mv-max-1788359428498-ee0cbe69）：确定性运行时缺失（X is not defined /
-        // Cannot read properties of undefined 等）不降级——坏产物此前被当成功任务交付，generate 也要硬 BLOCK。
+        // 🛡️ P0 升级（2026-09-02，mv-max-1788359428498-ee0cbe69）+ 扩展（2026-09-10 立项统一治理）：
+        // 确定性运行时缺失（X is not defined / Cannot read properties of undefined / **引用型 TDZ：
+        // Cannot access X before initialization** / RUNTIME-004 errorType='vue-render' 结构化信号等）不降级——
+        // 坏产物此前被当成功任务交付，generate 也要硬 BLOCK。判定口径见 utils/runtime-error-classifier.js。
+        // 降级分支仅对非确定性（环境类：导航/网络/资源缺失）放行；确定性产物缺陷一律走下方硬 BLOCK。
         const isGenerateMode = (state._v3Mode || 'generate') === 'generate';
         const isDeterministicMissing = hasDeterministicRuntimeMissing(runtimeGate);
         if (isGenerateMode && !isDeterministicMissing) {

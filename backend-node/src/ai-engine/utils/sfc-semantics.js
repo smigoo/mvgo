@@ -415,8 +415,9 @@ export function validateVueScriptSemantics(content, filePath = '', opts = {}) {
     if (whole.duplicated) {
       issues.push(`${filePath}: ${whole.reason}`)
     }
-    // 6. TDZ 检测 + 自动修复（变量在 let/const/var 声明前被裸赋值 → 运行时 TDZ 错误）
-    //    自动修复：移除声明前的裸赋值语句，修复成功后不再报错；修复失败（无语句可删）才 fail-closed。
+    // 6. TDZ 检测 + 自动修复
+    //    6a. 赋值型 TDZ（变量在 let/const/var 声明前被裸赋值 → 运行时 TDZ 错误）
+    //        自动修复：移除声明前的裸赋值语句，修复成功后不再报错；修复失败（无语句可删）才 fail-closed。
     let tdz = findTdzAssignments(scriptBody)
     if (tdz.length > 0) {
       const fixResult = autoFixTdzAssignments(scriptBody)
@@ -438,6 +439,29 @@ export function validateVueScriptSemantics(content, filePath = '', opts = {}) {
       } else {
         // 自动修复失败（无顶层语句可删，可能赋值嵌套在函数/if 块内）
         issues.push(`${filePath}: <script> 存在 TDZ 风险：变量在声明前被赋值（${tdz.slice(0, 6).join('、')}），会导致运行时 "Cannot access before initialization"，请删除声明前的重复赋值段`)
+      }
+    }
+
+    // 6b. 引用型 TDZ（非声明语句读取/调用了索引更大的 const/let 声明，如 `watch(x)` 排在 `const x` 之前）
+    //      🛡️ 2026-09-10：env 样本 mc-max-1789019718053-fb0a0de7 实锤，scriptSplit 三段合并后漏网写盘。
+    //      自动修复：把被提前引用的声明语句整体上移到首次引用之前（语义等价、不删除语句）。
+    const tdzRefs = findTdzReferences(scriptBody)
+    if (tdzRefs.length > 0) {
+      const fixResult = autoFixTdzReferences(scriptBody)
+      if (fixResult.fixed.length > 0) {
+        scriptBody = fixResult.content
+        const scriptTagMatch = content.match(/<script([^>]*)>([\s\S]*?)<\/script>/)
+        if (scriptTagMatch) {
+          const before = content.slice(0, scriptMatch.index)
+          const after = content.slice(scriptMatch.index + scriptMatch[0].length)
+          content = before + `<script${scriptTagMatch[1]}>${scriptBody}</script>` + after
+        }
+        const residual = findTdzReferences(scriptBody)
+        if (residual.length > 0) {
+          issues.push(`${filePath}: <script> 存在 TDZ 风险（引用型，自动修复后残留）：变量在声明前被引用（${residual.map(r => r.name).slice(0, 6).join('、')}），会导致运行时 "Cannot access before initialization"`)
+        }
+      } else {
+        issues.push(`${filePath}: <script> 存在 TDZ 风险（引用型）：变量在声明前被引用（${tdzRefs.map(r => r.name).slice(0, 6).join('、')}），会导致运行时 "Cannot access before initialization"，请调整声明顺序`);
       }
     }
 
@@ -650,6 +674,12 @@ export function autoFixTdzAssignments(scriptBody) {
   const kept = stmts.filter((_, i) => !removeIdx.has(i)).map(s => s.text)
   return { content: kept.join('\n'), fixed }
 }
+
+// 🛡️ 引用型 TDZ 检测/修复：纯函数、零依赖（无 import.meta），独立模块便于 jest 单测。
+// 与 findTdzAssignments（裸赋值型）并列，覆盖分段合并漏网的「引用早于声明」型 TDZ。
+// import 供本文件 validateVueScriptSemantics 第 6b 段使用；同时 re-export 保持对外 API 不变。
+import { findTdzReferences, autoFixTdzReferences } from './sfc-tdz.js'
+export { findTdzReferences, autoFixTdzReferences }
 
 /**
  * 整段 <script> 重复检测（兜底）。

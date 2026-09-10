@@ -21,7 +21,7 @@ import {
   extractLessGlobalVars,
 } from '../../utils/sfc-syntax-validation.js';
 import { repairScopedThirdPartySelectors, ensureFlexDirectionInVueSfc, ensureFlexDirection } from '../../utils/css-sanitizer.js';
-import { fixSpuriousLineBreaks, injectMissingTabUi, healVueEmbeddedStyleBraces, healThemeMixinVarRefs, healThemeMixinVarRefsInVue, healLessResourceVarInterpolation, healPresetLiteralDecls, healSlotHexToVarRefs, applyHealToVueStyleBlocks } from './code-healer.js';
+import { fixSpuriousLineBreaks, injectMissingTabUi, healVueEmbeddedStyleBraces, healThemeMixinVarRefs, healThemeMixinVarRefsInVue, healLessResourceVarInterpolation, healPresetLiteralDecls, healSlotHexToVarRefs, applyHealToVueStyleBlocks, injectThemeVarDeclsForLess } from './code-healer.js';
 import { healLessSource, healRootFixedSize } from '../../validators/less-compile-gate.js';
 import { safeLogger } from '../../logger/safe-logger.js';
 
@@ -660,6 +660,53 @@ export function writeFiles(files, outputPath, options = {}) {
             if (logger) {
               logger.warn(
                 `🧩 M5-6 归一: ${relativePath}（@fontSize 字面值/fallback → var(--fontSize) 精确映射）`,
+              );
+            }
+          }
+        }
+
+        // 🛡️ M5-6 治本（2026-09-10）：业务 .less 顶层注入 theme-vars 变量声明。
+        // 必须放在下方「E 步 healThemeMixinVarRefs」**之前**：注入后其 localDeclared
+        // 命中 → 自动跳过 var() 替换 → 业务样式保留 `@fontSize`（mc-check v1.0.20
+        // M5-6 要求「声明了就要用」），同时 LESS 不再报 variable undefined。
+        // 编译产物 CSS 与「替换成 var(--x, var(--x))」完全等价，不改变运行时行为。
+        // 仅作用于业务样式，themes/ 下的声明文件不处理。
+        if (
+          /^resources\/styles\/.+\.less$/.test(relativePath) &&
+          !relativePath.includes('/themes/')
+        ) {
+          try {
+            const rawTheme = String(
+              files?.['resources/styles/themes/theme-vars.less'] || '',
+            );
+            if (rawTheme) {
+              // 归一后再取变量值，确保注入的是 `@fontSize: var(--fontSize)` 精确映射
+              const themeVarsSrc = rawTheme
+                .replace(
+                  /@fontSize\s*:\s*\d+(?:\.\d+)?px\s*;/g,
+                  '@fontSize: var(--fontSize);',
+                )
+                .replace(
+                  /@fontSize\s*:\s*var\(--fontSize\s*,\s*[^)]+\)\s*;/g,
+                  '@fontSize: var(--fontSize);',
+                );
+              const injected = injectThemeVarDeclsForLess(
+                sanitizedContent,
+                themeVarsSrc,
+              );
+              if (injected !== sanitizedContent) {
+                sanitizedContent = injected;
+                if (logger) {
+                  logger.warn(
+                    `🧩 M5-6 治本: ${relativePath}（顶层注入 theme-vars 变量声明，保留 @变量 引用）`,
+                  );
+                }
+              }
+            }
+          } catch (injectErr) {
+            if (logger) {
+              logger.warn(
+                `🧩 M5-6 注入跳过: ${relativePath}（${injectErr?.message || injectErr}）`,
               );
             }
           }

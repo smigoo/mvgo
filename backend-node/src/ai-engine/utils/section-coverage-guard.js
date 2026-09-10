@@ -31,6 +31,8 @@
  *   - 检测器自身异常走 fail-open（WARN，不阻断），交由下游门禁与人工复核。
  */
 
+import { collectLeafSections } from './section-tree.js';
+
 /**
  * kebab-case / snake_case → PascalCase
  *   'daily-total' → 'DailyTotal'；'vehicle_type_distribution' → 'VehicleTypeDistribution'
@@ -85,8 +87,9 @@ function sectionCoveredByVFor(tpl, reachable, itemCount) {
  * @returns {Array<{id:string, title:string}>} 缺失（未组装）的 section 列表；无法判定/无缺失返回 []
  */
 export function detectMissingSections(files, componentPlan) {
-  const sections = componentPlan?.effectiveSections;
-  if (!componentPlan?.isForced || !Array.isArray(sections) || sections.length < 2) {
+  // 🛡️ A′ Phase 5：只校验叶子 section。布局容器不占 .vue，不能当缺失模块。
+  const sections = collectLeafSections(componentPlan?.effectiveSections);
+  if (!componentPlan?.isForced || sections.length < 2) {
     return [];
   }
 

@@ -60,6 +60,9 @@ const MODEL_ENTRY_SCHEMA = z.object({
       (value) => (value === undefined || value === null || value === '' ? undefined : value),
       z.enum(['both', 'text', 'vision']).optional(),
     ),
+  // 🔒 连通性测试通过标记（前端「自动识别能力」成功后置 true，随配置回读）。
+  // 仅作 UI 展示，保存闸门的权威事实源是 user_ai_configs.verifiedModels（服务端实测记录）。
+  verified: z.boolean().optional(),
   temperature: temperatureField,
   rpm: numberField(0, 1_000_000),
   tpm: numberField(0, 1_000_000_000),

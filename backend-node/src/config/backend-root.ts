@@ -12,7 +12,7 @@
  * 路径对照（ECS 生产部署）：
  *   - backendRoot:     /home/mvbt/mvgo/backend-node
  *   - projectRoot:    /home/mvbt/mvgo
- *   - workspace:      /home/mvbt/mvgo/workspace（与 backend-node 同级，在 projectRoot 下）
+ *   - workspace:      /home/mvbt/mvgo/backend-node/workspace（🆕 S5：统一到后端副本根）
  *   - tempComponents: /home/mvbt/mvgo/temp-components
  *   - frontendWorkspace: /home/mvbt/mvgo/frontend/workspace
  */
@@ -31,8 +31,15 @@ export const projectRoot = dirname(backendRoot)
 
 // ========== workspace 路径 ==========
 
-/** workspace 在 projectRoot 下（与 backend-node 同级，如 /home/mvbt/mvgo/workspace） */
-export const workspaceRoot = join(projectRoot, 'workspace')
+/**
+ * 🆕 S5（2026-09-10）：统一到**后端副本根** backend-node/workspace，消除读写分叉。
+ * 与 backend-root.js 保持同步（两个孪生文件，改一个必须改另一个）。
+ *
+ * 分叉根因：写入侧 `workspace-preview-publisher.js` 硬编码 `join(backendRoot, 'workspace')`，
+ * 而本文件原为 `projectRoot/workspace`；读取侧 `componentSearchRoots()` 又只扫
+ * `projectRoot/workspace` + `frontend/workspace` → backend-node/workspace 的产物读不到。
+ */
+export const workspaceRoot = join(backendRoot, 'workspace')
 export const customComponentsDir = join(workspaceRoot, 'custom-components')
 export const vue3ComponentsDir = join(workspaceRoot, 'vue3-components')
 

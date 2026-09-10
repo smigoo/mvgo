@@ -12,6 +12,8 @@ import {
   dedupeMcComponentBuilder,
   dedupeLifecycleHooks,
   validateVueScriptSemantics,
+  findTdzReferences,
+  autoFixTdzReferences,
   extractComponentTagNames,
   VUE_BUILTIN_COMPONENTS,
 } from '../../utils/sfc-semantics.js';
@@ -21,11 +23,13 @@ import { parseCodeOutput, detectFileTruncation } from './code-parser.js';
 import { invokeWithTimeout } from '../../utils/llm-timeout.js';
 import { getMaxTokens, coerceLLMText, resolveModelCapability } from '../../utils/model-config.js';
 import { enforceInputBudget } from '../../utils/input-budget.js';
+import { getIndexVueChunkBudgets } from './chunk-budget.js';
 import { getProviderPool } from '../../utils/provider-pool.js';
 import {
   extractResourceVarNames,
   resolveResourceDomMapping,
 } from '../../utils/resource-import-guard.js';
+import { collectLeafSections } from '../../utils/section-tree.js';
 
 function defaultNormalizeComponentId(name = '') {
   const raw = String(name || '').trim();
@@ -101,14 +105,11 @@ export async function generateIndexVue(runChunk, input, { splitDecision, allFile
     const scriptSplit = !!splitDecision.scriptSplit;
     const declContent = allFiles['declare.json'] || '';
 
-    // 🛡️ 动态 maxTokens：把整体预估 estTokens 按段权重下发，让每段的 dynamicMax 精准生效
-    // （template 较轻占 0.1；script 是 index.vue 主体，三段各占 0.3）。
-    // 若某段因预估偏低而 max_tokens 截断，由 _generateSingleChunk 的 escalation 兜底提到模型上限。
-    const estTotal = splitDecision.estTokens || 0;
-    const estTemplate =
-      estTotal > 0 ? Math.max(300, Math.round(estTotal * 0.1)) : 0;
-    const estScript =
-      estTotal > 0 ? Math.max(500, Math.round(estTotal * 0.3)) : 0;
+    // 🛡️ 动态 maxTokens：预算必须复用容量门禁的真实 chunk 预算。
+    // `total: 5/7` 仅用于进度展示，不代表等权 token 分母。
+    const chunkBudgets = getIndexVueChunkBudgets(splitDecision);
+    const estTemplate = chunkBudgets[0]?.estTokens || 0;
+    const estScript = chunkBudgets.find((chunk) => chunk.segmentType === 'script')?.estTokens || 0;
 
     // 批: index.vue <template>
     const chunkT = {
@@ -216,10 +217,11 @@ export async function generateIndexVue(runChunk, input, { splitDecision, allFile
         _genPlanForCharts && typeof _genPlanForCharts === 'object'
           ? _genPlanForCharts
           : input.subComponentPlan;
+      const _leafForCharts = collectLeafSections(
+        _subPlanForCharts?.effectiveSections || [],
+      );
       const _forcedSplit =
-        _subPlanForCharts?.isForced === true &&
-        Array.isArray(_subPlanForCharts?.effectiveSections) &&
-        _subPlanForCharts.effectiveSections.length > 0;
+        _subPlanForCharts?.isForced === true && _leafForCharts.length > 0;
 
       // 🛡️ 优雅降级：图表段失败降级为空（组件无图表仍可渲染，不 fail-closed）
       let scriptCharts = '';
@@ -228,7 +230,7 @@ export async function generateIndexVue(runChunk, input, { splitDecision, allFile
           '🧩 强制子组件拆分：主组件跳过 charts 段（图表逻辑归子组件）',
           {
             componentName: input.componentName,
-            sectionCount: _subPlanForCharts.effectiveSections.length,
+            sectionCount: _leafForCharts.length,
           },
         );
       } else {
@@ -360,13 +362,23 @@ export function mergeScriptParts(...parts) {
     // 仅一段有内容：原样返回该段（保留模型输出，不强制包裹重复标签）
     if (nonEmptyIdx.length === 1) return (parts[nonEmptyIdx[0]] || '').trim();
     // 🛡️ 多段各自可能都带 import（模型常见重复），确定性去重防编译崩
-    const merged = dedupeLifecycleHooks(
+    let merged = dedupeLifecycleHooks(
       dedupeMcComponentBuilder(
         dedupeScriptImports(
           nonEmptyIdx.map((i) => cleaned[i]).join('\n\n'),
         ),
       ),
     );
+    // 🛡️ 2026-09-10 治本（env 样本 mc-max-1789019718053-fb0a0de7 实锤）：
+    // 分段合并（state/lifecycle/charts）只做 import/Builder/lifecycle 去重，不做声明顺序校验。
+    // 若某段把 const 声明放段尾、另一段又先引用它（如 lifecycle 段 `watch(activeTab)` 排在 state 段 `const activeTab` 之前），
+    // 合并后产生「引用型 TDZ」→ 运行时 "Cannot access 'x' before initialization" → 渲染崩。
+    // 合并后确定性自检：发现引用早于声明即自动上移声明（语义等价），杜绝 TDZ 写盘。
+    const tdz = findTdzReferences(merged);
+    if (tdz.length > 0) {
+      const fix = autoFixTdzReferences(merged);
+      if (fix.fixed.length > 0) merged = fix.content;
+    }
     return `<script setup>\n${merged}\n</script>`;
   }
 

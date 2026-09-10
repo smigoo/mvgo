@@ -1,53 +1,46 @@
-# 感智晓界项目记忆
+# 感智晓界项目记忆（精简版，详史见同目录日志）
 
-## 环境与部署
-- 根目录 `/Users/smigoo/工作/mvgo`；子仓：`backend-node`、`backend-java`、`frontend`、`docs`。本地端口：Node 13030、Java 8080、前端 2610。
-- 本地常驻服务用根目录 `start-node.js`/`start-frontend.js`/`start-java.js`；WorkBuddy Bash 起常驻 Node 要用 `env -i` 清 `NODE_OPTIONS`/代理环境。curl 本地接口常加 `--noproxy '*'`。
-- Node 构建：`rm -f tsconfig.build.tsbuildinfo && npm run build`，不删 `dist`。本地 `.env` 保持空占位，`.env.development` 放开发配置；本地勿设 `FIELD_ENCRYPTION_KEY`，AI 凭证在 `backend-node/data/ai-config.json`。
-- **构建验证守则（2026-09-10 实测）**：build 报错时 dist/main.js 时间戳也会刷新，勿以 mtime 判成功；改完必 grep dist 新符号 + 比对 dist/ai-engine 文件 mtime。
-- **bcrypt TS2307 阻断（2026-09-10 实锤）**：bcrypt@6 `main:"./bcrypt"`（无 .js/无 exports/无 types），`moduleResolution:nodenext` CJS 下 `@types/bcrypt` 不被自动发现 → `nest build` 全量编译失败、dist 陈旧。`paths` 别名（.d.ts 或目录）均无效；**唯一有效方案是 `src/types/bcrypt-shim.d.ts` 环境声明模块**（纯类型，勿删）。auth.service.ts/user.schema.ts 的 bcrypt import 依赖此 shim。
-- 生产 ECS：nginx docker 80；Java 8080 是 `/api` 门面；Node 13030 是 AI 引擎/SSE；`/api/progress` 唯一直连 Node，必须放在 `/api` 路由前。nginx 容器内 proxy_pass 用 `192.168.112.1`，不用 localhost。
-- 生产必备 env：Java `PORTAL_BASE_URL=https://go.microvideo.cn/portlet/api`、`MONGODB_URI` 带 `authSource=admin`、`NODE_BACKEND_URL=http://192.168.112.1:13030/api`；Node `FIELD_ENCRYPTION_KEY` 固定不可变、`OPERATION_LOG_BACKEND=http://192.168.112.1:8080`、`MC_PREVIEW_BASE_URL=https://go.microvideo.cn`、`JAVA_BACKEND_URL=http://192.168.112.1:8080`。
+## 环境 / 构建 / 部署
+- 根 `/Users/smigoo/工作/mvgo`；子仓 `backend-node`/`backend-java`/`frontend`/`docs`。端口 Node 13030、Java 8080、前端 2610。
+- WorkBuddy Bash 起常驻服务/跑构建必须 `env -i PATH=... HOME=/Users/smigoo`（清 `NODE_OPTIONS` shim + 代理）；curl 本地加 `--noproxy '*'`；`ps` 被拦用 `pgrep -fl`。
+- **重启 Node 必杀 `dist/main.js` 真 PID**（`start-node.js` detached 一层子进程，父/子两 PID）；kill 后 `lsof -iTCP:13030 -sTCP:LISTEN` 为空再起。判据：server.log 出现 `Mapped {...}`。
+- 构建 `rm -f tsconfig.build.tsbuildinfo && npm run build`；`nest build` 只重编改动文件 → **src mtime 晚于 dist = 没进产物**；收尾必 `ls -l src/X dist/X` + `grep -c` 新符号（grep 一律 `-E`）。前端 `env -i ... npm run build:safe`（`--emptyOutDir false`），旧产物 `mv dist dist.old-<ts>`。
+- **bcrypt TS2307 唯一解**：`src/types/bcrypt-shim.d.ts`（勿删）。
+- 🔴 **`ai-engine/**/*.js` 是纯 ESM 但包没有 `"type":"module"`**：经 `nest-cli.json` assets `**/*.js` **原样拷贝**进 dist，靠 **node 22 模块类型自动探测 + `require(esm)`** 加载（运行时有 `MODULE_TYPELESS_PACKAGE_JSON` 提示属正常）。→ 给这类文件加相对 ESM import 安全；**不要**给 `backend-node/package.json` 加 `"type":"module"`（改变全后端模块解释方式，高危）。
+- 本地勿设 `FIELD_ENCRYPTION_KEY`（随机化永久废掉已加密字段）；AI 凭证在 `data/ai-config.json`。
+- **新增 Node 路由三处同步**（否则生产 404）：`docker/nginx/nginx.conf`（须排在 `location /api` 前）+ 公司 nginx 容器(192.168.112.1) + Java `NodeProxyController`。判据：生产 404 而直连 13030 200 = 纯代理问题。
 
-## 管线治理（2026-09-10 v2）
-- 执行权威：`docs/pipeline-governance-v2-2026-09-10.md`。09-09 诊断仍有效；playbook Loop 2/3/4 顺序作废。
-- 顺序锁死：Loop 2.0 停自伤（空契约禁全量、chrome 早退、tab 不进 headerSlots、contracts 提前到 LLM 前）→ 2.1 结构表改写 `sections` → Loop 3 类名/宿主高度 → Loop 4 Golden 才接入生成。
-- **禁止**：空契约 `return success`；给 chart-header 写 min-height:160；单测绿当完成；Loop 4 提前当治理完成。
-- Loop 0/0.5/1 代码在仓（7a1c585/93536dc）；**Loop 2.0 停自伤已落地（2026-09-10）**：`mappingForContract` 空契约→`[]`、`provenance` 改 `figma-tree`/`mapping-fallback`、chrome 早退前判业务 controls、`inferHeaderSlots` 移除 `\btab\b`、新增 `build-contracts.spec.ts`。5 套 spec 33/33 绿，dist 10:31 同步，13030 重启 PID 65242。三样本未在新代码上重跑 → **仍不算管线绿**。
-- Loop 2.0 完成标准只在 jest + dist + 重启；三样本重生成对照属 Loop 2.1，不得提前当 2.0 验收。
+## 组件定位 / 快照 / 预览
+- **定位单一事实源** `component-resolver.js#resolveComponentDirStrict()`：任务 `componentId`（`mc-lite-...-c298235f`）与真实目录（`c-environment-monitor-c298235f`）**共享尾缀**；检查/AI修复/快照/下载/GitLab 推送必须共用（曾「检查 strict、修复走旧」→ 写盘被拒）。`resolveWritableComponentDirs` 必须返回全部正式副本。收敛点 `phase2.service.ts:2019`、`demo.service.ts:261/486`、`gitlab-push.service.ts`。
+- 预览优先快照 `temp-components/.task-code-snapshots/{sessionId}/revisions/{rev}/`，其次 workspace；`publishToWorkspace` 候选源必须含 `package/`。
+- **快照冻结自愈前坏版**：写盘自愈只写磁盘不回写内存 map → 治本 = 终态落盘后回读 `finalTruthWritten` 回写。
+- **命名一致性盘点** `backend-node/scripts/naming-audit.mjs`（只读，`--json`/`--limit`，支持 `FRONTEND_WORKSPACE`；输出 6 段含 git 跟踪面）。判据：`component` 族才参与分析，`page`/`api-module`/`other` 仅分布展示。
+- 🔴 **踩坑**：`resolveComponentDirStrict` 尾缀匹配**忽略传入名，只看尾 8 hex** → **传规范 ID 也会命中任务号目录**（因搜索根第 1 位 `projectRoot/workspace` 是脏数据）。别以为「传规范名就安全」。
+- 🔴 **S4 存量改名 git 前置**：只有 `frontend/workspace` 被跟踪（3380 文件 / 169 目录 / 其中 152 条任务号形态）——`.gitignore` 有 `workspace/` 但被早期提交绕过；`backend-node/workspace` 与 `projectRoot/workspace` 跟踪数 = 0 可自由 `mv`。改名入库目录须 `git mv` + 单批 commit + **禁 `git add -A`**。
+- **已知脏目录**：`v2-e2e-*`（前缀非 mc/mv → 逃过编码型正则）、`page-page-*`（页面骨架误落组件根，且 `declare.componentId` **是中文**如 `c-环境监测`，与 ASCII 假定冲突），二者都需单独立项。
+- **`custom-components` 不进生产构建**的正确理由 = **glob 从未声明它**（`vcf.js:6,8,16,18` 只 glob `@/components/**` 与 `@/workspace/vue3-components/**`）；`vite.config.js:557-568` 的目录列表只是 `optimizeDeps.exclude`（dev 预扫描）。`vue3-components` 无 `component.js`/`declare.*`（glob 恒空）。
+- **dev 第二条写盘链路**：`vite.config.js:113-134` 的 `workspace-raw-files` 插件**可写** `frontend/workspace`（Playground 实时编辑）→ 后端写盘断言管不到它（但只收绝对路径 + 前缀校验，不产生名字→目录解析）。
+- ✅ **S1/S2/S3 已实施（2026-09-10）**：`component-resolver.js` 的 `resolveWritableComponentDirs` 改 `realName = readDeclaredComponentId(strict) || basename(strict)` 且候选循环改「ID 外层/根内层」；`resolveComponentDirStrict` 多命中改 `rankDirsByNaming(hits)[0]`（规范 c- 优先 / 任务号垫底）；`playground-tools.js#writeComponentFile` 写 `declare.json` 前经 `normalizeDeclareComponentId` **归一 + WARN**（**不是抛错** —— 存量 138 条污染若抛错会让 AI 修复全线失败）。实测：任务号查/规范 ID 查均返回规范目录；writable[0] 为规范目录。
 
-## 生成链路与微码契约
-- Phase2：Figma→预览/资源→Vision/LayoutReviewer/StyleMapper→子组件规划→MicrocodeEngineer→L0-B→重试/发布。
-- 微码产物：`package/index.vue`、`package/components/*.vue`、同级 `resources/styles/index.less`；主组件样式引 `../resources/styles/index.less`，子组件引 `../../resources/styles/index.less`。
-- `downloadStatus` 契约：`buildVarToMapping` 只收 `downloadStatus==='success'`；缺字段会导致资源校验静默假通过。勿放宽为兼容，否则破坏与 `injectResourceImports` 的事实源一致性。
-- `effectiveMapping` 必须在主干作用域、内层箭头函数定义前；否则易出现 `ReferenceError` 或校验假通过。
-- 常错签名：`validateVueScriptSemantics(content, filePath='', opts={})` 返回 `{issues, content}`；`injectResourceImports(content, mapping, resourceRelBase, diag)` 的 `resourceRelBase` 必须带尾斜杠。
-- `implicitlyDeclared` 只包含 success 资源变量；missing 容器臆造名必须 fail-closed。
-- AI engine 多为 ESM `.js`；改后做 acorn 解析、动态 import、冒烟和关键符号 Grep（至少 1 定义 + 1 调用）。
+## 已固化的门禁 / 根因
+- **L0-B 确定性 fail-closed 门禁**（`code-structure-validator.js`）：CODE-021 子组件死代码（import 但模板 0 处 `<X>`）、CODE-022 资源未挂（词边界计数 + 剔注释）、CODE-020 反向类名不命中。
+- **index.vue 内联渲染**（device-0quu3hqa 实锤）：模板段内联手写 DOM，脚本段无条件 import 全部子组件 → 7 个死 import。检查手法 `grep -cE "<(子组件名)" index.vue` = 0。子组件文件路径由 `detectSubComponents`（resource-mounter.js:2477）从脚本段 import 提取 → 模板/脚本/文件名三者由不同 LLM chunk 各自决定，天然不一致。
+- **确定性子组件命名**（`section-tree.js#assignSectionComponentNames`，2026-09-10 2b8a60b）：给 leaf section 分配确定性 PascalCase 名（**type 优先**稳定映射 + 序号去重），`buildSubComponentNamingGuidance` 输出「强制名称」替代「建议名列表」。**坑**：`resp.includes('标签')` 会误命中「数据统计指标区（数字+标签+趋势）」→ type 必须优先于 responsibility 关键词，关键词用「标签页」/「切换栏」精确匹配。
+- **结构树单一事实源**（R1，2026-09-10 a0f9e6a）：`buildLayoutSkeleton(layoutStructure, planSections)` 优先用 planner 的 `effectiveSections`（`resolvePlanSections(input)` 统一解析 `generationInput.componentPlan`→`subComponentPlan`），用 `formatSectionTreeForPrompt` 格式化；下游模板段/脚本段/样式段三个调用点不再从 layoutStructure 重新推断。`formatSectionTreeForPrompt` 的 `formatOne` 已加 layout 方向（非 vertical 标注）。
+- **LESS-COMPILE-001**：`common.less` 漏 `}`，治本 `less-compile-gate.js` + `file-writer.js` 自愈。
+- **`pruneRedundantFields` 误删 Auto Layout 属性**（待修）；IMAGE `imageRef` 不可误删。
+- 高度坍塌：宿主非 flex → 根 `flex:1` 失效；`resource-mounter.js` 规则②豁免组件根。
+- **COMP-001 fail-open**：`section-coverage-guard.js` 检测器异常走 WARN。
+- **微码契约**：`injectResourceImports` 的 `resourceRelBase` 带尾斜杠；import 去重正则**禁用尾部 `.*$`/`\s`**；`post-process.js` 改前先 grep 消费方。
+- **ID 双形态**：`user_ai_configs.userId`/`components.creatorId` 并存 ObjectId 与门户 UID → 聚合必须双候选键（`admin.service.ts` `configMap:183` 仍单键待修）。
 
-## 快照、预览与运行时
-- 快照重校验：`POST /api/tasks/:sessionId/code-snapshots/:revision/validate`；权威诊断在 `task.result.codeValidationResult` / `lessCompileGate.diagnostics` / `runtimeGate.issues`。
-- 预览优先读快照 `temp-components/.task-code-snapshots/{sessionId}/revisions/{revision}/`，其次 workspace。workspace 成品可能被 DemoService 自动修复，查生成态要看 `temp-components/<gid>/<cid>/` 或快照。
-- `publishToWorkspace` 候选源必须含 `package/`；temp 被清时回退快照；从快照发布走 tmpdir 副本；发布目标目录需排除。
-- generate 模式运行时门禁曾把 `RUNTIME-004 render-error` 降级 warning 后发布；确定性 `is not defined`/`Cannot read properties of undefined` 应升级 BLOCK。
+## AI 模型 / 修复链路
+- **不带 config 的入口**（Playground 修改器、mc-spec AI 修复）走 `resolveTextConfig({})` → 由 `ai-defaults.js#resolveSavedSlot(role)` 完整解析（binding 降维 → legacy 回退，mtime 缓存）。新增此类入口必须验证落到该兜底。
+- temperature 不硬编码；`playground-agent-graph.js` 有 `TEMPERATURE_LOCKED_MODELS` 去温度重试。
+- **AI 修复假成功三因**：配置错配（baseURL 空+model 硬编码）、temperature 400、提示词缺「缺字段补默认值、不要反问」。agent 失败返 HTTP 200 + `success:false`，前端必须判。
 
-## 已知根因与治本
-- LESS-COMPILE-001：`common.less` 根选择器漏 `}`；治本在 `less-compile-gate.js` 加自愈、`file-writer.js` 写盘自愈、phase2 如实回写 terminalError。
-- **快照冻结自愈前坏版（2026-09-08 mc-max-...06cfa312 实锤）**：`microcode-engineer.writeFiles` 写盘门禁自愈（SFC style 括号补全/Tab 骨架等）只写磁盘**不回写内存 files map** → 候选快照源 `finalTruthFiles` 仍是自愈前坏版（index.vue style 漏 `}`），而 workspace 发布从磁盘复制拿到自愈版 → 「TaskDetail 走快照源预览空白/LESS 编译失败、workspace 源可看」。治本在统一终态落盘后从磁盘回读 `finalTruthWritten` 回写 map（microcode-engineer.js R2，~6090 行）。
-- **post-process.js 契约劈叉（2026-09-08 实锤）**：`validateContainerSize` 必须返回 `{code,warnings,fixed}`（auto-fix），`validateResourceUsage` 返回 `{code,warnings}`——`resource-mounter.postProcessIndexVue`(T06/T07) 与 code-validator/microcode-engineer/vue3-engineer 均按此解构。若改纯校验返回 `{valid,errors}` 会在 T06 处 `fixedCode` undefined → `assembleIndexVue` 返回 undefined → `generateIndexVue:280` 崩 `Cannot read properties of undefined (reading 'length')`。改 post-process 前先全仓 grep 消费方。
-- 高度坍塌：宿主 `.pannel-content` 非 flex，根 `flex:1` 失效；`resource-mounter.js` 规则②对组件根 `.xxx-root` 豁免 height→flex 改写。
-- 资源去重：GROUP 无 fills 时用 `generateContainerSignature` 子树结构签名；IMAGE fill 的 imageRef 不能被 `pruneRedundantFields` 误删。
-- TEXT-001：同一数组元素内文本字段顺序不等于兄弟渲染顺序，`detectTextOrderDrift` 需跳过。
-- 定宽/定高区块：显式 px 尺寸 + `flex-grow` 归一为 `flex:0 0 auto`，避免尺寸被撑破。
-- deepseek 空响应：deepseek 推理模型默认 `thinkingType:'disabled'`；前端 payload 陈旧配置可旁路服务端文件，resolveProvider 需模型名级兜底。
-- import 去重正则禁用尾部 `.*$` 和 `\s` 跨换行，避免二次 `injectResourceImports` 吞掉 `vue/echarts` import。
-
-## 测试与构建
-- backend-node Jest 既有失败基线：多套件因 `import.meta`、`roles-request-context`、`config.service` 等失败；判断回归需与基线 FAIL 集合比对。
-- 单测稳定参数：`NODE_OPTIONS="--max-old-space-size=1536" npx jest <spec> --runInBand --forceExit`，`--runInBand` 与 `--maxWorkers` 不并用。
-- 本地 Java 无 JDK 时可用 `/tmp/jdksetup` 的 JDK17+Maven3.9.6；fat jar 打包 `mvn -pl mvgo-app -am package -DskipTests`。
-
-## 工作约定
-- 中文技术化，回答给根因、文件/行号、验证证据。实质修改后构建、确认 dist、重启/探活、冒烟验证、追加当日日志。
-- commit 标题含 `#code#`/`#reqcode#`/`#note#[类型] 描述`，AI 生成加 `#ai-coding#`。
-- 两类生成失败：服务中断看进程/日志；质量门禁 BLOCK 看 `tasks.json`、`lessCompileGate`、`codeValidationResult`。
+## 测试 / 约定
+- 单测 `NODE_OPTIONS="--max-old-space-size=1536" npx jest <spec> --runInBand --forceExit`，cwd 必须在 backend-node。既有基线失败含 `import.meta`（`backend-root.js`）、`roles-request-context`、`config.service` → 判回归比对基线 FAIL 集合。
+- **前端 `core/http.js` 两坑**：① `request()` 不自动解包 → 取 `res.data.*`；② `resolveUrl()` 对 `/` 开头原样透传 → 必须写全路径 `'/api/xxx'`。
+- commit `#code#`/`#reqcode#`/`#note#[类型] 描述`，AI 生成加 `#ai-coding#`；**绝不用 `git add -A`**，只显式列路径。
+- 中文技术化回答：根因 + 文件:行号 + 验证证据（表格化）。

@@ -12,6 +12,10 @@
 
 import { formatFigmaStyleData } from '../../utils/figma-format.js';
 import { formatResourceMapping } from '../../utils/resource-mapping-formatter.js';
+import {
+  collectLeafSections,
+  formatSectionTreeForPrompt,
+} from '../../utils/section-tree.js';
 
 /**
  * 构建上下文裁决约束文本（与 microcode-engineer 对齐）。
@@ -114,6 +118,7 @@ export function buildVue3CodePrompt(input, chunkSpec, options = {}) {
       requiredSubComps,
       internalSubcomponents,
     } = options.resolveSubComponentPlan(input);
+    const leafSections = collectLeafSections(effectiveSections);
 
     // vue3 规范注入（截断防止 prompt 过大）
     const spec = (key, max) => {
@@ -341,27 +346,12 @@ ${interactions && interactions.length > 0 ? interactions.map((it) => `- **${it.t
 ${
   effectiveSections.length > 0
     ? subPlan.isForced
-      ? `- 🚨 **强制子组件拆分（subcomponent-planner 规划产物）**：本组件**必须**拆分为 **${effectiveSections.length + (internalSubcomponents?.length || 0)}** 个独立子组件文件${internalSubcomponents?.length > 0 ? `（${effectiveSections.length} 个 section 级 + ${internalSubcomponents.length} 个内部子组件）` : ''}。文件名和组件名由你根据语义自行命名（PascalCase），但**数量和对应关系不得缩减**：
-${effectiveSections
-  .map((sec, idx) => {
-    let line = `  ${idx + 1}. \`${sec.id}\` — ${sec.responsibility}${sec.title ? `（原标题「${sec.title}」）` : ''}${sec.elementCount ? `，含 ${sec.elementCount} 个元素` : ''}`;
-    if (sec.complexityScore !== undefined) {
-      line += `，复杂度 ${sec.complexityScore}`;
-    }
-    if (sec.internalSubcomponents && sec.internalSubcomponents.length > 0) {
-      line += `\n     → 该 section 需进一步拆分为 ${sec.internalSubcomponents.length} 个内部子组件：`;
-      sec.internalSubcomponents.forEach((sub, subIdx) => {
-        line += `\n        ${subIdx + 1}. ${sub.responsibility} (${sub.reason})`;
-        if (sub.props?.length > 0) line += ` [Props: ${sub.props.join(', ')}]`;
-      });
-    }
-    return line;
-  })
-  .join('\n')}
-   **关键约束**：每个 section 必须对应一个独立的 \`package/components/{YourName}.vue\` 文件${internalSubcomponents?.length > 0 ? '；每个内部子组件也是独立的 \`package/components/{YourName}.vue\` 文件' : ''}；\`package/index.vue\` 必须 import 所有 section 级子组件${internalSubcomponents?.length > 0 ? '；section 级子组件 import 其内部子组件' : ''}；严禁合并或省略。
+      ? `- 🚨 **强制子组件拆分（subcomponent-planner 规划产物）**：本组件**必须**拆分为 **${leafSections.length + (internalSubcomponents?.length || 0)}** 个独立子组件文件${internalSubcomponents?.length > 0 ? `（${leafSections.length} 个叶子 section + ${internalSubcomponents.length} 个内部子组件）` : ''}。**布局容器不单独生成 .vue**，必须按下方树在父模板内组装：
+${formatSectionTreeForPrompt(effectiveSections)}
+   **关键约束**：每个**叶子** section 必须对应一个独立的 \`package/components/{YourName}.vue\` 文件；标「容器」的节点只做纵向 flex 包裹，禁止为其单独建文件、禁止把 children 打平到根模板。\`package/index.vue\` 必须按树组装（容器的子组件出现在该容器对应的 DOM 内，或由 index 用 column 直接包住这些子组件）。
 ${internalSubcomponents?.length > 0 ? `   **内部子组件说明**：图表子组件使用 echarts 渲染，根元素设置 width: 100%; height: 100%，禁止 margin。\n` : ''}`
       : `- 💡 **建议拆分子组件（非强制）**：以下 section 建议你按功能拆为独立 \`package/components/*.vue\`，可酌情合并：
-${effectiveSections.map((sec) => `  - \`${sec.id}\` — ${sec.responsibility}${sec.title ? `（原标题「${sec.title}」）` : ''}${sec.complexityScore !== undefined ? `，复杂度 ${sec.complexityScore}` : ''}`).join('\n')}\n`
+${formatSectionTreeForPrompt(effectiveSections)}\n`
     : ''
 }
 - defineProps({...}) 对象语法带类型与默认值；defineEmits([...])

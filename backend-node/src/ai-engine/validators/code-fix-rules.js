@@ -771,8 +771,9 @@ export function registerBuiltinFixRules(pipeline, engineer, context = {}) {
     applyTo: VUE,
     fix: (content) => engineer._quoteBareObjectKeysInVue(content),
   });
-  // 🛡️ 治本 E（2026-09-10）：v-if 与 v-for 同元素 → 拆为 template v-for + 内层 v-if。
+  // 🛡️ 治本 E（2026-09-10）：v-if 与 v-for 同元素 → v-if 折叠进 v-for 数据源（filter 改写，DOM 不变）。
   // 治本对象：env 样本 SubT.vue 同元素共存导致 runtime `Cannot read properties of undefined`。
+  // 统一编号中心：RUNTIME-STATIC-002（预防 RUNTIME-009/010），见 validators/runtime-static-rules.js。
   pipeline.register({
     id: 'VUE-VIF-VFOR-001',
     name: 'v-if/v-for 同元素拆分（Vue3 铁律）',
@@ -1097,6 +1098,7 @@ export function registerBuiltinFixRules(pipeline, engineer, context = {}) {
   // （ConsSection.vue:127 实测 `var(--fontSize, var(--fontSize))`）。改写为保留首个回退值：
   // `calc(var(--x, DEF) * n)`，把第二个 `var(--x)` 还原为合理默认值（缺失时用 14px）。
   // 纯正则，离线可验证；单条失败由 CodeFixPipeline 捕获跳过。
+  // 统一编号中心：RUNTIME-STATIC-003（预防 RUNTIME-005 尺寸塌陷），见 validators/runtime-static-rules.js。
   pipeline.register({
     id: 'CSS-CALC-SELFREF-001',
     name: 'calc 默认值自引用去掉双写',
@@ -1104,12 +1106,13 @@ export function registerBuiltinFixRules(pipeline, engineer, context = {}) {
     applyTo: /\.(vue|less|css)$/i,
     fix: (content) => {
       if (typeof content !== 'string') return content;
-      const re = /calc\(\s*var\((--[\w-]+)\s*,\s*var\(\1\)\s*\)\s*\*([^)]+)\)/g;
+      // 匹配 `calc(var(--x, var(--x)) * n)`：首个 var 双写自身默认值
+      const re = /calc\(\s*var\(\s*(--[\w-]+)\s*,\s*var\(\s*\1\s*\)\s*\)(\s*\*[^(]+\))/g;
       let changed = false;
-      const out = content.replace(re, (_m, name, factor) => {
+      const out = content.replace(re, (_m, name, tail) => {
         changed = true;
-        // 仅修正自引用双写；保留外层 calc 结构，默认值缺失时给 14px
-        return `calc(var(${name}, 14px) * ${factor})`;
+        // 改写为保留首个回退值（缺失时给 14px），乘数部分原样保留
+        return `calc(var(${name}, 14px)${tail}`;
       });
       return changed ? out : content;
     },

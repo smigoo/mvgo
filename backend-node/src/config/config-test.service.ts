@@ -535,10 +535,15 @@ export class ConfigTestService {
     const reachable = text.success || vision.success || reasoning.success;
     if (reachable && opts?.model) {
       const outTok = opts.outputTokens;
-      const identifiedOpts: { source: string; outputTokens?: number } = { source: 'test' };
+      const identifiedOpts: { source: string; outputTokens?: number; vision?: boolean } = { source: 'test' };
       if (typeof outTok === 'number' && Number.isFinite(outTok) && outTok > 0) {
         identifiedOpts.outputTokens = outTok;
       }
+      // 🆕 持久化视觉能力实测结论（权威事实源）。
+      // 组件生成依赖截图/Figma 图像理解，保存闸门与生成闸门都以此判定，
+      // 不再依赖任何模型名白名单。连通但视觉调用失败 → 明确记为 vision:false，
+      // 使「deepseek 这类纯文本模型被当成视觉模型」在保存/生成前即被拦下。
+      identifiedOpts.vision = !!vision.success;
       markModelCapabilityIdentified(opts.model, identifiedOpts);
     }
     return { text, vision, reasoning };

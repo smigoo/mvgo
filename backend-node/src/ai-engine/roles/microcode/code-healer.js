@@ -1443,6 +1443,76 @@ export function healThemeMixinVarRefs(content, themeVarsContent) {
   return changed ? out : content;
 }
 
+/**
+ * 🛡️ M5-6 治本（2026-09-10）：业务 .less 顶层注入 theme-vars 变量声明。
+ *
+ * 背景：theme-vars.less 的变量定义在 .common() 等 mixin 闭包内，顶层作用域不可见，
+ * 于是 healThemeMixinVarRefs 会把业务样式的 `@fontSize` 改写成 `var(--fontSize, <def>)`。
+ * 但 file-writer 已把 theme-vars 归一为 `@fontSize: var(--fontSize)`，def 也随之变成
+ * `var(--fontSize)` → 产出 **`var(--fontSize, var(--fontSize))`**（fallback 指向自己），
+ * 既绕过 LESS 变量层，又被 mc-check v1.0.20 的 M5-6 判「声明了但未使用 @fontSize」→
+ * 实测 106 个合法命名组件里 68 个因此不允许上线。
+ *
+ * 解法：**不替换引用，改为在业务 .less 顶层注入同名声明**（值原样取自 theme-vars）。
+ * 注入后 healThemeMixinVarRefs 的 `localDeclared` 命中 → 自动跳过替换 → 保留 `@fontSize`
+ * （合规）；同时 LESS 编译不再报 variable undefined（原自愈的初衷照旧满足）。
+ * 编译产物 CSS 与替换方案**完全等价**，不改变运行时行为（已用三样例 + less 4.9.0 验证）。
+ *
+ * @param {string} lessContent 业务样式源（common.less 等，不含 themes/）
+ * @param {string} themeVarsContent theme-vars.less 内容
+ * @returns {string} 注入后的内容（无缺失时原样返回）
+ */
+export function injectThemeVarDeclsForLess(lessContent, themeVarsContent) {
+  const source = String(lessContent || '');
+  const decls = extractThemeVarDecls(themeVarsContent);
+  if (!decls.size) return source;
+
+  // 业务文件顶层已声明的变量不再注入（避免重复声明）
+  const local = new Set();
+  for (const m of source.matchAll(/^\s*@([\w-]+)\s*:/gm)) local.add(m[1]);
+
+  // 业务文件引用到的变量（排除 at-rule 关键字）
+  const refs = new Set();
+  for (const m of source.matchAll(/@([\w-]+)/g)) {
+    if (LESS_AT_RULES.has(m[1])) continue;
+    refs.add(m[1]);
+  }
+
+  const missing = [];
+  for (const name of refs) {
+    if (local.has(name) || !decls.has(name)) continue;
+    missing.push(name);
+  }
+  if (!missing.length) return source;
+
+  const decl = missing.map((n) => `@${n}: ${decls.get(n)};`).join('\n');
+  return `${decl}\n${source}`;
+}
+
+/** LESS at-rule 关键字：出现在 `@xxx` 位置但不是变量引用，注入时必须排除 */
+const LESS_AT_RULES = new Set([
+  'import', 'import-once', 'media', 'supports', 'keyframes', 'font-face',
+  'charset', 'namespace', 'page', 'document', 'extend', 'mixin', 'include',
+  'if', 'else', 'for', 'each', 'while', 'function', 'return', 'ruleset',
+  'plugin', 'content', 'arguments', 'rest', 'screen', 'print',
+]);
+
+/**
+ * 提取 theme-vars.less 全部变量声明（mixin 闭包内 + 顶层），name → 声明值（原样，先到先得）。
+ * 注意：注入值必须原样取自 theme-vars（如 `@colorText: var(--colorTextBase)`），
+ * 不能一律写成 `var(--name)`，否则非 fontSize 变量会被注入错误映射。
+ */
+function extractThemeVarDecls(themeVarsContent) {
+  const map = new Map();
+  for (const raw of String(themeVarsContent || '').split('\n')) {
+    // 剥行尾 // 注释（2026-09-08 实锤：不剥会把注释吞进变量值 → LESS 解析失败）
+    const line = raw.replace(/\/\/.*$/, '').trim();
+    const m = line.match(/^@([\w-]+)\s*:\s*(.+?)\s*;?\s*$/);
+    if (m && !map.has(m[1])) map.set(m[1], m[2]);
+  }
+  return map;
+}
+
 /** 提取 theme-vars.less 中各 mixin（.common()/.theme-dark()/.theme-light()）闭包内的变量声明表（先到先得） */
 function extractMixinScopedVars(themeVars) {
   const map = new Map();
@@ -1853,45 +1923,43 @@ export function stripVIfOnVFor(vueContent) {
   if (!tplMatch) return vueContent;
   const tplBody = tplMatch[1];
 
-  // 匹配同时含 v-if 与 v-for 的单个开标签（含自闭合）
+  // 仅改写「开标签本身」的属性，不触碰 DOM 结构与子节点：
+  // 把 `v-if="cond"` 折叠进 `v-for="x in list"` 的数据源 → `v-for="x in list.filter(...)"`。
+  // 这是最小侵入、绝不破坏 DOM 树的改写（Vue3 官方推荐做法之一）。
   const tagRe = /<([a-zA-Z][\w-]*)\b([^>]*?)\/?>/g;
   let changed = false;
   const newBody = tplBody.replace(tagRe, (full, tag, attrs) => {
     const hasVIf = /\bv-if\s*=/.test(attrs);
     const hasVFor = /\bv-for\s*=/.test(attrs);
     if (!hasVIf || !hasVFor) return full;
-    // 已是 <template> 也不该同时挂（Vue3 不允许 template 上 v-if），仍拆开
-    if (tag === 'template') return full; // 不处理（极少出现，交门禁拦）
+    if (tag === 'template') return full; // template 上不共存，极少；交门禁拦
 
-    // 抽取 v-for / v-if 表达式
-    const vForM = attrs.match(/\bv-for\s*=\s*["']([^"']*)["']/);
-    const vIfM = attrs.match(/\bv-if\s*=\s*["']([^"']*)["']/);
+    const vForM = attrs.match(/\bv-for\s*=\s*(?:"([^"]*)"|'([^']*)')/);
+    const vIfM = attrs.match(/\bv-if\s*=\s*(?:"([^"]*)"|'([^']*)')/);
     if (!vForM || !vIfM) return full;
-    const vForExpr = vForM[1];
-    const vIfExpr = vIfM[1];
+    const vForExpr = (vForM[1] ?? vForM[2] ?? '').trim();
+    const vIfExpr = (vIfM[1] ?? vIfM[2] ?? '').trim();
 
-    // 其余属性（去掉 v-if / v-for 自身）
-    const restAttrs = attrs
-      .replace(/\bv-if\s*=\s*["'][^"']*["']/, '')
-      .replace(/\bv-for\s*=\s*["'][^"']*["']/, '')
-      .replace(/\s{2,}/g, ' ')
-      .trim();
+    // 拆出「循环变量」与「数据源表达式」： "x in list" / "(x, i) in list"
+    const inIdx = vForExpr.search(/\bin\b/);
+    if (inIdx < 0) return full;
+    const left = vForExpr.slice(0, inIdx).trim();
+    const source = vForExpr.slice(inIdx + 2).trim();
+    const loopVarM = left.match(/[([]?\s*([\w$]+)/);
+    const loopVar = loopVarM ? loopVarM[1] : null;
+    if (!loopVar || !source) return full;
 
-    // 提取循环变量名（"item in list" / "(item, i) in list"）
-    const inM = vForExpr.match(/\bin\s+([\w$]+)\s*$/) || vForExpr.match(/^\s*\(?([\w$]+)/);
-    const loopVar = inM ? inM[1] : null;
+    // 把 v-if 条件里的循环变量替换为过滤参数（保持语义等价）
+    const param = loopVar;
+    const filterSource = `${source}.filter((${param}) => ${vIfExpr})`;
+    const newVFor = `${left} in ${filterSource}`;
 
-    // 改写：外层 template v-for（带 key），内层原标签带 v-if 与其余属性
-    // key 提取：尝试从 v-for 的 "item in list" 推导 key（用索引或 item.id）
-    const keyExpr = loopVar ? `${loopVar}.id ?? ${loopVar}` : 'undefined';
-    const openTag = `<${tag}${restAttrs ? ' ' + restAttrs : ''} v-if="${vIfExpr}">`;
-    const closeTag = `</${tag}>`;
+    // 用新 v-for 替换原 v-for，并移除 v-if（同元素不再共存）
+    let newAttrs = attrs
+      .replace(/\bv-for\s*=\s*(?:"[^"]*"|'[^']*')/, `v-for="${newVFor}"`)
+      .replace(/\s*\bv-if\s*=\s*(?:"[^"]*"|'[^']*')/, '');
     changed = true;
-    return (
-      `<template v-for="${vForExpr}" :key="${keyExpr}">\n` +
-      `  ${openTag}${closeTag}\n` +
-      `</template>`
-    );
+    return `<${tag}${newAttrs}>`;
   });
 
   if (!changed) return vueContent;

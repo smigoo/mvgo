@@ -16,7 +16,7 @@ import { readdir, stat, mkdir, readdir as readdirAsync } from 'fs/promises'
 import componentResolver from '../utils/component-resolver.js'
 import { createLogger } from '../logger/index.js'
 
-const { resolveComponentDir } = componentResolver
+const { resolveComponentDirStrict } = componentResolver
 
 const logger = createLogger('snapshot-manager')
 
@@ -130,7 +130,7 @@ function getSnapshotsBaseDir(componentDir) {
  * 检查是否已有初始快照
  */
 export async function hasInitialSnapshot(componentId) {
-  const componentDir = await resolveComponentDir(componentId)
+  const componentDir = await resolveComponentDirStrict(componentId)
   if (!componentDir) return false
   const initialDir = path.join(getSnapshotsBaseDir(componentDir), INITIAL_DIR)
   try {
@@ -146,7 +146,7 @@ export async function hasInitialSnapshot(componentId) {
  * 如果已存在初始快照则跳过（不覆盖）
  */
 export async function takeInitialSnapshot(componentId) {
-  const componentDir = await resolveComponentDir(componentId)
+  const componentDir = await resolveComponentDirStrict(componentId)
   if (!componentDir) {
     throw new Error(`组件目录不存在: ${componentId}`)
   }
@@ -175,7 +175,7 @@ export async function takeInitialSnapshot(componentId) {
  * @returns {{ success: boolean, timestamp: string, snapshotDir: string }}
  */
 export async function takeModificationSnapshot(componentId) {
-  const componentDir = await resolveComponentDir(componentId)
+  const componentDir = await resolveComponentDirStrict(componentId)
   if (!componentDir) {
     throw new Error(`组件目录不存在: ${componentId}`)
   }
@@ -211,7 +211,7 @@ export async function takeModificationSnapshot(componentId) {
  * 单步后退 — 从最新修改快照恢复，并删除该快照
  */
 export async function undoLastModification(componentId) {
-  const componentDir = await resolveComponentDir(componentId)
+  const componentDir = await resolveComponentDirStrict(componentId)
   if (!componentDir) {
     throw new Error(`组件目录不存在: ${componentId}`)
   }
@@ -253,7 +253,7 @@ export async function undoLastModification(componentId) {
  * 全量恢复 — 从初始快照恢复，清空所有修改快照
  */
 export async function restoreToInitial(componentId) {
-  const componentDir = await resolveComponentDir(componentId)
+  const componentDir = await resolveComponentDirStrict(componentId)
   if (!componentDir) {
     throw new Error(`组件目录不存在: ${componentId}`)
   }
@@ -283,7 +283,7 @@ export async function restoreToInitial(componentId) {
  * 列出所有修改快照
  */
 export async function listModifications(componentId) {
-  const componentDir = await resolveComponentDir(componentId)
+  const componentDir = await resolveComponentDirStrict(componentId)
   if (!componentDir) {
     return []
   }

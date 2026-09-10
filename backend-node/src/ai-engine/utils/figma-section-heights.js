@@ -13,8 +13,11 @@
  *     由 mounter 规则② 加权改写（`flex: <系数> 1 0`），确定性治本。系数来自 A4 归一化
  *     （avg=1 量纲，如 0.978 / 1.061），与 FLEX-005 校验器系数阈值兼容。
  *
- * 该函数为纯函数，不依赖任何外部模块，可单独单测（避免拖入 langchain 链）。
+ * 该函数为纯函数，可单独单测（避免拖入 langchain 链）。
+ * 🛡️ A′ Phase 5：plan 走叶子 section，布局容器不占高度槽。
  */
+
+import { collectLeafSections, findSectionById } from './section-tree.js';
 
 /**
  * 取 SFC 根 <template> 内容（跳过 #header-right / v-slot 等具名插槽）。
@@ -69,11 +72,14 @@ export function buildSectionHeightsMap(modelFiles, layoutStructure, params = {})
       return 0;
     };
     let orderedSections = null;
-    if (Array.isArray(plan?.effectiveSections) && plan.effectiveSections.length >= 2) {
-      orderedSections = plan.effectiveSections.map((eff) => {
-          const sec = rawSections.find(
-            (s) => String(s?.id || '') === String(eff?.id || ''),
-          );
+    const planLeaves = collectLeafSections(plan?.effectiveSections);
+    if (planLeaves.length >= 2) {
+      orderedSections = planLeaves.map((eff) => {
+          const sec =
+            findSectionById(rawSections, eff?.id) ||
+            rawSections.find(
+              (s) => String(s?.id || '') === String(eff?.id || ''),
+            );
           if (!sec) return null;
           // 🎯 量纲修复（2026-09-09）：pxOf 返回 A4 归一化 flexGrow 系数（avg=1 量纲，
           // 如 0.978/1.061）。旧实现 `pxOf(sec) || Math.round(layoutMetadata.height)` 在
@@ -85,8 +91,8 @@ export function buildSectionHeightsMap(modelFiles, layoutStructure, params = {})
           return px > 0 ? px : null;
         })
         .filter((px) => px > 0);
-      // 有 eff 条目对不上原 section 时数量会缩水——必须全对齐才可信
-      if (orderedSections.length !== plan.effectiveSections.length) {
+      // 有叶子对不上原 section 时数量会缩水——必须全对齐才可信
+      if (orderedSections.length !== planLeaves.length) {
         orderedSections = null;
       }
     }

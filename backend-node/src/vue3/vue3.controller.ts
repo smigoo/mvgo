@@ -172,7 +172,7 @@ export class Vue3Controller implements OnModuleInit {
     }
 
     // 检查并发槽位
-    const availableSlots = await this.queueService.getAvailableSlots();
+    const availableSlots = await this.queueService.getAvailableSlots(userId);
     if (availableSlots <= 0) {
       this.logger.log(`[Vue3] 无可用并发槽位，任务进入等待队列: ${sessionId}`);
       const queuedTask = this.tasksService.createTask(sessionId, {
@@ -207,7 +207,7 @@ export class Vue3Controller implements OnModuleInit {
     }
     
     // 注册任务为运行中
-    await this.queueService.registerRunning(sessionId);
+    await this.queueService.registerRunning(sessionId, userId);
 
     // 配额充足：正常启动任务
     const task = this.tasksService.createTask(sessionId, {

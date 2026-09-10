@@ -10,27 +10,157 @@
 import { getProviderPool } from './provider-pool.js'
 import { isReasoningModel } from './model-config.js'
 import { createLogger } from '../logger/index.js'
+import fs from 'node:fs'
+import path from 'node:path'
+import { dataDir } from '../../config/backend-root.js'
 
 const logger = createLogger({ name: 'ai-defaults' })
+
+/**
+ * 从 data/ai-config.json 读已保存的 AI 凭证（2026-09-10）
+ *
+ * 背景：Playground AI 修改器 / 规范检查修复等入口只用 TEXT_DEFAULTS（读环境变量），
+ * 而用户的 Key 存在 ai-config.json 里、只在「跑生成任务」时才被注入 process.env，
+ * 服务一重启就丢 → 这些入口报「API Key 未配置」并秒失败。这里做服务端兜底读取。
+ */
+// ── 已保存配置读取（data/ai-config.json）────────────────────────────────────
+// 缓存按 mtime 失效：配置页改完配置无需重启后端即可生效。
+let aiConfigCache = null
+let aiConfigMtime = 0
+function readAiConfig() {
+  try {
+    const p = path.join(dataDir, 'ai-config.json')
+    const st = fs.statSync(p)
+    if (aiConfigCache && st.mtimeMs === aiConfigMtime) return aiConfigCache
+    aiConfigCache = JSON.parse(fs.readFileSync(p, 'utf8'))
+    aiConfigMtime = st.mtimeMs
+  } catch {
+    if (!aiConfigCache) aiConfigCache = {}
+  }
+  return aiConfigCache
+}
+
+const numOrUndef = (v) =>
+  v !== undefined && v !== null && v !== '' && !Number.isNaN(Number(v)) ? Number(v) : undefined
+
+/**
+ * 取「当前生效配置」的某个角色槽（text / vision）的完整参数。
+ *
+ * 背景（2026-09-10 实锤）：Playground AI 修改器 / 规范检查 AI 修复 / 预览渲染修复等入口
+ * 调用 resolveTextConfig({}) 不传任何 config，而用户的真实配置只存在于 data/ai-config.json
+ * （生成任务路径由前端传入 config，这些入口没有）→ 之前只有 apiKey 做了文件兜底，
+ * baseURL 为空、model 用硬编码 claude-opus-4-8 → 用 deepseek 的 key 打 Anthropic 端点，
+ * 报 "temperature is not supported for claude-opus-4-8"。
+ *
+ * 这里做完整的槽位解析（模型库 binding 降维优先，回退 legacy 扁平字段），
+ * 与 config.service.ts#resolveBindingToLegacy 同语义，保证「UI 显示什么就用什么」。
+ *
+ * @param {'text'|'vision'} role
+ * @returns {{apiKey:string, baseURL:string, model:string, providerType:string, temperature?:number, thinkingType?:string, providers:Array, pickStrategy?:string, modelMode?:string}}
+ */
+function resolveSavedSlot(role = 'text') {
+  const cfg = readAiConfig() || {}
+  const modelMode = cfg.modelMode === 'unified' ? 'unified' : 'separate'
+  const slot = modelMode === 'unified' ? 'unified' : role
+  const out = {
+    apiKey: '',
+    baseURL: '',
+    model: '',
+    providerType: 'auto',
+    temperature: undefined,
+    thinkingType: undefined,
+    providers: [],
+    pickStrategy: cfg.pickStrategy,
+    modelMode,
+  }
+
+  const models = Array.isArray(cfg.models) ? cfg.models : []
+  const byId = new Map()
+  for (const m of models) if (m && m.id) byId.set(m.id, m)
+  const binding = cfg.binding || {}
+  const b = binding[slot]
+  const primaryModel = b?.primaryId ? byId.get(b.primaryId) : null
+
+  if (primaryModel) {
+    out.apiKey = primaryModel.apiKey || ''
+    out.baseURL = primaryModel.baseURL || ''
+    out.model = primaryModel.model || ''
+    out.providerType = primaryModel.providerType || 'auto'
+    out.temperature = numOrUndef(primaryModel.temperature)
+    out.thinkingType = primaryModel.thinkingType || undefined
+  } else {
+    // 回退 legacy 扁平字段（未做模型库绑定 / 旧结构）
+    out.apiKey = cfg[`${slot}ApiKey`] || ''
+    out.baseURL = cfg[`${slot}BaseURL`] || ''
+    out.model = cfg[`${slot}Model`] || ''
+    out.providerType = cfg[`${slot}ProviderType`] || 'auto'
+    out.temperature = numOrUndef(cfg[`${slot}Temperature`])
+  }
+
+  // 池成员：unified 槽的 poolIds 参与所有角色，separate 槽各自独立
+  const poolIds = Array.isArray(b?.poolIds) ? b.poolIds : []
+  out.providers = poolIds
+    .map((id) => byId.get(id))
+    .filter(Boolean)
+    .map((m) => ({
+      id: m.id,
+      name: m.name,
+      apiKey: m.apiKey,
+      baseURL: m.baseURL,
+      model: m.model,
+      providerType: m.providerType || 'auto',
+      role: slot === 'unified' ? 'both' : slot,
+      ...(numOrUndef(m.temperature) !== undefined ? { temperature: numOrUndef(m.temperature) } : {}),
+      ...(numOrUndef(m.rpm) !== undefined ? { rpm: numOrUndef(m.rpm) } : {}),
+      ...(numOrUndef(m.tpm) !== undefined ? { tpm: numOrUndef(m.tpm) } : {}),
+      ...(numOrUndef(m.weight) !== undefined ? { weight: numOrUndef(m.weight) } : {}),
+      ...(m.thinkingType ? { thinkingType: m.thinkingType } : {}),
+    }))
+
+  return out
+}
+
 
 // 视觉任务默认配置（Preview 阶段 - 图像分析/VisualParser）
 // 使用通义千问视觉模型
 // ⚠️ A4 安全整改：apiKey 不再明文硬编码，改为运行时从 .env / 环境变量注入
 //    （MC_GEN_AI_API_KEY / VISION_API_KEY / ANTHROPIC_API_KEY）。此处仅留非密钥兜底默认。
+const _savedVision = resolveSavedSlot('vision')
 export const VISION_DEFAULTS = {
-  apiKey: process.env.MC_GEN_AI_API_KEY || process.env.VISION_API_KEY || process.env.ANTHROPIC_API_KEY || '',
-  baseURL: '',
-  model: 'qwen3.7-plus'
+  apiKey:
+    process.env.MC_GEN_AI_API_KEY ||
+    process.env.VISION_API_KEY ||
+    process.env.ANTHROPIC_API_KEY ||
+    _savedVision.apiKey ||
+    '',
+  baseURL: _savedVision.baseURL || '',
+  model: _savedVision.model || 'qwen3.7-plus',
 }
 
 // 文本任务默认配置（Figma/req 阶段 - 代码生成/审查/布局分析）
 // 使用 Claude Opus 最强模型
 // ⚠️ A4 安全整改：apiKey 不再明文硬编码，改为运行时从 .env / 环境变量注入
 //    （MC_GEN_TEXT_API_KEY / TEXT_API_KEY / ANTHROPIC_API_KEY）。此处仅留非密钥兜底默认。
+const _savedText = resolveSavedSlot('text')
 export const TEXT_DEFAULTS = {
-  apiKey: process.env.MC_GEN_TEXT_API_KEY || process.env.TEXT_API_KEY || process.env.ANTHROPIC_API_KEY || '',
-  baseURL: '',
-  model: 'claude-opus-4-8'
+  apiKey:
+    process.env.MC_GEN_TEXT_API_KEY ||
+    process.env.TEXT_API_KEY ||
+    process.env.ANTHROPIC_API_KEY ||
+    _savedText.apiKey ||
+    '',
+  baseURL:
+    process.env.MC_GEN_TEXT_ENDPOINT ||
+    process.env.TEXT_BASE_URL ||
+    process.env.ANTHROPIC_BASE_URL ||
+    _savedText.baseURL ||
+    '',
+  model:
+    process.env.MC_GEN_TEXT_MODEL ||
+    process.env.TEXT_MODEL ||
+    process.env.ANTHROPIC_MODEL ||
+    _savedText.model ||
+    'claude-opus-4-8',
 }
 
 /**
@@ -200,8 +330,11 @@ function resolveProvider(config = {}, primary = null, role = 'text') {
  * @returns {{apiKey:string, baseURL:string, model:string}}
  */
 export function resolveVisionConfig(config = {}) {
+  const saved = resolveSavedSlot('vision')
+  const hasAnyInput = Object.keys(config || {}).length > 0
+  const merged = hasAnyInput ? config : { ...config, modelMode: saved.modelMode }
   // 统一模式：vision/text 角色均改用 unified* 配置
-  const prefix = config.modelMode === 'unified' ? 'unified' : 'vision'
+  const prefix = merged.modelMode === 'unified' ? 'unified' : 'vision'
   const primary = {
     apiKey: pick(
       config[`${prefix}ApiKey`],
@@ -234,13 +367,18 @@ export function resolveVisionConfig(config = {}) {
 
   // 主配置的 temperature 跟随当前模式：统一模式读取 unifiedTemperature，分别模式读取 visionTemperature。
   // 仅显式配置时透传，否则保留 VisionAgent 默认值。
-  const temperature = config[`${prefix}Temperature`]
+  const temperature = merged[`${prefix}Temperature`] ?? saved.temperature
   if (temperature !== undefined && temperature !== null && temperature !== '') {
     primary.temperature = Number(temperature)
   }
+  if (saved.thinkingType) primary.thinkingType = saved.thinkingType
 
   // 供应商池：主配置并入池后择优 pick（向下兼容，主配置不失效）
-  const pooled = resolveProvider(config, primary, 'vision')
+  const poolConfig =
+    Array.isArray(merged.providers) && merged.providers.length
+      ? merged
+      : { ...merged, providers: saved.providers, pickStrategy: merged.pickStrategy ?? saved.pickStrategy }
+  const pooled = resolveProvider(poolConfig, primary, 'vision')
   return pooled || primary
 }
 
@@ -251,8 +389,15 @@ export function resolveVisionConfig(config = {}) {
  * @returns {{apiKey:string, baseURL:string, model:string}}
  */
 export function resolveTextConfig(config = {}) {
+  // 🆕 2026-09-10：无任何入参时（Playground / AI 修复 / 规范检查修复等入口），
+  // 用 data/ai-config.json 里当前生效的 text 槽补全 modelMode/temperature/providers，
+  // 否则会退化成「硬编码 model + 空 baseURL」的错配组合。
+  const saved = resolveSavedSlot('text')
+  const hasAnyInput = Object.keys(config || {}).length > 0
+  const merged = hasAnyInput ? config : { ...config, modelMode: saved.modelMode }
+
   // 统一模式：vision/text 角色均改用 unified* 配置
-  const prefix = config.modelMode === 'unified' ? 'unified' : 'text'
+  const prefix = merged.modelMode === 'unified' ? 'unified' : 'text'
   const primary = {
     apiKey: pick(
       config[`${prefix}ApiKey`],
@@ -284,13 +429,20 @@ export function resolveTextConfig(config = {}) {
   }
 
   // 文本温度同样跟随当前模式，并透传给供应商池/文本 Agent。
-  const temperature = config[`${prefix}Temperature`]
+  // 未显式配置时回退到已保存配置里的温度（与配置页一致）。
+  const temperature = merged[`${prefix}Temperature`] ?? saved.temperature
   if (temperature !== undefined && temperature !== null && temperature !== '') {
     primary.temperature = Number(temperature)
   }
+  if (saved.thinkingType) primary.thinkingType = saved.thinkingType
 
   // 供应商池：主配置并入池后择优 pick（向下兼容，主配置不失效）
-  const pooled = resolveProvider(config, primary, 'text')
+  // 调用方未自带 providers 时，用已保存配置的池（获得与生成管线一致的故障转移能力）
+  const poolConfig =
+    Array.isArray(merged.providers) && merged.providers.length
+      ? merged
+      : { ...merged, providers: saved.providers, pickStrategy: merged.pickStrategy ?? saved.pickStrategy }
+  const pooled = resolveProvider(poolConfig, primary, 'text')
   return pooled || primary
 }
 

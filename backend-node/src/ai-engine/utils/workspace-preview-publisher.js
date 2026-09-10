@@ -16,8 +16,8 @@ import { execFileSync } from 'child_process'
 import { dirname, join } from 'path'
 import { createLogger } from '../logger/index.js'
 import {
-  backendRoot,
   projectRoot,
+  workspaceRoot,
   customComponentsDir,
   vue3ComponentsDir,
   frontendCustomComponentsDir,
@@ -281,7 +281,7 @@ function ensureStartupCleanupScan() {
   startupCleanupScanned = true
 
   const roots = [
-    join(backendRoot, 'workspace'),
+    workspaceRoot, // 🆕 S5：单一事实源（= backend-node/workspace），不再硬编码
     resolveFrontendWorkspace(),
   ]
 
@@ -703,8 +703,7 @@ async function publishQualityPreview({
   // sessionId = outputPath 末段（temp-components/<groupId>/<sessionId>）。
   const sessionId = String(outputPath).split(/[\\/]/).filter(Boolean).pop() || ''
   const backendProbe = join(
-    backendRoot,
-    'workspace',
+    workspaceRoot, // 🆕 S5：单一事实源（= backend-node/workspace）
     target === 'vue3'
       ? join('vue3-components', groupId, resolvedComponentId)
       : join('custom-components', resolvedComponentId),
@@ -720,7 +719,7 @@ async function publishQualityPreview({
     ? join('vue3-components', groupId, resolvedComponentId)
     : join('custom-components', resolvedComponentId)
   const targetPaths = [
-    join(backendRoot, 'workspace', relativeTarget),
+    join(workspaceRoot, relativeTarget), // 🆕 S5：单一事实源（= backend-node/workspace）
     join(resolveFrontendWorkspace(), relativeTarget),
   ]
   const transactionKey = buildPreviewTransactionKey({ componentId: resolvedComponentId, groupId, target })

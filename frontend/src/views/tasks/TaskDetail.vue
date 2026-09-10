@@ -35,6 +35,10 @@
           ✕ 取消
         </button>
         <button class="btn-refresh" @click="handleManualRefresh">↻ 刷新</button>
+        <McSpecCheckButton
+          v-if="!pageTaskFlag && taskTarget === 'microcode' && task && (task.status === 'completed' || (task.fileCount && task.fileCount > 0))"
+          :component-id="task.componentId || sessionId"
+        />
         <button
           v-if="!pageTaskFlag && canPushGit && task && (task.status === 'completed' || (task.fileCount && task.fileCount > 0))"
           class="btn-action btn-gitlab-push"
@@ -1553,6 +1557,7 @@ import PublishToPoolModal from '@/components/PublishToPoolModal.vue'
 import { publishToPublicPool } from '@/utils/component-pool'
 import { downloadByUrl } from '@/utils/download-file'
 import ComponentAnalysisDrawer from '@/components/ComponentAnalysisDrawer.vue'
+import McSpecCheckButton from '@/components/McSpecCheckButton.vue'
 import { useConfigStore } from '@/stores/config'
 import PreviewErrorBanner from '@/components/PreviewErrorBanner.vue'
 import TierBadge from '@/components/generate/TierBadge.vue'
@@ -5414,7 +5419,7 @@ watch(bindingWizardOpen, (open) => {
   display: flex;
   align-items: flex-start;
   position: relative;
-  padding: 8px 4px 4px;
+  padding: 13px 4px 4px;
   /* 节点已改为 flex:1 自适应均分，不再需要横向滚动 */
   overflow-x: hidden;
 }
@@ -5458,7 +5463,7 @@ watch(bindingWizardOpen, (open) => {
 .sp-track-fill::after {
   content: '';
   position: absolute;
-  right: -5px;
+  right: 2px;
   top: -4px;
   width: 12px;
   height: 12px;
@@ -5529,8 +5534,8 @@ watch(bindingWizardOpen, (open) => {
 }
 
 .sp-dot {
-  width: 24px;
-  height: 24px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   display: flex;
   align-items: center;

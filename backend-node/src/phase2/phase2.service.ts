@@ -22,8 +22,9 @@ import { Model } from 'mongoose';
 import { sanitizeCssContent, aggressiveCleanCss } from '../ai-engine/utils/css-sanitizer.js';
 import { humanizeGenerationError } from '../ai-engine/utils/error-humanizer.js';
 import { resolvePrivateGroupId } from '../common/group-resolver';
+import { packageEntryFilter } from '../common/utils/package-filter';
 import { validateVueSfcDirectory } from '../ai-engine/utils/sfc-syntax-validation.js';
-import { resolveComponentDir } from '../ai-engine/utils/component-resolver.js';
+import { resolveComponentDirStrict } from '../ai-engine/utils/component-resolver.js';
 // P4（增量修改）：把 refineType 翻译成 refiner 的 _reviseTarget，避免精修范围被静默放大
 import { resolveRefineTarget } from './refine-target.js';
 // 动态导入 ESM 模块（workspace-preview-publisher.js 依赖 ESM 的 logger）
@@ -565,6 +566,9 @@ export class Phase2Service {
       const aiDefaultsModule =
         await import('../ai-engine/utils/ai-defaults.js');
       const { resolveVisionConfig, resolveTextConfig } = aiDefaultsModule;
+      // 视觉能力实测结论（不依赖模型名白名单）
+      const { resolveVisionCapability } =
+        await import('../ai-engine/utils/model-config.js');
 
       // 🆕 视觉/文本配置：请求 config > 按用户存 DB 的配置 > 全局 ai-config.json
       // 🔧 修复：此前完全没读按用户存 DB 的配置，导致用户配置的统一 AI 在生成时被忽略
@@ -617,6 +621,31 @@ export class Phase2Service {
       textModelUsed = textCfg?.model || null;
       console.log('[Phase2] visionCfg:', JSON.stringify(visionCfg));
       console.log('[Phase2] textCfg:', JSON.stringify(textCfg));
+
+      // 🛡️ 生成闸门：视觉能力硬校验（2026-09-10）
+      // 组件生成的第一步就是「看截图 / Figma 图」做视觉解析，模型若不具备视觉能力，
+      // 请求仍会成功返回，但模型根本没看到图 —— 产物与截图完全无关且不报任何错，
+      // 用户无从判断是模型问题。此处在真正发起生成前拦下并给出明确原因。
+      // 判定依据为实测结论（resolveVisionCapability），不依赖模型名白名单：
+      //   - false  → 实测不支持视觉，直接失败
+      //   - null   → 从未检测过，要求先到设置页检测（fail-closed，不冒险生成）
+      const visionModelName = String(visionCfg?.model || '').trim();
+      if (!visionModelName) {
+        throw new Error('未配置视觉模型，无法进行组件生成（截图 / Figma 识别依赖图像理解），请到「设置 - 模型配置」中选择支持视觉的模型并保存');
+      }
+      const visionCap = resolveVisionCapability(visionModelName);
+      if (visionCap.vision === false) {
+        throw new Error(
+          `模型「${visionModelName}」不支持视觉输入，无法进行组件生成。` +
+            `组件生成需要先识别截图 / Figma 设计图，请到「设置 - 模型配置」更换为支持视觉的模型（并点击「检测」确认）后重试`
+        );
+      }
+      if (visionCap.vision !== true) {
+        throw new Error(
+          `模型「${visionModelName}」的视觉能力尚未检测，无法确认其能否识别设计图。` +
+            `请到「设置 - 模型配置」点击「检测」完成能力识别后重试（未检测不支持直接生成，避免产出与设计图无关的结果）`
+        );
+      }
 
       const effectiveFigmaToken = this.resolveFigmaToken(config?.figmaToken);
 
@@ -1985,10 +2014,10 @@ export default component
     target?: string,
     groupId?: string,
   ): Promise<Buffer> {
-    // 统一走跨 workspace 解析器（backend → frontend → temp，vue3 跨 groupId 扫描）。
-    // 旧逻辑只拼 backend workspace 目录：vue3 指向实际不存在的 backend 路径、
-    // microcode 只命中 backend 侧少数组件，frontend 侧组件下载会 404。
-    const workspacePath = await resolveComponentDir(componentId);
+    // 统一走严格解析：与 Playground AI 修改器写入目录、规范检查目录保持同一事实源。
+    // 用旧 resolveComponentDir 时，任务号（mc-lite-...-c298235f）会解析到 temp 快照空壳，
+    // 导致下载包不含 AI 修复后的代码。
+    const workspacePath = await resolveComponentDirStrict(componentId);
 
     if (!workspacePath || !existsSync(workspacePath)) {
       throw new Error(`组件不存在: ${componentId}`);
@@ -2003,7 +2032,9 @@ export default component
       archive.on('error', (err) => reject(err));
 
       // 将组件目录添加到zip中
-      archive.directory(workspacePath, componentId);
+      // 🧹 剔除管线内部目录（.snapshots/.backups/.cache/.checkpoint/.mc-gen）：
+      // 这些是平台自身的快照/备份/中间态（含 125KB 生成截图），不属于组件交付物。
+      archive.directory(workspacePath, componentId, packageEntryFilter());
       archive.finalize();
     });
   }

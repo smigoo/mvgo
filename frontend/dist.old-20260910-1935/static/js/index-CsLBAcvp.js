@@ -1,0 +1,1 @@
+import{c as t}from"./index-C7hIbkqs.js";const a={getElementTree:e=>t().setParameters(e).post("/management/page/config/elementTree"),getRelationList:e=>t().setParameters(e).post("/management/component/relation/list"),getTraceData:e=>t().setParameters(e).get("/trace/info"),submitTrace:e=>t().setParameters(e).get("/trace/register")};export{a};

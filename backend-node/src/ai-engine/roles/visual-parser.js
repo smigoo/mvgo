@@ -77,6 +77,10 @@ import { rebuildSectionsPreservingInlineRows } from '../utils/inline-row-rebuild
 export { rebuildSectionsPreservingInlineRows }
 import { mergeInlineRowsIntoSections } from '../utils/inline-row-merger.js'
 export { mergeInlineRowsIntoSections }
+// 🛡️ A′（2026-09-10）：纵向容器层级重建（纯函数，无 import.meta，jest 可 require）。
+// 修 Vision 拆散 + merger 只提升「左右并列」子节点导致 slot-con 等纵向容器层级丢失。
+import { rebuildSlotConContainers, collectContainerHints } from '../utils/container-rebuilder.js'
+export { rebuildSlotConContainers, collectContainerHints }
 // 🛡️ P1（2026-09-09）：inlineCompositeRows → headerSlots 推断（纯函数，无 import.meta，jest 可 require）。
 // 单一事实源：visual-parser.js 不再内联实现，import 复用并对外导出。
 import {
@@ -1455,14 +1459,23 @@ ${analysisTask}`
           if (parsed.layoutStructure && !parsed.layoutStructure.inlineCompositeRows) {
             parsed.layoutStructure.inlineCompositeRows = inlineRows
           }
-          // 真正改写结构表（顶层 layout）
+          // 真正改写结构表（顶层 layout）—— 传入 figmaData 启用层级收敛（只保留最外层并行块）
           if (parsed.layout) {
-            parsed.layout = mergeInlineRowsIntoSections(parsed.layout, inlineRows)
+            parsed.layout = mergeInlineRowsIntoSections(parsed.layout, inlineRows, figmaData)
           }
           if (parsed.layoutStructure && parsed.layoutStructure.layout) {
             parsed.layoutStructure.layout = mergeInlineRowsIntoSections(
               parsed.layoutStructure.layout,
               inlineRows,
+              figmaData,
+            )
+            // 🛡️ A′（2026-09-10）：merger 之后补容器层级重建。merger 只提升「左右并列」
+            // 子节点为 section、丢弃「上下堆叠」的父容器（如 device slot-con 89:40）。
+            // 此处基于 figma 真值回查「全部直接子命中顶层 sections、自身非 section」的容器，
+            // 判定为纵向后恢复为带 children 的嵌套 section。无 figmaData 时零回归。
+            parsed.layoutStructure.layout = rebuildSlotConContainers(
+              parsed.layoutStructure.layout,
+              figmaData,
             )
           }
         }

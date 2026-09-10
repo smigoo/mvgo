@@ -465,9 +465,42 @@ export function markModelCapabilityIdentified(model, opts = {}) {
     identified: true,
     identifiedAt: Date.now(),
     source: opts.source || 'test',
+    // 🆕 视觉能力实测结论：权威事实源，保存/生成闸门据此判定。
+    // 只接受 boolean，未实测的模型不写该字段（保持 unknown 而非猜）。
+    ...(typeof opts.vision === 'boolean'
+      ? { vision: opts.vision, visionCheckedAt: Date.now() }
+      : {}),
     ...(Number.isFinite(opts.outputTokens) && opts.outputTokens > 0 ? { outputTokens: opts.outputTokens } : {}),
   }
   _persistCapabilityCache(cache)
+}
+
+/**
+ * 解析模型**视觉能力**。
+ *
+ * 权威来源只有一处：**实测记录**（配置检测时真实发图调用得出的结论）。
+ * 绝不根据模型名猜测 —— 模型名层出不穷且同名不同能力（如 deepseek-v4-pro 纯文本、
+ * claude-sonnet-5 支持视觉），任何写死的名单词表都会漏判或误判。
+ *
+ * @param {string} model 模型名
+ * @returns {{vision: boolean|null, identified: boolean, source: string, checkedAt?: number}}
+ *   vision — true=实测支持视觉 / false=实测不支持视觉 / null=未检测（未知，必须先检测）
+ */
+export function resolveVisionCapability(model) {
+  const m = String(model || '').trim().toLowerCase()
+  if (!m) return { vision: null, identified: false, source: 'empty' }
+  const cache = _loadCapabilityCache()
+  const entry = cache[m]
+  if (entry && typeof entry.vision === 'boolean') {
+    return {
+      vision: entry.vision,
+      identified: true,
+      source: 'test',
+      ...(entry.visionCheckedAt ? { checkedAt: entry.visionCheckedAt } : {}),
+    }
+  }
+  // 连通性测过、但没测过视觉 → 仍属未知
+  return { vision: null, identified: !!(entry && entry.identified), source: 'unknown' }
 }
 
 /**
@@ -506,7 +539,12 @@ export default {
   getMaxTokens,
   getModelMaxOutputTokens,
   getModelCapabilityTier,
+  // ⚠️ 遗留：按模型名子串猜测视觉能力（vision/qwen-vl/claude-3），覆盖率极低
+  // （claude-sonnet-5、gpt-4o、glm-5.x 等现代视觉模型全部漏判）。
+  // **禁止用于任何保存/生成闸门判定**，一律改用 resolveVisionCapability（实测结论）。
+  // 保留导出仅为兼容旧引用，当前全仓无调用点。
   isVisionModel,
+  resolveVisionCapability,
   coerceLLMText,
   coerceLLMUsage,
   estimateTokens,

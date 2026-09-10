@@ -201,6 +201,10 @@ const hasExplicitSource = !!(route.query.sessionId && route.query.revision)
 
 async function ensureLatestSnapshot() {
   if (hasExplicitSource) return
+  // 2026-09-10：Playground / 编辑态入口带 `snapshot=0`，强制走 workspace 源。
+  // 原因：AI 修复与代码编辑都写 workspace，而快照是生成时的旧内容，
+  // 走快照会出现「代码已改但预览不变」。只有生成中（workspace 尚无产物）才需要快照。
+  if (String(route.query.snapshot || '') === '0') return
   if (latestSnapshotSource.value) return
   // path 段是 componentId 可能是 componentId 或 sessionId（看入口），query.sessionId 优先；都没有就用 componentId
   const sessionId = String(route.query.sessionId || componentId || '')
@@ -255,7 +259,14 @@ const snapshotSource = computed(() => {
 })
 const snapshotFileUrl = (path) =>
   snapshotSource.value
-    ? buildSnapshotFileUrl(snapshotSource.value.sessionId, snapshotSource.value.revision, path, true)
+    ? buildSnapshotFileUrl(
+        snapshotSource.value.sessionId,
+        snapshotSource.value.revision,
+        path,
+        true,
+        // 随预览刷新变化，避免浏览器缓存返回旧代码
+        (route.query._t as string) || '',
+      )
     : ''
 
 const rtComponent = shallowRef(null)

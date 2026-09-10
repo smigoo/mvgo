@@ -27,6 +27,7 @@ import {
   tempComponentsDir,
 } from '../config/backend-root';
 import { existsSync } from 'fs';
+import { resolveComponentDirStrict } from '../ai-engine/utils/component-resolver.js';
 
 /** 提交信息类型枚举（与公司提交规范一致） */
 export type CommitType = 'feat' | 'fix' | 'refactor' | 'test' | 'word' | 'conf';
@@ -213,6 +214,16 @@ export class GitlabPushService {
     groupId?: string,
     target?: string,
   ): Promise<string | null> {
+    // 先走统一严格解析（支持任务号 → 真实组件目录），与规范检查 / AI 修复 / 下载同一事实源；
+    // 仅在该目录确实有产物时采用，否则继续走下面的精确匹配 + temp 扫描。
+    const strict = await resolveComponentDirStrict(componentId);
+    if (
+      strict &&
+      (existsSync(join(strict, 'package', 'index.vue')) || existsSync(join(strict, 'declare.json')))
+    ) {
+      return strict;
+    }
+
     const bases =
       target === 'vue3' && groupId
         ? [

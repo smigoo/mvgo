@@ -820,6 +820,29 @@ export default {
 2. 既有的「图片禁止用渐变替代」铁律保持不变（设计是图片就必须用图片）；本红线补上「设计是渐变就还原渐变」的反向缺口。
 3. 统计卡（含设备总数 / 完好率 / 在线数等）的标签与数值必须从 Figma 文本节点提取并**真实绑定到数据**，禁止整块缺失或用占位写死。字段文案（如「设备总数」「完好率」）与数值位置须与设计稿一致。
 
+### 🔴 7.8.5 统计数值字段必须是数值类型，禁止字符串拼接（治本 F2，2026-09-10）
+
+**异常数 / 总数 / 分母等结构化数值，必须用独立数值字段声明（如 `{ anomaly: 2, total: 484 }`），模板内以 `{{ item.anomaly }}/{{ item.total }}` 渲染；禁止把一个「数字+单位/分母」拆成两个字符串字面量（如 `anomalyCount:'2'` + `totalSuffix:'/484'`）。**
+
+1. 错误形态：`deviceItems = [{ name:'摄像机', anomalyCount:'2', totalSuffix:'/484' }]` → 模板 `{{ item.anomalyCount }}{{ item.totalSuffix }}`。这是把 Figma 文本「2/484」硬拆字符串，违背数据语义，后续无法参与排序 / 计算 / 国际化。
+2. 正确形态：`deviceItems = [{ name:'摄像机', anomaly: 2, total: 484 }]` → 模板 `{{ item.anomaly }}/{{ item.total }}`。单位 `/` 属展示层，直接写死在模板即可。
+3. 判定依据：Figma 文本节点若为「数值+分隔符+数值」（如 `56302`、`5`、`/484`），对应字段应为 `number` 类型，不得包成 `'...'` 字符串。
+4. 异常态（异常数 > 0）用 `:class` 切换颜色（`item.anomaly > 0 ? 'is-anomaly' : ''`），不要把「异常」语义编码进字符串值。
+
+**错误示例：**
+```vue
+<!-- ❌ 错误：数值被拆成字符串字面量 -->
+const deviceItems = [{ name:'摄像机', anomalyCount:'2', totalSuffix:'/484' }]
+{{ item.anomalyCount }}{{ item.totalSuffix }}
+```
+
+**正确示例：**
+```vue
+<!-- ✅ 正确：数值字段 + 模板拼接分隔符 -->
+const deviceItems = [{ name:'摄像机', anomaly: 2, total: 484 }]
+{{ item.anomaly }}/{{ item.total }}
+```
+
 **错误示例：**
 ```vue
 <!-- ❌ 错误：设计稿是蓝灰渐变，渲染成纯灰 -->

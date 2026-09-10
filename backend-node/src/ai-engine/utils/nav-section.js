@@ -9,6 +9,8 @@
  * （与既有 sections 一起参与强制拆分判定），从而让导航的样式事实（styleMappings / elementStyleMap 已进 prompt）被模型消费。
  */
 
+import { collectLeafSections, findSectionById } from './section-tree.js'
+
 const NAV_KEYWORDS = [
   '导航', 'nav', '菜单', '侧边', 'sidebar', 'menu', '纵向导航', '竖向导航', 'navigation',
 ]
@@ -97,13 +99,18 @@ function countNavElements(sources = {}) {
  * @param {{figmaNodeData?:object, elementStyleMap?:object}} [sources] 用于统计导航元素数
  * @returns {object} 可能修改后的 plan（新对象，不污染入参）
  */
+function isNavSection(sec) {
+  const hay = `${sec?.id || ''} ${sec?.title || ''} ${sec?.responsibility || ''}`.toLowerCase()
+  return containsNavSignal(hay) || /(^|\s)nav(\s|$)/.test(hay) || /sidebar/.test(hay)
+}
+
 export function injectNavSectionIfMissing(plan, navSignal, sources = {}) {
   if (!navSignal) return plan
   const effectiveSections = Array.isArray(plan?.effectiveSections) ? plan.effectiveSections : []
-  const hasNav = effectiveSections.some((sec) => {
-    const hay = `${sec?.id || ''} ${sec?.title || ''} ${sec?.responsibility || ''}`.toLowerCase()
-    return containsNavSignal(hay) || /(^|\s)nav(\s|$)/.test(hay) || /sidebar/.test(hay)
-  })
+  const hasNav = !!(
+    findSectionById(effectiveSections, 'nav') ||
+    collectLeafSections(effectiveSections).some(isNavSection)
+  )
   if (hasNav) return plan
 
   // 无实际导航节点支撑时，不注入空 section（避免误导模型产生幽灵引用）
@@ -136,15 +143,16 @@ export function injectNavSectionIfMissing(plan, navSignal, sources = {}) {
     shouldSplitInternally: false,
   }
   const nextSections = [...effectiveSections, navSection]
+  const leafCount = collectLeafSections(nextSections).length
   const minSectionsForced = 3
-  const isForced = nextSections.length >= minSectionsForced
+  const isForced = leafCount >= minSectionsForced
   return {
     ...plan,
     effectiveSections: nextSections,
     isForced,
-    minFiles: isForced ? nextSections.length : 0,
+    minFiles: isForced ? leafCount : 0,
     reason: isForced
-      ? `有效 sections=${nextSections.length} ≥ ${minSectionsForced} → 强制拆分（含强制注入的导航 section）`
-      : `有效 sections=${nextSections.length} < ${minSectionsForced} → 不强制拆分（已注入导航 section）`,
+      ? `叶子 sections=${leafCount} ≥ ${minSectionsForced} → 强制拆分（含强制注入的导航 section）`
+      : `叶子 sections=${leafCount} < ${minSectionsForced} → 不强制拆分（已注入导航 section）`,
   }
 }

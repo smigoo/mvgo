@@ -181,6 +181,12 @@
             </span>
           </div>
           <a-space :size="8">
+            <McSpecCheckButton
+              v-if="isMcComponent && !isPageMode"
+              :component-id="componentId"
+              :disabled="componentId === 'mc-demo'"
+              :title="componentId === 'mc-demo' ? '当前为占位组件 mc-demo（无产物目录），请先打开具体组件' : undefined"
+            />
             <a-button
               type="primary"
               size="small"
@@ -786,6 +792,7 @@ import { useFeatureFlag } from '@/composables/useFeatureFlag'
 import { useDragResize } from './composables/useDragResize.js'
 import { useSnapshots } from './composables/useSnapshots.js'
 import PreviewErrorBanner from '@/components/PreviewErrorBanner.vue'
+import McSpecCheckButton from '@/components/McSpecCheckButton.vue'
 import GitLabPushModal from '@/components/GitLabPushModal.vue'
 import { usePreviewErrorBridge } from '@/composables/usePreviewErrorBridge'
 
@@ -2561,10 +2568,16 @@ const previewUrl = computed(() => {
     { candidate: taskSnapshot.value, partial: null, lastGood: null },
   )
   if (!descriptor) return ''
+  // 2026-09-10：Playground 是编辑态，代码与 AI 修复都写 workspace；
+  // 只要 workspace 已读到文件就强制走 workspace 源（snapshot=0），
+  // 否则「保存/AI 修复成功但预览还是旧的」（快照是生成时内容）。
+  // 生成中 workspace 尚无产物时仍走快照源。
+  const useWorkspaceSource = componentFiles.value.length > 0
   return import.meta.env.BASE_URL + buildResolvedPreviewUrl(descriptor, {
     width: previewContainerWidth.value,
     height: previewContainerHeight.value,
     cacheKey: previewCacheKey.value,
+    snapshot: useWorkspaceSource ? '0' : undefined,
   }).replace(/^\//, '')
 })
 
@@ -3315,26 +3328,24 @@ async function saveFile(file) {
           ...item,
           snapshotOnly: true,
         }))
-        previewCacheKey.value = Date.now()
-        previewKey.value += 1
       }
       // 更新原始内容
       file.originalContent = file.content
       file.modified = false
       console.log('文件保存成功:', file.name, file.snapshotOnly ? '(new snapshot revision)' : '')
 
-      // 如果是index.vue文件，刷新预览
-      if (file.name === 'index.vue') {
-        // dev：失效 Vite 模块缓存。微码组件预览用 @vite-ignore 原生 import
-        // /workspace/.../component.js（不进 Vite 模块图、无 HMR 追踪），
-        // 文件变化不触发 transform 缓存失效 → 保存后 Vite 仍返回旧 transform。
-        // /__invalidate（vite.config.js）清空缓存，让下次 import 重新 transform。
-        // Vue3 走 /__raw 直读磁盘，无此问题；此处调用对 Vue3 无害。
-        try {
-          await fetch('/__invalidate', { method: 'GET' })
-        } catch {}
-        refreshPreview()
-      }
+      // 🔧 任何文件保存后都要刷新预览（2026-09-10 修复）
+      // 此前仅在 file.name === 'index.vue' 时刷新 → 改子组件（package/components/*.vue）
+      // 或样式文件后保存成功但预览纹丝不动，用户只能手动整页刷新。
+      // dev：失效 Vite 模块缓存。微码组件预览用 @vite-ignore 原生 import
+      // /workspace/.../component.js（不进 Vite 模块图、无 HMR 追踪），
+      // 文件变化不触发 transform 缓存失效 → 保存后 Vite 仍返回旧 transform。
+      // /__invalidate（vite.config.js）清空缓存，让下次 import 重新 transform。
+      // Vue3 走 /__raw 直读磁盘，无此问题；此处调用对 Vue3 无害。
+      try {
+        await fetch('/__invalidate', { method: 'GET' })
+      } catch {}
+      refreshPreview()
     } else {
       console.error('保存失败:', data.data.error)
       alert('保存失败: ' + data.data.error)

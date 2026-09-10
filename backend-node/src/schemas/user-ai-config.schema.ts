@@ -20,6 +20,11 @@ export class UserAiConfig {
   // 密文存储;明文由虚拟字段 `config` 透明桥接,不落库
   @Prop({ type: String, default: null })
   configEnc?: string | null;
+
+  // 🔒 模型实测通过记录（保存闸门事实源，明文存储——仅含绑定指纹哈希与布尔结论，无敏感信息）。
+  // key = sha256(`${baseURL}|${apiKey}|${model}`)，value = { text, vision, at }。
+  @Prop({ type: Object, default: {} })
+  verifiedModels?: Record<string, { text: boolean; vision: boolean; at: number }>;
 }
 
 export const UserAiConfigSchema = SchemaFactory.createForClass(UserAiConfig);

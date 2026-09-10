@@ -14,13 +14,58 @@ import componentResolver from '../utils/component-resolver.js'
 import snapshotManager from './snapshot-manager.js'
 import { createLogger } from '../logger/index.js'
 import { validateVueSfc } from '../utils/sfc-syntax-validation.js'
+import { buildComponentId, semanticTokenFrom } from '../utils/component-naming.js'
 
-const { resolveComponentDir, resolveWritableComponentDirs } = componentResolver
+const { resolveComponentDirStrict, resolveWritableComponentDirs, isEncodedComponentName } =
+  componentResolver
 const { takeModificationSnapshot } = snapshotManager
 
 const logger = createLogger('playground-tools')
 
 const SKIP_DIRS = new Set(['.snapshots', '.backups', 'node_modules', '.git'])
+
+/**
+ * 🛡️ S3 写盘防腐（2026-09-10）
+ *
+ * 背景：AI 修复 / Playground 修改曾把 declare.json 的 componentId 写成任务号
+ * （mc-lite-1789035969084-c298235f），即「规范化被反向覆盖」，且全程无告警 ——
+ * 直接导致 workspace 目录名、规范 ID、下载文件名一起退化成任务号。
+ *
+ * 处理：写入 declare.json 前解析内容，若 componentId 命中编码型（任务号）形态，
+ * 就地重建为 `c-<语义段>-<尾 8hex>` 并打 WARN。语义段优先复用原 id，其次从
+ * componentName 的中文/英文名派生，最后兜底 'component'。
+ *
+ * 为什么不抛错：现存存量有 138 条已被污染（4a），若 fail-closed 抛错会让这些组件的
+ * AI 修复全线失败 —— 目标是「不再持久化坏值」，而非「拒绝服务」。返回的仍是可写内容。
+ */
+export function normalizeDeclareComponentId(raw, fallbackComponentId, filePath) {
+  let parsed
+  try {
+    parsed = JSON.parse(raw)
+  } catch (e) {
+    throw new Error(`拒绝写入无法解析的 declare.json（${filePath}）: ${e.message}`)
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error(`拒绝写入结构非法的 declare.json（${filePath}）：顶层应为对象`)
+  }
+
+  const current = typeof parsed.componentId === 'string' ? parsed.componentId.trim() : ''
+  if (!current || !isEncodedComponentName(current)) return raw // 已是规范名 → 原样写
+
+  const seg = semanticTokenFrom({
+    displayName: parsed.componentName || parsed.name || parsed.displayName || '',
+    zhName: parsed.componentName || parsed.name || '',
+    fallbackToken: String(fallbackComponentId || '').replace(/^(mc|mv)-/i, ''),
+  })
+  const normalized = buildComponentId(seg, fallbackComponentId || current)
+  parsed.componentId = normalized
+  logger.warn('declare.componentId 为任务号形态，写盘前已归一', {
+    filePath,
+    from: current,
+    to: normalized,
+  })
+  return JSON.stringify(parsed, null, 2)
+}
 
 /**
  * 读取组件文件内容
@@ -34,7 +79,7 @@ function normalizeVue3Entry(componentDir, filePath) {
 
 export async function readComponentFile({ componentId, filePath }) {
   try {
-    const componentDir = await resolveComponentDir(componentId)
+    const componentDir = await resolveComponentDirStrict(componentId)
     if (!componentDir) {
       throw new Error(`组件目录不存在: ${componentId}`)
     }
@@ -75,7 +120,7 @@ export async function readComponentFile({ componentId, filePath }) {
  */
 export async function writeComponentFile({ componentId, filePath, content, createBackup = true }) {
   try {
-    const componentDir = await resolveComponentDir(componentId)
+    const componentDir = await resolveComponentDirStrict(componentId)
     if (!componentDir) {
       throw new Error(`组件目录不存在: ${componentId}`)
     }
@@ -92,6 +137,11 @@ export async function writeComponentFile({ componentId, filePath, content, creat
         throw new Error(`拒绝写入不可编译 Vue SFC ${normalizedPath}: ${syntaxResult.errors.join('; ')}`)
       }
     }
+    // 🛡️ S3：declare.json 写盘前归一到规范 ID（命中任务号形态则收敛 + WARN，禁止持久化坏值）
+    const effectiveContent =
+      path.basename(normalizedPath) === 'declare.json'
+        ? normalizeDeclareComponentId(content, componentId, normalizedPath)
+        : content
     const primaryDir = writableDirs.includes(componentDir) ? componentDir : writableDirs[0]
     const primaryPath = resolveSafeFilePath(primaryDir, normalizedPath)
     const originalFileExists = fs.existsSync(primaryPath)
@@ -126,14 +176,14 @@ export async function writeComponentFile({ componentId, filePath, content, creat
       if (!fs.existsSync(parentDir)) {
         fs.mkdirSync(parentDir, { recursive: true })
       }
-      fs.writeFileSync(targetPath, content, 'utf-8')
+      fs.writeFileSync(targetPath, effectiveContent, 'utf-8')
       writtenTargets.push(targetPath)
     }
 
     return {
       success: true,
       filePath: normalizedPath,
-      bytesWritten: Buffer.byteLength(content, 'utf-8'),
+      bytesWritten: Buffer.byteLength(effectiveContent, 'utf-8'),
       backupCreated: createBackup && originalFileExists,
       syncedWorkspaces: writtenTargets.length,
     }
@@ -160,7 +210,7 @@ function resolveSafeFilePath(componentDir, filePath) {
  */
 export async function listComponentFiles({ componentId }) {
   try {
-    const componentDir = await resolveComponentDir(componentId)
+    const componentDir = await resolveComponentDirStrict(componentId)
     if (!componentDir) {
       throw new Error(`组件目录不存在: ${componentId}`)
     }
@@ -208,7 +258,7 @@ export async function listComponentFiles({ componentId }) {
  */
 export async function restoreBackup({ componentId, filePath, backupTimestamp }) {
   try {
-    const componentDir = await resolveComponentDir(componentId)
+    const componentDir = await resolveComponentDirStrict(componentId)
     if (!componentDir) {
       throw new Error(`组件目录不存在: ${componentId}`)
     }
