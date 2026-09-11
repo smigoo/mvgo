@@ -1,0 +1,98 @@
+// 公共变量 mixin
+.common() {
+// 语义色（在所有主题下保持一致）
+  --em-color-danger: #ff4d4f;
+  --em-color-primary: #1890ff;
+  --em-color-warning: #fa8c16;
+  
+  // 品牌色
+  --em-brand-blue: #1990ff;
+  --em-brand-gradient-start: #1990ff;
+  --em-brand-gradient-end: #5a7eff;
+  
+  // 布局间距
+  --em-spacing-xs: 4px;
+  --em-spacing-sm: 8px;
+  --em-spacing-md: 12px;
+  --em-spacing-lg: 16px;
+  --em-spacing-xl: 20px;
+  
+  // 圆角
+  --em-radius-sm: 4px;
+  --em-radius-md: 8px;
+  
+  // 字号
+  --em-font-size-sm: 12px;
+  --em-font-size-base: 14px;
+  --em-font-size-lg: 16px;
+  --em-font-size-xl: 20px;
+  --em-font-size-xxl: 28px;
+  @click: inherit; // 自动添加
+}
+
+// 深色主题 mixin
+.theme-dark() {
+  .common();
+  
+  // 背景色
+  --em-bg-base: rgba(30, 40, 55, 1);
+  --em-bg-card: rgba(45, 55, 70, 0.8);
+  
+  // 文字色
+  --em-text-primary: rgba(255, 255, 255, 0.85);
+  --em-text-secondary: rgba(255, 255, 255, 0.65);
+  --em-text-tertiary: rgba(255, 255, 255, 0.45);
+  
+  // Tab颜色
+  --em-tab-bg: rgba(102, 128, 160, 0.6);
+  --em-tab-border: rgba(172, 196, 225, 0.3);
+  --em-tab-text: rgba(255, 255, 255, 0.85);
+  --em-tab-active-bg: #1990ff;
+  --em-tab-active-border: rgba(199, 224, 255, 0.5);
+  --em-tab-active-text: #ffffff;
+  
+  // 边框色
+  --em-border-base: rgba(255, 255, 255, 0.15);
+  --em-border-light: rgba(255, 255, 255, 0.08);
+  
+  // 阴影
+  --em-shadow-base: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+/* [Style Refine] bg node fills[0].color rgba(0.929, 0.956, 0.984, 1) → rgb(237, 244, 251) */
+/* [Style Refine] Frame 2136638769 (inactive tab) fills[0] → rgb(102, 128, 160), strokes[0] → rgba(172, 196, 225, 1) */
+/* [Style Refine] Frame 2136638771 (active tab) fills[0] → rgb(25, 144, 255), strokes[0] → rgba(199, 224, 255, 1) */
+/* [Style Refine] bg node effects[0] DROP_SHADOW → rgba(74, 117, 141, 0.25) */
+.theme-light() {
+  .common();
+  
+  // 背景色
+  --em-bg-base: rgb(237, 244, 251);
+  --em-bg-card: rgba(255, 255, 255, 0.9);
+  
+  // 文字色
+  --em-text-primary: rgb(51, 51, 51);
+  --em-text-secondary: rgb(102, 102, 102);
+  --em-text-tertiary: rgb(153, 153, 153);
+  
+  // Tab 颜色
+  --em-tab-bg: rgb(102, 128, 160);
+  --em-tab-border: rgba(172, 196, 225, 1);
+  --em-tab-text: rgb(51, 51, 51);
+  --em-tab-active-bg: rgb(25, 144, 255);
+  --em-tab-active-border: rgba(199, 224, 255, 1);
+  --em-tab-active-text: rgb(255, 255, 255);
+  
+  // 边框色
+  --em-border-base: rgba(0, 0, 0, 0.1);
+  --em-border-light: rgba(0, 0, 0, 0.06);
+  
+  // 阴影
+  --em-shadow-base: 0px 4px 10px rgba(74, 117, 141, 0.25);
+}
+
+// 默认应用浅色主题
+
+:root {
+  .theme-light();
+}

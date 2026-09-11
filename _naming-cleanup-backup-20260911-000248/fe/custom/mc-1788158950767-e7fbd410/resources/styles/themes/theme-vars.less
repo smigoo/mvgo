@@ -1,0 +1,120 @@
+// 主题变量定义文件
+// 结构：三个 mixin（.common()、.theme-dark()、.theme-light()）
+// 禁止在根级调用 mixin（由 dark.less/light.less 在主题选择器内调用）
+
+.common() {
+  // 字体缩放基准令牌（根容器通过 CSS 变量 --fontSize 驱动，默认 14px）
+  @fontSize: 14px;
+  
+  // 公共变量（不依赖主题的固定值）
+  @font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  @border-radius-base: 4px;
+  @transition-duration: 0.3s;
+}
+
+.theme-light() {
+  // Light 主题（面板默认主题，颜色必须与设计稿一致）
+  
+  // 背景图资源（从设计稿样式映射提取）
+  @bg-tab-active-image: url(../resources/images/bg-tab-active-7891.png);
+  @bg-main-image: url(../resources/images/bg-7890.png);
+  
+  // Tab 激活态背景
+  @tab-active-bg-image: @bg-tab-active-image;
+  @tab-active-bg-size: cover;
+  @tab-active-bg-position: center;
+  @tab-active-bg-repeat: no-repeat;
+  
+  // 主容器背景
+  @main-bg-image: @bg-main-image;
+  @main-bg-size: cover;
+  @main-bg-position: center;
+  @main-bg-repeat: no-repeat;
+  
+  // 文字颜色
+  @text-primary: #333333;
+  @text-secondary: #666666;
+  @text-tertiary: #999999;
+  @text-inverse: #ffffff;
+  
+  // 边框颜色
+  @border-base: #d9d9d9;
+  @border-light: #e8e8e8;
+  @border-dark: #bfbfbf;
+  
+  // 背景颜色
+  @bg-base: #ffffff;
+  @bg-gray: #f5f5f5;
+  @bg-hover: #fafafa;
+  @bg-mask: rgba(0, 0, 0, 0.45);
+  
+  // 品牌色（从 antd 默认值推断，未在设计稿中明确标注）
+  @primary-color: #1890ff;
+  @success-color: #52c41a;
+  @warning-color: #faad14;
+  @error-color: #ff4d4f;
+  @info-color: #1890ff;
+  
+  // 阴影
+  @shadow-base: 0 2px 8px rgba(0, 0, 0, 0.15);
+  @shadow-light: 0 1px 4px rgba(0, 0, 0, 0.1);
+  @shadow-dark: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.theme-dark() {
+  // Dark 主题（深色面板，所有文字禁止使用黑色系）
+  
+  // 背景图资源（与 light 主题共用）
+  @bg-tab-active-image: url(../resources/images/bg-tab-active-7891.png);
+  @bg-main-image: url(../resources/images/bg-7890.png);
+  
+  // Tab 激活态背景
+  @tab-active-bg-image: @bg-tab-active-image;
+  @tab-active-bg-size: cover;
+  @tab-active-bg-position: center;
+  @tab-active-bg-repeat: no-repeat;
+  
+  // 主容器背景
+  @main-bg-image: @bg-main-image;
+  @main-bg-size: cover;
+  @main-bg-position: center;
+  @main-bg-repeat: no-repeat;
+  
+  // 文字颜色（深色面板禁止黑色系）
+  @text-primary: #ffffff;
+  @text-secondary: rgba(255, 255, 255, 0.85);
+  @text-tertiary: rgba(255, 255, 255, 0.65);
+  @text-inverse: #141414;
+  
+  // 边框颜色
+  @border-base: #434343;
+  @border-light: #303030;
+  @border-dark: #595959;
+  
+  // 背景颜色
+  @bg-base: #1f1f1f;
+  @bg-gray: #141414;
+  @bg-hover: #262626;
+  @bg-mask: rgba(0, 0, 0, 0.65);
+  
+  // 品牌色（深色主题调整）
+  @primary-color: #177ddc;
+  @success-color: #49aa19;
+  @warning-color: #d89614;
+  @error-color: #d32029;
+  @info-color: #177ddc;
+  
+  // 阴影
+  @shadow-base: 0 2px 8px rgba(0, 0, 0, 0.45);
+  @shadow-light: 0 1px 4px rgba(0, 0, 0, 0.3);
+  @shadow-dark: 0 4px 16px rgba(0, 0, 0, 0.6);
+}
+// 写盘门禁自动补全缺失变量
+@fontSize: 0px;
+@fontSize: 0px;
+
+// 自动添加：将 .common() 中的 Less 变量暴露到全局作用域
+
+:root {
+  .common();
+}

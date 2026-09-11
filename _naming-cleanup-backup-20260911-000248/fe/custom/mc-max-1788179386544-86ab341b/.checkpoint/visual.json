@@ -1,0 +1,540 @@
+{
+  "layoutStructure": {
+    "generatedAt": "2026-01-20T12:00:00Z",
+    "stage": "preview-analysis",
+    "componentName": "环境监测",
+    "componentTitle": "环境监测",
+    "analysisModel": "claude-sonnet-5",
+    "sourceImage": {
+      "path": "mc-preview.png",
+      "size": 0,
+      "mtimeMs": 0,
+      "sha1": ""
+    },
+    "summary": "环境监测组件，包含Tab切换栏（氨化物、能见度、洞内照明、洞外光强）、时间范围选择器（2k3+785C0次起）、图表操作按钮，以及一个面积图展示24小时数据趋势，带阈值线标注",
+    "layout": {
+      "type": "single-panel",
+      "direction": "vertical",
+      "sections": [
+        {
+          "id": "header-tabs",
+          "name": "Tab切换栏",
+          "role": "常驻",
+          "layout": "horizontal",
+          "headerRelation": "title-same-row",
+          "slotCandidate": "header-right",
+          "body": {
+            "layout": "horizontal",
+            "children": [
+              {
+                "type": "tab",
+                "name": "氨化物",
+                "active": true,
+                "resourceFile": "../resources/images/bg-tab-active-7891.png",
+                "recommendedUsage": "backgroundStyle",
+                "styles": {
+                  "fontSize": 14,
+                  "color": "rgba(255, 255, 255, 1)",
+                  "padding": "6px 16px",
+                  "borderRadius": "4px"
+                },
+                "backgroundSize": "cover",
+                "backgroundPosition": "center center",
+                "backgroundRepeat": "no-repeat"
+              },
+              {
+                "type": "tab",
+                "name": "能见度",
+                "active": false,
+                "styles": {
+                  "fontSize": 14,
+                  "color": "rgba(255, 255, 255, 0.65)",
+                  "padding": "6px 16px"
+                }
+              },
+              {
+                "type": "tab",
+                "name": "洞内照明",
+                "active": false,
+                "styles": {
+                  "fontSize": 14,
+                  "color": "rgba(255, 255, 255, 0.65)",
+                  "padding": "6px 16px"
+                }
+              },
+              {
+                "type": "tab",
+                "name": "洞外光强",
+                "active": false,
+                "styles": {
+                  "fontSize": 14,
+                  "color": "rgba(255, 255, 255, 0.65)",
+                  "padding": "6px 16px"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "chart-controls",
+          "name": "图表控制区",
+          "role": "常驻",
+          "layout": "horizontal",
+          "headerRelation": "title-same-row",
+          "slotCandidate": "header-right",
+          "body": {
+            "layout": "horizontal",
+            "alignItems": "center",
+            "gap": "12px",
+            "children": [
+              {
+                "type": "label",
+                "text": "2k3+785C0次起",
+                "styles": {
+                  "fontSize": 12,
+                  "color": "rgba(255, 255, 255, 0.65)"
+                }
+              },
+              {
+                "type": "icon-button",
+                "icon": "chart",
+                "resourceFile": "../resources/images/icon-7941.png",
+                "recommendedUsage": "imgSrc",
+                "styles": {
+                  "width": 24,
+                  "height": 24
+                },
+                "resourceVarName": "icon1",
+                "downloadStatus": "success"
+              },
+              {
+                "type": "icon-button",
+                "icon": "notification",
+                "resourceFile": "../resources/images/icon-7941.png",
+                "recommendedUsage": "imgSrc",
+                "badge": "8",
+                "styles": {
+                  "width": 24,
+                  "height": 24
+                },
+                "resourceVarName": "icon1",
+                "downloadStatus": "success"
+              }
+            ]
+          }
+        },
+        {
+          "id": "chart-area",
+          "name": "面积图",
+          "role": "常驻",
+          "layout": "vertical",
+          "headerRelation": "content-below-title",
+          "slotCandidate": null,
+          "body": {
+            "layout": "vertical",
+            "children": [
+              {
+                "type": "chart",
+                "chartType": "area",
+                "styles": {
+                  "width": "100%",
+                  "height": 180
+                }
+              }
+            ],
+            "backgroundImage": {
+              "src": "../resources/images/bg-7890.png",
+              "recommendedUsage": "backgroundBlock"
+            },
+            "backgroundSize": "100% 100%",
+            "backgroundPosition": "center center",
+            "backgroundRepeat": "no-repeat"
+          }
+        }
+      ]
+    },
+    "styles": {
+      "backgroundBrightness": "light",
+      "theme": "浅色科技监测风",
+      "colors": [
+        "rgba(93, 201, 165, 1)",
+        "rgba(93, 201, 165, 0.3)",
+        "rgba(255, 107, 107, 1)",
+        "rgba(24, 144, 255, 1)",
+        "rgba(255, 255, 255, 1)",
+        "rgba(255, 255, 255, 0.65)"
+      ],
+      "background": "浅灰蓝色渐变背景（#edf4fb系）",
+      "decorations": [
+        "Tab激活态带圆角背景",
+        "红色阈值虚线（预警线）",
+        "面积图填充渐变（绿色半透明）"
+      ],
+      "emphasis": [
+        "激活Tab为白色文字+蓝绿色背景",
+        "右上角通知图标带红色角标数字8",
+        "阈值线标注\"预警线\"红色文字"
+      ]
+    },
+    "interactions": [
+      {
+        "target": "Tab切换栏",
+        "type": "tab-switch",
+        "description": "切换监测指标类型（氨化物/能见度/洞内照明/洞外光强）",
+        "defaultState": "常驻，氨化物激活",
+        "evidence": "第一个Tab有明显激活态背景"
+      },
+      {
+        "target": "图表操作按钮（左侧图标）",
+        "type": "icon-button",
+        "description": "图表相关操作（可能是视图切换或数据展示设置）",
+        "defaultState": "常驻",
+        "evidence": "有图表图标"
+      },
+      {
+        "target": "通知按钮（右侧图标）",
+        "type": "icon-button",
+        "description": "查看通知/告警消息",
+        "defaultState": "常驻，有8条未读",
+        "evidence": "有红色角标数字8"
+      },
+      {
+        "target": "面积图",
+        "type": "chart-hover",
+        "description": "可能支持鼠标悬停显示具体数值",
+        "defaultState": "常驻显示",
+        "evidence": "标准图表交互模式"
+      }
+    ],
+    "charts": [
+      {
+        "section": "chart-area",
+        "type": "area",
+        "series": [
+          "氨化物浓度"
+        ],
+        "legend": [],
+        "legendPosition": "",
+        "seriesColors": [
+          "#5dc9a5"
+        ],
+        "legendType": "",
+        "axes": "X轴为时间（0-24小时），Y轴为浓度值（0-40范围）",
+        "tooltip": "预计支持悬停显示时间点和数值",
+        "notes": [
+          "面积图填充为绿色半透明渐变",
+          "有红色虚线标注阈值（30）",
+          "阈值线右侧标注\"预警线\"红色文字",
+          "Y轴刻度值：0、10、20、30、40",
+          "X轴刻度值：2、4、6、8、10、12、14、16、18、20、22、24，单位\"时\""
+        ]
+      }
+    ],
+    "doNotInvent": [
+      "Tab切换后的具体数据内容",
+      "图表操作按钮的具体菜单选项",
+      "通知按钮点击后的弹窗内容",
+      "面积图的具体数据点数值",
+      "时间范围选择器的具体选项",
+      "阈值线的动态调整逻辑",
+      "数据自动刷新频率"
+    ],
+    "notes": [
+      "组件背景为浅色渐变，文字颜色为深色/半透明白色",
+      "Tab激活态使用蓝绿色背景资源（bg-tab-active-7891.png）",
+      "图表右上角有两个功能图标，右侧图标带红色角标",
+      "面积图使用绿色主题，带红色预警阈值线",
+      "整体设计风格为现代科技监测界面"
+    ],
+    "headerSlots": [
+      {
+        "slotType": "header-right",
+        "elementType": "tab",
+        "content": "氨化物/能见度/洞内照明/洞外光强 四选项Tab切换",
+        "figmaNodeId": ""
+      },
+      {
+        "slotType": "header-right",
+        "elementType": "label",
+        "content": "2k3+785C0次起",
+        "figmaNodeId": ""
+      },
+      {
+        "slotType": "header-right",
+        "elementType": "icon",
+        "content": "图表操作图标",
+        "figmaNodeId": ""
+      },
+      {
+        "slotType": "header-right",
+        "elementType": "icon",
+        "content": "通知图标（带角标8）",
+        "figmaNodeId": ""
+      }
+    ],
+    "coverageReport": {
+      "totalFigma": 14,
+      "matchedCount": 5,
+      "missingCount": 5,
+      "uncertainCount": 0,
+      "coverageRate": 50,
+      "missing": [
+        {
+          "name": "cp-环境监测",
+          "type": "FRAME",
+          "depth": 0
+        },
+        {
+          "name": "环境监测",
+          "type": "TEXT",
+          "depth": 2
+        },
+        {
+          "name": "sub-t",
+          "type": "FRAME",
+          "depth": 2
+        },
+        {
+          "name": "一氧化碳",
+          "type": "TEXT",
+          "depth": 4
+        },
+        {
+          "name": "num",
+          "type": "GROUP",
+          "depth": 3
+        }
+      ],
+      "uncertain": [],
+      "summary": "需关注"
+    },
+    "chartDataHints": [
+      {
+        "chartTitle": "area",
+        "chartType": "area",
+        "labels": [
+          {
+            "label": "40\n30\n20\n10\n0",
+            "name": "40 30 20 10 0"
+          },
+          {
+            "label": "辆",
+            "name": "辆"
+          },
+          {
+            "label": "预警线",
+            "name": "预警线"
+          },
+          {
+            "label": "时",
+            "name": "时"
+          },
+          {
+            "label": "zk3+785CO浓度",
+            "name": "zk3+785CO浓度"
+          },
+          {
+            "label": "一氧化碳",
+            "name": "一氧化碳"
+          },
+          {
+            "label": "洞内照明",
+            "name": "洞内照明"
+          },
+          {
+            "label": "洞外光强",
+            "name": "洞外光强"
+          },
+          {
+            "label": "能见度",
+            "name": "能见度"
+          }
+        ],
+        "values": [
+          {
+            "label": "600",
+            "value": 600,
+            "unit": ""
+          },
+          {
+            "label": "400",
+            "value": 400,
+            "unit": ""
+          },
+          {
+            "label": "200",
+            "value": 200,
+            "unit": ""
+          },
+          {
+            "label": "600",
+            "value": 600,
+            "unit": ""
+          },
+          {
+            "label": "0",
+            "value": 0,
+            "unit": ""
+          },
+          {
+            "label": "600",
+            "value": 600,
+            "unit": ""
+          },
+          {
+            "label": "2",
+            "value": 2,
+            "unit": ""
+          },
+          {
+            "label": "4",
+            "value": 4,
+            "unit": ""
+          },
+          {
+            "label": "6",
+            "value": 6,
+            "unit": ""
+          },
+          {
+            "label": "8",
+            "value": 8,
+            "unit": ""
+          },
+          {
+            "label": "10",
+            "value": 10,
+            "unit": ""
+          },
+          {
+            "label": "12",
+            "value": 12,
+            "unit": ""
+          }
+        ]
+      }
+    ]
+  },
+  "visualElements": {
+    "backgroundBrightness": "light",
+    "theme": "浅色科技监测风",
+    "colors": [
+      "rgba(93, 201, 165, 1)",
+      "rgba(93, 201, 165, 0.3)",
+      "rgba(255, 107, 107, 1)",
+      "rgba(24, 144, 255, 1)",
+      "rgba(255, 255, 255, 1)",
+      "rgba(255, 255, 255, 0.65)"
+    ],
+    "background": "浅灰蓝色渐变背景（#edf4fb系）",
+    "decorations": [
+      "Tab激活态带圆角背景",
+      "红色阈值虚线（预警线）",
+      "面积图填充渐变（绿色半透明）"
+    ],
+    "emphasis": [
+      "激活Tab为白色文字+蓝绿色背景",
+      "右上角通知图标带红色角标数字8",
+      "阈值线标注\"预警线\"红色文字"
+    ]
+  },
+  "interactions": [
+    {
+      "target": "Tab切换栏",
+      "type": "tab-switch",
+      "description": "切换监测指标类型（氨化物/能见度/洞内照明/洞外光强）",
+      "defaultState": "常驻，氨化物激活",
+      "evidence": "第一个Tab有明显激活态背景"
+    },
+    {
+      "target": "图表操作按钮（左侧图标）",
+      "type": "icon-button",
+      "description": "图表相关操作（可能是视图切换或数据展示设置）",
+      "defaultState": "常驻",
+      "evidence": "有图表图标"
+    },
+    {
+      "target": "通知按钮（右侧图标）",
+      "type": "icon-button",
+      "description": "查看通知/告警消息",
+      "defaultState": "常驻，有8条未读",
+      "evidence": "有红色角标数字8"
+    },
+    {
+      "target": "面积图",
+      "type": "chart-hover",
+      "description": "可能支持鼠标悬停显示具体数值",
+      "defaultState": "常驻显示",
+      "evidence": "标准图表交互模式"
+    }
+  ],
+  "charts": [
+    {
+      "section": "chart-area",
+      "type": "area",
+      "series": [
+        "氨化物浓度"
+      ],
+      "legend": [],
+      "legendPosition": "",
+      "seriesColors": [
+        "#5dc9a5"
+      ],
+      "legendType": "",
+      "axes": "X轴为时间（0-24小时），Y轴为浓度值（0-40范围）",
+      "tooltip": "预计支持悬停显示时间点和数值",
+      "notes": [
+        "面积图填充为绿色半透明渐变",
+        "有红色虚线标注阈值（30）",
+        "阈值线右侧标注\"预警线\"红色文字",
+        "Y轴刻度值：0、10、20、30、40",
+        "X轴刻度值：2、4、6、8、10、12、14、16、18、20、22、24，单位\"时\""
+      ]
+    }
+  ],
+  "headerSlots": [
+    {
+      "slotType": "header-right",
+      "elementType": "label",
+      "content": "2k3+785C0次起",
+      "figmaNodeId": ""
+    },
+    {
+      "slotType": "header-right",
+      "elementType": "icon",
+      "content": "图表操作图标",
+      "figmaNodeId": ""
+    },
+    {
+      "slotType": "header-right",
+      "elementType": "icon",
+      "content": "通知图标（带角标8）",
+      "figmaNodeId": ""
+    }
+  ],
+  "analysisType": "chart",
+  "analysisTarget": "图表展示区",
+  "analysisDescription": "",
+  "analysisEvidence": [],
+  "headerValidation": {
+    "passed": true,
+    "headerElements": [],
+    "headerRightElements": [],
+    "suggestions": [],
+    "confidence": "low",
+    "componentType": "microcode"
+  },
+  "headerSlotValidation": {
+    "validatedSlots": [],
+    "rejectedNodes": [],
+    "warnings": [
+      "预览图检测到undefined，但Figma中未找到同行节点",
+      "预览图检测到undefined，但Figma中未找到同行节点",
+      "预览图检测到undefined，但Figma中未找到同行节点",
+      "预览图检测到undefined，但Figma中未找到同行节点"
+    ],
+    "componentType": "microcode",
+    "derivedSlots": [],
+    "contractSlots": []
+  }
+}

@@ -1,0 +1,207 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 82,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0].body.children[1].body.children[0], layout.sections[0].body.children[2].body.children[0], layout.sections[2].body.children[0]",
+        "message": "图表节点使用了固定的 width 属性（如 380、360）。根据微码规范‘宽度自适应约束’，容器布局禁止使用固定 px 宽度限制容器伸缩，这会导致组件在不同屏幕尺寸下无法自适应，甚至溢出父容器。",
+        "suggestion": "移除图表节点的固定 width 属性，改为 width: '100%' 或依赖父容器的 flex 布局自适应。保留 height 属性（如 150、140）以确保图表有明确的渲染高度。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[0].body.children[1], layout.sections[0].body.children[2]",
+        "message": "图表容器的结构为 chart-container -> body -> children -> chart，嵌套达到了 4-5 层。对于仅包含一个图表的容器，存在冗余嵌套，增加了 DOM 深度。",
+        "suggestion": "简化结构，将 chart 直接作为 chart-container 的 body 内容，或者移除多余的 children 数组包裹，使嵌套深度尽量控制在 3 层以内。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body.children[0]",
+        "message": "总流量数值展示行（total-stats-row）使用了 justifyContent: 'space-between' 来布局左右两个统计卡片和中间的装饰图标。当子元素宽度不固定时，space-between 可能导致左右卡片无法等宽或间距不符合预期。",
+        "suggestion": "建议将左右统计卡片设置为 flex: 1 实现等宽自适应，中间装饰图标保持固定宽度（如 60px），并使用 gap 控制间距，而不是依赖 space-between。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.items[0].children[1], layout.sections[1].body.items[1].children[1]",
+        "message": "车型分布卡片内部同样使用了 justifyContent: 'space-between' 布局客车、图标、货车。与上一问题类似，可能导致两侧数据卡片宽度不一致，破坏视觉对称性。",
+        "suggestion": "建议将两侧的数值展示区域设置为 flex: 1 并居中对齐，中间图标固定宽度，确保左右对称和自适应。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[0].body.children[1], layout.sections[0].body.children[2], layout.sections[2].body",
+        "message": "布局结构中未明确体现图表容器的防溢出约束属性。在实际代码生成时，如果缺少 min-width: 0 和 overflow: hidden，容易导致 ECharts 图表坐标轴文字撑破父容器。",
+        "suggestion": "在图表容器节点的布局属性中补充 minWidth: 0 和 overflow: 'hidden' 的语义提示，确保代码生成阶段严格遵守图表边界约束。"
+      }
+    ],
+    "recommendations": [
+      "全面排查并移除所有非装饰性元素的固定 width 属性，统一使用 100%、flex: 1 等自适应布局方案，确保组件的响应式能力。",
+      "扁平化图表容器结构，减少不必要的 body -> children 嵌套，降低 DOM 深度，提升渲染性能和可维护性。",
+      "在涉及 ECharts 图表的容器节点中，显式声明防溢出属性（如 minWidth: 0, overflow: hidden），为代码生成提供明确的边界约束。",
+      "对于包含‘左-中-右’结构的水平布局，优先使用 flex: 1 分配两侧空间，避免滥用 space-between 导致布局失控。"
+    ],
+    "summary": "整体布局结构清晰，区域划分合理，微码规范中的 header/body 层级、面板插槽判断及图表信息配置基本符合要求。主要问题在于部分图表容器使用了固定宽度，违反了宽度自适应约束，且存在轻微的冗余嵌套和布局方式不当（滥用 space-between）。修复固定宽度问题并优化嵌套层级后，结构将达到优秀标准。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorBg": "#edf4fb",
+      "--colorTextBase": "#333333",
+      "--colorPrimary": "#1990ff",
+      "--colorWarning": "#fa8c16",
+      "--colorInfo": "#1890ff",
+      "--colorPrimaryBg": "#69c0ff",
+      "--fontSize": "14px",
+      "--fontSizeLarge": "28px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-bg": "#edf4fb",
+      "@color-text-base": "#333333",
+      "@color-primary": "#1990ff",
+      "@color-warning": "#fa8c16",
+      "@color-info": "#1890ff",
+      "@color-primary-bg": "#69c0ff",
+      "@font-size-base": "14px",
+      "@font-size-large": "28px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "width": "100%",
+        "height": "100%",
+        "background-color": "var(--colorBg, #edf4fb)",
+        "color": "var(--colorTextBase, #333333)",
+        "font-size": "var(--fontSize, 14px)",
+        "display": "flex",
+        "flex-direction": "column",
+        "position": "relative"
+      },
+      ".section-header": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "8px",
+        "font-weight": "bold",
+        "color": "var(--colorTextBase, #333333)"
+      },
+      ".diamond-icon": {
+        "width": "12px",
+        "height": "12px",
+        "background-color": "var(--colorPrimary, #1990ff)",
+        "transform": "rotate(45deg)"
+      },
+      ".car-effect-icon": {
+        "position": "absolute",
+        "top": "50%",
+        "left": "50%",
+        "transform": "translate(-50%, -50%)",
+        "z-index": "1"
+      },
+      ".data-value-primary": {
+        "font-size": "var(--fontSizeLarge, 28px)",
+        "font-weight": "bold",
+        "color": "var(--colorPrimary, #1990ff)",
+        "line-height": "1.2"
+      },
+      ".data-value-warning": {
+        "font-size": "var(--fontSizeLarge, 28px)",
+        "font-weight": "bold",
+        "color": "var(--colorWarning, #fa8c16)",
+        "line-height": "1.2"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主题背景色 #edf4fb 映射为 --colorBg，容器背景应优先直接落地为 Figma 字面量值，避免关键可见背景只依赖 CSS 变量",
+      "主色调 #1990ff 映射为 --colorPrimary，用于大号蓝色数值及菱形图标",
+      "强调色 #fa8c16 映射为 --colorWarning，用于橙色货车数值",
+      "辅助蓝色 #1890ff 和浅蓝色 #69c0ff 分别映射为 --colorInfo 和 --colorPrimaryBg，用于光效及辅助装饰",
+      "大号数值使用 --fontSizeLarge 变量控制，确保在不同主题下可统一调整"
+    ],
+    "elementStyleMap": {
+      "daily-total-flow": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-tunnel": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "stat-bridge": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "chart-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "chart-bridge": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-distribution": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "dist-tunnel-el-x-1-el-x-0": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "dist-tunnel-el-x-1-el-x-2": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "dist-tunnel-el-x-1": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center",
+        "justify-content": "space-between"
+      },
+      "dist-tunnel": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-_m-34.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "dist-bridge-el-x-1-el-x-0": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "dist-bridge-el-x-1-el-x-2": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "dist-bridge-el-x-1": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center",
+        "justify-content": "space-between"
+      },
+      "dist-bridge": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-_m-35.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "flow-prediction": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    }
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "gateSkippedFiles": [
+    "package/index.vue"
+  ],
+  "gateSkippedAt": 1788358010435,
+  "gateSkipReason": "Vue SFC 写盘门禁失败（validateVueSfc），文件未落盘"
+}

@@ -1,0 +1,173 @@
+@import './themes/theme-vars.less';
+
+.c-env-monitor-content {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 16px;
+  font-family: @em-font-family;
+  font-size: @em-font-size-base;
+  color: @em-text-color-primary;
+}
+
+.c-env-monitor-title-decor {
+  width: 8px;
+  height: 8px;
+  display: block;
+}
+
+.c-env-monitor-header-icons {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.c-env-monitor-icon-btn {
+  position: relative;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.c-env-monitor-tabs-icon {
+  width: 52px;
+  height: 24px;
+  display: block;
+}
+
+.c-env-monitor-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  background-color: @em-color-danger;
+  border-radius: @em-border-radius-pill;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 14px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.c-env-monitor-tabs {
+  display: flex;
+  flex-direction: row;
+  margin-bottom: 12px;
+}
+
+.c-env-monitor-tabs-list {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 3px;
+  background: @em-bg-tabs-list;
+  border: @em-border-tabs-list;
+  border-radius: 4px;
+  gap: 4px;
+}
+
+.c-env-monitor-tab-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 12px;
+  cursor: pointer;
+  z-index: 1;
+  transition: @em-transition-base;
+  
+  &.is-active {
+    .c-env-monitor-tab-text {
+      color: @em-color-tab-active-text;
+      text-shadow: @em-shadow-tab-active-text;
+    }
+  }
+}
+
+.c-env-monitor-tab-active-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: @em-bg-tab-active;
+  border: @em-border-tab-active;
+  border-radius: 3px;
+  z-index: -1;
+}
+
+.c-env-monitor-tab-text {
+  font-size: @em-font-size-md;
+  font-weight: 500;
+  color: @em-color-tab-text;
+  white-space: nowrap;
+  transition: @em-transition-base;
+}
+
+.c-env-monitor-chart-section {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.c-env-monitor-legend {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.c-env-monitor-legend-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  
+  &.is-active {
+    .c-env-monitor-legend-line {
+      opacity: 1;
+    }
+    .c-env-monitor-legend-text {
+      color: @em-text-color-primary;
+    }
+  }
+  
+  &:not(.is-active) {
+    .c-env-monitor-legend-line {
+      opacity: 0.4;
+    }
+    .c-env-monitor-legend-text {
+      color: @em-text-color-tertiary;
+    }
+  }
+}
+
+.c-env-monitor-legend-line {
+  width: 14px;
+  height: 2px;
+  background-color: @em-color-legend-line;
+  border-radius: 1px;
+  transition: @em-transition-base;
+}
+
+.c-env-monitor-legend-text {
+  font-size: @em-font-size-sm;
+  color: @em-text-color-primary;
+  transition: @em-transition-base;
+}
+
+.c-env-monitor-chart-container {
+  width: 100%;
+  height: 160px;
+}
+
+.is-active {
+  // 激活态通用标识，具体样式由父级组合类控制
+}

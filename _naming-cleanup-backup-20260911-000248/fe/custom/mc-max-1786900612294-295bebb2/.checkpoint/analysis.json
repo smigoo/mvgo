@@ -1,0 +1,225 @@
+{
+  "reviewResult": {
+    "reviewResult": "pass",
+    "issues": [],
+    "score": 50,
+    "recommendations": []
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名，浅色科技监测风）",
+      "--colorPrimary": "#1990FF",
+      "--colorDanger": "#F53F3F",
+      "--colorInfo": "#08A3A5",
+      "--colorTextBase": "#333333",
+      "--colorTextSecondary": "#666666",
+      "--colorBg": "#EDF4FB",
+      "--colorBgContainer": "#FFFFFF",
+      "--fontSize": "14px",
+      "--borderRadius": "8px",
+      "--boxShadowCard": "0 2px 8px rgba(25, 144, 255, 0.10)"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射（与CSS变量一一对应）",
+      "@color-primary": "#1990FF",
+      "@color-danger": "#F53F3F",
+      "@color-info": "#08A3A5",
+      "@color-text-base": "#333333",
+      "@color-text-secondary": "#666666",
+      "@color-bg": "#EDF4FB",
+      "@color-bg-container": "#FFFFFF",
+      "@font-size-base": "14px",
+      "@border-radius-base": "8px",
+      "@box-shadow-card": "0 2px 8px rgba(25, 144, 255, 0.10)"
+    },
+    "cssClasses": {
+      "comment": "可复用CSS类（浅色科技监测风）",
+      ".monitor-container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "width": "100%",
+        "height": "100%",
+        "padding": "1.25em",
+        "background": "var(--colorBg)",
+        "font-size": "var(--fontSize)",
+        "color": "var(--colorTextBase)"
+      },
+      ".summary-stat-card": {
+        "display": "flex",
+        "flex-direction": "column",
+        "justify-content": "space-between",
+        "padding": "1.25em",
+        "border-radius": "var(--borderRadius)",
+        "background": "linear-gradient(135deg, #1990FF 0%, #08A3A5 100%)",
+        "color": "#FFFFFF",
+        "box-shadow": "var(--boxShadowCard)"
+      },
+      ".device-card": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "0.75em",
+        "padding": "1em",
+        "background": "var(--colorBgContainer)",
+        "border-radius": "var(--borderRadius)",
+        "box-shadow": "var(--boxShadowCard)",
+        "border": "1px solid rgba(25, 144, 255, 0.08)"
+      },
+      ".nav-tab-active": {
+        "padding": "0.6em 1.25em",
+        "border-radius": "calc(var(--borderRadius) - 2px)",
+        "background": "var(--colorPrimary)",
+        "color": "#FFFFFF",
+        "font-weight": "600"
+      },
+      ".stat-number": {
+        "font-size": "2em",
+        "font-weight": "700",
+        "line-height": "1.2",
+        "color": "var(--colorTextBase)"
+      },
+      ".stat-value-primary": {
+        "font-size": "1.5em",
+        "font-weight": "600",
+        "color": "var(--colorPrimary)"
+      },
+      ".stat-value-danger": {
+        "font-size": "1.5em",
+        "font-weight": "600",
+        "color": "var(--colorDanger)"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色 #1990FF 映射为 --colorPrimary，用于激活态导航标签、蓝色正常数值/总数",
+      "异常红 #F53F3F 映射为 --colorDanger，用于异常数值强调",
+      "青绿色 #08A3A5 映射为 --colorInfo，作为渐变辅助色和次级信息色",
+      "文本色 #333333/#666666 分别映射为 --colorTextBase/--colorTextSecondary",
+      "浅灰蓝背景 rgba(237,244,251,1) 映射为 --colorBg，作为页面容器背景",
+      "白色 #FFFFFF 映射为 --colorBgContainer，用于卡片背景",
+      "左侧蓝色渐变统计卡片背景提取为 .summary-stat-card 渐变",
+      "设备卡片圆角阴影提取为 .device-card 的边框、阴影和圆角",
+      "激活态导航标签蓝色底色提取为 .nav-tab-active",
+      "强调数值类 .stat-number/.stat-value-primary/.stat-value-danger 覆盖三种强调状态",
+      "所有颜色均通过 CSS 变量暴露，并同步映射到 Less 变量便于主题切换"
+    ],
+    "elementStyleMap": {
+      "header-stats": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "summary-cards": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-7": {
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "card-main-total": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-north-south": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "main-content": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "side-nav": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-20": {
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "device-camera": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-wind": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-height": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-robot": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-lidar": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-co": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-covi": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-temp-humi": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-pressure": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-light-sensor": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-emergency-phone": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-water-quality": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "header-stats",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 0,
+        "title": "设备监测"
+      },
+      {
+        "id": "summary-cards",
+        "responsibility": "数据统计指标区（数字+标签+趋势）",
+        "elementCount": 0,
+        "title": "汇总统计卡片"
+      },
+      {
+        "id": "main-content",
+        "responsibility": "主内容区",
+        "elementCount": 2,
+        "title": "主内容区"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 → 强制拆分"
+  }
+}

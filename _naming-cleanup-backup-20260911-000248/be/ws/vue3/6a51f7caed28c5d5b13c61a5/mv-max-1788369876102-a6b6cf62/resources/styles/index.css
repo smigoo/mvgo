@@ -1,0 +1,168 @@
+.env-monitor-root {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background: #1e283c;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 14px;
+  overflow: hidden;
+}
+.env-monitor-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px 0;
+  position: relative;
+  flex-shrink: 0;
+}
+.env-monitor-header-icon {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1252fa 0%, #559eff 100%);
+}
+.env-monitor-header-title {
+  font-size: 16px;
+  font-weight: 700;
+  background: linear-gradient(90deg, #1990ff 0%, #5a7eff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1.2;
+}
+.env-monitor-divider {
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(85, 158, 255, 0.8) 0%, rgba(85, 158, 255, 0) 100%);
+  flex-shrink: 0;
+  margin: 0;
+}
+.env-monitor-tabs-bar {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 14px;
+  flex-shrink: 0;
+}
+.env-monitor-tabs-list {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+  height: 27px;
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+.env-monitor-tab-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 21px;
+  padding: 0 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #2c9bea;
+  cursor: pointer;
+  border-radius: 3px;
+  margin: 3px 2px;
+  white-space: nowrap;
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+  transition: color 0.2s;
+}
+.env-monitor-tab-item--active {
+  color: #ffffff;
+  text-shadow: 0 0.6px 0 #006fe3;
+}
+.env-monitor-tabs-icon-group {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+}
+.env-monitor-icon-btn {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.env-monitor-icon-btn img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  display: block;
+}
+.env-monitor-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #f53f3f;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.env-monitor-chart-section {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 8px 4px 8px;
+  background: rgba(237, 244, 251, 0.05);
+  position: relative;
+}
+.env-monitor-chart-topbar {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  margin-bottom: 2px;
+}
+.env-monitor-chart-yunit {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+  flex-shrink: 0;
+}
+.env-monitor-chart-legend {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.env-monitor-chart-legend-line {
+  width: 14px;
+  height: 2px;
+  background: #00e678;
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+.env-monitor-chart-legend-text {
+  font-size: 10px;
+  color: #00e678;
+}
+.env-monitor-chart-canvas {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}

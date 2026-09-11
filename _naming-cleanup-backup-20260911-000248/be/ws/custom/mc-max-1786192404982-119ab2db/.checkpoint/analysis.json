@@ -1,0 +1,160 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 75,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[0].config",
+        "message": "图表配置中缺少 tooltip 字段。根据微码规范，只要存在 ECharts 图表，就必须提供 option.tooltip，禁止省略或写死为 show: false。",
+        "suggestion": "在 chart config 中添加 tooltip 配置，例如：`tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } }`。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[0]",
+        "message": "图表节点设置了固定宽度 `width: 380`。根据宽度自适应约束，容器布局禁止使用固定 px 宽度限制容器伸缩。",
+        "suggestion": "移除固定的 width 属性，改为 `width: '100%'`，并通过父容器的 flex 布局实现自适应。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[0].config",
+        "message": "图表配置中缺少 grid 属性。根据图表边界约束，必须设置 `containLabel: true` 以防止坐标轴文字把画布撑出容器。",
+        "suggestion": "在 config 中添加 grid 配置，例如：`grid: { left: '3%', right: '4%', bottom: '3%', top: '10%', containLabel: true }`。"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "layout.sections[1].body.children[0].config.yAxis",
+        "message": "Y轴单位 label 为 '辆'，与图表主题 'CO浓度' 存在明显的语义冲突。虽然 notes 中已记录，但直接生成会导致业务逻辑错误。",
+        "suggestion": "核实设计稿，将 Y轴单位修正为 CO浓度的正确单位（如 ppm、mg/m³ 等），或在确认前移除单位标签。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections",
+        "message": "`filter-view-bar` 和 `chart-section` 的 body 中使用了完全相同的背景图 `bg-7890.png`。如果它们是同一面板内的连续区块，重复设置背景图会导致视觉割裂和 DOM 冗余。",
+        "suggestion": "确认设计稿意图。如果是两个独立卡片则保留；如果是同一背景，应将背景图提取到父级 `layout` 容器，并移除子级的背景设置。"
+      }
+    ],
+    "recommendations": [
+      "在代码生成阶段，必须确保 Tab 切换（一氧化碳、能见度等）能够联动更新图表数据（使用 watch 监听并调用 setOption），而不仅仅是样式切换。",
+      "确保图表容器外层设置 `min-width: 0` 和 `overflow: hidden`，并配合 ResizeObserver 实现完美的自适应和边界控制，防止图表越界。",
+      "对于视图切换图标（带角标），确保角标样式（红色背景、白色文字、圆角）在代码中精确还原，并注意处理图标资源 `tabs-icon-43.png` 的正确裁剪或分别引用。",
+      "图表的 markLine（预警线）配置中，建议将 label 的 position 设置为 'end' 或 'insideEndTop'，并确保线条样式为 dashed，以完美还原设计稿的红色虚线预警效果。"
+    ],
+    "summary": "整体布局结构清晰，区域划分合理，命名规范，能够准确反映设计稿的层级关系，且正确遵循了面板标题由宿主提供的原则。但在图表配置细节上存在违反微码强制规范的问题（如缺少 tooltip、使用固定宽度），且存在设计稿识别的语义冲突（Y轴单位）。建议修复上述 Error 级别问题，并优化图表自适应配置，以确保最终生成的组件既符合规范又具备良好的响应式表现。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#559EFF",
+      "--colorBg": "#EDF4FB",
+      "--colorSuccess": "#52c41a",
+      "--colorDanger": "#f53f3f",
+      "--colorTextSecondary": "#666666",
+      "--colorTextBase": "#333333",
+      "--fontSize": "14px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#559EFF",
+      "@color-bg": "#EDF4FB",
+      "@color-success": "#52c41a",
+      "@color-danger": "#f53f3f",
+      "@color-text-secondary": "#666666",
+      "@color-text-base": "#333333",
+      "@font-size-base": "14px",
+      "@border-radius-base": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "16px",
+        "background": "#EDF4FB",
+        "color": "#333333"
+      },
+      ".tab-capsule-active": {
+        "background": "#559EFF",
+        "border-radius": "16px",
+        "color": "#ffffff",
+        "padding": "4px 12px",
+        "font-weight": "500"
+      },
+      ".badge-danger": {
+        "background": "#f53f3f",
+        "color": "#ffffff",
+        "border-radius": "50%",
+        "font-size": "12px",
+        "min-width": "16px",
+        "height": "16px",
+        "line-height": "16px",
+        "text-align": "center"
+      },
+      ".chart-area-success": {
+        "fill": "rgba(82, 196, 26, 0.2)",
+        "stroke": "#52c41a",
+        "stroke-width": "2px"
+      },
+      ".chart-line-danger": {
+        "stroke": "#f53f3f",
+        "stroke-width": "2px",
+        "stroke-dasharray": "4 4"
+      },
+      ".text-secondary": {
+        "color": "#666666",
+        "font-size": "12px"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 #559EFF 映射为 --colorPrimary，用于Tab选中态蓝色胶囊背景",
+      "背景色 #EDF4FB 映射为 --colorBg，作为组件整体浅灰蓝底色",
+      "成功/强调色 #52c41a 映射为 --colorSuccess，用于绿色面积图填充与描边",
+      "危险/预警色 #f53f3f 映射为 --colorDanger，用于红色角标和红色预警线",
+      "辅助文本色 #666666 映射为 --colorTextSecondary",
+      "补充了基础文本色 #333333 以保证浅色背景下的文本可读性",
+      "容器背景应优先直接落地为 Figma 字面量值，避免关键可见背景只依赖 CSS 变量"
+    ],
+    "elementStyleMap": {
+      "filter-view-bar": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tabs-list": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "view-icons": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "chart-section": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-12": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  }
+}

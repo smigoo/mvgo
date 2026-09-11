@@ -1,0 +1,26 @@
+.common() {
+  @fontSize: 14px;
+  @font-size-base: var(--fontSize);
+  @border-radius-base: var(--borderRadius);
+  @chart-area-opacity: var(--chartAreaOpacity);
+}
+
+.theme-dark() {
+  @color-bg: var(--colorBg);
+  @color-primary: var(--colorPrimary);
+  @color-success: var(--colorSuccess);
+  @color-danger: var(--colorDanger);
+  @color-white: var(--colorWhite);
+  @color-text-base: var(--colorTextBase);
+}
+
+.theme-light() {
+  @color-bg: var(--colorBg);
+  @color-primary: var(--colorPrimary);
+  @color-success: var(--colorSuccess);
+  @color-danger: var(--colorDanger);
+  @color-white: var(--colorWhite);
+  @color-text-base: var(--colorTextBase);
+}
+// 写盘门禁自动补全缺失变量
+@fontSize: 0px;

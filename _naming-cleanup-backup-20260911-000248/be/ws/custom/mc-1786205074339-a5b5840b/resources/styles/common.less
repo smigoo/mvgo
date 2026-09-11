@@ -1,0 +1,135 @@
+@import './themes/theme-vars.less';
+
+/* [Style Refine] Figma bg-size rule: 100% 100% */
+.c-119ab2-content {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* [Layout Refine] Figma sub-t: align-items flex-start, padding 5px 0 0 0 */
+.c-119ab2-tabs-controls {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 5px 0 0 0;
+  flex-shrink: 0;
+  position: relative;
+}
+
+/* [Style Refine] Figma tabs-list bg: gradient + white border */
+.c-119ab2-tabs-list {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: @spacing-xs;
+  background: linear-gradient(to right, rgb(181, 222, 255), rgb(209, 236, 255));
+  border: 0.72px solid #FFFFFF;
+  border-radius: 4px;
+  padding: 3px 4px;
+}
+
+.c-119ab2-tab-decor {
+  width: 8px;
+  height: 8px;
+  margin-right: @spacing-sm;
+  flex-shrink: 0;
+}
+
+.c-119ab2-tab-item {
+  position: relative;
+  padding: @spacing-xs 14px;
+  cursor: pointer;
+  font-size: @font-size-base;
+  font-weight: 500;
+  color: #2c9bea;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: @transition-base;
+  
+  &:hover {
+    color: @color-primary;
+  }
+}
+
+.c-119ab2-tab-item--active {
+  color: #ffffff;
+  text-shadow: 0 0.6px 0 rgba(0, 111, 227, 1);
+  
+  &:hover {
+    color: #ffffff;
+  }
+}
+
+.c-119ab2-tab-active-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+  z-index: -1;
+}
+
+.c-119ab2-tab-text {
+  position: relative;
+  z-index: 2;
+}
+
+/* [Layout Refine] Figma tabs-icon: margin adjustments */
+.c-119ab2-view-controls {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin-top: 2px;
+  margin-right: 7px;
+}
+
+.c-119ab2-view-icon {
+  width: 52px;
+  height: 24px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* [Layout Refine] Figma num badge: absolute positioned top-right */
+.c-119ab2-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 14px;
+  height: 14px;
+  background: @color-warning;
+  border-radius: 29px;
+  color: #ffffff;
+  font-size: @font-size-sm;
+  font-weight: 500;
+  font-family: 'PingFang SC', sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  z-index: 10;
+}
+
+/* [Layout Refine] Figma chart area: no horizontal padding */
+.c-119ab2-chart-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  min-height: 0;
+}
+
+.c-119ab2-chart-container {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+}

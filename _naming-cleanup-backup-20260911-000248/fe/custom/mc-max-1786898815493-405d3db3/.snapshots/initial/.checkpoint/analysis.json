@@ -1,0 +1,163 @@
+{
+  "reviewResult": {
+    "reviewResult": "pass",
+    "issues": [],
+    "score": 50,
+    "recommendations": []
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1890ff",
+      "--colorSuccess": "#4ade80",
+      "--colorDanger": "#ff4d4f",
+      "--colorAlarm": "#f53f3f",
+      "--colorTextSecondary": "#666666",
+      "--colorTextInverse": "#ffffff",
+      "--colorBg": "#edf4fb",
+      "--fontSize": "14px",
+      "--fontSizeSm": "12px",
+      "--borderRadiusBase": "8px",
+      "--borderRadiusPill": "999px",
+      "--borderRadiusRound": "50%"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射（与CSS变量对应）",
+      "@color-primary": "#1890ff",
+      "@color-success": "#4ade80",
+      "@color-danger": "#ff4d4f",
+      "@color-alarm": "#f53f3f",
+      "@color-text-secondary": "#666666",
+      "@color-text-inverse": "#ffffff",
+      "@color-bg": "#edf4fb",
+      "@font-size-base": "14px",
+      "@font-size-sm": "12px",
+      "@border-radius-base": "8px",
+      "@border-radius-pill": "999px",
+      "@border-radius-round": "50%"
+    },
+    "cssClasses": {
+      "comment": "可复用CSS类",
+      ".monitor-container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "min-height": "100%",
+        "padding": "20px",
+        "background": "var(--colorBg, #edf4fb)",
+        "color": "var(--colorTextSecondary, #666666)",
+        "font-size": "var(--fontSize, 14px)"
+      },
+      ".tab-item": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "padding": "8px 16px",
+        "border-radius": "var(--borderRadiusPill, 999px)",
+        "color": "var(--colorTextSecondary, #666666)",
+        "cursor": "pointer"
+      },
+      ".tab-item.is-active": {
+        "background": "var(--colorPrimary, #1890ff)",
+        "color": "var(--colorTextInverse, #ffffff)",
+        "font-weight": "600"
+      },
+      ".badge-dot": {
+        "display": "inline-block",
+        "width": "8px",
+        "height": "8px",
+        "background": "var(--colorDanger, #ff4d4f)",
+        "border-radius": "var(--borderRadiusRound, 50%)"
+      },
+      ".badge-number": {
+        "position": "absolute",
+        "top": "-6px",
+        "right": "-6px",
+        "display": "inline-flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "min-width": "18px",
+        "height": "18px",
+        "padding": "0 5px",
+        "background": "var(--colorDanger, #ff4d4f)",
+        "color": "var(--colorTextInverse, #ffffff)",
+        "font-size": "var(--fontSizeSm, 12px)",
+        "border-radius": "var(--borderRadiusPill, 999px)",
+        "line-height": "1"
+      },
+      ".chart-alert-line": {
+        "border-top": "1px dashed var(--colorAlarm, #f53f3f)",
+        "color": "var(--colorAlarm, #f53f3f)",
+        "font-size": "var(--fontSizeSm, 12px)",
+        "padding-top": "4px"
+      },
+      ".status-success": {
+        "color": "var(--colorSuccess, #4ade80)"
+      },
+      ".status-danger": {
+        "color": "var(--colorDanger, #ff4d4f)"
+      },
+      ".text-secondary": {
+        "color": "var(--colorTextSecondary, #666666)"
+      },
+      ".monitor-panel": {
+        "background": "var(--colorBg, #edf4fb)",
+        "border-radius": "var(--borderRadiusBase, 8px)",
+        "padding": "16px"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主题色 #1890ff 映射为 --colorPrimary，用于 Tab 选中态高亮胶囊背景",
+      "背景 #edf4fb（rgba(237,244,251,1)）映射为 --colorBg，容器直接落地浅色科技监测背景",
+      "红色告警 #ff4d4f 与 #f53f3f 分别映射为 --colorDanger 和 --colorAlarm，用于 Badge 与图表预警线",
+      "次要文字 #666666 映射为 --colorTextSecondary",
+      "成功色 #4ade80 映射为 --colorSuccess，用于正常/成功状态",
+      "Tab 选中态使用圆角胶囊变量 --borderRadiusPill 和白色文字 --colorTextInverse",
+      "图表红色虚线预警线由 1px dashed var(--colorAlarm) 实现",
+      "容器背景同时提供 rgba 字面量 fallback，避免仅依赖 CSS 变量导致背景丢失"
+    ],
+    "elementStyleMap": {
+      "section-tabs": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-4": {
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-10": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-tabs",
+        "responsibility": "标签页切换区",
+        "elementCount": 4,
+        "title": "Tab切换栏"
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "CO浓度趋势图"
+      }
+    ],
+    "isForced": false,
+    "minFiles": 0,
+    "reason": "有效 sections=2 < 3 → 不强制拆分"
+  }
+}

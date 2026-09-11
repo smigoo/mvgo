@@ -1,0 +1,302 @@
+```json
+{
+  "generatedAt": "2025-06-15T10:30:00Z",
+  "stage": "preview-analysis",
+  "componentName": "环境监测",
+  "componentTitle": "环境监测",
+  "analysisModel": "claude-opus-4-20250514",
+  "sourceImage": {
+    "path": "mc-preview.png",
+    "size": 0,
+    "mtimeMs": 0,
+    "sha1": ""
+  },
+  "summary": "浅色主题的环境监测面积图组件，包含顶部Tab切换栏、右侧统计指标、24小时时间轴面积图、阈值线标注。主要展示气化板、能见度、洞内照明、洞外光强四个监测维度的数据趋势。",
+  "layout": {
+    "type": "single-panel",
+    "direction": "vertical",
+    "sections": [
+      {
+        "id": "header-tabs",
+        "name": "监测类型切换",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "body": {
+          "layout": "horizontal",
+          "bgPlaceholder": "tabs-bg",
+          "children": [
+            {
+              "id": "tab-1",
+              "name": "气化板",
+              "role": "tab",
+              "type": "tab-item",
+              "active": true,
+              "text": "气化板",
+              "styles": {
+                "fontSize": 14,
+                "color": "rgba(85, 158, 255, 1)",
+                "backgroundColor": "rgba(255, 255, 255, 1)",
+                "padding": "6px 16px",
+                "borderRadius": "4px"
+              }
+            },
+            {
+              "id": "tab-2",
+              "name": "能见度",
+              "role": "tab",
+              "type": "tab-item",
+              "active": false,
+              "text": "能见度",
+              "styles": {
+                "fontSize": 14,
+                "color": "rgba(0, 0, 0, 0.65)",
+                "padding": "6px 16px"
+              }
+            },
+            {
+              "id": "tab-3",
+              "name": "洞内照明",
+              "role": "tab",
+              "type": "tab-item",
+              "active": false,
+              "text": "洞内照明",
+              "styles": {
+                "fontSize": 14,
+                "color": "rgba(0, 0, 0, 0.65)",
+                "padding": "6px 16px"
+              }
+            },
+            {
+              "id": "tab-4",
+              "name": "洞外光强",
+              "role": "tab",
+              "type": "tab-item",
+              "active": false,
+              "text": "洞外光强",
+              "styles": {
+                "fontSize": 14,
+                "color": "rgba(0, 0, 0, 0.65)",
+                "padding": "6px 16px"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "chart-area",
+        "name": "面积图区域",
+        "role": "常驻",
+        "layout": "vertical",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "body": {
+          "layout": "vertical",
+          "children": [
+            {
+              "id": "chart-container",
+              "name": "面积图",
+              "role": "chart",
+              "type": "area-chart",
+              "layout": "vertical",
+              "styles": {
+                "width": "100%",
+                "height": "180px"
+              },
+              "children": [
+                {
+                  "type": "y-axis-labels",
+                  "name": "Y轴刻度",
+                  "values": ["0", "10", "20", "30", "40", "50"],
+                  "styles": {
+                    "fontSize": 12,
+                    "color": "rgba(0, 0, 0, 0.45)"
+                  }
+                },
+                {
+                  "type": "x-axis-labels",
+                  "name": "X轴时间刻度",
+                  "values": ["2", "4", "6", "8", "10", "12", "14", "16", "18", "20", "22", "24"],
+                  "unit": "时",
+                  "styles": {
+                    "fontSize": 12,
+                    "color": "rgba(0, 0, 0, 0.45)"
+                  }
+                },
+                {
+                  "type": "threshold-line",
+                  "name": "阈值线",
+                  "value": 30,
+                  "label": "预警线",
+                  "styles": {
+                    "borderStyle": "dashed",
+                    "borderColor": "rgba(255, 77, 79, 0.8)",
+                    "borderWidth": "1px"
+                  }
+                },
+                {
+                  "type": "area-series",
+                  "name": "气化板数据",
+                  "styles": {
+                    "fillColor": "rgba(82, 196, 26, 0.2)",
+                    "strokeColor": "rgba(82, 196, 26, 1)",
+                    "strokeWidth": "2px"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "headerSlots": [
+    {
+      "slotType": "header-right",
+      "elementType": "statistic",
+      "content": "2k3+785CD观测",
+      "figmaNodeId": "unknown",
+      "styles": {
+        "fontSize": 12,
+        "color": "rgba(0, 0, 0, 0.65)"
+      }
+    },
+    {
+      "slotType": "header-right",
+      "elementType": "icon",
+      "content": "图表图标",
+      "figmaNodeId": "7941",
+      "resource": "../resources/images/icon-7941.png",
+      "recommendedUsage": "imgSrc",
+      "styles": {
+        "width": "16px",
+        "height": "16px"
+      }
+    },
+    {
+      "slotType": "header-right",
+      "elementType": "icon",
+      "content": "数据图标",
+      "figmaNodeId": "7945",
+      "resource": "../resources/images/icon-7945.png",
+      "recommendedUsage": "imgSrc",
+      "styles": {
+        "width": "16px",
+        "height": "16px"
+      }
+    },
+    {
+      "slotType": "header-right",
+      "elementType": "label",
+      "content": "8",
+      "figmaNodeId": "unknown",
+      "styles": {
+        "fontSize": 10,
+        "color": "rgba(255, 255, 255, 1)",
+        "backgroundColor": "rgba(245, 63, 63, 1)",
+        "borderRadius": "7px",
+        "padding": "0 4px",
+        "minWidth": "14px",
+        "height": "14px",
+        "lineHeight": "14px",
+        "textAlign": "center"
+      }
+    }
+  ],
+  "styles": {
+    "backgroundBrightness": "light",
+    "theme": "浅色清新监测风",
+    "colors": [
+      "rgba(237, 244, 251, 1)",
+      "rgba(85, 158, 255, 1)",
+      "rgba(82, 196, 26, 1)",
+      "rgba(255, 77, 79, 1)",
+      "rgba(0, 0, 0, 0.65)",
+      "rgba(0, 0, 0, 0.45)"
+    ],
+    "background": "浅蓝灰色渐变背景(rgba(237, 244, 251, 1))",
+    "decorations": [
+      "顶部Tab栏使用渐变背景图",
+      "激活Tab有白色背景+蓝色文字",
+      "面积图使用浅绿色半透明填充+深绿边框",
+      "红色虚线标注预警阈值"
+    ],
+    "emphasis": [
+      "激活Tab蓝色文字(rgba(85, 158, 255, 1))",
+      "Y轴刻度30处红色虚线",
+      "右上角红色数字徽章"
+    ]
+  },
+  "interactions": [
+    {
+      "target": "顶部Tab切换栏",
+      "type": "tab-switch",
+      "description": "切换不同监测类型（气化板/能见度/洞内照明/洞外光强）",
+      "defaultState": "常驻，气化板激活",
+      "evidence": "激活Tab有明显样式区分（白底+蓝字）",
+      "options": ["气化板", "能见度", "洞内照明", "洞外光强"]
+    },
+    {
+      "target": "右上角图表图标",
+      "type": "icon-button",
+      "description": "切换图表展示模式（推测）",
+      "defaultState": "常驻",
+      "evidence": "独立图标按钮"
+    },
+    {
+      "target": "右上角数据图标",
+      "type": "icon-button",
+      "description": "数据相关操作（推测）",
+      "defaultState": "常驻，带红色徽章数字8",
+      "evidence": "独立图标按钮+数字徽章"
+    },
+    {
+      "target": "面积图",
+      "type": "chart-hover",
+      "description": "悬停显示具体时间点数值（推测）",
+      "defaultState": "常驻显示趋势",
+      "evidence": "标准图表交互"
+    }
+  ],
+  "charts": [
+    {
+      "section": "chart-area",
+      "type": "area",
+      "series": ["气化板数据"],
+      "legend": [],
+      "legendPosition": "",
+      "seriesColors": ["rgba(82, 196, 26, 1)"],
+      "legendType": "",
+      "axes": "X轴为24小时时间刻度（2,4,6...24时），Y轴为数值刻度（0,10,20,30,40,50）",
+      "tooltip": "未显示tooltip，推测悬停会显示时间点+数值",
+      "notes": [
+        "Y轴30处有红色虚线阈值线",
+        "面积图使用浅绿色填充(rgba(82, 196, 26, 0.2))+深绿边框(rgba(82, 196, 26, 1))",
+        "X轴单位为'时'",
+        "数据趋势呈现波动，在8-12时达到峰值后下降"
+      ]
+    }
+  ],
+  "doNotInvent": [
+    "不要臆造Tab切换后的具体数据内容（能见度/洞内照明/洞外光强的具体数值和曲线形态）",
+    "不要臆造tooltip的具体显示格式和内容",
+    "不要臆造右上角图标按钮的具体功能逻辑",
+    "不要臆造红色徽章数字8的具体含义",
+    "不要臆造预警线30的触发逻辑和告警规则",
+    "不要臆造数据刷新频率和自动更新机制",
+    "不要臆造'2k3+785CD观测'文字的具体跳转逻辑",
+    "不要臆造面积图的实时数据源和历史数据查询能力"
+  ],
+  "notes": [
+    "组件整体为浅色主题，背景使用浅蓝灰色",
+    "顶部Tab切换栏有独立背景图资源(bg-7890.png, bg-tab-active-7891.png)",
+    "右上角有两个功能图标(icon-7941.png, icon-7945.png)和一个红色数字徽章",
+    "面积图Y轴30处的红色虚线可能是预警阈值线",
+    "X轴时间范围为24小时，刻度间隔为2小时",
+    "当前激活Tab为'气化板'，显示绿色趋势面积图",
+    "右侧统计文字'2k3+785CD观测'可能是观测点位编号",
+    "组件适配base-panel外壳，slot内容需完整还原Tab栏+图表区域"
+  ]
+}
+```

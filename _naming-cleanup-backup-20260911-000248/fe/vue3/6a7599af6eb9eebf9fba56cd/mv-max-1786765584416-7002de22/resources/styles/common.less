@@ -1,0 +1,534 @@
+// ==========================================
+// 流量监测面板 - 共享业务样式
+// 按功能语义命名，主组件与子组件按需引入
+// ==========================================
+
+// 面板根容器
+.flow-monitor-root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #edf4fb;
+  box-shadow: 0 4px 10px 0 rgba(74, 117, 141, 0.25);
+  overflow: hidden;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+  box-sizing: border-box;
+}
+
+// 面板头部
+/* [Layout Refine] Figma header y=119.1, root y=109 → padding-top: 10px */
+.flow-panel-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0 0;
+  min-height: 33px;
+  flex-shrink: 0;
+  position: relative;
+
+  .header-left {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    position: relative;
+  }
+
+  // 装饰圆点
+  .header-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #1252fa 0%, #d6effc 100%);
+    flex-shrink: 0;
+    position: relative;
+
+    &::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 3px;
+      height: 3px;
+      border-radius: 50%;
+      background: #559eff;
+    }
+  }
+
+  // 装饰渐变线
+  /* [Style Refine] Figma Vector 1476 width=362 → width: 362px */
+  .header-line {
+    width: 362px;
+    height: 6px;
+    background: linear-gradient(90deg, #559eff 0%, rgba(85, 158, 255, 0.1) 100%);
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+  // 面板标题
+  .header-title {
+    font-size: 16px;
+    font-weight: 700;
+    margin: 0;
+    padding: 0;
+    background: linear-gradient(90deg, #1990ff 0%, #5a7eff 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 19px;
+    white-space: nowrap;
+  }
+
+  // 副标题/更新时间
+  .header-subtitle {
+    font-size: 14px;
+    font-weight: 400;
+    background: linear-gradient(90deg, #1990ff 0%, #5a7eff 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 21px;
+    white-space: nowrap;
+  }
+}
+
+// 内容区域
+/* [Layout Refine] Figma slot x=10, root x=10 → padding: 0 */
+.flow-panel-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  gap: 8px;
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  // 隐藏滚动条但保持可滚动
+  &::-webkit-scrollbar {
+    width: 0;
+    display: none;
+  }
+}
+
+// 区块通用容器
+.flow-section {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+// 区块子头部（标题行）
+.flow-section-subheader {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 24px;
+  margin-bottom: 4px;
+
+  .subheader-left {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .subheader-right {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
+
+  // 区块标题图标（菱形装饰）
+  .section-icon {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    position: relative;
+
+    // 外层蓝色方块
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 18px;
+      height: 18px;
+      background: #1990ff;
+      border-radius: 2px;
+    }
+
+    // 内层白色方块
+    &::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 14px;
+      height: 14px;
+      background: #ffffff;
+      border-radius: 1px;
+    }
+
+    // 中心渐变方块
+    .icon-inner {
+      position: absolute;
+      top: 5px;
+      left: 5px;
+      width: 9px;
+      height: 9px;
+      background: linear-gradient(135deg, #1990ff 0%, #5a7eff 100%);
+      border-radius: 1px;
+      z-index: 1;
+    }
+  }
+
+  // 区块标题文字
+  .section-title {
+    font-size: 16px;
+    font-weight: 500;
+    color: #333333;
+    line-height: 24px;
+    text-shadow: 0 5px 5px rgba(255, 255, 255, 0.8);
+    white-space: nowrap;
+  }
+}
+
+// 统计数值卡片
+.flow-stat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+
+  .stat-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: #333333;
+    line-height: 24px;
+    white-space: nowrap;
+  }
+
+  .stat-value {
+    font-family: 'Roboto', sans-serif;
+    font-size: 24px;
+    font-weight: 900;
+    line-height: 28px;
+    white-space: nowrap;
+
+    &--blue {
+      color: #006fe3;
+    }
+
+    &--cyan {
+      color: #0c9dbe;
+    }
+
+    &--primary {
+      color: #1990ff;
+    }
+
+    &--accent {
+      color: #fa8c16;
+    }
+
+    &--orange {
+      color: #ff6a00;
+    }
+  }
+}
+
+// 下拉选择控件
+.flow-dropdown {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  width: 100px;
+  height: 30px;
+  padding: 4px 8px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  color: #333333;
+  line-height: 22px;
+
+  .dropdown-text {
+    font-size: 14px;
+    color: #333333;
+  }
+
+  .dropdown-arrow {
+    width: 8px;
+    height: 4px;
+    position: relative;
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 0;
+      height: 0;
+      border-left: 4px solid transparent;
+      border-right: 4px solid transparent;
+      border-top: 5px solid #666666;
+    }
+  }
+}
+
+// Tab 切换按钮组
+.flow-tab-group {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+
+  .flow-tab-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 19px;
+    padding: 0 12px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 21px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+
+    &--active {
+      background: #1990ff;
+      color: #ffffff;
+      font-weight: 500;
+      border-color: rgba(199, 224, 255, 1);
+    }
+
+    &--inactive {
+      background: #6680a0;
+      color: #ffffff;
+      border-color: rgba(172, 196, 225, 1);
+    }
+
+    &:hover {
+      opacity: 0.85;
+    }
+  }
+}
+
+// 链接按钮
+.flow-link {
+  font-size: 12px;
+  color: #1990ff;
+  cursor: pointer;
+  white-space: nowrap;
+  line-height: 18px;
+
+  &:hover {
+    opacity: 0.8;
+  }
+}
+
+// 图表容器
+.flow-chart-wrapper {
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+
+  .chart-container {
+    width: 100%;
+    height: 100%;
+    min-height: 120px;
+  }
+}
+
+// 图表标题行（带装饰竖条）
+.flow-chart-title {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 3px;
+  margin-bottom: 4px;
+
+  .title-bar {
+    width: 3px;
+    height: 12px;
+    border-radius: 6px;
+    background: linear-gradient(180deg, #388dff 0%, #388dff 100%);
+    flex-shrink: 0;
+  }
+
+  .title-text {
+    font-size: 14px;
+    font-weight: 400;
+    color: #333333;
+    line-height: 21px;
+  }
+}
+
+// 车型分布卡片
+.flow-vehicle-card {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+
+  .vehicle-card-bg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-size: 100% 100%z-index: 0;
+  }
+
+  .vehicle-card-content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 8px;
+  }
+
+  .vehicle-card-title {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    margin-bottom: 4px;
+
+    .title-bg {
+      width: 130px;
+      height: 9px;
+      background-size: 100% 100%position: absolute;
+    }
+
+    .title-label {
+      font-size: 14px;
+      font-weight: 500;
+      color: #333333;
+      line-height: 18px;
+      position: relative;
+      z-index: 1;
+    }
+  }
+
+  .vehicle-stats {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-around;
+    width: 100%;
+    margin-top: 4px;
+
+    .vehicle-stat-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+
+      .stat-type {
+        font-size: 12px;
+        color: #333333;
+        line-height: 18px;
+      }
+
+      .stat-num {
+        font-family: 'Roboto', sans-serif;
+        font-size: 18px;
+        font-weight: 700;
+        line-height: 18px;
+
+        &--bus {
+          color: #1399ff;
+        }
+
+        &--truck {
+          color: #ff6a00;
+        }
+      }
+    }
+  }
+}
+
+// 准确率文字
+.flow-accuracy {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 21px;
+
+  .accuracy-item {
+    font-size: 12px;
+    font-weight: 500;
+    color: #52c41a;
+    line-height: 12px;
+  }
+}
+
+// 图例样式
+.flow-legend {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+
+  .legend-item {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+
+    .legend-line {
+      width: 14px;
+      height: 2px;
+      position: relative;
+
+      &::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: inherit;
+      }
+
+      &--blue {
+        background: #3385ff;
+
+        &::after {
+          background: #ffffff;
+          border: 1px solid #3385ff;
+        }
+      }
+
+      &--cyan {
+        background: #00cccc;
+
+        &::after {
+          background: #ffffff;
+          border: 1px solid #00cccc;
+        }
+      }
+    }
+
+    .legend-text {
+      font-size: 12px;
+      color: #333333;
+      line-height: 18px;
+    }
+  }
+}

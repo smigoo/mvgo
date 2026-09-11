@@ -1,0 +1,171 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 78,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "header.title 与 body.children 中均包含“环境监测”文本，渲染会重复。",
+        "suggestion": "保留 header.title 或 body 文本其一，避免标题重复输出。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[1].children[0]",
+        "message": "Y轴标签为“辆”，与系列“CO浓度”语义不符，可能为源图标注错误。",
+        "suggestion": "核实单位，CO浓度应使用 ppm 或 mg/m³，或修正系列名称。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[1].body.children[1]",
+        "message": "chart-area 平铺7类子节点，层级与职责混杂，结构略深。",
+        "suggestion": "将刻度、轴标签、图例、参考线等归类为 axes/legend 子组。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].headerRelation",
+        "message": "headerRelation 为 content-below-title，但 header.title 为 null，关系不明确。",
+        "suggestion": "缺少标题时改为 null 或移除该字段，避免影响插槽映射。"
+      }
+    ],
+    "recommendations": [
+      "合并标题栏文本，避免 header 与 body 重复渲染同一标题。",
+      "修正图表Y轴单位或系列命名，确保数据语义一致。",
+      "按 axes/legend/series 分组图表子节点，降低嵌套深度。"
+    ],
+    "summary": "整体布局清晰、结构基本合理，但存在标题重复、Y轴单位语义不符、层级略深等问题，建议修正后使用。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名），用于框架注入与运行时主题切换",
+      "--colorPrimary": "#559EFF",
+      "--colorPrimaryBg": "#559EFF1A",
+      "--colorBg": "#EDF4FB",
+      "--colorBgContainer": "#ffffff",
+      "--colorTextBase": "#333333",
+      "--colorSuccess": "#52c41a",
+      "--colorDanger": "#F53F3F",
+      "--fontSize": "14px",
+      "--fontSizeHeading": "18px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射，用于theme-vars.less中的.theme-light()和.theme-dark() mixin",
+      "@color-primary": "#559EFF",
+      "@color-primary-bg": "rgba(85, 158, 255, 0.1)",
+      "@color-bg": "#EDF4FB",
+      "@color-bg-container": "#ffffff",
+      "@color-text-base": "#333333",
+      "@color-text-secondary": "#666666",
+      "@color-success": "#52c41a",
+      "@color-danger": "#F53F3F",
+      "@font-size-base": "14px",
+      "@font-size-heading": "18px",
+      "@border-radius-base": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类，遵循纯Less变量主题模式与CSS变量回退机制",
+      ".monitor-container": {
+        "width": "100%",
+        "height": "100%",
+        "background": "#EDF4FB",
+        "padding": "16px",
+        "box-sizing": "border-box",
+        "font-family": "PingFang SC, Microsoft YaHei, sans-serif"
+      },
+      ".monitor-card": {
+        "background": "var(--colorBgContainer, @color-bg-container)",
+        "border-radius": "var(--borderRadius, @border-radius-base)",
+        "padding": "16px",
+        "box-shadow": "0 2px 8px rgba(0, 0, 0, 0.04)"
+      },
+      ".tab-item": {
+        "padding": "8px 16px",
+        "color": "var(--colorTextBase, @color-text-secondary)",
+        "cursor": "pointer",
+        "position": "relative",
+        "transition": "all 0.3s"
+      },
+      ".tab-item-active": {
+        "color": "var(--colorPrimary, @color-primary)",
+        "font-weight": "600",
+        "background": "linear-gradient(135deg, var(--colorPrimary, @color-primary), var(--colorPrimary, @color-primary) 80%, transparent 80%)",
+        "clip-path": "polygon(0 0, 100% 0, 90% 100%, 0 100%)"
+      },
+      ".chart-area": {
+        "fill": "url(#greenGradient)",
+        "opacity": "0.8"
+      },
+      ".warning-line": {
+        "stroke": "var(--colorDanger, @color-danger)",
+        "stroke-width": "2px",
+        "stroke-dasharray": "6, 4",
+        "filter": "drop-shadow(0 0 4px rgba(245, 63, 63, 0.4))"
+      },
+      ".text-highlight-primary": {
+        "color": "var(--colorPrimary, @color-primary)",
+        "font-weight": "bold"
+      },
+      ".text-highlight-danger": {
+        "color": "var(--colorDanger, @color-danger)",
+        "font-weight": "bold"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主题色 #559EFF 映射为 --colorPrimary，用于Tab选中态、箭头背景及主要高亮元素",
+      "容器背景 #EDF4FB 已优先直接落地为 Figma 字面量值（.monitor-container），避免关键可见背景仅依赖 CSS 变量",
+      "图表绿色渐变填充区域通过 .chart-area 类结合 SVG 渐变定义实现，基础色映射为 --colorSuccess (#52c41a)",
+      "红色虚线预警线通过 .warning-line 类实现，使用 stroke-dasharray 绘制虚线，并添加 drop-shadow 增强红色高亮预警视觉效果",
+      "白色 #ffffff 映射为 --colorBgContainer，作为浅色科技风下的卡片/面板背景色，以在浅灰蓝大背景中形成层级对比",
+      "所有样式类均遵循 var(--camelCase, @less-fallback) 规范，确保在 Less 编译期与 CSS 运行时均能正确解析并支持双主题切换"
+    ],
+    "elementStyleMap": {
+      "header-title": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "filter-and-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-tabs-监测指标Tab-5": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-icon-group-x-10": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "chart-area-reference-line-预警线-2": {
+        "color": "#F53F3F"
+      },
+      "el-reference-line-预警线-16": {
+        "color": "#F53F3F"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "header-title",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 2,
+        "title": "环境监测"
+      },
+      {
+        "id": "filter-and-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 13,
+        "title": "监测内容与图表"
+      }
+    ],
+    "isForced": false,
+    "minFiles": 0,
+    "reason": "有效 sections=2 < 3 → 不强制拆分"
+  }
+}

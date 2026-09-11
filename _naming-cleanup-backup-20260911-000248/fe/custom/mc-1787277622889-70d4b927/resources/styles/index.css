@@ -1,0 +1,284 @@
+.dark .c-traffic-monitor-root {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+.dark .c-traffic-forecast {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 16px;
+  background: rgba(8, 28, 51, 0.6);
+  border-radius: 8px;
+}
+.dark .tf-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.dark .tf-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #e5f0ff;
+}
+.dark .tf-update {
+  font-size: 12px;
+  color: #7a8fa6;
+}
+.dark .tf-list {
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dark .tf-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.dark .tf-item:last-child {
+  border-bottom: none;
+}
+.dark .tf-label {
+  font-size: 14px;
+  color: #b8c9e0;
+}
+.dark .tf-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+}
+.dark .tf-unit {
+  margin-left: 2px;
+  font-size: 12px;
+  font-style: normal;
+  color: #7a8fa6;
+}
+.dark .tf-trend {
+  min-width: 56px;
+  padding: 2px 6px;
+  font-size: 13px;
+  text-align: right;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.2);
+}
+.dark .tf-trend--up {
+  color: #f56c6c;
+}
+.dark .tf-trend--down {
+  color: #67c23a;
+}
+.dark .total-traffic-panel {
+  width: 100%;
+  height: 100%;
+  padding: 16px;
+  box-sizing: border-box;
+  background: rgba(0, 20, 40, 0.6);
+  border: 1px solid rgba(0, 150, 255, 0.3);
+  border-radius: 4px;
+  color: #fff;
+}
+.dark .total-traffic-panel .panel-title {
+  font-size: 16px;
+  font-weight: bold;
+  margin-bottom: 12px;
+  color: #00e5ff;
+}
+.dark .total-traffic-panel .traffic-data {
+  display: flex;
+  justify-content: space-around;
+  margin-bottom: 16px;
+}
+.dark .total-traffic-panel .data-item {
+  text-align: center;
+}
+.dark .total-traffic-panel .data-item .label {
+  font-size: 12px;
+  color: #aaa;
+  display: block;
+}
+.dark .total-traffic-panel .data-item .value {
+  font-size: 24px;
+  color: #fff;
+  font-weight: bold;
+}
+.dark .total-traffic-panel .chart-container {
+  width: 100%;
+  height: calc(100% - 100px);
+}
+.dark .vehicle-distribution {
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+}
+.dark .vehicle-distribution .vd-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #e5f0ff;
+}
+.dark .vehicle-distribution .vd-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dark .vehicle-distribution .vd-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+}
+.dark .vehicle-distribution .vd-label {
+  font-size: 14px;
+  color: #b8c9e0;
+}
+.dark .vehicle-distribution .vd-value {
+  font-weight: 500;
+  color: #fff;
+}
+.light .c-traffic-monitor-root {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+.light .c-traffic-forecast {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 16px;
+  background: rgba(8, 28, 51, 0.6);
+  border-radius: 8px;
+}
+.light .tf-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.light .tf-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #e5f0ff;
+}
+.light .tf-update {
+  font-size: 12px;
+  color: #7a8fa6;
+}
+.light .tf-list {
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.light .tf-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.light .tf-item:last-child {
+  border-bottom: none;
+}
+.light .tf-label {
+  font-size: 14px;
+  color: #b8c9e0;
+}
+.light .tf-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+}
+.light .tf-unit {
+  margin-left: 2px;
+  font-size: 12px;
+  font-style: normal;
+  color: #7a8fa6;
+}
+.light .tf-trend {
+  min-width: 56px;
+  padding: 2px 6px;
+  font-size: 13px;
+  text-align: right;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.2);
+}
+.light .tf-trend--up {
+  color: #f56c6c;
+}
+.light .tf-trend--down {
+  color: #67c23a;
+}
+.light .total-traffic-panel {
+  width: 100%;
+  height: 100%;
+  padding: 16px;
+  box-sizing: border-box;
+  background: rgba(0, 20, 40, 0.6);
+  border: 1px solid rgba(0, 150, 255, 0.3);
+  border-radius: 4px;
+  color: #fff;
+}
+.light .total-traffic-panel .panel-title {
+  font-size: 16px;
+  font-weight: bold;
+  margin-bottom: 12px;
+  color: #00e5ff;
+}
+.light .total-traffic-panel .traffic-data {
+  display: flex;
+  justify-content: space-around;
+  margin-bottom: 16px;
+}
+.light .total-traffic-panel .data-item {
+  text-align: center;
+}
+.light .total-traffic-panel .data-item .label {
+  font-size: 12px;
+  color: #aaa;
+  display: block;
+}
+.light .total-traffic-panel .data-item .value {
+  font-size: 24px;
+  color: #fff;
+  font-weight: bold;
+}
+.light .total-traffic-panel .chart-container {
+  width: 100%;
+  height: calc(100% - 100px);
+}
+.light .vehicle-distribution {
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+}
+.light .vehicle-distribution .vd-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #e5f0ff;
+}
+.light .vehicle-distribution .vd-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.light .vehicle-distribution .vd-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+}
+.light .vehicle-distribution .vd-label {
+  font-size: 14px;
+  color: #b8c9e0;
+}
+.light .vehicle-distribution .vd-value {
+  font-weight: 500;
+  color: #fff;
+}

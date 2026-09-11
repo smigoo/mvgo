@@ -1,0 +1,216 @@
+// 业务共享 class：按功能语义命名，供主组件与子组件按需引入
+// 禁止用组件 ID 作前缀，禁止全局裸 class
+
+@import './theme-vars.less';
+
+// 环境监测根容器
+.env-monitor-root {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  // 深色背景直接硬编码，禁止用 CSS 变量兜底
+  background: rgba(30, 40, 60, 1);
+  color: @color-text-base;
+  font-size: @font-size-base;
+  overflow: hidden;
+}
+
+// 标题栏容器
+.env-monitor-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px 0;
+  position: relative;
+  flex-shrink: 0;
+}
+
+// 标题装饰图标（CSS 绘制，无可用资源）
+.env-monitor-header-icon {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1252fa 0%, #559eff 100%);
+}
+
+// 标题文字
+.env-monitor-header-title {
+  font-size: 16px;
+  font-weight: 700;
+  // 标题渐变色：用 background-clip 实现渐变文字
+  background: linear-gradient(90deg, #1990ff 0%, #5a7eff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1.2;
+}
+
+// 标题下方渐变分隔线
+.env-monitor-divider {
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, @color-divider-start 0%, @color-divider-end 100%);
+  flex-shrink: 0;
+  margin: 0;
+}
+
+// Tab 切换栏与操作区容器
+.env-monitor-tabs-bar {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 14px;
+  flex-shrink: 0;
+}
+
+// Tab 标签组容器（挂 bg1 背景图）
+.env-monitor-tabs-list {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+  height: 27px;
+  // 背景尺寸严格匹配 Figma：295×27，由 :style 注入 backgroundImage
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+
+// 单个 Tab 项
+.env-monitor-tab-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 21px;
+  padding: 0 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #2c9bea;
+  cursor: pointer;
+  border-radius: 3px;
+  margin: 3px 2px;
+  white-space: nowrap;
+  // 背景尺寸匹配激活图：78×21，由 :style 条件注入
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+  transition: color 0.2s;
+}
+
+// Tab 激活态文字样式
+.env-monitor-tab-item--active {
+  color: #ffffff;
+  text-shadow: 0 0.6px 0 rgba(0, 111, 227, 1);
+}
+
+// 右侧图标操作区容器
+.env-monitor-tabs-icon-group {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+}
+
+// 图标按钮（包裹 <img>）
+.env-monitor-icon-btn {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  flex-shrink: 0;
+
+  img {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+    display: block;
+  }
+}
+
+// badge 红色圆形数字标记
+.env-monitor-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #f53f3f;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+// 图表区域外层容器
+.env-monitor-chart-section {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 8px 4px 8px;
+  // 图表背景色（bg 资源下载失败，用 CSS 半透明替代）
+  background: rgba(237, 244, 251, 0.05);
+  position: relative;
+}
+
+// 图表顶部信息行（Y轴单位 + 图例）
+.env-monitor-chart-topbar {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  margin-bottom: 2px;
+}
+
+// Y 轴单位标签
+.env-monitor-chart-yunit {
+  font-size: 10px;
+  color: @color-text-secondary;
+  flex-shrink: 0;
+}
+
+// 图例容器
+.env-monitor-chart-legend {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+// 图例色块（线段样式）
+.env-monitor-chart-legend-line {
+  width: 14px;
+  height: 2px;
+  background: @color-success;
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+
+// 图例文字
+.env-monitor-chart-legend-text {
+  font-size: 10px;
+  color: @color-success;
+}
+
+// ECharts 图表容器
+.env-monitor-chart-canvas {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}

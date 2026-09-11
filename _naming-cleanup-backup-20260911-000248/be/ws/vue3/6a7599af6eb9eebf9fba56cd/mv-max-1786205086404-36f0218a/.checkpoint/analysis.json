@@ -1,0 +1,197 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 75,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[0]",
+        "message": "图表容器使用了固定宽度 `width: 380`，违反了“容器布局禁止固定宽度”规范，会导致组件无法自适应不同屏幕尺寸，且可能引发图表越界问题。",
+        "suggestion": "将 `width: 380` 改为 `width: 100%`，并确保父容器使用 flex 布局。同时为图表容器添加 `min-width: 0` 和 `overflow: hidden` 以符合图表边界约束。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections",
+        "message": "`section-header-tabs` 和 `section-chart` 的 body 中重复引用了相同的背景图 `bg-7890.png`。在垂直堆叠布局中，这会导致背景图重复渲染、拼接异常或增加不必要的DOM渲染负担。",
+        "suggestion": "将背景图提取到最外层父级容器统一设置，或仅保留在一个 section 中，避免重复加载和渲染。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "`headerRelation` 设置为 `content-below-title`，但该 section 的 `header.title` 为 null。由于面板标题已由 `base-panel` 统一处理，内部 section 不需要此字段，保留会导致语义混淆。",
+        "suggestion": "移除 `headerRelation` 字段或将其设为 null，明确该 section 仅为内部业务区块，不涉及面板标题层级关系。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "charts[0] & chartDataHints",
+        "message": "图表数据中 Y 轴单位“辆”与图例“CO浓度”存在明显矛盾；此外，`chartDataHints` 中只提供了单一数据源，未体现 Tab 切换（一氧化碳、能见度等）对应的多组数据结构，无法指导代码生成阶段实现 Tab 数据联动。",
+        "suggestion": "在代码生成时根据语义修正 Y 轴单位（如 ppm 或 mg/m³）；在 `chartDataHints` 中补充按 Tab 分类的多组模拟数据结构，确保满足“Tab切换必须实现数据联动”的规范。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "覆盖率（coverageRate）为 0，缺失了大量 Figma 节点（如 header, slot-con, @echarts/line 等），可能导致布局还原度不足或关键结构丢失。",
+        "suggestion": "检查 Figma 解析过程，确保关键节点被正确映射；若为解析工具限制，需在布局中手动补充缺失的关键结构（如 echarts 容器、插槽容器等）。"
+      }
+    ],
+    "recommendations": [
+      "将 `chart-container` 的固定宽度改为 `100%`，并设置 `min-width: 0` 和 `overflow: hidden`，以严格符合宽度自适应和图表边界约束。",
+      "统一背景图管理，移除子 section 中重复的 `backgroundImage` 配置，改由最外层容器统一设置背景，提升渲染性能。",
+      "在 `chartDataHints` 中补充 Tab 切换对应的多组数据结构（如 `dataMap: { '一氧化碳': [...], '能见度': [...] }`），以指导代码生成阶段实现 Tab 与图表的数据联动。",
+      "修正 Y 轴单位“辆”的识别错误，在代码生成时根据“CO浓度”的语义自动修正为正确的单位，或在图表配置中隐藏错误的 Y 轴单位标签。"
+    ],
+    "summary": "整体布局结构清晰，区域划分合理，能够准确反映“环境监测”组件的核心功能（Tab切换与图表展示）。但存在固定宽度导致无法自适应、背景图重复引用、以及 Figma 节点覆盖率过低等问题。此外，Tab 切换的数据联动结构在布局中体现不足，且存在 Y 轴单位识别矛盾。建议修复固定宽度问题，优化背景图配置，并补充多状态数据结构，以确保代码生成阶段能够产出高质量、可自适应且交互完整的组件。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名），适配深色科技监测风",
+      "--colorPrimary": "rgba(85,158,255,1)",
+      "--colorSuccess": "#52c41a",
+      "--colorDanger": "#f53f3f",
+      "--colorTextBase": "rgba(237,244,251,1)",
+      "--colorBgBase": "#121a28",
+      "--colorBorder": "rgba(237,244,251,0.15)",
+      "--fontSize": "14px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射，用于common.less及主题mixin中",
+      "@color-primary": "rgba(85,158,255,1)",
+      "@color-success": "#52c41a",
+      "@color-danger": "#f53f3f",
+      "@color-text-base": "rgba(237,244,251,1)",
+      "@color-bg-base": "#121a28",
+      "@color-border": "rgba(237,244,251,0.15)",
+      "@font-size-base": "14px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类，使用em和var()保证响应式与主题切换",
+      ".monitor-container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "width": "100%",
+        "height": "100%",
+        "background-color": "var(--colorBgBase, #121a28)",
+        "color": "var(--colorTextBase, rgba(237,244,251,1))",
+        "font-size": "var(--fontSize, 14px)"
+      },
+      ".section-title": {
+        "display": "flex",
+        "align-items": "center",
+        "font-size": "1.14em",
+        "font-weight": "600",
+        "color": "var(--colorTextBase)",
+        "margin-bottom": "1em"
+      },
+      ".title-decoration": {
+        "display": "inline-block",
+        "width": "0.6em",
+        "height": "0.6em",
+        "margin-right": "0.5em",
+        "background-color": "var(--colorPrimary)",
+        "clip-path": "polygon(0 0, 100% 50%, 0 100%)"
+      },
+      ".tab-item": {
+        "padding": "0.5em 1.2em",
+        "font-size": "1em",
+        "color": "rgba(237,244,251,0.65)",
+        "cursor": "pointer",
+        "transition": "all 0.3s ease"
+      },
+      ".tab-item.active": {
+        "color": "var(--colorPrimary)",
+        "font-weight": "500",
+        "border-bottom": "2px solid var(--colorPrimary)"
+      },
+      ".chart-grid-line": {
+        "stroke": "var(--colorBorder, rgba(237,244,251,0.15))",
+        "stroke-width": "1",
+        "fill": "none"
+      },
+      ".warning-line": {
+        "stroke": "var(--colorDanger, #f53f3f)",
+        "stroke-width": "2",
+        "stroke-dasharray": "8, 4",
+        "fill": "none"
+      },
+      ".status-dot": {
+        "display": "inline-block",
+        "width": "0.5em",
+        "height": "0.5em",
+        "border-radius": "50%",
+        "margin-right": "0.4em"
+      },
+      ".status-dot.success": {
+        "background-color": "var(--colorSuccess)"
+      },
+      ".status-dot.danger": {
+        "background-color": "var(--colorDanger)"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调映射为科技蓝 rgba(85,158,255,1)，用于Tab高亮、标题装饰及核心交互元素",
+      "背景色整体偏深灰/科技蓝灰 (#121a28)，rgba(237,244,251,1) 作为局部高光、高亮文字基础色，通过降低透明度 (0.15) 实现图表网格线效果",
+      "预警状态使用 #f53f3f 红色虚线 (stroke-dasharray) 强调异常，正常状态使用 #52c41a 绿色",
+      "标题左侧装饰箭头通过 clip-path 实现三角形，增强科技监测风格，避免引入额外图片资源",
+      "容器背景应优先直接落地为 Figma 字面量值，避免关键可见背景只依赖 CSS 变量，同时保留 var() 兜底机制"
+    ],
+    "elementStyleMap": {
+      "section-header-tabs": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tabs-group": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "view-controls": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-12": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-header-tabs",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 8,
+        "title": "顶部Tab与控件栏"
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "监测数据图表"
+      }
+    ],
+    "isForced": false,
+    "minFiles": 0,
+    "reason": "有效 sections=2 < 3 → 不强制拆分"
+  }
+}

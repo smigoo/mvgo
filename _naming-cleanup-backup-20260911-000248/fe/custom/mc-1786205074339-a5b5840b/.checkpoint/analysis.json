@@ -1,0 +1,151 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 75,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[0]",
+        "message": "图表容器使用了固定宽度 width: 380，违反了'宽度自适应约束'。组件内部布局必须自适应容器宽度，禁止使用固定 px 宽度限制容器伸缩。",
+        "suggestion": "将图表容器的 width 改为 '100%' 或使用 flex: 1，高度保留 110px。同时确保外层容器设置 min-width: 0 和 overflow: hidden。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "Figma 节点覆盖率极低（coverageRate: 0），缺失了 26 个关键节点（包括 header、坐标轴文本、预警线、图例等）。这会导致生成的代码严重缺失设计稿细节。",
+        "suggestion": "重新检查 Figma 解析过程或补充缺失的节点结构。确保坐标轴、预警线、图例等关键图表元素在布局中被正确识别和映射。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[*].body",
+        "message": "布局嵌套深度达到 4 层（layout -> sections -> body -> children），部分 section 的 body 内仅有一个子元素且布局方向与 section 一致，存在冗余嵌套。",
+        "suggestion": "如果 body 内只有一个子元素且布局方向相同，建议合并层级，将 children 直接提升到 section 下，或简化 body 结构以减少 DOM 层级。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[*].body.backgroundImage",
+        "message": "背景图使用了本地相对路径 '../resources/images/bg-7890.png'。根据微码规范，禁止在代码中使用 ESM import 引入本地图片，否则会触发 RUNTIME-004 运行时错误。",
+        "suggestion": "在代码生成阶段，必须将该图片转换为 base64 内联，或使用同源 URL（如 /api/preview/.../bg-7890.png）进行引用。"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "chartDataHints[0].labels",
+        "message": "图表 Y 轴单位识别为 '辆'，但当前图表为 'CO浓度面积图'，业务逻辑冲突（notes 中也指出疑似模板残留）。",
+        "suggestion": "在代码生成时，应忽略或修正该 Y 轴单位，CO 浓度的单位通常为 'mg/m³' 或 'ppm'，避免生成错误的业务 UI。"
+      }
+    ],
+    "recommendations": [
+      "在代码生成阶段，必须为 Tab 切换（一氧化碳、能见度等）实现数据联动，使用 watch 监听 activeTab 变化并更新 ECharts 数据，禁止仅做样式切换。",
+      "图表必须配置 tooltip（trigger: 'axis'），且不能省略。如果设计稿有自定义图例，需实现点击图例切换系列显示的联动逻辑。",
+      "确保图表容器外层设置 min-width: 0 和 overflow: hidden，ECharts 的 grid 配置 containLabel: true，防止坐标轴文字撑破容器。",
+      "由于 Figma 覆盖率极低，建议人工核对设计稿，手动补充缺失的预警线（红色虚线）、坐标轴刻度等关键视觉元素的代码实现。"
+    ],
+    "summary": "该布局结构整体区域划分清晰，能够识别出 Tab 切换和图表区域，但在宽度自适应和 Figma 节点覆盖率上存在严重问题。图表容器使用了固定宽度，违反了自适应规范；同时 0% 的覆盖率意味着大量设计稿细节（如坐标轴、预警线）未被解析，可能导致最终生成的代码与设计稿偏差较大。此外，背景图路径和 Y 轴单位识别也需要在代码生成阶段进行修正。建议修复固定宽度问题，并补充缺失的图表细节节点。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorBgBase": "#EDF4FB",
+      "--colorPrimary": "#559EFF",
+      "--colorSuccess": "#52C41A",
+      "--colorError": "#F53F3F",
+      "--colorTextBase": "#333333",
+      "--fontSize": "14px",
+      "--borderRadius": "4px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-bg-base": "#EDF4FB",
+      "@color-primary": "#559EFF",
+      "@color-success": "#52C41A",
+      "@color-error": "#F53F3F",
+      "@color-text-base": "#333333",
+      "@font-size-base": "14px",
+      "@border-radius-base": "4px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "width": "100%",
+        "height": "100%",
+        "background-color": "#EDF4FB",
+        "color": "var(--colorTextBase, #333333)",
+        "font-size": "var(--fontSize, 14px)"
+      },
+      ".tab-item": {
+        "padding": "8px 16px",
+        "border-radius": "var(--borderRadius, 4px)",
+        "cursor": "pointer",
+        "transition": "all 0.3s",
+        "color": "var(--colorTextBase, #333333)"
+      },
+      ".tab-item-active": {
+        "background-color": "var(--colorPrimary, #559EFF)",
+        "color": "#ffffff"
+      },
+      ".warning-line": {
+        "border-top": "2px dashed var(--colorError, #F53F3F)",
+        "width": "100%"
+      },
+      ".warning-value": {
+        "color": "var(--colorError, #F53F3F)",
+        "font-weight": "bold",
+        "font-size": "1.2em"
+      },
+      ".co-curve": {
+        "stroke": "var(--colorSuccess, #52C41A)",
+        "stroke-width": "2px",
+        "fill": "none"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "背景色 #EDF4FB 映射为 --colorBgBase，并在 .monitor-container 中直接落地为 Figma 字面量值，避免关键可见背景只依赖 CSS 变量",
+      "主色调 #559EFF 映射为 --colorPrimary，用于 Tab 选中态背景及主要交互元素",
+      "绿色 #52C41A 映射为 --colorSuccess，专门用于 CO 浓度曲线等正向/监测数据展示",
+      "红色 #F53F3F 映射为 --colorError，用于预警虚线和预警数值（如30）等警示性元素",
+      "文字色 #333333 映射为 --colorTextBase，作为浅色主题下的基础文本颜色",
+      "所有 CSS 变量均使用 camelCase 命名规范，并在样式中提供 Less 变量/字面量作为 fallback"
+    ],
+    "elementStyleMap": {
+      "section-tabs-controls": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tabs-list": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "view-controls": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-13": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  }
+}

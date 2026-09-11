@@ -1,0 +1,222 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 83,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body",
+        "message": "标题区header与body均含标题文本'环境监测'，造成语义重复，建议将装饰与标题统一放入header",
+        "suggestion": "删除body中的标题文本节点，或将装饰+标题整体上移为header内容"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[1].body.children[1]",
+        "message": "控制栏图标组嵌套深度达5层（section>body>children>icon-group>children>icon-button），超过3层建议，建议扁平化",
+        "suggestion": "将icon-group和icon-button合并为扁平结构，badge作为icon-button的属性"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[0].children",
+        "message": "图表容器缺少面积图数据系列节点，仅含坐标轴/图例/参考线，应补充数据path节点",
+        "suggestion": "在chart-container中添加面积图数据系列元素，或明确引用外部series配置"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[1]",
+        "message": "icon-group节点混入resourceFile等无关元数据字段，增加结构噪音，应移除",
+        "suggestion": "清理icon-group中非布局属性，保留children和必要布局参数"
+      }
+    ],
+    "recommendations": [
+      "将标题区装饰与标题整体作为header内容，body留空或移除，避免重复",
+      "展平图标组，将icon-button升级为独立叶子节点，减少层级",
+      "在chart-container中显式声明面积图数据系列节点，保持结构完整"
+    ],
+    "summary": "整体结构清晰，功能分区合理，Tab与图表交互明确；但存在标题重复、嵌套过深及图表数据系列缺失等问题，建议优化后使用。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#559EFF",
+      "--colorSuccess": "#00B42A",
+      "--colorDanger": "#F53F3F",
+      "--colorTextBase": "#1D2129",
+      "--colorTextSecondary": "#86909C",
+      "--colorBg": "#EDF4FB",
+      "--fontSize": "14px",
+      "--borderRadius": "4px",
+      "--spaceSm": "8px",
+      "--spaceMd": "16px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#559EFF",
+      "@color-success": "#00B42A",
+      "@color-danger": "#F53F3F",
+      "@color-text-base": "#1D2129",
+      "@color-text-secondary": "#86909C",
+      "@color-bg": "#EDF4FB",
+      "@font-size-base": "14px",
+      "@border-radius-base": "4px",
+      "@space-sm": "8px",
+      "@space-md": "16px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "height": "100%",
+        "padding": "16px",
+        "background": "var(--colorBg)",
+        "font-size": "var(--fontSize)",
+        "color": "var(--colorTextBase)"
+      },
+      ".title": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "8px",
+        "font-weight": "600",
+        "color": "var(--colorTextBase)"
+      },
+      ".title-dots": {
+        "display": "flex",
+        "gap": "4px",
+        "margin-right": "8px"
+      },
+      ".title-dot": {
+        "width": "8px",
+        "height": "8px",
+        "border-radius": "50%",
+        "display": "inline-block"
+      },
+      ".title-dot--blue": {
+        "background": "var(--colorPrimary)"
+      },
+      ".title-dot--green": {
+        "background": "var(--colorSuccess)"
+      },
+      ".title-dot--red": {
+        "background": "var(--colorDanger)"
+      },
+      ".tabs": {
+        "display": "flex",
+        "gap": "4px",
+        "padding": "4px",
+        "background": "rgba(85, 158, 255, 0.08)",
+        "border-radius": "var(--borderRadius)"
+      },
+      ".tab-item": {
+        "padding": "6px 16px",
+        "color": "var(--colorTextSecondary)",
+        "border-radius": "var(--borderRadius)",
+        "cursor": "pointer"
+      },
+      ".tab-item--active": {
+        "background": "var(--colorPrimary)",
+        "color": "#ffffff"
+      },
+      ".warning-line": {
+        "border-left": "3px solid var(--colorDanger)",
+        "padding-left": "8px",
+        "background": "rgba(245, 63, 63, 0.06)",
+        "color": "var(--colorDanger)"
+      },
+      ".badge": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "min-width": "20px",
+        "height": "20px",
+        "padding": "0 6px",
+        "border-radius": "10px",
+        "background": "var(--colorDanger)",
+        "color": "#ffffff",
+        "font-size": "12px",
+        "line-height": "1"
+      }
+    },
+    "tokenCoverage": 0.92,
+    "mappingNotes": [
+      "将色板中的 #559EFF 映射为 --colorPrimary，用于 Tab 选中态、主按钮/链接及标题蓝色圆点。",
+      "#00B42A 映射为 --colorSuccess，对应三色圆点装饰中的绿色。",
+      "#F53F3F 映射为 --colorDanger，同时用于红色预警线与红色 Badge 数字 6。",
+      "#EDF4FB 映射为 --colorBg，作为整容器浅灰蓝背景。",
+      "#86909C 映射为 --colorTextSecondary，用于辅助文字。",
+      "正文色 #1D2129 由浅色科技监测风常规色补充（色板仅给出辅助灰 #86909C），若设计稿另有正文色请替换。",
+      "标题左侧三色圆点装饰通过 .title-dot--blue/green/red 类实现，与语义色一一对应。",
+      "预警线和 Badge 均采用红色 Token，保证强调元素一致。"
+    ],
+    "elementStyleMap": {
+      "section-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-decoration-group-x-2": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-controls": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-tab-group-x-8": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-icon-group-x-13": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-17-chart-container-x-0-reference-line-预警线-2": {
+        "color": "#F53F3F"
+      },
+      "el-el-x-17": {
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "el-chart-container-x-18-reference-line-预警线-2": {
+        "color": "#F53F3F"
+      },
+      "el-reference-line-预警线-40": {
+        "color": "#F53F3F"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-header",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 5,
+        "title": "环境监测"
+      },
+      {
+        "id": "section-controls",
+        "responsibility": "控制栏（请按功能拆分）",
+        "elementCount": 8,
+        "title": "控制栏"
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 24,
+        "title": "图表区"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 → 强制拆分"
+  }
+}

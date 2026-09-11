@@ -1,0 +1,222 @@
+.dark .c-env-monitor-root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow: hidden;
+  color: #ffffff;
+}
+.dark .c-env-monitor-tabs-wrapper {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  height: 32px;
+  flex-shrink: 0;
+  padding: 0 4px;
+  box-sizing: border-box;
+}
+.dark .c-env-monitor-tabs-list {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 27px;
+  background: linear-gradient(180deg, #b5deff 0%, #d1ecff 100%);
+  border: 0.72px solid #ffffff;
+  border-radius: 4px;
+  padding: 3px;
+  box-sizing: border-box;
+}
+.dark .c-env-monitor-tab-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 70px;
+  height: 21px;
+  cursor: pointer;
+  z-index: 1;
+  border-radius: 2px;
+  transition: all 0.3s ease;
+}
+.dark .c-env-monitor-tab-item.is-active .c-env-monitor-tab-text {
+  color: #ffffff;
+  text-shadow: 0 0.6px 0 #006fe3;
+}
+.dark .c-env-monitor-tab-active-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+  z-index: -1;
+  border-radius: 2px;
+}
+.dark .c-env-monitor-tab-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: #2c9bea;
+  line-height: 1;
+  white-space: nowrap;
+}
+.dark .c-env-monitor-tabs-right {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.dark .c-env-monitor-view-icons {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.dark .c-env-monitor-view-icon {
+  width: 52px;
+  height: 24px;
+  display: block;
+}
+.dark .c-env-monitor-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 14px;
+  height: 14px;
+  border-radius: 29px;
+  background: #f53f3f;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  z-index: 2;
+}
+.dark .c-env-monitor-chart-wrapper {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  padding: 4px 8px 8px;
+  box-sizing: border-box;
+}
+.dark .c-env-monitor-chart-container {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+.light .c-env-monitor-root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow: hidden;
+  color: #1f2937;
+}
+.light .c-env-monitor-tabs-wrapper {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  height: 32px;
+  flex-shrink: 0;
+  padding: 0 4px;
+  box-sizing: border-box;
+}
+.light .c-env-monitor-tabs-list {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 27px;
+  background: linear-gradient(180deg, #b5deff 0%, #d1ecff 100%);
+  border: 0.72px solid #ffffff;
+  border-radius: 4px;
+  padding: 3px;
+  box-sizing: border-box;
+}
+.light .c-env-monitor-tab-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 70px;
+  height: 21px;
+  cursor: pointer;
+  z-index: 1;
+  border-radius: 2px;
+  transition: all 0.3s ease;
+}
+.light .c-env-monitor-tab-item.is-active .c-env-monitor-tab-text {
+  color: #ffffff;
+  text-shadow: 0 0.6px 0 #006fe3;
+}
+.light .c-env-monitor-tab-active-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+  z-index: -1;
+  border-radius: 2px;
+}
+.light .c-env-monitor-tab-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: #2c9bea;
+  line-height: 1;
+  white-space: nowrap;
+}
+.light .c-env-monitor-tabs-right {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.light .c-env-monitor-view-icons {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.light .c-env-monitor-view-icon {
+  width: 52px;
+  height: 24px;
+  display: block;
+}
+.light .c-env-monitor-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 14px;
+  height: 14px;
+  border-radius: 29px;
+  background: #f53f3f;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  z-index: 2;
+}
+.light .c-env-monitor-chart-wrapper {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  padding: 4px 8px 8px;
+  box-sizing: border-box;
+}
+.light .c-env-monitor-chart-container {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}

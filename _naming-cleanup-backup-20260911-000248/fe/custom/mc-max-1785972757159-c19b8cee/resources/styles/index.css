@@ -1,0 +1,898 @@
+/* [Layout Refine] Figma layoutMode=VERTICAL → flex-direction: column */
+.c-device-monitor {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  /* [Style Refine] fills[0].color → rgb(237, 244, 251) */
+  background-color: #edf4fb;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+  box-sizing: border-box;
+  padding: 8px 20px 10px 20px;
+}
+/* Header */
+.c-device-monitor__header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 30px;
+  margin-bottom: 12px;
+}
+.c-device-monitor__title {
+  /* [Style Refine] typography → 16px, bold, gradient */
+  font-size: 16px;
+  font-weight: 700;
+  background: linear-gradient(90deg, #188fff 0%, #5a7eff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-right: 20px;
+}
+.c-device-monitor__stats {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 24px;
+  flex: 1;
+}
+.c-device-monitor__stat-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+.c-device-monitor__stat-label {
+  /* [Style Refine] fills[0].color → rgb(51, 51, 51) */
+  font-size: 14px;
+  color: #333333;
+}
+.c-device-monitor__stat-value {
+  /* [Style Refine] typography → 20px, bold, Roboto */
+  font-family: 'Roboto', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 23px;
+}
+.c-device-monitor__stat-value.primary {
+  /* [Style Refine] fills[0] gradient → rgb(225, 240, 255) to rgb(0, 204, 255) */
+  background: linear-gradient(180deg, #e1f0ff 0%, #00ccff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.c-device-monitor__stat-value.success {
+  /* [Style Refine] fills[0].color → rgb(8, 163, 165) */
+  color: #08a3a5;
+}
+.c-device-monitor__tip {
+  /* [Style Refine] typography → 14px, gradient */
+  font-size: 14px;
+  background: linear-gradient(90deg, #188fff 0%, #5a7eff 83%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+/* Content */
+.c-device-monitor__content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+/* Switch */
+.c-device-monitor__switch {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  height: 65px;
+  margin-bottom: 12px;
+}
+.c-device-monitor__switch-card {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 10px 14px;
+  border-radius: 6px;
+  /* [Style Refine] default bg gradient */
+  background: linear-gradient(180deg, rgba(147, 204, 255, 0.6) 0%, rgba(147, 204, 255, 0) 100%);
+  box-sizing: border-box;
+}
+.c-device-monitor__switch-card.active {
+  /* [Style Refine] active bg gradient */
+  background: linear-gradient(180deg, #2b9bff 0%, rgba(41, 154, 255, 0.6) 100%);
+}
+.c-device-monitor__switch-icon {
+  width: 35px;
+  height: 28px;
+  margin-right: 10px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+.c-device-monitor__switch-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.c-device-monitor__switch-title {
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+.c-device-monitor__switch-card.active .c-device-monitor__switch-title,
+.c-device-monitor__switch-card.active .c-device-monitor__switch-label {
+  color: #ffffff;
+}
+.c-device-monitor__switch-card:not(.active) .c-device-monitor__switch-title,
+.c-device-monitor__switch-card:not(.active) .c-device-monitor__switch-label {
+  color: #333333;
+}
+.c-device-monitor__switch-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+.c-device-monitor__switch-label {
+  font-size: 14px;
+}
+.c-device-monitor__switch-value {
+  font-family: 'Roboto', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 23px;
+}
+.c-device-monitor__switch-card.active .c-device-monitor__switch-value.primary {
+  background: linear-gradient(180deg, #e1f0ff 0%, #00ccff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.c-device-monitor__switch-card:not(.active) .c-device-monitor__switch-value.primary {
+  color: #1990ff;
+  background: none;
+  -webkit-text-fill-color: #1990ff;
+}
+.c-device-monitor__switch-card.active .c-device-monitor__switch-value.error {
+  background: linear-gradient(180deg, #e1f0ff 0%, #e03434 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.c-device-monitor__switch-card:not(.active) .c-device-monitor__switch-value.error {
+  color: #e03434;
+  background: none;
+  -webkit-text-fill-color: #e03434;
+}
+/* Main (Tabs + Grid) */
+.c-device-monitor__main {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+}
+/* Tabs */
+.c-device-monitor__tabs {
+  display: flex;
+  flex-direction: column;
+  width: 46px;
+  margin-right: 12px;
+}
+.c-device-monitor__tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  border-radius: 4px;
+  margin-bottom: 4px;
+  position: relative;
+  cursor: pointer;
+  /* [Style Refine] default tab bg */
+  background: linear-gradient(180deg, #85baff 0%, #c0e2ff 100%);
+  border: 1px solid #f0f4ff;
+}
+.c-device-monitor__tab.active {
+  /* [Style Refine] active tab bg */
+  background: linear-gradient(180deg, #318aff 0%, #70bfff 100%);
+}
+.c-device-monitor__tab-text {
+  font-size: 14px;
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  letter-spacing: 2px;
+}
+.c-device-monitor__tab.active .c-device-monitor__tab-text {
+  color: #ffffff;
+  font-weight: 700;
+}
+.c-device-monitor__tab:not(.active) .c-device-monitor__tab-text {
+  /* [Style Refine] fills[0].color → rgb(59, 128, 230) */
+  color: #3b80e6;
+}
+.c-device-monitor__tab-badge {
+  position: absolute;
+  top: -4px;
+  right: -10px;
+  background: #ffffff;
+  color: #3b80e6;
+  font-size: 12px;
+  padding: 0 4px;
+  border-radius: 9px;
+  border: 1px solid #258dc8;
+  box-shadow: 0 1px 2px rgba(51, 101, 144, 0.4);
+  white-space: nowrap;
+}
+.c-device-monitor__tab-dot {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 14px;
+  height: 14px;
+  background: #f53f3f;
+  border-radius: 29px;
+  color: #ffffff;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* Grid */
+.c-device-monitor__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+}
+.c-device-monitor__device {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 10px;
+  border-radius: 4px;
+  /* [Style Refine] device bg gradient */
+  background: linear-gradient(180deg, rgba(45, 104, 157, 0) 0%, rgba(45, 104, 157, 0.5) 100%);
+  box-sizing: border-box;
+  position: relative;
+  overflow: hidden;
+}
+/* 设备项背景装饰线 */
+.c-device-monitor__device::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(180deg, rgba(53, 189, 255, 0.9) 0%, rgba(0, 189, 255, 0.04) 100%);
+  opacity: 0.5;
+  z-index: 0;
+}
+.c-device-monitor__device-icon {
+  width: 26px;
+  height: 32px;
+  margin-right: 8px;
+  background: linear-gradient(180deg, rgba(18, 123, 238, 0) 0%, rgba(18, 123, 238, 0.2) 100%);
+  border-radius: 2px;
+  z-index: 1;
+}
+.c-device-monitor__device-info {
+  display: flex;
+  flex-direction: column;
+  z-index: 1;
+}
+.c-device-monitor__device-name {
+  font-size: 12px;
+  color: #333333;
+  margin-bottom: 4px;
+}
+.c-device-monitor__device-value {
+  font-family: 'Roboto', sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  color: #ffffff;
+  text-shadow: 0 0 0 rgba(0, 0, 0, 0.5);
+}
+.dark {
+  /* [Layout Refine] Figma layoutMode=VERTICAL → flex-direction: column */
+  /* Header */
+  /* Content */
+  /* Switch */
+  /* Main (Tabs + Grid) */
+  /* Tabs */
+  /* Grid */
+  /* 设备项背景装饰线 */
+}
+.dark .c-device-monitor {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  /* [Style Refine] fills[0].color → rgb(237, 244, 251) */
+  background-color: #edf4fb;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+  box-sizing: border-box;
+  padding: 8px 20px 10px 20px;
+}
+.dark .c-device-monitor__header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 30px;
+  margin-bottom: 12px;
+}
+.dark .c-device-monitor__title {
+  /* [Style Refine] typography → 16px, bold, gradient */
+  font-size: 16px;
+  font-weight: 700;
+  background: linear-gradient(90deg, #188fff 0%, #5a7eff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-right: 20px;
+}
+.dark .c-device-monitor__stats {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 24px;
+  flex: 1;
+}
+.dark .c-device-monitor__stat-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+.dark .c-device-monitor__stat-label {
+  /* [Style Refine] fills[0].color → rgb(51, 51, 51) */
+  font-size: 14px;
+  color: #333333;
+}
+.dark .c-device-monitor__stat-value {
+  /* [Style Refine] typography → 20px, bold, Roboto */
+  font-family: 'Roboto', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 23px;
+}
+.dark .c-device-monitor__stat-value.primary {
+  /* [Style Refine] fills[0] gradient → rgb(225, 240, 255) to rgb(0, 204, 255) */
+  background: linear-gradient(180deg, #e1f0ff 0%, #00ccff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.dark .c-device-monitor__stat-value.success {
+  /* [Style Refine] fills[0].color → rgb(8, 163, 165) */
+  color: #08a3a5;
+}
+.dark .c-device-monitor__tip {
+  /* [Style Refine] typography → 14px, gradient */
+  font-size: 14px;
+  background: linear-gradient(90deg, #188fff 0%, #5a7eff 83%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.dark .c-device-monitor__content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.dark .c-device-monitor__switch {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  height: 65px;
+  margin-bottom: 12px;
+}
+.dark .c-device-monitor__switch-card {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 10px 14px;
+  border-radius: 6px;
+  /* [Style Refine] default bg gradient */
+  background: linear-gradient(180deg, rgba(147, 204, 255, 0.6) 0%, rgba(147, 204, 255, 0) 100%);
+  box-sizing: border-box;
+}
+.dark .c-device-monitor__switch-card.active {
+  /* [Style Refine] active bg gradient */
+  background: linear-gradient(180deg, #2b9bff 0%, rgba(41, 154, 255, 0.6) 100%);
+}
+.dark .c-device-monitor__switch-icon {
+  width: 35px;
+  height: 28px;
+  margin-right: 10px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+.dark .c-device-monitor__switch-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.dark .c-device-monitor__switch-title {
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+.dark .c-device-monitor__switch-card.active .c-device-monitor__switch-title,
+.dark .c-device-monitor__switch-card.active .c-device-monitor__switch-label {
+  color: #ffffff;
+}
+.dark .c-device-monitor__switch-card:not(.active) .c-device-monitor__switch-title,
+.dark .c-device-monitor__switch-card:not(.active) .c-device-monitor__switch-label {
+  color: #333333;
+}
+.dark .c-device-monitor__switch-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+.dark .c-device-monitor__switch-label {
+  font-size: 14px;
+}
+.dark .c-device-monitor__switch-value {
+  font-family: 'Roboto', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 23px;
+}
+.dark .c-device-monitor__switch-card.active .c-device-monitor__switch-value.primary {
+  background: linear-gradient(180deg, #e1f0ff 0%, #00ccff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.dark .c-device-monitor__switch-card:not(.active) .c-device-monitor__switch-value.primary {
+  color: #1990ff;
+  background: none;
+  -webkit-text-fill-color: #1990ff;
+}
+.dark .c-device-monitor__switch-card.active .c-device-monitor__switch-value.error {
+  background: linear-gradient(180deg, #e1f0ff 0%, #e03434 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.dark .c-device-monitor__switch-card:not(.active) .c-device-monitor__switch-value.error {
+  color: #e03434;
+  background: none;
+  -webkit-text-fill-color: #e03434;
+}
+.dark .c-device-monitor__main {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+}
+.dark .c-device-monitor__tabs {
+  display: flex;
+  flex-direction: column;
+  width: 46px;
+  margin-right: 12px;
+}
+.dark .c-device-monitor__tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  border-radius: 4px;
+  margin-bottom: 4px;
+  position: relative;
+  cursor: pointer;
+  /* [Style Refine] default tab bg */
+  background: linear-gradient(180deg, #85baff 0%, #c0e2ff 100%);
+  border: 1px solid #f0f4ff;
+}
+.dark .c-device-monitor__tab.active {
+  /* [Style Refine] active tab bg */
+  background: linear-gradient(180deg, #318aff 0%, #70bfff 100%);
+}
+.dark .c-device-monitor__tab-text {
+  font-size: 14px;
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  letter-spacing: 2px;
+}
+.dark .c-device-monitor__tab.active .c-device-monitor__tab-text {
+  color: #ffffff;
+  font-weight: 700;
+}
+.dark .c-device-monitor__tab:not(.active) .c-device-monitor__tab-text {
+  /* [Style Refine] fills[0].color → rgb(59, 128, 230) */
+  color: #3b80e6;
+}
+.dark .c-device-monitor__tab-badge {
+  position: absolute;
+  top: -4px;
+  right: -10px;
+  background: #ffffff;
+  color: #3b80e6;
+  font-size: 12px;
+  padding: 0 4px;
+  border-radius: 9px;
+  border: 1px solid #258dc8;
+  box-shadow: 0 1px 2px rgba(51, 101, 144, 0.4);
+  white-space: nowrap;
+}
+.dark .c-device-monitor__tab-dot {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 14px;
+  height: 14px;
+  background: #f53f3f;
+  border-radius: 29px;
+  color: #ffffff;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dark .c-device-monitor__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+}
+.dark .c-device-monitor__device {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 10px;
+  border-radius: 4px;
+  /* [Style Refine] device bg gradient */
+  background: linear-gradient(180deg, rgba(45, 104, 157, 0) 0%, rgba(45, 104, 157, 0.5) 100%);
+  box-sizing: border-box;
+  position: relative;
+  overflow: hidden;
+}
+.dark .c-device-monitor__device::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(180deg, rgba(53, 189, 255, 0.9) 0%, rgba(0, 189, 255, 0.04) 100%);
+  opacity: 0.5;
+  z-index: 0;
+}
+.dark .c-device-monitor__device-icon {
+  width: 26px;
+  height: 32px;
+  margin-right: 8px;
+  background: linear-gradient(180deg, rgba(18, 123, 238, 0) 0%, rgba(18, 123, 238, 0.2) 100%);
+  border-radius: 2px;
+  z-index: 1;
+}
+.dark .c-device-monitor__device-info {
+  display: flex;
+  flex-direction: column;
+  z-index: 1;
+}
+.dark .c-device-monitor__device-name {
+  font-size: 12px;
+  color: #333333;
+  margin-bottom: 4px;
+}
+.dark .c-device-monitor__device-value {
+  font-family: 'Roboto', sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  color: #ffffff;
+  text-shadow: 0 0 0 rgba(0, 0, 0, 0.5);
+}
+.light {
+  /* [Layout Refine] Figma layoutMode=VERTICAL → flex-direction: column */
+  /* Header */
+  /* Content */
+  /* Switch */
+  /* Main (Tabs + Grid) */
+  /* Tabs */
+  /* Grid */
+  /* 设备项背景装饰线 */
+}
+.light .c-device-monitor {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  /* [Style Refine] fills[0].color → rgb(237, 244, 251) */
+  background-color: #edf4fb;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+  box-sizing: border-box;
+  padding: 8px 20px 10px 20px;
+}
+.light .c-device-monitor__header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 30px;
+  margin-bottom: 12px;
+}
+.light .c-device-monitor__title {
+  /* [Style Refine] typography → 16px, bold, gradient */
+  font-size: 16px;
+  font-weight: 700;
+  background: linear-gradient(90deg, #188fff 0%, #5a7eff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-right: 20px;
+}
+.light .c-device-monitor__stats {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 24px;
+  flex: 1;
+}
+.light .c-device-monitor__stat-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+.light .c-device-monitor__stat-label {
+  /* [Style Refine] fills[0].color → rgb(51, 51, 51) */
+  font-size: 14px;
+  color: #333333;
+}
+.light .c-device-monitor__stat-value {
+  /* [Style Refine] typography → 20px, bold, Roboto */
+  font-family: 'Roboto', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 23px;
+}
+.light .c-device-monitor__stat-value.primary {
+  /* [Style Refine] fills[0] gradient → rgb(225, 240, 255) to rgb(0, 204, 255) */
+  background: linear-gradient(180deg, #e1f0ff 0%, #00ccff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.light .c-device-monitor__stat-value.success {
+  /* [Style Refine] fills[0].color → rgb(8, 163, 165) */
+  color: #08a3a5;
+}
+.light .c-device-monitor__tip {
+  /* [Style Refine] typography → 14px, gradient */
+  font-size: 14px;
+  background: linear-gradient(90deg, #188fff 0%, #5a7eff 83%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.light .c-device-monitor__content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.light .c-device-monitor__switch {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  height: 65px;
+  margin-bottom: 12px;
+}
+.light .c-device-monitor__switch-card {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 10px 14px;
+  border-radius: 6px;
+  /* [Style Refine] default bg gradient */
+  background: linear-gradient(180deg, rgba(147, 204, 255, 0.6) 0%, rgba(147, 204, 255, 0) 100%);
+  box-sizing: border-box;
+}
+.light .c-device-monitor__switch-card.active {
+  /* [Style Refine] active bg gradient */
+  background: linear-gradient(180deg, #2b9bff 0%, rgba(41, 154, 255, 0.6) 100%);
+}
+.light .c-device-monitor__switch-icon {
+  width: 35px;
+  height: 28px;
+  margin-right: 10px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+.light .c-device-monitor__switch-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.light .c-device-monitor__switch-title {
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+.light .c-device-monitor__switch-card.active .c-device-monitor__switch-title,
+.light .c-device-monitor__switch-card.active .c-device-monitor__switch-label {
+  color: #ffffff;
+}
+.light .c-device-monitor__switch-card:not(.active) .c-device-monitor__switch-title,
+.light .c-device-monitor__switch-card:not(.active) .c-device-monitor__switch-label {
+  color: #333333;
+}
+.light .c-device-monitor__switch-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+.light .c-device-monitor__switch-label {
+  font-size: 14px;
+}
+.light .c-device-monitor__switch-value {
+  font-family: 'Roboto', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 23px;
+}
+.light .c-device-monitor__switch-card.active .c-device-monitor__switch-value.primary {
+  background: linear-gradient(180deg, #e1f0ff 0%, #00ccff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.light .c-device-monitor__switch-card:not(.active) .c-device-monitor__switch-value.primary {
+  color: #1990ff;
+  background: none;
+  -webkit-text-fill-color: #1990ff;
+}
+.light .c-device-monitor__switch-card.active .c-device-monitor__switch-value.error {
+  background: linear-gradient(180deg, #e1f0ff 0%, #e03434 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.light .c-device-monitor__switch-card:not(.active) .c-device-monitor__switch-value.error {
+  color: #e03434;
+  background: none;
+  -webkit-text-fill-color: #e03434;
+}
+.light .c-device-monitor__main {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+}
+.light .c-device-monitor__tabs {
+  display: flex;
+  flex-direction: column;
+  width: 46px;
+  margin-right: 12px;
+}
+.light .c-device-monitor__tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  border-radius: 4px;
+  margin-bottom: 4px;
+  position: relative;
+  cursor: pointer;
+  /* [Style Refine] default tab bg */
+  background: linear-gradient(180deg, #85baff 0%, #c0e2ff 100%);
+  border: 1px solid #f0f4ff;
+}
+.light .c-device-monitor__tab.active {
+  /* [Style Refine] active tab bg */
+  background: linear-gradient(180deg, #318aff 0%, #70bfff 100%);
+}
+.light .c-device-monitor__tab-text {
+  font-size: 14px;
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  letter-spacing: 2px;
+}
+.light .c-device-monitor__tab.active .c-device-monitor__tab-text {
+  color: #ffffff;
+  font-weight: 700;
+}
+.light .c-device-monitor__tab:not(.active) .c-device-monitor__tab-text {
+  /* [Style Refine] fills[0].color → rgb(59, 128, 230) */
+  color: #3b80e6;
+}
+.light .c-device-monitor__tab-badge {
+  position: absolute;
+  top: -4px;
+  right: -10px;
+  background: #ffffff;
+  color: #3b80e6;
+  font-size: 12px;
+  padding: 0 4px;
+  border-radius: 9px;
+  border: 1px solid #258dc8;
+  box-shadow: 0 1px 2px rgba(51, 101, 144, 0.4);
+  white-space: nowrap;
+}
+.light .c-device-monitor__tab-dot {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 14px;
+  height: 14px;
+  background: #f53f3f;
+  border-radius: 29px;
+  color: #ffffff;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.light .c-device-monitor__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+}
+.light .c-device-monitor__device {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 10px;
+  border-radius: 4px;
+  /* [Style Refine] device bg gradient */
+  background: linear-gradient(180deg, rgba(45, 104, 157, 0) 0%, rgba(45, 104, 157, 0.5) 100%);
+  box-sizing: border-box;
+  position: relative;
+  overflow: hidden;
+}
+.light .c-device-monitor__device::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(180deg, rgba(53, 189, 255, 0.9) 0%, rgba(0, 189, 255, 0.04) 100%);
+  opacity: 0.5;
+  z-index: 0;
+}
+.light .c-device-monitor__device-icon {
+  width: 26px;
+  height: 32px;
+  margin-right: 8px;
+  background: linear-gradient(180deg, rgba(18, 123, 238, 0) 0%, rgba(18, 123, 238, 0.2) 100%);
+  border-radius: 2px;
+  z-index: 1;
+}
+.light .c-device-monitor__device-info {
+  display: flex;
+  flex-direction: column;
+  z-index: 1;
+}
+.light .c-device-monitor__device-name {
+  font-size: 12px;
+  color: #333333;
+  margin-bottom: 4px;
+}
+.light .c-device-monitor__device-value {
+  font-family: 'Roboto', sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  color: #ffffff;
+  text-shadow: 0 0 0 rgba(0, 0, 0, 0.5);
+}

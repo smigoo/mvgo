@@ -1,0 +1,242 @@
+.dark .c-env-monitor-root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  height: 100%;
+}
+.dark .c-env-monitor-title-deco {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+.dark .c-env-monitor-tabs-section {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+.dark .c-env-monitor-tabs-list {
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+  align-items: center;
+  flex: 1;
+}
+.dark .c-env-monitor-tab-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 16px;
+  background: linear-gradient(#b5deff, #d1ecff);
+  border: 1px solid #ffffff;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s ease;
+}
+.dark .c-env-monitor-tab-item--active {
+  background: linear-gradient(#1099b1, #038fff);
+  border: 1px solid #ffffff;
+}
+.dark .c-env-monitor-tab-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #2c9bea;
+  line-height: 20px;
+  white-space: nowrap;
+}
+.dark .c-env-monitor-tab-item--active .c-env-monitor-tab-label {
+  color: #ffffff;
+  text-shadow: 0px 0.6px 0px #006fe3;
+}
+.dark .c-env-monitor-view-icons {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  position: relative;
+  margin-left: 12px;
+}
+.dark .c-env-monitor-view-icon {
+  width: 24px;
+  height: 24px;
+  display: block;
+  cursor: pointer;
+}
+.dark .c-env-monitor-view-badge {
+  position: absolute;
+  top: -6px;
+  right: -8px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  background: #f53f3f;
+  border-radius: 29px;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  text-align: center;
+  pointer-events: none;
+}
+.dark .c-env-monitor-chart-section {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  width: 100%;
+  padding: 12px 16px 16px;
+  background-image: url(../resources/images/bg-7890.png);
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+  box-sizing: border-box;
+}
+.dark .c-env-monitor-chart-legend {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  margin-bottom: 4px;
+}
+.dark .c-env-monitor-legend-marker {
+  width: 8px;
+  height: 8px;
+  background: #0fcd7d;
+  border-radius: 1.6px;
+  flex-shrink: 0;
+}
+.dark .c-env-monitor-legend-text {
+  color: #333333;
+  font-size: 9.6px;
+  font-weight: 400;
+  line-height: 14px;
+}
+.dark .c-env-monitor-chart-container {
+  width: 100%;
+  height: 240px;
+  flex: 1;
+  min-height: 200px;
+}
+.light .c-env-monitor-root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  height: 100%;
+}
+.light .c-env-monitor-title-deco {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+.light .c-env-monitor-tabs-section {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+.light .c-env-monitor-tabs-list {
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+  align-items: center;
+  flex: 1;
+}
+.light .c-env-monitor-tab-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 16px;
+  background: linear-gradient(#b5deff, #d1ecff);
+  border: 1px solid #ffffff;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s ease;
+}
+.light .c-env-monitor-tab-item--active {
+  background: linear-gradient(#1099b1, #038fff);
+  border: 1px solid #ffffff;
+}
+.light .c-env-monitor-tab-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #2c9bea;
+  line-height: 20px;
+  white-space: nowrap;
+}
+.light .c-env-monitor-tab-item--active .c-env-monitor-tab-label {
+  color: #ffffff;
+  text-shadow: 0px 0.6px 0px #006fe3;
+}
+.light .c-env-monitor-view-icons {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  position: relative;
+  margin-left: 12px;
+}
+.light .c-env-monitor-view-icon {
+  width: 24px;
+  height: 24px;
+  display: block;
+  cursor: pointer;
+}
+.light .c-env-monitor-view-badge {
+  position: absolute;
+  top: -6px;
+  right: -8px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  background: #f53f3f;
+  border-radius: 29px;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  text-align: center;
+  pointer-events: none;
+}
+.light .c-env-monitor-chart-section {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  width: 100%;
+  padding: 12px 16px 16px;
+  background-image: url(../resources/images/bg-7890.png);
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+  box-sizing: border-box;
+}
+.light .c-env-monitor-chart-legend {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  margin-bottom: 4px;
+}
+.light .c-env-monitor-legend-marker {
+  width: 8px;
+  height: 8px;
+  background: #0fcd7d;
+  border-radius: 1.6px;
+  flex-shrink: 0;
+}
+.light .c-env-monitor-legend-text {
+  color: #333333;
+  font-size: 9.6px;
+  font-weight: 400;
+  line-height: 14px;
+}
+.light .c-env-monitor-chart-container {
+  width: 100%;
+  height: 240px;
+  flex: 1;
+  min-height: 200px;
+}

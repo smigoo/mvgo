@@ -1,0 +1,264 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 78,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections",
+        "message": "Tab切换栏与图表区域均标记为常驻section，实际应为单section内header+body结构",
+        "suggestion": "合并为单section，tabs作为body内控件，图表为主内容区"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].headerRelation",
+        "message": "Tab区域headerRelation为content-below-title但无实际header，语义矛盾",
+        "suggestion": "改为no-header或将tabs提升为section的header层级"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "headerSlots",
+        "message": "headerSlots应映射到具体section的header层级，当前孤立在layout外部",
+        "suggestion": "将图标按钮整合到某个section的header.right插槽"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "layout.sections[1].body.bgPlaceholder",
+        "message": "两个section的backgroundImage引用相同资源bg-7890.png，但视觉应为整体背景",
+        "suggestion": "背景图应提升至面板级，section内设transparent"
+      }
+    ],
+    "recommendations": [
+      "将tabs与chart合并为单section：header放tabs，body放chart，减少冗余嵌套",
+      "headerSlots的2个图标按钮应映射到该section.header.right，而非全局headerSlots",
+      "charts[0].axes字段混杂刻度值与单位描述，建议结构化为xAxis/yAxis对象"
+    ],
+    "summary": "结构拆分过细导致2个section均为常驻且无header，tabs应为section内header控件而非独立section；headerSlots位置不当；整体可维护性尚可但需合并优化"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）—— 深色科技监测风主题",
+      "--colorPrimary": "rgba(85,158,255,1)",
+      "--colorTextBase": "rgba(237,244,251,1)",
+      "--colorTextSecondary": "rgba(255,255,255,0.8)",
+      "--colorTextMuted": "rgba(255,255,255,0.4)",
+      "--colorDanger": "#f53f3f",
+      "--colorSuccess": "rgba(0,200,100,0.6)",
+      "--colorTabActiveBg": "rgba(85,158,255,1)",
+      "--colorTabActiveText": "rgba(237,244,251,1)",
+      "--colorAxisLine": "rgba(255,255,255,0.2)",
+      "--colorAxisLabel": "rgba(255,255,255,0.4)",
+      "--colorPanelBg": "rgba(10,20,45,0.75)",
+      "--colorChartFillStart": "rgba(0,200,100,0.6)",
+      "--colorChartFillEnd": "rgba(0,200,100,0)",
+      "--colorWarningLine": "#f53f3f",
+      "--fontSize": "14px",
+      "--fontSizeSmall": "12px",
+      "--borderRadius": "4px",
+      "--borderRadiusBadge": "50%"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射 —— 对应 theme-dark() mixin",
+      "@color-primary": "rgba(85,158,255,1)",
+      "@color-text-base": "rgba(237,244,251,1)",
+      "@color-text-secondary": "rgba(255,255,255,0.8)",
+      "@color-text-muted": "rgba(255,255,255,0.4)",
+      "@color-danger": "#f53f3f",
+      "@color-success": "rgba(0,200,100,0.6)",
+      "@color-tab-active-bg": "rgba(85,158,255,1)",
+      "@color-tab-active-text": "rgba(237,244,251,1)",
+      "@color-axis-line": "rgba(255,255,255,0.2)",
+      "@color-axis-label": "rgba(255,255,255,0.4)",
+      "@color-panel-bg": "rgba(10,20,45,0.75)",
+      "@color-chart-fill-start": "rgba(0,200,100,0.6)",
+      "@color-chart-fill-end": "rgba(0,200,100,0)",
+      "@color-warning-line": "#f53f3f",
+      "@font-size-base": "14px",
+      "@font-size-small": "12px",
+      "@border-radius": "4px",
+      "@border-radius-badge": "50%"
+    },
+    "cssClasses": {
+      "comment": "可复用CSS类 —— 深色科技监测风",
+      ".monitor-panel": {
+        "background": "var(--colorPanelBg, @color-panel-bg)",
+        "border-radius": "var(--borderRadius, @border-radius)",
+        "padding": "0.857em 1em",
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "0.571em",
+        "color": "var(--colorTextBase, @color-text-base)"
+      },
+      ".tab-bar": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "0.286em",
+        "flex-shrink": "0"
+      },
+      ".tab-item": {
+        "padding": "0.286em 0.714em",
+        "border-radius": "var(--borderRadius, @border-radius)",
+        "font-size": "var(--fontSize, @font-size-base)",
+        "color": "var(--colorTextMuted, @color-text-muted)",
+        "cursor": "pointer",
+        "transition": "background 0.2s, color 0.2s",
+        "white-space": "nowrap"
+      },
+      ".tab-item--active": {
+        "background": "var(--colorTabActiveBg, @color-tab-active-bg)",
+        "color": "var(--colorTabActiveText, @color-tab-active-text)",
+        "font-weight": "600"
+      },
+      ".tab-item__badge": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "min-width": "1.143em",
+        "height": "1.143em",
+        "padding": "0 0.286em",
+        "border-radius": "var(--borderRadiusBadge, @border-radius-badge)",
+        "background": "var(--colorDanger, @color-danger)",
+        "color": "#ffffff",
+        "font-size": "var(--fontSizeSmall, @font-size-small)",
+        "font-weight": "700",
+        "margin-left": "0.286em",
+        "line-height": "1"
+      },
+      ".chart-wrapper": {
+        "flex": "1",
+        "min-height": "0",
+        "position": "relative"
+      },
+      ".chart-warning-label": {
+        "position": "absolute",
+        "right": "0",
+        "color": "var(--colorWarningLine, @color-warning-line)",
+        "font-size": "var(--fontSizeSmall, @font-size-small)",
+        "line-height": "1",
+        "pointer-events": "none"
+      },
+      ".chart-axis-text": {
+        "fill": "var(--colorAxisLabel, @color-axis-label)",
+        "font-size": "var(--fontSizeSmall, @font-size-small)"
+      }
+    },
+    "echartsThemeTokens": {
+      "comment": "ECharts 图表配色 token，在 JS 侧通过 THEME_COLORS[theme] 取值",
+      "axisLineColor": "rgba(255,255,255,0.2)",
+      "axisLabelColor": "rgba(255,255,255,0.4)",
+      "splitLineColor": "rgba(255,255,255,0.1)",
+      "lineColor": "rgba(85,158,255,1)",
+      "areaColorStart": "rgba(0,200,100,0.6)",
+      "areaColorEnd": "rgba(0,200,100,0)",
+      "markLineColor": "#f53f3f",
+      "markLineLabelColor": "#f53f3f",
+      "tooltipBg": "rgba(10,20,45,0.9)",
+      "tooltipTextColor": "rgba(237,244,251,1)"
+    },
+    "tokenCoverage": 0.94,
+    "mappingNotes": [
+      "主蓝色 rgba(85,158,255,1) 映射为 --colorPrimary，同时复用为 Tab 激活背景和折线颜色",
+      "危险/预警红 #f53f3f 映射为 --colorDanger 和 --colorWarningLine，两者语义不同但值相同，便于独立调整",
+      "绿色渐变填充拆分为 --colorChartFillStart / --colorChartFillEnd，供 ECharts areaStyle linearGradient 使用",
+      "面板背景 rgba(10,20,45,0.75) 为字面量落地值，未抽象成 CSS 变量以保证深色半透明效果不被主题配置覆盖",
+      "白色文字按不透明度分级：0.8 → --colorTextSecondary，0.4 → --colorTextMuted，满足信息层次对比",
+      "badge 红色圆形角标复用 --colorDanger，border-radius 固定 50% 保证圆形",
+      "ECharts 相关颜色单独输出为 echartsThemeTokens，在 JS 侧消费，避免 CSS 变量无法传入 ECharts option 的问题",
+      "所有 CSS 变量均采用 camelCase 命名（--colorPrimary 而非 --color-primary），符合微码平台注入规范"
+    ],
+    "elementStyleMap": {
+      "section-tabs": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-8": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-tabs",
+        "responsibility": "标签页切换区",
+        "elementCount": 4,
+        "title": "Tab切换栏",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 4,
+          "charts": 0,
+          "interactions": 1,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "折线面积图区域",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 1,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      }
+    ],
+    "isForced": false,
+    "minFiles": 0,
+    "reason": "有效 sections=2 < 3 且无高复杂度 section → 不强制拆分",
+    "internalSubcomponents": []
+  }
+}

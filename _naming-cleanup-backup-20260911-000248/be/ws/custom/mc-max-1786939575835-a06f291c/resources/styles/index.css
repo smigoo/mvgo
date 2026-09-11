@@ -1,0 +1,841 @@
+/* LESS 变量定义 */
+/* 此文件仅定义 mixin，不产生实际 CSS 输出 */
+/* 根级禁止调用任何主题 mixin */
+.dark {
+  /* --- 设备汇总卡片 --- */
+  /* --- 设备在线趋势 --- */
+  /* --- 设备类型图表 --- */
+  /* --- 设备状态表 --- */
+  /* --- 设计稿兼容元素 --- */
+  /* === [自动修复] v3.5 模板驱动 fallback 规则 === */
+  /* [自动修复] 模板 class .c-device-summary-card--active → 匹配元素 section-header-stats */
+  /* [自动修复] 模板 class .c-device-summary-value--blue → 匹配元素 section-header-stats */
+  /* [自动修复] 模板 class .c-device-summary-value--green → 匹配元素 section-header-stats */
+}
+.dark .c-device-monitor-root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+}
+.dark .c-device-monitor-summary {
+  flex-shrink: 0;
+}
+.dark .c-device-monitor-main {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+  gap: 16px;
+}
+.dark .c-device-monitor-trend-section {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.dark .c-device-monitor-type-section {
+  width: 340px;
+  flex-shrink: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.dark .c-device-monitor-status {
+  flex-shrink: 0;
+}
+.dark .c-device-summary-root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+.dark .c-device-summary-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 24px;
+}
+.dark .c-device-summary-stat {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+.dark .c-device-summary-label {
+  font-size: 14px;
+  color: #e8ebf0;
+  font-family: 'Source Han Sans CN', sans-serif;
+}
+.dark .c-device-summary-value {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: 'Roboto', sans-serif;
+}
+.dark .c-device-summary-value--blue {
+  color: #1990ff;
+}
+.dark .c-device-summary-value--green {
+  color: #08a3a5;
+}
+.dark .c-device-summary-cards {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+}
+.dark .c-device-summary-card {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 10px 15px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+.dark .c-device-summary-card:hover {
+  background: rgba(25, 144, 255, 0.12);
+}
+.dark .c-device-summary-card--active {
+  background: linear-gradient(270deg, #318aff 0%, #70bfff 100%);
+}
+.dark .c-device-summary-card--active .c-device-summary-card-title,
+.dark .c-device-summary-card--active .c-device-summary-card-label {
+  color: #ffffff;
+}
+.dark .c-device-summary-card--active .c-device-summary-card-num {
+  color: #ffffff;
+}
+.dark .c-device-summary-card--active .c-device-summary-card-num--error {
+  color: #f53f3f;
+}
+.dark .c-device-summary-card--active:hover {
+  background: linear-gradient(270deg, #318aff 0%, #70bfff 100%);
+}
+.dark .c-device-summary-card-icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.dark .c-device-summary-card-img {
+  width: 27px;
+  height: 32px;
+  object-fit: contain;
+}
+.dark .c-device-summary-card-title {
+  font-size: 12px;
+  color: #e8ebf0;
+  font-family: 'YouSheBiaoTiHei', sans-serif;
+  white-space: nowrap;
+}
+.dark .c-device-summary-card-data {
+  display: flex;
+  flex-direction: column;
+  margin-left: 15px;
+  gap: 4px;
+}
+.dark .c-device-summary-card-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+.dark .c-device-summary-card-label {
+  font-size: 14px;
+  color: #e8ebf0;
+  font-family: 'Source Han Sans CN', sans-serif;
+}
+.dark .c-device-summary-card-num {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1990ff;
+  font-family: 'Roboto', sans-serif;
+}
+.dark .c-device-summary-card-num--error {
+  color: #f53f3f;
+}
+.dark .c-device-monitor-trend-chart {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+.dark .c-device-monitor-trend-header {
+  flex-shrink: 0;
+  margin-bottom: 8px;
+}
+.dark .c-device-monitor-trend-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #e8ebf0;
+  font-family: 'Source Han Sans CN', sans-serif;
+}
+.dark .c-device-monitor-trend-body {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.dark .c-device-monitor-trend-container {
+  width: 100%;
+  height: 100%;
+}
+.dark .c-device-monitor-type-root {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+.dark .c-device-monitor-type-tabs {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 46px;
+  padding-top: 8px;
+  flex-shrink: 0;
+}
+.dark .c-device-monitor-type-tab {
+  width: 34px;
+  padding: 8px 0;
+  text-align: center;
+  cursor: pointer;
+  font-size: 14px;
+  color: #e8ebf0;
+  border-radius: 4px;
+  margin-bottom: 4px;
+  transition: all 0.3s ease;
+}
+.dark .c-device-monitor-type-tab:hover {
+  background: rgba(25, 144, 255, 0.12);
+}
+.dark .c-device-monitor-type-tab.is-active {
+  background: rgba(25, 144, 255, 0.24);
+  color: #1990ff;
+  font-weight: 700;
+}
+.dark .c-device-monitor-type-tab-name {
+  line-height: 18px;
+}
+.dark .c-device-monitor-type-tab-badge {
+  font-size: 12px;
+  color: #1990ff;
+  line-height: 16px;
+  margin-top: 2px;
+  font-weight: 500;
+}
+.dark .c-device-monitor-type-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 8px;
+  align-content: start;
+  min-width: 0;
+  overflow-y: auto;
+}
+.dark .c-device-monitor-type-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 64px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  padding: 4px;
+}
+.dark .c-device-monitor-type-icon {
+  width: 27px;
+  height: 32px;
+  object-fit: contain;
+  margin-bottom: 2px;
+}
+.dark .c-device-monitor-type-icon-placeholder {
+  width: 27px;
+  height: 32px;
+  margin-bottom: 2px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 2px;
+}
+.dark .c-device-monitor-type-name {
+  font-size: 12px;
+  color: #e8ebf0;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.dark .c-device-monitor-type-value {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 18px;
+}
+.dark .c-device-monitor-type-value .is-error {
+  color: #f53f3f;
+  font-weight: 700;
+}
+.dark .c-device-monitor-type-value .is-normal {
+  color: #08a3a5;
+  font-weight: 700;
+}
+.dark .c-device-monitor-type-value .is-sep {
+  color: #e8ebf0;
+  margin: 0 1px;
+}
+.dark .c-device-monitor-type-value .is-total {
+  color: #1990ff;
+}
+.dark .c-device-status-root {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  height: 100%;
+  gap: 6px;
+}
+.dark .c-device-status-sidebar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 46px;
+  flex-shrink: 0;
+  padding-top: 4px;
+}
+.dark .c-device-status-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  padding: 6px 0;
+  border-radius: 4px;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.3s ease;
+}
+.dark .c-device-status-tab:hover {
+  background: rgba(25, 144, 255, 0.12);
+}
+.dark .c-device-status-tab.is-active {
+  background: rgba(25, 144, 255, 0.24);
+}
+.dark .c-device-status-tab.is-active .c-device-status-tab-name {
+  color: #1990ff;
+  font-weight: 700;
+}
+.dark .c-device-status-tab-name {
+  font-size: 14px;
+  color: #e8ebf0;
+  text-align: center;
+  line-height: 18px;
+}
+.dark .c-device-status-tab-badge {
+  font-size: 12px;
+  color: #1990ff;
+  margin-top: 2px;
+  font-weight: 500;
+}
+.dark .c-device-status-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 0;
+}
+.dark .c-device-status-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+.dark .c-device-status-item-icon {
+  width: 27px;
+  height: 32px;
+  flex-shrink: 0;
+}
+.dark .c-device-status-item-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.dark .c-device-status-item-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.dark .c-device-status-item-name {
+  font-size: 12px;
+  color: #e8ebf0;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dark .c-device-status-item-value {
+  display: flex;
+  align-items: baseline;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 18px;
+}
+.dark .c-device-status-item-value .c-device-status-val-error {
+  color: #f53f3f;
+}
+.dark .c-device-status-item-value .c-device-status-val-normal {
+  color: #08a3a5;
+}
+.dark .c-device-status-val-sep {
+  color: #e8ebf0;
+  margin: 0 1px;
+}
+.dark .c-device-status-val-total {
+  color: #1990ff;
+}
+.dark .tunnel,
+.dark .north-south {
+  display: flex;
+  flex-direction: row;
+}
+.dark .c-device-summary-card--active {
+  display: flex;
+}
+.dark .c-device-summary-value--blue {
+  display: flex;
+}
+.dark .c-device-summary-value--green {
+  display: flex;
+}
+.light {
+  /* --- 设备汇总卡片 --- */
+  /* --- 设备在线趋势 --- */
+  /* --- 设备类型图表 --- */
+  /* --- 设备状态表 --- */
+  /* --- 设计稿兼容元素 --- */
+  /* === [自动修复] v3.5 模板驱动 fallback 规则 === */
+  /* [自动修复] 模板 class .c-device-summary-card--active → 匹配元素 section-header-stats */
+  /* [自动修复] 模板 class .c-device-summary-value--blue → 匹配元素 section-header-stats */
+  /* [自动修复] 模板 class .c-device-summary-value--green → 匹配元素 section-header-stats */
+}
+.light .c-device-monitor-root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+}
+.light .c-device-monitor-summary {
+  flex-shrink: 0;
+}
+.light .c-device-monitor-main {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+  gap: 16px;
+}
+.light .c-device-monitor-trend-section {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.light .c-device-monitor-type-section {
+  width: 340px;
+  flex-shrink: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.light .c-device-monitor-status {
+  flex-shrink: 0;
+}
+.light .c-device-summary-root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+.light .c-device-summary-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 24px;
+}
+.light .c-device-summary-stat {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+.light .c-device-summary-label {
+  font-size: 14px;
+  color: #333333;
+  font-family: 'Source Han Sans CN', sans-serif;
+}
+.light .c-device-summary-value {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: 'Roboto', sans-serif;
+}
+.light .c-device-summary-value--blue {
+  color: #1990ff;
+}
+.light .c-device-summary-value--green {
+  color: #08a3a5;
+}
+.light .c-device-summary-cards {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+}
+.light .c-device-summary-card {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 10px 15px;
+  border-radius: 6px;
+  background: #edf4fb;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+.light .c-device-summary-card:hover {
+  background: rgba(25, 144, 255, 0.05);
+}
+.light .c-device-summary-card--active {
+  background: linear-gradient(270deg, #318aff 0%, #70bfff 100%);
+}
+.light .c-device-summary-card--active .c-device-summary-card-title,
+.light .c-device-summary-card--active .c-device-summary-card-label {
+  color: #ffffff;
+}
+.light .c-device-summary-card--active .c-device-summary-card-num {
+  color: #ffffff;
+}
+.light .c-device-summary-card--active .c-device-summary-card-num--error {
+  color: #f53f3f;
+}
+.light .c-device-summary-card--active:hover {
+  background: linear-gradient(270deg, #318aff 0%, #70bfff 100%);
+}
+.light .c-device-summary-card-icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.light .c-device-summary-card-img {
+  width: 27px;
+  height: 32px;
+  object-fit: contain;
+}
+.light .c-device-summary-card-title {
+  font-size: 12px;
+  color: #333333;
+  font-family: 'YouSheBiaoTiHei', sans-serif;
+  white-space: nowrap;
+}
+.light .c-device-summary-card-data {
+  display: flex;
+  flex-direction: column;
+  margin-left: 15px;
+  gap: 4px;
+}
+.light .c-device-summary-card-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+.light .c-device-summary-card-label {
+  font-size: 14px;
+  color: #333333;
+  font-family: 'Source Han Sans CN', sans-serif;
+}
+.light .c-device-summary-card-num {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1990ff;
+  font-family: 'Roboto', sans-serif;
+}
+.light .c-device-summary-card-num--error {
+  color: #f53f3f;
+}
+.light .c-device-monitor-trend-chart {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+.light .c-device-monitor-trend-header {
+  flex-shrink: 0;
+  margin-bottom: 8px;
+}
+.light .c-device-monitor-trend-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333333;
+  font-family: 'Source Han Sans CN', sans-serif;
+}
+.light .c-device-monitor-trend-body {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.light .c-device-monitor-trend-container {
+  width: 100%;
+  height: 100%;
+}
+.light .c-device-monitor-type-root {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+.light .c-device-monitor-type-tabs {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 46px;
+  padding-top: 8px;
+  flex-shrink: 0;
+}
+.light .c-device-monitor-type-tab {
+  width: 34px;
+  padding: 8px 0;
+  text-align: center;
+  cursor: pointer;
+  font-size: 14px;
+  color: #333333;
+  border-radius: 4px;
+  margin-bottom: 4px;
+  transition: all 0.3s ease;
+}
+.light .c-device-monitor-type-tab:hover {
+  background: rgba(25, 144, 255, 0.05);
+}
+.light .c-device-monitor-type-tab.is-active {
+  background: rgba(25, 144, 255, 0.1);
+  color: #1990ff;
+  font-weight: 700;
+}
+.light .c-device-monitor-type-tab-name {
+  line-height: 18px;
+}
+.light .c-device-monitor-type-tab-badge {
+  font-size: 12px;
+  color: #1990ff;
+  line-height: 16px;
+  margin-top: 2px;
+  font-weight: 500;
+}
+.light .c-device-monitor-type-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 8px;
+  align-content: start;
+  min-width: 0;
+  overflow-y: auto;
+}
+.light .c-device-monitor-type-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 64px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 4px;
+  padding: 4px;
+}
+.light .c-device-monitor-type-icon {
+  width: 27px;
+  height: 32px;
+  object-fit: contain;
+  margin-bottom: 2px;
+}
+.light .c-device-monitor-type-icon-placeholder {
+  width: 27px;
+  height: 32px;
+  margin-bottom: 2px;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 2px;
+}
+.light .c-device-monitor-type-name {
+  font-size: 12px;
+  color: #333333;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.light .c-device-monitor-type-value {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 18px;
+}
+.light .c-device-monitor-type-value .is-error {
+  color: #f53f3f;
+  font-weight: 700;
+}
+.light .c-device-monitor-type-value .is-normal {
+  color: #08a3a5;
+  font-weight: 700;
+}
+.light .c-device-monitor-type-value .is-sep {
+  color: #333333;
+  margin: 0 1px;
+}
+.light .c-device-monitor-type-value .is-total {
+  color: #1990ff;
+}
+.light .c-device-status-root {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  height: 100%;
+  gap: 6px;
+}
+.light .c-device-status-sidebar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 46px;
+  flex-shrink: 0;
+  padding-top: 4px;
+}
+.light .c-device-status-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  padding: 6px 0;
+  border-radius: 4px;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.3s ease;
+}
+.light .c-device-status-tab:hover {
+  background: rgba(25, 144, 255, 0.05);
+}
+.light .c-device-status-tab.is-active {
+  background: rgba(25, 144, 255, 0.1);
+}
+.light .c-device-status-tab.is-active .c-device-status-tab-name {
+  color: #1990ff;
+  font-weight: 700;
+}
+.light .c-device-status-tab-name {
+  font-size: 14px;
+  color: #333333;
+  text-align: center;
+  line-height: 18px;
+}
+.light .c-device-status-tab-badge {
+  font-size: 12px;
+  color: #1990ff;
+  margin-top: 2px;
+  font-weight: 500;
+}
+.light .c-device-status-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 0;
+}
+.light .c-device-status-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+.light .c-device-status-item-icon {
+  width: 27px;
+  height: 32px;
+  flex-shrink: 0;
+}
+.light .c-device-status-item-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.light .c-device-status-item-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.light .c-device-status-item-name {
+  font-size: 12px;
+  color: #333333;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.light .c-device-status-item-value {
+  display: flex;
+  align-items: baseline;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 18px;
+}
+.light .c-device-status-item-value .c-device-status-val-error {
+  color: #f53f3f;
+}
+.light .c-device-status-item-value .c-device-status-val-normal {
+  color: #08a3a5;
+}
+.light .c-device-status-val-sep {
+  color: #333333;
+  margin: 0 1px;
+}
+.light .c-device-status-val-total {
+  color: #1990ff;
+}
+.light .tunnel,
+.light .north-south {
+  display: flex;
+  flex-direction: row;
+}
+.light .c-device-summary-card--active {
+  display: flex;
+}
+.light .c-device-summary-value--blue {
+  display: flex;
+}
+.light .c-device-summary-value--green {
+  display: flex;
+}

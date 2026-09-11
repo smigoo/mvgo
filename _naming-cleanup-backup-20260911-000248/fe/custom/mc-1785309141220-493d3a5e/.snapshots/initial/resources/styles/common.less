@@ -1,0 +1,292 @@
+/* [Layout Refine] Figma bbox 推算根容器 padding: top 8px, right 6px, bottom 3px, left 6px */
+/* [Style Refine] 删除无 Figma 依据的 border-radius */
+.c-mc-1785309141220-493d3a5e-container {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background-color: var(--em-bg-color, #edf4fb);
+  box-shadow: 0 4px 10px 0 rgba(74, 117, 141, 0.25);
+  padding: 8px 6px 3px 6px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+.c-mc-1785309141220-493d3a5e-header-stats {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex: 1;
+}
+
+.c-mc-1785309141220-493d3a5e-stat-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.c-mc-1785309141220-493d3a5e-stat-label {
+  /* [Style Refine] Figma fills -> rgb(51, 51, 51) */
+  font-size: 14px;
+  font-weight: 400;
+  color: #333333;
+  font-family: 'Source Han Sans CN', sans-serif;
+  line-height: 21px;
+}
+
+.c-mc-1785309141220-493d3a5e-stat-value--primary {
+  /* [Style Refine] Figma fills -> 渐变 #e1f0ff -> #00ccff, 叠加 #1990ff */
+  font-size: 20px;
+  font-weight: 700;
+  font-family: 'Roboto', sans-serif;
+  line-height: 23px;
+  background: linear-gradient(180deg, #e1f0ff 0%, #00ccff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: #1990ff;
+}
+
+.c-mc-1785309141220-493d3a5e-stat-value--success {
+  /* [Style Refine] Figma fills -> 渐变 #e1f0ff -> #00ccff, 叠加 #08a3a5 */
+  font-size: 20px;
+  font-weight: 700;
+  font-family: 'Roboto', sans-serif;
+  line-height: 23px;
+  background: linear-gradient(180deg, #e1f0ff 0%, #00ccff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: #08a3a5;
+}
+
+/* [Style Refine] Figma text "*数据实时更新" 样式 */
+.c-mc-1785309141220-493d3a5e-update-tip {
+  font-size: 14px;
+  font-weight: 400;
+  font-family: 'Source Han Sans CN', sans-serif;
+  background: linear-gradient(90deg, #1990ff 0%, rgba(90, 126, 255, 0.83) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.c-mc-1785309141220-493d3a5e-content {
+  flex: 1;
+  display: flex;
+  gap: 12px;
+  overflow: hidden;
+  margin-top: 12px;
+  min-height: 0;
+}
+
+/* [Layout Refine] Figma bbox 推算 switch gap: 10px */
+.c-mc-1785309141220-493d3a5e-switch {
+  display: flex;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.c-mc-1785309141220-493d3a5e-switch-item {
+  position: relative;
+  width: 193px;
+  height: 65px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.c-mc-1785309141220-493d3a5e-switch-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+
+/* [Layout Refine] Figma bbox 绝对定位重构 switch 内部布局 */
+.c-mc-1785309141220-493d3a5e-switch-icon {
+  position: absolute;
+  left: 14px;
+  top: 8px;
+  width: 35px;
+  height: 28px;
+  z-index: 1;
+  object-fit: contain;
+}
+
+.c-mc-1785309141220-493d3a5e-switch-title {
+  position: absolute;
+  left: 14px;
+  bottom: 12px;
+  font-size: 12px;
+  font-weight: 400;
+  font-family: 'YouSheBiaoTiHei', sans-serif;
+  z-index: 1;
+  line-height: 16px;
+}
+
+.c-mc-1785309141220-493d3a5e-switch-data {
+  position: absolute;
+  right: 16px;
+  top: 6px;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.c-mc-1785309141220-493d3a5e-switch-data-row {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.c-mc-1785309141220-493d3a5e-switch-data-label {
+  font-size: 14px;
+  font-weight: 400;
+  font-family: 'Source Han Sans CN', sans-serif;
+  line-height: 21px;
+}
+
+.c-mc-1785309141220-493d3a5e-switch-data-value {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: 'Roboto', sans-serif;
+  line-height: 23px;
+  background: linear-gradient(180deg, #e1f0ff 0%, #00ccff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: #1990ff;
+}
+
+.c-mc-1785309141220-493d3a5e-switch-data-value--error {
+  /* [Style Refine] Figma fills -> 异常数红色 #e03434 */
+  background: linear-gradient(180deg, #e1f0ff 0%, #00ccff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: #e03434;
+}
+
+.c-mc-1785309141220-493d3a5e-switch-item.is-active {
+  .c-mc-1785309141220-493d3a5e-switch-title,
+  .c-mc-1785309141220-493d3a5e-switch-data-label {
+    color: #ffffff;
+  }
+}
+
+.c-mc-1785309141220-493d3a5e-switch-item:not(.is-active) {
+  .c-mc-1785309141220-493d3a5e-switch-title,
+  .c-mc-1785309141220-493d3a5e-switch-data-label {
+    color: #333333;
+  }
+}
+
+.c-mc-1785309141220-493d3a5e-vtabs {
+  display: flex;
+  flex-direction: column;
+  width: 46px;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.c-mc-1785309141220-493d3a5e-vtab-item {
+  /* [Style Refine] Figma fills -> 渐变背景 + 边框 #f0f5ff */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  cursor: pointer;
+  background: linear-gradient(90deg, #85baff 0%, #bfe3ff 100%);
+  border: 1px solid #f0f5ff;
+  box-sizing: border-box;
+  transition: all 0.3s;
+}
+
+.c-mc-1785309141220-493d3a5e-vtab-text {
+  /* [Style Refine] Figma fills -> #3b80e6 */
+  font-size: 14px;
+  font-weight: 400;
+  color: #3b80e6;
+  text-align: center;
+  writing-mode: vertical-rl;
+  letter-spacing: 2px;
+  font-family: 'Source Han Sans CN', sans-serif;
+}
+
+.c-mc-1785309141220-493d3a5e-vtab-item.is-active {
+  /* [Style Refine] Figma fills -> active 渐变背景 */
+  background: linear-gradient(90deg, #318aff 0%, #70bfff 100%);
+  border: 1px solid #f0f5ff;
+
+  .c-mc-1785309141220-493d3a5e-vtab-text {
+    color: #ffffff;
+    font-weight: 700;
+  }
+}
+
+.c-mc-1785309141220-493d3a5e-device-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  /* [Layout Refine] Figma bbox 计算 gap: row 13px, col 8px */
+  gap: 13px 8px;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.c-mc-1785309141220-493d3a5e-device-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  box-sizing: border-box;
+}
+
+.c-mc-1785309141220-493d3a5e-device-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+
+.c-mc-1785309141220-493d3a5e-device-icon {
+  width: 26px;
+  height: 32px;
+  z-index: 1;
+  margin-right: 12px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.c-mc-1785309141220-493d3a5e-device-info {
+  display: flex;
+  flex-direction: column;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.c-mc-1785309141220-493d3a5e-device-name {
+  /* [Style Refine] Figma fills -> #333333, 12px */
+  font-size: 12px;
+  font-weight: 400;
+  color: #333333;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: 'Source Han Sans CN', sans-serif;
+}
+
+.c-mc-1785309141220-493d3a5e-device-count {
+  /* [Style Refine] Figma fills -> #ffffff, effects -> drop-shadow 0 0 rgba(0,0,0,0.5) */
+  font-size: 16px;
+  font-weight: 500;
+  font-family: 'Roboto', sans-serif;
+  color: #ffffff;
+  text-shadow: 0 0 0 rgba(0, 0, 0, 0.5);
+  line-height: 19px;
+  margin-top: 4px;
+}

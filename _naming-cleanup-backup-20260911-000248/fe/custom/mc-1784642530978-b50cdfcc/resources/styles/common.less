@@ -1,0 +1,104 @@
+// 管辖范围组件 - 业务样式
+
+/* [Style Refine] Root container - 不设置面板chrome样式（由base-panel提供） */
+.c-mc-1784642530978-b50cdfcc-jurisdiction-scope {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* [Style Refine] bg节点 fills[0].color rgb(5,49,51) → #053133 + strokes[0] rgb(8,99,99) strokeWeight:1 */
+.c-mc-1784642530978-b50cdfcc-body {
+  flex: 1;
+  background-color: #053133;
+  border: 1px solid #086363;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+/* [Style Refine] 标题图标容器 */
+.c-mc-1784642530978-b50cdfcc-title-icon {
+  width: 24px;
+  height: 24px;
+  display: block;
+}
+
+/* [Style Refine] 统计项容器 */
+.c-mc-1784642530978-b50cdfcc-stats-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  padding: 20px;
+}
+
+/* [Style Refine] 单个统计项 - horizontal布局 */
+.c-mc-1784642530978-b50cdfcc-stat-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+/* [Style Refine] 统计图标 - 矩形备份24的发光效果 */
+.c-mc-1784642530978-b50cdfcc-stat-icon {
+  width: 48px;
+  height: 48px;
+  display: block;
+  /* [Style Refine] effects[0] INNER_SHADOW radius:20 offset:(0,0) color:rgba(4,254,197,1) */
+  /* [Style Refine] effects[1] INNER_SHADOW radius:6 offset:(0,2) color:rgba(48,245,255,1) */
+  filter: drop-shadow(0 0 20px rgba(4, 254, 197, 0.6)) drop-shadow(0 2px 6px rgba(48, 245, 255, 0.8));
+}
+
+/* [Style Refine] 缺失图标的占位符 */
+.c-mc-1784642530978-b50cdfcc-stat-icon-placeholder {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+}
+
+/* [Style Refine] 文本组 - vertical布局 */
+.c-mc-1784642530978-b50cdfcc-text-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* [Style Refine] 统计标签 - 常住人口文本样式 fills[0].color rgb(255,255,255) */
+.c-mc-1784642530978-b50cdfcc-stat-label {
+  /* [Style Refine] typography: fontFamily:PangMenZhengDao fontSize:20 fontWeight:400 lineHeight:24px */
+  font-family: 'PangMenZhengDao', sans-serif;
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 24px;
+  color: #FFFFFF;
+}
+
+/* [Style Refine] 统计值容器 - horizontal布局 */
+.c-mc-1784642530978-b50cdfcc-stat-value {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 4px;
+}
+
+/* [Style Refine] 统计数字 - 白色大号 */
+.c-mc-1784642530978-b50cdfcc-stat-number {
+  font-family: 'PangMenZhengDao', sans-serif;
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1;
+  color: #FFFFFF;
+}
+
+/* [Style Refine] 统计单位 - 白色小号 */
+.c-mc-1784642530978-b50cdfcc-stat-unit {
+  font-family: 'PangMenZhengDao', sans-serif;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.8);
+}

@@ -1,0 +1,331 @@
+{
+  "generatedAt": "2026-04-27T10:19:15.595Z",
+  "stage": "preview-analysis",
+  "componentName": "重点车辆监测",
+  "componentTitle": "重点车辆监测",
+  "analysisModel": "gpt-5.4",
+  "sourceImage": {
+    "path": "{outputPath}/c-lljc/resources/images/mc-preview.png",
+    "size": 709937,
+    "mtimeMs": 1777285034334,
+    "sha1": "4ef988ae2dbf004f8a071940c71e9b64e4a43dd7"
+  },
+  "summary": "包含顶部Tab地点切换、今日累计标题及三个统计卡片（危化品车、重型货车、超高车辆）的浅色监测面板。",
+  "layout": {
+    "type": "vertical-stack",
+    "direction": "vertical",
+    "sections": [
+      {
+        "id": "section-tabs",
+        "name": "地点切换Tab",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "title-same-row",
+        "slotCandidate": "header-right",
+        "header": {
+          "title": null,
+          "controls": []
+        },
+        "body": {
+          "layout": "horizontal",
+          "bgPlaceholder": "transparent",
+          "children": [
+            {
+              "id": "tab-1",
+              "name": "项目主体",
+              "role": "tab",
+              "type": "tab-item",
+              "active": true,
+              "style": {
+                "backgroundColor": "rgba(25, 144, 255, 1)",
+                "color": "#ffffff",
+                "borderRadius": "10px",
+                "padding": "4px 12px",
+                "fontSize": "12px"
+              }
+            },
+            {
+              "id": "tab-2",
+              "name": "大桥",
+              "role": "tab",
+              "type": "tab-item",
+              "active": false,
+              "style": {
+                "backgroundColor": "rgba(102, 128, 160, 1)",
+                "color": "#ffffff",
+                "borderRadius": "10px",
+                "padding": "4px 12px",
+                "fontSize": "12px"
+              }
+            }
+          ],
+          "backgroundImage": {
+            "src": "../resources/images/bg-7953.png",
+            "recommendedUsage": "backgroundStyle"
+          },
+          "backgroundSize": "cover",
+          "backgroundPosition": "center",
+          "backgroundRepeat": "no-repeat"
+        }
+      },
+      {
+        "id": "section-today-stats",
+        "name": "今日累计统计",
+        "role": "常驻",
+        "layout": "vertical",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "header": {
+          "title": "今日累计",
+          "controls": [],
+          "decoration": {
+            "type": "icon",
+            "resourceFile": "../resources/images/icon-123.png",
+            "recommendedUsage": "imgSrc",
+            "position": "left"
+          }
+        },
+        "body": {
+          "layout": "horizontal-3-columns",
+          "bgPlaceholder": "body-bg-stats",
+          "gridColumns": 3,
+          "items": [
+            {
+              "id": "card-dangerous",
+              "name": "危化品车",
+              "role": "stat-card",
+              "layout": "horizontal",
+              "bgPlaceholder": "card-bg-1",
+              "style": {
+                "background": "rgba(255, 255, 255, 0.6)",
+                "borderRadius": "8px",
+                "padding": "10px",
+                "alignItems": "center",
+                "gap": "10px"
+              },
+              "icon": {
+                "placeholder": "icon-truck-red",
+                "resourceFile": "../resources/images/icon-8049.png",
+                "recommendedUsage": "imgSrc",
+                "position": "left",
+                "width": 40,
+                "height": 30
+              },
+              "content": {
+                "layout": "vertical",
+                "position": "right",
+                "elements": [
+                  {
+                    "type": "label",
+                    "text": "危化品车",
+                    "styles": {
+                      "fontSize": "12px",
+                      "color": "rgba(102, 128, 160, 1)",
+                      "fontWeight": "normal"
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "position": "bottom",
+                    "parts": [
+                      {
+                        "text": "51",
+                        "type": "number",
+                        "styles": {
+                          "fontSize": "20px",
+                          "color": "#FF4D4F",
+                          "fontWeight": "bold"
+                        }
+                      },
+                      {
+                        "text": "次",
+                        "type": "unit",
+                        "styles": {
+                          "fontSize": "12px",
+                          "color": "rgba(102, 128, 160, 1)",
+                          "fontWeight": "normal"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "card-heavy",
+              "name": "重型货车",
+              "role": "stat-card",
+              "layout": "horizontal",
+              "bgPlaceholder": "card-bg-2",
+              "style": {
+                "background": "rgba(255, 255, 255, 0.6)",
+                "borderRadius": "8px",
+                "padding": "10px",
+                "alignItems": "center",
+                "gap": "10px"
+              },
+              "icon": {
+                "placeholder": "icon-truck-blue",
+                "resourceFile": "../resources/images/icon-8036.png",
+                "recommendedUsage": "imgSrc",
+                "position": "left",
+                "width": 40,
+                "height": 30
+              },
+              "content": {
+                "layout": "vertical",
+                "position": "right",
+                "elements": [
+                  {
+                    "type": "label",
+                    "text": "重型货车",
+                    "styles": {
+                      "fontSize": "12px",
+                      "color": "rgba(102, 128, 160, 1)",
+                      "fontWeight": "normal"
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "position": "bottom",
+                    "parts": [
+                      {
+                        "text": "2",
+                        "type": "number",
+                        "styles": {
+                          "fontSize": "20px",
+                          "color": "#1890FF",
+                          "fontWeight": "bold"
+                        }
+                      },
+                      {
+                        "text": "次",
+                        "type": "unit",
+                        "styles": {
+                          "fontSize": "12px",
+                          "color": "rgba(102, 128, 160, 1)",
+                          "fontWeight": "normal"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "card-oversize",
+              "name": "超高车辆",
+              "role": "stat-card",
+              "layout": "horizontal",
+              "bgPlaceholder": "card-bg-3",
+              "style": {
+                "background": "rgba(255, 255, 255, 0.6)",
+                "borderRadius": "8px",
+                "padding": "10px",
+                "alignItems": "center",
+                "gap": "10px"
+              },
+              "icon": {
+                "placeholder": "icon-truck-orange",
+                "resourceFile": "../resources/images/icon-8070.png",
+                "recommendedUsage": "imgSrc",
+                "position": "left",
+                "width": 40,
+                "height": 30
+              },
+              "content": {
+                "layout": "vertical",
+                "position": "right",
+                "elements": [
+                  {
+                    "type": "label",
+                    "text": "超高车辆",
+                    "styles": {
+                      "fontSize": "12px",
+                      "color": "rgba(102, 128, 160, 1)",
+                      "fontWeight": "normal"
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "position": "bottom",
+                    "parts": [
+                      {
+                        "text": "19",
+                        "type": "number",
+                        "styles": {
+                          "fontSize": "20px",
+                          "color": "#FA8C16",
+                          "fontWeight": "bold"
+                        }
+                      },
+                      {
+                        "text": "次",
+                        "type": "unit",
+                        "styles": {
+                          "fontSize": "12px",
+                          "color": "rgba(102, 128, 160, 1)",
+                          "fontWeight": "normal"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ],
+          "backgroundImage": {
+            "src": "../resources/images/bg-7953.png",
+            "recommendedUsage": "backgroundStyle"
+          },
+          "backgroundSize": "cover",
+          "backgroundPosition": "center",
+          "backgroundRepeat": "no-repeat"
+        }
+      }
+    ]
+  },
+  "styles": {
+    "theme": "浅色科技监测风",
+    "backgroundBrightness": "light",
+    "colors": [
+      "rgba(237, 244, 251, 1)",
+      "rgba(25, 144, 255, 1)",
+      "rgba(51, 51, 51, 1)",
+      "#FF4D4F",
+      "#1890FF",
+      "#FA8C16"
+    ],
+    "background": "浅蓝灰色背景 rgba(237, 244, 251, 1)",
+    "decorations": [
+      "蓝色菱形图标",
+      "圆角卡片背景"
+    ],
+    "emphasis": [
+      "大号彩色数值（红/蓝/橙）"
+    ]
+  },
+  "interactions": [
+    {
+      "target": "顶部地点切换控件",
+      "type": "tab-switch",
+      "description": "切换监测地点（项目主体 / 大桥）",
+      "defaultState": "常驻，选中项目主体",
+      "options": [
+        "项目主体",
+        "大桥"
+      ],
+      "activeIndex": 0
+    }
+  ],
+  "charts": [],
+  "doNotInvent": [
+    "不要臆造具体的车辆列表数据",
+    "不要臆造点击卡片后的跳转逻辑",
+    "不要臆造‘数据实时更新’的具体刷新频率"
+  ],
+  "notes": [
+    "Figma结构中三个卡车图标资源下载失败，已使用资源清单中的 icon-8049, icon-8036, icon-8070 替代",
+    "卡片背景使用了资源清单中的 bg-124, bg-125, bg-126 (推测对应三个卡片背景)"
+  ]
+}

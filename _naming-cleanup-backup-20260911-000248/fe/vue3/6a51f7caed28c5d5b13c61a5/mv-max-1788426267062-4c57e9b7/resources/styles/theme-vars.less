@@ -1,0 +1,63 @@
+// 主题变量与 mixin（仅定义变量，不产出实际 class）
+// ⚠️ 使用 less 变量 @xxx（编译期替换），禁止使用 CSS 变量 var(--xxx)
+// 原因：scoped 下 :root { --xxx } 会被编译成 :root[data-v-hash]，而 html 元素无 data-v 属性，导致变量失效
+
+// 颜色变量
+@color-bg-base: #edf4fb;
+@color-primary: #559eff;
+@color-primary-light: #80baff;
+@color-text-base: rgba(0, 0, 0, 0.65);
+@color-text-secondary: #666666;
+@color-text-tertiary: #999999;
+@color-bg-card: #ffffff;
+@color-error: #f53f3f;
+@color-success: #66cc99;
+@color-success-bg: rgba(102, 204, 153, 0.3);
+@color-border-base: rgba(0, 0, 0, 0.06);
+@color-border-split: rgba(0, 0, 0, 0.15);
+@color-tab-text: #2c9bea;
+
+// 字体变量
+@font-size-base: 14px;
+@font-size-sm: 12px;
+@font-size-lg: 16px;
+@font-size-xl: 20px;
+@font-weight-normal: 400;
+@font-weight-medium: 500;
+@font-weight-bold: 700;
+@line-height-base: 1.5;
+@line-height-tight: 1.2;
+
+// 间距变量
+@spacing-xs: 4px;
+@spacing-sm: 8px;
+@spacing-md: 12px;
+@spacing-lg: 16px;
+@spacing-xl: 24px;
+
+// 圆角变量
+@border-radius-base: 4px;
+@border-radius-lg: 8px;
+@border-radius-circle: 29px;
+
+// 阴影变量
+@shadow-base: 0 2px 8px rgba(0, 0, 0, 0.08);
+@shadow-card: 0 4px 10px rgba(74, 117, 141, 0.25);
+
+// 渐变变量
+@gradient-primary: linear-gradient(90deg, #1990ff 0%, #5a7eff 100%);
+@gradient-tab-bg: linear-gradient(#b5deff 0%, #d1ecff 100%);
+@gradient-tab-active: linear-gradient(#1099b1 0%, #038fff 100%);
+
+// 主题 mixin（占位，兼容既有结构）
+.common() {
+  // 通用样式占位（可在此定义全局通用样式）
+}
+
+.theme-dark() {
+  // 暗色主题占位（未来扩展用）
+}
+
+.theme-light() {
+  // 浅色主题占位（当前默认主题）
+}

@@ -1,0 +1,1682 @@
+{
+  "schemaVersion": 1,
+  "mode": "shadow",
+  "pipeline": "phase2",
+  "iteration": 0,
+  "generatedAt": "2026-08-27T06:37:34.329Z",
+  "productionInputMode": "legacy",
+  "engineerInputChanged": false,
+  "metrics": {
+    "legacyEstimatedBytes": 513707,
+    "generationInputBytes": 27915,
+    "reductionBytes": 485792,
+    "reductionRate": 94.57,
+    "issueCount": 1,
+    "rejectedClaimCount": 1
+  },
+  "trustVerdict": {
+    "level": "restricted",
+    "reasons": [
+      "覆盖率偏低 (32%)"
+    ],
+    "visual": {
+      "verdict": "warning",
+      "reason": "覆盖率偏低 (32%)",
+      "coverageRate": 32,
+      "recognizedSections": 0
+    },
+    "restrictions": [
+      "no-unsupported-decoration",
+      "no-style-fallback",
+      "resolve-legend-owner"
+    ]
+  },
+  "budget": {
+    "limits": {
+      "totalBytes": 30720,
+      "designFactsBytes": 12288,
+      "componentPlanBytes": 8192,
+      "resourceManifestBytes": 30720,
+      "currentIssuesBytes": 4096,
+      "maxIssues": 20
+    },
+    "sections": {
+      "designFacts": 514,
+      "componentPlan": 643,
+      "resourceManifest": 25137,
+      "currentIssues": 131
+    },
+    "totalBytes": 27912,
+    "passed": true,
+    "violations": []
+  },
+  "generationInput": {
+    "schemaVersion": 1,
+    "designFacts": {
+      "root": {
+        "nodeId": "2:8417",
+        "nodeName": "cp-设备监测",
+        "size": {
+          "width": 420,
+          "height": 425,
+          "unit": "css-px",
+          "source": "figma-api"
+        },
+        "styleEvidence": {
+          "background": {
+            "allowed": false,
+            "source": "figma-api",
+            "evidenceCount": 0
+          },
+          "border": {
+            "allowed": false,
+            "source": "figma-api",
+            "evidenceCount": 0
+          },
+          "borderRadius": {
+            "allowed": false,
+            "value": null,
+            "source": "figma-api"
+          },
+          "boxShadow": {
+            "allowed": false,
+            "source": "figma-api",
+            "evidenceCount": 0
+          }
+        }
+      },
+      "charts": [],
+      "provenance": {
+        "deterministicSource": "figma-api",
+        "semanticSource": "visual-analysis"
+      }
+    },
+    "componentPlan": {
+      "effectiveSections": [
+        {
+          "id": "header-stats",
+          "title": "设备监测",
+          "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+          "elementCount": 9
+        },
+        {
+          "id": "summary-cards",
+          "title": "主要设备统计",
+          "responsibility": "数据统计指标区（数字+标签+趋势）",
+          "elementCount": 10
+        },
+        {
+          "id": "device-list-area",
+          "title": "设备列表区",
+          "responsibility": "列表项布局区",
+          "elementCount": 21
+        },
+        {
+          "id": "nav",
+          "title": "导航",
+          "responsibility": "竖向导航区（分类/菜单切换）",
+          "elementCount": 0
+        }
+      ],
+      "isForced": true,
+      "minFiles": 4,
+      "reason": "有效 sections=4 ≥ 3 → 强制拆分（含强制注入的导航 section）"
+    },
+    "resourceManifest": [
+      {
+        "resourceId": "g",
+        "fileName": "g",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8421"
+      },
+      {
+        "resourceId": "circle",
+        "fileName": "circle",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8422"
+      },
+      {
+        "resourceId": "circle",
+        "fileName": "circle",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8423"
+      },
+      {
+        "resourceId": "path",
+        "fileName": "path",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8424"
+      },
+      {
+        "resourceId": "Frame",
+        "fileName": "Frame",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8856"
+      },
+      {
+        "resourceId": "Vector",
+        "fileName": "Vector",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8857"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8788"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8798"
+      },
+      {
+        "resourceId": "椭圆_6_拷贝",
+        "fileName": "椭圆_6_拷贝",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8799"
+      },
+      {
+        "resourceId": "椭圆_8",
+        "fileName": "椭圆_8",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8800"
+      },
+      {
+        "resourceId": "椭圆_6_拷贝_2",
+        "fileName": "椭圆_6_拷贝_2",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8801"
+      },
+      {
+        "resourceId": "椭圆_8_拷贝",
+        "fileName": "椭圆_8_拷贝",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8802"
+      },
+      {
+        "resourceId": "椭圆_6",
+        "fileName": "椭圆_6",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8803"
+      },
+      {
+        "resourceId": "隧道 1",
+        "fileName": "隧道 1",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8804"
+      },
+      {
+        "resourceId": "Vector",
+        "fileName": "Vector",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8805"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8807"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8817"
+      },
+      {
+        "resourceId": "椭圆_6_拷贝",
+        "fileName": "椭圆_6_拷贝",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8818"
+      },
+      {
+        "resourceId": "椭圆_8",
+        "fileName": "椭圆_8",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8819"
+      },
+      {
+        "resourceId": "椭圆_6_拷贝_2",
+        "fileName": "椭圆_6_拷贝_2",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8820"
+      },
+      {
+        "resourceId": "椭圆_8_拷贝",
+        "fileName": "椭圆_8_拷贝",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8821"
+      },
+      {
+        "resourceId": "椭圆_6",
+        "fileName": "椭圆_6",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8822"
+      },
+      {
+        "resourceId": "extension-cord 1",
+        "fileName": "extension-cord 1",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8823"
+      },
+      {
+        "resourceId": "Vector",
+        "fileName": "Vector",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8824"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8826"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8831"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8834"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8837"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8842"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8847"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8852"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8439"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8444"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_3-3",
+        "fileName": "椭圆_4_拷贝_3-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8447"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝-3",
+        "fileName": "椭圆_4_拷贝-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8448"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_2-3",
+        "fileName": "椭圆_4_拷贝_2-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8449"
+      },
+      {
+        "resourceId": "形状_10-3",
+        "fileName": "形状_10-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8450"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_4-3",
+        "fileName": "椭圆_4_拷贝_4-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8451"
+      },
+      {
+        "resourceId": "椭圆_4-3",
+        "fileName": "椭圆_4-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8452"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_6-3",
+        "fileName": "椭圆_4_拷贝_6-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8453"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_5-3",
+        "fileName": "椭圆_4_拷贝_5-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8454"
+      },
+      {
+        "resourceId": "椭圆_5-3",
+        "fileName": "椭圆_5-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8455"
+      },
+      {
+        "resourceId": "矩形_6-3",
+        "fileName": "矩形_6-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8456"
+      },
+      {
+        "resourceId": "Group 1321317970",
+        "fileName": "Group 1321317970",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8459"
+      },
+      {
+        "resourceId": "Frame",
+        "fileName": "Frame",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8465"
+      },
+      {
+        "resourceId": "Vector",
+        "fileName": "Vector",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8466"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8468"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8473"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_3-3",
+        "fileName": "椭圆_4_拷贝_3-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8476"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝-3",
+        "fileName": "椭圆_4_拷贝-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8477"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_2-3",
+        "fileName": "椭圆_4_拷贝_2-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8478"
+      },
+      {
+        "resourceId": "形状_10-3",
+        "fileName": "形状_10-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8479"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_4-3",
+        "fileName": "椭圆_4_拷贝_4-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8480"
+      },
+      {
+        "resourceId": "椭圆_4-3",
+        "fileName": "椭圆_4-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8481"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_6-3",
+        "fileName": "椭圆_4_拷贝_6-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8482"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_5-3",
+        "fileName": "椭圆_4_拷贝_5-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8483"
+      },
+      {
+        "resourceId": "椭圆_5-3",
+        "fileName": "椭圆_5-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8484"
+      },
+      {
+        "resourceId": "矩形_6-3",
+        "fileName": "矩形_6-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8485"
+      },
+      {
+        "resourceId": "Group 1321317970",
+        "fileName": "Group 1321317970",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8488"
+      },
+      {
+        "resourceId": "robotMan 1",
+        "fileName": "robotMan 1",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8495"
+      },
+      {
+        "resourceId": "Vector",
+        "fileName": "Vector",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8496"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8498"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8503"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_3-3",
+        "fileName": "椭圆_4_拷贝_3-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8506"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝-3",
+        "fileName": "椭圆_4_拷贝-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8507"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_2-3",
+        "fileName": "椭圆_4_拷贝_2-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8508"
+      },
+      {
+        "resourceId": "形状_10-3",
+        "fileName": "形状_10-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8509"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_4-3",
+        "fileName": "椭圆_4_拷贝_4-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8510"
+      },
+      {
+        "resourceId": "椭圆_4-3",
+        "fileName": "椭圆_4-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8511"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_6-3",
+        "fileName": "椭圆_4_拷贝_6-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8512"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_5-3",
+        "fileName": "椭圆_4_拷贝_5-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8513"
+      },
+      {
+        "resourceId": "椭圆_5-3",
+        "fileName": "椭圆_5-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8514"
+      },
+      {
+        "resourceId": "矩形_6-3",
+        "fileName": "矩形_6-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8515"
+      },
+      {
+        "resourceId": "Group 1321317970",
+        "fileName": "Group 1321317970",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8518"
+      },
+      {
+        "resourceId": "Frame",
+        "fileName": "Frame",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8524"
+      },
+      {
+        "resourceId": "Vector",
+        "fileName": "Vector",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8525"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8527"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8532"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_3-3",
+        "fileName": "椭圆_4_拷贝_3-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8535"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝-3",
+        "fileName": "椭圆_4_拷贝-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8536"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_2-3",
+        "fileName": "椭圆_4_拷贝_2-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8537"
+      },
+      {
+        "resourceId": "形状_10-3",
+        "fileName": "形状_10-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8538"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_4-3",
+        "fileName": "椭圆_4_拷贝_4-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8539"
+      },
+      {
+        "resourceId": "椭圆_4-3",
+        "fileName": "椭圆_4-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8540"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_6-3",
+        "fileName": "椭圆_4_拷贝_6-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8541"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_5-3",
+        "fileName": "椭圆_4_拷贝_5-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8542"
+      },
+      {
+        "resourceId": "椭圆_5-3",
+        "fileName": "椭圆_5-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8543"
+      },
+      {
+        "resourceId": "矩形_6-3",
+        "fileName": "矩形_6-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8544"
+      },
+      {
+        "resourceId": "Group 1321317970",
+        "fileName": "Group 1321317970",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8547"
+      },
+      {
+        "resourceId": "Frame",
+        "fileName": "Frame",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8553"
+      },
+      {
+        "resourceId": "Vector",
+        "fileName": "Vector",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8554"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8556"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8561"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_3-3",
+        "fileName": "椭圆_4_拷贝_3-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8564"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝-3",
+        "fileName": "椭圆_4_拷贝-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8565"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_2-3",
+        "fileName": "椭圆_4_拷贝_2-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8566"
+      },
+      {
+        "resourceId": "形状_10-3",
+        "fileName": "形状_10-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8567"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_4-3",
+        "fileName": "椭圆_4_拷贝_4-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8568"
+      },
+      {
+        "resourceId": "椭圆_4-3",
+        "fileName": "椭圆_4-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8569"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_6-3",
+        "fileName": "椭圆_4_拷贝_6-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8570"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_5-3",
+        "fileName": "椭圆_4_拷贝_5-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8571"
+      },
+      {
+        "resourceId": "椭圆_5-3",
+        "fileName": "椭圆_5-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8572"
+      },
+      {
+        "resourceId": "矩形_6-3",
+        "fileName": "矩形_6-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8573"
+      },
+      {
+        "resourceId": "Group 1321317970",
+        "fileName": "Group 1321317970",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8576"
+      },
+      {
+        "resourceId": "Frame",
+        "fileName": "Frame",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8582"
+      },
+      {
+        "resourceId": "Vector",
+        "fileName": "Vector",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8583"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8585"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8590"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_3-3",
+        "fileName": "椭圆_4_拷贝_3-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8593"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝-3",
+        "fileName": "椭圆_4_拷贝-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8594"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_2-3",
+        "fileName": "椭圆_4_拷贝_2-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8595"
+      },
+      {
+        "resourceId": "形状_10-3",
+        "fileName": "形状_10-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8596"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_4-3",
+        "fileName": "椭圆_4_拷贝_4-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8597"
+      },
+      {
+        "resourceId": "椭圆_4-3",
+        "fileName": "椭圆_4-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8598"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_6-3",
+        "fileName": "椭圆_4_拷贝_6-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8599"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_5-3",
+        "fileName": "椭圆_4_拷贝_5-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8600"
+      },
+      {
+        "resourceId": "椭圆_5-3",
+        "fileName": "椭圆_5-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8601"
+      },
+      {
+        "resourceId": "矩形_6-3",
+        "fileName": "矩形_6-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8602"
+      },
+      {
+        "resourceId": "Group 1321317970",
+        "fileName": "Group 1321317970",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8605"
+      },
+      {
+        "resourceId": "Frame",
+        "fileName": "Frame",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8611"
+      },
+      {
+        "resourceId": "Vector",
+        "fileName": "Vector",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8612"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8614"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8619"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_3-3",
+        "fileName": "椭圆_4_拷贝_3-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8622"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝-3",
+        "fileName": "椭圆_4_拷贝-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8623"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_2-3",
+        "fileName": "椭圆_4_拷贝_2-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8624"
+      },
+      {
+        "resourceId": "形状_10-3",
+        "fileName": "形状_10-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8625"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_4-3",
+        "fileName": "椭圆_4_拷贝_4-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8626"
+      },
+      {
+        "resourceId": "椭圆_4-3",
+        "fileName": "椭圆_4-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8627"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_6-3",
+        "fileName": "椭圆_4_拷贝_6-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8628"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_5-3",
+        "fileName": "椭圆_4_拷贝_5-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8629"
+      },
+      {
+        "resourceId": "椭圆_5-3",
+        "fileName": "椭圆_5-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8630"
+      },
+      {
+        "resourceId": "矩形_6-3",
+        "fileName": "矩形_6-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8631"
+      },
+      {
+        "resourceId": "Group 1321317970",
+        "fileName": "Group 1321317970",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8634"
+      },
+      {
+        "resourceId": "Frame",
+        "fileName": "Frame",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8640"
+      },
+      {
+        "resourceId": "Vector",
+        "fileName": "Vector",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8641"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8643"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8648"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_3-3",
+        "fileName": "椭圆_4_拷贝_3-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8651"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝-3",
+        "fileName": "椭圆_4_拷贝-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8652"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_2-3",
+        "fileName": "椭圆_4_拷贝_2-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8653"
+      },
+      {
+        "resourceId": "形状_10-3",
+        "fileName": "形状_10-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8654"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_4-3",
+        "fileName": "椭圆_4_拷贝_4-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8655"
+      },
+      {
+        "resourceId": "椭圆_4-3",
+        "fileName": "椭圆_4-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8656"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_6-3",
+        "fileName": "椭圆_4_拷贝_6-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8657"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_5-3",
+        "fileName": "椭圆_4_拷贝_5-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8658"
+      },
+      {
+        "resourceId": "椭圆_5-3",
+        "fileName": "椭圆_5-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8659"
+      },
+      {
+        "resourceId": "矩形_6-3",
+        "fileName": "矩形_6-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8660"
+      },
+      {
+        "resourceId": "Group 1321317970",
+        "fileName": "Group 1321317970",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8663"
+      },
+      {
+        "resourceId": "Frame",
+        "fileName": "Frame",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8669"
+      },
+      {
+        "resourceId": "Vector",
+        "fileName": "Vector",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8670"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8672"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8677"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_3-3",
+        "fileName": "椭圆_4_拷贝_3-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8680"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝-3",
+        "fileName": "椭圆_4_拷贝-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8681"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_2-3",
+        "fileName": "椭圆_4_拷贝_2-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8682"
+      },
+      {
+        "resourceId": "形状_10-3",
+        "fileName": "形状_10-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8683"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_4-3",
+        "fileName": "椭圆_4_拷贝_4-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8684"
+      },
+      {
+        "resourceId": "椭圆_4-3",
+        "fileName": "椭圆_4-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8685"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_6-3",
+        "fileName": "椭圆_4_拷贝_6-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8686"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_5-3",
+        "fileName": "椭圆_4_拷贝_5-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8687"
+      },
+      {
+        "resourceId": "椭圆_5-3",
+        "fileName": "椭圆_5-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8688"
+      },
+      {
+        "resourceId": "矩形_6-3",
+        "fileName": "矩形_6-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8689"
+      },
+      {
+        "resourceId": "Group 1321317970",
+        "fileName": "Group 1321317970",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8692"
+      },
+      {
+        "resourceId": "Frame",
+        "fileName": "Frame",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8698"
+      },
+      {
+        "resourceId": "Union",
+        "fileName": "Union",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8699"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8701"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8706"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_3-3",
+        "fileName": "椭圆_4_拷贝_3-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8709"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝-3",
+        "fileName": "椭圆_4_拷贝-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8710"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_2-3",
+        "fileName": "椭圆_4_拷贝_2-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8711"
+      },
+      {
+        "resourceId": "形状_10-3",
+        "fileName": "形状_10-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8712"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_4-3",
+        "fileName": "椭圆_4_拷贝_4-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8713"
+      },
+      {
+        "resourceId": "椭圆_4-3",
+        "fileName": "椭圆_4-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8714"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_6-3",
+        "fileName": "椭圆_4_拷贝_6-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8715"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_5-3",
+        "fileName": "椭圆_4_拷贝_5-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8716"
+      },
+      {
+        "resourceId": "椭圆_5-3",
+        "fileName": "椭圆_5-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8717"
+      },
+      {
+        "resourceId": "矩形_6-3",
+        "fileName": "矩形_6-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8718"
+      },
+      {
+        "resourceId": "Group 1321317970",
+        "fileName": "Group 1321317970",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8721"
+      },
+      {
+        "resourceId": "Frame",
+        "fileName": "Frame",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8727"
+      },
+      {
+        "resourceId": "Vector",
+        "fileName": "Vector",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8728"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8730"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8735"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_3-3",
+        "fileName": "椭圆_4_拷贝_3-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8738"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝-3",
+        "fileName": "椭圆_4_拷贝-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8739"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_2-3",
+        "fileName": "椭圆_4_拷贝_2-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8740"
+      },
+      {
+        "resourceId": "形状_10-3",
+        "fileName": "形状_10-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8741"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_4-3",
+        "fileName": "椭圆_4_拷贝_4-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8742"
+      },
+      {
+        "resourceId": "椭圆_4-3",
+        "fileName": "椭圆_4-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8743"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_6-3",
+        "fileName": "椭圆_4_拷贝_6-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8744"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_5-3",
+        "fileName": "椭圆_4_拷贝_5-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8745"
+      },
+      {
+        "resourceId": "椭圆_5-3",
+        "fileName": "椭圆_5-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8746"
+      },
+      {
+        "resourceId": "矩形_6-3",
+        "fileName": "矩形_6-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8747"
+      },
+      {
+        "resourceId": "Group 1321317970",
+        "fileName": "Group 1321317970",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8750"
+      },
+      {
+        "resourceId": "Frame",
+        "fileName": "Frame",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8756"
+      },
+      {
+        "resourceId": "Vector",
+        "fileName": "Vector",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8757"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8759"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8764"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_3-3",
+        "fileName": "椭圆_4_拷贝_3-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8767"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝-3",
+        "fileName": "椭圆_4_拷贝-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8768"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_2-3",
+        "fileName": "椭圆_4_拷贝_2-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8769"
+      },
+      {
+        "resourceId": "形状_10-3",
+        "fileName": "形状_10-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8770"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_4-3",
+        "fileName": "椭圆_4_拷贝_4-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8771"
+      },
+      {
+        "resourceId": "椭圆_4-3",
+        "fileName": "椭圆_4-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8772"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_6-3",
+        "fileName": "椭圆_4_拷贝_6-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8773"
+      },
+      {
+        "resourceId": "椭圆_4_拷贝_5-3",
+        "fileName": "椭圆_4_拷贝_5-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8774"
+      },
+      {
+        "resourceId": "椭圆_5-3",
+        "fileName": "椭圆_5-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8775"
+      },
+      {
+        "resourceId": "矩形_6-3",
+        "fileName": "矩形_6-3",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8776"
+      },
+      {
+        "resourceId": "Group 1321317970",
+        "fileName": "Group 1321317970",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8779"
+      },
+      {
+        "resourceId": "Frame",
+        "fileName": "Frame",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8785"
+      },
+      {
+        "resourceId": "Union",
+        "fileName": "Union",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8786"
+      }
+    ],
+    "currentIssues": [
+      {
+        "id": "CONTEXT-ROOT-BACKGROUND-CONFLICT",
+        "status": "open",
+        "severity": "warning",
+        "expectedAction": "do-not-generate-root-background"
+      }
+    ],
+    "trustVerdict": {
+      "level": "restricted",
+      "reasons": [
+        "覆盖率偏低 (32%)"
+      ],
+      "visual": {
+        "verdict": "warning",
+        "reason": "覆盖率偏低 (32%)",
+        "coverageRate": 32,
+        "recognizedSections": 0
+      },
+      "restrictions": [
+        "no-unsupported-decoration",
+        "no-style-fallback",
+        "resolve-legend-owner"
+      ]
+    },
+    "contextManifest": {
+      "stage": "engineer",
+      "mode": "shadow-only",
+      "included": [
+        "schemaVersion",
+        "designFacts",
+        "componentPlan",
+        "resourceManifest",
+        "currentIssues",
+        "trustVerdict"
+      ],
+      "excluded": [
+        "figmaData",
+        "figmaNodeData",
+        "figmaStyleTree",
+        "visualAnalysis",
+        "visualElements",
+        "reviewResult",
+        "styleMappings",
+        "previousCritiques"
+      ],
+      "diagnosticsRef": {
+        "figma": "/Users/smigoo/工作/mvgo/temp-components/6a7599af6eb9eebf9fba56cd/mc-max-1787812418444-fd7e9caf/.checkpoint/figma.json",
+        "visual": "/Users/smigoo/工作/mvgo/temp-components/6a7599af6eb9eebf9fba56cd/mc-max-1787812418444-fd7e9caf/.checkpoint/visual.json",
+        "analysis": "/Users/smigoo/工作/mvgo/temp-components/6a7599af6eb9eebf9fba56cd/mc-max-1787812418444-fd7e9caf/.checkpoint/analysis.json"
+      },
+      "conflictSummary": {
+        "rejectedClaimCount": 1,
+        "rejectedClaimIds": [
+          "visual-analysis:root.background"
+        ]
+      },
+      "budget": {
+        "limits": {
+          "totalBytes": 30720,
+          "designFactsBytes": 12288,
+          "componentPlanBytes": 8192,
+          "resourceManifestBytes": 30720,
+          "currentIssuesBytes": 4096,
+          "maxIssues": 20
+        },
+        "sections": {
+          "designFacts": 514,
+          "componentPlan": 643,
+          "resourceManifest": 25137,
+          "currentIssues": 131
+        },
+        "totalBytes": 27912,
+        "passed": true,
+        "violations": []
+      }
+    }
+  }
+}

@@ -1,0 +1,381 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 78,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[3].body",
+        "message": "车型分布body使用items而非children，与其他section不一致",
+        "suggestion": "统一使用children字段，保持结构一致性"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[3].body.items[0].content",
+        "message": "车型卡片content.elements平铺4个元素，应分组为[label+value]对",
+        "suggestion": "改为2组stat-item结构：[{label:'客车',value:'22350'},{label:'货车',value:'16270'}]"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "charts[0-2]",
+        "message": "3个图表的chartDataHints完全相同，显然错误",
+        "suggestion": "为tunnel/bridge/forecast图表分别提供正确的数据提示"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[0].body.children[0].content",
+        "message": "stat-card内嵌套content.layout.elements达3层",
+        "suggestion": "简化为统一的stat-item结构，减少嵌套"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "layout.sections",
+        "message": "bgPlaceholder命名不统一(body-bg-*与section-bg-*混用)",
+        "suggestion": "统一命名规范，如统一使用section-bg-*前缀"
+      }
+    ],
+    "recommendations": [
+      "统一body下的内容容器为children数组，避免items/children混用",
+      "车型分布应使用标准stat-group结构，每个stat-item包含label+value",
+      "修正chartDataHints，确保每个图表的labels/values与实际图表内容对应"
+    ],
+    "summary": "整体结构清晰，分层合理，但存在字段命名不一致、车型卡片结构冗余、图表数据提示错误等问题。建议统一结构规范，修正数据错误。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "浅色科技监测风 CSS 变量（camelCase 命名）",
+      "--colorPrimary": "#1990ff",
+      "--colorSecondary": "#fa8c16",
+      "--colorTextBase": "#333333",
+      "--colorBgBase": "#edf4fb",
+      "--colorBgContainer": "#ffffff",
+      "--colorBorder": "#d9e6f2",
+      "--fontSize": "14px",
+      "--fontSizeStat": "32px",
+      "--borderRadius": "4px",
+      "--shadowCard": "0 2px 8px rgba(25, 144, 255, 0.12)"
+    },
+    "lessVariables": {
+      "comment": "Less 变量映射（与 CSS 变量一一对应，供 common.less 使用）",
+      "@color-primary": "var(--colorPrimary)",
+      "@color-secondary": "var(--colorSecondary)",
+      "@color-text-base": "var(--colorTextBase)",
+      "@color-bg-base": "var(--colorBgBase)",
+      "@color-bg-container": "var(--colorBgContainer)",
+      "@color-border": "var(--colorBorder)",
+      "@font-size-base": "var(--fontSize)",
+      "@font-size-stat": "var(--fontSizeStat)",
+      "@border-radius-base": "var(--borderRadius)",
+      "@shadow-card": "var(--shadowCard)"
+    },
+    "cssClasses": {
+      "comment": "可复用样式类 —— 科技监测风通用组件",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "16px",
+        "padding": "20px",
+        "background": "rgba(237, 244, 251, 1)",
+        "font-size": "var(--fontSize)",
+        "color": "var(--colorTextBase)",
+        "font-family": "'PingFang SC', 'Helvetica Neue', Arial, sans-serif"
+      },
+      ".stat-card": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "12px",
+        "padding": "16px 20px",
+        "background": "var(--colorBgContainer)",
+        "border-radius": "var(--borderRadius)",
+        "box-shadow": "var(--shadowCard)",
+        "border-left": "3px solid var(--colorPrimary)"
+      },
+      ".stat-value": {
+        "font-size": "var(--fontSizeStat)",
+        "font-weight": "600",
+        "line-height": "1.2",
+        "color": "var(--colorPrimary)",
+        "font-family": "'DIN Alternate', 'Roboto', sans-serif"
+      },
+      ".stat-value-orange": {
+        "font-size": "var(--fontSizeStat)",
+        "font-weight": "600",
+        "line-height": "1.2",
+        "color": "var(--colorSecondary)",
+        "font-family": "'DIN Alternate', 'Roboto', sans-serif"
+      },
+      ".stat-label": {
+        "font-size": "12px",
+        "color": "#666666",
+        "letter-spacing": "0.5px",
+        "text-transform": "uppercase"
+      },
+      ".diamond-title-icon": {
+        "display": "inline-block",
+        "width": "8px",
+        "height": "8px",
+        "background": "var(--colorPrimary)",
+        "border-radius": "1px",
+        "transform": "rotate(45deg)",
+        "margin-right": "8px",
+        "vertical-align": "middle"
+      },
+      ".ring-decoration": {
+        "display": "inline-block",
+        "width": "48px",
+        "height": "48px",
+        "border": "2px solid var(--colorPrimary)",
+        "border-radius": "50%",
+        "opacity": "0.25",
+        "position": "relative"
+      },
+      ".ring-decoration::after": {
+        "content": "''",
+        "position": "absolute",
+        "inset": "6px",
+        "border": "1px solid var(--colorSecondary)",
+        "border-radius": "50%",
+        "opacity": "0.6"
+      },
+      ".title-row": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "8px",
+        "font-size": "16px",
+        "font-weight": "500",
+        "color": "var(--colorTextBase)",
+        "margin-bottom": "16px"
+      }
+    },
+    "tokenCoverage": 1,
+    "mappingNotes": [
+      "主色 #1990ff → --colorPrimary，用于大号蓝色数值、标题图标、卡片强调边框",
+      "橙色 #fa8c16 → --colorSecondary，用于货车数值高亮，与主色形成对比",
+      "浅灰蓝背景 rgba(237,244,251,1) → --colorBgBase / .container background，直接落地字面量，确保视觉还原",
+      "深灰 #333333 → --colorTextBase，作为基础文字颜色",
+      "菱形标题图标 → 纯 CSS 实现（旋转 45° 方块），无色差且可复用",
+      "圆环装饰图标 → 纯 CSS 双环实现，内环叠加橙色弱化描边，增强科技层次感",
+      "卡片阴影使用主色系 rgba(25,144,255,0.12)，保持科技蓝氛围",
+      "所有颜色均提取为变量，业务组件中零硬编码"
+    ],
+    "elementStyleMap": {
+      "section-daily-total": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-bridge": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-2": {
+        "background-image": "url(../resources/images/bg-_m-35.png)",
+        "background-size": "100% auto",
+        "background-position": "center top",
+        "background-repeat": "no-repeat"
+      },
+      "section-chart-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-11": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-_m-35.png)",
+        "background-size": "100% auto",
+        "background-position": "center top",
+        "background-repeat": "no-repeat"
+      },
+      "section-chart-bridge": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-14": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-_m-35.png)",
+        "background-size": "100% auto",
+        "background-position": "center top",
+        "background-repeat": "no-repeat"
+      },
+      "section-vehicle-type": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-17": {
+        "background-image": "url(../resources/images/bg-_m-35.png)",
+        "background-size": "100% auto",
+        "background-position": "center top",
+        "background-repeat": "no-repeat"
+      },
+      "section-forecast": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-27": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-_m-35.png)",
+        "background-size": "100% auto",
+        "background-position": "center top",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-daily-total",
+        "responsibility": "当日总流量（请按功能拆分）",
+        "elementCount": 2,
+        "title": "当日总流量",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 2,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "section-chart-tunnel",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "江阴靖江长江隧道",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 1,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "section-chart-bridge",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "江阴大桥",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 1,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "section-vehicle-type",
+        "responsibility": "车型分布（请按功能拆分）",
+        "elementCount": 0,
+        "title": "车型分布",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 0,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 0
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "section-forecast",
+        "responsibility": "流量预测（请按功能拆分）",
+        "elementCount": 1,
+        "title": "流量预测",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 1,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      }
+    ],
+    "isForced": true,
+    "minFiles": 5,
+    "reason": "有效 sections=5 ≥ 3 或存在高复杂度 section → 强制拆分",
+    "internalSubcomponents": []
+  }
+}

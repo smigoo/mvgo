@@ -1,0 +1,264 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 78,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body",
+        "message": "Tab切换栏未区分header层级，4个tab直接平铺在body.children中",
+        "suggestion": "Tab栏属于导航控件，建议提取为section.header或映射到title-right插槽"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "headerSlots",
+        "message": "两个图标按钮映射到headerSlots但未关联具体section，无法追溯到DOM结构",
+        "suggestion": "将icon-7941.png和icon-7945.png作为children元素加入某个section.header"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "charts[0]",
+        "message": "chartDataHints.chartTitle值为\"area\"（应为图表标题文本），数据映射混乱",
+        "suggestion": "chartTitle应为\"zk3+785CO浓度\"，与layout.charts[0].series对齐"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "layout.sections[0].body.backgroundImage",
+        "message": "两个section复用同一bg-7890.png，但Tab栏实际应使用独立背景资源",
+        "suggestion": "检查Tab栏背景是否应为bg-tab-container或独立切图"
+      }
+    ],
+    "recommendations": [
+      "将Tab切换栏重构为section.header结构，body仅保留图表内容，符合header/body分层原则",
+      "补充headerSlots中图标按钮的具体DOM位置（所属section.id + children索引）",
+      "统一chartDataHints与layout.charts的字段映射关系，避免后续生成代码时数据错配"
+    ],
+    "summary": "结构基本合理但层级划分模糊：Tab栏未区分header层级，headerSlots悬空未关联DOM，图表数据hints字段语义错误。建议重构Tab栏为header结构，明确图标按钮归属"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）- 深色科技监测风主题",
+      "--colorBgPrimary": "#1a2a3a",
+      "--colorBgContent": "rgba(237,244,251,1)",
+      "--colorSuccess": "#00c853",
+      "--colorError": "#f53f3f",
+      "--colorTextBase": "rgba(255,255,255,0.85)",
+      "--colorTextInverse": "#000000",
+      "--colorLink": "#559eff",
+      "--colorTabActiveBg": "#ffffff",
+      "--colorTabActiveText": "#000000",
+      "--colorWarningLine": "#f53f3f",
+      "--colorChartFill": "#00c853",
+      "--colorBadge": "#f53f3f",
+      "--fontSize": "14px",
+      "--fontSizeLarge": "16px",
+      "--borderRadiusTab": "8px",
+      "--borderRadiusBadge": "50%"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射 - 对应CSS变量",
+      "@color-bg-primary": "#1a2a3a",
+      "@color-bg-content": "rgba(237,244,251,1)",
+      "@color-success": "#00c853",
+      "@color-error": "#f53f3f",
+      "@color-text-base": "rgba(255,255,255,0.85)",
+      "@color-text-inverse": "#000000",
+      "@color-link": "#559eff",
+      "@color-tab-active-bg": "#ffffff",
+      "@color-tab-active-text": "#000000",
+      "@color-warning-line": "#f53f3f",
+      "@color-chart-fill": "#00c853",
+      "@color-badge": "#f53f3f",
+      "@font-size-base": "14px",
+      "@font-size-large": "16px",
+      "@border-radius-tab": "8px",
+      "@border-radius-badge": "50%"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类 - 深色监测风格",
+      ".dark-monitoring-container": {
+        "background": "linear-gradient(180deg, #1a2a3a 0%, #0d1821 100%)",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)"
+      },
+      ".content-card": {
+        "background": "var(--colorBgContent)",
+        "border-radius": "var(--borderRadiusTab)",
+        "padding": "1.2em",
+        "color": "var(--colorTextInverse)"
+      },
+      ".tab-group": {
+        "display": "flex",
+        "gap": "0.5em",
+        "align-items": "center"
+      },
+      ".tab-item": {
+        "padding": "0.5em 1.2em",
+        "cursor": "pointer",
+        "border-radius": "var(--borderRadiusTab)",
+        "transition": "all 0.3s ease",
+        "color": "var(--colorTextBase)"
+      },
+      ".tab-item.active": {
+        "background": "var(--colorTabActiveBg)",
+        "color": "var(--colorTabActiveText)",
+        "font-weight": "500"
+      },
+      ".chart-container": {
+        "position": "relative",
+        "width": "100%",
+        "height": "100%"
+      },
+      ".warning-line": {
+        "border-top": "2px dashed var(--colorWarningLine)",
+        "position": "relative"
+      },
+      ".warning-line-label": {
+        "position": "absolute",
+        "right": "0",
+        "top": "-1.2em",
+        "color": "var(--colorError)",
+        "font-size": "0.85em"
+      },
+      ".area-chart-fill": {
+        "fill": "var(--colorChartFill)",
+        "fill-opacity": "0.3"
+      },
+      ".area-chart-stroke": {
+        "stroke": "var(--colorChartFill)",
+        "stroke-width": "2px"
+      },
+      ".badge": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "min-width": "1.4em",
+        "height": "1.4em",
+        "padding": "0 0.4em",
+        "background": "var(--colorBadge)",
+        "color": "#ffffff",
+        "border-radius": "var(--borderRadiusBadge)",
+        "font-size": "0.85em",
+        "font-weight": "500"
+      },
+      ".legend-item": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "0.5em",
+        "color": "var(--colorTextBase)"
+      },
+      ".legend-dot": {
+        "width": "0.7em",
+        "height": "0.7em",
+        "border-radius": "50%",
+        "background": "var(--colorChartFill)"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "深色蓝黑渐变背景已映射为 linear-gradient(180deg, #1a2a3a 0%, #0d1821 100%)",
+      "内容区浅蓝灰背景 rgba(237,244,251,1) 直接落地为字面量值",
+      "Tab激活态使用白色背景(#ffffff)搭配黑色文字(#000000)实现高对比度突出显示",
+      "预警线使用红色(#f53f3f)虚线配合文字标注",
+      "图表面积填充使用绿色(#00c853)渐变，透明度0.3",
+      "Badge红色角标使用圆形(border-radius: 50%)，数值居中显示",
+      "所有CSS变量采用camelCase命名规范",
+      "配色方案完全基于提供的7个色值，未引入额外颜色",
+      "建议ECharts配置中y轴刻度线在30附近添加红色虚线markLine"
+    ],
+    "elementStyleMap": {
+      "section-tabs": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-8": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-tabs",
+        "responsibility": "标签页切换区",
+        "elementCount": 4,
+        "title": "Tab切换栏",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 4,
+          "charts": 0,
+          "interactions": 1,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "浓度趋势图",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 1,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      }
+    ],
+    "isForced": false,
+    "minFiles": 0,
+    "reason": "有效 sections=2 < 3 且无高复杂度 section → 不强制拆分",
+    "internalSubcomponents": []
+  }
+}

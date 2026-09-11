@@ -1,0 +1,417 @@
+[
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7880",
+    "figmaPath": "cp-环境监测/bg",
+    "figmaBox": {
+      "x": 1480,
+      "y": 884,
+      "width": 420,
+      "height": 186
+    },
+    "usage": ":style=\"{ background: '#edf4fbb2' }\"",
+    "targetDomSelector": ".bg-container",
+    "targetDomHint": "bg区域",
+    "previewAnalysisRole": "bg",
+    "hint": "bg → bg区域",
+    "downloadStatus": "css",
+    "cssValue": "#edf4fbb2",
+    "deduplicatedFrom": null,
+    "fallbackHint": "✅ CSS 替代（无需图片）: background: #edf4fbb2;",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 420,
+      "height": 186,
+      "fillsSummary": "#edf4fbb2",
+      "effectsSummary": "box-shadow: 0px 4px 10px #4a758d"
+    },
+    "recommendedUsage": "backgroundStyle",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": "../resources/images/g-7883.png",
+    "figmaNodeId": "2:7883",
+    "figmaPath": "cp-环境监测/header/g",
+    "figmaBox": {
+      "x": 1501,
+      "y": 914.08984375,
+      "width": 8,
+      "height": 8
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".g-container",
+    "targetDomHint": "g区域",
+    "previewAnalysisRole": "icon",
+    "hint": "g → g区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 8,
+      "height": 8
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7884",
+    "figmaPath": "cp-环境监测/header/g/circle",
+    "figmaBox": {
+      "x": 1501,
+      "y": 914.08984375,
+      "width": 8,
+      "height": 8
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".circle-container",
+    "targetDomHint": "circle区域",
+    "previewAnalysisRole": "icon",
+    "hint": "circle → circle区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 8,
+      "height": 8,
+      "fillsSummary": "#00000000"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7885",
+    "figmaPath": "cp-环境监测/header/g/circle",
+    "figmaBox": {
+      "x": 1502,
+      "y": 915.08984375,
+      "width": 5.999999523162842,
+      "height": 5.999999523162842
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".circle-container",
+    "targetDomHint": "circle区域",
+    "previewAnalysisRole": "icon",
+    "hint": "circle → circle区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 6,
+      "height": 6,
+      "fillsSummary": "linear-gradient(#1252fa 0%, #d6effc 100%)"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7886",
+    "figmaPath": "cp-环境监测/header/g/path",
+    "figmaBox": {
+      "x": 1503.802001953125,
+      "y": 916.891845703125,
+      "width": 2.3958981037139893,
+      "height": 2.3960022926330566
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".path-container",
+    "targetDomHint": "path区域",
+    "previewAnalysisRole": "icon",
+    "hint": "path → path区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 2,
+      "height": 2,
+      "fillsSummary": "#559eff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7890",
+    "figmaPath": "cp-环境监测/slot-con/sub-t/tabs-list/bg",
+    "figmaBox": {
+      "x": 1500,
+      "y": 922.0000004565809,
+      "width": 295.00000118020694,
+      "height": 26.999999543419108
+    },
+    "usage": ":style=\"{ background: 'linear-gradient(90deg, #b5deff 0%, #d1ecff 100%)' }\"",
+    "targetDomSelector": ".bg-container",
+    "targetDomHint": "bg区域",
+    "previewAnalysisRole": "bg",
+    "hint": "bg → bg区域",
+    "downloadStatus": "css",
+    "cssValue": "linear-gradient(90deg, #b5deff 0%, #d1ecff 100%)",
+    "deduplicatedFrom": null,
+    "fallbackHint": "✅ CSS 替代（无需图片）: background: linear-gradient(90deg, #b5deff 0%, #d1ecff 100%);",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 295,
+      "height": 27,
+      "fillsSummary": "linear-gradient(#b5deff 0%, #d1ecff 100%)"
+    },
+    "recommendedUsage": "backgroundStyle",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7891",
+    "figmaPath": "cp-环境监测/slot-con/sub-t/tabs-list/bg-tab-active",
+    "figmaBox": {
+      "x": 1505,
+      "y": 925.000000405209,
+      "width": 78.0000009179389,
+      "height": 20.999999594791007
+    },
+    "usage": ":style=\"{ background: 'linear-gradient(90deg, #1099b1 0%, #038fff 100%)' }\"",
+    "targetDomSelector": ".tab-active-container",
+    "targetDomHint": "tab-active区域",
+    "previewAnalysisRole": "bg",
+    "hint": "bg-tab-active → tab-active区域",
+    "downloadStatus": "css",
+    "cssValue": "linear-gradient(90deg, #1099b1 0%, #038fff 100%)",
+    "deduplicatedFrom": null,
+    "fallbackHint": "✅ CSS 替代（无需图片）: background: linear-gradient(90deg, #1099b1 0%, #038fff 100%);",
+    "semanticVarName": "bgtabActive",
+    "visualMeta": {
+      "width": 78,
+      "height": 21,
+      "fillsSummary": "linear-gradient(#1099b1 0%, #038fff 100%)"
+    },
+    "recommendedUsage": "backgroundBlock",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": "../resources/images/tabs-icon-43.png",
+    "figmaNodeId": "89:43",
+    "figmaPath": "cp-环境监测/slot-con/sub-t/tabs-icon",
+    "figmaBox": {
+      "x": 1821,
+      "y": 924,
+      "width": 52,
+      "height": 24
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".tabs-icon-container",
+    "targetDomHint": "tabs-icon区域",
+    "previewAnalysisRole": "icon",
+    "hint": "tabs-icon → tabs-icon区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": "icontabsIcon",
+    "visualMeta": {
+      "width": 52,
+      "height": 24
+    },
+    "recommendedUsage": "decorativeBlock",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7941",
+    "figmaPath": "cp-环境监测/slot-con/sub-t/tabs-icon/icon",
+    "figmaBox": {
+      "x": 1821,
+      "y": 924,
+      "width": 24,
+      "height": 24
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".icon-container",
+    "targetDomHint": "icon区域",
+    "previewAnalysisRole": "icon",
+    "hint": "icon → icon区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 24,
+      "height": 24
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7943",
+    "figmaPath": "cp-环境监测/slot-con/sub-t/tabs-icon/icon/柱状图_filled 1",
+    "figmaBox": {
+      "x": 1824,
+      "y": 927,
+      "width": 18,
+      "height": 18
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": "._filled-1-container",
+    "targetDomHint": "柱状图_filled 1区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱状图_filled 1 → 柱状图_filled 1区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icon柱状图Filled1",
+    "visualMeta": {
+      "width": 18,
+      "height": 18
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7944",
+    "figmaPath": "cp-环境监测/slot-con/sub-t/tabs-icon/icon/柱状图_filled 1/Vector",
+    "figmaBox": {
+      "x": 1825,
+      "y": 928.25,
+      "width": 16,
+      "height": 15.5
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".vector-container",
+    "targetDomHint": "Vector区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Vector → Vector区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 16,
+      "height": 16,
+      "fillsSummary": "#2c9bea"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7945",
+    "figmaPath": "cp-环境监测/slot-con/sub-t/tabs-icon/icon",
+    "figmaBox": {
+      "x": 1849,
+      "y": 924,
+      "width": 24,
+      "height": 24
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".icon-container",
+    "targetDomHint": "icon区域",
+    "previewAnalysisRole": "icon",
+    "hint": "icon → icon区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 24,
+      "height": 24
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7947",
+    "figmaPath": "cp-环境监测/slot-con/sub-t/tabs-icon/icon/属性 列表 详情2 1",
+    "figmaBox": {
+      "x": 1852,
+      "y": 927,
+      "width": 18,
+      "height": 18
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".--2-1-container",
+    "targetDomHint": "属性 列表 详情2 1区域",
+    "previewAnalysisRole": "icon",
+    "hint": "属性 列表 详情2 1 → 属性 列表 详情2 1区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icon属性列表详情21",
+    "visualMeta": {
+      "width": 18,
+      "height": 18
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7948",
+    "figmaPath": "cp-环境监测/slot-con/sub-t/tabs-icon/icon/属性 列表 详情2 1/Vector",
+    "figmaBox": {
+      "x": 1853.125,
+      "y": 928.125,
+      "width": 14.625,
+      "height": 14.625
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".vector-container",
+    "targetDomHint": "Vector区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Vector → Vector区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 15,
+      "height": 15,
+      "fillsSummary": "#2c9bea"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7950",
+    "figmaPath": "cp-环境监测/slot-con/sub-t/num/bg",
+    "figmaBox": {
+      "x": 1866,
+      "y": 917,
+      "width": 14,
+      "height": 14
+    },
+    "usage": ":style=\"{ background: '#f53f3f' }\"",
+    "targetDomSelector": ".bg-container",
+    "targetDomHint": "bg区域",
+    "previewAnalysisRole": "bg",
+    "hint": "bg → bg区域",
+    "downloadStatus": "css",
+    "cssValue": "#f53f3f",
+    "deduplicatedFrom": null,
+    "fallbackHint": "✅ CSS 替代（无需图片）: background: #f53f3f;",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 14,
+      "height": 14,
+      "fillsSummary": "#f53f3f"
+    },
+    "recommendedUsage": "backgroundBlock",
+    "isTinyDecoration": false
+  }
+]

@@ -1,0 +1,85 @@
+// ==========================================
+// 流量监测面板 - 主题变量与 Mixin
+// 仅定义变量与 mixin，不产出实际 class
+// ==========================================
+
+// 主色调
+@color-primary: #1990ff;
+@color-primary-dark: #006fe3;
+@color-primary-light: #69c0ff;
+@color-primary-gradient-start: #1990ff;
+@color-primary-gradient-end: #5a7eff;
+
+// 背景色
+@color-bg: #edf4fb;
+@color-bg-card: #ffffff;
+@color-bg-card-shadow: rgba(25, 144, 255, 0.08);
+
+// 文本色
+@color-text-base: #333333;
+@color-text-secondary: #666666;
+@color-text-light: #999999;
+@color-text-white: #ffffff;
+
+// 功能色
+@color-warning: #fa8c16;
+@color-success: #52c41a;
+@color-danger: #ff4d4f;
+@color-info: #1890ff;
+
+// 图表色
+@color-chart-blue: #1890ff;
+@color-chart-light-blue: #69c0ff;
+@color-chart-green: #52c41a;
+@color-chart-cyan: #00cccc;
+@color-chart-orange: #ffa22f;
+
+// 字号
+@font-size-base: 14px;
+@font-size-small: 12px;
+@font-size-large: 16px;
+@font-size-xlarge: 20px;
+@font-size-xxlarge: 24px;
+@font-size-xxxlarge: 28px;
+@font-size-stat: 32px;
+
+// 间距
+@spacing-xs: 4px;
+@spacing-sm: 8px;
+@spacing-md: 12px;
+@spacing-lg: 16px;
+@spacing-xl: 20px;
+@spacing-xxl: 24px;
+
+// 圆角
+@border-radius-sm: 4px;
+@border-radius-base: 8px;
+@border-radius-lg: 12px;
+@border-radius-xl: 20px;
+@border-radius-round: 50%;
+
+// 阴影
+@shadow-card: 0 2px 12px rgba(25, 144, 255, 0.08);
+@shadow-panel: 0 4px 10px rgba(74, 117, 141, 0.25);
+
+// ==========================================
+// Mixin 定义
+// ==========================================
+
+// 通用样式 mixin
+.common() {
+  box-sizing: border-box;
+}
+
+// 暗色主题 mixin（占位）
+.theme-dark() {
+  // 暗色主题变量覆盖（当前为浅色主题，留空占位）
+}
+
+// 亮色主题 mixin（占位）
+.theme-light() {
+  // 亮色主题变量覆盖（当前默认即为浅色，留空占位）
+}
+
+// 调用主题 mixin（兼容既有结构）
+.theme-light();

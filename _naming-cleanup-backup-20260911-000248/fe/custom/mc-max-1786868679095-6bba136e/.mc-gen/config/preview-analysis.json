@@ -1,0 +1,709 @@
+{
+  "generatedAt": "2026-08-16T00:00:00.000Z",
+  "stage": "preview-analysis",
+  "componentName": "cp-环境监测",
+  "componentTitle": "环境监测",
+  "analysisModel": "gpt-5",
+  "sourceImage": {
+    "path": "mc-preview.png",
+    "size": 0,
+    "mtimeMs": 0,
+    "sha1": ""
+  },
+  "summary": "浅色环境监测面板，包含顶部标题、标题左侧装饰图标、下方四项 Tab 切换栏、右侧图表图标按钮与红色数量徽标，以及一张一氧化碳浓度趋势折线/面积图，图中包含绿色浓度曲线和红色虚线预警线。",
+  "layout": {
+    "type": "single-panel-slot-content",
+    "direction": "vertical",
+    "sections": [
+      {
+        "id": "panel-title",
+        "name": "面板标题",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "title-itself",
+        "slotCandidate": null,
+        "bgPlaceholder": "section-bg-panel-title",
+        "header": {
+          "title": "环境监测",
+          "controls": [],
+          "styles": {
+            "fontSize": "16px",
+            "fontWeight": 700,
+            "color": "#559eff",
+            "lineHeight": "20px",
+            "letterSpacing": "0px",
+            "textAlign": "left"
+          }
+        },
+        "body": {
+          "layout": "horizontal",
+          "bgPlaceholder": "body-bg-panel-title",
+          "children": [
+            {
+              "id": "title-left-dot-icon",
+              "name": "标题左侧装饰图标",
+              "role": "装饰",
+              "type": "icon",
+              "figmaNode": "header/g",
+              "resourceFile": "../resources/images/g-7883.png",
+              "recommendedUsage": "imgSrc",
+              "styles": {
+                "width": "8px",
+                "height": "8px",
+                "objectFit": "contain",
+                "opacity": 1
+              },
+              "resourceVarName": "icon1",
+              "downloadStatus": "success"
+            },
+            {
+              "id": "title-text",
+              "name": "环境监测标题文字",
+              "role": "常驻",
+              "type": "title",
+              "text": "环境监测",
+              "figmaNode": "header/环境监测",
+              "styles": {
+                "fontSize": "16px",
+                "fontWeight": 700,
+                "color": "#559eff",
+                "lineHeight": "20px",
+                "letterSpacing": "0px",
+                "textAlign": "left"
+              }
+            }
+          ],
+          "backgroundImage": {
+            "src": "../resources/images/bg-7890.png",
+            "recommendedUsage": "backgroundStyle"
+          },
+          "backgroundSize": "cover",
+          "backgroundPosition": "center",
+          "backgroundRepeat": "no-repeat"
+        }
+      },
+      {
+        "id": "monitor-tabs-and-actions",
+        "name": "监测类型切换与操作区",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "bgPlaceholder": "section-bg-monitor-tabs-and-actions",
+        "header": {
+          "title": "",
+          "controls": []
+        },
+        "body": {
+          "layout": "horizontal",
+          "bgPlaceholder": "body-bg-monitor-tabs-and-actions",
+          "children": [
+            {
+              "id": "tabs-list",
+              "name": "监测指标 Tab 列表",
+              "role": "tab-list",
+              "type": "tabs",
+              "figmaNode": "slot-con/sub-t/tabs-list",
+              "styles": {
+                "width": "295px",
+                "height": "27px",
+                "padding": "0px",
+                "gap": "0px",
+                "layout": "horizontal",
+                "justifyContent": "flex-start",
+                "alignItems": "center",
+                "background": "rgba(255,255,255,0.35)",
+                "borderRadius": "14px",
+                "overflow": "hidden",
+                "border": "1px solid rgba(85,158,255,0.45)",
+                "boxShadow": "none"
+              },
+              "children": [
+                {
+                  "id": "tab-carbon-monoxide",
+                  "name": "一氧化碳",
+                  "role": "tab",
+                  "type": "tab",
+                  "text": "一氧化碳",
+                  "active": true,
+                  "figmaNode": "tabs-list/一氧化碳",
+                  "background": {
+                    "resourceFile": "../resources/images/bg-tab-active-7891.png",
+                    "recommendedUsage": "backgroundStyle",
+                    "backgroundSize": "100% 100%",
+                    "backgroundPosition": "center",
+                    "backgroundRepeat": "no-repeat",
+                    "width": "83px",
+                    "height": "24px"
+                  },
+                  "styles": {
+                    "fontSize": "14px",
+                    "fontWeight": 700,
+                    "color": "#ffffff",
+                    "lineHeight": "24px",
+                    "letterSpacing": "0px",
+                    "textAlign": "center",
+                    "backgroundColor": "#3aa7c9",
+                    "borderRadius": "12px",
+                    "padding": "0 12px",
+                    "border": "none"
+                  }
+                },
+                {
+                  "id": "tab-visibility",
+                  "name": "能见度",
+                  "role": "tab",
+                  "type": "tab",
+                  "text": "能见度",
+                  "active": false,
+                  "figmaNode": "tabs-list/能见度",
+                  "styles": {
+                    "fontSize": "14px",
+                    "fontWeight": 700,
+                    "color": "#559eff",
+                    "lineHeight": "24px",
+                    "letterSpacing": "0px",
+                    "textAlign": "center",
+                    "backgroundColor": "transparent",
+                    "borderRadius": "12px",
+                    "padding": "0 10px",
+                    "border": "none"
+                  }
+                },
+                {
+                  "id": "tab-indoor-lighting",
+                  "name": "洞内照明",
+                  "role": "tab",
+                  "type": "tab",
+                  "text": "洞内照明",
+                  "active": false,
+                  "figmaNode": "tabs-list/洞内照明",
+                  "styles": {
+                    "fontSize": "14px",
+                    "fontWeight": 700,
+                    "color": "#559eff",
+                    "lineHeight": "24px",
+                    "letterSpacing": "0px",
+                    "textAlign": "center",
+                    "backgroundColor": "transparent",
+                    "borderRadius": "12px",
+                    "padding": "0 10px",
+                    "border": "none"
+                  }
+                },
+                {
+                  "id": "tab-outdoor-light",
+                  "name": "洞外光强",
+                  "role": "tab",
+                  "type": "tab",
+                  "text": "洞外光强",
+                  "active": false,
+                  "figmaNode": "tabs-list/洞外光强",
+                  "styles": {
+                    "fontSize": "14px",
+                    "fontWeight": 700,
+                    "color": "#559eff",
+                    "lineHeight": "24px",
+                    "letterSpacing": "0px",
+                    "textAlign": "center",
+                    "backgroundColor": "transparent",
+                    "borderRadius": "12px",
+                    "padding": "0 10px",
+                    "border": "none"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "chart-action-icon",
+              "name": "图表切换图标",
+              "role": "button",
+              "type": "icon-button",
+              "figmaNode": "slot-con/sub-t/tabs-icon",
+              "resourceFile": "../resources/images/g-7883.png",
+              "recommendedUsage": "imgSrc",
+              "styles": {
+                "width": "52px",
+                "height": "24px",
+                "objectFit": "contain",
+                "opacity": 1,
+                "fontSize": "12px",
+                "color": "#559eff",
+                "backgroundColor": "rgba(255,255,255,0.6)",
+                "borderRadius": "2px",
+                "padding": "0px",
+                "border": "1px solid rgba(85,158,255,0.35)"
+              },
+              "resourceVarName": "icon1",
+              "downloadStatus": "success"
+            },
+            {
+              "id": "action-badge-num",
+              "name": "数量徽标",
+              "role": "badge",
+              "type": "badge",
+              "text": "6",
+              "figmaNode": "slot-con/sub-t/num",
+              "styles": {
+                "width": "14px",
+                "height": "14px",
+                "fontSize": "10px",
+                "fontWeight": 700,
+                "color": "#ffffff",
+                "lineHeight": "14px",
+                "letterSpacing": "0px",
+                "textAlign": "center",
+                "background": "#f53f3f",
+                "backgroundColor": "#f53f3f",
+                "borderRadius": "7px",
+                "padding": "0px",
+                "border": "none"
+              }
+            }
+          ],
+          "backgroundImage": {
+            "src": "../resources/images/bg-7890.png",
+            "recommendedUsage": "backgroundStyle"
+          },
+          "backgroundSize": "cover",
+          "backgroundPosition": "center",
+          "backgroundRepeat": "no-repeat"
+        }
+      },
+      {
+        "id": "co-concentration-chart",
+        "name": "一氧化碳浓度趋势图",
+        "role": "常驻",
+        "layout": "vertical",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "bgPlaceholder": "section-bg-co-concentration-chart",
+        "header": {
+          "title": "",
+          "controls": []
+        },
+        "body": {
+          "layout": "vertical",
+          "bgPlaceholder": "body-bg-co-concentration-chart",
+          "children": [
+            {
+              "id": "chart-container",
+              "name": "折线面积图容器",
+              "role": "chart",
+              "type": "chart-container",
+              "figmaNode": "slot-con/chart",
+              "styles": {
+                "width": "370px",
+                "height": "105px",
+                "padding": "0px",
+                "gap": "0px",
+                "layout": "vertical",
+                "justifyContent": "flex-start",
+                "alignItems": "stretch",
+                "background": "transparent",
+                "borderRadius": "0px",
+                "overflow": "visible"
+              },
+              "children": [
+                {
+                  "id": "y-axis-unit",
+                  "name": "Y轴单位",
+                  "role": "label",
+                  "type": "text",
+                  "text": "辆",
+                  "figmaNode": "chart/y-axis-unit",
+                  "styles": {
+                    "fontSize": "10px",
+                    "fontWeight": 400,
+                    "color": "rgba(0,0,0,0.55)",
+                    "lineHeight": "14px",
+                    "letterSpacing": "0px",
+                    "textAlign": "left"
+                  }
+                },
+                {
+                  "id": "legend-co",
+                  "name": "zks+785CO浓度图例",
+                  "role": "legend",
+                  "type": "legend-item",
+                  "text": "zks+785CO浓度",
+                  "figmaNode": "chart/legend-zks-785-co",
+                  "styles": {
+                    "fontSize": "9px",
+                    "fontWeight": 400,
+                    "color": "rgba(0,0,0,0.55)",
+                    "lineHeight": "12px",
+                    "letterSpacing": "0px",
+                    "textAlign": "left"
+                  },
+                  "children": [
+                    {
+                      "id": "legend-co-line",
+                      "name": "绿色图例线段",
+                      "role": "装饰",
+                      "type": "line",
+                      "styles": {
+                        "background": "#2ccf8f",
+                        "width": "16px",
+                        "height": "2px",
+                        "position": "relative",
+                        "opacity": 1,
+                        "boxShadow": "none"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "id": "forecast-line-label",
+                  "name": "预警线文字",
+                  "role": "label",
+                  "type": "text",
+                  "text": "预警线",
+                  "figmaNode": "chart/预警线",
+                  "styles": {
+                    "fontSize": "11px",
+                    "fontWeight": 400,
+                    "color": "#d84a5a",
+                    "lineHeight": "14px",
+                    "letterSpacing": "0px",
+                    "textAlign": "left"
+                  }
+                },
+                {
+                  "id": "x-axis-unit",
+                  "name": "X轴单位",
+                  "role": "label",
+                  "type": "text",
+                  "text": "时",
+                  "figmaNode": "chart/x-axis-unit",
+                  "styles": {
+                    "fontSize": "10px",
+                    "fontWeight": 400,
+                    "color": "rgba(0,0,0,0.55)",
+                    "lineHeight": "14px",
+                    "letterSpacing": "0px",
+                    "textAlign": "left"
+                  }
+                }
+              ]
+            }
+          ],
+          "backgroundImage": {
+            "src": "../resources/images/bg-7890.png",
+            "recommendedUsage": "backgroundStyle"
+          },
+          "backgroundSize": "cover",
+          "backgroundPosition": "center",
+          "backgroundRepeat": "no-repeat"
+        }
+      }
+    ]
+  },
+  "headerSlots": [
+    {
+      "slotType": "title-left",
+      "elementType": "icon",
+      "content": "标题左侧蓝色装饰点图标",
+      "figmaNodeId": "header/g"
+    }
+  ],
+  "styles": {
+    "backgroundBrightness": "light",
+    "theme": "浅色科技监测风",
+    "colors": [
+      "#edf4fb",
+      "#559eff",
+      "#3aa7c9",
+      "#2ccf8f",
+      "#d84a5a",
+      "#f53f3f",
+      "rgba(0,0,0,0.55)",
+      "rgba(255,255,255,0.6)"
+    ],
+    "background": "浅蓝灰色面板背景，使用 bg-7880.png 作为整体浅色纹理背景；base-panel 外壳由宿主提供，代码生成时仅需还原 slot 内容区域。",
+    "backgroundResource": {
+      "resourceFile": "../resources/images/bg-7880.png",
+      "recommendedUsage": "backgroundStyle",
+      "backgroundSize": "100% 100%",
+      "backgroundPosition": "center",
+      "backgroundRepeat": "no-repeat",
+      "width": "420px",
+      "height": "186px"
+    },
+    "decorations": [
+      "标题左侧小圆点/发光装饰图标",
+      "Tab 容器浅蓝描边和箭头式激活背景",
+      "图表灰色虚线网格",
+      "红色横向虚线预警线",
+      "右上角红色圆形数量徽标"
+    ],
+    "emphasis": [
+      "激活 Tab 使用青蓝底白字突出",
+      "一氧化碳浓度曲线使用绿色线条与半透明面积填充",
+      "预警线使用红色虚线和红色文字标注"
+    ]
+  },
+  "interactions": [
+    {
+      "target": "监测指标 Tab 列表",
+      "type": "tab-switch",
+      "description": "可在一氧化碳、能见度、洞内照明、洞外光强之间切换监测指标；当前激活为一氧化碳。",
+      "defaultState": "常驻，一氧化碳 Tab 激活",
+      "options": [
+        "一氧化碳",
+        "能见度",
+        "洞内照明",
+        "洞外光强"
+      ],
+      "evidence": "Tab 列表中一氧化碳为青蓝背景白字，其余为蓝色文字。"
+    },
+    {
+      "target": "右侧图表图标按钮",
+      "type": "button",
+      "description": "右侧有一个带柱状图符号的图标按钮，具体功能从截图无法确认。",
+      "defaultState": "常驻，未按下态",
+      "options": [],
+      "evidence": "Tab 行右侧可见蓝色柱状图样式图标。"
+    }
+  ],
+  "charts": [
+    {
+      "section": "co-concentration-chart",
+      "type": "line-area",
+      "series": [
+        "zks+785CO浓度",
+        "预警线"
+      ],
+      "legend": [
+        "zks+785CO浓度",
+        "预警线"
+      ],
+      "legendPosition": "top-right",
+      "seriesColors": [
+        "#2ccf8f",
+        "#d84a5a"
+      ],
+      "legendType": "horizontal",
+      "axes": "X轴为时间小时刻度，显示 2、4、6、8、10、12、14、16、18、20、22、24；Y轴显示 0、10、20、30、40 等刻度，左上角可见单位文字。",
+      "tooltip": "截图中未显示 tooltip，仅可见常驻曲线、网格线、图例与预警线。",
+      "notes": [
+        "绿色曲线在 0-10 时接近低位，12 时后上升，16-20 时附近形成高位平台，24 时回落。",
+        "红色虚线预警线位于约 30 刻度，右侧标注“预警线”。",
+        "图表区域使用浅灰虚线水平网格。"
+      ]
+    }
+  ],
+  "doNotInvent": [
+    "不要臆造 Tab 切换后的具体图表数据。",
+    "不要臆造右侧图表图标按钮的具体功能，例如导出、刷新或全屏。",
+    "不要臆造 tooltip 固定显示或 hover 交互数据。",
+    "不要臆造未显示的告警规则、自动刷新逻辑或跳转路径。",
+    "不要将 Tab 行误识别为面板标题栏 header-right 插槽；它位于标题下方，属于内容区。"
+  ],
+  "notes": [
+    "base-panel 外壳由宿主提供，生成组件时重点还原标题下方 slot 内容；标题和左侧装饰图标在截图中可见，已作为结构参考记录。",
+    "Figma 已下载资源 bg-7880.png、g-7883.png、bg-tab-active-7891.png、tabs-icon-43.png 应按对应位置使用。",
+    "截图中文本较小，图例文字按 Figma 结构与可见内容记录为 zks+785CO浓度。"
+  ],
+  "coverageReport": {
+    "totalFigma": 49,
+    "matchedCount": 0,
+    "missingCount": 26,
+    "uncertainCount": 2,
+    "coverageRate": 0,
+    "missing": [
+      {
+        "name": "cp-环境监测",
+        "type": "FRAME",
+        "depth": 0
+      },
+      {
+        "name": "header",
+        "type": "GROUP",
+        "depth": 1
+      },
+      {
+        "name": "g",
+        "type": "GROUP",
+        "depth": 2
+      },
+      {
+        "name": "环境监测",
+        "type": "TEXT",
+        "depth": 2
+      },
+      {
+        "name": "slot-con",
+        "type": "FRAME",
+        "depth": 1
+      },
+      {
+        "name": "@echarts/line",
+        "type": "GROUP",
+        "depth": 2
+      },
+      {
+        "name": "Group 2136637691",
+        "type": "GROUP",
+        "depth": 3
+      },
+      {
+        "name": "Frame 2136636709",
+        "type": "FRAME",
+        "depth": 4
+      },
+      {
+        "name": "40 30 20 10 0",
+        "type": "TEXT",
+        "depth": 4
+      },
+      {
+        "name": "预警线",
+        "type": "TEXT",
+        "depth": 4
+      },
+      {
+        "name": "Frame 2136636710",
+        "type": "FRAME",
+        "depth": 4
+      },
+      {
+        "name": "Frame 2136637694",
+        "type": "FRAME",
+        "depth": 3
+      },
+      {
+        "name": "Group 1321318245",
+        "type": "GROUP",
+        "depth": 4
+      },
+      {
+        "name": "zk3+785CO浓度",
+        "type": "TEXT",
+        "depth": 5
+      },
+      {
+        "name": "sub-t",
+        "type": "FRAME",
+        "depth": 2
+      }
+    ],
+    "uncertain": [
+      {
+        "name": "辆",
+        "type": "TEXT"
+      },
+      {
+        "name": "时",
+        "type": "TEXT"
+      }
+    ],
+    "summary": "需关注"
+  },
+  "chartDataHints": [
+    {
+      "chartTitle": "line-area",
+      "chartType": "line-area",
+      "labels": [
+        {
+          "label": "40\n30\n20\n10\n0",
+          "name": "40 30 20 10 0"
+        },
+        {
+          "label": "辆",
+          "name": "辆"
+        },
+        {
+          "label": "预警线",
+          "name": "预警线"
+        },
+        {
+          "label": "时",
+          "name": "时"
+        },
+        {
+          "label": "zk3+785CO浓度",
+          "name": "zk3+785CO浓度"
+        },
+        {
+          "label": "一氧化碳",
+          "name": "一氧化碳"
+        },
+        {
+          "label": "洞内照明",
+          "name": "洞内照明"
+        },
+        {
+          "label": "洞外光强",
+          "name": "洞外光强"
+        },
+        {
+          "label": "能见度",
+          "name": "能见度"
+        }
+      ],
+      "values": [
+        {
+          "label": "600",
+          "value": 600,
+          "unit": ""
+        },
+        {
+          "label": "400",
+          "value": 400,
+          "unit": ""
+        },
+        {
+          "label": "200",
+          "value": 200,
+          "unit": ""
+        },
+        {
+          "label": "600",
+          "value": 600,
+          "unit": ""
+        },
+        {
+          "label": "0",
+          "value": 0,
+          "unit": ""
+        },
+        {
+          "label": "600",
+          "value": 600,
+          "unit": ""
+        },
+        {
+          "label": "2",
+          "value": 2,
+          "unit": ""
+        },
+        {
+          "label": "4",
+          "value": 4,
+          "unit": ""
+        },
+        {
+          "label": "6",
+          "value": 6,
+          "unit": ""
+        },
+        {
+          "label": "8",
+          "value": 8,
+          "unit": ""
+        },
+        {
+          "label": "10",
+          "value": 10,
+          "unit": ""
+        },
+        {
+          "label": "12",
+          "value": 12,
+          "unit": ""
+        }
+      ]
+    }
+  ]
+}

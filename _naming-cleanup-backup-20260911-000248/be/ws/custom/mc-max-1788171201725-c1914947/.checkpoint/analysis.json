@@ -1,0 +1,319 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 78,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0].body",
+        "message": "标题区 section-title 的 body.children 为空数组，但设置了背景图，结构冗余",
+        "suggestion": "标题区若无内容子元素，应简化为纯 header 结构，背景图移至 section 层级"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[1]",
+        "message": "icon-group 同时有 children 和 resourceFile 字段，语义冲突",
+        "suggestion": "移除 icon-group 的 resourceFile/resourceVarName，保留 children 内的 icon-button"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "charts[0].axes",
+        "message": "Y轴单位标注为'辆'与CO浓度语义不符，虽标记不臆造但需记录异常",
+        "suggestion": "在 notes 中明确标注单位异常，实现时忽略或显示'单位未知'"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body",
+        "message": "图表区 body.layout='relative' 但 children 只有 chart-container，无需相对布局",
+        "suggestion": "简化为 layout='vertical'，除非有浮层元素需要定位"
+      }
+    ],
+    "recommendations": [
+      "合并 section-title 的 header 和 body 背景图逻辑，避免空 children 数组",
+      "统一 icon-group 的资源引用方式，资源应在 icon-button 子元素中声明",
+      "补充 charts[0] 的 legendType 具体值（已有但需验证与 legendPosition 一致性）"
+    ],
+    "summary": "结构层次清晰，符合微码三段式规范，但存在空 body、资源字段冗余等问题。图表信息完整度较好，需修正单位异常标注和简化冗余嵌套。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）- 浅色科技监测风主题",
+      "--colorPrimary": "#559EFF",
+      "--colorBg": "#EDF4FB",
+      "--colorTextBase": "#333333",
+      "--colorTextSecondary": "#8C8C8C",
+      "--colorSuccess": "#52C41A",
+      "--colorError": "#F53F3F",
+      "--colorWarning": "#FF7D00",
+      "--colorBorder": "#E5E5E5",
+      "--colorBgElevated": "#FFFFFF",
+      "--colorPrimaryBg": "#559EFF",
+      "--colorPrimaryHover": "#6FAEFF",
+      "--colorPrimaryActive": "#4A8FE8",
+      "--fontSize": "14px",
+      "--fontSizeTitle": "16px",
+      "--fontSizeLarge": "18px",
+      "--borderRadius": "4px",
+      "--borderRadiusLarge": "8px",
+      "--borderWidth": "1px",
+      "--borderDashed": "1px dashed #F53F3F",
+      "--shadowCard": "0 2px 8px rgba(0, 0, 0, 0.08)",
+      "--transitionBase": "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射 - 对应CSS变量的Less引用",
+      "@color-primary": "var(--colorPrimary)",
+      "@color-bg": "var(--colorBg)",
+      "@color-text-base": "var(--colorTextBase)",
+      "@color-text-secondary": "var(--colorTextSecondary)",
+      "@color-success": "var(--colorSuccess)",
+      "@color-error": "var(--colorError)",
+      "@color-warning": "var(--colorWarning)",
+      "@color-border": "var(--colorBorder)",
+      "@color-bg-elevated": "var(--colorBgElevated)",
+      "@color-primary-bg": "var(--colorPrimaryBg)",
+      "@color-primary-hover": "var(--colorPrimaryHover)",
+      "@color-primary-active": "var(--colorPrimaryActive)",
+      "@font-size-base": "var(--fontSize)",
+      "@font-size-title": "var(--fontSizeTitle)",
+      "@font-size-large": "var(--fontSizeLarge)",
+      "@border-radius-base": "var(--borderRadius)",
+      "@border-radius-large": "var(--borderRadiusLarge)",
+      "@border-width": "var(--borderWidth)",
+      "@border-dashed": "var(--borderDashed)",
+      "@shadow-card": "var(--shadowCard)",
+      "@transition-base": "var(--transitionBase)"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类 - 浅色科技监测风格",
+      ".monitoring-container": {
+        "width": "100%",
+        "height": "100%",
+        "background": "#EDF4FB",
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "16px",
+        "padding": "16px",
+        "box-sizing": "border-box"
+      },
+      ".card-elevated": {
+        "background": "var(--colorBgElevated)",
+        "border-radius": "var(--borderRadiusLarge)",
+        "box-shadow": "var(--shadowCard)",
+        "padding": "16px",
+        "transition": "var(--transitionBase)"
+      },
+      ".tab-container": {
+        "display": "flex",
+        "gap": "8px",
+        "border-bottom": "var(--borderWidth) solid var(--colorBorder)"
+      },
+      ".tab-item": {
+        "padding": "8px 16px",
+        "font-size": "var(--fontSize)",
+        "color": "var(--colorTextBase)",
+        "cursor": "pointer",
+        "border-radius": "var(--borderRadius) var(--borderRadius) 0 0",
+        "transition": "var(--transitionBase)",
+        "background": "transparent"
+      },
+      ".tab-item-active": {
+        "background": "var(--colorPrimaryBg)",
+        "color": "#FFFFFF",
+        "font-weight": 500
+      },
+      ".tab-item:hover:not(.tab-item-active)": {
+        "background": "rgba(85, 158, 255, 0.1)"
+      },
+      ".warning-line": {
+        "border-top": "var(--borderDashed)",
+        "position": "relative"
+      },
+      ".warning-badge": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "gap": "4px",
+        "padding": "4px 8px",
+        "background": "var(--colorError)",
+        "color": "#FFFFFF",
+        "font-size": "12px",
+        "border-radius": "var(--borderRadius)",
+        "font-weight": 500
+      },
+      ".status-success": {
+        "color": "var(--colorSuccess)"
+      },
+      ".status-error": {
+        "color": "var(--colorError)"
+      },
+      ".status-warning": {
+        "color": "var(--colorWarning)"
+      },
+      ".text-primary": {
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)"
+      },
+      ".text-secondary": {
+        "color": "var(--colorTextSecondary)",
+        "font-size": "var(--fontSize)"
+      },
+      ".title": {
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSizeTitle)",
+        "font-weight": 500,
+        "line-height": 1.5
+      },
+      ".divider": {
+        "width": "100%",
+        "height": "var(--borderWidth)",
+        "background": "var(--colorBorder)",
+        "margin": "16px 0"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 #559EFF 映射为 --colorPrimary，用于 Tab 选中态、按钮、链接等交互元素",
+      "背景色 #EDF4FB 直接作为容器背景字面量值，确保可见性",
+      "预警红色 #F53F3F 映射为 --colorError，用于警示线、Badge、状态指示",
+      "成功绿色 #52C41A 映射为 --colorSuccess，用于正常状态指示",
+      "灰色 #8C8C8C 映射为 --colorTextSecondary，用于次要文本",
+      "Tab 选中态使用蓝色背景 + 白色文字，hover 态使用浅蓝半透明背景",
+      "红色虚线预警线使用 1px dashed #F53F3F",
+      "卡片使用白色背景 + 8px 圆角 + 轻微阴影提升层级",
+      "所有交互元素应用 0.3s 过渡动画增强体验",
+      "颜色系统完整覆盖主题、状态、交互三个维度"
+    ],
+    "elementStyleMap": {
+      "section-title": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "section-controls": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tab-group": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "icon-group": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-13": {
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-title",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 0,
+        "title": "环境监测",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 0,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 0
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "section-controls",
+        "responsibility": "标签页切换区",
+        "elementCount": 4,
+        "title": "指标切换与工具栏",
+        "complexityScore": 20,
+        "complexityReasons": {
+          "elementCount": 4,
+          "charts": 1,
+          "interactions": 5,
+          "maxDepth": 2
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "浓度趋势图",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 1,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 或存在高复杂度 section → 强制拆分",
+    "internalSubcomponents": []
+  }
+}

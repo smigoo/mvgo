@@ -1,0 +1,1679 @@
+{
+  "schemaVersion": 1,
+  "mode": "shadow",
+  "pipeline": "phase2",
+  "iteration": 0,
+  "generatedAt": "2026-08-21T04:13:18.522Z",
+  "productionInputMode": "legacy",
+  "engineerInputChanged": false,
+  "metrics": {
+    "legacyEstimatedBytes": 453293,
+    "generationInputBytes": 26348,
+    "reductionBytes": 426945,
+    "reductionRate": 94.19,
+    "issueCount": 5,
+    "rejectedClaimCount": 1
+  },
+  "trustVerdict": {
+    "level": "restricted",
+    "reasons": [
+      "覆盖率偏低 (43%)",
+      "布局审查结果已降级或评分为 0"
+    ],
+    "visual": {
+      "verdict": "warning",
+      "reason": "覆盖率偏低 (43%)",
+      "coverageRate": 43,
+      "recognizedSections": 0
+    },
+    "restrictions": [
+      "no-unsupported-decoration",
+      "no-style-fallback",
+      "resolve-legend-owner"
+    ]
+  },
+  "budget": {
+    "limits": {
+      "totalBytes": 30720,
+      "designFactsBytes": 12288,
+      "componentPlanBytes": 8192,
+      "resourceManifestBytes": 6144,
+      "currentIssuesBytes": 4096,
+      "maxIssues": 20
+    },
+    "sections": {
+      "designFacts": 1142,
+      "componentPlan": 726,
+      "resourceManifest": 22198,
+      "currentIssues": 651
+    },
+    "totalBytes": 26344,
+    "passed": false,
+    "violations": [
+      "resourceManifest"
+    ]
+  },
+  "generationInput": {
+    "schemaVersion": 1,
+    "designFacts": {
+      "root": {
+        "nodeId": "2:9778",
+        "nodeName": "cp-流量监测",
+        "size": {
+          "width": 425.8275146484375,
+          "height": 807,
+          "unit": "css-px",
+          "source": "figma-api"
+        },
+        "styleEvidence": {
+          "background": {
+            "allowed": false,
+            "source": "figma-api",
+            "evidenceCount": 0
+          },
+          "border": {
+            "allowed": false,
+            "source": "figma-api",
+            "evidenceCount": 0
+          },
+          "borderRadius": {
+            "allowed": false,
+            "value": null,
+            "source": "figma-api"
+          },
+          "boxShadow": {
+            "allowed": false,
+            "source": "figma-api",
+            "evidenceCount": 0
+          }
+        }
+      },
+      "charts": [
+        {
+          "id": "section-chart-tunnel",
+          "type": "bar",
+          "series": [
+            "北京方向",
+            "上海方向"
+          ],
+          "legend": {
+            "items": [
+              "北京方向",
+              "上海方向"
+            ],
+            "owner": "unresolved",
+            "position": "top-right"
+          },
+          "source": "visual-analysis"
+        },
+        {
+          "id": "section-chart-bridge",
+          "type": "bar",
+          "series": [
+            "北京方向",
+            "上海方向"
+          ],
+          "legend": {
+            "items": [
+              "北京方向",
+              "上海方向"
+            ],
+            "owner": "unresolved",
+            "position": "top-right"
+          },
+          "source": "visual-analysis"
+        },
+        {
+          "id": "section-forecast",
+          "type": "area",
+          "series": [
+            "实际流量",
+            "预测流量"
+          ],
+          "legend": {
+            "items": [
+              "实际流量",
+              "预测流量"
+            ],
+            "owner": "unresolved",
+            "position": "top-right"
+          },
+          "source": "visual-analysis"
+        }
+      ],
+      "provenance": {
+        "deterministicSource": "figma-api",
+        "semanticSource": "visual-analysis"
+      }
+    },
+    "componentPlan": {
+      "effectiveSections": [
+        {
+          "id": "section-daily-total",
+          "title": "当日总流量",
+          "responsibility": "当日总流量（请按功能拆分）",
+          "elementCount": 6
+        },
+        {
+          "id": "section-chart-tunnel",
+          "title": "江阴靖江长江隧道",
+          "responsibility": "图表/数据可视化区",
+          "elementCount": 1
+        },
+        {
+          "id": "section-chart-bridge",
+          "title": "江阴大桥",
+          "responsibility": "图表/数据可视化区",
+          "elementCount": 1
+        },
+        {
+          "id": "section-vehicle-type",
+          "title": "车型分布",
+          "responsibility": "车型分布（请按功能拆分）",
+          "elementCount": 14
+        },
+        {
+          "id": "section-forecast",
+          "title": "流量预测",
+          "responsibility": "流量预测（请按功能拆分）",
+          "elementCount": 1
+        }
+      ],
+      "isForced": true,
+      "minFiles": 5,
+      "reason": "有效 sections=5 ≥ 3 → 强制拆分"
+    },
+    "resourceManifest": [
+      {
+        "resourceId": "bg-[m]",
+        "fileName": "bg-[m]",
+        "role": null,
+        "recommendedUsage": "backgroundStyle",
+        "figmaNodeId": "2:3436"
+      },
+      {
+        "resourceId": "g",
+        "fileName": "g",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3552"
+      },
+      {
+        "resourceId": "circle",
+        "fileName": "circle",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3553"
+      },
+      {
+        "resourceId": "circle",
+        "fileName": "circle",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3554"
+      },
+      {
+        "resourceId": "path",
+        "fileName": "path",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3555"
+      },
+      {
+        "resourceId": "Vector",
+        "fileName": "Vector",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3549"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3561"
+      },
+      {
+        "resourceId": "bg-[m]",
+        "fileName": "bg-[m]",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "88:34"
+      },
+      {
+        "resourceId": "Group",
+        "fileName": "Group",
+        "role": null,
+        "recommendedUsage": "decorativeBlock",
+        "figmaNodeId": "2:3664"
+      },
+      {
+        "resourceId": "Vector",
+        "fileName": "Vector",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3666"
+      },
+      {
+        "resourceId": "Vector",
+        "fileName": "Vector",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3667"
+      },
+      {
+        "resourceId": "Vector",
+        "fileName": "Vector",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3668"
+      },
+      {
+        "resourceId": "Vector",
+        "fileName": "Vector",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3669"
+      },
+      {
+        "resourceId": "Group 1321318547",
+        "fileName": "Group 1321318547",
+        "role": null,
+        "recommendedUsage": "decorativeBlock",
+        "figmaNodeId": "2:3670"
+      },
+      {
+        "resourceId": "Group",
+        "fileName": "Group",
+        "role": null,
+        "recommendedUsage": "decorativeBlock",
+        "figmaNodeId": "2:3677"
+      },
+      {
+        "resourceId": "image 2136639306",
+        "fileName": "image 2136639306",
+        "role": null,
+        "recommendedUsage": "decorativeBlock",
+        "figmaNodeId": "2:7458"
+      },
+      {
+        "resourceId": "Group 2136636847",
+        "fileName": "Group 2136636847",
+        "role": null,
+        "recommendedUsage": "decorativeBlock",
+        "figmaNodeId": "2:7493"
+      },
+      {
+        "resourceId": "Group 2136638523",
+        "fileName": "Group 2136638523",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7500"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7501"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7502"
+      },
+      {
+        "resourceId": "Group 2136638522",
+        "fileName": "Group 2136638522",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7503"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7504"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7505"
+      },
+      {
+        "resourceId": "Group 2136638521",
+        "fileName": "Group 2136638521",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7506"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7507"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7508"
+      },
+      {
+        "resourceId": "Group 2136638520",
+        "fileName": "Group 2136638520",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7509"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7510"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7511"
+      },
+      {
+        "resourceId": "Group 2136638523",
+        "fileName": "Group 2136638523",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7512"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7513"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7514"
+      },
+      {
+        "resourceId": "Group 2136638522",
+        "fileName": "Group 2136638522",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7515"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7516"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7517"
+      },
+      {
+        "resourceId": "Group 2136638521",
+        "fileName": "Group 2136638521",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7518"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7519"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7520"
+      },
+      {
+        "resourceId": "Group 2136638520",
+        "fileName": "Group 2136638520",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7521"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7522"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7523"
+      },
+      {
+        "resourceId": "Group 2136638523",
+        "fileName": "Group 2136638523",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7524"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7525"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7526"
+      },
+      {
+        "resourceId": "Group 2136638522",
+        "fileName": "Group 2136638522",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7527"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7528"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7529"
+      },
+      {
+        "resourceId": "Group 2136638521",
+        "fileName": "Group 2136638521",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7530"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7531"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7532"
+      },
+      {
+        "resourceId": "Group 2136638520",
+        "fileName": "Group 2136638520",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7533"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7534"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7535"
+      },
+      {
+        "resourceId": "Group 2136638523",
+        "fileName": "Group 2136638523",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7536"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7537"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7538"
+      },
+      {
+        "resourceId": "Group 2136638522",
+        "fileName": "Group 2136638522",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7539"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7540"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7541"
+      },
+      {
+        "resourceId": "Group 2136638521",
+        "fileName": "Group 2136638521",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7542"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7543"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7544"
+      },
+      {
+        "resourceId": "Group 2136638520",
+        "fileName": "Group 2136638520",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7545"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7546"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7547"
+      },
+      {
+        "resourceId": "Group 2136638523",
+        "fileName": "Group 2136638523",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7549"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7550"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7551"
+      },
+      {
+        "resourceId": "Group 2136638522",
+        "fileName": "Group 2136638522",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7552"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7553"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7554"
+      },
+      {
+        "resourceId": "Group 2136638521",
+        "fileName": "Group 2136638521",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7555"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7556"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7557"
+      },
+      {
+        "resourceId": "Group 2136638520",
+        "fileName": "Group 2136638520",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7558"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7559"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7560"
+      },
+      {
+        "resourceId": "Group 2136638523",
+        "fileName": "Group 2136638523",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7561"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7562"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7563"
+      },
+      {
+        "resourceId": "Group 2136638522",
+        "fileName": "Group 2136638522",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7564"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7565"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7566"
+      },
+      {
+        "resourceId": "Group 2136638521",
+        "fileName": "Group 2136638521",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7567"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7568"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7569"
+      },
+      {
+        "resourceId": "Group 2136638520",
+        "fileName": "Group 2136638520",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7570"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7571"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7572"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7626"
+      },
+      {
+        "resourceId": "Group 2136636847",
+        "fileName": "Group 2136636847",
+        "role": null,
+        "recommendedUsage": "decorativeBlock",
+        "figmaNodeId": "2:7662"
+      },
+      {
+        "resourceId": "Group 2136638523",
+        "fileName": "Group 2136638523",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7669"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7670"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7671"
+      },
+      {
+        "resourceId": "Group 2136638522",
+        "fileName": "Group 2136638522",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7672"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7673"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7674"
+      },
+      {
+        "resourceId": "Group 2136638521",
+        "fileName": "Group 2136638521",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7675"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7676"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7677"
+      },
+      {
+        "resourceId": "Group 2136638520",
+        "fileName": "Group 2136638520",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7678"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7679"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7680"
+      },
+      {
+        "resourceId": "Group 2136638523",
+        "fileName": "Group 2136638523",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7681"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7682"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7683"
+      },
+      {
+        "resourceId": "Group 2136638522",
+        "fileName": "Group 2136638522",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7684"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7685"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7686"
+      },
+      {
+        "resourceId": "Group 2136638521",
+        "fileName": "Group 2136638521",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7687"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7688"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7689"
+      },
+      {
+        "resourceId": "Group 2136638520",
+        "fileName": "Group 2136638520",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7690"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7691"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7692"
+      },
+      {
+        "resourceId": "Group 2136638523",
+        "fileName": "Group 2136638523",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7693"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7694"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7695"
+      },
+      {
+        "resourceId": "Group 2136638522",
+        "fileName": "Group 2136638522",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7696"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7697"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7698"
+      },
+      {
+        "resourceId": "Group 2136638521",
+        "fileName": "Group 2136638521",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7699"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7700"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7701"
+      },
+      {
+        "resourceId": "Group 2136638520",
+        "fileName": "Group 2136638520",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7702"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7703"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7704"
+      },
+      {
+        "resourceId": "Group 2136638523",
+        "fileName": "Group 2136638523",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7705"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7706"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7707"
+      },
+      {
+        "resourceId": "Group 2136638522",
+        "fileName": "Group 2136638522",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7708"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7709"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7710"
+      },
+      {
+        "resourceId": "Group 2136638521",
+        "fileName": "Group 2136638521",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7711"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7712"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7713"
+      },
+      {
+        "resourceId": "Group 2136638520",
+        "fileName": "Group 2136638520",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7714"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7715"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7716"
+      },
+      {
+        "resourceId": "Group 2136638523",
+        "fileName": "Group 2136638523",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7718"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7719"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7720"
+      },
+      {
+        "resourceId": "Group 2136638522",
+        "fileName": "Group 2136638522",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7721"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7722"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7723"
+      },
+      {
+        "resourceId": "Group 2136638521",
+        "fileName": "Group 2136638521",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7724"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7725"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7726"
+      },
+      {
+        "resourceId": "Group 2136638520",
+        "fileName": "Group 2136638520",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7727"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7728"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7729"
+      },
+      {
+        "resourceId": "Group 2136638523",
+        "fileName": "Group 2136638523",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7730"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7731"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7732"
+      },
+      {
+        "resourceId": "Group 2136638522",
+        "fileName": "Group 2136638522",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7733"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7734"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7735"
+      },
+      {
+        "resourceId": "Group 2136638521",
+        "fileName": "Group 2136638521",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7736"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7737"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7738"
+      },
+      {
+        "resourceId": "Group 2136638520",
+        "fileName": "Group 2136638520",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7739"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7740"
+      },
+      {
+        "resourceId": "柱",
+        "fileName": "柱",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7741"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7795"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3441"
+      },
+      {
+        "resourceId": "bg-[m]",
+        "fileName": "bg-[m]",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "88:36"
+      },
+      {
+        "resourceId": "Group 2136637423",
+        "fileName": "Group 2136637423",
+        "role": null,
+        "recommendedUsage": "decorativeBlock",
+        "figmaNodeId": "2:3450"
+      },
+      {
+        "resourceId": "Group 2136637424",
+        "fileName": "Group 2136637424",
+        "role": null,
+        "recommendedUsage": "decorativeBlock",
+        "figmaNodeId": "2:3452"
+      },
+      {
+        "resourceId": "2026-03-17-5939-隧道图标，单元素，蓝色为主，白色为辅，透明科技感，未来感，光滑透明材质，没有光影... (1) 1",
+        "fileName": "2026-03-17-5939-隧道图标，单元素，蓝色为主，白色为辅，透明科技感，未来感，光滑透明材质，没有光影... (1) 1",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3473"
+      },
+      {
+        "resourceId": "Vector",
+        "fileName": "Vector",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3486"
+      },
+      {
+        "resourceId": "Group",
+        "fileName": "Group",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3487"
+      },
+      {
+        "resourceId": "Vector",
+        "fileName": "Vector",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3488"
+      },
+      {
+        "resourceId": "Vector",
+        "fileName": "Vector",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3490"
+      },
+      {
+        "resourceId": "Group",
+        "fileName": "Group",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3491"
+      },
+      {
+        "resourceId": "Vector",
+        "fileName": "Vector",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3492"
+      },
+      {
+        "resourceId": "Group",
+        "fileName": "Group",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3493"
+      },
+      {
+        "resourceId": "Vector",
+        "fileName": "Vector",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3494"
+      },
+      {
+        "resourceId": "Group 206",
+        "fileName": "Group 206",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3455"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:3475"
+      },
+      {
+        "resourceId": "bg-[m]",
+        "fileName": "bg-[m]",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "88:35"
+      },
+      {
+        "resourceId": "Group 2136637423",
+        "fileName": "Group 2136637423",
+        "role": null,
+        "recommendedUsage": "decorativeBlock",
+        "figmaNodeId": "2:3500"
+      },
+      {
+        "resourceId": "Group 2136637424",
+        "fileName": "Group 2136637424",
+        "role": null,
+        "recommendedUsage": "decorativeBlock",
+        "figmaNodeId": "2:3502"
+      },
+      {
+        "resourceId": "Group 206",
+        "fileName": "Group 206",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3505"
+      },
+      {
+        "resourceId": "Frame 2136637408",
+        "fileName": "Frame 2136637408",
+        "role": null,
+        "recommendedUsage": "decorativeBlock",
+        "figmaNodeId": "2:3519"
+      },
+      {
+        "resourceId": "image 2136639302",
+        "fileName": "image 2136639302",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3523"
+      },
+      {
+        "resourceId": "Vector",
+        "fileName": "Vector",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3536"
+      },
+      {
+        "resourceId": "Group",
+        "fileName": "Group",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3537"
+      },
+      {
+        "resourceId": "Vector",
+        "fileName": "Vector",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3538"
+      },
+      {
+        "resourceId": "Vector",
+        "fileName": "Vector",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3540"
+      },
+      {
+        "resourceId": "Group",
+        "fileName": "Group",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3541"
+      },
+      {
+        "resourceId": "Vector",
+        "fileName": "Vector",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3542"
+      },
+      {
+        "resourceId": "Group",
+        "fileName": "Group",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3543"
+      },
+      {
+        "resourceId": "Vector",
+        "fileName": "Vector",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3544"
+      },
+      {
+        "resourceId": "@echarts",
+        "fileName": "@echarts",
+        "role": null,
+        "recommendedUsage": "decorativeBlock",
+        "figmaNodeId": "246:31"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:3525"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3573"
+      },
+      {
+        "resourceId": "Group 2136637486",
+        "fileName": "Group 2136637486",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3639"
+      },
+      {
+        "resourceId": "Group 2136637486",
+        "fileName": "Group 2136637486",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3644"
+      }
+    ],
+    "currentIssues": [
+      {
+        "id": "CONTEXT-LAYOUT-REVIEW-DEGRADED",
+        "status": "open",
+        "severity": "warning",
+        "expectedAction": "ignore-review-as-design-fact"
+      },
+      {
+        "id": "CONTEXT-ROOT-BACKGROUND-CONFLICT",
+        "status": "open",
+        "severity": "warning",
+        "expectedAction": "do-not-generate-root-background"
+      },
+      {
+        "id": "CHART-LEGEND-OWNER:section-chart-tunnel",
+        "status": "open",
+        "severity": "warning",
+        "expectedAction": "choose-dom-or-echarts-owner"
+      },
+      {
+        "id": "CHART-LEGEND-OWNER:section-chart-bridge",
+        "status": "open",
+        "severity": "warning",
+        "expectedAction": "choose-dom-or-echarts-owner"
+      },
+      {
+        "id": "CHART-LEGEND-OWNER:section-forecast",
+        "status": "open",
+        "severity": "warning",
+        "expectedAction": "choose-dom-or-echarts-owner"
+      }
+    ],
+    "trustVerdict": {
+      "level": "restricted",
+      "reasons": [
+        "覆盖率偏低 (43%)",
+        "布局审查结果已降级或评分为 0"
+      ],
+      "visual": {
+        "verdict": "warning",
+        "reason": "覆盖率偏低 (43%)",
+        "coverageRate": 43,
+        "recognizedSections": 0
+      },
+      "restrictions": [
+        "no-unsupported-decoration",
+        "no-style-fallback",
+        "resolve-legend-owner"
+      ]
+    },
+    "contextManifest": {
+      "stage": "engineer",
+      "mode": "shadow-only",
+      "included": [
+        "schemaVersion",
+        "designFacts",
+        "componentPlan",
+        "resourceManifest",
+        "currentIssues",
+        "trustVerdict"
+      ],
+      "excluded": [
+        "figmaData",
+        "figmaNodeData",
+        "figmaStyleTree",
+        "visualAnalysis",
+        "visualElements",
+        "reviewResult",
+        "styleMappings",
+        "previousCritiques"
+      ],
+      "diagnosticsRef": {
+        "figma": "/Users/smigoo/工作/mvgo/temp-components/6a7599af6eb9eebf9fba56cd/mc-1787285457662-93841215-mc-max-1787281814603-6510c93f/.checkpoint/figma.json",
+        "visual": "/Users/smigoo/工作/mvgo/temp-components/6a7599af6eb9eebf9fba56cd/mc-1787285457662-93841215-mc-max-1787281814603-6510c93f/.checkpoint/visual.json",
+        "analysis": "/Users/smigoo/工作/mvgo/temp-components/6a7599af6eb9eebf9fba56cd/mc-1787285457662-93841215-mc-max-1787281814603-6510c93f/.checkpoint/analysis.json"
+      },
+      "conflictSummary": {
+        "rejectedClaimCount": 1,
+        "rejectedClaimIds": [
+          "visual-analysis:root.background"
+        ]
+      },
+      "budget": {
+        "limits": {
+          "totalBytes": 30720,
+          "designFactsBytes": 12288,
+          "componentPlanBytes": 8192,
+          "resourceManifestBytes": 6144,
+          "currentIssuesBytes": 4096,
+          "maxIssues": 20
+        },
+        "sections": {
+          "designFacts": 1142,
+          "componentPlan": 726,
+          "resourceManifest": 22198,
+          "currentIssues": 651
+        },
+        "totalBytes": 26344,
+        "passed": false,
+        "violations": [
+          "resourceManifest"
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,90 @@
+// 组件共享业务class样式
+// 按功能语义命名，供主组件与子组件按需引用
+
+// 环境监测组件通用容器
+.environment-monitor {
+  &-container {
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+  }
+
+  // 标题区域样式
+  &-header {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+
+  // Tab切换栏样式
+  &-tabs {
+    display: flex;
+    align-items: center;
+    border-radius: @border-radius-base;
+  }
+
+  // 图表容器样式
+  &-chart {
+    display: flex;
+    flex-direction: column;
+    border-radius: @border-radius-base;
+  }
+}
+
+// 标题文本渐变效果
+.gradient-title {
+  background: linear-gradient(90deg, #1990ff 0%, #5a7eff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+// Tab项通用样式
+.tab-item-base {
+  padding: 6px 16px;
+  font-size: @font-size-base;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border-radius: @border-radius-base;
+
+  &:hover {
+    opacity: 0.8;
+  }
+}
+
+// 图表标签样式
+.chart-label {
+  font-size: @font-size-small;
+  color: @color-text-secondary;
+}
+
+// 控件图标样式
+.control-icon-base {
+  position: relative;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &:hover {
+    opacity: 0.8;
+  }
+}
+
+// 徽章样式
+.badge-base {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 4px;
+  background: @color-error;
+  border-radius: 50%;
+  font-size: 10px;
+  color: @color-white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: @font-weight-medium;
+}

@@ -1,0 +1,186 @@
+{
+  "reviewResult": {
+    "reviewResult": "pass",
+    "issues": [],
+    "score": 50,
+    "recommendations": []
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1990ff",
+      "--colorError": "#f53f3f",
+      "--colorSecondary": "#08a3a5",
+      "--colorTextBase": "#333333",
+      "--colorBg": "#edf4fb",
+      "--fontSize": "14px",
+      "--fontSizeLarge": "36px",
+      "--borderRadius": "4px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#1990ff",
+      "@color-error": "#f53f3f",
+      "@color-secondary": "#08a3a5",
+      "@color-text-base": "#333333",
+      "@color-bg": "#edf4fb",
+      "@font-size-base": "14px",
+      "@font-size-large": "36px",
+      "@border-radius-base": "4px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "display": "flex",
+        "width": "100%",
+        "height": "100%",
+        "background-color": "var(--colorBg)",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)"
+      },
+      ".left-nav-bar": {
+        "width": "8px",
+        "min-height": "100%",
+        "background-color": "var(--colorPrimary)",
+        "border-radius": "var(--borderRadius)"
+      },
+      ".hexagon-card": {
+        "position": "relative",
+        "background": "rgba(255, 255, 255, 0.85)",
+        "border": "1px solid rgba(25, 144, 255, 0.2)",
+        "border-radius": "var(--borderRadius)",
+        "padding": "16px",
+        "box-shadow": "0 2px 8px rgba(25, 144, 255, 0.08)"
+      },
+      ".emphasis-value-primary": {
+        "font-size": "var(--fontSizeLarge)",
+        "font-weight": "700",
+        "color": "var(--colorPrimary)",
+        "line-height": "1.2"
+      },
+      ".emphasis-value-error": {
+        "font-size": "var(--fontSizeLarge)",
+        "font-weight": "700",
+        "color": "var(--colorError)",
+        "line-height": "1.2"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 #1990ff 映射为 --colorPrimary，用于蓝色大数值及左侧导航背景",
+      "异常色 #f53f3f 映射为 --colorError，专门用于红色异常数值高亮",
+      "辅助色 #08a3a5 映射为 --colorSecondary，可用于其他正常状态的数据指标或图表配色",
+      "基础文字色 #333333 映射为 --colorTextBase，浅蓝灰背景 #edf4fb 映射为 --colorBg",
+      "六边形/箭头状卡片建议通过 .hexagon-card 结合设计稿背景图或 CSS clip-path 实现特殊形状",
+      "大数值使用 --fontSizeLarge (36px) 配合 font-weight: 700 实现视觉强调"
+    ],
+    "elementStyleMap": {
+      "header-stats": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "card-tunnel-content-group-x-1-label-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-tunnel-content-group-x-1-label-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-tunnel-content-group-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-tunnel": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-north-south-content-group-x-1-label-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-north-south-content-group-x-1-label-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-north-south-content-group-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-north-south": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-8": {
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-content-group-x-11-label-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-content-group-x-11-label-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-content-group-x-11": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-label-row-x-12": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-label-row-x-15": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-content-group-x-21-label-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-content-group-x-21-label-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-content-group-x-21": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-label-row-x-22": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-label-row-x-25": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "navigation-and-grid": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "sidebar-tabs": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-30": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  }
+}

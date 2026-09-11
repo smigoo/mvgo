@@ -1,0 +1,131 @@
+{
+  "stage": "codegen_done",
+  "brief": {
+    "layout": "竖向长屏仪表盘布局，主轴自上而下；内容整体左对齐，关键数值与图表居中分布；顶部标题与筛选控件，主体依次为总流量概览、两组柱状图、车型分布、流量预测折线/面积图；各模块宽度接近全屏，左右留边一致。",
+    "regions": [
+      {
+        "name": "顶部标题区",
+        "description": "左上显示蓝色标题“流量监测”，下方有短横线装饰",
+        "position": "top",
+        "size": "约全宽，较小高度"
+      },
+      {
+        "name": "总流量概览区",
+        "description": "左侧菱形图标与“当日总流量”，右侧时间下拉框“24小时”；中间展示江阴靖江长江隧道与江阴大桥两项总流量，并配有中心车辆光效图",
+        "position": "top-center",
+        "size": "约全宽，高度约20%"
+      },
+      {
+        "name": "江阴靖江长江隧道柱状图区",
+        "description": "显示隧道按小时柱状流量，含北京方向与上海方向图例、坐标轴、悬浮提示框",
+        "position": "center",
+        "size": "约全宽，高度约18%"
+      },
+      {
+        "name": "江阴大桥柱状图区",
+        "description": "显示大桥按小时柱状流量，含北京方向与上海方向图例、坐标轴、悬浮提示框",
+        "position": "center",
+        "size": "约全宽，高度约18%"
+      },
+      {
+        "name": "车型分布区",
+        "description": "标题“车型分布”，左右两张卡片分别展示江阴靖江长江隧道和江阴大桥的客车/货车占比与数值，中央为环形图和图标",
+        "position": "center-bottom",
+        "size": "约全宽，高度约18%"
+      },
+      {
+        "name": "流量预测区",
+        "description": "标题“流量预测”，含隧道/大桥切换标签和“节假日预测>”入口，下方为实际流量与预测流量折线/面积图及准确率文本",
+        "position": "bottom",
+        "size": "约全宽，高度约24%"
+      }
+    ],
+    "spacing": {
+      "outer": "页面四周有明显留白，左右边距约24-40px，上下边距较小；整体内容位于灰蓝背景面板内。",
+      "gap": "模块之间以标题、细分割空间和图表上下空隙分隔，间距中等；两个柱状图之间间距较小。",
+      "padding": "各图表与卡片内部有左右内边距，图例和坐标轴与边缘保持安全距离；下拉框与卡片内容有明显内边距。"
+    },
+    "colors": {
+      "primary": "#168BFF",
+      "background": "#AEB7BA",
+      "surface": "#B8C5C8",
+      "text": "#1F2A2E",
+      "border": "#8FD0FF"
+    },
+    "typography": {
+      "size": "标题约22-26px，模块标题约22px，关键数值约32-36px，图表坐标/图例约14-18px，说明文字约14px。",
+      "weight": "页面标题、模块标题与核心数值为加粗；图例、坐标轴、普通说明为常规字重。",
+      "lineHeight": "整体行高紧凑，标题与数值行距较小；图表标签行高约1.2-1.4。"
+    },
+    "components": [
+      "标题文本",
+      "菱形图标",
+      "下拉选择框",
+      "数据指标卡/概览块",
+      "柱状图",
+      "图例",
+      "悬浮提示框",
+      "环形图",
+      "标签页/分段切换",
+      "链接文本",
+      "折线图",
+      "面积图",
+      "坐标轴与网格线"
+    ],
+    "textContent": [
+      "流量监测",
+      "当日总流量",
+      "24小时",
+      "江阴靖江长江隧道",
+      "34,620",
+      "江阴大桥",
+      "82,379",
+      "北京方向",
+      "上海方向",
+      "16时",
+      "北京方向 825 辆",
+      "上海方向 831 辆",
+      "车型分布",
+      "客车",
+      "货车",
+      "22350",
+      "16270",
+      "66109",
+      "流量预测",
+      "节假日预测>",
+      "实际流量",
+      "预测流量",
+      "2小时前",
+      "1小时前",
+      "当前时间",
+      "1小时后",
+      "2小时后",
+      "准确率98%",
+      "准确率96%",
+      "准确率92%"
+    ],
+    "visualDetails": [
+      "整体背景为灰蓝色科技风面板，外侧有黑色边缘阴影感。",
+      "顶部标题为亮蓝色，并带有细线装饰。",
+      "时间筛选框为浅色圆角矩形，右侧有向下箭头。",
+      "总流量区中央有发光圆形车辆插画，左右数据围绕其排布。",
+      "柱状图使用蓝色与青色双系列柱，背景有虚线网格。",
+      "柱状图右侧覆盖浅蓝渐变圆角 tooltip，带阴影和小色块标识。",
+      "车型分布卡片带浅蓝/橙色渐变背景，中央环形图为蓝橙双色环，顶部有小三角指示。",
+      "流量预测激活标签为蓝色胶囊按钮，非激活项为灰色胶囊按钮。",
+      "流量预测图为蓝色与青绿色折线，带圆点节点和半透明面积填充。"
+    ],
+    "interactions": [
+      "下拉选择框：位于总流量概览区右上，当前文案为“24小时”，带下拉箭头。",
+      "Tab切换栏：位于流量预测标题右侧，tab为“江阴靖江长江隧道”和“江阴大桥”，当前激活项为“江阴靖江长江隧道”。",
+      "链接/按钮：位于流量预测区右侧，文案为“节假日预测>”。",
+      "图表悬浮提示框：两张柱状图中可见16时 tooltip，展示北京方向与上海方向数值。"
+    ]
+  },
+  "width": 426,
+  "height": 807,
+  "sourceType": "figma",
+  "componentType": "vue3",
+  "generationTier": "lite",
+  "vueCode": "<template>\n  <section class=\"mv-lite-1786851177092-1aeb102b\">\n    <div class=\"dashboard\">\n      <header class=\"page-header\">\n        <h1>流量监测</h1>\n        <div class=\"title-line\"></div>\n      </header>\n\n      <section class=\"overview\">\n        <div class=\"overview-head\">\n          <div class=\"section-title\"><span class=\"diamond\"></span>当日总流量</div>\n          <button class=\"select-btn\" @click=\"handleSelect\">24小时<span>⌄</span></button>\n        </div>\n        <div class=\"overview-body\">\n          <div class=\"metric metric-left\">\n            <div class=\"metric-name\">江阴靖江长江隧道</div>\n            <div class=\"metric-value blue\">34,620</div>\n          </div>\n          <div class=\"car-glow\">\n            <div class=\"halo\"></div>\n            <div class=\"car\">🚙</div>\n          </div>\n          <div class=\"metric metric-right\">\n            <div class=\"metric-name\">江阴大桥</div>\n            <div class=\"metric-value cyan\">82,379</div>\n          </div>\n        </div>\n      </section>\n\n      <section class=\"bar-block\">\n        <div class=\"chart-head\">\n          <div class=\"sub-title\"><span class=\"blue-stick\"></span>江阴靖江长江隧道</div>\n          <div class=\"legend\"><i class=\"legend-blue\"></i>北京方向<i class=\"legend-cyan\"></i>上海方向</div>\n        </div>\n        <div class=\"bar-wrap\">\n          <div ref=\"tunnelBarRef\" class=\"chart\"></div>\n          <div class=\"tooltip-card\">\n            <b>16时</b>\n            <p><i class=\"legend-blue\"></i>北京方向 <strong>825</strong> 辆</p>\n            <p><i class=\"legend-cyan\"></i>上海方向 <strong>831</strong> 辆</p>\n          </div>\n        </div>\n      </section>\n\n      <section class=\"bar-block bridge-block\">\n        <div class=\"chart-head\">\n          <div class=\"sub-title\"><span class=\"blue-stick\"></span>江阴大桥</div>\n          <div class=\"legend\"><i class=\"legend-blue\"></i>北京方向<i class=\"legend-cyan\"></i>上海方向</div>\n        </div>\n        <div class=\"bar-wrap\">\n          <div ref=\"bridgeBarRef\" class=\"chart\"></div>\n          <div class=\"tooltip-card\">\n            <b>16时</b>\n            <p><i class=\"legend-blue\"></i>北京方向 <strong>825</strong> 辆</p>\n            <p><i class=\"legend-cyan\"></i>上海方向 <strong>831</strong> 辆</p>\n          </div>\n        </div>\n      </section>\n\n      <section class=\"vehicle-section\">\n        <div class=\"section-title\"><span class=\"diamond\"></span>车型分布</div>\n        <div class=\"vehicle-grid\">\n          <div class=\"vehicle-card\">\n            <div class=\"card-title\">江阴靖江长江隧道</div>\n            <div class=\"triangle\"></div>\n            <div class=\"card-body\">\n              <div class=\"car-type passenger\"><span>客车</span><b>22350</b></div>\n              <div class=\"donut-box\"><div ref=\"tunnelPieRef\" class=\"chart\"></div><span class=\"center-icon\">🚙</span></div>\n              <div class=\"car-type truck\"><span>货车</span><b>16270</b></div>\n            </div>\n          </div>\n          <div class=\"vehicle-card\">\n            <div class=\"card-title\">江阴大桥</div>\n            <div class=\"triangle\"></div>\n            <div class=\"card-body\">\n              <div class=\"car-type passenger\"><span>客车</span><b>66109</b></div>\n              <div class=\"donut-box\"><div ref=\"bridgePieRef\" class=\"chart\"></div><span class=\"center-icon\">🌉</span></div>\n              <div class=\"car-type truck\"><span>货车</span><b>16270</b></div>\n            </div>\n          </div>\n        </div>\n      </section>\n\n      <section class=\"forecast-section\">\n        <div class=\"forecast-top\">\n          <div class=\"section-title\"><span class=\"diamond\"></span>流量预测</div>\n          <div class=\"tabs\">\n            <button :class=\"{ active: activeTab === 'tunnel' }\" @click=\"activeTab = 'tunnel'\">江阴靖江长江隧道</button>\n            <button :class=\"{ active: activeTab === 'bridge' }\" @click=\"activeTab = 'bridge'\">江阴大桥</button>\n          </div>\n          <button class=\"holiday\" @click=\"handleHoliday\">节假日预测&gt;</button>\n        </div>\n        <div class=\"forecast-chart\">\n          <div ref=\"lineRef\" class=\"chart\"></div>\n        </div>\n      </section>\n    </div>\n  </section>\n</template>\n\n<script setup>\nimport { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'\nimport * as echarts from 'echarts'\n\ndefineOptions({ name: 'mv-lite-1786851177092-1aeb102b' })\n\nconst activeTab = ref('tunnel')\n\nconst tunnelBarRef = ref(null)\nconst bridgeBarRef = ref(null)\nconst tunnelPieRef = ref(null)\nconst bridgePieRef = ref(null)\nconst lineRef = ref(null)\n\nconst hourLabels = ref(['', '2', '4', '6', '8', '10', '12', '14', '16', '18', '20', '22', '24'])\nconst tunnelBeijing = ref([260, 310, 360, 540, 700, 520, 1780, 620, 2160, 620, 520, 430, 360])\nconst tunnelShanghai = ref([330, 390, 450, 680, 620, 1120, 1540, 1440, 980, 520, 450, 360, 300])\nconst bridgeBeijing = ref([260, 330, 360, 610, 720, 1180, 1800, 440, 2180, 520, 470, 390, 330])\nconst bridgeShanghai = ref([320, 360, 430, 700, 620, 1680, 1260, 1420, 980, 500, 430, 350, 280])\nconst tunnelPieData = ref([{ value: 22350, name: '客车' }, { value: 16270, name: '货车' }])\nconst bridgePieData = ref([{ value: 66109, name: '客车' }, { value: 16270, name: '货车' }])\nconst lineLabels = ref(['2小时前', '1小时前', '当前时间', '1小时后', '2小时后'])\nconst actualData = ref([560, 2050, 2860, null, null])\nconst predictTunnelData = ref([420, 2450, 3350, 2240, 720])\nconst predictBridgeData = ref([620, 2350, 3180, 2350, 820])\nconst accuracyLabels = ref(['准确率98%', '准确率96%', '准确率92%'])\n\nlet charts = []\nlet observers = []\n\nconst gridColor = 'rgba(255,255,255,.36)'\nconst axisColor = '#303a3e'\n\nfunction createObserver(el, chart) {\n  const observer = new ResizeObserver(() => chart.resize())\n  observer.observe(el)\n  observers.push(observer)\n}\n\nfunction initChart(el, option) {\n  if (!el) return null\n  const chart = echarts.init(el)\n  chart.setOption(option)\n  charts.push(chart)\n  createObserver(el, chart)\n  return chart\n}\n\nfunction barOption(beijing, shanghai) {\n  return {\n    animation: false,\n    grid: { left: 38, right: 30, top: 22, bottom: 24 },\n    xAxis: {\n      type: 'category',\n      data: hourLabels.value,\n      axisTick: { show: false },\n      axisLine: { lineStyle: { color: 'rgba(67,82,88,.55)' } },\n      axisLabel: { color: axisColor, fontSize: 12 }\n    },\n    yAxis: {\n      type: 'value',\n      min: 0,\n      max: 4000,\n      interval: 1000,\n      name: '辆',\n      nameLocation: 'end',\n      nameTextStyle: { color: axisColor, fontSize: 12, padding: [0, 28, 0, 0] },\n      splitLine: { lineStyle: { color: gridColor, type: 'dashed' } },\n      axisLabel: { color: axisColor, fontSize: 12 },\n      axisLine: { show: false },\n      axisTick: { show: false }\n    },\n    series: [\n      { name: '北京方向', type: 'bar', data: beijing.value, barWidth: 5, itemStyle: { color: '#178cff' } },\n      { name: '上海方向', type: 'bar', data: shanghai.value, barWidth: 5, itemStyle: { color: '#18d6eb' } }\n    ],\n    graphic: [\n      { type: 'text', left: 38, top: 28, style: { text: '即时流量', fill: '#e99146', font: 'bold 13px sans-serif' } },\n      { type: 'text', right: 2, bottom: 14, style: { text: '时', fill: axisColor, font: '12px sans-serif' } }\n    ]\n  }\n}\n\nfunction pieOption(dataRef) {\n  return {\n    animation: false,\n    series: [{\n      type: 'pie',\n      radius: ['58%', '78%'],\n      center: ['50%', '50%'],\n      avoidLabelOverlap: false,\n      label: { show: false },\n      labelLine: { show: false },\n      data: dataRef.value,\n      itemStyle: { borderWidth: 3, borderColor: '#cfd6d8' },\n      color: ['#16a6ff', '#ff9d1e']\n    }]\n  }\n}\n\nfunction lineOption() {\n  const predictData = activeTab.value === 'tunnel' ? predictTunnelData.value : predictBridgeData.value\n  return {\n    animation: false,\n    grid: { left: 38, right: 12, top: 30, bottom: 44 },\n    legend: {\n      right: 10,\n      top: 0,\n      itemWidth: 16,\n      itemHeight: 8,\n      textStyle: { color: axisColor, fontSize: 12 },\n      data: ['实际流量', '预测流量']\n    },\n    xAxis: {\n      type: 'category',\n      data: lineLabels.value,\n      boundaryGap: false,\n      axisTick: { show: false },\n      axisLine: { lineStyle: { color: 'rgba(67,82,88,.55)' } },\n      axisLabel: { color: axisColor, fontSize: 12, margin: 12 }\n    },\n    yAxis: {\n      type: 'value',\n      min: 0,\n      max: 4000,\n      interval: 1000,\n      name: '辆',\n      nameTextStyle: { color: axisColor, fontSize: 12, padding: [0, 28, 0, 0] },\n      splitLine: { lineStyle: { color: gridColor, type: 'dashed' } },\n      axisLabel: { color: axisColor, fontSize: 12 },\n      axisLine: { show: false },\n      axisTick: { show: false }\n    },\n    series: [\n      {\n        name: '实际流量',\n        type: 'line',\n        smooth: true,\n        data: actualData.value,\n        symbol: 'circle',\n        symbolSize: 7,\n        connectNulls: false,\n        lineStyle: { color: '#2b7dff', width: 2 },\n        itemStyle: { color: '#2b7dff', borderColor: '#fff', borderWidth: 2 },\n        areaStyle: { color: 'rgba(34,137,255,.26)' }\n      },\n      {\n        name: '预测流量',\n        type: 'line',\n        smooth: true,\n        data: predictData,\n        symbol: 'circle',\n        symbolSize: 7,\n        lineStyle: { color: '#25d6d2', width: 2 },\n        itemStyle: { color: '#25d6d2', borderColor: '#fff', borderWidth: 2 },\n        areaStyle: { color: 'rgba(37,214,210,.24)' }\n      }\n    ],\n    graphic: accuracyLabels.value.map((text, index) => ({\n      type: 'text',\n      left: `${15 + index * 22}%`,\n      bottom: 2,\n      style: { text, fill: '#21d74e', font: 'bold 12px sans-serif' }\n    }))\n  }\n}\n\nfunction initAllCharts() {\n  initChart(tunnelBarRef.value, barOption(tunnelBeijing, tunnelShanghai))\n  initChart(bridgeBarRef.value, barOption(bridgeBeijing, bridgeShanghai))\n  initChart(tunnelPieRef.value, pieOption(tunnelPieData))\n  initChart(bridgePieRef.value, pieOption(bridgePieData))\n  initChart(lineRef.value, lineOption())\n}\n\nwatch(activeTab, () => {\n  const lineChart = charts.find(chart => chart.getDom() === lineRef.value)\n  lineChart?.setOption(lineOption(), true)\n})\n\nfunction handleSelect() {\n  console.log('select 24小时')\n}\n\nfunction handleHoliday() {\n  console.log('节假日预测')\n}\n\nonMounted(async () => {\n  await nextTick()\n  requestAnimationFrame(() => initAllCharts())\n})\n\nonUnmounted(() => {\n  observers.forEach(observer => observer.disconnect())\n  charts.forEach(chart => chart.dispose())\n  observers = []\n  charts = []\n})\n</script>\n\n<style scoped>\n.mv-lite-1786851177092-1aeb102b {\n  width: 100%;\n  height: 100%;\n  box-sizing: border-box;\n  background: #0b0f11;\n  padding: 8px 14px;\n  font-family: Arial, \"Microsoft YaHei\", sans-serif;\n  color: #1f2a2e;\n}\n\n*, *::before, *::after { box-sizing: border-box; }\n\n.dashboard {\n  width: 100%;\n  height: 100%;\n  min-height: 0;\n  padding: 16px 24px 12px;\n  display: flex;\n  flex-direction: column;\n  background: #aeb7ba;\n  box-shadow: inset 0 0 22px rgba(255,255,255,.2), 0 8px 16px rgba(0,0,0,.35);\n  overflow: hidden;\n}\n\n.page-header { height: 55px; flex: 0 0 55px; }\n.page-header h1 {\n  margin: 0;\n  color: #168bff;\n  font-size: 20px;\n  font-weight: 800;\n  line-height: 28px;\n}\n.title-line {\n  width: 100%;\n  height: 7px;\n  margin-top: 7px;\n  background: linear-gradient(90deg, #168bff 0 2%, rgba(143,208,255,.75) 3% 100%);\n  clip-path: polygon(0 50%, 1.6% 0, 3.2% 50%, 100% 50%, 100% 75%, 3.2% 75%, 1.6% 100%, 0 75%);\n  opacity: .75;\n}\n\n.overview { flex: 0 0 168px; min-height: 0; }\n.overview-head, .chart-head, .forecast-top {\n  display: flex;\n  align-items: center;\n}\n.overview-head { justify-content: space-between; }\n.section-title {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  font-size: 22px;\n  font-weight: 800;\n  white-space: nowrap;\n}\n.diamond {\n  width: 17px;\n  height: 17px;\n  border: 3px solid #168bff;\n  background: #fff;\n  transform: rotate(45deg);\n  box-shadow: inset 0 0 0 3px #168bff;\n}\n.select-btn {\n  width: 144px;\n  height: 44px;\n  border: 1px solid #8fd0ff;\n  border-radius: 5px;\n  background: #edf8ff;\n  color: #2c363a;\n  font-size: 19px;\n  display: flex;\n  align-items: center;\n  justify-content: space-around;\n  box-shadow: 0 0 8px rgba(22,139,255,.35);\n  cursor: pointer;\n}\n.select-btn span { color: #8aa0a8; font-size: 22px; }\n.overview-body {\n  position: relative;\n  height: 114px;\n  margin-top: 8px;\n  display: grid;\n  grid-template-columns: 1fr 120px 1fr;\n  align-items: center;\n  background: linear-gradient(90deg, rgba(162,197,214,.32), rgba(184,197,200,.05), rgba(162,197,214,.28));\n}\n.metric { text-align: center; z-index: 2; }\n.metric-name { font-size: 20px; font-weight: 700; margin-bottom: 6px; }\n.metric-value { font-size: 30px; font-weight: 900; letter-spacing: .5px; }\n.blue { color: #098dff; }\n.cyan { color: #009cc7; }\n.car-glow {\n  position: relative;\n  width: 112px;\n  height: 112px;\n  display: grid;\n  place-items: center;\n}\n.halo {\n  position: absolute;\n  inset: 7px;\n  border-radius: 50%;\n  background: radial-gradient(circle, #eefbff 0 28%, #7ed8ff 48%, rgba(38,177,255,.12) 70%);\n  box-shadow: 0 0 0 8px rgba(28,164,255,.18), 0 0 26px rgba(0,191,255,.55);\n}\n.car { position: relative; font-size: 40px; filter: hue-rotate(165deg) saturate(1.7); }\n\n.bar-block { flex: 0 0 139px; min-height: 0; }\n.bridge-block { flex-basis: 136px; }\n.chart-head { height: 26px; justify-content: space-between; }\n.sub-title { font-size: 17px; display: flex; align-items: center; gap: 4px; }\n.blue-stick { width: 5px; height: 18px; background: linear-gradient(#168bff, transparent); display: inline-block; }\n.legend { display: flex; align-items: center; gap: 8px; font-size: 15px; }\n.legend i, .tooltip-card i { width: 11px; height: 11px; display: inline-block; border-radius: 2px; margin-right: 4px; }\n.legend-blue { background: #178cff; }\n.legend-cyan { background: #18d6eb; }\n.bar-wrap { position: relative; height: calc(100% - 26px); min-height: 0; }\n.chart { width: 100%; height: 100%; }\n.tooltip-card {\n  position: absolute;\n  right: 12px;\n  top: 22px;\n  width: 146px;\n  padding: 9px 10px;\n  border: 1px solid #8fd0ff;\n  border-radius: 6px;\n  background: linear-gradient(135deg, #ecf9ff, #c8edff);\n  box-shadow: 0 2px 9px rgba(28,117,180,.45);\n  font-size: 14px;\n  color: #243136;\n}\n.tooltip-card b { display: block; font-size: 15px; margin-bottom: 4px; }\n.tooltip-card p { margin: 3px 0; white-space: nowrap; }\n.tooltip-card strong { color: #168bff; font-size: 18px; }\n\n.vehicle-section { flex: 0 0 150px; min-height: 0; padding-top: 4px; }\n.vehicle-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; height: 112px; margin-top: 7px; }\n.vehicle-card { position: relative; min-width: 0; }\n.card-title {\n  height: 30px;\n  text-align: center;\n  font-size: 18px;\n  font-weight: 700;\n  line-height: 26px;\n  border-bottom: 9px solid transparent;\n  border-image: linear-gradient(90deg, transparent, #eaf8ff, #79bfe6, transparent) 1;\n}\n.triangle {\n  width: 0;\n  height: 0;\n  margin: -2px auto 3px;\n  border-left: 6px solid transparent;\n  border-right: 6px solid transparent;\n  border-top: 8px solid #168bff;\n  opacity: .65;\n}\n.card-body {\n  height: 76px;\n  display: grid;\n  grid-template-columns: 1fr 62px 1fr;\n  align-items: center;\n}\n.car-type {\n  height: 54px;\n  padding: 9px 4px;\n  border: 1px solid rgba(22,139,255,.28);\n  background: linear-gradient(120deg, rgba(80,178,255,.22), rgba(255,255,255,.08));\n  clip-path: polygon(10% 0, 100% 0, 90% 100%, 0 100%);\n}\n.car-type.truck {\n  border-color: rgba(255,123,37,.28);\n  background: linear-gradient(120deg, rgba(255,255,255,.06), rgba(255,141,30,.2));\n  clip-path: polygon(0 0, 90% 0, 100% 100%, 10% 100%);\n  text-align: right;\n}\n.car-type span { display: block; font-size: 14px; }\n.car-type b { font-size: 22px; line-height: 24px; color: #168bff; }\n.truck b { color: #ff6f16; }\n.donut-box { position: relative; width: 62px; height: 62px; }\n.center-icon { position: absolute; inset: 0; display: grid; place-items: center; font-size: 20px; }\n\n.forecast-section { flex: 1 1 auto; min-height: 0; padding-top: 2px; }\n.forecast-top { height: 32px; gap: 8px; }\n.tabs { display: flex; gap: 6px; flex: 1; min-width: 0; }\n.tabs button {\n  height: 27px;\n  padding: 0 9px;\n  border: 1px solid rgba(59,78,86,.45);\n  border-radius: 14px;\n  background: rgba(221,227,228,.55);\n  color: #253035;\n  font-size: 15px;\n  white-space: nowrap;\n  cursor: pointer;\n}\n.tabs button.active {\n  border-color: #8fd0ff;\n  background: #168bff;\n  color: #fff;\n  box-shadow: 0 0 8px rgba(22,139,255,.45);\n}\n.holiday {\n  border: 0;\n  background: transparent;\n  color: #168bff;\n  font-size: 14px;\n  white-space: nowrap;\n  cursor: pointer;\n}\n.forecast-chart { height: calc(100% - 32px); min-height: 0; }\n\n@media (max-width: 380px) {\n  .dashboard { padding-left: 18px; padding-right: 18px; }\n  .section-title { font-size: 19px; }\n  .metric-name { font-size: 17px; }\n  .metric-value { font-size: 26px; }\n  .tooltip-card { right: 4px; transform: scale(.92); transform-origin: right top; }\n  .tabs button { padding: 0 6px; font-size: 13px; }\n}\n</style>"
+}

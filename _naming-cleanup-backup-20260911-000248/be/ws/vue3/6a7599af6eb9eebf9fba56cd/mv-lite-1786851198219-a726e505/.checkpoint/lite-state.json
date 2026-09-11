@@ -1,0 +1,100 @@
+{
+  "stage": "codegen_done",
+  "brief": {
+    "layout": "横向宽屏数据看板表格布局，整体为单一主容器；顶部为标题栏与右侧人员状态区，主轴自上而下；下方为表格区域，表头与3行数据按列对齐，列宽均匀分布，内容左对齐为主。",
+    "regions": [
+      {
+        "name": "顶部标题栏",
+        "description": "左侧菱形图标与标题‘今日预警列表’，右侧显示两组人员处理状态‘张三 已处理 1’、‘李四 已处理 0’",
+        "position": "top",
+        "size": "约100%宽，18%高"
+      },
+      {
+        "name": "表格表头",
+        "description": "包含预警项、传感器节点、桩号、异常原因、异常时间、处理结果、操作等列名",
+        "position": "center",
+        "size": "约98%宽，20%高"
+      },
+      {
+        "name": "表格内容区",
+        "description": "3条预警记录，每行包含预警项、节点、桩号、原因、时间、处理状态和查看核实操作",
+        "position": "bottom",
+        "size": "约98%宽，62%高"
+      }
+    ],
+    "spacing": {
+      "outer": "容器贴近截图边缘，外边距很小，约4-14px",
+      "gap": "标题栏与表格紧密衔接；表格行之间由细分隔线区分，列间距较大且均匀",
+      "padding": "表格左右内边距约28-42px，单元格上下内边距约10-14px"
+    },
+    "colors": {
+      "primary": "#00E6C3",
+      "background": "#003A35",
+      "surface": "#064F45",
+      "text": "#E8FFFF",
+      "border": "#0BBDA9"
+    },
+    "typography": {
+      "size": "标题约26px；表头约21px；表格正文约18px；右上状态约17px",
+      "weight": "标题和表头为中粗/加粗，正文常规，状态数字区域常规",
+      "lineHeight": "表格行高约48-50px，标题栏行高约42px"
+    },
+    "components": [
+      "标题文本",
+      "装饰图标",
+      "状态信息文本",
+      "数据表格",
+      "表头行",
+      "表格数据行",
+      "文本链接/按钮"
+    ],
+    "textContent": [
+      "今日预警列表",
+      "张三",
+      "已处理 1",
+      "李四",
+      "已处理 0",
+      "预警项",
+      "传感器节点",
+      "桩号",
+      "异常原因",
+      "异常时间",
+      "处理结果",
+      "操作",
+      "管片沉降",
+      "接缝位移",
+      "ZYN6-2",
+      "ZYN6-3",
+      "K5+900",
+      "K4+200",
+      "K3+700",
+      "数值偏小异常",
+      "网络异常",
+      "18:20",
+      "待处理",
+      "已处理",
+      "查看核实"
+    ],
+    "visualDetails": [
+      "整体为深绿色科技风背景，带网格、光效和渐变纹理",
+      "顶部和表格边缘有青绿色发光描边",
+      "标题左侧有青绿色菱形/立方体图标",
+      "右上人员名前有蓝绿色立体小图标",
+      "表头背景为半透明青绿色横条",
+      "表格行之间使用细青绿色分隔线",
+      "处理结果中‘待处理’为黄色，‘已处理’为青色",
+      "‘查看核实’为亮绿色链接样式",
+      "主容器无明显圆角，整体有霓虹发光边框"
+    ],
+    "interactions": [
+      "文本链接/按钮：每行右侧‘查看核实’，位于操作列，可点击查看或核实该条记录",
+      "右上状态项：张三 已处理 1、李四 已处理 0，呈信息入口样式但截图中未显示明确激活/选中状态"
+    ]
+  },
+  "width": 1838,
+  "height": 400,
+  "sourceType": "screenshot",
+  "componentType": "vue3",
+  "generationTier": "lite",
+  "vueCode": "<template>\n  <section class=\"warning-board\">\n    <div class=\"glow-layer\"></div>\n\n    <header class=\"board-header\">\n      <div class=\"title-wrap\">\n        <span class=\"diamond-icon\" aria-hidden=\"true\"></span>\n        <h1>今日预警列表</h1>\n      </div>\n\n      <div class=\"status-wrap\">\n        <button class=\"person-status\" type=\"button\" @click=\"handleStatusClick('张三')\">\n          <span class=\"person-icon\" aria-hidden=\"true\"></span>\n          <span class=\"person-name\">张三</span>\n          <span class=\"processed\">已处理 <b>1</b></span>\n        </button>\n        <button class=\"person-status\" type=\"button\" @click=\"handleStatusClick('李四')\">\n          <span class=\"person-icon\" aria-hidden=\"true\"></span>\n          <span class=\"person-name\">李四</span>\n          <span class=\"processed\">已处理 <b>0</b></span>\n        </button>\n      </div>\n    </header>\n\n    <main class=\"table-panel\">\n      <a-table\n        class=\"warning-table\"\n        :columns=\"columns\"\n        :data-source=\"data\"\n        :pagination=\"false\"\n        :row-key=\"record => record.key\"\n      >\n        <template #bodyCell=\"{ column, record }\">\n          <template v-if=\"column.dataIndex === 'result'\">\n            <span :class=\"['result-text', record.result === '待处理' ? 'pending' : 'done']\">\n              {{ record.result }}\n            </span>\n          </template>\n          <template v-else-if=\"column.dataIndex === 'action'\">\n            <button class=\"verify-link\" type=\"button\" @click=\"handleVerify(record)\">查看核实</button>\n          </template>\n        </template>\n      </a-table>\n    </main>\n  </section>\n</template>\n\n<script setup>\nimport { Table as ATable } from 'ant-design-vue'\n\ndefineOptions({\n  name: 'mv-lite-1786851198219-a726e505',\n  components: { ATable }\n})\n\nconst columns = [\n  { title: '预警项', dataIndex: 'warning', key: 'warning', width: '15%' },\n  { title: '传感器节点', dataIndex: 'node', key: 'node', width: '15%' },\n  { title: '桩号', dataIndex: 'stake', key: 'stake', width: '12%' },\n  { title: '异常原因', dataIndex: 'reason', key: 'reason', width: '18%' },\n  { title: '异常时间', dataIndex: 'time', key: 'time', width: '14%' },\n  { title: '处理结果', dataIndex: 'result', key: 'result', width: '14%' },\n  { title: '操作', dataIndex: 'action', key: 'action', width: '12%' }\n]\n\nconst data = [\n  {\n    key: '1',\n    warning: '管片沉降',\n    node: 'ZYN6-2',\n    stake: 'K5+900',\n    reason: '数值偏小异常',\n    time: '18:20',\n    result: '待处理'\n  },\n  {\n    key: '2',\n    warning: '接缝位移',\n    node: 'ZYN6-3',\n    stake: 'K4+200',\n    reason: '网络异常',\n    time: '18:20',\n    result: '待处理'\n  },\n  {\n    key: '3',\n    warning: '管片沉降',\n    node: 'ZYN6-2',\n    stake: 'K3+700',\n    reason: '网络异常',\n    time: '18:20',\n    result: '已处理'\n  }\n]\n\nconst handleVerify = record => {\n  console.log('查看核实', record)\n}\n\nconst handleStatusClick = name => {\n  console.log('人员状态', name)\n}\n</script>\n\n<style scoped>\n.warning-board {\n  position: relative;\n  width: 100%;\n  height: 100%;\n  box-sizing: border-box;\n  overflow: hidden;\n  color: #e8ffff;\n  background:\n    radial-gradient(circle at 82% 0%, rgba(16, 255, 218, 0.24), transparent 30%),\n    linear-gradient(108deg, rgba(0, 118, 101, 0.22) 0%, rgba(0, 58, 53, 0.4) 33%, rgba(0, 86, 74, 0.22) 34%, rgba(0, 45, 43, 0.58) 100%),\n    repeating-linear-gradient(90deg, rgba(67, 255, 226, 0.055) 0, rgba(67, 255, 226, 0.055) 1px, transparent 1px, transparent 106px),\n    repeating-linear-gradient(0deg, rgba(67, 255, 226, 0.045) 0, rgba(67, 255, 226, 0.045) 1px, transparent 1px, transparent 56px),\n    #003a35;\n  border: 1px solid rgba(0, 230, 195, 0.62);\n  box-shadow:\n    inset 0 0 18px rgba(0, 230, 195, 0.36),\n    inset 0 0 46px rgba(0, 130, 116, 0.3);\n  font-family: \"Microsoft YaHei\", \"PingFang SC\", Arial, sans-serif;\n}\n\n.glow-layer {\n  position: absolute;\n  inset: 0;\n  pointer-events: none;\n  background:\n    linear-gradient(78deg, transparent 0%, transparent 38%, rgba(136, 255, 238, 0.09) 39%, rgba(136, 255, 238, 0.03) 48%, transparent 49%),\n    linear-gradient(90deg, rgba(0, 255, 213, 0.16), transparent 10%, transparent 82%, rgba(0, 255, 213, 0.1)),\n    radial-gradient(ellipse at 95% 12%, rgba(54, 255, 225, 0.22), transparent 24%);\n  opacity: 0.9;\n}\n\n.board-header {\n  position: relative;\n  z-index: 1;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  height: 18%;\n  min-height: 56px;\n  padding: 0 44px 0 22px;\n  box-sizing: border-box;\n  background: linear-gradient(180deg, rgba(0, 207, 177, 0.27), rgba(3, 66, 59, 0.2) 78%, rgba(0, 230, 195, 0.08));\n  border-bottom: 1px solid rgba(11, 189, 169, 0.7);\n  box-shadow:\n    inset 0 3px 9px rgba(0, 255, 218, 0.65),\n    inset 0 -1px 15px rgba(0, 230, 195, 0.26),\n    0 0 14px rgba(0, 230, 195, 0.4);\n}\n\n.title-wrap {\n  display: flex;\n  align-items: center;\n  min-width: 0;\n}\n\n.title-wrap h1 {\n  margin: 0 0 0 14px;\n  font-size: clamp(20px, 1.42vw, 26px);\n  line-height: 1.15;\n  font-weight: 800;\n  letter-spacing: 1px;\n  color: #eaffff;\n  text-shadow: 0 0 8px rgba(0, 230, 195, 0.7);\n}\n\n.diamond-icon {\n  position: relative;\n  width: 24px;\n  height: 24px;\n  flex: 0 0 24px;\n  transform: rotate(45deg);\n  background: linear-gradient(135deg, #baffff 0%, #00e6c3 46%, #16746f 100%);\n  box-shadow: 0 0 12px rgba(0, 230, 195, 0.88);\n}\n\n.diamond-icon::before,\n.diamond-icon::after {\n  content: \"\";\n  position: absolute;\n  inset: 4px;\n  border-top: 1px solid rgba(255, 255, 255, 0.55);\n  border-left: 1px solid rgba(255, 255, 255, 0.4);\n}\n\n.diamond-icon::after {\n  inset: -4px;\n  background: rgba(0, 230, 195, 0.1);\n  filter: blur(5px);\n  z-index: -1;\n}\n\n.status-wrap {\n  display: flex;\n  align-items: center;\n  gap: 56px;\n  height: 100%;\n}\n\n.person-status {\n  display: inline-flex;\n  align-items: center;\n  height: 44px;\n  padding: 0;\n  color: #e8ffff;\n  background: transparent;\n  border: 0;\n  cursor: pointer;\n  font: inherit;\n  text-shadow: 0 0 7px rgba(0, 230, 195, 0.42);\n}\n\n.person-icon {\n  position: relative;\n  width: 32px;\n  height: 32px;\n  margin-right: 12px;\n  background:\n    radial-gradient(circle at 48% 19%, #cbffff 0 13%, #00e6c3 14% 29%, transparent 30%),\n    linear-gradient(135deg, transparent 18%, #1ffff0 19% 50%, #0c7a71 51% 82%, transparent 83%);\n  filter: drop-shadow(0 0 8px rgba(0, 230, 195, 0.9));\n}\n\n.person-icon::before,\n.person-icon::after {\n  content: \"\";\n  position: absolute;\n  left: 7px;\n  bottom: 2px;\n  width: 18px;\n  height: 12px;\n  transform: skewX(-28deg);\n  background: linear-gradient(135deg, #8ffff5, #00e6c3 54%, #09564f);\n  border: 1px solid rgba(172, 255, 247, 0.35);\n}\n\n.person-icon::after {\n  left: 3px;\n  bottom: 8px;\n  width: 14px;\n  height: 9px;\n  opacity: 0.72;\n}\n\n.person-name {\n  margin-right: 26px;\n  font-size: clamp(15px, 0.93vw, 18px);\n  white-space: nowrap;\n}\n\n.processed {\n  font-size: clamp(15px, 0.9vw, 17px);\n  white-space: nowrap;\n}\n\n.processed b {\n  font-weight: 600;\n}\n\n.table-panel {\n  position: relative;\n  z-index: 1;\n  height: 82%;\n  padding: 22px 20px 20px;\n  box-sizing: border-box;\n}\n\n.warning-table {\n  width: 100%;\n  height: 100%;\n}\n\n:deep(.warning-table .ant-table) {\n  height: 100%;\n  color: #e8ffff;\n  background: transparent;\n  font-family: inherit;\n}\n\n:deep(.warning-table .ant-table-container) {\n  border: 0;\n}\n\n:deep(.warning-table .ant-table-content) {\n  height: 100%;\n}\n\n:deep(.warning-table table) {\n  height: 100%;\n  table-layout: fixed !important;\n  border-collapse: collapse;\n}\n\n:deep(.warning-table .ant-table-thead > tr > th) {\n  height: 62px;\n  padding: 0 24px;\n  color: #f0ffff;\n  font-size: clamp(17px, 1.12vw, 21px);\n  font-weight: 800;\n  line-height: 1.2;\n  text-align: left;\n  background: linear-gradient(180deg, rgba(8, 123, 107, 0.82), rgba(6, 79, 69, 0.76));\n  border: 0;\n  border-bottom: 1px solid rgba(20, 246, 218, 0.48);\n  text-shadow: 0 0 7px rgba(0, 230, 195, 0.35);\n}\n\n:deep(.warning-table .ant-table-thead > tr > th::before) {\n  display: none !important;\n}\n\n:deep(.warning-table .ant-table-tbody > tr > td) {\n  height: 50px;\n  padding: 0 24px;\n  color: #e8ffff;\n  font-size: clamp(16px, 0.98vw, 19px);\n  line-height: 1.2;\n  text-align: left;\n  background: rgba(4, 78, 69, 0.52);\n  border-bottom: 1px solid rgba(11, 189, 169, 0.46);\n}\n\n:deep(.warning-table .ant-table-tbody > tr:nth-child(2n) > td) {\n  background: rgba(3, 66, 59, 0.44);\n}\n\n:deep(.warning-table .ant-table-tbody > tr:hover > td) {\n  background: rgba(5, 101, 88, 0.58) !important;\n}\n\n:deep(.warning-table .ant-table-cell) {\n  white-space: nowrap;\n}\n\n.result-text.pending {\n  color: #ffd929;\n  text-shadow: 0 0 8px rgba(255, 217, 41, 0.35);\n}\n\n.result-text.done {\n  color: #26e2e4;\n  text-shadow: 0 0 8px rgba(38, 226, 228, 0.38);\n}\n\n.verify-link {\n  padding: 0;\n  color: #00f0b9;\n  font: inherit;\n  background: transparent;\n  border: 0;\n  cursor: pointer;\n  text-shadow: 0 0 8px rgba(0, 230, 195, 0.48);\n}\n\n.verify-link:hover {\n  color: #75ffe7;\n}\n\n@media (max-width: 1000px) {\n  .board-header {\n    padding-right: 22px;\n  }\n\n  .status-wrap {\n    gap: 22px;\n  }\n\n  .person-name {\n    margin-right: 12px;\n  }\n\n  .table-panel {\n    padding: 14px 12px 12px;\n  }\n\n  :deep(.warning-table .ant-table-thead > tr > th),\n  :deep(.warning-table .ant-table-tbody > tr > td) {\n    padding: 0 12px;\n  }\n}\n/* Ant Design Vue Table 内部背景层：避免透明单元格透出默认白底 */\n:deep(.warning-table .ant-table-container),\n:deep(.warning-table .ant-table-content),\n:deep(.warning-table table) {\n  background: transparent;\n  color: inherit;\n}\n\n/* Ant Design Vue 4 通过单元格状态类控制行悬浮背景 */\n:deep(.warning-table .ant-table-tbody > tr > td.ant-table-cell-row-hover) {\n  background: rgba(5, 101, 88, 0.58) !important;\n}\n\n</style>"
+}

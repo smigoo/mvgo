@@ -1,0 +1,276 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "issues": [
+      {
+        "id": "response_parse_failed",
+        "type": "response_parse_failed",
+        "severity": "warning",
+        "message": "布局审查响应解析失败，结果不可信"
+      }
+    ],
+    "score": 0,
+    "recommendations": [],
+    "degraded": true
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "浅色科技监测风-token变量（camelCase命名）",
+      "--colorBg": "#EDF4FB",
+      "--colorPrimary": "#1990FF",
+      "--colorTextBase": "#333333",
+      "--colorDanger": "#f53f3f",
+      "--colorInfo": "#08A3A5",
+      "--gradientCardBg": "linear-gradient(135deg, #FFFFFF 0%, #E8F4FF 100%)",
+      "--tabActiveBg": "#1990FF",
+      "--statPrimaryText": "#1990FF",
+      "--statDangerText": "#f53f3f",
+      "--fontSize": "14px",
+      "--borderRadius": "8px",
+      "--shadowCard": "0 2px 8px rgba(25, 144, 255, 0.10)"
+    },
+    "lessVariables": {
+      "comment": "Less变量与CSS变量一一对应",
+      "@color-bg": "var(--colorBg)",
+      "@color-primary": "var(--colorPrimary)",
+      "@color-text-base": "var(--colorTextBase)",
+      "@color-danger": "var(--colorDanger)",
+      "@color-info": "var(--colorInfo)",
+      "@gradient-card-bg": "var(--gradientCardBg)",
+      "@tab-active-bg": "var(--tabActiveBg)",
+      "@stat-primary-text": "var(--statPrimaryText)",
+      "@stat-danger-text": "var(--statDangerText)",
+      "@font-size-base": "var(--fontSize)",
+      "@border-radius-base": "var(--borderRadius)",
+      "@shadow-card": "var(--shadowCard)"
+    },
+    "cssClasses": {
+      "comment": "可复用的样式类",
+      ".screen-container": {
+        "width": "100%",
+        "height": "100%",
+        "display": "flex",
+        "flex-direction": "column",
+        "background": "var(--colorBg, #EDF4FB)",
+        "font-size": "var(--fontSize, 14px)",
+        "color": "var(--colorTextBase, #333333)",
+        "box-sizing": "border-box",
+        "padding": "20px"
+      },
+      ".top-card": {
+        "background": "var(--gradientCardBg, linear-gradient(135deg, #FFFFFF 0%, #E8F4FF 100%))",
+        "border-radius": "var(--borderRadius, 8px)",
+        "padding": "16px 20px",
+        "box-shadow": "var(--shadowCard, 0 2px 8px rgba(25, 144, 255, 0.10))",
+        "border": "1px solid rgba(25, 144, 255, 0.12)"
+      },
+      ".tab-item": {
+        "padding": "8px 16px",
+        "border-radius": "6px",
+        "cursor": "pointer",
+        "color": "var(--colorTextBase, #333333)",
+        "transition": "all 0.2s ease"
+      },
+      ".tab-item-active": {
+        "background": "var(--tabActiveBg, #1990FF)",
+        "color": "#FFFFFF",
+        "font-weight": "600"
+      },
+      ".stat-value-primary": {
+        "color": "var(--statPrimaryText, #1990FF)",
+        "font-size": "32px",
+        "font-weight": "700",
+        "line-height": "1.2",
+        "font-family": "DIN Alternate, Bebas Neue, sans-serif"
+      },
+      ".stat-value-danger": {
+        "color": "var(--statDangerText, #f53f3f)",
+        "font-size": "24px",
+        "font-weight": "600",
+        "line-height": "1.2"
+      },
+      ".chart-tooltip": {
+        "background": "rgba(255, 255, 255, 0.95)",
+        "border-radius": "4px",
+        "padding": "8px 12px",
+        "box-shadow": "0 4px 12px rgba(0, 0, 0, 0.08)",
+        "border": "1px solid rgba(25, 144, 255, 0.20)",
+        "font-size": "12px",
+        "color": "var(--colorTextBase, #333333)"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "rgba(237,244,251,1) → --colorBg，作为整套界面底色",
+      "rgba(25,144,255,1) → --colorPrimary，主交互色/品牌色，同时映射到Tab选中态背景",
+      "rgba(51,51,51,1) → --colorTextBase，主文字色",
+      "#f53f3f → --colorDanger，专用于异常数值提示",
+      "rgba(8,163,165,1) → --colorInfo，青色辅助信息色（如正常状态标识）",
+      "顶部卡片渐变背景 → --gradientCardBg，浅色科技风使用白到浅蓝渐变",
+      "蓝色大数值 → .stat-value-primary + --statPrimaryText",
+      "红色异常数 → .stat-value-danger + --statDangerText",
+      "CSS变量均使用camelCase，与微码平台注入规范一致"
+    ],
+    "elementStyleMap": {
+      "section-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-group-x-1-stat-item-x-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-group-x-1-stat-item-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-group-x-1-stat-item-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-group-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "el-group-x-4-stat-item-x-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-group-x-4-stat-item-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-group-x-4-stat-item-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-group-x-4": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-stat-item-x-5": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-stat-item-x-8": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-stat-item-x-11": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-tunnel-content-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-tunnel": {
+        "background": "linear-gradient(270deg, #318aff 0%, #70bfff 100%)",
+        "border-radius": "8px",
+        "padding": "16px",
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-north-south-content-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-north-south": {
+        "background": "rgba(237, 244, 251, 1)",
+        "border-radius": "8px",
+        "padding": "16px",
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-main-content": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "sidebar-tabs": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-摄像机-37": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-风速风向仪-40": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-超高检测器-43": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-烟道机器人-46": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-激光雷达-49": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-CO₂传感器-52": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-CO/VI检测器-55": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-温湿度传感器-58": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-压力传感器-61": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-光照度变送器-64": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-紧急电话-67": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-水质监测设备-70": {
+        "display": "flex",
+        "flex-direction": "row"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-header",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 11,
+        "title": "设备监测"
+      },
+      {
+        "id": "section-category-stats",
+        "responsibility": "数据统计指标区（数字+标签+趋势）",
+        "elementCount": 12,
+        "title": "大类设备统计"
+      },
+      {
+        "id": "section-main-content",
+        "responsibility": "列表项布局区",
+        "elementCount": 8,
+        "title": "分类导航与设备列表"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 → 强制拆分"
+  }
+}

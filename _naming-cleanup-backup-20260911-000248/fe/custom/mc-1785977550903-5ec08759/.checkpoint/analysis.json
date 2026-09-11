@@ -1,0 +1,199 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 65,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0].header",
+        "message": "违反了‘禁止生成组件面板标题’的核心规范。`header.title` 被设置为 '设备监测'，该标题应由 `base-panel` 通过 `componentName` 自动显示，组件内部禁止重复生成标题栏和标题文字。",
+        "suggestion": "移除 `section-header` 中的 `header` 配置，或将 `title` 置空。该 section 应仅保留统计指标（设备类型、总数、完好率）的业务内容。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "Figma 节点覆盖率（coverageRate）为 0%，缺失节点高达 114 个。这表明当前的布局结构与 Figma 设计稿存在严重脱节，解析结果无法准确反映设计稿的真实层级和元素。",
+        "suggestion": "重新运行 Figma 解析工具，检查 Figma 文件中的节点命名、图层结构是否发生变更，确保设计稿元素被正确映射到布局 JSON 中。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[*].body.backgroundImage",
+        "message": "背景图 `bg-8788.png` 在三个 section（header、summary-cards、device-grid）中均被重复引用。这会导致背景图重复渲染，增加不必要的 DOM 和样式计算开销。",
+        "suggestion": "将背景图统一设置在最外层容器（如 `layout` 根节点）或仅在一个主要 section 中设置，移除其他 section 中的重复 `backgroundImage` 配置。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1]",
+        "message": "在 `interactions` 中，顶部两个大卡片被定义为 `tab-switch`（互斥切换），但在 `layout` 结构中仅被定义为普通的 `stat-card`，缺乏切换语义和状态控制。",
+        "suggestion": "将 `section-summary-cards` 的 `layout` 调整为 `tab-list`，或将子节点重构为带有 `active` 状态字段的 Tab 项，以准确反映其互斥切换的交互逻辑。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[0].body.children[*]",
+        "message": "`stat-item` 内部嵌套了 `children` 数组来包含 `label` 和 `value`，导致 DOM 嵌套层级过深（达到5层），增加了代码生成时的结构复杂度。",
+        "suggestion": "扁平化 `stat-item` 结构，将 `label` 和 `value` 提升为 `stat-item` 的直接属性（如 `labelText`, `valueText`, `labelStyles`, `valueStyles`），减少不必要的包裹层。"
+      }
+    ],
+    "recommendations": [
+      "严格遵循‘禁止生成组件面板标题’规范，确保组件标题完全由 `base-panel` 的 `componentName` 接管，清理内部冗余的标题节点。",
+      "优化背景图资源的引用方式，避免在多个平级 section 中重复配置同一张背景图，建议提取至公共父容器。",
+      "针对 `coverageReport` 中 0% 的覆盖率问题，建议重新核对 Figma 源文件，确保解析工具能够正确读取节点树，必要时手动修正节点映射关系。",
+      "在布局结构中准确表达交互语义，对于具有 Tab 切换、Select 下拉等交互特征的元素，应在 `layout` 中使用对应的结构类型（如 `tab-list`）并明确状态字段。"
+    ],
+    "summary": "该布局结构整体区域划分较为清晰，能够反映设备监测面板的基本业务逻辑（顶部统计、分类卡片、设备网格）。但存在几个严重问题：首先，违反了‘禁止生成组件面板标题’的核心规范，在内部重复生成了标题；其次，背景图在多个 section 中重复引用，影响性能；第三，顶部卡片的交互语义（Tab切换）未在布局结构中正确体现；最后，Figma 节点覆盖率极低（0%），说明解析结果与设计稿严重脱节。建议优先修复标题重复和覆盖率问题，并重新核对 Figma 节点映射后再进行代码生成。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1990FF",
+      "--colorBgBase": "#EDF4FB",
+      "--colorTextBase": "#333333",
+      "--colorSuccess": "#08A3A5",
+      "--colorDanger": "#F53F3F",
+      "--colorWhite": "#ffffff",
+      "--fontSize": "14px",
+      "--fontSizeLarge": "28px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#1990FF",
+      "@color-bg-base": "#EDF4FB",
+      "@color-text-base": "#333333",
+      "@color-success": "#08A3A5",
+      "@color-danger": "#F53F3F",
+      "@color-white": "#ffffff",
+      "@font-size-base": "14px",
+      "@font-size-large": "28px",
+      "@border-radius-base": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "16px",
+        "background": "var(--colorBgBase)",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)"
+      },
+      ".card-header": {
+        "background": "linear-gradient(135deg, var(--colorPrimary) 0%, #4DA6FF 100%)",
+        "border-radius": "var(--borderRadius) var(--borderRadius) 0 0",
+        "color": "var(--colorWhite)",
+        "padding": "16px"
+      },
+      ".tab-active": {
+        "background": "var(--colorPrimary)",
+        "color": "var(--colorWhite)",
+        "border-radius": "4px"
+      },
+      ".grid-item": {
+        "background": "rgba(25, 144, 255, 0.1)",
+        "border-radius": "var(--borderRadius)",
+        "padding": "12px"
+      },
+      ".value-primary": {
+        "color": "var(--colorPrimary)",
+        "font-size": "var(--fontSizeLarge)",
+        "font-weight": "bold"
+      },
+      ".value-danger": {
+        "color": "var(--colorDanger)",
+        "font-size": "16px",
+        "font-weight": "bold"
+      },
+      ".value-success": {
+        "color": "var(--colorSuccess)",
+        "font-size": "16px",
+        "font-weight": "bold"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主题色 #1990FF 映射为 --colorPrimary 和 @color-primary",
+      "容器背景 #EDF4FB 优先直接落地为 Figma 字面量值，避免关键可见背景只依赖 CSS 变量",
+      "顶部卡片蓝色渐变背景使用 linear-gradient 结合主题色实现",
+      "网格项浅蓝色背景块使用 rgba(25, 144, 255, 0.1) 实现透明度效果",
+      "大号蓝色数值使用 .value-primary 类，字号映射为 28px",
+      "红色异常数和绿色正常数值分别使用 .value-danger 和 .value-success 类进行语义化区分"
+    ],
+    "elementStyleMap": {
+      "section-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "stat-type": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "stat-total": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "stat-rate": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "card-tunnel-content-group-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-tunnel": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-north-south-content-group-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-north-south": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-13": {
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-content-group-x-16": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-content-group-x-21": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-device-grid": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "sidebar-tabs": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-25": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  }
+}

@@ -1,0 +1,128 @@
+// 微码组件主题变量文件
+// 本文件定义三个 mixin：.common()、.theme-dark()、.theme-light()
+// 颜色变量定义在 mixin 内部，根级禁止调用任何主题 mixin
+
+// 通用变量（非颜色相关的基础变量）
+.common() {
+  // 字体
+  @font-family-base: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  
+  // 圆角
+  @border-radius-base: 4px;
+  @border-radius-sm: 2px;
+  @border-radius-lg: 8px;
+  
+  // 间距
+  @spacing-xs: 4px;
+  @spacing-sm: 8px;
+  @spacing-md: 16px;
+  @spacing-lg: 24px;
+  @spacing-xl: 32px;
+  
+  // 阴影
+  @shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
+  @shadow-md: 0 4px 8px rgba(0, 0, 0, 0.15);
+  @shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
+  
+  // 字号
+  @font-size-xs: 12px;
+  @font-size-sm: 13px;
+  @font-size-base: 14px;
+  @font-size-lg: 16px;
+  @font-size-xl: 18px;
+  @font-size-xxl: 20px;
+  
+  // 动画
+  @transition-base: all 0.3s ease;
+  @transition-fast: all 0.15s ease;
+}
+
+// 深色主题（背景深色，文字浅色）
+.theme-dark() {
+  // 主色调
+  @primary-color: #1990ff;
+  @primary-hover: #388dff;
+  @primary-active: #006fe3;
+  @primary-light: #2ba0ff;
+  
+  // 辅助色
+  @info-color: #57caff;
+  @success-color: #00cccc;
+  @warning-color: #ffa22f;
+  @error-color: #ff6a00;
+  
+  // 背景色（深色主题）
+  @bg-color: #1a2332;
+  @bg-secondary: rgba(74, 117, 141, 0.25);
+  @bg-hover: rgba(255, 255, 255, 0.1);
+  @bg-active: rgba(255, 255, 255, 0.15);
+  @bg-light: #d6effc;
+  @bg-card: rgba(0, 0, 0, 0.3);
+  
+  // 文字颜色（深色主题下必须使用浅色系）
+  @text-color: rgba(255, 255, 255, 0.8);
+  @text-secondary: rgba(172, 196, 225, 1);
+  @text-disabled: #6680a0;
+  @text-placeholder: #56597c;
+  @text-light: #ffffff;
+  
+  // 边框颜色
+  @border-color: rgba(74, 117, 141, 0.25);
+  @border-hover: #5bbbef;
+  @border-light: rgba(199, 224, 255, 1);
+  
+  // 品牌色系
+  @brand-blue: #559eff;
+  @brand-blue-light: #5a7eff;
+  @brand-cyan: #0c9dbe;
+  @brand-cyan-light: rgba(0, 204, 204, 0.3);
+  
+  // 强调色
+  @accent-color: rgba(51, 133, 255, 1);
+  @accent-secondary: #1399ff;
+}
+
+// 浅色主题（面板默认主题，必须与设计稿一致）
+.theme-light() {
+  // 主色调
+  @primary-color: #1252fa;
+  @primary-hover: #1990ff;
+  @primary-active: #006fe3;
+  @primary-light: #388dff;
+  
+  // 辅助色
+  @info-color: #57caff;
+  @success-color: #00cccc;
+  @warning-color: #ffa22f;
+  @error-color: #ff6a00;
+  
+  // 背景色（浅色主题）
+  @bg-color: #ffffff;
+  @bg-secondary: #edf4fb;
+  @bg-hover: rgba(0, 0, 0, 0.05);
+  @bg-active: rgba(0, 0, 0, 0.08);
+  @bg-light: #d6effc;
+  @bg-card: #f5f5f5;
+  
+  // 文字颜色（浅色主题下使用深色系）
+  @text-color: #333333;
+  @text-secondary: #56597c;
+  @text-disabled: #6680a0;
+  @text-placeholder: rgba(172, 196, 225, 1);
+  @text-light: #000000;
+  
+  // 边框颜色
+  @border-color: rgba(74, 117, 141, 0.25);
+  @border-hover: #5bbbef;
+  @border-light: rgba(199, 224, 255, 1);
+  
+  // 品牌色系
+  @brand-blue: #559eff;
+  @brand-blue-light: #5a7eff;
+  @brand-cyan: #0c9dbe;
+  @brand-cyan-light: rgba(0, 204, 204, 0.3);
+  
+  // 强调色
+  @accent-color: rgba(51, 133, 255, 1);
+  @accent-secondary: #1399ff;
+}

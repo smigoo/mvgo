@@ -1,0 +1,148 @@
+// 组件内共享的业务 class（按功能语义命名）
+
+// 根容器
+.env-monitor-root {
+  width: 100%;
+  height: 100%;
+  background: @color-bg;
+  box-shadow: 0 4px 10px 0 rgba(74, 117, 141, 0.25);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: 'Noto Sans SC', 'Source Han Sans CN', sans-serif;
+}
+
+// 标题区
+.env-header {
+  display: flex;
+  align-items: center;
+  padding: 12px @space-md;
+  
+  .decoration-group {
+    position: relative;
+    width: 8px;
+    height: 8px;
+    margin-right: @space-sm;
+    flex-shrink: 0;
+
+    .deco-icon {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      object-fit: contain;
+    }
+    .deco-icon-1 { width: 8px; height: 8px; }
+    .deco-icon-2 { width: 6px; height: 6px; }
+    .deco-icon-3 { width: 2.4px; height: 2.4px; }
+  }
+
+  .header-title {
+    font-size: 16px;
+    font-weight: 700;
+    background: linear-gradient(to right, #1990ff, #5a7eff);
+    -webkit-background-clip: text;
+    color: transparent;
+    line-height: 1.2;
+  }
+}
+
+// 控制栏
+.env-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 @space-md @space-sm;
+
+  .tab-group {
+    background: linear-gradient(to bottom, #b5deff, #d1ecff);
+    border: 0.72px solid #ffffff;
+    border-radius: @border-radius-base;
+    padding: 3px;
+    display: flex;
+    gap: 4px;
+
+    .tab-item {
+      padding: 4px 12px;
+      border-radius: 3px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s;
+      color: #2c9bea;
+      user-select: none;
+
+      &.active {
+        background: linear-gradient(to bottom, #1099b1, #038fff);
+        border: 0.6px solid #ffffff;
+        color: #ffffff;
+        text-shadow: 0 0.6px 0 rgba(0, 111, 227, 1);
+      }
+    }
+  }
+
+  .icon-group {
+    display: flex;
+    gap: @space-sm;
+
+    .icon-btn {
+      position: relative;
+      width: 24px;
+      height: 24px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      img {
+        width: 18px;
+        height: 18px;
+        object-fit: contain;
+      }
+
+      .badge {
+        position: absolute;
+        top: -4px;
+        right: -4px;
+        background: @color-danger;
+        color: #ffffff;
+        font-size: 12px;
+        font-weight: 500;
+        border-radius: 29px;
+        width: 14px;
+        height: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+      }
+    }
+  }
+}
+
+// 图表区
+.env-chart-section {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  padding: 0 @space-md 12px;
+  display: flex;
+  flex-direction: column;
+
+  .chart-bg-wrapper {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    background-size: 100% 100%;
+    background-position: center center;
+    background-repeat: no-repeat;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .chart-container {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+  }
+}

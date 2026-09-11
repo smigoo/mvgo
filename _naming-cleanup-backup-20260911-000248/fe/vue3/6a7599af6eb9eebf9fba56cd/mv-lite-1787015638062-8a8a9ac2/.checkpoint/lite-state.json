@@ -1,0 +1,81 @@
+{
+  "stage": "codegen_done",
+  "brief": {
+    "layout": "整体为上下结构，顶部为标题栏，下方为图表展示区。图表区包含左侧Y轴、底部X轴、顶部图例和中央的折线图及悬浮提示框。",
+    "regions": [
+      {
+        "name": "标题栏",
+        "description": "包含一个立体图标和'流量监测'文字",
+        "position": "top",
+        "size": "宽100%，高约10%"
+      },
+      {
+        "name": "图表区",
+        "description": "包含坐标轴、图例、折线图和悬浮提示框",
+        "position": "center",
+        "size": "宽100%，高约90%"
+      }
+    ],
+    "spacing": {
+      "outer": "图表区四周有适当内边距",
+      "gap": "图例项之间有间距，坐标轴刻度均匀分布",
+      "padding": "悬浮提示框内部有内边距"
+    },
+    "colors": {
+      "primary": "#00FFFF",
+      "background": "#001A1A",
+      "surface": "#003333",
+      "text": "#FFFFFF",
+      "border": "#006666"
+    },
+    "typography": {
+      "size": "标题约24px，坐标轴和图例约14px，提示框内时间约18px，数值约16px",
+      "weight": "标题加粗，其他常规",
+      "lineHeight": "常规行高，提示框内行距适中"
+    },
+    "components": [
+      "折线图",
+      "图例",
+      "悬浮提示框(Tooltip)",
+      "坐标轴"
+    ],
+    "textContent": [
+      "流量监测",
+      "辆",
+      "北京方向",
+      "上海方向",
+      "06:00",
+      "225辆",
+      "131辆",
+      "00",
+      "02",
+      "04",
+      "06",
+      "08",
+      "10",
+      "12",
+      "14",
+      "16",
+      "18",
+      "20",
+      "22",
+      "时"
+    ],
+    "visualDetails": [
+      "折线平滑，带有发光效果",
+      "悬浮提示框有圆角和半透明背景，边框为青色",
+      "Y轴有水平虚线网格",
+      "图表底部有立体感的底座效果"
+    ],
+    "interactions": [
+      "图例项(北京方向、上海方向)，可能支持点击切换显示",
+      "折线图上的数据点(如06:00处的点)，鼠标悬停显示悬浮提示框"
+    ]
+  },
+  "width": 453,
+  "height": 221,
+  "sourceType": "screenshot",
+  "componentType": "vue3",
+  "generationTier": "lite",
+  "vueCode": "<template>\n  <div class=\"container\">\n    <div class=\"header\">\n      <div class=\"icon-box\">\n        <div class=\"icon-shape\"></div>\n      </div>\n      <span class=\"title\">流量监测</span>\n    </div>\n    <div class=\"chart-wrapper\">\n      <div class=\"base-effect\"></div>\n      <div ref=\"chartRef\" class=\"chart\"></div>\n    </div>\n  </div>\n</template>\n\n<script setup>\nimport { ref, onMounted, onUnmounted } from 'vue';\nimport * as echarts from 'echarts';\n\nconst chartRef = ref(null);\nlet chart = null;\nlet resizeObserver = null;\n\n// Mock data based on screenshot\nconst xData = ['00', '02', '04', '06', '08', '10', '12', '14', '16', '18', '20', '22'];\nconst beijingData = [150, 175, 200, 225, 220, 200, 180, 180, 180, 190, 180, 110];\nconst shanghaiData = [210, 150, 120, 131, 140, 160, 180, 190, 180, 170, 180, 250];\n\nconst initChart = () => {\n  if (!chartRef.value || chart) return;\n  if (chartRef.value.clientWidth === 0 || chartRef.value.clientHeight === 0) return;\n\n  chart = echarts.init(chartRef.value);\n\n  const option = {\n    color: ['#1E90FF', '#00FA9A'],\n    tooltip: {\n      trigger: 'axis',\n      backgroundColor: 'rgba(6, 46, 46, 0.9)',\n      borderColor: '#008B8B',\n      borderWidth: 1,\n      textStyle: {\n        color: '#fff',\n        fontSize: 14\n      },\n      formatter: function (params) {\n        let time = params[0].axisValue + ':00';\n        let html = `<div style=\"font-size: 16px; margin-bottom: 8px; color: #fff;\">${time}</div>`;\n        params.forEach(p => {\n          let color = p.color;\n          let name = p.seriesName;\n          let value = p.value;\n          html += `<div style=\"display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; min-width: 140px;\">\n                     <span style=\"color: #ccc; margin-right: 10px;\">${name}</span>\n                     <span style=\"color: ${color}; font-size: 16px;\">${value}辆</span>\n                   </div>`;\n        });\n        return html;\n      },\n      // Force show tooltip at specific index to mimic screenshot if needed, \n      // but standard interaction is better. \n      // To mimic the screenshot exactly which shows tooltip at 06:00 (index 3):\n      // We can't easily force it permanently without 'alwaysShowContent' which might look weird on resize.\n      // I will leave it as standard hover, but style it to match.\n    },\n    legend: {\n      data: ['北京方向', '上海方向'],\n      top: 10,\n      textStyle: {\n        color: '#fff',\n        fontSize: 12\n      },\n      itemWidth: 12,\n      itemHeight: 12\n    },\n    grid: {\n      top: 50,\n      left: 40,\n      right: 20,\n      bottom: 30,\n      containLabel: false\n    },\n    xAxis: {\n      type: 'category',\n      boundaryGap: false,\n      data: xData,\n      axisLine: {\n        lineStyle: { color: '#004D4D' }\n      },\n      axisLabel: {\n        color: '#fff',\n        margin: 10\n      },\n      axisTick: { show: false },\n      name: '时',\n      nameLocation: 'end',\n      nameTextStyle: {\n        color: '#fff',\n        padding: [0, 0, 0, 10]\n      }\n    },\n    yAxis: {\n      type: 'value',\n      min: 0,\n      max: 300,\n      interval: 100,\n      splitLine: {\n        lineStyle: {\n          type: 'dashed',\n          color: '#004D4D'\n        }\n      },\n      axisLabel: {\n        color: '#fff'\n      },\n      name: '辆',\n      nameLocation: 'end',\n      nameTextStyle: {\n        color: '#fff',\n        padding: [0, 0, 20, 0],\n        align: 'right'\n      }\n    },\n    series: [\n      {\n        name: '北京方向',\n        type: 'line',\n        smooth: true,\n        symbol: 'circle',\n        symbolSize: 6,\n        itemStyle: {\n          color: '#1E90FF'\n        },\n        lineStyle: {\n          width: 2,\n          shadowColor: 'rgba(30, 144, 255, 0.5)',\n          shadowBlur: 10\n        },\n        data: beijingData\n      },\n      {\n        name: '上海方向',\n        type: 'line',\n        smooth: true,\n        symbol: 'circle',\n        symbolSize: 6,\n        itemStyle: {\n          color: '#00FA9A'\n        },\n        lineStyle: {\n          width: 2,\n          shadowColor: 'rgba(0, 250, 154, 0.5)',\n          shadowBlur: 10\n        },\n        data: shanghaiData\n      }\n    ]\n  };\n\n  chart.setOption(option);\n  \n  // To mimic the screenshot showing the tooltip at 06:00 (index 3)\n  // We can dispatch action, but usually this is for interaction.\n  // I'll dispatch it once after init to match the visual.\n  setTimeout(() => {\n    chart.dispatchAction({\n      type: 'showTip',\n      seriesIndex: 0,\n      dataIndex: 3\n    });\n  }, 100);\n};\n\nonMounted(() => {\n  resizeObserver = new ResizeObserver((entries) => {\n    for (let entry of entries) {\n      const { width, height } = entry.contentRect;\n      if (width > 0 && height > 0) {\n        if (!chart) {\n          initChart();\n        } else {\n          chart.resize();\n        }\n      }\n    }\n  });\n  \n  if (chartRef.value) {\n    resizeObserver.observe(chartRef.value);\n  }\n});\n\nonUnmounted(() => {\n  if (resizeObserver) {\n    resizeObserver.disconnect();\n  }\n  if (chart) {\n    chart.dispose();\n    chart = null;\n  }\n});\n</script>\n\n<style scoped>\n.container {\n  width: 100%;\n  height: 100%;\n  box-sizing: border-box;\n  background-color: #001A1A;\n  display: flex;\n  flex-direction: column;\n  overflow: hidden;\n  font-family: sans-serif;\n}\n\n.header {\n  height: 40px;\n  display: flex;\n  align-items: center;\n  padding: 0 20px;\n  background: linear-gradient(90deg, #003333 0%, #004D4D 50%, #003333 100%);\n  border-bottom: 1px solid #006666;\n  box-shadow: 0 2px 10px rgba(0, 255, 255, 0.1);\n  position: relative;\n}\n\n/* Decorative background for header */\n.header::after {\n  content: '';\n  position: absolute;\n  top: 0;\n  left: 0;\n  right: 0;\n  bottom: 0;\n  background: repeating-linear-gradient(\n    45deg,\n    transparent,\n    transparent 10px,\n    rgba(255, 255, 255, 0.03) 10px,\n    rgba(255, 255, 255, 0.03) 20px\n  );\n  pointer-events: none;\n}\n\n.icon-box {\n  margin-right: 10px;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n}\n\n.icon-shape {\n  width: 20px;\n  height: 20px;\n  background: linear-gradient(135deg, #00BFFF 0%, #008B8B 100%);\n  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);\n  box-shadow: 0 0 5px #00BFFF;\n}\n\n.title {\n  color: #fff;\n  font-size: 20px;\n  font-weight: bold;\n  letter-spacing: 2px;\n  text-shadow: 0 0 5px rgba(0, 255, 255, 0.5);\n}\n\n.chart-wrapper {\n  flex: 1;\n  min-height: 0;\n  position: relative;\n  padding: 10px;\n}\n\n.chart {\n  width: 100%;\n  height: 100%;\n}\n\n/* Bottom base effect */\n.base-effect {\n  position: absolute;\n  bottom: 20px;\n  left: 10%;\n  right: 10%;\n  height: 20px;\n  background: linear-gradient(to bottom, #004D4D, transparent);\n  clip-path: polygon(0 0, 100% 0, 90% 100%, 10% 100%);\n  opacity: 0.6;\n  pointer-events: none;\n  z-index: 0;\n}\n</style>"
+}

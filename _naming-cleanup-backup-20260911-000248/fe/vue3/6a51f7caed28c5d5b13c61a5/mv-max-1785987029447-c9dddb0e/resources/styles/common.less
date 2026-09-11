@@ -1,0 +1,74 @@
+/* [Style Refine] 保留业务 class，前缀不变 */
+
+.mv3-mv-max-1785987029447-c9dddb0e-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
+.mv3-mv-max-1785987029447-c9dddb0e-card {
+  background: var(--colorBgCard, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--colorBorder, rgba(255, 255, 255, 0.12));
+  border-radius: var(--borderRadiusMd, 8px);
+  padding: var(--spacingMd, 16px);
+}
+
+.mv3-mv-max-1785987029447-c9dddb0e-text-primary {
+  color: var(--colorTextBase, #ffffff);
+  font-size: var(--fontSize, 14px);
+}
+
+.mv3-mv-max-1785987029447-c9dddb0e-text-secondary {
+  color: var(--colorTextSecondary, rgba(255, 255, 255, 0.65));
+  font-size: var(--fontSizeSm, 12px);
+}
+
+.mv3-mv-max-1785987029447-c9dddb0e-flex-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.mv3-mv-max-1785987029447-c9dddb0e-flex-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.mv3-mv-max-1785987029447-c9dddb0e-flex-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.mv3-mv-max-1785987029447-c9dddb0e-divider {
+  width: 100%;
+  height: 1px;
+  /* [Style Refine] Figma Vector 1484 stroke → GRADIENT_LINEAR → 用透明度渐变分割线 */
+  background: linear-gradient(90deg, rgba(85, 158, 255, 0.3) 0%, rgba(85, 158, 255, 0) 100%);
+}
+
+/* [Style Refine] 标题渐变文字：fills GRADIENT_LINEAR stops: #1890ff(pos0) → #5a7eff(pos1) */
+.mv3-mv-max-1785987029447-c9dddb0e-title-gradient {
+  background: linear-gradient(90deg, rgb(25, 144, 255) 0%, rgb(90, 127, 255) 83%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+/* [Style Refine] 告警徽标：bg RECTANGLE fills solid rgb(245,63,63)，cornerRadius=29 */
+.mv3-mv-max-1785987029447-c9dddb0e-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 14px;
+  height: 14px;
+  border-radius: 29px;
+  background: rgb(245, 63, 63);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 0 2px;
+}

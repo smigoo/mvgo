@@ -1,0 +1,80 @@
+// 主题变量定义
+
+// 通用变量（非主题相关）
+.common() {
+  // 间距
+  --em-spacing-xs: 4px;
+  --em-spacing-sm: 8px;
+  --em-spacing-md: 16px;
+  --em-spacing-lg: 20px;
+  
+  // 字号
+  --em-font-size-sm: 14px;
+  --em-font-size-md: 16px;
+  --em-font-size-lg: 20px;
+  --em-font-size-xl: 24px;
+  
+  // 图标尺寸
+  --em-icon-size-sm: 18px;
+  --em-icon-size-md: 43px;
+  
+  // 边框
+  --em-border-width: 1px;
+  --em-border-radius: 0;
+}
+
+/* [Style Refine] Theme colors extracted from Figma fills data */
+// 深色主题变量
+.theme-dark() {
+  // 背景色 - from bg node fills[0].color
+  --em-bg-primary: rgba(5, 49, 51, 1);
+  --em-bg-overlay: rgba(5, 49, 51, 0.9);
+  
+  // 边框色 - from bg node strokes[0].color
+  --em-border-primary: rgba(8, 99, 99, 1);
+  --em-border-accent: rgba(24, 255, 206, 1);
+  
+  // 文字色 - from text fills and visual analysis
+  --em-text-primary: rgba(255, 255, 255, 1);
+  --em-text-secondary: rgba(255, 255, 255, 0.8);
+  --em-text-tertiary: rgba(255, 255, 255, 0.6);
+  
+  // 强调色/发光色 - from visual analysis accent colors
+  --em-accent-primary: rgba(0, 240, 255, 1);
+  --em-accent-cyan: rgba(24, 255, 206, 1);
+  --em-accent-glow: rgba(0, 240, 255, 0.6);
+  
+  // 渐变色 - from gradient fills in decorative elements
+  --em-gradient-bg: linear-gradient(180deg, rgba(6, 70, 56, 1) 0%, rgba(14, 107, 85, 1) 100%);
+  --em-gradient-divider: linear-gradient(90deg, rgba(11, 204, 254, 1) 0%, rgba(11, 204, 254, 1) 100%);
+}
+
+// 浅色主题变量（备用）
+.theme-light() {
+  // 背景色
+  --em-bg-primary: rgba(240, 248, 248, 1);
+  --em-bg-overlay: rgba(255, 255, 255, 0.95);
+  
+  // 边框色
+  --em-border-primary: rgba(200, 220, 220, 1);
+  --em-border-accent: rgba(0, 200, 180, 1);
+  
+  // 文字色
+  --em-text-primary: rgba(20, 20, 20, 1);
+  --em-text-secondary: rgba(60, 60, 60, 1);
+  --em-text-tertiary: rgba(100, 100, 100, 1);
+  
+  // 强调色/发光色
+  --em-accent-primary: rgba(0, 180, 200, 1);
+  --em-accent-cyan: rgba(0, 200, 180, 1);
+  --em-accent-glow: rgba(0, 180, 200, 0.4);
+  
+  // 渐变色
+  --em-gradient-bg: linear-gradient(180deg, rgba(230, 245, 240, 1) 0%, rgba(220, 240, 235, 1) 100%);
+  --em-gradient-divider: linear-gradient(90deg, rgba(0, 180, 200, 1) 0%, rgba(0, 200, 180, 1) 100%);
+}
+
+// 应用深色主题作为默认主题（与面板 backgroundBrightness=dark 一致）
+:root {
+  .theme-dark();
+}

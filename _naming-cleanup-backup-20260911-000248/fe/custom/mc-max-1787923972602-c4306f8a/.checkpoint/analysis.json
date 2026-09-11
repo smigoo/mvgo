@@ -1,0 +1,148 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 72,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "tabs-section缺少header层级，直接在body放置tab元素",
+        "suggestion": "tab属于控件应放在header.children，body留空或放置tab-panel内容"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "headerSlots",
+        "message": "headerSlots定义了3个header-right元素但未在layout中体现",
+        "suggestion": "将headerSlots[0]的tab移入tabs-section.header，其他slot映射到对应section"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "charts[0]",
+        "message": "chart缺少legend字段值(空数组)但legendPosition为top-right",
+        "suggestion": "明确legend:[]或移除legendPosition字段"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "layout.sections[0].body.backgroundImage",
+        "message": "两个section使用相同背景图bg-7890.png但recommendedUsage相同",
+        "suggestion": "区分用途或合并为面板级背景，避免重复声明"
+      }
+    ],
+    "recommendations": [
+      "将tabs-section改为header/body结构，header放tab控件，body可为空或放对应tab-panel",
+      "明确headerSlots与layout.sections的映射关系，避免信息割裂",
+      "补充chart的legend数据或删除legendPosition，保持字段一致性"
+    ],
+    "summary": "结构整体可用但header/body分层不规范，tab控件应在header而非body；headerSlots与layout脱节需对齐；图表字段存在逻辑矛盾"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "--colorPrimary": "#559EFF",
+      "--colorPrimarySoft": "rgba(85, 158, 255, 0.15)",
+      "--colorDanger": "#F53F3F",
+      "--colorTextBase": "rgba(0, 0, 0, 0.65)",
+      "--colorTextSecondary": "rgba(0, 0, 0, 0.45)",
+      "--colorBg": "#EDF4FB",
+      "--fontSize": "14px"
+    },
+    "lessVariables": {
+      "@color-primary": "var(--colorPrimary)",
+      "@color-primary-soft": "var(--colorPrimarySoft)",
+      "@color-danger": "var(--colorDanger)"
+    },
+    "cssClasses": {},
+    "tokenCoverage": 0,
+    "elementStyleMap": {
+      "tabs-section": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "chart-section": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-8": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "tabs-section",
+        "responsibility": "标签页切换区",
+        "elementCount": 4,
+        "title": "Tab切换栏",
+        "complexityScore": 20,
+        "complexityReasons": {
+          "elementCount": 4,
+          "charts": 0,
+          "interactions": 5,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "chart-section",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "面积图区域",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 1,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      }
+    ],
+    "isForced": false,
+    "minFiles": 0,
+    "reason": "有效 sections=2 < 3 且无高复杂度 section → 不强制拆分",
+    "internalSubcomponents": []
+  }
+}

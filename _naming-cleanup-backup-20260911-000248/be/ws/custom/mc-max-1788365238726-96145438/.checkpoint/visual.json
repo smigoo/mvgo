@@ -1,0 +1,639 @@
+{
+  "layoutStructure": {
+    "generatedAt": "2025-06-05T12:00:00.000Z",
+    "stage": "preview-analysis",
+    "componentName": "环境监测",
+    "componentTitle": "环境监测",
+    "analysisModel": "claude-opus-4-20250514",
+    "sourceImage": {
+      "path": "mc-preview.png",
+      "size": 0,
+      "mtimeMs": 0,
+      "sha1": ""
+    },
+    "summary": "环境监测组件，包含顶部Tab切换栏（氧化碳/能见度/洞内照明/洞外光强）、右上角图表和导出按钮、右侧实时数据显示、主体区域为24小时面积图，显示预警线",
+    "layout": {
+      "type": "single-panel",
+      "direction": "vertical",
+      "sections": [
+        {
+          "id": "header-tabs",
+          "name": "Tab切换栏",
+          "role": "常驻",
+          "layout": "horizontal",
+          "headerRelation": "content-below-title",
+          "slotCandidate": null,
+          "body": {
+            "layout": "horizontal",
+            "children": [
+              {
+                "type": "tab",
+                "text": "一氧化碳",
+                "active": true,
+                "bgPlaceholder": "bg-tab-active",
+                "resourceFile": "../resources/images/bg-tab-active-7891.png",
+                "recommendedUsage": "backgroundStyle",
+                "styles": {
+                  "fontSize": 14,
+                  "color": "rgba(255, 255, 255, 1)",
+                  "padding": "6px 16px",
+                  "borderRadius": "4px"
+                },
+                "backgroundSize": "cover",
+                "backgroundPosition": "center center",
+                "backgroundRepeat": "no-repeat"
+              },
+              {
+                "type": "tab",
+                "text": "能见度",
+                "active": false,
+                "styles": {
+                  "fontSize": 14,
+                  "color": "rgba(255, 255, 255, 0.65)",
+                  "padding": "6px 16px"
+                }
+              },
+              {
+                "type": "tab",
+                "text": "洞内照明",
+                "active": false,
+                "styles": {
+                  "fontSize": 14,
+                  "color": "rgba(255, 255, 255, 0.65)",
+                  "padding": "6px 16px"
+                }
+              },
+              {
+                "type": "tab",
+                "text": "洞外光强",
+                "active": false,
+                "styles": {
+                  "fontSize": 14,
+                  "color": "rgba(255, 255, 255, 0.65)",
+                  "padding": "6px 16px"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "chart-area",
+          "name": "图表区域",
+          "role": "常驻",
+          "layout": "vertical",
+          "headerRelation": "content-below-title",
+          "slotCandidate": null,
+          "header": {
+            "title": null,
+            "controls": [
+              {
+                "id": "chart-icon",
+                "type": "icon-button",
+                "icon": "chart",
+                "styles": {
+                  "width": 20,
+                  "height": 20
+                },
+                "resourceFile": "../resources/images/icon-7941.png",
+                "resourceVarName": "icon1",
+                "recommendedUsage": "imgSrc",
+                "downloadStatus": "success"
+              },
+              {
+                "id": "export-icon",
+                "type": "icon-button",
+                "icon": "export",
+                "styles": {
+                  "width": 20,
+                  "height": 20
+                },
+                "resourceFile": "../resources/images/icon-7941.png",
+                "resourceVarName": "icon1",
+                "recommendedUsage": "imgSrc",
+                "downloadStatus": "success"
+              }
+            ]
+          },
+          "body": {
+            "layout": "horizontal",
+            "bgPlaceholder": "bg",
+            "resourceFile": "../resources/images/bg-7890.png",
+            "recommendedUsage": "backgroundStyle",
+            "children": [
+              {
+                "type": "chart-container",
+                "layout": "vertical",
+                "styles": {
+                  "width": "100%",
+                  "height": 186,
+                  "background": "transparent"
+                },
+                "children": [
+                  {
+                    "type": "y-axis-labels",
+                    "position": "left",
+                    "values": [
+                      "0",
+                      "10",
+                      "20",
+                      "30",
+                      "40"
+                    ],
+                    "styles": {
+                      "fontSize": 12,
+                      "color": "rgba(0, 0, 0, 0.45)"
+                    }
+                  },
+                  {
+                    "type": "x-axis-labels",
+                    "position": "bottom",
+                    "values": [
+                      "2",
+                      "4",
+                      "6",
+                      "8",
+                      "10",
+                      "12",
+                      "14",
+                      "16",
+                      "18",
+                      "20",
+                      "22",
+                      "24"
+                    ],
+                    "unit": "时",
+                    "styles": {
+                      "fontSize": 12,
+                      "color": "rgba(0, 0, 0, 0.45)"
+                    }
+                  },
+                  {
+                    "type": "threshold-line",
+                    "value": 30,
+                    "label": "预警线",
+                    "styles": {
+                      "borderColor": "rgba(255, 77, 79, 1)",
+                      "borderStyle": "dashed",
+                      "borderWidth": 1
+                    }
+                  },
+                  {
+                    "type": "area-chart",
+                    "series": [
+                      "一氧化碳浓度"
+                    ],
+                    "styles": {
+                      "fillColor": "rgba(82, 196, 26, 0.3)",
+                      "strokeColor": "rgba(82, 196, 26, 1)",
+                      "strokeWidth": 2
+                    }
+                  }
+                ]
+              },
+              {
+                "type": "stat-display",
+                "layout": "vertical",
+                "position": "right",
+                "styles": {
+                  "padding": "20px 16px",
+                  "alignItems": "flex-end"
+                },
+                "children": [
+                  {
+                    "type": "row",
+                    "layout": "horizontal",
+                    "alignItems": "center",
+                    "gap": "6px",
+                    "children": [
+                      {
+                        "type": "icon",
+                        "resourceFile": "../resources/images/icon-7941.png",
+                        "recommendedUsage": "imgSrc",
+                        "styles": {
+                          "width": 8,
+                          "height": 8
+                        }
+                      },
+                      {
+                        "type": "label",
+                        "text": "当前",
+                        "styles": {
+                          "fontSize": 12,
+                          "color": "rgba(0, 0, 0, 0.45)"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "type": "value",
+                    "text": "40",
+                    "styles": {
+                      "fontSize": 40,
+                      "fontWeight": "bold",
+                      "color": "rgba(0, 0, 0, 0.85)",
+                      "lineHeight": 1.2
+                    }
+                  },
+                  {
+                    "type": "row",
+                    "layout": "horizontal",
+                    "alignItems": "center",
+                    "gap": "6px",
+                    "children": [
+                      {
+                        "type": "icon",
+                        "resourceFile": "../resources/images/icon-7945.png",
+                        "recommendedUsage": "imgSrc",
+                        "styles": {
+                          "width": 8,
+                          "height": 8
+                        }
+                      },
+                      {
+                        "type": "label",
+                        "text": "24-7h5CO浓度",
+                        "styles": {
+                          "fontSize": 12,
+                          "color": "rgba(0, 0, 0, 0.45)"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "backgroundSize": "100% 100%",
+            "backgroundPosition": "center center",
+            "backgroundRepeat": "no-repeat"
+          }
+        }
+      ]
+    },
+    "styles": {
+      "backgroundBrightness": "light",
+      "theme": "浅色监测面板",
+      "colors": [
+        "rgba(82, 196, 26, 1)",
+        "rgba(255, 77, 79, 1)",
+        "rgba(24, 144, 255, 1)",
+        "rgba(0, 0, 0, 0.85)",
+        "rgba(0, 0, 0, 0.45)"
+      ],
+      "background": "浅灰蓝色渐变背景（#EDF4FB）",
+      "decorations": [
+        "顶部蓝色渐变装饰线",
+        "激活Tab的蓝色高亮背景",
+        "图表区域浅灰背景板",
+        "右上角小图标（图表、导出）"
+      ],
+      "emphasis": [
+        "当前数值40为大号深色字体",
+        "预警线为红色虚线",
+        "面积图为绿色渐变填充"
+      ]
+    },
+    "headerSlots": [
+      {
+        "slotType": "header-right",
+        "elementType": "icon",
+        "content": "图表图标",
+        "figmaNodeId": "unknown"
+      },
+      {
+        "slotType": "header-right",
+        "elementType": "icon",
+        "content": "导出图标",
+        "figmaNodeId": "unknown"
+      }
+    ],
+    "interactions": [
+      {
+        "target": "顶部Tab栏",
+        "type": "tab-switch",
+        "description": "切换监测指标（一氧化碳/能见度/洞内照明/洞外光强）",
+        "defaultState": "常驻，一氧化碳为激活态",
+        "evidence": "一氧化碳Tab有蓝色高亮背景，其余为半透明文字"
+      },
+      {
+        "target": "右上角图表图标",
+        "type": "icon-button",
+        "description": "图表视图切换",
+        "defaultState": "常驻",
+        "evidence": "独立图标按钮"
+      },
+      {
+        "target": "右上角导出图标",
+        "type": "icon-button",
+        "description": "数据导出",
+        "defaultState": "常驻",
+        "evidence": "独立图标按钮"
+      },
+      {
+        "target": "面积图",
+        "type": "chart-hover",
+        "description": "鼠标悬停显示具体时间点数值",
+        "defaultState": "瞬态tooltip",
+        "evidence": "图表类组件的常见交互"
+      }
+    ],
+    "charts": [
+      {
+        "section": "chart-area",
+        "type": "area",
+        "series": [
+          "一氧化碳浓度"
+        ],
+        "legend": [],
+        "legendPosition": "top-right",
+        "seriesColors": [
+          "rgba(82, 196, 26, 1)"
+        ],
+        "legendType": "horizontal",
+        "axes": "X轴为小时（0-24时），Y轴为浓度值（0-40）",
+        "tooltip": "鼠标悬停显示时间点和浓度值",
+        "notes": [
+          "红色虚线为预警线（值30）",
+          "面积图填充为绿色半透明渐变",
+          "右侧显示实时数值40和图标标识"
+        ]
+      }
+    ],
+    "doNotInvent": [
+      "Tab切换后的具体数据变化",
+      "图表图标和导出图标的具体功能逻辑",
+      "预警线触发后的告警机制",
+      "数据刷新频率",
+      "历史数据查询范围",
+      "tooltip的详细格式和内容",
+      "Y轴单位（未在截图中明确标注）",
+      "数据来源和计算方式"
+    ],
+    "notes": [
+      "组件整体为浅色主题，背景为浅灰蓝色",
+      "Tab切换栏采用横向排列，激活态有蓝色渐变背景",
+      "图表区域右侧有实时数值显示，包含当前值和历史标识",
+      "预警线为红色虚线，明确标注'预警线'文字",
+      "X轴标注单位'时'，Y轴单位未明确标注",
+      "面积图为绿色系，与环境监测主题相符"
+    ],
+    "coverageReport": {
+      "totalFigma": 14,
+      "matchedCount": 6,
+      "missingCount": 4,
+      "uncertainCount": 0,
+      "coverageRate": 60,
+      "missing": [
+        {
+          "name": "cp-环境监测",
+          "type": "FRAME",
+          "depth": 0
+        },
+        {
+          "name": "环境监测",
+          "type": "TEXT",
+          "depth": 2
+        },
+        {
+          "name": "sub-t",
+          "type": "FRAME",
+          "depth": 2
+        },
+        {
+          "name": "num",
+          "type": "GROUP",
+          "depth": 3
+        }
+      ],
+      "uncertain": [],
+      "summary": "一般"
+    },
+    "chartDataHints": [
+      {
+        "chartTitle": "area",
+        "chartType": "area",
+        "labels": [
+          {
+            "label": "40\n30\n20\n10\n0",
+            "name": "40 30 20 10 0"
+          },
+          {
+            "label": "辆",
+            "name": "辆"
+          },
+          {
+            "label": "预警线",
+            "name": "预警线"
+          },
+          {
+            "label": "时",
+            "name": "时"
+          },
+          {
+            "label": "zk3+785CO浓度",
+            "name": "zk3+785CO浓度"
+          },
+          {
+            "label": "一氧化碳",
+            "name": "一氧化碳"
+          },
+          {
+            "label": "洞内照明",
+            "name": "洞内照明"
+          },
+          {
+            "label": "洞外光强",
+            "name": "洞外光强"
+          },
+          {
+            "label": "能见度",
+            "name": "能见度"
+          }
+        ],
+        "values": [
+          {
+            "label": "600",
+            "value": 600,
+            "unit": ""
+          },
+          {
+            "label": "400",
+            "value": 400,
+            "unit": ""
+          },
+          {
+            "label": "200",
+            "value": 200,
+            "unit": ""
+          },
+          {
+            "label": "600",
+            "value": 600,
+            "unit": ""
+          },
+          {
+            "label": "0",
+            "value": 0,
+            "unit": ""
+          },
+          {
+            "label": "600",
+            "value": 600,
+            "unit": ""
+          },
+          {
+            "label": "2",
+            "value": 2,
+            "unit": ""
+          },
+          {
+            "label": "4",
+            "value": 4,
+            "unit": ""
+          },
+          {
+            "label": "6",
+            "value": 6,
+            "unit": ""
+          },
+          {
+            "label": "8",
+            "value": 8,
+            "unit": ""
+          },
+          {
+            "label": "10",
+            "value": 10,
+            "unit": ""
+          },
+          {
+            "label": "12",
+            "value": 12,
+            "unit": ""
+          }
+        ]
+      }
+    ]
+  },
+  "visualElements": {
+    "backgroundBrightness": "light",
+    "theme": "浅色监测面板",
+    "colors": [
+      "rgba(82, 196, 26, 1)",
+      "rgba(255, 77, 79, 1)",
+      "rgba(24, 144, 255, 1)",
+      "rgba(0, 0, 0, 0.85)",
+      "rgba(0, 0, 0, 0.45)"
+    ],
+    "background": "浅灰蓝色渐变背景（#EDF4FB）",
+    "decorations": [
+      "顶部蓝色渐变装饰线",
+      "激活Tab的蓝色高亮背景",
+      "图表区域浅灰背景板",
+      "右上角小图标（图表、导出）"
+    ],
+    "emphasis": [
+      "当前数值40为大号深色字体",
+      "预警线为红色虚线",
+      "面积图为绿色渐变填充"
+    ]
+  },
+  "interactions": [
+    {
+      "target": "顶部Tab栏",
+      "type": "tab-switch",
+      "description": "切换监测指标（一氧化碳/能见度/洞内照明/洞外光强）",
+      "defaultState": "常驻，一氧化碳为激活态",
+      "evidence": "一氧化碳Tab有蓝色高亮背景，其余为半透明文字"
+    },
+    {
+      "target": "右上角图表图标",
+      "type": "icon-button",
+      "description": "图表视图切换",
+      "defaultState": "常驻",
+      "evidence": "独立图标按钮"
+    },
+    {
+      "target": "右上角导出图标",
+      "type": "icon-button",
+      "description": "数据导出",
+      "defaultState": "常驻",
+      "evidence": "独立图标按钮"
+    },
+    {
+      "target": "面积图",
+      "type": "chart-hover",
+      "description": "鼠标悬停显示具体时间点数值",
+      "defaultState": "瞬态tooltip",
+      "evidence": "图表类组件的常见交互"
+    }
+  ],
+  "charts": [
+    {
+      "section": "chart-area",
+      "type": "area",
+      "series": [
+        "一氧化碳浓度"
+      ],
+      "legend": [],
+      "legendPosition": "top-right",
+      "seriesColors": [
+        "rgba(82, 196, 26, 1)"
+      ],
+      "legendType": "horizontal",
+      "axes": "X轴为小时（0-24时），Y轴为浓度值（0-40）",
+      "tooltip": "鼠标悬停显示时间点和浓度值",
+      "notes": [
+        "红色虚线为预警线（值30）",
+        "面积图填充为绿色半透明渐变",
+        "右侧显示实时数值40和图标标识"
+      ]
+    }
+  ],
+  "headerSlots": [],
+  "analysisType": "chart-chart-stat-grid",
+  "analysisTarget": "图表展示区",
+  "analysisDescription": "",
+  "analysisEvidence": [],
+  "headerValidation": {
+    "passed": true,
+    "headerElements": [],
+    "headerRightElements": [],
+    "suggestions": [],
+    "confidence": "low",
+    "componentType": "microcode"
+  },
+  "headerSlotValidation": {
+    "validatedSlots": [],
+    "rejectedNodes": [
+      {
+        "slotCandidate": {
+          "slotType": "header-right",
+          "elementType": "icon",
+          "content": "图表图标",
+          "figmaNodeId": "unknown"
+        },
+        "figmaNodeId": "unknown",
+        "figmaPath": null,
+        "reason": "figma-no-same-row"
+      },
+      {
+        "slotCandidate": {
+          "slotType": "header-right",
+          "elementType": "icon",
+          "content": "导出图标",
+          "figmaNodeId": "unknown"
+        },
+        "figmaNodeId": "unknown",
+        "figmaPath": null,
+        "reason": "figma-no-same-row"
+      }
+    ],
+    "warnings": [
+      "预览图检测到icon，但Figma中未找到同行节点",
+      "预览图检测到icon，但Figma中未找到同行节点"
+    ],
+    "componentType": "microcode",
+    "derivedSlots": [],
+    "contractSlots": []
+  }
+}

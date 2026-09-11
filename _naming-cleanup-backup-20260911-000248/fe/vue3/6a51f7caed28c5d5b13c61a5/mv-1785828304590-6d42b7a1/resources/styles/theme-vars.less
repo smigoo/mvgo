@@ -1,0 +1,35 @@
+// 主题变量与 mixin 定义
+// 仅定义变量与 mixin，不产出实际 class
+
+.theme-dark() {
+  :root {
+    --color-bg-base: #003032;
+    --color-primary: #18FFCE;
+    --color-warning: #B07B00;
+    --color-text-base: #FFFFFF;
+    --color-text-secondary: rgba(255, 255, 255, 0.6);
+    --color-border: rgba(255, 255, 255, 0.2);
+    --color-primary-bg: rgba(24, 255, 206, 0.1);
+    --font-size-base: 14px;
+  }
+}
+
+.theme-light() {
+  :root {
+    --color-bg-base: #ffffff;
+    --color-primary: #1890ff;
+    --color-warning: #faad14;
+    --color-text-base: #333333;
+    --color-text-secondary: rgba(0, 0, 0, 0.6);
+    --color-border: rgba(0, 0, 0, 0.2);
+    --color-primary-bg: rgba(24, 144, 255, 0.1);
+    --font-size-base: 14px;
+  }
+}
+
+.common() {
+  // 通用 mixin，可放置跨主题共享的样式逻辑
+}
+
+// 默认使用深色主题
+.theme-dark();

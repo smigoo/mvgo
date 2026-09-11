@@ -1,0 +1,141 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 65,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "违规生成组件面板标题。布局中包含了 'section-header' 用于显示 '环境监测' 标题，严重违反 '禁止生成组件面板标题和边框样式' 的核心规范。",
+        "suggestion": "删除 'section-header' 整个 section。面板标题应由 base-panel 根据 declare.json 的 componentName 自动渲染，组件内部只需关注业务内容。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "Figma 节点覆盖率极低 (coverageRate: 0)。大量核心节点（如 slot-con, @echarts/line, sub-t 等）未被匹配，导致布局结构无法真实反映设计稿层级。",
+        "suggestion": "重新执行 Figma 节点解析与映射，确保核心容器和图表节点被正确提取到 layout.sections 中，提升覆盖率至合理水平。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body",
+        "message": "Tab与图标控制区使用了 justifyContent: 'space-between'。虽然此处无标题，但微码规范推荐右侧元素使用 margin-left: auto 以保持布局一致性和灵活性。",
+        "suggestion": "将 body 的 justifyContent 改为 'flex-start'，并为右侧的 'view-icons' 节点添加 marginLeft: 'auto' 的样式约束。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[2].body",
+        "message": "图表容器缺少防溢出约束。图表高度固定为 113px，但未在布局中体现 min-width: 0 和 overflow: hidden 等防止 ECharts 溢出的防御性属性。",
+        "suggestion": "在 section-chart 的 body 或 chart 节点配置中补充 minWidth: 0 和 overflow: 'hidden'，确保符合图表边界约束规范。"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "charts[0].notes",
+        "message": "图表 Y 轴单位识别为 '辆'，对于 CO 浓度监测业务明显不合理，大概率为设计稿误植或 OCR 识别错误。",
+        "suggestion": "在生成代码时，建议将 '辆' 修正为合理的 CO 浓度单位（如 ppm 或 mg/m³），或作为纯文本占位处理，避免业务逻辑误导。"
+      }
+    ],
+    "recommendations": [
+      "严格遵循零装饰原则和 base-panel 约束，移除所有由面板自动处理的标题、边框和背景样式。",
+      "在生成 Tab 切换逻辑时，务必实现数据联动（watch activeTab 更新图表数据），禁止仅做样式切换。",
+      "确保 ECharts 图表配置中包含 tooltip（trigger: 'axis'），并设置 grid.containLabel: true 防止坐标轴文字溢出。",
+      "重新梳理 Figma 节点树，确保 layout 结构与设计稿的 Frame/Group 层级一一对应，解决覆盖率归零的问题。"
+    ],
+    "summary": "该布局结构存在违反核心规范（违规生成面板标题）的严重问题，且 Figma 节点覆盖率归零，说明布局提取过程存在重大缺陷。此外，图表容器缺少防溢出约束，部分布局属性不符合微码规范。建议打回重新解析 Figma 结构并修正布局设计。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#038fff",
+      "--colorSecondary": "#1099b1",
+      "--colorWarning": "#f53f3f",
+      "--colorSuccess": "#76d7c4",
+      "--colorBgBase": "#edf4fb",
+      "--colorTextBase": "#333333",
+      "--fontSize": "14px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#038fff",
+      "@color-secondary": "#1099b1",
+      "@color-warning": "#f53f3f",
+      "@color-success": "#76d7c4",
+      "@color-bg-base": "#edf4fb",
+      "@color-text-base": "#333333",
+      "@font-size-base": "14px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "width": "100%",
+        "height": "100%",
+        "background-color": "#edf4fb",
+        "padding": "16px",
+        "box-sizing": "border-box",
+        "font-family": "system-ui, -apple-system, sans-serif"
+      },
+      ".tab-item": {
+        "padding": "8px 16px",
+        "border-radius": "4px",
+        "color": "#333333",
+        "cursor": "pointer",
+        "transition": "all 0.3s ease",
+        "font-size": "14px"
+      },
+      ".tab-item--active": {
+        "background": "linear-gradient(135deg, #038fff, #1099b1)",
+        "color": "#ffffff",
+        "font-weight": "600",
+        "box-shadow": "0 4px 12px rgba(3, 143, 255, 0.25)"
+      },
+      ".warning-line": {
+        "border-top": "2px dashed #f53f3f",
+        "width": "100%",
+        "margin": "12px 0",
+        "position": "relative"
+      },
+      ".warning-label": {
+        "color": "#f53f3f",
+        "font-weight": "bold",
+        "font-size": "14px",
+        "display": "inline-flex",
+        "align-items": "center",
+        "gap": "4px"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 #038fff 映射为 --colorPrimary，用于Tab高亮和主要交互元素",
+      "背景色 #edf4fb 直接落地为容器背景，符合浅色科技监测风",
+      "预警色 #f53f3f 映射为 --colorWarning，用于红色虚线预警线和红色标注",
+      "Tab选中态使用 #038fff 到 #1099b1 的渐变背景，增强科技感",
+      "补充了基础文字色 #333333 以保证浅色主题下的文本可读性"
+    ],
+    "elementStyleMap": {
+      "section-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-tabs-controls": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tab-switch": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "view-icons": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    }
+  }
+}

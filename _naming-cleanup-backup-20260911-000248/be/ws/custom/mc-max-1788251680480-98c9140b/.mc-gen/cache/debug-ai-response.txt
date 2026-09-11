@@ -1,0 +1,273 @@
+根据预览图分析，这是一个环境监测组件，包含顶部Tab切换栏和折线图表。以下是详细分析结果：
+
+```json
+{
+  "generatedAt": "2025-06-15T10:30:00Z",
+  "stage": "preview-analysis",
+  "componentName": "环境监测",
+  "componentTitle": "环境监测",
+  "analysisModel": "claude-sonnet-4-20250514",
+  "sourceImage": {
+    "path": "mc-preview.png",
+    "size": 0,
+    "mtimeMs": 0,
+    "sha1": ""
+  },
+  "summary": "环境监测组件，包含顶部Tab切换栏（气化版/能见度/洞内照明/洞外光强）、预警角标和折线图表",
+  "layout": {
+    "type": "vertical-stack",
+    "direction": "vertical",
+    "sections": [
+      {
+        "id": "header-tabs",
+        "name": "监测类型切换",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "body": {
+          "layout": "horizontal",
+          "children": [
+            {
+              "id": "tab-gasification",
+              "name": "气化版",
+              "role": "tab",
+              "active": true,
+              "backgroundImage": {
+                "resourceFile": "../resources/images/bg-tab-active-7891.png",
+                "recommendedUsage": "backgroundStyle"
+              },
+              "styles": {
+                "fontSize": 14,
+                "color": "rgba(255, 255, 255, 1)",
+                "padding": "8px 16px",
+                "borderRadius": "4px"
+              }
+            },
+            {
+              "id": "tab-visibility",
+              "name": "能见度",
+              "role": "tab",
+              "active": false,
+              "styles": {
+                "fontSize": 14,
+                "color": "rgba(255, 255, 255, 0.65)",
+                "padding": "8px 16px"
+              }
+            },
+            {
+              "id": "tab-lighting",
+              "name": "洞内照明",
+              "role": "tab",
+              "active": false,
+              "styles": {
+                "fontSize": 14,
+                "color": "rgba(255, 255, 255, 0.65)",
+                "padding": "8px 16px"
+              }
+            },
+            {
+              "id": "tab-outdoor-light",
+              "name": "洞外光强",
+              "role": "tab",
+              "active": false,
+              "styles": {
+                "fontSize": 14,
+                "color": "rgba(255, 255, 255, 0.65)",
+                "padding": "8px 16px"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "header-controls",
+        "name": "右侧控件组",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "body": {
+          "layout": "horizontal",
+          "alignItems": "center",
+          "gap": "8px",
+          "children": [
+            {
+              "id": "icon-chart",
+              "name": "图表图标",
+              "role": "icon",
+              "resourceFile": "../resources/images/icon-7941.png",
+              "recommendedUsage": "imgSrc",
+              "styles": {
+                "width": "16px",
+                "height": "16px"
+              }
+            },
+            {
+              "id": "icon-table",
+              "name": "表格图标",
+              "role": "icon",
+              "resourceFile": "../resources/images/icon-7945.png",
+              "recommendedUsage": "imgSrc",
+              "styles": {
+                "width": "16px",
+                "height": "16px"
+              }
+            },
+            {
+              "id": "badge-alert",
+              "name": "预警角标",
+              "role": "badge",
+              "value": "8",
+              "styles": {
+                "fontSize": 12,
+                "color": "rgba(255, 255, 255, 1)",
+                "backgroundColor": "#f53f3f",
+                "borderRadius": "8px",
+                "padding": "2px 6px",
+                "fontWeight": "bold"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "chart-area",
+        "name": "折线图表区",
+        "role": "常驻",
+        "layout": "vertical",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "backgroundImage": {
+          "resourceFile": "../resources/images/bg-7890.png",
+          "recommendedUsage": "backgroundStyle"
+        },
+        "body": {
+          "layout": "vertical",
+          "children": [
+            {
+              "id": "chart-legend",
+              "name": "图例",
+              "role": "legend",
+              "layout": "horizontal",
+              "position": "top-right",
+              "items": [
+                {
+                  "text": "2k3+785CD次道",
+                  "color": "rgba(82, 196, 154, 1)",
+                  "styles": {
+                    "fontSize": 12,
+                    "color": "rgba(255, 255, 255, 0.65)"
+                  }
+                },
+                {
+                  "text": "预警线",
+                  "color": "rgba(245, 63, 63, 1)",
+                  "styles": {
+                    "fontSize": 12,
+                    "color": "rgba(255, 255, 255, 0.65)"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "chart-main",
+              "name": "图表主体",
+              "role": "chart",
+              "type": "area",
+              "styles": {
+                "width": "100%",
+                "height": "180px"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "styles": {
+    "backgroundBrightness": "light",
+    "theme": "浅色监测风",
+    "colors": [
+      "rgba(82, 196, 154, 1)",
+      "rgba(245, 63, 63, 1)",
+      "rgba(24, 144, 255, 1)",
+      "rgba(255, 255, 255, 0.65)"
+    ],
+    "background": "浅色渐变背景，带有网格纹理",
+    "decorations": [
+      "顶部Tab切换栏选中态背景图",
+      "右上角预警角标",
+      "图表网格线"
+    ],
+    "emphasis": [
+      "预警线为红色虚线",
+      "折线图为绿色面积填充",
+      "选中Tab有蓝色渐变背景"
+    ]
+  },
+  "interactions": [
+    {
+      "target": "顶部Tab切换栏",
+      "type": "tab-switch",
+      "description": "切换不同监测类型（气化版/能见度/洞内照明/洞外光强）",
+      "defaultState": "常驻，气化版为选中态",
+      "evidence": "气化版Tab有蓝色渐变背景，其他Tab为半透明文字"
+    },
+    {
+      "target": "右上角图表/表格图标",
+      "type": "view-switch",
+      "description": "切换图表/表格视图",
+      "defaultState": "常驻，当前为图表视图",
+      "evidence": "两个图标按钮并排显示"
+    },
+    {
+      "target": "预警角标",
+      "type": "badge",
+      "description": "显示预警数量",
+      "defaultState": "常驻，显示数字8",
+      "evidence": "红色圆形角标，白色数字"
+    },
+    {
+      "target": "图表折线",
+      "type": "chart-hover",
+      "description": "鼠标悬停显示数据点详情",
+      "defaultState": "瞬态",
+      "evidence": "标准图表交互模式"
+    }
+  ],
+  "charts": [
+    {
+      "section": "chart-area",
+      "type": "area",
+      "series": ["2k3+785CD次道"],
+      "legend": ["2k3+785CD次道", "预警线"],
+      "legendPosition": "top-right",
+      "seriesColors": ["rgba(82, 196, 154, 1)", "rgba(245, 63, 63, 1)"],
+      "legendType": "horizontal",
+      "axes": "X轴为时间（0-24小时），Y轴为数值（0-40）",
+      "tooltip": "标准悬停提示",
+      "notes": [
+        "红色虚线表示预警阈值线（值为30）",
+        "绿色面积图表示实时监测数据",
+        "Y轴刻度：0、10、20、30、40",
+        "X轴刻度：0、2、4、6、8、10、12、14、16、18、20、22、24（小时）"
+      ]
+    }
+  ],
+  "doNotInvent": [
+    "Tab切换后的具体数据变化",
+    "预警角标点击后的详细信息",
+    "图表数据点的具体数值",
+    "图表/表格切换后的表格样式",
+    "其他监测类型的图表样式"
+  ],
+  "notes": [
+    "背景使用已下载的bg-7890.png资源",
+    "选中Tab使用bg-tab-active-7891.png背景图",
+    "图表和表格图标使用icon-7941.png和icon-7945.png",
+    "预警角标使用CSS background渐变（#f53f3f）",
+    "整体为浅色主题，背景为浅灰蓝色渐变"
+  ]
+}
+```

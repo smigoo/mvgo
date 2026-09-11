@@ -1,0 +1,67 @@
+{
+  "componentId": "c-monitor",
+  "componentName": "设备监测",
+  "version": "v1.0.0",
+  "attribute": {
+    "imgUrl": null,
+    "aspectRatio": [
+      16,
+      9
+    ],
+    "title": "cp-设备监测",
+    "description": "cp-设备监测"
+  },
+  "businessEvents": {
+    "c-monitor-onload": {
+      "eventId": "c-monitor-onload",
+      "eventName": "组件加载完成",
+      "eventDataSchema": {
+        "componentId": {
+          "key": "componentId",
+          "name": "组件ID",
+          "type": "string",
+          "required": true
+        },
+        "timestamp": {
+          "key": "timestamp",
+          "name": "时间戳",
+          "type": "number",
+          "required": true
+        }
+      }
+    }
+  },
+  "businessStatuses": {},
+  "dataSources": null,
+  "formSources": null,
+  "layoutConfig": {
+    "default": "one",
+    "list": [
+      {
+        "name": "默认布局",
+        "key": "one",
+        "previewName": "mc-preview.png"
+      }
+    ]
+  },
+  "themeConfig": {
+    "default": "light",
+    "list": [
+      {
+        "name": "浅色主题",
+        "key": "light"
+      },
+      {
+        "name": "深色主题",
+        "key": "dark"
+      }
+    ]
+  },
+  "cssVariableConfig": [],
+  "panelKey": "",
+  "businessConfig": {},
+  "size": {
+    "width": 420,
+    "height": 425
+  }
+}

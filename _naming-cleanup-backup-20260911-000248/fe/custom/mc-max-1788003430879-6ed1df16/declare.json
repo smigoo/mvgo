@@ -1,0 +1,220 @@
+{
+  "componentId": "c-env-monitor",
+  "componentName": "环境监测",
+  "version": "v1.0.0",
+  "attribute": {
+    "imgUrl": null,
+    "aspectRatio": [
+      16,
+      9
+    ],
+    "title": "cp-环境监测",
+    "description": "cp-环境监测"
+  },
+  "businessEvents": {
+    "env-monitor-item-click": {
+      "eventId": "env-monitor-item-click",
+      "eventName": "监测项点击",
+      "eventDataSchema": {
+        "itemKey": {
+          "key": "itemKey",
+          "name": "监测项标识",
+          "type": "string",
+          "required": true
+        },
+        "itemName": {
+          "key": "itemName",
+          "name": "监测项名称",
+          "type": "string",
+          "required": true
+        },
+        "value": {
+          "key": "value",
+          "name": "当前值",
+          "type": "number",
+          "required": false
+        },
+        "unit": {
+          "key": "unit",
+          "name": "单位",
+          "type": "string",
+          "required": false
+        }
+      }
+    },
+    "env-monitor-alarm": {
+      "eventId": "env-monitor-alarm",
+      "eventName": "监测告警触发",
+      "eventDataSchema": {
+        "itemKey": {
+          "key": "itemKey",
+          "name": "监测项标识",
+          "type": "string",
+          "required": true
+        },
+        "value": {
+          "key": "value",
+          "name": "告警值",
+          "type": "number",
+          "required": true
+        },
+        "level": {
+          "key": "level",
+          "name": "告警级别",
+          "type": "string",
+          "required": true
+        }
+      }
+    },
+    "c-env-monitor-onload": {
+      "eventId": "c-env-monitor-onload",
+      "eventName": "组件加载完成",
+      "eventDataSchema": {
+        "componentId": {
+          "key": "componentId",
+          "name": "组件ID",
+          "type": "string",
+          "required": true
+        },
+        "timestamp": {
+          "key": "timestamp",
+          "name": "时间戳",
+          "type": "number",
+          "required": true
+        }
+      }
+    }
+  },
+  "businessStatuses": {
+    "normal": {
+      "key": "normal",
+      "name": "正常",
+      "description": "监测指标处于正常范围"
+    },
+    "warning": {
+      "key": "warning",
+      "name": "预警",
+      "description": "监测指标接近阈值"
+    },
+    "alarm": {
+      "key": "alarm",
+      "name": "告警",
+      "description": "监测指标超出阈值"
+    },
+    "offline": {
+      "key": "offline",
+      "name": "离线",
+      "description": "监测设备离线或无数据"
+    }
+  },
+  "dataSources": null,
+  "formSources": null,
+  "layoutConfig": {
+    "default": "one",
+    "list": [
+      {
+        "name": "默认布局",
+        "key": "one",
+        "previewName": "mc-preview.png"
+      }
+    ]
+  },
+  "themeConfig": {
+    "default": "light",
+    "list": [
+      {
+        "name": "浅色主题",
+        "key": "light"
+      },
+      {
+        "name": "深色主题",
+        "key": "dark"
+      }
+    ]
+  },
+  "cssVariableConfig": [
+    {
+      "key": "--env-monitor-text-color",
+      "name": "文本颜色",
+      "type": "color",
+      "default": "#333333"
+    },
+    {
+      "key": "--env-monitor-label-color",
+      "name": "标签颜色",
+      "type": "color",
+      "default": "#909399"
+    },
+    {
+      "key": "--env-monitor-value-color",
+      "name": "数值颜色",
+      "type": "color",
+      "default": "#1890ff"
+    },
+    {
+      "key": "--env-monitor-normal-color",
+      "name": "正常状态色",
+      "type": "color",
+      "default": "#52c41a"
+    },
+    {
+      "key": "--env-monitor-warning-color",
+      "name": "预警状态色",
+      "type": "color",
+      "default": "#faad14"
+    },
+    {
+      "key": "--env-monitor-alarm-color",
+      "name": "告警状态色",
+      "type": "color",
+      "default": "#f5222d"
+    }
+  ],
+  "panelKey": "",
+  "businessConfig": {
+    "title": {
+      "key": "title",
+      "name": "组件标题",
+      "type": "string",
+      "default": "环境监测"
+    },
+    "showTitle": {
+      "key": "showTitle",
+      "name": "是否显示标题",
+      "type": "boolean",
+      "default": true
+    },
+    "refreshInterval": {
+      "key": "refreshInterval",
+      "name": "数据刷新间隔(秒)",
+      "type": "number",
+      "default": 30
+    },
+    "monitorItems": {
+      "key": "monitorItems",
+      "name": "监测项配置",
+      "type": "array",
+      "default": [
+        {
+          "itemKey": "temperature",
+          "itemName": "温度",
+          "unit": "℃"
+        },
+        {
+          "itemKey": "humidity",
+          "itemName": "湿度",
+          "unit": "%"
+        },
+        {
+          "itemKey": "pm25",
+          "itemName": "PM2.5",
+          "unit": "μg/m³"
+        }
+      ]
+    }
+  },
+  "size": {
+    "width": 420,
+    "height": 186
+  }
+}

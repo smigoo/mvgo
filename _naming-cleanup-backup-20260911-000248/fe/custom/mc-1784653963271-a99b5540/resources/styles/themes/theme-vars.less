@@ -1,0 +1,40 @@
+.common() {
+  // 组件通用样式（非主题相关）
+  --c-mc-1784653963271-a99b5540-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --c-mc-1784653963271-a99b5540-border-radius: 4px;
+}
+
+.theme-dark() {
+  // 深色主题变量
+  --c-mc-1784653963271-a99b5540-bg-primary: rgba(5, 49, 51, 1);
+  --c-mc-1784653963271-a99b5540-bg-overlay: rgba(8, 99, 99, 0.2);
+  --c-mc-1784653963271-a99b5540-border-color: rgba(8, 99, 99, 1);
+  
+  --c-mc-1784653963271-a99b5540-text-primary: rgba(255, 255, 255, 1);
+  --c-mc-1784653963271-a99b5540-text-secondary: rgba(255, 255, 255, 0.8);
+  --c-mc-1784653963271-a99b5540-text-tertiary: rgba(255, 255, 255, 0.6);
+  
+  --c-mc-1784653963271-a99b5540-accent-cyan: rgba(0, 240, 255, 1);
+  --c-mc-1784653963271-a99b5540-accent-green: rgba(24, 255, 206, 1);
+  --c-mc-1784653963271-a99b5540-accent-blue: rgba(14, 205, 190, 1);
+}
+
+.theme-light() {
+  // 浅色主题变量
+  --c-mc-1784653963271-a99b5540-bg-primary: rgba(255, 255, 255, 1);
+  --c-mc-1784653963271-a99b5540-bg-overlay: rgba(240, 242, 245, 1);
+  --c-mc-1784653963271-a99b5540-border-color: rgba(220, 223, 230, 1);
+  
+  --c-mc-1784653963271-a99b5540-text-primary: rgba(31, 35, 41, 1);
+  --c-mc-1784653963271-a99b5540-text-secondary: rgba(84, 89, 97, 1);
+  --c-mc-1784653963271-a99b5540-text-tertiary: rgba(121, 127, 136, 1);
+  
+  --c-mc-1784653963271-a99b5540-accent-cyan: rgba(0, 122, 204, 1);
+  --c-mc-1784653963271-a99b5540-accent-green: rgba(16, 185, 129, 1);
+  --c-mc-1784653963271-a99b5540-accent-blue: rgba(13, 148, 136, 1);
+}
+
+// 默认使用深色主题（与面板backgroundBrightness=dark一致）
+:root {
+  .theme-dark();
+}

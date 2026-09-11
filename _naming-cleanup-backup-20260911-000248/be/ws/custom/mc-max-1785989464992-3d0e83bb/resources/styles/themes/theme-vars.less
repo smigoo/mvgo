@@ -1,0 +1,135 @@
+.common() {
+  @prefix: c-mc-max-1785989464992-3d0e83bb;
+
+  // 字体
+  /* [Style Refine] typography.fontFamily from Figma text nodes */
+  @font-sans: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+  @font-roboto: 'Roboto', sans-serif;
+  @font-title: 'YouSheBiaoTiHei', sans-serif;
+
+  // 文字颜色
+  /* [Style Refine] fills[0].color rgb(51,51,51) from "设备类型"/"设备总数"/"完好率" text nodes */
+  @text-primary: rgb(51, 51, 51);
+  @text-white: #ffffff;
+  /* [Style Refine] fills[0].color rgb(25,144,255) = rgb(0.098*255,0.565*255,1*255) from stat-value blue */
+  @text-blue: rgb(25, 144, 255);
+  /* [Style Refine] fills[1].color rgb(8,163,166) = rgb(0.03*255,0.638*255,0.648*255) from "98%" second fill */
+  @text-health: rgb(8, 163, 166);
+  @text-num-blue: rgb(25, 144, 255);
+
+  // 统计栏
+  /* [Style Refine] "设备类型" text fills[0] = rgb(51,51,51) */
+  @stat-label-color: rgb(51, 51, 51);
+  /* [Style Refine] "28"/"68562" fills[1] solid = rgb(25,144,255) */
+  @stat-value-color: rgb(25, 144, 255);
+  /* [Style Refine] "98%" fills[1] solid = rgb(8,163,166) */
+  @stat-value-health-color: rgb(8, 163, 166);
+
+  // switch 区域
+  /* [Style Refine] active.bg cornerRadius=6 from Figma */
+  @switch-item-radius: 6px;
+  /* [Style Refine] t-隧道设备 fills white */
+  @switch-title-active-color: #ffffff;
+  /* [Style Refine] t-南北接线设备 fills rgb(51,51,51) */
+  @switch-title-default-color: rgb(51, 51, 51);
+  /* [Style Refine] typography fontSize=14 */
+  @switch-stat-label-size: 14px;
+  /* [Style Refine] typography fontSize=20 */
+  @switch-stat-num-size: 20px;
+
+  // tab 栏
+  /* [Style Refine] t-监控 typography fontSize=14 */
+  @tab-label-size: 14px;
+  /* [Style Refine] d-3/3740 typography fontSize=14 (badge frame) */
+  @tab-badge-size: 14px;
+
+  // 设备卡片
+  /* [Style Refine] "摄像机" typography fontSize=12 */
+  @device-name-size: 12px;
+  /* [Style Refine] "(2/484)" typography fontSize=16 */
+  @device-count-size: 16px;
+
+  // switch active 区域文字颜色（active时stat-label为白色）
+  @switch-active-label-color: #ffffff;
+  /* [Style Refine] d-56302 fills[1] solid white in active */
+  @switch-active-num-color: #ffffff;
+  /* [Style Refine] d-5 fills[1] solid = rgb(224,52,52) abnormal red */
+  @switch-active-abnormal-color: rgb(224, 52, 52);
+
+  // switch default 区域文字颜色
+  @switch-default-label-color: rgb(51, 51, 51);
+  @switch-default-num-color: rgb(25, 144, 255);
+  /* [Style Refine] d-3 fills[1] solid = rgb(224,52,52) abnormal */
+  @switch-default-abnormal-color: rgb(224, 52, 52);
+
+  // tab active badge 样式
+  /* [Style Refine] Frame 2136638920 fills white, stroke solid rgb(37,141,200) */
+  @tab-badge-bg: #ffffff;
+  @tab-badge-border: rgb(37, 141, 200);
+  /* [Style Refine] d-3/3740 fills rgb(59,128,231) */
+  @tab-badge-color: rgb(59, 128, 231);
+  /* [Style Refine] Frame 2136638920 effects DROP_SHADOW y=1 radius=2 color rgba(51,101,144,0.4) */
+  @tab-badge-shadow: 0 1px 2px 0 rgba(51, 101, 144, 0.40);
+
+  // tab inactive badge（red dot）
+  /* [Style Refine] Group 1321315882 bg fill rgb(245,63,63) */
+  @tab-dot-bg: rgb(245, 63, 63);
+  @tab-dot-color: #ffffff;
+
+  // device card count
+  /* [Style Refine] "(2/484)" fills white */
+  @device-count-color: #ffffff;
+  /* [Style Refine] "(2/484)" effects DROP_SHADOW radius=0 offset(0,0) color rgba(0,0,0,0.5) */
+  @device-count-shadow: 0 0 0 0 rgba(0, 0, 0, 0.50);
+
+  // device name
+  /* [Style Refine] "摄像机" fills rgb(51,51,51) */
+  @device-name-color: rgb(51, 51, 51);
+}
+
+.theme-light() {
+  /* [Style Refine] bg fills solid rgb(237,244,251) = rgb(0.929*255,0.957*255,0.984*255) */
+  @panel-bg: rgb(237, 244, 251);
+  /* [Style Refine] bg effects DROP_SHADOW y=4 radius=10 color rgba(74,117,141,0.25) */
+  @panel-shadow: 0 4px 10px 0 rgba(74, 117, 141, 0.25);
+
+  @body-bg: transparent;
+
+  // switch default bg: no explicit fill in CSS (handled via bg-image)
+  @switch-item-default-bg: transparent;
+
+  // tab active: handled via bg-image (bg4)
+  @tab-active-bg: transparent;
+  // tab default: handled via bg-image (bg5/bg7/bg8)
+  @tab-default-bg: transparent;
+
+  /* [Style Refine] device card bg Group opacity=0.5, translucent blue gradient → approximate */
+  @device-card-bg: transparent;
+  /* [Style Refine] no stroke on device card groups in Figma data */
+  @device-card-border: transparent;
+
+  @text-muted: rgba(51, 51, 51, 0.6);
+  @header-stats-separator: rgba(51, 51, 51, 0.15);
+}
+
+.theme-dark() {
+  @panel-bg: #0d1a2b;
+  @panel-shadow: 0 4px 10px 0 rgba(0, 0, 0, 0.4);
+
+  @body-bg: transparent;
+
+  @switch-item-default-bg: transparent;
+
+  @tab-active-bg: transparent;
+  @tab-default-bg: transparent;
+
+  @device-card-bg: transparent;
+  @device-card-border: transparent;
+
+  @text-muted: rgba(255, 255, 255, 0.45);
+  @header-stats-separator: rgba(255, 255, 255, 0.12);
+}
+
+// 默认调用 light 主题 + common（必须在末尾全局调用）
+.theme-light();
+.common();

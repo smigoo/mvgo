@@ -1,0 +1,296 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 78,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "charts[0].yAxisUnit",
+        "message": "Y轴单位标注为'辆'，与CO浓度监测场景不符，应为ppm或mg/m³等浓度单位",
+        "suggestion": "确认实际业务单位，若截图确实显示'辆'则在doNotInvent中保留说明，但需在notes中标记为疑似数据错误"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "coverageReport.missing",
+        "message": "4个Figma节点未映射：cp-环境监测(根容器)、环境监测(标题文本)、sub-t(子Tab框)、num(角标组)，覆盖率仅60%",
+        "suggestion": "sub-t和num节点应作为slotCandidate映射到headerSlots，环境监测文本应作为面板title属性"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].headerRelation",
+        "message": "section-tabs的headerRelation设为content-below-title，但该section本身即为Tab栏，无独立header，语义混淆",
+        "suggestion": "Tab切换栏作为纯内容区，headerRelation应设为no-header，或将其归并为面板header插槽的一部分"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "headerSlots",
+        "message": "num节点同时出现在headerSlots和coverageReport.missing中，存在矛盾：已声明为插槽但仍被标记为未覆盖",
+        "suggestion": "若num(角标badge)已映射到header-right插槽，应从missing列表中移除，保持覆盖报告一致性"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[*].body.backgroundImage",
+        "message": "两个section均引用同一背景图bg-7890.png且该资源下载失败，重复声明backgroundImage造成冗余",
+        "suggestion": "背景图应提升至面板容器层统一声明，各section不重复设置；失败资源应有明确CSS fallback颜色值"
+      }
+    ],
+    "recommendations": [
+      "将环境监测标题文本节点映射为面板title属性，sub-t和num补充到headerSlots，提升覆盖率至80%以上",
+      "核实CO浓度Y轴单位（当前为'辆'），与业务方确认后统一单位标注，避免误导运维人员",
+      "背景资源bg-7890.png需提供有效的深色CSS替代值（如rgba(10,20,40,0.9)），不应仅注释说明下载失败"
+    ],
+    "summary": "结构整体清晰，Tab+图表两段式布局合理；主要问题集中在Figma节点覆盖率偏低、Y轴单位语义异常、背景资源缺失及headerRelation语义不准确，修正后可达良好水平。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）—— 深色科技监测风主题",
+      "--colorPrimary": "#00b4ff",
+      "--colorPrimaryAlpha": "rgba(0,180,255,0.35)",
+      "--colorSuccess": "rgba(80,200,120,0.6)",
+      "--colorSuccessSolid": "#50c878",
+      "--colorDanger": "#f53f3f",
+      "--colorTextBase": "rgba(255,255,255,0.8)",
+      "--colorTextMuted": "rgba(255,255,255,0.5)",
+      "--colorBgBase": "#0d1b2e",
+      "--colorBgCard": "#0a1628",
+      "--colorBgTabActive": "rgba(0,180,255,0.15)",
+      "--colorBadgeBg": "#f53f3f",
+      "--colorWarningLine": "#f53f3f",
+      "--fontSize": "14px",
+      "--fontSizeSmall": "12px",
+      "--borderRadius": "4px",
+      "--borderColor": "rgba(0,180,255,0.25)"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射 —— 对应 theme-vars.less 的 .theme-dark() mixin",
+      "@color-primary": "#00b4ff",
+      "@color-primary-alpha": "rgba(0,180,255,0.35)",
+      "@color-success": "rgba(80,200,120,0.6)",
+      "@color-success-solid": "#50c878",
+      "@color-danger": "#f53f3f",
+      "@color-text-base": "rgba(255,255,255,0.8)",
+      "@color-text-muted": "rgba(255,255,255,0.5)",
+      "@color-bg-base": "#0d1b2e",
+      "@color-bg-card": "#0a1628",
+      "@color-tab-active-bg": "rgba(0,180,255,0.15)",
+      "@color-tab-active-text": "#ffffff",
+      "@color-tab-default-text": "rgba(255,255,255,0.5)",
+      "@color-badge-bg": "#f53f3f",
+      "@color-warning-line": "#f53f3f",
+      "@color-chart-fill-start": "rgba(80,200,120,0.6)",
+      "@color-chart-fill-end": "rgba(80,200,120,0.05)",
+      "@color-border": "rgba(0,180,255,0.25)",
+      "@font-size-base": "14px",
+      "@font-size-small": "12px",
+      "@border-radius-base": "4px"
+    },
+    "cssClasses": {
+      "comment": "可复用CSS类 —— 对应 common.less 业务样式",
+      ".mc-container": {
+        "width": "100%",
+        "height": "100%",
+        "display": "flex",
+        "flex-direction": "column",
+        "background": "@color-bg-base",
+        "color": "var(--colorTextBase, @color-text-base)",
+        "font-size": "var(--fontSize, @font-size-base)"
+      },
+      ".mc-card": {
+        "background": "@color-bg-card",
+        "border": "1px solid @color-border",
+        "border-radius": "@border-radius-base",
+        "padding": "1em"
+      },
+      ".mc-tab-bar": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "0.5em"
+      },
+      ".mc-tab-item": {
+        "padding": "0.4em 1em",
+        "border-radius": "@border-radius-base",
+        "color": "var(--colorTextMuted, @color-tab-default-text)",
+        "cursor": "pointer",
+        "transition": "all 0.2s ease",
+        "font-size": "var(--fontSize, @font-size-base)"
+      },
+      ".mc-tab-item.is-active": {
+        "background": "var(--colorBgTabActive, @color-tab-active-bg)",
+        "color": "var(--colorTextBase, @color-tab-active-text)",
+        "font-weight": "600"
+      },
+      ".mc-badge": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "min-width": "1.4em",
+        "height": "1.4em",
+        "padding": "0 0.3em",
+        "border-radius": "0.7em",
+        "background": "var(--colorBadgeBg, @color-badge-bg)",
+        "color": "#ffffff",
+        "font-size": "var(--fontSizeSmall, @font-size-small)",
+        "font-weight": "600",
+        "line-height": "1",
+        "position": "absolute",
+        "top": "-0.5em",
+        "right": "-0.5em"
+      },
+      ".mc-chart-wrapper": {
+        "position": "relative",
+        "width": "100%",
+        "flex": "1"
+      },
+      ".mc-chart-badge": {
+        "position": "absolute",
+        "top": "0.5em",
+        "right": "0.5em",
+        "z-index": "10"
+      },
+      ".mc-warning-line-label": {
+        "color": "var(--colorWarningLine, @color-warning-line)",
+        "font-size": "var(--fontSizeSmall, @font-size-small)",
+        "white-space": "nowrap"
+      },
+      ".mc-text-primary": {
+        "color": "var(--colorPrimary, @color-primary)"
+      },
+      ".mc-text-base": {
+        "color": "var(--colorTextBase, @color-text-base)"
+      },
+      ".mc-text-muted": {
+        "color": "var(--colorTextMuted, @color-text-muted)"
+      },
+      ".mc-text-danger": {
+        "color": "var(--colorDanger, @color-danger)"
+      }
+    },
+    "echartsThemeHints": {
+      "comment": "ECharts 配置建议（JS侧，不走Less变量）",
+      "areaStyleColor": [
+        "rgba(80,200,120,0.6)",
+        "rgba(80,200,120,0.05)"
+      ],
+      "markLineStyle": {
+        "color": "#f53f3f",
+        "type": "dashed",
+        "width": 1,
+        "label": "预警线"
+      },
+      "axisLabelColor": "rgba(255,255,255,0.5)",
+      "gridLineColor": "rgba(255,255,255,0.08)",
+      "seriesLineColor": "#00b4ff"
+    },
+    "themeVarsLessSnippet": {
+      "comment": "直接可用的 theme-vars.less 片段",
+      "code": "// themes/theme-vars.less\n\n.theme-dark() {\n  @color-primary:          #00b4ff;\n  @color-primary-alpha:    rgba(0,180,255,0.35);\n  @color-success:          rgba(80,200,120,0.6);\n  @color-success-solid:    #50c878;\n  @color-danger:           #f53f3f;\n  @color-text-base:        rgba(255,255,255,0.8);\n  @color-text-muted:       rgba(255,255,255,0.5);\n  @color-bg-base:          #0d1b2e;\n  @color-bg-card:          #0a1628;\n  @color-tab-active-bg:    rgba(0,180,255,0.15);\n  @color-tab-active-text:  #ffffff;\n  @color-tab-default-text: rgba(255,255,255,0.5);\n  @color-badge-bg:         #f53f3f;\n  @color-warning-line:     #f53f3f;\n  @color-border:           rgba(0,180,255,0.25);\n  @font-size-base:         14px;\n  @font-size-small:        12px;\n  @border-radius-base:     4px;\n}\n\n.theme-light() {\n  @color-primary:          #0090cc;\n  @color-primary-alpha:    rgba(0,144,204,0.15);\n  @color-success:          rgba(60,180,100,0.6);\n  @color-success-solid:    #3cb464;\n  @color-danger:           #d93025;\n  @color-text-base:        #1a2b3c;\n  @color-text-muted:       rgba(26,43,60,0.5);\n  @color-bg-base:          #edf4fb;\n  @color-bg-card:          #ffffff;\n  @color-tab-active-bg:    rgba(0,144,204,0.1);\n  @color-tab-active-text:  #0090cc;\n  @color-tab-default-text: rgba(26,43,60,0.5);\n  @color-badge-bg:         #d93025;\n  @color-warning-line:     #d93025;\n  @color-border:           rgba(0,144,204,0.2);\n  @font-size-base:         14px;\n  @font-size-small:        12px;\n  @border-radius-base:     4px;\n}\n\n// 全局默认兜底（浅色）\n.theme-light();"
+    },
+    "tokenCoverage": 0.93,
+    "mappingNotes": [
+      "主色 #00b4ff 映射为 --colorPrimary，用于边框高亮、Tab激活态下划线、图表折线色",
+      "深色背景 bg-7890.png 对应 CSS 回退值 #0d1b2e（深蓝），组件容器应以 background-image 引用实际图片，CSS回退仅作兜底",
+      "Tab 激活态：background=rgba(0,180,255,0.15) + color=#ffffff，通过 .is-active 类切换，禁止内联样式硬写",
+      "图表面积填充渐变：ECharts areaStyle 用 linearGradient from rgba(80,200,120,0.6) to rgba(80,200,120,0.05)，不走 Less 变量",
+      "预警线为 ECharts markLine，color=#f53f3f + type='dashed'，文字标签'预警线'通过 label.formatter 配置",
+      "角标 badge（橙色数字6）使用 .mc-badge 类，position:absolute 置于图表容器右上角，background 指向 @color-badge-bg",
+      "rgba(255,255,255,0.8) 映射为正文色 @color-text-base，rgba(255,255,255,0.5) 映射为次要色 @color-text-muted",
+      "浅色主题变量已补全，保证双主题完整性；浅色 bg 回退用 #edf4fb（与设计稿提供的 rgba(237,244,251,1) 一致）",
+      "容器背景应优先直接落地为 Figma 字面量值（background-image引用 bg-7890.png），避免关键可见背景只依赖 CSS 变量"
+    ],
+    "elementStyleMap": {
+      "section-tabs": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-8": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-tabs",
+        "responsibility": "标签页切换区",
+        "elementCount": 4,
+        "title": "Tab切换栏",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 4,
+          "charts": 0,
+          "interactions": 1,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "CO浓度趋势图",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 1,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      }
+    ],
+    "isForced": false,
+    "minFiles": 0,
+    "reason": "有效 sections=2 < 3 且无高复杂度 section → 不强制拆分",
+    "internalSubcomponents": []
+  }
+}

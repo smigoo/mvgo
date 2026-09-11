@@ -1,0 +1,4059 @@
+[
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3436",
+    "figmaPath": "cp-流量监测/bg-[m]",
+    "name": "bg-[m]",
+    "figmaBox": {
+      "x": 15.8271484375,
+      "y": 109,
+      "width": 420,
+      "height": 807
+    },
+    "parentBox": {
+      "x": 10,
+      "y": 109,
+      "width": 425.8275146484375,
+      "height": 807
+    },
+    "usage": ":style=\"{ background: '#edf4fbb2' }\"",
+    "targetDomSelector": ".m-container",
+    "targetDomHint": "[m]区域",
+    "previewAnalysisRole": "bg",
+    "hint": "bg-[m] → [m]区域",
+    "downloadStatus": "css",
+    "cssValue": "#edf4fbb2",
+    "deduplicatedFrom": null,
+    "fallbackHint": "✅ CSS 替代（无需图片）: background: #edf4fbb2;",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 420,
+      "height": 807,
+      "fillsSummary": "#edf4fbb2",
+      "effectsSummary": "box-shadow: 0px 4px 10px #4a758d"
+    },
+    "recommendedUsage": "backgroundStyle",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "skipMount": true,
+    "bgRole": "container"
+  },
+  {
+    "resourceFile": "../resources/images/icon-3561.png",
+    "figmaNodeId": "2:3561",
+    "figmaPath": "cp-流量监测/slot-当日总流量/sub-header/标题/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 35.8271484375,
+      "y": 164.86578369140625,
+      "width": 18,
+      "height": 18.253520965576172
+    },
+    "parentBox": {
+      "x": 35.8271484375,
+      "y": 161.82354736328125,
+      "width": 102,
+      "height": 24.338027954101562
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".icon-container",
+    "targetDomHint": "icon区域",
+    "previewAnalysisRole": "icon",
+    "hint": "icon → icon区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 18,
+      "height": 18
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon1"
+  },
+  {
+    "resourceFile": "../resources/images/bg-_m-34.png",
+    "figmaNodeId": "88:34",
+    "figmaPath": "cp-流量监测/slot-当日总流量/Group 2136636802/bg-[m]",
+    "name": "bg-[m]",
+    "figmaBox": {
+      "x": 9.999755859375,
+      "y": 196,
+      "width": 425.8287353515625,
+      "height": 91.4396743774414
+    },
+    "parentBox": {
+      "x": 9.999755859375,
+      "y": 196,
+      "width": 425.8287353515625,
+      "height": 91.4396743774414
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".m-container",
+    "targetDomHint": "[m]区域",
+    "previewAnalysisRole": "bg",
+    "hint": "bg-[m] → [m]区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": "bgm",
+    "visualMeta": {
+      "width": 426,
+      "height": 91
+    },
+    "recommendedUsage": "backgroundBlock",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "mountTarget": "Group 2136636802",
+    "bgRole": "container",
+    "assignedVarName": "bg1"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7501.png",
+    "figmaNodeId": "2:7501",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 65.8271484375,
+      "y": 398.0478210449219,
+      "width": 4,
+      "height": 4
+    },
+    "parentBox": {
+      "x": 65.8271484375,
+      "y": 396.0478210449219,
+      "width": 10,
+      "height": 6
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 4,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon2"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7502.png",
+    "figmaNodeId": "2:7502",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 71.8271484375,
+      "y": 396.0478210449219,
+      "width": 4,
+      "height": 6
+    },
+    "parentBox": {
+      "x": 65.8271484375,
+      "y": 396.0478210449219,
+      "width": 10,
+      "height": 6
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 6,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon3"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7501.png",
+    "figmaNodeId": "2:7504",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 79.77284240722656,
+      "y": 398.0478210449219,
+      "width": 4,
+      "height": 4
+    },
+    "parentBox": {
+      "x": 79.77284240722656,
+      "y": 396.0477600097656,
+      "width": 10,
+      "height": 6.00006103515625
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7501",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 4,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon4"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7502.png",
+    "figmaNodeId": "2:7505",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 85.77284240722656,
+      "y": 396.0477600097656,
+      "width": 4,
+      "height": 6
+    },
+    "parentBox": {
+      "x": 79.77284240722656,
+      "y": 396.0477600097656,
+      "width": 10,
+      "height": 6.00006103515625
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7502",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 6,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon5"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7501.png",
+    "figmaNodeId": "2:7507",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 93.71853637695312,
+      "y": 398.0477600097656,
+      "width": 4,
+      "height": 4
+    },
+    "parentBox": {
+      "x": 93.71853637695312,
+      "y": 396.0478210449219,
+      "width": 10,
+      "height": 6
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7501",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 4,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon6"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7502.png",
+    "figmaNodeId": "2:7508",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 99.71853637695312,
+      "y": 396.0477600097656,
+      "width": 4,
+      "height": 6
+    },
+    "parentBox": {
+      "x": 93.71853637695312,
+      "y": 396.0478210449219,
+      "width": 10,
+      "height": 6
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7502",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 6,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon7"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7501.png",
+    "figmaNodeId": "2:7510",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 107.66423034667969,
+      "y": 398.0478210449219,
+      "width": 4,
+      "height": 4
+    },
+    "parentBox": {
+      "x": 107.66423034667969,
+      "y": 396.0477600097656,
+      "width": 10,
+      "height": 6.00006103515625
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7501",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 4,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon8"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7502.png",
+    "figmaNodeId": "2:7511",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 113.66423034667969,
+      "y": 396.0477600097656,
+      "width": 4,
+      "height": 6
+    },
+    "parentBox": {
+      "x": 107.66423034667969,
+      "y": 396.0477600097656,
+      "width": 10,
+      "height": 6.00006103515625
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7502",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 6,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon9"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7513.png",
+    "figmaNodeId": "2:7513",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 121.60992431640625,
+      "y": 395.0478210449219,
+      "width": 4,
+      "height": 7
+    },
+    "parentBox": {
+      "x": 121.60992431640625,
+      "y": 391.0477600097656,
+      "width": 10,
+      "height": 11.00006103515625
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon10"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7514.png",
+    "figmaNodeId": "2:7514",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 127.60992431640625,
+      "y": 391.0477600097656,
+      "width": 4,
+      "height": 11
+    },
+    "parentBox": {
+      "x": 121.60992431640625,
+      "y": 391.0477600097656,
+      "width": 10,
+      "height": 11.00006103515625
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon11"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7513.png",
+    "figmaNodeId": "2:7516",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 135.5556182861328,
+      "y": 395.0478210449219,
+      "width": 4,
+      "height": 7
+    },
+    "parentBox": {
+      "x": 135.5556182861328,
+      "y": 391.0477600097656,
+      "width": 10,
+      "height": 11.00006103515625
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7513",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon12"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7514.png",
+    "figmaNodeId": "2:7517",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 141.5556182861328,
+      "y": 391.0477600097656,
+      "width": 4,
+      "height": 11
+    },
+    "parentBox": {
+      "x": 135.5556182861328,
+      "y": 391.0477600097656,
+      "width": 10,
+      "height": 11.00006103515625
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7514",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon13"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7513.png",
+    "figmaNodeId": "2:7519",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 149.50131225585938,
+      "y": 395.0478210449219,
+      "width": 4,
+      "height": 7
+    },
+    "parentBox": {
+      "x": 149.50131225585938,
+      "y": 391.0477600097656,
+      "width": 10,
+      "height": 11.00006103515625
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7513",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon14"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7514.png",
+    "figmaNodeId": "2:7520",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 155.50131225585938,
+      "y": 391.0477600097656,
+      "width": 4,
+      "height": 11
+    },
+    "parentBox": {
+      "x": 149.50131225585938,
+      "y": 391.0477600097656,
+      "width": 10,
+      "height": 11.00006103515625
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7514",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon15"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7513.png",
+    "figmaNodeId": "2:7522",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 163.44700622558594,
+      "y": 395.0478210449219,
+      "width": 4,
+      "height": 7
+    },
+    "parentBox": {
+      "x": 163.44700622558594,
+      "y": 391.0476989746094,
+      "width": 10,
+      "height": 11.0001220703125
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7513",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon16"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7514.png",
+    "figmaNodeId": "2:7523",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 169.44700622558594,
+      "y": 391.0476989746094,
+      "width": 4,
+      "height": 11
+    },
+    "parentBox": {
+      "x": 163.44700622558594,
+      "y": 391.0476989746094,
+      "width": 10,
+      "height": 11.0001220703125
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7514",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon17"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7525.png",
+    "figmaNodeId": "2:7525",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 177.3927001953125,
+      "y": 382.0478210449219,
+      "width": 4,
+      "height": 20
+    },
+    "parentBox": {
+      "x": 177.3927001953125,
+      "y": 372.0476379394531,
+      "width": 10,
+      "height": 30.00018310546875
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 20,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon18"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7526.png",
+    "figmaNodeId": "2:7526",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 183.3927001953125,
+      "y": 372.0476379394531,
+      "width": 4,
+      "height": 30
+    },
+    "parentBox": {
+      "x": 177.3927001953125,
+      "y": 372.0476379394531,
+      "width": 10,
+      "height": 30.00018310546875
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 30,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon19"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7525.png",
+    "figmaNodeId": "2:7528",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 191.33839416503906,
+      "y": 382.0478210449219,
+      "width": 4,
+      "height": 20
+    },
+    "parentBox": {
+      "x": 191.33839416503906,
+      "y": 372.0476379394531,
+      "width": 10,
+      "height": 30.00018310546875
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7525",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 20,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon20"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7526.png",
+    "figmaNodeId": "2:7529",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 197.33839416503906,
+      "y": 372.0476379394531,
+      "width": 4,
+      "height": 30
+    },
+    "parentBox": {
+      "x": 191.33839416503906,
+      "y": 372.0476379394531,
+      "width": 10,
+      "height": 30.00018310546875
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7526",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 30,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon21"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7513.png",
+    "figmaNodeId": "2:7531",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 205.28408813476562,
+      "y": 395.0478210449219,
+      "width": 4,
+      "height": 7
+    },
+    "parentBox": {
+      "x": 205.28408813476562,
+      "y": 391.0476989746094,
+      "width": 10,
+      "height": 11.0001220703125
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7513",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon22"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7514.png",
+    "figmaNodeId": "2:7532",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 211.28408813476562,
+      "y": 391.0476989746094,
+      "width": 4,
+      "height": 11
+    },
+    "parentBox": {
+      "x": 205.28408813476562,
+      "y": 391.0476989746094,
+      "width": 10,
+      "height": 11.0001220703125
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7514",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon23"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7534.png",
+    "figmaNodeId": "2:7534",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 219.2297821044922,
+      "y": 378.0478210449219,
+      "width": 4,
+      "height": 24
+    },
+    "parentBox": {
+      "x": 219.2297821044922,
+      "y": 366.0478210449219,
+      "width": 10,
+      "height": 36
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 24,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon24"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7535.png",
+    "figmaNodeId": "2:7535",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 225.2297821044922,
+      "y": 366.0478210449219,
+      "width": 4,
+      "height": 36
+    },
+    "parentBox": {
+      "x": 219.2297821044922,
+      "y": 366.0478210449219,
+      "width": 10,
+      "height": 36
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 36,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon25"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7513.png",
+    "figmaNodeId": "2:7537",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 233.17547607421875,
+      "y": 395.0478210449219,
+      "width": 4,
+      "height": 7
+    },
+    "parentBox": {
+      "x": 233.17547607421875,
+      "y": 391.0478210449219,
+      "width": 10,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7513",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon26"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7514.png",
+    "figmaNodeId": "2:7538",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 239.17547607421875,
+      "y": 391.0478210449219,
+      "width": 4,
+      "height": 11
+    },
+    "parentBox": {
+      "x": 233.17547607421875,
+      "y": 391.0478210449219,
+      "width": 10,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7514",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon27"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7534.png",
+    "figmaNodeId": "2:7540",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 247.1211700439453,
+      "y": 378.0477600097656,
+      "width": 4,
+      "height": 24
+    },
+    "parentBox": {
+      "x": 247.1211700439453,
+      "y": 366.0478210449219,
+      "width": 9.7987060546875,
+      "height": 36
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7534",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 24,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon28"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7535.png",
+    "figmaNodeId": "2:7541",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 252.9198760986328,
+      "y": 366.0477600097656,
+      "width": 4,
+      "height": 36
+    },
+    "parentBox": {
+      "x": 247.1211700439453,
+      "y": 366.0478210449219,
+      "width": 9.7987060546875,
+      "height": 36
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7535",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 36,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon29"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7543.png",
+    "figmaNodeId": "2:7543",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 260.8655700683594,
+      "y": 386.0478210449219,
+      "width": 4,
+      "height": 16
+    },
+    "parentBox": {
+      "x": 260.8655700683594,
+      "y": 378.0476989746094,
+      "width": 10,
+      "height": 24.0001220703125
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 16,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon30"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7544.png",
+    "figmaNodeId": "2:7544",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 266.8655700683594,
+      "y": 378.0476989746094,
+      "width": 4,
+      "height": 24
+    },
+    "parentBox": {
+      "x": 260.8655700683594,
+      "y": 378.0476989746094,
+      "width": 10,
+      "height": 24.0001220703125
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 24,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon31"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7543.png",
+    "figmaNodeId": "2:7546",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 274.811279296875,
+      "y": 386.0478210449219,
+      "width": 4,
+      "height": 16
+    },
+    "parentBox": {
+      "x": 274.811279296875,
+      "y": 378.0477600097656,
+      "width": 9.6787109375,
+      "height": 24
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7543",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 16,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon32"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7544.png",
+    "figmaNodeId": "2:7547",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 280.4901123046875,
+      "y": 378.0477600097656,
+      "width": 4,
+      "height": 24
+    },
+    "parentBox": {
+      "x": 274.811279296875,
+      "y": 378.0477600097656,
+      "width": 9.6787109375,
+      "height": 24
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7544",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 24,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon33"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7550.png",
+    "figmaNodeId": "2:7550",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638523/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 288.4358215332031,
+      "y": 394.7144775390625,
+      "width": 3,
+      "height": 7.333333492279053
+    },
+    "parentBox": {
+      "x": 288.4358215332031,
+      "y": 391.0478210449219,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon34"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7551.png",
+    "figmaNodeId": "2:7551",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638523/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 293.4358215332031,
+      "y": 391.0478210449219,
+      "width": 3,
+      "height": 11
+    },
+    "parentBox": {
+      "x": 288.4358215332031,
+      "y": 391.0478210449219,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon35"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7550.png",
+    "figmaNodeId": "2:7553",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638522/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 302.3489074707031,
+      "y": 394.7144775390625,
+      "width": 3,
+      "height": 7.333333492279053
+    },
+    "parentBox": {
+      "x": 302.3489074707031,
+      "y": 391.0478210449219,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7550",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon36"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7551.png",
+    "figmaNodeId": "2:7554",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638522/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 307.3489074707031,
+      "y": 391.0478210449219,
+      "width": 3,
+      "height": 11
+    },
+    "parentBox": {
+      "x": 302.3489074707031,
+      "y": 391.0478210449219,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7551",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon37"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7550.png",
+    "figmaNodeId": "2:7556",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638521/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 316.2618713378906,
+      "y": 394.7144775390625,
+      "width": 3,
+      "height": 7.333333492279053
+    },
+    "parentBox": {
+      "x": 316.2618713378906,
+      "y": 391.0478210449219,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7550",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon38"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7551.png",
+    "figmaNodeId": "2:7557",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638521/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 321.2618713378906,
+      "y": 391.0478210449219,
+      "width": 3,
+      "height": 11
+    },
+    "parentBox": {
+      "x": 316.2618713378906,
+      "y": 391.0478210449219,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7551",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon39"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7550.png",
+    "figmaNodeId": "2:7559",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638520/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 330.1749572753906,
+      "y": 394.7144775390625,
+      "width": 3,
+      "height": 7.333333492279053
+    },
+    "parentBox": {
+      "x": 330.1749572753906,
+      "y": 391.0478210449219,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7550",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon40"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7551.png",
+    "figmaNodeId": "2:7560",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638520/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 335.1749572753906,
+      "y": 391.0478210449219,
+      "width": 3,
+      "height": 11
+    },
+    "parentBox": {
+      "x": 330.1749572753906,
+      "y": 391.0478210449219,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7551",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon41"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7550.png",
+    "figmaNodeId": "2:7562",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638523/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 344.0880432128906,
+      "y": 394.7144775390625,
+      "width": 3,
+      "height": 7.333333492279053
+    },
+    "parentBox": {
+      "x": 344.0880432128906,
+      "y": 391.0478210449219,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7550",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon42"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7551.png",
+    "figmaNodeId": "2:7563",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638523/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 349.0880432128906,
+      "y": 391.0478210449219,
+      "width": 3,
+      "height": 11
+    },
+    "parentBox": {
+      "x": 344.0880432128906,
+      "y": 391.0478210449219,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7551",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon43"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7550.png",
+    "figmaNodeId": "2:7565",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638522/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 358.0010070800781,
+      "y": 394.7144775390625,
+      "width": 3,
+      "height": 7.333333492279053
+    },
+    "parentBox": {
+      "x": 358.0010070800781,
+      "y": 391.0478210449219,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7550",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon44"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7551.png",
+    "figmaNodeId": "2:7566",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638522/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 363.0010070800781,
+      "y": 391.0478210449219,
+      "width": 3,
+      "height": 11
+    },
+    "parentBox": {
+      "x": 358.0010070800781,
+      "y": 391.0478210449219,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7551",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon45"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7550.png",
+    "figmaNodeId": "2:7568",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638521/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 371.9140930175781,
+      "y": 394.7144775390625,
+      "width": 3,
+      "height": 7.333333492279053
+    },
+    "parentBox": {
+      "x": 371.9140930175781,
+      "y": 391.0478210449219,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7550",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon46"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7551.png",
+    "figmaNodeId": "2:7569",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638521/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 376.9140930175781,
+      "y": 391.0478210449219,
+      "width": 3,
+      "height": 11
+    },
+    "parentBox": {
+      "x": 371.9140930175781,
+      "y": 391.0478210449219,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7551",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon47"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7550.png",
+    "figmaNodeId": "2:7571",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638520/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 385.8271789550781,
+      "y": 394.7144775390625,
+      "width": 3,
+      "height": 7.333333492279053
+    },
+    "parentBox": {
+      "x": 385.8271789550781,
+      "y": 391.0478210449219,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7550",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon48"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7551.png",
+    "figmaNodeId": "2:7572",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638520/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 390.8271789550781,
+      "y": 391.0478210449219,
+      "width": 3,
+      "height": 11
+    },
+    "parentBox": {
+      "x": 385.8271789550781,
+      "y": 391.0478210449219,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7551",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon49"
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7626",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/Frame 2136639396/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 33.8271484375,
+      "y": 291.5,
+      "width": 3,
+      "height": 12
+    },
+    "parentBox": {
+      "x": 33.8271484375,
+      "y": 287,
+      "width": 118,
+      "height": 21
+    },
+    "usage": ":style=\"{ background: 'linear-gradient(180deg, #388dff 0%, #388dff 100%)' }\"",
+    "targetDomSelector": ".icon-container",
+    "targetDomHint": "icon区域",
+    "previewAnalysisRole": "icon",
+    "hint": "icon → icon区域",
+    "downloadStatus": "css",
+    "cssValue": "linear-gradient(180deg, #388dff 0%, #388dff 100%)",
+    "deduplicatedFrom": null,
+    "fallbackHint": "✅ CSS 替代（无需图片）: background: linear-gradient(180deg, #388dff 0%, #388dff 100%);",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 12,
+      "fillsSummary": "linear-gradient(#388dff 0%, #388dff 100%)"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false
+  },
+  {
+    "resourceFile": "../resources/images/柱-7501.png",
+    "figmaNodeId": "2:7670",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 65.8271484375,
+      "y": 539.0478515625,
+      "width": 4,
+      "height": 4
+    },
+    "parentBox": {
+      "x": 65.8271484375,
+      "y": 537.0478515625,
+      "width": 10,
+      "height": 6
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7501",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 4,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon50"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7502.png",
+    "figmaNodeId": "2:7671",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 71.8271484375,
+      "y": 537.0478515625,
+      "width": 4,
+      "height": 6
+    },
+    "parentBox": {
+      "x": 65.8271484375,
+      "y": 537.0478515625,
+      "width": 10,
+      "height": 6
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7502",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 6,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon51"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7501.png",
+    "figmaNodeId": "2:7673",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 79.77284240722656,
+      "y": 539.0477905273438,
+      "width": 4,
+      "height": 4
+    },
+    "parentBox": {
+      "x": 79.77284240722656,
+      "y": 537.0477294921875,
+      "width": 10,
+      "height": 6.00006103515625
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7501",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 4,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon52"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7502.png",
+    "figmaNodeId": "2:7674",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 85.77284240722656,
+      "y": 537.0477294921875,
+      "width": 4,
+      "height": 6
+    },
+    "parentBox": {
+      "x": 79.77284240722656,
+      "y": 537.0477294921875,
+      "width": 10,
+      "height": 6.00006103515625
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7502",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 6,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon53"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7501.png",
+    "figmaNodeId": "2:7676",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 93.71853637695312,
+      "y": 539.0477905273438,
+      "width": 4,
+      "height": 4
+    },
+    "parentBox": {
+      "x": 93.71853637695312,
+      "y": 537.0478515625,
+      "width": 10,
+      "height": 6
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7501",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 4,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon54"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7502.png",
+    "figmaNodeId": "2:7677",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 99.71853637695312,
+      "y": 537.0477905273438,
+      "width": 4,
+      "height": 6
+    },
+    "parentBox": {
+      "x": 93.71853637695312,
+      "y": 537.0478515625,
+      "width": 10,
+      "height": 6
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7502",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 6,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon55"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7501.png",
+    "figmaNodeId": "2:7679",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 107.66423034667969,
+      "y": 539.0477905273438,
+      "width": 4,
+      "height": 4
+    },
+    "parentBox": {
+      "x": 107.66423034667969,
+      "y": 537.0477294921875,
+      "width": 10,
+      "height": 6.00006103515625
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7501",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 4,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon56"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7502.png",
+    "figmaNodeId": "2:7680",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 113.66423034667969,
+      "y": 537.0477294921875,
+      "width": 4,
+      "height": 6
+    },
+    "parentBox": {
+      "x": 107.66423034667969,
+      "y": 537.0477294921875,
+      "width": 10,
+      "height": 6.00006103515625
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7502",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 6,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon57"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7513.png",
+    "figmaNodeId": "2:7682",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 121.60992431640625,
+      "y": 536.0477905273438,
+      "width": 4,
+      "height": 7
+    },
+    "parentBox": {
+      "x": 121.60992431640625,
+      "y": 532.0477294921875,
+      "width": 10,
+      "height": 11.00006103515625
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7513",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon58"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7514.png",
+    "figmaNodeId": "2:7683",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 127.60992431640625,
+      "y": 532.0477294921875,
+      "width": 4,
+      "height": 11
+    },
+    "parentBox": {
+      "x": 121.60992431640625,
+      "y": 532.0477294921875,
+      "width": 10,
+      "height": 11.00006103515625
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7514",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon59"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7513.png",
+    "figmaNodeId": "2:7685",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 135.5556182861328,
+      "y": 536.0477905273438,
+      "width": 4,
+      "height": 7
+    },
+    "parentBox": {
+      "x": 135.5556182861328,
+      "y": 532.0477294921875,
+      "width": 10,
+      "height": 11.00006103515625
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7513",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon60"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7514.png",
+    "figmaNodeId": "2:7686",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 141.5556182861328,
+      "y": 532.0477294921875,
+      "width": 4,
+      "height": 11
+    },
+    "parentBox": {
+      "x": 135.5556182861328,
+      "y": 532.0477294921875,
+      "width": 10,
+      "height": 11.00006103515625
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7514",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon61"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7513.png",
+    "figmaNodeId": "2:7688",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 149.50131225585938,
+      "y": 536.0477905273438,
+      "width": 4,
+      "height": 7
+    },
+    "parentBox": {
+      "x": 149.50131225585938,
+      "y": 532.0477294921875,
+      "width": 10,
+      "height": 11.00006103515625
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7513",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon62"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7514.png",
+    "figmaNodeId": "2:7689",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 155.50131225585938,
+      "y": 532.0477294921875,
+      "width": 4,
+      "height": 11
+    },
+    "parentBox": {
+      "x": 149.50131225585938,
+      "y": 532.0477294921875,
+      "width": 10,
+      "height": 11.00006103515625
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7514",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon63"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7513.png",
+    "figmaNodeId": "2:7691",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 163.44700622558594,
+      "y": 536.0478515625,
+      "width": 4,
+      "height": 7
+    },
+    "parentBox": {
+      "x": 163.44700622558594,
+      "y": 532.0477294921875,
+      "width": 10,
+      "height": 11.0001220703125
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7513",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon64"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7514.png",
+    "figmaNodeId": "2:7692",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 169.44700622558594,
+      "y": 532.0477294921875,
+      "width": 4,
+      "height": 11
+    },
+    "parentBox": {
+      "x": 163.44700622558594,
+      "y": 532.0477294921875,
+      "width": 10,
+      "height": 11.0001220703125
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7514",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon65"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7525.png",
+    "figmaNodeId": "2:7694",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 177.3927001953125,
+      "y": 523.0477905273438,
+      "width": 4,
+      "height": 20
+    },
+    "parentBox": {
+      "x": 177.3927001953125,
+      "y": 513.047607421875,
+      "width": 10,
+      "height": 30.00018310546875
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7525",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 20,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon66"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7526.png",
+    "figmaNodeId": "2:7695",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 183.3927001953125,
+      "y": 513.047607421875,
+      "width": 4,
+      "height": 30
+    },
+    "parentBox": {
+      "x": 177.3927001953125,
+      "y": 513.047607421875,
+      "width": 10,
+      "height": 30.00018310546875
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7526",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 30,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon67"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7525.png",
+    "figmaNodeId": "2:7697",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 191.33839416503906,
+      "y": 523.0477905273438,
+      "width": 4,
+      "height": 20
+    },
+    "parentBox": {
+      "x": 191.33839416503906,
+      "y": 513.047607421875,
+      "width": 10,
+      "height": 30.00018310546875
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7525",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 20,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon68"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7526.png",
+    "figmaNodeId": "2:7698",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 197.33839416503906,
+      "y": 513.047607421875,
+      "width": 4,
+      "height": 30
+    },
+    "parentBox": {
+      "x": 191.33839416503906,
+      "y": 513.047607421875,
+      "width": 10,
+      "height": 30.00018310546875
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7526",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 30,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon69"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7513.png",
+    "figmaNodeId": "2:7700",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 205.28408813476562,
+      "y": 536.0478515625,
+      "width": 4,
+      "height": 7
+    },
+    "parentBox": {
+      "x": 205.28408813476562,
+      "y": 532.0477294921875,
+      "width": 10,
+      "height": 11.0001220703125
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7513",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon70"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7514.png",
+    "figmaNodeId": "2:7701",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 211.28408813476562,
+      "y": 532.0477294921875,
+      "width": 4,
+      "height": 11
+    },
+    "parentBox": {
+      "x": 205.28408813476562,
+      "y": 532.0477294921875,
+      "width": 10,
+      "height": 11.0001220703125
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7514",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon71"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7534.png",
+    "figmaNodeId": "2:7703",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 219.2297821044922,
+      "y": 519.0478515625,
+      "width": 4,
+      "height": 24
+    },
+    "parentBox": {
+      "x": 219.2297821044922,
+      "y": 507.0478210449219,
+      "width": 10,
+      "height": 36
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7534",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 24,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon72"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7535.png",
+    "figmaNodeId": "2:7704",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 225.2297821044922,
+      "y": 507.0478210449219,
+      "width": 4,
+      "height": 36
+    },
+    "parentBox": {
+      "x": 219.2297821044922,
+      "y": 507.0478210449219,
+      "width": 10,
+      "height": 36
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7535",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 36,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon73"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7513.png",
+    "figmaNodeId": "2:7706",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 233.17547607421875,
+      "y": 536.0478515625,
+      "width": 4,
+      "height": 7
+    },
+    "parentBox": {
+      "x": 233.17547607421875,
+      "y": 532.0478515625,
+      "width": 10,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7513",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon74"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7514.png",
+    "figmaNodeId": "2:7707",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 239.17547607421875,
+      "y": 532.0478515625,
+      "width": 4,
+      "height": 11
+    },
+    "parentBox": {
+      "x": 233.17547607421875,
+      "y": 532.0478515625,
+      "width": 10,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7514",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon75"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7534.png",
+    "figmaNodeId": "2:7709",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 247.1211700439453,
+      "y": 519.0477294921875,
+      "width": 4,
+      "height": 24
+    },
+    "parentBox": {
+      "x": 247.1211700439453,
+      "y": 507.0478210449219,
+      "width": 9.7987060546875,
+      "height": 36
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7534",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 24,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon76"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7535.png",
+    "figmaNodeId": "2:7710",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 252.9198760986328,
+      "y": 507.0477600097656,
+      "width": 4,
+      "height": 36
+    },
+    "parentBox": {
+      "x": 247.1211700439453,
+      "y": 507.0478210449219,
+      "width": 9.7987060546875,
+      "height": 36
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7535",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 36,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon77"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7543.png",
+    "figmaNodeId": "2:7712",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 260.8655700683594,
+      "y": 527.0478515625,
+      "width": 4,
+      "height": 16
+    },
+    "parentBox": {
+      "x": 260.8655700683594,
+      "y": 519.0477294921875,
+      "width": 10,
+      "height": 24.0001220703125
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7543",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 16,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon78"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7544.png",
+    "figmaNodeId": "2:7713",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 266.8655700683594,
+      "y": 519.0477294921875,
+      "width": 4,
+      "height": 24
+    },
+    "parentBox": {
+      "x": 260.8655700683594,
+      "y": 519.0477294921875,
+      "width": 10,
+      "height": 24.0001220703125
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7544",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 24,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon79"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7543.png",
+    "figmaNodeId": "2:7715",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 274.811279296875,
+      "y": 527.0477905273438,
+      "width": 4,
+      "height": 16
+    },
+    "parentBox": {
+      "x": 274.811279296875,
+      "y": 519.0477294921875,
+      "width": 9.6787109375,
+      "height": 24
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7543",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 16,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon80"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7544.png",
+    "figmaNodeId": "2:7716",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 280.4901123046875,
+      "y": 519.0477294921875,
+      "width": 4,
+      "height": 24
+    },
+    "parentBox": {
+      "x": 274.811279296875,
+      "y": 519.0477294921875,
+      "width": 9.6787109375,
+      "height": 24
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7544",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 24,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon81"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7550.png",
+    "figmaNodeId": "2:7719",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638523/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 288.4358215332031,
+      "y": 535.7145385742188,
+      "width": 3,
+      "height": 7.333333492279053
+    },
+    "parentBox": {
+      "x": 288.4358215332031,
+      "y": 532.0478515625,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7550",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon82"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7551.png",
+    "figmaNodeId": "2:7720",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638523/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 293.4358215332031,
+      "y": 532.0478515625,
+      "width": 3,
+      "height": 11
+    },
+    "parentBox": {
+      "x": 288.4358215332031,
+      "y": 532.0478515625,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7551",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon83"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7550.png",
+    "figmaNodeId": "2:7722",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638522/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 302.3489074707031,
+      "y": 535.7145385742188,
+      "width": 3,
+      "height": 7.333333492279053
+    },
+    "parentBox": {
+      "x": 302.3489074707031,
+      "y": 532.0478515625,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7550",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon84"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7551.png",
+    "figmaNodeId": "2:7723",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638522/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 307.3489074707031,
+      "y": 532.0478515625,
+      "width": 3,
+      "height": 11
+    },
+    "parentBox": {
+      "x": 302.3489074707031,
+      "y": 532.0478515625,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7551",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon85"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7550.png",
+    "figmaNodeId": "2:7725",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638521/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 316.2618713378906,
+      "y": 535.7145385742188,
+      "width": 3,
+      "height": 7.333333492279053
+    },
+    "parentBox": {
+      "x": 316.2618713378906,
+      "y": 532.0478515625,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7550",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon86"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7551.png",
+    "figmaNodeId": "2:7726",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638521/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 321.2618713378906,
+      "y": 532.0478515625,
+      "width": 3,
+      "height": 11
+    },
+    "parentBox": {
+      "x": 316.2618713378906,
+      "y": 532.0478515625,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7551",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon87"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7550.png",
+    "figmaNodeId": "2:7728",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638520/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 330.1749572753906,
+      "y": 535.7145385742188,
+      "width": 3,
+      "height": 7.333333492279053
+    },
+    "parentBox": {
+      "x": 330.1749572753906,
+      "y": 532.0478515625,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7550",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon88"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7551.png",
+    "figmaNodeId": "2:7729",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638520/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 335.1749572753906,
+      "y": 532.0478515625,
+      "width": 3,
+      "height": 11
+    },
+    "parentBox": {
+      "x": 330.1749572753906,
+      "y": 532.0478515625,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7551",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon89"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7550.png",
+    "figmaNodeId": "2:7731",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638523/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 344.0880432128906,
+      "y": 535.7145385742188,
+      "width": 3,
+      "height": 7.333333492279053
+    },
+    "parentBox": {
+      "x": 344.0880432128906,
+      "y": 532.0478515625,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7550",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon90"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7551.png",
+    "figmaNodeId": "2:7732",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638523/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 349.0880432128906,
+      "y": 532.0478515625,
+      "width": 3,
+      "height": 11
+    },
+    "parentBox": {
+      "x": 344.0880432128906,
+      "y": 532.0478515625,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7551",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon91"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7550.png",
+    "figmaNodeId": "2:7734",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638522/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 358.0010070800781,
+      "y": 535.7145385742188,
+      "width": 3,
+      "height": 7.333333492279053
+    },
+    "parentBox": {
+      "x": 358.0010070800781,
+      "y": 532.0478515625,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7550",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon92"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7551.png",
+    "figmaNodeId": "2:7735",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638522/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 363.0010070800781,
+      "y": 532.0478515625,
+      "width": 3,
+      "height": 11
+    },
+    "parentBox": {
+      "x": 358.0010070800781,
+      "y": 532.0478515625,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7551",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon93"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7550.png",
+    "figmaNodeId": "2:7737",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638521/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 371.9140930175781,
+      "y": 535.7145385742188,
+      "width": 3,
+      "height": 7.333333492279053
+    },
+    "parentBox": {
+      "x": 371.9140930175781,
+      "y": 532.0478515625,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7550",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon94"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7551.png",
+    "figmaNodeId": "2:7738",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638521/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 376.9140930175781,
+      "y": 532.0478515625,
+      "width": 3,
+      "height": 11
+    },
+    "parentBox": {
+      "x": 371.9140930175781,
+      "y": 532.0478515625,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7551",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon95"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7550.png",
+    "figmaNodeId": "2:7740",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638520/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 385.8271789550781,
+      "y": 535.7145385742188,
+      "width": 3,
+      "height": 7.333333492279053
+    },
+    "parentBox": {
+      "x": 385.8271789550781,
+      "y": 532.0478515625,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7550",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon96"
+  },
+  {
+    "resourceFile": "../resources/images/柱-7551.png",
+    "figmaNodeId": "2:7741",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638520/柱",
+    "name": "柱",
+    "figmaBox": {
+      "x": 390.8271789550781,
+      "y": 532.0478515625,
+      "width": 3,
+      "height": 11
+    },
+    "parentBox": {
+      "x": 385.8271789550781,
+      "y": 532.0478515625,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:7551",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false,
+    "assignedVarName": "icon97"
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7795",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/Frame 2136639396/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 33.8271484375,
+      "y": 432.5,
+      "width": 3,
+      "height": 12
+    },
+    "parentBox": {
+      "x": 33.8271484375,
+      "y": 428,
+      "width": 62,
+      "height": 21
+    },
+    "usage": ":style=\"{ background: 'linear-gradient(180deg, #388dff 0%, #388dff 100%)' }\"",
+    "targetDomSelector": ".icon-container",
+    "targetDomHint": "icon区域",
+    "previewAnalysisRole": "icon",
+    "hint": "icon → icon区域",
+    "downloadStatus": "css",
+    "cssValue": "linear-gradient(180deg, #388dff 0%, #388dff 100%)",
+    "deduplicatedFrom": null,
+    "fallbackHint": "✅ CSS 替代（无需图片）: background: linear-gradient(180deg, #388dff 0%, #388dff 100%);",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 12,
+      "fillsSummary": "linear-gradient(#388dff 0%, #388dff 100%)"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true,
+    "isPanelResource": false
+  },
+  {
+    "resourceFile": "../resources/images/icon-3441.png",
+    "figmaNodeId": "2:3441",
+    "figmaPath": "cp-流量监测/slot-车型分布/sub-header/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 36.8271484375,
+      "y": 576.0422973632812,
+      "width": 18,
+      "height": 18.253520965576172
+    },
+    "parentBox": {
+      "x": 36.8271484375,
+      "y": 573,
+      "width": 86,
+      "height": 24.338027954101562
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".icon-container",
+    "targetDomHint": "icon区域",
+    "previewAnalysisRole": "icon",
+    "hint": "icon → icon区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 18,
+      "height": 18
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon98"
+  },
+  {
+    "resourceFile": "../resources/images/bg-_m-36.png",
+    "figmaNodeId": "88:36",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/bg-[m]",
+    "name": "bg-[m]",
+    "figmaBox": {
+      "x": 33.8271484375,
+      "y": 632.000244140625,
+      "width": 191,
+      "height": 80.267578125
+    },
+    "parentBox": {
+      "x": 32.8271484375,
+      "y": 601.000244140625,
+      "width": 192,
+      "height": 114
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".m-container",
+    "targetDomHint": "[m]区域",
+    "previewAnalysisRole": "bg",
+    "hint": "bg-[m] → [m]区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": "bgm_2",
+    "visualMeta": {
+      "width": 191,
+      "height": 80
+    },
+    "recommendedUsage": "backgroundBlock",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "mountTarget": "Frame 1280",
+    "bgRole": "sub-state",
+    "assignedVarName": "bg2"
+  },
+  {
+    "resourceFile": "../resources/images/bg-3475.png",
+    "figmaNodeId": "2:3475",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/t/bg",
+    "name": "bg",
+    "figmaBox": {
+      "x": 64.8271484375,
+      "y": 618.773681640625,
+      "width": 129.5,
+      "height": 9
+    },
+    "parentBox": {
+      "x": 64.8271484375,
+      "y": 603.000244140625,
+      "width": 129.5,
+      "height": 24.7734375
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".bg-container",
+    "targetDomHint": "bg区域",
+    "previewAnalysisRole": "bg",
+    "hint": "bg → bg区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 130,
+      "height": 9
+    },
+    "recommendedUsage": "backgroundBlock",
+    "isTinyDecoration": false,
+    "isPanelResource": true,
+    "mountTarget": "t",
+    "bgRole": "sub-state",
+    "assignedVarName": "bg3"
+  },
+  {
+    "resourceFile": "../resources/images/bg-_m-35.png",
+    "figmaNodeId": "88:35",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/bg-[m]",
+    "name": "bg-[m]",
+    "figmaBox": {
+      "x": 228.8271484375,
+      "y": 631.000244140625,
+      "width": 191,
+      "height": 81.267578125
+    },
+    "parentBox": {
+      "x": 227.8271484375,
+      "y": 601.000244140625,
+      "width": 192,
+      "height": 114
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".m-container",
+    "targetDomHint": "[m]区域",
+    "previewAnalysisRole": "bg",
+    "hint": "bg-[m] → [m]区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": "bgm_3",
+    "visualMeta": {
+      "width": 191,
+      "height": 81
+    },
+    "recommendedUsage": "backgroundBlock",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "mountTarget": "Frame 1280",
+    "bgRole": "sub-state",
+    "assignedVarName": "bg4"
+  },
+  {
+    "resourceFile": "../resources/images/bg-3525.png",
+    "figmaNodeId": "2:3525",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/t/bg",
+    "name": "bg",
+    "figmaBox": {
+      "x": 259.8271484375,
+      "y": 616.773681640625,
+      "width": 129.5,
+      "height": 9
+    },
+    "parentBox": {
+      "x": 259.8271484375,
+      "y": 601.000244140625,
+      "width": 129.5,
+      "height": 24.7734375
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".bg-container",
+    "targetDomHint": "bg区域",
+    "previewAnalysisRole": "bg",
+    "hint": "bg → bg区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 130,
+      "height": 9
+    },
+    "recommendedUsage": "backgroundBlock",
+    "isTinyDecoration": false,
+    "isPanelResource": true,
+    "mountTarget": "t",
+    "bgRole": "sub-state",
+    "assignedVarName": "bg5"
+  },
+  {
+    "resourceFile": "../resources/images/icon-3573.png",
+    "figmaNodeId": "2:3573",
+    "figmaPath": "cp-流量监测/slot-流量预测/sub-header/tit/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 35.8271484375,
+      "y": 733.04296875,
+      "width": 18,
+      "height": 18.253520965576172
+    },
+    "parentBox": {
+      "x": 35.8271484375,
+      "y": 730,
+      "width": 86,
+      "height": 24.338027954101562
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".icon-container",
+    "targetDomHint": "icon区域",
+    "previewAnalysisRole": "icon",
+    "hint": "icon → icon区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 18,
+      "height": 18
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon99"
+  }
+]

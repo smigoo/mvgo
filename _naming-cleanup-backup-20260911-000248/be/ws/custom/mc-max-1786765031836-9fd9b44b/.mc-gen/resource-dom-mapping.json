@@ -1,0 +1,5566 @@
+[
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3436",
+    "figmaPath": "cp-流量监测/bg-[m]",
+    "figmaBox": {
+      "x": 15.8271484375,
+      "y": 109,
+      "width": 420,
+      "height": 807
+    },
+    "usage": ":style=\"{ background: '#edf4fbb2' }\"",
+    "targetDomSelector": ".m-container",
+    "targetDomHint": "[m]区域",
+    "previewAnalysisRole": "bg",
+    "hint": "bg-[m] → [m]区域",
+    "downloadStatus": "css",
+    "cssValue": "#edf4fbb2",
+    "deduplicatedFrom": null,
+    "fallbackHint": "✅ CSS 替代（无需图片）: background: #edf4fbb2;",
+    "semanticVarName": "bgm",
+    "visualMeta": {
+      "width": 420,
+      "height": 807,
+      "fillsSummary": "#edf4fbb2",
+      "effectsSummary": "box-shadow: 0px 4px 10px #4a758d"
+    },
+    "recommendedUsage": "backgroundStyle",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": "../resources/images/g-3552.png",
+    "figmaNodeId": "2:3552",
+    "figmaPath": "cp-流量监测/header-/g",
+    "figmaBox": {
+      "x": 35.8271484375,
+      "y": 143.56997680664062,
+      "width": 8,
+      "height": 8.112675666809082
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".g-container",
+    "targetDomHint": "g区域",
+    "previewAnalysisRole": "icon",
+    "hint": "g → g区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 8,
+      "height": 8
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3553",
+    "figmaPath": "cp-流量监测/header-/g/circle",
+    "figmaBox": {
+      "x": 35.8271484375,
+      "y": 143.56997680664062,
+      "width": 8,
+      "height": 8.112675666809082
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".circle-container",
+    "targetDomHint": "circle区域",
+    "previewAnalysisRole": "icon",
+    "hint": "circle → circle区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 8,
+      "height": 8,
+      "fillsSummary": "#00000000"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3554",
+    "figmaPath": "cp-流量监测/header-/g/circle",
+    "figmaBox": {
+      "x": 36.8271484375,
+      "y": 144.5840606689453,
+      "width": 5.999999523162842,
+      "height": 6.084506511688232
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".circle-container",
+    "targetDomHint": "circle区域",
+    "previewAnalysisRole": "icon",
+    "hint": "circle → circle区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 6,
+      "height": 6,
+      "fillsSummary": "linear-gradient(#1252fa 0%, #d6effc 100%)"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3555",
+    "figmaPath": "cp-流量监测/header-/g/path",
+    "figmaBox": {
+      "x": 38.629150390625,
+      "y": 146.4114227294922,
+      "width": 2.3958981037139893,
+      "height": 2.429748773574829
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".path-container",
+    "targetDomHint": "path区域",
+    "previewAnalysisRole": "icon",
+    "hint": "path → path区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 2,
+      "height": 2,
+      "fillsSummary": "#559eff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": "../resources/images/Vector-3549.png",
+    "figmaNodeId": "2:3549",
+    "figmaPath": "cp-流量监测/slot-当日总流量/sub-header/@ant/select/Group 1321316013/Vector",
+    "figmaBox": {
+      "x": 397.8271484375,
+      "y": 171.21707715996212,
+      "width": 8.000000053413544,
+      "height": 4.473901843944134
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".vector-container",
+    "targetDomHint": "Vector区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Vector → Vector区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 8,
+      "height": 4,
+      "fillsSummary": "#a8abb2"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": "../resources/images/icon-3561.png",
+    "figmaNodeId": "2:3561",
+    "figmaPath": "cp-流量监测/slot-当日总流量/sub-header/标题/icon",
+    "figmaBox": {
+      "x": 35.8271484375,
+      "y": 164.86578369140625,
+      "width": 18,
+      "height": 18.253520965576172
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".icon-container",
+    "targetDomHint": "icon区域",
+    "previewAnalysisRole": "icon",
+    "hint": "icon → icon区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 18,
+      "height": 18
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": "../resources/images/bg-_m-34.png",
+    "figmaNodeId": "88:34",
+    "figmaPath": "cp-流量监测/slot-当日总流量/Group 2136636802/bg-[m]",
+    "figmaBox": {
+      "x": 9.999755859375,
+      "y": 196,
+      "width": 425.8287353515625,
+      "height": 91.4396743774414
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".m-container",
+    "targetDomHint": "[m]区域",
+    "previewAnalysisRole": "bg",
+    "hint": "bg-[m] → [m]区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": "bgm_2",
+    "visualMeta": {
+      "width": 426,
+      "height": 91
+    },
+    "recommendedUsage": "backgroundStyle",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3664",
+    "figmaPath": "cp-流量监测/slot-当日总流量/Group 2136636802/bg-[m]/Group 1321315135/Group",
+    "figmaBox": {
+      "x": 54.826534271240234,
+      "y": 207.1007843017578,
+      "width": 150.61532592773438,
+      "height": 64.39990234375
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-container",
+    "targetDomHint": "Group区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group → Group区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 151,
+      "height": 64,
+      "opacity": 0.4000000059604645
+    },
+    "recommendedUsage": "decorativeBlock",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3666",
+    "figmaPath": "cp-流量监测/slot-当日总流量/Group 2136636802/bg-[m]/Group 1321315135/Vector",
+    "figmaBox": {
+      "x": 205.54246520996094,
+      "y": 263.59893798828125,
+      "width": 30.770946502685547,
+      "height": 15.380969047546387
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".vector-container",
+    "targetDomHint": "Vector区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Vector → Vector区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 31,
+      "height": 15,
+      "fillsSummary": "linear-gradient(#3fa9f5 0%, #3fa9f5 10%, #3fa9f5 23%, #3fa9f5 37%, #3fa9f5 53%, #3fa9f5 69%, #3fa9f5 86%, #3fa9f5 100%)",
+      "opacity": 0.25
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3667",
+    "figmaPath": "cp-流量监测/slot-当日总流量/Group 2136636802/bg-[m]/Group 1321315135/Vector",
+    "figmaBox": {
+      "x": 200.93406677246094,
+      "y": 260.92529296875,
+      "width": 39.9869384765625,
+      "height": 19.988964080810547
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".vector-container",
+    "targetDomHint": "Vector区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Vector → Vector区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 40,
+      "height": 20,
+      "opacity": 0.20000000298023224
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3668",
+    "figmaPath": "cp-流量监测/slot-当日总流量/Group 2136636802/bg-[m]/Group 1321315135/Vector",
+    "figmaBox": {
+      "x": 200.82861328125,
+      "y": 267,
+      "width": 39.9869384765625,
+      "height": 19.998083114624023
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".vector-container",
+    "targetDomHint": "Vector区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Vector → Vector区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 40,
+      "height": 20,
+      "opacity": 0.5
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3669",
+    "figmaPath": "cp-流量监测/slot-当日总流量/Group 2136636802/bg-[m]/Group 1321315135/Vector",
+    "figmaBox": {
+      "x": 205.43603515625,
+      "y": 272.05859375,
+      "width": 30.770946502685547,
+      "height": 15.381078720092773
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".vector-container",
+    "targetDomHint": "Vector区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Vector → Vector区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 31,
+      "height": 15,
+      "fillsSummary": "linear-gradient(#3fa9f5 0%, #3fa9f5 17%, #3fa9f5 30%, #3fa9f5 42%, #3fa9f5 53%, #3fa9f5 64%, #3fa9f5 75%, #3fa9f5 85%, #3fa9f5 95%, #3fa9f5 100%)"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3670",
+    "figmaPath": "cp-流量监测/slot-当日总流量/Group 2136636802/bg-[m]/Group 1321315135/Group 1321318547",
+    "figmaBox": {
+      "x": 173.62838745117188,
+      "y": 196,
+      "width": 90,
+      "height": 86.32591247558594
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-1321318547-container",
+    "targetDomHint": "Group 1321318547区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 1321318547 → Group 1321318547区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup1321318547",
+    "visualMeta": {
+      "width": 90,
+      "height": 86,
+      "opacity": 0.5
+    },
+    "recommendedUsage": "decorativeBlock",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3677",
+    "figmaPath": "cp-流量监测/slot-当日总流量/Group 2136636802/bg-[m]/Group 1321315135/Group 1321318549/Group",
+    "figmaBox": {
+      "x": 235.36814880371094,
+      "y": 207.10116577148438,
+      "width": 152.99888610839844,
+      "height": 64.4002685546875
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-container",
+    "targetDomHint": "Group区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group → Group区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 153,
+      "height": 64,
+      "opacity": 0.4000000059604645
+    },
+    "recommendedUsage": "decorativeBlock",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7458",
+    "figmaPath": "cp-流量监测/slot-当日总流量/Group 2136636802/bg-[m]/image 2136639306",
+    "figmaBox": {
+      "x": 188.8271484375,
+      "y": 209,
+      "width": 62,
+      "height": 62
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".image-2136639306-container",
+    "targetDomHint": "image 2136639306区域",
+    "previewAnalysisRole": "icon",
+    "hint": "image 2136639306 → image 2136639306区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icon2136639306",
+    "visualMeta": {
+      "width": 62,
+      "height": 62
+    },
+    "recommendedUsage": "decorativeBlock",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7493",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Group 2136637691/Group 2136636847",
+    "figmaBox": {
+      "x": 278.8271484375,
+      "y": 333.394287109375,
+      "width": 1,
+      "height": 69.97183227539062
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136636847-container",
+    "targetDomHint": "Group 2136636847区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136636847 → Group 2136636847区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136636847",
+    "visualMeta": {
+      "width": 1,
+      "height": 70
+    },
+    "recommendedUsage": "decorativeBlock",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7500",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523",
+    "figmaBox": {
+      "x": 65.8271484375,
+      "y": 396.0478210449219,
+      "width": 10,
+      "height": 6
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638523-container",
+    "targetDomHint": "Group 2136638523区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638523 → Group 2136638523区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638523",
+    "visualMeta": {
+      "width": 10,
+      "height": 6
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7501",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523/柱",
+    "figmaBox": {
+      "x": 65.8271484375,
+      "y": 398.0478210449219,
+      "width": 4,
+      "height": 4
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 4,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7502",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523/柱",
+    "figmaBox": {
+      "x": 71.8271484375,
+      "y": 396.0478210449219,
+      "width": 4,
+      "height": 6
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 6,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7503",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522",
+    "figmaBox": {
+      "x": 79.77284240722656,
+      "y": 396.0477600097656,
+      "width": 10,
+      "height": 6.00006103515625
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638522-container",
+    "targetDomHint": "Group 2136638522区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638522 → Group 2136638522区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638522",
+    "visualMeta": {
+      "width": 10,
+      "height": 6
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7504",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522/柱",
+    "figmaBox": {
+      "x": 79.77284240722656,
+      "y": 398.0478210449219,
+      "width": 4,
+      "height": 4
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 4,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7505",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522/柱",
+    "figmaBox": {
+      "x": 85.77284240722656,
+      "y": 396.0477600097656,
+      "width": 4,
+      "height": 6
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 6,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7506",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521",
+    "figmaBox": {
+      "x": 93.71853637695312,
+      "y": 396.0478210449219,
+      "width": 10,
+      "height": 6
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638521-container",
+    "targetDomHint": "Group 2136638521区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638521 → Group 2136638521区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638521",
+    "visualMeta": {
+      "width": 10,
+      "height": 6
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7507",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521/柱",
+    "figmaBox": {
+      "x": 93.71853637695312,
+      "y": 398.0477600097656,
+      "width": 4,
+      "height": 4
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 4,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7508",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521/柱",
+    "figmaBox": {
+      "x": 99.71853637695312,
+      "y": 396.0477600097656,
+      "width": 4,
+      "height": 6
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 6,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7509",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520",
+    "figmaBox": {
+      "x": 107.66423034667969,
+      "y": 396.0477600097656,
+      "width": 10,
+      "height": 6.00006103515625
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638520-container",
+    "targetDomHint": "Group 2136638520区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638520 → Group 2136638520区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638520",
+    "visualMeta": {
+      "width": 10,
+      "height": 6
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7510",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520/柱",
+    "figmaBox": {
+      "x": 107.66423034667969,
+      "y": 398.0478210449219,
+      "width": 4,
+      "height": 4
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 4,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7511",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520/柱",
+    "figmaBox": {
+      "x": 113.66423034667969,
+      "y": 396.0477600097656,
+      "width": 4,
+      "height": 6
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 6,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7512",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523",
+    "figmaBox": {
+      "x": 121.60992431640625,
+      "y": 391.0477600097656,
+      "width": 10,
+      "height": 11.00006103515625
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638523-container",
+    "targetDomHint": "Group 2136638523区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638523 → Group 2136638523区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638523_2",
+    "visualMeta": {
+      "width": 10,
+      "height": 11
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7513",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523/柱",
+    "figmaBox": {
+      "x": 121.60992431640625,
+      "y": 395.0478210449219,
+      "width": 4,
+      "height": 7
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7514",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523/柱",
+    "figmaBox": {
+      "x": 127.60992431640625,
+      "y": 391.0477600097656,
+      "width": 4,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7515",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522",
+    "figmaBox": {
+      "x": 135.5556182861328,
+      "y": 391.0477600097656,
+      "width": 10,
+      "height": 11.00006103515625
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638522-container",
+    "targetDomHint": "Group 2136638522区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638522 → Group 2136638522区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638522_2",
+    "visualMeta": {
+      "width": 10,
+      "height": 11
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7516",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522/柱",
+    "figmaBox": {
+      "x": 135.5556182861328,
+      "y": 395.0478210449219,
+      "width": 4,
+      "height": 7
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7517",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522/柱",
+    "figmaBox": {
+      "x": 141.5556182861328,
+      "y": 391.0477600097656,
+      "width": 4,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7518",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521",
+    "figmaBox": {
+      "x": 149.50131225585938,
+      "y": 391.0477600097656,
+      "width": 10,
+      "height": 11.00006103515625
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638521-container",
+    "targetDomHint": "Group 2136638521区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638521 → Group 2136638521区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638521_2",
+    "visualMeta": {
+      "width": 10,
+      "height": 11
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7519",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521/柱",
+    "figmaBox": {
+      "x": 149.50131225585938,
+      "y": 395.0478210449219,
+      "width": 4,
+      "height": 7
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7520",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521/柱",
+    "figmaBox": {
+      "x": 155.50131225585938,
+      "y": 391.0477600097656,
+      "width": 4,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7521",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520",
+    "figmaBox": {
+      "x": 163.44700622558594,
+      "y": 391.0476989746094,
+      "width": 10,
+      "height": 11.0001220703125
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638520-container",
+    "targetDomHint": "Group 2136638520区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638520 → Group 2136638520区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638520_2",
+    "visualMeta": {
+      "width": 10,
+      "height": 11
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7522",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520/柱",
+    "figmaBox": {
+      "x": 163.44700622558594,
+      "y": 395.0478210449219,
+      "width": 4,
+      "height": 7
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7523",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520/柱",
+    "figmaBox": {
+      "x": 169.44700622558594,
+      "y": 391.0476989746094,
+      "width": 4,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7524",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523",
+    "figmaBox": {
+      "x": 177.3927001953125,
+      "y": 372.0476379394531,
+      "width": 10,
+      "height": 30.00018310546875
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638523-container",
+    "targetDomHint": "Group 2136638523区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638523 → Group 2136638523区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638523_3",
+    "visualMeta": {
+      "width": 10,
+      "height": 30
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7525",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523/柱",
+    "figmaBox": {
+      "x": 177.3927001953125,
+      "y": 382.0478210449219,
+      "width": 4,
+      "height": 20
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 20,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7526",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523/柱",
+    "figmaBox": {
+      "x": 183.3927001953125,
+      "y": 372.0476379394531,
+      "width": 4,
+      "height": 30
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 30,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7527",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522",
+    "figmaBox": {
+      "x": 191.33839416503906,
+      "y": 372.0476379394531,
+      "width": 10,
+      "height": 30.00018310546875
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638522-container",
+    "targetDomHint": "Group 2136638522区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638522 → Group 2136638522区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638522_3",
+    "visualMeta": {
+      "width": 10,
+      "height": 30
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7528",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522/柱",
+    "figmaBox": {
+      "x": 191.33839416503906,
+      "y": 382.0478210449219,
+      "width": 4,
+      "height": 20
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 20,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7529",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522/柱",
+    "figmaBox": {
+      "x": 197.33839416503906,
+      "y": 372.0476379394531,
+      "width": 4,
+      "height": 30
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 30,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7530",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521",
+    "figmaBox": {
+      "x": 205.28408813476562,
+      "y": 391.0476989746094,
+      "width": 10,
+      "height": 11.0001220703125
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638521-container",
+    "targetDomHint": "Group 2136638521区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638521 → Group 2136638521区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638521_3",
+    "visualMeta": {
+      "width": 10,
+      "height": 11
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7531",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521/柱",
+    "figmaBox": {
+      "x": 205.28408813476562,
+      "y": 395.0478210449219,
+      "width": 4,
+      "height": 7
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7532",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521/柱",
+    "figmaBox": {
+      "x": 211.28408813476562,
+      "y": 391.0476989746094,
+      "width": 4,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7533",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520",
+    "figmaBox": {
+      "x": 219.2297821044922,
+      "y": 366.0478210449219,
+      "width": 10,
+      "height": 36
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638520-container",
+    "targetDomHint": "Group 2136638520区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638520 → Group 2136638520区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638520_3",
+    "visualMeta": {
+      "width": 10,
+      "height": 36
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7534",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520/柱",
+    "figmaBox": {
+      "x": 219.2297821044922,
+      "y": 378.0478210449219,
+      "width": 4,
+      "height": 24
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 24,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7535",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520/柱",
+    "figmaBox": {
+      "x": 225.2297821044922,
+      "y": 366.0478210449219,
+      "width": 4,
+      "height": 36
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 36,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7536",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523",
+    "figmaBox": {
+      "x": 233.17547607421875,
+      "y": 391.0478210449219,
+      "width": 10,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638523-container",
+    "targetDomHint": "Group 2136638523区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638523 → Group 2136638523区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638523_4",
+    "visualMeta": {
+      "width": 10,
+      "height": 11
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7537",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523/柱",
+    "figmaBox": {
+      "x": 233.17547607421875,
+      "y": 395.0478210449219,
+      "width": 4,
+      "height": 7
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7538",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523/柱",
+    "figmaBox": {
+      "x": 239.17547607421875,
+      "y": 391.0478210449219,
+      "width": 4,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7539",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522",
+    "figmaBox": {
+      "x": 247.1211700439453,
+      "y": 366.0478210449219,
+      "width": 9.7987060546875,
+      "height": 36
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638522-container",
+    "targetDomHint": "Group 2136638522区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638522 → Group 2136638522区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638522_4",
+    "visualMeta": {
+      "width": 10,
+      "height": 36
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7540",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522/柱",
+    "figmaBox": {
+      "x": 247.1211700439453,
+      "y": 378.0477600097656,
+      "width": 4,
+      "height": 24
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 24,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7541",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522/柱",
+    "figmaBox": {
+      "x": 252.9198760986328,
+      "y": 366.0477600097656,
+      "width": 4,
+      "height": 36
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 36,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7542",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521",
+    "figmaBox": {
+      "x": 260.8655700683594,
+      "y": 378.0476989746094,
+      "width": 10,
+      "height": 24.0001220703125
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638521-container",
+    "targetDomHint": "Group 2136638521区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638521 → Group 2136638521区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638521_4",
+    "visualMeta": {
+      "width": 10,
+      "height": 24
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7543",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521/柱",
+    "figmaBox": {
+      "x": 260.8655700683594,
+      "y": 386.0478210449219,
+      "width": 4,
+      "height": 16
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 16,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7544",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521/柱",
+    "figmaBox": {
+      "x": 266.8655700683594,
+      "y": 378.0476989746094,
+      "width": 4,
+      "height": 24
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 24,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7545",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520",
+    "figmaBox": {
+      "x": 274.811279296875,
+      "y": 378.0477600097656,
+      "width": 9.6787109375,
+      "height": 24
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638520-container",
+    "targetDomHint": "Group 2136638520区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638520 → Group 2136638520区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638520_4",
+    "visualMeta": {
+      "width": 10,
+      "height": 24
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7546",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520/柱",
+    "figmaBox": {
+      "x": 274.811279296875,
+      "y": 386.0478210449219,
+      "width": 4,
+      "height": 16
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 16,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7547",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520/柱",
+    "figmaBox": {
+      "x": 280.4901123046875,
+      "y": 378.0477600097656,
+      "width": 4,
+      "height": 24
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 24,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7549",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638523",
+    "figmaBox": {
+      "x": 288.4358215332031,
+      "y": 391.0478210449219,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638523-container",
+    "targetDomHint": "Group 2136638523区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638523 → Group 2136638523区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638523_5",
+    "visualMeta": {
+      "width": 8,
+      "height": 11
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7550",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638523/柱",
+    "figmaBox": {
+      "x": 288.4358215332031,
+      "y": 394.7144775390625,
+      "width": 3,
+      "height": 7.333333492279053
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7551",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638523/柱",
+    "figmaBox": {
+      "x": 293.4358215332031,
+      "y": 391.0478210449219,
+      "width": 3,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7552",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638522",
+    "figmaBox": {
+      "x": 302.3489074707031,
+      "y": 391.0478210449219,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638522-container",
+    "targetDomHint": "Group 2136638522区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638522 → Group 2136638522区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638522_5",
+    "visualMeta": {
+      "width": 8,
+      "height": 11
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7553",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638522/柱",
+    "figmaBox": {
+      "x": 302.3489074707031,
+      "y": 394.7144775390625,
+      "width": 3,
+      "height": 7.333333492279053
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7554",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638522/柱",
+    "figmaBox": {
+      "x": 307.3489074707031,
+      "y": 391.0478210449219,
+      "width": 3,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7555",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638521",
+    "figmaBox": {
+      "x": 316.2618713378906,
+      "y": 391.0478210449219,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638521-container",
+    "targetDomHint": "Group 2136638521区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638521 → Group 2136638521区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638521_5",
+    "visualMeta": {
+      "width": 8,
+      "height": 11
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7556",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638521/柱",
+    "figmaBox": {
+      "x": 316.2618713378906,
+      "y": 394.7144775390625,
+      "width": 3,
+      "height": 7.333333492279053
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7557",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638521/柱",
+    "figmaBox": {
+      "x": 321.2618713378906,
+      "y": 391.0478210449219,
+      "width": 3,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7558",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638520",
+    "figmaBox": {
+      "x": 330.1749572753906,
+      "y": 391.0478210449219,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638520-container",
+    "targetDomHint": "Group 2136638520区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638520 → Group 2136638520区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638520_5",
+    "visualMeta": {
+      "width": 8,
+      "height": 11
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7559",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638520/柱",
+    "figmaBox": {
+      "x": 330.1749572753906,
+      "y": 394.7144775390625,
+      "width": 3,
+      "height": 7.333333492279053
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7560",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638520/柱",
+    "figmaBox": {
+      "x": 335.1749572753906,
+      "y": 391.0478210449219,
+      "width": 3,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7561",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638523",
+    "figmaBox": {
+      "x": 344.0880432128906,
+      "y": 391.0478210449219,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638523-container",
+    "targetDomHint": "Group 2136638523区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638523 → Group 2136638523区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638523_6",
+    "visualMeta": {
+      "width": 8,
+      "height": 11
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7562",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638523/柱",
+    "figmaBox": {
+      "x": 344.0880432128906,
+      "y": 394.7144775390625,
+      "width": 3,
+      "height": 7.333333492279053
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7563",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638523/柱",
+    "figmaBox": {
+      "x": 349.0880432128906,
+      "y": 391.0478210449219,
+      "width": 3,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7564",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638522",
+    "figmaBox": {
+      "x": 358.0010070800781,
+      "y": 391.0478210449219,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638522-container",
+    "targetDomHint": "Group 2136638522区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638522 → Group 2136638522区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638522_6",
+    "visualMeta": {
+      "width": 8,
+      "height": 11
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7565",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638522/柱",
+    "figmaBox": {
+      "x": 358.0010070800781,
+      "y": 394.7144775390625,
+      "width": 3,
+      "height": 7.333333492279053
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7566",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638522/柱",
+    "figmaBox": {
+      "x": 363.0010070800781,
+      "y": 391.0478210449219,
+      "width": 3,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7567",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638521",
+    "figmaBox": {
+      "x": 371.9140930175781,
+      "y": 391.0478210449219,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638521-container",
+    "targetDomHint": "Group 2136638521区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638521 → Group 2136638521区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638521_6",
+    "visualMeta": {
+      "width": 8,
+      "height": 11
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7568",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638521/柱",
+    "figmaBox": {
+      "x": 371.9140930175781,
+      "y": 394.7144775390625,
+      "width": 3,
+      "height": 7.333333492279053
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7569",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638521/柱",
+    "figmaBox": {
+      "x": 376.9140930175781,
+      "y": 391.0478210449219,
+      "width": 3,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7570",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638520",
+    "figmaBox": {
+      "x": 385.8271789550781,
+      "y": 391.0478210449219,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638520-container",
+    "targetDomHint": "Group 2136638520区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638520 → Group 2136638520区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638520_6",
+    "visualMeta": {
+      "width": 8,
+      "height": 11
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7571",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638520/柱",
+    "figmaBox": {
+      "x": 385.8271789550781,
+      "y": 394.7144775390625,
+      "width": 3,
+      "height": 7.333333492279053
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7572",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638520/柱",
+    "figmaBox": {
+      "x": 390.8271789550781,
+      "y": 391.0478210449219,
+      "width": 3,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7626",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/Frame 2136639396/icon",
+    "figmaBox": {
+      "x": 33.8271484375,
+      "y": 291.5,
+      "width": 3,
+      "height": 12
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".icon-container",
+    "targetDomHint": "icon区域",
+    "previewAnalysisRole": "icon",
+    "hint": "icon → icon区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 12,
+      "fillsSummary": "linear-gradient(#388dff 0%, #388dff 100%)"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7662",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Group 2136637691/Group 2136636847",
+    "figmaBox": {
+      "x": 278.8271484375,
+      "y": 474.394287109375,
+      "width": 1,
+      "height": 69.97183227539062
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136636847-container",
+    "targetDomHint": "Group 2136636847区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136636847 → Group 2136636847区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136636847_2",
+    "visualMeta": {
+      "width": 1,
+      "height": 70
+    },
+    "recommendedUsage": "decorativeBlock",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7669",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523",
+    "figmaBox": {
+      "x": 65.8271484375,
+      "y": 537.0478515625,
+      "width": 10,
+      "height": 6
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638523-container",
+    "targetDomHint": "Group 2136638523区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638523 → Group 2136638523区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638523_7",
+    "visualMeta": {
+      "width": 10,
+      "height": 6
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7670",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523/柱",
+    "figmaBox": {
+      "x": 65.8271484375,
+      "y": 539.0478515625,
+      "width": 4,
+      "height": 4
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 4,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7671",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523/柱",
+    "figmaBox": {
+      "x": 71.8271484375,
+      "y": 537.0478515625,
+      "width": 4,
+      "height": 6
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 6,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7672",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522",
+    "figmaBox": {
+      "x": 79.77284240722656,
+      "y": 537.0477294921875,
+      "width": 10,
+      "height": 6.00006103515625
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638522-container",
+    "targetDomHint": "Group 2136638522区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638522 → Group 2136638522区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638522_7",
+    "visualMeta": {
+      "width": 10,
+      "height": 6
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7673",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522/柱",
+    "figmaBox": {
+      "x": 79.77284240722656,
+      "y": 539.0477905273438,
+      "width": 4,
+      "height": 4
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 4,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7674",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522/柱",
+    "figmaBox": {
+      "x": 85.77284240722656,
+      "y": 537.0477294921875,
+      "width": 4,
+      "height": 6
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 6,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7675",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521",
+    "figmaBox": {
+      "x": 93.71853637695312,
+      "y": 537.0478515625,
+      "width": 10,
+      "height": 6
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638521-container",
+    "targetDomHint": "Group 2136638521区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638521 → Group 2136638521区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638521_7",
+    "visualMeta": {
+      "width": 10,
+      "height": 6
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7676",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521/柱",
+    "figmaBox": {
+      "x": 93.71853637695312,
+      "y": 539.0477905273438,
+      "width": 4,
+      "height": 4
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 4,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7677",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521/柱",
+    "figmaBox": {
+      "x": 99.71853637695312,
+      "y": 537.0477905273438,
+      "width": 4,
+      "height": 6
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 6,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7678",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520",
+    "figmaBox": {
+      "x": 107.66423034667969,
+      "y": 537.0477294921875,
+      "width": 10,
+      "height": 6.00006103515625
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638520-container",
+    "targetDomHint": "Group 2136638520区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638520 → Group 2136638520区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638520_7",
+    "visualMeta": {
+      "width": 10,
+      "height": 6
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7679",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520/柱",
+    "figmaBox": {
+      "x": 107.66423034667969,
+      "y": 539.0477905273438,
+      "width": 4,
+      "height": 4
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 4,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7680",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520/柱",
+    "figmaBox": {
+      "x": 113.66423034667969,
+      "y": 537.0477294921875,
+      "width": 4,
+      "height": 6
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 6,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7681",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523",
+    "figmaBox": {
+      "x": 121.60992431640625,
+      "y": 532.0477294921875,
+      "width": 10,
+      "height": 11.00006103515625
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638523-container",
+    "targetDomHint": "Group 2136638523区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638523 → Group 2136638523区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638523_8",
+    "visualMeta": {
+      "width": 10,
+      "height": 11
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7682",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523/柱",
+    "figmaBox": {
+      "x": 121.60992431640625,
+      "y": 536.0477905273438,
+      "width": 4,
+      "height": 7
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7683",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523/柱",
+    "figmaBox": {
+      "x": 127.60992431640625,
+      "y": 532.0477294921875,
+      "width": 4,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7684",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522",
+    "figmaBox": {
+      "x": 135.5556182861328,
+      "y": 532.0477294921875,
+      "width": 10,
+      "height": 11.00006103515625
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638522-container",
+    "targetDomHint": "Group 2136638522区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638522 → Group 2136638522区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638522_8",
+    "visualMeta": {
+      "width": 10,
+      "height": 11
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7685",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522/柱",
+    "figmaBox": {
+      "x": 135.5556182861328,
+      "y": 536.0477905273438,
+      "width": 4,
+      "height": 7
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7686",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522/柱",
+    "figmaBox": {
+      "x": 141.5556182861328,
+      "y": 532.0477294921875,
+      "width": 4,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7687",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521",
+    "figmaBox": {
+      "x": 149.50131225585938,
+      "y": 532.0477294921875,
+      "width": 10,
+      "height": 11.00006103515625
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638521-container",
+    "targetDomHint": "Group 2136638521区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638521 → Group 2136638521区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638521_8",
+    "visualMeta": {
+      "width": 10,
+      "height": 11
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7688",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521/柱",
+    "figmaBox": {
+      "x": 149.50131225585938,
+      "y": 536.0477905273438,
+      "width": 4,
+      "height": 7
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7689",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521/柱",
+    "figmaBox": {
+      "x": 155.50131225585938,
+      "y": 532.0477294921875,
+      "width": 4,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7690",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520",
+    "figmaBox": {
+      "x": 163.44700622558594,
+      "y": 532.0477294921875,
+      "width": 10,
+      "height": 11.0001220703125
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638520-container",
+    "targetDomHint": "Group 2136638520区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638520 → Group 2136638520区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638520_8",
+    "visualMeta": {
+      "width": 10,
+      "height": 11
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7691",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520/柱",
+    "figmaBox": {
+      "x": 163.44700622558594,
+      "y": 536.0478515625,
+      "width": 4,
+      "height": 7
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7692",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520/柱",
+    "figmaBox": {
+      "x": 169.44700622558594,
+      "y": 532.0477294921875,
+      "width": 4,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7693",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523",
+    "figmaBox": {
+      "x": 177.3927001953125,
+      "y": 513.047607421875,
+      "width": 10,
+      "height": 30.00018310546875
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638523-container",
+    "targetDomHint": "Group 2136638523区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638523 → Group 2136638523区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638523_9",
+    "visualMeta": {
+      "width": 10,
+      "height": 30
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7694",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523/柱",
+    "figmaBox": {
+      "x": 177.3927001953125,
+      "y": 523.0477905273438,
+      "width": 4,
+      "height": 20
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 20,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7695",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523/柱",
+    "figmaBox": {
+      "x": 183.3927001953125,
+      "y": 513.047607421875,
+      "width": 4,
+      "height": 30
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 30,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7696",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522",
+    "figmaBox": {
+      "x": 191.33839416503906,
+      "y": 513.047607421875,
+      "width": 10,
+      "height": 30.00018310546875
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638522-container",
+    "targetDomHint": "Group 2136638522区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638522 → Group 2136638522区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638522_9",
+    "visualMeta": {
+      "width": 10,
+      "height": 30
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7697",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522/柱",
+    "figmaBox": {
+      "x": 191.33839416503906,
+      "y": 523.0477905273438,
+      "width": 4,
+      "height": 20
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 20,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7698",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522/柱",
+    "figmaBox": {
+      "x": 197.33839416503906,
+      "y": 513.047607421875,
+      "width": 4,
+      "height": 30
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 30,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7699",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521",
+    "figmaBox": {
+      "x": 205.28408813476562,
+      "y": 532.0477294921875,
+      "width": 10,
+      "height": 11.0001220703125
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638521-container",
+    "targetDomHint": "Group 2136638521区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638521 → Group 2136638521区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638521_9",
+    "visualMeta": {
+      "width": 10,
+      "height": 11
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7700",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521/柱",
+    "figmaBox": {
+      "x": 205.28408813476562,
+      "y": 536.0478515625,
+      "width": 4,
+      "height": 7
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7701",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521/柱",
+    "figmaBox": {
+      "x": 211.28408813476562,
+      "y": 532.0477294921875,
+      "width": 4,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7702",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520",
+    "figmaBox": {
+      "x": 219.2297821044922,
+      "y": 507.0478210449219,
+      "width": 10,
+      "height": 36
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638520-container",
+    "targetDomHint": "Group 2136638520区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638520 → Group 2136638520区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638520_9",
+    "visualMeta": {
+      "width": 10,
+      "height": 36
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7703",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520/柱",
+    "figmaBox": {
+      "x": 219.2297821044922,
+      "y": 519.0478515625,
+      "width": 4,
+      "height": 24
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 24,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7704",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520/柱",
+    "figmaBox": {
+      "x": 225.2297821044922,
+      "y": 507.0478210449219,
+      "width": 4,
+      "height": 36
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 36,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7705",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523",
+    "figmaBox": {
+      "x": 233.17547607421875,
+      "y": 532.0478515625,
+      "width": 10,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638523-container",
+    "targetDomHint": "Group 2136638523区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638523 → Group 2136638523区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638523_10",
+    "visualMeta": {
+      "width": 10,
+      "height": 11
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7706",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523/柱",
+    "figmaBox": {
+      "x": 233.17547607421875,
+      "y": 536.0478515625,
+      "width": 4,
+      "height": 7
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7707",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638523/柱",
+    "figmaBox": {
+      "x": 239.17547607421875,
+      "y": 532.0478515625,
+      "width": 4,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7708",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522",
+    "figmaBox": {
+      "x": 247.1211700439453,
+      "y": 507.0478210449219,
+      "width": 9.7987060546875,
+      "height": 36
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638522-container",
+    "targetDomHint": "Group 2136638522区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638522 → Group 2136638522区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638522_10",
+    "visualMeta": {
+      "width": 10,
+      "height": 36
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7709",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522/柱",
+    "figmaBox": {
+      "x": 247.1211700439453,
+      "y": 519.0477294921875,
+      "width": 4,
+      "height": 24
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 24,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7710",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638522/柱",
+    "figmaBox": {
+      "x": 252.9198760986328,
+      "y": 507.0477600097656,
+      "width": 4,
+      "height": 36
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 36,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7711",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521",
+    "figmaBox": {
+      "x": 260.8655700683594,
+      "y": 519.0477294921875,
+      "width": 10,
+      "height": 24.0001220703125
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638521-container",
+    "targetDomHint": "Group 2136638521区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638521 → Group 2136638521区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638521_10",
+    "visualMeta": {
+      "width": 10,
+      "height": 24
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7712",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521/柱",
+    "figmaBox": {
+      "x": 260.8655700683594,
+      "y": 527.0478515625,
+      "width": 4,
+      "height": 16
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 16,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7713",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638521/柱",
+    "figmaBox": {
+      "x": 266.8655700683594,
+      "y": 519.0477294921875,
+      "width": 4,
+      "height": 24
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 24,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7714",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520",
+    "figmaBox": {
+      "x": 274.811279296875,
+      "y": 519.0477294921875,
+      "width": 9.6787109375,
+      "height": 24
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638520-container",
+    "targetDomHint": "Group 2136638520区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638520 → Group 2136638520区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638520_10",
+    "visualMeta": {
+      "width": 10,
+      "height": 24
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7715",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520/柱",
+    "figmaBox": {
+      "x": 274.811279296875,
+      "y": 527.0477905273438,
+      "width": 4,
+      "height": 16
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 16,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7716",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638520/柱",
+    "figmaBox": {
+      "x": 280.4901123046875,
+      "y": 519.0477294921875,
+      "width": 4,
+      "height": 24
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 4,
+      "height": 24,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7718",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638523",
+    "figmaBox": {
+      "x": 288.4358215332031,
+      "y": 532.0478515625,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638523-container",
+    "targetDomHint": "Group 2136638523区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638523 → Group 2136638523区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638523_11",
+    "visualMeta": {
+      "width": 8,
+      "height": 11
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7719",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638523/柱",
+    "figmaBox": {
+      "x": 288.4358215332031,
+      "y": 535.7145385742188,
+      "width": 3,
+      "height": 7.333333492279053
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7720",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638523/柱",
+    "figmaBox": {
+      "x": 293.4358215332031,
+      "y": 532.0478515625,
+      "width": 3,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7721",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638522",
+    "figmaBox": {
+      "x": 302.3489074707031,
+      "y": 532.0478515625,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638522-container",
+    "targetDomHint": "Group 2136638522区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638522 → Group 2136638522区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638522_11",
+    "visualMeta": {
+      "width": 8,
+      "height": 11
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7722",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638522/柱",
+    "figmaBox": {
+      "x": 302.3489074707031,
+      "y": 535.7145385742188,
+      "width": 3,
+      "height": 7.333333492279053
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7723",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638522/柱",
+    "figmaBox": {
+      "x": 307.3489074707031,
+      "y": 532.0478515625,
+      "width": 3,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7724",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638521",
+    "figmaBox": {
+      "x": 316.2618713378906,
+      "y": 532.0478515625,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638521-container",
+    "targetDomHint": "Group 2136638521区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638521 → Group 2136638521区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638521_11",
+    "visualMeta": {
+      "width": 8,
+      "height": 11
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7725",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638521/柱",
+    "figmaBox": {
+      "x": 316.2618713378906,
+      "y": 535.7145385742188,
+      "width": 3,
+      "height": 7.333333492279053
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7726",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638521/柱",
+    "figmaBox": {
+      "x": 321.2618713378906,
+      "y": 532.0478515625,
+      "width": 3,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7727",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638520",
+    "figmaBox": {
+      "x": 330.1749572753906,
+      "y": 532.0478515625,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638520-container",
+    "targetDomHint": "Group 2136638520区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638520 → Group 2136638520区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638520_11",
+    "visualMeta": {
+      "width": 8,
+      "height": 11
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7728",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638520/柱",
+    "figmaBox": {
+      "x": 330.1749572753906,
+      "y": 535.7145385742188,
+      "width": 3,
+      "height": 7.333333492279053
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7729",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638520/柱",
+    "figmaBox": {
+      "x": 335.1749572753906,
+      "y": 532.0478515625,
+      "width": 3,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7730",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638523",
+    "figmaBox": {
+      "x": 344.0880432128906,
+      "y": 532.0478515625,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638523-container",
+    "targetDomHint": "Group 2136638523区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638523 → Group 2136638523区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638523_12",
+    "visualMeta": {
+      "width": 8,
+      "height": 11
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7731",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638523/柱",
+    "figmaBox": {
+      "x": 344.0880432128906,
+      "y": 535.7145385742188,
+      "width": 3,
+      "height": 7.333333492279053
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7732",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638523/柱",
+    "figmaBox": {
+      "x": 349.0880432128906,
+      "y": 532.0478515625,
+      "width": 3,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7733",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638522",
+    "figmaBox": {
+      "x": 358.0010070800781,
+      "y": 532.0478515625,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638522-container",
+    "targetDomHint": "Group 2136638522区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638522 → Group 2136638522区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638522_12",
+    "visualMeta": {
+      "width": 8,
+      "height": 11
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7734",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638522/柱",
+    "figmaBox": {
+      "x": 358.0010070800781,
+      "y": 535.7145385742188,
+      "width": 3,
+      "height": 7.333333492279053
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7735",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638522/柱",
+    "figmaBox": {
+      "x": 363.0010070800781,
+      "y": 532.0478515625,
+      "width": 3,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7736",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638521",
+    "figmaBox": {
+      "x": 371.9140930175781,
+      "y": 532.0478515625,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638521-container",
+    "targetDomHint": "Group 2136638521区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638521 → Group 2136638521区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638521_12",
+    "visualMeta": {
+      "width": 8,
+      "height": 11
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7737",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638521/柱",
+    "figmaBox": {
+      "x": 371.9140930175781,
+      "y": 535.7145385742188,
+      "width": 3,
+      "height": 7.333333492279053
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7738",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638521/柱",
+    "figmaBox": {
+      "x": 376.9140930175781,
+      "y": 532.0478515625,
+      "width": 3,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7739",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638520",
+    "figmaBox": {
+      "x": 385.8271789550781,
+      "y": 532.0478515625,
+      "width": 8,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136638520-container",
+    "targetDomHint": "Group 2136638520区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136638520 → Group 2136638520区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136638520_12",
+    "visualMeta": {
+      "width": 8,
+      "height": 11
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7740",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638520/柱",
+    "figmaBox": {
+      "x": 385.8271789550781,
+      "y": 535.7145385742188,
+      "width": 3,
+      "height": 7.333333492279053
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 7,
+      "fillsSummary": "linear-gradient(#18ffff 0%, #00a3d6 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1fe7e8"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7741",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/折线图 /Frame 2136637710/Group 2136638525/Group 2136638520/柱",
+    "figmaBox": {
+      "x": 390.8271789550781,
+      "y": 532.0478515625,
+      "width": 3,
+      "height": 11
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "柱区域",
+    "previewAnalysisRole": "icon",
+    "hint": "柱 → 柱区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 11,
+      "fillsSummary": "linear-gradient(#18acff 0%, #3c50ff 100%)",
+      "effectsSummary": "box-shadow: 0px 0px 2px #1990ff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7795",
+    "figmaPath": "cp-流量监测/slot-当日总流量/@echarts/bar/Frame 2136639396/icon",
+    "figmaBox": {
+      "x": 33.8271484375,
+      "y": 432.5,
+      "width": 3,
+      "height": 12
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".icon-container",
+    "targetDomHint": "icon区域",
+    "previewAnalysisRole": "icon",
+    "hint": "icon → icon区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 3,
+      "height": 12,
+      "fillsSummary": "linear-gradient(#388dff 0%, #388dff 100%)"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": "../resources/images/icon-3441.png",
+    "figmaNodeId": "2:3441",
+    "figmaPath": "cp-流量监测/slot-车型分布/sub-header/icon",
+    "figmaBox": {
+      "x": 36.8271484375,
+      "y": 576.0422973632812,
+      "width": 18,
+      "height": 18.253520965576172
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".icon-container",
+    "targetDomHint": "icon区域",
+    "previewAnalysisRole": "icon",
+    "hint": "icon → icon区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 18,
+      "height": 18
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": "../resources/images/bg-_m-36.png",
+    "figmaNodeId": "88:36",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/bg-[m]",
+    "figmaBox": {
+      "x": 33.8271484375,
+      "y": 632.000244140625,
+      "width": 191,
+      "height": 80.267578125
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".m-container",
+    "targetDomHint": "[m]区域",
+    "previewAnalysisRole": "bg",
+    "hint": "bg-[m] → [m]区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": "bgm_3",
+    "visualMeta": {
+      "width": 191,
+      "height": 80
+    },
+    "recommendedUsage": "backgroundBlock",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3450",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/bg-[m]/Frame 2136639398/Group 2136637423",
+    "figmaBox": {
+      "x": 114.8271484375,
+      "y": 646.267822265625,
+      "width": 87,
+      "height": 66
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136637423-container",
+    "targetDomHint": "Group 2136637423区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136637423 → Group 2136637423区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136637423",
+    "visualMeta": {
+      "width": 87,
+      "height": 66
+    },
+    "recommendedUsage": "decorativeBlock",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3452",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/bg-[m]/Frame 2136639398/Group 2136637424",
+    "figmaBox": {
+      "x": 51.8271484375,
+      "y": 646.267822265625,
+      "width": 88,
+      "height": 66
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136637424-container",
+    "targetDomHint": "Group 2136637424区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136637424 → Group 2136637424区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136637424",
+    "visualMeta": {
+      "width": 88,
+      "height": 66
+    },
+    "recommendedUsage": "decorativeBlock",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3473",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/bg-[m]/Frame 2136639398/2026-03-17-5939-隧道图标，单元素，蓝色为主，白色为辅，透明科技感，未来感，光滑透明材质，没有光影... (1) 1",
+    "figmaBox": {
+      "x": 114.82763671875,
+      "y": 665.000244140625,
+      "width": 28,
+      "height": 24
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".2026-03-17-5939--1-1-container",
+    "targetDomHint": "2026-03-17-5939-隧道图标，单元素，蓝色为主，白色为辅，透明科技感，未来感，光滑透明材质，没有光影... (1) 1区域",
+    "previewAnalysisRole": "icon",
+    "hint": "2026-03-17-5939-隧道图标，单元素，蓝色为主，白色为辅，透明科技感，未来感，光滑透明材质，没有光影... (1) 1 → 2026-03-17-5939-隧道图标，单元素，蓝色为主，白色为辅，透明科技感，未来感，光滑透明材质，没有光影... (1) 1区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icon202603175939隧道图标",
+    "visualMeta": {
+      "width": 28,
+      "height": 24
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3486",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/bg-[m]/Group 1321318515/Group/Vector",
+    "figmaBox": {
+      "x": 123.4609603881836,
+      "y": 633.58544921875,
+      "width": 11.267337799072266,
+      "height": 5.5047783851623535
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".vector-container",
+    "targetDomHint": "Vector区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Vector → Vector区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 11,
+      "height": 6,
+      "fillsSummary": "linear-gradient(#1c77ff 0%, #0d9aff 16%, #41b3ff 43%, #18a2ff 76%, #35b0ff 99%)"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3487",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/bg-[m]/Group 1321318515/Group/Group",
+    "figmaBox": {
+      "x": 123.4609603881836,
+      "y": 633.5852661132812,
+      "width": 11.267337799072266,
+      "height": 5.5047783851623535
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-container",
+    "targetDomHint": "Group区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group → Group区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 11,
+      "height": 6
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3488",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/bg-[m]/Group 1321318515/Group/Group/Vector",
+    "figmaBox": {
+      "x": 123.4609603881836,
+      "y": 633.5852661132812,
+      "width": 11.267337799072266,
+      "height": 5.5047783851623535
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".vector-container",
+    "targetDomHint": "Vector区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Vector → Vector区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 11,
+      "height": 6,
+      "fillsSummary": "linear-gradient(#0088ff 0%, #3fa9f5 100%)"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3490",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/bg-[m]/Group 1321318515/Group/Vector",
+    "figmaBox": {
+      "x": 123.4609375,
+      "y": 632.000244140625,
+      "width": 11.267337799072266,
+      "height": 5.129491329193115
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".vector-container",
+    "targetDomHint": "Vector区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Vector → Vector区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 11,
+      "height": 5,
+      "fillsSummary": "linear-gradient(#006fff 0%, #00a1ff 16%, #1c8dff 43%, #49bcff 76%, #32aeff 99%)"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3491",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/bg-[m]/Group 1321318515/Group/Group",
+    "figmaBox": {
+      "x": 123.46102905273438,
+      "y": 632.000244140625,
+      "width": 11.267337799072266,
+      "height": 5.129491329193115
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-container",
+    "targetDomHint": "Group区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group → Group区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 11,
+      "height": 5
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3492",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/bg-[m]/Group 1321318515/Group/Group/Vector",
+    "figmaBox": {
+      "x": 123.46102905273438,
+      "y": 632.000244140625,
+      "width": 11.267337799072266,
+      "height": 5.129491329193115
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".vector-container",
+    "targetDomHint": "Vector区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Vector → Vector区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 11,
+      "height": 5,
+      "fillsSummary": "linear-gradient(#2c9dff 0%, #3fa9f5 100%)"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3493",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/bg-[m]/Group 1321318515/Group/Group",
+    "figmaBox": {
+      "x": 126.62545013427734,
+      "y": 632.000244140625,
+      "width": 4.938443660736084,
+      "height": 2.502180576324463
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-container",
+    "targetDomHint": "Group区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group → Group区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 5,
+      "height": 3
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3494",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/bg-[m]/Group 1321318515/Group/Group/Vector",
+    "figmaBox": {
+      "x": 126.62545013427734,
+      "y": 632.000244140625,
+      "width": 4.938443660736084,
+      "height": 2.502180576324463
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".vector-container",
+    "targetDomHint": "Vector区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Vector → Vector区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 5,
+      "height": 3,
+      "fillsSummary": "linear-gradient(#0084ff 0%, #3fa9f5 100%)"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3455",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/@echarts/Group 206",
+    "figmaBox": {
+      "x": 103.8271484375,
+      "y": 650.000244140625,
+      "width": 49.599998474121094,
+      "height": 49.599998474121094
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-206-container",
+    "targetDomHint": "Group 206区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 206 → Group 206区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup206",
+    "visualMeta": {
+      "width": 50,
+      "height": 50
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": "../resources/images/bg-3475.png",
+    "figmaNodeId": "2:3475",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/t/bg",
+    "figmaBox": {
+      "x": 64.8271484375,
+      "y": 618.773681640625,
+      "width": 129.5,
+      "height": 9
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".bg-container",
+    "targetDomHint": "bg区域",
+    "previewAnalysisRole": "bg",
+    "hint": "bg → bg区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 130,
+      "height": 9
+    },
+    "recommendedUsage": "backgroundBlock",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": "../resources/images/bg-_m-35.png",
+    "figmaNodeId": "88:35",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/bg-[m]",
+    "figmaBox": {
+      "x": 228.8271484375,
+      "y": 631.000244140625,
+      "width": 191,
+      "height": 81.267578125
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".m-container",
+    "targetDomHint": "[m]区域",
+    "previewAnalysisRole": "bg",
+    "hint": "bg-[m] → [m]区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": "bgm_4",
+    "visualMeta": {
+      "width": 191,
+      "height": 81
+    },
+    "recommendedUsage": "backgroundBlock",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3500",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/bg-[m]/Frame 2136639399/Group 2136637423",
+    "figmaBox": {
+      "x": 309.8271484375,
+      "y": 646.267822265625,
+      "width": 87,
+      "height": 66
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136637423-container",
+    "targetDomHint": "Group 2136637423区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136637423 → Group 2136637423区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136637423_2",
+    "visualMeta": {
+      "width": 87,
+      "height": 66
+    },
+    "recommendedUsage": "decorativeBlock",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3502",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/bg-[m]/Frame 2136639399/Group 2136637424",
+    "figmaBox": {
+      "x": 246.8271484375,
+      "y": 646.267822265625,
+      "width": 88,
+      "height": 66
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136637424-container",
+    "targetDomHint": "Group 2136637424区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136637424 → Group 2136637424区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136637424_2",
+    "visualMeta": {
+      "width": 88,
+      "height": 66
+    },
+    "recommendedUsage": "decorativeBlock",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3505",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/bg-[m]/Frame 2136639399/Group 206",
+    "figmaBox": {
+      "x": 298.8271484375,
+      "y": 650.000244140625,
+      "width": 49.599998474121094,
+      "height": 49.599998474121094
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-206-container",
+    "targetDomHint": "Group 206区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 206 → Group 206区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup206_2",
+    "visualMeta": {
+      "width": 50,
+      "height": 50
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3519",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/bg-[m]/Frame 2136639399/Frame 2136637408",
+    "figmaBox": {
+      "x": 294.96875,
+      "y": 650.992431640625,
+      "width": 53.85882568359375,
+      "height": 53.69676208496094
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".frame-2136637408-container",
+    "targetDomHint": "Frame 2136637408区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Frame 2136637408 → Frame 2136637408区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "iconframe2136637408",
+    "visualMeta": {
+      "width": 54,
+      "height": 54
+    },
+    "recommendedUsage": "decorativeBlock",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3523",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/bg-[m]/Frame 2136639399/Frame 2136637408/image 2136639302",
+    "figmaBox": {
+      "x": 305.82763671875,
+      "y": 658.000244140625,
+      "width": 36,
+      "height": 36
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".image-2136639302-container",
+    "targetDomHint": "image 2136639302区域",
+    "previewAnalysisRole": "icon",
+    "hint": "image 2136639302 → image 2136639302区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icon2136639302",
+    "visualMeta": {
+      "width": 36,
+      "height": 36
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3536",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/bg-[m]/Group 1321318515/Group/Vector",
+    "figmaBox": {
+      "x": 318.4609680175781,
+      "y": 632.58544921875,
+      "width": 11.267337799072266,
+      "height": 5.5047783851623535
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".vector-container",
+    "targetDomHint": "Vector区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Vector → Vector区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 11,
+      "height": 6,
+      "fillsSummary": "linear-gradient(#1c77ff 0%, #0d9aff 16%, #41b3ff 43%, #18a2ff 76%, #35b0ff 99%)"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3537",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/bg-[m]/Group 1321318515/Group/Group",
+    "figmaBox": {
+      "x": 318.4609680175781,
+      "y": 632.5852661132812,
+      "width": 11.267337799072266,
+      "height": 5.5047783851623535
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-container",
+    "targetDomHint": "Group区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group → Group区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 11,
+      "height": 6
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3538",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/bg-[m]/Group 1321318515/Group/Group/Vector",
+    "figmaBox": {
+      "x": 318.4609680175781,
+      "y": 632.5852661132812,
+      "width": 11.267337799072266,
+      "height": 5.5047783851623535
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".vector-container",
+    "targetDomHint": "Vector区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Vector → Vector区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 11,
+      "height": 6,
+      "fillsSummary": "linear-gradient(#0088ff 0%, #3fa9f5 100%)"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3540",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/bg-[m]/Group 1321318515/Group/Vector",
+    "figmaBox": {
+      "x": 318.4609375,
+      "y": 631.000244140625,
+      "width": 11.267337799072266,
+      "height": 5.129491329193115
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".vector-container",
+    "targetDomHint": "Vector区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Vector → Vector区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 11,
+      "height": 5,
+      "fillsSummary": "linear-gradient(#006fff 0%, #00a1ff 16%, #1c8dff 43%, #49bcff 76%, #32aeff 99%)"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3541",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/bg-[m]/Group 1321318515/Group/Group",
+    "figmaBox": {
+      "x": 318.4610290527344,
+      "y": 631.000244140625,
+      "width": 11.267337799072266,
+      "height": 5.129491329193115
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-container",
+    "targetDomHint": "Group区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group → Group区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 11,
+      "height": 5
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3542",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/bg-[m]/Group 1321318515/Group/Group/Vector",
+    "figmaBox": {
+      "x": 318.4610290527344,
+      "y": 631.000244140625,
+      "width": 11.267337799072266,
+      "height": 5.129491329193115
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".vector-container",
+    "targetDomHint": "Vector区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Vector → Vector区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 11,
+      "height": 5,
+      "fillsSummary": "linear-gradient(#2c9dff 0%, #3fa9f5 100%)"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3543",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/bg-[m]/Group 1321318515/Group/Group",
+    "figmaBox": {
+      "x": 321.6254577636719,
+      "y": 631.000244140625,
+      "width": 4.938443660736084,
+      "height": 2.502180576324463
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-container",
+    "targetDomHint": "Group区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group → Group区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 5,
+      "height": 3
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3544",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/bg-[m]/Group 1321318515/Group/Group/Vector",
+    "figmaBox": {
+      "x": 321.6254577636719,
+      "y": 631.000244140625,
+      "width": 4.938443660736084,
+      "height": 2.502180576324463
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".vector-container",
+    "targetDomHint": "Vector区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Vector → Vector区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 5,
+      "height": 3,
+      "fillsSummary": "linear-gradient(#0084ff 0%, #3fa9f5 100%)"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": true
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "246:31",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/@echarts",
+    "figmaBox": {
+      "x": 297.4878845214844,
+      "y": 650.488525390625,
+      "width": 52.06089782714844,
+      "height": 52.06089782714844
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".echarts-container",
+    "targetDomHint": "@echarts区域",
+    "previewAnalysisRole": "icon",
+    "hint": "@echarts → @echarts区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "iconecharts",
+    "visualMeta": {
+      "width": 52,
+      "height": 52
+    },
+    "recommendedUsage": "decorativeBlock",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": "../resources/images/bg-3525.png",
+    "figmaNodeId": "2:3525",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/t/bg",
+    "figmaBox": {
+      "x": 259.8271484375,
+      "y": 616.773681640625,
+      "width": 129.5,
+      "height": 9
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".bg-container",
+    "targetDomHint": "bg区域",
+    "previewAnalysisRole": "bg",
+    "hint": "bg → bg区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 130,
+      "height": 9
+    },
+    "recommendedUsage": "backgroundBlock",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": "../resources/images/icon-3573.png",
+    "figmaNodeId": "2:3573",
+    "figmaPath": "cp-流量监测/slot-流量预测/sub-header/tit/icon",
+    "figmaBox": {
+      "x": 35.8271484375,
+      "y": 733.04296875,
+      "width": 18,
+      "height": 18.253520965576172
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".icon-container",
+    "targetDomHint": "icon区域",
+    "previewAnalysisRole": "icon",
+    "hint": "icon → icon区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 18,
+      "height": 18
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3639",
+    "figmaPath": "cp-流量监测/slot-流量预测/@echarts/line/图例/Group 1321318565/Group 2136637486",
+    "figmaBox": {
+      "x": 263.8271484375,
+      "y": 770.337890625,
+      "width": 14,
+      "height": 6
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136637486-container",
+    "targetDomHint": "Group 2136637486区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136637486 → Group 2136637486区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136637486",
+    "visualMeta": {
+      "width": 14,
+      "height": 6
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3644",
+    "figmaPath": "cp-流量监测/slot-流量预测/@echarts/line/图例/Group 1321318566/Group 2136637486",
+    "figmaBox": {
+      "x": 339.8271484375,
+      "y": 770.337890625,
+      "width": 14,
+      "height": 6
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-2136637486-container",
+    "targetDomHint": "Group 2136637486区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 2136637486 → Group 2136637486区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup2136637486_2",
+    "visualMeta": {
+      "width": 14,
+      "height": 6
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  }
+]

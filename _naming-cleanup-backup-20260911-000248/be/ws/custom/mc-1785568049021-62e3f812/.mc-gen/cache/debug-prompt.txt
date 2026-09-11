@@ -1,0 +1,150 @@
+
+
+
+---
+
+## 📐 Figma 结构参考（交叉验证用）
+
+以下是从 Figma 设计稿提取的结构化数据。请结合预览图进行交叉验证：
+- **section 名称**应与 Figma 节点名称对应
+- **文字内容**（label/value）应参考 Figma 中的文本节点
+- **布局方向**应与 Figma 子节点的排列方式一致
+- **颜色值**应参考 Figma 中的填充色
+- **图标和背景**如果标注了 📎 资源文件，必须在对应位置使用该资源（img/:src 或 backgroundImage），不要用内联SVG/CSS渐变替代
+
+- 流量监测 426x807
+  - bg-[m] 420x807 color=[rgba(237,244,251,1)] → ⚡ CSS: `background: #edf4fbb2` (无需图片)
+    - Vector 420x807 color=[rgba(237,244,251,1)] → ⚡ CSS: `background: #a8abb2` (无需图片)
+  - header- 380x33
+    - Vector 1484 376x0
+    - g 8x8 → ⚡ CSS: `background: #edf4fbb2` (无需图片)
+      [layout: vertical, 3 children]
+      - circle 8x8 color=[rgba(0,0,0,1)] → ⛔ 下载失败(⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）)
+      - circle 6x6 [has-gradient] → ⛔ 下载失败(⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）)
+      - path 2x2 color=[rgba(85,158,255,1)] → ⛔ 下载失败(⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）)
+    - Vector 1476 362x6 [has-gradient]
+    - 流量监测 64x19 text="流量监测" [has-gradient]
+    - *数据实时更新 91x21 [has-gradient]
+  - slot-当日总流量 426x556
+    - sub-header 380x30
+      - @ant/select 100x30
+      - 标题 102x24
+    - Group 2136636802 426x91
+      - bg-[m] 426x91 → ⚡ CSS: `background: #edf4fbb2` (无需图片)
+      - Group 1321318553 77x52
+        [layout: vertical, 2 children]
+      - Group 1321318553 128x52
+    - @echarts/bar 379x131
+      - 折线图  379x127
+      - Frame 2136639396 118x21
+        [layout: horizontal, 2 children]
+    - @echarts/bar 379x131
+      - 折线图  379x127
+      - Frame 2136639396 62x21
+        [layout: horizontal, 2 children]
+  - slot-车型分布 387x142
+    [layout: vertical, 3 children]
+    - sub-header 86x24
+      - 车型分布 64x24 text="车型分布" color=[rgba(51,51,51,1)]
+      - icon 18x18 → 📎 ../resources/images/icon-3561.png (变量: ?, 用法: imgSrc)
+        [layout: vertical, 3 children]
+    - Frame 1280 192x114
+      - bg-[m] 191x80 → ⚡ CSS: `background: #edf4fbb2` (无需图片)
+      - @echarts 52x53 → ⛔ 下载失败(⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）)
+        [layout: vertical, 4 children]
+      - t 130x25 → ⚡ CSS: `background: #edf4fbb2` (无需图片)
+      - Frame 2136637409 41x36
+        [layout: vertical, 2 children]
+      - Frame 2136637410 42x36
+    - Frame 1280 192x114
+      - bg-[m] 191x81 → ⚡ CSS: `background: #edf4fbb2` (无需图片)
+      - @echarts 52x52 → ⛔ 下载失败(⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）)
+      - Frame 2136637409 41x36
+        [layout: vertical, 2 children]
+      - Frame 2136637410 42x36
+        [layout: vertical, 2 children]
+      - t 130x25 → ⚡ CSS: `background: #edf4fbb2` (无需图片)
+  - slot-流量预测 378x174
+    - sub-header 378x24
+      - @antd/tab 204x18
+        [layout: horizontal, 2 children]
+      - tit 86x24
+      - but-节假日预测[m] 67x18 text="节假日预测>" color=[rgba(25,144,255,1)]
+    - @echarts/line 363x141
+      [layout: horizontal, 2 children]
+      - charts 363x141 → ⛔ 下载失败(⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）)
+      - 图例 140x18
+        [layout: horizontal, 2 children]
+
+
+
+---
+
+## 🎨 已下载资源清单（必须使用，禁止替代）
+
+以下资源已成功下载，在输出 JSON 中遇到对应位置时，**必须使用 resourceFile 字段引用实际资源路径**，禁止使用 placeholder + CSS/SVG 替代。
+
+- **bg**: bg-[m] → [m]区域 → ⚡ CSS: `background: #edf4fbb2` (无需图片)
+- **icon**: g → g区域 → 📎 ../resources/images/g-3552.png (变量: N/A, 用法: imgSrc)
+- **icon**: Vector → Vector区域 → ⚡ CSS: `background: #a8abb2` (无需图片)
+- **icon**: icon → icon区域 → 📎 ../resources/images/icon-3561.png (变量: N/A, 用法: imgSrc)
+- **bg**: bg-[m] → [m]区域 → 📎 ../resources/images/bg-_m-34.png (变量: bgm, 用法: backgroundStyle)
+- **icon**: Group 2136636847 → Group 2136636847区域 → 📎 ../resources/images/Group_2136636847-7493.png (变量: icongroup2136636847, 用法: decorativeBlock)
+- **icon**: Group 2136638523 → Group 2136638523区域 → 📎 ../resources/images/Group_2136638523-7500.png (变量: icongroup2136638523, 用法: imgSrc)
+- **icon**: Group 2136638522 → Group 2136638522区域 → 📎 ../resources/images/Group_2136638522-7503.png (变量: icongroup2136638522, 用法: imgSrc)
+- **icon**: Group 2136638521 → Group 2136638521区域 → 📎 ../resources/images/Group_2136638521-7506.png (变量: icongroup2136638521, 用法: imgSrc)
+- **icon**: Group 2136638520 → Group 2136638520区域 → 📎 ../resources/images/Group_2136638520-7509.png (变量: icongroup2136638520, 用法: imgSrc)
+- **icon**: Group 2136638523 → Group 2136638523区域 → 📎 ../resources/images/Group_2136638523-7512.png (变量: icongroup2136638523, 用法: imgSrc)
+- **icon**: Group 2136638522 → Group 2136638522区域 → 📎 ../resources/images/Group_2136638522-7515.png (变量: icongroup2136638522, 用法: imgSrc)
+- **icon**: Group 2136638521 → Group 2136638521区域 → 📎 ../resources/images/Group_2136638521-7518.png (变量: icongroup2136638521, 用法: imgSrc)
+- **icon**: Group 2136638520 → Group 2136638520区域 → 📎 ../resources/images/Group_2136638520-7521.png (变量: icongroup2136638520, 用法: imgSrc)
+- **icon**: Group 2136638523 → Group 2136638523区域 → 📎 ../resources/images/Group_2136638523-7524.png (变量: icongroup2136638523, 用法: imgSrc)
+- **icon**: Group 2136638522 → Group 2136638522区域 → 📎 ../resources/images/Group_2136638522-7527.png (变量: icongroup2136638522, 用法: imgSrc)
+- **icon**: Group 2136638521 → Group 2136638521区域 → 📎 ../resources/images/Group_2136638521-7530.png (变量: icongroup2136638521, 用法: imgSrc)
+- **icon**: Group 2136638520 → Group 2136638520区域 → 📎 ../resources/images/Group_2136638520-7533.png (变量: icongroup2136638520, 用法: imgSrc)
+- **icon**: Group 2136638522 → Group 2136638522区域 → 📎 ../resources/images/Group_2136638522-7539.png (变量: icongroup2136638522, 用法: imgSrc)
+- **icon**: Group 2136638521 → Group 2136638521区域 → 📎 ../resources/images/Group_2136638521-7542.png (变量: icongroup2136638521, 用法: imgSrc)
+- **icon**: Group 2136638521 → Group 2136638521区域 → 📎 ../resources/images/Group_2136638521-7555.png (变量: icongroup2136638521, 用法: imgSrc)
+- **icon**: icon → icon区域 → ⚡ CSS: `background: linear-gradient(180deg, #388dff 0%, #388dff 100%)` (无需图片)
+- **icon**: Group 2136638520 → Group 2136638520区域 → 📎 ../resources/images/Group_2136638520-7678.png (变量: icongroup2136638520, 用法: imgSrc)
+- **icon**: Group 2136638522 → Group 2136638522区域 → 📎 ../resources/images/Group_2136638522-7696.png (变量: icongroup2136638522, 用法: imgSrc)
+- **icon**: Group 2136638521 → Group 2136638521区域 → 📎 ../resources/images/Group_2136638521-7736.png (变量: icongroup2136638521, 用法: imgSrc)
+- **icon**: icon → icon区域 → ⚡ CSS: `background: linear-gradient(180deg, #388dff 0%, #388dff 100%)` (无需图片)
+- **icon**: Group 206 → Group 206区域 → 📎 ../resources/images/Group_206-3455.png (变量: icongroup206, 用法: imgSrc)
+- **icon**: Group 2136637486 → Group 2136637486区域 → 📎 ../resources/images/Group_2136637486-3639.png (变量: icongroup2136637486, 用法: imgSrc)
+
+⚠️ 输出规范：对 icon/bg/image 类元素，优先输出 "resourceFile" 和 "recommendedUsage" 字段，而非 "placeholder"。
+⚡ CSS 替代资源（标记为 CSS: background: ...）不要输出 resourceFile，直接在样式中使用 CSS 值。
+
+### 头部插槽识别（面板组件专用）
+
+如果检测到面板标题栏区域有交互控件或附加信息，请输出 "headerSlots" 数组，将它们映射到 base-panel 的具名插槽：
+
+- **#title-left**: 标题栏左侧（装饰图标、状态标识、小icon）
+- **#title-right**: 标题右侧紧邻（副标题、更新时间、单位标注）
+- **#header-right**: 标题右侧靠右（统计指标、Tab切换按钮、图标操作按钮）
+- **#close**: 最右侧关闭按钮（通常由面板默认提供，不需要输出）
+
+每个元素格式：{ "slotType": "title-left/title-right/header-right", "elementType": "icon/tab/statistic/label", "content": "具体内容", "figmaNodeId": "节点ID（如有）" }
+
+⚠️ **注释过滤（CRITICAL）**：以下文本节点属于设计师注释/标注，**不应**识别为UI内容或插槽元素：
+- 以 * 或 # 开头的文本（如「*数据实时更新」、「#备注说明」）
+- 包含 TODO / FIXME / 注 / 标注 / 备注 的文本
+- 字号小于 10px 且内容少于 10 个字符的文本节点
+- 纯重复符号（如 *** / --- / ===）
+
+
+# 输出规范（Schema 引用）
+
+
+
+
+---
+
+## 分析任务
+
+请分析以下微码组件的预览图：
+
+- **组件名称**: 
+
+请严格按照上述规范输出 JSON 格式的 preview-analysis 结果。

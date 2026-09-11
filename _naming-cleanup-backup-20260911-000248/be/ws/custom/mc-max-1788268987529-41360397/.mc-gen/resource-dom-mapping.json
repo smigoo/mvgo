@@ -1,0 +1,339 @@
+[
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:3436",
+    "figmaPath": "cp-流量监测/bg-[m]",
+    "name": "bg-[m]",
+    "figmaBox": {
+      "x": 15.8271484375,
+      "y": 109,
+      "width": 420,
+      "height": 807
+    },
+    "parentBox": {
+      "x": 10,
+      "y": 109,
+      "width": 425.8275146484375,
+      "height": 807
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".m-container",
+    "targetDomHint": "[m]区域",
+    "previewAnalysisRole": "bg",
+    "hint": "bg-[m] → [m]区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS background 渐变/纯色）",
+    "semanticVarName": "bgm",
+    "visualMeta": {
+      "width": 420,
+      "height": 807,
+      "fillsSummary": "#edf4fbb2",
+      "effectsSummary": "box-shadow: 0px 4px 10px #4a758d"
+    },
+    "recommendedUsage": "backgroundStyle",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "skipMount": true,
+    "bgRole": "container"
+  },
+  {
+    "resourceFile": "../resources/images/icon-3561.png",
+    "figmaNodeId": "2:3561",
+    "figmaPath": "cp-流量监测/slot-当日总流量/sub-header/标题/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 35.8271484375,
+      "y": 164.86578369140625,
+      "width": 18,
+      "height": 18.253520965576172
+    },
+    "parentBox": {
+      "x": 35.8271484375,
+      "y": 161.82354736328125,
+      "width": 102,
+      "height": 24.338027954101562
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".icon-container",
+    "targetDomHint": "icon区域",
+    "previewAnalysisRole": "icon",
+    "hint": "icon → icon区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 18,
+      "height": 18
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon1"
+  },
+  {
+    "resourceFile": "../resources/images/bg-_m-34.png",
+    "figmaNodeId": "88:34",
+    "figmaPath": "cp-流量监测/slot-当日总流量/Group 2136636802/bg-[m]",
+    "name": "bg-[m]",
+    "figmaBox": {
+      "x": 9.999755859375,
+      "y": 196,
+      "width": 425.8287353515625,
+      "height": 91.4396743774414
+    },
+    "parentBox": {
+      "x": 9.999755859375,
+      "y": 196,
+      "width": 425.8287353515625,
+      "height": 91.4396743774414
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".m-container",
+    "targetDomHint": "[m]区域",
+    "previewAnalysisRole": "bg",
+    "hint": "bg-[m] → [m]区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": "bgm_2",
+    "visualMeta": {
+      "width": 426,
+      "height": 91
+    },
+    "recommendedUsage": "backgroundBlock",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "mountTarget": null,
+    "bgRole": "container",
+    "assignedVarName": "bg1"
+  },
+  {
+    "resourceFile": "../resources/images/icon-3441.png",
+    "figmaNodeId": "2:3441",
+    "figmaPath": "cp-流量监测/slot-车型分布/sub-header/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 36.8271484375,
+      "y": 576.0422973632812,
+      "width": 18,
+      "height": 18.253520965576172
+    },
+    "parentBox": {
+      "x": 36.8271484375,
+      "y": 573,
+      "width": 86,
+      "height": 24.338027954101562
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".icon-container",
+    "targetDomHint": "icon区域",
+    "previewAnalysisRole": "icon",
+    "hint": "icon → icon区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 18,
+      "height": 18
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon2"
+  },
+  {
+    "resourceFile": "../resources/images/bg-_m-36.png",
+    "figmaNodeId": "88:36",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/bg-[m]",
+    "name": "bg-[m]",
+    "figmaBox": {
+      "x": 33.8271484375,
+      "y": 632.000244140625,
+      "width": 191,
+      "height": 80.267578125
+    },
+    "parentBox": {
+      "x": 32.8271484375,
+      "y": 601.000244140625,
+      "width": 192,
+      "height": 114
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".m-container",
+    "targetDomHint": "[m]区域",
+    "previewAnalysisRole": "bg",
+    "hint": "bg-[m] → [m]区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": "bgm_3",
+    "visualMeta": {
+      "width": 191,
+      "height": 80
+    },
+    "recommendedUsage": "backgroundBlock",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "mountTarget": null,
+    "bgRole": "sub-state",
+    "assignedVarName": "bg2"
+  },
+  {
+    "resourceFile": "../resources/images/bg-3475.png",
+    "figmaNodeId": "2:3475",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/t/bg",
+    "name": "bg",
+    "figmaBox": {
+      "x": 64.8271484375,
+      "y": 618.773681640625,
+      "width": 129.5,
+      "height": 9
+    },
+    "parentBox": {
+      "x": 64.8271484375,
+      "y": 603.000244140625,
+      "width": 129.5,
+      "height": 24.7734375
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".bg-container",
+    "targetDomHint": "bg区域",
+    "previewAnalysisRole": "bg",
+    "hint": "bg → bg区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 130,
+      "height": 9
+    },
+    "recommendedUsage": "backgroundBlock",
+    "isTinyDecoration": false,
+    "isPanelResource": true,
+    "mountTarget": null,
+    "bgRole": "sub-state",
+    "assignedVarName": "bg3"
+  },
+  {
+    "resourceFile": "../resources/images/bg-_m-35.png",
+    "figmaNodeId": "88:35",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/bg-[m]",
+    "name": "bg-[m]",
+    "figmaBox": {
+      "x": 228.8271484375,
+      "y": 631.000244140625,
+      "width": 191,
+      "height": 81.267578125
+    },
+    "parentBox": {
+      "x": 227.8271484375,
+      "y": 601.000244140625,
+      "width": 192,
+      "height": 114
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".m-container",
+    "targetDomHint": "[m]区域",
+    "previewAnalysisRole": "bg",
+    "hint": "bg-[m] → [m]区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": "bgm_4",
+    "visualMeta": {
+      "width": 191,
+      "height": 81
+    },
+    "recommendedUsage": "backgroundBlock",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "mountTarget": null,
+    "bgRole": "sub-state",
+    "assignedVarName": "bg4"
+  },
+  {
+    "resourceFile": "../resources/images/bg-3525.png",
+    "figmaNodeId": "2:3525",
+    "figmaPath": "cp-流量监测/slot-车型分布/Frame 1280/t/bg",
+    "name": "bg",
+    "figmaBox": {
+      "x": 259.8271484375,
+      "y": 616.773681640625,
+      "width": 129.5,
+      "height": 9
+    },
+    "parentBox": {
+      "x": 259.8271484375,
+      "y": 601.000244140625,
+      "width": 129.5,
+      "height": 24.7734375
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".bg-container",
+    "targetDomHint": "bg区域",
+    "previewAnalysisRole": "bg",
+    "hint": "bg → bg区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 130,
+      "height": 9
+    },
+    "recommendedUsage": "backgroundBlock",
+    "isTinyDecoration": false,
+    "isPanelResource": true,
+    "mountTarget": null,
+    "bgRole": "sub-state",
+    "assignedVarName": "bg5"
+  },
+  {
+    "resourceFile": "../resources/images/icon-3573.png",
+    "figmaNodeId": "2:3573",
+    "figmaPath": "cp-流量监测/slot-流量预测/sub-header/tit/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 35.8271484375,
+      "y": 733.04296875,
+      "width": 18,
+      "height": 18.253520965576172
+    },
+    "parentBox": {
+      "x": 35.8271484375,
+      "y": 730,
+      "width": 86,
+      "height": 24.338027954101562
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".icon-container",
+    "targetDomHint": "icon区域",
+    "previewAnalysisRole": "icon",
+    "hint": "icon → icon区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 18,
+      "height": 18
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon3"
+  }
+]

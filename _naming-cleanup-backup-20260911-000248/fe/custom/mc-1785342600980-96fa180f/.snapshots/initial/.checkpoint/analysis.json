@@ -1,0 +1,209 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 72,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0].header",
+        "message": "包含冗余的 title 字段，极易触发违规生成面板标题。根据规范，面板标题由 base-panel 统一处理，禁止在组件内重复生成。",
+        "suggestion": "移除 header.title 字段，仅依赖 slotCandidate: 'header-right' 将 body 内容注入面板标题右侧插槽，避免生成器误判并渲染多余的标题 DOM。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[*].body.backgroundImage",
+        "message": "背景图在每个垂直 section 中重复引用并设置为 cover，会导致背景图被截断、重复显示，造成严重的视觉割裂。",
+        "suggestion": "将背景图提取至最外层父级容器，或仅在需要背景的主内容区（如 section-main-content）中设置一次，避免在每个子 section 中重复铺满。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[*]",
+        "message": "区域概览卡片同时存在 bgPlaceholder 和 CSS 渐变 background，存在样式冲突和证据不明确问题，违反'样式证据优先'原则。",
+        "suggestion": "根据 Figma 实际数据二选一：若设计稿为图片切片，则使用 bgPlaceholder 并移除 CSS 渐变；若为纯 CSS 渐变，则移除 bgPlaceholder 字段。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "coverageReport",
+        "message": "Figma 节点覆盖率极低（0%），缺失 114 个节点。这表明当前布局结构可能遗漏了大量设计稿细节（如精确间距、装饰元素等），存在极高的还原度风险。",
+        "suggestion": "重新执行 Figma 解析脚本或人工深度核对设计稿，确保节点匹配率提升至合理水平（建议 > 80%），并补全缺失的样式细节。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[1]",
+        "message": "设备网格（device-grid）未声明自适应宽度属性。在左侧 Tab 栏固定 46px 的情况下，网格可能无法自动撑满剩余空间。",
+        "suggestion": "在生成代码时，确保 device-grid 设置 flex: 1 和 min-width: 0，以自适应填充左侧 Tab 栏右侧的剩余空间，符合宽度自适应约束。"
+      }
+    ],
+    "recommendations": [
+      "清理冗余的面板标题字段，严格遵循 base-panel 约束，确保生成代码时不重复渲染标题、边框和背景。",
+      "重构背景图层级，将全局背景图统一挂载到根容器或单一主区块，避免垂直堆叠布局中的背景图重复渲染问题。",
+      "针对 Figma 覆盖率 0% 的严重问题，建议检查 Figma 导出插件或解析逻辑，重新获取高匹配度的节点数据后再进行代码生成。",
+      "在实现左侧垂直 Tab 切换（监控/照明/通风等）时，必须严格遵循 Tab 切换约束，实现真实的数据联动（更新右侧设备网格数据），禁止仅做 active 样式切换。",
+      "明确设备网格中数值颜色的业务逻辑（非0红色异常，0蓝绿正常），并在生成代码时通过计算属性或条件渲染动态绑定颜色，而非写死在模板中。"
+    ],
+    "summary": "整体布局结构划分清晰，分为顶部统计、区域概览和主内容区，符合常规监测面板的设计逻辑。但存在背景图重复引用导致视觉割裂、面板标题字段冗余易引发违规、以及 Figma 节点覆盖率极低等明显问题。建议优化背景图层级、清理冗余字段，并重新核对 Figma 解析数据以确保高保真还原。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名），用于浅色科技监测风主题",
+      "--colorPrimary": "#1990ff",
+      "--colorSecondary": "#08a3a5",
+      "--colorDanger": "#f53f3f",
+      "--colorTextBase": "#333333",
+      "--colorBgBase": "#edf4fb",
+      "--fontSize": "14px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射，用于theme-vars.less中的mixin定义",
+      "@color-primary": "#1990ff",
+      "@color-secondary": "#08a3a5",
+      "@color-danger": "#f53f3f",
+      "@color-text-base": "#333333",
+      "@color-bg-base": "#edf4fb",
+      "@font-size-base": "14px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类，用于业务组件样式",
+      ".monitor-container": {
+        "width": "100%",
+        "height": "100%",
+        "background": "var(--colorBgBase)",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)"
+      },
+      ".data-card": {
+        "background": "#ffffff",
+        "border-radius": "8px",
+        "padding": "16px",
+        "box-shadow": "0 2px 8px rgba(25, 144, 255, 0.08)"
+      },
+      ".value-highlight": {
+        "color": "var(--colorPrimary)",
+        "font-weight": "bold",
+        "font-size": "1.5em"
+      },
+      ".value-error": {
+        "color": "var(--colorDanger)",
+        "font-weight": "bold",
+        "font-size": "1.5em"
+      },
+      ".text-secondary": {
+        "color": "var(--colorSecondary)"
+      }
+    },
+    "tokenCoverage": 1,
+    "mappingNotes": [
+      "主色调 #1990ff 映射为 --colorPrimary，用于蓝色高亮数值及主要交互元素",
+      "辅助色 #08a3a5 映射为 --colorSecondary，用于图表辅助色或次要状态指示",
+      "异常色 #f53f3f 映射为 --colorDanger，专门用于红色异常数值高亮与警告",
+      "基础文本色 #333333 映射为 --colorTextBase，确保在浅色背景下的可读性",
+      "背景色 #edf4fb 映射为 --colorBgBase，作为整体页面或区块的浅色科技风底色",
+      "强调元素'蓝色高亮数值'和'红色异常数值'分别通过 .value-highlight 和 .value-error 语义化类实现"
+    ],
+    "elementStyleMap": {
+      "section-header-stats": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "stat-type": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "stat-total": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "stat-rate": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "card-tunnel-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "card-tunnel-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "card-tunnel": {
+        "background": "linear-gradient(270deg, #318aff 0%, #70bfff 100%)",
+        "border-radius": "8px",
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-bridge-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "card-bridge-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "card-bridge": {
+        "background": "linear-gradient(270deg, #85baff 0%, #bfe2ff 100%)",
+        "border-radius": "8px",
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-13": {
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-row-x-15": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-row-x-18": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-row-x-22": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-row-x-25": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "section-main-content": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "sidebar-tabs": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-29": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  }
+}

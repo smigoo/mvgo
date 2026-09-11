@@ -1,0 +1,118 @@
+{
+  "stage": "codegen_done",
+  "brief": {
+    "layout": "左侧垂直导航栏 + 右侧主内容区，主内容区采用上下布局：顶部统计横幅、两个大尺寸状态卡片、3x4网格卡片矩阵",
+    "regions": [
+      {
+        "name": "顶部统计横幅",
+        "description": "设备监测标题及三组关键指标：设备类型28、设备总数68562、完好率98%",
+        "position": "top",
+        "size": "全宽，高度约占8%"
+      },
+      {
+        "name": "左上蓝色状态卡",
+        "description": "隧道设备，总数56302，异常数5，带警报图标和箭头造型",
+        "position": "top-left",
+        "size": "宽约45%，高度约12%"
+      },
+      {
+        "name": "右上浅色状态卡",
+        "description": "南北接线设备，总数1280，异常数3，带芯片图标和箭头造型",
+        "position": "top-right",
+        "size": "宽约45%，高度约12%"
+      },
+      {
+        "name": "左侧垂直导航栏",
+        "description": "包含监控(3/3740红色角标)、照明(红色角标3)、通风、供配电、消防、交通诱导共6个tab",
+        "position": "left",
+        "size": "宽约6%，高度覆盖主内容区"
+      },
+      {
+        "name": "设备网格矩阵",
+        "description": "3列4行共12个设备卡片，每个卡片包含图标、设备名称、状态分数（异常数/总数）",
+        "position": "center",
+        "size": "占据主内容区剩余空间，约80%高度"
+      }
+    ],
+    "spacing": {
+      "outer": "页面四周留白约20-30px",
+      "gap": "大状态卡间距约20px，网格卡片横向间距约18px、纵向间距约16px",
+      "padding": "卡片内边距约20-24px，顶部横幅内边距约16px"
+    },
+    "theme": "light",
+    "colors": {
+      "primary": "#3B9EFF",
+      "background": "#E8F3FF",
+      "surface": "#FFFFFF",
+      "text": "#333333",
+      "border": "#B8D9F5"
+    },
+    "typography": {
+      "size": "标题28-32px、数字指标40-48px、设备名称18-20px、状态数字24-28px、分母数字20-22px",
+      "weight": "标题500-600、数字700-800、设备名称400-500",
+      "lineHeight": "紧凑，约1.2-1.4倍字号"
+    },
+    "components": [
+      "横幅容器",
+      "带箭头造型的大尺寸状态卡片",
+      "垂直tab导航栏",
+      "数字角标（红色圆点）",
+      "网格容器",
+      "设备卡片（含图标、文字、3D底座装饰）",
+      "圆形图标底座",
+      "分数显示组件"
+    ],
+    "textContent": [
+      "设备监测",
+      "设备类型28",
+      "设备总数68562",
+      "完好率98%",
+      "隧道设备 总数:56302 异常数:5",
+      "南北接线设备 总数:1280 异常数:3",
+      "摄像机 (2/484)",
+      "风速风向仪 (1/484)",
+      "超高检测器 (0/484)",
+      "烟道机器人 (0/484)",
+      "激光雷达 (0/484)",
+      "CO₂传感器 (0/484)",
+      "CO/VI检测器 (0/484)",
+      "温湿度传感器 (0/484)",
+      "压力传感器 (0/484)",
+      "光照度变送器 (0/484)",
+      "紧急电话 (0/484)",
+      "水质监测设备 (0/484)",
+      "监控",
+      "照明",
+      "通风",
+      "供配电",
+      "消防",
+      "交通诱导"
+    ],
+    "visualDetails": [
+      "卡片圆角约12-16px",
+      "左侧导航栏圆角约8px",
+      "卡片边框浅蓝色约1px",
+      "图标下方带3D圆形底座装饰（浅蓝色渐变、水波纹效果）",
+      "异常数字用红色#FF3B30高亮显示",
+      "导航栏角标为红色圆点，内含白色数字",
+      "大状态卡片带渐变填充（蓝色系和浅色系）",
+      "大状态卡片右侧带箭头/倾斜裁切造型",
+      "设备图标为蓝色扁平风格",
+      "状态数字用蓝色#3B9EFF显示",
+      "顶部横幅无明显边框，融入背景",
+      "卡片投影极浅或无投影"
+    ],
+    "interactions": [
+      "左侧垂直tab栏：包含监控(3/3740，红色角标3)、照明(红色角标3)、通风、供配电、消防、交通诱导，当前未明确激活项",
+      "12个设备卡片（摄像机、风速风向仪、超高检测器、烟道机器人、激光雷达、CO₂传感器、CO/VI检测器、温湿度传感器、压力传感器、光照度变送器、紧急电话、水质监测设备），每个卡片可点击查看详情",
+      "顶部两个大状态卡片（隧道设备、南北接线设备）可能支持点击进入子页面"
+    ],
+    "_themeSource": "pixel"
+  },
+  "width": 699,
+  "height": 701,
+  "sourceType": "screenshot",
+  "componentType": "vue3",
+  "generationTier": "lite",
+  "vueCode": "<template>\n  <div class=\"mv-lite-1788256182242-dfcad1b2\">\n    <!-- 左侧垂直导航栏 -->\n    <div class=\"sidebar\">\n      <div \n        v-for=\"(tab, index) in tabs\" \n        :key=\"index\"\n        class=\"sidebar-tab\"\n        :class=\"{ active: activeTab === index }\"\n        @click=\"activeTab = index\"\n      >\n        <span class=\"tab-text\">{{ tab.name }}</span>\n        <span v-if=\"tab.badge\" class=\"tab-badge\">{{ tab.badge }}</span>\n      </div>\n    </div>\n\n    <!-- 右侧主内容区 -->\n    <div class=\"main-content\">\n      <!-- 顶部统计横幅 -->\n      <div class=\"stats-banner\">\n        <div class=\"banner-title\">设备监测</div>\n        <div class=\"banner-stats\">\n          <div class=\"stat-item\">\n            <span class=\"stat-icon\">≡</span>\n            <span class=\"stat-label\">设备类型</span>\n            <span class=\"stat-value primary\">28</span>\n          </div>\n          <div class=\"stat-item\">\n            <span class=\"stat-label\">设备总数</span>\n            <span class=\"stat-value primary\">68562</span>\n          </div>\n          <div class=\"stat-item\">\n            <span class=\"stat-label\">完好率</span>\n            <span class=\"stat-value success\">98%</span>\n          </div>\n        </div>\n      </div>\n\n      <!-- 两个大状态卡片 -->\n      <div class=\"status-cards\">\n        <div class=\"status-card blue-card\">\n          <div class=\"card-icon\">\n            <div class=\"icon-bg\"></div>\n            <div class=\"icon-symbol\">🔔</div>\n          </div>\n          <div class=\"card-content\">\n            <div class=\"card-title\">隧道设备</div>\n            <div class=\"card-stats\">\n              <span class=\"card-label\">总数:</span>\n              <span class=\"card-number\">56302</span>\n            </div>\n            <div class=\"card-stats\">\n              <span class=\"card-label\">异常数:</span>\n              <span class=\"card-number error\">5</span>\n            </div>\n          </div>\n          <div class=\"card-arrow\"></div>\n        </div>\n\n        <div class=\"status-card light-card\">\n          <div class=\"card-icon\">\n            <div class=\"icon-bg\"></div>\n            <div class=\"icon-symbol\">💾</div>\n          </div>\n          <div class=\"card-content\">\n            <div class=\"card-title\">南北接线<br>设备</div>\n            <div class=\"card-stats\">\n              <span class=\"card-label\">总数:</span>\n              <span class=\"card-number\">1280</span>\n            </div>\n            <div class=\"card-stats\">\n              <span class=\"card-label\">异常数:</span>\n              <span class=\"card-number error\">3</span>\n            </div>\n          </div>\n          <div class=\"card-arrow\"></div>\n        </div>\n      </div>\n\n      <!-- 设备网格矩阵 -->\n      <div class=\"device-grid\">\n        <div \n          v-for=\"(device, index) in devices\" \n          :key=\"index\"\n          class=\"device-card\"\n          @click=\"handleDeviceClick(device)\"\n        >\n          <div class=\"device-icon-wrapper\">\n            <div class=\"device-icon-base\"></div>\n            <div class=\"device-icon\">{{ device.icon }}</div>\n          </div>\n          <div class=\"device-name\">{{ device.name }}</div>\n          <div class=\"device-status\">\n            <span class=\"status-error\">{{ device.error }}</span>\n            <span class=\"status-divider\">/</span>\n            <span class=\"status-total\">{{ device.total }}</span>\n          </div>\n        </div>\n      </div>\n    </div>\n  </div>\n</template>\n\n<script setup>\nimport { ref } from 'vue'\n\nconst activeTab = ref(0)\n\nconst tabs = [\n  { name: '监控', badge: '3' },\n  { name: '照明', badge: '3' },\n  { name: '通风', badge: null },\n  { name: '供配电', badge: null },\n  { name: '消防', badge: null },\n  { name: '交通诱导', badge: null }\n]\n\nconst devices = [\n  { name: '摄像机', error: 2, total: 484, icon: '📹' },\n  { name: '风速风向仪', error: 1, total: 484, icon: '🌬️' },\n  { name: '超高检测器', error: 0, total: 484, icon: '📏' },\n  { name: '烟道机器人', error: 0, total: 484, icon: '🤖' },\n  { name: '激光雷达', error: 0, total: 484, icon: '🎯' },\n  { name: 'CO₂传感器', error: 0, total: 484, icon: '💨' },\n  { name: 'CO/VI检测器', error: 0, total: 484, icon: '🔍' },\n  { name: '温湿度传感器', error: 0, total: 484, icon: '🌡️' },\n  { name: '压力传感器', error: 0, total: 484, icon: '⚡' },\n  { name: '光照度变送器', error: 0, total: 484, icon: '💡' },\n  { name: '紧急电话', error: 0, total: 484, icon: '📞' },\n  { name: '水质监测设备', error: 0, total: 484, icon: '💧' }\n]\n\nconst handleDeviceClick = (device) => {\n  console.log('Device clicked:', device.name)\n}\n</script>\n\n<style scoped>\n.mv-lite-1788256182242-dfcad1b2 {\n  width: 100%;\n  height: 100%;\n  box-sizing: border-box;\n  display: flex;\n  background: #E8F3FF;\n  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;\n  padding: 20px;\n  gap: 12px;\n}\n\n/* 左侧垂直导航栏 */\n.sidebar {\n  width: 48px;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.sidebar-tab {\n  position: relative;\n  background: rgba(255, 255, 255, 0.8);\n  border: 1px solid #B8D9F5;\n  border-radius: 8px;\n  padding: 16px 8px;\n  cursor: pointer;\n  transition: all 0.2s;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  min-height: 80px;\n}\n\n.sidebar-tab:hover {\n  background: #FFFFFF;\n  box-shadow: 0 2px 8px rgba(59, 158, 255, 0.15);\n}\n\n.sidebar-tab.active {\n  background: #3B9EFF;\n}\n\n.tab-text {\n  writing-mode: vertical-rl;\n  font-size: 16px;\n  font-weight: 500;\n  color: #3B9EFF;\n  letter-spacing: 2px;\n}\n\n.sidebar-tab.active .tab-text {\n  color: #FFFFFF;\n}\n\n.tab-badge {\n  position: absolute;\n  top: 8px;\n  right: 8px;\n  background: #FF3B30;\n  color: #FFFFFF;\n  font-size: 11px;\n  font-weight: 700;\n  min-width: 18px;\n  height: 18px;\n  border-radius: 9px;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  padding: 0 4px;\n}\n\n/* 右侧主内容区 */\n.main-content {\n  flex: 1;\n  display: flex;\n  flex-direction: column;\n  gap: 16px;\n  min-width: 0;\n}\n\n/* 顶部统计横幅 */\n.stats-banner {\n  display: flex;\n  align-items: center;\n  gap: 30px;\n  padding: 12px 20px;\n  background: transparent;\n}\n\n.banner-title {\n  font-size: 28px;\n  font-weight: 600;\n  color: #3B9EFF;\n  white-space: nowrap;\n}\n\n.banner-stats {\n  display: flex;\n  align-items: center;\n  gap: 40px;\n  flex: 1;\n}\n\n.stat-item {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n}\n\n.stat-icon {\n  font-size: 20px;\n  color: #3B9EFF;\n}\n\n.stat-label {\n  font-size: 16px;\n  color: #666666;\n}\n\n.stat-value {\n  font-size: 42px;\n  font-weight: 800;\n  line-height: 1;\n}\n\n.stat-value.primary {\n  color: #3B9EFF;\n}\n\n.stat-value.success {\n  color: #00C853;\n}\n\n/* 两个大状态卡片 */\n.status-cards {\n  display: flex;\n  gap: 20px;\n}\n\n.status-card {\n  flex: 1;\n  display: flex;\n  align-items: center;\n  gap: 20px;\n  padding: 20px 24px;\n  border-radius: 14px;\n  position: relative;\n  overflow: hidden;\n  cursor: pointer;\n  transition: transform 0.2s;\n  min-height: 85px;\n}\n\n.status-card:hover {\n  transform: translateY(-2px);\n}\n\n.blue-card {\n  background: linear-gradient(135deg, #3B9EFF 0%, #5CB3FF 100%);\n  border: 1px solid #2A8EEE;\n}\n\n.light-card {\n  background: linear-gradient(135deg, #E8F5FF 0%, #D0E9FF 100%);\n  border: 1px solid #B8D9F5;\n}\n\n.card-icon {\n  position: relative;\n  width: 50px;\n  height: 50px;\n  flex-shrink: 0;\n}\n\n.icon-bg {\n  position: absolute;\n  width: 50px;\n  height: 50px;\n  border-radius: 50%;\n  background: radial-gradient(circle, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0) 70%);\n}\n\n.icon-symbol {\n  position: absolute;\n  top: 50%;\n  left: 50%;\n  transform: translate(-50%, -50%);\n  font-size: 28px;\n}\n\n.card-content {\n  flex: 1;\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.card-title {\n  font-size: 18px;\n  font-weight: 600;\n  color: #FFFFFF;\n  line-height: 1.3;\n  margin-bottom: 4px;\n}\n\n.light-card .card-title {\n  color: #333333;\n}\n\n.card-stats {\n  display: flex;\n  align-items: baseline;\n  gap: 8px;\n}\n\n.card-label {\n  font-size: 14px;\n  color: rgba(255, 255, 255, 0.9);\n}\n\n.light-card .card-label {\n  color: #666666;\n}\n\n.card-number {\n  font-size: 32px;\n  font-weight: 800;\n  color: #FFFFFF;\n  line-height: 1;\n}\n\n.light-card .card-number {\n  color: #3B9EFF;\n}\n\n.card-number.error {\n  color: #FF3B30;\n}\n\n.card-arrow {\n  position: absolute;\n  right: -1px;\n  top: 0;\n  bottom: 0;\n  width: 50px;\n  background: linear-gradient(135deg, transparent 0%, transparent 50%, rgba(255, 255, 255, 0.1) 50%, rgba(255, 255, 255, 0.1) 100%);\n  clip-path: polygon(0 0, 100% 0, 100% 100%, 30% 100%);\n}\n\n/* 设备网格矩阵 */\n.device-grid {\n  display: grid;\n  grid-template-columns: repeat(3, 1fr);\n  gap: 18px 16px;\n  flex: 1;\n}\n\n.device-card {\n  background: #FFFFFF;\n  border: 1px solid #B8D9F5;\n  border-radius: 12px;\n  padding: 18px;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 10px;\n  cursor: pointer;\n  transition: all 0.2s;\n}\n\n.device-card:hover {\n  transform: translateY(-2px);\n  box-shadow: 0 4px 12px rgba(59, 158, 255, 0.15);\n  border-color: #3B9EFF;\n}\n\n.device-icon-wrapper {\n  position: relative;\n  width: 60px;\n  height: 60px;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n}\n\n.device-icon-base {\n  position: absolute;\n  width: 60px;\n  height: 20px;\n  bottom: 0;\n  border-radius: 50%;\n  background: radial-gradient(ellipse at center, rgba(59, 158, 255, 0.2) 0%, rgba(59, 158, 255, 0.05) 60%, transparent 100%);\n}\n\n.device-icon {\n  font-size: 36px;\n  position: relative;\n  z-index: 1;\n}\n\n.device-name {\n  font-size: 16px;\n  font-weight: 500;\n  color: #333333;\n  text-align: center;\n  line-height: 1.3;\n}\n\n.device-status {\n  font-size: 24px;\n  font-weight: 700;\n  display: flex;\n  align-items: baseline;\n  gap: 2px;\n}\n\n.status-error {\n  color: #FF3B30;\n}\n\n.status-divider {\n  color: #999999;\n  font-size: 20px;\n  font-weight: 400;\n}\n\n.status-total {\n  color: #3B9EFF;\n  font-size: 20px;\n}\n</style>"
+}

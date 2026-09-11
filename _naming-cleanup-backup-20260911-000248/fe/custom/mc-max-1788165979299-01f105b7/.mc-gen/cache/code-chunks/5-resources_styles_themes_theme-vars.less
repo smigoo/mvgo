@@ -1,0 +1,36 @@
+// 主题变量定义文件
+// 注意：颜色变量必须定义在 mixin 内部，禁止在根级调用 mixin
+
+.common() {
+  // 字体缩放基准令牌（微码组件必须定义）
+  @fontSize: 14px;
+  
+  // 公共变量（所有主题共享）
+  @font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+.theme-light() {
+  // Light 主题颜色变量（面板默认主题）
+  // 从设计稿样式映射提取的颜色事实
+  
+  // 背景相关
+  @bg-primary: transparent; // 根容器背景透明（Figma 真值确认无填充）
+  
+  // 其他组件颜色变量（根据实际组件需要补充）
+  @text-primary: #333333;
+  @text-secondary: #666666;
+  @border-color: #d9d9d9;
+}
+
+.theme-dark() {
+  // Dark 主题颜色变量
+  // 深色面板所有文字颜色禁止使用黑色系
+  
+  // 背景相关
+  @bg-primary: transparent; // 根容器背景透明（Figma 真值确认无填充）
+  
+  // 其他组件颜色变量（深色主题）
+  @text-primary: #e8e8e8;
+  @text-secondary: #b3b3b3;
+  @border-color: #434343;
+}

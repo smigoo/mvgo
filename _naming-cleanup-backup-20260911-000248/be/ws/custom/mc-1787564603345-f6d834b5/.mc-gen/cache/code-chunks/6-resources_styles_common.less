@@ -1,0 +1,130 @@
+.c-monitor-root {
+  display: flex;
+  flex-direction: column;
+  gap: @spacing-md;
+  padding: @spacing-md;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.c-monitor-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.c-monitor-section-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: @spacing-sm;
+}
+
+.c-monitor-section-title {
+  font-size: @font-size-lg;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.c-monitor-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: @spacing-md;
+}
+
+.c-monitor-total-cards {
+  display: flex;
+  flex-direction: row;
+  gap: @spacing-md;
+}
+
+.c-monitor-total-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: @spacing-sm @spacing-md;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: @border-radius-base;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.c-monitor-total-label {
+  font-size: @font-size-base;
+  color: rgba(255, 255, 255, 0.65);
+  margin-bottom: @spacing-sm;
+}
+
+.c-monitor-total-data {
+  display: flex;
+  align-items: baseline;
+}
+
+.c-monitor-total-value {
+  font-size: 28px;
+  font-weight: bold;
+  color: @chart-color-1;
+  font-family: 'DIN', 'Roboto', sans-serif;
+}
+
+.c-monitor-total-unit {
+  font-size: @font-size-sm;
+  color: rgba(255, 255, 255, 0.45);
+  margin-left: @spacing-xs;
+}
+
+.c-monitor-chart-block {
+  display: flex;
+  flex-direction: column;
+}
+
+.c-monitor-chart-title {
+  font-size: @font-size-base;
+  color: rgba(255, 255, 255, 0.85);
+  margin-bottom: @spacing-sm;
+}
+
+.c-monitor-chart-container {
+  width: 100%;
+  height: 180px;
+}
+
+.c-monitor-vehicle-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.c-monitor-vehicle-title {
+  font-size: @font-size-base;
+  color: rgba(255, 255, 255, 0.85);
+  margin-bottom: 12px;
+  padding-left: @spacing-sm;
+  border-left: 3px solid @chart-color-1;
+}
+
+.c-monitor-stat-items {
+  display: flex;
+  flex-direction: row;
+  gap: @spacing-lg;
+}
+
+.c-monitor-stat-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: @spacing-sm;
+}
+
+.c-monitor-stat-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.c-monitor-stat-label {
+  font-size: @font-size-base;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.c-monitor-stat-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: #ffffff;
+  font-family: 'DIN', 'Roboto', sans-serif;
+}

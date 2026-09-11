@@ -1,0 +1,240 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 75,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0].header",
+        "message": "违规生成面板标题。布局中包含了 header.title: '设备监测'，但根据微码规范，组件标题必须由 <base-panel> 通过 declare.json 的 componentName 自动渲染，禁止在组件内部重复生成标题栏和标题文字。",
+        "suggestion": "移除 layout.sections[0].header 中的 title 字段，或将整个 header-stats section 的 header 部分清空，仅保留统计指标作为内容区域。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0].body.children & headerSlots",
+        "message": "统计指标结构冲突与重复。headerSlots 中已正确声明了三个统计指标（设备类型、设备总数、完好率）作为 header-right 插槽，但在 layout.sections[0].body.children 中又重复定义了这三个指标。这会导致代码生成时重复渲染。",
+        "suggestion": "删除 layout.sections[0].body.children 中的 stat-type、stat-total、stat-rate 节点，仅依赖 headerSlots 进行渲染。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[*].body.backgroundImage",
+        "message": "背景图重复设置。header-stats、summary-cards、device-grid-section 三个 section 的 body 中均设置了相同的 backgroundImage (bg-8788.png)。这会导致背景图在每个区块重复渲染，增加 DOM 节点和渲染负担，且可能产生视觉重叠。",
+        "suggestion": "将背景图提取至组件最外层根容器统一设置，或者仅保留在需要背景的第一个 section 中，移除其他 section 的重复背景图配置。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[0].style",
+        "message": "侧边栏使用了固定宽度。sidebar-tabs 设置了 width: '60px'。根据'容器布局禁止固定宽度'规范，内部布局容器应优先使用 flex 比例或 100% 自适应。",
+        "suggestion": "建议将 width: '60px' 改为 flex: '0 0 60px' 以明确其不参与 flex 伸缩，同时确保父容器有正确的 flex 布局，或者评估是否可以使用百分比/比例宽度。"
+      }
+    ],
+    "recommendations": [
+      "在代码生成阶段，严格遵守'禁止 ESM import 本地图片资源'规范，将布局中的 ../resources/images/ 路径转换为 base64 内联或同源 URL 方式引用，避免触发 RUNTIME-004 错误。",
+      "确保左侧 Tab 切换（sidebar-tabs）在代码实现时，不仅切换激活态样式，必须通过 watch 监听 activeTab 变化并联动更新右侧 grid-content 的设备列表数据。",
+      "网格列表中的数值（如 '2/484'）在渲染时，需根据规范对异常数（斜杠前的数字）进行颜色区分（>0 红色，=0 青绿色），建议在数据模型中拆分异常数和总数，而非直接传递字符串，以便于样式绑定。"
+    ],
+    "summary": "整体布局结构清晰，区域划分合理，但在微码规范符合度上存在明显问题。主要问题在于违规生成了面板标题，以及统计指标在 headerSlots 和 body 中重复定义导致结构冲突。此外，背景图在多个 section 中重复设置会影响性能。修复这些结构和规范冲突后，布局将达到优秀标准。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1990FF",
+      "--colorDanger": "#F53F3F",
+      "--colorSuccess": "#08A3A5",
+      "--colorTextBase": "#333333",
+      "--colorBgBase": "#EDF4FB",
+      "--borderRadius": "8px",
+      "--fontSize": "14px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#1990FF",
+      "@color-danger": "#F53F3F",
+      "@color-success": "#08A3A5",
+      "@color-text-base": "#333333",
+      "@color-bg-base": "#EDF4FB",
+      "@border-radius-base": "8px",
+      "@font-size-base": "14px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "16px",
+        "background": "var(--colorBgBase, #EDF4FB)",
+        "color": "var(--colorTextBase, #333333)",
+        "font-size": "var(--fontSize, 14px)"
+      },
+      ".card": {
+        "background": "#ffffff",
+        "border-radius": "var(--borderRadius, 8px)",
+        "padding": "16px",
+        "box-shadow": "0 2px 8px rgba(25, 144, 255, 0.08)"
+      },
+      ".tunnel-card": {
+        "background": "linear-gradient(135deg, #1990FF 0%, #08A3A5 100%)",
+        "border-radius": "var(--borderRadius, 8px)",
+        "color": "#ffffff",
+        "padding": "16px"
+      },
+      ".number-primary": {
+        "color": "var(--colorPrimary, #1990FF)",
+        "font-size": "2.4em",
+        "font-weight": "bold",
+        "line-height": "1.2"
+      },
+      ".number-danger": {
+        "color": "var(--colorDanger, #F53F3F)",
+        "font-size": "1.5em",
+        "font-weight": "bold",
+        "line-height": "1.2"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 #1990FF 映射为 --colorPrimary，用于蓝色大数字（总数）及主要交互元素",
+      "异常状态色 #F53F3F 映射为 --colorDanger，专门用于红色异常数字的高亮强调",
+      "辅助色 #08A3A5 映射为 --colorSuccess，与主色结合用于隧道设备卡片的渐变背景",
+      "基础文字色 #333333 映射为 --colorTextBase，确保浅色背景下的阅读对比度",
+      "浅蓝灰色背景 #EDF4FB 映射为 --colorBgBase，作为全局容器背景，营造浅色科技监测风",
+      "卡片圆角提取为 --borderRadius (8px)，统一所有卡片的视觉风格",
+      "隧道设备卡片使用 linear-gradient 线性渐变背景，融合主色与辅助色提升科技感",
+      "容器背景应优先直接落地为 Figma 字面量值，避免关键可见背景只依赖 CSS 变量"
+    ],
+    "elementStyleMap": {
+      "header-stats": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "stat-type": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "stat-total": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "stat-rate": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "card-tunnel-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-tunnel-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-tunnel-row-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-tunnel": {
+        "background": "linear-gradient(90deg, #318aff 0%, #70bfff 100%)",
+        "border-radius": "8px",
+        "padding": "16px",
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-north-south-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-north-south-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-north-south-row-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-north-south": {
+        "background": "#EDF4FB",
+        "border-radius": "8px",
+        "padding": "16px",
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-13": {
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-row-x-15": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-row-x-18": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-row-x-21": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-row-x-25": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-row-x-28": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-row-x-31": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "device-grid-section": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "sidebar-tabs-tab-item-监控-0": {
+        "background": "#1990FF",
+        "color": "#ffffff"
+      },
+      "sidebar-tabs-tab-item-照明-1": {
+        "background": "#EDF4FB",
+        "color": "#333333"
+      },
+      "sidebar-tabs": {
+        "width": "60px",
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "grid-content": {
+        "gap": "12px"
+      },
+      "el-el-x-35": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-tab-item-监控-37": {
+        "background": "#1990FF",
+        "color": "#ffffff"
+      },
+      "el-tab-item-照明-38": {
+        "background": "#EDF4FB",
+        "color": "#333333"
+      }
+    }
+  }
+}

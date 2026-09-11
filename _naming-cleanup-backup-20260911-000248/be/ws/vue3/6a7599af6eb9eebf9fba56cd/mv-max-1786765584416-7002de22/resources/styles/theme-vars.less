@@ -1,0 +1,174 @@
+// ==========================================
+// 流量监测面板 - 主题变量与 Mixin 定义
+// 仅定义变量与 mixin，不产出实际 class
+// ==========================================
+
+// 浅色主题（默认）
+.theme-light() {
+  :root {
+    --color-primary: #1990ff;
+    --color-primary-light: #69c0ff;
+    --color-primary-dark: #006fe3;
+    --color-accent: #fa8c16;
+    --color-accent-orange: #ff6a00;
+    --color-success: #52c41a;
+    --color-text-base: #333333;
+    --color-text-secondary: #666666;
+    --color-text-light: #999999;
+    --color-bg-base: #edf4fb;
+    --color-bg-card: rgba(255, 255, 255, 0.6);
+    --color-bg-card-solid: #ffffff;
+    --color-border: rgba(199, 224, 255, 1);
+    --color-border-light: rgba(172, 196, 225, 1);
+    --color-shadow: rgba(74, 117, 141, 0.25);
+    --color-tab-active: #1990ff;
+    --color-tab-inactive: #6680a0;
+    --color-chart-blue: #1890ff;
+    --color-chart-light-blue: #69c0ff;
+    --color-chart-green: #52c41a;
+    --color-chart-cyan: #00cccc;
+    --font-family-base: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+    --font-family-number: 'Roboto', sans-serif;
+    --font-size-base: 14px;
+    --font-size-title: 16px;
+    --font-size-large: 24px;
+    --font-size-xlarge: 28px;
+    --font-size-small: 12px;
+    --font-size-xs: 10px;
+    --spacing-xs: 4px;
+    --spacing-sm: 8px;
+    --spacing-md: 12px;
+    --spacing-lg: 16px;
+    --spacing-xl: 20px;
+    --spacing-xxl: 24px;
+    --border-radius-sm: 4px;
+    --border-radius-md: 8px;
+    --border-radius-lg: 12px;
+    --border-radius-round: 20px;
+  }
+}
+
+// 深色主题
+.theme-dark() {
+  :root {
+    --color-primary: #1990ff;
+    --color-primary-light: #69c0ff;
+    --color-primary-dark: #4dabff;
+    --color-accent: #fa8c16;
+    --color-accent-orange: #ff8c3a;
+    --color-success: #52c41a;
+    --color-text-base: #e0e0e0;
+    --color-text-secondary: #aaaaaa;
+    --color-text-light: #888888;
+    --color-bg-base: #1a2332;
+    --color-bg-card: rgba(30, 45, 65, 0.8);
+    --color-bg-card-solid: #1e2d41;
+    --color-border: rgba(50, 80, 120, 0.5);
+    --color-border-light: rgba(60, 90, 130, 0.4);
+    --color-shadow: rgba(0, 0, 0, 0.4);
+    --color-tab-active: #1990ff;
+    --color-tab-inactive: #4a6080;
+    --color-chart-blue: #1890ff;
+    --color-chart-light-blue: #69c0ff;
+    --color-chart-green: #52c41a;
+    --color-chart-cyan: #00cccc;
+    --font-family-base: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+    --font-family-number: 'Roboto', sans-serif;
+    --font-size-base: 14px;
+    --font-size-title: 16px;
+    --font-size-large: 24px;
+    --font-size-xlarge: 28px;
+    --font-size-small: 12px;
+    --font-size-xs: 10px;
+    --spacing-xs: 4px;
+    --spacing-sm: 8px;
+    --spacing-md: 12px;
+    --spacing-lg: 16px;
+    --spacing-xl: 20px;
+    --spacing-xxl: 24px;
+    --border-radius-sm: 4px;
+    --border-radius-md: 8px;
+    --border-radius-lg: 12px;
+    --border-radius-round: 20px;
+  }
+}
+
+// 通用 mixin
+.common() {
+  // 文本渐变效果
+  .text-gradient-primary() {
+    background: linear-gradient(90deg, #1990ff, #5a7eff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  // 数值样式
+  .value-primary() {
+    font-family: var(--font-family-number);
+    font-size: var(--font-size-xlarge);
+    font-weight: 900;
+    color: var(--color-primary-dark);
+  }
+
+  .value-accent() {
+    font-family: var(--font-family-number);
+    font-size: var(--font-size-large);
+    font-weight: 700;
+    color: var(--color-accent-orange);
+  }
+
+  // 卡片基础样式
+  .card-base() {
+    background: var(--color-bg-card);
+    border-radius: var(--border-radius-md);
+    border: 1px solid var(--color-border);
+  }
+
+  // 弹性居中
+  .flex-center() {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  // 弹性纵向
+  .flex-column() {
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+// LESS 变量（供组件内部使用）
+@color-primary: #1990ff;
+@color-primary-light: #69c0ff;
+@color-primary-dark: #006fe3;
+@color-accent: #fa8c16;
+@color-accent-orange: #ff6a00;
+@color-success: #52c41a;
+@color-text-base: #333333;
+@color-text-secondary: #666666;
+@color-text-light: #999999;
+@color-bg-base: #edf4fb;
+@color-bg-card: rgba(255, 255, 255, 0.6);
+@color-border: rgba(199, 224, 255, 1);
+@color-shadow: rgba(74, 117, 141, 0.25);
+@color-chart-blue: #1890ff;
+@color-chart-light-blue: #69c0ff;
+@color-chart-green: #52c41a;
+@color-chart-cyan: #00cccc;
+@font-family-base: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+@font-family-number: 'Roboto', sans-serif;
+@font-size-base: 14px;
+@font-size-title: 16px;
+@font-size-large: 24px;
+@font-size-xlarge: 28px;
+@font-size-small: 12px;
+@spacing-xs: 4px;
+@spacing-sm: 8px;
+@spacing-md: 12px;
+@spacing-lg: 16px;
+@spacing-xl: 20px;
+
+// 默认启用浅色主题
+.theme-light();

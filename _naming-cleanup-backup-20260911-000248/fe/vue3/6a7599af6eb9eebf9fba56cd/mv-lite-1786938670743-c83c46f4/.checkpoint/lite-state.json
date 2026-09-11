@@ -1,0 +1,100 @@
+{
+  "stage": "codegen_done",
+  "brief": {
+    "layout": "垂直居中模态弹窗布局，主轴方向为纵向，采用Header-Main-Footer三层结构，左右两侧悬浮导航控件",
+    "regions": [
+      {
+        "name": "标题栏",
+        "description": "包含'结构预警事件'标题、待处理数量徽标(黄色)、关闭按钮",
+        "position": "top",
+        "size": "高度约12%"
+      },
+      {
+        "name": "预警信息卡片区",
+        "description": "显示具体预警详情：桩号、类型、倒计时、时间、阈值、监测值、异常原因",
+        "position": "center",
+        "size": "高度约65%，宽度约90%"
+      },
+      {
+        "name": "左侧导航",
+        "description": "< 翻页箭头按钮",
+        "position": "left",
+        "size": "宽度约8%，垂直居中"
+      },
+      {
+        "name": "右侧导航",
+        "description": "> 翻页箭头按钮",
+        "position": "right",
+        "size": "宽度约8%，垂直居中"
+      },
+      {
+        "name": "底部操作区",
+        "description": "分页指示器(三个圆点)及查看核实按钮",
+        "position": "bottom",
+        "size": "高度约18%"
+      }
+    ],
+    "spacing": {
+      "outer": "弹窗外围具有明显圆角(约12px)和红色外发光边框，与页面背景有明显间距",
+      "gap": "标题栏与内容区间距约16px，内容区与底部按钮区间距约20px，左右导航与内容区间距约10px",
+      "padding": "内容区内边距约24px，标题栏内边距水平20px垂直12px"
+    },
+    "colors": {
+      "primary": "#DC2626",
+      "background": "#2D0A0A",
+      "surface": "#1A0404",
+      "text": "#FFFFFF",
+      "border": "#991B1B",
+      "accent": "#EAB308"
+    },
+    "typography": {
+      "size": "标题28px(粗体)，预警名称24px(粗体)，正文18px，辅助信息16px，倒计时20px",
+      "weight": "标题700，预警名称600，正文400-500",
+      "lineHeight": "1.5-1.8"
+    },
+    "components": [
+      "ModalDialog",
+      "Badge(待处理计数)",
+      "CloseButton(X)",
+      "CountdownTimer(倒计时标签)",
+      "DataList(键值对列表)",
+      "PaginationIndicator(圆点指示器)",
+      "PrimaryButton(查看核实)",
+      "NavigationArrows(< >)"
+    ],
+    "textContent": [
+      "结构预警事件",
+      "待处理 3",
+      "k24+422 (ZYN6-2)沉降预警",
+      "03:24:54",
+      "预警时间：2025-08-01 18:20",
+      "报警阈值：-5~5 cm",
+      "实时监测值：3 cm",
+      "异常原因：数值偏小异常",
+      "查看核实"
+    ],
+    "visualDetails": [
+      "整体深红黑渐变背景(#2D0A0A至#1A0404)",
+      "标题栏采用亮红色(#B91C1C)到深红色渐变",
+      "待处理徽标为金黄色(#FACC15)背景黑字，带轻微圆角",
+      "倒计时标签为金黄色边框+半透明金黄背景，字体等宽",
+      "内容卡片具有内嵌式边框(深红色#450a0a)和微弱外发光",
+      "左右导航箭头为竖向长条形，深棕红色背景，白色箭头图标",
+      "查看核实按钮为深红色背景(#7F1D1D)，白色文字，圆角矩形，带边框",
+      "分页指示器为三个水平排列圆点，当前激活项为白色，其余为灰色半透明"
+    ],
+    "interactions": [
+      "关闭按钮(右上角X)：关闭弹窗",
+      "左侧导航箭头(<)：切换至上一个预警事件",
+      "右侧导航箭头(>)：切换至下一个预警事件",
+      "分页指示器(三个圆点)：可点击切换不同预警条目，当前激活第1个",
+      "查看核实按钮(底部中央)：进入该预警事件的详情核实页面"
+    ]
+  },
+  "width": 405,
+  "height": 338,
+  "sourceType": "screenshot",
+  "componentType": "vue3",
+  "generationTier": "lite",
+  "vueCode": "<template>\n  <div class=\"modal-container\">\n    <!-- 外层容器 -->\n    <div class=\"modal-wrapper\">\n      <!-- 标题栏 -->\n      <header class=\"modal-header\">\n        <h2 class=\"title\">结构预警事件</h2>\n        <div class=\"badge\">待处理 3</div>\n        <button class=\"close-btn\" @click=\"handleClose\">×</button>\n      </header>\n\n      <!-- 左侧导航 -->\n      <button class=\"nav-btn nav-left\" @click=\"handlePrev\">\n        <span class=\"arrow\">‹</span>\n      </button>\n\n      <!-- 右侧导航 -->\n      <button class=\"nav-btn nav-right\" @click=\"handleNext\">\n        <span class=\"arrow\">›</span>\n      </button>\n\n      <!-- 预警信息卡片区 -->\n      <main class=\"content-card\">\n        <div class=\"alert-header\">\n          <h3 class=\"alert-title\">{{ currentAlert.title }}</h3>\n          <div class=\"countdown-badge\">{{ currentAlert.countdown }}</div>\n        </div>\n        \n        <div class=\"info-list\">\n          <div class=\"info-item\">\n            <span class=\"info-label\">预警时间：</span>\n            <span class=\"info-value\">{{ currentAlert.time }}</span>\n          </div>\n          <div class=\"info-item\">\n            <span class=\"info-label\">报警阈值：</span>\n            <span class=\"info-value\">{{ currentAlert.threshold }}</span>\n          </div>\n          <div class=\"info-item\">\n            <span class=\"info-label\">实时监测值：</span>\n            <span class=\"info-value\">{{ currentAlert.value }}</span>\n          </div>\n          <div class=\"info-item\">\n            <span class=\"info-label\">异常原因：</span>\n            <span class=\"info-value\">{{ currentAlert.reason }}</span>\n          </div>\n        </div>\n      </main>\n\n      <!-- 底部操作区 -->\n      <footer class=\"footer\">\n        <div class=\"pagination-dots\">\n          <span \n            v-for=\"(dot, index) in totalDots\" \n            :key=\"index\"\n            :class=\"['dot', { active: index === currentIndex }]\"\n            @click=\"handleDotClick(index)\"\n          ></span>\n        </div>\n        <button class=\"action-btn\" @click=\"handleVerify\">查看核实</button>\n      </footer>\n    </div>\n  </div>\n</template>\n\n<script setup>\nimport { ref } from 'vue'\n\nconst currentIndex = ref(0)\nconst totalDots = ref(3)\n\nconst alertsData = ref([\n  {\n    title: 'k24+422 (ZYN6-2)沉降预警',\n    countdown: '03:24:54',\n    time: '2025-08-01 18:20',\n    threshold: '-5~5 cm',\n    value: '3 cm',\n    reason: '数值偏小异常'\n  },\n  {\n    title: 'k25+100 (ZYN6-3)倾斜预警',\n    countdown: '02:15:30',\n    time: '2025-08-01 17:45',\n    threshold: '-3~3 mm',\n    value: '4.2 mm',\n    reason: '数值偏大异常'\n  },\n  {\n    title: 'k26+500 (ZYN6-5)裂缝预警',\n    countdown: '05:42:18',\n    time: '2025-08-01 16:30',\n    threshold: '0~2 mm',\n    value: '2.8 mm',\n    reason: '超过阈值上限'\n  }\n])\n\nconst currentAlert = ref(alertsData.value[0])\n\nconst handleClose = () => {\n  console.log('关闭弹窗')\n}\n\nconst handlePrev = () => {\n  if (currentIndex.value > 0) {\n    currentIndex.value--\n    currentAlert.value = alertsData.value[currentIndex.value]\n  }\n}\n\nconst handleNext = () => {\n  if (currentIndex.value < alertsData.value.length - 1) {\n    currentIndex.value++\n    currentAlert.value = alertsData.value[currentIndex.value]\n  }\n}\n\nconst handleDotClick = (index) => {\n  currentIndex.value = index\n  currentAlert.value = alertsData.value[index]\n}\n\nconst handleVerify = () => {\n  console.log('查看核实', currentAlert.value)\n}\n</script>\n\n<style scoped>\n.modal-container {\n  width: 100%;\n  height: 100%;\n  box-sizing: border-box;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  background: rgba(0, 0, 0, 0.5);\n  font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif;\n}\n\n.modal-wrapper {\n  width: 405px;\n  height: 338px;\n  background: linear-gradient(180deg, #2D0A0A 0%, #1A0404 100%);\n  border-radius: 12px;\n  box-shadow: 0 0 20px rgba(220, 38, 38, 0.6), inset 0 0 30px rgba(153, 27, 27, 0.3);\n  border: 2px solid #991B1B;\n  position: relative;\n  display: flex;\n  flex-direction: column;\n  overflow: hidden;\n}\n\n/* 标题栏 */\n.modal-header {\n  height: 12%;\n  min-height: 40px;\n  background: linear-gradient(90deg, #DC2626 0%, #991B1B 100%);\n  display: flex;\n  align-items: center;\n  padding: 0 20px;\n  position: relative;\n  flex-shrink: 0;\n}\n\n.title {\n  font-size: 22px;\n  font-weight: 700;\n  color: #FFFFFF;\n  margin: 0;\n  letter-spacing: 1px;\n}\n\n.badge {\n  margin-left: auto;\n  background: #FACC15;\n  color: #000000;\n  padding: 4px 14px;\n  border-radius: 6px;\n  font-size: 16px;\n  font-weight: 600;\n  margin-right: 15px;\n}\n\n.close-btn {\n  width: 28px;\n  height: 28px;\n  background: transparent;\n  border: none;\n  color: #FFFFFF;\n  font-size: 24px;\n  cursor: pointer;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  transition: all 0.2s;\n  line-height: 1;\n}\n\n.close-btn:hover {\n  color: #FCA5A5;\n  transform: scale(1.1);\n}\n\n/* 导航按钮 */\n.nav-btn {\n  position: absolute;\n  top: 50%;\n  transform: translateY(-50%);\n  width: 32px;\n  height: 80px;\n  background: linear-gradient(180deg, #7F1D1D 0%, #450a0a 100%);\n  border: 1px solid #991B1B;\n  border-radius: 8px;\n  cursor: pointer;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  z-index: 10;\n  transition: all 0.2s;\n  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);\n}\n\n.nav-btn:hover {\n  background: linear-gradient(180deg, #991B1B 0%, #7F1D1D 100%);\n  box-shadow: 0 0 12px rgba(220, 38, 38, 0.5);\n}\n\n.nav-left {\n  left: -10px;\n}\n\n.nav-right {\n  right: -10px;\n}\n\n.arrow {\n  color: #FFFFFF;\n  font-size: 32px;\n  font-weight: 300;\n  line-height: 1;\n}\n\n/* 内容卡片 */\n.content-card {\n  flex: 1;\n  margin: 16px 20px 0;\n  background: linear-gradient(180deg, rgba(26, 4, 4, 0.9) 0%, rgba(13, 2, 2, 0.95) 100%);\n  border: 1px solid #450a0a;\n  border-radius: 8px;\n  padding: 24px;\n  box-shadow: inset 0 0 20px rgba(69, 10, 10, 0.5), 0 0 15px rgba(153, 27, 27, 0.2);\n  min-height: 0;\n  overflow-y: auto;\n}\n\n.alert-header {\n  display: flex;\n  align-items: center;\n  gap: 12px;\n  margin-bottom: 20px;\n  flex-wrap: wrap;\n}\n\n.alert-title {\n  font-size: 20px;\n  font-weight: 600;\n  color: #FFFFFF;\n  margin: 0;\n  letter-spacing: 0.5px;\n}\n\n.countdown-badge {\n  background: rgba(234, 179, 8, 0.15);\n  border: 1px solid #EAB308;\n  color: #FACC15;\n  padding: 4px 12px;\n  border-radius: 4px;\n  font-size: 18px;\n  font-weight: 600;\n  font-family: \"Courier New\", monospace;\n  letter-spacing: 1px;\n}\n\n.info-list {\n  display: flex;\n  flex-direction: column;\n  gap: 14px;\n}\n\n.info-item {\n  display: flex;\n  align-items: baseline;\n  gap: 8px;\n}\n\n.info-label {\n  font-size: 17px;\n  color: #E5E7EB;\n  font-weight: 400;\n  white-space: nowrap;\n}\n\n.info-value {\n  font-size: 17px;\n  color: #FFFFFF;\n  font-weight: 500;\n}\n\n/* 底部操作区 */\n.footer {\n  height: 18%;\n  min-height: 60px;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n  gap: 12px;\n  padding-bottom: 8px;\n  flex-shrink: 0;\n}\n\n.pagination-dots {\n  display: flex;\n  gap: 8px;\n  align-items: center;\n}\n\n.dot {\n  width: 8px;\n  height: 8px;\n  border-radius: 50%;\n  background: rgba(255, 255, 255, 0.3);\n  cursor: pointer;\n  transition: all 0.3s;\n}\n\n.dot.active {\n  background: #FFFFFF;\n  width: 20px;\n  border-radius: 4px;\n}\n\n.dot:hover:not(.active) {\n  background: rgba(255, 255, 255, 0.5);\n}\n\n.action-btn {\n  background: linear-gradient(180deg, #991B1B 0%, #7F1D1D 100%);\n  border: 1px solid #DC2626;\n  color: #FFFFFF;\n  padding: 8px 36px;\n  border-radius: 6px;\n  font-size: 17px;\n  font-weight: 500;\n  cursor: pointer;\n  transition: all 0.2s;\n  box-shadow: 0 2px 8px rgba(127, 29, 29, 0.4);\n}\n\n.action-btn:hover {\n  background: linear-gradient(180deg, #DC2626 0%, #991B1B 100%);\n  box-shadow: 0 0 15px rgba(220, 38, 38, 0.6);\n  transform: translateY(-1px);\n}\n\n.action-btn:active {\n  transform: translateY(0);\n}\n</style>"
+}

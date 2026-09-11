@@ -1,0 +1,59 @@
+// 主题变量定义文件
+// 注意：颜色变量必须定义在 mixin 内部，根级禁止调用主题 mixin
+
+// 公共变量 mixin（两个主题共享的变量）
+.common() {
+  // 背景图片资源（从设计稿样式映射提取）
+  @bg-image-8788: url(../resources/images/bg-8788.png);
+  
+  // 背景通用设置
+  @bg-size-full: 100% 100%;
+  @bg-position-center: center center;
+  @bg-repeat-no: no-repeat;
+}
+
+// 深色主题变量 mixin
+.theme-dark() {
+  // 背景相关
+  @background-image: url(../resources/images/bg-8788.png);
+  @background-size: 100% 100%;
+  @background-position: center center;
+  @background-repeat: no-repeat;
+  
+  // 文字颜色（深色主题禁止使用黑色系）
+  @text-color-primary: rgba(255, 255, 255, 0.9);
+  @text-color-secondary: rgba(255, 255, 255, 0.7);
+  @text-color-tertiary: rgba(255, 255, 255, 0.5);
+  
+  // 边框颜色
+  @border-color: rgba(255, 255, 255, 0.15);
+  @border-color-light: rgba(255, 255, 255, 0.08);
+  
+  // 背景色
+  @bg-color-overlay: rgba(0, 0, 0, 0.3);
+  @bg-color-hover: rgba(255, 255, 255, 0.1);
+  @bg-color-active: rgba(255, 255, 255, 0.15);
+}
+
+// 浅色主题变量 mixin（默认主题，与设计稿一致）
+.theme-light() {
+  // 背景相关
+  @background-image: url(../resources/images/bg-8788.png);
+  @background-size: 100% 100%;
+  @background-position: center center;
+  @background-repeat: no-repeat;
+  
+  // 文字颜色
+  @text-color-primary: rgba(0, 0, 0, 0.85);
+  @text-color-secondary: rgba(0, 0, 0, 0.65);
+  @text-color-tertiary: rgba(0, 0, 0, 0.45);
+  
+  // 边框颜色
+  @border-color: rgba(0, 0, 0, 0.15);
+  @border-color-light: rgba(0, 0, 0, 0.06);
+  
+  // 背景色
+  @bg-color-overlay: rgba(255, 255, 255, 0.8);
+  @bg-color-hover: rgba(0, 0, 0, 0.04);
+  @bg-color-active: rgba(0, 0, 0, 0.08);
+}

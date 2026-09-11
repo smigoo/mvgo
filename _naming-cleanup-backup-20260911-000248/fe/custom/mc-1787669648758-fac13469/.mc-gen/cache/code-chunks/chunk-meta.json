@@ -1,0 +1,29 @@
+{
+  "completed": [
+    "1-declare.json",
+    "2-package/index.vue",
+    "3-package/index.vue",
+    "4-package/index.vue",
+    "5-package/index.vue",
+    "6-package/components/TrafficBarChart.vue",
+    "7-package/components/VehicleTypeSection.vue",
+    "5-package/components/TotalTrafficSection.vue",
+    "8-package/components/ForecastSection.vue",
+    "9-resources/styles/themes/theme-vars.less",
+    "10-resources/styles/common.less",
+    "6-package/components/TrafficBarSection.vue"
+  ],
+  "total": 6,
+  "updatedAt": 1787671951030,
+  "files": {
+    "declare.json": "1-declare.json",
+    "package/index.vue": "5-package_index.vue",
+    "package/components/TrafficBarChart.vue": "6-package_components_TrafficBarChart.vue",
+    "package/components/VehicleTypeSection.vue": "7-package_components_VehicleTypeSection.vue",
+    "package/components/TotalTrafficSection.vue": "5-package_components_TotalTrafficSection.vue",
+    "package/components/ForecastSection.vue": "8-package_components_ForecastSection.vue",
+    "resources/styles/themes/theme-vars.less": "9-resources_styles_themes_theme-vars.less",
+    "resources/styles/common.less": "10-resources_styles_common.less",
+    "package/components/TrafficBarSection.vue": "6-package_components_TrafficBarSection.vue"
+  }
+}

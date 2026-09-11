@@ -1,0 +1,52 @@
+// 主题变量与 mixin 定义
+// 仅定义变量与 mixin，不产出实际 class
+
+// Less 变量
+@color-primary: rgba(25, 144, 255, 1);
+@color-bg-base: rgba(237, 244, 251, 1);
+@color-text-base: rgba(51, 51, 51, 1);
+@color-error: #f53f3f;
+@color-success: rgba(8, 163, 165, 1);
+@color-bg-container: #ffffff;
+@font-size-base: 14px;
+@font-size-heading: 24px;
+@border-radius-base: 8px;
+
+// 通用 mixin
+.common() {
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', 'Roboto', sans-serif;
+  box-sizing: border-box;
+}
+
+// 浅色主题
+.theme-light() {
+  :root {
+    --color-primary: rgba(25, 144, 255, 1);
+    --color-bg-base: rgba(237, 244, 251, 1);
+    --color-text-base: rgba(51, 51, 51, 1);
+    --color-error: #f53f3f;
+    --color-success: rgba(8, 163, 165, 1);
+    --color-bg-container: #ffffff;
+    --font-size-base: 14px;
+    --font-size-heading: 24px;
+    --border-radius-base: 8px;
+  }
+}
+
+// 深色主题（预留）
+.theme-dark() {
+  :root {
+    --color-primary: rgba(25, 144, 255, 1);
+    --color-bg-base: #1a1a2e;
+    --color-text-base: rgba(255, 255, 255, 0.85);
+    --color-error: #f53f3f;
+    --color-success: rgba(8, 163, 165, 1);
+    --color-bg-container: #2d2d44;
+    --font-size-base: 14px;
+    --font-size-heading: 24px;
+    --border-radius-base: 8px;
+  }
+}
+
+// 默认使用浅色主题
+.theme-light();

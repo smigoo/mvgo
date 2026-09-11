@@ -1,0 +1,43 @@
+{
+  "componentId": "mc-1784552183360-07177230",
+  "componentName": "管辖范围",
+  "version": "v1.0.0",
+  "attribute": {
+    "aspectRatio": [460, 138]
+  },
+  "panelKey": "aio-panel",
+  "businessEvents": {
+    "mc-1784552183360-07177230-onload": {
+      "eventId": "mc-1784552183360-07177230-onload",
+      "eventName": "组件加载完成",
+      "eventDataSchema": {
+        "componentId": {
+          "key": "componentId",
+          "name": "组件ID",
+          "type": "string"
+        },
+        "timestamp": {
+          "key": "timestamp",
+          "name": "时间戳",
+          "type": "number"
+        }
+      }
+    }
+  },
+  "businessStatuses": {},
+  "dataSources": [],
+  "formSources": [],
+  "themeConfig": {
+    "default": "dark",
+    "list": [
+      {
+        "name": "深色主题",
+        "key": "dark"
+      },
+      {
+        "name": "浅色主题",
+        "key": "light"
+      }
+    ]
+  }
+}

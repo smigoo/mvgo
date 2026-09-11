@@ -1,0 +1,145 @@
+.c-monitor-root {
+  font-size: var(--fontSize, 14px);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  height: 100%;
+}
+
+.c-monitor-header-stats {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-around;
+  background-image: url(../resources/images/bg-8788.png);
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+  padding: 0 20px;
+  border-radius: 6px;
+}
+
+.c-monitor-header-stat {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.c-monitor-header-stat-label {
+  font-size: @fontSize;
+  color: #333333;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.c-monitor-header-stat-value {
+  font-size: calc(@fontSize * 1.4286);
+  color: #1990ff;
+  font-weight: 700;
+  line-height: 1.17;
+}
+
+.c-monitor-status-badges {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+}
+
+.c-monitor-badge-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 12px;
+  border-radius: 6px;
+  background-image: url(../resources/images/bg-8788.png);
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+  flex: 1;
+}
+
+.c-monitor-badge-icon {
+  width: 40px;
+  height: 40px;
+  margin-right: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.c-monitor-badge-icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.c-monitor-badge-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.c-monitor-badge-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.c-monitor-badge-label {
+  font-size: calc(@fontSize * 0.8571);
+  color: #ffffff;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.c-monitor-badge-value {
+  font-size: calc(@fontSize * 1.4286);
+  color: #ffffff;
+  font-weight: 700;
+  line-height: 1.17;
+}
+
+.c-monitor-device-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+}
+
+.c-monitor-device-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 12px;
+  position: relative;
+  border-radius: 6px;
+}
+
+.c-monitor-device-icon {
+  width: 40px;
+  height: 40px;
+  margin-bottom: 8px;
+}
+
+.c-monitor-device-name {
+  font-size: calc(@fontSize * 0.8571);
+  color: #333333;
+  font-weight: 400;
+  line-height: 1.29;
+  text-align: center;
+  margin-bottom: 4px;
+}
+
+.c-monitor-device-count {
+  font-size: calc(@fontSize * 1.1429);
+  font-weight: 500;
+  color: #ffffff;
+  line-height: 1.17;
+  text-align: center;
+  text-shadow: 0px 0px 0px rgba(0, 0, 0, 0.5);
+}

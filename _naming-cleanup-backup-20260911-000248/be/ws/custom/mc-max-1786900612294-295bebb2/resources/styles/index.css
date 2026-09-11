@@ -1,0 +1,612 @@
+.dark {
+  /* 变量由 theme-vars.less 中的 mixin 提供，请勿直接修改颜色以保持主题支持 */
+}
+.dark .c-device-monitor-root {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  overflow: hidden;
+  font-family: 'Noto Sans SC', 'Source Han Sans CN', sans-serif;
+  color: #FFFFFF;
+}
+.dark .c-device-overview-root {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+.dark .c-device-overview-summary {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.dark .c-device-overview-card {
+  flex: 1;
+  min-width: 0;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.dark .c-device-overview-card-main {
+  background: linear-gradient(135deg, #1990FF 0%, #5A7EFF 100%);
+  color: #FFFFFF;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+.dark .c-device-overview-card-sub {
+  background: #1A2332;
+  color: #FFFFFF;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+.dark .c-device-overview-card-icon {
+  width: 35px;
+  height: 28px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.dark .c-device-overview-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+.dark .c-device-overview-card-title {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dark .c-device-overview-card-line {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+.dark .c-device-overview-card-label {
+  font-size: 14px;
+  line-height: 21px;
+  color: inherit;
+}
+.dark .c-device-overview-card-label-abnormal {
+  color: inherit;
+}
+.dark .c-device-overview-card-label-sub {
+  color: inherit;
+}
+.dark .c-device-overview-card-value {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: 'Roboto', sans-serif;
+  line-height: 23px;
+  color: inherit;
+}
+.dark .c-device-overview-card-value-danger {
+  color: #F53F3F;
+}
+.dark .c-device-overview-card-value-info {
+  color: #1990FF;
+}
+.dark .c-device-overview-main {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+  gap: 10px;
+}
+.dark .c-device-overview-nav {
+  width: 46px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+.dark .c-device-overview-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px 2px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.2s, color 0.2s;
+  min-height: 40px;
+  box-sizing: border-box;
+  color: #FFFFFF;
+}
+.dark .c-device-overview-nav-item-active {
+  background: #1990FF;
+  color: #FFFFFF;
+}
+.dark .c-device-overview-nav-text {
+  font-size: 14px;
+  line-height: 16px;
+  white-space: nowrap;
+  text-align: center;
+}
+.dark .c-device-overview-nav-badge {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 14px;
+  white-space: nowrap;
+}
+.dark .c-device-overview-grid {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-auto-rows: 64px;
+  gap: 8px;
+  overflow-y: auto;
+  padding: 2px;
+}
+.dark .c-device-overview-device {
+  background: #1A2332;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: box-shadow 0.2s, transform 0.2s;
+  color: #FFFFFF;
+}
+.dark .c-device-overview-device:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transform: translateY(-1px);
+}
+.dark .c-device-overview-device-icon {
+  width: 26px;
+  height: 32px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.dark .c-device-overview-device-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.dark .c-device-overview-device-name {
+  font-size: 12px;
+  line-height: 18px;
+  color: #FFFFFF;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dark .c-device-overview-device-status {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 2px;
+}
+.dark .c-device-overview-device-abnormal {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 19px;
+  color: #F53F3F;
+  font-family: 'Roboto', sans-serif;
+}
+.dark .c-device-overview-device-total {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 19px;
+  color: #1990FF;
+  font-family: 'Roboto', sans-serif;
+}
+.dark .c-device-list-root {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  font-family: 'Noto Sans SC', 'Source Han Sans CN', sans-serif;
+  color: #FFFFFF;
+}
+.dark .c-device-list-grid {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-auto-rows: 64px;
+  gap: 8px;
+}
+.dark .c-device-list-card {
+  height: 64px;
+  min-width: 0;
+  box-sizing: border-box;
+  background: #1A2332;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 8px 10px;
+  color: #FFFFFF;
+}
+.dark .c-device-list-card-body {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.dark .c-device-list-card-icon {
+  width: 26px;
+  height: 32px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.dark .c-device-list-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.dark .c-device-list-card-label {
+  font-size: 12px;
+  color: #FFFFFF;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dark .c-device-list-card-value {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 2px;
+}
+.dark .c-device-list-card-value-danger {
+  font-size: 18px;
+  color: #F53F3F;
+  font-weight: 700;
+  line-height: 21px;
+  font-family: 'Roboto', sans-serif;
+}
+.dark .c-device-list-card-value-unit {
+  font-size: 14px;
+  color: #1990FF;
+  font-weight: 500;
+  line-height: 21px;
+  font-family: 'Roboto', sans-serif;
+}
+.dark .c-device-monitor-trend-chart {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex-shrink: 0;
+}
+.light {
+  /* 变量由 theme-vars.less 中的 mixin 提供，请勿直接修改颜色以保持主题支持 */
+}
+.light .c-device-monitor-root {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  overflow: hidden;
+  font-family: 'Noto Sans SC', 'Source Han Sans CN', sans-serif;
+  color: #333333;
+}
+.light .c-device-overview-root {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+.light .c-device-overview-summary {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.light .c-device-overview-card {
+  flex: 1;
+  min-width: 0;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.light .c-device-overview-card-main {
+  background: linear-gradient(135deg, #1990FF 0%, #5A7EFF 100%);
+  color: #FFFFFF;
+  box-shadow: 0 4px 10px rgba(74, 117, 141, 0.25);
+}
+.light .c-device-overview-card-sub {
+  background: #FFFFFF;
+  color: #333333;
+  border: 1px solid rgba(25, 144, 255, 0.08);
+  box-shadow: 0 4px 10px rgba(74, 117, 141, 0.25);
+}
+.light .c-device-overview-card-icon {
+  width: 35px;
+  height: 28px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.light .c-device-overview-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+.light .c-device-overview-card-title {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.light .c-device-overview-card-line {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+.light .c-device-overview-card-label {
+  font-size: 14px;
+  line-height: 21px;
+  color: inherit;
+}
+.light .c-device-overview-card-label-abnormal {
+  color: inherit;
+}
+.light .c-device-overview-card-label-sub {
+  color: inherit;
+}
+.light .c-device-overview-card-value {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: 'Roboto', sans-serif;
+  line-height: 23px;
+  color: inherit;
+}
+.light .c-device-overview-card-value-danger {
+  color: #F53F3F;
+}
+.light .c-device-overview-card-value-info {
+  color: #1990FF;
+}
+.light .c-device-overview-main {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+  gap: 10px;
+}
+.light .c-device-overview-nav {
+  width: 46px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+.light .c-device-overview-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px 2px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.2s, color 0.2s;
+  min-height: 40px;
+  box-sizing: border-box;
+  color: #333333;
+}
+.light .c-device-overview-nav-item-active {
+  background: #1990FF;
+  color: #FFFFFF;
+}
+.light .c-device-overview-nav-text {
+  font-size: 14px;
+  line-height: 16px;
+  white-space: nowrap;
+  text-align: center;
+}
+.light .c-device-overview-nav-badge {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 14px;
+  white-space: nowrap;
+}
+.light .c-device-overview-grid {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-auto-rows: 64px;
+  gap: 8px;
+  overflow-y: auto;
+  padding: 2px;
+}
+.light .c-device-overview-device {
+  background: #FFFFFF;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(74, 117, 141, 0.25);
+  border: 1px solid rgba(25, 144, 255, 0.08);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: box-shadow 0.2s, transform 0.2s;
+  color: #333333;
+}
+.light .c-device-overview-device:hover {
+  box-shadow: 0 4px 12px rgba(74, 117, 141, 0.25);
+  transform: translateY(-1px);
+}
+.light .c-device-overview-device-icon {
+  width: 26px;
+  height: 32px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.light .c-device-overview-device-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.light .c-device-overview-device-name {
+  font-size: 12px;
+  line-height: 18px;
+  color: #333333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.light .c-device-overview-device-status {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 2px;
+}
+.light .c-device-overview-device-abnormal {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 19px;
+  color: #F53F3F;
+  font-family: 'Roboto', sans-serif;
+}
+.light .c-device-overview-device-total {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 19px;
+  color: #1990FF;
+  font-family: 'Roboto', sans-serif;
+}
+.light .c-device-list-root {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  font-family: 'Noto Sans SC', 'Source Han Sans CN', sans-serif;
+  color: #333333;
+}
+.light .c-device-list-grid {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-auto-rows: 64px;
+  gap: 8px;
+}
+.light .c-device-list-card {
+  height: 64px;
+  min-width: 0;
+  box-sizing: border-box;
+  background: #FFFFFF;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(74, 117, 141, 0.25);
+  border: 1px solid rgba(25, 144, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 8px 10px;
+  color: #333333;
+}
+.light .c-device-list-card-body {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.light .c-device-list-card-icon {
+  width: 26px;
+  height: 32px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.light .c-device-list-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.light .c-device-list-card-label {
+  font-size: 12px;
+  color: #333333;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.light .c-device-list-card-value {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 2px;
+}
+.light .c-device-list-card-value-danger {
+  font-size: 18px;
+  color: #F53F3F;
+  font-weight: 700;
+  line-height: 21px;
+  font-family: 'Roboto', sans-serif;
+}
+.light .c-device-list-card-value-unit {
+  font-size: 14px;
+  color: #1990FF;
+  font-weight: 500;
+  line-height: 21px;
+  font-family: 'Roboto', sans-serif;
+}
+.light .c-device-monitor-trend-chart {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex-shrink: 0;
+}

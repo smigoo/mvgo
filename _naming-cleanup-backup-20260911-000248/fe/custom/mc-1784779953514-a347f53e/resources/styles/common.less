@@ -1,0 +1,199 @@
+// 重点车辆监测组件 — 通用样式
+// 组件ID: mc-1784779953514-a347f53e
+
+// ========== Tab 区域 ==========
+.c-mc-1784779953514-a347f53e-section-tabs {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  align-items: center;
+}
+
+.c-mc-1784779953514-a347f53e-tab-item {
+  padding: 4px 16px;
+  border-radius: 4px;
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 21px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: rgb(102, 128, 160);
+  border: 0.73px solid rgba(172, 196, 225, 1);
+  color: rgb(51, 51, 51);
+
+  &:hover {
+    opacity: 0.9;
+  }
+}
+
+.c-mc-1784779953514-a347f53e-tab-active {
+  background: rgb(25, 144, 255);
+  border: 0.73px solid rgba(199, 224, 255, 1);
+  color: rgb(255, 255, 255);
+  font-weight: 500;
+}
+
+// ========== 主内容区 ==========
+.c-mc-1784779953514-a347f53e-content {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: rgb(237, 244, 251);
+  box-shadow: 0px 4px 10px rgba(74, 117, 141, 0.25);
+}
+
+// ========== 小标题（今日累计） ==========
+.c-mc-1784779953514-a347f53e-sub-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid;
+  border-image: linear-gradient(90deg, #559eff 0%, #559eff 100%) 1;
+}
+
+.c-mc-1784779953514-a347f53e-header-icon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
+.c-mc-1784779953514-a347f53e-header-title {
+  font-family: 'Noto Sans SC', 'Source Han Sans CN', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 19.2px;
+  background: linear-gradient(180deg, rgba(25, 144, 255, 1) 0%, rgba(90, 126, 255, 0.83) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+// ========== 统计卡片容器 ==========
+.c-mc-1784779953514-a347f53e-stats-container {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+  align-items: stretch;
+  justify-content: space-between;
+}
+
+// ========== 通用卡片样式 ==========
+.c-mc-1784779953514-a347f53e-card-icon {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.c-mc-1784779953514-a347f53e-card-label {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  color: rgb(51, 51, 51);
+  line-height: 20px;
+}
+
+.c-mc-1784779953514-a347f53e-card-value {
+  font-family: 'DIN Alternate', 'DIN', 'Arial', sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.c-mc-1784779953514-a347f53e-card-unit {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  color: rgb(102, 102, 102);
+  line-height: 20px;
+  margin-left: 4px;
+}
+
+// ========== 危化品车卡片 ==========
+.c-mc-1784779953514-a347f53e-card-dangerous {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 20px;
+  border-radius: 8px;
+  min-height: 100px;
+  justify-content: center;
+}
+
+.c-mc-1784779953514-a347f53e-card-dangerous-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+.c-mc-1784779953514-a347f53e-card-dangerous-value-row {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  .c-mc-1784779953514-a347f53e-card-value {
+    color: #ff4d4f;
+  }
+}
+
+// ========== 重型货车卡片 ==========
+.c-mc-1784779953514-a347f53e-card-heavy {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 20px;
+  border-radius: 8px;
+  min-height: 100px;
+  justify-content: center;
+}
+
+.c-mc-1784779953514-a347f53e-card-heavy-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+.c-mc-1784779953514-a347f53e-card-heavy-value-row {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  .c-mc-1784779953514-a347f53e-card-value {
+    color: #1890ff;
+  }
+}
+
+// ========== 超高车辆卡片 ==========
+.c-mc-1784779953514-a347f53e-card-oversize {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 20px;
+  border-radius: 8px;
+  min-height: 100px;
+  justify-content: center;
+}
+
+.c-mc-1784779953514-a347f53e-card-oversize-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+.c-mc-1784779953514-a347f53e-card-oversize-value-row {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  .c-mc-1784779953514-a347f53e-card-value {
+    color: #fa8c16;
+  }
+}

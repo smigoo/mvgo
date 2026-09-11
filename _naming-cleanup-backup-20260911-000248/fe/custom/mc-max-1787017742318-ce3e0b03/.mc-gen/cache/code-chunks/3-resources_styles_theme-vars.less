@@ -1,0 +1,33 @@
+// 主题变量定义
+// 注意：根级别不调用任何主题 mixin，仅定义 mixin。
+// 系统会在 dark.less / light.less 的主题选择器内调用 .common() 与对应主题 mixin。
+
+.common() {
+  @env-monitor-primary: #2c9bea;
+  @env-monitor-primary-rgb: 44, 155, 234;
+  @env-monitor-danger: #f53f3f;
+  @env-monitor-chart-line: #0fcd7d;
+  @env-monitor-chart-area-start: rgba(15, 205, 125, 0.3);
+  @env-monitor-chart-area-end: rgba(15, 205, 125, 0.02);
+  @env-monitor-tab-list-bg-start: #b5deff;
+  @env-monitor-tab-list-bg-end: #d1ecff;
+  @env-monitor-tab-list-border: #ffffff;
+}
+
+.theme-dark() {
+  @env-monitor-text-primary: #ffffff;
+  @env-monitor-text-secondary: rgba(255, 255, 255, 0.8);
+  @env-monitor-text-subtle: rgba(255, 255, 255, 0.6);
+  @env-monitor-surface: #1a2332;
+  @env-monitor-surface-light: #242f42;
+  @env-monitor-border: rgba(255, 255, 255, 0.12);
+}
+
+.theme-light() {
+  @env-monitor-text-primary: #1f2937;
+  @env-monitor-text-secondary: rgba(31, 41, 55, 0.8);
+  @env-monitor-text-subtle: rgba(31, 41, 55, 0.6);
+  @env-monitor-surface: #ffffff;
+  @env-monitor-surface-light: #f6f8fb;
+  @env-monitor-border: rgba(31, 41, 55, 0.12);
+}

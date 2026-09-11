@@ -1,0 +1,118 @@
+// 微码组件主题变量文件
+// 定义三个 mixin：.common()、.theme-dark()、.theme-light()
+// 颜色变量定义在 mixin 内部，根级禁止调用主题 mixin
+
+// 公共变量（两个主题共用的非颜色属性）
+.common() {
+  // 字体家族
+  @font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  
+  // 圆角尺寸
+  @border-radius-sm: 2px;
+  @border-radius-base: 4px;
+  @border-radius-lg: 8px;
+  
+  // 阴影
+  @box-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.08);
+  @box-shadow-base: 0 2px 8px rgba(0, 0, 0, 0.12);
+  @box-shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.16);
+  
+  // 间距
+  @spacing-xs: 4px;
+  @spacing-sm: 8px;
+  @spacing-md: 16px;
+  @spacing-lg: 24px;
+  @spacing-xl: 32px;
+}
+
+// 深色主题
+.theme-dark() {
+  // 主色调
+  @primary-color: #1990ff;
+  @primary-hover: #388dff;
+  @primary-active: #006fe3;
+  @primary-light: #2ba0ff;
+  
+  // 链接色
+  @link-color: #57caff;
+  @link-hover: #5bbbef;
+  
+  // 成功色
+  @success-color: #00cccc;
+  @success-light: rgba(0, 204, 204, 0.3);
+  
+  // 警告色
+  @warning-color: #ffa22f;
+  
+  // 错误色
+  @error-color: #ff6a00;
+  
+  // 文本颜色（深色主题禁止黑色系）
+  @text-color: rgba(255, 255, 255, 0.8);
+  @text-color-secondary: #6680a0;
+  @text-color-disabled: #56597c;
+  
+  // 背景色
+  @bg-color: #56597c;
+  @bg-color-light: rgba(172, 196, 225, 1);
+  @bg-color-container: rgba(74, 117, 141, 0.25);
+  
+  // 边框色
+  @border-color: rgba(199, 224, 255, 1);
+  @border-color-light: rgba(74, 117, 141, 0.25);
+  
+  // 遮罩色
+  @mask-color: rgba(0, 0, 0, 0.45);
+}
+
+// 浅色主题（默认主题，与设计稿一致）
+.theme-light() {
+  // 主色调
+  @primary-color: #1252fa;
+  @primary-hover: #559eff;
+  @primary-active: #006fe3;
+  @primary-light: #5a7eff;
+  @primary-lighter: #3385ff;
+  
+  // 链接色
+  @link-color: #0c9dbe;
+  @link-hover: #1399ff;
+  
+  // 成功色
+  @success-color: #00cccc;
+  @success-light: rgba(0, 204, 204, 0.3);
+  
+  // 警告色
+  @warning-color: #ffa22f;
+  
+  // 错误色
+  @error-color: #ff6a00;
+  
+  // 文本颜色
+  @text-color: #333333;
+  @text-color-secondary: #6680a0;
+  @text-color-disabled: #56597c;
+  @text-color-inverse: #ffffff;
+  
+  // 背景色
+  @bg-color: #ffffff;
+  @bg-color-light: #edf4fb;
+  @bg-color-container: #d6effc;
+  @bg-color-hover: rgba(199, 224, 255, 1);
+  
+  // 边框色
+  @border-color: rgba(172, 196, 225, 1);
+  @border-color-light: rgba(74, 117, 141, 0.25);
+  
+  // 遮罩色
+  @mask-color: rgba(0, 0, 0, 0.45);
+  
+  // 黑色（仅浅色主题使用）
+  @black-color: #000000;
+}
+
+// 自动添加：将 .common() 中的 Less 变量暴露到全局作用域
+
+:root {
+  .common();
+}

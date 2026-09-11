@@ -1,0 +1,267 @@
+// 业务样式（common.less）
+// 组件 ID：monitor | 所有 class 以 .c- 前缀，字体统一走 @fontSize 变量
+// 面板外壳（标题/边框/阴影）由 base-panel 提供，此处仅处理内容区
+
+/* === 组件根容器：字体缩放锚点，禁止背景/边框/阴影/圆角 === */
+.c-monitor-root {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: var(--fontSize, 14px);
+  color: #333333;
+}
+
+/* === 主体内容区：左侧分类栏 + 右侧设备网格 === */
+.c-monitor-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+}
+
+/* ============================================================
+   顶部统计切换栏（Figma switch 节点，396×65，两张卡片并排）
+   ============================================================ */
+.c-monitor-stats-bar {
+  width: 100%;
+  height: 65px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+}
+
+/* 单张统计卡片：背景图已含圆角/渐变，禁止再加 background/border-radius/border */
+.c-monitor-stats-card {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+
+/* 图标：Figma 35×28，PNG 自带边框底色，容器禁止任何装饰 */
+.c-monitor-stats-card-icon {
+  width: 35px;
+  height: 28px;
+  flex-shrink: 0;
+  display: block;
+}
+
+/* 文字列：标题 + 两行数据，纵向堆叠 */
+.c-monitor-stats-card-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+}
+
+.c-monitor-stats-card-title {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 标题：Figma t-隧道设备 / t-南北接线设备 12px，default 组文字 #333333 */
+.c-monitor-stats-card-title-line {
+  display: block;
+  font-family: 'YouSheBiaoTiHei', 'Source Han Sans CN', 'PingFang SC', sans-serif;
+  font-size: calc(var(--fontSize, 14px) * 0.8571);
+  line-height: 1.3;
+  white-space: nowrap;
+  color: #333333;
+}
+
+/* 数据行：label + value 横向排列，垂直居中 */
+.c-monitor-stats-card-line {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+/* label：Figma t-总数: / t-异常数: 14px，default 组 #333333 */
+.c-monitor-stats-card-label {
+  font-size: var(--fontSize, 14px);
+  line-height: 1.5;
+  color: #333333;
+}
+
+/* value：Figma d-56302 / d-1280 20px bold */
+.c-monitor-stats-card-value {
+  font-family: 'Roboto', 'PingFang SC', sans-serif;
+  font-size: calc(var(--fontSize, 14px) * 1.4286);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+/* 非选中卡片：总数蓝色（Figma d-1280 #1990ff 系，取 layoutStructure 蓝调），异常数红色（Figma d-3 #e03434） */
+.c-monitor-stats-card-value--total {
+  color: rgba(100, 181, 246, 1);
+}
+.c-monitor-stats-card-value--abnormal {
+  color: rgba(255, 77, 79, 1);
+}
+
+/* 选中卡片（深蓝渐变底 bg1）：标题纯白、label 白 0.9、总数白色，异常数保持红色 */
+.c-monitor-stats-card--active {
+  .c-monitor-stats-card-title-line {
+    color: #ffffff;
+  }
+  .c-monitor-stats-card-label {
+    color: rgba(255, 255, 255, 0.9);
+  }
+  .c-monitor-stats-card-value--total {
+    color: #ffffff;
+  }
+}
+
+/* ============================================================
+   左侧设备分类标签栏（监控/照明/通风/消防/交通诱导/供配电）
+   ============================================================ */
+.c-monitor-categories {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 46px;
+  height: 100%;
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+.c-monitor-category-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  flex: 1;
+  min-height: 40px;
+  cursor: pointer;
+  border-radius: 4px;
+  color: #333333;
+  transition: all 0.3s;
+
+  /* 选中态（Figma bg #1990ff / t-监控 #ffffff） */
+  &.is-active {
+    background: #1990ff;
+    color: #ffffff;
+  }
+}
+
+/* 分类文字：Figma t-监控 14px */
+.c-monitor-category-label {
+  font-size: var(--fontSize, 14px);
+  line-height: 1.3;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* 角标：Figma d-3/3740 / d-3，蓝调徽标 */
+.c-monitor-category-badge {
+  font-size: calc(var(--fontSize, 14px) * 0.8571);
+  line-height: 1.2;
+  margin-top: 2px;
+  padding: 0 4px;
+  min-width: 14px;
+  text-align: center;
+  border-radius: 2px;
+  background: rgba(25, 144, 255, 0.15);
+  color: #1990ff;
+
+  .is-active & {
+    background: transparent;
+    color: #ffffff;
+    font-size: var(--fontSize, 14px);
+    font-weight: 500;
+  }
+}
+
+/* ============================================================
+   右侧设备网格（3 列，12 类设备卡片）
+   ============================================================ */
+.c-monitor-eq-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  width: 100%;
+  height: 100%;
+  align-content: start;
+}
+
+/* 单个设备卡片：浅白底 + 蓝色描边（Frame 2136638920 bg #ffffff / border #258dc8 系） */
+.c-monitor-eq-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(100, 181, 246, 0.5);
+  border-radius: 6px;
+  padding: 8px 12px;
+  box-sizing: border-box;
+  min-height: 64px;
+}
+
+.c-monitor-eq-icon {
+  flex-shrink: 0;
+  width: 27px;
+  height: 32px;
+
+  img {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+}
+
+.c-monitor-eq-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* 设备名：Figma 摄像机/烟道机器人等 12px #333333 */
+.c-monitor-eq-name {
+  font-size: calc(var(--fontSize, 14px) * 0.8571);
+  color: #333333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 数值：Figma (2/484) 系，16px medium */
+.c-monitor-eq-value {
+  font-family: 'Roboto', sans-serif;
+  font-size: calc(var(--fontSize, 14px) * 1.1429);
+  font-weight: 500;
+  color: #333333;
+}
+
+/* 在线数（Figma d-3b80e7 蓝调，此处用统计蓝以突出） */
+.c-monitor-eq-online {
+  color: #64b5f6;
+  font-weight: 700;
+}
+
+/* 总数（弱化灰） */
+.c-monitor-eq-total {
+  color: rgba(0, 0, 0, 0.45);
+}
+
+/* 通用选中态类（供分类项等复用） */
+.is-active {
+  font-weight: 500;
+}

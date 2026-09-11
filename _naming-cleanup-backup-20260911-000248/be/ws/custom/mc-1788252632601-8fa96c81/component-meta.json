@@ -1,0 +1,9 @@
+{
+  "degradedFiles": [
+    "package/components/DailyTotalFlow.vue",
+    "package/components/TunnelHourlyChart.vue",
+    "package/components/VehicleTypeDistribution.vue"
+  ],
+  "degradedAt": 1788253944076,
+  "reason": "SFC 编译失败，已隔离降级（可二次生成）"
+}

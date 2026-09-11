@@ -1,0 +1,127 @@
+.common();
+
+.c-env-monitor-root {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: var(--fontSize, 14px);
+}
+
+.c-env-monitor-tabs-section {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.c-env-monitor-tabs-container {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  border: 1px solid #a1ceff;
+  border-radius: @border-radius;
+  overflow: hidden;
+  background: linear-gradient(#b5deff, #d1ecff);
+}
+
+.c-env-monitor-tab-item {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  font-size: @fontSize;
+  font-weight: 500;
+  color: #2c9bea;
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.2s;
+  white-space: nowrap;
+}
+
+.c-env-monitor-tab-item--active {
+  color: #ffffff;
+  text-shadow: 0px 0.6px 0px #006fe3;
+  background: linear-gradient(#1099b1, #038fff);
+}
+
+.c-env-monitor-icons-group {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.c-env-monitor-icon-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #a1ceff;
+  border-radius: @border-radius;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.c-env-monitor-icon-btn--active {
+  border-color: #a1ceff;
+  background: #ffffff;
+}
+
+.c-env-monitor-icon-btn.c-env-monitor-icon-badge-wrapper {
+  position: relative;
+}
+
+.c-env-monitor-icon-badge-wrapper {
+  position: relative;
+}
+
+.c-env-monitor-icon-img {
+  width: 16px;
+  height: 16px;
+  display: block;
+  object-fit: contain;
+}
+
+.c-env-monitor-icon-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f53f3f;
+  border-radius: @border-radius-badge;
+  color: #ffffff;
+  font-size: calc(@fontSize * 0.8571);
+  font-weight: 500;
+  line-height: 1;
+  box-sizing: border-box;
+}
+
+.c-env-monitor-chart-section {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.c-env-monitor-chart-container {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}

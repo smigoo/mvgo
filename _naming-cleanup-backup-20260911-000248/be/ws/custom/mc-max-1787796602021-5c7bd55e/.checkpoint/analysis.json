@@ -1,0 +1,283 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 78,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "顶部统计栏 headerRelation 为 title-same-row 且 slotCandidate=header-right，但统计项实际位于 body，层级语义冲突。",
+        "suggestion": "将统计项挂到 header-right 插槽，或将 headerRelation 改为 content-below-title。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[0]",
+        "message": "左侧 Tab 宽度仅 46px，'交通诱导'等四字文本存在裁切风险。",
+        "suggestion": "增加最小宽度或改用图标、短标签或旋转文字布局。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[2].body.children[1].items[0].content",
+        "message": "网格项 value.parts[].styles 嵌套层级过深，影响可维护性。",
+        "suggestion": "将部分样式提升为数字/单位字段，减少中间层。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[2].body.children[1].items",
+        "message": "12 个网格项均携带独立背景图资源，增加资源请求与节点量。",
+        "suggestion": "复用 CSS 类或合并背景图，减少每项独立背景图请求。"
+      }
+    ],
+    "recommendations": [
+      "将顶部统计项的层级关系修正为 header 插槽或 content-below-title，避免语义冲突。",
+      "简化设备网格项数据结构，合并重复背景资源并降低嵌套。",
+      "依据 coverageReport 的 missing 清单补全未匹配节点，提高结构化完整度。"
+    ],
+    "summary": "整体三区划分清晰，但顶部统计栏层级语义冲突、网格项嵌套偏深且背景图资源较多，建议修正插槽关系并适度扁平化。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1990FF",
+      "--colorSecondary": "#08A3A5",
+      "--colorDanger": "#F53F3F",
+      "--colorTextBase": "#333333",
+      "--colorBg": "#EDF4FB",
+      "--fontSize": "14px",
+      "--fontSizeLarge": "28px",
+      "--fontSizeMedium": "20px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#1990FF",
+      "@color-secondary": "#08A3A5",
+      "@color-danger": "#F53F3F",
+      "@color-text-base": "#333333",
+      "@color-bg": "#EDF4FB",
+      "@font-size-base": "14px",
+      "@font-size-large": "28px",
+      "@font-size-medium": "20px",
+      "@border-radius-base": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "min-height": "100%",
+        "background": "#EDF4FB",
+        "padding": "16px",
+        "box-sizing": "border-box",
+        "font-size": "var(--fontSize)",
+        "color": "var(--colorTextBase)"
+      },
+      ".card": {
+        "background": "#FFFFFF",
+        "border-radius": "var(--borderRadius)",
+        "padding": "16px",
+        "box-shadow": "0 2px 12px rgba(25, 144, 255, 0.08)"
+      },
+      ".card-gradient": {
+        "background": "linear-gradient(135deg, #1990FF 0%, #08A3A5 100%)",
+        "border-radius": "var(--borderRadius)",
+        "padding": "16px",
+        "color": "#FFFFFF"
+      },
+      ".value-primary": {
+        "font-size": "var(--fontSizeLarge)",
+        "font-weight": "600",
+        "color": "#1990FF",
+        "line-height": "1.4"
+      },
+      ".value-danger": {
+        "font-size": "var(--fontSizeMedium)",
+        "font-weight": "600",
+        "color": "#F53F3F",
+        "line-height": "1.4"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色 #1990FF 映射为 --colorPrimary，作为科技监测风的品牌色，用于蓝色大数值强调",
+      "渐变背景卡片使用 --colorPrimary → --colorSecondary 的线性渐变，从左至右体现科技流动感",
+      "容器背景采用浅灰蓝 #EDF4FB 字面量直接落地，避免关键可见背景只依赖 CSS 变量导致主题切换时丢失",
+      "红色 #F53F3F 映射为 --colorDanger，用于异常告警数值的强调展示"
+    ],
+    "elementStyleMap": {
+      "section-header-stats": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-stat-group-设备类型-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-stat-group-设备总数-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-stat-group-完好率-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "el-stat-group-设备类型-3": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-stat-group-设备总数-6": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-stat-group-完好率-9": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-tunnel-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "card-tunnel-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "card-tunnel": {
+        "background": "linear-gradient(270deg, #318aff 0%, #70bfff 100%)",
+        "border-radius": "8px",
+        "padding": "16px",
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-14": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-row-x-17": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "card-north-south-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "card-north-south-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "card-north-south": {
+        "background": "#EDF4FB",
+        "border-radius": "8px",
+        "padding": "16px",
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-21": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-row-x-24": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "section-main-content": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "vertical-tabs": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-36": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-39": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-42": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-45": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-48": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-51": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-54": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-57": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-60": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-63": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-66": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-69": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-header-stats",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 9,
+        "title": "设备监测"
+      },
+      {
+        "id": "section-summary-cards",
+        "responsibility": "数据统计指标区（数字+标签+趋势）",
+        "elementCount": 14,
+        "title": "汇总卡片"
+      },
+      {
+        "id": "section-main-content",
+        "responsibility": "列表项布局区",
+        "elementCount": 8,
+        "title": "设备列表与导航"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 → 强制拆分"
+  }
+}

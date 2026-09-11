@@ -1,0 +1,82 @@
+{
+  "stage": "codegen_done",
+  "brief": {
+    "layout": "整体为垂直布局，分为顶部标题/状态栏和下方数据表格区。表格区采用水平网格布局，列宽根据内容自适应或均分。",
+    "regions": [
+      {
+        "name": "顶部标题与状态栏",
+        "description": "左侧显示'今日预警列表'标题及图标，右侧显示用户'张三'和'李四'的处理数量状态。",
+        "position": "top",
+        "size": "宽度100%，高度约占15%"
+      },
+      {
+        "name": "数据表格区",
+        "description": "包含表头（预警项、传感器节点、桩号、异常原因、异常时间、处理结果、操作）及三行具体数据记录。",
+        "position": "center",
+        "size": "宽度100%，高度约占85%"
+      }
+    ],
+    "spacing": {
+      "outer": "无明显外边距，内容充满容器",
+      "gap": "表格行间距较小，列间距适中",
+      "padding": "表格单元格内有适中的内边距，保证文字不拥挤"
+    },
+    "colors": {
+      "primary": "#00FFFF",
+      "background": "#003333",
+      "surface": "#004D4D",
+      "text": "#FFFFFF",
+      "border": "#006666"
+    },
+    "typography": {
+      "size": "标题字号最大(约18px)，表头字号中等(约14px)，表格内容字号较小(约12px)",
+      "weight": "标题和表头字重较粗，表格内容字重正常",
+      "lineHeight": "行高适中，约为字号的1.5倍"
+    },
+    "components": [
+      "文本标签",
+      "表格",
+      "链接按钮"
+    ],
+    "textContent": [
+      "今日预警列表",
+      "张三 已处理 1",
+      "李四 已处理 0",
+      "预警项",
+      "传感器节点",
+      "桩号",
+      "异常原因",
+      "异常时间",
+      "处理结果",
+      "操作",
+      "管片沉降",
+      "ZYN6-2",
+      "K5+900",
+      "数值偏小异常",
+      "18:20",
+      "待处理",
+      "查看核实",
+      "接缝位移",
+      "ZYN6-3",
+      "K4+200",
+      "网络异常",
+      "已处理"
+    ],
+    "visualDetails": [
+      "顶部标题左侧有蓝色立方体图标",
+      "用户状态前有绿色人像图标",
+      "表格背景有细微的网格或纹理效果",
+      "'待处理'文本为黄色，'已处理'文本为浅蓝色",
+      "'查看核实'文本为浅蓝色，带有下划线或链接样式"
+    ],
+    "interactions": [
+      "链接按钮: 位于表格最右侧'操作'列，文案为'查看核实'，共三个，分别对应三行数据。"
+    ]
+  },
+  "width": 910,
+  "height": 191,
+  "sourceType": "screenshot",
+  "componentType": "vue3",
+  "generationTier": "lite",
+  "vueCode": "<template>\n  <div class=\"mv-container\">\n    <!-- 顶部标题与状态栏 -->\n    <div class=\"header-bar\">\n      <div class=\"header-left\">\n        <div class=\"icon-cube\">\n          <svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"#00e5ff\">\n            <path d=\"M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5\" opacity=\"0.8\"/>\n            <path d=\"M12 22V12\" stroke=\"#00e5ff\" stroke-width=\"2\"/>\n          </svg>\n        </div>\n        <span class=\"main-title\">今日预警列表</span>\n      </div>\n      <div class=\"header-right\">\n        <div class=\"user-status\">\n          <div class=\"icon-user\">\n            <svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"#52c41a\">\n              <path d=\"M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z\"/>\n            </svg>\n          </div>\n          <span class=\"user-name\">张三</span>\n          <span class=\"status-badge\">已处理 1</span>\n        </div>\n        <div class=\"user-status\">\n          <div class=\"icon-user\">\n            <svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"#52c41a\">\n              <path d=\"M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z\"/>\n            </svg>\n          </div>\n          <span class=\"user-name\">李四</span>\n          <span class=\"status-badge\">已处理 0</span>\n        </div>\n      </div>\n    </div>\n\n    <!-- 数据表格区 -->\n    <div class=\"table-container\">\n      <a-table\n        :columns=\"columns\"\n        :data-source=\"tableData\"\n        :pagination=\"false\"\n        row-key=\"id\"\n        class=\"dark-table\"\n        size=\"middle\"\n      >\n        <template #bodyCell=\"{ column, record }\">\n          <template v-if=\"column.key === 'status'\">\n            <span :class=\"['status-text', record.status === '待处理' ? 'text-warning' : 'text-processed']\">\n              {{ record.status }}\n            </span>\n          </template>\n          <template v-if=\"column.key === 'action'\">\n            <a class=\"action-link\">查看核实</a>\n          </template>\n        </template>\n      </a-table>\n    </div>\n  </div>\n</template>\n\n<script setup>\nimport { Table as ATable } from 'ant-design-vue';\n\nconst columns = [\n  { title: '预警项', dataIndex: 'item', key: 'item', width: '14%' },\n  { title: '传感器节点', dataIndex: 'node', key: 'node', width: '14%' },\n  { title: '桩号', dataIndex: 'pile', key: 'pile', width: '12%' },\n  { title: '异常原因', dataIndex: 'reason', key: 'reason', width: '18%' },\n  { title: '异常时间', dataIndex: 'time', key: 'time', width: '12%' },\n  { title: '处理结果', dataIndex: 'status', key: 'status', width: '14%' },\n  { title: '操作', dataIndex: 'action', key: 'action', width: '16%' },\n];\n\nconst tableData = [\n  {\n    id: '1',\n    item: '管片沉降',\n    node: 'ZYN6-2',\n    pile: 'K5+900',\n    reason: '数值偏小异常',\n    time: '18:20',\n    status: '待处理',\n    action: '查看核实',\n  },\n  {\n    id: '2',\n    item: '接缝位移',\n    node: 'ZYN6-3',\n    pile: 'K4+200',\n    reason: '网络异常',\n    time: '18:20',\n    status: '待处理',\n    action: '查看核实',\n  },\n  {\n    id: '3',\n    item: '管片沉降',\n    node: 'ZYN6-2',\n    pile: 'K3+700',\n    reason: '网络异常',\n    time: '18:20',\n    status: '已处理',\n    action: '查看核实',\n  },\n];\n</script>\n\n<style scoped>\n.mv-container {\n  width: 100%;\n  height: 100%;\n  box-sizing: border-box;\n  background-color: #002b36; /* 深色背景基调 */\n  background-image: linear-gradient(180deg, #003333 0%, #001a1a 100%);\n  color: #ffffff;\n  display: flex;\n  flex-direction: column;\n  font-family: 'Microsoft YaHei', sans-serif;\n  overflow: hidden;\n}\n\n/* 顶部标题栏 */\n.header-bar {\n  height: 48px;\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  padding: 0 20px;\n  background: linear-gradient(90deg, rgba(0, 77, 77, 0.8) 0%, rgba(0, 51, 51, 0.4) 100%);\n  border-bottom: 1px solid #006666;\n  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);\n  flex-shrink: 0;\n}\n\n.header-left {\n  display: flex;\n  align-items: center;\n  gap: 10px;\n}\n\n.icon-cube {\n  display: flex;\n  align-items: center;\n  justify-content: center;\n}\n\n.main-title {\n  font-size: 18px;\n  font-weight: bold;\n  color: #ffffff;\n  letter-spacing: 1px;\n  text-shadow: 0 0 5px rgba(0, 255, 255, 0.3);\n}\n\n.header-right {\n  display: flex;\n  align-items: center;\n  gap: 24px;\n}\n\n.user-status {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  font-size: 13px;\n  color: #cccccc;\n}\n\n.icon-user {\n  display: flex;\n  align-items: center;\n}\n\n.user-name {\n  color: #ffffff;\n  font-weight: 500;\n}\n\n.status-badge {\n  background-color: #004040;\n  padding: 2px 8px;\n  border-radius: 4px;\n  color: #ffffff;\n  font-size: 12px;\n  border: 1px solid #006666;\n}\n\n/* 表格区域 */\n.table-container {\n  flex: 1;\n  padding: 10px 20px;\n  overflow: auto;\n  min-height: 0;\n}\n\n/* Ant Design Vue 表格样式覆盖 */\n:deep(.dark-table) {\n  background: transparent;\n  color: #ffffff;\n}\n\n:deep(.dark-table .ant-table-thead > tr > th) {\n  background-color: #004d4d;\n  color: #ffffff;\n  border-bottom: 1px solid #006666;\n  font-weight: bold;\n  font-size: 14px;\n  padding: 12px 8px;\n  text-align: left;\n}\n\n:deep(.dark-table .ant-table-tbody > tr > td) {\n  background-color: transparent;\n  color: #e0e0e0;\n  border-bottom: 1px solid #004040;\n  font-size: 13px;\n  padding: 10px 8px;\n}\n\n:deep(.dark-table .ant-table-tbody > tr:hover > td) {\n  background-color: rgba(0, 255, 255, 0.05);\n}\n\n:deep(.dark-table .ant-table-row) {\n  background-color: transparent;\n}\n\n/* 状态文本颜色 */\n.status-text {\n  font-weight: 500;\n}\n\n.text-warning {\n  color: #faad14; /* 黄色 */\n}\n\n.text-processed {\n  color: #13c2c2; /* 浅蓝/青色 */\n}\n\n/* 操作链接 */\n.action-link {\n  color: #00ffff;\n  text-decoration: none;\n  cursor: pointer;\n  transition: opacity 0.3s;\n}\n\n.action-link:hover {\n  opacity: 0.8;\n  text-decoration: underline;\n}\n/* Ant Design Vue Table 内部背景层：避免透明单元格透出默认白底 */\n:deep(.dark-table .ant-table),\n:deep(.dark-table .ant-table-container),\n:deep(.dark-table .ant-table-content),\n:deep(.dark-table table) {\n  background: transparent;\n  color: inherit;\n}\n\n/* Ant Design Vue 4 通过单元格状态类控制行悬浮背景 */\n:deep(.dark-table .ant-table-tbody > tr > td.ant-table-cell-row-hover) {\n  background-color: rgba(0, 255, 255, 0.05);\n}\n\n</style>"
+}

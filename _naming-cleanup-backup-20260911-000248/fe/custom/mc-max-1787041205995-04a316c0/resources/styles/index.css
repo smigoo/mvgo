@@ -1,0 +1,502 @@
+.dark .c-monitor-root {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  height: 100%;
+  box-sizing: border-box;
+  color: #e6edf3;
+  font-family: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+}
+.dark .c-monitor-top-stats {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  padding: 16px;
+  background-image: url(../resources/images/bg-8788.png);
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  flex-shrink: 0;
+}
+.dark .c-monitor-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 4px;
+  min-width: 0;
+}
+.dark .c-monitor-stat-label {
+  font-size: 12px;
+  color: rgba(230, 237, 243, 0.55);
+  line-height: 1.5;
+  text-align: center;
+  white-space: nowrap;
+}
+.dark .c-monitor-stat-value {
+  font-size: 24px;
+  font-weight: 600;
+  color: #ffffff;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+}
+.dark .c-monitor-category-cards {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.dark .c-monitor-category-card {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-width: 240px;
+  padding: 12px;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  gap: 12px;
+  box-sizing: border-box;
+}
+.dark .c-monitor-category-card:nth-child(1) {
+  background-image: url(../resources/images/bg-8807.png);
+}
+.dark .c-monitor-category-card:nth-child(2) {
+  background-image: url(../resources/images/bg-8788.png);
+}
+.dark .c-monitor-card-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.dark .c-monitor-card-icon {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.dark .c-monitor-card-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #e6edf3;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.dark .c-monitor-stats-row {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.dark .c-monitor-stat-item-horizontal {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 0;
+  min-width: 80px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  padding: 8px;
+  box-sizing: border-box;
+}
+.dark .c-monitor-item-icon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.dark .c-monitor-text-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.dark .c-monitor-item-label {
+  font-size: 12px;
+  color: rgba(230, 237, 243, 0.55);
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.dark .c-monitor-item-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: #ffffff;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.dark .c-monitor-device-section {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+.dark .c-monitor-nav-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+  width: 100px;
+}
+.dark .c-monitor-nav-tab {
+  padding: 10px 12px;
+  background-image: url(../resources/images/bg-8439.png);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 13px;
+  color: rgba(230, 237, 243, 0.75);
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  user-select: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+.dark .c-monitor-nav-tab:hover {
+  color: #e6edf3;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+.dark .c-monitor-nav-tab.is-active {
+  color: #40a9ff;
+  font-weight: 600;
+  box-shadow: 0 0 0 1px #40a9ff, 0 4px 8px rgba(0, 0, 0, 0.1);
+  background-color: rgba(64, 169, 255, 0.12);
+}
+.dark .c-monitor-device-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  align-content: start;
+}
+.dark .c-monitor-device-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 8px;
+  background-image: url(../resources/images/bg-8788.png);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-sizing: border-box;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.dark .c-monitor-device-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+.dark .c-monitor-device-icon-wrapper {
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.dark .c-monitor-device-icon {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+.dark .c-monitor-device-name {
+  font-size: 13px;
+  color: #e6edf3;
+  text-align: center;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.dark .c-monitor-device-status {
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+  white-space: nowrap;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+.dark .c-monitor-device-status.status-online {
+  color: #52c41a;
+  background-color: rgba(82, 196, 26, 0.15);
+}
+.dark .c-monitor-device-status.status-offline {
+  color: #fa5151;
+  background-color: rgba(250, 81, 81, 0.15);
+}
+.dark .c-monitor-device-status.status-fault {
+  color: #faad14;
+  background-color: rgba(250, 173, 20, 0.15);
+}
+.dark .is-active {
+  /* 通用激活状态占位 */
+}
+.light .c-monitor-root {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  height: 100%;
+  box-sizing: border-box;
+  color: #262626;
+  font-family: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+}
+.light .c-monitor-top-stats {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  padding: 16px;
+  background-image: url(../resources/images/bg-8788.png);
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  flex-shrink: 0;
+}
+.light .c-monitor-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 4px;
+  min-width: 0;
+}
+.light .c-monitor-stat-label {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.45);
+  line-height: 1.5;
+  text-align: center;
+  white-space: nowrap;
+}
+.light .c-monitor-stat-value {
+  font-size: 24px;
+  font-weight: 600;
+  color: #262626;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+}
+.light .c-monitor-category-cards {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.light .c-monitor-category-card {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-width: 240px;
+  padding: 12px;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  gap: 12px;
+  box-sizing: border-box;
+}
+.light .c-monitor-category-card:nth-child(1) {
+  background-image: url(../resources/images/bg-8807.png);
+}
+.light .c-monitor-category-card:nth-child(2) {
+  background-image: url(../resources/images/bg-8788.png);
+}
+.light .c-monitor-card-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.light .c-monitor-card-icon {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.light .c-monitor-card-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #262626;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.light .c-monitor-stats-row {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.light .c-monitor-stat-item-horizontal {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 0;
+  min-width: 80px;
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 6px;
+  padding: 8px;
+  box-sizing: border-box;
+}
+.light .c-monitor-item-icon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.light .c-monitor-text-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.light .c-monitor-item-label {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.45);
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.light .c-monitor-item-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: #262626;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.light .c-monitor-device-section {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+.light .c-monitor-nav-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+  width: 100px;
+}
+.light .c-monitor-nav-tab {
+  padding: 10px 12px;
+  background-image: url(../resources/images/bg-8439.png);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.65);
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  user-select: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+.light .c-monitor-nav-tab:hover {
+  color: #262626;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+.light .c-monitor-nav-tab.is-active {
+  color: #1890ff;
+  font-weight: 600;
+  box-shadow: 0 0 0 1px #1890ff, 0 4px 8px rgba(0, 0, 0, 0.1);
+  background-color: rgba(24, 144, 255, 0.08);
+}
+.light .c-monitor-device-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  align-content: start;
+}
+.light .c-monitor-device-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 8px;
+  background-image: url(../resources/images/bg-8788.png);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-sizing: border-box;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.light .c-monitor-device-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+.light .c-monitor-device-icon-wrapper {
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.light .c-monitor-device-icon {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+.light .c-monitor-device-name {
+  font-size: 13px;
+  color: #262626;
+  text-align: center;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.light .c-monitor-device-status {
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+  white-space: nowrap;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+.light .c-monitor-device-status.status-online {
+  color: #52c41a;
+  background-color: rgba(82, 196, 26, 0.15);
+}
+.light .c-monitor-device-status.status-offline {
+  color: #f5222d;
+  background-color: rgba(245, 34, 45, 0.15);
+}
+.light .c-monitor-device-status.status-fault {
+  color: #faad14;
+  background-color: rgba(250, 173, 20, 0.15);
+}
+.light .is-active {
+  /* 通用激活状态占位 */
+}

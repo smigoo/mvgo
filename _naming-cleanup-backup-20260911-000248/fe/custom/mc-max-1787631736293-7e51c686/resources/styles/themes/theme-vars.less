@@ -1,0 +1,69 @@
+.common() {
+  // 基础排版与通用属性
+  @font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  @font-size-base: 14px;
+  @border-radius-base: 4px;
+
+  // 背景图片配置（提取自设计稿事实）
+  @bg-image: url(../resources/images/bg-7890.png);
+  @bg-size: 100% 100%;
+  @bg-position: center center;
+  @bg-repeat: no-repeat;
+}
+
+.theme-light() {
+  // 默认主题（Light）- 面板默认展示色
+  @bg-color: #ffffff;
+  @bg-color-secondary: #f5f7fa;
+  @bg-color-tertiary: #fafafa;
+
+  @text-color-primary: #333333;
+  @text-color-regular: #666666;
+  @text-color-secondary: #999999;
+  @text-color-placeholder: #c0c4cc;
+  @text-color-disabled: #c0c4cc;
+
+  @border-color-base: #e4e7ed;
+  @border-color-light: #ebeef5;
+  @border-color-lighter: #f2f6fc;
+
+  // 主色（基于 ant-design-vue 默认规范补齐）
+  @primary-color: #1890ff;
+  @primary-color-hover: #40a9ff;
+  @primary-color-active: #096dd9;
+  
+  // 状态色
+  @success-color: #52c41a;
+  @warning-color: #faad14;
+  @error-color: #f5222d;
+  @info-color: #1890ff;
+}
+
+.theme-dark() {
+  // 深色主题（Dark）
+  @bg-color: #141414;
+  @bg-color-secondary: #1f1f1f;
+  @bg-color-tertiary: #262626;
+
+  // 深色面板文字禁止使用黑色系
+  @text-color-primary: #ffffff;
+  @text-color-regular: #d9d9d9;
+  @text-color-secondary: #a6a6a6;
+  @text-color-placeholder: #595959;
+  @text-color-disabled: #595959;
+
+  @border-color-base: #434343;
+  @border-color-light: #303030;
+  @border-color-lighter: #262626;
+
+  // 主色（深色模式下适当调整亮度）
+  @primary-color: #177ddc;
+  @primary-color-hover: #3c9ae8;
+  @primary-color-active: #1554ad;
+  
+  // 状态色
+  @success-color: #49aa19;
+  @warning-color: #d89614;
+  @error-color: #d32029;
+  @info-color: #177ddc;
+}

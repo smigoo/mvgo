@@ -1,0 +1,169 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 65,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0].header",
+        "message": "违反核心规范：禁止生成组件面板标题。布局中 section-header-tabs 的 header.title 为 '环境监测'，而 base-panel 会根据 declare.json 的 componentName 自动渲染标题，组件内部再生成会导致标题重复显示。",
+        "suggestion": "移除 section-header-tabs 的 header 配置，或将 header.title 置空。该 section 应仅保留 body 中的 tabs 和 icons 业务内容。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[0].config.yAxis",
+        "message": "图表Y轴单位识别存在常识性错误。CO浓度面积图的Y轴单位被标记为 '辆'，这明显是设计稿笔误或视觉识别错误，CO浓度单位不应是车辆单位。",
+        "suggestion": "修正 yAxis.label，将其改为正确的浓度单位（如 'mg/m³' 或 'ppm'），或根据实际业务需求调整，避免直接照搬设计稿错误。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[*].body.backgroundImage",
+        "message": "背景图重复设置。section-header-tabs 和 section-chart 的 body 均设置了相同的背景图 bg-7890.png，在微码组件中可能导致视觉重叠或DOM渲染冗余。",
+        "suggestion": "移除各个 section body 中的 backgroundImage 配置，将背景图统一设置在组件根容器或由 base-panel 统一处理。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[0].body.children[1].children[*]",
+        "message": "图标资源引用方式存在运行时风险。布局中指定了 resourceFile 为本地相对路径，若代码生成时直接使用 ESM import 会触发 RUNTIME-004 阻断级错误。",
+        "suggestion": "在代码生成约束中明确，这些图标资源（如 tabs-icon-43.png）必须转换为 base64 内联或使用同源 URL 引入，禁止直接 import 本地图片文件。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "interactions[0]",
+        "message": "Tab 切换交互描述不完整。仅描述了样式切换，未明确说明切换监测指标后图表数据如何联动更新，违反了 Tab 切换必须实现数据联动的规范。",
+        "suggestion": "在 interactions 中补充数据联动逻辑，明确 Tab 切换需触发图表数据源的更新（如通过 watch 监听 activeTab 并调用 updateChart 更新 series 数据）。"
+      }
+    ],
+    "recommendations": [
+      "严格遵循 base-panel 约束，将面板标题、边框、背景等全局样式交由 base-panel 处理，组件内部只关注业务内容，杜绝重复生成面板外壳。",
+      "在代码生成阶段，确保所有本地图片资源转换为 base64 格式，避免触发 RUNTIME-004 运行时错误。",
+      "完善 Tab 切换的数据联动逻辑，确保切换不同监测指标（一氧化碳、能见度等）时，图表的 series 数据能够动态更新，禁止仅做样式切换。",
+      "仔细核对图表的坐标轴标签和单位，结合业务常识进行纠错，避免直接照搬设计稿中可能存在的笔误。"
+    ],
+    "summary": "该布局结构在嵌套深度和区域划分上较为合理，但存在违反微码核心规范的严重问题。最突出的是在组件内部重复生成了面板标题（'环境监测'），这将导致与 base-panel 自动生成的标题冲突。此外，图表Y轴单位识别存在明显常识性错误（CO浓度单位为'辆'），且背景图在子区块中重复设置。建议修正上述 error 级别问题后重新提交审查。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#559EFF",
+      "--colorBgBase": "#EDF4FB",
+      "--colorSuccess": "#52c41a",
+      "--colorDanger": "#f53f3f",
+      "--colorTextBase": "#333333",
+      "--colorTextSecondary": "#888888",
+      "--fontSize": "14px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#559EFF",
+      "@color-bg-base": "#EDF4FB",
+      "@color-success": "#52c41a",
+      "@color-danger": "#f53f3f",
+      "@color-text-base": "#333333",
+      "@color-text-secondary": "#888888",
+      "@font-size-base": "14px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "width": "100%",
+        "height": "100%",
+        "background-color": "#EDF4FB",
+        "padding": "16px",
+        "box-sizing": "border-box"
+      },
+      ".tab-item": {
+        "padding": "8px 16px",
+        "color": "#888888",
+        "cursor": "pointer",
+        "border-radius": "4px",
+        "transition": "all 0.3s"
+      },
+      ".tab-item.active": {
+        "background-color": "#559EFF",
+        "color": "#ffffff",
+        "font-weight": "500"
+      },
+      ".warning-line": {
+        "border-top": "2px dashed #f53f3f",
+        "width": "100%",
+        "position": "relative"
+      },
+      ".warning-label": {
+        "color": "#f53f3f",
+        "font-size": "12px",
+        "position": "absolute",
+        "top": "-18px",
+        "right": "0"
+      },
+      ".text-secondary": {
+        "color": "#888888",
+        "font-size": "12px"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 #559EFF 映射为 --colorPrimary，用于Tab选中态蓝色背景和高亮强调",
+      "背景色 #EDF4FB 映射为 --colorBgBase，作为组件全局浅灰蓝色背景",
+      "预警相关颜色 #f53f3f 映射为 --colorDanger，用于预警线红色虚线和红色标注",
+      "辅助文本颜色 #888888 映射为 --colorTextSecondary，用于常规次要信息",
+      "容器背景应优先直接落地为 Figma 字面量值，避免关键可见背景只依赖 CSS 变量"
+    ],
+    "elementStyleMap": {
+      "section-header-tabs": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "tabs-list": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "view-icons": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-12": {
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-header-tabs",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 4,
+        "title": "环境监测"
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "浓度趋势图"
+      }
+    ],
+    "isForced": false,
+    "minFiles": 0,
+    "reason": "有效 sections=2 < 3 → 不强制拆分"
+  }
+}

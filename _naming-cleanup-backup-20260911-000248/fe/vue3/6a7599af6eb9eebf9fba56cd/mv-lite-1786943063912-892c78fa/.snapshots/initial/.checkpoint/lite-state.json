@@ -1,0 +1,86 @@
+{
+  "stage": "codegen_done",
+  "brief": {
+    "layout": "整体为垂直布局，分为顶部标题/状态栏和下方数据表格区。表格区采用水平网格布局，列宽自适应或固定比例。",
+    "regions": [
+      {
+        "name": "顶部标题与状态栏",
+        "description": "左侧显示'今日预警列表'及图标，右侧显示用户'张三'和'李四'的处理状态。",
+        "position": "top",
+        "size": "宽度100%，高度约占15%"
+      },
+      {
+        "name": "数据表格区",
+        "description": "包含表头（预警项、传感器节点等7列）和3行数据记录。",
+        "position": "center",
+        "size": "宽度100%，高度约占85%"
+      }
+    ],
+    "spacing": {
+      "outer": "无明显外边距，充满容器",
+      "gap": "表格列间距均匀，行间距由分割线界定",
+      "padding": "表格单元格内有适中的内边距"
+    },
+    "colors": {
+      "primary": "#00FFFF",
+      "background": "#003333",
+      "surface": "#004D4D",
+      "text": "#FFFFFF",
+      "border": "#006666"
+    },
+    "typography": {
+      "size": "标题约16px，表头约14px，数据行约12px",
+      "weight": "标题和表头中等字重，数据行常规字重",
+      "lineHeight": "行高适中，约1.5倍字号"
+    },
+    "components": [
+      "Table",
+      "TableHeader",
+      "TableRow",
+      "Text",
+      "Icon",
+      "LinkButton"
+    ],
+    "textContent": [
+      "今日预警列表",
+      "张三 已处理 1",
+      "李四 已处理 0",
+      "预警项",
+      "传感器节点",
+      "桩号",
+      "异常原因",
+      "异常时间",
+      "处理结果",
+      "操作",
+      "管片沉降",
+      "ZYN6-2",
+      "K5+900",
+      "数值偏小异常",
+      "18:20",
+      "待处理",
+      "查看核实",
+      "接缝位移",
+      "ZYN6-3",
+      "K4+200",
+      "网络异常",
+      "K3+700",
+      "已处理"
+    ],
+    "visualDetails": [
+      "顶部标题左侧有蓝色水晶状图标",
+      "用户状态前有蓝色水晶状图标",
+      "表格行之间有细长的水平分割线",
+      "表头背景色略深于数据行背景色",
+      "'待处理'文字为黄色，'已处理'和'查看核实'文字为青色"
+    ],
+    "interactions": [
+      "表格每行最右侧有'查看核实'可点击链接/按钮"
+    ]
+  },
+  "width": 761,
+  "height": 161,
+  "sourceType": "screenshot",
+  "componentType": "vue3",
+  "generationTier": "lite",
+  "vueCode": "<template>\n  <div class=\"warning-list-container\">\n    <!-- 顶部标题与状态栏 -->\n    <div class=\"header-bar\">\n      <div class=\"header-left\">\n        <svg class=\"icon-crystal\" viewBox=\"0 0 24 24\" fill=\"none\">\n          <path d=\"M12 2L2 7L12 22L22 7L12 2Z\" fill=\"#00BFFF\" opacity=\"0.8\"/>\n          <path d=\"M12 2L2 7L12 12L22 7L12 2Z\" fill=\"#00FFFF\" opacity=\"0.9\"/>\n          <path d=\"M12 12L2 7V17L12 22V12Z\" fill=\"#0080FF\" opacity=\"0.6\"/>\n          <path d=\"M12 12L22 7V17L12 22V12Z\" fill=\"#0066CC\" opacity=\"0.7\"/>\n        </svg>\n        <span class=\"title-text\">今日预警列表</span>\n      </div>\n      <div class=\"header-right\">\n        <div class=\"user-status\">\n          <svg class=\"icon-user-crystal\" viewBox=\"0 0 24 24\" fill=\"none\">\n            <path d=\"M12 2L2 7L12 22L22 7L12 2Z\" fill=\"#00BFFF\" opacity=\"0.8\"/>\n            <path d=\"M12 2L2 7L12 12L22 7L12 2Z\" fill=\"#00FFFF\" opacity=\"0.9\"/>\n            <path d=\"M12 12L2 7V17L12 22V12Z\" fill=\"#0080FF\" opacity=\"0.6\"/>\n            <path d=\"M12 12L22 7V17L12 22V12Z\" fill=\"#0066CC\" opacity=\"0.7\"/>\n          </svg>\n          <span class=\"user-name\">张三</span>\n          <span class=\"status-text\">已处理 1</span>\n        </div>\n        <div class=\"user-status\">\n          <svg class=\"icon-user-crystal\" viewBox=\"0 0 24 24\" fill=\"none\">\n            <path d=\"M12 2L2 7L12 22L22 7L12 2Z\" fill=\"#00BFFF\" opacity=\"0.8\"/>\n            <path d=\"M12 2L2 7L12 12L22 7L12 2Z\" fill=\"#00FFFF\" opacity=\"0.9\"/>\n            <path d=\"M12 12L2 7V17L12 22V12Z\" fill=\"#0080FF\" opacity=\"0.6\"/>\n            <path d=\"M12 12L22 7V17L12 22V12Z\" fill=\"#0066CC\" opacity=\"0.7\"/>\n          </svg>\n          <span class=\"user-name\">李四</span>\n          <span class=\"status-text\">已处理 0</span>\n        </div>\n      </div>\n    </div>\n\n    <!-- 数据表格区 -->\n    <div class=\"table-wrapper\">\n      <a-table \n        :columns=\"columns\" \n        :data-source=\"tableData\" \n        :pagination=\"false\"\n        :bordered=\"false\"\n        class=\"custom-table\"\n        row-key=\"id\"\n      >\n        <template #bodyCell=\"{ column, record }\">\n          <template v-if=\"column.key === 'result'\">\n            <span :class=\"['result-text', record.status === 'pending' ? 'pending' : 'processed']\">\n              {{ record.result }}\n            </span>\n          </template>\n          <template v-if=\"column.key === 'action'\">\n            <span class=\"action-link\" @click=\"handleView(record)\">查看核实</span>\n          </template>\n        </template>\n      </a-table>\n    </div>\n  </div>\n</template>\n\n<script setup>\nimport { ref } from 'vue';\nimport { Table as ATable } from 'ant-design-vue';\n\nconst columns = [\n  { title: '预警项', dataIndex: 'item', key: 'item', align: 'center' },\n  { title: '传感器节点', dataIndex: 'sensor', key: 'sensor', align: 'center' },\n  { title: '桩号', dataIndex: 'pileNo', key: 'pileNo', align: 'center' },\n  { title: '异常原因', dataIndex: 'reason', key: 'reason', align: 'center' },\n  { title: '异常时间', dataIndex: 'time', key: 'time', align: 'center' },\n  { title: '处理结果', dataIndex: 'result', key: 'result', align: 'center' },\n  { title: '操作', key: 'action', align: 'center' }\n];\n\nconst tableData = ref([\n  {\n    id: 1,\n    item: '管片沉降',\n    sensor: 'ZYN6-2',\n    pileNo: 'K5+900',\n    reason: '数值偏小异常',\n    time: '18:20',\n    result: '待处理',\n    status: 'pending'\n  },\n  {\n    id: 2,\n    item: '接缝位移',\n    sensor: 'ZYN6-3',\n    pileNo: 'K4+200',\n    reason: '网络异常',\n    time: '18:20',\n    result: '待处理',\n    status: 'pending'\n  },\n  {\n    id: 3,\n    item: '管片沉降',\n    sensor: 'ZYN6-2',\n    pileNo: 'K3+700',\n    reason: '网络异常',\n    time: '18:20',\n    result: '已处理',\n    status: 'processed'\n  }\n]);\n\nconst handleView = (record) => {\n  console.log('查看核实:', record);\n};\n</script>\n\n<style scoped>\n.warning-list-container {\n  width: 100%;\n  height: 100%;\n  box-sizing: border-box;\n  background-color: #003333;\n  display: flex;\n  flex-direction: column;\n  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;\n  overflow: hidden;\n}\n\n/* 顶部标题栏 */\n.header-bar {\n  height: 15%;\n  min-height: 36px;\n  background: linear-gradient(90deg, #002b2b 0%, #003d3d 50%, #002b2b 100%);\n  border-bottom: 1px solid #006666;\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  padding: 0 16px;\n  box-sizing: border-box;\n}\n\n.header-left {\n  display: flex;\n  align-items: center;\n  gap: 10px;\n}\n\n.icon-crystal {\n  width: 20px;\n  height: 20px;\n}\n\n.title-text {\n  color: #FFFFFF;\n  font-size: 16px;\n  font-weight: 600;\n  letter-spacing: 1px;\n  text-shadow: 0 0 8px rgba(0, 255, 255, 0.5);\n}\n\n.header-right {\n  display: flex;\n  gap: 24px;\n  align-items: center;\n}\n\n.user-status {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n}\n\n.icon-user-crystal {\n  width: 16px;\n  height: 16px;\n}\n\n.user-name {\n  color: #FFFFFF;\n  font-size: 14px;\n  font-weight: 500;\n}\n\n.status-text {\n  color: #E0E0E0;\n  font-size: 13px;\n  margin-left: 4px;\n}\n\n/* 表格区域 */\n.table-wrapper {\n  flex: 1;\n  min-height: 0;\n  overflow: auto;\n  background-color: #003333;\n}\n\n/* 表格样式覆盖 */\n:deep(.custom-table) {\n  background: transparent !important;\n}\n\n:deep(.custom-table .ant-table) {\n  background: transparent !important;\n  border: none !important;\n}\n\n:deep(.custom-table .ant-table-thead > tr > th) {\n  background-color: #004444 !important;\n  color: #FFFFFF !important;\n  font-size: 14px !important;\n  font-weight: 500 !important;\n  border-bottom: 1px solid #006666 !important;\n  padding: 12px 8px !important;\n  text-align: center !important;\n}\n\n:deep(.custom-table .ant-table-tbody > tr > td) {\n  background-color: #003d3d !important;\n  color: #FFFFFF !important;\n  font-size: 13px !important;\n  border-bottom: 1px solid #005555 !important;\n  padding: 12px 8px !important;\n  text-align: center !important;\n}\n\n:deep(.custom-table .ant-table-tbody > tr:hover > td) {\n  background-color: #004d4d !important;\n}\n\n:deep(.custom-table .ant-table-placeholder) {\n  background-color: transparent !important;\n  border: none !important;\n}\n\n/* 状态文字样式 */\n.result-text {\n  font-weight: 500;\n}\n\n.result-text.pending {\n  color: #FFD700;\n}\n\n.result-text.processed {\n  color: #00FFFF;\n}\n\n/* 操作链接样式 */\n.action-link {\n  color: #00FFFF;\n  cursor: pointer;\n  text-decoration: underline;\n  transition: all 0.2s ease;\n}\n\n.action-link:hover {\n  color: #33FFFF;\n  text-shadow: 0 0 6px rgba(0, 255, 255, 0.6);\n}\n/* Ant Design Vue Table 内部背景层：避免透明单元格透出默认白底 */\n:deep(.custom-table .ant-table-container),\n:deep(.custom-table .ant-table-content),\n:deep(.custom-table table) {\n  background: transparent;\n  color: inherit;\n}\n\n/* Ant Design Vue 4 通过单元格状态类控制行悬浮背景 */\n:deep(.custom-table .ant-table-tbody > tr > td.ant-table-cell-row-hover) {\n  background-color: #004d4d !important;\n}\n\n</style>"
+}

@@ -1,0 +1,112 @@
+// 主题变量定义文件
+// 本文件定义三个 mixin：.common()、.theme-dark()、.theme-light()
+// 颜色变量定义在 mixin 内部，禁止使用 CSS 变量（var(--xxx)）
+
+// 公共主题变量（所有主题共享）
+.common() {
+  // 组件基础尺寸
+  @component-border-radius: 4px;
+  @component-padding: 16px;
+  
+  // 字体大小
+  @font-size-base: 14px;
+  @font-size-small: 12px;
+  @font-size-large: 16px;
+  
+  // 间距
+  @spacing-xs: 4px;
+  @spacing-sm: 8px;
+  @spacing-md: 16px;
+  @spacing-lg: 24px;
+  @spacing-xl: 32px;
+  
+  // 过渡动画
+  @transition-duration: 0.3s;
+  @transition-timing: ease-in-out;
+}
+
+// 深色主题
+.theme-dark() {
+  // 背景色（深色主题）
+  @bg-primary: #1a2332;
+  @bg-secondary: #242f3e;
+  @bg-tertiary: #2d3a4a;
+  
+  // 文字颜色（深色主题禁止使用黑色系）
+  @text-primary: rgba(255, 255, 255, 0.9);
+  @text-secondary: rgba(255, 255, 255, 0.7);
+  @text-tertiary: rgba(255, 255, 255, 0.5);
+  @text-disabled: rgba(255, 255, 255, 0.3);
+  
+  // 边框颜色
+  @border-color: rgba(255, 255, 255, 0.1);
+  @border-color-light: rgba(255, 255, 255, 0.05);
+  
+  // 品牌色（保持一致）
+  @primary-color: #1890ff;
+  @success-color: #52c41a;
+  @warning-color: #faad14;
+  @error-color: #f5222d;
+  @info-color: #1890ff;
+  
+  // 阴影
+  @shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+  @shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+  @shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+  
+  // 蒙层
+  @mask-bg: rgba(0, 0, 0, 0.6);
+  
+  // 图表颜色
+  @chart-color-1: #5470c6;
+  @chart-color-2: #91cc75;
+  @chart-color-3: #fac858;
+  @chart-color-4: #ee6666;
+  @chart-color-5: #73c0de;
+  @chart-color-6: #3ba272;
+  @chart-color-7: #fc8452;
+  @chart-color-8: #9a60b4;
+}
+
+// 浅色主题（默认主题，必须与设计稿一致）
+.theme-light() {
+  // 背景色（浅色主题）
+  @bg-primary: #ffffff;
+  @bg-secondary: #fafafa;
+  @bg-tertiary: #f5f5f5;
+  
+  // 文字颜色（浅色主题）
+  @text-primary: rgba(0, 0, 0, 0.85);
+  @text-secondary: rgba(0, 0, 0, 0.65);
+  @text-tertiary: rgba(0, 0, 0, 0.45);
+  @text-disabled: rgba(0, 0, 0, 0.25);
+  
+  // 边框颜色
+  @border-color: #d9d9d9;
+  @border-color-light: #f0f0f0;
+  
+  // 品牌色（保持一致）
+  @primary-color: #1890ff;
+  @success-color: #52c41a;
+  @warning-color: #faad14;
+  @error-color: #f5222d;
+  @info-color: #1890ff;
+  
+  // 阴影
+  @shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
+  @shadow-md: 0 4px 16px rgba(0, 0, 0, 0.12);
+  @shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.15);
+  
+  // 蒙层
+  @mask-bg: rgba(0, 0, 0, 0.45);
+  
+  // 图表颜色
+  @chart-color-1: #5470c6;
+  @chart-color-2: #91cc75;
+  @chart-color-3: #fac858;
+  @chart-color-4: #ee6666;
+  @chart-color-5: #73c0de;
+  @chart-color-6: #3ba272;
+  @chart-color-7: #fc8452;
+  @chart-color-8: #9a60b4;
+}

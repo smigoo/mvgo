@@ -1,0 +1,372 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 72,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1]",
+        "message": "stats-indicator section缺少body.children实际内容，仅有2个icon无统计数值",
+        "suggestion": "补充统计指标的label和value字段，或明确此section为纯装饰图标组"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "charts[0]",
+        "message": "图表数据hints与layout不一致：实际CO浓度，但hints显示'辆'单位和无关标签",
+        "suggestion": "修正chartDataHints中的labels和values，确保与面积图实际数据对齐"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "layout.sections[2].body.children[0]",
+        "message": "stat-value的value为'2k3+785CO2浓度'，疑似OCR错误（应为zk3+785）",
+        "suggestion": "统一修正为正确的桩号格式'zk3+785'"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "headerSlots",
+        "message": "headerSlots重复引用同一资源：两个icon都指向icon-7941.png",
+        "suggestion": "确认第二个icon的实际资源文件，更新figmaNodeId和resourceFile"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body",
+        "message": "chart-area的children混合chart元素和装饰元素，层级不清晰",
+        "suggestion": "将threshold-line/label提取为独立decorations数组，与chart并列"
+      }
+    ],
+    "recommendations": [
+      "补全stats-indicator的完整结构（label+value+unit），或删除此冗余section",
+      "修正chartDataHints与实际图表的映射关系，删除无关标签（如'辆'/'一氧化碳'等）",
+      "统一桩号命名规范，检查所有OCR结果的准确性"
+    ],
+    "summary": "结构基本合理但存在明显数据不一致问题：stats-indicator缺少实际统计内容，chartDataHints与布局描述严重不匹配，需修正后再审核"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "rgba(85, 158, 255, 1)",
+      "--colorDanger": "rgba(245, 63, 63, 1)",
+      "--colorTextBase": "rgba(0, 0, 0, 0.65)",
+      "--colorBg": "#EDF4FB",
+      "--colorWhite": "rgba(255, 255, 255, 1)",
+      "--colorSuccess": "rgba(76, 209, 55, 1)",
+      "--colorThresholdLine": "rgba(245, 63, 63, 1)",
+      "--colorHeaderGradientStart": "rgba(85, 158, 255, 0.8)",
+      "--colorHeaderGradientEnd": "rgba(85, 158, 255, 0.3)",
+      "--colorTabActiveBg": "linear-gradient(90deg, rgba(85, 158, 255, 0.2) 0%, rgba(85, 158, 255, 0.6) 100%)",
+      "--colorChartAreaFill": "linear-gradient(180deg, rgba(76, 209, 55, 0.3) 0%, rgba(76, 209, 55, 0.05) 100%)",
+      "--fontSize": "14px",
+      "--fontSizeTitle": "16px",
+      "--fontSizeLarge": "18px",
+      "--borderRadius": "4px",
+      "--borderRadiusLarge": "8px",
+      "--shadowCard": "0 2px 8px rgba(0, 0, 0, 0.08)"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "rgba(85, 158, 255, 1)",
+      "@color-danger": "rgba(245, 63, 63, 1)",
+      "@color-text-base": "rgba(0, 0, 0, 0.65)",
+      "@color-bg": "#EDF4FB",
+      "@color-white": "rgba(255, 255, 255, 1)",
+      "@color-success": "rgba(76, 209, 55, 1)",
+      "@color-threshold-line": "rgba(245, 63, 63, 1)",
+      "@color-header-gradient-start": "rgba(85, 158, 255, 0.8)",
+      "@color-header-gradient-end": "rgba(85, 158, 255, 0.3)",
+      "@color-tab-active-bg": "linear-gradient(90deg, rgba(85, 158, 255, 0.2) 0%, rgba(85, 158, 255, 0.6) 100%)",
+      "@color-chart-area-fill": "linear-gradient(180deg, rgba(76, 209, 55, 0.3) 0%, rgba(76, 209, 55, 0.05) 100%)",
+      "@font-size-base": "14px",
+      "@font-size-title": "16px",
+      "@font-size-large": "18px",
+      "@border-radius-base": "4px",
+      "@border-radius-large": "8px",
+      "@shadow-card": "0 2px 8px rgba(0, 0, 0, 0.08)"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "width": "100%",
+        "height": "100%",
+        "background": "var(--colorBg, #EDF4FB)",
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "20px",
+        "box-sizing": "border-box"
+      },
+      ".header-bar": {
+        "display": "flex",
+        "align-items": "center",
+        "height": "48px",
+        "background": "linear-gradient(90deg, var(--colorHeaderGradientStart, rgba(85, 158, 255, 0.8)) 0%, var(--colorHeaderGradientEnd, rgba(85, 158, 255, 0.3)) 100%)",
+        "padding": "0 16px",
+        "border-radius": "var(--borderRadiusLarge, 8px)",
+        "color": "var(--colorWhite, #ffffff)",
+        "font-size": "var(--fontSizeTitle, 16px)",
+        "font-weight": "500"
+      },
+      ".card": {
+        "background": "var(--colorWhite, #ffffff)",
+        "border-radius": "var(--borderRadius, 4px)",
+        "box-shadow": "var(--shadowCard, 0 2px 8px rgba(0, 0, 0, 0.08))",
+        "padding": "16px",
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      ".tab-container": {
+        "display": "flex",
+        "gap": "8px"
+      },
+      ".tab-item": {
+        "padding": "8px 16px",
+        "border-radius": "var(--borderRadius, 4px)",
+        "color": "var(--colorTextBase, rgba(0, 0, 0, 0.65))",
+        "font-size": "var(--fontSize, 14px)",
+        "cursor": "pointer",
+        "transition": "all 0.3s ease",
+        "background": "transparent"
+      },
+      ".tab-item-active": {
+        "background": "var(--colorTabActiveBg, linear-gradient(90deg, rgba(85, 158, 255, 0.2) 0%, rgba(85, 158, 255, 0.6) 100%))",
+        "color": "var(--colorPrimary, rgba(85, 158, 255, 1))",
+        "font-weight": "500"
+      },
+      ".threshold-line": {
+        "position": "absolute",
+        "width": "100%",
+        "height": "0",
+        "border-top": "2px dashed var(--colorThresholdLine, rgba(245, 63, 63, 1))",
+        "z-index": "10"
+      },
+      ".current-value": {
+        "position": "absolute",
+        "top": "16px",
+        "right": "16px",
+        "font-size": "var(--fontSizeLarge, 18px)",
+        "font-weight": "600",
+        "color": "var(--colorPrimary, rgba(85, 158, 255, 1))"
+      },
+      ".chart-container": {
+        "width": "100%",
+        "height": "300px",
+        "position": "relative"
+      },
+      ".area-chart-fill": {
+        "fill": "var(--colorChartAreaFill, linear-gradient(180deg, rgba(76, 209, 55, 0.3) 0%, rgba(76, 209, 55, 0.05) 100%))"
+      },
+      ".text-primary": {
+        "color": "var(--colorPrimary, rgba(85, 158, 255, 1))"
+      },
+      ".text-danger": {
+        "color": "var(--colorDanger, rgba(245, 63, 63, 1))"
+      },
+      ".text-base": {
+        "color": "var(--colorTextBase, rgba(0, 0, 0, 0.65))",
+        "font-size": "var(--fontSize, 14px)"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调（蓝色）映射为--colorPrimary，用于Tab激活态和重点数值",
+      "危险色（红色）映射为--colorDanger，用于阈值线和告警状态",
+      "浅色背景#EDF4FB直接落地为--colorBg字面量值，确保容器可见",
+      "顶部蓝色渐变装饰条通过--colorHeaderGradientStart和--colorHeaderGradientEnd实现",
+      "Tab激活态背景使用--colorTabActiveBg渐变变量",
+      "图表面积填充使用--colorChartAreaFill渐变变量（绿色系）",
+      "阈值线使用--colorThresholdLine（红色虚线）",
+      "当前数值显示在右上角，使用--colorPrimary强调",
+      "所有CSS变量严格遵循camelCase命名规范",
+      "卡片组件使用--shadowCard提供轻微阴影",
+      "字体大小分为三级：base(14px)、title(16px)、large(18px)",
+      "圆角分为两级：base(4px)、large(8px)"
+    ],
+    "elementStyleMap": {
+      "tab-switch": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tab-1": {
+        "background-image": "url(../resources/images/bg-tab-active-7891.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "stats-indicator": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "chart-area": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-10": {
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "tab-switch",
+        "responsibility": "标签页切换区",
+        "elementCount": 4,
+        "title": "指标切换tabs",
+        "complexityScore": 20,
+        "complexityReasons": {
+          "elementCount": 4,
+          "charts": 0,
+          "interactions": 5,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "stats-indicator",
+        "responsibility": "数据统计指标区（数字+标签+趋势）",
+        "elementCount": 2,
+        "title": "统计指标区",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 2,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "chart-area",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 4,
+        "title": "面积图区域",
+        "complexityScore": 30,
+        "complexityReasons": {
+          "elementCount": 4,
+          "charts": 2,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [
+          {
+            "type": "chart-component",
+            "id": "threshold-line",
+            "name": "阈值线",
+            "responsibility": "图表组件：阈值线",
+            "reason": "R1: 图表隔离策略",
+            "props": [
+              "chartData",
+              "chartConfig"
+            ],
+            "emits": [
+              "legendClick",
+              "dataZoom"
+            ]
+          },
+          {
+            "type": "chart-component",
+            "id": "area-chart",
+            "name": "面积图",
+            "responsibility": "图表组件：面积图",
+            "reason": "R1: 图表隔离策略",
+            "props": [
+              "chartData",
+              "chartConfig"
+            ],
+            "emits": [
+              "legendClick",
+              "dataZoom"
+            ]
+          }
+        ],
+        "shouldSplitInternally": true
+      }
+    ],
+    "isForced": true,
+    "minFiles": 5,
+    "reason": "有效 sections=3 ≥ 3 或存在高复杂度 section → 强制拆分",
+    "internalSubcomponents": [
+      {
+        "type": "chart-component",
+        "id": "threshold-line",
+        "name": "阈值线",
+        "responsibility": "图表组件：阈值线",
+        "reason": "R1: 图表隔离策略",
+        "props": [
+          "chartData",
+          "chartConfig"
+        ],
+        "emits": [
+          "legendClick",
+          "dataZoom"
+        ],
+        "parentSectionId": "chart-area",
+        "parentSectionTitle": "面积图区域"
+      },
+      {
+        "type": "chart-component",
+        "id": "area-chart",
+        "name": "面积图",
+        "responsibility": "图表组件：面积图",
+        "reason": "R1: 图表隔离策略",
+        "props": [
+          "chartData",
+          "chartConfig"
+        ],
+        "emits": [
+          "legendClick",
+          "dataZoom"
+        ],
+        "parentSectionId": "chart-area",
+        "parentSectionTitle": "面积图区域"
+      }
+    ]
+  }
+}

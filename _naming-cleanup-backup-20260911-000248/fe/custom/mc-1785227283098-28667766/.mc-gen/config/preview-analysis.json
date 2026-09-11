@@ -1,0 +1,21 @@
+{
+  "generatedAt": "2026-07-28T08:31:47.625Z",
+  "stage": "preview-analysis",
+  "thinking": "**Analyzing panel layout and content structure****Defining panel sections and header relations****Planning section headers and panel title placement****Designing section layout with header and tabs****Evaluating section headerRelation for layout consistency****Finalizing section with title and tabs same row****Deciding figmaNode defaults and text styles****Planning layout sections and card items****Defining card values and placeholder icons****Deciding placeholder use for unknown icons****Designing nested section layout with tabs****Defining section header with title and tabs****Deciding fixed ISO date format****Constructing detailed preview-analysis schema****Assigning placeholder icon with fixed size****Designing tab controls with styles****Structuring stat-card layout and styling****Noting decorative icon beside title****Planning title-left blue icon placement****Defining header structure with icon in styles****Including decorative icon as header control****Refining tab header icon placement****Mapping vehicle icons and backgrounds****Evaluating background image property usage****Defining item resourceFile and layout structure****Evaluating body children structure****Designing subheader and card group layout****Defining style and metadata requirements****Planning layout sections and header controls****Deciding icon placement in header****Designing JSON structure for headers and cards****Planning horizontal item layout with vertical content****Designing tab styles and subheader layout****Defining container styles and theme details**",
+  "type": "thinking",
+  "layout": {
+    "type": "vertical",
+    "direction": "top-to-bottom",
+    "sections": []
+  },
+  "styles": {
+    "theme": "未知",
+    "colors": [],
+    "background": "",
+    "decorations": [],
+    "emphasis": [],
+    "backgroundBrightness": "dark"
+  },
+  "interactions": [],
+  "charts": []
+}

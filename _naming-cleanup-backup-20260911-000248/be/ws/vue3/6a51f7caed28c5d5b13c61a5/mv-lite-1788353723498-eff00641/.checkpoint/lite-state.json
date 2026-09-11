@@ -1,0 +1,82 @@
+{
+  "stage": "codegen_done",
+  "brief": {
+    "layout": "2x2 网格布局，两行两列，卡片等宽等高，水平和垂直间距均匀。",
+    "regions": [
+      {
+        "name": "总任务卡片",
+        "description": "浅灰蓝色背景卡片，左侧有深灰蓝色竖条装饰。内部包含大字号数字'27'（深灰蓝色）和小字号标签'总任务'（浅灰色），纵向排列，左对齐。",
+        "position": "top-left",
+        "size": "宽约110px，高约70px，占左上象限"
+      },
+      {
+        "name": "已完成卡片",
+        "description": "浅绿色背景卡片，左侧有深绿色竖条装饰。内部包含大字号数字'6'（深绿色）和小字号标签'已完成'（浅灰绿色），纵向排列，左对齐。",
+        "position": "top-right",
+        "size": "宽约110px，高约70px，占右上象限"
+      },
+      {
+        "name": "进行中卡片",
+        "description": "浅蓝色背景卡片，左侧有深蓝色竖条装饰。内部包含大字号数字'0'（深蓝色）和小字号标签'进行中'（浅灰蓝色），纵向排列，左对齐。",
+        "position": "bottom-left",
+        "size": "宽约110px，高约70px，占左下象限"
+      },
+      {
+        "name": "失败卡片",
+        "description": "浅红色背景卡片，左侧有深红色竖条装饰。内部包含大字号数字'15'（深红色）和小字号标签'失败'（浅灰红色），纵向排列，左对齐。",
+        "position": "bottom-right",
+        "size": "宽约110px，高约70px，占右下象限"
+      }
+    ],
+    "spacing": {
+      "outer": "约8px",
+      "gap": "卡片间距约8px（水平和垂直）",
+      "padding": "卡片内边距约12px"
+    },
+    "theme": "light",
+    "colors": {
+      "primary": "#0052D9",
+      "background": "#FFFFFF",
+      "surface": "#F7F9FC",
+      "text": "#334155",
+      "border": "transparent"
+    },
+    "typography": {
+      "size": "数字约24px，标签文字约12px",
+      "weight": "数字Bold (700)，标签文字Regular (400)",
+      "lineHeight": "数字行高约1.2，标签行高约1.5"
+    },
+    "components": [
+      "统计卡片 (Stat Card)"
+    ],
+    "textContent": [
+      "27",
+      "总任务",
+      "6",
+      "已完成",
+      "0",
+      "进行中",
+      "15",
+      "失败"
+    ],
+    "name": {
+      "cn": "任务统计",
+      "en": "task-statistics"
+    },
+    "visualDetails": [
+      "卡片具有圆角（约8px）",
+      "每个卡片左侧边缘有彩色竖条装饰（宽度约4px）",
+      "卡片背景色分别为浅灰蓝、浅绿、浅蓝、浅红",
+      "数字颜色与左侧竖条颜色对应（深色系）",
+      "标签文字颜色较淡，略带对应色相的灰色"
+    ],
+    "interactions": [],
+    "_themeSource": "pixel"
+  },
+  "width": 241,
+  "height": 158,
+  "sourceType": "screenshot",
+  "componentType": "vue3",
+  "generationTier": "lite",
+  "vueCode": "<template>\n  <div class=\"task-statistics\">\n    <div class=\"task-statistics-card task-statistics-card--total\">\n      <div class=\"task-statistics-bar\" style=\"background-color: #475569;\"></div>\n      <div class=\"task-statistics-content\">\n        <div class=\"task-statistics-number\" style=\"color: #334155;\">27</div>\n        <div class=\"task-statistics-label\" style=\"color: #94A3B8;\">总任务</div>\n      </div>\n    </div>\n    \n    <div class=\"task-statistics-card task-statistics-card--done\">\n      <div class=\"task-statistics-bar\" style=\"background-color: #059669;\"></div>\n      <div class=\"task-statistics-content\">\n        <div class=\"task-statistics-number\" style=\"color: #047857;\">6</div>\n        <div class=\"task-statistics-label\" style=\"color: #6EE7B7;\">已完成</div>\n      </div>\n    </div>\n\n    <div class=\"task-statistics-card task-statistics-card--doing\">\n      <div class=\"task-statistics-bar\" style=\"background-color: #2563EB;\"></div>\n      <div class=\"task-statistics-content\">\n        <div class=\"task-statistics-number\" style=\"color: #1D4ED8;\">0</div>\n        <div class=\"task-statistics-label\" style=\"color: #93C5FD;\">进行中</div>\n      </div>\n    </div>\n\n    <div class=\"task-statistics-card task-statistics-card--fail\">\n      <div class=\"task-statistics-bar\" style=\"background-color: #DC2626;\"></div>\n      <div class=\"task-statistics-content\">\n        <div class=\"task-statistics-number\" style=\"color: #B91C1C;\">15</div>\n        <div class=\"task-statistics-label\" style=\"color: #FCA5A5;\">失败</div>\n      </div>\n    </div>\n  </div>\n</template>\n\n<script setup>\n</script>\n\n<style scoped>\n.task-statistics {\n  width: 100%;\n  height: 100%;\n  box-sizing: border-box;\n  display: grid;\n  grid-template-columns: 1fr 1fr;\n  grid-template-rows: 1fr 1fr;\n  gap: 8px;\n  padding: 8px;\n  background-color: #FFFFFF;\n}\n\n.task-statistics-card {\n  position: relative;\n  border-radius: 8px;\n  padding: 10px 12px 10px 24px; /* 左侧留出竖条空间 */\n  display: flex;\n  flex-direction: column;\n  justify-content: center;\n  overflow: hidden;\n  box-sizing: border-box;\n}\n\n.task-statistics-card--total {\n  background-color: #F4F6F9;\n}\n\n.task-statistics-card--done {\n  background-color: #ECFDF5;\n}\n\n.task-statistics-card--doing {\n  background-color: #EFF6FF;\n}\n\n.task-statistics-card--fail {\n  background-color: #FEF2F2;\n}\n\n.task-statistics-bar {\n  position: absolute;\n  left: 12px;\n  top: 20%;\n  bottom: 20%;\n  width: 4px;\n  border-radius: 2px;\n}\n\n.task-statistics-content {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.task-statistics-number {\n  font-size: 24px;\n  font-weight: 700;\n  line-height: 1.2;\n}\n\n.task-statistics-label {\n  font-size: 12px;\n  font-weight: 400;\n  line-height: 1.5;\n}\n</style>"
+}

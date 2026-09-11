@@ -1,0 +1,274 @@
+/* 业务样式（common.less） */
+/* 所有 class 均以 .c- 前缀，从模板提取的类名必须全部覆盖 */
+
+/* 根容器：仅布局，禁止背景/边框/圆角/阴影 */
+.c-monitor-root {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* 顶部统计栏 */
+.c-monitor-header-stats {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 24px;
+}
+
+.c-monitor-header-stat {
+  display: flex;
+  flex-direction: column;
+}
+
+.c-monitor-header-stat-label {
+  font-size: 14px;
+  font-weight: 400;
+  color: #333333;
+}
+
+.c-monitor-header-stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.c-monitor-stat-blue {
+  color: #1990ff;
+}
+
+.c-monitor-stat-teal {
+  color: #08a3a5;
+}
+
+.c-monitor-header-decoration {
+  display: flex;
+  align-items: center;
+}
+
+.c-monitor-header-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #1990ff;
+}
+
+.c-monitor-header-time {
+  font-size: 14px;
+  font-weight: 400;
+  background-image: linear-gradient(#1990ff, #5a7eff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* 汇总卡片区 */
+.c-monitor-summary-cards {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+}
+
+/* 卡片基础 */
+.c-monitor-card {
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  border-radius: 8px;
+  flex: 1;
+}
+
+/* 隧道设备卡（渐变蓝） */
+.c-monitor-card-tunnel {
+  background: linear-gradient(270deg, #318aff 0%, #70bfff 100%);
+}
+
+/* 南北接线设备卡（浅灰蓝） */
+.c-monitor-card-north-south {
+  background: #EDF4FB;
+}
+
+/* 卡片内部行 */
+.c-monitor-card-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.c-monitor-card-row-bottom {
+  margin-top: 12px;
+  justify-content: space-between;
+}
+
+/* 图标区域 */
+.c-monitor-card-icon-wrap {
+  width: 32px;
+  height: 32px;
+  margin-right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.c-monitor-card-icon {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+/* 卡片总数文本 */
+.c-monitor-card-total {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.c-monitor-card-total-light {
+  color: #ffffff;
+}
+
+.c-monitor-card-total-blue {
+  color: #1990ff;
+}
+
+/* 卡片名称 */
+.c-monitor-card-name {
+  font-size: 12px;
+}
+
+.c-monitor-card-name-light {
+  color: #ffffff;
+}
+
+.c-monitor-card-name-dark {
+  color: #333333;
+}
+
+/* 异常数文本 */
+.c-monitor-card-abnormal {
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.c-monitor-card-abnormal-danger {
+  color: #e03434;
+}
+
+/* 主体内容区（左右排布） */
+.c-monitor-main-content {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+}
+
+/* 左侧垂直 Tab 导航 */
+.c-monitor-vertical-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+  width: 120px;
+}
+
+.c-monitor-tab-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  cursor: pointer;
+  background: #ffffff;
+  border: 1px solid #258dc8;
+  border-radius: 6px;
+  box-shadow: 0px 1px 2px rgba(51, 101, 144, 0.4);
+  color: #3b80e7;
+  font-size: 14px;
+}
+
+.c-monitor-tab-item-active {
+  background: linear-gradient(#85baff, #bfe2ff);
+  border-color: #f0f5ff;
+  color: #ffffff;
+  box-shadow: none;
+}
+
+.c-monitor-tab-text {
+  font-weight: 400;
+}
+
+.c-monitor-tab-badge {
+  background: #f53f3f;
+  border-radius: 29px;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 1px 6px;
+  line-height: 1.5;
+  min-width: 18px;
+  text-align: center;
+}
+
+/* 右侧设备状态网格 */
+.c-monitor-device-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  flex: 1;
+}
+
+.c-monitor-device-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 8px;
+}
+
+.c-monitor-device-icon-wrap {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.c-monitor-device-icon {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.c-monitor-device-name {
+  font-size: 12px;
+  color: #333333;
+  margin-top: 4px;
+}
+
+.c-monitor-device-value {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.c-monitor-device-count {
+  font-weight: 500;
+  color: #333333;
+}
+
+.c-monitor-device-count-danger {
+  color: #e03434;
+}
+
+.c-monitor-device-count-normal {
+  color: #333333;
+}
+
+.c-monitor-device-total {
+  color: #999999;
+}
+
+/* 辅助 class（由列表强制要求） */
+.danger {
+  color: #e03434;
+}
+
+.normal {
+  color: #333333;
+}

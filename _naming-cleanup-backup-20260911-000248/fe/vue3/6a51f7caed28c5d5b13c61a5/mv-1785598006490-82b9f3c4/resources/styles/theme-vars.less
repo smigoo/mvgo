@@ -1,0 +1,64 @@
+// 主题变量与 mixin 定义
+// 组件默认浅色主题（与面板背景一致）
+// 注意：CSS 自定义属性必须放在选择器内，不能直接写在 mixin 根级
+
+.theme-light() {
+  :root {
+    --color-primary: #1990ff;
+    --color-secondary: #00bcd4;
+    --color-warning: #f97316;
+    --color-text-base: #333333;
+    --color-text-secondary: #666666;
+    --color-bg: #edf4fb;
+    --color-bg-card: #ffffff;
+    --color-border: rgba(199, 224, 255, 0.6);
+    --color-bar-1: #3b82f6;
+    --color-bar-2: #06b6d4;
+    --color-area-1: #3385ff;
+    --color-area-2: #00cccc;
+    --color-tab-active: #1990ff;
+    --color-tab-inactive: #6680a0;
+    --font-size-base: 14px;
+    --font-size-large: 24px;
+    --font-size-xl: 28px;
+    --font-size-small: 12px;
+    --border-radius-base: 8px;
+    --border-radius-sm: 4px;
+    --border-radius-lg: 20px;
+    --shadow-card: 0 2px 8px rgba(74, 117, 141, 0.12);
+  }
+}
+
+.theme-dark() {
+  :root {
+    --color-primary: #1990ff;
+    --color-secondary: #00bcd4;
+    --color-warning: #f97316;
+    --color-text-base: #e0e6ed;
+    --color-text-secondary: #a0aec0;
+    --color-bg: #1a2332;
+    --color-bg-card: #243042;
+    --color-border: rgba(199, 224, 255, 0.2);
+    --color-bar-1: #3b82f6;
+    --color-bar-2: #06b6d4;
+    --color-area-1: #3385ff;
+    --color-area-2: #00cccc;
+    --color-tab-active: #1990ff;
+    --color-tab-inactive: #6680a0;
+    --font-size-base: 14px;
+    --font-size-large: 24px;
+    --font-size-xl: 28px;
+    --font-size-small: 12px;
+    --border-radius-base: 8px;
+    --border-radius-sm: 4px;
+    --border-radius-lg: 20px;
+    --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+}
+
+.common() {
+  // 通用 mixin，可被主题覆盖
+}
+
+// 默认使用浅色主题
+.theme-light();

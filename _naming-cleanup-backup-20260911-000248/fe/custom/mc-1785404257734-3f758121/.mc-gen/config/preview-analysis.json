@@ -1,0 +1,105 @@
+{
+  "generatedAt": "2026-07-30T09:42:01.974Z",
+  "stage": "preview-analysis",
+  "layout": "horizontal",
+  "layoutStructure": null,
+  "sections": null,
+  "componentType": null,
+  "styles": {
+    "theme": "未知",
+    "colors": [],
+    "background": "",
+    "decorations": [],
+    "emphasis": [],
+    "backgroundBrightness": "dark"
+  },
+  "interactions": [],
+  "charts": [],
+  "_parseWarning": "质量门检测到解析结果全空，下游精修可能受限",
+  "coverageReport": {
+    "totalFigma": 216,
+    "matchedCount": 0,
+    "missingCount": 114,
+    "uncertainCount": 0,
+    "coverageRate": 0,
+    "missing": [
+      {
+        "name": "cp-设备监测",
+        "type": "FRAME",
+        "depth": 0
+      },
+      {
+        "name": "header",
+        "type": "GROUP",
+        "depth": 1
+      },
+      {
+        "name": "g",
+        "type": "GROUP",
+        "depth": 2
+      },
+      {
+        "name": "设备监测",
+        "type": "TEXT",
+        "depth": 2
+      },
+      {
+        "name": "Frame 2136638825",
+        "type": "FRAME",
+        "depth": 2
+      },
+      {
+        "name": "设备类型",
+        "type": "TEXT",
+        "depth": 3
+      },
+      {
+        "name": "Frame 2136638826",
+        "type": "FRAME",
+        "depth": 2
+      },
+      {
+        "name": "设备总数",
+        "type": "TEXT",
+        "depth": 3
+      },
+      {
+        "name": "Frame 2136638827",
+        "type": "FRAME",
+        "depth": 2
+      },
+      {
+        "name": "完好率",
+        "type": "TEXT",
+        "depth": 3
+      },
+      {
+        "name": "Frame",
+        "type": "FRAME",
+        "depth": 2
+      },
+      {
+        "name": "slot-con",
+        "type": "FRAME",
+        "depth": 1
+      },
+      {
+        "name": "switch",
+        "type": "FRAME",
+        "depth": 2
+      },
+      {
+        "name": "active",
+        "type": "GROUP",
+        "depth": 3
+      },
+      {
+        "name": "bg",
+        "type": "GROUP",
+        "depth": 4
+      }
+    ],
+    "uncertain": [],
+    "summary": "需关注"
+  }
+}

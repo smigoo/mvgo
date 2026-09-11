@@ -1,0 +1,112 @@
+// 微码组件主题变量定义
+// 结构：.common() + .theme-dark() + .theme-light()
+// ⚠️ 只允许 Less 变量（@xxx），禁止 CSS 变量（var(--xxx)）
+
+.common() {
+  // 字体缩放基准令牌（根容器通过 CSS 变量 --fontSize 驱动，默认 14px）
+  @fontSize: 14px;
+}
+
+.theme-dark() {
+  // ==================== 深色主题配色 ====================
+  // ⚠️ 所有文字颜色禁止使用黑色系
+  
+  // 主色系
+  @primary-color: #1990ff;
+  @primary-light: #559eff;
+  @primary-dark: #006fef;
+  @primary-active: #5a7eff;
+  
+  // 背景色系
+  @bg-color: rgba(0, 17, 34, 0.85);
+  @bg-color-secondary: rgba(26, 35, 50, 0.9);
+  @bg-color-tertiary: rgba(74, 117, 141, 0.25);
+  @bg-overlay: rgba(0, 0, 0, 0.6);
+  
+  // 文字色系（深色面板禁用黑色）
+  @text-color: #ffffff;
+  @text-color-secondary: rgba(255, 255, 255, 0.85);
+  @text-color-tertiary: rgba(255, 255, 255, 0.65);
+  @text-color-disabled: rgba(255, 255, 255, 0.45);
+  
+  // 边框色系
+  @border-color: rgba(255, 255, 255, 0.15);
+  @border-color-light: rgba(255, 255, 255, 0.08);
+  @border-color-dark: rgba(255, 255, 255, 0.25);
+  
+  // 功能色系
+  @success-color: #0fcd7d;
+  @error-color: #f53f3f;
+  @warning-color: #ff9800;
+  @info-color: #2c9bea;
+  
+  // 图表色系
+  @chart-color-1: #1990ff;
+  @chart-color-2: #2c9bea;
+  @chart-color-3: #5a7eff;
+  @chart-color-4: #1099b1;
+  @chart-color-5: #0fcd7d;
+  @chart-color-6: #038fff;
+  
+  // 半透明色系
+  @blue-alpha-15: rgba(25, 144, 255, 0.15);
+  @blue-alpha-25: rgba(25, 144, 255, 0.25);
+  @blue-alpha-40: rgba(25, 144, 255, 0.4);
+  @white-alpha-10: rgba(255, 255, 255, 0.1);
+  @white-alpha-20: rgba(255, 255, 255, 0.2);
+  
+  // 渐变色系
+  @gradient-primary: linear-gradient(135deg, #1990ff 0%, #5a7eff 100%);
+  @gradient-success: linear-gradient(135deg, #0fcd7d 0%, #1099b1 100%);
+}
+
+.theme-light() {
+  // ==================== 浅色主题配色（默认主题，必须与设计稿一致）====================
+  
+  // 主色系
+  @primary-color: #1252fa;
+  @primary-light: #559eff;
+  @primary-dark: #006fef;
+  @primary-active: #5a7eff;
+  
+  // 背景色系
+  @bg-color: #ffffff;
+  @bg-color-secondary: #edf4fb;
+  @bg-color-tertiary: #d6effc;
+  @bg-overlay: rgba(0, 0, 0, 0.15);
+  
+  // 文字色系
+  @text-color: #000000;
+  @text-color-secondary: #333333;
+  @text-color-tertiary: #666666;
+  @text-color-disabled: rgba(0, 0, 0, 0.25);
+  
+  // 边框色系
+  @border-color: rgba(74, 117, 141, 0.25);
+  @border-color-light: rgba(0, 0, 0, 0.06);
+  @border-color-dark: rgba(0, 0, 0, 0.15);
+  
+  // 功能色系
+  @success-color: #0fcd7d;
+  @error-color: #d32f2f;
+  @warning-color: #ff9800;
+  @info-color: #2c9bea;
+  
+  // 图表色系
+  @chart-color-1: #1990ff;
+  @chart-color-2: #2c9bea;
+  @chart-color-3: #5a7eff;
+  @chart-color-4: #1099b1;
+  @chart-color-5: #0fcd7d;
+  @chart-color-6: #038fff;
+  
+  // 半透明色系
+  @blue-alpha-10: #d1ecff;
+  @blue-alpha-15: #b5deff;
+  @blue-alpha-25: rgba(25, 144, 255, 0.25);
+  @blue-alpha-40: rgba(25, 144, 255, 0.4);
+  
+  // 渐变色系
+  @gradient-primary: linear-gradient(135deg, #1252fa 0%, #5a7eff 100%);
+  @gradient-success: linear-gradient(135deg, #0fcd7d 0%, #1099b1 100%);
+}

@@ -1,0 +1,178 @@
+@import './themes/theme-vars.less';
+
+// 导入公共令牌
+.common();
+
+// ============================================================
+// 根容器样式
+// ============================================================
+.c-env-monitor-root {
+  // 字体缩放基准（微码组件必遵）
+  font-size: var(--fontSize, 14px);
+  
+  // 布局
+  display: flex;
+  flex-direction: column;
+  gap: @spacing-md;
+  width: 100%;
+  height: 100%;
+  padding: @spacing-md;
+  box-sizing: border-box;
+  
+  // 字体基线
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  line-height: @line-height-base;
+}
+
+// ============================================================
+// 头部 Tab 区域
+// ============================================================
+.c-env-monitor-header-tabs {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  height: 32px;
+  flex-shrink: 0;
+}
+
+.c-env-monitor-tabs-wrapper {
+  display: flex;
+  gap: 0;
+  height: 27px;
+  background: linear-gradient(180deg, #b5deff 0%, #d1ecff 100%);
+  border: 1px solid #ffffff;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.c-env-monitor-tab-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  height: 27px;
+  font-size: @fontSize;
+  font-weight: 500;
+  line-height: 12px;
+  color: #2c9bea;
+  cursor: pointer;
+  transition: all @transition-base;
+  white-space: nowrap;
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+
+  &:hover {
+    opacity: 0.8;
+  }
+
+  &.active {
+    background: linear-gradient(180deg, #1099b1 0%, #038fff 100%);
+    border: 1px solid #ffffff;
+    color: #ffffff;
+    text-shadow: 0 0.6px 0 #006fe3;
+  }
+}
+
+.c-env-monitor-icon-group {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.c-env-monitor-icon-btn {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: opacity @transition-base;
+
+  &:hover {
+    opacity: 0.8;
+  }
+}
+
+.c-env-monitor-icon-img {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.c-env-monitor-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f53f3f;
+  border-radius: 29px;
+  font-size: calc(@fontSize * 0.857);
+  font-weight: 500;
+  line-height: 14px;
+  color: #ffffff;
+  box-sizing: border-box;
+}
+
+// ============================================================
+// 统计指标区域
+// ============================================================
+.c-env-monitor-stats-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  height: 32px;
+}
+
+.c-env-monitor-stat-card {
+  display: flex;
+  align-items: center;
+  gap: @spacing-sm;
+  padding: 6px 12px;
+  background: #ffffff;
+  border: 1px solid #a1ceff;
+  border-radius: @radius-sm;
+}
+
+.c-env-monitor-stat-label {
+  font-size: calc(@fontSize * 0.686);
+  color: #333333;
+  line-height: 1;
+  font-weight: 400;
+}
+
+.c-env-monitor-stat-value {
+  font-size: calc(@fontSize * 0.857);
+  color: #f53f3f;
+  line-height: 1;
+  font-weight: 400;
+}
+
+// ============================================================
+// 图表区域
+// ============================================================
+.c-env-monitor-chart-area {
+  flex: 1;
+  min-height: 100px;
+  min-width: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.c-env-monitor-chart-container {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+}

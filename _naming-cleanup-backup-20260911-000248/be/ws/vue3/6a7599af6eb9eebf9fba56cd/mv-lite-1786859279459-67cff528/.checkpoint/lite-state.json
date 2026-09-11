@@ -1,0 +1,118 @@
+{
+  "stage": "codegen_done",
+  "brief": {
+    "layout": "浅蓝色数据监测面板，整体为纵向布局：顶部标题区，下面为横向 Tab 导航与右侧功能图标区，主体为折线图区域；内容左对齐为主，图表占据下方大部分区域，右上角放置图例与预警线标注。",
+    "regions": [
+      {
+        "name": "标题区",
+        "description": "左上角显示“环境监测”，后方有浅色地点文字“土镇”及装饰线条",
+        "position": "top",
+        "size": "宽约100%，高约18%"
+      },
+      {
+        "name": "Tab导航区",
+        "description": "浅蓝色箭头/胶囊形导航条，包含一氧化碳、能见度、洞内照明、洞外光强，当前选中一氧化碳",
+        "position": "top",
+        "size": "宽约70%，高约14%"
+      },
+      {
+        "name": "右侧功能图标区",
+        "description": "两个方形描边图标按钮：柱状图图标、列表图标，列表图标右上叠加红色徽标“6”",
+        "position": "right",
+        "size": "宽约14%，高约16%"
+      },
+      {
+        "name": "图表区",
+        "description": "折线面积图，左侧纵轴单位辆与刻度0/10/20/30/40，底部横轴时间2到24，绿色曲线及浅绿色填充，红色虚线预警线位于30刻度",
+        "position": "center/bottom",
+        "size": "宽约88%，高约62%"
+      },
+      {
+        "name": "图例区",
+        "description": "绿色短线图例与文字“zk3+785CO浓度”，旁边/下方显示红色“预警线”文字",
+        "position": "right",
+        "size": "宽约24%，高约18%"
+      }
+    ],
+    "spacing": {
+      "outer": "面板内容距边缘约40-60px，整体留有浅色边距",
+      "gap": "标题与Tab间距较小，Tab与图表间距中等；右侧图标与导航条之间有明显间隔",
+      "padding": "导航条内部左右内边距较大；图标按钮内部有约10px留白；图表刻度与绘图区之间留白较紧凑"
+    },
+    "colors": {
+      "primary": "#2EA8E6",
+      "background": "#EAF6FF",
+      "surface": "#CFEFFF",
+      "text": "#333333",
+      "border": "#8DCDF5"
+    },
+    "typography": {
+      "size": "标题约36px；Tab文字约30px；坐标轴刻度约30px；图例文字约24px；预警线文字约28px；徽标数字约24px",
+      "weight": "标题和Tab为粗体/半粗体，坐标与图例为常规，预警线为常规偏醒目",
+      "lineHeight": "整体行高紧凑，标题约1.2，Tab与坐标文字约1.1-1.3"
+    },
+    "components": [
+      "标题文本",
+      "Tab切换栏",
+      "折线图",
+      "面积填充图",
+      "坐标轴刻度文本",
+      "虚线参考线",
+      "图例",
+      "图标按钮",
+      "徽标/角标"
+    ],
+    "textContent": [
+      "环境监测",
+      "土镇",
+      "一氧化碳",
+      "能见度",
+      "洞内照明",
+      "洞外光强",
+      "zk3+785CO浓度",
+      "预警线",
+      "辆",
+      "时",
+      "0",
+      "10",
+      "20",
+      "30",
+      "40",
+      "2",
+      "4",
+      "6",
+      "8",
+      "10",
+      "12",
+      "14",
+      "16",
+      "18",
+      "20",
+      "22",
+      "24",
+      "6"
+    ],
+    "visualDetails": [
+      "整体背景为浅蓝半透明面板，隐约可见地图/线路底图",
+      "标题为蓝色大字，后方地点文字为浅灰白半透明",
+      "Tab导航为浅蓝长条，右端箭头形；激活Tab为更深蓝绿色渐变胶囊/箭头块，白色文字",
+      "右侧两个按钮为浅蓝描边圆角矩形，内含蓝色柱状图与列表图标",
+      "列表按钮右上角有红色圆形徽标，白色数字6",
+      "图表网格线为浅灰蓝虚线，30刻度预警线为红色虚线",
+      "绿色折线下方有浅绿色半透明面积填充",
+      "图表左侧纵轴数字30为红色，其余刻度为深灰色",
+      "底部横轴为深灰数字，右端标注“时”"
+    ],
+    "interactions": [
+      "Tab切换栏：一氧化碳、能见度、洞内照明、洞外光强；当前激活项为一氧化碳",
+      "右上柱状图图标按钮：位于右上导航区左侧",
+      "右上列表图标按钮：位于右上导航区右侧，带红色角标6"
+    ]
+  },
+  "width": 1122,
+  "height": 500,
+  "sourceType": "screenshot",
+  "componentType": "vue3",
+  "generationTier": "lite",
+  "vueCode": "<template>\n  <div class=\"monitor-panel\">\n    <div class=\"panel-bg-lines\"></div>\n\n    <header class=\"header\">\n      <div class=\"title-wrap\">\n        <h1 class=\"title\">环境监测</h1>\n        <span class=\"place\">土镇</span>\n      </div>\n      <div class=\"decor-line\"></div>\n    </header>\n\n    <section class=\"toolbar\">\n      <nav class=\"tabs\" aria-label=\"环境监测类型\">\n        <button\n          v-for=\"tab in tabs\"\n          :key=\"tab\"\n          class=\"tab\"\n          :class=\"{ active: activeTab === tab }\"\n          type=\"button\"\n          @click=\"activeTab = tab\"\n        >\n          {{ tab }}\n        </button>\n      </nav>\n\n      <div class=\"action-buttons\">\n        <button class=\"icon-btn\" type=\"button\" aria-label=\"柱状图\" @click=\"handleIconClick('bar')\">\n          <span class=\"bar-icon\">\n            <i></i><i></i><i></i>\n          </span>\n        </button>\n        <button class=\"icon-btn list-btn\" type=\"button\" aria-label=\"列表\" @click=\"handleIconClick('list')\">\n          <span class=\"list-icon\">\n            <i></i><i></i><i></i>\n          </span>\n          <em class=\"badge\">6</em>\n        </button>\n      </div>\n    </section>\n\n    <main class=\"content\">\n      <div class=\"chart-shell\">\n        <span class=\"y-unit\">辆</span>\n        <div class=\"chart-holder\">\n          <div ref=\"chartRef\" class=\"chart\"></div>\n        </div>\n      </div>\n\n      <aside class=\"legend-panel\">\n        <div class=\"legend-item\">\n          <span class=\"legend-line\"></span>\n          <span>zk3+785CO浓度</span>\n        </div>\n        <div class=\"warning-text\">预警线</div>\n      </aside>\n    </main>\n  </div>\n</template>\n\n<script setup>\nimport { nextTick, onMounted, onUnmounted, ref } from 'vue'\nimport * as echarts from 'echarts'\n\nconst tabs = ['一氧化碳', '能见度', '洞内照明', '洞外光强']\nconst activeTab = ref('一氧化碳')\n\nconst xAxisData = ref(['2', '4', '6', '8', '10', '12', '14', '16', '18', '20', '22', '24'])\nconst chartData = ref([3.2, 5.5, 4.6, 2.4, 2.0, 4.2, 11.3, 13.2, 12.7, 10.3, 3.5, 0.7])\n\nconst chartRef = ref(null)\nlet chart = null\nlet resizeObserver = null\n\nconst handleIconClick = (type) => {\n  console.log(type)\n}\n\nconst initChart = () => {\n  if (!chartRef.value) return\n\n  chart = echarts.init(chartRef.value)\n  chart.setOption({\n    animation: false,\n    grid: {\n      left: 72,\n      right: 52,\n      top: 34,\n      bottom: 50,\n      containLabel: false\n    },\n    xAxis: {\n      type: 'category',\n      boundaryGap: false,\n      data: xAxisData.value,\n      axisLine: {\n        show: true,\n        lineStyle: { color: '#9fc6d7', width: 1 }\n      },\n      axisTick: { show: false },\n      axisLabel: {\n        color: '#333333',\n        fontSize: 30,\n        margin: 14,\n        interval: 0\n      },\n      name: '时',\n      nameLocation: 'end',\n      nameGap: -4,\n      nameTextStyle: {\n        color: '#333333',\n        fontSize: 30,\n        padding: [28, 0, 0, 0]\n      }\n    },\n    yAxis: {\n      type: 'value',\n      min: 0,\n      max: 40,\n      interval: 10,\n      axisLine: { show: false },\n      axisTick: { show: false },\n      splitLine: {\n        show: true,\n        lineStyle: {\n          color: '#b7cbd8',\n          type: 'dashed',\n          width: 1,\n          opacity: 0.8\n        }\n      },\n      axisLabel: {\n        fontSize: 30,\n        margin: 16,\n        formatter: (value) => `{${value === 30 ? 'warn' : 'normal'}|${value}}`,\n        rich: {\n          normal: { color: '#333333', fontSize: 30 },\n          warn: { color: '#d93030', fontSize: 30 }\n        }\n      }\n    },\n    series: [\n      {\n        name: 'zk3+785CO浓度',\n        type: 'line',\n        data: chartData.value,\n        smooth: true,\n        symbol: 'none',\n        lineStyle: {\n          color: '#14c982',\n          width: 3\n        },\n        areaStyle: {\n          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [\n            { offset: 0, color: 'rgba(20, 201, 130, 0.26)' },\n            { offset: 1, color: 'rgba(20, 201, 130, 0.04)' }\n          ])\n        },\n        markLine: {\n          silent: true,\n          symbol: 'none',\n          label: { show: false },\n          lineStyle: {\n            color: '#d93030',\n            type: 'dashed',\n            width: 2\n          },\n          data: [{ yAxis: 30 }]\n        }\n      }\n    ]\n  })\n\n  resizeObserver = new ResizeObserver(() => {\n    chart?.resize()\n  })\n  resizeObserver.observe(chartRef.value)\n}\n\nonMounted(async () => {\n  await nextTick()\n  requestAnimationFrame(() => initChart())\n})\n\nonUnmounted(() => {\n  resizeObserver?.disconnect()\n  chart?.dispose()\n})\n</script>\n\n<style scoped>\n.monitor-panel {\n  position: relative;\n  width: 100%;\n  height: 100%;\n  box-sizing: border-box;\n  overflow: hidden;\n  padding: 31px 58px 20px 58px;\n  background:\n    linear-gradient(90deg, rgba(233, 247, 255, 0.91), rgba(232, 246, 255, 0.93)),\n    #eaf6ff;\n  font-family: \"Microsoft YaHei\", \"PingFang SC\", Arial, sans-serif;\n  color: #333333;\n}\n\n.panel-bg-lines {\n  position: absolute;\n  inset: 0;\n  pointer-events: none;\n  opacity: 0.32;\n  background:\n    linear-gradient(153deg, transparent 0 17%, rgba(239, 191, 136, 0.45) 17.5% 20%, transparent 20.5%),\n    linear-gradient(160deg, transparent 0 14%, rgba(166, 217, 245, 0.55) 14.3% 14.9%, transparent 15.3%),\n    linear-gradient(145deg, transparent 0 38%, rgba(173, 218, 238, 0.55) 38.3% 38.8%, transparent 39.2%),\n    linear-gradient(25deg, transparent 0 53%, rgba(255, 255, 255, 0.55) 53.2% 54.1%, transparent 54.4%);\n}\n\n.header,\n.toolbar,\n.content {\n  position: relative;\n  z-index: 1;\n}\n\n.header {\n  height: 72px;\n}\n\n.title-wrap {\n  display: flex;\n  align-items: baseline;\n  height: 48px;\n  white-space: nowrap;\n}\n\n.title {\n  margin: 0;\n  color: #1e9bea;\n  font-size: 38px;\n  font-weight: 800;\n  line-height: 1.15;\n  letter-spacing: 1px;\n}\n\n.place {\n  margin-left: 12px;\n  color: rgba(170, 181, 186, 0.38);\n  font-size: 34px;\n  font-weight: 600;\n  line-height: 1;\n}\n\n.decor-line {\n  position: relative;\n  width: 95%;\n  height: 12px;\n  margin-top: 1px;\n  border-top: 3px solid rgba(75, 173, 240, 0.62);\n}\n\n.decor-line::before {\n  content: \"\";\n  position: absolute;\n  left: 0;\n  top: -8px;\n  width: 18px;\n  height: 14px;\n  border-top: 3px solid rgba(75, 173, 240, 0.7);\n  border-left: 3px solid rgba(75, 173, 240, 0.7);\n  border-radius: 12px 0 0 0;\n}\n\n.toolbar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  height: 72px;\n  gap: 44px;\n}\n\n.tabs {\n  display: flex;\n  align-items: center;\n  flex: 0 1 780px;\n  height: 66px;\n  padding: 6px 32px 6px 7px;\n  border: 1px solid rgba(255, 255, 255, 0.82);\n  background: rgba(188, 229, 250, 0.72);\n  clip-path: polygon(0 50%, 40px 0, calc(100% - 34px) 0, 100% 50%, calc(100% - 34px) 100%, 40px 100%);\n}\n\n.tab {\n  position: relative;\n  flex: 1 1 auto;\n  height: 54px;\n  margin: 0;\n  border: 0;\n  background: transparent;\n  color: #239ee8;\n  font: inherit;\n  font-size: 31px;\n  font-weight: 700;\n  line-height: 1;\n  letter-spacing: 1px;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.tab.active {\n  max-width: 210px;\n  color: #ffffff;\n  text-shadow: 0 1px 1px rgba(0, 90, 140, 0.22);\n  background: linear-gradient(90deg, #30aee8 0%, #55c0c4 100%);\n  clip-path: polygon(0 50%, 28px 0, calc(100% - 24px) 0, 100% 50%, calc(100% - 24px) 100%, 28px 100%);\n  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);\n}\n\n.action-buttons {\n  display: flex;\n  align-items: center;\n  gap: 12px;\n  padding-right: 18px;\n}\n\n.icon-btn {\n  position: relative;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  width: 62px;\n  height: 62px;\n  border: 3px solid rgba(93, 183, 239, 0.52);\n  border-radius: 9px;\n  background: rgba(231, 247, 255, 0.38);\n  cursor: pointer;\n}\n\n.bar-icon {\n  display: flex;\n  align-items: flex-end;\n  gap: 6px;\n  height: 39px;\n}\n\n.bar-icon i {\n  display: block;\n  width: 11px;\n  border-radius: 2px 2px 0 0;\n  background: #2ea8e6;\n}\n\n.bar-icon i:nth-child(1) { height: 19px; }\n.bar-icon i:nth-child(2) { height: 38px; }\n.bar-icon i:nth-child(3) { height: 28px; }\n\n.list-icon {\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n  width: 34px;\n}\n\n.list-icon i {\n  display: block;\n  height: 7px;\n  border-radius: 3px;\n  background: #2ea8e6;\n  box-shadow: -8px 0 0 -2px #2ea8e6;\n}\n\n.badge {\n  position: absolute;\n  top: -22px;\n  right: -22px;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  width: 38px;\n  height: 38px;\n  border-radius: 50%;\n  background: #ef3340;\n  color: #ffffff;\n  font-style: normal;\n  font-size: 27px;\n  font-weight: 700;\n  line-height: 1;\n}\n\n.content {\n  display: flex;\n  align-items: stretch;\n  height: calc(100% - 144px);\n  min-height: 0;\n  padding-top: 4px;\n}\n\n.chart-shell {\n  position: relative;\n  display: flex;\n  flex: 1;\n  min-width: 0;\n  min-height: 0;\n}\n\n.y-unit {\n  position: absolute;\n  left: 6px;\n  top: 6px;\n  color: #333333;\n  font-size: 30px;\n  line-height: 1;\n}\n\n.chart-holder {\n  flex: 1;\n  min-height: 0;\n}\n\n.chart {\n  width: 100%;\n  height: 100%;\n}\n\n.legend-panel {\n  position: absolute;\n  top: 18px;\n  right: 18px;\n  width: 260px;\n  color: #333333;\n  pointer-events: none;\n}\n\n.legend-item {\n  display: flex;\n  align-items: center;\n  gap: 16px;\n  font-size: 25px;\n  line-height: 1.2;\n  white-space: nowrap;\n}\n\n.legend-line {\n  width: 38px;\n  height: 5px;\n  border-radius: 4px;\n  background: #14c982;\n}\n\n.warning-text {\n  margin-top: 30px;\n  margin-left: 124px;\n  color: #d93030;\n  font-size: 31px;\n  line-height: 1.1;\n  white-space: nowrap;\n}\n\n@media (max-width: 860px) {\n  .monitor-panel {\n    padding-left: 36px;\n    padding-right: 36px;\n  }\n\n  .tab {\n    font-size: 26px;\n  }\n\n  .legend-panel {\n    right: 0;\n    transform: scale(0.88);\n    transform-origin: top right;\n  }\n}\n</style>"
+}

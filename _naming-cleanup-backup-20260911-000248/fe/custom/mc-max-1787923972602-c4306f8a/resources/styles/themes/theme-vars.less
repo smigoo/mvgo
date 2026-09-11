@@ -1,0 +1,37 @@
+.common() {
+  // 设计稿事实：背景图节点（非颜色，但属于主题公共变量）
+  @bg-image: url(../resources/images/bg-7890.png);
+  @bg-size: 100% 100%;
+  @bg-position: center center;
+  @bg-repeat: no-repeat;
+}
+
+.theme-dark() {
+  @bg-color: #1a2332;
+  @bg-color-secondary: #232d3f;
+  @bg-color-tertiary: #2d3850;
+  @text-color: #e6eaf0;
+  @text-color-secondary: #a0a8b8;
+  @text-color-disabled: #5c6678;
+  @border-color: #3a465c;
+  @border-color-split: #2a3448;
+  @shadow-color: rgba(0, 0, 0, 0.45);
+}
+
+.theme-light() {
+  @bg-color: #ffffff;
+  @bg-color-secondary: #f5f6f8;
+  @bg-color-tertiary: #eef0f3;
+  @text-color: #1f2329;
+  @text-color-secondary: #5e6470;
+  @text-color-disabled: #a8adb8;
+  @border-color: #d9dce2;
+  @border-color-split: #eceef2;
+  @shadow-color: rgba(0, 0, 0, 0.08);
+}
+
+// 自动添加：将 .common() 中的 Less 变量暴露到全局作用域
+
+:root {
+  .common();
+}

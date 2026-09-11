@@ -1,0 +1,104 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "issues": [
+      {
+        "id": "response_parse_failed",
+        "type": "response_parse_failed",
+        "severity": "warning",
+        "message": "布局审查响应解析失败，结果不可信"
+      }
+    ],
+    "score": 0,
+    "recommendations": [],
+    "degraded": true
+  },
+  "styleMappings": {
+    "themeVars": {
+      "--text-color": "rgba(255, 255, 255, 0.9)",
+      "--bg": "#0f0f0f",
+      "--primary": "#409EFF",
+      "--border": "rgba(255, 255, 255, 0.12)",
+      "--border-radius-base": "8px",
+      "--font-size-base": "14px",
+      "--gap": "12px"
+    },
+    "lessVariables": {
+      "@text-color": "rgba(255, 255, 255, 0.9)",
+      "@bg": "#0f0f0f",
+      "@primary": "#409EFF",
+      "@border": "rgba(255, 255, 255, 0.12)",
+      "@border-radius-base": "8px",
+      "@font-size-base": "14px",
+      "@gap": "12px"
+    },
+    "cssClasses": {},
+    "tokenCoverage": 0.6,
+    "elementStyleMap": {
+      "section-daily-total": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-bridge": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-hourly-charts": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-vehicle-type": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-group-x-16": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-group-x-20": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-forecast": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    },
+    "synthesizedFallback": true
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-daily-total",
+        "responsibility": "当日总流量（请按功能拆分）",
+        "elementCount": 6,
+        "title": "当日总流量"
+      },
+      {
+        "id": "section-hourly-charts",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 4,
+        "title": "小时流量图表"
+      },
+      {
+        "id": "section-vehicle-type",
+        "responsibility": "车型分布（请按功能拆分）",
+        "elementCount": 0,
+        "title": "车型分布"
+      },
+      {
+        "id": "section-forecast",
+        "responsibility": "流量预测（请按功能拆分）",
+        "elementCount": 1,
+        "title": "流量预测"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 4,
+    "reason": "有效 sections=4 ≥ 3 → 强制拆分"
+  }
+}

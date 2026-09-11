@@ -1,0 +1,170 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 72,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0].body.children[0]",
+        "message": "违规生成组件面板标题。`body` 中包含了 '设备监测' 标题节点，严重违反了'禁止生成组件面板标题和边框样式'的 🔴 核心规范。面板标题应由 `base-panel` 通过 `componentName` 自动显示，组件内部禁止重复生成。",
+        "suggestion": "立即移除 `header-stats.body.children[0]` 中的 title 节点，确保组件标题仅由外层 `base-panel` 渲染。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "header 与 body 内容严重冗余。`header` 和 `body` 中都定义了统计指标组（设备类型、设备总数、完好率），这会导致渲染时内容重复或 DOM 结构冲突。",
+        "suggestion": "重构 `header-stats` 的层级结构。将统计指标统一移至 `body` 中，`header` 仅保留右侧的操作按钮（如刷新图标），或者如果不需要独立 header，直接将所有内容平铺在 `body` 中。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[0]",
+        "message": "左侧导航使用了固定宽度 `width: '46px'`。虽然图标导航允许使用固定宽度，但在 flex 布局中直接设置 width 可能会在极端情况下被挤压或导致父容器计算异常。",
+        "suggestion": "建议在代码生成时将其转换为 `flex: 0 0 46px`，并确保父容器 `monitor-content` 具有正确的 flex 布局属性。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections",
+        "message": "多个 section (`header-stats`, `category-switch`, `monitor-content`) 重复使用同一张背景图 `bg-8788.png`。需确认设计稿真实意图，若为整体背景则造成冗余，若为独立背景则增加加载负担。",
+        "suggestion": "核对设计稿，若为整体背景，应将背景图提取至父容器；若确为独立卡片背景，请在代码生成时注意图片压缩和缓存策略。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children",
+        "message": "分类卡片内部结构过于扁平。`card-tunnel` 和 `card-north-south` 的 children 直接平铺了 icon 和 text，缺乏语义化分组，不利于后续样式控制和交互绑定。",
+        "suggestion": "建议为卡片内部增加语义化容器，例如将 icon 包裹在 `icon-wrapper` 中，将文本包裹在 `text-content` 中，以提升代码可维护性。"
+      }
+    ],
+    "recommendations": [
+      "移除所有组件内部的面板标题节点，严格遵循 base-panel 自动接管标题的规范。",
+      "清理 section 中 header 和 body 的重复数据，确保每个数据节点在 DOM 树中只出现一次。",
+      "在后续代码生成阶段，严格遵循'禁止 ESM import 本地图片'规范，将 JSON 中的 `resourceFile` 路径转换为 base64 内联或同源 URL，避免触发 RUNTIME-004 运行时错误。",
+      "为左侧 Tab 导航和右侧设备网格添加合理的 `min-width: 0` 和 `overflow: hidden`，防止内容溢出组件边界。",
+      "确保所有主题颜色（如异常数红色 #F53F3F、正常数蓝色 #1990FF）在 `theme-vars.less` 的 mixin 中正确定义，以支持双主题切换。"
+    ],
+    "summary": "布局结构整体划分清晰，能够准确反映'设备监测'面板的业务逻辑（顶部统计、分类概览、左侧导航+右侧网格）。但存在违反微码核心规范的问题（重复生成面板标题），且部分 section 的 header/body 层级存在数据冗余。需修正结构冲突、清理冗余节点，并严格遵循样式与资源引用规范后，方可进入代码生成阶段。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorBgBase": "#EDF4FB",
+      "--colorPrimary": "#1990FF",
+      "--colorError": "#F53F3F",
+      "--colorSuccess": "#08A3A5",
+      "--colorTextBase": "#333333",
+      "--fontSize": "14px",
+      "--fontSizeLarge": "28px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-bg-base": "#EDF4FB",
+      "@color-primary": "#1990FF",
+      "@color-error": "#F53F3F",
+      "@color-success": "#08A3A5",
+      "@color-text-base": "#333333",
+      "@font-size-base": "14px",
+      "@font-size-large": "28px",
+      "@border-radius-base": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "background": "var(--colorBgBase, #EDF4FB)",
+        "color": "var(--colorTextBase, #333333)",
+        "font-size": "var(--fontSize, 14px)",
+        "padding": "16px"
+      },
+      ".monitor-card": {
+        "background": "#FFFFFF",
+        "border-radius": "var(--borderRadius, 8px)",
+        "box-shadow": "0 2px 8px rgba(0, 0, 0, 0.05)",
+        "padding": "16px"
+      },
+      ".tab-active": {
+        "position": "relative",
+        "color": "var(--colorPrimary, #1990FF)",
+        "font-weight": "bold"
+      },
+      ".tab-active::after": {
+        "content": "''",
+        "position": "absolute",
+        "bottom": "0",
+        "left": "0",
+        "width": "100%",
+        "height": "2px",
+        "background": "var(--colorPrimary, #1990FF)",
+        "border-radius": "1px"
+      },
+      ".stat-value-primary": {
+        "color": "var(--colorPrimary, #1990FF)",
+        "font-size": "var(--fontSizeLarge, 28px)",
+        "font-weight": "bold",
+        "line-height": "1.2"
+      },
+      ".stat-value-error": {
+        "color": "var(--colorError, #F53F3F)",
+        "font-size": "var(--fontSizeLarge, 28px)",
+        "font-weight": "bold",
+        "line-height": "1.2"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 #1990FF 映射为 --colorPrimary，用于蓝色大数值及 Tab 选中高亮条",
+      "异常色 #F53F3F 映射为 --colorError，专用于红色异常数（如 5, 3）的强调展示",
+      "辅助色 #08A3A5 映射为 --colorSuccess，可用于正常状态指标或次要数据展示",
+      "浅蓝灰背景 #EDF4FB 映射为 --colorBgBase，容器背景优先直接落地为字面量值兜底",
+      "卡片圆角统一使用 --borderRadius (8px)，契合浅色科技监测风的柔和视觉特征",
+      "大数值与异常数采用 --fontSizeLarge (28px) 配合 font-weight: bold 实现视觉强调"
+    ],
+    "elementStyleMap": {
+      "header-stats": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "card-tunnel": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-north-south": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-10": {
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "monitor-content": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "left-tabs": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-20": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  }
+}

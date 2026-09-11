@@ -1,0 +1,265 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 78,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "charts[0].axes",
+        "message": "Y轴单位标注为'辆'，但监测CO浓度应为ppm/mg/m³等浓度单位，单位语义错误",
+        "suggestion": "核对原始设计稿，修正Y轴单位为浓度单位（如ppm），或确认数据含义"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body",
+        "message": "Tab栏未标记slotCandidate，但其为切换核心交互，建议映射为slot便于替换",
+        "suggestion": "将section-tabs的headerRelation改为slot-candidate: 'content-tabs'"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "charts[0].series",
+        "message": "系列名'zk3+785CO浓度'包含桩号前缀，图例位置top-right但未见截图证据",
+        "suggestion": "确认图例实际位置，若无图例区则legendPosition改为none"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "headerSlots",
+        "message": "headerSlots仅描述为'图标1/图标2'，缺少elementId关联到具体icon资源节点",
+        "suggestion": "补充figmaNodeId或添加iconSrc字段关联icon-7941/7945.png"
+      }
+    ],
+    "recommendations": [
+      "统一背景资源引用：section-tabs和section-chart均引用bg-7890.png但notes提到下载失败，建议明确fallback策略",
+      "补充Tab切换后的数据结构差异：doNotInvent已列'各Tab对应的图表数据格式'，建议在interactions中预留dataFormat字段",
+      "预警线阈值30应抽取为配置项：charts[0].notes中硬编码'值约为30'，建议在charts中增加thresholds数组"
+    ],
+    "summary": "结构清晰，Tab+图表分层合理，但存在单位语义错误（辆vs浓度）、图例位置缺证据、插槽映射不完整等问题，需核对原稿修正关键字段"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）— 深色科技监测风主题",
+      "--colorPrimary": "#559eff",
+      "--colorTextBase": "rgba(255,255,255,0.8)",
+      "--colorDanger": "#f53f3f",
+      "--colorSuccess": "rgba(0,200,100,0.6)",
+      "--colorBg": "#edf4fb",
+      "--colorTabActiveBg": "#559eff",
+      "--colorTabActiveText": "#ffffff",
+      "--colorAreaFill": "rgba(0,200,100,0.6)",
+      "--colorAlertLine": "#f53f3f",
+      "--borderRadius": "4px",
+      "--fontSize": "14px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射 — 对应 theme-vars.less 中的 .theme-light() / .theme-dark()",
+      "@color-primary": "#559eff",
+      "@color-text-base": "rgba(255,255,255,0.8)",
+      "@color-danger": "#f53f3f",
+      "@color-success": "rgba(0,200,100,0.6)",
+      "@color-bg": "#edf4fb",
+      "@color-tab-active-bg": "#559eff",
+      "@color-tab-active-text": "#ffffff",
+      "@color-tab-default-text": "rgba(255,255,255,0.8)",
+      "@color-area-fill": "rgba(0,200,100,0.6)",
+      "@color-alert-line": "#f53f3f",
+      "@color-alert-label": "#f53f3f",
+      "@border-radius-base": "4px",
+      "@font-size-base": "14px"
+    },
+    "cssClasses": {
+      "comment": "可复用CSS类 — 覆盖Tab、预警线标注、图表面积填充等核心视觉元素",
+      ".monitor-container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "width": "100%",
+        "height": "100%",
+        "background-color": "var(--colorBg, @color-bg)",
+        "font-size": "var(--fontSize, @font-size-base)"
+      },
+      ".monitor-header": {
+        "display": "flex",
+        "align-items": "center",
+        "justify-content": "space-between",
+        "padding": "0.857em 1.143em",
+        "background": "linear-gradient(180deg, #1a2a3f 0%, #1e3550 100%)",
+        "color": "var(--colorTextBase, @color-text-base)"
+      },
+      ".monitor-content": {
+        "flex": "1",
+        "background-color": "var(--colorBg, @color-bg)",
+        "padding": "1em",
+        "overflow": "hidden"
+      },
+      ".tab-group": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "gap": "0.286em",
+        "background": "rgba(255,255,255,0.1)",
+        "border-radius": "var(--borderRadius, @border-radius-base)",
+        "padding": "0.214em"
+      },
+      ".tab-item": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "padding": "0.286em 0.857em",
+        "border-radius": "var(--borderRadius, @border-radius-base)",
+        "font-size": "var(--fontSize, @font-size-base)",
+        "color": "var(--colorTabDefaultText, @color-tab-default-text)",
+        "cursor": "pointer",
+        "transition": "background 0.2s, color 0.2s",
+        "white-space": "nowrap"
+      },
+      ".tab-item.is-active": {
+        "background-color": "var(--colorTabActiveBg, @color-tab-active-bg)",
+        "color": "var(--colorTabActiveText, @color-tab-active-text)",
+        "border-radius": "var(--borderRadius, @border-radius-base)",
+        "font-weight": "500"
+      },
+      ".chart-wrapper": {
+        "position": "relative",
+        "width": "100%",
+        "height": "100%"
+      },
+      ".alert-line-label": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "gap": "0.286em",
+        "color": "var(--colorDanger, @color-danger)",
+        "font-size": "0.857em",
+        "position": "absolute",
+        "right": "0",
+        "transform": "translateY(-100%)"
+      },
+      ".alert-line-label::before": {
+        "content": "''",
+        "display": "inline-block",
+        "width": "1.429em",
+        "height": "2px",
+        "background-color": "var(--colorDanger, @color-danger)"
+      },
+      ".status-badge": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "padding": "0.143em 0.571em",
+        "border-radius": "var(--borderRadius, @border-radius-base)",
+        "font-size": "0.857em",
+        "font-weight": "500"
+      },
+      ".status-badge--danger": {
+        "background-color": "rgba(245,63,63,0.15)",
+        "color": "var(--colorDanger, @color-danger)"
+      },
+      ".status-badge--success": {
+        "background-color": "rgba(0,200,100,0.15)",
+        "color": "var(--colorSuccess, @color-success)"
+      }
+    },
+    "tokenCoverage": 0.91,
+    "mappingNotes": [
+      "主色 #559eff 映射为 --colorPrimary，同时复用为 Tab 激活背景色 --colorTabActiveBg",
+      "文字色 rgba(255,255,255,0.8) 用于暗色标题区域，浅色内容区应覆盖为深色文字，建议在 .theme-light() 中重新定义",
+      "红色预警线 #f53f3f 映射为 --colorDanger / --colorAlertLine，alert-line-label 通过伪元素 ::before 渲染横线，保持与图表分离",
+      "绿色面积填充 rgba(0,200,100,0.6) 映射为 --colorAreaFill，供 ECharts areaStyle.color 直接引用",
+      "背景 #edf4fb 为浅蓝灰，属于 light 主题值；标题区深色渐变硬编码在 .monitor-header，非主题变量控制（设计稿固定）",
+      "Tab 激活态圆角标签使用 border-radius: var(--borderRadius)，默认 4px，可由平台配置覆盖",
+      "所有间距、字号均使用 em 单位，基于组件根字体大小缩放，避免固定 px",
+      "容器背景优先落地为 Figma 字面量值 #edf4fb，同时通过 CSS 变量提供覆盖入口"
+    ],
+    "elementStyleMap": {
+      "section-tabs": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-8": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-tabs",
+        "responsibility": "标签页切换区",
+        "elementCount": 4,
+        "title": "Tab切换栏",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 4,
+          "charts": 0,
+          "interactions": 1,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "CO浓度趋势图",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 1,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      }
+    ],
+    "isForced": false,
+    "minFiles": 0,
+    "reason": "有效 sections=2 < 3 且无高复杂度 section → 不强制拆分",
+    "internalSubcomponents": []
+  }
+}

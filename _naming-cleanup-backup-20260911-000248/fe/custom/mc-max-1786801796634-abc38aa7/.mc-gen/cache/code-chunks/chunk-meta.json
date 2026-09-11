@@ -1,0 +1,36 @@
+{
+  "completed": [
+    "1-declare.json",
+    "2-package/index.vue",
+    "3-package/index.vue",
+    "4-package/index.vue",
+    "6-package/components/FlowTrend.vue",
+    "5-package/components/StatCards.vue",
+    "7-package/components/VehicleType.vue",
+    "8-resources/styles/common.less,resources/styles/themes/theme-vars.less",
+    "5-package/components/MonitorStats.vue",
+    "6-package/components/MonitorTrend.vue",
+    "7-package/components/MonitorDistribution.vue",
+    "5-package/components/SummaryStats.vue",
+    "7-package/components/VehicleDistribution.vue",
+    "8-package/components/TrafficForecast.vue",
+    "9-resources/styles/common.less,resources/styles/themes/theme-vars.less"
+  ],
+  "total": 6,
+  "updatedAt": 1786804683815,
+  "files": {
+    "declare.json": "1-declare.json",
+    "package/index.vue": "4-package_index.vue",
+    "package/components/FlowTrend.vue": "6-package_components_FlowTrend.vue",
+    "package/components/StatCards.vue": "5-package_components_StatCards.vue",
+    "package/components/VehicleType.vue": "7-package_components_VehicleType.vue",
+    "resources/styles/common.less": "9-resources_styles_common.less",
+    "resources/styles/themes/theme-vars.less": "9-resources_styles_themes_theme-vars.less",
+    "package/components/MonitorStats.vue": "5-package_components_MonitorStats.vue",
+    "package/components/MonitorTrend.vue": "6-package_components_MonitorTrend.vue",
+    "package/components/MonitorDistribution.vue": "7-package_components_MonitorDistribution.vue",
+    "package/components/SummaryStats.vue": "5-package_components_SummaryStats.vue",
+    "package/components/VehicleDistribution.vue": "7-package_components_VehicleDistribution.vue",
+    "package/components/TrafficForecast.vue": "8-package_components_TrafficForecast.vue"
+  }
+}

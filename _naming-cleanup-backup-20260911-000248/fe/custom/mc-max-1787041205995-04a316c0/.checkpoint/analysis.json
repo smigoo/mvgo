@@ -1,0 +1,487 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 65,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0].header",
+        "message": "违反了'禁止生成组件面板标题'的硬性规范。section-header 中定义了 header.title: '设备监测'，而面板标题应由 <base-panel> 通过 componentName 自动渲染，禁止在组件内部重复生成。",
+        "suggestion": "移除 section-header 中的 header 对象，仅保留 body 中的统计指标内容，或将该 section 重命名为'顶部统计区'以明确其业务语义。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[2].body.children[1].children",
+        "message": "device-item 内部通过 children 数组嵌套了 icon, label, value，导致整体嵌套深度达到 5-6 层，DOM 节点冗余，不符合微码组件扁平化设计原则。",
+        "suggestion": "将 icon, label, value 提升为 device-item 的直接属性（如 iconSrc, labelText, valueText），或将其视为基础卡片组件直接定义内容字段，避免使用 children 数组进行深层嵌套。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "全局 resourceFile 字段",
+        "message": "布局中大量使用本地图片路径（如 ../resources/images/xxx.png）。在代码生成时若使用 ESM import 引入这些图片，会触发 [RUNTIME-004] 运行时加载错误。",
+        "suggestion": "在代码生成阶段，必须将这些图片资源转换为 base64 内联，或使用同源 URL（如 /api/preview/.../resources/images/xxx.png），严禁使用 import 引入本地图片文件。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[0]",
+        "message": "left-tabs 设置了固定宽度 width: 46。在严格的自适应约束下，直接写死 width 可能导致在不同屏幕尺寸下右侧网格被挤压或布局异常。",
+        "suggestion": "在 CSS 实现时，建议使用 flex: 0 0 46px 或 width: 46px; flex-shrink: 0;，确保其宽度固定且不参与 flex 空间的压缩，同时右侧网格使用 flex: 1; min-width: 0; 保证自适应。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[1].body.children[*]",
+        "message": "分类统计卡片内部的 stats-row 和 stat-item 嵌套较深，且 stats-row 仅包含一个 stat-item，存在冗余的包裹层。",
+        "suggestion": "简化卡片内部结构，移除不必要的 stats-row 包裹层，直接将 stat-item 作为卡片的子元素，降低嵌套深度。"
+      }
+    ],
+    "recommendations": [
+      "严格遵循微码组件的 base-panel 约束，在生成代码前清理所有与面板标题、边框、背景相关的冗余布局节点，避免样式冲突。",
+      "优化组件树结构，尽量将嵌套深度控制在 3 层以内，减少不必要的包裹层（如 stats-row），提升渲染性能和代码可维护性。",
+      "提前规划图片资源的处理方案，确保所有设计稿中的图片资源在代码生成时能够正确转换为 base64 或同源 URL，避免运行时加载失败。",
+      "对于侧边栏 Tab 等需要固定宽度的元素，在 CSS 中结合 flex 布局属性（如 flex-shrink: 0）来保证其在自适应容器中的稳定性。"
+    ],
+    "summary": "该布局结构整体区域划分清晰，能够准确反映设计稿的视觉层次和业务逻辑。但存在违反'禁止生成组件面板标题'的严重结构问题，且部分区域嵌套过深、图片资源引用方式存在潜在的运行时风险。建议移除冗余的面板标题节点，扁平化设备列表和统计卡片的内部结构，并严格规范图片资源的引用方式。修正这些问题后，布局结构将更加合理且符合微码规范。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1990ff",
+      "--colorSuccess": "#08a3a5",
+      "--colorDanger": "#f53f3f",
+      "--colorTextBase": "#333333",
+      "--colorBg": "#edf4fb",
+      "--colorCardBg": "#ffffff",
+      "--colorPrimaryBg": "rgba(25,144,255,0.12)",
+      "--fontSize": "14px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "var(--colorPrimary)",
+      "@color-success": "var(--colorSuccess)",
+      "@color-danger": "var(--colorDanger)",
+      "@color-text-base": "var(--colorTextBase)",
+      "@color-bg": "var(--colorBg)",
+      "@color-card-bg": "var(--colorCardBg)",
+      "@color-primary-bg": "var(--colorPrimaryBg)",
+      "@font-size-base": "var(--fontSize)",
+      "@border-radius-base": "var(--borderRadius)"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "20px",
+        "background": "var(--colorBg)",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)"
+      },
+      ".card": {
+        "background": "var(--colorCardBg)",
+        "border-radius": "var(--borderRadius)",
+        "box-shadow": "0 2px 8px rgba(20, 60, 100, 0.08)",
+        "padding": "16px"
+      },
+      ".card-gradient": {
+        "background": "linear-gradient(135deg, var(--colorPrimary) 0%, var(--colorSuccess) 100%)",
+        "color": "#ffffff",
+        "border-radius": "var(--borderRadius)",
+        "padding": "20px"
+      },
+      ".total-value": {
+        "color": "var(--colorPrimary)",
+        "font-size": "28px",
+        "font-weight": "600",
+        "line-height": "1.2"
+      },
+      ".highlight-normal": {
+        "color": "var(--colorSuccess)",
+        "font-weight": "600"
+      },
+      ".highlight-danger": {
+        "color": "var(--colorDanger)",
+        "font-weight": "600"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主题色 rgba(25,144,255,1) 映射为 --colorPrimary，用于大号蓝色数值和渐变起始色。",
+      "正常数值青色/绿色高亮映射为 --colorSuccess，异常红色高亮映射为 --colorDanger。",
+      "浅蓝灰色背景映射为 --colorBg，卡片使用 --colorCardBg 增强科技感层次。",
+      "左侧大卡片蓝色渐变背景使用 --colorPrimary 与 --colorSuccess 组合，避免新增冗余变量。"
+    ],
+    "elementStyleMap": {
+      "section-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-stat-group-设备类型-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-stat-group-设备总数-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-stat-group-完好率-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "el-stat-group-设备类型-3": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-stat-group-设备总数-6": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-stat-group-完好率-9": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-tunnel-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "card-tunnel-stats-row-x-1-stat-item-x-0": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-tunnel-stats-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-tunnel-stat-item-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-tunnel": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8807.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-row-x-14": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-stats-row-x-17-stat-item-x-0": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stats-row-x-17": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-stat-item-x-18": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-item-x-20": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-north-south-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "card-north-south-stats-row-x-1-stat-item-x-0": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-north-south-stats-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-north-south-stat-item-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-north-south": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-row-x-24": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-stats-row-x-27-stat-item-x-0": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stats-row-x-27": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-stat-item-x-28": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-item-x-30": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-main-content": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "left-tabs-tab-监控-0": {
+        "background-image": "url(../resources/images/bg-8439.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "left-tabs": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-tab-监控-35": {
+        "background-image": "url(../resources/images/bg-8439.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "right-grid-device-item-摄像机-0": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8468.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "right-grid-device-item-风速风向仪-1": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8498.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "right-grid-device-item-超高检测器-2": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8527.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "right-grid-device-item-烟道机器人-3": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8556.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "right-grid-device-item-激光雷达-4": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8585.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "right-grid-device-item-CO₂传感器-5": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8614.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "right-grid-device-item-CO/VI检测器-6": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8643.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "right-grid-device-item-温湿度传感器-7": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8672.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "right-grid-device-item-压力传感器-8": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8701.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "right-grid-device-item-光照度变送器-9": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8730.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "right-grid-device-item-紧急电话-10": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8759.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "right-grid-device-item-水质监测设备-11": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-device-item-摄像机-42": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8468.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-device-item-风速风向仪-46": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8498.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-device-item-超高检测器-50": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8527.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-device-item-烟道机器人-54": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8556.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-device-item-激光雷达-58": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8585.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-device-item-CO₂传感器-62": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8614.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-device-item-CO/VI检测器-66": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8643.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-device-item-温湿度传感器-70": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8672.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-device-item-压力传感器-74": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8701.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-device-item-光照度变送器-78": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8730.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-device-item-紧急电话-82": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8759.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-device-item-水质监测设备-86": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-header",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 9,
+        "title": "设备监测"
+      },
+      {
+        "id": "section-top-cards",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 20,
+        "title": "分类统计卡片"
+      },
+      {
+        "id": "section-main-content",
+        "responsibility": "列表项布局区",
+        "elementCount": 56,
+        "title": "设备列表与导航"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 → 强制拆分"
+  }
+}

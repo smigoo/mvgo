@@ -1,0 +1,261 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 72,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "严重违反'禁止生成组件面板标题和边框样式'规范。`section-header` 中包含了 `header.title: '设备监测'`，且 `headerRelation: 'title-itself'`。组件标题应由 `<base-panel>` 通过 `componentName` 自动显示，禁止在组件内容中重复生成标题栏。",
+        "suggestion": "移除 `section-header` 中的 `header` 字段，将 `headerRelation` 改为 `content-below-title`。如果该 section 仅用于展示统计数据，建议将其重命名为'顶部统计概览'，并去掉标题相关配置。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[1].body.children[*]",
+        "message": "嵌套深度过深。设备类型切换卡片内部使用了 `content-group` 来包裹 `label`，导致 DOM 嵌套达到 5-6 层（section -> body -> card -> content-group -> label），增加了不必要的复杂度和渲染开销。",
+        "suggestion": "建议扁平化结构。可以直接在卡片 `children` 中平铺文本元素，或者在代码生成阶段使用 CSS 直接控制文本样式，减少 `content-group` 这种无实际布局意义的中间包裹层。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[*].body.backgroundImage",
+        "message": "背景图 `bg-8788.png` 在三个 section 的 `body` 中被重复定义。这可能导致背景图重复加载、渲染，或者在 section 之间出现视觉上的拼接断裂/重叠。",
+        "suggestion": "如果设计稿是整体背景，建议将背景图提取到最外层容器（如 `layout` 级别）统一设置；如果是分块背景，请确认设计稿意图，避免对同一张全尺寸背景图进行重复引用。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[0]",
+        "message": "左侧分类 Tab (`sidebar-tabs`) 使用了固定字符串宽度 `width: '60px'`。根据'容器布局禁止固定宽度'规范，应尽量避免使用固定 px 限制容器。",
+        "suggestion": "建议在代码生成时使用 `flex: 0 0 60px` 来明确其固定宽度且不参与伸缩，或者评估是否可以使用比例布局，以确保在不同屏幕尺寸下的自适应能力。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body.children[*]",
+        "message": "顶部统计区域的 `stat-group` 结构不够完整。仅定义了 `label` 和 `value`，但缺少明确的内部布局方向（如垂直排列）和对齐方式，可能导致生成代码时布局错乱。",
+        "suggestion": "建议在 `stat-group` 中补充 `layout: 'vertical'` 和 `alignItems: 'center'`（或根据设计稿调整），明确 label 和 value 的上下排列关系及对齐方式。"
+      }
+    ],
+    "recommendations": [
+      "在代码生成阶段，严格遵守 `<base-panel>` 约束，确保不生成任何面板级别的标题、边框、背景和内边距样式。",
+      "优化 DOM 结构，减少无意义的包裹层（如 `content-group`），提升渲染性能和代码可维护性。",
+      "统一背景图管理，避免在多个平级 section 中重复引用同一张背景图，建议提取到父级容器。",
+      "确保所有 Tab 切换（如设备类型切换、左侧分类 Tab）在代码实现时包含数据联动逻辑，而不仅仅是样式切换。"
+    ],
+    "summary": "该布局结构整体区域划分清晰，能够准确反映'设备监测'面板的功能模块（统计概览、类型切换、分类导航与设备列表）。但存在一个严重违规：重复生成了面板标题，这违反了微码组件的核心规范。此外，部分区域嵌套过深、背景图重复引用以及固定宽度使用不当等问题也需要在代码生成前进行修正。建议修复标题问题并优化嵌套结构后，再进行代码生成。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1990FF",
+      "--colorBgBase": "#EDF4FB",
+      "--colorTextBase": "#333333",
+      "--colorError": "#F53F3F",
+      "--colorSuccess": "#08A3A5",
+      "--borderRadius": "8px",
+      "--fontSize": "14px",
+      "--fontSizeLarge": "28px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#1990FF",
+      "@color-bg-base": "#EDF4FB",
+      "@color-text-base": "#333333",
+      "@color-error": "#F53F3F",
+      "@color-success": "#08A3A5",
+      "@border-radius-base": "8px",
+      "@font-size-base": "14px",
+      "@font-size-large": "28px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".dashboard-container": {
+        "width": "100%",
+        "height": "100%",
+        "background-color": "var(--colorBgBase, #EDF4FB)",
+        "padding": "16px",
+        "box-sizing": "border-box"
+      },
+      ".data-card": {
+        "background-color": "#FFFFFF",
+        "border-radius": "var(--borderRadius, 8px)",
+        "padding": "20px",
+        "box-shadow": "0 2px 8px rgba(0, 0, 0, 0.05)"
+      },
+      ".tab-item-active": {
+        "background-color": "var(--colorPrimary, #1990FF)",
+        "color": "#FFFFFF",
+        "border-radius": "4px",
+        "padding": "4px 12px",
+        "font-weight": "500"
+      },
+      ".stat-number-primary": {
+        "font-size": "var(--fontSizeLarge, 28px)",
+        "font-weight": "700",
+        "color": "var(--colorPrimary, #1990FF)",
+        "line-height": "1.2"
+      },
+      ".stat-number-error": {
+        "font-size": "var(--fontSizeLarge, 28px)",
+        "font-weight": "700",
+        "color": "var(--colorError, #F53F3F)",
+        "line-height": "1.2"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 #1990FF 映射为 --colorPrimary，用于 Tab 选中态背景及大数值（如68562）强调",
+      "浅灰蓝背景 #EDF4FB 映射为 --colorBgBase，作为浅色管理后台的全局容器底色",
+      "异常状态色 #F53F3F 映射为 --colorError，专门用于高亮异常数值（如 5, 3）",
+      "青绿色 #08A3A5 映射为 --colorSuccess，可作为辅助色、正常状态指示或图表辅助色",
+      "容器背景应优先直接落地为 Figma 字面量值，避免关键可见背景只依赖 CSS 变量"
+    ],
+    "elementStyleMap": {
+      "section-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-stat-group-设备类型-0": {
+        "color": "#1990FF",
+        "font-size": "20px",
+        "font-weight": "bold"
+      },
+      "el-el-x-2-stat-group-设备总数-1": {
+        "color": "#1990FF",
+        "font-size": "20px",
+        "font-weight": "bold"
+      },
+      "el-el-x-2-stat-group-完好率-2": {
+        "color": "#08A3A5",
+        "font-size": "20px",
+        "font-weight": "bold"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-stat-group-设备类型-3": {
+        "color": "#1990FF",
+        "font-size": "20px",
+        "font-weight": "bold"
+      },
+      "el-stat-group-设备总数-4": {
+        "color": "#1990FF",
+        "font-size": "20px",
+        "font-weight": "bold"
+      },
+      "el-stat-group-完好率-5": {
+        "color": "#08A3A5",
+        "font-size": "20px",
+        "font-weight": "bold"
+      },
+      "card-tunnel-content-group-x-1-label-总数:56302-0": {
+        "font-size": "16px",
+        "color": "#333333",
+        "font-weight": "bold"
+      },
+      "card-tunnel-content-group-x-1-label-异常数:5-1": {
+        "font-size": "14px",
+        "color": "#F53F3F"
+      },
+      "card-tunnel-content-group-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-tunnel": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-north-south-content-group-x-1-label-总数:1280-0": {
+        "font-size": "16px",
+        "color": "#333333",
+        "font-weight": "bold"
+      },
+      "card-north-south-content-group-x-1-label-异常数:3-1": {
+        "font-size": "14px",
+        "color": "#F53F3F"
+      },
+      "card-north-south-content-group-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-north-south": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-7": {
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-content-group-x-10-label-总数:56302-0": {
+        "font-size": "16px",
+        "color": "#333333",
+        "font-weight": "bold"
+      },
+      "el-content-group-x-10-label-异常数:5-1": {
+        "font-size": "14px",
+        "color": "#F53F3F"
+      },
+      "el-content-group-x-10": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-label-总数:56302-11": {
+        "font-size": "16px",
+        "color": "#333333",
+        "font-weight": "bold"
+      },
+      "el-label-异常数:5-12": {
+        "font-size": "14px",
+        "color": "#F53F3F"
+      },
+      "el-content-group-x-15-label-总数:1280-0": {
+        "font-size": "16px",
+        "color": "#333333",
+        "font-weight": "bold"
+      },
+      "el-content-group-x-15-label-异常数:3-1": {
+        "font-size": "14px",
+        "color": "#F53F3F"
+      },
+      "el-content-group-x-15": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-label-总数:1280-16": {
+        "font-size": "16px",
+        "color": "#333333",
+        "font-weight": "bold"
+      },
+      "el-label-异常数:3-17": {
+        "font-size": "14px",
+        "color": "#F53F3F"
+      },
+      "section-main-content": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "sidebar-tabs": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-19": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  }
+}

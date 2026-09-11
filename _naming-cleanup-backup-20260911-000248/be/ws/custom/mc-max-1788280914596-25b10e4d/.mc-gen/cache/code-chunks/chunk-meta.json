@@ -1,0 +1,44 @@
+{
+  "completed": [
+    "1-declare.json",
+    "2-package/index.vue",
+    "3-resources/styles/themes/theme-vars.less",
+    "4-resources/styles/common.less"
+  ],
+  "total": 3,
+  "updatedAt": 1788281482091,
+  "files": {
+    "declare.json": [
+      {
+        "index": 1,
+        "file": "1-declare.json",
+        "segmentType": "declare",
+        "scriptPart": ""
+      }
+    ],
+    "package/index.vue": [
+      {
+        "index": 2,
+        "file": "2-package_index.vue",
+        "segmentType": "",
+        "scriptPart": ""
+      }
+    ],
+    "resources/styles/themes/theme-vars.less": [
+      {
+        "index": 3,
+        "file": "3-resources_styles_themes_theme-vars.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      }
+    ],
+    "resources/styles/common.less": [
+      {
+        "index": 4,
+        "file": "4-resources_styles_common.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      }
+    ]
+  }
+}

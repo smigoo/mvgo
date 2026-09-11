@@ -1,0 +1,220 @@
+{
+  "layoutStructure": {
+    "generatedAt": "2026-08-16T07:22:54.548Z",
+    "stage": "preview-analysis",
+    "degraded": true,
+    "degradeReason": "LLM invoke timeout after 90000ms [vision-agent.analyzeImage]",
+    "layout": {
+      "type": "vertical",
+      "direction": "top-to-bottom",
+      "sections": [
+        {
+          "id": "figma-1",
+          "name": "cp-设备监测",
+          "role": "header",
+          "layout": "vertical",
+          "layoutSource": "figma",
+          "figmaY": 433,
+          "header": {
+            "title": "cp-设备监测"
+          },
+          "body": {
+            "layout": "vertical",
+            "children": [
+              {
+                "id": "figma-1-1",
+                "name": "header",
+                "role": "item",
+                "figmaNode": "2:8419"
+              },
+              {
+                "id": "figma-1-2",
+                "name": "Frame 2136638826",
+                "role": "item",
+                "figmaNode": "2:8431"
+              },
+              {
+                "id": "figma-1-3",
+                "name": "*数据实时更新",
+                "role": "item",
+                "figmaNode": "2:8427"
+              },
+              {
+                "id": "figma-1-4",
+                "name": "Frame 2136638827",
+                "role": "item",
+                "figmaNode": "2:8434"
+              },
+              {
+                "id": "figma-1-5",
+                "name": "Frame 2136638825",
+                "role": "item",
+                "figmaNode": "2:8428"
+              },
+              {
+                "id": "figma-1-6",
+                "name": "68562",
+                "role": "item",
+                "figmaNode": "2:8433"
+              },
+              {
+                "id": "figma-1-7",
+                "name": "设备监测",
+                "role": "item",
+                "figmaNode": "2:8426"
+              },
+              {
+                "id": "figma-1-8",
+                "name": "设备类型",
+                "role": "item",
+                "figmaNode": "2:8429"
+              },
+              {
+                "id": "figma-1-9",
+                "name": "设备总数",
+                "role": "item",
+                "figmaNode": "2:8432"
+              },
+              {
+                "id": "figma-1-10",
+                "name": "完好率",
+                "role": "item",
+                "figmaNode": "2:8435"
+              },
+              {
+                "id": "figma-1-11",
+                "name": "98%",
+                "role": "item",
+                "figmaNode": "2:8436"
+              },
+              {
+                "id": "figma-1-12",
+                "name": "28",
+                "role": "item",
+                "figmaNode": "2:8430"
+              }
+            ]
+          }
+        },
+        {
+          "id": "figma-2",
+          "name": "slot-con",
+          "role": "section",
+          "layout": "vertical",
+          "layoutSource": "figma",
+          "figmaY": 475,
+          "header": {
+            "title": "slot-con"
+          },
+          "body": {
+            "layout": "vertical",
+            "children": [
+              {
+                "id": "figma-2-1",
+                "name": "switch",
+                "role": "item",
+                "figmaNode": "89:38"
+              },
+              {
+                "id": "figma-2-2",
+                "name": "active",
+                "role": "item",
+                "figmaNode": "2:8787"
+              },
+              {
+                "id": "figma-2-3",
+                "name": "default",
+                "role": "item",
+                "figmaNode": "2:8806"
+              }
+            ]
+          }
+        },
+        {
+          "id": "figma-3",
+          "name": "cons",
+          "role": "tabs",
+          "layout": "vertical",
+          "layoutSource": "figma",
+          "figmaY": 538,
+          "header": {
+            "title": "cons"
+          },
+          "body": {
+            "layout": "vertical",
+            "children": [
+              {
+                "id": "figma-3-1",
+                "name": "@antd/tab",
+                "role": "item",
+                "figmaNode": "89:37"
+              },
+              {
+                "id": "figma-3-2",
+                "name": "tabs",
+                "role": "item",
+                "figmaNode": "89:39"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "layoutSource": "figma",
+    "visualDegraded": true,
+    "styles": {
+      "theme": "未知",
+      "colors": [],
+      "background": "",
+      "decorations": [],
+      "emphasis": [],
+      "backgroundBrightness": "dark"
+    },
+    "interactions": [],
+    "charts": []
+  },
+  "visualElements": {
+    "theme": "未知",
+    "colors": [],
+    "background": "",
+    "decorations": [],
+    "emphasis": [],
+    "backgroundBrightness": "dark"
+  },
+  "interactions": [],
+  "charts": [],
+  "headerSlots": [
+    {
+      "type": "title",
+      "text": "cp-设备监测",
+      "sectionId": "figma-1"
+    },
+    {
+      "type": "title",
+      "text": "slot-con",
+      "sectionId": "figma-2"
+    },
+    {
+      "type": "title",
+      "text": "cons",
+      "sectionId": "figma-3"
+    }
+  ],
+  "analysisType": "",
+  "analysisTarget": "",
+  "analysisDescription": "",
+  "analysisEvidence": [],
+  "headerValidation": {
+    "passed": true,
+    "headerElements": [],
+    "headerRightElements": [],
+    "suggestions": [],
+    "confidence": "low",
+    "componentType": "microcode"
+  },
+  "headerSlotValidation": {
+    "validatedSlots": [],
+    "rejectedNodes": [],
+    "warnings": []
+  }
+}

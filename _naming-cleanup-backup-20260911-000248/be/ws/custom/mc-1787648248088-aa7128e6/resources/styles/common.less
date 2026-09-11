@@ -1,0 +1,154 @@
+.c-mc-max-1787643746515-05ef2694-c-env-monitor-root {
+  display: flex;
+  flex-direction: column;
+  width: 420px;
+  height: 186px;
+  padding: @spacing-md;
+  box-sizing: border-box;
+
+  max-width: 100%;
+  max-height: 100vh;
+  box-sizing: border-box;}
+
+.c-mc-max-1787643746515-05ef2694-c-env-monitor-controls {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: @spacing-md;
+}
+
+.c-mc-max-1787643746515-05ef2694-c-env-monitor-tabs {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: @spacing-xs;
+}
+
+.c-mc-max-1787643746515-05ef2694-c-env-monitor-tab-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 @spacing-md;
+  height: 32px;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.c-mc-max-1787643746515-05ef2694-c-env-monitor-tab-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: #2c9bea;
+  z-index: 2;
+  position: relative;
+  white-space: nowrap;
+}
+
+.c-mc-max-1787643746515-05ef2694-c-env-monitor-tab-active-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(#1099b1, #038fff);
+  border: 1px solid #ffffff;
+  border-radius: @border-radius-md;
+  z-index: 1;
+}
+
+.c-mc-max-1787643746515-05ef2694-c-env-monitor-is-active {
+  .c-mc-max-1787643746515-05ef2694-c-env-monitor-tab-text {
+    color: #ffffff;
+    text-shadow: 0px 0.6px 0px #006fe3;
+  }
+}
+
+.c-mc-max-1787643746515-05ef2694-c-env-monitor-view-icons {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: @spacing-sm;
+}
+
+.c-mc-max-1787643746515-05ef2694-c-env-monitor-icon-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(#b5deff, #d1ecff);
+  border: 1px solid #ffffff;
+  border-radius: @border-radius-md;
+  cursor: pointer;
+}
+
+.c-mc-max-1787643746515-05ef2694-c-env-monitor-icon-img {
+  width: 16px;
+  height: 16px;
+}
+
+.c-mc-max-1787643746515-05ef2694-c-env-monitor-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  line-height: 16px;
+  text-align: center;
+  padding: 0 4px;
+  background: #f53f3f;
+  border-radius: 29px;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+  z-index: 3;
+}
+
+.c-mc-max-1787643746515-05ef2694-c-env-monitor-chart-section {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.c-mc-max-1787643746515-05ef2694-c-env-monitor-legend {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: @spacing-sm;
+}
+
+.c-mc-max-1787643746515-05ef2694-c-env-monitor-legend-item {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  margin-right: @spacing-md;
+  
+  &.is-inactive {
+    opacity: 0.5;
+  }
+}
+
+.c-mc-max-1787643746515-05ef2694-c-env-monitor-legend-line {
+  width: 16px;
+  height: 2px;
+  background: #0fcd7d;
+  border: 1px solid #0fcd7d;
+  margin-right: @spacing-xs;
+  border-radius: 1px;
+}
+
+.c-mc-max-1787643746515-05ef2694-c-env-monitor-legend-text {
+  font-size: 9.6px;
+  font-weight: 400;
+  color: #333333;
+}
+
+.c-mc-max-1787643746515-05ef2694-c-env-monitor-chart-container {
+  flex: 1;
+  width: 100%;
+  min-height: 200px;
+}

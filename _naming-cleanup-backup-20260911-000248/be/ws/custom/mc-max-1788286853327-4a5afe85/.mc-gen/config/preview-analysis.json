@@ -1,0 +1,1243 @@
+{
+  "generatedAt": "2025-06-10T12:00:00Z",
+  "stage": "preview-analysis",
+  "componentName": "设备监测",
+  "componentTitle": "设备监测",
+  "analysisModel": "claude-opus-4-8-20250219",
+  "sourceImage": {
+    "path": "mc-preview.png",
+    "size": 0,
+    "mtimeMs": 0,
+    "sha1": ""
+  },
+  "summary": "设备监测组件，展示设备总览统计和12类设备的在线/离线状态。顶部显示设备类型数、总数和完好率，中部是两个突出显示的设备（随便说说、房屋理性说话）及其统计，下方是12个设备项的网格布局（3列4行），每个设备项显示图标、名称和在线/离线状态（格式：0/484）。左侧有垂直导航栏（控/照明/通/供电/消防/交通）。整体为浅色背景（白/浅灰蓝）配深色文字和蓝色强调。",
+  "layout": {
+    "type": "single-panel",
+    "direction": "vertical",
+    "sections": [
+      {
+        "id": "header-stats",
+        "name": "头部统计栏",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "title-same-row",
+        "slotCandidate": "header-right",
+        "header": null,
+        "body": {
+          "layout": "horizontal-3-items",
+          "children": [
+            {
+              "id": "device-types",
+              "type": "statistic",
+              "label": "设备类型",
+              "value": "26",
+              "style": {
+                "fontSize": 14,
+                "color": "rgba(51, 51, 51, 1)",
+                "fontWeight": "normal"
+              }
+            },
+            {
+              "id": "device-total",
+              "type": "statistic",
+              "label": "设备总数",
+              "value": "68562",
+              "style": {
+                "fontSize": 14,
+                "color": "rgba(51, 51, 51, 1)",
+                "fontWeight": "normal"
+              }
+            },
+            {
+              "id": "device-integrity",
+              "type": "statistic",
+              "label": "完好率",
+              "value": "98%",
+              "style": {
+                "fontSize": 14,
+                "color": "rgba(8, 163, 165, 1)",
+                "fontWeight": "normal"
+              }
+            }
+          ],
+          "backgroundImage": {
+            "src": "../resources/images/bg-8788.png",
+            "recommendedUsage": "backgroundBlock"
+          },
+          "backgroundSize": "100% 100%",
+          "backgroundPosition": "center center",
+          "backgroundRepeat": "no-repeat"
+        }
+      },
+      {
+        "id": "featured-devices",
+        "name": "突出显示设备",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "header": null,
+        "body": {
+          "layout": "horizontal-2-items",
+          "children": [
+            {
+              "id": "device-left",
+              "type": "featured-card",
+              "layout": "horizontal",
+              "background": {
+                "resourceFile": "../resources/images/bg-8788.png",
+                "recommendedUsage": "backgroundBlock",
+                "backgroundSize": "100% 100%",
+                "backgroundPosition": "center center",
+                "backgroundRepeat": "no-repeat"
+              },
+              "style": {
+                "width": 210,
+                "height": 110,
+                "padding": "12px"
+              },
+              "children": [
+                {
+                  "type": "icon",
+                  "resourceFile": "../resources/images/icon-8798.png",
+                  "recommendedUsage": "imgSrc",
+                  "position": "left",
+                  "style": {
+                    "width": 43,
+                    "height": 44
+                  }
+                },
+                {
+                  "type": "content",
+                  "layout": "vertical",
+                  "position": "right",
+                  "elements": [
+                    {
+                      "type": "label",
+                      "text": "随便说说",
+                      "position": "top",
+                      "style": {
+                        "fontSize": 14,
+                        "color": "rgba(255, 255, 255, 1)",
+                        "fontWeight": "normal"
+                      }
+                    },
+                    {
+                      "type": "value",
+                      "position": "middle",
+                      "parts": [
+                        {
+                          "text": "总",
+                          "type": "label",
+                          "style": {
+                            "fontSize": 12,
+                            "color": "rgba(255, 255, 255, 0.8)"
+                          }
+                        },
+                        {
+                          "text": "数：",
+                          "type": "label",
+                          "style": {
+                            "fontSize": 12,
+                            "color": "rgba(255, 255, 255, 0.8)"
+                          }
+                        },
+                        {
+                          "text": "56302",
+                          "type": "number",
+                          "style": {
+                            "fontSize": 20,
+                            "color": "rgba(255, 255, 255, 1)",
+                            "fontWeight": "bold"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "badge",
+                      "text": "异常数：3",
+                      "position": "bottom",
+                      "style": {
+                        "fontSize": 12,
+                        "color": "rgba(255, 59, 48, 1)",
+                        "fontWeight": "normal"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "device-right",
+              "type": "featured-card",
+              "layout": "horizontal",
+              "background": {
+                "resourceFile": "../resources/images/bg-8807.png",
+                "recommendedUsage": "backgroundBlock",
+                "backgroundSize": "100% 100%",
+                "backgroundPosition": "center center",
+                "backgroundRepeat": "no-repeat"
+              },
+              "style": {
+                "width": 210,
+                "height": 110,
+                "padding": "12px"
+              },
+              "children": [
+                {
+                  "type": "icon",
+                  "resourceFile": "../resources/images/icon-8817.png",
+                  "recommendedUsage": "imgSrc",
+                  "position": "left",
+                  "style": {
+                    "width": 43,
+                    "height": 44
+                  }
+                },
+                {
+                  "type": "content",
+                  "layout": "vertical",
+                  "position": "right",
+                  "elements": [
+                    {
+                      "type": "label",
+                      "text": "房屋理性说话",
+                      "position": "top",
+                      "style": {
+                        "fontSize": 14,
+                        "color": "rgba(255, 255, 255, 1)",
+                        "fontWeight": "normal"
+                      }
+                    },
+                    {
+                      "type": "value",
+                      "position": "middle",
+                      "parts": [
+                        {
+                          "text": "总",
+                          "type": "label",
+                          "style": {
+                            "fontSize": 12,
+                            "color": "rgba(255, 255, 255, 0.8)"
+                          }
+                        },
+                        {
+                          "text": "数：",
+                          "type": "label",
+                          "style": {
+                            "fontSize": 12,
+                            "color": "rgba(255, 255, 255, 0.8)"
+                          }
+                        },
+                        {
+                          "text": "1280",
+                          "type": "number",
+                          "style": {
+                            "fontSize": 20,
+                            "color": "rgba(89, 196, 255, 1)",
+                            "fontWeight": "bold"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "badge",
+                      "text": "异常数：3",
+                      "position": "bottom",
+                      "style": {
+                        "fontSize": 12,
+                        "color": "rgba(255, 59, 48, 1)",
+                        "fontWeight": "normal"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "device-grid",
+        "name": "设备网格",
+        "role": "常驻",
+        "layout": "grid",
+        "gridColumns": 3,
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "header": null,
+        "body": {
+          "layout": "grid-3-columns",
+          "children": [
+            {
+              "id": "device-item-1",
+              "type": "device-card",
+              "layout": "vertical",
+              "background": {
+                "resourceFile": "../resources/images/bg-8439.png",
+                "recommendedUsage": "backgroundBlock",
+                "backgroundSize": "100% 100%",
+                "backgroundPosition": "center center",
+                "backgroundRepeat": "no-repeat"
+              },
+              "style": {
+                "width": 120,
+                "height": 80,
+                "padding": "8px",
+                "alignItems": "center"
+              },
+              "children": [
+                {
+                  "type": "icon",
+                  "resourceFile": "../resources/images/icon-8444.png",
+                  "recommendedUsage": "imgSrc",
+                  "style": {
+                    "width": 32,
+                    "height": 32
+                  }
+                },
+                {
+                  "type": "label",
+                  "text": "摄像机",
+                  "style": {
+                    "fontSize": 12,
+                    "color": "rgba(51, 51, 51, 1)",
+                    "fontWeight": "normal"
+                  }
+                },
+                {
+                  "type": "status",
+                  "parts": [
+                    {
+                      "text": "2",
+                      "type": "online",
+                      "style": {
+                        "fontSize": 14,
+                        "color": "rgba(25, 144, 255, 1)",
+                        "fontWeight": "bold"
+                      }
+                    },
+                    {
+                      "text": "/484",
+                      "type": "total",
+                      "style": {
+                        "fontSize": 12,
+                        "color": "rgba(153, 153, 153, 1)",
+                        "fontWeight": "normal"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "device-item-2",
+              "type": "device-card",
+              "layout": "vertical",
+              "background": {
+                "resourceFile": "../resources/images/bg-8439.png",
+                "recommendedUsage": "backgroundBlock",
+                "backgroundSize": "100% 100%",
+                "backgroundPosition": "center center",
+                "backgroundRepeat": "no-repeat"
+              },
+              "style": {
+                "width": 120,
+                "height": 80,
+                "padding": "8px",
+                "alignItems": "center"
+              },
+              "children": [
+                {
+                  "type": "icon",
+                  "resourceFile": "../resources/images/icon-8473.png",
+                  "recommendedUsage": "imgSrc",
+                  "style": {
+                    "width": 32,
+                    "height": 32
+                  }
+                },
+                {
+                  "type": "label",
+                  "text": "风速风向仪",
+                  "style": {
+                    "fontSize": 12,
+                    "color": "rgba(51, 51, 51, 1)",
+                    "fontWeight": "normal"
+                  }
+                },
+                {
+                  "type": "status",
+                  "parts": [
+                    {
+                      "text": "1",
+                      "type": "online",
+                      "style": {
+                        "fontSize": 14,
+                        "color": "rgba(25, 144, 255, 1)",
+                        "fontWeight": "bold"
+                      }
+                    },
+                    {
+                      "text": "/484",
+                      "type": "total",
+                      "style": {
+                        "fontSize": 12,
+                        "color": "rgba(153, 153, 153, 1)",
+                        "fontWeight": "normal"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "device-item-3",
+              "type": "device-card",
+              "layout": "vertical",
+              "background": {
+                "resourceFile": "../resources/images/bg-8439.png",
+                "recommendedUsage": "backgroundBlock",
+                "backgroundSize": "100% 100%",
+                "backgroundPosition": "center center",
+                "backgroundRepeat": "no-repeat"
+              },
+              "style": {
+                "width": 120,
+                "height": 80,
+                "padding": "8px",
+                "alignItems": "center"
+              },
+              "children": [
+                {
+                  "type": "icon",
+                  "resourceFile": "../resources/images/icon-8503.png",
+                  "recommendedUsage": "imgSrc",
+                  "style": {
+                    "width": 32,
+                    "height": 32
+                  }
+                },
+                {
+                  "type": "label",
+                  "text": "超高检测器",
+                  "style": {
+                    "fontSize": 12,
+                    "color": "rgba(51, 51, 51, 1)",
+                    "fontWeight": "normal"
+                  }
+                },
+                {
+                  "type": "status",
+                  "parts": [
+                    {
+                      "text": "0",
+                      "type": "online",
+                      "style": {
+                        "fontSize": 14,
+                        "color": "rgba(25, 144, 255, 1)",
+                        "fontWeight": "bold"
+                      }
+                    },
+                    {
+                      "text": "/484",
+                      "type": "total",
+                      "style": {
+                        "fontSize": 12,
+                        "color": "rgba(153, 153, 153, 1)",
+                        "fontWeight": "normal"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "device-item-4",
+              "type": "device-card",
+              "layout": "vertical",
+              "background": {
+                "resourceFile": "../resources/images/bg-8439.png",
+                "recommendedUsage": "backgroundBlock",
+                "backgroundSize": "100% 100%",
+                "backgroundPosition": "center center",
+                "backgroundRepeat": "no-repeat"
+              },
+              "style": {
+                "width": 120,
+                "height": 80,
+                "padding": "8px",
+                "alignItems": "center"
+              },
+              "children": [
+                {
+                  "type": "icon",
+                  "resourceFile": "../resources/images/icon-8532.png",
+                  "recommendedUsage": "imgSrc",
+                  "style": {
+                    "width": 32,
+                    "height": 32
+                  }
+                },
+                {
+                  "type": "label",
+                  "text": "烟雾机器人",
+                  "style": {
+                    "fontSize": 12,
+                    "color": "rgba(51, 51, 51, 1)",
+                    "fontWeight": "normal"
+                  }
+                },
+                {
+                  "type": "status",
+                  "parts": [
+                    {
+                      "text": "0",
+                      "type": "online",
+                      "style": {
+                        "fontSize": 14,
+                        "color": "rgba(25, 144, 255, 1)",
+                        "fontWeight": "bold"
+                      }
+                    },
+                    {
+                      "text": "/484",
+                      "type": "total",
+                      "style": {
+                        "fontSize": 12,
+                        "color": "rgba(153, 153, 153, 1)",
+                        "fontWeight": "normal"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "device-item-5",
+              "type": "device-card",
+              "layout": "vertical",
+              "background": {
+                "resourceFile": "../resources/images/bg-8439.png",
+                "recommendedUsage": "backgroundBlock",
+                "backgroundSize": "100% 100%",
+                "backgroundPosition": "center center",
+                "backgroundRepeat": "no-repeat"
+              },
+              "style": {
+                "width": 120,
+                "height": 80,
+                "padding": "8px",
+                "alignItems": "center"
+              },
+              "children": [
+                {
+                  "type": "icon",
+                  "resourceFile": "../resources/images/icon-8561.png",
+                  "recommendedUsage": "imgSrc",
+                  "style": {
+                    "width": 32,
+                    "height": 32
+                  }
+                },
+                {
+                  "type": "label",
+                  "text": "激光雷达",
+                  "style": {
+                    "fontSize": 12,
+                    "color": "rgba(51, 51, 51, 1)",
+                    "fontWeight": "normal"
+                  }
+                },
+                {
+                  "type": "status",
+                  "parts": [
+                    {
+                      "text": "0",
+                      "type": "online",
+                      "style": {
+                        "fontSize": 14,
+                        "color": "rgba(25, 144, 255, 1)",
+                        "fontWeight": "bold"
+                      }
+                    },
+                    {
+                      "text": "/484",
+                      "type": "total",
+                      "style": {
+                        "fontSize": 12,
+                        "color": "rgba(153, 153, 153, 1)",
+                        "fontWeight": "normal"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "device-item-6",
+              "type": "device-card",
+              "layout": "vertical",
+              "background": {
+                "resourceFile": "../resources/images/bg-8439.png",
+                "recommendedUsage": "backgroundBlock",
+                "backgroundSize": "100% 100%",
+                "backgroundPosition": "center center",
+                "backgroundRepeat": "no-repeat"
+              },
+              "style": {
+                "width": 120,
+                "height": 80,
+                "padding": "8px",
+                "alignItems": "center"
+              },
+              "children": [
+                {
+                  "type": "icon",
+                  "resourceFile": "../resources/images/icon-8590.png",
+                  "recommendedUsage": "imgSrc",
+                  "style": {
+                    "width": 32,
+                    "height": 32
+                  }
+                },
+                {
+                  "type": "label",
+                  "text": "CO传感器",
+                  "style": {
+                    "fontSize": 12,
+                    "color": "rgba(51, 51, 51, 1)",
+                    "fontWeight": "normal"
+                  }
+                },
+                {
+                  "type": "status",
+                  "parts": [
+                    {
+                      "text": "0",
+                      "type": "online",
+                      "style": {
+                        "fontSize": 14,
+                        "color": "rgba(25, 144, 255, 1)",
+                        "fontWeight": "bold"
+                      }
+                    },
+                    {
+                      "text": "/484",
+                      "type": "total",
+                      "style": {
+                        "fontSize": 12,
+                        "color": "rgba(153, 153, 153, 1)",
+                        "fontWeight": "normal"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "device-item-7",
+              "type": "device-card",
+              "layout": "vertical",
+              "background": {
+                "resourceFile": "../resources/images/bg-8439.png",
+                "recommendedUsage": "backgroundBlock",
+                "backgroundSize": "100% 100%",
+                "backgroundPosition": "center center",
+                "backgroundRepeat": "no-repeat"
+              },
+              "style": {
+                "width": 120,
+                "height": 80,
+                "padding": "8px",
+                "alignItems": "center"
+              },
+              "children": [
+                {
+                  "type": "icon",
+                  "resourceFile": "../resources/images/icon-8619.png",
+                  "recommendedUsage": "imgSrc",
+                  "style": {
+                    "width": 32,
+                    "height": 32
+                  }
+                },
+                {
+                  "type": "label",
+                  "text": "CO/VI检测器",
+                  "style": {
+                    "fontSize": 12,
+                    "color": "rgba(51, 51, 51, 1)",
+                    "fontWeight": "normal"
+                  }
+                },
+                {
+                  "type": "status",
+                  "parts": [
+                    {
+                      "text": "0",
+                      "type": "online",
+                      "style": {
+                        "fontSize": 14,
+                        "color": "rgba(25, 144, 255, 1)",
+                        "fontWeight": "bold"
+                      }
+                    },
+                    {
+                      "text": "/484",
+                      "type": "total",
+                      "style": {
+                        "fontSize": 12,
+                        "color": "rgba(153, 153, 153, 1)",
+                        "fontWeight": "normal"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "device-item-8",
+              "type": "device-card",
+              "layout": "vertical",
+              "background": {
+                "resourceFile": "../resources/images/bg-8439.png",
+                "recommendedUsage": "backgroundBlock",
+                "backgroundSize": "100% 100%",
+                "backgroundPosition": "center center",
+                "backgroundRepeat": "no-repeat"
+              },
+              "style": {
+                "width": 120,
+                "height": 80,
+                "padding": "8px",
+                "alignItems": "center"
+              },
+              "children": [
+                {
+                  "type": "icon",
+                  "resourceFile": "../resources/images/icon-8648.png",
+                  "recommendedUsage": "imgSrc",
+                  "style": {
+                    "width": 32,
+                    "height": 32
+                  }
+                },
+                {
+                  "type": "label",
+                  "text": "温湿度传感器",
+                  "style": {
+                    "fontSize": 12,
+                    "color": "rgba(51, 51, 51, 1)",
+                    "fontWeight": "normal"
+                  }
+                },
+                {
+                  "type": "status",
+                  "parts": [
+                    {
+                      "text": "0",
+                      "type": "online",
+                      "style": {
+                        "fontSize": 14,
+                        "color": "rgba(25, 144, 255, 1)",
+                        "fontWeight": "bold"
+                      }
+                    },
+                    {
+                      "text": "/484",
+                      "type": "total",
+                      "style": {
+                        "fontSize": 12,
+                        "color": "rgba(153, 153, 153, 1)",
+                        "fontWeight": "normal"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "device-item-9",
+              "type": "device-card",
+              "layout": "vertical",
+              "background": {
+                "resourceFile": "../resources/images/bg-8439.png",
+                "recommendedUsage": "backgroundBlock",
+                "backgroundSize": "100% 100%",
+                "backgroundPosition": "center center",
+                "backgroundRepeat": "no-repeat"
+              },
+              "style": {
+                "width": 120,
+                "height": 80,
+                "padding": "8px",
+                "alignItems": "center"
+              },
+              "children": [
+                {
+                  "type": "icon",
+                  "resourceFile": "../resources/images/icon-8677.png",
+                  "recommendedUsage": "imgSrc",
+                  "style": {
+                    "width": 32,
+                    "height": 32
+                  }
+                },
+                {
+                  "type": "label",
+                  "text": "压力传感器",
+                  "style": {
+                    "fontSize": 12,
+                    "color": "rgba(51, 51, 51, 1)",
+                    "fontWeight": "normal"
+                  }
+                },
+                {
+                  "type": "status",
+                  "parts": [
+                    {
+                      "text": "0",
+                      "type": "online",
+                      "style": {
+                        "fontSize": 14,
+                        "color": "rgba(25, 144, 255, 1)",
+                        "fontWeight": "bold"
+                      }
+                    },
+                    {
+                      "text": "/484",
+                      "type": "total",
+                      "style": {
+                        "fontSize": 12,
+                        "color": "rgba(153, 153, 153, 1)",
+                        "fontWeight": "normal"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "device-item-10",
+              "type": "device-card",
+              "layout": "vertical",
+              "background": {
+                "resourceFile": "../resources/images/bg-8439.png",
+                "recommendedUsage": "backgroundBlock",
+                "backgroundSize": "100% 100%",
+                "backgroundPosition": "center center",
+                "backgroundRepeat": "no-repeat"
+              },
+              "style": {
+                "width": 120,
+                "height": 80,
+                "padding": "8px",
+                "alignItems": "center"
+              },
+              "children": [
+                {
+                  "type": "icon",
+                  "resourceFile": "../resources/images/icon-8706.png",
+                  "recommendedUsage": "imgSrc",
+                  "style": {
+                    "width": 32,
+                    "height": 32
+                  }
+                },
+                {
+                  "type": "label",
+                  "text": "光照度变送器",
+                  "style": {
+                    "fontSize": 12,
+                    "color": "rgba(51, 51, 51, 1)",
+                    "fontWeight": "normal"
+                  }
+                },
+                {
+                  "type": "status",
+                  "parts": [
+                    {
+                      "text": "0",
+                      "type": "online",
+                      "style": {
+                        "fontSize": 14,
+                        "color": "rgba(25, 144, 255, 1)",
+                        "fontWeight": "bold"
+                      }
+                    },
+                    {
+                      "text": "/484",
+                      "type": "total",
+                      "style": {
+                        "fontSize": 12,
+                        "color": "rgba(153, 153, 153, 1)",
+                        "fontWeight": "normal"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "device-item-11",
+              "type": "device-card",
+              "layout": "vertical",
+              "background": {
+                "resourceFile": "../resources/images/bg-8439.png",
+                "recommendedUsage": "backgroundBlock",
+                "backgroundSize": "100% 100%",
+                "backgroundPosition": "center center",
+                "backgroundRepeat": "no-repeat"
+              },
+              "style": {
+                "width": 120,
+                "height": 80,
+                "padding": "8px",
+                "alignItems": "center"
+              },
+              "children": [
+                {
+                  "type": "icon",
+                  "resourceFile": "../resources/images/icon-8735.png",
+                  "recommendedUsage": "imgSrc",
+                  "style": {
+                    "width": 32,
+                    "height": 32
+                  }
+                },
+                {
+                  "type": "label",
+                  "text": "紧急电话",
+                  "style": {
+                    "fontSize": 12,
+                    "color": "rgba(51, 51, 51, 1)",
+                    "fontWeight": "normal"
+                  }
+                },
+                {
+                  "type": "status",
+                  "parts": [
+                    {
+                      "text": "0",
+                      "type": "online",
+                      "style": {
+                        "fontSize": 14,
+                        "color": "rgba(25, 144, 255, 1)",
+                        "fontWeight": "bold"
+                      }
+                    },
+                    {
+                      "text": "/484",
+                      "type": "total",
+                      "style": {
+                        "fontSize": 12,
+                        "color": "rgba(153, 153, 153, 1)",
+                        "fontWeight": "normal"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "device-item-12",
+              "type": "device-card",
+              "layout": "vertical",
+              "background": {
+                "resourceFile": "../resources/images/bg-8439.png",
+                "recommendedUsage": "backgroundBlock",
+                "backgroundSize": "100% 100%",
+                "backgroundPosition": "center center",
+                "backgroundRepeat": "no-repeat"
+              },
+              "style": {
+                "width": 120,
+                "height": 80,
+                "padding": "8px",
+                "alignItems": "center"
+              },
+              "children": [
+                {
+                  "type": "icon",
+                  "resourceFile": "../resources/images/icon-8764.png",
+                  "recommendedUsage": "imgSrc",
+                  "style": {
+                    "width": 32,
+                    "height": 32
+                  }
+                },
+                {
+                  "type": "label",
+                  "text": "水质监测设备",
+                  "style": {
+                    "fontSize": 12,
+                    "color": "rgba(51, 51, 51, 1)",
+                    "fontWeight": "normal"
+                  }
+                },
+                {
+                  "type": "status",
+                  "parts": [
+                    {
+                      "text": "0",
+                      "type": "online",
+                      "style": {
+                        "fontSize": 14,
+                        "color": "rgba(25, 144, 255, 1)",
+                        "fontWeight": "bold"
+                      }
+                    },
+                    {
+                      "text": "/484",
+                      "type": "total",
+                      "style": {
+                        "fontSize": 12,
+                        "color": "rgba(153, 153, 153, 1)",
+                        "fontWeight": "normal"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "left-nav",
+        "name": "左侧导航栏",
+        "role": "常驻",
+        "layout": "vertical",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "header": null,
+        "body": {
+          "layout": "vertical-6-items",
+          "style": {
+            "position": "absolute",
+            "left": 0,
+            "top": 0,
+            "width": 40,
+            "height": "100%",
+            "background": "rgba(89, 196, 255, 0.2)"
+          },
+          "children": [
+            {
+              "type": "nav-item",
+              "text": "控",
+              "style": {
+                "fontSize": 14,
+                "color": "rgba(89, 196, 255, 1)"
+              }
+            },
+            {
+              "type": "nav-item",
+              "text": "照明",
+              "style": {
+                "fontSize": 14,
+                "color": "rgba(89, 196, 255, 1)"
+              }
+            },
+            {
+              "type": "nav-item",
+              "text": "通",
+              "style": {
+                "fontSize": 14,
+                "color": "rgba(89, 196, 255, 1)"
+              }
+            },
+            {
+              "type": "nav-item",
+              "text": "供电",
+              "style": {
+                "fontSize": 14,
+                "color": "rgba(89, 196, 255, 1)"
+              }
+            },
+            {
+              "type": "nav-item",
+              "text": "消防",
+              "style": {
+                "fontSize": 14,
+                "color": "rgba(89, 196, 255, 1)"
+              }
+            },
+            {
+              "type": "nav-item",
+              "text": "交通",
+              "style": {
+                "fontSize": 14,
+                "color": "rgba(89, 196, 255, 1)"
+              }
+            }
+          ],
+          "backgroundImage": {
+            "src": "../resources/images/bg-8788.png",
+            "recommendedUsage": "backgroundBlock"
+          },
+          "backgroundSize": "100% 100%",
+          "backgroundPosition": "center center",
+          "backgroundRepeat": "no-repeat"
+        }
+      }
+    ]
+  },
+  "headerSlots": [
+    {
+      "slotType": "header-right",
+      "elementType": "statistic",
+      "content": "设备类型 26"
+    },
+    {
+      "slotType": "header-right",
+      "elementType": "statistic",
+      "content": "设备总数 68562"
+    },
+    {
+      "slotType": "header-right",
+      "elementType": "statistic",
+      "content": "完好率 98%"
+    }
+  ],
+  "styles": {
+    "backgroundBrightness": "light",
+    "theme": "浅色科技监测风",
+    "colors": [
+      "rgba(25, 144, 255, 1)",
+      "rgba(89, 196, 255, 1)",
+      "rgba(8, 163, 165, 1)",
+      "rgba(255, 59, 48, 1)",
+      "rgba(51, 51, 51, 1)",
+      "rgba(153, 153, 153, 1)"
+    ],
+    "background": "白色/浅灰蓝渐变背景，突出显示卡片有蓝色渐变背景，设备卡片有浅灰色背景",
+    "decorations": [
+      "左侧蓝色半透明垂直导航栏",
+      "设备卡片带圆角和浅色背景",
+      "进度条式状态指示（3/740）"
+    ],
+    "emphasis": [
+      "蓝色数值（设备统计、在线数）",
+      "红色异常数字",
+      "青色完好率百分比"
+    ]
+  },
+  "interactions": [
+    {
+      "target": "左侧垂直导航栏",
+      "type": "tab-switch",
+      "description": "点击切换设备类别",
+      "defaultState": "常驻",
+      "evidence": "6个垂直排列的标签项（控/照明/通/供电/消防/交通）"
+    },
+    {
+      "target": "设备卡片",
+      "type": "click",
+      "description": "点击查看设备详情",
+      "defaultState": "常驻",
+      "evidence": "12个设备卡片，可点击"
+    }
+  ],
+  "charts": [],
+  "doNotInvent": [
+    "左侧导航栏切换后的具体内容变化",
+    "设备卡片点击后的详情弹窗内容",
+    "完好率98%的计算逻辑",
+    "异常数字3的具体异常类型",
+    "设备总数68562的来源和更新频率"
+  ],
+  "notes": [
+    "左侧导航栏可能是固定定位或绝对定位，需要在布局中特殊处理",
+    "突出显示的两个设备卡片（随便说说、房屋理性说话）使用了渐变背景图片",
+    "所有设备卡片使用统一的背景图片（bg-8439.png）",
+    "每个设备的在线/离线状态格式统一为 '在线数/总数'",
+    "顶部统计栏的三个指标应识别为 header-right 插槽内容"
+  ],
+  "coverageReport": {
+    "totalFigma": 31,
+    "matchedCount": 3,
+    "missingCount": 19,
+    "uncertainCount": 0,
+    "coverageRate": 14,
+    "missing": [
+      {
+        "name": "cp-设备监测",
+        "type": "FRAME",
+        "depth": 0
+      },
+      {
+        "name": "设备监测",
+        "type": "TEXT",
+        "depth": 2
+      },
+      {
+        "name": "switch",
+        "type": "FRAME",
+        "depth": 2
+      },
+      {
+        "name": "active",
+        "type": "GROUP",
+        "depth": 3
+      },
+      {
+        "name": "t-隧道设备",
+        "type": "TEXT",
+        "depth": 4
+      },
+      {
+        "name": "line1",
+        "type": "FRAME",
+        "depth": 4
+      },
+      {
+        "name": "t-总数:",
+        "type": "TEXT",
+        "depth": 5
+      },
+      {
+        "name": "d-56302",
+        "type": "TEXT",
+        "depth": 5
+      },
+      {
+        "name": "line2",
+        "type": "FRAME",
+        "depth": 4
+      },
+      {
+        "name": "t-异常数:",
+        "type": "TEXT",
+        "depth": 5
+      },
+      {
+        "name": "d-5",
+        "type": "TEXT",
+        "depth": 5
+      },
+      {
+        "name": "default",
+        "type": "GROUP",
+        "depth": 3
+      },
+      {
+        "name": "line1",
+        "type": "FRAME",
+        "depth": 4
+      },
+      {
+        "name": "t-总数:",
+        "type": "TEXT",
+        "depth": 5
+      },
+      {
+        "name": "d-1280",
+        "type": "TEXT",
+        "depth": 5
+      }
+    ],
+    "uncertain": [],
+    "summary": "需关注"
+  }
+}

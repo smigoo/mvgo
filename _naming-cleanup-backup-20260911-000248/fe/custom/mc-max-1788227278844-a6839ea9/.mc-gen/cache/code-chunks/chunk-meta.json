@@ -1,0 +1,83 @@
+{
+  "completed": [
+    "1-declare.json",
+    "2-package/index.vue",
+    "3-package/index.vue",
+    "6-package/components/SectionChart.vue",
+    "5-package/components/SectionTabs.vue",
+    "7-resources/styles/themes/theme-vars.less",
+    "8-resources/styles/common.less",
+    "5-resources/styles/themes/theme-vars.less",
+    "6-resources/styles/common.less"
+  ],
+  "total": 6,
+  "updatedAt": 1788227983192,
+  "files": {
+    "declare.json": [
+      {
+        "index": 1,
+        "file": "1-declare.json",
+        "segmentType": "declare",
+        "scriptPart": ""
+      }
+    ],
+    "package/index.vue": [
+      {
+        "index": 2,
+        "file": "2-package_index.vue",
+        "segmentType": "template",
+        "scriptPart": ""
+      },
+      {
+        "index": 3,
+        "file": "3-package_index.vue",
+        "segmentType": "script",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/SectionChart.vue": [
+      {
+        "index": 6,
+        "file": "6-package_components_SectionChart.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/SectionTabs.vue": [
+      {
+        "index": 5,
+        "file": "5-package_components_SectionTabs.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "resources/styles/themes/theme-vars.less": [
+      {
+        "index": 5,
+        "file": "5-resources_styles_themes_theme-vars.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      },
+      {
+        "index": 7,
+        "file": "7-resources_styles_themes_theme-vars.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      }
+    ],
+    "resources/styles/common.less": [
+      {
+        "index": 6,
+        "file": "6-resources_styles_common.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      },
+      {
+        "index": 8,
+        "file": "8-resources_styles_common.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      }
+    ]
+  }
+}

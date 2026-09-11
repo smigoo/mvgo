@@ -1,0 +1,108 @@
+{
+  "stage": "codegen_done",
+  "brief": {
+    "layout": "整体采用'顶部标题栏+上部统计卡片区+下部左右分栏(左侧垂直导航+右侧网格内容)'的复合布局；主轴方向为垂直排列，右侧内容区内部为水平网格(3列)；对齐方式为顶部对齐、均分布局；区域比例约为Header:StatsBar:MainContent = 1:1.5:6",
+    "regions": [
+      {
+        "name": "Header",
+        "description": "顶部标题与全局统计信息(设备类型/总数/完好率)",
+        "position": "top",
+        "size": "宽度100%, 高度约8%"
+      },
+      {
+        "name": "StatsCards",
+        "description": "两个大型统计汇总卡片(隧道设备/南北接线设备)",
+        "position": "upper-center",
+        "size": "宽度100%, 高度约15%"
+      },
+      {
+        "name": "SidebarNav",
+        "description": "左侧垂直分类导航栏(监控/照明/通风等)",
+        "position": "left",
+        "size": "宽度约10%, 高度约75%"
+      },
+      {
+        "name": "DeviceGrid",
+        "description": "右侧设备详情网格展示区(3列多行)",
+        "position": "center-right",
+        "size": "宽度约88%, 高度约75%"
+      }
+    ],
+    "spacing": {
+      "outer": "四周保持约20px统一外边距",
+      "gap": "Header与StatsCards间距约15px，StatsCards与主内容区间距约15px，Sidebar与Grid间距约12px，Grid内部卡片间距约12px",
+      "padding": "StatsCards内部上下左右约15-20px，DeviceGrid卡片内部约12-16px，Sidebar选项内边距约10px"
+    },
+    "colors": {
+      "primary": "#2196F3",
+      "background": "#9E9E9E",
+      "surface": "#E3F2FD(普通卡片)/#42A5F5(激活统计卡)/#90CAF9(次级统计卡)",
+      "text": "#FFFFFF(主文字)/#FF5252(异常数值)/#4CAF50(正常数值)/#1976D2(链接蓝)",
+      "border": "#BBDEFB"
+    },
+    "typography": {
+      "size": "三级层级：大号(24-32px,用于总数统计)、中号(18-22px,用于类别名称)、小号(14-16px,用于分母/辅助信息)",
+      "weight": "Bold(700,用于关键数字)、Medium(500,用于标题)、Regular(400,用于辅助文字)",
+      "lineHeight": "紧凑型，行高约为字号的1.2-1.4倍"
+    },
+    "components": [
+      "TextLabel(纯文本标签)",
+      "StatisticCard(带图标+标题+双行数据的统计卡片)",
+      "VerticalTabRail(垂直选项卡导航栏)",
+      "BadgeIndicator(红点/数字角标)",
+      "IconTextCard(图标在上+名称在中+数据在下的网格卡片)",
+      "ProgressBar(隐含在完好率98%中)"
+    ],
+    "textContent": [
+      "设备监测",
+      "设备类型28",
+      "设备总数68562",
+      "完好率98%",
+      "隧道设备",
+      "总数:56302",
+      "异常数:5",
+      "南北接线设备",
+      "总数:1280",
+      "异常数:3",
+      "监控",
+      "照明",
+      "通风",
+      "供配电",
+      "消防",
+      "交通诱导",
+      "摄像机(2/484)",
+      "风速风向仪(1/484)",
+      "超高检测器(0/484)",
+      "烟道机器人(0/484)",
+      "激光雷达(0/484)",
+      "CO₂传感器(0/484)",
+      "CO/VI检测器(0/484)",
+      "温湿度传感器(0/484)",
+      "压力传感器(0/484)",
+      "光照度变送器(0/484)",
+      "紧急电话(0/484)",
+      "水质监测设备(0/484)",
+      "3/3740"
+    ],
+    "visualDetails": [
+      "圆角半径约8-12px应用于所有卡片容器",
+      "左侧统计卡片使用蓝色渐变背景(#42A5F5至#1E88E5)，右侧使用浅蓝渐变(#90CAF9至#64B5F6)",
+      "所有卡片带有轻微向下阴影(阴影模糊度约8-12px)",
+      "图标位于卡片上方中央位置，尺寸约40-48px，下方跟随文字说明",
+      "数值显示使用双色系统：分子为红色(#FF5252)表示异常/告警，绿色(#4CAF50)表示正常/零值，分母为浅灰色",
+      "左侧导航栏当前激活项('监控')使用蓝色高亮背景，其他项为半透明白色/灰色",
+      "导航项右上角支持红点徽章(如'照明'旁的'3')和悬浮计数标签(如'监控'旁的'3/3740')"
+    ],
+    "interactions": [
+      "VerticalTabSwitcher(左侧垂直Tab切换栏)：包含6个选项——'监控'(当前激活态，带红点badge '3'及悬浮计数'3/3740')、'照明'(带红点badge '3')、'通风'、'供配电'、'消防'、'交通诱导'",
+      "ClickableCards(可点击卡片)：StatsCards区域的两个大型统计卡片疑似可点击展开详情",
+      "DeviceGridItems(网格项)：右侧15个设备卡片均为可交互单元，显示(异常数/总数)格式的状态数据"
+    ]
+  },
+  "width": 420,
+  "height": 425,
+  "sourceType": "figma",
+  "componentType": "vue3",
+  "generationTier": "lite",
+  "vueCode": "<template>\n  <div class=\"dashboard-container\">\n    <!-- Header 区域 -->\n    <header class=\"dashboard-header\">\n      <div class=\"header-title\">设备监测</div>\n      <div class=\"header-stats\">\n        <span class=\"stat-item\">\n          <span class=\"icon-equal\">≡</span>\n          设备类型<span class=\"highlight-num\">28</span>\n        </span>\n        <span class=\"stat-item\">\n          设备总数<span class=\"highlight-num\">68562</span>\n        </span>\n        <span class=\"stat-item\">\n          完好率<span class=\"rate-num\">98%</span>\n        </span>\n      </div>\n    </header>\n\n    <!-- 统计卡片区域 -->\n    <section class=\"stats-cards\">\n      <div class=\"stat-card stat-card-primary\">\n        <div class=\"card-icon-wrapper\">\n          <svg class=\"card-icon\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\">\n            <path d=\"M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z\"/>\n            <path d=\"M12 8v4\"/>\n            <path d=\"M12 16h.01\"/>\n          </svg>\n        </div>\n        <div class=\"card-content\">\n          <div class=\"card-label\">隧道设备</div>\n          <div class=\"card-main-stat\">\n            总 数:<span class=\"big-num\">56302</span>\n          </div>\n          <div class=\"card-sub-stat\">\n            异常数:<span class=\"error-num\">5</span>\n          </div>\n        </div>\n      </div>\n\n      <div class=\"stat-card stat-card-secondary\">\n        <div class=\"card-icon-wrapper icon-secondary\">\n          <svg class=\"card-icon\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\">\n            <rect x=\"2\" y=\"7\" width=\"20\" height=\"14\" rx=\"2\" ry=\"2\"/>\n            <path d=\"M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16\"/>\n          </svg>\n        </div>\n        <div class=\"card-content\">\n          <div class=\"card-label\">南北接线<br>设备</div>\n          <div class=\"card-main-stat\">\n            总 数:<span class=\"big-num\">1280</span>\n          </div>\n          <div class=\"card-sub-stat\">\n            异常数:<span class=\"error-num\">3</span>\n          </div>\n        </div>\n      </div>\n    </section>\n\n    <!-- 主内容区域：左侧导航 + 右侧网格 -->\n    <main class=\"main-content\">\n      <!-- 左侧垂直导航 -->\n      <nav class=\"sidebar-nav\">\n        <div \n          v-for=\"(item, index) in navItems\" \n          :key=\"item.id\"\n          :class=\"['nav-item', { active: activeNav === item.id }]\"\n          @click=\"activeNav = item.id\"\n        >\n          <span class=\"nav-text\">{{ item.label }}</span>\n          <span v-if=\"item.badge\" class=\"nav-badge\">{{ item.badge }}</span>\n          <span v-if=\"item.floatingTag\" class=\"floating-tag\">{{ item.floatingTag }}</span>\n        </div>\n      </nav>\n\n      <!-- 右侧设备网格 -->\n      <div class=\"device-grid\">\n        <div \n          v-for=\"device in deviceList\" \n          :key=\"device.name\"\n          class=\"device-card\"\n        >\n          <div class=\"device-icon-wrapper\">\n            <component :is=\"getIconComponent(device.icon)\" />\n          </div>\n          <div class=\"device-name\">{{ device.name }}</div>\n          <div :class=\"['device-stat', getStatClass(device.abnormal)]\">\n            ({{ device.abnormal }}/{{ device.total }})\n          </div>\n        </div>\n      </div>\n    </main>\n  </div>\n</template>\n\n<script setup>\nimport { ref, h } from 'vue'\n\n// 当前激活的导航项\nconst activeNav = ref('monitor')\n\n// 导航项数据\nconst navItems = [\n  { id: 'monitor', label: '监控', badge: null, floatingTag: '3/3740' },\n  { id: 'lighting', label: '照明', badge: '3', floatingTag: null },\n  { id: 'ventilation', label: '通风', badge: null, floatingTag: null },\n  { id: 'power', label: '供配电', badge: null, floatingTag: null },\n  { id: 'fire', label: '消防', badge: null, floatingTag: null },\n  { id: 'traffic', label: '交通诱导', badge: null, floatingTag: null }\n]\n\n// 设备列表数据\nconst deviceList = [\n  { name: '摄像机', abnormal: 2, total: 484, icon: 'camera' },\n  { name: '风速风向仪', abnormal: 1, total: 484, icon: 'wind' },\n  { name: '超高检测器', abnormal: 0, total: 484, icon: 'height' },\n  { name: '烟道机器人', abnormal: 0, total: 484, icon: 'robot' },\n  { name: '激光雷达', abnormal: 0, total: 484, icon: 'radar' },\n  { name: 'CO₂传感器', abnormal: 0, total: 484, icon: 'co2' },\n  { name: 'CO/VI检测器', abnormal: 0, total: 484, icon: 'covi' },\n  { name: '温湿度传感器', abnormal: 0, total: 484, icon: 'temp' },\n  { name: '压力传感器', abnormal: 0, total: 484, icon: 'pressure' },\n  { name: '光照度变送器', abnormal: 0, total: 484, icon: 'light' },\n  { name: '紧急电话', abnormal: 0, total: 484, icon: 'phone' },\n  { name: '水质监测设备', abnormal: 0, total: 484, icon: 'water' }\n]\n\n// 获取图标组件（使用渲染函数返回SVG）\nconst getIconComponent = (iconType) => {\n  const icons = {\n    camera: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: '#1976D2', 'stroke-width': '2' }, [\n      h('path', { d: 'M23 7l-7 5 7 5V7z' }),\n      h('rect', { x: '1', y: '5', width: '15', height: '14', rx: '2', ry: '2' })\n    ]),\n    wind: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: '#1976D2', 'stroke-width': '2' }, [\n      h('path', { d: 'M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2' })\n    ]),\n    height: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: '#1976D2', 'stroke-width': '2' }, [\n      h('path', { d: 'M18 20V10m-6 10V4M6 20v-6' }),\n      h('line', { x1: '6', y1: '20', x2: '18', y2: '20' }),\n      h('polyline', { points: '3 17 9 11 13 15 21 7' })\n    ]),\n    robot: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: '#1976D2', 'stroke-width': '2' }, [\n      h('rect', { x: '3', y: '11', width: '18', height: '10', rx: '2' }),\n      h('circle', { cx: '12', cy: '5', r: '2' }),\n      h('path', { d: 'M12 7v4' }),\n      h('line', { x1: '8', y1: '16', x2: '8', y2: '16' }),\n      h('line', { x1: '16', y1: '16', x2: '16', y2: '16' })\n    ]),\n    radar: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: '#1976D2', 'stroke-width': '2' }, [\n      h('circle', { cx: '12', cy: '12', r: '10' }),\n      h('path', { d: 'M12 2a10 10 0 0 1 10 10' }),\n      h('path', { d: 'M12 12L12 6' })\n    ]),\n    co2: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: '#1976D2', 'stroke-width': '2' }, [\n      h('path', { d: 'M12 2v20M2 12h20' }),\n      h('text', { x: '12', y: '16', 'text-anchor': 'middle', 'font-size': '8', fill: '#1976D2', stroke: 'none' }, 'CO₂')\n    ]),\n    covi: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: '#1976D2', 'stroke-width': '2' }, [\n      h('path', { d: 'M12 2L2 7l10 5 10-5-10-5z' }),\n      h('path', { d: 'M2 17l10 5 10-5M2 12l10 5 10-5' })\n    ]),\n    temp: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: '#1976D2', 'stroke-width': '2' }, [\n      h('path', { d: 'M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z' })\n    ]),\n    pressure: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: '#1976D2', 'stroke-width': '2' }, [\n      h('path', { d: 'M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2z' }),\n      h('path', { d: 'M12 6v6l4 2' })\n    ]),\n    light: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: '#1976D2', 'stroke-width': '2' }, [\n      h('circle', { cx: '12', cy: '12', r: '5' }),\n      h('line', { x1: '12', y1: '1', x2: '12', y2: '3' }),\n      h('line', { x1: '12', y1: '21', x2: '12', y2: '23' }),\n      h('line', { x1: '4.22', y1: '4.22', x2: '5.64', y2: '5.64' }),\n      h('line', { x1: '18.36', y1: '18.36', x2: '19.78', y2: '19.78' }),\n      h('line', { x1: '1', y1: '12', x2: '3', y2: '12' }),\n      h('line', { x1: '21', y1: '12', x2: '23', y2: '12' }),\n      h('line', { x1: '4.22', y1: '19.78', x2: '5.64', y2: '18.36' }),\n      h('line', { x1: '18.36', y1: '5.64', x2: '19.78', y2: '4.22' })\n    ]),\n    phone: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: '#1976D2', 'stroke-width': '2' }, [\n      h('path', { d: 'M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z' })\n    ]),\n    water: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: '#1976D2', 'stroke-width': '2' }, [\n      h('path', { d: 'M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z' })\n    ])\n  }\n  \n  return icons[iconType] || icons.camera\n}\n\n// 根据异常数获取样式类名\nconst getStatClass = (abnormal) => {\n  if (abnormal > 0) return 'stat-error'\n  return 'stat-normal'\n}\n</script>\n\n<style scoped>\n.dashboard-container {\n  width: 100%;\n  height: 100%;\n  box-sizing: border-box;\n  background-color: #9E9E9E;\n  padding: 20px;\n  display: flex;\n  flex-direction: column;\n  font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif;\n  overflow: hidden;\n}\n\n/* Header 区域 */\n.dashboard-header {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  margin-bottom: 15px;\n  min-height: 34px;\n}\n\n.header-title {\n  font-size: 26px;\n  font-weight: 700;\n  color: #42A5F5;\n  letter-spacing: 2px;\n}\n\n.header-stats {\n  display: flex;\n  gap: 16px;\n  align-items: center;\n  font-size: 18px;\n  color: #FFFFFF;\n  font-weight: 500;\n}\n\n.stat-item {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n}\n\n.icon-equal {\n  color: #1976D2;\n  font-weight: bold;\n  font-size: 20px;\n}\n\n.highlight-num {\n  color: #42A5F5;\n  font-weight: 700;\n  font-size: 22px;\n  margin-left: 2px;\n}\n\n.rate-num {\n  color: #4CAF50;\n  font-weight: 700;\n  font-size: 22px;\n  margin-left: 2px;\n}\n\n/* 统计卡片区域 */\n.stats-cards {\n  display: flex;\n  gap: 15px;\n  margin-bottom: 15px;\n  min-height: 65px;\n}\n\n.stat-card {\n  flex: 1;\n  border-radius: 12px;\n  padding: 15px 20px;\n  display: flex;\n  align-items: center;\n  gap: 15px;\n  position: relative;\n  overflow: hidden;\n  box-shadow: 0 4px 12px rgba(0,0,0,0.15);\n}\n\n.stat-card-primary {\n  background: linear-gradient(135deg, #42A5F5 0%, #1E88E5 100%);\n}\n\n.stat-card-secondary {\n  background: linear-gradient(135deg, #90CAF9 0%, #64B5F6 100%);\n}\n\n.card-icon-wrapper {\n  width: 52px;\n  height: 52px;\n  background: rgba(255,255,255,0.25);\n  border-radius: 50%;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  flex-shrink: 0;\n}\n\n.icon-secondary {\n  background: rgba(255,255,255,0.35);\n}\n\n.card-icon {\n  width: 28px;\n  height: 28px;\n  color: white;\n}\n\n.card-content {\n  flex: 1;\n  color: white;\n}\n\n.card-label {\n  font-size: 16px;\n  font-weight: 700;\n  margin-bottom: 4px;\n  line-height: 1.2;\n}\n\n.card-main-stat {\n  font-size: 20px;\n  font-weight: 500;\n  line-height: 1.3;\n}\n\n.big-num {\n  font-size: 28px;\n  font-weight: 700;\n  margin-left: 4px;\n}\n\n.card-sub-stat {\n  font-size: 16px;\n  font-weight: 500;\n  line-height: 1.3;\n}\n\n.error-num {\n  color: #FF5252;\n  font-size: 22px;\n  font-weight: 700;\n  margin-left: 4px;\n}\n\n/* 主内容区域 */\n.main-content {\n  flex: 1;\n  display: flex;\n  gap: 12px;\n  min-height: 0;\n}\n\n/* 左侧导航 */\n.sidebar-nav {\n  width: 45px;\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n  flex-shrink: 0;\n}\n\n.nav-item {\n  position: relative;\n  padding: 10px 8px;\n  text-align: center;\n  cursor: pointer;\n  border-radius: 8px;\n  transition: all 0.2s ease;\n  background: rgba(255,255,255,0.15);\n  color: #1565C0;\n  font-size: 15px;\n  font-weight: 600;\n  writing-mode: vertical-lr;\n  letter-spacing: 4px;\n  border: 1px solid rgba(255,255,255,0.2);\n}\n\n.nav-item:hover {\n  background: rgba(33,150,243,0.25);\n}\n\n.nav-item.active {\n  background: #2196F3;\n  color: white;\n  box-shadow: 0 2px 8px rgba(33,150,243,0.4);\n}\n\n.nav-badge {\n  position: absolute;\n  top: 2px;\n  right: 2px;\n  background: #FF5252;\n  color: white;\n  font-size: 10px;\n  width: 16px;\n  height: 16px;\n  border-radius: 50%;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  font-weight: 700;\n  z-index: 2;\n}\n\n.floating-tag {\n  position: absolute;\n  top: -8px;\n  left: -8px;\n  background: white;\n  color: #333;\n  font-size: 11px;\n  padding: 2px 5px;\n  border-radius: 4px;\n  border: 1px solid #ccc;\n  font-weight: 600;\n  z-index: 2;\n  white-space: nowrap;\n  writing-mode: horizontal-tb;\n}\n\n/* 右侧设备网格 */\n.device-grid {\n  flex: 1;\n  display: grid;\n  grid-template-columns: repeat(3, 1fr);\n  gap: 12px;\n  min-height: 0;\n  overflow-y: auto;\n}\n\n.device-card {\n  background: rgba(227,242,253,0.85);\n  border-radius: 10px;\n  padding: 12px 10px;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n  border: 1px solid rgba(187,222,251,0.6);\n  box-shadow: 0 2px 8px rgba(0,0,0,0.08);\n  transition: transform 0.2s ease, box-shadow 0.2s ease;\n  cursor: pointer;\n}\n\n.device-card:hover {\n  transform: translateY(-2px);\n  box-shadow: 0 4px 12px rgba(0,0,0,0.15);\n}\n\n.device-icon-wrapper {\n  width: 44px;\n  height: 44px;\n  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.9), rgba(227,242,253,0.6));\n  border-radius: 50%;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  box-shadow: 0 2px 6px rgba(0,0,0,0.1);\n}\n\n.device-name {\n  font-size: 15px;\n  color: #37474F;\n  font-weight: 600;\n  text-align: center;\n  line-height: 1.2;\n}\n\n.device-stat {\n  font-size: 16px;\n  font-weight: 700;\n  line-height: 1.2;\n}\n\n.stat-error {\n  color: #FF5252;\n}\n\n.stat-normal {\n  color: #4CAF50;\n}\n</style>"
+}

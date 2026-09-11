@@ -1,0 +1,160 @@
+// 微码组件主题变量文件
+// 本文件定义 common、dark、light 三个主题 mixin
+// 由系统生成的 dark.less/light.less 自动调用对应 mixin
+
+// ============================================
+// 公共变量 mixin（所有主题共享的尺寸、字号等非颜色属性）
+// ============================================
+.common() {
+  // 字体
+  @em-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  
+  // 字号
+  @em-font-size-xs: 12px;
+  @em-font-size-sm: 13px;
+  @em-font-size-base: 14px;
+  @em-font-size-md: 16px;
+  @em-font-size-lg: 18px;
+  @em-font-size-xl: 20px;
+  
+  // 行高
+  @em-line-height-base: 1.5;
+  @em-line-height-compact: 1.4;
+  @em-line-height-loose: 1.6;
+  
+  // 间距
+  @em-spacing-xs: 4px;
+  @em-spacing-sm: 8px;
+  @em-spacing-md: 16px;
+  @em-spacing-lg: 24px;
+  @em-spacing-xl: 32px;
+  
+  // 圆角
+  @em-radius-sm: 2px;
+  @em-radius-base: 4px;
+  @em-radius-md: 6px;
+  @em-radius-lg: 8px;
+  @em-radius-xl: 12px;
+  
+  // 阴影
+  @em-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  @em-shadow-base: 0 2px 8px rgba(0, 0, 0, 0.1);
+  @em-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.12);
+  @em-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.15);
+  
+  // Z-index
+  @em-zindex-dropdown: 1000;
+  @em-zindex-modal: 1050;
+  @em-zindex-tooltip: 1100;
+  
+  // 过渡
+  @em-transition-base: all 0.3s ease;
+  @em-transition-fast: all 0.2s ease;
+  @em-transition-slow: all 0.4s ease;
+}
+
+// ============================================
+// Dark 主题颜色变量
+// ============================================
+.theme-dark() {
+  // 背景色
+  @em-bg-primary: #000000;
+  @em-bg-secondary: #56597c;
+  @em-bg-tertiary: #6680a0;
+  @em-bg-overlay: rgba(74, 117, 141, 0.25);
+  
+  // 文字色（深色背景下禁止黑色系）
+  @em-text-primary: #ffffff;
+  @em-text-secondary: rgba(255, 255, 255, 0.8);
+  @em-text-tertiary: #edf4fb;
+  @em-text-quaternary: #d6effc;
+  @em-text-disabled: rgba(172, 196, 225, 1);
+  
+  // 主色系
+  @em-primary: #1990ff;
+  @em-primary-hover: #2ba0ff;
+  @em-primary-active: #1399ff;
+  @em-primary-light: #559eff;
+  @em-primary-lighter: #388dff;
+  @em-primary-dark: #006fe3;
+  @em-primary-variant: #5a7eff;
+  @em-primary-alt: rgba(51, 133, 255, 1);
+  
+  // 辅助色
+  @em-info: #57caff;
+  @em-info-light: #5bbbef;
+  @em-info-dark: #0c9dbe;
+  
+  @em-cyan: #00cccc;
+  @em-cyan-light: rgba(0, 204, 204, 1);
+  @em-cyan-fade: rgba(0, 204, 204, 0.3);
+  
+  @em-blue-primary: #1252fa;
+  
+  // 警示色
+  @em-warning: #ffa22f;
+  @em-error: #ff6a00;
+  
+  // 边框色
+  @em-border-base: rgba(172, 196, 225, 1);
+  @em-border-light: rgba(199, 224, 255, 1);
+  @em-border-dark: #6680a0;
+  
+  // 强调色
+  @em-accent-primary: rgba(51, 133, 255, 1);
+  @em-accent-cyan: rgba(0, 204, 204, 1);
+}
+
+// ============================================
+// Light 主题颜色变量（面板默认主题，与设计稿一致）
+// ============================================
+.theme-light() {
+  // 背景色
+  @em-bg-primary: #ffffff;
+  @em-bg-secondary: #edf4fb;
+  @em-bg-tertiary: #d6effc;
+  @em-bg-quaternary: rgba(199, 224, 255, 1);
+  @em-bg-overlay: rgba(74, 117, 141, 0.25);
+  
+  // 文字色
+  @em-text-primary: #333333;
+  @em-text-secondary: #56597c;
+  @em-text-tertiary: #6680a0;
+  @em-text-quaternary: rgba(172, 196, 225, 1);
+  @em-text-dark: #000000;
+  @em-text-light: rgba(255, 255, 255, 0.8);
+  @em-text-white: #ffffff;
+  
+  // 主色系
+  @em-primary: #1990ff;
+  @em-primary-hover: #2ba0ff;
+  @em-primary-active: #1399ff;
+  @em-primary-light: #559eff;
+  @em-primary-lighter: #388dff;
+  @em-primary-dark: #006fe3;
+  @em-primary-variant: #5a7eff;
+  @em-primary-brand: #1252fa;
+  @em-primary-alt: rgba(51, 133, 255, 1);
+  
+  // 辅助色
+  @em-info: #57caff;
+  @em-info-light: #5bbbef;
+  @em-info-dark: #0c9dbe;
+  
+  @em-cyan: #00cccc;
+  @em-cyan-light: rgba(0, 204, 204, 1);
+  @em-cyan-fade: rgba(0, 204, 204, 0.3);
+  
+  // 警示色
+  @em-warning: #ffa22f;
+  @em-error: #ff6a00;
+  
+  // 边框色
+  @em-border-base: rgba(172, 196, 225, 1);
+  @em-border-light: rgba(199, 224, 255, 1);
+  @em-border-dark: #6680a0;
+  
+  // 强调色
+  @em-accent-primary: rgba(51, 133, 255, 1);
+  @em-accent-cyan: rgba(0, 204, 204, 1);
+}

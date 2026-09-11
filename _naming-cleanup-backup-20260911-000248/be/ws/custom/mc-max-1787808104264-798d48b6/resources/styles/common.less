@@ -1,0 +1,283 @@
+.c-mc-max-1787808104264-798d48b6-c-monitor-header-stats {
+  height: 425px;
+  width: 420px;
+  display: flex;
+  align-items: center;
+  gap: @space-xl;
+
+  max-width: 100%;
+  max-height: 100vh;
+  box-sizing: border-box;}
+
+.c-mc-max-1787808104264-798d48b6-c-monitor-header-stat {
+  display: flex;
+  align-items: baseline;
+  gap: @space-xs;
+
+  &-label {
+    color: @text-color-secondary;
+    font-size: @font-size-xs;
+  }
+
+  &-value {
+    color: @text-color-primary;
+    font-size: @font-size-md;
+    font-weight: @font-weight-bold;
+  }
+}
+
+.c-mc-max-1787808104264-798d48b6-c-monitor-body {
+  display: flex;
+  gap: @space-lg;
+  height: 100%;
+  padding: @space-lg;
+  box-sizing: border-box;
+  background-color: @bg-color-page;
+  background-image: @res-bg-image;
+  background-size: @res-bg-size;
+  background-position: @res-bg-position;
+  background-repeat: @res-bg-repeat;
+}
+
+.c-mc-max-1787808104264-798d48b6-c-monitor-switch {
+  display: flex;
+  flex-direction: column;
+  gap: @space-md;
+  width: 240px;
+  flex-shrink: 0;
+  padding: @space-md;
+  border-radius: @radius-lg;
+  background: @bg-color-container;
+}
+
+.c-mc-max-1787808104264-798d48b6-c-monitor-switch-item {
+  display: flex;
+  gap: @space-sm;
+  padding: @space-sm;
+  border: 1px solid @border-color-light;
+  border-radius: @radius-base;
+  background: @bg-color-elevated;
+  cursor: pointer;
+  transition: all @duration-fast @easing-base;
+
+  &:hover {
+    background: @bg-color-hover;
+    border-color: @border-color-base;
+  }
+
+  &--active {
+    border-color: @primary-color;
+    background: @bg-color-hover;
+  }
+}
+
+.c-mc-max-1787808104264-798d48b6-c-monitor-switch-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: @radius-base;
+  background: @bg-color-hover;
+  flex-shrink: 0;
+
+  &-shape {
+    width: 20px;
+    height: 20px;
+    border-radius: @radius-sm;
+    background: @primary-color;
+  }
+}
+
+.c-mc-max-1787808104264-798d48b6-c-monitor-switch-info {
+  display: flex;
+  flex-direction: column;
+  gap: @space-xxs;
+  min-width: 0;
+}
+
+.c-mc-max-1787808104264-798d48b6-c-monitor-switch-title {
+  color: @text-color-primary;
+  font-size: @font-size-base;
+  font-weight: @font-weight-medium;
+}
+
+.c-mc-max-1787808104264-798d48b6-c-monitor-switch-row {
+  display: flex;
+  align-items: baseline;
+  gap: @space-xs;
+}
+
+.c-mc-max-1787808104264-798d48b6-c-monitor-switch-label {
+  color: @text-color-secondary;
+  font-size: @font-size-xs;
+}
+
+.c-mc-max-1787808104264-798d48b6-c-monitor-switch-value {
+  color: @text-color-primary;
+  font-size: @font-size-sm;
+  font-weight: @font-weight-medium;
+
+  &--error {
+    color: @error-color;
+  }
+}
+
+.c-mc-max-1787808104264-798d48b6-c-monitor-main {
+  display: flex;
+  flex-direction: column;
+  gap: @space-lg;
+  flex: 1;
+  min-width: 0;
+}
+
+.c-mc-max-1787808104264-798d48b6-c-monitor-tabs {
+  display: flex;
+  align-items: center;
+  gap: @space-sm;
+  padding: @space-xs;
+  width: fit-content;
+  border: 1px solid @border-color-light;
+  border-radius: @radius-base;
+  background: @bg-color-container;
+}
+
+.c-mc-max-1787808104264-798d48b6-c-monitor-tab-item {
+  display: flex;
+  align-items: center;
+  gap: @space-xs;
+  padding: @space-sm @space-lg;
+  border-radius: @radius-base;
+  color: @text-color-secondary;
+  font-size: @font-size-base;
+  cursor: pointer;
+  transition: all @duration-fast @easing-base;
+
+  &:hover {
+    color: @text-color-primary;
+    background: @bg-color-hover;
+  }
+
+  &--active {
+    color: @primary-color;
+    background: @bg-color-hover;
+    font-weight: @font-weight-medium;
+  }
+}
+
+.c-mc-max-1787808104264-798d48b6-c-monitor-tab-count {
+  font-size: @font-size-xs;
+  color: inherit;
+  opacity: 0.8;
+}
+
+.c-mc-max-1787808104264-798d48b6-c-monitor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: @space-md;
+  flex: 1;
+  overflow: auto;
+}
+
+.c-mc-max-1787808104264-798d48b6-c-monitor-device-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: @space-sm;
+  padding: @space-lg @space-md;
+  border: 1px solid @border-color-light;
+  border-radius: @radius-base;
+  background: @bg-color-container;
+  cursor: pointer;
+  transition: all @duration-fast @easing-base;
+
+  &:hover {
+    border-color: @primary-color-hover;
+    background: @bg-color-elevated;
+  }
+}
+
+.c-mc-max-1787808104264-798d48b6-c-monitor-device-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: @radius-base;
+  background: @bg-color-hover;
+
+  &-shape {
+    width: 20px;
+    height: 20px;
+    border-radius: @radius-sm;
+    background: @primary-color;
+  }
+}
+
+.c-mc-max-1787808104264-798d48b6-c-monitor-device-name {
+  color: @text-color-regular;
+  font-size: @font-size-sm;
+  text-align: center;
+}
+
+.c-mc-max-1787808104264-798d48b6-c-monitor-device-value {
+  color: @text-color-secondary;
+  font-size: @font-size-xs;
+}
+
+/* === [自动修复] v3.5 模板驱动 fallback 规则 === */
+/* [自动修复] 模板 class .c-monitor-device-icon-shape → 匹配元素 device-summary */
+
+.c-mc-max-1787808104264-798d48b6-c-monitor-device-icon-shape {
+  display: flex;
+  flex-direction: column;
+}
+
+/* [自动修复] 模板 class .c-monitor-header-stat-label → 匹配元素 device-summary */
+
+.c-mc-max-1787808104264-798d48b6-c-monitor-header-stat-label {
+  display: flex;
+  flex-direction: column;
+}
+
+/* [自动修复] 模板 class .c-monitor-header-stat-value → 匹配元素 device-summary */
+
+.c-mc-max-1787808104264-798d48b6-c-monitor-header-stat-value {
+  display: flex;
+  flex-direction: column;
+}
+
+/* [自动修复] 模板 class .c-monitor-switch-icon-shape → 匹配元素 device-summary */
+
+.c-mc-max-1787808104264-798d48b6-c-monitor-switch-icon-shape {
+  display: flex;
+  flex-direction: column;
+}
+
+/* [自动修复] 模板 class .c-monitor-switch-item--active → 匹配元素 device-summary */
+
+.c-mc-max-1787808104264-798d48b6-c-monitor-switch-item--active {
+  display: flex;
+  flex-direction: column;
+}
+
+/* [自动修复] 模板 class .c-monitor-switch-value--error → 匹配元素 device-summary */
+
+.c-mc-max-1787808104264-798d48b6-c-monitor-switch-value--error {
+  display: flex;
+  flex-direction: column;
+}
+
+/* [自动修复] 模板 class .c-monitor-tab-item--active → 匹配元素 device-summary */
+
+.c-mc-max-1787808104264-798d48b6-c-monitor-tab-item--active {
+  display: flex;
+  flex-direction: column;
+}
+
+/* [自动修复] 模板 class .c-monitor-tab-label → 匹配元素 device-summary */
+
+.c-mc-max-1787808104264-798d48b6-c-monitor-tab-label {
+  display: flex;
+  flex-direction: column;
+}

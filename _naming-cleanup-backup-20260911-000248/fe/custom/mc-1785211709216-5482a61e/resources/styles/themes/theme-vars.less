@@ -1,0 +1,43 @@
+.common() {
+--em-primary: #1990ff;
+  --em-primary-end: #5a7eff;
+  --em-accent: #559eff;
+  --em-cyan: #57caff;
+  --em-panel-bg: #edf4fb;
+  --em-text-primary: #333333;
+  --em-text-inverse: #ffffff;
+  --em-tab-default-bg: #6680a0;
+  --em-tab-active-border: rgba(199, 224, 255, 1);
+  --em-tab-default-border: rgba(172, 196, 225, 1);
+  --em-panel-shadow: rgba(74, 117, 141, 0.25);
+  --em-highlight-shadow: rgba(255, 255, 255, 0.8);
+  @click: inherit; // 自动添加
+}
+
+.theme-dark() {
+  .common();
+
+  --em-theme-bg: #edf4fb;
+  --em-theme-primary: #1990ff;
+  --em-theme-primary-gradient-start: #1990ff;
+  --em-theme-primary-gradient-end: #5a7eff;
+  --em-theme-title-line: #559eff;
+  --em-theme-text: #333333;
+  --em-theme-text-inverse: #ffffff;
+}
+
+.theme-light() {
+  .common();
+
+  --em-theme-bg: #edf4fb;
+  --em-theme-primary: #1990ff;
+  --em-theme-primary-gradient-start: #1990ff;
+  --em-theme-primary-gradient-end: #5a7eff;
+  --em-theme-title-line: #559eff;
+  --em-theme-text: #333333;
+  --em-theme-text-inverse: #ffffff;
+}
+
+:root {
+  .theme-dark();
+}

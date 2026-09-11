@@ -1,0 +1,298 @@
+.dark .c-monitor-root {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 420px;
+  height: 425px;
+  max-width: 100%;
+  max-height: 100vh;
+  box-sizing: border-box;
+  background-image: url('../resources/images/bg-8418.png');
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+.dark .c-monitor-overview {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  position: relative;
+  padding: 16px 24px;
+  background: #edf4fb;
+  box-shadow: 0px 4px 10px rgba(74, 117, 141, 0.25);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.dark .c-monitor-overview-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url(../resources/images/bg-8788.png);
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+  pointer-events: none;
+  z-index: 0;
+}
+.dark .c-monitor-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  position: relative;
+  z-index: 1;
+}
+.dark .c-monitor-stat-label {
+  color: #333333;
+  font-size: 14px;
+  font-weight: 400;
+  margin-bottom: 8px;
+}
+.dark .c-monitor-stat-value {
+  color: #1990ff;
+  font-size: 20px;
+  font-weight: 700;
+}
+.dark .c-monitor-categories {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  position: relative;
+}
+.dark .c-monitor-categories-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.dark .c-monitor-categories-title {
+  font-size: 16px;
+  font-weight: 700;
+  background: linear-gradient(#1990ff, #5a7eff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: transparent;
+}
+.dark .c-monitor-categories-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.dark .c-monitor-device-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  padding: 16px;
+  background: #f6fbff;
+  border-radius: 6px;
+  position: relative;
+  background-image: url(../resources/images/bg-8788.png);
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+.dark .c-monitor-device-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 8px;
+  background: linear-gradient(#93ccff, #93ccff);
+  border-radius: 6px;
+  position: relative;
+}
+.dark .c-monitor-device-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+  background: linear-gradient(#4ba8fd, #5db1fe);
+  box-shadow: 0px 0.68px 0.68px #96cdff;
+}
+.dark .c-monitor-device-icon-camera,
+.dark .c-monitor-device-icon-co,
+.dark .c-monitor-device-icon-covi,
+.dark .c-monitor-device-icon-height,
+.dark .c-monitor-device-icon-light,
+.dark .c-monitor-device-icon-phone,
+.dark .c-monitor-device-icon-pressure,
+.dark .c-monitor-device-icon-radar,
+.dark .c-monitor-device-icon-robot,
+.dark .c-monitor-device-icon-temp,
+.dark .c-monitor-device-icon-water,
+.dark .c-monitor-device-icon-wind {
+  background-size: 60%;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+.dark .c-monitor-device-name {
+  color: #333333;
+  font-size: 12px;
+  font-weight: 400;
+  margin-bottom: 4px;
+  text-align: center;
+}
+.dark .c-monitor-device-value {
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 500;
+  background: linear-gradient(#127bee, #127bee);
+  padding: 2px 8px;
+  border-radius: 10px;
+  text-shadow: 0px 0px 0px rgba(0, 0, 0, 0.5);
+}
+.light .c-monitor-root {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 420px;
+  height: 425px;
+  max-width: 100%;
+  max-height: 100vh;
+  box-sizing: border-box;
+  background-image: url('../resources/images/bg-8418.png');
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+.light .c-monitor-overview {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  position: relative;
+  padding: 16px 24px;
+  background: #edf4fb;
+  box-shadow: 0px 4px 10px rgba(74, 117, 141, 0.25);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.light .c-monitor-overview-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url(../resources/images/bg-8788.png);
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+  pointer-events: none;
+  z-index: 0;
+}
+.light .c-monitor-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  position: relative;
+  z-index: 1;
+}
+.light .c-monitor-stat-label {
+  color: #333333;
+  font-size: 14px;
+  font-weight: 400;
+  margin-bottom: 8px;
+}
+.light .c-monitor-stat-value {
+  color: #1990ff;
+  font-size: 20px;
+  font-weight: 700;
+}
+.light .c-monitor-categories {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  position: relative;
+}
+.light .c-monitor-categories-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.light .c-monitor-categories-title {
+  font-size: 16px;
+  font-weight: 700;
+  background: linear-gradient(#1990ff, #5a7eff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: transparent;
+}
+.light .c-monitor-categories-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.light .c-monitor-device-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  padding: 16px;
+  background: #f6fbff;
+  border-radius: 6px;
+  position: relative;
+  background-image: url(../resources/images/bg-8788.png);
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+.light .c-monitor-device-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 8px;
+  background: linear-gradient(#93ccff, #93ccff);
+  border-radius: 6px;
+  position: relative;
+}
+.light .c-monitor-device-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+  background: linear-gradient(#4ba8fd, #5db1fe);
+  box-shadow: 0px 0.68px 0.68px #96cdff;
+}
+.light .c-monitor-device-icon-camera,
+.light .c-monitor-device-icon-co,
+.light .c-monitor-device-icon-covi,
+.light .c-monitor-device-icon-height,
+.light .c-monitor-device-icon-light,
+.light .c-monitor-device-icon-phone,
+.light .c-monitor-device-icon-pressure,
+.light .c-monitor-device-icon-radar,
+.light .c-monitor-device-icon-robot,
+.light .c-monitor-device-icon-temp,
+.light .c-monitor-device-icon-water,
+.light .c-monitor-device-icon-wind {
+  background-size: 60%;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+.light .c-monitor-device-name {
+  color: #333333;
+  font-size: 12px;
+  font-weight: 400;
+  margin-bottom: 4px;
+  text-align: center;
+}
+.light .c-monitor-device-value {
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 500;
+  background: linear-gradient(#127bee, #127bee);
+  padding: 2px 8px;
+  border-radius: 10px;
+  text-shadow: 0px 0px 0px rgba(0, 0, 0, 0.5);
+}

@@ -1,0 +1,244 @@
+// 设备监测组件业务样式
+// 所有 class 必须以 .c- 为前缀
+
+// ==================== 根容器 ====================
+.c-monitor-root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+// ==================== 头部统计栏 ====================
+.c-monitor-header-stats {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+}
+
+.c-monitor-header-stat-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.c-monitor-header-stat-label {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 21px;
+  color: #333333;
+}
+
+.c-monitor-header-stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 23.4375px;
+  background: linear-gradient(180deg, #1990ff 0%, #5a7eff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+
+  &--success {
+    color: #08a3a5;
+    background: none;
+    -webkit-text-fill-color: #08a3a5;
+  }
+}
+
+// ==================== 汇总统计卡片 ====================
+.c-monitor-summary-cards {
+  display: flex;
+  gap: 16px;
+  padding: 16px;
+}
+
+.c-monitor-card {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background-image: url(../images/bg-8788.png);
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+  border-radius: 6px;
+  box-shadow: 0px 4px 10px rgba(74, 117, 141, 0.25);
+}
+
+.c-monitor-card-icon {
+  width: 35px;
+  height: 28px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.c-monitor-card-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.c-monitor-card-label {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.33;
+  color: #ffffff;
+}
+
+.c-monitor-card-value {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.c-monitor-card-unit {
+  font-size: 14px;
+  font-weight: 400;
+  color: #ffffff;
+}
+
+.c-monitor-card-number {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.17;
+  color: #ffffff;
+}
+
+.c-monitor-card-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #e03434;
+  align-self: flex-start;
+}
+
+// ==================== 设备分类网格 ====================
+.c-monitor-device-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  padding: 16px;
+}
+
+.c-monitor-device-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  box-sizing: border-box;
+}
+
+.c-monitor-device-icon-wrapper {
+  width: 32px;
+  height: 32px;
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+
+.c-monitor-device-icon {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.c-monitor-device-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.c-monitor-device-label {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  text-align: center;
+  color: #333333;
+}
+
+.c-monitor-device-count {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 21px;
+  text-align: center;
+  color: #ffffff;
+}
+
+// ==================== 左侧导航栏 ====================
+.c-monitor-sidebar {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  background-image: url(../images/bg-8788.png);
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+  border-radius: 6px;
+}
+
+.c-monitor-sidebar-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 6px;
+  cursor: pointer;
+  transition: all 0.3s;
+  
+  &:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+  
+  &.active {
+    background: linear-gradient(180deg, rgba(25, 144, 255, 0.2) 0%, rgba(25, 144, 255, 0.05) 100%);
+    
+    .c-monitor-sidebar-label {
+      color: #ffffff;
+      font-weight: 700;
+    }
+  }
+}
+
+.c-monitor-sidebar-label {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 16px;
+  color: #ffffff;
+  text-align: center;
+  white-space: nowrap;
+  writing-mode: vertical-rl;
+  letter-spacing: 0.05em;
+  transition: all 0.3s;
+}
+
+.c-monitor-sidebar-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f53f3f;
+  border-radius: 29px;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+}

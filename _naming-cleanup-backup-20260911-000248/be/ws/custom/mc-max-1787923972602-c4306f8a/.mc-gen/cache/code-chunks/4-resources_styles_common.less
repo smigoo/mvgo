@@ -1,0 +1,101 @@
+.c-env-monitor-root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.c-env-monitor-tabs-section {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.c-env-monitor-tabs-container {
+  display: flex;
+  flex-direction: row;
+  background-image: url(../resources/images/bg-7890.png);
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+  padding: 4px;
+  border-radius: 4px;
+  gap: 4px;
+}
+
+.c-env-monitor-tab-item {
+  padding: 8px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #2c9bea;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border-radius: 4px;
+  user-select: none;
+
+  &:hover {
+    opacity: 0.85;
+  }
+
+  &.active {
+    background: linear-gradient(180deg, #1099b1 0%, #038fff 100%);
+    color: #ffffff;
+    text-shadow: 0px 0.6px 0px #006fe3;
+  }
+}
+
+.c-env-monitor-tabs-actions {
+  display: flex;
+  align-items: center;
+}
+
+.c-env-monitor-icon-group {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+}
+
+.c-env-monitor-icon-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+
+  &:hover {
+    opacity: 0.8;
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+}
+
+.c-env-monitor-icon {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.c-env-monitor-chart-section {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  background-image: url(../resources/images/bg-7890.png);
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+  padding: 16px;
+  border-radius: 4px;
+}
+
+.c-env-monitor-chart-container {
+  width: 100%;
+  height: 100%;
+  min-height: 300px;
+}

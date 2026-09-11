@@ -1,0 +1,48 @@
+// [Style Refine] 从 Figma fills 提取精确颜色值，替换臆造的框架默认色
+.common() {
+  // 图例文字: fills[0].color → rgb(51,51,51) = #333333
+  @legend-text-color: #333333;
+  // Tab 未激活文字: 洞内照明 fills[0] → rgb(44,155,234) = #2c9bea
+  @tab-label-color: #2c9bea;
+  // Tab 激活文字: 一氧化碳 fills[0] → #ffffff
+  @tab-active-label-color: #ffffff;
+  // 图表单位"辆": fills[0] → rgb(102,102,102) = #666666
+  @chart-unit-color: #666666;
+  // 预警线标签: fills[0] → rgb(211,47,47) = #d32f2f
+  @chart-warn-color: #d32f2f;
+  // 角标背景: bg fills[0] → rgb(245,63,63) = #f53f3f
+  @badge-bg-color: #f53f3f;
+  @badge-text-color: #ffffff;
+  // 图例色块: Rectangle 346241398 fills[0] → rgb(15,205,125) ≈ #0fcd7e
+  @legend-dot-color: #0fcd7e;
+  // 图例文字: zk3+785CO浓度 fills[0] → rgb(51,51,51) = #333333
+  @legend-label-color: #333333;
+}
+
+.theme-dark() {
+  @legend-text-color: #cccccc;
+  @tab-label-color: #5ab4f0;
+  @tab-active-label-color: #ffffff;
+  @chart-unit-color: #999999;
+  @chart-warn-color: #e57373;
+  @badge-bg-color: #f53f3f;
+  @badge-text-color: #ffffff;
+  @legend-dot-color: #0fcd7e;
+  @legend-label-color: #cccccc;
+}
+
+.theme-light() {
+  @legend-text-color: #333333;
+  @tab-label-color: #2c9bea;
+  @tab-active-label-color: #ffffff;
+  @chart-unit-color: #666666;
+  @chart-warn-color: #d32f2f;
+  @badge-bg-color: #f53f3f;
+  @badge-text-color: #ffffff;
+  @legend-dot-color: #0fcd7e;
+  @legend-label-color: #333333;
+}
+
+// 全局默认调用（light 主题 + common 公共变量）
+.theme-light();
+.common();

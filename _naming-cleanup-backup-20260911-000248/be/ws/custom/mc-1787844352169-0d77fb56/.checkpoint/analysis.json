@@ -1,0 +1,277 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 78,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0].body.children[0].children",
+        "message": "stat-card 内 icon 与 container 混排，应将 label+value 包装为 text-group",
+        "suggestion": "将 label 和 value 包入 container 子节点，与 icon 平级：[icon, {type: 'container', children: [label, value]}]"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "charts[0], charts[1]",
+        "message": "小时流量图表的 series/legend 数据与 chartDataHints 不一致",
+        "suggestion": "chartDataHints 中未提取到「北京方向」「上海方向」标签，需核对图表解析逻辑或补充正确 labels"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[3].body.children[0].children",
+        "message": "车型分布 stat-card 内 stats.children 嵌套过深（4层），可简化为二维结构",
+        "suggestion": "将 stat-item 提升到与 chart 平级，避免 stats 中间层"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[4].body.children[2]",
+        "message": "timeline 与 chart 平级不合理，应作为 chart 的 footer 或 annotation",
+        "suggestion": "将 timeline（时间轴+准确率）作为图表的 xAxis.data 或独立 annotation 组件"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "charts[2], charts[3]",
+        "message": "donut 图表 section 命名为 tunnel-vehicle-types，但 charts 中用通用 'donut' 标题",
+        "suggestion": "统一使用语义化命名，如 chartTitle: '江阴靖江长江隧道车型分布'"
+      }
+    ],
+    "recommendations": [
+      "统一 stat-card 结构为 [icon, text-group]，text-group 包含 label+value，减少嵌套",
+      "将流量预测的 legend 和 timeline 合并为 chart 的 grid.bottom 区域，避免重复元素",
+      "补充 chartDataHints 中缺失的系列名称（北京/上海方向），确保数据提示完整"
+    ],
+    "summary": "整体结构清晰，但 stat-card 内部嵌套不规范，图表元素（legend/timeline）存在冗余平级，chartDataHints 数据不完整。需优化卡片子结构和图表元素层级。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）- 浅色科技监测风主题",
+      "--colorPrimary": "rgba(25, 144, 255, 1)",
+      "--colorWarning": "rgba(255, 133, 51, 1)",
+      "--colorSuccess": "rgba(82, 196, 26, 1)",
+      "--colorInfo": "rgba(88, 217, 209, 1)",
+      "--colorTextBase": "rgba(51, 51, 51, 1)",
+      "--colorTextSecondary": "rgba(102, 102, 102, 1)",
+      "--colorBgBase": "#edf4fb",
+      "--colorBgContainer": "#ffffff",
+      "--colorBgCard": "rgba(255, 255, 255, 0.9)",
+      "--colorBorder": "rgba(0, 0, 0, 0.06)",
+      "--fontSize": "14px",
+      "--fontSizeTitle": "18px",
+      "--fontSizeValue": "32px",
+      "--borderRadius": "8px",
+      "--shadowCard": "0 2px 8px rgba(0, 0, 0, 0.08)"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射 - 与CSS变量对应",
+      "@color-primary": "var(--colorPrimary)",
+      "@color-warning": "var(--colorWarning)",
+      "@color-success": "var(--colorSuccess)",
+      "@color-info": "var(--colorInfo)",
+      "@color-text-base": "var(--colorTextBase)",
+      "@color-text-secondary": "var(--colorTextSecondary)",
+      "@color-bg-base": "var(--colorBgBase)",
+      "@color-bg-container": "var(--colorBgContainer)",
+      "@color-bg-card": "var(--colorBgCard)",
+      "@color-border": "var(--colorBorder)",
+      "@font-size-base": "var(--fontSize)",
+      "@font-size-title": "var(--fontSizeTitle)",
+      "@font-size-value": "var(--fontSizeValue)",
+      "@border-radius-base": "var(--borderRadius)",
+      "@shadow-card": "var(--shadowCard)"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类 - 浅色科技监测风格",
+      ".container": {
+        "width": "100%",
+        "height": "100%",
+        "background": "#edf4fb",
+        "padding": "1.43em",
+        "box-sizing": "border-box"
+      },
+      ".stat-card": {
+        "background": "rgba(255, 255, 255, 0.9)",
+        "border-radius": "var(--borderRadius, 8px)",
+        "padding": "1.43em",
+        "box-shadow": "0 2px 8px rgba(0, 0, 0, 0.08)",
+        "transition": "box-shadow 0.3s ease"
+      },
+      ".stat-card:hover": {
+        "box-shadow": "0 4px 16px rgba(0, 0, 0, 0.12)"
+      },
+      ".stat-value": {
+        "font-size": "2.29em",
+        "font-weight": "600",
+        "color": "var(--colorPrimary, rgba(25, 144, 255, 1))",
+        "line-height": "1.2",
+        "margin": "0.36em 0"
+      },
+      ".stat-label": {
+        "font-size": "var(--fontSize, 14px)",
+        "color": "var(--colorTextSecondary, rgba(102, 102, 102, 1))",
+        "margin-bottom": "0.57em"
+      },
+      ".chart-container": {
+        "background": "var(--colorBgContainer, #ffffff)",
+        "border-radius": "var(--borderRadius, 8px)",
+        "padding": "1.43em",
+        "box-shadow": "0 2px 8px rgba(0, 0, 0, 0.08)"
+      },
+      ".chart-title": {
+        "font-size": "var(--fontSizeTitle, 18px)",
+        "font-weight": "500",
+        "color": "var(--colorTextBase, rgba(51, 51, 51, 1))",
+        "margin-bottom": "1em"
+      },
+      ".accuracy-text": {
+        "color": "var(--colorSuccess, rgba(82, 196, 26, 1))",
+        "font-weight": "500"
+      },
+      ".threshold-line": {
+        "border-top": "2px dashed var(--colorWarning, rgba(255, 133, 51, 1))"
+      },
+      ".info-badge": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "padding": "0.29em 0.71em",
+        "background": "rgba(88, 217, 209, 0.1)",
+        "color": "var(--colorInfo, rgba(88, 217, 209, 1))",
+        "border-radius": "4px",
+        "font-size": "0.86em"
+      },
+      ".grid-layout": {
+        "display": "grid",
+        "gap": "1.43em",
+        "grid-template-columns": "repeat(auto-fit, minmax(240px, 1fr))"
+      },
+      ".flex-row": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "0.71em"
+      },
+      ".flex-column": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "0.71em"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调蓝色(rgba(25, 144, 255, 1))映射为--colorPrimary，用于数值强调",
+      "橙色(rgba(255, 133, 51, 1))映射为--colorWarning，用于阈值线和警告提示",
+      "绿色(rgba(82, 196, 26, 1))映射为--colorSuccess，用于准确率等正向指标",
+      "青色(rgba(88, 217, 209, 1))映射为--colorInfo，用于辅助信息标识",
+      "深灰(rgba(51, 51, 51, 1))映射为--colorTextBase，用于主要文本",
+      "浅灰渐变背景(#edf4fb)直接落地为容器background字面量值，确保关键背景可见",
+      "统计卡片和图表区域使用白色半透明背景(rgba(255, 255, 255, 0.9))",
+      "所有圆角统一使用8px，通过--borderRadius变量控制",
+      "字体大小采用em单位实现响应式，基准14px通过--fontSize配置",
+      "数值字体使用2.29em(32px)实现视觉强调",
+      "阴影效果统一使用浅色阴影(0 2px 8px rgba(0, 0, 0, 0.08))提升层次感",
+      "hover状态通过加深阴影增强交互反馈",
+      "覆盖率95%：已映射所有核心视觉元素（颜色、背景、装饰、强调样式）"
+    ],
+    "elementStyleMap": {
+      "slot-当日总流量": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "tunnel-stats": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "bridge-stats": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "hourly-tunnel-flow": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "hourly-bridge-flow": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "slot-车型分布": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "tunnel-vehicle-types-stats-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "tunnel-vehicle-types": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-stats-x-18": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "bridge-vehicle-types-stats-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "bridge-vehicle-types": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-stats-x-23": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "slot-流量预测": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-legend-x-29": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-timeline-x-32": {
+        "display": "flex",
+        "flex-direction": "row"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "slot-当日总流量",
+        "responsibility": "当日总流量（请按功能拆分）",
+        "elementCount": 8,
+        "title": "当日总流量"
+      },
+      {
+        "id": "hourly-tunnel-flow",
+        "responsibility": "江阴靖江长江隧道（请按功能拆分）",
+        "elementCount": 1,
+        "title": "江阴靖江长江隧道"
+      },
+      {
+        "id": "hourly-bridge-flow",
+        "responsibility": "江阴大桥（请按功能拆分）",
+        "elementCount": 1,
+        "title": "江阴大桥"
+      },
+      {
+        "id": "slot-车型分布",
+        "responsibility": "车型分布（请按功能拆分）",
+        "elementCount": 10,
+        "title": "车型分布"
+      },
+      {
+        "id": "slot-流量预测",
+        "responsibility": "流量预测（请按功能拆分）",
+        "elementCount": 10,
+        "title": "流量预测"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 5,
+    "reason": "有效 sections=5 ≥ 3 → 强制拆分"
+  }
+}

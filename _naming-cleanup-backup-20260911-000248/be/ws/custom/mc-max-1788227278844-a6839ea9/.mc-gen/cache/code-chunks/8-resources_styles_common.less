@@ -1,0 +1,84 @@
+// 环境监测组件 - 业务样式
+// 依据 Figma 真值表与 elementStyleMap 精确还原，主题变量仅用于无明确值属性
+
+.c-env-monitor-root {
+  font-size: var(--fontSize, 14px);
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: @spacing-sm;
+  box-sizing: border-box;
+  // 根容器无 Figma 填充证据，禁止背景/边框/圆角/阴影
+}
+// === Tabs 区域 ===
+.c-env-monitor-tabs-wrapper {
+  // 布局样式已在组件内定义，此处补充业务级容器规则（无额外覆盖）
+}
+
+.c-env-monitor-tabs-list {
+  // 背景/圆角已在组件内按 Figma 真值定义（linear-gradient #b5deff → #d1ecff, radius:4px, border:#ffffff）
+}
+
+.c-env-monitor-tab-item {
+  // 交互态由组件内 is-active 类控制
+}
+
+.c-env-monitor-tab-active-bg {
+  // 激活背景使用图片资源 bg-tab-active（linear-gradient #1099b1 → #038fff）
+}
+
+.c-env-monitor-tab-text {
+  font-size: @fontSize;
+  font-weight: 500;
+  color: #2c9bea; // Figma: 洞内照明/洞外光强/能见度 文字色
+}
+
+.c-env-monitor-tabs-icons {
+  // 图标按钮组容器，间距已在组件内定义
+}
+
+.c-env-monitor-icon-btn {
+  // 背景渐变 + inset box-shadow 已在组件内按 Figma 真值定义
+}
+
+.c-env-monitor-icon-bar,
+.c-env-monitor-icon-list {
+  // 图标条形/列表形状由组件内 span 定义，此处不重复
+}
+
+.c-env-monitor-badge {
+  font-size: calc(@fontSize * 0.85); // Figma: 12px → 系数 0.857 近似值，采用组件内既有系数
+  background: #f53f3f; // Figma: num/bg 精确值
+  color: #ffffff;
+}
+// === Chart 区域 ===
+.c-env-monitor-chart-section {
+  background-image: url(../images/bg-7890.png);
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+
+.c-env-monitor-chart-legend {
+  cursor: pointer;
+}
+
+.c-env-monitor-chart-legend-color {
+  background: #0fcd7d; // Figma: Vector 1304 渐变色值
+  border-radius: 1.6px; // Figma: Group 1321318245 / Rectangle 346241398 radius
+}
+
+.c-env-monitor-chart-legend-text {
+  font-size: calc(@fontSize * 0.6857); // Figma: 9.6px / 14px 基准
+  color: #333333; // Figma: zk3+785CO浓度 文字色
+  font-weight: 400;
+}
+
+.c-env-monitor-chart-legend:not(.is-active) .c-env-monitor-chart-legend-text {
+  color: @text-color-tertiary;
+}
+
+.c-env-monitor-chart-container {
+  // echarts 内部渲染由图表库自身控制样式，容器尺寸已在组件内定义
+}

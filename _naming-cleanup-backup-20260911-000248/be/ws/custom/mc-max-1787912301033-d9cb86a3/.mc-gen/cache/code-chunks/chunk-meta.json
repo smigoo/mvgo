@@ -1,0 +1,20 @@
+{
+  "completed": [
+    "1-declare.json",
+    "2-package/index.vue",
+    "3-package/components/HeaderStats.vue",
+    "4-package/components/MainContent.vue",
+    "5-resources/styles/themes/theme-vars.less",
+    "6-resources/styles/common.less"
+  ],
+  "total": 3,
+  "updatedAt": 1787912526375,
+  "files": {
+    "declare.json": "1-declare.json",
+    "package/index.vue": "2-package_index.vue",
+    "package/components/HeaderStats.vue": "3-package_components_HeaderStats.vue",
+    "package/components/MainContent.vue": "4-package_components_MainContent.vue",
+    "resources/styles/common.less": "6-resources_styles_common.less",
+    "resources/styles/themes/theme-vars.less": "5-resources_styles_themes_theme-vars.less"
+  }
+}

@@ -1,0 +1,296 @@
+/* [Layout Refine] 重构根容器，移除背景图，使用 Figma 背景色 */
+.c-device-monitor-root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  box-sizing: border-box;
+  overflow: hidden;
+  background: #edf4fb;
+}
+
+/* [Layout Refine] Header 区域水平布局 */
+.c-device-monitor-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 30px;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+
+.c-device-monitor-header-left {
+  display: flex;
+  align-items: center;
+}
+
+.c-device-monitor-title {
+  font-family: 'Noto Sans SC', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  background: linear-gradient(90deg, #1990ff 0%, #5a7eff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.c-device-monitor-header-stats {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 24px;
+  margin-left: 24px;
+  flex: 1;
+}
+
+.c-device-monitor-stat-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+.c-device-monitor-stat-label {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  color: #333333;
+  line-height: 21px;
+}
+
+.c-device-monitor-stat-value {
+  font-family: 'Roboto', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 23px;
+  
+  &.primary {
+    color: #1990ff;
+  }
+  
+  &.success {
+    color: #08a3a5;
+  }
+}
+
+.c-device-monitor-update-tip {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  color: #1990ff;
+  line-height: 21px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* [Layout Refine] Switch 概览卡片水平布局 */
+.c-device-monitor-switch {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+
+.c-device-monitor-switch-card {
+  flex: 1;
+  height: 65px;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 0 16px;
+  position: relative;
+  cursor: pointer;
+  background: linear-gradient(135deg, rgba(92, 192, 255, 0.4) 0%, rgba(92, 192, 255, 0.1) 100%);
+  border: 1px solid rgba(92, 192, 255, 0.6);
+  transition: all 0.3s;
+  
+  &.is-active {
+    background: linear-gradient(135deg, rgba(43, 155, 255, 0.8) 0%, rgba(41, 154, 255, 0.4) 100%);
+    border: 1px solid rgba(43, 155, 255, 0.8);
+    
+    .c-device-monitor-switch-text,
+    .c-device-monitor-switch-title {
+      color: #ffffff;
+    }
+    .c-device-monitor-switch-num {
+      color: #ffffff;
+    }
+  }
+}
+
+.c-device-monitor-switch-icon {
+  width: 35px;
+  height: 28px;
+  flex-shrink: 0;
+  margin-right: 12px;
+  
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+}
+
+.c-device-monitor-switch-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.c-device-monitor-switch-line {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+.c-device-monitor-switch-text {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  color: #333333;
+  line-height: 21px;
+}
+
+.c-device-monitor-switch-num {
+  font-family: 'Roboto', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 23px;
+  color: #1990ff;
+  
+  &.error {
+    color: #f53f3f;
+  }
+}
+
+.c-device-monitor-switch-title {
+  position: absolute;
+  bottom: 8px;
+  left: 16px;
+  font-family: 'YouSheBiaoTiHei', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  color: #333333;
+  line-height: 16px;
+}
+
+.c-device-alarm-root {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  flex: 1;
+  gap: 12px;
+  min-height: 0;
+}
+
+.c-device-alarm-tabs {
+  display: flex;
+  flex-direction: column;
+  width: 46px;
+  flex-shrink: 0;
+  gap: 4px;
+  align-items: center;
+}
+
+.c-device-alarm-tab-item {
+  width: 34px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  padding: 4px 0;
+  background-size: 100% 100%
+  transition: all 0.3s;
+  border-radius: 4px;
+}
+
+.c-device-alarm-tab-text {
+  font-size: 14px;
+  color: #333333;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.c-device-alarm-tab-badge {
+  width: 14px;
+  height: 14px;
+  background: #f53f3f;
+  border-radius: 50%;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px;
+}
+
+.c-device-alarm-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.c-device-alarm-card {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 8px;
+  gap: 8px;
+  background-size: 100% 100%
+  min-width: 0;
+  border-radius: 4px;
+}
+
+.c-device-alarm-card-icon {
+  width: 27px;
+  height: 32px;
+  flex-shrink: 0;
+}
+
+.c-device-alarm-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.c-device-alarm-card-label {
+  font-size: 12px;
+  color: #333333;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.c-device-alarm-card-value {
+  font-family: 'Roboto', sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 18.75px;
+}
+
+// --- 铁律强制要求的独立状态类 ---
+.error {
+  color: #f53f3f !important;
+}
+
+.is-total {
+  color: #999999 !important;
+}
+
+.is-normal {
+  color: #08a3a5 !important;
+}

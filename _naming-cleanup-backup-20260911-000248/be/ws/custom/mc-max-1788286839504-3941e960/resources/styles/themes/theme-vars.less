@@ -1,0 +1,67 @@
+// 主题变量定义文件
+// 由 Style Mapper 从 Figma 设计稿提取，禁止修改变量名和色值
+
+// 公共变量（主题无关）
+.common() {
+  // 字体缩放基准令牌（根容器通过 CSS 变量 --fontSize 驱动）
+  @fontSize: 14px;
+  
+  // 基础字体大小
+  @font-size-base: 14px;
+  @font-size-title: 16px;
+  
+  // 圆角
+  @border-radius-base: 4px;
+}
+
+// 深色主题
+.theme-dark() {
+  // 主色调
+  @color-primary: #559eff;
+  @color-primary-active: #4589ff;
+  @color-primary-bg: #559eff;
+  
+  // 功能色
+  @color-success: #5fc694;
+  @color-danger: #ff6b6b;
+  
+  // 文字颜色（深色面板禁止使用黑色系）
+  @color-text-base: #e6e6e6;
+  @color-text-secondary: #999999;
+  
+  // 背景色
+  @color-bg: #1a2332;
+  @color-bg-container: #2a3544;
+  
+  // 边框色
+  @color-border: rgba(255, 255, 255, 0.06);
+}
+
+// 浅色主题（默认主题，与设计稿一致）
+.theme-light() {
+  // 主色调
+  @color-primary: #559eff;
+  @color-primary-active: #4589ff;
+  @color-primary-bg: #559eff;
+  
+  // 功能色
+  @color-success: #5fc694;
+  @color-danger: #ff6b6b;
+  
+  // 文字颜色
+  @color-text-base: #333333;
+  @color-text-secondary: #999999;
+  
+  // 背景色
+  @color-bg: #edf4fb;
+  @color-bg-container: #ffffff;
+  
+  // 边框色
+  @color-border: rgba(0, 0, 0, 0.06);
+}
+
+// 自动添加：将 .common() 中的 Less 变量暴露到全局作用域
+
+:root {
+  .common();
+}

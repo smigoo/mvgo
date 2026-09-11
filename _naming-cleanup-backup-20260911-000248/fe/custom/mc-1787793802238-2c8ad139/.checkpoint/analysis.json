@@ -1,0 +1,298 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "issues": [
+      {
+        "id": "response_parse_failed",
+        "type": "response_parse_failed",
+        "severity": "warning",
+        "message": "布局审查响应解析失败，结果不可信"
+      }
+    ],
+    "score": 0,
+    "recommendations": [],
+    "degraded": true
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "浅色设备监测大屏主题 CSS 变量（camelCase）",
+      "--colorBg": "#edf4fb",
+      "--colorPrimary": "#1890ff",
+      "--colorSecondary": "#05a3a5",
+      "--colorTextBase": "#333333",
+      "--colorTextSecondary": "#999999",
+      "--colorDanger": "#f53f3f",
+      "--colorCardBg": "#ffffff",
+      "--colorCardBlueBg": "#1890ff",
+      "--colorNavActiveBg": "#1890ff",
+      "--colorNavActiveText": "#ffffff",
+      "--colorHighlightValue": "#1890ff",
+      "--fontSizeBase": "14px",
+      "--fontSizeTitle": "20px",
+      "--fontSizeStatValue": "28px",
+      "--borderRadiusCard": "8px",
+      "--boxShadowCard": "0 2px 8px rgba(24, 144, 255, 0.15)"
+    },
+    "lessVariables": {
+      "comment": "Less 变量映射，供 common.less 业务样式使用",
+      "@color-bg": "var(--colorBg)",
+      "@color-primary": "var(--colorPrimary)",
+      "@color-secondary": "var(--colorSecondary)",
+      "@color-text-base": "var(--colorTextBase)",
+      "@color-text-secondary": "var(--colorTextSecondary)",
+      "@color-danger": "var(--colorDanger)",
+      "@color-card-bg": "var(--colorCardBg)",
+      "@color-card-blue-bg": "var(--colorCardBlueBg)",
+      "@color-nav-active-bg": "var(--colorNavActiveBg)",
+      "@color-nav-active-text": "var(--colorNavActiveText)",
+      "@color-highlight-value": "var(--colorHighlightValue)",
+      "@font-size-base": "var(--fontSizeBase)",
+      "@font-size-title": "var(--fontSizeTitle)",
+      "@font-size-stat-value": "var(--fontSizeStatValue)",
+      "@border-radius-card": "var(--borderRadiusCard)",
+      "@box-shadow-card": "var(--boxShadowCard)"
+    },
+    "cssClasses": {
+      "comment": "可复用的 CSS 类（浅色设备监测大屏风格）",
+      ".device-dashboard": {
+        "display": "flex",
+        "flex-direction": "column",
+        "width": "100%",
+        "height": "100%",
+        "background": "#edf4fb",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSizeBase)"
+      },
+      ".device-dashboard__header": {
+        "display": "flex",
+        "justify-content": "space-between",
+        "align-items": "center",
+        "padding": "16px 24px",
+        "background": "transparent"
+      },
+      ".device-dashboard__title": {
+        "font-size": "var(--fontSizeTitle)",
+        "font-weight": "600",
+        "color": "var(--colorTextBase)"
+      },
+      ".device-dashboard__body": {
+        "display": "flex",
+        "flex": "1",
+        "gap": "16px",
+        "padding": "0 16px 16px"
+      },
+      ".device-dashboard__nav": {
+        "display": "flex",
+        "flex-direction": "column",
+        "width": "180px",
+        "background": "#ffffff",
+        "border-radius": "var(--borderRadiusCard)",
+        "box-shadow": "var(--boxShadowCard)",
+        "overflow": "hidden"
+      },
+      ".device-dashboard__nav-item": {
+        "display": "flex",
+        "align-items": "center",
+        "height": "48px",
+        "padding": "0 20px",
+        "font-size": "var(--fontSizeBase)",
+        "color": "var(--colorTextBase)",
+        "cursor": "pointer",
+        "border-left": "3px solid transparent",
+        "transition": "all 0.2s ease"
+      },
+      ".device-dashboard__nav-item--active": {
+        "background": "var(--colorNavActiveBg)",
+        "color": "var(--colorNavActiveText)",
+        "border-left-color": "#05a3a5"
+      },
+      ".device-dashboard__content": {
+        "display": "flex",
+        "flex": "1",
+        "flex-direction": "column",
+        "gap": "16px",
+        "min-width": "0"
+      },
+      ".stat-cards-row": {
+        "display": "flex",
+        "gap": "16px"
+      },
+      ".stat-card": {
+        "display": "flex",
+        "flex-direction": "column",
+        "flex": "1",
+        "padding": "20px",
+        "background": "var(--colorCardBg)",
+        "border-radius": "var(--borderRadiusCard)",
+        "box-shadow": "var(--boxShadowCard)"
+      },
+      ".stat-card--blue": {
+        "display": "flex",
+        "flex-direction": "column",
+        "flex": "1",
+        "padding": "20px",
+        "background": "var(--colorCardBlueBg)",
+        "border-radius": "var(--borderRadiusCard)",
+        "box-shadow": "var(--boxShadowCard)",
+        "color": "#ffffff"
+      },
+      ".stat-card__label": {
+        "font-size": "var(--fontSizeBase)",
+        "color": "var(--colorTextSecondary)",
+        "margin-bottom": "8px"
+      },
+      ".stat-card--blue .stat-card__label": {
+        "color": "rgba(255, 255, 255, 0.85)"
+      },
+      ".stat-card__value": {
+        "font-size": "var(--fontSizeStatValue)",
+        "font-weight": "700",
+        "color": "var(--colorHighlightValue)"
+      },
+      ".stat-card--blue .stat-card__value": {
+        "color": "#ffffff"
+      },
+      ".stat-card--green .stat-card__value": {
+        "color": "#05a3a5"
+      },
+      ".stat-card__extra": {
+        "font-size": "12px",
+        "color": "var(--colorTextSecondary)",
+        "margin-top": "4px"
+      },
+      ".device-grid": {
+        "display": "grid",
+        "grid-template-columns": "repeat(auto-fill, minmax(120px, 1fr))",
+        "gap": "16px",
+        "padding": "20px",
+        "background": "var(--colorCardBg)",
+        "border-radius": "var(--borderRadiusCard)",
+        "box-shadow": "var(--boxShadowCard)"
+      },
+      ".device-item": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center",
+        "justify-content": "center",
+        "gap": "8px",
+        "padding": "16px 8px",
+        "background": "#f7fafd",
+        "border-radius": "6px",
+        "border": "1px solid #e6f0fa"
+      },
+      ".device-item__icon": {
+        "display": "flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "width": "48px",
+        "height": "48px",
+        "border-radius": "50%",
+        "background": "rgba(24, 144, 255, 0.12)",
+        "color": "var(--colorPrimary)",
+        "font-size": "24px"
+      },
+      ".device-item--offline .device-item__icon": {
+        "background": "rgba(153, 153, 153, 0.15)",
+        "color": "var(--colorTextSecondary)"
+      },
+      ".device-item__name": {
+        "font-size": "var(--fontSizeBase)",
+        "color": "var(--colorTextBase)",
+        "text-align": "center"
+      },
+      ".device-item__status": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "4px",
+        "font-size": "12px"
+      },
+      ".device-item__status-dot": {
+        "width": "8px",
+        "height": "8px",
+        "border-radius": "50%",
+        "background": "#05a3a5"
+      },
+      ".device-item--offline .device-item__status-dot": {
+        "background": "#f53f3f"
+      },
+      ".chart-panel": {
+        "padding": "20px",
+        "background": "var(--colorCardBg)",
+        "border-radius": "var(--borderRadiusCard)",
+        "box-shadow": "var(--boxShadowCard)"
+      },
+      ".chart-panel__title": {
+        "font-size": "16px",
+        "font-weight": "600",
+        "color": "var(--colorTextBase)",
+        "margin-bottom": "16px",
+        "padding-left": "12px",
+        "border-left": "3px solid var(--colorPrimary)"
+      },
+      ".highlight-number": {
+        "color": "var(--colorPrimary)",
+        "font-weight": "700"
+      },
+      ".highlight-number--danger": {
+        "color": "var(--colorDanger)"
+      },
+      ".highlight-number--success": {
+        "color": "var(--colorSecondary)"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "背景 #edf4fb 直接落地为 .device-dashboard 的 background，并映射为 --colorBg 与 @color-bg，保证浅灰蓝底色始终可见",
+      "主色调 #1890ff 映射为 --colorPrimary，同时用于蓝色数值高亮（.stat-card__value）、导航选中态（.nav-item--active）及设备图标底色",
+      "辅助色 #05a3a5 映射为 --colorSecondary，用于设备在线状态、绿色数值强调（完好率 98% 可用 .highlight-number--success）",
+      "#f53f3f 映射为 --colorDanger，用于离线状态和异常告警数值",
+      "文字层级：#333333 为基础文字 --colorTextBase，#999999 为次级说明文字 --colorTextSecondary",
+      "蓝色信息块通过 .stat-card--blue 实现白色文字 + 蓝色背景，与浅灰内容块（白色卡片）形成对比",
+      "左侧竖向分类导航：180px 宽的白色卡片 + .nav-item 垂直排列，选中项使用蓝色背景和白色文字",
+      "圆形设备图标以 48px 圆形 + 主色透明底色的方式实现",
+      "总数56302、总数1280、完好率98% 三个核心数值使用 .stat-card__value 的大字号加粗样式突出显示",
+      "所有盒子阴影统一使用 rgba(24, 144, 255, 0.15) 的轻量蓝色投影，与浅色大屏主题一致"
+    ],
+    "elementStyleMap": {
+      "device-overview": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-2": {
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "device-categories": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-7": {
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "device-overview",
+        "responsibility": "数据统计指标区（数字+标签+趋势）",
+        "elementCount": 3,
+        "title": "设备概览"
+      },
+      {
+        "id": "device-categories",
+        "responsibility": "设备类型分类（请按功能拆分）",
+        "elementCount": 12,
+        "title": "设备类型分类"
+      }
+    ],
+    "isForced": false,
+    "minFiles": 0,
+    "reason": "有效 sections=2 < 3 → 不强制拆分"
+  }
+}

@@ -1,0 +1,178 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 60,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "违反核心规范：禁止生成组件面板标题。`section-header` 生成了组件标题“环境监测”及装饰图标。根据规范，面板标题由 `base-panel` 通过 `declare.json.componentName` 自动处理，组件内部禁止重复生成。",
+        "suggestion": "删除 `section-header` 整个节点，组件内容直接从 `section-controls` 开始。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[0]",
+        "message": "违反宽度自适应约束：`chart-container` 使用了固定宽度 `width: 380`。组件内部布局必须自适应容器宽度，禁止使用固定 px 宽度限制容器伸缩。",
+        "suggestion": "将 `width: 380` 修改为 `width: 100%` 或使用 `flex: 1` 进行自适应布局。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[*].body.backgroundImage",
+        "message": "背景图片重复引用：三个 section 的 body 均引用了相同的背景图 `bg-7890.png`，在垂直堆叠时会导致背景重复显示或出现接缝。",
+        "suggestion": "将背景图提升至组件根容器，或仅在真正需要独立背景的区块使用，避免每个 section 重复设置相同的背景。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[1].children",
+        "message": "图标资源解析重复：`view-icons` 中的“柱状图视图”和“列表视图”使用了完全相同的图片资源 `tabs-icon-43.png`，这不符合视觉逻辑。",
+        "suggestion": "重新核对 Figma 设计稿中的图标资源，确保柱状图和列表视图使用不同的图标文件。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[0].children[0]",
+        "message": "图表 Y 轴单位与业务语义冲突：Y 轴标签为“辆”，但图例和 Tab 为“CO浓度”（环境监测）。",
+        "suggestion": "在代码生成阶段修正 Y 轴单位为浓度单位（如 ppm 或 mg/m³），或向设计师确认设计稿文案错误。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[2].body.children[0]",
+        "message": "缺少图表防溢出布局约束：`chart-container` 未体现防止 ECharts 溢出的布局属性。",
+        "suggestion": "在生成代码时，确保图表外层容器设置 `min-width: 0` 和 `overflow: hidden`，并在 ECharts 配置中设置 `grid.containLabel: true`。"
+      }
+    ],
+    "recommendations": [
+      "移除 `section-header`，让 `base-panel` 统一处理面板标题，确保符合微码组件核心规范。",
+      "将图表容器的固定宽度改为 `width: 100%`，并配合 `ResizeObserver` 实现真正的自适应。",
+      "优化背景图的使用方式，避免在垂直堆叠的子节点中重复设置相同的背景图，建议提取到父级容器。",
+      "在代码生成阶段，确保 Tab 切换（一氧化碳、能见度等）能够联动更新图表数据，而不仅仅是样式切换。",
+      "修正设计稿中的文案错误（Y轴单位“辆”改为浓度单位），提升组件的专业性和准确性。"
+    ],
+    "summary": "该布局结构整体划分较为清晰，能够识别出标题、Tab控制区和图表区。但存在违反微码核心规范的问题：错误地生成了面板标题（应由 base-panel 处理），且图表容器使用了固定宽度，破坏了自适应布局。此外，背景图重复引用和图标资源解析重复也是明显的瑕疵。建议删除标题栏节点，修正宽度约束，并优化背景图层级，以达到微码组件的生成标准。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "rgba(85, 158, 255, 1)",
+      "--colorBg": "rgba(237, 244, 251, 1)",
+      "--colorSuccess": "#52c41a",
+      "--colorDanger": "#f53f3f",
+      "--colorTextBase": "#011025",
+      "--fontSize": "14px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "rgba(85, 158, 255, 1)",
+      "@color-bg": "rgba(237, 244, 251, 1)",
+      "@color-success": "#52c41a",
+      "@color-danger": "#f53f3f",
+      "@color-text-base": "#011025",
+      "@font-size-base": "14px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "16px",
+        "background": "var(--colorBg, rgba(237, 244, 251, 1))",
+        "color": "var(--colorTextBase, #011025)",
+        "font-size": "var(--fontSize, 14px)"
+      },
+      ".tab-active": {
+        "position": "relative",
+        "color": "#ffffff",
+        "background": "var(--colorPrimary, rgba(85, 158, 255, 1))",
+        "clip-path": "polygon(0 0, 100% 0, 85% 100%, 15% 100%)",
+        "font-weight": "bold"
+      },
+      ".chart-area-fill": {
+        "fill": "var(--colorSuccess, #52c41a)",
+        "opacity": "0.2",
+        "stroke": "var(--colorSuccess, #52c41a)",
+        "stroke-width": "2px"
+      },
+      ".warning-line": {
+        "stroke": "var(--colorDanger, #f53f3f)",
+        "stroke-dasharray": "6 4",
+        "stroke-width": "2px",
+        "fill": "none"
+      },
+      ".badge-danger": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "min-width": "20px",
+        "height": "20px",
+        "padding": "0 6px",
+        "background": "var(--colorDanger, #f53f3f)",
+        "color": "#ffffff",
+        "border-radius": "10px",
+        "font-size": "12px",
+        "font-weight": "bold",
+        "line-height": "1"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 rgba(85, 158, 255, 1) 映射为 --colorPrimary，用于Tab选中态箭头背景等科技风强调元素",
+      "浅灰蓝色背景 rgba(237, 244, 251, 1) 映射为 --colorBg，作为组件容器基础背景",
+      "绿色 #52c41a 映射为 --colorSuccess，用于图表绿色面积填充等正向/数据展示元素",
+      "红色 #f53f3f 映射为 --colorDanger，用于预警线红色虚线及Badge红色数字等警示元素",
+      "容器背景应优先直接落地为 Figma 字面量值，避免关键可见背景只依赖 CSS 变量"
+    ],
+    "elementStyleMap": {
+      "section-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "section-controls": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tab-switch": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "view-icons": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-6": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center",
+        "justify-content": "space-between",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-16": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  }
+}

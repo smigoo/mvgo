@@ -1,0 +1,114 @@
+// 主题变量文件
+// 结构：.common() / .theme-dark() / .theme-light() 三个 mixin
+// 说明：颜色变量仅定义在 mixin 内部，根级不调用任何主题 mixin
+//       dark.less / light.less 由系统在主题选择器内先调用 .common() 与对应主题 mixin，再导入 common.less
+// 默认主题：light（.theme-light() 中的颜色即组件默认展示色）
+
+// 公共令牌：字体缩放基准、间距、圆角等与主题无关的变量
+.common() {
+  // 字体缩放基准令牌（根容器通过 CSS 变量 --fontSize 驱动，默认 14px）
+  @fontSize: 14px;
+
+  // 字号阶梯
+  @font-size-sm: 12px;
+  @font-size-base: 14px;
+  @font-size-lg: 16px;
+  @font-size-xl: 20px;
+
+  // 字重
+  @font-weight-normal: 400;
+  @font-weight-medium: 500;
+  @font-weight-bold: 600;
+
+  // 间距阶梯
+  @spacing-xs: 4px;
+  @spacing-sm: 8px;
+  @spacing-md: 16px;
+  @spacing-lg: 24px;
+  @spacing-xl: 32px;
+
+  // 圆角
+  @radius-sm: 2px;
+  @radius-md: 4px;
+  @radius-lg: 8px;
+
+  // 行高
+  @line-height-base: 1.5;
+
+  // 主题事实：tab 激活态背景图（tab-1）
+  @tab-active-bg-image: url(../resources/images/bg-tab-active-7891.png);
+  @tab-active-bg-size: cover;
+  @tab-active-bg-position: center;
+  @tab-active-bg-repeat: no-repeat;
+
+  // 主题事实：区块背景图（el-el-x-10）
+  @block-bg-image: url(../resources/images/bg-7890.png);
+  @block-bg-size: cover;
+  @block-bg-position: center;
+  @block-bg-repeat: no-repeat;
+}
+
+// 深色主题
+// 注意：深色面板所有文字颜色禁止使用黑色系
+.theme-dark() {
+  // 文本
+  @text-color: #e6ecf5;
+  @text-color-secondary: #a3b0c2;
+  @text-color-disabled: #6b7787;
+
+  // 背景（用于组件内部区块，非根容器）
+  @panel-bg-color: #1a2332;
+  @panel-bg-color-elevated: #232f42;
+  @panel-bg-color-hover: #2b3852;
+
+  // 边框 / 分割线
+  @border-color: #33415c;
+  @divider-color: #2a3548;
+
+  // 强调色
+  @primary-color: #4a90e2;
+  @primary-color-hover: #6aa8ee;
+  @primary-color-active: #3a7bc8;
+
+  // 状态色
+  @success-color: #3fb950;
+  @warning-color: #d29922;
+  @error-color: #f85149;
+  @info-color: #58a6ff;
+
+  // tab 相关
+  @tab-text-color: #a3b0c2;
+  @tab-text-color-active: #ffffff;
+}
+
+// 浅色主题（默认主题，颜色须与设计稿一致）
+.theme-light() {
+  // 文本
+  @text-color: #1f2733;
+  @text-color-secondary: #5c6673;
+  @text-color-disabled: #a8b0bd;
+
+  // 背景（用于组件内部区块，非根容器）
+  @panel-bg-color: #ffffff;
+  @panel-bg-color-elevated: #f5f7fa;
+  @panel-bg-color-hover: #eef1f6;
+
+  // 边框 / 分割线
+  @border-color: #e2e6ed;
+  @divider-color: #eceff4;
+
+  // 强调色
+  @primary-color: #2f6fed;
+  @primary-color-hover: #4d86f5;
+  @primary-color-active: #2559c9;
+
+  // 状态色
+  @success-color: #21a366;
+  @warning-color: #e6a23c;
+  @error-color: #e34d59;
+  @info-color: #2f6fed;
+
+  // tab 相关
+  @tab-text-color: #5c6673;
+  @tab-text-color-active: #1f2733;
+}

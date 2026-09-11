@@ -1,0 +1,212 @@
+@import './themes/theme-vars.less';
+
+// 标题装饰点
+.c-mc-max-1785984937554-3cc58f63-title-dot {
+  width: 8px;
+  height: 8px;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+// 内容区（禁止设置 background/box-shadow/border-radius，由 base-panel 提供外壳）
+.c-mc-max-1785984937554-3cc58f63-content {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: 0;
+}
+
+// 子标题/Tab 区域
+.c-mc-max-1785984937554-3cc58f63-sub-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  height: 32px;
+  padding: 0 4px;
+  flex-shrink: 0;
+}
+
+// Tabs 列表容器
+.c-mc-max-1785984937554-3cc58f63-tabs-list {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 27px;
+  border-radius: 3px;
+  overflow: hidden;
+  flex: 1;
+}
+
+// 单个 Tab 项
+.c-mc-max-1785984937554-3cc58f63-tab-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  height: 100%;
+  cursor: pointer;
+  user-select: none;
+
+  &--active {
+    .c-mc-max-1785984937554-3cc58f63-tab-label {
+      color: #ffffff;
+      text-shadow: 0 0.6px 0 rgba(0, 111, 227, 1);
+    }
+  }
+}
+
+// Tab 激活背景层（绝对定位覆盖整个 tab-item）
+.c-mc-max-1785984937554-3cc58f63-tab-active-bg {
+  position: absolute;
+  inset: 0;
+  border-radius: 3px;
+  z-index: 0;
+}
+
+// Tab 文字标签
+.c-mc-max-1785984937554-3cc58f63-tab-label {
+  position: relative;
+  z-index: 1;
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 12px;
+  color: #2c9bea;
+  white-space: nowrap;
+}
+
+// 图标包裹区（tabs 右侧图标 + 角标）
+.c-mc-max-1785984937554-3cc58f63-tabs-icon-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 24px;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+// 图标图片
+.c-mc-max-1785984937554-3cc58f63-tabs-icon {
+  width: 24px;
+  height: 24px;
+  display: block;
+}
+
+// 角标容器
+.c-mc-max-1785984937554-3cc58f63-badge {
+  position: absolute;
+  top: -4px;
+  right: 2px;
+  min-width: 14px;
+  height: 14px;
+  background-color: #f53f3f;
+  border-radius: 29px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 2px;
+}
+
+// 角标数字
+.c-mc-max-1785984937554-3cc58f63-badge-num {
+  font-family: 'PingFang SC', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 14px;
+  color: #ffffff;
+}
+
+// 图表区域（Y轴标签 + 图表容器）
+.c-mc-max-1785984937554-3cc58f63-chart-area {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  flex: 1;
+  min-height: 0;
+  padding: 4px 0 0 0;
+}
+
+// Y轴标签列（单位 + 预警线文字）
+.c-mc-max-1785984937554-3cc58f63-chart-y-label {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  width: 36px;
+  flex-shrink: 0;
+  padding: 0 2px 24px 0;
+}
+
+// 图表单位文字（辆）
+.c-mc-max-1785984937554-3cc58f63-chart-unit {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 21.6px;
+  color: #666666;
+  text-align: right;
+}
+
+// 预警线标签文字
+.c-mc-max-1785984937554-3cc58f63-chart-warn-label {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 21.6px;
+  color: #d32f2f;
+  text-align: right;
+}
+
+// ECharts 图表容器
+.c-mc-max-1785984937554-3cc58f63-chart-container {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+}
+
+// 图例区域
+.c-mc-max-1785984937554-3cc58f63-legend-area {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  height: 14px;
+  padding: 0 8px;
+  flex-shrink: 0;
+  margin-bottom: 4px;
+}
+
+// 单个图例项
+.c-mc-max-1785984937554-3cc58f63-legend-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+// 图例色块（小方块/短横线）
+.c-mc-max-1785984937554-3cc58f63-legend-dot {
+  display: inline-block;
+  width: 14px;
+  height: 2px;
+  background-color: #0fcd7d;
+  border-radius: 1.6px;
+  flex-shrink: 0;
+}
+
+// 图例文字
+.c-mc-max-1785984937554-3cc58f63-legend-text {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 9.6px;
+  font-weight: 400;
+  line-height: 14.4px;
+  color: @legend-text-color;
+  white-space: nowrap;
+}

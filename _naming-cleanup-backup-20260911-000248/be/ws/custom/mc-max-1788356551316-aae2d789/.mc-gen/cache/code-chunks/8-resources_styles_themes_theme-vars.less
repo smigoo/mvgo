@@ -1,0 +1,66 @@
+// 微码组件主题变量文件
+// 定义三个 mixin：.common()、.theme-dark()、.theme-light()
+// 由系统生成的 dark.less/light.less 在主题选择器内调用
+
+.common() {
+  // 字体缩放基准令牌（根容器通过 CSS 变量 --fontSize 驱动）
+  @fontSize: 14px;
+  
+  // 公共字体尺寸
+  @font-size-base: 14px;
+  @font-size-value-lg: 40px;
+  
+  // 公共字重
+  @font-weight-strong: 700;
+  @font-weight-normal: 400;
+}
+
+.theme-light() {
+  // 主色
+  @color-primary: rgba(85, 158, 255, 1);
+  
+  // 状态色
+  @color-danger: rgba(255, 77, 79, 1);
+  
+  // 文本色系
+  @color-text-base: rgba(0, 0, 0, 1);
+  @color-text-secondary: rgba(102, 102, 102, 1);
+  @color-text-tertiary: rgba(153, 153, 153, 1);
+  
+  // 背景色系
+  @color-bg-base: rgba(237, 244, 251, 1);
+  @color-bg-card: rgba(255, 255, 255, 1);
+  
+  // 边框色
+  @color-border-base: rgba(230, 230, 230, 1);
+  
+  // 辅助色
+  @color-info: rgba(85, 158, 255, 1);
+  @color-success: rgba(82, 196, 26, 1);
+  @color-warning: rgba(250, 173, 20, 1);
+}
+
+.theme-dark() {
+  // 主色
+  @color-primary: rgba(85, 158, 255, 1);
+  
+  // 状态色
+  @color-danger: rgba(255, 77, 79, 1);
+  
+  // 文本色系（深色模式禁止黑色系）
+  @color-text-base: rgba(255, 255, 255, 1);
+  @color-text-secondary: rgba(204, 204, 204, 1);
+  @color-text-tertiary: rgba(153, 153, 153, 1);
+  
+  // 背景色系
+  @color-bg-base: rgba(26, 35, 50, 1);
+  @color-bg-card: rgba(36, 46, 64, 1);
+  
+  // 边框色
+  @color-border-base: rgba(64, 74, 92, 1);
+  
+  // 辅助色
+  @color-info: rgba(85, 158, 255, 1);
+  @color-success: rgba(82, 196, 26, 1);
+  @color-warning: rgba(250, 173, 20, 1);
+}

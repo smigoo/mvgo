@@ -1,0 +1,59 @@
+{
+  "name": "mc-lite-1785842756914-98bad2c9",
+  "title": "巡检机器人状态弹窗",
+  "description": "展示巡检机器人的各项运行状态数据，包含标题栏和两列网格布局的信息区。",
+  "props": [
+    {
+      "name": "title",
+      "type": "String",
+      "default": "巡检机器人(机器人名称)",
+      "description": "弹窗标题文本"
+    },
+    {
+      "name": "items",
+      "type": "Array",
+      "default": [],
+      "description": "状态信息列表，每项包含 label, value, colorType(success/danger/default)",
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "label": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            },
+            "colorType": {
+              "type": "string",
+              "enum": [
+                "success",
+                "danger",
+                "default"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "theme",
+      "type": "Object",
+      "default": {},
+      "description": "主题配置对象，可覆盖 backgroundColor, textColor, primaryColor 等"
+    }
+  ],
+  "events": [
+    {
+      "name": "close",
+      "description": "点击关闭按钮时触发"
+    }
+  ],
+  "slots": [],
+  "style": {
+    "width": "600px",
+    "height": "auto"
+  },
+  "attribute": {}
+}

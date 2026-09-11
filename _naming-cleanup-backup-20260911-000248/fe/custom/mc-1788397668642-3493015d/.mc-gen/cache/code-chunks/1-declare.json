@@ -1,0 +1,27 @@
+{
+  "componentName": "cp-设备监测",
+  "panelKey": "",
+  "businessEvents": {
+    "monitor-onload": {
+      "eventId": "monitor-onload",
+      "eventName": "组件加载完成",
+      "eventDataSchema": {
+        "componentId": {
+          "key": "componentId",
+          "name": "组件ID",
+          "type": "string",
+          "required": true
+        },
+        "timestamp": {
+          "key": "timestamp",
+          "name": "时间戳",
+          "type": "number",
+          "required": true
+        }
+      }
+    }
+  },
+  "businessStatuses": {},
+  "cssVariableConfig": [],
+  "businessConfig": {}
+}

@@ -1,0 +1,63 @@
+{
+  "reviewResult": {
+    "reviewResult": "pass",
+    "issues": [],
+    "score": 50,
+    "recommendations": []
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）— 基于 dark 背景亮度的最小兜底配置",
+      "--colorTextBase": "#ffffff",
+      "--colorTextSecondary": "rgba(255, 255, 255, 0.65)",
+      "--colorBg": "#0d1117",
+      "--colorBgCard": "rgba(255, 255, 255, 0.06)",
+      "--colorBorder": "rgba(255, 255, 255, 0.12)",
+      "--fontSize": "14px",
+      "--borderRadius": "4px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射 — 与 CSS 变量一一对应，用于 theme-vars.less 的 .theme-dark() mixin",
+      "@color-text-base": "#ffffff",
+      "@color-text-secondary": "rgba(255, 255, 255, 0.65)",
+      "@color-bg": "#0d1117",
+      "@color-bg-card": "rgba(255, 255, 255, 0.06)",
+      "@color-border": "rgba(255, 255, 255, 0.12)",
+      "@font-size-base": "14px",
+      "@border-radius-base": "4px"
+    },
+    "cssClasses": {
+      "comment": "可复用的基础 CSS 类 — dark 主题通用结构",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "width": "100%",
+        "height": "100%",
+        "background": "var(--colorBg, @color-bg)",
+        "color": "var(--colorTextBase, @color-text-base)",
+        "font-size": "var(--fontSize, @font-size-base)"
+      },
+      ".card": {
+        "background": "var(--colorBgCard, @color-bg-card)",
+        "border": "1px solid var(--colorBorder, @color-border)",
+        "border-radius": "var(--borderRadius, @border-radius-base)",
+        "padding": "1em"
+      },
+      ".text-primary": {
+        "color": "var(--colorTextBase, @color-text-base)"
+      },
+      ".text-secondary": {
+        "color": "var(--colorTextSecondary, @color-text-secondary)"
+      }
+    },
+    "tokenCoverage": 0.3,
+    "mappingNotes": [
+      "设计稿视觉元素字段均为空（colors/background/decorations/emphasis 均无值），仅 backgroundBrightness=dark 有效信息",
+      "基于 dark 亮度推断出最小化 dark 主题兜底色板，所有值为合理默认值，非从设计稿提取",
+      "tokenCoverage 仅 0.3：覆盖率低反映的是设计稿信息本身的缺失，而非映射遗漏",
+      "建议补充 colors/background/decorations 字段后重新执行映射，以获得准确的主题变量",
+      "容器背景直接使用字面量值作为 Less 变量，CSS 变量作为运行时覆盖层，避免关键背景仅依赖 var()"
+    ],
+    "elementStyleMap": {}
+  }
+}

@@ -1,0 +1,267 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 78,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections",
+        "message": "缺少组件标题区域，headerSlots 内容无对应 section 承载",
+        "suggestion": "在 sections 首位增加 header section，包含标题和右侧统计信息"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body.backgroundImage",
+        "message": "Tab 栏和图表区复用相同背景图（bg-7890.png），应提升到父容器",
+        "suggestion": "移除子 section 的 backgroundImage，在组件根节点统一设置"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "charts[0].series",
+        "message": "图表系列名称与标题不一致（'实时CO浓度' vs 'zk3+785CO浓度'）",
+        "suggestion": "统一使用 'zk3+785CO浓度' 作为系列名称"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "chartDataHints[0].values",
+        "message": "数据提示包含多个 600/0 重复值，且与图表 Y 轴刻度不匹配",
+        "suggestion": "清理无效数据提示，保留与 X 轴时间刻度对应的数值"
+      }
+    ],
+    "recommendations": [
+      "将右上角徽章和统计信息映射到 header-right 插槽，使用 base-panel 具名插槽结构",
+      "补充 Tab 切换后的数据结构定义，明确不同指标的 series 配置",
+      "为图表容器补充最小高度约束，避免内容过少时布局塌陷"
+    ],
+    "summary": "结构基本合理但缺少标题区域 section，背景图配置冗余，chartDataHints 数据质量较低。修复后可达良好水平。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "rgba(85, 158, 255, 1)",
+      "--colorSuccess": "rgba(82, 196, 26, 1)",
+      "--colorSuccessBg": "rgba(82, 196, 26, 0.3)",
+      "--colorDanger": "rgba(255, 77, 79, 1)",
+      "--colorTextBase": "rgba(255, 255, 255, 0.9)",
+      "--colorBgBase": "rgba(237, 244, 251, 1)",
+      "--colorBorder": "rgba(85, 158, 255, 0.2)",
+      "--fontSize": "14px",
+      "--fontSizeTitle": "18px",
+      "--fontSizeBadge": "12px",
+      "--borderRadius": "4px",
+      "--borderRadiusBadge": "50%",
+      "--paddingBase": "16px",
+      "--paddingSmall": "8px",
+      "--shadowCard": "0 2px 8px rgba(0, 0, 0, 0.08)"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "rgba(85, 158, 255, 1)",
+      "@color-success": "rgba(82, 196, 26, 1)",
+      "@color-success-bg": "rgba(82, 196, 26, 0.3)",
+      "@color-danger": "rgba(255, 77, 79, 1)",
+      "@color-text-base": "rgba(255, 255, 255, 0.9)",
+      "@color-bg-base": "rgba(237, 244, 251, 1)",
+      "@color-border": "rgba(85, 158, 255, 0.2)",
+      "@font-size-base": "14px",
+      "@font-size-title": "18px",
+      "@font-size-badge": "12px",
+      "@border-radius-base": "4px",
+      "@border-radius-badge": "50%",
+      "@padding-base": "16px",
+      "@padding-small": "8px",
+      "@shadow-card": "0 2px 8px rgba(0, 0, 0, 0.08)"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".light-tech-container": {
+        "width": "100%",
+        "height": "100%",
+        "background": "linear-gradient(180deg, rgba(237, 244, 251, 1) 0%, rgba(245, 249, 252, 1) 100%)",
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "var(--paddingBase)",
+        "box-sizing": "border-box"
+      },
+      ".header-bar": {
+        "display": "flex",
+        "justify-content": "space-between",
+        "align-items": "center",
+        "padding": "var(--paddingSmall) var(--paddingBase)",
+        "background": "linear-gradient(90deg, rgba(85, 158, 255, 0.1) 0%, rgba(85, 158, 255, 0.05) 100%)",
+        "border-left": "4px solid var(--colorPrimary)",
+        "border-radius": "var(--borderRadius)",
+        "margin-bottom": "var(--paddingBase)"
+      },
+      ".header-title": {
+        "font-size": "var(--fontSizeTitle)",
+        "font-weight": "600",
+        "color": "var(--colorTextBase)",
+        "letter-spacing": "0.5px"
+      },
+      ".chart-area": {
+        "flex": "1",
+        "background": "#ffffff",
+        "border-radius": "var(--borderRadius)",
+        "padding": "var(--paddingBase)",
+        "box-shadow": "var(--shadowCard)",
+        "position": "relative"
+      },
+      ".chart-area-with-fill": {
+        "background": "linear-gradient(180deg, rgba(82, 196, 26, 0.05) 0%, rgba(82, 196, 26, 0.15) 100%)"
+      },
+      ".warning-line": {
+        "border-top": "2px dashed var(--colorDanger)",
+        "position": "absolute",
+        "width": "100%",
+        "z-index": "10"
+      },
+      ".badge-danger": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "min-width": "20px",
+        "height": "20px",
+        "padding": "0 6px",
+        "background": "var(--colorDanger)",
+        "color": "#ffffff",
+        "font-size": "var(--fontSizeBadge)",
+        "font-weight": "600",
+        "border-radius": "var(--borderRadiusBadge)",
+        "box-shadow": "0 2px 4px rgba(255, 77, 79, 0.3)"
+      },
+      ".stat-card": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "var(--paddingBase)",
+        "background": "#ffffff",
+        "border-radius": "var(--borderRadius)",
+        "box-shadow": "var(--shadowCard)",
+        "border": "1px solid var(--colorBorder)"
+      },
+      ".stat-value": {
+        "font-size": "24px",
+        "font-weight": "700",
+        "color": "var(--colorPrimary)",
+        "line-height": "1.2"
+      },
+      ".stat-label": {
+        "font-size": "var(--fontSize)",
+        "color": "rgba(0, 0, 0, 0.65)",
+        "margin-top": "var(--paddingSmall)"
+      },
+      ".border-decoration": {
+        "border": "1px solid var(--colorBorder)",
+        "border-radius": "var(--borderRadius)"
+      },
+      ".gradient-primary-bg": {
+        "background": "linear-gradient(135deg, rgba(85, 158, 255, 0.08) 0%, rgba(85, 158, 255, 0.02) 100%)"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色rgba(85, 158, 255, 1)映射为--colorPrimary，用于标题装饰条和数值强调",
+      "成功色rgba(82, 196, 26, 1)及其30%透明度映射为--colorSuccess和--colorSuccessBg，用于图表填充渐变",
+      "危险色rgba(255, 77, 79, 1)映射为--colorDanger，用于预警线和徽章",
+      "浅灰蓝色背景rgba(237, 244, 251, 1)映射为--colorBgBase，作为容器基础背景",
+      "文字颜色rgba(255, 255, 255, 0.9)映射为--colorTextBase，用于标题文字",
+      "圆形徽章使用--borderRadiusBadge: 50%实现完美圆形",
+      "所有边框和装饰条使用统一的--colorPrimary确保视觉一致性",
+      "卡片阴影使用--shadowCard提供轻微层次感",
+      "渐变背景直接使用Figma字面量值确保视觉还原度",
+      "预警虚线使用border-top: 2px dashed实现虚线效果"
+    ],
+    "elementStyleMap": {
+      "section-tabs": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-8": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-tabs",
+        "responsibility": "标签页切换区",
+        "elementCount": 4,
+        "title": "监测指标切换栏",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 4,
+          "charts": 0,
+          "interactions": 1,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "24小时趋势图表",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 1,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      }
+    ],
+    "isForced": false,
+    "minFiles": 0,
+    "reason": "有效 sections=2 < 3 且无高复杂度 section → 不强制拆分",
+    "internalSubcomponents": []
+  }
+}

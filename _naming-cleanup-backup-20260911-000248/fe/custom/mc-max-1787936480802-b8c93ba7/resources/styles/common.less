@@ -1,0 +1,138 @@
+// 业务样式文件
+// 所有 class 必须以 .c- 为前缀
+// 禁止在 .c-monitor-content 上设置 background、box-shadow、border-radius（已由 base-panel 提供）
+
+// 根容器
+.c-mc-max-1787936480802-b8c93ba7-c-monitor-root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+// 内容区域（不设置面板外壳样式）
+.c-mc-max-1787936480802-b8c93ba7-c-monitor-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  min-height: 0;
+}
+
+// 头部统计区域
+.c-mc-max-1787936480802-b8c93ba7-c-monitor-header-stats {
+  height: 425px;
+  width: 420px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+
+  max-width: 100%;
+  max-height: 100vh;
+  box-sizing: border-box;}
+
+.c-mc-max-1787936480802-b8c93ba7-c-monitor-header-stat {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.c-mc-max-1787936480802-b8c93ba7-c-monitor-header-stat-label {
+  font-size: 14px;
+  font-weight: 400;
+  color: #333333;
+  line-height: 21px;
+}
+
+.c-mc-max-1787936480802-b8c93ba7-c-monitor-header-stat-value {
+  font-family: Roboto, sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 23.44px;
+  color: #1990ff;
+  
+  &--success {
+    color: #08a3a5;
+  }
+}
+
+// 主统计卡片区域
+.c-mc-max-1787936480802-b8c93ba7-c-monitor-main-stats {
+  display: flex;
+  gap: 16px;
+  width: 100%;
+  flex-shrink: 0;
+}
+
+// 统计卡片基础样式
+.c-mc-max-1787936480802-b8c93ba7-c-monitor-stat-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  border-radius: 6px;
+  min-height: 0;
+  box-shadow: 0px 4px 10px rgba(74, 117, 141, 0.25);
+}
+
+// 隧道设备卡片
+.c-mc-max-1787936480802-b8c93ba7-c-monitor-stat-card-tunnel {
+  background: linear-gradient(135deg, #2b9bff 0%, #299aff 100%);
+}
+
+// 监理检验设备卡片
+.c-mc-max-1787936480802-b8c93ba7-c-monitor-stat-card-supervision {
+  background: linear-gradient(135deg, #93ccff 0%, #93ccff 100%);
+}
+
+// 卡片头部
+.c-mc-max-1787936480802-b8c93ba7-c-monitor-stat-card-header {
+  margin-bottom: 12px;
+}
+
+.c-mc-max-1787936480802-b8c93ba7-c-monitor-stat-card-label {
+  font-size: 12px;
+  font-weight: 400;
+  color: #ffffff;
+  line-height: 18px;
+}
+
+// 卡片数值
+.c-mc-max-1787936480802-b8c93ba7-c-monitor-stat-card-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 28px;
+  margin-bottom: 8px;
+}
+
+// 卡片底部
+.c-mc-max-1787936480802-b8c93ba7-c-monitor-stat-card-footer {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.c-mc-max-1787936480802-b8c93ba7-c-monitor-stat-card-footer-label {
+  font-size: 14px;
+  font-weight: 400;
+  color: #ffffff;
+  line-height: 21px;
+}
+
+.c-mc-max-1787936480802-b8c93ba7-c-monitor-stat-card-footer-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #e03434;
+  line-height: 28px;
+}
+
+
+/* === [自动修复] v3.5 模板驱动 fallback 规则 === */
+/* [自动修复] 模板 class .c-monitor-header-stat-value--success → 匹配元素 header-stats */
+
+.c-mc-max-1787936480802-b8c93ba7-c-monitor-header-stat-value--success {
+  display: flex;
+  flex-direction: row;
+}

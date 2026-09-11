@@ -1,0 +1,28 @@
+.common() {
+@fontSize: 14px;
+  @font-size-base: 14px;
+  @border-radius-base: 8px;
+  @color-primary: #559EFF;
+  @color-success: #52c41a;
+  @color-danger: #f53f3f;
+  @color-white: #ffffff;
+  @echarts: inherit; // 自动添加
+}
+
+.theme-dark() {
+  @color-bg: #1a2332;
+  @color-text-base: @color-white;
+}
+
+.theme-light() {
+  @color-bg: #EDF4FB;
+  @color-text-base: #333333;
+}
+// 写盘门禁自动补全缺失变量
+@fontSize: 14px;
+
+// 自动添加：将 .common() 中的 Less 变量暴露到全局作用域
+
+:root {
+  .common();
+}

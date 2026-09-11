@@ -1,0 +1,45 @@
+// 主题变量与 Mixin 定义
+.theme-light() {
+  :root {
+    --color-primary: #559eff;
+    --color-primary-active: #2b7de9;
+    --color-primary-bg: #edf4fb;
+    --color-bg: #edf4fb;
+    --color-text-base: #333333;
+    --color-success: #00b578;
+    --color-danger: #f53f3f;
+    --font-size-base: 14px;
+  }
+}
+
+.theme-dark() {
+  :root {
+    --color-primary: #559eff;
+    --color-primary-active: #2b7de9;
+    --color-primary-bg: #1a2332;
+    --color-bg: #0f141e;
+    --color-text-base: #e0e0e0;
+    --color-success: #00b578;
+    --color-danger: #f53f3f;
+    --font-size-base: 14px;
+  }
+}
+
+// 默认使用浅色主题
+.theme-light();
+
+// Less 变量映射
+@color-primary: #559eff;
+@color-primary-active: #2b7de9;
+@color-primary-bg: #edf4fb;
+@color-bg: #edf4fb;
+@color-text-base: #333333;
+@color-success: #00b578;
+@color-danger: #f53f3f;
+@font-size-base: 14px;
+
+// 通用 Mixin
+.common() {
+  box-sizing: border-box;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+}

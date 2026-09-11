@@ -1,0 +1,95 @@
+// ─────────────────────────────────────────────
+// 主题变量文件
+// 由系统生成的 dark.less / light.less 在主题选择器内
+// 先调用 .common() 与对应主题 mixin，再导入 common.less
+// 根级禁止调用任何主题 mixin
+// ─────────────────────────────────────────────
+
+.common() {
+  // 字体缩放基准令牌（根容器通过 CSS 变量 --fontSize 驱动，默认 14px）
+  @fontSize: 14px;
+
+  // 基础字号
+  @font-size-base: 14px;
+  @font-size-small: 12px;
+}
+
+.theme-dark() {
+  // 背景
+  @color-bg-base: #1a2a3a;
+
+  // 品牌色
+  @color-primary: #1890ff;
+
+  // 状态色
+  @color-success: #52c41a;
+  @color-danger: #f5222d;
+  @color-warning-line: #f5222d;
+
+  // 文字色（深色面板，禁止使用黑色系）
+  @color-text-base: rgba(255, 255, 255, 0.8);
+  @color-text-secondary: rgba(255, 255, 255, 0.45);
+
+  // 坐标轴文字（同主文字基准）
+  @color-axis-text: rgba(255, 255, 255, 0.8);
+
+  // 图表填充
+  @color-chart-fill: rgba(82, 196, 26, 0.15);
+
+  // Tab 激活背景
+  @color-tab-active-bg: #1890ff;
+
+  // 边框辅助色（dark 风格，浅透明）
+  @color-border: rgba(255, 255, 255, 0.12);
+
+  // 卡片/面板次级背景
+  @color-bg-card: rgba(255, 255, 255, 0.04);
+
+  // 滚动条
+  @color-scrollbar-thumb: rgba(255, 255, 255, 0.2);
+  @color-scrollbar-track: rgba(255, 255, 255, 0.05);
+}
+
+.theme-light() {
+  // 背景
+  @color-bg-base: #f0f2f5;
+
+  // 品牌色
+  @color-primary: #1890ff;
+
+  // 状态色
+  @color-success: #52c41a;
+  @color-danger: #f5222d;
+  @color-warning-line: #f5222d;
+
+  // 文字色
+  @color-text-base: rgba(0, 0, 0, 0.85);
+  @color-text-secondary: rgba(0, 0, 0, 0.45);
+
+  // 坐标轴文字
+  @color-axis-text: rgba(0, 0, 0, 0.65);
+
+  // 图表填充
+  @color-chart-fill: rgba(82, 196, 26, 0.15);
+
+  // Tab 激活背景
+  @color-tab-active-bg: #1890ff;
+
+  // 边框辅助色
+  @color-border: rgba(0, 0, 0, 0.1);
+
+  // 卡片/面板次级背景
+  @color-bg-card: rgba(0, 0, 0, 0.03);
+
+  // 滚动条
+  @color-scrollbar-thumb: rgba(0, 0, 0, 0.2);
+  @color-scrollbar-track: rgba(0, 0, 0, 0.05);
+}
+// 写盘门禁自动补全缺失变量
+@fontSize: 14px;
+
+// 自动添加：将 .common() 中的 Less 变量暴露到全局作用域
+
+:root {
+  .common();
+}

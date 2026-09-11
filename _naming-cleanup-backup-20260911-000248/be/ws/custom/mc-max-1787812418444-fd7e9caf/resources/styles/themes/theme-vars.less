@@ -1,0 +1,37 @@
+.common() {
+  // 背景图配置
+  @em-bg-image: url(../resources/images/bg-8788.png);
+  @em-bg-size: 100% 100%;
+  @em-bg-position: center center;
+  @em-bg-repeat: no-repeat;
+
+  // 圆角配置
+  @em-card-tunnel-radius: 8px;
+  @em-card-connection-radius: 8px;
+}
+
+.theme-light() {
+  // 卡片背景
+  @em-card-tunnel-bg: linear-gradient(270deg, #318aff 0%, #70bfff 100%);
+  @em-card-connection-bg: rgba(255, 255, 255, 0.6);
+
+  // 基础文本与背景色 (Light 默认)
+  @em-text-color-primary: #333333;
+  @em-text-color-secondary: #666666;
+  @em-text-color-tertiary: #999999;
+  @em-bg-color-base: #ffffff;
+  @em-border-color-base: #e8e8e8;
+}
+
+.theme-dark() {
+  // 卡片背景
+  @em-card-tunnel-bg: linear-gradient(270deg, #318aff 0%, #70bfff 100%);
+  @em-card-connection-bg: rgba(255, 255, 255, 0.15);
+
+  // 基础文本与背景色 (Dark 默认，文字禁止黑色系)
+  @em-text-color-primary: #ffffff;
+  @em-text-color-secondary: rgba(255, 255, 255, 0.85);
+  @em-text-color-tertiary: rgba(255, 255, 255, 0.65);
+  @em-bg-color-base: #141414;
+  @em-border-color-base: #434343;
+}

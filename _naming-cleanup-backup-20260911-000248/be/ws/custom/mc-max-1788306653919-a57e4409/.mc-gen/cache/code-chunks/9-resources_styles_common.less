@@ -1,0 +1,200 @@
+.c-monitor-root {
+  font-size: var(--fontSize, 14px);
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.c-monitor-left-nav-wrapper {
+  display: flex;
+  flex-direction: column;
+  width: 160px;
+  height: 100%;
+  flex-shrink: 0;
+}
+
+.c-monitor-left-nav {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  gap: 4px;
+  padding: 8px;
+}
+
+.c-monitor-nav-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+  background: rgba(255, 255, 255, 0.05);
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+}
+
+.c-monitor-nav-item-active {
+  color: rgba(255, 255, 255, 1);
+}
+
+.c-monitor-nav-item-text {
+  font-size: calc(@fontSize * 0.8571);
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.c-monitor-nav-item-active .c-monitor-nav-item-text {
+  color: rgba(255, 255, 255, 1);
+  font-weight: 600;
+}
+
+.c-monitor-nav-item-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  font-size: calc(@fontSize * 0.75);
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(24, 144, 255, 0.3);
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.c-monitor-nav-item-active .c-monitor-nav-item-badge {
+  background: rgba(24, 144, 255, 0.6);
+}
+
+.c-monitor-main-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  height: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.c-monitor-header-stats {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 100%;
+  width: 100%;
+  gap: 24px;
+}
+
+.c-monitor-stat-group {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+.c-monitor-stat-label {
+  font-size: calc(@fontSize * 1.1429);
+  font-weight: 700;
+  background: linear-gradient(90deg, #1990ff, #5a7eff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: transparent;
+}
+
+.c-monitor-stat-items {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+}
+
+.c-monitor-stat-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+.c-monitor-stat-item-label {
+  font-size: @fontSize;
+  color: #333333;
+  font-weight: 400;
+}
+
+.c-monitor-stat-item-value {
+  font-size: calc(@fontSize * 1.4286);
+  font-weight: 700;
+  color: #1990ff;
+}
+
+.c-monitor-stat-value-success {
+  color: #08a3a5;
+}
+
+.c-monitor-device-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  padding: 16px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  width: 100%;
+}
+
+.c-monitor-device-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 12px;
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0px 4px 10px rgba(74, 117, 141, 0.25);
+  transition: all 0.3s ease;
+  cursor: pointer;
+
+  &:hover {
+    box-shadow: 0 4px 16px rgba(24, 144, 255, 0.15);
+    transform: translateY(-2px);
+  }
+}
+
+.c-monitor-device-icon-wrapper {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
+.c-monitor-device-icon {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.c-monitor-device-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.c-monitor-device-name {
+  font-size: calc(@fontSize * 0.8571);
+  color: #333333;
+  text-align: center;
+  line-height: 1.3;
+}
+
+.c-monitor-device-value {
+  font-size: calc(@fontSize * 1.1429);
+  font-weight: 500;
+  color: #1990ff;
+  text-align: center;
+}

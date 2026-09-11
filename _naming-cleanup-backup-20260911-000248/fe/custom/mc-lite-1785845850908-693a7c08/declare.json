@@ -1,0 +1,44 @@
+{
+  "name": "智慧养护-98934",
+  "title": "运单信息详情组件",
+  "description": "展示危化品运输运单列表及详细信息，包含监控截图，采用深色科技风设计。",
+  "props": [
+    {
+      "name": "plateNumber",
+      "type": "String",
+      "default": "苏A 12345",
+      "description": "车牌号标签文本"
+    },
+    {
+      "name": "tableData",
+      "type": "Array",
+      "default": [],
+      "description": "运单列表数据"
+    },
+    {
+      "name": "detailData",
+      "type": "Object",
+      "default": {},
+      "description": "当前选中运单的详细信息"
+    },
+    {
+      "name": "activeRowIndex",
+      "type": "Number",
+      "default": 0,
+      "description": "表格中高亮行的索引"
+    }
+  ],
+  "events": [
+    {
+      "name": "close",
+      "description": "点击关闭按钮时触发"
+    }
+  ],
+  "slots": [],
+  "style": {
+    "width": "100%",
+    "height": "auto",
+    "background": "#002222"
+  },
+  "attribute": {}
+}

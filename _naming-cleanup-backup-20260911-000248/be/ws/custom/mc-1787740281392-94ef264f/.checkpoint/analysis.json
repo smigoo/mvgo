@@ -1,0 +1,106 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 78,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].header",
+        "message": "左侧分类栏(tab-switch)作为header.controls存在，但语义上属于内容区/侧栏，且slotCandidate=null，层级矛盾。",
+        "suggestion": "将分类栏移入body或明确映射到header插槽。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].layout",
+        "message": "section布局为horizontal，但body为grid且header含垂直侧栏，父子关系与交互位置不清。",
+        "suggestion": "改为vertical或拆分为sidebar+grid左右结构。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[1].body.backgroundImage",
+        "message": "同一背景图在多section body重复定义，可能产生冗余绘制或样式代码。",
+        "suggestion": "提升到外层容器统一设置背景。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[1].body",
+        "message": "grid固定3列但未定义列宽与间距，12项卡片可能拥挤或溢出。",
+        "suggestion": "补充gridTemplateColumns、gap及响应式规则。"
+      }
+    ],
+    "recommendations": [
+      "将设备类型分类的左侧切换栏从header调整至body，明确交互区边界",
+      "将重复背景图配置提升到公共容器，减少维护成本",
+      "为设备卡片数值格式补充语义字段，便于后续解析"
+    ],
+    "summary": "整体层级尚可，但设备类型分类区标题与左侧栏结构冲突，slotCandidate未映射，背景图与网格配置存在冗余，需调整后可用。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "--text-color": "#333333",
+      "--bg": "#ffffff",
+      "--primary": "#1677ff",
+      "--border": "rgba(0, 0, 0, 0.08)",
+      "--border-radius-base": "8px",
+      "--font-size-base": "14px",
+      "--gap": "12px"
+    },
+    "lessVariables": {
+      "@text-color": "#333333",
+      "@bg": "#ffffff",
+      "@primary": "#1677ff",
+      "@border": "rgba(0, 0, 0, 0.08)",
+      "@border-radius-base": "8px",
+      "@font-size-base": "14px",
+      "@gap": "12px"
+    },
+    "cssClasses": {},
+    "tokenCoverage": 0.6,
+    "elementStyleMap": {
+      "device-overview": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-2": {
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "device-categories": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-7": {
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    },
+    "synthesizedFallback": true
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "device-overview",
+        "responsibility": "数据统计指标区（数字+标签+趋势）",
+        "elementCount": 3,
+        "title": "设备概览"
+      },
+      {
+        "id": "device-categories",
+        "responsibility": "设备类型分类（请按功能拆分）",
+        "elementCount": 12,
+        "title": "设备类型分类"
+      }
+    ],
+    "isForced": false,
+    "minFiles": 0,
+    "reason": "有效 sections=2 < 3 → 不强制拆分"
+  }
+}

@@ -1,0 +1,339 @@
+.c-c-monitor-root {
+  width: 100%;
+  min-height: 100%;
+  box-sizing: border-box;
+  padding: 18px 20px 16px;
+  color: @text-primary;
+  font-family: @font-family-cn;
+  overflow: hidden;
+}
+
+.c-c-monitor-title-dot {
+  display: block;
+  width: 8px;
+  height: 8px;
+  object-fit: contain;
+}
+
+.c-c-monitor-title-vector {
+  display: block;
+  width: 362px;
+  max-width: 100%;
+  height: 6px;
+  object-fit: fill;
+}
+
+.c-c-monitor-section {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.c-c-monitor-total-section {
+  min-height: 556px;
+}
+
+.c-c-monitor-vehicle-section {
+  margin-top: 18px;
+}
+
+.c-c-monitor-forecast-section {
+  margin-top: 18px;
+}
+
+.c-c-monitor-section-header {
+  width: 100%;
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+}
+
+.c-c-monitor-section-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.c-c-monitor-section-title-icon {
+  display: block;
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.c-c-monitor-section-title {
+  color: @text-primary;
+  font-family: @font-family-cn;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  text-align: left;
+  text-shadow: 0 5px 5px rgba(255, 255, 255, 0.8);
+  white-space: nowrap;
+}
+
+.c-c-monitor-time-select {
+  width: 100px;
+  height: 30px;
+  flex-shrink: 0;
+
+  :deep(.ant-select-selector) {
+    height: 30px !important;
+    border-radius: 0 !important;
+    border-color: @select-border-color !important;
+    background: @select-bg-color !important;
+    box-shadow: none !important;
+    padding: 0 24px 0 10px !important;
+  }
+
+  :deep(.ant-select-selection-item) {
+    color: @text-primary;
+    font-family: @font-family-cn;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 28px !important;
+  }
+
+  :deep(.ant-select-arrow) {
+    color: @primary-color;
+  }
+}
+
+.c-c-monitor-total-card {
+  position: relative;
+  width: calc(100% + 40px);
+  height: 91px;
+  margin: 12px -20px 14px;
+  box-sizing: border-box;
+}
+
+.c-c-monitor-total-stat {
+  position: absolute;
+  top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 77px;
+}
+
+.c-c-monitor-total-stat-left {
+  left: 60px;
+  align-items: flex-start;
+}
+
+.c-c-monitor-total-stat-right {
+  right: 30px;
+  align-items: flex-end;
+  min-width: 128px;
+}
+
+.c-c-monitor-total-label {
+  color: @text-primary;
+  font-family: @font-family-cn;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  white-space: nowrap;
+}
+
+.c-c-monitor-total-value {
+  font-family: @font-family-number;
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 28px;
+  white-space: nowrap;
+}
+
+.c-c-monitor-total-value-bridge {
+  color: @total-bridge-color;
+}
+
+.c-c-monitor-total-value-tunnel {
+  color: @total-tunnel-color;
+}
+
+.c-c-monitor-chart-block {
+  width: 100%;
+  margin-top: 8px;
+  box-sizing: border-box;
+}
+
+.c-c-monitor-chart-title-row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 21px;
+  margin-left: 0;
+  margin-bottom: 4px;
+}
+
+.c-c-monitor-chart-title-mark {
+  width: 3px;
+  height: 12px;
+  border-radius: 6px;
+  background: @primary-color;
+  flex-shrink: 0;
+}
+
+.c-c-monitor-chart-title {
+  color: @text-primary;
+  font-family: @font-family-cn;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 21px;
+  white-space: nowrap;
+}
+
+.c-c-monitor-chart-container {
+  width: 379px;
+  max-width: 100%;
+  height: 131px;
+}
+
+.c-c-monitor-vehicle-list {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 3px;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.c-c-monitor-vehicle-card {
+  position: relative;
+  width: 192px;
+  height: 114px;
+  flex: 0 0 192px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.c-c-monitor-vehicle-chart {
+  position: absolute;
+  left: 70px;
+  top: 20px;
+  width: 52px;
+  height: 52px;
+}
+
+.c-c-monitor-vehicle-name {
+  position: absolute;
+  left: 31px;
+  bottom: 6px;
+  width: 129px;
+  height: 18px;
+  color: @text-primary;
+  font-family: @font-family-cn;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 18px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.c-c-monitor-vehicle-stats {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  top: 40px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.c-c-monitor-vehicle-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 52px;
+  min-height: 36px;
+}
+
+.c-c-monitor-vehicle-stat-right {
+  align-items: flex-end;
+}
+
+.c-c-monitor-vehicle-stat-label {
+  color: @text-primary;
+  font-family: @font-family-stat;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.c-c-monitor-vehicle-stat-value {
+  font-family: @font-family-number;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.c-c-monitor-vehicle-stat-value-passenger {
+  color: @vehicle-passenger-color;
+}
+
+.c-c-monitor-vehicle-stat-value-truck {
+  color: @vehicle-truck-color;
+}
+
+.c-c-monitor-forecast-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  margin-left: auto;
+  margin-right: 10px;
+}
+
+.c-c-monitor-forecast-tab {
+  height: 19px;
+  padding: 0 10px;
+  border: 1px solid @tab-border-color;
+  border-radius: 20px;
+  background: @tab-bg-color;
+  color: @tab-text-color;
+  font-family: @font-family-cn;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 17px;
+  text-align: center;
+  white-space: nowrap;
+  cursor: pointer;
+  outline: none;
+}
+
+.c-c-monitor-forecast-tab-active {
+  min-width: 128px;
+  border-color: @tab-active-border-color;
+  background: @primary-color;
+  color: @text-inverse;
+  font-weight: 500;
+}
+
+.c-c-monitor-holiday-button {
+  flex: 0 0 auto;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: @primary-color;
+  font-family: @font-family-cn;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  white-space: nowrap;
+  cursor: pointer;
+  outline: none;
+}
+
+.c-c-monitor-forecast-chart {
+  width: 363px;
+  max-width: 100%;
+  height: 141px;
+  margin-top: 8px;
+}

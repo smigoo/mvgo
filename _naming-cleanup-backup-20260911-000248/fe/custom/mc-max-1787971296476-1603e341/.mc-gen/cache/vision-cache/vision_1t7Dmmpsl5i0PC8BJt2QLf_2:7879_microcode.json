@@ -1,0 +1,612 @@
+{
+  "imageVerified": true,
+  "layoutStructure": {
+    "generatedAt": "2026-01-15T10:30:00Z",
+    "stage": "preview-analysis",
+    "componentName": "环境监测",
+    "componentTitle": "环境监测",
+    "analysisModel": "claude-sonnet-5",
+    "sourceImage": {
+      "path": "mc-preview.png",
+      "size": 0,
+      "mtimeMs": 0,
+      "sha1": ""
+    },
+    "summary": "环境监测组件，包含Tab切换栏（氧化碳、能见度、洞内照明、洞外光强）、24小时趋势图表区域（面积图展示实时数据与预警线）、右上角统计徽章",
+    "layout": {
+      "type": "vertical-stack",
+      "direction": "vertical",
+      "sections": [
+        {
+          "id": "section-tabs",
+          "name": "监测指标切换栏",
+          "role": "常驻",
+          "layout": "horizontal",
+          "headerRelation": "content-below-title",
+          "slotCandidate": null,
+          "body": {
+            "layout": "horizontal",
+            "children": [
+              {
+                "id": "tab-1",
+                "name": "氧化碳",
+                "role": "tab",
+                "active": true,
+                "styles": {
+                  "fontSize": 14,
+                  "color": "rgba(255, 255, 255, 0.9)",
+                  "backgroundColor": "rgba(85, 158, 255, 0.2)",
+                  "padding": "8px 16px",
+                  "borderRadius": "4px"
+                }
+              },
+              {
+                "id": "tab-2",
+                "name": "能见度",
+                "role": "tab",
+                "active": false,
+                "styles": {
+                  "fontSize": 14,
+                  "color": "rgba(255, 255, 255, 0.6)",
+                  "padding": "8px 16px"
+                }
+              },
+              {
+                "id": "tab-3",
+                "name": "洞内照明",
+                "role": "tab",
+                "active": false,
+                "styles": {
+                  "fontSize": 14,
+                  "color": "rgba(255, 255, 255, 0.6)",
+                  "padding": "8px 16px"
+                }
+              },
+              {
+                "id": "tab-4",
+                "name": "洞外光强",
+                "role": "tab",
+                "active": false,
+                "styles": {
+                  "fontSize": 14,
+                  "color": "rgba(255, 255, 255, 0.6)",
+                  "padding": "8px 16px"
+                }
+              }
+            ],
+            "backgroundImage": {
+              "src": "../resources/images/bg-7890.png",
+              "recommendedUsage": "backgroundBlock"
+            },
+            "backgroundSize": "100% 100%",
+            "backgroundPosition": "center center",
+            "backgroundRepeat": "no-repeat"
+          }
+        },
+        {
+          "id": "section-chart",
+          "name": "24小时趋势图表",
+          "role": "常驻",
+          "layout": "vertical",
+          "headerRelation": "no-header",
+          "slotCandidate": null,
+          "body": {
+            "layout": "vertical",
+            "children": [
+              {
+                "id": "chart-container",
+                "name": "面积图容器",
+                "role": "chart-container",
+                "type": "area-chart",
+                "styles": {
+                  "width": "100%",
+                  "height": "180px",
+                  "background": "transparent"
+                }
+              }
+            ],
+            "backgroundImage": {
+              "src": "../resources/images/bg-7890.png",
+              "recommendedUsage": "backgroundBlock"
+            },
+            "backgroundSize": "100% 100%",
+            "backgroundPosition": "center center",
+            "backgroundRepeat": "no-repeat"
+          }
+        }
+      ]
+    },
+    "styles": {
+      "backgroundBrightness": "light",
+      "theme": "浅色科技监测风",
+      "colors": [
+        "rgba(85, 158, 255, 1)",
+        "rgba(82, 196, 26, 0.3)",
+        "rgba(255, 77, 79, 1)",
+        "rgba(255, 255, 255, 0.9)"
+      ],
+      "background": "浅灰蓝色渐变背景（rgba(237, 244, 251, 1)）",
+      "decorations": [
+        "顶部标题栏带蓝色渐变装饰条",
+        "图表区域带浅绿色渐变填充"
+      ],
+      "emphasis": [
+        "右上角红色圆形徽章显示数字8",
+        "图表中红色预警虚线（预警线）",
+        "右上角统计数值区域"
+      ]
+    },
+    "headerSlots": [
+      {
+        "slotType": "header-right",
+        "elementType": "statistic",
+        "content": "2k3+785CO浓度",
+        "figmaNodeId": null
+      },
+      {
+        "slotType": "header-right",
+        "elementType": "statistic",
+        "content": "预警线",
+        "figmaNodeId": null
+      }
+    ],
+    "interactions": [
+      {
+        "target": "监测指标Tab栏",
+        "type": "tab-switch",
+        "description": "切换不同监测指标（氧化碳/能见度/洞内照明/洞外光强）",
+        "defaultState": "常驻，氧化碳选中",
+        "evidence": "Tab栏中氧化碳有背景高亮，其他为半透明文字"
+      },
+      {
+        "target": "右上角图标按钮组",
+        "type": "icon-button",
+        "description": "统计图标和通知徽章",
+        "defaultState": "常驻显示",
+        "evidence": "右上角有柱状图图标和消息徽章（红点8）"
+      },
+      {
+        "target": "图表区域",
+        "type": "chart-hover",
+        "description": "鼠标悬停显示详细数值",
+        "defaultState": "hover交互，默认不显示tooltip",
+        "evidence": "面积图支持交互，但截图中无tooltip展示"
+      }
+    ],
+    "charts": [
+      {
+        "section": "section-chart",
+        "type": "area",
+        "series": [
+          "实时CO浓度"
+        ],
+        "legend": [],
+        "legendPosition": "top-right",
+        "seriesColors": [
+          "rgba(82, 196, 26, 0.3)"
+        ],
+        "legendType": "horizontal",
+        "axes": "X轴为0-24小时时间刻度（2,4,6,8,10,12,14,16,18,20,22,24），Y轴为浓度值（0,10,20,30,40）",
+        "tooltip": "截图中无tooltip展示，推测hover时显示时间点和CO浓度值",
+        "notes": [
+          "红色虚线标注预警线位置（约30单位）",
+          "图表右上角标注'预警线'文字",
+          "面积图填充为浅绿色渐变（rgba(82, 196, 26, 0.3)）",
+          "趋势线为深绿色实线",
+          "Y轴刻度值：0, 10, 20, 30, 40",
+          "X轴刻度值：2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24（单位：时）"
+        ]
+      }
+    ],
+    "doNotInvent": [
+      "Tab切换后的其他指标数据（能见度/洞内照明/洞外光强的具体数值和图表）",
+      "图表tooltip的固定显示逻辑（截图中未显示tooltip，不要默认常驻显示）",
+      "右上角图标按钮的具体功能（只能看到图标，无法确定点击后行为）",
+      "红色徽章数字8的具体含义（只能看到数字，无法确定代表什么通知类型）",
+      "预警线触发后的联动告警机制",
+      "图表的自动刷新频率",
+      "历史数据查询功能",
+      "数据导出功能"
+    ],
+    "notes": [
+      "组件整体为浅色主题，背景为浅灰蓝色（rgba(237, 244, 251, 1)）",
+      "顶部Tab栏使用蓝色系配色（选中态：rgba(85, 158, 255, 0.2)背景）",
+      "图表区域占据主体高度，约180px",
+      "右上角统计区域包含'2k3+785CO浓度'和'预警线'文字标注",
+      "红色徽章（数字8）位于右上角图标组右上方",
+      "图表Y轴刻度密集（0-40，间隔10），X轴为24小时完整时间轴",
+      "预警线为红色虚线，位于Y=30位置"
+    ],
+    "coverageReport": {
+      "totalFigma": 14,
+      "matchedCount": 6,
+      "missingCount": 4,
+      "uncertainCount": 0,
+      "coverageRate": 60,
+      "missing": [
+        {
+          "name": "cp-环境监测",
+          "type": "FRAME",
+          "depth": 0
+        },
+        {
+          "name": "环境监测",
+          "type": "TEXT",
+          "depth": 2
+        },
+        {
+          "name": "sub-t",
+          "type": "FRAME",
+          "depth": 2
+        },
+        {
+          "name": "num",
+          "type": "GROUP",
+          "depth": 3
+        }
+      ],
+      "uncertain": [],
+      "summary": "一般"
+    },
+    "chartDataHints": [
+      {
+        "chartTitle": "area",
+        "chartType": "area",
+        "labels": [
+          {
+            "label": "40\n30\n20\n10\n0",
+            "name": "40 30 20 10 0"
+          },
+          {
+            "label": "辆",
+            "name": "辆"
+          },
+          {
+            "label": "预警线",
+            "name": "预警线"
+          },
+          {
+            "label": "时",
+            "name": "时"
+          },
+          {
+            "label": "zk3+785CO浓度",
+            "name": "zk3+785CO浓度"
+          },
+          {
+            "label": "一氧化碳",
+            "name": "一氧化碳"
+          },
+          {
+            "label": "洞内照明",
+            "name": "洞内照明"
+          },
+          {
+            "label": "洞外光强",
+            "name": "洞外光强"
+          },
+          {
+            "label": "能见度",
+            "name": "能见度"
+          }
+        ],
+        "values": [
+          {
+            "label": "600",
+            "value": 600,
+            "unit": ""
+          },
+          {
+            "label": "400",
+            "value": 400,
+            "unit": ""
+          },
+          {
+            "label": "200",
+            "value": 200,
+            "unit": ""
+          },
+          {
+            "label": "600",
+            "value": 600,
+            "unit": ""
+          },
+          {
+            "label": "0",
+            "value": 0,
+            "unit": ""
+          },
+          {
+            "label": "600",
+            "value": 600,
+            "unit": ""
+          },
+          {
+            "label": "2",
+            "value": 2,
+            "unit": ""
+          },
+          {
+            "label": "4",
+            "value": 4,
+            "unit": ""
+          },
+          {
+            "label": "6",
+            "value": 6,
+            "unit": ""
+          },
+          {
+            "label": "8",
+            "value": 8,
+            "unit": ""
+          },
+          {
+            "label": "10",
+            "value": 10,
+            "unit": ""
+          },
+          {
+            "label": "12",
+            "value": 12,
+            "unit": ""
+          }
+        ]
+      }
+    ]
+  },
+  "visualElements": {
+    "backgroundBrightness": "light",
+    "theme": "浅色科技监测风",
+    "colors": [
+      "rgba(85, 158, 255, 1)",
+      "rgba(82, 196, 26, 0.3)",
+      "rgba(255, 77, 79, 1)",
+      "rgba(255, 255, 255, 0.9)"
+    ],
+    "background": "浅灰蓝色渐变背景（rgba(237, 244, 251, 1)）",
+    "decorations": [
+      "顶部标题栏带蓝色渐变装饰条",
+      "图表区域带浅绿色渐变填充"
+    ],
+    "emphasis": [
+      "右上角红色圆形徽章显示数字8",
+      "图表中红色预警虚线（预警线）",
+      "右上角统计数值区域"
+    ]
+  },
+  "_visualElementList": [
+    {
+      "id": "tab-1",
+      "name": "氧化碳",
+      "role": "tab",
+      "active": true,
+      "styles": {
+        "fontSize": 14,
+        "color": "rgba(255, 255, 255, 0.9)",
+        "backgroundColor": "rgba(85, 158, 255, 0.2)",
+        "padding": "8px 16px",
+        "borderRadius": "4px"
+      }
+    },
+    {
+      "id": "tab-2",
+      "name": "能见度",
+      "role": "tab",
+      "active": false,
+      "styles": {
+        "fontSize": 14,
+        "color": "rgba(255, 255, 255, 0.6)",
+        "padding": "8px 16px"
+      }
+    },
+    {
+      "id": "tab-3",
+      "name": "洞内照明",
+      "role": "tab",
+      "active": false,
+      "styles": {
+        "fontSize": 14,
+        "color": "rgba(255, 255, 255, 0.6)",
+        "padding": "8px 16px"
+      }
+    },
+    {
+      "id": "tab-4",
+      "name": "洞外光强",
+      "role": "tab",
+      "active": false,
+      "styles": {
+        "fontSize": 14,
+        "color": "rgba(255, 255, 255, 0.6)",
+        "padding": "8px 16px"
+      }
+    },
+    {
+      "id": "chart-container",
+      "name": "面积图容器",
+      "role": "chart-container",
+      "type": "area-chart",
+      "styles": {
+        "width": "100%",
+        "height": "180px",
+        "background": "transparent"
+      }
+    }
+  ],
+  "interactions": [
+    {
+      "target": "监测指标Tab栏",
+      "type": "tab-switch",
+      "description": "切换不同监测指标（氧化碳/能见度/洞内照明/洞外光强）",
+      "defaultState": "常驻，氧化碳选中",
+      "evidence": "Tab栏中氧化碳有背景高亮，其他为半透明文字"
+    },
+    {
+      "target": "右上角图标按钮组",
+      "type": "icon-button",
+      "description": "统计图标和通知徽章",
+      "defaultState": "常驻显示",
+      "evidence": "右上角有柱状图图标和消息徽章（红点8）"
+    },
+    {
+      "target": "图表区域",
+      "type": "chart-hover",
+      "description": "鼠标悬停显示详细数值",
+      "defaultState": "hover交互，默认不显示tooltip",
+      "evidence": "面积图支持交互，但截图中无tooltip展示"
+    }
+  ],
+  "charts": [
+    {
+      "section": "section-chart",
+      "type": "area",
+      "series": [
+        "实时CO浓度"
+      ],
+      "legend": [],
+      "legendPosition": "top-right",
+      "seriesColors": [
+        "rgba(82, 196, 26, 0.3)"
+      ],
+      "legendType": "horizontal",
+      "axes": "X轴为0-24小时时间刻度（2,4,6,8,10,12,14,16,18,20,22,24），Y轴为浓度值（0,10,20,30,40）",
+      "tooltip": "截图中无tooltip展示，推测hover时显示时间点和CO浓度值",
+      "notes": [
+        "红色虚线标注预警线位置（约30单位）",
+        "图表右上角标注'预警线'文字",
+        "面积图填充为浅绿色渐变（rgba(82, 196, 26, 0.3)）",
+        "趋势线为深绿色实线",
+        "Y轴刻度值：0, 10, 20, 30, 40",
+        "X轴刻度值：2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24（单位：时）"
+      ]
+    }
+  ],
+  "chartDataHints": [
+    {
+      "chartTitle": "area",
+      "chartType": "area",
+      "labels": [
+        {
+          "label": "40\n30\n20\n10\n0",
+          "name": "40 30 20 10 0"
+        },
+        {
+          "label": "辆",
+          "name": "辆"
+        },
+        {
+          "label": "预警线",
+          "name": "预警线"
+        },
+        {
+          "label": "时",
+          "name": "时"
+        },
+        {
+          "label": "zk3+785CO浓度",
+          "name": "zk3+785CO浓度"
+        },
+        {
+          "label": "一氧化碳",
+          "name": "一氧化碳"
+        },
+        {
+          "label": "洞内照明",
+          "name": "洞内照明"
+        },
+        {
+          "label": "洞外光强",
+          "name": "洞外光强"
+        },
+        {
+          "label": "能见度",
+          "name": "能见度"
+        }
+      ],
+      "values": [
+        {
+          "label": "600",
+          "value": 600,
+          "unit": ""
+        },
+        {
+          "label": "400",
+          "value": 400,
+          "unit": ""
+        },
+        {
+          "label": "200",
+          "value": 200,
+          "unit": ""
+        },
+        {
+          "label": "600",
+          "value": 600,
+          "unit": ""
+        },
+        {
+          "label": "0",
+          "value": 0,
+          "unit": ""
+        },
+        {
+          "label": "600",
+          "value": 600,
+          "unit": ""
+        },
+        {
+          "label": "2",
+          "value": 2,
+          "unit": ""
+        },
+        {
+          "label": "4",
+          "value": 4,
+          "unit": ""
+        },
+        {
+          "label": "6",
+          "value": 6,
+          "unit": ""
+        },
+        {
+          "label": "8",
+          "value": 8,
+          "unit": ""
+        },
+        {
+          "label": "10",
+          "value": 10,
+          "unit": ""
+        },
+        {
+          "label": "12",
+          "value": 12,
+          "unit": ""
+        }
+      ]
+    }
+  ],
+  "headerSlots": [
+    {
+      "slotType": "header-right",
+      "elementType": "statistic",
+      "content": "2k3+785CO浓度",
+      "figmaNodeId": null
+    },
+    {
+      "slotType": "header-right",
+      "elementType": "statistic",
+      "content": "预警线",
+      "figmaNodeId": null
+    }
+  ],
+  "analysisType": "chart",
+  "analysisTarget": "图表展示区",
+  "analysisDescription": "图表：面积图容器",
+  "analysisEvidence": [],
+  "analysisFile": "/Users/smigoo/工作/mvgo/temp-components/6a7599af6eb9eebf9fba56cd/mc-max-1787971296476-1603e341/.mc-gen/config/preview-analysis.json",
+  "_cachedAt": 1787971344611,
+  "_cacheKey": "vision_1t7Dmmpsl5i0PC8BJt2QLf_2:7879_microcode"
+}

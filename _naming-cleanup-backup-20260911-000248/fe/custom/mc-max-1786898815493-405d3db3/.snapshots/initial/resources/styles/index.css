@@ -1,0 +1,344 @@
+.dark .c-env-monitor-root {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 8px 12px 10px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.dark .c-env-monitor-tabs {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  flex: none;
+}
+.dark .c-env-monitor-tabs-list {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  height: 27px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #1b3a52 0%, #274a68 100%);
+  border: 0.72px solid rgba(255, 255, 255, 0.12);
+  box-sizing: border-box;
+}
+.dark .c-env-monitor-tab-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 21px;
+  padding: 0 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+.dark .c-env-monitor-tab-item__label {
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 12px;
+  text-align: left;
+  color: #7ab8f5;
+  white-space: nowrap;
+}
+.dark .c-env-monitor-tab-item--active {
+  background: linear-gradient(180deg, #0077b6 0%, #005f9e 100%);
+  border: 0.6px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0.6px 0 rgba(0, 111, 227, 0.2);
+}
+.dark .c-env-monitor-tab-item--active .c-env-monitor-tab-item__label {
+  color: #ffffff;
+  text-shadow: 0 0.6px 0 rgba(0, 0, 0, 0.5);
+}
+.dark .c-env-monitor-tabs-icon {
+  display: block;
+  width: 52px;
+  height: 24px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+.dark .c-env-monitor-metric-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  width: 100%;
+  flex: none;
+  min-width: 0;
+}
+.dark .c-env-monitor-metric-card {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  min-width: 0;
+  background: rgba(25, 40, 60, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+.dark .c-env-monitor-metric-card__icon {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dark .c-env-monitor-metric-card__img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.dark .c-env-monitor-metric-card__icon-fallback {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1890ff 0%, #4ade80 100%);
+  box-shadow: 0 0 6px rgba(24, 144, 255, 0.3);
+}
+.dark .c-env-monitor-metric-card__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+}
+.dark .c-env-monitor-metric-card__label {
+  font-size: 10px;
+  line-height: 1.2;
+  color: #b0c4de;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dark .c-env-monitor-metric-card__value-row {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  min-width: 0;
+}
+.dark .c-env-monitor-metric-card__value {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: #ffffff;
+  white-space: nowrap;
+}
+.dark .c-env-monitor-metric-card__unit {
+  font-size: 10px;
+  line-height: 1.2;
+  color: #a0b5cc;
+  white-space: nowrap;
+}
+.dark .trend-chart-container {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+}
+.dark .chart-canvas {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+.dark .c-env-monitor-metric-card--good {
+  border-left: 2px solid #4ade80;
+}
+.dark .c-env-monitor-metric-card--normal {
+  border-left: 2px solid #1890ff;
+}
+.dark .c-env-monitor-metric-card--bad {
+  border-left: 2px solid #ff4d4f;
+}
+.light .c-env-monitor-root {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 8px 12px 10px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.light .c-env-monitor-tabs {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  flex: none;
+}
+.light .c-env-monitor-tabs-list {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  height: 27px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #b5deff 0%, #d1ecff 100%);
+  border: 0.72px solid #ffffff;
+  box-sizing: border-box;
+}
+.light .c-env-monitor-tab-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 21px;
+  padding: 0 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+.light .c-env-monitor-tab-item__label {
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 12px;
+  text-align: left;
+  color: #2c9bea;
+  white-space: nowrap;
+}
+.light .c-env-monitor-tab-item--active {
+  background: linear-gradient(180deg, #1099b1 0%, #038fff 100%);
+  border: 0.6px solid #ffffff;
+  box-shadow: 0 0.6px 0 rgba(0, 111, 227, 0.2);
+}
+.light .c-env-monitor-tab-item--active .c-env-monitor-tab-item__label {
+  color: #ffffff;
+  text-shadow: 0 0.6px 0 #006fe3;
+}
+.light .c-env-monitor-tabs-icon {
+  display: block;
+  width: 52px;
+  height: 24px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+.light .c-env-monitor-metric-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  width: 100%;
+  flex: none;
+  min-width: 0;
+}
+.light .c-env-monitor-metric-card {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 4px;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+.light .c-env-monitor-metric-card__icon {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.light .c-env-monitor-metric-card__img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.light .c-env-monitor-metric-card__icon-fallback {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1890ff 0%, #4ade80 100%);
+  box-shadow: 0 0 6px rgba(24, 144, 255, 0.3);
+}
+.light .c-env-monitor-metric-card__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+}
+.light .c-env-monitor-metric-card__label {
+  font-size: 10px;
+  line-height: 1.2;
+  color: #333333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.light .c-env-monitor-metric-card__value-row {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  min-width: 0;
+}
+.light .c-env-monitor-metric-card__value {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: #333333;
+  white-space: nowrap;
+}
+.light .c-env-monitor-metric-card__unit {
+  font-size: 10px;
+  line-height: 1.2;
+  color: #666666;
+  white-space: nowrap;
+}
+.light .trend-chart-container {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+}
+.light .chart-canvas {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+.light .c-env-monitor-metric-card--good {
+  border-left: 2px solid #4ade80;
+}
+.light .c-env-monitor-metric-card--normal {
+  border-left: 2px solid #1890ff;
+}
+.light .c-env-monitor-metric-card--bad {
+  border-left: 2px solid #ff4d4f;
+}

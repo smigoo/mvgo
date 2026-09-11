@@ -1,0 +1,93 @@
+// 管辖范围组件 - 业务样式
+
+// 根容器（base-panel 内容包裹层，不设置面板级样式）
+.c-mc-1784552183360-07177230-root {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+// 标题图标
+.c-mc-1784552183360-07177230-title-icon {
+  width: 17px;
+  height: 18px;
+  display: block;
+}
+
+/* [Style Refine] bg 节点 fills[0].color → rgb(5,49,51) → #053133 */
+.c-mc-1784552183360-07177230-content {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+  background-color: #053133;
+}
+
+// 统计项列表容器
+.c-mc-1784552183360-07177230-stats-list {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 400px;
+  gap: 24px;
+}
+
+// 统计项容器（横向布局：icon + text-group）
+.c-mc-1784552183360-07177230-stat-item {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+// 统计项图标
+.c-mc-1784552183360-07177230-stat-icon {
+  width: 43px;
+  height: 44px;
+  flex-shrink: 0;
+}
+
+// 文字组（标签 + 数值单位纵向排列）
+.c-mc-1784552183360-07177230-text-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+// 标签文字
+.c-mc-1784552183360-07177230-stat-label {
+  font-size: 14px;
+  line-height: 1.4;
+  white-space: nowrap;
+  color: @color-text-label;
+}
+
+// 数值+单位行
+.c-mc-1784552183360-07177230-value-row {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+/* [Style Refine] header/"常住人口" 节点 typography.fontSize: 20px, fontWeight: 400 */
+/* 数值样式参考标题字号，使用略大尺寸以突出显示 */
+.c-mc-1784552183360-07177230-stat-value {
+  font-size: 24px;
+  font-weight: bold;
+  line-height: 1.2;
+  color: @color-text-value;
+}
+
+// 单位
+.c-mc-1784552183360-07177230-stat-unit {
+  font-size: 12px;
+  line-height: 1.4;
+  color: @color-text-label;
+}

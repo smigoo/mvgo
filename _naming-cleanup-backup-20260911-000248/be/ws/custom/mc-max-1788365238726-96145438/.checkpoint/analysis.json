@@ -1,0 +1,368 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 72,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[0]",
+        "message": "chart-container 嵌套过深（4层），y-axis-labels等应提到body.children平级",
+        "suggestion": "将y-axis-labels、x-axis-labels、area-chart提到body.children，与stat-display平级"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].header.controls",
+        "message": "两个icon-button共用同一resourceFile（icon-7941.png），明显不符合图表/导出的视觉差异",
+        "suggestion": "检查资源映射，为export-icon分配正确的图标资源文件"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "charts[0]",
+        "message": "chartTitle为'area'过于简单，应使用'一氧化碳浓度趋势'等描述性名称",
+        "suggestion": "将chartTitle改为具体指标名称，便于多Tab场景下的数据绑定"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[1].children[2]",
+        "message": "label文本'24-7h5CO浓度'疑似OCR错误（应为'zk3+785CO浓度'）",
+        "suggestion": "修正为'zk3+785CO浓度'或统一为通用标签'24小时平均浓度'"
+      }
+    ],
+    "recommendations": [
+      "拍平chart-container结构：body.children直接包含[y-axis-labels, x-axis-labels, area-chart, threshold-line, stat-display]",
+      "补充charts[0].legend字段说明（当前为空数组但应标注'无图例'或'系列名在右侧数值区'）",
+      "为4个Tab预留dataKey映射（如co/visibility/light_in/light_out），避免Tab切换时重构整个layout"
+    ],
+    "summary": "结构整体清晰但图表区嵌套冗余，资源映射有误，命名和OCR细节需修正。修复后可达良好水平。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）— 浅色监测面板主题",
+      "--colorPrimary": "rgba(24, 144, 255, 1)",
+      "--colorSuccess": "rgba(82, 196, 26, 1)",
+      "--colorError": "rgba(255, 77, 79, 1)",
+      "--colorTextBase": "rgba(0, 0, 0, 0.85)",
+      "--colorTextSecondary": "rgba(0, 0, 0, 0.45)",
+      "--colorBg": "#EDF4FB",
+      "--colorBgPanel": "#ffffff",
+      "--colorBgChart": "#f0f4f8",
+      "--colorPrimaryBg": "rgba(24, 144, 255, 0.08)",
+      "--colorPrimaryActive": "rgba(24, 144, 255, 0.15)",
+      "--colorBorderDecor": "rgba(24, 144, 255, 0.6)",
+      "--colorChartFillStart": "rgba(82, 196, 26, 0.4)",
+      "--colorChartFillEnd": "rgba(82, 196, 26, 0)",
+      "--colorAlertLine": "rgba(255, 77, 79, 1)",
+      "--fontSize": "14px",
+      "--fontSizeLg": "40px",
+      "--fontWeightStrong": "600",
+      "--borderRadius": "4px",
+      "--borderRadiusLg": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射 — 对应 theme-vars.less 中 .theme-light() mixin",
+      "@color-primary": "rgba(24, 144, 255, 1)",
+      "@color-success": "rgba(82, 196, 26, 1)",
+      "@color-error": "rgba(255, 77, 79, 1)",
+      "@color-text-primary": "rgba(0, 0, 0, 0.85)",
+      "@color-text-secondary": "rgba(0, 0, 0, 0.45)",
+      "@color-bg": "#EDF4FB",
+      "@color-bg-panel": "#ffffff",
+      "@color-bg-chart": "#f0f4f8",
+      "@color-primary-bg": "rgba(24, 144, 255, 0.08)",
+      "@color-primary-active": "rgba(24, 144, 255, 0.15)",
+      "@color-border-decor": "rgba(24, 144, 255, 0.6)",
+      "@color-chart-fill-start": "rgba(82, 196, 26, 0.4)",
+      "@color-chart-fill-end": "rgba(82, 196, 26, 0)",
+      "@color-alert-line": "rgba(255, 77, 79, 1)",
+      "@font-size-base": "var(--fontSize)",
+      "@font-size-value-lg": "var(--fontSizeLg)",
+      "@font-weight-strong": "var(--fontWeightStrong)",
+      "@border-radius-base": "var(--borderRadius)",
+      "@border-radius-lg": "var(--borderRadiusLg)"
+    },
+    "cssClasses": {
+      "comment": "可复用CSS类 — 浅色监测面板",
+      ".monitor-panel": {
+        "width": "100%",
+        "height": "100%",
+        "display": "flex",
+        "flex-direction": "column",
+        "background": "#EDF4FB",
+        "font-size": "var(--fontSize, 14px)",
+        "color": "var(--colorTextBase, rgba(0,0,0,0.85))"
+      },
+      ".panel-header-decor": {
+        "height": "3px",
+        "width": "100%",
+        "background": "linear-gradient(90deg, rgba(24,144,255,1) 0%, rgba(24,144,255,0.3) 60%, transparent 100%)",
+        "flex-shrink": "0"
+      },
+      ".panel-tab-bar": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "0.5em",
+        "padding": "0.5em 1em"
+      },
+      ".panel-tab-item": {
+        "padding": "0.3em 1em",
+        "border-radius": "var(--borderRadius, 4px)",
+        "font-size": "var(--fontSize, 14px)",
+        "color": "var(--colorTextSecondary, rgba(0,0,0,0.45))",
+        "cursor": "pointer",
+        "transition": "all 0.2s"
+      },
+      ".panel-tab-item.active": {
+        "background": "var(--colorPrimaryActive, rgba(24,144,255,0.15))",
+        "color": "var(--colorPrimary, rgba(24,144,255,1))",
+        "font-weight": "var(--fontWeightStrong, 600)"
+      },
+      ".panel-toolbar": {
+        "display": "flex",
+        "align-items": "center",
+        "justify-content": "flex-end",
+        "gap": "0.5em",
+        "padding": "0 1em 0.5em"
+      },
+      ".toolbar-icon-btn": {
+        "width": "1.6em",
+        "height": "1.6em",
+        "display": "flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "border-radius": "var(--borderRadius, 4px)",
+        "color": "var(--colorTextSecondary, rgba(0,0,0,0.45))",
+        "cursor": "pointer",
+        "transition": "color 0.2s",
+        "background": "transparent",
+        "border": "none"
+      },
+      ".toolbar-icon-btn:hover": {
+        "color": "var(--colorPrimary, rgba(24,144,255,1))"
+      },
+      ".chart-board": {
+        "flex": "1",
+        "border-radius": "var(--borderRadiusLg, 8px)",
+        "background": "#f0f4f8",
+        "padding": "1em",
+        "display": "flex",
+        "flex-direction": "column",
+        "overflow": "hidden"
+      },
+      ".metric-value-lg": {
+        "font-size": "var(--fontSizeLg, 40px)",
+        "font-weight": "var(--fontWeightStrong, 600)",
+        "color": "var(--colorTextBase, rgba(0,0,0,0.85))",
+        "line-height": "1.1"
+      },
+      ".metric-label": {
+        "font-size": "var(--fontSize, 14px)",
+        "color": "var(--colorTextSecondary, rgba(0,0,0,0.45))"
+      },
+      ".chart-area-fill": {
+        "comment": "ECharts areaStyle 用，JS侧读取",
+        "--chart-fill-start": "rgba(82, 196, 26, 0.4)",
+        "--chart-fill-end": "rgba(82, 196, 26, 0)",
+        "--chart-line-color": "rgba(82, 196, 26, 1)"
+      },
+      ".chart-alert-line": {
+        "comment": "ECharts markLine 用，JS侧读取",
+        "--alert-line-color": "rgba(255, 77, 79, 1)",
+        "--alert-line-type": "dashed",
+        "--alert-line-width": "1px"
+      }
+    },
+    "tokenCoverage": 0.91,
+    "mappingNotes": [
+      "背景色 #EDF4FB 作为浅灰蓝色渐变背景直接落地为字面量值，不依赖 CSS 变量，避免关键可见背景丢失",
+      "顶部蓝色装饰线使用 linear-gradient 实现，渐变方向从左（不透明蓝）到右（透明），模拟设计稿视觉",
+      "激活 Tab 的高亮背景映射为 --colorPrimaryActive（rgba(24,144,255,0.15)），文字色用 --colorPrimary",
+      "图表区域浅灰背景板映射为 @color-bg-chart: #f0f4f8，独立于主背景色 @color-bg",
+      "当前数值 40 的大号字体通过 .metric-value-lg 实现，字号 40px 定义为 --fontSizeLg 便于配置",
+      "预警红色虚线（rgba(255,77,79,1)）和绿色面积图填充（渐变 0.4→0）均以 CSS 自定义属性暴露给 ECharts JS 侧读取，不写死在 JS 中",
+      "面积图绿色渐变填充：顶部 rgba(82,196,26,0.4) → 底部 rgba(82,196,26,0)，通过 --chart-fill-start / --chart-fill-end 变量传递",
+      "右上角图标按钮(.toolbar-icon-btn)默认色用 --colorTextSecondary，hover 态升为 --colorPrimary，符合浅色面板交互规范",
+      "theme-vars.less 中 .theme-light() mixin 应包含本次所有 @color-xxx 变量；若后续需要深色主题，在 .theme-dark() 中覆盖对应值即可",
+      "所有业务样式写入 common.less，通过注释分段组织（// === 监测面板容器 === 等），不创建独立业务样式文件"
+    ],
+    "elementStyleMap": {
+      "header-tabs": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-tab-一氧化碳-2": {
+        "background-image": "url(../resources/images/bg-tab-active-7891.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "chart-area": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-7-chart-container-x-0": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-7-stat-display-x-1-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-el-x-7-stat-display-x-1-row-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-el-x-7-stat-display-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-7": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-chart-container-x-8": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-display-x-13-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-stat-display-x-13-row-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-stat-display-x-13": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-14": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-row-x-18": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "header-tabs",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 4,
+        "title": "Tab切换栏",
+        "complexityScore": 20,
+        "complexityReasons": {
+          "elementCount": 4,
+          "charts": 0,
+          "interactions": 5,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "chart-area",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 13,
+        "title": "图表区域",
+        "complexityScore": 55,
+        "complexityReasons": {
+          "elementCount": 13,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 3
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [
+          {
+            "type": "element-group",
+            "id": "chart-area-group1",
+            "name": "Group1",
+            "responsibility": "元素分组 1（高密度拆分）",
+            "reason": "R2: 元素密度拆分（总计13个元素）",
+            "props": [],
+            "emits": []
+          },
+          {
+            "type": "element-group",
+            "id": "chart-area-group2",
+            "name": "Group2",
+            "responsibility": "元素分组 2（高密度拆分）",
+            "reason": "R2: 元素密度拆分（总计13个元素）",
+            "props": [],
+            "emits": []
+          }
+        ],
+        "shouldSplitInternally": true
+      }
+    ],
+    "isForced": true,
+    "minFiles": 4,
+    "reason": "有效 sections=2 ≥ 3 或存在高复杂度 section → 强制拆分",
+    "internalSubcomponents": [
+      {
+        "type": "element-group",
+        "id": "chart-area-group1",
+        "name": "Group1",
+        "responsibility": "元素分组 1（高密度拆分）",
+        "reason": "R2: 元素密度拆分（总计13个元素）",
+        "props": [],
+        "emits": [],
+        "parentSectionId": "chart-area",
+        "parentSectionTitle": "图表区域"
+      },
+      {
+        "type": "element-group",
+        "id": "chart-area-group2",
+        "name": "Group2",
+        "responsibility": "元素分组 2（高密度拆分）",
+        "reason": "R2: 元素密度拆分（总计13个元素）",
+        "props": [],
+        "emits": [],
+        "parentSectionId": "chart-area",
+        "parentSectionTitle": "图表区域"
+      }
+    ]
+  }
+}

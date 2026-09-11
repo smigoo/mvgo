@@ -1,0 +1,400 @@
+@import './themes/theme-vars.less';
+
+.common();
+.theme-light();
+
+// 🔹 根容器字体缩放基准
+.c-monitor-content {
+  font-size: var(--fontSize, 14px);
+}
+
+// 🔹 Header 区域统计数据
+.c-monitor-header-stats {
+  display: flex;
+  flex-direction: row;
+  gap: 32px;
+  align-items: center;
+}
+
+.c-monitor-header-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.c-monitor-header-stat-label {
+  font-size: calc(@fontSize * 1);
+  font-weight: 400;
+  color: rgba(51, 51, 51, 1);
+  line-height: 1.4;
+}
+
+.c-monitor-header-stat-value {
+  font-size: calc(@fontSize * 1.4286);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.c-monitor-stat-blue {
+  color: rgba(25, 144, 255, 1);
+}
+
+.c-monitor-stat-teal {
+  color: rgba(8, 163, 165, 1);
+}
+
+// 🔹 标题装饰点
+.c-monitor-title-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(25, 144, 255, 1) 0%, rgba(90, 126, 255, 1) 100%);
+  box-shadow: 0px 2px 4px rgba(25, 144, 255, 0.3);
+}
+
+// 🔹 Body 容器
+.c-monitor-body {
+  width: 100%;
+  height: 100%;
+  padding: 16px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+// 🔹 Main 主区域布局
+.c-monitor-main {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  height: 100%;
+  gap: 12px;
+}
+
+// 🔹 左侧垂直 Tab 栏
+.c-monitor-tab-bar {
+  width: 46px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+}
+
+.c-monitor-tab-item {
+  width: 46px;
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 4px;
+  cursor: pointer;
+  background: rgba(237, 244, 251, 1);
+  border-radius: 4px;
+  position: relative;
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+
+  &:hover {
+    background: rgba(25, 144, 255, 0.08);
+  }
+
+  &--active {
+    background: linear-gradient(180deg, rgba(147, 204, 255, 1) 0%, rgba(147, 204, 255, 1) 100%);
+    border: 1px solid rgba(240, 245, 255, 1);
+
+    .c-monitor-tab-label {
+      color: rgba(25, 144, 255, 1);
+      font-weight: 700;
+    }
+
+    &::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 3px;
+      height: 60%;
+      background: linear-gradient(180deg, rgba(49, 138, 255, 1) 0%, rgba(112, 191, 255, 1) 100%);
+      border-radius: 0 2px 2px 0;
+    }
+  }
+}
+
+.c-monitor-tab-label {
+  font-size: calc(@fontSize * 1);
+  font-weight: 400;
+  color: rgba(51, 51, 51, 1);
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  letter-spacing: 2px;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+.c-monitor-tab-badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(@fontSize * 0.8571);
+  font-weight: 500;
+  line-height: 1;
+  color: rgba(255, 255, 255, 1);
+  box-sizing: border-box;
+
+  &--blue {
+    background: rgba(59, 128, 231, 1);
+    box-shadow: 0px 1px 2px rgba(51, 101, 144, 0.4);
+  }
+
+  &--red {
+    background: rgba(245, 63, 63, 1);
+    box-shadow: 0px 1px 2px rgba(245, 63, 63, 0.4);
+  }
+}
+
+// 🔹 右侧内容区
+.c-monitor-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+}
+
+// 🔹 切换开关行
+.c-monitor-switch-row {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+}
+
+.c-monitor-switch-card {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  box-sizing: border-box;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0px 6px 16px rgba(74, 117, 141, 0.35);
+  }
+
+  &--selected {
+    &::after {
+      content: '';
+      position: absolute;
+      inset: -2px;
+      border-radius: 6px;
+      border: 2px solid rgba(25, 144, 255, 1);
+      pointer-events: none;
+    }
+  }
+
+  &--active {
+    background: linear-gradient(135deg, rgba(43, 155, 255, 1) 0%, rgba(41, 154, 255, 1) 100%);
+    box-shadow: 0px 4px 10px rgba(74, 117, 141, 0.25);
+  }
+
+  &--default {
+    background: linear-gradient(135deg, rgba(147, 204, 255, 1) 0%, rgba(147, 204, 255, 1) 100%);
+    box-shadow: 0px 4px 10px rgba(74, 117, 141, 0.25);
+  }
+}
+
+.c-monitor-switch-icon-wrap {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(246, 251, 255, 1);
+  position: relative;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0.1) 100%);
+    z-index: 0;
+  }
+}
+
+.c-monitor-switch-icon {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  position: relative;
+  z-index: 1;
+  filter: drop-shadow(0px 0.6774px 0.6774px rgba(150, 205, 255, 1));
+}
+
+.c-monitor-switch-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.c-monitor-switch-title {
+  font-size: calc(@fontSize * 0.8571);
+  font-weight: 400;
+  line-height: 1.4;
+
+  &--active {
+    color: rgba(255, 255, 255, 1);
+  }
+
+  &--default {
+    color: rgba(51, 51, 51, 1);
+  }
+}
+
+.c-monitor-switch-stat-row {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.c-monitor-switch-stat-label {
+  font-size: calc(@fontSize * 1);
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.c-monitor-switch-card--active .c-monitor-switch-stat-label {
+  color: rgba(255, 255, 255, 1);
+}
+
+.c-monitor-switch-card--default .c-monitor-switch-stat-label {
+  color: rgba(51, 51, 51, 1);
+}
+
+.c-monitor-switch-stat-value {
+  font-size: calc(@fontSize * 1.4286);
+  font-weight: 700;
+  line-height: 1.2;
+
+  &--blue {
+    color: rgba(25, 144, 255, 1);
+  }
+
+  &--red {
+    color: rgba(224, 52, 52, 1);
+  }
+}
+
+.c-monitor-switch-card--active .c-monitor-switch-stat-value--blue {
+  color: rgba(255, 255, 255, 1);
+}
+
+.c-monitor-switch-card--active .c-monitor-switch-stat-value--red {
+  color: rgba(224, 52, 52, 1);
+}
+
+// 🔹 设备监测网格（4行3列）
+.c-monitor-device-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.c-monitor-device-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  box-sizing: border-box;
+  background: linear-gradient(135deg, rgba(18, 123, 238, 1) 0%, rgba(18, 123, 238, 1) 100%);
+  box-shadow: 0px 4px 10px rgba(74, 117, 141, 0.25);
+
+  &:hover {
+    transform: translateY(-3px);
+    box-shadow: 0px 6px 16px rgba(74, 117, 141, 0.35);
+  }
+}
+
+.c-monitor-device-icon {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  filter: drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.1));
+}
+
+.c-monitor-device-name {
+  font-size: calc(@fontSize * 0.8571);
+  font-weight: 400;
+  color: rgba(51, 51, 51, 1);
+  line-height: 1.4;
+  text-align: center;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.c-monitor-device-value {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 2px;
+}
+
+.c-monitor-device-num {
+  font-size: calc(@fontSize * 1.1429);
+  font-weight: 500;
+  line-height: 1.2;
+
+  &--normal {
+    color: rgba(255, 255, 255, 1);
+  }
+
+  &--red {
+    color: rgba(224, 52, 52, 1);
+  }
+}
+
+.c-monitor-device-total {
+  font-size: calc(@fontSize * 1);
+  font-weight: 400;
+  color: rgba(255, 255, 255, 1);
+  line-height: 1.2;
+}
+
+// 🔹 预留 class（从模板提取但暂无明确样式需求）
+.barrier {
+  // 预留：切换开关选中态标识
+}
+
+.tunnel {
+  // 预留：切换开关选中态标识
+}
+
+.monitor {
+  // 预留：Tab 选中态标识
+}

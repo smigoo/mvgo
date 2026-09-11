@@ -1,0 +1,32 @@
+.common() {
+  // 圆角
+  @card-tunnel-border-radius: 8px;
+  @card-north-south-border-radius: 8px;
+  @device-card-border-radius: 6px;
+}
+
+.theme-light() {
+  // 背景色
+  @card-tunnel-bg: linear-gradient(270deg, #318aff 0%, #70bfff 100%);
+  @card-north-south-bg: rgba(255, 255, 255, 0.6);
+  @device-card-bg: rgba(255, 255, 255, 0.8);
+
+  // 文字颜色
+  @text-color-primary: #1D2129;
+  @text-color-regular: #4E5969;
+  @text-color-secondary: #86909C;
+  @text-color-disabled: #C9CDD4;
+}
+
+.theme-dark() {
+  // 背景色
+  @card-tunnel-bg: linear-gradient(270deg, #318aff 0%, #70bfff 100%);
+  @card-north-south-bg: rgba(255, 255, 255, 0.1);
+  @device-card-bg: rgba(255, 255, 255, 0.15);
+
+  // 文字颜色 (深色面板禁止使用黑色系)
+  @text-color-primary: #FFFFFF;
+  @text-color-regular: rgba(255, 255, 255, 0.85);
+  @text-color-secondary: rgba(255, 255, 255, 0.65);
+  @text-color-disabled: rgba(255, 255, 255, 0.35);
+}

@@ -1,0 +1,92 @@
+// 通用变量（不受主题影响）
+.common() {
+// 主题色
+  --em-primary-color: #559eff;
+  --em-success-color: #52c41a;
+  --em-error-color: #ff4d4f;
+  --em-warning-color: #ff4d4f;
+  
+  // 间距
+  --em-spacing-xs: 4px;
+  --em-spacing-sm: 8px;
+  --em-spacing-md: 12px;
+  --em-spacing-lg: 16px;
+  --em-spacing-xl: 20px;
+  
+  // 字体
+  --em-font-size-sm: 12px;
+  --em-font-size-base: 14px;
+  --em-font-size-lg: 16px;
+  
+  // 圆角
+  --em-border-radius-sm: 2px;
+  --em-border-radius-base: 4px;
+  --em-border-radius-lg: 8px;
+  
+  // 阴影
+  --em-shadow-base: 0 4px 10px 0 rgba(74, 117, 141, 0.25);
+  @click: inherit; // 自动添加
+  @echarts: inherit; // 自动添加
+}
+
+// 深色主题
+.theme-dark() {
+  .common();
+  
+  // 背景色
+  --em-bg-primary: #1a1a1a;
+  --em-bg-secondary: #2a2a2a;
+  --em-bg-tertiary: #333333;
+  
+  // 文字色
+  --em-text-primary: rgba(255, 255, 255, 0.9);
+  --em-text-secondary: rgba(255, 255, 255, 0.7);
+  --em-text-tertiary: rgba(255, 255, 255, 0.5);
+  
+  // Tab背景
+  --em-tab-bg: linear-gradient(180deg, #3a5a7a 0%, #2a4a6a 100%);
+  --em-tab-active-bg: linear-gradient(180deg, #1099b1 0%, #038fff 100%);
+  --em-tab-text: #7ab8e8;
+  --em-tab-active-text: #ffffff;
+  
+  // Badge
+  --em-badge-bg: #f53f3f;
+  --em-badge-text: #ffffff;
+  
+  // 边框
+  --em-border-color: rgba(255, 255, 255, 0.15);
+}
+
+// 浅色主题
+.theme-light() {
+  .common();
+  
+  // 背景色
+  --em-bg-primary: #edf4fb;
+  --em-bg-secondary: #f5f9fc;
+  --em-bg-tertiary: #ffffff;
+  
+  // 文字色
+  --em-text-primary: #333333;
+  --em-text-secondary: #666666;
+  --em-text-tertiary: #999999;
+  
+  // Tab背景
+  --em-tab-bg: linear-gradient(180deg, #b5deff 0%, #d1ecff 100%);
+  --em-tab-active-bg: linear-gradient(180deg, #1099b1 0%, #038fff 100%);
+  --em-tab-text: #2c9bea;
+  --em-tab-active-text: #ffffff;
+  
+  // Badge
+  --em-badge-bg: #f53f3f;
+  --em-badge-text: #ffffff;
+  
+  // 边框
+  --em-border-color: rgba(0, 0, 0, 0.1);
+}
+
+// 默认使用浅色主题
+
+:root {
+  .theme-light();
+}

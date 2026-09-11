@@ -1,0 +1,76 @@
+// 主题变量定义文件
+// 本文件定义三个 mixin：.common()、.theme-dark()、.theme-light()
+// 由系统生成的 dark.less/light.less 调用对应 mixin 后导入 common.less
+
+.common() {
+  // 字体缩放基准令牌（根容器通过 CSS 变量 --fontSize 驱动，默认 14px）
+  @fontSize: 14px;
+  
+  // 公共变量（与主题无关的固定值）
+  @border-radius-base: 4px;
+  @transition-duration: 0.3s;
+}
+
+.theme-light() {
+  // Light 主题颜色变量（默认主题，与设计稿一致）
+  
+  // 背景色
+  @bg-primary: transparent; // 主背景透明（使用背景图）
+  @bg-tab-active: transparent; // 激活 tab 背景透明（使用背景图）
+  
+  // 文字颜色
+  @text-primary: #333333;
+  @text-secondary: #666666;
+  @text-disabled: #999999;
+  @text-placeholder: #cccccc;
+  
+  // 边框颜色
+  @border-color: #e0e0e0;
+  @border-color-hover: #d0d0d0;
+  
+  // 状态颜色
+  @color-success: #52c41a;
+  @color-warning: #faad14;
+  @color-error: #ff4d4f;
+  @color-info: #1890ff;
+  
+  // 交互颜色
+  @color-hover: rgba(0, 0, 0, 0.04);
+  @color-active: rgba(0, 0, 0, 0.08);
+  
+  // 阴影
+  @shadow-base: 0 2px 8px rgba(0, 0, 0, 0.1);
+  @shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.theme-dark() {
+  // Dark 主题颜色变量（深色面板所有文字禁止使用黑色系）
+  
+  // 背景色
+  @bg-primary: transparent; // 主背景透明（使用背景图）
+  @bg-tab-active: transparent; // 激活 tab 背景透明（使用背景图）
+  
+  // 文字颜色（深色面板禁止黑色系）
+  @text-primary: #ffffff;
+  @text-secondary: rgba(255, 255, 255, 0.85);
+  @text-disabled: rgba(255, 255, 255, 0.45);
+  @text-placeholder: rgba(255, 255, 255, 0.3);
+  
+  // 边框颜色
+  @border-color: rgba(255, 255, 255, 0.15);
+  @border-color-hover: rgba(255, 255, 255, 0.25);
+  
+  // 状态颜色
+  @color-success: #52c41a;
+  @color-warning: #faad14;
+  @color-error: #ff4d4f;
+  @color-info: #1890ff;
+  
+  // 交互颜色
+  @color-hover: rgba(255, 255, 255, 0.08);
+  @color-active: rgba(255, 255, 255, 0.12);
+  
+  // 阴影
+  @shadow-base: 0 2px 8px rgba(0, 0, 0, 0.3);
+  @shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.4);
+}

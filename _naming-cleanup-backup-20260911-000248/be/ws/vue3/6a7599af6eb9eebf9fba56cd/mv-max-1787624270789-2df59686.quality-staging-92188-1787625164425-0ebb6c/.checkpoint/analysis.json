@@ -1,0 +1,155 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 75,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "header.title与body.children中的文本节点重复，会导致标题渲染两次。",
+        "suggestion": "移除body.children中的文本节点，仅保留header.title或将其作为body的唯一内容并清空header.title。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[1]",
+        "message": "action-icons同时配置了resourceFile和children，存在渲染冲突。",
+        "suggestion": "明确交互意图：若为独立图标按钮则移除resourceFile；若为整体切图则移除children。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "charts[0].axes",
+        "message": "Y轴单位误识别为'辆'，CO浓度单位应为ppm或mg/m³，需修正。",
+        "suggestion": "修正axes描述中的单位，确保图表配置生成正确的Y轴标签。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1]",
+        "message": "section-controls无header却设置headerRelation为content-below-title，语义失效。",
+        "suggestion": "若无独立标题，应将headerRelation设为null或content-below-header，以正确映射插槽。"
+      }
+    ],
+    "recommendations": [
+      "统一图表数据提示与图表配置中的单位描述，避免生成错误坐标轴。",
+      "优化覆盖率，针对missing中的坐标轴文本和图例进行补充，提升准确度。"
+    ],
+    "summary": "整体结构基本清晰，但存在标题重复渲染、资源与子节点冲突及图表单位识别错误等问题，需修复后使用。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#559EFF",
+      "--colorPrimaryBg": "#EDF4FB",
+      "--colorBg": "#EDF4FB",
+      "--colorTextBase": "#8c8c8c",
+      "--colorSuccess": "#52c41a",
+      "--colorError": "#f53f3f",
+      "--fontSize": "14px",
+      "--borderRadius": "4px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#559EFF",
+      "@color-primary-bg": "#EDF4FB",
+      "@color-bg": "#EDF4FB",
+      "@color-text-base": "#8c8c8c",
+      "@color-success": "#52c41a",
+      "@color-error": "#f53f3f",
+      "@font-size-base": "14px",
+      "@border-radius-base": "4px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "width": "100%",
+        "height": "100%",
+        "display": "flex",
+        "flex-direction": "column",
+        "background": "var(--colorBg)",
+        "font-size": "var(--fontSize)",
+        "color": "var(--colorTextBase)"
+      },
+      ".tab-item--active": {
+        "background": "var(--colorPrimary)",
+        "color": "#ffffff",
+        "border-radius": "var(--borderRadius)"
+      },
+      ".warning-line": {
+        "border-top": "1px dashed var(--colorError)",
+        "height": "0"
+      },
+      ".area-chart-fill": {
+        "fill": "var(--colorSuccess)",
+        "fill-opacity": "0.2"
+      },
+      ".metric-text": {
+        "color": "var(--colorTextBase)"
+      }
+    },
+    "tokenCoverage": 0.93,
+    "mappingNotes": [
+      "#559EFF 映射为 --colorPrimary，用于选中Tab蓝色背景",
+      "#EDF4FB 同时映射为 --colorBg 与 --colorPrimaryBg，作为浅色科技监测风背景",
+      "#f53f3f 映射为 --colorError，用于红色虚线预警线",
+      "#52c41a 映射为 --colorSuccess，用于绿色面积图填充",
+      "#8c8c8c 映射为 --colorTextBase，作为次要文本/说明文字颜色",
+      "所有业务样式类使用 var(--xxx) 引用主题变量，避免硬编码颜色值"
+    ],
+    "elementStyleMap": {
+      "section-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-controls": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tab-group": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "action-icons": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-14": {
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-header",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 2,
+        "title": "环境监测"
+      },
+      {
+        "id": "section-controls",
+        "responsibility": "工具栏",
+        "elementCount": 8,
+        "title": "筛选与操作栏"
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "监测图表"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 → 强制拆分"
+  }
+}

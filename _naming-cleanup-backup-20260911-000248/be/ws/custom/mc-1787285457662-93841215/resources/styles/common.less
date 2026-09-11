@@ -1,0 +1,358 @@
+@color-primary: #1990ff;
+@color-secondary: #00d2ff;
+@color-bridge: #0c9dbe;
+@color-tunnel: #006fe3;
+@color-warning: #ff7a45;
+@color-success: #52c41a;
+
+@color-text-primary: #333333;
+@color-text-secondary: #666666;
+@color-text-light: #cfe5ff;
+@color-text-lighter: #dcecff;
+
+@color-bg-dark: rgba(0, 22, 64, 0.55);
+@color-border-dark: rgba(70, 130, 220, 0.35);
+@color-border-light: #e8e8e8;
+@color-split-light: #f0f0f0;
+
+@font-family-base: 'Source Han Sans CN', sans-serif;
+@font-family-number: 'Roboto', sans-serif;
+
+.flex-center() {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flex-between() {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.panel-base() {
+  background: @color-bg-dark;
+  border: 1px solid @color-border-dark;
+  border-radius: 8px;
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(4px);
+}
+
+/* === [自动修复] v3.5 模板驱动 fallback 规则 === */
+/* [自动修复] 模板 class .c-flow-forecast → 匹配元素 section-forecast */
+
+.c-flow-forecast {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-flow-forecast-accuracy → 匹配元素 section-daily-total */
+
+.c-flow-forecast-accuracy {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-flow-forecast-accuracy-item → 匹配元素 card-tunnel-type-stat-item-x-0 */
+
+.c-flow-forecast-accuracy-item {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-flow-forecast-chart → 匹配元素 section-chart-tunnel */
+
+.c-flow-forecast-chart {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-flow-forecast-chart-wrapper → 匹配元素 section-daily-total */
+
+.c-flow-forecast-chart-wrapper {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-flow-forecast-controls → 匹配元素 section-daily-total */
+
+.c-flow-forecast-controls {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-flow-forecast-header → 匹配元素 section-daily-total */
+
+.c-flow-forecast-header {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-flow-forecast-link → 匹配元素 section-daily-total */
+
+.c-flow-forecast-link {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-flow-forecast-tab → 匹配元素 section-daily-total */
+
+.c-flow-forecast-tab {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-flow-forecast-tabs → 匹配元素 section-daily-total */
+
+.c-flow-forecast-tabs {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-flow-forecast-title → 匹配元素 section-daily-total */
+
+.c-flow-forecast-title {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-flow-forecast-title-block → 匹配元素 section-daily-total */
+
+.c-flow-forecast-title-block {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-flow-forecast-title-icon → 匹配元素 section-daily-total */
+
+.c-flow-forecast-title-icon {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-monitor-bridge-chart → 匹配元素 section-chart-tunnel */
+
+.c-monitor-bridge-chart {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-monitor-bridge-chart-root → 匹配元素 section-daily-total */
+
+.c-monitor-bridge-chart-root {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-monitor-bridge-chart-wrapper → 匹配元素 section-daily-total */
+
+.c-monitor-bridge-chart-wrapper {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-monitor-bridge-decor → 匹配元素 section-daily-total */
+
+.c-monitor-bridge-decor {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-monitor-bridge-header → 匹配元素 section-daily-total */
+
+.c-monitor-bridge-header {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-monitor-bridge-title → 匹配元素 section-daily-total */
+
+.c-monitor-bridge-title {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-monitor-root → 匹配元素 section-daily-total */
+
+.c-monitor-root {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-monitor-total-traffic → 匹配元素 section-daily-total */
+
+.c-monitor-total-traffic {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-monitor-total-traffic-body → 匹配元素 section-daily-total */
+
+.c-monitor-total-traffic-body {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-monitor-total-traffic-header → 匹配元素 section-daily-total */
+
+.c-monitor-total-traffic-header {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-monitor-total-traffic-select → 匹配元素 section-daily-total */
+
+.c-monitor-total-traffic-select {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-monitor-total-traffic-stat → 匹配元素 stat-tunnel */
+
+.c-monitor-total-traffic-stat {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-monitor-total-traffic-stat--bridge → 匹配元素 stat-bridge */
+
+.c-monitor-total-traffic-stat--bridge {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-monitor-total-traffic-stat--tunnel → 匹配元素 stat-tunnel */
+
+.c-monitor-total-traffic-stat--tunnel {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-monitor-total-traffic-stat-label → 匹配元素 section-daily-total */
+
+.c-monitor-total-traffic-stat-label {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-monitor-total-traffic-stat-value → 匹配元素 section-daily-total */
+
+.c-monitor-total-traffic-stat-value {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-monitor-total-traffic-stat-value--bridge → 匹配元素 stat-bridge */
+
+.c-monitor-total-traffic-stat-value--bridge {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-monitor-total-traffic-stat-value--tunnel → 匹配元素 stat-tunnel */
+
+.c-monitor-total-traffic-stat-value--tunnel {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-monitor-total-traffic-title → 匹配元素 section-daily-total */
+
+.c-monitor-total-traffic-title {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-monitor-total-traffic-title-icon → 匹配元素 section-daily-total */
+
+.c-monitor-total-traffic-title-icon {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-monitor-total-traffic-title-text → 匹配元素 section-daily-total */
+
+.c-monitor-total-traffic-title-text {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-monitor-tunnel-chart-container → 匹配元素 section-daily-total */
+
+.c-monitor-tunnel-chart-container {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-monitor-tunnel-chart-header → 匹配元素 section-daily-total */
+
+.c-monitor-tunnel-chart-header {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-monitor-tunnel-chart-indicator → 匹配元素 section-daily-total */
+
+.c-monitor-tunnel-chart-indicator {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-monitor-tunnel-chart-legend → 匹配元素 section-daily-total */
+
+.c-monitor-tunnel-chart-legend {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-monitor-tunnel-chart-legend-dot → 匹配元素 section-daily-total */
+
+.c-monitor-tunnel-chart-legend-dot {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-monitor-tunnel-chart-legend-item → 匹配元素 card-tunnel-type-stat-item-x-0 */
+
+.c-monitor-tunnel-chart-legend-item {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-monitor-tunnel-chart-root → 匹配元素 section-daily-total */
+
+.c-monitor-tunnel-chart-root {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-monitor-tunnel-chart-title → 匹配元素 section-daily-total */
+
+.c-monitor-tunnel-chart-title {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .vehicle-type-wrap → 匹配元素 section-daily-total */
+
+.vehicle-type-wrap {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .vt-dot → 匹配元素 section-daily-total */
+
+.vt-dot {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .vt-header → 匹配元素 section-daily-total */
+
+.vt-header {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .vt-label → 匹配元素 section-daily-total */
+
+.vt-label {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .vt-list → 匹配元素 section-daily-total */
+
+.vt-list {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .vt-row → 匹配元素 section-daily-total */
+
+.vt-row {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .vt-subtitle → 匹配元素 section-daily-total */
+
+.vt-subtitle {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .vt-title → 匹配元素 section-daily-total */
+
+.vt-title {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .vt-track → 匹配元素 section-daily-total */
+
+.vt-track {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .vt-track-inner → 匹配元素 section-daily-total */
+
+.vt-track-inner {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .vt-value → 匹配元素 section-daily-total */
+
+.vt-value {
+  display: flex;
+}

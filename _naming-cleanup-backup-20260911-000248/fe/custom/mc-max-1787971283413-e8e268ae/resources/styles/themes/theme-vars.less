@@ -1,0 +1,142 @@
+// 主题变量文件 - 定义 dark/light 两套主题的颜色变量
+// 注意：颜色变量定义在 mixin 内部，根级禁止调用任何主题 mixin
+
+// 公共变量（不区分主题）
+.common() {
+// 通用尺寸
+  @border-radius-base: 4px;
+  @border-radius-sm: 2px;
+  @border-radius-lg: 8px;
+  
+  // 通用间距
+  @spacing-xs: 4px;
+  @spacing-sm: 8px;
+  @spacing-md: 16px;
+  @spacing-lg: 24px;
+  @spacing-xl: 32px;
+  @color-text-title: inherit; // 自动添加
+}
+
+// 深色主题变量
+.theme-dark() {
+  // 主色调
+  @primary-color: #1990ff;
+  @primary-hover: #388dff;
+  @primary-active: #006fe3;
+  @primary-light: #2ba0ff;
+  
+  // 辅助色
+  @secondary-color: #5a7eff;
+  @info-color: #57caff;
+  @success-color: #00cccc;
+  @warning-color: #ffa22f;
+  @error-color: #ff6a00;
+  
+  // 背景色
+  @bg-color-base: #1a2332;
+  @bg-color-container: rgba(74, 117, 141, 0.25);
+  @bg-color-hover: rgba(255, 255, 255, 0.1);
+  @bg-color-active: rgba(255, 255, 255, 0.15);
+  @bg-color-overlay: rgba(0, 0, 0, 0.6);
+  
+  // 文字颜色（深色面板禁止使用黑色系）
+  @text-color-primary: #ffffff;
+  @text-color-secondary: rgba(255, 255, 255, 0.8);
+  @text-color-tertiary: rgba(255, 255, 255, 0.6);
+  @text-color-disabled: rgba(255, 255, 255, 0.4);
+  
+  // 边框颜色
+  @border-color-base: rgba(255, 255, 255, 0.2);
+  @border-color-light: rgba(255, 255, 255, 0.1);
+  @border-color-dark: rgba(255, 255, 255, 0.3);
+  
+  // 阴影
+  @shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
+  @shadow-md: 0 4px 8px rgba(0, 0, 0, 0.4);
+  @shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.5);
+  
+  // 图表相关
+  @chart-bg: transparent;
+  @chart-axis-line: rgba(255, 255, 255, 0.2);
+  @chart-grid-line: rgba(255, 255, 255, 0.1);
+  @chart-label-color: rgba(255, 255, 255, 0.8);
+  
+  // 表格相关
+  @table-header-bg: rgba(74, 117, 141, 0.25);
+  @table-row-hover-bg: rgba(255, 255, 255, 0.05);
+  @table-border-color: rgba(255, 255, 255, 0.1);
+}
+
+// 浅色主题变量（默认主题，必须与设计稿一致）
+.theme-light() {
+  // 主色调
+  @primary-color: #1252fa;
+  @primary-hover: #388dff;
+  @primary-active: #006fe3;
+  @primary-light: #559eff;
+  
+  // 辅助色
+  @secondary-color: #5a7eff;
+  @info-color: #1399ff;
+  @success-color: #00cccc;
+  @warning-color: #ffa22f;
+  @error-color: #ff6a00;
+  
+  // 背景色
+  @bg-color-base: #ffffff;
+  @bg-color-container: #edf4fb;
+  @bg-color-hover: #d6effc;
+  @bg-color-active: rgba(199, 224, 255, 1);
+  @bg-color-overlay: rgba(0, 0, 0, 0.3);
+  @bg-color-panel: #f5f7fa;
+  
+  // 文字颜色
+  @text-color-primary: #333333;
+  @text-color-secondary: #56597c;
+  @text-color-tertiary: #6680a0;
+  @text-color-disabled: rgba(0, 0, 0, 0.25);
+  @text-color-inverse: #ffffff;
+  
+  // 边框颜色
+  @border-color-base: rgba(172, 196, 225, 1);
+  @border-color-light: #e8eef5;
+  @border-color-dark: #bcc8d6;
+  
+  // 阴影
+  @shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.08);
+  @shadow-md: 0 4px 8px rgba(0, 0, 0, 0.12);
+  @shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.16);
+  
+  // 图表相关
+  @chart-bg: transparent;
+  @chart-axis-line: rgba(172, 196, 225, 1);
+  @chart-grid-line: #e8eef5;
+  @chart-label-color: #6680a0;
+  
+  // 表格相关
+  @table-header-bg: #edf4fb;
+  @table-row-hover-bg: #d6effc;
+  @table-border-color: rgba(172, 196, 225, 1);
+  
+  // 特殊组件色
+  @badge-bg: #0c9dbe;
+  @tag-bg: rgba(0, 204, 204, 0.3);
+  @tooltip-bg: rgba(0, 0, 0, 0.75);
+  @tooltip-color: #ffffff;
+  
+  // 链接色
+  @link-color: #1252fa;
+  @link-hover-color: #388dff;
+  @link-active-color: #006fe3;
+  
+  // 渐变色（如需使用）
+  @gradient-primary: linear-gradient(135deg, #1252fa 0%, #5a7eff 100%);
+  @gradient-info: linear-gradient(135deg, #57caff 0%, #5bbbef 100%);
+  @gradient-success: linear-gradient(135deg, #00cccc 0%, rgba(0, 204, 204, 1) 100%);
+}
+
+// 自动添加：将 .common() 中的 Less 变量暴露到全局作用域
+
+:root {
+  .common();
+}

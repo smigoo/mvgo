@@ -1,0 +1,233 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 82,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "charts",
+        "message": "车型分布区域使用了chart-gauge，但charts数组中缺失该环形图的配置信息。",
+        "suggestion": "在charts数组中补充gauge类型图表的系列、颜色及数据映射配置。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1] & [2]",
+        "message": "隧道和大桥的流量柱状图section结构高度重复，增加了冗余DOM节点。",
+        "suggestion": "建议合并为一个section，通过header添加Tab控件切换地点数据。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[*].body.backgroundImage",
+        "message": "各section的body中均包含src为null的冗余backgroundImage配置。",
+        "suggestion": "移除无效的背景图配置，或将其提取至全局styles中统一管理。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[3].body.children[*].children",
+        "message": "车型分布卡片内嵌套stat-group，导致局部嵌套层级过深，结构复杂。",
+        "suggestion": "评估扁平化stat-group结构，或将其封装为独立的原子组件。"
+      }
+    ],
+    "recommendations": [
+      "统一图表配置：确保所有可视化组件（包括gauge）都在charts数组中有完整定义。",
+      "优化重复结构：对于仅数据或标题不同的同构区块，优先采用数据驱动或Tab切换模式。",
+      "精简冗余字段：清理JSON中未实际使用的样式占位符，提升解析性能。"
+    ],
+    "summary": "整体布局清晰，符合微码规范。但存在图表配置遗漏、同构区块冗余及无效样式字段等问题。建议补充gauge配置，合并重复图表区块，并清理冗余字段以提升性能。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1990ff",
+      "--colorBg": "#edf4fb",
+      "--colorTextBase": "#333333",
+      "--colorWarning": "#ff9f43",
+      "--colorSuccess": "#52c41a",
+      "--fontSize": "14px",
+      "--fontSizeLarge": "28px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#1990ff",
+      "@color-bg": "#edf4fb",
+      "@color-text-base": "#333333",
+      "@color-warning": "#ff9f43",
+      "@color-success": "#52c41a",
+      "@font-size-base": "14px",
+      "@font-size-large": "28px",
+      "@border-radius-base": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "16px",
+        "background-color": "var(--colorBg, #edf4fb)",
+        "color": "var(--colorTextBase, #333333)",
+        "font-size": "var(--fontSize, 14px)"
+      },
+      ".header-section": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "8px",
+        "margin-bottom": "16px"
+      },
+      ".icon-diamond": {
+        "width": "16px",
+        "height": "16px",
+        "background-size": "contain",
+        "background-repeat": "no-repeat"
+      },
+      ".icon-car": {
+        "width": "24px",
+        "height": "24px",
+        "background-size": "contain",
+        "background-repeat": "no-repeat"
+      },
+      ".value-primary": {
+        "font-size": "var(--fontSizeLarge, 28px)",
+        "font-weight": "bold",
+        "color": "var(--colorPrimary, #1990ff)"
+      },
+      ".value-warning": {
+        "font-size": "var(--fontSizeLarge, 28px)",
+        "font-weight": "bold",
+        "color": "var(--colorWarning, #ff9f43)"
+      },
+      ".value-success": {
+        "font-size": "var(--fontSizeLarge, 28px)",
+        "font-weight": "bold",
+        "color": "var(--colorSuccess, #52c41a)"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 #1990ff 映射为 --colorPrimary，用于大号蓝色数值及主要强调元素",
+      "背景色 #edf4fb 映射为 --colorBg，作为组件整体浅灰蓝色背景，建议直接落地为字面量值避免关键背景依赖变量",
+      "基础文字颜色 #333333 映射为 --colorTextBase",
+      "橙色 #ff9f43 映射为 --colorWarning，专门用于橙色货车数值等警告/强调场景",
+      "绿色 #52c41a 映射为 --colorSuccess，用于正常/成功状态指示",
+      "菱形标题图标和小车装饰图标建议通过 background-image 引用实际切图资源（如 base64 或 URL），避免纯 CSS 绘制导致失真",
+      "大号数值使用 --fontSizeLarge 配合对应的颜色变量（--colorPrimary / --colorWarning）实现视觉强调"
+    ],
+    "elementStyleMap": {
+      "section-daily-total": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-tunnel": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "stat-bridge": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "section-chart-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-chart-bridge": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-vehicle-type": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-tunnel-type-stat-group-x-0": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-tunnel-type-stat-group-x-2": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-tunnel-type": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center",
+        "justify-content": "space-between"
+      },
+      "el-stat-group-x-15": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-group-x-19": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-bridge-type-stat-group-x-0": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-bridge-type-stat-group-x-2": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-bridge-type": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center",
+        "justify-content": "space-between"
+      },
+      "el-stat-group-x-23": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-group-x-27": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-forecast": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-daily-total",
+        "responsibility": "当日总流量（请按功能拆分）",
+        "elementCount": 6,
+        "title": "当日总流量"
+      },
+      {
+        "id": "section-chart-tunnel",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "江阴靖江长江隧道"
+      },
+      {
+        "id": "section-chart-bridge",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "江阴大桥"
+      },
+      {
+        "id": "section-vehicle-type",
+        "responsibility": "车型分布（请按功能拆分）",
+        "elementCount": 16,
+        "title": "车型分布"
+      },
+      {
+        "id": "section-forecast",
+        "responsibility": "流量预测（请按功能拆分）",
+        "elementCount": 1,
+        "title": "流量预测"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 5,
+    "reason": "有效 sections=5 ≥ 3 → 强制拆分"
+  }
+}

@@ -1,0 +1,127 @@
+// 业务样式文件
+// 说明：本文件定义组件的业务样式，所有 class 必须以 .c- 为前缀
+//       主题变量由 theme-vars.less 提供，已通过 dark.less/light.less 导入
+//       本文件不直接调用主题 mixin，直接使用变量即可
+
+// 根容器
+.c-mc-max-env-monitor-verify-r6-c-env-monitor-root {// 字体缩放基准（支持微前端整组件等比缩放）
+  
+  
+  width: 420px;
+  height: 186px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  
+  // 背景图：来自 elementStyleMap el-el-x-10
+  background-image: @block-bg-image;
+  background-size: @block-bg-size;
+  background-position: @block-bg-position;
+  background-repeat: @block-bg-repeat;
+
+  max-width: 100%;
+  max-height: 100vh;
+  box-sizing: border-box;
+  font-size: var(--fontSize, 14px);
+
+// Tab 切换区域
+}
+.c-mc-max-env-monitor-verify-r6-c-env-monitor-tab-switch {
+  height: auto;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.c-mc-max-env-monitor-verify-r6-c-env-monitor-tabs-list {
+  display: flex;
+  gap: 0;
+  overflow: hidden;
+}
+
+.c-mc-max-env-monitor-verify-r6-c-env-monitor-tab-item {
+  padding: 6px 16px;
+  font-size: calc(@fontSize * 1); // 14px 基准;
+  font-weight: 500;
+  line-height: 12px;
+  color: #2c9bea;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+  user-select: none;
+  position: relative;
+
+  &:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 1px;
+    height: 60%;
+    background: rgba(255, 255, 255, 0.3);
+  }
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  &--active {
+    // 来自 elementStyleMap tab-1
+    background-image: @tab-active-bg-image;
+    background-size: @tab-active-bg-size;
+    background-position: @tab-active-bg-position;
+    background-repeat: @tab-active-bg-repeat;
+    
+    color: #ffffff;
+    border: 0.6px solid rgba(255, 255, 255, 1);
+    border-radius: 4px;
+    box-shadow: 0 0.6px 0 0 rgba(0, 111, 227, 1);
+
+    &::after {
+      display: none;
+    }
+  }
+}
+
+// 统计指标区
+.c-mc-max-env-monitor-verify-r6-c-env-monitor-stats-indicator {
+  height: auto;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.c-mc-max-env-monitor-verify-r6-c-env-monitor-icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: opacity 0.3s;
+
+  &:hover {
+    opacity: 0.8;
+  }
+}
+
+// 图表区域
+.c-mc-max-env-monitor-verify-r6-c-env-monitor-chart-area {
+  flex: 1;
+  min-height: 80px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.c-mc-max-env-monitor-verify-r6-c-env-monitor-chart-container {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}

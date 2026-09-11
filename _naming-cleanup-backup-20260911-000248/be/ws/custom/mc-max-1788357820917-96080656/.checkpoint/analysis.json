@@ -1,0 +1,307 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 78,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "headerSlots",
+        "message": "headerSlots 与 section-tabs 职责重叠，视图切换图标应归入 section header 或面板插槽",
+        "suggestion": "将视图切换图标和 badge 移至 section-tabs 的 header 区域，或映射到 base-panel 的 header-right 插槽"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "section-tabs 的 headerRelation 为 content-below-title 但无 header 定义，仅有 body",
+        "suggestion": "若 tabs 本身即顶层内容，headerRelation 应为 no-header；或将 tabs 拆分为 header.controls"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "charts[0].axes",
+        "message": "Y 轴单位「辆」与一氧化碳浓度语义不符，应为 ppm 或 mg/m³，截图标注可能有误",
+        "suggestion": "在 doNotInvent 中已标注此问题，建议在 notes 中明确提示开发者核查业务语义"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.backgroundImage",
+        "message": "背景图资源 bg-7890.png 同时定义在 section 和 styles.background，冗余且易混淆",
+        "suggestion": "统一在 section.body.backgroundImage 定义，styles.background 仅描述视觉效果即可"
+      }
+    ],
+    "recommendations": [
+      "合并 headerSlots 到 section-tabs 的 header 结构，明确插槽映射关系",
+      "补充 tab 切换后其他指标的数据结构占位（chartDataHints 应为数组，覆盖 4 个 tab）",
+      "chart 对象的 series/legend 应与 chartDataHints.labels 关联，当前两者割裂"
+    ],
+    "summary": "整体结构清晰，section 划分合理，但 headerSlots 与 section 职责边界模糊，背景资源定义冗余，Y 轴单位语义存疑。建议统一插槽映射逻辑并补充多 tab 数据占位"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）—— 深色科技监测风",
+      "--colorBgBase": "#1a2a3a",
+      "--colorPrimary": "#559eff",
+      "--colorSuccess": "rgba(0,200,120,0.8)",
+      "--colorWarning": "#f53f3f",
+      "--colorTextBase": "rgba(255,255,255,0.7)",
+      "--colorTextStrong": "#ffffff",
+      "--colorChartLine": "rgba(0,200,100,1)",
+      "--colorChartFillStart": "rgba(0,200,120,0.4)",
+      "--colorChartFillEnd": "rgba(0,200,120,0)",
+      "--colorTabActiveBg": "#559eff",
+      "--colorAlertLine": "#f53f3f",
+      "--fontSize": "14px",
+      "--fontSizeTitle": "16px",
+      "--borderRadius": "4px",
+      "--bgImage": "url('../resources/images/bg-7890.png')"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射（theme-vars.less .theme-dark() 内定义）",
+      "@color-bg-base": "#1a2a3a",
+      "@color-primary": "#559eff",
+      "@color-success": "rgba(0,200,120,0.8)",
+      "@color-warning": "#f53f3f",
+      "@color-text-base": "rgba(255,255,255,0.7)",
+      "@color-text-strong": "#ffffff",
+      "@color-chart-line": "rgba(0,200,100,1)",
+      "@color-chart-fill-start": "rgba(0,200,120,0.4)",
+      "@color-chart-fill-end": "rgba(0,200,120,0)",
+      "@color-tab-active-bg": "#559eff",
+      "@color-alert-line": "#f53f3f",
+      "@font-size-base": "14px",
+      "@font-size-title": "16px",
+      "@border-radius-base": "4px"
+    },
+    "cssClasses": {
+      "comment": "可复用CSS类，背景图用 background-image: url() 引用实际资源文件",
+      ".monitor-root": {
+        "width": "100%",
+        "height": "100%",
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url('../resources/images/bg-7890.png')",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat",
+        "color": "var(--colorTextBase, rgba(255,255,255,0.7))",
+        "font-size": "var(--fontSize, 14px)"
+      },
+      ".monitor-root.dark": {
+        "comment": "深色主题根节点，由 themeType='dark' 触发",
+        "background-image": "url('../resources/images/bg-7890.png')"
+      },
+      ".chart-container": {
+        "position": "relative",
+        "width": "100%",
+        "height": "100%"
+      },
+      ".chart-alert-line": {
+        "comment": "红色横向预警线",
+        "position": "absolute",
+        "left": "0",
+        "right": "0",
+        "height": "0",
+        "border-top": "1.5px dashed var(--colorAlertLine, #f53f3f)",
+        "z-index": "10",
+        "pointer-events": "none"
+      },
+      ".chart-alert-line::after": {
+        "comment": "预警线右侧文字标注「预警线」",
+        "content": "'预警线'",
+        "position": "absolute",
+        "right": "0",
+        "top": "-1em",
+        "font-size": "0.85em",
+        "color": "var(--colorAlertLine, #f53f3f)",
+        "white-space": "nowrap",
+        "padding": "0 0.3em"
+      },
+      ".tab-bar": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "0.5em"
+      },
+      ".tab-item": {
+        "padding": "0.3em 1em",
+        "border-radius": "var(--borderRadius, 4px)",
+        "color": "var(--colorTextBase, rgba(255,255,255,0.7))",
+        "cursor": "pointer",
+        "transition": "background 0.2s, color 0.2s",
+        "font-size": "var(--fontSize, 14px)"
+      },
+      ".tab-item.active": {
+        "background": "var(--colorTabActiveBg, #559eff)",
+        "color": "var(--colorTextStrong, #ffffff)"
+      },
+      ".stat-value": {
+        "color": "var(--colorTextStrong, #ffffff)",
+        "font-size": "var(--fontSizeTitle, 16px)",
+        "font-weight": "600"
+      },
+      ".stat-label": {
+        "color": "var(--colorTextBase, rgba(255,255,255,0.7))",
+        "font-size": "var(--fontSize, 14px)"
+      },
+      ".highlight-success": {
+        "color": "var(--colorSuccess, rgba(0,200,120,0.8))"
+      },
+      ".highlight-danger": {
+        "color": "var(--colorWarning, #f53f3f)"
+      },
+      ".highlight-primary": {
+        "color": "var(--colorPrimary, #559eff)"
+      }
+    },
+    "themeVarsLessSnippet": {
+      "comment": "粘贴至 themes/theme-vars.less，供 common.less 通过 @color-xxx 引用",
+      "code": [
+        "// ===== 深色科技监测风 主题变量 =====",
+        "",
+        ".theme-dark() {",
+        "  @color-bg-base:          #1a2a3a;",
+        "  @color-primary:          #559eff;",
+        "  @color-success:          rgba(0,200,120,0.8);",
+        "  @color-warning:          #f53f3f;",
+        "  @color-text-base:        rgba(255,255,255,0.7);",
+        "  @color-text-strong:      #ffffff;",
+        "  @color-chart-line:       rgba(0,200,100,1);",
+        "  @color-chart-fill-start: rgba(0,200,120,0.4);",
+        "  @color-chart-fill-end:   rgba(0,200,120,0);",
+        "  @color-tab-active-bg:    #559eff;",
+        "  @color-alert-line:       #f53f3f;",
+        "}",
+        "",
+        ".theme-light() {",
+        "  @color-bg-base:          #f0f4f8;",
+        "  @color-primary:          #1677ff;",
+        "  @color-success:          rgba(0,160,90,0.9);",
+        "  @color-warning:          #d32f2f;",
+        "  @color-text-base:        rgba(0,0,0,0.65);",
+        "  @color-text-strong:      #011025;",
+        "  @color-chart-line:       rgba(0,160,80,1);",
+        "  @color-chart-fill-start: rgba(0,160,80,0.3);",
+        "  @color-chart-fill-end:   rgba(0,160,80,0);",
+        "  @color-tab-active-bg:    #1677ff;",
+        "  @color-alert-line:       #d32f2f;",
+        "}",
+        "",
+        "// 默认兜底：浅色",
+        ".theme-light();"
+      ]
+    },
+    "echartsColorTokens": {
+      "comment": "ECharts 配置中使用的颜色 token，在 JS 侧通过 THEME_COLORS[theme] 取值",
+      "dark": {
+        "lineColor": "rgba(0,200,100,1)",
+        "areaColorStart": "rgba(0,200,120,0.4)",
+        "areaColorEnd": "rgba(0,200,120,0)",
+        "alertLineColor": "#f53f3f",
+        "axisLabelColor": "rgba(255,255,255,0.7)",
+        "axisLineColor": "rgba(255,255,255,0.15)"
+      },
+      "light": {
+        "lineColor": "rgba(0,160,80,1)",
+        "areaColorStart": "rgba(0,160,80,0.3)",
+        "areaColorEnd": "rgba(0,160,80,0)",
+        "alertLineColor": "#d32f2f",
+        "axisLabelColor": "rgba(0,0,0,0.55)",
+        "axisLineColor": "rgba(0,0,0,0.12)"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "背景图通过 background-image: url('../resources/images/bg-7890.png') 引用实际资源文件，禁止用纯 CSS 渐变替代",
+      "预警线用伪元素 ::after 实现「预警线」文字标注，避免额外 DOM 节点",
+      "面积图渐变填充（绿色 rgba(0,200,120,0.4) → transparent）在 ECharts areaStyle.color LinearGradient 中配置，不在 CSS 中处理",
+      "active tab 高亮蓝色（#559eff）映射为 --colorTabActiveBg，与 --colorPrimary 统一来源",
+      "所有颜色均提供 dark/light 双主题值，light 主题为合理推断值（设计稿仅提供深色稿）",
+      "CSS 变量命名严格使用 camelCase，Less 变量使用 kebab-case，两者通过 theme-vars.less 的 .common() mixin 桥接",
+      "--bgImage 作为变量声明，但实际引用建议直接在 .monitor-root 中写 background-image: url() 以确保资源覆盖率校验通过"
+    ],
+    "elementStyleMap": {
+      "section-tabs": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-7": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-tabs",
+        "responsibility": "标签页切换区",
+        "elementCount": 4,
+        "title": "Tab切换栏",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 4,
+          "charts": 0,
+          "interactions": 1,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "浓度趋势图",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 1,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      }
+    ],
+    "isForced": false,
+    "minFiles": 0,
+    "reason": "有效 sections=2 < 3 且无高复杂度 section → 不强制拆分",
+    "internalSubcomponents": []
+  }
+}

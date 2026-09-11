@@ -1,0 +1,326 @@
+{
+  "componentId": "mc-1785342600980-96fa180f",
+  "componentName": "96fa180f",
+  "version": "v1.0.0",
+  "attribute": {
+    "aspectRatio": [
+      460,
+      138
+    ]
+  },
+  "businessEvents": {
+    "mc-1785342600980-96fa180f-onload": {
+      "eventId": "mc-1785342600980-96fa180f-onload",
+      "eventName": "组件加载完成",
+      "eventDataSchema": {
+        "componentId": {
+          "key": "componentId",
+          "name": "组件ID",
+          "type": "string"
+        },
+        "timestamp": {
+          "key": "timestamp",
+          "name": "时间戳",
+          "type": "number"
+        },
+        "sectionNum": {
+          "key": "sectionNum",
+          "name": "路段编码",
+          "type": "string"
+        }
+      }
+    },
+    "data-loaded": {
+      "eventId": "data-loaded",
+      "eventName": "设备数据加载完成",
+      "eventDataSchema": {
+        "sectionNum": {
+          "key": "sectionNum",
+          "name": "路段编码",
+          "type": "string"
+        },
+        "total": {
+          "key": "total",
+          "name": "设备总数",
+          "type": "number"
+        },
+        "online": {
+          "key": "online",
+          "name": "在线设备数",
+          "type": "number"
+        },
+        "abnormal": {
+          "key": "abnormal",
+          "name": "异常设备数",
+          "type": "number"
+        },
+        "onlineRate": {
+          "key": "onlineRate",
+          "name": "在线率",
+          "type": "number"
+        }
+      }
+    },
+    "system-expand": {
+      "eventId": "system-expand",
+      "eventName": "展开收起系统面板",
+      "eventDataSchema": {
+        "systemName": {
+          "key": "systemName",
+          "name": "系统名称",
+          "type": "string"
+        },
+        "expanded": {
+          "key": "expanded",
+          "name": "是否展开",
+          "type": "boolean"
+        }
+      }
+    },
+    "device-type-click": {
+      "eventId": "device-type-click",
+      "eventName": "点击设备类型明细",
+      "eventDataSchema": {
+        "deviceTypeCode": {
+          "key": "deviceTypeCode",
+          "name": "设备类型编码",
+          "type": "string"
+        },
+        "deviceTypeName": {
+          "key": "deviceTypeName",
+          "name": "设备类型名称",
+          "type": "string"
+        },
+        "systemName": {
+          "key": "systemName",
+          "name": "系统名称",
+          "type": "string"
+        }
+      }
+    }
+  },
+  "businessStatuses": {
+    "refresh-data": {
+      "statusId": "refresh-data",
+      "statusName": "刷新设备统计数据",
+      "parameters": {
+        "sectionNum": {
+          "key": "sectionNum",
+          "name": "路段编码",
+          "type": "string"
+        }
+      }
+    },
+    "set-section": {
+      "statusId": "set-section",
+      "statusName": "设置当前路段编码",
+      "parameters": {
+        "sectionNum": {
+          "key": "sectionNum",
+          "name": "路段编码",
+          "type": "string"
+        },
+        "sectionName": {
+          "key": "sectionName",
+          "name": "路段名称",
+          "type": "string"
+        }
+      }
+    },
+    "expand-system": {
+      "statusId": "expand-system",
+      "statusName": "展开指定系统面板",
+      "parameters": {
+        "systemName": {
+          "key": "systemName",
+          "name": "系统名称",
+          "type": "string"
+        }
+      }
+    }
+  },
+  "dataSources": [
+    {
+      "sourceName": "deviceOverview",
+      "columns": [
+        {
+          "name": "total",
+          "type": "number",
+          "comment": "设备总数"
+        },
+        {
+          "name": "online",
+          "type": "number",
+          "comment": "在线设备数"
+        },
+        {
+          "name": "abnormal",
+          "type": "number",
+          "comment": "异常设备数"
+        },
+        {
+          "name": "onlineRate",
+          "type": "number",
+          "comment": "在线率"
+        },
+        {
+          "name": "systemList",
+          "type": "array",
+          "comment": "系统分类列表"
+        },
+        {
+          "name": "deviceTypeList",
+          "type": "array",
+          "comment": "设备类型明细"
+        }
+      ]
+    }
+  ],
+  "layoutConfig": {
+    "default": "one",
+    "list": [
+      {
+        "name": "默认布局",
+        "key": "one",
+        "previewName": "mc-preview.png"
+      }
+    ]
+  },
+  "themeConfig": {
+    "default": "light",
+    "list": [
+      {
+        "name": "深色主题",
+        "key": "dark"
+      },
+      {
+        "name": "亮色主题",
+        "key": "light"
+      }
+    ]
+  },
+  "cssVariableConfig": [
+    {
+      "name": "总数卡片颜色",
+      "key": "--color-total",
+      "type": "color",
+      "default": "#1990FF"
+    },
+    {
+      "name": "在线卡片颜色",
+      "key": "--color-online",
+      "type": "color",
+      "default": "#52C41A"
+    },
+    {
+      "name": "异常卡片颜色",
+      "key": "--color-abnormal",
+      "type": "color",
+      "default": "#FAAD14"
+    },
+    {
+      "name": "在线率卡片颜色",
+      "key": "--color-rate",
+      "type": "color",
+      "default": "#13C2C2"
+    },
+    {
+      "name": "异常标签颜色",
+      "key": "--color-warning-tag",
+      "type": "color",
+      "default": "#FAAD14"
+    },
+    {
+      "name": "系统面板背景色",
+      "key": "--system-panel-bg",
+      "type": "color",
+      "default": "rgba(0, 0, 0, 0.45)"
+    },
+    {
+      "name": "系统面板标题颜色",
+      "key": "--system-panel-title",
+      "type": "color",
+      "default": "#FFFFFF"
+    },
+    {
+      "name": "完好率低值颜色",
+      "key": "--color-rate-low",
+      "type": "color",
+      "default": "#FF4D4F"
+    },
+    {
+      "name": "完好率正常颜色",
+      "key": "--color-rate-normal",
+      "type": "color",
+      "default": "#52C41A"
+    }
+  ],
+  "businessConfig": [
+    {
+      "name": "路段编码",
+      "key": "sectionNum",
+      "type": "string",
+      "default": "S23-JY"
+    },
+    {
+      "name": "路段名称",
+      "key": "sectionName",
+      "type": "string",
+      "default": "隧道"
+    },
+    {
+      "name": "轮询间隔(ms)",
+      "key": "pollInterval",
+      "type": "number",
+      "default": 60000
+    },
+    {
+      "name": "显示总数卡片",
+      "key": "showTotalCard",
+      "type": "boolean",
+      "renderType": "radio",
+      "default": true
+    },
+    {
+      "name": "显示在线卡片",
+      "key": "showOnlineCard",
+      "type": "boolean",
+      "renderType": "radio",
+      "default": true
+    },
+    {
+      "name": "显示异常卡片",
+      "key": "showAbnormalCard",
+      "type": "boolean",
+      "renderType": "radio",
+      "default": true
+    },
+    {
+      "name": "显示在线率卡片",
+      "key": "showRateCard",
+      "type": "boolean",
+      "renderType": "radio",
+      "default": true
+    },
+    {
+      "name": "显示系统面板",
+      "key": "showSystemPanel",
+      "type": "boolean",
+      "renderType": "radio",
+      "default": true
+    },
+    {
+      "name": "允许展开系统",
+      "key": "allowExpand",
+      "type": "boolean",
+      "renderType": "radio",
+      "default": true
+    },
+    {
+      "name": "空态文案",
+      "key": "emptyText",
+      "type": "string",
+      "default": "暂无设备数据"
+    }
+  ]
+}

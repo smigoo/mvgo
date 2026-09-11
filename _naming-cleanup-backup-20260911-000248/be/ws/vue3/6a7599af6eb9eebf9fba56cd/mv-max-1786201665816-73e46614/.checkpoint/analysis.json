@@ -1,0 +1,194 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 45,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "严重违规：生成了组件面板标题'环境监测'及装饰图标。根据微码核心规范，组件标题由 base-panel 通过 declare.json 的 componentName 自动显示，禁止在组件内部重复生成标题栏。",
+        "suggestion": "直接删除 section-header 整个 section。组件内容应直接从 Tab 切换区（section-tabs-controls）开始，不要包含任何面板级别的标题和边框装饰。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[*].body.backgroundImage",
+        "message": "背景图渲染冲突：三个 section 的 body 均引用了同一张背景图(bg-7890.png)且设置为 backgroundSize: cover。这会导致每个 section 独立渲染一张完整的背景图，而不是形成一张连续的组件背景。",
+        "suggestion": "将背景图统一提取到组件根容器（.my-component）上设置；或者为每个 section 提供不同的局部背景切片资源，避免重复渲染整图。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[0].axes.y",
+        "message": "业务语义冲突：当前默认选中的 Tab 是'一氧化碳'，但图表 Y 轴单位被识别为'辆'。CO 浓度的单位通常为 ppm 或 mg/m³，'辆' 是车辆监测的单位，存在明显的逻辑错误。",
+        "suggestion": "核对设计稿或重新解析，修正 Y 轴单位标签，确保图表元数据与当前监测指标（一氧化碳）的业务语义保持一致。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "数据可靠性极低：Figma 节点覆盖率（coverageRate）为 0%，缺失 26 个节点。这表明当前的布局结构可能严重偏离设计稿，或是 AI 在缺乏足够视觉证据时臆造的结构。",
+        "suggestion": "重新运行视觉解析流程，确保布局结构严格基于真实的 Figma 节点数据生成。在覆盖率达标前，不应进入代码生成阶段。"
+      }
+    ],
+    "recommendations": [
+      "严格遵循'禁止生成组件面板标题'规范，移除所有由 base-panel 托管的面板级 UI 元素（标题、边框、背景等）。",
+      "优化背景图资源管理策略，避免在多个平级 section 中重复使用同一张 cover 尺寸的背景图，建议采用根容器统一背景或局部切片。",
+      "加强图表元数据（如坐标轴单位、图例名称）与 Tab 切换状态的业务逻辑校验，确保数据语义的准确性。",
+      "提升 Figma 节点解析覆盖率，确保生成的布局结构有真实的设计稿数据支撑，杜绝 AI 臆造布局。"
+    ],
+    "summary": "当前布局结构存在严重的规范违规问题，特别是重复生成了组件面板标题，直接违反了微码组件的核心约束。此外，背景图的重复使用会导致视觉渲染异常，且 Figma 节点覆盖率极低（0%），表明该结构缺乏真实设计稿数据支撑，可靠性存疑。建议彻底重构，移除面板标题，修正背景图策略，并基于真实的 Figma 数据重新生成布局后再进行审查。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#3b82f6",
+      "--colorSuccess": "#52c41a",
+      "--colorDanger": "#f53f3f",
+      "--colorBgBase": "rgba(237, 244, 251, 1)",
+      "--colorWhite": "#ffffff",
+      "--fontSize": "14px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#3b82f6",
+      "@color-success": "#52c41a",
+      "@color-danger": "#f53f3f",
+      "@color-bg-base": "rgba(237, 244, 251, 1)",
+      "@color-white": "#ffffff",
+      "@font-size-base": "14px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "width": "100%",
+        "height": "100%",
+        "background-color": "var(--colorBgBase)",
+        "color": "#333333",
+        "font-size": "var(--fontSize)"
+      },
+      ".tab-item-active": {
+        "position": "relative",
+        "color": "var(--colorPrimary)",
+        "font-weight": "600",
+        "background": "transparent"
+      },
+      ".tab-item-active::after": {
+        "content": "''",
+        "position": "absolute",
+        "bottom": "-4px",
+        "left": "50%",
+        "transform": "translateX(-50%)",
+        "width": "0",
+        "height": "0",
+        "border-left": "6px solid transparent",
+        "border-right": "6px solid transparent",
+        "border-bottom": "6px solid var(--colorPrimary)"
+      },
+      ".warning-line": {
+        "width": "100%",
+        "height": "0",
+        "border-top": "2px dashed var(--colorDanger)",
+        "position": "relative",
+        "z-index": "1"
+      },
+      ".badge-danger": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "min-width": "18px",
+        "height": "18px",
+        "padding": "0 5px",
+        "background-color": "var(--colorDanger)",
+        "color": "var(--colorWhite)",
+        "font-size": "12px",
+        "line-height": "1",
+        "border-radius": "9px",
+        "font-weight": "bold",
+        "box-sizing": "border-box"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 #3b82f6 映射为 --colorPrimary，用于Tab选中态及科技风强调元素",
+      "背景色 rgba(237, 244, 251, 1) 映射为 --colorBgBase，作为浅灰蓝色基础背景，容器背景直接落地为字面量值",
+      "预警色 #f53f3f 映射为 --colorDanger，用于红色虚线预警线和红色Badge高亮",
+      "成功色 #52c41a 映射为 --colorSuccess，预留用于正常状态或正向数据指示",
+      "Tab选中态箭头背景通过 ::after 伪元素实现三角形箭头效果，保持与主色一致",
+      "红色虚线预警线使用 border-top: 2px dashed 实现，确保在图表或数据层上方清晰可见",
+      "红色Badge数字采用圆角矩形背景与白色文字，确保在浅色背景下的高对比度与可读性"
+    ],
+    "elementStyleMap": {
+      "section-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "section-tabs-controls": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tabs-list": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "view-icons": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-6": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-18": {
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-header",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 2,
+        "title": "环境监测"
+      },
+      {
+        "id": "section-tabs-controls",
+        "responsibility": "标签页切换区",
+        "elementCount": 10,
+        "title": "Tab切换与视图控制"
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "监测数据图表"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 → 强制拆分"
+  }
+}

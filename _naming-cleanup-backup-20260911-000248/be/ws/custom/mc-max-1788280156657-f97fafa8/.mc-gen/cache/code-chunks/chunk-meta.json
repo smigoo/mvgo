@@ -1,0 +1,103 @@
+{
+  "completed": [
+    "1-declare.json",
+    "2-package/index.vue",
+    "3-package/index.vue",
+    "4-package/index.vue",
+    "6-package/components/SectionChartTunnel.vue",
+    "5-package/components/SectionDailyTotal.vue",
+    "8-package/components/SectionVehicleType.vue",
+    "7-package/components/SectionChartBridge.vue",
+    "9-package/components/SectionForecast.vue",
+    "10-resources/styles/themes/theme-vars.less",
+    "11-resources/styles/common.less"
+  ],
+  "total": 6,
+  "updatedAt": 1788281198597,
+  "files": {
+    "declare.json": [
+      {
+        "index": 1,
+        "file": "1-declare.json",
+        "segmentType": "declare",
+        "scriptPart": ""
+      }
+    ],
+    "package/index.vue": [
+      {
+        "index": 2,
+        "file": "2-package_index.vue",
+        "segmentType": "template",
+        "scriptPart": ""
+      },
+      {
+        "index": 3,
+        "file": "3-package_index.vue",
+        "segmentType": "script",
+        "scriptPart": "state"
+      },
+      {
+        "index": 4,
+        "file": "4-package_index.vue",
+        "segmentType": "script",
+        "scriptPart": "lifecycle"
+      }
+    ],
+    "package/components/SectionChartTunnel.vue": [
+      {
+        "index": 6,
+        "file": "6-package_components_SectionChartTunnel.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/SectionDailyTotal.vue": [
+      {
+        "index": 5,
+        "file": "5-package_components_SectionDailyTotal.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/SectionVehicleType.vue": [
+      {
+        "index": 8,
+        "file": "8-package_components_SectionVehicleType.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/SectionChartBridge.vue": [
+      {
+        "index": 7,
+        "file": "7-package_components_SectionChartBridge.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/SectionForecast.vue": [
+      {
+        "index": 9,
+        "file": "9-package_components_SectionForecast.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "resources/styles/themes/theme-vars.less": [
+      {
+        "index": 10,
+        "file": "10-resources_styles_themes_theme-vars.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      }
+    ],
+    "resources/styles/common.less": [
+      {
+        "index": 11,
+        "file": "11-resources_styles_common.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      }
+    ]
+  }
+}

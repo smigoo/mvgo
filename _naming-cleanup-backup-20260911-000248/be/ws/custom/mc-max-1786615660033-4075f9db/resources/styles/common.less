@@ -1,0 +1,338 @@
+.c-monitor-layout {
+  width: 100%;
+  height: 100%;
+  background-color: @bg-color;
+  box-shadow: 0px 4px 10px @shadow-color;
+  display: flex;
+  flex-direction: column;
+  padding: 10px 15px;
+  box-sizing: border-box;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.c-monitor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 32px;
+  flex-shrink: 0;
+}
+
+.c-monitor-title,
+.c-monitor-subtitle {
+  font-size: 16px;
+  font-weight: 700;
+  background: linear-gradient(90deg, #1990ff 0%, #597eff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.c-monitor-subtitle {
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.c-section-daily,
+.c-section-vehicle,
+.c-section-prediction {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.c-sub-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 30px;
+  margin-bottom: 8px;
+}
+
+.c-sub-header-title-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.c-sub-header-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.c-sub-header-title {
+  font-size: 16px;
+  font-weight: 500;
+  color: @text-color;
+  text-shadow: 0px 5px 5px rgba(255, 255, 255, 0.8);
+}
+
+.c-total-traffic-body {
+  width: 100%;
+  height: 91px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  box-sizing: border-box;
+  position: relative;
+  background-size: 100% 100%center
+}
+
+.c-total-traffic-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 1;
+}
+
+.c-total-traffic-stat-right {
+  align-items: flex-end;
+}
+
+.c-total-traffic-label {
+  font-size: 16px;
+  font-weight: 500;
+  color: @text-color;
+}
+
+.c-total-traffic-value {
+  font-family: 'Roboto', sans-serif;
+  font-size: 24px;
+  font-weight: 900;
+}
+
+.c-total-traffic-value-tunnel {
+  color: @value-tunnel;
+}
+
+.c-total-traffic-value-bridge {
+  color: @value-bridge;
+}
+
+.c-total-traffic-center-icon {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 62px;
+  height: 62px;
+  z-index: 1;
+}
+
+.c-monitor-chart-block {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 12px;
+  
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.c-monitor-chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.c-monitor-chart-title {
+  font-size: 14px;
+  font-weight: 400;
+  color: @text-color;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  
+  &::before {
+    content: '';
+    display: inline-block;
+    width: 3px;
+    height: 12px;
+    background: linear-gradient(180deg, #388dff 0%, #388dff 100%);
+    border-radius: 6px;
+  }
+}
+
+.c-monitor-chart-canvas {
+  width: 100%;
+  height: 131px;
+}
+
+.c-monitor-chart-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.c-monitor-tab-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.c-monitor-tab-item {
+  font-size: 14px;
+  font-weight: 400;
+  color: @text-color;
+  padding: 0 12px;
+  height: 19px;
+  line-height: 19px;
+  border-radius: 20px;
+  background: #6680a0;
+  border: 0.73px solid rgba(172, 196, 225, 1);
+  cursor: pointer;
+  transition: all 0.3s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  
+  &.is-active {
+    background: @primary-color;
+    border-color: rgba(199, 224, 255, 1);
+    color: #ffffff;
+    font-weight: 500;
+  }
+}
+
+.c-monitor-holiday-link {
+  font-size: 12px;
+  color: @primary-color;
+  cursor: pointer;
+}
+
+.c-monitor-accuracy-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 21px;
+  font-size: 12px;
+  font-weight: 500;
+  color: @chart-green;
+  margin-top: 4px;
+}
+
+.c-vehicle-distribution-root {
+  display: flex;
+  gap: 3px;
+  width: 100%;
+}
+
+.c-vehicle-distribution-card {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  box-sizing: border-box;
+  height: 114px;
+}
+
+.c-vehicle-distribution-card-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  background-size: 100% 100%center
+}
+
+.c-vehicle-distribution-title-wrapper {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+  height: 24px;
+}
+
+.c-vehicle-distribution-title-bg {
+  position: absolute;
+  width: 129.5px;
+  height: 9px;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background-size: 100% 100%center
+}
+
+.c-vehicle-distribution-title-text {
+  position: relative;
+  z-index: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: @text-color;
+  text-align: center;
+}
+
+.c-vehicle-distribution-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 1;
+}
+
+.c-vehicle-distribution-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.c-vehicle-distribution-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.c-vehicle-distribution-stat-label {
+  font-size: 12px;
+  color: @text-color;
+}
+
+.c-vehicle-distribution-stat-value {
+  font-family: 'Roboto', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.c-vehicle-distribution-divider-icon {
+  width: 11px;
+  height: 7px;
+  margin: 0 8px;
+}
+
+.c-vehicle-distribution-chart-wrapper {
+  width: 52px;
+  height: 52px;
+  position: relative;
+}
+
+.c-vehicle-distribution-chart {
+  width: 100%;
+  height: 100%;
+}
+
+:deep(.ant-select) {
+  .ant-select-selector {
+    background: linear-gradient(180deg, #ffffff 0%, #e2f0ff 100%) !important;
+    border: 1px solid #a1cdff !important;
+    box-shadow: none !important;
+    border-radius: 4px !important;
+    color: @text-color;
+    font-size: 14px;
+    height: 30px !important;
+  }
+  .ant-select-selection-item {
+    line-height: 30px !important;
+  }
+  .ant-select-arrow {
+    color: #a8abb3;
+  }
+}

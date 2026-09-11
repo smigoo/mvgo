@@ -1,0 +1,220 @@
+根据预览图分析，这是一个环境监测面板组件。让我逐步分析其结构：
+
+## 结构分析
+
+1. **顶部控件区**：包含4个Tab标签（气化版、能见度、洞内照明、洞外光强）
+2. **右上角功能区**：有两个图标按钮（可能是视图切换和其他功能）
+3. **主内容区**：
+   - 时间范围显示："2k3+785CO3侧"
+   - 状态标签："拥堵线"（红色背景）
+   - 面积图表：展示24小时数据趋势
+   - Y轴刻度：0, 10, 20, 30, 40
+   - X轴时间轴：2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24（时）
+
+## 关键识别
+
+- **backgroundBrightness**: `"light"` - 背景为浅灰色（#EDF4FB），文字为深色
+- **Tab控件**：位于标题下方，属于内容区筛选，不是header插槽
+- **图表类型**：面积图（area chart），填充为绿色渐变
+- **图例**：无独立图例区域，只有单系列数据
+
+```json
+{
+  "generatedAt": "2025-06-10T12:00:00Z",
+  "stage": "preview-analysis",
+  "componentName": "环境监测",
+  "componentTitle": "环境监测",
+  "analysisModel": "claude-3-7-sonnet-20250219",
+  "sourceImage": {
+    "path": "mc-preview.png",
+    "size": 0,
+    "mtimeMs": 0,
+    "sha1": ""
+  },
+  "summary": "浅色背景的环境监测面板，包含Tab切换、状态标签和24小时面积图",
+  "layout": {
+    "type": "vertical-stack",
+    "direction": "vertical",
+    "sections": [
+      {
+        "id": "tabs-section",
+        "name": "监测类型切换",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "body": {
+          "layout": "horizontal",
+          "children": [
+            {
+              "id": "tab-1",
+              "name": "气化版",
+              "role": "tab",
+              "active": true,
+              "resourceFile": "../resources/images/bg-tab-active-7891.png",
+              "recommendedUsage": "backgroundBlock"
+            },
+            {
+              "id": "tab-2",
+              "name": "能见度",
+              "role": "tab",
+              "active": false
+            },
+            {
+              "id": "tab-3",
+              "name": "洞内照明",
+              "role": "tab",
+              "active": false
+            },
+            {
+              "id": "tab-4",
+              "name": "洞外光强",
+              "role": "tab",
+              "active": false
+            }
+          ]
+        }
+      },
+      {
+        "id": "chart-section",
+        "name": "监测数据图表",
+        "role": "常驻",
+        "layout": "vertical",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "bgPlaceholder": "section-bg-chart",
+        "body": {
+          "layout": "vertical",
+          "bgPlaceholder": "body-bg-chart",
+          "children": [
+            {
+              "id": "chart-header",
+              "type": "row",
+              "layout": "horizontal",
+              "alignItems": "center",
+              "justifyContent": "space-between",
+              "children": [
+                {
+                  "type": "label",
+                  "text": "时间",
+                  "styles": {
+                    "fontSize": 12,
+                    "color": "rgba(0, 0, 0, 0.45)"
+                  }
+                },
+                {
+                  "type": "value",
+                  "text": "2k3+785CO3侧",
+                  "styles": {
+                    "fontSize": 14,
+                    "color": "rgba(0, 0, 0, 0.85)"
+                  }
+                },
+                {
+                  "type": "badge",
+                  "text": "拥堵线",
+                  "styles": {
+                    "fontSize": 12,
+                    "color": "#ffffff",
+                    "backgroundColor": "#f5222d",
+                    "padding": "2px 8px",
+                    "borderRadius": "4px"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "chart-container",
+              "type": "chart",
+              "chartType": "area",
+              "styles": {
+                "width": 400,
+                "height": 180
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "styles": {
+    "backgroundBrightness": "light",
+    "theme": "浅色环境监测风",
+    "colors": [
+      "#EDF4FB",
+      "#5AD8A6",
+      "#F5222D",
+      "#1890FF"
+    ],
+    "background": "浅灰蓝色背景（#EDF4FB）",
+    "decorations": [
+      "Tab选中态有浅蓝色背景图片",
+      "拥堵线标签为红色徽章"
+    ],
+    "emphasis": [
+      "绿色面积图填充",
+      "红色状态标签"
+    ]
+  },
+  "headerSlots": [
+    {
+      "slotType": "header-right",
+      "elementType": "icon",
+      "content": "视图切换图标",
+      "figmaNodeId": "7914:7915"
+    }
+  ],
+  "interactions": [
+    {
+      "target": "顶部Tab标签组",
+      "type": "tab-switch",
+      "description": "切换不同监测指标",
+      "defaultState": "气化版选中",
+      "evidence": "第一个Tab有蓝色背景高亮"
+    },
+    {
+      "target": "右上角图标按钮",
+      "type": "button",
+      "description": "可能的视图切换功能",
+      "defaultState": "常驻",
+      "evidence": "有明确的图标按钮样式"
+    }
+  ],
+  "charts": [
+    {
+      "section": "chart-section",
+      "type": "area",
+      "series": [
+        "监测数值"
+      ],
+      "legend": [],
+      "legendPosition": null,
+      "seriesColors": [
+        "#5AD8A6"
+      ],
+      "legendType": null,
+      "axes": "X轴为时间（2-24时），Y轴为数值（0-40）",
+      "tooltip": "无可见tooltip",
+      "notes": [
+        "绿色面积填充",
+        "有红色虚线标识拥堵线",
+        "Y轴刻度：0, 10, 20, 30, 40",
+        "X轴刻度：2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24"
+      ]
+    }
+  ],
+  "doNotInvent": [
+    "Tab切换后的具体数据变化逻辑",
+    "右上角图标按钮的具体功能",
+    "图表tooltip的详细格式",
+    "拥堵线阈值的计算规则",
+    "数据实时更新的频率"
+  ],
+  "notes": [
+    "组件采用浅色主题，背景为浅灰蓝色",
+    "Tab控件使用了下载的背景图片资源",
+    "图表为单系列面积图，无独立图例",
+    "存在状态标签（拥堵线）提示当前状态"
+  ]
+}
+```

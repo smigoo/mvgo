@@ -1,0 +1,149 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 82,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "charts[0].notes & charts[1].notes",
+        "message": "图表 notes 中提到'有橙色虚线表示建议分流'，但在图表的 series 或 axes 配置中缺少 markLine 相关的数据和样式定义，可能导致生成时遗漏该关键视觉元素。",
+        "suggestion": "在 charts 配置中补充 markLine 属性，明确虚线的 x 轴位置（如 16时）、颜色（橙色 #fa8c16）及线型（虚线 dashed）。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[3].body",
+        "message": "notes 中提到'车型分布卡片中间有装饰性的仪表盘/圆环图形'，但布局结构中未体现该装饰元素的层级、位置和尺寸，生成时极易与统计文本发生重叠或布局错乱。",
+        "suggestion": "在 section-vehicle-type 的 body 中增加装饰元素的节点定义，明确其是作为背景图、绝对定位元素还是 flex 布局中的独立子元素，并预留相应的宽高占位。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].header.controls[0]",
+        "message": "time-selector 仅定义为 dropdown，未明确其视觉特征。在生成时容易与 Tab 切换按钮混淆，违反 Select/下拉框识别约束。",
+        "suggestion": "补充 Select 下拉框的视觉特征描述（如边框矩形、下拉箭头 ▼），并在生成提示中强调必须实现完整的 trigger + dropdown 结构，禁止简化为 toggle 按钮。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[1].body.children[0]",
+        "message": "图表高度硬编码为 200，在极端窄屏或容器宽度受限时，可能导致 ECharts 内容挤压溢出或坐标轴文字被截断。",
+        "suggestion": "在生成代码时，必须确保图表外层容器设置 min-width: 0 和 overflow: hidden，并配置 ECharts 的 grid.containLabel: true 以严格遵循图表边界约束。"
+      }
+    ],
+    "recommendations": [
+      "补充图表 markLine 配置：明确'建议分流'橙色虚线的具体触发位置（如 x 轴 16时）和样式，确保视觉还原准确。",
+      "完善车型分布装饰元素层级：在布局中明确中间仪表盘/圆环图形的 DOM 结构和 CSS 定位方式（如 absolute 居中），避免与客车/货车数据重叠。",
+      "严格遵循 Select 识别约束：生成 time-selector 时，必须实现带有边框和箭头的完整下拉菜单结构，支持点击展开/收起，且箭头需根据状态旋转。",
+      "确保 Tab 切换数据联动：生成 location-tab 时，必须使用 watch 监听 activeIndex 变化，并动态更新下方流量预测面积图的数据，禁止仅做样式切换。",
+      "落实图表边界与标题对齐约束：图表容器必须设置 min-width: 0 和 overflow: hidden；所有 section 的 header 标题必须左对齐，右侧控件使用 margin-left: auto 推至右侧，禁止使用 justify-content: space-between。"
+    ],
+    "summary": "该布局结构整体划分清晰，层级合理，符合微码组件的基本规范。但在部分细节上存在信息缺失，如图表辅助线（markLine）配置遗漏、装饰性元素层级未定义等，可能导致代码生成时出现视觉偏差。此外，需特别注意在生成阶段严格落实 Select 下拉框识别、Tab 数据联动、图表边界控制及标题对齐等 AI 生成约束，以确保最终产物的交互正确性和布局稳定性。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1990ff",
+      "--colorWarning": "#fa8c16",
+      "--colorTextBase": "#333333",
+      "--colorBgBase": "#edf4fb",
+      "--fontSize": "14px",
+      "--fontSizeHeading": "32px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#1990ff",
+      "@color-warning": "#fa8c16",
+      "@color-text-base": "#333333",
+      "@color-bg-base": "#edf4fb",
+      "@font-size-base": "14px",
+      "@font-size-heading": "32px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "width": "100%",
+        "height": "100%",
+        "background-color": "#edf4fb",
+        "color": "#333333",
+        "font-size": "14px",
+        "position": "relative",
+        "overflow": "hidden",
+        "box-sizing": "border-box"
+      },
+      ".emphasis-value": {
+        "font-size": "32px",
+        "color": "#1990ff",
+        "font-weight": "700",
+        "line-height": "1.2",
+        "font-family": "DIN Alternate, Arial, sans-serif"
+      },
+      ".decoration-diamond": {
+        "width": "10px",
+        "height": "10px",
+        "background-color": "#1990ff",
+        "transform": "rotate(45deg)",
+        "display": "inline-block",
+        "margin-right": "8px"
+      },
+      ".decoration-light-ring": {
+        "border": "2px solid rgba(25, 144, 255, 0.4)",
+        "border-radius": "50%",
+        "box-shadow": "0 0 12px rgba(25, 144, 255, 0.6)",
+        "position": "absolute",
+        "pointer-events": "none"
+      },
+      ".text-warning": {
+        "color": "#fa8c16"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 #1990ff 映射为 --colorPrimary，用于大号数值和菱形图标",
+      "辅助色 #fa8c16 映射为 --colorWarning，用于次要强调或警示元素",
+      "背景色 #edf4fb 直接落地为容器背景，同时映射为 --colorBgBase 以支持主题切换",
+      "文本色 #333333 映射为 --colorTextBase，作为基础文字颜色",
+      "大号蓝色数值通过 .emphasis-value 类实现，结合主色和放大字号，并指定等宽字体增强科技感",
+      "装饰元素菱形和光效圆环通过 .decoration-diamond 和 .decoration-light-ring 实现，光效圆环使用绝对定位避免影响布局"
+    ],
+    "elementStyleMap": {
+      "section-daily-total": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-bridge": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-chart-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-chart-bridge": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-vehicle-type": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-tunnel": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "vehicle-bridge": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-flow-prediction": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    }
+  }
+}

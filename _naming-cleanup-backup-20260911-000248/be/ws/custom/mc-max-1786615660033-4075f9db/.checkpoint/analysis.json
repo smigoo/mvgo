@@ -1,0 +1,152 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 72,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "Figma 节点覆盖率极低（coverageRate: 0），缺失节点高达 170 个。这表明当前布局结构可能遗漏了大量设计稿细节，或 Figma 解析存在严重偏差，无法保证最终还原度。",
+        "suggestion": "建议重新检查 Figma 设计稿的图层结构，确保关键节点未被隐藏或锁定。如果设计稿使用了大量组件实例或复杂分组，可能需要调整解析策略或手动补充缺失的布局细节。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "chartDataHints",
+        "message": "图表数据提示（chartDataHints）中存在数据污染。labels 数组中混入了大量非图表坐标轴的文本（如 '24小时', '当日总流量', '江阴大桥' 等），这会导致 AI 在生成 ECharts 配置时错误地将这些文本作为 X/Y 轴数据。",
+        "suggestion": "在生成代码前，需对 chartDataHints 进行清洗，过滤掉标题、图例、单位等非坐标轴数据，仅保留真实的 X 轴（如时间/小时）和 Y 轴（如车辆数）数据。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[3].body.items",
+        "message": "车型分布（vehicle-distribution）内部嵌套过深。items 内部又分为 header 和 content，且 content 内部再次使用 horizontal 布局包裹 stat-item 和 icon，导致 DOM 层级增加，不利于样式控制和自适应。",
+        "suggestion": "建议简化结构，将标题（如'江阴靖江长江隧道'）、客车数据、图标、货车数据直接平铺在一个 flex 容器中，减少不必要的 content 包裹层。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[0].body.children[1] & layout.sections[3].body.items[*].content.children[1]",
+        "message": "装饰性汽车图标（center-icon）直接作为 flex 子元素参与水平布局。如果图标未设置严格的固定宽高，可能会在响应式缩放时挤压两侧的统计卡片，导致布局变形。",
+        "suggestion": "在生成代码时，必须为这些装饰图标设置固定的 width 和 height（如 width: 40px; height: 40px;），或者使用 flex-shrink: 0 防止被压缩。如果设计稿允许，也可以考虑将图标作为背景图或绝对定位元素。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[4].header.controls",
+        "message": "流量预测（flow-prediction）的 header 右侧同时存在 location-tab 和 holiday-link 两个控件。根据'标题对齐约束'，右侧元素需要统一推到右侧，如果分别处理 margin-left: auto 可能会导致间距不可控。",
+        "suggestion": "建议在生成代码时，将这两个控件包裹在一个统一的 controls-wrapper 容器中，对该容器使用 margin-left: auto，以确保它们作为一个整体靠右对齐，并保持内部合理的 gap 间距。"
+      }
+    ],
+    "recommendations": [
+      "1. 重点解决 Figma 覆盖率问题：在代码生成前，务必人工核对设计稿，补充缺失的关键 UI 元素和布局层级，避免生成残缺的组件。",
+      "2. 严格遵循图片资源规范：布局中引用的本地图片（如 g-3552.png, icon-3573.png）在生成代码时，必须转换为 base64 内联或使用同源 URL，严禁使用 ESM import，以免触发 RUNTIME-004 运行时错误。",
+      "3. 图表配置规范化：确保所有 ECharts 图表都配置了 tooltip（根据坐标系选择 trigger: 'axis' 或 'item'），并且自定义图例必须实现与图表的联动（点击切换系列显示）。",
+      "4. 样式零装饰原则：在生成 Less 样式时，严格遵守'证据优先'原则，不要为 section 或卡片默认添加 background、border-radius、box-shadow 等装饰样式，除非 Figma 数据中有明确证据。"
+    ],
+    "summary": "该布局结构在微码规范符合度上表现良好，正确区分了 header/body 层级，区域划分清晰，且图表信息较为完整。但存在两个致命隐患：一是 Figma 节点覆盖率极低（0%），可能导致大量设计细节丢失；二是图表数据提示（chartDataHints）存在数据污染，可能误导图表生成。此外，部分装饰图标的布局方式和车型分布的嵌套深度需要优化。建议在代码生成前优先修复覆盖率和数据清洗问题，并严格遵循图片资源引用和样式零装饰规范。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1990ff",
+      "--colorBg": "#edf4fb",
+      "--colorTextBase": "#333333",
+      "--colorAccent": "#fa8c16",
+      "--fontSize": "14px",
+      "--fontSizeLarge": "28px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#1990ff",
+      "@color-bg": "#edf4fb",
+      "@color-text-base": "#333333",
+      "@color-accent": "#fa8c16",
+      "@font-size-base": "14px",
+      "@font-size-large": "28px",
+      "@border-radius-base": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "width": "100%",
+        "height": "100%",
+        "background-color": "#edf4fb",
+        "color": "#333333",
+        "font-size": "14px",
+        "position": "relative",
+        "overflow": "hidden"
+      },
+      ".header-section": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "8px",
+        "margin-bottom": "16px"
+      },
+      ".diamond-icon": {
+        "width": "16px",
+        "height": "16px",
+        "background-color": "#1990ff",
+        "transform": "rotate(45deg)"
+      },
+      ".emphasis-value": {
+        "font-size": "28px",
+        "font-weight": "bold",
+        "color": "#1990ff",
+        "line-height": "1.2"
+      },
+      ".car-decoration": {
+        "position": "absolute",
+        "right": "16px",
+        "bottom": "16px",
+        "width": "64px",
+        "height": "64px",
+        "opacity": "0.8"
+      },
+      ".text-accent": {
+        "color": "#fa8c16"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 #1990ff 映射为 --colorPrimary，用于大号数值强调及核心图标",
+      "背景色 #edf4fb 直接落地为容器背景，符合浅色科技监测风基调",
+      "辅助色 #fa8c16 映射为 --colorAccent，用于次要数据或状态提示",
+      "菱形标题图标可通过 CSS transform 旋转实现，或替换为实际图片资源",
+      "汽车装饰图标建议通过 <img :src> 引入，并预留绝对定位样式类",
+      "大号蓝色数值使用 --colorPrimary 结合放大字号，突出核心监测指标"
+    ],
+    "elementStyleMap": {
+      "daily-total-stats": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-bridge": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "tunnel-flow-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "bridge-flow-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-distribution": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "flow-prediction": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    }
+  }
+}

@@ -1,0 +1,54 @@
+// 微码组件主题变量
+// 仅定义主题 mixin，禁止在根级调用任何主题 mixin。
+
+.common() {
+  // 字体缩放基准令牌
+  @fontSize: 14px;
+
+  // 设计稿字号
+  @font-size-base: 14px;
+  @font-size-title: 16px;
+  @font-size-large: 24px;
+  @font-size-xl: 32px;
+
+  // 圆角与阴影
+  @border-radius-base: 4px;
+  @border-radius-lg: 8px;
+  @box-shadow-card: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.theme-dark() {
+  // 品牌色
+  @color-primary: #1890ff;
+  @color-warning: #ff7a45;
+  @color-success: #52c41a;
+
+  // 深色面板文字颜色
+  @color-text-base: rgba(255, 255, 255, 0.9);
+  @color-text-secondary: rgba(255, 255, 255, 0.65);
+
+  // 深色面板背景
+  @color-bg-base: rgba(18, 26, 38, 1);
+  @color-bg-container: #1a2332;
+
+  // 主色光晕
+  @glow-color-primary: rgba(24, 144, 255, 0.3);
+}
+
+.theme-light() {
+  // 品牌色
+  @color-primary: #1890ff;
+  @color-warning: #ff7a45;
+  @color-success: #52c41a;
+
+  // 浅色面板文字颜色
+  @color-text-base: rgba(51, 51, 51, 1);
+  @color-text-secondary: rgba(51, 51, 51, 0.65);
+
+  // 浅色面板背景
+  @color-bg-base: rgba(237, 244, 251, 1);
+  @color-bg-container: #ffffff;
+
+  // 主色光晕
+  @glow-color-primary: rgba(24, 144, 255, 0.3);
+}

@@ -1,0 +1,21 @@
+{
+  "generatedAt": "2026-07-28T05:30:45.763Z",
+  "stage": "preview-analysis",
+  "degraded": true,
+  "degradeReason": "The \"data\" argument must be of type string or an instance of Buffer, TypedArray, or DataView. Received an instance of Array",
+  "layout": {
+    "type": "vertical",
+    "direction": "top-to-bottom",
+    "sections": []
+  },
+  "styles": {
+    "theme": "未知",
+    "colors": [],
+    "background": "",
+    "decorations": [],
+    "emphasis": [],
+    "backgroundBrightness": "dark"
+  },
+  "interactions": [],
+  "charts": []
+}

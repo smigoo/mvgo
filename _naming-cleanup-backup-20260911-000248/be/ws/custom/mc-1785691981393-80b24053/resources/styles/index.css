@@ -1,0 +1,325 @@
+/* [Layout Refine] Figma slot-con bbox → padding: 0 20px 8px 20px */
+/* [Style Refine] fills[0].color → #edf4fb, effects → box-shadow */
+.c-mc-1785691981393-80b24053-content {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 0 20px 8px 20px;
+  background: #edf4fb;
+  box-shadow: 0 4px 10px rgba(74, 116, 140, 0.25);
+  box-sizing: border-box;
+  min-height: 0;
+}
+/* [Layout Refine] Figma sub-t bbox → height: 32px, flex-shrink: 0 */
+.c-mc-1785691981393-80b24053-tabs-controls {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  height: 32px;
+  flex-shrink: 0;
+}
+/* [Style Refine] fills[0].gradientStops → linear-gradient, strokes → border */
+.c-mc-1785691981393-80b24053-tab-switch {
+  display: flex;
+  flex-direction: row;
+  background: linear-gradient(90deg, #b5deff 0%, #d1ecff 100%);
+  border: 0.72px solid #ffffff;
+  padding: 3px;
+  gap: 0;
+}
+/* [Style Refine] typography → font-size: 14px, font-weight: 500, line-height: 12px */
+.c-mc-1785691981393-80b24053-tab-item {
+  padding: 4px 11px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #2c9bea;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  line-height: 12px;
+  user-select: none;
+}
+.c-mc-1785691981393-80b24053-tab-item:hover {
+  opacity: 0.8;
+}
+/* [Style Refine] fills[0].gradientStops → linear-gradient, effects → text-shadow */
+.c-mc-1785691981393-80b24053-tab-item--active {
+  background: linear-gradient(90deg, #1099b1 0%, #038fff 100%);
+  border: 0.6px solid #ffffff;
+  color: #ffffff;
+  text-shadow: 0 0.6px 0 #006fe3;
+}
+/* [Layout Refine] Figma tabs-icon bbox → gap: 4px */
+.c-mc-1785691981393-80b24053-view-icons {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+}
+/* [Style Refine] strokes → border, fills → background, cornerRadius → border-radius */
+.c-mc-1785691981393-80b24053-view-icon {
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  border: 1px solid #a1ceff;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #ffffff 0%, #e2f0ff 100%);
+  object-fit: contain;
+  padding: 3px;
+  box-sizing: border-box;
+}
+/* [Layout Refine] Figma num bbox relative to tabs-icon → top: -7px, right: -7px */
+/* [Style Refine] fills[0].color → #f53f3f, cornerRadius → 29px */
+.c-mc-1785691981393-80b24053-badge {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  width: 14px;
+  height: 14px;
+  background: #f53f3f;
+  border-radius: 29px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* [Style Refine] typography → font-size: 12px, font-weight: 500 */
+.c-mc-1785691981393-80b24053-badge-text {
+  font-size: 12px;
+  font-weight: 500;
+  color: #ffffff;
+  line-height: 14px;
+}
+/* [Layout Refine] Figma @echarts/line bbox → flex: 1, min-height: 0 */
+.c-mc-1785691981393-80b24053-chart-section {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+}
+.c-mc-1785691981393-80b24053-chart-container {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+.dark {
+  /* [Layout Refine] Figma slot-con bbox → padding: 0 20px 8px 20px */
+  /* [Style Refine] fills[0].color → #edf4fb, effects → box-shadow */
+  /* [Layout Refine] Figma sub-t bbox → height: 32px, flex-shrink: 0 */
+  /* [Style Refine] fills[0].gradientStops → linear-gradient, strokes → border */
+  /* [Style Refine] typography → font-size: 14px, font-weight: 500, line-height: 12px */
+  /* [Style Refine] fills[0].gradientStops → linear-gradient, effects → text-shadow */
+  /* [Layout Refine] Figma tabs-icon bbox → gap: 4px */
+  /* [Style Refine] strokes → border, fills → background, cornerRadius → border-radius */
+  /* [Layout Refine] Figma num bbox relative to tabs-icon → top: -7px, right: -7px */
+  /* [Style Refine] fills[0].color → #f53f3f, cornerRadius → 29px */
+  /* [Style Refine] typography → font-size: 12px, font-weight: 500 */
+  /* [Layout Refine] Figma @echarts/line bbox → flex: 1, min-height: 0 */
+}
+.dark .c-mc-1785691981393-80b24053-content {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 0 20px 8px 20px;
+  background: #edf4fb;
+  box-shadow: 0 4px 10px rgba(74, 116, 140, 0.25);
+  box-sizing: border-box;
+  min-height: 0;
+}
+.dark .c-mc-1785691981393-80b24053-tabs-controls {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  height: 32px;
+  flex-shrink: 0;
+}
+.dark .c-mc-1785691981393-80b24053-tab-switch {
+  display: flex;
+  flex-direction: row;
+  background: linear-gradient(90deg, #b5deff 0%, #d1ecff 100%);
+  border: 0.72px solid #ffffff;
+  padding: 3px;
+  gap: 0;
+}
+.dark .c-mc-1785691981393-80b24053-tab-item {
+  padding: 4px 11px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #2c9bea;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  line-height: 12px;
+  user-select: none;
+}
+.dark .c-mc-1785691981393-80b24053-tab-item:hover {
+  opacity: 0.8;
+}
+.dark .c-mc-1785691981393-80b24053-tab-item--active {
+  background: linear-gradient(90deg, #1099b1 0%, #038fff 100%);
+  border: 0.6px solid #ffffff;
+  color: #ffffff;
+  text-shadow: 0 0.6px 0 #006fe3;
+}
+.dark .c-mc-1785691981393-80b24053-view-icons {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+}
+.dark .c-mc-1785691981393-80b24053-view-icon {
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  border: 1px solid #a1ceff;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #ffffff 0%, #e2f0ff 100%);
+  object-fit: contain;
+  padding: 3px;
+  box-sizing: border-box;
+}
+.dark .c-mc-1785691981393-80b24053-badge {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  width: 14px;
+  height: 14px;
+  background: #f53f3f;
+  border-radius: 29px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dark .c-mc-1785691981393-80b24053-badge-text {
+  font-size: 12px;
+  font-weight: 500;
+  color: #ffffff;
+  line-height: 14px;
+}
+.dark .c-mc-1785691981393-80b24053-chart-section {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+}
+.dark .c-mc-1785691981393-80b24053-chart-container {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+.light {
+  /* [Layout Refine] Figma slot-con bbox → padding: 0 20px 8px 20px */
+  /* [Style Refine] fills[0].color → #edf4fb, effects → box-shadow */
+  /* [Layout Refine] Figma sub-t bbox → height: 32px, flex-shrink: 0 */
+  /* [Style Refine] fills[0].gradientStops → linear-gradient, strokes → border */
+  /* [Style Refine] typography → font-size: 14px, font-weight: 500, line-height: 12px */
+  /* [Style Refine] fills[0].gradientStops → linear-gradient, effects → text-shadow */
+  /* [Layout Refine] Figma tabs-icon bbox → gap: 4px */
+  /* [Style Refine] strokes → border, fills → background, cornerRadius → border-radius */
+  /* [Layout Refine] Figma num bbox relative to tabs-icon → top: -7px, right: -7px */
+  /* [Style Refine] fills[0].color → #f53f3f, cornerRadius → 29px */
+  /* [Style Refine] typography → font-size: 12px, font-weight: 500 */
+  /* [Layout Refine] Figma @echarts/line bbox → flex: 1, min-height: 0 */
+}
+.light .c-mc-1785691981393-80b24053-content {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 0 20px 8px 20px;
+  background: #edf4fb;
+  box-shadow: 0 4px 10px rgba(74, 116, 140, 0.25);
+  box-sizing: border-box;
+  min-height: 0;
+}
+.light .c-mc-1785691981393-80b24053-tabs-controls {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  height: 32px;
+  flex-shrink: 0;
+}
+.light .c-mc-1785691981393-80b24053-tab-switch {
+  display: flex;
+  flex-direction: row;
+  background: linear-gradient(90deg, #b5deff 0%, #d1ecff 100%);
+  border: 0.72px solid #ffffff;
+  padding: 3px;
+  gap: 0;
+}
+.light .c-mc-1785691981393-80b24053-tab-item {
+  padding: 4px 11px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #2c9bea;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  line-height: 12px;
+  user-select: none;
+}
+.light .c-mc-1785691981393-80b24053-tab-item:hover {
+  opacity: 0.8;
+}
+.light .c-mc-1785691981393-80b24053-tab-item--active {
+  background: linear-gradient(90deg, #1099b1 0%, #038fff 100%);
+  border: 0.6px solid #ffffff;
+  color: #ffffff;
+  text-shadow: 0 0.6px 0 #006fe3;
+}
+.light .c-mc-1785691981393-80b24053-view-icons {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+}
+.light .c-mc-1785691981393-80b24053-view-icon {
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  border: 1px solid #a1ceff;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #ffffff 0%, #e2f0ff 100%);
+  object-fit: contain;
+  padding: 3px;
+  box-sizing: border-box;
+}
+.light .c-mc-1785691981393-80b24053-badge {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  width: 14px;
+  height: 14px;
+  background: #f53f3f;
+  border-radius: 29px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.light .c-mc-1785691981393-80b24053-badge-text {
+  font-size: 12px;
+  font-weight: 500;
+  color: #ffffff;
+  line-height: 14px;
+}
+.light .c-mc-1785691981393-80b24053-chart-section {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+}
+.light .c-mc-1785691981393-80b24053-chart-container {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}

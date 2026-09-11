@@ -1,0 +1,50 @@
+// 主题变量与 Mixin 定义
+// 仅定义变量与 mixin，不产出实际 class
+
+.common() {
+  :root {
+    --color-bg: #003032;
+    --color-text-base: #ffffff;
+    --color-row-bg: #00464b;
+    --color-row-active-bg: #014347;
+    --color-tag-bg: #b07b00;
+    --color-tag-text: #ffffff;
+    --color-decoration: #18ffce;
+    --color-primary: #18ffce;
+    --font-size-base: 14px;
+    --border-radius-base: 4px;
+  }
+}
+
+.theme-dark() {
+  :root {
+    --color-bg: #003032;
+    --color-text-base: #ffffff;
+    --color-row-bg: #00464b;
+    --color-row-active-bg: #014347;
+    --color-tag-bg: #b07b00;
+    --color-tag-text: #ffffff;
+    --color-decoration: #18ffce;
+    --color-primary: #18ffce;
+    --font-size-base: 14px;
+    --border-radius-base: 4px;
+  }
+}
+
+.theme-light() {
+  :root {
+    --color-bg: #f0f8ff;
+    --color-text-base: #333333;
+    --color-row-bg: #ffffff;
+    --color-row-active-bg: rgba(0, 200, 255, 0.1);
+    --color-tag-bg: #ffcc00;
+    --color-tag-text: #333333;
+    --color-decoration: #00a8a8;
+    --color-primary: #00a8a8;
+    --font-size-base: 14px;
+    --border-radius-base: 4px;
+  }
+}
+
+// 默认调用深色主题
+.theme-dark();

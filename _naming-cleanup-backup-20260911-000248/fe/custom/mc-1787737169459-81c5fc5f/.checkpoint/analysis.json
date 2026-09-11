@@ -1,0 +1,167 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "issues": [
+      {
+        "id": "response_parse_failed",
+        "type": "response_parse_failed",
+        "severity": "warning",
+        "message": "布局审查响应解析失败，结果不可信"
+      }
+    ],
+    "score": 0,
+    "recommendations": [],
+    "degraded": true
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1990ff",
+      "--colorAccent": "#fa8c16",
+      "--colorTextBase": "#333333",
+      "--colorBg": "#edf4fb",
+      "--fontSize": "14px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#1990ff",
+      "@color-accent": "#fa8c16",
+      "@color-text-base": "#333333",
+      "@color-bg": "#edf4fb",
+      "@font-size-base": "14px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "16px",
+        "padding": "20px",
+        "background": "var(--colorBg, #edf4fb)"
+      },
+      ".section-title": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "8px",
+        "color": "var(--colorTextBase, #333333)",
+        "font-size": "var(--fontSize, 14px)",
+        "font-weight": "600",
+        "margin-bottom": "12px"
+      },
+      ".section-title::before": {
+        "content": "''",
+        "display": "inline-block",
+        "width": "10px",
+        "height": "10px",
+        "background": "var(--colorPrimary, #1990ff)",
+        "transform": "rotate(45deg)",
+        "flex-shrink": "0"
+      },
+      ".stat-card": {
+        "background": "#ffffff",
+        "border-radius": "8px",
+        "padding": "16px",
+        "box-shadow": "0 2px 8px rgba(0,0,0,0.06)"
+      },
+      ".stat-value": {
+        "font-size": "32px",
+        "font-weight": "700",
+        "color": "var(--colorPrimary, #1990ff)"
+      },
+      ".stat-value--orange": {
+        "color": "var(--colorAccent, #fa8c16)"
+      },
+      ".stat-divider": {
+        "width": "1px",
+        "background": "#e0e6ed",
+        "height": "auto",
+        "margin": "0 16px"
+      }
+    },
+    "tokenCoverage": 0.92,
+    "mappingNotes": [
+      "主蓝色 #1990ff 映射为 --colorPrimary，用于大号数值和菱形图标",
+      "橙色 #fa8c16 映射为 --colorAccent，用于货车数值",
+      "深色 #333333 映射为 --colorTextBase，用于标题和正文",
+      "浅灰蓝背景 #edf4fb 映射为 --colorBg，用于容器背景",
+      "标题前的菱形小图标通过伪元素 ::before 实现，使用主色填充",
+      "统计卡片间分割线通过 .stat-divider 或 flex gap 实现",
+      "数值强调通过 .stat-value 和 .stat-value--orange 类实现"
+    ],
+    "elementStyleMap": {
+      "section-daily-total": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-bridge": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-chart-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-chart-bridge": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-vehicle-type": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-tunnel": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "vehicle-bridge": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-forecast": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-daily-total",
+        "responsibility": "当日总流量（请按功能拆分）",
+        "elementCount": 6,
+        "title": "当日总流量"
+      },
+      {
+        "id": "section-chart-tunnel",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "江阴靖江长江隧道"
+      },
+      {
+        "id": "section-chart-bridge",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "江阴大桥"
+      },
+      {
+        "id": "section-vehicle-type",
+        "responsibility": "车型分布（请按功能拆分）",
+        "elementCount": 8,
+        "title": "车型分布"
+      },
+      {
+        "id": "section-forecast",
+        "responsibility": "流量预测（请按功能拆分）",
+        "elementCount": 1,
+        "title": "流量预测"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 5,
+    "reason": "有效 sections=5 ≥ 3 → 强制拆分"
+  }
+}

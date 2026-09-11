@@ -1,0 +1,50 @@
+// 环境监测组件共享业务样式
+
+// 页面容器
+.page-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+// 卡片容器
+.card {
+  background-color: @color-bg-card;
+  border-radius: @border-radius-tab;
+  overflow: hidden;
+}
+
+// 标签页栏
+.tab-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.25em;
+}
+
+// 标签页项
+.tab-item {
+  padding: 0.4em 1em;
+  border-radius: @border-radius-tab;
+  font-size: @font-size-base;
+  color: @color-text-secondary;
+  background: @color-tab-default-bg;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  white-space: nowrap;
+}
+
+.tab-item.is-active {
+  background: @color-tab-active-bg;
+  color: @color-tab-active-text;
+  font-weight: 600;
+}
+
+// 预警线标签
+.warning-line-label {
+  color: @color-warning-line;
+  font-size: @font-size-base;
+  font-weight: 500;
+}

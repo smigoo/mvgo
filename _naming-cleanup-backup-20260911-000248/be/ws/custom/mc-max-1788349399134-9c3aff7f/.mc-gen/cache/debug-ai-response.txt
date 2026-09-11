@@ -1,0 +1,209 @@
+```json
+{
+  "generatedAt": "2026-09-02T11:43:36.612Z",
+  "stage": "preview-analysis",
+  "componentName": "环境监测",
+  "componentTitle": "环境监测",
+  "analysisModel": "Claude Opus 4.8",
+  "sourceImage": {
+    "path": "mc-preview.png",
+    "size": 0,
+    "mtimeMs": 0,
+    "sha1": ""
+  },
+  "summary": "环境监测面板，包含Tab切换栏（一氧化碳/能见度/洞内照明/洞外光强）和面积折线图，图表展示zk3+785CO浓度随时间变化趋势，含橙红色预警线",
+  "layout": {
+    "type": "单一面板",
+    "direction": "vertical",
+    "sections": [
+      {
+        "id": "section-tabs",
+        "name": "Tab切换栏",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "body": {
+          "layout": "horizontal",
+          "bgPlaceholder": "section-bg-section-tabs",
+          "children": [
+            {
+              "id": "tab-co",
+              "name": "一氧化碳",
+              "role": "tab",
+              "active": true,
+              "styles": {
+                "fontSize": 12,
+                "color": "rgba(255,255,255,1)",
+                "backgroundColor": "rgba(0,180,255,0.35)",
+                "borderRadius": "4px",
+                "padding": "4px 10px"
+              }
+            },
+            {
+              "id": "tab-visibility",
+              "name": "能见度",
+              "role": "tab",
+              "active": false,
+              "styles": {
+                "fontSize": 12,
+                "color": "rgba(255,255,255,0.8)",
+                "backgroundColor": "transparent",
+                "padding": "4px 10px"
+              }
+            },
+            {
+              "id": "tab-inner-light",
+              "name": "洞内照明",
+              "role": "tab",
+              "active": false,
+              "styles": {
+                "fontSize": 12,
+                "color": "rgba(255,255,255,0.8)",
+                "backgroundColor": "transparent",
+                "padding": "4px 10px"
+              }
+            },
+            {
+              "id": "tab-outer-light",
+              "name": "洞外光强",
+              "role": "tab",
+              "active": false,
+              "styles": {
+                "fontSize": 12,
+                "color": "rgba(255,255,255,0.8)",
+                "backgroundColor": "transparent",
+                "padding": "4px 10px"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "section-chart",
+        "name": "CO浓度趋势图",
+        "role": "常驻",
+        "layout": "vertical",
+        "headerRelation": "no-header",
+        "slotCandidate": null,
+        "body": {
+          "layout": "vertical",
+          "bgPlaceholder": "section-bg-section-chart",
+          "children": [
+            {
+              "id": "chart-area-co",
+              "name": "zk3+785CO浓度面积图",
+              "role": "chart",
+              "type": "area",
+              "styles": {
+                "width": "100%",
+                "height": "120px",
+                "background": "transparent"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "headerSlots": [
+    {
+      "slotType": "header-right",
+      "elementType": "icon",
+      "content": "柱状图切换图标（蓝色，当前激活）",
+      "figmaNodeId": "tabs-icon"
+    },
+    {
+      "slotType": "header-right",
+      "elementType": "icon",
+      "content": "列表/表格切换图标（带橙色角标数字6）",
+      "figmaNodeId": "num"
+    }
+  ],
+  "styles": {
+    "theme": "深色科技监测风",
+    "backgroundBrightness": "dark",
+    "colors": [
+      "#00b4ff",
+      "rgba(0,180,255,0.35)",
+      "rgba(80,200,120,0.6)",
+      "#f53f3f",
+      "rgba(255,255,255,0.8)",
+      "rgba(255,255,255,0.5)"
+    ],
+    "background": "深色背景，主容器使用 bg-7890.png（下载失败，CSS替代：rgba(237,244,251,1) 但视觉实际为深色，以预览图为准，背景应为深蓝/深灰色）",
+    "decorations": [
+      "橙红色虚线预警线，标注文字'预警线'",
+      "Tab激活态带浅蓝色背景高亮",
+      "图表右上角角标badge（橙色，数字6）"
+    ],
+    "emphasis": [
+      "Tab激活项文字高亮为纯白",
+      "面积图填充色为绿色渐变（rgba(80,200,120,...)）",
+      "预警线为橙红色虚线（#f53f3f）"
+    ]
+  },
+  "interactions": [
+    {
+      "target": "Tab切换栏",
+      "type": "tab-switch",
+      "description": "切换一氧化碳/能见度/洞内照明/洞外光强四个监测维度，图表内容随之更新",
+      "defaultState": "一氧化碳激活",
+      "evidence": "一氧化碳Tab有明显高亮背景，其余Tab无背景"
+    },
+    {
+      "target": "header右侧柱状图图标",
+      "type": "tab-switch",
+      "description": "切换图表视图（图表/列表）",
+      "defaultState": "图表视图激活",
+      "evidence": "柱状图icon颜色更深，列表icon较浅"
+    }
+  ],
+  "charts": [
+    {
+      "section": "section-chart",
+      "type": "area",
+      "series": ["zk3+785CO浓度"],
+      "legend": ["zk3+785CO浓度"],
+      "legendPosition": "top-right",
+      "seriesColors": ["#52c41a"],
+      "legendType": "horizontal",
+      "axes": "X轴为时间（2~24时，单位：时），Y轴为浓度（0~40，单位：辆/浓度值）",
+      "xAxisLabels": ["2", "4", "6", "8", "10", "12", "14", "16", "18", "20", "22", "24"],
+      "yAxisLabels": ["0", "10", "20", "30", "40"],
+      "yAxisUnit": "辆",
+      "xAxisUnit": "时",
+      "referenceLine": {
+        "value": 30,
+        "color": "#f53f3f",
+        "style": "dashed",
+        "label": "预警线"
+      },
+      "tooltip": "悬停显示对应时刻CO浓度值（截图未见展开态）",
+      "notes": [
+        "橙红色水平虚线为预警阈值线，数值约30，标注文字'预警线'",
+        "面积图填充为绿色渐变，线条颜色为绿色",
+        "图例文字'zk3+785CO浓度'位于图表右上角",
+        "Y轴单位标注'辆'在左上角",
+        "X轴单位标注'时'在右下角"
+      ]
+    }
+  ],
+  "doNotInvent": [
+    "Tab切换后各维度的具体数据和图表形态",
+    "预警线的具体业务逻辑和告警触发机制",
+    "列表视图的表格列结构和数据内容",
+    "图表tooltip的完整格式",
+    "角标数字6的具体业务含义（未读消息/告警数量等）",
+    "自动刷新周期和数据更新逻辑",
+    "Y轴单位是否为ppm或其他浓度单位（截图显示'辆'，保持原样）"
+  ],
+  "notes": [
+    "面板背景资源 bg-7890.png 下载失败，需CSS替代；但预览图视觉为深色背景，backgroundBrightness=dark",
+    "Tab激活背景资源 bg-tab-active-7891.png 已下载，用于激活Tab的背景",
+    "header右侧两个图标（icon-7941.png、icon-7945.png）已下载，对应图表/列表切换按钮",
+    "Figma中 bg 节点 color=rgba(237,244,251,1) 为浅色，但预览图显示为深色大屏风格，以预览图视觉为准",
+    "角标badge使用CSS替代资源：background: #f53f3f"
+  ]
+}
+```

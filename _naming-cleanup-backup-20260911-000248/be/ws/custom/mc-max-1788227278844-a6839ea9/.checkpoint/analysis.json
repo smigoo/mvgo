@@ -1,0 +1,517 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 74,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0].body",
+        "message": "body.layout声明为horizontal-5-items，但children仅4个tab，数量与声明不符",
+        "suggestion": "改为horizontal-4-items，或核实是否有被截断的第5个Tab需补充"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].header",
+        "message": "interactions记录的右上角图表图标与数字Badge未映射到header.controls或slotCandidate",
+        "suggestion": "将图标与Badge补充为header.controls，并设置slotCandidate为header-right"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "chartDataHints[0].values",
+        "message": "values中600/400/200等数值与axes描述的Y轴刻度(0-40)明显不一致，疑似占位脏数据",
+        "suggestion": "校验chartDataHints提取逻辑，剔除与实际坐标轴不符的异常数值"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "覆盖率仅60%，missing中的num/sub-t疑似对应右上角图标与Badge，采集不完整",
+        "suggestion": "补充采集缺失节点，使layout结构与interactions记录对齐"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "layout.sections[*].headerRelation",
+        "message": "两个section的headerRelation均为content-below-title，但section-tabs.header为null，语义前后矛盾",
+        "suggestion": "header为空时headerRelation应置为none，避免字段填充逻辑误用默认值"
+      }
+    ],
+    "recommendations": [
+      "补齐右上角图标与Badge在header结构中的插槽映射，避免interactions与layout脱节",
+      "核对Tab数量与layout声明的一致性，避免布局占位符与实际数据不符",
+      "清理chartDataHints中与坐标轴不符的异常数值，提升图表信息可信度"
+    ],
+    "summary": "整体分层清晰、嵌套未超3层，但header插槽映射缺失、Tab数量声明不一致、图表提示数据异常，建议修正后再用。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名），浅色科技监测风主题",
+      "--colorPrimary": "#4e9bff",
+      "--colorPrimaryActive": "#2c7ce0",
+      "--colorPrimaryBg": "#ffffff",
+      "--colorPrimaryBgHover": "#4e9bff1a",
+      "--colorSuccess": "#5ad8a6",
+      "--colorWarning": "#ff4d4f",
+      "--colorTextBase": "#333333",
+      "--colorTextSecondary": "#999999",
+      "--colorBgBase": "#ffffff",
+      "--colorBgGradientStart": "#ffffff",
+      "--colorBgGradientEnd": "#eaf3ff",
+      "--fontSize": "14px",
+      "--fontWeightStrong": "600",
+      "--borderRadius": "8px",
+      "--borderRadiusSm": "4px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射（theme-vars.less 中 .theme-light() mixin）",
+      "@color-primary": "#4e9bff",
+      "@color-primary-active": "#2c7ce0",
+      "@color-primary-bg": "#ffffff",
+      "@color-primary-bg-hover": "#4e9bff1a",
+      "@color-success": "#5ad8a6",
+      "@color-warning": "#ff4d4f",
+      "@color-text-primary": "#333333",
+      "@color-text-secondary": "#999999",
+      "@color-bg-base": "#ffffff",
+      "@color-bg-gradient-start": "#ffffff",
+      "@color-bg-gradient-end": "#eaf3ff",
+      "@color-tab-active-bg": "#4e9bff",
+      "@color-tab-active-text": "#ffffff",
+      "@color-tab-default-bg": "transparent",
+      "@color-tab-default-text": "#333333",
+      "@color-chart-axis": "#999999",
+      "@color-chart-gradient-start": "#4e9bff4d",
+      "@color-chart-gradient-end": "#4e9bff00",
+      "@color-warning-line": "#ff4d4f",
+      "@color-badge-bg": "#4e9bff",
+      "@color-badge-text": "#ffffff",
+      "@font-size-base": "14px",
+      "@border-radius-base": "8px",
+      "@border-radius-sm": "4px"
+    },
+    "cssClasses": {
+      "comment": "可复用CSS类（浅色科技监测风：白/浅蓝渐变背景、卡片面板、Tab激活态、折线图渐变、预警虚线、圆角Badge）",
+      ".page-container": {
+        "width": "100%",
+        "height": "100%",
+        "background": "linear-gradient(180deg, var(--colorBgGradientStart, #ffffff) 0%, var(--colorBgGradientEnd, #eaf3ff) 100%)",
+        "display": "flex",
+        "flex-direction": "column",
+        "box-sizing": "border-box"
+      },
+      ".panel-card": {
+        "background": "#ffffff",
+        "border-radius": "var(--borderRadius, 8px)",
+        "box-shadow": "0 2px 12px rgba(78, 155, 255, 0.08)",
+        "padding": "1em",
+        "box-sizing": "border-box"
+      },
+      ".tab-group": {
+        "display": "flex",
+        "gap": "0.5em",
+        "align-items": "center"
+      },
+      ".tab-item": {
+        "padding": "0.4em 1em",
+        "border-radius": "var(--borderRadiusSm, 4px)",
+        "font-size": "var(--fontSize, 14px)",
+        "color": "var(--colorTextBase, @color-text-primary)",
+        "background": "transparent",
+        "cursor": "pointer",
+        "transition": "all 0.2s ease"
+      },
+      ".tab-item.active": {
+        "background": "var(--colorPrimary, @color-primary)",
+        "color": "#ffffff",
+        "font-weight": "var(--fontWeightStrong, 600)"
+      },
+      ".chart-line-area": {
+        "comment": "折线图渐变填充区域，需在ECharts series.areaStyle中使用linear-gradient",
+        "fill": "linear-gradient(180deg, rgba(78,155,255,0.3) 0%, rgba(78,155,255,0) 100%)"
+      },
+      ".warning-line": {
+        "comment": "预警虚线，红色，用于ECharts markLine或DOM分割线",
+        "border-top": "1px dashed var(--colorWarning, @color-warning)",
+        "position": "absolute",
+        "width": "100%"
+      },
+      ".badge": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "min-width": "1.6em",
+        "height": "1.6em",
+        "padding": "0 0.4em",
+        "border-radius": "var(--borderRadius, 8px)",
+        "background": "var(--colorPrimary, @color-badge-bg)",
+        "color": "#ffffff",
+        "font-size": "0.85em",
+        "font-weight": "var(--fontWeightStrong, 600)"
+      },
+      ".text-secondary": {
+        "color": "var(--colorTextSecondary, @color-text-secondary)",
+        "font-size": "0.9em"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色 #4e9bff 映射为 --colorPrimary，用于Tab激活态背景、Badge背景、折线图主色",
+      "辅助色 #5ad8a6（成功/正常状态）映射为 --colorSuccess，#ff4d4f（预警/告警）映射为 --colorWarning，用于预警虚线和红色数值",
+      "背景采用白色到浅蓝的线性渐变（#ffffff → #eaf3ff）实现'白色/浅蓝渐变背景'效果，落地为 .page-container 的字面量渐变值，不完全依赖CSS变量，保证关键可见背景稳定渲染",
+      "卡片面板 .panel-card 使用纯白背景 + 浅蓝色阴影模拟科技感浮层效果",
+      "Tab激活态（如'一氧化碳'蓝底白字）通过 .tab-item.active 类实现，背景色取主色 --colorPrimary",
+      "预警线（红色虚线，30刻度）建议在ECharts中通过 markLine 的 lineStyle: { type: 'dashed', color: 'var(--colorWarning)' } 实现，.warning-line 类作为DOM兜底方案",
+      "折线图渐变填充区域需在ECharts js配置中用 areaStyle.color 设置 linear-gradient 对象，css中的 .chart-line-area 仅作参考色值",
+      "圆角Badge数字标使用 .badge 类，背景色可根据业务状态在 --colorPrimary/--colorWarning/--colorSuccess 间切换",
+      "文字主色 #333333 映射为 --colorTextBase，辅助文字色 #999999 映射为 --colorTextSecondary，用于图表坐标轴、说明文字等次要信息",
+      "所有尺寸使用 em 或 $mcCssBuilder.getCssSize() 响应式单位，避免固定px值（除边框等极小尺寸）"
+    ],
+    "elementStyleMap": {
+      "section-tabs": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-8": {
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-tabs",
+        "responsibility": "标签页切换区",
+        "elementCount": 4,
+        "title": "监测项Tab切换栏",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 4,
+          "charts": 0,
+          "interactions": 1,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 8,
+        "title": "浓度趋势图",
+        "complexityScore": 50,
+        "complexityReasons": {
+          "elementCount": 8,
+          "charts": 8,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [
+          {
+            "type": "chart-component",
+            "id": "chart-legend",
+            "name": "图例文字",
+            "responsibility": "图表组件：图例文字",
+            "reason": "R1: 图表隔离策略",
+            "props": [
+              "chartData",
+              "chartConfig"
+            ],
+            "emits": [
+              "legendClick",
+              "dataZoom"
+            ]
+          },
+          {
+            "type": "chart-component",
+            "id": "chart-y-axis-unit",
+            "name": "Y轴单位",
+            "responsibility": "图表组件：Y轴单位",
+            "reason": "R1: 图表隔离策略",
+            "props": [
+              "chartData",
+              "chartConfig"
+            ],
+            "emits": [
+              "legendClick",
+              "dataZoom"
+            ]
+          },
+          {
+            "type": "chart-component",
+            "id": "chart-y-axis-ticks",
+            "name": "Y轴刻度",
+            "responsibility": "图表组件：Y轴刻度",
+            "reason": "R1: 图表隔离策略",
+            "props": [
+              "chartData",
+              "chartConfig"
+            ],
+            "emits": [
+              "legendClick",
+              "dataZoom"
+            ]
+          },
+          {
+            "type": "chart-component",
+            "id": "chart-warning-line",
+            "name": "预警线",
+            "responsibility": "图表组件：预警线",
+            "reason": "R1: 图表隔离策略",
+            "props": [
+              "chartData",
+              "chartConfig"
+            ],
+            "emits": [
+              "legendClick",
+              "dataZoom"
+            ]
+          },
+          {
+            "type": "chart-component",
+            "id": "chart-x-axis-unit",
+            "name": "X轴单位",
+            "responsibility": "图表组件：X轴单位",
+            "reason": "R1: 图表隔离策略",
+            "props": [
+              "chartData",
+              "chartConfig"
+            ],
+            "emits": [
+              "legendClick",
+              "dataZoom"
+            ]
+          },
+          {
+            "type": "chart-component",
+            "id": "chart-x-axis-ticks",
+            "name": "X轴刻度",
+            "responsibility": "图表组件：X轴刻度",
+            "reason": "R1: 图表隔离策略",
+            "props": [
+              "chartData",
+              "chartConfig"
+            ],
+            "emits": [
+              "legendClick",
+              "dataZoom"
+            ]
+          },
+          {
+            "type": "chart-component",
+            "id": "chart-line-series",
+            "name": "浓度折线",
+            "responsibility": "图表组件：浓度折线",
+            "reason": "R1: 图表隔离策略",
+            "props": [
+              "chartData",
+              "chartConfig"
+            ],
+            "emits": [
+              "legendClick",
+              "dataZoom"
+            ]
+          },
+          {
+            "type": "chart-component",
+            "id": "chart-area-fill",
+            "name": "折线下方渐变填充区域",
+            "responsibility": "图表组件：折线下方渐变填充区域",
+            "reason": "R1: 图表隔离策略",
+            "props": [
+              "chartData",
+              "chartConfig"
+            ],
+            "emits": [
+              "legendClick",
+              "dataZoom"
+            ]
+          }
+        ],
+        "shouldSplitInternally": true
+      }
+    ],
+    "isForced": true,
+    "minFiles": 10,
+    "reason": "有效 sections=2 ≥ 3 或存在高复杂度 section → 强制拆分",
+    "internalSubcomponents": [
+      {
+        "type": "chart-component",
+        "id": "chart-legend",
+        "name": "图例文字",
+        "responsibility": "图表组件：图例文字",
+        "reason": "R1: 图表隔离策略",
+        "props": [
+          "chartData",
+          "chartConfig"
+        ],
+        "emits": [
+          "legendClick",
+          "dataZoom"
+        ],
+        "parentSectionId": "section-chart",
+        "parentSectionTitle": "浓度趋势图"
+      },
+      {
+        "type": "chart-component",
+        "id": "chart-y-axis-unit",
+        "name": "Y轴单位",
+        "responsibility": "图表组件：Y轴单位",
+        "reason": "R1: 图表隔离策略",
+        "props": [
+          "chartData",
+          "chartConfig"
+        ],
+        "emits": [
+          "legendClick",
+          "dataZoom"
+        ],
+        "parentSectionId": "section-chart",
+        "parentSectionTitle": "浓度趋势图"
+      },
+      {
+        "type": "chart-component",
+        "id": "chart-y-axis-ticks",
+        "name": "Y轴刻度",
+        "responsibility": "图表组件：Y轴刻度",
+        "reason": "R1: 图表隔离策略",
+        "props": [
+          "chartData",
+          "chartConfig"
+        ],
+        "emits": [
+          "legendClick",
+          "dataZoom"
+        ],
+        "parentSectionId": "section-chart",
+        "parentSectionTitle": "浓度趋势图"
+      },
+      {
+        "type": "chart-component",
+        "id": "chart-warning-line",
+        "name": "预警线",
+        "responsibility": "图表组件：预警线",
+        "reason": "R1: 图表隔离策略",
+        "props": [
+          "chartData",
+          "chartConfig"
+        ],
+        "emits": [
+          "legendClick",
+          "dataZoom"
+        ],
+        "parentSectionId": "section-chart",
+        "parentSectionTitle": "浓度趋势图"
+      },
+      {
+        "type": "chart-component",
+        "id": "chart-x-axis-unit",
+        "name": "X轴单位",
+        "responsibility": "图表组件：X轴单位",
+        "reason": "R1: 图表隔离策略",
+        "props": [
+          "chartData",
+          "chartConfig"
+        ],
+        "emits": [
+          "legendClick",
+          "dataZoom"
+        ],
+        "parentSectionId": "section-chart",
+        "parentSectionTitle": "浓度趋势图"
+      },
+      {
+        "type": "chart-component",
+        "id": "chart-x-axis-ticks",
+        "name": "X轴刻度",
+        "responsibility": "图表组件：X轴刻度",
+        "reason": "R1: 图表隔离策略",
+        "props": [
+          "chartData",
+          "chartConfig"
+        ],
+        "emits": [
+          "legendClick",
+          "dataZoom"
+        ],
+        "parentSectionId": "section-chart",
+        "parentSectionTitle": "浓度趋势图"
+      },
+      {
+        "type": "chart-component",
+        "id": "chart-line-series",
+        "name": "浓度折线",
+        "responsibility": "图表组件：浓度折线",
+        "reason": "R1: 图表隔离策略",
+        "props": [
+          "chartData",
+          "chartConfig"
+        ],
+        "emits": [
+          "legendClick",
+          "dataZoom"
+        ],
+        "parentSectionId": "section-chart",
+        "parentSectionTitle": "浓度趋势图"
+      },
+      {
+        "type": "chart-component",
+        "id": "chart-area-fill",
+        "name": "折线下方渐变填充区域",
+        "responsibility": "图表组件：折线下方渐变填充区域",
+        "reason": "R1: 图表隔离策略",
+        "props": [
+          "chartData",
+          "chartConfig"
+        ],
+        "emits": [
+          "legendClick",
+          "dataZoom"
+        ],
+        "parentSectionId": "section-chart",
+        "parentSectionTitle": "浓度趋势图"
+      }
+    ]
+  }
+}

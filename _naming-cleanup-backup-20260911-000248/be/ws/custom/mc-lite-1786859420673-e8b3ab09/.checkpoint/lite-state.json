@@ -1,0 +1,141 @@
+{
+  "stage": "codegen_done",
+  "brief": {
+    "layout": "横向宽屏数据看板卡片布局，浅色地图/底图背景。顶部左侧为标题，标题下方为横向 Tab 切换栏；右上为两个图标按钮与红色角标。主体区域为折线图，占据下方约70%高度，图例位于图表右上方，坐标轴文字沿左侧与底部排列。整体主轴偏垂直：标题/导航/图表自上而下；内容左对齐为主，图表横向铺满。",
+    "regions": [
+      {
+        "name": "标题区",
+        "description": "显示“环境监测”及较浅的“土镇”字样，底部有一条浅蓝色横线装饰",
+        "position": "top/left",
+        "size": "约占宽度35%，高度15%"
+      },
+      {
+        "name": "Tab切换栏",
+        "description": "浅蓝色长条箭头状导航，包含一氧化碳、能见度、洞内照明、洞外光强；当前一氧化碳为深青色高亮胶囊/箭头",
+        "position": "top/center",
+        "size": "约占宽度70%，高度14%"
+      },
+      {
+        "name": "右上工具区",
+        "description": "两个浅蓝描边方形图标按钮，分别为柱状图图标和列表图标，列表图标右上叠加红色圆形角标数字6",
+        "position": "top/right",
+        "size": "约占宽度13%，高度14%"
+      },
+      {
+        "name": "图表区",
+        "description": "一氧化碳浓度折线/面积图，绿色曲线与淡绿色填充，红色虚线预警线，浅灰虚线网格，左侧纵轴单位辆及刻度0/10/20/30/40，底部横轴时间刻度2到24，右下角单位时",
+        "position": "center/bottom",
+        "size": "约占宽度90%，高度65%"
+      },
+      {
+        "name": "图例与预警标注区",
+        "description": "右上图例显示绿色短线和“zk3+785CO浓度”，图内右侧红字“预警线”贴近30刻度虚线",
+        "position": "right/center",
+        "size": "约占宽度25%，高度20%"
+      }
+    ],
+    "spacing": {
+      "outer": "整体内容距画布边缘约50-60px左边距、顶部约30px，右侧工具距边约70px，底部图表刻度距边约20px",
+      "gap": "标题与Tab间距较小；Tab与图表之间约15-25px；右上工具按钮之间约10px；图表网格线纵向均匀分布",
+      "padding": "Tab条内部左右留白明显，文字与边缘约25-35px；工具按钮内图标居中并有约10px内边距；图表绘图区左右有约50px轴标签空间"
+    },
+    "colors": {
+      "primary": "#229BE5",
+      "background": "#EAF4FC",
+      "surface": "#CFE9FA",
+      "text": "#333333",
+      "border": "#8BC9F0"
+    },
+    "typography": {
+      "size": "标题约36-40px；Tab文字约30-34px；坐标轴刻度约30-34px；图例文字约24-28px；预警线文字约28-32px；角标数字约26-30px",
+      "weight": "标题与Tab为粗体/半粗体；坐标轴与图例为常规；预警线文字为常规偏醒目；角标数字为粗体",
+      "lineHeight": "整体单行文本为主，行高约1.1-1.3；坐标轴标签紧贴网格与刻度"
+    },
+    "components": [
+      "标题文本",
+      "横向Tab切换栏",
+      "当前选中Tab",
+      "图标按钮",
+      "红色数字角标",
+      "折线图",
+      "面积填充图",
+      "图例",
+      "虚线网格线",
+      "红色虚线预警线",
+      "坐标轴刻度文本"
+    ],
+    "textContent": [
+      "环境监测",
+      "土镇",
+      "一氧化碳",
+      "能见度",
+      "洞内照明",
+      "洞外光强",
+      "6",
+      "zk3+785CO浓度",
+      "预警线",
+      "辆",
+      "40",
+      "30",
+      "20",
+      "10",
+      "0",
+      "2",
+      "4",
+      "6",
+      "8",
+      "10",
+      "12",
+      "14",
+      "16",
+      "18",
+      "20",
+      "22",
+      "24",
+      "时"
+    ],
+    "visualDetails": [
+      "整体背景为浅蓝半透明地图纹理感",
+      "标题下方有细蓝色横线和左侧弧形装饰",
+      "Tab容器为浅蓝色长条，右端为箭头斜切形",
+      "激活Tab为深青蓝渐变箭头/胶囊形，白色文字，带浅色描边",
+      "未激活Tab为蓝色文字，无单独边框",
+      "右上按钮为圆角矩形，浅蓝描边，内部为蓝色图标",
+      "红色角标位于列表按钮右上角，圆形，白色数字",
+      "图表网格线为浅灰蓝色水平虚线",
+      "预警线为红色水平虚线，对应30刻度",
+      "绿色数据线下方有浅绿色透明面积填充",
+      "曲线在14-20时段较高，24时附近接近0",
+      "图表无明显外框，仅坐标线与网格线"
+    ],
+    "interactions": [
+      "Tab切换栏：一氧化碳、能见度、洞内照明、洞外光强；当前激活项为一氧化碳",
+      "右上柱状图图标按钮：位于顶部右侧第一个，可切换/查看图表样式",
+      "右上列表图标按钮：位于顶部右侧第二个，带红色角标6",
+      "折线图数据展示区：可见图例项zk3+785CO浓度"
+    ]
+  },
+  "width": 1122,
+  "height": 500,
+  "sourceType": "screenshot",
+  "componentType": "microcode",
+  "generationTier": "lite",
+  "vueCode": "<template>\n  <base-panel panelKey=\"default-panel\">\n    <div class=\"c-mc-lite-1786859420673-e8b3ab09-content\">\n      <div class=\"c-mc-lite-1786859420673-e8b3ab09-bg-map\"></div>\n\n      <div class=\"c-mc-lite-1786859420673-e8b3ab09-top\">\n        <div class=\"c-mc-lite-1786859420673-e8b3ab09-title-wrap\">\n          <div class=\"c-mc-lite-1786859420673-e8b3ab09-title-line\">\n            <span class=\"c-mc-lite-1786859420673-e8b3ab09-title-main\">环境监测</span>\n            <span class=\"c-mc-lite-1786859420673-e8b3ab09-title-sub\">土镇</span>\n          </div>\n          <div class=\"c-mc-lite-1786859420673-e8b3ab09-title-deco\"></div>\n        </div>\n\n        <div class=\"c-mc-lite-1786859420673-e8b3ab09-tools\">\n          <button\n            class=\"c-mc-lite-1786859420673-e8b3ab09-tool-btn\"\n            type=\"button\"\n            @click=\"handleToolClick('bar')\"\n          >\n            <span class=\"c-mc-lite-1786859420673-e8b3ab09-bar-icon\">\n              <i class=\"c-mc-lite-1786859420673-e8b3ab09-bar-one\"></i>\n              <i class=\"c-mc-lite-1786859420673-e8b3ab09-bar-two\"></i>\n              <i class=\"c-mc-lite-1786859420673-e8b3ab09-bar-three\"></i>\n            </span>\n          </button>\n          <button\n            class=\"c-mc-lite-1786859420673-e8b3ab09-tool-btn c-mc-lite-1786859420673-e8b3ab09-tool-btn-list\"\n            type=\"button\"\n            @click=\"handleToolClick('list')\"\n          >\n            <span class=\"c-mc-lite-1786859420673-e8b3ab09-list-icon\">\n              <i class=\"c-mc-lite-1786859420673-e8b3ab09-list-row\"></i>\n              <i class=\"c-mc-lite-1786859420673-e8b3ab09-list-row\"></i>\n              <i class=\"c-mc-lite-1786859420673-e8b3ab09-list-row\"></i>\n            </span>\n            <span class=\"c-mc-lite-1786859420673-e8b3ab09-badge\">6</span>\n          </button>\n        </div>\n      </div>\n\n      <div class=\"c-mc-lite-1786859420673-e8b3ab09-tabs-row\">\n        <div class=\"c-mc-lite-1786859420673-e8b3ab09-tabs\">\n          <button\n            v-for=\"item in tabs\"\n            :key=\"item\"\n            type=\"button\"\n            :class=\"[\n              'c-mc-lite-1786859420673-e8b3ab09-tab',\n              activeTab === item ? 'c-mc-lite-1786859420673-e8b3ab09-tab-active' : ''\n            ]\"\n            @click=\"activeTab = item\"\n          >\n            {{ item }}\n          </button>\n        </div>\n      </div>\n\n      <div class=\"c-mc-lite-1786859420673-e8b3ab09-chart-wrap\">\n        <div ref=\"chartRef\" class=\"c-mc-lite-1786859420673-e8b3ab09-chart\"></div>\n      </div>\n    </div>\n  </base-panel>\n</template>\n\n<script setup>\nimport { nextTick, onMounted, onUnmounted, ref } from 'vue'\nimport * as echarts from 'echarts'\n\nconst chartRef = ref(null)\nconst activeTab = ref('一氧化碳')\nconst tabs = ref(['一氧化碳', '能见度', '洞内照明', '洞外光强'])\nconst xAxisData = ref(['2', '4', '6', '8', '10', '12', '14', '16', '18', '20', '22', '24'])\nconst chartData = ref([3.8, 5.5, 4.2, 2.5, 2.4, 4.3, 11.5, 13.2, 12.8, 10.5, 4.4, 0.6])\n\nlet chart = null\nlet resizeObserver = null\n\nconst handleToolClick = (type) => {\n  console.log('tool click:', type)\n}\n\nconst initChart = () => {\n  if (!chartRef.value) return\n\n  chart = echarts.init(chartRef.value)\n  chart.setOption({\n    animation: false,\n    color: ['#18C989'],\n    grid: {\n      top: '18%',\n      right: '7%',\n      bottom: '18%',\n      left: '7%',\n      containLabel: false\n    },\n    legend: {\n      top: '0%',\n      right: '3%',\n      icon: 'roundRect',\n      itemWidth: 26,\n      itemHeight: 4,\n      textStyle: {\n        color: '#333333',\n        fontSize: 26,\n        fontWeight: 400\n      },\n      data: ['zk3+785CO浓度']\n    },\n    xAxis: {\n      type: 'category',\n      boundaryGap: false,\n      data: xAxisData.value,\n      name: '时',\n      nameLocation: 'end',\n      nameGap: 2,\n      nameTextStyle: {\n        color: '#333333',\n        fontSize: 34,\n        padding: [18, 0, 0, 2]\n      },\n      axisLine: {\n        lineStyle: {\n          color: '#A9C7D8',\n          width: 2\n        }\n      },\n      axisTick: {\n        show: false\n      },\n      axisLabel: {\n        color: '#333333',\n        fontSize: 31,\n        margin: 14\n      },\n      splitLine: {\n        show: false\n      }\n    },\n    yAxis: {\n      type: 'value',\n      min: 0,\n      max: 40,\n      interval: 10,\n      name: '辆',\n      nameLocation: 'end',\n      nameGap: 8,\n      nameTextStyle: {\n        color: '#333333',\n        fontSize: 30,\n        align: 'left',\n        padding: [0, 0, 0, -20]\n      },\n      axisLine: {\n        show: false\n      },\n      axisTick: {\n        show: false\n      },\n      axisLabel: {\n        color: '#333333',\n        fontSize: 31,\n        margin: 14\n      },\n      splitLine: {\n        show: true,\n        lineStyle: {\n          color: '#B7C8D5',\n          type: 'dashed',\n          width: 2,\n          opacity: 0.7\n        }\n      }\n    },\n    series: [\n      {\n        name: 'zk3+785CO浓度',\n        type: 'line',\n        data: chartData.value,\n        smooth: true,\n        symbol: 'none',\n        lineStyle: {\n          color: '#16C987',\n          width: 3\n        },\n        areaStyle: {\n          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [\n            { offset: 0, color: 'rgba(22, 201, 135, 0.32)' },\n            { offset: 1, color: 'rgba(22, 201, 135, 0.04)' }\n          ])\n        },\n        markLine: {\n          symbol: 'none',\n          silent: true,\n          label: {\n            show: true,\n            formatter: '预警线',\n            position: 'insideEndTop',\n            color: '#E73346',\n            fontSize: 31,\n            padding: [0, 24, 5, 0]\n          },\n          lineStyle: {\n            color: '#E73346',\n            type: 'dashed',\n            width: 2\n          },\n          data: [{ yAxis: 30 }]\n        }\n      }\n    ]\n  })\n\n  resizeObserver = new ResizeObserver(() => {\n    if (chart) chart.resize()\n  })\n  resizeObserver.observe(chartRef.value)\n}\n\nonMounted(async () => {\n  await nextTick()\n  requestAnimationFrame(() => {\n    initChart()\n  })\n})\n\nonUnmounted(() => {\n  if (resizeObserver) {\n    resizeObserver.disconnect()\n    resizeObserver = null\n  }\n  if (chart) {\n    chart.dispose()\n    chart = null\n  }\n})\n</script>\n\n<style scoped>\n.c-mc-lite-1786859420673-e8b3ab09-content {\n  position: relative;\n  width: 100%;\n  height: 100%;\n  overflow: hidden;\n  display: flex;\n  flex-direction: column;\n  padding: 3.2% 5.2% 2.2% 5.2%;\n  box-sizing: border-box;\n  background:\n    linear-gradient(90deg, rgba(234, 244, 252, 0.94), rgba(234, 244, 252, 0.86)),\n    radial-gradient(circle at 9% 12%, rgba(255, 255, 255, 0.72) 0, rgba(255, 255, 255, 0.12) 30%, transparent 55%),\n    #eaf4fc;\n  color: #333333;\n  font-family: \"Microsoft YaHei\", \"PingFang SC\", Arial, sans-serif;\n}\n\n.c-mc-lite-1786859420673-e8b3ab09-bg-map {\n  position: absolute;\n  inset: 0;\n  pointer-events: none;\n  opacity: 0.34;\n  background:\n    linear-gradient(116deg, transparent 0 15%, rgba(215, 172, 126, 0.5) 15% 18%, transparent 18% 100%),\n    linear-gradient(142deg, transparent 0 24%, rgba(185, 213, 228, 0.72) 24% 24.4%, transparent 24.4% 100%),\n    linear-gradient(74deg, transparent 0 10%, rgba(185, 213, 228, 0.64) 10% 10.3%, transparent 10.3% 100%),\n    linear-gradient(154deg, transparent 0 39%, rgba(185, 213, 228, 0.55) 39% 39.4%, transparent 39.4% 100%);\n}\n\n.c-mc-lite-1786859420673-e8b3ab09-top {\n  position: relative;\n  z-index: 1;\n  display: flex;\n  align-items: flex-start;\n  justify-content: space-between;\n  flex: 0 0 15%;\n  min-height: 0;\n}\n\n.c-mc-lite-1786859420673-e8b3ab09-title-wrap {\n  width: 75%;\n  display: flex;\n  flex-direction: column;\n  justify-content: flex-start;\n}\n\n.c-mc-lite-1786859420673-e8b3ab09-title-line {\n  display: flex;\n  align-items: baseline;\n  line-height: 1.08;\n  white-space: nowrap;\n}\n\n.c-mc-lite-1786859420673-e8b3ab09-title-main {\n  font-size: clamp(1.5rem, 3.2vw, 2.7rem);\n  font-weight: 800;\n  color: #229be5;\n  letter-spacing: 0.04em;\n}\n\n.c-mc-lite-1786859420673-e8b3ab09-title-sub {\n  margin-left: 1.1%;\n  font-size: clamp(1.2rem, 2.6vw, 2.25rem);\n  font-weight: 500;\n  color: rgba(160, 178, 190, 0.42);\n  letter-spacing: 0.08em;\n}\n\n.c-mc-lite-1786859420673-e8b3ab09-title-deco {\n  position: relative;\n  width: 100%;\n  height: 0.18rem;\n  margin-top: 1.5%;\n  background: linear-gradient(90deg, #89cdf4 0%, #7bc8f5 65%, rgba(137, 205, 244, 0.18) 100%);\n}\n\n.c-mc-lite-1786859420673-e8b3ab09-title-deco::before {\n  content: \"\";\n  position: absolute;\n  left: 0;\n  top: 50%;\n  width: 2.2%;\n  aspect-ratio: 1 / 1;\n  border-left: 0.12rem solid #8bc9f0;\n  border-top: 0.12rem solid #8bc9f0;\n  border-radius: 50%;\n  transform: translateY(-50%) rotate(-35deg);\n}\n\n.c-mc-lite-1786859420673-e8b3ab09-tools {\n  display: flex;\n  align-items: flex-start;\n  justify-content: flex-end;\n  gap: 0.7rem;\n  width: 14%;\n  padding-top: 7.4%;\n}\n\n.c-mc-lite-1786859420673-e8b3ab09-tool-btn {\n  position: relative;\n  width: 43%;\n  aspect-ratio: 1 / 1;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  border: 0.16rem solid rgba(139, 201, 240, 0.84);\n  border-radius: 16%;\n  background: rgba(225, 243, 253, 0.58);\n  padding: 0;\n  cursor: pointer;\n}\n\n.c-mc-lite-1786859420673-e8b3ab09-bar-icon {\n  width: 64%;\n  height: 64%;\n  display: flex;\n  align-items: flex-end;\n  justify-content: space-between;\n  border-bottom: 0.16rem solid #229be5;\n}\n\n.c-mc-lite-1786859420673-e8b3ab09-bar-icon i {\n  display: block;\n  width: 23%;\n  border-radius: 0.15rem 0.15rem 0 0;\n  background: #229be5;\n}\n\n.c-mc-lite-1786859420673-e8b3ab09-bar-one {\n  height: 42%;\n}\n\n.c-mc-lite-1786859420673-e8b3ab09-bar-two {\n  height: 80%;\n}\n\n.c-mc-lite-1786859420673-e8b3ab09-bar-three {\n  height: 58%;\n}\n\n.c-mc-lite-1786859420673-e8b3ab09-list-icon {\n  width: 58%;\n  height: 52%;\n  display: flex;\n  flex-direction: column;\n  justify-content: space-between;\n}\n\n.c-mc-lite-1786859420673-e8b3ab09-list-row {\n  display: block;\n  width: 100%;\n  height: 18%;\n  border-radius: 999rem;\n  background: linear-gradient(90deg, #229be5 0 18%, transparent 18% 30%, #229be5 30% 100%);\n}\n\n.c-mc-lite-1786859420673-e8b3ab09-badge {\n  position: absolute;\n  top: -34%;\n  right: -31%;\n  width: 58%;\n  aspect-ratio: 1 / 1;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  border-radius: 50%;\n  background: #f33445;\n  color: #ffffff;\n  font-size: clamp(1rem, 2vw, 1.95rem);\n  font-weight: 800;\n  line-height: 1;\n}\n\n.c-mc-lite-1786859420673-e8b3ab09-tabs-row {\n  position: relative;\n  z-index: 1;\n  flex: 0 0 16%;\n  min-height: 0;\n  display: flex;\n  align-items: flex-start;\n}\n\n.c-mc-lite-1786859420673-e8b3ab09-tabs {\n  width: 76%;\n  height: 70%;\n  display: flex;\n  align-items: center;\n  padding: 0 3.2% 0 1%;\n  box-sizing: border-box;\n  background: rgba(207, 233, 250, 0.88);\n  clip-path: polygon(4% 0, 96% 0, 100% 50%, 96% 100%, 4% 100%, 0 50%);\n  border-radius: 0.35rem;\n  box-shadow: inset 0 0 0 0.12rem rgba(255, 255, 255, 0.72);\n}\n\n.c-mc-lite-1786859420673-e8b3ab09-tab {\n  position: relative;\n  flex: 1;\n  height: 86%;\n  border: none;\n  background: transparent;\n  color: #229be5;\n  font-size: clamp(1.18rem, 2.75vw, 2.22rem);\n  font-weight: 800;\n  letter-spacing: 0.04em;\n  white-space: nowrap;\n  cursor: pointer;\n  padding: 0 1%;\n}\n\n.c-mc-lite-1786859420673-e8b3ab09-tab-active {\n  flex: 0 0 29%;\n  color: #ffffff;\n  text-shadow: 0 0.08rem 0.12rem rgba(0, 95, 155, 0.22);\n  background: linear-gradient(90deg, #38aee9 0%, #36b9d6 45%, #5eb8c4 100%);\n  clip-path: polygon(8% 0, 90% 0, 100% 50%, 90% 100%, 8% 100%, 0 50%);\n  border-radius: 0.35rem;\n  box-shadow: inset 0 0 0 0.12rem rgba(255, 255, 255, 0.78);\n}\n\n.c-mc-lite-1786859420673-e8b3ab09-chart-wrap {\n  position: relative;\n  z-index: 1;\n  flex: 1;\n  min-height: 0;\n  width: 100%;\n}\n\n.c-mc-lite-1786859420673-e8b3ab09-chart {\n  width: 100%;\n  height: 100%;\n}\n</style>",
+  "declareJson": {
+    "componentId": "mc-lite-1786859420673-e8b3ab09",
+    "componentName": "mc-lite-1786859420673-e8b3ab09",
+    "panelType": "default-panel",
+    "defaultTheme": "dark",
+    "size": {
+      "width": 1122,
+      "height": 500
+    },
+    "businessEvents": [],
+    "businessStatuses": [],
+    "dataSources": [],
+    "formSources": [],
+    "layoutConfig": {},
+    "themeConfig": {},
+    "businessConfig": {}
+  }
+}

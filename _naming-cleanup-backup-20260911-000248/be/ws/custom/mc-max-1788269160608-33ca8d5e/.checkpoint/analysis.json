@@ -1,0 +1,367 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 72,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0].body.children[0]",
+        "message": "stat-group 结构混乱：'设备监测'与'设备类型 26'应拆分为两个独立 stat-item",
+        "suggestion": "按 headerSlots 重构为3个并列 stat-item，每个含 label+value"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1]",
+        "message": "status-badges 区内容语义不明：'总 56302'与'总 数: 1280'标签冲突",
+        "suggestion": "核对原图，补全标签文本（如'在线总数''设备总数'），移除占位文本"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[2].body.items[*].content.elements[1].parts",
+        "message": "value 的 parts 拆分过细（3层嵌套），可直接用富文本样式表达",
+        "suggestion": "简化为 value:{text, styles, highlight:{range, color}}"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "覆盖率23%，遗漏左侧导航栏（switch/active/default）等15+节点",
+        "suggestion": "补充左侧导航区为独立 section，或标注为设计稿范围外"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "layout.sections[*].body.bgPlaceholder",
+        "message": "所有section共用同一背景图bg-8788.png，bgPlaceholder命名无区分度",
+        "suggestion": "若背景相同可提升到全局styles，或按区域重命名占位符"
+      }
+    ],
+    "recommendations": [
+      "将 header-stats 区的 stat-group 重构为3个标准 stat-item（设备类型/设备总数/完好率），与 headerSlots 一一对应",
+      "补全 status-badges 区的标签文本，删除'随图设置''雨水井链接'等残留OCR错误",
+      "简化 device-card 内 value.parts 结构，用 highlight 字段标记数值高亮范围"
+    ],
+    "summary": "结构基本合理，但统计区stat嵌套混乱、徽章区文本错位、覆盖率低。需对齐headerSlots重构统计组，核查原图补全缺失区域。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#2196f3",
+      "--colorBgGradientStart": "#2196f3",
+      "--colorBgGradientEnd": "#90caf9",
+      "--colorTextBase": "#ffffff",
+      "--colorTextSecondary": "rgba(255, 255, 255, 0.8)",
+      "--colorTextTertiary": "rgba(255, 255, 255, 0.6)",
+      "--colorDanger": "#f44336",
+      "--colorCardBg": "rgba(255, 255, 255, 0.12)",
+      "--fontSize": "14px",
+      "--fontSizeLarge": "24px",
+      "--fontWeightBold": "600",
+      "--fontWeightNormal": "400",
+      "--borderRadius": "8px",
+      "--borderRadiusSmall": "4px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#2196f3",
+      "@color-bg-gradient-start": "#2196f3",
+      "@color-bg-gradient-end": "#90caf9",
+      "@color-text-base": "#ffffff",
+      "@color-text-secondary": "rgba(255, 255, 255, 0.8)",
+      "@color-text-tertiary": "rgba(255, 255, 255, 0.6)",
+      "@color-danger": "#f44336",
+      "@color-card-bg": "rgba(255, 255, 255, 0.12)",
+      "@font-size-base": "14px",
+      "@font-size-large": "24px",
+      "@font-weight-bold": "600",
+      "@font-weight-normal": "400",
+      "@border-radius-base": "8px",
+      "@border-radius-small": "4px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "width": "100%",
+        "height": "100%",
+        "background": "linear-gradient(135deg, var(--colorBgGradientStart) 0%, var(--colorBgGradientEnd) 100%)",
+        "display": "flex",
+        "position": "relative"
+      },
+      ".nav-left": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "1.43em 0.71em",
+        "gap": "1em",
+        "background": "rgba(255, 255, 255, 0.08)",
+        "border-right": "1px solid rgba(255, 255, 255, 0.1)"
+      },
+      ".nav-item": {
+        "padding": "0.86em",
+        "border-radius": "var(--borderRadiusSmall)",
+        "color": "var(--colorTextSecondary)",
+        "font-size": "var(--fontSize)",
+        "cursor": "pointer",
+        "transition": "all 0.3s ease"
+      },
+      ".nav-item:hover": {
+        "background": "rgba(255, 255, 255, 0.12)",
+        "color": "var(--colorTextBase)"
+      },
+      ".header-stats": {
+        "display": "flex",
+        "gap": "1.14em",
+        "padding": "1.43em",
+        "background": "linear-gradient(90deg, rgba(33, 150, 243, 0.3) 0%, rgba(33, 150, 243, 0.1) 100%)",
+        "border-radius": "var(--borderRadius)"
+      },
+      ".device-card": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "1.43em",
+        "background": "var(--colorCardBg)",
+        "border-radius": "var(--borderRadius)",
+        "border": "1px solid rgba(255, 255, 255, 0.1)",
+        "position": "relative"
+      },
+      ".device-icon": {
+        "width": "3.43em",
+        "height": "3.43em",
+        "display": "flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "background": "rgba(33, 150, 243, 0.2)",
+        "border-radius": "50%",
+        "margin-bottom": "0.86em"
+      },
+      ".online-count": {
+        "font-size": "var(--fontSizeLarge)",
+        "font-weight": "var(--fontWeightBold)",
+        "color": "var(--colorTextBase)",
+        "line-height": "1.2"
+      },
+      ".total-count": {
+        "font-size": "var(--fontSize)",
+        "font-weight": "var(--fontWeightNormal)",
+        "color": "var(--colorTextSecondary)",
+        "margin-top": "0.29em"
+      },
+      ".error-badge": {
+        "position": "absolute",
+        "top": "0.71em",
+        "right": "0.71em",
+        "padding": "0.29em 0.57em",
+        "background": "var(--colorDanger)",
+        "color": "var(--colorTextBase)",
+        "font-size": "0.86em",
+        "font-weight": "var(--fontWeightBold)",
+        "border-radius": "var(--borderRadiusSmall)"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主题色 rgba(33, 150, 243, 1) 映射为 --colorPrimary: #2196f3",
+      "浅色渐变背景拆分为 --colorBgGradientStart 和 --colorBgGradientEnd",
+      "白色透明度变体映射为 --colorTextBase/Secondary/Tertiary 三级文字颜色",
+      "异常角标红色映射为 --colorDanger: #f44336",
+      "头部统计区蓝色渐变背景使用 linear-gradient + rgba 实现",
+      "设备卡片图标底座使用圆形容器 + 半透明蓝色背景",
+      "所有尺寸使用 em 单位，基于 --fontSize: 14px 计算",
+      "容器背景直接使用 linear-gradient 字面量值，确保关键视觉效果呈现"
+    ],
+    "elementStyleMap": {
+      "header-stats": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-stat-group-x-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-stat-group-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-stat-group-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "el-stat-group-x-3": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-stat-group-x-7": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-stat-group-x-10": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "status-badges": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-14": {
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "el-el-x-20": {
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "el-device-card-x-21": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-device-card-x-24": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-device-card-x-27": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-device-card-x-30": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-device-card-x-33": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-device-card-x-36": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-device-card-x-39": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-device-card-x-42": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-device-card-x-45": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-device-card-x-48": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-device-card-x-51": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-device-card-x-54": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "header-stats",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 10,
+        "title": "头部统计指标",
+        "complexityScore": 20,
+        "complexityReasons": {
+          "elementCount": 10,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 2
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "status-badges",
+        "responsibility": "数据统计指标区（数字+标签+趋势）",
+        "elementCount": 4,
+        "title": "设备状态徽章区",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 4,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "device-grid",
+        "responsibility": "网格卡片布局区",
+        "elementCount": 0,
+        "title": "设备类型网格",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 0,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 0
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 或存在高复杂度 section → 强制拆分",
+    "internalSubcomponents": []
+  }
+}

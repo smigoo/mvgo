@@ -1,0 +1,89 @@
+// 主题变量与 mixin 定义
+// 定义浅色科技监测风的 CSS 自定义属性
+
+// 浅色主题变量
+.theme-light() {
+  :root {
+    --color-bg-base: rgb(237, 244, 251);
+    --color-primary: rgb(85, 158, 255);
+    --color-primary-active: rgb(40, 110, 200);
+    --color-primary-gradient-start: #1990ff;
+    --color-primary-gradient-end: rgba(90, 126, 255, 0.83);
+    --color-error: #f53f3f;
+    --color-success: #0fcd7d;
+    --color-text-base: #333333;
+    --color-text-secondary: #666666;
+    --color-text-tertiary: #999999;
+    --color-border-secondary: #bdd4e8;
+    --color-tab-text: #2c9bea;
+    --color-tab-bg-start: #b5deff;
+    --color-tab-bg-end: #d1ecff;
+    --color-tab-active-start: #1099b1;
+    --color-tab-active-end: #038fff;
+    --color-warning-line: #d32f2f;
+    --color-shadow: rgba(74, 117, 141, 0.25);
+    --border-radius-base: 8px;
+    --border-radius-sm: 4px;
+    --border-radius-xs: 2px;
+    --font-size-base: 14px;
+    --font-size-sm: 12px;
+    --font-size-lg: 16px;
+    --font-size-xs: 10px;
+  }
+}
+
+// 深色主题变量（预留）
+.theme-dark() {
+  :root {
+    --color-bg-base: #1a1a2e;
+    --color-primary: rgb(85, 158, 255);
+    --color-primary-active: rgb(60, 130, 220);
+    --color-error: #f53f3f;
+    --color-success: #0fcd7d;
+    --color-text-base: #ffffff;
+    --color-text-secondary: #a0a0a0;
+    --color-border-secondary: rgba(85, 158, 255, 0.3);
+    --border-radius-base: 8px;
+    --font-size-base: 14px;
+  }
+}
+
+// 通用 mixin
+.common() {
+  // 弹性布局
+  .flex-row() {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+  }
+  
+  .flex-col() {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .flex-center() {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  // 文本截断
+  .text-ellipsis() {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  
+  // 渐变文字
+  .gradient-text(@start, @end) {
+    background: linear-gradient(90deg, @start 0%, @end 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+}
+
+// 调用 mixin 注册默认主题
+.common();
+.theme-light();

@@ -1,0 +1,38 @@
+// 微码组件主题变量定义
+// 三个主题 mixin：.common() 基础令牌、.theme-light() 浅色主题（默认）、.theme-dark() 深色主题
+
+.common() {
+  @fontSize: 14px;
+  @font-size-base: 14px;
+  @font-size-large: 36px;
+  @font-size-display: 36px;
+  @border-radius-base: 8px;
+}
+
+.theme-light() {
+  @color-primary: rgba(24,144,255,1);
+  @color-danger: rgba(255,119,102,1);
+  @color-success: rgba(82,196,26,1);
+  @color-text-base: rgba(51,51,51,1);
+  @color-text-secondary: rgba(51,51,51,0.65);
+  @color-bg-base: rgba(237,244,251,1);
+  @shadow-card: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.theme-dark() {
+  @color-primary: rgba(24,144,255,1);
+  @color-danger: rgba(255,119,102,1);
+  @color-success: rgba(82,196,26,1);
+  @color-text-base: rgba(255,255,255,1);
+  @color-text-secondary: rgba(255,255,255,0.65);
+  @color-bg-base: rgba(26,35,46,1);
+  @shadow-card: 0 2px 8px rgba(0,0,0,0.32);
+}
+// 写盘门禁自动补全缺失变量
+@fontSize: 0px;
+
+// 自动添加：将 .common() 中的 Less 变量暴露到全局作用域
+
+:root {
+  .common();
+}

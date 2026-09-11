@@ -1,0 +1,23 @@
+{
+  "completed": [
+    "1-declare.json",
+    "2-package/index.vue",
+    "3-package/index.vue",
+    "4-package/index.vue",
+    "6-package/components/VehicleType.vue",
+    "7-package/components/FlowForecast.vue",
+    "5-package/components/TotalTraffic.vue",
+    "8-resources/styles/common.less,resources/styles/themes/theme-vars.less"
+  ],
+  "total": 6,
+  "updatedAt": 1787306734930,
+  "files": {
+    "declare.json": "1-declare.json",
+    "package/index.vue": "4-package_index.vue",
+    "package/components/VehicleType.vue": "6-package_components_VehicleType.vue",
+    "package/components/FlowForecast.vue": "7-package_components_FlowForecast.vue",
+    "package/components/TotalTraffic.vue": "5-package_components_TotalTraffic.vue",
+    "resources/styles/common.less": "8-resources_styles_common.less",
+    "resources/styles/themes/theme-vars.less": "8-resources_styles_themes_theme-vars.less"
+  }
+}

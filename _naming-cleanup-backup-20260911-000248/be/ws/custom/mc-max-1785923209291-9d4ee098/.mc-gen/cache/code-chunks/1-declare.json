@@ -1,0 +1,83 @@
+{
+  "componentId": "mc-max-1785923209291-9d4ee098",
+  "componentName": "cp-环境监测",
+  "version": "v1.0.0",
+  "panelKey": "default-panel",
+  "attribute": {
+    "aspectRatio": [
+      10,
+      3
+    ]
+  },
+  "businessEvents": {
+    "mc-max-1785923209291-9d4ee098-onload": {
+      "eventId": "mc-max-1785923209291-9d4ee098-onload",
+      "eventName": "组件加载",
+      "eventDataSchema": {}
+    }
+  },
+  "businessStatuses": {},
+  "dataSources": [
+    {
+      "sourceName": "environmentData",
+      "columns": [
+        {
+          "name": "temperature",
+          "type": "number",
+          "comment": "温度"
+        },
+        {
+          "name": "humidity",
+          "type": "number",
+          "comment": "湿度"
+        },
+        {
+          "name": "pm25",
+          "type": "number",
+          "comment": "PM2.5"
+        },
+        {
+          "name": "aqi",
+          "type": "number",
+          "comment": "空气质量指数"
+        }
+      ]
+    }
+  ],
+  "themeConfig": {
+    "default": "light",
+    "list": [
+      {
+        "name": "亮色主题",
+        "key": "light"
+      },
+      {
+        "name": "深色主题",
+        "key": "dark"
+      }
+    ]
+  },
+  "layoutConfig": {
+    "default": "one",
+    "list": [
+      {
+        "name": "默认布局",
+        "key": "one",
+        "previewName": "mc-preview.png"
+      }
+    ]
+  },
+  "cssVariableConfig": [
+    {
+      "name": "字体大小",
+      "key": "fontSize",
+      "type": "size"
+    },
+    {
+      "name": "主色调",
+      "key": "colorPrimary",
+      "type": "color"
+    }
+  ],
+  "businessConfig": []
+}

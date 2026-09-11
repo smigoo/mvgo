@@ -1,0 +1,104 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 5,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "root",
+        "message": "核心布局结构缺失：`layoutStructure` 和 `sections` 均为 null，导致无法进行任何布局合理性、嵌套深度及区域划分的审查。",
+        "suggestion": "重新执行 Figma 解析流程，确保正确提取出组件的层级结构、区块划分以及父子关系。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "Figma 节点覆盖率极低：`coverageRate` 为 0%，`matchedCount` 为 0，`missingCount` 高达 114。系统已触发 `_parseWarning`（解析结果全空）。",
+        "suggestion": "检查 Figma 源文件的图层命名、分组结构是否符合解析规范，或排查解析脚本/AI 提取逻辑是否存在异常，修复后重新生成布局数据。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "styles",
+        "message": "样式信息完全缺失：`theme` 为'未知'，`colors`、`decorations`、`emphasis` 等均为空，无法评估微码规范中的纯 Less 变量主题模式及样式符合度。",
+        "suggestion": "在重新解析时，确保正确提取 Figma 中的颜色、背景、装饰等样式信息，并准确映射到微码规范要求的主题变量中。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "charts & interactions",
+        "message": "图表与交互信息缺失：`charts` 和 `interactions` 为空，但 `missing` 节点中包含 `switch`、`active`、`slot-con` 等疑似交互或图表容器元素，存在严重的漏解析风险。",
+        "suggestion": "重新解析时，需重点识别并提取图表配置（如 ECharts 相关节点）和交互组件（如 Tab、Switch 等），确保业务逻辑和交互状态完整。"
+      }
+    ],
+    "recommendations": [
+      "立即中止下游精修和代码生成流程，因为当前输入数据完全无效（解析结果全空），强行生成会导致严重偏差。",
+      "排查 Figma 解析插件或 AI 提取 Prompt，修复导致 `matchedCount` 为 0 的根本原因（可能是 Figma 文件未正确导出、图层被隐藏或解析正则/规则不匹配）。",
+      "检查 Figma 设计稿的图层结构，确保关键节点（如 header、slot-con、switch 等）命名清晰且层级合理，避免解析器无法识别。",
+      "修复解析问题后，重新生成 `preview-analysis` 阶段的 JSON 数据，确保 `coverageRate` 达到合理水平（建议 > 80%）后，再次提交审查。"
+    ],
+    "summary": "当前布局结构数据解析完全失败，核心字段（layoutStructure、sections、styles等）均为空，Figma节点覆盖率为0%。由于缺乏有效的结构输入，无法进行任何实质性的布局、规范和性能审查。必须修复解析流程并重新生成有效数据后，才能进行后续的微码组件开发。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "基于深色背景推断的基础CSS变量（camelCase命名）",
+      "--colorPrimary": "#3677f8",
+      "--colorPrimaryBg": "rgba(54, 119, 248, 0.15)",
+      "--colorBg": "#121212",
+      "--colorBgContainer": "#1e1e1e",
+      "--colorTextBase": "#ffffff",
+      "--colorTextSecondary": "rgba(255, 255, 255, 0.65)",
+      "--fontSize": "14px",
+      "--borderRadius": "8px",
+      "--borderColor": "rgba(255, 255, 255, 0.12)"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射，用于theme-vars.less中的mixin",
+      "@color-primary": "#3677f8",
+      "@color-primary-bg": "rgba(54, 119, 248, 0.15)",
+      "@color-bg": "#121212",
+      "@color-bg-container": "#1e1e1e",
+      "@color-text-base": "#ffffff",
+      "@color-text-secondary": "rgba(255, 255, 255, 0.65)",
+      "@font-size-base": "14px",
+      "@border-radius-base": "8px",
+      "@border-color": "rgba(255, 255, 255, 0.12)"
+    },
+    "cssClasses": {
+      "comment": "基于深色主题推断的可复用基础CSS类",
+      ".dark-container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "16px",
+        "background-color": "var(--colorBg)",
+        "color": "var(--colorTextBase)",
+        "border-radius": "var(--borderRadius)"
+      },
+      ".dark-card": {
+        "background-color": "var(--colorBgContainer)",
+        "border": "1px solid var(--borderColor)",
+        "border-radius": "var(--borderRadius)",
+        "padding": "16px",
+        "color": "var(--colorTextBase)"
+      },
+      ".dark-text-primary": {
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)"
+      },
+      ".dark-text-secondary": {
+        "color": "var(--colorTextSecondary)",
+        "font-size": "var(--fontSize)"
+      }
+    },
+    "tokenCoverage": 0.75,
+    "mappingNotes": [
+      "输入视觉元素为空，仅提供了 backgroundBrightness: 'dark'，因此基于深色主题规范推断基础样式变量",
+      "主色调推断为科技蓝 #3677f8，适合深色大屏/数据可视化场景",
+      "背景色采用深灰 #121212 和 #1e1e1e 构建层级",
+      "文本色采用纯白 #ffffff 和 65% 透明度白色构建主次层级",
+      "边框采用 12% 透明度白色，保证在深色背景下的微妙分割"
+    ],
+    "elementStyleMap": {}
+  }
+}

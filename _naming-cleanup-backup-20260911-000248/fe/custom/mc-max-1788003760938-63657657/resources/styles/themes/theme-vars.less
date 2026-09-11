@@ -1,0 +1,46 @@
+// 主题变量定义文件
+// 结构：三个 mixin（.common()、.theme-dark()、.theme-light()）
+// 颜色变量定义在 mixin 内部，根级禁止调用主题 mixin
+
+// 公共变量 mixin（所有主题共享）
+.common() {
+  // 背景图片路径
+  @bg-image-8788: url(../resources/images/bg-8788.png);
+  
+  // 背景图片通用配置
+  @bg-size-full: 100% 100%;
+  @bg-position-center: center center;
+  @bg-repeat-none: no-repeat;
+}
+
+// 深色主题 mixin
+.theme-dark() {
+  // 背景图片（el-el-x-2、el-el-x-13 使用相同背景）
+  @bg-image: url(../resources/images/bg-8788.png);
+  
+  // 深色主题禁止使用黑色系文字
+  // 根据 Figma 样式映射，仅保留背景图相关变量
+  // 其他颜色变量根据深色主题风格补齐
+  @text-color-primary: #e8e8e8;
+  @text-color-secondary: #a8a8a8;
+  @bg-color-container: rgba(26, 35, 50, 0.9);
+  @border-color: rgba(255, 255, 255, 0.15);
+}
+
+// 浅色主题 mixin（面板默认主题）
+.theme-light() {
+  // 背景图片（el-el-x-2、el-el-x-13 使用相同背景）
+  @bg-image: url(../resources/images/bg-8788.png);
+  
+  // 浅色主题颜色变量（与设计稿一致）
+  @text-color-primary: #333333;
+  @text-color-secondary: #666666;
+  @bg-color-container: rgba(255, 255, 255, 0.95);
+  @border-color: rgba(0, 0, 0, 0.15);
+}
+
+// 自动添加：将 .common() 中的 Less 变量暴露到全局作用域
+
+:root {
+  .common();
+}

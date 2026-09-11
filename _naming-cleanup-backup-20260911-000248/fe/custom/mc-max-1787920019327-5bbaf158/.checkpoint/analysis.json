@@ -1,0 +1,386 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 82,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].body",
+        "message": "layout声明为vertical-5-items，但children实际包含6个tab元素，数量不匹配。",
+        "suggestion": "将layout修正为vertical-6-items以匹配实际子元素数量。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[0].body.children",
+        "message": "stat-types和blue-card内部使用group包裹文本，导致嵌套深度达4-5层，超出≤3层建议。",
+        "suggestion": "移除不必要的group节点，将label和value直接作为card的子元素以降低DOM深度。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "header-stats的slotCandidate为header-right，但被放置在sections数组中作为独立section。",
+        "suggestion": "将其从sections移至面板的header插槽配置中，或确保渲染器能正确识别并提取到标题栏。"
+      }
+    ],
+    "recommendations": [
+      "统一section的header/body结构，为category-tabs和device-grid补充缺失的header字段。",
+      "优化设备网格的卡片样式，将重复的background和borderRadius提取为公共样式类以减少冗余。"
+    ],
+    "summary": "整体布局清晰，但存在子元素数量与layout声明不匹配、局部嵌套过深以及插槽位置定义不当的问题，需修正以确保渲染准确性。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "rgba(25, 144, 255, 1)",
+      "--colorError": "rgba(255, 59, 48, 1)",
+      "--colorBgBase": "rgba(237, 244, 251, 1)",
+      "--colorBgContainer": "rgba(255, 255, 255, 0.8)",
+      "--colorTextBase": "#333333",
+      "--colorTextLight": "#ffffff",
+      "--fontSize": "14px",
+      "--fontSizeHeading": "24px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "rgba(25, 144, 255, 1)",
+      "@color-error": "rgba(255, 59, 48, 1)",
+      "@color-bg-base": "rgba(237, 244, 251, 1)",
+      "@color-bg-container": "rgba(255, 255, 255, 0.8)",
+      "@color-text-base": "#333333",
+      "@color-text-light": "#ffffff",
+      "@font-size-base": "14px",
+      "@font-size-heading": "24px",
+      "@border-radius-base": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-panel": {
+        "width": "100%",
+        "height": "100%",
+        "background": "rgba(237, 244, 251, 1)",
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      ".panel-header": {
+        "position": "relative",
+        "background": "rgba(25, 144, 255, 1)",
+        "color": "#ffffff",
+        "padding": "16px"
+      },
+      ".wave-decoration": {
+        "position": "absolute",
+        "bottom": "-1px",
+        "left": "0",
+        "width": "100%",
+        "height": "20px",
+        "background": "rgba(25, 144, 255, 1)"
+      },
+      ".stat-value": {
+        "font-size": "24px",
+        "font-weight": "bold",
+        "color": "#ffffff"
+      },
+      ".category-list": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "8px"
+      },
+      ".category-tag": {
+        "padding": "8px 12px",
+        "border-radius": "4px",
+        "cursor": "pointer",
+        "transition": "all 0.3s"
+      },
+      ".category-tag.active": {
+        "background": "rgba(25, 144, 255, 1)",
+        "color": "#ffffff",
+        "font-weight": "500"
+      },
+      ".device-card": {
+        "background": "rgba(255, 255, 255, 0.8)",
+        "border-radius": "8px",
+        "padding": "16px",
+        "backdrop-filter": "blur(10px)",
+        "box-shadow": "0 2px 8px rgba(0, 0, 0, 0.05)"
+      },
+      ".error-badge": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "background": "rgba(255, 59, 48, 1)",
+        "color": "#ffffff",
+        "border-radius": "50%",
+        "min-width": "20px",
+        "height": "20px",
+        "font-size": "12px",
+        "font-weight": "bold"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 rgba(25, 144, 255, 1) 映射为 --colorPrimary，用于波浪装饰、激活标签高亮等核心视觉元素",
+      "容器背景 rgba(237, 244, 251, 1) 应优先直接落地为 Figma 字面量值，避免关键可见背景只依赖 CSS 变量",
+      "设备卡片使用 rgba(255, 255, 255, 0.8) 半透明白色背景，建议配合 backdrop-filter: blur() 提升浅色面板的层次感",
+      "异常红色 rgba(255, 59, 48, 1) 映射为 --colorError，专用于异常数字徽章等警告状态",
+      "顶部统计数值使用白色 (--colorTextLight)，需确保其父容器（如顶部蓝色区域）具有足够的对比度"
+    ],
+    "elementStyleMap": {
+      "header-stats": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "stat-types-group-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-types": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-group-x-4": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-total": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "blue-card-1-group-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "blue-card-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-group-x-12": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "blue-card-2-group-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "blue-card-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-group-x-19": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "category-tabs": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-25": {
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "el-el-x-33": {
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "header-stats",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 22,
+        "title": "顶部统计指标",
+        "complexityScore": 40,
+        "complexityReasons": {
+          "elementCount": 22,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 3
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [
+          {
+            "type": "element-group",
+            "id": "header-stats-group1",
+            "name": "Group1",
+            "responsibility": "元素分组 1（高密度拆分）",
+            "reason": "R2: 元素密度拆分（总计22个元素）",
+            "props": [],
+            "emits": []
+          },
+          {
+            "type": "element-group",
+            "id": "header-stats-group2",
+            "name": "Group2",
+            "responsibility": "元素分组 2（高密度拆分）",
+            "reason": "R2: 元素密度拆分（总计22个元素）",
+            "props": [],
+            "emits": []
+          },
+          {
+            "type": "element-group",
+            "id": "header-stats-group3",
+            "name": "Group3",
+            "responsibility": "元素分组 3（高密度拆分）",
+            "reason": "R2: 元素密度拆分（总计22个元素）",
+            "props": [],
+            "emits": []
+          }
+        ],
+        "shouldSplitInternally": true
+      },
+      {
+        "id": "category-tabs",
+        "responsibility": "标签页切换区",
+        "elementCount": 6,
+        "title": "左侧分类标签",
+        "complexityScore": 20,
+        "complexityReasons": {
+          "elementCount": 6,
+          "charts": 0,
+          "interactions": 6,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "device-grid",
+        "responsibility": "网格卡片布局区",
+        "elementCount": 12,
+        "title": "设备网格",
+        "complexityScore": 40,
+        "complexityReasons": {
+          "elementCount": 12,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [
+          {
+            "type": "element-group",
+            "id": "device-grid-group1",
+            "name": "Group1",
+            "responsibility": "元素分组 1（高密度拆分）",
+            "reason": "R2: 元素密度拆分（总计12个元素）",
+            "props": [],
+            "emits": []
+          },
+          {
+            "type": "element-group",
+            "id": "device-grid-group2",
+            "name": "Group2",
+            "responsibility": "元素分组 2（高密度拆分）",
+            "reason": "R2: 元素密度拆分（总计12个元素）",
+            "props": [],
+            "emits": []
+          }
+        ],
+        "shouldSplitInternally": true
+      }
+    ],
+    "isForced": true,
+    "minFiles": 8,
+    "reason": "有效 sections=3 ≥ 3 或存在高复杂度 section → 强制拆分",
+    "internalSubcomponents": [
+      {
+        "type": "element-group",
+        "id": "header-stats-group1",
+        "name": "Group1",
+        "responsibility": "元素分组 1（高密度拆分）",
+        "reason": "R2: 元素密度拆分（总计22个元素）",
+        "props": [],
+        "emits": [],
+        "parentSectionId": "header-stats",
+        "parentSectionTitle": "顶部统计指标"
+      },
+      {
+        "type": "element-group",
+        "id": "header-stats-group2",
+        "name": "Group2",
+        "responsibility": "元素分组 2（高密度拆分）",
+        "reason": "R2: 元素密度拆分（总计22个元素）",
+        "props": [],
+        "emits": [],
+        "parentSectionId": "header-stats",
+        "parentSectionTitle": "顶部统计指标"
+      },
+      {
+        "type": "element-group",
+        "id": "header-stats-group3",
+        "name": "Group3",
+        "responsibility": "元素分组 3（高密度拆分）",
+        "reason": "R2: 元素密度拆分（总计22个元素）",
+        "props": [],
+        "emits": [],
+        "parentSectionId": "header-stats",
+        "parentSectionTitle": "顶部统计指标"
+      },
+      {
+        "type": "element-group",
+        "id": "device-grid-group1",
+        "name": "Group1",
+        "responsibility": "元素分组 1（高密度拆分）",
+        "reason": "R2: 元素密度拆分（总计12个元素）",
+        "props": [],
+        "emits": [],
+        "parentSectionId": "device-grid",
+        "parentSectionTitle": "设备网格"
+      },
+      {
+        "type": "element-group",
+        "id": "device-grid-group2",
+        "name": "Group2",
+        "responsibility": "元素分组 2（高密度拆分）",
+        "reason": "R2: 元素密度拆分（总计12个元素）",
+        "props": [],
+        "emits": [],
+        "parentSectionId": "device-grid",
+        "parentSectionTitle": "设备网格"
+      }
+    ]
+  }
+}

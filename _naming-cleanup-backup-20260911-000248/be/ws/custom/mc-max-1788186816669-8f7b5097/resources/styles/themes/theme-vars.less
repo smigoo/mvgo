@@ -1,0 +1,109 @@
+// 主题变量定义文件
+// 说明：
+// 1. 必须定义三个 mixin：.common()、.theme-dark()、.theme-light()
+// 2. 只使用 Less 变量（@xxx），禁止使用 CSS 变量（var(--xxx)）
+// 3. 颜色变量定义在 mixin 内部，根级禁止调用主题 mixin
+// 4. .theme-light() 中的颜色为组件默认展示色，必须与设计稿一致
+
+.common() {
+  // 字体缩放基准令牌（根容器通过 CSS 变量 --fontSize 驱动，默认 14px）
+  @fontSize: 14px;
+  
+  // 通用尺寸变量
+  @border-radius-base: 4px;
+  @border-radius-large: 8px;
+  @spacing-xs: 4px;
+  @spacing-sm: 8px;
+  @spacing-md: 16px;
+  @spacing-lg: 24px;
+  @spacing-xl: 32px;
+  
+  // 字体大小
+  @font-size-xs: 12px;
+  @font-size-sm: 14px;
+  @font-size-base: 16px;
+  @font-size-lg: 18px;
+  @font-size-xl: 20px;
+  @font-size-xxl: 24px;
+  
+  // 透明度
+  @opacity-disabled: 0.4;
+  @opacity-hover: 0.8;
+}
+
+.theme-light() {
+  // 主题色
+  @primary-color: #1890ff;
+  @success-color: #52c41a;
+  @warning-color: #faad14;
+  @error-color: #ff4d4f;
+  @info-color: #1890ff;
+  
+  // 背景色
+  @bg-color: #ffffff;
+  @bg-color-secondary: #f5f5f5;
+  @bg-color-tertiary: #fafafa;
+  @bg-color-hover: #f0f0f0;
+  @bg-color-active: #e6e6e6;
+  
+  // 文字颜色
+  @text-color: #333333;
+  @text-color-secondary: #666666;
+  @text-color-tertiary: #999999;
+  @text-color-disabled: #cccccc;
+  @text-color-inverse: #ffffff;
+  
+  // 边框颜色
+  @border-color: #d9d9d9;
+  @border-color-light: #e8e8e8;
+  @border-color-dark: #bfbfbf;
+  
+  // 阴影
+  @shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  @shadow-base: 0 2px 8px rgba(0, 0, 0, 0.1);
+  @shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.15);
+  
+  // 装饰背景（从设计稿提取）
+  @decoration-bg-glow-url: url(../resources/images/bg-_m-34.png);
+  @decoration-bg-gradient-url: url(../resources/images/bg-_m-35.png);
+}
+
+.theme-dark() {
+  // 主题色（深色主题下保持亮色调）
+  @primary-color: #40a9ff;
+  @success-color: #73d13d;
+  @warning-color: #ffc53d;
+  @error-color: #ff7875;
+  @info-color: #40a9ff;
+  
+  // 背景色（深色系）
+  @bg-color: #1a2332;
+  @bg-color-secondary: #0f1724;
+  @bg-color-tertiary: #0a0f1a;
+  @bg-color-hover: #243044;
+  @bg-color-active: #2e3d56;
+  
+  // 文字颜色（深色主题禁止黑色系，使用浅色系）
+  @text-color: #e8e8e8;
+  @text-color-secondary: #b3b3b3;
+  @text-color-tertiary: #808080;
+  @text-color-disabled: #595959;
+  @text-color-inverse: #1a2332;
+  
+  // 边框颜色（深色系）
+  @border-color: #3d4d66;
+  @border-color-light: #2e3d56;
+  @border-color-dark: #4d6080;
+  
+  // 阴影（深色主题使用更深的阴影）
+  @shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  @shadow-base: 0 2px 8px rgba(0, 0, 0, 0.4);
+  @shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.5);
+  
+  // 装饰背景（与 light 主题相同）
+  @decoration-bg-glow-url: url(../resources/images/bg-_m-34.png);
+  @decoration-bg-gradient-url: url(../resources/images/bg-_m-35.png);
+}
+// 写盘门禁自动补全缺失变量
+@fontSize: 0px;
+@fontSize: 0px;

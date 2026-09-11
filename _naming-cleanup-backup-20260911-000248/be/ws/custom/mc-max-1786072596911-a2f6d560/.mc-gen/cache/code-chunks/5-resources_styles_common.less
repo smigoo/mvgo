@@ -1,0 +1,69 @@
+@import './themes/theme-vars.less';
+
+.c-mc-max-1786072596911-a2f6d560-env-monitor {
+  width: 100%;
+  height: 100%;
+  background-color: @env-bg-color;
+  box-shadow: 0 4px 10px @env-shadow-color;
+  padding: 20px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.c-mc-max-1786072596911-a2f6d560-indicator-list {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+}
+
+.c-mc-max-1786072596911-a2f6d560-indicator-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 8px;
+}
+
+.c-mc-max-1786072596911-a2f6d560-indicator-icon {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+.c-mc-max-1786072596911-a2f6d560-indicator-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.c-mc-max-1786072596911-a2f6d560-indicator-label {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  color: @env-text-secondary;
+  line-height: 1.5;
+}
+
+.c-mc-max-1786072596911-a2f6d560-indicator-value {
+  font-family: 'Roboto', sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  color: @env-text-primary;
+  line-height: 1.2;
+}
+
+.c-mc-max-1786072596911-a2f6d560-indicator-unit {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  color: @env-text-secondary;
+  margin-left: 2px;
+}

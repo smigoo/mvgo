@@ -1,0 +1,291 @@
+// 微码组件业务样式文件
+// 所有 class 必须以 .c- 为前缀
+// 引用主题变量必须使用 theme-vars.less 中已定义的变量名
+
+@import './themes/theme-vars.less';
+
+// 应用主题变量
+.common();
+.theme-light();
+
+// 根容器和布局
+
+.c-monitor-root {width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  font-size: var(--fontSize, 14px);
+
+}
+.c-monitor-layout {
+  width: 100%;
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  min-height: 0;
+}
+
+// 左侧 Tab 切换栏
+
+.c-monitor-left-tabs {
+  width: 46px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+}
+
+.c-monitor-tabs-list {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  flex: 1 1 0;
+}
+
+.c-monitor-tab-item {
+  width: 34px;
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+  
+  &--active {
+    width: 38px;
+  }
+}
+
+.c-monitor-tab-bg {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 0;
+  min-height: 44px;
+  position: relative;
+  box-sizing: border-box;
+  
+  &--default {
+  }
+}
+
+.c-monitor-tab-item--active .c-monitor-tab-bg {
+  width: 38px;
+  min-height: 54px;
+}
+
+.c-monitor-tab-label {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-size: calc(var(--fontSize, 14px) * 1);
+  font-weight: 400;
+  color: rgba(59, 128, 231, 1);
+  line-height: 16px;
+  text-align: center;
+  white-space: nowrap;
+  flex-shrink: 0;
+  
+  &--active {
+    color: rgba(255, 255, 255, 1);
+    font-weight: 700;
+  }
+}
+
+.c-monitor-tab-item--active .c-monitor-tab-label {
+  color: rgba(255, 255, 255, 1);
+  font-weight: 700;
+}
+
+.c-monitor-tab-badge {
+  position: absolute;
+  top: -8px;
+  right: -6px;
+  background: rgba(255, 255, 255, 1);
+  color: rgba(59, 128, 231, 1);
+  font-size: calc(var(--fontSize, 14px) * 1);
+  font-weight: 500;
+  line-height: 18px;
+  height: 18px;
+  padding: 0 4px;
+  white-space: nowrap;
+  z-index: 1;
+  
+  &--error {
+    background: rgba(245, 63, 63, 1);
+    color: rgba(255, 255, 255, 1);
+    width: 14px;
+    height: 14px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: calc(var(--fontSize, 14px) * 0.857);
+  }
+}
+
+// 主内容区
+
+.c-monitor-main-content {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+// 汇总统计卡片
+
+.c-monitor-summary-cards {
+  flex-shrink: 0;
+  display: flex;
+  gap: 12px;
+}
+
+.c-monitor-summary-card {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+
+.c-monitor-summary-card-tunnel {
+  background: linear-gradient(180deg, #93ccff 0%, #93ccff 100%);
+  border-radius: 6px;
+}
+
+.c-monitor-summary-card-normal {
+  background: linear-gradient(180deg, #93ccff 0%, #93ccff 100%);
+  border-radius: 6px;
+}
+
+.c-monitor-summary-card-icon {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+}
+
+.c-monitor-summary-card-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.c-monitor-summary-card-label {
+  font-size: calc(var(--fontSize, 14px) * 0.857);
+  color: rgba(51, 51, 51, 1);
+  line-height: 1.3;
+  font-weight: 400;
+}
+
+.c-monitor-summary-card-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.c-monitor-summary-card-sublabel {
+  font-size: calc(var(--fontSize, 14px) * 1);
+  color: rgba(51, 51, 51, 1);
+  font-weight: 400;
+}
+
+.c-monitor-summary-card-value {
+  font-size: calc(var(--fontSize, 14px) * 1.429);
+  font-weight: 700;
+  color: rgba(25, 144, 255, 1);
+  line-height: 1.2;
+}
+
+.c-monitor-summary-card-value-error {
+  font-size: calc(var(--fontSize, 14px) * 1.429);
+  font-weight: 700;
+  color: rgba(224, 52, 52, 1);
+}
+
+.c-monitor-summary-card-value-warning {
+  font-size: calc(var(--fontSize, 14px) * 1.429);
+  font-weight: 700;
+  color: rgba(224, 52, 52, 1);
+}
+
+// 设备类型网格
+
+.c-monitor-device-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.c-monitor-device-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 8px;
+  border-radius: 8px;
+  gap: 6px;
+  background: linear-gradient(180deg, #127bee 0%, #127bee 100%);
+  box-sizing: border-box;
+}
+
+.c-monitor-device-icon {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+}
+
+.c-monitor-device-label {
+  font-size: calc(var(--fontSize, 14px) * 0.857);
+  color: rgba(51, 51, 51, 1);
+  text-align: center;
+  line-height: 1.3;
+  font-weight: 400;
+}
+
+.c-monitor-device-count {
+  font-size: calc(var(--fontSize, 14px) * 1.143);
+  color: rgba(255, 255, 255, 1);
+  text-align: center;
+  font-weight: 500;
+  text-shadow: 0px 0px 0px rgba(0, 0, 0, 0.5);
+}
+
+.c-monitor-device-total {
+  font-size: calc(var(--fontSize, 14px) * 1.143);
+  color: rgba(255, 255, 255, 1);
+  font-weight: 500;
+  text-shadow: 0px 0px 0px rgba(0, 0, 0, 0.5);
+}
+
+
+/* === [自动修复] v3.5 模板驱动 fallback 规则 === */
+/* [自动修复] 模板 class .c-monitor-tab-badge--error → 匹配元素 section-left-tabs */
+
+.c-monitor-tab-badge--error {
+  display: flex;
+  flex-direction: column;
+}
+
+/* [自动修复] 模板 class .c-monitor-tab-bg--default → 匹配元素 section-left-tabs */
+
+.c-monitor-tab-bg--default {
+  display: flex;
+  flex-direction: column;
+}
+
+/* [自动修复] 模板 class .c-monitor-tab-label--active → 匹配元素 tab-active */
+
+.c-monitor-tab-label--active {
+  display: flex;
+  flex-direction: column;
+}

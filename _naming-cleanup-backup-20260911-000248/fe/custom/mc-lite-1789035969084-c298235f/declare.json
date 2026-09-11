@@ -1,0 +1,46 @@
+{
+  "componentId": "mc-lite-1789035969084-c298235f",
+  "componentName": "environment-monitor",
+  "version": "v1.0.0",
+  "panelType": "default-panel",
+  "defaultTheme": "light",
+  "size": {
+    "width": 420,
+    "height": 186
+  },
+  "aspectRatio": "16:9",
+  "attribute": {
+    "aspectRatio": "16:9"
+  },
+  "businessEvents": [],
+  "businessStatuses": [],
+  "dataSources": [],
+  "formSources": [],
+  "layoutConfig": {
+    "list": [
+      {
+        "key": "default",
+        "name": "默认布局",
+        "label": "默认布局",
+        "previewName": "mc-preview.png"
+      }
+    ],
+    "default": "default"
+  },
+  "themeConfig": {
+    "default": "light",
+    "list": [
+      {
+        "key": "light",
+        "name": "浅色",
+        "label": "浅色"
+      },
+      {
+        "key": "dark",
+        "name": "深色",
+        "label": "深色"
+      }
+    ]
+  },
+  "businessConfig": {}
+}

@@ -1,0 +1,67 @@
+{
+  "completed": [
+    "1-declare.json",
+    "2-package/index.vue",
+    "3-package/components/ChartCoTrend.vue",
+    "4-resources/styles/themes/theme-vars.less",
+    "5-resources/styles/common.less",
+    "3-resources/styles/themes/theme-vars.less",
+    "4-resources/styles/common.less"
+  ],
+  "total": 3,
+  "updatedAt": 1788370228442,
+  "files": {
+    "declare.json": [
+      {
+        "index": 1,
+        "file": "1-declare.json",
+        "segmentType": "declare",
+        "scriptPart": ""
+      }
+    ],
+    "package/index.vue": [
+      {
+        "index": 2,
+        "file": "2-package_index.vue",
+        "segmentType": "",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/ChartCoTrend.vue": [
+      {
+        "index": 3,
+        "file": "3-package_components_ChartCoTrend.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "resources/styles/themes/theme-vars.less": [
+      {
+        "index": 3,
+        "file": "3-resources_styles_themes_theme-vars.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      },
+      {
+        "index": 4,
+        "file": "4-resources_styles_themes_theme-vars.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      }
+    ],
+    "resources/styles/common.less": [
+      {
+        "index": 4,
+        "file": "4-resources_styles_common.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      },
+      {
+        "index": 5,
+        "file": "5-resources_styles_common.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      }
+    ]
+  }
+}

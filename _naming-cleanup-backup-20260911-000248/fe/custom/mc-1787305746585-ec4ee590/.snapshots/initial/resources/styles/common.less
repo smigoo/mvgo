@@ -1,0 +1,407 @@
+.c-monitor-root {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  font-family: @font-family;
+  color: @text-color-primary;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.c-monitor-section {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.c-monitor-section-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.c-monitor-section-title-group {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.c-monitor-section-deco {
+  width: 16px;
+  height: 16px;
+}
+
+.c-monitor-section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: @text-color-primary;
+}
+
+.c-monitor-total-traffic {
+  display: flex;
+  flex-direction: column;
+}
+
+.c-monitor-title-icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+}
+
+.c-monitor-title-text {
+  font-size: 16px;
+  font-weight: 600;
+  color: @text-color-primary;
+}
+
+.c-monitor-time-select {
+  width: 120px;
+  :deep(.ant-select-selector) {
+    background: transparent !important;
+    border: 1px solid @border-color !important;
+    border-radius: 4px !important;
+    color: @text-color-secondary !important;
+    font-size: 12px;
+  }
+}
+
+.c-monitor-stat-cards {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 16px;
+  border-radius: 8px;
+  background-color: @bg-card;
+}
+
+.c-monitor-stat-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.c-monitor-stat-label {
+  font-size: 14px;
+  color: @text-color-secondary;
+  margin-bottom: 8px;
+}
+
+.c-monitor-stat-value {
+  font-size: 28px;
+  font-weight: bold;
+  font-family: 'Roboto', sans-serif;
+}
+
+.c-monitor-stat-value-tunnel {
+  color: @primary-color;
+}
+
+.c-monitor-stat-value-bridge {
+  color: @success-color;
+}
+
+.c-monitor-chart-block {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 16px;
+}
+
+.c-monitor-chart-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.c-monitor-chart-title {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 500;
+  color: @text-color-primary;
+}
+
+.c-monitor-chart-title-bar {
+  display: inline-block;
+  width: 3px;
+  height: 14px;
+  background-color: @primary-color;
+  border-radius: 2px;
+  margin-right: 8px;
+}
+
+.c-monitor-chart-legend {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+}
+
+.c-monitor-legend-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  font-size: 12px;
+  color: @text-color-secondary;
+  cursor: pointer;
+  
+  &.active {
+    color: @text-color-primary;
+  }
+}
+
+.c-monitor-legend-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+.c-monitor-chart-container {
+  width: 100%;
+  height: 200px;
+}
+
+.c-monitor-vehicle-type {
+  display: flex;
+  flex-direction: column;
+}
+
+.c-monitor-vehicle-cards {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+}
+
+.c-monitor-vehicle-card {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px;
+  border-radius: 8px;
+  background-color: @bg-card;
+  min-height: 100px;
+}
+
+.c-monitor-vehicle-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.c-monitor-vehicle-label {
+  font-size: 14px;
+  color: @text-color-secondary;
+  margin-bottom: 8px;
+}
+
+.c-monitor-vehicle-value {
+  font-size: 24px;
+  font-weight: bold;
+  font-family: 'Roboto', sans-serif;
+}
+
+.c-monitor-vehicle-value-blue {
+  color: @primary-color;
+}
+
+.c-monitor-vehicle-value-orange {
+  color: @warning-color;
+}
+
+.c-monitor-vehicle-icon {
+  width: 48px;
+  height: 48px;
+}
+
+.c-monitor-forecast {
+  display: flex;
+  flex-direction: column;
+}
+
+.c-monitor-forecast-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.c-monitor-forecast-title {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.c-monitor-forecast-title-icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+}
+
+.c-monitor-forecast-title-text {
+  font-size: 16px;
+  font-weight: 600;
+  color: @text-color-primary;
+}
+
+.c-monitor-forecast-tabs {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+}
+
+.c-monitor-forecast-tab {
+  font-size: 14px;
+  color: @text-color-secondary;
+  cursor: pointer;
+  padding: 4px 0;
+  position: relative;
+  
+  &--active {
+    color: @primary-color;
+    font-weight: 500;
+    
+    &::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background-color: @primary-color;
+      border-radius: 1px;
+    }
+  }
+}
+
+.c-monitor-forecast-link {
+  font-size: 12px;
+  color: @primary-color;
+  text-decoration: none;
+  
+  &:hover {
+    opacity: 0.8;
+  }
+}
+
+.c-monitor-forecast-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.c-monitor-forecast-legend {
+  display: flex;
+  flex-direction: row;
+  gap: 24px;
+  margin-bottom: 12px;
+}
+
+.c-monitor-forecast-legend-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  font-size: 12px;
+  color: @text-color-secondary;
+  cursor: pointer;
+  
+  &--active {
+    color: @text-color-primary;
+  }
+}
+
+.c-monitor-forecast-legend-line {
+  display: inline-block;
+  width: 16px;
+  height: 2px;
+  margin-right: 4px;
+  
+  &--actual {
+    background-color: @primary-color;
+  }
+  
+  &--forecast {
+    background-color: @success-color;
+  }
+}
+
+.c-monitor-forecast-legend-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 6px;
+  
+  &--actual {
+    background-color: @primary-color;
+  }
+  
+  &--forecast {
+    background-color: @success-color;
+  }
+}
+
+.c-monitor-forecast-legend-text {
+  font-size: 12px;
+}
+
+.c-monitor-forecast-chart {
+  width: 100%;
+  height: 240px;
+}
+
+.c-monitor-forecast-accuracy {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-end;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.c-monitor-forecast-accuracy-item {
+  font-size: 12px;
+  color: @text-color-tertiary;
+}
+
+/* === [自动修复] v3.5 模板驱动 fallback 规则 === */
+/* [自动修复] 模板 class .c-monitor-forecast-legend-dot--actual → 匹配元素 section-daily-total */
+
+.c-monitor-forecast-legend-dot--actual {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-monitor-forecast-legend-dot--forecast → 匹配元素 section-daily-total */
+
+.c-monitor-forecast-legend-dot--forecast {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-monitor-forecast-legend-line--actual → 匹配元素 section-daily-total */
+
+.c-monitor-forecast-legend-line--actual {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-monitor-forecast-legend-line--forecast → 匹配元素 section-daily-total */
+
+.c-monitor-forecast-legend-line--forecast {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-monitor-forecast-tab--active → 匹配元素 section-daily-total */
+
+.c-monitor-forecast-tab--active {
+  display: flex;
+}

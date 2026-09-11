@@ -1,0 +1,232 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 78,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "header-tabs section 缺少 header 层级，tab 组应在 body.children 而非直接作为 body.children",
+        "suggestion": "将 tab 组包裹在独立容器节点中，明确区分 section.body 的布局结构"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[1]",
+        "message": "stats-panel 的 stat-item 子元素结构不完整，icon 和 label 应包裹在统一容器中",
+        "suggestion": "stat-item.children 应为 [{type: 'container', children: [icon, label]}] 结构"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "charts[0]",
+        "message": "chartTitle 值为 'area' 应为实际标题，chartType 已标识类型",
+        "suggestion": "chartTitle 改为 '氧化碳浓度趋势' 或空字符串"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[0]",
+        "message": "chart-container 多余一层嵌套，area-chart 可直接作为 body.children",
+        "suggestion": "移除 chart-container 包裹层，简化为 {id: 'area-chart', type: 'chart', ...}"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "headerSlots[0]",
+        "message": "tab 控件位于标题下方独立行，不应标记为 header-right 插槽",
+        "suggestion": "移除 headerSlots 或将 slotType 改为 null，tab section 独立存在"
+      }
+    ],
+    "recommendations": [
+      "将 header-tabs section 的 slotCandidate 改为 null，明确其为独立内容区而非面板插槽",
+      "合并 chart-container 冗余层级，直接在 body.children 中放置 chart 和 stats-panel",
+      "补充 charts[0] 的 xAxis/yAxis 结构化字段，当前 axes 字段为文本描述不便解析"
+    ],
+    "summary": "结构整体清晰但存在层级冗余和插槽误判。tab 区域不应标记为 header-right 插槽，chart-container 包裹层可简化，stat-item 子元素结构需规范化。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "rgba(85, 158, 255, 1)",
+      "--colorDanger": "rgba(245, 63, 63, 1)",
+      "--colorTextBase": "rgba(0, 0, 0, 0.65)",
+      "--colorBg": "rgba(255, 255, 255, 1)",
+      "--colorTabActiveBg": "rgba(85, 158, 255, 0.08)",
+      "--colorPanelBg": "rgba(250, 251, 252, 1)",
+      "--colorBorder": "rgba(229, 230, 235, 1)",
+      "--fontSize": "14px",
+      "--fontSizeBase": "14px",
+      "--fontSizeLg": "16px",
+      "--borderRadius": "4px",
+      "--borderRadiusLg": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "rgba(85, 158, 255, 1)",
+      "@color-danger": "rgba(245, 63, 63, 1)",
+      "@color-text-base": "rgba(0, 0, 0, 0.65)",
+      "@color-bg": "rgba(255, 255, 255, 1)",
+      "@color-tab-active-bg": "rgba(85, 158, 255, 0.08)",
+      "@color-panel-bg": "rgba(250, 251, 252, 1)",
+      "@color-border": "rgba(229, 230, 235, 1)",
+      "@font-size-base": "14px",
+      "@font-size-lg": "16px",
+      "@border-radius": "4px",
+      "@border-radius-lg": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".panel-container": {
+        "background": "linear-gradient(180deg, rgba(250, 251, 252, 1) 0%, rgba(245, 247, 250, 1) 100%)",
+        "border-radius": "var(--borderRadiusLg, @border-radius-lg)",
+        "padding": "1.43em",
+        "box-shadow": "0 2px 8px rgba(0, 0, 0, 0.04)"
+      },
+      ".chart-wrapper": {
+        "background": "var(--colorBg, @color-bg)",
+        "border-radius": "var(--borderRadius, @border-radius)",
+        "padding": "1.14em",
+        "border": "1px solid var(--colorBorder, @color-border)"
+      },
+      ".tab-item": {
+        "padding": "0.57em 1.14em",
+        "font-size": "var(--fontSize, @font-size-base)",
+        "color": "var(--colorTextBase, @color-text-base)",
+        "cursor": "pointer",
+        "transition": "all 0.3s ease",
+        "border-radius": "var(--borderRadius, @border-radius)"
+      },
+      ".tab-item-active": {
+        "background": "var(--colorTabActiveBg, @color-tab-active-bg)",
+        "color": "var(--colorPrimary, @color-primary)",
+        "position": "relative"
+      },
+      ".warning-text": {
+        "color": "var(--colorDanger, @color-danger)",
+        "font-weight": "500"
+      },
+      ".highlight-primary": {
+        "color": "var(--colorPrimary, @color-primary)",
+        "font-weight": "600"
+      },
+      ".data-card": {
+        "background": "var(--colorBg, @color-bg)",
+        "border-radius": "var(--borderRadius, @border-radius)",
+        "padding": "1.14em",
+        "box-shadow": "0 1px 4px rgba(0, 0, 0, 0.06)"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调(蓝色)映射为--colorPrimary，用于选中态和高亮",
+      "危险色(红色)映射为--colorDanger，用于预警文字强调",
+      "浅色面板背景使用渐变，提供微光效果增强视觉层次",
+      "Tab选中态背景为8%透明度的主色，保持轻量感",
+      "图表容器使用纯白背景配合浅灰边框，确保内容清晰可读",
+      "所有间距使用em单位，基于--fontSize实现响应式",
+      "容器背景已落地为具体的线性渐变值，确保关键视觉效果不丢失"
+    ],
+    "elementStyleMap": {
+      "header-tabs": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "chart-section": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "chart-container": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-average": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "stat-warning": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "stats-panel": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "header-tabs",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 4,
+        "title": "监测类型切换",
+        "complexityScore": 20,
+        "complexityReasons": {
+          "elementCount": 4,
+          "charts": 0,
+          "interactions": 5,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "chart-section",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 9,
+        "title": "氧化碳浓度图表",
+        "complexityScore": 35,
+        "complexityReasons": {
+          "elementCount": 9,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 3
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": true
+      }
+    ],
+    "isForced": true,
+    "minFiles": 2,
+    "reason": "有效 sections=2 ≥ 3 或存在高复杂度 section → 强制拆分",
+    "internalSubcomponents": []
+  }
+}

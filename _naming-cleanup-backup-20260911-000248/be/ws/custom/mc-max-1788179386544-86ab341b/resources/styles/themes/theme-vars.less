@@ -1,0 +1,150 @@
+// 主题变量定义文件
+// 结构：.common() 定义公共变量，.theme-dark() / .theme-light() 定义主题色
+
+.common() {
+// 字体缩放基准令牌（微码组件必需）
+  @fontSize: 14px;
+
+  // 组件尺寸
+  @header-height: 60px;
+  @tabs-height: 40px;
+  @chart-height: 300px;
+  
+  // 间距
+  @spacing-xs: 4px;
+  @spacing-sm: 8px;
+  @spacing-md: 16px;
+  @spacing-lg: 24px;
+  
+  // 边框
+  @border-radius-base: 4px;
+  @border-radius-sm: 2px;
+  
+  // 字体
+  @font-size-base: 14px;
+  @font-size-sm: 12px;
+  @font-size-lg: 16px;
+  @font-weight-normal: 400;
+  @font-weight-medium: 500;
+  @font-weight-bold: 600;
+  
+  // 过渡
+  @transition-base: all 0.3s ease;
+  @border-radius-lg: inherit; // 自动添加
+  @spacing-xl: inherit; // 自动添加
+  @font-size-xl: inherit; // 自动添加
+  @line-height-base: inherit; // 自动添加
+  @line-height-tight: inherit; // 自动添加
+  @opacity-disabled: inherit; // 自动添加
+  @opacity-hover: inherit; // 自动添加
+  @bg-card: inherit; // 自动添加
+  @bg-hover: inherit; // 自动添加
+  @bg-active: inherit; // 自动添加
+  @bg-disabled: inherit; // 自动添加
+  @text-inverse: inherit; // 自动添加
+  @border-base: inherit; // 自动添加
+  @border-light: inherit; // 自动添加
+  @border-dark: inherit; // 自动添加
+  @tab-active-bg-image: inherit; // 自动添加
+  @container-bg-image: inherit; // 自动添加
+  @shadow-sm: inherit; // 自动添加
+  @shadow-lg: inherit; // 自动添加
+  @divider-color: inherit; // 自动添加
+  @mask-bg: inherit; // 自动添加
+}
+
+.theme-light() {
+  // 面板默认主题（与设计稿一致）
+  
+  // 背景色
+  @bg-primary: #ffffff;
+  @bg-secondary: #f5f7fa;
+  @bg-tab-active: transparent; // 使用背景图
+  
+  // 文字颜色
+  @text-primary: #333333;
+  @text-secondary: #666666;
+  @text-tertiary: #999999;
+  @text-disabled: #cccccc;
+  
+  // 主题色
+  @color-primary: #1890ff;
+  @color-success: #52c41a;
+  @color-warning: #faad14;
+  @color-error: #ff4d4f;
+  @color-info: #1890ff;
+  
+  // 边框色
+  @border-color-base: #d9d9d9;
+  @border-color-light: #e8e8e8;
+  @border-color-split: #f0f0f0;
+  
+  // 阴影
+  @shadow-base: 0 2px 8px rgba(0, 0, 0, 0.08);
+  @shadow-card: 0 1px 2px rgba(0, 0, 0, 0.06);
+  
+  // 图表颜色
+  @chart-color-1: #5470c6;
+  @chart-color-2: #91cc75;
+  @chart-color-3: #fac858;
+  @chart-color-4: #ee6666;
+  @chart-color-5: #73c0de;
+  @chart-color-6: #3ba272;
+  @chart-color-7: #fc8452;
+  @chart-color-8: #9a60b4;
+  
+  // 背景图（从设计稿映射提取）
+  @bg-tab-active-image: url(../resources/images/bg-tab-active-7891.png);
+  @bg-chart-area-image: url(../resources/images/bg-7890.png);
+}
+
+.theme-dark() {
+  // 深色主题（深色面板禁止黑色文字）
+  
+  // 背景色
+  @bg-primary: #1a1d2e;
+  @bg-secondary: #252837;
+  @bg-tab-active: transparent; // 使用背景图
+  
+  // 文字颜色（深色面板禁止黑色系）
+  @text-primary: #e8eaed;
+  @text-secondary: #b0b3bb;
+  @text-tertiary: #7d8088;
+  @text-disabled: #5a5c64;
+  
+  // 主题色
+  @color-primary: #4a9eff;
+  @color-success: #6dd230;
+  @color-warning: #ffc329;
+  @color-error: #ff6b72;
+  @color-info: #4a9eff;
+  
+  // 边框色
+  @border-color-base: #3d4153;
+  @border-color-light: #32353f;
+  @border-color-split: #2a2d3a;
+  
+  // 阴影
+  @shadow-base: 0 2px 8px rgba(0, 0, 0, 0.45);
+  @shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3);
+  
+  // 图表颜色（深色主题调整）
+  @chart-color-1: #6a8ee7;
+  @chart-color-2: #a3dd87;
+  @chart-color-3: #ffd666;
+  @chart-color-4: #ff8585;
+  @chart-color-5: #8dd5f0;
+  @chart-color-6: #52c98d;
+  @chart-color-7: #ffa36e;
+  @chart-color-8: #b37fd4;
+  
+  // 背景图（与 light 主题共用）
+  @bg-tab-active-image: url(../resources/images/bg-tab-active-7891.png);
+  @bg-chart-area-image: url(../resources/images/bg-7890.png);
+}
+
+// 自动添加：将 .common() 中的 Less 变量暴露到全局作用域
+
+:root {
+  .common();
+}

@@ -1,0 +1,78 @@
+{
+  "componentName": "cp-环境监测",
+  "title": "环境监测图表组件",
+  "description": "用于展示环境数据（如CO浓度）的折线/面积图，包含Tab切换和预警线功能。",
+  "props": [
+    {
+      "name": "title",
+      "type": "String",
+      "default": "环境监测",
+      "description": "组件标题"
+    },
+    {
+      "name": "tabs",
+      "type": "Array",
+      "default": [
+        "一氧化碳",
+        "能见度",
+        "洞内照明",
+        "洞外光强"
+      ],
+      "description": "Tab导航列表"
+    },
+    {
+      "name": "activeTab",
+      "type": "String",
+      "default": "一氧化碳",
+      "description": "当前选中的Tab"
+    },
+    {
+      "name": "chartLabel",
+      "type": "String",
+      "default": "zk3+785CO浓度",
+      "description": "图表图例名称"
+    },
+    {
+      "name": "warningValue",
+      "type": "Number",
+      "default": 30,
+      "description": "预警线数值"
+    },
+    {
+      "name": "badgeCount",
+      "type": "Number",
+      "default": 6,
+      "description": "右上角消息Badge数量"
+    },
+    {
+      "name": "chartData",
+      "type": "Array",
+      "default": [],
+      "description": "图表数据，格式为 [{x: number, y: number}]"
+    }
+  ],
+  "events": [
+    {
+      "name": "tab-change",
+      "description": "切换Tab时触发",
+      "parameters": [
+        "tabName"
+      ]
+    },
+    {
+      "name": "action-click",
+      "description": "点击右上角图标时触发",
+      "parameters": [
+        "actionType"
+      ]
+    }
+  ],
+  "configure": {
+    "component": {
+      "isContainer": false,
+      "nestingRule": {
+        "childWhitelist": []
+      }
+    }
+  }
+}

@@ -1,0 +1,768 @@
+:root {
+  --em-font-family-base: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+  --em-font-family-title: 'YouSheBiaoTiHei', sans-serif;
+  --em-font-family-number: Roboto, sans-serif;
+  --em-radius-sm: 6px;
+  --em-radius-md: 8px;
+  --em-radius-lg: 10px;
+  --em-page-bg: #edf4fb;
+  --em-panel-bg: #edf4fb;
+  --em-panel-shadow: 0 4px 10px rgba(74, 117, 141, 0.25);
+  --em-text-primary: #333333;
+  --em-text-secondary: #1990ff;
+  --em-text-tertiary: #08a3a5;
+  --em-border-soft: rgba(25, 144, 255, 0.15);
+  --em-header-gradient-start: #1990ff;
+  --em-header-gradient-end: #5a7eff;
+  --em-number-gradient-start: #e1f0ff;
+  --em-number-gradient-end: #00ccff;
+  --em-tab-active-bg: rgba(25, 144, 255, 0.14);
+  --em-tab-inactive-bg: rgba(255, 255, 255, 0.45);
+  --em-switch-title: #333333;
+  --em-switch-title-active: #ffffff;
+}
+.c-mc-1785238301016-77e87ecc-body {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 16px 16px;
+  background: #edf4fb;
+}
+.c-mc-1785238301016-77e87ecc-title-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.c-mc-1785238301016-77e87ecc-title-left-icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+.c-mc-1785238301016-77e87ecc-title-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.c-mc-1785238301016-77e87ecc-title-right-icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+.c-mc-1785238301016-77e87ecc-title-right-text {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  line-height: 21px;
+  color: #1990ff;
+  white-space: nowrap;
+}
+.c-mc-1785238301016-77e87ecc-header-stats {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 18px;
+  min-width: 0;
+}
+.c-mc-1785238301016-77e87ecc-header-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+.c-mc-1785238301016-77e87ecc-header-stat-label {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  line-height: 21px;
+  color: #333333;
+  white-space: nowrap;
+}
+.c-mc-1785238301016-77e87ecc-header-stat-value {
+  font-family: Roboto, sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 23px;
+  color: #1990ff;
+  white-space: nowrap;
+}
+.c-mc-1785238301016-77e87ecc-switch-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.c-mc-1785238301016-77e87ecc-switch-card {
+  box-sizing: border-box;
+  width: 193px;
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  overflow: hidden;
+  border-radius: 8px;
+  cursor: pointer;
+  background-position: center center;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+}
+.c-mc-1785238301016-77e87ecc-switch-card.is-active {
+  box-shadow: inset 0 0 0 1px rgba(25, 144, 255, 0.16);
+}
+.c-mc-1785238301016-77e87ecc-switch-card-icon {
+  display: block;
+  width: 35px;
+  height: 28px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+.c-mc-1785238301016-77e87ecc-switch-card-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  gap: 2px;
+  flex: 1 1 auto;
+}
+.c-mc-1785238301016-77e87ecc-switch-card-title {
+  font-family: 'YouSheBiaoTiHei', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.2;
+  color: #333333;
+  text-align: center;
+  white-space: nowrap;
+}
+.c-mc-1785238301016-77e87ecc-switch-card-subtitle {
+  font-family: 'YouSheBiaoTiHei', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.2;
+  color: #333333;
+  text-align: center;
+  white-space: nowrap;
+  opacity: 0.92;
+}
+.c-mc-1785238301016-77e87ecc-tab-layout {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 0;
+  min-height: 317px;
+}
+.c-mc-1785238301016-77e87ecc-tab-rail {
+  box-sizing: border-box;
+  width: 46px;
+  flex: 0 0 46px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.c-mc-1785238301016-77e87ecc-tab-item {
+  box-sizing: border-box;
+  width: 46px;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 4px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.45);
+  color: #333333;
+  cursor: pointer;
+}
+.c-mc-1785238301016-77e87ecc-tab-item.is-active {
+  background: rgba(25, 144, 255, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(25, 144, 255, 0.15);
+}
+.c-mc-1785238301016-77e87ecc-tab-item-text {
+  display: block;
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  line-height: 16px;
+  color: inherit;
+  text-align: center;
+  white-space: nowrap;
+}
+.c-mc-1785238301016-77e87ecc-card-panel {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+.c-mc-1785238301016-77e87ecc-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  align-content: start;
+  min-width: 0;
+}
+.c-mc-1785238301016-77e87ecc-device-card {
+  box-sizing: border-box;
+  position: relative;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  overflow: hidden;
+  border-radius: 6px;
+}
+.c-mc-1785238301016-77e87ecc-device-card-icon {
+  display: block;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+.c-mc-1785238301016-77e87ecc-device-card-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  gap: 2px;
+}
+.c-mc-1785238301016-77e87ecc-device-card-label {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  line-height: 16px;
+  color: #333333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.c-mc-1785238301016-77e87ecc-device-card-value {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-family: Roboto, sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+  color: #1990ff;
+  white-space: nowrap;
+}
+.c-mc-1785238301016-77e87ecc-device-card-value small {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1;
+  color: #1990ff;
+}
+.dark {
+  --em-page-bg: #edf4fb;
+  --em-panel-bg: #edf4fb;
+  --em-panel-shadow: 0 4px 10px rgba(74, 117, 141, 0.25);
+  --em-text-primary: #333333;
+  --em-text-secondary: #1990ff;
+  --em-text-tertiary: #08a3a5;
+  --em-border-soft: rgba(25, 144, 255, 0.15);
+  --em-header-gradient-start: #1990ff;
+  --em-header-gradient-end: #5a7eff;
+  --em-number-gradient-start: #e1f0ff;
+  --em-number-gradient-end: #00ccff;
+  --em-tab-active-bg: rgba(25, 144, 255, 0.14);
+  --em-tab-inactive-bg: rgba(255, 255, 255, 0.45);
+  --em-switch-title: #333333;
+  --em-switch-title-active: #ffffff;
+}
+.dark .c-mc-1785238301016-77e87ecc-body {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 16px 16px;
+  background: #edf4fb;
+}
+.dark .c-mc-1785238301016-77e87ecc-title-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.dark .c-mc-1785238301016-77e87ecc-title-left-icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+.dark .c-mc-1785238301016-77e87ecc-title-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.dark .c-mc-1785238301016-77e87ecc-title-right-icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+.dark .c-mc-1785238301016-77e87ecc-title-right-text {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  line-height: 21px;
+  color: #1990ff;
+  white-space: nowrap;
+}
+.dark .c-mc-1785238301016-77e87ecc-header-stats {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 18px;
+  min-width: 0;
+}
+.dark .c-mc-1785238301016-77e87ecc-header-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+.dark .c-mc-1785238301016-77e87ecc-header-stat-label {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  line-height: 21px;
+  color: #333333;
+  white-space: nowrap;
+}
+.dark .c-mc-1785238301016-77e87ecc-header-stat-value {
+  font-family: Roboto, sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 23px;
+  color: #1990ff;
+  white-space: nowrap;
+}
+.dark .c-mc-1785238301016-77e87ecc-switch-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.dark .c-mc-1785238301016-77e87ecc-switch-card {
+  box-sizing: border-box;
+  width: 193px;
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  overflow: hidden;
+  border-radius: 8px;
+  cursor: pointer;
+  background-position: center center;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+}
+.dark .c-mc-1785238301016-77e87ecc-switch-card.is-active {
+  box-shadow: inset 0 0 0 1px rgba(25, 144, 255, 0.16);
+}
+.dark .c-mc-1785238301016-77e87ecc-switch-card-icon {
+  display: block;
+  width: 35px;
+  height: 28px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+.dark .c-mc-1785238301016-77e87ecc-switch-card-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  gap: 2px;
+  flex: 1 1 auto;
+}
+.dark .c-mc-1785238301016-77e87ecc-switch-card-title {
+  font-family: 'YouSheBiaoTiHei', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.2;
+  color: #333333;
+  text-align: center;
+  white-space: nowrap;
+}
+.dark .c-mc-1785238301016-77e87ecc-switch-card-subtitle {
+  font-family: 'YouSheBiaoTiHei', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.2;
+  color: #333333;
+  text-align: center;
+  white-space: nowrap;
+  opacity: 0.92;
+}
+.dark .c-mc-1785238301016-77e87ecc-tab-layout {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 0;
+  min-height: 317px;
+}
+.dark .c-mc-1785238301016-77e87ecc-tab-rail {
+  box-sizing: border-box;
+  width: 46px;
+  flex: 0 0 46px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.dark .c-mc-1785238301016-77e87ecc-tab-item {
+  box-sizing: border-box;
+  width: 46px;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 4px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.45);
+  color: #333333;
+  cursor: pointer;
+}
+.dark .c-mc-1785238301016-77e87ecc-tab-item.is-active {
+  background: rgba(25, 144, 255, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(25, 144, 255, 0.15);
+}
+.dark .c-mc-1785238301016-77e87ecc-tab-item-text {
+  display: block;
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  line-height: 16px;
+  color: inherit;
+  text-align: center;
+  white-space: nowrap;
+}
+.dark .c-mc-1785238301016-77e87ecc-card-panel {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+.dark .c-mc-1785238301016-77e87ecc-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  align-content: start;
+  min-width: 0;
+}
+.dark .c-mc-1785238301016-77e87ecc-device-card {
+  box-sizing: border-box;
+  position: relative;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  overflow: hidden;
+  border-radius: 6px;
+}
+.dark .c-mc-1785238301016-77e87ecc-device-card-icon {
+  display: block;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+.dark .c-mc-1785238301016-77e87ecc-device-card-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  gap: 2px;
+}
+.dark .c-mc-1785238301016-77e87ecc-device-card-label {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  line-height: 16px;
+  color: #333333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dark .c-mc-1785238301016-77e87ecc-device-card-value {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-family: Roboto, sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+  color: #1990ff;
+  white-space: nowrap;
+}
+.dark .c-mc-1785238301016-77e87ecc-device-card-value small {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1;
+  color: #1990ff;
+}
+.light {
+  --em-page-bg: #f7fbff;
+  --em-panel-bg: #ffffff;
+  --em-panel-shadow: 0 4px 10px rgba(120, 160, 190, 0.18);
+  --em-text-primary: #2b2b2b;
+  --em-text-secondary: #168bff;
+  --em-text-tertiary: #0b9aa0;
+  --em-border-soft: rgba(22, 139, 255, 0.12);
+  --em-header-gradient-start: #168bff;
+  --em-header-gradient-end: #6b8cff;
+  --em-number-gradient-start: #dff0ff;
+  --em-number-gradient-end: #17bfff;
+  --em-tab-active-bg: rgba(22, 139, 255, 0.12);
+  --em-tab-inactive-bg: rgba(255, 255, 255, 0.72);
+  --em-switch-title: #2b2b2b;
+  --em-switch-title-active: #ffffff;
+}
+.light .c-mc-1785238301016-77e87ecc-body {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 16px 16px;
+  background: #edf4fb;
+}
+.light .c-mc-1785238301016-77e87ecc-title-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.light .c-mc-1785238301016-77e87ecc-title-left-icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+.light .c-mc-1785238301016-77e87ecc-title-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.light .c-mc-1785238301016-77e87ecc-title-right-icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+.light .c-mc-1785238301016-77e87ecc-title-right-text {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  line-height: 21px;
+  color: #1990ff;
+  white-space: nowrap;
+}
+.light .c-mc-1785238301016-77e87ecc-header-stats {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 18px;
+  min-width: 0;
+}
+.light .c-mc-1785238301016-77e87ecc-header-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+.light .c-mc-1785238301016-77e87ecc-header-stat-label {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  line-height: 21px;
+  color: #333333;
+  white-space: nowrap;
+}
+.light .c-mc-1785238301016-77e87ecc-header-stat-value {
+  font-family: Roboto, sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 23px;
+  color: #1990ff;
+  white-space: nowrap;
+}
+.light .c-mc-1785238301016-77e87ecc-switch-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.light .c-mc-1785238301016-77e87ecc-switch-card {
+  box-sizing: border-box;
+  width: 193px;
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  overflow: hidden;
+  border-radius: 8px;
+  cursor: pointer;
+  background-position: center center;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+}
+.light .c-mc-1785238301016-77e87ecc-switch-card.is-active {
+  box-shadow: inset 0 0 0 1px rgba(25, 144, 255, 0.16);
+}
+.light .c-mc-1785238301016-77e87ecc-switch-card-icon {
+  display: block;
+  width: 35px;
+  height: 28px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+.light .c-mc-1785238301016-77e87ecc-switch-card-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  gap: 2px;
+  flex: 1 1 auto;
+}
+.light .c-mc-1785238301016-77e87ecc-switch-card-title {
+  font-family: 'YouSheBiaoTiHei', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.2;
+  color: #333333;
+  text-align: center;
+  white-space: nowrap;
+}
+.light .c-mc-1785238301016-77e87ecc-switch-card-subtitle {
+  font-family: 'YouSheBiaoTiHei', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.2;
+  color: #333333;
+  text-align: center;
+  white-space: nowrap;
+  opacity: 0.92;
+}
+.light .c-mc-1785238301016-77e87ecc-tab-layout {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 0;
+  min-height: 317px;
+}
+.light .c-mc-1785238301016-77e87ecc-tab-rail {
+  box-sizing: border-box;
+  width: 46px;
+  flex: 0 0 46px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.light .c-mc-1785238301016-77e87ecc-tab-item {
+  box-sizing: border-box;
+  width: 46px;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 4px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.45);
+  color: #333333;
+  cursor: pointer;
+}
+.light .c-mc-1785238301016-77e87ecc-tab-item.is-active {
+  background: rgba(25, 144, 255, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(25, 144, 255, 0.15);
+}
+.light .c-mc-1785238301016-77e87ecc-tab-item-text {
+  display: block;
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  line-height: 16px;
+  color: inherit;
+  text-align: center;
+  white-space: nowrap;
+}
+.light .c-mc-1785238301016-77e87ecc-card-panel {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+.light .c-mc-1785238301016-77e87ecc-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  align-content: start;
+  min-width: 0;
+}
+.light .c-mc-1785238301016-77e87ecc-device-card {
+  box-sizing: border-box;
+  position: relative;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  overflow: hidden;
+  border-radius: 6px;
+}
+.light .c-mc-1785238301016-77e87ecc-device-card-icon {
+  display: block;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+.light .c-mc-1785238301016-77e87ecc-device-card-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  gap: 2px;
+}
+.light .c-mc-1785238301016-77e87ecc-device-card-label {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  line-height: 16px;
+  color: #333333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.light .c-mc-1785238301016-77e87ecc-device-card-value {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-family: Roboto, sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+  color: #1990ff;
+  white-space: nowrap;
+}
+.light .c-mc-1785238301016-77e87ecc-device-card-value small {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1;
+  color: #1990ff;
+}

@@ -1,0 +1,7 @@
+{
+  "degradedFiles": [
+    "package/components/EnvMonitorControls.vue"
+  ],
+  "degradedAt": 1788171687173,
+  "reason": "SFC 编译失败，已隔离降级（可二次生成）"
+}

@@ -1,0 +1,62 @@
+{
+  "completed": [
+    "1-declare.json",
+    "2-package/index.vue",
+    "3-package/components/SectionHeader.vue",
+    "4-package/components/SectionContent.vue",
+    "5-resources/styles/themes/theme-vars.less",
+    "6-resources/styles/common.less"
+  ],
+  "total": 3,
+  "updatedAt": 1788323554742,
+  "files": {
+    "declare.json": [
+      {
+        "index": 1,
+        "file": "1-declare.json",
+        "segmentType": "declare",
+        "scriptPart": ""
+      }
+    ],
+    "package/index.vue": [
+      {
+        "index": 2,
+        "file": "2-package_index.vue",
+        "segmentType": "",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/SectionHeader.vue": [
+      {
+        "index": 3,
+        "file": "3-package_components_SectionHeader.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/SectionContent.vue": [
+      {
+        "index": 4,
+        "file": "4-package_components_SectionContent.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "resources/styles/themes/theme-vars.less": [
+      {
+        "index": 5,
+        "file": "5-resources_styles_themes_theme-vars.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      }
+    ],
+    "resources/styles/common.less": [
+      {
+        "index": 6,
+        "file": "6-resources_styles_common.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      }
+    ]
+  }
+}

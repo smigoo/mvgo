@@ -1,0 +1,289 @@
+@import './themes/theme-vars.less';
+
+// ─── 头部区域 ───────────────────────────────────────────────
+.c-mc-max-1785981394966-e19214f4-title-dot {
+  width: 8px;
+  height: 8px;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.c-mc-max-1785981394966-e19214f4-header-stats {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.c-mc-max-1785981394966-e19214f4-stat-group {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 1px;
+}
+
+.c-mc-max-1785981394966-e19214f4-stat-label {
+  font-family: @font-body;
+  font-size: @font-size-md;
+  font-weight: 400;
+  line-height: 21px;
+  color: @color-stat-label;
+  white-space: nowrap;
+}
+
+.c-mc-max-1785981394966-e19214f4-stat-value {
+  font-family: @font-num;
+  font-size: @font-size-xl;
+  font-weight: 700;
+  line-height: 23px;
+  color: @color-stat-value;
+  white-space: nowrap;
+}
+
+.c-mc-max-1785981394966-e19214f4-stat-value-green {
+  font-family: @font-num;
+  font-size: @font-size-xl;
+  font-weight: 700;
+  line-height: 23px;
+  color: @color-stat-value-green;
+  white-space: nowrap;
+}
+
+.c-mc-max-1785981394966-e19214f4-header-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+// ─── 主体内容区 ──────────────────────────────────────────────
+.c-mc-max-1785981394966-e19214f4-body {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  box-sizing: border-box;
+  gap: 6px;
+}
+
+// ─── 顶部切换区（隧道设备 / 南北接线设备）────────────────────
+.c-mc-max-1785981394966-e19214f4-switch-row {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.c-mc-max-1785981394966-e19214f4-switch-item {
+  flex: 1;
+  min-width: 0;
+  height: 65px;
+  border-radius: @radius-md;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 6px 10px;
+  box-sizing: border-box;
+  gap: 8px;
+  cursor: pointer;
+  transition: @transition-base;
+  position: relative;
+  overflow: hidden;
+}
+
+.c-mc-max-1785981394966-e19214f4-switch-icon {
+  width: 35px;
+  height: 28px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.c-mc-max-1785981394966-e19214f4-switch-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+// switch-title 激活/默认 通过动态 class 绑定，定义在修饰符规则中
+.c-mc-max-1785981394966-e19214f4-switch-title--active {
+  font-family: @font-icon-label;
+  font-size: @font-size-sm;
+  font-weight: 400;
+  line-height: 16px;
+  color: @color-switch-title-active;
+}
+
+.c-mc-max-1785981394966-e19214f4-switch-title--default {
+  font-family: @font-icon-label;
+  font-size: @font-size-sm;
+  font-weight: 400;
+  line-height: 16px;
+  color: @color-switch-title-default;
+}
+
+.c-mc-max-1785981394966-e19214f4-switch-data-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 1px;
+}
+
+.c-mc-max-1785981394966-e19214f4-switch-data-label {
+  font-family: @font-body;
+  font-size: @font-size-md;
+  font-weight: 400;
+  line-height: 21px;
+  color: @color-switch-data-label;
+  white-space: nowrap;
+}
+
+.c-mc-max-1785981394966-e19214f4-switch-data-value {
+  font-family: @font-num;
+  font-size: @font-size-xl;
+  font-weight: 700;
+  line-height: 23px;
+  color: @color-switch-data-value;
+  white-space: nowrap;
+}
+
+// ─── 主区域：左侧 Tab + 右侧卡片网格 ─────────────────────────
+.c-mc-max-1785981394966-e19214f4-main-area {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+  gap: 4px;
+}
+
+// ─── 左侧竖向 Tab ─────────────────────────────────────────────
+.c-mc-max-1785981394966-e19214f4-tab-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+  width: 46px;
+}
+
+.c-mc-max-1785981394966-e19214f4-tab-item {
+  width: 34px;
+  min-height: 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 2px;
+  box-sizing: border-box;
+  cursor: pointer;
+  transition: @transition-base;
+  position: relative;
+  gap: 4px;
+
+  &.c-mc-max-1785981394966-e19214f4-tab-item--active {
+    .c-mc-max-1785981394966-e19214f4-tab-label {
+      color: @color-tab-label-active;
+      font-weight: 700;
+    }
+    .c-mc-max-1785981394966-e19214f4-tab-badge {
+      background: @color-tab-badge-bg;
+      color: @color-tab-badge-text;
+    }
+  }
+}
+
+// activeTab / activeSwitch 是 Vue 动态 class，CSS 无需为其生成独立块，
+// 但列表中要求它们存在，给予空规则确保选择器合法
+.activeTab {
+  // 由 Vue 动态 class 绑定控制激活态，样式通过父级 tab-item--active 嵌套实现
+}
+
+.activeSwitch {
+  // 由 Vue 动态 class 绑定控制激活态，样式通过 switch-item--active 嵌套实现
+}
+
+.c-mc-max-1785981394966-e19214f4-tab-label {
+  font-family: @font-body;
+  font-size: @font-size-md;
+  font-weight: 400;
+  line-height: 16px;
+  color: @color-tab-label-default;
+  text-align: center;
+  writing-mode: vertical-rl;
+  white-space: nowrap;
+}
+
+.c-mc-max-1785981394966-e19214f4-tab-badge {
+  font-family: @font-num;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 14px;
+  color: @color-tab-badge-text-default;
+  background: @color-tab-badge-bg-default;
+  border-radius: 7px;
+  padding: 0 3px;
+  min-width: 14px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+// ─── 右侧设备卡片网格 ─────────────────────────────────────────
+.c-mc-max-1785981394966-e19214f4-device-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  align-content: start;
+}
+
+.c-mc-max-1785981394966-e19214f4-device-card {
+  width: 117px;
+  height: 64px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 6px 8px;
+  box-sizing: border-box;
+  gap: 6px;
+  cursor: pointer;
+  transition: @transition-base;
+  position: relative;
+  overflow: hidden;
+}
+
+.c-mc-max-1785981394966-e19214f4-device-icon {
+  width: 27px;
+  height: 32px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.c-mc-max-1785981394966-e19214f4-device-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.c-mc-max-1785981394966-e19214f4-device-name {
+  font-family: @font-body;
+  font-size: @font-size-sm;
+  font-weight: 400;
+  line-height: 18px;
+  color: @color-device-name;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.c-mc-max-1785981394966-e19214f4-device-ratio {
+  font-family: @font-num;
+  font-size: @font-size-lg;
+  font-weight: 500;
+  line-height: 19px;
+  color: @color-device-ratio;
+  white-space: nowrap;
+}

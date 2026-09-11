@@ -1,0 +1,311 @@
+@import './themes/theme-vars.less';
+
+.c-mc-1785390759361-da0cde23-content {
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+}
+
+.c-mc-1785390759361-da0cde23-title-icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+.c-mc-1785390759361-da0cde23-header-action {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.c-mc-1785390759361-da0cde23-header-stats {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-around;
+  align-items: center;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-radius: 4px;
+}
+
+.c-mc-1785390759361-da0cde23-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.c-mc-1785390759361-da0cde23-stat-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.c-mc-1785390759361-da0cde23-stat-label {
+  font-size: 14px;
+  color: @text-color;
+  font-family: 'Source Han Sans CN', sans-serif;
+}
+
+.c-mc-1785390759361-da0cde23-stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: 'Roboto', sans-serif;
+  background: linear-gradient(180deg, #e1f0ff 0%, #00ccff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: @color-total;
+
+  &.is-primary {
+    color: @color-total;
+    background: linear-gradient(180deg, #e1f0ff 0%, #00ccff 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  &.is-secondary {
+    color: @color-success;
+    background: linear-gradient(180deg, #e1f0ff 0%, #08a3a5 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+}
+
+.c-mc-1785390759361-da0cde23-category-switch {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.c-mc-1785390759361-da0cde23-category-card {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 12px 16px;
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+  cursor: pointer;
+  transition: all 0.3s;
+  border-radius: 4px;
+  
+  &.is-active {
+    box-shadow: 0 4px 12px rgba(25, 144, 255, 0.2);
+  }
+}
+
+.c-mc-1785390759361-da0cde23-card-icon {
+  width: 35px;
+  height: 28px;
+  margin-right: 12px;
+}
+
+.c-mc-1785390759361-da0cde23-card-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.c-mc-1785390759361-da0cde23-card-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.c-mc-1785390759361-da0cde23-card-label {
+  font-size: 12px;
+  color: @text-color;
+  font-family: 'YouSheBiaoTiHei', sans-serif;
+}
+
+.c-mc-1785390759361-da0cde23-card-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: @color-total;
+  font-family: 'Roboto', sans-serif;
+}
+
+.c-mc-1785390759361-da0cde23-card-name {
+  font-size: 12px;
+  color: @text-color;
+  font-family: 'YouSheBiaoTiHei', sans-serif;
+  
+  &.is-active {
+    color: #ffffff;
+  }
+}
+
+.c-mc-1785390759361-da0cde23-card-abnormal {
+  font-size: 14px;
+  font-weight: 700;
+  color: @color-danger;
+  font-family: 'Roboto', sans-serif;
+}
+
+.c-mc-1785390759361-da0cde23-nav-and-grid {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.c-mc-1785390759361-da0cde23-sidebar-tabs {
+  display: flex;
+  flex-direction: column;
+  width: 80px;
+  gap: 8px;
+  padding: 8px;
+  background: rgba(25, 144, 255, 0.05);
+  border-radius: 4px;
+}
+
+.c-mc-1785390759361-da0cde23-tab-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 4px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.3s;
+  position: relative;
+  
+  &.is-active {
+    background: linear-gradient(135deg, #1990ff 0%, #5a7eff 100%);
+    color: #ffffff;
+    
+    .c-mc-1785390759361-da0cde23-tab-name {
+      color: #ffffff;
+    }
+    
+    .c-mc-1785390759361-da0cde23-tab-badge {
+      color: #ffffff;
+      background: rgba(255, 255, 255, 0.2);
+    }
+  }
+}
+
+.c-mc-1785390759361-da0cde23-tab-name {
+  font-size: 12px;
+  color: @text-color;
+  font-family: 'YouSheBiaoTiHei', sans-serif;
+  text-align: center;
+}
+
+.c-mc-1785390759361-da0cde23-tab-badge {
+  font-size: 10px;
+  color: @color-danger;
+  background: rgba(245, 63, 63, 0.1);
+  padding: 2px 4px;
+  border-radius: 8px;
+  margin-top: 4px;
+  font-family: 'Roboto', sans-serif;
+}
+
+.c-mc-1785390759361-da0cde23-device-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  gap: 12px;
+  overflow-y: auto;
+  padding-right: 4px;
+  
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(25, 144, 255, 0.3);
+    border-radius: 2px;
+  }
+}
+
+.c-mc-1785390759361-da0cde23-device-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 12px;
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-radius: 4px;
+  transition: all 0.3s;
+  
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  }
+}
+
+.c-mc-1785390759361-da0cde23-device-icon {
+  width: 24px;
+  height: 24px;
+  margin-right: 8px;
+}
+
+.c-mc-1785390759361-da0cde23-device-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.c-mc-1785390759361-da0cde23-device-name {
+  font-size: 12px;
+  color: @text-color;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.c-mc-1785390759361-da0cde23-device-stats {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+}
+
+.c-mc-1785390759361-da0cde23-device-abnormal {
+  font-size: 14px;
+  font-weight: 700;
+  color: @color-danger;
+  font-family: 'Roboto', sans-serif;
+  
+  &.is-zero {
+    color: @color-success;
+  }
+}
+
+.c-mc-1785390759361-da0cde23-device-total {
+  font-size: 12px;
+  color: @text-color-secondary;
+  margin-left: 4px;
+  font-family: 'Roboto', sans-serif;
+}
+
+.is-active {
+  // 通用激活状态，具体样式已在各组件内定义
+}
+
+.is-zero {
+  // 零值状态，具体样式已在 device-abnormal 内定义
+}

@@ -1,0 +1,553 @@
+// 流量监测业务样式（浅色主题默认，深色主题继承覆盖）
+// ⚠️ 所有 class 必须以 .c- 为前缀
+// ⚠️ elementStyleMap 精确值优先，禁止用主题变量覆盖
+// ⚠️ 禁止在 .c-monitor-content 上设置面板外壳样式（background/box-shadow/border-radius）
+
+// 根容器（严格禁止背景/边框/圆角/阴影，Figma 无此类填充）
+.c-mc-max-1788003319188-c32142f3-c-monitor-root {
+  width: 426px;
+  height: 807px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+
+  max-width: 100%;
+  max-height: 100vh;
+  box-sizing: border-box;}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-daily-total-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+// 分区标题栏（带图标 + 时间选择器）
+.c-mc-max-1788003319188-c32142f3-c-monitor-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 30px;
+  flex-shrink: 0;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-title-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-title-text {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  color: #333333;
+  text-shadow: 0px 5px 5px rgba(255, 255, 255, 0.8);
+  white-space: nowrap;
+}
+
+// 时间选择器（24小时下拉）
+.c-mc-max-1788003319188-c32142f3-c-monitor-time-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  background: #ffffff;
+  border: 1px solid rgba(161, 206, 255, 1);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+
+  &:hover {
+    background: rgba(237, 244, 251, 0.6);
+  }
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-selector-text {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 22px;
+  color: #333333;
+  white-space: nowrap;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-selector-arrow {
+  width: 8px;
+  height: 5px;
+  flex-shrink: 0;
+}
+
+// 流量卡片容器（背景图模式）
+.c-mc-max-1788003319188-c32142f3-c-monitor-flow-cards {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  position: relative;
+  min-height: 91px;
+  overflow: hidden;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-flow-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  position: relative;
+  z-index: 1;
+
+  &:first-child {
+    align-items: flex-start;
+  }
+
+  &:last-child {
+    align-items: flex-end;
+  }
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-card-label {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  color: #333333;
+  white-space: nowrap;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-card-value {
+  font-family: 'Roboto', sans-serif;
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 28px;
+}
+
+// 隧道数值（青色）
+.c-mc-max-1788003319188-c32142f3-c-monitor-tunnel-value {
+  color: #006fe3;
+}
+
+// 大桥数值（蓝绿色）
+.c-mc-max-1788003319188-c32142f3-c-monitor-bridge-value {
+  color: #0c9dbe;
+}
+
+// 隧道图标容器（居中绝对定位）
+.c-mc-max-1788003319188-c32142f3-c-monitor-tunnel-icon-wrapper {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 62px;
+  height: 62px;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-tunnel-icon {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-tunnel-hourly {
+  width: 100%;
+  flex: 180 1 0;
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+// 图例区域（自定义 DOM 图例）
+.c-mc-max-1788003319188-c32142f3-c-monitor-chart-legend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  height: 18px;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+
+  &:not(.active) {
+    opacity: 0.4;
+  }
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-legend-dot-blue {
+  background: #1890ff;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-legend-dot-green {
+  background: #52c41a;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-legend-label {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  color: #333333;
+  white-space: nowrap;
+}
+
+// 图表容器
+.c-mc-max-1788003319188-c32142f3-c-monitor-chart-body {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-chart-container {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-bridge-root {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-bridge-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-bottom: 4px;
+}
+
+// 大桥标题前的蓝色竖条（3x12, 圆角 6px, 渐变 #388dff）
+.c-mc-max-1788003319188-c32142f3-c-monitor-bridge-title-icon {
+  flex-shrink: 0;
+  width: 3px;
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #388dff 0%, #388dff 100%);
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-bridge-title {
+  flex-shrink: 0;
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 21px;
+  color: #333333;
+  white-space: nowrap;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-bridge-legend {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-bridge-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 18px;
+  color: #333333;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  transition: opacity 0.2s ease;
+
+  &.is-inactive {
+    opacity: 0.35;
+  }
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-bridge-dot {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-bridge-dot-beijing {
+  background: rgba(24, 144, 255, 1);
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-bridge-dot-shanghai {
+  background: rgba(82, 196, 26, 1);
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-bridge-chart-wrap {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-bridge-chart {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-vehicle-section {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-vehicle-header {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-bottom: 8px;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-vehicle-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin-right: 6px;
+  object-fit: contain;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-vehicle-title {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  color: #333333;
+  white-space: nowrap;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-vehicle-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-vehicle-card {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  overflow: hidden;
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-vehicle-chart {
+  flex: 1;
+  min-width: 0;
+  min-height: 100px;
+  height: 100%;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-vehicle-legend {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  padding-right: 8px;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-vehicle-legend-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-vehicle-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  margin-right: 6px;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-vehicle-dot-bus {
+  background: #1890ff;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-vehicle-dot-truck {
+  background: #fa8c16;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-vehicle-legend-label {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  color: rgba(51, 51, 51, 0.65);
+  margin-right: 6px;
+  white-space: nowrap;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-vehicle-legend-value {
+  font-family: 'Roboto', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  color: #333333;
+  white-space: nowrap;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-prediction {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-prediction-header {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  height: 30px;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-prediction-title {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-prediction-title-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-prediction-title-text {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  color: #333333;
+  white-space: nowrap;
+}
+
+// 地点切换 tab（江阴靖江长江隧道 / 江阴大桥）
+.c-mc-max-1788003319188-c32142f3-c-monitor-prediction-tabs {
+  display: flex;
+  align-items: center;
+  margin-left: 16px;
+  flex-shrink: 0;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-prediction-tab {
+  padding: 2px 10px;
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  color: rgba(0, 0, 0, 0.65);
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+
+  &:hover {
+    background: rgba(24, 144, 255, 0.1);
+  }
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-prediction-tab--active {
+  color: rgba(255, 255, 255, 1);
+  background: rgba(24, 144, 255, 1);
+
+  &:hover {
+    background: rgba(24, 144, 255, 1);
+  }
+}
+
+// 节假日预测链接（右侧）
+.c-mc-max-1788003319188-c32142f3-c-monitor-prediction-link {
+  margin-left: auto;
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  color: rgba(24, 144, 255, 1);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: opacity 0.3s ease;
+
+  &:hover {
+    opacity: 0.8;
+  }
+}
+
+// 图表区域
+.c-mc-max-1788003319188-c32142f3-c-monitor-prediction-chart-wrapper {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-prediction-chart {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+// 准确率标注行（底部水平排列）
+.c-mc-max-1788003319188-c32142f3-c-monitor-prediction-accuracy {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  flex-shrink: 0;
+  height: 16px;
+  padding: 0 12px;
+}
+
+.c-mc-max-1788003319188-c32142f3-c-monitor-prediction-accuracy-item {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  color: rgba(82, 196, 26, 1);
+  white-space: nowrap;
+}

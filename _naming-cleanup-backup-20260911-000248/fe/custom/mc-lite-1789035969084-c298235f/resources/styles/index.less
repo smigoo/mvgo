@@ -1,0 +1,38 @@
+// environment-monitor 组件样式
+// 使用 CSS 变量支持主题切换
+
+// M2-4：引入主题基础变量文件（圆角 / 间距 / 字号）
+@import './themes/theme-vars.less';
+
+// M4-5：引入主题变量文件（浅色 / 深色）
+@import './themes/light.less';
+@import './themes/dark.less';
+
+.mc-environment-monitor {
+  --primary-color: var(--mc-primary, #1890ff);
+  --text-color: var(--mc-text, #333333);
+  --border-color: var(--mc-border, #e8e8e8);
+  --bg-color: var(--mc-bg, #ffffff);
+
+  width: 100%;
+  height: 100%;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 16px;
+  box-sizing: border-box;
+
+  &__header {
+    // M5-7：字号改为引用主题变量，禁止硬编码
+    font-size: var(--mc-font-size-lg);
+    font-weight: 500;
+    margin-bottom: 12px;
+  }
+
+  &__content {
+    // M5-7：字号改为引用主题变量，禁止硬编码
+    font-size: var(--mc-font-size-md);
+    line-height: 1.5;
+  }
+}

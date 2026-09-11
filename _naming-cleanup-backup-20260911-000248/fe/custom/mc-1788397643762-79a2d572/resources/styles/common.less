@@ -1,0 +1,281 @@
+.common();
+
+.c-monitor-body {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  flex: 1 1 0;
+  min-height: 0;
+  box-sizing: border-box;
+  background: rgba(237, 244, 251, 1);
+  overflow: hidden;
+}
+
+.c-monitor-header-stats {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+}
+
+.c-monitor-header-stat {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.c-monitor-header-stat-label {
+  font-size: var(--fontSize, 14px);
+  font-weight: 400;
+  color: #333333;
+}
+
+.c-monitor-header-stat-value {
+  font-size: calc(var(--fontSize, 14px) * 1.4286);
+  font-weight: 700;
+  color: #1990ff;
+}
+
+.c-monitor-header-stat-value--success {
+  color: #08a3a5;
+}
+
+.c-monitor-summary-cards {
+  width: 100%;
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  flex-shrink: 0;
+  padding: 0 6px;
+}
+
+.c-monitor-summary-card {
+  width: 190px;
+  height: 65px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.c-monitor-summary-card-inner {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  flex: 1 1 0;
+  padding: 8px 12px;
+  box-sizing: border-box;
+}
+
+.c-monitor-summary-card-icon-wrap {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.c-monitor-summary-card-icon {
+  width: 35px;
+  height: 28px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.c-monitor-summary-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.c-monitor-summary-card-title {
+  font-family: YouSheBiaoTiHei, sans-serif;
+  font-size: calc(var(--fontSize, 14px) * 0.857);
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.c-monitor-summary-card-title-dark {
+  color: #333333;
+}
+
+.c-monitor-summary-card-row {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.c-monitor-summary-card-label {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: calc(var(--fontSize, 14px) * 0.857);
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.75);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.c-monitor-summary-card-label-dark {
+  color: rgba(51, 51, 51, 0.75);
+}
+
+.c-monitor-summary-card-value-total {
+  font-family: Roboto, sans-serif;
+  font-size: calc(var(--fontSize, 14px) * 1.286);
+  font-weight: 700;
+  color: rgba(255, 255, 255, 1);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.c-monitor-summary-card-value-total-dark {
+  color: rgba(51, 51, 51, 1);
+}
+
+.c-monitor-summary-card-value-error {
+  font-family: Roboto, sans-serif;
+  font-size: var(--fontSize, 14px);
+  font-weight: 700;
+  color: rgba(255, 80, 80, 1);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.c-monitor-main-content {
+  width: 100%;
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  flex: 317 1 0;
+  min-height: 0;
+}
+
+.c-monitor-vertical-tabs {
+  display: flex;
+  flex-direction: column;
+  width: 46px;
+  flex-shrink: 0;
+}
+
+.c-monitor-tab-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 4px;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.3s;
+  background: transparent;
+}
+
+.c-monitor-tab-item-active {
+  background: rgba(25, 144, 255, 0.25);
+}
+
+.c-monitor-tab-text {
+  font-size: calc(var(--fontSize, 14px) * 0.857);
+  color: rgba(255, 255, 255, 0.75);
+  line-height: 1.14;
+  writing-mode: vertical-rl;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.c-monitor-tab-item-active .c-monitor-tab-text {
+  color: rgba(255, 255, 255, 1);
+  font-weight: 700;
+}
+
+.c-monitor-tab-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 4px;
+  font-size: calc(var(--fontSize, 14px) * 0.857);
+  line-height: 14px;
+  color: #ffffff;
+  background: #f53f3f;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.c-monitor-device-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  align-content: start;
+}
+
+.c-monitor-device-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+  min-height: 64px;
+}
+
+.c-monitor-device-icon {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  margin-bottom: 4px;
+  object-fit: contain;
+}
+
+.c-monitor-device-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.c-monitor-device-label {
+  font-size: calc(var(--fontSize, 14px) * 0.857);
+  color: #333333;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.c-monitor-device-value {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+}
+
+.c-monitor-device-count {
+  font-size: calc(var(--fontSize, 14px) * 0.857);
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  font-family: 'Roboto', sans-serif;
+}
+
+.c-monitor-device-count-error {
+  color: rgba(255, 80, 80, 1);
+}
+
+.c-monitor-device-total {
+  font-size: calc(var(--fontSize, 14px) * 0.857);
+  color: rgba(255, 255, 255, 0.6);
+  font-family: 'Roboto', sans-serif;
+}
+
+/* === [自动修复] v3.5 模板驱动 fallback 规则 === */
+/* [自动修复] 模板 class .c-monitor-header-stat-value-success → 匹配元素 section-summary-cards */
+
+.c-monitor-header-stat-value-success {
+  display: flex;
+  flex-direction: row;
+}

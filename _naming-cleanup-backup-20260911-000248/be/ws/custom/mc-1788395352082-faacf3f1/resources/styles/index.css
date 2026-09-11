@@ -1,0 +1,222 @@
+.c-monitor-root {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-size: var(--fontSize, 14px);
+}
+.c-monitor-header-stats {
+  flex: 1 1 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.c-monitor-stat-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.c-monitor-stat-label {
+  font-size: calc(var(--fontSize, 14px) * 0.857);
+  color: #333333;
+  font-weight: 400;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.c-monitor-stat-value {
+  font-size: calc(var(--fontSize, 14px) * 1.429);
+  font-weight: 700;
+  line-height: 1.17;
+  white-space: nowrap;
+}
+.c-monitor-summary-cards {
+  width: 100%;
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  padding: 0 8px;
+}
+.c-monitor-summary-card {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 8px 12px;
+  overflow: hidden;
+  position: relative;
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+.c-monitor-summary-card-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.c-monitor-summary-card-icon {
+  width: 35px;
+  height: 28px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+.c-monitor-summary-card-title {
+  font-size: calc(var(--fontSize, 14px) * 0.857);
+  color: #ffffff;
+  font-weight: 400;
+  white-space: nowrap;
+}
+.c-monitor-summary-card-row {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 4px;
+}
+.c-monitor-summary-card-label {
+  font-size: calc(var(--fontSize, 14px) * 0.857);
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 400;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.c-monitor-summary-card-total {
+  font-size: calc(var(--fontSize, 14px) * 1.286);
+  color: #ffffff;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.c-monitor-summary-card-abnormal {
+  font-size: calc(var(--fontSize, 14px) * 1.143);
+  color: #e03434;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.c-monitor-main-content {
+  display: flex;
+  flex-direction: row;
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+}
+.c-monitor-tab-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0;
+  flex-shrink: 0;
+  width: 64px;
+}
+.c-monitor-tab-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  position: relative;
+  background: linear-gradient(#85baff, #bfe2ff);
+  border: 1px solid #f0f5ff;
+  transition: background 0.2s;
+}
+.c-monitor-tab-item--active {
+  background: linear-gradient(#318aff, #70bfff);
+  border: 1px solid #f0f5ff;
+}
+.c-monitor-tab-item--active .c-monitor-tab-text {
+  color: #ffffff;
+  font-weight: 700;
+}
+.c-monitor-tab-text {
+  font-size: var(--fontSize, 14px);
+  color: #3b80e7;
+  font-weight: 400;
+  white-space: nowrap;
+}
+.c-monitor-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  background: #f53f3f;
+  color: #ffffff;
+  font-size: calc(var(--fontSize, 14px) * 0.857);
+  font-weight: 500;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.c-monitor-device-grid {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 8px;
+  padding: 8px;
+  overflow-y: auto;
+}
+.c-monitor-device-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 6px;
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+  cursor: pointer;
+  flex: 0 0 calc(25% - 6px);
+  min-width: 0;
+  overflow: hidden;
+}
+.c-monitor-device-icon {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.c-monitor-device-name {
+  font-size: calc(var(--fontSize, 14px) * 0.857);
+  color: #333333;
+  font-weight: 400;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+}
+.c-monitor-device-count {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: center;
+  gap: 2px;
+}
+.c-monitor-device-count-value {
+  font-size: calc(var(--fontSize, 14px) * 1.143);
+  color: #ffffff;
+  font-weight: 500;
+  line-height: 1;
+}
+.c-monitor-device-count-value--danger {
+  color: #ffffff;
+  text-shadow: 0px 0px 0px rgba(0, 0, 0, 0.5);
+}
+.c-monitor-device-count-total {
+  font-size: calc(var(--fontSize, 14px) * 0.857);
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 400;
+  line-height: 1;
+}

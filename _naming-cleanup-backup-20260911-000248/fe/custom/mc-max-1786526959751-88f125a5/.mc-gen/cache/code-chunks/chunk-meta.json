@@ -1,0 +1,22 @@
+{
+  "completed": [
+    "1-declare.json",
+    "2-package/index.vue",
+    "3-package/index.vue",
+    "6-package/components/DeviceTrendChart.vue",
+    "5-package/components/DeviceStatusChart.vue",
+    "7-package/components/DeviceAlarmList.vue",
+    "8-resources/styles/common.less,resources/styles/themes/theme-vars.less"
+  ],
+  "total": 6,
+  "updatedAt": 1786527697724,
+  "files": {
+    "declare.json": "1-declare.json",
+    "package/index.vue": "3-package_index.vue",
+    "package/components/DeviceTrendChart.vue": "6-package_components_DeviceTrendChart.vue",
+    "package/components/DeviceStatusChart.vue": "5-package_components_DeviceStatusChart.vue",
+    "package/components/DeviceAlarmList.vue": "7-package_components_DeviceAlarmList.vue",
+    "resources/styles/common.less": "8-resources_styles_common.less",
+    "resources/styles/themes/theme-vars.less": "8-resources_styles_themes_theme-vars.less"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "completed": [
+    "1-declare.json",
+    "2-package/index.vue",
+    "3-package/index.vue",
+    "5-package/components/TopStats.vue",
+    "6-package/components/CategoryStats.vue",
+    "7-package/components/DeviceList.vue",
+    "8-resources/styles/themes/theme-vars.less",
+    "9-resources/styles/common.less"
+  ],
+  "total": 6,
+  "updatedAt": 1787572733633,
+  "files": {
+    "declare.json": "1-declare.json",
+    "package/index.vue": "3-package_index.vue",
+    "package/components/TopStats.vue": "5-package_components_TopStats.vue",
+    "package/components/CategoryStats.vue": "6-package_components_CategoryStats.vue",
+    "package/components/DeviceList.vue": "7-package_components_DeviceList.vue",
+    "resources/styles/themes/theme-vars.less": "8-resources_styles_themes_theme-vars.less",
+    "resources/styles/common.less": "9-resources_styles_common.less"
+  }
+}

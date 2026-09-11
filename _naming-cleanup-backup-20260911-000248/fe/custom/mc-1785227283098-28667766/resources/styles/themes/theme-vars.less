@@ -1,0 +1,40 @@
+.common() {
+--em-primary: #1990ff;
+  --em-primary-weak: #5a7eff;
+  --em-primary-soft: #d6effc;
+  --em-primary-border: rgba(199, 224, 255, 1);
+  --em-secondary-border: rgba(172, 196, 225, 1);
+  --em-text-primary: #333333;
+  --em-text-inverse: #ffffff;
+  --em-panel-bg-dark: #edf4fb;
+  --em-panel-shadow: 0 4px 10px rgba(74, 117, 141, 0.25);
+  --em-shadow-light: 0 5.047923088px 5.047923088px rgba(255, 255, 255, 0.8);
+  --em-font-family-sc: "Source Han Sans CN", "Noto Sans SC", sans-serif;
+  @click: inherit; // 自动添加
+}
+
+.theme-dark() {
+  .common();
+  --em-panel-bg: #edf4fb;
+  --em-title-text: #1990ff;
+  --em-subtitle-text: #333333;
+  --em-tab-bg: #6680a0;
+  --em-tab-active-bg: #1990ff;
+  --em-tab-text: #333333;
+  --em-tab-active-text: #ffffff;
+}
+
+.theme-light() {
+  .common();
+  --em-panel-bg: #ffffff;
+  --em-title-text: #1990ff;
+  --em-subtitle-text: #333333;
+  --em-tab-bg: #dbe8f6;
+  --em-tab-active-bg: #1990ff;
+  --em-tab-text: #334155;
+  --em-tab-active-text: #ffffff;
+}
+
+:root {
+  .theme-dark();
+}

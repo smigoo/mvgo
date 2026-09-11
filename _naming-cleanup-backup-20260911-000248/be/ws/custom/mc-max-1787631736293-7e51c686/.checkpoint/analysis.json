@@ -1,0 +1,190 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 78,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body.children[1]",
+        "message": "视图切换图标属于标题栏交互控件，却放在 body 与 tabs 并列，未映射 header 插槽。",
+        "suggestion": "将 view-icons 移至 header.controls 或映射 header-right 插槽。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[0].body.children[0]",
+        "message": "tabs-list 下又嵌套 children 数组，层级达到 5-6 层，超过建议 ≤3 层。",
+        "suggestion": "扁平化 tabs 结构，直接以 tab 数组表示。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "charts[0].axes",
+        "message": "Y轴单位“辆”与 CO 浓度系列不一致，疑似模板复用错误。",
+        "suggestion": "确认 Y 轴单位并修正为浓度单位。"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "layout.sections[1].body.backgroundImage.src",
+        "message": "图表区背景图引用 bg-7890.png，与 notes 中 bg-7880.png 不一致。",
+        "suggestion": "核对背景资源名称，统一为正确文件名。"
+      }
+    ],
+    "recommendations": [
+      "将视图切换控件纳入 header 插槽体系，避免与内容区混放。",
+      "精简 tabs 和 children 层级，符合 ≤3 层规范。",
+      "统一图表坐标轴单位与背景资源命名。"
+    ],
+    "summary": "布局整体划分清晰，但存在插槽归属不当、嵌套偏深、图表单位与资源命名不一致等问题，建议修正后使用。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#559eff",
+      "--colorPrimaryBg": "rgba(85, 158, 255, 0.12)",
+      "--colorSuccess": "#52c41a",
+      "--colorSuccessBg": "rgba(82, 196, 26, 0.15)",
+      "--colorDanger": "#f53f3f",
+      "--colorDangerBg": "rgba(245, 63, 63, 0.12)",
+      "--colorTextBase": "#333333",
+      "--colorTextSecondary": "#8c8c8c",
+      "--colorBg": "#EDF4FB",
+      "--fontSize": "14px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#559eff",
+      "@color-primary-bg": "rgba(85, 158, 255, 0.12)",
+      "@color-success": "#52c41a",
+      "@color-success-bg": "rgba(82, 196, 26, 0.15)",
+      "@color-danger": "#f53f3f",
+      "@color-danger-bg": "rgba(245, 63, 63, 0.12)",
+      "@color-text-base": "#333333",
+      "@color-text-secondary": "#8c8c8c",
+      "@color-bg": "#EDF4FB",
+      "@font-size-base": "14px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "min-height": "100%",
+        "background": "var(--colorBg)",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)"
+      },
+      ".monitor-header": {
+        "display": "flex",
+        "justify-content": "space-between",
+        "align-items": "center",
+        "padding": "12px 16px",
+        "border-bottom": "1px solid rgba(140, 140, 140, 0.18)"
+      },
+      ".tab-list": {
+        "display": "flex",
+        "gap": "16px"
+      },
+      ".tab-item": {
+        "padding": "8px 12px",
+        "cursor": "pointer",
+        "color": "var(--colorTextSecondary)",
+        "border-bottom": "2px solid transparent",
+        "transition": "color 0.2s ease, border-color 0.2s ease"
+      },
+      ".tab-item.is-active": {
+        "color": "var(--colorPrimary)",
+        "border-bottom-color": "var(--colorPrimary)",
+        "background": "var(--colorPrimaryBg)",
+        "font-weight": "600"
+      },
+      ".alert-line": {
+        "stroke": "var(--colorDanger)",
+        "stroke-width": "2px",
+        "stroke-dasharray": "6,4",
+        "fill": "none"
+      },
+      ".alert-annotation": {
+        "color": "var(--colorDanger)",
+        "border-left": "3px dashed var(--colorDanger)",
+        "padding-left": "8px"
+      },
+      ".area-fill": {
+        "background": "var(--colorSuccessBg)",
+        "border-top": "1px solid rgba(82, 196, 26, 0.35)"
+      },
+      ".metric-card": {
+        "padding": "12px 14px",
+        "border-radius": "6px",
+        "background": "rgba(255, 255, 255, 0.7)",
+        "box-shadow": "0 6px 16px rgba(31, 77, 125, 0.08)"
+      },
+      ".metric-value": {
+        "font-size": "20px",
+        "font-weight": "600",
+        "line-height": "1.2",
+        "color": "var(--colorTextBase)"
+      },
+      ".metric-label": {
+        "font-size": "12px",
+        "line-height": "1.5",
+        "color": "var(--colorTextSecondary)"
+      }
+    },
+    "tokenCoverage": 0.96,
+    "mappingNotes": [
+      "主题色 #559eff 映射为 --colorPrimary，用于选中Tab蓝色高亮",
+      "浅蓝灰背景 #EDF4FB 映射为 --colorBg，作为页面基础背景",
+      "绿色 #52c41a 映射为 --colorSuccess，用于绿色面积填充",
+      "红色 #f53f3f 映射为 --colorDanger，用于红色虚线预警线和红色标注",
+      "灰色 #8c8c8c 映射为 --colorTextSecondary，用于次要文字与辅助信息",
+      "补充 #333333 作为 --colorTextBase，保证浅色背景下文本可读性",
+      "核心视觉Token均已映射，新增基础文字色和圆角/阴影属于通用可读性样式"
+    ],
+    "elementStyleMap": {
+      "section-tabs-nav": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tabs-list": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "view-icons": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-11": {
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-tabs-nav",
+        "responsibility": "标签页切换区",
+        "elementCount": 8,
+        "title": "环境监测"
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "浓度趋势图表"
+      }
+    ],
+    "isForced": false,
+    "minFiles": 0,
+    "reason": "有效 sections=2 < 3 → 不强制拆分"
+  }
+}

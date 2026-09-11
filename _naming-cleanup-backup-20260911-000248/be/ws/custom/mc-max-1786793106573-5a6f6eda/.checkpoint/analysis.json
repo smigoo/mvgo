@@ -1,0 +1,226 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 82,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[0] (及 sections[2], sections[4])",
+        "message": "图表容器使用了固定宽度 `width: 380`，严重违反‘容器布局禁止固定宽度’的自适应约束，会导致组件在不同屏幕尺寸下无法正确伸缩或溢出。",
+        "suggestion": "移除 JSON 中的固定 `width` 属性。在代码生成时，图表容器应使用 `width: 100%`，外层 flex 子项设置 `min-width: 0` 以实现完全自适应。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[1] & layout.sections[2]",
+        "message": "`tunnel-flow-chart` 和 `bridge-flow-chart` 结构完全重复，且各自独立实例化 ECharts，增加了不必要的 DOM 节点和内存开销。",
+        "suggestion": "建议将这两个区块合并为一个图表区块，通过增加类似 `flow-prediction` 中的 Tab 切换控件（如‘隧道/大桥’）来切换数据，从而减少一个 ECharts 实例，提升渲染性能。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[3].body.children[0].children[1]",
+        "message": "‘车型分布’区块中 `stat-group` -> `row` -> `stat-item` -> `label/value` 嵌套层级过深（达4-5层），增加了 DOM 复杂度和维护成本。",
+        "suggestion": "建议扁平化处理，移除多余的 `row` 包装层，直接在 `stat-group` 下使用 flex 布局横向排列 `stat-item`，将嵌套深度控制在3层以内。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].header.controls[0]",
+        "message": "`time-selector` 被标记为 dropdown，根据‘Select/下拉框识别约束’，必须实现完整的下拉结构，禁止简化为简单的 toggle 切换按钮。",
+        "suggestion": "在代码生成时，必须实现完整的 `select-trigger` + `select-dropdown` 结构，支持点击展开/收起，且下拉箭头需根据展开状态旋转。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[4].header.controls[0]",
+        "message": "`location-tab` 为 tab-switch，根据‘Tab/Select 切换约束’，必须实现数据联动，禁止仅做样式（active class）切换。",
+        "suggestion": "确保在代码中使用 `watch` 监听 `activeTab` 变化，并调用 `chart.setOption` 动态更新图表数据，维护不同状态对应的数据源。"
+      }
+    ],
+    "recommendations": [
+      "严格遵守 base-panel 约束：不要生成‘流量监测’的面板标题、边框、背景和阴影，这些由 default-panel 统一处理，组件根容器禁止设置 padding/background/border-radius。",
+      "落实图表边界约束：图表容器必须显式设置 height（如 150px），并在 ECharts 配置中设置 `grid: { containLabel: true }`，防止坐标轴文字撑破容器；同时使用 ResizeObserver 监听尺寸变化。",
+      "规范标题对齐：区域标题（如‘当日总流量’、‘车型分布’）必须始终左对齐，右侧的控件（如时间选择、Tab）使用 `margin-left: auto` 推至右侧，禁止使用 `justify-content: space-between`。",
+      "正确处理瞬态元素：确保所有 ECharts 图表都配置了 `tooltip`，但绝对不要将设计稿中的 tooltip 气泡写死为常驻 DOM 元素；图例若为自定义，必须实现点击联动（dispatchAction）。",
+      "样式文件规范：所有业务样式必须写在 `common.less` 中，禁止生成以组件名命名的 less 文件，且必须在主组件的 `<style scoped>` 中通过 `@import` 引入。"
+    ],
+    "summary": "整体布局结构清晰，区域划分合理，能够准确反映‘流量监测’面板的业务逻辑和层级关系。但存在图表容器使用固定宽度违反自适应规范的严重问题，且部分区块（如两个流量图表）存在结构冗余和性能浪费，车型分布区域嵌套过深。建议在代码生成阶段重点修正宽度自适应问题，合并重复图表区块，并严格落实 Tab/Select 的数据联动、Select 下拉框完整结构以及 base-panel 的零装饰约束。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名），用于运行时主题切换与框架注入",
+      "--colorPrimary": "#1990ff",
+      "--colorAccent": "#fa8c16",
+      "--colorTextBase": "#333333",
+      "--colorBg": "#edf4fb",
+      "--fontSize": "14px",
+      "--fontSizeLarge": "28px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射，用于编译期计算与样式回退",
+      "@color-primary": "#1990ff",
+      "@color-accent": "#fa8c16",
+      "@color-text-base": "rgba(255, 255, 255, 1)",
+      "@color-bg": "#edf4fb",
+      "@font-size-base": "14px",
+      "@font-size-large": "28px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类，基于浅色科技监测风视觉规范",
+      ".monitor-container": {
+        "background-color": "#edf4fb",
+        "padding": "16px",
+        "color": "var(--colorTextBase, @color-text-base)",
+        "font-family": "PingFang SC, Microsoft YaHei, sans-serif"
+      },
+      ".section-header": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "8px",
+        "margin-bottom": "12px",
+        "position": "relative"
+      },
+      ".diamond-icon": {
+        "width": "16px",
+        "height": "16px",
+        "background-size": "contain",
+        "background-repeat": "no-repeat",
+        "background-position": "center"
+      },
+      ".circle-decoration": {
+        "position": "absolute",
+        "width": "24px",
+        "height": "24px",
+        "background-size": "contain",
+        "background-repeat": "no-repeat",
+        "opacity": "0.8"
+      },
+      ".stat-value-blue": {
+        "color": "var(--colorPrimary, @color-primary)",
+        "font-size": "var(--fontSizeLarge, @font-size-large)",
+        "font-weight": "700",
+        "line-height": "1.2",
+        "letter-spacing": "0.5px"
+      },
+      ".stat-value-orange": {
+        "color": "var(--colorAccent, @color-accent)",
+        "font-size": "24px",
+        "font-weight": "700",
+        "line-height": "1.2",
+        "letter-spacing": "0.5px"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 #1990ff 映射为 --colorPrimary，用于大号蓝色数值及主要视觉引导。",
+      "强调色 #fa8c16 映射为 --colorAccent，用于橙色货车数值等次要高亮元素。",
+      "背景色 #edf4fb 直接落地为容器背景（.monitor-container），确保浅色科技监测风的视觉基调，避免仅依赖CSS变量导致主题切换时背景丢失。",
+      "菱形标题图标和圆形装饰图标建议通过 <img :src> 或 background-image 引用实际切图资源（参考 resource-dom-mapping.json），禁止使用纯CSS渐变或边框模拟以保证还原度。",
+      "大号数值需配合 --fontSizeLarge 和 font-weight: 700 以突出监测数据的视觉层级，形成明确的数据阅读焦点。"
+    ],
+    "elementStyleMap": {
+      "daily-total": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-bridge": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "tunnel-flow-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "bridge-flow-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-distribution": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-tunnel-row-x-1-stat-item-x-0": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-tunnel-row-x-1-stat-item-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-tunnel-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "vehicle-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-16-stat-item-x-0": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-16-stat-item-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-16": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-stat-item-x-17": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-item-x-20": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-bridge-row-x-1-stat-item-x-0": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-bridge-row-x-1-stat-item-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-bridge-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "vehicle-bridge": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-25-stat-item-x-0": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-25-stat-item-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-25": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-stat-item-x-26": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-item-x-29": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "flow-prediction": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    }
+  }
+}

@@ -1,0 +1,81 @@
+// 微码组件主题变量定义
+// 本文件定义三个 mixin：.common()、.theme-dark()、.theme-light()
+// 系统自动生成的 dark.less/light.less 会在主题选择器内调用对应 mixin
+
+// ============================================================================
+// 公共变量（与主题无关的固定值）
+// ============================================================================
+.common() {
+  // 字体缩放基准令牌（根容器通过 CSS 变量 --fontSize 驱动）
+  @fontSize: 14px;
+  
+  // 字体大小
+  @font-size-base: 14px;
+  @font-size-large: 16px;
+  
+  // 圆角
+  @border-radius-tab: 8px;
+  @border-radius-badge: 50%;
+}
+
+// ============================================================================
+// 深色主题（默认主题，必须与设计稿一致）
+// ============================================================================
+.theme-dark() {
+  // 背景色
+  @color-bg-primary: #1a2a3a;
+  @color-bg-content: rgba(237, 244, 251, 1);
+  
+  // 状态色
+  @color-success: #00c853;
+  @color-error: #f53f3f;
+  @color-warning-line: #f53f3f;
+  
+  // 文字色
+  @color-text-base: rgba(255, 255, 255, 0.85);
+  @color-text-inverse: #000000;
+  
+  // 链接色
+  @color-link: #559eff;
+  
+  // 选项卡激活态
+  @color-tab-active-bg: #ffffff;
+  @color-tab-active-text: #000000;
+  
+  // 图表填充色
+  @color-chart-fill: #00c853;
+  
+  // 徽章色
+  @color-badge: #f53f3f;
+}
+
+// ============================================================================
+// 浅色主题（根据深色主题调整的亮色版本）
+// ============================================================================
+.theme-light() {
+  // 背景色（浅色主题反转逻辑）
+  @color-bg-primary: #f5f7fa;
+  @color-bg-content: #ffffff;
+  
+  // 状态色（与深色主题保持一致）
+  @color-success: #00c853;
+  @color-error: #f53f3f;
+  @color-warning-line: #f53f3f;
+  
+  // 文字色（浅色主题反转）
+  @color-text-base: rgba(0, 0, 0, 0.85);
+  @color-text-inverse: #ffffff;
+  
+  // 链接色
+  @color-link: #1890ff;
+  
+  // 选项卡激活态（浅色主题下的视觉对比）
+  @color-tab-active-bg: #1890ff;
+  @color-tab-active-text: #ffffff;
+  
+  // 图表填充色（与深色主题保持一致）
+  @color-chart-fill: #00c853;
+  
+  // 徽章色（与深色主题保持一致）
+  @color-badge: #f53f3f;
+}

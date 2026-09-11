@@ -1,0 +1,198 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 70,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "违反了“禁止生成组件面板标题和边框样式”的核心规范。`base-panel` 会自动处理组件标题，此处单独生成 `section-title` 会导致标题重复显示。",
+        "suggestion": "移除 `section-title` 整个 section，仅保留业务内容区域（如 Tab 切换和图表）。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[*].body.backgroundImage",
+        "message": "每个 section 的 body 都重复设置了相同的背景图 `bg-7890.png`，这会导致背景图在 DOM 中重复渲染，增加不必要的性能开销和代码冗余。",
+        "suggestion": "将背景图统一设置在组件根容器或 `base-panel` 内部，移除各个 section 中的 `backgroundImage` 配置。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "charts[0].tooltip",
+        "message": "图表配置中 `tooltip` 标记为“未显示”，但根据微码规范，只要存在 ECharts 图表就必须提供 `option.tooltip`，禁止省略。",
+        "suggestion": "在代码生成阶段，必须为图表配置默认的 `tooltip`（如 `trigger: 'axis'`），即使设计稿中未直接展示 tooltip 气泡。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "Figma 节点覆盖率仅为 0%，缺失 26 个节点，这可能导致布局细节（如具体尺寸、间距、对齐方式）丢失，严重影响最终 UI 还原度。",
+        "suggestion": "建议检查 Figma 文件结构或重新运行解析工具，确保布局尺寸和间距的准确性；或在代码生成时根据设计稿手动补充缺失的样式。"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "charts[0].axes",
+        "message": "Y轴单位识别为“辆”，虽然遵循了“不臆造”原则，但在环境监测业务中 CO 浓度单位通常为 ppm 或 mg/m³，“辆”明显不符合业务逻辑。",
+        "suggestion": "建议与业务方或设计师确认设计稿是否存在笔误。若确认为笔误，请在代码中修正为正确的 CO 浓度单位。"
+      }
+    ],
+    "recommendations": [
+      "移除冗余的 `section-title` 区块，严格遵循 `base-panel` 统一处理面板标题的规范。",
+      "优化背景图加载策略，将全局背景图提取至根容器，避免子区块重复声明。",
+      "在代码生成时，务必为 ECharts 图表配置默认的 `tooltip` 交互，提升数据可读性。",
+      "针对 Figma 覆盖率过低的问题，建议重新解析 Figma 文件以获取精确的布局尺寸和间距数据。",
+      "核实图表 Y 轴单位“辆”是否为设计稿笔误，确保业务数据的严谨性。",
+      "确保 Tab 切换组件在代码实现时与图表数据联动，并遵循纯 Less 变量主题模式。"
+    ],
+    "summary": "布局结构整体划分清晰，采用了垂直堆叠的方式，符合常规的面板设计逻辑。但存在违反微码核心规范的问题（重复生成面板标题），且背景图重复设置影响性能。此外，Figma 解析覆盖率极低（0%），可能丢失关键的尺寸和间距信息。建议移除冗余的标题区块，优化背景图设置，并在代码生成时严格遵循图表 tooltip、数据联动和主题变量等规范。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#0099FF",
+      "--colorBgBase": "#EDF4FB",
+      "--colorSuccess": "#52C41A",
+      "--colorError": "#F53F3F",
+      "--colorWhite": "#FFFFFF",
+      "--colorTextBase": "#333333",
+      "--colorTextSecondary": "#666666",
+      "--colorGridLine": "#E8E8E8",
+      "--fontSize": "14px",
+      "--borderRadius": "4px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#0099FF",
+      "@color-bg-base": "#EDF4FB",
+      "@color-success": "#52C41A",
+      "@color-error": "#F53F3F",
+      "@color-white": "#FFFFFF",
+      "@color-text-base": "#333333",
+      "@color-text-secondary": "#666666",
+      "@color-grid-line": "#E8E8E8",
+      "@font-size-base": "14px",
+      "@border-radius-base": "4px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "width": "100%",
+        "height": "100%",
+        "background-color": "#EDF4FB",
+        "padding": "16px",
+        "box-sizing": "border-box",
+        "font-family": "PingFang SC, Microsoft YaHei, sans-serif"
+      },
+      ".tab-item": {
+        "padding": "8px 20px",
+        "color": "#666666",
+        "cursor": "pointer",
+        "font-size": "14px",
+        "transition": "all 0.3s"
+      },
+      ".tab-item-active": {
+        "color": "#FFFFFF",
+        "background-color": "#0099FF",
+        "clip-path": "polygon(0 0, 100% 0, 85% 100%, 0 100%)"
+      },
+      ".chart-card": {
+        "background-color": "#FFFFFF",
+        "border-radius": "4px",
+        "padding": "16px",
+        "box-shadow": "0 2px 8px rgba(0, 0, 0, 0.04)"
+      },
+      ".chart-grid-line": {
+        "stroke": "#E8E8E8",
+        "stroke-width": "1"
+      },
+      ".trend-area-success": {
+        "fill": "rgba(82, 196, 26, 0.15)",
+        "stroke": "#52C41A",
+        "stroke-width": "2"
+      },
+      ".warning-line-error": {
+        "stroke": "#F53F3F",
+        "stroke-width": "2",
+        "stroke-dasharray": "6 4"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 #0099FF 映射为 --colorPrimary，用于Tab选中项及核心交互元素",
+      "背景色 #EDF4FB 直接落地为容器背景，同时映射为 --colorBgBase 供其他组件复用",
+      "绿色 #52C41A 和红色 #F53F3F 分别映射为 --colorSuccess 和 --colorError，用于面积图和预警虚线",
+      "Tab选中项的蓝色箭头背景通过 clip-path 属性实现箭头形状",
+      "图表网格线使用浅灰色 #E8E8E8，避免喧宾夺主，突出绿色面积图和红色预警线"
+    ],
+    "elementStyleMap": {
+      "section-title": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "section-controls": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tabs-list": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "view-icons": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-5": {
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-15": {
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-title",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 1,
+        "title": "环境监测"
+      },
+      {
+        "id": "section-controls",
+        "responsibility": "标签页切换区",
+        "elementCount": 8,
+        "title": "监测项切换与视图控制"
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "浓度趋势图"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 → 强制拆分"
+  }
+}

@@ -1,0 +1,79 @@
+// 微码组件主题变量定义
+// 结构：.common() 定义公共变量，.theme-dark()/.theme-light() 定义颜色变量
+// ⚠️ 只允许 Less 变量（@xxx），禁止 CSS 变量 var(--xxx）
+
+.common() {
+  // 字体缩放基准令牌（根容器通过 CSS 变量 --fontSize 驱动，默认 14px）
+  @fontSize: 14px;
+  
+  // 字号衍生变量（基于 --fontSize CSS 变量动态计算）
+  @font-size-base: var(--fontSize);
+  @font-size-value-lg: var(--fontSizeLg);
+  
+  // 字重
+  @font-weight-strong: var(--fontWeightStrong);
+  
+  // 圆角
+  @border-radius-base: var(--borderRadius);
+  @border-radius-lg: var(--borderRadiusLg);
+}
+
+.theme-light() {
+  // 品牌色
+  @color-primary: rgba(24, 144, 255, 1);
+  @color-success: rgba(82, 196, 26, 1);
+  @color-error: rgba(255, 77, 79, 1);
+  
+  // 文字颜色
+  @color-text-primary: rgba(0, 0, 0, 0.85);
+  @color-text-secondary: rgba(0, 0, 0, 0.45);
+  
+  // 背景色
+  @color-bg: #EDF4FB;
+  @color-bg-panel: #ffffff;
+  @color-bg-chart: #f0f4f8;
+  
+  // 主题色扩展
+  @color-primary-bg: rgba(24, 144, 255, 0.08);
+  @color-primary-active: rgba(24, 144, 255, 0.15);
+  
+  // 边框装饰色
+  @color-border-decor: rgba(24, 144, 255, 0.6);
+  
+  // 图表渐变填充
+  @color-chart-fill-start: rgba(82, 196, 26, 0.4);
+  @color-chart-fill-end: rgba(82, 196, 26, 0);
+  
+  // 告警线颜色
+  @color-alert-line: rgba(255, 77, 79, 1);
+}
+
+.theme-dark() {
+  // 品牌色（深色模式保持一致）
+  @color-primary: rgba(24, 144, 255, 1);
+  @color-success: rgba(82, 196, 26, 1);
+  @color-error: rgba(255, 77, 79, 1);
+  
+  // 文字颜色（深色面板禁止黑色系，使用白色系）
+  @color-text-primary: rgba(255, 255, 255, 0.85);
+  @color-text-secondary: rgba(255, 255, 255, 0.45);
+  
+  // 背景色
+  @color-bg: #1a1d23;
+  @color-bg-panel: #252932;
+  @color-bg-chart: #1f2329;
+  
+  // 主题色扩展
+  @color-primary-bg: rgba(24, 144, 255, 0.15);
+  @color-primary-active: rgba(24, 144, 255, 0.25);
+  
+  // 边框装饰色
+  @color-border-decor: rgba(24, 144, 255, 0.7);
+  
+  // 图表渐变填充
+  @color-chart-fill-start: rgba(82, 196, 26, 0.5);
+  @color-chart-fill-end: rgba(82, 196, 26, 0);
+  
+  // 告警线颜色
+  @color-alert-line: rgba(255, 77, 79, 1);
+}

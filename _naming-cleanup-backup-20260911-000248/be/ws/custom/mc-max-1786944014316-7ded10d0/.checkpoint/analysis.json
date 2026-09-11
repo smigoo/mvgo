@@ -1,0 +1,161 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 72,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0].header.title",
+        "message": "违反了“禁止生成组件面板标题”规范。组件标题“环境监测”应由 base-panel 的 componentName 自动渲染，禁止在组件内部重复生成标题。",
+        "suggestion": "移除 section-header 中的 title 字段，仅保留右侧的视图切换图标控件。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[0]",
+        "message": "违反了“容器布局禁止固定宽度”规范。图表容器 chart-area 使用了固定宽度 width: 380，无法自适应容器宽度。",
+        "suggestion": "将 chart-area 的 width 修改为 100%，并设置明确的 height（如 110px），确保图表容器能够自适应父级宽度。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].header.controls",
+        "message": "图标资源识别重复。view-chart 和 view-list 使用了相同的图片资源 g-7883.png，会导致两个视图切换图标显示相同，无法区分。",
+        "suggestion": "检查并修正 view-chart 和 view-list 的图标资源路径，确保它们分别指向正确的图表和列表图标。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[*].body.backgroundImage",
+        "message": "背景图重复定义。三个 section 的 body 中均引用了相同的背景图 bg-7890.png，会导致 DOM 中重复渲染背景，增加不必要的性能开销。",
+        "suggestion": "将 bg-7890.png 背景图配置提取到组件的最外层根容器中，移除各个 section 内部的重复背景图配置。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[1]",
+        "message": "图例节点 legend-co 作为独立子节点存在，在代码生成时需确保实现与 ECharts 的点击联动，禁止使用 ECharts 内置 legend 替代。",
+        "suggestion": "在代码生成阶段，为自定义图例实现点击事件，调用 chart.dispatchAction({ type: 'legendToggleSelect' }) 与图表联动。"
+      }
+    ],
+    "recommendations": [
+      "移除 section-header 中的 title 字段，将该 section 重命名为“视图切换栏”或直接作为顶部操作区，避免与 base-panel 标题冲突。",
+      "将图表容器 chart-area 的 width 属性修改为 100%，保留固定高度，并在 ECharts 配置中设置 grid.containLabel: true 防止坐标轴文字溢出。",
+      "重新核对 Figma 设计稿中的图标资源，确保图表视图和列表视图使用不同的图标文件。",
+      "统一背景图管理，将公共背景图提升至根节点，子节点仅保留必要的局部背景或保持透明。",
+      "在代码生成时，务必为 ECharts 配置 tooltip，并为 Tab 切换实现完整的数据联动逻辑（watch activeTab 更新图表数据）。"
+    ],
+    "summary": "布局整体区域划分清晰，父子关系基本正确，但在微码核心规范遵守上存在明显缺陷。主要问题包括违规生成了组件面板标题、图表容器使用了固定宽度导致无法自适应，以及图标资源识别重复和背景图冗余。建议修正上述 Error 级别问题，并优化背景图和图标资源的配置，以确保生成的代码符合微码规范且具备良好的自适应性和性能。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#559eff",
+      "--colorBg": "#edf4fb",
+      "--colorTextBase": "#333333",
+      "--colorSuccess": "#52c41a",
+      "--colorDanger": "#f53f3f",
+      "--fontSize": "14px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#559eff",
+      "@color-bg": "#edf4fb",
+      "@color-text-base": "#333333",
+      "@color-success": "#52c41a",
+      "@color-danger": "#f53f3f",
+      "@font-size-base": "14px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "width": "100%",
+        "height": "100%",
+        "background-color": "var(--colorBg, #edf4fb)",
+        "color": "var(--colorTextBase, #333333)",
+        "font-size": "var(--fontSize, 14px)"
+      },
+      ".tab-item": {
+        "padding": "8px 16px",
+        "cursor": "pointer",
+        "color": "var(--colorTextBase, #333333)",
+        "transition": "all 0.3s ease"
+      },
+      ".tab-item.active": {
+        "background-color": "var(--colorPrimary, #559eff)",
+        "color": "#ffffff",
+        "border-radius": "4px"
+      },
+      ".chart-gradient-fill": {
+        "fill": "var(--colorSuccess, #52c41a)",
+        "opacity": "0.2"
+      },
+      ".warning-line": {
+        "stroke": "var(--colorDanger, #f53f3f)",
+        "stroke-width": "2px",
+        "stroke-dasharray": "4 4"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 #559eff 映射为 --colorPrimary，用于Tab选中项蓝色背景块等强调元素",
+      "背景色 #edf4fb 映射为 --colorBg，作为组件整体浅灰蓝底色",
+      "文本色 #333333 映射为 --colorTextBase，适配浅色科技监测风主题",
+      "绿色 #52c41a 映射为 --colorSuccess，用于图表绿色渐变填充",
+      "红色 #f53f3f 映射为 --colorDanger，用于红色预警线(30)等危险/预警提示",
+      "容器背景应优先直接落地为 Figma 字面量值，避免关键可见背景只依赖 CSS 变量"
+    ],
+    "elementStyleMap": {
+      "section-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "section-tabs": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-6": {
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-12": {
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-tabs",
+        "responsibility": "标签页切换区",
+        "elementCount": 4,
+        "title": "监测指标Tab栏"
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 3,
+        "title": "浓度趋势图"
+      }
+    ],
+    "isForced": false,
+    "minFiles": 0,
+    "reason": "有效 sections=2 < 3 → 不强制拆分"
+  }
+}

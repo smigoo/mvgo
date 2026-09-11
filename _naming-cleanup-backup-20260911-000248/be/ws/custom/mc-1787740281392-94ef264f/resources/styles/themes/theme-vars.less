@@ -1,0 +1,101 @@
+// ----------------------------------------------------------
+// 微码组件主题变量
+//
+// 本文件仅定义主题变量 mixin，不产出任何 CSS 规则。
+// dark.less / light.less 会先调用 .common() 与对应主题 mixin，
+// 再导入 common.less 使用本文件中的 Less 变量。
+//
+// 设计稿颜色事实：
+//   el-el-x-2 / el-el-x-7 → background-image: url(../resources/images/bg-8788.png)
+//   该背景图属于组件静态资源，不属于主题变量，由组件样式直接引用。
+// ----------------------------------------------------------
+
+.common() {
+  // 字体
+  @font-family-base: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
+    Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  @font-size-xs: 12px;
+  @font-size-sm: 13px;
+  @font-size-base: 14px;
+  @font-size-lg: 16px;
+  @font-size-xl: 18px;
+
+  // 圆角
+  @border-radius-sm: 2px;
+  @border-radius-base: 4px;
+  @border-radius-lg: 6px;
+
+  // 间距
+  @spacing-xs: 4px;
+  @spacing-sm: 8px;
+  @spacing-md: 16px;
+  @spacing-lg: 24px;
+  @spacing-xl: 32px;
+
+  // 动效
+  @transition-duration-base: 0.2s;
+  @transition-duration-slow: 0.4s;
+  @ease-base-out: cubic-bezier(0.7, 0.3, 0.1, 1);
+}
+
+.theme-light() {
+  // ===== Light 主题（面板默认主题，对应设计稿） =====
+
+  // 主色/功能色
+  @primary-color: #1677ff;
+  @success-color: #52c41a;
+  @warning-color: #faad14;
+  @error-color: #ff4d4f;
+  @info-color: #1677ff;
+
+  // 背景色（根容器请勿直接使用，仅用于组件局部容器）
+  @bg-color: #ffffff;
+  @bg-color-container: #f5f5f5;
+  @bg-color-elevated: #ffffff;
+
+  // 文字色
+  @text-color: rgba(0, 0, 0, 0.88);
+  @text-color-secondary: rgba(0, 0, 0, 0.65);
+  @text-color-tertiary: rgba(0, 0, 0, 0.45);
+  @text-color-disabled: rgba(0, 0, 0, 0.25);
+  @text-color-inverse: #ffffff;
+
+  // 边框色
+  @border-color: #d9d9d9;
+  @border-color-split: #f0f0f0;
+
+  // 阴影色
+  @shadow-color: rgba(0, 0, 0, 0.15);
+  @shadow-color-secondary: rgba(0, 0, 0, 0.06);
+}
+
+.theme-dark() {
+  // ===== Dark 主题 =====
+
+  // 主色/功能色
+  @primary-color: #1668dc;
+  @success-color: #49aa19;
+  @warning-color: #d89614;
+  @error-color: #dc4446;
+  @info-color: #1668dc;
+
+  // 背景色（根容器请勿直接使用，仅用于组件局部容器）
+  @bg-color: #141414;
+  @bg-color-container: #000000;
+  @bg-color-elevated: #1f1f1f;
+
+  // 文字色（深色面板禁止使用黑色系文字）
+  @text-color: rgba(255, 255, 255, 0.85);
+  @text-color-secondary: rgba(255, 255, 255, 0.65);
+  @text-color-tertiary: rgba(255, 255, 255, 0.45);
+  @text-color-disabled: rgba(255, 255, 255, 0.25);
+  @text-color-inverse: #ffffff;
+
+  // 边框色
+  @border-color: #424242;
+  @border-color-split: #303030;
+
+  // 阴影色
+  @shadow-color: rgba(0, 0, 0, 0.45);
+  @shadow-color-secondary: rgba(0, 0, 0, 0.2);
+}

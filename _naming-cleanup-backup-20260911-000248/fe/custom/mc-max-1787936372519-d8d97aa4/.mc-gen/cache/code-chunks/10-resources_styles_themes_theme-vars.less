@@ -1,0 +1,164 @@
+// 主题变量定义文件
+// 说明：
+// 1. 定义三个 mixin：.common()、.theme-dark()、.theme-light()
+// 2. 颜色变量定义在 mixin 内部，根级禁止调用 mixin
+// 3. 面板默认主题为 light，.theme-light() 中的颜色即组件默认展示色
+// 4. 只使用 Less 变量（@xxx），禁止 CSS 变量（var(--xxx)）
+// 5. 所有颜色精确取自 Figma 调色板
+
+// ========================================
+// 通用主题变量（两种主题共用）
+// ========================================
+.common() {
+  // 主色调
+  @primary-color: #1990ff;
+  @primary-hover: #559eff;
+  @primary-active: #006fe3;
+  
+  // 链接色
+  @link-color: #1252fa;
+  @link-hover: #388dff;
+  
+  // 成功色
+  @success-color: #00cccc;
+  @success-light: rgba(0, 204, 204, 0.3);
+  
+  // 警告色
+  @warning-color: #ffa22f;
+  
+  // 危险色
+  @danger-color: #ff6a00;
+  
+  // 信息色
+  @info-color: #2ba0ff;
+  @info-light: #57caff;
+  
+  // 品牌色系
+  @brand-blue: #3385ff;
+  @brand-blue-light: rgba(51, 133, 255, 1);
+  @brand-blue-lighter: rgba(199, 224, 255, 1);
+  
+  // 辅助色
+  @accent-blue: #5a7eff;
+  @accent-cyan: #0c9dbe;
+  @accent-sky: #5bbbef;
+  @accent-ocean: #1399ff;
+  
+  // 尺寸变量
+  @border-radius-base: 4px;
+  @border-radius-lg: 8px;
+  @border-radius-sm: 2px;
+  
+  // 间距
+  @spacing-xs: 4px;
+  @spacing-sm: 8px;
+  @spacing-md: 16px;
+  @spacing-lg: 24px;
+  @spacing-xl: 32px;
+  
+  // 字体
+  @font-size-base: 14px;
+  @font-size-sm: 12px;
+  @font-size-lg: 16px;
+  @font-size-xl: 18px;
+  
+  @line-height-base: 1.5;
+  
+  // 层级
+  @z-index-base: 1;
+  @z-index-dropdown: 1050;
+  @z-index-modal: 1060;
+  @z-index-tooltip: 1070;
+}
+
+// ========================================
+// 深色主题变量
+// ========================================
+.theme-dark() {
+  // 背景色系（深色面板）
+  @bg-color: #1a2332;
+  @bg-color-secondary: #56597c;
+  @bg-color-tertiary: #6680a0;
+  @bg-hover: rgba(74, 117, 141, 0.25);
+  
+  // 文字色系（深色面板禁止使用黑色系）
+  @text-color: #ffffff;
+  @text-color-secondary: rgba(255, 255, 255, 0.8);
+  @text-color-disabled: rgba(172, 196, 225, 1);
+  
+  // 边框色
+  @border-color: rgba(172, 196, 225, 1);
+  @border-color-light: rgba(74, 117, 141, 0.25);
+  
+  // 分割线
+  @divider-color: rgba(172, 196, 225, 1);
+  
+  // 遮罩
+  @mask-bg: rgba(0, 0, 0, 0.5);
+  
+  // 浅色背景（用于卡片、面板等）
+  @card-bg: #56597c;
+  @panel-bg: #6680a0;
+  
+  // 输入框背景
+  @input-bg: rgba(74, 117, 141, 0.25);
+  @input-border: rgba(172, 196, 225, 1);
+  
+  // 表格背景
+  @table-header-bg: rgba(74, 117, 141, 0.25);
+  @table-row-hover: rgba(74, 117, 141, 0.25);
+  
+  // 下拉框背景
+  @dropdown-bg: #56597c;
+  
+  // 按钮
+  @btn-default-bg: transparent;
+  @btn-default-border: rgba(172, 196, 225, 1);
+  @btn-default-color: #ffffff;
+}
+
+// ========================================
+// 浅色主题变量（默认主题）
+// ========================================
+.theme-light() {
+  // 背景色系（浅色面板）
+  @bg-color: #ffffff;
+  @bg-color-secondary: #edf4fb;
+  @bg-color-tertiary: #d6effc;
+  @bg-hover: rgba(199, 224, 255, 1);
+  
+  // 文字色系
+  @text-color: #333333;
+  @text-color-secondary: #56597c;
+  @text-color-disabled: #6680a0;
+  
+  // 边框色
+  @border-color: #6680a0;
+  @border-color-light: rgba(172, 196, 225, 1);
+  
+  // 分割线
+  @divider-color: rgba(172, 196, 225, 1);
+  
+  // 遮罩
+  @mask-bg: rgba(0, 0, 0, 0.5);
+  
+  // 浅色背景（用于卡片、面板等）
+  @card-bg: #edf4fb;
+  @panel-bg: #d6effc;
+  
+  // 输入框背景
+  @input-bg: #ffffff;
+  @input-border: #6680a0;
+  
+  // 表格背景
+  @table-header-bg: #edf4fb;
+  @table-row-hover: rgba(199, 224, 255, 1);
+  
+  // 下拉框背景
+  @dropdown-bg: #ffffff;
+  
+  // 按钮
+  @btn-default-bg: transparent;
+  @btn-default-border: #6680a0;
+  @btn-default-color: #333333;
+}

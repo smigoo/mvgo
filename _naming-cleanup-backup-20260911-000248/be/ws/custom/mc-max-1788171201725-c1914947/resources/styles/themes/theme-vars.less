@@ -1,0 +1,99 @@
+// 主题变量定义文件
+// 本文件定义三个 mixin：.common()、.theme-dark()、.theme-light()
+// 系统会自动生成 dark.less 和 light.less 在主题选择器内调用这些 mixin
+
+// 公共变量（所有主题共享）
+.common() {
+  // 字体缩放基准令牌（微码组件必须定义）
+  @fontSize: 14px;
+  
+  // 通用尺寸变量
+  @border-radius-base: 4px;
+  @border-radius-sm: 2px;
+  @border-radius-lg: 8px;
+  
+  // 通用间距
+  @spacing-xs: 4px;
+  @spacing-sm: 8px;
+  @spacing-md: 16px;
+  @spacing-lg: 24px;
+  @spacing-xl: 32px;
+}
+
+// 深色主题
+.theme-dark() {
+  // 背景色
+  @bg-color: #1a2332;
+  @bg-color-secondary: #253142;
+  @bg-color-tertiary: #2d3a4f;
+  
+  // 文字颜色（深色主题禁止使用黑色系）
+  @text-color-primary: #ffffff;
+  @text-color-secondary: rgba(255, 255, 255, 0.85);
+  @text-color-tertiary: rgba(255, 255, 255, 0.65);
+  @text-color-quaternary: rgba(255, 255, 255, 0.45);
+  
+  // 边框颜色
+  @border-color: rgba(255, 255, 255, 0.15);
+  @border-color-light: rgba(255, 255, 255, 0.08);
+  
+  // 品牌色
+  @primary-color: #1890ff;
+  @success-color: #52c41a;
+  @warning-color: #faad14;
+  @error-color: #ff4d4f;
+  @info-color: #1890ff;
+  
+  // 交互状态
+  @hover-bg: rgba(255, 255, 255, 0.08);
+  @active-bg: rgba(255, 255, 255, 0.12);
+  @disabled-bg: rgba(255, 255, 255, 0.04);
+  @disabled-color: rgba(255, 255, 255, 0.25);
+  
+  // 阴影
+  @shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.45);
+  @shadow-md: 0 4px 16px rgba(0, 0, 0, 0.45);
+  @shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+// 浅色主题（默认主题，必须与设计稿一致）
+.theme-light() {
+  // 背景色
+  @bg-color: #ffffff;
+  @bg-color-secondary: #f5f5f5;
+  @bg-color-tertiary: #fafafa;
+  
+  // 文字颜色
+  @text-color-primary: #000000;
+  @text-color-secondary: rgba(0, 0, 0, 0.85);
+  @text-color-tertiary: rgba(0, 0, 0, 0.65);
+  @text-color-quaternary: rgba(0, 0, 0, 0.45);
+  
+  // 边框颜色
+  @border-color: #d9d9d9;
+  @border-color-light: #f0f0f0;
+  
+  // 品牌色
+  @primary-color: #1890ff;
+  @success-color: #52c41a;
+  @warning-color: #faad14;
+  @error-color: #ff4d4f;
+  @info-color: #1890ff;
+  
+  // 交互状态
+  @hover-bg: rgba(0, 0, 0, 0.04);
+  @active-bg: rgba(0, 0, 0, 0.08);
+  @disabled-bg: #f5f5f5;
+  @disabled-color: rgba(0, 0, 0, 0.25);
+  
+  // 阴影
+  @shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
+  @shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08);
+  @shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+// 自动添加：将 .common() 中的 Less 变量暴露到全局作用域
+
+:root {
+  .common();
+}

@@ -1,0 +1,162 @@
+// 环境监测组件业务样式
+// 所有 class 以 .c- 为前缀，样式值精确匹配 Figma 真值表
+
+.c-mc-max-1787631736293-7e51c686-c-env-monitor-root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  height: 100%;
+}
+
+// 标题装饰图标
+.c-mc-max-1787631736293-7e51c686-c-env-monitor-title-deco {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+// ========== Tabs 区域 ==========
+.c-mc-max-1787631736293-7e51c686-c-env-monitor-tabs-section {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.c-mc-max-1787631736293-7e51c686-c-env-monitor-tabs-list {
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+  align-items: center;
+  flex: 1;
+}
+
+// Tab 项：默认状态（浅蓝渐变背景，白色边框）
+.c-mc-max-1787631736293-7e51c686-c-env-monitor-tab-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 16px;
+  background: linear-gradient(#b5deff, #d1ecff);
+  border: 1px solid #ffffff;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s ease;
+}
+
+// Tab 项：激活状态（深蓝渐变背景，白色边框）
+.c-mc-max-1787631736293-7e51c686-c-env-monitor-tab-item--active {
+  background: linear-gradient(#1099b1, #038fff);
+  border: 1px solid #ffffff;
+}
+
+// Tab 标签文字
+.c-mc-max-1787631736293-7e51c686-c-env-monitor-tab-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #2c9bea;
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+// 激活状态的 Tab 标签
+.c-env-monitor-tab-item--active .c-mc-max-1787631736293-7e51c686-c-env-monitor-tab-label {
+  color: #ffffff;
+  text-shadow: 0px 0.6px 0px #006fe3;
+}
+
+// ========== 视图切换图标区域 ==========
+.c-mc-max-1787631736293-7e51c686-c-env-monitor-view-icons {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  position: relative;
+  margin-left: 12px;
+}
+
+.c-mc-max-1787631736293-7e51c686-c-env-monitor-view-icon {
+  width: 24px;
+  height: 24px;
+  display: block;
+  cursor: pointer;
+  background-image: url('../resources/images/tabs-icon-43.png');
+  background-size: 104px 48px;
+}
+
+.c-mc-max-1787631736293-7e51c686-c-env-monitor-view-icon.chart-icon {
+  background-position: 0 0;
+}
+
+.c-mc-max-1787631736293-7e51c686-c-env-monitor-view-icon.list-icon {
+  background-position: -52px 0;
+}
+
+// 徽章：红色圆形，白色数字
+.c-mc-max-1787631736293-7e51c686-c-env-monitor-view-badge {
+  position: absolute;
+  top: -6px;
+  right: -8px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  background: #f53f3f;
+  border-radius: 29px;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  text-align: center;
+  pointer-events: none;
+}
+
+// ========== 图表区域 ==========
+.c-mc-max-1787631736293-7e51c686-c-env-monitor-chart-section {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  width: 100%;
+  padding: 12px 16px 16px;
+  background-image: url(../resources/images/bg-7890.png);
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+  box-sizing: border-box;
+}
+
+// 自定义图例（DOM 图例）
+.c-mc-max-1787631736293-7e51c686-c-env-monitor-chart-legend {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  margin-bottom: 4px;
+}
+
+// 图例颜色标记（绿色小方块）
+.c-mc-max-1787631736293-7e51c686-c-env-monitor-legend-marker {
+  width: 8px;
+  height: 8px;
+  background: #0fcd7d;
+  border-radius: 1.6px;
+  flex-shrink: 0;
+}
+
+// 图例文字
+.c-mc-max-1787631736293-7e51c686-c-env-monitor-legend-text {
+  color: #333333;
+  font-size: 9.6px;
+  font-weight: 400;
+  line-height: 14px;
+}
+
+// ECharts 容器
+.c-mc-max-1787631736293-7e51c686-c-env-monitor-chart-container {
+  width: 100%;
+  height: 240px;
+  flex: 1;
+  min-height: 200px;
+}

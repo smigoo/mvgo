@@ -1,0 +1,61 @@
+// 主题变量定义文件
+// 结构：三个 mixin（.common()、.theme-dark()、.theme-light()）
+// 根级禁止调用 mixin，由 dark.less/light.less 在主题选择器内调用
+
+// 公共变量（非颜色类）
+.common() {
+  // 字体缩放基准令牌（根容器通过 CSS 变量 --fontSize 驱动）
+  @fontSize: 14px;
+  
+  // 字体大小
+  @font-size-base: 14px;
+  @font-size-title: 16px;
+  @font-size-large: 18px;
+  
+  // 圆角
+  @border-radius-base: 4px;
+  
+  // 阴影
+  @shadow-card: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+// 暗色主题
+.theme-dark() {
+  // 主色调
+  @color-primary: #1890ff;
+  @color-secondary: #52c41a;
+  @color-success: #52c41a;
+  
+  // 文字颜色（深色面板禁止使用黑色系）
+  @color-text-base: #ffffff;
+  @color-text-secondary: rgba(255, 255, 255, 0.65);
+  
+  // 背景颜色
+  @color-bg: #141414;
+  @color-card-bg: #1f1f1f;
+  
+  // 发光效果
+  @glow-primary: 0 0 8px rgba(24, 144, 255, 0.6);
+}
+
+// 亮色主题（默认主题，与设计稿一致）
+.theme-light() {
+  // 主色调
+  @color-primary: #1890ff;
+  @color-secondary: #52c41a;
+  @color-success: #52c41a;
+  
+  // 文字颜色
+  @color-text-base: #000000;
+  @color-text-secondary: rgba(0, 0, 0, 0.65);
+  
+  // 背景颜色
+  @color-bg: #f0f2f5;
+  @color-card-bg: #ffffff;
+  
+  // 发光效果
+  @glow-primary: 0 0 8px rgba(24, 144, 255, 0.3);
+}
+// 写盘门禁自动补全缺失变量
+@fontSize: 0px;
+@fontSize: 0px;

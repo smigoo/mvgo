@@ -1,0 +1,59 @@
+/* [Style Refine] Theme variables sourced from Figma color data */
+
+.common() {
+  --em-component-id: mc-1784680576076-8317470b;
+  
+  --em-icon-size-sm: 17px;
+  --em-icon-size-md: 40px;
+  --em-font-size-xs: 12px;
+  --em-font-size-sm: 14px;
+  --em-font-size-lg: 28px;
+  --em-spacing-sm: 8px;
+  --em-spacing-md: 16px;
+  --em-spacing-lg: 20px;
+}
+
+.theme-dark() {
+  /* [Style Refine] bg node fills[0].color rgba(5,49,51,1) → rgb(5,49,51) → #053133 */
+  --em-bg-primary: rgb(5, 49, 51);
+  
+  /* [Style Refine] bg node strokes[0].color rgba(8,99,99,1) → rgb(8,99,99) → #086363 */
+  --em-border-primary: rgb(8, 99, 99);
+  
+  /* [Style Refine] Multiple cyan accent colors from Figma nodes */
+  /* 矩形备份 fills rgba(24,255,206,1) */
+  --em-accent-cyan: rgb(24, 255, 206);
+  --em-accent-cyan-soft: rgba(24, 255, 206, 0.4);
+  
+  /* [Style Refine] "常住人口" text fills[0].color rgba(255,255,255,1) → rgb(255,255,255) */
+  --em-text-primary: rgb(255, 255, 255);
+  --em-text-secondary: rgba(255, 255, 255, 0.8);
+  --em-text-tertiary: rgba(255, 255, 255, 0.6);
+  
+  /* [Style Refine] Inner shadow colors from 矩形备份 24 effects */
+  /* effect[0].color rgba(4,254,197,1) */
+  --em-glow-cyan: rgba(4, 254, 197, 0.4);
+  /* effect[1].color rgba(48,245,255,1) */
+  --em-glow-cyan-bright: rgba(48, 245, 255, 0.6);
+  
+  /* [Zero Fabrication] Removed fabricated gradient colors - no Figma source */
+}
+
+.theme-light() {
+  --em-bg-primary: rgba(240, 250, 250, 1);
+  --em-border-primary: rgba(200, 230, 230, 1);
+  --em-accent-cyan: rgba(0, 180, 200, 1);
+  --em-accent-cyan-soft: rgba(0, 180, 200, 0.2);
+  
+  --em-text-primary: rgba(0, 0, 0, 0.9);
+  --em-text-secondary: rgba(0, 0, 0, 0.7);
+  --em-text-tertiary: rgba(0, 0, 0, 0.5);
+  
+  --em-glow-cyan: rgba(0, 180, 200, 0.3);
+  --em-glow-cyan-bright: rgba(0, 180, 200, 0.5);
+}
+
+:root {
+  .common();
+  .theme-dark();
+}

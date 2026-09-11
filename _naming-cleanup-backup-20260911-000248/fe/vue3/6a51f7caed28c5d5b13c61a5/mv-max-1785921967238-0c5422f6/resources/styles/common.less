@@ -1,0 +1,78 @@
+// 组件内共享的业务 class
+// 前缀: .mv3-mv-max-1785921967238-0c5422f6-
+
+// 面板容器基础样式
+.mv3-mv-max-1785921967238-0c5422f6-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+// 标题文字渐变样式
+.mv3-mv-max-1785921967238-0c5422f6-title-gradient {
+  font-family: 'Noto Sans SC', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  background: linear-gradient(90deg, #1990ff 0%, rgba(90, 126, 255, 0.83) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+// Tab 基础样式
+.mv3-mv-max-1785921967238-0c5422f6-tab-base {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+// 图表容器
+.mv3-mv-max-1785921967238-0c5422f6-chart-wrap {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+// Badge 样式
+.mv3-mv-max-1785921967238-0c5422f6-badge {
+  position: absolute;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  background: #f53f3f;
+  border-radius: 29px;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 14px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+// 图标按钮基础
+.mv3-mv-max-1785921967238-0c5422f6-icon-btn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  border-radius: 4px;
+  transition: background 0.2s;
+  
+  &:hover {
+    background: rgba(85, 158, 255, 0.1);
+  }
+}

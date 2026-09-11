@@ -1,0 +1,151 @@
+// 业务样式文件
+// 本文件定义组件的具体业务样式，通过 index.less 导入
+// 所有 class 必须以 .c- 为前缀，遵循 kebab-case 命名规范
+// === 组件根容器 ===
+.c-mc-max-env-monitor-verify-r5-c-env-monitor-root {// 字体缩放基准：支持微前端整组件等比缩放
+  
+  
+  width: 420px;
+  height: 186px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-sizing: border-box;
+  
+  // 禁止设置背景、边框、阴影（由 base-panel 提供面板外壳）
+
+  max-width: 100%;
+  max-height: 100vh;
+  box-sizing: border-box;
+  background-image: url('../images/bg-7880.png');
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  background-position: center;
+  font-size: var(--fontSize, 14px);
+// === 指标切换 tabs 区 ===
+}
+.c-mc-max-env-monitor-verify-r5-c-env-monitor-tab-switch {
+  width: 100%;
+  height: 27px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+// tabs 列表容器：Figma 渐变填充 #b5deff → #d1ecff
+.c-mc-max-env-monitor-verify-r5-c-env-monitor-tabs-list {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  width: 100%;
+  flex: 1 1 0;
+  padding: 3px;
+  box-sizing: border-box;
+  background: linear-gradient(90deg, #b5deff 0%, #d1ecff 100%);
+  border: 1px solid #ffffff;
+  border-radius: 4px;
+}
+
+// 单个 tab：均分宽度，禁止换行挤压
+.c-mc-max-env-monitor-verify-r5-c-env-monitor-tab-item {
+  flex: 1;
+  flex-shrink: 0;
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  white-space: nowrap;
+  cursor: pointer;
+  font-size: @fontSize;
+  font-weight: 500;
+  line-height: 1.5;
+  color: #2c9bea;
+  border-radius: 3px;
+  transition: color 0.2s, background 0.2s;
+  box-sizing: border-box;
+}
+
+// 激活态：使用背景图 + 白色文字 + 蓝色投影
+.c-mc-max-env-monitor-verify-r5-c-env-monitor-tab-item-active {
+  color: #ffffff;
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+  text-shadow: 0 0.6px 0 #006fe3;
+}
+// === 统计指标区（icon 按钮组，含红色计数徽标）===
+.c-mc-max-env-monitor-verify-r5-c-env-monitor-stats-indicator {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+  width: 100%;
+  height: 24px;
+  min-width: 0;
+}
+
+// 图标按钮：24×24，相对定位以支持徽标绝对定位
+.c-mc-max-env-monitor-verify-r5-c-env-monitor-stat-icon-btn {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.c-mc-max-env-monitor-verify-r5-c-env-monitor-stat-icon-btn:hover {
+  opacity: 0.8;
+}
+
+// icon 图标本体：统一按 18px 内容尺寸还原
+.c-mc-max-env-monitor-verify-r5-c-env-monitor-stat-icon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  display: block;
+}
+
+// 红色计数徽标：Figma num 节点 14×14、cornerRadius 29、#f53f3f、白字
+.c-mc-max-env-monitor-verify-r5-c-env-monitor-stat-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f53f3f;
+  border-radius: 29px;
+  color: #ffffff;
+  font-size: calc(@fontSize * 0.857);
+  font-weight: 500;
+  line-height: 14px;
+  pointer-events: none;
+}
+// === 图表区域 ===
+.c-mc-max-env-monitor-verify-r5-c-env-monitor-chart-area {
+  width: 100%;
+  flex: 1;
+  min-height: 100px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.c-mc-max-env-monitor-verify-r5-c-env-monitor-chart-body {
+  width: 100%;
+  height: 100%;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}

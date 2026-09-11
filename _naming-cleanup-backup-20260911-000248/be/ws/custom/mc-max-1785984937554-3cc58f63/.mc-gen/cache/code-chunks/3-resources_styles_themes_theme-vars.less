@@ -1,0 +1,36 @@
+.common() {
+  @legend-text-color: #333333;
+  @tab-label-color: #2c9bea;
+  @tab-active-label-color: #ffffff;
+  @chart-unit-color: #666666;
+  @chart-warn-color: #d32f2f;
+  @badge-bg-color: #f53f3f;
+  @badge-text-color: #ffffff;
+  @legend-dot-color: #0fcd7d;
+}
+
+.theme-dark() {
+  @legend-text-color: #cccccc;
+  @tab-label-color: #5ab4f0;
+  @tab-active-label-color: #ffffff;
+  @chart-unit-color: #999999;
+  @chart-warn-color: #e57373;
+  @badge-bg-color: #f53f3f;
+  @badge-text-color: #ffffff;
+  @legend-dot-color: #0fcd7d;
+}
+
+.theme-light() {
+  @legend-text-color: #333333;
+  @tab-label-color: #2c9bea;
+  @tab-active-label-color: #ffffff;
+  @chart-unit-color: #666666;
+  @chart-warn-color: #d32f2f;
+  @badge-bg-color: #f53f3f;
+  @badge-text-color: #ffffff;
+  @legend-dot-color: #0fcd7d;
+}
+
+// 全局默认调用（light 主题 + common 公共变量）
+.theme-light();
+.common();

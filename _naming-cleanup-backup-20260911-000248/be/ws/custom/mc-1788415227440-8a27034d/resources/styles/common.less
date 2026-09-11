@@ -1,0 +1,417 @@
+.common();
+
+// ─── 根容器 ───────────────────────────────────────────────────────────────────
+.c-monitor-root {width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-size: var(--fontSize, 14px);
+
+// ─── 内容包装层 ───────────────────────────────────────────────────────────────
+}
+.c-monitor-content-wrapper {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  overflow: hidden;
+  padding: 8px;
+}
+
+// ─── Header 统计区（panel header-right 插槽） ─────────────────────────────────
+.c-monitor-header-stats {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+}
+
+.c-monitor-header-stats-banner {
+  width: 100%;
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 12px 16px;
+  flex-shrink: 0;
+}
+
+.c-monitor-header-stats-group {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-left: auto;
+}
+
+.c-monitor-header-stat-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+.c-monitor-header-stat-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.c-monitor-header-stat-title {
+  font-size: calc(var(--fontSize, 14px) * 1.1429);
+  font-weight: var(--font-weight-strong, 700);
+  // 设计稿：gradient #1990ff → #5a7eff，降级为起始色
+  color: #1990ff;
+}
+
+.c-monitor-header-stat-label {
+  font-size: var(--fontSize, 14px);
+  font-weight: 400;
+  color: #333333;
+}
+
+.c-monitor-header-stat-value {
+  font-size: calc(var(--fontSize, 14px) * 1.1429);
+  font-weight: var(--font-weight-strong, 700);
+  color: #1990ff;
+}
+
+.c-monitor-header-stat-value--primary {
+  color: #08a3a5;
+}
+
+// ─── Tabs 包装层 ──────────────────────────────────────────────────────────────
+.c-monitor-tabs-wrapper {
+  width: 160px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+}
+
+.c-monitor-tabs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1 1 0;
+}
+
+// 单个 tab 项
+.c-monitor-tab-item {
+  position: relative;
+  flex: 1;
+  min-height: 64px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+  }
+}
+
+.c-monitor-tab-item--active {
+  // 激活态通过 bg image + content 颜色体现，见下方子规则
+}
+
+// tab 背景图层
+.c-monitor-tab-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+  border-radius: 6px;
+}
+
+// tab 内容层
+.c-monitor-tab-content {
+  position: relative;
+  z-index: 1;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 0;
+}
+
+// tab 标题：非激活态 #333333，激活态 #ffffff
+.c-monitor-tab-title {
+  font-size: calc(var(--fontSize, 14px) * 0.8571);
+  font-weight: 400;
+  color: #333333;
+  line-height: 1.2;
+}
+
+.c-monitor-tab-item--active .c-monitor-tab-title {
+  color: #ffffff;
+  font-weight: var(--font-weight-strong, 700);
+}
+
+// tab 统计区
+.c-monitor-tab-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.c-monitor-tab-stat-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+// 标签文字：非激活 #333333，激活 #ffffff
+.c-monitor-tab-stat-label {
+  font-size: var(--fontSize, 14px);
+  font-weight: 400;
+  color: #333333;
+  line-height: 1.5;
+}
+
+.c-monitor-tab-item--active .c-monitor-tab-stat-label {
+  color: #ffffff;
+}
+
+// 统计数值：非激活 #1990ff，激活 #ffffff
+.c-monitor-tab-stat-value {
+  font-size: calc(var(--fontSize, 14px) * 1.4286);
+  font-weight: var(--font-weight-strong, 700);
+  color: #1990ff;
+  line-height: 1.17;
+}
+
+.c-monitor-tab-item--active .c-monitor-tab-stat-value {
+  color: #ffffff;
+}
+
+// 危险色数值（异常数）
+.c-monitor-tab-stat-value--danger {
+  color: #e03434;
+}
+
+// tab 图标
+.c-monitor-tab-icon {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 35px;
+  height: 28px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+// tab 角标徽章
+.c-monitor-tab-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: var(--badge-size, 18px);
+  height: var(--badge-size, 18px);
+  padding: 0 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f53f3f;
+  color: #ffffff;
+  font-size: calc(var(--fontSize, 14px) * 0.8571);
+  font-weight: var(--font-weight-strong, 700);
+  border-radius: 9px;
+  z-index: 2;
+}
+
+// ─── 主内容区 ─────────────────────────────────────────────────────────────────
+.c-monitor-main-content {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow: hidden;
+}
+
+// 顶部统计卡片横排
+.c-monitor-stats-row {
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+// 统计卡片基础
+.c-monitor-stat-card {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  position: relative;
+  overflow: hidden;
+}
+
+// 激活态卡片（隧道设备，深蓝渐变背景图）
+.c-monitor-stat-card--active {
+  // 背景由内联 style 的 backgroundImage 控制，此处不重复设置
+}
+
+// 默认态卡片（南北接线设备，浅蓝背景图）
+.c-monitor-stat-card--default {
+  // 背景由内联 style 的 backgroundImage 控制
+}
+
+// 统计卡片图标
+.c-monitor-stat-card-icon {
+  width: 35px;
+  height: 28px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+// 统计卡片内容
+.c-monitor-stat-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+// 卡片标题（激活态白字）
+.c-monitor-stat-card-title {
+  font-size: calc(var(--fontSize, 14px) * 0.8571);
+  font-weight: 400;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+// 卡片标题（默认态深色）
+.c-monitor-stat-card-title--dark {
+  color: #333333;
+}
+
+// 卡片数值行
+.c-monitor-stat-card-values {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.c-monitor-stat-card-value-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 1px;
+}
+
+// 标签（总数:/异常数:）—— 激活态白色半透明
+.c-monitor-stat-card-label {
+  font-size: var(--fontSize, 14px);
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.8);
+  white-space: nowrap;
+  line-height: 1.5;
+}
+
+// 标签 —— 默认态深色
+.c-monitor-stat-card-label--dark {
+  color: rgba(51, 51, 51, 0.8);
+}
+
+// 数值基础
+.c-monitor-stat-card-number {
+  font-size: calc(var(--fontSize, 14px) * 1.4286);
+  font-weight: var(--font-weight-strong, 700);
+  white-space: nowrap;
+  line-height: 1.17;
+}
+
+// 白色数值（隧道设备总数）
+.c-monitor-stat-card-number--white {
+  color: #ffffff;
+}
+
+// 主色数值（南北接线总数）
+.c-monitor-stat-card-number--primary {
+  color: #1990ff;
+}
+
+// 危险色数值（异常数）
+.c-monitor-stat-card-number--danger {
+  color: #e03434;
+}
+
+// ─── 设备网格 ─────────────────────────────────────────────────────────────────
+.c-monitor-device-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  overflow-y: auto;
+  align-content: start;
+}
+
+// 单个设备卡片
+.c-monitor-device-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 6px;
+  cursor: pointer;
+  border-radius: 4px;
+  overflow: hidden;
+  transition: opacity 0.2s ease;
+
+  &:hover {
+    opacity: 0.85;
+  }
+}
+
+// 设备卡片图标
+.c-monitor-device-card-icon {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+// 设备名称
+.c-monitor-device-card-name {
+  font-size: calc(var(--fontSize, 14px) * 0.8571);
+  font-weight: 400;
+  color: #333333;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+// 设备状态文字基础
+.c-monitor-device-card-status {
+  font-size: var(--fontSize, 14px);
+  font-weight: 500;
+  color: #ffffff;
+  text-align: center;
+  white-space: nowrap;
+}
+
+// 在线状态（有设备在线）
+.c-monitor-device-card-status--active {
+  color: #ffffff;
+}
+
+// 离线/全0状态
+.c-monitor-device-card-status--inactive {
+  color: rgba(255, 255, 255, 0.6);
+}

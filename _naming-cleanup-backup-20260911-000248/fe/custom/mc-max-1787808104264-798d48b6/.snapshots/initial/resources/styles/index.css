@@ -1,0 +1,238 @@
+.c-monitor-header-stats {
+  height: 425px;
+  width: 420px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  max-width: 100%;
+  max-height: 100vh;
+  box-sizing: border-box;
+}
+.c-monitor-header-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.c-monitor-header-stat-label {
+  color: #6b7686;
+  font-size: 12px;
+}
+.c-monitor-header-stat-value {
+  color: #1a2332;
+  font-size: 16px;
+  font-weight: 600;
+}
+.c-monitor-body {
+  display: flex;
+  gap: 16px;
+  height: 100%;
+  padding: 16px;
+  box-sizing: border-box;
+  background-color: #f2f4f8;
+  background-image: url(../resources/images/bg-8788.png);
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+.c-monitor-switch {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 240px;
+  flex-shrink: 0;
+  padding: 12px;
+  border-radius: 8px;
+  background: #ffffff;
+}
+.c-monitor-switch-item {
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid #e8ecf2;
+  border-radius: 4px;
+  background: #ffffff;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+.c-monitor-switch-item:hover {
+  background: rgba(10, 21, 38, 0.04);
+  border-color: #d9dee6;
+}
+.c-monitor-switch-item--active {
+  border-color: #2f7cf6;
+  background: rgba(10, 21, 38, 0.04);
+}
+.c-monitor-switch-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+  background: rgba(10, 21, 38, 0.04);
+  flex-shrink: 0;
+}
+.c-monitor-switch-icon-shape {
+  width: 20px;
+  height: 20px;
+  border-radius: 2px;
+  background: #2f7cf6;
+}
+.c-monitor-switch-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.c-monitor-switch-title {
+  color: #1a2332;
+  font-size: 14px;
+  font-weight: 500;
+}
+.c-monitor-switch-row {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.c-monitor-switch-label {
+  color: #6b7686;
+  font-size: 12px;
+}
+.c-monitor-switch-value {
+  color: #1a2332;
+  font-size: 13px;
+  font-weight: 500;
+}
+.c-monitor-switch-value--error {
+  color: #f65353;
+}
+.c-monitor-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+}
+.c-monitor-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px;
+  width: fit-content;
+  border: 1px solid #e8ecf2;
+  border-radius: 4px;
+  background: #ffffff;
+}
+.c-monitor-tab-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 16px;
+  border-radius: 4px;
+  color: #6b7686;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+.c-monitor-tab-item:hover {
+  color: #1a2332;
+  background: rgba(10, 21, 38, 0.04);
+}
+.c-monitor-tab-item--active {
+  color: #2f7cf6;
+  background: rgba(10, 21, 38, 0.04);
+  font-weight: 500;
+}
+.c-monitor-tab-count {
+  font-size: 12px;
+  color: inherit;
+  opacity: 0.8;
+}
+.c-monitor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+  flex: 1;
+  overflow: auto;
+}
+.c-monitor-device-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 12px;
+  border: 1px solid #e8ecf2;
+  border-radius: 4px;
+  background: #ffffff;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+.c-monitor-device-card:hover {
+  border-color: #4d8ef8;
+  background: #ffffff;
+}
+.c-monitor-device-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+  background: rgba(10, 21, 38, 0.04);
+}
+.c-monitor-device-icon-shape {
+  width: 20px;
+  height: 20px;
+  border-radius: 2px;
+  background: #2f7cf6;
+}
+.c-monitor-device-name {
+  color: #3d4a5c;
+  font-size: 13px;
+  text-align: center;
+}
+.c-monitor-device-value {
+  color: #6b7686;
+  font-size: 12px;
+}
+/* === [自动修复] v3.5 模板驱动 fallback 规则 === */
+/* [自动修复] 模板 class .c-monitor-device-icon-shape → 匹配元素 device-summary */
+.c-monitor-device-icon-shape {
+  display: flex;
+  flex-direction: column;
+}
+/* [自动修复] 模板 class .c-monitor-header-stat-label → 匹配元素 device-summary */
+.c-monitor-header-stat-label {
+  display: flex;
+  flex-direction: column;
+}
+/* [自动修复] 模板 class .c-monitor-header-stat-value → 匹配元素 device-summary */
+.c-monitor-header-stat-value {
+  display: flex;
+  flex-direction: column;
+}
+/* [自动修复] 模板 class .c-monitor-switch-icon-shape → 匹配元素 device-summary */
+.c-monitor-switch-icon-shape {
+  display: flex;
+  flex-direction: column;
+}
+/* [自动修复] 模板 class .c-monitor-switch-item--active → 匹配元素 device-summary */
+.c-monitor-switch-item--active {
+  display: flex;
+  flex-direction: column;
+}
+/* [自动修复] 模板 class .c-monitor-switch-value--error → 匹配元素 device-summary */
+.c-monitor-switch-value--error {
+  display: flex;
+  flex-direction: column;
+}
+/* [自动修复] 模板 class .c-monitor-tab-item--active → 匹配元素 device-summary */
+.c-monitor-tab-item--active {
+  display: flex;
+  flex-direction: column;
+}
+/* [自动修复] 模板 class .c-monitor-tab-label → 匹配元素 device-summary */
+.c-monitor-tab-label {
+  display: flex;
+  flex-direction: column;
+}

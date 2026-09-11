@@ -1,0 +1,372 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 72,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0] 和 sections[1]",
+        "message": "header-tabs 和 header-controls 应合并为一个 section，分别映射到 title-left 和 header-right 插槽",
+        "suggestion": "创建统一的 header section，tabs 放入 header.left，icons 放入 header.right"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "sections[0].body 和 sections[2].body",
+        "message": "两个 body 使用同一背景图 bg-7890.png，但 backgroundImage 字段结构不一致",
+        "suggestion": "统一 backgroundImage 格式为 {src, recommendedUsage}，或提升背景到容器层"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "sections[2].body.children[0]",
+        "message": "current-value 的 children 结构过深且类型标记混乱（label/group/value/status）",
+        "suggestion": "简化为 {label, value, unit, status}，避免中间 group 层级"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "charts[0]",
+        "message": "chartConfig 嵌套在 chart-area.children[0] 内，应直接放在 chart-area 自身",
+        "suggestion": "将 chartConfig 提升到 chart-area 节点，删除冗余 children 包裹"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "sections[2].body.children[1].children[0]",
+        "message": "chart 节点达到 4 层深度（section > body > chart-area > children > chart）",
+        "suggestion": "移除 children 层，直接在 chart-area 节点配置 chartConfig"
+      }
+    ],
+    "recommendations": [
+      "将 header-tabs 和 header-controls 合并为单个 header section，使用 slotCandidate 区分插槽位置",
+      "统一背景图配置方式，避免同一资源的不同表达形式",
+      "简化 chart 节点结构，chartConfig 应作为 chart-area 的直接属性而非嵌套子节点"
+    ],
+    "summary": "结构整体可用但存在明显问题：header 区域错误拆分为两个 section，应合并并映射到面板插槽；图表配置嵌套冗余；背景图配置不一致。修复后可达良好水平。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）— 浅色科技监测风",
+      "--colorPrimary": "rgba(85, 158, 255, 1)",
+      "--colorPrimaryBg": "rgba(85, 158, 255, 0.2)",
+      "--colorDanger": "rgba(245, 63, 63, 1)",
+      "--colorTextSecondary": "rgba(102, 102, 102, 1)",
+      "--colorBgPage": "rgba(237, 244, 251, 1)",
+      "--colorBgCard": "rgba(255, 255, 255, 1)",
+      "--colorTextBase": "rgba(102, 102, 102, 1)",
+      "--fontSize": "14px",
+      "--borderRadius": "4px",
+      "--borderRadiusTab": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射 — 对应 theme-vars.less 中 .theme-light() mixin",
+      "@color-primary": "rgba(85, 158, 255, 1)",
+      "@color-primary-bg": "rgba(85, 158, 255, 0.2)",
+      "@color-danger": "rgba(245, 63, 63, 1)",
+      "@color-text-secondary": "rgba(102, 102, 102, 1)",
+      "@color-bg-page": "rgba(237, 244, 251, 1)",
+      "@color-bg-card": "rgba(255, 255, 255, 1)",
+      "@color-tab-active-text": "rgba(255, 255, 255, 1)",
+      "@color-tab-active-bg": "rgba(85, 158, 255, 1)",
+      "@color-tab-default-bg": "transparent",
+      "@color-chart-fill-start": "rgba(85, 158, 255, 0.4)",
+      "@color-chart-fill-end": "rgba(85, 158, 255, 0)",
+      "@color-warning-line": "rgba(245, 63, 63, 1)",
+      "@border-radius-tab": "8px",
+      "@font-size-base": "14px"
+    },
+    "cssClasses": {
+      "comment": "可复用CSS类 — 对应 common.less 中各业务块",
+      ".page-container": {
+        "width": "100%",
+        "height": "100%",
+        "background-color": "var(--colorBgPage, @color-bg-page)",
+        "display": "flex",
+        "flex-direction": "column",
+        "overflow": "hidden"
+      },
+      ".content-area": {
+        "flex": "1",
+        "background-image": "url('../../images/bg-texture.png')",
+        "background-size": "cover",
+        "background-repeat": "no-repeat",
+        "background-position": "center",
+        "overflow": "hidden"
+      },
+      ".card": {
+        "background-color": "var(--colorBgCard, @color-bg-card)",
+        "border-radius": "var(--borderRadius, @border-radius-tab)",
+        "overflow": "hidden"
+      },
+      ".tab-bar": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "0.5em",
+        "padding": "0.25em"
+      },
+      ".tab-item": {
+        "padding": "0.4em 1em",
+        "border-radius": "var(--borderRadiusTab, @border-radius-tab)",
+        "font-size": "var(--fontSize, @font-size-base)",
+        "color": "var(--colorTextSecondary, @color-text-secondary)",
+        "background": "@color-tab-default-bg",
+        "cursor": "pointer",
+        "transition": "background 0.2s, color 0.2s",
+        "white-space": "nowrap"
+      },
+      ".tab-item.is-active": {
+        "background": "var(--colorPrimary, @color-tab-active-bg)",
+        "color": "var(--colorBgCard, @color-tab-active-text)",
+        "font-weight": "600"
+      },
+      ".chart-area-gradient": {
+        "comment": "面积图渐变填充 — 用于 ECharts areaStyle linearGradient 配置",
+        "--chart-fill-start": "@color-chart-fill-start",
+        "--chart-fill-end": "@color-chart-fill-end"
+      },
+      ".warning-line-label": {
+        "color": "var(--colorDanger, @color-warning-line)",
+        "font-size": "var(--fontSize, @font-size-base)",
+        "font-weight": "500"
+      }
+    },
+    "echartsThemeTokens": {
+      "comment": "ECharts 图表侧主题配置（JS对象，供 THEME_COLORS[theme] 使用）",
+      "light": {
+        "colorPrimary": "rgba(85, 158, 255, 1)",
+        "areaColorStart": "rgba(85, 158, 255, 0.4)",
+        "areaColorEnd": "rgba(85, 158, 255, 0)",
+        "warningLineColor": "rgba(245, 63, 63, 1)",
+        "warningLineDash": [
+          6,
+          4
+        ],
+        "axisLabelColor": "rgba(102, 102, 102, 1)",
+        "splitLineColor": "rgba(85, 158, 255, 0.15)"
+      }
+    },
+    "tokenCoverage": 0.94,
+    "mappingNotes": [
+      "主色 rgba(85,158,255,1) 映射为 --colorPrimary，用于激活标签页背景、图表线条、强调元素",
+      "主色半透明 rgba(85,158,255,0.2) 映射为 --colorPrimaryBg，用于图表面积填充底色",
+      "危险红 rgba(245,63,63,1) 映射为 --colorDanger，用于预警虚线及文字标注",
+      "页面背景 #EDF4FB 直接字面量落地为 --colorBgPage，不依赖单一CSS变量，保障可见性",
+      "内容区纹理背景图通过 background-image: url() 引用，禁止用纯CSS渐变替代",
+      "标签页圆角统一为 --borderRadiusTab: 8px，与普通卡片圆角 4px 区分",
+      "激活标签页用 --colorPrimary 背景 + 白色文字，非激活用 secondary 文字色 + 透明背景",
+      "ECharts 面积图渐变需在 JS 侧通过 THEME_COLORS.light 对象配置 linearGradient，不可用纯CSS实现",
+      "预警虚线在 ECharts markLine 中配置 lineStyle.type='dashed'，dash 间隔建议 [6,4]"
+    ],
+    "elementStyleMap": {
+      "header-tabs": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tab-co": {
+        "font-size": 14,
+        "color": "rgba(255, 255, 255, 1)",
+        "background-color": "rgba(85, 158, 255, 0.8)",
+        "border-radius": "8px 8px 0 0",
+        "padding": "6px 16px"
+      },
+      "tab-visibility": {
+        "font-size": 14,
+        "color": "rgba(85, 158, 255, 1)",
+        "background-color": "transparent",
+        "padding": "6px 16px"
+      },
+      "tab-lighting": {
+        "font-size": 14,
+        "color": "rgba(85, 158, 255, 1)",
+        "background-color": "transparent",
+        "padding": "6px 16px"
+      },
+      "tab-light-intensity": {
+        "font-size": 14,
+        "color": "rgba(85, 158, 255, 1)",
+        "background-color": "transparent",
+        "padding": "6px 16px"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "header-controls": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "chart-icon": {
+        "width": 16,
+        "height": 16
+      },
+      "list-icon": {
+        "width": 16,
+        "height": 16,
+        "position": "relative"
+      },
+      "data-display": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "current-value-label-当前-0": {
+        "font-size": 12,
+        "color": "rgba(102, 102, 102, 1)"
+      },
+      "current-value-group-x-1-value-2k3+785CD火度-0": {
+        "font-size": 14,
+        "color": "rgba(102, 102, 102, 1)",
+        "font-weight": "normal"
+      },
+      "current-value-group-x-1-status-预警线-1": {
+        "font-size": 12,
+        "color": "rgba(245, 63, 63, 1)"
+      },
+      "current-value-group-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "current-value": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "chart-area": {
+        "width": "100%",
+        "height": 160
+      },
+      "el-el-x-11": {
+        "padding": "16px",
+        "border-radius": "0 8px 8px 8px",
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "el-label-当前-13": {
+        "font-size": 12,
+        "color": "rgba(102, 102, 102, 1)"
+      },
+      "el-group-x-14-value-2k3+785CD火度-0": {
+        "font-size": 14,
+        "color": "rgba(102, 102, 102, 1)",
+        "font-weight": "normal"
+      },
+      "el-group-x-14-status-预警线-1": {
+        "font-size": 12,
+        "color": "rgba(245, 63, 63, 1)"
+      },
+      "el-group-x-14": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-value-2k3+785CD火度-15": {
+        "font-size": 14,
+        "color": "rgba(102, 102, 102, 1)",
+        "font-weight": "normal"
+      },
+      "el-status-预警线-16": {
+        "font-size": 12,
+        "color": "rgba(245, 63, 63, 1)"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "header-tabs",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 4,
+        "title": "标签页导航",
+        "complexityScore": 20,
+        "complexityReasons": {
+          "elementCount": 4,
+          "charts": 0,
+          "interactions": 4,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "header-controls",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 2,
+        "title": "右侧控件",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 2,
+          "charts": 1,
+          "interactions": 1,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "data-display",
+        "responsibility": "数据展示区（请按功能拆分）",
+        "elementCount": 7,
+        "title": "数据展示区",
+        "complexityScore": 20,
+        "complexityReasons": {
+          "elementCount": 7,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 3
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 或存在高复杂度 section → 强制拆分",
+    "internalSubcomponents": []
+  }
+}

@@ -1,0 +1,48 @@
+// 主题变量定义文件
+// 结构：.common() 定义公共变量，.theme-dark() 和 .theme-light() 定义主题色
+// 由 dark.less/light.less 在主题选择器内调用
+
+.common() {
+  // 字体缩放基准令牌（根容器通过 CSS 变量 --fontSize 驱动，默认 14px）
+  @fontSize: 14px;
+  
+  // 字体大小
+  @font-size-base: 14px;
+  @font-size-lg: 24px;
+  
+  // 字重
+  @font-weight-strong: 700;
+  
+  // 圆角
+  @border-radius-base: 8px;
+  @border-radius-sm: 4px;
+  
+  // 徽章尺寸
+  @badge-size: 18px;
+}
+
+.theme-dark() {
+  // 深色主题颜色变量
+  @color-primary: rgba(74, 144, 226, 1);
+  @color-primary-bg: rgba(23, 45, 78, 1);
+  @color-banner-start: rgba(74, 144, 226, 1);
+  @color-banner-end: rgba(41, 98, 179, 1);
+  @color-text-base: rgba(230, 230, 230, 1);
+  @color-text-secondary: rgba(153, 153, 153, 1);
+  @color-danger: rgba(255, 85, 85, 1);
+  @color-surface: rgba(30, 30, 30, 1);
+  @shadow-card: 0 2px 12px rgba(0, 0, 0, 0.3);
+}
+
+.theme-light() {
+  // 浅色主题颜色变量（面板默认主题，必须与设计稿一致）
+  @color-primary: rgba(74, 144, 226, 1);
+  @color-primary-bg: rgba(237, 244, 251, 1);
+  @color-banner-start: rgba(74, 144, 226, 1);
+  @color-banner-end: rgba(41, 98, 179, 1);
+  @color-text-base: rgba(51, 51, 51, 1);
+  @color-text-secondary: rgba(153, 153, 153, 1);
+  @color-danger: rgba(255, 85, 85, 1);
+  @color-surface: rgba(255, 255, 255, 1);
+  @shadow-card: 0 2px 12px rgba(74, 144, 226, 0.12);
+}

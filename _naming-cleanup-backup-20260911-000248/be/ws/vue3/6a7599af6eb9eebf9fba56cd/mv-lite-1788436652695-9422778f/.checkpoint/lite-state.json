@@ -1,0 +1,101 @@
+{
+  "stage": "codegen_done",
+  "brief": {
+    "layout": "整体为垂直布局，从上至下依次为标题栏、Tab导航栏、图表区域。标题栏左对齐，Tab栏横向排列，图表区占满剩余空间。",
+    "regions": [
+      {
+        "name": "标题栏",
+        "description": "左侧为蓝色标题文字「环境监测」，右侧为两个功能图标（柱状图、列表）及红色数字角标。",
+        "position": "top",
+        "size": "高度约占整体15%，宽度100%"
+      },
+      {
+        "name": "Tab导航栏",
+        "description": "横向胶囊状容器，包含四个选项。当前选中项「一氧化碳」背景高亮，其余项透明。",
+        "position": "top",
+        "size": "高度约占整体10%，宽度约占80%，位于标题下方"
+      },
+      {
+        "name": "图表区域",
+        "description": "包含Y轴（左侧，标签「辆」及数值）、X轴（底部，数值及「时」）、图例（右上，绿色线段及红色虚线说明）、网格线（横向虚线）、数据曲线（绿色面积图）及预警线（红色虚线）。",
+        "position": "center",
+        "size": "占满剩余高度，宽度100%"
+      }
+    ],
+    "spacing": {
+      "outer": "0px",
+      "gap": "标题与Tab间距约5px，Tab与图表间距约5px",
+      "padding": "卡片内边距约10px"
+    },
+    "theme": "light",
+    "colors": {
+      "primary": "#6BA3D6",
+      "background": "#B4B9C2",
+      "surface": "#B4B9C2",
+      "text": "#555555",
+      "border": "#FFFFFF"
+    },
+    "typography": {
+      "size": "标题约12px，Tab文字约10px，坐标轴数字约9px，图例文字约9px",
+      "weight": "标题中等字重，正文常规字重",
+      "lineHeight": "约1.2"
+    },
+    "components": [
+      "Tab切换栏",
+      "折线面积图",
+      "图标按钮",
+      "徽章(Badge)"
+    ],
+    "textContent": [
+      "环境监测",
+      "一氧化碳",
+      "能见度",
+      "洞内照明",
+      "洞外光强",
+      "辆",
+      "40",
+      "30",
+      "20",
+      "10",
+      "0",
+      "zk3+785CO浓度",
+      "预警线",
+      "2",
+      "4",
+      "6",
+      "8",
+      "10",
+      "12",
+      "14",
+      "16",
+      "18",
+      "20",
+      "22",
+      "24",
+      "时",
+      "6"
+    ],
+    "name": {
+      "cn": "环境监测",
+      "en": "environment-monitor"
+    },
+    "visualDetails": [
+      "Tab栏呈胶囊状，选中项背景为浅蓝色，文字白色",
+      "图表背景有横向虚线网格",
+      "数据曲线为绿色，下方有浅绿色渐变填充",
+      "预警线为红色虚线，位于Y轴30刻度处",
+      "右上角列表图标右上角有红色圆形角标，数字6"
+    ],
+    "interactions": [
+      "Tab切换栏：包含「一氧化碳」（当前激活）、「能见度」、「洞内照明」、「洞外光强」",
+      "右上角图标按钮：柱状图图标、列表图标（带消息数6）"
+    ],
+    "_themeSource": "pixel"
+  },
+  "width": 220,
+  "height": 103,
+  "sourceType": "screenshot",
+  "componentType": "vue3",
+  "generationTier": "lite",
+  "vueCode": "<template>\n  <div class=\"verify-repair\">\n    <!-- 标题栏 -->\n    <div class=\"verify-repair-header\">\n      <div class=\"verify-repair-title\">环境监测</div>\n      <div class=\"verify-repair-icons\">\n        <div class=\"icon-box\">\n          <svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"icon-svg\">\n            <line x1=\"18\" y1=\"20\" x2=\"18\" y2=\"10\"></line>\n            <line x1=\"12\" y1=\"20\" x2=\"12\" y2=\"4\"></line>\n            <line x1=\"6\" y1=\"20\" x2=\"6\" y2=\"14\"></line>\n          </svg>\n        </div>\n        <div class=\"icon-box badge-wrapper\">\n          <svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"icon-svg\">\n            <line x1=\"8\" y1=\"6\" x2=\"21\" y2=\"6\"></line>\n            <line x1=\"8\" y1=\"12\" x2=\"21\" y2=\"12\"></line>\n            <line x1=\"8\" y1=\"18\" x2=\"21\" y2=\"18\"></line>\n            <line x1=\"3\" y1=\"6\" x2=\"3.01\" y2=\"6\"></line>\n            <line x1=\"3\" y1=\"12\" x2=\"3.01\" y2=\"12\"></line>\n            <line x1=\"3\" y1=\"18\" x2=\"3.01\" y2=\"18\"></line>\n          </svg>\n          <span class=\"badge\">6</span>\n        </div>\n      </div>\n    </div>\n\n    <!-- Tab导航栏 -->\n    <div class=\"verify-repair-tabs-container\">\n      <div class=\"verify-repair-tabs\">\n        <div \n          v-for=\"tab in tabs\" \n          :key=\"tab\" \n          class=\"tab-item\" \n          :class=\"{ active: currentTab === tab }\"\n          @click=\"currentTab = tab\"\n        >\n          {{ tab }}\n        </div>\n      </div>\n    </div>\n\n    <!-- 图表区域 -->\n    <div class=\"verify-repair-chart-area\">\n      <div ref=\"chartRef\" class=\"chart\"></div>\n    </div>\n  </div>\n</template>\n\n<script setup>\nimport { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';\nimport * as echarts from 'echarts';\n\nconst tabs = ['一氧化碳', '能见度', '洞内照明', '洞外光强'];\nconst currentTab = ref('一氧化碳');\nconst chartRef = ref(null);\nlet chart = null;\nlet resizeObserver = null;\n\n// 模拟数据\nconst xData = ref([2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24]);\n// 为了曲线平滑，使用更多数据点模拟截图形状\nconst seriesData = ref([\n  2, 3, 4, 3, 2, 2, 3, 2, 2, 3, 4, 5, 6, 8, 10, 12, 11, 9, 7, 5, 3, 2, 1, 0\n]);\nconst xAxisFullData = ref(Array.from({length: 24}, (_, i) => i + 1));\n\nconst initChartWhenReady = () => {\n  if (!chartRef.value || chart) return;\n  if (chartRef.value.clientWidth === 0 || chartRef.value.clientHeight === 0) return;\n\n  chart = echarts.init(chartRef.value);\n  \n  const option = {\n    grid: {\n      top: 25,\n      right: 10,\n      bottom: 15,\n      left: 25,\n      containLabel: false\n    },\n    tooltip: {\n      trigger: 'axis'\n    },\n    legend: {\n      data: ['zk3+785CO浓度', '预警线'],\n      top: 5,\n      right: 5,\n      textStyle: {\n        fontSize: 9,\n        color: '#666'\n      },\n      itemWidth: 15,\n      itemHeight: 2\n    },\n    xAxis: {\n      type: 'category',\n      boundaryGap: false,\n      data: xAxisFullData.value,\n      axisLine: { show: false },\n      axisTick: { show: false },\n      axisLabel: {\n        fontSize: 9,\n        color: '#888',\n        interval: 1, // 显示 2, 4, 6...\n        formatter: (value) => {\n          if (value % 2 === 0) return value;\n          return '';\n        }\n      },\n      axisPointer: { show: false }\n    },\n    yAxis: {\n      type: 'value',\n      min: 0,\n      max: 40,\n      interval: 10,\n      name: '辆',\n      nameLocation: 'start',\n      nameTextStyle: {\n        fontSize: 9,\n        color: '#888',\n        padding: [0, 0, 0, -10]\n      },\n      splitLine: {\n        lineStyle: {\n          type: 'dashed',\n          color: '#ddd'\n        }\n      },\n      axisLabel: {\n        fontSize: 9,\n        color: '#888'\n      }\n    },\n    series: [\n      {\n        name: 'zk3+785CO浓度',\n        type: 'line',\n        smooth: true,\n        symbol: 'none',\n        data: seriesData.value,\n        lineStyle: {\n          color: '#76C7C0',\n          width: 1\n        },\n        areaStyle: {\n          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [\n            { offset: 0, color: 'rgba(118, 199, 192, 0.5)' },\n            { offset: 1, color: 'rgba(118, 199, 192, 0.1)' }\n          ])\n        }\n      },\n      {\n        name: '预警线',\n        type: 'line',\n        symbol: 'none',\n        data: Array(24).fill(30),\n        lineStyle: {\n          type: 'dashed',\n          color: '#D9534F',\n          width: 1\n        }\n      }\n    ]\n  };\n\n  chart.setOption(option);\n\n  resizeObserver = new ResizeObserver(() => {\n    if (chart) {\n      chart.resize();\n    }\n  });\n  resizeObserver.observe(chartRef.value);\n};\n\nwatch(chartRef, (el) => {\n  if (el && !chart) {\n    nextTick(() => initChartWhenReady());\n  }\n}, { immediate: true });\n\nonMounted(() => {\n  nextTick(initChartWhenReady);\n});\n\nonUnmounted(() => {\n  if (resizeObserver) {\n    resizeObserver.disconnect();\n  }\n  if (chart) {\n    chart.dispose();\n    chart = null;\n  }\n});\n</script>\n\n<style scoped>\n.verify-repair {\n  width: 100%;\n  height: 100%;\n  box-sizing: border-box;\n  background-color: #B4B9C2;\n  display: flex;\n  flex-direction: column;\n  padding: 4px 6px;\n  font-family: sans-serif;\n  overflow: hidden;\n}\n\n.verify-repair-header {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  height: 16px;\n  margin-bottom: 4px;\n}\n\n.verify-repair-title {\n  color: #5B9BD5;\n  font-size: 12px;\n  font-weight: 500;\n}\n\n.verify-repair-icons {\n  display: flex;\n  gap: 6px;\n  align-items: center;\n}\n\n.icon-box {\n  width: 16px;\n  height: 16px;\n  background: rgba(255, 255, 255, 0.2);\n  border-radius: 2px;\n  display: flex;\n  justify-content: center;\n  align-items: center;\n  cursor: pointer;\n  position: relative;\n}\n\n.icon-svg {\n  width: 10px;\n  height: 10px;\n  color: #fff;\n}\n\n.badge-wrapper {\n  position: relative;\n}\n\n.badge {\n  position: absolute;\n  top: -4px;\n  right: -4px;\n  background-color: #D9534F;\n  color: #fff;\n  font-size: 8px;\n  line-height: 10px;\n  width: 10px;\n  height: 10px;\n  border-radius: 50%;\n  text-align: center;\n  z-index: 10;\n}\n\n.verify-repair-tabs-container {\n  margin-bottom: 4px;\n}\n\n.verify-repair-tabs {\n  display: flex;\n  background: rgba(255, 255, 255, 0.1);\n  border-radius: 10px;\n  padding: 2px;\n  width: 80%;\n}\n\n.tab-item {\n  flex: 1;\n  text-align: center;\n  font-size: 9px;\n  color: #fff;\n  padding: 2px 0;\n  cursor: pointer;\n  border-radius: 8px;\n  white-space: nowrap;\n}\n\n.tab-item.active {\n  background-color: #6BA3D6;\n  color: #fff;\n}\n\n.verify-repair-chart-area {\n  flex: 1;\n  min-height: 0;\n  position: relative;\n  width: 100%;\n}\n\n.chart {\n  width: 100%;\n  height: 100%;\n}\n</style>"
+}

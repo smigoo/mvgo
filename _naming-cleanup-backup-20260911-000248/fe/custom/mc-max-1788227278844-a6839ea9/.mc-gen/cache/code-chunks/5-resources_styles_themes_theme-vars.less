@@ -1,0 +1,95 @@
+.common() {
+  // 字体缩放基准令牌（根容器通过 CSS 变量 --fontSize 驱动，默认 14px）
+  @fontSize: 14px;
+
+  // 字体族
+  @font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+
+  // 间距令牌
+  @spacing-xs: 4px;
+  @spacing-sm: 8px;
+  @spacing-md: 16px;
+  @spacing-lg: 24px;
+
+  // 圆角令牌
+  @radius-sm: 4px;
+  @radius-md: 8px;
+
+  // 图表配色（与主题无关的语义色，用于 echarts 系列色）
+  @chart-color-1: #5B8FF9;
+  @chart-color-2: #61DDAA;
+  @chart-color-3: #F6BD16;
+  @chart-color-4: #F6903D;
+  @chart-color-5: #E86452;
+  @chart-color-6: #6DC8EC;
+
+  // 状态色
+  @color-success: #52C41A;
+  @color-warning: #FAAD14;
+  @color-error: #F5222D;
+  @color-info: #1890FF;
+}
+
+.theme-light() {
+  // 主色
+  @primary-color: #1890FF;
+
+  // 面板/容器背景
+  @panel-bg-color: #FFFFFF;
+  @panel-bg-color-secondary: #F5F7FA;
+  @section-bg-color: #FAFBFC;
+
+  // 文字颜色（浅色面板，可使用深色文字）
+  @text-color-primary: #1D2129;
+  @text-color-secondary: #4E5969;
+  @text-color-tertiary: #86909C;
+  @text-color-disabled: #C9CDD4;
+
+  // 边框/分割线
+  @border-color: #E5E6EB;
+  @border-color-light: #F2F3F5;
+  @divider-color: #E5E6EB;
+
+  // 图表专用（浅色面板下的坐标轴/网格线）
+  @chart-axis-line-color: #E5E6EB;
+  @chart-axis-label-color: #86909C;
+  @chart-split-line-color: #F2F3F5;
+  @chart-tooltip-bg-color: rgba(255, 255, 255, 0.95);
+  @chart-tooltip-text-color: #1D2129;
+
+  // 滚动条
+  @scrollbar-thumb-color: rgba(0, 0, 0, 0.15);
+  @scrollbar-track-color: rgba(0, 0, 0, 0.03);
+}
+
+.theme-dark() {
+  // 主色
+  @primary-color: #3C9EFF;
+
+  // 面板/容器背景
+  @panel-bg-color: #1A2332;
+  @panel-bg-color-secondary: #202B3D;
+  @section-bg-color: #232F42;
+
+  // 文字颜色（深色面板，禁止黑色系）
+  @text-color-primary: #E8EDF5;
+  @text-color-secondary: #B0BAC9;
+  @text-color-tertiary: #7C8AA0;
+  @text-color-disabled: #4E5B70;
+
+  // 边框/分割线
+  @border-color: #2E3B52;
+  @border-color-light: #38455E;
+  @divider-color: #2E3B52;
+
+  // 图表专用（深色面板下的坐标轴/网格线）
+  @chart-axis-line-color: #38455E;
+  @chart-axis-label-color: #B0BAC9;
+  @chart-split-line-color: #2E3B52;
+  @chart-tooltip-bg-color: rgba(26, 35, 50, 0.95);
+  @chart-tooltip-text-color: #E8EDF5;
+
+  // 滚动条
+  @scrollbar-thumb-color: rgba(255, 255, 255, 0.2);
+  @scrollbar-track-color: rgba(255, 255, 255, 0.05);
+}

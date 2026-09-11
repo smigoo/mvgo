@@ -1,0 +1,23 @@
+{
+  "completed": [
+    "1-declare.json",
+    "2-package/index.vue",
+    "3-package/index.vue",
+    "4-package/index.vue",
+    "5-package/components/MonitorStats.vue",
+    "6-package/components/MonitorTrend.vue",
+    "7-package/components/MonitorDistribution.vue",
+    "8-resources/styles/common.less,resources/styles/themes/theme-vars.less"
+  ],
+  "total": 6,
+  "updatedAt": 1786702407027,
+  "files": {
+    "declare.json": "1-declare.json",
+    "package/index.vue": "4-package_index.vue",
+    "package/components/MonitorStats.vue": "5-package_components_MonitorStats.vue",
+    "package/components/MonitorTrend.vue": "6-package_components_MonitorTrend.vue",
+    "package/components/MonitorDistribution.vue": "7-package_components_MonitorDistribution.vue",
+    "resources/styles/common.less": "8-resources_styles_common.less",
+    "resources/styles/themes/theme-vars.less": "8-resources_styles_themes_theme-vars.less"
+  }
+}

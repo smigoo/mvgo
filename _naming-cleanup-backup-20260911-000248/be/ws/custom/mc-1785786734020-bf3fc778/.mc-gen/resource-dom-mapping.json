@@ -1,0 +1,500 @@
+[
+  {
+    "resourceFile": null,
+    "figmaNodeId": "1:98935",
+    "figmaPath": "弹窗2/bg",
+    "figmaBox": {
+      "x": 134,
+      "y": 4229,
+      "width": 796,
+      "height": 486
+    },
+    "usage": ":style=\"{ background: '#003032f0' }\"",
+    "targetDomSelector": ".bg-container",
+    "targetDomHint": "bg区域",
+    "previewAnalysisRole": "bg",
+    "hint": "bg → bg区域",
+    "downloadStatus": "css",
+    "cssValue": "#003032f0",
+    "deduplicatedFrom": null,
+    "fallbackHint": "✅ CSS 替代（无需图片）: background: #003032f0;",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 796,
+      "height": 486,
+      "fillsSummary": "#003032f0"
+    },
+    "recommendedUsage": "backgroundStyle",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "1:98947",
+    "figmaPath": "弹窗2/header/Frame 2136637420/点背景/Group 4272",
+    "figmaBox": {
+      "x": 134,
+      "y": 4236.19921875,
+      "width": 344,
+      "height": 25.600000381469727
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-4272-container",
+    "targetDomHint": "Group 4272区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 4272 → Group 4272区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icongroup4272",
+    "visualMeta": {
+      "width": 344,
+      "height": 26
+    },
+    "recommendedUsage": "decorativeBlock",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "1:98949",
+    "figmaPath": "弹窗2/header/Frame 2136637420/点背景/Group 4272/矩形 3",
+    "figmaBox": {
+      "x": 135.599609375,
+      "y": 4237.798828125,
+      "width": 342.3999938964844,
+      "height": 17.600000381469727
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".-3-container",
+    "targetDomHint": "矩形 3区域",
+    "previewAnalysisRole": "bg",
+    "hint": "矩形 3 → 矩形 3区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS background 渐变/纯色）",
+    "semanticVarName": "bg矩形3",
+    "visualMeta": {
+      "width": 342,
+      "height": 18,
+      "opacity": 0.10000000149011612
+    },
+    "recommendedUsage": "backgroundStyle",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": "../resources/images/分割线-98952.png",
+    "figmaNodeId": "1:98952",
+    "figmaPath": "弹窗2/header/Frame 2136637420/分割线",
+    "figmaBox": {
+      "x": 161.2001953125,
+      "y": 4259.400390625,
+      "width": 733.23681640625,
+      "height": 4.000227928161621
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "分割线区域",
+    "previewAnalysisRole": "icon",
+    "hint": "分割线 → 分割线区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 733,
+      "height": 4
+    },
+    "recommendedUsage": "decorativeBlock",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": "../resources/images/矩形-98954.png",
+    "figmaNodeId": "1:98954",
+    "figmaPath": "弹窗2/header/Frame 2136637420/矩形",
+    "figmaBox": {
+      "x": 295.98046875,
+      "y": 4262.599609375,
+      "width": 20.038835525512695,
+      "height": 0.800000011920929
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "矩形区域",
+    "previewAnalysisRole": "icon",
+    "hint": "矩形 → 矩形区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 20,
+      "height": 1,
+      "fillsSummary": "#18ffce"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": "../resources/images/矩形备份-98955.png",
+    "figmaNodeId": "1:98955",
+    "figmaPath": "弹窗2/header/Frame 2136637420/矩形备份",
+    "figmaBox": {
+      "x": 910,
+      "y": 4261,
+      "width": 12.133027076721191,
+      "height": 2.4000000953674316
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".-container",
+    "targetDomHint": "矩形备份区域",
+    "previewAnalysisRole": "icon",
+    "hint": "矩形备份 → 矩形备份区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 12,
+      "height": 2,
+      "fillsSummary": "#18ffce"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": "../resources/images/Group_4114-98956.png",
+    "figmaNodeId": "1:98956",
+    "figmaPath": "弹窗2/header/Group 4114",
+    "figmaBox": {
+      "x": 146.66015625,
+      "y": 4237.80078125,
+      "width": 16.531923294067383,
+      "height": 17.600534439086914
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".group-4114-container",
+    "targetDomHint": "Group 4114区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Group 4114 → Group 4114区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": "icongroup4114",
+    "visualMeta": {
+      "width": 17,
+      "height": 18
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "1:98957",
+    "figmaPath": "弹窗2/header/Group 4114/Vector 321",
+    "figmaBox": {
+      "x": 146.662109375,
+      "y": 4242.17578125,
+      "width": 16.529970169067383,
+      "height": 13.223760604858398
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".vector-321-container",
+    "targetDomHint": "Vector 321区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Vector 321 → Vector 321区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "iconvector321",
+    "visualMeta": {
+      "width": 17,
+      "height": 13,
+      "fillsSummary": "#00f0ff",
+      "opacity": 0.23999999463558197
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "1:98958",
+    "figmaPath": "弹窗2/header/Group 4114/Vector 318",
+    "figmaBox": {
+      "x": 146.66015625,
+      "y": 4237.80078125,
+      "width": 16.529970169067383,
+      "height": 8.784128189086914
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".vector-318-container",
+    "targetDomHint": "Vector 318区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Vector 318 → Vector 318区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "iconvector318",
+    "visualMeta": {
+      "width": 17,
+      "height": 9,
+      "fillsSummary": "linear-gradient(#ffffff 0%, #03ccff 100%)",
+      "opacity": 0.800000011920929
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "1:98959",
+    "figmaPath": "弹窗2/header/Group 4114/Vector 320",
+    "figmaBox": {
+      "x": 146.66015625,
+      "y": 4246.6171875,
+      "width": 16.529970169067383,
+      "height": 8.784128189086914
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".vector-320-container",
+    "targetDomHint": "Vector 320区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Vector 320 → Vector 320区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "iconvector320",
+    "visualMeta": {
+      "width": 17,
+      "height": 9,
+      "fillsSummary": "linear-gradient(#ffffff 0%, #03ccff 100%)",
+      "opacity": 0.800000011920929
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "1:98960",
+    "figmaPath": "弹窗2/header/image 960",
+    "figmaBox": {
+      "x": 134,
+      "y": 4210,
+      "width": 379,
+      "height": 43
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".image-960-container",
+    "targetDomHint": "image 960区域",
+    "previewAnalysisRole": "bg",
+    "hint": "image 960 → image 960区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS background 渐变/纯色）",
+    "semanticVarName": "bg960",
+    "visualMeta": {
+      "width": 379,
+      "height": 43
+    },
+    "recommendedUsage": "backgroundStyle",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": "../resources/images/Union-98964.png",
+    "figmaNodeId": "1:98964",
+    "figmaPath": "弹窗2/header/Union",
+    "figmaBox": {
+      "x": 900,
+      "y": 4237.66015625,
+      "width": 14.68148136138916,
+      "height": 14.681365013122559
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".union-container",
+    "targetDomHint": "Union区域",
+    "previewAnalysisRole": "icon",
+    "hint": "Union → Union区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 15,
+      "height": 15,
+      "fillsSummary": "#ffffff"
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": "../resources/images/bg-2.png",
+    "figmaNodeId": "206:2",
+    "figmaPath": "弹窗2/slot-con/@antd/table/bg",
+    "figmaBox": {
+      "x": 158,
+      "y": 4281,
+      "width": 748,
+      "height": 32
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".bg-container",
+    "targetDomHint": "bg区域",
+    "previewAnalysisRole": "bg",
+    "hint": "bg → bg区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 748,
+      "height": 32
+    },
+    "recommendedUsage": "backgroundStyle",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "1:98936",
+    "figmaPath": "弹窗2/slot-con/@antd/table/bg/bg",
+    "figmaBox": {
+      "x": 158,
+      "y": 4281,
+      "width": 748,
+      "height": 32
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".bg-container",
+    "targetDomHint": "bg区域",
+    "previewAnalysisRole": "bg",
+    "hint": "bg → bg区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS background 渐变/纯色）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 748,
+      "height": 32,
+      "fillsSummary": "#00373a"
+    },
+    "recommendedUsage": "backgroundStyle",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": "../resources/images/bg-98973.png",
+    "figmaNodeId": "1:98973",
+    "figmaPath": "弹窗2/slot-con/@antd/table/bg",
+    "figmaBox": {
+      "x": 158,
+      "y": 4317,
+      "width": 748,
+      "height": 32
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".bg-container",
+    "targetDomHint": "bg区域",
+    "previewAnalysisRole": "bg",
+    "hint": "bg → bg区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 748,
+      "height": 32
+    },
+    "recommendedUsage": "backgroundStyle",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": "../resources/images/bg-98983.png",
+    "figmaNodeId": "1:98983",
+    "figmaPath": "弹窗2/slot-con/@antd/table/bg",
+    "figmaBox": {
+      "x": 158,
+      "y": 4353,
+      "width": 748,
+      "height": 32
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".bg-container",
+    "targetDomHint": "bg区域",
+    "previewAnalysisRole": "bg",
+    "hint": "bg → bg区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 748,
+      "height": 32
+    },
+    "recommendedUsage": "backgroundStyle",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": "../resources/images/bg-98993.png",
+    "figmaNodeId": "1:98993",
+    "figmaPath": "弹窗2/slot-con/@antd/table/bg",
+    "figmaBox": {
+      "x": 158,
+      "y": 4389,
+      "width": 748,
+      "height": 32
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".bg-container",
+    "targetDomHint": "bg区域",
+    "previewAnalysisRole": "bg",
+    "hint": "bg → bg区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 748,
+      "height": 32
+    },
+    "recommendedUsage": "backgroundStyle",
+    "isTinyDecoration": false
+  },
+  {
+    "resourceFile": "../resources/images/img-99044.png",
+    "figmaNodeId": "1:99044",
+    "figmaPath": "弹窗2/slot-con/img",
+    "figmaBox": {
+      "x": 657,
+      "y": 4489,
+      "width": 237,
+      "height": 155
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".img-container",
+    "targetDomHint": "img区域",
+    "previewAnalysisRole": "image",
+    "hint": "img → img区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 237,
+      "height": 155
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false
+  }
+]

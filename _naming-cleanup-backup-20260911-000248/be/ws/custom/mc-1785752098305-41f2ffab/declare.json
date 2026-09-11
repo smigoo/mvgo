@@ -1,0 +1,56 @@
+{
+  "componentId": "mc-1785752098305-41f2ffab",
+  "componentName": "41f2ffab",
+  "version": "v1.0.0",
+  "attribute": {
+    "aspectRatio": [
+      10,
+      3
+    ],
+    "title": "cp-流量监测",
+    "description": "cp-流量监测"
+  },
+  "businessEvents": {
+    "mc-1785752098305-41f2ffab-onload": {
+      "eventId": "mc-1785752098305-41f2ffab-onload",
+      "eventName": "组件加载",
+      "eventDataSchema": {
+        "componentId": {
+          "key": "componentId",
+          "name": "组件ID",
+          "type": "string",
+          "required": true
+        },
+        "timestamp": {
+          "key": "timestamp",
+          "name": "时间戳",
+          "type": "number",
+          "required": true
+        }
+      }
+    }
+  },
+  "businessStatuses": {},
+  "themeConfig": {
+    "default": "light",
+    "list": [
+      {
+        "name": "亮色主题",
+        "key": "light"
+      }
+    ]
+  },
+  "layoutConfig": {
+    "default": "one",
+    "list": [
+      {
+        "name": "默认布局",
+        "key": "one",
+        "previewName": "mc-preview.png"
+      }
+    ]
+  },
+  "dataSources": null,
+  "formSources": null,
+  "cssVariableConfig": []
+}

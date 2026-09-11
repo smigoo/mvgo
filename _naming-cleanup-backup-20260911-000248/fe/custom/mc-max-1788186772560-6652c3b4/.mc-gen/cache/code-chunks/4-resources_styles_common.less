@@ -1,0 +1,104 @@
+// 业务样式文件 - 环境监测组件
+// 命名规范：所有 class 必须以 .c- 为前缀
+
+// 引入主题变量
+@import './themes/theme-vars.less';
+
+// 组件根容器
+.c-env-monitor-root {
+  // 字体缩放基准（微码组件必遵 - 支撑微前端整组件等比缩放）
+  font-size: var(--fontSize, 14px);
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  // 禁止设置背景/边框/阴影（base-panel 已提供面板外壳）
+}
+
+// Tab 切换栏容器
+.c-env-monitor-tabs-container {
+  flex-shrink: 0;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-bottom: 12px;
+  // elementStyleMap 明确指定为 flex row
+  display: flex;
+  flex-direction: row;
+}
+
+// Tab 项
+.c-env-monitor-tab-item {
+  flex: 1;
+  height: 27px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  // 字体缩放（基准字号）
+  font-size: @fontSize;
+  font-weight: 500;
+  // Figma 真值：默认态文字色
+  color: #2c9bea;
+  // Figma 真值：默认态背景渐变
+  background: linear-gradient(180deg, #b5deff 0%, #d1ecff 100%);
+  // Figma 真值：边框
+  border: 0.72px solid #ffffff;
+  cursor: pointer;
+  transition: all 0.3s;
+  user-select: none;
+
+  &:first-child {
+    border-top-left-radius: 4px;
+    border-bottom-left-radius: 4px;
+  }
+
+  &:last-child {
+    border-top-right-radius: 4px;
+    border-bottom-right-radius: 4px;
+  }
+
+  &:not(:last-child) {
+    border-right: none;
+  }
+
+  // 激活态样式
+  &.active {
+    // Figma 真值：激活态文字色
+    color: #ffffff;
+    // elementStyleMap 明确指定：激活态背景图
+    background-image: url(../resources/images/bg-tab-active-7891.png);
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    // Figma 真值：激活态边框
+    border: 0.6px solid #ffffff;
+    // Figma 真值：激活态文字阴影
+    text-shadow: 0 0.6px 0 rgba(0, 111, 227, 1);
+  }
+
+  // Hover 态（非激活时）
+  &:hover:not(.active) {
+    background: linear-gradient(180deg, #a5d4ff 0%, #c1e9ff 100%);
+  }
+}
+
+// 图表区域容器
+.c-env-monitor-chart-section {
+  flex: 1;
+  min-height: 0;
+  // elementStyleMap 明确指定为 flex column
+  display: flex;
+  flex-direction: column;
+}
+
+// 图表容器
+.c-env-monitor-chart-container {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  // 图表内容由 ECharts 渲染，不设置装饰性样式
+}

@@ -1,0 +1,94 @@
+{
+  "completed": [
+    "1-declare.json",
+    "2-package/index.vue",
+    "3-package/index.vue",
+    "4-package/index.vue",
+    "5-package/components/HeaderStats.vue",
+    "6-package/components/LeftNav.vue",
+    "7-package/components/FeaturedDevices.vue",
+    "8-package/components/DeviceGrid.vue",
+    "9-resources/styles/themes/theme-vars.less",
+    "10-resources/styles/common.less"
+  ],
+  "total": 6,
+  "updatedAt": 1788287851902,
+  "files": {
+    "declare.json": [
+      {
+        "index": 1,
+        "file": "1-declare.json",
+        "segmentType": "declare",
+        "scriptPart": ""
+      }
+    ],
+    "package/index.vue": [
+      {
+        "index": 2,
+        "file": "2-package_index.vue",
+        "segmentType": "template",
+        "scriptPart": ""
+      },
+      {
+        "index": 3,
+        "file": "3-package_index.vue",
+        "segmentType": "script",
+        "scriptPart": "state"
+      },
+      {
+        "index": 4,
+        "file": "4-package_index.vue",
+        "segmentType": "script",
+        "scriptPart": "lifecycle"
+      }
+    ],
+    "package/components/HeaderStats.vue": [
+      {
+        "index": 5,
+        "file": "5-package_components_HeaderStats.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/LeftNav.vue": [
+      {
+        "index": 6,
+        "file": "6-package_components_LeftNav.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/FeaturedDevices.vue": [
+      {
+        "index": 7,
+        "file": "7-package_components_FeaturedDevices.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/DeviceGrid.vue": [
+      {
+        "index": 8,
+        "file": "8-package_components_DeviceGrid.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "resources/styles/themes/theme-vars.less": [
+      {
+        "index": 9,
+        "file": "9-resources_styles_themes_theme-vars.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      }
+    ],
+    "resources/styles/common.less": [
+      {
+        "index": 10,
+        "file": "10-resources_styles_common.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      }
+    ]
+  }
+}

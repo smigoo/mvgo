@@ -1,0 +1,64 @@
+// 重点车辆监测组件 — 主题变量
+// 组件ID: mc-1784779953514-a347f53e
+
+// 公共变量 mixin（所有主题共享）
+.common() {
+  --em-color-danger: #ff4d4f;
+  --em-color-primary: #1890ff;
+  --em-color-warning: #fa8c16;
+  --em-spacing-xs: 4px;
+  --em-spacing-sm: 8px;
+  --em-spacing-md: 12px;
+  --em-spacing-lg: 16px;
+  --em-spacing-xl: 20px;
+  --em-radius-sm: 4px;
+  --em-radius-md: 8px;
+  --em-font-size-sm: 12px;
+  --em-font-size-base: 14px;
+  --em-font-size-lg: 16px;
+  --em-font-size-xl: 20px;
+  --em-font-size-xxl: 28px;
+}
+
+// 深色主题 mixin
+.theme-dark() {
+  .common();
+  --em-bg-base: rgba(30, 40, 55, 1);
+  --em-bg-card: rgba(45, 55, 70, 0.8);
+  --em-text-primary: rgba(255, 255, 255, 0.85);
+  --em-text-secondary: rgba(255, 255, 255, 0.65);
+  --em-text-tertiary: rgba(255, 255, 255, 0.45);
+  --em-tab-bg: rgba(102, 128, 160, 0.6);
+  --em-tab-border: rgba(172, 196, 225, 0.3);
+  --em-tab-text: rgba(255, 255, 255, 0.85);
+  --em-tab-active-bg: #1990ff;
+  --em-tab-active-border: rgba(199, 224, 255, 0.5);
+  --em-tab-active-text: #ffffff;
+  --em-border-base: rgba(255, 255, 255, 0.15);
+  --em-border-light: rgba(255, 255, 255, 0.08);
+  --em-shadow-base: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+// 浅色主题 mixin
+.theme-light() {
+  .common();
+  --em-bg-base: rgb(237, 244, 251);
+  --em-bg-card: rgba(255, 255, 255, 0.9);
+  --em-text-primary: rgb(51, 51, 51);
+  --em-text-secondary: rgb(102, 102, 102);
+  --em-text-tertiary: rgb(153, 153, 153);
+  --em-tab-bg: rgb(102, 128, 160);
+  --em-tab-border: rgba(172, 196, 225, 1);
+  --em-tab-text: rgb(51, 51, 51);
+  --em-tab-active-bg: rgb(25, 144, 255);
+  --em-tab-active-border: rgba(199, 224, 255, 1);
+  --em-tab-active-text: rgb(255, 255, 255);
+  --em-border-base: rgba(0, 0, 0, 0.1);
+  --em-border-light: rgba(0, 0, 0, 0.06);
+  --em-shadow-base: 0px 4px 10px rgba(74, 117, 141, 0.25);
+}
+
+// 默认浅色主题
+:root {
+  .theme-light();
+}

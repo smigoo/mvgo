@@ -1,0 +1,345 @@
+/* 变量由 theme-vars.less 中的 mixin 提供，请勿直接修改颜色以保持主题支持 */
+.c-device-monitor-root {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  overflow: hidden;
+  font-family: @font-family-base;
+  color: @color-text-primary;
+}
+
+.c-device-overview-root {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.c-device-overview-summary {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.c-device-overview-card {
+  flex: 1;
+  min-width: 0;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.c-device-overview-card-main {
+  background: linear-gradient(135deg, @color-card-main-gradient-start 0%, @color-card-main-gradient-end 100%);
+  color: @color-card-main-text;
+  box-shadow: 0 4px 10px @color-shadow;
+}
+
+.c-device-overview-card-sub {
+  background: @color-bg-card;
+  color: @color-card-sub-text;
+  border: 1px solid @color-border;
+  box-shadow: 0 4px 10px @color-shadow;
+}
+
+.c-device-overview-card-icon {
+  width: 35px;
+  height: 28px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.c-device-overview-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+
+.c-device-overview-card-title {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.c-device-overview-card-line {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+.c-device-overview-card-label {
+  font-size: 14px;
+  line-height: 21px;
+  color: inherit;
+}
+
+.c-device-overview-card-label-abnormal {
+  color: inherit;
+}
+
+.c-device-overview-card-label-sub {
+  color: inherit;
+}
+
+.c-device-overview-card-value {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: @font-family-number;
+  line-height: 23px;
+  color: inherit;
+}
+
+.c-device-overview-card-value-danger {
+  color: @color-danger;
+}
+
+.c-device-overview-card-value-info {
+  color: @color-primary;
+}
+
+.c-device-overview-main {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+  gap: 10px;
+}
+
+.c-device-overview-nav {
+  width: 46px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.c-device-overview-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px 2px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.2s, color 0.2s;
+  min-height: 40px;
+  box-sizing: border-box;
+  color: @color-text-primary;
+}
+
+.c-device-overview-nav-item-active {
+  background: @color-nav-active-bg;
+  color: @color-nav-active-text;
+}
+
+.c-device-overview-nav-text {
+  font-size: 14px;
+  line-height: 16px;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.c-device-overview-nav-badge {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 14px;
+  white-space: nowrap;
+}
+
+.c-device-overview-grid {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-auto-rows: 64px;
+  gap: 8px;
+  overflow-y: auto;
+  padding: 2px;
+}
+
+.c-device-overview-device {
+  background: @color-bg-card;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px @color-shadow;
+  border: 1px solid @color-border;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: box-shadow 0.2s, transform 0.2s;
+  color: @color-text-primary;
+}
+
+.c-device-overview-device:hover {
+  box-shadow: 0 4px 12px @color-shadow;
+  transform: translateY(-1px);
+}
+
+.c-device-overview-device-icon {
+  width: 26px;
+  height: 32px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.c-device-overview-device-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.c-device-overview-device-name {
+  font-size: 12px;
+  line-height: 18px;
+  color: @color-text-primary;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.c-device-overview-device-status {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 2px;
+}
+
+.c-device-overview-device-abnormal {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 19px;
+  color: @color-danger;
+  font-family: @font-family-number;
+}
+
+.c-device-overview-device-total {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 19px;
+  color: @color-primary;
+  font-family: @font-family-number;
+}
+
+.c-device-list-root {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  font-family: @font-family-base;
+  color: @color-text-primary;
+}
+
+.c-device-list-grid {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-auto-rows: 64px;
+  gap: 8px;
+}
+
+.c-device-list-card {
+  height: 64px;
+  min-width: 0;
+  box-sizing: border-box;
+  background: @color-bg-card;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px @color-shadow;
+  border: 1px solid @color-border;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 8px 10px;
+  color: @color-text-primary;
+}
+
+.c-device-list-card-body {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.c-device-list-card-icon {
+  width: 26px;
+  height: 32px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.c-device-list-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.c-device-list-card-label {
+  font-size: 12px;
+  color: @color-text-primary;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.c-device-list-card-value {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 2px;
+}
+
+.c-device-list-card-value-danger {
+  font-size: 18px;
+  color: @color-danger;
+  font-weight: 700;
+  line-height: 21px;
+  font-family: @font-family-number;
+}
+
+.c-device-list-card-value-unit {
+  font-size: 14px;
+  color: @color-primary;
+  font-weight: 500;
+  line-height: 21px;
+  font-family: @font-family-number;
+}
+
+.c-device-monitor-trend-chart {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex-shrink: 0;
+}

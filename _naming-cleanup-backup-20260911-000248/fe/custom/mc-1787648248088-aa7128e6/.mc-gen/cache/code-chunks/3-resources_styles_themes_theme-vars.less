@@ -1,0 +1,87 @@
+.common() {
+  // 字体
+  @font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  
+  // 字号
+  @font-size-xs: 12px;
+  @font-size-sm: 14px;
+  @font-size-md: 16px;
+  @font-size-lg: 18px;
+  @font-size-xl: 20px;
+
+  // 间距
+  @spacing-xs: 4px;
+  @spacing-sm: 8px;
+  @spacing-md: 16px;
+  @spacing-lg: 24px;
+  @spacing-xl: 32px;
+
+  // 圆角
+  @border-radius-sm: 2px;
+  @border-radius-md: 4px;
+  @border-radius-lg: 8px;
+
+  // 背景图相关（基于主题颜色事实）
+  @bg-image: url(../resources/images/bg-7890.png);
+  @bg-size: 100% 100%;
+  @bg-position: center center;
+  @bg-repeat: no-repeat;
+}
+
+.theme-light() {
+  // 背景色
+  @bg-color: #ffffff;
+  @bg-color-secondary: #f5f7fa;
+  @bg-color-tertiary: #fafafa;
+
+  // 文字色
+  @text-color-primary: #333333;
+  @text-color-regular: #666666;
+  @text-color-secondary: #999999;
+  @text-color-placeholder: #c0c4cc;
+
+  // 边框色
+  @border-color-base: #dcdfe6;
+  @border-color-light: #e4e7ed;
+  @border-color-lighter: #ebeef5;
+
+  // 主色/品牌色
+  @color-primary: #409eff;
+  @color-primary-light: #66b1ff;
+  @color-primary-dark: #3a8ee6;
+
+  // 状态色
+  @color-success: #67c23a;
+  @color-warning: #e6a23c;
+  @color-danger: #f56c6c;
+  @color-info: #909399;
+}
+
+.theme-dark() {
+  // 背景色
+  @bg-color: #141414;
+  @bg-color-secondary: #1f1f1f;
+  @bg-color-tertiary: #262626;
+
+  // 文字色（深色面板禁止使用黑色系）
+  @text-color-primary: #ffffff;
+  @text-color-regular: #d9d9d9;
+  @text-color-secondary: #8c8c8c;
+  @text-color-placeholder: #595959;
+
+  // 边框色
+  @border-color-base: #434343;
+  @border-color-light: #303030;
+  @border-color-lighter: #262626;
+
+  // 主色/品牌色
+  @color-primary: #177ddc;
+  @color-primary-light: #3c9ae8;
+  @color-primary-dark: #1564b5;
+
+  // 状态色
+  @color-success: #49aa19;
+  @color-warning: #d89614;
+  @color-danger: #d32029;
+  @color-info: #6e6e6e;
+}

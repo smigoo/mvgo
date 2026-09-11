@@ -1,0 +1,196 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 55,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0].header",
+        "message": "严重违反核心规范：禁止生成组件面板标题。`section-tabs` 的 `header.title` 为 '重点车辆监测'，这是整个组件的总标题，应由 `base-panel` 通过 `declare.json.componentName` 自动渲染，绝不能在内部 section 中重复生成。",
+        "suggestion": "移除 `section-tabs.header.title`，或将整个 `section-tabs` 的 `header` 置空，仅保留 `body` 作为 Tab 内容，由框架将其放入面板的 `header-right` 插槽。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "Figma 节点覆盖率极低（coverageRate: 0, matchedCount: 0）。这意味着当前的布局结构完全基于视觉猜测而非真实的 Figma 节点数据生成，存在极大的 UI 还原偏差风险。",
+        "suggestion": "检查 Figma 解析流程或重新执行预览分析（preview-analysis），确保布局结构基于有效的 Figma 节点数据生成，而非纯视觉推断。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[0]",
+        "message": "Tab 切换栏的结构设计存在冗余。`section-tabs` 同时包含 `header` 和 `body`，且 `headerRelation` 为 `title-same-row`，这种嵌套方式增加了不必要的复杂度。",
+        "suggestion": "简化结构，将 Tab 直接作为独立的 section 或直接作为 `header-right` 插槽的内容，无需包裹在带有 `header` 的 section 内。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.items[*].style",
+        "message": "样式属性硬编码。卡片和文本的样式（如 `background: rgba(255,255,255,0.5)`, `color: #ff4d4f`）直接写死在 JSON 中，这违反了“纯 Less 变量主题模式”规范，不利于后续的双主题（dark/light）切换。",
+        "suggestion": "在代码生成阶段，必须将这些硬编码的颜色、背景和圆角值提取为 Less 变量（在 `theme-vars.less` 的 mixin 中定义），并通过 CSS 类名应用，禁止在模板中写死内联样式。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[1].body.items[*].icon",
+        "message": "图标资源缺失风险。`notes` 中提示图标资源下载失败，当前使用 `placeholder` 占位，可能导致最终渲染时出现空白或布局错位。",
+        "suggestion": "确保在代码生成前修复资源下载问题，或在代码中提供 SVG/Iconfont 兜底方案，并为图标容器设置明确的 width/height 以防止布局塌陷。"
+      }
+    ],
+    "recommendations": [
+      "严格遵循“禁止生成面板标题”规范，清理 `section-tabs` 中多余的组件总标题，确保组件标题仅由 `base-panel` 统一处理。",
+      "重新运行 Figma 解析以获取有效的节点覆盖率，确保布局结构有真实的底层数据支撑，避免纯视觉猜测带来的还原偏差。",
+      "在代码生成阶段，将 JSON 中硬编码的样式全面转换为 Less 变量，严格遵循纯 Less 变量主题模式（dark/light），禁止使用 CSS var() 或内联样式。",
+      "确保 Tab 切换组件在代码实现时，不仅切换激活态样式，还要通过 `watch` 联动更新下方的统计数据，预留数据联动的结构。"
+    ],
+    "summary": "该布局结构在区域划分上基本清晰，能够反映出“地点切换”和“车辆统计”两大核心模块。但存在两个致命问题：一是严重违反了“禁止生成组件面板标题”的核心规范，错误地将组件总标题写入了内部 section；二是 Figma 节点覆盖率几乎为 0，说明当前结构缺乏底层数据支撑，存在极高的还原偏差风险。此外，样式硬编码和图标资源缺失也需要在后续代码生成阶段予以解决。建议修复标题重复问题，重新获取 Figma 数据，并严格遵循微码规范进行代码生成。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1990ff",
+      "--colorRed": "#ff4d4f",
+      "--colorOrange": "#fa8c16",
+      "--colorTextBase": "#333333",
+      "--colorBgBase": "#edf4fb",
+      "--fontSize": "14px",
+      "--fontSizeLarge": "24px",
+      "--fontSizeHuge": "32px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#1990ff",
+      "@color-red": "#ff4d4f",
+      "@color-orange": "#fa8c16",
+      "@color-text-base": "#333333",
+      "@color-bg-base": "#edf4fb",
+      "@font-size-base": "14px",
+      "@font-size-large": "24px",
+      "@font-size-huge": "32px",
+      "@border-radius-base": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "16px",
+        "background": "var(--colorBgBase)",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)"
+      },
+      ".tab-wrapper": {
+        "display": "inline-flex",
+        "background": "rgba(25, 144, 255, 0.08)",
+        "border-radius": "var(--borderRadius)",
+        "padding": "4px",
+        "gap": "4px"
+      },
+      ".tab-item": {
+        "padding": "8px 16px",
+        "border-radius": "calc(var(--borderRadius) - 4px)",
+        "cursor": "pointer",
+        "transition": "all 0.3s ease",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)"
+      },
+      ".tab-item.active": {
+        "background": "#ffffff",
+        "color": "var(--colorPrimary)",
+        "font-weight": "600",
+        "box-shadow": "0 2px 8px rgba(25, 144, 255, 0.15)"
+      },
+      ".diamond-icon": {
+        "width": "10px",
+        "height": "10px",
+        "background": "var(--colorPrimary)",
+        "transform": "rotate(45deg)",
+        "border-radius": "2px",
+        "display": "inline-block"
+      },
+      ".value-large": {
+        "font-size": "var(--fontSizeHuge)",
+        "font-weight": "700",
+        "line-height": "1.2",
+        "font-family": "DIN Alternate, Helvetica Neue, Arial, sans-serif"
+      },
+      ".value-blue": {
+        "color": "var(--colorPrimary)"
+      },
+      ".value-red": {
+        "color": "var(--colorRed)"
+      },
+      ".value-orange": {
+        "color": "var(--colorOrange)"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 #1990ff 映射为 --colorPrimary，用于蓝色菱形图标、Tab激活态及蓝色数值",
+      "背景色 #edf4fb 映射为 --colorBgBase，作为全局浅色科技风底色，营造清透监测感",
+      "强调色 #ff4d4f 和 #fa8c16 分别映射为 --colorRed 和 --colorOrange，专用于大号彩色数值展示以突出告警或关键指标",
+      "基础文字色 #333333 映射为 --colorTextBase，确保在浅蓝灰背景下的最佳可读性",
+      "Tab圆角背景通过 --borderRadius 变量控制，配合半透明主色背景与白色激活态实现科技感交互",
+      "大号数值采用 --fontSizeHuge (32px) 配合 DIN 字体族，增强数据监测的视觉冲击力"
+    ],
+    "elementStyleMap": {
+      "section-tabs": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tab-1": {
+        "background-color": "#1990ff",
+        "color": "#ffffff",
+        "border-radius": "10px",
+        "padding": "4px 12px",
+        "font-size": "12px"
+      },
+      "tab-2": {
+        "background-color": "transparent",
+        "color": "#6680a0",
+        "border-radius": "10px",
+        "padding": "4px 12px",
+        "font-size": "12px"
+      },
+      "card-dangerous": {
+        "background": "rgba(255,255,255,0.5)",
+        "border-radius": "8px",
+        "padding": "10px",
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-value-row-x-6": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-heavy": {
+        "background": "rgba(255,255,255,0.5)",
+        "border-radius": "8px",
+        "padding": "10px",
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-value-row-x-9": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-oversize": {
+        "background": "rgba(255,255,255,0.5)",
+        "border-radius": "8px",
+        "padding": "10px",
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-value-row-x-12": {
+        "display": "flex",
+        "flex-direction": "row"
+      }
+    }
+  }
+}

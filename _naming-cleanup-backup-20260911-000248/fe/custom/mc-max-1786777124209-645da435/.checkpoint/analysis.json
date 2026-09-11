@@ -1,0 +1,143 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 75,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections",
+        "message": "headerSlots 中定义的右上角图标组（柱状图、列表带Badge）未映射到任何 section 的 header.controls 中，导致布局结构与插槽定义脱节。",
+        "suggestion": "将右上角图标组添加到组件根级别或第一个 section (monitor-tabs) 的 header.controls 中，确保插槽内容在布局中有明确的节点承载。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[0]",
+        "message": "图表容器 (chart-canvas) 使用了固定宽度 (width: 380)，违反了微码规范中的'容器布局禁止固定宽度'约束，会导致组件在不同屏幕下无法自适应。",
+        "suggestion": "移除固定宽度属性，改为 width: 100% 或 flex: 1，并确保其父容器设置 min-width: 0 以防止内容挤压溢出。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body",
+        "message": "图表配置 (charts) 中指定了图例 (legend) 和位置 (top-right)，但 chart-section 的 body.children 中缺失图例 DOM 节点。根据'图例交互约束'，自定义图例需要在布局中显式体现以实现点击联动。",
+        "suggestion": "在 chart-section 的 body 中添加图例容器节点（如 legend-container），并设置相应的 flex 布局样式，以便在代码生成阶段实现图例与图表的联动。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body.children[4]",
+        "message": "Tab 栏右侧装饰图标 (tabs-icon) 与 Tab 项平级放在 body.children 中，在水平布局下可能会破坏 Tab 项的自然流式排列或导致间距异常。",
+        "suggestion": "建议将 tabs-icon 移至 monitor-tabs 的 header.controls 中；如果必须放在 body 中，请确保 body 使用 flex 布局并给该图标添加 margin-left: auto 以将其推到右侧。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "coverageReport",
+        "message": "覆盖率报告 (coverageReport) 显示覆盖率为 0%，大量关键 Figma 节点（如 header, slot-con, @echarts/line 等）未被匹配，说明布局解析存在严重遗漏，可能丢失设计稿细节。",
+        "suggestion": "重新核对 Figma 节点树与布局结构的映射关系，确保关键容器（特别是 header 分组和图表内部结构）被正确识别并转化为布局节点。"
+      }
+    ],
+    "recommendations": [
+      "在生成代码时，严格遵守宽度自适应约束，所有图表和布局容器使用百分比或 flex 布局，绝对禁止写死 px 宽度。",
+      "确保 headerSlots 中定义的插槽内容在 layout 的 header.controls 中有对应的节点映射，保持分析数据结构的一致性。",
+      "对于包含图例的图表，必须在布局中显式声明图例容器节点，以便在代码生成阶段实现图例与图表的联动交互（dispatchAction）。",
+      "提高 Figma 节点解析的覆盖率，确保设计稿中的关键分组（如 header、图表容器、坐标轴文本等）被正确转化为布局节点，避免信息丢失。"
+    ],
+    "summary": "布局整体划分为 Tab 切换和图表展示两个主要区域，业务逻辑清晰。但存在几个关键问题：一是 header 插槽内容未在布局结构中体现，导致数据脱节；二是图表容器使用了固定宽度，违反了自适应规范；三是图例节点缺失，无法支持后续的联动交互；四是 Figma 节点覆盖率极低，解析存在明显遗漏。建议修复上述结构和规范问题，特别是解决固定宽度和节点映射缺失的问题后重新审查。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorBgBase": "#EDF4FB",
+      "--colorPrimary": "#559EFF",
+      "--colorSuccess": "#4ade80",
+      "--colorError": "#f53f3f",
+      "--colorTextBase": "#333333",
+      "--fontSize": "14px",
+      "--borderRadiusBase": "4px",
+      "--borderRadiusCapsule": "999px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-bg-base": "#EDF4FB",
+      "@color-primary": "#559EFF",
+      "@color-success": "#4ade80",
+      "@color-error": "#f53f3f",
+      "@color-text-base": "#333333",
+      "@font-size-base": "14px",
+      "@border-radius-base": "4px",
+      "@border-radius-capsule": "999px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "16px",
+        "background": "var(--colorBgBase, #EDF4FB)",
+        "color": "var(--colorTextBase, #333333)",
+        "font-size": "var(--fontSize, 14px)"
+      },
+      ".tab-item": {
+        "padding": "6px 16px",
+        "border-radius": "var(--borderRadiusCapsule, 999px)",
+        "color": "var(--colorTextBase, #333333)",
+        "cursor": "pointer",
+        "transition": "all 0.3s ease"
+      },
+      ".tab-item.active": {
+        "background": "var(--colorPrimary, #559EFF)",
+        "color": "#ffffff"
+      },
+      ".chart-area": {
+        "fill": "var(--colorSuccess, #4ade80)",
+        "fill-opacity": "0.2",
+        "stroke": "var(--colorSuccess, #4ade80)",
+        "stroke-width": "2"
+      },
+      ".warning-line": {
+        "stroke": "var(--colorError, #f53f3f)",
+        "stroke-width": "2",
+        "stroke-dasharray": "6 4"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主题色 #559EFF 映射为 --colorPrimary，用于Tab选中态高亮及主色调",
+      "容器背景 #EDF4FB 映射为 --colorBgBase，作为浅色科技风的基础底色",
+      "图表绿色 #4ade80 映射为 --colorSuccess，用于面积图填充及折线",
+      "预警红色 #f53f3f 映射为 --colorError，用于虚线预警线",
+      "文字色 #333333 映射为 --colorTextBase，保证浅色背景下的可读性",
+      "Tab选中态使用 border-radius: 999px 实现胶囊背景效果",
+      "预警线使用 stroke-dasharray 实现红色虚线效果"
+    ],
+    "elementStyleMap": {
+      "monitor-tabs": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "chart-section": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-9": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  }
+}

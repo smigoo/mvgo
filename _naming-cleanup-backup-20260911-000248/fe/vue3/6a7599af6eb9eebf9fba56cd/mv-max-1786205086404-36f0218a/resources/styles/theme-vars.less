@@ -1,0 +1,50 @@
+// 主题变量与 mixin 定义 - 环境监测面板深色科技风
+
+// Less 变量
+@color-primary: rgba(85, 158, 255, 1);
+@color-success: #52c41a;
+@color-danger: #f53f3f;
+@color-text-base: rgba(237, 244, 251, 1);
+@color-bg-base: #121a28;
+@color-border: rgba(237, 244, 251, 0.15);
+@font-size-base: 14px;
+
+// 通用 mixin
+.common() {
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', 'Roboto', sans-serif;
+  box-sizing: border-box;
+}
+
+// 深色主题
+.theme-dark() {
+  :root {
+  .theme-dark();
+    --color-primary: rgba(85, 158, 255, 1);
+    --color-success: #52c41a;
+    --color-danger: #f53f3f;
+    --color-text-base: rgba(237, 244, 251, 1);
+    --color-bg-base: #121a28;
+    --color-border: rgba(237, 244, 251, 0.15);
+    --font-size-base: 14px;
+    --color-tab-inactive: #2c9bea;
+    --color-tab-text-active: #ffffff;
+    --color-warning-line: #d32f2f;
+    --color-chart-area: rgba(15, 205, 125, 0.15);
+    --color-chart-line: rgba(15, 205, 125, 1);
+  }
+}
+
+// 浅色主题（预留）
+.theme-light() {
+  :root {
+    --color-primary: rgba(85, 158, 255, 1);
+    --color-success: #52c41a;
+    --color-danger: #f53f3f;
+    --color-text-base: #333333;
+    --color-bg-base: #f0f5fa;
+    --color-border: rgba(0, 0, 0, 0.1);
+    --font-size-base: 14px;
+  }
+}
+
+// 默认使用深色主题

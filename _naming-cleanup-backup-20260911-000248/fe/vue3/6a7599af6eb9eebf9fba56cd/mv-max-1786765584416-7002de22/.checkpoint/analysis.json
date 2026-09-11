@@ -1,0 +1,254 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 75,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[*].children[1] & layout.sections[3].body.children[0]",
+        "message": "图表节点使用了固定宽度（width: 380），违反了‘宽度自适应约束’中‘容器布局禁止固定宽度’的规范，会导致生成的图表无法随容器自适应缩放。",
+        "suggestion": "将图表的 width 属性移除或设置为 '100%'，在代码生成时通过 CSS 的 width: 100% 和 flex 布局来实现自适应。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "chartDataHints[*].labels",
+        "message": "图表数据提示（chartDataHints）中的 labels 错误地混入了页面级文本（如'24小时'、'当日总流量'、'江阴大桥'等），而非纯粹的图表 X 轴刻度数据。这会导致生成的图表 X 轴显示无关文本，造成数据映射严重错误。",
+        "suggestion": "重新解析图表数据，确保 labels 仅包含图表坐标轴的刻度值（如时间刻度 0, 2, 4... 12），将页面 UI 文本从图表数据中彻底剥离。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[*].children[1]",
+        "message": "车型分布统计行使用了 justifyContent: 'space-around'，在仅有两个子元素（客车、货车）的情况下，可能导致两侧留白过大，视觉不够紧凑。",
+        "suggestion": "建议将 justifyContent 改为 'space-between'，或者在代码生成时使用 CSS 的 gap 属性来精确控制元素间距。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[1].body.children[*].children[1] & layout.sections[3].body.children[0]",
+        "message": "图表节点硬编码了固定高度（height: 150/120），虽然高度固定在某些场景下可接受，但不利于后续的响应式调整或统一维护。",
+        "suggestion": "建议移除 JSON 中的固定 height，在代码生成时通过 CSS 类名（如 .chart-container { height: 150px; }）统一管理图表高度。"
+      }
+    ],
+    "recommendations": [
+      "修正 chartDataHints 的数据提取逻辑，严格区分页面 UI 文本与图表坐标轴数据，避免脏数据污染 ECharts 配置。",
+      "全面排查布局 JSON 中的固定 px 宽度（如 width: 380），统一替换为百分比或 flex 比例，确保组件在不同屏幕尺寸下的自适应能力。",
+      "在代码生成阶段，确保图表容器满足‘图表边界约束’，设置 width: 100%、min-width: 0 以及 grid.containLabel: true，防止图表溢出。",
+      "对于 Select 下拉框（time-selector），在生成代码时需严格按照‘Select/下拉框识别约束’实现完整的 trigger + dropdown 结构，并处理展开/收起状态及箭头旋转。",
+      "保持当前良好的 section header/body 层级划分，并在生成代码时确保区域标题左对齐，右侧控件使用 margin-left: auto 推至右侧。"
+    ],
+    "summary": "整体布局结构清晰，区域划分合理，section 的 header/body 层级区分正确，且未违规生成面板标题，符合微码组件的基本结构规范。但存在两个严重问题：一是图表节点使用了固定宽度，违反了宽度自适应的核心约束；二是图表数据提示（chartDataHints）中混入了大量页面级文本，会导致图表数据映射错误。此外，部分布局属性（如 space-around）和硬编码高度需要优化。建议修复数据解析错误并调整固定宽度后重新生成。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1990ff",
+      "--colorAccent": "#fa8c16",
+      "--colorTextBase": "#333333",
+      "--colorBgBase": "#edf4fb",
+      "--fontSize": "14px",
+      "--fontSizeLarge": "32px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#1990ff",
+      "@color-accent": "#fa8c16",
+      "@color-text-base": "#333333",
+      "@color-bg-base": "#edf4fb",
+      "@font-size-base": "14px",
+      "@font-size-large": "32px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "16px",
+        "background-color": "var(--colorBgBase)",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)"
+      },
+      ".header": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "8px",
+        "margin-bottom": "16px"
+      },
+      ".icon-diamond": {
+        "width": "16px",
+        "height": "16px",
+        "background": "url('diamond-icon.png') no-repeat center",
+        "background-size": "contain"
+      },
+      ".icon-circle": {
+        "width": "12px",
+        "height": "12px",
+        "border-radius": "50%",
+        "background-color": "var(--colorPrimary)"
+      },
+      ".value-primary": {
+        "font-size": "var(--fontSizeLarge)",
+        "font-weight": "bold",
+        "color": "var(--colorPrimary)"
+      },
+      ".value-accent": {
+        "font-size": "var(--fontSizeLarge)",
+        "font-weight": "bold",
+        "color": "var(--colorAccent)"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 #1990ff 映射为 --colorPrimary，用于大号蓝色数值及主要交互元素",
+      "强调色 #fa8c16 映射为 --colorAccent，专门用于橙色货车数值等需要突出的数据",
+      "背景色 #edf4fb 直接落地为容器背景，符合浅色科技监测风",
+      "文本色 #333333 映射为 --colorTextBase，保证浅色背景下的可读性",
+      "菱形和圆形装饰图标建议通过 CSS 类结合背景图或基础形状实现，保持组件复用性"
+    ],
+    "elementStyleMap": {
+      "section-daily-total": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-tunnel": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "stat-bridge": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "section-hourly-flow": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "chart-tunnel-flow": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "chart-bridge-flow": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-vehicle-type": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-tunnel-row-x-1-stat-item-x-0": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-tunnel-row-x-1-stat-item-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-tunnel-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row",
+        "justify-content": "space-around"
+      },
+      "vehicle-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-19-stat-item-x-0": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-19-stat-item-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-19": {
+        "display": "flex",
+        "flex-direction": "row",
+        "justify-content": "space-around"
+      },
+      "el-stat-item-x-20": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-item-x-23": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-bridge-row-x-1-stat-item-x-0": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-bridge-row-x-1-stat-item-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-bridge-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row",
+        "justify-content": "space-around"
+      },
+      "vehicle-bridge": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-28-stat-item-x-0": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-28-stat-item-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-28": {
+        "display": "flex",
+        "flex-direction": "row",
+        "justify-content": "space-around"
+      },
+      "el-stat-item-x-29": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-item-x-32": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-flow-prediction": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-daily-total",
+        "responsibility": "当日总流量（请按功能拆分）",
+        "elementCount": 6,
+        "title": "当日总流量"
+      },
+      {
+        "id": "section-hourly-flow",
+        "responsibility": "分地点小时流量（请按功能拆分）",
+        "elementCount": 6,
+        "title": "分地点小时流量"
+      },
+      {
+        "id": "section-vehicle-type",
+        "responsibility": "车型分布（请按功能拆分）",
+        "elementCount": 18,
+        "title": "车型分布"
+      },
+      {
+        "id": "section-flow-prediction",
+        "responsibility": "流量预测（请按功能拆分）",
+        "elementCount": 1,
+        "title": "流量预测"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 4,
+    "reason": "有效 sections=4 ≥ 3 → 强制拆分"
+  }
+}

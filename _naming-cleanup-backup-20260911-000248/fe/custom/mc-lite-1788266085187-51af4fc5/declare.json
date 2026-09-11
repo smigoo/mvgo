@@ -1,0 +1,17 @@
+{
+  "componentId": "mc-lite-1788266085187-51af4fc5",
+  "componentName": "equipment-monitor",
+  "panelType": "default-panel",
+  "defaultTheme": "light",
+  "size": {
+    "width": 420,
+    "height": 425
+  },
+  "businessEvents": [],
+  "businessStatuses": [],
+  "dataSources": [],
+  "formSources": [],
+  "layoutConfig": {},
+  "themeConfig": {},
+  "businessConfig": {}
+}

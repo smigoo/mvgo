@@ -1,0 +1,96 @@
+{
+  "completed": [
+    "1-declare.json",
+    "2-package/index.vue",
+    "3-package/index.vue",
+    "5-package/components/SectionHeader.vue",
+    "6-package/components/SectionControls.vue",
+    "7-package/components/SectionChart.vue",
+    "8-resources/styles/themes/theme-vars.less",
+    "9-resources/styles/common.less"
+  ],
+  "total": 6,
+  "updatedAt": 1788347345487,
+  "files": {
+    "declare.json": [
+      {
+        "index": 1,
+        "file": "1-declare.json",
+        "segmentType": "declare",
+        "scriptPart": ""
+      }
+    ],
+    "package/index.vue": [
+      {
+        "index": 2,
+        "file": "2-package_index.vue",
+        "segmentType": "template",
+        "scriptPart": ""
+      },
+      {
+        "index": 3,
+        "file": "3-package_index.vue",
+        "segmentType": "script",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/SectionHeader.vue": [
+      {
+        "index": 2,
+        "file": "2-package_components_SectionHeader.vue",
+        "segmentType": "template",
+        "scriptPart": ""
+      },
+      {
+        "index": 5,
+        "file": "5-package_components_SectionHeader.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/SectionControls.vue": [
+      {
+        "index": 2,
+        "file": "2-package_components_SectionControls.vue",
+        "segmentType": "template",
+        "scriptPart": ""
+      },
+      {
+        "index": 6,
+        "file": "6-package_components_SectionControls.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/SectionChart.vue": [
+      {
+        "index": 2,
+        "file": "2-package_components_SectionChart.vue",
+        "segmentType": "template",
+        "scriptPart": ""
+      },
+      {
+        "index": 7,
+        "file": "7-package_components_SectionChart.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "resources/styles/themes/theme-vars.less": [
+      {
+        "index": 8,
+        "file": "8-resources_styles_themes_theme-vars.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      }
+    ],
+    "resources/styles/common.less": [
+      {
+        "index": 9,
+        "file": "9-resources_styles_common.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      }
+    ]
+  }
+}

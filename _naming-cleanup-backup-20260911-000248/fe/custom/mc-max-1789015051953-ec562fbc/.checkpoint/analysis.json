@@ -1,0 +1,1900 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 62,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[3..]",
+        "message": "Figma内联行被重复提升为顶层section，破坏主面板父子层级。",
+        "suggestion": "仅保留三个业务section，将2:*和89:*节点挂回对应业务节点或作为映射元数据。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "headerSlots",
+        "message": "header被错误识别为header-right统计项，且与3个真实指标重复。",
+        "suggestion": "移除figma节点2:8419的伪统计插槽，明确面板标题与右侧指标的归属。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[1].body.children[1]",
+        "message": "右侧内容存在section、body、卡片、group、row多层冗余嵌套。",
+        "suggestion": "卡片内部保留icon与text-group两层，将label和数值行合并为紧凑数据组。"
+      },
+      {
+        "level": "error",
+        "type": "performance",
+        "location": "layout.sections",
+        "message": "重复节点会导致大量无效DOM，且inlineCompositeRows与业务树内容重复。",
+        "suggestion": "渲染时只使用业务布局树，inlineCompositeRows仅用于定位和审计，不参与组件生成。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[1].body.children[1]",
+        "message": "网格声明gridColumns=3且重复声明，缺少行间距、列间距和自适应策略。",
+        "suggestion": "统一网格配置，补充gap、最小卡片宽度及窄屏下的列数变化规则。"
+      }
+    ],
+    "recommendations": [
+      "先清理顶层Figma碎片和重复映射，再建立单一可渲染业务树。",
+      "补齐面板标题header、真实文本映射及11、12号卡片图标资源状态。",
+      "校验统计口径：汇总卡片数值与顶部68562及各设备卡片总数需保持一致。"
+    ],
+    "summary": "业务区域划分基本清晰，但顶层节点重复、插槽误判和嵌套冗余会影响渲染与维护，建议修正后再进入实现。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）— 浅色科技监测风",
+      "--colorPrimary": "rgba(25,144,255,1)",
+      "--colorPrimaryBg": "rgba(237,244,251,1)",
+      "--colorSuccess": "rgba(8,163,165,1)",
+      "--colorError": "rgba(255,77,79,1)",
+      "--colorTextBase": "rgba(51,51,51,1)",
+      "--colorTextSecondary": "rgba(102,102,102,1)",
+      "--colorBgWhite": "rgba(255,255,255,1)",
+      "--fontSize": "14px",
+      "--borderRadius": "4px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射 — theme-vars.less 中 .theme-light() mixin 内定义",
+      "@color-primary": "rgba(25,144,255,1)",
+      "@color-primary-bg": "rgba(237,244,251,1)",
+      "@color-success": "rgba(8,163,165,1)",
+      "@color-error": "rgba(255,77,79,1)",
+      "@color-text-primary": "rgba(51,51,51,1)",
+      "@color-text-secondary": "rgba(102,102,102,1)",
+      "@color-bg-white": "rgba(255,255,255,1)",
+      "@color-divider-gradient-start": "rgba(25,144,255,1)",
+      "@color-divider-gradient-end": "rgba(25,144,255,0)",
+      "@color-badge-error": "rgba(255,77,79,1)",
+      "@color-badge-primary": "rgba(25,144,255,1)",
+      "@font-size-base": "14px",
+      "@border-radius-base": "4px"
+    },
+    "cssClasses": {
+      "comment": "可复用CSS类 — 写入 common.less，变量来自 theme-vars.less",
+      ".monitor-container": {
+        "background": "var(--colorPrimaryBg, @color-primary-bg)",
+        "width": "100%",
+        "height": "100%",
+        "display": "flex",
+        "flex-direction": "column",
+        "font-size": "var(--fontSize, @font-size-base)",
+        "color": "var(--colorTextBase, @color-text-primary)"
+      },
+      ".section-header": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "0.5em",
+        "padding": "0.57em 1em",
+        "position": "relative"
+      },
+      ".section-header::after": {
+        "content": "''",
+        "position": "absolute",
+        "bottom": "0",
+        "left": "0",
+        "right": "0",
+        "height": "1px",
+        "background": "linear-gradient(90deg, @color-divider-gradient-start 0%, @color-divider-gradient-end 100%)"
+      },
+      ".section-header__diamond": {
+        "width": "0.57em",
+        "height": "0.57em",
+        "background": "var(--colorPrimary, @color-primary)",
+        "transform": "rotate(45deg)",
+        "flex-shrink": "0"
+      },
+      ".section-header__title": {
+        "font-size": "1em",
+        "font-weight": "600",
+        "color": "var(--colorTextBase, @color-text-primary)"
+      },
+      ".tab-bar": {
+        "display": "flex",
+        "align-items": "center",
+        "background": "var(--colorPrimaryBg, @color-primary-bg)",
+        "padding": "0.28em"
+      },
+      ".tab-item": {
+        "position": "relative",
+        "padding": "0.35em 1em",
+        "cursor": "pointer",
+        "font-size": "0.93em",
+        "color": "var(--colorTextSecondary, @color-text-secondary)",
+        "border-radius": "var(--borderRadius, @border-radius-base)",
+        "transition": "all 0.2s"
+      },
+      ".tab-item--active": {
+        "background": "var(--colorBgWhite, @color-bg-white)",
+        "color": "var(--colorTextBase, @color-text-primary)",
+        "font-weight": "600"
+      },
+      ".tab-item__badge": {
+        "position": "absolute",
+        "top": "-0.35em",
+        "right": "-0.35em",
+        "min-width": "1.2em",
+        "height": "1.2em",
+        "padding": "0 0.28em",
+        "border-radius": "0.6em",
+        "font-size": "0.78em",
+        "line-height": "1.2em",
+        "text-align": "center",
+        "font-weight": "700"
+      },
+      ".tab-item__badge--error": {
+        "background": "var(--colorError, @color-badge-error)",
+        "color": "@color-bg-white"
+      },
+      ".tab-item__badge--primary": {
+        "background": "var(--colorPrimaryBg, @color-primary-bg)",
+        "color": "var(--colorPrimary, @color-badge-primary)",
+        "border": "1px solid var(--colorPrimary, @color-primary)"
+      },
+      ".stat-value--primary": {
+        "color": "var(--colorPrimary, @color-primary)",
+        "font-weight": "700"
+      },
+      ".stat-value--success": {
+        "color": "var(--colorSuccess, @color-success)",
+        "font-weight": "600"
+      },
+      ".stat-value--error": {
+        "color": "var(--colorError, @color-error)",
+        "font-weight": "700"
+      },
+      ".stat-value--error-bracket::before": {
+        "content": "'('"
+      },
+      ".stat-value--error-bracket::after": {
+        "content": "')'"
+      },
+      ".stat-label": {
+        "color": "var(--colorTextSecondary, @color-text-secondary)",
+        "font-size": "0.86em"
+      }
+    },
+    "tokenCoverage": 0.91,
+    "mappingNotes": [
+      "背景色 rgba(237,244,251,1) 同时作为页面底色（--colorPrimaryBg）和 Tab active 的反衬背景",
+      "蓝色 rgba(25,144,255,1) 映射为 --colorPrimary，用于标题菱形装饰、分隔线渐变起点、统计数值粗体、badge边框",
+      "青色 rgba(8,163,165,1) 映射为 --colorSuccess，专用于完好率等正向指标显示",
+      "红色 rgba(255,77,79,1) 映射为 --colorError，用于异常数、红色 badge 背景",
+      "标题栏底部分隔线用 linear-gradient 实现：从 @color-primary 渐变到透明，避免硬切割",
+      "菱形装饰使用正方形 + rotate(45deg) 实现，尺寸建议用 em 跟随字体缩放",
+      "Tab active 高亮用白色背景卡片效果（@color-bg-white），而非下划线，符合设计稿描述",
+      "数值异常括号显示通过 .stat-value--error-bracket 伪元素 ::before/::after 实现，便于条件渲染控制",
+      "容器背景直接落地为 Figma 字面量值 rgba(237,244,251,1)，同时通过 CSS 变量 --colorPrimaryBg 保持可配置性",
+      "所有尺寸值使用 em 单位，以组件根 font-size 为基准，支持平台字体缩放注入"
+    ],
+    "elementStyleMap": {
+      "section-header-stats": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "stat-device-type": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "stat-device-total": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "stat-health-rate": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "section-main-content": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-tabs": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-right-content": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-13": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "section-summary-cards": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-tunnel-device-group-x-1-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-tunnel-device-group-x-1-row-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-tunnel-device-group-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-tunnel-device": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-group-x-25-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-group-x-25-row-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-group-x-25": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-27": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-row-x-30": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-nanbeilan-device-group-x-1-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-nanbeilan-device-group-x-1-row-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-nanbeilan-device-group-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-nanbeilan-device": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-group-x-35-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-group-x-35-row-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-group-x-35": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-37": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-row-x-40": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "device-card-1-value-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "device-card-1": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-value-x-47": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "device-card-2-value-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "device-card-2": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-value-x-51": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "device-card-3-value-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "device-card-3": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-value-x-55": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "device-card-4-value-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "device-card-4": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-value-x-59": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "device-card-5-value-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "device-card-5": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-value-x-63": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "device-card-6-value-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "device-card-6": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-value-x-67": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "device-card-7-value-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "device-card-7": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-value-x-71": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "device-card-8-value-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "device-card-8": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-value-x-75": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "device-card-9-value-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "device-card-9": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-value-x-79": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "device-card-10-value-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "device-card-10": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-value-x-83": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "device-card-11-value-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "device-card-11": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-value-x-87": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "device-card-12-value-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "device-card-12": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-value-x-91": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8419": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8428": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8431": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8434": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "89:38": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8787": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8792": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8795": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8798": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8806": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8810": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8813": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8817": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "89:37": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8437": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8438": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8459": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8467": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8488": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8497": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8518": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8526": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8547": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8555": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8576": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8584": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8605": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8613": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8634": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8642": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8663": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8671": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8692": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8700": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8721": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8729": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8750": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8758": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "2:8779": {
+        "display": "flex",
+        "flex-direction": "row"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-header-stats",
+        "responsibility": "数据统计指标区（数字+标签+趋势）",
+        "elementCount": 9,
+        "title": "顶部统计指标栏",
+        "complexityScore": 20,
+        "complexityReasons": {
+          "elementCount": 9,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 2
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "section-main-content",
+        "responsibility": "主内容区",
+        "elementCount": 22,
+        "title": "主内容区",
+        "complexityScore": 70,
+        "complexityReasons": {
+          "elementCount": 22,
+          "charts": 0,
+          "interactions": 7,
+          "maxDepth": 6
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [
+          {
+            "type": "element-group",
+            "id": "section-main-content-group1",
+            "name": "Group1",
+            "responsibility": "元素分组 1（高密度拆分）",
+            "reason": "R2: 元素密度拆分（总计22个元素）",
+            "props": [],
+            "emits": []
+          },
+          {
+            "type": "element-group",
+            "id": "section-main-content-group2",
+            "name": "Group2",
+            "responsibility": "元素分组 2（高密度拆分）",
+            "reason": "R2: 元素密度拆分（总计22个元素）",
+            "props": [],
+            "emits": []
+          },
+          {
+            "type": "element-group",
+            "id": "section-main-content-group3",
+            "name": "Group3",
+            "responsibility": "元素分组 3（高密度拆分）",
+            "reason": "R2: 元素密度拆分（总计22个元素）",
+            "props": [],
+            "emits": []
+          }
+        ],
+        "shouldSplitInternally": true
+      },
+      {
+        "id": "2:8419",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 6,
+        "title": "header",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 6,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0.446,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "2:8428",
+        "responsibility": "Frame 2136638825（请按功能拆分）",
+        "elementCount": 2,
+        "title": "Frame 2136638825",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 2,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0.341,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "2:8431",
+        "responsibility": "Frame 2136638826（请按功能拆分）",
+        "elementCount": 2,
+        "title": "Frame 2136638826",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 2,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0.341,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "2:8434",
+        "responsibility": "Frame 2136638827（请按功能拆分）",
+        "elementCount": 2,
+        "title": "Frame 2136638827",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 2,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0.341,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "89:38",
+        "responsibility": "switch（请按功能拆分）",
+        "elementCount": 2,
+        "title": "switch",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 2,
+          "charts": 0,
+          "interactions": 1,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0.96,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "2:8787",
+        "responsibility": "active（请按功能拆分）",
+        "elementCount": 2,
+        "title": "active",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 2,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0.96,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "2:8792",
+        "responsibility": "line1（请按功能拆分）",
+        "elementCount": 2,
+        "title": "line1",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 2,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0.341,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "2:8795",
+        "responsibility": "line2（请按功能拆分）",
+        "elementCount": 2,
+        "title": "line2",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 2,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0.341,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "2:8798",
+        "responsibility": "icon（请按功能拆分）",
+        "elementCount": 6,
+        "title": "icon",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 6,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0.42,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "2:8806",
+        "responsibility": "default（请按功能拆分）",
+        "elementCount": 2,
+        "title": "default",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 2,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0.96,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "2:8810",
+        "responsibility": "line1（请按功能拆分）",
+        "elementCount": 2,
+        "title": "line1",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 2,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0.341,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "2:8813",
+        "responsibility": "line2（请按功能拆分）",
+        "elementCount": 2,
+        "title": "line2",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 2,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0.341,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "2:8817",
+        "responsibility": "icon（请按功能拆分）",
+        "elementCount": 6,
+        "title": "icon",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 6,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0.42,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "89:37",
+        "responsibility": "标签页切换区",
+        "elementCount": 2,
+        "title": "@antd/tab",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 2,
+          "charts": 0,
+          "interactions": 1,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 4.697,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false,
+        "tabStructure": {
+          "nav": {
+            "present": false,
+            "placeholder": true
+          },
+          "panels": [
+            "89:39",
+            "2:8437"
+          ]
+        }
+      },
+      {
+        "id": "2:8437",
+        "responsibility": "cons（请按功能拆分）",
+        "elementCount": 3,
+        "title": "cons",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 3,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 4.371,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "2:8438",
+        "responsibility": "Group 2136637321（请按功能拆分）",
+        "elementCount": 3,
+        "title": "Group 2136637321",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 3,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0.948,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "2:8459",
+        "responsibility": "Group 1321317970（请按功能拆分）",
+        "elementCount": 2,
+        "title": "Group 1321317970",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 2,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "2:8467",
+        "responsibility": "Group 2136637552（请按功能拆分）",
+        "elementCount": 3,
+        "title": "Group 2136637552",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 3,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0.948,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "2:8488",
+        "responsibility": "Group 1321317970（请按功能拆分）",
+        "elementCount": 2,
+        "title": "Group 1321317970",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 2,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "2:8497",
+        "responsibility": "Group 2136637555（请按功能拆分）",
+        "elementCount": 3,
+        "title": "Group 2136637555",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 3,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0.948,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "2:8518",
+        "responsibility": "Group 1321317970（请按功能拆分）",
+        "elementCount": 2,
+        "title": "Group 1321317970",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 2,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "2:8526",
+        "responsibility": "Group 2136637558（请按功能拆分）",
+        "elementCount": 3,
+        "title": "Group 2136637558",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 3,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0.948,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "2:8547",
+        "responsibility": "Group 1321317970（请按功能拆分）",
+        "elementCount": 2,
+        "title": "Group 1321317970",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 2,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "2:8555",
+        "responsibility": "Group 2136637550（请按功能拆分）",
+        "elementCount": 3,
+        "title": "Group 2136637550",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 3,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0.948,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "2:8576",
+        "responsibility": "Group 1321317970（请按功能拆分）",
+        "elementCount": 2,
+        "title": "Group 1321317970",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 2,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "2:8584",
+        "responsibility": "Group 2136637553（请按功能拆分）",
+        "elementCount": 3,
+        "title": "Group 2136637553",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 3,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0.948,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "2:8605",
+        "responsibility": "Group 1321317970（请按功能拆分）",
+        "elementCount": 2,
+        "title": "Group 1321317970",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 2,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "2:8613",
+        "responsibility": "Group 2136637556（请按功能拆分）",
+        "elementCount": 3,
+        "title": "Group 2136637556",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 3,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0.948,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "2:8634",
+        "responsibility": "Group 1321317970（请按功能拆分）",
+        "elementCount": 2,
+        "title": "Group 1321317970",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 2,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "2:8642",
+        "responsibility": "Group 2136637559（请按功能拆分）",
+        "elementCount": 3,
+        "title": "Group 2136637559",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 3,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0.948,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "2:8663",
+        "responsibility": "Group 1321317970（请按功能拆分）",
+        "elementCount": 2,
+        "title": "Group 1321317970",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 2,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "2:8671",
+        "responsibility": "Group 2136637551（请按功能拆分）",
+        "elementCount": 3,
+        "title": "Group 2136637551",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 3,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0.948,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "2:8692",
+        "responsibility": "Group 1321317970（请按功能拆分）",
+        "elementCount": 2,
+        "title": "Group 1321317970",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 2,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "2:8700",
+        "responsibility": "Group 2136637554（请按功能拆分）",
+        "elementCount": 3,
+        "title": "Group 2136637554",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 3,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0.948,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "2:8721",
+        "responsibility": "Group 1321317970（请按功能拆分）",
+        "elementCount": 2,
+        "title": "Group 1321317970",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 2,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "2:8729",
+        "responsibility": "Group 2136637557（请按功能拆分）",
+        "elementCount": 3,
+        "title": "Group 2136637557",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 3,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0.948,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "2:8750",
+        "responsibility": "Group 1321317970（请按功能拆分）",
+        "elementCount": 2,
+        "title": "Group 1321317970",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 2,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "2:8758",
+        "responsibility": "Group 2136637560（请按功能拆分）",
+        "elementCount": 3,
+        "title": "Group 2136637560",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 3,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0.948,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "2:8779",
+        "responsibility": "Group 1321317970（请按功能拆分）",
+        "elementCount": 2,
+        "title": "Group 1321317970",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 2,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "flexGrow": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      }
+    ],
+    "isForced": true,
+    "minFiles": 44,
+    "reason": "有效 sections=41 ≥ 3 或存在高复杂度 section → 强制拆分",
+    "internalSubcomponents": [
+      {
+        "type": "element-group",
+        "id": "section-main-content-group1",
+        "name": "Group1",
+        "responsibility": "元素分组 1（高密度拆分）",
+        "reason": "R2: 元素密度拆分（总计22个元素）",
+        "props": [],
+        "emits": [],
+        "parentSectionId": "section-main-content",
+        "parentSectionTitle": "主内容区"
+      },
+      {
+        "type": "element-group",
+        "id": "section-main-content-group2",
+        "name": "Group2",
+        "responsibility": "元素分组 2（高密度拆分）",
+        "reason": "R2: 元素密度拆分（总计22个元素）",
+        "props": [],
+        "emits": [],
+        "parentSectionId": "section-main-content",
+        "parentSectionTitle": "主内容区"
+      },
+      {
+        "type": "element-group",
+        "id": "section-main-content-group3",
+        "name": "Group3",
+        "responsibility": "元素分组 3（高密度拆分）",
+        "reason": "R2: 元素密度拆分（总计22个元素）",
+        "props": [],
+        "emits": [],
+        "parentSectionId": "section-main-content",
+        "parentSectionTitle": "主内容区"
+      }
+    ],
+    "diagnostics": null
+  }
+}

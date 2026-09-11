@@ -1,0 +1,98 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 75,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "header.title与body中的文本节点重复定义了标题'环境监测'，存在冗余。",
+        "suggestion": "移除body中的冗余文本，统一使用header.title承载标题内容。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[1].body.children[0].children[1].children[1]",
+        "message": "列表视图按钮内部嵌套icon和badge导致层级过深，增加DOM复杂度。",
+        "suggestion": "将badge作为icon-button的附属属性或简化children结构，减少嵌套。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].headerRelation",
+        "message": "headerRelation为title-itself，但标题内容被错误放置在body中。",
+        "suggestion": "将标题内容移至header字段，或修正headerRelation以匹配实际结构。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "图表解析覆盖率仅53%，缺失Y轴刻度、预警线及图例等关键文本。",
+        "suggestion": "补充解析缺失的图表文本元素，确保图表配置信息完整。"
+      }
+    ],
+    "recommendations": [
+      "优化面板标题结构，严格遵循header/body语义，避免内容重复。",
+      "提升视觉解析覆盖率，确保图表坐标轴、图例及辅助线文本完整提取。",
+      "扁平化图标按钮结构，减少不必要的中间容器节点以提升渲染性能。"
+    ],
+    "summary": "整体结构基本清晰，但存在标题冗余、局部嵌套过深及图表元素解析缺失等问题。建议优化header/body语义映射，扁平化按钮结构，并补全图表解析数据。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "--text-color": "#333333",
+      "--bg": "#ffffff",
+      "--primary": "#1677ff",
+      "--border": "rgba(0, 0, 0, 0.08)",
+      "--border-radius-base": "8px",
+      "--font-size-base": "14px",
+      "--gap": "12px"
+    },
+    "lessVariables": {
+      "@text-color": "#333333",
+      "@bg": "#ffffff",
+      "@primary": "#1677ff",
+      "@border": "rgba(0, 0, 0, 0.08)",
+      "@border-radius-base": "8px",
+      "@font-size-base": "14px",
+      "@gap": "12px"
+    },
+    "cssClasses": {},
+    "tokenCoverage": 0.6,
+    "elementStyleMap": {
+      "section-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-content": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "tabs-list": {
+        "display": "flex",
+        "flex-direction": "row"
+      }
+    },
+    "synthesizedFallback": true
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-header",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 2,
+        "title": "环境监测"
+      },
+      {
+        "id": "section-content",
+        "responsibility": "主内容区",
+        "elementCount": 13,
+        "title": "监测数据展示"
+      }
+    ],
+    "isForced": false,
+    "minFiles": 0,
+    "reason": "有效 sections=2 < 3 → 不强制拆分"
+  }
+}

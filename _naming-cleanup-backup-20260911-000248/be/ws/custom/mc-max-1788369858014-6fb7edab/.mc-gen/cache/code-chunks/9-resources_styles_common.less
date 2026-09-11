@@ -1,0 +1,297 @@
+@import './themes/theme-vars.less';
+
+.common();
+.theme-light();
+
+// ─────────────────────────────────────────────
+// 根容器
+// ─────────────────────────────────────────────
+.c-monitor-root {
+  font-size: var(--fontSize, 14px);
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+// ─────────────────────────────────────────────
+// 主布局（左导航 + 右内容区）
+// ─────────────────────────────────────────────
+.c-monitor-main-layout {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  overflow: hidden;
+  gap: 8px;
+}
+
+// ─────────────────────────────────────────────
+// 右侧内容区
+// ─────────────────────────────────────────────
+.c-monitor-content-area {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  gap: 8px;
+}
+
+// ─────────────────────────────────────────────
+// 左侧导航
+// ─────────────────────────────────────────────
+.c-monitor-left-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0;
+  flex-shrink: 0;
+  width: 72px;
+}
+
+.c-monitor-nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 4px;
+  cursor: pointer;
+  border-radius: 4px;
+  background: linear-gradient(#85baff, #bfe2ff);
+  border: 1px solid #f0f5ff;
+  transition: all 0.2s ease;
+
+  &--active,
+  &.c-monitor-nav-item--active {
+    background: linear-gradient(#318aff, #70bfff);
+    border-color: #f0f5ff;
+  }
+}
+
+.c-monitor-nav-label {
+  font-size: @fontSize;
+  font-weight: 700;
+  color: #3b80e7;
+
+  .c-monitor-nav-item--active & {
+    color: #ffffff;
+  }
+}
+
+.c-monitor-nav-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 29px;
+  background: #f53f3f;
+  color: #ffffff;
+  font-size: calc(@fontSize * 0.857);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+// ─────────────────────────────────────────────
+// 统计横幅
+// ─────────────────────────────────────────────
+.c-monitor-stats-banner {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.c-monitor-global-stats {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+}
+
+.c-monitor-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.c-monitor-stat-label {
+  font-size: @fontSize;
+  font-weight: 400;
+  color: #333333;
+}
+
+.c-monitor-stat-value {
+  font-size: calc(@fontSize * 1.4286);
+  font-weight: 700;
+  color: #1990ff;
+  line-height: 1.2;
+}
+
+.c-monitor-stat-value-highlight {
+  color: #1990ff;
+}
+
+.c-monitor-stat-value-success {
+  color: #08a3a5;
+}
+
+// ─────────────────────────────────────────────
+// 设备卡片（StatsBanner 内的隧道/桥梁卡片）
+// ─────────────────────────────────────────────
+.c-monitor-device-card {
+  display: flex;
+  flex-direction: column;
+  border-radius: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+// 隧道卡片 — 深色蓝底（Figma: Rectangle 346241414 → #2b9bff/#299aff gradient）
+.c-monitor-device-card-tunnel {
+  background: linear-gradient(#2b9bff, #299aff);
+  padding: 10px 12px;
+}
+
+// 桥梁卡片 — 浅色背景（Figma: Rectangle 346241415 → #93ccff；浅底文字为深色）
+.c-monitor-device-card-bridge {
+  background: linear-gradient(#93ccff, #93ccff);
+  padding: 10px 12px;
+  border: 1px solid #f0f5ff;
+  box-shadow: 0px 1px 2px rgba(51, 101, 144, 0.4);
+}
+
+.c-monitor-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.c-monitor-card-label {
+  font-size: calc(@fontSize * 0.857);
+  font-weight: 400;
+  color: #ffffff;
+  white-space: nowrap;
+
+  .c-monitor-device-card-bridge & {
+    color: #333333;
+  }
+}
+
+.c-monitor-card-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.c-monitor-card-stat-row {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.c-monitor-card-stat-label {
+  font-size: @fontSize;
+  font-weight: 400;
+  color: #ffffff;
+  white-space: nowrap;
+
+  .c-monitor-device-card-bridge & {
+    color: #333333;
+  }
+}
+
+.c-monitor-card-stat-value {
+  font-size: calc(@fontSize * 1.4286);
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.2;
+
+  .c-monitor-device-card-bridge & {
+    color: #1990ff;
+  }
+}
+
+.c-monitor-card-stat-value-error {
+  color: #e03434;
+}
+
+// ─────────────────────────────────────────────
+// 设备网格（DeviceGrid）
+// ─────────────────────────────────────────────
+.c-monitor-device-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.c-monitor-device-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+}
+
+.c-monitor-device-icon-placeholder {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  background: rgba(24, 144, 255, 0.1);
+}
+
+.c-monitor-device-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+}
+
+.c-monitor-device-label {
+  font-size: calc(@fontSize * 0.857);
+  color: #333333;
+  font-weight: 400;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.c-monitor-device-value {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+}
+
+.c-monitor-device-online {
+  font-size: calc(@fontSize * 1.1429);
+  font-weight: 500;
+  color: #ffffff;
+  text-shadow: 0px 0px 0px rgba(0, 0, 0, 0.5);
+  line-height: 1.2;
+}
+
+.c-monitor-device-separator {
+  font-size: @fontSize;
+  color: #ffffff;
+  margin: 0 1px;
+}
+
+.c-monitor-device-total {
+  font-size: calc(@fontSize * 1.1429);
+  font-weight: 500;
+  color: #ffffff;
+  text-shadow: 0px 0px 0px rgba(0, 0, 0, 0.5);
+  line-height: 1.2;
+}

@@ -1,0 +1,70 @@
+// 主题变量定义文件
+// 由系统自动生成的 dark.less/light.less 会在主题选择器内调用这些 mixin
+
+// 公共变量（所有主题共享）
+.common() {
+  // 背景图资源（从设计稿映射提取）
+  @bg-image-7890: url(../resources/images/bg-7890.png);
+  
+  // 基础间距
+  @spacing-xs: 4px;
+  @spacing-sm: 8px;
+  @spacing-md: 16px;
+  @spacing-lg: 24px;
+  @spacing-xl: 32px;
+  
+  // 基础圆角
+  @radius-sm: 2px;
+  @radius-md: 4px;
+  @radius-lg: 8px;
+  
+  // 字体大小
+  @font-size-sm: 12px;
+  @font-size-base: 14px;
+  @font-size-lg: 16px;
+  @font-size-xl: 18px;
+  
+  // 透明度
+  @opacity-disabled: 0.4;
+  @opacity-hover: 0.8;
+}
+
+// 深色主题
+.theme-dark() {
+  // 背景色
+  @bg-color: #1a1a1a;
+  @bg-color-secondary: #262626;
+  
+  // 文字色（深色主题禁止使用黑色系）
+  @text-color-primary: #ffffff;
+  @text-color-secondary: rgba(255, 255, 255, 0.85);
+  @text-color-tertiary: rgba(255, 255, 255, 0.65);
+  @text-color-disabled: rgba(255, 255, 255, 0.45);
+  
+  // 边框色
+  @border-color: rgba(255, 255, 255, 0.15);
+  @border-color-hover: rgba(255, 255, 255, 0.25);
+  
+  // 分割线色
+  @divider-color: rgba(255, 255, 255, 0.12);
+}
+
+// 浅色主题（默认主题，与设计稿一致）
+.theme-light() {
+  // 背景色
+  @bg-color: #ffffff;
+  @bg-color-secondary: #f5f5f5;
+  
+  // 文字色
+  @text-color-primary: #333333;
+  @text-color-secondary: rgba(0, 0, 0, 0.85);
+  @text-color-tertiary: rgba(0, 0, 0, 0.65);
+  @text-color-disabled: rgba(0, 0, 0, 0.45);
+  
+  // 边框色
+  @border-color: #d9d9d9;
+  @border-color-hover: #bfbfbf;
+  
+  // 分割线色
+  @divider-color: #e8e8e8;
+}

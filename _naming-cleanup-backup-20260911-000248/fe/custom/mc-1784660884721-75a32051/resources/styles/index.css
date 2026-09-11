@@ -1,0 +1,391 @@
+/* [Style Refine] Theme colors extracted from Figma fills data */
+:root {
+  --em-bg-primary: #053133;
+  --em-bg-overlay: rgba(5, 49, 51, 0.9);
+  --em-border-primary: #086363;
+  --em-border-accent: #18ffce;
+  --em-text-primary: #ffffff;
+  --em-text-secondary: rgba(255, 255, 255, 0.8);
+  --em-text-tertiary: rgba(255, 255, 255, 0.6);
+  --em-accent-primary: #00f0ff;
+  --em-accent-cyan: #18ffce;
+  --em-accent-glow: rgba(0, 240, 255, 0.6);
+  --em-gradient-bg: linear-gradient(180deg, #064638 0%, #0e6b55 100%);
+  --em-gradient-divider: linear-gradient(90deg, #0bccfe 0%, #0bccfe 100%);
+}
+.c-test-e2e-v4-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+/* [Style Refine] title icon from Group 4114 dimensions */
+.c-test-e2e-v4-title-icon {
+  width: 17px;
+  height: 18px;
+  object-fit: contain;
+}
+/* [Style Refine] bg node fills[0].color → rgba(5,49,51,1) */
+/* [Style Refine] bg node strokes[0].color → rgba(8,99,99,1), strokeWeight → 1px */
+/* [Style Refine] bg node cornerRadius not set → border-radius: 0 */
+.c-test-e2e-v4-content {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: #053133;
+  border: 1px solid #086363;
+  border-radius: 0;
+  padding: 16px 20px;
+  overflow: hidden;
+}
+/* [Style Refine] 分割线 decorative image - positioned absolutely */
+.c-test-e2e-v4-divider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: auto;
+  pointer-events: none;
+}
+/* [Style Refine] 矩形 decorative image - positioned absolutely */
+.c-test-e2e-v4-rect {
+  position: absolute;
+  top: 8px;
+  right: 20px;
+  width: auto;
+  height: 12px;
+  pointer-events: none;
+}
+/* [Style Refine] 矩形备份 decorative image - positioned absolutely */
+.c-test-e2e-v4-rect-copy {
+  position: absolute;
+  bottom: 8px;
+  left: 20px;
+  width: auto;
+  height: 2px;
+  pointer-events: none;
+}
+.c-test-e2e-v4-stats-list {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 8px;
+}
+.c-test-e2e-v4-stat-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+/* [Style Refine] icon dimensions from Figma list item icons (43x44px) */
+.c-test-e2e-v4-stat-icon {
+  width: 43px;
+  height: 44px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.c-test-e2e-v4-text-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+/* [Style Refine] Secondary text color from visual analysis → rgba(255,255,255,0.8) */
+.c-test-e2e-v4-stat-label {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.c-test-e2e-v4-stat-value-wrapper {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 4px;
+}
+/* [Style Refine] Primary text color → rgba(255,255,255,1) */
+/* [Style Refine] Glow effect from visual analysis → text-shadow with cyan accent */
+.c-test-e2e-v4-stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #ffffff;
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
+  white-space: nowrap;
+}
+/* [Style Refine] Secondary text color → rgba(255,255,255,0.8) */
+.c-test-e2e-v4-stat-unit {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.8);
+  white-space: nowrap;
+}
+.dark {
+  --em-bg-primary: #053133;
+  --em-bg-overlay: rgba(5, 49, 51, 0.9);
+  --em-border-primary: #086363;
+  --em-border-accent: #18ffce;
+  --em-text-primary: #ffffff;
+  --em-text-secondary: rgba(255, 255, 255, 0.8);
+  --em-text-tertiary: rgba(255, 255, 255, 0.6);
+  --em-accent-primary: #00f0ff;
+  --em-accent-cyan: #18ffce;
+  --em-accent-glow: rgba(0, 240, 255, 0.6);
+  --em-gradient-bg: linear-gradient(180deg, #064638 0%, #0e6b55 100%);
+  --em-gradient-divider: linear-gradient(90deg, #0bccfe 0%, #0bccfe 100%);
+  /* [Style Refine] title icon from Group 4114 dimensions */
+  /* [Style Refine] bg node fills[0].color → rgba(5,49,51,1) */
+  /* [Style Refine] bg node strokes[0].color → rgba(8,99,99,1), strokeWeight → 1px */
+  /* [Style Refine] bg node cornerRadius not set → border-radius: 0 */
+  /* [Style Refine] 分割线 decorative image - positioned absolutely */
+  /* [Style Refine] 矩形 decorative image - positioned absolutely */
+  /* [Style Refine] 矩形备份 decorative image - positioned absolutely */
+  /* [Style Refine] icon dimensions from Figma list item icons (43x44px) */
+  /* [Style Refine] Secondary text color from visual analysis → rgba(255,255,255,0.8) */
+  /* [Style Refine] Primary text color → rgba(255,255,255,1) */
+  /* [Style Refine] Glow effect from visual analysis → text-shadow with cyan accent */
+  /* [Style Refine] Secondary text color → rgba(255,255,255,0.8) */
+}
+.dark .c-test-e2e-v4-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+.dark .c-test-e2e-v4-title-icon {
+  width: 17px;
+  height: 18px;
+  object-fit: contain;
+}
+.dark .c-test-e2e-v4-content {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: #053133;
+  border: 1px solid #086363;
+  border-radius: 0;
+  padding: 16px 20px;
+  overflow: hidden;
+}
+.dark .c-test-e2e-v4-divider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: auto;
+  pointer-events: none;
+}
+.dark .c-test-e2e-v4-rect {
+  position: absolute;
+  top: 8px;
+  right: 20px;
+  width: auto;
+  height: 12px;
+  pointer-events: none;
+}
+.dark .c-test-e2e-v4-rect-copy {
+  position: absolute;
+  bottom: 8px;
+  left: 20px;
+  width: auto;
+  height: 2px;
+  pointer-events: none;
+}
+.dark .c-test-e2e-v4-stats-list {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 8px;
+}
+.dark .c-test-e2e-v4-stat-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+.dark .c-test-e2e-v4-stat-icon {
+  width: 43px;
+  height: 44px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.dark .c-test-e2e-v4-text-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+.dark .c-test-e2e-v4-stat-label {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dark .c-test-e2e-v4-stat-value-wrapper {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 4px;
+}
+.dark .c-test-e2e-v4-stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #ffffff;
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
+  white-space: nowrap;
+}
+.dark .c-test-e2e-v4-stat-unit {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.8);
+  white-space: nowrap;
+}
+.light {
+  --em-bg-primary: #f0f8f8;
+  --em-bg-overlay: rgba(255, 255, 255, 0.95);
+  --em-border-primary: #c8dcdc;
+  --em-border-accent: #00c8b4;
+  --em-text-primary: #141414;
+  --em-text-secondary: #3c3c3c;
+  --em-text-tertiary: #646464;
+  --em-accent-primary: #00b4c8;
+  --em-accent-cyan: #00c8b4;
+  --em-accent-glow: rgba(0, 180, 200, 0.4);
+  --em-gradient-bg: linear-gradient(180deg, #e6f5f0 0%, #dcf0eb 100%);
+  --em-gradient-divider: linear-gradient(90deg, #00b4c8 0%, #00c8b4 100%);
+  /* [Style Refine] title icon from Group 4114 dimensions */
+  /* [Style Refine] bg node fills[0].color → rgba(5,49,51,1) */
+  /* [Style Refine] bg node strokes[0].color → rgba(8,99,99,1), strokeWeight → 1px */
+  /* [Style Refine] bg node cornerRadius not set → border-radius: 0 */
+  /* [Style Refine] 分割线 decorative image - positioned absolutely */
+  /* [Style Refine] 矩形 decorative image - positioned absolutely */
+  /* [Style Refine] 矩形备份 decorative image - positioned absolutely */
+  /* [Style Refine] icon dimensions from Figma list item icons (43x44px) */
+  /* [Style Refine] Secondary text color from visual analysis → rgba(255,255,255,0.8) */
+  /* [Style Refine] Primary text color → rgba(255,255,255,1) */
+  /* [Style Refine] Glow effect from visual analysis → text-shadow with cyan accent */
+  /* [Style Refine] Secondary text color → rgba(255,255,255,0.8) */
+}
+.light .c-test-e2e-v4-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+.light .c-test-e2e-v4-title-icon {
+  width: 17px;
+  height: 18px;
+  object-fit: contain;
+}
+.light .c-test-e2e-v4-content {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: #053133;
+  border: 1px solid #086363;
+  border-radius: 0;
+  padding: 16px 20px;
+  overflow: hidden;
+}
+.light .c-test-e2e-v4-divider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: auto;
+  pointer-events: none;
+}
+.light .c-test-e2e-v4-rect {
+  position: absolute;
+  top: 8px;
+  right: 20px;
+  width: auto;
+  height: 12px;
+  pointer-events: none;
+}
+.light .c-test-e2e-v4-rect-copy {
+  position: absolute;
+  bottom: 8px;
+  left: 20px;
+  width: auto;
+  height: 2px;
+  pointer-events: none;
+}
+.light .c-test-e2e-v4-stats-list {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 8px;
+}
+.light .c-test-e2e-v4-stat-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+.light .c-test-e2e-v4-stat-icon {
+  width: 43px;
+  height: 44px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.light .c-test-e2e-v4-text-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+.light .c-test-e2e-v4-stat-label {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.light .c-test-e2e-v4-stat-value-wrapper {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 4px;
+}
+.light .c-test-e2e-v4-stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #ffffff;
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
+  white-space: nowrap;
+}
+.light .c-test-e2e-v4-stat-unit {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.8);
+  white-space: nowrap;
+}

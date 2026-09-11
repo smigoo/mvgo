@@ -1,0 +1,272 @@
+// 设备监测大屏 公共业务样式
+// 对应 package/index.vue
+
+// ===== 根内容容器 =====
+// base-panel 已处理面板外壳（标题、边框、阴影），此处仅处理内容布局
+.c-monitor-root {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  height: 100%;
+}
+
+// ===== 头部统计区（面板 header-right 插槽）=====
+.c-monitor-header-stats {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 32px;
+}
+
+.c-monitor-header-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.c-monitor-header-stat-label {
+  font-size: 14px;
+  font-weight: 400;
+  color: #333333;
+  line-height: 22px;
+}
+
+.c-monitor-header-stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1990ff;
+  line-height: 28px;
+}
+
+// 完好率统计值使用独立色
+.c-monitor-header-stat:nth-child(3) .c-monitor-header-stat-value {
+  color: #08a3a5;
+}
+
+// ===== 设备汇总卡片区 =====
+.c-monitor-overview-cards {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+}
+
+.c-monitor-summary-card {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex: 1;
+  border-radius: 6px;
+  padding: 16px 20px;
+}
+
+// 隧道设备卡片（深蓝渐变）
+.c-monitor-summary-card:first-child {
+  background: linear-gradient(180deg, #2b9bff 0%, #299aff 100%);
+}
+
+.c-monitor-summary-card:first-child .c-monitor-card-label,
+.c-monitor-summary-card:first-child .c-monitor-card-value {
+  color: #ffffff;
+}
+
+// 南北接线设备卡片（浅蓝渐变）
+.c-monitor-summary-card:last-child {
+  background: linear-gradient(180deg, #93ccff 0%, #93ccff 100%);
+}
+
+.c-monitor-summary-card:last-child .c-monitor-card-label {
+  color: #333333;
+}
+
+.c-monitor-summary-card:last-child .c-monitor-card-value {
+  color: #1990ff;
+}
+
+.c-monitor-card-icon {
+  display: block;
+  width: 48px;
+  height: 48px;
+  margin-right: 12px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.c-monitor-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.c-monitor-card-label-row {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.c-monitor-card-label {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 22px;
+}
+
+.c-monitor-card-value {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 28px;
+}
+
+.c-monitor-card-abnormal {
+  font-size: 20px;
+  font-weight: 700;
+  color: #e03434;
+  line-height: 28px;
+}
+
+// ===== 设备列表与分类区 =====
+.c-monitor-device-section {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+  flex: 1;
+  padding: 16px;
+  background-image: url(../images/bg-8788.png);
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+
+// 左侧分类 Tab 栏
+.c-monitor-sidebar-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 120px;
+  flex-shrink: 0;
+}
+
+.c-monitor-tab-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: linear-gradient(180deg, #85baff 0%, #bfe2ff 100%);
+  border: 1px solid #f0f5ff;
+  cursor: pointer;
+  color: #3b80e7;
+  font-size: 14px;
+  font-weight: 400;
+  transition: all 0.3s ease-in-out;
+}
+
+.c-monitor-tab-item.active {
+  background: linear-gradient(180deg, #318aff 0%, #70bfff 100%);
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.c-monitor-tab-label {
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.c-monitor-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+// 监控 tab 徽章（3/3740）白色描边样式
+.c-monitor-tab-item:nth-child(1) .c-monitor-tab-badge {
+  background: #ffffff;
+  border: 1px solid #258dc8;
+  box-shadow: 0px 1px 2px rgba(51, 101, 144, 0.4);
+  color: #3b80e7;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 4px;
+  height: 24px;
+  padding: 0 8px;
+}
+
+// 照明 tab 徽章（3）红色药丸样式
+.c-monitor-tab-item:nth-child(2) .c-monitor-tab-badge {
+  background: #f53f3f;
+  border-radius: 29px;
+  color: #ffffff;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+}
+
+// 右侧设备网格
+.c-monitor-device-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px 12px;
+  flex: 1;
+  align-content: start;
+}
+
+.c-monitor-device-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+}
+
+.c-monitor-device-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  background: linear-gradient(180deg, #127bee 0%, #127bee 100%);
+}
+
+.c-monitor-device-icon {
+  display: block;
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+.c-monitor-device-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  justify-content: center;
+  min-width: 0;
+}
+
+.c-monitor-device-name {
+  font-size: 12px;
+  font-weight: 400;
+  color: #333333;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.c-monitor-device-count {
+  font-size: 16px;
+  font-weight: 500;
+  color: #ffffff;
+  line-height: 22px;
+  text-shadow: 0 0 0 rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+}
+```

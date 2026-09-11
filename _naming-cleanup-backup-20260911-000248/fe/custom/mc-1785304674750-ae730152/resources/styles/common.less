@@ -1,0 +1,327 @@
+/* [Layout Refine] Root container strictly follows panel rules: no background/border/shadow */
+.c-device-monitor-root {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* [Style Refine] bg VECTOR fills #EDF4FB + shadow mapped to wrapper */
+.c-device-monitor-wrapper {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-size: 100% 100%
+  z-index: 0;
+}
+
+.c-device-monitor-inner {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 20px 4px 20px;
+  box-sizing: border-box;
+  min-height: 0;
+}
+
+/* [Layout Refine] header GROUP bbox y:460 h:30 → flex row, height 30px */
+.c-device-monitor-header {
+  display: flex;
+  align-items: center;
+  height: 30px;
+  flex-shrink: 0;
+}
+
+.c-device-monitor-header-left {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.c-device-monitor-header-icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* [Style Refine] 设备监测 TEXT fills gradient → #1990FF to #5A7EFF */
+.c-device-monitor-title {
+  font-size: 16px;
+  font-weight: 700;
+  background: var(--color-gradient-title);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.c-device-monitor-header-stats {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-left: 36px;
+}
+
+.c-device-monitor-stat-item {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+/* [Style Refine] 设备类型/总数/完好率 TEXT fills #333333 */
+.c-device-monitor-stat-label {
+  font-size: 14px;
+  color: var(--color-text-main);
+  line-height: 21px;
+}
+
+/* [Style Refine] 28/68562/98% TEXT fills gradient → #E1F0FF to #00CCFF */
+.c-device-monitor-stat-value {
+  font-family: 'Roboto', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 23px;
+  background: var(--color-gradient-blue);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* [Style Refine] *数据实时更新 TEXT fills gradient */
+.c-device-monitor-header-tip {
+  margin-left: auto;
+  font-size: 14px;
+  background: var(--color-gradient-title);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* [Layout Refine] slot-con FRAME → flex column, flex: 1 */
+.c-device-monitor-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  margin-top: 12px;
+}
+
+/* [Layout Refine] switch FRAME bbox h:64.8 → flex row, height 65px */
+.c-device-monitor-switch {
+  display: flex;
+  gap: 10px;
+  height: 65px;
+  flex-shrink: 0;
+}
+
+/* [Style Refine] active/default bg gradient mapped */
+.c-device-monitor-switch-card {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  border-radius: 4px;
+  background: var(--color-switch-default-bg);
+  border: 1px solid rgba(147, 204, 255, 0.5);
+  box-sizing: border-box;
+}
+
+.c-device-monitor-switch-card.is-active {
+  background: var(--color-switch-active-bg);
+  border: 1px solid rgba(43, 156, 255, 0.8);
+}
+
+.c-device-monitor-switch-icon {
+  width: 35px;
+  height: 28px;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.c-device-monitor-switch-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.c-device-monitor-switch-title {
+  font-size: 12px;
+  color: var(--color-text-main);
+  line-height: 16px;
+  margin-bottom: 4px;
+}
+
+.is-active .c-device-monitor-switch-title {
+  color: var(--color-text-white);
+}
+
+.c-device-monitor-switch-data {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.c-device-monitor-switch-label {
+  font-size: 14px;
+  color: var(--color-text-main);
+  line-height: 21px;
+}
+
+.is-active .c-device-monitor-switch-label {
+  color: var(--color-text-white);
+}
+
+.c-device-monitor-switch-num {
+  font-family: 'Roboto', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 23px;
+  background: var(--color-gradient-blue);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* [Style Refine] 异常数 fills #E03434 */
+.c-device-monitor-switch-num.is-warn {
+  background: none;
+  -webkit-text-fill-color: var(--color-warning);
+  color: var(--color-warning);
+}
+
+/* [Layout Refine] @antd/tab FRAME → flex row */
+.c-device-monitor-tab-con {
+  flex: 1;
+  display: flex;
+  margin-top: 12px;
+  min-height: 0;
+}
+
+/* [Layout Refine] tabs FRAME w:46 → flex column */
+.c-device-monitor-tabs {
+  width: 46px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+/* [Style Refine] tab bg gradient + vertical text */
+.c-device-monitor-tab {
+  width: 34px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 0;
+  background: var(--color-tab-default-bg);
+  border: 1px solid #F0F5FF;
+  border-radius: 4px 0 0 4px;
+  box-sizing: border-box;
+  cursor: pointer;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+}
+
+.c-device-monitor-tab.is-active {
+  background: var(--color-tab-active-bg);
+  border: 1px solid #F0F5FF;
+}
+
+.c-device-monitor-tab-text {
+  font-size: 14px;
+  font-weight: 400;
+  color: #3B80E6;
+  line-height: 16px;
+}
+
+.c-device-monitor-tab.is-active .c-device-monitor-tab-text {
+  color: #FFFFFF;
+  font-weight: 700;
+}
+
+.c-device-monitor-tab-badge {
+  font-size: 12px;
+  color: #3B80E6;
+  margin-top: 4px;
+  writing-mode: horizontal-tb;
+}
+
+.c-device-monitor-tab.is-active .c-device-monitor-tab-badge {
+  color: #FFFFFF;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 2px 4px;
+  border-radius: 2px;
+}
+
+/* [Layout Refine] cons GROUP → grid 3x4 */
+.c-device-monitor-cons {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  gap: 13px 8px;
+  padding: 12px;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* [Style Refine] card bg gradient + border */
+.c-device-monitor-card {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  background: var(--color-card-bg);
+  border-radius: 4px;
+  border: 1px solid rgba(71, 166, 250, 0.3);
+  box-sizing: border-box;
+}
+
+.c-device-monitor-card-icon {
+  width: 26px;
+  height: 32px;
+  margin-right: 8px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+}
+
+.c-device-monitor-card-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+/* [Style Refine] 摄像机/烟道机器人 TEXT fills #333333 */
+.c-device-monitor-card-name {
+  font-size: 12px;
+  color: var(--color-text-main);
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* [Style Refine] (2/484) TEXT fills #FFFFFF + shadow */
+.c-device-monitor-card-count {
+  font-family: 'Roboto', sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 19px;
+  color: #FFFFFF;
+  text-shadow: 0 0 0 rgba(0, 0, 0, 0.5);
+}

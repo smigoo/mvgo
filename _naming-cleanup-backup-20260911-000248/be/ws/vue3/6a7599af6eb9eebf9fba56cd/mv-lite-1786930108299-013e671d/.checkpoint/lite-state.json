@@ -1,0 +1,144 @@
+{
+  "stage": "codegen_done",
+  "brief": {
+    "layout": "垂直流式布局，主轴方向为纵向，从上至下依次排列功能模块；采用响应式栅格系统，各区域宽度撑满容器，高度按内容自适应；整体对齐方式为左对齐或居中对齐混合",
+    "regions": [
+      {
+        "name": "顶部导航栏",
+        "description": "左侧显示'日常养护'标题及图标，右侧显示时间筛选Tab（今日/本月/本年）",
+        "position": "top",
+        "size": "宽度100%，高度约8%"
+      },
+      {
+        "name": "巡查检查模块",
+        "description": "包含4个关键指标卡片（实巡应巡里程、完成率、巡查车数量、巡查员人数）及下方的柱状图+折线图组合图表",
+        "position": "upper-center",
+        "size": "宽度100%，高度约25%"
+      },
+      {
+        "name": "病害分布模块",
+        "description": "中心辐射状布局，中心显示总病害数（6起），周围环绕5个处理状态分类（养护维修、继续观察、纳入工程养护、现场处理等），配有工程车辆插图",
+        "position": "center",
+        "size": "宽度100%，高度约20%"
+      },
+      {
+        "name": "高发病害Top5",
+        "description": "横向排列的5个排名卡片，分别标注第1-5名，显示病害类型及发生次数，前3名带有金银铜奖牌图标",
+        "position": "lower-center",
+        "size": "宽度100%，高度约18%"
+      },
+      {
+        "name": "施工占道模块",
+        "description": "上方为三段式状态统计（待施工/施工中/已完成）及占道里程数据；中间为计划施工数量横幅；下方为三项作业类型占比分布（集约化作业/重复作业/其他）",
+        "position": "bottom",
+        "size": "宽度100%，高度约29%"
+      }
+    ],
+    "spacing": {
+      "outer": "四周保持均匀外边距，约16-24px；整体内边距紧凑，适合大屏展示",
+      "gap": "模块间垂直间距约16-20px；同模块内元素间距约12-16px；图表与卡片间留白适中",
+      "padding": "卡片内部 padding 约16px；图表区域 padding 约20px；文本容器 padding 约8-12px"
+    },
+    "colors": {
+      "primary": "#00E5C7",
+      "background": "#061520",
+      "surface": "#0A2332",
+      "text": "#FFFFFF",
+      "border": "#1A4A5E"
+    },
+    "typography": {
+      "size": "特大(32-48px)用于核心数据数字；大(20-24px)用于区域标题；中(16-18px)用于指标名称；小(12-14px)用于辅助说明和坐标轴标签",
+      "weight": "700-900用于数据高亮和标题；400-500用于常规文本；300用于辅助信息",
+      "lineHeight": "1.2-1.4用于标题；1.5-1.6用于正文；数据展示采用紧凑行高"
+    },
+    "components": [
+      "SegmentedControl(Tab切换器)",
+      "StatCard(带图标的数据统计卡片)",
+      "MixedChart(柱状图与折线图组合)",
+      "RadialFlowDiagram(环形流向分布图)",
+      "RankCard(排名展示卡片，含奖牌徽章)",
+      "StatusIndicator(三态状态指示器)",
+      "ProgressBar/PercentageRing(占比可视化)",
+      "IconButton(左右切换箭头按钮)"
+    ],
+    "textContent": [
+      "日常养护",
+      "今日",
+      "本月",
+      "本年",
+      "巡查检查",
+      "实巡/应巡里程",
+      "112.6/114.6 km",
+      "完成率",
+      "96.2%",
+      "巡查车",
+      "1 辆",
+      "巡查员",
+      "2 人",
+      "实际巡查",
+      "计划巡查",
+      "完成率(%)",
+      "病害分布",
+      "病害数",
+      "6 起",
+      "养护维修",
+      "3",
+      "继续观察",
+      "0",
+      "纳入工程养护",
+      "2",
+      "现场处理",
+      "1",
+      "高发病害top5",
+      "衬砌渗漏水",
+      "1 起",
+      "淤塞",
+      "2 起",
+      "洞口边(仰)坡危石洞口边沟",
+      "2 起",
+      "洞门起层剥落",
+      "2 起",
+      "检修道盖板缺损",
+      "1 起",
+      "施工占道",
+      "待施工",
+      "1 处",
+      "施工中",
+      "3 处",
+      "占道里程",
+      "28.26 km",
+      "已完成",
+      "1 处",
+      "计划施工",
+      "5 处",
+      "集约化作业",
+      "40%",
+      "重复作业",
+      "20%",
+      "其他",
+      "40%"
+    ],
+    "visualDetails": [
+      "整体采用深色模式(Dark Mode)，背景为深蓝黑色渐变",
+      "卡片和容器具有微妙的青色发光边框(Glow Border)效果，营造科技感",
+      "圆角半径统一约为8-12px",
+      "图表使用渐变填充：柱状图绿色(#00E5C7)与橙色(#FFB800)对比，折线图为金黄色",
+      "排名卡片采用阶梯式高度设计，第1名最高，依次递减",
+      "病害分布模块中心车辆插图采用等距视角(Isometric)",
+      "数字采用等宽字体(Monospace)或粗体无衬线体，关键数据使用黄色(#FFD700)或亮青色高亮",
+      "图标采用线性风格(Line Icon)或填充风格(Filled Icon)，位于文字左侧",
+      "底部施工占道区域具有透视网格背景效果"
+    ],
+    "interactions": [
+      "Tab切换栏：位于右上角，包含'今日'(当前激活态，高亮显示)、'本月'、'本年'三个选项，点击可切换时间维度",
+      "轮播控制：施工占道模块底部存在左右箭头按钮(< >)，暗示可横向滑动查看更多施工项目详情",
+      "潜在交互：各统计卡片可能支持点击跳转详情页；图表支持Hover显示Tooltip数据"
+    ]
+  },
+  "width": 508,
+  "height": 941,
+  "sourceType": "screenshot",
+  "componentType": "vue3",
+  "generationTier": "lite",
+  "vueCode": "<template>\n  <div class=\"dashboard-container\">\n    <!-- 顶部导航栏 -->\n    <header class=\"header\">\n      <div class=\"title\">\n        <svg class=\"title-icon\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#00E5C7\" stroke-width=\"2\">\n          <path d=\"M12 4L4 8v8l8 4 8-4V8l-8-4z\"/>\n        </svg>\n        <h1>日常养护</h1>\n      </div>\n      <div class=\"tabs\">\n        <button \n          v-for=\"tab in tabs\" \n          :key=\"tab.value\"\n          :class=\"['tab-btn', { active: activeTab === tab.value }]\"\n          @click=\"activeTab = tab.value\"\n        >\n          {{ tab.label }}\n        </button>\n      </div>\n    </header>\n\n    <!-- 主内容区 -->\n    <main class=\"main-content\">\n      <!-- 巡查检查模块 -->\n      <section class=\"section patrol-section\">\n        <h2 class=\"section-title\">巡查检查</h2>\n        \n        <!-- 统计卡片行 -->\n        <div class=\"stats-row\">\n          <div class=\"stat-card\">\n            <div class=\"stat-icon-circle\">\n              <svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#00E5C7\" stroke-width=\"2\">\n                <path d=\"M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z\"/>\n                <line x1=\"4\" y1=\"22\" x2=\"4\" y2=\"15\"/>\n              </svg>\n            </div>\n            <div class=\"stat-content\">\n              <div class=\"stat-label\">实巡/应巡里程</div>\n              <div class=\"stat-value highlight-cyan\">112.6/114.6 km</div>\n            </div>\n          </div>\n\n          <div class=\"stat-card\">\n            <div class=\"stat-icon-circle\">\n              <svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#00E5C7\" stroke-width=\"2\">\n                <circle cx=\"12\" cy=\"12\" r=\"10\"/>\n                <path d=\"M12 6v6l4 2\"/>\n              </svg>\n            </div>\n            <div class=\"stat-content\">\n              <div class=\"stat-label\">完成率</div>\n              <div class=\"stat-value highlight-cyan\">96.2%</div>\n            </div>\n          </div>\n\n          <div class=\"stat-card\">\n            <div class=\"stat-icon-circle\">\n              <svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#00E5C7\" stroke-width=\"2\">\n                <rect x=\"1\" y=\"3\" width=\"15\" height=\"13\" rx=\"2\"/>\n                <path d=\"M16 8h4l3 3v5a2 2 0 01-2 2h-1\"/>\n                <circle cx=\"5.5\" cy=\"18.5\" r=\"2.5\"/>\n                <circle cx=\"18.5\" cy=\"18.5\" r=\"2.5\"/>\n              </svg>\n            </div>\n            <div class=\"stat-content\">\n              <div class=\"stat-label\">巡查车</div>\n              <div class=\"stat-value highlight-cyan\">1 辆</div>\n            </div>\n          </div>\n\n          <div class=\"stat-card\">\n            <div class=\"stat-icon-circle\">\n              <svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#00E5C7\" stroke-width=\"2\">\n                <path d=\"M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2\"/>\n                <circle cx=\"9\" cy=\"7\" r=\"4\"/>\n                <path d=\"M23 21v-2a4 4 0 00-3-3.87\"/>\n                <path d=\"M16 3.13a4 4 0 010 7.75\"/>\n              </svg>\n            </div>\n            <div class=\"stat-content\">\n              <div class=\"stat-label\">巡查员</div>\n              <div class=\"stat-value highlight-cyan\">2 人</div>\n            </div>\n          </div>\n        </div>\n\n        <!-- 图表区域 -->\n        <div class=\"chart-wrapper\">\n          <div ref=\"patrolChartRef\" class=\"chart-box\"></div>\n        </div>\n      </section>\n\n      <!-- 病害分布模块 -->\n      <section class=\"section disease-section\">\n        <h2 class=\"section-title\">病害分布</h2>\n        <div class=\"disease-radial\">\n          <div class=\"disease-center\">\n            <div class=\"warning-icon\">⚠️</div>\n            <div class=\"center-label\">病害数</div>\n            <div class=\"center-value\">6 起</div>\n          </div>\n          \n          <div class=\"disease-item item-top-left\">\n            <div class=\"item-label\">养护维修</div>\n            <div class=\"item-value\">3</div>\n            <div class=\"item-bowl\"></div>\n          </div>\n          \n          <div class=\"disease-item item-top-right\">\n            <div class=\"item-label\">继续观察</div>\n            <div class=\"item-value\">0</div>\n            <div class=\"item-bowl\"></div>\n          </div>\n          \n          <div class=\"disease-item item-bottom-left\">\n            <div class=\"item-label\">纳入工程养护</div>\n            <div class=\"item-value\">2</div>\n            <div class=\"item-bowl\"></div>\n          </div>\n          \n          <div class=\"disease-item item-bottom-right\">\n            <div class=\"item-label\">现场处理</div>\n            <div class=\"item-value\">1</div>\n            <div class=\"item-bowl\"></div>\n          </div>\n\n          <div class=\"truck-icon\">🚛</div>\n        </div>\n      </section>\n\n      <!-- 高发病害Top5 -->\n      <section class=\"section top5-section\">\n        <h2 class=\"section-title\">高发病害top5</h2>\n        <div class=\"rank-list\">\n          <div class=\"rank-card rank-4\">\n            <div class=\"rank-badge\">4</div>\n            <div class=\"rank-count\">1 起</div>\n            <div class=\"rank-name\">衬砌<br>渗漏水</div>\n          </div>\n          \n          <div class=\"rank-card rank-2\">\n            <div class=\"rank-badge silver\">🥈</div>\n            <div class=\"rank-count highlight-red\">2 起</div>\n            <div class=\"rank-name\">淤塞</div>\n          </div>\n          \n          <div class=\"rank-card rank-1\">\n            <div class=\"rank-badge gold\">🥇</div>\n            <div class=\"rank-count highlight-red\">2 起</div>\n            <div class=\"rank-name\">洞口边<br>(仰)坡危石<br>洞口边沟</div>\n          </div>\n          \n          <div class=\"rank-card rank-3\">\n            <div class=\"rank-badge bronze\">🥉</div>\n            <div class=\"rank-count highlight-red\">2 起</div>\n            <div class=\"rank-name\">洞门起层<br>剥落</div>\n          </div>\n          \n          <div class=\"rank-card rank-5\">\n            <div class=\"rank-badge\">5</div>\n            <div class=\"rank-count\">1 起</div>\n            <div class=\"rank-name\">检修道<br>盖板缺损</div>\n          </div>\n        </div>\n      </section>\n\n      <!-- 施工占道模块 -->\n      <section class=\"section construction-section\">\n        <h2 class=\"section-title\">施工占道</h2>\n        \n        <!-- 状态统计行 -->\n        <div class=\"status-row\">\n          <div class=\"status-item\">\n            <div class=\"status-icon\">🏗️</div>\n            <div class=\"status-text\">\n              <div class=\"status-label\">待施工</div>\n              <div class=\"status-value\">1 处</div>\n            </div>\n          </div>\n          \n          <div class=\"divider\"></div>\n          \n          <div class=\"status-item\">\n            <div class=\"status-text\">\n              <div class=\"status-label\">施工中</div>\n              <div class=\"status-value highlight-yellow\">3 处</div>\n            </div>\n            <div class=\"status-extra\">\n              <div class=\"extra-label\">占道里程</div>\n              <div class=\"extra-value highlight-yellow\">28.26 km</div>\n            </div>\n          </div>\n          \n          <div class=\"divider\"></div>\n          \n          <div class=\"status-item\">\n            <div class=\"status-text\">\n              <div class=\"status-label\">已完成</div>\n              <div class=\"status-value\">1 处</div>\n            </div>\n          </div>\n        </div>\n\n        <!-- 计划施工横幅 -->\n        <div class=\"plan-banner\">\n          <button class=\"nav-btn left\" @click=\"handlePrev\">‹</button>\n          <div class=\"plan-content\">\n            <span class=\"plan-icon\">⚒️</span>\n            <span class=\"plan-label\">计划施工</span>\n            <span class=\"plan-value\">5 处</span>\n          </div>\n          <button class=\"nav-btn right\" @click=\"handleNext\">›</button>\n        </div>\n\n        <!-- 作业占比 -->\n        <div class=\"distribution-area\">\n          <div class=\"dist-item dist-left\">\n            <div class=\"dist-value\">2 处</div>\n            <div class=\"dist-label\">集约化作业 <span class=\"percent\">40%</span></div>\n          </div>\n          <div class=\"dist-item dist-center\">\n            <div class=\"dist-value\">1 处</div>\n            <div class=\"dist-label\">重复作业 <span class=\"percent\">20%</span></div>\n          </div>\n          <div class=\"dist-item dist-right\">\n            <div class=\"dist-value\">2 处</div>\n            <div class=\"dist-label\">其他 <span class=\"percent\">40%</span></div>\n          </div>\n        </div>\n      </section>\n    </main>\n  </div>\n</template>\n\n<script setup>\nimport { ref, onMounted, onUnmounted } from 'vue'\nimport * as echarts from 'echarts'\n\n// Tab 状态\nconst tabs = [\n  { label: '今日', value: 'today' },\n  { label: '本月', value: 'month' },\n  { label: '本年', value: 'year' }\n]\nconst activeTab = ref('today')\n\n// 图表相关\nconst patrolChartRef = ref(null)\nlet chart = null\nlet resizeObserver = null\n\n// 图表数据（响应式）\nconst chartData = {\n  categories: ['00', '02', '04', '06', '08', '10', '12', '14', '16', '18', '20', '22'],\n  actual: [75, 48, 55, 42, 60, 18, 22, 16, 48, 65, 10, 12],\n  planned: [35, 25, 45, 18, 42, 8, 10, 12, 28, 32, 8, 6],\n  completionRate: [38, 52, 58, 62, 56, 68, 72, 75, 82, 88, 92, 95]\n}\n\n// 初始化图表\nconst initChart = () => {\n  if (!patrolChartRef.value || chart) return\n  \n  const container = patrolChartRef.value\n  if (container.clientWidth === 0 || container.clientHeight === 0) return\n  \n  chart = echarts.init(container)\n  \n  const option = {\n    backgroundColor: 'transparent',\n    legend: {\n      data: ['实际巡查', '计划巡查', '完成率(%)'],\n      textStyle: { color: '#fff', fontSize: 11 },\n      top: 5,\n      right: 10,\n      itemWidth: 12,\n      itemHeight: 12,\n      itemGap: 15\n    },\n    grid: {\n      top: 35,\n      left: 40,\n      right: 45,\n      bottom: 25\n    },\n    xAxis: {\n      type: 'category',\n      data: chartData.categories,\n      axisLine: { lineStyle: { color: '#1A4A5E' } },\n      axisLabel: { color: '#8BA5B5', fontSize: 11 },\n      splitLine: { show: false }\n    },\n    yAxis: [\n      {\n        type: 'value',\n        name: '里程(km)',\n        nameTextStyle: { color: '#8BA5B5', fontSize: 10 },\n        max: 150,\n        interval: 30,\n        axisLine: { lineStyle: { color: '#1A4A5E' } },\n        axisLabel: { color: '#8BA5B5', fontSize: 10 },\n        splitLine: { lineStyle: { color: '#1A4A5E', type: 'dashed' } }\n      },\n      {\n        type: 'value',\n        name: '完成率(%)',\n        nameTextStyle: { color: '#8BA5B5', fontSize: 10 },\n        min: 0,\n        max: 100,\n        axisLine: { lineStyle: { color: '#1A4A5E' } },\n        axisLabel: { color: '#8BA5B5', fontSize: 10 },\n        splitLine: { show: false }\n      }\n    ],\n    series: [\n      {\n        name: '实际巡查',\n        type: 'bar',\n        data: chartData.actual,\n        barWidth: 8,\n        itemStyle: {\n          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [\n            { offset: 0, color: '#00E5C7' },\n            { offset: 1, color: '#007A6A' }\n          ]),\n          borderRadius: [4, 4, 0, 0]\n        }\n      },\n      {\n        name: '计划巡查',\n        type: 'bar',\n        data: chartData.planned,\n        barWidth: 8,\n        itemStyle: {\n          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [\n            { offset: 0, color: '#FFB800' },\n            { offset: 1, color: '#CC9200' }\n          ]),\n          borderRadius: [4, 4, 0, 0]\n        }\n      },\n      {\n        name: '完成率(%)',\n        type: 'line',\n        yAxisIndex: 1,\n        data: chartData.completionRate,\n        smooth: true,\n        symbol: 'none',\n        lineStyle: {\n          color: '#FFD700',\n          width: 2,\n          shadowColor: 'rgba(255, 215, 0, 0.5)',\n          shadowBlur: 10\n        },\n        areaStyle: {\n          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [\n            { offset: 0, color: 'rgba(255, 215, 0, 0.2)' },\n            { offset: 1, color: 'rgba(255, 215, 0, 0)' }\n          ])\n        }\n      }\n    ]\n  }\n  \n  chart.setOption(option)\n}\n\n// ResizeObserver 监听\nonMounted(() => {\n  if (patrolChartRef.value) {\n    resizeObserver = new ResizeObserver(() => {\n      initChart()\n      if (chart && patrolChartRef.value) {\n        chart.resize()\n      }\n    })\n    resizeObserver.observe(patrolChartRef.value)\n  }\n})\n\nonUnmounted(() => {\n  if (resizeObserver) {\n    resizeObserver.disconnect()\n  }\n  if (chart) {\n    chart.dispose()\n    chart = null\n  }\n})\n\n// 轮播控制\nconst handlePrev = () => console.log('上一页')\nconst handleNext = () => console.log('下一页')\n</script>\n\n<style scoped>\n.dashboard-container {\n  width: 100%;\n  height: 100%;\n  box-sizing: border-box;\n  background: linear-gradient(180deg, #061520 0%, #04101a 100%);\n  color: #ffffff;\n  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;\n  overflow-y: auto;\n  padding: 12px;\n  display: flex;\n  flex-direction: column;\n  gap: 16px;\n}\n\n/* 顶部导航栏 */\n.header {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  height: 44px;\n  padding: 0 16px;\n  background: linear-gradient(90deg, rgba(0, 229, 199, 0.15) 0%, rgba(0, 229, 199, 0.05) 100%);\n  border: 1px solid rgba(0, 229, 199, 0.3);\n  border-radius: 8px;\n  box-shadow: 0 0 20px rgba(0, 229, 199, 0.1), inset 0 0 20px rgba(0, 229, 199, 0.05);\n}\n\n.title {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n}\n\n.title-icon {\n  width: 20px;\n  height: 20px;\n}\n\n.title h1 {\n  font-size: 18px;\n  font-weight: 700;\n  color: #00E5C7;\n  margin: 0;\n  letter-spacing: 2px;\n}\n\n.tabs {\n  display: flex;\n  gap: 4px;\n  background: rgba(0, 0, 0, 0.3);\n  padding: 3px;\n  border-radius: 6px;\n}\n\n.tab-btn {\n  padding: 4px 16px;\n  border: none;\n  background: transparent;\n  color: #8BA5B5;\n  font-size: 13px;\n  cursor: pointer;\n  border-radius: 4px;\n  transition: all 0.3s;\n  font-weight: 500;\n}\n\n.tab-btn.active {\n  background: linear-gradient(180deg, #00E5C7 0%, #00B89F 100%);\n  color: #061520;\n  box-shadow: 0 2px 8px rgba(0, 229, 199, 0.4);\n}\n\n/* 主内容区 */\n.main-content {\n  display: flex;\n  flex-direction: column;\n  gap: 16px;\n  flex: 1;\n  min-height: 0;\n}\n\n/* 通用区块样式 */\n.section {\n  background: linear-gradient(135deg, rgba(10, 35, 50, 0.8) 0%, rgba(6, 21, 32, 0.9) 100%);\n  border: 1px solid rgba(26, 74, 94, 0.6);\n  border-radius: 10px;\n  padding: 14px 16px;\n  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(0, 229, 199, 0.1);\n  position: relative;\n  overflow: hidden;\n}\n\n.section::before {\n  content: '';\n  position: absolute;\n  top: 0;\n  left: 0;\n  width: 4px;\n  height: 100%;\n  background: linear-gradient(180deg, #00E5C7 0%, transparent 100%);\n  opacity: 0.6;\n}\n\n.section-title {\n  font-size: 16px;\n  font-weight: 700;\n  color: #fff;\n  margin: 0 0 12px 0;\n  display: flex;\n  align-items: center;\n  letter-spacing: 1px;\n}\n\n.section-title::before {\n  content: '';\n  display: inline-block;\n  width: 3px;\n  height: 16px;\n  background: #00E5C7;\n  margin-right: 8px;\n  border-radius: 2px;\n}\n\n/* 巡查检查模块 */\n.patrol-section {\n  flex-shrink: 0;\n}\n\n.stats-row {\n  display: grid;\n  grid-template-columns: repeat(4, 1fr);\n  gap: 12px;\n  margin-bottom: 12px;\n}\n\n.stat-card {\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  background: rgba(0, 229, 199, 0.05);\n  border: 1px solid rgba(0, 229, 199, 0.2);\n  border-radius: 8px;\n  padding: 10px 12px;\n  transition: all 0.3s;\n}\n\n.stat-card:hover {\n  border-color: rgba(0, 229, 199, 0.5);\n  box-shadow: 0 0 15px rgba(0, 229, 199, 0.15);\n}\n\n.stat-icon-circle {\n  width: 36px;\n  height: 36px;\n  border-radius: 50%;\n  background: rgba(0, 229, 199, 0.15);\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  flex-shrink: 0;\n  border: 1px solid rgba(0, 229, 199, 0.3);\n}\n\n.stat-icon-circle svg {\n  width: 20px;\n  height: 20px;\n}\n\n.stat-content {\n  flex: 1;\n  min-width: 0;\n}\n\n.stat-label {\n  font-size: 12px;\n  color: #8BA5B5;\n  margin-bottom: 2px;\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n}\n\n.stat-value {\n  font-size: 16px;\n  font-weight: 800;\n  color: #fff;\n  font-family: 'Courier New', monospace;\n}\n\n.highlight-cyan {\n  color: #00E5C7;\n  text-shadow: 0 0 10px rgba(0, 229, 199, 0.5);\n}\n\n.chart-wrapper {\n  height: 160px;\n  width: 100%;\n  position: relative;\n}\n\n.chart-box {\n  width: 100%;\n  height: 100%;\n}\n\n/* 病害分布模块 */\n.disease-section {\n  flex-shrink: 0;\n  min-height: 180px;\n}\n\n.disease-radial {\n  position: relative;\n  height: 160px;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n}\n\n.disease-center {\n  position: absolute;\n  z-index: 10;\n  text-align: center;\n  background: radial-gradient(circle, rgba(0, 229, 199, 0.2) 0%, transparent 70%);\n  padding: 20px;\n  border-radius: 50%;\n  width: 90px;\n  height: 90px;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n}\n\n.warning-icon {\n  font-size: 20px;\n  margin-bottom: 4px;\n}\n\n.center-label {\n  font-size: 12px;\n  color: #FFD700;\n  font-weight: 600;\n}\n\n.center-value {\n  font-size: 24px;\n  font-weight: 900;\n  color: #FF6B6B;\n  text-shadow: 0 0 10px rgba(255, 107, 107, 0.5);\n}\n\n.disease-item {\n  position: absolute;\n  text-align: center;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 4px;\n}\n\n.item-top-left {\n  top: 10px;\n  left: 10px;\n}\n\n.item-top-right {\n  top: 10px;\n  right: 80px;\n}\n\n.item-bottom-left {\n  bottom: 10px;\n  left: 60px;\n}\n\n.item-bottom-right {\n  bottom: 10px;\n  right: 10px;\n}\n\n.item-label {\n  font-size: 12px;\n  color: #fff;\n  font-weight: 500;\n  white-space: nowrap;\n}\n\n.item-value {\n  font-size: 20px;\n  font-weight: 900;\n  color: #FFD700;\n  text-shadow: 0 0 8px rgba(255, 215, 0, 0.5);\n}\n\n.item-bowl {\n  width: 40px;\n  height: 20px;\n  background: linear-gradient(180deg, rgba(0, 229, 199, 0.4) 0%, rgba(0, 229, 199, 0.1) 100%);\n  border-radius: 0 0 50% 50%;\n  border: 1px solid rgba(0, 229, 199, 0.3);\n  border-top: none;\n}\n\n.truck-icon {\n  position: absolute;\n  bottom: 30px;\n  left: 50%;\n  transform: translateX(-50%);\n  font-size: 32px;\n  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5));\n  animation: truckMove 3s ease-in-out infinite;\n}\n\n@keyframes truckMove {\n  0%, 100% { transform: translateX(-50%) translateY(0); }\n  50% { transform: translateX(-50%) translateY(-5px); }\n}\n\n/* 高发病害Top5 */\n.top5-section {\n  flex-shrink: 0;\n}\n\n.rank-list {\n  display: flex;\n  justify-content: space-between;\n  align-items: flex-end;\n  gap: 8px;\n  height: 120px;\n  padding: 0 4px;\n}\n\n.rank-card {\n  flex: 1;\n  background: linear-gradient(180deg, rgba(0, 229, 199, 0.15) 0%, rgba(0, 229, 199, 0.05) 100%);\n  border: 1px solid rgba(0, 229, 199, 0.3);\n  border-radius: 8px;\n  padding: 8px 4px;\n  text-align: center;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: flex-end;\n  transition: transform 0.3s;\n  position: relative;\n}\n\n.rank-card:hover {\n  transform: translateY(-4px);\n  border-color: #00E5C7;\n}\n\n.rank-1 { height: 110px; order: 3; }\n.rank-2 { height: 95px; order: 2; }\n.rank-3 { height: 85px; order: 4; }\n.rank-4 { height: 75px; order: 1; }\n.rank-5 { height: 75px; order: 5; }\n\n.rank-badge {\n  position: absolute;\n  top: -10px;\n  width: 24px;\n  height: 24px;\n  border-radius: 50%;\n  background: #1A4A5E;\n  border: 2px solid #00E5C7;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  font-size: 12px;\n  font-weight: 800;\n  color: #00E5C7;\n}\n\n.rank-badge.gold {\n  background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);\n  border-color: #FFD700;\n  color: #fff;\n  font-size: 14px;\n}\n\n.rank-badge.silver {\n  background: linear-gradient(135deg, #C0C0C0 0%, #A0A0A0 100%);\n  border-color: #C0C0C0;\n  color: #fff;\n  font-size: 14px;\n}\n\n.rank-badge.bronze {\n  background: linear-gradient(135deg, #CD7F32 0%, #A0522D 100%);\n  border-color: #CD7F32;\n  color: #fff;\n  font-size: 14px;\n}\n\n.rank-count {\n  font-size: 16px;\n  font-weight: 800;\n  color: #fff;\n  margin: 4px 0;\n}\n\n.highlight-red {\n  color: #FF6B6B;\n  text-shadow: 0 0 8px rgba(255, 107, 107, 0.5);\n}\n\n.rank-name {\n  font-size: 11px;\n  color: #B8D4E3;\n  line-height: 1.3;\n  font-weight: 500;\n}\n\n/* 施工占道模块 */\n.construction-section {\n  flex-shrink: 0;\n}\n\n.status-row {\n  display: flex;\n  align-items: stretch;\n  justify-content: space-between;\n  background: rgba(0, 0, 0, 0.2);\n  border-radius: 8px;\n  padding: 12px 16px;\n  margin-bottom: 12px;\n  border: 1px solid rgba(26, 74, 94, 0.4);\n}\n\n.status-item {\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  flex: 1;\n}\n\n.status-icon {\n  font-size: 28px;\n  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));\n}\n\n.status-text {\n  display: flex;\n  flex-direction: column;\n  gap: 2px;\n}\n\n.status-label {\n  font-size: 12px;\n  color: #8BA5B5;\n}\n\n.status-value {\n  font-size: 18px;\n  font-weight: 800;\n  color: #fff;\n  font-family: 'Courier New', monospace;\n}\n\n.highlight-yellow {\n  color: #FFD700;\n  text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);\n}\n\n.status-extra {\n  margin-left: auto;\n  text-align: right;\n  display: flex;\n  flex-direction: column;\n  gap: 2px;\n}\n\n.extra-label {\n  font-size: 11px;\n  color: #8BA5B5;\n}\n\n.extra-value {\n  font-size: 16px;\n  font-weight: 800;\n  color: #FFD700;\n  font-family: 'Courier New', monospace;\n}\n\n.divider {\n  width: 1px;\n  background: linear-gradient(180deg, transparent 0%, #1A4A5E 50%, transparent 100%);\n  margin: 0 16px;\n}\n\n.plan-banner {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  background: linear-gradient(90deg, rgba(0, 229, 199, 0.1) 0%, rgba(0, 229, 199, 0.05) 50%, rgba(0, 229, 199, 0.1) 100%);\n  border: 1px solid rgba(0, 229, 199, 0.3);\n  border-radius: 8px;\n  padding: 10px 16px;\n  margin-bottom: 12px;\n  position: relative;\n  overflow: hidden;\n}\n\n.plan-banner::after {\n  content: '';\n  position: absolute;\n  bottom: 0;\n  left: 0;\n  right: 0;\n  height: 2px;\n  background: linear-gradient(90deg, transparent, #00E5C7, transparent);\n  opacity: 0.5;\n}\n\n.nav-btn {\n  background: rgba(0, 229, 199, 0.1);\n  border: 1px solid rgba(0, 229, 199, 0.3);\n  color: #00E5C7;\n  width: 28px;\n  height: 28px;\n  border-radius: 4px;\n  cursor: pointer;\n  font-size: 18px;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  transition: all 0.3s;\n  flex-shrink: 0;\n}\n\n.nav-btn:hover {\n  background: rgba(0, 229, 199, 0.2);\n  box-shadow: 0 0 10px rgba(0, 229, 199, 0.3);\n}\n\n.plan-content {\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 10px;\n  flex: 1;\n}\n\n.plan-icon {\n  font-size: 20px;\n}\n\n.plan-label {\n  font-size: 14px;\n  color: #B8D4E3;\n  font-weight: 500;\n}\n\n.plan-value {\n  font-size: 18px;\n  font-weight: 800;\n  color: #00E5C7;\n  font-family: 'Courier New', monospace;\n}\n\n.distribution-area {\n  display: flex;\n  justify-content: space-between;\n  align-items: flex-end;\n  gap: 12px;\n  padding: 0 10px;\n  position: relative;\n  background: radial-gradient(ellipse at center bottom, rgba(0, 229, 199, 0.08) 0%, transparent 70%);\n  border-radius: 8px;\n  padding-top: 20px;\n  padding-bottom: 10px;\n}\n\n.dist-item {\n  text-align: center;\n  flex: 1;\n  position: relative;\n}\n\n.dist-value {\n  font-size: 18px;\n  font-weight: 800;\n  color: #fff;\n  margin-bottom: 4px;\n  font-family: 'Courier New', monospace;\n}\n\n.dist-label {\n  font-size: 13px;\n  color: #B8D4E3;\n  font-weight: 500;\n}\n\n.percent {\n  color: #00E5C7;\n  font-weight: 700;\n  margin-left: 2px;\n}\n\n.dist-center::after {\n  content: '';\n  position: absolute;\n  bottom: -10px;\n  left: 50%;\n  transform: translateX(-50%);\n  width: 60px;\n  height: 30px;\n  background: radial-gradient(ellipse at center, rgba(0, 229, 199, 0.3) 0%, transparent 70%);\n  border-radius: 50%;\n  filter: blur(4px);\n}\n</style>"
+}

@@ -1,0 +1,652 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 72,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0].body.children[0]",
+        "message": "stats-header 的 stat-group 嵌套过深(4层)，且混用 stat-item 的 horizontal/vertical 布局",
+        "suggestion": "将 stat-group 扁平化为 body.children 直接子元素，统一 stat-item 布局方向"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body.children[0].children[1]",
+        "message": "stat-item 的 children 包含 row 容器再嵌套 icon+label，增加冗余层级",
+        "suggestion": "将 row.children 直接提升为 stat-item.children，删除 row 容器"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "layout.sections[0].body",
+        "message": "body.layout 标记为 horizontal-4-items 但实际只有 3 个 stat-group",
+        "suggestion": "修正 layout 描述为 horizontal-3-groups 或调整实际结构"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body.children",
+        "message": "device-grid 包含 12 个重复 device-card，status 字段数据高度重复 (0/484)",
+        "suggestion": "确认数据真实性，避免用占位数据掩盖结构设计缺陷"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "覆盖率仅 32%，缺失 15 个 Figma 节点(switch/active/default 分支未映射)",
+        "suggestion": "补充左侧导航的 active/default 状态差异到 nav-item 结构中"
+      }
+    ],
+    "recommendations": [
+      "重构 stats-header：将 4 个 stat-group 改为并列的 stat-item 数组，减少嵌套到 2 层",
+      "补充 category-nav 的状态结构：nav-item 需包含 active/badge/异常数等完整字段",
+      "device-grid 改用循环结构标记：children 改为单个 device-card 模板 + repeat 属性"
+    ],
+    "summary": "结构嵌套过深(最深 5 层)且存在冗余容器，stats-header 布局混乱，覆盖率低表明结构映射不完整。需扁平化并补充状态差异。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1890FF",
+      "--colorSuccess": "#52C41A",
+      "--colorError": "#FF4D4F",
+      "--colorInfo": "#08A3A5",
+      "--colorBgBase": "#FFFFFF",
+      "--colorBgContainer": "#EDF4FB",
+      "--colorTextBase": "#333333",
+      "--colorTextInverse": "#FFFFFF",
+      "--colorBgGradientStart": "#1890FF",
+      "--colorBgGradientEnd": "#096DD9",
+      "--colorBgNav": "#F5F5F5",
+      "--colorBgCard": "#FFFFFF",
+      "--fontSize": "14px",
+      "--fontSizeLg": "16px",
+      "--fontSizeXl": "20px",
+      "--fontSizeXxl": "32px",
+      "--fontWeightNormal": "400",
+      "--fontWeightStrong": "600",
+      "--borderRadius": "8px",
+      "--borderRadiusSm": "4px",
+      "--spacingSm": "8px",
+      "--spacingMd": "16px",
+      "--spacingLg": "24px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "var(--colorPrimary)",
+      "@color-success": "var(--colorSuccess)",
+      "@color-error": "var(--colorError)",
+      "@color-info": "var(--colorInfo)",
+      "@color-bg-base": "var(--colorBgBase)",
+      "@color-bg-container": "var(--colorBgContainer)",
+      "@color-text-base": "var(--colorTextBase)",
+      "@color-text-inverse": "var(--colorTextInverse)",
+      "@color-bg-gradient-start": "var(--colorBgGradientStart)",
+      "@color-bg-gradient-end": "var(--colorBgGradientEnd)",
+      "@color-bg-nav": "var(--colorBgNav)",
+      "@color-bg-card": "var(--colorBgCard)",
+      "@font-size-base": "var(--fontSize)",
+      "@font-size-lg": "var(--fontSizeLg)",
+      "@font-size-xl": "var(--fontSizeXl)",
+      "@font-size-xxl": "var(--fontSizeXxl)",
+      "@font-weight-normal": "var(--fontWeightNormal)",
+      "@font-weight-strong": "var(--fontWeightStrong)",
+      "@border-radius-base": "var(--borderRadius)",
+      "@border-radius-sm": "var(--borderRadiusSm)",
+      "@spacing-sm": "var(--spacingSm)",
+      "@spacing-md": "var(--spacingMd)",
+      "@spacing-lg": "var(--spacingLg)"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".stats-header": {
+        "display": "flex",
+        "justify-content": "space-between",
+        "padding": "var(--spacingLg)",
+        "background": "linear-gradient(90deg, var(--colorBgGradientStart), var(--colorBgGradientEnd))",
+        "border-radius": "var(--borderRadius)",
+        "color": "var(--colorTextInverse)"
+      },
+      ".stats-item": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center",
+        "gap": "var(--spacingSm)"
+      },
+      ".stats-value": {
+        "font-size": "var(--fontSizeXxl)",
+        "font-weight": "var(--fontWeightStrong)",
+        "color": "var(--colorTextInverse)"
+      },
+      ".stats-label": {
+        "font-size": "var(--fontSize)",
+        "color": "var(--colorTextInverse)",
+        "opacity": "0.9"
+      },
+      ".left-nav": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--spacingMd)",
+        "padding": "var(--spacingMd)",
+        "background": "var(--colorBgNav)",
+        "border-radius": "var(--borderRadius)"
+      },
+      ".nav-item": {
+        "display": "flex",
+        "align-items": "center",
+        "justify-content": "space-between",
+        "padding": "var(--spacingSm) var(--spacingMd)",
+        "background": "var(--colorBgCard)",
+        "border-radius": "var(--borderRadiusSm)",
+        "cursor": "pointer",
+        "transition": "all 0.3s ease"
+      },
+      ".nav-item:hover": {
+        "background": "var(--colorBgContainer)"
+      },
+      ".nav-badge": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "min-width": "20px",
+        "height": "20px",
+        "padding": "0 6px",
+        "background": "var(--colorError)",
+        "color": "var(--colorTextInverse)",
+        "font-size": "12px",
+        "border-radius": "10px"
+      },
+      ".device-grid": {
+        "display": "grid",
+        "grid-template-columns": "repeat(auto-fill, minmax(200px, 1fr))",
+        "gap": "var(--spacingMd)",
+        "padding": "var(--spacingMd)",
+        "background": "var(--colorBgContainer)"
+      },
+      ".device-card": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "var(--spacingMd)",
+        "background": "var(--colorBgCard)",
+        "border-radius": "var(--borderRadius)",
+        "box-shadow": "0 2px 8px rgba(0, 0, 0, 0.08)"
+      },
+      ".device-status": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "var(--spacingSm)",
+        "margin-top": "var(--spacingSm)"
+      },
+      ".status-value-normal": {
+        "color": "var(--colorSuccess)",
+        "font-size": "var(--fontSizeXl)",
+        "font-weight": "var(--fontWeightStrong)"
+      },
+      ".status-value-error": {
+        "color": "var(--colorError)",
+        "font-size": "var(--fontSizeXl)",
+        "font-weight": "var(--fontWeightStrong)"
+      },
+      ".status-value-primary": {
+        "color": "var(--colorPrimary)",
+        "font-size": "var(--fontSizeXl)",
+        "font-weight": "var(--fontWeightStrong)"
+      },
+      ".status-value-info": {
+        "color": "var(--colorInfo)",
+        "font-size": "var(--fontSizeXl)",
+        "font-weight": "var(--fontWeightStrong)"
+      },
+      ".device-icon": {
+        "width": "48px",
+        "height": "48px",
+        "object-fit": "contain"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "顶部统计区蓝色渐变背景映射为--colorBgGradientStart和--colorBgGradientEnd，实际应用时使用linear-gradient",
+      "左侧导航红色徽章映射为--colorError背景",
+      "设备卡片圆角容器使用--borderRadius统一控制",
+      "异常数使用--colorError强调，完好率使用--colorInfo强调",
+      "设备状态数字分别使用--colorPrimary（异常）和--colorSuccess（正常）",
+      "整体浅色背景使用--colorBgBase和--colorBgContainer层级区分",
+      "统计数字使用--fontSizeXxl和--fontWeightStrong实现大号粗体效果",
+      "左侧导航背景使用--colorBgNav独立控制",
+      "所有CSS变量均使用camelCase命名规范",
+      "Less变量通过var()函数映射CSS变量，确保主题可配置性"
+    ],
+    "elementStyleMap": {
+      "stats-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-stat-group-x-2-stat-item-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-stat-group-x-2-stat-item-x-1-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-stat-group-x-2-stat-item-x-1": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-stat-group-x-2-stat-item-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-stat-group-x-2-stat-item-x-3": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-stat-group-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-stat-item-x-3": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-stat-item-x-6-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-stat-item-x-6": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-row-x-7": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-stat-item-x-11": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-stat-item-x-14": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-stat-group-x-17-stat-item-x-0-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-stat-group-x-17-stat-item-x-0": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-stat-group-x-17-stat-item-x-1-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-stat-group-x-17-stat-item-x-1": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-stat-group-x-17": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-stat-item-x-18-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-stat-item-x-18": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-row-x-19": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-stat-item-x-23-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-stat-item-x-23": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-row-x-24": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-stat-group-x-28-stat-item-x-0": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "flex-start"
+      },
+      "el-stat-group-x-28-stat-item-x-1": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "flex-start"
+      },
+      "el-stat-group-x-28": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-stat-item-x-29": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "flex-start"
+      },
+      "el-stat-item-x-32": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "flex-start"
+      },
+      "category-nav": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-37": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "el-device-card-x-44": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-device-card-x-48": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-device-card-x-52": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-device-card-x-56": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-device-card-x-60": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-device-card-x-64": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-device-card-x-68": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-device-card-x-72": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-device-card-x-76": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-device-card-x-80": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-device-card-x-84": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-device-card-x-88": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "stats-header",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 34,
+        "title": "统计指标",
+        "complexityScore": 50,
+        "complexityReasons": {
+          "elementCount": 34,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 4
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [
+          {
+            "type": "element-group",
+            "id": "stats-header-group1",
+            "name": "Group1",
+            "responsibility": "元素分组 1（高密度拆分）",
+            "reason": "R2: 元素密度拆分（总计34个元素）",
+            "props": [],
+            "emits": []
+          },
+          {
+            "type": "element-group",
+            "id": "stats-header-group2",
+            "name": "Group2",
+            "responsibility": "元素分组 2（高密度拆分）",
+            "reason": "R2: 元素密度拆分（总计34个元素）",
+            "props": [],
+            "emits": []
+          },
+          {
+            "type": "element-group",
+            "id": "stats-header-group3",
+            "name": "Group3",
+            "responsibility": "元素分组 3（高密度拆分）",
+            "reason": "R2: 元素密度拆分（总计34个元素）",
+            "props": [],
+            "emits": []
+          }
+        ],
+        "shouldSplitInternally": true
+      },
+      {
+        "id": "category-nav",
+        "responsibility": "竖向导航区（分类/菜单切换）",
+        "elementCount": 5,
+        "title": "设备分类导航",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 5,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "device-grid",
+        "responsibility": "网格卡片布局区",
+        "elementCount": 48,
+        "title": "设备网格",
+        "complexityScore": 40,
+        "complexityReasons": {
+          "elementCount": 48,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 2
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [
+          {
+            "type": "element-group",
+            "id": "device-grid-group1",
+            "name": "Group1",
+            "responsibility": "元素分组 1（高密度拆分）",
+            "reason": "R2: 元素密度拆分（总计48个元素）",
+            "props": [],
+            "emits": []
+          },
+          {
+            "type": "element-group",
+            "id": "device-grid-group2",
+            "name": "Group2",
+            "responsibility": "元素分组 2（高密度拆分）",
+            "reason": "R2: 元素密度拆分（总计48个元素）",
+            "props": [],
+            "emits": []
+          },
+          {
+            "type": "element-group",
+            "id": "device-grid-group3",
+            "name": "Group3",
+            "responsibility": "元素分组 3（高密度拆分）",
+            "reason": "R2: 元素密度拆分（总计48个元素）",
+            "props": [],
+            "emits": []
+          }
+        ],
+        "shouldSplitInternally": true
+      }
+    ],
+    "isForced": true,
+    "minFiles": 9,
+    "reason": "有效 sections=3 ≥ 3 或存在高复杂度 section → 强制拆分",
+    "internalSubcomponents": [
+      {
+        "type": "element-group",
+        "id": "stats-header-group1",
+        "name": "Group1",
+        "responsibility": "元素分组 1（高密度拆分）",
+        "reason": "R2: 元素密度拆分（总计34个元素）",
+        "props": [],
+        "emits": [],
+        "parentSectionId": "stats-header",
+        "parentSectionTitle": "统计指标"
+      },
+      {
+        "type": "element-group",
+        "id": "stats-header-group2",
+        "name": "Group2",
+        "responsibility": "元素分组 2（高密度拆分）",
+        "reason": "R2: 元素密度拆分（总计34个元素）",
+        "props": [],
+        "emits": [],
+        "parentSectionId": "stats-header",
+        "parentSectionTitle": "统计指标"
+      },
+      {
+        "type": "element-group",
+        "id": "stats-header-group3",
+        "name": "Group3",
+        "responsibility": "元素分组 3（高密度拆分）",
+        "reason": "R2: 元素密度拆分（总计34个元素）",
+        "props": [],
+        "emits": [],
+        "parentSectionId": "stats-header",
+        "parentSectionTitle": "统计指标"
+      },
+      {
+        "type": "element-group",
+        "id": "device-grid-group1",
+        "name": "Group1",
+        "responsibility": "元素分组 1（高密度拆分）",
+        "reason": "R2: 元素密度拆分（总计48个元素）",
+        "props": [],
+        "emits": [],
+        "parentSectionId": "device-grid",
+        "parentSectionTitle": "设备网格"
+      },
+      {
+        "type": "element-group",
+        "id": "device-grid-group2",
+        "name": "Group2",
+        "responsibility": "元素分组 2（高密度拆分）",
+        "reason": "R2: 元素密度拆分（总计48个元素）",
+        "props": [],
+        "emits": [],
+        "parentSectionId": "device-grid",
+        "parentSectionTitle": "设备网格"
+      },
+      {
+        "type": "element-group",
+        "id": "device-grid-group3",
+        "name": "Group3",
+        "responsibility": "元素分组 3（高密度拆分）",
+        "reason": "R2: 元素密度拆分（总计48个元素）",
+        "props": [],
+        "emits": [],
+        "parentSectionId": "device-grid",
+        "parentSectionTitle": "设备网格"
+      }
+    ]
+  }
+}

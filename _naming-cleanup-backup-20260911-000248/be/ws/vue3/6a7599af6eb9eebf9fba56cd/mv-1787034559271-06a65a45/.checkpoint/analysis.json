@@ -1,0 +1,345 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "issues": [
+      {
+        "id": "response_parse_failed",
+        "type": "response_parse_failed",
+        "severity": "warning",
+        "message": "布局审查响应解析失败，结果不可信"
+      }
+    ],
+    "score": 0,
+    "recommendations": [],
+    "degraded": true
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorBg": "rgba(237,244,251,1)",
+      "--colorPrimary": "rgba(25,144,255,1)",
+      "--colorDanger": "#f53f3f",
+      "--colorTeal": "rgba(8,163,165,1)",
+      "--colorTextBase": "rgba(51,51,51,1)",
+      "--borderColor": "rgba(25,144,255,0.25)",
+      "--colorCardBg": "#ffffff",
+      "--colorPrimaryBg": "rgba(25,144,255,0.12)",
+      "--navActiveBg": "rgba(25,144,255,1)",
+      "--fontSize": "14px",
+      "--fontSizeNumberLarge": "32px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-bg": "var(--colorBg)",
+      "@color-primary": "var(--colorPrimary)",
+      "@color-danger": "var(--colorDanger)",
+      "@color-teal": "var(--colorTeal)",
+      "@color-text-base": "var(--colorTextBase)",
+      "@border-color": "var(--borderColor)",
+      "@color-card-bg": "var(--colorCardBg)",
+      "@color-primary-bg": "var(--colorPrimaryBg)",
+      "@nav-active-bg": "var(--navActiveBg)",
+      "@font-size": "var(--fontSize)",
+      "@font-size-number-large": "var(--fontSizeNumberLarge)",
+      "@border-radius": "var(--borderRadius)"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background": "var(--colorBg, rgba(237,244,251,1))",
+        "color": "var(--colorTextBase, rgba(51,51,51,1))",
+        "font-size": "var(--fontSize, 14px)"
+      },
+      ".tech-card": {
+        "background": "var(--colorCardBg, #ffffff)",
+        "border": "1px solid var(--borderColor, rgba(25,144,255,0.25))",
+        "border-radius": "var(--borderRadius, 8px)",
+        "box-shadow": "0 2px 8px rgba(25,144,255,0.08)",
+        "padding": "16px"
+      },
+      ".nav-item": {
+        "display": "flex",
+        "align-items": "center",
+        "padding": "10px 16px",
+        "border-radius": "6px",
+        "color": "var(--colorTextBase, rgba(51,51,51,1))",
+        "cursor": "pointer"
+      },
+      ".nav-item-active": {
+        "background": "var(--navActiveBg, rgba(25,144,255,1))",
+        "color": "#ffffff",
+        "font-weight": "600"
+      },
+      ".card-header-primary": {
+        "background": "var(--colorPrimaryBg, rgba(25,144,255,0.12))",
+        "color": "var(--colorPrimary, rgba(25,144,255,1))",
+        "font-weight": "600",
+        "padding": "12px 16px",
+        "border-radius": "6px 6px 0 0"
+      },
+      ".card-header-default": {
+        "background": "rgba(237,244,251,0.8)",
+        "color": "var(--colorTextBase, rgba(51,51,51,1))",
+        "font-weight": "500",
+        "padding": "12px 16px",
+        "border-radius": "6px 6px 0 0"
+      },
+      ".stat-value-primary": {
+        "font-size": "var(--fontSizeNumberLarge, 32px)",
+        "font-weight": "700",
+        "color": "var(--colorPrimary, rgba(25,144,255,1))",
+        "line-height": "1.2"
+      },
+      ".stat-value-danger": {
+        "font-size": "24px",
+        "font-weight": "700",
+        "color": "var(--colorDanger, #f53f3f)",
+        "line-height": "1.2"
+      },
+      ".stat-value-secondary": {
+        "font-size": "20px",
+        "font-weight": "600",
+        "color": "var(--colorTeal, rgba(8,163,165,1))"
+      },
+      ".stat-label": {
+        "font-size": "12px",
+        "color": "rgba(51,51,51,0.65)"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主题色 rgba(25,144,255,1) 映射为 --colorPrimary，作为科技感主色",
+      "浅蓝灰色背景 rgba(237,244,251,1) 映射为 --colorBg，容器中同时保留字面量兜底",
+      "异常红 #f53f3f 映射为 --colorDanger，用于异常设备数与告警状态",
+      "青色 rgba(8,163,165,1) 映射为 --colorTeal，用于辅助状态或数据对比色",
+      "左侧导航选中态使用 --navActiveBg 与 .nav-item-active",
+      "顶部卡片蓝/灰区分使用 .card-header-primary / .card-header-default",
+      "设备总数大号蓝色数值与红色异常数使用 .stat-value-primary / .stat-value-danger",
+      "基础背景与文字颜色优先通过 CSS 变量注入，同时保留 Figma 字面量作为兜底"
+    ],
+    "elementStyleMap": {
+      "section-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-stat-item-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-stat-item-x-3": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-stat-item-x-4": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-stat-item-x-5": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-stat-item-x-8": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-stat-item-x-11": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-tunnel-icon-group-x-0": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-tunnel-data-group-x-1-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-tunnel-data-group-x-1-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-tunnel-data-group-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-tunnel": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-north-south-icon-group-x-0": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-north-south-data-group-x-1-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-north-south-data-group-x-1-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-north-south-data-group-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-north-south": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-18": {
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-icon-group-x-20": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-data-group-x-23-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-data-group-x-23-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-data-group-x-23": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-24": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-row-x-27": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-icon-group-x-31": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-data-group-x-34-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-data-group-x-34-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-data-group-x-34": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-35": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-row-x-38": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-main-content": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "sidebar-tabs": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-42": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-el-x-52": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-55": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-58": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-61": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-64": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-67": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-70": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-73": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-76": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-79": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-82": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-85": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-header",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 11,
+        "title": "设备监测"
+      },
+      {
+        "id": "section-top-cards",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 22,
+        "title": "大类设备统计"
+      },
+      {
+        "id": "section-main-content",
+        "responsibility": "列表项布局区",
+        "elementCount": 9,
+        "title": "设备列表区"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 → 强制拆分"
+  }
+}

@@ -1,0 +1,71 @@
+// 主题变量定义文件
+// 说明：本文件定义三个 mixin（.common()、.theme-dark()、.theme-light()），由系统生成的 dark.less/light.less 调用
+
+// 公共主题变量（所有主题共享）
+.common() {
+  // 背景图片路径（从设计稿映射提取）
+  @bg-image-7890: url(../resources/images/bg-7890.png);
+  
+  // 背景尺寸和位置
+  @bg-size-full: 100% 100%;
+  @bg-position-center: center center;
+  @bg-repeat-none: no-repeat;
+}
+
+// 深色主题变量
+.theme-dark() {
+  // 背景图片应用（从设计稿事实提取）
+  @el-x-2-bg-image: url(../resources/images/bg-7890.png);
+  @el-x-8-bg-image: url(../resources/images/bg-7890.png);
+  
+  // 文字颜色（深色面板禁止使用黑色系）
+  @text-primary: rgba(255, 255, 255, 0.85);
+  @text-secondary: rgba(255, 255, 255, 0.65);
+  @text-tertiary: rgba(255, 255, 255, 0.45);
+  
+  // 容器背景色（深色主题）
+  @container-bg: rgba(26, 35, 50, 0.8);
+  @container-bg-light: rgba(42, 55, 75, 0.6);
+  
+  // 边框颜色
+  @border-color: rgba(255, 255, 255, 0.15);
+  @border-color-light: rgba(255, 255, 255, 0.08);
+  
+  // 悬停态
+  @hover-bg: rgba(255, 255, 255, 0.08);
+  
+  // 激活态
+  @active-bg: rgba(255, 255, 255, 0.12);
+}
+
+// 浅色主题变量（默认主题，必须与设计稿一致）
+.theme-light() {
+  // 背景图片应用（从设计稿事实提取）
+  @el-x-2-bg-image: url(../resources/images/bg-7890.png);
+  @el-x-8-bg-image: url(../resources/images/bg-7890.png);
+  
+  // 文字颜色
+  @text-primary: rgba(0, 0, 0, 0.85);
+  @text-secondary: rgba(0, 0, 0, 0.65);
+  @text-tertiary: rgba(0, 0, 0, 0.45);
+  
+  // 容器背景色（浅色主题）
+  @container-bg: rgba(255, 255, 255, 0.9);
+  @container-bg-light: rgba(250, 250, 250, 0.8);
+  
+  // 边框颜色
+  @border-color: rgba(0, 0, 0, 0.15);
+  @border-color-light: rgba(0, 0, 0, 0.08);
+  
+  // 悬停态
+  @hover-bg: rgba(0, 0, 0, 0.04);
+  
+  // 激活态
+  @active-bg: rgba(0, 0, 0, 0.08);
+}
+
+// 自动添加：将 .common() 中的 Less 变量暴露到全局作用域
+
+:root {
+  .common();
+}

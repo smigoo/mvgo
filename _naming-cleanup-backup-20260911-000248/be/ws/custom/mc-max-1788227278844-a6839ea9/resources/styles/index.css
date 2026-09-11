@@ -1,0 +1,42 @@
+.c-env-monitor-root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 100%;
+  max-height: 100vh;
+  box-sizing: border-box;
+  font-size: var(--fontSize, 14px);
+}
+.c-env-monitor-tab-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: #2c9bea;
+}
+.c-env-monitor-badge {
+  font-size: calc(14px * 0.85);
+  background: #f53f3f;
+  color: #ffffff;
+}
+.c-env-monitor-chart-section {
+  background-image: url(../images/bg-7890.png);
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+.c-env-monitor-chart-legend {
+  cursor: pointer;
+}
+.c-env-monitor-chart-legend-color {
+  background: #0fcd7d;
+  border-radius: 1.6px;
+}
+.c-env-monitor-chart-legend-text {
+  font-size: calc(14px * 0.6857);
+  color: #333333;
+  font-weight: 400;
+}
+.c-env-monitor-chart-legend:not(.is-active) .c-env-monitor-chart-legend-text {
+  color: #8c8c8c;
+}

@@ -1,0 +1,164 @@
+```json
+{
+  "generatedAt": "2026-09-01T01:48:09.837Z",
+  "stage": "preview-analysis",
+  "componentName": "环境监测",
+  "componentTitle": "环境监测",
+  "analysisModel": "claude-sonnet-5",
+  "sourceImage": {
+    "path": "mc-preview.png",
+    "size": 0,
+    "mtimeMs": 0,
+    "sha1": ""
+  },
+  "summary": "包含五项气体/环境Tab切换、右侧图表切换与数量Badge、折线图（含预警虚线、渐变填充区域、坐标轴）",
+  "layout": {
+    "type": "vertical-stack",
+    "direction": "vertical",
+    "sections": [
+      {
+        "id": "section-tabs",
+        "name": "监测项Tab切换栏",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "header": null,
+        "body": {
+          "layout": "horizontal-5-items",
+          "bgPlaceholder": "body-bg-tabs",
+          "children": [
+            { "id": "tab-1", "name": "一氧化碳", "role": "tab", "active": true },
+            { "id": "tab-2", "name": "能见度", "role": "tab", "active": false },
+            { "id": "tab-3", "name": "洞内照明", "role": "tab", "active": false },
+            { "id": "tab-4", "name": "洞外光强", "role": "tab", "active": false }
+          ]
+        }
+      },
+      {
+        "id": "section-chart",
+        "name": "浓度趋势图",
+        "role": "常驻",
+        "layout": "vertical",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "header": {
+          "title": null,
+          "controls": []
+        },
+        "body": {
+          "layout": "chart",
+          "bgPlaceholder": "body-bg-chart",
+          "children": [
+            {
+              "id": "chart-legend",
+              "name": "图例文字",
+              "role": "label",
+              "value": "zk3+785CO浓度"
+            },
+            {
+              "id": "chart-y-axis-unit",
+              "name": "Y轴单位",
+              "role": "label",
+              "value": "辆"
+            },
+            {
+              "id": "chart-y-axis-ticks",
+              "name": "Y轴刻度",
+              "role": "axis-labels",
+              "value": ["40", "30", "20", "10", "0"]
+            },
+            {
+              "id": "chart-warning-line",
+              "name": "预警线",
+              "role": "reference-line",
+              "value": "30",
+              "label": "预警线"
+            },
+            {
+              "id": "chart-x-axis-unit",
+              "name": "X轴单位",
+              "role": "label",
+              "value": "时"
+            },
+            {
+              "id": "chart-x-axis-ticks",
+              "name": "X轴刻度",
+              "role": "axis-labels",
+              "value": ["2", "4", "6", "8", "10", "12", "14", "16", "18", "20", "22", "24"]
+            },
+            {
+              "id": "chart-line-series",
+              "name": "浓度折线",
+              "role": "line-series",
+              "value": "zk3+785CO浓度",
+              "color": "#5ad8a6"
+            },
+            {
+              "id": "chart-area-fill",
+              "name": "折线下方渐变填充区域",
+              "role": "area-fill",
+              "color": "rgba(90,216,166,0.15)"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "styles": {
+    "backgroundBrightness": "light",
+    "theme": "浅色科技监测风",
+    "colors": ["#ffffff", "#4e9bff", "#5ad8a6", "#ff4d4f", "#333333", "#999999"],
+    "background": "白色/浅蓝渐变背景，卡片式面板",
+    "decorations": ["Tab激活态蓝色圆角背景", "折线图渐变填充区域", "预警虚线", "圆角Badge数字标"],
+    "emphasis": ["预警线（红色虚线，30刻度）", "激活状态Tab（一氧化碳，蓝底白字）"]
+  },
+  "interactions": [
+    {
+      "target": "一氧化碳/能见度/洞内照明/洞外光强",
+      "type": "tab-switch",
+      "description": "切换不同监测指标类型",
+      "defaultState": "常驻，默认选中“一氧化碳”",
+      "evidence": "一氧化碳文字为蓝底白字高亮，其余为普通文字"
+    },
+    {
+      "target": "右上角图表图标",
+      "type": "link",
+      "description": "可能用于切换图表展示模式（柱状图/图表视图），无法确认具体功能",
+      "defaultState": "常驻，图标态",
+      "evidence": "图标为蓝色圆角方块，内含类似柱状图样式图形"
+    },
+    {
+      "target": "右上角数字Badge（6）",
+      "type": "link",
+      "description": "红色圆角Badge显示数字6，可能表示告警/消息数量，具体功能无法确认",
+      "defaultState": "常驻",
+      "evidence": "红色圆角矩形背景，内含白色数字6"
+    }
+  ],
+  "charts": [
+    {
+      "section": "section-chart",
+      "type": "line",
+      "series": ["zk3+785CO浓度"],
+      "legend": ["zk3+785CO浓度"],
+      "legendPosition": "top-left",
+      "seriesColors": ["#5ad8a6"],
+      "legendType": "horizontal",
+      "axes": "X轴为时间（时），刻度为2,4,6,8,10,12,14,16,18,20,22,24；Y轴为数值（辆），刻度为0,10,20,30,40",
+      "tooltip": "未见明显tooltip展示",
+      "notes": ["含红色虚线预警线，标注值为30，右侧标注文字“预警线”", "折线下方有浅绿色渐变填充区域"]
+    }
+  ],
+  "doNotInvent": [
+    "右上角图表图标的具体点击后行为未知，不应臆造为“切换为柱状图”等具体功能",
+    "红色数字Badge（6）具体业务含义未知，不应臆造为“告警数量”等具体描述",
+    "未显示的具体数据点数值（如某小时精确浓度值）不应臆造",
+    "Tab切换后内容变化的具体展现形式未在截图中证明，不应臆造"
+  ],
+  "notes": [
+    "整体为base-panel插槽内容，未包含面板标题栏“环境监测”的外壳部分（该部分由宿主提供），但预览图中包含标题文字，仅作为交叉验证参考",
+    "Tab数量为4个可见选项（一氧化碳、能见度、洞内照明、洞外光强），从截图边缘看不确定是否有更多被截断的Tab"
+  ]
+}
+```

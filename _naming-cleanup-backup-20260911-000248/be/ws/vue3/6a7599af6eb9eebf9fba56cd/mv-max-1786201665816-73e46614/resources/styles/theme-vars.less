@@ -1,0 +1,40 @@
+// 主题变量与 mixin 定义
+// 仅定义变量与 mixin，不产出实际 class
+
+// 浅色主题变量（当前设计稿默认主题）
+.theme-light() {
+  :root {
+    --color-primary: #3b82f6;
+    --color-success: #52c41a;
+    --color-danger: #f53f3f;
+    --color-bg-base: rgba(237, 244, 251, 1);
+    --color-white: #ffffff;
+    --color-text-primary: #333333;
+    --color-text-secondary: #666666;
+    --font-size-base: 14px;
+    --shadow-panel: 0px 4px 10px rgba(74, 117, 141, 0.25);
+  }
+}
+
+// 深色主题变量（预留扩展）
+.theme-dark() {
+  :root {
+    --color-primary: #3b82f6;
+    --color-success: #52c41a;
+    --color-danger: #f53f3f;
+    --color-bg-base: #1a1a1a;
+    --color-white: #ffffff;
+    --color-text-primary: #e0e0e0;
+    --color-text-secondary: #a0a0a0;
+    --font-size-base: 14px;
+    --shadow-panel: 0px 4px 10px rgba(0, 0, 0, 0.5);
+  }
+}
+
+// 通用 mixin（预留）
+.common() {
+  // 通用样式 mixin
+}
+
+// 默认调用浅色主题作为默认值
+.theme-light();

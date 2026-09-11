@@ -1,0 +1,228 @@
+// 组件内共享业务 class
+
+.monitor-root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: @color-bg-base;
+  box-shadow: 0px 4px 10px rgba(74, 117, 141, 0.25);
+  overflow: hidden;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+}
+
+// 标题区
+.monitor-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 8px 20px;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.monitor-header-decoration {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+}
+
+.monitor-header-decoration .deco-circle-outer {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #000000;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.monitor-header-decoration .deco-circle-inner {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1252fa 0%, #d6effc 100%);
+  position: absolute;
+  top: 1px;
+  left: 1px;
+}
+
+.monitor-header-decoration .deco-path {
+  width: 2px;
+  height: 2px;
+  background: #559eff;
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  border-radius: 50%;
+}
+
+.monitor-header-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, #559eff 0%, #559eff 100%);
+  opacity: 0.3;
+}
+
+.monitor-title {
+  font-size: 16px;
+  font-weight: 700;
+  background: linear-gradient(90deg, @title-gradient-start 0%, @title-gradient-end 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 19px;
+  white-space: nowrap;
+}
+
+// 内容区
+.monitor-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0 20px 12px;
+}
+
+// 控制栏
+.monitor-control-bar {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+
+// Tab 列表容器
+.monitor-tabs {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  position: relative;
+  height: 27px;
+  border-radius: 2px;
+  overflow: hidden;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  border: 0.72px solid rgba(255, 255, 255, 1);
+}
+
+.monitor-tab-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 11px;
+  height: 100%;
+  font-size: 14px;
+  font-weight: 500;
+  color: @tab-text-inactive;
+  cursor: pointer;
+  z-index: 1;
+  white-space: nowrap;
+  transition: color 0.2s;
+}
+
+.monitor-tab-item.is-active {
+  color: @tab-text-active;
+  text-shadow: 0 0.6px 0 rgba(0, 111, 227, 1);
+}
+
+.monitor-tab-active-bg {
+  position: absolute;
+  top: 3px;
+  height: 21px;
+  border-radius: 2px;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  border: 0.6px solid rgba(255, 255, 255, 1);
+  transition: left 0.3s ease, width 0.3s ease;
+  z-index: 0;
+}
+
+// 功能图标区
+.monitor-action-icons {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.monitor-icon-btn {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.monitor-icon-btn img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
+.monitor-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 14px;
+  height: 14px;
+  border-radius: 29px;
+  background: @color-danger;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+  line-height: 14px;
+}
+
+// 图表区
+.monitor-chart-area {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.monitor-chart-container {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  position: relative;
+}
+
+.monitor-chart-legend {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 4px 0;
+  flex-shrink: 0;
+}
+
+.monitor-chart-legend-line {
+  width: 14px;
+  height: 2px;
+  background: @chart-area-color;
+  border-radius: 1px;
+}
+
+.monitor-chart-legend-text {
+  font-size: 10px;
+  color: @color-text-base;
+  line-height: 14px;
+}

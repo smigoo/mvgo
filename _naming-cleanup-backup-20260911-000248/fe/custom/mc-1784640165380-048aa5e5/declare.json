@@ -1,0 +1,88 @@
+{
+  "componentId": "mc-1784640165380-048aa5e5",
+  "componentName": "管辖范围",
+  "version": "v1.0.0",
+  "attribute": {
+    "aspectRatio": [460, 138]
+  },
+  "panelKey": "default-panel",
+  "businessEvents": {
+    "mc-1784640165380-048aa5e5-onload": {
+      "eventId": "mc-1784640165380-048aa5e5-onload",
+      "eventName": "组件加载完成",
+      "eventDataSchema": {
+        "componentId": {
+          "key": "componentId",
+          "name": "组件ID",
+          "type": "string"
+        },
+        "timestamp": {
+          "key": "timestamp",
+          "name": "时间戳",
+          "type": "number"
+        }
+      }
+    }
+  },
+  "businessStatuses": {},
+  "dataSources": [
+    {
+      "sourceName": "jurisdictionStats",
+      "columns": [
+        {
+          "name": "mainlineLength",
+          "type": "number",
+          "comment": "主线长度(km)"
+        },
+        {
+          "name": "tunnelCount",
+          "type": "number",
+          "comment": "隧道数量"
+        },
+        {
+          "name": "bridgeCount",
+          "type": "number",
+          "comment": "桥梁数量"
+        },
+        {
+          "name": "workzoneCount",
+          "type": "number",
+          "comment": "工区数量"
+        }
+      ]
+    }
+  ],
+  "layoutConfig": {
+    "default": "default",
+    "list": [
+      {
+        "name": "默认布局",
+        "key": "default",
+        "previewName": "mc-preview.png"
+      }
+    ]
+  },
+  "themeConfig": {
+    "default": "dark",
+    "list": [
+      {
+        "name": "深色主题",
+        "key": "dark"
+      },
+      {
+        "name": "浅色主题",
+        "key": "light"
+      }
+    ]
+  },
+  "businessConfig": [
+    {
+      "name": "数据刷新间隔",
+      "key": "dataRefreshInterval",
+      "type": "number",
+      "describe": "数据自动刷新间隔时间（毫秒），0表示不自动刷新",
+      "renderType": "number",
+      "default": 60000
+    }
+  ]
+}

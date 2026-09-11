@@ -1,0 +1,262 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 72,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "Tab切换栏缺少header层级，body直接包含tab列表，违反section分层规范",
+        "suggestion": "将tabs section的body.children移到header.children，body应为空或包含tab内容面板"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[0]",
+        "message": "chart-container内嵌套bg和chart为兄弟节点，应将bg作为容器样式而非独立子元素",
+        "suggestion": "移除bg节点，将背景图属性提升到chart-container的styles中"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "charts[0]",
+        "message": "图表缺少legend/tooltip等关键字段定义，legendPosition为none但未说明原因",
+        "suggestion": "补充图表完整配置，明确无图例是设计要求还是信息缺失"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[1].body.children[0].children",
+        "message": "chart-area存在不必要的3层嵌套(section>body>chart-container>children)",
+        "suggestion": "简化为section.body直接包含chart配置，背景作为容器属性"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "覆盖率仅30%，缺失标题文字、右上角图标等7个Figma元素",
+        "suggestion": "补充面板标题、右上角操作区到layout结构中"
+      }
+    ],
+    "recommendations": [
+      "重构tabs section：header存放tab列表，body存放对应内容面板(如气化版图表)",
+      "扁平化chart-area结构：去除chart-container包装层，背景图作为section.body样式",
+      "补全缺失元素：添加面板标题到layout.title，右上角图标到headerSlots"
+    ],
+    "summary": "结构基本可用但存在明显规范偏差：tabs未分离header/body、图表嵌套冗余、覆盖率偏低。需调整section分层并补全缺失元素。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "rgba(24,144,255,1)",
+      "--colorDanger": "rgba(255,77,79,1)",
+      "--colorSuccess": "rgba(82,196,26,1)",
+      "--colorSuccessLight": "rgba(82,196,26,0.3)",
+      "--colorTextBase": "rgba(0,0,0,0.65)",
+      "--colorBgLight": "rgba(237,244,251,1)",
+      "--colorBorder": "rgba(217,217,217,1)",
+      "--colorAxisLine": "rgba(0,0,0,0.15)",
+      "--fontSize": "14px",
+      "--fontSizeSmall": "12px",
+      "--fontSizeLarge": "16px",
+      "--borderRadius": "4px",
+      "--spacing": "16px",
+      "--spacingSmall": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "var(--colorPrimary)",
+      "@color-danger": "var(--colorDanger)",
+      "@color-success": "var(--colorSuccess)",
+      "@color-success-light": "var(--colorSuccessLight)",
+      "@color-text-base": "var(--colorTextBase)",
+      "@color-bg-light": "var(--colorBgLight)",
+      "@color-border": "var(--colorBorder)",
+      "@color-axis-line": "var(--colorAxisLine)",
+      "@font-size-base": "var(--fontSize)",
+      "@font-size-small": "var(--fontSizeSmall)",
+      "@font-size-large": "var(--fontSizeLarge)",
+      "@border-radius-base": "var(--borderRadius)",
+      "@spacing-base": "var(--spacing)",
+      "@spacing-small": "var(--spacingSmall)"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "width": "100%",
+        "height": "100%",
+        "background": "linear-gradient(180deg, rgba(245,249,252,1) 0%, rgba(237,244,251,1) 100%)",
+        "padding": "var(--spacing)",
+        "box-sizing": "border-box"
+      },
+      ".tab-container": {
+        "display": "flex",
+        "gap": "var(--spacingSmall)",
+        "margin-bottom": "var(--spacing)"
+      },
+      ".tab-item": {
+        "padding": "8px 16px",
+        "font-size": "var(--fontSize)",
+        "color": "var(--colorTextBase)",
+        "background": "transparent",
+        "border": "1px solid var(--colorBorder)",
+        "border-radius": "var(--borderRadius)",
+        "cursor": "pointer",
+        "transition": "all 0.3s ease"
+      },
+      ".tab-item-active": {
+        "background": "var(--colorPrimary)",
+        "color": "#ffffff",
+        "border-color": "var(--colorPrimary)"
+      },
+      ".chart-container": {
+        "width": "100%",
+        "height": "100%",
+        "background": "#ffffff",
+        "border-radius": "var(--borderRadius)",
+        "padding": "var(--spacing)",
+        "box-shadow": "0 2px 8px rgba(0,0,0,0.08)"
+      },
+      ".threshold-line": {
+        "stroke": "var(--colorDanger)",
+        "stroke-width": "2px",
+        "stroke-dasharray": "4,4"
+      },
+      ".threshold-label": {
+        "font-size": "var(--fontSizeSmall)",
+        "color": "var(--colorDanger)",
+        "font-weight": "500"
+      },
+      ".statistic-badge": {
+        "position": "absolute",
+        "top": "var(--spacing)",
+        "right": "var(--spacing)",
+        "padding": "4px 12px",
+        "background": "rgba(24,144,255,0.1)",
+        "border-radius": "var(--borderRadius)",
+        "font-size": "var(--fontSizeSmall)",
+        "color": "var(--colorPrimary)"
+      },
+      ".area-fill": {
+        "fill": "var(--colorSuccessLight)",
+        "opacity": "0.6"
+      },
+      ".axis-line": {
+        "stroke": "var(--colorAxisLine)",
+        "stroke-width": "1px"
+      },
+      ".axis-label": {
+        "font-size": "var(--fontSizeSmall)",
+        "color": "var(--colorTextBase)",
+        "fill": "var(--colorTextBase)"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主题蓝色(rgba(24,144,255,1))映射为--colorPrimary，用于激活态Tab和图表主色",
+      "危险红色(rgba(255,77,79,1))映射为--colorDanger，用于阈值线和告警文字",
+      "成功绿色(rgba(82,196,26,0.3))映射为--colorSuccessLight，用于面积图填充",
+      "浅蓝灰背景(rgba(237,244,251,1))映射为--colorBgLight，并在.container中实现渐变效果",
+      "Y轴刻度线使用--colorAxisLine，透明度0.15确保不过于突兀",
+      "右上角统计标注使用.statistic-badge类，带Primary色调的半透明背景",
+      "所有变量使用camelCase命名，符合微码平台注入规范",
+      "Tab激活态通过.tab-item-active类实现蓝色背景+白色文字",
+      "覆盖率95%：5种主色+3种装饰元素+3种强调样式全部映射"
+    ],
+    "elementStyleMap": {
+      "tabs": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "chart-area": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-chart-container-x-8-bg-x-0": {
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-bg-x-9": {
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "tabs",
+        "responsibility": "标签页切换区",
+        "elementCount": 4,
+        "title": "Tab切换栏",
+        "complexityScore": 20,
+        "complexityReasons": {
+          "elementCount": 4,
+          "charts": 0,
+          "interactions": 5,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "chart-area",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 3,
+        "title": "图表展示区",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 3,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 2
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      }
+    ],
+    "isForced": false,
+    "minFiles": 0,
+    "reason": "有效 sections=2 < 3 且无高复杂度 section → 不强制拆分",
+    "internalSubcomponents": []
+  }
+}

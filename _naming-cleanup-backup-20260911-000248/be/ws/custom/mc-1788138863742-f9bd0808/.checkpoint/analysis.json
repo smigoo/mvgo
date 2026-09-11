@@ -1,0 +1,182 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 72,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[0]",
+        "message": "stats-value区value-group结构不合理，number与unit应是siblings而非嵌套在container内",
+        "suggestion": "将value-group的children扁平化为[{number},{unit}]，移除冗余嵌套层"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "tab-controls缺少header/body分层，直接在section下定义body违反微码规范",
+        "suggestion": "section应包含可选header和必须body，当前结构缺少明确分层"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "charts[0]",
+        "message": "图表type='area'但section命名为'chart-area'产生歧义，且chartTitle='area'无意义",
+        "suggestion": "chartTitle改为'CO浓度趋势'，section.id改为'trend-chart'"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "charts[0]",
+        "message": "charts数组缺少legendType字段（当前为'none'但应明确为字段），且预警线未在series中体现",
+        "suggestion": "补充legendType:'none'，markLines:[[{y:30,label:'预警线'}]]描述预警线"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[0]",
+        "message": "统计数值'2k3+785 CO浓度'文本拆分错误，应为'zk3+785'（桩号）+'CO浓度'（指标名）",
+        "suggestion": "根据chartDataHints修正为'zk3+785 CO浓度'，number应为桩号而非混合文本"
+      }
+    ],
+    "recommendations": [
+      "补充headerRelation的面板映射逻辑：当前3个section的headerRelation均为'content-below-title'，应明确哪些可作为base-panel插槽",
+      "chartDataHints与layout描述不一致：hints显示Y轴40/30/20/10/0，但layout描述为0-50，需核对设计稿统一",
+      "tab切换交互应在interactions中补充defaultActiveTab:'气化碳'和onTabChange回调约定"
+    ],
+    "summary": "结构基本合理但存在关键问题：stats-value区嵌套冗余，section缺少header/body规范分层，图表元数据不完整。修复后可达良好水平。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "--text-color": "#333333",
+      "--bg": "#ffffff",
+      "--primary": "#1677ff",
+      "--border": "rgba(0, 0, 0, 0.08)",
+      "--border-radius-base": "8px",
+      "--font-size-base": "14px",
+      "--gap": "12px"
+    },
+    "lessVariables": {
+      "@text-color": "#333333",
+      "@bg": "#ffffff",
+      "@primary": "#1677ff",
+      "@border": "rgba(0, 0, 0, 0.08)",
+      "@border-radius-base": "8px",
+      "@font-size-base": "14px",
+      "@gap": "12px"
+    },
+    "cssClasses": {},
+    "tokenCoverage": 0.6,
+    "elementStyleMap": {
+      "tab-controls": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "stats-value": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-value-group-x-7": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "chart-area": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    },
+    "synthesizedFallback": true
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "tab-controls",
+        "responsibility": "标签页切换区",
+        "elementCount": 4,
+        "title": "Tab切换栏",
+        "complexityScore": 20,
+        "complexityReasons": {
+          "elementCount": 4,
+          "charts": 0,
+          "interactions": 5,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "stats-value",
+        "responsibility": "数据统计指标区（数字+标签+趋势）",
+        "elementCount": 4,
+        "title": "统计数值区",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 4,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 2
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "chart-area",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "面积图区域",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 1,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 或存在高复杂度 section → 强制拆分",
+    "internalSubcomponents": []
+  }
+}

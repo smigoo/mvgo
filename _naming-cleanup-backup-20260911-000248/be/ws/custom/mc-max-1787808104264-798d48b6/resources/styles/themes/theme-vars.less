@@ -1,0 +1,160 @@
+// 组件主题变量定义文件
+// 使用方式：由系统生成的 dark.less / light.less 在主题选择器内先调用 .common() 与对应主题 mixin，再导入 common.less
+// 约束：根级禁止调用任何主题 mixin；仅允许 Less 变量，禁止 var(--xxx)（fade()/darken() 遇 CSS 变量会编译报错）
+
+// ----------------------------------------------------------------
+// 公共变量（与主题无关：背景图资源、字体、字号、间距、圆角、动效、层级）
+// ----------------------------------------------------------------
+.common() {
+  // 背景图资源（Figma 事实：el-el-x-2 fills，供对应元素使用）
+  @res-bg-image: url(../resources/images/bg-8788.png);
+  @res-bg-size: 100% 100%;
+  @res-bg-position: center center;
+  @res-bg-repeat: no-repeat;
+
+  // 字体族
+  @font-family-base: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  @font-family-number: 'DIN Alternate', 'Bebas Neue', 'Helvetica Neue', Arial, sans-serif;
+
+  // 字号梯度
+  @font-size-xs: 12px;
+  @font-size-sm: 13px;
+  @font-size-base: 14px;
+  @font-size-md: 16px;
+  @font-size-lg: 18px;
+  @font-size-xl: 20px;
+  @font-size-xxl: 24px;
+  @font-size-xxxl: 32px;
+
+  // 字重
+  @font-weight-regular: 400;
+  @font-weight-medium: 500;
+  @font-weight-bold: 600;
+
+  // 行高
+  @line-height-base: 1.5;
+
+  // 间距梯度
+  @space-xxs: 2px;
+  @space-xs: 4px;
+  @space-sm: 8px;
+  @space-md: 12px;
+  @space-lg: 16px;
+  @space-xl: 24px;
+  @space-xxl: 32px;
+
+  // 圆角
+  @radius-sm: 2px;
+  @radius-base: 4px;
+  @radius-lg: 8px;
+
+  // 动效
+  @duration-fast: 0.15s;
+  @duration-base: 0.3s;
+  @easing-base: ease-in-out;
+
+  // 层级
+  @z-index-base: 1;
+  @z-index-mask: 100;
+  @z-index-popup: 1000;
+}
+
+// ----------------------------------------------------------------
+// 深色主题（面板文字禁止黑色系，统一使用白色系透明梯度）
+// ----------------------------------------------------------------
+.theme-dark() {
+  // 背景色
+  @bg-color-page: #0a1526;
+  @bg-color-container: #101f36;
+  @bg-color-elevated: #16294a;
+  @bg-color-hover: rgba(255, 255, 255, 0.08);
+  @bg-color-active: rgba(255, 255, 255, 0.12);
+  @bg-color-mask: rgba(0, 0, 0, 0.6);
+
+  // 文字色（白色系）
+  @text-color-primary: rgba(255, 255, 255, 0.92);
+  @text-color-regular: rgba(255, 255, 255, 0.72);
+  @text-color-secondary: rgba(255, 255, 255, 0.52);
+  @text-color-placeholder: rgba(255, 255, 255, 0.36);
+  @text-color-disabled: rgba(255, 255, 255, 0.28);
+  @text-color-inverse: #0a1526;
+
+  // 边框 / 分割线
+  @border-color-base: rgba(255, 255, 255, 0.16);
+  @border-color-light: rgba(255, 255, 255, 0.1);
+  @divider-color: rgba(255, 255, 255, 0.08);
+
+  // 品牌 / 状态色
+  @primary-color: #2f7cf6;
+  @primary-color-hover: #4d8ef8;
+  @primary-color-active: #1f63d6;
+  @success-color: #34c98e;
+  @warning-color: #f6a72f;
+  @error-color: #f65353;
+  @info-color: #33c6dd;
+
+  // 图表调色板（ECharts）
+  @chart-color-1: #2f7cf6;
+  @chart-color-2: #33c6dd;
+  @chart-color-3: #f6a72f;
+  @chart-color-4: #34c98e;
+  @chart-color-5: #8a6ff0;
+  @chart-color-6: #f65353;
+  @chart-axis-color: rgba(255, 255, 255, 0.4);
+  @chart-split-line-color: rgba(255, 255, 255, 0.1);
+  @chart-tooltip-bg: rgba(16, 31, 54, 0.95);
+
+  // 阴影
+  @shadow-base: 0 2px 8px rgba(0, 0, 0, 0.4);
+  @shadow-popup: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+// ----------------------------------------------------------------
+// 浅色主题（面板默认主题，组件默认展示色）
+// ----------------------------------------------------------------
+.theme-light() {
+  // 背景色
+  @bg-color-page: #f2f4f8;
+  @bg-color-container: #ffffff;
+  @bg-color-elevated: #ffffff;
+  @bg-color-hover: rgba(10, 21, 38, 0.04);
+  @bg-color-active: rgba(10, 21, 38, 0.08);
+  @bg-color-mask: rgba(10, 21, 38, 0.45);
+
+  // 文字色
+  @text-color-primary: #1a2332;
+  @text-color-regular: #3d4a5c;
+  @text-color-secondary: #6b7686;
+  @text-color-placeholder: #9aa3b0;
+  @text-color-disabled: #c0c6cf;
+  @text-color-inverse: #ffffff;
+
+  // 边框 / 分割线
+  @border-color-base: #d9dee6;
+  @border-color-light: #e8ecf2;
+  @divider-color: #eef1f6;
+
+  // 品牌 / 状态色
+  @primary-color: #2f7cf6;
+  @primary-color-hover: #4d8ef8;
+  @primary-color-active: #1f63d6;
+  @success-color: #34c98e;
+  @warning-color: #f6a72f;
+  @error-color: #f65353;
+  @info-color: #33c6dd;
+
+  // 图表调色板（ECharts）
+  @chart-color-1: #2f7cf6;
+  @chart-color-2: #33c6dd;
+  @chart-color-3: #f6a72f;
+  @chart-color-4: #34c98e;
+  @chart-color-5: #8a6ff0;
+  @chart-color-6: #f65353;
+  @chart-axis-color: #6b7686;
+  @chart-split-line-color: #eef1f6;
+  @chart-tooltip-bg: rgba(255, 255, 255, 0.98);
+
+  // 阴影
+  @shadow-base: 0 2px 8px rgba(26, 35, 50, 0.08);
+  @shadow-popup: 0 4px 16px rgba(26, 35, 50, 0.12);
+}

@@ -1,0 +1,55 @@
+// 主题变量定义
+// 使用 mixin 方式定义，由系统自动包装到 .theme-light 和 .theme-dark 选择器中
+
+// 公共变量（所有主题共享）
+.common() {
+// 主题色
+  --em-primary-color: #1990ff;
+  --em-danger-color: #ff4d4f;
+  --em-warning-color: #fa8c16;
+  
+  // 功能色
+  --em-success-color: #52c41a;
+  --em-info-color: #1890ff;
+  @click: inherit; // 自动添加
+}
+
+// 深色主题变量
+.theme-dark() {
+  // 文字颜色
+  --em-text-primary: rgba(255, 255, 255, 0.85);
+  --em-text-secondary: rgba(255, 255, 255, 0.65);
+  --em-text-tertiary: rgba(255, 255, 255, 0.45);
+  
+  // 组件特定颜色
+  --em-card-label-color: rgba(255, 255, 255, 0.85);
+  --em-value-unit-color: rgba(255, 255, 255, 0.65);
+  
+  // 背景色
+  --em-bg-primary: #1f1f1f;
+  --em-bg-secondary: #2a2a2a;
+  --em-bg-tertiary: #363636;
+}
+
+// 浅色主题变量
+.theme-light() {
+  // 文字颜色
+  --em-text-primary: #333333;
+  --em-text-secondary: #666666;
+  --em-text-tertiary: #999999;
+  
+  // 组件特定颜色
+  --em-card-label-color: #333333;
+  --em-value-unit-color: #666666;
+  
+  // 背景色
+  --em-bg-primary: #ffffff;
+  --em-bg-secondary: #f5f5f5;
+  --em-bg-tertiary: #eeeeee;
+}
+
+// 默认使用浅色主题
+
+:root {
+  .theme-light();
+}

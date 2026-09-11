@@ -1,0 +1,190 @@
+/* [Layout Refine] Figma cp-环境监测 根容器，垂直布局 */
+.c-ff0ff1-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 10px 20px 8px 20px; /* Figma header top:10, left:20 */
+  box-sizing: border-box;
+  /* [Style Refine] Figma bg fills SOLID #EDF4FB */
+  background-color: #EDF4FB;
+  /* [Style Refine] Figma bg effects DROP_SHADOW */
+  box-shadow: 0px 4px 10px rgba(74, 117, 141, 0.25);
+}
+
+/* [Layout Refine] Figma header 区域 */
+.c-ff0ff1-header {
+  display: flex;
+  align-items: center;
+  height: 28px; /* Figma header height */
+  margin-bottom: 5px;
+  position: relative;
+}
+
+/* [Style Refine] Figma 环境监测 TEXT 渐变与字体 */
+.c-ff0ff1-title {
+  font-family: 'Noto Sans SC', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  background: linear-gradient(90deg, #1890FF 0%, rgba(89, 126, 255, 0.83) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 19px;
+}
+
+/* [Layout Refine] Figma slot-con 区域 */
+.c-ff0ff1-slot-con {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0; /* Flex 嵌套必须 */
+}
+
+/* [Layout Refine] Figma sub-t 区域，固定高度 32px */
+.c-ff0ff1-metrics-section {
+  height: 32px;
+  flex-shrink: 0;
+  margin-bottom: 0;
+}
+
+.c-ff0ff1-metrics-wrapper {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 100%;
+}
+
+/* [Style Refine] Figma tabs-list bg 渐变与边框 */
+.c-ff0ff1-tabs-list {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  position: relative;
+  background: linear-gradient(90deg, #B5DEFF 0%, #D1ECFF 100%);
+  border: 0.72px solid #FFFFFF;
+  border-radius: 4px;
+  padding: 3px;
+  gap: 4px;
+  height: 27px;
+}
+
+.c-ff0ff1-tabs-bg {
+  display: none; /* 移除冗余背景，使用父容器背景 */
+}
+
+/* [Style Refine] Figma bg-tab-active 渐变与边框 */
+.c-ff0ff1-tab-active-bg {
+  position: absolute;
+  top: 3px;
+  height: calc(100% - 6px);
+  background: linear-gradient(90deg, #1099B1 0%, #038FFF 100%);
+  border: 0.6px solid #FFFFFF;
+  border-radius: 3px;
+  z-index: 1;
+  transition: left 0.3s ease, width 0.3s ease;
+}
+
+/* [Style Refine] Figma Tab 文本样式 */
+.c-ff0ff1-tab-item {
+  position: relative;
+  z-index: 2;
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: #2C9BEA;
+  padding: 4px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  line-height: 12px;
+  transition: color 0.3s ease;
+}
+
+/* [Style Refine] Figma 一氧化碳 激活态文本与阴影 */
+.c-ff0ff1-tab-item--active {
+  color: #FFFFFF;
+  text-shadow: 0px 0.6px 0px rgba(0, 111, 227, 1);
+}
+
+/* [Layout Refine] Figma tabs-icon 区域 */
+.c-ff0ff1-tabs-actions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+}
+
+/* [Style Refine] Figma icon 按钮样式 */
+.c-ff0ff1-tabs-icon-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: 1px solid #A1CEFF;
+  background: linear-gradient(180deg, #FFFFFF 0%, #E2F0FF 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.c-ff0ff1-tabs-icon-img {
+  width: 18px;
+  height: 18px;
+  /* [Style Refine] Figma Vector 图标颜色 #2C9BEA */
+  filter: brightness(0) saturate(100%) invert(45%) sepia(82%) saturate(1352%) hue-rotate(175deg) brightness(95%) contrast(92%);
+}
+
+/* [Style Refine] Figma num 角标样式 */
+.c-ff0ff1-tabs-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #F53F3F;
+  border-radius: 29px;
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3;
+}
+
+.c-ff0ff1-tabs-badge span {
+  font-family: 'PingFang SC', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  color: #FFFFFF;
+  line-height: 14px;
+}
+
+/* [Layout Refine] Figma @echarts/line 区域，flex: 1 */
+.c-ff0ff1-trend-section {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0; /* Flex 嵌套必须 */
+  width: 100%;
+  margin-top: 8px;
+}
+
+.c-ff0ff1-env-trend {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
+.c-ff0ff1-chart-wrapper {
+  flex: 1;
+  width: 100%;
+  position: relative;
+  min-height: 0;
+}
+
+.c-ff0ff1-chart-container {
+  width: 100%;
+  height: 100%;
+}

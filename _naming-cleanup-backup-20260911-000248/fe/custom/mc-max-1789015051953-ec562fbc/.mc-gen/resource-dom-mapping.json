@@ -1,0 +1,1089 @@
+[
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:8418",
+    "figmaPath": "cp-设备监测/bg",
+    "name": "bg",
+    "figmaBox": {
+      "x": 1475,
+      "y": 433,
+      "width": 420,
+      "height": 425
+    },
+    "parentBox": {
+      "x": 1475,
+      "y": 433,
+      "width": 420,
+      "height": 425
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".bg-container",
+    "targetDomHint": "cp-设备监测区域",
+    "previewAnalysisRole": "bg",
+    "hint": "cp-设备监测 → cp-设备监测区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS background 渐变/纯色）",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 420,
+      "height": 425,
+      "fillsSummary": "#edf4fbb2",
+      "effectsSummary": "box-shadow: 0px 4px 10px #4a758d"
+    },
+    "recommendedUsage": "backgroundStyle",
+    "isTinyDecoration": false,
+    "isPanelResource": true,
+    "skipMount": true,
+    "bgRole": "container"
+  },
+  {
+    "resourceFile": "../resources/images/bg-8788.png",
+    "figmaNodeId": "2:8788",
+    "figmaPath": "cp-设备监测/slot-con/switch/active/bg",
+    "name": "bg",
+    "figmaBox": {
+      "x": 1485.9999971674945,
+      "y": 475.00017465168986,
+      "width": 193.39992043504458,
+      "height": 64.80017935221639
+    },
+    "parentBox": {
+      "x": 1485.9999971674945,
+      "y": 475.0001136165336,
+      "width": 193.39992043504458,
+      "height": 64.80017935221639
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".bg-container",
+    "targetDomHint": "active区域",
+    "previewAnalysisRole": "bg",
+    "hint": "active → active区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 193,
+      "height": 65
+    },
+    "recommendedUsage": "backgroundBlock",
+    "isTinyDecoration": false,
+    "isPanelResource": true,
+    "mountTarget": "active",
+    "bgRole": "container",
+    "assignedVarName": "bg1"
+  },
+  {
+    "resourceFile": "../resources/images/icon-8798.png",
+    "figmaNodeId": "2:8798",
+    "figmaPath": "cp-设备监测/slot-con/switch/active/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 1504,
+      "y": 483.000244140625,
+      "width": 35.24592208862305,
+      "height": 28.33283805847168
+    },
+    "parentBox": {
+      "x": 1485.9999971674945,
+      "y": 475.0001136165336,
+      "width": 193.39992043504458,
+      "height": 64.80017935221639
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".icon-container",
+    "targetDomHint": "active区域",
+    "previewAnalysisRole": "icon",
+    "hint": "active → active区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 35,
+      "height": 28
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon1"
+  },
+  {
+    "resourceFile": "../resources/images/bg-8807.png",
+    "figmaNodeId": "2:8807",
+    "figmaPath": "cp-设备监测/slot-con/switch/default/bg",
+    "name": "bg",
+    "figmaBox": {
+      "x": 1688.9999971674945,
+      "y": 475.0001136165336,
+      "width": 193.39992043504458,
+      "height": 64.80017935221639
+    },
+    "parentBox": {
+      "x": 1688.9999971674945,
+      "y": 475.0001136165336,
+      "width": 193.39992043504458,
+      "height": 64.80017935221639
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".bg-container",
+    "targetDomHint": "default区域",
+    "previewAnalysisRole": "bg",
+    "hint": "default → default区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 193,
+      "height": 65
+    },
+    "recommendedUsage": "backgroundBlock",
+    "isTinyDecoration": false,
+    "isPanelResource": true,
+    "mountTarget": "default",
+    "bgRole": "container",
+    "assignedVarName": "bg2"
+  },
+  {
+    "resourceFile": "../resources/images/icon-8817.png",
+    "figmaNodeId": "2:8817",
+    "figmaPath": "cp-设备监测/slot-con/switch/default/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 1707,
+      "y": 481.0002136230469,
+      "width": 35.24592208862305,
+      "height": 28.33283805847168
+    },
+    "parentBox": {
+      "x": 1688.9999971674945,
+      "y": 475.0001136165336,
+      "width": 193.39992043504458,
+      "height": 64.80017935221639
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".icon-container",
+    "targetDomHint": "default区域",
+    "previewAnalysisRole": "icon",
+    "hint": "default → default区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 35,
+      "height": 28
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon2"
+  },
+  {
+    "resourceFile": "../resources/images/bg-8439.png",
+    "figmaNodeId": "2:8439",
+    "figmaPath": "cp-设备监测/slot-con/@antd/tab/cons/Group 2136637321/bg",
+    "name": "bg",
+    "figmaBox": {
+      "x": 1517.9999972024714,
+      "y": 549.9999987004649,
+      "width": 117.00000279752862,
+      "height": 64.00000129953514
+    },
+    "parentBox": {
+      "x": 1518,
+      "y": 550,
+      "width": 117,
+      "height": 64
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".bg-container",
+    "targetDomHint": "cons区域",
+    "previewAnalysisRole": "bg",
+    "hint": "cons → cons区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 117,
+      "height": 64,
+      "opacity": 0.5
+    },
+    "recommendedUsage": "backgroundBlock",
+    "isTinyDecoration": false,
+    "isPanelResource": true,
+    "mountTarget": null,
+    "bgRole": "container",
+    "assignedVarName": "bg3"
+  },
+  {
+    "resourceFile": "../resources/images/icon-8444.png",
+    "figmaNodeId": "2:8444",
+    "figmaPath": "cp-设备监测/slot-con/@antd/tab/cons/Group 2136637321/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 1524,
+      "y": 566,
+      "width": 26.649499893188477,
+      "height": 32
+    },
+    "parentBox": {
+      "x": 1518,
+      "y": 550,
+      "width": 117,
+      "height": 64
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".icon-container",
+    "targetDomHint": "cons区域",
+    "previewAnalysisRole": "icon",
+    "hint": "cons → cons区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 27,
+      "height": 32
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon3"
+  },
+  {
+    "resourceFile": "../resources/images/bg-8439.png",
+    "figmaNodeId": "2:8468",
+    "figmaPath": "cp-设备监测/slot-con/@antd/tab/cons/Group 2136637552/bg",
+    "name": "bg",
+    "figmaBox": {
+      "x": 1517.9999972024714,
+      "y": 626.9999987004649,
+      "width": 117.00000279752862,
+      "height": 64.00000129953514
+    },
+    "parentBox": {
+      "x": 1518,
+      "y": 627,
+      "width": 117,
+      "height": 64
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".bg-container",
+    "targetDomHint": "cons区域",
+    "previewAnalysisRole": "bg",
+    "hint": "cons → cons区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:8439",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 117,
+      "height": 64,
+      "opacity": 0.5
+    },
+    "recommendedUsage": "backgroundBlock",
+    "isTinyDecoration": false,
+    "isPanelResource": true,
+    "mountTarget": null,
+    "bgRole": "container",
+    "assignedVarName": "bg4"
+  },
+  {
+    "resourceFile": "../resources/images/icon-8473.png",
+    "figmaNodeId": "2:8473",
+    "figmaPath": "cp-设备监测/slot-con/@antd/tab/cons/Group 2136637552/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 1524,
+      "y": 643,
+      "width": 26.649499893188477,
+      "height": 32
+    },
+    "parentBox": {
+      "x": 1518,
+      "y": 627,
+      "width": 117,
+      "height": 64
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".icon-container",
+    "targetDomHint": "cons区域",
+    "previewAnalysisRole": "icon",
+    "hint": "cons → cons区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 27,
+      "height": 32
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon4"
+  },
+  {
+    "resourceFile": "../resources/images/bg-8439.png",
+    "figmaNodeId": "2:8498",
+    "figmaPath": "cp-设备监测/slot-con/@antd/tab/cons/Group 2136637555/bg",
+    "name": "bg",
+    "figmaBox": {
+      "x": 1517.9999972024714,
+      "y": 703.9999987004649,
+      "width": 117.00000279752862,
+      "height": 64.00000129953514
+    },
+    "parentBox": {
+      "x": 1518,
+      "y": 704,
+      "width": 117,
+      "height": 64
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".bg-container",
+    "targetDomHint": "cons区域",
+    "previewAnalysisRole": "bg",
+    "hint": "cons → cons区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:8439",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 117,
+      "height": 64,
+      "opacity": 0.5
+    },
+    "recommendedUsage": "backgroundBlock",
+    "isTinyDecoration": false,
+    "isPanelResource": true,
+    "mountTarget": null,
+    "bgRole": "container",
+    "assignedVarName": "bg5"
+  },
+  {
+    "resourceFile": "../resources/images/icon-8503.png",
+    "figmaNodeId": "2:8503",
+    "figmaPath": "cp-设备监测/slot-con/@antd/tab/cons/Group 2136637555/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 1524,
+      "y": 720,
+      "width": 26.649499893188477,
+      "height": 32
+    },
+    "parentBox": {
+      "x": 1518,
+      "y": 704,
+      "width": 117,
+      "height": 64
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".icon-container",
+    "targetDomHint": "cons区域",
+    "previewAnalysisRole": "icon",
+    "hint": "cons → cons区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 27,
+      "height": 32
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon5"
+  },
+  {
+    "resourceFile": "../resources/images/bg-8439.png",
+    "figmaNodeId": "2:8527",
+    "figmaPath": "cp-设备监测/slot-con/@antd/tab/cons/Group 2136637558/bg",
+    "name": "bg",
+    "figmaBox": {
+      "x": 1517.9999972024714,
+      "y": 781.0000025151621,
+      "width": 117.00000279752862,
+      "height": 63.99999748483788
+    },
+    "parentBox": {
+      "x": 1518,
+      "y": 781,
+      "width": 117,
+      "height": 63.999996185302734
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".bg-container",
+    "targetDomHint": "cons区域",
+    "previewAnalysisRole": "bg",
+    "hint": "cons → cons区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:8439",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 117,
+      "height": 64,
+      "opacity": 0.5
+    },
+    "recommendedUsage": "backgroundBlock",
+    "isTinyDecoration": false,
+    "isPanelResource": true,
+    "mountTarget": null,
+    "bgRole": "container",
+    "assignedVarName": "bg6"
+  },
+  {
+    "resourceFile": "../resources/images/icon-8532.png",
+    "figmaNodeId": "2:8532",
+    "figmaPath": "cp-设备监测/slot-con/@antd/tab/cons/Group 2136637558/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 1524,
+      "y": 797,
+      "width": 26.649499893188477,
+      "height": 32
+    },
+    "parentBox": {
+      "x": 1518,
+      "y": 781,
+      "width": 117,
+      "height": 63.999996185302734
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".icon-container",
+    "targetDomHint": "cons区域",
+    "previewAnalysisRole": "icon",
+    "hint": "cons → cons区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 27,
+      "height": 32
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon6"
+  },
+  {
+    "resourceFile": "../resources/images/bg-8439.png",
+    "figmaNodeId": "2:8556",
+    "figmaPath": "cp-设备监测/slot-con/@antd/tab/cons/Group 2136637550/bg",
+    "name": "bg",
+    "figmaBox": {
+      "x": 1642.9999972024714,
+      "y": 626.9999987004649,
+      "width": 117.00000279752862,
+      "height": 64.00000129953514
+    },
+    "parentBox": {
+      "x": 1643,
+      "y": 627,
+      "width": 117,
+      "height": 64
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".bg-container",
+    "targetDomHint": "cons区域",
+    "previewAnalysisRole": "bg",
+    "hint": "cons → cons区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:8439",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 117,
+      "height": 64,
+      "opacity": 0.5
+    },
+    "recommendedUsage": "backgroundBlock",
+    "isTinyDecoration": false,
+    "isPanelResource": true,
+    "mountTarget": null,
+    "bgRole": "container",
+    "assignedVarName": "bg7"
+  },
+  {
+    "resourceFile": "../resources/images/icon-8561.png",
+    "figmaNodeId": "2:8561",
+    "figmaPath": "cp-设备监测/slot-con/@antd/tab/cons/Group 2136637550/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 1649,
+      "y": 643,
+      "width": 26.649499893188477,
+      "height": 32
+    },
+    "parentBox": {
+      "x": 1643,
+      "y": 627,
+      "width": 117,
+      "height": 64
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".icon-container",
+    "targetDomHint": "cons区域",
+    "previewAnalysisRole": "icon",
+    "hint": "cons → cons区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 27,
+      "height": 32
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon7"
+  },
+  {
+    "resourceFile": "../resources/images/bg-8439.png",
+    "figmaNodeId": "2:8585",
+    "figmaPath": "cp-设备监测/slot-con/@antd/tab/cons/Group 2136637553/bg",
+    "name": "bg",
+    "figmaBox": {
+      "x": 1642.9999972024714,
+      "y": 549.9999987004649,
+      "width": 117.00000279752862,
+      "height": 64.00000129953514
+    },
+    "parentBox": {
+      "x": 1643,
+      "y": 550,
+      "width": 117,
+      "height": 64
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".bg-container",
+    "targetDomHint": "cons区域",
+    "previewAnalysisRole": "bg",
+    "hint": "cons → cons区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:8439",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 117,
+      "height": 64,
+      "opacity": 0.5
+    },
+    "recommendedUsage": "backgroundBlock",
+    "isTinyDecoration": false,
+    "isPanelResource": true,
+    "mountTarget": null,
+    "bgRole": "container",
+    "assignedVarName": "bg8"
+  },
+  {
+    "resourceFile": "../resources/images/icon-8590.png",
+    "figmaNodeId": "2:8590",
+    "figmaPath": "cp-设备监测/slot-con/@antd/tab/cons/Group 2136637553/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 1649,
+      "y": 566,
+      "width": 26.649499893188477,
+      "height": 32
+    },
+    "parentBox": {
+      "x": 1643,
+      "y": 550,
+      "width": 117,
+      "height": 64
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".icon-container",
+    "targetDomHint": "cons区域",
+    "previewAnalysisRole": "icon",
+    "hint": "cons → cons区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 27,
+      "height": 32
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon8"
+  },
+  {
+    "resourceFile": "../resources/images/bg-8439.png",
+    "figmaNodeId": "2:8614",
+    "figmaPath": "cp-设备监测/slot-con/@antd/tab/cons/Group 2136637556/bg",
+    "name": "bg",
+    "figmaBox": {
+      "x": 1642.9999972024714,
+      "y": 703.9999987004649,
+      "width": 117.00000279752862,
+      "height": 64.00000129953514
+    },
+    "parentBox": {
+      "x": 1643,
+      "y": 704,
+      "width": 117,
+      "height": 64
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".bg-container",
+    "targetDomHint": "cons区域",
+    "previewAnalysisRole": "bg",
+    "hint": "cons → cons区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:8439",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 117,
+      "height": 64,
+      "opacity": 0.5
+    },
+    "recommendedUsage": "backgroundBlock",
+    "isTinyDecoration": false,
+    "isPanelResource": true,
+    "mountTarget": null,
+    "bgRole": "container",
+    "assignedVarName": "bg9"
+  },
+  {
+    "resourceFile": "../resources/images/icon-8619.png",
+    "figmaNodeId": "2:8619",
+    "figmaPath": "cp-设备监测/slot-con/@antd/tab/cons/Group 2136637556/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 1649,
+      "y": 720,
+      "width": 26.649499893188477,
+      "height": 32
+    },
+    "parentBox": {
+      "x": 1643,
+      "y": 704,
+      "width": 117,
+      "height": 64
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".icon-container",
+    "targetDomHint": "cons区域",
+    "previewAnalysisRole": "icon",
+    "hint": "cons → cons区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 27,
+      "height": 32
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon9"
+  },
+  {
+    "resourceFile": "../resources/images/bg-8439.png",
+    "figmaNodeId": "2:8643",
+    "figmaPath": "cp-设备监测/slot-con/@antd/tab/cons/Group 2136637559/bg",
+    "name": "bg",
+    "figmaBox": {
+      "x": 1642.9999972024714,
+      "y": 781.0000025151621,
+      "width": 117.00000279752862,
+      "height": 63.99999748483788
+    },
+    "parentBox": {
+      "x": 1643,
+      "y": 781,
+      "width": 117,
+      "height": 63.999996185302734
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".bg-container",
+    "targetDomHint": "cons区域",
+    "previewAnalysisRole": "bg",
+    "hint": "cons → cons区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:8439",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 117,
+      "height": 64,
+      "opacity": 0.5
+    },
+    "recommendedUsage": "backgroundBlock",
+    "isTinyDecoration": false,
+    "isPanelResource": true,
+    "mountTarget": null,
+    "bgRole": "container",
+    "assignedVarName": "bg10"
+  },
+  {
+    "resourceFile": "../resources/images/icon-8648.png",
+    "figmaNodeId": "2:8648",
+    "figmaPath": "cp-设备监测/slot-con/@antd/tab/cons/Group 2136637559/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 1649,
+      "y": 797,
+      "width": 26.649499893188477,
+      "height": 32
+    },
+    "parentBox": {
+      "x": 1643,
+      "y": 781,
+      "width": 117,
+      "height": 63.999996185302734
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".icon-container",
+    "targetDomHint": "cons区域",
+    "previewAnalysisRole": "icon",
+    "hint": "cons → cons区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 27,
+      "height": 32
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon10"
+  },
+  {
+    "resourceFile": "../resources/images/bg-8439.png",
+    "figmaNodeId": "2:8672",
+    "figmaPath": "cp-设备监测/slot-con/@antd/tab/cons/Group 2136637551/bg",
+    "name": "bg",
+    "figmaBox": {
+      "x": 1767.9999972024714,
+      "y": 549.9999987004649,
+      "width": 117.00000279752862,
+      "height": 64.00000129953514
+    },
+    "parentBox": {
+      "x": 1768,
+      "y": 550,
+      "width": 117,
+      "height": 64
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".bg-container",
+    "targetDomHint": "cons区域",
+    "previewAnalysisRole": "bg",
+    "hint": "cons → cons区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:8439",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 117,
+      "height": 64,
+      "opacity": 0.5
+    },
+    "recommendedUsage": "backgroundBlock",
+    "isTinyDecoration": false,
+    "isPanelResource": true,
+    "mountTarget": null,
+    "bgRole": "container",
+    "assignedVarName": "bg11"
+  },
+  {
+    "resourceFile": "../resources/images/icon-8677.png",
+    "figmaNodeId": "2:8677",
+    "figmaPath": "cp-设备监测/slot-con/@antd/tab/cons/Group 2136637551/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 1776,
+      "y": 566,
+      "width": 26.649499893188477,
+      "height": 32
+    },
+    "parentBox": {
+      "x": 1768,
+      "y": 550,
+      "width": 117,
+      "height": 64
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".icon-container",
+    "targetDomHint": "cons区域",
+    "previewAnalysisRole": "icon",
+    "hint": "cons → cons区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 27,
+      "height": 32
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon11"
+  },
+  {
+    "resourceFile": "../resources/images/bg-8439.png",
+    "figmaNodeId": "2:8701",
+    "figmaPath": "cp-设备监测/slot-con/@antd/tab/cons/Group 2136637554/bg",
+    "name": "bg",
+    "figmaBox": {
+      "x": 1767.9999972024714,
+      "y": 626.9999987004649,
+      "width": 117.00000279752862,
+      "height": 64.00000129953514
+    },
+    "parentBox": {
+      "x": 1768,
+      "y": 627,
+      "width": 117,
+      "height": 64
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".bg-container",
+    "targetDomHint": "cons区域",
+    "previewAnalysisRole": "bg",
+    "hint": "cons → cons区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:8439",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 117,
+      "height": 64,
+      "opacity": 0.5
+    },
+    "recommendedUsage": "backgroundBlock",
+    "isTinyDecoration": false,
+    "isPanelResource": true,
+    "mountTarget": null,
+    "bgRole": "container",
+    "assignedVarName": "bg12"
+  },
+  {
+    "resourceFile": "../resources/images/icon-8706.png",
+    "figmaNodeId": "2:8706",
+    "figmaPath": "cp-设备监测/slot-con/@antd/tab/cons/Group 2136637554/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 1776,
+      "y": 643,
+      "width": 26.649499893188477,
+      "height": 32
+    },
+    "parentBox": {
+      "x": 1768,
+      "y": 627,
+      "width": 117,
+      "height": 64
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".icon-container",
+    "targetDomHint": "cons区域",
+    "previewAnalysisRole": "icon",
+    "hint": "cons → cons区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 27,
+      "height": 32
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon12"
+  },
+  {
+    "resourceFile": "../resources/images/bg-8439.png",
+    "figmaNodeId": "2:8730",
+    "figmaPath": "cp-设备监测/slot-con/@antd/tab/cons/Group 2136637557/bg",
+    "name": "bg",
+    "figmaBox": {
+      "x": 1767.9999972024714,
+      "y": 703.9999987004649,
+      "width": 117.00000279752862,
+      "height": 64.00000129953514
+    },
+    "parentBox": {
+      "x": 1768,
+      "y": 704,
+      "width": 117,
+      "height": 64
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".bg-container",
+    "targetDomHint": "cons区域",
+    "previewAnalysisRole": "bg",
+    "hint": "cons → cons区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:8439",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 117,
+      "height": 64,
+      "opacity": 0.5
+    },
+    "recommendedUsage": "backgroundBlock",
+    "isTinyDecoration": false,
+    "isPanelResource": true,
+    "mountTarget": null,
+    "bgRole": "container",
+    "assignedVarName": "bg13"
+  },
+  {
+    "resourceFile": "../resources/images/icon-8735.png",
+    "figmaNodeId": "2:8735",
+    "figmaPath": "cp-设备监测/slot-con/@antd/tab/cons/Group 2136637557/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 1776,
+      "y": 720,
+      "width": 26.649499893188477,
+      "height": 32
+    },
+    "parentBox": {
+      "x": 1768,
+      "y": 704,
+      "width": 117,
+      "height": 64
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".icon-container",
+    "targetDomHint": "cons区域",
+    "previewAnalysisRole": "icon",
+    "hint": "cons → cons区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 27,
+      "height": 32
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon13"
+  },
+  {
+    "resourceFile": "../resources/images/bg-8439.png",
+    "figmaNodeId": "2:8759",
+    "figmaPath": "cp-设备监测/slot-con/@antd/tab/cons/Group 2136637560/bg",
+    "name": "bg",
+    "figmaBox": {
+      "x": 1767.9999972024714,
+      "y": 780.9999987004649,
+      "width": 117.00000279752862,
+      "height": 64.00000129953514
+    },
+    "parentBox": {
+      "x": 1768,
+      "y": 781,
+      "width": 117,
+      "height": 64
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".bg-container",
+    "targetDomHint": "cons区域",
+    "previewAnalysisRole": "bg",
+    "hint": "cons → cons区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": "2:8439",
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 117,
+      "height": 64,
+      "opacity": 0.5
+    },
+    "recommendedUsage": "backgroundBlock",
+    "isTinyDecoration": false,
+    "isPanelResource": true,
+    "mountTarget": null,
+    "bgRole": "container",
+    "assignedVarName": "bg14"
+  },
+  {
+    "resourceFile": "../resources/images/icon-8764.png",
+    "figmaNodeId": "2:8764",
+    "figmaPath": "cp-设备监测/slot-con/@antd/tab/cons/Group 2136637560/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 1776,
+      "y": 797,
+      "width": 26.649499893188477,
+      "height": 32
+    },
+    "parentBox": {
+      "x": 1768,
+      "y": 781,
+      "width": 117,
+      "height": 64
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".icon-container",
+    "targetDomHint": "cons区域",
+    "previewAnalysisRole": "icon",
+    "hint": "cons → cons区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 27,
+      "height": 32
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon14"
+  }
+]

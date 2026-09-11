@@ -1,0 +1,88 @@
+{
+  "stage": "codegen_done",
+  "brief": {
+    "layout": "整体为横向矩形布局，自上而下分为顶部导航区和主体图表区。主轴方向为垂直，顶部区域水平排列，主体区域占据大部分空间。",
+    "regions": [
+      {
+        "name": "顶部导航区",
+        "description": "包含标题'环境监测'、Tab切换栏和右上角功能图标",
+        "position": "top",
+        "size": "高度约占整体的20%"
+      },
+      {
+        "name": "主体图表区",
+        "description": "包含Y轴、X轴、绿色面积图和红色预警线",
+        "position": "center",
+        "size": "高度约占整体的80%"
+      }
+    ],
+    "spacing": {
+      "outer": "整体有适中的内边距",
+      "gap": "顶部元素之间水平间距均匀，图表坐标轴与绘图区有适当留白",
+      "padding": "容器内部有均匀的内边距"
+    },
+    "colors": {
+      "primary": "#4A90E2",
+      "background": "#D3D3D3",
+      "surface": "#E8E8E8",
+      "text": "#333333",
+      "border": "#CCCCCC"
+    },
+    "typography": {
+      "size": "标题字号较大(约18px)，Tab和坐标轴字号中等(约14px)",
+      "weight": "标题和激活Tab字重较粗，其他文字常规",
+      "lineHeight": "行高适中，约1.5倍"
+    },
+    "components": [
+      "Tab切换栏",
+      "图标按钮",
+      "面积图"
+    ],
+    "textContent": [
+      "环境监测",
+      "一氧化碳",
+      "能见度",
+      "洞内照明",
+      "洞外光强",
+      "辆",
+      "0",
+      "10",
+      "20",
+      "30",
+      "40",
+      "2",
+      "4",
+      "6",
+      "8",
+      "10",
+      "12",
+      "14",
+      "16",
+      "18",
+      "20",
+      "22",
+      "24",
+      "时",
+      "zk3+785CO浓度",
+      "预警线"
+    ],
+    "visualDetails": [
+      "Tab栏左侧有箭头形状，激活项背景为蓝色圆角矩形",
+      "右上角图标有蓝色背景和红色角标(数字6)",
+      "图表曲线平滑，下方有绿色渐变填充",
+      "预警线为红色虚线"
+    ],
+    "interactions": [
+      "Tab切换栏(包含'一氧化碳'、'能见度'、'洞内照明'、'洞外光强'，当前激活'一氧化碳')",
+      "右上角柱状图图标按钮",
+      "右上角列表图标按钮",
+      "右上角带红点的通知图标按钮"
+    ]
+  },
+  "width": 220,
+  "height": 103,
+  "sourceType": "screenshot",
+  "componentType": "vue3",
+  "generationTier": "lite",
+  "vueCode": "<template>\n  <div class=\"container\">\n    <!-- 顶部区域 -->\n    <div class=\"header\">\n      <div class=\"title\">环境监测</div>\n      \n      <div class=\"nav-row\">\n        <!-- Tab 切换栏 -->\n        <div class=\"tab-wrapper\">\n          <div class=\"tab-shape\">\n            <div \n              v-for=\"tab in tabs\" \n              :key=\"tab\" \n              class=\"tab-item\" \n              :class=\"{ active: currentTab === tab }\"\n              @click=\"currentTab = tab\"\n            >\n              {{ tab }}\n            </div>\n          </div>\n        </div>\n\n        <!-- 右上角图标 -->\n        <div class=\"icons\">\n          <div class=\"icon-btn blue-bg\">\n            <svg viewBox=\"0 0 24 24\" width=\"14\" height=\"14\" fill=\"white\">\n              <rect x=\"4\" y=\"12\" width=\"4\" height=\"8\" />\n              <rect x=\"10\" y=\"6\" width=\"4\" height=\"14\" />\n              <rect x=\"16\" y=\"10\" width=\"4\" height=\"10\" />\n            </svg>\n          </div>\n          <div class=\"icon-btn blue-bg\">\n            <svg viewBox=\"0 0 24 24\" width=\"14\" height=\"14\" fill=\"white\">\n              <rect x=\"4\" y=\"6\" width=\"16\" height=\"2\" />\n              <rect x=\"4\" y=\"11\" width=\"16\" height=\"2\" />\n              <rect x=\"4\" y=\"16\" width=\"16\" height=\"2\" />\n            </svg>\n          </div>\n          <div class=\"icon-btn relative\">\n            <svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"#888\">\n              <path d=\"M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z\"/>\n            </svg>\n            <div class=\"badge\">6</div>\n          </div>\n        </div>\n      </div>\n    </div>\n\n    <!-- 主体图表区 -->\n    <div class=\"chart-container\">\n      <div class=\"y-axis-label\">辆</div>\n      <div ref=\"chartRef\" class=\"chart\"></div>\n    </div>\n  </div>\n</template>\n\n<script setup>\nimport { ref, onMounted, onUnmounted } from 'vue';\nimport * as echarts from 'echarts';\n\nconst currentTab = ref('一氧化碳');\nconst tabs = ['一氧化碳', '能见度', '洞内照明', '洞外光强'];\n\nconst chartRef = ref(null);\nlet chart = null;\nlet resizeObserver = null;\n\n// Mock 数据\nconst xData = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24];\nconst yData = [2, 3, 4, 3, 2, 2, 3, 6, 10, 12, 10, 6];\nconst warningValue = 30;\n\nconst initChart = () => {\n  if (!chartRef.value || chart) return;\n  if (chartRef.value.clientWidth === 0 || chartRef.value.clientHeight === 0) return;\n\n  chart = echarts.init(chartRef.value);\n\n  const option = {\n    grid: {\n      top: 25,\n      right: 50,\n      bottom: 20,\n      left: 30,\n      containLabel: false\n    },\n    tooltip: {\n      trigger: 'axis'\n    },\n    legend: {\n      data: ['zk3+785CO浓度'],\n      right: 10,\n      top: 0,\n      textStyle: {\n        color: '#333',\n        fontSize: 10\n      },\n      icon: 'rect'\n    },\n    xAxis: {\n      type: 'category',\n      boundaryGap: false,\n      data: xData,\n      axisLine: { show: false },\n      axisTick: { show: false },\n      axisLabel: {\n        color: '#666',\n        fontSize: 10,\n        margin: 10\n      },\n      splitLine: {\n        show: true,\n        lineStyle: {\n          type: 'dashed',\n          color: '#E0E0E0'\n        }\n      }\n    },\n    yAxis: {\n      type: 'value',\n      min: 0,\n      max: 40,\n      interval: 10,\n      name: '辆',\n      nameLocation: 'start',\n      nameTextStyle: {\n        color: '#666',\n        fontSize: 10,\n        padding: [0, 0, 0, -20] // 调整位置\n      },\n      axisLine: { show: false },\n      axisTick: { show: false },\n      axisLabel: {\n        color: '#666',\n        fontSize: 10\n      },\n      splitLine: {\n        show: true,\n        lineStyle: {\n          type: 'dashed',\n          color: '#E0E0E0'\n        }\n      }\n    },\n    series: [\n      {\n        name: 'zk3+785CO浓度',\n        type: 'line',\n        smooth: true,\n        symbol: 'none',\n        data: yData,\n        lineStyle: {\n          color: '#50E3C2',\n          width: 2\n        },\n        areaStyle: {\n          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [\n            { offset: 0, color: 'rgba(80, 227, 194, 0.5)' },\n            { offset: 1, color: 'rgba(80, 227, 194, 0.1)' }\n          ])\n        }\n      },\n      {\n        name: '预警线',\n        type: 'line',\n        symbol: 'none',\n        data: Array(xData.length).fill(warningValue),\n        lineStyle: {\n          color: '#F56C6C',\n          type: 'dashed',\n          width: 1\n        },\n        markPoint: {\n          data: [\n            {\n              type: 'max',\n              name: '预警线',\n              label: {\n                show: true,\n                position: 'right',\n                formatter: '预警线',\n                color: '#F56C6C',\n                fontSize: 10\n              }\n            }\n          ],\n          symbol: 'none',\n          label: {\n             show: true,\n             position: 'right',\n             formatter: '预警线',\n             color: '#F56C6C',\n             fontSize: 10\n          }\n        }\n      }\n    ]\n  };\n\n  // 手动添加预警线文字标注，因为 markPoint 可能位置不准\n  // 使用 graphic 组件或者直接在 series 里处理\n  // 这里简化处理，依靠 markLine 或单独 series\n  \n  // 修正：使用 markLine 更合适\n  option.series[0].markLine = {\n    symbol: 'none',\n    label: {\n      show: true,\n      position: 'end',\n      formatter: '预警线',\n      color: '#F56C6C',\n      fontSize: 10\n    },\n    lineStyle: {\n      color: '#F56C6C',\n      type: 'dashed'\n    },\n    data: [\n      { yAxis: warningValue }\n    ]\n  };\n  \n  // 移除第二个 series，改用 markLine\n  option.series.pop();\n\n  chart.setOption(option);\n};\n\nonMounted(() => {\n  resizeObserver = new ResizeObserver((entries) => {\n    for (let entry of entries) {\n      const { width, height } = entry.contentRect;\n      if (width > 0 && height > 0) {\n        if (!chart) {\n          initChart();\n        } else {\n          chart.resize();\n        }\n      }\n    }\n  });\n  \n  if (chartRef.value) {\n    resizeObserver.observe(chartRef.value);\n  }\n});\n\nonUnmounted(() => {\n  if (resizeObserver) {\n    resizeObserver.disconnect();\n  }\n  if (chart) {\n    chart.dispose();\n  }\n});\n</script>\n\n<style scoped>\n.container {\n  width: 100%;\n  height: 100%;\n  box-sizing: border-box;\n  background-color: #D3D3D3;\n  display: flex;\n  flex-direction: column;\n  padding: 8px 12px;\n  font-family: sans-serif;\n  overflow: hidden;\n}\n\n.header {\n  display: flex;\n  flex-direction: column;\n  margin-bottom: 5px;\n}\n\n.title {\n  color: #4A90E2;\n  font-size: 14px;\n  font-weight: bold;\n  margin-bottom: 6px;\n}\n\n.nav-row {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n}\n\n.tab-wrapper {\n  flex: 1;\n  display: flex;\n  align-items: center;\n}\n\n.tab-shape {\n  display: flex;\n  background: #E8E8E8;\n  border-radius: 4px;\n  /* 模拟左侧箭头效果 */\n  position: relative;\n  padding-left: 10px;\n  clip-path: polygon(10px 0, 100% 0, 100% 100%, 10px 100%, 0 50%);\n  background: #F0F0F0;\n}\n\n.tab-item {\n  padding: 4px 10px;\n  font-size: 11px;\n  color: #555;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.tab-item.active {\n  background: #8CB4D8;\n  color: #fff;\n  border-radius: 2px;\n  font-weight: bold;\n}\n\n.icons {\n  display: flex;\n  gap: 6px;\n  margin-left: 10px;\n}\n\n.icon-btn {\n  width: 20px;\n  height: 20px;\n  display: flex;\n  justify-content: center;\n  align-items: center;\n  border-radius: 2px;\n  cursor: pointer;\n}\n\n.blue-bg {\n  background: #4A90E2;\n}\n\n.relative {\n  position: relative;\n  background: #E0E0E0;\n}\n\n.badge {\n  position: absolute;\n  top: -4px;\n  right: -4px;\n  background: #F56C6C;\n  color: white;\n  font-size: 8px;\n  border-radius: 50%;\n  width: 12px;\n  height: 12px;\n  display: flex;\n  justify-content: center;\n  align-items: center;\n  line-height: 1;\n}\n\n.chart-container {\n  flex: 1;\n  min-height: 0;\n  position: relative;\n  width: 100%;\n}\n\n.y-axis-label {\n  position: absolute;\n  top: 0;\n  left: 0;\n  font-size: 10px;\n  color: #666;\n  z-index: 10;\n}\n\n.chart {\n  width: 100%;\n  height: 100%;\n}\n</style>"
+}

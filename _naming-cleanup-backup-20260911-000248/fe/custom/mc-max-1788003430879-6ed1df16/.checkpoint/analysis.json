@@ -1,0 +1,365 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 72,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].body.children",
+        "message": "图表坐标轴（x-axis/y-axis）应由图表库渲染，不应作为独立children节点",
+        "suggestion": "移除x-axis和y-axis节点，将刻度信息合并到chart-main的配置中"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[0]",
+        "message": "chart-header包含碎片化文本节点（'当'/'40'/'2k3+785CD次隧'），应合并为完整语义单元",
+        "suggestion": "合并为单个title节点或拆分为左侧数值、右侧标题两个明确区域"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "charts[0]",
+        "message": "图表配置缺少legendPosition字段，且axes描述为纯文本而非结构化配置",
+        "suggestion": "补充legendPosition:'none'，将axes改为{xAxis:{...}, yAxis:{...}}结构"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[1].body",
+        "message": "图表区body内嵌套5层children（header/threshold/chart/x-axis/y-axis），超出建议深度",
+        "suggestion": "将装饰性元素（threshold-line）移入chart配置的markLine，保留header+chart两层"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "layout.sections[0].body.bgPlaceholder",
+        "message": "bgPlaceholder值'tabs-bg'与实际backgroundImage路径不一致，存在命名混淆",
+        "suggestion": "统一为'bg-7890'或移除bgPlaceholder字段，直接使用backgroundImage"
+      }
+    ],
+    "recommendations": [
+      "将图表坐标轴和阈值线从DOM节点改为图表库配置项（如ECharts的grid/markLine）",
+      "chart-header的3个碎片文本应合并为结构化title组件，明确数值区和标题区",
+      "补全charts[0]的legendPosition、tooltip等必需字段，axes改为结构化对象"
+    ],
+    "summary": "结构识别完整但图表区存在过度DOM化问题。坐标轴/阈值线应由图表库渲染而非独立节点，导致嵌套过深且维护困难。header区文本碎片化需合并。补全图表元数据后可达良好水平。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）- 浅色科技监测风",
+      "--colorPrimary": "#559eff",
+      "--colorPrimaryBg": "rgba(85, 158, 255, 0.12)",
+      "--colorPrimaryActive": "#559eff",
+      "--colorBg": "rgba(237, 244, 251, 1)",
+      "--colorBgGradientStart": "rgba(237, 244, 251, 1)",
+      "--colorBgGradientEnd": "rgba(255, 255, 255, 1)",
+      "--colorTextBase": "#1a2b47",
+      "--colorTextSecondary": "rgba(26, 43, 71, 0.65)",
+      "--colorDanger": "#f53f3f",
+      "--colorSuccess": "#52c41a",
+      "--colorSuccessArea": "rgba(82, 196, 26, 0.3)",
+      "--colorPanelBg": "rgba(255, 255, 255, 0.65)",
+      "--colorThreshold": "#f53f3f",
+      "--colorEmphasis": "#559eff",
+      "--fontSize": "14px",
+      "--titleSize": "20px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射 - 对应theme-light() mixin",
+      "@color-primary": "#559eff",
+      "@color-primary-bg": "rgba(85, 158, 255, 0.12)",
+      "@color-primary-active": "#559eff",
+      "@color-bg": "rgba(237, 244, 251, 1)",
+      "@color-bg-gradient-start": "rgba(237, 244, 251, 1)",
+      "@color-bg-gradient-end": "rgba(255, 255, 255, 1)",
+      "@color-text-base": "#1a2b47",
+      "@color-text-secondary": "rgba(26, 43, 71, 0.65)",
+      "@color-danger": "#f53f3f",
+      "@color-success": "#52c41a",
+      "@color-success-area": "rgba(82, 196, 26, 0.3)",
+      "@color-panel-bg": "rgba(255, 255, 255, 0.65)",
+      "@color-threshold": "#f53f3f",
+      "@color-emphasis": "#559eff",
+      "@color-tab-active-bg": "#559eff",
+      "@color-tab-active-text": "#ffffff",
+      "@color-tab-default-text": "rgba(26, 43, 71, 0.65)",
+      "@font-size-base": "14px",
+      "@title-size": "20px",
+      "@border-radius-base": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类 - 浅色科技监测风",
+      ".monitor-container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "width": "100%",
+        "height": "100%",
+        "padding": "1.2em",
+        "background": "linear-gradient(180deg, rgba(237, 244, 251, 1) 0%, rgba(255, 255, 255, 1) 100%)",
+        "color": "var(--colorTextBase, @color-text-base)",
+        "font-size": "var(--fontSize, @font-size-base)"
+      },
+      ".tab-bar": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "0.5em",
+        "padding": "0.4em",
+        "background": "linear-gradient(90deg, rgba(85, 158, 255, 0.08) 0%, rgba(255, 255, 255, 0.65) 100%)",
+        "border-radius": "var(--borderRadius, @border-radius-base)"
+      },
+      ".tab-item": {
+        "padding": "0.4em 1em",
+        "border-radius": "0.4em",
+        "cursor": "pointer",
+        "color": "var(--colorTextSecondary, @color-text-secondary)",
+        "transition": "background 0.2s ease, color 0.2s ease"
+      },
+      ".tab-item.is-active": {
+        "background": "var(--colorPrimary, @color-primary)",
+        "color": "#ffffff",
+        "font-weight": "500"
+      },
+      ".metric-value": {
+        "color": "var(--colorEmphasis, @color-emphasis)",
+        "font-size": "var(--titleSize, @title-size)",
+        "font-weight": "600"
+      },
+      ".panel-card": {
+        "background": "var(--colorPanelBg, @color-panel-bg)",
+        "border-radius": "var(--borderRadius, @border-radius-base)",
+        "padding": "1em",
+        "backdrop-filter": "blur(8px)"
+      },
+      ".threshold-line": {
+        "border-top": "1px dashed var(--colorThreshold, @color-threshold)",
+        "position": "relative"
+      },
+      ".threshold-label": {
+        "color": "var(--colorDanger, @color-danger)",
+        "font-size": "0.85em"
+      },
+      ".chart-area-fill": {
+        "comment": "绿色渐变面积图填充，供ECharts areaStyle参考",
+        "background": "linear-gradient(180deg, rgba(82, 196, 26, 0.3) 0%, rgba(82, 196, 26, 0) 100%)"
+      }
+    },
+    "tokenCoverage": 0.94,
+    "mappingNotes": [
+      "背景采用浅灰蓝色到白色的线性渐变，字面量值 rgba(237, 244, 251, 1) 直接落地到 .monitor-container，避免关键背景只依赖 CSS 变量",
+      "激活Tab用蓝色背景块 #559eff + 白色文字实现视觉突出，对应 emphasis 规则",
+      "当前数值40用主色 #559eff 强调，映射为 --colorEmphasis（.metric-value）",
+      "红色虚线阈值线用 border dashed + --colorThreshold(#f53f3f) 实现，标签同色",
+      "绿色渐变面积图填充 rgba(82, 196, 26, 0.3) → 透明，供 ECharts areaStyle 使用，JS 侧建议用 THEME_COLORS[props.theme] 取值",
+      "半透明白面板 rgba(255,255,255,0.65) 映射为 --colorPanelBg，配合 backdrop-filter 营造监测风玻璃质感",
+      "所有色值同时提供 var(--xxx, @fallback) 双主题兜底，Less 变量写入 theme-light() mixin",
+      "顶部Tab栏渐变背景由蓝色微光到半透明白，用纯 CSS 渐变实现（设计稿无独立背景图资源）"
+    ],
+    "elementStyleMap": {
+      "header-tabs": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "chart-section": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "chart-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "threshold-line": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "x-axis": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "y-axis": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-8": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "header-tabs",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 4,
+        "title": "环境类型切换",
+        "complexityScore": 20,
+        "complexityReasons": {
+          "elementCount": 4,
+          "charts": 0,
+          "interactions": 5,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "chart-section",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 29,
+        "title": "环境数据图表区",
+        "complexityScore": 70,
+        "complexityReasons": {
+          "elementCount": 29,
+          "charts": 3,
+          "interactions": 0,
+          "maxDepth": 2
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [
+          {
+            "type": "chart-component",
+            "id": "chart-header",
+            "name": "图表标题行",
+            "responsibility": "图表组件：图表标题行",
+            "reason": "R1: 图表隔离策略",
+            "props": [
+              "chartData",
+              "chartConfig"
+            ],
+            "emits": [
+              "legendClick",
+              "dataZoom"
+            ]
+          },
+          {
+            "type": "chart-component",
+            "id": "threshold-line",
+            "name": "阈值线",
+            "responsibility": "图表组件：阈值线",
+            "reason": "R1: 图表隔离策略",
+            "props": [
+              "chartData",
+              "chartConfig"
+            ],
+            "emits": [
+              "legendClick",
+              "dataZoom"
+            ]
+          },
+          {
+            "type": "chart-component",
+            "id": "chart-main",
+            "name": "主图表",
+            "responsibility": "图表组件：主图表",
+            "reason": "R1: 图表隔离策略",
+            "props": [
+              "chartData",
+              "chartConfig"
+            ],
+            "emits": [
+              "legendClick",
+              "dataZoom"
+            ]
+          }
+        ],
+        "shouldSplitInternally": true
+      }
+    ],
+    "isForced": true,
+    "minFiles": 5,
+    "reason": "有效 sections=2 ≥ 3 或存在高复杂度 section → 强制拆分",
+    "internalSubcomponents": [
+      {
+        "type": "chart-component",
+        "id": "chart-header",
+        "name": "图表标题行",
+        "responsibility": "图表组件：图表标题行",
+        "reason": "R1: 图表隔离策略",
+        "props": [
+          "chartData",
+          "chartConfig"
+        ],
+        "emits": [
+          "legendClick",
+          "dataZoom"
+        ],
+        "parentSectionId": "chart-section",
+        "parentSectionTitle": "环境数据图表区"
+      },
+      {
+        "type": "chart-component",
+        "id": "threshold-line",
+        "name": "阈值线",
+        "responsibility": "图表组件：阈值线",
+        "reason": "R1: 图表隔离策略",
+        "props": [
+          "chartData",
+          "chartConfig"
+        ],
+        "emits": [
+          "legendClick",
+          "dataZoom"
+        ],
+        "parentSectionId": "chart-section",
+        "parentSectionTitle": "环境数据图表区"
+      },
+      {
+        "type": "chart-component",
+        "id": "chart-main",
+        "name": "主图表",
+        "responsibility": "图表组件：主图表",
+        "reason": "R1: 图表隔离策略",
+        "props": [
+          "chartData",
+          "chartConfig"
+        ],
+        "emits": [
+          "legendClick",
+          "dataZoom"
+        ],
+        "parentSectionId": "chart-section",
+        "parentSectionTitle": "环境数据图表区"
+      }
+    ]
+  }
+}

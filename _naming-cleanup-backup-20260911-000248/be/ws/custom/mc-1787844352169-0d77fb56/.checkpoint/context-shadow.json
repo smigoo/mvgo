@@ -1,0 +1,360 @@
+{
+  "schemaVersion": 1,
+  "mode": "shadow",
+  "pipeline": "phase2",
+  "iteration": 0,
+  "generatedAt": "2026-08-27T15:26:21.843Z",
+  "productionInputMode": "legacy",
+  "engineerInputChanged": false,
+  "metrics": {
+    "legacyEstimatedBytes": 307078,
+    "generationInputBytes": 5091,
+    "reductionBytes": 301987,
+    "reductionRate": 98.34,
+    "issueCount": 4,
+    "rejectedClaimCount": 1
+  },
+  "trustVerdict": {
+    "level": "trusted",
+    "reasons": [],
+    "visual": {
+      "verdict": "trusted",
+      "reason": "覆盖率 88%",
+      "coverageRate": 88,
+      "recognizedSections": 0
+    },
+    "restrictions": []
+  },
+  "budget": {
+    "limits": {
+      "totalBytes": 30720,
+      "designFactsBytes": 12288,
+      "componentPlanBytes": 8192,
+      "resourceManifestBytes": 30720,
+      "currentIssuesBytes": 4096,
+      "maxIssues": 20
+    },
+    "sections": {
+      "designFacts": 1453,
+      "componentPlan": 756,
+      "resourceManifest": 987,
+      "currentIssues": 523
+    },
+    "totalBytes": 5089,
+    "passed": true,
+    "violations": []
+  },
+  "generationInput": {
+    "schemaVersion": 1,
+    "designFacts": {
+      "root": {
+        "nodeId": "2:9778",
+        "nodeName": "cp-流量监测",
+        "size": {
+          "width": 425.8275146484375,
+          "height": 807,
+          "unit": "css-px",
+          "source": "figma-api"
+        },
+        "styleEvidence": {
+          "background": {
+            "allowed": false,
+            "source": "figma-api",
+            "evidenceCount": 0
+          },
+          "border": {
+            "allowed": false,
+            "source": "figma-api",
+            "evidenceCount": 0
+          },
+          "borderRadius": {
+            "allowed": false,
+            "value": null,
+            "source": "figma-api"
+          },
+          "boxShadow": {
+            "allowed": false,
+            "source": "figma-api",
+            "evidenceCount": 0
+          }
+        }
+      },
+      "charts": [
+        {
+          "id": "hourly-tunnel-flow",
+          "type": "bar",
+          "series": [
+            "北京方向",
+            "上海方向"
+          ],
+          "legend": {
+            "items": [
+              "北京方向",
+              "上海方向"
+            ],
+            "owner": "unresolved",
+            "position": "top-right"
+          },
+          "source": "visual-analysis"
+        },
+        {
+          "id": "hourly-bridge-flow",
+          "type": "bar",
+          "series": [
+            "北京方向",
+            "上海方向"
+          ],
+          "legend": {
+            "items": [
+              "北京方向",
+              "上海方向"
+            ],
+            "owner": "unresolved",
+            "position": "top-right"
+          },
+          "source": "visual-analysis"
+        },
+        {
+          "id": "tunnel-vehicle-types",
+          "type": "donut",
+          "series": [
+            "客车",
+            "货车"
+          ],
+          "legend": {
+            "items": [],
+            "owner": "none",
+            "position": "right"
+          },
+          "source": "visual-analysis"
+        },
+        {
+          "id": "bridge-vehicle-types",
+          "type": "donut",
+          "series": [
+            "客车",
+            "货车"
+          ],
+          "legend": {
+            "items": [],
+            "owner": "none",
+            "position": "right"
+          },
+          "source": "visual-analysis"
+        },
+        {
+          "id": "slot-流量预测",
+          "type": "area",
+          "series": [
+            "实际流量",
+            "预测流量"
+          ],
+          "legend": {
+            "items": [
+              "实际流量",
+              "预测流量"
+            ],
+            "owner": "unresolved",
+            "position": "top-right"
+          },
+          "source": "visual-analysis"
+        }
+      ],
+      "provenance": {
+        "deterministicSource": "figma-api",
+        "semanticSource": "visual-analysis"
+      }
+    },
+    "componentPlan": {
+      "effectiveSections": [
+        {
+          "id": "slot-当日总流量",
+          "title": "当日总流量",
+          "responsibility": "当日总流量（请按功能拆分）",
+          "elementCount": 8
+        },
+        {
+          "id": "hourly-tunnel-flow",
+          "title": "江阴靖江长江隧道",
+          "responsibility": "江阴靖江长江隧道（请按功能拆分）",
+          "elementCount": 1
+        },
+        {
+          "id": "hourly-bridge-flow",
+          "title": "江阴大桥",
+          "responsibility": "江阴大桥（请按功能拆分）",
+          "elementCount": 1
+        },
+        {
+          "id": "slot-车型分布",
+          "title": "车型分布",
+          "responsibility": "车型分布（请按功能拆分）",
+          "elementCount": 10
+        },
+        {
+          "id": "slot-流量预测",
+          "title": "流量预测",
+          "responsibility": "流量预测（请按功能拆分）",
+          "elementCount": 10
+        }
+      ],
+      "isForced": true,
+      "minFiles": 5,
+      "reason": "有效 sections=5 ≥ 3 → 强制拆分"
+    },
+    "resourceManifest": [
+      {
+        "resourceId": "bg-[m]",
+        "fileName": "bg-[m]",
+        "role": null,
+        "recommendedUsage": "backgroundStyle",
+        "figmaNodeId": "2:3436"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3561"
+      },
+      {
+        "resourceId": "bg-[m]",
+        "fileName": "bg-[m]",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "88:34"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3441"
+      },
+      {
+        "resourceId": "bg-[m]",
+        "fileName": "bg-[m]",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "88:36"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:3475"
+      },
+      {
+        "resourceId": "bg-[m]",
+        "fileName": "bg-[m]",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "88:35"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:3525"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:3573"
+      }
+    ],
+    "currentIssues": [
+      {
+        "id": "CONTEXT-ROOT-BACKGROUND-CONFLICT",
+        "status": "open",
+        "severity": "warning",
+        "expectedAction": "do-not-generate-root-background"
+      },
+      {
+        "id": "CHART-LEGEND-OWNER:hourly-tunnel-flow",
+        "status": "open",
+        "severity": "warning",
+        "expectedAction": "choose-dom-or-echarts-owner"
+      },
+      {
+        "id": "CHART-LEGEND-OWNER:hourly-bridge-flow",
+        "status": "open",
+        "severity": "warning",
+        "expectedAction": "choose-dom-or-echarts-owner"
+      },
+      {
+        "id": "CHART-LEGEND-OWNER:slot-流量预测",
+        "status": "open",
+        "severity": "warning",
+        "expectedAction": "choose-dom-or-echarts-owner"
+      }
+    ],
+    "trustVerdict": {
+      "level": "trusted",
+      "reasons": [],
+      "visual": {
+        "verdict": "trusted",
+        "reason": "覆盖率 88%",
+        "coverageRate": 88,
+        "recognizedSections": 0
+      },
+      "restrictions": []
+    },
+    "contextManifest": {
+      "stage": "engineer",
+      "mode": "shadow-only",
+      "included": [
+        "schemaVersion",
+        "designFacts",
+        "componentPlan",
+        "resourceManifest",
+        "currentIssues",
+        "trustVerdict"
+      ],
+      "excluded": [
+        "figmaData",
+        "figmaNodeData",
+        "figmaStyleTree",
+        "visualAnalysis",
+        "visualElements",
+        "reviewResult",
+        "styleMappings",
+        "previousCritiques"
+      ],
+      "diagnosticsRef": {
+        "figma": "/Users/smigoo/工作/mvgo/temp-components/6a7599af6eb9eebf9fba56cd/mc-1787844352169-0d77fb56/.checkpoint/figma.json",
+        "visual": "/Users/smigoo/工作/mvgo/temp-components/6a7599af6eb9eebf9fba56cd/mc-1787844352169-0d77fb56/.checkpoint/visual.json",
+        "analysis": "/Users/smigoo/工作/mvgo/temp-components/6a7599af6eb9eebf9fba56cd/mc-1787844352169-0d77fb56/.checkpoint/analysis.json"
+      },
+      "conflictSummary": {
+        "rejectedClaimCount": 1,
+        "rejectedClaimIds": [
+          "visual-analysis:root.background"
+        ]
+      },
+      "budget": {
+        "limits": {
+          "totalBytes": 30720,
+          "designFactsBytes": 12288,
+          "componentPlanBytes": 8192,
+          "resourceManifestBytes": 30720,
+          "currentIssuesBytes": 4096,
+          "maxIssues": 20
+        },
+        "sections": {
+          "designFacts": 1453,
+          "componentPlan": 756,
+          "resourceManifest": 987,
+          "currentIssues": 523
+        },
+        "totalBytes": 5089,
+        "passed": true,
+        "violations": []
+      }
+    }
+  }
+}

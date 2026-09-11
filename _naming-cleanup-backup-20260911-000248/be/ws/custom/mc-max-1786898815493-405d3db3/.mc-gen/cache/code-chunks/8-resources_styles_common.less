@@ -1,0 +1,193 @@
+.c-env-monitor-root {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 8px 12px 10px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.c-env-monitor-tabs {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  flex: none;
+}
+
+.c-env-monitor-tabs-list {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  height: 27px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 4px;
+  background: linear-gradient(180deg, @env-monitor-tabs-bg-start 0%, @env-monitor-tabs-bg-end 100%);
+  border: 0.72px solid @env-monitor-tabs-border-color;
+  box-sizing: border-box;
+}
+
+.c-env-monitor-tab-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 21px;
+  padding: 0 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.c-env-monitor-tab-item__label {
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 12px;
+  text-align: left;
+  color: @env-monitor-tab-text-color;
+  white-space: nowrap;
+}
+
+.c-env-monitor-tab-item--active {
+  background: linear-gradient(180deg, @env-monitor-tab-active-bg-start 0%, @env-monitor-tab-active-bg-end 100%);
+  border: 0.6px solid @env-monitor-tabs-border-color;
+  box-shadow: 0 0.6px 0 rgba(0, 111, 227, 0.2);
+  .c-env-monitor-tab-item__label {
+    color: @env-monitor-tab-active-text-color;
+    text-shadow: 0 0.6px 0 @env-monitor-tab-active-text-shadow;
+  }
+}
+
+.c-env-monitor-tabs-icon {
+  display: block;
+  width: 52px;
+  height: 24px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.c-env-monitor-metric-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  width: 100%;
+  flex: none;
+  min-width: 0;
+}
+
+.c-env-monitor-metric-card {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  min-width: 0;
+  background: @env-monitor-card-bg;
+  border: 1px solid @env-monitor-card-border-color;
+  border-radius: 4px;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.c-env-monitor-metric-card__icon {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.c-env-monitor-metric-card__img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.c-env-monitor-metric-card__icon-fallback {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1890ff 0%, #4ade80 100%);
+  box-shadow: 0 0 6px rgba(24, 144, 255, 0.3);
+}
+
+.c-env-monitor-metric-card__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+}
+
+.c-env-monitor-metric-card__label {
+  font-size: 10px;
+  line-height: 1.2;
+  color: @env-monitor-label-color;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.c-env-monitor-metric-card__value-row {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  min-width: 0;
+}
+
+.c-env-monitor-metric-card__value {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: @env-monitor-value-color;
+  white-space: nowrap;
+}
+
+.c-env-monitor-metric-card__unit {
+  font-size: 10px;
+  line-height: 1.2;
+  color: @env-monitor-unit-color;
+  white-space: nowrap;
+}
+
+.trend-chart-container {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.chart-canvas {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+
+.c-env-monitor-metric-card--good {
+  border-left: 2px solid #4ade80;
+}
+
+.c-env-monitor-metric-card--normal {
+  border-left: 2px solid #1890ff;
+}
+
+.c-env-monitor-metric-card--bad {
+  border-left: 2px solid #ff4d4f;
+}

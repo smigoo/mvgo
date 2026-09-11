@@ -1,0 +1,111 @@
+{
+  "stage": "codegen_done",
+  "brief": {
+    "layout": "整体采用垂直堆叠布局（Column），主轴垂直方向。顶部为水平分布的标题栏与状态卡片区（Flex Row，两端对齐），下方为全宽数据表格区域。表格采用经典行列结构，固定表头，内容区等宽分栏。",
+    "regions": [
+      {
+        "name": "标题栏",
+        "description": "左侧含图标的'今日预警列表'标题",
+        "position": "top-left",
+        "size": "高度约占12%，宽度30%"
+      },
+      {
+        "name": "用户状态卡片区",
+        "description": "右侧两个用户处理状态卡片（张三、李四及对应数量）",
+        "position": "top-right",
+        "size": "高度约占12%，宽度50%"
+      },
+      {
+        "name": "表格容器",
+        "description": "包含表头和数据行的完整表格区域",
+        "position": "center/bottom",
+        "size": "高度约占76%，宽度100%"
+      }
+    ],
+    "spacing": {
+      "outer": "整体四周保持均等外边距，约16-24px",
+      "gap": "标题与右侧卡片间距较大（弹性空间）；表格行之间无明显间隙，通过边框线或背景色区分；单元格水平间距均匀",
+      "padding": "表格单元格内部上下左右均有内边距，约12-16px；标题栏和状态卡片内部有紧凑内边距"
+    },
+    "colors": {
+      "primary": "#00D4AA",
+      "background": "#071A26",
+      "surface": "#0C2938",
+      "text": "#FFFFFF",
+      "border": "#1A3B4D"
+    },
+    "typography": {
+      "size": "标题大号（约20-24px）；表头中号（约14-16px）；内容常规（约13-15px）；状态标签小号（约12-14px）",
+      "weight": "标题粗体（600-700）；表头中等（500-600）；内容常规（400）；数字和状态标签正常或中等",
+      "lineHeight": "表格行高约为字体大小的1.5-1.8倍，保证可读性"
+    },
+    "components": [
+      "HeaderBar（标题栏）",
+      "UserStatusCard（用户状态卡片，含头像图标、姓名、统计数）",
+      "DataTable（数据表格）",
+      "TableHeader（表格表头行）",
+      "TableRow（数据行）",
+      "TableCell（单元格）",
+      "StatusBadge（状态标签：待处理/已处理）",
+      "TextLink/Button（查看核实操作按钮）",
+      "Icon（标题前置图标、用户头像图标）"
+    ],
+    "textContent": [
+      "今日预警列表",
+      "张三",
+      "已处理 1",
+      "李四",
+      "已处理 0",
+      "预警项",
+      "传感器节点",
+      "桩号",
+      "异常原因",
+      "异常时间",
+      "处理结果",
+      "操作",
+      "管片沉降",
+      "ZYN6-2",
+      "K5+900",
+      "数值偏小异常",
+      "18:20",
+      "待处理",
+      "查看核实",
+      "接缝位移",
+      "ZYN6-3",
+      "K4+200",
+      "网络异常",
+      "18:20",
+      "待处理",
+      "查看核实",
+      "管片沉降",
+      "ZYN6-2",
+      "K3+700",
+      "网络异常",
+      "18:20",
+      "已处理",
+      "查看核实"
+    ],
+    "visualDetails": [
+      "深色科技风主题（Dark Mode / Cyberpunk风格）",
+      "标题左侧带有倾斜菱形或方块图标装饰",
+      "用户头像使用简笔画风格的人形轮廓图标，带青色底色",
+      "表格表头背景略深于内容行，形成层次感",
+      "表格行间以细线或微弱背景色差异分隔",
+      "状态标签采用胶囊形状（Pill shape）：'待处理'为金黄色（#FFD700或类似），'已处理'为青色（#00D4AA）",
+      "'查看核实'操作项为青色文字链接样式，可能带下划线或悬停效果",
+      "整体圆角较小（约4-6px），主要应用于卡片和标签",
+      "可能有微弱的发光效果（Glow）在主色调元素上"
+    ],
+    "interactions": [
+      "用户状态切换区：右上角两个用户卡片（'张三 已处理 1'、'李四 已处理 0'），可能作为筛选器或Tab切换当前责任人视图",
+      "行级操作按钮：每行最右侧的'查看核实'文字按钮，用于进入详情页或弹窗",
+      "潜在表头交互：虽然截图中未明确显示排序箭头，但表头通常支持点击排序功能"
+    ]
+  },
+  "width": 1020,
+  "height": 219,
+  "sourceType": "screenshot",
+  "componentType": "vue3",
+  "generationTier": "lite",
+  "vueCode": "<template>\n  <div class=\"root-container\">\n    <!-- 顶部标题与状态栏 -->\n    <div class=\"header-section\">\n      <div class=\"title-group\">\n        <div class=\"title-icon\">\n          <div class=\"diamond d1\"></div>\n          <div class=\"diamond d2\"></div>\n        </div>\n        <h2 class=\"main-title\">今日预警列表</h2>\n      </div>\n      \n      <div class=\"user-status-group\">\n        <div \n          class=\"user-card\" \n          :class=\"{ active: activeUser === 'zhang' }\"\n          @click=\"activeUser = 'zhang'\"\n        >\n          <div class=\"avatar-icon\">\n            <svg viewBox=\"0 0 24 24\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\">\n              <path d=\"M12 12C14.21 12 16 10.21 16 8C16 5.79 14.21 4 12 4C9.79 4 8 5.79 8 8C8 10.21 9.79 12 12 12ZM12 14C9.33 14 4 15.34 4 18V20H20V18C20 15.34 14.67 14 12 14Z\" fill=\"#00D4AA\"/>\n            </svg>\n          </div>\n          <span class=\"user-name\">张三</span>\n          <span class=\"status-tag-dark\">已处理 1</span>\n        </div>\n\n        <div \n          class=\"user-card\" \n          :class=\"{ active: activeUser === 'li' }\"\n          @click=\"activeUser = 'li'\"\n        >\n          <div class=\"avatar-icon\">\n            <svg viewBox=\"0 0 24 24\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\">\n              <path d=\"M12 12C14.21 12 16 10.21 16 8C16 5.79 14.21 4 12 4C9.79 4 8 5.79 8 8C8 10.21 9.79 12 12 12ZM12 14C9.33 14 4 15.34 4 18V20H20V18C20 15.34 14.67 14 12 14Z\" fill=\"#00D4AA\"/>\n            </svg>\n          </div>\n          <span class=\"user-name\">李四</span>\n          <span class=\"status-tag-dark\">已处理 0</span>\n        </div>\n      </div>\n    </div>\n\n    <!-- 表格区域 -->\n    <div class=\"table-section\">\n      <a-table \n        :columns=\"columns\" \n        :data-source=\"tableData\" \n        :pagination=\"false\" \n        row-key=\"id\"\n        class=\"tech-table\"\n      >\n        <template #bodyCell=\"{ column, record }\">\n          <template v-if=\"column.key === 'status'\">\n            <span class=\"status-badge\" :class=\"record.status === 'pending' ? 'status-pending' : 'status-processed'\">\n              {{ record.status === 'pending' ? '待处理' : '已处理' }}\n            </span>\n          </template>\n          <template v-if=\"column.key === 'action'\">\n            <a class=\"action-link\" @click=\"handleCheck(record)\">查看核实</a>\n          </template>\n        </template>\n      </a-table>\n    </div>\n  </div>\n</template>\n\n<script setup>\nimport { ref } from 'vue';\nimport { Table as ATable } from 'ant-design-vue';\n\nconst activeUser = ref('zhang');\n\nconst columns = [\n  { title: '预警项', dataIndex: 'item', key: 'item', width: '15%' },\n  { title: '传感器节点', dataIndex: 'node', key: 'node', width: '15%' },\n  { title: '桩号', dataIndex: 'pile', key: 'pile', width: '12%' },\n  { title: '异常原因', dataIndex: 'reason', key: 'reason', width: '20%' },\n  { title: '异常时间', dataIndex: 'time', key: 'time', width: '10%' },\n  { title: '处理结果', dataIndex: 'status', key: 'status', width: '13%' },\n  { title: '操作', key: 'action', width: '15%' },\n];\n\nconst tableData = ref([\n  {\n    id: 1,\n    item: '管片沉降',\n    node: 'ZYN6-2',\n    pile: 'K5+900',\n    reason: '数值偏小异常',\n    time: '18:20',\n    status: 'pending',\n  },\n  {\n    id: 2,\n    item: '接缝位移',\n    node: 'ZYN6-3',\n    pile: 'K4+200',\n    reason: '网络异常',\n    time: '18:20',\n    status: 'pending',\n  },\n  {\n    id: 3,\n    item: '管片沉降',\n    node: 'ZYN6-2',\n    pile: 'K3+700',\n    reason: '网络异常',\n    time: '18:20',\n    status: 'processed',\n  },\n]);\n\nconst handleCheck = (record) => {\n  console.log('查看核实:', record);\n};\n</script>\n\n<style scoped>\n.root-container {\n  width: 100%;\n  height: 100%;\n  box-sizing: border-box;\n  background-color: #061822;\n  padding: 16px 24px;\n  display: flex;\n  flex-direction: column;\n  font-family: 'Microsoft YaHei', sans-serif;\n  color: #ffffff;\n  overflow: hidden;\n}\n\n/* Header Section */\n.header-section {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  margin-bottom: 16px;\n  height: auto;\n  min-height: 40px;\n}\n\n.title-group {\n  display: flex;\n  align-items: center;\n  gap: 12px;\n}\n\n.title-icon {\n  position: relative;\n  width: 24px;\n  height: 24px;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n}\n\n.diamond {\n  position: absolute;\n  width: 12px;\n  height: 12px;\n  background: #00D4AA;\n  transform: rotate(45deg);\n  opacity: 0.8;\n}\n\n.d1 {\n  left: 0;\n  top: 2px;\n  background: #00D4AA;\n}\n\n.d2 {\n  left: 6px;\n  top: 6px;\n  background: #008f73;\n}\n\n.main-title {\n  margin: 0;\n  font-size: 20px;\n  font-weight: 600;\n  color: #ffffff;\n  letter-spacing: 1px;\n  text-shadow: 0 0 10px rgba(0, 212, 170, 0.3);\n}\n\n.user-status-group {\n  display: flex;\n  gap: 16px;\n}\n\n.user-card {\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  padding: 6px 16px;\n  background: rgba(12, 41, 56, 0.6);\n  border: 1px solid #1A3B4D;\n  border-radius: 4px;\n  cursor: pointer;\n  transition: all 0.3s;\n}\n\n.user-card:hover, .user-card.active {\n  background: rgba(0, 212, 170, 0.1);\n  border-color: #00D4AA;\n}\n\n.avatar-icon {\n  width: 24px;\n  height: 24px;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n}\n\n.avatar-icon svg {\n  width: 20px;\n  height: 20px;\n}\n\n.user-name {\n  font-size: 14px;\n  color: #ffffff;\n}\n\n.status-tag-dark {\n  background: #000000;\n  color: #ffffff;\n  font-size: 12px;\n  padding: 2px 8px;\n  border-radius: 10px;\n  border: 1px solid #333;\n}\n\n/* Table Section */\n.table-section {\n  flex: 1;\n  min-height: 0;\n  background: #0C2938;\n  border: 1px solid #1A3B4D;\n  border-radius: 4px;\n  overflow: hidden;\n  display: flex;\n  flex-direction: column;\n}\n\n/* Ant Design Vue Overrides */\n:deep(.tech-table) {\n  background: transparent;\n  color: #ffffff;\n  flex: 1;\n}\n\n:deep(.tech-table .ant-table-container) {\n  border-radius: 4px;\n}\n\n:deep(.tech-table .ant-table-thead > tr > th) {\n  background: #0A2535 !important;\n  color: #ffffff;\n  border-bottom: 1px solid #1A3B4D;\n  font-weight: 600;\n  font-size: 15px;\n  padding: 16px;\n  text-align: left;\n}\n\n:deep(.tech-table .ant-table-tbody > tr > td) {\n  background: transparent !important;\n  color: #e0e0e0;\n  border-bottom: 1px solid #1A3B4D;\n  font-size: 14px;\n  padding: 14px 16px;\n}\n\n:deep(.tech-table .ant-table-tbody > tr:last-child > td) {\n  border-bottom: none;\n}\n\n:deep(.tech-table .ant-table-tbody > tr:hover > td) {\n  background: rgba(0, 212, 170, 0.05) !important;\n}\n\n/* Custom Components in Table */\n.status-badge {\n  display: inline-block;\n  padding: 4px 12px;\n  border-radius: 12px;\n  font-size: 13px;\n  font-weight: 500;\n}\n\n.status-pending {\n  color: #FFD700;\n  background: rgba(255, 215, 0, 0.1);\n  border: 1px solid rgba(255, 215, 0, 0.3);\n}\n\n.status-processed {\n  color: #00D4AA;\n  background: rgba(0, 212, 170, 0.1);\n  border: 1px solid rgba(0, 212, 170, 0.3);\n}\n\n.action-link {\n  color: #00D4AA;\n  text-decoration: none;\n  cursor: pointer;\n  font-size: 14px;\n  transition: opacity 0.3s;\n}\n\n.action-link:hover {\n  opacity: 0.8;\n  text-decoration: underline;\n}\n/* Ant Design Vue Table 内部背景层：避免透明单元格透出默认白底 */\n:deep(.tech-table .ant-table),\n:deep(.tech-table .ant-table-container),\n:deep(.tech-table .ant-table-content),\n:deep(.tech-table table) {\n  background: transparent;\n  color: inherit;\n}\n\n/* Ant Design Vue 4 通过单元格状态类控制行悬浮背景 */\n:deep(.tech-table .ant-table-tbody > tr > td.ant-table-cell-row-hover) {\n  background: rgba(0, 212, 170, 0.05) !important;\n}\n\n</style>"
+}

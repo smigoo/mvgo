@@ -1,0 +1,173 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 82,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "标题区headerRelation为title-itself，但body仍包含标题文本及装饰图标，导致header与body职责割裂，建议将标题相关元素统一收拢至header。",
+        "suggestion": "将图标组与标题文本移至section.header，使body仅承载非标题内容"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body.children[1]",
+        "message": "header与body中同时存在'环境监测'文本，造成标题重复定义，增加维护成本，建议移除body中的文本节点或header的title字段。",
+        "suggestion": "删除body中的文本节点，仅在header.title保留标题定义"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[2].body",
+        "message": "图表区body使用relative布局并设置backgroundImage，仅包裹单一chart-container，建议将背景上提至section层级以简化嵌套。",
+        "suggestion": "将backgroundImage移至section层级，body改为常规flex布局"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[0].children[0]",
+        "message": "Tab选中项同时声明bgResource图片与styles背景色，存在样式冲突风险，建议统一为CSS样式或明确图片优先级。",
+        "suggestion": "移除bgResource，使用styles.backgroundColor实现选中态"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[1].children[1].badge",
+        "message": "右上角列表图标badge文字色与背景色同为#F53F3F，角标文字将不可见，建议将文字色改为#FFFFFF。",
+        "suggestion": "修改badge.color为#FFFFFF以保证数字清晰可读"
+      }
+    ],
+    "recommendations": [
+      "统一标题区header与body职责，避免重复定义",
+      "将装饰性背景图上提，减少relative嵌套层级",
+      "规范Tab选中态样式来源，优先使用CSS样式"
+    ],
+    "summary": "布局分区合理，但标题区存在header与body职责混乱及内容重复，图表背景图层级可优化，角标存在同色导致不可见问题。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#559EFF",
+      "--colorPrimaryBg": "#559EFF",
+      "--colorBg": "#EDF4FB",
+      "--colorSuccess": "#52C41A",
+      "--colorDanger": "#F53F3F",
+      "--colorTextBase": "#333333",
+      "--fontSize": "14px",
+      "--borderRadius": "6px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#559EFF",
+      "@color-primary-bg": "#559EFF",
+      "@color-bg": "#EDF4FB",
+      "@color-success": "#52C41A",
+      "@color-danger": "#F53F3F",
+      "@color-text-base": "#333333",
+      "@font-size-base": "14px",
+      "@border-radius-base": "6px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-panel": {
+        "display": "flex",
+        "flex-direction": "column",
+        "height": "100%",
+        "padding": "16px",
+        "background": "var(--colorBg, @color-bg)",
+        "color": "var(--colorTextBase, @color-text-base)",
+        "font-size": "var(--fontSize, @font-size-base)"
+      },
+      ".tab": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "padding": "8px 16px",
+        "border-radius": "var(--borderRadius, @border-radius-base)",
+        "color": "var(--colorTextBase, @color-text-base)",
+        "background": "transparent",
+        "cursor": "pointer",
+        "transition": "background 0.2s ease, color 0.2s ease"
+      },
+      ".tab.is-active": {
+        "background": "var(--colorPrimaryBg, @color-primary-bg)",
+        "color": "#ffffff"
+      },
+      ".chart-area-fill": {
+        "fill": "var(--colorSuccess, @color-success)",
+        "fill-opacity": "0.25"
+      },
+      ".warning-line": {
+        "border-top": "2px dashed var(--colorDanger, @color-danger)"
+      },
+      ".warning-text": {
+        "color": "var(--colorDanger, @color-danger)",
+        "font-weight": "600"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "浅灰蓝背景 #EDF4FB 映射为 --colorBg / @color-bg，并直接应用到容器背景，避免仅依赖变量",
+      "主色 #559EFF 映射为 --colorPrimary，用于 Tab 选中态高亮及强调元素",
+      "Tab 选中态蓝色背景同时补充 --colorPrimaryBg，便于框架预设变量覆盖",
+      "绿色 #52C41A 映射为 --colorSuccess，用于图表面积填充，可通过 fill-opacity 调整透明度",
+      "红色 #F53F3F 映射为 --colorDanger，用于红色虚线预警线及警示文字",
+      "深灰文本 #333333 映射为 --colorTextBase / @color-text-base，作为浅色主题基础文字色",
+      "所有可复用类均优先使用 var(--xxx) 并回退至 Less 变量，保证主题切换兼容性"
+    ],
+    "elementStyleMap": {
+      "section-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-icon-group-左侧装饰图标-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-controls": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tab-bar": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-15": {
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-header",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 4,
+        "title": "环境监测"
+      },
+      {
+        "id": "section-controls",
+        "responsibility": "工具栏",
+        "elementCount": 8,
+        "title": "筛选与工具栏"
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "趋势图表"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 → 强制拆分"
+  }
+}

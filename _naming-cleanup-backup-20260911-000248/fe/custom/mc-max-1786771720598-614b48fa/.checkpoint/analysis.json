@@ -1,0 +1,220 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 65,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[0]",
+        "message": "图表容器使用了固定宽度 `width: 380`，严重违反「容器布局禁止固定宽度」的 🔴 核心规范，会导致组件在不同屏幕尺寸下无法自适应。",
+        "suggestion": "将 `width: 380` 移除或改为 `width: '100%'`，依赖父容器的 flex 布局实现自适应宽度。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[3].body",
+        "message": "车型分布区块的 body 使用了 `items` 字段来定义子节点，而其他所有区块均使用 `children`，破坏了微码布局结构的一致性，会导致解析器报错。",
+        "suggestion": "将 `items` 统一重命名为 `children`，确保所有同级子节点列表字段命名完全一致。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "chartDataHints",
+        "message": "三个图表（bar, bar, area）的 `labels` 和 `values` 数据提示完全相同，存在明显的数据解析或生成错误，会导致图表渲染出错误的数据。",
+        "suggestion": "修正 `chartDataHints` 中各图表的独立数据，确保每个图表的数据提示与其实际业务内容（如隧道流量、大桥流量、预测趋势）精准匹配。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[*].body.backgroundImage",
+        "message": "每个 section 和 body 都包含 `backgroundImage` 配置且 `src` 为 null，造成大量冗余节点，增加 JSON 体积和解析负担。",
+        "suggestion": "移除 `src` 为 null 的无效 `backgroundImage` 节点，保持 JSON 结构精简，遵循“零装饰”原则。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[*].body.children[0]",
+        "message": "图表容器缺少对坐标轴标签空间的布局提示，在代码生成时容易导致 ECharts 渲染时坐标轴文字溢出容器边界。",
+        "suggestion": "在图表配置中增加 `grid: { containLabel: true }` 的提示，或在布局结构中明确预留坐标轴边距。"
+      }
+    ],
+    "recommendations": [
+      "严格遵循“证据优先”和“零装饰”原则，清理 JSON 中无实际意义的空背景图配置（src 为 null 的节点）。",
+      "统一布局容器的字段命名规范，所有子节点列表必须统一使用 `children`，禁止使用 `items` 等别名。",
+      "在图表容器节点中明确标识自适应要求（如移除固定宽高，改用百分比或 flex），确保代码生成阶段使用 `width: 100%` 和 `ResizeObserver`。",
+      "修正 `chartDataHints` 中的占位数据，确保数据驱动视图的准确性，避免所有图表复用同一套假数据。"
+    ],
+    "summary": "布局结构整体模块划分清晰，能够准确反映设计稿的业务逻辑和层级关系。但存在违反 🔴 核心规范的问题（图表使用固定宽度），且部分字段命名不一致（`children` vs `items`），`chartDataHints` 存在明显的数据重复错误。必须修复固定宽度问题、统一结构字段并修正图表数据提示，否则将导致代码生成失败或运行时布局错乱。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorBg": "#edf4fb",
+      "--colorPrimary": "#1990ff",
+      "--colorTextBase": "#333333",
+      "--colorWarning": "#fa8c16",
+      "--colorInfo": "#1890ff",
+      "--colorSuccess": "#52c41a",
+      "--fontSize": "14px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-bg": "#edf4fb",
+      "@color-primary": "#1990ff",
+      "@color-text-base": "#333333",
+      "@color-warning": "#fa8c16",
+      "@color-info": "#1890ff",
+      "@color-success": "#52c41a",
+      "@font-size-base": "14px",
+      "@border-radius-base": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "16px",
+        "background": "var(--colorBg, #edf4fb)",
+        "color": "var(--colorTextBase, #333333)",
+        "font-size": "var(--fontSize, 14px)"
+      },
+      ".card": {
+        "background": "#ffffff",
+        "border-radius": "var(--borderRadius, 8px)",
+        "padding": "16px",
+        "box-shadow": "0 2px 8px rgba(0, 0, 0, 0.05)"
+      },
+      ".title": {
+        "display": "flex",
+        "align-items": "center",
+        "font-size": "1.14em",
+        "font-weight": "600",
+        "color": "var(--colorTextBase, #333333)",
+        "position": "relative",
+        "padding-left": "1.5em"
+      },
+      ".title::before": {
+        "content": "''",
+        "position": "absolute",
+        "left": "0",
+        "top": "50%",
+        "transform": "translateY(-50%) rotate(45deg)",
+        "width": "0.6em",
+        "height": "0.6em",
+        "background": "var(--colorPrimary, #1990ff)"
+      },
+      ".value-primary": {
+        "font-size": "2em",
+        "font-weight": "700",
+        "color": "var(--colorInfo, #1890ff)",
+        "line-height": "1.2"
+      },
+      ".value-warning": {
+        "font-size": "2em",
+        "font-weight": "700",
+        "color": "var(--colorWarning, #fa8c16)",
+        "line-height": "1.2"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 #1990ff 映射为 --colorPrimary，辅助蓝色 #1890ff 映射为 --colorInfo 以区分数据层级",
+      "橙色 #fa8c16 映射为 --colorWarning，专门用于货车数值等特定业务强调",
+      "背景色 #edf4fb 直接落地为 --colorBg，避免关键可见背景只依赖 CSS 变量",
+      "菱形图标装饰通过 .title::before 伪元素实现，保持 DOM 结构语义化且易于主题切换",
+      "大号数值使用 em 单位（2em），基于基础字体大小进行响应式缩放，符合规范"
+    ],
+    "elementStyleMap": {
+      "section-daily-total": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-bridge": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-tunnel-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-bridge-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-vehicle-type": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-tunnel-el-x-1-stat-item-x-0": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-tunnel-el-x-1-stat-item-x-2": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-tunnel-el-x-1": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center",
+        "justify-content": "space-between"
+      },
+      "vehicle-tunnel": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-_m-34.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-stat-item-x-17": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-item-x-21": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-bridge-el-x-1-stat-item-x-0": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-bridge-el-x-1-stat-item-x-2": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-bridge-el-x-1": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center",
+        "justify-content": "space-between"
+      },
+      "vehicle-bridge": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-_m-35.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-stat-item-x-26": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-item-x-30": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-flow-prediction": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    }
+  }
+}

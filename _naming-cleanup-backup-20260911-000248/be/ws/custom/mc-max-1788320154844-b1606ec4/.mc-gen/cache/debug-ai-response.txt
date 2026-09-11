@@ -1,0 +1,278 @@
+```json
+{
+  "generatedAt": "2023-10-27T10:00:00Z",
+  "stage": "preview-analysis",
+  "componentName": "环境监测",
+  "componentTitle": "环境监测",
+  "analysisModel": "visual-parser-v2",
+  "sourceImage": {
+    "path": "mc-preview.png",
+    "size": 0,
+    "mtimeMs": 0,
+    "sha1": ""
+  },
+  "summary": "包含Tab切换栏（一氧化碳、能见度等）、右侧功能图标（带Badge）、CO浓度面积图及红色预警线",
+  "layout": {
+    "type": "vertical-stack",
+    "direction": "vertical",
+    "sections": [
+      {
+        "id": "section-header",
+        "name": "标题区",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "title-itself",
+        "slotCandidate": null,
+        "header": {
+          "title": "环境监测",
+          "controls": []
+        },
+        "body": {
+          "layout": "horizontal",
+          "bgPlaceholder": "section-bg-header",
+          "children": [
+            {
+              "type": "icon",
+              "name": "信号图标",
+              "resourceFile": "../resources/images/icon-7941.png",
+              "recommendedUsage": "imgSrc",
+              "styles": {
+                "width": 8,
+                "height": 8
+              }
+            },
+            {
+              "type": "text",
+              "text": "环境监测",
+              "styles": {
+                "fontSize": 16,
+                "fontWeight": "bold",
+                "color": "rgba(85,158,255,1)",
+                "hasGradient": true
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "section-controls",
+        "name": "Tab切换与工具栏",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "header": {
+          "title": null,
+          "controls": []
+        },
+        "body": {
+          "layout": "horizontal",
+          "bgPlaceholder": "body-bg-controls",
+          "children": [
+            {
+              "id": "tab-list",
+              "name": "监测指标Tab",
+              "role": "tabs",
+              "layout": "horizontal",
+              "items": [
+                {
+                  "role": "tab",
+                  "name": "一氧化碳",
+                  "active": true,
+                  "bgResource": "../resources/images/bg-tab-active-7891.png",
+                  "styles": {
+                    "color": "#ffffff",
+                    "fontSize": 12
+                  }
+                },
+                {
+                  "role": "tab",
+                  "name": "能见度",
+                  "active": false,
+                  "styles": {
+                    "color": "rgba(255,255,255,0.6)",
+                    "fontSize": 12
+                  }
+                },
+                {
+                  "role": "tab",
+                  "name": "洞内照明",
+                  "active": false,
+                  "styles": {
+                    "color": "rgba(255,255,255,0.6)",
+                    "fontSize": 12
+                  }
+                },
+                {
+                  "role": "tab",
+                  "name": "洞外光强",
+                  "active": false,
+                  "styles": {
+                    "color": "rgba(255,255,255,0.6)",
+                    "fontSize": 12
+                  }
+                }
+              ]
+            },
+            {
+              "id": "tool-icons",
+              "name": "工具图标",
+              "role": "icon-group",
+              "layout": "horizontal",
+              "children": [
+                {
+                  "type": "icon-button",
+                  "name": "图表视图",
+                  "resourceFile": "../resources/images/icon-7941.png",
+                  "recommendedUsage": "imgSrc",
+                  "styles": {
+                    "width": 24,
+                    "height": 24,
+                    "backgroundColor": "#ffffff",
+                    "borderRadius": 4
+                  }
+                },
+                {
+                  "type": "icon-button",
+                  "name": "列表视图",
+                  "resourceFile": "../resources/images/icon-7945.png",
+                  "recommendedUsage": "imgSrc",
+                  "badge": {
+                    "text": "6",
+                    "color": "#f53f3f",
+                    "styles": {
+                      "backgroundColor": "#f53f3f",
+                      "color": "#ffffff",
+                      "fontSize": 10,
+                      "borderRadius": 10
+                    }
+                  },
+                  "styles": {
+                    "width": 24,
+                    "height": 24,
+                    "backgroundColor": "#ffffff",
+                    "borderRadius": 4
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "section-chart",
+        "name": "浓度趋势图",
+        "role": "常驻",
+        "layout": "vertical",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "header": {
+          "title": null,
+          "controls": []
+        },
+        "body": {
+          "layout": "vertical",
+          "bgPlaceholder": "body-bg-chart",
+          "children": [
+            {
+              "type": "chart",
+              "name": "CO浓度折线/面积图",
+              "chartType": "area",
+              "width": 380,
+              "height": 100,
+              "config": {
+                "xAxis": {
+                  "label": "时",
+                  "ticks": ["2", "4", "6", "8", "10", "12", "14", "16", "18", "20", "22", "24"]
+                },
+                "yAxis": {
+                  "label": "辆",
+                  "ticks": ["0", "10", "20", "30", "40"]
+                },
+                "series": [
+                  {
+                    "name": "zk3+785CO浓度",
+                    "color": "#2ecc71",
+                    "type": "area"
+                  }
+                ],
+                "annotations": [
+                  {
+                    "type": "line",
+                    "value": 30,
+                    "style": "dashed",
+                    "color": "#f53f3f",
+                    "label": "预警线"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "styles": {
+    "theme": "浅色科技监测风",
+    "backgroundBrightness": "light",
+    "colors": [
+      "#EDF4FB",
+      "#559EFF",
+      "#2ecc71",
+      "#f53f3f",
+      "#ffffff"
+    ],
+    "background": "浅灰蓝色背景 (#EDF4FB)",
+    "decorations": [
+      "绿色面积图填充",
+      "红色虚线预警线"
+    ],
+    "emphasis": [
+      "选中Tab蓝色背景",
+      "红色Badge数字6"
+    ]
+  },
+  "interactions": [
+    {
+      "target": "Tab切换栏",
+      "type": "tab-switch",
+      "description": "切换监测指标（一氧化碳、能见度、洞内照明、洞外光强）",
+      "defaultState": "选中'一氧化碳'",
+      "evidence": "蓝色高亮背景"
+    },
+    {
+      "target": "右侧图标按钮",
+      "type": "button",
+      "description": "切换图表/列表视图",
+      "defaultState": "常驻",
+      "evidence": "图标样式"
+    }
+  ],
+  "charts": [
+    {
+      "section": "section-chart",
+      "type": "area",
+      "series": ["zk3+785CO浓度"],
+      "legend": ["zk3+785CO浓度"],
+      "legendPosition": "top-right",
+      "seriesColors": ["#2ecc71"],
+      "legendType": "horizontal",
+      "axes": "X轴为时间(2-24时)，Y轴为数值(0-40，标签为'辆')",
+      "tooltip": "显示时间点及浓度值",
+      "notes": [
+        "包含红色虚线预警线(Y=30)",
+        "Y轴顶部标签显示为'辆'，Legend显示为CO浓度，可能存在设计稿笔误"
+      ]
+    }
+  ],
+  "doNotInvent": [
+    "不要臆造Tab的其他选项（如'通风'）",
+    "不要臆造图表的具体数值点，只描述趋势",
+    "不要臆造点击图标后的具体弹窗内容"
+  ],
+  "notes": [
+    "Y轴标签'辆'与Legend'CO浓度'语义不符，按原图识别",
+    "背景色为浅灰蓝，属于浅色主题"
+  ]
+}
+```

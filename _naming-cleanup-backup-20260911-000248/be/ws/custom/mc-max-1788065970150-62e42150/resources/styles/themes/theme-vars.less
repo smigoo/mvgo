@@ -1,0 +1,116 @@
+// 主题变量定义文件
+// 禁止在根级调用主题 mixin（由 dark.less/light.less 在主题选择器内调用）
+
+// 公共变量（跨主题共享）
+.common() {
+  // 字体
+  @font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  @font-size-base: 14px;
+  @font-size-small: 12px;
+  @font-size-large: 16px;
+  @font-size-title: 18px;
+  
+  // 间距
+  @spacing-xs: 4px;
+  @spacing-sm: 8px;
+  @spacing-md: 16px;
+  @spacing-lg: 24px;
+  @spacing-xl: 32px;
+  
+  // 圆角
+  @border-radius-sm: 2px;
+  @border-radius-md: 4px;
+  @border-radius-lg: 8px;
+  
+  // 过渡
+  @transition-duration: 0.3s;
+  @transition-timing: ease;
+  
+  // 层级
+  @z-index-base: 1;
+  @z-index-popup: 1000;
+  @z-index-modal: 2000;
+  @z-index-tooltip: 3000;
+}
+
+// 深色主题（默认主题，必须与设计稿一致）
+.theme-dark() {
+  // 背景色（深色面板默认）
+  @bg-primary: #0a0e1a;
+  @bg-secondary: #1a2332;
+  @bg-tertiary: #24303f;
+  @bg-hover: rgba(255, 255, 255, 0.05);
+  @bg-active: rgba(255, 255, 255, 0.08);
+  @bg-disabled: rgba(255, 255, 255, 0.02);
+  
+  // 文字颜色（深色面板禁止黑色系）
+  @text-primary: rgba(255, 255, 255, 0.85);
+  @text-secondary: rgba(255, 255, 255, 0.65);
+  @text-tertiary: rgba(255, 255, 255, 0.45);
+  @text-disabled: rgba(255, 255, 255, 0.25);
+  @text-inverse: rgba(0, 0, 0, 0.85);
+  
+  // 边框颜色
+  @border-primary: rgba(255, 255, 255, 0.15);
+  @border-secondary: rgba(255, 255, 255, 0.08);
+  @border-focus: rgba(24, 144, 255, 0.5);
+  
+  // 状态颜色
+  @color-primary: #1890ff;
+  @color-success: #52c41a;
+  @color-warning: #faad14;
+  @color-error: #f5222d;
+  @color-info: #1890ff;
+  
+  // 阴影
+  @shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.15);
+  @shadow-md: 0 4px 16px rgba(0, 0, 0, 0.2);
+  @shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.25);
+  
+  // 遮罩
+  @mask-bg: rgba(0, 0, 0, 0.45);
+  
+  // 特殊背景图（来自设计稿）
+  @bg-image-7890: url(../resources/images/bg-7890.png);
+}
+
+// 浅色主题
+.theme-light() {
+  // 背景色（浅色面板）
+  @bg-primary: #ffffff;
+  @bg-secondary: #fafafa;
+  @bg-tertiary: #f5f5f5;
+  @bg-hover: rgba(0, 0, 0, 0.04);
+  @bg-active: rgba(0, 0, 0, 0.08);
+  @bg-disabled: rgba(0, 0, 0, 0.02);
+  
+  // 文字颜色（浅色面板）
+  @text-primary: rgba(0, 0, 0, 0.85);
+  @text-secondary: rgba(0, 0, 0, 0.65);
+  @text-tertiary: rgba(0, 0, 0, 0.45);
+  @text-disabled: rgba(0, 0, 0, 0.25);
+  @text-inverse: rgba(255, 255, 255, 0.85);
+  
+  // 边框颜色
+  @border-primary: rgba(0, 0, 0, 0.15);
+  @border-secondary: rgba(0, 0, 0, 0.08);
+  @border-focus: rgba(24, 144, 255, 0.5);
+  
+  // 状态颜色（与 dark 保持一致）
+  @color-primary: #1890ff;
+  @color-success: #52c41a;
+  @color-warning: #faad14;
+  @color-error: #f5222d;
+  @color-info: #1890ff;
+  
+  // 阴影
+  @shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
+  @shadow-md: 0 4px 16px rgba(0, 0, 0, 0.12);
+  @shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.15);
+  
+  // 遮罩
+  @mask-bg: rgba(0, 0, 0, 0.45);
+  
+  // 特殊背景图（来自设计稿）
+  @bg-image-7890: url(../resources/images/bg-7890.png);
+}

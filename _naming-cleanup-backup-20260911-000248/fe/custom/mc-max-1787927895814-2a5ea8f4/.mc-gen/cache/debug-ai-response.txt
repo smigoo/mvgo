@@ -1,0 +1,309 @@
+分析完成。以下是该微码组件的预览图分析结果：
+
+```json
+{
+  "generatedAt": "2025-06-15T10:30:00Z",
+  "stage": "preview-analysis",
+  "componentName": "环境监测",
+  "componentTitle": "环境监测",
+  "analysisModel": "claude-3-7-sonnet-20250219",
+  "sourceImage": {
+    "path": "mc-preview.png",
+    "size": 0,
+    "mtimeMs": 0,
+    "sha1": ""
+  },
+  "summary": "包含tab切换栏、统计指标、面积图的环境监测面板。深色风格，支持多维度查看（气化版、能见度、洞内照明、洞外光强）。右上角有图标按钮和数值展示。图表显示24小时趋势，包含阈值线。",
+  "layout": {
+    "type": "vertical-stack",
+    "direction": "vertical",
+    "sections": [
+      {
+        "id": "header-tabs",
+        "name": "tab切换栏",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "title-same-row",
+        "slotCandidate": "header-right",
+        "body": {
+          "layout": "horizontal",
+          "bgPlaceholder": "bg-tab-active",
+          "children": [
+            {
+              "id": "tab-1",
+              "name": "气化版",
+              "role": "tab",
+              "active": true,
+              "styles": {
+                "fontSize": 14,
+                "color": "rgba(255,255,255,1)",
+                "fontWeight": "bold"
+              }
+            },
+            {
+              "id": "tab-2",
+              "name": "能见度",
+              "role": "tab",
+              "active": false,
+              "styles": {
+                "fontSize": 14,
+                "color": "rgba(255,255,255,0.6)",
+                "fontWeight": "normal"
+              }
+            },
+            {
+              "id": "tab-3",
+              "name": "洞内照明",
+              "role": "tab",
+              "active": false,
+              "styles": {
+                "fontSize": 14,
+                "color": "rgba(255,255,255,0.6)",
+                "fontWeight": "normal"
+              }
+            },
+            {
+              "id": "tab-4",
+              "name": "洞外光强",
+              "role": "tab",
+              "active": false,
+              "styles": {
+                "fontSize": 14,
+                "color": "rgba(255,255,255,0.6)",
+                "fontWeight": "normal"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "header-controls",
+        "name": "右侧控件区",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "title-same-row",
+        "slotCandidate": "header-right",
+        "body": {
+          "layout": "horizontal",
+          "children": [
+            {
+              "id": "chart-icon",
+              "name": "图表图标",
+              "role": "icon",
+              "resourceFile": "../resources/images/icon-7941.png",
+              "recommendedUsage": "imgSrc",
+              "styles": {
+                "width": 24,
+                "height": 24
+              }
+            },
+            {
+              "id": "export-icon",
+              "name": "导出图标",
+              "role": "icon",
+              "resourceFile": "../resources/images/icon-7945.png",
+              "recommendedUsage": "imgSrc",
+              "styles": {
+                "width": 24,
+                "height": 24
+              }
+            },
+            {
+              "id": "stat-badge",
+              "name": "统计徽章",
+              "role": "badge",
+              "value": "8",
+              "styles": {
+                "fontSize": 12,
+                "color": "rgba(255,255,255,1)",
+                "backgroundColor": "#f53f3f",
+                "borderRadius": "50%",
+                "width": 16,
+                "height": 16
+              }
+            },
+            {
+              "id": "stat-value",
+              "name": "统计数值",
+              "role": "statistic",
+              "text": "2k3+78560×威",
+              "styles": {
+                "fontSize": 12,
+                "color": "rgba(255,255,255,0.8)"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "chart-section",
+        "name": "图表区域",
+        "role": "常驻",
+        "layout": "vertical",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "body": {
+          "layout": "vertical",
+          "bgPlaceholder": "bg2",
+          "children": [
+            {
+              "id": "threshold-label",
+              "name": "阈值标签",
+              "role": "label",
+              "text": "阈值线",
+              "position": "top-right",
+              "styles": {
+                "fontSize": 12,
+                "color": "#f53f3f"
+              }
+            },
+            {
+              "id": "chart-container",
+              "name": "图表容器",
+              "role": "chart-container",
+              "layout": "vertical",
+              "children": [
+                {
+                  "id": "area-chart",
+                  "name": "面积图",
+                  "role": "chart",
+                  "type": "area",
+                  "styles": {
+                    "width": 380,
+                    "height": 140
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "styles": {
+    "backgroundBrightness": "light",
+    "theme": "浅色科技监测风",
+    "colors": [
+      "rgba(237,244,251,1)",
+      "rgba(85,158,255,1)",
+      "rgba(245,63,63,1)",
+      "rgba(255,255,255,1)",
+      "rgba(255,255,255,0.6)",
+      "rgba(0,197,255,1)"
+    ],
+    "background": "浅蓝灰色底色，带有细微渐变纹理",
+    "decorations": [
+      "tab激活态有蓝色底色背景",
+      "图表区域有浅色网格线",
+      "顶部有装饰性分隔线",
+      "红色虚线表示阈值"
+    ],
+    "emphasis": [
+      "激活tab使用白色粗体文字+蓝色背景",
+      "统计徽章使用红色圆形背景突出显示",
+      "阈值线使用红色虚线+文字标注"
+    ]
+  },
+  "interactions": [
+    {
+      "target": "tab切换栏",
+      "type": "tab-switch",
+      "description": "切换不同监测维度（气化版/能见度/洞内照明/洞外光强）",
+      "defaultState": "常驻，气化版激活",
+      "evidence": "激活tab有蓝色背景和白色文字，其他tab为半透明白字"
+    },
+    {
+      "target": "右侧图标按钮",
+      "type": "icon-button",
+      "description": "可能触发图表视图切换或数据导出",
+      "defaultState": "常驻",
+      "evidence": "有独立图标元素，视觉上可点击"
+    },
+    {
+      "target": "面积图",
+      "type": "chart-hover",
+      "description": "可能支持鼠标悬停显示具体数值",
+      "defaultState": "常驻显示，无tooltip截图",
+      "evidence": "图表类型通常支持交互，但截图中未显示tooltip"
+    }
+  ],
+  "charts": [
+    {
+      "section": "chart-section",
+      "type": "area",
+      "series": ["气化版数据"],
+      "legend": [],
+      "legendPosition": "",
+      "seriesColors": ["rgba(0,197,255,0.3)"],
+      "legendType": "",
+      "axes": "X轴为24小时时间刻度（0-24时），Y轴为数值（0-40范围），有网格线辅助",
+      "tooltip": "截图中未显示tooltip",
+      "notes": [
+        "红色虚线表示阈值线（Y=30位置）",
+        "阈值线右上角有'阈值线'文字标注",
+        "面积图填充使用浅蓝色半透明",
+        "曲线边缘使用青色描边",
+        "X轴刻度：2,4,6,8,10,12,14,16,18,20,22,24",
+        "Y轴刻度：0,10,20,30,40"
+      ]
+    }
+  ],
+  "headerSlots": [
+    {
+      "slotType": "header-right",
+      "elementType": "tab",
+      "content": "气化版/能见度/洞内照明/洞外光强 四选项tab切换",
+      "figmaNodeId": "7882"
+    },
+    {
+      "slotType": "header-right",
+      "elementType": "icon",
+      "content": "图表视图图标",
+      "figmaNodeId": "7941"
+    },
+    {
+      "slotType": "header-right",
+      "elementType": "icon",
+      "content": "导出/分享图标",
+      "figmaNodeId": "7945"
+    },
+    {
+      "slotType": "header-right",
+      "elementType": "statistic",
+      "content": "统计徽章数值8 + 统计文本2k3+78560×威"
+    }
+  ],
+  "doNotInvent": [
+    "tab切换后的具体数据内容（能见度/洞内照明/洞外光强的图表数据）",
+    "图标按钮的具体功能（是视图切换还是数据导出）",
+    "图表tooltip的固定显示逻辑和数据格式",
+    "阈值线的动态计算规则",
+    "统计徽章'8'的具体含义和更新逻辑",
+    "右上角统计文本的实际数据结构",
+    "图表是否支持缩放、拖拽等高级交互",
+    "数据刷新频率和自动更新机制"
+  ],
+  "notes": [
+    "组件主体是base-panel的slot内容，无需输出面板外壳",
+    "tab切换栏位于标题行右侧，属于header-right插槽",
+    "图表区域占据主要内容区，背景有浅色纹理",
+    "统计徽章和数值紧邻图标按钮，可能作为快速统计展示",
+    "阈值线固定在Y=30位置，红色虚线+文字标注",
+    "X轴时间刻度完整显示0-24小时",
+    "Y轴数值刻度为0,10,20,30,40",
+    "面积图使用青蓝色渐变填充，边缘有青色描边"
+  ]
+}
+```
+
+**关键识别点：**
+
+1. **背景亮度判断**：背景为浅蓝灰色（rgba(237,244,251,1)），文字为深色，判断为 `"light"` 背景
+2. **插槽识别**：tab切换栏、图标按钮、统计信息都在标题行右侧，属于 `header-right` 插槽
+3. **图表分析**：单系列面积图，无图例，有红色阈值线，X轴24小时刻度，Y轴0-40数值范围
+4. **资源映射**：
+   - bg1: 面板主背景（浅蓝灰渐变）
+   - bg2: 图表区域背景
+   - bg-tab-active: tab激活态背景
+   - icon1/icon2: 右上角图标按钮
+5. **交互线索**：tab切换、图标按钮点击、可能的图表hover（截图中未显示tooltip）

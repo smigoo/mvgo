@@ -1,0 +1,134 @@
+{
+  "stage": "codegen_done",
+  "brief": {
+    "layout": "整体为左右分栏布局，左侧为竖向分类导航栏（固定宽度约42px），右侧为主内容区。主内容区采用纵向流式布局：顶部标题栏 + 两个统计卡片（横向排列）+ 3×4 设备网格",
+    "regions": [
+      {
+        "name": "顶部标题栏",
+        "description": "深色半透明横条（高约32px），包含「设备监测」标题及三组统计数据：设备类型28、设备总数68562、完好率98%，横向等距排列，使用图标+文字形式",
+        "position": "top",
+        "size": "占满整个画布宽度420px，高约32px，紧贴顶部无上边距"
+      },
+      {
+        "name": "左侧分类导航",
+        "description": "竖向排列的分类按钮，从上到下依次为：监控（顶部显示3/3740红色角标）、照明（红色数字3角标）、通风、供配电、消防、交通诱导。每个按钮为竖排文字，蓝色背景带圆角",
+        "position": "left",
+        "size": "宽约42px，起始于统计卡片区下方，占满剩余高度至底部"
+      },
+      {
+        "name": "统计卡片区",
+        "description": "两个横向排列的六边形卡片。左卡片：隧道设备，总数56302，异常数5（红色），蓝色渐变背景；右卡片：南北接线设备，总数1280，异常数3（红色），浅蓝色渐变背景。图标在左，文字在右上下排列",
+        "position": "top",
+        "size": "位于标题栏下方，两卡片横向排列，左卡片宽约200px，右卡片宽约190px，卡片间距约10px，总高约95px"
+      },
+      {
+        "name": "设备网格区",
+        "description": "3列×4行网格布局，每个单元格包含：3D 等轴测图标（圆形底座+设备图标）、设备名称、状态数值（格式：异常数/总数，如(2/484)）。图标居中偏上，名称在图标右侧，数值在底部居中",
+        "position": "center",
+        "size": "起始位置与左侧导航栏顶部齐平（统计卡片区下方），占满右侧剩余宽度约378px，行高约120px，列间距约10px，行间距约8px"
+      }
+    ],
+    "spacing": {
+      "outer": "页面无明显外边距，内容紧贴顶部和左侧",
+      "gap": "统计卡片与网格区间距约12px，网格单元格间距：列间距约10px，行间距约8px",
+      "padding": "统计卡片内边距约16px，网格单元格内边距约12px，左侧导航按钮内边距约6px"
+    },
+    "theme": "light",
+    "colors": {
+      "primary": "#3B9EFF",
+      "background": "#E4EEF9",
+      "surface": "rgba(255,255,255,0.15)",
+      "text": "#2C3E50",
+      "border": "rgba(255,255,255,0.3)"
+    },
+    "typography": {
+      "size": "标题「设备监测」约16px，统计数字「28/68562/98%」约14-18px，卡片大数字「56302/1280」约22px，卡片异常数「5/3」约18px（红色加粗），网格设备名称约11px，网格状态数值约13px，左侧导航文字约12px",
+      "weight": "标题 500，统计数字 600-700，卡片数字 700，设备名称 400，状态数值 600",
+      "lineHeight": "标题约1.2，正文约1.4，数字约1.0"
+    },
+    "components": [
+      "六边形卡片容器",
+      "3D 等轴测设备图标",
+      "竖排文字按钮（左侧导航）",
+      "数字角标（红色圆点，显示在监控和照明按钮右上角）",
+      "状态标签（异常数/总数）",
+      "渐变背景卡片"
+    ],
+    "textContent": [
+      "设备监测",
+      "设备类型",
+      "28",
+      "设备总数",
+      "68562",
+      "完好率",
+      "98%",
+      "隧道设备",
+      "总数:",
+      "56302",
+      "异常数:",
+      "5",
+      "南北接线设备",
+      "1280",
+      "3",
+      "3/3740",
+      "监控",
+      "照明",
+      "通风",
+      "供配电",
+      "消防",
+      "交通诱导",
+      "摄像机",
+      "(2/484)",
+      "风速风向仪",
+      "(1/484)",
+      "超高检测器",
+      "(0/484)",
+      "烟道机器人",
+      "(0/484)",
+      "激光雷达",
+      "(0/484)",
+      "CO2传感器",
+      "(0/484)",
+      "CO/VI检测器",
+      "(0/484)",
+      "温湿度传感器",
+      "(0/484)",
+      "压力传感器",
+      "(0/484)",
+      "光照度变送器",
+      "(0/484)",
+      "紧急电话",
+      "(0/484)",
+      "水质监测设备",
+      "(0/484)"
+    ],
+    "name": {
+      "cn": "设备监测",
+      "en": "equipment-monitor"
+    },
+    "visualDetails": [
+      "统计卡片采用六边形造型，右侧边缘呈箭头切角",
+      "左侧导航按钮圆角约8px，竖排文字，选中项背景色更深",
+      "网格单元格圆角约8px，半透明白色背景 rgba(255,255,255,0.15)",
+      "设备图标采用 3D 等轴测风格，圆形底座带阴影和高光效果",
+      "异常数字使用红色（#FF4D4F）加粗显示",
+      "状态数值使用青色（#00D4FF）显示",
+      "监控和照明按钮右上角带红色数字角标（3 和 3）",
+      "整体采用半透明毛玻璃效果，边框使用白色半透明线条",
+      "顶部标题栏背景色略深于主背景，带轻微透明度"
+    ],
+    "interactions": [
+      "左侧竖向分类导航栏，包含 6 个分类按钮：监控（当前激活，显示 3/3740 角标）、照明（红色数字 3 角标）、通风、供配电、消防、交通诱导",
+      "12 个设备网格单元格可能支持点击查看详情（无明确交互标识）",
+      "统计卡片为信息展示区，无明显交互元素"
+    ],
+    "_themeSource": "pixel",
+    "_bgSource": "pixel-edge"
+  },
+  "width": 420,
+  "height": 425,
+  "sourceType": "figma",
+  "componentType": "vue3",
+  "generationTier": "lite",
+  "vueCode": "<template>\n  <div class=\"equipment-monitor\">\n    <!-- 顶部标题栏 -->\n    <div class=\"equipment-monitor-header\">\n      <div class=\"equipment-monitor-header-title\">设备监测</div>\n      <div class=\"equipment-monitor-header-stats\">\n        <div class=\"equipment-monitor-header-stat\">\n          <span class=\"equipment-monitor-header-stat-icon\">≡</span>\n          <span class=\"equipment-monitor-header-stat-label\">设备类型</span>\n          <span class=\"equipment-monitor-header-stat-value\">28</span>\n        </div>\n        <div class=\"equipment-monitor-header-stat\">\n          <span class=\"equipment-monitor-header-stat-label\">设备总数</span>\n          <span class=\"equipment-monitor-header-stat-value\">68562</span>\n        </div>\n        <div class=\"equipment-monitor-header-stat\">\n          <span class=\"equipment-monitor-header-stat-label\">完好率</span>\n          <span class=\"equipment-monitor-header-stat-value\">98%</span>\n        </div>\n      </div>\n    </div>\n\n    <!-- 主内容区 -->\n    <div class=\"equipment-monitor-content\">\n      <!-- 左侧分类导航 -->\n      <div class=\"equipment-monitor-sidebar\">\n        <div class=\"equipment-monitor-sidebar-btn active\">\n          <span class=\"equipment-monitor-sidebar-badge\">3/3740</span>\n          <span class=\"equipment-monitor-sidebar-text\">监控</span>\n        </div>\n        <div class=\"equipment-monitor-sidebar-btn\">\n          <span class=\"equipment-monitor-sidebar-badge small\">3</span>\n          <span class=\"equipment-monitor-sidebar-text\">照明</span>\n        </div>\n        <div class=\"equipment-monitor-sidebar-btn\">\n          <span class=\"equipment-monitor-sidebar-text\">通风</span>\n        </div>\n        <div class=\"equipment-monitor-sidebar-btn\">\n          <span class=\"equipment-monitor-sidebar-text\">供配电</span>\n        </div>\n        <div class=\"equipment-monitor-sidebar-btn\">\n          <span class=\"equipment-monitor-sidebar-text\">消防</span>\n        </div>\n        <div class=\"equipment-monitor-sidebar-btn\">\n          <span class=\"equipment-monitor-sidebar-text\">交通诱导</span>\n        </div>\n      </div>\n\n      <!-- 右侧内容区 -->\n      <div class=\"equipment-monitor-main\">\n        <!-- 统计卡片区 -->\n        <div class=\"equipment-monitor-cards\">\n          <div class=\"equipment-monitor-card primary\">\n            <div class=\"equipment-monitor-card-icon\">\n              <svg viewBox=\"0 0 48 48\" fill=\"none\">\n                <circle cx=\"24\" cy=\"24\" r=\"20\" fill=\"rgba(255,255,255,0.2)\" />\n                <path d=\"M24 12 L32 20 L24 28 L16 20 Z\" fill=\"currentColor\" />\n              </svg>\n            </div>\n            <div class=\"equipment-monitor-card-content\">\n              <div class=\"equipment-monitor-card-title\">隧道设备</div>\n              <div class=\"equipment-monitor-card-stats\">\n                <div class=\"equipment-monitor-card-stat\">\n                  <span class=\"equipment-monitor-card-stat-label\">总 数:</span>\n                  <span class=\"equipment-monitor-card-stat-value\">56302</span>\n                </div>\n                <div class=\"equipment-monitor-card-stat\">\n                  <span class=\"equipment-monitor-card-stat-label\">异常数:</span>\n                  <span class=\"equipment-monitor-card-stat-value error\">5</span>\n                </div>\n              </div>\n            </div>\n          </div>\n          <div class=\"equipment-monitor-card secondary\">\n            <div class=\"equipment-monitor-card-icon\">\n              <svg viewBox=\"0 0 48 48\" fill=\"none\">\n                <circle cx=\"24\" cy=\"24\" r=\"20\" fill=\"rgba(255,255,255,0.2)\" />\n                <ellipse cx=\"24\" cy=\"24\" rx=\"12\" ry=\"8\" fill=\"currentColor\" />\n              </svg>\n            </div>\n            <div class=\"equipment-monitor-card-content\">\n              <div class=\"equipment-monitor-card-title\">南北接线设备</div>\n              <div class=\"equipment-monitor-card-stats\">\n                <div class=\"equipment-monitor-card-stat\">\n                  <span class=\"equipment-monitor-card-stat-label\">总 数:</span>\n                  <span class=\"equipment-monitor-card-stat-value\">1280</span>\n                </div>\n                <div class=\"equipment-monitor-card-stat\">\n                  <span class=\"equipment-monitor-card-stat-label\">异常数:</span>\n                  <span class=\"equipment-monitor-card-stat-value error\">3</span>\n                </div>\n              </div>\n            </div>\n          </div>\n        </div>\n\n        <!-- 设备网格区 -->\n        <div class=\"equipment-monitor-grid\">\n          <div v-for=\"item in equipmentList\" :key=\"item.name\" class=\"equipment-monitor-grid-item\">\n            <div class=\"equipment-monitor-grid-icon\">\n              <div class=\"equipment-monitor-grid-icon-base\"></div>\n              <div class=\"equipment-monitor-grid-icon-symbol\">\n                <component :is=\"item.icon\" />\n              </div>\n            </div>\n            <div class=\"equipment-monitor-grid-info\">\n              <div class=\"equipment-monitor-grid-name\">{{ item.name }}</div>\n              <div class=\"equipment-monitor-grid-status\">{{ item.status }}</div>\n            </div>\n          </div>\n        </div>\n      </div>\n    </div>\n  </div>\n</template>\n\n<script setup>\nimport { ref } from 'vue'\n\nconst equipmentList = ref([\n  { name: '摄像机', status: '(2/484)', icon: 'IconCamera' },\n  { name: '风速风向仪', status: '(1/484)', icon: 'IconWind' },\n  { name: '超高检测器', status: '(0/484)', icon: 'IconHeight' },\n  { name: '烟道机器人', status: '(0/484)', icon: 'IconRobot' },\n  { name: '激光雷达', status: '(0/484)', icon: 'IconRadar' },\n  { name: 'CO₂传感器', status: '(0/484)', icon: 'IconCO2' },\n  { name: 'CO/VI检测器', status: '(0/484)', icon: 'IconCO' },\n  { name: '温湿度传感器', status: '(0/484)', icon: 'IconTemp' },\n  { name: '压力传感器', status: '(0/484)', icon: 'IconPressure' },\n  { name: '光照度变送器', status: '(0/484)', icon: 'IconLight' },\n  { name: '紧急电话', status: '(0/484)', icon: 'IconPhone' },\n  { name: '水质监测设备', status: '(0/484)', icon: 'IconWater' }\n])\n</script>\n\n<style scoped>\n.equipment-monitor {\n  width: 100%;\n  height: 100%;\n  box-sizing: border-box;\n  background: #E4EEF9;\n  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;\n  overflow: hidden;\n  display: flex;\n  flex-direction: column;\n  min-height: 0;\n}\n\n/* 顶部标题栏 */\n.equipment-monitor-header {\n  height: 32px;\n  background: rgba(59, 158, 255, 0.15);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  padding: 0 16px;\n  flex-shrink: 0;\n}\n\n.equipment-monitor-header-title {\n  font-size: 16px;\n  font-weight: 500;\n  color: #2C3E50;\n}\n\n.equipment-monitor-header-stats {\n  display: flex;\n  gap: 24px;\n}\n\n.equipment-monitor-header-stat {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  font-size: 14px;\n}\n\n.equipment-monitor-header-stat-icon {\n  color: #3B9EFF;\n  font-size: 16px;\n  font-weight: 700;\n}\n\n.equipment-monitor-header-stat-label {\n  color: #2C3E50;\n}\n\n.equipment-monitor-header-stat-value {\n  color: #3B9EFF;\n  font-weight: 700;\n  font-size: 16px;\n}\n\n/* 主内容区 */\n.equipment-monitor-content {\n  flex: 1;\n  display: flex;\n  gap: 10px;\n  padding: 12px 10px 10px;\n  min-height: 0;\n  overflow: hidden;\n}\n\n/* 左侧分类导航 */\n.equipment-monitor-sidebar {\n  width: 42px;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  flex-shrink: 0;\n  overflow-y: auto;\n  min-height: 0;\n}\n\n.equipment-monitor-sidebar-btn {\n  background: rgba(59, 158, 255, 0.25);\n  border-radius: 8px;\n  padding: 8px 4px;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n  gap: 4px;\n  cursor: pointer;\n  position: relative;\n  min-height: 50px;\n  transition: background 0.2s;\n}\n\n.equipment-monitor-sidebar-btn:hover {\n  background: rgba(59, 158, 255, 0.35);\n}\n\n.equipment-monitor-sidebar-btn.active {\n  background: rgba(59, 158, 255, 0.5);\n}\n\n.equipment-monitor-sidebar-text {\n  writing-mode: vertical-rl;\n  font-size: 12px;\n  color: #2C3E50;\n  font-weight: 500;\n  letter-spacing: 2px;\n}\n\n.equipment-monitor-sidebar-badge {\n  position: absolute;\n  top: -4px;\n  right: -4px;\n  background: #FF4D4F;\n  color: white;\n  font-size: 10px;\n  padding: 2px 4px;\n  border-radius: 8px;\n  font-weight: 600;\n  white-space: nowrap;\n}\n\n.equipment-monitor-sidebar-badge.small {\n  padding: 2px 5px;\n  min-width: 16px;\n  text-align: center;\n}\n\n/* 右侧主内容 */\n.equipment-monitor-main {\n  flex: 1;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n  min-height: 0;\n  overflow: hidden;\n}\n\n/* 统计卡片区 */\n.equipment-monitor-cards {\n  display: flex;\n  gap: 10px;\n  flex-shrink: 0;\n}\n\n.equipment-monitor-card {\n  flex: 1;\n  min-height: 95px;\n  border-radius: 8px;\n  padding: 14px 16px;\n  display: flex;\n  align-items: center;\n  gap: 12px;\n  position: relative;\n  overflow: hidden;\n}\n\n.equipment-monitor-card::before {\n  content: '';\n  position: absolute;\n  top: 0;\n  right: 0;\n  width: 30px;\n  height: 100%;\n  background: rgba(255, 255, 255, 0.15);\n  clip-path: polygon(100% 0, 100% 100%, 0 100%, 40% 50%, 0 0);\n}\n\n.equipment-monitor-card.primary {\n  background: linear-gradient(135deg, #3B9EFF 0%, #1E7FCF 100%);\n}\n\n.equipment-monitor-card.secondary {\n  background: linear-gradient(135deg, #7CB9E8 0%, #5BA3D0 100%);\n}\n\n.equipment-monitor-card-icon {\n  width: 48px;\n  height: 48px;\n  flex-shrink: 0;\n  color: rgba(255, 255, 255, 0.9);\n}\n\n.equipment-monitor-card-icon svg {\n  width: 100%;\n  height: 100%;\n}\n\n.equipment-monitor-card-content {\n  flex: 1;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.equipment-monitor-card-title {\n  font-size: 14px;\n  color: white;\n  font-weight: 500;\n}\n\n.equipment-monitor-card-stats {\n  display: flex;\n  gap: 16px;\n}\n\n.equipment-monitor-card-stat {\n  display: flex;\n  align-items: baseline;\n  gap: 4px;\n}\n\n.equipment-monitor-card-stat-label {\n  font-size: 12px;\n  color: rgba(255, 255, 255, 0.85);\n}\n\n.equipment-monitor-card-stat-value {\n  font-size: 22px;\n  font-weight: 700;\n  color: white;\n}\n\n.equipment-monitor-card-stat-value.error {\n  color: #FF4D4F;\n  font-size: 18px;\n}\n\n/* 设备网格区 */\n.equipment-monitor-grid {\n  flex: 1;\n  display: grid;\n  grid-template-columns: repeat(3, 1fr);\n  grid-template-rows: repeat(4, min-content);\n  gap: 8px 10px;\n  min-height: 0;\n  overflow-y: auto;\n  align-content: start;\n  padding-bottom: 4px;\n}\n\n.equipment-monitor-grid-item {\n  background: rgba(255, 255, 255, 0.15);\n  border: 1px solid rgba(255, 255, 255, 0.3);\n  border-radius: 8px;\n  padding: 10px;\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  cursor: pointer;\n  transition: all 0.2s;\n}\n\n.equipment-monitor-grid-item:hover {\n  background: rgba(255, 255, 255, 0.25);\n  transform: translateY(-2px);\n  box-shadow: 0 4px 12px rgba(59, 158, 255, 0.15);\n}\n\n.equipment-monitor-grid-icon {\n  width: 40px;\n  height: 40px;\n  position: relative;\n  flex-shrink: 0;\n}\n\n.equipment-monitor-grid-icon-base {\n  position: absolute;\n  bottom: 0;\n  left: 50%;\n  transform: translateX(-50%);\n  width: 36px;\n  height: 12px;\n  background: linear-gradient(180deg, rgba(59, 158, 255, 0.3) 0%, rgba(59, 158, 255, 0.1) 100%);\n  border-radius: 50%;\n  box-shadow: 0 2px 8px rgba(59, 158, 255, 0.2);\n}\n\n.equipment-monitor-grid-icon-symbol {\n  position: absolute;\n  top: 0;\n  left: 50%;\n  transform: translateX(-50%);\n  width: 28px;\n  height: 28px;\n  background: linear-gradient(135deg, #3B9EFF 0%, #1E7FCF 100%);\n  border-radius: 50%;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  color: white;\n  font-size: 16px;\n  box-shadow: 0 2px 6px rgba(59, 158, 255, 0.3);\n}\n\n.equipment-monitor-grid-info {\n  flex: 1;\n  display: flex;\n  flex-direction: column;\n  gap: 2px;\n}\n\n.equipment-monitor-grid-name {\n  font-size: 11px;\n  color: #2C3E50;\n  font-weight: 400;\n  line-height: 1.3;\n}\n\n.equipment-monitor-grid-status {\n  font-size: 13px;\n  color: #00D4FF;\n  font-weight: 600;\n}\n</style>"
+}

@@ -1,0 +1,294 @@
+@import './themes/theme-vars.less';
+
+// 通用样式变量定义
+.common();
+.theme-light();
+
+// 组件根容器 - 仅设置字体缩放基准，禁止背景/边框/圆角/阴影
+.c-monitor-root {
+  font-size: var(--fontSize, 14px);
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+// ==================== 顶部统计卡片区域 ====================
+.c-monitor-stats-header {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  height: 100px;
+  flex-shrink: 0;
+}
+
+.c-monitor-stats-card {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  border-radius: 6px;
+  gap: 12px;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.c-monitor-stats-card--active {
+  background: linear-gradient(135deg, #2B9BFF, #299AFF);
+  box-shadow: none;
+}
+
+.c-monitor-stats-card--default {
+  background: linear-gradient(135deg, #93CCFF, #93CCFF);
+  border: 1px solid #F0F5FF;
+}
+
+.c-monitor-stats-card-icon {
+  flex-shrink: 0;
+  width: 35px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+}
+
+.c-monitor-stats-card-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.c-monitor-stats-card-title {
+  font-size: calc(@fontSize * 0.857);
+  font-weight: 400;
+  line-height: calc(@fontSize * 1.14);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #FFFFFF;
+}
+
+.c-monitor-stats-card-title--dark {
+  color: #333333;
+}
+
+.c-monitor-stats-card-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.c-monitor-stats-card-label {
+  font-size: @fontSize;
+  font-weight: 400;
+  line-height: calc(@fontSize * 1.5);
+  white-space: nowrap;
+  color: #FFFFFF;
+}
+
+.c-monitor-stats-card-value {
+  font-size: calc(@fontSize * 1.428);
+  font-weight: 700;
+  line-height: calc(@fontSize * 1.64);
+  white-space: nowrap;
+}
+
+.c-monitor-stats-card-value--white {
+  color: #FFFFFF;
+}
+
+.c-monitor-stats-card-value--primary {
+  color: #1990FF;
+}
+
+.c-monitor-stats-card-value--error {
+  color: #E03434;
+}
+
+// ==================== 主体布局区域 ====================
+.c-monitor-main-layout {
+  flex: 1;
+  display: flex;
+  gap: 12px;
+  min-height: 0;
+  margin-top: 12px;
+}
+
+// ==================== 左侧分类导航 ====================
+.c-monitor-category-nav {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 46px;
+  flex-shrink: 0;
+  gap: 8px;
+  padding: 8px 0;
+  box-sizing: border-box;
+  background: linear-gradient(180deg, #85BAFF, #BFE2FF);
+  border: 1px solid #F0F5FF;
+  border-radius: 6px;
+}
+
+.c-monitor-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  padding: 8px 0;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.3s;
+  position: relative;
+
+  &:hover {
+    background: rgba(59, 128, 231, 0.1);
+  }
+}
+
+.c-monitor-nav-item--active {
+  background: linear-gradient(135deg, #318AFF, #70BFFF);
+  border: 1px solid #F0F5FF;
+  
+  .c-monitor-nav-label {
+    color: #FFFFFF;
+    font-weight: 700;
+  }
+}
+
+.c-monitor-nav-label {
+  writing-mode: vertical-rl;
+  font-size: @fontSize;
+  color: #3B80E7;
+  font-weight: 400;
+  letter-spacing: 2px;
+  line-height: 1;
+}
+
+.c-monitor-nav-badge {
+  font-size: calc(@fontSize * 0.857);
+  color: #3B80E7;
+  font-weight: 500;
+  margin-top: 4px;
+  writing-mode: horizontal-tb;
+  background: #FFFFFF;
+  border: 1px solid #258DC8;
+  box-shadow: 0px 1px 2px rgba(51, 101, 144, 0.4);
+  padding: 2px 6px;
+  border-radius: 12px;
+}
+
+.c-monitor-nav-badge--red {
+  background: #F53F3F;
+  color: #FFFFFF;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(@fontSize * 0.857);
+  font-weight: 500;
+  margin-top: 4px;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+}
+
+// ==================== 右侧设备网格 ====================
+.c-monitor-device-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  padding: 12px;
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
+  background-image: url(../images/bg-8788.png);
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+
+.c-monitor-device-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 12px;
+  background: linear-gradient(135deg, #127BEE, #127BEE);
+  border-radius: 8px;
+  box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+  cursor: pointer;
+  min-height: 120px;
+  position: relative;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.15);
+  }
+}
+
+.c-monitor-device-icon {
+  width: 40px;
+  height: 40px;
+  margin-bottom: 8px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.c-monitor-device-name {
+  font-size: calc(@fontSize * 0.857);
+  color: #333333;
+  font-weight: 400;
+  text-align: center;
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+
+.c-monitor-device-status {
+  font-size: calc(@fontSize * 1.143);
+  font-weight: 500;
+  color: #FFFFFF;
+  text-align: center;
+  text-shadow: 0px 0px 0px rgba(0, 0, 0, 0.5);
+}
+
+// ==================== 顶部 Header 统计项 ====================
+.c-monitor-header-stats {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.c-monitor-header-stat-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.c-monitor-header-stat-label {
+  font-size: @fontSize;
+  color: #333333;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.c-monitor-header-stat-value {
+  font-size: calc(@fontSize * 1.428);
+  color: #1990FF;
+  font-weight: 700;
+  white-space: nowrap;
+}

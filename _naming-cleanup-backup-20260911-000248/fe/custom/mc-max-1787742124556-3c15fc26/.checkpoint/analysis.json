@@ -1,0 +1,181 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 78,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].header.controls[0]",
+        "message": "左侧分类栏被放入header控件，且slotCandidate为空，违反面板插槽规范。",
+        "suggestion": "将分类栏移出header，作为body级导航或设置slotCandidate映射。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body",
+        "message": "section声明为horizontal但body仅grid，未描述左侧导航与内容区的左右结构。",
+        "suggestion": "用horizontal容器包裹左侧分类导航与右侧grid内容区。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body.children",
+        "message": "stat-card仅含value，未拆分label/value子结构，影响标题、单位、图标绑定。",
+        "suggestion": "为统计卡补充label、value、unit或icon子节点。"
+      }
+    ],
+    "recommendations": [
+      "重构设备类型分类区域的布局层级，将左侧分类导航并入body主体。",
+      "为统计卡补全结构化字段，避免仅用name承担标题。",
+      "有header.controls时必须明确slotCandidate插槽归属。"
+    ],
+    "summary": "整体结构基本可用，但设备分类区的侧栏归属与插槽配置存在明显结构性问题，需修正后再使用。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1890ff",
+      "--colorPrimaryBg": "#edf4fb",
+      "--colorSecondary": "#05a3a5",
+      "--colorTextBase": "#333333",
+      "--colorTextSecondary": "#999999",
+      "--colorDanger": "#f53f3f",
+      "--colorTextInverse": "#ffffff",
+      "--fontSize": "14px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "var(--colorPrimary)",
+      "@color-primary-bg": "var(--colorPrimaryBg)",
+      "@color-secondary": "var(--colorSecondary)",
+      "@color-text-base": "var(--colorTextBase)",
+      "@color-text-secondary": "var(--colorTextSecondary)",
+      "@color-danger": "var(--colorDanger)",
+      "@color-text-inverse": "var(--colorTextInverse)",
+      "@font-size-base": "var(--fontSize)",
+      "@border-radius-base": "var(--borderRadius)"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".device-monitor": {
+        "display": "flex",
+        "height": "100%",
+        "background": "var(--colorPrimaryBg, #edf4fb)",
+        "color": "var(--colorTextBase, #333333)",
+        "font-size": "var(--fontSize, 14px)"
+      },
+      ".left-category-nav": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "8px",
+        "padding": "12px",
+        "background": "var(--colorPrimaryBg, #edf4fb)"
+      },
+      ".category-item": {
+        "padding": "8px 12px",
+        "color": "var(--colorTextBase, #333333)",
+        "background": "var(--colorPrimaryBg, #edf4fb)",
+        "border-radius": "var(--borderRadius, 8px)"
+      },
+      ".category-item-active": {
+        "background": "var(--colorPrimary, #1890ff)",
+        "color": "var(--colorTextInverse, #ffffff)"
+      },
+      ".info-card": {
+        "background": "var(--colorPrimary, #1890ff)",
+        "color": "var(--colorTextInverse, #ffffff)",
+        "border-radius": "var(--borderRadius, 8px)",
+        "padding": "16px"
+      },
+      ".content-card": {
+        "background": "var(--colorPrimaryBg, #edf4fb)",
+        "color": "var(--colorTextBase, #333333)",
+        "border-radius": "var(--borderRadius, 8px)",
+        "padding": "12px"
+      },
+      ".value-highlight": {
+        "color": "var(--colorPrimary, #1890ff)",
+        "font-weight": "600"
+      },
+      ".device-icon-circle": {
+        "width": "40px",
+        "height": "40px",
+        "border-radius": "50%",
+        "background": "var(--colorPrimary, #1890ff)",
+        "color": "var(--colorTextInverse, #ffffff)",
+        "display": "flex",
+        "align-items": "center",
+        "justify-content": "center"
+      },
+      ".emphasis-total": {
+        "color": "var(--colorPrimary, #1890ff)",
+        "font-size": "24px",
+        "font-weight": "600"
+      },
+      ".emphasis-rate": {
+        "color": "var(--colorSecondary, #05a3a5)",
+        "font-size": "24px",
+        "font-weight": "600"
+      },
+      ".danger-text": {
+        "color": "var(--colorDanger, #f53f3f)"
+      },
+      ".secondary-text": {
+        "color": "var(--colorTextSecondary, #999999)"
+      }
+    },
+    "tokenCoverage": 0.94,
+    "mappingNotes": [
+      "浅灰蓝底色 #edf4fb 映射为 --colorPrimaryBg，同时承担大屏底色与浅灰内容块底色。",
+      "主色 #1890ff 映射为 --colorPrimary，用于左侧导航激活态、蓝色信息块、数值高亮与圆形设备图标。",
+      "#05a3a5 映射为 --colorSecondary，用于完好率等辅助强调数据。",
+      "#f53f3f 映射为 --colorDanger，用于告警/异常信息。",
+      "#333333 映射为 --colorTextBase，#999999 映射为 --colorTextSecondary。",
+      "为蓝色信息块上的反色文字补充 --colorTextInverse: #ffffff，保证可读性。",
+      "左侧竖向分类导航、圆形设备图标、蓝色数值高亮已抽象为可复用 CSS 类。"
+    ],
+    "elementStyleMap": {
+      "device-overview": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-2": {
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "device-categories": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-7": {
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "device-overview",
+        "responsibility": "数据统计指标区（数字+标签+趋势）",
+        "elementCount": 3,
+        "title": "设备概览"
+      },
+      {
+        "id": "device-categories",
+        "responsibility": "设备类型分类（请按功能拆分）",
+        "elementCount": 12,
+        "title": "设备类型分类"
+      }
+    ],
+    "isForced": false,
+    "minFiles": 0,
+    "reason": "有效 sections=2 < 3 → 不强制拆分"
+  }
+}

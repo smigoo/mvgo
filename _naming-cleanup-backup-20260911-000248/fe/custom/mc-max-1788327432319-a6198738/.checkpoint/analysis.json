@@ -1,0 +1,302 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 76,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body",
+        "message": "section-header 中 header.title 与 body.children[0].text 重复标题，且样式位于 body，易导致重复渲染。",
+        "suggestion": "将标题样式归入 header.title 控件，body 不再重复标题文本。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[0].children",
+        "message": "图表容器仅包含坐标轴/图例/预警线，缺少面积系列元素，无法完整表达面积图。",
+        "suggestion": "在 chart-container 中补充 area-series 或面积填充/折线数据绑定。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "charts[0].axes",
+        "message": "Y轴单位显示为“辆”，与CO浓度语义不符，疑似模板残留。",
+        "suggestion": "核实并修正单位；无法确定时可留空，避免错误数据。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[1]",
+        "message": "tool-icons 组级与首个图标重复 resourceFile 字段，可能造成资源解析歧义。",
+        "suggestion": "移除组级资源字段，仅保留各子图标资源信息。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[1].body.children[0]",
+        "message": "tab-group 容器内嵌 children 列表使嵌套层级偏深，超过建议≤3层。",
+        "suggestion": "将 tab 项直接作为 body.children 或减少一层容器。"
+      }
+    ],
+    "recommendations": [
+      "将标题及其样式归入 header，删除 body 中重复文本。",
+      "补齐面积图系列与数据绑定，并修正Y轴单位。",
+      "清理 tool-icons 组级冗余字段，压平 tab 层级并保持结构≤3层。"
+    ],
+    "summary": "整体架构清晰，但存在标题重复、图表元素缺失、单位错误与层级冗余，需修正。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1890ff",
+      "--colorPrimaryBg": "rgba(237, 244, 251, 1)",
+      "--colorSuccess": "#52c41a",
+      "--colorDanger": "#f53f3f",
+      "--colorBg": "rgba(237, 244, 251, 1)",
+      "--colorTextBase": "#1f2d3d",
+      "--fontSize": "14px",
+      "--borderRadius": "6px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射，对应CSS变量",
+      "@color-primary": "var(--colorPrimary)",
+      "@color-primary-bg": "var(--colorPrimaryBg)",
+      "@color-success": "var(--colorSuccess)",
+      "@color-danger": "var(--colorDanger)",
+      "@color-bg": "var(--colorBg)",
+      "@color-text-base": "var(--colorTextBase)",
+      "@font-size-base": "var(--fontSize)",
+      "@border-radius-base": "var(--borderRadius)"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "height": "100%",
+        "padding": "16px",
+        "background": "var(--colorBg)",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)"
+      },
+      ".tab-item": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "padding": "8px 16px",
+        "border-radius": "var(--borderRadius)",
+        "color": "var(--colorTextBase)",
+        "background": "transparent",
+        "cursor": "pointer"
+      },
+      ".tab-item-active": {
+        "background": "linear-gradient(180deg, var(--colorPrimary) 0%, rgba(24, 144, 255, 0.72) 100%)",
+        "color": "#ffffff",
+        "box-shadow": "0 2px 6px rgba(24, 144, 255, 0.25)"
+      },
+      ".chart-area-fill": {
+        "background": "rgba(82, 196, 26, 0.22)",
+        "border": "1px solid rgba(82, 196, 26, 0.35)"
+      },
+      ".alert-line": {
+        "height": "2px",
+        "background": "var(--colorDanger)",
+        "opacity": "0.9"
+      },
+      ".badge": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "min-width": "20px",
+        "height": "20px",
+        "padding": "0 6px",
+        "border-radius": "10px",
+        "background": "var(--colorDanger)",
+        "color": "#ffffff",
+        "font-size": "12px",
+        "font-weight": "600"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "#EDF4FB 映射为 --colorBg 与 --colorPrimaryBg，背景直接落地为 rgba(237, 244, 251, 1)",
+      "#52c41a 映射为 --colorSuccess，用于图表绿色面积填充",
+      "#f53f3f 映射为 --colorDanger，用于红色预警线和红色 Badge 数字 6",
+      "#1890ff 映射为 --colorPrimary，用于 Tab 选中态蓝色渐变背景",
+      "补充浅色科技监测风基础文字色 --colorTextBase，保证浅色背景可读性",
+      "样式类中关键装饰和强调元素均使用变量，便于主题切换时统一覆盖"
+    ],
+    "elementStyleMap": {
+      "section-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "section-tabs-tools": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tab-group-tab-一氧化碳-0": {
+        "background-image": "url(../resources/images/bg-tab-active-7891.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "tab-group": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-tab-一氧化碳-6": {
+        "background-image": "url(../resources/images/bg-tab-active-7891.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "tool-icons": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-16-chart-container-x-0-mark-line-预警线-3": {
+        "color": "#f53f3f"
+      },
+      "el-el-x-16": {
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "el-chart-container-x-17-mark-line-预警线-3": {
+        "color": "#f53f3f"
+      },
+      "el-mark-line-预警线-21": {
+        "color": "#f53f3f"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-header",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 1,
+        "title": "环境监测",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 1,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "section-tabs-tools",
+        "responsibility": "标签页切换区",
+        "elementCount": 10,
+        "title": "Tab切换与工具栏",
+        "complexityScore": 55,
+        "complexityReasons": {
+          "elementCount": 10,
+          "charts": 1,
+          "interactions": 7,
+          "maxDepth": 3
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [
+          {
+            "type": "interaction-area",
+            "id": "section-tabs-tools-interactive",
+            "name": "InteractiveArea",
+            "responsibility": "交互控件区",
+            "reason": "R4: 交互复杂度拆分（7个交互元素）",
+            "props": [],
+            "emits": [
+              "action"
+            ]
+          }
+        ],
+        "shouldSplitInternally": true
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 5,
+        "title": "浓度趋势图表",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 5,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 2
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      }
+    ],
+    "isForced": true,
+    "minFiles": 4,
+    "reason": "有效 sections=3 ≥ 3 或存在高复杂度 section → 强制拆分",
+    "internalSubcomponents": [
+      {
+        "type": "interaction-area",
+        "id": "section-tabs-tools-interactive",
+        "name": "InteractiveArea",
+        "responsibility": "交互控件区",
+        "reason": "R4: 交互复杂度拆分（7个交互元素）",
+        "props": [],
+        "emits": [
+          "action"
+        ],
+        "parentSectionId": "section-tabs-tools",
+        "parentSectionTitle": "Tab切换与工具栏"
+      }
+    ]
+  }
+}

@@ -1,0 +1,59 @@
+.common() {
+  @font-family-cn: "Source Han Sans CN", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  @font-family-number: "Roboto", "DIN Alternate", Arial, sans-serif;
+  @font-family-stat: "Alibaba PuHuiTi", "Source Han Sans CN", "Microsoft YaHei", sans-serif;
+}
+
+.theme-dark() {
+  /* [Style Refine] Figma fills: section icon / active tab color rgb(25,144,255) */
+  @primary-color: #1990ff;
+  /* [Style Refine] Figma title gradient stop color rgb(90,126,255) */
+  @primary-end-color: #5a7eff;
+  /* [Style Refine] Figma bg-[m] fills[0].color → rgb(237,244,251) */
+  @panel-bg-color: #edf4fb;
+  /* [Style Refine] Figma bg-[m] fills[0].color → rgb(237,244,251) */
+  @content-bg-color: #edf4fb;
+  /* [Style Refine] Figma text fills[0].color → rgb(51,51,51) */
+  @text-primary: #333333;
+  /* [Style Refine] Figma axis unit fills[0].color → rgb(102,102,102) */
+  @text-secondary: #666666;
+  /* [Style Refine] Figma active tab text fills[0].color → rgb(255,255,255) */
+  @text-inverse: #ffffff;
+  /* [Style Refine] Figma select fills gradient approximated from explicit stops #ffffff → #e2efff → #deedff → #ffffff */
+  @select-bg-color: linear-gradient(90deg, #ffffff 0%, #e2efff 36.19%, #deedff 68.88%, #ffffff 100%);
+  /* [Style Refine] Figma select strokes[0].color → rgb(161,206,255) */
+  @select-border-color: #a1ceff;
+  /* [Style Refine] Figma inactive tab fills[0].color → rgb(102,128,160) */
+  @tab-bg-color: #6680a0;
+  /* [Style Refine] Figma inactive tab strokes[0].color → rgb(172,196,225) */
+  @tab-border-color: #acc4e1;
+  /* [Style Refine] Figma active tab strokes[0].color → rgb(199,224,255) */
+  @tab-active-border-color: #c7e0ff;
+  /* [Style Refine] Figma inactive tab text fills[0].color → rgb(51,51,51) */
+  @tab-text-color: #333333;
+  /* [Style Refine] Figma d-82,379 fills[0].color → rgb(12,157,190) */
+  @total-bridge-color: #0c9dbe;
+  /* [Style Refine] Figma d-34,620 fills[0].color → rgb(0,111,227) */
+  @total-tunnel-color: #006fe3;
+  /* [Style Refine] Figma vehicle passenger fills[0].color → rgb(19,153,255) */
+  @vehicle-passenger-color: #1399ff;
+  /* [Style Refine] Figma vehicle truck fills[0].color → rgb(255,106,0) */
+  @vehicle-truck-color: #ff6a00;
+  /* [Style Refine] Figma line actual stroke color → rgb(0,204,204) */
+  @chart-line-actual: #00cccc;
+  /* [Style Refine] Figma line forecast stroke color → rgb(51,133,255) */
+  @chart-line-forecast: #3385ff;
+  /* [Style Refine] Figma pie dark fill → rgb(86,89,124) */
+  @chart-pie-dark: #56597c;
+  /* [Style Refine] Figma pie orange fill → rgb(255,162,47) */
+  @chart-pie-orange: #ffa22f;
+  /* [Style Refine] Figma pie blue fill → rgb(43,160,255) */
+  @chart-pie-blue: #2ba0ff;
+}
+
+.theme-light() {
+  .theme-dark();
+}
+
+.theme-light();
+.common();
