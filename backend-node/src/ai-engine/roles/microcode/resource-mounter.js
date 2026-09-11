@@ -28,6 +28,8 @@ import {
   inferComponentPrefix,
 } from '../../utils/mount-target-scoring.js';
 import { safeLogger } from '../../logger/safe-logger.js';
+import { extractSfcTemplate } from '../../utils/sfc-template-extractor.js';
+import { collectResourceVarRefsFromSfc } from '../../utils/resource-facts.js';
 import { normalizeFixedSizeFlex } from '../../utils/fixed-size-normalizer.js';
 // 量纲阈值与 FLEX 校验单点同源（code-structure-validator.js），杜绝「修复器一套、校验器一套」
 import { FLEX_GROW_SCALES } from '../../validators/code-structure-validator.js';
@@ -368,6 +370,64 @@ export function injectBgStyleBinding(content, tag, varName, mapping = null) {
   const pos = content.indexOf(tag);
   if (pos < 0) return null;
   return content.slice(0, pos) + newTag + content.slice(pos + tag.length);
+}
+
+/**
+ * 🛡️ P1.7（2026-09-11）：**引用驱动的资源 import 补齐**（治本 13890774 `icon4 is not defined`）。
+ *
+ * 旧注入只认「模板里可识别的使用形态」（`${var}` / `:src`），而模型常把资源变量用在
+ * **script 内**（如 `const deviceIcons = [icon3, icon4, …]`）→ 看不见 → 不注入 import
+ * → 运行时 ReferenceError（整个组件渲染失败）。
+ *
+ * 本函数以「引用采集（模板 + script，单一实现 utils/resource-facts）」为准，
+ * 对每个「被引用但未 import 且事实源有该变量」的项，按 mapping 的文件补齐 import。
+ *
+ * @param {Object<string,string>} files 产物文件表
+ * @param {Array} resourceDomMapping 资源映射（含 assignedVarName / resourceFile）
+ * @param {{logger?:object}} [options]
+ * @returns {{ files: Object<string,string>, injected: Array<{path:string,varName:string}>, unresolved: Array<{path:string,varName:string}> }}
+ */
+export function ensureResourceImportsForRefs(files = {}, resourceDomMapping = [], options = {}) {
+  const logger = safeLogger(options.logger);
+  const out = { ...files };
+  const injected = [];
+  const unresolved = [];
+  if (!Array.isArray(resourceDomMapping) || resourceDomMapping.length === 0) {
+    return { files: out, injected, unresolved };
+  }
+
+  const byVar = new Map();
+  for (const m of resourceDomMapping) {
+    const varName = m?.assignedVarName || m?.semanticVarName;
+    if (varName && m?.resourceFile) byVar.set(varName, m);
+  }
+  if (byVar.size === 0) return { files: out, injected, unresolved };
+
+  for (const [p, c] of Object.entries(out)) {
+    if (!/\.vue$/i.test(p) || typeof c !== 'string') continue;
+    let updated = c;
+    const refs = collectResourceVarRefsFromSfc(updated);
+    for (const varName of refs.all) {
+      if (new RegExp(`import\\s+${varName}\\s+from`).test(updated)) continue;
+      const m = byVar.get(varName);
+      if (!m) {
+        unresolved.push({ path: p, varName });
+        continue;
+      }
+      updated = ensureResourceImportInVue(updated, varName, m, p);
+      injected.push({ path: p, varName });
+    }
+    if (updated !== c) out[p] = updated;
+  }
+
+  if (injected.length > 0 && logger) {
+    logger.info('🧩 资源 import 引用驱动补齐（含 script 内引用）', {
+      count: injected.length,
+      samples: injected.slice(0, 6),
+      unresolved: unresolved.length,
+    });
+  }
+  return { files: out, injected, unresolved };
 }
 
 /** 确保目标 vue 文件 script 中存在该资源变量的 import */
@@ -1879,15 +1939,12 @@ export function stripUndefinedResourceRefs(code, options = {}) {
   const templateMatch = code.match(/<template>([\s\S]*)<\/template>/i);
   if (!templateMatch) return code;
 
-  // 模板里出现的资源变量名候选（bg1/bgMain/icon2/img3 …）
+  // 模板 + 🛡️ script 双覆盖（P1.7：script 内引用曾是盲区 —— 13890774 事故中
+  // `const deviceIcons = [icon3, icon4, …]` 写在 script 里，只扫模板则完全看不见，
+  // 幽灵引用直达运行时 → `icon4 is not defined`）。
   const referenced = new Set();
-  const resourceVarRe =
-    /\$\{\s*([A-Za-z_$][\w$]*)\s*\}|:src="\s*([A-Za-z_$][\w$]*)\s*"/g;
-  let m;
-  while ((m = resourceVarRe.exec(templateMatch[1])) !== null) {
-    const name = m[1] || m[2];
-    if (name && /^(bg|icon|img|image|pic)/i.test(name)) referenced.add(name);
-  }
+  const tplRefs = collectResourceVarRefsFromSfc(code);
+  for (const name of tplRefs.all) referenced.add(name);
   if (referenced.size === 0) return code;
 
   const undefinedVars = [...referenced].filter((name) => {
@@ -1910,6 +1967,16 @@ export function stripUndefinedResourceRefs(code, options = {}) {
     );
     // ② 删除 `:src="name"`
     result = result.replace(new RegExp(`\\s*:src="\\s*${name}\\s*"`, 'g'), '');
+    // ③ 🛡️ script 区收尾（P1.7）：把 script 内剩余的未定义资源引用替换为 `undefined`，
+    //    避免 `[icon3, icon4]` / `getDeviceIcon()` 等形态直达运行时抛 ReferenceError。
+    //    仅替换**非声明位置**的裸标识符（该变量已确认未 import/未声明 → 不可能是定义处）。
+    result = result.replace(
+      /(<script[^>]*>)([\s\S]*?)(<\/script>)/i,
+      (whole, open, body, close) =>
+        open +
+        body.replace(new RegExp(`(?<![.\\w$])${name}(?![\\w$])`, 'g'), 'undefined') +
+        close,
+    );
   }
   // ③ 清理因上一步变空的 :style="{ }" 绑定
   result = result.replace(/\s*:style="\{\s*\}"/g, '');
@@ -2369,7 +2436,11 @@ export function fixSectionHeightsForResource(content, ctx, options = {}) {
   // 生成时间线放大了该 bug：chunk 级快照推的是模型原始产出（height:100% 还在，预览正常），
   // 收尾 code-fix pipeline 改写后才推最终快照 → 用户看到「中途是好的，完成时反而坏了」。
   // `-root\b` 词边界：.c-x-rooter 不误豁免。
-  const ROOT_SELECTOR_RE = /\.[\w-]*-root\b/;
+  // 🔴 2026-09-11 二次实锤（c-env-monitor-xh8jdcpy-2aa25837）：层① 确定性模板的根内容容器
+  // 是 `c-{semantic}-slot-con`（code-generator.js buildDeterministicIndexTemplate 硬编码），
+  // 同样直连宿主 block 容器 .pannel-content——只豁免 -root 时 slot-con 的 height:100% 仍被
+  // 改写成 flex:1 1 0 → 塌陷复发（flex:1 1 0 在非 flex 父容器下完全失效）。
+  const ROOT_SELECTOR_RE = /\.[\w-]*-(root|slot-con)\b/;
   // 🆕 A4 加权（2026-09-04，实锤 mc-max-1788454423557-25e40782；2026-09-09 修订从 px 改系数）：
   // section 根类命中 ctx.sectionHeights（{根class: flexGrow系数}，由 engineer
   // _buildSectionHeightsMap 按「plan.effectiveSections 顺序 ↔ 主组件模板子组件标签顺序」
@@ -2576,6 +2647,54 @@ export function ensureSubComponentImport(content, options = {}) {
     /<script([^>]*)>(\s*)/i,
     (m, attrs, ws) => `<script${attrs}>${ws}${importLines}\n`,
   );
+}
+
+/**
+ * 🛡️ 层①（2026-09-11）：删除死子组件 import —— 治 CODE-021（import 了但模板 0 处引用）。
+ * ensureSubComponentImport 只「补缺失 import」，本函数做对称的「删多余 import」：
+ * 脚本里 `import X from './components/X.vue'` 但 X 在 <template> 里 0 处引用（非 <X 标签、
+ * 非 :is="X" 动态引用）→ 该 import 是死代码（真实结构只活在未挂载的子组件里），确定性移除。
+ * 与层①确定性模板装配配套：模板由系统生成后，脚本段的子组件 import 以模板标签为唯一事实源，
+ * LLM 臆造/多 import 的子组件名被裁剪，杜绝「import 与模板不一致」→ CODE-021 BLOCK。
+ */
+export function pruneDeadSubComponentImports(content, options = {}) {
+  const logger = safeLogger(options.logger);
+  if (!content || typeof content !== 'string') return content;
+  // 🛡️ 2026-09-11（0ca84358 实锤）：模板区提取改用共享边界法 —— lazy `</template>`
+  // 会被具名插槽提前闭合截断，插槽后的主内容标签全部不可见 → 全部 import 被误判
+  // 「模板未引用」删除 → 悬空标签（SwitchSection/TabsSection/MainSection 事故）。
+  const templateBody = extractSfcTemplate(content);
+  if (!templateBody) return content;
+
+  const scriptMatch = content.match(/<script[^>]*>([\s\S]*?)<\/script>/i);
+  if (!scriptMatch) return content;
+  const scriptBody = scriptMatch[1];
+
+  // 模板里实际引用的子组件名：<PascalCase ...> 或 <component :is="X">
+  const used = new Set();
+  for (const m of templateBody.matchAll(/<([A-Z][\w]*)\b/g)) used.add(m[1]);
+  for (const m of templateBody.matchAll(/:is\s*=\s*["']([A-Za-z_$][\w$]*)["']/g))
+    used.add(m[1]);
+
+  const dead = [];
+  const importRe = /import\s+([A-Za-z_$][\w$]*)\s+from\s*['"]\.\/components\/[^'"]+['"]/g;
+  for (const m of scriptBody.matchAll(importRe)) {
+    if (!used.has(m[1])) dead.push(m[1]);
+  }
+  if (dead.length === 0) return content;
+
+  let newScript = scriptBody;
+  for (const name of dead) {
+    newScript = newScript.replace(
+      new RegExp(`import\\s+${name}\\s+from\\s*['"]\\.\\/components\\/[^'"]+['"]\\s*\\n?`, 'g'),
+      '',
+    );
+  }
+
+  if (logger) {
+    logger.warn('🔧 已删除死子组件 import（模板未引用）', { dead });
+  }
+  return content.replace(scriptBody, newScript);
 }
 
 /**

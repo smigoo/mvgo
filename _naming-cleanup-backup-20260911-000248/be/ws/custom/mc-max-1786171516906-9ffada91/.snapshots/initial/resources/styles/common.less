@@ -1,0 +1,238 @@
+/* [Layout Refine] Adjust padding to align with Figma slot-con (y:475, root y:433 -> 42px top) */
+.c-9ffada-content {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 42px 13px 0 11px;
+  box-sizing: border-box;
+}
+
+/* [Layout Refine] Figma switch height 64.8 -> 65px */
+.c-9ffada-switch {
+  display: flex;
+  gap: 12px;
+  height: 65px;
+  margin-bottom: 0;
+}
+
+.c-9ffada-switch-item {
+  flex: 1;
+  height: 100%;
+  cursor: pointer;
+  position: relative;
+}
+
+/* [Style Refine] Active state border and glow from Figma fills/effects */
+.c-9ffada-switch-item--active {
+  .c-9ffada-switch-bg {
+    border: 1px solid rgba(43, 155, 255, 0.8);
+    box-shadow: 0 0 12px rgba(25, 144, 255, 0.5), inset 0 0 10px rgba(43, 155, 255, 0.2);
+  }
+}
+
+.c-9ffada-switch-bg {
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  box-sizing: border-box;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid transparent;
+}
+
+.c-9ffada-switch-icon {
+  width: 35px;
+  height: 28px;
+  margin-right: 12px;
+  object-fit: contain;
+}
+
+.c-9ffada-switch-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.c-9ffada-switch-title {
+  font-size: 12px;
+  font-weight: 400;
+  color: @c-9ffada-text-white;
+  margin-bottom: 4px;
+  line-height: 16px;
+}
+
+.c-9ffada-switch-line {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  line-height: 23px;
+}
+
+.c-9ffada-switch-label {
+  font-size: 14px;
+  font-weight: 400;
+  color: @c-9ffada-text-white;
+}
+
+.c-9ffada-switch-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: @c-9ffada-color-primary;
+  font-family: 'Roboto', sans-serif;
+}
+
+/* [Style Refine] Error color from Figma fills rgb(224, 52, 52) */
+.c-9ffada-switch-value--error {
+  color: @c-9ffada-color-error;
+}
+
+/* [Layout Refine] Figma tab y:538, switch bottom y:540 -> -2px overlap */
+.c-9ffada-bottom {
+  flex: 1;
+  display: flex;
+  gap: 0;
+  margin-top: -2px;
+  min-height: 0;
+}
+
+/* [Layout Refine] Figma tabs width 46px */
+.c-9ffada-tabs {
+  width: 46px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.c-9ffada-tab-item {
+  width: 100%;
+  min-height: 40px;
+  cursor: pointer;
+  position: relative;
+}
+
+.c-9ffada-tab-item--active {
+  .c-9ffada-tab-bg {
+    box-shadow: 0 0 8px rgba(25, 144, 255, 0.4);
+  }
+}
+
+/* [Style Refine] Tab bg border from Figma strokes */
+.c-9ffada-tab-bg {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  padding: 8px 0;
+  box-sizing: border-box;
+  border: 1px solid @c-9ffada-tab-border;
+}
+
+/* [Style Refine] Tab text color from Figma fills */
+.c-9ffada-tab-text {
+  font-size: 14px;
+  font-weight: 400;
+  color: @c-9ffada-tab-text;
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  letter-spacing: 2px;
+}
+
+.c-9ffada-tab-item--active .c-9ffada-tab-text {
+  font-weight: 700;
+  color: @c-9ffada-text-white;
+}
+
+/* [Style Refine] Tab badge styles from Figma */
+.c-9ffada-tab-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 4px;
+  border-radius: 29px;
+  background: @c-9ffada-text-white;
+  border: 1px solid @c-9ffada-tab-badge-border;
+  color: @c-9ffada-tab-text;
+  font-size: 12px;
+  font-family: 'Source Han Sans CN', sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  z-index: 1;
+}
+
+.c-9ffada-tab-badge--error {
+  background: @c-9ffada-tab-badge-error;
+  border: none;
+  color: @c-9ffada-text-white;
+}
+
+/* [Layout Refine] Figma cards grid: 3 cols 117px, 4 rows 64px, gap 13px 8px */
+.c-9ffada-cards {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 117px);
+  grid-template-rows: repeat(4, 64px);
+  gap: 13px 8px;
+  min-width: 0;
+  /* [Layout Refine] Figma cards x:1518, tabs right:1521 -> -3px overlap */
+  margin-left: -3px;
+}
+
+/* [Layout Refine] Fixed card item size from Figma bbox */
+.c-9ffada-card-item {
+  width: 117px;
+  height: 64px;
+  position: relative;
+}
+
+.c-9ffada-card-bg {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  box-sizing: border-box;
+  position: relative;
+  overflow: hidden;
+}
+
+.c-9ffada-card-icon {
+  width: 26px;
+  height: 32px;
+  margin-right: 12px;
+  object-fit: contain;
+}
+
+.c-9ffada-card-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* [Style Refine] Card name color and font from Figma */
+.c-9ffada-card-name {
+  font-size: 12px;
+  font-weight: 400;
+  color: @c-9ffada-text-primary;
+  line-height: 18px;
+  margin-bottom: 2px;
+}
+
+/* [Style Refine] Card status color, font and shadow from Figma */
+.c-9ffada-card-status {
+  font-size: 16px;
+  font-weight: 500;
+  color: @c-9ffada-text-white;
+  font-family: 'Roboto', sans-serif;
+  line-height: 19px;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+}

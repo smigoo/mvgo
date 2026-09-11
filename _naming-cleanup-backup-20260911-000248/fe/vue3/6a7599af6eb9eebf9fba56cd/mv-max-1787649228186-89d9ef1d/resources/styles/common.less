@@ -1,0 +1,322 @@
+// ==========================================
+// 流量监测面板 - 共享业务样式
+// 按功能语义命名，主组件与子组件按需 @import
+// ==========================================
+
+// 模块标题区域通用样式
+.section-title-bar {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  
+  .section-title-left {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    
+    .title-icon {
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+    }
+    
+    .title-text {
+      font-size: 16px;
+      font-weight: 500;
+      color: @color-text-base;
+      text-shadow: 0 5px 5px rgba(255, 255, 255, 0.8);
+      line-height: 24px;
+    }
+  }
+  
+  .section-title-right {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+  }
+}
+
+// 统计卡片通用样式
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  
+  .stat-label {
+    font-size: 14px;
+    color: @color-text-secondary;
+    line-height: 24px;
+  }
+  
+  .stat-value {
+    font-size: 24px;
+    font-weight: 900;
+    line-height: 28px;
+    font-family: 'Roboto', sans-serif;
+    
+    &--blue {
+      color: @color-primary-dark;
+    }
+    
+    &--cyan {
+      color: #0c9dbe;
+    }
+  }
+}
+
+// 车型分布卡片
+.vehicle-type-card {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  border-radius: @border-radius-base;
+  overflow: hidden;
+  
+  .vehicle-type-header {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 0;
+    position: relative;
+    z-index: 1;
+    
+    .header-bg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 9px;
+      background-size: 100% 100%;
+      background-repeat: no-repeat;
+      background-position: center;
+    }
+    
+    .header-text {
+      font-size: 14px;
+      font-weight: 500;
+      color: @color-text-base;
+      line-height: 18px;
+    }
+  }
+  
+  .vehicle-type-body {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-around;
+    padding: 8px 12px;
+    position: relative;
+    
+    .vehicle-type-bg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-size: 100% 100%;
+      background-repeat: no-repeat;
+      background-position: center;
+      z-index: 0;
+    }
+  }
+  
+  .vehicle-stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    position: relative;
+    z-index: 1;
+    
+    .vehicle-stat-label {
+      font-size: 12px;
+      color: @color-text-base;
+      line-height: 18px;
+    }
+    
+    .vehicle-stat-value {
+      font-size: 18px;
+      font-weight: 700;
+      font-family: 'Roboto', sans-serif;
+      line-height: 18px;
+      
+      &--car {
+        color: #1399ff;
+      }
+      
+      &--truck {
+        color: #ff6a00;
+      }
+    }
+  }
+}
+
+// 图表容器通用样式
+.chart-container {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  
+  .chart-canvas {
+    width: 100%;
+    height: 100%;
+  }
+}
+
+// Tab 切换按钮组
+.tab-switch-group {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  
+  .tab-btn {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    padding: 0 16px;
+    height: 28px;
+    border-radius: 20px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+    
+    &--active {
+      background: @color-primary;
+      border-color: rgba(199, 224, 255, 1);
+      color: @color-text-white;
+      font-weight: 500;
+    }
+    
+    &--inactive {
+      background: #6680a0;
+      border-color: rgba(172, 196, 225, 1);
+      color: @color-text-white;
+      font-weight: 400;
+    }
+    
+    &:hover {
+      opacity: 0.85;
+    }
+  }
+}
+
+// 下拉选择器样式
+.time-selector {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  width: 100px;
+  height: 30px;
+  padding: 0 8px;
+  cursor: pointer;
+  
+  .selector-text {
+    font-size: 14px;
+    color: @color-text-base;
+    line-height: 22px;
+  }
+  
+  .selector-arrow {
+    width: 8px;
+    height: 4px;
+    flex-shrink: 0;
+  }
+}
+
+// 链接按钮样式
+.link-btn {
+  font-size: 12px;
+  color: @color-primary;
+  cursor: pointer;
+  line-height: 18px;
+  
+  &:hover {
+    opacity: 0.8;
+  }
+}
+
+// 准确率文字样式
+.accuracy-text {
+  font-size: 12px;
+  font-weight: 500;
+  color: @color-success;
+  line-height: 12px;
+}
+
+// 主面板标题装饰
+.panel-header-decoration {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  
+  .decoration-dot {
+    width: 8px;
+    height: 8px;
+    flex-shrink: 0;
+  }
+  
+  .decoration-path {
+    width: 2px;
+    height: 2px;
+    flex-shrink: 0;
+  }
+}
+
+// 主面板标题文字（渐变）
+.panel-title-text {
+  font-size: 16px;
+  font-weight: 700;
+  background: linear-gradient(90deg, @color-primary-gradient-start 0%, @color-primary-gradient-end 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 19px;
+}
+
+// 实时数据提示
+.realtime-hint {
+  font-size: 14px;
+  font-weight: 400;
+  background: linear-gradient(90deg, @color-primary-gradient-start 0%, @color-primary-gradient-end 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 21px;
+}
+
+// 当日总流量背景容器
+.daily-total-bg {
+  position: relative;
+  width: 100%;
+  min-height: 91px;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  background-position: center;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-around;
+  padding: 12px 20px;
+}
+
+// 子模块标题左侧装饰条
+.sub-title-decoration {
+  width: 3px;
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #388dff 0%, #388dff 100%);
+  flex-shrink: 0;
+}

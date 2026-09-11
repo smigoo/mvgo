@@ -1,0 +1,21 @@
+{
+  "generatedAt": "2026-08-06T03:30:40.137Z",
+  "stage": "preview-analysis",
+  "degraded": true,
+  "degradeReason": "404 请求的资源未找到，请检查请求路径或联系管理员。\n\n\nTroubleshooting URL: https://js.langchain.com/docs/troubleshooting/errors/MODEL_NOT_FOUND/\n",
+  "layout": {
+    "type": "vertical",
+    "direction": "top-to-bottom",
+    "sections": []
+  },
+  "styles": {
+    "theme": "未知",
+    "colors": [],
+    "background": "",
+    "decorations": [],
+    "emphasis": [],
+    "backgroundBrightness": "dark"
+  },
+  "interactions": [],
+  "charts": []
+}

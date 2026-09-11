@@ -1,0 +1,176 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 58,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "将组件面板标题“cp-设备监测”识别为 header section，并在 body 中又包含 header、设备监测等标题类节点，存在面板标题与业务内容混淆的问题。根据规范，面板标题应由 base-panel/default-panel 与 declare.json.componentName 统一处理，不应作为组件内容结构生成。",
+        "suggestion": "将“设备监测”作为 declare.json.componentName 的候选标题；布局结构中仅保留标题栏下方的业务内容，如数据更新时间、指标卡/指标项等。删除或标记 figma-1-1/header、figma-1-7/设备监测 等重复标题节点。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0].body.children",
+        "message": "指标区域的父子关系不正确，数值、标签、装饰 Frame 被扁平地列为同级 item，无法表达“设备类型-28”“设备总数-68562”“完好率-98%”等语义组合。",
+        "suggestion": "将指标重组为明确的 summary/stat-list 结构，例如 stats: [{label:'设备类型', value:'28'}, {label:'设备总数', value:'68562'}, {label:'完好率', value:'98%'}]，每个指标作为独立 stat-item，Frame 装饰仅在有 Figma 证据时作为 icon/background 子节点。"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "layout.sections[0].body.children[1], layout.sections[0].body.children[3], layout.sections[0].body.children[4]",
+        "message": "存在大量 Figma 默认命名，如“Frame 2136638826”“Frame 2136638827”“Frame 2136638825”，业务含义不清晰，可维护性较差。",
+        "suggestion": "根据视觉和语义重命名为明确业务节点，如 update-time-row、device-type-card、device-total-card、integrity-rate-card、stat-icon 等。若仅为装饰容器，应合并到对应业务项内部。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1]",
+        "message": "slot-con 被识别为独立 section，但其 children 为 switch、active、default，更像 Tab/开关控件的不同状态或插槽状态，而不是独立业务区域。缺少 headerRelation 字段，无法判断该插槽是否属于面板 header、body 或 tab 控制区。",
+        "suggestion": "补充 headerRelation 或 slotRelation 信息，明确 switch 是否是面板头部操作、内容筛选器或 tabs 控制器。active/default 应作为状态描述或样式状态，不应作为常驻 DOM 子节点同时生成。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[2]",
+        "message": "tabs 区域结构不完整。role 为 tabs，但 body 中仅有 @antd/tab 和 tabs 两个抽象 item，缺少 tab items、activeKey、tabPanel/content 的对应关系，也未体现切换后内容联动。",
+        "suggestion": "将 tabs 建模为 tab-container，包含 tabList、activeTab、panels/content。若对应设备类型切换或状态筛选，需要定义每个 tab 的 key、label、默认激活项以及切换后展示/数据联动关系。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[*]",
+        "message": "当前最大嵌套约为 sections -> section -> body -> children，深度在建议范围内，但存在无语义的 header/body/item 包装，使实际生成时容易继续叠加冗余 DOM。",
+        "suggestion": "保留必要的 section/body 层级即可；对于简单指标项，直接使用 stat-list/stat-item 语义结构，避免每个文本节点都包一层 item。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[0].body.children",
+        "message": "过多文本节点和 Frame 节点被作为同级 DOM 输出，可能导致 DOM 数量偏多，并增加后续样式定位复杂度。",
+        "suggestion": "合并标签和值节点，使用 v-for 渲染指标列表；装饰性 Frame 若没有交互或独立语义，应作为 CSS 背景、伪元素或对应卡片内部元素处理。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "styles, visualDegraded",
+        "message": "分析结果处于 degraded/visualDegraded 状态，styles.colors、background、decorations、charts、interactions 均为空，说明布局判断缺少视觉和样式证据，后续生成很容易出现样式缺失或臆造样式。",
+        "suggestion": "重新执行视觉分析或补充 Figma 节点的 fills、strokes、cornerRadius、effects、autoLayout、尺寸、坐标等信息。对于无法确认的圆角、背景、边框、阴影应遵循证据优先和零装饰原则。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].header.title",
+        "message": "组件标题字段为“cp-设备监测”，含有英文/前缀 cp，不符合 declare.json.componentName 必须使用预览图中文面板标题的规范倾向。",
+        "suggestion": "若预览图中文标题为“设备监测”，componentName 应使用“设备监测”，不要使用“cp-设备监测”或组件英文 ID。"
+      }
+    ],
+    "recommendations": [
+      "建议将整体结构重构为：base-panel 承载面板标题；组件内容区包含 update-tip、summary-stats、filter/tabs、tab-content 四类语义区块。",
+      "将“active/default”识别为状态而非同时渲染的元素；Tab/Switch 必须明确默认激活态和切换后的内容或数据联动。",
+      "对指标类内容使用数据驱动结构，避免将 label、value、Frame 全部平铺为同级 item。",
+      "补充 headerRelation/slotRelation 字段，明确 slot-con 与 header/body/tabs 的归属关系，避免插槽误判。",
+      "重新获取非降级的视觉分析结果，补全颜色、背景、间距、圆角、图标占位等基础样式证据；无证据时不要默认卡片化。",
+      "布局实现建议使用 flex column 作为主轴，指标区使用 flex/grid 自适应布局；内部容器使用 width:100%、flex:1、min-width:0，避免固定宽度。",
+      "如果后续存在图表，应补充 charts 信息，包括图表类型、series、legendPosition、tooltip、grid.containLabel 等关键配置。"
+    ],
+    "summary": "当前布局仅粗略保留了 Figma 节点顺序，嵌套深度本身不算过深，但语义建模明显不足：面板标题与内容混淆、指标父子关系错误、Tab/Slot 结构不完整、状态节点被当作常驻元素、命名不可维护。同时由于视觉分析降级，样式和交互证据严重缺失。该结构不建议直接进入代码生成，应先进行语义重组并补充插槽、Tab、样式与交互信息。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）；视觉元素未提供明确色值，按 dark 亮度背景给出深色主题兜底变量",
+      "--colorPrimary": "#3677f8",
+      "--colorBg": "#0f0f0f",
+      "--colorTextBase": "#ffffff",
+      "--colorTextSecondary": "rgba(255, 255, 255, 0.65)",
+      "--colorPrimaryBg": "rgba(54, 119, 248, 0.16)",
+      "--fontSize": "14px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射；与 CSS 变量保持语义对应，可在 theme-vars.less 中作为 fallback 使用",
+      "@color-primary": "#3677f8",
+      "@color-bg": "#0f0f0f",
+      "@color-text-base": "#ffffff",
+      "@color-text-secondary": "rgba(255, 255, 255, 0.65)",
+      "@color-primary-bg": "rgba(54, 119, 248, 0.16)",
+      "@font-size-base": "14px",
+      "@border-radius-base": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类；由于未提供具体装饰、强调、背景图等视觉信息，仅生成暗色基础容器与文本类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "width": "100%",
+        "height": "100%",
+        "font-size": "var(--fontSize, @font-size-base)",
+        "color": "var(--colorTextBase, @color-text-base)",
+        "background": "var(--colorBg, @color-bg)",
+        "box-sizing": "border-box"
+      },
+      ".panel": {
+        "display": "flex",
+        "flex-direction": "column",
+        "border-radius": "var(--borderRadius, @border-radius-base)",
+        "background": "var(--colorPrimaryBg, @color-primary-bg)",
+        "color": "var(--colorTextBase, @color-text-base)",
+        "overflow": "hidden"
+      },
+      ".header": {
+        "display": "flex",
+        "justify-content": "space-between",
+        "align-items": "center",
+        "color": "var(--colorTextBase, @color-text-base)",
+        "font-size": "1em"
+      },
+      ".text-secondary": {
+        "color": "var(--colorTextSecondary, @color-text-secondary)"
+      },
+      ".primary-emphasis": {
+        "color": "var(--colorPrimary, @color-primary)"
+      }
+    },
+    "tokenCoverage": 0.35,
+    "mappingNotes": [
+      "输入视觉元素中 theme 为未知，colors/background/decorations/emphasis 均为空，仅 backgroundBrightness=dark 可确定暗色背景倾向。",
+      "CSS变量命名已使用 camelCase，如 --colorTextBase、--colorPrimaryBg。",
+      "由于缺少设计稿具体色值，--colorPrimary、--colorBg、--colorTextBase 使用规范兜底值，实际落地时应替换为 Figma 字面量值。",
+      "Less变量与CSS变量保持语义对应，业务样式建议使用 var(--key, @fallback) 形式。",
+      "未发现资源映射信息，因此未生成 background-image 或 img 图标引用类。"
+    ],
+    "elementStyleMap": {
+      "figma-3": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "figma-1",
+        "responsibility": "cp-设备监测（请按功能拆分）",
+        "elementCount": 12,
+        "title": "cp-设备监测"
+      },
+      {
+        "id": "figma-2",
+        "responsibility": "slot-con（请按功能拆分）",
+        "elementCount": 3,
+        "title": "slot-con"
+      },
+      {
+        "id": "figma-3",
+        "responsibility": "cons（请按功能拆分）",
+        "elementCount": 2,
+        "title": "cons"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 → 强制拆分"
+  }
+}

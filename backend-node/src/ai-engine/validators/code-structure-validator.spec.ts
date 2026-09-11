@@ -1704,3 +1704,78 @@ const x = typeof _tmp !== 'undefined' ? _tmp : 0
     expect(r3).toHaveLength(0)
   })
 })
+
+// ──────────────────────────────────────────────
+// 🛡️ CODE-023（2026-09-11）：悬空子组件标签（根治方案 R3-1）
+// ──────────────────────────────────────────────
+const runCode023 = (files: any[]) => {
+  const res = CodeStructureValidator.validate(files, 'test-component', { target: 'microcode' })
+  return res.issues.filter((i: any) => i.id.startsWith('CODE-023'))
+}
+
+const baseComp = { path: 'package/components/HeaderSection.vue', content: '<template><div>h</div></template>' }
+
+describe('CODE-023 悬空子组件标签', () => {
+  it('有文件缺 import → BLOCK', () => {
+    const files = [
+      { path: 'package/index.vue', content: '<template><base-panel><div class="c-x-slot-con"><HeaderSection /><SwitchSection /></div></base-panel></template><script setup>import HeaderSection from "./components/HeaderSection.vue"</script>' },
+      baseComp,
+      { path: 'package/components/SwitchSection.vue', content: '<template><div>s</div></template>' },
+    ]
+    const issues = runCode023(files)
+    const c23 = issues.find((i: any) => i.id === 'CODE-023')
+    expect(c23).toBeDefined()
+    expect(c23.severity).toBe('BLOCK')
+    expect(c23.message).toContain('<SwitchSection>（缺 import）')
+  })
+
+  it('有 import 缺文件 → BLOCK', () => {
+    const files = [
+      { path: 'package/index.vue', content: '<template><base-panel><div class="c-x-slot-con"><HeaderSection /><ChartSection /></div></base-panel></template><script setup>import HeaderSection from "./components/HeaderSection.vue"\nimport ChartSection from "./components/ChartSection.vue"</script>' },
+      baseComp,
+    ]
+    const issues = runCode023(files)
+    const c23 = issues.find((i: any) => i.id === 'CODE-023')
+    expect(c23).toBeDefined()
+    expect(c23.message).toContain('<ChartSection>（缺组件文件）')
+  })
+
+  it('三要素齐备 → 不报', () => {
+    const files = [
+      { path: 'package/index.vue', content: '<template><base-panel><div class="c-x-slot-con"><HeaderSection /></div></base-panel></template><script setup>import HeaderSection from "./components/HeaderSection.vue"</script>' },
+      baseComp,
+    ]
+    const issues = runCode023(files)
+    expect(issues.filter((i: any) => i.id === 'CODE-023')).toHaveLength(0)
+  })
+
+  it('defineAsyncComponent 形式的 const 绑定算已声明', () => {
+    const files = [
+      { path: 'package/index.vue', content: '<template><base-panel><div class="c-x-slot-con"><HeaderSection /></div></base-panel></template><script setup>const HeaderSection = defineAsyncComponent(() => import("./components/HeaderSection.vue"))</script>' },
+      baseComp,
+    ]
+    const issues = runCode023(files)
+    expect(issues.filter((i: any) => i.id === 'CODE-023')).toHaveLength(0)
+  })
+
+  it('三全缺 → BLOCK（2026-09-11 升级：微码无任意全局注册机制，0ca84358 臆造标签实锤）', () => {
+    const files = [
+      { path: 'package/index.vue', content: '<template><base-panel><div class="c-x-slot-con"><HeaderSection /><MysteryWidget /></div></base-panel></template><script setup>import HeaderSection from "./components/HeaderSection.vue"</script>' },
+      baseComp,
+    ]
+    const issues = runCode023(files)
+    const block = issues.find((i: any) => i.id === 'CODE-023')
+    expect(block).toBeDefined()
+    expect(block.severity).toBe('BLOCK')
+    expect(block.message).toContain('MysteryWidget')
+    expect(block.message).toContain('臆造标签')
+  })
+
+  it('components/ 为空时不启用（避免误报库组件）', () => {
+    const files = [
+      { path: 'package/index.vue', content: '<template><base-panel><MysteryWidget /></base-panel></template>' },
+    ]
+    const issues = runCode023(files)
+    expect(issues.filter((i: any) => i.id.startsWith('CODE-023'))).toHaveLength(0)
+  })
+})

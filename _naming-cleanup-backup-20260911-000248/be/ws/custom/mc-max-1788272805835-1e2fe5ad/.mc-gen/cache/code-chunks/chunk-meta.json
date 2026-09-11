@@ -1,0 +1,112 @@
+{
+  "completed": [
+    "1-declare.json",
+    "2-package/index.vue",
+    "3-package/index.vue",
+    "4-package/index.vue",
+    "5-package/components/DailyTotalFlow.vue",
+    "6-package/components/HourlyFlowTunnel.vue",
+    "7-package/components/HourlyFlowBridge.vue",
+    "9-package/components/FlowPrediction.vue",
+    "8-package/components/VehicleDistribution.vue",
+    "10-resources/styles/themes/theme-vars.less",
+    "11-resources/styles/common.less",
+    "6-package/components/TunnelHourlyFlow.vue"
+  ],
+  "total": 6,
+  "updatedAt": 1788273559394,
+  "files": {
+    "declare.json": [
+      {
+        "index": 1,
+        "file": "1-declare.json",
+        "segmentType": "declare",
+        "scriptPart": ""
+      }
+    ],
+    "package/index.vue": [
+      {
+        "index": 2,
+        "file": "2-package_index.vue",
+        "segmentType": "template",
+        "scriptPart": ""
+      },
+      {
+        "index": 3,
+        "file": "3-package_index.vue",
+        "segmentType": "script",
+        "scriptPart": "state"
+      },
+      {
+        "index": 4,
+        "file": "4-package_index.vue",
+        "segmentType": "script",
+        "scriptPart": "lifecycle"
+      }
+    ],
+    "package/components/DailyTotalFlow.vue": [
+      {
+        "index": 5,
+        "file": "5-package_components_DailyTotalFlow.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/HourlyFlowTunnel.vue": [
+      {
+        "index": 6,
+        "file": "6-package_components_HourlyFlowTunnel.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/HourlyFlowBridge.vue": [
+      {
+        "index": 7,
+        "file": "7-package_components_HourlyFlowBridge.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/FlowPrediction.vue": [
+      {
+        "index": 9,
+        "file": "9-package_components_FlowPrediction.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/VehicleDistribution.vue": [
+      {
+        "index": 8,
+        "file": "8-package_components_VehicleDistribution.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "resources/styles/themes/theme-vars.less": [
+      {
+        "index": 10,
+        "file": "10-resources_styles_themes_theme-vars.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      }
+    ],
+    "resources/styles/common.less": [
+      {
+        "index": 11,
+        "file": "11-resources_styles_common.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/TunnelHourlyFlow.vue": [
+      {
+        "index": 6,
+        "file": "6-package_components_TunnelHourlyFlow.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ]
+  }
+}

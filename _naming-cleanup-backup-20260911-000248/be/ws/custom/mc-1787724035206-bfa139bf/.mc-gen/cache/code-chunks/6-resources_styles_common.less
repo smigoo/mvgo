@@ -1,0 +1,163 @@
+.c-env-monitor-root {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.c-env-monitor-controls {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.c-env-monitor-tabs {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.c-env-monitor-tab-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 16px;
+  cursor: pointer;
+  z-index: 1;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.c-env-monitor-tab-active-bg {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, #1099b1, #038fff);
+  border: 1px solid #ffffff;
+  border-radius: 4px;
+  z-index: 0;
+}
+
+.c-env-monitor-tab-text {
+  position: relative;
+  z-index: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: #2c9bea;
+  white-space: nowrap;
+}
+
+.is-active .c-env-monitor-tab-text {
+  color: #ffffff;
+  text-shadow: 0px 0.6px 0px #006fe3;
+}
+
+.c-env-monitor-icon-group {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+.c-env-monitor-icon-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.c-env-monitor-icon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+
+.c-env-monitor-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  background: #f53f3f;
+  border-radius: 29px;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  z-index: 1;
+  box-sizing: border-box;
+}
+
+.c-env-monitor-chart-section {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  position: relative;
+  background-image: url(../resources/images/bg-7890.png);
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.c-env-monitor-chart-container {
+  flex: 1;
+  width: 100%;
+  min-height: 200px;
+}
+
+.c-env-monitor-legend {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.c-env-monitor-legend-item {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  margin-right: 16px;
+}
+
+.c-env-monitor-legend-dot {
+  width: 10px;
+  height: 10px;
+  background: #0fcd7d;
+  border-radius: 1.6px;
+  margin-right: 6px;
+}
+
+.c-env-monitor-legend-text {
+  font-size: 12px;
+  font-weight: 400;
+  color: #333333;
+}
+
+.c-env-monitor-title-deco {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.c-env-monitor-deco-1,
+.c-env-monitor-deco-2,
+.c-env-monitor-deco-3 {
+  height: 14px;
+  width: auto;
+  object-fit: contain;
+}
+
+.is-active {
+  // 通用激活状态标识
+}

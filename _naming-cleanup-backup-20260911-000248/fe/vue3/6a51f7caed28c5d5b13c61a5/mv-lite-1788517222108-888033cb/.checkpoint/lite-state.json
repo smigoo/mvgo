@@ -1,0 +1,129 @@
+{
+  "stage": "codegen_done",
+  "brief": {
+    "layout": "整体为深色主题的设备监控界面，采用垂直布局：顶部标题栏 + 楼层切换 Tab 栏 + 设备类型筛选横向滚动栏 + 三个设备分组区域（排风机房、弱电机房、轴流排风机房）垂直堆叠，每个分组内设备卡片采用4列网格横向排列",
+    "regions": [
+      {
+        "name": "标题栏",
+        "description": "深色背景，左侧白色图标 + 白色标题文字「辽北工作柱」，右侧白色关闭按钮（×）",
+        "position": "top",
+        "size": "全宽，高度约20px（逻辑px），固定在顶部"
+      },
+      {
+        "name": "楼层切换 Tab 栏",
+        "description": "5个横向等宽 Tab 按钮（地下一层/风道夹层/地下二层/地下三层/地下四层），激活项「地下一层」为青色描边高亮，未激活项为透明底深色文字",
+        "position": "top",
+        "size": "全宽，紧贴标题栏下方，高度约22px"
+      },
+      {
+        "name": "设备类型筛选栏",
+        "description": "横向滚动的设备类型标签栏，左侧「全部」标签激活（青色底），后续为「排风机」(红色角标2)、「送风机」(红色角标1) 等，右侧有右箭头翻页按钮。每个标签为圆角矩形，图标在左、文字在右单行排列",
+        "position": "top",
+        "size": "全宽，位于 Tab 栏下方约10px 处，高度约20px"
+      },
+      {
+        "name": "排风机房分组",
+        "description": "左侧白色组名标签「排风机房」+ 4列设备卡片网格。每张卡片内：顶部圆形青色图标区域，左侧设备名称 +「停止」状态标签（绿色或深色），中间「正转/停止」文字行，底部3个横向按钮（启动/停机/执行），其中执行按钮为青色高亮",
+        "position": "center",
+        "size": "全宽网格，起始于筛选栏下方约10px，卡片间横向间距约10px、纵向无多行"
+      },
+      {
+        "name": "弱电机房分组",
+        "description": "结构同上，左侧白色组名标签「弱电机房」+ 4列设备卡片网格（轴流风机），卡片布局相同",
+        "position": "center",
+        "size": "紧接排风机房分组下方约10px，卡片间距同上"
+      },
+      {
+        "name": "轴流排风机房分组",
+        "description": "左侧白色组名标签「轴流排风机房」+ 8张卡片（2行4列），卡片内图标为柱状图样式，设备名称为「电动风阀」，布局结构一致",
+        "position": "center",
+        "size": "紧接弱电机房分组下方约10px，占2行网格，底部留约10px 外边距"
+      }
+    ],
+    "spacing": {
+      "outer": "页面左右外边距约10px，顶部标题栏无外边距，底部约10px",
+      "gap": "楼层 Tab 栏与筛选栏间距约10px，筛选栏与首个分组间距约10px，分组间垂直间距约10px；卡片横向间距约10px",
+      "padding": "标题栏内边距约8px，Tab 按钮内边距约8px 横向、6px 纵向；卡片内边距顶部约12px、左右约10px、底部约8px；设备类型标签内边距约6px 横向、4px 纵向"
+    },
+    "theme": "dark",
+    "colors": {
+      "primary": "#00BFA5",
+      "background": "#0A2E2A",
+      "surface": "#0F3D38",
+      "text": "#FFFFFF",
+      "border": "#1A4D47"
+    },
+    "typography": {
+      "size": "标题约10px，楼层 Tab 约9px，设备名称约11px，状态标签约8px，按钮文字约8px，角标数字约7px",
+      "weight": "标题 500，正文 400，按钮 500",
+      "lineHeight": "约1.4倍字号"
+    },
+    "components": [
+      "关闭按钮（×）",
+      "Tab 切换按钮",
+      "横向滚动标签栏",
+      "角标气泡（红色数字）",
+      "设备卡片",
+      "圆形图标容器",
+      "状态标签（pill 样式）",
+      "操作按钮（启动/停机/执行）",
+      "右箭头翻页按钮"
+    ],
+    "textContent": [
+      "辽北工作柱",
+      "地下一层",
+      "风道夹层",
+      "地下二层",
+      "地下三层",
+      "地下四层",
+      "全部",
+      "排风机",
+      "送风机",
+      "变频轴流风机",
+      "电动风阀",
+      "电动组合风阀",
+      "潜污泵",
+      "液位计",
+      "排风机房",
+      "送风机",
+      "停止",
+      "正转",
+      "启动",
+      "停机",
+      "执行",
+      "暖通渗漏风机",
+      "停止→运行≤30℃℃自启动",
+      "弱电机房",
+      "轴流风机",
+      "轴流排风机房",
+      "电动风阀"
+    ],
+    "name": {
+      "cn": "设备监测",
+      "en": "equipment-monitor"
+    },
+    "visualDetails": [
+      "整体深色背景带青色调（#0A2E2A）",
+      "卡片为深青色半透明底（#0F3D38）+ 青色细边框（#1A4D47）+ 轻微圆角约4px",
+      "图标容器为圆形青色渐变底（#00BFA5 系）+ 白色图标",
+      "状态标签为深色底 + 小圆点前缀 + 文字，激活项为绿色底（#00C853）",
+      "执行按钮为青色底（#00BFA5）白色文字，启动/停机为透明底青色描边",
+      "角标为红色圆形（#F44336）+ 白色数字",
+      "Tab 激活项为青色描边 + 半透明青色底",
+      "设备类型标签激活项为青色底白字，未激活为透明底灰字"
+    ],
+    "interactions": [
+      "楼层切换 Tab 栏：5个 Tab（地下一层/风道夹层/地下二层/地下三层/地下四层），当前激活「地下一层」",
+      "设备类型筛选栏：横向滚动标签，当前激活「全部」，右侧有右箭头翻页按钮",
+      "设备卡片操作按钮：每张卡片底部3个按钮（启动/停机/执行），执行按钮为高亮状态可点击",
+      "关闭按钮：右上角白色 × 图标"
+    ],
+    "_themeSource": "pixel"
+  },
+  "width": 398,
+  "height": 323,
+  "sourceType": "screenshot",
+  "componentType": "vue3",
+  "generationTier": "lite",
+  "vueCode": "<template>\n  <div class=\"equipment-monitor\">\n    <!-- 标题栏 -->\n    <div class=\"equipment-monitor-header\">\n      <div class=\"equipment-monitor-header-left\">\n        <svg class=\"equipment-monitor-header-icon\" viewBox=\"0 0 16 16\" fill=\"currentColor\">\n          <path d=\"M8 2l6 4v8H2V6l6-4zm0 1.5L3.5 7v6h9V7L8 3.5z\"/>\n        </svg>\n        <span class=\"equipment-monitor-header-title\">辽北工作柱</span>\n      </div>\n      <button class=\"equipment-monitor-header-close\">×</button>\n    </div>\n\n    <!-- 楼层切换 Tab 栏 -->\n    <div class=\"equipment-monitor-tabs\">\n      <button\n        v-for=\"floor in floors\"\n        :key=\"floor\"\n        :class=\"['equipment-monitor-tab', { active: activeFloor === floor }]\"\n        @click=\"activeFloor = floor\"\n      >\n        {{ floor }}\n      </button>\n    </div>\n\n    <!-- 设备类型筛选栏 -->\n    <div class=\"equipment-monitor-filter\">\n      <div class=\"equipment-monitor-filter-scroll\">\n        <button\n          v-for=\"type in deviceTypes\"\n          :key=\"type.name\"\n          :class=\"['equipment-monitor-filter-item', { active: activeType === type.name }]\"\n          @click=\"activeType = type.name\"\n        >\n          <svg v-if=\"type.icon\" class=\"equipment-monitor-filter-icon\" viewBox=\"0 0 16 16\" fill=\"currentColor\">\n            <rect x=\"4\" y=\"4\" width=\"8\" height=\"8\" rx=\"1\"/>\n          </svg>\n          <span>{{ type.name }}</span>\n          <span v-if=\"type.badge\" class=\"equipment-monitor-filter-badge\">{{ type.badge }}</span>\n        </button>\n      </div>\n      <button class=\"equipment-monitor-filter-arrow\">›</button>\n    </div>\n\n    <!-- 设备分组区域 -->\n    <div class=\"equipment-monitor-content\">\n      <!-- 排风机房 -->\n      <div class=\"equipment-monitor-group\">\n        <div class=\"equipment-monitor-group-label\">排风机房</div>\n        <div class=\"equipment-monitor-grid\">\n          <div v-for=\"(device, idx) in group1Devices\" :key=\"idx\" class=\"equipment-monitor-card\">\n            <div class=\"equipment-monitor-card-icon\">\n              <svg viewBox=\"0 0 24 24\" fill=\"currentColor\">\n                <circle cx=\"12\" cy=\"12\" r=\"8\"/>\n                <path d=\"M12 8v8M8 12h8\" stroke=\"currentColor\" stroke-width=\"1.5\"/>\n              </svg>\n            </div>\n            <div class=\"equipment-monitor-card-header\">\n              <div class=\"equipment-monitor-card-name\">{{ device.name }}</div>\n              <div :class=\"['equipment-monitor-card-status', device.statusClass]\">\n                <span class=\"equipment-monitor-card-status-dot\"></span>\n                {{ device.status }}\n              </div>\n            </div>\n            <div class=\"equipment-monitor-card-info\">\n              <span class=\"equipment-monitor-card-mode\">{{ device.mode }}</span>\n              <span class=\"equipment-monitor-card-state\">{{ device.state }}</span>\n            </div>\n            <div class=\"equipment-monitor-card-actions\">\n              <button class=\"equipment-monitor-card-btn outline\">启动</button>\n              <button class=\"equipment-monitor-card-btn outline\">停机</button>\n              <button class=\"equipment-monitor-card-btn primary\">执行</button>\n            </div>\n          </div>\n        </div>\n      </div>\n\n      <!-- 弱电机房 -->\n      <div class=\"equipment-monitor-group\">\n        <div class=\"equipment-monitor-group-label\">弱电机房</div>\n        <div class=\"equipment-monitor-grid\">\n          <div v-for=\"(device, idx) in group2Devices\" :key=\"idx\" class=\"equipment-monitor-card\">\n            <div class=\"equipment-monitor-card-icon\">\n              <svg viewBox=\"0 0 24 24\" fill=\"currentColor\">\n                <circle cx=\"12\" cy=\"12\" r=\"8\"/>\n                <path d=\"M12 8v8M8 12h8\" stroke=\"currentColor\" stroke-width=\"1.5\"/>\n              </svg>\n            </div>\n            <div class=\"equipment-monitor-card-header\">\n              <div class=\"equipment-monitor-card-name\">{{ device.name }}</div>\n              <div :class=\"['equipment-monitor-card-status', device.statusClass]\">\n                <span class=\"equipment-monitor-card-status-dot\"></span>\n                {{ device.status }}\n              </div>\n            </div>\n            <div class=\"equipment-monitor-card-info\">\n              <span class=\"equipment-monitor-card-mode\">{{ device.mode }}</span>\n              <span class=\"equipment-monitor-card-state\">{{ device.state }}</span>\n            </div>\n            <div class=\"equipment-monitor-card-actions\">\n              <button class=\"equipment-monitor-card-btn outline\">启动</button>\n              <button class=\"equipment-monitor-card-btn outline\">停机</button>\n              <button class=\"equipment-monitor-card-btn primary\">执行</button>\n            </div>\n          </div>\n        </div>\n      </div>\n\n      <!-- 轴流排风机房 -->\n      <div class=\"equipment-monitor-group\">\n        <div class=\"equipment-monitor-group-label\">轴流排风机房</div>\n        <div class=\"equipment-monitor-grid\">\n          <div v-for=\"(device, idx) in group3Devices\" :key=\"idx\" class=\"equipment-monitor-card\">\n            <div class=\"equipment-monitor-card-icon chart\">\n              <svg viewBox=\"0 0 24 24\" fill=\"currentColor\">\n                <rect x=\"5\" y=\"14\" width=\"3\" height=\"6\"/>\n                <rect x=\"10\" y=\"10\" width=\"3\" height=\"10\"/>\n                <rect x=\"15\" y=\"6\" width=\"3\" height=\"14\"/>\n              </svg>\n            </div>\n            <div class=\"equipment-monitor-card-header\">\n              <div class=\"equipment-monitor-card-name\">{{ device.name }}</div>\n              <div :class=\"['equipment-monitor-card-status', device.statusClass]\">\n                <span class=\"equipment-monitor-card-status-dot\"></span>\n                {{ device.status }}\n              </div>\n            </div>\n            <div class=\"equipment-monitor-card-info\">\n              <span class=\"equipment-monitor-card-mode\">{{ device.mode }}</span>\n              <span class=\"equipment-monitor-card-state\">{{ device.state }}</span>\n            </div>\n            <div class=\"equipment-monitor-card-actions\">\n              <button class=\"equipment-monitor-card-btn outline\">启动</button>\n              <button class=\"equipment-monitor-card-btn outline\">停机</button>\n              <button class=\"equipment-monitor-card-btn primary\">执行</button>\n            </div>\n          </div>\n        </div>\n      </div>\n    </div>\n  </div>\n</template>\n\n<script setup>\nimport { ref } from 'vue'\n\nconst activeFloor = ref('地下一层')\nconst floors = ['地下一层', '风道夹层', '地下二层', '地下三层', '地下四层']\n\nconst activeType = ref('全部')\nconst deviceTypes = [\n  { name: '全部', icon: true },\n  { name: '排风机', icon: true, badge: 2 },\n  { name: '送风机', icon: true, badge: 1 },\n  { name: '变频轴流风机', icon: true },\n  { name: '电动风阀', icon: true },\n  { name: '电动组合风阀', icon: true },\n  { name: '潜污泵', icon: true },\n  { name: '液位计', icon: true }\n]\n\nconst group1Devices = [\n  { name: '送风机', status: '停止', statusClass: 'stopped', mode: '正转', state: '停止' },\n  { name: '送风机', status: '运转', statusClass: 'running', mode: '正转', state: '停止' },\n  { name: '送风机', status: '停止', statusClass: 'stopped', mode: '正转', state: '停止' },\n  { name: '暖通渗漏风机', status: '停止', statusClass: 'stopped', mode: '正转', state: '停止' }\n]\n\nconst group2Devices = [\n  { name: '轴流风机', status: '停止', statusClass: 'stopped', mode: '正转', state: '停止' },\n  { name: '轴流风机', status: '停止', statusClass: 'stopped', mode: '正转', state: '停止' },\n  { name: '轴流风机', status: '停止', statusClass: 'stopped', mode: '正转', state: '停止' },\n  { name: '轴流风机', status: '停止', statusClass: 'stopped', mode: '正转', state: '停止' }\n]\n\nconst group3Devices = [\n  { name: '电动风阀', status: '停止', statusClass: 'stopped', mode: '正转', state: '停止' },\n  { name: '电动风阀', status: '停止', statusClass: 'stopped', mode: '正转', state: '停止' },\n  { name: '电动风阀', status: '停止', statusClass: 'stopped', mode: '正转', state: '停止' },\n  { name: '电动风阀', status: '停止', statusClass: 'stopped', mode: '正转', state: '停止' },\n  { name: '电动风阀', status: '停止', statusClass: 'stopped', mode: '正转', state: '停止' },\n  { name: '电动风阀', status: '停止', statusClass: 'stopped', mode: '正转', state: '停止' },\n  { name: '电动风阀', status: '停止', statusClass: 'stopped', mode: '正转', state: '停止' },\n  { name: '电动风阀', status: '停止', statusClass: 'stopped', mode: '正转', state: '停止' }\n]\n</script>\n\n<style scoped>\n.equipment-monitor {\n  width: 100%;\n  height: 100%;\n  box-sizing: border-box;\n  background: #0A2E2A;\n  color: #FFFFFF;\n  padding: 8px;\n  overflow-y: auto;\n  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;\n}\n\n/* 标题栏 */\n.equipment-monitor-header {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  height: 20px;\n  margin-bottom: 8px;\n}\n\n.equipment-monitor-header-left {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n}\n\n.equipment-monitor-header-icon {\n  width: 14px;\n  height: 14px;\n  color: #FFFFFF;\n}\n\n.equipment-monitor-header-title {\n  font-size: 10px;\n  font-weight: 500;\n  color: #FFFFFF;\n}\n\n.equipment-monitor-header-close {\n  width: 18px;\n  height: 18px;\n  background: transparent;\n  border: none;\n  color: #FFFFFF;\n  font-size: 16px;\n  cursor: pointer;\n  padding: 0;\n  line-height: 1;\n}\n\n/* 楼层 Tab 栏 */\n.equipment-monitor-tabs {\n  display: flex;\n  gap: 6px;\n  margin-bottom: 8px;\n  height: 22px;\n}\n\n.equipment-monitor-tab {\n  flex: 1;\n  background: transparent;\n  border: 1px solid #1A4D47;\n  border-radius: 3px;\n  color: #FFFFFF;\n  font-size: 9px;\n  font-weight: 400;\n  cursor: pointer;\n  padding: 4px 6px;\n  transition: all 0.2s;\n}\n\n.equipment-monitor-tab.active {\n  background: rgba(0, 191, 165, 0.15);\n  border-color: #00BFA5;\n  color: #00BFA5;\n}\n\n/* 设备类型筛选栏 */\n.equipment-monitor-filter {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  margin-bottom: 8px;\n  height: 20px;\n}\n\n.equipment-monitor-filter-scroll {\n  flex: 1;\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  scrollbar-width: none;\n}\n\n.equipment-monitor-filter-scroll::-webkit-scrollbar {\n  display: none;\n}\n\n.equipment-monitor-filter-item {\n  position: relative;\n  display: flex;\n  align-items: center;\n  gap: 4px;\n  padding: 4px 8px;\n  background: transparent;\n  border: 1px solid #1A4D47;\n  border-radius: 10px;\n  color: #999999;\n  font-size: 8px;\n  font-weight: 400;\n  cursor: pointer;\n  white-space: nowrap;\n  flex-shrink: 0;\n  transition: all 0.2s;\n}\n\n.equipment-monitor-filter-item.active {\n  background: #00BFA5;\n  border-color: #00BFA5;\n  color: #FFFFFF;\n}\n\n.equipment-monitor-filter-icon {\n  width: 10px;\n  height: 10px;\n}\n\n.equipment-monitor-filter-badge {\n  position: absolute;\n  top: -6px;\n  right: -6px;\n  min-width: 14px;\n  height: 14px;\n  padding: 0 4px;\n  background: #F44336;\n  border-radius: 7px;\n  color: #FFFFFF;\n  font-size: 8px;\n  font-weight: 500;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  line-height: 1;\n}\n\n.equipment-monitor-filter-arrow {\n  width: 20px;\n  height: 20px;\n  background: rgba(255, 255, 255, 0.1);\n  border: 1px solid #1A4D47;\n  border-radius: 3px;\n  color: #FFFFFF;\n  font-size: 14px;\n  cursor: pointer;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  flex-shrink: 0;\n  padding: 0;\n}\n\n/* 内容区域 */\n.equipment-monitor-content {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n/* 设备分组 */\n.equipment-monitor-group {\n  display: flex;\n  gap: 8px;\n}\n\n.equipment-monitor-group-label {\n  writing-mode: vertical-rl;\n  white-space: nowrap;\n  background: rgba(255, 255, 255, 0.1);\n  border: 1px solid #1A4D47;\n  border-radius: 3px;\n  padding: 8px 4px;\n  font-size: 9px;\n  font-weight: 400;\n  color: #FFFFFF;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  letter-spacing: 2px;\n  flex-shrink: 0;\n}\n\n/* 设备网格 */\n.equipment-monitor-grid {\n  flex: 1;\n  display: grid;\n  grid-template-columns: repeat(4, 1fr);\n  grid-auto-rows: min-content;\n  gap: 8px;\n  min-height: 0;\n}\n\n/* 设备卡片 */\n.equipment-monitor-card {\n  background: #0F3D38;\n  border: 1px solid #1A4D47;\n  border-radius: 4px;\n  padding: 10px 8px 6px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.equipment-monitor-card-icon {\n  width: 32px;\n  height: 32px;\n  border-radius: 50%;\n  background: linear-gradient(135deg, #00BFA5 0%, #008C7A 100%);\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  margin: 0 auto 4px;\n  flex-shrink: 0;\n}\n\n.equipment-monitor-card-icon svg {\n  width: 18px;\n  height: 18px;\n  color: #FFFFFF;\n}\n\n.equipment-monitor-card-icon.chart svg {\n  width: 16px;\n  height: 16px;\n}\n\n.equipment-monitor-card-header {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 4px;\n}\n\n.equipment-monitor-card-name {\n  font-size: 9px;\n  font-weight: 400;\n  color: #FFFFFF;\n  flex: 1;\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n}\n\n.equipment-monitor-card-status {\n  display: flex;\n  align-items: center;\n  gap: 3px;\n  padding: 2px 6px;\n  border-radius: 8px;\n  font-size: 7px;\n  font-weight: 400;\n  white-space: nowrap;\n  flex-shrink: 0;\n}\n\n.equipment-monitor-card-status.running {\n  background: #00C853;\n  color: #FFFFFF;\n}\n\n.equipment-monitor-card-status.stopped {\n  background: rgba(255, 255, 255, 0.1);\n  color: #999999;\n}\n\n.equipment-monitor-card-status-dot {\n  width: 4px;\n  height: 4px;\n  border-radius: 50%;\n  background: currentColor;\n}\n\n.equipment-monitor-card-info {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n  font-size: 7px;\n  color: #999999;\n}\n\n.equipment-monitor-card-mode::after {\n  content: '/';\n  margin-left: 4px;\n}\n\n.equipment-monitor-card-actions {\n  display: flex;\n  gap: 4px;\n  margin-top: 2px;\n}\n\n.equipment-monitor-card-btn {\n  flex: 1;\n  height: 18px;\n  border-radius: 3px;\n  font-size: 7px;\n  font-weight: 500;\n  cursor: pointer;\n  transition: all 0.2s;\n  padding: 0;\n  white-space: nowrap;\n}\n\n.equipment-monitor-card-btn.outline {\n  background: transparent;\n  border: 1px solid #00BFA5;\n  color: #00BFA5;\n}\n\n.equipment-monitor-card-btn.outline:hover {\n  background: rgba(0, 191, 165, 0.1);\n}\n\n.equipment-monitor-card-btn.primary {\n  background: #00BFA5;\n  border: 1px solid #00BFA5;\n  color: #FFFFFF;\n}\n\n.equipment-monitor-card-btn.primary:hover {\n  background: #00A893;\n  border-color: #00A893;\n}\n</style>"
+}

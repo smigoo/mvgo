@@ -1,0 +1,99 @@
+// 主题变量定义 - 管辖范围组件
+
+// 公共变量 mixin（非主题相关的通用变量）
+.common() {
+  // 布局相关
+  --c-test-e2e-v3-container-padding: 14px;
+  --c-test-e2e-v3-header-height: 34px;
+  --c-test-e2e-v3-content-padding: 20px 14px 16px 14px;
+  
+  // 字体
+  --c-test-e2e-v3-font-family-title: 'PangMenZhengDao', 'Microsoft YaHei', sans-serif;
+  --c-test-e2e-v3-font-family-number: 'DIN Alternate', 'Arial', sans-serif;
+  --c-test-e2e-v3-font-family-base: 'Microsoft YaHei', sans-serif;
+  
+  // 尺寸
+  --c-test-e2e-v3-icon-size: 43px;
+  --c-test-e2e-v3-decoration-icon-size: 16.53px;
+  
+  // 间距
+  --c-test-e2e-v3-stats-gap: 12px;
+  --c-test-e2e-v3-stat-item-gap: 4px;
+}
+
+// 深色主题变量
+.theme-dark() {
+  // 背景色
+  --c-test-e2e-v3-bg-primary: rgba(5, 49, 51, 1);
+  --c-test-e2e-v3-bg-secondary: rgba(8, 99, 99, 0.8);
+  --c-test-e2e-v3-bg-accent: rgba(14, 205, 190, 1);
+  
+  // 边框色
+  --c-test-e2e-v3-border-primary: rgba(8, 99, 99, 1);
+  --c-test-e2e-v3-border-accent: rgba(24, 255, 206, 1);
+  
+  // 文字色
+  --c-test-e2e-v3-text-primary: rgba(255, 255, 255, 1);
+  --c-test-e2e-v3-text-secondary: rgba(255, 255, 255, 0.8);
+  --c-test-e2e-v3-text-tertiary: rgba(255, 255, 255, 0.7);
+  --c-test-e2e-v3-text-accent: rgba(0, 240, 255, 1);
+  
+  // 光效色
+  --c-test-e2e-v3-glow-primary: rgba(0, 240, 255, 0.6);
+  --c-test-e2e-v3-glow-secondary: rgba(4, 254, 197, 0.5);
+  --c-test-e2e-v3-glow-shadow: rgba(0, 240, 255, 0.3);
+  
+  // 渐变色
+  --c-test-e2e-v3-gradient-base-start: rgba(6, 70, 56, 1);
+  --c-test-e2e-v3-gradient-base-end: rgba(14, 107, 85, 1);
+  --c-test-e2e-v3-gradient-accent-start: rgba(11, 204, 254, 1);
+  --c-test-e2e-v3-gradient-accent-end: rgba(3, 204, 255, 1);
+  
+  // 阴影
+  --c-test-e2e-v3-shadow-text: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --c-test-e2e-v3-shadow-text-strong: 0 2px 4px rgba(0, 0, 0, 0.4);
+  --c-test-e2e-v3-shadow-glow: 0 0 8px rgba(0, 240, 255, 0.6);
+  --c-test-e2e-v3-shadow-icon: 0 2px 6px rgba(0, 240, 255, 0.4);
+  --c-test-e2e-v3-shadow-base: 0 4px 12px rgba(0, 240, 255, 0.3);
+}
+
+// 浅色主题变量
+.theme-light() {
+  // 背景色
+  --c-test-e2e-v3-bg-primary: rgba(240, 250, 250, 1);
+  --c-test-e2e-v3-bg-secondary: rgba(220, 240, 240, 0.8);
+  --c-test-e2e-v3-bg-accent: rgba(100, 220, 210, 1);
+  
+  // 边框色
+  --c-test-e2e-v3-border-primary: rgba(180, 220, 220, 1);
+  --c-test-e2e-v3-border-accent: rgba(80, 200, 190, 1);
+  
+  // 文字色
+  --c-test-e2e-v3-text-primary: rgba(40, 40, 40, 1);
+  --c-test-e2e-v3-text-secondary: rgba(60, 60, 60, 0.9);
+  --c-test-e2e-v3-text-tertiary: rgba(80, 80, 80, 0.8);
+  --c-test-e2e-v3-text-accent: rgba(0, 160, 180, 1);
+  
+  // 光效色
+  --c-test-e2e-v3-glow-primary: rgba(0, 180, 200, 0.4);
+  --c-test-e2e-v3-glow-secondary: rgba(80, 200, 180, 0.3);
+  --c-test-e2e-v3-glow-shadow: rgba(0, 180, 200, 0.2);
+  
+  // 渐变色
+  --c-test-e2e-v3-gradient-base-start: rgba(220, 240, 235, 1);
+  --c-test-e2e-v3-gradient-base-end: rgba(200, 230, 225, 1);
+  --c-test-e2e-v3-gradient-accent-start: rgba(120, 210, 230, 1);
+  --c-test-e2e-v3-gradient-accent-end: rgba(100, 200, 220, 1);
+  
+  // 阴影
+  --c-test-e2e-v3-shadow-text: 0 1px 2px rgba(0, 0, 0, 0.1);
+  --c-test-e2e-v3-shadow-text-strong: 0 2px 4px rgba(0, 0, 0, 0.15);
+  --c-test-e2e-v3-shadow-glow: 0 0 8px rgba(0, 180, 200, 0.3);
+  --c-test-e2e-v3-shadow-icon: 0 2px 6px rgba(0, 180, 200, 0.2);
+  --c-test-e2e-v3-shadow-base: 0 4px 12px rgba(0, 180, 200, 0.15);
+}
+
+// 默认使用深色主题（与面板 backgroundBrightness=dark 一致）
+:root {
+  .theme-dark();
+}

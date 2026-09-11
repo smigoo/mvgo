@@ -1,0 +1,171 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 82,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "section-header的header.title与body内text重复定义'环境监测'，存在结构冗余。",
+        "suggestion": "将body内的图标和文本上移至header中，或移除header仅保留body作为标题区。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[1].body.children[1].children[1]",
+        "message": "列表视图icon-button内部嵌套icon和badge，嵌套层级较深，增加DOM复杂度。",
+        "suggestion": "建议使用微码原生带badge属性的icon-button组件，或简化内部相对布局结构。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "section-header作为面板标题，headerRelation为title-itself但slotCandidate为null。",
+        "suggestion": "若该section仅用于展示面板标题，建议直接映射为base-panel的header插槽，而非独立section。"
+      }
+    ],
+    "recommendations": [
+      "统一section的header与body职责，避免同一内容在header和body中重复声明。",
+      "对于带角标的图标按钮，优先使用框架内置的Badge组件包裹，减少自定义relative布局嵌套。"
+    ],
+    "summary": "整体布局结构清晰，区域划分合理。主要问题在于标题区域存在内容重复定义，以及部分图标按钮嵌套过深。建议优化冗余节点并合理运用内置组件。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#2b7de0",
+      "--colorPrimaryBg": "rgba(43, 125, 224, 0.12)",
+      "--colorSuccess": "#52c41a",
+      "--colorDanger": "#f53f3f",
+      "--colorTextBase": "#666666",
+      "--colorBgLayout": "#EDF4FB",
+      "--fontSize": "14px",
+      "--fontWeightStrong": "600",
+      "--borderRadius": "6px",
+      "--gradientAreaFill": "linear-gradient(180deg, rgba(82, 196, 26, 0.35) 0%, rgba(82, 196, 26, 0) 100%)"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#2b7de0",
+      "@color-primary-bg": "rgba(43, 125, 224, 0.12)",
+      "@color-success": "#52c41a",
+      "@color-danger": "#f53f3f",
+      "@color-text-base": "#666666",
+      "@color-bg-layout": "#EDF4FB",
+      "@font-size-base": "14px",
+      "@font-weight-strong": "600",
+      "@border-radius-base": "6px",
+      "@gradient-area-fill": "linear-gradient(180deg, rgba(82, 196, 26, 0.35) 0%, rgba(82, 196, 26, 0) 100%)"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".tech-monitor": {
+        "display": "flex",
+        "flex-direction": "column",
+        "width": "100%",
+        "height": "100%",
+        "background": "var(--colorBgLayout, @color-bg-layout)",
+        "color": "var(--colorTextBase, @color-text-base)",
+        "font-size": "var(--fontSize, @font-size-base)",
+        "border-radius": "var(--borderRadius, @border-radius-base)"
+      },
+      ".tab": {
+        "padding": "8px 16px",
+        "cursor": "pointer",
+        "border-bottom": "2px solid transparent",
+        "color": "var(--colorTextBase, @color-text-base)"
+      },
+      ".tab-active": {
+        "color": "var(--colorPrimary, @color-primary)",
+        "border-bottom": "2px solid var(--colorPrimary, @color-primary)",
+        "background": "var(--colorPrimaryBg, @color-primary-bg)",
+        "font-weight": "var(--fontWeightStrong, @font-weight-strong)"
+      },
+      ".warning-line": {
+        "width": "100%",
+        "height": "0",
+        "border": "none",
+        "border-top": "2px dashed var(--colorDanger, @color-danger)"
+      },
+      ".area-fill": {
+        "background": "var(--gradientAreaFill, @gradient-area-fill)"
+      },
+      ".badge": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "min-width": "1.5em",
+        "height": "1.5em",
+        "padding": "0 0.5em",
+        "background": "var(--colorDanger, @color-danger)",
+        "color": "#ffffff",
+        "border-radius": "999px",
+        "font-size": "0.75em"
+      },
+      ".badge-corner": {
+        "position": "absolute",
+        "top": "-0.5em",
+        "right": "-0.5em"
+      }
+    },
+    "tokenCoverage": 1,
+    "mappingNotes": [
+      "#2b7de0 映射为 --colorPrimary，用于选中 Tab 蓝色高亮",
+      "#52c41a 映射为 --colorSuccess，并派生出绿色渐变面积填充 --gradientAreaFill",
+      "#f53f3f 映射为 --colorDanger，同时用于红色虚线预警线和红色 Badge 角标",
+      "#EDF4FB 映射为 --colorBgLayout，作为浅灰蓝页面背景",
+      "#666666 映射为 --colorTextBase，作为常规文字色",
+      "所有 CSS 变量均使用 camelCase，样式类中使用 var(--xxx, @fallback) 保证降级"
+    ],
+    "elementStyleMap": {
+      "section-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-tabs-tools": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-tab-group-监测指标Tab-5": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-tool-group-视图工具-10": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-16": {
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-header",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 2,
+        "title": "环境监测"
+      },
+      {
+        "id": "section-tabs-tools",
+        "responsibility": "标签页切换区",
+        "elementCount": 10,
+        "title": "指标切换与工具栏"
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "浓度趋势图表"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 → 强制拆分"
+  }
+}

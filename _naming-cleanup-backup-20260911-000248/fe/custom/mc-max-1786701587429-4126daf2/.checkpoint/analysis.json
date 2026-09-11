@@ -1,0 +1,177 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 65,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "chartDataHints",
+        "message": "图表数据提示解析严重错误：三个图表的 labels 和 values 完全相同，且 labels 中包含了 '24小时'、'当日总流量'、'江阴大桥'、'82,379' 等页面标题和统计数值，而不是图表真实的 X/Y 轴数据。这将导致生成的图表数据完全错乱。",
+        "suggestion": "修正 chartDataHints，X轴标签应为时间（如 0时, 1时...24时），Y轴应为流量数值。同时必须为'江阴靖江长江隧道'和'江阴大桥'提供各自独立的数据集。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].body.items[*].children[1]",
+        "message": "环形图使用静态图片代替：车型分布中的环形图被识别为 type: 'icon' 并引用了本地图片 (icon-3441.png)。这违反了'禁止使用静态图片代替图表'以及'禁止 ESM import 本地图片资源'的核心规范。",
+        "suggestion": "将环形图改为 ECharts 的 pie (doughnut) 图表类型，通过代码动态渲染数据，并移除对本地静态图片的引用。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[1].body.items[*]",
+        "message": "嵌套层级过深：车型分布卡片内部使用了 horizontal -> vertical -> label/value 的多层嵌套，导致 DOM 结构冗余，嵌套深度超过建议的 3 层。",
+        "suggestion": "简化 DOM 结构，使用 Flex 布局直接排列 label 和 value，减少不必要的 horizontal/vertical 包裹层。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body.children[1, 2]",
+        "message": "图表标题冗余嵌套：图表容器 (chart-container) 内部又嵌套了 chart-title 节点。在微码规范中，这会增加不必要的 DOM 节点。",
+        "suggestion": "移除 chart-title 节点，将标题配置移入 ECharts 的 option.title 中，或者利用 section 的 header 进行视觉区分。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "charts",
+        "message": "图表配置重复且缺乏数据区分：前两个柱状图（隧道和大桥）的配置完全一模一样，没有体现出两个不同地点的数据差异和独立标识。",
+        "suggestion": "在 charts 配置中增加 id 或 name 进行区分，并确保在 chartDataHints 中绑定各自独立的数据源。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "Figma 覆盖率极低：coverageRate 为 0，missingCount 高达 170，缺失了大量细节节点（如单位'辆'、'时'等），可能导致最终 UI 还原度不足。",
+        "suggestion": "重新运行 Figma 解析或手动补充缺失的节点，确保 UI 细节的完整性。"
+      }
+    ],
+    "recommendations": [
+      "修正 chartDataHints 数据，确保坐标轴标签正确，并为隧道和大桥提供独立的数据集。",
+      "将车型分布的环形图改为 ECharts 的 doughnut 图表类型动态渲染，彻底移除静态图片引用。",
+      "简化车型分布卡片的 DOM 结构，利用 Flex 布局减少冗余的 div 嵌套，降低嵌套深度。",
+      "移除图表容器内的 chart-title 节点，统一使用 ECharts 的 title 组件或 section header 来展示标题。",
+      "重新执行 Figma 解析以补全缺失的节点（如数值单位、装饰性文本等），提升整体覆盖率。"
+    ],
+    "summary": "整体布局的 Section 划分和 Header/Body 结构较为清晰，符合微码组件的基本区域划分规范。但存在两个致命问题：一是图表数据提示(chartDataHints)解析严重错误，将页面标题误认为图表标签；二是使用静态图片代替环形图，违反了图表渲染和静态资源引入的核心规范。此外，部分区域嵌套过深，且 Figma 覆盖率极低。建议修正数据解析和图表类型、简化 DOM 结构后重新提交审查。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorBg": "#edf4fb",
+      "--colorPrimary": "#1990ff",
+      "--colorTextBase": "#333333",
+      "--colorWarning": "#fa8c16",
+      "--colorSuccess": "#52c41a",
+      "--fontSize": "14px",
+      "--fontSizeLarge": "28px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-bg": "#edf4fb",
+      "@color-primary": "#1990ff",
+      "@color-text-base": "#333333",
+      "@color-warning": "#fa8c16",
+      "@color-success": "#52c41a",
+      "@font-size-base": "14px",
+      "@font-size-large": "28px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "width": "100%",
+        "height": "100%",
+        "background-color": "var(--colorBg, #edf4fb)",
+        "padding": "16px",
+        "box-sizing": "border-box",
+        "position": "relative",
+        "overflow": "hidden"
+      },
+      ".section-header": {
+        "display": "flex",
+        "align-items": "center",
+        "margin-bottom": "12px",
+        "color": "var(--colorTextBase, #333333)",
+        "font-size": "var(--fontSize, 14px)",
+        "font-weight": "600"
+      },
+      ".diamond-icon": {
+        "width": "16px",
+        "height": "16px",
+        "margin-right": "8px",
+        "background-size": "contain",
+        "background-repeat": "no-repeat",
+        "background-position": "center"
+      },
+      ".car-decoration": {
+        "position": "absolute",
+        "width": "48px",
+        "height": "48px",
+        "background-size": "contain",
+        "background-repeat": "no-repeat",
+        "background-position": "center",
+        "pointer-events": "none"
+      },
+      ".metric-value-primary": {
+        "font-size": "var(--fontSizeLarge, 28px)",
+        "font-weight": "bold",
+        "color": "var(--colorPrimary, #1990ff)",
+        "line-height": "1.2",
+        "font-family": "DIN Alternate, Arial, sans-serif"
+      },
+      ".metric-value-warning": {
+        "font-size": "24px",
+        "font-weight": "bold",
+        "color": "var(--colorWarning, #fa8c16)",
+        "line-height": "1.2",
+        "font-family": "DIN Alternate, Arial, sans-serif"
+      },
+      ".text-base": {
+        "color": "var(--colorTextBase, #333333)",
+        "font-size": "var(--fontSize, 14px)"
+      },
+      ".status-success": {
+        "color": "var(--colorSuccess, #52c41a)"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 #1990ff 映射为 --colorPrimary，用于大号蓝色数值及核心科技风视觉元素",
+      "背景色 #edf4fb 映射为 --colorBg，作为组件全局浅色科技监测风底色，建议直接落地为字面量值兜底",
+      "橙色 #fa8c16 映射为 --colorWarning，专门用于强调橙色货车数值等警示/高亮数据",
+      "绿色 #52c41a 映射为 --colorSuccess，用于正常/畅通/成功状态指示",
+      "菱形标题图标与汽车装饰图标建议通过 background-image 引入实际切图资源（如 base64 或 URL），此处仅提供容器样式类",
+      "大号数值采用 --fontSizeLarge 配合 font-weight: bold 及等宽数字字体实现视觉强调"
+    ],
+    "elementStyleMap": {
+      "section-daily-total": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-bridge": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "chart-tunnel-flow": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "chart-bridge-flow": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-vehicle-type": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-flow-prediction": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    }
+  }
+}

@@ -1,0 +1,69 @@
+// 组件内共享的业务 class
+// 前缀: .mv3-mv-1785823567400-b127a453-
+
+// 通用 flex 行布局
+.mv3-mv-1785823567400-b127a453-flex-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+// 通用 flex 列布局
+.mv3-mv-1785823567400-b127a453-flex-col {
+  display: flex;
+  flex-direction: column;
+}
+
+// 文本截断
+.mv3-mv-1785823567400-b127a453-text-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// 菱形装饰图标
+.mv3-mv-1785823567400-b127a453-diamond {
+  width: 10px;
+  height: 10px;
+  background: @color-primary;
+  transform: rotate(45deg);
+  flex-shrink: 0;
+}
+
+// 标签样式（如车牌号）
+.mv3-mv-1785823567400-b127a453-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  height: 24px;
+  background: @color-warning;
+  border: 1px solid rgba(255, 255, 255, 1);
+  border-radius: @border-radius-base;
+  font-size: @font-size-base;
+  color: @color-text-base;
+}
+
+// 表格行选中态
+.mv3-mv-1785823567400-b127a453-row-active {
+  border: 1px solid @color-primary;
+  background: rgba(0, 240, 255, 0.1);
+  box-shadow: inset 0 0 8px rgba(27, 255, 221, 0.85);
+}
+
+// 信息项标签
+.mv3-mv-1785823567400-b127a453-info-label {
+  font-size: @font-size-base;
+  font-weight: 400;
+  line-height: 21px;
+  color: @color-text-secondary;
+  white-space: nowrap;
+}
+
+// 信息项值
+.mv3-mv-1785823567400-b127a453-info-value {
+  font-size: @font-size-base;
+  font-weight: 700;
+  line-height: 21px;
+  color: @color-text-base;
+}

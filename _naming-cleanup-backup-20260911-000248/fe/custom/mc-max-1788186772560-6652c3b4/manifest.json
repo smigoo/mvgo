@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "sessionId": "mc-max-1788186772560-6652c3b4",
+  "componentId": "mc-max-1788186772560-6652c3b4",
+  "groupId": "6a7599af6eb9eebf9fba56cd",
+  "target": "microcode",
+  "revision": "r-a559b2c4-b32d-408c-8c11-7d8e964280b8",
+  "status": "validating",
+  "createdAt": "2026-08-31T14:37:35.411Z",
+  "stage": "microcode-engineer",
+  "files": [
+    {
+      "path": "_figma-size.json",
+      "size": 98,
+      "hash": "99fdfa9e463bda2ca7008fb3f47673187244c486839af4e30469d4c570a7b014"
+    },
+    {
+      "path": "declare.json",
+      "size": 1260,
+      "hash": "bc29d2e5cc0928c0676ae76c8a82ebd2071583ccc05801fcc6fe97f277910094"
+    },
+    {
+      "path": "package/index.vue",
+      "size": 6931,
+      "hash": "fab724ea34682d5df8b4ac150a60c847df92976f01bbdb9195c9f4720c82f9b5"
+    },
+    {
+      "path": "resources/images/bg-7890.png",
+      "size": 23733,
+      "hash": "827cc6cc7da9bda9afce061b6b38a7c130661848315840fbcbe299a82e877af7"
+    },
+    {
+      "path": "resources/images/bg-tab-active-7891.png",
+      "size": 7717,
+      "hash": "e4f5e1ba899da0e8da57184f2102ac8b9ade785af1ca8d174bbe7bc620ffbdc0"
+    },
+    {
+      "path": "resources/images/icon-7941.png",
+      "size": 1572,
+      "hash": "375c6772d482f1ad56f35e3d7b79fce19c40a7d15d8d695645c8f7dad94f1614"
+    },
+    {
+      "path": "resources/images/icon-7945.png",
+      "size": 1646,
+      "hash": "1007dd8ce76a9663755369706b6da44ca27708f7b2d39e72faf4ea43a343b605"
+    },
+    {
+      "path": "resources/images/mc-preview.png",
+      "size": 45806,
+      "hash": "dd5fa5a2a8acb1324559734a2e94733ecd1cfadd5029731de997895a58d0dd67"
+    },
+    {
+      "path": "resources/styles/common.less",
+      "size": 2481,
+      "hash": "01df8ee052a9c3b56879e0d1f03644162a6e434a3d4bed956d711d8b48a8fed1"
+    },
+    {
+      "path": "resources/styles/index.less",
+      "size": 584,
+      "hash": "6a9ebcccb877a7cc2966cc6e35c5d2acbe13903ca98c7279405f3b64454eeaf1"
+    },
+    {
+      "path": "resources/styles/themes/dark.less",
+      "size": 195,
+      "hash": "3775ec978eb2927b53b105306a3e2d8d742f38c014ca6f17fd6dab9e119a5171"
+    },
+    {
+      "path": "resources/styles/themes/light.less",
+      "size": 198,
+      "hash": "6ec5701189fb8f03f7dc740eaeb712c789026b4577b4db11df21d81cd6d41c0c"
+    },
+    {
+      "path": "resources/styles/themes/theme-vars.less",
+      "size": 2913,
+      "hash": "d260a241af3bb186c18214b8a7f644fb71096a2153ce316305eaf2e719f545e6"
+    }
+  ],
+  "validation": {
+    "semantics": "passed",
+    "sfc": "passed",
+    "less": "passed",
+    "runtime": "pending"
+  }
+}

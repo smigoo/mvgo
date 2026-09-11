@@ -1,0 +1,654 @@
+.dark .c-monitor-root {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  padding: 12px;
+  box-sizing: border-box;
+}
+.dark .c-monitor-main {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
+}
+.dark .c-monitor-status-panel,
+.dark .c-monitor-detail-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  gap: 8px;
+}
+.dark .c-monitor-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px;
+}
+.dark .c-monitor-panel-title {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+  color: #e0e6ed;
+}
+.dark .c-monitor-chart-wrapper {
+  flex: 1;
+  min-height: 200px;
+  width: 100%;
+}
+.dark .c-monitor-list-wrapper {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+}
+.dark .c-device-stats-root {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+.dark .c-device-stats-summary {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+  min-width: 0;
+}
+.dark .c-device-stats-summary-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 1px;
+}
+.dark .c-device-stats-summary-label {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 21px;
+  color: #e0e6ed;
+  white-space: nowrap;
+}
+.dark .c-device-stats-summary-value {
+  font-family: 'Roboto', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 23.4375px;
+  white-space: nowrap;
+}
+.dark .c-device-stats-value-primary {
+  color: #4da3ff;
+}
+.dark .c-device-stats-value-success {
+  color: #2fd1c3;
+}
+.dark .c-device-stats-summary-icon {
+  width: 16px;
+  height: 16px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.dark .c-device-stats-cards {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+.dark .c-device-stats-card {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  padding: 15px;
+  border-radius: 8px;
+  flex: 1 1 260px;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.dark .c-device-stats-card-active {
+  background: linear-gradient(270deg, #1f5fa8 0%, #4da3ff 100%);
+}
+.dark .c-device-stats-card-default {
+  background: #1e2a3a;
+}
+.dark .c-device-stats-card-icon {
+  width: 35px;
+  height: 28px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.dark .c-device-stats-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.dark .c-device-stats-card-title {
+  font-family: 'YouSheBiaoTiHei', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 15.6px;
+  white-space: nowrap;
+}
+.dark .c-device-stats-card-active .c-device-stats-card-title {
+  color: #ffffff;
+}
+.dark .c-device-stats-card-default .c-device-stats-card-title {
+  color: #e0e6ed;
+}
+.dark .c-device-stats-card-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 1px;
+}
+.dark .c-device-stats-card-label {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 21px;
+  white-space: nowrap;
+}
+.dark .c-device-stats-card-active .c-device-stats-card-label {
+  color: #ffffff;
+}
+.dark .c-device-stats-card-default .c-device-stats-card-label {
+  color: #a0a6b3;
+}
+.dark .c-device-stats-card-total {
+  font-family: 'Roboto', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 23.4375px;
+  white-space: nowrap;
+}
+.dark .c-device-stats-card-abnormal {
+  font-family: 'Roboto', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 18.75px;
+  color: #ff6b6b;
+  white-space: nowrap;
+}
+.dark .c-device-status-chart {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dark .c-device-status-chart__container {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+.dark .c-monitor-device-list {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  gap: 10px;
+}
+.dark .c-monitor-sidebar-tabs {
+  width: 46px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dark .c-monitor-tab-item {
+  width: 46px;
+  min-height: 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 4px;
+  position: relative;
+  transition: all 0.3s;
+  gap: 2px;
+}
+.dark .c-monitor-tab-item.is-active {
+  background: linear-gradient(270deg, #1f5fa8 0%, #4da3ff 100%);
+}
+.dark .c-monitor-tab-item.is-active .c-monitor-tab-text {
+  color: #ffffff;
+  font-weight: 700;
+}
+.dark .c-monitor-tab-item.is-active .c-monitor-tab-badge {
+  color: #ffffff;
+}
+.dark .c-monitor-tab-text {
+  font-size: 14px;
+  color: #e0e6ed;
+  font-weight: 400;
+  line-height: 18px;
+  text-align: center;
+}
+.dark .c-monitor-tab-badge {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 14px;
+  text-align: center;
+  color: #e0e6ed;
+}
+.dark .c-monitor-tab-badge.is-danger {
+  background: #ff6b6b;
+  color: #ffffff;
+  border-radius: 7px;
+  padding: 0 4px;
+  min-width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+.dark .c-monitor-device-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  align-content: start;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.dark .c-monitor-device-item {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  background: linear-gradient(135deg, rgba(30, 42, 58, 0.8) 0%, rgba(24, 35, 50, 0.6) 100%);
+  border: 1px solid rgba(77, 163, 255, 0.2);
+  border-radius: 4px;
+  gap: 8px;
+  position: relative;
+}
+.dark .c-monitor-device-item::before,
+.dark .c-monitor-device-item::after {
+  content: '';
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border: 1px solid #4da3ff;
+}
+.dark .c-monitor-device-item::before {
+  top: -1px;
+  left: -1px;
+  border-right: none;
+  border-bottom: none;
+}
+.dark .c-monitor-device-item::after {
+  bottom: -1px;
+  right: -1px;
+  border-left: none;
+  border-top: none;
+}
+.dark .c-monitor-device-icon {
+  width: 27px;
+  height: 32px;
+  flex-shrink: 0;
+}
+.dark .c-monitor-device-info {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+.dark .c-monitor-device-name {
+  font-size: 12px;
+  color: #e0e6ed;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dark .c-monitor-device-value {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 19px;
+}
+.dark .c-monitor-device-value.is-danger {
+  color: #ff6b6b;
+}
+.dark .c-monitor-device-value.is-success {
+  color: #2fd1c3;
+}
+.light .c-monitor-root {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  padding: 12px;
+  box-sizing: border-box;
+}
+.light .c-monitor-main {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
+}
+.light .c-monitor-status-panel,
+.light .c-monitor-detail-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  gap: 8px;
+}
+.light .c-monitor-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px;
+}
+.light .c-monitor-panel-title {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+  color: #333333;
+}
+.light .c-monitor-chart-wrapper {
+  flex: 1;
+  min-height: 200px;
+  width: 100%;
+}
+.light .c-monitor-list-wrapper {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+}
+.light .c-device-stats-root {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+.light .c-device-stats-summary {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+  min-width: 0;
+}
+.light .c-device-stats-summary-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 1px;
+}
+.light .c-device-stats-summary-label {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 21px;
+  color: #333333;
+  white-space: nowrap;
+}
+.light .c-device-stats-summary-value {
+  font-family: 'Roboto', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 23.4375px;
+  white-space: nowrap;
+}
+.light .c-device-stats-value-primary {
+  color: #1990ff;
+}
+.light .c-device-stats-value-success {
+  color: #08a3a5;
+}
+.light .c-device-stats-summary-icon {
+  width: 16px;
+  height: 16px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.light .c-device-stats-cards {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+.light .c-device-stats-card {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  padding: 15px;
+  border-radius: 8px;
+  flex: 1 1 260px;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.light .c-device-stats-card-active {
+  background: linear-gradient(270deg, #318aff 0%, #70bfff 100%);
+}
+.light .c-device-stats-card-default {
+  background: #f0f5ff;
+}
+.light .c-device-stats-card-icon {
+  width: 35px;
+  height: 28px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.light .c-device-stats-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.light .c-device-stats-card-title {
+  font-family: 'YouSheBiaoTiHei', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 15.6px;
+  white-space: nowrap;
+}
+.light .c-device-stats-card-active .c-device-stats-card-title {
+  color: #ffffff;
+}
+.light .c-device-stats-card-default .c-device-stats-card-title {
+  color: #333333;
+}
+.light .c-device-stats-card-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 1px;
+}
+.light .c-device-stats-card-label {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 21px;
+  white-space: nowrap;
+}
+.light .c-device-stats-card-active .c-device-stats-card-label {
+  color: #ffffff;
+}
+.light .c-device-stats-card-default .c-device-stats-card-label {
+  color: #666666;
+}
+.light .c-device-stats-card-total {
+  font-family: 'Roboto', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 23.4375px;
+  white-space: nowrap;
+}
+.light .c-device-stats-card-abnormal {
+  font-family: 'Roboto', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 18.75px;
+  color: #f53f3f;
+  white-space: nowrap;
+}
+.light .c-device-status-chart {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.light .c-device-status-chart__container {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+.light .c-monitor-device-list {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  gap: 10px;
+}
+.light .c-monitor-sidebar-tabs {
+  width: 46px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.light .c-monitor-tab-item {
+  width: 46px;
+  min-height: 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 4px;
+  position: relative;
+  transition: all 0.3s;
+  gap: 2px;
+}
+.light .c-monitor-tab-item.is-active {
+  background: linear-gradient(270deg, #318aff 0%, #70bfff 100%);
+}
+.light .c-monitor-tab-item.is-active .c-monitor-tab-text {
+  color: #ffffff;
+  font-weight: 700;
+}
+.light .c-monitor-tab-item.is-active .c-monitor-tab-badge {
+  color: #ffffff;
+}
+.light .c-monitor-tab-text {
+  font-size: 14px;
+  color: #333333;
+  font-weight: 400;
+  line-height: 18px;
+  text-align: center;
+}
+.light .c-monitor-tab-badge {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 14px;
+  text-align: center;
+  color: #333333;
+}
+.light .c-monitor-tab-badge.is-danger {
+  background: #f53f3f;
+  color: #ffffff;
+  border-radius: 7px;
+  padding: 0 4px;
+  min-width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+.light .c-monitor-device-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  align-content: start;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.light .c-monitor-device-item {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.8) 0%, rgba(237, 244, 251, 0.6) 100%);
+  border: 1px solid rgba(25, 144, 255, 0.2);
+  border-radius: 4px;
+  gap: 8px;
+  position: relative;
+}
+.light .c-monitor-device-item::before,
+.light .c-monitor-device-item::after {
+  content: '';
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border: 1px solid #1990ff;
+}
+.light .c-monitor-device-item::before {
+  top: -1px;
+  left: -1px;
+  border-right: none;
+  border-bottom: none;
+}
+.light .c-monitor-device-item::after {
+  bottom: -1px;
+  right: -1px;
+  border-left: none;
+  border-top: none;
+}
+.light .c-monitor-device-icon {
+  width: 27px;
+  height: 32px;
+  flex-shrink: 0;
+}
+.light .c-monitor-device-info {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+.light .c-monitor-device-name {
+  font-size: 12px;
+  color: #333333;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.light .c-monitor-device-value {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 19px;
+}
+.light .c-monitor-device-value.is-danger {
+  color: #f53f3f;
+}
+.light .c-monitor-device-value.is-success {
+  color: #08a3a5;
+}

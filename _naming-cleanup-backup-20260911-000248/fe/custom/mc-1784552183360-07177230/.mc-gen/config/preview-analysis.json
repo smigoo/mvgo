@@ -1,0 +1,221 @@
+{
+  "generatedAt": "2026-07-20T13:02:38.355Z",
+  "stage": "preview-analysis",
+  "componentName": "管辖范围统计面板",
+  "description": "用于展示交通或工程项目的管辖范围统计数据，包括主线长度、隧道、桥梁和工区的数量。采用深色科技风设计。",
+  "figmaStructure": {
+    "root": {
+      "name": "管辖范围",
+      "size": "460x138",
+      "children": [
+        {
+          "name": "header",
+          "type": "container",
+          "size": "460x34",
+          "description": "顶部标题栏，包含装饰线、图标和标题文字。",
+          "elements": [
+            {
+              "name": "bg-decoration",
+              "type": "image",
+              "resourceFile": "../resources/images/分割线-1195.png",
+              "recommendedUsage": "decorativeBlock",
+              "description": "标题栏下方的分割装饰线。"
+            },
+            {
+              "name": "title-icon",
+              "type": "icon",
+              "resourceFile": "../resources/images/Group_4114-1199.png",
+              "variableName": "icongroup4114",
+              "recommendedUsage": "imgSrc",
+              "description": "标题左侧的蓝色菱形/方块组合图标。"
+            },
+            {
+              "name": "title-text",
+              "type": "text",
+              "content": "管辖范围",
+              "style": {
+                "color": "rgba(255,255,255,1)",
+                "fontSize": "16px",
+                "fontWeight": "bold"
+              }
+            }
+          ]
+        },
+        {
+          "name": "content-area",
+          "type": "container",
+          "size": "460x104",
+          "backgroundResource": "../resources/images/bg-954.png",
+          "recommendedUsage": "backgroundStyle",
+          "layout": "horizontal",
+          "description": "数据展示区域，包含四个统计项。",
+          "children": [
+            {
+              "name": "stat-item-1",
+              "type": "group",
+              "description": "主线统计",
+              "elements": [
+                {
+                  "name": "icon-mainline",
+                  "type": "icon",
+                  "resourceFile": "../resources/images/icon-1955.png",
+                  "recommendedUsage": "imgSrc",
+                  "description": "主线/高速公路图标。"
+                },
+                {
+                  "name": "label",
+                  "type": "text",
+                  "content": "主线"
+                },
+                {
+                  "name": "value",
+                  "type": "text",
+                  "content": "185.6",
+                  "style": {
+                    "fontSize": "24px",
+                    "fontWeight": "bold",
+                    "color": "#fff"
+                  }
+                },
+                {
+                  "name": "unit",
+                  "type": "text",
+                  "content": "km"
+                }
+              ]
+            },
+            {
+              "name": "stat-item-2",
+              "type": "group",
+              "description": "隧道统计",
+              "elements": [
+                {
+                  "name": "icon-tunnel",
+                  "type": "icon",
+                  "resourceFile": "../resources/images/icon-1958.png",
+                  "recommendedUsage": "imgSrc",
+                  "description": "隧道图标。"
+                },
+                {
+                  "name": "label",
+                  "type": "text",
+                  "content": "隧道"
+                },
+                {
+                  "name": "value",
+                  "type": "text",
+                  "content": "1",
+                  "style": {
+                    "fontSize": "24px",
+                    "fontWeight": "bold",
+                    "color": "#fff"
+                  }
+                },
+                {
+                  "name": "unit",
+                  "type": "text",
+                  "content": "条"
+                }
+              ]
+            },
+            {
+              "name": "stat-item-3",
+              "type": "group",
+              "description": "桥梁统计",
+              "elements": [
+                {
+                  "name": "icon-bridge",
+                  "type": "icon",
+                  "resourceFile": "../resources/images/icon-1961.png",
+                  "recommendedUsage": "imgSrc",
+                  "description": "桥梁图标。"
+                },
+                {
+                  "name": "label",
+                  "type": "text",
+                  "content": "桥"
+                },
+                {
+                  "name": "value",
+                  "type": "text",
+                  "content": "3",
+                  "style": {
+                    "fontSize": "24px",
+                    "fontWeight": "bold",
+                    "color": "#fff"
+                  }
+                },
+                {
+                  "name": "unit",
+                  "type": "text",
+                  "content": "座"
+                }
+              ]
+            },
+            {
+              "name": "stat-item-4",
+              "type": "group",
+              "description": "工区统计",
+              "elements": [
+                {
+                  "name": "icon-workarea",
+                  "type": "icon",
+                  "resourceFile": "../resources/images/icon-1964.png",
+                  "recommendedUsage": "imgSrc",
+                  "description": "工区/房子图标。"
+                },
+                {
+                  "name": "label",
+                  "type": "text",
+                  "content": "工区"
+                },
+                {
+                  "name": "value",
+                  "type": "text",
+                  "content": "1",
+                  "style": {
+                    "fontSize": "24px",
+                    "fontWeight": "bold",
+                    "color": "#fff"
+                  }
+                },
+                {
+                  "name": "unit",
+                  "type": "text",
+                  "content": "个"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "headerSlots": [
+    {
+      "slotType": "#title-left",
+      "elementType": "icon",
+      "content": "Group_4114-1199.png",
+      "figmaNodeId": "Group 4114"
+    }
+  ],
+  "visualStyle": {
+    "theme": "dark-tech",
+    "primaryColor": "rgba(24,255,206,1)",
+    "backgroundColor": "rgba(5,49,51,1)",
+    "textColor": "rgba(255,255,255,1)"
+  },
+  "styles": {
+    "theme": "dark-tech",
+    "primaryColor": "rgba(24,255,206,1)",
+    "backgroundColor": "rgba(5,49,51,1)",
+    "textColor": "rgba(255,255,255,1)"
+  },
+  "layout": {
+    "type": "vertical",
+    "direction": "top-to-bottom",
+    "sections": []
+  },
+  "interactions": [],
+  "charts": []
+}

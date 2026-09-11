@@ -1,0 +1,426 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 72,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[2] (left-nav)",
+        "message": "左侧导航(left-nav)作为独立section与stats-banner/device-grid并列，但三者实为同一视图层的平级兄弟，缺少外层容器描述水平组合关系，父子关系语义不完整。",
+        "suggestion": "在layout下增加一个horizontal容器section，将left-nav与右侧内容区(stats-banner+device-grid)的垂直组合包裹为两列结构，明确水平分栏关系。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0].body (stats-banner) & headerSlots",
+        "message": "global-stats中的3项统计(设备类型/设备总数/完好率)同时出现在stats-banner的body.children和headerSlots中，存在内容重复定义，会导致实现时数据来源歧义。",
+        "suggestion": "明确统计数据归属：若已放入headerSlots映射到base-panel标题栏，则stats-banner的global-stats子组应移除或调整为不同内容，避免双重声明。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[1].body.items[*].content.elements",
+        "message": "device-card嵌套路径为sections→body→items→content→elements，实际深度达5层，超出建议的3层上限，且content与elements两层均为layout:vertical，存在冗余包装。",
+        "suggestion": "将content层合并，device-card直接持有elements数组，消除中间content容器层，降至4层以内。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[0].body, sections[1].body, sections[2].body",
+        "message": "三个section的body均引用同一张背景图bg-8788.png，但其中device-grid(浅色卡片区域)使用深色科技背景图在视觉上存在矛盾，且重复声明backgroundImage增加维护成本。",
+        "suggestion": "将公共背景图提升到layout根节点统一声明，device-grid根据实际视觉需要单独设置或置空backgroundImage。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "覆盖率仅36%，missing列表中包含顶层FRAME(cp-设备监测)及switch切换组件(active/default状态组)，说明统计横幅中的切换交互态结构未在layout中体现。",
+        "suggestion": "在tunnel-stats/bridge-stats的stat-card中补充states字段(active/default)，对应Figma的switch组件两种状态，提升结构覆盖率。"
+      }
+    ],
+    "recommendations": [
+      "补充整体两列容器：在layout.sections外层增加horizontal分栏描述，明确left-nav与主内容区的左右布局关系，使结构能直接映射为flex-row容器。",
+      "统一异常数据字段：tunnel-stats和bridge-stats的abnormalCount当前值为字符串'3'，但coverageReport missing中d-5(异常数:5)与之不符，需核查数据来源并统一为数值类型。",
+      "为device-card补充状态语义：大部分设备在线数为0，建议在device-card的styles或新增status字段中区分'正常/离线/异常'三种视觉状态，支持后续条件渲染逻辑。"
+    ],
+    "summary": "整体布局意图清晰，3列设备网格与统计横幅结构合理，但缺少水平分栏容器导致left-nav位置关系语义缺失，统计数据双重定义与低覆盖率(36%)是主要风险点，需重点修正。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1890ff",
+      "--colorPrimaryLight": "#00d4ff",
+      "--colorPrimaryMedium": "#4A9EFF",
+      "--colorPrimaryBright": "#5EBBFF",
+      "--colorError": "#ff4d4f",
+      "--colorTextDark": "rgba(51,51,51,0.85)",
+      "--colorTextLight": "rgba(255,255,255,0.9)",
+      "--colorBgBase": "#f0f5f9",
+      "--colorBgGradientStart": "#e8f4ff",
+      "--colorBgGradientEnd": "#f0f5f9",
+      "--colorBannerGradientStart": "#1890ff",
+      "--colorBannerGradientEnd": "#00d4ff",
+      "--colorCardBg": "rgba(255,255,255,0.9)",
+      "--colorCardBorder": "rgba(24,144,255,0.15)",
+      "--colorNavBg": "#1890ff",
+      "--colorBadgeBg": "#ff4d4f",
+      "--colorIconTint": "#1890ff",
+      "--colorShadowCard": "rgba(24,144,255,0.08)",
+      "--borderRadiusBase": "8px",
+      "--borderRadiusLarge": "12px",
+      "--fontSize": "14px",
+      "--fontSizeLarge": "16px",
+      "--fontSizeXL": "24px",
+      "--fontSizeXXL": "32px",
+      "--fontWeightNormal": "400",
+      "--fontWeightMedium": "500",
+      "--fontWeightBold": "600",
+      "--spacingBase": "16px",
+      "--spacingSmall": "8px",
+      "--spacingLarge": "24px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#1890ff",
+      "@color-primary-light": "#00d4ff",
+      "@color-primary-medium": "#4A9EFF",
+      "@color-primary-bright": "#5EBBFF",
+      "@color-error": "#ff4d4f",
+      "@color-text-dark": "rgba(51,51,51,0.85)",
+      "@color-text-light": "rgba(255,255,255,0.9)",
+      "@color-bg-base": "#f0f5f9",
+      "@color-bg-gradient-start": "#e8f4ff",
+      "@color-bg-gradient-end": "#f0f5f9",
+      "@color-banner-gradient-start": "#1890ff",
+      "@color-banner-gradient-end": "#00d4ff",
+      "@color-card-bg": "rgba(255,255,255,0.9)",
+      "@color-card-border": "rgba(24,144,255,0.15)",
+      "@color-nav-bg": "#1890ff",
+      "@color-badge-bg": "#ff4d4f",
+      "@color-icon-tint": "#1890ff",
+      "@color-shadow-card": "rgba(24,144,255,0.08)",
+      "@border-radius-base": "8px",
+      "@border-radius-large": "12px",
+      "@font-size-base": "14px",
+      "@font-size-large": "16px",
+      "@font-size-xl": "24px",
+      "@font-size-xxl": "32px",
+      "@font-weight-normal": "400",
+      "@font-weight-medium": "500",
+      "@font-weight-bold": "600",
+      "@spacing-base": "16px",
+      "@spacing-small": "8px",
+      "@spacing-large": "24px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".page-container": {
+        "width": "100%",
+        "min-height": "100vh",
+        "background": "linear-gradient(180deg, #e8f4ff 0%, #f0f5f9 100%)",
+        "padding": "var(--spacingLarge)"
+      },
+      ".stats-banner": {
+        "display": "flex",
+        "align-items": "center",
+        "justify-content": "space-around",
+        "padding": "var(--spacingLarge)",
+        "background": "linear-gradient(135deg, #1890ff 0%, #00d4ff 100%)",
+        "border-radius": "var(--borderRadiusLarge)",
+        "box-shadow": "0 4px 16px rgba(24,144,255,0.2)",
+        "margin-bottom": "var(--spacingLarge)"
+      },
+      ".stat-item": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center",
+        "gap": "var(--spacingSmall)"
+      },
+      ".stat-label": {
+        "font-size": "var(--fontSize)",
+        "color": "var(--colorTextLight)",
+        "font-weight": "var(--fontWeightNormal)"
+      },
+      ".stat-value": {
+        "font-size": "var(--fontSizeXXL)",
+        "font-weight": "var(--fontWeightBold)",
+        "color": "var(--colorTextLight)"
+      },
+      ".stat-value-highlight": {
+        "color": "#00d4ff"
+      },
+      ".device-card": {
+        "background": "var(--colorCardBg)",
+        "border-radius": "var(--borderRadiusBase)",
+        "padding": "var(--spacingBase)",
+        "border": "1px solid var(--colorCardBorder)",
+        "box-shadow": "0 2px 8px var(--colorShadowCard)",
+        "transition": "all 0.3s ease"
+      },
+      ".device-card:hover": {
+        "transform": "translateY(-2px)",
+        "box-shadow": "0 4px 16px var(--colorShadowCard)"
+      },
+      ".device-icon": {
+        "width": "48px",
+        "height": "48px",
+        "display": "flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "background": "rgba(24,144,255,0.1)",
+        "border-radius": "var(--borderRadiusBase)",
+        "color": "var(--colorIconTint)"
+      },
+      ".left-nav": {
+        "position": "fixed",
+        "left": "0",
+        "top": "0",
+        "width": "80px",
+        "height": "100vh",
+        "background": "var(--colorNavBg)",
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center",
+        "padding": "var(--spacingLarge) 0",
+        "box-shadow": "2px 0 8px rgba(24,144,255,0.15)"
+      },
+      ".nav-item": {
+        "width": "56px",
+        "height": "56px",
+        "display": "flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "margin-bottom": "var(--spacingBase)",
+        "border-radius": "var(--borderRadiusBase)",
+        "cursor": "pointer",
+        "transition": "all 0.3s ease"
+      },
+      ".nav-item:hover": {
+        "background": "rgba(255,255,255,0.15)"
+      },
+      ".nav-item.active": {
+        "background": "rgba(255,255,255,0.2)"
+      },
+      ".badge": {
+        "position": "absolute",
+        "top": "-4px",
+        "right": "-4px",
+        "min-width": "20px",
+        "height": "20px",
+        "padding": "0 6px",
+        "background": "var(--colorBadgeBg)",
+        "color": "#ffffff",
+        "font-size": "12px",
+        "font-weight": "var(--fontWeightMedium)",
+        "border-radius": "10px",
+        "display": "flex",
+        "align-items": "center",
+        "justify-content": "center"
+      },
+      ".card-grid": {
+        "display": "grid",
+        "grid-template-columns": "repeat(auto-fill, minmax(280px, 1fr))",
+        "gap": "var(--spacingBase)",
+        "margin-top": "var(--spacingBase)"
+      },
+      ".text-primary": {
+        "color": "var(--colorPrimary)"
+      },
+      ".text-error": {
+        "color": "var(--colorError)"
+      },
+      ".text-dark": {
+        "color": "var(--colorTextDark)"
+      },
+      ".text-light": {
+        "color": "var(--colorTextLight)"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调#1890ff映射为--colorPrimary，用于导航栏、图标、边框等",
+      "亮蓝色#00d4ff映射为--colorPrimaryLight，用于设备总数高亮显示",
+      "红色#ff4d4f映射为--colorError，专用于异常数量徽章",
+      "浅灰蓝渐变背景直接落地为linear-gradient(180deg, #e8f4ff 0%, #f0f5f9 100%)",
+      "统计横幅渐变背景直接落地为linear-gradient(135deg, #1890ff 0%, #00d4ff 100%)",
+      "设备卡片使用半透明白色背景rgba(255,255,255,0.9)配合浅蓝阴影rgba(24,144,255,0.08)",
+      "左侧导航栏使用纯蓝色背景#1890ff，导航项hover态使用白色半透明遮罩",
+      "所有圆角统一使用8px基础值和12px大尺寸值",
+      "字体大小分为4个层级：14px基础、16px大、24px超大、32px特大",
+      "异常徽章使用绝对定位配合红色背景，确保视觉突出"
+    ],
+    "elementStyleMap": {
+      "stats-banner": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "global-stats": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "el-el-x-10": {
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "device-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-2": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-3": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-4": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-5": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-6": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-7": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-8": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-9": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-10": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-11": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-12": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "left-nav": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-48": {
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "stats-banner",
+        "responsibility": "数据统计指标区（数字+标签+趋势）",
+        "elementCount": 6,
+        "title": "统计横幅",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 6,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 2
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "device-grid",
+        "responsibility": "网格卡片布局区",
+        "elementCount": 0,
+        "title": "设备网格",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 0,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 0
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "left-nav",
+        "responsibility": "竖向导航区（分类/菜单切换）",
+        "elementCount": 6,
+        "title": "左侧导航",
+        "complexityScore": 20,
+        "complexityReasons": {
+          "elementCount": 6,
+          "charts": 0,
+          "interactions": 6,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 或存在高复杂度 section → 强制拆分",
+    "internalSubcomponents": []
+  }
+}

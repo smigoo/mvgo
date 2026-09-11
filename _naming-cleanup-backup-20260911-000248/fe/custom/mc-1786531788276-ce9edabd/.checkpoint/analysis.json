@@ -1,0 +1,313 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 68,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "header-stats 区块包含 header.title='设备监测'，但根据微码规范，组件标题由 base-panel 通过 declare.json.componentName 自动渲染，禁止在组件内部重复生成标题。此外 slotCandidate='header-right' 表明此区块应作为面板标题栏右侧插槽内容，但当前被定义为独立 section，结构定位矛盾。",
+        "suggestion": "移除 header-stats 的 header 字段，仅保留 body 作为统计指标内容。若设计意图是统计栏位于标题行右侧，应将其标记为面板插槽内容而非独立 section；若统计栏独占一行，则移除 slotCandidate 字段并去掉 header.title。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[0]",
+        "message": "左侧功能导航 sidebar-tabs 使用了固定宽度 width: 60，违反'容器布局禁止固定宽度'规范。当组件容器宽度变化时，固定 60px 会导致比例失调或空间浪费。",
+        "suggestion": "将 width: 60 改为 flex 比例或 min-width/max-width 约束，例如 width: 'auto', minWidth: 56, maxWidth: 80，或使用 flex: '0 0 60px' 配合父容器 overflow 处理。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[2].body.children[1].items[0].content.elements",
+        "message": "设备网格项的嵌套深度达到 5 层（section → body → grid-content → item → content → elements），超过建议的 ≤3 层限制。过深嵌套增加 DOM 节点数量和维护复杂度。",
+        "suggestion": "扁平化网格项结构，将 content.elements 合并为直接子节点。例如将 label 和 value 作为 item 的直接 children，减少 content 和 elements 中间层。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1]",
+        "message": "category-cards 区块 headerRelation='content-below-title' 但未定义 header 字段。虽然语义上表示'内容在标题下方'，但缺少 header 对象会导致代码生成时无法判断该区块是否有独立小标题。",
+        "suggestion": "明确补充 header 字段：若该区块无独立标题，设置 header: null 或 header: { title: null }；若有标题（如'分类统计'），则补充完整 header 对象。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2]",
+        "message": "device-grid-section 同样 headerRelation='content-below-title' 但无 header 字段，与 category-cards 存在相同问题。",
+        "suggestion": "同 category-cards，明确声明 header 字段以消除歧义。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[*].body.backgroundImage",
+        "message": "三个 section 的 body 均引用了相同的背景图 bg-8788.png，且均设置 backgroundSize: cover。重复引用同一背景图会增加资源解析负担，且 cover 模式在不同尺寸区块中可能产生不一致的裁切效果。",
+        "suggestion": "将公共背景图提升至根容器或统一背景层，各 section 设为透明背景。若各区块确需独立背景，应确认是否为同一张图的不同裁切区域，考虑使用 background-position 精确定位。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[1].items",
+        "message": "网格列表包含 12 个高度重复的 item 结构，每个 item 的 layout/styles/content 结构几乎一致，仅 icon、label、value 不同。当前以完整展开方式描述，导致 JSON 体积膨胀且不利于代码生成时采用 v-for 循环。",
+        "suggestion": "将 12 个 item 抽象为数据数组 + 模板结构。定义一个 itemTemplate 描述通用结构，items 仅保留差异数据（icon、label、value、abnormalCount、totalCount），代码生成时使用 v-for 渲染。"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "layout.sections[0].body.children[*]",
+        "message": "stat-item 内的子节点使用 type: 'label' 和 type: 'value' 作为类型标识，但未提供 id 或语义化 name，不利于样式定位和交互绑定。",
+        "suggestion": "为每个 stat-item 添加 id（如 'stat-device-type'、'stat-device-total'、'stat-intact-rate'），便于后续样式定制和事件绑定。"
+      }
+    ],
+    "recommendations": [
+      "将 header-stats 重新定位为面板 header 插槽内容或独立内容区块，消除 slotCandidate 与独立 section 的结构矛盾",
+      "侧边栏 Tab 导航改用 flex 弹性宽度或 min/max-width 约束，确保在不同屏幕尺寸下自适应",
+      "设备网格项采用数据驱动模式：定义通用 item 模板 + 差异数据数组，生成时使用 v-for 循环，减少 80% 以上的重复 JSON 结构",
+      "统一背景图管理：提取公共背景至根容器，或为每个 section 指定不同的背景资源/定位",
+      "为所有 section 显式声明 header 字段（即使为 null），确保 headerRelation 语义完整可解析",
+      "网格项嵌套层级扁平化，将 content.elements 提升为 item 直接子节点，降低 DOM 深度"
+    ],
+    "summary": "布局整体结构清晰，三段式分区（顶部统计→分类卡片→设备网格）符合信息层级逻辑，Grid 布局用于设备列表合理。但存在几个关键问题：1) header-stats 区块的结构定位矛盾（既是独立 section 又标记为 header 插槽）且重复生成组件标题；2) 侧边栏固定宽度违反自适应规范；3) 网格项嵌套过深且高度重复，不利于代码生成和维护；4) 背景图重复引用。建议重点修复 header 结构矛盾和固定宽度问题，同时抽象网格项为数据驱动模式以大幅提升可维护性。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1990FF",
+      "--colorSecondary": "#08A3A5",
+      "--colorDanger": "#F53F3F",
+      "--colorTextBase": "#333333",
+      "--colorBgBase": "#EDF4FB",
+      "--fontSize": "14px",
+      "--fontSizeLarge": "24px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#1990FF",
+      "@color-secondary": "#08A3A5",
+      "@color-danger": "#F53F3F",
+      "@color-text-base": "#333333",
+      "@color-bg-base": "#EDF4FB",
+      "@font-size-base": "14px",
+      "@font-size-large": "24px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "16px",
+        "background-color": "#EDF4FB",
+        "color": "#333333",
+        "font-size": "14px"
+      },
+      ".top-card": {
+        "background": "linear-gradient(135deg, #1990FF 0%, #08A3A5 100%)",
+        "border-radius": "8px",
+        "padding": "20px",
+        "color": "#ffffff"
+      },
+      ".tab-active": {
+        "background-color": "#1990FF",
+        "color": "#ffffff",
+        "border-radius": "4px"
+      },
+      ".text-danger": {
+        "color": "#F53F3F",
+        "font-weight": "bold"
+      },
+      ".text-primary-large": {
+        "color": "#1990FF",
+        "font-size": "24px",
+        "font-weight": "bold"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 #1990FF 映射为 --colorPrimary，用于左侧Tab选中态和设备总数强调",
+      "辅助色 #08A3A5 映射为 --colorSecondary，与主色结合形成顶部大卡片渐变背景",
+      "异常高亮色 #F53F3F 映射为 --colorDanger，用于异常数值红色高亮",
+      "基础文本色 #333333 映射为 --colorTextBase",
+      "浅蓝灰背景 #EDF4FB 映射为 --colorBgBase，作为全局容器背景",
+      "设备总数使用 --colorPrimary 配合 --fontSizeLarge 实现蓝色大号字体强调"
+    ],
+    "elementStyleMap": {
+      "header-stats": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-stat-item-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-el-x-2-stat-item-x-1": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-el-x-2-stat-item-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-stat-item-x-3": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-stat-item-x-6": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-stat-item-x-9": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "card-tunnel-row-x-0-text-group-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-tunnel-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "card-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-north-south-row-x-0-text-group-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-north-south-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "card-north-south": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-13": {
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-row-x-15-text-group-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-15": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-text-group-x-17": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-22-text-group-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-22": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-text-group-x-24": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-grid-section": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "sidebar-tabs": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-29": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-el-x-38": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-el-x-41": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-el-x-44": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-el-x-47": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-el-x-50": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-el-x-53": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-el-x-56": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-el-x-59": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-el-x-62": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-el-x-65": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-el-x-68": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-el-x-71": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      }
+    }
+  }
+}

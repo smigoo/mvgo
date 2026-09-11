@@ -1,0 +1,22 @@
+// resources/styles/themes/theme-vars.less
+// 微码规范 M2-4：themes 目录必须提供主题变量文件 theme-vars.less
+// 作用：集中定义与主题无关的基础变量（圆角 / 间距 / 字号），
+//      供 light.less / dark.less 及各组件样式统一引用，
+//      与 resources/config/css-vars.js 中的 common 对象保持一致。
+
+:root {
+  // 圆角
+  --mc-radius: 4px;
+
+  // 间距
+  --mc-spacing-xs: 4px;
+  --mc-spacing-sm: 8px;
+  --mc-spacing-md: 12px;
+  --mc-spacing-lg: 16px;
+
+  // 字号（规范要求：样式文件禁止硬编码字号，统一引用此变量）
+  --mc-font-size-xs: 9px;
+  --mc-font-size-sm: 11px;
+  --mc-font-size-md: 14px;
+  --mc-font-size-lg: 16px;
+}

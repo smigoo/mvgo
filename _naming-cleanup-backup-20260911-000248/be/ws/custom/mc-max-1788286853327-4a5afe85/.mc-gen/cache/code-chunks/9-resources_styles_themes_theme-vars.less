@@ -1,0 +1,65 @@
+// 主题变量定义文件
+// 包含三个 mixin：.common()、.theme-dark()、.theme-light()
+// 由系统生成的 dark.less/light.less 会在主题选择器内调用对应 mixin
+
+.common() {
+  // 字体缩放基准令牌（根容器通过 CSS 变量 --fontSize 驱动，默认 14px）
+  @fontSize: 14px;
+  
+  // 基础字体尺寸
+  @font-size-base: 14px;
+  @font-size-title: 16px;
+  @font-size-value: 20px;
+  
+  // 基础圆角
+  @border-radius-base: 4px;
+  @border-radius-card: 8px;
+  
+  // 基础间距
+  @spacing-base: 8px;
+  @spacing-card: 16px;
+}
+
+.theme-light() {
+  // 主题色（从 Figma 精确提取）
+  @color-primary: rgba(8, 163, 165, 1);
+  @color-primary-light: rgba(89, 196, 255, 1);
+  @color-success: rgba(8, 163, 165, 1);
+  @color-error: rgba(255, 59, 48, 1);
+  
+  // 文字颜色
+  @color-text-base: rgba(51, 51, 51, 1);
+  @color-text-secondary: rgba(89, 196, 255, 1);
+  @color-text-white: rgba(255, 255, 255, 1);
+  
+  // 背景色
+  @color-bg-base: rgba(255, 255, 255, 1);
+  @color-bg-gray: rgba(245, 245, 245, 1);
+  @color-bg-card: rgba(255, 255, 255, 1);
+  @color-bg-nav: rgba(89, 196, 255, 0.2);
+  
+  // 边框色
+  @color-border-base: rgba(217, 217, 217, 1);
+}
+
+.theme-dark() {
+  // 主题色（深色模式）
+  @color-primary: rgba(8, 163, 165, 1);
+  @color-primary-light: rgba(89, 196, 255, 1);
+  @color-success: rgba(8, 163, 165, 1);
+  @color-error: rgba(255, 59, 48, 1);
+  
+  // 文字颜色（深色模式禁止使用黑色系）
+  @color-text-base: rgba(255, 255, 255, 0.85);
+  @color-text-secondary: rgba(89, 196, 255, 1);
+  @color-text-white: rgba(255, 255, 255, 1);
+  
+  // 背景色（深色模式）
+  @color-bg-base: rgba(26, 35, 50, 1);
+  @color-bg-gray: rgba(38, 47, 62, 1);
+  @color-bg-card: rgba(32, 41, 56, 1);
+  @color-bg-nav: rgba(89, 196, 255, 0.2);
+  
+  // 边框色（深色模式）
+  @color-border-base: rgba(255, 255, 255, 0.15);
+}

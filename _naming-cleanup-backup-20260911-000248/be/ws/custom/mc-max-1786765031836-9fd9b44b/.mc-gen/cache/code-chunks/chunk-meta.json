@@ -1,0 +1,23 @@
+{
+  "completed": [
+    "1-declare.json",
+    "2-package/index.vue",
+    "3-package/index.vue",
+    "4-package/index.vue",
+    "5-package/components/TotalStats.vue",
+    "7-package/components/VehicleDistribution.vue",
+    "6-package/components/FlowTrend.vue",
+    "8-resources/styles/common.less,resources/styles/themes/theme-vars.less"
+  ],
+  "total": 6,
+  "updatedAt": 1786765652352,
+  "files": {
+    "declare.json": "1-declare.json",
+    "package/index.vue": "4-package_index.vue",
+    "package/components/TotalStats.vue": "5-package_components_TotalStats.vue",
+    "package/components/VehicleDistribution.vue": "7-package_components_VehicleDistribution.vue",
+    "package/components/FlowTrend.vue": "6-package_components_FlowTrend.vue",
+    "resources/styles/themes/theme-vars.less": "8-resources_styles_themes_theme-vars.less",
+    "resources/styles/common.less": "8-resources_styles_common.less"
+  }
+}

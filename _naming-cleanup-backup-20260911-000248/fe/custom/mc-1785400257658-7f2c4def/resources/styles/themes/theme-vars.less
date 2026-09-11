@@ -1,0 +1,68 @@
+.common() {
+@bg-color: #edf4fb;
+  @text-color-primary: #333333;
+  @text-color-title: #1990ff;
+  @text-color-title-end: rgba(90, 126, 255, 0.83);
+  @text-color-stat-blue: #1990ff;
+  @text-color-stat-green: #08a3a5;
+  @text-color-switch-active: #ffffff;
+  @text-color-switch-default: #333333;
+  @text-color-tab-active: #ffffff;
+  @text-color-tab-default: #3b80e6;
+  @text-color-card-value: #ffffff;
+  @text-color-update: #1990ff;
+  @border-color: rgba(74, 117, 141, 0.25);
+  @shadow-panel: 0 4px 10px 0 rgba(74, 117, 141, 0.25);
+  @border-gradient-header: linear-gradient(90deg, rgba(54, 119, 248, 0.3), transparent);
+  @bg-tab-active: linear-gradient(180deg, #318aff, #70bfff);
+  @bg-tab-default: linear-gradient(180deg, #85baff, #bfe2ff);
+  @border-color-tab: #f0f4ff;
+  @click: inherit; // 自动添加
+}
+
+.theme-dark() {
+  @bg-color: #1a2332;
+  @text-color-primary: #e0e6ed;
+  @text-color-title: #4facfe;
+  @text-color-title-end: rgba(0, 242, 254, 0.83);
+  @text-color-stat-blue: #4facfe;
+  @text-color-stat-green: #43e97b;
+  @text-color-switch-active: #ffffff;
+  @text-color-switch-default: #a0aec0;
+  @text-color-tab-active: #ffffff;
+  @text-color-tab-default: #a0aec0;
+  @text-color-card-value: #ffffff;
+  @text-color-update: #4facfe;
+  @border-color: rgba(255, 255, 255, 0.1);
+  @shadow-panel: 0 4px 10px 0 rgba(0, 0, 0, 0.3);
+  @border-gradient-header: linear-gradient(90deg, rgba(79, 172, 254, 0.3), transparent);
+  @bg-tab-active: linear-gradient(180deg, #318aff, #70bfff);
+  @bg-tab-default: linear-gradient(180deg, #85baff, #bfe2ff);
+  @border-color-tab: rgba(255, 255, 255, 0.2);
+}
+
+.theme-light() {
+  @bg-color: #edf4fb;
+  @text-color-primary: #333333;
+  @text-color-title: #1990ff;
+  @text-color-title-end: rgba(90, 126, 255, 0.83);
+  @text-color-stat-blue: #1990ff;
+  @text-color-stat-green: #08a3a5;
+  @text-color-switch-active: #ffffff;
+  @text-color-switch-default: #333333;
+  @text-color-tab-active: #ffffff;
+  @text-color-tab-default: #3b80e6;
+  @text-color-card-value: #ffffff;
+  @text-color-update: #1990ff;
+  @border-color: rgba(74, 117, 141, 0.25);
+  @shadow-panel: 0 4px 10px 0 rgba(74, 117, 141, 0.25);
+  @border-gradient-header: linear-gradient(90deg, rgba(54, 119, 248, 0.3), transparent);
+  @bg-tab-active: linear-gradient(180deg, #318aff, #70bfff);
+  @bg-tab-default: linear-gradient(180deg, #85baff, #bfe2ff);
+  @border-color-tab: #f0f4ff;
+}
+
+:root {
+  .theme-light();
+  .common();
+}

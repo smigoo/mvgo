@@ -1,0 +1,77 @@
+// 业务样式文件 - 环境监测组件
+// 命名规范：所有 class 必须以 .c- 为前缀
+
+// 引入主题变量
+@import './themes/theme-vars.less';
+
+// 组件根容器
+.c-env-monitor-root {
+  // 字体缩放基准（微码组件必遵 - 支撑微前端整组件等比缩放）
+  font-size: var(--fontSize, 14px);
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  // 禁止设置背景/边框/阴影（base-panel 已提供面板外壳）
+}
+
+// Tab 切换栏容器
+.c-env-monitor-tabs-container {
+  flex-shrink: 0;
+  height: 26px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+// Tab 项（设计稿真值：非激活透明底灰字；激活态背景图由 index.vue 内联 var(--bg-tab-active) 提供，
+// 此处不写 url()——运行时编译的 CSS 相对 url 无法解析到 resources/images）
+.c-env-monitor-tab-item {
+  flex: none;
+  width: 79px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(@fontSize * 0.857);
+  font-weight: 400;
+  color: #9c9cb4;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color 0.2s;
+  user-select: none;
+
+  // 激活态样式
+  &.active {
+    color: #ffffff;
+    font-weight: 500;
+  }
+
+  // Hover 态（非激活时）
+  &:hover:not(.active) {
+    color: #6b6b85;
+  }
+}
+
+// 图表区域容器
+.c-env-monitor-chart-section {
+  flex: 1;
+  min-height: 0;
+  // elementStyleMap 明确指定为 flex column
+  display: flex;
+  flex-direction: column;
+}
+
+// 图表容器
+.c-env-monitor-chart-container {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  // 图表内容由 ECharts 渲染，不设置装饰性样式
+}

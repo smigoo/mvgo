@@ -1,0 +1,47 @@
+.common() {
+  @font-family-base: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+  @font-family-number: 'Roboto', sans-serif;
+  
+  @font-size-xs: 12px;
+  @font-size-sm: 14px;
+  @font-size-md: 16px;
+  @font-size-lg: 20px;
+  
+  @spacing-xs: 4px;
+  @spacing-sm: 8px;
+  @spacing-md: 12px;
+  @spacing-lg: 16px;
+  
+  @border-radius-sm: 4px;
+  @border-radius-md: 6px;
+  
+  @transition-base: all 0.3s;
+}
+
+.theme-light() {
+  @color-primary: #1990ff;
+  @color-danger: #f53f3f;
+  @color-success: #08a3a5;
+  @color-text-primary: #333333;
+  @color-text-secondary: #666666;
+  @color-text-placeholder: #999999;
+  @color-bg-base: #edf4fb;
+  @color-bg-card: #ffffff;
+  @color-border: rgba(0, 0, 0, 0.05);
+}
+
+.theme-dark() {
+  @color-primary: #1990ff;
+  @color-danger: #f53f3f;
+  @color-success: #08a3a5;
+  @color-text-primary: #ffffff;
+  @color-text-secondary: rgba(255, 255, 255, 0.8);
+  @color-text-placeholder: rgba(255, 255, 255, 0.5);
+  @color-bg-base: #1a2332;
+  @color-bg-card: #243042;
+  @color-border: rgba(255, 255, 255, 0.1);
+}
+
+// 全局调用默认主题（禁止调用 .theme-dark()）
+.theme-light();
+.common();

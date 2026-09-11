@@ -1,0 +1,144 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 35,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections",
+        "message": "sections 为空，未识别出任何实际业务区域，当前布局仅包含一个空的 vertical 根结构，无法支撑组件内容生成或布局还原。",
+        "suggestion": "需要重新进行预览图/设计稿解析，补充至少一个 section，并明确每个 section 的 header、body、内容模块、图表或列表等结构。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout",
+        "message": "布局分析结果处于 degraded 状态，degradeReason 为请求 524 超时，说明当前结构并非可靠的设计稿分析结果。",
+        "suggestion": "不建议基于该结果直接进入代码生成阶段，应重新请求 preview-analysis 或使用可用的 Figma/截图数据生成完整布局。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "styles",
+        "message": "styles 中 theme 为“未知”，colors、decorations、emphasis 均为空，background 为空，无法判断视觉层级、主题变量、背景亮度和关键强调色是否符合预览图。",
+        "suggestion": "补充主题识别结果、关键颜色、背景样式、字号层级和强调信息，尤其需要明确 dark/light 主题下的变量映射。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "interactions",
+        "message": "interactions 为空，无法判断是否存在 Tab、Select、图例点击、筛选等交互，也无法验证交互是否与数据或图表联动。",
+        "suggestion": "若设计稿中存在 Tab/Select/自定义图例等交互，应在结构中显式描述交互区域、状态字段和数据联动关系。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "charts",
+        "message": "charts 为空，无法判断是否存在图表；若实际预览图包含图表，则当前分析缺失图表类型、series、legendPosition、tooltip、grid 等必要信息。",
+        "suggestion": "重新识别图表区域，并补充 chart type、数据系列、legend 位置、自定义图例关系、tooltip trigger、grid.containLabel 等配置依据。"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "layout.sections",
+        "message": "由于没有 section 节点，无法评估区域命名是否清晰，也无法确认 section 内部是否正确区分 header 和 body。",
+        "suggestion": "为每个业务区域补充语义化 key/name，例如 overviewSection、trendChartSection、statusListSection，并明确 headerRelation。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout",
+        "message": "当前结构过于简化，虽然不存在 DOM 节点过多或嵌套过深问题，但这是由于结构缺失导致，不能视为性能设计合理。",
+        "suggestion": "在补全布局后再评估 DOM 层级、flex/grid 使用、自适应宽度、图表容器边界和 overflow 兜底策略。"
+      }
+    ],
+    "recommendations": [
+      "当前结果因 524 超时降级，建议直接判定为不可用于生成，重新执行布局分析。",
+      "补全 layout.sections，至少包含清晰的业务区域划分，并在 section 内明确 header/body 层级。",
+      "如果组件使用 base-panel，应避免把面板标题、边框、背景、阴影、根容器 padding 等重复纳入业务布局结构。",
+      "补充 styles 中的主题、颜色、背景、字号层级、强调色和装饰证据，避免后续生成时臆造卡片化样式。",
+      "若存在图表，应补充 charts 信息，包括图表类型、series、legendPosition、tooltip、grid.containLabel、自定义图例联动等字段。",
+      "若存在 Tab、Select、图例等交互，应补充 interactions，并明确状态字段与数据联动关系。",
+      "补全后需再次检查宽度自适应要求，避免固定宽度容器导致组件溢出。"
+    ],
+    "summary": "当前布局结构不具备可审查的完整性：分析结果处于 degraded 状态，sections 为空，样式、交互、图表信息均缺失。虽然根布局没有嵌套过深或冗余 DOM 的问题，但这是由于有效结构缺失造成的，无法证明其符合微码布局规范、可维护性和性能要求。建议拒绝该布局结果，重新进行设计稿/预览图分析后再进入生成阶段。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）；视觉元素未提供明确色值，依据backgroundBrightness=dark给出深色场景基础兜底变量",
+      "--colorPrimary": "#3677f8",
+      "--colorBg": "#0f0f0f",
+      "--colorPanelBg": "#1a1a2e",
+      "--colorTextBase": "#ffffff",
+      "--colorTextSecondary": "rgba(255, 255, 255, 0.65)",
+      "--colorBorder": "rgba(255, 255, 255, 0.12)",
+      "--fontSize": "14px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射；与CSS变量保持语义对应，可在theme-vars.less中作为回退值使用",
+      "@color-primary": "#3677f8",
+      "@color-bg": "#0f0f0f",
+      "@color-panel-bg": "#1a1a2e",
+      "@color-text-base": "#ffffff",
+      "@color-text-secondary": "rgba(255, 255, 255, 0.65)",
+      "@color-border": "rgba(255, 255, 255, 0.12)",
+      "@font-size-base": "14px",
+      "@border-radius-base": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类；适配未知主题但背景亮度为dark的基础样式",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "width": "100%",
+        "height": "100%",
+        "font-size": "var(--fontSize, @font-size-base)",
+        "color": "var(--colorTextBase, @color-text-base)",
+        "background": "var(--colorBg, @color-bg)",
+        "box-sizing": "border-box"
+      },
+      ".panel": {
+        "display": "flex",
+        "flex-direction": "column",
+        "border-radius": "var(--borderRadius, @border-radius-base)",
+        "background": "var(--colorPanelBg, @color-panel-bg)",
+        "border": "1px solid var(--colorBorder, @color-border)",
+        "color": "var(--colorTextBase, @color-text-base)",
+        "box-sizing": "border-box"
+      },
+      ".header": {
+        "display": "flex",
+        "justify-content": "space-between",
+        "align-items": "center",
+        "color": "var(--colorTextBase, @color-text-base)",
+        "font-size": "var(--fontSize, @font-size-base)",
+        "font-weight": "600"
+      },
+      ".content": {
+        "flex": "1",
+        "min-height": "0",
+        "color": "var(--colorTextSecondary, @color-text-secondary)"
+      },
+      ".text-primary": {
+        "color": "var(--colorTextBase, @color-text-base)"
+      },
+      ".text-secondary": {
+        "color": "var(--colorTextSecondary, @color-text-secondary)"
+      },
+      ".primary-emphasis": {
+        "color": "var(--colorPrimary, @color-primary)"
+      }
+    },
+    "tokenCoverage": 0.5,
+    "mappingNotes": [
+      "输入视觉元素中theme为未知，colors、decorations、emphasis均为空，因此无法从设计稿提取精确主题色，仅根据backgroundBrightness=dark生成深色基础兜底Token。",
+      "CSS变量均使用camelCase命名，如--colorTextBase、--colorPanelBg，符合微码平台注入规范。",
+      "Less变量与CSS变量建立语义对应关系，业务样式中建议使用var(--key, @fallback)形式。",
+      "容器背景映射为--colorBg，并提供#0f0f0f深色字面量回退，避免暗色背景缺失导致可读性问题。",
+      "由于原始视觉信息较少，Token覆盖率按可映射项backgroundBrightness占整体视觉字段的有效比例估算为0.5。"
+    ],
+    "elementStyleMap": {}
+  }
+}

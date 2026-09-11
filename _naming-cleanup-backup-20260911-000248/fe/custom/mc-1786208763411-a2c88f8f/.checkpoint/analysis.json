@@ -1,0 +1,216 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 65,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "🔴 违反 base-panel 约束，重复生成面板标题。`section-header` 的 `header.title` 和 `body.children[1]` 均包含 '环境监测' 标题文字。规范明确禁止在组件内容中重复生成面板标题，面板标题应由 `default-panel` 通过 `componentName` 自动处理。",
+        "suggestion": "移除 `section-header` 中的标题文字节点（`body.children[1]`）以及左侧的信号塔装饰图标，将面板标题完全交由 `base-panel` 渲染。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0].header & layout.sections[0].body.children[2]",
+        "message": "结构冗余与重复定义。`section-header` 的 `header.controls` 与 `body` 中的右侧操作图标组（`children[2]`）重复定义了完全相同的图标按钮（图表视图、列表视图带角标），会导致代码生成时产生冗余的 DOM 节点。",
+        "suggestion": "合并重复的操作按钮定义，统一保留在 `header.controls` 中，并删除 `body.children[2]` 的右侧操作图标组。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[*].body.backgroundImage",
+        "message": "背景图重复渲染。三个 section 的 `body` 均设置了相同的背景图 `bg-7890.png`。如果这是面板整体背景，应由 `base-panel` 处理；如果是内容区背景，应提取到父容器。在每个 section 重复设置会导致重复加载和渲染，影响性能。",
+        "suggestion": "移除各个 section 内部的背景图配置，将背景图统一配置在组件根容器，或直接由 `base-panel` 接管。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[0].config.yAxis",
+        "message": "图表语义错误。面积图的 Y 轴标签为 '辆'，但当前监测指标是 CO 浓度，单位应为 'ppm' 或 'mg/m³'。虽然 notes 中已提示可能是模板残留，但在布局结构中应直接修正。",
+        "suggestion": "将 Y 轴标签 '辆' 修正为 'ppm' 或其他符合 CO 浓度监测业务语义的单位。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body.children[1].styles.color",
+        "message": "样式证据存疑。标题文字颜色使用了 `linear-gradient(to right, #559eff, #ffffff)` 渐变。根据'零装饰原则'，需确认 Figma 数据中是否有明确的渐变证据，否则属于自行添加装饰样式。",
+        "suggestion": "核对 Figma 源文件，若无渐变证据，请改为纯色（如 `#ffffff` 或 `#559eff`）。"
+      }
+    ],
+    "recommendations": [
+      "删除 `section-header` 中的标题文字及左侧装饰图标，严格遵循 base-panel 约束，不重复生成面板标题和边框样式。",
+      "清理 `section-header` 中的重复操作按钮定义，统一放置在 `header.controls` 中，保持结构清晰。",
+      "移除各 section 内部的背景图配置，将背景图统一配置在组件根容器或由 `base-panel` 接管，避免性能浪费。",
+      "在代码生成阶段，必须为 Tab 切换（一氧化碳、能见度等）实现数据联动，使用 `watch` 监听状态并更新 ECharts 数据，禁止仅做样式切换。",
+      "修正图表 Y 轴单位，确保业务语义正确（将 '辆' 改为 'ppm'）。",
+      "代码生成时，严格遵守图片资源引用规范，禁止使用 ESM import 本地图片，必须改用 base64 内联或同源 URL 方式引入。"
+    ],
+    "summary": "该布局结构存在严重的规范违反和结构冗余问题。最突出的是重复生成了面板标题，违反了 base-panel 的 🔴 核心约束；同时 section-header 内部存在重复的按钮定义，且多个 section 重复设置背景图，影响性能和可维护性。此外，图表 Y 轴单位存在业务语义错误。建议重构布局结构，移除冗余节点，严格遵循微码组件规范后重新提交审查。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#559EFF",
+      "--colorBgBase": "#EDF4FB",
+      "--colorBgContainer": "#FFFFFF",
+      "--colorSuccess": "#52C41A",
+      "--colorDanger": "#F53F3F",
+      "--colorTextBase": "#333333",
+      "--colorTextSecondary": "#666666",
+      "--fontSize": "14px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#559EFF",
+      "@color-bg-base": "#EDF4FB",
+      "@color-bg-container": "#FFFFFF",
+      "@color-success": "#52C41A",
+      "@color-danger": "#F53F3F",
+      "@color-text-base": "#333333",
+      "@color-text-secondary": "#666666",
+      "@font-size-base": "14px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "width": "100%",
+        "height": "100%",
+        "background-color": "#EDF4FB",
+        "position": "relative",
+        "display": "flex",
+        "padding": "1em"
+      },
+      ".signal-tower": {
+        "position": "absolute",
+        "left": "1em",
+        "top": "1em",
+        "width": "3em",
+        "height": "3em",
+        "z-index": "1"
+      },
+      ".monitor-card": {
+        "background-color": "#FFFFFF",
+        "border-radius": "0.5em",
+        "padding": "1.2em",
+        "flex": "1",
+        "display": "flex",
+        "flex-direction": "column",
+        "box-shadow": "0 2px 8px rgba(0, 0, 0, 0.05)"
+      },
+      ".tab-header": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "1em",
+        "margin-bottom": "1em",
+        "border-bottom": "1px solid #f0f0f0",
+        "padding-bottom": "0.8em"
+      },
+      ".tab-item": {
+        "padding": "0.4em 1em",
+        "color": "#666666",
+        "cursor": "pointer",
+        "display": "flex",
+        "align-items": "center",
+        "gap": "0.4em",
+        "font-size": "1em",
+        "transition": "all 0.3s"
+      },
+      ".tab-item--active": {
+        "color": "#559EFF",
+        "font-weight": "600",
+        "background-color": "rgba(85, 158, 255, 0.1)",
+        "border-radius": "0.25em"
+      },
+      ".tab-icon": {
+        "width": "1em",
+        "height": "1em",
+        "vertical-align": "middle"
+      },
+      ".chart-area": {
+        "flex": "1",
+        "position": "relative",
+        "min-height": "15em"
+      },
+      ".warning-line": {
+        "position": "absolute",
+        "left": "0",
+        "right": "0",
+        "height": "0",
+        "border-top": "2px dashed #F53F3F",
+        "z-index": "2"
+      },
+      ".warning-label": {
+        "position": "absolute",
+        "right": "0",
+        "top": "-1.2em",
+        "color": "#F53F3F",
+        "font-size": "0.85em",
+        "background": "#FFFFFF",
+        "padding": "0 0.4em"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 #559EFF 映射为 --colorPrimary，用于蓝色高亮Tab（如'一氧化碳'）及交互高亮",
+      "容器背景 #EDF4FB 优先直接落地为 Figma 字面量值，避免关键可见背景只依赖 CSS 变量",
+      "红色 #F53F3F 映射为 --colorDanger，专门用于红色预警线及异常状态提示",
+      "左侧信号塔装饰图标和Tab右侧小图标需通过 <img :src> 引入（base64或同源URL），严格禁止 import 本地图片",
+      "采用纯 Less 变量模式，在 theme-vars.less 中通过 .theme-light() 和 .theme-dark() 管理双主题变量，确保 Less 颜色函数正常工作",
+      "间距与尺寸优先使用 em 单位，基于组件根字体大小实现响应式缩放"
+    ],
+    "elementStyleMap": {
+      "section-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-group-右侧操作图标-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-group-右侧操作图标-5": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-tabs": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-11-tab-group-Tab列表-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-11": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-tab-group-Tab列表-12": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-19": {
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  }
+}

@@ -1296,10 +1296,10 @@ async function detectModelCapability(m: ModelEntry) {
       m.verified = true
       message.success('识别完成：该模型仅支持文本')
     } else {
-      // 检测已完成但未能识别出任何能力：仍可保存，只是 capability='' 不会进入槽位候选
+      // 检测已完成但未能识别出任何能力：不视为有效模型，不可保存，避免垃圾数据入库
       m.capability = ''
-      m.verified = true
-      message.warning('检测完成：该模型未能识别出文本或视觉能力，仍可保存，但不会出现在槽位候选中', 4)
+      m.verified = false
+      message.warning('检测完成：该模型未能识别出文本或视觉能力，请检查 API Key / Base URL / Model 是否正确，或更换模型后重新检测', 4)
     }
   } catch (e: any) {
     const msg = e?.data?.message || e?.message || String(e)
@@ -1474,20 +1474,23 @@ async function saveConfig() {
         ...(p.temperature != null && p.temperature !== '' ? { temperature: Number(p.temperature) } : {}),
       })),
     // 🆕 模型库 + 槽位绑定（新结构，后端 resolveBindingToLegacy 据此降维出 legacy 字段 + providers）
-    models: (formData.value.models || []).map((m: any) => ({
-      id: m.id,
-      name: trim(m.name),
-      apiKey: trim(m.apiKey),
-      baseURL: trim(m.baseURL),
-      model: trim(m.model),
-      providerType: m.providerType || 'auto',
-      capability: m.capability || '',
-      verified: m.verified === true,
-      rpm: Number(m.rpm) || 0,
-      tpm: Number(m.tpm) || 0,
-      weight: Number(m.weight) || 10,
-      ...(m.temperature != null && m.temperature !== '' ? { temperature: Number(m.temperature) } : {}),
-    })),
+    // 过滤掉完全空白的模型卡片（无 name/apiKey/model/baseURL 任何内容），避免空卡片入库。
+    models: (formData.value.models || [])
+      .filter((m: any) => m.name?.trim() || m.apiKey?.trim() || m.model?.trim() || m.baseURL?.trim())
+      .map((m: any) => ({
+        id: m.id,
+        name: trim(m.name),
+        apiKey: trim(m.apiKey),
+        baseURL: trim(m.baseURL),
+        model: trim(m.model),
+        providerType: m.providerType || 'auto',
+        capability: m.capability || '',
+        verified: m.verified === true,
+        rpm: Number(m.rpm) || 0,
+        tpm: Number(m.tpm) || 0,
+        weight: Number(m.weight) || 10,
+        ...(m.temperature != null && m.temperature !== '' ? { temperature: Number(m.temperature) } : {}),
+      })),
     binding: normalizeBindingForSave(modelMode.value, formData.value.binding),
   }
 
@@ -1517,19 +1520,22 @@ async function saveConfig() {
     }
   }
 
-  // 🔒 保存闸门：每个填写完整的模型必须至少执行过一次「自动识别能力」服务端实测才能保存。
-  // 即使识别结果是「什么都不支持」，也允许保存（不会进入槽位候选）；未检测的模型一律拦截。
+  // 🔒 保存闸门：只要模型「有任意内容」（name/apiKey/model/baseURL 任一非空）就必须检测通过且
+  // 识别出至少一种能力（text/vision/both），否则拦截。不再要求三个字段全填——否则只填了
+  // name+apiKey+model 而漏了 baseURL 的垃圾模型会漏过闸门（已发生：id=m1789055916941_98b1 入库）。
   {
-    const undetected = (formData.value.models || []).filter(
-      (m: any) => m.apiKey?.trim() && m.baseURL?.trim() && m.model?.trim() && m.verified !== true,
+    const validCaps = new Set(['text', 'vision', 'both'])
+    const hasContent = (m: any) => !!(m.name?.trim() || m.apiKey?.trim() || m.model?.trim() || m.baseURL?.trim())
+    const invalid = (formData.value.models || []).filter(
+      (m: any) => hasContent(m) && (m.verified !== true || !validCaps.has(m.capability)),
     )
-    if (undetected.length) {
-      const first = undetected[0]
+    if (invalid.length) {
+      const first = invalid[0]
       expandedModels.value[first.id] = true
       message.error(
-        undetected.length === 1
-          ? `模型「${first.name || first.model}」尚未执行检测：请填写完整后点击卡片内「自动识别能力」，完成检测后即可保存`
-          : `${undetected.length} 个模型尚未执行检测（${undetected.map((m: any) => m.name || m.model).join('、')}）：请逐一点击「自动识别能力」，完成检测后即可保存`,
+        invalid.length === 1
+          ? `模型「${first.name || first.model || first.id}」尚未检测通过：请填写完整后点击卡片内「自动识别能力」，识别出文本/视觉能力后即可保存`
+          : `${invalid.length} 个模型尚未检测通过（${invalid.map((m: any) => m.name || m.model || m.id).join('、')}）：请逐一点击「自动识别能力」，识别出文本/视觉能力后即可保存`,
         6,
       )
       return

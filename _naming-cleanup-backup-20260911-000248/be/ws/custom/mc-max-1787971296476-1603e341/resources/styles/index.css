@@ -1,0 +1,90 @@
+.c-mc-max-1787971296476-1603e341-c-env-monitor-root {
+  width: 420px;
+  height: 186px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 100%;
+  max-height: 100vh;
+  box-sizing: border-box;
+}
+.c-mc-max-1787971296476-1603e341-c-env-monitor-tabs {
+  flex-shrink: 0;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  background-image: url(../resources/images/bg-7890.png);
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+  padding: 3px;
+  border-radius: 4px;
+  gap: 4px;
+  position: relative;
+}
+.c-mc-max-1787971296476-1603e341-c-env-monitor-tab-item {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #2c9bea;
+  transition: all 0.3s;
+  border-radius: 2px;
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+  white-space: nowrap;
+}
+.c-mc-max-1787971296476-1603e341-c-env-monitor-tab-item-active {
+  color: #ffffff;
+  text-shadow: 0 0.6px 0 #006fe3;
+  background-image: url(../resources/images/bg-7890.png);
+}
+.c-mc-max-1787971296476-1603e341-c-env-monitor-tab-icons {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding-right: 4px;
+  position: relative;
+}
+.c-mc-max-1787971296476-1603e341-c-env-monitor-icon {
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.c-mc-max-1787971296476-1603e341-c-env-monitor-badge {
+  position: absolute;
+  top: -6px;
+  right: 0;
+  min-width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f53f3f;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 29px;
+  padding: 0 4px;
+}
+.c-mc-max-1787971296476-1603e341-c-env-monitor-chart-wrapper {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.c-mc-max-1787971296476-1603e341-c-env-monitor-chart-container {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}

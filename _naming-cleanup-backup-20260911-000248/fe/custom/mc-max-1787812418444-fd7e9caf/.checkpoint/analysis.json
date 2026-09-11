@@ -1,0 +1,231 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 80,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "headerRelation为title-same-row，slotCandidate为header-right，但header.controls为空，存在臆造插槽风险。",
+        "suggestion": "若无实际控件应移除slotCandidate，或明确将统计组作为标题栏插槽。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1]",
+        "message": "headerRelation为content-below-title，但未定义header.title，层级不完整。",
+        "suggestion": "补充header标题，或将headerRelation改为不依赖标题。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2]",
+        "message": "与sections[1]相同，headerRelation为content-below-title但缺少header定义。",
+        "suggestion": "补充设备列表区标题，使结构完整。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[0].body.children[0]",
+        "message": "stat-group内label/value形成4层嵌套，超过建议的3层。",
+        "suggestion": "将label与value合并为内联文本或使用更扁平结构。"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "layout.sections[1].body.layout",
+        "message": "layout值horizontal-2-columns非标准取值，易造成解析歧义。",
+        "suggestion": "改为horizontal并结合子项宽度或栅格定义两列。"
+      }
+    ],
+    "recommendations": [
+      "消除无依据的slotCandidate，完善section的header定义",
+      "将stat-group扁平化，控制嵌套深度在3层内",
+      "coverageRate仅32%，应复核Figma解析缺失的15个节点"
+    ],
+    "summary": "整体结构清晰，主要问题为部分section缺少header定义、插槽依据不足及少量嵌套过深，建议修正后使用。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "rgba(25,144,255,1)",
+      "--colorSecondary": "rgba(8,163,165,1)",
+      "--colorError": "#f53f3f",
+      "--colorBg": "rgba(237,244,251,1)",
+      "--colorTextBase": "rgba(51,51,51,1)",
+      "--fontSize": "14px",
+      "--fontSizeLarge": "32px",
+      "--borderRadius": "8px",
+      "--colorPrimaryGradient": "linear-gradient(135deg, rgba(25,144,255,1) 0%, rgba(8,163,165,1) 100%)"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "rgba(25,144,255,1)",
+      "@color-secondary": "rgba(8,163,165,1)",
+      "@color-error": "#f53f3f",
+      "@color-bg": "rgba(237,244,251,1)",
+      "@color-text-base": "rgba(51,51,51,1)",
+      "@font-size-base": "14px",
+      "@font-size-large": "32px",
+      "@border-radius-base": "8px",
+      "@color-primary-gradient": "linear-gradient(135deg, rgba(25,144,255,1) 0%, rgba(8,163,165,1) 100%)"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "16px",
+        "background": "var(--colorBg)",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)"
+      },
+      ".card": {
+        "background": "#ffffff",
+        "border-radius": "var(--borderRadius)",
+        "padding": "16px",
+        "box-shadow": "0 2px 8px rgba(0,0,0,0.05)"
+      },
+      ".card-gradient": {
+        "background": "var(--colorPrimaryGradient)",
+        "border-radius": "var(--borderRadius)",
+        "color": "#ffffff"
+      },
+      ".stat-value-primary": {
+        "font-size": "var(--fontSizeLarge)",
+        "color": "var(--colorPrimary)",
+        "font-weight": "bold"
+      },
+      ".stat-value-error": {
+        "font-size": "var(--fontSizeLarge)",
+        "color": "var(--colorError)",
+        "font-weight": "bold"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 rgba(25,144,255,1) 映射为 --colorPrimary，用于强调数值和主要交互元素",
+      "背景色 rgba(237,244,251,1) 映射为 --colorBg，作为全局或容器底色",
+      "异常状态色 #f53f3f 映射为 --colorError，专用于红色异常数值展示",
+      "隧道设备卡片的蓝色渐变背景提取为 --colorPrimaryGradient 变量，便于复用",
+      "大号数值强调通过 --fontSizeLarge 和对应的颜色变量组合实现",
+      "容器背景应优先直接落地为 Figma 字面量值，避免关键可见背景只依赖 CSS 变量"
+    ],
+    "elementStyleMap": {
+      "header-stats": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-stat-group-设备类型-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-stat-group-设备总数-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-stat-group-完好率-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "el-stat-group-设备类型-3": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-stat-group-设备总数-6": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-stat-group-完好率-9": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-tunnel-content-group-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-tunnel": {
+        "background": "linear-gradient(270deg, #318aff 0%, #70bfff 100%)",
+        "border-radius": "8px",
+        "padding": "16px",
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-content-group-x-15": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-connection-content-group-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-connection": {
+        "background": "rgba(255,255,255,0.6)",
+        "border-radius": "8px",
+        "padding": "16px",
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-content-group-x-20": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-list-area": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "sidebar-tabs": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-24": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "header-stats",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 9,
+        "title": "设备监测"
+      },
+      {
+        "id": "summary-cards",
+        "responsibility": "数据统计指标区（数字+标签+趋势）",
+        "elementCount": 10,
+        "title": "主要设备统计"
+      },
+      {
+        "id": "device-list-area",
+        "responsibility": "列表项布局区",
+        "elementCount": 21,
+        "title": "设备列表区"
+      },
+      {
+        "id": "nav",
+        "responsibility": "竖向导航区（分类/菜单切换）",
+        "elementCount": 0,
+        "title": "导航"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 4,
+    "reason": "有效 sections=4 ≥ 3 → 强制拆分（含强制注入的导航 section）"
+  }
+}

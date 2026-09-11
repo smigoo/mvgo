@@ -1,0 +1,425 @@
+// 业务样式文件 - 设备监测组件
+// 所有 class 以 .c- 为前缀，字体使用 @fontSize 变量
+
+.common();
+
+// ─────────────────────────────────────────────
+// 根容器
+// ─────────────────────────────────────────────
+
+.c-monitor-root {
+  font-size: var(--fontSize, 14px);
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+// ─────────────────────────────────────────────
+// 左侧侧边栏导航
+// ─────────────────────────────────────────────
+
+.c-monitor-sidebar {
+  width: 46px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.c-monitor-nav-list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0;
+}
+
+.c-monitor-nav-item {
+  position: relative;
+  width: 100%;
+  padding: 8px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  &.active {
+    background: rgba(25, 144, 255, 0.2);
+
+    .c-monitor-nav-text {
+      color: rgba(255, 255, 255, 1);
+      font-weight: 700;
+    }
+  }
+}
+
+.c-monitor-nav-text {
+  font-size: @fontSize;
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+  transition: color 0.3s ease;
+}
+
+.c-monitor-nav-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 77, 79, 1);
+  border-radius: 7px;
+  font-size: calc(@fontSize * 0.857);
+  color: rgba(255, 255, 255, 1);
+  font-weight: 500;
+  line-height: 1;
+}
+
+// ─────────────────────────────────────────────
+// 主内容区
+// ─────────────────────────────────────────────
+
+.c-monitor-main-content {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+// ─────────────────────────────────────────────
+// 顶部切换栏（隧道设备 / 南北接线设备）
+// ─────────────────────────────────────────────
+
+.c-monitor-switch-bar {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  flex-shrink: 0;
+  padding: 0 4px 6px 4px;
+}
+
+// 隧道设备切换项（深色激活态背景，来自 Figma 真值）
+.c-monitor-switch-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  // 默认：南北接线设备卡背景色（浅蓝渐变，来自 Figma：bg:linear-gradient(#93ccff → #93ccff)）
+  background: linear-gradient(135deg, #93ccff, #93ccff);
+  border: 1px solid rgba(25, 144, 255, 0.18);
+  transition: background 0.2s;
+
+  // 激活态（--active 对应隧道设备：Figma bg:linear-gradient(#2b9bff → #299aff)）
+  &--active {
+    background: linear-gradient(135deg, #2b9bff, #299aff);
+    border-color: rgba(25, 144, 255, 0.5);
+  }
+
+  // 选中态
+  &--selected {
+    background: linear-gradient(135deg, #2b9bff, #299aff);
+    border-color: rgba(25, 144, 255, 0.5);
+
+    .c-monitor-switch-item-title {
+      color: #ffffff;
+    }
+
+    .c-monitor-switch-stat-label {
+      color: #ffffff;
+    }
+  }
+
+  &:hover {
+    background: rgba(25, 144, 255, 0.16);
+  }
+}
+
+.c-monitor-switch-item-icon {
+  flex-shrink: 0;
+  width: 35px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.c-monitor-switch-icon-img {
+  width: 35px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.c-monitor-switch-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.c-monitor-switch-item-title {
+  font-size: calc(@fontSize * 0.857);
+  font-weight: 400;
+  color: #333333;
+  white-space: nowrap;
+  line-height: 1.3;
+}
+
+.c-monitor-switch-item-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.c-monitor-switch-stat-line {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 3px;
+}
+
+.c-monitor-switch-stat-label {
+  font-size: @fontSize;
+  color: #333333;
+  line-height: 1.2;
+}
+
+// 激活（隧道设备）切换项内标签色为白色
+.c-monitor-switch-item--active .c-monitor-switch-stat-label {
+  color: #ffffff;
+}
+
+.c-monitor-switch-stat-value {
+  font-size: calc(@fontSize * 1.4286);
+  font-weight: 700;
+  line-height: 1;
+}
+
+// 总数数值：蓝色
+.c-monitor-switch-stat-value--blue {
+  color: #1990ff;
+}
+
+// 激活态总数数值：白色（深色背景下）
+.c-monitor-switch-item--active .c-monitor-switch-stat-value--blue {
+  color: #ffffff;
+}
+
+// 异常数数值：红色
+.c-monitor-switch-stat-value--red {
+  color: #e03434;
+}
+
+// ─────────────────────────────────────────────
+// 内容主体（左侧垂直 Tab + 右侧设备网格）
+// ─────────────────────────────────────────────
+
+.c-monitor-content-body {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  gap: 0;
+}
+
+// ─────────────────────────────────────────────
+// 左侧垂直 Tab
+// ─────────────────────────────────────────────
+
+.c-monitor-vertical-tabs {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  width: 40px;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  gap: 2px;
+  padding: 4px 0;
+}
+
+.c-monitor-vtab-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 4px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.2s;
+  // 默认态：来自 Figma bg:linear-gradient(#85baff → #bfe2ff) | border:#f0f5ff
+  background: linear-gradient(180deg, #85baff, #bfe2ff);
+  border: 1px solid #f0f5ff;
+
+  &:hover {
+    background: linear-gradient(180deg, #6aaeff, #aad8ff);
+  }
+
+  // 激活态：来自 Figma bg:linear-gradient(#318aff → #70bfff) | border:#f0f5ff
+  &--active {
+    background: linear-gradient(180deg, #318aff, #70bfff);
+    border-color: #f0f5ff;
+
+    .c-monitor-vtab-label {
+      color: #ffffff;
+      font-weight: 700;
+    }
+  }
+}
+
+.c-monitor-vtab-label {
+  font-size: @fontSize;
+  font-weight: 700;
+  color: #3b80e7;
+  text-align: center;
+  line-height: 1.3;
+  white-space: nowrap;
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+}
+
+.c-monitor-vtab-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  // Figma：bg:#f53f3f | radius:29px
+  background: #f53f3f;
+  border-radius: 29px;
+  font-size: calc(@fontSize * 0.857);
+  font-weight: 500;
+  color: #ffffff;
+  line-height: 1;
+}
+
+// ─────────────────────────────────────────────
+// 右侧设备卡片网格
+// ─────────────────────────────────────────────
+
+.c-monitor-device-grid {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  padding: 6px;
+  overflow-y: auto;
+  align-content: start;
+}
+
+.c-monitor-device-card {
+  display: flex;
+  flex-direction: column;
+  border-radius: 6px;
+  // 来自 Figma：Frame 2136638920 bg:#ffffff | border:#258dc8 | shadow:0px 1px 2px rgba(51,101,144,0.4)
+  background: #ffffff;
+  border: 1px solid #258dc8;
+  box-shadow: 0px 1px 2px rgba(51, 101, 144, 0.4);
+  overflow: hidden;
+  cursor: pointer;
+  transition: box-shadow 0.2s;
+
+  &:hover {
+    box-shadow: 0px 3px 8px rgba(51, 101, 144, 0.5);
+  }
+}
+
+.c-monitor-device-card-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 6px;
+}
+
+.c-monitor-device-icon {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.c-monitor-device-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  width: 100%;
+}
+
+.c-monitor-device-name {
+  // 来自 Figma：t-隧道设备 color:#333333 | font:12px
+  font-size: calc(@fontSize * 0.857);
+  font-weight: 400;
+  color: #333333;
+  text-align: center;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.c-monitor-device-count {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.c-monitor-device-count-text {
+  // 来自 Figma：(2/484) color:#ffffff | shadow:0px 0px 0px rgba(0,0,0,0.5) | font:16px
+  // 此处背景深色，文字白色
+  font-size: calc(@fontSize * 1.1429);
+  font-weight: 500;
+  color: #3b80e7;
+  text-shadow: 0px 0px 0px rgba(0, 0, 0, 0.5);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+// ─────────────────────────────────────────────
+// 特殊布局辅助 class（来自模板 class 列表）
+// ─────────────────────────────────────────────
+
+// .south-north 与 .tunnel：切换面板容器区分
+.south-north {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.tunnel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}

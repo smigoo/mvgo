@@ -1,0 +1,392 @@
+.c-monitor-root {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+.c-monitor-root > .c-monitor-total-flow {
+  flex: 0 0 auto;
+  font-size: var(--fontSize, 14px);
+}
+.c-monitor-root > .c-monitor-total-flow > .c-monitor-chart-tunnel {
+  flex: 1 1 0;
+}
+.c-monitor-root > .c-monitor-total-flow > .c-monitor-chart-bridge {
+  flex: 1 1 0;
+}
+.c-monitor-root > .c-monitor-total-flow > .c-monitor-vehicle-type {
+  flex: 1 1 0;
+}
+.c-monitor-root > .c-monitor-total-flow > .c-monitor-prediction {
+  flex: 1 1 0;
+}
+.c-monitor-total-flow {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+.c-monitor-total-flow-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 30px;
+  flex-shrink: 0;
+  padding: 0 4px;
+}
+.c-monitor-total-flow-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.c-monitor-total-flow-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+.c-monitor-total-flow-title-text {
+  font-size: calc(var(--fontSize, 14px) * 1.1429);
+  font-weight: 500;
+  color: #333333;
+  line-height: 24px;
+}
+.c-monitor-total-flow-selector {
+  width: 100px;
+}
+.c-monitor-time-select {
+  width: 100px;
+}
+.c-monitor-total-flow-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  background-size: 100% auto;
+  background-position: center top;
+  background-repeat: no-repeat;
+  padding: 10px 0;
+}
+.c-monitor-stat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.c-monitor-stat-label {
+  font-size: calc(var(--fontSize, 14px) * 1.1429);
+  font-weight: 500;
+  color: #333333;
+  line-height: 24px;
+}
+.c-monitor-stat-value {
+  font-size: calc(var(--fontSize, 14px) * 1.7143);
+  font-weight: 900;
+  color: #1990ff;
+  line-height: 28px;
+  font-family: Roboto, sans-serif;
+}
+.c-monitor-chart-tunnel {
+  width: 100%;
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.c-monitor-chart-tunnel-header {
+  flex-shrink: 0;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+  margin-bottom: 8px;
+}
+.c-monitor-chart-tunnel-header-bg {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 118px;
+  height: 21px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  pointer-events: none;
+}
+.c-monitor-chart-tunnel-header-decor {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 12px;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  pointer-events: none;
+}
+.c-monitor-chart-tunnel-header-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+.c-monitor-chart-tunnel-header-title {
+  font-size: var(--fontSize, 14px);
+  font-weight: 400;
+  color: #333333;
+  line-height: 21px;
+  position: relative;
+  z-index: 1;
+}
+.c-monitor-chart-tunnel-body {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.c-monitor-chart-tunnel-legend {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.c-monitor-chart-tunnel-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.c-monitor-chart-tunnel-legend-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+}
+.c-monitor-chart-tunnel-legend-text {
+  font-size: calc(var(--fontSize, 14px) * 0.8571);
+  color: #333333;
+}
+.c-monitor-chart-tunnel-chart {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.c-monitor-chart-bridge {
+  width: 100%;
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+}
+.c-monitor-chart-bridge-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.c-monitor-chart-bridge-title {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: left center;
+  padding-left: 4px;
+}
+.c-monitor-chart-bridge-title-icon {
+  width: 3px;
+  height: 12px;
+  background: linear-gradient(180deg, #388dff 0%, #388dff 100%);
+  border-radius: 6px;
+}
+.c-monitor-chart-bridge-title-text {
+  font-size: var(--fontSize, 14px);
+  font-weight: 400;
+  line-height: 21px;
+  color: #333333;
+}
+.c-monitor-chart-bridge-legend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.c-monitor-chart-bridge-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: calc(var(--fontSize, 14px) * 0.8571);
+  color: #333333;
+  cursor: pointer;
+  transition: opacity 0.3s;
+}
+.c-monitor-chart-bridge-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 1.6px;
+}
+.c-monitor-chart-bridge-legend-dot--beijing {
+  background: #3b82f6;
+}
+.c-monitor-chart-bridge-legend-dot--shanghai {
+  background: #7dd3fc;
+}
+.c-monitor-chart-bridge-chart {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.c-monitor-vehicle-type {
+  width: 100%;
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.c-monitor-vehicle-type-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-bottom: 8px;
+}
+.c-monitor-vehicle-type-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+.c-monitor-vehicle-type-title {
+  font-size: calc(var(--fontSize, 14px) * 1.1429);
+  color: #333333;
+  font-weight: 500;
+  line-height: 1.5;
+}
+.c-monitor-vehicle-type-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 12px;
+}
+.c-monitor-vehicle-group {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  background-size: 100% auto;
+  background-position: center top;
+  background-repeat: no-repeat;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  box-sizing: border-box;
+}
+.c-monitor-vehicle-group-title {
+  font-size: var(--fontSize, 14px);
+  color: #333333;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+.c-monitor-vehicle-items {
+  display: flex;
+  gap: 24px;
+}
+.c-monitor-vehicle-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.c-monitor-vehicle-label {
+  font-size: calc(var(--fontSize, 14px) * 0.8571);
+  color: #666666;
+}
+.c-monitor-vehicle-value {
+  font-size: calc(var(--fontSize, 14px) * 1.4286);
+  font-weight: bold;
+}
+.c-monitor-vehicle-value--blue {
+  color: #1990ff;
+}
+.c-monitor-vehicle-value--orange {
+  color: #fa8c16;
+}
+.c-monitor-prediction {
+  width: 100%;
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.c-monitor-prediction-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  height: 30px;
+  padding: 0 12px;
+}
+.c-monitor-prediction-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.c-monitor-prediction-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+.c-monitor-prediction-title-text {
+  font-size: var(--fontSize, 14px);
+  font-weight: 500;
+  color: #333333;
+}
+.c-monitor-prediction-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.c-monitor-prediction-tabs {
+  display: flex;
+  gap: 4px;
+}
+.c-monitor-prediction-tab {
+  padding: 4px 12px;
+  font-size: calc(var(--fontSize, 14px) * 0.8571);
+  color: #666666;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.3s;
+  background-color: rgba(25, 144, 255, 0.05);
+}
+.c-monitor-prediction-link {
+  font-size: calc(var(--fontSize, 14px) * 0.8571);
+  color: #1990ff;
+  cursor: pointer;
+}
+.c-monitor-prediction-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0 12px 12px;
+}
+.c-monitor-prediction-chart {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.c-monitor-prediction-accuracy {
+  flex-shrink: 0;
+  text-align: center;
+  font-size: calc(var(--fontSize, 14px) * 0.8571);
+  color: #999999;
+  margin-top: 4px;
+}
+.c-monitor-is-active {
+  opacity: 1;
+}

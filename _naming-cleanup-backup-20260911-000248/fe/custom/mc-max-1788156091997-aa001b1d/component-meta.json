@@ -1,0 +1,7 @@
+{
+  "degradedFiles": [
+    "package/components/TabSwitch.vue"
+  ],
+  "degradedAt": 1788156428946,
+  "reason": "SFC 编译失败，已隔离降级（可二次生成）"
+}

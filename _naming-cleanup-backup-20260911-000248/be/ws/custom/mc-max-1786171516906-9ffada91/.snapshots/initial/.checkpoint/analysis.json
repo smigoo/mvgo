@@ -1,0 +1,95 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 0,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "root",
+        "message": "布局数据严重损坏/截断。`degraded` 为 true，且 `degradeReason` 明确指出视觉解析结果结构为空（sections/charts/interactions 全空），疑似截断损坏。",
+        "suggestion": "拒绝接受此半截数据。请检查上游视觉解析模块（如 Figma 解析或图像识别服务）是否发生超时、截断或解析失败，并重新生成完整的布局结构。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections",
+        "message": "`layout.sections` 为空数组，没有任何区域划分，无法进行任何布局审查、嵌套深度评估和代码生成。",
+        "suggestion": "确保解析结果包含完整的 sections 数组，且每个 section 具有正确的 header 和 body 层级结构。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "styles",
+        "message": "`styles` 对象中 `theme` 为 '未知'，`colors`、`background`、`decorations` 等关键样式信息均为空，无法指导双主题和样式生成。",
+        "suggestion": "重新提取设计稿的主题色、背景色及装饰样式信息，确保样式数据完整且符合纯 Less 变量主题模式的要求。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "charts & interactions",
+        "message": "`charts` 和 `interactions` 为空数组，丢失了所有图表配置和交互逻辑信息。",
+        "suggestion": "重新解析设计稿中的图表配置（如 ECharts 类型、数据维度、图例位置）和交互逻辑（如 Tab 切换、Select 下拉等）。"
+      }
+    ],
+    "recommendations": [
+      "立即终止当前基于此损坏数据的代码生成流程，避免生成无意义的空壳组件。",
+      "排查上游视觉解析/大模型分析节点的日志，定位导致结果截断或解析失败的根本原因（如 Token 超限、网络中断、JSON 格式错误等）。",
+      "在流水线中增加对 `degraded: true` 或核心字段（sections/charts/interactions）为空的拦截机制，直接阻断并触发重试或人工介入。",
+      "确保重新生成的布局数据包含完整的 sections、charts、interactions 和 styles 信息后，再提交审查。"
+    ],
+    "summary": "当前提交的布局结构数据严重损坏，处于降级（degraded）状态，核心内容（sections、charts、interactions、styles）全部为空。这属于上游解析失败或数据截断导致的致命错误，完全不具备审查和代码生成的条件，必须直接拒绝并重新生成完整数据。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "基于 backgroundBrightness: dark 提取的深色主题基础 CSS 变量（严格使用 camelCase 命名）",
+      "--colorPrimary": "#3677f8",
+      "--colorBg": "#141414",
+      "--colorTextBase": "#ffffff",
+      "--fontSize": "14px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less 变量映射，用于在 theme-vars.less 的 .common() mixin 中映射 CSS 变量",
+      "@colorPrimary": "var(--colorPrimary)",
+      "@colorBg": "var(--colorBg)",
+      "@colorTextBase": "var(--colorTextBase)",
+      "@fontSize": "var(--fontSize)",
+      "@borderRadius": "var(--borderRadius)"
+    },
+    "cssClasses": {
+      "comment": "基于深色主题生成的可复用基础 CSS 类，适用于通用布局与组件容器",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "width": "100%",
+        "height": "100%",
+        "background-color": "var(--colorBg)",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)",
+        "border-radius": "var(--borderRadius)"
+      },
+      ".card": {
+        "background": "rgba(255, 255, 255, 0.05)",
+        "border": "1px solid rgba(255, 255, 255, 0.1)",
+        "border-radius": "var(--borderRadius)",
+        "padding": "16px"
+      },
+      ".text-primary": {
+        "color": "var(--colorPrimary)"
+      },
+      ".text-base": {
+        "color": "var(--colorTextBase)"
+      }
+    },
+    "tokenCoverage": 0.1,
+    "mappingNotes": [
+      "输入视觉元素（colors/background/decorations）为空，仅根据 backgroundBrightness: 'dark' 推断并生成深色主题的基础 Token",
+      "主题色 --colorPrimary 默认映射为科技蓝 #3677f8，背景色 --colorBg 映射为深灰 #141414",
+      "容器背景应优先直接落地为 Figma 字面量值，避免关键可见背景只依赖 CSS 变量",
+      "由于缺少具体颜色和设计元素，tokenCoverage 仅计算基础主题变量的覆盖率（0.1）",
+      "Less 变量已按照规范映射为 var(--camelCase) 格式，确保在 common.less 中可正常结合 Less 函数使用"
+    ],
+    "elementStyleMap": {}
+  }
+}

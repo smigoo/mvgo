@@ -1,0 +1,94 @@
+// 共享业务样式类：各组件按需 @import 使用
+// ⚠️ class 名必须按功能语义命名，禁止用组件 ID 作前缀
+
+// 浅色渐变背景
+.light-bg-gradient {
+  background: linear-gradient(180deg, rgba(237, 244, 251, 1) 0%, rgba(255, 255, 255, 1) 100%);
+  position: relative;
+}
+
+// 装饰线条
+.decor-line {
+  position: absolute;
+  pointer-events: none;
+  opacity: 0.1;
+}
+
+// 标题与图标组合
+.title-with-icon {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+// 标题装饰图标
+.title-icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(85, 158, 255, 1);
+}
+
+// Tab 容器
+.tab-container {
+  display: flex;
+  gap: 16px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+// Tab 项默认样式
+.tab-item {
+  padding: 8px 16px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border-radius: 4px 4px 0 0;
+  position: relative;
+}
+
+// Tab 激活态
+.tab-item-active {
+  color: rgba(85, 158, 255, 1);
+  font-weight: 500;
+}
+
+// 图表包装器
+.chart-wrapper {
+  background: rgba(237, 244, 251, 0.3);
+  border-radius: 8px;
+  padding: 16px;
+  position: relative;
+  overflow: hidden;
+}
+
+// 预警线样式
+.warning-line {
+  stroke: rgba(245, 63, 63, 1);
+  stroke-width: 2;
+  stroke-dasharray: 4 4;
+}
+
+// 卡片样式（浅色主题）
+.card-light {
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+// 文本颜色工具类
+.text-primary {
+  color: rgba(85, 158, 255, 1);
+}
+
+.text-danger {
+  color: rgba(245, 63, 63, 1);
+}
+
+.text-secondary {
+  color: rgba(255, 255, 255, 0.6);
+}

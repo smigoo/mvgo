@@ -1,0 +1,8 @@
+{
+  "degradedFiles": [
+    "package/components/StatsValue.vue",
+    "package/components/TabControls.vue"
+  ],
+  "degradedAt": 1788139204236,
+  "reason": "SFC 编译失败，已隔离降级（可二次生成）"
+}

@@ -1,0 +1,91 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 0,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.layoutStructure & layout.sections",
+        "message": "核心布局结构字段 `layoutStructure` 和 `sections` 均为 null，导致组件的层级、区域划分和父子关系完全缺失，无法进行任何下游代码生成。",
+        "suggestion": "重新执行 Figma 解析流程，检查解析脚本或 AI 提示词，确保能够正确提取并构建组件的 DOM 树和区块结构。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "Figma 节点覆盖率仅为 0%（matchedCount: 0, missingCount: 114）。大量关键业务节点（如 header、指标文本'设备类型/总数/完好率'、插槽'slot-con'、开关'switch'）均未被识别和匹配。",
+        "suggestion": "检查 Figma 源文件的图层命名和分组规范。确保关键节点具有明确的语义化命名，并检查解析器是否支持当前 Figma 文件的图层嵌套深度和类型。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.componentType",
+        "message": "`componentType` 为 null，无法确定组件的具体类型（如数据面板、图表组件、控制组件等），这将导致微码规范中特定组件模板和约束规则无法正确应用。",
+        "suggestion": "根据设计稿特征和解析结果，明确指定 `componentType`（例如 'dashboard-panel' 或 'control-component'）。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout._parseWarning",
+        "message": "系统已触发质量门警告：'质量门检测到解析结果全空，下游精修可能受限'。当前状态属于阻断级错误，直接导致后续精修和代码生成流程失效。",
+        "suggestion": "在解析阶段增加前置校验和容错机制。当 `coverageRate` 低于阈值或结构为空时，应直接中断并输出详细的 Figma 结构诊断日志，而非生成空结构继续流转。"
+      }
+    ],
+    "recommendations": [
+      "规范 Figma 设计稿的图层命名和 Auto Layout 使用，避免使用默认的 'Frame xxx' 等无意义命名，确保解析器能准确识别 header、body、指标卡片等语义区块。",
+      "在解析流水线中增加强校验门禁：当 `coverageRate` < 50% 或 `layoutStructure` 为空时，直接拦截并返回 Figma 结构诊断报告，要求设计师修复图层后再重新解析。",
+      "确保关键交互组件（如 switch、slot-con）在 Figma 中有明确的组件化定义（Component/Instance），以便解析器能正确映射为微码组件的插槽和交互元素。",
+      "针对包含 header（指标区）和 body（内容区）的复杂面板，优化解析算法，确保能正确区分 headerRelation 和面板插槽（slot）的层级关系。"
+    ],
+    "summary": "当前布局结构解析完全失败，核心结构字段（layoutStructure、sections）均为空，Figma 节点覆盖率 0%，且已触发质量门阻断警告。从缺失节点来看，设计稿应包含头部指标（设备类型/总数/完好率）和主体内容（插槽与开关），但解析器未能提取任何有效信息。此状态无法支撑微码组件的代码生成，必须打回重新解析 Figma 设计稿并修复源文件图层结构问题。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#3677f8",
+      "--colorBg": "#141414",
+      "--colorTextBase": "#ffffff",
+      "--fontSize": "14px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#3677f8",
+      "@color-bg": "#141414",
+      "@color-text-base": "#ffffff",
+      "@font-size-base": "14px",
+      "@border-radius-base": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "20px",
+        "background": "#141414",
+        "color": "#ffffff",
+        "font-size": "14px"
+      },
+      ".header": {
+        "display": "flex",
+        "justify-content": "space-between",
+        "align-items": "center",
+        "color": "var(--colorTextBase)"
+      },
+      ".card": {
+        "background": "rgba(255, 255, 255, 0.05)",
+        "border-radius": "var(--borderRadius)",
+        "padding": "16px"
+      }
+    },
+    "tokenCoverage": 0.85,
+    "mappingNotes": [
+      "背景亮度为 dark，基础文字颜色自动映射为浅色（#ffffff）以保证对比度",
+      "由于未提供具体颜色值，采用标准深色主题默认色板进行兜底",
+      "容器背景应优先直接落地为 Figma 字面量值，避免关键可见背景只依赖 CSS 变量",
+      "CSS 变量严格遵循 camelCase 命名规范（如 --colorTextBase）"
+    ],
+    "elementStyleMap": {}
+  }
+}

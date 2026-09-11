@@ -68,6 +68,9 @@ interface SnapshotPointer {
 const MAX_FILE_COUNT = 200;
 const MAX_SINGLE_FILE_BYTES = 2 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 20 * 1024 * 1024;
+// 图片文件独立限制（PNG/JPG 无损压缩后容易超过 2MB）
+const MAX_IMAGE_FILE_BYTES = 10 * 1024 * 1024;
+const IMAGE_EXT_RE = /\.(png|jpg|jpeg|gif|webp|svg)$/i;
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/;
 const SAFE_REVISION = /^r-[a-f0-9-]{36}$/;
 
@@ -161,8 +164,13 @@ export class TaskCodeSnapshotService {
         const path = this.normalizeRelativePath(rawPath);
         const rawBuffer = Buffer.isBuffer(rawContent) ? rawContent : Buffer.from(rawContent, 'utf8');
         const content = sanitizeStyleFenceLeak(path, rawBuffer);
-        if (content.byteLength > MAX_SINGLE_FILE_BYTES) {
-          throw new Error(`文件超过单文件限制：${path}`);
+        
+        // 图片文件使用独立的大小限制（PNG/JPG 无损压缩后容易超过 2MB）
+        const isImage = IMAGE_EXT_RE.test(path);
+        const sizeLimit = isImage ? MAX_IMAGE_FILE_BYTES : MAX_SINGLE_FILE_BYTES;
+        
+        if (content.byteLength > sizeLimit) {
+          throw new Error(`文件超过单文件限制：${path} (${(content.byteLength / 1024 / 1024).toFixed(2)}MB > ${(sizeLimit / 1024 / 1024).toFixed(2)}MB)`);
         }
         totalBytes += content.byteLength;
         if (totalBytes > MAX_TOTAL_BYTES) throw new Error('候选快照总大小超过限制');

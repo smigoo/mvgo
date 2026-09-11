@@ -204,7 +204,7 @@ export class LiteService {
       }
       const { buffer, mime, ext } = imageResult;
       const { width: rasterWidth, height: rasterHeight } = await this.precheck(buffer, mime);
-      // Figma 预览接口返回的是节点逻辑尺寸（CSS px）；导出图使用 scale=2，
+      // Figma 预览接口返回的是节点逻辑尺寸（CSS px）；导出图使用 scale=1，
       // 因此 PNG 像素只用于图片校验，不能作为组件设计画布尺寸。
       // 截图来源同理：用户截图通常来自 HiDPI/Retina 屏幕（DPR=2），PNG 像素是
       // 逻辑尺寸的 2 倍。统一按 2x 还原为 CSS 逻辑尺寸，否则生成的组件会偏大 2 倍。
@@ -458,35 +458,76 @@ export class LiteService {
       // ---------- 阶段 4：写盘 + 预览图 + workspace ----------
       const packageDir = join(outputPath, 'package');
       await mkdir(packageDir, { recursive: true });
-      await writeFile(join(packageDir, 'index.vue'), vueCode, 'utf-8');
 
-      // 微码：写入确定性声明文件与最小样式入口
+      // 🛡️ P1.8（2026-09-11）：微码产物必须先补齐**完整平台骨架**再落盘。
+      // 根因（用户截图 lite 全红）：lite 此前自造精简骨架（只有 index.vue + 自拼 declare.js
+      // + 私有 buildDefaultLess 的 index.less + component.js），缺 config/css-vars.js、
+      // common.less、themes/*，且 index.vue 未引用 styles/index.less → mc-check 的
+      // M2-3/M2-4/M3-5/M3-6/M4-8 必然全部报错（实测 lite 11/11 全缺，max 138 个仅 5–8% 缺）。
+      // 现在与 max 路径共用 buildMcSkeleton（单一骨架生成器），并做字体归一（M5-6/M5-7）。
       if (isMicrocode) {
+        // 🛡️ P1.8 修复（2026-09-11）：lite 路径的 LLM 输出是「单文件完整组件」，
+        // 所有样式都在 index.vue 的 <style> 里。此前 buildMcSkeleton 无条件覆盖所有文件，
+        // 导致 common.less 只有空骨架、业务样式丢失；@import 注入到 <style scoped> 内，
+        // 作用域隔离导致主题变量无法传播。
+        // 
+        // 修复方案：
+        // 1. 提取 index.vue 的 <style> 内容（业务样式）
+        // 2. 把业务样式写入 common.less（不是空骨架）
+        // 3. index.vue 只保留非 scoped 的 @import 引用
+        // 4. 骨架只生成缺失文件，不覆盖 LLM 已生成的内容
+        const { buildMcSkeleton } = await import(
+          '../ai-engine/utils/mc-skeleton.js'
+        );
+        const { extractAndPrepareLiteMicrocodeStyles } = await import(
+          '../ai-engine/utils/lite-style-extractor.js'
+        );
+        
+        // 提取样式并准备 index.vue 最终内容
+        const { vueFinal, businessStyles, styleStats } = 
+          await extractAndPrepareLiteMicrocodeStyles(vueCode, finalComponentName);
+        
+        await writeFile(join(packageDir, 'index.vue'), vueFinal, 'utf-8');
+
         await writeFile(
           join(outputPath, 'declare.json'),
           JSON.stringify(declareJson, null, 2),
           'utf-8',
         );
-        await writeFile(
-          join(outputPath, 'declare.js'),
-          `import declareConfig from './declare.json'\nlet declareInfo = $createMcDeclare({ metaUrl: import.meta.url, declareConfig })\nexport default declareInfo\n`,
-          'utf-8',
+        
+        // 生成骨架，但用提取的业务样式覆盖 common.less
+        const skeleton = buildMcSkeleton({
+          componentName: finalComponentName,
+          rootClass: `c-${finalComponentName}`,
+        });
+        
+        // 如果有业务样式，用它们覆盖空的 common.less 骨架
+        if (businessStyles && businessStyles.trim().length > 0) {
+          skeleton['resources/styles/common.less'] = 
+            `@import './themes/theme-vars.less';
+
+.common();
+
+// ─────────────────────────────────────────────
+// ${finalComponentName} 业务样式（从 LLM 产物提取）
+// ─────────────────────────────────────────────
+${businessStyles}
+`;
+        }
+        
+        for (const [rel, content] of Object.entries(skeleton) as [string, string][]) {
+          const abs = join(outputPath, rel);
+          await mkdir(dirname(abs), { recursive: true });
+          await writeFile(abs, content, 'utf-8');
+        }
+        
+        this.logger.log(
+          `🧩 P1.8 微码平台骨架已补齐（${Object.keys(skeleton).length} 个文件）；` +
+          `业务样式${businessStyles ? `${businessStyles.split('\n').length}行` : '无'}` +
+          `；字号${styleStats.fontNormalized ? '已归一' : '无需归一'}`,
         );
-        const stylesDir = join(outputPath, 'resources', 'styles');
-        await mkdir(stylesDir, { recursive: true });
-        await writeFile(
-          join(stylesDir, 'index.less'),
-          this.buildDefaultLess(finalComponentName),
-          'utf-8',
-        );
-        // 🔧 微码入口 component.js（2026-09-01）：与 max 管线（microcode-engineer.js standardFiles）
-        // 对齐，在写盘阶段即生成到产物源目录，供 import.meta.glob 注册 / 预览 / 打包扫描。
-        // 此前仅在 copyToWorkspace 发布时动态生成，产物源目录缺失导致任务卡片/快照缺该文件。
-        await writeFile(
-          join(outputPath, 'component.js'),
-          `import component from './package/index.vue'\nimport './resources/styles/index.less'\nexport default component\n`,
-          'utf-8',
-        );
+      } else {
+        await writeFile(join(packageDir, 'index.vue'), vueCode, 'utf-8');
       }
 
       // 截图直接作为统一预览图
@@ -1510,7 +1551,7 @@ ${originalCode}`;
       const imageUrl = await figmaClient.exportImage(
         parsed.fileKey,
         parsed.nodeId,
-        { format: 'png', scale: 2 },
+        { format: 'png', scale: 1 },
       );
 
       if (!imageUrl) {
@@ -1974,7 +2015,7 @@ ${originalCode}`;
     rasterHeight?: number,
     figmaTexts?: string[] | null,
   ): string {
-    // 🔧 尺寸标定（2026-09-01）：截图多为 scale=2 栅格（figma 导出 / Retina 截图），
+    // 🔧 尺寸标定（2026-09-01）：截图多为 scale=1 栅格（figma 导出 / Retina 截图），
     // 模型直接按栅格像素估字号/间距会整体偏大 ~2 倍（实锤 mc-lite-1788258227940：
     // brief「大数字36-48px」→ 产物 900px 内容塞进 425px 画布）。把逻辑画布尺寸喂给
     // 模型，强制它按逻辑 CSS px 输出所有尺寸估计。
@@ -2106,6 +2147,11 @@ ${extra ? `【布局补充】\n${extra}\n` : ''}
   }
 
   private extractVueCode(text: string): string {
+    // 🛡️ 类型防护：LLM 可能返回非字符串（对象/数组）
+    if (typeof text !== 'string') {
+      this.logger.warn(`extractVueCode 收到非字符串输入: ${typeof text}`);
+      return '';
+    }
     if (!text) return '';
     const fence = text.match(/```vue\s*([\s\S]*?)```/i);
     if (fence && fence[1].trim()) return fence[1].trim();
@@ -2244,6 +2290,15 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
 
   /** 从生成文本中提取 Vue 代码和 declare.json */
   private extractMicrocodeOutput(text: string): { vueCode: string; declareJson: any } {
+    // 🛡️ 类型防护：LLM 可能返回非字符串（对象/数组）
+    if (typeof text !== 'string') {
+      this.logger.warn(`extractMicrocodeOutput 收到非字符串输入: ${typeof text}`);
+      return { vueCode: '', declareJson: null };
+    }
+    if (!text) {
+      return { vueCode: '', declareJson: null };
+    }
+
     // 提取 vue 代码块
     const vueMatch = text.match(/```vue\s*([\s\S]*?)```/i);
     const vueCode = vueMatch ? vueMatch[1].trim() : this.extractVueCode(text);
@@ -2351,27 +2406,63 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
         : input.defaultTheme === 'dark' || input.defaultTheme === 'light'
           ? input.defaultTheme
           : 'light';
+
+    // 🛡️ P1.8 修复（2026-09-11）：补齐 mc-check 必填字段
+    // - version: 微码规范要求 v1.0.0 格式
+    // - attribute.aspectRatio: 组件宽高比（从 size 推导）
+    // - layoutConfig: 至少一个布局配置
+    // - themeConfig: 至少包含 light 和 dark 两个主题
+    const aspectRatio = this.calcAspectRatio(width, height);
+
+    // layoutConfig：LLM 未提供则用默认单布局
+    const layoutConfig = input.layoutConfig && typeof input.layoutConfig === 'object' && input.layoutConfig.list?.length
+      ? input.layoutConfig
+      : {
+          default: 'default',
+          list: [{ name: '默认布局', key: 'default', previewName: 'mc-preview.png' }],
+        };
+
+    // themeConfig：必须包含 light 和 dark
+    const themeConfig = {
+      default: theme,
+      list: [
+        { name: '亮色主题', key: 'light' },
+        { name: '深色主题', key: 'dark' },
+      ],
+    };
+
     return {
       componentId,
       componentName: input.componentName || input.displayName || componentName,
+      version: 'v1.0.0',
       panelType: input.panelType || 'default-panel',
       // 🔧 主题默认值收紧（2026-09-01）：此前无凭据时默认 dark，导致浅色截图被误渲染成深色。
       //   现改为默认 light；仅当视觉简报/声明明确给出 dark 时才用 dark。
       defaultTheme: theme,
+      attribute: {
+        aspectRatio,
+        ...(input.attribute || {}),
+      },
       size: {
         width: Number(input.size?.width) || width,
         height: Number(input.size?.height) || height,
       },
-      businessEvents: [],
-      businessStatuses: [],
-      dataSources: [],
-      formSources: [],
-      layoutConfig: {},
-      themeConfig: input.themeConfig && typeof input.themeConfig === 'object'
-        ? input.themeConfig
-        : {},
-      businessConfig: {},
+      businessEvents: input.businessEvents || {},
+      businessStatuses: input.businessStatuses || {},
+      dataSources: input.dataSources || [],
+      formSources: input.formSources || [],
+      layoutConfig,
+      themeConfig,
+      businessConfig: input.businessConfig || {},
     };
+  }
+
+  /** 计算宽高比（用于 attribute.aspectRatio） */
+  private calcAspectRatio(width: number, height: number): [number, number] {
+    if (!width || !height) return [16, 9];
+    const gcd = (a: number, b: number): number => b === 0 ? a : gcd(b, a % b);
+    const g = gcd(Math.round(width), Math.round(height));
+    return [Math.round(width / g), Math.round(height / g)];
   }
 
   /** 生成默认 Less 样式文件 */
@@ -2901,10 +2992,19 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
       // 写盘 + workspace + 完成
       const packageDir = join(outputPath, 'package');
       mkdirSync(packageDir, { recursive: true });
-      writeFileSync(join(packageDir, 'index.vue'), vueCode, 'utf-8');
 
       if (isMicrocode) {
-        this.writeMicrocodeAssets(outputPath, declareJson, finalComponentName, sessionId);
+        // 🛡️ P1.8 修复：与主写盘段同一处理（提取业务样式 → common.less，index.vue 只留 @import）
+        const { extractAndPrepareLiteMicrocodeStyles } = await import(
+          '../ai-engine/utils/lite-style-extractor.js'
+        );
+        const { vueFinal, businessStyles } =
+          await extractAndPrepareLiteMicrocodeStyles(vueCode, finalComponentName);
+        writeFileSync(join(packageDir, 'index.vue'), vueFinal, 'utf-8');
+
+        await this.writeMicrocodeAssets(outputPath, declareJson, finalComponentName, sessionId, businessStyles);
+      } else {
+        writeFileSync(join(packageDir, 'index.vue'), vueCode, 'utf-8');
       }
 
       const resumeGroupId = await this.resolvePrivateGroupId(dto.groupId, this.tasksService.getTask(sessionId)?.userId);
@@ -3020,27 +3120,75 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
     return 'png';
   }
 
-  /** 写入微码运行时文件 */
-  private writeMicrocodeAssets(outputPath: string, declareJson: any, componentName: string, sessionId: string) {
+  /** 写入微码运行时文件（🛡️ P1.8：统一走共享骨架生成器，不再自造） */
+  private async writeMicrocodeAssets(
+    outputPath: string,
+    declareJson: any,
+    componentName: string,
+    sessionId: string,
+    businessStyles?: string,
+  ) {
     const { mkdirSync, writeFileSync } = require('fs');
     // 确保 attribute 字段存在（兼容旧组件和 AI 输出不完整的情况）
     if (!declareJson.attribute) {
       declareJson.attribute = {};
     }
     writeFileSync(join(outputPath, 'declare.json'), JSON.stringify(declareJson, null, 2), 'utf-8');
-    writeFileSync(
-      join(outputPath, 'declare.js'),
-      `import declareConfig from './declare.json'\nlet declareInfo = $createMcDeclare({ metaUrl: import.meta.url, declareConfig })\nexport default declareInfo\n`,
-      'utf-8',
+    // 🛡️ P1.8（2026-09-11）：此前此处自造 declare.js / index.less（buildDefaultLess）/ component.js
+    // → 缺 config/css-vars.js、common.less、themes/*，且 index.less 是私有版本
+    // → mc-check M2-3/M2-4/M3-5/M3-6 必然全红。改为与 max 路径共用 buildMcSkeleton。
+    const { buildMcSkeleton } = await import('../ai-engine/utils/mc-skeleton.js');
+    const skeleton = buildMcSkeleton({
+      componentName,
+      rootClass: `c-${componentName}`,
+    });
+
+    // 🛡️ P1.8 修复：如果有业务样式，用它们覆盖空的 common.less 骨架
+    if (businessStyles && businessStyles.trim().length > 0) {
+      skeleton['resources/styles/common.less'] =
+        `@import './themes/theme-vars.less';
+
+.common();
+
+// ─────────────────────────────────────────────
+// ${componentName} 业务样式（从 LLM 产物提取）
+// ─────────────────────────────────────────────
+${businessStyles}
+`;
+    }
+
+    for (const [rel, content] of Object.entries(skeleton) as [string, string][]) {
+      const abs = join(outputPath, rel);
+      mkdirSync(dirname(abs), { recursive: true });
+      writeFileSync(abs, content, 'utf-8');
+    }
+    this.logger.log(
+      `🧩 P1.8 微码平台骨架写入（${Object.keys(skeleton).length} 个文件，与 max 路径同源${businessStyles ? '，业务样式已提取' : ''}）`,
     );
-    const stylesDir = join(outputPath, 'resources', 'styles');
-    mkdirSync(stylesDir, { recursive: true });
-    writeFileSync(join(stylesDir, 'index.less'), this.buildDefaultLess(componentName), 'utf-8');
-    // 🔧 微码入口 component.js（2026-09-01）：与主流程写盘段对齐，产物源目录即生成
-    writeFileSync(
-      join(outputPath, 'component.js'),
-      `import component from './package/index.vue'\nimport './resources/styles/index.less'\nexport default component\n`,
-      'utf-8',
+  }
+
+  /**
+   * 🛡️ P1.8（2026-09-11）微码 index.vue 落盘前处理（单一实现）：
+   *   ① 补 `@import '../resources/styles/index.less'`（mc-check M4-8：样式入口引用）
+   *   ② 硬编码字号归一为 `calc(var(--fontSize, 14px) * ratio)`（M5-6/M5-7）
+   */
+  private async prepareMicrocodeVueContent(vueCode: string, isMicrocode: boolean): Promise<string> {
+    if (!isMicrocode || typeof vueCode !== 'string') return vueCode;
+    const { normalizeFontSizeLiterals } = await import(
+      '../ai-engine/utils/font-size-normalizer.js'
     );
+    let out = vueCode;
+    if (!/@import\s+['"][^'"]*resources\/styles\/index\.less['"]/.test(out)) {
+      const styleTagRe = /<style([^>]*)>/i;
+      if (styleTagRe.test(out)) {
+        out = out.replace(
+          styleTagRe,
+          (m: string) => `${m}\n@import '../resources/styles/index.less';`,
+        );
+      } else {
+        out += `\n<style lang="less" scoped>\n@import '../resources/styles/index.less';\n</style>\n`;
+      }
+    }
+    return normalizeFontSizeLiterals(out).text;
   }
 }

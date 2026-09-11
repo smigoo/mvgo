@@ -1,0 +1,117 @@
+// 微码组件主题变量定义
+// 结构：三个 mixin（.common()、.theme-dark()、.theme-light()）
+// 颜色变量定义在 mixin 内部，根级禁止调用主题 mixin
+
+// 公共变量（与主题无关的尺寸、间距等）
+.common() {
+  // 尺寸变量
+  @border-radius-base: 4px;
+  @border-radius-sm: 2px;
+  @border-radius-lg: 8px;
+  
+  // 间距变量
+  @spacing-xs: 4px;
+  @spacing-sm: 8px;
+  @spacing-md: 16px;
+  @spacing-lg: 24px;
+  @spacing-xl: 32px;
+  
+  // 字体尺寸
+  @font-size-sm: 12px;
+  @font-size-base: 14px;
+  @font-size-lg: 16px;
+  @font-size-xl: 18px;
+  
+  // 行高
+  @line-height-base: 1.5;
+  @line-height-sm: 1.4;
+  
+  // 过渡动画
+  @transition-base: all 0.3s ease;
+  @transition-fast: all 0.15s ease;
+}
+
+// 深色主题变量
+.theme-dark() {
+  // 主色调
+  @primary-color: #1990ff;
+  @primary-hover: #388dff;
+  @primary-active: #006fe3;
+  @primary-light: #2ba0ff;
+  
+  // 辅助色
+  @info-color: #57caff;
+  @success-color: #00cccc;
+  @warning-color: #ffa22f;
+  @error-color: #ff6a00;
+  
+  // 背景色
+  @bg-color: #56597c;
+  @bg-secondary: rgba(74, 117, 141, 0.25);
+  @bg-hover: rgba(0, 204, 204, 0.3);
+  @bg-active: rgba(199, 224, 255, 1);
+  @bg-panel: #d6effc;
+  
+  // 文字颜色（深色面板禁止使用黑色系）
+  @text-primary: #ffffff;
+  @text-secondary: rgba(255, 255, 255, 0.8);
+  @text-tertiary: rgba(172, 196, 225, 1);
+  @text-disabled: #6680a0;
+  
+  // 边框颜色
+  @border-color: rgba(172, 196, 225, 1);
+  @border-light: rgba(74, 117, 141, 0.25);
+  
+  // 图表色板
+  @chart-color-1: #1990ff;
+  @chart-color-2: #5a7eff;
+  @chart-color-3: #57caff;
+  @chart-color-4: #00cccc;
+  @chart-color-5: #5bbbef;
+  @chart-color-6: #0c9dbe;
+  @chart-color-7: #559eff;
+  @chart-color-8: #3385ff;
+}
+
+// 浅色主题变量（默认主题，颜色必须与设计稿一致）
+.theme-light() {
+  // 主色调
+  @primary-color: #1252fa;
+  @primary-hover: #388dff;
+  @primary-active: #006fe3;
+  @primary-light: #1399ff;
+  
+  // 辅助色
+  @info-color: #2ba0ff;
+  @success-color: #00cccc;
+  @warning-color: #ffa22f;
+  @error-color: #ff6a00;
+  
+  // 背景色
+  @bg-color: #ffffff;
+  @bg-secondary: #edf4fb;
+  @bg-hover: #d6effc;
+  @bg-active: rgba(199, 224, 255, 1);
+  @bg-panel: #f5f5f5;
+  
+  // 文字颜色
+  @text-primary: #333333;
+  @text-secondary: #56597c;
+  @text-tertiary: #6680a0;
+  @text-disabled: rgba(74, 117, 141, 0.25);
+  @text-black: #000000;
+  
+  // 边框颜色
+  @border-color: rgba(172, 196, 225, 1);
+  @border-light: rgba(74, 117, 141, 0.25);
+  
+  // 图表色板
+  @chart-color-1: #1252fa;
+  @chart-color-2: #5a7eff;
+  @chart-color-3: #1990ff;
+  @chart-color-4: #00cccc;
+  @chart-color-5: #5bbbef;
+  @chart-color-6: #0c9dbe;
+  @chart-color-7: #559eff;
+  @chart-color-8: #3385ff;
+}

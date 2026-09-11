@@ -1,0 +1,90 @@
+// 主题变量定义文件
+// 本文件定义三个 mixin：.common()、.theme-dark()、.theme-light()
+// 由系统生成的 dark.less/light.less 在主题选择器内调用对应 mixin
+
+.common() {
+  // 字体缩放基准令牌（微码组件必须项）
+  @fontSize: 14px;
+  
+  // 公共字体尺寸
+  @font-size-base: 14px;
+  @font-size-title: 16px;
+  
+  // 公共圆角
+  @border-radius-tab: 4px;
+  @border-radius-badge: 10px;
+}
+
+.theme-dark() {
+  // 面板默认主题（dark），以下颜色即组件默认展示色
+  
+  // 主色调
+  @color-primary: #0078ff;
+  
+  // 背景色
+  @color-bg-base: #1a2a3a;
+  
+  // 状态色
+  @color-success: #00c853;
+  @color-danger: #f5222d;
+  
+  // 文字颜色（深色面板禁止使用黑色系）
+  @color-text-base: #ffffff;
+  @color-text-secondary: rgba(255, 255, 255, 0.7);
+  
+  // Tab 标签页颜色
+  @color-tab-active-bg: #0078ff;
+  @color-tab-active-text: #ffffff;
+  @color-tab-default-text: rgba(255, 255, 255, 0.7);
+  
+  // 告警线条颜色
+  @color-warning-line: #f5222d;
+  
+  // 图表颜色
+  @color-chart-fill-start: rgba(0, 200, 83, 0.25);
+  @color-chart-fill-end: rgba(0, 200, 83, 0);
+  @color-chart-line: #00c853;
+  
+  // 徽章颜色
+  @color-badge: #ff6a00;
+}
+
+.theme-light() {
+  // 浅色主题（待设计稿提供，当前按深色主题风格反转补齐）
+  
+  // 主色调
+  @color-primary: #0078ff;
+  
+  // 背景色
+  @color-bg-base: #f5f7fa;
+  
+  // 状态色
+  @color-success: #00c853;
+  @color-danger: #f5222d;
+  
+  // 文字颜色
+  @color-text-base: #1a2a3a;
+  @color-text-secondary: rgba(26, 42, 58, 0.7);
+  
+  // Tab 标签页颜色
+  @color-tab-active-bg: #0078ff;
+  @color-tab-active-text: #ffffff;
+  @color-tab-default-text: rgba(26, 42, 58, 0.7);
+  
+  // 告警线条颜色
+  @color-warning-line: #f5222d;
+  
+  // 图表颜色
+  @color-chart-fill-start: rgba(0, 200, 83, 0.25);
+  @color-chart-fill-end: rgba(0, 200, 83, 0);
+  @color-chart-line: #00c853;
+  
+  // 徽章颜色
+  @color-badge: #ff6a00;
+}
+
+// 自动添加：将 .common() 中的 Less 变量暴露到全局作用域
+
+:root {
+  .common();
+}

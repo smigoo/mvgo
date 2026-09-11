@@ -1,0 +1,360 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 72,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].body 和 layout.sections[2].body",
+        "message": "bg-7890.png 同时被 stats-and-controls 和 chart-area 两个 section 引用为背景，且 chart-area.body 同时存在 resourceFile 和 backgroundImage 双重背景字段，语义冲突。",
+        "suggestion": "明确背景图归属：若背景仅属于图表区则从 stats-and-controls 移除；chart-area.body 中删除冗余的 resourceFile 字段，统一使用 backgroundImage。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[1]（stat-range）",
+        "message": "stat-range 中 text '2k3+785CD今夜度' 疑似 OCR 识别错误（chartDataHints 中原文为 'zk3+785CO浓度'），字段含义模糊，与实际数据不符。",
+        "suggestion": "将该文本修正为 'zk3+785CO浓度'，并补充 unit 字段说明单位，避免前端直接渲染错误文本。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "headerSlots",
+        "message": "图表/列表视图切换按钮同时存在于 headerSlots（slotType: header-right）和 sections[1].body.children[2]（view-toggle），造成元素位置定义冲突。",
+        "suggestion": "二选一：若按钮属于面板标题栏插槽则从 sections[1] 的 body children 中移除；若属于内容区行内布局则从 headerSlots 中移除。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "coverageReport.missing",
+        "message": "覆盖率仅 60%，缺失 'cp-环境监测'（根容器 FRAME）、'环境监测'（标题 TEXT）、'sub-t'（FRAME）、'num'（GROUP）4 个节点，组件标题和数值子结构未在 layout 中体现。",
+        "suggestion": "补充根容器映射；在适当 section 中添加 header 层承载 '环境监测' 标题文本；将 num GROUP 拆解为 label+value children 纳入 stat-group。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "charts[0]",
+        "message": "charts[0].axes 为纯文本字符串，缺少结构化的 xAxis/yAxis 对象定义；Y轴刻度范围（notes 中为0-40）与 chartDataHints.values（含600）存在数量级不一致。",
+        "suggestion": "将 axes 拆分为 xAxis:{type,labels} / yAxis:{type,min,max,labels} 结构化字段；核实 Y 轴真实量程，统一 charts 与 chartDataHints 中的数值范围。"
+      }
+    ],
+    "recommendations": [
+      "三个 section 均未设置 header 子层（仅有 body），导致 '环境监测' 组件标题、Tab栏标题语义缺失；建议在顶层补充一个 title-section 或在 header-tabs section 中增加 header 字段承载组件标题，符合 section 分层规范。",
+      "stats-and-controls section 的 slotCandidate 为 null，但 headerSlots 已声明两个 header-right 插槽元素，二者需同步：若视图切换按钮属于标题栏插槽，应将 slotCandidate 设为对应插槽标识。",
+      "建议将 chartDataHints 中的标签信息（预警线、单位'辆'/'时'、系列名）反向补充到 charts[0] 的结构化字段中，提升图表配置的完整性与可维护性。"
+    ],
+    "summary": "结构分层基本清晰，Tab与图表区划分合理，但存在背景资源重复引用、视图切换按钮位置冲突、Figma节点覆盖率偏低（60%）及图表轴定义非结构化等问题，需重点修复后方可投入开发。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）—— 浅色科技监测风主题",
+      "--colorPrimary": "rgba(85, 158, 255, 1)",
+      "--colorDanger": "rgba(255, 77, 79, 1)",
+      "--colorTextSecondary": "rgba(102, 102, 102, 1)",
+      "--colorTextTertiary": "rgba(153, 153, 153, 1)",
+      "--colorBgBase": "rgba(237, 244, 251, 1)",
+      "--colorTextBase": "rgba(0, 0, 0, 1)",
+      "--fontSize": "14px",
+      "--fontSizeLg": "40px",
+      "--fontWeightStrong": "700"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射 —— 对应 theme-vars.less 中 .theme-light() mixin",
+      "@color-primary": "rgba(85, 158, 255, 1)",
+      "@color-danger": "rgba(255, 77, 79, 1)",
+      "@color-text-secondary": "rgba(102, 102, 102, 1)",
+      "@color-text-tertiary": "rgba(153, 153, 153, 1)",
+      "@color-bg-base": "rgba(237, 244, 251, 1)",
+      "@color-text-base": "rgba(0, 0, 0, 1)",
+      "@font-size-base": "14px",
+      "@font-size-value-lg": "40px",
+      "@font-weight-strong": "700"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类 —— 对应 common.less 业务样式",
+      ".monitor-container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "width": "100%",
+        "height": "100%",
+        "background": "var(--colorBgBase, @color-bg-base)",
+        "font-size": "var(--fontSize, @font-size-base)"
+      },
+      ".tab-bar": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "0.5em"
+      },
+      ".tab-item": {
+        "padding": "0.4em 1em",
+        "font-size": "var(--fontSize, @font-size-base)",
+        "color": "var(--colorTextSecondary, @color-text-secondary)",
+        "cursor": "pointer",
+        "background": "transparent",
+        "border": "none",
+        "border-radius": "4px",
+        "transition": "color 0.2s, background-image 0.2s"
+      },
+      ".tab-item.is-active": {
+        "color": "var(--colorPrimary, @color-primary)",
+        "font-weight": "var(--fontWeightStrong, @font-weight-strong)",
+        "background-image": "url('../../images/tab-active-bg.png')",
+        "background-size": "100% 100%",
+        "background-repeat": "no-repeat",
+        "background-color": "transparent",
+        "border": "none"
+      },
+      ".chart-area": {
+        "position": "relative",
+        "flex": "1",
+        "background-image": "url('../../images/chart-area-bg.png')",
+        "background-size": "100% 100%",
+        "background-repeat": "no-repeat",
+        "background-color": "transparent",
+        "border": "none"
+      },
+      ".threshold-line": {
+        "position": "absolute",
+        "left": "0",
+        "right": "0",
+        "border-top": "1px dashed var(--colorDanger, @color-danger)"
+      },
+      ".threshold-label": {
+        "position": "absolute",
+        "right": "0.5em",
+        "top": "-1.2em",
+        "font-size": "0.85em",
+        "color": "var(--colorDanger, @color-danger)",
+        "font-weight": "var(--fontWeightStrong, @font-weight-strong)"
+      },
+      ".metric-value": {
+        "font-size": "var(--fontSizeLg, @font-size-value-lg)",
+        "font-weight": "var(--fontWeightStrong, @font-weight-strong)",
+        "color": "var(--colorTextBase, @color-text-base)",
+        "line-height": "1.2",
+        "letter-spacing": "-0.02em"
+      },
+      ".metric-label": {
+        "font-size": "var(--fontSize, @font-size-base)",
+        "color": "var(--colorTextTertiary, @color-text-tertiary)"
+      }
+    },
+    "themeVarsLessSnippet": {
+      "comment": "粘贴到 themes/theme-vars.less 的完整代码示例",
+      "code": [
+        "// ===== 浅色科技监测风主题变量 =====",
+        "",
+        ".common() {",
+        "  @colorPrimary: var(--colorPrimary);",
+        "  @colorDanger: var(--colorDanger);",
+        "  @colorTextBase: var(--colorTextBase);",
+        "  @colorTextSecondary: var(--colorTextSecondary);",
+        "  @colorTextTertiary: var(--colorTextTertiary);",
+        "  @colorBgBase: var(--colorBgBase);",
+        "  @fontSize: var(--fontSize);",
+        "  @fontSizeLg: var(--fontSizeLg);",
+        "  @fontWeightStrong: var(--fontWeightStrong);",
+        "}",
+        ".common();",
+        "",
+        ".theme-light() {",
+        "  @color-primary: rgba(85, 158, 255, 1);",
+        "  @color-danger: rgba(255, 77, 79, 1);",
+        "  @color-text-secondary: rgba(102, 102, 102, 1);",
+        "  @color-text-tertiary: rgba(153, 153, 153, 1);",
+        "  @color-bg-base: rgba(237, 244, 251, 1);",
+        "  @color-text-base: rgba(0, 0, 0, 1);",
+        "  @font-size-base: 14px;",
+        "  @font-size-value-lg: 40px;",
+        "  @font-weight-strong: 700;",
+        "}",
+        "",
+        ".theme-dark() {",
+        "  @color-primary: rgba(85, 158, 255, 1);",
+        "  @color-danger: rgba(255, 77, 79, 1);",
+        "  @color-text-secondary: rgba(180, 180, 180, 1);",
+        "  @color-text-tertiary: rgba(120, 120, 120, 1);",
+        "  @color-bg-base: rgba(15, 25, 40, 1);",
+        "  @color-text-base: rgba(255, 255, 255, 1);",
+        "  @font-size-base: 14px;",
+        "  @font-size-value-lg: 40px;",
+        "  @font-weight-strong: 700;",
+        "}",
+        "",
+        "// 全局兜底：浅色值",
+        ".theme-light();"
+      ]
+    },
+    "tokenCoverage": 0.91,
+    "mappingNotes": [
+      "rgba(85,158,255,1) 映射为主色 --colorPrimary，用于激活Tab文字、交互高亮",
+      "rgba(255,77,79,1) 映射为危险/告警色 --colorDanger，用于阈值线及其标注文字",
+      "rgba(102,102,102,1) 映射为二级文字 --colorTextSecondary，用于非激活Tab等次要信息",
+      "rgba(153,153,153,1) 映射为三级文字 --colorTextTertiary，用于指标单位、辅助说明",
+      "rgba(237,244,251,1) 映射为页面背景 --colorBgBase，同时作为浅灰蓝渐变底色",
+      "大号数值40 对应 .metric-value，字号用 --fontSizeLg（40px），黑色加粗 700",
+      "Tab激活态背景图片在 .tab-item.is-active 中通过 background-image: url() 引用，移除 border 和 background-color 避免叠加",
+      "图表区域背景图片在 .chart-area 中通过 background-image: url() 引用，移除 border 和 background-color 避免叠加",
+      "阈值线拆分为 .threshold-line（线体）和 .threshold-label（红色文字标注）两个类，均引用 --colorDanger",
+      "深色主题变量已预埋 .theme-dark() mixin，背景色调整为深海军蓝以保持科技监测风格",
+      "背景图资源路径为占位写法（../../images/xxx.png），实际路径需替换为 resource-dom-mapping.json 中对应的文件名"
+    ],
+    "elementStyleMap": {
+      "header-tabs": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-tab-氧化碳-2": {
+        "background-image": "url(../resources/images/bg-tab-active-7891.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "stats-and-controls": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-7-stat-group-x-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-7-stat-range-x-1": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "flex-end"
+      },
+      "el-el-x-7-view-toggle-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-7": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center",
+        "justify-content": "space-between",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "el-stat-group-x-8": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-stat-range-x-11": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "flex-end"
+      },
+      "el-view-toggle-x-14": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "chart-area": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-18": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "header-tabs",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 4,
+        "title": "Tab切换栏",
+        "complexityScore": 20,
+        "complexityReasons": {
+          "elementCount": 4,
+          "charts": 0,
+          "interactions": 5,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "stats-and-controls",
+        "responsibility": "标签页切换区",
+        "elementCount": 9,
+        "title": "统计数值与视图切换",
+        "complexityScore": 30,
+        "complexityReasons": {
+          "elementCount": 9,
+          "charts": 0,
+          "interactions": 3,
+          "maxDepth": 2
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": true
+      },
+      {
+        "id": "chart-area",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "趋势图表区",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 1,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 或存在高复杂度 section → 强制拆分",
+    "internalSubcomponents": []
+  }
+}

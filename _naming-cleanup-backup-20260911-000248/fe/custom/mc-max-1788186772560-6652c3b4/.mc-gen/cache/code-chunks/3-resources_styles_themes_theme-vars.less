@@ -1,0 +1,97 @@
+// 主题变量定义文件
+// 结构：.common() 定义通用变量，.theme-dark() 和 .theme-light() 定义深色/浅色主题颜色
+
+.common() {
+  // 字体缩放基准令牌（根容器通过 CSS 变量 --fontSize 驱动，默认 14px）
+  @fontSize: 14px;
+  
+  // 通用尺寸变量
+  @border-radius-base: 4px;
+  @border-radius-sm: 2px;
+  @border-radius-lg: 8px;
+  
+  // 通用间距变量
+  @spacing-xs: 4px;
+  @spacing-sm: 8px;
+  @spacing-md: 16px;
+  @spacing-lg: 24px;
+  @spacing-xl: 32px;
+}
+
+.theme-light() {
+  // 背景颜色（浅色主题 - 默认展示色）
+  @bg-color-primary: #ffffff;
+  @bg-color-secondary: #f5f7fa;
+  @bg-color-tertiary: #e8ecf1;
+  
+  // 文字颜色
+  @text-color-primary: #1a2332;
+  @text-color-secondary: #4a5568;
+  @text-color-tertiary: #718096;
+  @text-color-disabled: #a0aec0;
+  
+  // 边框颜色
+  @border-color-base: #e2e8f0;
+  @border-color-light: #edf2f7;
+  @border-color-dark: #cbd5e0;
+  
+  // 主题色
+  @primary-color: #3b82f6;
+  @success-color: #10b981;
+  @warning-color: #f59e0b;
+  @error-color: #ef4444;
+  @info-color: #6366f1;
+  
+  // 特殊背景（图片）
+  @tab-active-bg: url(../resources/images/bg-tab-active-7891.png);
+  @container-bg: url(../resources/images/bg-7890.png);
+  
+  // 阴影
+  @shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  @shadow-base: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  @shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  @shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  
+  // 遮罩颜色
+  @mask-color: rgba(0, 0, 0, 0.45);
+  @mask-color-light: rgba(0, 0, 0, 0.25);
+}
+
+.theme-dark() {
+  // 背景颜色（深色主题）
+  @bg-color-primary: #1a2332;
+  @bg-color-secondary: #0f1723;
+  @bg-color-tertiary: #2d3748;
+  
+  // 文字颜色（深色面板禁止使用黑色系）
+  @text-color-primary: #f7fafc;
+  @text-color-secondary: #e2e8f0;
+  @text-color-tertiary: #cbd5e0;
+  @text-color-disabled: #718096;
+  
+  // 边框颜色
+  @border-color-base: #2d3748;
+  @border-color-light: #1a2332;
+  @border-color-dark: #4a5568;
+  
+  // 主题色（深色主题下略微调整亮度）
+  @primary-color: #60a5fa;
+  @success-color: #34d399;
+  @warning-color: #fbbf24;
+  @error-color: #f87171;
+  @info-color: #818cf8;
+  
+  // 特殊背景（图片 - 与浅色主题相同）
+  @tab-active-bg: url(../resources/images/bg-tab-active-7891.png);
+  @container-bg: url(../resources/images/bg-7890.png);
+  
+  // 阴影（深色主题阴影更深）
+  @shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  @shadow-base: 0 1px 3px 0 rgba(0, 0, 0, 0.4), 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  @shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+  @shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.4);
+  
+  // 遮罩颜色
+  @mask-color: rgba(0, 0, 0, 0.65);
+  @mask-color-light: rgba(0, 0, 0, 0.45);
+}

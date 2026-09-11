@@ -1,0 +1,28 @@
+{
+  "completed": [
+    "1-declare.json",
+    "2-package/index.vue",
+    "3-package/index.vue",
+    "4-package/index.vue",
+    "5-package/components/DailyTotalFlow.vue",
+    "6-package/components/TunnelHourlyChart.vue",
+    "8-package/components/VehicleTypeDistribution.vue",
+    "9-package/components/FlowPrediction.vue",
+    "7-package/components/BridgeHourlyChart.vue",
+    "10-resources/styles/themes/theme-vars.less",
+    "11-resources/styles/common.less"
+  ],
+  "total": 6,
+  "updatedAt": 1788003992240,
+  "files": {
+    "declare.json": "1-declare.json",
+    "package/index.vue": "4-package_index.vue",
+    "package/components/DailyTotalFlow.vue": "5-package_components_DailyTotalFlow.vue",
+    "package/components/TunnelHourlyChart.vue": "6-package_components_TunnelHourlyChart.vue",
+    "package/components/VehicleTypeDistribution.vue": "8-package_components_VehicleTypeDistribution.vue",
+    "package/components/FlowPrediction.vue": "9-package_components_FlowPrediction.vue",
+    "package/components/BridgeHourlyChart.vue": "7-package_components_BridgeHourlyChart.vue",
+    "resources/styles/themes/theme-vars.less": "10-resources_styles_themes_theme-vars.less",
+    "resources/styles/common.less": "11-resources_styles_common.less"
+  }
+}

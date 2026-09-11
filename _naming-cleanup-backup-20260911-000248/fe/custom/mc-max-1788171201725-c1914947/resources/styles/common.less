@@ -1,0 +1,167 @@
+// 业务样式文件
+// 本文件定义组件的业务样式，使用 .c- 前缀命名
+// 主题变量通过 theme-vars.less 引入
+
+@import './themes/theme-vars.less';
+
+// 应用公共变量
+.common();
+
+// 组件根容器
+.c-mc-max-1788171201725-c1914947-c-env-monitor-root {width: 420px;
+  height: 186px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  box-sizing: border-box;
+  
+
+  max-width: 100%;
+  max-height: 100vh;
+  box-sizing: border-box;
+  font-size: var(--fontSize, 14px);
+
+// 控制区块容器
+}
+.c-mc-max-1788171201725-c1914947-c-env-monitor-controls-block {
+  width: 100%;
+  flex-shrink: 0;
+}
+
+// 控制区根容器
+.c-mc-max-1788171201725-c1914947-c-env-monitor-controls {
+  width: 100%;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+// 监测指标 Tab 容器
+.c-mc-max-1788171201725-c1914947-c-env-monitor-tabs {
+  flex: 1;
+  min-width: 0;
+  height: 27px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 3px;
+  box-sizing: border-box;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #b5deff 0%, #d1ecff 100%);
+  border: 1px solid #ffffff;
+  overflow: hidden;
+}
+
+// 单个 Tab 项
+.c-mc-max-1788171201725-c1914947-c-env-monitor-tab-item {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+  font-size: @fontSize;
+  font-weight: 500;
+  color: #2c9bea;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+
+  &:hover {
+    opacity: 0.8;
+  }
+}
+
+// 激活态 Tab
+.c-mc-max-1788171201725-c1914947-c-env-monitor-tab-item-active {
+  color: #ffffff;
+  text-shadow: 0 0.6px 0 #006fe3;
+}
+
+// 视图切换图标组
+.c-mc-max-1788171201725-c1914947-c-env-monitor-view-icons {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+// 图标按钮容器
+.c-mc-max-1788171201725-c1914947-c-env-monitor-view-icon {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: opacity 0.3s ease;
+
+  &:hover {
+    opacity: 0.7;
+  }
+}
+
+// 激活态图标
+.c-mc-max-1788171201725-c1914947-c-env-monitor-view-icon-active {
+  opacity: 1;
+}
+
+// 图标图片
+.c-mc-max-1788171201725-c1914947-c-env-monitor-view-icon-img {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+// 列表视图角标
+.c-mc-max-1788171201725-c1914947-c-env-monitor-view-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 2px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 29px;
+  background: #f53f3f;
+  color: #ffffff;
+  font-size: calc(@fontSize * 0.8571);
+  font-weight: 500;
+  line-height: 1;
+}
+
+// 图表区块容器
+.c-mc-max-1788171201725-c1914947-c-env-monitor-chart-block {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+}
+
+// 图表根容器
+.c-mc-max-1788171201725-c1914947-c-env-monitor-chart {
+  width: 100%;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+// 图表画布
+.c-mc-max-1788171201725-c1914947-c-env-monitor-chart-canvas {
+  width: 100%;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}

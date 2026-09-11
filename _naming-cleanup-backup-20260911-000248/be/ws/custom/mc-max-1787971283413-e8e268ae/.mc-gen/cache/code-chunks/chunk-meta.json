@@ -1,0 +1,28 @@
+{
+  "completed": [
+    "1-declare.json",
+    "2-package/index.vue",
+    "3-package/index.vue",
+    "4-package/index.vue",
+    "5-package/components/DailyTotal.vue",
+    "6-package/components/TunnelFlowChart.vue",
+    "7-package/components/BridgeFlowChart.vue",
+    "8-package/components/VehicleDistribution.vue",
+    "9-package/components/FlowPrediction.vue",
+    "10-resources/styles/themes/theme-vars.less",
+    "11-resources/styles/common.less"
+  ],
+  "total": 6,
+  "updatedAt": 1787971589429,
+  "files": {
+    "declare.json": "1-declare.json",
+    "package/index.vue": "4-package_index.vue",
+    "package/components/DailyTotal.vue": "5-package_components_DailyTotal.vue",
+    "package/components/TunnelFlowChart.vue": "6-package_components_TunnelFlowChart.vue",
+    "package/components/BridgeFlowChart.vue": "7-package_components_BridgeFlowChart.vue",
+    "package/components/VehicleDistribution.vue": "8-package_components_VehicleDistribution.vue",
+    "package/components/FlowPrediction.vue": "9-package_components_FlowPrediction.vue",
+    "resources/styles/themes/theme-vars.less": "10-resources_styles_themes_theme-vars.less",
+    "resources/styles/common.less": "11-resources_styles_common.less"
+  }
+}

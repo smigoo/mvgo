@@ -1,0 +1,232 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 78,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].header",
+        "message": "标题区 header.title 与 body.text 重复渲染同一标题，易导致DOM重复或样式不一致。",
+        "suggestion": "保留header.title，body仅保留装饰元素，删除重复text节点。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[1]",
+        "message": "icon-group 容器上挂载 resourceFile/resourceVarName 等单图标字段，与children图标资源冲突。",
+        "suggestion": "移除容器级图标字段，将资源归属到具体icon-button子节点。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[0].children[0]",
+        "message": "Y轴单位标注为“辆”，与CO浓度监测语义不符，疑似模板复用残留。",
+        "suggestion": "改为ppm或mg/m³等浓度单位，或由图表数据动态生成。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[0].children",
+        "message": "图表容器缺少面积/折线序列节点，仅有坐标轴、预警线和图例，无法渲染CO趋势。",
+        "suggestion": "在chart-container中补充series/area节点并绑定seriesColors。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[2].body.children[0].children",
+        "message": "图表区嵌套较深（body.relative→chart-container→axis-labels→elements），超过建议3层。",
+        "suggestion": "可将轴标签和系列抽为chart-container的扁平子组件或插槽，减少层级。"
+      }
+    ],
+    "recommendations": [
+      "统一标题区结构，避免header与body重复渲染标题。",
+      "修正图标组资源归属，确保资源字段只出现在具体子节点。",
+      "补齐图表系列节点并校验Y轴单位与数据语义一致。"
+    ],
+    "summary": "整体布局分区清晰，但存在标题重复、资源挂载错位及图表系列缺失等问题，建议修正后使用。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名，浅色科技监测风）",
+      "--colorPrimary": "#559EFF",
+      "--colorBg": "#EDF4FB",
+      "--colorSuccess": "#00B42A",
+      "--colorDanger": "#F53F3F",
+      "--colorTextBase": "#1A1A2E",
+      "--colorTextSecondary": "#86909C",
+      "--colorTextInverse": "#FFFFFF",
+      "--fontSize": "14px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射（kebab-case）",
+      "@color-primary": "#559EFF",
+      "@color-bg": "#EDF4FB",
+      "@color-success": "#00B42A",
+      "@color-danger": "#F53F3F",
+      "@color-text-base": "#1A1A2E",
+      "@color-text-secondary": "#86909C",
+      "@color-text-inverse": "#FFFFFF",
+      "@font-size-base": "14px",
+      "@border-radius-base": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用样式类（浅色科技监测风）",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "height": "100%",
+        "padding": "1em",
+        "background": "var(--colorBg, #EDF4FB)",
+        "color": "var(--colorTextBase, #1A1A2E)",
+        "font-size": "var(--fontSize, 14px)"
+      },
+      ".section-title": {
+        "position": "relative",
+        "display": "flex",
+        "align-items": "center",
+        "gap": "0.5em",
+        "font-size": "1em",
+        "font-weight": "600",
+        "color": "var(--colorTextBase, #1A1A2E)"
+      },
+      ".section-title-dots": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "4px"
+      },
+      ".section-title-dot": {
+        "width": "8px",
+        "height": "8px",
+        "border-radius": "50%"
+      },
+      ".section-title-dot:nth-child(1)": {
+        "background": "var(--colorPrimary, #559EFF)"
+      },
+      ".section-title-dot:nth-child(2)": {
+        "background": "var(--colorSuccess, #00B42A)"
+      },
+      ".section-title-dot:nth-child(3)": {
+        "background": "var(--colorDanger, #F53F3F)"
+      },
+      ".tab": {
+        "display": "flex",
+        "gap": "0.5em"
+      },
+      ".tab-item": {
+        "padding": "0.5em 1em",
+        "border-radius": "var(--borderRadius, 8px)",
+        "color": "var(--colorTextSecondary, #86909C)",
+        "background": "transparent",
+        "cursor": "pointer",
+        "transition": "all 0.2s ease"
+      },
+      ".tab-item.active": {
+        "background": "var(--colorPrimary, #559EFF)",
+        "color": "var(--colorTextInverse, #FFFFFF)"
+      },
+      ".alert-line": {
+        "height": "2px",
+        "background": "var(--colorDanger, #F53F3F)",
+        "border-radius": "1px"
+      },
+      ".badge": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "min-width": "1.25em",
+        "height": "1.25em",
+        "padding": "0 0.35em",
+        "border-radius": "999px",
+        "background": "var(--colorDanger, #F53F3F)",
+        "color": "var(--colorTextInverse, #FFFFFF)",
+        "font-size": "0.75em",
+        "line-height": "1"
+      },
+      ".status-card": {
+        "background": "var(--colorBgContainer, #FFFFFF)",
+        "border": "1px solid rgba(134, 144, 156, 0.2)",
+        "border-radius": "var(--borderRadius, 8px)",
+        "padding": "1em"
+      }
+    },
+    "tokenCoverage": 0.96,
+    "mappingNotes": [
+      "#EDF4FB 映射为 --colorBg，作为浅色科技监测风背景",
+      "#559EFF 映射为 --colorPrimary，用于 Tab 选中态蓝色背景与主强调",
+      "#00B42A 映射为 --colorSuccess，用于成功/正常状态",
+      "#F53F3F 映射为 --colorDanger，用于红色预警线与红色 Badge 数字 6",
+      "#86909C 映射为 --colorTextSecondary，用于次要文字与未选中 Tab",
+      "标题左侧三色圆点装饰拆分为 .section-title-dots + 三个 nth-child 色点",
+      "红色 Badge 数字 6 通过 .badge 类实现，支持任意数字复用",
+      "所有颜色均以 CSS 变量方式输出，并保留 Figma 字面量作为 fallback"
+    ],
+    "elementStyleMap": {
+      "section-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-decoration-group-x-2": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-controls": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-tab-group-x-8": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-icon-group-x-13": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-17-chart-container-x-0-reference-line-预警线-2": {
+        "color": "#F53F3F"
+      },
+      "el-el-x-17": {
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "el-chart-container-x-18-reference-line-预警线-2": {
+        "color": "#F53F3F"
+      },
+      "el-reference-line-预警线-40": {
+        "color": "#F53F3F"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-header",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 5,
+        "title": "环境监测"
+      },
+      {
+        "id": "section-controls",
+        "responsibility": "控制栏（请按功能拆分）",
+        "elementCount": 8,
+        "title": "控制栏"
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 24,
+        "title": "图表区"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 → 强制拆分"
+  }
+}

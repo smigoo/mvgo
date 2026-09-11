@@ -1,0 +1,30 @@
+{
+  "componentId": "mc-1784653963271-a99b5540",
+  "componentName": "mc-1784653963271-a99b5540",
+  "version": "v1.0.0",
+  "panelKey": "default-panel",
+  "attribute": {
+    "aspectRatio": [460, 138]
+  },
+  "businessEvents": {
+    "mc-1784653963271-a99b5540-onload": {
+      "eventId": "mc-1784653963271-a99b5540-onload",
+      "eventName": "组件加载",
+      "eventDataSchema": {}
+    }
+  },
+  "businessStatuses": {},
+  "themeConfig": {
+    "default": "dark",
+    "list": [
+      {
+        "name": "深色主题",
+        "key": "dark"
+      },
+      {
+        "name": "亮色主题",
+        "key": "light"
+      }
+    ]
+  }
+}

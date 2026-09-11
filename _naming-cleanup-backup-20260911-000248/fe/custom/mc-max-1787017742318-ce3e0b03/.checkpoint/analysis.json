@@ -1,0 +1,110 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 65,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0].header",
+        "message": "违反了「禁止生成组件面板标题和边框样式」核心规范。`base-panel` 会自动通过 `componentName` 渲染面板标题，组件内部不应再重复生成标题栏和标题文字。",
+        "suggestion": "移除 `section-header-nav` 的 `header` 配置（或将其置为 null），该 section 应仅作为内部业务导航栏（Tab切换），不包含组件主标题。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[0]",
+        "message": "违反了「容器布局禁止固定宽度」核心规范。图表容器设置了固定宽度 `width: 380`，导致无法自适应容器宽度，在不同屏幕下会留白或溢出。",
+        "suggestion": "将图表宽度改为 `width: '100%'` 或使用 `flex: 1`，并确保外层图表区块设置 `min-width: 0` 和 `overflow: hidden` 以防止 ECharts 越界。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[0].axes.y",
+        "message": "业务语义识别严重错误。当前组件为「环境监测」，CO浓度图表的 Y 轴单位被错误识别为「辆」，这完全不符合业务逻辑。",
+        "suggestion": "修正 Y 轴单位，CO 浓度单位通常为 'ppm' 或 'mg/m³'，请根据实际设计稿或业务常识进行修正。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "图表细节覆盖率过低（仅 48%），缺失了 Y 轴刻度文本（'40 30 20 10 0'）、预警线文本、图例文本（'zk3+785CO浓度'）等关键节点，可能导致代码生成时图表细节丢失。",
+        "suggestion": "补充完善图表的坐标轴标签、图例和预警线标签的解析，确保这些文本节点在布局结构中被正确映射。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[0].body.backgroundImage",
+        "message": "布局中直接引用了本地图片路径（如 `../resources/images/bg-7890.png`）。在后续代码生成时，若使用 ESM `import` 引入会触发 RUNTIME-004 运行时阻断。",
+        "suggestion": "在代码生成阶段，必须将本地图片转换为 base64 内联，或使用同源 URL 路径（如 `/api/preview/...`），严禁使用 `import` 引入本地图片资源。"
+      }
+    ],
+    "recommendations": [
+      "重新解析 Figma 结构，剥离由 `base-panel` 统一处理的面板标题、边框和背景，确保组件内部只包含纯业务内容（如 Tab 导航和图表）。",
+      "修正图表的 Y 轴单位识别错误，并补全缺失的坐标轴刻度、图例和预警线文本节点，提升 Figma 节点覆盖率。",
+      "在代码生成阶段，严格遵循宽度自适应原则，图表容器使用 `width: 100%`，并配合 `ResizeObserver` 实现响应式缩放。",
+      "确保 Tab 切换（一氧化碳、能见度等）在代码中实现数据联动，使用 `watch` 监听切换事件并更新 ECharts 数据，禁止仅做样式切换而不更新数据。"
+    ],
+    "summary": "该布局结构存在违反微码核心规范的问题，包括重复生成面板标题和图表容器使用固定宽度，同时存在明显的业务语义识别错误（CO浓度单位识别为“辆”）。此外，图表细节覆盖率较低，可能影响最终代码的还原度。建议打回重构，修正上述错误并补充缺失的节点解析。"
+  },
+  "styleMappings": {
+    "themeVars": {},
+    "lessVariables": {},
+    "cssClasses": {},
+    "tokenCoverage": 0,
+    "elementStyleMap": {
+      "section-header-nav": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "tabs-group": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "header-icons": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-12": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-header-nav",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 8,
+        "title": "环境监测"
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "CO浓度趋势图"
+      }
+    ],
+    "isForced": false,
+    "minFiles": 0,
+    "reason": "有效 sections=2 < 3 → 不强制拆分"
+  }
+}

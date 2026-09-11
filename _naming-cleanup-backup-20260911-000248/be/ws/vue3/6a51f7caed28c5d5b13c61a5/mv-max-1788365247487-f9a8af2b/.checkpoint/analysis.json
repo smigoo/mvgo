@@ -1,0 +1,339 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 78,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[1] (tabs-icon-area)",
+        "message": "badge角标使用position:absolute但父容器无position:relative，定位基准丢失，角标会偏移到错误位置。",
+        "suggestion": "在tabs-icon-area的styles中添加position:relative，或将badge作为某个icon的子元素并在该icon容器上设置relative。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[1] (tabs-icon-area)",
+        "message": "badge角标是独立平铺子元素而非附属于某个icon，语义上badge应挂载在具体icon上，当前结构无法明确badge归属哪个图标。",
+        "suggestion": "将badge嵌入其所属icon节点内作为子元素，形成[icon+badge]组合节点，明确归属关系。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "coverageReport.missing",
+        "message": "sub-t(FRAME)和num(GROUP)两个Figma节点未映射，覆盖率80%，存在遗漏元素未在layout中体现。",
+        "suggestion": "排查sub-t和num对应的视觉元素，确认是否为标题副文本或数字标注，补充到对应section结构中。"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "charts[0].axes",
+        "message": "Y轴单位标注为'辆'但图表内容是CO浓度，单位与业务含义不符，已在notes中标注为疑问但未在charts字段修正。",
+        "suggestion": "在charts.axes字段中将Y轴单位标为待确认（如'？/浓度单位'），避免下游代码直接使用错误单位。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body (section-chart)",
+        "message": "图表容器高度145px但内部chart-container高度130px，padding 8px*2=16px，145-16=129px，与130px存在1px误差，可能导致细微溢出。",
+        "suggestion": "将body高度改为146px或chart-container高度改为129px，确保padding+内容高度严格匹配。"
+      }
+    ],
+    "recommendations": [
+      "badge组件应始终作为目标icon的子元素，并在父icon容器设置position:relative，避免绝对定位基准丢失导致的布局错位。",
+      "补充sub-t和num两个缺失节点的映射，可通过查阅Figma原文件确认其层级位置，提升覆盖率至100%。",
+      "Y轴单位'辆'疑为OCR误读，建议在生成阶段对单位标签做业务校验，或在charts字段增加unitConfirmed:false标记，提示实现方需人工确认。"
+    ],
+    "summary": "整体结构清晰，三段式分区合理，Tab与图表信息较完整。主要问题集中在badge定位语义错误、两个Figma节点未覆盖、Y轴单位存疑，需修正后方可进入代码生成阶段。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）- 深色科技监测风主题",
+      "--colorTextPrimary": "rgba(237,244,251,1)",
+      "--colorPrimary": "rgba(85,158,255,1)",
+      "--colorTextBase": "rgba(255,255,255,1)",
+      "--colorTextSecondary": "rgba(255,255,255,0.8)",
+      "--colorDanger": "#f53f3f",
+      "--colorSuccess": "rgba(80,200,120,1)",
+      "--colorSuccessLight": "rgba(80,200,120,0.3)",
+      "--colorWarning": "rgba(255,48,48,1)",
+      "--colorBgContainer": "#1a1f2e",
+      "--colorBgPanel": "#0f1419",
+      "--colorBorderBase": "rgba(255,255,255,0.1)",
+      "--fontSize": "14px",
+      "--fontSizeTitle": "16px",
+      "--borderRadiusBase": "4px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射（用于主题切换和颜色运算）",
+      "@color-text-primary": "rgba(237,244,251,1)",
+      "@color-primary": "rgba(85,158,255,1)",
+      "@color-text-base": "rgba(255,255,255,1)",
+      "@color-text-secondary": "rgba(255,255,255,0.8)",
+      "@color-danger": "#f53f3f",
+      "@color-success": "rgba(80,200,120,1)",
+      "@color-success-light": "rgba(80,200,120,0.3)",
+      "@color-warning": "rgba(255,48,48,1)",
+      "@color-bg-container": "#1a1f2e",
+      "@color-bg-panel": "#0f1419",
+      "@color-border-base": "rgba(255,255,255,0.1)",
+      "@font-size-base": "14px",
+      "@font-size-title": "16px",
+      "@border-radius-base": "4px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类 - 深色科技监测面板样式",
+      ".monitor-container": {
+        "width": "100%",
+        "height": "100%",
+        "background-image": "url('../../images/bg-7890.png')",
+        "background-size": "cover",
+        "background-position": "center",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)"
+      },
+      ".panel-header": {
+        "display": "flex",
+        "align-items": "center",
+        "padding": "0.857em 1.143em",
+        "position": "relative"
+      },
+      ".header-icon-decorator": {
+        "width": "1.143em",
+        "height": "1.143em",
+        "margin-right": "0.571em",
+        "display": "inline-flex",
+        "align-items": "center",
+        "justify-content": "center"
+      },
+      ".panel-title": {
+        "font-size": "var(--fontSizeTitle)",
+        "color": "var(--colorTextPrimary)",
+        "font-weight": "500",
+        "letter-spacing": "0.05em"
+      },
+      ".title-divider": {
+        "height": "1px",
+        "background": "linear-gradient(90deg, var(--colorPrimary) 0%, transparent 100%)",
+        "margin": "0.714em 0"
+      },
+      ".tab-container": {
+        "display": "flex",
+        "gap": "0.571em",
+        "padding": "0.857em 0"
+      },
+      ".tab-item": {
+        "padding": "0.429em 1.143em",
+        "border-radius": "var(--borderRadiusBase)",
+        "color": "var(--colorTextSecondary)",
+        "cursor": "pointer",
+        "transition": "all 0.3s ease",
+        "border": "1px solid var(--colorBorderBase)"
+      },
+      ".tab-item-active": {
+        "background-image": "url('../../images/bg-tab-active-7891.png')",
+        "background-size": "cover",
+        "color": "var(--colorPrimary)",
+        "border-color": "var(--colorPrimary)"
+      },
+      ".chart-wrapper": {
+        "flex": "1",
+        "padding": "1.143em",
+        "background": "var(--colorBgContainer)",
+        "border-radius": "var(--borderRadiusBase)"
+      },
+      ".warning-line": {
+        "stroke": "var(--colorDanger)",
+        "stroke-width": "2",
+        "stroke-dasharray": "5,5"
+      },
+      ".success-area": {
+        "fill": "var(--colorSuccessLight)",
+        "stroke": "var(--colorSuccess)",
+        "stroke-width": "2"
+      },
+      ".metric-card": {
+        "padding": "1.143em",
+        "background": "var(--colorBgContainer)",
+        "border-radius": "var(--borderRadiusBase)",
+        "border": "1px solid var(--colorBorderBase)"
+      },
+      ".metric-value": {
+        "font-size": "1.714em",
+        "color": "var(--colorPrimary)",
+        "font-weight": "600",
+        "line-height": "1.2"
+      },
+      ".metric-label": {
+        "font-size": "0.857em",
+        "color": "var(--colorTextSecondary)",
+        "margin-top": "0.5em"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主背景 bg-7890.png 必须使用 background-image 直接引用，不可用纯色或渐变替代",
+      "Tab 激活态 bg-tab-active-7891.png 必须在 .tab-item-active 中引用",
+      "装饰图标（圆形+菱形）需通过 <img> 标签以 base64 或资源路径方式内联",
+      "渐变分隔线 Vector 1476 使用 linear-gradient 实现",
+      "预警线使用红色虚线样式（stroke-dasharray），颜色取 --colorDanger",
+      "折线图配色使用绿色系（--colorSuccess 和 --colorSuccessLight）",
+      "所有尺寸使用 em 单位以支持响应式缩放",
+      "深色面板外层背景色建议设为 #0f1419（接近深蓝黑）",
+      "内容区背景色建议设为 #1a1f2e（深灰蓝）",
+      "CSS 变量命名严格使用 camelCase（--colorTextBase 而非 --color-text-base）"
+    ],
+    "elementStyleMap": {
+      "section-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "header-decoration": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-tabs": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tabs-list": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tabs-icon-area": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-16": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-header",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 3,
+        "title": "面板标题区",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 3,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 2
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "section-tabs",
+        "responsibility": "标签页切换区",
+        "elementCount": 9,
+        "title": "Tab切换栏与右侧操作区",
+        "complexityScore": 55,
+        "complexityReasons": {
+          "elementCount": 9,
+          "charts": 1,
+          "interactions": 6,
+          "maxDepth": 2
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [
+          {
+            "type": "interaction-area",
+            "id": "section-tabs-interactive",
+            "name": "InteractiveArea",
+            "responsibility": "交互控件区",
+            "reason": "R4: 交互复杂度拆分（6个交互元素）",
+            "props": [],
+            "emits": [
+              "action"
+            ]
+          }
+        ],
+        "shouldSplitInternally": true
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "图表区域",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 1,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      }
+    ],
+    "isForced": true,
+    "minFiles": 4,
+    "reason": "有效 sections=3 ≥ 3 或存在高复杂度 section → 强制拆分",
+    "internalSubcomponents": [
+      {
+        "type": "interaction-area",
+        "id": "section-tabs-interactive",
+        "name": "InteractiveArea",
+        "responsibility": "交互控件区",
+        "reason": "R4: 交互复杂度拆分（6个交互元素）",
+        "props": [],
+        "emits": [
+          "action"
+        ],
+        "parentSectionId": "section-tabs",
+        "parentSectionTitle": "Tab切换栏与右侧操作区"
+      }
+    ]
+  }
+}

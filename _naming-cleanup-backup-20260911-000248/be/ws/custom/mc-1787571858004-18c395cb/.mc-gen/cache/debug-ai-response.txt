@@ -1,0 +1,308 @@
+```json
+{
+  "generatedAt": "2023-10-27T10:00:00Z",
+  "stage": "preview-analysis",
+  "componentName": "设备监测",
+  "componentTitle": "设备监测",
+  "analysisModel": "visual-parser-v2",
+  "sourceImage": {
+    "path": "mc-preview.png",
+    "size": 0,
+    "mtimeMs": 0,
+    "sha1": ""
+  },
+  "summary": "包含顶部标题与全局统计指标、两个分类统计卡片（隧道设备/南北接线设备）、左侧垂直Tab导航栏及右侧3x4设备网格列表",
+  "layout": {
+    "type": "vertical-stack",
+    "direction": "vertical",
+    "sections": [
+      {
+        "id": "header-stats",
+        "name": "顶部标题与统计",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "title-itself",
+        "slotCandidate": null,
+        "header": {
+          "title": "设备监测",
+          "controls": []
+        },
+        "body": {
+          "layout": "horizontal",
+          "bgPlaceholder": "section-bg-header",
+          "children": [
+            {
+              "type": "text-group",
+              "name": "设备类型",
+              "layout": "horizontal",
+              "children": [
+                { "type": "label", "text": "设备类型", "styles": { "fontSize": 14, "color": "rgba(51,51,51,1)" } },
+                { "type": "value", "text": "28", "styles": { "fontSize": 18, "color": "rgba(25,144,255,1)", "fontWeight": "bold" } }
+              ]
+            },
+            {
+              "type": "text-group",
+              "name": "设备总数",
+              "layout": "horizontal",
+              "children": [
+                { "type": "label", "text": "设备总数", "styles": { "fontSize": 14, "color": "rgba(51,51,51,1)" } },
+                { "type": "value", "text": "68562", "styles": { "fontSize": 18, "color": "rgba(25,144,255,1)", "fontWeight": "bold" } }
+              ]
+            },
+            {
+              "type": "text-group",
+              "name": "完好率",
+              "layout": "horizontal",
+              "children": [
+                { "type": "label", "text": "完好率", "styles": { "fontSize": 14, "color": "rgba(51,51,51,1)" } },
+                { "type": "value", "text": "98%", "styles": { "fontSize": 18, "color": "rgba(8,163,165,1)", "fontWeight": "bold" } }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "top-cards",
+        "name": "分类统计卡片",
+        "role": "常驻",
+        "layout": "horizontal-2-columns",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "body": {
+          "layout": "horizontal-2-items",
+          "bgPlaceholder": "body-bg-cards",
+          "items": [
+            {
+              "id": "card-tunnel",
+              "name": "隧道设备",
+              "role": "stat-card",
+              "layout": "horizontal",
+              "bgPlaceholder": "card-bg-tunnel",
+              "resourceFile": "../resources/images/bg-8807.png",
+              "recommendedUsage": "backgroundBlock",
+              "children": [
+                {
+                  "type": "icon",
+                  "resourceFile": "../resources/images/icon-8798.png",
+                  "recommendedUsage": "imgSrc",
+                  "width": 40,
+                  "height": 40
+                },
+                {
+                  "type": "content-group",
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "row",
+                      "layout": "horizontal",
+                      "children": [
+                        { "type": "label", "text": "总 数:", "styles": { "fontSize": 14, "color": "rgba(255,255,255,0.8)" } },
+                        { "type": "value", "text": "56302", "styles": { "fontSize": 24, "color": "#ffffff", "fontWeight": "bold" } }
+                      ]
+                    },
+                    {
+                      "type": "row",
+                      "layout": "horizontal",
+                      "children": [
+                        { "type": "label", "text": "异常数:", "styles": { "fontSize": 14, "color": "rgba(255,255,255,0.8)" } },
+                        { "type": "value", "text": "5", "styles": { "fontSize": 18, "color": "#f53f3f", "fontWeight": "bold" } }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "card-north-south",
+              "name": "南北接线设备",
+              "role": "stat-card",
+              "layout": "horizontal",
+              "bgPlaceholder": "card-bg-ns",
+              "resourceFile": "../resources/images/bg-8439.png",
+              "recommendedUsage": "backgroundBlock",
+              "children": [
+                {
+                  "type": "icon",
+                  "resourceFile": "../resources/images/icon-8473.png",
+                  "recommendedUsage": "imgSrc",
+                  "width": 40,
+                  "height": 40
+                },
+                {
+                  "type": "content-group",
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "row",
+                      "layout": "horizontal",
+                      "children": [
+                        { "type": "label", "text": "总 数:", "styles": { "fontSize": 14, "color": "rgba(51,51,51,0.8)" } },
+                        { "type": "value", "text": "1280", "styles": { "fontSize": 24, "color": "rgba(25,144,255,1)", "fontWeight": "bold" } }
+                      ]
+                    },
+                    {
+                      "type": "row",
+                      "layout": "horizontal",
+                      "children": [
+                        { "type": "label", "text": "异常数:", "styles": { "fontSize": 14, "color": "rgba(51,51,51,0.8)" } },
+                        { "type": "value", "text": "3", "styles": { "fontSize": 18, "color": "#f53f3f", "fontWeight": "bold" } }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "main-content",
+        "name": "设备列表区",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "body": {
+          "layout": "horizontal",
+          "bgPlaceholder": "body-bg-main",
+          "children": [
+            {
+              "id": "sidebar-tabs",
+              "name": "左侧导航",
+              "role": "tab-list",
+              "layout": "vertical",
+              "width": 46,
+              "children": [
+                { "type": "tab-item", "text": "监控", "active": true, "styles": { "backgroundColor": "rgba(25,144,255,1)", "color": "#ffffff" } },
+                { "type": "tab-item", "text": "照明", "active": false, "badge": "3", "styles": { "color": "rgba(51,51,51,1)" } },
+                { "type": "tab-item", "text": "通风", "active": false, "styles": { "color": "rgba(51,51,51,1)" } },
+                { "type": "tab-item", "text": "供配电", "active": false, "styles": { "color": "rgba(51,51,51,1)" } },
+                { "type": "tab-item", "text": "消防", "active": false, "styles": { "color": "rgba(51,51,51,1)" } },
+                { "type": "tab-item", "text": "交通诱导", "active": false, "styles": { "color": "rgba(51,51,51,1)" } }
+              ]
+            },
+            {
+              "id": "device-grid",
+              "name": "设备网格",
+              "role": "content-grid",
+              "layout": "grid",
+              "gridColumns": 3,
+              "children": [
+                {
+                  "type": "device-item",
+                  "name": "摄像机",
+                  "icon": { "resourceFile": "../resources/images/icon-8503.png", "recommendedUsage": "imgSrc" },
+                  "value": { "abnormal": 2, "total": 484, "text": "(2/484)" }
+                },
+                {
+                  "type": "device-item",
+                  "name": "风速风向仪",
+                  "icon": { "resourceFile": "../resources/images/icon-8532.png", "recommendedUsage": "imgSrc" },
+                  "value": { "abnormal": 1, "total": 484, "text": "(1/484)" }
+                },
+                {
+                  "type": "device-item",
+                  "name": "超高检测器",
+                  "icon": { "resourceFile": "../resources/images/icon-8561.png", "recommendedUsage": "imgSrc" },
+                  "value": { "abnormal": 0, "total": 484, "text": "(0/484)" }
+                },
+                {
+                  "type": "device-item",
+                  "name": "烟道机器人",
+                  "icon": { "resourceFile": "../resources/images/icon-8590.png", "recommendedUsage": "imgSrc" },
+                  "value": { "abnormal": 0, "total": 484, "text": "(0/484)" }
+                },
+                {
+                  "type": "device-item",
+                  "name": "激光雷达",
+                  "icon": { "resourceFile": "../resources/images/icon-8619.png", "recommendedUsage": "imgSrc" },
+                  "value": { "abnormal": 0, "total": 484, "text": "(0/484)" }
+                },
+                {
+                  "type": "device-item",
+                  "name": "CO传感器",
+                  "icon": { "resourceFile": "../resources/images/icon-8648.png", "recommendedUsage": "imgSrc" },
+                  "value": { "abnormal": 0, "total": 484, "text": "(0/484)" }
+                },
+                {
+                  "type": "device-item",
+                  "name": "CO/VI检测器",
+                  "icon": { "resourceFile": "../resources/images/icon-8677.png", "recommendedUsage": "imgSrc" },
+                  "value": { "abnormal": 0, "total": 484, "text": "(0/484)" }
+                },
+                {
+                  "type": "device-item",
+                  "name": "温湿度传感器",
+                  "icon": { "resourceFile": "../resources/images/icon-8706.png", "recommendedUsage": "imgSrc" },
+                  "value": { "abnormal": 0, "total": 484, "text": "(0/484)" }
+                },
+                {
+                  "type": "device-item",
+                  "name": "压力传感器",
+                  "icon": { "resourceFile": "../resources/images/icon-8735.png", "recommendedUsage": "imgSrc" },
+                  "value": { "abnormal": 0, "total": 484, "text": "(0/484)" }
+                },
+                {
+                  "type": "device-item",
+                  "name": "光照度变送器",
+                  "icon": { "resourceFile": "../resources/images/icon-8764.png", "recommendedUsage": "imgSrc" },
+                  "value": { "abnormal": 0, "total": 484, "text": "(0/484)" }
+                },
+                {
+                  "type": "device-item",
+                  "name": "紧急电话",
+                  "icon": { "resourceFile": "../resources/images/icon-8473.png", "recommendedUsage": "imgSrc" },
+                  "value": { "abnormal": 0, "total": 484, "text": "(0/484)" }
+                },
+                {
+                  "type": "device-item",
+                  "name": "水质监测设备",
+                  "icon": { "resourceFile": "../resources/images/icon-8503.png", "recommendedUsage": "imgSrc" },
+                  "value": { "abnormal": 0, "total": 484, "text": "(0/484)" }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "styles": {
+    "theme": "浅色科技监测风",
+    "backgroundBrightness": "light",
+    "colors": [
+      "rgba(237,244,251,1)",
+      "rgba(25,144,255,1)",
+      "rgba(8,163,165,1)",
+      "#f53f3f",
+      "rgba(51,51,51,1)"
+    ],
+    "background": "浅灰蓝色背景",
+    "decorations": [],
+    "emphasis": [
+      "蓝色高亮数值",
+      "红色异常数警示"
+    ]
+  },
+  "interactions": [
+    {
+      "target": "左侧导航栏",
+      "type": "tab-switch",
+      "description": "切换设备分类（监控、照明、通风等）",
+      "defaultState": "常驻，选中'监控'",
+      "evidence": "左侧垂直排列的Tab项，'监控'背景高亮"
+    }
+  ],
+  "charts": [],
+  "doNotInvent": [
+    "不要臆造点击设备卡片后的详情弹窗",
+    "不要臆造'数据实时更新'文字（Figma中标注为注释）",
+    "不要臆造顶部统计数字的点击交互"
+  ],
+  "notes": [
+    "顶部两个大卡片（隧道设备、南北接线设备）背景色不同，左侧为蓝色渐变，右侧为浅灰/白色",
+    "设备网格中，异常数>0时数值为红色，=0时为绿色/青色",
+    "左侧Tab栏'照明'项有一个红色角标'3'"
+  ]
+}
+```

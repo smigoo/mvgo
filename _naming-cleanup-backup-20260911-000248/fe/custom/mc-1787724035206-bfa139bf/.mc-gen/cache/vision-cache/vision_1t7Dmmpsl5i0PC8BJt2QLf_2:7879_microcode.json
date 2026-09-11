@@ -1,0 +1,1062 @@
+{
+  "imageVerified": true,
+  "layoutStructure": {
+    "generatedAt": "2023-10-27T10:00:00Z",
+    "stage": "preview-analysis",
+    "componentName": "环境监测",
+    "componentTitle": "环境监测",
+    "analysisModel": "visual-parser-v2",
+    "sourceImage": {
+      "path": "preview.png",
+      "size": 0,
+      "mtimeMs": 0,
+      "sha1": ""
+    },
+    "summary": "包含标题装饰、Tab切换栏（一氧化碳等）、视图切换按钮（带Badge）及CO浓度趋势面积图（含预警线）",
+    "layout": {
+      "type": "vertical-stack",
+      "direction": "vertical",
+      "sections": [
+        {
+          "id": "section-header",
+          "name": "标题区",
+          "role": "常驻",
+          "layout": "horizontal",
+          "bgPlaceholder": "section-bg-header",
+          "headerRelation": "title-itself",
+          "slotCandidate": null,
+          "header": {
+            "title": "环境监测",
+            "controls": []
+          },
+          "body": {
+            "layout": "horizontal",
+            "alignItems": "center",
+            "gap": "8px",
+            "children": [
+              {
+                "type": "decoration-group",
+                "layout": "vertical",
+                "children": [
+                  {
+                    "type": "icon",
+                    "resourceFile": "../resources/images/circle-7884.png",
+                    "recommendedUsage": "imgSrc",
+                    "width": 8,
+                    "height": 8
+                  },
+                  {
+                    "type": "icon",
+                    "resourceFile": "../resources/images/circle-7885.png",
+                    "recommendedUsage": "imgSrc",
+                    "width": 6,
+                    "height": 6
+                  },
+                  {
+                    "type": "icon",
+                    "resourceFile": "../resources/images/path-7886.png",
+                    "recommendedUsage": "imgSrc",
+                    "width": 2,
+                    "height": 2
+                  }
+                ]
+              },
+              {
+                "type": "text",
+                "text": "环境监测",
+                "styles": {
+                  "fontSize": 16,
+                  "fontWeight": "bold",
+                  "color": "linear-gradient(to right, #559EFF, #00B42A)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "section-controls",
+          "name": "控制栏",
+          "role": "常驻",
+          "layout": "horizontal",
+          "bgPlaceholder": "section-bg-controls",
+          "headerRelation": "content-below-title",
+          "slotCandidate": null,
+          "body": {
+            "layout": "horizontal",
+            "justifyContent": "space-between",
+            "alignItems": "center",
+            "children": [
+              {
+                "type": "tab-group",
+                "layout": "horizontal",
+                "bgPlaceholder": "bg-tab-container",
+                "children": [
+                  {
+                    "type": "tab",
+                    "name": "一氧化碳",
+                    "active": true,
+                    "bgResource": "../resources/images/bg-tab-active-7891.png",
+                    "styles": {
+                      "fontSize": 12,
+                      "color": "#ffffff",
+                      "padding": "4px 12px",
+                      "borderRadius": "4px"
+                    }
+                  },
+                  {
+                    "type": "tab",
+                    "name": "能见度",
+                    "active": false,
+                    "styles": {
+                      "fontSize": 12,
+                      "color": "#86909C"
+                    }
+                  },
+                  {
+                    "type": "tab",
+                    "name": "洞内照明",
+                    "active": false,
+                    "styles": {
+                      "fontSize": 12,
+                      "color": "#86909C"
+                    }
+                  },
+                  {
+                    "type": "tab",
+                    "name": "洞外光强",
+                    "active": false,
+                    "styles": {
+                      "fontSize": 12,
+                      "color": "#86909C"
+                    }
+                  }
+                ]
+              },
+              {
+                "type": "icon-group",
+                "layout": "horizontal",
+                "gap": "8px",
+                "children": [
+                  {
+                    "type": "icon-button",
+                    "icon": {
+                      "resourceFile": "../resources/images/icon-7941.png",
+                      "recommendedUsage": "imgSrc",
+                      "width": 20,
+                      "height": 20
+                    }
+                  },
+                  {
+                    "type": "icon-button",
+                    "relative": true,
+                    "icon": {
+                      "resourceFile": "../resources/images/icon-7945.png",
+                      "recommendedUsage": "imgSrc",
+                      "width": 20,
+                      "height": 20
+                    },
+                    "badge": {
+                      "text": "6",
+                      "position": "top-right",
+                      "styles": {
+                        "backgroundColor": "#f53f3f",
+                        "color": "#ffffff",
+                        "fontSize": 10,
+                        "borderRadius": "10px",
+                        "padding": "2px 4px"
+                      }
+                    }
+                  }
+                ],
+                "resourceFile": "../resources/images/circle-7884.png",
+                "resourceVarName": "icon1",
+                "recommendedUsage": "imgSrc",
+                "downloadStatus": "success"
+              }
+            ]
+          }
+        },
+        {
+          "id": "section-chart",
+          "name": "图表区",
+          "role": "常驻",
+          "layout": "vertical",
+          "bgPlaceholder": "section-bg-chart",
+          "headerRelation": "content-below-title",
+          "slotCandidate": null,
+          "body": {
+            "layout": "relative",
+            "children": [
+              {
+                "type": "chart-container",
+                "width": 380,
+                "height": 110,
+                "children": [
+                  {
+                    "type": "y-axis-labels",
+                    "position": "left",
+                    "elements": [
+                      {
+                        "text": "辆",
+                        "styles": {
+                          "fontSize": 10,
+                          "color": "#86909C"
+                        }
+                      },
+                      {
+                        "text": "40",
+                        "styles": {
+                          "fontSize": 10,
+                          "color": "#86909C"
+                        }
+                      },
+                      {
+                        "text": "30",
+                        "styles": {
+                          "fontSize": 10,
+                          "color": "#86909C"
+                        }
+                      },
+                      {
+                        "text": "20",
+                        "styles": {
+                          "fontSize": 10,
+                          "color": "#86909C"
+                        }
+                      },
+                      {
+                        "text": "10",
+                        "styles": {
+                          "fontSize": 10,
+                          "color": "#86909C"
+                        }
+                      },
+                      {
+                        "text": "0",
+                        "styles": {
+                          "fontSize": 10,
+                          "color": "#86909C"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "type": "x-axis-labels",
+                    "position": "bottom",
+                    "elements": [
+                      {
+                        "text": "2",
+                        "styles": {
+                          "fontSize": 10,
+                          "color": "#86909C"
+                        }
+                      },
+                      {
+                        "text": "4",
+                        "styles": {
+                          "fontSize": 10,
+                          "color": "#86909C"
+                        }
+                      },
+                      {
+                        "text": "6",
+                        "styles": {
+                          "fontSize": 10,
+                          "color": "#86909C"
+                        }
+                      },
+                      {
+                        "text": "8",
+                        "styles": {
+                          "fontSize": 10,
+                          "color": "#86909C"
+                        }
+                      },
+                      {
+                        "text": "10",
+                        "styles": {
+                          "fontSize": 10,
+                          "color": "#86909C"
+                        }
+                      },
+                      {
+                        "text": "12",
+                        "styles": {
+                          "fontSize": 10,
+                          "color": "#86909C"
+                        }
+                      },
+                      {
+                        "text": "14",
+                        "styles": {
+                          "fontSize": 10,
+                          "color": "#86909C"
+                        }
+                      },
+                      {
+                        "text": "16",
+                        "styles": {
+                          "fontSize": 10,
+                          "color": "#86909C"
+                        }
+                      },
+                      {
+                        "text": "18",
+                        "styles": {
+                          "fontSize": 10,
+                          "color": "#86909C"
+                        }
+                      },
+                      {
+                        "text": "20",
+                        "styles": {
+                          "fontSize": 10,
+                          "color": "#86909C"
+                        }
+                      },
+                      {
+                        "text": "22",
+                        "styles": {
+                          "fontSize": 10,
+                          "color": "#86909C"
+                        }
+                      },
+                      {
+                        "text": "24",
+                        "styles": {
+                          "fontSize": 10,
+                          "color": "#86909C"
+                        }
+                      },
+                      {
+                        "text": "时",
+                        "styles": {
+                          "fontSize": 10,
+                          "color": "#86909C"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "type": "reference-line",
+                    "name": "预警线",
+                    "value": 30,
+                    "style": {
+                      "borderTop": "1px dashed #F53F3F",
+                      "color": "#F53F3F"
+                    },
+                    "label": {
+                      "text": "预警线",
+                      "position": "right",
+                      "styles": {
+                        "fontSize": 10,
+                        "color": "#F53F3F"
+                      }
+                    }
+                  },
+                  {
+                    "type": "legend",
+                    "position": "top-right",
+                    "items": [
+                      {
+                        "color": "#00B42A",
+                        "text": "zk3+785CO浓度",
+                        "styles": {
+                          "fontSize": 10,
+                          "color": "#4E5969"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "backgroundImage": {
+              "src": "../resources/images/bg-7890.png",
+              "recommendedUsage": "backgroundBlock"
+            },
+            "backgroundSize": "100% 100%",
+            "backgroundPosition": "center center",
+            "backgroundRepeat": "no-repeat"
+          }
+        }
+      ]
+    },
+    "styles": {
+      "theme": "浅色科技监测风",
+      "backgroundBrightness": "light",
+      "colors": [
+        "#EDF4FB",
+        "#559EFF",
+        "#00B42A",
+        "#F53F3F",
+        "#86909C"
+      ],
+      "background": "浅灰蓝色背景 #EDF4FB",
+      "decorations": [
+        "标题左侧三色圆点/路径装饰",
+        "Tab选中态蓝色背景"
+      ],
+      "emphasis": [
+        "红色预警线",
+        "红色Badge数字6"
+      ]
+    },
+    "interactions": [
+      {
+        "target": "Tab切换栏",
+        "type": "tab-switch",
+        "description": "切换监测项目（一氧化碳、能见度等）",
+        "defaultState": "一氧化碳选中",
+        "evidence": "蓝色高亮背景"
+      },
+      {
+        "target": "右侧图标按钮",
+        "type": "click",
+        "description": "切换视图模式（图表/列表）",
+        "defaultState": "常驻",
+        "evidence": "图标样式"
+      }
+    ],
+    "charts": [
+      {
+        "section": "section-chart",
+        "type": "area",
+        "series": [
+          "zk3+785CO浓度"
+        ],
+        "legend": [
+          "zk3+785CO浓度"
+        ],
+        "legendPosition": "top-right",
+        "seriesColors": [
+          "#00B42A"
+        ],
+        "legendType": "horizontal",
+        "axes": "X轴为时间(2-24时)，Y轴为数值(0-40辆)",
+        "tooltip": "未显示",
+        "notes": [
+          "红色虚线预警线位于Y轴30处",
+          "曲线在14-18时有轻微隆起"
+        ]
+      }
+    ],
+    "doNotInvent": [
+      "不要臆造其他Tab（能见度等）点击后的具体图表数据",
+      "不要臆造列表视图的具体内容",
+      "不要臆造图表的具体数值点，仅描述趋势"
+    ],
+    "notes": [
+      "Y轴单位标注为'辆'，可能是模板复用，实际应为浓度单位",
+      "标题文字具有渐变色效果"
+    ],
+    "coverageReport": {
+      "totalFigma": 14,
+      "matchedCount": 8,
+      "missingCount": 2,
+      "uncertainCount": 0,
+      "coverageRate": 80,
+      "missing": [
+        {
+          "name": "sub-t",
+          "type": "FRAME",
+          "depth": 2
+        },
+        {
+          "name": "num",
+          "type": "GROUP",
+          "depth": 3
+        }
+      ],
+      "uncertain": [],
+      "summary": "良好"
+    },
+    "chartDataHints": [
+      {
+        "chartTitle": "area",
+        "chartType": "area",
+        "labels": [
+          {
+            "label": "40\n30\n20\n10\n0",
+            "name": "40 30 20 10 0"
+          },
+          {
+            "label": "辆",
+            "name": "辆"
+          },
+          {
+            "label": "预警线",
+            "name": "预警线"
+          },
+          {
+            "label": "时",
+            "name": "时"
+          },
+          {
+            "label": "zk3+785CO浓度",
+            "name": "zk3+785CO浓度"
+          },
+          {
+            "label": "一氧化碳",
+            "name": "一氧化碳"
+          },
+          {
+            "label": "洞内照明",
+            "name": "洞内照明"
+          },
+          {
+            "label": "洞外光强",
+            "name": "洞外光强"
+          },
+          {
+            "label": "能见度",
+            "name": "能见度"
+          }
+        ],
+        "values": [
+          {
+            "label": "600",
+            "value": 600,
+            "unit": ""
+          },
+          {
+            "label": "400",
+            "value": 400,
+            "unit": ""
+          },
+          {
+            "label": "200",
+            "value": 200,
+            "unit": ""
+          },
+          {
+            "label": "600",
+            "value": 600,
+            "unit": ""
+          },
+          {
+            "label": "0",
+            "value": 0,
+            "unit": ""
+          },
+          {
+            "label": "600",
+            "value": 600,
+            "unit": ""
+          },
+          {
+            "label": "2",
+            "value": 2,
+            "unit": ""
+          },
+          {
+            "label": "4",
+            "value": 4,
+            "unit": ""
+          },
+          {
+            "label": "6",
+            "value": 6,
+            "unit": ""
+          },
+          {
+            "label": "8",
+            "value": 8,
+            "unit": ""
+          },
+          {
+            "label": "10",
+            "value": 10,
+            "unit": ""
+          },
+          {
+            "label": "12",
+            "value": 12,
+            "unit": ""
+          }
+        ]
+      }
+    ]
+  },
+  "visualElements": {
+    "theme": "浅色科技监测风",
+    "backgroundBrightness": "light",
+    "colors": [
+      "#EDF4FB",
+      "#559EFF",
+      "#00B42A",
+      "#F53F3F",
+      "#86909C"
+    ],
+    "background": "浅灰蓝色背景 #EDF4FB",
+    "decorations": [
+      "标题左侧三色圆点/路径装饰",
+      "Tab选中态蓝色背景"
+    ],
+    "emphasis": [
+      "红色预警线",
+      "红色Badge数字6"
+    ]
+  },
+  "_visualElementList": [
+    {
+      "type": "decoration-group",
+      "layout": "vertical",
+      "children": [
+        {
+          "type": "icon",
+          "resourceFile": "../resources/images/circle-7884.png",
+          "recommendedUsage": "imgSrc",
+          "width": 8,
+          "height": 8
+        },
+        {
+          "type": "icon",
+          "resourceFile": "../resources/images/circle-7885.png",
+          "recommendedUsage": "imgSrc",
+          "width": 6,
+          "height": 6
+        },
+        {
+          "type": "icon",
+          "resourceFile": "../resources/images/path-7886.png",
+          "recommendedUsage": "imgSrc",
+          "width": 2,
+          "height": 2
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "text": "环境监测",
+      "styles": {
+        "fontSize": 16,
+        "fontWeight": "bold",
+        "color": "linear-gradient(to right, #559EFF, #00B42A)"
+      }
+    },
+    {
+      "type": "tab-group",
+      "layout": "horizontal",
+      "bgPlaceholder": "bg-tab-container",
+      "children": [
+        {
+          "type": "tab",
+          "name": "一氧化碳",
+          "active": true,
+          "bgResource": "../resources/images/bg-tab-active-7891.png",
+          "styles": {
+            "fontSize": 12,
+            "color": "#ffffff",
+            "padding": "4px 12px",
+            "borderRadius": "4px"
+          }
+        },
+        {
+          "type": "tab",
+          "name": "能见度",
+          "active": false,
+          "styles": {
+            "fontSize": 12,
+            "color": "#86909C"
+          }
+        },
+        {
+          "type": "tab",
+          "name": "洞内照明",
+          "active": false,
+          "styles": {
+            "fontSize": 12,
+            "color": "#86909C"
+          }
+        },
+        {
+          "type": "tab",
+          "name": "洞外光强",
+          "active": false,
+          "styles": {
+            "fontSize": 12,
+            "color": "#86909C"
+          }
+        }
+      ]
+    },
+    {
+      "type": "icon-group",
+      "layout": "horizontal",
+      "gap": "8px",
+      "children": [
+        {
+          "type": "icon-button",
+          "icon": {
+            "resourceFile": "../resources/images/icon-7941.png",
+            "recommendedUsage": "imgSrc",
+            "width": 20,
+            "height": 20
+          }
+        },
+        {
+          "type": "icon-button",
+          "relative": true,
+          "icon": {
+            "resourceFile": "../resources/images/icon-7945.png",
+            "recommendedUsage": "imgSrc",
+            "width": 20,
+            "height": 20
+          },
+          "badge": {
+            "text": "6",
+            "position": "top-right",
+            "styles": {
+              "backgroundColor": "#f53f3f",
+              "color": "#ffffff",
+              "fontSize": 10,
+              "borderRadius": "10px",
+              "padding": "2px 4px"
+            }
+          }
+        }
+      ],
+      "resourceFile": "../resources/images/circle-7884.png",
+      "resourceVarName": "icon1",
+      "recommendedUsage": "imgSrc",
+      "downloadStatus": "success"
+    },
+    {
+      "type": "chart-container",
+      "width": 380,
+      "height": 110,
+      "children": [
+        {
+          "type": "y-axis-labels",
+          "position": "left",
+          "elements": [
+            {
+              "text": "辆",
+              "styles": {
+                "fontSize": 10,
+                "color": "#86909C"
+              }
+            },
+            {
+              "text": "40",
+              "styles": {
+                "fontSize": 10,
+                "color": "#86909C"
+              }
+            },
+            {
+              "text": "30",
+              "styles": {
+                "fontSize": 10,
+                "color": "#86909C"
+              }
+            },
+            {
+              "text": "20",
+              "styles": {
+                "fontSize": 10,
+                "color": "#86909C"
+              }
+            },
+            {
+              "text": "10",
+              "styles": {
+                "fontSize": 10,
+                "color": "#86909C"
+              }
+            },
+            {
+              "text": "0",
+              "styles": {
+                "fontSize": 10,
+                "color": "#86909C"
+              }
+            }
+          ]
+        },
+        {
+          "type": "x-axis-labels",
+          "position": "bottom",
+          "elements": [
+            {
+              "text": "2",
+              "styles": {
+                "fontSize": 10,
+                "color": "#86909C"
+              }
+            },
+            {
+              "text": "4",
+              "styles": {
+                "fontSize": 10,
+                "color": "#86909C"
+              }
+            },
+            {
+              "text": "6",
+              "styles": {
+                "fontSize": 10,
+                "color": "#86909C"
+              }
+            },
+            {
+              "text": "8",
+              "styles": {
+                "fontSize": 10,
+                "color": "#86909C"
+              }
+            },
+            {
+              "text": "10",
+              "styles": {
+                "fontSize": 10,
+                "color": "#86909C"
+              }
+            },
+            {
+              "text": "12",
+              "styles": {
+                "fontSize": 10,
+                "color": "#86909C"
+              }
+            },
+            {
+              "text": "14",
+              "styles": {
+                "fontSize": 10,
+                "color": "#86909C"
+              }
+            },
+            {
+              "text": "16",
+              "styles": {
+                "fontSize": 10,
+                "color": "#86909C"
+              }
+            },
+            {
+              "text": "18",
+              "styles": {
+                "fontSize": 10,
+                "color": "#86909C"
+              }
+            },
+            {
+              "text": "20",
+              "styles": {
+                "fontSize": 10,
+                "color": "#86909C"
+              }
+            },
+            {
+              "text": "22",
+              "styles": {
+                "fontSize": 10,
+                "color": "#86909C"
+              }
+            },
+            {
+              "text": "24",
+              "styles": {
+                "fontSize": 10,
+                "color": "#86909C"
+              }
+            },
+            {
+              "text": "时",
+              "styles": {
+                "fontSize": 10,
+                "color": "#86909C"
+              }
+            }
+          ]
+        },
+        {
+          "type": "reference-line",
+          "name": "预警线",
+          "value": 30,
+          "style": {
+            "borderTop": "1px dashed #F53F3F",
+            "color": "#F53F3F"
+          },
+          "label": {
+            "text": "预警线",
+            "position": "right",
+            "styles": {
+              "fontSize": 10,
+              "color": "#F53F3F"
+            }
+          }
+        },
+        {
+          "type": "legend",
+          "position": "top-right",
+          "items": [
+            {
+              "color": "#00B42A",
+              "text": "zk3+785CO浓度",
+              "styles": {
+                "fontSize": 10,
+                "color": "#4E5969"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "interactions": [
+    {
+      "target": "Tab切换栏",
+      "type": "tab-switch",
+      "description": "切换监测项目（一氧化碳、能见度等）",
+      "defaultState": "一氧化碳选中",
+      "evidence": "蓝色高亮背景"
+    },
+    {
+      "target": "右侧图标按钮",
+      "type": "click",
+      "description": "切换视图模式（图表/列表）",
+      "defaultState": "常驻",
+      "evidence": "图标样式"
+    }
+  ],
+  "charts": [
+    {
+      "section": "section-chart",
+      "type": "area",
+      "series": [
+        "zk3+785CO浓度"
+      ],
+      "legend": [
+        "zk3+785CO浓度"
+      ],
+      "legendPosition": "top-right",
+      "seriesColors": [
+        "#00B42A"
+      ],
+      "legendType": "horizontal",
+      "axes": "X轴为时间(2-24时)，Y轴为数值(0-40辆)",
+      "tooltip": "未显示",
+      "notes": [
+        "红色虚线预警线位于Y轴30处",
+        "曲线在14-18时有轻微隆起"
+      ]
+    }
+  ],
+  "chartDataHints": [
+    {
+      "chartTitle": "area",
+      "chartType": "area",
+      "labels": [
+        {
+          "label": "40\n30\n20\n10\n0",
+          "name": "40 30 20 10 0"
+        },
+        {
+          "label": "辆",
+          "name": "辆"
+        },
+        {
+          "label": "预警线",
+          "name": "预警线"
+        },
+        {
+          "label": "时",
+          "name": "时"
+        },
+        {
+          "label": "zk3+785CO浓度",
+          "name": "zk3+785CO浓度"
+        },
+        {
+          "label": "一氧化碳",
+          "name": "一氧化碳"
+        },
+        {
+          "label": "洞内照明",
+          "name": "洞内照明"
+        },
+        {
+          "label": "洞外光强",
+          "name": "洞外光强"
+        },
+        {
+          "label": "能见度",
+          "name": "能见度"
+        }
+      ],
+      "values": [
+        {
+          "label": "600",
+          "value": 600,
+          "unit": ""
+        },
+        {
+          "label": "400",
+          "value": 400,
+          "unit": ""
+        },
+        {
+          "label": "200",
+          "value": 200,
+          "unit": ""
+        },
+        {
+          "label": "600",
+          "value": 600,
+          "unit": ""
+        },
+        {
+          "label": "0",
+          "value": 0,
+          "unit": ""
+        },
+        {
+          "label": "600",
+          "value": 600,
+          "unit": ""
+        },
+        {
+          "label": "2",
+          "value": 2,
+          "unit": ""
+        },
+        {
+          "label": "4",
+          "value": 4,
+          "unit": ""
+        },
+        {
+          "label": "6",
+          "value": 6,
+          "unit": ""
+        },
+        {
+          "label": "8",
+          "value": 8,
+          "unit": ""
+        },
+        {
+          "label": "10",
+          "value": 10,
+          "unit": ""
+        },
+        {
+          "label": "12",
+          "value": 12,
+          "unit": ""
+        }
+      ]
+    }
+  ],
+  "headerSlots": [],
+  "analysisType": "chart",
+  "analysisTarget": "图表展示区",
+  "analysisDescription": "",
+  "analysisEvidence": [],
+  "analysisFile": "/Users/smigoo/工作/mvgo/temp-components/6a7599af6eb9eebf9fba56cd/mc-1787724035206-bfa139bf-mc-max-1787717625475-7db40354/.mc-gen/config/preview-analysis.json",
+  "_cachedAt": 1787724171376,
+  "_cacheKey": "vision_1t7Dmmpsl5i0PC8BJt2QLf_2:7879_microcode"
+}

@@ -1,0 +1,863 @@
+根据预览图分析，这是一个设备监测组件，包含统计信息、分类标签和设备网格。以下是结构化分析结果：
+
+```json
+{
+  "generatedAt": "2025-06-10T12:00:00Z",
+  "stage": "preview-analysis",
+  "componentName": "设备监测",
+  "componentTitle": "设备监测",
+  "analysisModel": "claude-3-7-sonnet-20250219",
+  "sourceImage": {
+    "path": "mc-preview.png",
+    "size": 0,
+    "mtimeMs": 0,
+    "sha1": ""
+  },
+  "summary": "设备监测组件，包含顶部统计栏（设备类型/总数/完好率）、左侧分类标签（6个类别），以及主体3x4网格布局展示12种设备的在线/总数状态",
+  "layout": {
+    "type": "vertical-stack",
+    "direction": "vertical",
+    "sections": [
+      {
+        "id": "header-stats",
+        "name": "顶部统计栏",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "body": {
+          "layout": "horizontal-3-columns",
+          "bgPlaceholder": "header-bg",
+          "children": [
+            {
+              "id": "device-types",
+              "name": "设备类型",
+              "role": "statistic",
+              "layout": "horizontal",
+              "children": [
+                {
+                  "type": "label",
+                  "text": "设备类型",
+                  "styles": {
+                    "fontSize": 14,
+                    "color": "rgba(255, 255, 255, 0.8)",
+                    "fontWeight": "normal"
+                  }
+                },
+                {
+                  "type": "value",
+                  "text": "28",
+                  "styles": {
+                    "fontSize": 20,
+                    "color": "rgba(255, 255, 255, 1)",
+                    "fontWeight": "bold"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "device-total",
+              "name": "设备总数",
+              "role": "statistic",
+              "layout": "horizontal",
+              "children": [
+                {
+                  "type": "label",
+                  "text": "设备总数",
+                  "styles": {
+                    "fontSize": 14,
+                    "color": "rgba(255, 255, 255, 0.8)",
+                    "fontWeight": "normal"
+                  }
+                },
+                {
+                  "type": "value",
+                  "text": "68562",
+                  "styles": {
+                    "fontSize": 20,
+                    "color": "rgba(255, 255, 255, 1)",
+                    "fontWeight": "bold"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "completion-rate",
+              "name": "完好率",
+              "role": "statistic",
+              "layout": "horizontal",
+              "children": [
+                {
+                  "type": "label",
+                  "text": "完好率",
+                  "styles": {
+                    "fontSize": 14,
+                    "color": "rgba(255, 255, 255, 0.8)",
+                    "fontWeight": "normal"
+                  }
+                },
+                {
+                  "type": "value",
+                  "text": "98%",
+                  "styles": {
+                    "fontSize": 20,
+                    "color": "rgba(8, 163, 165, 1)",
+                    "fontWeight": "bold"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "main-content",
+        "name": "主内容区",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "body": {
+          "layout": "horizontal-2-sections",
+          "children": [
+            {
+              "id": "category-tabs",
+              "name": "左侧分类标签",
+              "role": "常驻",
+              "layout": "vertical",
+              "children": [
+                {
+                  "type": "tab",
+                  "text": "监控",
+                  "badge": "3",
+                  "active": true,
+                  "styles": {
+                    "fontSize": 14,
+                    "color": "rgba(255, 255, 255, 1)",
+                    "backgroundColor": "rgba(37, 141, 255, 1)"
+                  }
+                },
+                {
+                  "type": "tab",
+                  "text": "照明",
+                  "active": false,
+                  "styles": {
+                    "fontSize": 14,
+                    "color": "rgba(255, 255, 255, 0.8)",
+                    "backgroundColor": "rgba(37, 141, 255, 0.3)"
+                  }
+                },
+                {
+                  "type": "tab",
+                  "text": "通风",
+                  "active": false,
+                  "styles": {
+                    "fontSize": 14,
+                    "color": "rgba(255, 255, 255, 0.8)",
+                    "backgroundColor": "rgba(37, 141, 255, 0.3)"
+                  }
+                },
+                {
+                  "type": "tab",
+                  "text": "供配电",
+                  "active": false,
+                  "styles": {
+                    "fontSize": 14,
+                    "color": "rgba(255, 255, 255, 0.8)",
+                    "backgroundColor": "rgba(37, 141, 255, 0.3)"
+                  }
+                },
+                {
+                  "type": "tab",
+                  "text": "消防",
+                  "active": false,
+                  "styles": {
+                    "fontSize": 14,
+                    "color": "rgba(255, 255, 255, 0.8)",
+                    "backgroundColor": "rgba(37, 141, 255, 0.3)"
+                  }
+                },
+                {
+                  "type": "tab",
+                  "text": "交通诱导",
+                  "active": false,
+                  "styles": {
+                    "fontSize": 14,
+                    "color": "rgba(255, 255, 255, 0.8)",
+                    "backgroundColor": "rgba(37, 141, 255, 0.3)"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "device-grid",
+              "name": "设备网格",
+              "role": "常驻",
+              "layout": "grid",
+              "gridColumns": 3,
+              "bgPlaceholder": "grid-bg",
+              "body": {
+                "layout": "grid",
+                "gridColumns": 3,
+                "children": [
+                  {
+                    "id": "device-camera",
+                    "name": "摄像机",
+                    "role": "device-card",
+                    "layout": "vertical",
+                    "children": [
+                      {
+                        "type": "icon",
+                        "resourceFile": "../resources/images/icon-8798.png",
+                        "recommendedUsage": "imgSrc",
+                        "width": 40,
+                        "height": 40
+                      },
+                      {
+                        "type": "label",
+                        "text": "摄像机",
+                        "styles": {
+                          "fontSize": 14,
+                          "color": "rgba(255, 255, 255, 0.9)",
+                          "fontWeight": "normal"
+                        }
+                      },
+                      {
+                        "type": "status",
+                        "text": "2/484",
+                        "parts": [
+                          {
+                            "text": "2",
+                            "type": "online",
+                            "styles": {
+                              "fontSize": 18,
+                              "color": "rgba(37, 141, 255, 1)",
+                              "fontWeight": "bold"
+                            }
+                          },
+                          {
+                            "text": "/484",
+                            "type": "total",
+                            "styles": {
+                              "fontSize": 14,
+                              "color": "rgba(255, 255, 255, 0.6)",
+                              "fontWeight": "normal"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "id": "device-wind-direction",
+                    "name": "风速风向仪",
+                    "role": "device-card",
+                    "layout": "vertical",
+                    "children": [
+                      {
+                        "type": "icon",
+                        "resourceFile": "../resources/images/icon-8817.png",
+                        "recommendedUsage": "imgSrc",
+                        "width": 40,
+                        "height": 40
+                      },
+                      {
+                        "type": "label",
+                        "text": "风速风向仪",
+                        "styles": {
+                          "fontSize": 14,
+                          "color": "rgba(255, 255, 255, 0.9)",
+                          "fontWeight": "normal"
+                        }
+                      },
+                      {
+                        "type": "status",
+                        "text": "1/484",
+                        "parts": [
+                          {
+                            "text": "1",
+                            "type": "online",
+                            "styles": {
+                              "fontSize": 18,
+                              "color": "rgba(37, 141, 255, 1)",
+                              "fontWeight": "bold"
+                            }
+                          },
+                          {
+                            "text": "/484",
+                            "type": "total",
+                            "styles": {
+                              "fontSize": 14,
+                              "color": "rgba(255, 255, 255, 0.6)",
+                              "fontWeight": "normal"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "id": "device-ultrasonic",
+                    "name": "超高检测器",
+                    "role": "device-card",
+                    "layout": "vertical",
+                    "children": [
+                      {
+                        "type": "icon",
+                        "placeholder": "icon-ultrasonic",
+                        "width": 40,
+                        "height": 40
+                      },
+                      {
+                        "type": "label",
+                        "text": "超高检测器",
+                        "styles": {
+                          "fontSize": 14,
+                          "color": "rgba(255, 255, 255, 0.9)",
+                          "fontWeight": "normal"
+                        }
+                      },
+                      {
+                        "type": "status",
+                        "text": "0/484",
+                        "parts": [
+                          {
+                            "text": "0",
+                            "type": "online",
+                            "styles": {
+                              "fontSize": 18,
+                              "color": "rgba(255, 59, 48, 1)",
+                              "fontWeight": "bold"
+                            }
+                          },
+                          {
+                            "text": "/484",
+                            "type": "total",
+                            "styles": {
+                              "fontSize": 14,
+                              "color": "rgba(255, 255, 255, 0.6)",
+                              "fontWeight": "normal"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "id": "device-smoke-robot",
+                    "name": "烟雾机器人",
+                    "role": "device-card",
+                    "layout": "vertical",
+                    "children": [
+                      {
+                        "type": "icon",
+                        "placeholder": "icon-smoke-robot",
+                        "width": 40,
+                        "height": 40
+                      },
+                      {
+                        "type": "label",
+                        "text": "烟雾机器人",
+                        "styles": {
+                          "fontSize": 14,
+                          "color": "rgba(255, 255, 255, 0.9)",
+                          "fontWeight": "normal"
+                        }
+                      },
+                      {
+                        "type": "status",
+                        "text": "0/484",
+                        "parts": [
+                          {
+                            "text": "0",
+                            "type": "online",
+                            "styles": {
+                              "fontSize": 18,
+                              "color": "rgba(255, 59, 48, 1)",
+                              "fontWeight": "bold"
+                            }
+                          },
+                          {
+                            "text": "/484",
+                            "type": "total",
+                            "styles": {
+                              "fontSize": 14,
+                              "color": "rgba(255, 255, 255, 0.6)",
+                              "fontWeight": "normal"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "id": "device-laser-transmittance",
+                    "name": "激光雷达",
+                    "role": "device-card",
+                    "layout": "vertical",
+                    "children": [
+                      {
+                        "type": "icon",
+                        "placeholder": "icon-laser",
+                        "width": 40,
+                        "height": 40
+                      },
+                      {
+                        "type": "label",
+                        "text": "激光雷达",
+                        "styles": {
+                          "fontSize": 14,
+                          "color": "rgba(255, 255, 255, 0.9)",
+                          "fontWeight": "normal"
+                        }
+                      },
+                      {
+                        "type": "status",
+                        "text": "0/484",
+                        "parts": [
+                          {
+                            "text": "0",
+                            "type": "online",
+                            "styles": {
+                              "fontSize": 18,
+                              "color": "rgba(255, 59, 48, 1)",
+                              "fontWeight": "bold"
+                            }
+                          },
+                          {
+                            "text": "/484",
+                            "type": "total",
+                            "styles": {
+                              "fontSize": 14,
+                              "color": "rgba(255, 255, 255, 0.6)",
+                              "fontWeight": "normal"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "id": "device-co-sensor",
+                    "name": "CO传感器",
+                    "role": "device-card",
+                    "layout": "vertical",
+                    "children": [
+                      {
+                        "type": "icon",
+                        "placeholder": "icon-co-sensor",
+                        "width": 40,
+                        "height": 40
+                      },
+                      {
+                        "type": "label",
+                        "text": "CO传感器",
+                        "styles": {
+                          "fontSize": 14,
+                          "color": "rgba(255, 255, 255, 0.9)",
+                          "fontWeight": "normal"
+                        }
+                      },
+                      {
+                        "type": "status",
+                        "text": "0/484",
+                        "parts": [
+                          {
+                            "text": "0",
+                            "type": "online",
+                            "styles": {
+                              "fontSize": 18,
+                              "color": "rgba(255, 59, 48, 1)",
+                              "fontWeight": "bold"
+                            }
+                          },
+                          {
+                            "text": "/484",
+                            "type": "total",
+                            "styles": {
+                              "fontSize": 14,
+                              "color": "rgba(255, 255, 255, 0.6)",
+                              "fontWeight": "normal"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "id": "device-co-vi-detector",
+                    "name": "CO/VI检测器",
+                    "role": "device-card",
+                    "layout": "vertical",
+                    "children": [
+                      {
+                        "type": "icon",
+                        "placeholder": "icon-co-vi",
+                        "width": 40,
+                        "height": 40
+                      },
+                      {
+                        "type": "label",
+                        "text": "CO/VI检测器",
+                        "styles": {
+                          "fontSize": 14,
+                          "color": "rgba(255, 255, 255, 0.9)",
+                          "fontWeight": "normal"
+                        }
+                      },
+                      {
+                        "type": "status",
+                        "text": "0/484",
+                        "parts": [
+                          {
+                            "text": "0",
+                            "type": "online",
+                            "styles": {
+                              "fontSize": 18,
+                              "color": "rgba(255, 59, 48, 1)",
+                              "fontWeight": "bold"
+                            }
+                          },
+                          {
+                            "text": "/484",
+                            "type": "total",
+                            "styles": {
+                              "fontSize": 14,
+                              "color": "rgba(255, 255, 255, 0.6)",
+                              "fontWeight": "normal"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "id": "device-temp-humidity",
+                    "name": "温湿度传感器",
+                    "role": "device-card",
+                    "layout": "vertical",
+                    "children": [
+                      {
+                        "type": "icon",
+                        "placeholder": "icon-temp-humidity",
+                        "width": 40,
+                        "height": 40
+                      },
+                      {
+                        "type": "label",
+                        "text": "温湿度传感器",
+                        "styles": {
+                          "fontSize": 14,
+                          "color": "rgba(255, 255, 255, 0.9)",
+                          "fontWeight": "normal"
+                        }
+                      },
+                      {
+                        "type": "status",
+                        "text": "0/484",
+                        "parts": [
+                          {
+                            "text": "0",
+                            "type": "online",
+                            "styles": {
+                              "fontSize": 18,
+                              "color": "rgba(255, 59, 48, 1)",
+                              "fontWeight": "bold"
+                            }
+                          },
+                          {
+                            "text": "/484",
+                            "type": "total",
+                            "styles": {
+                              "fontSize": 14,
+                              "color": "rgba(255, 255, 255, 0.6)",
+                              "fontWeight": "normal"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "id": "device-pressure-sensor",
+                    "name": "压力传感器",
+                    "role": "device-card",
+                    "layout": "vertical",
+                    "children": [
+                      {
+                        "type": "icon",
+                        "placeholder": "icon-pressure",
+                        "width": 40,
+                        "height": 40
+                      },
+                      {
+                        "type": "label",
+                        "text": "压力传感器",
+                        "styles": {
+                          "fontSize": 14,
+                          "color": "rgba(255, 255, 255, 0.9)",
+                          "fontWeight": "normal"
+                        }
+                      },
+                      {
+                        "type": "status",
+                        "text": "0/484",
+                        "parts": [
+                          {
+                            "text": "0",
+                            "type": "online",
+                            "styles": {
+                              "fontSize": 18,
+                              "color": "rgba(255, 59, 48, 1)",
+                              "fontWeight": "bold"
+                            }
+                          },
+                          {
+                            "text": "/484",
+                            "type": "total",
+                            "styles": {
+                              "fontSize": 14,
+                              "color": "rgba(255, 255, 255, 0.6)",
+                              "fontWeight": "normal"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "id": "device-light-transmitter",
+                    "name": "光照度变送器",
+                    "role": "device-card",
+                    "layout": "vertical",
+                    "children": [
+                      {
+                        "type": "icon",
+                        "placeholder": "icon-light",
+                        "width": 40,
+                        "height": 40
+                      },
+                      {
+                        "type": "label",
+                        "text": "光照度变送器",
+                        "styles": {
+                          "fontSize": 14,
+                          "color": "rgba(255, 255, 255, 0.9)",
+                          "fontWeight": "normal"
+                        }
+                      },
+                      {
+                        "type": "status",
+                        "text": "0/484",
+                        "parts": [
+                          {
+                            "text": "0",
+                            "type": "online",
+                            "styles": {
+                              "fontSize": 18,
+                              "color": "rgba(255, 59, 48, 1)",
+                              "fontWeight": "bold"
+                            }
+                          },
+                          {
+                            "text": "/484",
+                            "type": "total",
+                            "styles": {
+                              "fontSize": 14,
+                              "color": "rgba(255, 255, 255, 0.6)",
+                              "fontWeight": "normal"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "id": "device-emergency-phone",
+                    "name": "紧急电话",
+                    "role": "device-card",
+                    "layout": "vertical",
+                    "children": [
+                      {
+                        "type": "icon",
+                        "placeholder": "icon-phone",
+                        "width": 40,
+                        "height": 40
+                      },
+                      {
+                        "type": "label",
+                        "text": "紧急电话",
+                        "styles": {
+                          "fontSize": 14,
+                          "color": "rgba(255, 255, 255, 0.9)",
+                          "fontWeight": "normal"
+                        }
+                      },
+                      {
+                        "type": "status",
+                        "text": "0/484",
+                        "parts": [
+                          {
+                            "text": "0",
+                            "type": "online",
+                            "styles": {
+                              "fontSize": 18,
+                              "color": "rgba(255, 59, 48, 1)",
+                              "fontWeight": "bold"
+                            }
+                          },
+                          {
+                            "text": "/484",
+                            "type": "total",
+                            "styles": {
+                              "fontSize": 14,
+                              "color": "rgba(255, 255, 255, 0.6)",
+                              "fontWeight": "normal"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "id": "device-water-monitor",
+                    "name": "水质监测设备",
+                    "role": "device-card",
+                    "layout": "vertical",
+                    "children": [
+                      {
+                        "type": "icon",
+                        "placeholder": "icon-water",
+                        "width": 40,
+                        "height": 40
+                      },
+                      {
+                        "type": "label",
+                        "text": "水质监测设备",
+                        "styles": {
+                          "fontSize": 14,
+                          "color": "rgba(255, 255, 255, 0.9)",
+                          "fontWeight": "normal"
+                        }
+                      },
+                      {
+                        "type": "status",
+                        "text": "0/484",
+                        "parts": [
+                          {
+                            "text": "0",
+                            "type": "online",
+                            "styles": {
+                              "fontSize": 18,
+                              "color": "rgba(255, 59, 48, 1)",
+                              "fontWeight": "bold"
+                            }
+                          },
+                          {
+                            "text": "/484",
+                            "type": "total",
+                            "styles": {
+                              "fontSize": 14,
+                              "color": "rgba(255, 255, 255, 0.6)",
+                              "fontWeight": "normal"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "headerSlots": [
+    {
+      "slotType": "header-right",
+      "elementType": "statistic",
+      "content": "设备类型 28",
+      "figmaNodeId": "2136638825"
+    },
+    {
+      "slotType": "header-right",
+      "elementType": "statistic",
+      "content": "设备总数 68562",
+      "figmaNodeId": "2136638826"
+    },
+    {
+      "slotType": "header-right",
+      "elementType": "statistic",
+      "content": "完好率 98%",
+      "figmaNodeId": "2136638827"
+    }
+  ],
+  "styles": {
+    "backgroundBrightness": "light",
+    "theme": "浅色科技监测风",
+    "colors": [
+      "rgba(37, 141, 255, 1)",
+      "rgba(8, 163, 165, 1)",
+      "rgba(255, 59, 48, 1)",
+      "rgba(255, 255, 255, 0.9)",
+      "rgba(255, 255, 255, 0.6)"
+    ],
+    "background": "浅灰蓝色渐变背景（rgba(237, 244, 251, 1)）",
+    "decorations": [
+      "顶部蓝色渐变装饰条",
+      "菱形图标装饰",
+      "设备卡片圆角背景",
+      "分类标签左侧蓝色竖条"
+    ],
+    "emphasis": [
+      "在线数量用蓝色强调（正常）或红色强调（异常）",
+      "完好率用青色强调",
+      "激活标签用深蓝色背景突出"
+    ]
+  },
+  "interactions": [
+    {
+      "target": "左侧分类标签",
+      "type": "tab-switch",
+      "description": "点击切换不同设备分类（监控/照明/通风/供配电/消防/交通诱导）",
+      "defaultState": "常驻，默认选中'监控'",
+      "evidence": "激活状态标签有深蓝色背景和右侧红色数字徽章"
+    },
+    {
+      "target": "设备卡片",
+      "type": "clickable-card",
+      "description": "点击卡片可能查看该设备详情或操作",
+      "defaultState": "常驻，可点击",
+      "evidence": "卡片有独立的视觉边界和交互区域"
+    }
+  ],
+  "charts": [],
+  "doNotInvent": [
+    "设备卡片的点击后跳转路径（截图未显示）",
+    "分类标签切换后的数据联动逻辑（截图未显示）",
+    "设备状态的刷新机制（截图未显示）",
+    "徽章数字的更新规则（截图未显示）",
+    "顶部统计数据的实时更新逻辑（截图未显示）"
+  ],
+  "notes": [
+    "顶部统计栏包含3个关键指标（设备类型/总数/完好率），位于组件最上方",
+    "左侧有6个分类标签，当前激活'监控'类别，显示红色徽章数字3",
+    "主体区域为3列4行网格布局，共12个设备卡片",
+    "设备卡片包含图标、名称、在线数/总数状态，0在线的设备用红色显示异常",
+    "2个图标资源已下载（icon-8798.png摄像机、icon-8817.png风速风向仪），其他10个图标需要占位符",
+    "整体采用浅色科技风格，蓝色系为主色调"
+  ]
+}
+```
+
+## 关键分析说明
+
+1. **整体结构**：组件采用垂直堆叠布局，分为顶部统计栏和主内容区两个section
+2. **主内容区**：采用左右布局，左侧为分类标签（6个垂直排列的tab），右侧为3x4网格设备卡片
+3. **backgroundBrightness判断**：背景为浅灰蓝色（rgba(237, 244, 251, 1)），文字为深色，因此判断为`"light"`
+4. **headerSlots识别**：顶部3个统计指标（设备类型28、设备总数68562、完好率98%）位于面板标题行右侧，识别为`header-right`插槽
+5. **资源映射**：2个图标已下载（摄像机、风速风向仪），其他10个使用占位符
+6. **交互分析**：左侧标签支持tab切换，设备卡片可点击（但跳转逻辑未在截图中显示）
+7. **状态展示**：在线数量用蓝色/红色区分正常/异常状态，完好率用青色强调

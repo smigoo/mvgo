@@ -1,0 +1,218 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 80,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "headerRelation为title-same-row，但统计指标被错误放在body中，应放入header.controls。",
+        "suggestion": "将设备类型、总数、完好率等stat-group移至header.controls数组中。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[2].body.children[1].children[*]",
+        "message": "device-card内使用valueParts导致嵌套层级过深（超4层），增加DOM复杂度。",
+        "suggestion": "将valueParts扁平化，合并为单一富文本节点或使用CSS实现多色文本。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "coverageReport.missing",
+        "message": "解析时将'总数:'与'56302'合并为单一label，丢失原始Figma文本层级，导致覆盖率下降。",
+        "suggestion": "优化解析逻辑，保持标签文本与数值文本在节点树中的独立性。"
+      }
+    ],
+    "recommendations": [
+      "将header-stats中的统计指标提取到header.controls中，确保同行布局正确映射。",
+      "优化device-card的数值展示结构，减少嵌套层级以提升渲染性能。",
+      "完善summary-cards和device-list-area的header定义，即使无标题也建议显式声明header: null。"
+    ],
+    "summary": "整体布局清晰，但header-stats的插槽映射错误，且device-card嵌套过深。需修正header结构并优化深层嵌套节点。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorBg": "rgba(237,244,251,1)",
+      "--colorPrimary": "rgba(25,144,255,1)",
+      "--colorAccent": "rgba(8,163,165,1)",
+      "--colorError": "#f53f3f",
+      "--colorTextBase": "rgba(51,51,51,1)",
+      "--colorPrimaryGradient": "linear-gradient(135deg, rgba(25,144,255,1), rgba(8,163,165,1))",
+      "--fontSizeBase": "14px",
+      "--fontSizeStat": "32px",
+      "--borderRadiusCard": "12px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射（与CSS变量一一对应）",
+      "@color-bg": "var(--colorBg)",
+      "@color-primary": "var(--colorPrimary)",
+      "@color-accent": "var(--colorAccent)",
+      "@color-error": "var(--colorError)",
+      "@color-text-base": "var(--colorTextBase)",
+      "@color-primary-gradient": "var(--colorPrimaryGradient)",
+      "@font-size-base": "var(--fontSizeBase)",
+      "@font-size-stat": "var(--fontSizeStat)",
+      "@border-radius-card": "var(--borderRadiusCard)"
+    },
+    "cssClasses": {
+      "comment": "可复用基础类（容器、卡片、统计数值）",
+      ".monitor-container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "16px",
+        "padding": "16px",
+        "background": "var(--colorBg)",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSizeBase)"
+      },
+      ".device-card": {
+        "padding": "16px",
+        "border-radius": "var(--borderRadiusCard)",
+        "background": "var(--colorBg)"
+      },
+      ".device-card--gradient": {
+        "padding": "16px",
+        "border-radius": "var(--borderRadiusCard)",
+        "background": "var(--colorPrimaryGradient)",
+        "color": "#ffffff"
+      },
+      ".stat-value": {
+        "font-size": "var(--fontSizeStat)",
+        "color": "var(--colorPrimary)",
+        "font-weight": "600",
+        "line-height": "1.2"
+      },
+      ".stat-value--error": {
+        "color": "var(--colorError)"
+      }
+    },
+    "tokenCoverage": 0.96,
+    "mappingNotes": [
+      "浅灰蓝色背景 rgba(237,244,251,1) 映射为 --colorBg，并作为容器背景直接落地。",
+      "主色 rgba(25,144,255,1) 映射为 --colorPrimary，用于大号设备总数数值和渐变卡片起点色。",
+      "青绿色 rgba(8,163,165,1) 映射为 --colorAccent，与主色共同构成蓝色渐变卡片背景。",
+      "红色 #f53f3f 映射为 --colorError，用于异常数值强调。",
+      "深灰文字 rgba(51,51,51,1) 映射为 --colorTextBase，用于基准文本。",
+      "卡片圆角抽取为 --borderRadiusCard，大号统计数值抽取为 --fontSizeStat。",
+      "渐变背景使用 --colorPrimaryGradient 统一复用，避免在业务样式中硬编码渐变。"
+    ],
+    "elementStyleMap": {
+      "header-stats": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-stat-group-设备类型-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-stat-group-设备总数-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-stat-group-完好率-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "el-stat-group-设备类型-3": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-stat-group-设备总数-6": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-stat-group-完好率-9": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-tunnel-content-group-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-tunnel": {
+        "background": "linear-gradient(270deg, #318aff 0%, #70bfff 100%)",
+        "border-radius": "8px",
+        "padding": "16px",
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-content-group-x-15": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-connection-content-group-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-connection": {
+        "background": "rgba(255,255,255,0.6)",
+        "border-radius": "8px",
+        "padding": "16px",
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-content-group-x-20": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-list-area": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "sidebar-tabs": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-24": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "header-stats",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 9,
+        "title": "设备监测"
+      },
+      {
+        "id": "summary-cards",
+        "responsibility": "数据统计指标区（数字+标签+趋势）",
+        "elementCount": 10,
+        "title": "主要设备统计"
+      },
+      {
+        "id": "device-list-area",
+        "responsibility": "列表项布局区",
+        "elementCount": 21,
+        "title": "设备列表区"
+      },
+      {
+        "id": "nav",
+        "responsibility": "竖向导航区（分类/菜单切换）",
+        "elementCount": 0,
+        "title": "导航"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 4,
+    "reason": "有效 sections=4 ≥ 3 → 强制拆分（含强制注入的导航 section）"
+  }
+}

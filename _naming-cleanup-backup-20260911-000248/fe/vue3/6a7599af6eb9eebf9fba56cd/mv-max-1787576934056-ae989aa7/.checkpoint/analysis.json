@@ -1,0 +1,168 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 76,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body",
+        "message": "header.title 与 body 中 text 重复渲染标题“环境监测”，造成内容冗余。",
+        "suggestion": "保留 header.title，body 仅放装饰图标或移入 title 插槽。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1]",
+        "message": "slotCandidate 为 header-right，但 tabs 和 view-icons 放在 body.children，未映射到 header 控件插槽。",
+        "suggestion": "将控件移入 header.controls 或使用具名插槽，body 只承载内容。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[1].body.children[0]",
+        "message": "tabs-list 内 tab 子节点又嵌 styles，嵌套层级超过 3 层，增加 DOM 深度。",
+        "suggestion": "将 tab 样式提升为扁平结构或合并样式类。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[1]",
+        "message": "view-icons 容器携带 resourceFile/resourceVarName 等资源字段，与子图标资源重复。",
+        "suggestion": "移除容器冗余资源字段，仅保留在具体 icon-button 上。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body",
+        "message": "chart-area 仅含 chart-container，未体现 charts 元数据中的图例、坐标轴、预警线等结构。",
+        "suggestion": "在 chart-container 下补充 series/legend/axes 结构或显式关联 charts 数据。"
+      }
+    ],
+    "recommendations": [
+      "将标题文本收敛到 header.title，避免 body 重复渲染。",
+      "将 control-bar 的 tabs 和 view-icons 移入 header.controls 或明确具名插槽。",
+      "扁平化 tabs 和 view-icons 结构，移除容器冗余资源字段。"
+    ],
+    "summary": "结构基本清晰，但存在标题重复、控件未映射插槽、嵌套过深等问题，需优化后使用。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#559EFF",
+      "--colorBg": "rgba(237, 244, 251, 1)",
+      "--colorBgContainer": "#ffffff",
+      "--colorSuccess": "#52c41a",
+      "--colorDanger": "#f53f3f",
+      "--colorTextBase": "#1a1a2e",
+      "--fontSize": "14px",
+      "--borderRadius": "4px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#559EFF",
+      "@color-bg": "#EDF4FB",
+      "@color-bg-container": "#ffffff",
+      "@color-success": "#52c41a",
+      "@color-danger": "#f53f3f",
+      "@color-text-base": "rgba(255, 255, 255, 1)",
+      "@font-size-base": "14px",
+      "@border-radius-base": "4px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "16px",
+        "background": "var(--colorBg, @color-bg)",
+        "color": "var(--colorTextBase, @color-text-base)"
+      },
+      ".panel-card": {
+        "background": "var(--colorBgContainer, @color-bg-container)",
+        "border-radius": "var(--borderRadius, @border-radius-base)",
+        "padding": "12px"
+      },
+      ".tab-selected": {
+        "background": "var(--colorPrimary, @color-primary)",
+        "color": "#ffffff",
+        "border-radius": "4px"
+      },
+      ".warning-line": {
+        "border-top": "1px dashed var(--colorDanger, @color-danger)"
+      },
+      ".area-fill": {
+        "background": "rgba(82, 196, 26, 0.18)",
+        "border-color": "var(--colorSuccess, @color-success)"
+      },
+      ".warning-value": {
+        "color": "var(--colorDanger, @color-danger)",
+        "font-weight": "600"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "背景色 #EDF4FB 映射为 --colorBg，并直接用于浅色科技监测风容器背景",
+      "蓝色 #559EFF 映射为主色 --colorPrimary，用于蓝色选中Tab",
+      "红色 #f53f3f 映射为预警色 --colorDanger，用于红色虚线预警线及预警数值30",
+      "绿色 #52c41a 映射为成功色 --colorSuccess，用于绿色面积填充",
+      "白色 #ffffff 映射为容器/卡片背景色 --colorBgContainer",
+      "字体大小与圆角采用平台默认 14px / 4px 作为可复用基础变量，视觉稿未显式给出"
+    ],
+    "elementStyleMap": {
+      "panel-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "control-bar": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tabs-list": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "view-icons": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "chart-area": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-14": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "panel-header",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 2,
+        "title": "环境监测"
+      },
+      {
+        "id": "control-bar",
+        "responsibility": "标签页切换区",
+        "elementCount": 8,
+        "title": "监测项目切换与视图控制"
+      },
+      {
+        "id": "chart-area",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "浓度趋势图表"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 → 强制拆分"
+  }
+}

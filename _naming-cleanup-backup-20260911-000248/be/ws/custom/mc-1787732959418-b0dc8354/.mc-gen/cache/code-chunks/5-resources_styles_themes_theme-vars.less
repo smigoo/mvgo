@@ -1,0 +1,41 @@
+// 微码组件主题变量文件
+// 本文件定义主题 mixin，由系统生成的 dark.less/light.less 在主题选择器内调用
+// 根级禁止调用任何主题 mixin
+
+// ========== 公共主题变量（浅色/深色主题共享） ==========
+.common() {
+  // 预警线/参考线颜色（设计稿指定，r:245 g:63 b:63）
+  @em-alert-line-color: #F53F3F;
+}
+
+// ========== 浅色主题（默认主题，组件默认展示色） ==========
+.theme-light() {
+  // 文字颜色
+  @em-text-primary: #1A1A1A;
+  @em-text-secondary: #666666;
+  @em-text-tertiary: #999999;
+  @em-text-disabled: #CCCCCC;
+
+  // 背景颜色
+  @em-bg-primary: #FFFFFF;
+  @em-bg-secondary: #F5F6F8;
+
+  // 边框颜色
+  @em-border-color: #E5E8EF;
+}
+
+// ========== 深色主题 ==========
+.theme-dark() {
+  // 文字颜色（深色面板禁止使用黑色系）
+  @em-text-primary: #FFFFFF;
+  @em-text-secondary: #B0B8C4;
+  @em-text-tertiary: #6B7A8C;
+  @em-text-disabled: #4A5568;
+
+  // 背景颜色
+  @em-bg-primary: #1A2332;
+  @em-bg-secondary: #232D3D;
+
+  // 边框颜色
+  @em-border-color: #2D3A4D;
+}

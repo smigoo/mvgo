@@ -65,9 +65,17 @@ import { detectThemeColorViolations } from '../utils/theme-color-guard.js';
 // 🛡️ CODE-019（2026-09-07）：Props 接线校验 —— 事实源在 props-wiring-guard.js
 // （主组件调用子组件时必须传入所有 required props，否则运行时 Vue 警告 + 渲染异常）
 import { detectMissingPropsWiring } from '../utils/props-wiring-guard.js';
+// 🛡️ CODE-023（2026-09-11）：悬空子组件标签（模板 PascalCase 标签 ↔ script import ↔
+// components/*.vue 文件三要素必须齐备）。注意：不 import sfc-semantics（其含 import.meta，
+// jest 直接加载会炸），标签提取在本块内联实现（VUE 内置集合与 resource-mounter 对齐）。
 // 🛡️ SEMANTIC-BINDING（2026-09-07）：语义元素错绑校验 —— 事实源在 semantic-binding-guard.js
 // （角标数据如 `3/3740` 不得绑定到 progress/percent 等进度/比例字段，否则语义错乱）
 import { detectSemanticBindingErrors } from '../utils/semantic-binding-guard.js';
+import { extractSfcTemplate, extractSfcTemplateRegion } from '../utils/sfc-template-extractor.js';
+import { collectClassFacts } from '../utils/class-facts.js';
+import { checkClassNameContract } from '../utils/classname-contract.js';
+import { buildResourceFacts, checkResourceContract } from '../utils/resource-facts.js';
+import { checkSkeletonCompleteness } from '../utils/mc-skeleton.js';
 
 function normalizeCssLiteral(value = '') {
   return String(value || '')
@@ -522,8 +530,18 @@ export function findUndefinedComponentClasses(files) {
   const defined = new Set();
   for (const f of list) {
     const p = String(f?.path || '');
-    if (!/\.less$/.test(p)) continue;
-    for (const c of extractCommonLessClasses(f?.content || '')) defined.add(c);
+    const c = f?.content;
+    if (!/\.less$/.test(p)) {
+      // 🛡️ 层③（2026-09-11）：子组件自身 <style>（含 scoped）里定义的类同样是合法定义——
+      // 旧实现只认 *.less，导致「模板 class + 自有 scoped 样式」被误判 CODE-020 BLOCK（假阳性）。
+      if (/\.vue$/.test(p) && typeof c === 'string') {
+        for (const sm of c.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)) {
+          for (const cls of extractCommonLessClasses(sm[1] || '')) defined.add(cls);
+        }
+      }
+      continue;
+    }
+    for (const cls of extractCommonLessClasses(c || '')) defined.add(cls);
   }
   const definedArr = [...defined];
   const templateClasses = extractTemplateClasses(list);
@@ -1583,11 +1601,9 @@ export class CodeStructureValidator {
 
       if (indexVueFile && sections.length > 0) {
         const content = indexVueFile.content || '';
-        const templateMatch = content.match(
-          /<template>([\s\S]*?)<\/template>/i,
-        );
-        if (templateMatch) {
-          const templateContent = templateMatch[1];
+        // 🛡️ 共享边界法（lazy </template> 会被具名插槽提前截断——0ca84358 家族缺陷）
+        const templateContent = extractSfcTemplate(content);
+        if (templateContent) {
 
           for (let i = 0; i < sections.length; i++) {
             const section = sections[i];
@@ -2324,6 +2340,108 @@ export class CodeStructureValidator {
       }
     }
 
+    // ========== 🛡️ CODE-023: 悬空子组件标签（fail-closed BLOCK，2026-09-11）==========
+    // 事故 1fduq67s / 46859f40 / cfb53488：模板写了 <SwitchSection /> 等标签，但 script 无
+    // import 且/或 components/ 下无文件 → 渲染白块。此前语义门禁对 subCompTags 白名单放行
+    // （假设"后面有人接线"），这类悬空完全不可测。三要素齐备才合法：
+    //   ① 模板有标签 ② script 有绑定（import / const X = defineAsyncComponent）③ 文件存在。
+    // 正常路径（层① 标签并入生成清单 + 落盘终验补 import）三要素天然齐备，本检测只拦异常路径。
+    // 排除：Vue 内置/模板白名单（extractComponentTagNames 已排除）+ 组件库 PascalCase 形态
+    // （BasePanel / El/Van/Ant/N/AR 前缀），避免把全局注册组件误判为悬空。
+    {
+      const indexVue = files.find(
+        (f) => f && (f.path || '').endsWith('package/index.vue'),
+      );
+      const compFiles = new Set();
+      for (const f of files) {
+        const m = /package\/components\/([A-Za-z][\w]*)\.vue$/.exec(
+          String(f?.path || ''),
+        );
+        if (m) compFiles.add(m[1]);
+      }
+      if (indexVue && indexVue.content && compFiles.size > 0) {
+        // 🛡️ 共享边界法（lazy </template> 会被具名插槽提前截断——0ca84358 家族缺陷）
+        const templateBody = extractSfcTemplate(indexVue.content);
+        const scriptMatch = indexVue.content.match(
+          /<script[^>]*>([\s\S]*?)<\/script>/i,
+        );
+        let dangling = [];
+        try {
+          // 内联标签提取（与 sfc-semantics.extractComponentTagNames 同口径）：
+          // PascalCase 标签，排除 Vue 内置组件
+          const VUE_BUILTINS = new Set([
+            'RouterView', 'RouterLink', 'KeepAlive', 'Transition',
+            'TransitionGroup', 'Suspense', 'Teleport', 'Component', 'Slot',
+          ]);
+          const tags = new Set();
+          if (templateBody) {
+            for (const m of templateBody.matchAll(/<([A-Z][A-Za-z0-9]*)\b/g)) {
+              if (!VUE_BUILTINS.has(m[1])) tags.add(m[1]);
+            }
+          }
+          const declared = new Set();
+          if (scriptMatch) {
+            const script = scriptMatch[1];
+            for (const m of script.matchAll(
+              /import\s+([A-Za-z_$][\w$]*)\s+from/g,
+            )) {
+              declared.add(m[1]);
+            }
+            for (const m of script.matchAll(
+              /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=/g,
+            )) {
+              declared.add(m[1]);
+            }
+          }
+          for (const tag of tags) {
+            if (/^(BasePanel|(El|Van|Ant|N|AR)[A-Z])/.test(tag)) continue;
+            const hasImport = declared.has(tag);
+            const hasFile = compFiles.has(tag);
+            if (hasImport && hasFile) continue;
+            // 有文件缺 import / 有 import 缺文件 = 确定性管线缺陷（BLOCK）
+            if (hasImport || hasFile) {
+              dangling.push({
+                tag,
+                missing: hasFile ? '缺 import' : '缺组件文件',
+              });
+            } else {
+              // 🛡️ 2026-09-11 升级 BLOCK（0ca84358 实锤）：微码管线无任意全局注册机制，
+              // 三全缺 = 臆造标签（渲染空白且无报错）。此前 WARN 观察的缝隙让带病产物
+              // 随软失败降级发布。宿主真全局组件仅 BasePanel 与 UI 库前缀（上方已排除）。
+              dangling.push({
+                tag,
+                missing: '无组件文件且无 import（臆造标签）',
+              });
+            }
+          }
+        } catch (err) {
+          issues.push({
+            id: 'CODE-023-ERROR',
+            severity: 'BLOCK',
+            file: 'package/index.vue',
+            message: `悬空子组件标签检测器执行异常（fail-closed）：${err?.message || String(err)}`,
+          });
+        }
+        if (dangling.length > 0) {
+          const detail = dangling
+            .map((d) => `<${d.tag}>（${d.missing}）`)
+            .join('、');
+          issues.push({
+            id: 'CODE-023',
+            severity: 'BLOCK',
+            file: 'package/index.vue',
+            message: `悬空子组件标签：${dangling.length} 个模板标签三要素不齐备（${detail}）。悬空标签渲染为空白且无任何报错，必须补齐 import 与 package/components/{Tag}.vue 文件，或从模板删除该标签`,
+            hint: {
+              suggestion:
+                '为每个标签补 import（可 defineAsyncComponent）并确保 package/components/{Tag}.vue 存在；不打算渲染的标签从模板删除',
+            },
+          });
+        }
+        // （CODE-023-GLOBAL-SUSPECT WARN 已移除：三全缺自 2026-09-11 起并入 CODE-023 BLOCK，
+        //   微码管线无任意全局注册机制，见 dangling 分支注释）
+      }
+    }
+
     // ========== 🛡️ CODE-022: 资源变量 import 未挂载（fail-closed BLOCK，2026-09-10）==========
     // 事故 P0-6：bg-8788/bg-8807/bg-8439 import 后模板 0 处 background-image/:style → 大卡/标签背景整块丢失。
     // 只查「import 后完全未引用」的变量（间接引用链不做，避免误报）；纯正则、fail-closed。
@@ -2389,6 +2507,165 @@ export class CodeStructureValidator {
       }
     }
 
+    // ========== 🛡️ CODE-024: 类名契约（fail-closed BLOCK，2026-09-11 · P1.6）==========
+    // 契约（C1 方言标准 / C2 修饰符基类形态一致 / C3 激活态样式存在 / C4 无死修饰符规则）：
+    // 判据基准 = DOM 类事实（classFacts）；实现与产物不变量 I7 **共用同一函数**
+    // （utils/classname-contract.checkClassNameContract），杜绝「门禁放过、不变量报警」双源漂移。
+    // 事故实证：0b95f5cf → 模板 is-active + 样式 .c-device-monitor-tab-item.is-active（基类无前缀）
+    // → 激活态永不命中，而旧 I7 判「全通过」；1afdb842 → 模板无前缀 --active vs 样式有前缀。
+    {
+      let contractViolations = [];
+      try {
+        const facts = collectClassFacts(
+          (files || []).filter((f) => f && typeof f.content === 'string'),
+        );
+        contractViolations = checkClassNameContract(
+          Object.fromEntries(
+            (files || [])
+              .filter((f) => f && typeof f.content === 'string')
+              .map((f) => [f.path, f.content]),
+          ),
+          facts,
+        );
+      } catch (err) {
+        issues.push({
+          id: 'CODE-024-ERROR',
+          severity: 'BLOCK',
+          file: '(classname-contract)',
+          message: `类名契约检测器执行异常（fail-closed）：${err?.message || String(err)}`,
+        });
+      }
+      const blocking = contractViolations.filter((v) => v.severity === 'error');
+      if (blocking.length > 0) {
+        issues.push({
+          id: 'CODE-024',
+          severity: 'BLOCK',
+          file: blocking[0].file || 'package/index.vue',
+          message:
+            `类名契约违规（${blocking.length} 项）：` +
+            blocking
+              .slice(0, 5)
+              .map((v) => `[${v.code}] ${v.message}`)
+              .join('；') +
+            '。修饰符（--active 等）必须为 BEM 形态、与同元素基类前缀一致，且样式源必须有对应规则',
+          hint: {
+            suggestion:
+              '① 布尔方言（is-active/active）归一为「基类--active」；② 修饰符类与同元素基类使用同一前缀形态；③ 为每个修饰符类补对应样式规则；④ 不使用的修饰符规则删除',
+          },
+        });
+      }
+      const warns = contractViolations.filter((v) => v.severity === 'warn');
+      if (warns.length > 0) {
+        issues.push({
+          id: 'CODE-024-WARN',
+          severity: 'WARN',
+          file: warns[0].file || 'resources/styles/common.less',
+          message: `类名契约提示（${warns.length} 项）：${warns
+            .slice(0, 4)
+            .map((v) => `[${v.code}] ${v.message}`)
+            .join('；')}`,
+        });
+      }
+    }
+
+    // ========== 🛡️ CODE-025: 资源契约（fail-closed BLOCK，2026-09-11 · P1.7）==========
+    // 契约：资源变量引用（模板 + **script**）↔ import ↔ 资源事实源 三方一致
+    //   R1 引用未 import 且事实源已登记 → 注入漏项（运行时 `X is not defined`）
+    //   R2 引用既无 import 也不在事实源 → 幽灵引用
+    //   R3 import 未在事实源登记 → warn
+    // 事故实证 13890774：`const deviceIcons = [icon3,…,icon14]` 在 script 里，旧注入只认模板
+    // 使用形态 → 只注入 3 个 import → 运行时 icon4 is not defined；T08 兜底同样只扫模板。
+    // 判据实现与不变量 I8 共用 utils/resource-facts#checkResourceContract。
+    {
+      let resourceViolations = [];
+      try {
+        const fileMap = Object.fromEntries(
+          (files || [])
+            .filter((f) => f && typeof f.content === 'string')
+            .map((f) => [f.path, f.content]),
+        );
+        const rfacts = buildResourceFacts({
+          mapping: (options && options.resourceMapping) || [],
+          files: fileMap,
+        });
+        resourceViolations = checkResourceContract(fileMap, rfacts);
+      } catch {
+        resourceViolations = []; // 资源映射缺失（非本阶段输入）→ fail-open，交 I8 报告
+      }
+      const blocking = resourceViolations.filter((v) => v.severity === 'error');
+      if (blocking.length > 0) {
+        issues.push({
+          id: 'CODE-025',
+          severity: 'BLOCK',
+          file: blocking[0].file || 'package/index.vue',
+          message:
+            `资源契约违规（${blocking.length} 项）：` +
+            blocking
+              .slice(0, 5)
+              .map((v) => `[${v.code}] ${v.message}`)
+              .join('；') +
+            '。资源变量必须在事实源登记、被引用即须 import（含 script 内引用）',
+          hint: {
+            suggestion:
+              '① 引用的资源变量必须由资源事实源（resourceDomMapping）提供；② 引用后必须注入对应 import；③ 不使用未登记的变量名（幽灵引用）',
+          },
+        });
+      }
+      const rw = resourceViolations.filter((v) => v.severity === 'warn');
+      if (rw.length > 0) {
+        issues.push({
+          id: 'CODE-025-WARN',
+          severity: 'WARN',
+          file: rw[0].file || 'package/index.vue',
+          message: `资源契约提示（${rw.length} 项）：${rw
+            .slice(0, 4)
+            .map((v) => `[${v.code}] ${v.message}`)
+            .join('；')}`,
+        });
+      }
+    }
+
+    // ========== 🛡️ CODE-026: 微码平台骨架完整性（fail-closed BLOCK，2026-09-11 · P1.8）==========
+    // 契约：微码产物必须具备完整平台骨架（config/css-vars.js / common.less / themes/{theme-vars,dark,light}.less
+    // / index.less / declare.json / declare.js）+ index.vue 引用 styles/index.less。
+    // 事故：lite 路径自造精简骨架 → M2-3/M2-4/M3-5/M3-6/M4-8 全红（用户截图实锤）。
+    // 判据实现 = utils/mc-skeleton.checkSkeletonCompleteness（与骨架生成器同模块，防双源漂移）。
+    {
+      let skeletonViolations = [];
+      try {
+        const fileMap = Object.fromEntries(
+          (files || [])
+            .filter((f) => f && typeof f.content === 'string')
+            .map((f) => [f.path, f.content]),
+        );
+        skeletonViolations = checkSkeletonCompleteness(fileMap);
+      } catch (err) {
+        issues.push({
+          id: 'CODE-026-ERROR',
+          severity: 'BLOCK',
+          file: '(mc-skeleton)',
+          message: `骨架完整性检测器执行异常（fail-closed）：${err?.message || String(err)}`,
+        });
+      }
+      if (skeletonViolations.length > 0) {
+        issues.push({
+          id: 'CODE-026',
+          severity: 'BLOCK',
+          file: skeletonViolations[0].file,
+          message:
+            `微码产物骨架不完整（${skeletonViolations.length} 项）：` +
+            skeletonViolations
+              .slice(0, 6)
+              .map((v) => `[${v.code}] ${v.message}`)
+              .join('；'),
+          hint: {
+            suggestion:
+              '平台骨架必须由 utils/mc-skeleton 的 buildMcSkeleton 统一生成（css-vars.js / common.less / themes/* / index.less / declare.js），不要在各路径自行拼装',
+          },
+        });
+      }
+    }
+
     return {
       pass: !issues.some((i) => i.severity === 'BLOCK'),
       blockCount: issues.filter((i) => i.severity === 'BLOCK').length,
@@ -2410,8 +2687,9 @@ export class CodeStructureValidator {
       (f) => f && /package\/index\.vue$/.test(f.path || '') && f.content,
     );
     if (!vue) return '';
-    const tpl = String(vue.content).match(/<template>([\s\S]*?)<\/template>/i);
-    const body = tpl ? tpl[1] : String(vue.content);
+    // 🛡️ 共享边界法 + 剥具名插槽（防插槽内装饰元素误判为结构根）
+    const body = extractSfcTemplateRegion(String(vue.content), { stripSlots: true }) ||
+      String(vue.content);
     const withPanel = body.match(
       /<base-panel[^>]*>[\s\S]*?<[a-zA-Z][^>]*\bclass="([\w-]+)"/,
     );

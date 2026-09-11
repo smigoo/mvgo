@@ -1,0 +1,169 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 75,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[0]",
+        "message": "chart-container 设置了固定宽度 width: 380，严重违反了【容器布局禁止固定宽度】的硬性规范（🔴），会导致组件无法自适应容器宽度，在不同屏幕尺寸下出现留白或溢出。",
+        "suggestion": "将 width: 380 修改为 width: 100% 或 flex: 1。高度可保留 height: 110（或根据设计稿调整为更合理的值如 160px），但宽度必须自适应。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "chartDataHints[0].values",
+        "message": "图表数据提示中的 values (600, 400, 200) 与 charts[0].axes 描述的 Y轴范围 (0-40) 严重不匹配，且与 labels 中的 Y轴刻度 (40, 30, 20, 10, 0) 矛盾。这会导致 AI 生成代码时数据映射错乱。",
+        "suggestion": "核对 Figma 数据或预览图，修正 chartDataHints 中的 values，确保模拟数据与坐标轴刻度（0-40）在合理范围内一致。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "coverageReport.missing",
+        "message": "图表核心节点如 @echarts/line、坐标轴文本 (40 30 20 10 0)、预警线 等处于 missing 状态。缺乏 Figma 节点证据可能导致图表内部样式（如预警线虚线样式、坐标轴颜色）被 AI 臆造，违反【证据优先】原则。",
+        "suggestion": "在 Figma 中检查图表组件是否被正确解析，或在 notes 中补充预警线、坐标轴的具体样式证据（如：预警线为红色虚线 #f53f3f，坐标轴文字颜色 #8c8c8c 等）。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body.backgroundImage & layout.sections[1].body.backgroundImage",
+        "message": "section-toolbar 和 section-chart 的 body 重复引用了同一张背景图 bg-7890.png。如果这是组件的统一背景，重复设置会导致背景图在 section 之间重复渲染或拼接错位。",
+        "suggestion": "如果 bg-7890.png 是整体背景，应将其提升到最外层容器；如果是各自独立的背景切片，请确认 Figma 中是否确实存在两份相同的背景，避免代码生成时产生冗余的 background-image。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body.children[1].children[1]",
+        "message": "视图切换按钮中的 list 图标缺少 resourceFile 或具体的 icon 资源引用（chart 图标有 tabs-icon-43.png，但 list 没有），可能导致列表图标无法正确渲染。",
+        "suggestion": "为 list 图标补充对应的 resourceFile 路径，或在代码生成时使用通用的 icon 组件（如 <ListIcon />）并确保有对应的图标映射。"
+      }
+    ],
+    "recommendations": [
+      "移除所有容器的固定 px 宽度，全面采用 flex 布局（flex: 1 / width: 100%）以实现宽度自适应，并在图表外层增加 min-width: 0 和 overflow: hidden 防止越界。",
+      "在生成代码时，确保 Tab 切换（一氧化碳、能见度等）与图表数据严格联动，使用 watch 监听 activeTab 变化并调用 chart.setOption 更新 ECharts 数据，禁止仅做样式切换。",
+      "图表容器必须设置明确的高度，并在 ECharts 配置中开启 grid.containLabel: true，防止坐标轴文字把画布撑出容器。",
+      "补充图表内部缺失节点的样式证据，特别是“预警线”的红色虚线样式和坐标轴文本的颜色/字号，避免 AI 自由发挥导致与设计稿不符。",
+      "确保组件最外层不生成面板标题和边框样式，将“环境监测”标题交由 base-panel 通过 declare.json 的 componentName 自动处理。"
+    ],
+    "summary": "整体布局结构清晰，区域划分合理，能够准确反映“环境监测”组件的 UI 层级和交互逻辑。但存在一个严重的规范违反问题：图表容器使用了固定宽度（380px），破坏了宽度自适应原则。此外，图表数据提示与坐标轴描述存在矛盾，且部分图表内部节点缺失，可能导致生成代码时图表细节（如预警线样式）缺乏证据支撑。建议重点修复固定宽度问题，并补充图表相关的数据和样式证据。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#559eff",
+      "--colorBg": "#edf4fb",
+      "--colorSuccess": "#52c41a",
+      "--colorDanger": "#f53f3f",
+      "--colorTextBase": "#333333",
+      "--colorTextSecondary": "#8c8c8c",
+      "--fontSize": "14px",
+      "--borderRadius": "4px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#559eff",
+      "@color-bg": "#edf4fb",
+      "@color-success": "#52c41a",
+      "@color-danger": "#f53f3f",
+      "@color-text-base": "#333333",
+      "@color-text-secondary": "#8c8c8c",
+      "@font-size-base": "14px",
+      "@border-radius-base": "4px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "16px",
+        "background-color": "var(--colorBg)",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)"
+      },
+      ".tab-active": {
+        "color": "var(--colorPrimary)",
+        "border-bottom": "2px solid var(--colorPrimary)",
+        "font-weight": "bold"
+      },
+      ".badge-danger": {
+        "background-color": "var(--colorDanger)",
+        "color": "#ffffff",
+        "border-radius": "8px",
+        "padding": "0 6px",
+        "font-size": "12px",
+        "line-height": "16px"
+      },
+      ".warning-line": {
+        "border-top": "1px dashed var(--colorDanger)",
+        "width": "100%"
+      },
+      ".area-fill-success": {
+        "fill": "var(--colorSuccess)",
+        "fill-opacity": "0.2"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 #559eff 映射为 --colorPrimary，用于选中Tab蓝色高亮等强调元素",
+      "背景色 #edf4fb 映射为 --colorBg，容器背景应优先直接落地为 Figma 字面量值，避免关键可见背景只依赖 CSS 变量",
+      "绿色 #52c41a 映射为 --colorSuccess，用于图表绿色面积填充及正常状态指示",
+      "红色 #f53f3f 映射为 --colorDanger，用于红色虚线预警线及 Badge 红色角标",
+      "灰色 #8c8c8c 映射为 --colorTextSecondary，用于次要文本及辅助信息",
+      "补充基础文本色 #333333 作为 --colorTextBase，确保浅色背景下的文本可读性"
+    ],
+    "elementStyleMap": {
+      "section-toolbar": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tabs-list": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "view-icons": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-12": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-toolbar",
+        "responsibility": "工具栏",
+        "elementCount": 4,
+        "title": "工具栏与筛选"
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "监测数据图表"
+      }
+    ],
+    "isForced": false,
+    "minFiles": 0,
+    "reason": "有效 sections=2 < 3 → 不强制拆分"
+  }
+}

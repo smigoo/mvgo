@@ -1,0 +1,43 @@
+{
+  "imageVerified": true,
+  "layoutStructure": {
+    "generatedAt": "2026-07-28T15:05:36.649Z",
+    "stage": "preview-analysis",
+    "degraded": true,
+    "degradeReason": "503 {\"error\":{\"message\":\"Service temporarily unavailable\",\"type\":\"api_error\"},\"type\":\"error\"}",
+    "layout": {
+      "type": "vertical",
+      "direction": "top-to-bottom",
+      "sections": []
+    },
+    "styles": {
+      "theme": "未知",
+      "colors": [],
+      "background": "",
+      "decorations": [],
+      "emphasis": [],
+      "backgroundBrightness": "dark"
+    },
+    "interactions": [],
+    "charts": []
+  },
+  "visualElements": {
+    "theme": "未知",
+    "colors": [],
+    "background": "",
+    "decorations": [],
+    "emphasis": [],
+    "backgroundBrightness": "dark"
+  },
+  "interactions": [],
+  "charts": [],
+  "chartDataHints": [],
+  "analysisFile": "/Users/smigoo/工作/项目主体智慧化综合业务一体化管理平台建设项目/langgraph-server/temp-components/default-group/mc-1785251092881-d9ef7d6d/.mc-gen/config/preview-analysis.json",
+  "headerSlots": [],
+  "analysisType": "",
+  "analysisTarget": "",
+  "analysisDescription": "",
+  "analysisEvidence": [],
+  "_cachedAt": 1785251136650,
+  "_cacheKey": "vision_1t7Dmmpsl5i0PC8BJt2QLf_2-8417"
+}

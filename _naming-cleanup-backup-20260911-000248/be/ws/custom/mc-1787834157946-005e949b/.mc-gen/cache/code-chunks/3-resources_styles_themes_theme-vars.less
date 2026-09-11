@@ -1,0 +1,164 @@
+// 主题变量定义文件
+// 结构：三个 mixin（.common()、.theme-dark()、.theme-light()）
+// 颜色变量定义在 mixin 内部，根级禁止调用主题 mixin
+
+// ============================================
+// 公共变量（所有主题共享）
+// ============================================
+.common() {
+  // 字体家族
+  @font-family-base: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  
+  // 字号
+  @font-size-xs: 12px;
+  @font-size-sm: 13px;
+  @font-size-base: 14px;
+  @font-size-md: 16px;
+  @font-size-lg: 18px;
+  @font-size-xl: 20px;
+  @font-size-xxl: 24px;
+  
+  // 字重
+  @font-weight-normal: 400;
+  @font-weight-medium: 500;
+  @font-weight-semibold: 600;
+  @font-weight-bold: 700;
+  
+  // 行高
+  @line-height-base: 1.5;
+  @line-height-tight: 1.2;
+  @line-height-relaxed: 1.75;
+  
+  // 间距
+  @spacing-xs: 4px;
+  @spacing-sm: 8px;
+  @spacing-md: 12px;
+  @spacing-base: 16px;
+  @spacing-lg: 20px;
+  @spacing-xl: 24px;
+  @spacing-xxl: 32px;
+  
+  // 圆角
+  @border-radius-xs: 2px;
+  @border-radius-sm: 4px;
+  @border-radius-base: 6px;
+  @border-radius-md: 8px;
+  @border-radius-lg: 12px;
+  @border-radius-xl: 16px;
+  
+  // 边框宽度
+  @border-width-base: 1px;
+  @border-width-thick: 2px;
+  
+  // 过渡
+  @transition-fast: 0.15s ease;
+  @transition-base: 0.2s ease;
+  @transition-slow: 0.3s ease;
+  
+  // 阴影
+  @shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  @shadow-base: 0 2px 8px rgba(0, 0, 0, 0.1);
+  @shadow-md: 0 4px 12px rgba(0, 0, 0, 0.12);
+  @shadow-lg: 0 6px 16px rgba(0, 0, 0, 0.15);
+  
+  // z-index
+  @z-index-base: 1;
+  @z-index-dropdown: 1000;
+  @z-index-modal: 1050;
+  @z-index-tooltip: 1100;
+}
+
+// ============================================
+// 深色主题
+// ============================================
+.theme-dark() {
+  // 背景色
+  @bg-primary: #0a0e1a;
+  @bg-secondary: #141824;
+  @bg-tertiary: #1a2332;
+  @bg-hover: rgba(255, 255, 255, 0.05);
+  @bg-active: rgba(255, 255, 255, 0.08);
+  
+  // 文字颜色（深色面板禁止使用黑色系）
+  @text-primary: #ffffff;
+  @text-secondary: rgba(255, 255, 255, 0.85);
+  @text-tertiary: rgba(255, 255, 255, 0.65);
+  @text-quaternary: rgba(255, 255, 255, 0.45);
+  @text-disabled: rgba(255, 255, 255, 0.25);
+  
+  // 边框颜色
+  @border-primary: rgba(255, 255, 255, 0.1);
+  @border-secondary: rgba(255, 255, 255, 0.06);
+  
+  // 品牌色/强调色
+  @color-accent: #3b82f6;
+  @color-accent-hover: #60a5fa;
+  @color-accent-active: #2563eb;
+  
+  // 功能色
+  @color-success: #10b981;
+  @color-warning: #f59e0b;
+  @color-error: #ef4444;
+  @color-info: #3b82f6;
+  
+  // 组件专用颜色
+  @tab-bg-active: url(../resources/images/bg-tab-active-7891.png);
+  @panel-bg-main: url(../resources/images/bg-7890.png);
+  
+  // 图表颜色
+  @chart-line-primary: #3b82f6;
+  @chart-line-secondary: #10b981;
+  @chart-line-tertiary: #f59e0b;
+  @chart-bar-primary: #3b82f6;
+  @chart-bar-secondary: #8b5cf6;
+  @chart-grid: rgba(255, 255, 255, 0.1);
+  @chart-axis: rgba(255, 255, 255, 0.45);
+}
+
+// ============================================
+// 浅色主题（面板默认主题，必须与设计稿一致）
+// ============================================
+.theme-light() {
+  // 背景色
+  @bg-primary: #ffffff;
+  @bg-secondary: #f8f9fa;
+  @bg-tertiary: #f1f3f5;
+  @bg-hover: rgba(0, 0, 0, 0.04);
+  @bg-active: rgba(0, 0, 0, 0.08);
+  
+  // 文字颜色
+  @text-primary: #1f2937;
+  @text-secondary: #4b5563;
+  @text-tertiary: #6b7280;
+  @text-quaternary: #9ca3af;
+  @text-disabled: #d1d5db;
+  
+  // 边框颜色
+  @border-primary: #e5e7eb;
+  @border-secondary: #f3f4f6;
+  
+  // 品牌色/强调色
+  @color-accent: #3b82f6;
+  @color-accent-hover: #2563eb;
+  @color-accent-active: #1d4ed8;
+  
+  // 功能色
+  @color-success: #10b981;
+  @color-warning: #f59e0b;
+  @color-error: #ef4444;
+  @color-info: #3b82f6;
+  
+  // 组件专用颜色
+  @tab-bg-active: url(../resources/images/bg-tab-active-7891.png);
+  @panel-bg-main: url(../resources/images/bg-7890.png);
+  
+  // 图表颜色
+  @chart-line-primary: #3b82f6;
+  @chart-line-secondary: #10b981;
+  @chart-line-tertiary: #f59e0b;
+  @chart-bar-primary: #3b82f6;
+  @chart-bar-secondary: #8b5cf6;
+  @chart-grid: #e5e7eb;
+  @chart-axis: #6b7280;
+}
+```

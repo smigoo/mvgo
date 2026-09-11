@@ -1,0 +1,156 @@
+{
+  "completed": [
+    "1-declare.json",
+    "2-package/index.vue",
+    "3-package/index.vue",
+    "6-package/components/SummaryCards.vue",
+    "5-package/components/HeaderStats.vue",
+    "7-package/components/MainContent.vue",
+    "8-resources/styles/themes/theme-vars.less",
+    "9-resources/styles/common.less"
+  ],
+  "total": 6,
+  "updatedAt": 1788395743956,
+  "files": {
+    "declare.json": [
+      {
+        "index": 1,
+        "file": "1-declare.json",
+        "segmentType": "declare",
+        "scriptPart": ""
+      }
+    ],
+    "package/index.vue": [
+      {
+        "index": 2,
+        "file": "2-package_index.vue",
+        "segmentType": "template",
+        "scriptPart": ""
+      },
+      {
+        "index": 3,
+        "file": "3-package_index.vue",
+        "segmentType": "script",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/SummaryCards.vue": [
+      {
+        "index": 2,
+        "file": "2-package_components_SummaryCards.vue",
+        "segmentType": "template",
+        "scriptPart": ""
+      },
+      {
+        "index": 3,
+        "file": "3-package_components_SummaryCards.vue",
+        "segmentType": "script",
+        "scriptPart": ""
+      },
+      {
+        "index": 6,
+        "file": "6-package_components_SummaryCards.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/HeaderStats.vue": [
+      {
+        "index": 2,
+        "file": "2-package_components_HeaderStats.vue",
+        "segmentType": "template",
+        "scriptPart": ""
+      },
+      {
+        "index": 3,
+        "file": "3-package_components_HeaderStats.vue",
+        "segmentType": "script",
+        "scriptPart": ""
+      },
+      {
+        "index": 5,
+        "file": "5-package_components_HeaderStats.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/MainContent.vue": [
+      {
+        "index": 2,
+        "file": "2-package_components_MainContent.vue",
+        "segmentType": "template",
+        "scriptPart": ""
+      },
+      {
+        "index": 3,
+        "file": "3-package_components_MainContent.vue",
+        "segmentType": "script",
+        "scriptPart": ""
+      },
+      {
+        "index": 7,
+        "file": "7-package_components_MainContent.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "resources/styles/themes/theme-vars.less": [
+      {
+        "index": 8,
+        "file": "8-resources_styles_themes_theme-vars.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      }
+    ],
+    "resources/styles/common.less": [
+      {
+        "index": 2,
+        "file": "2-resources_styles_common.less",
+        "segmentType": "template",
+        "scriptPart": ""
+      },
+      {
+        "index": 3,
+        "file": "3-resources_styles_common.less",
+        "segmentType": "script",
+        "scriptPart": ""
+      },
+      {
+        "index": 9,
+        "file": "9-resources_styles_common.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/TabSidebar.vue": [
+      {
+        "index": 2,
+        "file": "2-package_components_TabSidebar.vue",
+        "segmentType": "template",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/DeviceGrid.vue": [
+      {
+        "index": 2,
+        "file": "2-package_components_DeviceGrid.vue",
+        "segmentType": "template",
+        "scriptPart": ""
+      }
+    ],
+    "resources/styles/theme-vars.less": [
+      {
+        "index": 2,
+        "file": "2-resources_styles_theme-vars.less",
+        "segmentType": "template",
+        "scriptPart": ""
+      },
+      {
+        "index": 3,
+        "file": "3-resources_styles_theme-vars.less",
+        "segmentType": "script",
+        "scriptPart": ""
+      }
+    ]
+  }
+}

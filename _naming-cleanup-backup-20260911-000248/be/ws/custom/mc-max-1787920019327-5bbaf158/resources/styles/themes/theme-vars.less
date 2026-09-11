@@ -1,0 +1,73 @@
+// 主题变量定义文件
+// 本文件定义三个 mixin：.common()、.theme-dark()、.theme-light()
+// 由系统生成的 dark.less/light.less 在主题选择器内调用对应 mixin
+
+.common() {
+// 公共变量（不区分主题的变量）
+  
+  // 容器尺寸
+  @container-width: 100%;
+  @container-height: 100%;
+  
+  // 背景图路径（两个背景图相同）
+  @bg-image-url: url(../resources/images/bg-8788.png);
+  @bg-image-size: 100% 100%;
+  @bg-image-position: center center;
+  @bg-image-repeat: no-repeat;
+  @color-stat-label: inherit; // 自动添加
+  @color-stat-value-primary: inherit; // 自动添加
+  @color-stat-card-bg: inherit; // 自动添加
+  @color-stat-card-label: inherit; // 自动添加
+  @color-stat-card-value: inherit; // 自动添加
+  @color-stat-card-sublabel: inherit; // 自动添加
+}
+
+.theme-light() {
+  // 浅色主题（默认主题）
+  // 面板默认主题为 light，此处颜色为组件默认展示色
+  
+  // 背景相关
+  @bg-image: url(../resources/images/bg-8788.png);
+  @bg-size: 100% 100%;
+  @bg-position: center center;
+  @bg-repeat: no-repeat;
+  
+  // 文字颜色（浅色主题通常使用深色文字）
+  @text-primary: rgba(0, 0, 0, 0.85);
+  @text-secondary: rgba(0, 0, 0, 0.65);
+  @text-disabled: rgba(0, 0, 0, 0.25);
+  
+  // 边框颜色
+  @border-color: rgba(0, 0, 0, 0.15);
+  
+  // 容器背景（如需要）
+  @container-bg: transparent;
+}
+
+.theme-dark() {
+  // 深色主题
+  // 深色面板所有文字颜色禁止使用黑色系
+  
+  // 背景相关
+  @bg-image: url(../resources/images/bg-8788.png);
+  @bg-size: 100% 100%;
+  @bg-position: center center;
+  @bg-repeat: no-repeat;
+  
+  // 文字颜色（深色主题使用浅色文字）
+  @text-primary: rgba(255, 255, 255, 0.85);
+  @text-secondary: rgba(255, 255, 255, 0.65);
+  @text-disabled: rgba(255, 255, 255, 0.25);
+  
+  // 边框颜色
+  @border-color: rgba(255, 255, 255, 0.15);
+  
+  // 容器背景（如需要）
+  @container-bg: transparent;
+}
+
+// 自动添加：将 .common() 中的 Less 变量暴露到全局作用域
+
+:root {
+  .common();
+}

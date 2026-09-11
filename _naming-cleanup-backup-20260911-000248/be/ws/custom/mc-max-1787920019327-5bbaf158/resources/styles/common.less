@@ -1,0 +1,368 @@
+// 业务样式文件
+// 所有 class 必须以 .c- 为前缀
+// 颜色/尺寸/圆角/阴影严格按照 Figma 真值表和 elementStyleMap
+
+// 根容器布局
+.c-mc-max-1787920019327-5bbaf158-c-monitor-root {
+  display: flex;
+  flex-direction: row;
+  width: 420px;
+  height: 425px;
+  gap: 0;
+
+  max-width: 100%;
+  max-height: 100vh;
+  box-sizing: border-box;}
+
+.c-mc-max-1787920019327-5bbaf158-c-monitor-category {
+  flex-shrink: 0;
+}
+
+.c-mc-max-1787920019327-5bbaf158-c-monitor-grid {
+  flex: 1;
+  min-width: 0;
+}
+
+// 头部统计区域
+.c-mc-max-1787920019327-5bbaf158-c-monitor-header-stats {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 24px;
+  height: 100%;
+  width: 100%;
+}
+
+// 统计分组（设备类型）
+.c-mc-max-1787920019327-5bbaf158-c-monitor-stat-group {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.c-mc-max-1787920019327-5bbaf158-c-monitor-stat-icon {
+  width: 43px;
+  height: 44px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.c-mc-max-1787920019327-5bbaf158-c-monitor-stat-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.c-mc-max-1787920019327-5bbaf158-c-monitor-stat-label {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 21px;
+  color: #333333;
+}
+
+.c-mc-max-1787920019327-5bbaf158-c-monitor-stat-value {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 23.44px;
+}
+
+.c-mc-max-1787920019327-5bbaf158-c-monitor-stat-value-primary {
+  color: #1990ff;
+}
+
+// 统计卡片（隧道设备/房建设施）
+.c-mc-max-1787920019327-5bbaf158-c-monitor-stat-card {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+
+.c-mc-max-1787920019327-5bbaf158-c-monitor-stat-card-blue {
+  background: linear-gradient(180deg, #2b9bff 0%, #299aff 100%);
+}
+
+.c-mc-max-1787920019327-5bbaf158-c-monitor-stat-card-icon {
+  width: 43px;
+  height: 44px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.c-mc-max-1787920019327-5bbaf158-c-monitor-stat-card-emoji {
+  width: 43px;
+  height: 44px;
+  flex-shrink: 0;
+  font-size: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.c-mc-max-1787920019327-5bbaf158-c-monitor-stat-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.c-mc-max-1787920019327-5bbaf158-c-monitor-stat-card-label {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 21px;
+  color: #ffffff;
+}
+
+.c-mc-max-1787920019327-5bbaf158-c-monitor-stat-card-value {
+  font-family: 'Roboto', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 23.44px;
+  color: #ffffff;
+}
+
+.c-mc-max-1787920019327-5bbaf158-c-monitor-stat-card-sublabel {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  color: #ffffff;
+}
+
+.c-mc-max-1787920019327-5bbaf158-c-monitor-stat-card-badge {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 21px;
+  color: #e03434;
+  background: transparent;
+  padding: 0;
+  display: inline-block;
+  margin-top: 2px;
+}
+
+// 分类标签页（垂直侧边栏）
+.c-mc-max-1787920019327-5bbaf158-c-monitor-category-tabs {
+  display: flex;
+  flex-direction: column;
+  width: 46px;
+  height: 100%;
+  gap: 0;
+  background-image: url(../resources/images/bg-8788.png);
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+
+.c-mc-max-1787920019327-5bbaf158-c-monitor-tab-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 4px;
+  cursor: pointer;
+  border-top-left-radius: 6px;
+  border-bottom-left-radius: 6px;
+  background: linear-gradient(180deg, #93ccff 0%, #93ccff 100%);
+  border: 1px solid #f0f5ff;
+  border-right: none;
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+
+  &:hover {
+    opacity: 0.9;
+  }
+}
+
+.c-monitor-tab-item.is-active {
+  background: linear-gradient(180deg, #318aff 0%, #70bfff 100%);
+  border-color: #f0f5ff;
+
+  .c-mc-max-1787920019327-5bbaf158-c-monitor-tab-text {
+    color: #ffffff;
+    font-weight: 700;
+  }
+}
+
+.c-mc-max-1787920019327-5bbaf158-c-monitor-tab-item:not(.is-active) {
+  .c-mc-max-1787920019327-5bbaf158-c-monitor-tab-text {
+    color: #3b80e7;
+    font-weight: 400;
+  }
+}
+
+.c-mc-max-1787920019327-5bbaf158-c-monitor-tab-text {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  line-height: 18px;
+  text-align: center;
+  writing-mode: vertical-rl;
+  letter-spacing: 2px;
+}
+
+.c-mc-max-1787920019327-5bbaf158-c-monitor-tab-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f53f3f;
+  border-radius: 29px;
+  color: #ffffff;
+  font-family: 'Roboto', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 14px;
+  box-sizing: border-box;
+}
+
+// 可选：has-badge 修饰符（预留）
+.c-monitor-tab-item.has-badge {
+  // 如需特殊样式可在此处添加
+}
+
+// 设备网格区域
+.c-mc-max-1787920019327-5bbaf158-c-monitor-device-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 11px;
+  width: 100%;
+  height: 100%;
+  padding: 11px;
+  box-sizing: border-box;
+}
+
+.c-mc-max-1787920019327-5bbaf158-c-monitor-device-card {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  box-sizing: border-box;
+  cursor: pointer;
+  transition: all 0.3s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+}
+
+// 设备图标包装器
+.c-mc-max-1787920019327-5bbaf158-c-monitor-device-icon-wrapper {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+}
+
+.c-mc-max-1787920019327-5bbaf158-c-monitor-device-icon-bg {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+}
+
+.c-mc-max-1787920019327-5bbaf158-c-monitor-device-icon-circle-outer {
+  position: absolute;
+  width: 27px;
+  height: 27px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(226, 246, 255, 1) 0%, rgba(173, 225, 251, 1) 100%);
+}
+
+.c-mc-max-1787920019327-5bbaf158-c-monitor-device-icon-circle-inner {
+  position: absolute;
+  width: 23px;
+  height: 23px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(226, 246, 255, 1) 0%, rgba(173, 225, 251, 1) 100%);
+}
+
+.c-mc-max-1787920019327-5bbaf158-c-monitor-device-icon-dot-1,
+.c-mc-max-1787920019327-5bbaf158-c-monitor-device-icon-dot-2,
+.c-mc-max-1787920019327-5bbaf158-c-monitor-device-icon-dot-3 {
+  position: absolute;
+  width: 1.3px;
+  height: 1.3px;
+  border-radius: 50%;
+  background: #c5e9fa;
+}
+
+.c-mc-max-1787920019327-5bbaf158-c-monitor-device-icon-dot-1 {
+  top: 6px;
+  left: 8px;
+}
+
+.c-mc-max-1787920019327-5bbaf158-c-monitor-device-icon-dot-2 {
+  top: 8px;
+  right: 6px;
+}
+
+.c-mc-max-1787920019327-5bbaf158-c-monitor-device-icon-dot-3 {
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.c-mc-max-1787920019327-5bbaf158-c-monitor-device-icon-content {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+// 设备信息区域
+.c-mc-max-1787920019327-5bbaf158-c-monitor-device-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.c-mc-max-1787920019327-5bbaf158-c-monitor-device-name {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  color: #333333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.c-mc-max-1787920019327-5bbaf158-c-monitor-device-count {
+  font-family: 'Roboto', sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 18.75px;
+  color: #ffffff;
+  text-shadow: 0px 0px 0px rgba(0, 0, 0, 0.5);
+}

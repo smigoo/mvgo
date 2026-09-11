@@ -1,0 +1,218 @@
+.dark .c-env-monitor-root {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.dark .c-env-monitor-tabs-tools {
+  flex-shrink: 0;
+  height: 32px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(to right, #b5deff, #d1ecff);
+  border: 0.72px solid #ffffff;
+  border-radius: 4px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  margin-bottom: 8px;
+}
+.dark .c-env-monitor-tabs-list {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+.dark .c-env-monitor-tab-item {
+  position: relative;
+  width: 78px;
+  height: 21px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.dark .c-env-monitor-tab-active-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  background-position: center;
+  z-index: 0;
+}
+.dark .c-env-monitor-tab-text {
+  position: relative;
+  z-index: 1;
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: #2c9bea;
+  line-height: 12px;
+  white-space: nowrap;
+}
+.is-active .dark .c-env-monitor-tab-text {
+  color: #ffffff;
+  text-shadow: 0 0.6px 0 #006fe3;
+}
+.dark .c-env-monitor-view-icons {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+.dark .c-env-monitor-icon-wrapper {
+  position: relative;
+  width: 52px;
+  height: 24px;
+}
+.dark .c-env-monitor-tabs-icon {
+  width: 52px;
+  height: 24px;
+  display: block;
+}
+.dark .c-env-monitor-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 14px;
+  height: 14px;
+  background: #f53f3f;
+  border-radius: 29px;
+  color: #ffffff;
+  font-family: 'PingFang SC', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  z-index: 2;
+}
+.dark .c-env-monitor-chart-section {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.dark .c-env-monitor-chart-container {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+.light .c-env-monitor-root {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.light .c-env-monitor-tabs-tools {
+  flex-shrink: 0;
+  height: 32px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(to right, #b5deff, #d1ecff);
+  border: 0.72px solid #ffffff;
+  border-radius: 4px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  margin-bottom: 8px;
+}
+.light .c-env-monitor-tabs-list {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+.light .c-env-monitor-tab-item {
+  position: relative;
+  width: 78px;
+  height: 21px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.light .c-env-monitor-tab-active-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  background-position: center;
+  z-index: 0;
+}
+.light .c-env-monitor-tab-text {
+  position: relative;
+  z-index: 1;
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: #2c9bea;
+  line-height: 12px;
+  white-space: nowrap;
+}
+.is-active .light .c-env-monitor-tab-text {
+  color: #ffffff;
+  text-shadow: 0 0.6px 0 #006fe3;
+}
+.light .c-env-monitor-view-icons {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+.light .c-env-monitor-icon-wrapper {
+  position: relative;
+  width: 52px;
+  height: 24px;
+}
+.light .c-env-monitor-tabs-icon {
+  width: 52px;
+  height: 24px;
+  display: block;
+}
+.light .c-env-monitor-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 14px;
+  height: 14px;
+  background: #f53f3f;
+  border-radius: 29px;
+  color: #ffffff;
+  font-family: 'PingFang SC', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  z-index: 2;
+}
+.light .c-env-monitor-chart-section {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.light .c-env-monitor-chart-container {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+}

@@ -1,0 +1,22 @@
+{
+  "completed": [
+    "1-declare.json",
+    "2-package/index.vue",
+    "3-package/index.vue",
+    "5-package/components/EnvStatsOverview.vue",
+    "7-package/components/EnvMonitorChart.vue",
+    "6-package/components/EnvMonitorTabs.vue",
+    "8-resources/styles/common.less,resources/styles/themes/theme-vars.less"
+  ],
+  "total": 6,
+  "updatedAt": 1786944518322,
+  "files": {
+    "declare.json": "1-declare.json",
+    "package/index.vue": "3-package_index.vue",
+    "package/components/EnvStatsOverview.vue": "5-package_components_EnvStatsOverview.vue",
+    "package/components/EnvMonitorChart.vue": "7-package_components_EnvMonitorChart.vue",
+    "package/components/EnvMonitorTabs.vue": "6-package_components_EnvMonitorTabs.vue",
+    "resources/styles/common.less": "8-resources_styles_common.less",
+    "resources/styles/themes/theme-vars.less": "8-resources_styles_themes_theme-vars.less"
+  }
+}

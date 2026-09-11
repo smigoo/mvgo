@@ -1,0 +1,429 @@
+/* ==================== 根容器 ==================== */
+.c-monitor-root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  max-width: 100%;
+  max-height: 100vh;
+  box-sizing: border-box;
+  font-size: var(--fontSize, 14px);
+  /* ==================== 通用区块样式 ==================== */
+}
+.c-monitor-section {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+}
+.c-monitor-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+  height: 30px;
+}
+.c-monitor-section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0px;
+  font-weight: 500;
+  color: #333333;
+  line-height: 21px;
+}
+/* ==================== 标题装饰 ==================== */
+.c-monitor-title-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+.c-monitor-title-text {
+  font-size: calc(0px * 1.14);
+  font-weight: 500;
+  color: #333333;
+  line-height: 21px;
+}
+.c-monitor-title-indicator {
+  width: 3px;
+  height: 12px;
+  background: linear-gradient(180deg, #388dff 0%, #388dff 100%);
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.c-monitor-title-group {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+/* ==================== 1. 当日总流量区块 ==================== */
+.c-monitor-daily-total {
+  flex: 1 1 0;
+  min-height: 0;
+}
+.c-monitor-time-selector {
+  flex-shrink: 0;
+}
+.c-monitor-select {
+  width: 100px;
+}
+.c-monitor-stats-container {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  padding: 16px;
+  position: relative;
+  overflow: hidden;
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.c-monitor-stat-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+}
+.c-monitor-stat-label {
+  font-size: calc(0px * 1.14);
+  font-weight: 500;
+  color: #333333;
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+.c-monitor-stat-value {
+  font-size: calc(0px * 1.71);
+  font-weight: 900;
+  line-height: 1.17;
+  font-family: 'Roboto', 'Arial', sans-serif;
+}
+.c-monitor-tunnel .c-monitor-stat-value {
+  color: #006fe3;
+}
+.c-monitor-bridge .c-monitor-stat-value {
+  color: #0c9dbe;
+}
+.c-monitor-stat-decoration {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 191px;
+  height: 80px;
+  z-index: -1;
+  pointer-events: none;
+  background-size: auto 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+/* ==================== 2/3. 小时流量区块（隧道/大桥）==================== */
+.c-monitor-tunnel-hourly,
+.c-monitor-bridge-hourly {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+  flex: 1 1 0;
+}
+/* 隧道标题栏 */
+.c-monitor-th-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  height: 21px;
+  margin-bottom: 8px;
+}
+.c-monitor-th-title-bar {
+  flex-shrink: 0;
+  width: 3px;
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #388dff 0%, #388dff 100%);
+  margin-right: 3px;
+}
+.c-monitor-th-title {
+  flex-shrink: 0;
+  font-size: 0px;
+  font-weight: 400;
+  color: #333333;
+  line-height: 21px;
+  white-space: nowrap;
+}
+/* 隧道图例 */
+.c-monitor-th-legend {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.c-monitor-th-legend-item {
+  display: flex;
+  align-items: center;
+  font-size: calc(0px * 0.857);
+  color: #333333;
+  line-height: 18px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.2s;
+}
+.c-monitor-th-legend-item.is-off {
+  opacity: 0.4;
+}
+.c-monitor-th-dot {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 4px;
+}
+.c-monitor-th-dot-beijing {
+  background: #1890ff;
+}
+.c-monitor-th-dot-shanghai {
+  background: #ff9800;
+}
+/* 隧道图表区 */
+.c-monitor-th-body {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  background-size: 100% auto;
+  background-position: center top;
+  background-repeat: no-repeat;
+}
+.c-monitor-th-chart {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+/* 大桥图表区 */
+.c-monitor-chart-wrapper {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  background-size: 100% auto;
+  background-position: center top;
+  background-repeat: no-repeat;
+  position: relative;
+  padding: 8px 0;
+}
+.c-monitor-chart-container {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  min-width: 0;
+}
+.c-monitor-chart-legend {
+  position: absolute;
+  top: 16px;
+  right: 20px;
+  display: flex;
+  gap: 10px;
+  z-index: 10;
+}
+.c-monitor-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-size: calc(0px * 0.857);
+  font-weight: 400;
+  line-height: 18px;
+  color: #333333;
+  opacity: 1;
+  transition: opacity 0.3s;
+  white-space: nowrap;
+}
+.c-monitor-legend-item:hover {
+  opacity: 0.8;
+}
+.c-monitor-legend-item:not(.active) {
+  opacity: 0.4;
+}
+.c-monitor-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+/* ==================== 4. 车型分布区块 ==================== */
+.c-monitor-vehicle-distribution {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 0;
+}
+.c-monitor-vehicle-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 12px;
+  padding-top: 8px;
+  background-size: 100% auto;
+  background-position: center top;
+  background-repeat: no-repeat;
+}
+.c-monitor-vehicle-card {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  gap: 12px;
+  border-radius: 4px;
+  overflow: hidden;
+  background-size: 100% auto;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.c-monitor-vehicle-chart-wrapper {
+  width: 80px;
+  height: 80px;
+  flex-shrink: 0;
+}
+.c-monitor-vehicle-chart {
+  width: 100%;
+  height: 100%;
+}
+.c-monitor-vehicle-stats {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.c-monitor-vehicle-stat-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.c-monitor-vehicle-stat-label {
+  font-size: 0px;
+  color: #333333;
+  white-space: nowrap;
+  font-weight: 400;
+}
+.c-monitor-vehicle-stat-value {
+  font-size: calc(0px * 1.14);
+  font-weight: 600;
+  font-family: 'Roboto', 'Arial', sans-serif;
+}
+.c-monitor-value-blue {
+  color: #1890ff;
+}
+.c-monitor-value-orange {
+  color: #ff9800;
+}
+/* ==================== 5. 流量预测区块 ==================== */
+.c-monitor-flow-prediction {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  flex: 1 1 0;
+  min-height: 0;
+}
+.c-monitor-flow-prediction-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  padding-bottom: 12px;
+  height: 30px;
+}
+.c-monitor-flow-prediction-title {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.c-monitor-flow-prediction-title-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+.c-monitor-flow-prediction-title-text {
+  font-size: 0px;
+  font-weight: 400;
+  line-height: 21px;
+  color: #333333;
+}
+.c-monitor-flow-prediction-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.c-monitor-flow-prediction-tabs {
+  display: flex;
+  gap: 0;
+}
+.c-monitor-flow-prediction-tab-item {
+  padding: 4px 12px;
+  font-size: calc(0px * 0.857);
+  color: #333333;
+  background: transparent;
+  border: 1px solid #a1ceff;
+  cursor: pointer;
+  transition: all 0.3s;
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-weight: 400;
+  line-height: 1.5;
+}
+.c-monitor-flow-prediction-tab-item:first-child {
+  border-radius: 4px 0 0 4px;
+}
+.c-monitor-flow-prediction-tab-item:last-child {
+  border-radius: 0 4px 4px 0;
+  border-left: none;
+}
+.c-monitor-flow-prediction-tab-item:not(:first-child):not(:last-child) {
+  border-left: none;
+}
+.c-monitor-flow-prediction-tab-item:hover {
+  background: rgba(161, 206, 255, 0.1);
+}
+.c-monitor-flow-prediction-tab-item.active {
+  background: linear-gradient(90deg, #ffffff 0%, #e2f0ff 36%, #deedff 69%, #ffffff 100%);
+  color: #1890ff;
+  font-weight: 500;
+}
+.c-monitor-flow-prediction-link {
+  font-size: calc(0px * 0.857);
+  color: #1890ff;
+  text-decoration: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.c-monitor-flow-prediction-link:hover {
+  color: #40a9ff;
+}
+.c-monitor-flow-prediction-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background-size: 100% auto;
+  background-position: center top;
+  background-repeat: no-repeat;
+}
+.c-monitor-flow-prediction-chart {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}

@@ -1,0 +1,412 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 78,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0] 和 sections[1]",
+        "message": "panel-header 与 header-right-slot 应合并为一个 section，header 含标题，body 含右侧按钮",
+        "suggestion": "合并为单个 section，headerRelation 设为 title-with-actions，右侧按钮放入 slotCandidate: 'header-right'"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[0]",
+        "message": "chart-icon-button 的 resourceFile 与 panel-title-icon 共用 icon-7941.png，但图表按钮应为独立图标资源",
+        "suggestion": "检查资源映射，确保不同语义图标使用不同资源文件"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[3].body.children[0]",
+        "message": "chart-header 的 children 结构扁平化为三个 text 元素，应封装为 meta-left 和 meta-right 容器以体现布局分组",
+        "suggestion": "将 ppm 单独为左侧，location 和预警线分组为右侧容器"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "charts[0].chartTitle",
+        "message": "chartTitle 值为 'area' 应为图表标题文本，此处误用了图表类型",
+        "suggestion": "改为 '氧化碳浓度趋势' 或 '24小时监测' 等描述性标题"
+      }
+    ],
+    "recommendations": [
+      "将 panel-header 和 header-right-slot 合并为单个 section，减少顶层嵌套",
+      "补充 charts[0] 的 tooltip 字段为 { enabled: true, formatter: 'time + value' }",
+      "chart-section 的 backgroundImage 应明确区分图表背景与面板背景，避免样式冲突"
+    ],
+    "summary": "结构整体清晰，但顶部标题栏拆分为两个 section 不符合规范，图表元数据布局需优化分组，资源映射存在复用风险"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）- 浅色监测数据风格",
+      "--colorPrimary": "rgba(85, 158, 255, 1)",
+      "--colorPrimaryLight": "rgba(85, 158, 255, 0.3)",
+      "--colorDanger": "rgba(255, 77, 79, 1)",
+      "--colorBgBase": "rgba(237, 244, 251, 1)",
+      "--colorTextBase": "rgba(0, 0, 0, 0.85)",
+      "--colorTextSecondary": "rgba(0, 0, 0, 0.45)",
+      "--colorBorder": "rgba(85, 158, 255, 0.2)",
+      "--colorWarningLine": "rgba(255, 77, 79, 1)",
+      "--colorChartFill": "rgba(85, 158, 255, 0.3)",
+      "--fontSize": "14px",
+      "--fontSizeTitle": "16px",
+      "--borderRadiusBase": "4px",
+      "--borderRadiusCard": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射 - 用于业务样式",
+      "@color-primary": "rgba(85, 158, 255, 1)",
+      "@color-primary-light": "rgba(85, 158, 255, 0.3)",
+      "@color-danger": "rgba(255, 77, 79, 1)",
+      "@color-bg-base": "rgba(237, 244, 251, 1)",
+      "@color-text-base": "rgba(0, 0, 0, 0.85)",
+      "@color-text-secondary": "rgba(0, 0, 0, 0.45)",
+      "@color-border": "rgba(85, 158, 255, 0.2)",
+      "@color-warning-line": "rgba(255, 77, 79, 1)",
+      "@color-chart-fill": "rgba(85, 158, 255, 0.3)",
+      "@font-size-base": "14px",
+      "@font-size-title": "16px",
+      "@border-radius-base": "4px",
+      "@border-radius-card": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类 - 监测数据风格组件",
+      ".monitoring-container": {
+        "width": "100%",
+        "height": "100%",
+        "background": "var(--colorBgBase)",
+        "font-family": "PingFang SC, Microsoft YaHei, sans-serif"
+      },
+      ".monitoring-card": {
+        "background": "#ffffff",
+        "border-radius": "var(--borderRadiusCard)",
+        "padding": "1.14em",
+        "box-shadow": "0 2px 8px rgba(85, 158, 255, 0.08)",
+        "transition": "box-shadow 0.3s ease"
+      },
+      ".monitoring-card:hover": {
+        "box-shadow": "0 4px 16px rgba(85, 158, 255, 0.15)"
+      },
+      ".gradient-header": {
+        "position": "relative",
+        "padding-top": "0.21em"
+      },
+      ".gradient-header::before": {
+        "content": "''",
+        "position": "absolute",
+        "top": "0",
+        "left": "0",
+        "right": "0",
+        "height": "3px",
+        "background": "linear-gradient(90deg, var(--colorPrimary) 0%, var(--colorPrimaryLight) 100%)",
+        "border-radius": "var(--borderRadiusBase) var(--borderRadiusBase) 0 0"
+      },
+      ".tab-active-bg": {
+        "position": "relative",
+        "background": "linear-gradient(135deg, var(--colorPrimaryLight) 0%, rgba(85, 158, 255, 0.15) 100%)",
+        "border-radius": "var(--borderRadiusBase)",
+        "color": "var(--colorPrimary)",
+        "font-weight": "500"
+      },
+      ".notification-badge": {
+        "position": "absolute",
+        "top": "-0.36em",
+        "right": "-0.36em",
+        "min-width": "1.14em",
+        "height": "1.14em",
+        "padding": "0 0.29em",
+        "background": "var(--colorDanger)",
+        "color": "#ffffff",
+        "font-size": "0.86em",
+        "line-height": "1.14em",
+        "text-align": "center",
+        "border-radius": "999px",
+        "border": "2px solid #ffffff"
+      },
+      ".warning-line": {
+        "border-top": "2px dashed var(--colorWarningLine)",
+        "position": "relative"
+      },
+      ".warning-line-label": {
+        "position": "absolute",
+        "top": "-0.64em",
+        "right": "1.43em",
+        "padding": "0 0.57em",
+        "background": "var(--colorBgBase)",
+        "color": "var(--colorDanger)",
+        "font-size": "0.86em",
+        "line-height": "1.14em"
+      },
+      ".chart-area-fill": {
+        "fill": "url(#areaGradient)"
+      },
+      ".chart-gradient-def": {
+        "comment": "在SVG/Canvas中使用的渐变定义"
+      },
+      ".data-value-primary": {
+        "color": "var(--colorPrimary)",
+        "font-size": "1.71em",
+        "font-weight": "600",
+        "line-height": "1.2"
+      },
+      ".data-label": {
+        "color": "var(--colorTextSecondary)",
+        "font-size": "1em",
+        "line-height": "1.5"
+      },
+      ".divider-light": {
+        "border": "none",
+        "border-top": "1px solid var(--colorBorder)",
+        "margin": "1.14em 0"
+      },
+      ".status-dot-active": {
+        "display": "inline-block",
+        "width": "0.57em",
+        "height": "0.57em",
+        "background": "var(--colorPrimary)",
+        "border-radius": "50%",
+        "box-shadow": "0 0 8px var(--colorPrimaryLight)"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 rgba(85,158,255,1) 映射为 --colorPrimary，用于按钮、图表主色、高亮文字",
+      "浅色变体 rgba(85,158,255,0.3) 映射为 --colorPrimaryLight，用于图表填充、Tab激活背景",
+      "危险色 rgba(255,77,79,1) 映射为 --colorDanger，用于预警线、角标、异常状态",
+      "背景色 rgba(237,244,251,1) 映射为 --colorBgBase，应直接落地为容器背景（避免仅依赖CSS变量导致初始渲染空白）",
+      "文字颜色使用 rgba(0,0,0,0.85) 主文本、rgba(0,0,0,0.45) 次要文本，符合Ant Design规范",
+      "顶部渐变装饰线通过 ::before 伪元素实现，使用 linear-gradient",
+      "Tab激活态背景使用 135deg 渐变，从 0.3 透明度到 0.15 透明度",
+      "通知角标使用 border: 2px solid #ffffff 创建白色描边与背景分离",
+      "预警线使用 border-top: 2px dashed 实现虚线效果",
+      "面积图填充建议在 ECharts/Canvas 中定义渐变 ID 为 areaGradient",
+      "所有间距使用 em 单位相对根字体大小，确保响应式缩放",
+      "卡片阴影使用主色调带透明度，与整体风格统一"
+    ],
+    "elementStyleMap": {
+      "panel-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "header-right-slot": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tabs-section": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tab-1": {
+        "background-image": "url(../resources/images/bg-tab-active-7891.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "chart-section": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "chart-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-13": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "panel-header",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 2,
+        "title": "面板标题行",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 2,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "header-right-slot",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 2,
+        "title": "右上角操作区",
+        "complexityScore": 10,
+        "complexityReasons": {
+          "elementCount": 2,
+          "charts": 1,
+          "interactions": 2,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "tabs-section",
+        "responsibility": "标签页切换区",
+        "elementCount": 4,
+        "title": "Tab切换栏",
+        "complexityScore": 20,
+        "complexityReasons": {
+          "elementCount": 4,
+          "charts": 0,
+          "interactions": 5,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "chart-section",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 5,
+        "title": "图表区域",
+        "complexityScore": 30,
+        "complexityReasons": {
+          "elementCount": 5,
+          "charts": 2,
+          "interactions": 0,
+          "maxDepth": 2
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [
+          {
+            "type": "chart-component",
+            "id": "chart-header",
+            "name": "图表顶部信息",
+            "responsibility": "图表组件：图表顶部信息",
+            "reason": "R1: 图表隔离策略",
+            "props": [
+              "chartData",
+              "chartConfig"
+            ],
+            "emits": [
+              "legendClick",
+              "dataZoom"
+            ]
+          },
+          {
+            "type": "chart-component",
+            "id": "area-chart",
+            "name": "面积图",
+            "responsibility": "图表组件：面积图",
+            "reason": "R1: 图表隔离策略",
+            "props": [
+              "chartData",
+              "chartConfig"
+            ],
+            "emits": [
+              "legendClick",
+              "dataZoom"
+            ]
+          }
+        ],
+        "shouldSplitInternally": true
+      }
+    ],
+    "isForced": true,
+    "minFiles": 6,
+    "reason": "有效 sections=4 ≥ 3 或存在高复杂度 section → 强制拆分",
+    "internalSubcomponents": [
+      {
+        "type": "chart-component",
+        "id": "chart-header",
+        "name": "图表顶部信息",
+        "responsibility": "图表组件：图表顶部信息",
+        "reason": "R1: 图表隔离策略",
+        "props": [
+          "chartData",
+          "chartConfig"
+        ],
+        "emits": [
+          "legendClick",
+          "dataZoom"
+        ],
+        "parentSectionId": "chart-section",
+        "parentSectionTitle": "图表区域"
+      },
+      {
+        "type": "chart-component",
+        "id": "area-chart",
+        "name": "面积图",
+        "responsibility": "图表组件：面积图",
+        "reason": "R1: 图表隔离策略",
+        "props": [
+          "chartData",
+          "chartConfig"
+        ],
+        "emits": [
+          "legendClick",
+          "dataZoom"
+        ],
+        "parentSectionId": "chart-section",
+        "parentSectionTitle": "图表区域"
+      }
+    ]
+  }
+}

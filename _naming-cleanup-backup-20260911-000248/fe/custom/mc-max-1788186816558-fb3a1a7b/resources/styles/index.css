@@ -1,0 +1,273 @@
+.c-流量监测-复杂-多图表-c-monitor-root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow: auto;
+  max-width: 100%;
+  max-height: 100vh;
+  box-sizing: border-box;
+  font-size: var(--fontSize, 14px);
+}
+.c-流量监测-复杂-多图表-c-monitor-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 30px;
+  flex-shrink: 0;
+  margin-bottom: 8px;
+}
+.c-流量监测-复杂-多图表-c-monitor-section-title-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.c-流量监测-复杂-多图表-c-monitor-title-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.c-monitor-title-icon,
+.c-流量监测-复杂-多图表-c-monitor-flow-prediction-icon {
+  width: 3px;
+  height: 12px;
+  background: linear-gradient(180deg, #388dff 0%, #388dff 100%);
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.c-monitor-title-text,
+.c-monitor-section-title,
+.c-流量监测-复杂-多图表-c-monitor-flow-prediction-title {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 21px;
+  color: #333333;
+}
+.c-流量监测-复杂-多图表-c-monitor-info-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.c-流量监测-复杂-多图表-c-monitor-tunnel-hourly-chart {
+  width: 100%;
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.c-流量监测-复杂-多图表-c-monitor-chart-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background-size: 100% auto;
+  background-position: center top;
+  background-repeat: no-repeat;
+  overflow: hidden;
+}
+.c-流量监测-复杂-多图表-c-monitor-chart-container {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+.c-流量监测-复杂-多图表-c-monitor-bridge-hourly-section {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.c-流量监测-复杂-多图表-c-monitor-chart-wrapper {
+  flex: 1 1 0;
+  min-height: 100px;
+  display: flex;
+  flex-direction: column;
+  background-size: 100% auto;
+  background-position: center top;
+  background-repeat: no-repeat;
+}
+.c-流量监测-复杂-多图表-c-monitor-chart-legend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+.c-流量监测-复杂-多图表-c-monitor-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  opacity: 1;
+  transition: opacity 0.3s;
+}
+.c-流量监测-复杂-多图表-c-monitor-legend-item:not(.active) {
+  opacity: 0.4;
+}
+.c-流量监测-复杂-多图表-c-monitor-legend-dot {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+}
+.c-流量监测-复杂-多图表-c-monitor-legend-dot.beijing {
+  background: #559eff;
+}
+.c-流量监测-复杂-多图表-c-monitor-legend-dot.shanghai {
+  background: #ff8b67;
+}
+.c-流量监测-复杂-多图表-c-monitor-legend-text {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: calc(14px * 0.857);
+  font-weight: 400;
+  line-height: 18px;
+  color: #333333;
+}
+.c-流量监测-复杂-多图表-c-monitor-vehicle-distribution {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  flex: 1 1 0;
+  min-height: 0;
+}
+.c-流量监测-复杂-多图表-c-monitor-vehicle-cards {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+.c-流量监测-复杂-多图表-c-monitor-vehicle-card {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.c-流量监测-复杂-多图表-c-monitor-vehicle-card-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  flex: 1 1 0;
+  padding: 12px;
+}
+.c-流量监测-复杂-多图表-c-monitor-vehicle-chart {
+  width: 80px;
+  height: 80px;
+  flex-shrink: 0;
+}
+.c-流量监测-复杂-多图表-c-monitor-vehicle-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+.c-流量监测-复杂-多图表-c-monitor-vehicle-stat-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.c-流量监测-复杂-多图表-c-monitor-vehicle-stat-label {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 18px;
+}
+.c-流量监测-复杂-多图表-c-monitor-vehicle-stat-value {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 18px;
+}
+.c-monitor-vehicle-stat-value.tunnel-passenger,
+.c-monitor-vehicle-stat-value.bridge-passenger {
+  color: #559eff;
+}
+.c-monitor-vehicle-stat-value.tunnel-freight,
+.c-monitor-vehicle-stat-value.bridge-freight {
+  color: #ff8b67;
+}
+.c-流量监测-复杂-多图表-c-monitor-flow-prediction {
+  width: 100%;
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.c-流量监测-复杂-多图表-c-monitor-flow-prediction-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+  height: 30px;
+  margin-bottom: 12px;
+}
+.c-流量监测-复杂-多图表-c-monitor-flow-prediction-title-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.c-流量监测-复杂-多图表-c-monitor-flow-prediction-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.c-流量监测-复杂-多图表-c-monitor-flow-prediction-tabs {
+  display: flex;
+  gap: 0;
+}
+.c-流量监测-复杂-多图表-c-monitor-flow-prediction-tab-item {
+  padding: 4px 12px;
+  font-size: calc(14px * 0.857);
+  color: #666666;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid #d9d9d9;
+  transition: all 0.3s;
+}
+.c-流量监测-复杂-多图表-c-monitor-flow-prediction-tab-item:first-child {
+  border-top-left-radius: 4px;
+  border-bottom-left-radius: 4px;
+}
+.c-流量监测-复杂-多图表-c-monitor-flow-prediction-tab-item:last-child {
+  border-top-right-radius: 4px;
+  border-bottom-right-radius: 4px;
+  border-left: none;
+}
+.c-流量监测-复杂-多图表-c-monitor-flow-prediction-tab-item:not(:first-child):not(:last-child) {
+  border-left: none;
+}
+.c-流量监测-复杂-多图表-c-monitor-flow-prediction-tab-item:hover {
+  color: #1890ff;
+  border-color: #1890ff;
+  z-index: 1;
+}
+.c-流量监测-复杂-多图表-c-monitor-flow-prediction-tab-active {
+  color: #ffffff;
+  background: #1890ff;
+  border-color: #1890ff;
+  z-index: 2;
+}
+.c-流量监测-复杂-多图表-c-monitor-flow-prediction-tab-active:hover {
+  color: #ffffff;
+}
+.c-流量监测-复杂-多图表-c-monitor-flow-prediction-date-select {
+  width: 140px;
+}
+.c-流量监测-复杂-多图表-c-monitor-flow-prediction-chart-wrapper {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background-size: 100% auto;
+  background-position: center top;
+  background-repeat: no-repeat;
+}
+.c-流量监测-复杂-多图表-c-monitor-flow-prediction-chart {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}

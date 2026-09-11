@@ -1,0 +1,40 @@
+.common() {
+@color-total: #1990FF;
+  @color-online: #52C41A;
+  @color-abnormal: #FAAD14;
+  @color-rate: #13C2C2;
+  @color-warning-tag: #FAAD14;
+  @system-panel-bg: rgba(0, 0, 0, 0.45);
+  @system-panel-title: #FFFFFF;
+  @color-rate-low: #FF4D4F;
+  @color-rate-normal: #52C41A;
+  
+  @primary-color: #1990ff;
+  @success-color: #08a3a5;
+  @danger-color: #f53f3f;
+  @text-color: #333333;
+  @bg-color: #edf4fb;
+  @border-color: rgba(0, 0, 0, 0.06);
+  @text-secondary: #666666;
+  @click: inherit; // 自动添加
+}
+
+.theme-dark() {
+  .common();
+  @bg-color: #141414;
+  @text-color: #ffffff;
+  @text-secondary: #aaaaaa;
+  @border-color: rgba(255, 255, 255, 0.1);
+}
+
+.theme-light() {
+  .common();
+  @bg-color: #edf4fb;
+  @text-color: #333333;
+  @text-secondary: #666666;
+  @border-color: rgba(0, 0, 0, 0.06);
+}
+
+:root {
+  .theme-light();
+}

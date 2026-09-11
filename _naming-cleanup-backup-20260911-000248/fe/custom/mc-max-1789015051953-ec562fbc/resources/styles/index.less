@@ -1,0 +1,11 @@
+// 样式入口（系统自动生成，勿手改）
+@import './themes/theme-vars.less';
+
+// 默认主题：必须在**根作用域**生效，否则组件在无 .dark/.light 祖先的真实 DOM 上样式全部失效
+.common();
+.theme-light();
+@import (multiple) './common.less';
+
+// 主题覆盖层（宿主注入 .dark/.light 类时生效）
+@import './themes/dark.less';
+@import './themes/light.less';

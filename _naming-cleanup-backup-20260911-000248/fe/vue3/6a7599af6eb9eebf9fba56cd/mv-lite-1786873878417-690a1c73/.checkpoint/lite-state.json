@@ -1,0 +1,114 @@
+{
+  "stage": "codegen_done",
+  "brief": {
+    "layout": "横向宽屏信息看板，整体为深色科技风背景；顶部为标题栏横向区域，左侧图标+标题；中部为横向 Tab/按钮导航栏；下方为纵向列表区域，列表项按行堆叠，左对齐，文本与标签沿水平方向排列，右侧为操作图标组。主要内容区域约占画面下方 75%，顶部标题约占 13%，导航约占 18%。",
+    "regions": [
+      {
+        "name": "标题栏",
+        "description": "左侧六边形/立方体样式图标，右侧大标题“当日总流量”，背景有渐变光带与斜纹装饰",
+        "position": "top",
+        "size": "宽100%，高约13%"
+      },
+      {
+        "name": "导航标签区",
+        "description": "一排描边圆角按钮，包括 AI²、交通态势、协同上报、相邻路段、气象预警、结构预警",
+        "position": "center",
+        "size": "宽约93%，高约16%"
+      },
+      {
+        "name": "事件列表区",
+        "description": "4 条事件列表，首条展开显示更多文字并带高亮边框，其余条目为单行截断展示",
+        "position": "bottom",
+        "size": "宽约93%，高约70%"
+      },
+      {
+        "name": "列表项左侧标识区",
+        "description": "每行左侧有竖向状态线与橙色日历/告警类图标",
+        "position": "left",
+        "size": "每行宽约8%，高随列表项"
+      },
+      {
+        "name": "列表项内容区",
+        "description": "时间标签、道路名称绿色标签、方向与桩号/描述文本横向排列",
+        "position": "center",
+        "size": "每行宽约75%，高随列表项"
+      },
+      {
+        "name": "列表项右侧操作区",
+        "description": "每行右侧有 3 个小方形图标按钮",
+        "position": "right",
+        "size": "每行宽约12%，高随列表项"
+      }
+    ],
+    "spacing": {
+      "outer": "整体内容距离画布左右约4%，顶部标题贴近上边缘但有光效边距，底部列表距底部约2%",
+      "gap": "标题栏与导航区间距约25px；导航按钮间距约10px；列表行间距约14px；列表项内部标签间距约10px",
+      "padding": "导航按钮水平内边距较大、垂直内边距中等；列表首行容器内边距约10px；时间与道路标签内部有明显左右 padding"
+    },
+    "colors": {
+      "primary": "#23E6D1",
+      "background": "#032E2F",
+      "surface": "#06484A",
+      "text": "#FFFFFF",
+      "border": "#20D8C9"
+    },
+    "typography": {
+      "size": "标题超大号约42-48px；导航文字约34-38px；列表主文字约32-36px；时间标签约34px；小图标无明显文字",
+      "weight": "标题为粗体/加粗并带阴影；导航与列表文字为中粗；标签文字为常规到中粗",
+      "lineHeight": "标题行高紧凑；列表首行展开为两行，行高约1.35；其余列表单行垂直居中"
+    },
+    "components": [
+      "标题文本",
+      "装饰图标/Logo",
+      "圆角描边按钮",
+      "标签按钮",
+      "事件列表",
+      "列表行容器",
+      "状态竖线",
+      "图标按钮",
+      "时间徽标",
+      "道路名称徽标",
+      "截断文本"
+    ],
+    "textContent": [
+      "当日总流量",
+      "AI²",
+      "交通态势",
+      "协同上报",
+      "相邻路段",
+      "气象预警",
+      "结构预警",
+      "15:32",
+      "G2京沪高速（隧道段）",
+      "上行 YK2+9...检测出异常事件，普通车辆临时停驶",
+      "事件，普通车辆临时停驶",
+      "上行 YK2+9..."
+    ],
+    "visualDetails": [
+      "整体深青绿色渐变背景，顶部有青色发光边线与斜纹暗纹",
+      "标题左侧为蓝白立体六边形图标，标题有白色高亮和投影",
+      "导航按钮为青色描边圆角矩形，深色半透明底，文字为青绿色",
+      "AI² 按钮呈更强填充高亮状态",
+      "首条列表左侧竖线为亮青色，其余为灰青色",
+      "首条列表有青色细边框，内容区域更高并展开两行",
+      "时间标签为青绿色圆角矩形，白色文字",
+      "道路标签为绿色圆角矩形，白色文字",
+      "左侧事件图标为橙色方形底，内含白/深色日历样式符号",
+      "右侧每行有 3 个青绿色描边小方形图标，图标分别类似建筑/人员或设备/盾牌星标",
+      "列表行背景为深青半透明条块，第二至第四行文字右侧省略号截断"
+    ],
+    "interactions": [
+      "Tab 切换栏：AI²、交通态势、协同上报、相邻路段、气象预警、结构预警；当前视觉高亮项为 AI²",
+      "列表项：首条处于选中/展开状态，显示完整两行描述并有高亮边框",
+      "右侧图标按钮组：每条列表右侧 3 个可点击图标按钮",
+      "左侧橙色事件图标按钮/状态入口：每条列表左侧可见",
+      "时间标签与道路标签以按钮/徽标形式展示但未见明确点击状态"
+    ]
+  },
+  "width": 681,
+  "height": 383,
+  "sourceType": "screenshot",
+  "componentType": "vue3",
+  "generationTier": "lite",
+  "vueCode": "<template>\n  <section class=\"mv-lite-1786873878417-690a1c73 dashboard-panel\">\n    <header class=\"panel-header\">\n      <div class=\"header-icon\" aria-hidden=\"true\">\n        <span class=\"cube cube-top\"></span>\n        <span class=\"cube cube-mid\"></span>\n        <span class=\"cube cube-bottom\"></span>\n      </div>\n      <h1 class=\"panel-title\">当日总流量</h1>\n    </header>\n\n    <nav class=\"tab-bar\" aria-label=\"导航标签\">\n      <button\n        v-for=\"tab in tabs\"\n        :key=\"tab\"\n        class=\"tab-button\"\n        :class=\"{ active: activeTab === tab }\"\n        type=\"button\"\n        @click=\"activeTab = tab\"\n      >\n        {{ tab }}\n      </button>\n    </nav>\n\n    <main class=\"event-list-wrap\">\n      <a-table\n        class=\"event-table\"\n        :columns=\"columns\"\n        :data-source=\"data\"\n        :pagination=\"false\"\n        :show-header=\"false\"\n        :row-class-name=\"rowClassName\"\n      >\n        <template #bodyCell=\"{ column, record, index }\">\n          <template v-if=\"column.key === 'status'\">\n            <div class=\"status-cell\">\n              <span class=\"state-line\" :class=\"{ active: index === 0 }\"></span>\n              <button class=\"alarm-icon\" type=\"button\" @click=\"handleIconClick('alarm', record)\">\n                <span class=\"calendar-top\"></span>\n                <span class=\"calendar-dot\"></span>\n              </button>\n            </div>\n          </template>\n\n          <template v-if=\"column.key === 'content'\">\n            <div class=\"content-cell\" :class=\"{ expanded: index === 0 }\">\n              <div class=\"content-line\">\n                <span class=\"time-badge\">{{ record.time }}</span>\n                <span class=\"road-badge\">{{ record.road }}</span>\n                <span class=\"event-text\">{{ record.desc }}</span>\n              </div>\n              <div v-if=\"index === 0 && expanded\" class=\"content-line second-line\">\n                <span class=\"event-text continuation\">{{ record.more }}</span>\n              </div>\n            </div>\n          </template>\n\n          <template v-if=\"column.key === 'actions'\">\n            <div class=\"action-cell\">\n              <button class=\"action-btn\" type=\"button\" aria-label=\"道路设施\" @click=\"handleIconClick('building', record)\">\n                <span class=\"icon-building\"></span>\n              </button>\n              <button class=\"action-btn\" type=\"button\" aria-label=\"设备\" @click=\"handleIconClick('device', record)\">\n                <span class=\"icon-device\"></span>\n              </button>\n              <button class=\"action-btn\" type=\"button\" aria-label=\"预警\" @click=\"handleIconClick('shield', record)\">\n                <span class=\"icon-shield\"></span>\n              </button>\n            </div>\n          </template>\n        </template>\n      </a-table>\n    </main>\n  </section>\n</template>\n\n<script setup>\nimport { ref } from 'vue'\nimport { Table as ATable } from 'ant-design-vue'\n\ndefineOptions({\n  name: 'mv-lite-1786873878417-690a1c73',\n})\n\nconst tabs = ['AI²', '交通态势', '协同上报', '相邻路段', '气象预警', '结构预警']\nconst activeTab = ref('AI²')\nconst expanded = ref(true)\n\nconst columns = [\n  { title: '状态', key: 'status', width: '7%' },\n  { title: '内容', key: 'content', width: '80%' },\n  { title: '操作', key: 'actions', width: '13%' },\n]\n\nconst data = [\n  {\n    key: '1',\n    time: '15:32',\n    road: 'G2京沪高速（隧道段）',\n    desc: '上行 YK2+9...检测出异常事件，',\n    more: '事件，普通车辆临时停驶',\n  },\n  {\n    key: '2',\n    time: '15:32',\n    road: 'G2京沪高速（隧道段）',\n    desc: '上行 YK2+9...',\n    more: '',\n  },\n  {\n    key: '3',\n    time: '15:32',\n    road: 'G2京沪高速（隧道段）',\n    desc: '上行 YK2+9...',\n    more: '',\n  },\n  {\n    key: '4',\n    time: '15:32',\n    road: 'G2京沪高速（隧道段）',\n    desc: '上行 YK2+9...',\n    more: '',\n  },\n]\n\nconst rowClassName = (_record, index) => (index === 0 ? 'selected-row' : 'normal-row')\n\nconst handleIconClick = (type, record) => {\n  if (type === 'alarm' && record.key === '1') {\n    expanded.value = !expanded.value\n  }\n  console.log(type, record.key)\n}\n</script>\n\n<style scoped>\n.mv-lite-1786873878417-690a1c73,\n.dashboard-panel {\n  width: 100%;\n  height: 100%;\n  box-sizing: border-box;\n  overflow: hidden;\n  color: #ffffff;\n  background:\n    radial-gradient(circle at 18% 3%, rgba(42, 255, 220, 0.22), transparent 30%),\n    linear-gradient(180deg, #033c3b 0%, #032e2f 34%, #03292b 100%);\n  font-family: \"Microsoft YaHei\", \"PingFang SC\", Arial, sans-serif;\n}\n\n.panel-header {\n  position: relative;\n  height: 13.2%;\n  min-height: 48px;\n  box-sizing: border-box;\n  display: flex;\n  align-items: center;\n  padding: 0 4.1%;\n  border-top: 2px solid rgba(35, 230, 209, 0.75);\n  border-bottom: 2px solid rgba(35, 230, 209, 0.68);\n  background:\n    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.06) 0 18px, transparent 18px 54px),\n    linear-gradient(90deg, rgba(0, 255, 210, 0.34), rgba(4, 57, 57, 0.7) 37%, rgba(3, 44, 47, 0.15) 100%);\n  box-shadow:\n    inset 0 0 18px rgba(35, 230, 209, 0.5),\n    0 0 12px rgba(35, 230, 209, 0.36);\n}\n\n.panel-header::after {\n  content: \"\";\n  position: absolute;\n  right: 2.2%;\n  bottom: -2px;\n  width: 64%;\n  height: 2px;\n  background: linear-gradient(90deg, transparent, rgba(35, 230, 209, 0.9), transparent);\n}\n\n.header-icon {\n  position: relative;\n  width: 4.7%;\n  min-width: 32px;\n  height: 60%;\n  margin-right: 2.1%;\n  filter: drop-shadow(0 0 8px rgba(35, 230, 209, 0.72));\n}\n\n.cube {\n  position: absolute;\n  left: 0;\n  width: 100%;\n  height: 36%;\n  clip-path: polygon(50% 0, 100% 28%, 50% 100%, 0 28%);\n  background: linear-gradient(135deg, #f1ffff 0%, #79dff1 42%, #0d7fc0 100%);\n}\n\n.cube-top { top: 0; opacity: 0.95; }\n.cube-mid { top: 27%; transform: scaleX(0.95); opacity: 0.82; }\n.cube-bottom { top: 54%; transform: scaleX(0.9); opacity: 0.9; }\n\n.panel-title {\n  margin: 0;\n  font-size: clamp(26px, 6.6vh, 47px);\n  line-height: 1;\n  font-weight: 900;\n  letter-spacing: 0.04em;\n  color: #ffffff;\n  text-shadow:\n    0 2px 0 rgba(0, 0, 0, 0.45),\n    0 0 10px rgba(255, 255, 255, 0.62),\n    0 0 18px rgba(35, 230, 209, 0.55);\n}\n\n.tab-bar {\n  width: 93%;\n  height: 17.5%;\n  box-sizing: border-box;\n  margin: 2.7% auto 1.4%;\n  display: flex;\n  align-items: center;\n  gap: 0.9%;\n}\n\n.tab-button {\n  height: 78%;\n  flex: 1 1 auto;\n  padding: 0 1.05%;\n  border: 2px solid #20d8c9;\n  border-radius: 7px;\n  color: #23e6d1;\n  background: rgba(4, 63, 65, 0.42);\n  box-shadow: inset 0 0 10px rgba(35, 230, 209, 0.16);\n  font-size: clamp(20px, 4.9vh, 37px);\n  font-weight: 700;\n  line-height: 1;\n  white-space: nowrap;\n  cursor: pointer;\n}\n\n.tab-button.active {\n  color: #ffffff;\n  background: linear-gradient(180deg, rgba(35, 230, 209, 0.72), rgba(8, 127, 124, 0.82));\n  box-shadow:\n    inset 0 0 14px rgba(255, 255, 255, 0.18),\n    0 0 12px rgba(35, 230, 209, 0.36);\n}\n\n.event-list-wrap {\n  width: 93%;\n  height: 64%;\n  margin: 0 auto;\n  box-sizing: border-box;\n}\n\n.event-table {\n  width: 100%;\n  height: 100%;\n}\n\n.status-cell {\n  height: 100%;\n  display: flex;\n  align-items: center;\n  gap: 10px;\n}\n\n.state-line {\n  width: 4px;\n  height: 84%;\n  min-height: 42px;\n  background: rgba(194, 220, 218, 0.82);\n  box-shadow: 0 0 5px rgba(174, 224, 219, 0.22);\n}\n\n.state-line.active {\n  background: #20f2d0;\n  box-shadow: 0 0 10px rgba(32, 242, 208, 0.75);\n}\n\n.alarm-icon {\n  position: relative;\n  width: clamp(30px, 5.3vh, 50px);\n  height: clamp(30px, 5.3vh, 50px);\n  border: 0;\n  border-radius: 4px;\n  background: #e17600;\n  box-shadow: inset 0 0 7px rgba(75, 29, 0, 0.35), 0 0 6px rgba(255, 123, 0, 0.28);\n  cursor: pointer;\n}\n\n.alarm-icon::before {\n  content: \"\";\n  position: absolute;\n  left: 23%;\n  top: 26%;\n  width: 54%;\n  height: 50%;\n  border: 4px solid #ffffff;\n  border-radius: 4px;\n  box-sizing: border-box;\n}\n\n.calendar-top {\n  position: absolute;\n  left: 27%;\n  top: 21%;\n  width: 46%;\n  height: 5px;\n  border-radius: 3px;\n  background: #ffffff;\n}\n\n.calendar-dot {\n  position: absolute;\n  left: 45%;\n  top: 42%;\n  width: 10%;\n  height: 10%;\n  border-radius: 50%;\n  background: #ffffff;\n}\n\n.content-cell {\n  min-width: 0;\n  color: #ffffff;\n  font-size: clamp(18px, 4.25vh, 34px);\n  line-height: 1.2;\n  font-weight: 500;\n}\n\n.content-line {\n  min-width: 0;\n  display: flex;\n  align-items: center;\n  gap: 1.2%;\n  white-space: nowrap;\n}\n\n.second-line {\n  margin-top: 7px;\n  padding-left: 0;\n}\n\n.time-badge,\n.road-badge {\n  display: inline-flex;\n  align-items: center;\n  height: clamp(31px, 5.4vh, 54px);\n  box-sizing: border-box;\n  border-radius: 4px;\n  color: #ffffff;\n  line-height: 1;\n  white-space: nowrap;\n}\n\n.time-badge {\n  padding: 0 2.2%;\n  background: rgba(14, 158, 147, 0.95);\n  font-size: clamp(19px, 4.55vh, 36px);\n}\n\n.road-badge {\n  padding: 0 2.6%;\n  background: rgba(51, 135, 0, 0.95);\n}\n\n.event-text {\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  text-shadow: 0 0 4px rgba(255, 255, 255, 0.22);\n}\n\n.continuation {\n  padding-left: 0.6%;\n}\n\n.action-cell {\n  display: flex;\n  justify-content: flex-end;\n  align-items: center;\n  gap: 7px;\n}\n\n.action-btn {\n  position: relative;\n  width: clamp(22px, 3.65vh, 36px);\n  height: clamp(22px, 3.65vh, 36px);\n  border: 2px solid rgba(236, 255, 251, 0.95);\n  border-radius: 5px;\n  background: linear-gradient(180deg, rgba(34, 224, 207, 0.92), rgba(9, 128, 124, 0.94));\n  box-shadow: 0 0 7px rgba(35, 230, 209, 0.45);\n  cursor: pointer;\n}\n\n.icon-building::before {\n  content: \"\";\n  position: absolute;\n  left: 19%;\n  top: 24%;\n  width: 62%;\n  height: 48%;\n  border-top: 4px solid #ffffff;\n  border-bottom: 4px solid #ffffff;\n  background: repeating-linear-gradient(90deg, #ffffff 0 3px, transparent 3px 8px);\n}\n\n.icon-building::after {\n  content: \"\";\n  position: absolute;\n  left: 14%;\n  top: 17%;\n  width: 72%;\n  height: 8px;\n  clip-path: polygon(50% 0, 100% 100%, 0 100%);\n  background: #ffffff;\n}\n\n.icon-device::before {\n  content: \"\";\n  position: absolute;\n  left: 32%;\n  top: 17%;\n  width: 36%;\n  height: 36%;\n  border-radius: 50%;\n  border: 3px solid #ffffff;\n  box-sizing: border-box;\n}\n\n.icon-device::after {\n  content: \"\";\n  position: absolute;\n  left: 24%;\n  top: 55%;\n  width: 52%;\n  height: 25%;\n  border-radius: 50% 50% 4px 4px;\n  background: #ffffff;\n}\n\n.icon-shield::before {\n  content: \"\";\n  position: absolute;\n  left: 24%;\n  top: 17%;\n  width: 52%;\n  height: 62%;\n  clip-path: polygon(50% 0, 88% 12%, 84% 58%, 50% 100%, 16% 58%, 12% 12%);\n  background: #ffffff;\n}\n\n.icon-shield::after {\n  content: \"★\";\n  position: absolute;\n  left: 0;\n  right: 0;\n  top: 24%;\n  color: #159f96;\n  font-size: 11px;\n  line-height: 1;\n  text-align: center;\n}\n\n:deep(.event-table .ant-table) {\n  height: 100%;\n  color: #ffffff;\n  background: transparent;\n  font-family: inherit;\n}\n\n:deep(.event-table .ant-table-container),\n:deep(.event-table .ant-table-content),\n:deep(.event-table table) {\n  height: 100%;\n}\n\n:deep(.event-table .ant-table-tbody > tr > td) {\n  height: 21.4%;\n  padding: 0;\n  border: 0;\n  background: rgba(5, 70, 72, 0.48);\n  vertical-align: middle;\n}\n\n:deep(.event-table .ant-table-tbody > tr.selected-row > td) {\n  height: 33%;\n  border-top: 2px solid #20d8c9;\n  border-bottom: 2px solid #20d8c9;\n  background: rgba(5, 77, 78, 0.62);\n}\n\n:deep(.event-table .ant-table-tbody > tr.selected-row > td:first-child) {\n  border-left: 2px solid #20d8c9;\n}\n\n:deep(.event-table .ant-table-tbody > tr.selected-row > td:last-child) {\n  border-right: 2px solid #20d8c9;\n}\n\n:deep(.event-table .ant-table-tbody > tr.normal-row > td) {\n  border-top: 12px solid transparent;\n  background-clip: padding-box;\n}\n\n:deep(.event-table .ant-table-tbody > tr:hover > td) {\n  background: rgba(5, 77, 78, 0.62) !important;\n}\n\n:deep(.event-table .ant-empty) {\n  display: none;\n}\n\n@media (max-width: 620px) {\n  .tab-button {\n    font-size: clamp(14px, 4vh, 24px);\n  }\n\n  .content-cell {\n    font-size: clamp(14px, 3.5vh, 24px);\n  }\n\n  .action-cell {\n    gap: 4px;\n  }\n}\n/* Ant Design Vue Table 内部背景层：避免透明单元格透出默认白底 */\n:deep(.event-table .ant-table-container),\n:deep(.event-table .ant-table-content),\n:deep(.event-table table) {\n  background: transparent;\n  color: inherit;\n}\n\n/* Ant Design Vue 4 通过单元格状态类控制行悬浮背景 */\n:deep(.event-table .ant-table-tbody > tr > td.ant-table-cell-row-hover) {\n  background: rgba(5, 77, 78, 0.62) !important;\n}\n\n</style>"
+}

@@ -38,6 +38,7 @@ import {
 import { buildResourceManifest } from '../utils/resource-manifest.js';
 import { inferChartMinHeight } from '../utils/post-process.js';
 import { assessNumericLiteralRewrite } from '../utils/numeric-literal-guard.js';
+import { resolveEchartsType, normalizeSeriesInSource, normalizeChartAxesInSource } from '../utils/chart-type-guard.js';
 import { stripLlmTailGarbage } from '../utils/llm-tail-garbage.js';
 import { normalizeFlexSourceConflicts } from '../utils/flex-sibling-guard.js';
 // 🧩 Vue3 拆分模块（2026-08-30：prompt / healer / style-entry 纯函数化，主类改委托壳）
@@ -1240,12 +1241,12 @@ export class Vue3Engineer extends MicrocodeEngineer {
 
         // T3 图表 type 强约束：vision 指定的图表 type 必须与 product 一致（防止 LLM 把 area/line 改 bar）
         const chartsArr3 = Array.isArray(input.charts) ? input.charts : [];
-        const targetType3 = chartsArr3[0]?.type
-          ? String(chartsArr3[0].type).toLowerCase()
-          : '';
+        // 🔴 2026-09-11：真值先归一到 echarts 注册名，避免把 'area-line'/'面积折线图'
+        // 当作合法目标写进 series.type（真值洗白，实锤 mc-max-1789062564333-f1ff01eb）。
+        const targetType3 = resolveEchartsType(chartsArr3[0]?.type) || '';
         const visionTypes3 = new Set(
           chartsArr3
-            .map((c) => String(c?.type || '').toLowerCase())
+            .map((c) => resolveEchartsType(c?.type))
             .filter(Boolean),
         );
         if (targetType3 && targetType3 !== 'bar' && !visionTypes3.has('bar')) {
@@ -1268,6 +1269,63 @@ export class Vue3Engineer extends MicrocodeEngineer {
               `🎯 图表 type 强约束：${fixedCount3} 处 'bar' 强制改 '${targetType3}'（vision types: ${[...visionTypes3].join(',') || '无'}）`,
             );
           }
+        }
+
+        // 🛡️ Loop 2.1.E（2026-09-11 vue3 端补齐，与 mc 端对齐）：非法 series.type 拒收。
+        // 背景：vue3 侧此前**完全没有**该环节（mc 端 2026-09-10 已立），且 T3 的目标类型
+        // 取自未校验真值 → 'area-line'/'面积折线图' 等非法别名会直落 series.type，
+        // 运行时 ECharts 报 `Unknown series area-line` 并**整条 series 被丢弃**（只剩空坐标轴）。
+        // 治本同 mc：真值先归一 + 括号配平 + 只改元素顶层 type（不碰 lineStyle/渐变 type）。
+        try {
+          const _truthChartType3 = resolveEchartsType(chartsArr3[0]?.type);
+          let _illegalFixed3 = 0;
+          for (const [fp, fc] of Object.entries(codeResult.files)) {
+            if (!fp.endsWith('.vue') || typeof fc !== 'string') continue;
+            if (!fc.includes('series')) continue;
+            const r = normalizeSeriesInSource(fc, { chartType: _truthChartType3 });
+            if (r.changed > 0) {
+              codeResult.files[fp] = r.text;
+              _illegalFixed3 += r.changed;
+            }
+          }
+          if (_illegalFixed3 > 0) {
+            this.logger.warn(
+              `🛡️ [vue3] 2.1.E 非法 series.type 已收敛 ${_illegalFixed3} 处（真值=${_truthChartType3 || 'none→line'}）`,
+            );
+          }
+        } catch (ctErr3) {
+          this.logger.warn('⚠️ [vue3] 2.1.E chartType 收敛失败（非阻塞）', {
+            error: ctErr3?.message,
+          });
+        }
+
+        // 🛡️ Loop 2.1.F（2026-09-11）：坐标轴格式守卫，根治 `xAxis "0" not found`（与 mc 端对齐）。
+        try {
+          let _axisFixed3 = 0;
+          for (const [fp, fc] of Object.entries(codeResult.files)) {
+            if (!fp.endsWith('.vue') || typeof fc !== 'string') continue;
+            if (
+              !fc.includes('series') &&
+              !fc.includes('xAxis') &&
+              !fc.includes('yAxis') &&
+              !fc.includes('@fontSize')
+            )
+              continue;
+            const r = normalizeChartAxesInSource(fc);
+            if (r.changed > 0) {
+              codeResult.files[fp] = r.text;
+              _axisFixed3 += r.changed;
+            }
+          }
+          if (_axisFixed3 > 0) {
+            this.logger.warn(
+              `🛡️ [vue3] 2.1.F 坐标轴格式已收敛 ${_axisFixed3} 处（xAxis/yAxis 数组化 + 显式索引）`,
+            );
+          }
+        } catch (axisErr3) {
+          this.logger.warn('⚠️ [vue3] 2.1.F 坐标轴格式收敛失败（非阻塞）', {
+            error: axisErr3?.message,
+          });
         }
 
         // 🎯 N1 数字字面量确定性剥离（vue3 端，mc 端已有）：vision TEXT 字符集 vs 产物数字字面量差集
@@ -1371,7 +1429,7 @@ export class Vue3Engineer extends MicrocodeEngineer {
             const targetFile = codeResult.files[idxPathN2];
             if (typeof targetFile === 'string') {
               const firstChart = chartsForGuard[0] || {};
-              const chartType = String(firstChart.type || 'line').toLowerCase();
+              const chartType = resolveEchartsType(firstChart.type) || 'line';
               const chartSeries = (
                 Array.isArray(firstChart.series) ? firstChart.series : ['trend']
               ).join(', ');
@@ -1742,6 +1800,33 @@ export class Vue3Engineer extends MicrocodeEngineer {
 
       this.logger.info('✅ Vue3 组件生成完成', { files: writtenFiles });
 
+      // 🛡️ R2-2（2026-09-11，vue3 端补齐，与 mc 侧 microcode-engineer 对齐）：六条产物不变量终验
+      // （I1 根高度 / I2 标签↔import↔文件 / I3 tabs 唯一 / I4 形态锚定 / I5 类名对齐 / I6 资源挂载）。
+      // 与 scripts/artifact-invariants.mjs CLI 共用同一实现（动态 import，故静态 grep 查不到）。
+      // 报告性校验：error 级违规落日志 + 随任务 result 暴露，**不 fail-closed 阻断**。
+      let _artifactInvariants = null;
+      try {
+        const { runArtifactInvariants } = await import(
+          '../utils/artifact-invariants.js'
+        );
+        _artifactInvariants = runArtifactInvariants(codeResult.files);
+        if (!_artifactInvariants.passed) {
+          const _errs = _artifactInvariants.violations.filter(
+            (v) => v.severity === 'error',
+          );
+          this.logger.warn(
+            `🛡️ [vue3] 产物不变量违规：${_errs.length} error / ${
+              _artifactInvariants.violations.length - _errs.length
+            } warn`,
+            { violations: _artifactInvariants.violations.slice(0, 20) },
+          );
+        }
+      } catch (invErr) {
+        this.logger.warn('🛡️ [vue3] 产物不变量校验执行失败（非阻断）', {
+          error: invErr?.message,
+        });
+      }
+
       // 只有完整文件组完成全部组装、截断检查和后处理后才发布候选快照。
       if (typeof onFilesReady === 'function') {
         try {
@@ -1786,6 +1871,8 @@ export class Vue3Engineer extends MicrocodeEngineer {
           planReason: subPlan.reason,
         },
         autoFixes: [],
+        // 🛡️ R2-2：六条产物不变量结果（violations/passed/summary），供任务 meta 与前端展示
+        artifactInvariants: _artifactInvariants || undefined,
         // 🛡️ 资源归属指导（方案5）：经 graph 写回 state，供重试轮次注入。
         _attributionGuidance: input._attributionGuidance || null,
       };

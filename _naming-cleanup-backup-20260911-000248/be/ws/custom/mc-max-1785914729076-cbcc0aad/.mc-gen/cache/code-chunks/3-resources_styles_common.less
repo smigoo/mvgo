@@ -1,0 +1,118 @@
+@import './themes/theme-vars.less';
+
+.c-mc-max-1785914729076-cbcc0aad-main {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  padding: 16px;
+  box-sizing: border-box;
+  background-color: @bg-color;
+  font-family: @font-family;
+  color: @text-color;
+}
+
+.c-mc-max-1785914729076-cbcc0aad-stats-grid {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.c-mc-max-1785914729076-cbcc0aad-stat-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex: 1;
+  padding: 12px;
+  background: @bg-color-secondary;
+  border-radius: @border-radius-base;
+  border: 1px solid @border-color;
+}
+
+.c-mc-max-1785914729076-cbcc0aad-stat-icon {
+  width: 32px;
+  height: 32px;
+  margin-right: 12px;
+  object-fit: contain;
+}
+
+.c-mc-max-1785914729076-cbcc0aad-stat-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.c-mc-max-1785914729076-cbcc0aad-stat-label {
+  font-size: 12px;
+  color: @text-color-secondary;
+  margin-bottom: 4px;
+}
+
+.c-mc-max-1785914729076-cbcc0aad-stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: @text-color;
+  
+  small {
+    font-size: 12px;
+    font-weight: 400;
+    margin-left: 2px;
+    color: @text-color-secondary;
+  }
+}
+
+.c-mc-max-1785914729076-cbcc0aad-chart-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: @bg-color-secondary;
+  border-radius: @border-radius-base;
+  border: 1px solid @border-color;
+  padding: 12px;
+  overflow: hidden;
+}
+
+.c-mc-max-1785914729076-cbcc0aad-chart-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.c-mc-max-1785914729076-cbcc0aad-section-title {
+  font-size: 16px;
+  font-weight: 700;
+  background: linear-gradient(to right, @title-gradient-start, @title-gradient-end);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  position: relative;
+  padding-left: 16px;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: @success-color;
+    box-shadow: 0 0 8px @success-color;
+  }
+}
+
+.c-mc-max-1785914729076-cbcc0aad-chart-wrapper {
+  flex: 1;
+  position: relative;
+  width: 100%;
+}
+
+.c-mc-max-1785914729076-cbcc0aad-chart-container {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+}

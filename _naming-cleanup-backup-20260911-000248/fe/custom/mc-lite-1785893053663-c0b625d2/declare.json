@@ -1,0 +1,18 @@
+{
+  "componentId": "mc-lite-1785893053663-c0b625d2",
+  "componentName": "回归测试-环境监测Lite",
+  "panelType": "default-panel",
+  "defaultTheme": "dark",
+  "size": {
+    "width": 440,
+    "height": 202
+  },
+  "businessEvents": [],
+  "businessStatuses": [],
+  "dataSources": [],
+  "formSources": [],
+  "layoutConfig": {},
+  "themeConfig": {},
+  "businessConfig": {},
+  "attribute": {}
+}

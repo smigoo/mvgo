@@ -1,0 +1,88 @@
+// 微码主题变量文件
+// 定义组件的颜色、字体、间距等主题变量
+
+.common() {
+  // 字体缩放基准令牌（根容器通过 CSS 变量 --fontSize 驱动）
+  @fontSize: 14px;
+  
+  // 字体大小
+  @font-size-base: @fontSize;
+  @font-size-lg: 16px;
+  @font-size-xl: 18px;
+  @font-size-xxl: 20px;
+  
+  // 字体粗细
+  @font-weight-normal: 400;
+  @font-weight-strong: 600;
+  
+  // 圆角
+  @border-radius-base: 4px;
+  @border-radius-sm: 2px;
+  
+  // 间距
+  @spacing-sm: 8px;
+  @spacing-md: 16px;
+  @spacing-lg: 24px;
+}
+
+.theme-light() {
+  // 主题色
+  @color-primary: #1890ff;
+  @color-success: #52c41a;
+  @color-error: #ff4d4f;
+  @color-info: #1890ff;
+  
+  // 背景色
+  @color-bg-base: #ffffff;
+  @color-bg-container: #f5f5f5;
+  @color-bg-nav: #001529;
+  @color-bg-card: #ffffff;
+  
+  // 渐变背景
+  @color-bg-gradient-start: #f0f2f5;
+  @color-bg-gradient-end: #ffffff;
+  
+  // 文字色
+  @color-text-base: #333333;
+  @color-text-inverse: #ffffff;
+  
+  // 组件特定颜色
+  @color-header-bg: #001529;
+  @color-stats-text: #ffffff;
+  @color-category-active: #1890ff;
+  @color-device-card-bg: #ffffff;
+  @color-device-border: #e8e8e8;
+  @color-device-text: #333333;
+  @color-device-count: #666666;
+}
+
+.theme-dark() {
+  // 主题色
+  @color-primary: #1890ff;
+  @color-success: #52c41a;
+  @color-error: #ff4d4f;
+  @color-info: #1890ff;
+  
+  // 背景色
+  @color-bg-base: #141414;
+  @color-bg-container: #1f1f1f;
+  @color-bg-nav: #000000;
+  @color-bg-card: #262626;
+  
+  // 渐变背景
+  @color-bg-gradient-start: #1f1f1f;
+  @color-bg-gradient-end: #141414;
+  
+  // 文字色（深色模式下使用浅色文字）
+  @color-text-base: #e8e8e8;
+  @color-text-inverse: #141414;
+  
+  // 组件特定颜色
+  @color-header-bg: #000000;
+  @color-stats-text: #e8e8e8;
+  @color-category-active: #1890ff;
+  @color-device-card-bg: #262626;
+  @color-device-border: #434343;
+  @color-device-text: #e8e8e8;
+  @color-device-count: #a8a8a8;
+}

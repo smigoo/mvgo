@@ -1,0 +1,262 @@
+{
+  "schemaVersion": 1,
+  "mode": "shadow",
+  "pipeline": "phase2",
+  "iteration": 0,
+  "generatedAt": "2026-08-31T06:42:00.686Z",
+  "productionInputMode": "legacy",
+  "engineerInputChanged": false,
+  "metrics": {
+    "legacyEstimatedBytes": 62946,
+    "generationInputBytes": 3606,
+    "reductionBytes": 59340,
+    "reductionRate": 94.27,
+    "issueCount": 1,
+    "rejectedClaimCount": 1
+  },
+  "trustVerdict": {
+    "level": "restricted",
+    "reasons": [
+      "覆盖率偏低 (50%)"
+    ],
+    "visual": {
+      "verdict": "warning",
+      "reason": "覆盖率偏低 (50%)",
+      "coverageRate": 50,
+      "recognizedSections": 0
+    },
+    "restrictions": [
+      "no-unsupported-decoration",
+      "no-style-fallback",
+      "resolve-legend-owner"
+    ]
+  },
+  "budget": {
+    "limits": {
+      "totalBytes": 30720,
+      "designFactsBytes": 12288,
+      "componentPlanBytes": 8192,
+      "resourceManifestBytes": 30720,
+      "currentIssuesBytes": 4096,
+      "maxIssues": 20
+    },
+    "sections": {
+      "designFacts": 652,
+      "componentPlan": 479,
+      "resourceManifest": 782,
+      "currentIssues": 131
+    },
+    "totalBytes": 3604,
+    "passed": true,
+    "violations": []
+  },
+  "generationInput": {
+    "schemaVersion": 1,
+    "designFacts": {
+      "root": {
+        "nodeId": "2:7879",
+        "nodeName": "cp-环境监测",
+        "size": {
+          "width": 420,
+          "height": 186,
+          "unit": "css-px",
+          "source": "figma-api"
+        },
+        "styleEvidence": {
+          "background": {
+            "allowed": false,
+            "source": "figma-api",
+            "evidenceCount": 0
+          },
+          "border": {
+            "allowed": false,
+            "source": "figma-api",
+            "evidenceCount": 0
+          },
+          "borderRadius": {
+            "allowed": false,
+            "value": null,
+            "source": "figma-api"
+          },
+          "boxShadow": {
+            "allowed": false,
+            "source": "figma-api",
+            "evidenceCount": 0
+          }
+        }
+      },
+      "charts": [
+        {
+          "id": "chart-area",
+          "type": "area",
+          "series": [
+            "CO2浓度"
+          ],
+          "legend": {
+            "items": [],
+            "owner": "none",
+            "position": "none"
+          },
+          "source": "visual-analysis"
+        }
+      ],
+      "provenance": {
+        "deterministicSource": "figma-api",
+        "semanticSource": "visual-analysis"
+      }
+    },
+    "componentPlan": {
+      "effectiveSections": [
+        {
+          "id": "tab-switch",
+          "title": "指标切换tabs",
+          "responsibility": "标签页切换区",
+          "elementCount": 4
+        },
+        {
+          "id": "stats-indicator",
+          "title": "统计指标区",
+          "responsibility": "数据统计指标区（数字+标签+趋势）",
+          "elementCount": 2
+        },
+        {
+          "id": "chart-area",
+          "title": "面积图区域",
+          "responsibility": "图表/数据可视化区",
+          "elementCount": 4
+        }
+      ],
+      "isForced": true,
+      "minFiles": 5,
+      "reason": "有效 sections=3 ≥ 3 或存在高复杂度 section → 强制拆分"
+    },
+    "resourceManifest": [
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundStyle",
+        "figmaNodeId": "2:7880"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:7890"
+      },
+      {
+        "resourceId": "bg-tab-active",
+        "fileName": "bg-tab-active",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:7891"
+      },
+      {
+        "resourceId": "tabs-icon",
+        "fileName": "tabs-icon",
+        "role": null,
+        "recommendedUsage": "decorativeBlock",
+        "figmaNodeId": "89:43"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7941"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7945"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:7950"
+      }
+    ],
+    "currentIssues": [
+      {
+        "id": "CONTEXT-ROOT-BACKGROUND-CONFLICT",
+        "status": "open",
+        "severity": "warning",
+        "expectedAction": "do-not-generate-root-background"
+      }
+    ],
+    "trustVerdict": {
+      "level": "restricted",
+      "reasons": [
+        "覆盖率偏低 (50%)"
+      ],
+      "visual": {
+        "verdict": "warning",
+        "reason": "覆盖率偏低 (50%)",
+        "coverageRate": 50,
+        "recognizedSections": 0
+      },
+      "restrictions": [
+        "no-unsupported-decoration",
+        "no-style-fallback",
+        "resolve-legend-owner"
+      ]
+    },
+    "contextManifest": {
+      "stage": "engineer",
+      "mode": "shadow-only",
+      "included": [
+        "schemaVersion",
+        "designFacts",
+        "componentPlan",
+        "resourceManifest",
+        "currentIssues",
+        "trustVerdict"
+      ],
+      "excluded": [
+        "figmaData",
+        "figmaNodeData",
+        "figmaStyleTree",
+        "visualAnalysis",
+        "visualElements",
+        "reviewResult",
+        "styleMappings",
+        "previousCritiques"
+      ],
+      "diagnosticsRef": {
+        "figma": "/Users/smigoo/工作/mvgo/temp-components/6a7599af6eb9eebf9fba56cd/mc-1788158348874-c45315df-mc-max-env-monitor-verify-r6/.checkpoint/figma.json",
+        "visual": "/Users/smigoo/工作/mvgo/temp-components/6a7599af6eb9eebf9fba56cd/mc-1788158348874-c45315df-mc-max-env-monitor-verify-r6/.checkpoint/visual.json",
+        "analysis": "/Users/smigoo/工作/mvgo/temp-components/6a7599af6eb9eebf9fba56cd/mc-1788158348874-c45315df-mc-max-env-monitor-verify-r6/.checkpoint/analysis.json"
+      },
+      "conflictSummary": {
+        "rejectedClaimCount": 1,
+        "rejectedClaimIds": [
+          "visual-analysis:root.background"
+        ]
+      },
+      "budget": {
+        "limits": {
+          "totalBytes": 30720,
+          "designFactsBytes": 12288,
+          "componentPlanBytes": 8192,
+          "resourceManifestBytes": 30720,
+          "currentIssuesBytes": 4096,
+          "maxIssues": 20
+        },
+        "sections": {
+          "designFacts": 652,
+          "componentPlan": 479,
+          "resourceManifest": 782,
+          "currentIssues": 131
+        },
+        "totalBytes": 3604,
+        "passed": true,
+        "violations": []
+      }
+    }
+  }
+}

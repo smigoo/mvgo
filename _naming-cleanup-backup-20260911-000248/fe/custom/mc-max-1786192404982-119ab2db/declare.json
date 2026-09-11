@@ -1,0 +1,66 @@
+{
+  "componentId": "119ab2",
+  "componentName": "环境监测",
+  "version": "v1.0.0",
+  "panelKey": "default-panel",
+  "attribute": {
+    "aspectRatio": [
+      10,
+      3
+    ],
+    "title": "cp-环境监测",
+    "description": "cp-环境监测"
+  },
+  "businessEvents": {
+    "119ab2-onload": {
+      "eventId": "119ab2-onload",
+      "eventName": "组件加载",
+      "eventDataSchema": {
+        "componentId": {
+          "key": "componentId",
+          "name": "组件ID",
+          "type": "string",
+          "required": true
+        },
+        "timestamp": {
+          "key": "timestamp",
+          "name": "时间戳",
+          "type": "number",
+          "required": true
+        }
+      }
+    }
+  },
+  "businessStatuses": {},
+  "dataSources": [],
+  "formSources": [],
+  "layoutConfig": {
+    "default": "one",
+    "list": [
+      {
+        "name": "默认布局",
+        "key": "one",
+        "previewName": "mc-preview.png"
+      }
+    ]
+  },
+  "themeConfig": {
+    "default": "light",
+    "list": [
+      {
+        "name": "亮色主题",
+        "key": "light"
+      },
+      {
+        "name": "深色主题",
+        "key": "dark"
+      }
+    ]
+  },
+  "cssVariableConfig": [],
+  "businessConfig": [],
+  "size": {
+    "width": 420,
+    "height": 186
+  }
+}

@@ -1,0 +1,135 @@
+{
+  "stage": "codegen_done",
+  "brief": {
+    "layout": "横向布局，主轴从左至右分为三个主要区域：左侧统计卡片区（含两个异常数据卡片和一个圆环完好率指示器）、中间设备网格区（2行4列共8个设备卡片）、右侧翻页按钮区。顶部标题栏独立占据全宽，内含标题、数值统计和分类标签栏",
+    "regions": [
+      {
+        "name": "顶部标题栏",
+        "description": "横向排列，左侧为应用标题「设备监测」，右侧依次显示四组统计数据（设备类型/总数/在线数/完好率），每组以标签+数字形式呈现，数字使用强调色",
+        "position": "top",
+        "size": "全宽，高度约22px（逻辑px），顶部与画布顶边齐平"
+      },
+      {
+        "name": "分类标签栏",
+        "description": "横向等分排列6个系统分类按钮（监控系统/照明系统/通风系统/供配电系统/消防系统/交通诱导系统），每个按钮有边框圆角，文字居中",
+        "position": "top",
+        "size": "全宽，位于标题栏下方，高度约22px（逻辑px），按钮间距约8px"
+      },
+      {
+        "name": "左侧统计卡片区",
+        "description": "纵向排列，包含两个异常统计卡片（异常设备数3、设备总数3740）和一个中心圆环图（设备完好率99%），卡片内文字左对齐，数字使用青色强调色，圆环图居中",
+        "position": "left",
+        "size": "宽度约175px，高度约130px，从标签栏底部开始，占据左侧约四分之一宽度"
+      },
+      {
+        "name": "设备网格区",
+        "description": "2行4列网格布局，每个设备卡片内图标在左上，设备名称和状态数字在右侧纵向排列，状态数字格式为「(在线数/总数)」，异常项数字使用红色标签",
+        "position": "center",
+        "size": "占据中间主要区域，宽度约440px，高度约130px，与左侧统计区顶部对齐"
+      },
+      {
+        "name": "右侧翻页按钮",
+        "description": "单个右箭头按钮，垂直居中",
+        "position": "right",
+        "size": "宽度约20px，高度约20px，垂直居中于设备网格区右侧边缘"
+      }
+    ],
+    "spacing": {
+      "outer": "顶部标题栏距画布顶边约0px，左侧边距约12px，右侧边距约12px",
+      "gap": "标题栏与分类标签栏间距约4px，分类标签栏与内容区间距约8px，左侧统计区与设备网格区间距约16px，设备卡片间横向间距约12px、纵向间距约10px",
+      "padding": "标题栏内左右padding约12px，设备卡片内padding约10px，统计卡片内padding约12px"
+    },
+    "theme": "dark",
+    "colors": {
+      "primary": "#00D9D9",
+      "background": "#0A1F1F",
+      "surface": "#0D2828",
+      "text": "#FFFFFF",
+      "border": "#1A4040"
+    },
+    "typography": {
+      "size": "标题约16px，分类标签约11px，设备名称约11px，状态数字约14px，统计数值约24px（异常数3）和约32px（总数3740），完好率数字约20px",
+      "weight": "标题粗体，分类标签常规，设备名称常规，数字粗体",
+      "lineHeight": "标题约1.2，正文约1.4"
+    },
+    "components": [
+      "横向Tab标签栏",
+      "统计卡片",
+      "圆环进度图",
+      "设备状态卡片",
+      "图标+文字组合",
+      "数字标签",
+      "翻页箭头按钮"
+    ],
+    "textContent": [
+      "设备监测",
+      "设备类型",
+      "28",
+      "设备总数",
+      "56302",
+      "在线数",
+      "56298",
+      "完好率",
+      "98%",
+      "监控系统",
+      "照明系统",
+      "通风系统",
+      "供配电系统",
+      "消防系统",
+      "交通诱导系统",
+      "异常设备数",
+      "3",
+      "设备总数",
+      "3740",
+      "设备完好率",
+      "99%",
+      "摄像机",
+      "2/484",
+      "报修1",
+      "超高检测器",
+      "0/484",
+      "激光雷达",
+      "0/484",
+      "CO/VI检测器",
+      "0/484",
+      "风速风向仪",
+      "1/484",
+      "烟道机器人",
+      "0/484",
+      "CO₂传感器",
+      "0/484",
+      "洞外亮度检测",
+      "0/484"
+    ],
+    "name": {
+      "cn": "设备监测",
+      "en": "equipment-monitoring"
+    },
+    "visualDetails": [
+      "整体深色主题，采用深青色背景渐变",
+      "分类标签按钮带圆角边框，边框颜色为半透明青色",
+      "统计卡片采用深色半透明背景，带微弱边框和柔和投影",
+      "圆环进度图使用青色渐变，中心显示百分比数字",
+      "设备卡片采用深色半透明背景，带圆角和边框",
+      "设备图标为线条风格，白色描边",
+      "异常状态数字带红色背景标签（「报修1」）",
+      "在线/离线状态数字格式为「(x/总数)」，异常项数字显示为红色/青色",
+      "右侧翻页按钮为右箭头，带圆角边框",
+      "所有数字使用青色强调色（#00D9D9）",
+      "CO₂使用下标格式"
+    ],
+    "interactions": [
+      "Tab切换栏：6个系统分类按钮（监控系统/照明系统/通风系统/供配电系统/消防系统/交通诱导系统），当前无明显激活态",
+      "设备卡片：可点击查看详情，当前显示8个设备项，每个显示图标、名称和在线/离线状态",
+      "右侧翻页按钮：点击查看更多设备",
+      "圆环图：展示设备完好率，可能支持交互查看详细数据"
+    ],
+    "_themeSource": "pixel"
+  },
+  "width": 671,
+  "height": 175,
+  "sourceType": "screenshot",
+  "componentType": "vue3",
+  "generationTier": "lite",
+  "vueCode": "<template>\n  <div class=\"equipment-monitoring\">\n    <div class=\"equipment-monitoring-header\">\n      <div class=\"equipment-monitoring-title\">设备监测</div>\n      <div class=\"equipment-monitoring-stats\">\n        <div class=\"equipment-monitoring-stat-item\">\n          <span class=\"equipment-monitoring-stat-label\">设备类型</span>\n          <span class=\"equipment-monitoring-stat-value\">28</span>\n        </div>\n        <div class=\"equipment-monitoring-stat-item\">\n          <span class=\"equipment-monitoring-stat-label\">设备总数</span>\n          <span class=\"equipment-monitoring-stat-value\">56302</span>\n        </div>\n        <div class=\"equipment-monitoring-stat-item\">\n          <span class=\"equipment-monitoring-stat-label\">在线数</span>\n          <span class=\"equipment-monitoring-stat-value\">56298</span>\n        </div>\n        <div class=\"equipment-monitoring-stat-item\">\n          <span class=\"equipment-monitoring-stat-label\">完好率</span>\n          <span class=\"equipment-monitoring-stat-value\">98%</span>\n        </div>\n      </div>\n    </div>\n\n    <div class=\"equipment-monitoring-tabs\">\n      <div\n        v-for=\"tab in tabs\"\n        :key=\"tab\"\n        class=\"equipment-monitoring-tab\"\n        :class=\"{ active: activeTab === tab }\"\n        @click=\"activeTab = tab\"\n      >\n        {{ tab }}\n      </div>\n    </div>\n\n    <div class=\"equipment-monitoring-content\">\n      <div class=\"equipment-monitoring-left\">\n        <div class=\"equipment-monitoring-card equipment-monitoring-card-abnormal\">\n          <div class=\"equipment-monitoring-card-label\">异常设备数</div>\n          <div class=\"equipment-monitoring-card-value\">3</div>\n        </div>\n        <div class=\"equipment-monitoring-card equipment-monitoring-card-total\">\n          <div class=\"equipment-monitoring-card-label\">设备总数</div>\n          <div class=\"equipment-monitoring-card-value\">3740</div>\n        </div>\n        <div class=\"equipment-monitoring-chart-wrapper\">\n          <div ref=\"chartRef\" class=\"equipment-monitoring-chart\"></div>\n          <div class=\"equipment-monitoring-chart-center\">\n            <div class=\"equipment-monitoring-chart-label\">设备完好率</div>\n            <div class=\"equipment-monitoring-chart-value\">99%</div>\n          </div>\n        </div>\n      </div>\n\n      <div class=\"equipment-monitoring-grid\">\n        <div\n          v-for=\"device in devices\"\n          :key=\"device.name\"\n          class=\"equipment-monitoring-device\"\n        >\n          <div class=\"equipment-monitoring-device-icon\">\n            <svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\">\n              <path :d=\"device.iconPath\" />\n            </svg>\n          </div>\n          <div class=\"equipment-monitoring-device-content\">\n            <div class=\"equipment-monitoring-device-name\">{{ device.name }}</div>\n            <div class=\"equipment-monitoring-device-status\">\n              <span v-if=\"device.alert\" class=\"equipment-monitoring-device-alert\">{{ device.alert }}</span>\n              <span class=\"equipment-monitoring-device-count\" :class=\"{ error: device.error }\">\n                ({{ device.online }}/{{ device.total }})\n              </span>\n            </div>\n          </div>\n        </div>\n      </div>\n\n      <div class=\"equipment-monitoring-pagination\">\n        <button class=\"equipment-monitoring-pagination-btn\" @click=\"console.log('next page')\">\n          <svg viewBox=\"0 0 12 12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\">\n            <path d=\"M4 2l4 4-4 4\" />\n          </svg>\n        </button>\n      </div>\n    </div>\n  </div>\n</template>\n\n<script setup>\nimport { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'\nimport * as echarts from 'echarts'\n\nconst activeTab = ref('监控系统')\nconst tabs = ['监控系统', '照明系统', '通风系统', '供配电系统', '消防系统', '交通诱导系统']\n\nconst devices = [\n  {\n    name: '摄像机',\n    online: 2,\n    total: 484,\n    error: true,\n    alert: '报修1',\n    iconPath: 'M12 8a4 4 0 100-8 4 4 0 000 8zM2 20v-2a6 6 0 0112 0v2'\n  },\n  {\n    name: '超高检测器',\n    online: 0,\n    total: 484,\n    error: false,\n    iconPath: 'M12 2v20M2 12h20'\n  },\n  {\n    name: '激光雷达',\n    online: 0,\n    total: 484,\n    error: false,\n    iconPath: 'M12 2l9 20H3l9-20z'\n  },\n  {\n    name: 'CO/VI检测器',\n    online: 0,\n    total: 484,\n    error: false,\n    iconPath: 'M12 22c5.5 0 10-4.5 10-10S17.5 2 12 2 2 6.5 2 12s4.5 10 10 10z'\n  },\n  {\n    name: '风速风向仪',\n    online: 1,\n    total: 484,\n    error: true,\n    iconPath: 'M12 2v8m0 0l4-4m-4 4L8 6m4 16v-8m0 0l4 4m-4-4l-4 4'\n  },\n  {\n    name: '烟道机器人',\n    online: 0,\n    total: 484,\n    error: false,\n    iconPath: 'M8 6h8M8 10h8M8 14h8M6 2h12a2 2 0 012 2v16a2 2 0 01-2 2H6a2 2 0 01-2-2V4a2 2 0 012-2z'\n  },\n  {\n    name: 'CO₂传感器',\n    online: 0,\n    total: 484,\n    error: false,\n    iconPath: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z'\n  },\n  {\n    name: '洞外亮度检测',\n    online: 0,\n    total: 484,\n    error: false,\n    iconPath: 'M12 2v4m0 12v4m8-10h-4M8 12H4m13.66-5.66l-2.83 2.83M9.17 14.83l-2.83 2.83m0-11.32l2.83 2.83m5.66 5.66l2.83 2.83'\n  }\n]\n\nconst chartRef = ref(null)\nlet chart = null\nlet resizeObserver = null\n\nconst initChartWhenReady = () => {\n  if (!chartRef.value || chart) return\n\n  resizeObserver = new ResizeObserver((entries) => {\n    const { clientWidth, clientHeight } = entries[0].target\n    if (clientWidth > 0 && clientHeight > 0) {\n      if (!chart) {\n        chart = echarts.init(chartRef.value)\n        const option = {\n          series: [\n            {\n              type: 'pie',\n              radius: ['70%', '90%'],\n              center: ['50%', '50%'],\n              startAngle: 90,\n              avoidLabelOverlap: false,\n              label: { show: false },\n              labelLine: { show: false },\n              data: [\n                {\n                  value: 99,\n                  itemStyle: {\n                    color: {\n                      type: 'linear',\n                      x: 0,\n                      y: 0,\n                      x2: 1,\n                      y2: 1,\n                      colorStops: [\n                        { offset: 0, color: '#00D9D9' },\n                        { offset: 1, color: '#00A3A3' }\n                      ]\n                    }\n                  }\n                },\n                {\n                  value: 1,\n                  itemStyle: {\n                    color: 'rgba(255, 255, 255, 0.1)'\n                  }\n                }\n              ]\n            }\n          ]\n        }\n        chart.setOption(option)\n      }\n      if (chart) {\n        chart.resize()\n      }\n    }\n  })\n\n  resizeObserver.observe(chartRef.value)\n}\n\nwatch(chartRef, (el) => {\n  if (el && !chart) {\n    nextTick(() => initChartWhenReady())\n  }\n}, { immediate: true })\n\nonMounted(() => {\n  nextTick(() => initChartWhenReady())\n})\n\nonUnmounted(() => {\n  if (resizeObserver) {\n    resizeObserver.disconnect()\n  }\n  if (chart) {\n    chart.dispose()\n  }\n})\n</script>\n\n<style scoped>\n.equipment-monitoring {\n  width: 100%;\n  height: 100%;\n  box-sizing: border-box;\n  background: linear-gradient(135deg, #0A1F1F 0%, #0D2828 100%);\n  padding: 10px 12px;\n  color: #FFFFFF;\n  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;\n}\n\n.equipment-monitoring-header {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  height: 22px;\n  margin-bottom: 4px;\n}\n\n.equipment-monitoring-title {\n  font-size: 14px;\n  font-weight: 600;\n  display: flex;\n  align-items: center;\n  gap: 6px;\n}\n\n.equipment-monitoring-title::before {\n  content: '';\n  width: 16px;\n  height: 16px;\n  background: linear-gradient(135deg, #00D9D9 0%, #00A3A3 100%);\n  border-radius: 3px;\n}\n\n.equipment-monitoring-stats {\n  display: flex;\n  gap: 16px;\n  align-items: center;\n}\n\n.equipment-monitoring-stat-item {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n  font-size: 10px;\n}\n\n.equipment-monitoring-stat-label {\n  color: rgba(255, 255, 255, 0.6);\n}\n\n.equipment-monitoring-stat-value {\n  color: #00D9D9;\n  font-weight: 600;\n  font-size: 11px;\n}\n\n.equipment-monitoring-tabs {\n  display: flex;\n  gap: 8px;\n  height: 22px;\n  margin-bottom: 8px;\n}\n\n.equipment-monitoring-tab {\n  flex: 1;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  background: rgba(13, 40, 40, 0.6);\n  border: 1px solid rgba(26, 64, 64, 0.8);\n  border-radius: 4px;\n  font-size: 10px;\n  cursor: pointer;\n  transition: all 0.3s;\n  white-space: nowrap;\n}\n\n.equipment-monitoring-tab:hover {\n  border-color: #00D9D9;\n  background: rgba(0, 217, 217, 0.1);\n}\n\n.equipment-monitoring-tab.active {\n  background: rgba(0, 217, 217, 0.2);\n  border-color: #00D9D9;\n}\n\n.equipment-monitoring-content {\n  display: flex;\n  gap: 16px;\n  height: calc(100% - 60px);\n}\n\n.equipment-monitoring-left {\n  width: 140px;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.equipment-monitoring-card {\n  background: rgba(13, 40, 40, 0.6);\n  border: 1px solid rgba(26, 64, 64, 0.8);\n  border-radius: 6px;\n  padding: 8px 10px;\n  display: flex;\n  flex-direction: column;\n  gap: 2px;\n}\n\n.equipment-monitoring-card-label {\n  font-size: 9px;\n  color: rgba(255, 255, 255, 0.6);\n}\n\n.equipment-monitoring-card-value {\n  font-size: 20px;\n  font-weight: 700;\n  color: #00D9D9;\n}\n\n.equipment-monitoring-card-total .equipment-monitoring-card-value {\n  font-size: 26px;\n}\n\n.equipment-monitoring-chart-wrapper {\n  flex: 1;\n  position: relative;\n  min-height: 0;\n}\n\n.equipment-monitoring-chart {\n  width: 100%;\n  height: 100%;\n}\n\n.equipment-monitoring-chart-center {\n  position: absolute;\n  top: 50%;\n  left: 50%;\n  transform: translate(-50%, -50%);\n  text-align: center;\n  pointer-events: none;\n}\n\n.equipment-monitoring-chart-label {\n  font-size: 8px;\n  color: rgba(255, 255, 255, 0.6);\n  margin-bottom: 2px;\n}\n\n.equipment-monitoring-chart-value {\n  font-size: 16px;\n  font-weight: 700;\n  color: #00D9D9;\n}\n\n.equipment-monitoring-grid {\n  flex: 1;\n  display: grid;\n  grid-template-columns: repeat(4, 1fr);\n  grid-template-rows: repeat(2, minmax(0, 1fr));\n  gap: 10px 12px;\n  min-height: 0;\n  min-width: 0;\n}\n\n.equipment-monitoring-device {\n  background: rgba(13, 40, 40, 0.6);\n  border: 1px solid rgba(26, 64, 64, 0.8);\n  border-radius: 6px;\n  padding: 8px;\n  display: flex;\n  align-items: flex-start;\n  gap: 8px;\n  min-width: 0;\n  min-height: 0;\n}\n\n.equipment-monitoring-device-icon {\n  width: 28px;\n  height: 28px;\n  flex-shrink: 0;\n  background: rgba(0, 217, 217, 0.1);\n  border-radius: 4px;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  color: #00D9D9;\n}\n\n.equipment-monitoring-device-icon svg {\n  width: 18px;\n  height: 18px;\n}\n\n.equipment-monitoring-device-content {\n  flex: 1;\n  display: flex;\n  flex-direction: column;\n  gap: 2px;\n  min-width: 0;\n}\n\n.equipment-monitoring-device-name {\n  font-size: 10px;\n  color: rgba(255, 255, 255, 0.9);\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: ellipsis;\n}\n\n.equipment-monitoring-device-status {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n  font-size: 11px;\n  font-weight: 600;\n}\n\n.equipment-monitoring-device-alert {\n  background: #FF4D4F;\n  color: #FFFFFF;\n  padding: 1px 4px;\n  border-radius: 3px;\n  font-size: 8px;\n}\n\n.equipment-monitoring-device-count {\n  color: #00D9D9;\n}\n\n.equipment-monitoring-device-count.error {\n  color: #FF4D4F;\n}\n\n.equipment-monitoring-pagination {\n  width: 20px;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n}\n\n.equipment-monitoring-pagination-btn {\n  width: 20px;\n  height: 20px;\n  background: rgba(13, 40, 40, 0.6);\n  border: 1px solid rgba(26, 64, 64, 0.8);\n  border-radius: 4px;\n  color: #00D9D9;\n  cursor: pointer;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  transition: all 0.3s;\n}\n\n.equipment-monitoring-pagination-btn:hover {\n  background: rgba(0, 217, 217, 0.2);\n  border-color: #00D9D9;\n}\n\n.equipment-monitoring-pagination-btn svg {\n  width: 10px;\n  height: 10px;\n}\n</style>"
+}

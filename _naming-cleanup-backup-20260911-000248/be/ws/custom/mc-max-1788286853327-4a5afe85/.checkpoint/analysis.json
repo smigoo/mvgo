@@ -1,0 +1,926 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 72,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[3] (left-nav)",
+        "message": "左侧导航栏作为独立 section 且用绝对定位，应作为全局布局元素而非内容 section",
+        "suggestion": "将导航栏提升到 layout 顶层作为 aside 区域，或标记为 layout-overlay 类型"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0] (header-stats)",
+        "message": "headerRelation 标记为 title-same-row 但无 header 字段，语义矛盾",
+        "suggestion": "若统计栏本身就是标题行内容，应设 headerRelation: null 或 'no-header'"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "sections[1].body.children[*].children[1].elements",
+        "message": "featured-card 内嵌套 4 层（card > content > elements > parts），略复杂",
+        "suggestion": "考虑将 parts 数组扁平化到 elements 层级，减少一层嵌套"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "sections[1].body.children[*].id",
+        "message": "突出设备卡片 id 为 device-left/right，但实际名称是'随便说说'等，命名不匹配内容",
+        "suggestion": "使用语义化 id 如 featured-device-tunnel / featured-device-building"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2] (device-grid)",
+        "message": "12 个设备卡片共用同一背景图 bg-8439.png，应提取到 body 层级避免重复",
+        "suggestion": "在 body 设置统一背景，children 继承样式，减少冗余配置"
+      }
+    ],
+    "recommendations": [
+      "将左侧导航栏从 sections 数组提取到 layout 顶层，作为 { type: 'aside-left', ... } 结构",
+      "统一 featured-card 和 device-card 的数据结构，减少类型差异（如都用 value + label 模式）",
+      "为 grid 布局添加响应式配置（gridColumns: { sm: 2, md: 3, lg: 4 }），提升适配性"
+    ],
+    "summary": "结构基本合理，但左侧导航栏的定位方式与 section 模型冲突，统计栏的 headerRelation 语义不清，设备卡片嵌套略深且命名欠佳。建议调整导航栏层级并优化卡片结构。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）- 浅色科技监测风",
+      "--colorPrimary": "rgba(25, 144, 255, 1)",
+      "--colorPrimaryLight": "rgba(89, 196, 255, 1)",
+      "--colorSuccess": "rgba(8, 163, 165, 1)",
+      "--colorError": "rgba(255, 59, 48, 1)",
+      "--colorTextBase": "rgba(51, 51, 51, 1)",
+      "--colorTextSecondary": "rgba(153, 153, 153, 1)",
+      "--colorBgBase": "#ffffff",
+      "--colorBgGray": "rgba(246, 248, 250, 1)",
+      "--colorBgCard": "linear-gradient(135deg, rgba(89, 196, 255, 0.1) 0%, rgba(25, 144, 255, 0.15) 100%)",
+      "--colorBgNav": "rgba(25, 144, 255, 0.08)",
+      "--fontSize": "14px",
+      "--fontSizeTitle": "18px",
+      "--fontSizeValue": "24px",
+      "--borderRadiusBase": "8px",
+      "--borderRadiusCard": "12px",
+      "--spacingBase": "16px",
+      "--spacingCard": "20px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "var(--colorPrimary)",
+      "@color-primary-light": "var(--colorPrimaryLight)",
+      "@color-success": "var(--colorSuccess)",
+      "@color-error": "var(--colorError)",
+      "@color-text-base": "var(--colorTextBase)",
+      "@color-text-secondary": "var(--colorTextSecondary)",
+      "@color-bg-base": "var(--colorBgBase)",
+      "@color-bg-gray": "var(--colorBgGray)",
+      "@color-bg-card": "var(--colorBgCard)",
+      "@color-bg-nav": "var(--colorBgNav)",
+      "@font-size-base": "var(--fontSize)",
+      "@font-size-title": "var(--fontSizeTitle)",
+      "@font-size-value": "var(--fontSizeValue)",
+      "@border-radius-base": "var(--borderRadiusBase)",
+      "@border-radius-card": "var(--borderRadiusCard)",
+      "@spacing-base": "var(--spacingBase)",
+      "@spacing-card": "var(--spacingCard)"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".tech-monitor-container": {
+        "width": "100%",
+        "height": "100%",
+        "background": "linear-gradient(180deg, #ffffff 0%, rgba(246, 248, 250, 1) 100%)",
+        "padding": "var(--spacingBase)",
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--spacingBase)"
+      },
+      ".left-nav": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background": "var(--colorBgNav)",
+        "border-radius": "var(--borderRadiusBase)",
+        "padding": "12px",
+        "gap": "8px",
+        "backdrop-filter": "blur(10px)"
+      },
+      ".device-card": {
+        "background": "var(--colorBgGray)",
+        "border-radius": "var(--borderRadiusCard)",
+        "padding": "var(--spacingCard)",
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "12px",
+        "box-shadow": "0 2px 8px rgba(0, 0, 0, 0.04)"
+      },
+      ".highlight-card": {
+        "background": "var(--colorBgCard)",
+        "border-radius": "var(--borderRadiusCard)",
+        "padding": "var(--spacingCard)",
+        "border": "1px solid rgba(25, 144, 255, 0.2)"
+      },
+      ".stat-value": {
+        "font-size": "var(--fontSizeValue)",
+        "font-weight": "600",
+        "color": "var(--colorPrimary)",
+        "line-height": "1.2"
+      },
+      ".stat-value-error": {
+        "font-size": "var(--fontSizeValue)",
+        "font-weight": "600",
+        "color": "var(--colorError)",
+        "line-height": "1.2"
+      },
+      ".stat-value-success": {
+        "font-size": "var(--fontSizeValue)",
+        "font-weight": "600",
+        "color": "var(--colorSuccess)",
+        "line-height": "1.2"
+      },
+      ".stat-label": {
+        "font-size": "var(--fontSize)",
+        "color": "var(--colorTextSecondary)",
+        "line-height": "1.5"
+      },
+      ".progress-indicator": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "8px",
+        "font-size": "var(--fontSize)",
+        "color": "var(--colorTextBase)"
+      },
+      ".progress-bar": {
+        "height": "4px",
+        "background": "rgba(25, 144, 255, 0.1)",
+        "border-radius": "2px",
+        "overflow": "hidden",
+        "flex": "1"
+      },
+      ".progress-bar-fill": {
+        "height": "100%",
+        "background": "linear-gradient(90deg, var(--colorPrimary) 0%, var(--colorPrimaryLight) 100%)",
+        "transition": "width 0.3s ease"
+      },
+      ".section-title": {
+        "font-size": "var(--fontSizeTitle)",
+        "font-weight": "500",
+        "color": "var(--colorTextBase)",
+        "margin-bottom": "12px"
+      },
+      ".card-grid": {
+        "display": "grid",
+        "grid-template-columns": "repeat(auto-fit, minmax(200px, 1fr))",
+        "gap": "var(--spacingBase)"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 rgba(25, 144, 255, 1) 映射为 --colorPrimary，用于数值强调和主要交互",
+      "辅助蓝色 rgba(89, 196, 255, 1) 映射为 --colorPrimaryLight，用于渐变和次要强调",
+      "青色 rgba(8, 163, 165, 1) 映射为 --colorSuccess，用于完好率等正向指标",
+      "红色 rgba(255, 59, 48, 1) 映射为 --colorError，用于异常数字强调",
+      "深灰 rgba(51, 51, 51, 1) 映射为 --colorTextBase，作为主要文字颜色",
+      "浅灰 rgba(153, 153, 153, 1) 映射为 --colorTextSecondary，用于次要文字和标签",
+      "容器背景使用白色到浅灰蓝渐变，直接落地为字面量值确保关键视觉效果",
+      "突出显示卡片使用蓝色渐变背景 --colorBgCard，体现科技感",
+      "设备卡片使用 --colorBgGray 浅灰色背景，与主背景区分",
+      "左侧导航栏使用半透明蓝色背景 --colorBgNav + backdrop-filter 实现毛玻璃效果",
+      "进度条使用主色调到浅蓝色的线性渐变，增强科技感",
+      "所有圆角统一使用 8px/12px 保持视觉一致性",
+      "间距系统使用 16px/20px 基准单位，可通过 CSS 变量统一调整"
+    ],
+    "elementStyleMap": {
+      "header-stats": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "device-types": {
+        "font-size": 14,
+        "color": "rgba(51, 51, 51, 1)",
+        "font-weight": "normal"
+      },
+      "device-total": {
+        "font-size": 14,
+        "color": "rgba(51, 51, 51, 1)",
+        "font-weight": "normal"
+      },
+      "device-integrity": {
+        "font-size": 14,
+        "color": "rgba(8, 163, 165, 1)",
+        "font-weight": "normal"
+      },
+      "el-el-x-2": {
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "featured-devices": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "device-left-icon-x-0": {
+        "width": 43,
+        "height": 44
+      },
+      "device-left-content-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-left": {
+        "width": 210,
+        "height": 110,
+        "padding": "12px",
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "el-icon-x-8": {
+        "width": 43,
+        "height": 44
+      },
+      "el-label-随便说说-9": {
+        "font-size": 14,
+        "color": "rgba(255, 255, 255, 1)",
+        "font-weight": "normal"
+      },
+      "el-badge-异常数：3-11": {
+        "font-size": 12,
+        "color": "rgba(255, 59, 48, 1)",
+        "font-weight": "normal"
+      },
+      "device-right-icon-x-0": {
+        "width": 43,
+        "height": 44
+      },
+      "device-right-content-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-right": {
+        "width": 210,
+        "height": 110,
+        "padding": "12px",
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8807.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "el-icon-x-13": {
+        "width": 43,
+        "height": 44
+      },
+      "el-label-房屋理性说话-14": {
+        "font-size": 14,
+        "color": "rgba(255, 255, 255, 1)",
+        "font-weight": "normal"
+      },
+      "el-badge-异常数：3-16": {
+        "font-size": 12,
+        "color": "rgba(255, 59, 48, 1)",
+        "font-weight": "normal"
+      },
+      "device-item-1-icon-x-0": {
+        "width": 32,
+        "height": 32
+      },
+      "device-item-1-label-摄像机-1": {
+        "font-size": 12,
+        "color": "rgba(51, 51, 51, 1)",
+        "font-weight": "normal"
+      },
+      "device-item-1": {
+        "width": 120,
+        "height": 80,
+        "padding": "8px",
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8439.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "el-icon-x-19": {
+        "width": 32,
+        "height": 32
+      },
+      "el-label-摄像机-20": {
+        "font-size": 12,
+        "color": "rgba(51, 51, 51, 1)",
+        "font-weight": "normal"
+      },
+      "device-item-2-icon-x-0": {
+        "width": 32,
+        "height": 32
+      },
+      "device-item-2-label-风速风向仪-1": {
+        "font-size": 12,
+        "color": "rgba(51, 51, 51, 1)",
+        "font-weight": "normal"
+      },
+      "device-item-2": {
+        "width": 120,
+        "height": 80,
+        "padding": "8px",
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8439.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "el-icon-x-23": {
+        "width": 32,
+        "height": 32
+      },
+      "el-label-风速风向仪-24": {
+        "font-size": 12,
+        "color": "rgba(51, 51, 51, 1)",
+        "font-weight": "normal"
+      },
+      "device-item-3-icon-x-0": {
+        "width": 32,
+        "height": 32
+      },
+      "device-item-3-label-超高检测器-1": {
+        "font-size": 12,
+        "color": "rgba(51, 51, 51, 1)",
+        "font-weight": "normal"
+      },
+      "device-item-3": {
+        "width": 120,
+        "height": 80,
+        "padding": "8px",
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8439.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "el-icon-x-27": {
+        "width": 32,
+        "height": 32
+      },
+      "el-label-超高检测器-28": {
+        "font-size": 12,
+        "color": "rgba(51, 51, 51, 1)",
+        "font-weight": "normal"
+      },
+      "device-item-4-icon-x-0": {
+        "width": 32,
+        "height": 32
+      },
+      "device-item-4-label-烟雾机器人-1": {
+        "font-size": 12,
+        "color": "rgba(51, 51, 51, 1)",
+        "font-weight": "normal"
+      },
+      "device-item-4": {
+        "width": 120,
+        "height": 80,
+        "padding": "8px",
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8439.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "el-icon-x-31": {
+        "width": 32,
+        "height": 32
+      },
+      "el-label-烟雾机器人-32": {
+        "font-size": 12,
+        "color": "rgba(51, 51, 51, 1)",
+        "font-weight": "normal"
+      },
+      "device-item-5-icon-x-0": {
+        "width": 32,
+        "height": 32
+      },
+      "device-item-5-label-激光雷达-1": {
+        "font-size": 12,
+        "color": "rgba(51, 51, 51, 1)",
+        "font-weight": "normal"
+      },
+      "device-item-5": {
+        "width": 120,
+        "height": 80,
+        "padding": "8px",
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8439.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "el-icon-x-35": {
+        "width": 32,
+        "height": 32
+      },
+      "el-label-激光雷达-36": {
+        "font-size": 12,
+        "color": "rgba(51, 51, 51, 1)",
+        "font-weight": "normal"
+      },
+      "device-item-6-icon-x-0": {
+        "width": 32,
+        "height": 32
+      },
+      "device-item-6-label-CO传感器-1": {
+        "font-size": 12,
+        "color": "rgba(51, 51, 51, 1)",
+        "font-weight": "normal"
+      },
+      "device-item-6": {
+        "width": 120,
+        "height": 80,
+        "padding": "8px",
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8439.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "el-icon-x-39": {
+        "width": 32,
+        "height": 32
+      },
+      "el-label-CO传感器-40": {
+        "font-size": 12,
+        "color": "rgba(51, 51, 51, 1)",
+        "font-weight": "normal"
+      },
+      "device-item-7-icon-x-0": {
+        "width": 32,
+        "height": 32
+      },
+      "device-item-7-label-CO/VI检测器-1": {
+        "font-size": 12,
+        "color": "rgba(51, 51, 51, 1)",
+        "font-weight": "normal"
+      },
+      "device-item-7": {
+        "width": 120,
+        "height": 80,
+        "padding": "8px",
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8439.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "el-icon-x-43": {
+        "width": 32,
+        "height": 32
+      },
+      "el-label-CO/VI检测器-44": {
+        "font-size": 12,
+        "color": "rgba(51, 51, 51, 1)",
+        "font-weight": "normal"
+      },
+      "device-item-8-icon-x-0": {
+        "width": 32,
+        "height": 32
+      },
+      "device-item-8-label-温湿度传感器-1": {
+        "font-size": 12,
+        "color": "rgba(51, 51, 51, 1)",
+        "font-weight": "normal"
+      },
+      "device-item-8": {
+        "width": 120,
+        "height": 80,
+        "padding": "8px",
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8439.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "el-icon-x-47": {
+        "width": 32,
+        "height": 32
+      },
+      "el-label-温湿度传感器-48": {
+        "font-size": 12,
+        "color": "rgba(51, 51, 51, 1)",
+        "font-weight": "normal"
+      },
+      "device-item-9-icon-x-0": {
+        "width": 32,
+        "height": 32
+      },
+      "device-item-9-label-压力传感器-1": {
+        "font-size": 12,
+        "color": "rgba(51, 51, 51, 1)",
+        "font-weight": "normal"
+      },
+      "device-item-9": {
+        "width": 120,
+        "height": 80,
+        "padding": "8px",
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8439.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "el-icon-x-51": {
+        "width": 32,
+        "height": 32
+      },
+      "el-label-压力传感器-52": {
+        "font-size": 12,
+        "color": "rgba(51, 51, 51, 1)",
+        "font-weight": "normal"
+      },
+      "device-item-10-icon-x-0": {
+        "width": 32,
+        "height": 32
+      },
+      "device-item-10-label-光照度变送器-1": {
+        "font-size": 12,
+        "color": "rgba(51, 51, 51, 1)",
+        "font-weight": "normal"
+      },
+      "device-item-10": {
+        "width": 120,
+        "height": 80,
+        "padding": "8px",
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8439.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "el-icon-x-55": {
+        "width": 32,
+        "height": 32
+      },
+      "el-label-光照度变送器-56": {
+        "font-size": 12,
+        "color": "rgba(51, 51, 51, 1)",
+        "font-weight": "normal"
+      },
+      "device-item-11-icon-x-0": {
+        "width": 32,
+        "height": 32
+      },
+      "device-item-11-label-紧急电话-1": {
+        "font-size": 12,
+        "color": "rgba(51, 51, 51, 1)",
+        "font-weight": "normal"
+      },
+      "device-item-11": {
+        "width": 120,
+        "height": 80,
+        "padding": "8px",
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8439.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "el-icon-x-59": {
+        "width": 32,
+        "height": 32
+      },
+      "el-label-紧急电话-60": {
+        "font-size": 12,
+        "color": "rgba(51, 51, 51, 1)",
+        "font-weight": "normal"
+      },
+      "device-item-12-icon-x-0": {
+        "width": 32,
+        "height": 32
+      },
+      "device-item-12-label-水质监测设备-1": {
+        "font-size": 12,
+        "color": "rgba(51, 51, 51, 1)",
+        "font-weight": "normal"
+      },
+      "device-item-12": {
+        "width": 120,
+        "height": 80,
+        "padding": "8px",
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8439.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "el-icon-x-63": {
+        "width": 32,
+        "height": 32
+      },
+      "el-label-水质监测设备-64": {
+        "font-size": 12,
+        "color": "rgba(51, 51, 51, 1)",
+        "font-weight": "normal"
+      },
+      "left-nav": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-67-nav-item-控-0": {
+        "font-size": 14,
+        "color": "rgba(89, 196, 255, 1)"
+      },
+      "el-el-x-67-nav-item-照明-1": {
+        "font-size": 14,
+        "color": "rgba(89, 196, 255, 1)"
+      },
+      "el-el-x-67-nav-item-通-2": {
+        "font-size": 14,
+        "color": "rgba(89, 196, 255, 1)"
+      },
+      "el-el-x-67-nav-item-供电-3": {
+        "font-size": 14,
+        "color": "rgba(89, 196, 255, 1)"
+      },
+      "el-el-x-67-nav-item-消防-4": {
+        "font-size": 14,
+        "color": "rgba(89, 196, 255, 1)"
+      },
+      "el-el-x-67-nav-item-交通-5": {
+        "font-size": 14,
+        "color": "rgba(89, 196, 255, 1)"
+      },
+      "el-el-x-67": {
+        "position": "absolute",
+        "width": 40,
+        "height": "100%",
+        "background": "rgba(89, 196, 255, 0.2)",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "el-nav-item-控-68": {
+        "font-size": 14,
+        "color": "rgba(89, 196, 255, 1)"
+      },
+      "el-nav-item-照明-69": {
+        "font-size": 14,
+        "color": "rgba(89, 196, 255, 1)"
+      },
+      "el-nav-item-通-70": {
+        "font-size": 14,
+        "color": "rgba(89, 196, 255, 1)"
+      },
+      "el-nav-item-供电-71": {
+        "font-size": 14,
+        "color": "rgba(89, 196, 255, 1)"
+      },
+      "el-nav-item-消防-72": {
+        "font-size": 14,
+        "color": "rgba(89, 196, 255, 1)"
+      },
+      "el-nav-item-交通-73": {
+        "font-size": 14,
+        "color": "rgba(89, 196, 255, 1)"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "header-stats",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 3,
+        "title": "头部统计栏",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 3,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "featured-devices",
+        "responsibility": "突出显示设备（请按功能拆分）",
+        "elementCount": 12,
+        "title": "突出显示设备",
+        "complexityScore": 40,
+        "complexityReasons": {
+          "elementCount": 12,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 3
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [
+          {
+            "type": "element-group",
+            "id": "featured-devices-group1",
+            "name": "Group1",
+            "responsibility": "元素分组 1（高密度拆分）",
+            "reason": "R2: 元素密度拆分（总计12个元素）",
+            "props": [],
+            "emits": []
+          },
+          {
+            "type": "element-group",
+            "id": "featured-devices-group2",
+            "name": "Group2",
+            "responsibility": "元素分组 2（高密度拆分）",
+            "reason": "R2: 元素密度拆分（总计12个元素）",
+            "props": [],
+            "emits": []
+          }
+        ],
+        "shouldSplitInternally": true
+      },
+      {
+        "id": "device-grid",
+        "responsibility": "网格卡片布局区",
+        "elementCount": 48,
+        "title": "设备网格",
+        "complexityScore": 40,
+        "complexityReasons": {
+          "elementCount": 48,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 2
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [
+          {
+            "type": "element-group",
+            "id": "device-grid-group1",
+            "name": "Group1",
+            "responsibility": "元素分组 1（高密度拆分）",
+            "reason": "R2: 元素密度拆分（总计48个元素）",
+            "props": [],
+            "emits": []
+          },
+          {
+            "type": "element-group",
+            "id": "device-grid-group2",
+            "name": "Group2",
+            "responsibility": "元素分组 2（高密度拆分）",
+            "reason": "R2: 元素密度拆分（总计48个元素）",
+            "props": [],
+            "emits": []
+          },
+          {
+            "type": "element-group",
+            "id": "device-grid-group3",
+            "name": "Group3",
+            "responsibility": "元素分组 3（高密度拆分）",
+            "reason": "R2: 元素密度拆分（总计48个元素）",
+            "props": [],
+            "emits": []
+          }
+        ],
+        "shouldSplitInternally": true
+      },
+      {
+        "id": "left-nav",
+        "responsibility": "竖向导航区（分类/菜单切换）",
+        "elementCount": 6,
+        "title": "左侧导航栏",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 6,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      }
+    ],
+    "isForced": true,
+    "minFiles": 9,
+    "reason": "有效 sections=4 ≥ 3 或存在高复杂度 section → 强制拆分",
+    "internalSubcomponents": [
+      {
+        "type": "element-group",
+        "id": "featured-devices-group1",
+        "name": "Group1",
+        "responsibility": "元素分组 1（高密度拆分）",
+        "reason": "R2: 元素密度拆分（总计12个元素）",
+        "props": [],
+        "emits": [],
+        "parentSectionId": "featured-devices",
+        "parentSectionTitle": "突出显示设备"
+      },
+      {
+        "type": "element-group",
+        "id": "featured-devices-group2",
+        "name": "Group2",
+        "responsibility": "元素分组 2（高密度拆分）",
+        "reason": "R2: 元素密度拆分（总计12个元素）",
+        "props": [],
+        "emits": [],
+        "parentSectionId": "featured-devices",
+        "parentSectionTitle": "突出显示设备"
+      },
+      {
+        "type": "element-group",
+        "id": "device-grid-group1",
+        "name": "Group1",
+        "responsibility": "元素分组 1（高密度拆分）",
+        "reason": "R2: 元素密度拆分（总计48个元素）",
+        "props": [],
+        "emits": [],
+        "parentSectionId": "device-grid",
+        "parentSectionTitle": "设备网格"
+      },
+      {
+        "type": "element-group",
+        "id": "device-grid-group2",
+        "name": "Group2",
+        "responsibility": "元素分组 2（高密度拆分）",
+        "reason": "R2: 元素密度拆分（总计48个元素）",
+        "props": [],
+        "emits": [],
+        "parentSectionId": "device-grid",
+        "parentSectionTitle": "设备网格"
+      },
+      {
+        "type": "element-group",
+        "id": "device-grid-group3",
+        "name": "Group3",
+        "responsibility": "元素分组 3（高密度拆分）",
+        "reason": "R2: 元素密度拆分（总计48个元素）",
+        "props": [],
+        "emits": [],
+        "parentSectionId": "device-grid",
+        "parentSectionTitle": "设备网格"
+      }
+    ]
+  }
+}

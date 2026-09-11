@@ -18,6 +18,8 @@
  * @param {object} [opts.analysis] 视觉分析对象（charts / doNotInvent / layoutStructure）
  * @returns {{ pass: boolean, blockCount: number, issues: Array, _analyzed: boolean }}
  */
+import { extractSfcTemplate } from '../utils/sfc-template-extractor.js'
+
 export function validateDoNotInvent({ files = {}, analysis = {} } = {}) {
   const issues = []
   const seen = new Set() // 去重：避免 doNotInvent 中重复声明同一「X→Y」产生多条相同违规
@@ -143,9 +145,10 @@ export function extractSnippet(vueContent, keyword) {
 
 /** 提取 template 纯文本（去标签、去插值表达式） */
 export function extractTemplateText(vueContent) {
-  const tplMatch = vueContent.match(/<template>([\s\S]*?)<\/template>/i)
-  const tpl = tplMatch ? tplMatch[1] : vueContent
-  return tpl.replace(/<[^>]+>/g, ' ').replace(/{{[^}]+}}/g, ' ')
+  // 🛡️ 共享边界法（lazy </template> 会被具名插槽提前截断——0ca84358 家族缺陷）
+  const tpl = extractSfcTemplate(vueContent)
+  const body = tpl ?? vueContent
+  return body.replace(/<[^>]+>/g, ' ').replace(/{{[^}]+}}/g, ' ')
 }
 
 /**

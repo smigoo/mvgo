@@ -1,0 +1,78 @@
+{
+  "completed": [
+    "1-declare.json",
+    "2-package/index.vue",
+    "3-package/index.vue",
+    "5-package/components/LeftNav.vue",
+    "6-package/components/StatsBanner.vue",
+    "7-package/components/DeviceGrid.vue",
+    "8-resources/styles/themes/theme-vars.less",
+    "9-resources/styles/common.less"
+  ],
+  "total": 6,
+  "updatedAt": 1788373296151,
+  "files": {
+    "declare.json": [
+      {
+        "index": 1,
+        "file": "1-declare.json",
+        "segmentType": "declare",
+        "scriptPart": ""
+      }
+    ],
+    "package/index.vue": [
+      {
+        "index": 2,
+        "file": "2-package_index.vue",
+        "segmentType": "template",
+        "scriptPart": ""
+      },
+      {
+        "index": 3,
+        "file": "3-package_index.vue",
+        "segmentType": "script",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/LeftNav.vue": [
+      {
+        "index": 5,
+        "file": "5-package_components_LeftNav.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/StatsBanner.vue": [
+      {
+        "index": 6,
+        "file": "6-package_components_StatsBanner.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/DeviceGrid.vue": [
+      {
+        "index": 7,
+        "file": "7-package_components_DeviceGrid.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "resources/styles/themes/theme-vars.less": [
+      {
+        "index": 8,
+        "file": "8-resources_styles_themes_theme-vars.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      }
+    ],
+    "resources/styles/common.less": [
+      {
+        "index": 9,
+        "file": "9-resources_styles_common.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      }
+    ]
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "componentId": "mc-1784841909593-fb2bd4ac",
+  "componentName": "mod-step-1",
+  "version": "v1.0.0",
+  "panelKey": "default-panel",
+  "attribute": {
+    "aspectRatio": [460, 138]
+  },
+  "businessEvents": {
+    "mc-1784841909593-fb2bd4ac-onload": {
+      "eventId": "mc-1784841909593-fb2bd4ac-onload",
+      "eventName": "组件加载",
+      "eventDataSchema": {}
+    }
+  },
+  "businessStatuses": {},
+  "dataSources": [],
+  "formSources": [],
+  "themeConfig": {
+    "default": "light",
+    "list": [
+      {
+        "name": "亮色主题",
+        "key": "light"
+      }
+    ]
+  }
+}

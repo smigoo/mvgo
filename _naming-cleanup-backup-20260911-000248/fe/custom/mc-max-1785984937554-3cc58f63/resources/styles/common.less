@@ -1,0 +1,285 @@
+@import './themes/theme-vars.less';
+
+// [Layout Refine] 标题装饰点：Figma bbox 8×8px 精确还原
+.c-mc-max-1785984937554-3cc58f63-title-dot {
+  width: 8px;
+  height: 8px;
+  display: block;
+  flex-shrink: 0;
+}
+
+// [Layout Refine] 内容区：slot-con bbox h=145，root 禁 background/border/shadow
+// [Style Refine] 零臆造：不加 background（bg 由 backgroundImage inline 提供）
+.c-mc-max-1785984937554-3cc58f63-content {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: 0;
+  // [Style Refine] bg VECTOR 的 DROP_SHADOW: offset(0,4) radius=10 color rgba(74,117,141,0.25)
+  // 背景图承载在 inline backgroundImage 上，阴影加在内容容器外壳等同 bg VECTOR 效果
+  // 注：base-panel 提供外壳，此处不加 box-shadow 以免双重叠加
+}
+
+// [Layout Refine] sub-header 对应 sub-t FRAME bbox: x=1495,y=898,w=380,h=32
+// [Layout Refine] HORIZONTAL 排列，tabs-list 左侧 + tabs-icon 右侧
+.c-mc-max-1785984937554-3cc58f63-sub-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  // [Layout Refine] tabs-list w=295 + gap + tabs-icon w=52，右侧推到边缘
+  justify-content: space-between;
+  // [Layout Refine] sub-t h=32，slot-con 顶部 y=898，sub-t y=898 → 0 padding-top
+  height: 32px;
+  // [Layout Refine] slot-con left offset=1495-1495=0，tabs-list x=1495 → padding-left=0
+  // tabs-list x 相对 slot-con: 1495-1495=0; tabs-icon x: 1816-1495=321 → 321+52=373 < 380
+  padding: 0 7px 0 0;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+// [Layout Refine] tabs-list GROUP bbox: w=295,h=27，位置 y=903（sub-t y=898 → top offset 5px）
+// [Style Refine] bg VECTOR fills → GRADIENT_LINEAR(#b5deed→#d1ecff)，stroke #ffffff 0.72px
+.c-mc-max-1785984937554-3cc58f63-tabs-list {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  // [Layout Refine] Figma 精确宽度 295px
+  width: 295px;
+  // [Layout Refine] Figma 精确高度 27px
+  height: 27px;
+  flex-shrink: 0;
+  // [Style Refine] bg VECTOR strokes → border 0.72px solid #ffffff
+  border: 0.72px solid #ffffff;
+  // [Style Refine] bg VECTOR 为 GRADIENT_LINEAR，由 backgroundImage inline 承载，此处不加 background
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+// [Layout Refine] 单个 tab-item：4 个 tab 均分 295px → flex:1
+.c-mc-max-1785984937554-3cc58f63-tab-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  height: 100%;
+  cursor: pointer;
+  user-select: none;
+
+  &--active {
+    .c-mc-max-1785984937554-3cc58f63-tab-label {
+      // [Style Refine] 一氧化碳 fills[0] → #ffffff
+      color: #ffffff;
+      // [Style Refine] 一氧化碳 effects DROP_SHADOW offset(0,0.6) radius=0 → text-shadow
+      text-shadow: 0 0.6px 0 rgb(0, 111, 227);
+    }
+  }
+}
+
+// [Layout Refine] 激活 tab 背景：bg-tab-active bbox inset 3px top, 2px sides（相对 tabs-list）
+// bg-tab-active bbox: x=1500,y=906; tabs-list bbox: x=1495,y=903 → offset (5,3)
+// bg-tab-active w=78, h=21 → 对应首个 tab 大小，用 backgroundImage inline
+.c-mc-max-1785984937554-3cc58f63-tab-active-bg {
+  position: absolute;
+  // [Layout Refine] top=3px(906-903), bottom=3px(903+27-906-21=3), left/right 由 flex 决定
+  top: 3px;
+  bottom: 3px;
+  left: 2px;
+  right: 2px;
+  // [Style Refine] bg-tab-active VECTOR fills → GRADIENT_LINEAR，由 backgroundImage inline
+  border-radius: 3px;
+  // [Style Refine] bg-tab-active strokes → border 0.6px solid #ffffff
+  border: 0.6px solid #ffffff;
+  z-index: 0;
+  box-sizing: border-box;
+}
+
+// [Style Refine] 未激活文字: 洞内照明/洞外光强/能见度 fills[0] → rgb(44,155,234)
+// [Style Refine] 字体: Source Han Sans CN, 14px, weight 500, lineHeight 12px
+.c-mc-max-1785984937554-3cc58f63-tab-label {
+  position: relative;
+  z-index: 1;
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  // [Style Refine] Figma lineHeightPx=12
+  line-height: 12px;
+  color: @tab-label-color;
+  white-space: nowrap;
+}
+
+// [Layout Refine] tabs-icon FRAME: bbox w=52,h=24，HORIZONTAL，counterAxisAlignItems=CENTER
+// [Layout Refine] tabs-icon x=1816, sub-t x=1495 → 右侧 offset = 1495+380-1816-52 = 7px → padding-right 7px 在 sub-header
+.c-mc-max-1785984937554-3cc58f63-tabs-icon-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  // [Layout Refine] FRAME itemSpacing=0（未指定），两图标紧靠
+  gap: 0;
+  // [Layout Refine] Figma tabs-icon FRAME w=52
+  width: 52px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+// [Layout Refine] 每个 icon 24×24px
+.c-mc-max-1785984937554-3cc58f63-tabs-icon {
+  width: 52px;
+  height: 24px;
+  display: block;
+}
+
+// [Layout Refine] num GROUP: bbox x=1861,y=898,w=14,h=14
+// 相对 tabs-icon FRAME: x=1861-1816=45, y=898-905=-7 → top:-7px, right:52-45-14=-7 → right:-7px
+// [Style Refine] bg RECTANGLE fills[0] → rgb(245,63,63)=#f53f3f，cornerRadius=29
+.c-mc-max-1785984937554-3cc58f63-badge {
+  position: absolute;
+  // [Layout Refine] num y=898, tabs-icon y=905 → top = 898-905 = -7px
+  top: -7px;
+  // [Layout Refine] num x=1861, tabs-icon右边=1816+52=1868 → right = 1868-1861-14 = -7px
+  right: -7px;
+  width: 14px;
+  height: 14px;
+  // [Style Refine] cornerRadius=29 → border-radius: 29px (fully rounded)
+  border-radius: 29px;
+  // [Style Refine] bg fills[0] → rgb(245,63,63)
+  background-color: #f53f3f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+// [Style Refine] 角标数字"6": fills → #ffffff, fontFamily PingFang SC, fontSize 12, weight 500, lineHeight 14
+.c-mc-max-1785984937554-3cc58f63-badge-num {
+  font-family: 'PingFang SC', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 14px;
+  color: #ffffff;
+}
+
+// [Layout Refine] chart-area 对应 @echarts/line GROUP bbox: y=930, sub-t 底=898+32=930 → 紧接
+// [Layout Refine] @echarts/line h=113, slot-con h=145, sub-t h=32 → 113=145-32 ✓
+// [Layout Refine] 内部 HORIZONTAL: Y轴标签(宽20px绝对) + 图表容器(flex:1)
+.c-mc-max-1785984937554-3cc58f63-chart-area {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  // [Layout Refine] @echarts/line h=113px 精确固定高度（slot-con h=145 - sub-t h=32 = 113）
+  flex: 1;
+  min-height: 0;
+  box-sizing: border-box;
+  // [Layout Refine] @echarts/line x=1495 对齐 slot-con x=1495，无 padding
+  padding: 0;
+}
+
+// [Layout Refine] Y轴标签列：对应 Figma "辆" text + "预警线" text 纵向排布
+// "辆" bbox: x=1497,y=930,w=12,h=22；@echarts/line y=930 → top offset=0
+// "预警线" bbox: x=1825 超出 420px 范围，实际为图表内部 overlay，HTML侧作为绝对定位文字
+.c-mc-max-1785984937554-3cc58f63-chart-y-label {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  // [Layout Refine] "辆" 在顶部，"预警线" 在中部（y=955 相对 @echarts/line y=930 → offset 25px）
+  justify-content: flex-start;
+  // [Layout Refine] "辆" bbox w=12，留出标签宽度，加上 x offset=1497-1495=2px → width=20px
+  width: 20px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  padding-top: 0;
+  // [Layout Refine] 预留底部 x轴高度（Frame 2136636710 h=12 + margin）
+  padding-bottom: 22px;
+  gap: 3px;
+}
+
+// [Style Refine] "辆" fills[0] → rgb(102,102,102)=#666666，Source Han Sans CN 12px 400
+.c-mc-max-1785984937554-3cc58f63-chart-unit {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  // [Style Refine] lineHeightPx=21.6
+  line-height: 21.6px;
+  color: @chart-unit-color;
+  text-align: right;
+  white-space: nowrap;
+}
+
+// [Style Refine] "预警线" fills[0] → rgb(211,47,47)=#d32f2f，Source Han Sans CN 12px 400
+.c-mc-max-1785984937554-3cc58f63-chart-warn-label {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  // [Style Refine] lineHeightPx=21.6
+  line-height: 21.6px;
+  color: @chart-warn-color;
+  text-align: right;
+  white-space: nowrap;
+}
+
+// [Layout Refine] 图表容器：flex:1 填满剩余宽度，高度撑满 chart-area
+.c-mc-max-1785984937554-3cc58f63-chart-container {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+// [Layout Refine] 图例区域：Frame 2136637694 bbox: x=1779,y=934,w=89,h=14
+// HORIZONTAL, counterAxisAlignItems=CENTER, itemSpacing=16
+// 相对整个组件：置于图表右上角，用 absolute 定位或放在 chart-area 内 flex 末端
+// 此处保持 flex 行内布局，置于 chart-area 同级（图表顶部右侧）
+.c-mc-max-1785984937554-3cc58f63-legend-area {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  // [Layout Refine] Frame 2136637694 itemSpacing=16
+  gap: 16px;
+  // [Layout Refine] h=14px 固定
+  height: 14px;
+  flex-shrink: 0;
+  // [Layout Refine] 图例 x=1779，slot-con x=1495 → left offset=284px
+  // 图例在图表顶部右侧，此处通过 justify-content: flex-end + padding-right 对齐
+  justify-content: flex-end;
+  // [Layout Refine] 右侧 offset: slot-con 右边=1495+380=1875; 图例右边=1779+89=1868 → padding-right=7px
+  padding: 0 7px 0 0;
+  box-sizing: border-box;
+}
+
+// [Layout Refine] 图例项：Group 1321318245 HORIZONTAL
+.c-mc-max-1785984937554-3cc58f63-legend-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+// [Style Refine] Rectangle 346241398 fills[0] → rgb(15,205,125)≈#0fcd7e
+// [Style Refine] cornerRadius=1.6
+// [Layout Refine] bbox w=14, h=2
+.c-mc-max-1785984937554-3cc58f63-legend-dot {
+  display: inline-block;
+  width: 14px;
+  height: 2px;
+  // [Style Refine] fills[0].color: r=0.0603,g=0.8042,b=0.4917 → rgb(15,205,125)
+  background-color: #0fcd7d;
+  // [Style Refine] cornerRadius=1.6
+  border-radius: 1.6px;
+  flex-shrink: 0;
+}
+
+// [Style Refine] "zk3+785CO浓度" fills[0] → rgb(51,51,51)=#333333
+// [Style Refine] Source Han Sans CN, fontSize=9.6, weight=400, lineHeightPx=14.4
+.c-mc-max-1785984937554-3cc58f63-legend-text {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 9.6px;
+  font-weight: 400;
+  line-height: 14.4px;
+  color: @legend-label-color;
+  white-space: nowrap;
+}

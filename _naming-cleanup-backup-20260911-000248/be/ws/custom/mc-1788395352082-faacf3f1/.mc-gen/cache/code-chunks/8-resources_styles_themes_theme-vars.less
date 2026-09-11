@@ -1,0 +1,61 @@
+// 微码组件主题变量定义
+// 由 Style Mapper 从 Figma 设计稿提取，禁止手动修改色值
+
+// 公共变量（所有主题共享）
+.common() {
+  // 字体缩放基准令牌（根容器通过 CSS 变量 --fontSize 驱动）
+  @fontSize: 14px;
+  
+  // 字体尺寸
+  @font-size-base: 14px;
+  @font-size-lg: 28px;
+  @font-size-md: 18px;
+  
+  // 圆角
+  @border-radius-base: 8px;
+  @border-radius-sm: 4px;
+}
+
+// 深色主题
+.theme-dark() {
+  // 主色系
+  @color-primary: rgba(25, 144, 255, 1);
+  @color-secondary: rgba(8, 163, 165, 1);
+  @color-danger: rgba(255, 100, 100, 1);
+  @color-decoration: rgba(25, 144, 255, 1);
+  
+  // 文字颜色（深色面板禁止使用黑色系）
+  @color-text-base: rgba(230, 230, 230, 1);
+  @color-text-inverse: rgba(51, 51, 51, 1);
+  
+  // 背景颜色
+  @color-bg: rgba(26, 35, 50, 1);
+  @color-bg-card: rgba(35, 45, 62, 1);
+  
+  // Tab 状态颜色
+  @color-tab-active-bg: rgba(25, 144, 255, 1);
+  @color-tab-active-text: rgba(255, 255, 255, 1);
+  @color-tab-default-text: rgba(230, 230, 230, 1);
+}
+
+// 浅色主题（默认主题，必须与设计稿一致）
+.theme-light() {
+  // 主色系
+  @color-primary: rgba(25, 144, 255, 1);
+  @color-secondary: rgba(8, 163, 165, 1);
+  @color-danger: rgba(255, 100, 100, 1);
+  @color-decoration: rgba(25, 144, 255, 1);
+  
+  // 文字颜色
+  @color-text-base: rgba(51, 51, 51, 1);
+  @color-text-inverse: rgba(255, 255, 255, 1);
+  
+  // 背景颜色
+  @color-bg: rgba(237, 244, 251, 1);
+  @color-bg-card: rgba(255, 255, 255, 1);
+  
+  // Tab 状态颜色
+  @color-tab-active-bg: rgba(25, 144, 255, 1);
+  @color-tab-active-text: rgba(255, 255, 255, 1);
+  @color-tab-default-text: rgba(51, 51, 51, 1);
+}

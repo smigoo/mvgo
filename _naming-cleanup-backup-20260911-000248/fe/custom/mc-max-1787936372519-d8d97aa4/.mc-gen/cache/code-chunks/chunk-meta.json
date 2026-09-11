@@ -1,0 +1,28 @@
+{
+  "completed": [
+    "1-declare.json",
+    "2-package/index.vue",
+    "3-package/index.vue",
+    "4-package/index.vue",
+    "10-resources/styles/themes/theme-vars.less",
+    "11-resources/styles/common.less",
+    "5-package/components/DailyTotal.vue",
+    "6-package/components/TunnelHourlyFlow.vue",
+    "7-package/components/BridgeHourlyFlow.vue",
+    "8-package/components/VehicleDistribution.vue",
+    "9-package/components/FlowPrediction.vue"
+  ],
+  "total": 6,
+  "updatedAt": 1787938017144,
+  "files": {
+    "declare.json": "1-declare.json",
+    "package/index.vue": "4-package_index.vue",
+    "resources/styles/themes/theme-vars.less": "10-resources_styles_themes_theme-vars.less",
+    "resources/styles/common.less": "11-resources_styles_common.less",
+    "package/components/DailyTotal.vue": "5-package_components_DailyTotal.vue",
+    "package/components/TunnelHourlyFlow.vue": "6-package_components_TunnelHourlyFlow.vue",
+    "package/components/BridgeHourlyFlow.vue": "7-package_components_BridgeHourlyFlow.vue",
+    "package/components/VehicleDistribution.vue": "8-package_components_VehicleDistribution.vue",
+    "package/components/FlowPrediction.vue": "9-package_components_FlowPrediction.vue"
+  }
+}

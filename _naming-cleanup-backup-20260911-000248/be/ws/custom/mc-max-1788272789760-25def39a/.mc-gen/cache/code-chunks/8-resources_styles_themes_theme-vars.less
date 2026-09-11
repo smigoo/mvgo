@@ -1,0 +1,32 @@
+// 微码主题变量（theme-vars）
+// 仅定义 mixin，根级不调用；由 dark.less/light.less 在主题作用域内按需调用。
+
+.common() {
+  @fontSize: 14px;
+  @font-size-base: @fontSize;
+  @font-size-stat: 24px;
+  @font-weight-strong: 600;
+  @border-radius-base: 4px;
+}
+
+.theme-dark() {
+  @color-primary: #3086ff;
+  @color-primary-bg: #1f3d66;
+  @color-danger: #ff6b6b;
+  @color-teal: #2bb3a3;
+  @color-bg: #1a2332;
+  @color-stats-start: #3086ff;
+  @color-stats-end: #36cfc9;
+  @color-text-base: #e8edf3;
+}
+
+.theme-light() {
+  @color-primary: #1677ff;
+  @color-primary-bg: #e6f4ff;
+  @color-danger: #ff4d4f;
+  @color-teal: #13c2c2;
+  @color-bg: #ffffff;
+  @color-stats-start: #1677ff;
+  @color-stats-end: #13c2c2;
+  @color-text-base: #1a2332;
+}

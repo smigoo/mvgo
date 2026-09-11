@@ -1,0 +1,175 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 65,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[0], layout.sections[2].body.children[0], layout.sections[4].body.children[0]",
+        "message": "图表节点设置了固定宽度（如 \"width\": 400），严重违反「宽度自适应约束」。在响应式布局中，固定宽度会导致图表在不同屏幕尺寸下无法自适应，甚至撑破父容器。",
+        "suggestion": "移除图表的固定 width 属性，改为由 CSS 控制 `width: 100%`。保留明确的 height（如 200px），并确保外层 flex 子项设置 `min-width: 0` 和 `overflow: hidden`。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "Figma 解析覆盖率极低（coverageRate: 0），缺失节点高达 170 个。这意味着布局结构遗漏了大量设计稿细节（如背景、图标、具体间距等），直接生成代码会导致严重的视觉偏差。",
+        "suggestion": "重新检查 Figma 文件链接或重新运行解析工具，确保所有设计稿元素被正确识别。在覆盖率问题解决前，生成的代码无法保证贴合设计稿。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[3].body.items[0].children",
+        "message": "「车型分布」区域嵌套过深（达到 5 层：section -> body -> items -> group -> children -> label）。过深的嵌套会增加 DOM 节点数量，降低渲染性能，且不利于样式维护。",
+        "suggestion": "扁平化结构。移除多余的 `group` 层级，直接将 `label` 和 `value` 作为 `vt-tunnel` 的子节点，通过 CSS 的 flex 布局（如 `flex-direction: column`）来控制垂直排列。同时建议将 `items` 统一重命名为 `children` 以保持结构一致性。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].header.controls[0]",
+        "message": "「时间选择」控件被标记为 `dropdown`，但在布局中仅体现为一个简单的值。根据「Select/下拉框识别约束」，必须将其识别为完整的 Select 下拉框，而非简单的切换按钮。",
+        "suggestion": "在生成代码时，必须实现完整的 Select 结构（包含 trigger 触发器和 dropdown 下拉菜单），支持点击展开/收起，且下拉箭头需根据状态旋转。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "charts",
+        "message": "图表的详细配置（如 legend, tooltip, axes）被剥离到了顶层的 `charts` 数组中，与 `layout.sections` 中的图表节点分离。这增加了数据映射的复杂度，容易导致生成时丢失图表细节。",
+        "suggestion": "建议将图表配置直接内联到对应的 `section.body.children` 的 `chart` 节点中，保持布局与配置的强关联。"
+      }
+    ],
+    "recommendations": [
+      "1. 严格遵循「证据优先」原则：在 Figma 覆盖率问题解决前，不要为 `daily-total` 或 `vehicle-type` 默认添加卡片背景、圆角和阴影，避免违反「禁止默认卡片化」规范。",
+      "2. 实现自定义图例联动：柱状图包含「北京方向/上海方向」图例，生成代码时必须使用自定义 DOM 实现图例，并绑定点击事件调用 `chart.dispatchAction({ type: 'legendToggleSelect' })`，禁止直接使用 ECharts 内置 legend。",
+      "3. 面板标题去重：确保生成代码时不要重复生成「流量监测」这个面板大标题及相关的边框/背景样式，这些应由 `<base-panel>` 统一处理。",
+      "4. 图表边界兜底：所有图表容器必须显式设置 `width: 100%` 和固定 `height`，ECharts 的 `grid` 必须配置 `containLabel: true`，并增加 `overflow: hidden` 防止坐标轴文字溢出。",
+      "5. Tab 切换数据联动：「流量预测」的 Tab 切换必须实现数据联动，使用 `watch` 监听 `activeTab` 变化并调用 `chart.setOption` 更新数据，禁止仅做样式切换。"
+    ],
+    "summary": "该布局结构在宏观区域划分和父子关系上基本合理，能够清晰表达业务模块。但存在两个致命问题：一是图表使用了固定宽度，违反了响应式自适应的强制规范；二是 Figma 解析覆盖率为 0%，导致大量设计细节丢失。此外，部分区域嵌套过深，且图表配置与布局节点分离。建议优先修复 Figma 解析问题，移除图表固定宽度，并扁平化车型分布的 DOM 结构后再进行代码生成。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1990ff",
+      "--colorBg": "#edf4fb",
+      "--colorTextBase": "#333333",
+      "--colorWarning": "#fa8c16",
+      "--colorSuccess": "#52c41a",
+      "--fontSize": "14px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#1990ff",
+      "@color-bg": "#edf4fb",
+      "@color-text-base": "#333333",
+      "@color-warning": "#fa8c16",
+      "@color-success": "#52c41a",
+      "@font-size-base": "14px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "16px",
+        "background-color": "var(--colorBg, #edf4fb)",
+        "color": "var(--colorTextBase, #333333)"
+      },
+      ".header": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "8px",
+        "font-size": "1.2em",
+        "font-weight": "bold"
+      },
+      ".icon-diamond": {
+        "width": "16px",
+        "height": "16px",
+        "background-size": "contain",
+        "background-repeat": "no-repeat"
+      },
+      ".icon-car": {
+        "width": "48px",
+        "height": "48px",
+        "background-size": "contain",
+        "background-repeat": "no-repeat"
+      },
+      ".value-large-primary": {
+        "font-size": "2.5em",
+        "font-weight": "bold",
+        "color": "var(--colorPrimary, #1990ff)"
+      },
+      ".value-warning": {
+        "font-size": "1.5em",
+        "font-weight": "bold",
+        "color": "var(--colorWarning, #fa8c16)"
+      },
+      ".value-success": {
+        "font-size": "1.5em",
+        "font-weight": "bold",
+        "color": "var(--colorSuccess, #52c41a)"
+      }
+    },
+    "tokenCoverage": 1,
+    "mappingNotes": [
+      "主题色 #1990ff 映射为 --colorPrimary，用于大号蓝色数值等核心强调元素",
+      "背景色 #edf4fb 直接落地为容器背景，同时映射为 --colorBg 和 @color-bg 变量",
+      "橙色 #fa8c16 映射为 --colorWarning，用于橙色货车数值等次级强调或警示元素",
+      "绿色 #52c41a 映射为 --colorSuccess，用于常规状态或辅助数据展示",
+      "装饰性图标（菱形、汽车）通过 background-image 引用，需确保资源路径正确并移除多余的 border/background-color"
+    ],
+    "elementStyleMap": {
+      "daily-total": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-tunnel": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "stat-bridge": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "chart-tunnel-flow": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "chart-bridge-flow": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-type": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-group-x-14": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-group-x-18": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-group-x-21": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-group-x-25": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "flow-prediction": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    }
+  }
+}

@@ -83,6 +83,13 @@
 | ✅ 内边距 | `padding` | `padding` | |
 | ⚡ 边框 | `border` | `border` | |
 
+#### 🚫 tab 项资源引用硬约束（CRITICAL，禁止张冠李戴）
+
+- ❌ **tab 项（type=tab）禁止填写 `resourceFile` 指向其他区块的资源**：如把 switch 的 `bg-8788.png` 挂到 tab 项上——这会生成错误背景。tab 项的 `resourceFile` 只能引用「tabs 容器子树内」的真实资源。
+- ✅ **tab 背景优先用 CSS**：tab 项背景通常是纯色或渐变（Figma fills 的 SOLID / GRADIENT_LINEAR），应写 `backgroundColor` 或 `background: linear-gradient(...)`，**不要**强行找一张 png 当背景。
+- ✅ **找不到属于 tab 的资源时**：不填 `resourceFile`，让下游用 CSS 色值/渐变渲染；绝不借用其他 section 的背景图/图标。
+- ✅ **tab 图标**：仅当 tabs 容器子树内确有独立图标节点时才填 `icon.resourceFile`；否则留空。
+
 ### 7. 图表类（chart, chart-container）
 
 | 必检属性 | JSON 字段名 | CSS 属性 | 说明 |

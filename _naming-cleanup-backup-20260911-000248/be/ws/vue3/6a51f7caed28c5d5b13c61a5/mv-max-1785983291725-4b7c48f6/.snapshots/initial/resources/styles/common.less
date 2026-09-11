@@ -1,0 +1,101 @@
+// 共享业务 class 文件
+// 前缀：.mv3-mv-max-1785983291725-4b7c48f6-
+// 主组件与子组件按需 @import 本文件
+
+// 注意：本文件被 standalone 编译校验，禁止引用 theme-vars 中的 Less 变量
+// 所有颜色/尺寸使用字面量值
+
+// ---- 容器通用 ----
+.mv3-mv-max-1785983291725-4b7c48f6-col {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
+.mv3-mv-max-1785983291725-4b7c48f6-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+// ---- 卡片/面板 ----
+.mv3-mv-max-1785983291725-4b7c48f6-card {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  padding: 1em;
+  box-sizing: border-box;
+}
+
+// ---- 文字工具类 ----
+.mv3-mv-max-1785983291725-4b7c48f6-text-primary {
+  color: #ffffff;
+  font-size: 14px;
+}
+
+.mv3-mv-max-1785983291725-4b7c48f6-text-secondary {
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 12px;
+}
+
+.mv3-mv-max-1785983291725-4b7c48f6-text-blue {
+  color: #1990ff;
+}
+
+.mv3-mv-max-1785983291725-4b7c48f6-text-warning {
+  color: #d32f2f;
+}
+
+// ---- 标题渐变文字 ----
+// [Style Refine] fills[0].gradientStops: #1890ff(0%) → rgba(90,127,255,0.83)(100%)
+.mv3-mv-max-1785983291725-4b7c48f6-title-gradient {
+  background: linear-gradient(180deg, #1890ff 0%, rgba(90, 127, 255, 0.83) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-family: 'Noto Sans SC', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 19.2px;
+}
+
+// ---- Tab 相关 ----
+// [Style Refine] tabs-list/bg fills GRADIENT_LINEAR: #b5deff(0%) → #d2ecff(100%), stroke 0.72px solid #fff
+.mv3-mv-max-1785983291725-4b7c48f6-tabs-bg {
+  background: linear-gradient(90deg, #b5deff 0%, #d2ecff 100%);
+  border: 0.72px solid rgba(255, 255, 255, 1);
+  border-radius: 3px;
+}
+
+// [Style Refine] bg-tab-active fills GRADIENT_LINEAR: #0f99b1(0%) → #0390ff(100%), stroke 0.6px solid #fff
+.mv3-mv-max-1785983291725-4b7c48f6-tab-active-bg {
+  background: linear-gradient(90deg, #0f99b1 0%, #0390ff 100%);
+  border: 0.6px solid rgba(255, 255, 255, 1);
+  border-radius: 2px;
+}
+
+// ---- 徽标 ----
+// [Style Refine] num/bg fills SOLID: rgb(245,63,63), cornerRadius 29
+.mv3-mv-max-1785983291725-4b7c48f6-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  background: rgb(245, 63, 63);
+  border-radius: 50%;
+  font-family: 'PingFang SC', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  color: #ffffff;
+  line-height: 14px;
+}
+
+// ---- 图表相关 ----
+.mv3-mv-max-1785983291725-4b7c48f6-chart-wrap {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+}

@@ -1,0 +1,107 @@
+{
+  "componentId": "mc-max-1785972757159-c19b8cee",
+  "componentName": "设备监测",
+  "version": "v1.0.0",
+  "panelKey": "default-panel",
+  "attribute": {
+    "aspectRatio": [
+      10,
+      3
+    ],
+    "title": "cp-设备监测",
+    "description": "cp-设备监测"
+  },
+  "businessEvents": {
+    "mc-max-1785972757159-c19b8cee-onload": {
+      "eventId": "mc-max-1785972757159-c19b8cee-onload",
+      "eventName": "组件加载",
+      "eventDataSchema": {
+        "componentId": {
+          "key": "componentId",
+          "name": "组件ID",
+          "type": "string",
+          "required": true
+        },
+        "timestamp": {
+          "key": "timestamp",
+          "name": "时间戳",
+          "type": "number",
+          "required": true
+        }
+      }
+    }
+  },
+  "businessStatuses": {},
+  "dataSources": [
+    {
+      "sourceName": "deviceList",
+      "columns": [
+        {
+          "name": "deviceId",
+          "type": "string",
+          "comment": "设备ID"
+        },
+        {
+          "name": "deviceName",
+          "type": "string",
+          "comment": "设备名称"
+        },
+        {
+          "name": "status",
+          "type": "string",
+          "comment": "设备状态"
+        }
+      ]
+    }
+  ],
+  "layoutConfig": {
+    "default": "one",
+    "list": [
+      {
+        "name": "默认布局",
+        "key": "one",
+        "previewName": "mc-preview.png"
+      }
+    ]
+  },
+  "themeConfig": {
+    "default": "light",
+    "list": [
+      {
+        "name": "亮色主题",
+        "key": "light"
+      },
+      {
+        "name": "深色主题",
+        "key": "dark"
+      }
+    ]
+  },
+  "cssVariableConfig": [
+    {
+      "name": "字体大小",
+      "key": "fontSize",
+      "type": "size"
+    },
+    {
+      "name": "主色调",
+      "key": "colorPrimary",
+      "type": "color"
+    }
+  ],
+  "businessConfig": [
+    {
+      "name": "刷新间隔",
+      "key": "refreshInterval",
+      "type": "number",
+      "describe": "设备数据刷新间隔时间（秒）",
+      "renderType": "number",
+      "default": 5
+    }
+  ],
+  "size": {
+    "width": 420,
+    "height": 425
+  },
+  "formSources": null
+}

@@ -1,0 +1,29 @@
+{
+  "componentId": "mc-1785600410600-f8e51929",
+  "componentName": "Frame 2136637714",
+  "version": "v1.0.0",
+  "panelKey": "default-panel",
+  "attribute": {
+    "aspectRatio": [
+      10,
+      3
+    ]
+  },
+  "businessEvents": {
+    "mc-1785600410600-f8e51929-onload": {
+      "eventId": "mc-1785600410600-f8e51929-onload",
+      "eventName": "组件加载",
+      "eventDataSchema": {}
+    }
+  },
+  "businessStatuses": {},
+  "themeConfig": {
+    "default": "light",
+    "list": [
+      {
+        "name": "亮色主题",
+        "key": "light"
+      }
+    ]
+  }
+}

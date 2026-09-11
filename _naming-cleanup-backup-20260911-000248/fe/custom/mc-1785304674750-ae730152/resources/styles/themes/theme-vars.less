@@ -1,0 +1,26 @@
+.common() {
+--color-primary: #1990FF;
+  --color-text-main: #333333;
+  --color-text-white: #FFFFFF;
+  --color-gradient-blue: linear-gradient(180deg, #E1F0FF 0%, #00CCFF 100%);
+  --color-gradient-title: linear-gradient(180deg, #1990FF 0%, #5A7EFF 100%);
+  --color-warning: #E03434;
+  --color-tab-active-bg: linear-gradient(180deg, #318AFF 0%, #70BEFF 100%);
+  --color-tab-default-bg: linear-gradient(180deg, #85BAFF 0%, #C0E1FF 100%);
+  --color-switch-active-bg: linear-gradient(135deg, #2B9CFF 0%, rgba(43, 156, 255, 0) 100%);
+  --color-switch-default-bg: linear-gradient(135deg, #93CCFF 0%, rgba(147, 204, 255, 0) 100%);
+  --color-card-bg: linear-gradient(180deg, rgba(71, 166, 250, 0) 0%, rgba(71, 166, 250, 0.5) 100%);
+  @antd: inherit; // 自动添加
+}
+
+.theme-dark() {
+  .common();
+}
+
+.theme-light() {
+  .common();
+}
+
+:root {
+  .theme-dark();
+}

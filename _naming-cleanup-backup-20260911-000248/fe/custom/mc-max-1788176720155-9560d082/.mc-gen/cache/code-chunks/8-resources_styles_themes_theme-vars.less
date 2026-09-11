@@ -1,0 +1,92 @@
+// 主题变量定义文件
+// 仅定义 Less 变量与主题 mixin，禁止使用 CSS 变量 var(--xxx)
+// 根级不调用任何 mixin，由系统生成的 dark.less/light.less 负责调用
+
+// ============================================================
+// .common() — 主题无关的公共令牌
+// ============================================================
+.common() {
+  // 字体缩放基准令牌（根容器通过 CSS 变量 --fontSize 驱动，默认 14px）
+  @fontSize: 14px;
+
+  // 间距令牌
+  @spacing-xs: 4px;
+  @spacing-sm: 8px;
+  @spacing-md: 16px;
+  @spacing-lg: 24px;
+
+  // 圆角令牌
+  @radius-sm: 4px;
+  @radius-md: 8px;
+
+  // 字号令牌
+  @font-size-sm: 12px;
+  @font-size-base: 14px;
+  @font-size-lg: 16px;
+  @font-size-xl: 20px;
+
+  // 行高令牌
+  @line-height-base: 1.5;
+
+  // 动画令牌
+  @transition-base: 0.2s ease;
+}
+
+// ============================================================
+// .theme-light() — 浅色主题（面板默认展示色，必须与设计稿一致）
+// ============================================================
+.theme-light() {
+  // 文字颜色
+  @text-color: #1a1a1a;
+  @text-color-secondary: #595959;
+  @text-color-disabled: #bfbfbf;
+
+  // 背景颜色
+  @bg-color: #ffffff;
+  @bg-color-secondary: #f5f5f5;
+  @bg-color-hover: #f0f0f0;
+
+  // 边框颜色
+  @border-color: #d9d9d9;
+  @border-color-light: #f0f0f0;
+
+  // 主色 / 强调色
+  @primary-color: #1677ff;
+  @primary-color-hover: #4096ff;
+  @primary-color-active: #0958d9;
+
+  // 功能色
+  @success-color: #52c41a;
+  @warning-color: #faad14;
+  @error-color: #ff4d4f;
+}
+
+// ============================================================
+// .theme-dark() — 深色主题
+// 深色面板下所有文字颜色禁止使用黑色系
+// ============================================================
+.theme-dark() {
+  // 文字颜色（深色底，使用亮色文字）
+  @text-color: #e6f0ff;
+  @text-color-secondary: #a6b4c8;
+  @text-color-disabled: #5a6b82;
+
+  // 背景颜色
+  @bg-color: #1a2332;
+  @bg-color-secondary: #22304a;
+  @bg-color-hover: #2b3b58;
+
+  // 边框颜色
+  @border-color: #35496b;
+  @border-color-light: #2b3b58;
+
+  // 主色 / 强调色
+  @primary-color: #4096ff;
+  @primary-color-hover: #69b1ff;
+  @primary-color-active: #1677ff;
+
+  // 功能色
+  @success-color: #73d13d;
+  @warning-color: #ffc53d;
+  @error-color: #ff7875;
+}

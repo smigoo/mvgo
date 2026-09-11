@@ -1,0 +1,942 @@
+{
+  "generatedAt": "2026-08-16T00:00:00.000Z",
+  "stage": "preview-analysis",
+  "componentName": "cp-环境监测",
+  "componentTitle": "环境监测",
+  "analysisModel": "gpt-5",
+  "sourceImage": {
+    "path": "mc-preview.png",
+    "size": 0,
+    "mtimeMs": 0,
+    "sha1": ""
+  },
+  "summary": "浅色环境监测面板内容，包含标题装饰、污染物/环境指标 Tab 切换栏、右侧图表/列表类图标控件及红色数量角标，下方为一张带网格线、预警虚线和单条绿色浓度趋势线的折线图。",
+  "layout": {
+    "type": "single-panel-slot-content",
+    "direction": "vertical",
+    "sections": [
+      {
+        "id": "panel-title",
+        "name": "环境监测标题",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "title-itself",
+        "slotCandidate": null,
+        "bgPlaceholder": "section-bg-panel-title",
+        "header": {
+          "title": "环境监测",
+          "controls": [],
+          "figmaNode": "header",
+          "styles": {
+            "fontSize": "16px",
+            "fontWeight": 700,
+            "color": "#559eff",
+            "lineHeight": "20px",
+            "letterSpacing": "0px",
+            "textAlign": "left"
+          }
+        },
+        "body": {
+          "layout": "horizontal",
+          "bgPlaceholder": "body-bg-panel-title",
+          "children": [
+            {
+              "id": "title-text",
+              "name": "环境监测",
+              "role": "title",
+              "type": "text",
+              "text": "环境监测",
+              "figmaNode": "环境监测",
+              "styles": {
+                "fontSize": "16px",
+                "fontWeight": 700,
+                "color": "#559eff",
+                "lineHeight": "20px",
+                "letterSpacing": "0px",
+                "textAlign": "left"
+              }
+            }
+          ],
+          "backgroundImage": {
+            "src": "../resources/images/bg-7890.png",
+            "recommendedUsage": "backgroundStyle"
+          },
+          "backgroundSize": "cover",
+          "backgroundPosition": "center",
+          "backgroundRepeat": "no-repeat"
+        }
+      },
+      {
+        "id": "metric-tabs-and-actions",
+        "name": "指标切换与右侧控件",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "bgPlaceholder": "section-bg-metric-tabs-and-actions",
+        "header": {
+          "title": null,
+          "controls": []
+        },
+        "body": {
+          "layout": "horizontal",
+          "bgPlaceholder": "body-bg-metric-tabs-and-actions",
+          "children": [
+            {
+              "id": "tabs-list",
+              "name": "环境指标 Tab 切换",
+              "role": "tabs",
+              "type": "tab-group",
+              "figmaNode": "tabs-list",
+              "style": {
+                "width": "295px",
+                "height": "27px",
+                "padding": "0px 8px",
+                "gap": "8px",
+                "layout": "horizontal",
+                "justifyContent": "flex-start",
+                "alignItems": "center",
+                "background": "rgba(230, 242, 252, 0.65)",
+                "borderRadius": "14px",
+                "overflow": "hidden",
+                "border": "1px solid rgba(85, 158, 255, 0.45)"
+              },
+              "children": [
+                {
+                  "id": "tab-co2",
+                  "name": "一氧化碳",
+                  "role": "tab",
+                  "type": "tab",
+                  "active": true,
+                  "text": "一氧化碳",
+                  "figmaNode": "tab-一氧化碳",
+                  "resourceFile": "../resources/images/bg-tab-active-7891.png",
+                  "recommendedUsage": "backgroundBlock",
+                  "style": {
+                    "fontSize": "14px",
+                    "color": "#ffffff",
+                    "fontWeight": 700,
+                    "lineHeight": "24px",
+                    "textAlign": "center",
+                    "backgroundColor": "rgba(63, 169, 214, 0.95)",
+                    "borderRadius": "12px",
+                    "padding": "0px 12px",
+                    "border": "1px solid rgba(255, 255, 255, 0.55)"
+                  }
+                },
+                {
+                  "id": "tab-visibility",
+                  "name": "能见度",
+                  "role": "tab",
+                  "type": "tab",
+                  "active": false,
+                  "text": "能见度",
+                  "figmaNode": "tab-能见度",
+                  "style": {
+                    "fontSize": "14px",
+                    "color": "#559eff",
+                    "fontWeight": 700,
+                    "lineHeight": "24px",
+                    "textAlign": "center",
+                    "backgroundColor": "transparent",
+                    "borderRadius": "12px",
+                    "padding": "0px 8px",
+                    "border": "0"
+                  }
+                },
+                {
+                  "id": "tab-lighting",
+                  "name": "洞内照明",
+                  "role": "tab",
+                  "type": "tab",
+                  "active": false,
+                  "text": "洞内照明",
+                  "figmaNode": "tab-洞内照明",
+                  "style": {
+                    "fontSize": "14px",
+                    "color": "#559eff",
+                    "fontWeight": 700,
+                    "lineHeight": "24px",
+                    "textAlign": "center",
+                    "backgroundColor": "transparent",
+                    "borderRadius": "12px",
+                    "padding": "0px 8px",
+                    "border": "0"
+                  }
+                },
+                {
+                  "id": "tab-outside-light",
+                  "name": "洞外光强",
+                  "role": "tab",
+                  "type": "tab",
+                  "active": false,
+                  "text": "洞外光强",
+                  "figmaNode": "tab-洞外光强",
+                  "style": {
+                    "fontSize": "14px",
+                    "color": "#559eff",
+                    "fontWeight": 700,
+                    "lineHeight": "24px",
+                    "textAlign": "center",
+                    "backgroundColor": "transparent",
+                    "borderRadius": "12px",
+                    "padding": "0px 8px",
+                    "border": "0"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "tabs-action-icon",
+              "name": "图表控件图标",
+              "role": "button",
+              "type": "icon-button",
+              "figmaNode": "tabs-icon",
+              "resourceFile": "../resources/images/g-7883.png",
+              "recommendedUsage": "imgSrc",
+              "style": {
+                "width": "52px",
+                "height": "24px",
+                "padding": "0px",
+                "gap": "0px",
+                "layout": "horizontal",
+                "justifyContent": "center",
+                "alignItems": "center",
+                "background": "transparent",
+                "borderRadius": "4px",
+                "overflow": "visible",
+                "objectFit": "contain",
+                "opacity": 1
+              },
+              "resourceVarName": "icon1",
+              "downloadStatus": "success"
+            },
+            {
+              "id": "badge-count",
+              "name": "红色数量角标",
+              "role": "badge",
+              "type": "badge",
+              "text": "6",
+              "figmaNode": "num",
+              "style": {
+                "width": "14px",
+                "height": "14px",
+                "fontSize": "10px",
+                "fontWeight": 700,
+                "color": "#ffffff",
+                "lineHeight": "14px",
+                "textAlign": "center",
+                "backgroundColor": "#f53f3f",
+                "borderRadius": "7px",
+                "padding": "0px",
+                "border": "0"
+              }
+            }
+          ],
+          "backgroundImage": {
+            "src": "../resources/images/bg-7890.png",
+            "recommendedUsage": "backgroundStyle"
+          },
+          "backgroundSize": "cover",
+          "backgroundPosition": "center",
+          "backgroundRepeat": "no-repeat"
+        }
+      },
+      {
+        "id": "co2-trend-chart",
+        "name": "一氧化碳浓度趋势图",
+        "role": "常驻",
+        "layout": "vertical",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "bgPlaceholder": "section-bg-co2-trend-chart",
+        "header": {
+          "title": null,
+          "controls": []
+        },
+        "body": {
+          "layout": "vertical",
+          "bgPlaceholder": "body-bg-co2-trend-chart",
+          "children": [
+            {
+              "id": "chart-container",
+              "name": "折线图区域",
+              "role": "chart",
+              "type": "line-chart",
+              "figmaNode": "slot-con/chart-area",
+              "style": {
+                "width": "360px",
+                "height": "105px",
+                "padding": "2px 0px 0px 0px",
+                "gap": "0px",
+                "layout": "vertical",
+                "justifyContent": "flex-start",
+                "alignItems": "stretch",
+                "background": "transparent",
+                "borderRadius": "0",
+                "overflow": "visible"
+              },
+              "children": [
+                {
+                  "id": "y-axis-label",
+                  "name": "Y轴单位",
+                  "role": "axis-label",
+                  "type": "text",
+                  "text": "辆",
+                  "figmaNode": "axis-y-unit",
+                  "styles": {
+                    "fontSize": "11px",
+                    "fontWeight": 400,
+                    "color": "#6f7f88",
+                    "lineHeight": "14px",
+                    "textAlign": "left"
+                  }
+                },
+                {
+                  "id": "chart-grid",
+                  "name": "图表网格虚线",
+                  "role": "装饰",
+                  "type": "decoration",
+                  "style": {
+                    "background": "repeating-linear-gradient(to right, rgba(120,140,150,0.35) 0 4px, transparent 4px 8px)",
+                    "width": "330px",
+                    "height": "72px",
+                    "position": "absolute",
+                    "opacity": 1
+                  }
+                },
+                {
+                  "id": "warning-line",
+                  "name": "预警线",
+                  "role": "threshold-line",
+                  "type": "decoration",
+                  "text": "预警线",
+                  "style": {
+                    "background": "repeating-linear-gradient(to right, rgba(205,80,105,0.75) 0 5px, transparent 5px 9px)",
+                    "width": "330px",
+                    "height": "1px",
+                    "position": "absolute",
+                    "opacity": 1
+                  }
+                },
+                {
+                  "id": "series-line-zk3",
+                  "name": "zk3+785CO浓度折线",
+                  "role": "chart-series",
+                  "type": "line",
+                  "style": {
+                    "background": "#33c6a4",
+                    "width": "330px",
+                    "height": "2px",
+                    "position": "absolute",
+                    "opacity": 1
+                  }
+                },
+                {
+                  "id": "x-axis-labels",
+                  "name": "X轴时间刻度",
+                  "role": "axis-labels",
+                  "type": "text-group",
+                  "children": [
+                    {
+                      "type": "label",
+                      "text": "2",
+                      "figmaNode": "x-2",
+                      "styles": {
+                        "fontSize": "11px",
+                        "fontWeight": 400,
+                        "color": "#4b5a63",
+                        "lineHeight": "14px",
+                        "textAlign": "center"
+                      }
+                    },
+                    {
+                      "type": "label",
+                      "text": "4",
+                      "figmaNode": "x-4",
+                      "styles": {
+                        "fontSize": "11px",
+                        "fontWeight": 400,
+                        "color": "#4b5a63",
+                        "lineHeight": "14px",
+                        "textAlign": "center"
+                      }
+                    },
+                    {
+                      "type": "label",
+                      "text": "6",
+                      "figmaNode": "x-6",
+                      "styles": {
+                        "fontSize": "11px",
+                        "fontWeight": 400,
+                        "color": "#4b5a63",
+                        "lineHeight": "14px",
+                        "textAlign": "center"
+                      }
+                    },
+                    {
+                      "type": "label",
+                      "text": "8",
+                      "figmaNode": "x-8",
+                      "styles": {
+                        "fontSize": "11px",
+                        "fontWeight": 400,
+                        "color": "#4b5a63",
+                        "lineHeight": "14px",
+                        "textAlign": "center"
+                      }
+                    },
+                    {
+                      "type": "label",
+                      "text": "10",
+                      "figmaNode": "x-10",
+                      "styles": {
+                        "fontSize": "11px",
+                        "fontWeight": 400,
+                        "color": "#4b5a63",
+                        "lineHeight": "14px",
+                        "textAlign": "center"
+                      }
+                    },
+                    {
+                      "type": "label",
+                      "text": "12",
+                      "figmaNode": "x-12",
+                      "styles": {
+                        "fontSize": "11px",
+                        "fontWeight": 400,
+                        "color": "#4b5a63",
+                        "lineHeight": "14px",
+                        "textAlign": "center"
+                      }
+                    },
+                    {
+                      "type": "label",
+                      "text": "14",
+                      "figmaNode": "x-14",
+                      "styles": {
+                        "fontSize": "11px",
+                        "fontWeight": 400,
+                        "color": "#4b5a63",
+                        "lineHeight": "14px",
+                        "textAlign": "center"
+                      }
+                    },
+                    {
+                      "type": "label",
+                      "text": "16",
+                      "figmaNode": "x-16",
+                      "styles": {
+                        "fontSize": "11px",
+                        "fontWeight": 400,
+                        "color": "#4b5a63",
+                        "lineHeight": "14px",
+                        "textAlign": "center"
+                      }
+                    },
+                    {
+                      "type": "label",
+                      "text": "18",
+                      "figmaNode": "x-18",
+                      "styles": {
+                        "fontSize": "11px",
+                        "fontWeight": 400,
+                        "color": "#4b5a63",
+                        "lineHeight": "14px",
+                        "textAlign": "center"
+                      }
+                    },
+                    {
+                      "type": "label",
+                      "text": "20",
+                      "figmaNode": "x-20",
+                      "styles": {
+                        "fontSize": "11px",
+                        "fontWeight": 400,
+                        "color": "#4b5a63",
+                        "lineHeight": "14px",
+                        "textAlign": "center"
+                      }
+                    },
+                    {
+                      "type": "label",
+                      "text": "22",
+                      "figmaNode": "x-22",
+                      "styles": {
+                        "fontSize": "11px",
+                        "fontWeight": 400,
+                        "color": "#4b5a63",
+                        "lineHeight": "14px",
+                        "textAlign": "center"
+                      }
+                    },
+                    {
+                      "type": "label",
+                      "text": "24",
+                      "figmaNode": "x-24",
+                      "styles": {
+                        "fontSize": "11px",
+                        "fontWeight": 400,
+                        "color": "#4b5a63",
+                        "lineHeight": "14px",
+                        "textAlign": "center"
+                      }
+                    },
+                    {
+                      "type": "unit",
+                      "text": "时",
+                      "figmaNode": "x-unit",
+                      "styles": {
+                        "fontSize": "11px",
+                        "fontWeight": 400,
+                        "color": "#4b5a63",
+                        "lineHeight": "14px",
+                        "textAlign": "left"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "id": "y-axis-labels",
+                  "name": "Y轴刻度",
+                  "role": "axis-labels",
+                  "type": "text-group",
+                  "children": [
+                    {
+                      "type": "label",
+                      "text": "40",
+                      "figmaNode": "y-40",
+                      "styles": {
+                        "fontSize": "11px",
+                        "fontWeight": 400,
+                        "color": "#4b5a63",
+                        "lineHeight": "14px",
+                        "textAlign": "right"
+                      }
+                    },
+                    {
+                      "type": "label",
+                      "text": "30",
+                      "figmaNode": "y-30",
+                      "styles": {
+                        "fontSize": "11px",
+                        "fontWeight": 400,
+                        "color": "#4b5a63",
+                        "lineHeight": "14px",
+                        "textAlign": "right"
+                      }
+                    },
+                    {
+                      "type": "label",
+                      "text": "20",
+                      "figmaNode": "y-20",
+                      "styles": {
+                        "fontSize": "11px",
+                        "fontWeight": 400,
+                        "color": "#4b5a63",
+                        "lineHeight": "14px",
+                        "textAlign": "right"
+                      }
+                    },
+                    {
+                      "type": "label",
+                      "text": "10",
+                      "figmaNode": "y-10",
+                      "styles": {
+                        "fontSize": "11px",
+                        "fontWeight": 400,
+                        "color": "#4b5a63",
+                        "lineHeight": "14px",
+                        "textAlign": "right"
+                      }
+                    },
+                    {
+                      "type": "label",
+                      "text": "0",
+                      "figmaNode": "y-0",
+                      "styles": {
+                        "fontSize": "11px",
+                        "fontWeight": 400,
+                        "color": "#4b5a63",
+                        "lineHeight": "14px",
+                        "textAlign": "right"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "id": "chart-legend",
+                  "name": "图例",
+                  "role": "legend",
+                  "type": "legend",
+                  "children": [
+                    {
+                      "id": "legend-zk3",
+                      "name": "zk3+785CO浓度",
+                      "role": "legend-item",
+                      "type": "legend-item",
+                      "children": [
+                        {
+                          "type": "decoration",
+                          "name": "绿色线段",
+                          "style": {
+                            "background": "#33c6a4",
+                            "width": "18px",
+                            "height": "2px",
+                            "position": "relative",
+                            "opacity": 1
+                          }
+                        },
+                        {
+                          "type": "label",
+                          "text": "zk3+785CO浓度",
+                          "figmaNode": "legend-text",
+                          "styles": {
+                            "fontSize": "9px",
+                            "fontWeight": 400,
+                            "color": "#4b5a63",
+                            "lineHeight": "12px",
+                            "textAlign": "left"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "id": "legend-warning",
+                      "name": "预警线标注",
+                      "role": "threshold-label",
+                      "type": "label",
+                      "text": "预警线",
+                      "figmaNode": "warning-text",
+                      "styles": {
+                        "fontSize": "11px",
+                        "fontWeight": 400,
+                        "color": "#c65069",
+                        "lineHeight": "14px",
+                        "textAlign": "left"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "backgroundImage": {
+            "src": "../resources/images/bg-7890.png",
+            "recommendedUsage": "backgroundStyle"
+          },
+          "backgroundSize": "cover",
+          "backgroundPosition": "center",
+          "backgroundRepeat": "no-repeat"
+        }
+      }
+    ],
+    "headerSlots": [
+      {
+        "slotType": "title-left",
+        "elementType": "icon",
+        "content": "标题左侧蓝色装饰圆点图标",
+        "figmaNodeId": "g"
+      }
+    ]
+  },
+  "styles": {
+    "backgroundBrightness": "light",
+    "theme": "浅色科技监测风",
+    "colors": [
+      "#edf4fb",
+      "#559eff",
+      "#33c6a4",
+      "#c65069",
+      "#f53f3f",
+      "#4b5a63",
+      "rgba(255,255,255,0.65)"
+    ],
+    "background": "整体内容区为浅灰蓝色科技面板背景，Figma bg 资源覆盖 420x186 区域。",
+    "backgroundResource": {
+      "resourceFile": "../resources/images/bg-7880.png",
+      "recommendedUsage": "backgroundStyle",
+      "width": "420px",
+      "height": "186px",
+      "backgroundSize": "cover",
+      "backgroundPosition": "center",
+      "backgroundRepeat": "no-repeat"
+    },
+    "decorations": [
+      "标题左侧小圆点装饰图标",
+      "Tab 外层浅蓝描边胶囊背景",
+      "选中 Tab 使用蓝色胶囊高亮背景",
+      "图表区域有浅灰虚线网格",
+      "30刻度附近有红色预警虚线和预警线文字",
+      "右上角红色圆形数量角标"
+    ],
+    "emphasis": [
+      "当前选中 Tab '一氧化碳' 使用白字蓝底突出",
+      "绿色折线表示 zk3+785CO浓度",
+      "红色虚线强调预警线"
+    ]
+  },
+  "interactions": [
+    {
+      "target": "指标 Tab 切换栏",
+      "type": "tab-switch",
+      "options": [
+        "一氧化碳",
+        "能见度",
+        "洞内照明",
+        "洞外光强"
+      ],
+      "description": "切换不同环境监测指标；当前选中一氧化碳。",
+      "defaultState": "常驻，选中一氧化碳",
+      "evidence": "顶部存在多个并列标签，首项有明显选中高亮背景。"
+    },
+    {
+      "target": "右侧图表控件图标",
+      "type": "button",
+      "options": [
+        "图标按钮"
+      ],
+      "description": "右侧有图表样式图标按钮，具体功能无法从截图确认。",
+      "defaultState": "常驻",
+      "evidence": "Tab 右侧有独立蓝色柱状图样式图标。"
+    }
+  ],
+  "charts": [
+    {
+      "section": "co2-trend-chart",
+      "type": "line",
+      "series": [
+        "zk3+785CO浓度"
+      ],
+      "legend": [
+        "zk3+785CO浓度"
+      ],
+      "legendPosition": "top-right",
+      "seriesColors": [
+        "#33c6a4"
+      ],
+      "legendType": "horizontal",
+      "axes": "X轴为2到24的小时刻度，右下角单位为'时'；Y轴可见0、10、20、30、40刻度，左上角单位显示为'辆'。",
+      "tooltip": "截图中未显示 tooltip。",
+      "notes": [
+        "图中包含红色虚线预警线，标注文字为'预警线'。",
+        "绿色折线在14时后上升并在16-20时附近保持较高值，之后回落。",
+        "仅能确认单条绿色数据系列。"
+      ]
+    }
+  ],
+  "doNotInvent": [
+    "不要臆造 Tab 切换后的其他图表数据。",
+    "不要臆造右侧图标按钮的具体功能，如导出、刷新或全屏。",
+    "不要臆造未显示的 tooltip、告警弹窗或联动规则。",
+    "不要把红色数量角标解释为具体告警列表数量之外的业务含义。",
+    "不要新增截图中不存在的下拉框、搜索框、表格或筛选条件。"
+  ],
+  "notes": [
+    "base-panel 外壳由宿主提供；本分析保留可见的 slot 内容与 Figma 提供的资源映射。",
+    "Figma 中 bg-7880.png 与标题装饰 g-7883.png 均为已下载资源，应在实现中优先引用。",
+    "预览图中标题可见，若宿主已提供面板标题，则实现时标题文字应映射到宿主标题或 title-left 装饰插槽，避免重复渲染。",
+    "部分图表轴标签和 Figma 节点 ID 无精确 API 文本节点编号，使用语义 figmaNode 标识。"
+  ],
+  "coverageReport": {
+    "totalFigma": 49,
+    "matchedCount": 0,
+    "missingCount": 26,
+    "uncertainCount": 2,
+    "coverageRate": 0,
+    "missing": [
+      {
+        "name": "cp-环境监测",
+        "type": "FRAME",
+        "depth": 0
+      },
+      {
+        "name": "header",
+        "type": "GROUP",
+        "depth": 1
+      },
+      {
+        "name": "g",
+        "type": "GROUP",
+        "depth": 2
+      },
+      {
+        "name": "环境监测",
+        "type": "TEXT",
+        "depth": 2
+      },
+      {
+        "name": "slot-con",
+        "type": "FRAME",
+        "depth": 1
+      },
+      {
+        "name": "@echarts/line",
+        "type": "GROUP",
+        "depth": 2
+      },
+      {
+        "name": "Group 2136637691",
+        "type": "GROUP",
+        "depth": 3
+      },
+      {
+        "name": "Frame 2136636709",
+        "type": "FRAME",
+        "depth": 4
+      },
+      {
+        "name": "40 30 20 10 0",
+        "type": "TEXT",
+        "depth": 4
+      },
+      {
+        "name": "预警线",
+        "type": "TEXT",
+        "depth": 4
+      },
+      {
+        "name": "Frame 2136636710",
+        "type": "FRAME",
+        "depth": 4
+      },
+      {
+        "name": "Frame 2136637694",
+        "type": "FRAME",
+        "depth": 3
+      },
+      {
+        "name": "Group 1321318245",
+        "type": "GROUP",
+        "depth": 4
+      },
+      {
+        "name": "zk3+785CO浓度",
+        "type": "TEXT",
+        "depth": 5
+      },
+      {
+        "name": "sub-t",
+        "type": "FRAME",
+        "depth": 2
+      }
+    ],
+    "uncertain": [
+      {
+        "name": "辆",
+        "type": "TEXT"
+      },
+      {
+        "name": "时",
+        "type": "TEXT"
+      }
+    ],
+    "summary": "需关注"
+  },
+  "chartDataHints": [
+    {
+      "chartTitle": "line",
+      "chartType": "line",
+      "labels": [
+        {
+          "label": "40\n30\n20\n10\n0",
+          "name": "40 30 20 10 0"
+        },
+        {
+          "label": "辆",
+          "name": "辆"
+        },
+        {
+          "label": "预警线",
+          "name": "预警线"
+        },
+        {
+          "label": "时",
+          "name": "时"
+        },
+        {
+          "label": "zk3+785CO浓度",
+          "name": "zk3+785CO浓度"
+        },
+        {
+          "label": "一氧化碳",
+          "name": "一氧化碳"
+        },
+        {
+          "label": "洞内照明",
+          "name": "洞内照明"
+        },
+        {
+          "label": "洞外光强",
+          "name": "洞外光强"
+        },
+        {
+          "label": "能见度",
+          "name": "能见度"
+        }
+      ],
+      "values": [
+        {
+          "label": "600",
+          "value": 600,
+          "unit": ""
+        },
+        {
+          "label": "400",
+          "value": 400,
+          "unit": ""
+        },
+        {
+          "label": "200",
+          "value": 200,
+          "unit": ""
+        },
+        {
+          "label": "600",
+          "value": 600,
+          "unit": ""
+        },
+        {
+          "label": "0",
+          "value": 0,
+          "unit": ""
+        },
+        {
+          "label": "600",
+          "value": 600,
+          "unit": ""
+        },
+        {
+          "label": "2",
+          "value": 2,
+          "unit": ""
+        },
+        {
+          "label": "4",
+          "value": 4,
+          "unit": ""
+        },
+        {
+          "label": "6",
+          "value": 6,
+          "unit": ""
+        },
+        {
+          "label": "8",
+          "value": 8,
+          "unit": ""
+        },
+        {
+          "label": "10",
+          "value": 10,
+          "unit": ""
+        },
+        {
+          "label": "12",
+          "value": 12,
+          "unit": ""
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+.common() {
+  @em-font-size-base: 14px;
+  @em-font-size-sm: 12px;
+  @em-font-size-lg: 16px;
+  
+  @em-border-radius-sm: 2px;
+  @em-border-radius-md: 4px;
+  @em-border-radius-lg: 8px;
+  
+  @em-transition-duration: 0.3s;
+  @em-transition-timing: cubic-bezier(0.645, 0.045, 0.355, 1);
+}
+
+.theme-light() {
+  // 背景色
+  @em-bg-color: #ffffff;
+  @em-bg-color-secondary: #edf4fb;
+  @em-bg-color-tertiary: #d6effc;
+  @em-bg-color-hover: #c7e0ff;
+  
+  // 文本色
+  @em-text-color: #333333;
+  @em-text-color-secondary: #56597c;
+  @em-text-color-disabled: rgba(74, 117, 141, 0.25);
+  
+  // 主色
+  @em-primary-color: #1252fa;
+  @em-primary-color-hover: #1990ff;
+  @em-primary-color-active: #006fe3;
+  @em-primary-color-bg: #c7e0ff;
+  
+  // 边框色
+  @em-border-color: rgba(74, 117, 141, 0.25);
+  @em-border-color-secondary: #acc4e1;
+  
+  // 功能色
+  @em-success-color: #00cccc;
+  @em-warning-color: #ffa22f;
+  @em-error-color: #ff6a00;
+  @em-info-color: #3385ff;
+}
+
+.theme-dark() {
+  // 背景色
+  @em-bg-color: #000000;
+  @em-bg-color-secondary: #333333;
+  @em-bg-color-tertiary: #56597c;
+  @em-bg-color-hover: rgba(74, 117, 141, 0.25);
+  
+  // 文本色 (禁止使用黑色系)
+  @em-text-color: rgba(255, 255, 255, 0.8);
+  @em-text-color-secondary: #6680a0;
+  @em-text-color-disabled: #56597c;
+  
+  // 主色
+  @em-primary-color: #559eff;
+  @em-primary-color-hover: #57caff;
+  @em-primary-color-active: #388dff;
+  @em-primary-color-bg: rgba(0, 204, 204, 0.3);
+  
+  // 边框色
+  @em-border-color: #6680a0;
+  @em-border-color-secondary: rgba(74, 117, 141, 0.25);
+  
+  // 功能色
+  @em-success-color: #00cccc;
+  @em-warning-color: #ffa22f;
+  @em-error-color: #ff6a00;
+  @em-info-color: #3385ff;
+}

@@ -1,0 +1,458 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 55,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "覆盖率报告（coverageReport）显示匹配率为0%（matchedCount: 0），且存在解析全空警告（_parseWarning），表明当前布局结构未正确映射到设计稿（Figma）节点，属于无效解析结果。",
+        "suggestion": "立即检查Figma到JSON的解析链路，确保设计稿图层被正确识别和转换，重新生成布局结构。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.children[1]",
+        "message": "section内部未严格区分header和body层级，sub-header与具体内容节点（如stats-row、chart-container）直接平铺在children中，不符合微码规范中section应包含明确header和body的标准结构。",
+        "suggestion": "将section重构为包含header（存放sub-header）和body（存放具体业务内容）的标准化层级结构。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.children[1].children[2]",
+        "message": "存在大量结构重复的硬编码节点（如两个配置完全相同的chart-container，两个相同的distribution-card），缺乏数据驱动设计，导致JSON结构臃肿且难以维护。",
+        "suggestion": "提取公共组件模板，使用数据数组（如dataList）进行循环渲染，通过数据差异（如title、数据源）来驱动视图更新，减少冗余代码。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.children[1].children[1].children[0]",
+        "message": "stats-row内部的stat-item嵌套达到4层（section -> stats-row -> stat-item -> text），嵌套过深会增加DOM节点数量，影响渲染性能和可维护性。",
+        "suggestion": "简化stat-item结构，将文本节点直接作为stats-row的子节点，或使用更扁平的布局方式，尽量将核心业务嵌套控制在3层以内。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.children[1].children[2].config",
+        "message": "图表配置（chart-container）信息不够完整，缺少legendPosition、grid间距、axisLabel样式等详细配置，可能导致图表渲染不符合设计规范。",
+        "suggestion": "补充图表的legendPosition（如'top'或'bottom'）、grid（控制图表边距）、坐标轴标签样式等详细配置项。"
+      }
+    ],
+    "recommendations": [
+      "修复解析映射问题：当前覆盖率为0%是致命缺陷，需优先排查设计稿解析工具，确保Figma节点与JSON结构正确绑定。",
+      "引入数据驱动模式：对于重复的图表和卡片，建议采用“组件模板+数据源”的模式，通过遍历数组来渲染，大幅提升代码可维护性。",
+      "规范Section结构：严格按照微码规范，将Section拆分为`header`和`body`两部分，避免内容平铺，提升组件的语义化和扩展性。",
+      "优化嵌套层级：尽量将嵌套深度控制在3层以内，对于简单的文本和图标组合，可合并为单一节点或使用内联样式，减少不必要的DOM层级。"
+    ],
+    "summary": "当前布局结构在业务逻辑划分上具备一定清晰度，但存在致命缺陷：解析覆盖率为0%，表明结构未正确映射到设计稿，无法直接用于下游精修。此外，结构上存在section层级不规范、大量硬编码重复节点以及嵌套过深等问题。建议优先修复解析映射问题，并引入数据驱动模式优化冗余结构，严格按照微码规范重构section层级后再进行复审。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名），基于暗色主题推导",
+      "--colorPrimary": "#4a90e2",
+      "--colorBg": "#1e1e1e",
+      "--colorTextBase": "#e0e0e0",
+      "--fontSize": "14px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#4a90e2",
+      "@color-bg": "#1e1e1e",
+      "@color-text-base": "#e0e0e0",
+      "@font-size-base": "14px",
+      "@border-radius-base": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "20px",
+        "background": "var(--colorBg)",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)"
+      },
+      ".header": {
+        "display": "flex",
+        "justify-content": "space-between",
+        "align-items": "center",
+        "color": "var(--colorTextBase)",
+        "padding-bottom": "16px",
+        "border-bottom": "1px solid rgba(255, 255, 255, 0.1)"
+      },
+      ".card": {
+        "background": "rgba(255, 255, 255, 0.05)",
+        "border-radius": "var(--borderRadius)",
+        "padding": "16px",
+        "margin-bottom": "16px"
+      },
+      ".button": {
+        "background": "var(--colorPrimary)",
+        "color": "#ffffff",
+        "border-radius": "var(--borderRadius)",
+        "padding": "8px 16px",
+        "border": "none",
+        "cursor": "pointer"
+      }
+    },
+    "tokenCoverage": 0.85,
+    "mappingNotes": [
+      "基于 backgroundBrightness: dark 推导并生成暗色主题变量",
+      "主色映射为--colorPrimary，采用高对比度蓝色以保证暗色背景下的可读性",
+      "背景色映射为--colorBg，采用深灰色减少视觉疲劳",
+      "文本色映射为--colorTextBase，采用浅灰色保证对比度"
+    ],
+    "elementStyleMap": {
+      "el-el-x-0-section-x-1-sub-header-x-0-select-x-1": {
+        "border": "1px solid #d9d9d9",
+        "border-radius": "4px",
+        "padding": "4px 8px",
+        "background": "#fff"
+      },
+      "el-el-x-0-section-x-1-sub-header-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "justify-content": "space-between"
+      },
+      "el-el-x-0-section-x-1-stats-row-x-1-stat-item-x-0-text-x-0": {
+        "color": "#666",
+        "font-size": "14px"
+      },
+      "el-el-x-0-section-x-1-stats-row-x-1-stat-item-x-0-text-x-1": {
+        "color": "#1990ff",
+        "font-size": "24px",
+        "font-weight": "bold"
+      },
+      "el-el-x-0-section-x-1-stats-row-x-1-stat-item-x-0": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-el-x-0-section-x-1-stats-row-x-1-image-x-1": {
+        "width": "60px",
+        "height": "60px"
+      },
+      "el-el-x-0-section-x-1-stats-row-x-1-stat-item-x-2-text-x-0": {
+        "color": "#666",
+        "font-size": "14px"
+      },
+      "el-el-x-0-section-x-1-stats-row-x-1-stat-item-x-2-text-x-1": {
+        "color": "#00bcd4",
+        "font-size": "24px",
+        "font-weight": "bold"
+      },
+      "el-el-x-0-section-x-1-stats-row-x-1-stat-item-x-2": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-el-x-0-section-x-1-stats-row-x-1": {
+        "background": "rgba(237, 244, 251, 0.7)",
+        "border-radius": "8px",
+        "padding": "16px",
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center",
+        "justify-content": "space-around"
+      },
+      "el-el-x-0-section-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-0-section-x-2-sub-header-x-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-0-section-x-2-distribution-row-x-1-distribution-card-x-0-image-x-1": {
+        "width": "52px",
+        "height": "53px"
+      },
+      "el-el-x-0-section-x-2-distribution-row-x-1-distribution-card-x-0": {
+        "background": "rgba(237, 244, 251, 0.7)",
+        "border-radius": "8px",
+        "padding": "12px",
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-el-x-0-section-x-2-distribution-row-x-1-distribution-card-x-1-image-x-1": {
+        "width": "52px",
+        "height": "52px"
+      },
+      "el-el-x-0-section-x-2-distribution-row-x-1-distribution-card-x-1": {
+        "background": "rgba(237, 244, 251, 0.7)",
+        "border-radius": "8px",
+        "padding": "12px",
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-el-x-0-section-x-2-distribution-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row",
+        "justify-content": "space-between"
+      },
+      "el-el-x-0-section-x-2": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-0-section-x-3-sub-header-x-0-tabs-x-1-tab-x-0": {
+        "background": "#1990ff",
+        "color": "#fff",
+        "border-radius": "12px",
+        "padding": "2px 12px"
+      },
+      "el-el-x-0-section-x-3-sub-header-x-0-tabs-x-1-tab-x-1": {
+        "color": "#666"
+      },
+      "el-el-x-0-section-x-3-sub-header-x-0-tabs-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-0-section-x-3-sub-header-x-0-link-x-2": {
+        "color": "#1990ff",
+        "font-size": "12px"
+      },
+      "el-el-x-0-section-x-3-sub-header-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center",
+        "justify-content": "space-between"
+      },
+      "el-el-x-0-section-x-3": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-0": {
+        "background": "#edf4fb",
+        "border-radius": "8px",
+        "width": "426px",
+        "height": "807px"
+      },
+      "el-sub-header-x-2-select-x-1": {
+        "border": "1px solid #d9d9d9",
+        "border-radius": "4px",
+        "padding": "4px 8px",
+        "background": "#fff"
+      },
+      "el-sub-header-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "justify-content": "space-between"
+      },
+      "el-select-x-4": {
+        "border": "1px solid #d9d9d9",
+        "border-radius": "4px",
+        "padding": "4px 8px",
+        "background": "#fff"
+      },
+      "el-stats-row-x-5-stat-item-x-0-text-x-0": {
+        "color": "#666",
+        "font-size": "14px"
+      },
+      "el-stats-row-x-5-stat-item-x-0-text-x-1": {
+        "color": "#1990ff",
+        "font-size": "24px",
+        "font-weight": "bold"
+      },
+      "el-stats-row-x-5-stat-item-x-0": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-stats-row-x-5-image-x-1": {
+        "width": "60px",
+        "height": "60px"
+      },
+      "el-stats-row-x-5-stat-item-x-2-text-x-0": {
+        "color": "#666",
+        "font-size": "14px"
+      },
+      "el-stats-row-x-5-stat-item-x-2-text-x-1": {
+        "color": "#00bcd4",
+        "font-size": "24px",
+        "font-weight": "bold"
+      },
+      "el-stats-row-x-5-stat-item-x-2": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-stats-row-x-5": {
+        "background": "rgba(237, 244, 251, 0.7)",
+        "border-radius": "8px",
+        "padding": "16px",
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center",
+        "justify-content": "space-around"
+      },
+      "el-stat-item-x-6-text-x-0": {
+        "color": "#666",
+        "font-size": "14px"
+      },
+      "el-stat-item-x-6-text-x-1": {
+        "color": "#1990ff",
+        "font-size": "24px",
+        "font-weight": "bold"
+      },
+      "el-stat-item-x-6": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-text-x-7": {
+        "color": "#666",
+        "font-size": "14px"
+      },
+      "el-text-x-8": {
+        "color": "#1990ff",
+        "font-size": "24px",
+        "font-weight": "bold"
+      },
+      "el-image-x-9": {
+        "width": "60px",
+        "height": "60px"
+      },
+      "el-stat-item-x-10-text-x-0": {
+        "color": "#666",
+        "font-size": "14px"
+      },
+      "el-stat-item-x-10-text-x-1": {
+        "color": "#00bcd4",
+        "font-size": "24px",
+        "font-weight": "bold"
+      },
+      "el-stat-item-x-10": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-text-x-11": {
+        "color": "#666",
+        "font-size": "14px"
+      },
+      "el-text-x-12": {
+        "color": "#00bcd4",
+        "font-size": "24px",
+        "font-weight": "bold"
+      },
+      "el-sub-header-x-15": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-distribution-row-x-17-distribution-card-x-0-image-x-1": {
+        "width": "52px",
+        "height": "53px"
+      },
+      "el-distribution-row-x-17-distribution-card-x-0": {
+        "background": "rgba(237, 244, 251, 0.7)",
+        "border-radius": "8px",
+        "padding": "12px",
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-distribution-row-x-17-distribution-card-x-1-image-x-1": {
+        "width": "52px",
+        "height": "52px"
+      },
+      "el-distribution-row-x-17-distribution-card-x-1": {
+        "background": "rgba(237, 244, 251, 0.7)",
+        "border-radius": "8px",
+        "padding": "12px",
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-distribution-row-x-17": {
+        "display": "flex",
+        "flex-direction": "row",
+        "justify-content": "space-between"
+      },
+      "el-distribution-card-x-18-image-x-1": {
+        "width": "52px",
+        "height": "53px"
+      },
+      "el-distribution-card-x-18": {
+        "background": "rgba(237, 244, 251, 0.7)",
+        "border-radius": "8px",
+        "padding": "12px",
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-image-x-20": {
+        "width": "52px",
+        "height": "53px"
+      },
+      "el-distribution-card-x-22-image-x-1": {
+        "width": "52px",
+        "height": "52px"
+      },
+      "el-distribution-card-x-22": {
+        "background": "rgba(237, 244, 251, 0.7)",
+        "border-radius": "8px",
+        "padding": "12px",
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-image-x-24": {
+        "width": "52px",
+        "height": "52px"
+      },
+      "el-sub-header-x-26-tabs-x-1-tab-x-0": {
+        "background": "#1990ff",
+        "color": "#fff",
+        "border-radius": "12px",
+        "padding": "2px 12px"
+      },
+      "el-sub-header-x-26-tabs-x-1-tab-x-1": {
+        "color": "#666"
+      },
+      "el-sub-header-x-26-tabs-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-sub-header-x-26-link-x-2": {
+        "color": "#1990ff",
+        "font-size": "12px"
+      },
+      "el-sub-header-x-26": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center",
+        "justify-content": "space-between"
+      },
+      "el-tabs-x-28-tab-x-0": {
+        "background": "#1990ff",
+        "color": "#fff",
+        "border-radius": "12px",
+        "padding": "2px 12px"
+      },
+      "el-tabs-x-28-tab-x-1": {
+        "color": "#666"
+      },
+      "el-tabs-x-28": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-tab-x-29": {
+        "background": "#1990ff",
+        "color": "#fff",
+        "border-radius": "12px",
+        "padding": "2px 12px"
+      },
+      "el-tab-x-30": {
+        "color": "#666"
+      },
+      "el-link-x-31": {
+        "color": "#1990ff",
+        "font-size": "12px"
+      }
+    }
+  }
+}

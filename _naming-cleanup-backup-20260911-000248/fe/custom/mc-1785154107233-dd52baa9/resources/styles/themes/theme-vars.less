@@ -1,0 +1,45 @@
+.common() {
+--em-primary: #1990ff;
+  --em-secondary: #5a7eff;
+  --em-accent: #559eff;
+  --em-accent-light: #d6effc;
+  --em-info: #57caff;
+  --em-white: #ffffff;
+  --em-panel-shadow: 0 4px 10px rgba(74, 117, 141, 0.25);
+  --em-title-gradient: linear-gradient(90deg, #1990ff 0%, #5a7eff 100%);
+  @click: inherit; // 自动添加
+}
+
+.theme-dark() {
+  .common();
+
+  --em-panel-bg: #edf4fb;
+  --em-text-primary: #333333;
+  --em-text-secondary: #333333;
+  --em-tab-active-bg: #1990ff;
+  --em-tab-active-border: #c7e0ff;
+  --em-tab-active-text: #ffffff;
+  --em-tab-normal-bg: #6680a0;
+  --em-tab-normal-border: #acc4e1;
+  --em-tab-normal-text: #333333;
+  --em-sub-title-shadow: 0 5.047923px 5.047923px rgba(255, 255, 255, 0.8);
+}
+
+.theme-light() {
+  .common();
+
+  --em-panel-bg: #edf4fb;
+  --em-text-primary: #333333;
+  --em-text-secondary: #333333;
+  --em-tab-active-bg: #1990ff;
+  --em-tab-active-border: #c7e0ff;
+  --em-tab-active-text: #ffffff;
+  --em-tab-normal-bg: #6680a0;
+  --em-tab-normal-border: #acc4e1;
+  --em-tab-normal-text: #333333;
+  --em-sub-title-shadow: 0 5.047923px 5.047923px rgba(255, 255, 255, 0.8);
+}
+
+:root {
+  .theme-dark();
+}

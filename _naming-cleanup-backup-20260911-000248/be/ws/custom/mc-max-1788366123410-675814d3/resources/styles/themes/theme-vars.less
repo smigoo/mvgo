@@ -1,0 +1,61 @@
+.common() {
+  // 字体缩放基准令牌（根容器通过 CSS 变量 --fontSize 驱动，默认 14px）
+  @fontSize: 14px;
+
+  // 字体尺寸
+  @font-size-base: 14px;
+  @font-size-large: 36px;
+  @font-size-title: 16px;
+
+  // 字重
+  @font-weight-bold: 700;
+  @font-weight-normal: 400;
+
+  // 圆角
+  @border-radius-base: 8px;
+  @border-radius-card: 12px;
+
+  // 阴影
+  @shadow-card: 0 2px 8px rgba(0, 0, 0, 0.08);
+
+  // 间距
+  @spacing-base: 16px;
+  @spacing-large: 24px;
+}
+
+.theme-light() {
+  // 主色
+  @color-primary: rgba(25, 144, 255, 1);
+  @color-warning: rgba(255, 138, 96, 1);
+
+  // 文字色
+  @color-text-base: rgba(51, 51, 51, 1);
+  @color-text-secondary: rgba(51, 51, 51, 0.65);
+
+  // 背景色
+  @color-bg-base: rgba(237, 244, 251, 1);
+  @color-bg-card: #ffffff;
+}
+
+.theme-dark() {
+  // 主色
+  @color-primary: rgba(25, 144, 255, 1);
+  @color-warning: rgba(255, 138, 96, 1);
+
+  // 文字色（深色面板禁止使用黑色系）
+  @color-text-base: rgba(220, 230, 242, 1);
+  @color-text-secondary: rgba(180, 200, 220, 0.65);
+
+  // 背景色
+  @color-bg-base: rgba(18, 30, 48, 1);
+  @color-bg-card: rgba(26, 42, 64, 1);
+}
+// 写盘门禁自动补全缺失变量
+@fontSize: 14px;
+@fontSize: 14px;
+
+// 自动添加：将 .common() 中的 Less 变量暴露到全局作用域
+
+:root {
+  .common();
+}

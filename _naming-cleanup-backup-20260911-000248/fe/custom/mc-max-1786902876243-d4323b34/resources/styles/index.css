@@ -1,0 +1,210 @@
+.dark .c-env-monitor-title-icon {
+  display: block;
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+.dark .c-env-monitor-header-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 28px;
+  flex-shrink: 0;
+}
+.dark .c-env-monitor-tabs {
+  display: flex;
+  align-items: center;
+  height: 27px;
+  padding: 3px 4px;
+  box-sizing: border-box;
+  background-image: linear-gradient(180deg, #b5deff 0%, #d1ecff 100%);
+  border: 0.72px solid #ffffff;
+  border-radius: 4px;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.dark .c-env-monitor-tab-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 21px;
+  padding: 0 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+  transition: background-image 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s;
+  border: 0.6px solid transparent;
+  box-sizing: border-box;
+}
+.dark .c-env-monitor-tab-item.active {
+  background-image: linear-gradient(180deg, #1099b1 0%, #038fff 100%);
+  border-color: #ffffff;
+}
+.dark .c-env-monitor-tab-label {
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', 'PingFang SC', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+  color: #2c9bea;
+  white-space: nowrap;
+}
+.dark .c-env-monitor-tab-item.active .c-env-monitor-tab-label {
+  color: #ffffff;
+  text-shadow: 0 0.6px 0 #006fe3;
+}
+.dark .c-env-monitor-tabs-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 24px;
+  margin-left: 12px;
+  flex-shrink: 0;
+  overflow: visible;
+}
+.dark .c-env-monitor-tabs-icon-img {
+  display: block;
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+.dark .c-env-monitor-badge {
+  position: absolute;
+  top: -4px;
+  right: 0;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  box-sizing: border-box;
+  border-radius: 7px;
+  background-color: #f53f3f;
+  color: #ffffff;
+  font-family: 'PingFang SC', 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 14px;
+  text-align: center;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dark .c-env-monitor-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: 0 20px;
+  box-sizing: border-box;
+}
+.dark .c-env-monitor-chart {
+  width: 100%;
+  height: 145px;
+  min-height: 113px;
+}
+.light .c-env-monitor-title-icon {
+  display: block;
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+.light .c-env-monitor-header-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 28px;
+  flex-shrink: 0;
+}
+.light .c-env-monitor-tabs {
+  display: flex;
+  align-items: center;
+  height: 27px;
+  padding: 3px 4px;
+  box-sizing: border-box;
+  background-image: linear-gradient(180deg, #b5deff 0%, #d1ecff 100%);
+  border: 0.72px solid #ffffff;
+  border-radius: 4px;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.light .c-env-monitor-tab-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 21px;
+  padding: 0 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+  transition: background-image 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s;
+  border: 0.6px solid transparent;
+  box-sizing: border-box;
+}
+.light .c-env-monitor-tab-item.active {
+  background-image: linear-gradient(180deg, #1099b1 0%, #038fff 100%);
+  border-color: #ffffff;
+}
+.light .c-env-monitor-tab-label {
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', 'PingFang SC', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+  color: #2c9bea;
+  white-space: nowrap;
+}
+.light .c-env-monitor-tab-item.active .c-env-monitor-tab-label {
+  color: #ffffff;
+  text-shadow: 0 0.6px 0 #006fe3;
+}
+.light .c-env-monitor-tabs-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 24px;
+  margin-left: 12px;
+  flex-shrink: 0;
+  overflow: visible;
+}
+.light .c-env-monitor-tabs-icon-img {
+  display: block;
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+.light .c-env-monitor-badge {
+  position: absolute;
+  top: -4px;
+  right: 0;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  box-sizing: border-box;
+  border-radius: 7px;
+  background-color: #f53f3f;
+  color: #ffffff;
+  font-family: 'PingFang SC', 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 14px;
+  text-align: center;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.light .c-env-monitor-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: 0 20px;
+  box-sizing: border-box;
+}
+.light .c-env-monitor-chart {
+  width: 100%;
+  height: 145px;
+  min-height: 113px;
+}

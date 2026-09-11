@@ -1,0 +1,448 @@
+{
+  "generatedAt": "2026-01-17T12:00:00Z",
+  "stage": "preview-analysis",
+  "componentName": "环境监测",
+  "componentTitle": "环境监测",
+  "analysisModel": "claude-opus-4-8",
+  "sourceImage": {
+    "path": "mc-preview.png",
+    "size": 0,
+    "mtimeMs": 0,
+    "sha1": ""
+  },
+  "summary": "浅色环境监测面板，包含顶部Tab切换栏（4个选项）、右上角统计指标和视图切换按钮、以及主体折线图区域",
+  "layout": {
+    "type": "vertical-stack",
+    "direction": "vertical",
+    "sections": [
+      {
+        "id": "header-tabs",
+        "name": "环境类型切换",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "title-same-row",
+        "slotCandidate": "header-right",
+        "body": {
+          "layout": "horizontal",
+          "bgPlaceholder": "body-bg-tabs",
+          "children": [
+            {
+              "id": "tab-1",
+              "role": "tab",
+              "type": "tab-button",
+              "text": "气化碳",
+              "active": true,
+              "figmaNode": null,
+              "styles": {
+                "fontSize": 14,
+                "fontWeight": "normal",
+                "color": "rgba(255, 255, 255, 1)",
+                "backgroundColor": "rgba(85, 158, 255, 1)",
+                "borderRadius": "4px",
+                "padding": "6px 16px"
+              },
+              "resourceFile": "../resources/images/bg-7890.png",
+              "recommendedUsage": "backgroundBlock",
+              "backgroundSize": "100% 100%",
+              "backgroundPosition": "center center",
+              "backgroundRepeat": "no-repeat"
+            },
+            {
+              "id": "tab-2",
+              "role": "tab",
+              "type": "tab-button",
+              "text": "能见度",
+              "active": false,
+              "figmaNode": null,
+              "styles": {
+                "fontSize": 14,
+                "fontWeight": "normal",
+                "color": "rgba(0, 0, 0, 0.65)",
+                "backgroundColor": "transparent",
+                "padding": "6px 16px"
+              }
+            },
+            {
+              "id": "tab-3",
+              "role": "tab",
+              "type": "tab-button",
+              "text": "洞内照明",
+              "active": false,
+              "figmaNode": null,
+              "styles": {
+                "fontSize": 14,
+                "fontWeight": "normal",
+                "color": "rgba(0, 0, 0, 0.65)",
+                "backgroundColor": "transparent",
+                "padding": "6px 16px"
+              }
+            },
+            {
+              "id": "tab-4",
+              "role": "tab",
+              "type": "tab-button",
+              "text": "洞外光强",
+              "active": false,
+              "figmaNode": null,
+              "styles": {
+                "fontSize": 14,
+                "fontWeight": "normal",
+                "color": "rgba(0, 0, 0, 0.65)",
+                "backgroundColor": "transparent",
+                "padding": "6px 16px"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "header-right-controls",
+        "name": "右上角控件组",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "title-same-row",
+        "slotCandidate": "header-right",
+        "body": {
+          "layout": "horizontal",
+          "gap": "8px",
+          "children": [
+            {
+              "id": "stats-indicator",
+              "role": "statistic",
+              "type": "text-label",
+              "text": "2k3+785CO浓度",
+              "figmaNode": null,
+              "styles": {
+                "fontSize": 12,
+                "fontWeight": "normal",
+                "color": "rgba(0, 0, 0, 0.65)"
+              }
+            },
+            {
+              "id": "view-toggle-list",
+              "role": "icon-button",
+              "type": "icon",
+              "figmaNode": null,
+              "styles": {
+                "width": 20,
+                "height": 20
+              },
+              "resourceFile": "../resources/images/icon-7941.png",
+              "resourceVarName": "icon1",
+              "recommendedUsage": "imgSrc",
+              "downloadStatus": "success"
+            },
+            {
+              "id": "view-toggle-chart",
+              "role": "icon-button",
+              "type": "icon",
+              "figmaNode": null,
+              "styles": {
+                "width": 20,
+                "height": 20
+              },
+              "resourceFile": "../resources/images/icon-7941.png",
+              "resourceVarName": "icon1",
+              "recommendedUsage": "imgSrc",
+              "downloadStatus": "success"
+            },
+            {
+              "id": "notification-badge",
+              "role": "badge",
+              "type": "badge",
+              "value": "8",
+              "figmaNode": null,
+              "styles": {
+                "fontSize": 10,
+                "fontWeight": "bold",
+                "color": "rgba(255, 255, 255, 1)",
+                "backgroundColor": "rgba(245, 63, 63, 1)",
+                "borderRadius": "50%",
+                "width": 16,
+                "height": 16
+              },
+              "resourceFile": "../resources/images/bg-7880.png",
+              "recommendedUsage": "backgroundStyle",
+              "backgroundSize": "100% 100%",
+              "backgroundPosition": "center center",
+              "backgroundRepeat": "no-repeat"
+            }
+          ]
+        }
+      },
+      {
+        "id": "chart-area",
+        "name": "折线图区域",
+        "role": "常驻",
+        "layout": "vertical",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "body": {
+          "layout": "vertical",
+          "bgPlaceholder": "chart-container-bg",
+          "children": [
+            {
+              "id": "chart-main",
+              "role": "chart",
+              "type": "area-chart",
+              "figmaNode": null,
+              "styles": {
+                "width": 420,
+                "height": 160
+              }
+            }
+          ],
+          "backgroundImage": {
+            "src": "../resources/images/bg-7890.png",
+            "recommendedUsage": "backgroundBlock"
+          },
+          "backgroundSize": "100% 100%",
+          "backgroundPosition": "center center",
+          "backgroundRepeat": "no-repeat"
+        }
+      }
+    ]
+  },
+  "styles": {
+    "backgroundBrightness": "light",
+    "theme": "浅色数据监测风",
+    "colors": [
+      "rgba(85, 158, 255, 1)",
+      "rgba(94, 205, 150, 1)",
+      "rgba(245, 63, 63, 1)",
+      "rgba(237, 244, 251, 1)"
+    ],
+    "background": "浅灰蓝色背景（#edf4fb）",
+    "decorations": [
+      "顶部装饰线条",
+      "Tab按钮选中态背景"
+    ],
+    "emphasis": [
+      "选中Tab使用蓝色背景高亮",
+      "通知数字使用红色圆形徽章"
+    ]
+  },
+  "interactions": [
+    {
+      "target": "顶部Tab栏（气化碳/能见度/洞内照明/洞外光强）",
+      "type": "tab-switch",
+      "description": "切换不同环境监测指标",
+      "defaultState": "常驻，气化碳选中",
+      "evidence": "第一个Tab有蓝色背景高亮"
+    },
+    {
+      "target": "右上角列表图标",
+      "type": "icon-button",
+      "description": "切换到列表视图",
+      "defaultState": "常驻，可点击",
+      "evidence": "图标样式明确，位于右上角"
+    },
+    {
+      "target": "右上角图表图标",
+      "type": "icon-button",
+      "description": "切换到图表视图",
+      "defaultState": "常驻，可点击",
+      "evidence": "图标样式明确，位于右上角"
+    }
+  ],
+  "charts": [
+    {
+      "section": "chart-area",
+      "type": "area",
+      "series": [
+        "CO浓度"
+      ],
+      "legend": [],
+      "legendPosition": null,
+      "seriesColors": [
+        "rgba(94, 205, 150, 0.3)"
+      ],
+      "legendType": null,
+      "axes": "X轴为时间（0-24小时），Y轴为浓度值（0-50范围）",
+      "tooltip": "未显示",
+      "notes": [
+        "面积图带绿色渐变填充",
+        "Y轴有红色虚线标注预警值",
+        "右上角显示当前数值和预警文字"
+      ]
+    }
+  ],
+  "doNotInvent": [
+    "下拉选项全集（未展示）",
+    "具体的数据刷新逻辑",
+    "预警触发条件详细规则",
+    "图表交互行为（tooltip内容未显示）",
+    "通知徽章点击后的行为"
+  ],
+  "notes": [
+    "这是一个 base-panel 的内容区组件，外层面板框架由宿主提供",
+    "顶部Tab和右上角控件应映射到 header-right 插槽",
+    "图表区域为主内容，占据大部分空间",
+    "配色以浅色为主，强调信息使用蓝色和红色高亮"
+  ],
+  "headerSlots": [
+    {
+      "slotType": "header-right",
+      "controlType": "Tab切换",
+      "description": "4个环境类型切换按钮（气化碳/能见度/洞内照明/洞外光强）",
+      "confidence": "high",
+      "figmaNode": null
+    },
+    {
+      "slotType": "header-right",
+      "controlType": "统计指标",
+      "description": "2k3+785CO浓度文本标签",
+      "confidence": "high",
+      "figmaNode": null
+    },
+    {
+      "slotType": "header-right",
+      "controlType": "图标操作",
+      "description": "视图切换按钮组（列表/图表）+ 通知徽章",
+      "confidence": "high",
+      "figmaNode": null
+    }
+  ],
+  "coverageReport": {
+    "totalFigma": 14,
+    "matchedCount": 5,
+    "missingCount": 5,
+    "uncertainCount": 0,
+    "coverageRate": 50,
+    "missing": [
+      {
+        "name": "cp-环境监测",
+        "type": "FRAME",
+        "depth": 0
+      },
+      {
+        "name": "环境监测",
+        "type": "TEXT",
+        "depth": 2
+      },
+      {
+        "name": "sub-t",
+        "type": "FRAME",
+        "depth": 2
+      },
+      {
+        "name": "一氧化碳",
+        "type": "TEXT",
+        "depth": 4
+      },
+      {
+        "name": "num",
+        "type": "GROUP",
+        "depth": 3
+      }
+    ],
+    "uncertain": [],
+    "summary": "需关注"
+  },
+  "chartDataHints": [
+    {
+      "chartTitle": "area",
+      "chartType": "area",
+      "labels": [
+        {
+          "label": "40\n30\n20\n10\n0",
+          "name": "40 30 20 10 0"
+        },
+        {
+          "label": "辆",
+          "name": "辆"
+        },
+        {
+          "label": "预警线",
+          "name": "预警线"
+        },
+        {
+          "label": "时",
+          "name": "时"
+        },
+        {
+          "label": "zk3+785CO浓度",
+          "name": "zk3+785CO浓度"
+        },
+        {
+          "label": "一氧化碳",
+          "name": "一氧化碳"
+        },
+        {
+          "label": "洞内照明",
+          "name": "洞内照明"
+        },
+        {
+          "label": "洞外光强",
+          "name": "洞外光强"
+        },
+        {
+          "label": "能见度",
+          "name": "能见度"
+        }
+      ],
+      "values": [
+        {
+          "label": "600",
+          "value": 600,
+          "unit": ""
+        },
+        {
+          "label": "400",
+          "value": 400,
+          "unit": ""
+        },
+        {
+          "label": "200",
+          "value": 200,
+          "unit": ""
+        },
+        {
+          "label": "600",
+          "value": 600,
+          "unit": ""
+        },
+        {
+          "label": "0",
+          "value": 0,
+          "unit": ""
+        },
+        {
+          "label": "600",
+          "value": 600,
+          "unit": ""
+        },
+        {
+          "label": "2",
+          "value": 2,
+          "unit": ""
+        },
+        {
+          "label": "4",
+          "value": 4,
+          "unit": ""
+        },
+        {
+          "label": "6",
+          "value": 6,
+          "unit": ""
+        },
+        {
+          "label": "8",
+          "value": 8,
+          "unit": ""
+        },
+        {
+          "label": "10",
+          "value": 10,
+          "unit": ""
+        },
+        {
+          "label": "12",
+          "value": 12,
+          "unit": ""
+        }
+      ]
+    }
+  ]
+}

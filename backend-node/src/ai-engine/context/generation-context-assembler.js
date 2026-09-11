@@ -26,6 +26,10 @@ function normalizeSectionNode(section) {
     isLayoutContainer: section.isLayoutContainer === true,
     layout: section.layout || null,
     layoutSource: section.layoutSource || null,
+    // 🛡️ R1-1：透传归属 Figma 节点 id 集合（dedupeDuplicateSections 单一归属去重依赖它）
+    sourceNodeIds: Array.isArray(section.sourceNodeIds)
+      ? section.sourceNodeIds.map((s) => String(s)).filter(Boolean)
+      : undefined,
     ...(children && children.length > 0 ? { children } : {}),
   }
 }

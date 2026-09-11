@@ -1,0 +1,132 @@
+{
+  "componentId": "mc-1785238301016-77e87ecc",
+  "componentName": "cp-设备监测",
+  "version": "v1.0.0",
+  "panelKey": "default-panel",
+  "attribute": {
+    "aspectRatio": [
+      230,
+      69
+    ]
+  },
+  "businessEvents": {
+    "mc-1785238301016-77e87ecc-onload": {
+      "eventId": "mc-1785238301016-77e87ecc-onload",
+      "eventName": "组件加载",
+      "eventDataSchema": {
+        "componentId": {
+          "key": "componentId",
+          "name": "组件ID",
+          "type": "string"
+        },
+        "componentName": {
+          "key": "componentName",
+          "name": "组件名称",
+          "type": "string"
+        }
+      }
+    }
+  },
+  "businessStatuses": {},
+  "dataSources": [
+    {
+      "sourceName": "deviceMonitorData",
+      "columns": [
+        {
+          "name": "deviceName",
+          "type": "string",
+          "comment": "设备名称"
+        },
+        {
+          "name": "deviceStatus",
+          "type": "string",
+          "comment": "设备状态"
+        },
+        {
+          "name": "onlineCount",
+          "type": "number",
+          "comment": "在线数量"
+        },
+        {
+          "name": "offlineCount",
+          "type": "number",
+          "comment": "离线数量"
+        },
+        {
+          "name": "alarmCount",
+          "type": "number",
+          "comment": "告警数量"
+        },
+        {
+          "name": "updateTime",
+          "type": "string",
+          "comment": "更新时间"
+        }
+      ]
+    }
+  ],
+  "formSources": [],
+  "layoutConfig": {
+    "default": "default",
+    "list": [
+      {
+        "name": "默认布局",
+        "key": "default",
+        "previewName": "mc-preview.png"
+      }
+    ]
+  },
+  "themeConfig": {
+    "default": "dark",
+    "list": [
+      {
+        "name": "深色主题",
+        "key": "dark"
+      },
+      {
+        "name": "亮色主题",
+        "key": "light"
+      }
+    ]
+  },
+  "cssVariableConfig": [
+    {
+      "name": "基础文字颜色",
+      "key": "colorTextBase",
+      "type": "color"
+    },
+    {
+      "name": "主色调",
+      "key": "colorPrimary",
+      "type": "color"
+    },
+    {
+      "name": "主背景色",
+      "key": "colorPrimaryBg",
+      "type": "color"
+    },
+    {
+      "name": "字体大小",
+      "key": "fontSize",
+      "type": "size"
+    }
+  ],
+  "businessConfig": [
+    {
+      "name": "是否自动刷新",
+      "key": "autoRefresh",
+      "type": "boolean",
+      "renderType": "radio",
+      "default": true,
+      "describe": "控制设备监测数据是否自动刷新"
+    },
+    {
+      "name": "刷新间隔",
+      "key": "refreshInterval",
+      "type": "number",
+      "renderType": "number",
+      "default": 30,
+      "describe": "设备监测数据自动刷新的间隔时间，单位为秒"
+    }
+  ]
+}

@@ -1,0 +1,347 @@
+// 业务样式：设备监测组件
+// 所有类名以 .c- 前缀，与本组件模板精确匹配
+// 颜色值严格遵循 Figma 真值表，禁止使用主题变量覆盖明确颜色
+
+.c-mc-max-1787739503358-290d5fa6-c-monitor-root {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 12px 16px;
+  font-family: @font-family-base;
+  color: @text-color;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+// 标题区域
+.c-mc-max-1787739503358-290d5fa6-c-monitor-title-left {
+  height: 425px;
+  width: 420px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  max-width: 100%;
+  max-height: 100vh;
+  box-sizing: border-box;
+  background-image: url('../resources/images/bg-8418.png');
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.c-mc-max-1787739503358-290d5fa6-c-monitor-title-dot {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+
+.c-mc-max-1787739503358-290d5fa6-c-monitor-title-dot--small {
+  width: 10px;
+  height: 10px;
+}
+
+.c-mc-max-1787739503358-290d5fa6-c-monitor-title-text {
+  background: linear-gradient(180deg, #1990ff 0%, #5a7eff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.c-mc-max-1787739503358-290d5fa6-c-monitor-title-tip {
+  background: linear-gradient(180deg, #1990ff 0%, #5a7eff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+// 头部指标
+.c-mc-max-1787739503358-290d5fa6-c-monitor-header-metrics {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 24px;
+}
+
+.c-mc-max-1787739503358-290d5fa6-c-monitor-header-metric {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.c-mc-max-1787739503358-290d5fa6-c-monitor-header-metric-label {
+  color: #333333;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.c-mc-max-1787739503358-290d5fa6-c-monitor-header-metric-value {
+  color: #1990ff;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.c-mc-max-1787739503358-290d5fa6-c-monitor-header-metric-value--health {
+  color: #08a3a5;
+}
+
+// 设备概览区域
+.c-mc-max-1787739503358-290d5fa6-c-monitor-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.c-mc-max-1787739503358-290d5fa6-c-monitor-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.c-mc-max-1787739503358-290d5fa6-c-monitor-section-title {
+  color: @text-color;
+  font-size: @font-size-lg;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.c-mc-max-1787739503358-290d5fa6-c-monitor-overview-body {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.c-mc-max-1787739503358-290d5fa6-c-monitor-overview-card {
+  background: #ffffff;
+  border: 1px solid @border-color;
+  border-radius: 6px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 120px;
+  box-shadow: 0px 1px 2px rgba(51, 101, 144, 0.4);
+}
+
+.c-mc-max-1787739503358-290d5fa6-c-monitor-overview-value {
+  color: #1990ff;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.c-mc-max-1787739503358-290d5fa6-c-monitor-overview-label {
+  color: #333333;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.c-mc-max-1787739503358-290d5fa6-c-monitor-overview-value--health {
+  color: #08a3a5;
+}
+
+// 设备类型分类区域
+.c-mc-max-1787739503358-290d5fa6-c-monitor-categories {
+  display: flex;
+  flex-direction: row;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.c-mc-max-1787739503358-290d5fa6-c-monitor-categories-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+// 切换卡片（隧道设备/南北接线设备）
+.c-mc-max-1787739503358-290d5fa6-c-monitor-switch {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+}
+
+.c-mc-max-1787739503358-290d5fa6-c-monitor-switch-active,
+.c-mc-max-1787739503358-290d5fa6-c-monitor-switch-default {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-radius: 6px;
+  padding: 12px 16px;
+  min-width: 180px;
+}
+
+.c-mc-max-1787739503358-290d5fa6-c-monitor-switch-active {
+  background: linear-gradient(135deg, #2b9bff 0%, #299aff 100%);
+  color: #ffffff;
+}
+
+.c-mc-max-1787739503358-290d5fa6-c-monitor-switch-default {
+  background: linear-gradient(135deg, #93ccff 0%, #93ccff 100%);
+  color: #333333;
+}
+
+.c-mc-max-1787739503358-290d5fa6-c-monitor-switch-icon {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.c-mc-max-1787739503358-290d5fa6-c-monitor-switch-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.c-mc-max-1787739503358-290d5fa6-c-monitor-switch-name {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.c-mc-max-1787739503358-290d5fa6-c-monitor-switch-line {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: inherit;
+}
+
+// 分类标签栏
+.c-mc-max-1787739503358-290d5fa6-c-monitor-tab-rail {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.c-mc-max-1787739503358-290d5fa6-c-monitor-tab-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #318aff 0%, #70bfff 100%);
+  border: 1px solid #f0f5ff;
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: #ffffff;
+  cursor: default;
+}
+
+.c-mc-max-1787739503358-290d5fa6-c-monitor-tab-card--active {
+  // 激活态额外样式，可选背景微调
+  background: linear-gradient(135deg, #318aff 0%, #70bfff 100%);
+}
+
+.c-mc-max-1787739503358-290d5fa6-c-monitor-tab-text {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: #ffffff;
+}
+
+.c-mc-max-1787739503358-290d5fa6-c-monitor-tab-number {
+  display: inline-block;
+  background: #ffffff;
+  border: 1px solid #258dc8;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #3b80e7;
+  box-shadow: 0px 1px 2px rgba(51, 101, 144, 0.4);
+}
+
+.c-mc-max-1787739503358-290d5fa6-c-monitor-tab-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #85baff 0%, #bfe2ff 100%);
+  border: 1px solid #f0f5ff;
+  border-radius: 6px;
+  padding: 8px 16px;
+  color: #3b80e7;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
+  cursor: default;
+  white-space: nowrap;
+}
+
+.c-mc-max-1787739503358-290d5fa6-c-monitor-tab-item--medium {
+  padding: 8px 12px;
+}
+
+.c-mc-max-1787739503358-290d5fa6-c-monitor-tab-item--tall {
+  padding: 8px 20px;
+}
+
+// 设备网格
+.c-mc-max-1787739503358-290d5fa6-c-monitor-device-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.c-mc-max-1787739503358-290d5fa6-c-monitor-device-card {
+  background: #ffffff;
+  border: 1px solid @border-color;
+  border-radius: 6px;
+  padding: 12px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+  box-shadow: 0px 1px 2px rgba(51, 101, 144, 0.2);
+}
+
+.c-mc-max-1787739503358-290d5fa6-c-monitor-device-icon {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+
+.c-mc-max-1787739503358-290d5fa6-c-monitor-device-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+}
+
+.c-mc-max-1787739503358-290d5fa6-c-monitor-device-name {
+  color: #333333;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.c-mc-max-1787739503358-290d5fa6-c-monitor-device-value {
+  display: inline-block;
+  background: linear-gradient(135deg, #127bee 0%, #127bee 100%);
+  border-radius: 4px;
+  padding: 2px 8px;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.3;
+  box-shadow: 0px 0px 0px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+}

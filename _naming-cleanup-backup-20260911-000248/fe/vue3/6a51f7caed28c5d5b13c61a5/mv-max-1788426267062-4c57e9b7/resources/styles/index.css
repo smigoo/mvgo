@@ -1,0 +1,77 @@
+.gradient-title {
+  background: linear-gradient(90deg, #1990ff 0%, #5a7eff 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.stat-card {
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 16px 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+}
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+.stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #559eff;
+  line-height: 1.2;
+}
+.stat-label {
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.65);
+  margin-top: 8px;
+}
+.badge-common {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 4px;
+  font-size: 10px;
+  line-height: 1;
+  border-radius: 29px;
+  background: #f53f3f;
+  color: #ffffff;
+  font-weight: 500;
+}
+.chart-wrapper {
+  flex: 1;
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 16px;
+  position: relative;
+  min-height: 0;
+}
+.tab-container-common {
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  background: #ffffff;
+  border-radius: 4px;
+}
+.success-bg-common {
+  background: rgba(102, 204, 153, 0.3);
+  padding: 8px 12px;
+  border-radius: 4px;
+}
+.success-indicator-common {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #66cc99;
+  display: inline-block;
+  margin-right: 8px;
+}
+.divider-common {
+  height: 1px;
+  background: rgba(0, 0, 0, 0.06);
+  margin: 12px 0;
+}

@@ -1,0 +1,193 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 78,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1]",
+        "message": "section-chart的headerRelation为content-below-title，但缺失header节点定义，导致面板标题插槽无法正确映射。",
+        "suggestion": "补充header节点或修正headerRelation字段以匹配实际结构。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[1].body.children[0]",
+        "message": "chart-container将坐标轴刻度等图表内部元素作为布局子节点，造成DOM冗余，应通过图表配置项驱动。",
+        "suggestion": "将坐标轴、图例等元素从children中移除，收敛至图表配置项中。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[0].body.children[1].children[1]",
+        "message": "icon-wrapper使用relative布局包裹icon和badge，增加了嵌套层级，建议简化。",
+        "suggestion": "将badge作为icon组件的属性或简化布局结构，减少DOM节点。"
+      }
+    ],
+    "recommendations": [
+      "为section-chart补充header节点，或修正headerRelation以匹配实际结构。",
+      "将图表内部的坐标轴、图例等元素从children中移除，收敛至图表配置项中。",
+      "修正Y轴单位'辆'的业务逻辑错误，确保与CO浓度监测的实际物理单位一致。"
+    ],
+    "summary": "整体布局基本清晰，但存在面板标题缺失、图表内部节点冗余及嵌套过深等问题。建议修正section层级并优化图表封装。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#559EFF",
+      "--colorBg": "#EDF4FB",
+      "--colorTextBase": "#1F2D3D",
+      "--colorTextSecondary": "#8c8c8c",
+      "--colorSuccess": "#52c41a",
+      "--colorDanger": "#f53f3f",
+      "--colorGridLine": "rgba(140, 140, 140, 0.45)",
+      "--colorTabActiveBg": "rgba(85, 158, 255, 0.14)",
+      "--fontSize": "14px",
+      "--borderRadius": "6px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#559EFF",
+      "@color-bg": "#EDF4FB",
+      "@color-text-base": "#1F2D3D",
+      "@color-text-secondary": "#8c8c8c",
+      "@color-success": "#52c41a",
+      "@color-danger": "#f53f3f",
+      "@color-grid-line": "rgba(140, 140, 140, 0.45)",
+      "@color-tab-active-bg": "rgba(85, 158, 255, 0.14)",
+      "@font-size-base": "14px",
+      "@border-radius-base": "6px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "min-height": "100%",
+        "padding": "16px",
+        "background": "var(--colorBg)",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)"
+      },
+      ".tab-nav": {
+        "display": "flex",
+        "gap": "8px",
+        "padding": "8px 12px",
+        "border-bottom": "1px dashed var(--colorGridLine)"
+      },
+      ".tab-item": {
+        "position": "relative",
+        "padding": "8px 14px",
+        "color": "var(--colorTextSecondary)",
+        "border-radius": "var(--borderRadius)",
+        "cursor": "pointer"
+      },
+      ".tab-item.active": {
+        "color": "var(--colorPrimary)",
+        "background": "var(--colorTabActiveBg)",
+        "font-weight": "600"
+      },
+      ".tab-item.active::after": {
+        "content": "''",
+        "position": "absolute",
+        "left": "50%",
+        "bottom": "-10px",
+        "transform": "translateX(-50%)",
+        "border-left": "6px solid transparent",
+        "border-right": "6px solid transparent",
+        "border-bottom": "6px solid var(--colorPrimary)"
+      },
+      ".chart-grid-line": {
+        "border-bottom": "1px dashed var(--colorGridLine)"
+      },
+      ".co-curve": {
+        "stroke": "var(--colorSuccess)",
+        "stroke-width": "2px",
+        "fill": "none"
+      },
+      ".alert-line": {
+        "stroke": "var(--colorDanger)",
+        "stroke-width": "2px",
+        "stroke-dasharray": "6 4"
+      },
+      ".panel-header": {
+        "display": "flex",
+        "justify-content": "space-between",
+        "align-items": "center",
+        "color": "var(--colorTextBase)"
+      }
+    },
+    "tokenCoverage": 0.92,
+    "mappingNotes": [
+      "主题色 #559EFF 映射为 --colorPrimary，并用于 Tab 选中箭头背景",
+      "背景色 #EDF4FB 直接落地为 --colorBg，避免关键可见背景只依赖 CSS 变量",
+      "#8c8c8c 同时映射为次要文字色 --colorTextSecondary 与网格线派生色 --colorGridLine",
+      "绿色 CO 浓度曲线映射为 --colorSuccess，红色预警线映射为 --colorDanger"
+    ],
+    "elementStyleMap": {
+      "section-tabs-controls": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tab-list": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "view-icons": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-13-chart-container-CO浓度面积图-0-legend-zk3+785CO浓度-4": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-13-chart-container-CO浓度面积图-0-reference-line-预警线-5": {
+        "color": "#f53f3f"
+      },
+      "el-el-x-13": {
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "el-chart-container-CO浓度面积图-14-legend-zk3+785CO浓度-4": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-chart-container-CO浓度面积图-14-reference-line-预警线-5": {
+        "color": "#f53f3f"
+      },
+      "el-legend-zk3+785CO浓度-19": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-reference-line-预警线-22": {
+        "color": "#f53f3f"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-tabs-controls",
+        "responsibility": "标签页切换区",
+        "elementCount": 10,
+        "title": "监测指标与视图控制"
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 10,
+        "title": "浓度趋势图"
+      }
+    ],
+    "isForced": false,
+    "minFiles": 0,
+    "reason": "有效 sections=2 < 3 → 不强制拆分"
+  }
+}

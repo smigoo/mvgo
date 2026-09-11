@@ -27,6 +27,11 @@ interface LLMTestOptions {
    * 传入后写入能力缓存，使容量门禁可基于真实上限判断（而非保守默认）。
    */
   outputTokens?: number;
+  /**
+   * 🆕 思考模式类型（2026-09-11）：用户配置的 thinkingType（low/high/max/disabled）
+   * 优先使用用户配置，否则硬编码检测 GLM 模型自动注入 'low'
+   */
+  thinkingType?: string;
 }
 
 interface VisionTestOptions extends LLMTestOptions {}
@@ -54,7 +59,7 @@ export class ConfigTestService {
    * 4. 返回内容非空
    */
   async testTextLLM(opts: LLMTestOptions): Promise<TestResult> {
-    const { apiKey, baseURL, model, temperature, timeoutMs = 15000, providerType } = opts;
+    const { apiKey, baseURL, model, temperature, timeoutMs = 15000, providerType, thinkingType } = opts;
 
     const start = Date.now();
     // 推理类模型（kimi-k2.6/k3/deepseek-reasoner 等）服务端硬性 temperature=1，
@@ -71,20 +76,27 @@ export class ConfigTestService {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-      const res = await fetch(url, {
+      // 🔒 思考模式参数（2026-09-11）：优先用户配置，否则先尝试关闭思考
+      // 如果模型不支持关闭思考（如 GLM 5.3-flash），自动降级到 'low'
+      const buildBody = (thinkingType?: string) => ({
+        model,
+        messages: [{ role: 'user', content: 'Reply with exactly: OK' }],
+        // 推理模型（deepseek-v4-flash / deepseek-reasoner 等）会把额度先花在 reasoning 上，
+        // max_tokens 太小会导致 content 为空。给到足以产出正文的空间。
+        max_tokens: 64,
+        ...(effectiveTemp !== undefined ? { temperature: effectiveTemp } : {}),
+        ...(thinkingType ? { thinking: { type: thinkingType } } : {}),
+      });
+
+      // 第一次请求：优先用户配置，否则不带 thinking 参数（尝试关闭思考）
+      const initialThinking = thinkingType || undefined;
+      let res = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${apiKey}`,
         },
-        body: JSON.stringify({
-          model,
-          messages: [{ role: 'user', content: 'Reply with exactly: OK' }],
-          // 推理模型（deepseek-v4-flash / deepseek-reasoner 等）会把额度先花在 reasoning 上，
-          // max_tokens 太小会导致 content 为空。给到足以产出正文的空间。
-          max_tokens: 64,
-          ...(effectiveTemp !== undefined ? { temperature: effectiveTemp } : {}),
-        }),
+        body: JSON.stringify(buildBody(initialThinking)),
         signal: controller.signal,
       });
 
@@ -93,12 +105,44 @@ export class ConfigTestService {
 
       if (!res.ok) {
         const body = await res.text().catch(() => '');
-        return {
-          success: false,
-          latency,
-          error: this.classifyHTTPError(res.status, body),
-          detail: `实际请求: ${url}`,
-        };
+        
+        // 🔒 自动降级（2026-09-11）：如果模型返回 400 且错误信息包含"不支持关闭思考"，
+        // 自动重试带 thinking: { type: 'low' }，用户无需手动设置
+        if (res.status === 400 && /不支持关闭思考|thinking.*type.*low|always.*think/i.test(body) && !initialThinking) {
+          const retryController = new AbortController();
+          const retryTimer = setTimeout(() => retryController.abort(), timeoutMs);
+          
+          res = await fetch(url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify(buildBody('low')),
+            signal: retryController.signal,
+          });
+          
+          clearTimeout(retryTimer);
+          
+          if (res.ok) {
+            // 降级成功，继续处理响应
+          } else {
+            const retryBody = await res.text().catch(() => '');
+            return {
+              success: false,
+              latency: Date.now() - start,
+              error: this.classifyHTTPError(res.status, retryBody),
+              detail: `实际请求: ${url}（已尝试自动降级到 thinking:low）`,
+            };
+          }
+        } else {
+          return {
+            success: false,
+            latency,
+            error: this.classifyHTTPError(res.status, body),
+            detail: `实际请求: ${url}`,
+          };
+        }
       }
 
       const data = await res.json();
@@ -211,7 +255,7 @@ export class ConfigTestService {
    * 注意：如果模型不支持视觉，会返回 400/bad_request 类错误
    */
   async testVisionLLM(opts: VisionTestOptions): Promise<TestResult> {
-    const { apiKey, baseURL, model, temperature, timeoutMs = 30000, providerType } = opts;
+    const { apiKey, baseURL, model, temperature, timeoutMs = 30000, providerType, thinkingType } = opts;
 
     const start = Date.now();
     // 推理类模型（kimi-k2.6/k3/deepseek-reasoner 等）服务端硬性 temperature=1，
@@ -232,34 +276,41 @@ export class ConfigTestService {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-      const res = await fetch(url, {
+      // 🔒 思考模式参数（2026-09-11）：优先用户配置，否则先尝试关闭思考
+      // 如果模型不支持关闭思考（如 GLM 5.3-flash），自动降级到 'low'
+      const buildVisionBody = (thinkingType?: string) => ({
+        model,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: 'Describe this image in one word.',
+              },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: testImageData,
+                },
+              },
+            ],
+          },
+        ],
+        max_tokens: 64,
+        ...(effectiveTemp !== undefined ? { temperature: effectiveTemp } : {}),
+        ...(thinkingType ? { thinking: { type: thinkingType } } : {}),
+      });
+
+      // 第一次请求：优先用户配置，否则不带 thinking 参数（尝试关闭思考）
+      const initialThinking = thinkingType || undefined;
+      let res = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${apiKey}`,
         },
-        body: JSON.stringify({
-          model,
-          messages: [
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'text',
-                  text: 'Describe this image in one word.',
-                },
-                {
-                  type: 'image_url',
-                  image_url: {
-                    url: testImageData,
-                  },
-                },
-              ],
-            },
-          ],
-          max_tokens: 64,
-          ...(effectiveTemp !== undefined ? { temperature: effectiveTemp } : {}),
-        }),
+        body: JSON.stringify(buildVisionBody(initialThinking)),
         signal: controller.signal,
       });
 
@@ -269,22 +320,62 @@ export class ConfigTestService {
       if (!res.ok) {
         const body = await res.text().catch(() => '');
 
-        // 检查是否是"不支持视觉"类错误
-        if (this.isVisionNotSupportedError(res.status, body)) {
+        // 🔒 自动降级（2026-09-11）：如果模型返回 400 且错误信息包含"不支持关闭思考"，
+        // 自动重试带 thinking: { type: 'low' }，用户无需手动设置
+        if (res.status === 400 && /不支持关闭思考|thinking.*type.*low|always.*think/i.test(body) && !initialThinking) {
+          const retryController = new AbortController();
+          const retryTimer = setTimeout(() => retryController.abort(), timeoutMs);
+          
+          res = await fetch(url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify(buildVisionBody('low')),
+            signal: retryController.signal,
+          });
+          
+          clearTimeout(retryTimer);
+          
+          if (res.ok) {
+            // 降级成功，继续处理响应
+          } else {
+            const retryBody = await res.text().catch(() => '');
+            // 检查是否是"不支持视觉"类错误
+            if (this.isVisionNotSupportedError(res.status, retryBody)) {
+              return {
+                success: false,
+                latency: Date.now() - start,
+                error: '该模型不支持图像输入（视觉能力）',
+                detail: `模型 "${model}" 是纯文本模型，无法处理截图分析。\n\n建议方案：\n1. 切换到分别模式，为视觉任务单独配置 qwen-vl-max 或 gpt-4o\n2. 统一模式下选择多模态模型（如 claude-3-opus、gpt-4-vision）\n3. 如果只需要代码生成，可以忽略此警告`,
+              };
+            }
+            return {
+              success: false,
+              latency: Date.now() - start,
+              error: this.classifyHTTPError(res.status, retryBody),
+              detail: `实际请求: ${url}（已尝试自动降级到 thinking:low）`,
+            };
+          }
+        } else {
+          // 检查是否是"不支持视觉"类错误
+          if (this.isVisionNotSupportedError(res.status, body)) {
+            return {
+              success: false,
+              latency,
+              error: '该模型不支持图像输入（视觉能力）',
+              detail: `模型 "${model}" 是纯文本模型，无法处理截图分析。\n\n建议方案：\n1. 切换到分别模式，为视觉任务单独配置 qwen-vl-max 或 gpt-4o\n2. 统一模式下选择多模态模型（如 claude-3-opus、gpt-4-vision）\n3. 如果只需要代码生成，可以忽略此警告`,
+            };
+          }
+
           return {
             success: false,
             latency,
-            error: '该模型不支持图像输入（视觉能力）',
-            detail: `模型 "${model}" 是纯文本模型，无法处理截图分析。\n\n建议方案：\n1. 切换到分别模式，为视觉任务单独配置 qwen-vl-max 或 gpt-4o\n2. 统一模式下选择多模态模型（如 claude-3-opus、gpt-4-vision）\n3. 如果只需要代码生成，可以忽略此警告`,
+            error: this.classifyHTTPError(res.status, body),
+            detail: `实际请求: ${url}`,
           };
         }
-
-        return {
-          success: false,
-          latency,
-          error: this.classifyHTTPError(res.status, body),
-          detail: `实际请求: ${url}`,
-        };
       }
 
       const data = await res.json();

@@ -1,0 +1,63 @@
+/**
+ * 主题变量文件
+ * 定义通用主题token和mixin，供所有组件共享
+ * 基于dark背景亮度推断的基础变量集
+ */
+
+// 通用mixin：公共样式片段（不产出实际class）
+.common() {
+  // 通用flex布局mixin
+  .flex-center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .flex-between {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  // 通用文本省略mixin
+  .text-ellipsis {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+// 暗色主题mixin：定义CSS自定义属性（dark模式）
+.theme-dark() {
+  :root {
+    --color-text-primary: #ffffff;
+    --color-text-secondary: rgba(255, 255, 255, 0.65);
+    --color-text-disabled: rgba(255, 255, 255, 0.35);
+    --color-bg: #0f1117;
+    --color-bg-secondary: rgba(255, 255, 255, 0.06);
+    --color-border: rgba(255, 255, 255, 0.12);
+    --color-primary: #3677f8;
+    --color-primary-bg: rgba(54, 119, 248, 0.15);
+    --font-size-base: 14px;
+    --border-radius-base: 4px;
+  }
+}
+
+// 亮色主题mixin：定义CSS自定义属性（light模式，预留）
+.theme-light() {
+  :root {
+    --color-text-primary: #000000;
+    --color-text-secondary: rgba(0, 0, 0, 0.65);
+    --color-text-disabled: rgba(0, 0, 0, 0.35);
+    --color-bg: #ffffff;
+    --color-bg-secondary: rgba(0, 0, 0, 0.04);
+    --color-border: rgba(0, 0, 0, 0.12);
+    --color-primary: #3677f8;
+    --color-primary-bg: rgba(54, 119, 248, 0.15);
+    --font-size-base: 14px;
+    --border-radius-base: 4px;
+  }
+}
+
+// 默认应用dark主题
+.theme-dark();

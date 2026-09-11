@@ -1,0 +1,260 @@
+@import './themes/theme-vars.less';
+
+/* [Layout Refine] Figma root FRAME 420x425 → 100% 100% flex column */
+.c-mc-1785980184402-c71ffb16-root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  /* [Style Refine] fills[0].color → #EDF4FB */
+  background: @bg-color;
+  /* [Style Refine] effects[0] DROP_SHADOW → 0px 4px 10px rgba(74, 117, 141, 0.25) */
+  box-shadow: 0px 4px 10px @shadow-color;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+/* [Layout Refine] Figma header GROUP height ~30px → flex row space-between */
+.c-mc-1785980184402-c71ffb16-header {
+  height: 30px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  flex-shrink: 0;
+}
+
+/* [Style Refine] fills[0] GRADIENT_LINEAR → 渐变蓝 */
+.c-mc-1785980184402-c71ffb16-title {
+  font-size: 16px;
+  font-weight: 700;
+  background: linear-gradient(90deg, #1990FF 0%, #5A7EFF 83%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.c-mc-1785980184402-c71ffb16-stats {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+}
+
+.c-mc-1785980184402-c71ffb16-stat-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+/* [Style Refine] fills[0].color → #333333 */
+.c-mc-1785980184402-c71ffb16-stat-label {
+  font-size: 14px;
+  color: @text-color;
+}
+
+/* [Style Refine] fills[0].color → #1990FF, typography → Roboto 20px 700 */
+.c-mc-1785980184402-c71ffb16-stat-value {
+  font-family: 'Roboto', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: @primary-color;
+}
+
+/* [Layout Refine] Figma slot-con → flex 1 column, min-height: 0 */
+.c-mc-1785980184402-c71ffb16-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0 10px 10px;
+  gap: 10px;
+}
+
+/* [Layout Refine] Figma switch FRAME → flex row, height 65px */
+.c-mc-1785980184402-c71ffb16-switch {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  height: 65px;
+  flex-shrink: 0;
+}
+
+.c-mc-1785980184402-c71ffb16-switch-card {
+  flex: 1;
+  /* [Style Refine] cornerRadius → 6px */
+  border-radius: @border-radius-base;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 0 15px;
+  gap: 10px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* [Style Refine] fills[0] GRADIENT_LINEAR → 蓝色渐变 */
+.c-mc-1785980184402-c71ffb16-switch-card.active {
+  background: @card-active-bg;
+  color: #ffffff;
+}
+
+/* [Style Refine] fills[0] GRADIENT_LINEAR + opacity 0.6 → 浅蓝渐变 */
+.c-mc-1785980184402-c71ffb16-switch-card.default {
+  background: @card-default-bg;
+  opacity: 0.8;
+  color: @text-color;
+}
+
+.c-mc-1785980184402-c71ffb16-switch-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.c-mc-1785980184402-c71ffb16-switch-title {
+  font-size: 12px;
+}
+
+.c-mc-1785980184402-c71ffb16-switch-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+}
+
+/* [Style Refine] typography → Roboto 20px 700 */
+.c-mc-1785980184402-c71ffb16-switch-val {
+  font-family: 'Roboto', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.c-mc-1785980184402-c71ffb16-switch-card.active .c-mc-1785980184402-c71ffb16-switch-val {
+  color: #ffffff;
+}
+
+/* [Style Refine] fills[0].color → #F53F3F */
+.c-mc-1785980184402-c71ffb16-switch-card.active .c-mc-1785980184402-c71ffb16-switch-val.error {
+  color: @error-color;
+}
+
+.c-mc-1785980184402-c71ffb16-switch-card.default .c-mc-1785980184402-c71ffb16-switch-val {
+  color: @primary-color;
+}
+
+.c-mc-1785980184402-c71ffb16-switch-card.default .c-mc-1785980184402-c71ffb16-switch-val.error {
+  color: @error-color;
+}
+
+/* [Layout Refine] Figma @antd/tab → flex row, flex 1 */
+.c-mc-1785980184402-c71ffb16-tab-grid {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  min-height: 0;
+}
+
+/* [Layout Refine] Figma tabs FRAME width 46px → flex column */
+.c-mc-1785980184402-c71ffb16-tabs {
+  width: 46px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.c-mc-1785980184402-c71ffb16-tab-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  /* [Style Refine] fills[0] GRADIENT_LINEAR → 浅蓝渐变 */
+  background: linear-gradient(180deg, #84B9FF 0%, #C0E1FF 100%);
+  color: #3B80E6;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* [Style Refine] fills[0] GRADIENT_LINEAR → 深蓝渐变 */
+.c-mc-1785980184402-c71ffb16-tab-item.active {
+  background: linear-gradient(180deg, #318AFF 0%, #70BFFF 100%);
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.c-mc-1785980184402-c71ffb16-tab-badge {
+  font-size: 12px;
+  background: #ffffff;
+  color: #3B80E6;
+  border-radius: 9px;
+  padding: 0 6px;
+  margin-top: 2px;
+  line-height: 18px;
+}
+
+.c-mc-1785980184402-c71ffb16-tab-item.active .c-mc-1785980184402-c71ffb16-tab-badge {
+  color: #1990FF;
+}
+
+/* [Layout Refine] Figma cons GROUP → grid 3 columns 4 rows */
+.c-mc-1785980184402-c71ffb16-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  gap: 8px;
+  min-width: 0;
+}
+
+.c-mc-1785980184402-c71ffb16-device-card {
+  /* [Style Refine] fills[0] GRADIENT_LINEAR → 半透明蓝渐变 */
+  background: linear-gradient(180deg, rgba(71, 166, 250, 0.5) 0%, rgba(0, 189, 255, 0.04) 100%);
+  /* [Style Refine] strokes[0] → 1px solid rgba(25, 144, 255, 0.2) */
+  border: 1px solid rgba(25, 144, 255, 0.2);
+  border-radius: 4px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 0 12px;
+  gap: 8px;
+  min-width: 0;
+}
+
+.c-mc-1785980184402-c71ffb16-device-icon {
+  width: 26px;
+  height: 32px;
+  flex-shrink: 0;
+  background: linear-gradient(180deg, rgba(18, 123, 238, 0) 0%, rgba(18, 123, 238, 0.2) 100%);
+  border-radius: 4px;
+}
+
+.c-mc-1785980184402-c71ffb16-device-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* [Style Refine] fills[0].color → #333333, typography → 12px */
+.c-mc-1785980184402-c71ffb16-device-name {
+  font-size: 12px;
+  color: @text-color;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* [Style Refine] fills[0].color → #ffffff, typography → Roboto 16px 500 */
+.c-mc-1785980184402-c71ffb16-device-val {
+  font-family: 'Roboto', sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  color: #ffffff;
+  text-shadow: 0px 0px 0px rgba(0, 0, 0, 0.5);
+}

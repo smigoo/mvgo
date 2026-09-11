@@ -1,0 +1,273 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 78,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "headerSlots[0]",
+        "message": "右上角图标组应映射到 section-tabs 的 header.right，而非全局 headerSlots",
+        "suggestion": "将 tabs-icon 移入 section-tabs.header.right，保持标题栏与操作区的父子关系"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "section-tabs 缺少 header 层级，导致 Tab 栏与操作图标分离",
+        "suggestion": "增设 header 容纳标题/操作区，body 仅保留 Tab 切换组件"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "charts[0].axes",
+        "message": "Y 轴单位标注为「辆」疑似错误（应为 ppm 或 CO 浓度单位）",
+        "suggestion": "核对原始截图，修正 axes 字段中的单位描述"
+      }
+    ],
+    "recommendations": [
+      "将 section-tabs 拆分为 header（含标题/图标操作区）与 body（Tab 切换栏），符合 base-panel 插槽规范",
+      "补充 charts[0].markLine 字段描述预警线配置（yAxis: 30, color: #f5222d, lineStyle: dashed）",
+      "明确 badge 数字 6 的语义（建议在 interactions 或 notes 中标注为告警计数）"
+    ],
+    "summary": "结构基本合理，但 headerSlots 与 section 层级混淆，Tab 栏缺少独立 header 容器；图表配置完整度中等，需补充预警线结构化描述"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）—— 深色科技监测风主题",
+      "--colorPrimary": "#0078ff",
+      "--colorBgBase": "#1a2a3a",
+      "--colorSuccess": "#00c853",
+      "--colorDanger": "#f5222d",
+      "--colorTextBase": "#ffffff",
+      "--colorTextSecondary": "rgba(255,255,255,0.7)",
+      "--colorTabActiveBg": "#0078ff",
+      "--colorTabActiveText": "#ffffff",
+      "--colorTabDefaultText": "rgba(255,255,255,0.7)",
+      "--colorWarningLine": "#f5222d",
+      "--colorChartFill": "rgba(0,200,83,0.15)",
+      "--colorChartLine": "#00c853",
+      "--colorBadge": "#ff6a00",
+      "--fontSize": "14px",
+      "--fontSizeTitle": "16px",
+      "--borderRadiusTab": "4px",
+      "--borderRadiusBadge": "10px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射 —— 对应 theme-vars.less 中 .theme-dark() mixin",
+      "@color-primary": "#0078ff",
+      "@color-bg-base": "#1a2a3a",
+      "@color-success": "#00c853",
+      "@color-danger": "#f5222d",
+      "@color-text-base": "#ffffff",
+      "@color-text-secondary": "rgba(255,255,255,0.7)",
+      "@color-tab-active-bg": "#0078ff",
+      "@color-tab-active-text": "#ffffff",
+      "@color-tab-default-text": "rgba(255,255,255,0.7)",
+      "@color-warning-line": "#f5222d",
+      "@color-chart-fill-start": "rgba(0,200,83,0.25)",
+      "@color-chart-fill-end": "rgba(0,200,83,0)",
+      "@color-chart-line": "#00c853",
+      "@color-badge": "#ff6a00",
+      "@font-size-base": "14px",
+      "@font-size-title": "16px",
+      "@border-radius-tab": "4px",
+      "@border-radius-badge": "10px"
+    },
+    "cssClasses": {
+      "comment": "可复用CSS类 —— 写入 common.less，变量引用 @color-xxx",
+      ".monitor-container": {
+        "width": "100%",
+        "height": "100%",
+        "background": "var(--colorBgBase, @color-bg-base)",
+        "background-image": "linear-gradient(180deg, #1a2a3a 0%, #0d1a26 100%)",
+        "color": "var(--colorTextBase, @color-text-base)",
+        "font-size": "var(--fontSize, @font-size-base)",
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      ".tab-bar": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "0.57em",
+        "padding": "0.57em 1em"
+      },
+      ".tab-item": {
+        "padding": "0.35em 1em",
+        "border-radius": "var(--borderRadiusTab, @border-radius-tab)",
+        "color": "var(--colorTabDefaultText, @color-tab-default-text)",
+        "font-size": "var(--fontSize, @font-size-base)",
+        "cursor": "pointer",
+        "transition": "background 0.2s, color 0.2s",
+        "position": "relative",
+        "white-space": "nowrap"
+      },
+      ".tab-item.active": {
+        "background": "var(--colorTabActiveBg, @color-tab-active-bg)",
+        "color": "var(--colorTabActiveText, @color-tab-active-text)",
+        "font-weight": "600"
+      },
+      ".tab-badge": {
+        "position": "absolute",
+        "top": "-0.4em",
+        "right": "-0.4em",
+        "min-width": "1.3em",
+        "height": "1.3em",
+        "border-radius": "var(--borderRadiusBadge, @border-radius-badge)",
+        "background": "var(--colorBadge, @color-badge)",
+        "color": "#ffffff",
+        "font-size": "0.75em",
+        "font-weight": "700",
+        "display": "flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "padding": "0 0.3em"
+      },
+      ".chart-wrapper": {
+        "width": "100%",
+        "flex": "1",
+        "position": "relative"
+      },
+      ".warning-line-label": {
+        "color": "var(--colorWarningLine, @color-warning-line)",
+        "font-size": "0.86em",
+        "font-weight": "600"
+      }
+    },
+    "echartsThemeHints": {
+      "comment": "ECharts 图表配置参考值（在 JS 侧使用，不写入 Less）",
+      "lineColor": "#00c853",
+      "areaColorStart": "rgba(0,200,83,0.25)",
+      "areaColorEnd": "rgba(0,200,83,0)",
+      "markLineColor": "#f5222d",
+      "markLineDashArray": "[6, 4]",
+      "markLineLabel": "预警线",
+      "axisLabelColor": "rgba(255,255,255,0.7)",
+      "axisLineColor": "rgba(255,255,255,0.2)",
+      "tooltipBg": "rgba(26,42,58,0.95)",
+      "tooltipBorder": "#0078ff"
+    },
+    "themeVarsLessSample": {
+      "comment": "theme-vars.less 片段参考（仅展示 dark 侧，light 侧需另行补充）",
+      "code": [
+        ".theme-dark() {",
+        "  @color-primary:          #0078ff;",
+        "  @color-bg-base:          #1a2a3a;",
+        "  @color-success:          #00c853;",
+        "  @color-danger:           #f5222d;",
+        "  @color-text-base:        #ffffff;",
+        "  @color-text-secondary:   rgba(255,255,255,0.7);",
+        "  @color-tab-active-bg:    #0078ff;",
+        "  @color-tab-active-text:  #ffffff;",
+        "  @color-tab-default-text: rgba(255,255,255,0.7);",
+        "  @color-warning-line:     #f5222d;",
+        "  @color-chart-fill-start: rgba(0,200,83,0.25);",
+        "  @color-chart-fill-end:   rgba(0,200,83,0);",
+        "  @color-chart-line:       #00c853;",
+        "  @color-badge:            #ff6a00;",
+        "}"
+      ]
+    },
+    "tokenCoverage": 0.94,
+    "mappingNotes": [
+      "背景色 #1a2a3a 映射为 --colorBgBase，配合 linear-gradient 向更深的 #0d1a26 渐变，还原「深色蓝黑渐变背景」",
+      "Tab 选中态蓝色填充：--colorTabActiveBg: #0078ff，active 类写死背景而非 border，保持深色科技感",
+      "预警线使用 ECharts markLine + dashArray [6,4]，颜色 #f5222d；label 用 .warning-line-label 类单独控制可见度",
+      "折线图区域填充通过 ECharts areaStyle linearGradient 实现，起点透明度 0.25 → 终点 0，不用纯色填充避免遮挡",
+      "badge 橙色 #ff6a00 独立于 danger (#f5222d)，两者语义不同，分别定义 --colorBadge 与 --colorDanger",
+      "rgba(255,255,255,0.7) 作为次要文本色，映射为 --colorTextSecondary，Tab 默认态和轴标签均复用此变量",
+      "echartsThemeHints 节点供 JS 侧 THEME_COLORS.dark 对象使用，不写入 Less，避免 Less 变量与运行时 ECharts 配置耦合",
+      "容器背景同时保留 background 纯色兜底和 background-image 渐变，确保 CSS 变量未注入时仍可见"
+    ],
+    "elementStyleMap": {
+      "section-tabs": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-8": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-tabs",
+        "responsibility": "标签页切换区",
+        "elementCount": 4,
+        "title": "Tab切换栏",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 4,
+          "charts": 0,
+          "interactions": 1,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "CO浓度折线面积图",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 1,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      }
+    ],
+    "isForced": false,
+    "minFiles": 0,
+    "reason": "有效 sections=2 < 3 且无高复杂度 section → 不强制拆分",
+    "internalSubcomponents": []
+  }
+}

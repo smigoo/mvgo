@@ -1,0 +1,265 @@
+[
+  {
+    "resourceFile": "../resources/images/bg-7880.png",
+    "figmaNodeId": "2:7880",
+    "figmaPath": "cp-环境监测/bg",
+    "name": "bg",
+    "figmaBox": {
+      "x": 1475,
+      "y": 865,
+      "width": 420,
+      "height": 186
+    },
+    "parentBox": {
+      "x": 1475,
+      "y": 865,
+      "width": 420,
+      "height": 186
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".bg-container",
+    "targetDomHint": "bg区域",
+    "previewAnalysisRole": "bg",
+    "hint": "bg → bg区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 420,
+      "height": 186,
+      "fillsSummary": "#edf4fbb2",
+      "effectsSummary": "box-shadow: 0px 4px 10px #4a758d"
+    },
+    "recommendedUsage": "backgroundStyle",
+    "isTinyDecoration": false,
+    "isPanelResource": true,
+    "skipMount": true,
+    "bgRole": "container",
+    "assignedVarName": "bg1"
+  },
+  {
+    "resourceFile": "../resources/images/bg-7890.png",
+    "figmaNodeId": "2:7890",
+    "figmaPath": "cp-环境监测/slot-con/sub-t/tabs-list/bg",
+    "name": "bg",
+    "figmaBox": {
+      "x": 1495,
+      "y": 903.0000004565809,
+      "width": 295.00000118020694,
+      "height": 26.999999543419108
+    },
+    "parentBox": {
+      "x": 1495,
+      "y": 903,
+      "width": 295,
+      "height": 27
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".bg-container",
+    "targetDomHint": "bg区域",
+    "previewAnalysisRole": "bg",
+    "hint": "bg → bg区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 295,
+      "height": 27,
+      "fillsSummary": "linear-gradient(#b5deff 0%, #d1ecff 100%)"
+    },
+    "recommendedUsage": "backgroundBlock",
+    "isTinyDecoration": false,
+    "isPanelResource": true,
+    "mountTarget": "tabs-list",
+    "bgRole": "container",
+    "assignedVarName": "bg2"
+  },
+  {
+    "resourceFile": "../resources/images/bg-tab-active-7891.png",
+    "figmaNodeId": "2:7891",
+    "figmaPath": "cp-环境监测/slot-con/sub-t/tabs-list/bg-tab-active",
+    "name": "bg-tab-active",
+    "figmaBox": {
+      "x": 1500,
+      "y": 906.000000405209,
+      "width": 78.0000009179389,
+      "height": 20.999999594791007
+    },
+    "parentBox": {
+      "x": 1495,
+      "y": 903,
+      "width": 295,
+      "height": 27
+    },
+    "usage": ":style=\"{ backgroundImage: `url(${bgX})` }\"",
+    "targetDomSelector": ".tab-active-container",
+    "targetDomHint": "tab-active区域",
+    "previewAnalysisRole": "bg",
+    "hint": "bg-tab-active → tab-active区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": "bgtabActive",
+    "visualMeta": {
+      "width": 78,
+      "height": 21,
+      "fillsSummary": "linear-gradient(#1099b1 0%, #038fff 100%)"
+    },
+    "recommendedUsage": "backgroundBlock",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "mountTarget": "tabs-list",
+    "bgRole": "sub-state",
+    "assignedVarName": "bg3"
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "89:43",
+    "figmaPath": "cp-环境监测/slot-con/sub-t/tabs-icon",
+    "name": "tabs-icon",
+    "figmaBox": {
+      "x": 1816,
+      "y": 905,
+      "width": 52,
+      "height": 24
+    },
+    "parentBox": {
+      "x": 1495,
+      "y": 898,
+      "width": 380,
+      "height": 32
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".tabs-icon-container",
+    "targetDomHint": "tabs-icon区域",
+    "previewAnalysisRole": "icon",
+    "hint": "tabs-icon → tabs-icon区域",
+    "downloadStatus": "missing",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": "⚠️ 资源下载失败(missing), 请使用CSS替代方案（CSS 绘制图标样式）",
+    "semanticVarName": "icontabsIcon",
+    "visualMeta": {
+      "width": 52,
+      "height": 24
+    },
+    "recommendedUsage": "decorativeBlock",
+    "isTinyDecoration": false,
+    "isPanelResource": false
+  },
+  {
+    "resourceFile": "../resources/images/icon-7941.png",
+    "figmaNodeId": "2:7941",
+    "figmaPath": "cp-环境监测/slot-con/sub-t/tabs-icon/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 1816,
+      "y": 905,
+      "width": 24,
+      "height": 24
+    },
+    "parentBox": {
+      "x": 1816,
+      "y": 905,
+      "width": 52,
+      "height": 24
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".icon-container",
+    "targetDomHint": "icon区域",
+    "previewAnalysisRole": "icon",
+    "hint": "icon → icon区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 24,
+      "height": 24
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon1"
+  },
+  {
+    "resourceFile": "../resources/images/icon-7945.png",
+    "figmaNodeId": "2:7945",
+    "figmaPath": "cp-环境监测/slot-con/sub-t/tabs-icon/icon",
+    "name": "icon",
+    "figmaBox": {
+      "x": 1844,
+      "y": 905,
+      "width": 24,
+      "height": 24
+    },
+    "parentBox": {
+      "x": 1816,
+      "y": 905,
+      "width": 52,
+      "height": 24
+    },
+    "usage": "<img :src=\"iconX\">",
+    "targetDomSelector": ".icon-container",
+    "targetDomHint": "icon区域",
+    "previewAnalysisRole": "icon",
+    "hint": "icon → icon区域",
+    "downloadStatus": "success",
+    "cssValue": null,
+    "deduplicatedFrom": null,
+    "fallbackHint": null,
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 24,
+      "height": 24
+    },
+    "recommendedUsage": "imgSrc",
+    "isTinyDecoration": false,
+    "isPanelResource": false,
+    "assignedVarName": "icon2"
+  },
+  {
+    "resourceFile": null,
+    "figmaNodeId": "2:7950",
+    "figmaPath": "cp-环境监测/slot-con/sub-t/num/bg",
+    "name": "bg",
+    "figmaBox": {
+      "x": 1861,
+      "y": 898,
+      "width": 14,
+      "height": 14
+    },
+    "parentBox": {
+      "x": 1861,
+      "y": 898,
+      "width": 14,
+      "height": 14
+    },
+    "usage": ":style=\"{ background: '#f53f3f' }\"",
+    "targetDomSelector": ".bg-container",
+    "targetDomHint": "bg区域",
+    "previewAnalysisRole": "bg",
+    "hint": "bg → bg区域",
+    "downloadStatus": "css",
+    "cssValue": "#f53f3f",
+    "deduplicatedFrom": null,
+    "fallbackHint": "✅ CSS 替代（无需图片）: background: #f53f3f;",
+    "semanticVarName": null,
+    "visualMeta": {
+      "width": 14,
+      "height": 14,
+      "fillsSummary": "#f53f3f"
+    },
+    "recommendedUsage": "backgroundBlock",
+    "isTinyDecoration": false,
+    "isPanelResource": true,
+    "mountTarget": "num",
+    "bgRole": "container"
+  }
+]

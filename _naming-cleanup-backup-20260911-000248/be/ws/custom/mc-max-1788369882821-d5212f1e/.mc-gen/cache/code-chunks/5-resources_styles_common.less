@@ -1,0 +1,165 @@
+// ─────────────────────────────────────────────
+// 微码组件业务样式
+// 所有 class 必须以 .c- 为前缀
+// 字体尺寸必须使用 @fontSize 变量（微前端整组件等比缩放）
+// ─────────────────────────────────────────────
+
+.c-env-monitor-root {
+  font-size: var(--fontSize, 14px);
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+// ─── Tab 切换栏 + 图标区容器 ───
+.c-env-monitor-sub-t {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 16px;
+  flex-shrink: 0;
+  background-image: url(../images/bg-7890.png);
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+
+// ─── Tab 列表容器 ───
+.c-env-monitor-tabs-list {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  align-items: center;
+}
+
+// ─── 单个 Tab 项容器 ───
+.c-env-monitor-tab-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+// ─── Tab 激活态背景层 ───
+.c-env-monitor-tab-active-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+  border-radius: @border-radius-tab;
+  border: 1px solid #ffffff;
+  pointer-events: none;
+  z-index: 0;
+}
+
+// ─── Tab 文字标签 ───
+.c-env-monitor-tab-label {
+  position: relative;
+  font-size: @fontSize;
+  font-weight: 500;
+  color: #2c9bea;
+  z-index: 1;
+  transition: color 0.2s ease;
+}
+
+.c-env-monitor-tab-item--active .c-env-monitor-tab-label {
+  color: #ffffff;
+  text-shadow: 0px 0.6px 0px #006fe3;
+}
+
+// ─── 右侧图标组容器 ───
+.c-env-monitor-tabs-icon {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  align-items: center;
+}
+
+// ─── 图标按钮 ───
+.c-env-monitor-icon-btn {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+  
+  &:hover {
+    transform: scale(1.05);
+  }
+}
+
+// ─── 图标图片 ───
+.c-env-monitor-icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+// ─── 徽章数字（带背景） ───
+.c-env-monitor-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: @color-badge;
+  border-radius: @border-radius-badge;
+  color: #ffffff;
+  font-size: calc(@fontSize * 0.857);
+  font-weight: 500;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.c-env-monitor-icon-btn--badge {
+  // 用于标识带徽章的图标按钮
+}
+
+// ─── 图表区域容器 ───
+.c-env-monitor-chart-section {
+  flex: 1;
+  min-height: 0;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  background-image: url(../images/bg-7890.png);
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+
+// ─── 图表包裹层 ───
+.c-env-monitor-chart-wrapper {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+// ─── ECharts 容器 ───
+.c-env-monitor-chart-container {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}

@@ -1,0 +1,177 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 82,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "标题区 header.title 与 body 内 text 均为“环境监测”，存在重复结构，违反 header/body 分层规范。",
+        "suggestion": "标题应仅保留在 header.title，body 只保留装饰元素。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[1].children[0].axes.y",
+        "message": "Y轴单位为“辆”，但系列为 CO 浓度，语义冲突，可能误导监测数据。",
+        "suggestion": "核对原始设计，CO 浓度单位应为 ppm 或 mg/m³。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[0].body.children[0]",
+        "message": "标题装饰节点 vertical>children>icon 嵌套层级偏深，叠加 section/body 后层级过多。",
+        "suggestion": "合并为单个装饰节点或改用 CSS 背景减少 DOM 层级。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].header",
+        "message": "headerRelation 为 content-below-title 但 header.title 为空，可能产生无意义插槽。",
+        "suggestion": "若无标题则省略 header 或改用无标题 section 结构。"
+      }
+    ],
+    "recommendations": [
+      "保持 section 内标题仅由 header 承载，避免 body 重复渲染标题。",
+      "核对图表单位与系列量纲，确保 Y 轴 label 与监测指标一致。",
+      "简化装饰节点的内部层级，优先使用 CSS 背景或单图标。"
+    ],
+    "summary": "整体结构清晰，交互元素与图表配置较完整。主要问题为标题区 header/body 重复、Y轴单位语义冲突及装饰层级偏深，建议修正后进入后续阶段。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名，浅色科技监测风）",
+      "--colorPrimary": "rgba(0, 150, 255, 1)",
+      "--colorPrimaryActive": "rgba(0, 150, 255, 0.16)",
+      "--colorPrimaryBg": "rgba(0, 150, 255, 0.10)",
+      "--colorBgBase": "rgba(237, 244, 251, 1)",
+      "--colorBgContainer": "#ffffff",
+      "--colorSuccess": "#52c41a",
+      "--colorDanger": "#f53f3f",
+      "--colorTextBase": "#0f2743",
+      "--colorTextSecondary": "#5b7087",
+      "--borderRadiusBase": "6px",
+      "--fontSize": "14px",
+      "--tabActiveBgImage": "linear-gradient(135deg, rgba(0, 150, 255, 0.16), rgba(0, 150, 255, 0.04))"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射（与CSS变量一一对应）",
+      "@color-primary": "rgba(0, 150, 255, 1)",
+      "@color-primary-active": "rgba(0, 150, 255, 0.16)",
+      "@color-primary-bg": "rgba(0, 150, 255, 0.10)",
+      "@color-bg-base": "rgba(237, 244, 251, 1)",
+      "@color-bg-container": "#ffffff",
+      "@color-success": "#52c41a",
+      "@color-danger": "#f53f3f",
+      "@color-text-base": "#0f2743",
+      "@color-text-secondary": "#5b7087",
+      "@border-radius-base": "6px",
+      "@font-size-base": "14px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类（浅色科技监测风）",
+      ".monitor-container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "width": "100%",
+        "height": "100%",
+        "background": "var(--colorBgBase)",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)"
+      },
+      ".section-title": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "8px",
+        "font-weight": "600",
+        "color": "var(--colorTextBase)"
+      },
+      ".section-title::before": {
+        "content": "\"\"",
+        "width": "10px",
+        "height": "10px",
+        "background": "var(--colorPrimary)",
+        "clip-path": "polygon(0 0, 100% 0, 100% 70%, 50% 100%, 0 70%)",
+        "margin-right": "6px"
+      },
+      ".tab-item": {
+        "position": "relative",
+        "display": "inline-flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "padding": "0 12px",
+        "height": "32px",
+        "border-radius": "var(--borderRadiusBase)",
+        "color": "var(--colorTextSecondary)",
+        "cursor": "pointer"
+      },
+      ".tab-item.is-active": {
+        "background-image": "var(--tabActiveBgImage)",
+        "background-color": "var(--colorPrimaryBg)",
+        "color": "var(--colorPrimary)"
+      },
+      ".area-chart": {
+        "position": "relative",
+        "width": "100%",
+        "height": "200px",
+        "background": "transparent"
+      },
+      ".area-chart__fill": {
+        "fill": "var(--colorSuccess)",
+        "opacity": "0.35"
+      },
+      ".alert-line": {
+        "stroke": "var(--colorDanger)",
+        "stroke-width": "2px",
+        "stroke-dasharray": "6 4"
+      }
+    },
+    "tokenCoverage": 0.92,
+    "mappingNotes": [
+      "主色映射为--colorPrimary（科技蓝）",
+      "浅灰蓝背景映射为--colorBgBase",
+      "绿色面积图映射为--colorSuccess及.area-chart__fill",
+      "红色预警线映射为--colorDanger及.alert-line",
+      "标题左侧六边形/箭头装饰通过.section-title::before实现",
+      "Tab选中态背景图映射为--tabActiveBgImage，便于后续替换为实际资源"
+    ],
+    "elementStyleMap": {
+      "section-title": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-decoration-标题左侧装饰-2": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-content": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "tabs-list": {
+        "display": "flex",
+        "flex-direction": "row"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-title",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 4,
+        "title": "环境监测"
+      },
+      {
+        "id": "section-content",
+        "responsibility": "主内容区",
+        "elementCount": 11,
+        "title": "内容区"
+      }
+    ],
+    "isForced": false,
+    "minFiles": 0,
+    "reason": "有效 sections=2 < 3 → 不强制拆分"
+  }
+}

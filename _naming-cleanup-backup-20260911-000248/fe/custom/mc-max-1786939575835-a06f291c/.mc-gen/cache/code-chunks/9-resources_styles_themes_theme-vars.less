@@ -1,0 +1,66 @@
+/* LESS 变量定义 */
+/* 此文件仅定义 mixin，不产生实际 CSS 输出 */
+/* 根级禁止调用任何主题 mixin */
+
+.common() {
+  // 品牌色
+  @c-primary: #1990ff;
+  @c-primary-hover: #70bfff;
+  @c-primary-dark: #318aff;
+  @c-success: #08a3a5;
+  @c-error: #f53f3f;
+
+  // 字体
+  @c-font-family-base: 'Source Han Sans CN', sans-serif;
+  @c-font-family-number: 'Roboto', sans-serif;
+  @c-font-family-title: 'YouSheBiaoTiHei', sans-serif;
+
+  // 圆角
+  @c-radius-sm: 4px;
+  @c-radius-md: 6px;
+
+  // 过渡
+  @c-transition-base: all 0.3s ease;
+}
+
+.theme-dark() {
+  // 背景
+  @c-bg-item: rgba(255, 255, 255, 0.08);
+  @c-bg-card: rgba(255, 255, 255, 0.06);
+  @c-bg-card-hover: rgba(25, 144, 255, 0.12);
+  @c-bg-card-active: linear-gradient(270deg, #318aff 0%, #70bfff 100%);
+  @c-bg-tab-hover: rgba(25, 144, 255, 0.12);
+  @c-bg-tab-active: rgba(25, 144, 255, 0.24);
+  @c-bg-placeholder: rgba(255, 255, 255, 0.06);
+
+  // 文字
+  @c-text-primary: #e8ebf0;
+  @c-text-secondary: #a3b0c2;
+  @c-text-inverse: #ffffff;
+  @c-text-muted: #8895a7;
+
+  // 边框/分割线
+  @c-border-color: #2a3346;
+  @c-divider-color: #2a3346;
+}
+
+.theme-light() {
+  // 背景
+  @c-bg-item: rgba(255, 255, 255, 0.8);
+  @c-bg-card: #edf4fb;
+  @c-bg-card-hover: rgba(25, 144, 255, 0.05);
+  @c-bg-card-active: linear-gradient(270deg, #318aff 0%, #70bfff 100%);
+  @c-bg-tab-hover: rgba(25, 144, 255, 0.05);
+  @c-bg-tab-active: rgba(25, 144, 255, 0.1);
+  @c-bg-placeholder: rgba(0, 0, 0, 0.04);
+
+  // 文字
+  @c-text-primary: #333333;
+  @c-text-secondary: #666666;
+  @c-text-inverse: #ffffff;
+  @c-text-muted: #999999;
+
+  // 边框/分割线
+  @c-border-color: #e8e8e8;
+  @c-divider-color: #e8e8e8;
+}

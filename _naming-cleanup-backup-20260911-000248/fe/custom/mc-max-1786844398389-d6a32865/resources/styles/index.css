@@ -1,0 +1,1120 @@
+/* [Style Refine] Figma fills: section icon / active tab color rgb(25,144,255) */
+/* [Style Refine] Figma title gradient stop color rgb(90,126,255) */
+/* [Style Refine] Figma bg-[m] fills[0].color → rgb(237,244,251) */
+/* [Style Refine] Figma bg-[m] fills[0].color → rgb(237,244,251) */
+/* [Style Refine] Figma text fills[0].color → rgb(51,51,51) */
+/* [Style Refine] Figma axis unit fills[0].color → rgb(102,102,102) */
+/* [Style Refine] Figma active tab text fills[0].color → rgb(255,255,255) */
+/* [Style Refine] Figma select fills gradient approximated from explicit stops #ffffff → #e2efff → #deedff → #ffffff */
+/* [Style Refine] Figma select strokes[0].color → rgb(161,206,255) */
+/* [Style Refine] Figma inactive tab fills[0].color → rgb(102,128,160) */
+/* [Style Refine] Figma inactive tab strokes[0].color → rgb(172,196,225) */
+/* [Style Refine] Figma active tab strokes[0].color → rgb(199,224,255) */
+/* [Style Refine] Figma inactive tab text fills[0].color → rgb(51,51,51) */
+/* [Style Refine] Figma d-82,379 fills[0].color → rgb(12,157,190) */
+/* [Style Refine] Figma d-34,620 fills[0].color → rgb(0,111,227) */
+/* [Style Refine] Figma vehicle passenger fills[0].color → rgb(19,153,255) */
+/* [Style Refine] Figma vehicle truck fills[0].color → rgb(255,106,0) */
+/* [Style Refine] Figma line actual stroke color → rgb(0,204,204) */
+/* [Style Refine] Figma line forecast stroke color → rgb(51,133,255) */
+/* [Style Refine] Figma pie dark fill → rgb(86,89,124) */
+/* [Style Refine] Figma pie orange fill → rgb(255,162,47) */
+/* [Style Refine] Figma pie blue fill → rgb(43,160,255) */
+/* [Layout Refine] root 在 base-panel 内仅负责内容布局；禁止 root 添加背景/边框/阴影，补充 flex 与 min-height:0 */
+.c-c-monitor-root {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding: 7px 20px 12px;
+  color: #333333;
+  font-family: "Source Han Sans CN", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  overflow: hidden;
+}
+.c-c-monitor-title-dot {
+  display: block;
+  width: 8px;
+  height: 8px;
+  object-fit: contain;
+}
+.c-c-monitor-title-vector {
+  display: block;
+  width: 362px;
+  max-width: 100%;
+  height: 6px;
+  object-fit: fill;
+}
+/* [Layout Refine] section 为纵向内容容器；flex 嵌套补充 min-height:0 */
+.c-c-monitor-section {
+  width: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+/* [Layout Refine] Figma slot-当日总流量 bbox.height=556.31，但与后续区块存在覆盖；按可见图表区约 400px 分配，避免挤出 807px 面板 */
+.c-c-monitor-total-section {
+  height: 407px;
+}
+/* [Layout Refine] Figma slot-车型分布 y=573，相对上一图表 y=428+131=559，间距≈14px */
+.c-c-monitor-vehicle-section {
+  height: 142px;
+  margin-top: 14px;
+}
+/* [Layout Refine] Figma slot-流量预测 y=730，相对车型分布 y=573+142=715，间距≈15px */
+.c-c-monitor-forecast-section {
+  height: 174px;
+  margin-top: 15px;
+  flex: 1 1 auto;
+}
+/* [Layout Refine] Figma sub-header layoutMode=HORIZONTAL → flex-direction: row；primaryAxisAlignItems=SPACE_BETWEEN */
+.c-c-monitor-section-header {
+  width: 100%;
+  height: 30px;
+  min-height: 30px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+/* [Layout Refine] 标题组 icon 与 text 横向排列，对齐 Figma bbox：icon x=35.827, text x=57.827，间距=4px */
+.c-c-monitor-section-title-wrap {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.c-c-monitor-section-title-icon {
+  display: block;
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+/* [Style Refine] Figma title typography: Source Han Sans CN / 16 / 500 / 24；effects DROP_SHADOW y=5.047 radius=5.047 color rgba(255,255,255,.8) */
+.c-c-monitor-section-title {
+  color: #333333;
+  font-family: "Source Han Sans CN", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  text-align: left;
+  text-shadow: 0 5.047px 5.047px rgba(255, 255, 255, 0.8);
+  white-space: nowrap;
+}
+/* [Layout Refine] Figma @ant/select bbox.width=100 height=30.422 */
+.c-c-monitor-time-select {
+  width: 100px;
+  height: 30px;
+  flex-shrink: 0;
+}
+.c-c-monitor-time-select :deep(.ant-select-selector) {
+  height: 30px !important;
+  /* [Style Refine] Figma Rectangle 34624274 cornerRadius=4 */
+  border-radius: 4px !important;
+  /* [Style Refine] Figma strokes[0].color → rgb(161,206,255) */
+  border: 1px solid #a1ceff !important;
+  /* [Style Refine] Figma select fills gradient from explicit stops */
+  background: linear-gradient(90deg, #ffffff 0%, #e2efff 36.19%, #deedff 68.88%, #ffffff 100%) !important;
+  box-shadow: none !important;
+  padding: 0 24px 0 10px !important;
+}
+.c-c-monitor-time-select :deep(.ant-select-selection-item) {
+  color: #333333;
+  font-family: "Source Han Sans CN", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 28px !important;
+}
+.c-c-monitor-time-select :deep(.ant-select-arrow) {
+  color: #1990ff;
+}
+/* [Layout Refine] Figma Group 2136636802 bbox: x≈10 y=196 width=425.83 height=91.44；相对内容 x 负偏移 25.827 */
+.c-c-monitor-total-card {
+  position: relative;
+  width: calc(100% + 45.827px);
+  height: 91px;
+  margin: 7px -20px 0 -25.827px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+/* [Layout Refine] Figma stat groups height=52；相对 total-card top=16px */
+.c-c-monitor-total-stat {
+  position: absolute;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 77px;
+}
+/* [Layout Refine] Figma left stat x=42.828，相对 total-card x≈10 → left≈33px；原模板左右数据位置与设计相反，保持 DOM 文案时用样式对齐 */
+.c-c-monitor-total-stat-left {
+  right: 67px;
+  align-items: flex-start;
+}
+/* [Layout Refine] Figma right stat x=271.828，相对 total-card x≈10 → left≈262px */
+.c-c-monitor-total-stat-right {
+  left: 33px;
+  align-items: flex-end;
+  min-width: 128px;
+}
+.c-c-monitor-total-label {
+  color: #333333;
+  font-family: "Source Han Sans CN", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  white-space: nowrap;
+}
+.c-c-monitor-total-value {
+  font-family: "Roboto", "DIN Alternate", Arial, sans-serif;
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 28px;
+  white-space: nowrap;
+}
+.c-c-monitor-total-value-bridge {
+  color: #0c9dbe;
+}
+.c-c-monitor-total-value-tunnel {
+  color: #006fe3;
+}
+/* [Layout Refine] Figma @echarts/bar bbox.width=379 height=131；两图间 y 差=141 */
+.c-c-monitor-chart-block {
+  width: 379px;
+  max-width: 100%;
+  height: 131px;
+  margin-top: 10px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+/* [Layout Refine] Figma Frame 2136639396 layoutMode=HORIZONTAL → flex-direction: row；counterAxisAlignItems=CENTER */
+.c-c-monitor-chart-title-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 3px;
+  height: 21px;
+  margin-left: 0;
+  margin-bottom: 0;
+}
+/* [Style Refine] Figma icon fills GRADIENT_LINEAR stop0 rgb(56,141,255), stop1 alpha=0；cornerRadius=6 */
+.c-c-monitor-chart-title-mark {
+  width: 3px;
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #388dff 0%, rgba(56, 141, 255, 0) 100%);
+  flex-shrink: 0;
+}
+.c-c-monitor-chart-title {
+  color: #333333;
+  font-family: "Source Han Sans CN", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 21px;
+  white-space: nowrap;
+}
+/* [Layout Refine] Figma chart block total height=131，标题行 height=21 → 图表容器 height=110 */
+.c-c-monitor-chart-container {
+  width: 379px;
+  max-width: 100%;
+  height: 110px;
+  min-height: 0;
+}
+/* [Layout Refine] Figma 两个 Frame 1280 横向排列：x=32.827 与 x=227.827，gap≈3px */
+.c-c-monitor-vehicle-list {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 3px;
+  width: 100%;
+  margin-top: 4px;
+  min-height: 0;
+}
+/* [Layout Refine] Figma Frame 1280 bbox.width=192 height=114 */
+.c-c-monitor-vehicle-card {
+  position: relative;
+  width: 192px;
+  height: 114px;
+  flex: 0 0 192px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+/* [Layout Refine] Figma @echarts bbox relative to card: left≈69.66 top≈49，width≈52.06 height≈52.55 */
+.c-c-monitor-vehicle-chart {
+  position: absolute;
+  left: 69px;
+  top: 49px;
+  width: 52px;
+  height: 52px;
+}
+/* [Layout Refine] Figma title frame bbox relative card: x≈32 y≈2 width=129.5 height=24.77 */
+.c-c-monitor-vehicle-name {
+  position: absolute;
+  left: 32px;
+  top: 2px;
+  width: 129px;
+  height: 18px;
+  color: #333333;
+  font-family: "Source Han Sans CN", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 18px;
+  text-align: center;
+  white-space: nowrap;
+}
+/* [Layout Refine] Figma vehicle stat frames at x≈44/168 y≈658 relative card y=601 → top≈57，横向 space-between */
+.c-c-monitor-vehicle-stats {
+  position: absolute;
+  left: 12px;
+  right: 14px;
+  top: 57px;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
+  pointer-events: none;
+}
+.c-c-monitor-vehicle-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 52px;
+  min-height: 36px;
+}
+.c-c-monitor-vehicle-stat-right {
+  align-items: flex-end;
+}
+.c-c-monitor-vehicle-stat-label {
+  color: #333333;
+  font-family: "Alibaba PuHuiTi", "Source Han Sans CN", "Microsoft YaHei", sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  white-space: nowrap;
+}
+.c-c-monitor-vehicle-stat-value {
+  font-family: "Roboto", "DIN Alternate", Arial, sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 18px;
+  white-space: nowrap;
+}
+.c-c-monitor-vehicle-stat-value-passenger {
+  color: #1399ff;
+}
+.c-c-monitor-vehicle-stat-value-truck {
+  color: #ff6a00;
+}
+/* [Layout Refine] Figma @antd/tab layoutMode=HORIZONTAL → flex-direction: row；counterAxisAlignItems=CENTER */
+.c-c-monitor-forecast-tabs {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  margin-left: auto;
+  margin-right: 10px;
+}
+/* [Style Refine] Figma btn cornerRadius=20.4615 strokeWeight≈0.73；inactive fills rgb(102,128,160) */
+.c-c-monitor-forecast-tab {
+  height: 19px;
+  padding: 0 10px;
+  border: 0.731px solid #acc4e1;
+  border-radius: 20.462px;
+  background: #6680a0;
+  color: #333333;
+  font-family: "Source Han Sans CN", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 17px;
+  text-align: center;
+  white-space: nowrap;
+  cursor: pointer;
+  outline: none;
+}
+/* [Style Refine] Figma btn-active fills[0].color rgb(25,144,255), stroke rgb(199,224,255), text white */
+.c-c-monitor-forecast-tab-active {
+  min-width: 128px;
+  border-color: #c7e0ff;
+  background: #1990ff;
+  color: #ffffff;
+  font-weight: 500;
+}
+.c-c-monitor-holiday-button {
+  flex: 0 0 auto;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #1990ff;
+  font-family: "Source Han Sans CN", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  white-space: nowrap;
+  cursor: pointer;
+  outline: none;
+}
+/* [Layout Refine] Figma @echarts/line bbox.width=363 height=140.662，y 与 header 下沿间距≈10px */
+.c-c-monitor-forecast-chart {
+  width: 363px;
+  max-width: 100%;
+  height: 141px;
+  min-height: 0;
+  margin-top: 10px;
+}
+.dark {
+  /* [Style Refine] Figma fills: section icon / active tab color rgb(25,144,255) */
+  /* [Style Refine] Figma title gradient stop color rgb(90,126,255) */
+  /* [Style Refine] Figma bg-[m] fills[0].color → rgb(237,244,251) */
+  /* [Style Refine] Figma bg-[m] fills[0].color → rgb(237,244,251) */
+  /* [Style Refine] Figma text fills[0].color → rgb(51,51,51) */
+  /* [Style Refine] Figma axis unit fills[0].color → rgb(102,102,102) */
+  /* [Style Refine] Figma active tab text fills[0].color → rgb(255,255,255) */
+  /* [Style Refine] Figma select fills gradient approximated from explicit stops #ffffff → #e2efff → #deedff → #ffffff */
+  /* [Style Refine] Figma select strokes[0].color → rgb(161,206,255) */
+  /* [Style Refine] Figma inactive tab fills[0].color → rgb(102,128,160) */
+  /* [Style Refine] Figma inactive tab strokes[0].color → rgb(172,196,225) */
+  /* [Style Refine] Figma active tab strokes[0].color → rgb(199,224,255) */
+  /* [Style Refine] Figma inactive tab text fills[0].color → rgb(51,51,51) */
+  /* [Style Refine] Figma d-82,379 fills[0].color → rgb(12,157,190) */
+  /* [Style Refine] Figma d-34,620 fills[0].color → rgb(0,111,227) */
+  /* [Style Refine] Figma vehicle passenger fills[0].color → rgb(19,153,255) */
+  /* [Style Refine] Figma vehicle truck fills[0].color → rgb(255,106,0) */
+  /* [Style Refine] Figma line actual stroke color → rgb(0,204,204) */
+  /* [Style Refine] Figma line forecast stroke color → rgb(51,133,255) */
+  /* [Style Refine] Figma pie dark fill → rgb(86,89,124) */
+  /* [Style Refine] Figma pie orange fill → rgb(255,162,47) */
+  /* [Style Refine] Figma pie blue fill → rgb(43,160,255) */
+  /* [Layout Refine] root 在 base-panel 内仅负责内容布局；禁止 root 添加背景/边框/阴影，补充 flex 与 min-height:0 */
+  /* [Layout Refine] section 为纵向内容容器；flex 嵌套补充 min-height:0 */
+  /* [Layout Refine] Figma slot-当日总流量 bbox.height=556.31，但与后续区块存在覆盖；按可见图表区约 400px 分配，避免挤出 807px 面板 */
+  /* [Layout Refine] Figma slot-车型分布 y=573，相对上一图表 y=428+131=559，间距≈14px */
+  /* [Layout Refine] Figma slot-流量预测 y=730，相对车型分布 y=573+142=715，间距≈15px */
+  /* [Layout Refine] Figma sub-header layoutMode=HORIZONTAL → flex-direction: row；primaryAxisAlignItems=SPACE_BETWEEN */
+  /* [Layout Refine] 标题组 icon 与 text 横向排列，对齐 Figma bbox：icon x=35.827, text x=57.827，间距=4px */
+  /* [Style Refine] Figma title typography: Source Han Sans CN / 16 / 500 / 24；effects DROP_SHADOW y=5.047 radius=5.047 color rgba(255,255,255,.8) */
+  /* [Layout Refine] Figma @ant/select bbox.width=100 height=30.422 */
+  /* [Layout Refine] Figma Group 2136636802 bbox: x≈10 y=196 width=425.83 height=91.44；相对内容 x 负偏移 25.827 */
+  /* [Layout Refine] Figma stat groups height=52；相对 total-card top=16px */
+  /* [Layout Refine] Figma left stat x=42.828，相对 total-card x≈10 → left≈33px；原模板左右数据位置与设计相反，保持 DOM 文案时用样式对齐 */
+  /* [Layout Refine] Figma right stat x=271.828，相对 total-card x≈10 → left≈262px */
+  /* [Layout Refine] Figma @echarts/bar bbox.width=379 height=131；两图间 y 差=141 */
+  /* [Layout Refine] Figma Frame 2136639396 layoutMode=HORIZONTAL → flex-direction: row；counterAxisAlignItems=CENTER */
+  /* [Style Refine] Figma icon fills GRADIENT_LINEAR stop0 rgb(56,141,255), stop1 alpha=0；cornerRadius=6 */
+  /* [Layout Refine] Figma chart block total height=131，标题行 height=21 → 图表容器 height=110 */
+  /* [Layout Refine] Figma 两个 Frame 1280 横向排列：x=32.827 与 x=227.827，gap≈3px */
+  /* [Layout Refine] Figma Frame 1280 bbox.width=192 height=114 */
+  /* [Layout Refine] Figma @echarts bbox relative to card: left≈69.66 top≈49，width≈52.06 height≈52.55 */
+  /* [Layout Refine] Figma title frame bbox relative card: x≈32 y≈2 width=129.5 height=24.77 */
+  /* [Layout Refine] Figma vehicle stat frames at x≈44/168 y≈658 relative card y=601 → top≈57，横向 space-between */
+  /* [Layout Refine] Figma @antd/tab layoutMode=HORIZONTAL → flex-direction: row；counterAxisAlignItems=CENTER */
+  /* [Style Refine] Figma btn cornerRadius=20.4615 strokeWeight≈0.73；inactive fills rgb(102,128,160) */
+  /* [Style Refine] Figma btn-active fills[0].color rgb(25,144,255), stroke rgb(199,224,255), text white */
+  /* [Layout Refine] Figma @echarts/line bbox.width=363 height=140.662，y 与 header 下沿间距≈10px */
+}
+.dark .c-c-monitor-root {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding: 7px 20px 12px;
+  color: #333333;
+  font-family: "Source Han Sans CN", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  overflow: hidden;
+}
+.dark .c-c-monitor-title-dot {
+  display: block;
+  width: 8px;
+  height: 8px;
+  object-fit: contain;
+}
+.dark .c-c-monitor-title-vector {
+  display: block;
+  width: 362px;
+  max-width: 100%;
+  height: 6px;
+  object-fit: fill;
+}
+.dark .c-c-monitor-section {
+  width: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+.dark .c-c-monitor-total-section {
+  height: 407px;
+}
+.dark .c-c-monitor-vehicle-section {
+  height: 142px;
+  margin-top: 14px;
+}
+.dark .c-c-monitor-forecast-section {
+  height: 174px;
+  margin-top: 15px;
+  flex: 1 1 auto;
+}
+.dark .c-c-monitor-section-header {
+  width: 100%;
+  height: 30px;
+  min-height: 30px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+.dark .c-c-monitor-section-title-wrap {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.dark .c-c-monitor-section-title-icon {
+  display: block;
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.dark .c-c-monitor-section-title {
+  color: #333333;
+  font-family: "Source Han Sans CN", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  text-align: left;
+  text-shadow: 0 5.047px 5.047px rgba(255, 255, 255, 0.8);
+  white-space: nowrap;
+}
+.dark .c-c-monitor-time-select {
+  width: 100px;
+  height: 30px;
+  flex-shrink: 0;
+}
+.dark .c-c-monitor-time-select :deep(.ant-select-selector) {
+  height: 30px !important;
+  /* [Style Refine] Figma Rectangle 34624274 cornerRadius=4 */
+  border-radius: 4px !important;
+  /* [Style Refine] Figma strokes[0].color → rgb(161,206,255) */
+  border: 1px solid #a1ceff !important;
+  /* [Style Refine] Figma select fills gradient from explicit stops */
+  background: linear-gradient(90deg, #ffffff 0%, #e2efff 36.19%, #deedff 68.88%, #ffffff 100%) !important;
+  box-shadow: none !important;
+  padding: 0 24px 0 10px !important;
+}
+.dark .c-c-monitor-time-select :deep(.ant-select-selection-item) {
+  color: #333333;
+  font-family: "Source Han Sans CN", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 28px !important;
+}
+.dark .c-c-monitor-time-select :deep(.ant-select-arrow) {
+  color: #1990ff;
+}
+.dark .c-c-monitor-total-card {
+  position: relative;
+  width: calc(100% + 45.827px);
+  height: 91px;
+  margin: 7px -20px 0 -25.827px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+.dark .c-c-monitor-total-stat {
+  position: absolute;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 77px;
+}
+.dark .c-c-monitor-total-stat-left {
+  right: 67px;
+  align-items: flex-start;
+}
+.dark .c-c-monitor-total-stat-right {
+  left: 33px;
+  align-items: flex-end;
+  min-width: 128px;
+}
+.dark .c-c-monitor-total-label {
+  color: #333333;
+  font-family: "Source Han Sans CN", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  white-space: nowrap;
+}
+.dark .c-c-monitor-total-value {
+  font-family: "Roboto", "DIN Alternate", Arial, sans-serif;
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 28px;
+  white-space: nowrap;
+}
+.dark .c-c-monitor-total-value-bridge {
+  color: #0c9dbe;
+}
+.dark .c-c-monitor-total-value-tunnel {
+  color: #006fe3;
+}
+.dark .c-c-monitor-chart-block {
+  width: 379px;
+  max-width: 100%;
+  height: 131px;
+  margin-top: 10px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+.dark .c-c-monitor-chart-title-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 3px;
+  height: 21px;
+  margin-left: 0;
+  margin-bottom: 0;
+}
+.dark .c-c-monitor-chart-title-mark {
+  width: 3px;
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #388dff 0%, rgba(56, 141, 255, 0) 100%);
+  flex-shrink: 0;
+}
+.dark .c-c-monitor-chart-title {
+  color: #333333;
+  font-family: "Source Han Sans CN", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 21px;
+  white-space: nowrap;
+}
+.dark .c-c-monitor-chart-container {
+  width: 379px;
+  max-width: 100%;
+  height: 110px;
+  min-height: 0;
+}
+.dark .c-c-monitor-vehicle-list {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 3px;
+  width: 100%;
+  margin-top: 4px;
+  min-height: 0;
+}
+.dark .c-c-monitor-vehicle-card {
+  position: relative;
+  width: 192px;
+  height: 114px;
+  flex: 0 0 192px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.dark .c-c-monitor-vehicle-chart {
+  position: absolute;
+  left: 69px;
+  top: 49px;
+  width: 52px;
+  height: 52px;
+}
+.dark .c-c-monitor-vehicle-name {
+  position: absolute;
+  left: 32px;
+  top: 2px;
+  width: 129px;
+  height: 18px;
+  color: #333333;
+  font-family: "Source Han Sans CN", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 18px;
+  text-align: center;
+  white-space: nowrap;
+}
+.dark .c-c-monitor-vehicle-stats {
+  position: absolute;
+  left: 12px;
+  right: 14px;
+  top: 57px;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
+  pointer-events: none;
+}
+.dark .c-c-monitor-vehicle-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 52px;
+  min-height: 36px;
+}
+.dark .c-c-monitor-vehicle-stat-right {
+  align-items: flex-end;
+}
+.dark .c-c-monitor-vehicle-stat-label {
+  color: #333333;
+  font-family: "Alibaba PuHuiTi", "Source Han Sans CN", "Microsoft YaHei", sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  white-space: nowrap;
+}
+.dark .c-c-monitor-vehicle-stat-value {
+  font-family: "Roboto", "DIN Alternate", Arial, sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 18px;
+  white-space: nowrap;
+}
+.dark .c-c-monitor-vehicle-stat-value-passenger {
+  color: #1399ff;
+}
+.dark .c-c-monitor-vehicle-stat-value-truck {
+  color: #ff6a00;
+}
+.dark .c-c-monitor-forecast-tabs {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  margin-left: auto;
+  margin-right: 10px;
+}
+.dark .c-c-monitor-forecast-tab {
+  height: 19px;
+  padding: 0 10px;
+  border: 0.731px solid #acc4e1;
+  border-radius: 20.462px;
+  background: #6680a0;
+  color: #333333;
+  font-family: "Source Han Sans CN", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 17px;
+  text-align: center;
+  white-space: nowrap;
+  cursor: pointer;
+  outline: none;
+}
+.dark .c-c-monitor-forecast-tab-active {
+  min-width: 128px;
+  border-color: #c7e0ff;
+  background: #1990ff;
+  color: #ffffff;
+  font-weight: 500;
+}
+.dark .c-c-monitor-holiday-button {
+  flex: 0 0 auto;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #1990ff;
+  font-family: "Source Han Sans CN", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  white-space: nowrap;
+  cursor: pointer;
+  outline: none;
+}
+.dark .c-c-monitor-forecast-chart {
+  width: 363px;
+  max-width: 100%;
+  height: 141px;
+  min-height: 0;
+  margin-top: 10px;
+}
+.light {
+  /* [Style Refine] Figma fills: section icon / active tab color rgb(25,144,255) */
+  /* [Style Refine] Figma title gradient stop color rgb(90,126,255) */
+  /* [Style Refine] Figma bg-[m] fills[0].color → rgb(237,244,251) */
+  /* [Style Refine] Figma bg-[m] fills[0].color → rgb(237,244,251) */
+  /* [Style Refine] Figma text fills[0].color → rgb(51,51,51) */
+  /* [Style Refine] Figma axis unit fills[0].color → rgb(102,102,102) */
+  /* [Style Refine] Figma active tab text fills[0].color → rgb(255,255,255) */
+  /* [Style Refine] Figma select fills gradient approximated from explicit stops #ffffff → #e2efff → #deedff → #ffffff */
+  /* [Style Refine] Figma select strokes[0].color → rgb(161,206,255) */
+  /* [Style Refine] Figma inactive tab fills[0].color → rgb(102,128,160) */
+  /* [Style Refine] Figma inactive tab strokes[0].color → rgb(172,196,225) */
+  /* [Style Refine] Figma active tab strokes[0].color → rgb(199,224,255) */
+  /* [Style Refine] Figma inactive tab text fills[0].color → rgb(51,51,51) */
+  /* [Style Refine] Figma d-82,379 fills[0].color → rgb(12,157,190) */
+  /* [Style Refine] Figma d-34,620 fills[0].color → rgb(0,111,227) */
+  /* [Style Refine] Figma vehicle passenger fills[0].color → rgb(19,153,255) */
+  /* [Style Refine] Figma vehicle truck fills[0].color → rgb(255,106,0) */
+  /* [Style Refine] Figma line actual stroke color → rgb(0,204,204) */
+  /* [Style Refine] Figma line forecast stroke color → rgb(51,133,255) */
+  /* [Style Refine] Figma pie dark fill → rgb(86,89,124) */
+  /* [Style Refine] Figma pie orange fill → rgb(255,162,47) */
+  /* [Style Refine] Figma pie blue fill → rgb(43,160,255) */
+  /* [Layout Refine] root 在 base-panel 内仅负责内容布局；禁止 root 添加背景/边框/阴影，补充 flex 与 min-height:0 */
+  /* [Layout Refine] section 为纵向内容容器；flex 嵌套补充 min-height:0 */
+  /* [Layout Refine] Figma slot-当日总流量 bbox.height=556.31，但与后续区块存在覆盖；按可见图表区约 400px 分配，避免挤出 807px 面板 */
+  /* [Layout Refine] Figma slot-车型分布 y=573，相对上一图表 y=428+131=559，间距≈14px */
+  /* [Layout Refine] Figma slot-流量预测 y=730，相对车型分布 y=573+142=715，间距≈15px */
+  /* [Layout Refine] Figma sub-header layoutMode=HORIZONTAL → flex-direction: row；primaryAxisAlignItems=SPACE_BETWEEN */
+  /* [Layout Refine] 标题组 icon 与 text 横向排列，对齐 Figma bbox：icon x=35.827, text x=57.827，间距=4px */
+  /* [Style Refine] Figma title typography: Source Han Sans CN / 16 / 500 / 24；effects DROP_SHADOW y=5.047 radius=5.047 color rgba(255,255,255,.8) */
+  /* [Layout Refine] Figma @ant/select bbox.width=100 height=30.422 */
+  /* [Layout Refine] Figma Group 2136636802 bbox: x≈10 y=196 width=425.83 height=91.44；相对内容 x 负偏移 25.827 */
+  /* [Layout Refine] Figma stat groups height=52；相对 total-card top=16px */
+  /* [Layout Refine] Figma left stat x=42.828，相对 total-card x≈10 → left≈33px；原模板左右数据位置与设计相反，保持 DOM 文案时用样式对齐 */
+  /* [Layout Refine] Figma right stat x=271.828，相对 total-card x≈10 → left≈262px */
+  /* [Layout Refine] Figma @echarts/bar bbox.width=379 height=131；两图间 y 差=141 */
+  /* [Layout Refine] Figma Frame 2136639396 layoutMode=HORIZONTAL → flex-direction: row；counterAxisAlignItems=CENTER */
+  /* [Style Refine] Figma icon fills GRADIENT_LINEAR stop0 rgb(56,141,255), stop1 alpha=0；cornerRadius=6 */
+  /* [Layout Refine] Figma chart block total height=131，标题行 height=21 → 图表容器 height=110 */
+  /* [Layout Refine] Figma 两个 Frame 1280 横向排列：x=32.827 与 x=227.827，gap≈3px */
+  /* [Layout Refine] Figma Frame 1280 bbox.width=192 height=114 */
+  /* [Layout Refine] Figma @echarts bbox relative to card: left≈69.66 top≈49，width≈52.06 height≈52.55 */
+  /* [Layout Refine] Figma title frame bbox relative card: x≈32 y≈2 width=129.5 height=24.77 */
+  /* [Layout Refine] Figma vehicle stat frames at x≈44/168 y≈658 relative card y=601 → top≈57，横向 space-between */
+  /* [Layout Refine] Figma @antd/tab layoutMode=HORIZONTAL → flex-direction: row；counterAxisAlignItems=CENTER */
+  /* [Style Refine] Figma btn cornerRadius=20.4615 strokeWeight≈0.73；inactive fills rgb(102,128,160) */
+  /* [Style Refine] Figma btn-active fills[0].color rgb(25,144,255), stroke rgb(199,224,255), text white */
+  /* [Layout Refine] Figma @echarts/line bbox.width=363 height=140.662，y 与 header 下沿间距≈10px */
+}
+.light .c-c-monitor-root {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding: 7px 20px 12px;
+  color: #333333;
+  font-family: "Source Han Sans CN", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  overflow: hidden;
+}
+.light .c-c-monitor-title-dot {
+  display: block;
+  width: 8px;
+  height: 8px;
+  object-fit: contain;
+}
+.light .c-c-monitor-title-vector {
+  display: block;
+  width: 362px;
+  max-width: 100%;
+  height: 6px;
+  object-fit: fill;
+}
+.light .c-c-monitor-section {
+  width: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+.light .c-c-monitor-total-section {
+  height: 407px;
+}
+.light .c-c-monitor-vehicle-section {
+  height: 142px;
+  margin-top: 14px;
+}
+.light .c-c-monitor-forecast-section {
+  height: 174px;
+  margin-top: 15px;
+  flex: 1 1 auto;
+}
+.light .c-c-monitor-section-header {
+  width: 100%;
+  height: 30px;
+  min-height: 30px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+.light .c-c-monitor-section-title-wrap {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.light .c-c-monitor-section-title-icon {
+  display: block;
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.light .c-c-monitor-section-title {
+  color: #333333;
+  font-family: "Source Han Sans CN", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  text-align: left;
+  text-shadow: 0 5.047px 5.047px rgba(255, 255, 255, 0.8);
+  white-space: nowrap;
+}
+.light .c-c-monitor-time-select {
+  width: 100px;
+  height: 30px;
+  flex-shrink: 0;
+}
+.light .c-c-monitor-time-select :deep(.ant-select-selector) {
+  height: 30px !important;
+  /* [Style Refine] Figma Rectangle 34624274 cornerRadius=4 */
+  border-radius: 4px !important;
+  /* [Style Refine] Figma strokes[0].color → rgb(161,206,255) */
+  border: 1px solid #a1ceff !important;
+  /* [Style Refine] Figma select fills gradient from explicit stops */
+  background: linear-gradient(90deg, #ffffff 0%, #e2efff 36.19%, #deedff 68.88%, #ffffff 100%) !important;
+  box-shadow: none !important;
+  padding: 0 24px 0 10px !important;
+}
+.light .c-c-monitor-time-select :deep(.ant-select-selection-item) {
+  color: #333333;
+  font-family: "Source Han Sans CN", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 28px !important;
+}
+.light .c-c-monitor-time-select :deep(.ant-select-arrow) {
+  color: #1990ff;
+}
+.light .c-c-monitor-total-card {
+  position: relative;
+  width: calc(100% + 45.827px);
+  height: 91px;
+  margin: 7px -20px 0 -25.827px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+.light .c-c-monitor-total-stat {
+  position: absolute;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 77px;
+}
+.light .c-c-monitor-total-stat-left {
+  right: 67px;
+  align-items: flex-start;
+}
+.light .c-c-monitor-total-stat-right {
+  left: 33px;
+  align-items: flex-end;
+  min-width: 128px;
+}
+.light .c-c-monitor-total-label {
+  color: #333333;
+  font-family: "Source Han Sans CN", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  white-space: nowrap;
+}
+.light .c-c-monitor-total-value {
+  font-family: "Roboto", "DIN Alternate", Arial, sans-serif;
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 28px;
+  white-space: nowrap;
+}
+.light .c-c-monitor-total-value-bridge {
+  color: #0c9dbe;
+}
+.light .c-c-monitor-total-value-tunnel {
+  color: #006fe3;
+}
+.light .c-c-monitor-chart-block {
+  width: 379px;
+  max-width: 100%;
+  height: 131px;
+  margin-top: 10px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+.light .c-c-monitor-chart-title-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 3px;
+  height: 21px;
+  margin-left: 0;
+  margin-bottom: 0;
+}
+.light .c-c-monitor-chart-title-mark {
+  width: 3px;
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #388dff 0%, rgba(56, 141, 255, 0) 100%);
+  flex-shrink: 0;
+}
+.light .c-c-monitor-chart-title {
+  color: #333333;
+  font-family: "Source Han Sans CN", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 21px;
+  white-space: nowrap;
+}
+.light .c-c-monitor-chart-container {
+  width: 379px;
+  max-width: 100%;
+  height: 110px;
+  min-height: 0;
+}
+.light .c-c-monitor-vehicle-list {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 3px;
+  width: 100%;
+  margin-top: 4px;
+  min-height: 0;
+}
+.light .c-c-monitor-vehicle-card {
+  position: relative;
+  width: 192px;
+  height: 114px;
+  flex: 0 0 192px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.light .c-c-monitor-vehicle-chart {
+  position: absolute;
+  left: 69px;
+  top: 49px;
+  width: 52px;
+  height: 52px;
+}
+.light .c-c-monitor-vehicle-name {
+  position: absolute;
+  left: 32px;
+  top: 2px;
+  width: 129px;
+  height: 18px;
+  color: #333333;
+  font-family: "Source Han Sans CN", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 18px;
+  text-align: center;
+  white-space: nowrap;
+}
+.light .c-c-monitor-vehicle-stats {
+  position: absolute;
+  left: 12px;
+  right: 14px;
+  top: 57px;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
+  pointer-events: none;
+}
+.light .c-c-monitor-vehicle-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 52px;
+  min-height: 36px;
+}
+.light .c-c-monitor-vehicle-stat-right {
+  align-items: flex-end;
+}
+.light .c-c-monitor-vehicle-stat-label {
+  color: #333333;
+  font-family: "Alibaba PuHuiTi", "Source Han Sans CN", "Microsoft YaHei", sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  white-space: nowrap;
+}
+.light .c-c-monitor-vehicle-stat-value {
+  font-family: "Roboto", "DIN Alternate", Arial, sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 18px;
+  white-space: nowrap;
+}
+.light .c-c-monitor-vehicle-stat-value-passenger {
+  color: #1399ff;
+}
+.light .c-c-monitor-vehicle-stat-value-truck {
+  color: #ff6a00;
+}
+.light .c-c-monitor-forecast-tabs {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  margin-left: auto;
+  margin-right: 10px;
+}
+.light .c-c-monitor-forecast-tab {
+  height: 19px;
+  padding: 0 10px;
+  border: 0.731px solid #acc4e1;
+  border-radius: 20.462px;
+  background: #6680a0;
+  color: #333333;
+  font-family: "Source Han Sans CN", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 17px;
+  text-align: center;
+  white-space: nowrap;
+  cursor: pointer;
+  outline: none;
+}
+.light .c-c-monitor-forecast-tab-active {
+  min-width: 128px;
+  border-color: #c7e0ff;
+  background: #1990ff;
+  color: #ffffff;
+  font-weight: 500;
+}
+.light .c-c-monitor-holiday-button {
+  flex: 0 0 auto;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #1990ff;
+  font-family: "Source Han Sans CN", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  white-space: nowrap;
+  cursor: pointer;
+  outline: none;
+}
+.light .c-c-monitor-forecast-chart {
+  width: 363px;
+  max-width: 100%;
+  height: 141px;
+  min-height: 0;
+  margin-top: 10px;
+}

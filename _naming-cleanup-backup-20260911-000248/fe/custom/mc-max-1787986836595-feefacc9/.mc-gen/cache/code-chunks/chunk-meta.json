@@ -1,0 +1,20 @@
+{
+  "completed": [
+    "1-declare.json",
+    "2-package/index.vue",
+    "3-package/components/SectionStatsCards.vue",
+    "4-package/components/SectionDeviceGrid.vue",
+    "5-resources/styles/themes/theme-vars.less",
+    "6-resources/styles/common.less"
+  ],
+  "total": 3,
+  "updatedAt": 1787987942947,
+  "files": {
+    "declare.json": "1-declare.json",
+    "package/index.vue": "2-package_index.vue",
+    "package/components/SectionStatsCards.vue": "3-package_components_SectionStatsCards.vue",
+    "package/components/SectionDeviceGrid.vue": "4-package_components_SectionDeviceGrid.vue",
+    "resources/styles/theme-vars.less": "5-resources_styles_theme-vars.less",
+    "resources/styles/common.less": "6-resources_styles_common.less"
+  }
+}

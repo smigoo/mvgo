@@ -19,6 +19,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { createLogger } from '../logger/index.js';
 import { dataDir, backendRoot } from '../../config/backend-root.js';
+import { getBuildVersion } from '../utils/build-version.js';
 import {
   coerceLLMText,
   getMaxTokens,
@@ -88,14 +89,13 @@ import {
   getIndexVueChunkBudgets,
   getMaxIndexVueChunkBudget,
 } from './microcode/chunk-budget.js';
-import { isValidEchartsType, normalizeChartOptionType } from '../utils/chart-type-guard.js';
+import { resolveEchartsType, normalizeSeriesInSource, normalizeChartAxesInSource } from '../utils/chart-type-guard.js';
 import {
   audit as auditManifest,
   auditSelfConsistency,
 } from '../utils/manifest-auditor.js';
 import {
-  autoWireSubComponentProps,
-  rewriteSubcomponentResourceImportsToProps,
+  stripResourcePropsFromDefineProps,
 } from '../utils/props-wiring-guard.js';
 import { assessNumericLiteralRewrite } from '../utils/numeric-literal-guard.js';
 import {
@@ -108,10 +108,41 @@ import {
   validateSubcomponentResourceDeps,
   healUnavailableResourceRefs,
   ensureRuntimeLibraryImports,
+  pruneUnmountedResourceImports,
 } from '../utils/resource-import-guard.js';
 import { isSessionLocked } from '../utils/session-lock-registry.js';
 import { normalizeFlexSourceConflicts, normalizeFlexSiblingScale } from '../utils/flex-sibling-guard.js';
 import { formatResourceMapping } from '../utils/resource-mapping-formatter.js';
+// 🛡️ 层③（2026-09-11）：模板类名统一补前缀（CODE-020 确定性自愈）
+import { fixMissingClassPrefixes } from '../utils/class-prefix-fixer.js';
+// 🛡️ 治本（2026-09-11）：内容根容器高度归一（flex 填充 → height:100%，宿主 .pannel-content 为 block）
+import { normalizeRootContainerLayout, detectContentRootClass } from '../utils/root-container-normalizer.js';
+
+/**
+ * 🛡️ 层①配套（2026-09-11 · c-device-monitor-1fduq67s 实锤）：把模板 PascalCase 子组件标签
+ * 并入子组件生成候选清单（原地去重）。
+ *
+ * 背景：层①确定性模板按 effectiveSections 生成全部子组件标签（<SwitchSection /> 等），
+ * 但 LLM script 段可能只 import 部分 → _detectSubComponents 仅按 import 反推 → 模板标签
+ * 对应的子组件文件永不生成 → 悬空标签（渲染断裂/白块）。vue3-engineer 已有同款修法，
+ * 此处对齐复用 extractComponentTagNames（已排除 Vue 内置组件与模板白名单）。
+ *
+ * @param {string[]} subComps _detectSubComponents 产出的路径清单（package/components/X.vue）
+ * @param {string} indexVueContent index.vue 内容
+ */
+function _unionTemplateTagSubComponents(subComps, indexVueContent) {
+  if (!Array.isArray(subComps) || !indexVueContent) return;
+  // 🛡️ 2026-09-11（0ca84358 实锤）：改用共享边界法提取模板区 —— lazy `</template>` 被
+  // 具名插槽提前闭合截断，插槽后主内容标签（Switch/Tabs/Main）全部漏 union →
+  // 子组件文件永不生成（「子组件并行生成完成: 1 个」事故）。
+  const templateBody = extractSfcTemplate(indexVueContent);
+  if (!templateBody) return;
+  for (const tag of extractComponentTagNames(templateBody)) {
+    const p = `package/components/${tag}.vue`;
+    if (!subComps.includes(p)) subComps.push(p);
+  }
+}
+
 // 🆕 2026-09-04：组件语义命名（唯一 componentId = c-<语义段>-<sessionId 尾 8 hex>，
 // CSS class 前缀/onload 事件与带 hash 的 componentId 解耦用 classPrefixOf）
 import {
@@ -126,6 +157,9 @@ import {
 } from '../utils/component-naming.js';
 // 🛡️ 2026-09-03（管线 A 方案）：写盘前把子组件类样式收敛进 common.less
 import { consolidateSubComponentClasses } from '../utils/style-class-consolidator.js';
+import { collectClassFacts } from '../utils/class-facts.js';
+import { normalizeClassNameDialect } from '../utils/class-dialect-normalizer.js';
+import { extractSfcTemplate } from '../utils/sfc-template-extractor.js';
 import {
   extractSections,
   extractElements,
@@ -1601,38 +1635,38 @@ export class MicrocodeEngineer extends BaseAgent {
               // 🎯 Phase 2 方案7: 自动修复子组件尺寸约束
               fixed = _autoFixSubComponentSizePure(fixed);
 
-              // 🎯 P0/D 契约改写（2026-09-09）：子组件本地 import 资源 → defineProps 资源 prop。
-              // 资源归属契约：资源只在主组件 import 一次，子组件只通过 defineProps 接收、由父透传，
-              // 杜绝「子组件本地 import + 又 defineProps 要求父传」的双重持有导致的 CODE-019 不收敛。
-              // 该改写必须在 injectResourceImports 之前执行（先清子组件本地 import，再由其 section 内
-              // 实际使用的资源走主组件透传链路）。
+              // 🔁 层② 反转（2026-09-11）：子组件资源「defineProps prop → 本地 import」。
+              // 反转 P0/D 旧契约（资源只归主组件、子组件 defineProps 接收 + 父透传）：该契约要求
+              // LLM 在主组件写盘时把资源 props 全量透传给子组件，实测反复漏传 → CODE-019 BLOCK →
+              // 全量重写重试仍漏 → 3×BLOCK 不收敛；且与层①「系统确定性生成 index.vue 模板骨架」
+              // （生成的子组件标签不带 props）根本冲突。
+              // 新契约：**子组件自己 import 自己用到的资源**，父组件不再需要透传，CODE-019 检测面归零。
+              // 顺序关键：必须先删 prop（否则 collectDeclaredBindings 记为「已声明」→ 下方
+              // injectResourceImports 撞名复核拒绝注入 import → 资源静默 undefined）；删除后由下方
+              // 默认分支（去掉 skipResourceVars）扫描模板实际引用并注入本地 import。
               try {
-                const _rw = rewriteSubcomponentResourceImportsToProps(fixed, effectiveMapping)
-                if (_rw.changed) {
-                  fixed = _rw.content
-                  this.logger.info(`🎯 子组件资源契约改写(本地import→props): ${f}`, {
-                    rewritten: _rw.rewritten,
+                const _sp = stripResourcePropsFromDefineProps(fixed, effectiveMapping)
+                if (_sp.changed) {
+                  fixed = _sp.content
+                  this.logger.info(`🔁 子组件资源契约反转(去 prop 待本地 import): ${f}`, {
+                    removed: _sp.removed,
                   })
                 }
-              } catch (rwErr) {
-                this.logger.warn('🎯 子组件资源契约改写异常（非阻断）', {
-                  error: rwErr?.message || String(rwErr),
+              } catch (spErr) {
+                this.logger.warn('🔁 子组件资源 prop 剥离异常（非阻断）', {
+                  error: spErr?.message || String(spErr),
                 })
               }
 
               // 🆕 方案 1: 子组件资源自动注入（2026-08-31）
               // R0-1（2026-09-01）：统一走 resource-import-guard 的 injectResourceImports
               // （单一事实源）。子组件位于 package/components/，relBase 为 ../../resources/images/。
-              // 🎯 P0/D 契约（2026-09-09）：子组件资源变量**不再本地 import**，只经 defineProps
-              // 接收（上方契约改写已把本地资源 import 转成 prop）。故此处传 skipResourceVars:true，
-              // 仅允许注入子组件自身独有的、**非资源类** import（如 vue 运行库），资源类 import 一律跳过，
-              // 杜绝「子组件本地 import + 又 defineProps 要求父传」双重持有致 CODE-019 不收敛。
+              // 🔁 层② 反转（2026-09-11）：子组件资源变量**改回本地 import**（上方已剥离同名 prop），
+              // 故不再传 skipResourceVars:true，走默认分支扫描模板实际引用的资源变量并注入 import。
               fixed = injectResourceImports(
                 fixed,
                 effectiveMapping,
                 '../../resources/images/',
-                null,
-                { skipResourceVars: true },
               );
 
               // 🆕 方案 3: 编译前置校验（2026-08-31）
@@ -1823,6 +1857,11 @@ export class MicrocodeEngineer extends BaseAgent {
         const subComps = this._detectSubComponents(
           allFiles['package/index.vue'] || '',
         );
+        // 🛡️ 层①配套（2026-09-11 · c-device-monitor-1fduq67s 实锤）：确定性模板按 effectiveSections
+        // 生成全部子组件标签，但 LLM script 段可能只 import 部分 → _detectSubComponents 仅按 import
+        // 反推 → 模板标签对应的子组件文件永不生成 → 悬空标签（渲染断裂/白块）。与 vue3-engineer
+        // 同款修法对齐：把模板 PascalCase 标签并入候选清单（extractComponentTagNames 已排除 Vue 内置）。
+        _unionTemplateTagSubComponents(subComps, allFiles['package/index.vue'] || '');
         // 📊 方案 4：更新总 chunk 数（子组件检测完成后）
         _perfMonitor.totalChunks += subComps.length;
         await genSubComponents(subComps, 5);
@@ -1898,6 +1937,8 @@ export class MicrocodeEngineer extends BaseAgent {
         const subComps = this._detectSubComponents(
           allFiles['package/index.vue'] || '',
         );
+        // 🛡️ 层①配套（2026-09-11）：模板标签并入候选清单（详见 complex 分支注释）
+        _unionTemplateTagSubComponents(subComps, allFiles['package/index.vue'] || '');
         await genSubComponents(subComps, 3);
         const idx = 3 + subComps.length;
 
@@ -1936,6 +1977,8 @@ export class MicrocodeEngineer extends BaseAgent {
         const subComps = this._detectSubComponents(
           allFiles['package/index.vue'] || '',
         );
+        // 🛡️ 层①配套（2026-09-11）：模板标签并入候选清单（详见 complex 分支注释）
+        _unionTemplateTagSubComponents(subComps, allFiles['package/index.vue'] || '');
         await genSubComponents(subComps, 2);
         const idx = 2 + subComps.length;
 
@@ -2100,25 +2143,14 @@ export class MicrocodeEngineer extends BaseAgent {
             ? '../../resources/images/'
             : '../resources/images/';
           const diag = { residual: [], unmapped: [] };
-          // 🎯 P0/D 契约（2026-09-09）：主组件 index.vue 全量 import 全部 success 资源
-          // （forceAll），作为「资源只归主组件持有、子组件 defineProps + 父透传」的事实源；
-          // 子组件保持普通注入（只注入自身用到的，改写后主要为 vue 运行库 import）。
-          // 主组件 forceAll 后，autoWire 才总能找到同名变量可传给子组件（CODE-019 收敛前提）。
-          const isMainComp = /^package\/index\.vue$/.test(relPath);
-          // Loop 1：主组件走契约（parentMustPass ∪ panel），不再 forceAll 全量。
-          // 无 contracts 时不再回退 forceAll 全量风暴：改为注入「模板实际引用 + panel 级」资源
-          // （injectResourceImports 默认分支扫描代码内已用资源变量），既维持 CODE-019 父持有子透传，
-          // 又不把全部 success 资源强塞主组件 import。
-          const mainOpts =
-            isMainComp && workingManifest.contracts?.length > 0
-              ? { contractMapping: workingManifest.contracts }
-              : null;
+          // 🔁 层② 反转（2026-09-11）：主组件不再走 contractMapping（也不再 forceAll）。
+          // 资源归各自组件本地持有：主组件只注入「自己模板里实际引用」的资源变量
+          // （injectResourceImports 默认分支扫描），子组件各自 import，无需父透传。
           const injected = injectResourceImports(
             content,
             effectiveMapping,
             relBase,
             diag,
-            isMainComp ? mainOpts : null,
           );
           if (diag.residual.length > 0 || diag.unmapped.length > 0) {
             placeholderDiag.push({ file: relPath, ...diag });
@@ -2152,6 +2184,31 @@ export class MicrocodeEngineer extends BaseAgent {
           injectedCount,
           mappingCount: effectiveMapping.length,
         });
+
+        // 🛡️ P1.7（2026-09-11）引用驱动补齐：旧注入只认模板使用形态，**script 内引用是盲区**
+        // （13890774 实锤：`const deviceIcons=[icon3,…,icon14]` 写在 script 里 → 只注入 3 个 import
+        // → 运行时 `icon4 is not defined` 整组件渲染失败）。此处按「引用采集（模板+script）」
+        // 对齐事实源补齐 import；无对应的幽灵引用交由 T08 兜底。
+        try {
+          const _refFix = microcodeResources.ensureResourceImportsForRefs
+            ? microcodeResources.ensureResourceImportsForRefs(allFiles, effectiveMapping, {
+                logger: this.logger,
+              })
+            : null;
+          if (_refFix && _refFix.injected.length > 0) {
+            for (const [k, v] of Object.entries(_refFix.files)) allFiles[k] = v;
+            input.onProgress?.({
+              stage: '资源校验',
+              message: `🧩 资源 import 引用驱动补齐 ${_refFix.injected.length} 项（含 script 内引用）`,
+              status: 'success',
+              details: _refFix.injected.slice(0, 10),
+            });
+          }
+        } catch (e) {
+          this.logger.warn('资源 import 引用驱动补齐失败（fail-open）', {
+            error: e?.message || String(e),
+          });
+        }
       } else {
         this.logger.warn(
           '⚠️ 微码资源映射完全缺失（内存与磁盘 .mc-gen/resource-dom-mapping.json 均无），跳过 import 注入，模板资源变量将不被解析',
@@ -2776,6 +2833,9 @@ export class MicrocodeEngineer extends BaseAgent {
         autoFixes: chunkFixes,
         // 🛡️ 资源归属指导（方案5）：带回 execute 层，经 graph 写回 state 供重试轮次注入。
         _attributionGuidance: input._attributionGuidance || null,
+        // 🛡️ R1-2：布局事实（rootContainerClass / sectionRoots），由 execute 转 rootLayoutFacts
+        // 供下游归一器与 fix-section-heights 规则②改读事实、退役命名枚举。
+        indexTemplateFacts: input._indexTemplateFacts || null,
       };
     } catch (error) {
       // 🚨 崩溃堆栈追踪（2026-08-30 为排查 Cannot read properties of undefined (reading 'error') 添加）
@@ -3922,7 +3982,25 @@ export class MicrocodeEngineer extends BaseAgent {
     // 纯函数 + 失败/括号不平衡自动回退，不阻断主流程。
     let targetFiles = files;
     try {
-      targetFiles = consolidateSubComponentClasses(files, { logger: this.logger });
+      // 🛡️ P1.5（2026-09-11）类名单一写入者：**先归一，后采集**。
+      // 顺序至关重要：归一（布尔方言 is-active → `${元素基类}--active`、修饰符形态对齐）
+      // 必须在 classFacts 采集之前完成，否则 facts 与下游链会看到两套类名（新裂缝）。
+      const _normalized = normalizeClassNameDialect(targetFiles);
+      targetFiles = _normalized.files;
+      if (_normalized.changes.length > 0) {
+        this.logger.info('🧹 类名方言归一（单一写入者）', {
+          count: _normalized.changes.length,
+          samples: _normalized.changes.slice(0, 3),
+        });
+      }
+      // 🛡️ P1.1：类事实单一采集——生成期采集一次，收敛器只读消费
+      // （修饰符独立成键，杜绝「基名 first-wins」把 --active 规则写成基类）。
+      const _facts = collectClassFacts(targetFiles);
+      this._classFacts = _facts;
+      targetFiles = consolidateSubComponentClasses(targetFiles, {
+        logger: this.logger,
+        classFacts: _facts,
+      });
     } catch (e) {
       // 🛡️ 2026-09-04 C：logger 判空 + 记录调用栈（生产曾现 reading 'log' 且无堆栈无法溯源）
       const errText = `[style-class-consolidator] 收敛失败，按原样写盘: ${e?.message || e}`;
@@ -5335,6 +5413,39 @@ export class MicrocodeEngineer extends BaseAgent {
         }
       }
 
+      // 🛡️ R1-2（2026-09-11）布局事实数据流：rootLayoutFacts 单一来源。
+      // 优先取确定性模板 facts（buildDeterministicIndexTemplate），缺失时从 index.vue 落盘内容
+      // 兜底提取一次（词尾猜测固化于此，下游归一器/规则②改读 facts、退役命名枚举）。
+      let rootLayoutFacts = null;
+      const _indexTemplateFacts = codeResult.indexTemplateFacts || null;
+      if (_indexTemplateFacts?.rootContainerClass) {
+        rootLayoutFacts = {
+          rootContainerClass: _indexTemplateFacts.rootContainerClass,
+          sectionRoots: _indexTemplateFacts.sectionRoots || [],
+          source: _indexTemplateFacts.source || 'deterministic-template',
+        };
+      } else {
+        const _idxFallback =
+          codeResult.files['package/index.vue'] || codeResult.files['index.vue'];
+        const _detCls = detectContentRootClass(
+          typeof _idxFallback === 'string' ? _idxFallback : '',
+        );
+        if (_detCls) {
+          rootLayoutFacts = {
+            rootContainerClass: _detCls,
+            sectionRoots: [],
+            source: 'detected-index',
+          };
+        }
+      }
+      if (rootLayoutFacts) {
+        this.logger.info('🧩 布局事实 rootLayoutFacts', {
+          rootContainerClass: rootLayoutFacts.rootContainerClass,
+          sectionRoots: rootLayoutFacts.sectionRoots.length,
+          source: rootLayoutFacts.source,
+        });
+      }
+
       // 🎯 确定性后处理（治本，不依赖 LLM 遵守 prompt）：
       //   T1 面板标题剥离：base-panel 外壳已渲染标题，组件内 PanelHeader 重复（mc-max-1787577949692 实锤）
       //   T2 echarts 容器最小高度：图表容器被 flex 兄弟挤压到 ~10px
@@ -5449,14 +5560,14 @@ export class MicrocodeEngineer extends BaseAgent {
         // 实锤：mc-max-1787577949692 vision 明确 type: 'area'，product 写 type: 'bar' → 折线变柱
         // 策略：按 vision 第一个图表 type 统一替换 product 里所有 series type（多图组件图类型通常一致）
         const chartsArr = Array.isArray(charts) ? charts : [];
+        // 🔴 2026-09-11：真值必须先归一到 echarts 注册名，否则 '面积折线图'/'area-line'
+        // 会被当作合法目标写进 series.type（真值洗白，实锤 mc-max-1789062564333-f1ff01eb）。
         const visionTypes = new Set(
           chartsArr
-            .map((c) => String(c?.type || '').toLowerCase())
+            .map((c) => resolveEchartsType(c?.type))
             .filter(Boolean),
         );
-        const targetType = chartsArr[0]?.type
-          ? String(chartsArr[0].type).toLowerCase()
-          : '';
+        const targetType = resolveEchartsType(chartsArr[0]?.type) || '';
         if (targetType && targetType !== 'bar' && !visionTypes.has('bar')) {
           // vision 不含 bar → product 里所有非 vision 指定类型的 series 强制改回
           let fixedCount = 0;
@@ -5479,37 +5590,27 @@ export class MicrocodeEngineer extends BaseAgent {
           }
         }
 
-        // 🛡️ Loop 2.1.E（2026-09-10）：非法 series.type 拒收（chartType 真值驱动）。
+        // 🛡️ Loop 2.1.E（2026-09-10 立，2026-09-11 修订）：非法 series.type 拒收（chartType 真值驱动）。
         // 根因：traffic 产物 series.type:'分组柱状图'（中文别名，非 echarts 注册名）→ init 失败/空白。
-        // 治本：只允许注册名（bar/line/pie/…），中文别名一律按真值收敛；真值缺失则 fail-closed 回退。
+        // 🔴 2026-09-11 修订（真值洗白事故 mc-max-1789062564333-f1ff01eb，组件 c-env-monitor-d0ela8hg-f1ff01eb）：
+        //    ① 旧版 fallback 直接取**未校验真值** → 真值='area-line'/'面积折线图'/'分组柱状图' 时
+        //       把非法值「收敛」成同一个非法值并打印「已收敛 N 处」→ 守卫退化成洗白器，图表依旧空白。
+        //       实锤日志：`2.1.E 非法 series.type 已收敛 2 处（真值=area-line）`
+        //    ② 旧正则 `/series\s*:\s*\[[\s\S]*?\]/`（lazy）只覆盖到第一个 `]`（colorStops 的闭合），
+        //       同一 series 数组后半段逃过收敛；且无差别替换数组内所有 `type:` 键 →
+        //       lineStyle.type / areaStyle.color.type 被改坏（实锤 c-traffic-monitor-ppheeeem-9c86b889:158）。
+        // 现改为 chart-type-guard.normalizeSeriesInSource：真值先归一 + 括号配平 + 只改元素顶层 type。
         try {
-          const _truthChartType = chartsArr[0]?.type
-            ? String(chartsArr[0].type).toLowerCase()
-            : null;
+          const _truthChartType = resolveEchartsType(chartsArr[0]?.type);
           let _illegalFixed = 0;
           for (const [fp, fc] of Object.entries(codeResult.files || {})) {
             if (!fp.endsWith('.vue') || typeof fc !== 'string') continue;
-            const before = fc;
-            // 逐 series 项规范化：仅处理 `type: '...'` 紧跟于 series 数组内的写法
-            const after = before.replace(
-              /(series\s*:\s*\[[\s\S]*?\])(\s*[,}])/g,
-              (block, arr, tail) => {
-                const fixedArr = arr.replace(
-                  /type\s*:\s*(['"])([^'"]+)\1/g,
-                  (m2, q, raw) => {
-                    if (isValidEchartsType(raw, { chartType: _truthChartType })) return m2;
-                    const safe = normalizeChartOptionType(
-                      { series: [{ type: raw }] },
-                      { chartType: _truthChartType },
-                    ).series[0].type;
-                    if (safe !== String(raw).toLowerCase()) _illegalFixed += 1;
-                    return `type: ${q}${safe}${q}`;
-                  },
-                );
-                return fixedArr + tail;
-              },
-            );
-            if (after !== before) codeResult.files[fp] = after;
+            if (!fc.includes('series')) continue;
+            const r = normalizeSeriesInSource(fc, { chartType: _truthChartType });
+            if (r.changed > 0) {
+              codeResult.files[fp] = r.text;
+              _illegalFixed += r.changed;
+            }
           }
           if (_illegalFixed > 0) {
             this.logger.warn(
@@ -5519,6 +5620,38 @@ export class MicrocodeEngineer extends BaseAgent {
         } catch (ctErr) {
           this.logger.warn('⚠️ [mc] 2.1.E chartType 收敛失败（非阻塞）', {
             error: ctErr?.message,
+          });
+        }
+
+        // 🛡️ Loop 2.1.F（2026-09-11）：坐标轴格式守卫，根治 `xAxis "0" not found`。
+        // 根因：LLM 跟随 prompt 生成对象格式 xAxis/yAxis + 缺显式索引，markLine 值定位点
+        // 在部分 ECharts 版本触发轴索引查询失败（c-traffic-monitor-5nxelujp-1a29a03f）。
+        // 治本：对象→数组 + 字符串索引→数字 + cartesian 缺索引注入 + @fontSize 泄漏修复。
+        try {
+          let _axisFixed = 0;
+          for (const [fp, fc] of Object.entries(codeResult.files || {})) {
+            if (!fp.endsWith('.vue') || typeof fc !== 'string') continue;
+            if (
+              !fc.includes('series') &&
+              !fc.includes('xAxis') &&
+              !fc.includes('yAxis') &&
+              !fc.includes('@fontSize')
+            )
+              continue;
+            const r = normalizeChartAxesInSource(fc);
+            if (r.changed > 0) {
+              codeResult.files[fp] = r.text;
+              _axisFixed += r.changed;
+            }
+          }
+          if (_axisFixed > 0) {
+            this.logger.warn(
+              `🛡️ [mc] 2.1.F 坐标轴格式已收敛 ${_axisFixed} 处（xAxis/yAxis 数组化 + 显式索引）`,
+            );
+          }
+        } catch (axisErr) {
+          this.logger.warn('⚠️ [mc] 2.1.F 坐标轴格式收敛失败（非阻塞）', {
+            error: axisErr?.message,
           });
         }
 
@@ -5623,7 +5756,7 @@ export class MicrocodeEngineer extends BaseAgent {
             const targetFile = codeResult.files[idxPathN2];
             if (typeof targetFile === 'string') {
               const firstChart = chartsForGuard[0] || {};
-              const chartType = String(firstChart.type || 'line').toLowerCase();
+              const chartType = resolveEchartsType(firstChart.type) || 'line';
               const chartSeries = (
                 Array.isArray(firstChart.series)
                   ? firstChart.series
@@ -6071,6 +6204,8 @@ export default declareInfo
             layoutStructure,
             params,
           ),
+          // 🛡️ R1-2：布局事实（fix-section-heights 规则②豁免依据，退役命名枚举）
+          rootLayoutFacts,
           input: params,
         });
         const fixRes = fixPipeline.apply(modelFiles, {
@@ -6158,34 +6293,11 @@ export default declareInfo
         }
       }
 
-      // 🎯 ③ 治本（2026-09-09）：Props 接线确定性自愈（解 CODE-019 不收敛）
-      // 根因（c-device-monitor-pyb7ue1h / c-env-monitor-ggtch996-3dc0faa1 实锤）：LLM 写盘时
-      // 漏给子组件传资源 props（bg1/icon1/icon2）/ required props（chartData/activeTab），
-      // CODE-019 BLOCK → 全量重写重试 → LLM 重写仍漏 → 3×BLOCK 空转。
-      // 此处确定性补线：父组件调用处缺的「父级作用域可接线」prop（资源变量已由 injectResourceImports
-      // 注入父级 script），自动补 `:name="name"`；不臆造数据源（父级未声明的 chartData 等留给重试指导）。
-      // 在 validateAndFixGeneratedFiles（L0-B 门禁）之前跑，使自愈后的 index.vue 直接进入校验/落盘终态。
-      {
-        const _awInput = resolveResourceDomMapping(resourceDomMapping, outputPath);
-        if (_awInput && Array.isArray(_awInput) && _awInput.length > 0) {
-          try {
-            const _awRes = autoWireSubComponentProps(allFiles, {
-              resourceDomMapping: _awInput,
-              contracts: workingManifest?.contracts || [],
-            });
-            if (_awRes.fixes.length > 0) {
-              Object.assign(allFiles, _awRes.files);
-              this.logger.warn('🛡️ ③ 已确定性自动接线子组件 props', {
-                fixes: _awRes.fixes,
-              });
-            }
-          } catch (awErr) {
-            this.logger.warn('🛡️ ③ 子组件 props 自动接线异常（非阻断）', {
-              error: awErr?.message || String(awErr),
-            });
-          }
-        }
-      }
+      // 🔁 层② 反转（2026-09-11）：原「③ Props 接线确定性自愈（autoWireSubComponentProps）」整块移除。
+      // 移除原因：该自愈是为旧 P0/D 契约（资源归主组件、子组件 defineProps 接收 + 父透传）服务的
+      // 兜底——父组件漏传 props 时确定性补 `:prop="prop"`。反转后子组件各自 import 资源、不再声明
+      // 资源 props，CODE-019 检测面归零，自愈已无对象；保留反而会往系统生成的子组件标签上塞多余
+      // 属性（层① 生成的 <TabsSection /> 不带 props）。
 
       // 🔍 4. 验证和修复生成的文件（防止反复出现相同错误）
       const allFilePaths = Object.keys(allFiles);
@@ -6309,16 +6421,12 @@ export default declareInfo
           const relBase = /^package\/components\//.test(fp)
             ? '../../resources/images/'
             : '../resources/images/';
-          // 🎯 Loop 1：落盘终验兜底按契约注入主组件 import（不再 forceAll 全量）。
-          // 借用 generateCode 回传的 Working Manifest contracts，幂等补缺失 import。
-          const isMain = /^package\/index\.vue$/.test(fp);
-          const _contracts = codeResult?.workingManifest?.contracts || workingManifest?.contracts || [];
+          // 🔁 层② 反转（2026-09-11）：落盘终验兜底不再按契约注入主组件 import。资源归各自组件
+          // 本地持有，主/子组件统一走默认分支（仅补模板实际引用而缺失的资源 import，幂等只补不删）。
           const injected = injectResourceImports(
             fc,
             _finalMapping,
             relBase,
-            null,
-            isMain ? { contractMapping: _contracts } : null,
           );
           if (injected !== fc) {
             finalTruthFiles[fp] = injected;
@@ -6337,6 +6445,35 @@ export default declareInfo
         if (ensured !== fc) {
           finalTruthFiles[fp] = ensured;
           this.logger.info('🛡️ 运行库 import 兜底补齐（落盘前）', { file: fp });
+        }
+      }
+      // 🛡️ CODE-022 修复器（2026-09-11 根治方案 R3-2）：未挂载的资源 import 确定性删除。
+      // LLM 偶发「import bg1 后 0 处引用」→ CODE-022 BLOCK → 重试常犯同一错 → 耗尽。
+      // 确定性自愈优先于重试；放在运行库 import 兜底之后、FLEX 归一之前（同为幂等纯函数）。
+      {
+        const _pruneMapping = resolveResourceDomMapping(
+          resourceDomMapping,
+          outputPath,
+        );
+        if (Array.isArray(_pruneMapping) && _pruneMapping.length > 0) {
+          for (const [fp, fc] of Object.entries(finalTruthFiles)) {
+            if (!fp.endsWith('.vue') || typeof fc !== 'string') continue;
+            try {
+              const _pr = pruneUnmountedResourceImports(fc, _pruneMapping);
+              if (_pr.changed) {
+                finalTruthFiles[fp] = _pr.content;
+                this.logger.warn('🛡️ CODE-022 修复：删除未挂载的资源 import', {
+                  file: fp,
+                  pruned: _pr.pruned,
+                });
+              }
+            } catch (prErr) {
+              this.logger.warn('🛡️ CODE-022 修复器异常（非阻断）', {
+                file: fp,
+                error: prErr?.message || String(prErr),
+              });
+            }
+          }
         }
       }
       // 🛡️ FLEX-003 确定性归一（2026-09-02，mc-max-1788362388732-1ae956dc 重试耗尽）：
@@ -6384,6 +6521,75 @@ export default declareInfo
           this.logger.info('🛡️ FLEX-005 量纲归一（落盘前，统一到比例量级）', {
             files: _sibNormCount,
           });
+        }
+      }
+      // 🛡️ 层①配套（2026-09-11 · c-device-monitor-1fduq67s 实锤）：子组件 import 落盘终验兜底。
+      // 后处理/AI 修复可能重写 index.vue script 并丢掉子组件 import（实测：模板 4 个标签只剩
+      // 1 个 import，其余 3 个文件已生成但引用悬空 → 渲染断裂）。语义门禁对子组件标签是白名单
+      // 放行（_finalSubCompTags），拦不住此类悬空 → 必须在落盘前确定性幂等补齐（ensureSubComponentImport
+      // 只补模板已引用标签的缺失 import，绝不删除已有内容）。文件存在性由批 5+ 的标签并入清单保证。
+      {
+        const _idxPath = 'package/index.vue';
+        const _idxContent = finalTruthFiles[_idxPath];
+        if (typeof _idxContent === 'string' && _idxContent) {
+          const _ensured = this._ensureSubComponentImport(_idxContent);
+          if (_ensured !== _idxContent) {
+            finalTruthFiles[_idxPath] = _ensured;
+            this.logger.warn('🛡️ 子组件 import 终验兜底（模板标签→import 幂等补齐）', {
+              file: _idxPath,
+            });
+          }
+        }
+      }
+      // 🛡️ 层③（2026-09-11）：模板类名统一补前缀（CODE-020 确定性自愈，落盘前）。
+      // 判据与 findUndefinedComponentClasses 严格同口径（后缀命中才改写，取最短候选），LLM 重试
+      // 反复犯同一漏前缀错误 → 系统直接归一，否则 CODE-020 每轮 BLOCK → 重试必耗尽。
+      {
+        const _clsArr = Object.entries(finalTruthFiles).map(
+          ([path, content]) => ({ path, content }),
+        );
+        const _clsFixed = fixMissingClassPrefixes(_clsArr, {
+          // 🛡️ P1.3：DOM 类事实作为唯一判据（修「修饰符类前缀不一致」）
+          classFacts: collectClassFacts(_clsArr),
+        });
+        if (_clsFixed.fixes.length > 0) {
+          for (const nf of _clsFixed.files) {
+            const prev = finalTruthFiles[nf.path];
+            if (prev !== undefined && prev !== nf.content) {
+              finalTruthFiles[nf.path] = nf.content;
+            }
+          }
+          this.logger.warn('🛡️ CODE-020 模板类名统一补前缀（落盘前）', {
+            fixes: _clsFixed.fixes.slice(0, 20),
+          });
+        }
+      }
+      // 🛡️ 治本（2026-09-11 · c-env-monitor-xh8jdcpy-2aa25837 复发实锤）：内容根容器高度归一。
+      // 宿主 .pannel-content 是 block（无 display:flex），内容根（-slot-con / -root）的
+      // flex:1 1 0 必然失效 → 图表区 flex:1 min-height:0 拿到 0 → 「只有上面一部分」。
+      // 规则②豁免只防「height:100% 被改写」这一条来源，LLM 直写 flex:1 1 0 防不住 →
+      // 落盘前统一归一为 height:100%（规则②豁免 + 本归一器双防）。
+      {
+        const _rootArr = Object.entries(finalTruthFiles).map(
+          ([path, content]) => ({ path, content }),
+        );
+        const _rootNorm = normalizeRootContainerLayout(_rootArr, {
+          logger: this.logger,
+          // 🛡️ P2-1 时序治理（2026-09-11）：figma bbox 有效时终验链补 aspect-ratio ——
+          // fix pipeline 中 anchor 对 common.less 的补丁会被 writeFiles 出口的
+          // consolidateSubComponentClasses 等产物重建类步骤覆盖，布局修复必须在
+          // 写盘前最后一刻重跑（I4 不变量终验兜底）。
+          figmaNodeData,
+          // 🛡️ R1-2：根容器类改读 facts（确定性模板单一事实源），命名猜测降为兜底
+          rootLayoutFacts,
+        });
+        if (_rootNorm.fixes.length > 0) {
+          for (const nf of _rootNorm.files) {
+            const prev = finalTruthFiles[nf.path];
+            if (prev !== undefined && prev !== nf.content) {
+              finalTruthFiles[nf.path] = nf.content;
+            }
+          }
         }
       }
       // 🛡️ 修复 B（覆写后重校验，2026-09-02）：fixedFiles 覆写可能引入语义问题（模板引用未声明变量/
@@ -6524,10 +6730,10 @@ export default declareInfo
           ...finalTruthSkipped,
         ]),
       ].filter(Boolean);
-      if (
-        (degradedFiles.length > 0 || gateSkippedFiles.length > 0) &&
-        outputPath
-      ) {
+      // 🛡️ R3-B（2026-09-11）：无条件把 codeVersion 写入 component-meta.json —— 让 TaskDetail
+      // 可回查「这份产物是哪个 dist/git 生成的」，杜绝「旧 dist 产物被当成新代码效果」的误判。
+      // 降级/门禁跳过字段仍按条件写（只在发生时才追加），codeVersion 恒写。
+      if (outputPath) {
         try {
           const metaPath = join(outputPath, 'component-meta.json');
           let prevMeta = {};
@@ -6538,36 +6744,38 @@ export default declareInfo
           } catch (_) {
             /* 旧 meta 损坏则重建 */
           }
-          writeFileSync(
-            metaPath,
-            JSON.stringify(
-              {
-                ...prevMeta,
-                ...(degradedFiles.length > 0
-                  ? {
-                      degradedFiles,
-                      degradedAt: Date.now(),
-                      reason: 'SFC 编译失败，已隔离降级（可二次生成）',
-                    }
-                  : {}),
-                ...(gateSkippedFiles.length > 0
-                  ? {
-                      gateSkippedFiles,
-                      gateSkippedAt: Date.now(),
-                      gateSkipReason:
-                        'Vue SFC 写盘门禁失败（validateVueSfc），文件未落盘',
-                    }
-                  : {}),
-              },
-              null,
-              2,
-            ),
-            'utf-8',
-          );
-          this.logger.warn('🩹 P1-4/D+ 降级与门禁跳过留痕已写入 component-meta.json', {
-            degradedFiles: degradedFiles.length,
-            gateSkippedFiles: gateSkippedFiles.length,
-          });
+          const { gitHash, distBuildAt } = getBuildVersion();
+          const nextMeta = {
+            ...prevMeta,
+            codeVersion: {
+              gitHash,
+              distBuildAt,
+              writtenAt: Date.now(),
+            },
+            ...(degradedFiles.length > 0
+              ? {
+                  degradedFiles,
+                  degradedAt: Date.now(),
+                  reason: 'SFC 编译失败，已隔离降级（可二次生成）',
+                }
+              : {}),
+            ...(gateSkippedFiles.length > 0
+              ? {
+                  gateSkippedFiles,
+                  gateSkippedAt: Date.now(),
+                  gateSkipReason:
+                    'Vue SFC 写盘门禁失败（validateVueSfc），文件未落盘',
+                }
+              : {}),
+          };
+          writeFileSync(metaPath, JSON.stringify(nextMeta, null, 2), 'utf-8');
+          if (degradedFiles.length > 0 || gateSkippedFiles.length > 0) {
+            this.logger.warn('🩹 P1-4/D+ 降级与门禁跳过留痕已写入 component-meta.json', {
+              degradedFiles: degradedFiles.length,
+              gateSkippedFiles: gateSkippedFiles.length,
+              codeVersion: { gitHash, distBuildAt },
+            });
+          }
         } catch (metaErr) {
           this.logger.warn('⚠️ component-meta.json 写入失败（非阻断）', {
             error: metaErr?.message || String(metaErr),
@@ -6674,6 +6882,38 @@ export default component
           });
         }
       }
+
+      // 🛡️ R2-2（2026-09-11）：六条产物不变量终验（I1 根高度 / I2 标签↔绑定↔文件 / I3 tabs
+      // 唯一 / I4 形态锚定 / I5 类名对齐 / I6 资源挂载）。与 scripts/artifact-invariants.mjs
+      // CLI 共用同一实现。报告性校验：error 级违规落日志 + 随任务 result 暴露（前端可见），
+      // 不 fail-closed 阻断 —— 悬空标签/内容根塌陷等历史事故形态自此必有可观测记录。
+      let _artifactInvariants = null;
+      try {
+        const { runArtifactInvariants } = await import(
+          '../utils/artifact-invariants.js'
+        );
+        _artifactInvariants = runArtifactInvariants(snapshotFiles, {
+          // 🛡️ P1.4：复用生成期类事实（I7 修饰符双向一致的判据基准）
+          classFacts: this._classFacts || undefined,
+        });
+        if (!_artifactInvariants.passed) {
+          const _errs = _artifactInvariants.violations.filter(
+            (v) => v.severity === 'error',
+          );
+          this.logger.warn(
+            `🛡️ 产物不变量违规：${_errs.length} error / ${
+              _artifactInvariants.violations.length - _errs.length
+            } warn`,
+            {
+              violations: _artifactInvariants.violations.slice(0, 20),
+            },
+          );
+        }
+      } catch (invErr) {
+        this.logger.warn('🛡️ 产物不变量校验执行失败（非阻断）', {
+          error: invErr?.message || String(invErr),
+        });
+      }
       // 标准文件补齐、确定性修复及 LESS 预编译完成后，才暴露完整候选文件组。
       if (typeof onFilesReady === 'function') {
         try {
@@ -6716,6 +6956,8 @@ export default component
         // 🛡️ #10 静默失败降级：gateSkippedFiles 暴露到任务级 result（经 execute → tasks.service 落库）
         // 前端据此展示「N 个文件被写盘门禁跳过」+ 缺失清单，避免静默丢失
         gateSkippedFiles: gateSkippedFiles.length > 0 ? gateSkippedFiles : undefined,
+        // 🛡️ R2-2：六条产物不变量结果（violations/passed/summary），供任务 meta 与前端展示
+        artifactInvariants: _artifactInvariants || undefined,
         _attributionGuidance: codeResult._attributionGuidance || null, // 🛡️ 资源归属指导（供 graph 写回 state）
       };
     } catch (error) {

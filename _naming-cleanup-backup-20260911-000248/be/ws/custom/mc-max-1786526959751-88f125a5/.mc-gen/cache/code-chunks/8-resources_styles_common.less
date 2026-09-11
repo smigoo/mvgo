@@ -1,0 +1,251 @@
+.c-device-monitor-root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.c-device-monitor-stats {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+
+.c-device-monitor-stat-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex: 1;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 6px;
+  gap: 12px;
+}
+
+.c-device-monitor-stat-icon {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+}
+
+.c-device-monitor-stat-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.c-device-monitor-stat-label {
+  font-size: 14px;
+  color: #333333;
+  line-height: 21px;
+}
+
+.c-device-monitor-stat-value {
+  font-family: 'Roboto', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 23px;
+  color: #1990ff;
+}
+
+.c-device-monitor-charts {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex: 1;
+  min-height: 0;
+}
+
+.c-device-monitor-chart-half {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 6px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+}
+
+.c-device-trend-chart-root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.c-device-trend-chart-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.c-device-trend-chart-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333333;
+}
+
+.c-device-trend-chart-body {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.c-device-trend-chart-container {
+  width: 100%;
+  height: 100%;
+}
+
+.c-device-status-chart-root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.c-device-status-chart-container {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.c-device-alarm-root {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  flex: 1;
+  gap: 12px;
+  min-height: 0;
+}
+
+.c-device-alarm-tabs {
+  display: flex;
+  flex-direction: column;
+  width: 46px;
+  flex-shrink: 0;
+  gap: 4px;
+  align-items: center;
+}
+
+.c-device-alarm-tab-item {
+  width: 34px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  padding: 4px 0;
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+  transition: all 0.3s;
+  border-radius: 4px;
+}
+
+.c-device-alarm-tab-text {
+  font-size: 14px;
+  color: #333333;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.c-device-alarm-tab-badge {
+  width: 14px;
+  height: 14px;
+  background: #f53f3f;
+  border-radius: 50%;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px;
+}
+
+.c-device-alarm-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.c-device-alarm-card {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 8px;
+  gap: 8px;
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+  min-width: 0;
+  border-radius: 4px;
+}
+
+.c-device-alarm-card-icon {
+  width: 27px;
+  height: 32px;
+  flex-shrink: 0;
+}
+
+.c-device-alarm-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.c-device-alarm-card-label {
+  font-size: 12px;
+  color: #333333;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.c-device-alarm-card-value {
+  font-family: 'Roboto', sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 18.75px;
+}
+
+// --- 铁律强制要求的独立状态类 ---
+.error {
+  color: #f53f3f !important;
+}
+
+.is-active {
+  background: linear-gradient(270deg, #318aff 0%, #70bfff 100%) !important;
+  
+  .c-device-alarm-tab-text {
+    color: #ffffff !important;
+    font-weight: 700 !important;
+  }
+}
+
+.is-total {
+  color: #999999 !important;
+}
+
+.offline {
+  color: #999999 !important;
+}
+
+.online {
+  color: #08a3a5 !important;
+}

@@ -1,0 +1,435 @@
+{
+  "layoutStructure": {
+    "generatedAt": "2024-01-15T10:30:00Z",
+    "stage": "preview-analysis",
+    "componentName": "环境监测",
+    "componentTitle": "环境监测",
+    "analysisModel": "claude-sonnet-5",
+    "sourceImage": {
+      "path": "mc-preview.png",
+      "size": 0,
+      "mtimeMs": 0,
+      "sha1": ""
+    },
+    "summary": "浅色背景的环境监测面积图组件，包含Tab切换栏、图表统计数值、面积折线图。整体为浅灰蓝底配深色文字，典型的轻量级数据展示风格。",
+    "layout": {
+      "type": "vertical-stack",
+      "direction": "vertical",
+      "sections": [
+        {
+          "id": "tab-controls",
+          "name": "Tab切换栏",
+          "role": "常驻",
+          "layout": "horizontal",
+          "headerRelation": "content-below-title",
+          "slotCandidate": null,
+          "body": {
+            "layout": "horizontal",
+            "children": [
+              {
+                "type": "tab",
+                "name": "气化碳",
+                "active": true,
+                "styles": {
+                  "fontSize": 14,
+                  "color": "rgba(85, 158, 255, 1)",
+                  "fontWeight": "500"
+                }
+              },
+              {
+                "type": "tab",
+                "name": "能见度",
+                "active": false,
+                "styles": {
+                  "fontSize": 14,
+                  "color": "rgba(0, 0, 0, 0.65)",
+                  "fontWeight": "normal"
+                }
+              },
+              {
+                "type": "tab",
+                "name": "洞内照明",
+                "active": false,
+                "styles": {
+                  "fontSize": 14,
+                  "color": "rgba(0, 0, 0, 0.65)",
+                  "fontWeight": "normal"
+                }
+              },
+              {
+                "type": "tab",
+                "name": "洞外光强",
+                "active": false,
+                "styles": {
+                  "fontSize": 14,
+                  "color": "rgba(0, 0, 0, 0.65)",
+                  "fontWeight": "normal"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "stats-value",
+          "name": "统计数值区",
+          "role": "常驻",
+          "layout": "horizontal",
+          "headerRelation": "content-below-title",
+          "slotCandidate": null,
+          "body": {
+            "layout": "horizontal",
+            "alignItems": "baseline",
+            "justifyContent": "space-between",
+            "children": [
+              {
+                "type": "value-group",
+                "layout": "horizontal",
+                "alignItems": "baseline",
+                "gap": "4px",
+                "children": [
+                  {
+                    "type": "number",
+                    "text": "2k3+785",
+                    "styles": {
+                      "fontSize": 12,
+                      "color": "rgba(0, 0, 0, 0.85)",
+                      "fontWeight": "normal"
+                    }
+                  },
+                  {
+                    "type": "unit",
+                    "text": "CO浓度",
+                    "styles": {
+                      "fontSize": 12,
+                      "color": "rgba(0, 0, 0, 0.65)",
+                      "fontWeight": "normal"
+                    }
+                  }
+                ]
+              },
+              {
+                "type": "label",
+                "text": "预警线",
+                "styles": {
+                  "fontSize": 12,
+                  "color": "rgba(245, 34, 45, 1)",
+                  "fontWeight": "normal"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "chart-area",
+          "name": "面积图区域",
+          "role": "常驻",
+          "layout": "vertical",
+          "headerRelation": "content-below-title",
+          "slotCandidate": null,
+          "body": {
+            "layout": "vertical",
+            "children": [
+              {
+                "type": "chart-container",
+                "chartType": "area",
+                "styles": {
+                  "width": "100%",
+                  "height": "160px",
+                  "background": "transparent"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "styles": {
+      "backgroundBrightness": "light",
+      "theme": "浅色科技监测风",
+      "colors": [
+        "rgba(85, 158, 255, 1)",
+        "rgba(245, 34, 45, 1)",
+        "rgba(0, 0, 0, 0.85)",
+        "rgba(0, 0, 0, 0.65)",
+        "rgba(237, 244, 251, 1)"
+      ],
+      "background": "浅灰蓝底色（rgba(237, 244, 251, 1)）",
+      "decorations": [
+        "顶部装饰线条",
+        "Tab下划线高亮"
+      ],
+      "emphasis": [
+        "红色预警线文字",
+        "蓝色面积填充"
+      ]
+    },
+    "interactions": [
+      {
+        "target": "Tab栏",
+        "type": "tab-switch",
+        "description": "切换不同监测指标（气化碳/能见度/洞内照明/洞外光强）",
+        "defaultState": "常驻，气化碳为激活态",
+        "evidence": "蓝色文字+下划线表示激活态"
+      },
+      {
+        "target": "面积图",
+        "type": "chart-hover",
+        "description": "鼠标悬停可能显示具体数值",
+        "defaultState": "常驻，无悬停态证据",
+        "evidence": "典型图表交互模式，但截图未显示tooltip"
+      }
+    ],
+    "charts": [
+      {
+        "section": "chart-area",
+        "type": "area",
+        "series": [
+          "CO浓度"
+        ],
+        "legend": [],
+        "legendPosition": "none",
+        "seriesColors": [
+          "rgba(85, 158, 255, 0.3)"
+        ],
+        "legendType": "none",
+        "axes": "X轴为时间（0-24小时），Y轴为数值（0-50）",
+        "tooltip": "未显示，推测支持悬停显示",
+        "notes": [
+          "红色虚线为预警线（30）",
+          "绿色区域填充表示数值范围",
+          "曲线相对平缓"
+        ]
+      }
+    ],
+    "doNotInvent": [
+      "Tab切换的具体数据变化（只看到气化碳的图表）",
+      "tooltip的具体显示内容和格式",
+      "预警线的具体触发逻辑",
+      "数据刷新频率和机制",
+      "其他未显示的监测指标的数据范围"
+    ],
+    "notes": [
+      "组件整体为浅色背景（light主题）",
+      "右上角有小图标按钮（柱状图、文档图标、带数字徽章），属于面板外壳控件",
+      "预警线使用红色虚线+文字标注",
+      "图表采用面积填充而非纯折线"
+    ],
+    "headerSlots": [],
+    "coverageReport": {
+      "totalFigma": 14,
+      "matchedCount": 6,
+      "missingCount": 4,
+      "uncertainCount": 0,
+      "coverageRate": 60,
+      "missing": [
+        {
+          "name": "cp-环境监测",
+          "type": "FRAME",
+          "depth": 0
+        },
+        {
+          "name": "环境监测",
+          "type": "TEXT",
+          "depth": 2
+        },
+        {
+          "name": "sub-t",
+          "type": "FRAME",
+          "depth": 2
+        },
+        {
+          "name": "一氧化碳",
+          "type": "TEXT",
+          "depth": 4
+        }
+      ],
+      "uncertain": [],
+      "summary": "一般"
+    },
+    "chartDataHints": [
+      {
+        "chartTitle": "area",
+        "chartType": "area",
+        "labels": [
+          {
+            "label": "40\n30\n20\n10\n0",
+            "name": "40 30 20 10 0"
+          },
+          {
+            "label": "辆",
+            "name": "辆"
+          },
+          {
+            "label": "预警线",
+            "name": "预警线"
+          },
+          {
+            "label": "时",
+            "name": "时"
+          },
+          {
+            "label": "zk3+785CO浓度",
+            "name": "zk3+785CO浓度"
+          },
+          {
+            "label": "一氧化碳",
+            "name": "一氧化碳"
+          },
+          {
+            "label": "洞内照明",
+            "name": "洞内照明"
+          },
+          {
+            "label": "洞外光强",
+            "name": "洞外光强"
+          },
+          {
+            "label": "能见度",
+            "name": "能见度"
+          }
+        ],
+        "values": [
+          {
+            "label": "600",
+            "value": 600,
+            "unit": ""
+          },
+          {
+            "label": "400",
+            "value": 400,
+            "unit": ""
+          },
+          {
+            "label": "200",
+            "value": 200,
+            "unit": ""
+          },
+          {
+            "label": "600",
+            "value": 600,
+            "unit": ""
+          },
+          {
+            "label": "0",
+            "value": 0,
+            "unit": ""
+          },
+          {
+            "label": "600",
+            "value": 600,
+            "unit": ""
+          },
+          {
+            "label": "2",
+            "value": 2,
+            "unit": ""
+          },
+          {
+            "label": "4",
+            "value": 4,
+            "unit": ""
+          },
+          {
+            "label": "6",
+            "value": 6,
+            "unit": ""
+          },
+          {
+            "label": "8",
+            "value": 8,
+            "unit": ""
+          },
+          {
+            "label": "10",
+            "value": 10,
+            "unit": ""
+          },
+          {
+            "label": "12",
+            "value": 12,
+            "unit": ""
+          }
+        ]
+      }
+    ]
+  },
+  "visualElements": {
+    "backgroundBrightness": "light",
+    "theme": "浅色科技监测风",
+    "colors": [
+      "rgba(85, 158, 255, 1)",
+      "rgba(245, 34, 45, 1)",
+      "rgba(0, 0, 0, 0.85)",
+      "rgba(0, 0, 0, 0.65)",
+      "rgba(237, 244, 251, 1)"
+    ],
+    "background": "浅灰蓝底色（rgba(237, 244, 251, 1)）",
+    "decorations": [
+      "顶部装饰线条",
+      "Tab下划线高亮"
+    ],
+    "emphasis": [
+      "红色预警线文字",
+      "蓝色面积填充"
+    ]
+  },
+  "interactions": [
+    {
+      "target": "Tab栏",
+      "type": "tab-switch",
+      "description": "切换不同监测指标（气化碳/能见度/洞内照明/洞外光强）",
+      "defaultState": "常驻，气化碳为激活态",
+      "evidence": "蓝色文字+下划线表示激活态"
+    },
+    {
+      "target": "面积图",
+      "type": "chart-hover",
+      "description": "鼠标悬停可能显示具体数值",
+      "defaultState": "常驻，无悬停态证据",
+      "evidence": "典型图表交互模式，但截图未显示tooltip"
+    }
+  ],
+  "charts": [
+    {
+      "section": "chart-area",
+      "type": "area",
+      "series": [
+        "CO浓度"
+      ],
+      "legend": [],
+      "legendPosition": "none",
+      "seriesColors": [
+        "rgba(85, 158, 255, 0.3)"
+      ],
+      "legendType": "none",
+      "axes": "X轴为时间（0-24小时），Y轴为数值（0-50）",
+      "tooltip": "未显示，推测支持悬停显示",
+      "notes": [
+        "红色虚线为预警线（30）",
+        "绿色区域填充表示数值范围",
+        "曲线相对平缓"
+      ]
+    }
+  ],
+  "headerSlots": [],
+  "analysisType": "chart",
+  "analysisTarget": "图表展示区",
+  "analysisDescription": "",
+  "analysisEvidence": [],
+  "headerValidation": {
+    "passed": true,
+    "headerElements": [],
+    "headerRightElements": [],
+    "suggestions": [],
+    "confidence": "low",
+    "componentType": "microcode"
+  },
+  "headerSlotValidation": {
+    "validatedSlots": [],
+    "rejectedNodes": [],
+    "warnings": [],
+    "componentType": "microcode",
+    "derivedSlots": [],
+    "contractSlots": []
+  }
+}

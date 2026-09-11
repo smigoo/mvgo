@@ -428,6 +428,9 @@ line 132  if (!absPath.startsWith(workspaceRoot + path.sep)) → Forbidden
 | `normalizeDeclareComponentId(规范 declare, …)` | — | **原样返回**（无副作用） |
 | `normalizeDeclareComponentId('{ not json', …)` | — | **抛错**（结构非法不放过） |
 
+> 注：§11.2 的解析结果是 **S5 之前**的（落在 `frontend/workspace`）。S5 之后同一断言落在
+> `backend-node/workspace`（见 §12.3）—— 选择规则（规范名优先）不变，只是根优先级变了。
+
 WARN 日志实测输出（新增可观测性）：
 ```
 [WARN] 组件目录尾缀多命中，规范名优先
@@ -456,6 +459,272 @@ WARN 日志实测输出（新增可观测性）：
 | 项 | 状态 |
 |---|---|
 | **服务重启** | ⏳ 线上进程 PID 7528 仍载旧 dist，**需重启才生效**（未获授权，未动） |
-| S4 存量 813 条 | ⏳ 未执行（661 条自由 `mv` + 152 条 `git mv`；建议先选尾缀 `c298235f` 试点） |
-| S5 读写根分叉 | ⏳ 未执行（倾向纳入 `backend-node/workspace`，退役 `projectRoot/workspace`） |
+| S4 存量 813 条 | ⏳ **风险已量化，待确认，见 §十三（尚未删除任何东西）** |
+| S5 读写根分叉 | ✅ **已完成并验证，见 §十二** |
 | 4c 的 12 条脏目录 | ⏳ 未执行（`v2-e2e-*` / `page-page-*` 中文 ID，需单独立项） |
+
+---
+
+## 十二、S5 实施记录：统一 backend 副本根（2026-09-11 00:0x 已完成并验证）
+
+### 12.1 分叉根因（实证）
+
+| 角色 | 路径 | 来源 |
+|---|---|---|
+| **写**（质量预览发布器） | `backend-node/workspace` | `workspace-preview-publisher.js` **硬编码** `join(backendRoot,'workspace')` |
+| **写**（phase2 同步 / tasks 读取） | ~~`projectRoot/workspace`~~ | `backend-root.js` 的 `workspaceRoot` |
+| **读**（解析搜索根） | `projectRoot/workspace` + `frontend/workspace` | `componentSearchRoots()` |
+| **读**（预览接口） | `backend-node/workspace` | `preview.controller` |
+
+→ `backend-node/workspace` 里写进去的 **116 个规范 `c-` 目录全部读不到**，这正是 4b「残留任务号目录」高达 285 条的成因。
+
+### 12.2 改动（4 个文件，全部是「路径单一事实源化」）
+
+| 文件 | 改动 |
+|---|---|
+| `src/config/backend-root.js` | `workspaceRoot = join(projectRoot,'workspace')` → **`join(backendRoot,'workspace')`**（`customComponentsDir` / `vue3ComponentsDir` 随之统一） |
+| `src/config/backend-root.ts` | 同上（**孪生文件，必须同步改**） |
+| `src/ai-engine/utils/workspace-preview-publisher.js` | 3 处硬编码 `join(backendRoot,'workspace')` → `workspaceRoot`；移除已不用的 `backendRoot` import |
+| `src/preview/preview.controller.ts` | `collectComponentRoots()` / `collectPageRoots()` 去重（原「主路径 + 旧路径」在 S5 后是同一路径）；`backendRoot` import 移除 |
+
+### 12.3 验证证据（实跑）
+
+```
+workspaceRoot       = /Users/smigoo/工作/mvgo/backend-node/workspace
+customComponentsDir = .../backend-node/workspace/custom-components
+vue3ComponentsDir   = .../backend-node/workspace/vue3-components
+
+componentSearchRoots() → [0] backend-node/workspace/custom-components   ← 后端侧置顶
+                         [1] backend-node/workspace/vue3-components
+                         [2] frontend/workspace/custom-components
+                         [3] frontend/workspace/vue3-components
+                         ✅ 已无 projectRoot/workspace
+
+resolveComponentDirStrict(任务号) = .../backend-node/workspace/custom-components/c-environment-monitor-c298235f
+resolveComponentDirStrict(规范ID) = 同一路径  ✅ 一致
+resolveWritableComponentDirs → [0] backend-node/workspace/.../c-environment-monitor-c298235f  ✅ 规范副本在前
+```
+
+| 项 | 结果 |
+|---|---|
+| 构建 | ✅ 成功（中途一次 `TS2304: Cannot find name 'backendRoot'` —— `preview.controller.ts:158` 漏改 → 已修） |
+| jest（S5 关键 5 套） | ✅ **66 passed**；2 failed 属**既有基线失败**（`component.service.spec.ts` 删除权限文案过期：spec 期望「公共组件仅提供者可以删除」，实现已改为「公开组件不允许直接删除，请先下架后再删除」；该字符串只存在于 spec，**与本次改动无关**） |
+
+### 12.4 副作用（需知情）
+
+- `projectRoot/workspace`（`/Users/smigoo/工作/mvgo/workspace`）**不再被扫描** → 成为退役根，建议整体回收（见 §十三）。
+- 解析优先级变化：同一组件两侧都有副本时，**现在优先取 backend 侧**（此前取 frontend 侧）。两侧内容一致时无影响。
+
+---
+
+## 十三、⚠️ 存量清理风险（**待确认，尚未删除任何东西**）
+
+### 13.1 上一轮的关键假设被推翻
+
+上一轮我按「813 = 重复副本，删掉不影响」设计清理。**实测不成立**：
+
+> **804 个任务号目录里，只有 1 个存在规范 `c-*` 副本。其余全是该组件的唯一产物。**
+
+证据：跨根「同尾缀不同名」实测只有 **2 组** → 规范目录与任务号目录的尾缀几乎完全不重叠，
+它们不是「同一组件的两份副本」，而是「**一批组件只以任务号名存在**」。
+
+### 13.2 分桶实测（`naming-cleanup-plan.mjs`，S5 后活跃根）
+
+| 桶 | 数量 | 含义 | 删除后果 |
+|---|---|---|---|
+| **A 安全** | **1** | 任务号名 + 存在规范副本 | 无损失 |
+| **B 风险** | **680** | 任务号名 + **无任何规范副本** | ⚠️ **该组件从平台消失** |
+| noTail | 123 | `mc-spec-<ts>-<6hex>` 形态，尾段非 8 hex | 疑似规范检查过程产物，相对安全 |
+| 退役根追加 | +8 | `RETIRED-root-ws/custom` | 已不参与解析，回收无影响 |
+| **合计** | **804（+9）** | | |
+
+**B 组 680 个为什么不能轻删：**
+
+| 指标 | 值 |
+|---|---|
+| 含真实产物（`declare.json` 或 `package/index.vue`） | **668 / 680** |
+| 最近 7 天内被改动 | 19 |
+| 7 – 30 天 | 481 |
+| 超过 30 天 | 185 |
+| 空目录 | 3 |
+
+→ **98% 含真实产物，且 481 个是近 30 天内生成的**，不是「陈年老垃圾」。
+
+### 13.3 `declare` 污染的 138 条构成（与目录名交叉后）
+
+| 类 | 数量 | 处置 |
+|---|---|---|
+| `4a-enc` 目录名也是任务号 | 132 | 随 A/B 回收一起消失（问题自然解决） |
+| `4a-can` 目录名是规范 `c-*` | **2** | ⚠️ **不可删**！删掉会丢组件。应由 S3 归一（下次写盘自动修正） |
+| `4a-other` 目录名既非任务号也非规范 | 3 | 人工看（`mc-evaltest-fresh-0001`、`….quality-staging-…` 等测试残留） |
+
+### 13.4 执行方式（无论怎么选，都**不 rm**）
+
+`naming-cleanup-plan.mjs --apply` 把目录 **`rename` 到 `<projectRoot>/_naming-cleanup-backup-<ts>/<rootKey>/`**：
+- ✅ 从 workspace 消失（功能上等于删除）
+- ✅ 可回滚（按 rootKey 移回即可）
+- ✅ 从不 `rm`（符合既有迁移铁律 3）
+
+| 命令 | 作用 |
+|---|---|
+| `node scripts/naming-cleanup-plan.mjs` | dry-run + 落 manifest（默认，**零改动**） |
+| `... --apply --only-safe` | 只回收 A 组（1 个） |
+| `... --apply` | 回收 A + B（681 个，**组件将全部从平台消失**） |
+| `... --apply --include-retired-roots` | 追加回收退役根 `projectRoot/workspace` |
+
+---
+
+## 十四、执行结果（2026-09-11 00:03 全量回收 + 00:10 服务重启）
+
+> 用户决策：**全量回收 804 个** + **立即重启**。
+
+### 14.1 回收结果
+
+| 批次 | 数量 | 说明 |
+|---|---|---|
+| 第一批 `--apply` | **804 / 804** | A 1 + B 680 + noTail 123（活跃根，S5 后口径） |
+| 第二批 `--apply`（新增 staging 桶后） | **10 / 10** | 发布器 `*.quality-staging-*` 崩溃残留（7 custom + 3 vue3） |
+| 合并后回收区合计 | **814** | 552（一层根）+ 262（两层根） |
+
+**回收区（唯一）：`/Users/smigoo/工作/mvgo/_naming-cleanup-backup-20260911-000248/`**
+结构 = `<rootKey>/<name>`（两层根为 `<rootKey>/<group>/<name>`），**按原路径移回即可回滚**。
+
+校验：`804 = 545 + 259`、合并后 `814 = 552 + 262` —— 与预期完全吻合，**无遗漏、无失败**。
+
+工具升级：新增 `staging` 分桶（`/\.quality-staging-\d+-\d+-[0-9a-f]+$/i`），`--apply` 默认连同 A+B+noTail+staging 一起回收。
+
+### 14.2 清理后各根状态
+
+| 根 | 剩余目录 | 任务号形态 |
+|---|---|---|
+| `backend-node/workspace/custom-components` | 130 | 0（1 个为 `mc-evaltest-fresh-0001` e2e 测试装置，**未动**） |
+| `backend-node/workspace/vue3-components` | 3 | 0 |
+| `frontend/workspace/custom-components` | 125 | 0（含同一 e2e 装置） |
+| `frontend/workspace/vue3-components` | 3 | 0 |
+
+**未清理（有意保留）**：
+- `projectRoot/workspace`（退役根，9 个任务号目录）—— 用户未勾选，可用 `--apply --include-retired-roots` 单独处理；
+- `mc-evaltest-fresh-0001` ×2（疑似 e2e 用例自建固定装置，名字非任务号形态，未纳入分桶）；
+- 4c 的 `v2-e2e-*` / `page-page-*`（12 个，需单独立项）+ `4a-can` 的 2 个规范目录（**不可删**，等 S3 归一）。
+
+### 14.3 服务重启
+
+| 项 | 值 |
+|---|---|
+| 旧 PID | 22987（12:01:35 启动）→ `kill -TERM` |
+| 端口释放 | ✅ 第 1 秒 `lsof -iTCP:13030` 为空 |
+| 新 PID | **29317**（`env -i PATH=… HOME=/Users/smigoo node start-node.js`） |
+| 就绪判据 | ✅ `server.log` 出现 `Nest application successfully started`（00:10:11） |
+| 监听 | ✅ `TCP *:13030 (LISTEN)` |
+
+冒烟测试：
+
+| 接口 | 结果 |
+|---|---|
+| `GET /api` | `200 Hello World!` |
+| `GET /api/apifox/catalogs` | `200` + 真实数据 |
+| `GET /api/component` / `/api/tasks?limit=1` | `401 未登录或登录已过期`（预期：本地无门户 token） |
+| 重启后日志 `ERROR|Exception` 计数 | **0** |
+
+### 14.4 遗留待办
+
+1. **观察组件库**：回收后平台组件数应等于「规范 `c-*` 目录数」（`backend-node/workspace` 129 + `frontend/workspace` 124 左右，两侧有重叠）。若前端列表出现「点开 404 / 空白」，说明某些组件原先只被任务号目录服务 —— 从回收区按 rootKey 移回对应目录即可。
+2. **回滚方式**：`_naming-cleanup-backup-20260911-000248/<rootKey>/…` → 移回 `<对应根>/…`。
+3. **确认无误后彻底删除**：`rm -rf _naming-cleanup-backup-20260911-000248`（**建议保留一段时间**）。
+4. **后续清理**：退役根 9 个 + 4c 12 个 + `4a-can` 2 个。
+5. **S6 验证**：新生成一个组件，确认目录名 === `declare.componentId` === `c-<语义>-<尾8hex>`，且预览/AI 修复/下载读同一目录（S5 后应落在 `backend-node/workspace`）。
+
+---
+
+## 十五、复审收尾：审计口径修正 + S2 补丁 + 重启（2026-09-11 00:12–00:20）
+
+### 15.1 审计工具口径过期（新发现）
+
+`backend-node/scripts/naming-audit.mjs` 的根常量**仍停在 S5 之前**：
+
+| 常量 | 修正前（过期） | 修正后（= S5 事实） |
+|---|---|---|
+| `SEARCH_ROOT_ORDER` | `['root-ws/custom','root-ws/vue3','fe/custom','fe/vue3']` | `['be/ws/custom','be/ws/vue3','fe/custom','fe/vue3']` |
+| `root-ws/*` 的 `inSearchRoot` | `true` | `false` + `retired: true` |
+| `be/ws/*` 的 `inSearchRoot` | `false`（标注「不在搜索根」） | `true`（标注「写入根」） |
+
+后果：脚本输出「→ 解析会最先命中 `mc-lite-1789035969084-c298235f`（来源 root-ws/custom）」，
+与 S5 后的事实**完全相反**。修正后同一段输出变为
+「→ 解析会最先命中 `c-environment-monitor-c298235f`（来源 be/ws/custom）」。
+
+> **教训**：改 `workspaceRoot` 这类「全局路径单一事实源」时，**所有自建排障脚本里的根常量都要一起过一遍**，
+> 否则工具会持续输出过期结论，比没有工具更危险。JSON 输出已新增 `retired` 字段便于脚本消费。
+
+### 15.2 S2 排序漏洞：伪规范名（新发现 + 已修）
+
+存量存在 `c-mc-lite-1788491849328-99e8660b` —— `c-` 前缀但主体是任务号。判定链：
+
+| 判定 | 结果 | 说明 |
+|---|---|---|
+| `isEncodedComponentName` | `false` | 复用 `isEncodedSessionId`，正则要求 `mc\|mv\|cp\|page-` 开头 → 拦不住 `c-` 开头的 |
+| `CANONICAL_NAME_RE = /^c-[a-z]/` | `true` | → `namingRank` 返回 **0（最优）**，会盖过真规范名 ❌ |
+
+修复（`src/ai-engine/utils/component-resolver.js`）：
+
+```js
+const EMBEDDED_TASK_ID_RE = /\d{13}/   // 规范名 c-<语义>-<8hex> 绝不含 13 位时间戳
+export function namingRank(name) {
+  if (EMBEDDED_TASK_ID_RE.test(String(name ?? ''))) return 2   // ← 必须最先判
+  if (CANONICAL_NAME_RE.test(name)) return 0
+  if (isEncodedComponentName(name)) return 2
+  return 1
+}
+```
+
+`namingRank` / `rankDirsByNaming` 改为 `export` 以便断言。实测 **7/7 PASS**：
+
+| 名称 | rank | 期望 |
+|---|---|---|
+| `c-environment-monitor-c298235f` | 0 | 0 ✅ |
+| `c-env-monitor` | 0 | 0 ✅ |
+| `mc-lite-1789035969084-c298235f` | 2 | 2 ✅ |
+| `c-mc-lite-1788491849328-99e8660b` | 2 | 2 ✅（修复前为 0） |
+| `mc-max-1788327432319-a6198738` | 2 | 2 ✅ |
+| `mc-evaltest-fresh-0001` | 1 | 1 ✅ |
+| `v2-e2e-p2verify-1786520871372` | 2 | 2 ✅ |
+
+排序验证：`['/X/c-mc-lite-…','/Y/mc-lite-…','/Z/c-real-name-99e8660b']` → `/Z` 第一，两个任务号级按输入序。
+构建 ✅，dist 同步（`grep -c EMBEDDED_TASK_ID_RE` = 2，`namingRank` 位于 `dist/.../component-resolver.js:53`）。
+
+### 15.3 服务重启（PID 31402 → 34022）
+
+- `kill 31402` → 第 2s 端口释放、无残留进程；
+- 启动成功（`===== [start-node] ===== 2026-09-10T16:14:16.060Z =====` → `Nest application successfully started`）；
+- 冒烟：`/api` 200、`/api/apifox/catalogs` 200、未鉴权接口 401（预期）；启动后 `ERROR|Exception` = **0**。
+
+### 15.4 🔴 事故记录：误杀一个正在生成的任务
+
+**现象**：重启前用 `find workspace -maxdepth 2 -newermt '-60 minutes'` 判断「无在跑任务」，
+实际 `kill` 掉的是正在 `visual-parser` 阶段调用 Vision 模型的任务
+`mc-max-1789056777461-5e9f0512`（日志 00:13:46 仍在 `发起模型请求`）。
+
+**根因**：该任务的中间产物写在 `temp-components/<session>/<task>/.mc-gen/…`（深度 ≥4），
+`-maxdepth 2` 探不到 → 误判为空闲。
+
+**损失**：该任务**未写 workspace**（三个根按尾缀 `5e9f0512` find 均为空），
+无半成品、无脏目录；仅剩 `temp-components/6a51f7caed28c5d5b13c61a5/mc-max-1789056777461-5e9f0512/{resources,.checkpoint}`。
+→ **需用户重跑该任务**（无自动 resume 逻辑）。
+
+**正确判据**（已固化到 skill 与 MEMORY.md）：
+1. `tail -20 backend-node/server.log` 看近 1–2 分钟是否仍有 `visual-parser` / `发起模型请求` / `Checkpoint 已保存`；
+2. 或 `find temp-components -maxdepth 4 -newermt '-10 minutes'`；
+3. **不要**只看 `workspace` 浅层 `find`。
+
+### 15.5 收尾状态
+
+| 根 | 总数 | 任务号名 | 规范 c- 名 |
+|---|---|---|---|
+| `be/ws/custom` [写入根] | 123 | **0** | 118 |
+| `be/ws/vue3` [写入根] | 3 | 0 | 0 |
+| `fe/custom` | 125 | **0** | 111 |
+| `fe/vue3` | 2 | 0 | 0 |
+| `root-ws/custom` [退役根] | 9 | 9 | 0 |
+
+同尾缀多名字 **1 组**（`c298235f`，3 份副本 / 2 种名字，解析稳定选中 `be/ws` 规范副本）。
+
+**待用户决策**：① 是否重跑 `mc-max-1789056777461-5e9f0512`；② 回收区 `_naming-cleanup-backup-20260911-000248`（814 个）保留还是删除；③ 退役根 9 个是否一并回收（需 `--apply --include-retired-roots`，S5 后已读不到）。

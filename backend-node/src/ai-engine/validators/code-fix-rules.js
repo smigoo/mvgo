@@ -20,6 +20,7 @@ import { stripLlmTailGarbage } from '../utils/llm-tail-garbage.js';
 import { ensureSectionAssembly } from '../utils/section-coverage-guard.js';
 import { detectUnknownText } from '../utils/text-truth-guard.js';
 import { pruneDuplicateStyleDecls } from '../utils/style-dedup-guard.js';
+import { extractSfcTemplateRegion } from '../utils/sfc-template-extractor.js';
 
 const VUE = /\.vue$/i;
 const STYLE = /\.(less|css)$/i;
@@ -137,7 +138,7 @@ export function normalizeStyleResourceUrls(content, filePath, resourceDomMapping
  */
 export function detectRootContainerClass(vueContent) {
   if (!vueContent || typeof vueContent !== 'string') return null;
-  const tplStart = vueContent.search(/<template\s*>/i);
+  const tplStart = vueContent.search(/<template\b[^>]*>/i);
   if (tplStart < 0) return null;
   const rest = vueContent.slice(tplStart);
   const endIdx = rest.search(/<script[\s>]|<style[\s>]/i);
@@ -150,7 +151,7 @@ export function detectRootContainerClass(vueContent) {
       '',
     );
   const mBase = stripped.match(
-    /<template\s*>[\s\S]*?<base-panel[^>]*>[\s\S]*?<([a-zA-Z][\w-]*)[^>]*\bclass=(["'])([\w-]+)\2/i,
+    /<template\b[^>]*>[\s\S]*?<base-panel[^>]*>[\s\S]*?<([a-zA-Z][\w-]*)[^>]*\bclass=(["'])([\w-]+)\2/i,
   );
   if (mBase) return mBase[3];
   const mRoot = stripped.match(
@@ -475,8 +476,8 @@ export function collectResourceCarrierClasses(files, resourceDomMapping) {
   // ① 模板信号
   for (const p of vuePaths) {
     const c = files[p];
-    const tpl = c.match(/<template>([\s\S]*?)<\/template>/i);
-    const body = tpl ? tpl[1] : c;
+    // 🛡️ 共享边界法 + 剥具名插槽（lazy </template> 截断家族缺陷，0ca84358）
+    const body = extractSfcTemplateRegion(c, { stripSlots: true }) || c;
     if (!rootCls) {
       const withPanel = body.match(
         /<base-panel[^>]*>[\s\S]*?<[a-zA-Z][^>]*\bclass="([\w-]+)"/,
@@ -716,6 +717,14 @@ export function registerBuiltinFixRules(pipeline, engineer, context = {}) {
     pipeline.context = {
       ...pipeline.context,
       sectionHeights: context.sectionHeights,
+    };
+  }
+  // 🛡️ R1-2（2026-09-11）：布局事实数据流 —— 把 rootLayoutFacts 并入 pipeline.context，
+  // 供 fix-section-heights 规则② 以「事实 rootContainerClass」作豁免依据（退役命名枚举）。
+  if (context.rootLayoutFacts && pipeline && pipeline.context) {
+    pipeline.context = {
+      ...pipeline.context,
+      rootLayoutFacts: context.rootLayoutFacts,
     };
   }
 

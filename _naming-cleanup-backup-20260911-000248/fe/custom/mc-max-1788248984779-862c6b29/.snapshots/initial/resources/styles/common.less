@@ -1,0 +1,173 @@
+// 业务样式（环境监测组件）
+// 颜色/圆角/阴影严格取自 Figma 真值表，字号统一走 @fontSize 缩放令牌
+// 注意：面板外壳（背景/边框/阴影/圆角）由 base-panel 提供，此处只负责内容区
+
+// ============ 内容区根容器 ============
+// 组件字体缩放基准：宿主平台覆写 --fontSize 即可整体等比缩放
+.c-env-monitor-content {
+  display: flex;
+  flex-direction: column;
+  width: 420px;
+  height: 186px;
+  box-sizing: border-box;
+  padding: 8px 12px 12px;
+  font-size: var(--fontSize, 14px);
+  color: var(--color-text-base, rgba(0, 0, 0, 0.65));
+  overflow: hidden;
+
+  max-width: 100%;
+  max-height: 100vh;
+  box-sizing: border-box;}
+
+// ============ Tab 切换栏 ============
+.c-env-monitor-tabs-section {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  gap: 12px;
+}
+
+// 区域背景 bg1（背景图由模板内联挂载，此处只定义铺排方式与布局）
+.c-env-monitor-tabs-list {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 32px;
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+
+.c-env-monitor-tab-item {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  box-sizing: border-box;
+  font-size: var(--fontSize, 14px);
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  color: #2c9bea;
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.2s ease;
+
+  // 激活态：背景图 bg2 由模板内联挂载
+  &--active {
+    color: #ffffff;
+    text-shadow: 0px 0.6px 0px #006fe3;
+    background-size: 100% 100%;
+    background-position: center center;
+    background-repeat: no-repeat;
+  }
+}
+
+// ============ 右侧功能图标 ============
+.c-env-monitor-tabs-icons {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.c-env-monitor-tab-icon-wrapper {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  background: #ffffff;
+  border: 1px solid #a1ceff;
+  border-radius: var(--border-radius-base, 4px);
+  cursor: pointer;
+}
+
+.c-env-monitor-tab-icon {
+  display: block;
+  width: 14px;
+  height: 14px;
+  object-fit: contain;
+}
+
+.c-env-monitor-tab-badge {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  min-width: var(--badge-size, 16px);
+  height: var(--badge-size, 16px);
+  padding: 0 4px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f53f3f;
+  border-radius: 29px;
+  color: #ffffff;
+  font-size: calc(var(--fontSize, 14px) * 0.8571); // 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+// ============ 24 小时趋势图表 ============
+.c-env-monitor-chart-section {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-top: 8px;
+}
+
+// DOM 图例（归属：容器自绘，非 echarts 内建）
+.c-env-monitor-chart-legend {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 12px;
+  padding-left: 4px;
+}
+
+.c-env-monitor-chart-legend-item {
+  display: inline-flex;
+  align-items: center;
+  color: #333333;
+  font-size: calc(var(--fontSize, 14px) * 0.6857); // 9.6px;
+  font-weight: 400;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.c-env-monitor-chart-legend-dot {
+  display: inline-block;
+  width: 8px;
+  height: 3px;
+  margin-right: 4px;
+  background: #0fcd7d;
+  border-radius: 1.6px;
+  flex: 0 0 auto;
+}
+
+.c-env-monitor-chart-body {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+}
+
+.c-env-monitor-chart-container {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}

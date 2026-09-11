@@ -1,0 +1,170 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "issues": [
+      {
+        "id": "response_parse_failed",
+        "type": "response_parse_failed",
+        "severity": "warning",
+        "message": "布局审查响应解析失败，结果不可信"
+      }
+    ],
+    "score": 0,
+    "recommendations": [],
+    "degraded": true
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名），用于微码平台主题注入与运行时切换",
+      "--colorPrimary": "#559EFF",
+      "--colorBgBase": "#EDF4FB",
+      "--colorTextBase": "#333333",
+      "--colorSuccess": "#52C41A",
+      "--colorError": "#F53F3F",
+      "--colorBorderSecondary": "#D9E5F5",
+      "--fontSize": "14px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射，用于编译期样式计算与主题mixin定义",
+      "@color-primary": "#559EFF",
+      "@color-bg-base": "#EDF4FB",
+      "@color-text-base": "#333333",
+      "@color-success": "#52C41A",
+      "@color-error": "#F53F3F",
+      "@color-border-secondary": "#D9E5F5",
+      "@font-size-base": "14px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类，结合CSS变量与Less变量实现主题适配",
+      ".monitor-container": {
+        "width": "100%",
+        "height": "100%",
+        "background-color": "var(--colorBgBase, #EDF4FB)",
+        "color": "var(--colorTextBase, #333333)",
+        "font-size": "var(--fontSize, 14px)",
+        "box-sizing": "border-box"
+      },
+      ".tab-bar": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "16px",
+        "padding": "0 16px"
+      },
+      ".tab-item": {
+        "padding": "8px 20px",
+        "cursor": "pointer",
+        "position": "relative",
+        "color": "var(--colorTextBase, #333333)",
+        "transition": "all 0.3s ease"
+      },
+      ".tab-item.active": {
+        "color": "var(--colorPrimary, #559EFF)",
+        "font-weight": "600",
+        "background": "linear-gradient(135deg, rgba(85, 158, 255, 0.15) 0%, rgba(85, 158, 255, 0.05) 100%)",
+        "clip-path": "polygon(0 0, 100% 0, 92% 100%, 0 100%)"
+      },
+      ".chart-container": {
+        "width": "100%",
+        "flex": "1",
+        "position": "relative",
+        "padding": "16px"
+      },
+      ".chart-grid-line": {
+        "stroke": "var(--colorBorderSecondary, #D9E5F5)",
+        "stroke-width": "1",
+        "stroke-dasharray": "4 4"
+      },
+      ".area-chart-fill": {
+        "fill": "var(--colorSuccess, #52C41A)",
+        "fill-opacity": "0.2",
+        "stroke": "var(--colorSuccess, #52C41A)",
+        "stroke-width": "2"
+      },
+      ".warning-line": {
+        "stroke": "var(--colorError, #F53F3F)",
+        "stroke-width": "2",
+        "stroke-dasharray": "6 4",
+        "fill": "none"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 #559EFF 映射为 --colorPrimary，用于选中Tab高亮及核心交互元素",
+      "背景色 #EDF4FB 映射为 --colorBgBase，容器背景应优先直接落地为 Figma 字面量值，避免关键可见背景只依赖 CSS 变量",
+      "绿色 #52C41A 映射为 --colorSuccess，用于面积图填充，实际使用时通过 fill-opacity 控制透明度",
+      "红色 #F53F3F 映射为 --colorError，用于预警虚线，通过 stroke-dasharray 实现虚线效果",
+      "文本色 #333333 映射为 --colorTextBase，作为浅色科技风的基础文字颜色",
+      "Tab栏左侧箭头形状通过 clip-path 属性实现，避免引入额外图片资源，提升渲染性能",
+      "图表网格线颜色 #D9E5F5 映射为 --colorBorderSecondary，与浅灰蓝背景保持视觉协调"
+    ],
+    "elementStyleMap": {
+      "section-tabs-tools": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tabs-list": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "view-icons": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center",
+        "justify-content": "space-between",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-el-一氧化碳-4": {
+        "background-color": "linear-gradient(to right, #559eff, #3b82f6)",
+        "color": "#ffffff",
+        "border-radius": "4px"
+      },
+      "el-el-能见度-5": {
+        "color": "#ffffff"
+      },
+      "el-el-洞内照明-6": {
+        "color": "#ffffff"
+      },
+      "el-el-洞外光强-7": {
+        "color": "#ffffff"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-12": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-tabs-tools",
+        "responsibility": "标签页切换区",
+        "elementCount": 4,
+        "title": "Tab切换与工具栏"
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "数据图表区"
+      }
+    ],
+    "isForced": false,
+    "minFiles": 0,
+    "reason": "有效 sections=2 < 3 → 不强制拆分"
+  }
+}

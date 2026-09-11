@@ -1,0 +1,40 @@
+// 主题变量定义：颜色 token、字体、间距等
+// ⚠️ 这些变量会被各组件通过 @import 引入，禁止在此文件定义实际 class
+// === 颜色变量 ===
+@color-primary: rgba(85, 158, 255, 1);
+@color-text-secondary: rgba(255, 255, 255, 0.6);
+@color-danger: rgba(245, 63, 63, 1);
+@color-bg-light: rgba(237, 244, 251, 1);
+@color-bg-gradient-start: rgba(237, 244, 251, 1);
+@color-bg-gradient-end: rgba(255, 255, 255, 1);
+@color-tab-active: rgba(85, 158, 255, 1);
+@color-text-base: rgba(0, 0, 0, 0.85);
+@color-border: rgba(0, 0, 0, 0.06);
+// === 字体变量 ===
+@font-size-base: 14px;
+@font-size-title: 16px;
+@font-size-large: 20px;
+@font-weight-normal: 400;
+@font-weight-medium: 500;
+@font-weight-bold: 700;
+// === 布局变量 ===
+@border-radius: 4px;
+@border-radius-large: 8px;
+@icon-size: 16px;
+@spacing-base: 16px;
+@spacing-small: 8px;
+// === 主题 mixin（占位，保留结构兼容性）===
+.common() {
+  // 通用样式 mixin（占位）
+}
+
+.theme-dark() {
+  // 深色主题 mixin（占位）
+}
+
+.theme-light() {
+  // 浅色主题 mixin（占位）
+}
+
+// 默认应用浅色主题
+.theme-light();

@@ -1,0 +1,361 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 78,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].headerRelation",
+        "message": "category-cards 声明 headerRelation 为 content-below-title，但未定义 header，语义矛盾。",
+        "suggestion": "移除 headerRelation 或补充对应 header 结构。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body.children[0]",
+        "message": "body 首个子项重复渲染组件标题，且 header 已包含标题，造成冗余。",
+        "suggestion": "将图标+标题移入 header，body 仅保留统计项。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[2].body.children[1].items",
+        "message": "设备网格嵌套层级过深，超过建议的3层，增加维护成本。",
+        "suggestion": "扁平化 device-card 结构或采用数据驱动渲染。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[0].width",
+        "message": "左侧Tab宽度46px可能无法容纳“交通诱导”等长文本，存在溢出风险。",
+        "suggestion": "适当增加Tab宽度或使用缩写与提示。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "interactions[1].type",
+        "message": "顶部卡片交互类型为 tab-switch，但布局中 role 为 stat-card，角色不一致。",
+        "suggestion": "统一交互类型与布局角色，明确卡片是否可切换。"
+      }
+    ],
+    "recommendations": [
+      "将标题统一置于 section.header，body 不重复渲染标题。",
+      "修正各 section 的 headerRelation 与缺失 header 的问题。",
+      "简化设备卡片嵌套层级，采用模板或数据驱动减少冗余。"
+    ],
+    "summary": "整体布局清晰，但存在标题重复、headerRelation语义矛盾、层级过深及交互角色不一致等问题，建议优化后使用。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1990ff",
+      "--colorDanger": "#f53f3f",
+      "--colorInfo": "#08a3a5",
+      "--colorTextBase": "#333333",
+      "--colorBg": "#edf4fb",
+      "--colorPrimaryGradientStart": "#1990ff",
+      "--colorPrimaryGradientEnd": "#08a3a5",
+      "--fontSize": "14px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#1990ff",
+      "@color-danger": "#f53f3f",
+      "@color-info": "#08a3a5",
+      "@color-text-base": "#333333",
+      "@color-bg": "#edf4fb",
+      "@color-primary-gradient-start": "#1990ff",
+      "@color-primary-gradient-end": "#08a3a5",
+      "@font-size-base": "14px",
+      "@border-radius-base": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "height": "100%",
+        "padding": "16px",
+        "background": "var(--colorBg)",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)"
+      },
+      ".left-tab": {
+        "display": "flex",
+        "align-items": "center",
+        "padding": "10px 14px",
+        "border-radius": "var(--borderRadius)",
+        "color": "var(--colorTextBase)",
+        "cursor": "pointer",
+        "transition": "background 0.2s ease"
+      },
+      ".left-tab.is-active": {
+        "background": "var(--colorPrimary)",
+        "color": "#ffffff"
+      },
+      ".large-card": {
+        "padding": "20px",
+        "border-radius": "calc(var(--borderRadius) * 2)",
+        "background": "linear-gradient(135deg, var(--colorPrimaryGradientStart) 0%, var(--colorPrimaryGradientEnd) 100%)",
+        "color": "#ffffff",
+        "box-shadow": "0 8px 24px rgba(25,144,255,0.25)"
+      },
+      ".stat-value": {
+        "font-size": "2em",
+        "font-weight": "600",
+        "color": "var(--colorPrimary)",
+        "line-height": "1.2"
+      },
+      ".stat-value--danger": {
+        "color": "var(--colorDanger)"
+      },
+      ".abnormal-count": {
+        "display": "inline-block",
+        "min-width": "1.6em",
+        "padding": "0.08em 0.4em",
+        "border-radius": "999px",
+        "background": "var(--colorDanger)",
+        "color": "#ffffff",
+        "font-weight": "600",
+        "text-align": "center"
+      },
+      ".section-title": {
+        "font-size": "1.2em",
+        "font-weight": "600",
+        "color": "var(--colorTextBase)"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主题色 #1990ff 映射为 --colorPrimary，用于左侧Tab选中态蓝色背景和大号蓝色数值",
+      "异常红 #f53f3f 映射为 --colorDanger，用于异常数(5,3)红色高亮",
+      "辅助科技色 #08a3a5 映射为 --colorInfo，并作为大卡片蓝色渐变背景的渐变末端",
+      "文本色 #333333 映射为 --colorTextBase，浅蓝灰背景 rgba(237,244,251,1) 映射为 --colorBg",
+      "容器背景应优先直接落地为 Figma 字面量值，避免关键可见背景只依赖 CSS 变量",
+      "大号蓝色数值(68562,56302)使用 .stat-value 及 --colorPrimary 强调，红色异常数(5,3)使用 --colorDanger"
+    ],
+    "elementStyleMap": {
+      "header-stats": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-text-group-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-stat-item-x-5": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-stat-item-x-8": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-stat-item-x-11": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "card-tunnel-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "card-tunnel-value-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-tunnel-value-row-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-tunnel": {
+        "background": "linear-gradient(270deg, #318aff 0%, #70bfff 100%)",
+        "border-radius": "8px",
+        "padding": "16px",
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-16": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-value-row-x-19": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-value-row-x-22": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-north-south-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "card-north-south-value-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-north-south-value-row-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-north-south": {
+        "background": "rgba(255,255,255,0.6)",
+        "border-radius": "8px",
+        "padding": "16px",
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-26": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-value-row-x-29": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-value-row-x-32": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "device-list-container": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "vertical-tabs": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-device-card-摄像机-44": {
+        "background": "rgba(255,255,255,0.8)",
+        "border-radius": "6px",
+        "padding": "12px",
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-device-card-风速风向仪-48": {
+        "background": "rgba(255,255,255,0.8)",
+        "border-radius": "6px",
+        "padding": "12px",
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-device-card-超高检测器-52": {
+        "background": "rgba(255,255,255,0.8)",
+        "border-radius": "6px",
+        "padding": "12px",
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-device-card-烟道机器人-56": {
+        "background": "rgba(255,255,255,0.8)",
+        "border-radius": "6px",
+        "padding": "12px",
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-device-card-激光雷达-60": {
+        "background": "rgba(255,255,255,0.8)",
+        "border-radius": "6px",
+        "padding": "12px",
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-device-card-CO₂传感器-64": {
+        "background": "rgba(255,255,255,0.8)",
+        "border-radius": "6px",
+        "padding": "12px",
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-device-card-CO/VI检测器-68": {
+        "background": "rgba(255,255,255,0.8)",
+        "border-radius": "6px",
+        "padding": "12px",
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-device-card-温湿度传感器-72": {
+        "background": "rgba(255,255,255,0.8)",
+        "border-radius": "6px",
+        "padding": "12px",
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-device-card-压力传感器-76": {
+        "background": "rgba(255,255,255,0.8)",
+        "border-radius": "6px",
+        "padding": "12px",
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-device-card-光照度变送器-80": {
+        "background": "rgba(255,255,255,0.8)",
+        "border-radius": "6px",
+        "padding": "12px",
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-device-card-紧急电话-84": {
+        "background": "rgba(255,255,255,0.8)",
+        "border-radius": "6px",
+        "padding": "12px",
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-device-card-水质监测设备-88": {
+        "background": "rgba(255,255,255,0.8)",
+        "border-radius": "6px",
+        "padding": "12px",
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "header-stats",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 12,
+        "title": "设备监测"
+      },
+      {
+        "id": "category-cards",
+        "responsibility": "数据统计指标区（数字+标签+趋势）",
+        "elementCount": 0,
+        "title": "设备分类统计卡片"
+      },
+      {
+        "id": "device-list-container",
+        "responsibility": "列表项布局区",
+        "elementCount": 8,
+        "title": "设备列表与导航"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 → 强制拆分"
+  }
+}

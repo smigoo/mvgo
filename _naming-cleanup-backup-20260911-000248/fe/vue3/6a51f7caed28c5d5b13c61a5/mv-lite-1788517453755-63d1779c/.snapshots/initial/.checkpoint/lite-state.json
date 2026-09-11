@@ -1,0 +1,111 @@
+{
+  "stage": "codegen_done",
+  "brief": {
+    "layout": "单列垂直布局，上方 Tab 切换栏 + 右上角图标操作区，下方为折线图表主体区域，图表占据大部分高度",
+    "regions": [
+      {
+        "name": "标题栏",
+        "description": "左侧「环境监测」标题文字，浅蓝色",
+        "position": "top-left",
+        "size": "标题文字约占顶部 20% 宽度，高度约 15px"
+      },
+      {
+        "name": "Tab 切换栏",
+        "description": "横向排列 4 个 Tab 按钮：「一氧化碳」「能见度」「河内照明」「河外光强」，当前激活「一氧化碳」，激活项为深色文字 + 浅色圆角背景高亮，未激活项为浅色文字",
+        "position": "top-center",
+        "size": "位于标题下方，横向占据中间约 60% 宽度，高度约 16px"
+      },
+      {
+        "name": "右上角操作区",
+        "description": "两个图标按钮横向排列：左侧柱状图图标（蓝色），右侧表格图标（白色背景），表格图标右上角有红色数字徽章「8」",
+        "position": "top-right",
+        "size": "宽度约 40px，高度约 16px，与 Tab 栏同一水平线"
+      },
+      {
+        "name": "图表区域",
+        "description": "折线面积图，Y 轴刻度（0/10/20/30/40）垂直排列在左侧，X 轴时间刻度（2/4/6/8/10/12/14/16/18/20/22/24 时）水平排列在底部，绿色渐变填充面积 + 绿色折线，右上角显示当前数值「2k3+7850CD火度」及「抑製线」红色虚线标注，Y 轴刻度 30 处标红色",
+        "position": "center",
+        "size": "顶部与 Tab 栏下方间距约 8px，占据剩余高度约 75px，左右边距各约 15px"
+      }
+    ],
+    "spacing": {
+      "outer": "页面外边距：左右各约 15px，顶部约 8px，底部约 8px",
+      "gap": "标题与 Tab 栏间距约 4px，Tab 栏与图表区间距约 8px",
+      "padding": "Tab 按钮内边距横向约 8px 纵向约 4px，图表区内边距顶部约 4px"
+    },
+    "theme": "light",
+    "colors": {
+      "primary": "#5CADEC",
+      "background": "#EAEEF2",
+      "surface": "#F5F7FA",
+      "text": "#4A5568",
+      "border": "#D1D9E0"
+    },
+    "typography": {
+      "size": "标题约 13px，Tab 文字约 11px，图表数值约 9px，右上角数值约 10px",
+      "weight": "标题 500，Tab 激活项 500/未激活 400，图表文字 400",
+      "lineHeight": "约 1.2-1.4"
+    },
+    "components": [
+      "Tab 切换栏",
+      "图标按钮",
+      "徽章数字",
+      "折线面积图",
+      "坐标轴刻度",
+      "虚线标注"
+    ],
+    "textContent": [
+      "环境监测",
+      "一氧化碳",
+      "能见度",
+      "河内照明",
+      "河外光强",
+      "2k3+7850CD火度",
+      "抑製线",
+      "0",
+      "10",
+      "20",
+      "30",
+      "40",
+      "2",
+      "4",
+      "6",
+      "8",
+      "10",
+      "12",
+      "14",
+      "16",
+      "18",
+      "20",
+      "22",
+      "24",
+      "时"
+    ],
+    "name": {
+      "cn": "环境监测",
+      "en": "environment-monitor"
+    },
+    "visualDetails": [
+      "Tab 按钮圆角约 12px（全圆角胶囊形）",
+      "激活 Tab 背景为白色半透明",
+      "图标按钮圆角约 4px",
+      "右上角徽章为红色圆形背景白色数字",
+      "折线图绿色渐变填充从上到下由深到浅",
+      "红色虚线标注「抑製线」位于图表右上角",
+      "Y 轴刻度 30 为红色字体",
+      "X 轴刻度末尾带「时」单位",
+      "图表边框无明显描边"
+    ],
+    "interactions": [
+      "Tab 切换栏：4 个 Tab（一氧化碳、能见度、河内照明、河外光强），当前激活「一氧化碳」",
+      "右上角图标按钮：柱状图切换按钮（左），表格视图按钮（右，带红色徽章 8）"
+    ],
+    "_themeSource": "pixel"
+  },
+  "width": 220,
+  "height": 103,
+  "sourceType": "screenshot",
+  "componentType": "vue3",
+  "generationTier": "lite",
+  "vueCode": "<template>\n  <div class=\"environment-monitor\">\n    <div class=\"environment-monitor-header\">\n      <div class=\"environment-monitor-title\">环境监测</div>\n      <div class=\"environment-monitor-tabs\">\n        <div\n          v-for=\"tab in tabs\"\n          :key=\"tab\"\n          :class=\"['tab-item', { active: activeTab === tab }]\"\n          @click=\"activeTab = tab\"\n        >\n          {{ tab }}\n        </div>\n      </div>\n      <div class=\"environment-monitor-actions\">\n        <div class=\"action-btn chart-btn\"></div>\n        <div class=\"action-btn table-btn\">\n          <div class=\"badge\">8</div>\n        </div>\n      </div>\n    </div>\n    <div class=\"environment-monitor-chart\">\n      <div ref=\"chartRef\" class=\"chart\"></div>\n    </div>\n  </div>\n</template>\n\n<script setup>\nimport { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'\nimport * as echarts from 'echarts'\n\nconst tabs = ['一氧化碳', '能见度', '河内照明', '河外光强']\nconst activeTab = ref('一氧化碳')\n\nconst chartRef = ref(null)\nlet chart = null\nlet resizeObserver = null\n\nconst chartData = ref([\n  8, 10, 9, 8, 9, 10, 12, 13, 14, 15, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3\n])\n\nconst initChartWhenReady = () => {\n  if (!chartRef.value || chart) return\n\n  resizeObserver = new ResizeObserver((entries) => {\n    const entry = entries[0]\n    const { width, height } = entry.contentRect\n    \n    if (width > 0 && height > 0) {\n      if (!chart) {\n        chart = echarts.init(chartRef.value)\n        \n        const option = {\n          grid: {\n            left: 20,\n            right: 40,\n            top: 15,\n            bottom: 20\n          },\n          xAxis: {\n            type: 'category',\n            data: ['2', '4', '6', '8', '10', '12', '14', '16', '18', '20', '22', '24'],\n            axisLabel: {\n              color: '#8B92A0',\n              fontSize: 9,\n              formatter: (value, index) => {\n                return index === 11 ? value + '时' : value\n              }\n            },\n            axisLine: {\n              lineStyle: {\n                color: '#D1D9E0'\n              }\n            },\n            axisTick: {\n              show: false\n            }\n          },\n          yAxis: {\n            type: 'value',\n            min: 0,\n            max: 40,\n            interval: 10,\n            axisLabel: {\n              color: '#8B92A0',\n              fontSize: 9,\n              formatter: (value) => {\n                return value === 30 ? `{red|${value}}` : value\n              },\n              rich: {\n                red: {\n                  color: '#E74C3C'\n                }\n              }\n            },\n            splitLine: {\n              lineStyle: {\n                color: '#E5E9ED',\n                type: 'solid'\n              }\n            },\n            axisLine: {\n              show: false\n            },\n            axisTick: {\n              show: false\n            }\n          },\n          series: [\n            {\n              data: chartData.value,\n              type: 'line',\n              smooth: true,\n              symbol: 'none',\n              lineStyle: {\n                color: '#52C41A',\n                width: 1.5\n              },\n              areaStyle: {\n                color: {\n                  type: 'linear',\n                  x: 0,\n                  y: 0,\n                  x2: 0,\n                  y2: 1,\n                  colorStops: [\n                    {\n                      offset: 0,\n                      color: 'rgba(82, 196, 26, 0.4)'\n                    },\n                    {\n                      offset: 1,\n                      color: 'rgba(82, 196, 26, 0.05)'\n                    }\n                  ]\n                }\n              },\n              markLine: {\n                symbol: 'none',\n                label: {\n                  show: true,\n                  position: 'end',\n                  formatter: '抑製线',\n                  color: '#E74C3C',\n                  fontSize: 9\n                },\n                lineStyle: {\n                  type: 'dashed',\n                  color: '#E74C3C',\n                  width: 1\n                },\n                data: [{ yAxis: 30 }]\n              }\n            }\n          ],\n          graphic: [\n            {\n              type: 'text',\n              right: 40,\n              top: 8,\n              style: {\n                text: '2k3+7850CD火度',\n                fontSize: 10,\n                fill: '#4A5568'\n              }\n            }\n          ]\n        }\n        \n        chart.setOption(option)\n        \n        const chartResizeObserver = new ResizeObserver(() => {\n          if (chart) {\n            chart.resize()\n          }\n        })\n        chartResizeObserver.observe(chartRef.value)\n      } else {\n        chart.resize()\n      }\n    }\n  })\n  \n  resizeObserver.observe(chartRef.value)\n}\n\nwatch(\n  chartRef,\n  (el) => {\n    if (el && !chart) {\n      nextTick(() => initChartWhenReady())\n    }\n  },\n  { immediate: true }\n)\n\nonMounted(() => {\n  nextTick(initChartWhenReady)\n})\n\nonUnmounted(() => {\n  if (resizeObserver) {\n    resizeObserver.disconnect()\n  }\n  if (chart) {\n    chart.dispose()\n    chart = null\n  }\n})\n</script>\n\n<style scoped>\n.environment-monitor {\n  width: 100%;\n  height: 100%;\n  box-sizing: border-box;\n  background: #EAEEF2;\n  padding: 6px 12px 8px 12px;\n  display: flex;\n  flex-direction: column;\n  min-height: 0;\n}\n\n.environment-monitor-header {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  margin-bottom: 6px;\n  height: 18px;\n  flex-shrink: 0;\n}\n\n.environment-monitor-title {\n  font-size: 12px;\n  font-weight: 500;\n  color: #5CADEC;\n  white-space: nowrap;\n}\n\n.environment-monitor-tabs {\n  display: flex;\n  gap: 6px;\n  flex: 1;\n}\n\n.tab-item {\n  padding: 3px 10px;\n  font-size: 10px;\n  font-weight: 400;\n  color: #8B92A0;\n  background: transparent;\n  border-radius: 12px;\n  cursor: pointer;\n  white-space: nowrap;\n  transition: all 0.2s;\n}\n\n.tab-item.active {\n  background: rgba(255, 255, 255, 0.6);\n  color: #4A5568;\n  font-weight: 500;\n}\n\n.environment-monitor-actions {\n  display: flex;\n  gap: 6px;\n  align-items: center;\n}\n\n.action-btn {\n  width: 18px;\n  height: 18px;\n  border-radius: 3px;\n  cursor: pointer;\n  position: relative;\n  flex-shrink: 0;\n}\n\n.chart-btn {\n  background: linear-gradient(135deg, #5CADEC 0%, #4A9BD8 100%);\n}\n\n.chart-btn::before {\n  content: '';\n  position: absolute;\n  left: 50%;\n  top: 50%;\n  transform: translate(-50%, -50%);\n  width: 10px;\n  height: 10px;\n  background: linear-gradient(to top,\n    #fff 0%, #fff 20%,\n    transparent 20%, transparent 40%,\n    #fff 40%, #fff 60%,\n    transparent 60%, transparent 80%,\n    #fff 80%, #fff 100%\n  );\n  background-size: 2px 10px;\n  background-repeat: repeat-x;\n  background-position: 0 0;\n}\n\n.table-btn {\n  background: rgba(255, 255, 255, 0.9);\n}\n\n.table-btn::before {\n  content: '';\n  position: absolute;\n  left: 50%;\n  top: 50%;\n  transform: translate(-50%, -50%);\n  width: 10px;\n  height: 10px;\n  background-image: \n    linear-gradient(#8B92A0 1px, transparent 1px),\n    linear-gradient(90deg, #8B92A0 1px, transparent 1px);\n  background-size: 100% 4px, 4px 100%;\n  background-position: 0 0, 0 0;\n}\n\n.badge {\n  position: absolute;\n  top: -4px;\n  right: -4px;\n  background: #E74C3C;\n  color: #fff;\n  font-size: 8px;\n  font-weight: 500;\n  min-width: 12px;\n  height: 12px;\n  border-radius: 6px;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  padding: 0 3px;\n  z-index: 1;\n}\n\n.environment-monitor-chart {\n  flex: 1;\n  min-height: 0;\n  position: relative;\n}\n\n.chart {\n  width: 100%;\n  height: 100%;\n}\n</style>"
+}

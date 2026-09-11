@@ -272,7 +272,7 @@ export class ApifoxGeneratorService {
         },
       ],
     };
-    this.apifoxService.saveCatalog(singleCatalog);
+    this.apifoxService.saveCatalog(singleCatalog, dto.ownerId);
 
     // 6. 登记任务元数据（单模块：不写 projectName，让历史卡显示纯模块名）
     const task = this.apifoxService.recordTask({
@@ -377,7 +377,7 @@ export class ApifoxGeneratorService {
     // 修正 totalApiCount
     catalog.totalApiCount = catalogModules.reduce((s, m) => s + m.functions.length, 0);
 
-    this.apifoxService.saveCatalog(catalog);
+    this.apifoxService.saveCatalog(catalog, dto.ownerId);
 
     // 也登记为任务（便于历史列表展示）
     // projectName 统一用用户填写的项目名（resolvedProjectName），不再回退到 spec.info?.title

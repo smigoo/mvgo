@@ -1,0 +1,493 @@
+.c-device-monitor-root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+.c-device-monitor-summary {
+  flex-shrink: 0;
+}
+
+.c-device-monitor-main {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+  gap: 16px;
+}
+
+.c-device-monitor-trend-section {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.c-device-monitor-type-section {
+  width: 340px;
+  flex-shrink: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.c-device-monitor-status {
+  flex-shrink: 0;
+}
+
+/* --- 设备汇总卡片 --- */
+.c-device-summary-root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.c-device-summary-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 24px;
+}
+
+.c-device-summary-stat {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+.c-device-summary-label {
+  font-size: 14px;
+  color: @c-text-primary;
+  font-family: @c-font-family-base;
+}
+
+.c-device-summary-value {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: @c-font-family-number;
+
+  &--blue {
+    color: @c-primary;
+  }
+
+  &--green {
+    color: @c-success;
+  }
+}
+
+.c-device-summary-cards {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+}
+
+.c-device-summary-card {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 10px 15px;
+  border-radius: @c-radius-md;
+  background: @c-bg-card;
+  cursor: pointer;
+  transition: @c-transition-base;
+
+  &:hover {
+    background: @c-bg-card-hover;
+  }
+
+  &--active {
+    background: @c-bg-card-active;
+
+    .c-device-summary-card-title,
+    .c-device-summary-card-label {
+      color: @c-text-inverse;
+    }
+
+    .c-device-summary-card-num {
+      color: @c-text-inverse;
+    }
+
+    .c-device-summary-card-num--error {
+      color: @c-error;
+    }
+  }
+
+  &--active:hover {
+    background: @c-bg-card-active;
+  }
+}
+
+.c-device-summary-card-icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.c-device-summary-card-img {
+  width: 27px;
+  height: 32px;
+  object-fit: contain;
+}
+
+.c-device-summary-card-title {
+  font-size: 12px;
+  color: @c-text-primary;
+  font-family: @c-font-family-title;
+  white-space: nowrap;
+}
+
+.c-device-summary-card-data {
+  display: flex;
+  flex-direction: column;
+  margin-left: 15px;
+  gap: 4px;
+}
+
+.c-device-summary-card-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+.c-device-summary-card-label {
+  font-size: 14px;
+  color: @c-text-primary;
+  font-family: @c-font-family-base;
+}
+
+.c-device-summary-card-num {
+  font-size: 20px;
+  font-weight: 700;
+  color: @c-primary;
+  font-family: @c-font-family-number;
+
+  &--error {
+    color: @c-error;
+  }
+}
+
+/* --- 设备在线趋势 --- */
+.c-device-monitor-trend-chart {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.c-device-monitor-trend-header {
+  flex-shrink: 0;
+  margin-bottom: 8px;
+}
+
+.c-device-monitor-trend-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: @c-text-primary;
+  font-family: @c-font-family-base;
+}
+
+.c-device-monitor-trend-body {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.c-device-monitor-trend-container {
+  width: 100%;
+  height: 100%;
+}
+
+/* --- 设备类型图表 --- */
+.c-device-monitor-type-root {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.c-device-monitor-type-tabs {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 46px;
+  padding-top: 8px;
+  flex-shrink: 0;
+}
+
+.c-device-monitor-type-tab {
+  width: 34px;
+  padding: 8px 0;
+  text-align: center;
+  cursor: pointer;
+  font-size: 14px;
+  color: @c-text-primary;
+  border-radius: @c-radius-sm;
+  margin-bottom: 4px;
+  transition: @c-transition-base;
+
+  &:hover {
+    background: @c-bg-tab-hover;
+  }
+
+  &.is-active {
+    background: @c-bg-tab-active;
+    color: @c-primary;
+    font-weight: 700;
+  }
+}
+
+.c-device-monitor-type-tab-name {
+  line-height: 18px;
+}
+
+.c-device-monitor-type-tab-badge {
+  font-size: 12px;
+  color: @c-primary;
+  line-height: 16px;
+  margin-top: 2px;
+  font-weight: 500;
+}
+
+.c-device-monitor-type-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 8px;
+  align-content: start;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+.c-device-monitor-type-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 64px;
+  background: @c-bg-item;
+  border-radius: @c-radius-sm;
+  padding: 4px;
+}
+
+.c-device-monitor-type-icon {
+  width: 27px;
+  height: 32px;
+  object-fit: contain;
+  margin-bottom: 2px;
+}
+
+.c-device-monitor-type-icon-placeholder {
+  width: 27px;
+  height: 32px;
+  margin-bottom: 2px;
+  background: @c-bg-placeholder;
+  border-radius: 2px;
+}
+
+.c-device-monitor-type-name {
+  font-size: 12px;
+  color: @c-text-primary;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.c-device-monitor-type-value {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 18px;
+
+  .is-error {
+    color: @c-error;
+    font-weight: 700;
+  }
+
+  .is-normal {
+    color: @c-success;
+    font-weight: 700;
+  }
+
+  .is-sep {
+    color: @c-text-primary;
+    margin: 0 1px;
+  }
+
+  .is-total {
+    color: @c-primary;
+  }
+}
+
+/* --- 设备状态表 --- */
+.c-device-status-root {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  height: 100%;
+  gap: 6px;
+}
+
+.c-device-status-sidebar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 46px;
+  flex-shrink: 0;
+  padding-top: 4px;
+}
+
+.c-device-status-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  padding: 6px 0;
+  border-radius: @c-radius-sm;
+  cursor: pointer;
+  position: relative;
+  transition: @c-transition-base;
+
+  &:hover {
+    background: @c-bg-tab-hover;
+  }
+
+  &.is-active {
+    background: @c-bg-tab-active;
+
+    .c-device-status-tab-name {
+      color: @c-primary;
+      font-weight: 700;
+    }
+  }
+}
+
+.c-device-status-tab-name {
+  font-size: 14px;
+  color: @c-text-primary;
+  text-align: center;
+  line-height: 18px;
+}
+
+.c-device-status-tab-badge {
+  font-size: 12px;
+  color: @c-primary;
+  margin-top: 2px;
+  font-weight: 500;
+}
+
+.c-device-status-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 0;
+}
+
+.c-device-status-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background: @c-bg-item;
+  border-radius: @c-radius-sm;
+  box-sizing: border-box;
+}
+
+.c-device-status-item-icon {
+  width: 27px;
+  height: 32px;
+  flex-shrink: 0;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+}
+
+.c-device-status-item-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.c-device-status-item-name {
+  font-size: 12px;
+  color: @c-text-primary;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.c-device-status-item-value {
+  display: flex;
+  align-items: baseline;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 18px;
+
+  .c-device-status-val-error {
+    color: @c-error;
+  }
+
+  .c-device-status-val-normal {
+    color: @c-success;
+  }
+}
+
+.c-device-status-val-sep {
+  color: @c-text-primary;
+  margin: 0 1px;
+}
+
+.c-device-status-val-total {
+  color: @c-primary;
+}
+
+/* --- 设计稿兼容元素 --- */
+.tunnel,
+.north-south {
+  display: flex;
+  flex-direction: row;
+}
+
+/* === [自动修复] v3.5 模板驱动 fallback 规则 === */
+/* [自动修复] 模板 class .c-device-summary-card--active → 匹配元素 section-header-stats */
+
+.c-device-summary-card--active {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-device-summary-value--blue → 匹配元素 section-header-stats */
+
+.c-device-summary-value--blue {
+  display: flex;
+}
+
+/* [自动修复] 模板 class .c-device-summary-value--green → 匹配元素 section-header-stats */
+
+.c-device-summary-value--green {
+  display: flex;
+}

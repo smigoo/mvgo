@@ -1,0 +1,55 @@
+// 主题变量定义文件
+// 由 Style Mapper 从 Figma 设计稿提取，禁止臆造变量名或修改色值
+
+.common() {
+  // 字体缩放基准令牌（微码组件必须定义）
+  @fontSize: 14px;
+  
+  // 基础字体尺寸
+  @font-size-base: 14px;
+  
+  // 圆角
+  @border-radius-base: 4px;
+  @border-radius-lg: 8px;
+  
+  // 徽章尺寸
+  @badge-size: 16px;
+}
+
+.theme-light() {
+  // 主色
+  @color-primary: rgba(85, 158, 255, 1);
+  @color-primary-light: rgba(85, 158, 255, 0.3);
+  
+  // 危险色
+  @color-danger: rgba(255, 78, 78, 1);
+  
+  // 文字颜色
+  @color-text-base: rgba(0, 0, 0, 0.65);
+  
+  // 背景色
+  @color-bg: rgba(255, 255, 255, 1);
+  @color-bg-secondary: rgba(237, 244, 251, 1);
+  
+  // 边框样式
+  @border-style-dashed: 2px dashed @color-danger;
+}
+
+.theme-dark() {
+  // 主色（深色主题保持一致）
+  @color-primary: rgba(85, 158, 255, 1);
+  @color-primary-light: rgba(85, 158, 255, 0.3);
+  
+  // 危险色（深色主题保持一致）
+  @color-danger: rgba(255, 78, 78, 1);
+  
+  // 文字颜色（深色主题使用浅色文字）
+  @color-text-base: rgba(255, 255, 255, 0.85);
+  
+  // 背景色（深色主题使用深色背景）
+  @color-bg: rgba(26, 35, 50, 1);
+  @color-bg-secondary: rgba(35, 47, 66, 1);
+  
+  // 边框样式
+  @border-style-dashed: 2px dashed @color-danger;
+}

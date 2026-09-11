@@ -1,0 +1,21 @@
+{
+  "generatedAt": "2026-08-08T06:49:13.553Z",
+  "stage": "preview-analysis",
+  "degraded": true,
+  "degradeReason": "Failed to parse analysis result: 视觉解析结果结构为空（sections/charts/interactions 全空），疑似截断损坏，拒绝接受半截数据",
+  "layout": {
+    "type": "vertical",
+    "direction": "top-to-bottom",
+    "sections": []
+  },
+  "styles": {
+    "theme": "未知",
+    "colors": [],
+    "background": "",
+    "decorations": [],
+    "emphasis": [],
+    "backgroundBrightness": "dark"
+  },
+  "interactions": [],
+  "charts": []
+}

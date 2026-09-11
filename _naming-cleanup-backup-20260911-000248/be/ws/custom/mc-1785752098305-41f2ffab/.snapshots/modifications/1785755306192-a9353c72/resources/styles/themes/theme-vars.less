@@ -1,0 +1,47 @@
+.common() {
+@bg-color: #edf4fb;
+  @text-color: #333333;
+  @primary-color: #1990ff;
+  @success-color: #52c41a;
+  @warning-color: #fa8c16;
+  @tunnel-color: #006fe3;
+  @bridge-color: #0c9dbe;
+  @passenger-color: #1399ff;
+  @freight-color: #ff6a00;
+  @tab-active-bg: #1990ff;
+  @tab-inactive-bg: #6680a0;
+  @click: inherit; // 自动添加
+}
+
+.theme-dark() {
+  @bg-color: #1a2332;
+  @text-color: #e0e6ed;
+  @primary-color: #1990ff;
+  @success-color: #52c41a;
+  @warning-color: #fa8c16;
+  @tunnel-color: #4d94ff;
+  @bridge-color: #36c2c2;
+  @passenger-color: #40a9ff;
+  @freight-color: #ff8533;
+  @tab-active-bg: #1990ff;
+  @tab-inactive-bg: #4a5568;
+}
+
+.theme-light() {
+  @bg-color: #edf4fb;
+  @text-color: #333333;
+  @primary-color: #1990ff;
+  @success-color: #52c41a;
+  @warning-color: #fa8c16;
+  @tunnel-color: #006fe3;
+  @bridge-color: #0c9dbe;
+  @passenger-color: #1399ff;
+  @freight-color: #ff6a00;
+  @tab-active-bg: #1990ff;
+  @tab-inactive-bg: #6680a0;
+}
+
+:root {
+  .theme-light();
+  .common();
+}

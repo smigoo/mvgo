@@ -1,0 +1,75 @@
+// 主题变量文件 - 定义浅色/深色主题的颜色变量
+// 注意：Less 变量（@xxx）而非 CSS 变量（var(--xxx)），以支持颜色函数
+
+// 公共变量（两种主题共享）
+.common() {
+  // 品牌色
+  @primary-color: #1990ff;
+  @primary-hover: #388dff;
+  @primary-active: #006fe3;
+  
+  // 功能色
+  @success-color: #00cccc;
+  @warning-color: #ffa22f;
+  @danger-color: #ff6a00;
+  @info-color: #2ba0ff;
+  
+  // 中性色
+  @white: #ffffff;
+  @black: #000000;
+}
+
+// 深色主题变量
+.theme-dark() {
+  // 背景色
+  @bg-primary: #1a2332;
+  @bg-secondary: rgba(74, 117, 141, 0.25);
+  @bg-tertiary: rgba(0, 204, 204, 0.3);
+  
+  // 文字颜色（深色面板禁止黑色系）
+  @text-primary: #ffffff;
+  @text-secondary: rgba(255, 255, 255, 0.8);
+  @text-tertiary: rgba(172, 196, 225, 1);
+  @text-quaternary: #6680a0;
+  
+  // 边框颜色
+  @border-color: rgba(199, 224, 255, 1);
+  @border-color-light: rgba(74, 117, 141, 0.25);
+  
+  // 品牌色变体
+  @primary-light: #57caff;
+  @primary-fade: #5bbbef;
+  
+  // 辅助色
+  @accent-purple: #5a7eff;
+  @accent-cyan: #0c9dbe;
+}
+
+// 浅色主题变量（默认主题，必须与设计稿一致）
+.theme-light() {
+  // 背景色
+  @bg-primary: #ffffff;
+  @bg-secondary: #edf4fb;
+  @bg-tertiary: #d6effc;
+  @bg-quaternary: rgba(199, 224, 255, 1);
+  
+  // 文字颜色
+  @text-primary: #333333;
+  @text-secondary: #56597c;
+  @text-tertiary: #6680a0;
+  @text-quaternary: rgba(172, 196, 225, 1);
+  
+  // 边框颜色
+  @border-color: rgba(74, 117, 141, 0.25);
+  @border-color-dark: #56597c;
+  
+  // 品牌色变体
+  @primary-light: #559eff;
+  @primary-lighter: #1399ff;
+  @primary-fade: rgba(51, 133, 255, 1);
+  
+  // 辅助色
+  @accent-blue: #1252fa;
+  @accent-purple: #5a7eff;
+  @accent-cyan: #0c9dbe;
+}

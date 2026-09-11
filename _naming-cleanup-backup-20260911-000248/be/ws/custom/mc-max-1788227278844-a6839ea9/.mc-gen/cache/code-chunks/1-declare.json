@@ -1,0 +1,89 @@
+{
+  "componentName": "cp-环境监测",
+  "panelKey": "",
+  "businessEvents": {
+    "env-monitor-onload": {
+      "eventId": "env-monitor-onload",
+      "eventName": "组件加载完成",
+      "eventDataSchema": {
+        "componentId": {
+          "key": "componentId",
+          "name": "组件ID",
+          "type": "string",
+          "required": true
+        },
+        "timestamp": {
+          "key": "timestamp",
+          "name": "时间戳",
+          "type": "number",
+          "required": true
+        }
+      }
+    },
+    "env-monitor-threshold-exceed": {
+      "eventId": "env-monitor-threshold-exceed",
+      "eventName": "监测指标超阈值告警",
+      "eventDataSchema": {
+        "componentId": {
+          "key": "componentId",
+          "name": "组件ID",
+          "type": "string",
+          "required": true
+        },
+        "metricKey": {
+          "key": "metricKey",
+          "name": "指标标识",
+          "type": "string",
+          "required": true
+        },
+        "metricValue": {
+          "key": "metricValue",
+          "name": "指标数值",
+          "type": "number",
+          "required": true
+        },
+        "threshold": {
+          "key": "threshold",
+          "name": "阈值",
+          "type": "number",
+          "required": true
+        },
+        "timestamp": {
+          "key": "timestamp",
+          "name": "时间戳",
+          "type": "number",
+          "required": true
+        }
+      }
+    }
+  },
+  "businessStatuses": {
+    "monitorStatus": {
+      "key": "monitorStatus",
+      "name": "监测状态",
+      "type": "string",
+      "enum": [
+        "normal",
+        "warning",
+        "error",
+        "offline"
+      ],
+      "defaultValue": "normal"
+    }
+  },
+  "cssVariableConfig": [],
+  "businessConfig": {
+    "metrics": {
+      "key": "metrics",
+      "name": "监测指标列表",
+      "type": "array",
+      "defaultValue": []
+    },
+    "refreshInterval": {
+      "key": "refreshInterval",
+      "name": "刷新间隔（秒）",
+      "type": "number",
+      "defaultValue": 30
+    }
+  }
+}

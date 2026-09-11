@@ -1,0 +1,143 @@
+@import './themes/theme-vars.less';
+
+/* [Layout Refine] Figma root frame -> flex column, padding 10px 20px */
+/* [Style Refine] root 容器禁令：background/box-shadow 属于 base-panel chrome，由面板组件提供，此处移除 */
+.c-env-monitor {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 10px 20px;
+  box-sizing: border-box;
+}
+
+/* [Layout Refine] Figma header group -> flex row, height 28px */
+.c-env-header {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  flex-shrink: 0;
+  
+  .header-icon {
+    width: 8px;
+    height: 8px;
+    margin-right: 4px;
+  }
+  
+  /* [Style Refine] Figma text fills gradient -> background-clip text */
+  /* [Style Refine] typography.lineHeightPx -> 19.2 */
+  .header-title {
+    font-family: 'Noto Sans SC', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 19.2px;
+    background: linear-gradient(180deg, @env-title-grad-start 0%, @env-title-grad-end 100%);
+    -webkit-background-clip: text;
+    color: transparent;
+  }
+}
+
+/* [Layout Refine] Figma slot-con -> flex 1, column */
+.c-env-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* [Layout Refine] Figma sub-t -> flex row, space-between, height 32px */
+.c-env-sub-t {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 32px;
+  flex-shrink: 0;
+  
+  .tabs-list {
+    display: flex;
+    align-items: center;
+    height: 27px;
+    /* [Style Refine] Figma tabs-list bg gradient & stroke */
+    background: linear-gradient(180deg, @env-tab-list-grad-start 0%, @env-tab-list-grad-end 100%);
+    border: 0.72px solid #ffffff;
+    
+    .tab-item {
+      padding: 0 12px;
+      font-family: 'Source Han Sans CN', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      color: @env-tab-text;
+      cursor: pointer;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      /* [Style Refine] typography.lineHeightPx -> 12 */
+      line-height: 12px;
+      
+      /* [Style Refine] Figma bg-tab-active gradient & stroke */
+      &.active {
+        color: #ffffff;
+        background: linear-gradient(180deg, @env-tab-active-grad-start 0%, @env-tab-active-grad-end 100%);
+        border: 0.6px solid #ffffff;
+        text-shadow: 0px 0.6px 0px rgba(0, 111, 227, 1);
+      }
+    }
+  }
+  
+  .tabs-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    
+    .icon-btn {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      /* [Style Refine] Figma icon bg gradient & stroke */
+      background: linear-gradient(180deg, #ffffff 0%, rgb(226, 239, 255) 36%, rgb(222, 237, 255) 69%, #ffffff 100%);
+      border: 1px solid @env-icon-border;
+      border-radius: 4px;
+      position: relative;
+      cursor: pointer;
+      
+      img {
+        width: 18px;
+        height: 18px;
+      }
+      
+      /* [Style Refine] Figma num badge -> 14x14, red bg, cornerRadius 29 */
+      /* [Style Refine] fills[0].color → rgb(245,63,63) → #F53F3F; typography: fontSize 12, lineHeightPx 14 */
+      .badge {
+        position: absolute;
+        top: -4px;
+        right: -4px;
+        width: 14px;
+        height: 14px;
+        background: @env-badge-bg;
+        border-radius: 29px;
+        font-family: 'PingFang SC', sans-serif;
+        font-size: 12px;
+        font-weight: 500;
+        color: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 14px;
+      }
+    }
+  }
+}
+
+/* [Layout Refine] Figma chart area -> flex 1, min-height 0 */
+.c-env-chart {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  
+  .chart-instance {
+    width: 100%;
+    height: 100%;
+  }
+}

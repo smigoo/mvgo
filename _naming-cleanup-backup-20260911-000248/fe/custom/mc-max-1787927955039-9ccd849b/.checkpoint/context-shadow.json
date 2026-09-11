@@ -1,0 +1,247 @@
+{
+  "schemaVersion": 1,
+  "mode": "shadow",
+  "pipeline": "phase2",
+  "iteration": 0,
+  "generatedAt": "2026-08-28T14:57:25.055Z",
+  "productionInputMode": "legacy",
+  "engineerInputChanged": false,
+  "metrics": {
+    "legacyEstimatedBytes": 291524,
+    "generationInputBytes": 3417,
+    "reductionBytes": 288107,
+    "reductionRate": 98.83,
+    "issueCount": 1,
+    "rejectedClaimCount": 1
+  },
+  "trustVerdict": {
+    "level": "restricted",
+    "reasons": [
+      "覆盖率偏低 (27%)"
+    ],
+    "visual": {
+      "verdict": "warning",
+      "reason": "覆盖率偏低 (27%)",
+      "coverageRate": 27,
+      "recognizedSections": 0
+    },
+    "restrictions": [
+      "no-unsupported-decoration",
+      "no-style-fallback",
+      "resolve-legend-owner"
+    ]
+  },
+  "budget": {
+    "limits": {
+      "totalBytes": 30720,
+      "designFactsBytes": 12288,
+      "componentPlanBytes": 8192,
+      "resourceManifestBytes": 30720,
+      "currentIssuesBytes": 4096,
+      "maxIssues": 20
+    },
+    "sections": {
+      "designFacts": 514,
+      "componentPlan": 624,
+      "resourceManifest": 661,
+      "currentIssues": 131
+    },
+    "totalBytes": 3415,
+    "passed": true,
+    "violations": []
+  },
+  "generationInput": {
+    "schemaVersion": 1,
+    "designFacts": {
+      "root": {
+        "nodeId": "2:8417",
+        "nodeName": "cp-设备监测",
+        "size": {
+          "width": 420,
+          "height": 425,
+          "unit": "css-px",
+          "source": "figma-api"
+        },
+        "styleEvidence": {
+          "background": {
+            "allowed": false,
+            "source": "figma-api",
+            "evidenceCount": 0
+          },
+          "border": {
+            "allowed": false,
+            "source": "figma-api",
+            "evidenceCount": 0
+          },
+          "borderRadius": {
+            "allowed": false,
+            "value": null,
+            "source": "figma-api"
+          },
+          "boxShadow": {
+            "allowed": false,
+            "source": "figma-api",
+            "evidenceCount": 0
+          }
+        }
+      },
+      "charts": [],
+      "provenance": {
+        "deterministicSource": "figma-api",
+        "semanticSource": "visual-analysis"
+      }
+    },
+    "componentPlan": {
+      "effectiveSections": [
+        {
+          "id": "header-stats",
+          "title": "头部统计栏",
+          "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+          "elementCount": 4
+        },
+        {
+          "id": "summary-cards",
+          "title": "汇总统计卡片",
+          "responsibility": "数据统计指标区（数字+标签+趋势）",
+          "elementCount": 2
+        },
+        {
+          "id": "device-grid",
+          "title": "设备分类网格",
+          "responsibility": "网格卡片布局区",
+          "elementCount": 12
+        },
+        {
+          "id": "sidebar-nav",
+          "title": "左侧导航栏",
+          "responsibility": "侧边栏",
+          "elementCount": 6
+        }
+      ],
+      "isForced": true,
+      "minFiles": 6,
+      "reason": "有效 sections=4 ≥ 3 或存在高复杂度 section → 强制拆分"
+    },
+    "resourceManifest": [
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8788"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8798"
+      },
+      {
+        "resourceId": "隧道 1",
+        "fileName": "隧道 1",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8804"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8807"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8817"
+      },
+      {
+        "resourceId": "extension-cord 1",
+        "fileName": "extension-cord 1",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8823"
+      }
+    ],
+    "currentIssues": [
+      {
+        "id": "CONTEXT-ROOT-BACKGROUND-CONFLICT",
+        "status": "open",
+        "severity": "warning",
+        "expectedAction": "do-not-generate-root-background"
+      }
+    ],
+    "trustVerdict": {
+      "level": "restricted",
+      "reasons": [
+        "覆盖率偏低 (27%)"
+      ],
+      "visual": {
+        "verdict": "warning",
+        "reason": "覆盖率偏低 (27%)",
+        "coverageRate": 27,
+        "recognizedSections": 0
+      },
+      "restrictions": [
+        "no-unsupported-decoration",
+        "no-style-fallback",
+        "resolve-legend-owner"
+      ]
+    },
+    "contextManifest": {
+      "stage": "engineer",
+      "mode": "shadow-only",
+      "included": [
+        "schemaVersion",
+        "designFacts",
+        "componentPlan",
+        "resourceManifest",
+        "currentIssues",
+        "trustVerdict"
+      ],
+      "excluded": [
+        "figmaData",
+        "figmaNodeData",
+        "figmaStyleTree",
+        "visualAnalysis",
+        "visualElements",
+        "reviewResult",
+        "styleMappings",
+        "previousCritiques"
+      ],
+      "diagnosticsRef": {
+        "figma": "/Users/smigoo/工作/mvgo/temp-components/6a7599af6eb9eebf9fba56cd/mc-max-1787927955039-9ccd849b/.checkpoint/figma.json",
+        "visual": "/Users/smigoo/工作/mvgo/temp-components/6a7599af6eb9eebf9fba56cd/mc-max-1787927955039-9ccd849b/.checkpoint/visual.json",
+        "analysis": "/Users/smigoo/工作/mvgo/temp-components/6a7599af6eb9eebf9fba56cd/mc-max-1787927955039-9ccd849b/.checkpoint/analysis.json"
+      },
+      "conflictSummary": {
+        "rejectedClaimCount": 1,
+        "rejectedClaimIds": [
+          "visual-analysis:root.background"
+        ]
+      },
+      "budget": {
+        "limits": {
+          "totalBytes": 30720,
+          "designFactsBytes": 12288,
+          "componentPlanBytes": 8192,
+          "resourceManifestBytes": 30720,
+          "currentIssuesBytes": 4096,
+          "maxIssues": 20
+        },
+        "sections": {
+          "designFacts": 514,
+          "componentPlan": 624,
+          "resourceManifest": 661,
+          "currentIssues": 131
+        },
+        "totalBytes": 3415,
+        "passed": true,
+        "violations": []
+      }
+    }
+  }
+}

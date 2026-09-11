@@ -1,0 +1,38 @@
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background-color: @primary-color;
+  color: #ffffff;
+  border: none;
+  padding: 10px 20px;
+  border-radius: @border-radius-base;
+  cursor: pointer;
+  font-size: @font-size-base;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  box-shadow: @box-shadow-base;
+
+  &:hover {
+    background-color: lighten(@primary-color, 10%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(24, 144, 255, 0.35);
+  }
+
+  &:active {
+    transform: translateY(0);
+    background-color: darken(@primary-color, 5%);
+  }
+}
+
+.text-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

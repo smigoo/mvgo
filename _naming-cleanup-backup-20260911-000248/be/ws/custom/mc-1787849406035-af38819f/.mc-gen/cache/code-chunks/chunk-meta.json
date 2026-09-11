@@ -1,0 +1,23 @@
+{
+  "completed": [
+    "1-declare.json",
+    "2-package/index.vue",
+    "3-package/index.vue",
+    "6-package/components/HeaderRightControls.vue",
+    "5-package/components/HeaderTabs.vue",
+    "7-package/components/ChartArea.vue",
+    "8-resources/styles/themes/theme-vars.less",
+    "9-resources/styles/common.less"
+  ],
+  "total": 6,
+  "updatedAt": 1787849824821,
+  "files": {
+    "declare.json": "1-declare.json",
+    "package/index.vue": "3-package_index.vue",
+    "package/components/HeaderRightControls.vue": "6-package_components_HeaderRightControls.vue",
+    "package/components/HeaderTabs.vue": "5-package_components_HeaderTabs.vue",
+    "package/components/ChartArea.vue": "7-package_components_ChartArea.vue",
+    "resources/styles/themes/theme-vars.less": "8-resources_styles_themes_theme-vars.less",
+    "resources/styles/common.less": "9-resources_styles_common.less"
+  }
+}

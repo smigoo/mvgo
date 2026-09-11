@@ -1,0 +1,32 @@
+// 组件主题变量（微码组件）
+// 说明：根级不调用任何主题 mixin；由系统生成的 dark.less/light.less
+// 在主题选择器内先调用 .common() 与对应主题 mixin，再导入 common.less。
+
+// 公共变量（全主题共享）
+.common() {
+  // 背景图样式映射（el-el-x-2 / el-el-x-32）
+  @bg-image: url(../resources/images/bg-8788.png);
+  @bg-size: 100% 100%;
+  @bg-position: center center;
+  @bg-repeat: no-repeat;
+}
+
+// 深色主题
+.theme-dark() {
+  @bg-color: #1a2332;
+  @bg-color-secondary: #232e40;
+  @text-color: #e6e9f0;
+  @text-color-secondary: #a3adc2;
+  @border-color: #3c4656;
+  @shadow-color: rgba(0, 0, 0, 0.45);
+}
+
+// 默认主题（light）
+.theme-light() {
+  @bg-color: #ffffff;
+  @bg-color-secondary: #f5f6f8;
+  @text-color: #1f2329;
+  @text-color-secondary: #646a73;
+  @border-color: #e5e6eb;
+  @shadow-color: rgba(0, 0, 0, 0.08);
+}

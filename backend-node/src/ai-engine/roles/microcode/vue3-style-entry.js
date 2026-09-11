@@ -16,6 +16,7 @@
 import { sanitizeCssContent } from '../../utils/css-sanitizer.js';
 import { extractComponentTagNames } from '../../utils/sfc-semantics.js';
 import { extractVue3SfcBlock } from './vue3-healer.js';
+import { extractSfcTemplate } from '../../utils/sfc-template-extractor.js';
 import {
   buildVue3ThemeMixinSnippet,
   buildVue3ThemeVarsLess,
@@ -146,9 +147,9 @@ export function wireVue3SubComponentImports(files, options = {}) {
   const main = files && files['package/index.vue'];
   if (!main || typeof main !== 'string') return files;
 
-  const tplMatch = main.match(/<template>([\s\S]*?)<\/template>/);
-  if (!tplMatch) return files;
-  const tags = extractComponentTagNames(tplMatch[1]);
+  const templateBody = extractSfcTemplate(main);
+  if (!templateBody) return files;
+  const tags = extractComponentTagNames(templateBody);
   if (tags.length === 0) return files;
 
   // 已生成的子组件文件集合（仅接线真实存在的）

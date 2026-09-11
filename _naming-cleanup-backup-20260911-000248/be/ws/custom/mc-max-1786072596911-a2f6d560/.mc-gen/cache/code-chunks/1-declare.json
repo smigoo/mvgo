@@ -1,0 +1,46 @@
+{
+  "componentId": "mc-max-1786072596911-a2f6d560",
+  "componentName": "cp-环境监测",
+  "version": "v1.0.0",
+  "attribute": {
+    "aspectRatio": [
+      460,
+      138
+    ]
+  },
+  "businessEvents": {
+    "mc-max-1786072596911-a2f6d560-onload": {
+      "eventId": "mc-max-1786072596911-a2f6d560-onload",
+      "eventName": "组件加载",
+      "eventDataSchema": {}
+    }
+  },
+  "businessStatuses": {},
+  "dataSources": [],
+  "formSources": [],
+  "layoutConfig": {
+    "default": "one",
+    "list": [
+      {
+        "name": "默认布局",
+        "key": "one",
+        "previewName": "mc-preview.png"
+      }
+    ]
+  },
+  "themeConfig": {
+    "default": "light",
+    "list": [
+      {
+        "name": "亮色主题",
+        "key": "light"
+      },
+      {
+        "name": "深色主题",
+        "key": "dark"
+      }
+    ]
+  },
+  "cssVariableConfig": [],
+  "businessConfig": []
+}

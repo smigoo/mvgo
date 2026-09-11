@@ -1,0 +1,17 @@
+{
+  "completed": [
+    "1-declare.json",
+    "2-package/index.vue",
+    "3-package/index.vue",
+    "3-resources/styles/themes/theme-vars.less",
+    "4-resources/styles/common.less"
+  ],
+  "total": 3,
+  "updatedAt": 1787632848745,
+  "files": {
+    "declare.json": "1-declare.json",
+    "package/index.vue": "3-package_index.vue",
+    "resources/styles/themes/theme-vars.less": "3-resources_styles_themes_theme-vars.less",
+    "resources/styles/common.less": "4-resources_styles_common.less"
+  }
+}

@@ -1,0 +1,593 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 76,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[1].body.children[1].items[*].content.children",
+        "message": "设备卡片嵌套达4-5层（section→body→items→content→children），超出建议的3层上限",
+        "suggestion": "将 icon 与 content 平铺为卡片直接子节点，去掉 content 包装层，减少一层嵌套"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body.children[*]",
+        "message": "汇总卡片的 bgPlaceholder 与父级 body 的 bgPlaceholder 值相同（body-bg-summary-cards），导致背景占位语义重叠",
+        "suggestion": "子卡片应使用独立 bgPlaceholder（如 bg-card-tunnel / bg-card-north-south），与父容器背景区分"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[0]（section-vertical-tabs）",
+        "message": "Tab 栏中'监控'/'照明'有 badge 字段，其余 Tab 无 badge，结构不一致，且 badge 含义（推测为异常数）未明确",
+        "suggestion": "统一所有 Tab 的 badge 字段（无异常时值为 0 或省略），并补充 badgeType 字段说明语义"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "coverageReport（覆盖率43%）",
+        "message": "Figma 节点覆盖率仅43%，32个节点未匹配，缺失包括主框架、标题文本、汇总卡数值行等关键节点",
+        "suggestion": "补充 cp-设备监测 根框架、标题文本节点及汇总卡内 line1/line2 数值行的 figmaNodeId 映射"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[1].body.children[1].items（12个卡片）",
+        "message": "12个设备卡片结构完全一致但逐一展开描述，JSON 体积过大；所有卡片共用同一 bg-8439.png 背景",
+        "suggestion": "提取公共卡片模板 deviceCardTemplate，items 中仅保留差异字段（id/name/icon/value），减少冗余"
+      }
+    ],
+    "recommendations": [
+      "补全覆盖率：重点补充根框架 figmaNodeId 和汇总卡片内数值行（line1/line2）的节点映射，覆盖率提升至70%以上再交付",
+      "引入卡片模板机制：设备网格12张卡片结构高度同质，建议用 itemTemplate + dataList 替代逐条展开，降低维护成本",
+      "明确 Tab badge 语义：在 interactions 或 notes 中确认 badge 是否为异常设备数，统一字段结构并与汇总卡异常数做交叉校验"
+    ],
+    "summary": "整体结构分区清晰，Tab+网格的主内容区设计合理，但Figma覆盖率偏低（43%）、卡片嵌套过深、12张同构卡片冗余展开是主要问题，修复后可达良好水准。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorBgBase": "rgba(237,244,251,1)",
+      "--colorPrimary": "rgba(25,144,255,1)",
+      "--colorSuccess": "rgba(8,163,165,1)",
+      "--colorTextBase": "rgba(51,51,51,1)",
+      "--colorError": "rgba(255,80,80,1)",
+      "--colorBgContainer": "rgba(255,255,255,1)",
+      "--colorTextInverse": "rgba(0,0,0,1)",
+      "--colorBorder": "rgba(230,230,230,1)",
+      "--colorTextSecondary": "rgba(102,102,102,1)",
+      "--fontSize": "14px",
+      "--fontSizeLg": "16px",
+      "--fontSizeXl": "20px",
+      "--fontSizeXxl": "28px",
+      "--borderRadius": "4px",
+      "--borderRadiusLg": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-bg-base": "rgba(237,244,251,1)",
+      "@color-primary": "rgba(25,144,255,1)",
+      "@color-success": "rgba(8,163,165,1)",
+      "@color-text-base": "rgba(51,51,51,1)",
+      "@color-error": "rgba(255,80,80,1)",
+      "@color-bg-container": "rgba(255,255,255,1)",
+      "@color-text-inverse": "rgba(0,0,0,1)",
+      "@color-border": "rgba(230,230,230,1)",
+      "@color-text-secondary": "rgba(102,102,102,1)",
+      "@font-size-base": "14px",
+      "@font-size-lg": "16px",
+      "@font-size-xl": "20px",
+      "@font-size-xxl": "28px",
+      "@border-radius-base": "4px",
+      "@border-radius-lg": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "width": "100%",
+        "height": "100%",
+        "background": "rgba(237,244,251,1)",
+        "padding": "1.25em",
+        "box-sizing": "border-box"
+      },
+      ".section-title": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "0.5em",
+        "font-size": "var(--fontSizeLg)",
+        "font-weight": "500",
+        "color": "var(--colorTextBase)",
+        "margin-bottom": "1em"
+      },
+      ".title-icon": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "gap": "0.25em"
+      },
+      ".title-divider": {
+        "width": "100%",
+        "height": "2px",
+        "background": "linear-gradient(90deg, var(--colorPrimary) 0%, transparent 100%)",
+        "margin-top": "0.5em"
+      },
+      ".device-card": {
+        "position": "relative",
+        "background": "var(--colorBgContainer)",
+        "border-radius": "var(--borderRadiusLg)",
+        "padding": "1.5em",
+        "overflow": "hidden",
+        "box-shadow": "0 2px 8px rgba(0,0,0,0.08)"
+      },
+      ".device-card::before": {
+        "content": "''",
+        "position": "absolute",
+        "top": "0",
+        "left": "0",
+        "right": "0",
+        "bottom": "0",
+        "background-image": "url('../../images/bg-8439.png')",
+        "background-size": "cover",
+        "background-position": "center",
+        "opacity": "0.05",
+        "z-index": "0"
+      },
+      ".summary-card": {
+        "position": "relative",
+        "background": "var(--colorBgContainer)",
+        "border-radius": "var(--borderRadiusLg)",
+        "padding": "1.5em",
+        "overflow": "hidden",
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "1em"
+      },
+      ".summary-card-bg-1::before": {
+        "content": "''",
+        "position": "absolute",
+        "top": "0",
+        "left": "0",
+        "right": "0",
+        "bottom": "0",
+        "background-image": "url('../../images/bg-8788.png')",
+        "background-size": "cover",
+        "background-position": "center",
+        "opacity": "0.08",
+        "z-index": "0"
+      },
+      ".summary-card-bg-2::before": {
+        "content": "''",
+        "position": "absolute",
+        "top": "0",
+        "left": "0",
+        "right": "0",
+        "bottom": "0",
+        "background-image": "url('../../images/bg-8807.png')",
+        "background-size": "cover",
+        "background-position": "center",
+        "opacity": "0.08",
+        "z-index": "0"
+      },
+      ".stat-value-primary": {
+        "font-size": "var(--fontSizeXxl)",
+        "font-weight": "600",
+        "color": "var(--colorPrimary)",
+        "line-height": "1.2"
+      },
+      ".stat-value-success": {
+        "font-size": "var(--fontSizeXxl)",
+        "font-weight": "600",
+        "color": "var(--colorSuccess)",
+        "line-height": "1.2"
+      },
+      ".stat-value-error": {
+        "font-size": "var(--fontSizeXl)",
+        "font-weight": "600",
+        "color": "var(--colorError)",
+        "line-height": "1.2"
+      },
+      ".stat-value-large": {
+        "font-size": "2.5em",
+        "font-weight": "700",
+        "color": "var(--colorTextInverse)",
+        "line-height": "1"
+      },
+      ".stat-label": {
+        "font-size": "var(--fontSize)",
+        "color": "var(--colorTextSecondary)",
+        "margin-bottom": "0.5em"
+      },
+      ".tab-list": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "0.5em",
+        "border-right": "1px solid var(--colorBorder)",
+        "padding-right": "1em"
+      },
+      ".tab-item": {
+        "padding": "0.75em 1em",
+        "font-size": "var(--fontSize)",
+        "color": "var(--colorTextBase)",
+        "background": "transparent",
+        "border": "none",
+        "border-radius": "var(--borderRadius)",
+        "cursor": "pointer",
+        "transition": "all 0.3s ease",
+        "text-align": "left"
+      },
+      ".tab-item:hover": {
+        "background": "rgba(25,144,255,0.08)",
+        "color": "var(--colorPrimary)"
+      },
+      ".tab-item-active": {
+        "background": "var(--colorPrimary)",
+        "color": "var(--colorBgContainer)",
+        "font-weight": "500"
+      },
+      ".chart-container": {
+        "width": "100%",
+        "height": "100%",
+        "min-height": "300px",
+        "position": "relative"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主背景色 rgba(237,244,251,1) 映射为 --colorBgBase",
+      "主题蓝色 rgba(25,144,255,1) 映射为 --colorPrimary，用于设备类型/总数强调",
+      "青色 rgba(8,163,165,1) 映射为 --colorSuccess，用于完好率数值",
+      "红色 rgba(255,80,80,1) 映射为 --colorError，用于异常数字强调",
+      "白色容器 rgba(255,255,255,1) 映射为 --colorBgContainer",
+      "标题装饰图标通过 .title-icon 类实现",
+      "标题下方渐变分隔线通过 .title-divider 类实现，使用主题色渐变",
+      "设备卡片背景图 bg-8439.png 通过 .device-card::before 伪元素实现，半透明叠加",
+      "汇总卡片背景图 bg-8788/bg-8807.png 通过 .summary-card-bg-1/2::before 伪元素实现",
+      "左侧Tab栏分隔线通过 .tab-list 的 border-right 实现",
+      "数值强调使用独立类名 .stat-value-primary/.stat-value-success/.stat-value-error",
+      "所有背景图已通过 background-image 落地，移除了容器的 CSS border 和 background-color 避免叠加",
+      "响应式单位优先使用 em，基于 --fontSize 进行缩放"
+    ],
+    "elementStyleMap": {
+      "section-summary-cards": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-tunnel-row-x-0-group-x-1-value-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-tunnel-row-x-0-group-x-1-value-row-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-tunnel-row-x-0-group-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-tunnel-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "card-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-3-group-x-1-value-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-row-x-3-group-x-1-value-row-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-row-x-3-group-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-3": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-group-x-5-value-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-group-x-5-value-row-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-group-x-5": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-value-row-x-7": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-value-row-x-10": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-north-south-row-x-0-group-x-1-value-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-north-south-row-x-0-group-x-1-value-row-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-north-south-row-x-0-group-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-north-south-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "card-north-south": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-14-group-x-1-value-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-row-x-14-group-x-1-value-row-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-row-x-14-group-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-14": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-group-x-16-value-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-group-x-16-value-row-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-group-x-16": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-value-row-x-18": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-value-row-x-21": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-main-content": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-vertical-tabs": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-camera": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "device-anemometer": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "device-height-detector": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "device-chimney-robot": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "device-lidar": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "device-co2-sensor": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "device-covi-detector": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "device-temp-humidity": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "device-pressure-sensor": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "device-illuminance": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "device-emergency-phone": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "device-water-monitor": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-summary-cards",
+        "responsibility": "数据统计指标区（数字+标签+趋势）",
+        "elementCount": 22,
+        "title": "汇总卡片区",
+        "complexityScore": 50,
+        "complexityReasons": {
+          "elementCount": 22,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 5
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [
+          {
+            "type": "element-group",
+            "id": "section-summary-cards-group1",
+            "name": "Group1",
+            "responsibility": "元素分组 1（高密度拆分）",
+            "reason": "R2: 元素密度拆分（总计22个元素）",
+            "props": [],
+            "emits": []
+          },
+          {
+            "type": "element-group",
+            "id": "section-summary-cards-group2",
+            "name": "Group2",
+            "responsibility": "元素分组 2（高密度拆分）",
+            "reason": "R2: 元素密度拆分（总计22个元素）",
+            "props": [],
+            "emits": []
+          },
+          {
+            "type": "element-group",
+            "id": "section-summary-cards-group3",
+            "name": "Group3",
+            "responsibility": "元素分组 3（高密度拆分）",
+            "reason": "R2: 元素密度拆分（总计22个元素）",
+            "props": [],
+            "emits": []
+          }
+        ],
+        "shouldSplitInternally": true
+      },
+      {
+        "id": "section-main-content",
+        "responsibility": "标签页切换区",
+        "elementCount": 8,
+        "title": "主内容区（Tab+设备列表）",
+        "complexityScore": 40,
+        "complexityReasons": {
+          "elementCount": 8,
+          "charts": 0,
+          "interactions": 8,
+          "maxDepth": 2
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [
+          {
+            "type": "interaction-area",
+            "id": "section-main-content-interactive",
+            "name": "InteractiveArea",
+            "responsibility": "交互控件区",
+            "reason": "R4: 交互复杂度拆分（8个交互元素）",
+            "props": [],
+            "emits": [
+              "action"
+            ]
+          }
+        ],
+        "shouldSplitInternally": true
+      }
+    ],
+    "isForced": true,
+    "minFiles": 6,
+    "reason": "有效 sections=2 ≥ 3 或存在高复杂度 section → 强制拆分",
+    "internalSubcomponents": [
+      {
+        "type": "element-group",
+        "id": "section-summary-cards-group1",
+        "name": "Group1",
+        "responsibility": "元素分组 1（高密度拆分）",
+        "reason": "R2: 元素密度拆分（总计22个元素）",
+        "props": [],
+        "emits": [],
+        "parentSectionId": "section-summary-cards",
+        "parentSectionTitle": "汇总卡片区"
+      },
+      {
+        "type": "element-group",
+        "id": "section-summary-cards-group2",
+        "name": "Group2",
+        "responsibility": "元素分组 2（高密度拆分）",
+        "reason": "R2: 元素密度拆分（总计22个元素）",
+        "props": [],
+        "emits": [],
+        "parentSectionId": "section-summary-cards",
+        "parentSectionTitle": "汇总卡片区"
+      },
+      {
+        "type": "element-group",
+        "id": "section-summary-cards-group3",
+        "name": "Group3",
+        "responsibility": "元素分组 3（高密度拆分）",
+        "reason": "R2: 元素密度拆分（总计22个元素）",
+        "props": [],
+        "emits": [],
+        "parentSectionId": "section-summary-cards",
+        "parentSectionTitle": "汇总卡片区"
+      },
+      {
+        "type": "interaction-area",
+        "id": "section-main-content-interactive",
+        "name": "InteractiveArea",
+        "responsibility": "交互控件区",
+        "reason": "R4: 交互复杂度拆分（8个交互元素）",
+        "props": [],
+        "emits": [
+          "action"
+        ],
+        "parentSectionId": "section-main-content",
+        "parentSectionTitle": "主内容区（Tab+设备列表）"
+      }
+    ]
+  }
+}

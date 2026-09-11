@@ -1,0 +1,166 @@
+// 微码组件业务样式
+// 所有 class 以 .c- 为前缀，字体使用 @fontSize 变量
+
+.common();
+
+// ============================================================================
+// 根容器字体缩放基准
+// ============================================================================
+.c-env-monitor-body {
+  font-size: var(--fontSize, 14px);
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+// ============================================================================
+// Header 图标区域
+// ============================================================================
+.c-env-monitor-header-icons {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+.c-env-monitor-header-icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.c-env-monitor-header-icon-badge-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.c-env-monitor-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 14px;
+  height: 14px;
+  background: #f53f3f;
+  color: #ffffff;
+  border-radius: 29px;
+  font-family: 'PingFang SC', sans-serif;
+  font-size: calc(@fontSize * 0.857);
+  font-weight: 500;
+  line-height: 14px;
+  text-align: center;
+  padding: 0 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+// ============================================================================
+// Tabs 区域
+// ============================================================================
+.c-env-monitor-tabs-section {
+  width: 100%;
+  flex-shrink: 0;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  padding: 0;
+}
+
+.c-env-monitor-tabs-container {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0;
+  background: linear-gradient(180deg, #b5deff 0%, #d1ecff 100%);
+  border: 0.72px solid rgba(255, 255, 255, 1);
+  border-radius: 4px;
+  padding: 3px;
+  height: 27px;
+}
+
+.c-env-monitor-tab-item {
+  position: relative;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+
+  &.active {
+    background: linear-gradient(180deg, #1099b1 0%, #038fff 100%);
+    border: 0.6px solid rgba(255, 255, 255, 1);
+
+    .c-env-monitor-tab-text {
+      color: #ffffff;
+      text-shadow: 0 0.6px 0 rgba(0, 111, 227, 1);
+    }
+  }
+}
+
+.c-env-monitor-tab-text {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: calc(@fontSize * 1);
+  font-weight: 500;
+  line-height: 12px;
+  color: #2c9bea;
+  transition: all 0.3s;
+}
+
+// ============================================================================
+// 图表区域
+// ============================================================================
+.c-env-monitor-chart-section {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.c-env-monitor-chart-legend {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 4px 8px 2px;
+}
+
+.c-env-monitor-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.c-env-monitor-legend-line {
+  display: inline-block;
+  width: 14px;
+  height: 2px;
+  background: #0fcd7d;
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+
+.c-env-monitor-legend-text {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: calc(@fontSize * 0.8);
+  font-weight: 400;
+  color: #333333;
+  white-space: nowrap;
+}
+
+.c-env-monitor-chart-container {
+  flex: 1;
+  min-height: 80px;
+  min-width: 0;
+  width: 100%;
+}

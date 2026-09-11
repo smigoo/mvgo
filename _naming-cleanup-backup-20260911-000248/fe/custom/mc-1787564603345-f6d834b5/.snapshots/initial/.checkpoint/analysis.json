@@ -1,0 +1,177 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 78,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0].header, layout.sections[2].header",
+        "message": "当日总流量与流量预测区块的header均含交互控件，但slotCandidate为null，无法定位插槽。",
+        "suggestion": "将下拉、Tab、链接等控件映射到header-right或title-right插槽。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "charts[0]",
+        "message": "布局中当日总流量有两个独立图表容器，但charts仅1个bar条目，图表定义不一一对应。",
+        "suggestion": "为隧道和大桥分别创建charts条目，或增加子图表结构。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[0].body.children[0]",
+        "message": "stats-row/stat-card/children多层嵌套超过建议的3层，增加结构复杂度。",
+        "suggestion": "将label/value提为stat-card直接字段，减少中间容器。"
+      }
+    ],
+    "recommendations": [
+      "统一header控件与slotCandidate映射，确保微码插槽可渲染。",
+      "保持图表定义与布局中的chart-container一一对应。",
+      "压缩统计卡片嵌套层级，采用扁平化数据字段。"
+    ],
+    "summary": "总体结构清晰，但控件插槽缺失、图表定义与布局不匹配、局部嵌套偏深，需修正后使用。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1890ff",
+      "--colorAccent": "#fa8c16",
+      "--colorTextBase": "#333333",
+      "--colorBg": "#edf4fb",
+      "--fontSize": "14px",
+      "--fontSizeLg": "24px",
+      "--borderRadius": "8px",
+      "--colorPrimaryBg": "rgba(24, 144, 255, 0.10)"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#1890ff",
+      "@color-accent": "#fa8c16",
+      "@color-text-base": "#333333",
+      "@color-bg": "#edf4fb",
+      "@font-size-base": "14px",
+      "@font-size-lg": "24px",
+      "@border-radius-base": "8px",
+      "@color-primary-bg": "rgba(24, 144, 255, 0.10)"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "20px",
+        "background": "var(--colorBg, @color-bg)",
+        "color": "var(--colorTextBase, @color-text-base)",
+        "font-size": "var(--fontSize, @font-size-base)",
+        "border-radius": "var(--borderRadius, @border-radius-base)"
+      },
+      ".metric-value": {
+        "font-size": "var(--fontSizeLg, @font-size-lg)",
+        "font-weight": "600",
+        "line-height": "1.2",
+        "letter-spacing": "0.02em"
+      },
+      ".metric-value--blue": {
+        "color": "var(--colorPrimary, @color-primary)"
+      },
+      ".metric-value--orange": {
+        "color": "var(--colorAccent, @color-accent)"
+      },
+      ".decoration-diamond": {
+        "width": "12px",
+        "height": "12px",
+        "background": "var(--colorPrimary, @color-primary)",
+        "transform": "rotate(45deg)",
+        "display": "inline-block"
+      },
+      ".decoration-ring": {
+        "width": "16px",
+        "height": "16px",
+        "border": "2px solid var(--colorPrimary, @color-primary)",
+        "border-radius": "50%",
+        "display": "inline-block"
+      },
+      ".panel-header": {
+        "display": "flex",
+        "justify-content": "space-between",
+        "align-items": "center",
+        "padding": "12px 16px",
+        "background": "var(--colorPrimaryBg, @color-primary-bg)",
+        "border-radius": "var(--borderRadius, @border-radius-base)"
+      }
+    },
+    "tokenCoverage": 1,
+    "mappingNotes": [
+      "主题色 #1890ff 映射为 --colorPrimary，用于大号蓝色数值、主操作及装饰元素",
+      "橙色 #fa8c16 映射为 --colorAccent，用于橙色货车数值等强调信息",
+      "深灰色 #333333 映射为 --colorTextBase，保证浅色背景上的文字对比度",
+      "浅蓝灰色背景 #edf4fb 映射为 --colorBg，组件根容器直接使用该变量作为背景",
+      "装饰元素通过 .decoration-diamond 与 .decoration-ring 类实现，均使用 --colorPrimary 保持视觉一致",
+      "大号数值样式通过 .metric-value 配合强调色修饰类实现，字体大小映射至 --fontSizeLg"
+    ],
+    "elementStyleMap": {
+      "section-daily-total": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-bridge": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "chart-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "chart-bridge": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-vehicle-type": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-tunnel": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "vehicle-bridge": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-flow-prediction": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-daily-total",
+        "responsibility": "当日总流量（请按功能拆分）",
+        "elementCount": 11,
+        "title": "当日总流量"
+      },
+      {
+        "id": "section-vehicle-type",
+        "responsibility": "车型分布（请按功能拆分）",
+        "elementCount": 6,
+        "title": "车型分布"
+      },
+      {
+        "id": "section-flow-prediction",
+        "responsibility": "流量预测（请按功能拆分）",
+        "elementCount": 1,
+        "title": "流量预测"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 → 强制拆分"
+  }
+}

@@ -1,0 +1,473 @@
+我会仔细分析这张预览图，严格遵守输出规范进行结构化识别。
+
+## 分析过程
+
+### 1. 整体布局识别
+从上到下观察，这是一个数据监测面板，包含：
+- 标题区："流量监测"
+- Section 1: 当日总流量（标题+下拉框+双数据卡）
+- Section 2: 江阴靖江长江隧道流量柱状图
+- Section 3: 江阴大桥流量柱状图  
+- Section 4: 车型分布（双饼图对比）
+- Section 5: 流量预测（Tab切换+面积图）
+
+### 2. 样式判断
+- **backgroundBrightness**: 背景为浅色（淡蓝灰色），文字为深色 → `"light"`
+- **theme**: 浅色科技监测风
+
+### 3. 插槽识别
+预览图顶部的"流量监测"是面板标题（来自宿主），标题右侧的"`*数据实时更新`"是**设计师注释**（以`*`开头），不应识别为UI元素。
+
+**正确做法**：不输出任何 headerSlots（标题行没有有效UI元素）
+
+### 4. Sections 拆解
+
+#### Section 1: 当日总流量
+- **headerRelation**: `content-below-title`（标题在上，内容在下）
+- header: 标题"当日总流量" + 右侧下拉框"24小时"
+- body: 2个数据卡（江阴靖江隧道 34,620 + 江阴大桥 82,379），中间有装饰性蓝色地图图标
+
+#### Section 2-3: 双柱状图
+- 结构相同，分别展示两个地点的小时流量
+- 图表类型：分组柱状图
+- 图例：北京方向（蓝）、上海方向（绿）
+- tooltip: 16时的瞬态提示框（不应作为常驻元素）
+- 橙色虚线：建议分流阈值
+
+#### Section 4: 车型分布
+- 双饼图对比（江阴靖江隧道 vs 江阴大桥）
+- 每个饼图有两类：客车（蓝）、货车（橙）
+
+#### Section 5: 流量预测
+- Tab切换：江阴靖江长江隧道（选中）、江阴大桥、节假日预测
+- 面积图：实际流量 vs 预测流量
+- 底部绿色准确率标签
+
+### 5. 资源使用
+根据 resourceDomMapping，中间的地图图标、饼图中心图标、背景装饰等已下载，必须使用 resourceFile 引用。
+
+## 输出 JSON
+
+```json
+{
+  "generatedAt": "2025-06-10T12:00:00Z",
+  "stage": "preview-analysis",
+  "componentName": "流量监测",
+  "componentTitle": "流量监测",
+  "analysisModel": "claude-3.7-sonnet",
+  "sourceImage": {
+    "path": "mc-preview.png",
+    "size": 0,
+    "mtimeMs": 0,
+    "sha1": ""
+  },
+  "summary": "浅色科技监测面板，包含当日流量统计、双地点小时流量柱状图、车型分布饼图、流量预测面积图。有Tab切换、下拉筛选、图表tooltip等交互。",
+  
+  "layout": {
+    "type": "vertical-stack",
+    "direction": "vertical",
+    "sections": [
+      {
+        "id": "daily-total",
+        "name": "当日总流量",
+        "role": "常驻",
+        "layout": "vertical",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "header": {
+          "title": "当日总流量",
+          "figmaNode": "sub-header",
+          "controls": [
+            {
+              "id": "time-selector",
+              "name": "时间选择",
+              "role": "dropdown",
+              "value": "24小时",
+              "figmaNode": "@ant/select"
+            }
+          ]
+        },
+        "body": {
+          "layout": "horizontal-3-items",
+          "bgPlaceholder": "body-bg-daily",
+          "children": [
+            {
+              "type": "stat-card",
+              "layout": "vertical",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "label",
+                  "text": "江阴靖江长江隧道",
+                  "figmaNode": "Group 1321318553",
+                  "styles": {
+                    "fontSize": 14,
+                    "color": "rgba(51, 51, 51, 0.65)"
+                  }
+                },
+                {
+                  "type": "value",
+                  "text": "34,620",
+                  "figmaNode": "Group 1321318553",
+                  "styles": {
+                    "fontSize": 36,
+                    "fontWeight": "bold",
+                    "color": "#1890ff"
+                  }
+                }
+              ]
+            },
+            {
+              "type": "decoration",
+              "role": "装饰",
+              "description": "蓝色地图图标装饰",
+              "resourceFile": "../resources/images/bg-_m-34.png",
+              "recommendedUsage": "backgroundBlock",
+              "styles": {
+                "width": 91,
+                "height": 91
+              }
+            },
+            {
+              "type": "stat-card",
+              "layout": "vertical",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "label",
+                  "text": "江阴大桥",
+                  "figmaNode": "Group 1321318553",
+                  "styles": {
+                    "fontSize": 14,
+                    "color": "rgba(51, 51, 51, 0.65)"
+                  }
+                },
+                {
+                  "type": "value",
+                  "text": "82,379",
+                  "figmaNode": "Group 1321318553",
+                  "styles": {
+                    "fontSize": 36,
+                    "fontWeight": "bold",
+                    "color": "#1890ff"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      
+      {
+        "id": "tunnel-flow-chart",
+        "name": "江阴靖江长江隧道小时流量",
+        "role": "常驻",
+        "layout": "vertical",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "header": {
+          "title": "江阴靖江长江隧道",
+          "figmaNode": "sub-header",
+          "controls": []
+        },
+        "body": {
+          "layout": "vertical",
+          "children": [
+            {
+              "type": "chart-container",
+              "chartType": "bar",
+              "styles": {
+                "width": 387,
+                "height": 142
+              }
+            }
+          ]
+        }
+      },
+      
+      {
+        "id": "bridge-flow-chart",
+        "name": "江阴大桥小时流量",
+        "role": "常驻",
+        "layout": "vertical",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "header": {
+          "title": "江阴大桥",
+          "figmaNode": "sub-header",
+          "controls": []
+        },
+        "body": {
+          "layout": "vertical",
+          "children": [
+            {
+              "type": "chart-container",
+              "chartType": "bar",
+              "styles": {
+                "width": 387,
+                "height": 142
+              }
+            }
+          ]
+        }
+      },
+      
+      {
+        "id": "vehicle-distribution",
+        "name": "车型分布",
+        "role": "常驻",
+        "layout": "vertical",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "header": {
+          "title": "车型分布",
+          "figmaNode": "sub-header",
+          "controls": []
+        },
+        "body": {
+          "layout": "horizontal-2-columns",
+          "children": [
+            {
+              "type": "pie-chart-card",
+              "title": "江阴靖江长江隧道",
+              "layout": "horizontal",
+              "children": [
+                {
+                  "type": "chart-container",
+                  "chartType": "pie",
+                  "styles": {
+                    "width": 114,
+                    "height": 114
+                  }
+                },
+                {
+                  "type": "stats-group",
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "stat-item",
+                      "label": "客车",
+                      "value": "22350",
+                      "color": "#1890ff"
+                    },
+                    {
+                      "type": "stat-item",
+                      "label": "货车",
+                      "value": "16270",
+                      "color": "#faad14"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "pie-chart-card",
+              "title": "江阴大桥",
+              "layout": "horizontal",
+              "children": [
+                {
+                  "type": "chart-container",
+                  "chartType": "pie",
+                  "styles": {
+                    "width": 114,
+                    "height": 114
+                  }
+                },
+                {
+                  "type": "stats-group",
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "stat-item",
+                      "label": "客车",
+                      "value": "66109",
+                      "color": "#1890ff"
+                    },
+                    {
+                      "type": "stat-item",
+                      "label": "货车",
+                      "value": "16270",
+                      "color": "#faad14"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      
+      {
+        "id": "flow-prediction",
+        "name": "流量预测",
+        "role": "常驻",
+        "layout": "vertical",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "header": {
+          "title": "流量预测",
+          "figmaNode": "sub-header",
+          "controls": [
+            {
+              "id": "location-tab",
+              "name": "地点切换",
+              "role": "tab",
+              "options": ["江阴靖江长江隧道", "江阴大桥"],
+              "activeIndex": 0,
+              "figmaNode": "@antd/tab"
+            },
+            {
+              "id": "holiday-prediction",
+              "name": "节假日预测",
+              "role": "button",
+              "text": "节假日预测",
+              "figmaNode": "but-节假日预测[m]"
+            }
+          ]
+        },
+        "body": {
+          "layout": "vertical",
+          "children": [
+            {
+              "type": "chart-container",
+              "chartType": "area",
+              "styles": {
+                "width": 378,
+                "height": 150
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  
+  "styles": {
+    "backgroundBrightness": "light",
+    "theme": "浅色科技监测风",
+    "colors": [
+      "主色调蓝色#1890ff",
+      "辅助绿色#52c41a",
+      "警告橙色#faad14",
+      "浅灰背景#edf4fb"
+    ],
+    "background": "浅蓝灰色渐变背景",
+    "decorations": [
+      "数据卡片之间的蓝色地图图标",
+      "橙色建议分流虚线",
+      "饼图中心装饰图标"
+    ],
+    "emphasis": [
+      "大号蓝色数值（36px）",
+      "绿色准确率标签"
+    ]
+  },
+  
+  "interactions": [
+    {
+      "target": "当日总流量-24小时下拉框",
+      "type": "dropdown",
+      "description": "时间范围筛选（24小时/本周/本月等）",
+      "defaultState": "常驻，收起态",
+      "evidence": "右侧有向下箭头"
+    },
+    {
+      "target": "流量预测-地点Tab",
+      "type": "tab-switch",
+      "description": "切换江阴靖江隧道/江阴大桥的预测数据",
+      "defaultState": "常驻，第一项选中",
+      "evidence": "蓝色底色标识选中态"
+    },
+    {
+      "target": "流量预测-节假日预测按钮",
+      "type": "button",
+      "description": "切换到节假日预测模式",
+      "defaultState": "常驻",
+      "evidence": "蓝色文字按钮"
+    },
+    {
+      "target": "柱状图16时数据点",
+      "type": "chart-hover",
+      "description": "鼠标悬停显示详细数值",
+      "defaultState": "瞬态",
+      "evidence": "截图中显示的tooltip"
+    }
+  ],
+  
+  "charts": [
+    {
+      "section": "tunnel-flow-chart",
+      "type": "bar",
+      "series": ["北京方向", "上海方向"],
+      "legend": ["北京方向", "上海方向"],
+      "legendPosition": "top-right",
+      "seriesColors": ["#1890ff", "#52c41a"],
+      "legendType": "horizontal",
+      "axes": "X轴为0-24小时，Y轴为流量数值（0-4000）",
+      "tooltip": "显示时间点、双向流量、建议分流状态",
+      "notes": ["有橙色虚线表示建议分流阈值"]
+    },
+    {
+      "section": "bridge-flow-chart",
+      "type": "bar",
+      "series": ["北京方向", "上海方向"],
+      "legend": ["北京方向", "上海方向"],
+      "legendPosition": "top-right",
+      "seriesColors": ["#1890ff", "#52c41a"],
+      "legendType": "horizontal",
+      "axes": "X轴为0-24小时，Y轴为流量数值（0-4000）",
+      "tooltip": "显示时间点、双向流量、建议分流状态",
+      "notes": ["有橙色虚线表示建议分流阈值"]
+    },
+    {
+      "section": "vehicle-distribution",
+      "type": "pie",
+      "series": ["客车", "货车"],
+      "legend": [],
+      "legendPosition": "right",
+      "seriesColors": ["#1890ff", "#faad14"],
+      "legendType": "vertical",
+      "axes": "",
+      "tooltip": "显示车型和数量",
+      "notes": ["饼图中心有装饰图标"]
+    },
+    {
+      "section": "flow-prediction",
+      "type": "area",
+      "series": ["实际流量", "预测流量"],
+      "legend": ["实际流量", "预测流量"],
+      "legendPosition": "top-right",
+      "seriesColors": ["#1890ff", "#52c41a"],
+      "legendType": "horizontal",
+      "axes": "X轴为时间轴（2小时前-2小时后），Y轴为流量（0-4000）",
+      "tooltip": "显示时间点和流量值",
+      "notes": ["底部有绿色准确率标签（98%/96%/92%）"]
+    }
+  ],
+  
+  "doNotInvent": [
+    "时间选择器的完整选项列表（只看到24小时）",
+    "tooltip的详细内联逻辑（只看到瞬态截图）",
+    "节假日预测按钮的跳转目标",
+    "图表的联动规则（未被证明）",
+    "自动刷新机制（虽然有注释提到，但未在UI中体现）",
+    "具体的分流阈值数值（只看到橙色虚线）"
+  ],
+  
+  "notes": [
+    "预览图顶部的'*数据实时更新'是设计师注释（以*开头），不应识别为UI元素",
+    "中间的地图图标、饼图图标等已有资源文件，必须使用resourceFile引用",
+    "柱状图tooltip是瞬态，不应作为常驻DOM结构",
+    "流量预测区的Tab和按钮都在header.controls中"
+  ]
+}
+```
+
+## 关键决策说明
+
+1. **backgroundBrightness = "light"**: 背景为浅蓝灰色，文字为深色，符合浅色主题定义
+2. **headerSlots = []**: 标题行右侧的"`*数据实时更新`"是设计师注释（以`*`开头），根据注释过滤规则不应识别
+3. **headerRelation**: 所有section都是`content-below-title`（标题在上，内容在下）
+4. **资源使用**: 地图图标、饼图图标等使用resourceFile引用实际资源路径
+5. **图表legend**: 严格按照预览图提取legendPosition、seriesColors、legendType
+6. **doNotInvent**: 明确列出不应臆造的内容（如下拉选项全集、tooltip逻辑等）

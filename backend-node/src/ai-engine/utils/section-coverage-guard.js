@@ -32,6 +32,7 @@
  */
 
 import { collectLeafSections } from './section-tree.js';
+import { extractSfcTemplate } from './sfc-template-extractor.js';
 
 /**
  * kebab-case / snake_case → PascalCase
@@ -100,8 +101,8 @@ export function detectMissingSections(files, componentPlan) {
   const indexContent = fileByPath.get('package/index.vue');
   if (!indexContent) return [];
 
-  const tpl =
-    (indexContent.match(/<template>([\s\S]*?)<\/template>/i) || [])[1] || '';
+  // 🛡️ 共享边界法（lazy </template> 会被具名插槽提前截断——0ca84358 家族缺陷）
+  const tpl = extractSfcTemplate(indexContent) || '';
   const script =
     (indexContent.match(/<script[^>]*>([\s\S]*?)<\/script>/i) || [])[1] || '';
 

@@ -1,0 +1,291 @@
+```json
+{
+  "componentName": "流量监测面板",
+  "description": "一个展示交通流量监测数据的仪表盘组件，包含当日总流量统计、车型分布以及流量预测图表。",
+  "layout": {
+    "type": "vertical",
+    "gap": "16px",
+    "padding": "16px"
+  },
+  "style": {
+    "background": "#edf4fb",
+    "borderRadius": "8px",
+    "width": "426px",
+    "height": "807px"
+  },
+  "children": [
+    {
+      "type": "header",
+      "content": {
+        "title": "流量监测",
+        "icon": {
+          "type": "css-shape",
+          "shape": "diamond",
+          "color": "#388dff"
+        }
+      },
+      "headerSlots": [
+        {
+          "slotType": "title-left",
+          "elementType": "icon",
+          "content": "菱形装饰图标",
+          "style": {
+            "background": "linear-gradient(180deg, #388dff 0%, #388dff 100%)"
+          }
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "title": "当日总流量",
+      "layout": "vertical",
+      "children": [
+        {
+          "type": "sub-header",
+          "layout": "horizontal",
+          "justifyContent": "space-between",
+          "children": [
+            {
+              "type": "title-group",
+              "content": "当日总流量",
+              "icon": {
+                "type": "css-shape",
+                "shape": "diamond",
+                "color": "#388dff"
+              }
+            },
+            {
+              "type": "select",
+              "content": "24小时",
+              "style": {
+                "border": "1px solid #d9d9d9",
+                "borderRadius": "4px",
+                "padding": "4px 8px",
+                "background": "#fff"
+              }
+            }
+          ]
+        },
+        {
+          "type": "stats-row",
+          "layout": "horizontal",
+          "justifyContent": "space-around",
+          "alignItems": "center",
+          "style": {
+            "background": "rgba(237, 244, 251, 0.7)",
+            "borderRadius": "8px",
+            "padding": "16px",
+            "marginBottom": "16px"
+          },
+          "children": [
+            {
+              "type": "stat-item",
+              "layout": "vertical",
+              "alignItems": "center",
+              "children": [
+                { "type": "text", "content": "江阴靖江长江隧道", "style": { "color": "#666", "fontSize": "14px" } },
+                { "type": "text", "content": "34,620", "style": { "color": "#1990ff", "fontSize": "24px", "fontWeight": "bold" } }
+              ]
+            },
+            {
+              "type": "image",
+              "resourceFile": "../resources/images/Group_2136636847-7493.png",
+              "recommendedUsage": "decorativeBlock",
+              "description": "中间发光的汽车图标背景",
+              "style": { "width": "60px", "height": "60px" }
+            },
+            {
+              "type": "stat-item",
+              "layout": "vertical",
+              "alignItems": "center",
+              "children": [
+                { "type": "text", "content": "江阴大桥", "style": { "color": "#666", "fontSize": "14px" } },
+                { "type": "text", "content": "82,379", "style": { "color": "#00bcd4", "fontSize": "24px", "fontWeight": "bold" } }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "chart-container",
+          "title": "江阴靖江长江隧道",
+          "chartType": "bar",
+          "config": {
+            "xAxis": { "type": "category", "data": ["2", "4", "6", "8", "10", "12", "14", "16", "18", "20", "22", "24"], "unit": "时" },
+            "yAxis": { "type": "value", "max": 4000, "unit": "辆" },
+            "series": [
+              { "name": "北京方向", "color": "#1990ff", "type": "bar" },
+              { "name": "上海方向", "color": "#00bcd4", "type": "bar" }
+            ],
+            "tooltip": { "visible": true, "content": "16时\n北京方向 825 辆\n上海方向 831 辆" }
+          },
+          "legend": { "data": ["北京方向", "上海方向"], "colors": ["#1990ff", "#00bcd4"] }
+        },
+        {
+          "type": "chart-container",
+          "title": "江阴大桥",
+          "chartType": "bar",
+          "config": {
+            "xAxis": { "type": "category", "data": ["2", "4", "6", "8", "10", "12", "14", "16", "18", "20", "22", "24"], "unit": "时" },
+            "yAxis": { "type": "value", "max": 4000, "unit": "辆" },
+            "series": [
+              { "name": "北京方向", "color": "#1990ff", "type": "bar" },
+              { "name": "上海方向", "color": "#00bcd4", "type": "bar" }
+            ],
+            "tooltip": { "visible": true, "content": "16时\n北京方向 825 辆\n上海方向 831 辆" }
+          },
+          "legend": { "data": ["北京方向", "上海方向"], "colors": ["#1990ff", "#00bcd4"] }
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "title": "车型分布",
+      "layout": "vertical",
+      "children": [
+        {
+          "type": "sub-header",
+          "layout": "horizontal",
+          "children": [
+            {
+              "type": "title-group",
+              "content": "车型分布",
+              "icon": {
+                "type": "image",
+                "resourceFile": "../resources/images/icon-3561.png",
+                "recommendedUsage": "imgSrc"
+              }
+            }
+          ]
+        },
+        {
+          "type": "distribution-row",
+          "layout": "horizontal",
+          "justifyContent": "space-between",
+          "children": [
+            {
+              "type": "distribution-card",
+              "title": "江阴靖江长江隧道",
+              "layout": "horizontal",
+              "alignItems": "center",
+              "style": { "background": "rgba(237, 244, 251, 0.7)", "borderRadius": "8px", "padding": "12px" },
+              "children": [
+                {
+                  "type": "stat-box",
+                  "label": "客车",
+                  "value": "22350",
+                  "color": "#1990ff",
+                  "shape": "hexagon-left"
+                },
+                {
+                  "type": "image",
+                  "resourceFile": "../resources/images/Group_2136637486-3639.png",
+                  "recommendedUsage": "imgSrc",
+                  "description": "车型分布仪表盘图标",
+                  "style": { "width": "52px", "height": "53px" }
+                },
+                {
+                  "type": "stat-box",
+                  "label": "货车",
+                  "value": "16270",
+                  "color": "#ff9800",
+                  "shape": "hexagon-right"
+                }
+              ]
+            },
+            {
+              "type": "distribution-card",
+              "title": "江阴大桥",
+              "layout": "horizontal",
+              "alignItems": "center",
+              "style": { "background": "rgba(237, 244, 251, 0.7)", "borderRadius": "8px", "padding": "12px" },
+              "children": [
+                {
+                  "type": "stat-box",
+                  "label": "客车",
+                  "value": "66109",
+                  "color": "#1990ff",
+                  "shape": "hexagon-left"
+                },
+                {
+                  "type": "image",
+                  "resourceFile": "../resources/images/Group_2136637486-3639.png",
+                  "recommendedUsage": "imgSrc",
+                  "description": "车型分布仪表盘图标",
+                  "style": { "width": "52px", "height": "52px" }
+                },
+                {
+                  "type": "stat-box",
+                  "label": "货车",
+                  "value": "16270",
+                  "color": "#ff9800",
+                  "shape": "hexagon-right"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "title": "流量预测",
+      "layout": "vertical",
+      "children": [
+        {
+          "type": "sub-header",
+          "layout": "horizontal",
+          "justifyContent": "space-between",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "title-group",
+              "content": "流量预测",
+              "icon": {
+                "type": "css-shape",
+                "shape": "diamond",
+                "color": "#388dff"
+              }
+            },
+            {
+              "type": "tabs",
+              "layout": "horizontal",
+              "children": [
+                { "type": "tab", "content": "江阴靖江长江隧道", "active": true, "style": { "background": "#1990ff", "color": "#fff", "borderRadius": "12px", "padding": "2px 12px" } },
+                { "type": "tab", "content": "江阴大桥", "active": false, "style": { "color": "#666" } }
+              ]
+            },
+            {
+              "type": "link",
+              "content": "节假日预测>",
+              "style": { "color": "#1990ff", "fontSize": "12px" }
+            }
+          ]
+        },
+        {
+          "type": "chart-container",
+          "chartType": "line-area",
+          "config": {
+            "xAxis": { "type": "category", "data": ["2小时前", "1小时前", "当前时间", "1小时后", "2小时后"] },
+            "yAxis": { "type": "value", "max": 4000, "unit": "辆" },
+            "series": [
+              { "name": "实际流量", "color": "#1990ff", "type": "line", "symbol": "circle" },
+              { "name": "预测流量", "color": "#00bcd4", "type": "line", "symbol": "circle", "areaStyle": { "opacity": 0.3 } }
+            ]
+          },
+          "legend": { "data": ["实际流量", "预测流量"], "colors": ["#1990ff", "#00bcd4"] },
+          "footer": {
+            "type": "text-row",
+            "layout": "horizontal",
+            "justifyContent": "space-around",
+            "children": [
+              { "type": "text", "content": "准确率98%", "style": { "color": "#4caf50" } },
+              { "type": "text", "content": "准确率96%", "style": { "color": "#4caf50" } },
+              { "type": "text", "content": "准确率92%", "style": { "color": "#4caf50" } }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
+```

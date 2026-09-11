@@ -1,0 +1,527 @@
+```json
+{
+  "generatedAt": "2024-01-15T10:30:00.000Z",
+  "stage": "preview-analysis",
+  "componentName": "设备监测",
+  "componentTitle": "设备监测",
+  "analysisModel": "visual-parser-v2",
+  "sourceImage": {
+    "path": ".mc-gen/cache/mc-preview.png",
+    "size": 0,
+    "mtimeMs": 0,
+    "sha1": ""
+  },
+  "summary": "设备监测面板，包含标题行统计指标（设备类型28、设备总数68562、完好率98%）、两个设备类型统计卡片切换（隧道设备/南北接线设备）、左侧6项分类导航tab、3×4设备卡片网格（共12种设备）",
+  "layout": {
+    "type": "vertical",
+    "direction": "column",
+    "sections": [
+      {
+        "id": "header-row",
+        "name": "标题行",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "title-itself",
+        "slotCandidate": null,
+        "header": {
+          "title": "设备监测",
+          "controls": []
+        },
+        "body": {
+          "layout": "horizontal",
+          "bgPlaceholder": "body-bg-header-row",
+          "children": [
+            {
+              "type": "title",
+              "text": "设备监测",
+              "figmaNode": "header-title",
+              "styles": {
+                "fontSize": 16,
+                "fontWeight": "bold",
+                "color": "rgba(51,51,51,1)"
+              }
+            },
+            {
+              "type": "stat-item",
+              "layout": "horizontal",
+              "label": {
+                "type": "label",
+                "text": "设备类型",
+                "figmaNode": "stat-label-type",
+                "styles": {
+                  "fontSize": 14,
+                  "color": "rgba(51,51,51,1)"
+                }
+              },
+              "value": {
+                "type": "value",
+                "parts": [
+                  {
+                    "text": "28",
+                    "type": "number",
+                    "figmaNode": "stat-value-type",
+                    "styles": {
+                      "fontSize": 16,
+                      "fontWeight": "bold",
+                      "color": "rgba(25,144,255,1)"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "type": "stat-item",
+              "layout": "horizontal",
+              "label": {
+                "type": "label",
+                "text": "设备总数",
+                "figmaNode": "stat-label-total",
+                "styles": {
+                  "fontSize": 14,
+                  "color": "rgba(51,51,51,1)"
+                }
+              },
+              "value": {
+                "type": "value",
+                "parts": [
+                  {
+                    "text": "68562",
+                    "type": "number",
+                    "figmaNode": "stat-value-total",
+                    "styles": {
+                      "fontSize": 16,
+                      "fontWeight": "bold",
+                      "color": "rgba(25,144,255,1)"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "type": "stat-item",
+              "layout": "horizontal",
+              "label": {
+                "type": "label",
+                "text": "完好率",
+                "figmaNode": "stat-label-rate",
+                "styles": {
+                  "fontSize": 14,
+                  "color": "rgba(51,51,51,1)"
+                }
+              },
+              "value": {
+                "type": "value",
+                "parts": [
+                  {
+                    "text": "98",
+                    "type": "number",
+                    "figmaNode": "stat-value-rate-num",
+                    "styles": {
+                      "fontSize": 16,
+                      "fontWeight": "bold",
+                      "color": "rgba(8,163,165,1)"
+                    }
+                  },
+                  {
+                    "text": "%",
+                    "type": "unit",
+                    "figmaNode": "stat-value-rate-unit",
+                    "styles": {
+                      "fontSize": 14,
+                      "color": "rgba(8,163,165,1)"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "type": "icon-button",
+              "icon": "refresh",
+              "resourceFile": "../resources/images/Frame-8856.png",
+              "recommendedUsage": "imgSrc",
+              "width": 16,
+              "height": 16,
+              "figmaNode": "refresh-icon"
+            }
+          ]
+        }
+      },
+      {
+        "id": "stats-cards",
+        "name": "设备类型统计卡片",
+        "role": "常驻",
+        "layout": "horizontal-2-columns",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "header": {
+          "title": null,
+          "controls": []
+        },
+        "body": {
+          "layout": "horizontal-2-columns",
+          "bgPlaceholder": "body-bg-stats-cards",
+          "children": [
+            {
+              "type": "stat-card",
+              "name": "隧道设备",
+              "active": true,
+              "bgPlaceholder": "bg-8807",
+              "resourceFile": "../resources/images/bg-8807.png",
+              "recommendedUsage": "backgroundBlock",
+              "layout": "horizontal",
+              "children": [
+                {
+                  "type": "icon",
+                  "resourceFile": "../resources/images/icon-8817.png",
+                  "recommendedUsage": "imgSrc",
+                  "width": 40,
+                  "height": 40,
+                  "position": "left"
+                },
+                {
+                  "type": "content",
+                  "layout": "vertical",
+                  "position": "right",
+                  "elements": [
+                    {
+                      "type": "label",
+                      "text": "总数:56302",
+                      "figmaNode": "tunnel-total",
+                      "styles": {
+                        "fontSize": 14,
+                        "color": "rgba(255,255,255,1)",
+                        "fontWeight": "bold"
+                      }
+                    },
+                    {
+                      "type": "value",
+                      "text": "异常数:5",
+                      "figmaNode": "tunnel-abnormal",
+                      "styles": {
+                        "fontSize": 14,
+                        "color": "rgba(245,63,63,1)",
+                        "fontWeight": "bold"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "stat-card",
+              "name": "南北接线设备",
+              "active": false,
+              "bgPlaceholder": "bg-8439",
+              "resourceFile": "../resources/images/bg-8439.png",
+              "recommendedUsage": "backgroundBlock",
+              "layout": "horizontal",
+              "children": [
+                {
+                  "type": "icon",
+                  "resourceFile": "../resources/images/icon-8444.png",
+                  "recommendedUsage": "imgSrc",
+                  "width": 40,
+                  "height": 40,
+                  "position": "left"
+                },
+                {
+                  "type": "content",
+                  "layout": "vertical",
+                  "position": "right",
+                  "elements": [
+                    {
+                      "type": "label",
+                      "text": "总数:1280",
+                      "figmaNode": "north-south-total",
+                      "styles": {
+                        "fontSize": 14,
+                        "color": "rgba(51,51,51,1)",
+                        "fontWeight": "bold"
+                      }
+                    },
+                    {
+                      "type": "value",
+                      "text": "异常数:3",
+                      "figmaNode": "north-south-abnormal",
+                      "styles": {
+                        "fontSize": 14,
+                        "color": "rgba(245,63,63,1)",
+                        "fontWeight": "bold"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "device-grid",
+        "name": "设备列表网格",
+        "role": "常驻",
+        "layout": "grid",
+        "gridColumns": 3,
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "header": {
+          "title": null,
+          "controls": []
+        },
+        "body": {
+          "layout": "grid-3-columns",
+          "bgPlaceholder": "body-bg-device-grid",
+          "items": [
+            {
+              "layout": "horizontal",
+              "icon": {
+                "placeholder": "icon-camera",
+                "resourceFile": "../resources/images/icon-8473.png",
+                "recommendedUsage": "imgSrc",
+                "position": "left",
+                "width": 30,
+                "height": 30
+              },
+              "content": {
+                "layout": "vertical",
+                "position": "right",
+                "elements": [
+                  {
+                    "type": "label",
+                    "text": "摄像机",
+                    "figmaNode": "device-label-camera",
+                    "position": "top",
+                    "styles": {
+                      "fontSize": 14,
+                      "color": "rgba(51,51,51,1)"
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "position": "bottom",
+                    "parts": [
+                      {
+                        "text": "2",
+                        "type": "number",
+                        "figmaNode": "device-value-camera-num",
+                        "styles": {
+                          "fontSize": 14,
+                          "color": "rgba(25,144,255,1)",
+                          "fontWeight": "bold"
+                        }
+                      },
+                      {
+                        "text": "/484",
+                        "type": "unit",
+                        "figmaNode": "device-value-camera-unit",
+                        "styles": {
+                          "fontSize": 14,
+                          "color": "rgba(153,153,153,1)"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "layout": "horizontal",
+              "icon": {
+                "placeholder": "icon-wind",
+                "resourceFile": "../resources/images/icon-8503.png",
+                "recommendedUsage": "imgSrc",
+                "position": "left",
+                "width": 30,
+                "height": 30
+              },
+              "content": {
+                "layout": "vertical",
+                "position": "right",
+                "elements": [
+                  {
+                    "type": "label",
+                    "text": "风速风向仪",
+                    "figmaNode": "device-label-wind",
+                    "position": "top",
+                    "styles": {
+                      "fontSize": 14,
+                      "color": "rgba(51,51,51,1)"
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "position": "bottom",
+                    "parts": [
+                      {
+                        "text": "1",
+                        "type": "number",
+                        "figmaNode": "device-value-wind-num",
+                        "styles": {
+                          "fontSize": 14,
+                          "color": "rgba(245,63,63,1)",
+                          "fontWeight": "bold"
+                        }
+                      },
+                      {
+                        "text": "/484",
+                        "type": "unit",
+                        "figmaNode": "device-value-wind-unit",
+                        "styles": {
+                          "fontSize": 14,
+                          "color": "rgba(153,153,153,1)"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "layout": "horizontal",
+              "icon": {
+                "placeholder": "icon-height",
+                "resourceFile": "../resources/images/icon-8532.png",
+                "recommendedUsage": "imgSrc",
+                "position": "left",
+                "width": 30,
+                "height": 30
+              },
+              "content": {
+                "layout": "vertical",
+                "position": "right",
+                "elements": [
+                  {
+                    "type": "label",
+                    "text": "超高检测器",
+                    "figmaNode": "device-label-height",
+                    "position": "top",
+                    "styles": {
+                      "fontSize": 14,
+                      "color": "rgba(51,51,51,1)"
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "position": "bottom",
+                    "parts": [
+                      {
+                        "text": "0",
+                        "type": "number",
+                        "figmaNode": "device-value-height-num",
+                        "styles": {
+                          "fontSize": 14,
+                          "color": "rgba(8,163,165,1)",
+                          "fontWeight": "bold"
+                        }
+                      },
+                      {
+                        "text": "/484",
+                        "type": "unit",
+                        "figmaNode": "device-value-height-unit",
+                        "styles": {
+                          "fontSize": 14,
+                          "color": "rgba(153,153,153,1)"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "layout": "horizontal",
+              "icon": {
+                "placeholder": "icon-robot",
+                "resourceFile": "../resources/images/icon-8561.png",
+                "recommendedUsage": "imgSrc",
+                "position": "left",
+                "width": 30,
+                "height": 30
+              },
+              "content": {
+                "layout": "vertical",
+                "position": "right",
+                "elements": [
+                  {
+                    "type": "label",
+                    "text": "烟道机器人",
+                    "figmaNode": "device-label-robot",
+                    "position": "top",
+                    "styles": {
+                      "fontSize": 14,
+                      "color": "rgba(51,51,51,1)"
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "position": "bottom",
+                    "parts": [
+                      {
+                        "text": "0",
+                        "type": "number",
+                        "figmaNode": "device-value-robot-num",
+                        "styles": {
+                          "fontSize": 14,
+                          "color": "rgba(8,163,165,1)",
+                          "fontWeight": "bold"
+                        }
+                      },
+                      {
+                        "text": "/484",
+                        "type": "unit",
+                        "figmaNode": "device-value-robot-unit",
+                        "styles": {
+                          "fontSize": 14,
+                          "color": "rgba(153,153,153,1)"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "layout": "horizontal",
+              "icon": {
+                "placeholder": "icon-lidar",
+                "resourceFile": "../resources/images/icon-8590.png",
+                "recommendedUsage": "imgSrc",
+                "position": "left",
+                "width": 30,
+                "height": 30
+              },
+              "content": {
+                "layout": "vertical",
+                "position": "right",
+                "elements": [
+                  {
+                    "type": "label",
+                    "text": "激光雷达",
+                    "figmaNode": "device-label-lidar",
+                    "position": "top",
+                    "styles": {
+                      "fontSize": 14,
+                      "color": "rgba(51,51,51,1)"
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "position": "bottom",
+                    "parts": [
+                      {
+                        "text": "0",
+                        "type": "number",
+                        "figmaNode": "device-value-lidar-num",
+                        "styles": {
+                          "fontSize": 14,
+                          "color": "rgba(8,163,165,1)",
+                          "fontWeight": "bold"
+                        }
+                      },
+                      {
+                        "text": "/484",
+                        "type": "unit",
+                        "figmaNode": "device-value-lidar-unit",
+                        "styles": {
+                          "fontSize": 14,
+                          "color": "rgba

@@ -1,0 +1,241 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 72,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "charts",
+        "message": "车型分布区域（section-vehicle-type）包含两个环形图（donut），但在全局 `charts` 数组中完全缺失对应的图表配置（如 series, legend, colors 等），会导致 AI 无法正确生成该图表代码。",
+        "suggestion": "在 `charts` 数组中补充 `section-vehicle-type` 对应的 donut 图表配置，明确系列名称（客车/货车）、颜色和图例位置。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "chartDataHints",
+        "message": "`chartDataHints` 中的 `labels` 字段混入了大量非图表坐标轴的页面文本（如 '24小时', '当日总流量', '江阴大桥' 等），存在严重的数据噪音，会导致 AI 在数据映射时产生错误。",
+        "suggestion": "清洗 `chartDataHints` 数据，确保 `labels` 仅包含图表的 X 轴/Y 轴标签或图例项，严格剔除页面其他无关文本。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1] & layout.sections[2]",
+        "message": "`section-chart-tunnel` 和 `section-chart-bridge` 结构高度重复，且与 `section-flow-prediction` 类似都是按地点区分。独立成两个 section 会增加 DOM 节点和代码冗余，降低可维护性。",
+        "suggestion": "建议将隧道和大桥的实时流量柱状图合并为一个 section（如 '实时流量趋势'），通过 Header 中的 Tab 控件进行地点切换，与 '流量预测' 保持一致的交互模式，减少冗余。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "coverageReport",
+        "message": "Figma 节点覆盖率仅为 43%，大量关键节点（如坐标轴文本 '4000 3000...'、图例 '北京方向'、阈值线 '建议分流'）在 `missing` 列表中，可能导致 AI 生成时遗漏关键 UI 元素（如 Y 轴刻度、图例等）。",
+        "suggestion": "检查 Figma 解析逻辑或重新提取节点，确保图表坐标轴、图例、辅助线等关键元素的节点被正确识别并映射到布局结构中。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "charts[*].notes",
+        "message": "柱状图配置中 notes 提到 '有橙色虚线表示建议分流阈值'，但在 layout 的 chart 节点中未体现 markLine 或辅助线的结构定义，AI 可能无法准确还原该视觉元素。",
+        "suggestion": "在 `section-chart-tunnel` 和 `section-chart-bridge` 的 chart 节点中补充 `markLine` 或辅助线相关的配置结构，或在 `charts` 数组中明确 markLine 的样式（橙色虚线）和数据。"
+      }
+    ],
+    "recommendations": [
+      "合并同类项：将隧道和大桥的实时流量柱状图合并为一个 Section，使用 Tab 切换，减少代码冗余并统一交互模式。",
+      "完善图表配置：补充车型分布环形图（donut）的完整配置，并为柱状图补充建议分流阈值线（markLine）的结构定义。",
+      "清洗数据提示：严格过滤 `chartDataHints` 中的噪音数据，确保 labels 和 values 仅与图表坐标系直接相关。",
+      "提升解析覆盖率：针对缺失的坐标轴刻度、图例文本等节点进行补充解析，确保 UI 元素不遗漏。"
+    ],
+    "summary": "整体布局结构清晰，区域划分合理，符合微码组件的基本规范。但存在图表配置缺失（车型分布环形图）、数据提示噪音过大、Figma 节点覆盖率偏低（43%）以及部分辅助线配置未落地等问题。建议合并重复的图表 Section 以降低冗余，并完善图表相关配置和数据清洗，以确保 AI 代码生成的准确性和完整性。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorBgBase": "#edf4fb",
+      "--colorTextBase": "#333333",
+      "--colorPrimary": "#1990ff",
+      "--colorWarning": "#fa8c16",
+      "--colorSuccess": "#52c41a",
+      "--fontSize": "14px",
+      "--fontSizeLarge": "32px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-bg-base": "#edf4fb",
+      "@color-text-base": "#333333",
+      "@color-primary": "#1990ff",
+      "@color-warning": "#fa8c16",
+      "@color-success": "#52c41a",
+      "@font-size-base": "14px",
+      "@font-size-large": "32px",
+      "@border-radius-base": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "width": "100%",
+        "height": "100%",
+        "background-color": "var(--colorBgBase, #edf4fb)",
+        "padding": "16px",
+        "box-sizing": "border-box"
+      },
+      ".monitor-card": {
+        "background-color": "#ffffff",
+        "border-radius": "var(--borderRadius, 8px)",
+        "padding": "16px",
+        "box-shadow": "0 2px 8px rgba(0, 0, 0, 0.05)"
+      },
+      ".card-header": {
+        "display": "flex",
+        "align-items": "center",
+        "margin-bottom": "16px"
+      },
+      ".title-icon-diamond": {
+        "width": "12px",
+        "height": "12px",
+        "background-color": "var(--colorPrimary, #1990ff)",
+        "transform": "rotate(45deg)",
+        "margin-right": "8px"
+      },
+      ".card-title": {
+        "font-size": "16px",
+        "font-weight": "600",
+        "color": "var(--colorTextBase, #333333)"
+      },
+      ".stat-value": {
+        "font-size": "var(--fontSizeLarge, 32px)",
+        "font-weight": "bold",
+        "color": "var(--colorPrimary, #1990ff)",
+        "line-height": "1.2"
+      },
+      ".stat-accuracy": {
+        "font-size": "14px",
+        "color": "var(--colorSuccess, #52c41a)",
+        "font-weight": "500"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "浅灰蓝色背景 #edf4fb 映射为 --colorBgBase，作为组件容器底色",
+      "主文本色 #333333 映射为 --colorTextBase，用于常规文本",
+      "科技蓝 #1990ff 映射为 --colorPrimary，重点用于大号数值和菱形图标",
+      "绿色 #52c41a 映射为 --colorSuccess，用于准确率等正向指标文字",
+      "橙色 #fa8c16 映射为 --colorWarning，作为辅助状态色备用",
+      "卡片圆角提取为 --borderRadius，菱形图标通过 CSS transform rotate(45deg) 实现",
+      "大号数值使用 --fontSizeLarge 放大字号，并结合 --colorPrimary 突出显示"
+    ],
+    "elementStyleMap": {
+      "section-daily-total": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-tunnel": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "stat-bridge": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "section-chart-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-chart-bridge": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-vehicle-type": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-tunnel-stat-item-x-0": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-tunnel-stat-item-x-2": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-tunnel": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center",
+        "justify-content": "space-between"
+      },
+      "el-stat-item-x-15": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-item-x-19": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-bridge-stat-item-x-0": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-bridge-stat-item-x-2": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-bridge": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center",
+        "justify-content": "space-between"
+      },
+      "el-stat-item-x-23": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-item-x-27": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-flow-prediction": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-daily-total",
+        "responsibility": "当日总流量（请按功能拆分）",
+        "elementCount": 6,
+        "title": "当日总流量"
+      },
+      {
+        "id": "section-chart-tunnel",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "江阴靖江长江隧道"
+      },
+      {
+        "id": "section-chart-bridge",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "江阴大桥"
+      },
+      {
+        "id": "section-vehicle-type",
+        "responsibility": "车型分布（请按功能拆分）",
+        "elementCount": 16,
+        "title": "车型分布"
+      },
+      {
+        "id": "section-flow-prediction",
+        "responsibility": "流量预测（请按功能拆分）",
+        "elementCount": 1,
+        "title": "流量预测"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 5,
+    "reason": "有效 sections=5 ≥ 3 → 强制拆分"
+  }
+}

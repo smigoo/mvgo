@@ -1,0 +1,68 @@
+// 主题变量文件
+// 只允许 Less 变量（@xxx），禁止使用 CSS 变量（var(--xxx)）
+// 面板默认主题为 light，.theme-light() 中颜色为组件默认展示色
+
+.common() {
+  // 字体缩放基准令牌
+  @fontSize: 14px;
+
+  // 间距令牌
+  @spacing-xs: 4px;
+  @spacing-sm: 8px;
+  @spacing-md: 16px;
+  @spacing-lg: 24px;
+
+  // 圆角令牌
+  @radius-sm: 4px;
+  @radius-md: 8px;
+}
+
+.theme-dark() {
+  // 背景色
+  @bg-color: #1a2332;
+  @bg-color-secondary: #212c3d;
+  @panel-bg-color: #1f2a3a;
+
+  // 文字颜色（深色面板禁止黑色系）
+  @text-color-primary: #e6edf5;
+  @text-color-secondary: #a8b6c8;
+  @text-color-tertiary: #7a8ba0;
+
+  // 边框颜色
+  @border-color: #2e3d52;
+  @border-color-light: #3a4a63;
+
+  // 品牌/强调色
+  @primary-color: #3b82f6;
+  @success-color: #52c41a;
+  @warning-color: #faad14;
+  @error-color: #f5222d;
+
+  // 分割线
+  @divider-color: #2e3d52;
+}
+
+.theme-light() {
+  // 背景色（默认主题，须与设计稿一致）
+  @bg-color: #ffffff;
+  @bg-color-secondary: #f5f7fa;
+  @panel-bg-color: #ffffff;
+
+  // 文字颜色
+  @text-color-primary: #1a1a1a;
+  @text-color-secondary: #595959;
+  @text-color-tertiary: #8c8c8c;
+
+  // 边框颜色
+  @border-color: #e8e8e8;
+  @border-color-light: #f0f0f0;
+
+  // 品牌/强调色
+  @primary-color: #3b82f6;
+  @success-color: #52c41a;
+  @warning-color: #faad14;
+  @error-color: #f5222d;
+
+  // 分割线
+  @divider-color: #e8e8e8;
+}

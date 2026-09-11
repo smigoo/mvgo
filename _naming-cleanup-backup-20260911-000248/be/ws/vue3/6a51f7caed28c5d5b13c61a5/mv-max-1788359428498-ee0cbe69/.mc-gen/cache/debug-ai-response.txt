@@ -1,0 +1,329 @@
+```json
+{
+  "generatedAt": "2025-06-05T12:00:00.000Z",
+  "stage": "preview-analysis",
+  "componentName": "环境监测",
+  "componentTitle": "环境监测",
+  "analysisModel": "claude-opus-4-20250514",
+  "sourceImage": {
+    "path": "mc-preview.png",
+    "size": 0,
+    "mtimeMs": 0,
+    "sha1": ""
+  },
+  "summary": "环境监测组件，包含顶部tab切换栏（氧化碳/能见度/洞内照明/洞外光强）、右上角图表工具按钮、右上角通知角标、主体面积图表（24小时趋势），整体为浅色主题",
+  "layout": {
+    "type": "panel-with-tabs-and-chart",
+    "direction": "vertical",
+    "sections": [
+      {
+        "id": "panel-header",
+        "name": "面板标题行",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "title-itself",
+        "slotCandidate": null,
+        "header": null,
+        "body": {
+          "layout": "horizontal",
+          "children": [
+            {
+              "id": "panel-title",
+              "name": "环境监测",
+              "role": "常驻",
+              "type": "text",
+              "text": "环境监测",
+              "styles": {
+                "fontSize": 16,
+                "fontWeight": "bold",
+                "color": "rgba(85, 158, 255, 1)",
+                "background": "linear-gradient(90deg, rgba(85, 158, 255, 1) 0%, rgba(85, 158, 255, 0.6) 100%)"
+              }
+            },
+            {
+              "id": "panel-title-icon",
+              "name": "标题装饰图标",
+              "role": "装饰",
+              "type": "icon",
+              "resourceFile": "../resources/images/icon-7941.png",
+              "recommendedUsage": "imgSrc",
+              "width": 8,
+              "height": 8,
+              "styles": {
+                "marginLeft": "4px"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "header-right-slot",
+        "name": "右上角操作区",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "title-same-row",
+        "slotCandidate": "header-right",
+        "header": null,
+        "body": {
+          "layout": "horizontal",
+          "children": [
+            {
+              "id": "chart-icon-button",
+              "name": "图表工具按钮",
+              "role": "常驻",
+              "type": "icon-button",
+              "icon": "chart-bar",
+              "resourceFile": "../resources/images/icon-7945.png",
+              "recommendedUsage": "imgSrc",
+              "width": 20,
+              "height": 20,
+              "styles": {
+                "backgroundColor": "rgba(85, 158, 255, 0.1)",
+                "borderRadius": "4px",
+                "padding": "4px"
+              }
+            },
+            {
+              "id": "notification-button",
+              "name": "通知按钮",
+              "role": "常驻",
+              "type": "icon-button-with-badge",
+              "icon": "bell",
+              "badge": "8",
+              "styles": {
+                "backgroundColor": "rgba(85, 158, 255, 0.1)",
+                "borderRadius": "4px",
+                "padding": "4px",
+                "marginLeft": "8px"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "tabs-section",
+        "name": "Tab切换栏",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "header": null,
+        "body": {
+          "layout": "horizontal",
+          "children": [
+            {
+              "id": "tab-1",
+              "name": "氧化碳",
+              "role": "常驻",
+              "type": "tab",
+              "text": "氧化碳",
+              "active": true,
+              "resourceFile": "../resources/images/bg-tab-active-7891.png",
+              "recommendedUsage": "backgroundStyle",
+              "styles": {
+                "fontSize": 14,
+                "color": "rgba(85, 158, 255, 1)",
+                "backgroundColor": "rgba(85, 158, 255, 0.1)",
+                "borderRadius": "4px 4px 0 0",
+                "padding": "6px 16px"
+              }
+            },
+            {
+              "id": "tab-2",
+              "name": "能见度",
+              "role": "常驻",
+              "type": "tab",
+              "text": "能见度",
+              "active": false,
+              "styles": {
+                "fontSize": 14,
+                "color": "rgba(0, 0, 0, 0.45)",
+                "padding": "6px 16px"
+              }
+            },
+            {
+              "id": "tab-3",
+              "name": "洞内照明",
+              "role": "常驻",
+              "type": "tab",
+              "text": "洞内照明",
+              "active": false,
+              "styles": {
+                "fontSize": 14,
+                "color": "rgba(0, 0, 0, 0.45)",
+                "padding": "6px 16px"
+              }
+            },
+            {
+              "id": "tab-4",
+              "name": "洞外光强",
+              "role": "常驻",
+              "type": "tab",
+              "text": "洞外光强",
+              "active": false,
+              "styles": {
+                "fontSize": 14,
+                "color": "rgba(0, 0, 0, 0.45)",
+                "padding": "6px 16px"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "chart-section",
+        "name": "图表区域",
+        "role": "常驻",
+        "layout": "vertical",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "header": null,
+        "body": {
+          "layout": "vertical",
+          "children": [
+            {
+              "id": "chart-header",
+              "name": "图表顶部信息",
+              "role": "常驻",
+              "type": "chart-meta",
+              "layout": "horizontal",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "ppm",
+                  "styles": {
+                    "fontSize": 12,
+                    "color": "rgba(0, 0, 0, 0.45)",
+                    "position": "left"
+                  }
+                },
+                {
+                  "type": "text",
+                  "text": "2k3+785CD米道",
+                  "styles": {
+                    "fontSize": 12,
+                    "color": "rgba(0, 0, 0, 0.45)",
+                    "position": "right"
+                  }
+                },
+                {
+                  "type": "text",
+                  "text": "预警线",
+                  "styles": {
+                    "fontSize": 12,
+                    "color": "#ff4d4f",
+                    "position": "right"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "area-chart",
+              "name": "面积图",
+              "role": "常驻",
+              "type": "chart-container",
+              "styles": {
+                "width": "100%",
+                "height": "180px"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "styles": {
+    "backgroundBrightness": "light",
+    "theme": "浅色监测数据风",
+    "colors": [
+      "rgba(85, 158, 255, 1)",
+      "rgba(85, 158, 255, 0.3)",
+      "rgba(255, 77, 79, 1)",
+      "rgba(237, 244, 251, 1)",
+      "rgba(0, 0, 0, 0.85)",
+      "rgba(0, 0, 0, 0.45)"
+    ],
+    "background": "浅蓝灰色背景（rgba(237, 244, 251, 1)）",
+    "decorations": [
+      "顶部渐变装饰线",
+      "Tab激活态背景图",
+      "通知红色角标"
+    ],
+    "emphasis": [
+      "预警线（红色虚线）",
+      "面积图填充（浅蓝色渐变）"
+    ]
+  },
+  "interactions": [
+    {
+      "target": "Tab切换栏（氧化碳/能见度/洞内照明/洞外光强）",
+      "type": "tab-switch",
+      "description": "切换不同监测指标",
+      "defaultState": "常驻，氧化碳为激活态",
+      "evidence": "氧化碳tab有蓝色背景和下划线"
+    },
+    {
+      "target": "右上角图表图标按钮",
+      "type": "icon-button",
+      "description": "图表相关操作（可能是查看详情或切换视图）",
+      "defaultState": "常驻",
+      "evidence": "有图表图标按钮"
+    },
+    {
+      "target": "右上角通知按钮",
+      "type": "icon-button-with-badge",
+      "description": "查看通知，角标显示8条未读",
+      "defaultState": "常驻",
+      "evidence": "有通知图标和红色角标8"
+    },
+    {
+      "target": "面积图表",
+      "type": "chart-hover",
+      "description": "可能支持鼠标悬停查看具体数值",
+      "defaultState": "常驻",
+      "evidence": "标准图表交互模式"
+    }
+  ],
+  "charts": [
+    {
+      "section": "chart-section",
+      "type": "area",
+      "series": [
+        "氧化碳浓度"
+      ],
+      "legend": [],
+      "legendPosition": "top-right",
+      "seriesColors": [
+        "rgba(85, 158, 255, 0.3)"
+      ],
+      "legendType": "horizontal",
+      "axes": "X轴为时间（0-24小时），Y轴为浓度值（ppm，刻度0/10/20/30/40）",
+      "tooltip": "未显示，推测支持鼠标悬停显示具体时间点和数值",
+      "notes": [
+        "红色虚线标注预警线（30ppm）",
+        "面积图采用浅蓝色渐变填充",
+        "Y轴刻度：0, 10, 20, 30, 40",
+        "X轴刻度：2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24（小时）",
+        "右上角显示当前监测点位：2k3+785CD米道"
+      ]
+    }
+  ],
+  "doNotInvent": [
+    "Tab切换时的数据加载逻辑（未显示加载状态）",
+    "通知弹窗的具体内容（仅显示角标数量）",
+    "图表工具按钮的下拉菜单选项（未展开）",
+    "面积图的具体数据点数值（Y轴未标注具体数值）",
+    "预警触发时的告警动作（未显示）",
+    "时间范围筛选功能（未显示相关控件）",
+    "数据自动刷新机制（未显示刷新按钮或时间戳）"
+  ],
+  "notes": [
+    "整体为浅色主题，背景为浅蓝灰色",
+    "Tab切换为主要交互方式，氧化碳为当前激活态",
+    "右上角工具栏包含图表操作和通知功能",
+    "图表采用面积图样式，带红色预警线",
+    "预览图中未显示tooltip悬浮态，但标准图表应支持此交互",
+    "需要完整还原面板外壳，包括背景、标题栏、装饰元素"
+  ]
+}
+```

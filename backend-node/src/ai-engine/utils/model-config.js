@@ -456,8 +456,9 @@ function _persistCapabilityCache(cache) {
  *   outputTokens — 用户在设置中确认/实测到的模型单次输出上限；传入后 limitKnown=true，容量判断可基于真实上限。
  */
 export function markModelCapabilityIdentified(model, opts = {}) {
-  const m = String(model || '').trim().toLowerCase()
-  if (!m) return
+  const raw = String(model || '').trim().toLowerCase()
+  if (!raw) return
+  const m = _stripProviderPrefix(raw)
   const cache = _loadCapabilityCache()
   const prev = cache[m] || {}
   cache[m] = {
@@ -486,9 +487,20 @@ export function markModelCapabilityIdentified(model, opts = {}) {
  * @returns {{vision: boolean|null, identified: boolean, source: string, checkedAt?: number}}
  *   vision — true=实测支持视觉 / false=实测不支持视觉 / null=未检测（未知，必须先检测）
  */
+/**
+ * 剥离模型名中的 provider 前缀（如 z-ai/glm-5.3-flash → glm-5.3-flash）。
+ * 缓存 key 统一用纯模型名存储，lookup 时必须先剥离前缀才能命中。
+ */
+function _stripProviderPrefix(modelName) {
+  const s = String(modelName || '').trim()
+  const slashIdx = s.indexOf('/')
+  return slashIdx >= 0 ? s.slice(slashIdx + 1) : s
+}
+
 export function resolveVisionCapability(model) {
-  const m = String(model || '').trim().toLowerCase()
-  if (!m) return { vision: null, identified: false, source: 'empty' }
+  const raw = String(model || '').trim().toLowerCase()
+  if (!raw) return { vision: null, identified: false, source: 'empty' }
+  const m = _stripProviderPrefix(raw)
   const cache = _loadCapabilityCache()
   const entry = cache[m]
   if (entry && typeof entry.vision === 'boolean') {
@@ -509,8 +521,9 @@ export function resolveVisionCapability(model) {
  *   source: 'table' | 'env' | 'test' | 'test-unknown-limit' | 'fallback'
  */
 export function resolveModelCapability(model, fallback = 16000) {
-  const m = String(model || '').trim().toLowerCase()
-  if (!m) return { tokens: fallback, identified: false, limitKnown: false, source: 'fallback' }
+  const raw = String(model || '').trim().toLowerCase()
+  if (!raw) return { tokens: fallback, identified: false, limitKnown: false, source: 'fallback' }
+  const m = _stripProviderPrefix(raw)
   // 1) env 覆盖（用户显式指定）→ 权威，已识别且上限可知
   const envKey = 'MC_MAX_OUTPUT_TOKENS_' + m.toUpperCase().replace(/[^A-Z0-9]/g, '_')
   const envVal = parseInt(process.env[envKey] || '', 10)

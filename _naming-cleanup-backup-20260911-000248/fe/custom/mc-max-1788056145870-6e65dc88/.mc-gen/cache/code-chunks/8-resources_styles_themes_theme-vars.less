@@ -1,0 +1,126 @@
+// 公共主题变量（两个主题共享的变量）
+.common() {
+  // 背景图资源（两个主题共享）
+  @bg-image-7890: url(../resources/images/bg-7890.png);
+  
+  // 圆角
+  @border-radius-base: 4px;
+  @border-radius-sm: 2px;
+  @border-radius-lg: 8px;
+  
+  // 间距
+  @spacing-xs: 4px;
+  @spacing-sm: 8px;
+  @spacing-md: 16px;
+  @spacing-lg: 24px;
+  @spacing-xl: 32px;
+  
+  // 字体大小
+  @font-size-xs: 12px;
+  @font-size-sm: 13px;
+  @font-size-base: 14px;
+  @font-size-md: 16px;
+  @font-size-lg: 18px;
+  @font-size-xl: 20px;
+  
+  // 阴影
+  @shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  @shadow-base: 0 2px 8px rgba(0, 0, 0, 0.1);
+  @shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+// 深色主题变量
+.theme-dark() {
+  // 主色调（深色模式）
+  @primary-color: #1890ff;
+  @primary-color-hover: #40a9ff;
+  @primary-color-active: #096dd9;
+  
+  // 背景色（深色面板）
+  @bg-color-base: #1a2332;
+  @bg-color-container: #232d3f;
+  @bg-color-elevated: #2d3748;
+  @bg-color-overlay: rgba(35, 45, 63, 0.9);
+  
+  // 背景图（根据设计稿事实）
+  @bg-image-container: url(../resources/images/bg-7890.png);
+  
+  // 文字颜色（深色模式禁止黑色）
+  @text-color-primary: rgba(255, 255, 255, 0.95);
+  @text-color-secondary: rgba(255, 255, 255, 0.75);
+  @text-color-tertiary: rgba(255, 255, 255, 0.55);
+  @text-color-disabled: rgba(255, 255, 255, 0.35);
+  
+  // 边框颜色
+  @border-color-base: rgba(255, 255, 255, 0.15);
+  @border-color-light: rgba(255, 255, 255, 0.1);
+  @border-color-dark: rgba(255, 255, 255, 0.2);
+  
+  // 成功色
+  @success-color: #52c41a;
+  @success-color-hover: #73d13d;
+  @success-color-active: #389e0d;
+  
+  // 警告色
+  @warning-color: #faad14;
+  @warning-color-hover: #ffc53d;
+  @warning-color-active: #d48806;
+  
+  // 错误色
+  @error-color: #ff4d4f;
+  @error-color-hover: #ff7875;
+  @error-color-active: #d9363e;
+  
+  // 信息色
+  @info-color: #1890ff;
+  @info-color-hover: #40a9ff;
+  @info-color-active: #096dd9;
+}
+
+// 浅色主题变量（默认主题，与设计稿一致）
+.theme-light() {
+  // 主色调（浅色模式）
+  @primary-color: #1890ff;
+  @primary-color-hover: #40a9ff;
+  @primary-color-active: #096dd9;
+  
+  // 背景色（浅色面板）
+  @bg-color-base: #ffffff;
+  @bg-color-container: #f5f5f5;
+  @bg-color-elevated: #fafafa;
+  @bg-color-overlay: rgba(255, 255, 255, 0.9);
+  
+  // 背景图（根据设计稿事实）
+  @bg-image-container: url(../resources/images/bg-7890.png);
+  
+  // 文字颜色
+  @text-color-primary: rgba(0, 0, 0, 0.88);
+  @text-color-secondary: rgba(0, 0, 0, 0.65);
+  @text-color-tertiary: rgba(0, 0, 0, 0.45);
+  @text-color-disabled: rgba(0, 0, 0, 0.25);
+  
+  // 边框颜色
+  @border-color-base: #d9d9d9;
+  @border-color-light: #e8e8e8;
+  @border-color-dark: #bfbfbf;
+  
+  // 成功色
+  @success-color: #52c41a;
+  @success-color-hover: #73d13d;
+  @success-color-active: #389e0d;
+  
+  // 警告色
+  @warning-color: #faad14;
+  @warning-color-hover: #ffc53d;
+  @warning-color-active: #d48806;
+  
+  // 错误色
+  @error-color: #ff4d4f;
+  @error-color-hover: #ff7875;
+  @error-color-active: #d9363e;
+  
+  // 信息色
+  @info-color: #1890ff;
+  @info-color-hover: #40a9ff;
+  @info-color-active: #096dd9;
+}

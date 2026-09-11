@@ -1,0 +1,468 @@
+{
+  "imageVerified": true,
+  "layoutStructure": {
+    "generatedAt": "2025-08-08T00:00:00Z",
+    "stage": "preview-analysis",
+    "componentName": "设备监测",
+    "componentTitle": "设备监测",
+    "analysisModel": "gpt-5",
+    "sourceImage": {
+      "path": "",
+      "size": 0,
+      "mtimeMs": 0,
+      "sha1": ""
+    },
+    "summary": "顶部为设备监测标题与三项统计信息，左侧为垂直分类标签，主体为设备类型网格卡片。",
+    "layout": {
+      "type": "single-panel",
+      "direction": "vertical",
+      "sections": [
+        {
+          "id": "device-summary",
+          "name": "设备概览",
+          "role": "常驻",
+          "layout": "vertical",
+          "headerRelation": "content-below-title",
+          "slotCandidate": null,
+          "header": {
+            "title": "设备监测",
+            "controls": []
+          },
+          "body": {
+            "layout": "vertical",
+            "bgPlaceholder": "section-bg-device-summary",
+            "children": [
+              {
+                "type": "stats-row",
+                "layout": "horizontal",
+                "children": [
+                  {
+                    "type": "stat-card",
+                    "name": "隧道设备",
+                    "role": "stat-card",
+                    "value": "56302"
+                  },
+                  {
+                    "type": "stat-card",
+                    "name": "市控接设备",
+                    "role": "stat-card",
+                    "value": "1280"
+                  },
+                  {
+                    "type": "stat-card",
+                    "name": "完好率",
+                    "role": "stat-card",
+                    "value": "98%"
+                  }
+                ]
+              },
+              {
+                "type": "tab-list",
+                "layout": "vertical",
+                "children": [
+                  {
+                    "type": "tab",
+                    "name": "监控",
+                    "active": true
+                  },
+                  {
+                    "type": "tab",
+                    "name": "照明",
+                    "active": false
+                  },
+                  {
+                    "type": "tab",
+                    "name": "通风",
+                    "active": false
+                  },
+                  {
+                    "type": "tab",
+                    "name": "供配电",
+                    "active": false
+                  },
+                  {
+                    "type": "tab",
+                    "name": "消防",
+                    "active": false
+                  },
+                  {
+                    "type": "tab",
+                    "name": "交通诱导",
+                    "active": false
+                  }
+                ]
+              },
+              {
+                "type": "device-grid",
+                "layout": "grid",
+                "gridColumns": 3,
+                "children": [
+                  {
+                    "type": "device-item",
+                    "name": "摄像机",
+                    "value": "2/484"
+                  },
+                  {
+                    "type": "device-item",
+                    "name": "风速风向仪",
+                    "value": "1/484"
+                  },
+                  {
+                    "type": "device-item",
+                    "name": "超高检测器",
+                    "value": "0/484"
+                  },
+                  {
+                    "type": "device-item",
+                    "name": "烟道机器人",
+                    "value": "0/484"
+                  },
+                  {
+                    "type": "device-item",
+                    "name": "激光雷达",
+                    "value": "0/484"
+                  },
+                  {
+                    "type": "device-item",
+                    "name": "CO1传感器",
+                    "value": "0/484"
+                  },
+                  {
+                    "type": "device-item",
+                    "name": "CO/VI检测器",
+                    "value": "0/484"
+                  },
+                  {
+                    "type": "device-item",
+                    "name": "温湿度传感器",
+                    "value": "0/484"
+                  },
+                  {
+                    "type": "device-item",
+                    "name": "压力传感器",
+                    "value": "0/484"
+                  },
+                  {
+                    "type": "device-item",
+                    "name": "光照度变送器",
+                    "value": "0/484"
+                  },
+                  {
+                    "type": "device-item",
+                    "name": "紧急电话",
+                    "value": "0/484"
+                  },
+                  {
+                    "type": "device-item",
+                    "name": "水质监测设备",
+                    "value": "0/484"
+                  }
+                ]
+              }
+            ],
+            "backgroundImage": {
+              "src": "../resources/images/bg-8788.png",
+              "recommendedUsage": "backgroundBlock"
+            },
+            "backgroundSize": "100% 100%",
+            "backgroundPosition": "center center",
+            "backgroundRepeat": "no-repeat"
+          }
+        }
+      ]
+    },
+    "styles": {
+      "backgroundBrightness": "light",
+      "theme": "浅色设备监测面板",
+      "colors": [
+        "#edf4fb",
+        "#1890ff",
+        "#2a7bff",
+        "#f53f3f",
+        "#333333",
+        "#8aa6c7"
+      ],
+      "background": "浅灰蓝底色，模块使用蓝色高亮卡片与灰蓝网格卡片",
+      "decorations": [
+        "左侧竖向分类标签",
+        "顶部蓝色统计条",
+        "卡片内圆形设备图标"
+      ],
+      "emphasis": [
+        "蓝色统计数字",
+        "红色异常数值"
+      ]
+    },
+    "interactions": [
+      {
+        "target": "左侧分类标签栏",
+        "type": "tab-switch",
+        "description": "切换监控、照明、通风、供配电、消防、交通诱导分类",
+        "defaultState": "监控高亮",
+        "evidence": "左侧竖排标签中“监控”为选中态"
+      }
+    ],
+    "charts": [],
+    "doNotInvent": [],
+    "notes": [
+      "顶部还可见设备类型、设备总数、完好率三项统计信息。",
+      "主体为3列网格设备卡片，共12项可见。"
+    ],
+    "coverageReport": {
+      "totalFigma": 31,
+      "matchedCount": 4,
+      "missingCount": 18,
+      "uncertainCount": 0,
+      "coverageRate": 18,
+      "missing": [
+        {
+          "name": "设备类型",
+          "type": "TEXT",
+          "depth": 3
+        },
+        {
+          "name": "设备总数",
+          "type": "TEXT",
+          "depth": 3
+        },
+        {
+          "name": "switch",
+          "type": "FRAME",
+          "depth": 2
+        },
+        {
+          "name": "active",
+          "type": "GROUP",
+          "depth": 3
+        },
+        {
+          "name": "line1",
+          "type": "FRAME",
+          "depth": 4
+        },
+        {
+          "name": "t-总数:",
+          "type": "TEXT",
+          "depth": 5
+        },
+        {
+          "name": "d-56302",
+          "type": "TEXT",
+          "depth": 5
+        },
+        {
+          "name": "line2",
+          "type": "FRAME",
+          "depth": 4
+        },
+        {
+          "name": "t-异常数:",
+          "type": "TEXT",
+          "depth": 5
+        },
+        {
+          "name": "d-5",
+          "type": "TEXT",
+          "depth": 5
+        },
+        {
+          "name": "default",
+          "type": "GROUP",
+          "depth": 3
+        },
+        {
+          "name": "line1",
+          "type": "FRAME",
+          "depth": 4
+        },
+        {
+          "name": "t-总数:",
+          "type": "TEXT",
+          "depth": 5
+        },
+        {
+          "name": "d-1280",
+          "type": "TEXT",
+          "depth": 5
+        },
+        {
+          "name": "line2",
+          "type": "FRAME",
+          "depth": 4
+        }
+      ],
+      "uncertain": [],
+      "summary": "需关注"
+    }
+  },
+  "visualElements": {
+    "backgroundBrightness": "light",
+    "theme": "浅色设备监测面板",
+    "colors": [
+      "#edf4fb",
+      "#1890ff",
+      "#2a7bff",
+      "#f53f3f",
+      "#333333",
+      "#8aa6c7"
+    ],
+    "background": "浅灰蓝底色，模块使用蓝色高亮卡片与灰蓝网格卡片",
+    "decorations": [
+      "左侧竖向分类标签",
+      "顶部蓝色统计条",
+      "卡片内圆形设备图标"
+    ],
+    "emphasis": [
+      "蓝色统计数字",
+      "红色异常数值"
+    ]
+  },
+  "_visualElementList": [
+    {
+      "type": "stats-row",
+      "layout": "horizontal",
+      "children": [
+        {
+          "type": "stat-card",
+          "name": "隧道设备",
+          "role": "stat-card",
+          "value": "56302"
+        },
+        {
+          "type": "stat-card",
+          "name": "市控接设备",
+          "role": "stat-card",
+          "value": "1280"
+        },
+        {
+          "type": "stat-card",
+          "name": "完好率",
+          "role": "stat-card",
+          "value": "98%"
+        }
+      ]
+    },
+    {
+      "type": "tab-list",
+      "layout": "vertical",
+      "children": [
+        {
+          "type": "tab",
+          "name": "监控",
+          "active": true
+        },
+        {
+          "type": "tab",
+          "name": "照明",
+          "active": false
+        },
+        {
+          "type": "tab",
+          "name": "通风",
+          "active": false
+        },
+        {
+          "type": "tab",
+          "name": "供配电",
+          "active": false
+        },
+        {
+          "type": "tab",
+          "name": "消防",
+          "active": false
+        },
+        {
+          "type": "tab",
+          "name": "交通诱导",
+          "active": false
+        }
+      ]
+    },
+    {
+      "type": "device-grid",
+      "layout": "grid",
+      "gridColumns": 3,
+      "children": [
+        {
+          "type": "device-item",
+          "name": "摄像机",
+          "value": "2/484"
+        },
+        {
+          "type": "device-item",
+          "name": "风速风向仪",
+          "value": "1/484"
+        },
+        {
+          "type": "device-item",
+          "name": "超高检测器",
+          "value": "0/484"
+        },
+        {
+          "type": "device-item",
+          "name": "烟道机器人",
+          "value": "0/484"
+        },
+        {
+          "type": "device-item",
+          "name": "激光雷达",
+          "value": "0/484"
+        },
+        {
+          "type": "device-item",
+          "name": "CO1传感器",
+          "value": "0/484"
+        },
+        {
+          "type": "device-item",
+          "name": "CO/VI检测器",
+          "value": "0/484"
+        },
+        {
+          "type": "device-item",
+          "name": "温湿度传感器",
+          "value": "0/484"
+        },
+        {
+          "type": "device-item",
+          "name": "压力传感器",
+          "value": "0/484"
+        },
+        {
+          "type": "device-item",
+          "name": "光照度变送器",
+          "value": "0/484"
+        },
+        {
+          "type": "device-item",
+          "name": "紧急电话",
+          "value": "0/484"
+        },
+        {
+          "type": "device-item",
+          "name": "水质监测设备",
+          "value": "0/484"
+        }
+      ]
+    }
+  ],
+  "interactions": [
+    {
+      "target": "左侧分类标签栏",
+      "type": "tab-switch",
+      "description": "切换监控、照明、通风、供配电、消防、交通诱导分类",
+      "defaultState": "监控高亮",
+      "evidence": "左侧竖排标签中“监控”为选中态"
+    }
+  ],
+  "charts": [],
+  "chartDataHints": [],
+  "headerSlots": [],
+  "analysisType": "stat-grid",
+  "analysisTarget": "",
+  "analysisDescription": "",
+  "analysisEvidence": [],
+  "analysisFile": "/Users/smigoo/工作/mvgo/temp-components/6a7599af6eb9eebf9fba56cd/mc-max-1787808104264-798d48b6/.mc-gen/config/preview-analysis.json",
+  "_cachedAt": 1787808156282,
+  "_cacheKey": "vision_1t7Dmmpsl5i0PC8BJt2QLf_2:8417_microcode"
+}

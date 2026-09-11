@@ -1,0 +1,119 @@
+@import './theme-vars.less';
+
+.environment-panel-block {
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.environment-title-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.environment-title-text {
+  font-family: 'Noto Sans SC', 'Source Han Sans CN', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 19.2px;
+  color: #1990ff;
+}
+
+.environment-tab-shell {
+  position: relative;
+  box-sizing: border-box;
+  min-width: 0;
+  background-size: 100% 100%;
+  background-position: 0 0;
+  background-repeat: no-repeat;
+}
+
+.environment-tab-list {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.environment-tab-button {
+  position: relative;
+  z-index: 1;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 12px;
+  color: #2c9bea;
+  white-space: nowrap;
+}
+
+.environment-tab-button--active {
+  color: #ffffff;
+  text-shadow: 0 0.6px 0 rgba(0, 111, 227, 1);
+}
+
+.environment-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 29px;
+  background: #f53f3f;
+  color: #ffffff;
+  font-family: 'PingFang SC', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 14px;
+
+  flex-direction: column;}
+
+.environment-chart-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.environment-chart-body {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+.environment-chart-canvas {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.environment-chart-legend {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  box-sizing: border-box;
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 9.6px;
+  line-height: 14.4px;
+  color: #333333;
+}
+
+.environment-chart-legend-line {
+  width: 14px;
+  height: 2px;
+  border-radius: 1.6px;
+  background: #0fcd7d;
+  flex-shrink: 0;
+}

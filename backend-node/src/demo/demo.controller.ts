@@ -10,10 +10,13 @@ import {
   Logger,
   Req,
   HttpCode,
+  UseGuards,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { DemoService } from './demo.service';
+import { SessionGuard } from '../auth/session.guard';
 
+@UseGuards(SessionGuard)
 @Controller('demo')
 export class DemoController {
   private readonly logger = new Logger(DemoController.name);

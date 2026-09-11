@@ -1,0 +1,219 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 60,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "违反 base-panel 约束：生成了组件面板标题'环境监测'。根据规范，组件标题由 default-panel 通过 componentName 自动显示，禁止在组件内容中重复生成标题栏和标题文字。",
+        "suggestion": "删除 section-header 整个区块，组件根容器内只保留业务内容（筛选控制区和图表区），由外层 base-panel 统一处理标题。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[0]",
+        "message": "违反宽度自适应约束：图表容器 chart-container 使用了固定宽度 width: 380。规范明确要求容器布局禁止使用固定 px 宽度限制容器伸缩。",
+        "suggestion": "将图表容器的 width 改为 100%，并确保外层 flex 子项设置 min-width: 0 以防止内容挤压溢出。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.charts[0]",
+        "message": "违反图表 tooltip 约束：图表配置中 tooltip 为'未显示'。规范强制要求只要存在 ECharts 图表，就必须提供 option.tooltip，禁止省略。",
+        "suggestion": "为面积图补充默认的 tooltip 配置，建议设置为 tooltip: { trigger: 'axis' }，并根据设计稿还原样式。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[*].body.backgroundImage",
+        "message": "背景图重复引用：三个 section 的 body 均引用了同一张背景图 bg-7890.png，这会导致背景重叠、层级混乱以及不必要的性能开销。",
+        "suggestion": "将背景图提取到组件的最外层根容器（如 .my-component）上统一设置，移除各个 section 内部的重复背景图配置。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "节点覆盖率极低：coverageRate 为 0，missingCount 高达 26，说明 Figma 节点解析或匹配存在严重问题，当前布局结构可能是不完整的。",
+        "suggestion": "重新检查 Figma 解析过程或预览图识别逻辑，确保所有关键节点（如 header、slot-con、echarts 组等）被正确映射到布局结构中。"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "layout.sections[2].body.children[0].axes.y",
+        "message": "语义冲突：Y轴标签为'辆'，但图例和系列名为'CO浓度'（zk3+785CO浓度）。虽然 doNotInvent 要求保持视觉原样，但这极大概率是设计稿的笔误。",
+        "suggestion": "在代码生成前与设计师确认 Y 轴单位是否应为 'ppm' 或 'mg/m³' 等 CO 浓度单位，避免上线后出现明显的业务逻辑错误。"
+      }
+    ],
+    "recommendations": [
+      "严格遵循 base-panel 规范，移除组件内部的标题区域，避免与面板默认标题重复。",
+      "全面排查布局中的固定 px 宽度，统一替换为 flex 布局（flex: 1 / width: 100%）以实现响应式自适应。",
+      "为所有 ECharts 图表实例补充完整的 tooltip 配置，确保交互体验符合规范底线。",
+      "优化背景资源的引用方式，避免在子区块中重复挂载同一张大背景图，提升渲染性能。",
+      "修复 Figma 节点覆盖率问题，确保布局结构完整反映设计稿的所有层级和元素。"
+    ],
+    "summary": "该布局结构在区域划分上具备一定的逻辑性，但存在多处违反微码核心规范的严重问题。特别是重复生成面板标题、图表容器使用固定宽度、缺失必需的 tooltip 配置，以及极低的 Figma 节点覆盖率。这些问题会导致组件无法正常渲染、失去自适应能力或违反框架约束。建议打回重构，优先修复 Error 级别的规范冲突，并补全缺失的节点结构。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "rgba(55, 120, 200, 1)",
+      "--colorBgBase": "rgba(237, 244, 251, 1)",
+      "--colorSuccess": "#52c41a",
+      "--colorDanger": "#f53f3f",
+      "--colorTextBase": "#333333",
+      "--colorTextSecondary": "#666666",
+      "--fontSize": "14px",
+      "--borderRadius": "4px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "rgba(55, 120, 200, 1)",
+      "@color-bg-base": "rgba(237, 244, 251, 1)",
+      "@color-success": "#52c41a",
+      "@color-danger": "#f53f3f",
+      "@color-text-base": "#333333",
+      "@color-text-secondary": "#666666",
+      "@font-size-base": "14px",
+      "@border-radius-base": "4px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "width": "100%",
+        "height": "100%",
+        "background-color": "var(--colorBgBase)",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)",
+        "box-sizing": "border-box"
+      },
+      ".tab-nav": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "8px",
+        "padding": "12px 16px"
+      },
+      ".tab-item": {
+        "padding": "6px 16px",
+        "border-radius": "var(--borderRadius)",
+        "cursor": "pointer",
+        "transition": "all 0.3s ease",
+        "color": "var(--color-text-secondary)"
+      },
+      ".tab-item.active": {
+        "background-color": "var(--colorPrimary)",
+        "color": "#ffffff",
+        "font-weight": "500"
+      },
+      ".badge": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "min-width": "20px",
+        "height": "20px",
+        "padding": "0 6px",
+        "border-radius": "10px",
+        "background-color": "var(--colorDanger)",
+        "color": "#ffffff",
+        "font-size": "12px",
+        "font-weight": "bold",
+        "line-height": "1"
+      },
+      ".warning-line": {
+        "width": "100%",
+        "height": "2px",
+        "background-color": "var(--colorDanger)",
+        "box-shadow": "0 0 8px rgba(245, 63, 63, 0.4)"
+      },
+      ".antenna-icon": {
+        "width": "24px",
+        "height": "24px",
+        "margin-right": "8px",
+        "flex-shrink": "0"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 rgba(55, 120, 200, 1) 映射为 --colorPrimary，用于Tab选中态等强调元素",
+      "浅灰蓝色背景 rgba(237, 244, 251, 1) 映射为 --colorBgBase，作为组件整体底色",
+      "红色 #f53f3f 映射为 --colorDanger，用于红色预警线和Badge数字6的强调展示，并增加微发光效果增强科技感",
+      "绿色 #52c41a 映射为 --colorSuccess，用于正常状态或安全指标的展示",
+      "左侧天线装饰图标建议通过 <img :src> 引入，并赋予 .antenna-icon 类控制尺寸",
+      "容器背景应优先直接落地为 Figma 字面量值，避免关键可见背景只依赖 CSS 变量"
+    ],
+    "elementStyleMap": {
+      "section-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "section-controls": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tabs-list": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "view-switchers": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-5": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-15": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-header",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 1,
+        "title": "环境监测"
+      },
+      {
+        "id": "section-controls",
+        "responsibility": "筛选与视图控制（请按功能拆分）",
+        "elementCount": 4,
+        "title": "筛选与视图控制"
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "趋势图表"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 → 强制拆分"
+  }
+}

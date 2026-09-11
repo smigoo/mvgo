@@ -1,0 +1,330 @@
+```json
+{
+  "generatedAt": "2026-01-20T10:30:00Z",
+  "stage": "preview-analysis",
+  "componentName": "环境监测",
+  "componentTitle": "环境监测",
+  "analysisModel": "claude-sonnet-5",
+  "sourceImage": {
+    "path": "mc-preview.png",
+    "size": 0,
+    "mtimeMs": 0,
+    "sha1": ""
+  },
+  "summary": "浅色主题的环境监测面积图组件，包含Tab切换、能见度指标、时间轴和面积图表。顶部有4个Tab选项卡（气化版、能见度、洞内照明、洞外光强），右上角有统计和导出控件，主体为24小时能见度趋势面积图。",
+  "layout": {
+    "type": "vertical-stack",
+    "direction": "vertical",
+    "sections": [
+      {
+        "id": "section-header",
+        "name": "组件标题区",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "title-itself",
+        "slotCandidate": null,
+        "header": {
+          "title": "环境监测",
+          "figmaNode": "7890",
+          "styles": {
+            "fontSize": 16,
+            "fontWeight": "500",
+            "color": "rgba(85, 158, 255, 1)"
+          },
+          "controls": []
+        },
+        "body": {
+          "layout": "horizontal",
+          "bgPlaceholder": "header-bg",
+          "children": [
+            {
+              "type": "icon",
+              "name": "装饰图标",
+              "resourceFile": "../resources/images/bg-7880.png",
+              "recommendedUsage": "imgSrc",
+              "position": "title-left",
+              "styles": {
+                "width": 8,
+                "height": 8
+              }
+            },
+            {
+              "type": "decoration",
+              "name": "标题下划线",
+              "role": "装饰",
+              "styles": {
+                "width": 362,
+                "height": 6,
+                "background": "linear-gradient(90deg, rgba(85, 158, 255, 0.8) 0%, rgba(85, 158, 255, 0) 100%)"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "section-tabs",
+        "name": "Tab切换栏",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "header": null,
+        "body": {
+          "layout": "horizontal",
+          "bgPlaceholder": "tabs-bg",
+          "children": [
+            {
+              "type": "tab",
+              "name": "气化版",
+              "role": "tab",
+              "active": true,
+              "resourceFile": "../resources/images/bg-tab-active-7891.png",
+              "recommendedUsage": "backgroundBlock",
+              "styles": {
+                "fontSize": 14,
+                "color": "rgba(255, 255, 255, 1)",
+                "padding": "6px 16px",
+                "borderRadius": 0
+              }
+            },
+            {
+              "type": "tab",
+              "name": "能见度",
+              "role": "tab",
+              "active": false,
+              "styles": {
+                "fontSize": 14,
+                "color": "rgba(0, 0, 0, 0.65)",
+                "padding": "6px 16px"
+              }
+            },
+            {
+              "type": "tab",
+              "name": "洞内照明",
+              "role": "tab",
+              "active": false,
+              "styles": {
+                "fontSize": 14,
+                "color": "rgba(0, 0, 0, 0.65)",
+                "padding": "6px 16px"
+              }
+            },
+            {
+              "type": "tab",
+              "name": "洞外光强",
+              "role": "tab",
+              "active": false,
+              "styles": {
+                "fontSize": 14,
+                "color": "rgba(0, 0, 0, 0.65)",
+                "padding": "6px 16px"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "section-chart",
+        "name": "能见度图表区",
+        "role": "常驻",
+        "layout": "vertical",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "header": {
+          "title": null,
+          "controls": [
+            {
+              "type": "icon-button",
+              "name": "统计图标",
+              "role": "icon-button",
+              "icon": "chart",
+              "badge": 8,
+              "styles": {
+                "width": 16,
+                "height": 16
+              }
+            },
+            {
+              "type": "icon-button",
+              "name": "导出按钮",
+              "role": "icon-button",
+              "icon": "export",
+              "styles": {
+                "width": 16,
+                "height": 16
+              }
+            }
+          ]
+        },
+        "body": {
+          "layout": "vertical",
+          "bgPlaceholder": "chart-bg",
+          "resourceFile": "../resources/images/bg-7890.png",
+          "recommendedUsage": "backgroundStyle",
+          "children": [
+            {
+              "type": "stat-label",
+              "name": "当前指标",
+              "role": "常驻",
+              "layout": "horizontal",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "2k3+785CD入度",
+                  "styles": {
+                    "fontSize": 12,
+                    "color": "rgba(0, 0, 0, 0.45)"
+                  }
+                },
+                {
+                  "type": "text",
+                  "text": "调整线",
+                  "styles": {
+                    "fontSize": 12,
+                    "color": "rgba(245, 63, 63, 1)"
+                  }
+                }
+              ]
+            },
+            {
+              "type": "chart-container",
+              "name": "能见度趋势图",
+              "role": "常驻",
+              "chartType": "area",
+              "styles": {
+                "width": 380,
+                "height": 120
+              },
+              "children": [
+                {
+                  "type": "y-axis",
+                  "role": "常驻",
+                  "labels": ["50", "40", "30", "20", "10", "0"],
+                  "styles": {
+                    "fontSize": 10,
+                    "color": "rgba(0, 0, 0, 0.45)"
+                  }
+                },
+                {
+                  "type": "x-axis",
+                  "role": "常驻",
+                  "labels": ["2", "4", "6", "8", "10", "12", "14", "16", "18", "20", "22", "24"],
+                  "unit": "时",
+                  "styles": {
+                    "fontSize": 10,
+                    "color": "rgba(0, 0, 0, 0.45)"
+                  }
+                },
+                {
+                  "type": "threshold-line",
+                  "name": "调整线",
+                  "role": "常驻",
+                  "value": 30,
+                  "styles": {
+                    "borderStyle": "dashed",
+                    "borderColor": "rgba(245, 63, 63, 1)",
+                    "borderWidth": 1
+                  }
+                },
+                {
+                  "type": "area-series",
+                  "name": "能见度数据",
+                  "role": "常驻",
+                  "styles": {
+                    "fillColor": "rgba(82, 196, 26, 0.3)",
+                    "strokeColor": "rgba(82, 196, 26, 1)",
+                    "strokeWidth": 2
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "styles": {
+    "backgroundBrightness": "light",
+    "theme": "浅色科技监测风",
+    "colors": [
+      "rgba(237, 244, 251, 1)",
+      "rgba(85, 158, 255, 1)",
+      "rgba(82, 196, 26, 1)",
+      "rgba(245, 63, 63, 1)",
+      "rgba(0, 0, 0, 0.65)",
+      "rgba(0, 0, 0, 0.45)"
+    ],
+    "background": "浅蓝灰色渐变背景（#EDF4FB）",
+    "decorations": [
+      "标题左侧蓝色圆点图标",
+      "标题下方蓝色渐变横线",
+      "Tab激活态蓝色渐变背景",
+      "红色虚线调整线"
+    ],
+    "emphasis": [
+      "激活Tab使用白色文字+蓝色渐变背景",
+      "调整线使用红色虚线标识",
+      "面积图使用绿色渐变填充"
+    ]
+  },
+  "interactions": [
+    {
+      "target": "顶部Tab栏",
+      "type": "tab-switch",
+      "description": "切换监测指标类型（气化版、能见度、洞内照明、洞外光强）",
+      "defaultState": "常驻，气化版激活",
+      "evidence": "有4个Tab选项，第一个为激活态"
+    },
+    {
+      "target": "右上角统计图标",
+      "type": "icon-button",
+      "description": "查看统计信息，带有数字8角标",
+      "defaultState": "常驻",
+      "evidence": "图标右上角有红色数字8"
+    },
+    {
+      "target": "右上角导出按钮",
+      "type": "icon-button",
+      "description": "导出数据",
+      "defaultState": "常驻",
+      "evidence": "有导出图标样式"
+    }
+  ],
+  "charts": [
+    {
+      "section": "section-chart",
+      "type": "area",
+      "series": ["能见度"],
+      "legend": [],
+      "legendPosition": null,
+      "seriesColors": ["rgba(82, 196, 26, 1)"],
+      "legendType": null,
+      "axes": "X轴为时间（2-24时），Y轴为能见度值（0-50）",
+      "tooltip": "未显示tooltip",
+      "notes": [
+        "有红色虚线调整线标识阈值（30）",
+        "面积图使用绿色渐变填充",
+        "坐标轴刻度值完整显示"
+      ]
+    }
+  ],
+  "doNotInvent": [
+    "Tab切换后的具体数据内容",
+    "统计图标点击后的弹窗内容",
+    "导出功能的具体格式和选项",
+    "图表hover时的详细tooltip格式",
+    "调整线阈值的可编辑性",
+    "数据自动刷新逻辑"
+  ],
+  "notes": [
+    "组件需要完整还原面板外壳，包括浅蓝灰色背景、标题栏装饰、Tab栏样式",
+    "标题区包含左侧蓝色圆点图标和下方渐变横线装饰",
+    "Tab激活态使用蓝色渐变背景+白色文字",
+    "图表区域有独立的背景图资源",
+    "Y轴刻度值需完整显示（50/40/30/20/10/0）",
+    "X轴时间轴需显示完整刻度（2/4/6/8/10/12/14/16/18/20/22/24时）",
+    "红色虚线调整线需保持水平位置（Y=30）",
+    "右上角控件包含带角标的统计图标和导出按钮"
+  ]
+}
+```

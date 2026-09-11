@@ -1,0 +1,316 @@
+@import './themes/theme-vars.less';
+
+/* [Layout Refine] Figma root bbox 420x425, padding calculated from children offsets */
+.c-mc-1785400257658-7f2c4def-root {
+  width: 100%;
+  height: 100%;
+  background-color: @bg-color;
+  box-shadow: @shadow-panel;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 12px 0 20px;
+  box-sizing: border-box;
+}
+
+/* [Layout Refine] Figma header height 30px, margin-bottom 4px to slot-con */
+.c-mc-1785400257658-7f2c4def-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 30px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid transparent;
+  border-image: @border-gradient-header 1;
+}
+
+.c-mc-1785400257658-7f2c4def-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.c-mc-1785400257658-7f2c4def-title-icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* [Style Refine] fills[0].gradientStops → linear-gradient(90deg, #1990ff, rgba(90,126,255,0.83)) */
+.c-mc-1785400257658-7f2c4def-title-text {
+  font-size: 16px;
+  font-weight: 700;
+  font-family: 'Noto Sans SC', sans-serif;
+  background: linear-gradient(90deg, @text-color-title, @text-color-title-end);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 19px;
+}
+
+.c-mc-1785400257658-7f2c4def-stats {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.c-mc-1785400257658-7f2c4def-stat-item {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+/* [Style Refine] fills[0].color → rgb(51,51,51) */
+.c-mc-1785400257658-7f2c4def-stat-label {
+  font-size: 14px;
+  font-weight: 400;
+  font-family: 'Source Han Sans CN', sans-serif;
+  color: @text-color-primary;
+  line-height: 21px;
+}
+
+/* [Style Refine] typography → Roboto 20px 700 */
+.c-mc-1785400257658-7f2c4def-stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: 'Roboto', sans-serif;
+  line-height: 23px;
+}
+
+.c-mc-1785400257658-7f2c4def-stat-value--blue {
+  background: linear-gradient(180deg, #e1efff, #00ccff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.c-mc-1785400257658-7f2c4def-stat-value--green {
+  background: linear-gradient(180deg, #e1efff, #00ccff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  position: relative;
+}
+.c-mc-1785400257658-7f2c4def-stat-value--green::after {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; right: 0; bottom: 0;
+  background: #08a3a5;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  mix-blend-mode: multiply;
+}
+
+/* [Style Refine] fills[0].gradientStops → linear-gradient(90deg, #1990ff, rgba(90,126,255,0.83)) */
+.c-mc-1785400257658-7f2c4def-update-text {
+  font-size: 14px;
+  font-weight: 400;
+  font-family: 'Source Han Sans CN', sans-serif;
+  background: linear-gradient(90deg, @text-color-title, @text-color-title-end);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 21px;
+}
+
+.c-mc-1785400257658-7f2c4def-header-action {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+/* [Layout Refine] Figma slot-con flex: 1, min-height: 0 for flex nesting */
+.c-mc-1785400257658-7f2c4def-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* [Layout Refine] Figma switch height 65px */
+.c-mc-1785400257658-7f2c4def-switch {
+  display: flex;
+  height: 65px;
+  gap: 9px;
+}
+
+/* [Layout Refine] Figma switch-item layout: left(icon+title) right(data) */
+.c-mc-1785400257658-7f2c4def-switch-item {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  cursor: pointer;
+  background-size: 100% 100%
+  transition: all 0.3s;
+  box-sizing: border-box;
+}
+
+.switch-left {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.switch-icon {
+  width: 35px;
+  height: 28px;
+}
+
+.switch-title {
+  font-size: 12px;
+  font-weight: 400;
+  font-family: 'YouSheBiaoTiHei', sans-serif;
+  color: @text-color-switch-default;
+  line-height: 16px;
+}
+
+.is-active .switch-title {
+  color: @text-color-switch-active;
+}
+
+.switch-right {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.switch-data {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.data-label {
+  font-size: 14px;
+  font-weight: 400;
+  font-family: 'Source Han Sans CN', sans-serif;
+  color: @text-color-switch-default;
+  line-height: 21px;
+}
+
+.is-active .data-label {
+  color: @text-color-switch-active;
+}
+
+.data-value {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: 'Roboto', sans-serif;
+  line-height: 23px;
+  color: @text-color-stat-blue;
+}
+
+.is-active .data-value {
+  background: linear-gradient(180deg, #e1efff, #00ccff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.data-value--error {
+  color: #e03434;
+}
+
+.is-active .data-value--error {
+  background: none;
+  -webkit-text-fill-color: #e03434;
+}
+
+/* [Layout Refine] Figma content area flex: 1, tabs width 46px */
+.c-mc-1785400257658-7f2c4def-content {
+  flex: 1;
+  display: flex;
+  gap: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.c-mc-1785400257658-7f2c4def-tabs {
+  width: 46px;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+/* [Layout Refine] Figma tab-item heights vary, use flex: 1 and padding */
+.c-mc-1785400257658-7f2c4def-tab-item {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 0;
+  font-size: 14px;
+  font-weight: 400;
+  font-family: 'Source Han Sans CN', sans-serif;
+  color: @text-color-tab-default;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.3s;
+  background: @bg-tab-default;
+  border: 1px solid @border-color-tab;
+  border-right: none;
+  box-sizing: border-box;
+  line-height: 16px;
+}
+
+.c-mc-1785400257658-7f2c4def-tab-item.is-active {
+  background: @bg-tab-active;
+  color: @text-color-tab-active;
+  font-weight: 700;
+  border: 1px solid @border-color-tab;
+  border-right: none;
+}
+
+/* [Layout Refine] Figma cons grid: 3 cols, 4 rows, exact pixel sizes */
+.c-mc-1785400257658-7f2c4def-cards {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(4, 64px);
+  gap: 13px 8px;
+  overflow: hidden;
+}
+
+/* [Style Refine] Remove border-radius, bg image handles shape */
+.c-mc-1785400257658-7f2c4def-card {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  background-size: 100% 100%
+  box-sizing: border-box;
+}
+
+.c-mc-1785400257658-7f2c4def-card-icon {
+  width: 26px;
+  height: 32px;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.c-mc-1785400257658-7f2c4def-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.c-mc-1785400257658-7f2c4def-card-label {
+  font-size: 12px;
+  font-weight: 400;
+  font-family: 'Source Han Sans CN', sans-serif;
+  color: @text-color-primary;
+  line-height: 18px;
+}
+
+/* [Style Refine] typography → Roboto 16px 500, white, text-shadow */
+.c-mc-1785400257658-7f2c4def-card-value {
+  font-size: 16px;
+  font-weight: 500;
+  font-family: 'Roboto', sans-serif;
+  color: @text-color-card-value;
+  line-height: 18.75px;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+}

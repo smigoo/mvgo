@@ -1,0 +1,1152 @@
+{
+  "layoutStructure": {
+    "generatedAt": "2025-06-15T10:30:00Z",
+    "stage": "preview-analysis",
+    "componentName": "流量监测",
+    "componentTitle": "流量监测",
+    "analysisModel": "claude-3-5-sonnet-20241022",
+    "sourceImage": {
+      "path": "mc-preview.png",
+      "size": 0,
+      "mtimeMs": 0,
+      "sha1": ""
+    },
+    "summary": "浅色风格的交通流量监测面板，包含当日总流量统计、两地小时流量对比柱状图、车型分布环形图、流量预测折线图四个主要区域",
+    "layout": {
+      "type": "vertical-stack",
+      "direction": "top-to-bottom",
+      "sections": [
+        {
+          "id": "daily-total-flow",
+          "name": "当日总流量",
+          "role": "常驻",
+          "layout": "vertical",
+          "headerRelation": "content-below-title",
+          "slotCandidate": null,
+          "header": {
+            "title": "当日总流量",
+            "controls": [
+              {
+                "id": "time-range-selector",
+                "name": "时间范围选择",
+                "role": "dropdown",
+                "value": "24小时",
+                "options": [
+                  "24小时"
+                ],
+                "figmaNode": "@ant/select"
+              }
+            ]
+          },
+          "body": {
+            "layout": "horizontal-2-columns",
+            "bgPlaceholder": "body-bg-daily-total",
+            "children": [
+              {
+                "id": "tunnel-flow",
+                "name": "江阴靖江长江隧道",
+                "role": "stat-card",
+                "layout": "vertical",
+                "children": [
+                  {
+                    "type": "label",
+                    "text": "江阴靖江长江隧道",
+                    "styles": {
+                      "fontSize": 14,
+                      "color": "rgba(51, 51, 51, 0.65)"
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "text": "34,620",
+                    "styles": {
+                      "fontSize": 36,
+                      "fontWeight": "bold",
+                      "color": "rgba(56, 141, 255, 1)"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "bridge-flow",
+                "name": "江阴大桥",
+                "role": "stat-card",
+                "layout": "vertical",
+                "children": [
+                  {
+                    "type": "label",
+                    "text": "江阴大桥",
+                    "styles": {
+                      "fontSize": 14,
+                      "color": "rgba(51, 51, 51, 0.65)"
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "text": "82,379",
+                    "styles": {
+                      "fontSize": 36,
+                      "fontWeight": "bold",
+                      "color": "rgba(56, 141, 255, 1)"
+                    }
+                  }
+                ]
+              }
+            ],
+            "backgroundImage": {
+              "src": null,
+              "recommendedUsage": "backgroundStyle"
+            },
+            "backgroundSize": "cover",
+            "backgroundPosition": "center",
+            "backgroundRepeat": "no-repeat"
+          }
+        },
+        {
+          "id": "hourly-flow-tunnel",
+          "name": "江阴靖江长江隧道小时流量",
+          "role": "常驻",
+          "layout": "vertical",
+          "headerRelation": "content-below-title",
+          "slotCandidate": null,
+          "header": {
+            "title": "江阴靖江长江隧道",
+            "controls": []
+          },
+          "body": {
+            "layout": "single-chart",
+            "bgPlaceholder": "body-bg-hourly-tunnel",
+            "children": [
+              {
+                "type": "chart-container",
+                "role": "chart",
+                "chartId": "tunnel-hourly-bar"
+              }
+            ],
+            "backgroundImage": {
+              "src": null,
+              "recommendedUsage": "backgroundStyle"
+            },
+            "backgroundSize": "cover",
+            "backgroundPosition": "center",
+            "backgroundRepeat": "no-repeat"
+          }
+        },
+        {
+          "id": "hourly-flow-bridge",
+          "name": "江阴大桥小时流量",
+          "role": "常驻",
+          "layout": "vertical",
+          "headerRelation": "content-below-title",
+          "slotCandidate": null,
+          "header": {
+            "title": "江阴大桥",
+            "controls": []
+          },
+          "body": {
+            "layout": "single-chart",
+            "bgPlaceholder": "body-bg-hourly-bridge",
+            "children": [
+              {
+                "type": "chart-container",
+                "role": "chart",
+                "chartId": "bridge-hourly-bar"
+              }
+            ],
+            "backgroundImage": {
+              "src": null,
+              "recommendedUsage": "backgroundStyle"
+            },
+            "backgroundSize": "cover",
+            "backgroundPosition": "center",
+            "backgroundRepeat": "no-repeat"
+          }
+        },
+        {
+          "id": "vehicle-type-distribution",
+          "name": "车型分布",
+          "role": "常驻",
+          "layout": "vertical",
+          "headerRelation": "content-below-title",
+          "slotCandidate": null,
+          "header": {
+            "title": "车型分布",
+            "controls": []
+          },
+          "body": {
+            "layout": "horizontal-2-columns",
+            "bgPlaceholder": "body-bg-vehicle-type",
+            "children": [
+              {
+                "id": "tunnel-vehicle-type",
+                "name": "江阴靖江长江隧道车型",
+                "role": "chart-with-stats",
+                "layout": "vertical",
+                "children": [
+                  {
+                    "type": "label",
+                    "text": "江阴靖江长江隧道",
+                    "styles": {
+                      "fontSize": 14,
+                      "color": "rgba(51, 51, 51, 0.65)"
+                    }
+                  },
+                  {
+                    "type": "chart-container",
+                    "role": "chart",
+                    "chartId": "tunnel-vehicle-pie"
+                  },
+                  {
+                    "type": "stat-row",
+                    "layout": "horizontal",
+                    "children": [
+                      {
+                        "type": "stat-item",
+                        "label": "客车",
+                        "value": "22350",
+                        "color": "rgba(56, 141, 255, 1)"
+                      },
+                      {
+                        "type": "stat-item",
+                        "label": "货车",
+                        "value": "16020",
+                        "color": "rgba(255, 135, 82, 1)"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "bridge-vehicle-type",
+                "name": "江阴大桥车型",
+                "role": "chart-with-stats",
+                "layout": "vertical",
+                "children": [
+                  {
+                    "type": "label",
+                    "text": "江阴大桥",
+                    "styles": {
+                      "fontSize": 14,
+                      "color": "rgba(51, 51, 51, 0.65)"
+                    }
+                  },
+                  {
+                    "type": "chart-container",
+                    "role": "chart",
+                    "chartId": "bridge-vehicle-pie"
+                  },
+                  {
+                    "type": "stat-row",
+                    "layout": "horizontal",
+                    "children": [
+                      {
+                        "type": "stat-item",
+                        "label": "客车",
+                        "value": "68109",
+                        "color": "rgba(56, 141, 255, 1)"
+                      },
+                      {
+                        "type": "stat-item",
+                        "label": "货车",
+                        "value": "16020",
+                        "color": "rgba(255, 135, 82, 1)"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "backgroundImage": {
+              "src": null,
+              "recommendedUsage": "backgroundStyle"
+            },
+            "backgroundSize": "cover",
+            "backgroundPosition": "center",
+            "backgroundRepeat": "no-repeat"
+          }
+        },
+        {
+          "id": "flow-prediction",
+          "name": "流量预测",
+          "role": "常驻",
+          "layout": "vertical",
+          "headerRelation": "content-below-title",
+          "slotCandidate": null,
+          "header": {
+            "title": "流量预测",
+            "controls": [
+              {
+                "id": "location-tabs",
+                "name": "地点切换",
+                "role": "tab",
+                "options": [
+                  {
+                    "label": "江阴靖江长江隧道",
+                    "value": "tunnel",
+                    "active": true
+                  },
+                  {
+                    "label": "江阴大桥",
+                    "value": "bridge",
+                    "active": false
+                  }
+                ]
+              },
+              {
+                "id": "holiday-mode-button",
+                "name": "节假日预测",
+                "role": "button",
+                "variant": "link",
+                "styles": {
+                  "color": "rgba(25, 144, 255, 1)"
+                }
+              }
+            ]
+          },
+          "body": {
+            "layout": "single-chart",
+            "bgPlaceholder": "body-bg-flow-prediction",
+            "children": [
+              {
+                "type": "chart-container",
+                "role": "chart",
+                "chartId": "flow-prediction-area"
+              }
+            ],
+            "backgroundImage": {
+              "src": null,
+              "recommendedUsage": "backgroundStyle"
+            },
+            "backgroundSize": "cover",
+            "backgroundPosition": "center",
+            "backgroundRepeat": "no-repeat"
+          }
+        }
+      ]
+    },
+    "styles": {
+      "backgroundBrightness": "light",
+      "theme": "浅色科技监测风",
+      "colors": [
+        "rgba(56, 141, 255, 1)",
+        "rgba(255, 135, 82, 1)",
+        "rgba(82, 196, 26, 1)",
+        "rgba(237, 244, 251, 1)",
+        "rgba(51, 51, 51, 1)"
+      ],
+      "background": "浅灰蓝色渐变背景 rgba(237, 244, 251, 1)",
+      "decorations": [
+        "统计卡片中间的地图图标装饰",
+        "section标题左侧的菱形图标",
+        "图表顶部的橙色建议分流阈值线"
+      ],
+      "emphasis": [
+        "大号蓝色数值（36px）",
+        "图表tooltip中的实时数据",
+        "准确率百分比（绿色）"
+      ]
+    },
+    "headerSlots": [],
+    "interactions": [
+      {
+        "target": "当日总流量右侧下拉框",
+        "type": "dropdown",
+        "description": "时间范围筛选（24小时）",
+        "defaultState": "常驻，收起态",
+        "evidence": "右侧有向下箭头"
+      },
+      {
+        "target": "流量预测区域的地点tab",
+        "type": "tab-switch",
+        "description": "切换江阴靖江长江隧道/江阴大桥",
+        "defaultState": "常驻，江阴靖江长江隧道选中态",
+        "evidence": "蓝色底部选中指示器"
+      },
+      {
+        "target": "流量预测区域的节假日预测按钮",
+        "type": "link",
+        "description": "切换到节假日预测模式",
+        "defaultState": "常驻，链接态",
+        "evidence": "蓝色文字按钮"
+      },
+      {
+        "target": "柱状图的16时数据点",
+        "type": "chart-hover",
+        "description": "显示北京方向825车、上海方向831车",
+        "defaultState": "瞬态，需hover触发",
+        "evidence": "截图中显示的白色tooltip框"
+      }
+    ],
+    "charts": [
+      {
+        "section": "hourly-flow-tunnel",
+        "type": "bar",
+        "series": [
+          "北京方向",
+          "上海方向"
+        ],
+        "legend": [
+          "北京方向",
+          "上海方向"
+        ],
+        "legendPosition": "top-right",
+        "seriesColors": [
+          "rgba(56, 141, 255, 1)",
+          "rgba(255, 135, 82, 1)"
+        ],
+        "legendType": "horizontal",
+        "axes": "X轴为0-24小时，Y轴为车辆数（0-4000）",
+        "tooltip": "显示时间点、北京方向流量、上海方向流量",
+        "notes": [
+          "有橙色虚线表示建议分流阈值"
+        ]
+      },
+      {
+        "section": "hourly-flow-bridge",
+        "type": "bar",
+        "series": [
+          "北京方向",
+          "上海方向"
+        ],
+        "legend": [
+          "北京方向",
+          "上海方向"
+        ],
+        "legendPosition": "top-right",
+        "seriesColors": [
+          "rgba(56, 141, 255, 1)",
+          "rgba(255, 135, 82, 1)"
+        ],
+        "legendType": "horizontal",
+        "axes": "X轴为0-24小时，Y轴为车辆数（0-4000）",
+        "tooltip": "显示时间点、北京方向流量、上海方向流量",
+        "notes": [
+          "有橙色虚线表示建议分流阈值"
+        ]
+      },
+      {
+        "section": "vehicle-type-distribution",
+        "type": "pie",
+        "series": [
+          "客车",
+          "货车"
+        ],
+        "legend": [],
+        "legendPosition": null,
+        "seriesColors": [
+          "rgba(56, 141, 255, 1)",
+          "rgba(255, 135, 82, 1)"
+        ],
+        "legendType": null,
+        "axes": null,
+        "tooltip": "显示车型名称和数量",
+        "notes": [
+          "环形图中心显示总数",
+          "图表下方显示客车和货车的具体数值"
+        ]
+      },
+      {
+        "section": "flow-prediction",
+        "type": "area",
+        "series": [
+          "实际流量",
+          "预测流量"
+        ],
+        "legend": [
+          "实际流量",
+          "预测流量"
+        ],
+        "legendPosition": "top-right",
+        "seriesColors": [
+          "rgba(82, 196, 26, 1)",
+          "rgba(56, 141, 255, 1)"
+        ],
+        "legendType": "horizontal",
+        "axes": "X轴为2小时前-2小时后，Y轴为车辆数（0-4000）",
+        "tooltip": "显示时间点和流量值",
+        "notes": [
+          "X轴刻度：2小时前、1小时前、当前时间、1小时后、2小时后",
+          "每个时间点下方显示准确率（如准确率98%、准确率96%、准确率92%）"
+        ]
+      }
+    ],
+    "doNotInvent": [
+      "时间范围下拉框的完整选项列表（截图只显示24小时）",
+      "tooltip的显示逻辑和触发条件",
+      "建议分流阈值线的具体数值和计算规则",
+      "节假日预测的具体算法和数据来源",
+      "车型分布环形图的交互逻辑",
+      "流量预测的准确率计算方法",
+      "图表之间的联动规则",
+      "自动刷新频率",
+      "数据的时间粒度和聚合规则"
+    ],
+    "notes": [
+      "截图中16时的tooltip是瞬态，不应作为常驻DOM结构",
+      "两个小时流量柱状图结构相同，可复用同一图表组件",
+      "车型分布环形图中心显示总数，需要在图表配置中实现",
+      "流量预测面积图的准确率标签需要在X轴下方单独渲染",
+      "所有section标题左侧的菱形图标应作为装饰元素处理"
+    ],
+    "coverageReport": {
+      "totalFigma": 46,
+      "matchedCount": 21,
+      "missingCount": 3,
+      "uncertainCount": 0,
+      "coverageRate": 88,
+      "missing": [
+        {
+          "name": "cp-流量监测",
+          "type": "FRAME",
+          "depth": 0
+        },
+        {
+          "name": "流量监测",
+          "type": "TEXT",
+          "depth": 2
+        },
+        {
+          "name": "标题",
+          "type": "GROUP",
+          "depth": 3
+        }
+      ],
+      "uncertain": [],
+      "summary": "良好"
+    },
+    "chartDataHints": [
+      {
+        "chartTitle": "bar",
+        "chartType": "bar",
+        "labels": [
+          {
+            "label": "24小时",
+            "name": "24小时"
+          },
+          {
+            "label": "当日总流量",
+            "name": "当日总流量"
+          },
+          {
+            "label": "江阴大桥",
+            "name": "t-江阴大桥"
+          },
+          {
+            "label": "82,379",
+            "name": "d-82,379"
+          },
+          {
+            "label": "34,620",
+            "name": "d-34,620"
+          },
+          {
+            "label": "江阴靖江长江隧道",
+            "name": "t-江阴靖江长江隧道"
+          },
+          {
+            "label": "辆",
+            "name": "辆"
+          },
+          {
+            "label": "建议分流",
+            "name": "建议分流"
+          },
+          {
+            "label": "时",
+            "name": "时"
+          },
+          {
+            "label": "16时",
+            "name": "16时"
+          },
+          {
+            "label": "北京方向",
+            "name": "北京方向"
+          },
+          {
+            "label": "辆",
+            "name": "辆"
+          }
+        ],
+        "values": [
+          {
+            "label": "600",
+            "value": 600,
+            "unit": ""
+          },
+          {
+            "label": "400",
+            "value": 400,
+            "unit": ""
+          },
+          {
+            "label": "200",
+            "value": 200,
+            "unit": ""
+          },
+          {
+            "label": "600",
+            "value": 600,
+            "unit": ""
+          },
+          {
+            "label": "0",
+            "value": 0,
+            "unit": ""
+          },
+          {
+            "label": "600",
+            "value": 600,
+            "unit": ""
+          },
+          {
+            "label": "2",
+            "value": 2,
+            "unit": ""
+          },
+          {
+            "label": "4",
+            "value": 4,
+            "unit": ""
+          },
+          {
+            "label": "6",
+            "value": 6,
+            "unit": ""
+          },
+          {
+            "label": "8",
+            "value": 8,
+            "unit": ""
+          },
+          {
+            "label": "10",
+            "value": 10,
+            "unit": ""
+          },
+          {
+            "label": "12",
+            "value": 12,
+            "unit": ""
+          }
+        ]
+      },
+      {
+        "chartTitle": "bar",
+        "chartType": "bar",
+        "labels": [
+          {
+            "label": "24小时",
+            "name": "24小时"
+          },
+          {
+            "label": "当日总流量",
+            "name": "当日总流量"
+          },
+          {
+            "label": "江阴大桥",
+            "name": "t-江阴大桥"
+          },
+          {
+            "label": "82,379",
+            "name": "d-82,379"
+          },
+          {
+            "label": "34,620",
+            "name": "d-34,620"
+          },
+          {
+            "label": "江阴靖江长江隧道",
+            "name": "t-江阴靖江长江隧道"
+          },
+          {
+            "label": "辆",
+            "name": "辆"
+          },
+          {
+            "label": "建议分流",
+            "name": "建议分流"
+          },
+          {
+            "label": "时",
+            "name": "时"
+          },
+          {
+            "label": "16时",
+            "name": "16时"
+          },
+          {
+            "label": "北京方向",
+            "name": "北京方向"
+          },
+          {
+            "label": "辆",
+            "name": "辆"
+          }
+        ],
+        "values": [
+          {
+            "label": "600",
+            "value": 600,
+            "unit": ""
+          },
+          {
+            "label": "400",
+            "value": 400,
+            "unit": ""
+          },
+          {
+            "label": "200",
+            "value": 200,
+            "unit": ""
+          },
+          {
+            "label": "600",
+            "value": 600,
+            "unit": ""
+          },
+          {
+            "label": "0",
+            "value": 0,
+            "unit": ""
+          },
+          {
+            "label": "600",
+            "value": 600,
+            "unit": ""
+          },
+          {
+            "label": "2",
+            "value": 2,
+            "unit": ""
+          },
+          {
+            "label": "4",
+            "value": 4,
+            "unit": ""
+          },
+          {
+            "label": "6",
+            "value": 6,
+            "unit": ""
+          },
+          {
+            "label": "8",
+            "value": 8,
+            "unit": ""
+          },
+          {
+            "label": "10",
+            "value": 10,
+            "unit": ""
+          },
+          {
+            "label": "12",
+            "value": 12,
+            "unit": ""
+          }
+        ]
+      },
+      {
+        "chartTitle": "pie",
+        "chartType": "pie",
+        "labels": [
+          {
+            "label": "24小时",
+            "name": "24小时"
+          },
+          {
+            "label": "当日总流量",
+            "name": "当日总流量"
+          },
+          {
+            "label": "江阴大桥",
+            "name": "t-江阴大桥"
+          },
+          {
+            "label": "82,379",
+            "name": "d-82,379"
+          },
+          {
+            "label": "34,620",
+            "name": "d-34,620"
+          },
+          {
+            "label": "江阴靖江长江隧道",
+            "name": "t-江阴靖江长江隧道"
+          },
+          {
+            "label": "辆",
+            "name": "辆"
+          },
+          {
+            "label": "建议分流",
+            "name": "建议分流"
+          },
+          {
+            "label": "时",
+            "name": "时"
+          },
+          {
+            "label": "16时",
+            "name": "16时"
+          },
+          {
+            "label": "北京方向",
+            "name": "北京方向"
+          },
+          {
+            "label": "辆",
+            "name": "辆"
+          }
+        ],
+        "values": [
+          {
+            "label": "600",
+            "value": 600,
+            "unit": ""
+          },
+          {
+            "label": "400",
+            "value": 400,
+            "unit": ""
+          },
+          {
+            "label": "200",
+            "value": 200,
+            "unit": ""
+          },
+          {
+            "label": "600",
+            "value": 600,
+            "unit": ""
+          },
+          {
+            "label": "0",
+            "value": 0,
+            "unit": ""
+          },
+          {
+            "label": "600",
+            "value": 600,
+            "unit": ""
+          },
+          {
+            "label": "2",
+            "value": 2,
+            "unit": ""
+          },
+          {
+            "label": "4",
+            "value": 4,
+            "unit": ""
+          },
+          {
+            "label": "6",
+            "value": 6,
+            "unit": ""
+          },
+          {
+            "label": "8",
+            "value": 8,
+            "unit": ""
+          },
+          {
+            "label": "10",
+            "value": 10,
+            "unit": ""
+          },
+          {
+            "label": "12",
+            "value": 12,
+            "unit": ""
+          }
+        ]
+      },
+      {
+        "chartTitle": "area",
+        "chartType": "area",
+        "labels": [
+          {
+            "label": "24小时",
+            "name": "24小时"
+          },
+          {
+            "label": "当日总流量",
+            "name": "当日总流量"
+          },
+          {
+            "label": "江阴大桥",
+            "name": "t-江阴大桥"
+          },
+          {
+            "label": "82,379",
+            "name": "d-82,379"
+          },
+          {
+            "label": "34,620",
+            "name": "d-34,620"
+          },
+          {
+            "label": "江阴靖江长江隧道",
+            "name": "t-江阴靖江长江隧道"
+          },
+          {
+            "label": "辆",
+            "name": "辆"
+          },
+          {
+            "label": "建议分流",
+            "name": "建议分流"
+          },
+          {
+            "label": "时",
+            "name": "时"
+          },
+          {
+            "label": "16时",
+            "name": "16时"
+          },
+          {
+            "label": "北京方向",
+            "name": "北京方向"
+          },
+          {
+            "label": "辆",
+            "name": "辆"
+          }
+        ],
+        "values": [
+          {
+            "label": "600",
+            "value": 600,
+            "unit": ""
+          },
+          {
+            "label": "400",
+            "value": 400,
+            "unit": ""
+          },
+          {
+            "label": "200",
+            "value": 200,
+            "unit": ""
+          },
+          {
+            "label": "600",
+            "value": 600,
+            "unit": ""
+          },
+          {
+            "label": "0",
+            "value": 0,
+            "unit": ""
+          },
+          {
+            "label": "600",
+            "value": 600,
+            "unit": ""
+          },
+          {
+            "label": "2",
+            "value": 2,
+            "unit": ""
+          },
+          {
+            "label": "4",
+            "value": 4,
+            "unit": ""
+          },
+          {
+            "label": "6",
+            "value": 6,
+            "unit": ""
+          },
+          {
+            "label": "8",
+            "value": 8,
+            "unit": ""
+          },
+          {
+            "label": "10",
+            "value": 10,
+            "unit": ""
+          },
+          {
+            "label": "12",
+            "value": 12,
+            "unit": ""
+          }
+        ]
+      }
+    ]
+  },
+  "visualElements": {
+    "backgroundBrightness": "light",
+    "theme": "浅色科技监测风",
+    "colors": [
+      "rgba(56, 141, 255, 1)",
+      "rgba(255, 135, 82, 1)",
+      "rgba(82, 196, 26, 1)",
+      "rgba(237, 244, 251, 1)",
+      "rgba(51, 51, 51, 1)"
+    ],
+    "background": "浅灰蓝色渐变背景 rgba(237, 244, 251, 1)",
+    "decorations": [
+      "统计卡片中间的地图图标装饰",
+      "section标题左侧的菱形图标",
+      "图表顶部的橙色建议分流阈值线"
+    ],
+    "emphasis": [
+      "大号蓝色数值（36px）",
+      "图表tooltip中的实时数据",
+      "准确率百分比（绿色）"
+    ]
+  },
+  "interactions": [
+    {
+      "target": "当日总流量右侧下拉框",
+      "type": "dropdown",
+      "description": "时间范围筛选（24小时）",
+      "defaultState": "常驻，收起态",
+      "evidence": "右侧有向下箭头"
+    },
+    {
+      "target": "流量预测区域的地点tab",
+      "type": "tab-switch",
+      "description": "切换江阴靖江长江隧道/江阴大桥",
+      "defaultState": "常驻，江阴靖江长江隧道选中态",
+      "evidence": "蓝色底部选中指示器"
+    },
+    {
+      "target": "流量预测区域的节假日预测按钮",
+      "type": "link",
+      "description": "切换到节假日预测模式",
+      "defaultState": "常驻，链接态",
+      "evidence": "蓝色文字按钮"
+    },
+    {
+      "target": "柱状图的16时数据点",
+      "type": "chart-hover",
+      "description": "显示北京方向825车、上海方向831车",
+      "defaultState": "瞬态，需hover触发",
+      "evidence": "截图中显示的白色tooltip框"
+    }
+  ],
+  "charts": [
+    {
+      "section": "hourly-flow-tunnel",
+      "type": "bar",
+      "series": [
+        "北京方向",
+        "上海方向"
+      ],
+      "legend": [
+        "北京方向",
+        "上海方向"
+      ],
+      "legendPosition": "top-right",
+      "seriesColors": [
+        "rgba(56, 141, 255, 1)",
+        "rgba(255, 135, 82, 1)"
+      ],
+      "legendType": "horizontal",
+      "axes": "X轴为0-24小时，Y轴为车辆数（0-4000）",
+      "tooltip": "显示时间点、北京方向流量、上海方向流量",
+      "notes": [
+        "有橙色虚线表示建议分流阈值"
+      ]
+    },
+    {
+      "section": "hourly-flow-bridge",
+      "type": "bar",
+      "series": [
+        "北京方向",
+        "上海方向"
+      ],
+      "legend": [
+        "北京方向",
+        "上海方向"
+      ],
+      "legendPosition": "top-right",
+      "seriesColors": [
+        "rgba(56, 141, 255, 1)",
+        "rgba(255, 135, 82, 1)"
+      ],
+      "legendType": "horizontal",
+      "axes": "X轴为0-24小时，Y轴为车辆数（0-4000）",
+      "tooltip": "显示时间点、北京方向流量、上海方向流量",
+      "notes": [
+        "有橙色虚线表示建议分流阈值"
+      ]
+    },
+    {
+      "section": "vehicle-type-distribution",
+      "type": "pie",
+      "series": [
+        "客车",
+        "货车"
+      ],
+      "legend": [],
+      "legendPosition": null,
+      "seriesColors": [
+        "rgba(56, 141, 255, 1)",
+        "rgba(255, 135, 82, 1)"
+      ],
+      "legendType": null,
+      "axes": null,
+      "tooltip": "显示车型名称和数量",
+      "notes": [
+        "环形图中心显示总数",
+        "图表下方显示客车和货车的具体数值"
+      ]
+    },
+    {
+      "section": "flow-prediction",
+      "type": "area",
+      "series": [
+        "实际流量",
+        "预测流量"
+      ],
+      "legend": [
+        "实际流量",
+        "预测流量"
+      ],
+      "legendPosition": "top-right",
+      "seriesColors": [
+        "rgba(82, 196, 26, 1)",
+        "rgba(56, 141, 255, 1)"
+      ],
+      "legendType": "horizontal",
+      "axes": "X轴为2小时前-2小时后，Y轴为车辆数（0-4000）",
+      "tooltip": "显示时间点和流量值",
+      "notes": [
+        "X轴刻度：2小时前、1小时前、当前时间、1小时后、2小时后",
+        "每个时间点下方显示准确率（如准确率98%、准确率96%、准确率92%）"
+      ]
+    }
+  ],
+  "headerSlots": [],
+  "analysisType": "chart",
+  "analysisTarget": "图表展示区、图表展示区、图表展示区",
+  "analysisDescription": "",
+  "analysisEvidence": [],
+  "headerValidation": {
+    "passed": true,
+    "headerElements": [],
+    "headerRightElements": [],
+    "suggestions": [],
+    "confidence": "low",
+    "componentType": "microcode"
+  },
+  "headerSlotValidation": {
+    "validatedSlots": [],
+    "rejectedNodes": [],
+    "warnings": [
+      "Figma中发现同行节点\"*数据实时更新\" (Y偏移: 2.0px)，但预览图未检测到，请人工确认"
+    ],
+    "componentType": "microcode",
+    "derivedSlots": [],
+    "contractSlots": []
+  }
+}

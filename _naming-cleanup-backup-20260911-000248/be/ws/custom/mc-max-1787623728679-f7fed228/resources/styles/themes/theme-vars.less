@@ -1,0 +1,63 @@
+.common() {
+  // 基础排版
+  @font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  @font-size-xs: 10px;
+  @font-size-sm: 12px;
+  @font-size-md: 14px;
+  @font-size-lg: 16px;
+
+  // 事实提取：预警线颜色
+  @color-ref-line-warning: #f53f3f;
+}
+
+.theme-light() {
+  // 背景
+  @bg-color-container: #ffffff;
+  @bg-color-tooltip: #ffffff;
+
+  // 文本（坐标轴、图例、标题等）
+  @text-color-title: #262626;
+  @text-color-axis: #595959;
+  @text-color-legend: #595959;
+  @text-color-tooltip: #262626;
+
+  // 辅助线/网格线
+  @color-grid-line: #f0f0f0;
+  @color-axis-line: #d9d9d9;
+
+  // 图表系列色（默认补齐）
+  @chart-series-color-1: #1890ff;
+  @chart-series-color-2: #36cfc9;
+  @chart-series-color-3: #ffc53d;
+  @chart-series-color-4: #9254de;
+  @chart-series-color-5: #f5222d;
+
+  // 面积图填充
+  @chart-area-fill-1: fade(@chart-series-color-1, 15%);
+}
+
+.theme-dark() {
+  // 背景
+  @bg-color-container: #1f1f1f;
+  @bg-color-tooltip: #262626;
+
+  // 文本（深色面板禁止使用黑色系）
+  @text-color-title: #f5f5f5;
+  @text-color-axis: #bfbfbf;
+  @text-color-legend: #bfbfbf;
+  @text-color-tooltip: #f5f5f5;
+
+  // 辅助线/网格线
+  @color-grid-line: #303030;
+  @color-axis-line: #434343;
+
+  // 图表系列色（深色模式调亮）
+  @chart-series-color-1: #40a9ff;
+  @chart-series-color-2: #5cdbd3;
+  @chart-series-color-3: #ffd666;
+  @chart-series-color-4: #b37feb;
+  @chart-series-color-5: #ff4d4f;
+
+  // 面积图填充
+  @chart-area-fill-1: fade(@chart-series-color-1, 20%);
+}

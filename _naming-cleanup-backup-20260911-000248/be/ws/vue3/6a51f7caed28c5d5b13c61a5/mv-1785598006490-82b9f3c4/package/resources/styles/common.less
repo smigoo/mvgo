@@ -1,0 +1,116 @@
+// 组件内共享的业务 class
+
+.mv3-mv-1785598006490-82b9f3c4-root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-bg);
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+  color: var(--color-text-base);
+  position: relative;
+  overflow: hidden;
+}
+
+.mv3-mv-1785598006490-82b9f3c4-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 20px;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.mv3-mv-1785598006490-82b9f3c4-header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mv3-mv-1785598006490-82b9f3c4-header-title-text {
+  font-size: 16px;
+  font-weight: 700;
+  background: linear-gradient(90deg, #1990ff 0%, #5a7eff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.mv3-mv-1785598006490-82b9f3c4-header-update {
+  margin-left: auto;
+  font-size: 14px;
+  background: linear-gradient(90deg, #1990ff 0%, #5a7eff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.mv3-mv-1785598006490-82b9f3c4-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0 20px 16px;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.mv3-mv-1785598006490-82b9f3c4-section {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.mv3-mv-1785598006490-82b9f3c4-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+}
+
+.mv3-mv-1785598006490-82b9f3c4-section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--color-text-base);
+}
+
+.mv3-mv-1785598006490-82b9f3c4-title-icon {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.mv3-mv-1785598006490-82b9f3c4-title-icon-inner {
+  width: 18px;
+  height: 18px;
+  background: #1990ff;
+  border-radius: 3px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mv3-mv-1785598006490-82b9f3c4-title-icon-inner::after {
+  content: '';
+  width: 13px;
+  height: 13px;
+  background: #ffffff;
+  border-radius: 2px;
+  position: absolute;
+}
+
+.mv3-mv-1785598006490-82b9f3c4-title-icon-inner::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  background: linear-gradient(135deg, #1990ff 0%, #5a7eff 100%);
+  border-radius: 1px;
+  position: absolute;
+  z-index: 1;
+}

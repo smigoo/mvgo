@@ -1,0 +1,43 @@
+@font-cn: 'Source Han Sans CN', sans-serif;
+@font-en: 'Roboto', sans-serif;
+
+@color-blue: #006fe3;
+@color-cyan: #0c9dbe;
+@color-text: #333333;
+@color-text-light: #666666;
+@color-border: #e6edf4;
+@color-bg: #edf4fb;
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+.c-monitor-root {
+  width: 100%;
+  height: 100%;
+  font-family: @font-cn;
+  color: @color-text;
+  overflow: hidden;
+}
+
+.common-bg {
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+
+.common-title {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  color: @color-text;
+}
+
+.common-value {
+  font-family: @font-en;
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 28px;
+}

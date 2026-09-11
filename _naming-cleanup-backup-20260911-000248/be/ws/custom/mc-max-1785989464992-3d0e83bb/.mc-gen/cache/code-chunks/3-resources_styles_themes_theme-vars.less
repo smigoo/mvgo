@@ -1,0 +1,91 @@
+.common() {
+  @prefix: c-mc-max-1785989464992-3d0e83bb;
+
+  // 字体
+  @font-sans: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+  @font-roboto: 'Roboto', sans-serif;
+  @font-title: 'YouSheBiaoTiHei', sans-serif;
+
+  // 文字颜色
+  @text-primary: #333333;
+  @text-white: #ffffff;
+  @text-blue: #1990ff;
+  @text-health: #08a3a5;
+  @text-num-blue: #1990ff;
+
+  // 数字渐变色（用于 stat-value）
+  @gradient-num-start: #e1f0ff;
+  @gradient-num-end: #00ccff;
+
+  // 统计栏
+  @stat-label-color: #333333;
+  @stat-value-color: #1990ff;
+  @stat-value-health-color: #08a3a5;
+
+  // switch 区域
+  @switch-item-radius: 6px;
+  @switch-title-active-color: #ffffff;
+  @switch-title-default-color: #333333;
+  @switch-stat-label-size: 14px;
+  @switch-stat-num-size: 20px;
+
+  // tab 栏
+  @tab-label-size: 14px;
+  @tab-badge-size: 12px;
+
+  // 设备卡片
+  @device-name-size: 12px;
+  @device-count-size: 16px;
+}
+
+.theme-light() {
+  // 面板背景色（Figma bg: #edf4fb）
+  @panel-bg: #edf4fb;
+  @panel-shadow: 0 4px 10px 0 rgba(74, 117, 141, 0.25);
+
+  // body 区域
+  @body-bg: transparent;
+
+  // switch 区域背景（default/inactive）
+  @switch-item-default-bg: rgba(255, 255, 255, 0.08);
+
+  // tab 激活背景
+  @tab-active-bg: rgba(25, 144, 255, 0.12);
+  @tab-default-bg: transparent;
+
+  // 设备卡片背景
+  @device-card-bg: rgba(255, 255, 255, 0.08);
+  @device-card-border: rgba(85, 158, 255, 0.3);
+
+  // 文字
+  @text-muted: rgba(51, 51, 51, 0.6);
+  @header-stats-separator: rgba(51, 51, 51, 0.15);
+}
+
+.theme-dark() {
+  // 面板背景色（dark）
+  @panel-bg: #0d1a2b;
+  @panel-shadow: 0 4px 10px 0 rgba(0, 0, 0, 0.4);
+
+  // body 区域
+  @body-bg: transparent;
+
+  // switch 区域背景
+  @switch-item-default-bg: rgba(255, 255, 255, 0.05);
+
+  // tab
+  @tab-active-bg: rgba(25, 144, 255, 0.2);
+  @tab-default-bg: transparent;
+
+  // 设备卡片
+  @device-card-bg: rgba(255, 255, 255, 0.04);
+  @device-card-border: rgba(85, 158, 255, 0.2);
+
+  // 文字
+  @text-muted: rgba(255, 255, 255, 0.45);
+  @header-stats-separator: rgba(255, 255, 255, 0.12);
+}
+
+// 默认调用 light 主题 + common（必须在末尾全局调用）
+.theme-light();
+.common();

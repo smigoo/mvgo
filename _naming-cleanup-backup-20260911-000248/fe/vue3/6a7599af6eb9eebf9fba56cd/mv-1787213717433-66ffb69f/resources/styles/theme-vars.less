@@ -1,0 +1,53 @@
+// 主题变量与 mixin，仅供各组件共享 token，不出具体 class
+.theme-light() {
+  :root {
+    --color-primary: #1990ff;
+    --color-primary-dark: #006fe3;
+    --color-text: #333333;
+    --color-text-secondary: #6680a0;
+    --color-bg: #edf4fb;
+    --color-bg-card: #ffffff;
+    --color-border: #d9e2ec;
+    --color-success: #52c41a;
+    --color-warning: #fa8c16;
+    --color-orange: #ff6a00;
+    --color-cyan: #0c9dbe;
+    --font-size-base: 14px;
+    --font-size-sm: 12px;
+    --font-size-xs: 9.6px;
+    --spacing-xs: 4px;
+    --spacing-sm: 8px;
+    --spacing-md: 12px;
+    --spacing-lg: 24px;
+    --radius-base: 6px;
+    --radius-lg: 12px;
+  }
+}
+.theme-dark() {
+  :root {
+    --color-primary: #409EFF;
+    --color-primary-dark: #337ecc;
+    --color-text: rgba(255,255,255,0.9);
+    --color-text-secondary: rgba(255,255,255,0.6);
+    --color-bg: #0f0f0f;
+    --color-bg-card: #1a1a1a;
+    --color-border: rgba(255,255,255,0.12);
+    --color-success: #67c23a;
+    --color-warning: #fa8c16;
+    --color-orange: #ff6a00;
+    --color-cyan: #00bcd4;
+    --font-size-base: 14px;
+    --font-size-sm: 12px;
+    --font-size-xs: 9.6px;
+    --spacing-xs: 4px;
+    --spacing-sm: 8px;
+    --spacing-md: 12px;
+    --spacing-lg: 24px;
+    --radius-base: 6px;
+    --radius-lg: 12px;
+  }
+}
+.common() {
+  // 可复用的通用规则（可选）
+}
+.theme-light(); // 默认浅色主题

@@ -1,0 +1,190 @@
+```json
+{
+  "generatedAt": "2024-05-20T10:00:00.000Z",
+  "stage": "preview-analysis",
+  "componentName": "运单信息",
+  "componentTitle": "运单信息",
+  "analysisModel": "gpt-4-vision",
+  "sourceImage": {
+    "path": "resources/images/mc-preview.png",
+    "size": 0,
+    "mtimeMs": 0,
+    "sha1": ""
+  },
+  "summary": "深色主题弹窗组件，展示危化品运输运单信息。包含顶部标题栏（含车牌号标签）、中部运单列表表格（高亮选中行）、底部运单详情（左侧文本字段列表，右侧车辆监控图片）。",
+  "layout": {
+    "type": "vertical",
+    "direction": "column",
+    "sections": [
+      {
+        "id": "section-table",
+        "name": "运单列表表格",
+        "role": "常驻",
+        "layout": "vertical",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "header": {
+          "title": null,
+          "controls": []
+        },
+        "body": {
+          "layout": "table",
+          "bgPlaceholder": "table-bg",
+          "children": [
+            {
+              "type": "table-header",
+              "columns": [
+                "运单编号",
+                "危化品名称",
+                "超运地",
+                "实际发车时间",
+                "目的地",
+                "预计到达时间",
+                "满载情况",
+                "运输状态"
+              ]
+            },
+            {
+              "type": "table-row",
+              "status": "selected",
+              "data": [
+                "3203502388...",
+                "烟花",
+                "江阴",
+                "2023-11-22 06:20:46",
+                "靖江",
+                "--",
+                "满载",
+                "在途"
+              ]
+            },
+            {
+              "type": "table-row",
+              "status": "normal",
+              "data": [
+                "3203502388...",
+                "硫酸",
+                "无锡",
+                "2023-11-20 06:20:46",
+                "泰州",
+                "--",
+                "满载",
+                "在途"
+              ]
+            },
+            {
+              "type": "table-row",
+              "status": "normal",
+              "data": [
+                "3203502388...",
+                "硫酸",
+                "江阴",
+                "2023-11-19 06:20:46",
+                "靖江",
+                "--",
+                "满载",
+                "在途"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "section-details",
+        "name": "运单详情",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "header": {
+          "title": "运单详情",
+          "controls": []
+        },
+        "body": {
+          "layout": "horizontal-2-columns",
+          "bgPlaceholder": "details-bg",
+          "children": [
+            {
+              "id": "details-text",
+              "name": "详情文本列表",
+              "role": "text-list",
+              "layout": "grid-2-columns",
+              "children": [
+                { "label": "起运地", "value": "江苏省无锡市江阴市" },
+                { "label": "危险品名称", "value": "烟花" },
+                { "label": "分类名称", "value": "危险品(1类4项)" },
+                { "label": "目的地", "value": "江苏省泰州市靖江市" },
+                { "label": "运输里程", "value": "200(KM)" },
+                { "label": "发车时间", "value": "2023-11-22 06:20:46" },
+                { "label": "预计到达时间", "value": "2023-11-22 12:04:21" },
+                { "label": "满载情况", "value": "满载货物" },
+                { "label": "总重量", "value": "9.8(吨)" },
+                { "label": "驾驶员姓名", "value": "张悦" },
+                { "label": "驾驶员电话", "value": "13955086495" },
+                { "label": "备注", "value": "栖霞大道浦口104国道桥宁马高速路路二桥百水桥栖霞大道", "fullWidth": true }
+              ]
+            },
+            {
+              "id": "details-image",
+              "name": "车辆监控图片",
+              "role": "image",
+              "resourceFile": "../resources/images/img-99044.png",
+              "recommendedUsage": "imgSrc",
+              "layout": "vertical",
+              "children": []
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "styles": {
+    "theme": "深色数据监控风",
+    "backgroundBrightness": "dark",
+    "colors": [
+      "#003032",
+      "#18FFCE",
+      "#B07B00",
+      "#FFFFFF",
+      "rgba(255,255,255,0.6)"
+    ],
+    "background": "深青色背景 (#003032)",
+    "decorations": [
+      "标题左侧菱形图标",
+      "分割线"
+    ],
+    "emphasis": [
+      "选中行高亮背景",
+      "车牌号黄色标签"
+    ]
+  },
+  "interactions": [
+    {
+      "target": "表格行",
+      "type": "click",
+      "description": "点击表格行切换选中状态，下方详情随之更新",
+      "defaultState": "第一行选中",
+      "evidence": "第一行背景色与其他行不同，且详情内容与第一行数据（烟花、江阴）对应"
+    },
+    {
+      "target": "右上角关闭按钮",
+      "type": "click",
+      "description": "关闭弹窗",
+      "defaultState": "常驻",
+      "evidence": "右上角X图标"
+    }
+  ],
+  "charts": [],
+  "doNotInvent": [
+    "表格的分页功能（图中未显示分页器）",
+    "表格的排序功能（列头无排序图标）",
+    "图片的放大查看功能（虽可能有，但图中无明确按钮）",
+    "具体的运单编号完整数字（图中显示为3203502388...）"
+  ],
+  "notes": [
+    "顶部标题栏包含车牌号标签'苏A 12345'，背景为黄色/橙色。",
+    "详情文本区域采用两列布局，'备注'字段横跨底部。",
+    "Figma资源中包含分割线和装饰图标，需在代码中还原。"
+  ]
+}
+```

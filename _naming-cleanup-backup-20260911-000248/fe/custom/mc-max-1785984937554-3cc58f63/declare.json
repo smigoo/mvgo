@@ -1,0 +1,117 @@
+{
+  "componentId": "mc-max-1785984937554-3cc58f63",
+  "componentName": "环境监测",
+  "version": "v1.0.0",
+  "panelKey": "default-panel",
+  "attribute": {
+    "aspectRatio": [
+      460,
+      138
+    ],
+    "title": "cp-环境监测",
+    "description": "cp-环境监测"
+  },
+  "businessEvents": {
+    "mc-max-1785984937554-3cc58f63-onload": {
+      "eventId": "mc-max-1785984937554-3cc58f63-onload",
+      "eventName": "组件加载",
+      "eventDataSchema": {
+        "componentId": {
+          "key": "componentId",
+          "name": "组件ID",
+          "type": "string",
+          "required": true
+        },
+        "timestamp": {
+          "key": "timestamp",
+          "name": "时间戳",
+          "type": "number",
+          "required": true
+        }
+      }
+    }
+  },
+  "businessStatuses": {},
+  "dataSources": [
+    {
+      "sourceName": "environmentData",
+      "columns": [
+        {
+          "name": "monitorName",
+          "type": "string",
+          "comment": "监测项名称"
+        },
+        {
+          "name": "monitorValue",
+          "type": "string",
+          "comment": "监测值"
+        },
+        {
+          "name": "monitorUnit",
+          "type": "string",
+          "comment": "单位"
+        },
+        {
+          "name": "monitorStatus",
+          "type": "string",
+          "comment": "状态"
+        }
+      ]
+    }
+  ],
+  "themeConfig": {
+    "default": "dark",
+    "list": [
+      {
+        "name": "深色主题",
+        "key": "dark"
+      },
+      {
+        "name": "亮色主题",
+        "key": "light"
+      }
+    ]
+  },
+  "cssVariableConfig": [
+    {
+      "name": "主色调",
+      "key": "colorPrimary",
+      "type": "color"
+    },
+    {
+      "name": "基础文字颜色",
+      "key": "colorTextBase",
+      "type": "color"
+    },
+    {
+      "name": "字体大小",
+      "key": "fontSize",
+      "type": "size"
+    }
+  ],
+  "businessConfig": [
+    {
+      "name": "刷新间隔",
+      "key": "refreshInterval",
+      "type": "number",
+      "renderType": "number",
+      "default": 60,
+      "describe": "数据自动刷新间隔，单位秒，0 表示不自动刷新"
+    }
+  ],
+  "size": {
+    "width": 420,
+    "height": 186
+  },
+  "formSources": null,
+  "layoutConfig": {
+    "default": "one",
+    "list": [
+      {
+        "name": "默认布局",
+        "key": "one",
+        "previewName": "mc-preview.png"
+      }
+    ]
+  }
+}

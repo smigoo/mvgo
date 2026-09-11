@@ -1,0 +1,265 @@
+@import './themes/theme-vars.less';
+
+// 应用通用变量
+.common();
+
+// ==================== 组件根容器 ====================
+.c-monitor-root {width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: row;
+  position: relative;
+  padding-left: 40px;
+  box-sizing: border-box;
+  font-size: var(--fontSize, 14px);
+
+// ==================== 主内容区 ====================
+}
+.c-monitor-main-content {
+  flex: 1;
+  min-width: 0;
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  box-sizing: border-box;
+}
+
+// ==================== 头部统计区域 ====================
+.c-monitor-header-stats {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 24px;
+}
+
+.c-monitor-header-stat-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+.c-monitor-header-stat-label {
+  font-size: calc(var(--fontSize, 14px) * 1);
+  color: rgba(51, 51, 51, 1);
+  font-weight: 400;
+}
+
+.c-monitor-header-stat-value {
+  font-size: calc(var(--fontSize, 14px) * 1.4286);
+  font-weight: 700;
+  background: linear-gradient(180deg, rgba(25, 144, 255, 1) 0%, rgba(90, 126, 255, 1) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  
+  &--success {
+    color: rgba(8, 163, 165, 1);
+    background: linear-gradient(180deg, rgba(8, 163, 165, 1) 0%, rgba(8, 163, 165, 1) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+}
+
+// ==================== 左侧导航 ====================
+.c-monitor-left-nav {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 40px;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  padding: 12px 0;
+  gap: 8px;
+  background-image: url(../images/bg-8788.png);
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+
+.c-monitor-nav-item {
+  width: 100%;
+  padding: 8px 0;
+  font-size: calc(var(--fontSize, 14px) * 1);
+  color: rgba(89, 196, 255, 1);
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s;
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+
+  &:hover {
+    color: rgba(25, 144, 255, 1);
+  }
+
+  &.active {
+    color: rgba(25, 144, 255, 1);
+    font-weight: 700;
+  }
+}
+
+// ==================== 高亮设备卡片区域 ====================
+.c-monitor-featured-devices {
+  flex: 110 0 0;
+  min-height: 110px;
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  width: 100%;
+}
+
+.c-monitor-featured-card {
+  flex: 1;
+  min-width: 0;
+  height: 110px;
+  padding: 12px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.c-monitor-featured-icon {
+  width: 43px;
+  height: 44px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.c-monitor-featured-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+}
+
+.c-monitor-featured-name {
+  font-size: calc(var(--fontSize, 14px) * 1);
+  color: rgba(255, 255, 255, 1);
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.c-monitor-featured-total {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.c-monitor-featured-total-label {
+  font-size: calc(var(--fontSize, 14px) * 1);
+  color: rgba(255, 255, 255, 1);
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.c-monitor-featured-total-value {
+  font-size: calc(var(--fontSize, 14px) * 1.4286);
+  font-weight: 700;
+  color: rgba(255, 255, 255, 1);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.c-monitor-featured-alert {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.c-monitor-featured-alert-label {
+  font-size: calc(var(--fontSize, 14px) * 1);
+  color: rgba(255, 255, 255, 1);
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.c-monitor-featured-alert-value {
+  font-size: calc(var(--fontSize, 14px) * 1.4286);
+  font-weight: 700;
+  color: rgba(224, 52, 52, 1);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+// ==================== 设备网格区域 ====================
+.c-monitor-device-grid {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  padding: 0;
+}
+
+.c-monitor-device-card {
+  width: 100%;
+  height: 80px;
+  padding: 8px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background-image: url(../images/bg-8439.png);
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+
+.c-monitor-device-icon {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.c-monitor-device-label {
+  font-size: calc(var(--fontSize, 14px) * 0.857);
+  color: rgba(51, 51, 51, 1);
+  font-weight: 400;
+  line-height: 1.5;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.c-monitor-device-status {
+  display: flex;
+  align-items: baseline;
+  gap: 0;
+}
+
+.c-monitor-device-status-online {
+  font-size: calc(var(--fontSize, 14px) * 1.4286);
+  color: rgba(25, 144, 255, 1);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.c-monitor-device-status-total {
+  font-size: calc(var(--fontSize, 14px) * 1);
+  color: rgba(153, 153, 153, 1);
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+
+/* === [自动修复] v3.5 模板驱动 fallback 规则 === */
+/* [自动修复] 模板 class .c-monitor-header-stat-value--success → 匹配元素 header-stats */
+
+.c-monitor-header-stat-value--success {
+  display: flex;
+  flex-direction: row;
+}

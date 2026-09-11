@@ -1,0 +1,171 @@
+// Tab 容器
+.c-mc-1784774080869-c537eb47-tabs-container {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  align-items: center;
+}
+
+/* [Style Refine] Frame 2136638769 fills[0].color rgba(0.400, 0.501, 0.628, 1) → rgb(102, 128, 160) */
+/* [Style Refine] Frame 2136638769 strokes[0].color rgba(0.675, 0.767, 0.882, 1) → rgba(172, 196, 225, 1) */
+/* [Style Refine] Frame 2136638769 strokeWeight 0.731 → 0.73px */
+/* [Style Refine] 大桥 text fills[0].color rgba(0.2, 0.2, 0.2, 1) → rgb(51, 51, 51) */
+/* [Style Refine] 大桥 text typography fontSize 14, fontWeight 400, lineHeight 21 */
+.c-mc-1784774080869-c537eb47-tab-item {
+  padding: 4px 16px;
+  border-radius: 4px;
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 21px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: rgb(102, 128, 160);
+  border: 0.73px solid rgba(172, 196, 225, 1);
+  color: rgb(51, 51, 51);
+
+  &:hover {
+    opacity: 0.9;
+  }
+}
+
+/* [Style Refine] Frame 2136638771 fills[0].color rgba(0.098, 0.565, 1, 1) → rgb(25, 144, 255) */
+/* [Style Refine] Frame 2136638771 strokes[0].color rgba(0.780, 0.878, 1, 1) → rgba(199, 224, 255, 1) */
+/* [Style Refine] Frame 2136638771 strokeWeight 0.731 → 0.73px */
+/* [Style Refine] 项目主体 text fills[0].color rgba(1, 1, 1, 1) → rgb(255, 255, 255) */
+/* [Style Refine] 项目主体 text typography fontSize 14, fontWeight 500, lineHeight 21 */
+.c-mc-1784774080869-c537eb47-tab-active {
+  background: rgb(25, 144, 255);
+  border: 0.73px solid rgba(199, 224, 255, 1);
+  color: rgb(255, 255, 255);
+  font-weight: 500;
+}
+
+/* [Style Refine] bg node fills[0].color rgba(0.929, 0.956, 0.984, 1) → rgb(237, 244, 251) - applied to content container */
+/* [Style Refine] bg node effects[0] DROP_SHADOW offset(0, 4), radius 10, color rgba(0.291, 0.458, 0.551, 0.25) */
+.c-mc-1784774080869-c537eb47-content {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: rgb(237, 244, 251);
+  box-shadow: 0px 4px 10px rgba(74, 117, 141, 0.25);
+}
+
+// 小标题行
+.c-mc-1784774080869-c537eb47-subtitle-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid;
+  border-image: linear-gradient(90deg, #559eff 0%, #559eff 100%) 1;
+}
+
+// 小标题图标
+.c-mc-1784774080869-c537eb47-subtitle-icon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
+/* [Style Refine] 重点车辆监测 text fills[0] GRADIENT_LINEAR from rgba(0.097, 0.564, 1, 1) to rgba(0.352, 0.495, 1, 0.83) */
+/* [Style Refine] 重点车辆监测 text typography fontFamily "Noto Sans SC", fontSize 16, fontWeight 700, lineHeight 19.2 */
+/* [Style Refine] 重点车辆监测 text effects[0] is not present - no text shadow in original design */
+.c-mc-1784774080869-c537eb47-subtitle-text {
+  font-family: 'Noto Sans SC', 'Source Han Sans CN', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 19.2px;
+  background: linear-gradient(180deg, rgba(25, 144, 255, 1) 0%, rgba(90, 126, 255, 0.83) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+// ========== 统计卡片区域 ==========
+.c-mc-1784774080869-c537eb47-cards-container {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+  align-items: stretch;
+  justify-content: space-between;
+}
+
+// 单个卡片
+.c-mc-1784774080869-c537eb47-card {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border-radius: 8px;
+  min-height: 80px;
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+// 卡片图标
+.c-mc-1784774080869-c537eb47-card-icon {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+// 文字组（标签+数值）
+.c-mc-1784774080869-c537eb47-text-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+// 卡片标签
+.c-mc-1784774080869-c537eb47-card-label {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  color: rgb(51, 51, 51);
+  line-height: 20px;
+}
+
+// 数值+单位行
+.c-mc-1784774080869-c537eb47-card-value-group {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 4px;
+}
+
+// 数值
+.c-mc-1784774080869-c537eb47-card-value {
+  font-family: 'DIN Alternate', 'DIN', 'Arial', sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+// 数值颜色
+.c-mc-1784774080869-c537eb47-value-danger {
+  color: #ff4d4f;
+}
+.c-mc-1784774080869-c537eb47-value-primary {
+  color: #1890ff;
+}
+.c-mc-1784774080869-c537eb47-value-warning {
+  color: #fa8c16;
+}
+
+// 单位
+.c-mc-1784774080869-c537eb47-card-unit {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  color: rgb(102, 102, 102);
+  line-height: 20px;
+}

@@ -1,0 +1,476 @@
+.c-monitor-root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow: hidden;
+}
+
+.c-monitor-daily-total {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.c-monitor-daily-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.c-monitor-daily-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.c-monitor-daily-title-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.c-monitor-daily-title-text {
+  font-size: 16px;
+  font-weight: 500;
+  color: #333333;
+  text-shadow: 0px 5.05px 5.05px rgba(255, 255, 255, 0.8);
+}
+
+.c-monitor-daily-select {
+  display: flex;
+  align-items: center;
+}
+
+.c-monitor-daily-select-trigger {
+  :deep(.ant-select-selector) {
+    background: #ffffff !important;
+    border: 1px solid #a1ceff !important;
+    border-radius: 4px !important;
+    height: 24px !important;
+    min-height: 24px !important;
+    padding: 0 8px !important;
+  }
+  :deep(.ant-select-selection-item) {
+    font-size: 14px;
+    color: #333333;
+    line-height: 22px;
+  }
+}
+
+.c-monitor-daily-select-arrow {
+  width: 10px;
+  height: 10px;
+}
+
+.c-monitor-daily-body {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  background: #ffffff;
+  border: 1px solid #a1ceff;
+  border-radius: 4px;
+}
+
+.c-monitor-stat-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.c-monitor-stat-card--left {
+  align-items: flex-start;
+}
+
+.c-monitor-stat-card--right {
+  align-items: flex-end;
+}
+
+.c-monitor-stat-label {
+  font-size: 16px;
+  font-weight: 500;
+  color: #333333;
+  margin-bottom: 4px;
+}
+
+.c-monitor-stat-value {
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.c-monitor-stat-value--bridge {
+  color: #0c9dbe;
+}
+
+.c-monitor-stat-value--tunnel {
+  color: #006fe3;
+}
+
+.c-monitor-section-tunnel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.c-monitor-section-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.c-monitor-section-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333333;
+  display: flex;
+  align-items: center;
+
+  &::before {
+    content: '';
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    background: #1990ff;
+    transform: rotate(45deg);
+    margin-right: 8px;
+    flex-shrink: 0;
+  }
+}
+
+.c-monitor-chart-wrapper {
+  flex: 1;
+  min-height: 0;
+}
+
+.c-monitor-chart-container {
+  width: 100%;
+  height: 100%;
+}
+
+.c-monitor-bridge-section {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.c-monitor-bridge-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.c-monitor-bridge-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333333;
+}
+
+.c-monitor-bridge-legend {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.c-monitor-bridge-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #666666;
+  cursor: pointer;
+
+  &.active {
+    color: #333333;
+  }
+}
+
+.c-monitor-bridge-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.c-monitor-bridge-legend-dot--blue {
+  background: #1588f8;
+}
+
+.c-monitor-bridge-legend-dot--light-blue {
+  background: #00d0ff;
+}
+
+.c-monitor-bridge-chart-body {
+  flex: 1;
+  min-height: 0;
+}
+
+.c-monitor-bridge-chart-container {
+  width: 100%;
+  height: 100%;
+}
+
+.c-monitor-vehicle-section {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.c-monitor-vehicle-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.c-monitor-vehicle-header-icon {
+  width: 18px;
+  height: 18px;
+  background: linear-gradient(#388dff, #388dff);
+  border-radius: 6px;
+}
+
+.c-monitor-vehicle-title {
+  font-size: 14px;
+  font-weight: 400;
+  color: #333333;
+}
+
+.c-monitor-vehicle-cards {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+
+.c-monitor-vehicle-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(#ffffff, #ffffff);
+  border: 1px solid #a1ceff;
+  box-shadow: 4px 4px 4px rgba(0, 28, 53, 0.2);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.c-monitor-vehicle-card-top {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+.c-monitor-vehicle-card-name {
+  font-size: 14px;
+  font-weight: 400;
+  color: #333333;
+  margin-bottom: 8px;
+}
+
+.c-monitor-vehicle-chart {
+  width: 80px;
+  height: 80px;
+}
+
+.c-monitor-vehicle-stats {
+  display: flex;
+  flex-direction: row;
+  border-top: 1px solid #edf4fb;
+}
+
+.c-monitor-vehicle-stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0;
+  cursor: pointer;
+  transition: opacity 0.2s;
+
+  &--inactive {
+    opacity: 0.4;
+  }
+}
+
+.c-monitor-vehicle-stat-label {
+  font-size: 12px;
+  color: #666666;
+  margin-bottom: 4px;
+}
+
+.c-monitor-vehicle-stat-value {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.c-monitor-vehicle-stat-value--passenger {
+  color: #1588f8;
+}
+
+.c-monitor-vehicle-stat-value--freight {
+  color: #00abd1;
+}
+
+.c-monitor-forecast {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.c-monitor-forecast-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.c-monitor-forecast-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  color: #333333;
+  text-shadow: 0px 5.05px 5.05px rgba(255, 255, 255, 0.8);
+}
+
+.c-monitor-forecast-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.c-monitor-forecast-tabs {
+  display: flex;
+  gap: 8px;
+  margin-left: 16px;
+}
+
+.c-monitor-forecast-tab {
+  padding: 2px 12px;
+  font-size: 12px;
+  color: #ffffff;
+  background: #6680a0;
+  border: 0.73px solid rgba(172, 196, 225, 1);
+  border-radius: 20.46px;
+  cursor: pointer;
+  transition: all 0.3s;
+
+  &.active {
+    background: #1990ff;
+    border: 0.73px solid rgba(199, 224, 255, 1);
+    font-weight: 500;
+  }
+}
+
+.c-monitor-forecast-link {
+  margin-left: auto;
+  font-size: 12px;
+  color: #1990ff;
+  cursor: pointer;
+}
+
+.c-monitor-forecast-chart-wrapper {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.c-monitor-forecast-chart {
+  width: 100%;
+  height: 100%;
+}
+
+.c-monitor-forecast-legend {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  gap: 16px;
+  z-index: 10;
+}
+
+.c-monitor-forecast-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #333333;
+  cursor: pointer;
+  transition: opacity 0.3s;
+
+  &.inactive {
+    opacity: 0.3;
+  }
+}
+
+.c-monitor-forecast-legend-line {
+  display: inline-block;
+  width: 14px;
+  height: 2px;
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #ffffff;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
+  }
+
+  &.actual {
+    background: #3385ff;
+    &::after {
+      border: 1px solid #3385ff;
+    }
+  }
+
+  &.forecast {
+    background: #00cccc;
+    &::after {
+      border: 1px solid #00cccc;
+    }
+  }
+}
+
+.c-monitor-forecast-accuracy {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: #666666;
+}
+
+.actual {
+  // 实际流量状态标识
+}
+
+.bridge {
+  // 大桥状态标识
+}
+
+.forecast {
+  // 预测状态标识
+}
+
+.tunnel {
+  // 隧道状态标识
+}

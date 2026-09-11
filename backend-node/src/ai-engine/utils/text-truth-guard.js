@@ -18,6 +18,8 @@
 
 const CHINESE_RUN_RE = /[\u4e00-\u9fa5]{2,}/g;
 
+import { extractSfcTemplate } from './sfc-template-extractor.js';
+
 /**
  * 收集 Figma TEXT 节点的 characters 真值集合（确定性）。
  * @param {object} figmaNodeData Figma 节点树（pruneRedundantFields 后）
@@ -123,10 +125,10 @@ export function findClosestTruth(text, truth) {
  * `<img alt="信号图标">` 这类属性值会被标签剥离一起移除，不误报。
  */
 function extractTemplateText(content) {
-  const tpl = String(content || '').match(/<template>([\s\S]*?)<\/template>/i);
+  // 🛡️ 共享边界法（lazy </template> 会被具名插槽提前截断——0ca84358 家族缺陷）
+  const tpl = extractSfcTemplate(String(content || ''));
   if (!tpl) return '';
-  return tpl[1]
-    .replace(/<!--[\s\S]*?-->/g, ' ')
+  return tpl
     .replace(/<[^>]*>/g, ' ')
     .replace(/\{\{[^}]*\}\}/g, ' ');
 }

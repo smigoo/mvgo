@@ -1,0 +1,424 @@
+.dark {
+  /* === [自动修复] v3.5 模板驱动 fallback 规则 === */
+  /* [自动修复] 模板 class .c-flow-forecast-accuracy → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-flow-forecast-chart → 匹配元素 section-hourly-charts */
+  /* [自动修复] 模板 class .c-flow-forecast-chart-wrap → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-flow-forecast-header → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-flow-forecast-holiday-link → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-flow-forecast-root → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-flow-forecast-tab → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-flow-forecast-tabs → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-flow-forecast-title → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-flow-forecast-title-group → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-flow-forecast-title-icon → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-hourly-flow-card → 匹配元素 card-tunnel-type */
+  /* [自动修复] 模板 class .c-hourly-flow-chart → 匹配元素 section-hourly-charts */
+  /* [自动修复] 模板 class .c-hourly-flow-header → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-hourly-flow-root → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-hourly-flow-title → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-hourly-flow-title-decorator → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-total-traffic-body → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-total-traffic-header → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-total-traffic-root → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-total-traffic-select → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-total-traffic-stat → 匹配元素 stat-tunnel */
+  /* [自动修复] 模板 class .c-total-traffic-stat-bridge → 匹配元素 stat-bridge */
+  /* [自动修复] 模板 class .c-total-traffic-stat-label → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-total-traffic-stat-tunnel → 匹配元素 stat-tunnel */
+  /* [自动修复] 模板 class .c-total-traffic-stat-value → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-total-traffic-stat-value-bridge → 匹配元素 stat-bridge */
+  /* [自动修复] 模板 class .c-total-traffic-stat-value-tunnel → 匹配元素 stat-tunnel */
+  /* [自动修复] 模板 class .c-total-traffic-title → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-total-traffic-title-icon → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-total-traffic-title-wrap → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-vehicle-type-card → 匹配元素 card-tunnel-type */
+  /* [自动修复] 模板 class .c-vehicle-type-card-body → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-vehicle-type-card-header → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-vehicle-type-card-title → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-vehicle-type-cards → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-vehicle-type-chart → 匹配元素 section-hourly-charts */
+  /* [自动修复] 模板 class .c-vehicle-type-root → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-vehicle-type-stat → 匹配元素 stat-tunnel */
+  /* [自动修复] 模板 class .c-vehicle-type-stat-label → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-vehicle-type-stat-value → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-vehicle-type-stat-value--blue → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-vehicle-type-stat-value--orange → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-vehicle-type-title-bar → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .is-active → 匹配元素 section-daily-total */
+}
+.dark * {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+.dark .c-monitor-root {
+  width: 100%;
+  height: 100%;
+  font-family: 'Source Han Sans CN', sans-serif;
+  color: #333333;
+  overflow: hidden;
+}
+.dark .common-bg {
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+.dark .common-title {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  color: #333333;
+}
+.dark .common-value {
+  font-family: 'Roboto', sans-serif;
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 28px;
+}
+.dark .c-flow-forecast-accuracy {
+  display: flex;
+}
+.dark .c-flow-forecast-chart {
+  display: flex;
+}
+.dark .c-flow-forecast-chart-wrap {
+  display: flex;
+}
+.dark .c-flow-forecast-header {
+  display: flex;
+}
+.dark .c-flow-forecast-holiday-link {
+  display: flex;
+}
+.dark .c-flow-forecast-root {
+  display: flex;
+}
+.dark .c-flow-forecast-tab {
+  display: flex;
+}
+.dark .c-flow-forecast-tabs {
+  display: flex;
+}
+.dark .c-flow-forecast-title {
+  display: flex;
+}
+.dark .c-flow-forecast-title-group {
+  display: flex;
+}
+.dark .c-flow-forecast-title-icon {
+  display: flex;
+}
+.dark .c-hourly-flow-card {
+  display: flex;
+}
+.dark .c-hourly-flow-chart {
+  display: flex;
+}
+.dark .c-hourly-flow-header {
+  display: flex;
+}
+.dark .c-hourly-flow-root {
+  display: flex;
+}
+.dark .c-hourly-flow-title {
+  display: flex;
+}
+.dark .c-hourly-flow-title-decorator {
+  display: flex;
+}
+.dark .c-total-traffic-body {
+  display: flex;
+}
+.dark .c-total-traffic-header {
+  display: flex;
+}
+.dark .c-total-traffic-root {
+  display: flex;
+}
+.dark .c-total-traffic-select {
+  display: flex;
+}
+.dark .c-total-traffic-stat {
+  display: flex;
+}
+.dark .c-total-traffic-stat-bridge {
+  display: flex;
+}
+.dark .c-total-traffic-stat-label {
+  display: flex;
+}
+.dark .c-total-traffic-stat-tunnel {
+  display: flex;
+}
+.dark .c-total-traffic-stat-value {
+  display: flex;
+}
+.dark .c-total-traffic-stat-value-bridge {
+  display: flex;
+}
+.dark .c-total-traffic-stat-value-tunnel {
+  display: flex;
+}
+.dark .c-total-traffic-title {
+  display: flex;
+}
+.dark .c-total-traffic-title-icon {
+  display: flex;
+}
+.dark .c-total-traffic-title-wrap {
+  display: flex;
+}
+.dark .c-vehicle-type-card {
+  display: flex;
+}
+.dark .c-vehicle-type-card-body {
+  display: flex;
+}
+.dark .c-vehicle-type-card-header {
+  display: flex;
+}
+.dark .c-vehicle-type-card-title {
+  display: flex;
+}
+.dark .c-vehicle-type-cards {
+  display: flex;
+}
+.dark .c-vehicle-type-chart {
+  display: flex;
+}
+.dark .c-vehicle-type-root {
+  display: flex;
+}
+.dark .c-vehicle-type-stat {
+  display: flex;
+}
+.dark .c-vehicle-type-stat-label {
+  display: flex;
+}
+.dark .c-vehicle-type-stat-value {
+  display: flex;
+}
+.dark .c-vehicle-type-stat-value--blue {
+  display: flex;
+}
+.dark .c-vehicle-type-stat-value--orange {
+  display: flex;
+}
+.dark .c-vehicle-type-title-bar {
+  display: flex;
+}
+.dark .is-active {
+  display: flex;
+}
+.light {
+  /* === [自动修复] v3.5 模板驱动 fallback 规则 === */
+  /* [自动修复] 模板 class .c-flow-forecast-accuracy → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-flow-forecast-chart → 匹配元素 section-hourly-charts */
+  /* [自动修复] 模板 class .c-flow-forecast-chart-wrap → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-flow-forecast-header → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-flow-forecast-holiday-link → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-flow-forecast-root → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-flow-forecast-tab → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-flow-forecast-tabs → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-flow-forecast-title → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-flow-forecast-title-group → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-flow-forecast-title-icon → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-hourly-flow-card → 匹配元素 card-tunnel-type */
+  /* [自动修复] 模板 class .c-hourly-flow-chart → 匹配元素 section-hourly-charts */
+  /* [自动修复] 模板 class .c-hourly-flow-header → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-hourly-flow-root → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-hourly-flow-title → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-hourly-flow-title-decorator → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-total-traffic-body → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-total-traffic-header → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-total-traffic-root → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-total-traffic-select → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-total-traffic-stat → 匹配元素 stat-tunnel */
+  /* [自动修复] 模板 class .c-total-traffic-stat-bridge → 匹配元素 stat-bridge */
+  /* [自动修复] 模板 class .c-total-traffic-stat-label → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-total-traffic-stat-tunnel → 匹配元素 stat-tunnel */
+  /* [自动修复] 模板 class .c-total-traffic-stat-value → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-total-traffic-stat-value-bridge → 匹配元素 stat-bridge */
+  /* [自动修复] 模板 class .c-total-traffic-stat-value-tunnel → 匹配元素 stat-tunnel */
+  /* [自动修复] 模板 class .c-total-traffic-title → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-total-traffic-title-icon → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-total-traffic-title-wrap → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-vehicle-type-card → 匹配元素 card-tunnel-type */
+  /* [自动修复] 模板 class .c-vehicle-type-card-body → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-vehicle-type-card-header → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-vehicle-type-card-title → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-vehicle-type-cards → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-vehicle-type-chart → 匹配元素 section-hourly-charts */
+  /* [自动修复] 模板 class .c-vehicle-type-root → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-vehicle-type-stat → 匹配元素 stat-tunnel */
+  /* [自动修复] 模板 class .c-vehicle-type-stat-label → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-vehicle-type-stat-value → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-vehicle-type-stat-value--blue → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-vehicle-type-stat-value--orange → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-vehicle-type-title-bar → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .is-active → 匹配元素 section-daily-total */
+}
+.light * {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+.light .c-monitor-root {
+  width: 100%;
+  height: 100%;
+  font-family: 'Source Han Sans CN', sans-serif;
+  color: #333333;
+  overflow: hidden;
+}
+.light .common-bg {
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+.light .common-title {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  color: #333333;
+}
+.light .common-value {
+  font-family: 'Roboto', sans-serif;
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 28px;
+}
+.light .c-flow-forecast-accuracy {
+  display: flex;
+}
+.light .c-flow-forecast-chart {
+  display: flex;
+}
+.light .c-flow-forecast-chart-wrap {
+  display: flex;
+}
+.light .c-flow-forecast-header {
+  display: flex;
+}
+.light .c-flow-forecast-holiday-link {
+  display: flex;
+}
+.light .c-flow-forecast-root {
+  display: flex;
+}
+.light .c-flow-forecast-tab {
+  display: flex;
+}
+.light .c-flow-forecast-tabs {
+  display: flex;
+}
+.light .c-flow-forecast-title {
+  display: flex;
+}
+.light .c-flow-forecast-title-group {
+  display: flex;
+}
+.light .c-flow-forecast-title-icon {
+  display: flex;
+}
+.light .c-hourly-flow-card {
+  display: flex;
+}
+.light .c-hourly-flow-chart {
+  display: flex;
+}
+.light .c-hourly-flow-header {
+  display: flex;
+}
+.light .c-hourly-flow-root {
+  display: flex;
+}
+.light .c-hourly-flow-title {
+  display: flex;
+}
+.light .c-hourly-flow-title-decorator {
+  display: flex;
+}
+.light .c-total-traffic-body {
+  display: flex;
+}
+.light .c-total-traffic-header {
+  display: flex;
+}
+.light .c-total-traffic-root {
+  display: flex;
+}
+.light .c-total-traffic-select {
+  display: flex;
+}
+.light .c-total-traffic-stat {
+  display: flex;
+}
+.light .c-total-traffic-stat-bridge {
+  display: flex;
+}
+.light .c-total-traffic-stat-label {
+  display: flex;
+}
+.light .c-total-traffic-stat-tunnel {
+  display: flex;
+}
+.light .c-total-traffic-stat-value {
+  display: flex;
+}
+.light .c-total-traffic-stat-value-bridge {
+  display: flex;
+}
+.light .c-total-traffic-stat-value-tunnel {
+  display: flex;
+}
+.light .c-total-traffic-title {
+  display: flex;
+}
+.light .c-total-traffic-title-icon {
+  display: flex;
+}
+.light .c-total-traffic-title-wrap {
+  display: flex;
+}
+.light .c-vehicle-type-card {
+  display: flex;
+}
+.light .c-vehicle-type-card-body {
+  display: flex;
+}
+.light .c-vehicle-type-card-header {
+  display: flex;
+}
+.light .c-vehicle-type-card-title {
+  display: flex;
+}
+.light .c-vehicle-type-cards {
+  display: flex;
+}
+.light .c-vehicle-type-chart {
+  display: flex;
+}
+.light .c-vehicle-type-root {
+  display: flex;
+}
+.light .c-vehicle-type-stat {
+  display: flex;
+}
+.light .c-vehicle-type-stat-label {
+  display: flex;
+}
+.light .c-vehicle-type-stat-value {
+  display: flex;
+}
+.light .c-vehicle-type-stat-value--blue {
+  display: flex;
+}
+.light .c-vehicle-type-stat-value--orange {
+  display: flex;
+}
+.light .c-vehicle-type-title-bar {
+  display: flex;
+}
+.light .is-active {
+  display: flex;
+}

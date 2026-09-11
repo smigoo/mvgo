@@ -69,22 +69,32 @@ const frontendWorkspaceRoot =
  *   other     —— 其他辅助目录，仅做分布展示
  *
  * inSearchRoot: 是否属于 component-resolver.js#componentSearchRoots() 的解析搜索根
+ *
+ * 🆕 S5（2026-09-10）：`workspaceRoot` 已由 `projectRoot/workspace` 统一到
+ *   `backend-node/workspace`，搜索根随之变为
+ *   [be/ws/custom, be/ws/vue3, fe/custom, fe/vue3]。
+ *   `projectRoot/workspace` 退役（retired: true，不再参与解析），
+ *   其残留目录只在 `--scan-retired` / `--include-retired-roots` 场景下清理。
  */
 const ROOTS = [
-  { key: 'root-ws/custom', family: 'component', inSearchRoot: true, label: 'projectRoot/workspace/custom-components', dir: path.join(projectRoot, 'workspace', 'custom-components'), twoLevel: false },
-  { key: 'root-ws/vue3', family: 'component', inSearchRoot: true, label: 'projectRoot/workspace/vue3-components', dir: path.join(projectRoot, 'workspace', 'vue3-components'), twoLevel: true },
+  { key: 'root-ws/custom', family: 'component', inSearchRoot: false, retired: true, label: 'projectRoot/workspace/custom-components [退役根]', dir: path.join(projectRoot, 'workspace', 'custom-components'), twoLevel: false },
+  { key: 'root-ws/vue3', family: 'component', inSearchRoot: false, retired: true, label: 'projectRoot/workspace/vue3-components [退役根]', dir: path.join(projectRoot, 'workspace', 'vue3-components'), twoLevel: true },
   { key: 'fe/custom', family: 'component', inSearchRoot: true, label: 'frontend/workspace/custom-components', dir: path.join(frontendWorkspaceRoot, 'custom-components'), twoLevel: false },
   { key: 'fe/vue3', family: 'component', inSearchRoot: true, label: 'frontend/workspace/vue3-components', dir: path.join(frontendWorkspaceRoot, 'vue3-components'), twoLevel: true },
-  { key: 'be/ws/custom', family: 'component', inSearchRoot: false, label: 'backend-node/workspace/custom-components [不在搜索根]', dir: path.join(backendRoot, 'workspace', 'custom-components'), twoLevel: false },
-  { key: 'be/ws/vue3', family: 'component', inSearchRoot: false, label: 'backend-node/workspace/vue3-components [不在搜索根]', dir: path.join(backendRoot, 'workspace', 'vue3-components'), twoLevel: true },
+  { key: 'be/ws/custom', family: 'component', inSearchRoot: true, label: 'backend-node/workspace/custom-components [写入根]', dir: path.join(backendRoot, 'workspace', 'custom-components'), twoLevel: false },
+  { key: 'be/ws/vue3', family: 'component', inSearchRoot: true, label: 'backend-node/workspace/vue3-components [写入根]', dir: path.join(backendRoot, 'workspace', 'vue3-components'), twoLevel: true },
   { key: 'be/ws/pages', family: 'page', inSearchRoot: false, label: 'backend-node/workspace/vue3-pages [页面骨架]', dir: path.join(backendRoot, 'workspace', 'vue3-pages'), twoLevel: true },
   { key: 'fe/pages', family: 'page', inSearchRoot: false, label: 'frontend/workspace/vue3-pages [页面骨架]', dir: path.join(frontendWorkspaceRoot, 'vue3-pages'), twoLevel: true },
   { key: 'fe/panels', family: 'other', inSearchRoot: false, label: 'frontend/workspace/custom-panels [面板]', dir: path.join(frontendWorkspaceRoot, 'custom-panels'), twoLevel: false },
   { key: 'fe/api-modules', family: 'api-module', inSearchRoot: false, label: 'frontend/workspace/api-modules [接口产物]', dir: path.join(frontendWorkspaceRoot, 'api-modules'), twoLevel: false },
 ];
 
-/** 实际参与解析的搜索根顺序（与 component-resolver.js#componentSearchRoots() 一致） */
-const SEARCH_ROOT_ORDER = ['root-ws/custom', 'root-ws/vue3', 'fe/custom', 'fe/vue3'];
+/**
+ * 实际参与解析的搜索根顺序（与 component-resolver.js#componentSearchRoots() 一致）
+ * 🆕 S5：顺序 = customComponentsDir → vue3ComponentsDir → frontendCustom → frontendVue3
+ *         （均指向 backend-node/workspace 与 frontend/workspace，不再含退役根）
+ */
+const SEARCH_ROOT_ORDER = ['be/ws/custom', 'be/ws/vue3', 'fe/custom', 'fe/vue3'];
 
 function readDirSafe(dir) {
   try {
@@ -289,6 +299,7 @@ if (jsonMode) {
       label: v.root.label,
       family: v.root.family,
       inSearchRoot: !!v.root.inSearchRoot,
+      retired: !!v.root.retired,
       count: v.items.length,
       gitRepo: v.gitInfo?.repo ?? null,
       gitTrackedFiles: v.gitInfo?.tracked ?? 0,

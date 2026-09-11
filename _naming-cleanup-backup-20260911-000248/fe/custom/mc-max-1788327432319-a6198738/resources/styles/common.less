@@ -1,0 +1,155 @@
+.c-env-monitor-root {display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  
+  width: 100%;
+  aspect-ratio: 420 / 186;
+  font-size: var(--fontSize, 14px);
+
+}
+.c-env-monitor-tabs-tools {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-width: 0;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.c-env-monitor-tabs-list {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 3px 4px;
+  flex-shrink: 0;
+}
+
+.c-env-monitor-tab-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-width: 42px;
+  height: 21px;
+  padding: 0 9px;
+  color: #2c9bea;
+  font-family: 'Source Han Sans CN', 'Roboto', sans-serif;
+  font-size: var(--fontSize, 14px);
+  font-weight: 500;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.c-env-monitor-tool-icons {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.c-env-monitor-icon-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+.c-env-monitor-icon-img {
+  display: block;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.c-env-monitor-icon-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  background: #f53f3f;
+  color: #ffffff;
+  font-family: 'PingFang SC', 'Source Han Sans CN', sans-serif;
+  font-size: calc(var(--fontSize, 14px) * 0.857);
+  font-weight: 500;
+  line-height: 14px;
+  border-radius: 29px;
+}
+
+.c-env-monitor-section-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  flex: 1 1 0;
+}
+
+.c-env-monitor-header-dot {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+}
+
+.c-env-monitor-header-dot-outer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #000000;
+}
+
+.c-env-monitor-header-dot-inner {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #1252fa 0%, #d6effc 100%);
+}
+
+.c-env-monitor-header-dot-highlight {
+  position: absolute;
+  top: 2.2px;
+  left: 2.2px;
+  width: 2.4px;
+  height: 2.4px;
+  border-radius: 50%;
+  background: #559eff;
+}
+
+.c-env-monitor-chart-wrapper {
+  width: 100%;
+  flex: 113 1 0;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.c-env-monitor-chart-container {
+  width: 100%;
+  height: 100%;
+}

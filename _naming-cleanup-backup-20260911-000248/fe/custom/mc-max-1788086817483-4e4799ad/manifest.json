@@ -1,0 +1,200 @@
+{
+  "version": 1,
+  "sessionId": "mc-max-1788086817483-4e4799ad",
+  "componentId": "mc-max-1788086817483-4e4799ad",
+  "groupId": "6a7599af6eb9eebf9fba56cd",
+  "target": "microcode",
+  "revision": "r-6adae05c-a5b5-4f06-b9a9-26d0a4691fd8",
+  "status": "validating",
+  "createdAt": "2026-08-30T10:51:48.869Z",
+  "stage": "microcode-engineer",
+  "files": [
+    {
+      "path": "_figma-size.json",
+      "size": 98,
+      "hash": "445b4ec6cb698ce928e24c7a5b7a08702a62a6c379b953804fd92d78d701b84a"
+    },
+    {
+      "path": "declare.json",
+      "size": 1248,
+      "hash": "7db568bf496cff74cec0e277dfe56144a7f5ec80b51728fea7dd10be1323da90"
+    },
+    {
+      "path": "package/components/AlertCards.vue",
+      "size": 2357,
+      "hash": "859ba45997e62d2b934ac944eed091c8500e2d3331ccd7ad16f5d80c8beede1d"
+    },
+    {
+      "path": "package/components/DeviceGrid.vue",
+      "size": 3849,
+      "hash": "99dfde6885389729a4671ea0f18a611427c71a6ef43bceb984bacd798cc7baf8"
+    },
+    {
+      "path": "package/components/HeaderStats.vue",
+      "size": 763,
+      "hash": "0ddb90c232b586448f9bae35456611abee38f9965a04201d4d46a2da4a333acd"
+    },
+    {
+      "path": "package/index.vue",
+      "size": 898,
+      "hash": "d602f1ca2396eb3c705e1b86c2d44ee2fb7f62fc2215dde354b54bea64c1cac3"
+    },
+    {
+      "path": "resources/images/bg-8418.png",
+      "size": 87645,
+      "hash": "630a136900a83be6e00fb27ab450108bdaeba6254f17583489895dcdf442adc2"
+    },
+    {
+      "path": "resources/images/bg-8439.png",
+      "size": 29550,
+      "hash": "14c80e3d77e1c963dc520a6e8653072cf7bdad0aaf7713bcf3dad86058f475d3"
+    },
+    {
+      "path": "resources/images/bg-8468.png",
+      "size": 29550,
+      "hash": "14c80e3d77e1c963dc520a6e8653072cf7bdad0aaf7713bcf3dad86058f475d3"
+    },
+    {
+      "path": "resources/images/bg-8498.png",
+      "size": 29550,
+      "hash": "14c80e3d77e1c963dc520a6e8653072cf7bdad0aaf7713bcf3dad86058f475d3"
+    },
+    {
+      "path": "resources/images/bg-8527.png",
+      "size": 29550,
+      "hash": "14c80e3d77e1c963dc520a6e8653072cf7bdad0aaf7713bcf3dad86058f475d3"
+    },
+    {
+      "path": "resources/images/bg-8556.png",
+      "size": 29550,
+      "hash": "14c80e3d77e1c963dc520a6e8653072cf7bdad0aaf7713bcf3dad86058f475d3"
+    },
+    {
+      "path": "resources/images/bg-8585.png",
+      "size": 29550,
+      "hash": "14c80e3d77e1c963dc520a6e8653072cf7bdad0aaf7713bcf3dad86058f475d3"
+    },
+    {
+      "path": "resources/images/bg-8614.png",
+      "size": 29550,
+      "hash": "14c80e3d77e1c963dc520a6e8653072cf7bdad0aaf7713bcf3dad86058f475d3"
+    },
+    {
+      "path": "resources/images/bg-8643.png",
+      "size": 29550,
+      "hash": "14c80e3d77e1c963dc520a6e8653072cf7bdad0aaf7713bcf3dad86058f475d3"
+    },
+    {
+      "path": "resources/images/bg-8672.png",
+      "size": 29550,
+      "hash": "14c80e3d77e1c963dc520a6e8653072cf7bdad0aaf7713bcf3dad86058f475d3"
+    },
+    {
+      "path": "resources/images/bg-8701.png",
+      "size": 29550,
+      "hash": "14c80e3d77e1c963dc520a6e8653072cf7bdad0aaf7713bcf3dad86058f475d3"
+    },
+    {
+      "path": "resources/images/bg-8730.png",
+      "size": 29550,
+      "hash": "14c80e3d77e1c963dc520a6e8653072cf7bdad0aaf7713bcf3dad86058f475d3"
+    },
+    {
+      "path": "resources/images/bg-8759.png",
+      "size": 29550,
+      "hash": "14c80e3d77e1c963dc520a6e8653072cf7bdad0aaf7713bcf3dad86058f475d3"
+    },
+    {
+      "path": "resources/images/bg-8788.png",
+      "size": 48101,
+      "hash": "48f46da46462316133e31ff88da0ac974d07d7203a2e1ef72675478c9d4ed737"
+    },
+    {
+      "path": "resources/images/bg-8807.png",
+      "size": 73378,
+      "hash": "fd5f5dd5a1ae7aaff3e64ffbf2faeb34d41e75a55e0832b9715f6cffe794e6e2"
+    },
+    {
+      "path": "resources/images/icon-8444.png",
+      "size": 6379,
+      "hash": "ae34bb8065b4b4e0ec47606d64111f628b9cc7342e9dfecff22e7313d5c6098c"
+    },
+    {
+      "path": "resources/images/icon-8473.png",
+      "size": 6089,
+      "hash": "67ee2da37d58ba924c4d838ac6c1de01617f9501d47ec59d670ce129d2718f13"
+    },
+    {
+      "path": "resources/images/icon-8503.png",
+      "size": 5954,
+      "hash": "814321f333f6cf5c6df874f29b74bede1f9983b972efc8b26ca192a64e5520f4"
+    },
+    {
+      "path": "resources/images/icon-8532.png",
+      "size": 6539,
+      "hash": "0c7e0c286f9627614faf0079c7ac42be046af7ce797513ba9945355309470de4"
+    },
+    {
+      "path": "resources/images/icon-8561.png",
+      "size": 6981,
+      "hash": "1048e3282ccaec00eef0fb8057089db0d186f90c9286a442600db9bbbfd94948"
+    },
+    {
+      "path": "resources/images/icon-8590.png",
+      "size": 6309,
+      "hash": "62c378343a286b99b54b163a4b4bf8aa2446bc1eb63148cf1010790b8614b423"
+    },
+    {
+      "path": "resources/images/icon-8619.png",
+      "size": 6028,
+      "hash": "68278526ac23c7ba5394bdc986f5d75b15e3826fbb72abb10e63ad5d818eaf1f"
+    },
+    {
+      "path": "resources/images/icon-8648.png",
+      "size": 6133,
+      "hash": "8ce9e72749396f68d49b74e7d124699285ec4a010c09a564e1661554548b7970"
+    },
+    {
+      "path": "resources/images/icon-8677.png",
+      "size": 5838,
+      "hash": "d6f30c10f019a34ca73eeb93a7a1d8bb046789ac287448c5498cb56cc201b961"
+    },
+    {
+      "path": "resources/images/icon-8706.png",
+      "size": 6248,
+      "hash": "0c4e8695b2ccb08804728f0866c7a229a670c667d19a89779f657cbee12ba9eb"
+    },
+    {
+      "path": "resources/images/icon-8735.png",
+      "size": 6363,
+      "hash": "77c0ec4c75b5eefe9fbb0e38ba0ab9b59d26ccb07f3db86296e7d2c41821dce9"
+    },
+    {
+      "path": "resources/images/icon-8764.png",
+      "size": 6468,
+      "hash": "413318c404ec67a8ac99807cc6a7c7d95bc943b1edb17b4195b8f79492472f71"
+    },
+    {
+      "path": "resources/images/icon-8798.png",
+      "size": 4367,
+      "hash": "695ccbb2b5fe9cb56df54722fac64c45f460e0a4312fd96b119c6b894b937f54"
+    },
+    {
+      "path": "resources/images/icon-8817.png",
+      "size": 6859,
+      "hash": "6485b8c2ff400c13ab1fd787aae2f4bd6719bbf2f3d6fc220d8086b9065d0095"
+    },
+    {
+      "path": "resources/images/mc-preview.png",
+      "size": 197214,
+      "hash": "b4b729c86ace96c2b1ec798935b6f41448d450b352c29042a7908209aea236d7"
+    }
+  ],
+  "validation": {
+    "less": "warning",
+    "semantics": "passed",
+    "sfc": "passed",
+    "runtime": "pending"
+  },
+  "rejectionReason": "1 个阻断问题"
+}

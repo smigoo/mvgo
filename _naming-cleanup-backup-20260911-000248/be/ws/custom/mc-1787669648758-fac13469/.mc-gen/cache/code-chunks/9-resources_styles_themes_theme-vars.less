@@ -1,0 +1,95 @@
+.common() {
+  // 基础排版与结构（非颜色变量）
+  @font-size-base: 14px;
+  @font-size-sm: 12px;
+  @font-size-lg: 16px;
+  @border-radius-base: 4px;
+  @border-radius-sm: 2px;
+  @border-radius-lg: 8px;
+  @line-height-base: 1.5;
+  @transition-duration: 0.3s;
+}
+
+.theme-light() {
+  // 背景色
+  @bg-color: #edf4fb;
+  @bg-color-secondary: #d6effc;
+  @bg-color-tertiary: rgba(199,224,255,1);
+  @bg-color-component: #ffffff;
+
+  // 文本色
+  @text-color-primary: #333333;
+  @text-color-secondary: #56597c;
+  @text-color-tertiary: #6680a0;
+  @text-color-disabled: rgba(172,196,225,1);
+
+  // 品牌/主色
+  @primary-color: #1990ff;
+  @primary-color-hover: #388dff;
+  @primary-color-active: #006fe3;
+  @primary-color-light: #559eff;
+  @primary-color-bg: rgba(199,224,255,1);
+
+  // 边框色
+  @border-color: rgba(172,196,225,1);
+  @border-color-light: #d6effc;
+
+  // 状态色
+  @success-color: #00cccc;
+  @success-color-light: rgba(0,204,204,0.3);
+  @warning-color: #ffa22f;
+  @error-color: #ff6a00;
+  @info-color: #1252fa;
+
+  // 辅助/图表色
+  @chart-color-1: #1990ff;
+  @chart-color-2: #5a7eff;
+  @chart-color-3: #0c9dbe;
+  @chart-color-4: #ffa22f;
+  @chart-color-5: #2ba0ff;
+  @chart-color-6: #1399ff;
+  @chart-color-7: #3385ff;
+  @chart-color-8: #5bbbef;
+}
+
+.theme-dark() {
+  // 背景色
+  @bg-color: #333333;
+  @bg-color-secondary: #000000;
+  @bg-color-tertiary: #56597c;
+  @bg-color-component: #000000;
+
+  // 文本色（深色面板禁止使用黑色系）
+  @text-color-primary: #ffffff;
+  @text-color-secondary: rgba(255,255,255,0.8);
+  @text-color-tertiary: rgba(172,196,225,1);
+  @text-color-disabled: #6680a0;
+
+  // 品牌/主色
+  @primary-color: #559eff;
+  @primary-color-hover: #57caff;
+  @primary-color-active: #388dff;
+  @primary-color-light: rgba(74,117,141,0.25);
+  @primary-color-bg: rgba(74,117,141,0.25);
+
+  // 边框色
+  @border-color: rgba(74,117,141,0.25);
+  @border-color-light: #56597c;
+
+  // 状态色
+  @success-color: #00cccc;
+  @success-color-light: rgba(0,204,204,0.3);
+  @warning-color: #ffa22f;
+  @error-color: #ff6a00;
+  @info-color: #5a7eff;
+
+  // 辅助/图表色
+  @chart-color-1: #559eff;
+  @chart-color-2: #5a7eff;
+  @chart-color-3: #0c9dbe;
+  @chart-color-4: #ffa22f;
+  @chart-color-5: #2ba0ff;
+  @chart-color-6: #1399ff;
+  @chart-color-7: #3385ff;
+  @chart-color-8: #5bbbef;
+}

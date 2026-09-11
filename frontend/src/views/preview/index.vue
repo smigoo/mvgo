@@ -211,7 +211,7 @@ async function ensureLatestSnapshot() {
   if (!sessionId) return
   try {
     // latest 接口返回 { candidate, lastGood, partial }；优先级 candidate > partial > lastGood
-    const data = await http.get(`/api/tasks/${encodeURIComponent(sessionId)}/code-snapshots/latest`)
+    const data = await http.get(`/api/tasks/${encodeURIComponent(sessionId)}/code-snapshots/latest`, undefined, { silent401: true })
     const candidate = data?.candidate
     const partial = data?.partial
     const lastGood = data?.lastGood
@@ -230,7 +230,7 @@ async function ensureLatestSnapshot() {
       try {
         const resolveData = await http.get('/api/tasks/resolve-session', { componentId })
         if (resolveData?.success && resolveData.sessionId) {
-          const retry = await http.get(`/api/tasks/${encodeURIComponent(resolveData.sessionId)}/code-snapshots/latest`)
+          const retry = await http.get(`/api/tasks/${encodeURIComponent(resolveData.sessionId)}/code-snapshots/latest`, undefined, { silent401: true })
           const snap = retry?.candidate || retry?.partial || retry?.lastGood
           if (snap?.revision) {
             latestSnapshotSource.value = {

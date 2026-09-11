@@ -1,0 +1,391 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 72,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0].body.children[0]",
+        "message": "顶部统计栏第一个 stat-item 包含 icon+content 结构，但 content 仅有单个 label，不符合统计项语义",
+        "suggestion": "第一项应为页面标题，建议将其从 stat-item 数组中分离，放入独立 header 区域"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[1].items",
+        "message": "右侧设备网格所有 device-card 的 icon 字段误用 bg-8788.png 作为图标资源，实际应为设备图标",
+        "suggestion": "根据 coverageReport 显示存在 16 个未匹配节点，设备图标资源可能缺失或映射错误，需重新解析"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[0]",
+        "message": "左侧导航 width 固定为 60，但包含「交通诱导」等长文本，可能导致文字截断",
+        "suggestion": "建议改用 minWidth 或移除固定宽度，由内容自适应"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[1].body.children[1].items[*].content",
+        "message": "设备卡片 content 嵌套 vertical → elements 数组，深度达 5 层，可简化为 content 直接包含 label+value",
+        "suggestion": "扁平化 device-card 结构，减少冗余 layout 层级"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body.backgroundImage",
+        "message": "顶部统计栏和主内容区共用相同背景图 bg-8788.png，与实际视觉不符（应为两张不同的背景图）",
+        "suggestion": "检查背景图资源映射，确保每个区域使用正确的背景"
+      }
+    ],
+    "recommendations": [
+      "将顶部统计栏第一项「设备监测」标题独立为 section header，剩余 3 个指标保留在 body",
+      "修正设备卡片图标资源映射，从 Figma coverageReport.missing 中查找匹配的图标节点",
+      "扁平化 device-card 结构：content: { label, value, color } 替代当前的嵌套 elements 数组"
+    ],
+    "summary": "整体布局清晰，左侧导航+右侧网格模式合理。主要问题：顶部标题混入统计项、设备图标资源错误、结构嵌套冗余。建议分离标题层级、修正资源映射、简化卡片结构后可达良好水平。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）- 浅色科技监控风主题",
+      "--colorPrimary": "rgba(25, 144, 255, 1)",
+      "--colorSecondary": "rgba(8, 163, 165, 1)",
+      "--colorTextBase": "rgba(255, 255, 255, 0.9)",
+      "--colorTextSecondary": "rgba(255, 255, 255, 0.8)",
+      "--colorBg": "#f5f7fa",
+      "--colorBgGradient": "linear-gradient(135deg, #e8f0f8 0%, #f2f6fc 100%)",
+      "--colorNavIndicator": "rgba(25, 144, 255, 1)",
+      "--colorCardBg": "#ffffff",
+      "--colorIconBg": "rgba(25, 144, 255, 0.1)",
+      "--colorStatBarBg": "linear-gradient(90deg, rgba(25, 144, 255, 0.8) 0%, rgba(8, 163, 165, 0.6) 100%)",
+      "--colorBadgeDanger": "#ff4d4f",
+      "--colorBorder": "rgba(0, 0, 0, 0.06)",
+      "--colorShadow": "rgba(0, 0, 0, 0.08)",
+      "--fontSize": "14px",
+      "--fontSizeTitle": "16px",
+      "--fontSizeNumber": "24px",
+      "--borderRadius": "8px",
+      "--borderRadiusCard": "12px",
+      "--spacing": "16px",
+      "--spacingSmall": "8px",
+      "--spacingLarge": "24px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射 - 与CSS变量对应",
+      "@color-primary": "var(--colorPrimary)",
+      "@color-secondary": "var(--colorSecondary)",
+      "@color-text-base": "var(--colorTextBase)",
+      "@color-text-secondary": "var(--colorTextSecondary)",
+      "@color-bg": "var(--colorBg)",
+      "@color-bg-gradient": "var(--colorBgGradient)",
+      "@color-nav-indicator": "var(--colorNavIndicator)",
+      "@color-card-bg": "var(--colorCardBg)",
+      "@color-icon-bg": "var(--colorIconBg)",
+      "@color-stat-bar-bg": "var(--colorStatBarBg)",
+      "@color-badge-danger": "var(--colorBadgeDanger)",
+      "@color-border": "var(--colorBorder)",
+      "@color-shadow": "var(--colorShadow)",
+      "@font-size-base": "var(--fontSize)",
+      "@font-size-title": "var(--fontSizeTitle)",
+      "@font-size-number": "var(--fontSizeNumber)",
+      "@border-radius-base": "var(--borderRadius)",
+      "@border-radius-card": "var(--borderRadiusCard)",
+      "@spacing-base": "var(--spacing)",
+      "@spacing-small": "var(--spacingSmall)",
+      "@spacing-large": "var(--spacingLarge)"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类 - 浅色科技监控风格",
+      ".light-tech-container": {
+        "width": "100%",
+        "height": "100%",
+        "background": "var(--colorBgGradient)",
+        "position": "relative",
+        "overflow": "hidden"
+      },
+      ".tech-grid-texture": {
+        "background-image": "repeating-linear-gradient(0deg, transparent, transparent 49px, rgba(25, 144, 255, 0.05) 49px, rgba(25, 144, 255, 0.05) 50px), repeating-linear-gradient(90deg, transparent, transparent 49px, rgba(25, 144, 255, 0.05) 49px, rgba(25, 144, 255, 0.05) 50px)",
+        "background-size": "50px 50px",
+        "pointer-events": "none"
+      },
+      ".nav-item": {
+        "display": "flex",
+        "align-items": "center",
+        "padding": "12px 16px",
+        "color": "var(--colorTextSecondary)",
+        "transition": "all 0.3s ease",
+        "cursor": "pointer",
+        "position": "relative"
+      },
+      ".nav-item-active": {
+        "color": "var(--colorPrimary)",
+        "font-weight": "500"
+      },
+      ".nav-item-active::before": {
+        "content": "''",
+        "position": "absolute",
+        "left": "0",
+        "top": "50%",
+        "transform": "translateY(-50%)",
+        "width": "3px",
+        "height": "60%",
+        "background": "var(--colorNavIndicator)",
+        "border-radius": "0 2px 2px 0"
+      },
+      ".device-card": {
+        "background": "var(--colorCardBg)",
+        "border-radius": "var(--borderRadiusCard)",
+        "padding": "var(--spacing)",
+        "box-shadow": "0 2px 8px var(--colorShadow)",
+        "border": "1px solid var(--colorBorder)",
+        "transition": "all 0.3s ease"
+      },
+      ".device-card:hover": {
+        "box-shadow": "0 4px 16px var(--colorShadow)",
+        "transform": "translateY(-2px)"
+      },
+      ".icon-wrapper": {
+        "width": "48px",
+        "height": "48px",
+        "border-radius": "50%",
+        "background": "var(--colorIconBg)",
+        "display": "flex",
+        "align-items": "center",
+        "justify-content": "center"
+      },
+      ".stat-bar": {
+        "background": "var(--colorStatBarBg)",
+        "padding": "var(--spacing)",
+        "border-radius": "var(--borderRadius)",
+        "display": "flex",
+        "align-items": "center",
+        "justify-content": "space-between",
+        "box-shadow": "0 2px 8px rgba(25, 144, 255, 0.15)"
+      },
+      ".number-display": {
+        "font-size": "var(--fontSizeNumber)",
+        "font-weight": "600",
+        "color": "var(--colorPrimary)",
+        "font-family": "DIN, 'Helvetica Neue', Arial, sans-serif"
+      },
+      ".number-display-cyan": {
+        "font-size": "var(--fontSizeNumber)",
+        "font-weight": "600",
+        "color": "var(--colorSecondary)",
+        "font-family": "DIN, 'Helvetica Neue', Arial, sans-serif"
+      },
+      ".badge-danger": {
+        "background": "var(--colorBadgeDanger)",
+        "color": "#ffffff",
+        "padding": "2px 8px",
+        "border-radius": "10px",
+        "font-size": "12px",
+        "font-weight": "500"
+      },
+      ".section-title": {
+        "font-size": "var(--fontSizeTitle)",
+        "font-weight": "500",
+        "color": "var(--colorTextBase)",
+        "margin-bottom": "var(--spacing)"
+      },
+      ".flex-row": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "var(--spacing)"
+      },
+      ".flex-column": {
+        "display": "flex",
+        "flex-direction": "column",
+        "gap": "var(--spacingSmall)"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 rgba(25, 144, 255, 1) 映射为 --colorPrimary，用于导航高亮、数值强调、图标背景",
+      "次色调 rgba(8, 163, 165, 1) 映射为 --colorSecondary，用于渐变和辅助数值显示",
+      "文字颜色使用浅灰色系（rgba(255, 255, 255, 0.9/0.8)），确保在浅色背景上的可读性",
+      "背景使用浅灰蓝色渐变（#e8f0f8 → #f2f6fc）配合网格纹理，营造科技感",
+      "卡片使用白色背景（#ffffff）配合浅色阴影和边框，提升层次感",
+      "异常状态使用标准红色 badge（#ff4d4f），确保视觉突出",
+      "圆角统一使用 8px（基础）和 12px（卡片），保持一致性",
+      "间距系统采用 8px 基准（8/16/24px），便于响应式调整",
+      "数值字体推荐使用 DIN 字体，增强科技感和可读性",
+      "所有交互元素添加 0.3s 缓动动画，提升用户体验",
+      "容器背景已直接落地为渐变字面量值，避免关键背景只依赖 CSS 变量"
+    ],
+    "elementStyleMap": {
+      "header-stats": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-stat-item-设备监测-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-stat-item-设备类型-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-stat-item-设备总数-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-stat-item-完好率-3": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "el-stat-item-设备监测-3": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-stat-item-设备类型-5": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-stat-item-设备总数-8": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-stat-item-完好率-11": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "main-content": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "left-nav": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-15": {
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "device-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-2": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-3": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-4": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-5": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-6": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-7": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-8": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-9": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-10": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-11": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-12": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "header-stats",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 4,
+        "title": "顶部统计栏",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 4,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "main-content",
+        "responsibility": "主内容区",
+        "elementCount": 2,
+        "title": "主内容区",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 2,
+          "charts": 0,
+          "interactions": 1,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "nav",
+        "responsibility": "竖向导航区（分类/菜单切换）",
+        "elementCount": 0,
+        "title": "导航"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 → 强制拆分（含强制注入的导航 section）"
+  }
+}

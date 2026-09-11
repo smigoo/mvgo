@@ -1,0 +1,430 @@
+{
+  "generatedAt": "2026-01-21T10:30:00Z",
+  "stage": "preview-analysis",
+  "componentName": "环境监测",
+  "componentTitle": "环境监测",
+  "analysisModel": "claude-sonnet-5",
+  "sourceImage": {
+    "path": "mc-preview.png",
+    "size": 0,
+    "mtimeMs": 0,
+    "sha1": ""
+  },
+  "summary": "环境监测组件，包含顶部Tab切换栏（4个选项）、右上角图表类型切换按钮和通知图标，以及主体面积图展示气化碳数据的24小时趋势",
+  "layout": {
+    "type": "vertical-stack",
+    "direction": "vertical",
+    "sections": [
+      {
+        "id": "header-tabs",
+        "name": "Tab切换栏",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "body": {
+          "layout": "horizontal",
+          "children": [
+            {
+              "id": "tab-1",
+              "name": "气化碳",
+              "role": "tab",
+              "active": true,
+              "styles": {
+                "fontSize": 14,
+                "color": "rgba(255, 255, 255, 1)",
+                "fontWeight": "normal"
+              }
+            },
+            {
+              "id": "tab-2",
+              "name": "能见度",
+              "role": "tab",
+              "active": false,
+              "styles": {
+                "fontSize": 14,
+                "color": "rgba(255, 255, 255, 0.6)",
+                "fontWeight": "normal"
+              }
+            },
+            {
+              "id": "tab-3",
+              "name": "洞内照明",
+              "role": "tab",
+              "active": false,
+              "styles": {
+                "fontSize": 14,
+                "color": "rgba(255, 255, 255, 0.6)",
+                "fontWeight": "normal"
+              }
+            },
+            {
+              "id": "tab-4",
+              "name": "洞外光强",
+              "role": "tab",
+              "active": false,
+              "styles": {
+                "fontSize": 14,
+                "color": "rgba(255, 255, 255, 0.6)",
+                "fontWeight": "normal"
+              }
+            }
+          ],
+          "backgroundImage": {
+            "src": "../resources/images/bg-7890.png",
+            "recommendedUsage": "backgroundBlock"
+          },
+          "backgroundSize": "100% 100%",
+          "backgroundPosition": "center center",
+          "backgroundRepeat": "no-repeat"
+        }
+      },
+      {
+        "id": "header-controls",
+        "name": "右上角控制按钮",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "title-same-row",
+        "slotCandidate": "header-right",
+        "body": {
+          "layout": "horizontal",
+          "children": [
+            {
+              "id": "chart-type-toggle",
+              "name": "图表类型切换",
+              "role": "icon-button-group",
+              "styles": {
+                "width": 52,
+                "height": 24
+              },
+              "resourceFile": "../resources/images/icon-7941.png",
+              "recommendedUsage": "imgSrc",
+              "backgroundSize": "cover",
+              "backgroundPosition": "center center",
+              "backgroundRepeat": "no-repeat",
+              "resourceVarName": "icon1",
+              "downloadStatus": "success"
+            },
+            {
+              "id": "notification-badge",
+              "name": "通知图标",
+              "role": "icon-button",
+              "badge": "8",
+              "styles": {
+                "width": 14,
+                "height": 14
+              },
+              "resourceFile": "../resources/images/icon-7941.png",
+              "resourceVarName": "icon1",
+              "recommendedUsage": "imgSrc",
+              "downloadStatus": "success"
+            }
+          ]
+        }
+      },
+      {
+        "id": "chart-section",
+        "name": "图表区域",
+        "role": "常驻",
+        "layout": "vertical",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "bgPlaceholder": "section-bg-chart",
+        "body": {
+          "layout": "vertical",
+          "bgPlaceholder": "body-bg-chart",
+          "children": [
+            {
+              "id": "chart-title",
+              "name": "数据标签",
+              "role": "text",
+              "text": "2k3+785CO浓度",
+              "styles": {
+                "fontSize": 12,
+                "color": "rgba(255, 255, 255, 0.8)",
+                "fontWeight": "normal"
+              }
+            },
+            {
+              "id": "chart-subtitle",
+              "name": "单位标签",
+              "role": "text",
+              "text": "单位线",
+              "styles": {
+                "fontSize": 12,
+                "color": "rgba(245, 63, 63, 1)",
+                "fontWeight": "normal"
+              }
+            },
+            {
+              "id": "area-chart",
+              "name": "面积图",
+              "role": "chart",
+              "chartType": "area",
+              "styles": {
+                "width": 380,
+                "height": 145
+              }
+            }
+          ],
+          "backgroundImage": {
+            "src": "../resources/images/bg-7890.png",
+            "recommendedUsage": "backgroundBlock"
+          },
+          "backgroundSize": "100% 100%",
+          "backgroundPosition": "center center",
+          "backgroundRepeat": "no-repeat"
+        }
+      }
+    ]
+  },
+  "styles": {
+    "backgroundBrightness": "light",
+    "theme": "浅色科技监测风",
+    "colors": [
+      "rgba(255, 255, 255, 1)",
+      "rgba(255, 255, 255, 0.6)",
+      "rgba(85, 158, 255, 1)",
+      "rgba(245, 63, 63, 1)",
+      "rgba(0, 0, 0, 0.05)"
+    ],
+    "background": "浅色渐变背景（从上到下：浅蓝到白色过渡）",
+    "decorations": [
+      "顶部标题区域有蓝色渐变装饰",
+      "Tab选中态有蓝色高亮背景",
+      "通知图标有红色数字角标"
+    ],
+    "emphasis": [
+      "选中Tab为纯白色文字",
+      "未选中Tab为半透明白色文字",
+      "预警线为红色虚线",
+      "面积图填充为半透明蓝绿色渐变"
+    ]
+  },
+  "interactions": [
+    {
+      "target": "顶部Tab栏（气化碳/能见度/洞内照明/洞外光强）",
+      "type": "tab-switch",
+      "description": "切换不同的环境监测指标",
+      "defaultState": "常驻，气化碳为选中态",
+      "evidence": "气化碳Tab有蓝色高亮背景和纯白色文字，其他Tab为半透明白色文字"
+    },
+    {
+      "target": "右上角图表类型切换按钮",
+      "type": "toggle",
+      "description": "切换图表展示类型（折线图/柱状图等）",
+      "defaultState": "常驻，显示两种图表类型图标",
+      "evidence": "有两个小图标并排显示，有选中态高亮"
+    },
+    {
+      "target": "右上角通知图标",
+      "type": "icon-button",
+      "description": "查看通知消息",
+      "defaultState": "常驻，显示角标数字8",
+      "evidence": "右上角有通知图标，带红色数字角标"
+    },
+    {
+      "target": "面积图",
+      "type": "chart-hover",
+      "description": "悬停显示具体数值",
+      "defaultState": "常驻显示，支持交互",
+      "evidence": "标准图表组件，支持悬停交互"
+    }
+  ],
+  "charts": [
+    {
+      "section": "chart-section",
+      "type": "area",
+      "series": [
+        "CO浓度"
+      ],
+      "legend": [],
+      "legendPosition": "top-right",
+      "seriesColors": [
+        "rgba(85, 158, 255, 0.3)"
+      ],
+      "legendType": "horizontal",
+      "axes": "X轴为时间（0-24小时），Y轴为浓度值（0-40）",
+      "tooltip": "支持悬停显示具体时间点的数值",
+      "notes": [
+        "有红色虚线表示预警阈值（约30左右）",
+        "Y轴刻度包含：0、10、20、30、40",
+        "X轴刻度包含：2、4、6、8、10、12、14、16、18、20、22、24（时）",
+        "面积图填充为半透明蓝绿色渐变",
+        "趋势线为深蓝色"
+      ]
+    }
+  ],
+  "doNotInvent": [
+    "不要臆造Tab切换后的具体数据内容",
+    "不要臆造图表类型切换按钮的具体选项",
+    "不要臆造通知消息的具体内容",
+    "不要臆造CO浓度的具体数值范围和告警规则",
+    "不要臆造面积图的交互细节（缩放、拖拽等）",
+    "不要臆造更多的时间范围选项",
+    "不要臆造数据自动刷新的时间间隔"
+  ],
+  "notes": [
+    "组件整体为浅色背景风格，与深色大屏风格不同",
+    "Tab切换采用横向排列，选中态有明显的视觉区分",
+    "右上角控制区域紧凑，包含图表切换和通知功能",
+    "面积图占据主要空间，Y轴标签位于左侧，X轴标签位于底部",
+    "预警线（红色虚线）为重要视觉元素，需要还原",
+    "背景有从上到下的渐变效果（蓝色到白色过渡）"
+  ],
+  "headerSlots": [
+    {
+      "slotType": "header-right",
+      "elementType": "icon",
+      "content": "图表类型切换按钮（2个图标并排）",
+      "figmaNodeId": "7891"
+    },
+    {
+      "slotType": "header-right",
+      "elementType": "icon",
+      "content": "通知图标（带数字8角标）"
+    }
+  ],
+  "coverageReport": {
+    "totalFigma": 14,
+    "matchedCount": 5,
+    "missingCount": 5,
+    "uncertainCount": 0,
+    "coverageRate": 50,
+    "missing": [
+      {
+        "name": "cp-环境监测",
+        "type": "FRAME",
+        "depth": 0
+      },
+      {
+        "name": "环境监测",
+        "type": "TEXT",
+        "depth": 2
+      },
+      {
+        "name": "sub-t",
+        "type": "FRAME",
+        "depth": 2
+      },
+      {
+        "name": "一氧化碳",
+        "type": "TEXT",
+        "depth": 4
+      },
+      {
+        "name": "num",
+        "type": "GROUP",
+        "depth": 3
+      }
+    ],
+    "uncertain": [],
+    "summary": "需关注"
+  },
+  "chartDataHints": [
+    {
+      "chartTitle": "area",
+      "chartType": "area",
+      "labels": [
+        {
+          "label": "40\n30\n20\n10\n0",
+          "name": "40 30 20 10 0"
+        },
+        {
+          "label": "辆",
+          "name": "辆"
+        },
+        {
+          "label": "预警线",
+          "name": "预警线"
+        },
+        {
+          "label": "时",
+          "name": "时"
+        },
+        {
+          "label": "zk3+785CO浓度",
+          "name": "zk3+785CO浓度"
+        },
+        {
+          "label": "一氧化碳",
+          "name": "一氧化碳"
+        },
+        {
+          "label": "洞内照明",
+          "name": "洞内照明"
+        },
+        {
+          "label": "洞外光强",
+          "name": "洞外光强"
+        },
+        {
+          "label": "能见度",
+          "name": "能见度"
+        }
+      ],
+      "values": [
+        {
+          "label": "600",
+          "value": 600,
+          "unit": ""
+        },
+        {
+          "label": "400",
+          "value": 400,
+          "unit": ""
+        },
+        {
+          "label": "200",
+          "value": 200,
+          "unit": ""
+        },
+        {
+          "label": "600",
+          "value": 600,
+          "unit": ""
+        },
+        {
+          "label": "0",
+          "value": 0,
+          "unit": ""
+        },
+        {
+          "label": "600",
+          "value": 600,
+          "unit": ""
+        },
+        {
+          "label": "2",
+          "value": 2,
+          "unit": ""
+        },
+        {
+          "label": "4",
+          "value": 4,
+          "unit": ""
+        },
+        {
+          "label": "6",
+          "value": 6,
+          "unit": ""
+        },
+        {
+          "label": "8",
+          "value": 8,
+          "unit": ""
+        },
+        {
+          "label": "10",
+          "value": 10,
+          "unit": ""
+        },
+        {
+          "label": "12",
+          "value": 12,
+          "unit": ""
+        }
+      ]
+    }
+  ]
+}

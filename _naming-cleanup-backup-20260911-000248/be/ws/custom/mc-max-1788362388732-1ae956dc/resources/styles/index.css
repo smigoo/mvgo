@@ -1,0 +1,121 @@
+.c-env-monitor-root {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  font-size: var(--fontSize, 14px);
+}
+.c-env-monitor-tabs-section {
+  height: 32px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px;
+}
+.c-env-monitor-tabs-list {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 3px;
+  gap: 0;
+}
+.c-env-monitor-tab-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 10px;
+  font-size: var(--fontSize, 14px);
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-weight: 500;
+  color: #2c9bea;
+  cursor: pointer;
+  border-radius: 3px;
+  white-space: nowrap;
+  transition: background 0.2s, color 0.2s;
+  line-height: 12px;
+}
+.c-env-monitor-tab-item--active {
+  background: linear-gradient(180deg, #1099b1 0%, #038fff 100%);
+  border: 0.72px solid #ffffff;
+  color: #ffffff;
+  text-shadow: 0px 0.6px 0px #006fe3;
+}
+.c-env-monitor-tabs-icons {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+.c-env-monitor-icon-btn {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  display: block;
+}
+.c-env-monitor-icon-btn-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.c-env-monitor-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  background: #f53f3f;
+  border-radius: 29px;
+  color: #ffffff;
+  font-size: calc(var(--fontSize, 14px) * 0.8571);
+  font-weight: 500;
+  line-height: 16px;
+  text-align: center;
+  box-sizing: border-box;
+}
+.c-env-monitor-chart-section {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+.c-env-monitor-chart-legend {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 4px 8px 2px 8px;
+  gap: 12px;
+}
+.c-env-monitor-legend-item {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 5px;
+}
+.c-env-monitor-legend-line {
+  display: inline-block;
+  width: 16px;
+  height: 2px;
+  background: #0fcd7d;
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+.c-env-monitor-legend-text {
+  font-size: calc(var(--fontSize, 14px) * 0.6857);
+  font-weight: 400;
+  color: #333333;
+  font-family: 'Source Han Sans CN', sans-serif;
+  white-space: nowrap;
+}
+.c-env-monitor-chart-wrap {
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+}

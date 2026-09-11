@@ -1,0 +1,299 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 82,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0].header",
+        "message": "面板标题重复生成：`section-header` 中定义了 `title: \"设备监测\"`，这与组件的 `componentTitle` 重复。根据微码核心规范，组件面板标题由 `<base-panel>` 统一处理，绝对禁止在组件内部重复生成面板标题。",
+        "suggestion": "移除 `section-header.header.title`，或者将 `section-header` 的 `headerRelation` 改为 `none`，仅保留统计指标作为 body 内容，不要生成标题栏。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[0]",
+        "message": "左侧导航栏使用固定宽度：左侧分类导航 `left-tabs` 设置了固定宽度 `\"width\": 60`。根据宽度自适应约束，容器布局禁止使用固定 px 宽度限制容器伸缩，可能导致在不同屏幕尺寸下布局异常或挤压右侧网格。",
+        "suggestion": "移除 JSON 中的固定 `width` 属性。在代码生成时，使用 `flex: 0 0 60px` 或根据内容自适应宽度，确保整体布局的弹性。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1] & layout.sections[2]",
+        "message": "headerRelation 与 header 字段不匹配：`section-summary-cards` 和 `section-device-list` 的 `headerRelation` 设置为 `content-below-title`，但它们的 `header` 字段缺失或为空。这会导致渲染时缺少标题占位或结构解析异常。",
+        "suggestion": "如果这两个区域不需要独立标题，请将 `headerRelation` 修改为 `none`；如果确实需要标题，请补充完整的 `header` 对象（包含 title 和 controls）。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body.children[0].children",
+        "message": "统计指标布局方向需确认：顶部统计指标 `stat-item` 的布局设置为 `horizontal`（水平排列，即 label 和 value 左右并排）。通常数据看板的统计指标采用 `vertical`（垂直排列，label 在上，value 在下）以突出大数值。",
+        "suggestion": "请严格核对设计稿。如果设计稿确实是水平排列则保留；如果是垂直排列，请将 `layout` 修改为 `vertical`。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "全局 resourceFile 字段",
+        "message": "图片资源路径引用方式风险：布局中大量使用了 `../resources/images/xxx.png` 的相对路径。根据规范，生成代码时禁止使用 ESM `import` 引入本地图片，否则会触发 `[RUNTIME-004] load-error` 阻断门禁。",
+        "suggestion": "在代码生成阶段，必须将这些图片路径转换为 base64 内联字符串，或使用运行时同源 URL（如 `/api/preview/...`），禁止直接 import 本地图片文件。"
+      }
+    ],
+    "recommendations": [
+      "使用 v-for 优化网格渲染：右侧设备网格 `right-grid` 包含了 12 个结构完全相同的 item，在代码生成时应提取公共结构，使用 `v-for` 循环渲染并传入动态数据，避免模板冗余。",
+      "确保 Tab 切换的数据联动：左侧垂直 Tab 切换时，必须实现数据联动（更新右侧网格的设备列表数据），禁止仅做样式切换（只改 active class）而不更新数据。",
+      "遵循零装饰原则：`section-summary-cards` 中的卡片使用了渐变和纯色背景，在代码生成时必须确保这些样式有明确的 Figma 证据（如 fills 属性），禁止默认添加无证据的卡片化装饰样式。",
+      "统一主题变量：确保所有颜色值（如 `rgba(25,144,255,1)`、`#f53f3f` 等）在代码生成时映射到 `theme-vars.less` 中定义的 Less 变量，以支持纯 Less 变量主题模式的双主题切换。"
+    ],
+    "summary": "布局结构整体清晰，区域划分合理，嵌套深度符合规范。主要问题在于违反了“禁止生成组件面板标题”的核心规范，且部分区域存在固定宽度和 headerRelation 配置不匹配的问题。建议在代码生成前修正标题重复问题，调整固定宽度为弹性布局，并严格遵循图片资源引用规范，以确保组件的可维护性和运行稳定性。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "rgba(25,144,255,1)",
+      "--colorBgBase": "rgba(237,244,251,1)",
+      "--colorTextBase": "rgba(51,51,51,1)",
+      "--colorError": "#f53f3f",
+      "--colorSuccess": "rgba(8,163,165,1)",
+      "--colorBgContainer": "#ffffff",
+      "--fontSize": "14px",
+      "--fontSizeHeading": "24px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "rgba(25,144,255,1)",
+      "@color-bg-base": "rgba(237,244,251,1)",
+      "@color-text-base": "rgba(51,51,51,1)",
+      "@color-error": "#f53f3f",
+      "@color-success": "rgba(8,163,165,1)",
+      "@color-bg-container": "#ffffff",
+      "@font-size-base": "14px",
+      "@font-size-heading": "24px",
+      "@border-radius-base": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "16px",
+        "background": "var(--colorBgBase, rgba(237,244,251,1))",
+        "color": "var(--colorTextBase, rgba(51,51,51,1))"
+      },
+      ".card": {
+        "background": "var(--colorBgContainer, #ffffff)",
+        "border-radius": "var(--borderRadius, 8px)",
+        "padding": "16px",
+        "box-shadow": "0 2px 8px rgba(0,0,0,0.05)"
+      },
+      ".card-gradient": {
+        "background": "linear-gradient(135deg, rgba(25,144,255,1) 0%, rgba(25,144,255,0.6) 100%)",
+        "color": "#ffffff",
+        "border-radius": "var(--borderRadius, 8px)",
+        "padding": "20px"
+      },
+      ".tab-active": {
+        "background": "var(--colorPrimary, rgba(25,144,255,1))",
+        "color": "#ffffff",
+        "border-radius": "4px",
+        "font-weight": "500"
+      },
+      ".value-primary": {
+        "font-size": "var(--fontSizeHeading, 24px)",
+        "color": "var(--colorPrimary, rgba(25,144,255,1))",
+        "font-weight": "bold"
+      },
+      ".value-error": {
+        "font-size": "var(--fontSizeHeading, 24px)",
+        "color": "var(--colorError, #f53f3f)",
+        "font-weight": "bold"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 rgba(25,144,255,1) 映射为 --colorPrimary，用于Tab选中态、大数值和渐变背景",
+      "全局背景色 rgba(237,244,251,1) 映射为 --colorBgBase，作为页面或组件底色",
+      "异常状态红色 #f53f3f 映射为 --colorError，专门用于突出显示异常数据",
+      "顶部大卡片使用 .card-gradient 类实现蓝色渐变，避免关键可见背景仅依赖CSS变量",
+      "左侧Tab选中态使用 .tab-active 类，结合 --colorPrimary 实现蓝色背景高亮",
+      "大数值和异常数通过 .value-primary 和 .value-error 类组合字号与颜色变量进行视觉强调"
+    ],
+    "elementStyleMap": {
+      "section-header": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-2-text-group-x-0-stat-item-x-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-text-group-x-0-stat-item-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-text-group-x-0-stat-item-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-text-group-x-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-text-group-x-3-stat-item-x-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-text-group-x-3-stat-item-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-text-group-x-3-stat-item-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-text-group-x-3": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-stat-item-x-4": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-stat-item-x-7": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-stat-item-x-10": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-tunnel-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "card-tunnel-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "card-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-north-south-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "card-north-south-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "card-north-south": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-14": {
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-row-x-16": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-row-x-19": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-row-x-23": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "el-row-x-26": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "section-device-list": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "left-tabs": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-30": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-el-x-39": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-42": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-45": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-48": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-51": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-54": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-57": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-60": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-63": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-66": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-69": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-72": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    }
+  }
+}

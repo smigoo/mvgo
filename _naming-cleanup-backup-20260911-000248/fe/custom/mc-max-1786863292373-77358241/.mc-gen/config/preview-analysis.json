@@ -1,0 +1,118 @@
+{
+  "generatedAt": "2026-08-16T06:56:33.274Z",
+  "stage": "preview-analysis",
+  "degraded": true,
+  "degradeReason": "LLM invoke timeout after 90000ms [vision-agent.analyzeImage]",
+  "layout": {
+    "type": "vertical",
+    "direction": "top-to-bottom",
+    "sections": [
+      {
+        "id": "figma-1",
+        "name": "cp-环境监测",
+        "role": "header",
+        "layout": "vertical",
+        "layoutSource": "figma",
+        "figmaY": 865,
+        "header": {
+          "title": "cp-环境监测"
+        },
+        "body": {
+          "layout": "vertical",
+          "children": [
+            {
+              "id": "figma-1-1",
+              "name": "header",
+              "role": "item",
+              "figmaNode": "2:7881"
+            },
+            {
+              "id": "figma-1-2",
+              "name": "环境监测",
+              "role": "item",
+              "figmaNode": "2:7888"
+            }
+          ]
+        }
+      },
+      {
+        "id": "figma-2",
+        "name": "slot-con",
+        "role": "tabs",
+        "layout": "vertical",
+        "layoutSource": "figma",
+        "figmaY": 898,
+        "header": {
+          "title": "slot-con"
+        },
+        "body": {
+          "layout": "vertical",
+          "children": [
+            {
+              "id": "figma-2-1",
+              "name": "sub-t",
+              "role": "item",
+              "figmaNode": "89:42"
+            },
+            {
+              "id": "figma-2-2",
+              "name": "tabs-list",
+              "role": "item",
+              "figmaNode": "2:7889"
+            },
+            {
+              "id": "figma-2-3",
+              "name": "tabs-icon",
+              "role": "item",
+              "figmaNode": "89:43",
+              "resourceFile": "../resources/images/tabs-icon-43.png",
+              "resourceVarName": "icontabsIcon",
+              "recommendedUsage": "decorativeBlock",
+              "downloadStatus": "success"
+            }
+          ]
+        }
+      },
+      {
+        "id": "figma-3",
+        "name": "@echarts/line",
+        "role": "chart",
+        "layout": "vertical",
+        "layoutSource": "figma",
+        "figmaY": 930,
+        "header": {
+          "title": "@echarts/line"
+        },
+        "body": {
+          "layout": "vertical",
+          "children": [
+            {
+              "id": "figma-3-1",
+              "name": "Group 2136637691",
+              "role": "item",
+              "figmaNode": "2:7899"
+            },
+            {
+              "id": "figma-3-2",
+              "name": "Frame 2136637694",
+              "role": "item",
+              "figmaNode": "2:7935"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "layoutSource": "figma",
+  "visualDegraded": true,
+  "styles": {
+    "theme": "未知",
+    "colors": [],
+    "background": "",
+    "decorations": [],
+    "emphasis": [],
+    "backgroundBrightness": "dark"
+  },
+  "interactions": [],
+  "charts": []
+}

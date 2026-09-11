@@ -1,0 +1,395 @@
+{
+  "schemaVersion": 1,
+  "mode": "shadow",
+  "pipeline": "phase2",
+  "iteration": 0,
+  "generatedAt": "2026-09-01T14:45:26.760Z",
+  "productionInputMode": "legacy",
+  "engineerInputChanged": false,
+  "metrics": {
+    "legacyEstimatedBytes": 319862,
+    "generationInputBytes": 5595,
+    "reductionBytes": 314267,
+    "reductionRate": 98.25,
+    "issueCount": 1,
+    "rejectedClaimCount": 1
+  },
+  "trustVerdict": {
+    "level": "restricted",
+    "reasons": [
+      "覆盖率偏低 (45%)"
+    ],
+    "visual": {
+      "verdict": "warning",
+      "reason": "覆盖率偏低 (45%)",
+      "coverageRate": 45,
+      "recognizedSections": 0
+    },
+    "restrictions": [
+      "no-unsupported-decoration",
+      "no-style-fallback",
+      "resolve-legend-owner"
+    ]
+  },
+  "budget": {
+    "limits": {
+      "totalBytes": 30720,
+      "designFactsBytes": 12288,
+      "componentPlanBytes": 8192,
+      "resourceManifestBytes": 30720,
+      "currentIssuesBytes": 4096,
+      "maxIssues": 20
+    },
+    "sections": {
+      "designFacts": 514,
+      "componentPlan": 507,
+      "resourceManifest": 2955,
+      "currentIssues": 131
+    },
+    "totalBytes": 5593,
+    "passed": true,
+    "violations": []
+  },
+  "generationInput": {
+    "schemaVersion": 1,
+    "designFacts": {
+      "root": {
+        "nodeId": "2:8417",
+        "nodeName": "cp-设备监测",
+        "size": {
+          "width": 420,
+          "height": 425,
+          "unit": "css-px",
+          "source": "figma-api"
+        },
+        "styleEvidence": {
+          "background": {
+            "allowed": false,
+            "source": "figma-api",
+            "evidenceCount": 0
+          },
+          "border": {
+            "allowed": false,
+            "source": "figma-api",
+            "evidenceCount": 0
+          },
+          "borderRadius": {
+            "allowed": false,
+            "value": null,
+            "source": "figma-api"
+          },
+          "boxShadow": {
+            "allowed": false,
+            "source": "figma-api",
+            "evidenceCount": 0
+          }
+        }
+      },
+      "charts": [],
+      "provenance": {
+        "deterministicSource": "figma-api",
+        "semanticSource": "visual-analysis"
+      }
+    },
+    "componentPlan": {
+      "effectiveSections": [
+        {
+          "id": "stats-bar",
+          "title": "顶部统计栏",
+          "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+          "elementCount": 30
+        },
+        {
+          "id": "equipment-categories",
+          "title": "设备分类标签栏",
+          "responsibility": "标签页切换区",
+          "elementCount": 5
+        },
+        {
+          "id": "equipment-grid",
+          "title": "设备网格",
+          "responsibility": "网格卡片布局区",
+          "elementCount": 48
+        }
+      ],
+      "isForced": true,
+      "minFiles": 9,
+      "reason": "有效 sections=3 ≥ 3 或存在高复杂度 section → 强制拆分"
+    },
+    "resourceManifest": [
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8788"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8798"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8807"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8817"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8439"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8444"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8468"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8473"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8498"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8503"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8527"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8532"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8556"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8561"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8585"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8590"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8614"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8619"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8643"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8648"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8672"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8677"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8701"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8706"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8730"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8735"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:8759"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:8764"
+      }
+    ],
+    "currentIssues": [
+      {
+        "id": "CONTEXT-ROOT-BACKGROUND-CONFLICT",
+        "status": "open",
+        "severity": "warning",
+        "expectedAction": "do-not-generate-root-background"
+      }
+    ],
+    "trustVerdict": {
+      "level": "restricted",
+      "reasons": [
+        "覆盖率偏低 (45%)"
+      ],
+      "visual": {
+        "verdict": "warning",
+        "reason": "覆盖率偏低 (45%)",
+        "coverageRate": 45,
+        "recognizedSections": 0
+      },
+      "restrictions": [
+        "no-unsupported-decoration",
+        "no-style-fallback",
+        "resolve-legend-owner"
+      ]
+    },
+    "contextManifest": {
+      "stage": "engineer",
+      "mode": "shadow-only",
+      "included": [
+        "schemaVersion",
+        "designFacts",
+        "componentPlan",
+        "resourceManifest",
+        "currentIssues",
+        "trustVerdict"
+      ],
+      "excluded": [
+        "figmaData",
+        "figmaNodeData",
+        "figmaStyleTree",
+        "visualAnalysis",
+        "visualElements",
+        "reviewResult",
+        "styleMappings",
+        "previousCritiques"
+      ],
+      "diagnosticsRef": {
+        "figma": "/Users/smigoo/工作/mvgo/temp-components/6a7599af6eb9eebf9fba56cd/mc-max-1788272789760-25def39a/.checkpoint/figma.json",
+        "visual": "/Users/smigoo/工作/mvgo/temp-components/6a7599af6eb9eebf9fba56cd/mc-max-1788272789760-25def39a/.checkpoint/visual.json",
+        "analysis": "/Users/smigoo/工作/mvgo/temp-components/6a7599af6eb9eebf9fba56cd/mc-max-1788272789760-25def39a/.checkpoint/analysis.json"
+      },
+      "conflictSummary": {
+        "rejectedClaimCount": 1,
+        "rejectedClaimIds": [
+          "visual-analysis:root.background"
+        ]
+      },
+      "budget": {
+        "limits": {
+          "totalBytes": 30720,
+          "designFactsBytes": 12288,
+          "componentPlanBytes": 8192,
+          "resourceManifestBytes": 30720,
+          "currentIssuesBytes": 4096,
+          "maxIssues": 20
+        },
+        "sections": {
+          "designFacts": 514,
+          "componentPlan": 507,
+          "resourceManifest": 2955,
+          "currentIssues": 131
+        },
+        "totalBytes": 5593,
+        "passed": true,
+        "violations": []
+      }
+    }
+  }
+}

@@ -1,0 +1,28 @@
+.common() {
+  // 框架级 CSS 变量
+}
+
+.theme-dark() {
+  @color-bg-base: #003032;
+  @color-text-base: #ffffff;
+  @color-primary: #18ffc6;
+  @color-warning: #b07b00;
+  @color-row-active: #014347;
+  @color-row-normal: #00464b;
+  @color-table-header: #00373a;
+}
+
+.theme-light() {
+  @color-bg-base: #ffffff;
+  @color-text-base: #333333;
+  @color-primary: #1890ff;
+  @color-warning: #faad14;
+  @color-row-active: #e6f7ff;
+  @color-row-normal: #fafafa;
+  @color-table-header: #f0f0f0;
+}
+
+:root {
+  .theme-dark();
+  .common();
+}

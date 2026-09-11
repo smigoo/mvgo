@@ -30,6 +30,7 @@ import { healMissingLessBraces } from '../../validators/less-compile-gate.js';
 import { fixTextOrderDrift } from '../../utils/text-order-guard.js';
 import { parse as parseJavaScript } from '@babel/parser';
 import { inferChartMinHeight } from '../../utils/post-process.js';
+import { extractSfcTemplate } from '../../utils/sfc-template-extractor.js';
 
 function isIndexVuePath(path) {
   return /(^|\/)package\/index\.vue$/i.test(String(path || ''));
@@ -807,16 +808,19 @@ export function stripInstanceIdPrefix(content, instanceId) {
  */
 export function quoteBareObjectKeysInVue(vueContent) {
   if (!vueContent || typeof vueContent !== 'string') return vueContent;
-  const tplMatch = vueContent.match(/<template>([\s\S]*?)<\/template>/);
-  if (!tplMatch) return vueContent;
-  const body = tplMatch[1];
+  const body = extractSfcTemplate(vueContent);
+  if (!body) return vueContent;
   const fixedBody = body.replace(
     /([{,])\s*(['"])?([A-Za-z_$][A-Za-z0-9_$]*(?:-[A-Za-z0-9_$]+)+)(['"])?(\s*:)/g,
     (_m, open, q1, key, q2, post) =>
       `${open}${q1 || "'"}${key}${q2 || "'"}${post}`,
   );
   if (fixedBody === body) return vueContent;
-  const start = tplMatch.index + '<template>'.length;
+  // 🛡️ 回填定位：body 是 extractSfcTemplate 从 vueContent 切出的真实子串（含 <template> 标签），
+  // indexOf(body) 即其起始偏移。此前此处引用 tplMatch.index —— 改用 extractSfcTemplate 后
+  // 该变量已不存在（重构残留），ReferenceError 直接炸穿生成（mc-max-1789091377500-624c3a24 实锤）。
+  const start = vueContent.indexOf(body);
+  if (start < 0) return vueContent;
   return (
     vueContent.slice(0, start) +
     fixedBody +
@@ -835,9 +839,9 @@ export function quoteBareObjectKeysInVue(vueContent) {
 export function ensureRootInstanceId(vueContent, rootClass) {
   if (!vueContent || typeof vueContent !== 'string' || !rootClass)
     return vueContent;
-  const tpl = vueContent.match(/<template>([\s\S]*?)<\/template>/);
+  const tpl = extractSfcTemplate(vueContent);
   if (!tpl) return vueContent;
-  const body = tpl[1];
+  const body = tpl;
   const tagMatch = body.match(/<([a-zA-Z][\w-]*)((?:\s+[^>]*?)?)(\/?)>/);
   if (!tagMatch) return vueContent;
   const tagName = tagMatch[1];
@@ -887,14 +891,16 @@ export function fixSpuriousLineBreaks(content, options = {}) {
     );
   }
 
-  const templateMatch = content.match(/<template>([\s\S]*?)<\/template>/);
+  // 🛡️ 共享边界法（lazy </template> 截断家族缺陷，0ca84358）
+  const templateMatch = extractSfcTemplate(content);
+  const templateBody = templateMatch;
   const scriptMatch = content.match(/<script[^>]*>([\s\S]*?)<\/script>/);
 
   let fixed = content;
 
   // --- Template 区域 ---
   if (templateMatch) {
-    let template = templateMatch[1];
+    let template = templateBody;
     const tLines = template.split('\n');
     const tMerged = [];
     for (let i = 0; i < tLines.length; i++) {
@@ -931,7 +937,7 @@ export function fixSpuriousLineBreaks(content, options = {}) {
       /<(div|span|img|base-panel|base|a|p|ul|li|button|input|label|form|h[1-6])(class|style|src|alt|id|ref|:|@|v-|panelKey|key)/g,
       '<$1 $2',
     );
-    fixed = fixed.replace(templateMatch[1], template);
+    fixed = fixed.replace(templateBody, template);
   }
 
   // --- Script 区域 ---
@@ -1335,7 +1341,7 @@ function buildTabBarSkeleton(prefix, tabsVar, activeVar, labelKey, valueKey, cha
     `          v-for="tab in ${tabsVar}"\n` +
     `          :key="tab.${valueKey}"\n` +
     `          class="${itemClass}"\n` +
-    `          :class="{ 'is-active': ${activeVar} === tab.${valueKey} }"\n` +
+    `          :class="{ '${itemClass}--active': ${activeVar} === tab.${valueKey} }"\n` +
     `          :style="${styleExpr}"\n` +
     `          @click="${clickExpr}"\n` +
     `          style="padding:4px 12px;border-radius:4px;cursor:pointer;font-size:14px;line-height:20px;"\n` +
@@ -1566,8 +1572,8 @@ export function injectEchartsFallback(content, options = {}) {
   const scriptM = content.match(/<script\b[^>]*>([\s\S]*?)<\/script>/i);
   if (!scriptM) return content;
   const script = scriptM[1];
-  const tplM = content.match(/<template>([\s\S]*?)<\/template>/i);
-  const tplBody = tplM ? tplM[1] : '';
+  const tplM = extractSfcTemplate(content);
+  const tplBody = tplM || '';
 
   // ---- 符号冲突检测与私有名派生 ----
   const usedInScript = (name) => new RegExp(`\\b${escapeRe(name)}\\b`).test(script);

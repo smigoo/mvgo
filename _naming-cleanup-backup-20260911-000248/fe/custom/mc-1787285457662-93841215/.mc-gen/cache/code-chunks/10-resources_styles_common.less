@@ -1,0 +1,39 @@
+@color-primary: #1990ff;
+@color-secondary: #00d2ff;
+@color-bridge: #0c9dbe;
+@color-tunnel: #006fe3;
+@color-warning: #ff7a45;
+@color-success: #52c41a;
+
+@color-text-primary: #333333;
+@color-text-secondary: #666666;
+@color-text-light: #cfe5ff;
+@color-text-lighter: #dcecff;
+
+@color-bg-dark: rgba(0, 22, 64, 0.55);
+@color-border-dark: rgba(70, 130, 220, 0.35);
+@color-border-light: #e8e8e8;
+@color-split-light: #f0f0f0;
+
+@font-family-base: 'Source Han Sans CN', sans-serif;
+@font-family-number: 'Roboto', sans-serif;
+
+.flex-center() {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flex-between() {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.panel-base() {
+  background: @color-bg-dark;
+  border: 1px solid @color-border-dark;
+  border-radius: 8px;
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(4px);
+}

@@ -88,6 +88,10 @@ import {
   mergeHeaderSlots,
 } from '../utils/inline-header-slot-inferrer.js'
 export { inferHeaderSlotsFromInlineRows, mergeHeaderSlots }
+// 🛡️ P1（2026-09-11）：tab 项资源引用幻觉校验 + 纠正（纯函数，无 import.meta，jest 可 require）。
+// 治本：tab 项 resourceFile 反查 figmaNodeId 不在 tab 真实归属链内 → 判幻觉，摘除并改 CSS 渐变。
+import { detectAndFixTabResourceHallucination } from '../utils/tab-resource-guard.js'
+export { detectAndFixTabResourceHallucination }
 
 export class VisualParser {
   constructor(config = {}) {
@@ -1282,6 +1286,20 @@ ${analysisTask}`
       }
       const bgSized = this._calculateAllBackgroundSizing(parsed, resourceDomMapping, figmaData)
 
+      // 🛡️ P1（2026-09-11）：tab 项资源引用幻觉校验 + 纠正（bg-8788 错挂到 tab 的治本）。
+      // 必须在 chrome 剥离之后、尺寸覆盖之前执行——幻觉资源摘除后，后续尺寸覆盖/归一才拿到干净结构。
+      const tabResourceFixed = detectAndFixTabResourceHallucination(parsed, resourceDomMapping, figmaData)
+      if (tabResourceFixed.applied > 0) {
+        logger.warn('🛡️ tab 项资源引用幻觉已纠正', {
+          applied: tabResourceFixed.applied,
+          hallucinations: tabResourceFixed.hallucinations.map((h) => ({
+            tab: h.tabName,
+            wrongResource: h.resourceFile,
+            wrongPath: h.figmaPath,
+          })),
+        })
+      }
+
       //  微码模式下，同步清理 Figma 文本和资源映射中的面板外壳资源
       let figmaTextCleaned = 0
       let resourcesFiltered = 0
@@ -1725,6 +1743,10 @@ ${analysisTask}`
         if (this._isResourceWrapperName(name)) return
         if (name && !SKIP_PATTERNS.some(p => p.test(name)) && FILL_NODE_TYPES.includes(node.type)) {
           figmaElements.push({
+            // 🛡️ 覆盖率根因修复（2026-09-11）：保留节点 id，供「几何 section 已确认节点」判定。
+            // 无 id 时无法把 inline-row 的成员容器（tabs-list/tabs-icon/num 等无语义文案节点）
+            // 判为 matched → 一律进 missing → 覆盖率虚低、闸门 fail-closed。
+            id: node.id,
             name: name.substring(0, 60),
             type: node.type,
             depth,
@@ -1801,6 +1823,27 @@ ${analysisTask}`
         }
       }
 
+      // 🛡️ 覆盖率根因修复（2026-09-11 · env-monitor 实锤）：inline-row / container-rebuild 几何块
+      // 是 Figma 真值几何（bbox 推导），其成员节点（如 tabs-list/tabs-icon/num 容器）由 merger 从
+      // Figma 树原样并入，天然已确认存在。这些容器节点 name 多为无语义图层名（tabs-list/num），
+      // 不在 Vision 识别集里，按字符匹配必进 missing → 覆盖率虚低、闸门 fail-closed。
+      // 治本：凡 layout 中几何 section 的成员 figmaNode id，直接视为已确认（等价于 identified）。
+      const confirmedNodeIds = new Set()
+      const collectConfirmed = (sec) => {
+        if (!sec || typeof sec !== 'object') return
+        if (sec.layoutSource === 'inline-row' || sec.layoutSource === 'container-rebuild') {
+          for (const c of sec.children || []) {
+            if (c && c.figmaNode) confirmedNodeIds.add(String(c.figmaNode))
+          }
+        }
+        for (const child of sec.children || []) collectConfirmed(child)
+        const body = sec.body
+        if (body && Array.isArray(body.children)) for (const c of body.children) collectConfirmed(c)
+      }
+      const walkLayout = parsed.layout || parsed.layoutStructure
+      if (walkLayout && Array.isArray(walkLayout.sections)) walkLayout.sections.forEach(collectConfirmed)
+      else if (walkLayout) collectConfirmed(walkLayout)
+
       // 3. 交叉比对
       const matched = []
       const missing = []
@@ -1827,7 +1870,9 @@ ${analysisTask}`
         // 其次 name。任一命中即 matched——避免「name 无语义名 + characters 有真值」时
         // 被 name 判 missing，同时保留 name 匹配通道（FRAME/GROUP 容器无 characters）。
         const matchCandidates = charsLower.trim() ? [charsLower, nameLower] : [nameLower]
-        const isIdentified = matchCandidates.some((cand) =>
+        // 🛡️ 几何 section 成员节点（bbox 真值并入）直接视为已识别，不参与字符匹配。
+        const isIdentifiedByGeometry = !!(elem.id && confirmedNodeIds.has(String(elem.id)))
+        const isIdentified = isIdentifiedByGeometry || matchCandidates.some((cand) =>
           cand && Array.from(identifiedNames).some(
             id => id.includes(cand) || cand.includes(id)
           )

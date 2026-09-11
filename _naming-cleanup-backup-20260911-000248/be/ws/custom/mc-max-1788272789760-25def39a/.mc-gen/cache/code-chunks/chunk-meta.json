@@ -1,0 +1,94 @@
+{
+  "completed": [
+    "1-declare.json",
+    "2-package/index.vue",
+    "3-package/index.vue",
+    "4-package/index.vue",
+    "5-package/components/StatsBar.vue",
+    "6-package/components/EquipmentCategories.vue",
+    "7-package/components/EquipmentGrid.vue",
+    "8-resources/styles/themes/theme-vars.less",
+    "9-resources/styles/common.less",
+    "6-package/components/CategoryTabs.vue"
+  ],
+  "total": 6,
+  "updatedAt": 1788274436838,
+  "files": {
+    "declare.json": [
+      {
+        "index": 1,
+        "file": "1-declare.json",
+        "segmentType": "declare",
+        "scriptPart": ""
+      }
+    ],
+    "package/index.vue": [
+      {
+        "index": 2,
+        "file": "2-package_index.vue",
+        "segmentType": "template",
+        "scriptPart": ""
+      },
+      {
+        "index": 3,
+        "file": "3-package_index.vue",
+        "segmentType": "script",
+        "scriptPart": "state"
+      },
+      {
+        "index": 4,
+        "file": "4-package_index.vue",
+        "segmentType": "script",
+        "scriptPart": "lifecycle"
+      }
+    ],
+    "package/components/StatsBar.vue": [
+      {
+        "index": 5,
+        "file": "5-package_components_StatsBar.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/EquipmentCategories.vue": [
+      {
+        "index": 6,
+        "file": "6-package_components_EquipmentCategories.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/EquipmentGrid.vue": [
+      {
+        "index": 7,
+        "file": "7-package_components_EquipmentGrid.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "resources/styles/themes/theme-vars.less": [
+      {
+        "index": 8,
+        "file": "8-resources_styles_themes_theme-vars.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      }
+    ],
+    "resources/styles/common.less": [
+      {
+        "index": 9,
+        "file": "9-resources_styles_common.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/CategoryTabs.vue": [
+      {
+        "index": 6,
+        "file": "6-package_components_CategoryTabs.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ]
+  }
+}

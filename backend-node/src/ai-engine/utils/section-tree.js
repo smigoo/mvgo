@@ -31,6 +31,91 @@ export function collectLeafSections(sections) {
   return leaves
 }
 
+/**
+ * 🛡️ 治本（2026-09-11 · c-device-monitor-hsvmkuvd-cfb53488 实锤）：planner 双重解释去重。
+ *
+ * 实锤链路：同一主内容区被 planner 产出两个叶子——`89:37`（@antd/tab，elementCount=2，
+ * antd 组件壳）与臆造语义壳 `section-main-content`（主内容区（Tab切换+设备网格），elementCount=16），
+ * 两者 type=tabs 且 responsibility 同为「标签页切换区」→ 层①模板装出两个组件 →
+ * LLM 各自生成「左垂直 tab 栏 + 右设备网格」完整副本 → **两个大 tabs 重复出现**。
+ *
+ * 确定性去重规则（递归整棵树）：
+ *   ① sourceNodeIds 单一归属（R1-1，优先级最高、不依赖措辞）：任一 Figma 节点 id 只能归属
+ *     一个叶子 section（layout 容器除外）；两个叶子 sourceNodeIds 有交集 → 保留 elementCount 更大者。
+ *   ② type=tabs 措辞兜底（原规则）：按 `type|responsibility` 分组，组内 >1 保留 elementCount 更大者。
+ * 纯函数、幂等，供 resolvePlanSections（R1 单一事实源）调用，
+ * 模板装配/命名/prompt/COMP-001 全链自动受益。
+ *
+ * @param {Array} sections effectiveSections 树
+ * @returns {Array} 去重后的树
+ */
+export function dedupeDuplicateSections(sections) {
+  if (!Array.isArray(sections)) return sections
+  const out = []
+  const seen = new Map() // tabs 措辞 key -> out 下标
+  const nodeOwner = new Map() // sourceNodeId -> out 下标（仅叶子）
+  for (const sec of sections) {
+    if (!sec || typeof sec !== 'object') {
+      out.push(sec)
+      continue
+    }
+    // layout 容器：仅空间包裹，不参与归属冲突；递归处理 children
+    if (isLayoutContainerSection(sec)) {
+      out.push({ ...sec, children: dedupeDuplicateSections(sec.children) })
+      continue
+    }
+    // ① R1-1：sourceNodeIds 单一归属（不依赖措辞）
+    const srcIds = Array.isArray(sec.sourceNodeIds)
+      ? sec.sourceNodeIds.map((s) => String(s)).filter(Boolean)
+      : []
+    let conflictIdx = -1
+    for (const id of srcIds) {
+      if (nodeOwner.has(id)) {
+        conflictIdx = nodeOwner.get(id)
+        break
+      }
+    }
+    if (conflictIdx >= 0) {
+      const prev = out[conflictIdx]
+      const prevCount = Number(prev?.elementCount) || 0
+      const curCount = Number(sec.elementCount) || 0
+      // 保留内容更全的一份（elementCount 更大），丢弃重复解释
+      if (curCount > prevCount) {
+        for (const id of Array.isArray(prev?.sourceNodeIds) ? prev.sourceNodeIds : []) {
+          if (nodeOwner.get(String(id)) === conflictIdx) nodeOwner.delete(String(id))
+        }
+        out[conflictIdx] = sec
+        for (const id of srcIds) nodeOwner.set(id, conflictIdx)
+      }
+      continue
+    }
+    if (srcIds.length > 0) {
+      const idx = out.length
+      for (const id of srcIds) nodeOwner.set(id, idx)
+    }
+    // ② tabs 措辞兜底（原规则，保留）
+    const type = String(sec.type || '').toLowerCase()
+    if (type === 'tabs') {
+      const key = `tabs|${String(sec.responsibility || '').trim()}`
+      if (seen.has(key)) {
+        const prevIdx = seen.get(key)
+        const prev = out[prevIdx]
+        const prevCount = Number(prev?.elementCount) || 0
+        const curCount = Number(sec.elementCount) || 0
+        if (curCount > prevCount) out[prevIdx] = sec
+        continue
+      }
+      seen.set(key, out.length)
+    }
+    if (Array.isArray(sec.children)) {
+      out.push({ ...sec, children: dedupeDuplicateSections(sec.children) })
+      continue
+    }
+    out.push(sec)
+  }
+  return out
+}
+
 export function collectContainerSections(sections, acc = []) {
   if (!Array.isArray(sections)) return acc
   for (const sec of sections) {

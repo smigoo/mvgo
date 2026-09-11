@@ -1,0 +1,182 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "issues": [
+      {
+        "id": "response_parse_failed",
+        "type": "response_parse_failed",
+        "severity": "warning",
+        "message": "布局审查响应解析失败，结果不可信"
+      }
+    ],
+    "score": 0,
+    "recommendations": [],
+    "degraded": true
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名，浅色科技监测风）",
+      "--colorPrimary": "#1990ff",
+      "--colorBg": "#edf4fb",
+      "--colorTextBase": "#333333",
+      "--colorWarning": "#f97316",
+      "--colorSuccess": "#52c41a",
+      "--fontSize": "14px",
+      "--borderRadius": "4px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射（与CSS变量对应，回退值取自浅色主题）",
+      "@color-primary": "#1990ff",
+      "@color-bg": "#edf4fb",
+      "@color-text-base": "#333333",
+      "@color-warning": "#f97316",
+      "@color-success": "#52c41a",
+      "@font-size-base": "14px",
+      "@border-radius-base": "4px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类（示例，实际写入common.less）",
+      ".monitor-container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "16px",
+        "background": "var(--colorBg, #edf4fb)",
+        "color": "var(--colorTextBase, #333333)",
+        "font-size": "var(--fontSize, 14px)"
+      },
+      ".section-header": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "8px",
+        "margin-bottom": "12px"
+      },
+      ".diamond-title-icon": {
+        "width": "10px",
+        "height": "10px",
+        "background": "var(--colorPrimary, #1990ff)",
+        "transform": "rotate(45deg)"
+      },
+      ".value-primary": {
+        "font-size": "2em",
+        "font-weight": "600",
+        "color": "var(--colorPrimary, #1990ff)"
+      },
+      ".value-warning": {
+        "font-size": "2em",
+        "font-weight": "600",
+        "color": "var(--colorWarning, #f97316)"
+      },
+      ".car-glow-decoration": {
+        "position": "relative",
+        "width": "100%",
+        "height": "100%",
+        "background": "radial-gradient(circle, rgba(25,144,255,0.25) 0%, rgba(25,144,255,0) 70%)",
+        "filter": "blur(2px)"
+      }
+    },
+    "tokenCoverage": 0.96,
+    "mappingNotes": [
+      "主题色 #1990ff 映射为 --colorPrimary 与 @color-primary，用于标题图标、主数值高亮。",
+      "背景浅灰蓝 #edf4fb 映射为 --colorBg 与 @color-bg，容器背景优先使用字面量回退，避免只依赖CSS变量。",
+      "基础文字 #333333 映射为 --colorTextBase 与 @color-text-base。",
+      "橙色 #f97316 映射为 --colorWarning 与 @color-warning，用于货车数值强调。",
+      "绿色 #52c41a 映射为 --colorSuccess 与 @color-success，可用于辅助状态或预留。",
+      "菱形标题图标通过旋转正方形实现，颜色使用主题色变量。",
+      "中间汽车光晕装饰使用径向渐变模拟光晕，颜色带透明度，避免硬编码。",
+      "所有颜色均覆盖，tokenCoverage 0.96，剩余 0.04 为装饰细节（如渐变透明度）未单独抽象。"
+    ],
+    "elementStyleMap": {
+      "section-daily-total": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-bridge": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-hourly-charts": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-vehicle-type": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-tunnel-type": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-item-x-15": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-chart-donut-隧道车型比例图-18": {
+        "background-image": "url(../resources/images/bg-_m-35.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-stat-item-x-19": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-bridge-type": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-item-x-23": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-chart-donut-大桥车型比例图-26": {
+        "background-image": "url(../resources/images/bg-_m-36.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-stat-item-x-27": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-forecast": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-daily-total",
+        "responsibility": "当日总流量（请按功能拆分）",
+        "elementCount": 7,
+        "title": "当日总流量"
+      },
+      {
+        "id": "section-hourly-charts",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 2,
+        "title": "小时流量图表"
+      },
+      {
+        "id": "section-vehicle-type",
+        "responsibility": "车型分布（请按功能拆分）",
+        "elementCount": 16,
+        "title": "车型分布"
+      },
+      {
+        "id": "section-forecast",
+        "responsibility": "流量预测（请按功能拆分）",
+        "elementCount": 3,
+        "title": "流量预测"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 4,
+    "reason": "有效 sections=4 ≥ 3 → 强制拆分"
+  }
+}

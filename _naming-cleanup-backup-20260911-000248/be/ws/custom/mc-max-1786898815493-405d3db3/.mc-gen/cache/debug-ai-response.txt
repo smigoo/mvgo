@@ -1,0 +1,264 @@
+```json
+{
+  "generatedAt": "2024-01-15T10:30:00Z",
+  "stage": "preview-analysis",
+  "componentName": "环境监测",
+  "componentTitle": "环境监测",
+  "analysisModel": "visual-parser-v2",
+  "sourceImage": {
+    "path": "./mc-preview.png",
+    "size": 420186,
+    "mtimeMs": 1705312200000,
+    "sha1": "abc123def456"
+  },
+  "summary": "包含面板标题行（带操作按钮和Badge）、Tab切换栏（4个选项）、面积图（含预警线）",
+  "layout": {
+    "type": "vertical-stack",
+    "direction": "top-to-bottom",
+    "sections": [
+      {
+        "id": "section-header",
+        "name": "标题栏",
+        "role": "header",
+        "layout": "horizontal",
+        "headerRelation": "title-itself",
+        "slotCandidate": null,
+        "header": {
+          "title": "环境监测",
+          "figmaNode": "text-环境监测",
+          "styles": {
+            "fontSize": 19,
+            "fontWeight": "bold",
+            "color": "#1890ff"
+          },
+          "controls": [
+            {
+              "id": "view-toggle-btn",
+              "name": "视图切换按钮",
+              "role": "icon-button",
+              "figmaNode": "tabs-icon",
+              "resourceFile": "../resources/images/tabs-icon-43.png",
+              "recommendedUsage": "decorativeBlock",
+              "styles": {
+                "width": 52,
+                "height": 24
+              }
+            },
+            {
+              "id": "alert-badge",
+              "name": "告警数量徽章",
+              "role": "badge",
+              "value": "6",
+              "figmaNode": "num",
+              "styles": {
+                "backgroundColor": "#f53f3f",
+                "color": "#ffffff",
+                "fontSize": 12,
+                "borderRadius": "50%",
+                "width": 14,
+                "height": 14,
+                "minWidth": 14,
+                "padding": "0 4px"
+              }
+            }
+          ]
+        },
+        "body": null
+      },
+      {
+        "id": "section-tabs",
+        "name": "Tab切换栏",
+        "role": "tabs",
+        "layout": "horizontal",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "header": null,
+        "body": {
+          "layout": "horizontal-4-items",
+          "bgPlaceholder": "tabs-bg",
+          "children": [
+            {
+              "id": "tab-co",
+              "name": "一氧化碳",
+              "role": "tab",
+              "active": true,
+              "figmaNode": "tab-active",
+              "resourceFile": "../resources/images/bg-tab-active-7891.png",
+              "recommendedUsage": "backgroundBlock",
+              "styles": {
+                "fontSize": 14,
+                "color": "#ffffff",
+                "backgroundColor": "#1890ff",
+                "borderRadius": 4,
+                "padding": "4px 12px"
+              },
+              "text": "一氧化碳"
+            },
+            {
+              "id": "tab-visibility",
+              "name": "能见度",
+              "role": "tab",
+              "active": false,
+              "styles": {
+                "fontSize": 14,
+                "color": "#666666",
+                "backgroundColor": "transparent",
+                "borderRadius": 4,
+                "padding": "4px 12px"
+              },
+              "text": "能见度"
+            },
+            {
+              "id": "tab-inner-light",
+              "name": "洞内照明",
+              "role": "tab",
+              "active": false,
+              "styles": {
+                "fontSize": 14,
+                "color": "#666666",
+                "backgroundColor": "transparent",
+                "borderRadius": 4,
+                "padding": "4px 12px"
+              },
+              "text": "洞内照明"
+            },
+            {
+              "id": "tab-outer-light",
+              "name": "洞外光强",
+              "role": "tab",
+              "active": false,
+              "styles": {
+                "fontSize": 14,
+                "color": "#666666",
+                "backgroundColor": "transparent",
+                "borderRadius": 4,
+                "padding": "4px 12px"
+              },
+              "text": "洞外光强"
+            }
+          ]
+        }
+      },
+      {
+        "id": "section-chart",
+        "name": "CO浓度趋势图",
+        "role": "chart-container",
+        "layout": "vertical",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "header": null,
+        "body": {
+          "layout": "vertical",
+          "bgPlaceholder": "chart-bg",
+          "children": [
+            {
+              "id": "chart-area",
+              "name": "面积图",
+              "role": "area-chart",
+              "type": "chart",
+              "figmaNode": "chart-main",
+              "styles": {
+                "width": "100%",
+                "height": 140,
+                "background": "transparent"
+              },
+              "config": {
+                "chartType": "area",
+                "seriesName": "zk3+750CO浓度",
+                "seriesColor": "#4ade80",
+                "fillColor": "rgba(74, 222, 128, 0.3)",
+                "warningLine": {
+                  "value": 30,
+                  "color": "#ff4d4f",
+                  "label": "预警线",
+                  "style": "dashed"
+                },
+                "xAxis": {
+                  "type": "category",
+                  "data": [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24],
+                  "unit": "时"
+                },
+                "yAxis": {
+                  "type": "value",
+                  "min": 0,
+                  "max": 40,
+                  "interval": 10
+                }
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "styles": {
+    "theme": "浅色科技监测风",
+    "colors": [
+      "#1890ff",
+      "#4ade80",
+      "#ff4d4f",
+      "#f53f3f",
+      "#666666",
+      "#edf4fb"
+    ],
+    "background": "浅灰蓝色背景 rgba(237,244,251,1)，整体清新科技风格",
+    "decorations": [
+      "Tab选中态圆角胶囊背景",
+      "红色圆形告警Badge",
+      "图表中红色虚线预警线"
+    ],
+    "emphasis": [
+      "选中Tab高亮蓝色背景白字",
+      "预警线红色醒目标识",
+      "右上角红色数字Badge提示"
+    ]
+  },
+  "interactions": [
+    {
+      "target": "Tab切换栏",
+      "type": "tab-switch",
+      "description": "切换不同环境监测指标（一氧化碳/能见度/洞内照明/洞外光强）",
+      "defaultState": "常驻，当前选中'一氧化碳'",
+      "evidence": "4个水平排列的标签项，第一个有蓝色高亮背景"
+    },
+    {
+      "target": "右上角视图切换按钮",
+      "type": "button-click",
+      "description": "可能用于切换图表/列表视图或展开更多选项",
+      "defaultState": "常驻，图标按钮形态",
+      "evidence": "标题栏右侧的双图标按钮组"
+    }
+  ],
+  "charts": [
+    {
+      "section": "section-chart",
+      "type": "单系列面积图",
+      "series": ["zk3+750CO浓度"],
+      "legend": ["zk3+750CO浓度"],
+      "legendPosition": "top-right",
+      "seriesColors": ["#4ade80"],
+      "legendType": "horizontal",
+      "axes": "X轴为时间（2-24时），Y轴为CO浓度值（0-40）",
+      "tooltip": "悬停显示具体时间点和浓度数值",
+      "notes": [
+        "包含红色虚线预警线，位于Y轴30位置",
+        "图表使用绿色渐变填充面积",
+        "数据显示午后14-18时左右达到峰值约15-20"
+      ]
+    }
+  ],
+  "doNotInvent": [
+    "不要臆造其他Tab选项卡内容（如PM2.5、温度等未显示指标）",
+    "不要假设图表支持缩放/平移等未明确展示的交互",
+    "不要编造具体的 tooltip 格式或详细数据点数值",
+    "不要添加不存在的筛选条件或时间范围选择器",
+    "不要假设 Badge 数字6对应的具体告警类型或详情"
+  ],
+  "notes": [
+    "组件采用浅色主题，背景为淡蓝灰色",
+    "选中Tab使用蓝色高亮，与标题颜色呼应",
+    "图表预警线使用红色警示，符合安全监控场景视觉习惯",
+    "整体布局紧凑，适合嵌入大屏或仪表板系统"
+  ]
+}
+```

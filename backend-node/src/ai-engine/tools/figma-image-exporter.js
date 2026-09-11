@@ -158,7 +158,7 @@ export async function exportMergedImages(params) {
     })
 
     try {
-      const apiUrl = `https://api.figma.com/v1/images/${fileKey}?ids=${nodeIds}&format=png&scale=2`
+      const apiUrl = `https://api.figma.com/v1/images/${fileKey}?ids=${nodeIds}&format=png&scale=1`
       const response = await axios.get(apiUrl, {
         headers: { 'X-Figma-Token': figmaToken }
       })

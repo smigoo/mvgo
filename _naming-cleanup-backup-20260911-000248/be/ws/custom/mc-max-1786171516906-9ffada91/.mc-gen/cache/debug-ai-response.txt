@@ -1,0 +1,735 @@
+```json
+{
+  "generatedAt": "2024-01-15T10:30:00.000Z",
+  "stage": "preview-analysis",
+  "componentName": "设备监测",
+  "componentTitle": "设备监测",
+  "analysisModel": "visual-parser-v2",
+  "sourceImage": {
+    "path": "mc-preview.png",
+    "size": 0,
+    "mtimeMs": 0,
+    "sha1": ""
+  },
+  "summary": "设备监测面板，包含标题行统计指标（设备类型28、设备总数68562、完好率98%）、两个设备类型汇总卡片（隧道设备/南北接线设备）、左侧6项分类导航Tab和3×4设备状态卡片网格",
+  "layout": {
+    "type": "vertical-stack",
+    "direction": "vertical",
+    "sections": [
+      {
+        "id": "section-header-stats",
+        "name": "标题行统计指标",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "title-same-row",
+        "slotCandidate": "header-right",
+        "header": {
+          "title": "设备监测",
+          "controls": [
+            {
+              "id": "refresh-btn",
+              "name": "刷新",
+              "role": "icon-button",
+              "icon": {
+                "resourceFile": "../resources/images/Frame-8856.png",
+                "recommendedUsage": "imgSrc",
+                "width": 16,
+                "height": 16
+              }
+            }
+          ]
+        },
+        "body": {
+          "layout": "horizontal",
+          "bgPlaceholder": "body-bg-header-stats",
+          "children": [
+            {
+              "id": "stat-device-type",
+              "name": "设备类型",
+              "role": "stat-label",
+              "layout": "horizontal",
+              "alignItems": "center",
+              "gap": "4px",
+              "elements": [
+                {
+                  "type": "label",
+                  "text": "设备类型",
+                  "figmaNode": "2136638825-label",
+                  "styles": { "fontSize": 14, "color": "rgba(51,51,51,1)", "fontWeight": "normal" }
+                },
+                {
+                  "type": "value",
+                  "figmaNode": "2136638825-value",
+                  "parts": [
+                    {
+                      "text": "28",
+                      "type": "number",
+                      "figmaNode": "2136638825-num",
+                      "styles": { "fontSize": 16, "color": "rgba(25,144,255,1)", "fontWeight": "bold" }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "stat-device-total",
+              "name": "设备总数",
+              "role": "stat-label",
+              "layout": "horizontal",
+              "alignItems": "center",
+              "gap": "4px",
+              "elements": [
+                {
+                  "type": "label",
+                  "text": "设备总数",
+                  "figmaNode": "2136638826-label",
+                  "styles": { "fontSize": 14, "color": "rgba(51,51,51,1)", "fontWeight": "normal" }
+                },
+                {
+                  "type": "value",
+                  "figmaNode": "2136638826-value",
+                  "parts": [
+                    {
+                      "text": "68562",
+                      "type": "number",
+                      "figmaNode": "2136638826-num",
+                      "styles": { "fontSize": 16, "color": "rgba(25,144,255,1)", "fontWeight": "bold" }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "stat-completion-rate",
+              "name": "完好率",
+              "role": "stat-label",
+              "layout": "horizontal",
+              "alignItems": "center",
+              "gap": "4px",
+              "elements": [
+                {
+                  "type": "label",
+                  "text": "完好率",
+                  "figmaNode": "2136638827-label",
+                  "styles": { "fontSize": 14, "color": "rgba(51,51,51,1)", "fontWeight": "normal" }
+                },
+                {
+                  "type": "value",
+                  "figmaNode": "2136638827-value",
+                  "parts": [
+                    {
+                      "text": "98%",
+                      "type": "number",
+                      "figmaNode": "2136638827-num",
+                      "styles": { "fontSize": 16, "color": "rgba(8,163,165,1)", "fontWeight": "bold" }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "section-top-cards",
+        "name": "设备类型汇总卡片",
+        "role": "常驻",
+        "layout": "horizontal-2-columns",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "body": {
+          "layout": "horizontal-2-items",
+          "bgPlaceholder": "body-bg-top-cards",
+          "items": [
+            {
+              "id": "card-tunnel",
+              "name": "隧道设备",
+              "role": "stat-card",
+              "layout": "horizontal",
+              "alignItems": "center",
+              "bgPlaceholder": "card-bg-tunnel",
+              "style": {
+                "background": "linear-gradient(270deg, #318aff 0%, #70bfff 100%)",
+                "borderRadius": "8px",
+                "width": "193px",
+                "height": "65px",
+                "padding": "12px 16px"
+              },
+              "icon": {
+                "resourceFile": "../resources/images/icon-8798.png",
+                "recommendedUsage": "imgSrc",
+                "width": 40,
+                "height": 40,
+                "position": "left"
+              },
+              "content": {
+                "layout": "vertical",
+                "position": "right",
+                "elements": [
+                  {
+                    "type": "label-row",
+                    "layout": "horizontal",
+                    "alignItems": "center",
+                    "gap": "8px",
+                    "elements": [
+                      {
+                        "type": "label",
+                        "text": "总 数:",
+                        "figmaNode": "card-tunnel-total-label",
+                        "styles": { "fontSize": 14, "color": "rgba(255,255,255,0.9)", "fontWeight": "normal" }
+                      },
+                      {
+                        "type": "value",
+                        "figmaNode": "card-tunnel-total-value",
+                        "parts": [
+                          {
+                            "text": "56302",
+                            "type": "number",
+                            "figmaNode": "card-tunnel-total-num",
+                            "styles": { "fontSize": 22, "color": "rgba(255,255,255,1)", "fontWeight": "bold" }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "abnormal-row",
+                    "layout": "horizontal",
+                    "alignItems": "center",
+                    "gap": "8px",
+                    "elements": [
+                      {
+                        "type": "label",
+                        "text": "异常数:",
+                        "figmaNode": "card-tunnel-abnormal-label",
+                        "styles": { "fontSize": 14, "color": "rgba(255,255,255,0.9)", "fontWeight": "normal" }
+                      },
+                      {
+                        "type": "value",
+                        "figmaNode": "card-tunnel-abnormal-value",
+                        "parts": [
+                          {
+                            "text": "5",
+                            "type": "number",
+                            "figmaNode": "card-tunnel-abnormal-num",
+                            "styles": { "fontSize": 18, "color": "rgba(245,63,63,1)", "fontWeight": "bold" }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "card-north-south",
+              "name": "南北接线设备",
+              "role": "stat-card",
+              "layout": "horizontal",
+              "alignItems": "center",
+              "bgPlaceholder": "card-bg-north-south",
+              "style": {
+                "background": "rgba(245,247,250,1)",
+                "borderRadius": "8px",
+                "width": "193px",
+                "height": "65px",
+                "padding": "12px 16px"
+              },
+              "icon": {
+                "resourceFile": "../resources/images/icon-8817.png",
+                "recommendedUsage": "imgSrc",
+                "width": 40,
+                "height": 40,
+                "position": "left"
+              },
+              "content": {
+                "layout": "vertical",
+                "position": "right",
+                "elements": [
+                  {
+                    "type": "label-row",
+                    "layout": "horizontal",
+                    "alignItems": "center",
+                    "gap": "8px",
+                    "elements": [
+                      {
+                        "type": "label",
+                        "text": "总 数:",
+                        "figmaNode": "card-ns-total-label",
+                        "styles": { "fontSize": 14, "color": "rgba(51,51,51,0.8)", "fontWeight": "normal" }
+                      },
+                      {
+                        "type": "value",
+                        "figmaNode": "card-ns-total-value",
+                        "parts": [
+                          {
+                            "text": "1280",
+                            "type": "number",
+                            "figmaNode": "card-ns-total-num",
+                            "styles": { "fontSize": 22, "color": "rgba(25,144,255,1)", "fontWeight": "bold" }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "type": "abnormal-row",
+                    "layout": "horizontal",
+                    "alignItems": "center",
+                    "gap": "8px",
+                    "elements": [
+                      {
+                        "type": "label",
+                        "text": "异常数:",
+                        "figmaNode": "card-ns-abnormal-label",
+                        "styles": { "fontSize": 14, "color": "rgba(51,51,51,0.8)", "fontWeight": "normal" }
+                      },
+                      {
+                        "type": "value",
+                        "figmaNode": "card-ns-abnormal-value",
+                        "parts": [
+                          {
+                            "text": "3",
+                            "type": "number",
+                            "figmaNode": "card-ns-abnormal-num",
+                            "styles": { "fontSize": 18, "color": "rgba(245,63,63,1)", "fontWeight": "bold" }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "section-device-grid",
+        "name": "设备分类与网格",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "body": {
+          "layout": "horizontal",
+          "bgPlaceholder": "body-bg-device-grid",
+          "children": [
+            {
+              "id": "tab-nav",
+              "name": "左侧分类导航",
+              "role": "tab-nav",
+              "layout": "vertical",
+              "style": {
+                "width": "46px",
+                "height": "317px"
+              },
+              "items": [
+                {
+                  "type": "tab-item",
+                  "text": "监控",
+                  "active": true,
+                  "badge": "3/3740",
+                  "figmaNode": "tab-monitor",
+                  "styles": { "fontSize": 14, "color": "rgba(255,255,255,1)", "backgroundColor": "rgba(25,144,255,1)", "borderRadius": "4px" }
+                },
+                {
+                  "type": "tab-item",
+                  "text": "照明",
+                  "active": false,
+                  "badge": "3",
+                  "badgeColor": "rgba(245,63,63,1)",
+                  "figmaNode": "tab-lighting",
+                  "styles": { "fontSize": 14, "color": "rgba(51,51,51,0.8)", "backgroundColor": "rgba(245,247,250,1)", "borderRadius": "4px" }
+                },
+                {
+                  "type": "tab-item",
+                  "text": "通风",
+                  "active": false,
+                  "figmaNode": "tab-ventilation",
+                  "styles": { "fontSize": 14, "color": "rgba(51,51,51,0.8)", "backgroundColor": "rgba(245,247,250,1)", "borderRadius": "4px" }
+                },
+                {
+                  "type": "tab-item",
+                  "text": "供配电",
+                  "active": false,
+                  "figmaNode": "tab-power",
+                  "styles": { "fontSize": 14, "color": "rgba(51,51,51,0.8)", "backgroundColor": "rgba(245,247,250,1)", "borderRadius": "4px" }
+                },
+                {
+                  "type": "tab-item",
+                  "text": "消防",
+                  "active": false,
+                  "figmaNode": "tab-fire",
+                  "styles": { "fontSize": 14, "color": "rgba(51,51,51,0.8)", "backgroundColor": "rgba(245,247,250,1)", "borderRadius": "4px" }
+                },
+                {
+                  "type": "tab-item",
+                  "text": "交通诱导",
+                  "active": false,
+                  "figmaNode": "tab-traffic",
+                  "styles": { "fontSize": 14, "color": "rgba(51,51,51,0.8)", "backgroundColor": "rgba(245,247,250,1)", "borderRadius": "4px" }
+                }
+              ]
+            },
+            {
+              "id": "device-grid",
+              "name": "设备卡片网格",
+              "role": "content-grid",
+              "layout": "grid",
+              "gridColumns": 3,
+              "style": {
+                "width": "367px",
+                "height": "295px",
+                "gap": "8px"
+              },
+              "items": [
+                {
+                  "id": "device-camera",
+                  "name": "摄像机",
+                  "role": "device-card",
+                  "layout": "vertical",
+                  "alignItems": "center",
+                  "bgPlaceholder": "device-bg-camera",
+                  "style": {
+                    "background": "rgba(245,247,250,1)",
+                    "borderRadius": "6px",
+                    "padding": "10px 8px",
+                    "width": "115px",
+                    "height": "68px"
+                  },
+                  "icon": {
+                    "resourceFile": "../resources/images/icon-8444.png",
+                    "recommendedUsage": "imgSrc",
+                    "width": 28,
+                    "height": 28,
+                    "position": "top"
+                  },
+                  "content": {
+                    "layout": "vertical",
+                    "alignItems": "center",
+                    "elements": [
+                      {
+                        "type": "label",
+                        "text": "摄像机",
+                        "figmaNode": "device-camera-label",
+                        "styles": { "fontSize": 12, "color": "rgba(51,51,51,0.9)", "fontWeight": "normal" }
+                      },
+                      {
+                        "type": "value",
+                        "figmaNode": "device-camera-value",
+                        "parts": [
+                          {
+                            "text": "(",
+                            "type": "symbol",
+                            "styles": { "fontSize": 12, "color": "rgba(51,51,51,0.6)" }
+                          },
+                          {
+                            "text": "2",
+                            "type": "number",
+                            "figmaNode": "device-camera-abnormal",
+                            "styles": { "fontSize": 14, "color": "rgba(245,63,63,1)", "fontWeight": "bold" }
+                          },
+                          {
+                            "text": "/",
+                            "type": "symbol",
+                            "styles": { "fontSize": 12, "color": "rgba(51,51,51,0.6)" }
+                          },
+                          {
+                            "text": "484",
+                            "type": "number",
+                            "figmaNode": "device-camera-total",
+                            "styles": { "fontSize": 14, "color": "rgba(25,144,255,1)", "fontWeight": "bold" }
+                          },
+                          {
+                            "text": ")",
+                            "type": "symbol",
+                            "styles": { "fontSize": 12, "color": "rgba(51,51,51,0.6)" }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "id": "device-wind",
+                  "name": "风速风向仪",
+                  "role": "device-card",
+                  "layout": "vertical",
+                  "alignItems": "center",
+                  "bgPlaceholder": "device-bg-wind",
+                  "style": {
+                    "background": "rgba(245,247,250,1)",
+                    "borderRadius": "6px",
+                    "padding": "10px 8px",
+                    "width": "115px",
+                    "height": "68px"
+                  },
+                  "icon": {
+                    "resourceFile": "../resources/images/icon-8473.png",
+                    "recommendedUsage": "imgSrc",
+                    "width": 28,
+                    "height": 28,
+                    "position": "top"
+                  },
+                  "content": {
+                    "layout": "vertical",
+                    "alignItems": "center",
+                    "elements": [
+                      {
+                        "type": "label",
+                        "text": "风速风向仪",
+                        "figmaNode": "device-wind-label",
+                        "styles": { "fontSize": 12, "color": "rgba(51,51,51,0.9)", "fontWeight": "normal" }
+                      },
+                      {
+                        "type": "value",
+                        "figmaNode": "device-wind-value",
+                        "parts": [
+                          { "text": "(", "type": "symbol", "styles": { "fontSize": 12, "color": "rgba(51,51,51,0.6)" } },
+                          { "text": "1", "type": "number", "figmaNode": "device-wind-abnormal", "styles": { "fontSize": 14, "color": "rgba(245,63,63,1)", "fontWeight": "bold" } },
+                          { "text": "/", "type": "symbol", "styles": { "fontSize": 12, "color": "rgba(51,51,51,0.6)" } },
+                          { "text": "484", "type": "number", "figmaNode": "device-wind-total", "styles": { "fontSize": 14, "color": "rgba(25,144,255,1)", "fontWeight": "bold" } },
+                          { "text": ")", "type": "symbol", "styles": { "fontSize": 12, "color": "rgba(51,51,51,0.6)" } }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "id": "device-height",
+                  "name": "超高检测器",
+                  "role": "device-card",
+                  "layout": "vertical",
+                  "alignItems": "center",
+                  "bgPlaceholder": "device-bg-height",
+                  "style": {
+                    "background": "rgba(245,247,250,1)",
+                    "borderRadius": "6px",
+                    "padding": "10px 8px",
+                    "width": "115px",
+                    "height": "68px"
+                  },
+                  "icon": {
+                    "resourceFile": "../resources/images/icon-8503.png",
+                    "recommendedUsage": "imgSrc",
+                    "width": 28,
+                    "height": 28,
+                    "position": "top"
+                  },
+                  "content": {
+                    "layout": "vertical",
+                    "alignItems": "center",
+                    "elements": [
+                      {
+                        "type": "label",
+                        "text": "超高检测器",
+                        "figmaNode": "device-height-label",
+                        "styles": { "fontSize": 12, "color": "rgba(51,51,51,0.9)", "fontWeight": "normal" }
+                      },
+                      {
+                        "type": "value",
+                        "figmaNode": "device-height-value",
+                        "parts": [
+                          { "text": "(", "type": "symbol", "styles": { "fontSize": 12, "color": "rgba(51,51,51,0.6)" } },
+                          { "text": "0", "type": "number", "figmaNode": "device-height-abnormal", "styles": { "fontSize": 14, "color": "rgba(8,163,165,1)", "fontWeight": "bold" } },
+                          { "text": "/", "type": "symbol", "styles": { "fontSize": 12, "color": "rgba(51,51,51,0.6)" } },
+                          { "text": "484", "type": "number", "figmaNode": "device-height-total", "styles": { "fontSize": 14, "color": "rgba(25,144,255,1)", "fontWeight": "bold" } },
+                          { "text": ")", "type": "symbol", "styles": { "fontSize": 12, "color": "rgba(51,51,51,0.6)" } }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "id": "device-robot",
+                  "name": "烟道机器人",
+                  "role": "device-card",
+                  "layout": "vertical",
+                  "alignItems": "center",
+                  "bgPlaceholder": "device-bg-robot",
+                  "style": {
+                    "background": "rgba(245,247,250,1)",
+                    "borderRadius": "6px",
+                    "padding": "10px 8px",
+                    "width": "115px",
+                    "height": "68px"
+                  },
+                  "icon": {
+                    "resourceFile": "../resources/images/icon-8532.png",
+                    "recommendedUsage": "imgSrc",
+                    "width": 28,
+                    "height": 28,
+                    "position": "top"
+                  },
+                  "content": {
+                    "layout": "vertical",
+                    "alignItems": "center",
+                    "elements": [
+                      {
+                        "type": "label",
+                        "text": "烟道机器人",
+                        "figmaNode": "device-robot-label",
+                        "styles": { "fontSize": 12, "color": "rgba(51,51,51,0.9)", "fontWeight": "normal" }
+                      },
+                      {
+                        "type": "value",
+                        "figmaNode": "device-robot-value",
+                        "parts": [
+                          { "text": "(", "type": "symbol", "styles": { "fontSize": 12, "color": "rgba(51,51,51,0.6)" } },
+                          { "text": "0", "type": "number", "figmaNode": "device-robot-abnormal", "styles": { "fontSize": 14, "color": "rgba(8,163,165,1)", "fontWeight": "bold" } },
+                          { "text": "/", "type": "symbol", "styles": { "fontSize": 12, "color": "rgba(51,51,51,0.6)" } },
+                          { "text": "484", "type": "number", "figmaNode": "device-robot-total", "styles": { "fontSize": 14, "color": "rgba(25,144,255,1)", "fontWeight": "bold" } },
+                          { "text": ")", "type": "symbol", "styles": { "fontSize": 12, "color": "rgba(51,51,51,0.6)" } }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "id": "device-lidar",
+                  "name": "激光雷达",
+                  "role": "device-card",
+                  "layout": "vertical",
+                  "alignItems": "center",
+                  "bgPlaceholder": "device-bg-lidar",
+                  "style": {
+                    "background": "rgba(245,247,250,1)",
+                    "borderRadius": "6px",
+                    "padding": "10px 8px",
+                    "width": "115px",
+                    "height": "68px"
+                  },
+                  "icon": {
+                    "resourceFile": "../resources/images/icon-8561.png",
+                    "recommendedUsage": "imgSrc",
+                    "width": 28,
+                    "height": 28,
+                    "position": "top"
+                  },
+                  "content": {
+                    "layout": "vertical",
+                    "alignItems": "center",
+                    "elements": [
+                      {
+                        "type": "label",
+                        "text": "激光雷达",
+                        "figmaNode": "device-lidar-label",
+                        "styles": { "fontSize": 12, "color": "rgba(51,51,51,0.9)", "fontWeight": "normal" }
+                      },
+                      {
+                        "type": "value",
+                        "figmaNode": "device-lidar-value",
+                        "parts": [
+                          { "text": "(", "type": "symbol", "styles": { "fontSize": 12, "color": "rgba(51,51,51,0.6)" } },
+                          { "text": "0", "type": "number", "figmaNode": "device-lidar-abnormal", "styles": { "fontSize": 14, "color": "rgba(8,163,165,1)", "fontWeight": "bold" } },
+                          { "text": "/", "type": "symbol", "styles": { "fontSize": 12, "color": "rgba(51,51,51,0.6)" } },
+                          { "text": "484", "type": "number", "figmaNode": "device-lidar-total", "styles": { "fontSize": 14, "color": "rgba(25,144,255,1)", "fontWeight": "bold" } },
+                          { "text": ")", "type": "symbol", "styles": { "fontSize": 12, "color": "rgba(51,51,51,0.6)" } }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "id": "device-co2",
+                  "name": "CO₂传感器",
+                  "role": "device-card",
+                  "layout": "vertical",
+                  "alignItems": "center",
+                  "bgPlaceholder": "device-bg-co2",
+                  "style": {
+                    "background": "rgba(245,247,250,1)",
+                    "borderRadius": "6px",
+                    "padding": "10px 8px",
+                    "width": "115px",
+                    "height": "68px"
+                  },
+                  "icon": {
+                    "resourceFile": "../resources/images/icon-8590.png",
+                    "recommendedUsage": "imgSrc",
+                    "width": 28,
+                    "height": 28,
+                    "position": "top"
+                  },
+                  "content": {
+                    "layout": "vertical",
+                    "alignItems": "center",
+                    "elements": [
+                      {
+                        "type": "label",
+                        "text": "CO₂传感器",
+                        "figmaNode": "device-co2-label",
+                        "styles": { "fontSize": 12, "color": "rgba(51,51,51,0.9)", "fontWeight": "normal" }
+                      },
+                      {
+                        "type": "value",
+                        "figmaNode": "device-co2-value",
+                        "parts": [
+                          { "text": "(", "type": "symbol", "styles": { "fontSize": 12, "color": "rgba(51,51,51,0.6)" } },
+                          { "text": "0", "type": "number", "figmaNode": "device-co2-abnormal", "styles": { "fontSize": 14, "color": "rgba(8,163,165,1)", "fontWeight": "bold" } },
+                          { "text": "/", "type": "symbol", "styles": { "fontSize": 12, "color": "rgba(51,51,51,0.6)" } },
+                          { "text": "484", "type": "number", "figmaNode": "device-co2-total", "styles": { "fontSize": 14, "color": "rgba(25,144,255,1)", "fontWeight": "bold" } },
+                          { "text": ")", "type": "symbol", "styles": { "fontSize": 12, "color": "rgba(51,51,51,0.6)" } }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "id": "device-covi",
+                  "name": "CO/VI检测器",
+                  "role": "device-card",
+                  "layout": "vertical",
+                  "alignItems": "center",
+                  "bgPlaceholder": "device-bg-covi",
+                  "style": {
+                    "background": "rgba(245,247,250,1)",
+                    "borderRadius": "6px",
+                    "padding": "10px 8px",
+                    "width": "115px",
+                    "height": "68px"
+                  },
+                  "icon": {
+                    "resourceFile": "../resources/images/icon-8619.png",
+                    "recommendedUsage": "imgSrc",
+                    "width": 28,
+                    "height": 28,
+                    "position": "top"
+                  },
+                  "content": {
+                    "layout": "vertical",
+                    "alignItems": "center",
+                    "elements": [
+                      {
+                        "type": "label",
+                        "text": "CO/VI检测器",
+                        "figmaNode": "device-covi-label",
+                        "styles": { "fontSize": 12, "color": "rgba(51,51,51,0.9)", "fontWeight": "normal" }
+                      },
+                      {
+                        "type": "value",
+                        "figmaNode": "device-covi-value",
+                        "parts": [
+                          { "text": "(", "type": "symbol", "styles": { "fontSize": 12, "color": "rgba(51,51,51,0.6)" } },
+                          { "text": "0", "type": "number", "figmaNode": "device-covi-abnormal", "styles": { "fontSize": 14, "color": "rgba(8,163,165,1)", "fontWeight": "bold" } },
+                          { "text": "/", "type": "symbol", "styles": { "fontSize": 12, "color": "rgba(51,51,51,0.6)" } },
+                          { "text": "484", "type": "number", "figmaNode": "device-covi-total", "styles": { "fontSize": 14, "color": "rgba(25,144,255,1)", "fontWeight": "bold" } },
+                          { "text": ")", "type": "symbol", "styles": { "fontSize": 12, "color": "rgba(51,51,51,0.6)" } }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "id": "device-temp",
+                  "name": "温湿度传感器",
+                  "role": "device-card",
+                  "layout": "vertical",
+                  "alignItems": "center",
+                  "bgPlaceholder": "device-bg-temp",
+                  "style": {
+                    "background": "rgba(245,247,250,1)",
+                    "borderRadius": "6px",
+                    "padding": "10px 8px",
+                    "width":

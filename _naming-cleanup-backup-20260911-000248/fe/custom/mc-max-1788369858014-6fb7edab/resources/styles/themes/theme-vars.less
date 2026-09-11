@@ -1,0 +1,99 @@
+.common() {
+  // 字体缩放基准令牌（根容器通过 CSS 变量 --fontSize 驱动，默认 14px）
+  @fontSize: 14px;
+
+  // 主色
+  @color-primary: #1890ff;
+  @color-primary-light: #00d4ff;
+  @color-primary-medium: #4A9EFF;
+  @color-primary-bright: #5EBBFF;
+
+  // 错误/告警色
+  @color-error: #ff4d4f;
+  @color-badge-bg: #ff4d4f;
+
+  // 图标色
+  @color-icon-tint: #1890ff;
+
+  // 圆角
+  @border-radius-base: 8px;
+  @border-radius-large: 12px;
+
+  // 字体大小
+  @font-size-base: 14px;
+  @font-size-large: 16px;
+  @font-size-xl: 24px;
+  @font-size-xxl: 32px;
+
+  // 字重
+  @font-weight-normal: 400;
+  @font-weight-medium: 500;
+  @font-weight-bold: 600;
+
+  // 间距
+  @spacing-base: 16px;
+  @spacing-small: 8px;
+  @spacing-large: 24px;
+}
+
+.theme-light() {
+  // 文字色
+  @color-text-primary: rgba(51, 51, 51, 0.85);
+  @color-text-secondary: rgba(51, 51, 51, 0.65);
+  @color-text-hint: rgba(51, 51, 51, 0.45);
+
+  // 背景色
+  @color-bg-base: #f0f5f9;
+  @color-bg-gradient-start: #e8f4ff;
+  @color-bg-gradient-end: #f0f5f9;
+
+  // Banner 渐变
+  @color-banner-gradient-start: #1890ff;
+  @color-banner-gradient-end: #00d4ff;
+
+  // 导航背景
+  @color-nav-bg: #1890ff;
+
+  // 卡片
+  @color-card-bg: rgba(255, 255, 255, 0.9);
+  @color-card-border: rgba(24, 144, 255, 0.15);
+  @color-shadow-card: rgba(24, 144, 255, 0.08);
+
+  // 文字（light 主题使用深色文字）
+  @color-text-dark: rgba(51, 51, 51, 0.85);
+  @color-text-light: rgba(255, 255, 255, 0.9);
+}
+
+.theme-dark() {
+  // 文字色（深色面板禁止使用黑色系）
+  @color-text-primary: rgba(255, 255, 255, 0.9);
+  @color-text-secondary: rgba(255, 255, 255, 0.65);
+  @color-text-hint: rgba(255, 255, 255, 0.35);
+
+  // 背景色
+  @color-bg-base: #0d1b2a;
+  @color-bg-gradient-start: #0d1b2a;
+  @color-bg-gradient-end: #1a2e44;
+
+  // Banner 渐变（与 light 保持一致，来自 Figma）
+  @color-banner-gradient-start: #1890ff;
+  @color-banner-gradient-end: #00d4ff;
+
+  // 导航背景
+  @color-nav-bg: #0d1b2a;
+
+  // 卡片
+  @color-card-bg: rgba(255, 255, 255, 0.06);
+  @color-card-border: rgba(24, 144, 255, 0.25);
+  @color-shadow-card: rgba(0, 0, 0, 0.3);
+
+  // 文字别名（保持 light 变量名兼容性）
+  @color-text-dark: rgba(255, 255, 255, 0.9);
+  @color-text-light: rgba(255, 255, 255, 0.9);
+}
+
+// 自动添加：将 .common() 中的 Less 变量暴露到全局作用域
+
+:root {
+  .common();
+}

@@ -1,0 +1,75 @@
+// 主题变量与 mixin 定义文件
+
+// ---- Less 变量 ----
+// [Style Refine] 从 Figma fills 精确提取的颜色 token
+@color-text-base: #ffffff;
+@color-text-secondary: rgba(255, 255, 255, 0.65);
+@color-bg: #0d1117;
+@color-bg-card: rgba(255, 255, 255, 0.06);
+@color-border: rgba(255, 255, 255, 0.12);
+@font-size-base: 14px;
+@border-radius-base: 4px;
+
+// 环境监测组件专用颜色 token（从 Figma fills 精确提取）
+// [Style Refine] 环境监测 header/title fills GRADIENT_LINEAR stop0: rgb(25,144,255) stop1: rgba(90,127,255,0.83)
+@color-primary-blue: rgb(25, 144, 255);
+@color-primary-blue-end: rgba(90, 127, 255, 0.83);
+// [Style Refine] tabs bg-tab-active fills stop0: rgb(16,153,177) stop1: rgb(4,143,255)
+@color-tab-active-start: rgb(16, 153, 177);
+@color-tab-active-end: rgb(4, 143, 255);
+// [Style Refine] 非激活 Tab 文字: rgb(44,155,234)
+@color-tab-inactive: rgb(44, 155, 234);
+// [Style Refine] tabs-list/bg fills stop0: rgb(181,222,255) stop1: rgb(210,236,255)
+@color-tab-bg-start: rgb(181, 222, 255);
+@color-tab-bg-end: rgb(210, 236, 255);
+// [Style Refine] 预警线 fills SOLID: rgb(211,47,47)
+@color-warning-line: rgb(211, 47, 47);
+// [Style Refine] Vector 1303 stroke SOLID: rgb(15,205,125)
+@color-chart-line: rgb(15, 205, 125);
+// [Style Refine] num/bg fills SOLID: rgb(245,63,63)
+@color-badge-bg: rgb(245, 63, 63);
+// [Style Refine] bg node fills SOLID: rgb(237,244,251), DROP_SHADOW rgba(74,117,141,0.25)
+@color-header-bg: rgb(237, 244, 251);
+@color-shadow: rgba(74, 117, 141, 0.25);
+
+// ---- 公共 mixin ----
+.common() {
+  box-sizing: border-box;
+  font-size: @font-size-base;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+  line-height: 1.4;
+}
+
+.theme-dark() {
+  :root {
+    --color-text-base: @color-text-base;
+    --color-text-secondary: @color-text-secondary;
+    --color-bg: @color-bg;
+    --color-bg-card: @color-bg-card;
+    --color-border: @color-border;
+    --font-size-base: @font-size-base;
+    --border-radius-base: @border-radius-base;
+    --color-primary-blue: @color-primary-blue;
+    --color-warning-line: @color-warning-line;
+    --color-chart-line: @color-chart-line;
+    --color-badge-bg: @color-badge-bg;
+  }
+}
+
+.theme-light() {
+  :root {
+    --color-text-base: #1a1a1a;
+    --color-text-secondary: rgba(0, 0, 0, 0.55);
+    --color-bg: #f5f7fa;
+    --color-bg-card: rgba(0, 0, 0, 0.04);
+    --color-border: rgba(0, 0, 0, 0.1);
+    --font-size-base: @font-size-base;
+    --border-radius-base: @border-radius-base;
+    --color-primary-blue: @color-primary-blue;
+    --color-warning-line: @color-warning-line;
+    --color-chart-line: @color-chart-line;
+    --color-badge-bg: @color-badge-bg;
+  }
+}
+
+.theme-dark();

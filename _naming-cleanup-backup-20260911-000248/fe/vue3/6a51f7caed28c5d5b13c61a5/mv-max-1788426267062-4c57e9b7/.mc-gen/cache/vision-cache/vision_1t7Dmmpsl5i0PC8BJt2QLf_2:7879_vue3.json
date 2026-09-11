@@ -1,0 +1,867 @@
+{
+  "imageVerified": true,
+  "layoutStructure": {
+    "generatedAt": "2025-06-15T10:30:00Z",
+    "stage": "preview-analysis",
+    "componentName": "环境监测",
+    "componentTitle": "环境监测",
+    "analysisModel": "claude-opus-4",
+    "sourceImage": {
+      "path": "mc-preview.png",
+      "size": 0,
+      "mtimeMs": 0,
+      "sha1": ""
+    },
+    "summary": "环境监测面板，包含顶部导航栏（气化版/能见度/洞内照明/洞外光强切换）、右上角统计指标（2k3+7850次+观测）和通知图标（红色角标8），主体为折线图展示24小时趋势数据，含预警线标注",
+    "layout": {
+      "type": "single-panel",
+      "direction": "vertical",
+      "sections": [
+        {
+          "id": "panel-header",
+          "name": "面板标题与控制区",
+          "role": "常驻",
+          "layout": "horizontal",
+          "headerRelation": "title-itself",
+          "slotCandidate": null,
+          "header": null,
+          "body": {
+            "layout": "horizontal",
+            "bgPlaceholder": "section-bg-header",
+            "children": [
+              {
+                "id": "title-text",
+                "type": "text",
+                "name": "环境监测",
+                "role": "常驻",
+                "value": "环境监测",
+                "style": {
+                  "fontSize": 16,
+                  "fontWeight": "500",
+                  "color": "rgba(85, 158, 255, 1)",
+                  "background": "linear-gradient(90deg, rgba(85,158,255,1) 0%, rgba(128,186,255,1) 100%)"
+                }
+              },
+              {
+                "id": "header-right-slot",
+                "type": "group",
+                "name": "右侧控件组",
+                "role": "常驻",
+                "layout": "horizontal",
+                "headerRelation": "title-same-row",
+                "slotCandidate": "header-right",
+                "children": [
+                  {
+                    "id": "stats-indicator",
+                    "type": "text",
+                    "name": "统计指标",
+                    "role": "常驻",
+                    "value": "2k3+7850次+观测",
+                    "style": {
+                      "fontSize": 12,
+                      "color": "rgba(0, 0, 0, 0.65)"
+                    }
+                  },
+                  {
+                    "id": "icon-chart",
+                    "type": "icon",
+                    "name": "图表图标",
+                    "role": "常驻",
+                    "resourceFile": "../resources/images/icon-7941.png",
+                    "recommendedUsage": "imgSrc",
+                    "style": {
+                      "width": 20,
+                      "height": 20
+                    }
+                  },
+                  {
+                    "id": "icon-notification",
+                    "type": "icon",
+                    "name": "通知图标",
+                    "role": "常驻",
+                    "resourceFile": "../resources/images/icon-7945.png",
+                    "recommendedUsage": "imgSrc",
+                    "badge": "8",
+                    "style": {
+                      "width": 20,
+                      "height": 20
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "tabs-section",
+          "name": "选项卡切换区",
+          "role": "常驻",
+          "layout": "horizontal",
+          "headerRelation": "content-below-title",
+          "slotCandidate": null,
+          "header": null,
+          "body": {
+            "layout": "horizontal",
+            "bgPlaceholder": "body-bg-tabs",
+            "children": [
+              {
+                "id": "tab-gasification",
+                "type": "tab",
+                "name": "气化版",
+                "role": "常驻",
+                "active": true,
+                "value": "气化版",
+                "resourceFile": "../resources/images/bg-tab-active-7891.png",
+                "recommendedUsage": "backgroundStyle",
+                "style": {
+                  "fontSize": 14,
+                  "color": "rgba(255, 255, 255, 1)",
+                  "padding": "8px 16px",
+                  "borderRadius": "4px 0 0 4px",
+                  "backgroundImage": "url(../resources/images/bg-tab-active-7891.png)",
+                  "backgroundSize": "cover"
+                },
+                "backgroundSize": "cover",
+                "backgroundPosition": "center center",
+                "backgroundRepeat": "no-repeat"
+              },
+              {
+                "id": "tab-visibility",
+                "type": "tab",
+                "name": "能见度",
+                "role": "常驻",
+                "active": false,
+                "value": "能见度",
+                "style": {
+                  "fontSize": 14,
+                  "color": "rgba(0, 0, 0, 0.45)",
+                  "padding": "8px 16px"
+                }
+              },
+              {
+                "id": "tab-tunnel-lighting",
+                "type": "tab",
+                "name": "洞内照明",
+                "role": "常驻",
+                "active": false,
+                "value": "洞内照明",
+                "style": {
+                  "fontSize": 14,
+                  "color": "rgba(0, 0, 0, 0.45)",
+                  "padding": "8px 16px"
+                }
+              },
+              {
+                "id": "tab-outside-light",
+                "type": "tab",
+                "name": "洞外光强",
+                "role": "常驻",
+                "active": false,
+                "value": "洞外光强",
+                "style": {
+                  "fontSize": 14,
+                  "color": "rgba(0, 0, 0, 0.45)",
+                  "padding": "8px 16px",
+                  "borderRadius": "0 4px 4px 0"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "chart-section",
+          "name": "图表区",
+          "role": "常驻",
+          "layout": "vertical",
+          "headerRelation": "content-below-title",
+          "slotCandidate": null,
+          "header": null,
+          "body": {
+            "layout": "vertical",
+            "bgPlaceholder": "body-bg-chart",
+            "children": [
+              {
+                "id": "chart-container",
+                "type": "chart-container",
+                "name": "折线图容器",
+                "role": "常驻",
+                "chartType": "area",
+                "style": {
+                  "width": 420,
+                  "height": 140,
+                  "padding": "16px"
+                }
+              }
+            ],
+            "backgroundImage": {
+              "src": "../resources/images/bg-7890.png",
+              "recommendedUsage": "backgroundBlock"
+            },
+            "backgroundSize": "100% 100%",
+            "backgroundPosition": "center center",
+            "backgroundRepeat": "no-repeat"
+          }
+        }
+      ]
+    },
+    "styles": {
+      "backgroundBrightness": "light",
+      "theme": "浅色科技监测风",
+      "colors": [
+        "rgba(237, 244, 251, 1)",
+        "rgba(85, 158, 255, 1)",
+        "rgba(128, 186, 255, 1)",
+        "rgba(0, 0, 0, 0.65)",
+        "rgba(255, 255, 255, 1)",
+        "rgba(245, 63, 63, 1)",
+        "rgba(102, 204, 153, 0.3)"
+      ],
+      "background": "浅蓝灰色背景 rgba(237,244,251,1)",
+      "decorations": [
+        "顶部标题渐变色文字（蓝色系渐变）",
+        "选项卡激活态背景图",
+        "通知图标红色角标",
+        "图表区域网格线",
+        "红色预警虚线"
+      ],
+      "emphasis": [
+        "右上角统计数值 2k3+7850次+观测",
+        "通知角标数字 8",
+        "激活选项卡白色文字",
+        "红色预警线标注"
+      ]
+    },
+    "interactions": [
+      {
+        "target": "选项卡切换区（气化版/能见度/洞内照明/洞外光强）",
+        "type": "tab-switch",
+        "description": "切换不同监测指标",
+        "defaultState": "常驻，气化版激活",
+        "evidence": "气化版选项卡有激活态背景"
+      },
+      {
+        "target": "右上角图表图标",
+        "type": "icon-button",
+        "description": "可能用于切换图表显示模式",
+        "defaultState": "常驻",
+        "evidence": "独立图标按钮"
+      },
+      {
+        "target": "右上角通知图标",
+        "type": "icon-button",
+        "description": "查看通知/告警信息",
+        "defaultState": "常驻，有未读数（8）",
+        "evidence": "红色角标数字"
+      },
+      {
+        "target": "折线图区域",
+        "type": "chart-hover",
+        "description": "鼠标悬停显示数值",
+        "defaultState": "图表常驻展示",
+        "evidence": "标准数据可视化组件"
+      }
+    ],
+    "charts": [
+      {
+        "section": "chart-section",
+        "type": "area",
+        "series": [
+          "气化版数据"
+        ],
+        "legend": [],
+        "legendPosition": "top-right",
+        "seriesColors": [
+          "rgba(102, 204, 153, 0.3)"
+        ],
+        "legendType": "horizontal",
+        "axes": "X轴为时间（0-24小时），Y轴为数值（0-50单位）",
+        "tooltip": "标准ECharts悬停提示",
+        "xAxisLabels": [
+          "2",
+          "4",
+          "6",
+          "8",
+          "10",
+          "12",
+          "14",
+          "16",
+          "18",
+          "20",
+          "22",
+          "24"
+        ],
+        "yAxisLabels": [
+          "0",
+          "10",
+          "20",
+          "30",
+          "40",
+          "50"
+        ],
+        "annotations": [
+          {
+            "type": "threshold-line",
+            "value": 30,
+            "label": "预警线",
+            "style": "红色虚线",
+            "color": "rgba(245, 63, 63, 1)"
+          }
+        ],
+        "notes": [
+          "面积图填充为绿色渐变",
+          "Y轴30单位处有红色预警虚线",
+          "X轴刻度为2小时间隔",
+          "图表显示24小时完整周期"
+        ]
+      }
+    ],
+    "doNotInvent": [
+      "选项卡的具体数据内容（能见度、洞内照明、洞外光强的数据格式）",
+      "通知图标点击后的弹窗内容",
+      "图表的实时更新频率",
+      "预警线触发后的联动逻辑",
+      "统计指标（2k3+7850次+观测）的具体计算规则",
+      "图表数据的时间范围选择功能",
+      "数据导出功能"
+    ],
+    "headerSlots": [
+      {
+        "slotType": "header-right",
+        "elementType": "statistic",
+        "content": "2k3+7850次+观测",
+        "figmaNodeId": "unknown"
+      },
+      {
+        "slotType": "header-right",
+        "elementType": "icon",
+        "content": "图表图标",
+        "figmaNodeId": "7941"
+      },
+      {
+        "slotType": "header-right",
+        "elementType": "icon",
+        "content": "通知图标（角标8）",
+        "figmaNodeId": "7945"
+      }
+    ],
+    "notes": [
+      "面板采用浅色背景，顶部标题使用蓝色渐变",
+      "选项卡采用左对齐横向排列，激活态有专属背景图",
+      "右上角统计文字与图标按钮紧凑排列",
+      "图表区域占据主要空间，含红色预警线标注",
+      "通知图标有红色角标，显示未读数量",
+      "整体风格为现代科技监测界面"
+    ],
+    "coverageReport": {
+      "totalFigma": 14,
+      "matchedCount": 7,
+      "missingCount": 3,
+      "uncertainCount": 0,
+      "coverageRate": 70,
+      "missing": [
+        {
+          "name": "sub-t",
+          "type": "FRAME",
+          "depth": 2
+        },
+        {
+          "name": "一氧化碳",
+          "type": "TEXT",
+          "depth": 4
+        },
+        {
+          "name": "num",
+          "type": "GROUP",
+          "depth": 3
+        }
+      ],
+      "uncertain": [],
+      "summary": "一般"
+    },
+    "chartDataHints": [
+      {
+        "chartTitle": "area",
+        "chartType": "area",
+        "labels": [
+          {
+            "label": "40\n30\n20\n10\n0",
+            "name": "40 30 20 10 0"
+          },
+          {
+            "label": "辆",
+            "name": "辆"
+          },
+          {
+            "label": "预警线",
+            "name": "预警线"
+          },
+          {
+            "label": "时",
+            "name": "时"
+          },
+          {
+            "label": "zk3+785CO浓度",
+            "name": "zk3+785CO浓度"
+          },
+          {
+            "label": "一氧化碳",
+            "name": "一氧化碳"
+          },
+          {
+            "label": "洞内照明",
+            "name": "洞内照明"
+          },
+          {
+            "label": "洞外光强",
+            "name": "洞外光强"
+          },
+          {
+            "label": "能见度",
+            "name": "能见度"
+          }
+        ],
+        "values": [
+          {
+            "label": "600",
+            "value": 600,
+            "unit": ""
+          },
+          {
+            "label": "400",
+            "value": 400,
+            "unit": ""
+          },
+          {
+            "label": "200",
+            "value": 200,
+            "unit": ""
+          },
+          {
+            "label": "600",
+            "value": 600,
+            "unit": ""
+          },
+          {
+            "label": "0",
+            "value": 0,
+            "unit": ""
+          },
+          {
+            "label": "600",
+            "value": 600,
+            "unit": ""
+          },
+          {
+            "label": "2",
+            "value": 2,
+            "unit": ""
+          },
+          {
+            "label": "4",
+            "value": 4,
+            "unit": ""
+          },
+          {
+            "label": "6",
+            "value": 6,
+            "unit": ""
+          },
+          {
+            "label": "8",
+            "value": 8,
+            "unit": ""
+          },
+          {
+            "label": "10",
+            "value": 10,
+            "unit": ""
+          },
+          {
+            "label": "12",
+            "value": 12,
+            "unit": ""
+          }
+        ]
+      }
+    ]
+  },
+  "visualElements": {
+    "backgroundBrightness": "light",
+    "theme": "浅色科技监测风",
+    "colors": [
+      "rgba(237, 244, 251, 1)",
+      "rgba(85, 158, 255, 1)",
+      "rgba(128, 186, 255, 1)",
+      "rgba(0, 0, 0, 0.65)",
+      "rgba(255, 255, 255, 1)",
+      "rgba(245, 63, 63, 1)",
+      "rgba(102, 204, 153, 0.3)"
+    ],
+    "background": "浅蓝灰色背景 rgba(237,244,251,1)",
+    "decorations": [
+      "顶部标题渐变色文字（蓝色系渐变）",
+      "选项卡激活态背景图",
+      "通知图标红色角标",
+      "图表区域网格线",
+      "红色预警虚线"
+    ],
+    "emphasis": [
+      "右上角统计数值 2k3+7850次+观测",
+      "通知角标数字 8",
+      "激活选项卡白色文字",
+      "红色预警线标注"
+    ]
+  },
+  "_visualElementList": [
+    {
+      "id": "title-text",
+      "type": "text",
+      "name": "环境监测",
+      "role": "常驻",
+      "value": "环境监测",
+      "style": {
+        "fontSize": 16,
+        "fontWeight": "500",
+        "color": "rgba(85, 158, 255, 1)",
+        "background": "linear-gradient(90deg, rgba(85,158,255,1) 0%, rgba(128,186,255,1) 100%)"
+      }
+    },
+    {
+      "id": "header-right-slot",
+      "type": "group",
+      "name": "右侧控件组",
+      "role": "常驻",
+      "layout": "horizontal",
+      "headerRelation": "title-same-row",
+      "slotCandidate": "header-right",
+      "children": [
+        {
+          "id": "stats-indicator",
+          "type": "text",
+          "name": "统计指标",
+          "role": "常驻",
+          "value": "2k3+7850次+观测",
+          "style": {
+            "fontSize": 12,
+            "color": "rgba(0, 0, 0, 0.65)"
+          }
+        },
+        {
+          "id": "icon-chart",
+          "type": "icon",
+          "name": "图表图标",
+          "role": "常驻",
+          "resourceFile": "../resources/images/icon-7941.png",
+          "recommendedUsage": "imgSrc",
+          "style": {
+            "width": 20,
+            "height": 20
+          }
+        },
+        {
+          "id": "icon-notification",
+          "type": "icon",
+          "name": "通知图标",
+          "role": "常驻",
+          "resourceFile": "../resources/images/icon-7945.png",
+          "recommendedUsage": "imgSrc",
+          "badge": "8",
+          "style": {
+            "width": 20,
+            "height": 20
+          }
+        }
+      ]
+    },
+    {
+      "id": "tab-gasification",
+      "type": "tab",
+      "name": "气化版",
+      "role": "常驻",
+      "active": true,
+      "value": "气化版",
+      "resourceFile": "../resources/images/bg-tab-active-7891.png",
+      "recommendedUsage": "backgroundStyle",
+      "style": {
+        "fontSize": 14,
+        "color": "rgba(255, 255, 255, 1)",
+        "padding": "8px 16px",
+        "borderRadius": "4px 0 0 4px",
+        "backgroundImage": "url(../resources/images/bg-tab-active-7891.png)",
+        "backgroundSize": "cover"
+      },
+      "backgroundSize": "cover",
+      "backgroundPosition": "center center",
+      "backgroundRepeat": "no-repeat"
+    },
+    {
+      "id": "tab-visibility",
+      "type": "tab",
+      "name": "能见度",
+      "role": "常驻",
+      "active": false,
+      "value": "能见度",
+      "style": {
+        "fontSize": 14,
+        "color": "rgba(0, 0, 0, 0.45)",
+        "padding": "8px 16px"
+      }
+    },
+    {
+      "id": "tab-tunnel-lighting",
+      "type": "tab",
+      "name": "洞内照明",
+      "role": "常驻",
+      "active": false,
+      "value": "洞内照明",
+      "style": {
+        "fontSize": 14,
+        "color": "rgba(0, 0, 0, 0.45)",
+        "padding": "8px 16px"
+      }
+    },
+    {
+      "id": "tab-outside-light",
+      "type": "tab",
+      "name": "洞外光强",
+      "role": "常驻",
+      "active": false,
+      "value": "洞外光强",
+      "style": {
+        "fontSize": 14,
+        "color": "rgba(0, 0, 0, 0.45)",
+        "padding": "8px 16px",
+        "borderRadius": "0 4px 4px 0"
+      }
+    },
+    {
+      "id": "chart-container",
+      "type": "chart-container",
+      "name": "折线图容器",
+      "role": "常驻",
+      "chartType": "area",
+      "style": {
+        "width": 420,
+        "height": 140,
+        "padding": "16px"
+      }
+    }
+  ],
+  "interactions": [
+    {
+      "target": "选项卡切换区（气化版/能见度/洞内照明/洞外光强）",
+      "type": "tab-switch",
+      "description": "切换不同监测指标",
+      "defaultState": "常驻，气化版激活",
+      "evidence": "气化版选项卡有激活态背景"
+    },
+    {
+      "target": "右上角图表图标",
+      "type": "icon-button",
+      "description": "可能用于切换图表显示模式",
+      "defaultState": "常驻",
+      "evidence": "独立图标按钮"
+    },
+    {
+      "target": "右上角通知图标",
+      "type": "icon-button",
+      "description": "查看通知/告警信息",
+      "defaultState": "常驻，有未读数（8）",
+      "evidence": "红色角标数字"
+    },
+    {
+      "target": "折线图区域",
+      "type": "chart-hover",
+      "description": "鼠标悬停显示数值",
+      "defaultState": "图表常驻展示",
+      "evidence": "标准数据可视化组件"
+    }
+  ],
+  "charts": [
+    {
+      "section": "chart-section",
+      "type": "area",
+      "series": [
+        "气化版数据"
+      ],
+      "legend": [],
+      "legendPosition": "top-right",
+      "seriesColors": [
+        "rgba(102, 204, 153, 0.3)"
+      ],
+      "legendType": "horizontal",
+      "axes": "X轴为时间（0-24小时），Y轴为数值（0-50单位）",
+      "tooltip": "标准ECharts悬停提示",
+      "xAxisLabels": [
+        "2",
+        "4",
+        "6",
+        "8",
+        "10",
+        "12",
+        "14",
+        "16",
+        "18",
+        "20",
+        "22",
+        "24"
+      ],
+      "yAxisLabels": [
+        "0",
+        "10",
+        "20",
+        "30",
+        "40",
+        "50"
+      ],
+      "annotations": [
+        {
+          "type": "threshold-line",
+          "value": 30,
+          "label": "预警线",
+          "style": "红色虚线",
+          "color": "rgba(245, 63, 63, 1)"
+        }
+      ],
+      "notes": [
+        "面积图填充为绿色渐变",
+        "Y轴30单位处有红色预警虚线",
+        "X轴刻度为2小时间隔",
+        "图表显示24小时完整周期"
+      ]
+    }
+  ],
+  "chartDataHints": [
+    {
+      "chartTitle": "area",
+      "chartType": "area",
+      "labels": [
+        {
+          "label": "40\n30\n20\n10\n0",
+          "name": "40 30 20 10 0"
+        },
+        {
+          "label": "辆",
+          "name": "辆"
+        },
+        {
+          "label": "预警线",
+          "name": "预警线"
+        },
+        {
+          "label": "时",
+          "name": "时"
+        },
+        {
+          "label": "zk3+785CO浓度",
+          "name": "zk3+785CO浓度"
+        },
+        {
+          "label": "一氧化碳",
+          "name": "一氧化碳"
+        },
+        {
+          "label": "洞内照明",
+          "name": "洞内照明"
+        },
+        {
+          "label": "洞外光强",
+          "name": "洞外光强"
+        },
+        {
+          "label": "能见度",
+          "name": "能见度"
+        }
+      ],
+      "values": [
+        {
+          "label": "600",
+          "value": 600,
+          "unit": ""
+        },
+        {
+          "label": "400",
+          "value": 400,
+          "unit": ""
+        },
+        {
+          "label": "200",
+          "value": 200,
+          "unit": ""
+        },
+        {
+          "label": "600",
+          "value": 600,
+          "unit": ""
+        },
+        {
+          "label": "0",
+          "value": 0,
+          "unit": ""
+        },
+        {
+          "label": "600",
+          "value": 600,
+          "unit": ""
+        },
+        {
+          "label": "2",
+          "value": 2,
+          "unit": ""
+        },
+        {
+          "label": "4",
+          "value": 4,
+          "unit": ""
+        },
+        {
+          "label": "6",
+          "value": 6,
+          "unit": ""
+        },
+        {
+          "label": "8",
+          "value": 8,
+          "unit": ""
+        },
+        {
+          "label": "10",
+          "value": 10,
+          "unit": ""
+        },
+        {
+          "label": "12",
+          "value": 12,
+          "unit": ""
+        }
+      ]
+    }
+  ],
+  "headerSlots": [
+    {
+      "slotType": "header-right",
+      "elementType": "statistic",
+      "content": "2k3+7850次+观测",
+      "figmaNodeId": "unknown"
+    },
+    {
+      "slotType": "header-right",
+      "elementType": "icon",
+      "content": "图表图标",
+      "figmaNodeId": "7941"
+    },
+    {
+      "slotType": "header-right",
+      "elementType": "icon",
+      "content": "通知图标（角标8）",
+      "figmaNodeId": "7945"
+    }
+  ],
+  "analysisType": "chart",
+  "analysisTarget": "图表展示区",
+  "analysisDescription": "图表：折线图容器",
+  "analysisEvidence": [],
+  "analysisFile": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mv-max-1788426267062-4c57e9b7/.mc-gen/config/preview-analysis.json",
+  "_cachedAt": 1788426329029,
+  "_cacheKey": "vision_1t7Dmmpsl5i0PC8BJt2QLf_2:7879_vue3"
+}

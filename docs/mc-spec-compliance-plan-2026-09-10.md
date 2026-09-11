@@ -113,6 +113,56 @@ targetFiles = enforceMcSpecCompliance(targetFiles)
 | M5-10 硬编码颜色 | 102 | warning | prompt + 后处理抽变量 | L4（渐进） |
 | M5-4 / M3-12 / M3-13 / M3-1 等零散 | 5–7 | error | `enforceMcSpecCompliance` | L2 能补则补，否则 BLOCK |
 
+### M7 类名契约（2026-09-11 新增，P1.6）
+
+同一视觉事实（类名）此前被 5 条变换链各自推导 → 反复复发（lazy 正则截断 3 例 / 资源占位 selector /
+`--active` 后缀丢失 / `is-active` 方言 / 基类前缀不一致）。M7 把类名纳入**契约 + 门禁 + 单一写入者**。
+
+| 条款 | 内容 | 级别 | 落点 |
+|---|---|---|---|
+| **C1** 方言标准 | 修饰符只允许 BEM `--mod`；`is-active`/`active`/`is-on` 等布尔别名必须在写盘前归一为「同元素基类 + `--mod`」 | error | 归一 `utils/class-dialect-normalizer.js`（单一写入者，**必须先于 classFacts 采集**） |
+| **C2** 基类形态一致 | 修饰符类必须与**同一元素的基类**同前缀形态（DOM 事实）；复合选择器 `.base.is-active` 同样适用 | error | 门禁 `CODE-024`（fail-closed BLOCK）+ 归一器 R2 |
+| **C3** 激活态可命中 | 模板出现的每个修饰符类，样式源必须有对应规则 | error | 门禁 `CODE-024` + 不变量 `I7`（`utils/classname-contract.js` 单一实现） |
+| **C4** 无死修饰符规则 | 样式里的修饰符规则必须有模板使用（防被 base 化 / 拼写漂移） | warning | 门禁 `CODE-024-WARN` + `I7` warn |
+
+**判据基准**：DOM 类事实（`utils/class-facts.js#collectClassFacts`）为唯一事实源；各链只消费、不再自行解析模板。
+**单一实现**：门禁与不变量共用 `utils/classname-contract.js#checkClassNameContract`（防「门禁放过、不变量报警」双源漂移）。
+**审计**：`scripts/classname-writer-audit.mjs` 枚举全部改写类名的模块，新增写者必须登记（禁止绕过归一器）。
+**验收**：`scripts/r1-3-acceptance.mjs`（方言计数 / 契约违规 / DOM 命中率），可挂 build 前自检。
+
+### M8 资源契约（2026-09-11 新增，P1.7）
+
+事故 mc-max-1789096764029-13890774：资源映射变量名与模型引用一致（icon1…icon14），
+但**注入只认模板使用形态** → script 内 `const deviceIcons = [icon3, icon4, …]` 是盲区
+→ 只注入 3 个 import、模型引用 12 个 → 运行时 `icon4 is not defined` 整组件渲染失败；
+兜底 T08 `stripUndefinedResourceRefs` 同样只扫模板 → 漏网。（实测原始块 R1 = 24 条）
+
+| 条款 | 内容 | 级别 | 落点 |
+|---|---|---|---|
+| **R1** 引用即须 import | 引用的资源变量（模板 `${var}` / `:src` / 拼接 / **script 内数组·对象·函数引用**）必须已 import 且事实源登记 | error | 引用驱动补齐 `resource-mounter.ensureResourceImportsForRefs` + 门禁 CODE-025 + 不变量 I8 |
+| **R2** 禁止幽灵引用 | 引用既无 import 也不在事实源 → 运行时必然报错 | error | 同上（T08 兜底降级为 `undefined`） |
+| **R3** 无孤儿 import | import 了事实源未登记的变量（命名漂移） | warning | CODE-025-WARN |
+
+**事实源**：`utils/resource-facts.js`（引用采集单一实现，模板 + script 双覆盖）；映射 `resourceDomMapping` 为变量名唯一来源。
+**注入唯一写者**：引用驱动补齐（不再依赖「模板使用形态」识别）。
+**审计**：资源写者一并纳入 `scripts/classname-writer-audit.mjs` 白名单（当前 14 个写者全登记）。
+
+### M9 微码平台骨架完整性（2026-09-11 新增，P1.8）
+
+事故（用户截图）：lite 产物微码检查全红（M2-3/M2-4/M3-5/M3-6/M4-8 + M5-6/M5-7）。
+根因：**同一份产物规范被两条链各自实现** —— max 路径产全量骨架，lite 路径自造精简落盘（缺 css-vars.js /
+common.less / themes/*，index.vue 亦未引用 styles/index.less）。实测 lite 11/11 全缺 vs max 138 个仅 5–8% 缺。
+
+| 条款 | 内容 | 级别 | 落点 |
+|---|---|---|---|
+| **S1** 骨架齐备 | 微码产物必须含 config/css-vars.js、common.less、themes/{theme-vars,dark,light}.less、index.less、declare.json、declare.js | error | 生成器 `utils/mc-skeleton.buildMcSkeleton` + 门禁 CODE-026（BLOCK） |
+| **S2** 样式入口连通 | index.vue 必须 `@import '../resources/styles/index.less'`（M4-8），且 index.less 引 theme-vars + 调默认主题 + 引 common.less | error | 同上门禁 + lite `prepareMicrocodeVueContent` |
+| **S3** 字号契约 | 禁止硬编码 >5px 字号；统一 `var(--fontSize, 14px)` / `calc(var(--fontSize, 14px) * ratio)` | error | `utils/font-size-normalizer.normalizeFontSizeLiterals`（确定性归一，M5-6/M5-7） |
+
+**单一生成器原则**：任何路径（max / lite / 未来新增）都必须调用 `buildMcSkeleton`，禁止自行拼装骨架
+（本次 lite 的第二处写者 `writeMicrocodeAssets` 已收口）。
+**验收**：`scripts/r1-3-acceptance.mjs` 输出「骨架完整性」统计。
+
 ---
 
 ## 4. 风险与前置验证

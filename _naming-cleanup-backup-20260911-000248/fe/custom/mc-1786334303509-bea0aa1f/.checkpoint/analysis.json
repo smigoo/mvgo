@@ -1,0 +1,170 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 60,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "违反“禁止生成组件面板标题和边框样式”规范。`section-header` 生成了组件主标题“环境监测”及装饰图标，而面板标题应由 `base-panel` 通过 `declare.json` 的 `componentName` 自动处理，禁止在组件内部重复生成。",
+        "suggestion": "删除 `section-header` 整个节点，组件业务内容直接从 `section-toolbar` 开始。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[0]",
+        "message": "违反“容器布局禁止固定宽度”规范。`chart-main` 设置了固定宽度 `width: 380`，导致图表无法自适应容器宽度，在不同尺寸面板下会显示异常。",
+        "suggestion": "移除固定宽度配置，改为 `width: 100%` 或使用 `flex: 1`，仅保留固定高度 `height: 110`。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections",
+        "message": "背景图冗余配置。三个 section 的 body 均重复配置了相同的背景图 `bg-7890.png`，会导致多余的 DOM 节点和样式覆盖问题，增加渲染负担。",
+        "suggestion": "将背景图统一提取到组件根容器或最外层包裹容器中，子 section 移除背景图配置。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[1]",
+        "message": "视图切换按钮组缺少状态定义。`toolbar-icons` 中的图标按钮未定义选中/未选中态，无法体现交互反馈，不符合 Preview 阶段最低样式标准。",
+        "suggestion": "补充按钮组的激活态样式（如背景色、边框或图标高亮），明确单选/多选逻辑。"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "layout.sections[0].body.children[1]",
+        "message": "命名语义重复。`header-title-text` 的 name 为“环境监测标题”，与组件名完全一致，容易引起混淆。",
+        "suggestion": "若保留该节点（假设是内部子标题），需修改文案以区分；若为面板标题，则按 error 1 直接删除。"
+      }
+    ],
+    "recommendations": [
+      "严格遵循“零装饰”和“禁止生成面板标题”原则，所有面板级标题、边框、背景交由 `base-panel` 处理，组件内部只保留纯业务内容。",
+      "布局设计时全面采用 Flex 弹性布局，避免使用固定 px 宽度限制容器，确保组件在不同尺寸面板下的自适应能力。",
+      "优化背景图和资源引用方式，避免在子节点中重复配置相同的背景资源，提升渲染性能并减少样式冲突。",
+      "完善交互组件的状态定义，如 Tab 切换、图标按钮组等，确保在 Preview 阶段能准确反映交互反馈和激活态样式。"
+    ],
+    "summary": "该布局结构整体区域划分较为清晰，但存在违反微码核心规范的严重问题。首先，错误地生成了组件面板标题，违反了“禁止生成组件面板标题”的 🔴 强制规范；其次，图表区域使用了固定宽度，违反了“容器布局禁止固定宽度”的自适应要求。此外，背景图在子节点中重复配置，存在性能隐患。建议删除冗余的标题区，修正图表宽度为自适应，并优化背景图配置层级。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorBg": "rgba(237, 244, 251, 1)",
+      "--colorPrimary": "rgba(85, 158, 255, 1)",
+      "--colorWarning": "rgba(245, 63, 63, 1)",
+      "--colorSuccess": "rgba(82, 196, 26, 1)",
+      "--colorTextBase": "#333333",
+      "--colorTextLight": "#ffffff",
+      "--fontSize": "14px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-bg": "rgba(237, 244, 251, 1)",
+      "@color-primary": "rgba(85, 158, 255, 1)",
+      "@color-warning": "rgba(245, 63, 63, 1)",
+      "@color-success": "rgba(82, 196, 26, 1)",
+      "@color-text-base": "#333333",
+      "@color-text-light": "#ffffff",
+      "@font-size-base": "14px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "width": "100%",
+        "height": "100%",
+        "background-color": "var(--colorBg)",
+        "padding": "16px",
+        "box-sizing": "border-box",
+        "font-size": "var(--fontSize)"
+      },
+      ".status-dot": {
+        "width": "8px",
+        "height": "8px",
+        "border-radius": "50%",
+        "background-color": "var(--colorSuccess)",
+        "display": "inline-block",
+        "margin-right": "8px"
+      },
+      ".status-dot--info": {
+        "background-color": "var(--colorPrimary)"
+      },
+      ".tab-item": {
+        "padding": "8px 16px",
+        "cursor": "pointer",
+        "color": "var(--colorTextBase)",
+        "position": "relative",
+        "transition": "all 0.3s ease"
+      },
+      ".tab-item--active": {
+        "background-color": "var(--colorPrimary)",
+        "color": "var(--colorTextLight)",
+        "clip-path": "polygon(0 0, 100% 0, 90% 100%, 0 100%)"
+      },
+      ".chart-warning-line": {
+        "border-top": "2px dashed var(--colorWarning)",
+        "width": "100%",
+        "position": "absolute",
+        "pointer-events": "none"
+      },
+      ".chart-curve--success": {
+        "stroke": "var(--colorSuccess)",
+        "fill": "rgba(82, 196, 26, 0.15)",
+        "stroke-width": "2px"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主题色映射为--colorPrimary，预警色映射为--colorWarning，正常状态映射为--colorSuccess",
+      "容器背景应优先直接落地为 Figma 字面量值 rgba(237, 244, 251, 1)，避免关键可见背景只依赖 CSS 变量",
+      "Tab选中态使用蓝色背景(--colorPrimary)和白色文字(--colorTextLight)，并通过clip-path实现箭头背景效果",
+      "图表预警线使用红色(--colorWarning)虚线样式，与绿色(--colorSuccess)图表曲线形成明确的视觉对比"
+    ],
+    "elementStyleMap": {
+      "section-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "section-toolbar": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tabs-list": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "toolbar-icons": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-6": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-16": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  }
+}

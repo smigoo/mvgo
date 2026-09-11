@@ -1,0 +1,242 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 72,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0].body",
+        "message": "Tab栏section缺失header层级，4个tab-item直接放body.children不符合规范",
+        "suggestion": "建议将tab-item提升为section.header.controls，body保留背景装饰"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "charts[0]",
+        "message": "图表缺失legendPosition字段（必填），且Y轴刻度与chartDataHints不一致（0-50 vs 0-600）",
+        "suggestion": "补充legendPosition:'none'，核对Y轴真实刻度范围"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[1].body.children[0].children",
+        "message": "chart-container嵌套4层children（轴/阈值线/系列），建议扁平为chart配置对象",
+        "suggestion": "将y-axis-labels等改为chart的config.yAxis等平级字段"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "headerSlots",
+        "message": "右上角统计文字'2k3+785CD观测'应归入section.header而非全局headerSlots",
+        "suggestion": "将此元素移至chart-area section的header.stats"
+      }
+    ],
+    "recommendations": [
+      "Tab切换栏应重构为独立section.header层级，包含controls数组放置tab项",
+      "图表children扁平化为config对象（yAxis/xAxis/series/thresholds），降低嵌套深度",
+      "核对chartDataHints的Y轴数值（0-600）与布局定义（0-50）的冲突，统一为真实数据范围"
+    ],
+    "summary": "结构整体可用但存在规范偏离：Tab栏缺header层级、图表嵌套过深且字段不完整、Y轴数据不一致。需调整section分层和图表结构定义。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorBgBase": "rgba(237, 244, 251, 1)",
+      "--colorPrimary": "rgba(85, 158, 255, 1)",
+      "--colorSuccess": "rgba(82, 196, 26, 1)",
+      "--colorError": "rgba(255, 77, 79, 1)",
+      "--colorTextBase": "rgba(0, 0, 0, 0.65)",
+      "--colorTextSecondary": "rgba(0, 0, 0, 0.45)",
+      "--colorBgElevated": "#ffffff",
+      "--colorBorder": "rgba(0, 0, 0, 0.06)",
+      "--borderRadiusLG": "8px",
+      "--fontSize": "14px",
+      "--fontSizeLG": "16px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-bg-base": "rgba(237, 244, 251, 1)",
+      "@color-primary": "rgba(85, 158, 255, 1)",
+      "@color-success": "rgba(82, 196, 26, 1)",
+      "@color-error": "rgba(255, 77, 79, 1)",
+      "@color-text-base": "rgba(0, 0, 0, 0.65)",
+      "@color-text-secondary": "rgba(0, 0, 0, 0.45)",
+      "@color-bg-elevated": "#ffffff",
+      "@color-border": "rgba(0, 0, 0, 0.06)",
+      "@border-radius-lg": "8px",
+      "@font-size-base": "14px",
+      "@font-size-lg": "16px",
+      "@color-success-bg": "rgba(82, 196, 26, 0.1)",
+      "@color-success-border": "rgba(82, 196, 26, 1)",
+      "@color-error-line": "rgba(255, 77, 79, 1)"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "width": "100%",
+        "height": "100%",
+        "background": "linear-gradient(180deg, rgba(237, 244, 251, 1) 0%, rgba(247, 250, 253, 1) 100%)",
+        "padding": "16px",
+        "box-sizing": "border-box"
+      },
+      ".tab-bar": {
+        "display": "flex",
+        "gap": "8px",
+        "padding": "4px",
+        "background-image": "url('../../images/tab-bg.png')",
+        "background-size": "cover",
+        "background-position": "center",
+        "border-radius": "var(--borderRadiusLG)"
+      },
+      ".tab-item": {
+        "padding": "8px 20px",
+        "font-size": "var(--fontSize)",
+        "color": "var(--colorTextSecondary)",
+        "cursor": "pointer",
+        "transition": "all 0.3s ease",
+        "border-radius": "6px"
+      },
+      ".tab-item-active": {
+        "background": "var(--colorBgElevated)",
+        "color": "var(--colorPrimary)",
+        "font-weight": "500",
+        "box-shadow": "0 2px 8px rgba(0, 0, 0, 0.08)"
+      },
+      ".chart-wrapper": {
+        "background": "var(--colorBgElevated)",
+        "border-radius": "var(--borderRadiusLG)",
+        "padding": "16px",
+        "box-shadow": "0 2px 8px rgba(0, 0, 0, 0.04)"
+      },
+      ".area-chart-fill": {
+        "fill": "rgba(82, 196, 26, 0.1)",
+        "stroke": "var(--colorSuccess)",
+        "stroke-width": "2px"
+      },
+      ".threshold-line": {
+        "stroke": "var(--colorError)",
+        "stroke-width": "2px",
+        "stroke-dasharray": "4 4"
+      },
+      ".badge-error": {
+        "background": "var(--colorError)",
+        "color": "#ffffff",
+        "padding": "2px 8px",
+        "border-radius": "10px",
+        "font-size": "12px",
+        "font-weight": "500"
+      },
+      ".axis-label": {
+        "font-size": "12px",
+        "color": "var(--colorTextSecondary)"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "浅蓝灰色渐变背景 rgba(237, 244, 251, 1) 映射为 --colorBgBase",
+      "蓝色激活态 rgba(85, 158, 255, 1) 映射为 --colorPrimary",
+      "绿色成功态 rgba(82, 196, 26, 1) 映射为 --colorSuccess，用于面积图填充和边框",
+      "红色预警 rgba(255, 77, 79, 1) 映射为 --colorError，用于虚线阈值和徽章",
+      "Tab栏背景图应使用实际背景图资源，通过 background-image 引用",
+      "面积图填充使用半透明绿色 rgba(82, 196, 26, 0.1)，边框使用深绿 rgba(82, 196, 26, 1)",
+      "Y轴红色虚线使用 stroke-dasharray: 4 4 实现虚线效果",
+      "激活Tab具有白色背景 + 蓝色文字 + 轻微阴影提升层级感",
+      "右上角数字徽章使用红色背景 --colorError 实现醒目预警效果"
+    ],
+    "elementStyleMap": {
+      "header-tabs": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "chart-area": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "chart-container": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-8": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "header-tabs",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 4,
+        "title": "监测类型切换",
+        "complexityScore": 20,
+        "complexityReasons": {
+          "elementCount": 4,
+          "charts": 0,
+          "interactions": 5,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "chart-area",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 5,
+        "title": "面积图区域",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 5,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 2
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      }
+    ],
+    "isForced": false,
+    "minFiles": 0,
+    "reason": "有效 sections=2 < 3 且无高复杂度 section → 不强制拆分",
+    "internalSubcomponents": []
+  }
+}

@@ -1,0 +1,223 @@
+```json
+{
+  "generatedAt": "2026-04-27T10:19:15.595Z",
+  "stage": "preview-analysis",
+  "componentName": "环境监测",
+  "componentTitle": "环境监测",
+  "analysisModel": "gpt-5.4",
+  "sourceImage": {
+    "path": "{outputPath}/c-hjjc/resources/images/mc-preview.png",
+    "size": 0,
+    "mtimeMs": 0,
+    "sha1": ""
+  },
+  "summary": "环境监测面板，包含标题、Tab切换栏（一氧化碳/能见度等）、右上角视图切换图标（带Badge），以及展示CO浓度趋势和预警线的面积图。",
+  "layout": {
+    "type": "vertical-stack",
+    "direction": "vertical",
+    "sections": [
+      {
+        "id": "header-title",
+        "name": "标题区",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "title-itself",
+        "slotCandidate": null,
+        "header": {
+          "title": "环境监测",
+          "controls": []
+        },
+        "body": {
+          "layout": "horizontal",
+          "children": [
+            {
+              "type": "decoration",
+              "name": "标题左侧装饰图标",
+              "resourceFile": "../resources/images/g-7883.png",
+              "recommendedUsage": "imgSrc",
+              "width": 8,
+              "height": 8
+            },
+            {
+              "type": "text",
+              "text": "环境监测",
+              "styles": {
+                "fontSize": 16,
+                "fontWeight": "bold",
+                "color": "rgba(85, 158, 255, 1)",
+                "hasGradient": true
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "main-content",
+        "name": "图表与控件区",
+        "role": "常驻",
+        "layout": "vertical",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "header": {
+          "title": null,
+          "controls": [
+            {
+              "type": "tab-switch",
+              "name": "监测指标切换",
+              "options": ["一氧化碳", "能见度", "洞内照明", "洞外光强"],
+              "activeIndex": 0,
+              "style": {
+                "background": "linear-gradient(to right, #559EFF, #A0CFFF)",
+                "borderRadius": "4px"
+              }
+            },
+            {
+              "type": "icon-group",
+              "name": "视图切换按钮",
+              "children": [
+                {
+                  "type": "icon",
+                  "name": "柱状图视图",
+                  "resourceFile": "../resources/images/tabs-icon-43.png",
+                  "recommendedUsage": "imgSrc",
+                  "width": 24,
+                  "height": 24
+                },
+                {
+                  "type": "icon",
+                  "name": "列表视图",
+                  "width": 24,
+                  "height": 24,
+                  "badge": {
+                    "text": "6",
+                    "bgColor": "#f53f3f",
+                    "color": "#ffffff"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "body": {
+          "layout": "vertical",
+          "bgPlaceholder": "section-bg-main",
+          "children": [
+            {
+              "type": "chart-container",
+              "name": "CO浓度趋势图",
+              "chartType": "area",
+              "width": 380,
+              "height": 113,
+              "config": {
+                "xAxis": {
+                  "type": "category",
+                  "data": ["2", "4", "6", "8", "10", "12", "14", "16", "18", "20", "22", "24"],
+                  "name": "时"
+                },
+                "yAxis": {
+                  "type": "value",
+                  "min": 0,
+                  "max": 40,
+                  "interval": 10,
+                  "name": "辆"
+                },
+                "series": [
+                  {
+                    "name": "zk3+785CO浓度",
+                    "type": "line",
+                    "areaStyle": {
+                      "color": "rgba(82, 196, 26, 0.2)"
+                    },
+                    "lineStyle": {
+                      "color": "#52c41a"
+                    },
+                    "data": "trend_low_peak_14_16"
+                  }
+                ],
+                "markLine": {
+                  "name": "预警线",
+                  "yAxis": 30,
+                  "lineStyle": {
+                    "type": "dashed",
+                    "color": "#f53f3f"
+                  },
+                  "label": {
+                    "text": "预警线",
+                    "color": "#f53f3f",
+                    "position": "end"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "styles": {
+    "theme": "浅色科技监测风",
+    "backgroundBrightness": "light",
+    "colors": [
+      "#EDF4FB",
+      "#559EFF",
+      "#52c41a",
+      "#f53f3f",
+      "#333333"
+    ],
+    "background": "浅灰蓝色背景 (#EDF4FB)",
+    "decorations": [
+      "标题左侧绿色圆点装饰",
+      "Tab选中项蓝色渐变背景"
+    ],
+    "emphasis": [
+      "绿色面积图表示CO浓度",
+      "红色虚线表示预警线"
+    ]
+  },
+  "interactions": [
+    {
+      "target": "监测指标Tab栏",
+      "type": "tab-switch",
+      "description": "切换不同的环境监测指标（一氧化碳、能见度等）",
+      "defaultState": "常驻，'一氧化碳'选中",
+      "evidence": "蓝色高亮背景块覆盖在'一氧化碳'文字上"
+    },
+    {
+      "target": "右上角图标按钮",
+      "type": "button-group",
+      "description": "切换图表视图或查看列表详情",
+      "defaultState": "常驻",
+      "evidence": "柱状图和列表图标，列表图标带有红色数字6的Badge"
+    }
+  ],
+  "charts": [
+    {
+      "section": "main-content",
+      "type": "area",
+      "series": ["zk3+785CO浓度"],
+      "legend": ["zk3+785CO浓度"],
+      "legendPosition": "top-right",
+      "seriesColors": ["#52c41a"],
+      "legendType": "horizontal",
+      "axes": "X轴为时间(2-24时)，Y轴为数值(0-40，标签显示'辆')",
+      "tooltip": "未显示，推测显示时间和浓度值",
+      "notes": [
+        "包含红色虚线'预警线'，阈值约为30",
+        "曲线在14-16时达到峰值，约10-12左右",
+        "Y轴标签'辆'与CO浓度语境不符，疑似设计稿残留"
+      ]
+    }
+  ],
+  "doNotInvent": [
+    "不要臆造具体的CO浓度数值点，只描述趋势",
+    "不要臆造'辆'单位的具体含义，如实记录",
+    "不要臆造右上角图标的具体点击功能（是刷新还是切换视图）",
+    "不要造Badge '6' 的具体含义（是消息数还是数据条数）"
+  ],
+  "notes": [
+    "背景图资源: ../resources/images/bg-7880.png",
+    "Tab激活背景资源: ../resources/images/bg-tab-active-7891.png",
+    "Y轴标签'辆'可能是设计错误，因为图表内容是CO浓度"
+  ]
+}
+```

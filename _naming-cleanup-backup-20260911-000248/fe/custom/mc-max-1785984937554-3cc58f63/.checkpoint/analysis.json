@@ -1,0 +1,103 @@
+{
+  "reviewResult": {
+    "reviewResult": "pass",
+    "issues": [],
+    "score": 50,
+    "recommendations": []
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）— 基于 dark 主题兜底，颜色待设计稿补充后替换",
+      "--colorPrimary": "#3677f8",
+      "--colorPrimaryActive": "rgba(54,119,248,0.16)",
+      "--colorPrimaryBg": "rgba(54,119,248,0.08)",
+      "--colorPrimaryBgHover": "rgba(54,119,248,0.16)",
+      "--colorTextBase": "#ffffff",
+      "--colorTextSecondary": "rgba(255,255,255,0.65)",
+      "--colorTextDisabled": "rgba(255,255,255,0.35)",
+      "--colorBg": "#0d1117",
+      "--colorBgSurface": "rgba(255,255,255,0.04)",
+      "--colorBorder": "rgba(255,255,255,0.12)",
+      "--fontSize": "14px",
+      "--fontSizeSm": "12px",
+      "--fontSizeLg": "16px",
+      "--fontWeightStrong": "600",
+      "--borderRadius": "4px",
+      "--borderRadiusMd": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射 — 用于 theme-vars.less 的 .theme-dark() mixin",
+      "@color-primary": "#3677f8",
+      "@color-primary-active": "rgba(54,119,248,0.16)",
+      "@color-primary-bg": "rgba(54,119,248,0.08)",
+      "@color-primary-bg-hover": "rgba(54,119,248,0.16)",
+      "@color-text-base": "#ffffff",
+      "@color-text-secondary": "rgba(255,255,255,0.65)",
+      "@color-text-disabled": "rgba(255,255,255,0.35)",
+      "@color-bg": "#0d1117",
+      "@color-bg-surface": "rgba(255,255,255,0.04)",
+      "@color-border": "rgba(255,255,255,0.12)",
+      "@font-size-base": "14px",
+      "@font-size-sm": "12px",
+      "@font-size-lg": "16px",
+      "@font-weight-strong": "600",
+      "@border-radius-base": "4px",
+      "@border-radius-md": "8px"
+    },
+    "cssClasses": {
+      "comment": "通用布局类 — dark主题基线，颜色通过 var() 响应主题切换",
+      ".container": {
+        "width": "100%",
+        "height": "100%",
+        "display": "flex",
+        "flex-direction": "column",
+        "background": "var(--colorBg, @color-bg)",
+        "color": "var(--colorTextBase, @color-text-base)",
+        "font-size": "var(--fontSize, @font-size-base)"
+      },
+      ".surface-card": {
+        "background": "var(--colorBgSurface, @color-bg-surface)",
+        "border": "1px solid var(--colorBorder, @color-border)",
+        "border-radius": "var(--borderRadius, @border-radius-base)",
+        "padding": "1em"
+      },
+      ".text-primary": {
+        "color": "var(--colorTextBase, @color-text-base)"
+      },
+      ".text-secondary": {
+        "color": "var(--colorTextSecondary, @color-text-secondary)",
+        "font-size": "var(--fontSizeSm, @font-size-sm)"
+      },
+      ".text-highlight": {
+        "color": "var(--colorPrimary, @color-primary)",
+        "font-weight": "var(--fontWeightStrong, @font-weight-strong)"
+      },
+      ".divider": {
+        "width": "100%",
+        "height": "1px",
+        "background": "var(--colorBorder, @color-border)",
+        "flex-shrink": "0"
+      },
+      ".flex-row": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      ".flex-col": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    },
+    "tokenCoverage": 0.4,
+    "mappingNotes": [
+      "设计稿 colors 数组为空、background 为空、decorations/emphasis 均为空，无法从具体设计令牌提取，当前所有值均为 dark 主题合理默认值，待设计稿补充后替换",
+      "backgroundBrightness 为 dark，整体色系基于深色背景（#0d1117）+ 白色文字体系",
+      "tokenCoverage 设为 0.40，反映当前仅覆盖通用布局与字体层，具体业务色彩 token 因设计稿缺失无法映射",
+      "容器背景优先落地为 Figma 字面量值（#0d1117），避免关键可见背景只依赖 CSS 变量",
+      "主题色 --colorPrimary 使用框架预设蓝色 #3677f8，若设计稿有明确主色请直接替换",
+      "所有 CSS 变量均采用 camelCase 命名（--colorTextBase 而非 --color-text-base）",
+      "Less 变量与 CSS 变量一一对应，直接填入 theme-vars.less 的 .theme-dark() mixin 即可"
+    ],
+    "elementStyleMap": {}
+  }
+}

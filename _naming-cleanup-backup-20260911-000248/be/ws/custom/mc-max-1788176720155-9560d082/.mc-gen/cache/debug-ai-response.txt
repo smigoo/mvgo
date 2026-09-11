@@ -1,0 +1,175 @@
+```json
+{
+  "generatedAt": "2024-01-15T10:30:00Z",
+  "stage": "preview-analysis",
+  "componentName": "环境监测",
+  "componentTitle": "环境监测",
+  "analysisModel": "claude-sonnet-5",
+  "sourceImage": {
+    "path": "mc-preview.png",
+    "size": 0,
+    "mtimeMs": 0,
+    "sha1": ""
+  },
+  "summary": "浅色主题环境监测面积图组件，包含顶部Tab切换、统计指标和24小时趋势图表，显示氧化碳浓度数据",
+  "layout": {
+    "type": "vertical-stack",
+    "direction": "vertical",
+    "sections": [
+      {
+        "id": "header-tabs",
+        "name": "环境类型切换",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "body": {
+          "layout": "horizontal",
+          "children": [
+            {
+              "id": "tab-co",
+              "name": "一氧化碳",
+              "role": "tab",
+              "active": true
+            },
+            {
+              "id": "tab-visibility",
+              "name": "能见度",
+              "role": "tab",
+              "active": false
+            },
+            {
+              "id": "tab-illumination",
+              "name": "洞内照明",
+              "role": "tab",
+              "active": false
+            },
+            {
+              "id": "tab-light",
+              "name": "洞外光强",
+              "role": "tab",
+              "active": false
+            }
+          ]
+        }
+      },
+      {
+        "id": "stats-row",
+        "name": "统计指标",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "body": {
+          "layout": "horizontal",
+          "children": [
+            {
+              "id": "stat-current",
+              "name": "当前浓度",
+              "role": "statistic",
+              "label": "2k3+785CO浓度",
+              "value": "调整线",
+              "styles": {
+                "labelColor": "rgba(0, 0, 0, 0.45)",
+                "valueColor": "rgba(245, 63, 63, 1)",
+                "fontSize": 12
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "chart-area",
+        "name": "趋势图表",
+        "role": "常驻",
+        "layout": "vertical",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "body": {
+          "layout": "vertical",
+          "children": [
+            {
+              "id": "area-chart",
+              "name": "CO浓度趋势",
+              "role": "chart"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "styles": {
+    "backgroundBrightness": "light",
+    "theme": "浅色数据监测风",
+    "colors": [
+      "rgba(0, 0, 0, 0.85)",
+      "rgba(0, 0, 0, 0.45)",
+      "rgba(24, 144, 255, 1)",
+      "rgba(82, 196, 154, 1)",
+      "rgba(245, 63, 63, 1)"
+    ],
+    "background": "浅灰色面板背景(rgba(237, 244, 251, 1))",
+    "decorations": [
+      "顶部蓝色装饰线条",
+      "标题前菱形图标",
+      "渐变色标题文字"
+    ],
+    "emphasis": [
+      "红色调整线标注",
+      "绿色面积图填充",
+      "蓝色活跃Tab"
+    ]
+  },
+  "interactions": [
+    {
+      "target": "顶部Tab栏",
+      "type": "tab-switch",
+      "description": "环境类型切换",
+      "defaultState": "常驻，一氧化碳Tab激活",
+      "evidence": "一氧化碳Tab有蓝色底色和深色字体"
+    },
+    {
+      "target": "右上角图标按钮",
+      "type": "icon-button",
+      "description": "功能操作区",
+      "defaultState": "常驻",
+      "evidence": "柱状图图标和列表图标，红色角标显示8"
+    }
+  ],
+  "charts": [
+    {
+      "section": "chart-area",
+      "type": "area",
+      "series": ["CO浓度"],
+      "legend": [],
+      "legendPosition": "top-right",
+      "seriesColors": ["rgba(82, 196, 154, 0.3)"],
+      "legendType": "horizontal",
+      "axes": "X轴为时间(0-24小时)，Y轴为浓度值(0-50)",
+      "tooltip": "hover显示时间点和浓度值",
+      "notes": [
+        "Y轴刻度: 0, 10, 20, 30, 40, 50",
+        "X轴刻度: 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24",
+        "红色虚线标注调整线位置",
+        "绿色面积填充显示趋势",
+        "右上角标注'调整线'文字"
+      ]
+    }
+  ],
+  "doNotInvent": [
+    "Tab切换后的具体数据内容",
+    "图标按钮的具体操作功能",
+    "红色角标8的具体含义",
+    "调整线的具体阈值规则",
+    "数据的实时更新频率",
+    "历史数据查询范围"
+  ],
+  "notes": [
+    "组件采用浅色主题，与深色大屏不同",
+    "顶部Tab为内容区筛选控件，不是面板header插槽",
+    "统计指标区域布局为横向排列",
+    "图表区域占据主要视觉空间",
+    "右上角功能图标带有消息提示角标"
+  ]
+}
+```

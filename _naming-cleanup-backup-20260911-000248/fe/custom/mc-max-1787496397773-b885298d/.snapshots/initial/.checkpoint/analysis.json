@@ -1,0 +1,203 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "issues": [
+      {
+        "id": "response_parse_failed",
+        "type": "response_parse_failed",
+        "severity": "warning",
+        "message": "布局审查响应解析失败，结果不可信"
+      }
+    ],
+    "score": 0,
+    "recommendations": [],
+    "degraded": true
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1990ff",
+      "--colorSecondary": "#00d2ff",
+      "--colorWarning": "#fa8c16",
+      "--colorSuccess": "#52c41a",
+      "--colorTextBase": "#333333",
+      "--colorBgBase": "#edf4fb",
+      "--fontSize": "14px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#1990ff",
+      "@color-secondary": "#00d2ff",
+      "@color-warning": "#fa8c16",
+      "@color-success": "#52c41a",
+      "@color-text-base": "#333333",
+      "@color-bg-base": "#edf4fb",
+      "@font-size-base": "14px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".tech-monitor-container": {
+        "width": "100%",
+        "height": "100%",
+        "background-color": "var(--colorBgBase, #edf4fb)",
+        "color": "var(--colorTextBase, #333333)",
+        "font-family": "'DIN Alternate', 'Arial', sans-serif",
+        "padding": "16px"
+      },
+      ".section-header": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "8px",
+        "font-size": "1.14em",
+        "font-weight": "bold",
+        "color": "var(--colorTextBase)"
+      },
+      ".diamond-icon": {
+        "width": "12px",
+        "height": "12px",
+        "background": "linear-gradient(135deg, var(--colorPrimary), var(--colorSecondary))",
+        "transform": "rotate(45deg)",
+        "border-radius": "2px"
+      },
+      ".hexagon-data-block": {
+        "position": "relative",
+        "background": "rgba(25, 144, 255, 0.05)",
+        "clip-path": "polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)",
+        "display": "flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "padding": "20px"
+      },
+      ".large-blue-value": {
+        "font-size": "2.5em",
+        "font-weight": "bold",
+        "color": "var(--colorPrimary, #1990ff)",
+        "line-height": "1.2",
+        "font-family": "'DIN Alternate', monospace"
+      },
+      ".green-accuracy-text": {
+        "font-size": "1.2em",
+        "font-weight": "500",
+        "color": "var(--colorSuccess, #52c41a)"
+      },
+      ".data-card": {
+        "background": "#ffffff",
+        "border-radius": "8px",
+        "padding": "16px",
+        "box-shadow": "0 2px 8px rgba(25, 144, 255, 0.08)"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 #1990ff 映射为 --colorPrimary，用于大号蓝色数值等核心视觉强调。",
+      "背景色 #edf4fb 直接落地为容器背景字面量，同时映射为 --colorBgBase 支持主题变量扩展。",
+      "根据 '绿色准确率文字' 补充了 --colorSuccess (#52c41a)，确保强调元素色彩完整（原色板未显式包含绿色）。",
+      "菱形和六边形装饰通过 CSS 的 transform: rotate(45deg) 和 clip-path 实现，提供轻量级几何图形方案。",
+      "科技风数值推荐使用 DIN 等宽数字字体，已在 .large-blue-value 中配置 font-family 回退方案以增强数据科技感。"
+    ],
+    "elementStyleMap": {
+      "section-daily-total": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-tunnel": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "stat-bridge": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "section-chart-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-legend-row-x-11": {
+        "display": "flex",
+        "flex-direction": "row",
+        "justify-content": "flex-end"
+      },
+      "section-chart-bridge": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-legend-row-x-16": {
+        "display": "flex",
+        "flex-direction": "row",
+        "justify-content": "flex-end"
+      },
+      "section-vehicle-type": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-group-x-21": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-stat-group-x-25": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-stat-group-x-28": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-stat-group-x-32": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "section-flow-prediction": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-legend-row-x-36": {
+        "display": "flex",
+        "flex-direction": "row",
+        "justify-content": "flex-end"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-daily-total",
+        "responsibility": "当日总流量（请按功能拆分）",
+        "elementCount": 7,
+        "title": "当日总流量"
+      },
+      {
+        "id": "section-chart-tunnel",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 4,
+        "title": "江阴靖江长江隧道"
+      },
+      {
+        "id": "section-chart-bridge",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 4,
+        "title": "江阴大桥"
+      },
+      {
+        "id": "section-vehicle-type",
+        "responsibility": "车型分布（请按功能拆分）",
+        "elementCount": 0,
+        "title": "车型分布"
+      },
+      {
+        "id": "section-flow-prediction",
+        "responsibility": "流量预测（请按功能拆分）",
+        "elementCount": 4,
+        "title": "流量预测"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 5,
+    "reason": "有效 sections=5 ≥ 3 → 强制拆分"
+  }
+}

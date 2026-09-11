@@ -1,0 +1,311 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 72,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[0]",
+        "message": "chart-header应提升至section.header，当前错误嵌套在body.children中",
+        "suggestion": "将chart-header移至section.header，保持标题/控件与内容区分离"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "charts[0]",
+        "message": "图表缺失legendPosition字段（即使无图例也应标注null原因）",
+        "suggestion": "补充legendPosition: null及说明，如'单系列图表无需图例'"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "layout.sections[0].body.children",
+        "message": "tab元素命名不一致：tab-1有resourceFile但tab-2/3/4无，应统一处理",
+        "suggestion": "明确非激活态tab样式规则，或为所有tab预留resourceFile字段"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "覆盖率50%偏低，缺失'一氧化碳'等关键文本节点映射",
+        "suggestion": "检查是否遗漏将Figma文本节点映射到layout结构中的对应元素"
+      }
+    ],
+    "recommendations": [
+      "重构chart-section：header承载'时间/位置/状态标签'，body仅含图表容器",
+      "明确tabs-section的slotCandidate为null的原因（常驻非插槽场景）",
+      "补充图表坐标轴详细结构（xAxis/yAxis配置）以便代码生成"
+    ],
+    "summary": "结构基本合理但违反section分层规范：图表标题错误嵌套在body中。图表元数据不完整，覆盖率偏低提示可能遗漏关键元素。建议优先修正section.header/body层级关系"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorBgBase": "#EDF4FB",
+      "--colorSuccess": "#5AD8A6",
+      "--colorError": "#F5222D",
+      "--colorPrimary": "#1890FF",
+      "--colorTabActiveBg": "#1890FF",
+      "--colorBadgeDanger": "#F5222D",
+      "--colorChartFill": "#5AD8A6",
+      "--colorStatusDanger": "#F5222D",
+      "--fontSize": "14px",
+      "--borderRadius": "4px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-bg-base": "#EDF4FB",
+      "@color-success": "#5AD8A6",
+      "@color-error": "#F5222D",
+      "@color-primary": "#1890FF",
+      "@color-tab-active-bg": "#1890FF",
+      "@color-badge-danger": "#F5222D",
+      "@color-chart-fill": "#5AD8A6",
+      "@color-status-danger": "#F5222D",
+      "@font-size-base": "14px",
+      "@border-radius-base": "4px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".light-monitoring-container": {
+        "width": "100%",
+        "height": "100%",
+        "background": "#EDF4FB",
+        "font-family": "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+      },
+      ".tab-item": {
+        "position": "relative",
+        "padding": "8px 16px",
+        "cursor": "pointer",
+        "transition": "all 0.3s ease",
+        "color": "var(--colorTextBase, #333333)"
+      },
+      ".tab-item-active": {
+        "color": "var(--colorPrimary, #1890FF)",
+        "background-image": "url('../../images/tab-active-bg.png')",
+        "background-size": "100% 100%",
+        "background-repeat": "no-repeat"
+      },
+      ".status-badge": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "padding": "2px 8px",
+        "border-radius": "var(--borderRadius, 4px)",
+        "font-size": "12px",
+        "font-weight": "500"
+      },
+      ".status-badge-danger": {
+        "background": "var(--colorError, #F5222D)",
+        "color": "#ffffff"
+      },
+      ".chart-area-fill": {
+        "fill": "var(--colorSuccess, #5AD8A6)",
+        "fill-opacity": "0.3"
+      },
+      ".chart-line": {
+        "stroke": "var(--colorSuccess, #5AD8A6)",
+        "stroke-width": "2px"
+      },
+      ".congestion-label": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "padding": "4px 12px",
+        "background": "var(--colorBadgeDanger, #F5222D)",
+        "color": "#ffffff",
+        "border-radius": "12px",
+        "font-size": "12px",
+        "font-weight": "500"
+      },
+      ".card-light": {
+        "background": "#ffffff",
+        "border-radius": "var(--borderRadius, 4px)",
+        "box-shadow": "0 2px 8px rgba(0, 0, 0, 0.08)",
+        "padding": "16px"
+      },
+      ".status-text-danger": {
+        "color": "var(--colorStatusDanger, #F5222D)",
+        "font-weight": "500"
+      },
+      ".primary-button": {
+        "background": "var(--colorPrimary, #1890FF)",
+        "color": "#ffffff",
+        "border": "none",
+        "padding": "8px 16px",
+        "border-radius": "var(--borderRadius, 4px)",
+        "cursor": "pointer",
+        "transition": "all 0.3s ease"
+      },
+      ".primary-button:hover": {
+        "background": "#40a9ff",
+        "box-shadow": "0 2px 4px rgba(24, 144, 255, 0.3)"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "浅灰蓝色背景（#EDF4FB）映射为--colorBgBase",
+      "绿色（#5AD8A6）作为成功/正常状态色，用于面积图填充",
+      "红色（#F5222D）作为错误/拥堵状态色，用于徽章和警告标签",
+      "蓝色（#1890FF）作为主色调，用于Tab选中态和主要交互",
+      "Tab选中态背景图需在对应组件中通过background-image引用",
+      "容器背景直接使用#EDF4FB字面量，确保浅色环境基调可见",
+      "卡片背景使用白色增强层次感",
+      "所有交互元素使用0.3s过渡动画提升体验"
+    ],
+    "elementStyleMap": {
+      "tabs-section": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "chart-section": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "chart-header": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center",
+        "justify-content": "space-between"
+      },
+      "el-el-x-7": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "tabs-section",
+        "responsibility": "标签页切换区",
+        "elementCount": 4,
+        "title": "监测类型切换",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 4,
+          "charts": 0,
+          "interactions": 1,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "chart-section",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 5,
+        "title": "监测数据图表",
+        "complexityScore": 30,
+        "complexityReasons": {
+          "elementCount": 5,
+          "charts": 2,
+          "interactions": 0,
+          "maxDepth": 2
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [
+          {
+            "type": "chart-component",
+            "id": "chart-header",
+            "name": "chart-header",
+            "responsibility": "图表组件：chart-header",
+            "reason": "R1: 图表隔离策略",
+            "props": [
+              "chartData",
+              "chartConfig"
+            ],
+            "emits": [
+              "legendClick",
+              "dataZoom"
+            ]
+          },
+          {
+            "type": "chart-component",
+            "id": "chart-container",
+            "name": "chart-container",
+            "responsibility": "图表组件：chart-container",
+            "reason": "R1: 图表隔离策略",
+            "props": [
+              "chartData",
+              "chartConfig"
+            ],
+            "emits": [
+              "legendClick",
+              "dataZoom"
+            ]
+          }
+        ],
+        "shouldSplitInternally": true
+      }
+    ],
+    "isForced": true,
+    "minFiles": 4,
+    "reason": "有效 sections=2 ≥ 3 或存在高复杂度 section → 强制拆分",
+    "internalSubcomponents": [
+      {
+        "type": "chart-component",
+        "id": "chart-header",
+        "name": "chart-header",
+        "responsibility": "图表组件：chart-header",
+        "reason": "R1: 图表隔离策略",
+        "props": [
+          "chartData",
+          "chartConfig"
+        ],
+        "emits": [
+          "legendClick",
+          "dataZoom"
+        ],
+        "parentSectionId": "chart-section",
+        "parentSectionTitle": "监测数据图表"
+      },
+      {
+        "type": "chart-component",
+        "id": "chart-container",
+        "name": "chart-container",
+        "responsibility": "图表组件：chart-container",
+        "reason": "R1: 图表隔离策略",
+        "props": [
+          "chartData",
+          "chartConfig"
+        ],
+        "emits": [
+          "legendClick",
+          "dataZoom"
+        ],
+        "parentSectionId": "chart-section",
+        "parentSectionTitle": "监测数据图表"
+      }
+    ]
+  }
+}

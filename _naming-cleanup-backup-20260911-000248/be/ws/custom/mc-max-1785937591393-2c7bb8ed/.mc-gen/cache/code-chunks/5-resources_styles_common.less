@@ -1,0 +1,236 @@
+@import './themes/theme-vars.less';
+
+.c-mc-max-1785937591393-2c7bb8ed-container {
+  width: 100%;
+  height: 100%;
+  padding: 16px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  color: @text-color;
+}
+
+.c-mc-max-1785937591393-2c7bb8ed-stats-section {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+}
+
+.c-mc-max-1785937591393-2c7bb8ed-stat-card {
+  flex: 1;
+  background: @card-bg;
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 4px 10px rgba(74, 117, 141, 0.1);
+}
+
+.c-mc-max-1785937591393-2c7bb8ed-stat-icon-wrapper {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: fade(@primary-color, 10%);
+  border-radius: 50%;
+}
+
+.c-mc-max-1785937591393-2c7bb8ed-stat-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.c-mc-max-1785937591393-2c7bb8ed-stat-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.c-mc-max-1785937591393-2c7bb8ed-stat-label {
+  font-size: 14px;
+  color: @text-secondary;
+}
+
+.c-mc-max-1785937591393-2c7bb8ed-stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: @primary-color;
+  font-family: 'Roboto', sans-serif;
+}
+
+.c-mc-max-1785937591393-2c7bb8ed-charts-section {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+  flex: 1;
+}
+
+.c-mc-max-1785937591393-2c7bb8ed-chart-card {
+  flex: 1;
+  background: @card-bg;
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 10px rgba(74, 117, 141, 0.1);
+}
+
+.c-mc-max-1785937591393-2c7bb8ed-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.c-mc-max-1785937591393-2c7bb8ed-section-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: @text-color;
+  position: relative;
+  padding-left: 12px;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 16px;
+    background: @primary-color;
+    border-radius: 2px;
+  }
+}
+
+.c-mc-max-1785937591393-2c7bb8ed-tab-group {
+  display: flex;
+  gap: 8px;
+}
+
+.c-mc-max-1785937591393-2c7bb8ed-tab-item {
+  padding: 4px 12px;
+  font-size: 14px;
+  color: @text-secondary;
+  background: @bg-color;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s;
+  
+  &:hover {
+    color: @primary-color;
+  }
+}
+
+.c-mc-max-1785937591393-2c7bb8ed-tab-item--active {
+  background: @primary-color;
+  color: #ffffff;
+}
+
+.c-mc-max-1785937591393-2c7bb8ed-chart-wrapper {
+  flex: 1;
+  position: relative;
+}
+
+.c-mc-max-1785937591393-2c7bb8ed-chart-container {
+  width: 100%;
+  height: 100%;
+  min-height: 200px;
+}
+
+.c-mc-max-1785937591393-2c7bb8ed-list-section {
+  background: @card-bg;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 4px 10px rgba(74, 117, 141, 0.1);
+}
+
+.c-mc-max-1785937591393-2c7bb8ed-list-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.c-mc-max-1785937591393-2c7bb8ed-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  background: @bg-color;
+  border-radius: 6px;
+  transition: all 0.3s;
+  
+  &:hover {
+    background: fade(@primary-color, 5%);
+  }
+}
+
+.c-mc-max-1785937591393-2c7bb8ed-list-item-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.c-mc-max-1785937591393-2c7bb8ed-list-item-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.c-mc-max-1785937591393-2c7bb8ed-alarm-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: @primary-color;
+  
+  &--high {
+    background: @danger-color;
+  }
+  
+  &--medium {
+    background: #faad14;
+  }
+  
+  &--low {
+    background: @success-color;
+  }
+}
+
+.c-mc-max-1785937591393-2c7bb8ed-alarm-device {
+  font-size: 14px;
+  font-weight: 500;
+  color: @text-color;
+}
+
+.c-mc-max-1785937591393-2c7bb8ed-alarm-content {
+  font-size: 14px;
+  color: @text-secondary;
+}
+
+.c-mc-max-1785937591393-2c7bb8ed-alarm-time {
+  font-size: 12px;
+  color: @text-secondary;
+}
+
+.c-mc-max-1785937591393-2c7bb8ed-alarm-status {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: fade(@primary-color, 10%);
+  color: @primary-color;
+  
+  &--resolved {
+    background: fade(@success-color, 10%);
+    color: @success-color;
+  }
+  
+  &--pending {
+    background: fade(@danger-color, 10%);
+    color: @danger-color;
+  }
+}

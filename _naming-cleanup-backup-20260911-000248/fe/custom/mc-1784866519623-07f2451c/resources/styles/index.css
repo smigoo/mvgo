@@ -1,0 +1,426 @@
+:root {
+  --em-text-primary: #333333;
+  --em-text-secondary: #666666;
+  --em-text-tertiary: #999999;
+  --em-card-label-color: #333333;
+  --em-value-unit-color: #666666;
+  --em-bg-primary: #ffffff;
+  --em-bg-secondary: #f5f5f5;
+  --em-bg-tertiary: #eeeeee;
+}
+.c-mc-1784866519623-07f2451c-tabs-container {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  align-items: center;
+}
+.c-mc-1784866519623-07f2451c-tab-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 16px;
+  height: 19px;
+  background: #6680a0;
+  border: 0.73px solid #acc4e1;
+  border-radius: 2px;
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 21px;
+  text-align: center;
+  color: #333333;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+.c-mc-1784866519623-07f2451c-tab-item:hover {
+  opacity: 0.9;
+}
+.c-mc-1784866519623-07f2451c-tab-item-active {
+  background: #1990ff;
+  border-color: #c7e0ff;
+  color: #ffffff;
+  font-weight: 500;
+}
+.c-mc-1784866519623-07f2451c-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0;
+}
+.c-mc-1784866519623-07f2451c-subheader {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  height: 24px;
+}
+.c-mc-1784866519623-07f2451c-diamond-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+.c-mc-1784866519623-07f2451c-status-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.c-mc-1784866519623-07f2451c-subheader-text {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  color: #333333;
+  text-shadow: 0 5px 5px rgba(255, 255, 255, 0.8);
+}
+.c-mc-1784866519623-07f2451c-cards {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  align-items: stretch;
+}
+.c-mc-1784866519623-07f2451c-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  padding: 12px 8px;
+  border-radius: 4px;
+  position: relative;
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+.c-mc-1784866519623-07f2451c-card-icon {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.c-mc-1784866519623-07f2451c-card-label {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 18px;
+  text-align: center;
+  color: var(--em-card-label-color);
+  white-space: nowrap;
+}
+.c-mc-1784866519623-07f2451c-card-value {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 4px;
+  justify-content: center;
+}
+.c-mc-1784866519623-07f2451c-value-number {
+  font-family: 'DIN Alternate', 'Arial', sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+}
+.c-mc-1784866519623-07f2451c-value-danger {
+  color: #ff4d4f;
+}
+.c-mc-1784866519623-07f2451c-value-primary {
+  color: #1990ff;
+}
+.c-mc-1784866519623-07f2451c-value-warning {
+  color: #fa8c16;
+}
+.c-mc-1784866519623-07f2451c-value-unit {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1;
+  color: var(--em-value-unit-color);
+}
+.dark {
+  --em-text-primary: rgba(255, 255, 255, 0.85);
+  --em-text-secondary: rgba(255, 255, 255, 0.65);
+  --em-text-tertiary: rgba(255, 255, 255, 0.45);
+  --em-card-label-color: rgba(255, 255, 255, 0.85);
+  --em-value-unit-color: rgba(255, 255, 255, 0.65);
+  --em-bg-primary: #1f1f1f;
+  --em-bg-secondary: #2a2a2a;
+  --em-bg-tertiary: #363636;
+}
+.dark .c-mc-1784866519623-07f2451c-tabs-container {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  align-items: center;
+}
+.dark .c-mc-1784866519623-07f2451c-tab-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 16px;
+  height: 19px;
+  background: #6680a0;
+  border: 0.73px solid #acc4e1;
+  border-radius: 2px;
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 21px;
+  text-align: center;
+  color: #333333;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+.dark .c-mc-1784866519623-07f2451c-tab-item:hover {
+  opacity: 0.9;
+}
+.dark .c-mc-1784866519623-07f2451c-tab-item-active {
+  background: #1990ff;
+  border-color: #c7e0ff;
+  color: #ffffff;
+  font-weight: 500;
+}
+.dark .c-mc-1784866519623-07f2451c-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0;
+}
+.dark .c-mc-1784866519623-07f2451c-subheader {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  height: 24px;
+}
+.dark .c-mc-1784866519623-07f2451c-diamond-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+.dark .c-mc-1784866519623-07f2451c-status-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.dark .c-mc-1784866519623-07f2451c-subheader-text {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  color: #333333;
+  text-shadow: 0 5px 5px rgba(255, 255, 255, 0.8);
+}
+.dark .c-mc-1784866519623-07f2451c-cards {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  align-items: stretch;
+}
+.dark .c-mc-1784866519623-07f2451c-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  padding: 12px 8px;
+  border-radius: 4px;
+  position: relative;
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+.dark .c-mc-1784866519623-07f2451c-card-icon {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.dark .c-mc-1784866519623-07f2451c-card-label {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 18px;
+  text-align: center;
+  color: var(--em-card-label-color);
+  white-space: nowrap;
+}
+.dark .c-mc-1784866519623-07f2451c-card-value {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 4px;
+  justify-content: center;
+}
+.dark .c-mc-1784866519623-07f2451c-value-number {
+  font-family: 'DIN Alternate', 'Arial', sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+}
+.dark .c-mc-1784866519623-07f2451c-value-danger {
+  color: #ff4d4f;
+}
+.dark .c-mc-1784866519623-07f2451c-value-primary {
+  color: #1990ff;
+}
+.dark .c-mc-1784866519623-07f2451c-value-warning {
+  color: #fa8c16;
+}
+.dark .c-mc-1784866519623-07f2451c-value-unit {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1;
+  color: var(--em-value-unit-color);
+}
+.light {
+  --em-text-primary: #333333;
+  --em-text-secondary: #666666;
+  --em-text-tertiary: #999999;
+  --em-card-label-color: #333333;
+  --em-value-unit-color: #666666;
+  --em-bg-primary: #ffffff;
+  --em-bg-secondary: #f5f5f5;
+  --em-bg-tertiary: #eeeeee;
+}
+.light .c-mc-1784866519623-07f2451c-tabs-container {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  align-items: center;
+}
+.light .c-mc-1784866519623-07f2451c-tab-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 16px;
+  height: 19px;
+  background: #6680a0;
+  border: 0.73px solid #acc4e1;
+  border-radius: 2px;
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 21px;
+  text-align: center;
+  color: #333333;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+.light .c-mc-1784866519623-07f2451c-tab-item:hover {
+  opacity: 0.9;
+}
+.light .c-mc-1784866519623-07f2451c-tab-item-active {
+  background: #1990ff;
+  border-color: #c7e0ff;
+  color: #ffffff;
+  font-weight: 500;
+}
+.light .c-mc-1784866519623-07f2451c-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0;
+}
+.light .c-mc-1784866519623-07f2451c-subheader {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  height: 24px;
+}
+.light .c-mc-1784866519623-07f2451c-diamond-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+.light .c-mc-1784866519623-07f2451c-status-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.light .c-mc-1784866519623-07f2451c-subheader-text {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  color: #333333;
+  text-shadow: 0 5px 5px rgba(255, 255, 255, 0.8);
+}
+.light .c-mc-1784866519623-07f2451c-cards {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  align-items: stretch;
+}
+.light .c-mc-1784866519623-07f2451c-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  padding: 12px 8px;
+  border-radius: 4px;
+  position: relative;
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+.light .c-mc-1784866519623-07f2451c-card-icon {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.light .c-mc-1784866519623-07f2451c-card-label {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 18px;
+  text-align: center;
+  color: var(--em-card-label-color);
+  white-space: nowrap;
+}
+.light .c-mc-1784866519623-07f2451c-card-value {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 4px;
+  justify-content: center;
+}
+.light .c-mc-1784866519623-07f2451c-value-number {
+  font-family: 'DIN Alternate', 'Arial', sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+}
+.light .c-mc-1784866519623-07f2451c-value-danger {
+  color: #ff4d4f;
+}
+.light .c-mc-1784866519623-07f2451c-value-primary {
+  color: #1990ff;
+}
+.light .c-mc-1784866519623-07f2451c-value-warning {
+  color: #fa8c16;
+}
+.light .c-mc-1784866519623-07f2451c-value-unit {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1;
+  color: var(--em-value-unit-color);
+}

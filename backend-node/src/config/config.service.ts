@@ -372,7 +372,18 @@ export class AiConfigService {
     }
     // 🆕 降维：若配置为「模型库 + 槽位绑定」新结构，解析出完整 legacy 字段 + providers，
     // 保证下游 resolveVisionConfig/resolveTextConfig 零改动兼容（幂等，旧结构原样透传）。
-    return resolveBindingToLegacy(merged);
+    const result = resolveBindingToLegacy(merged);
+
+    // 🔒 用户配置隔离（2026-09-11）：当用户有自己的配置时，确保 providers 不为 null/undefined。
+    // 如果用户的 models 为空或 binding 为空，resolveBindingToLegacy 不会生成 providers，
+    // 下游 resolveVisionConfig/resolveTextConfig 会回退到 data/ai-config.json 的全局配置，
+    // 导致用户只配了 1 个模型，故障转移时却切换到开发者的模型池。
+    // 修复：显式设置 providers: []，让供应商池只包含用户配置的主模型（通过 primaryEntry 注入）。
+    if (Object.keys(userCfg).length > 0 && !Array.isArray(result.providers)) {
+      result.providers = [];
+    }
+
+    return result;
   }
 
   /**

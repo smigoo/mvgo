@@ -1,0 +1,41 @@
+.env-monitor-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  font-size: 14px;
+  color: #333333;
+}
+.env-monitor-card {
+  background: #ffffff;
+  border-radius: 6px;
+  padding: 1em;
+}
+.env-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  font-size: 14px;
+  color: #333333;
+  font-weight: 600;
+}
+.env-deco-line {
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, #559eff 0%, rgba(85, 158, 255, 0) 100%);
+  margin-top: 0.5em;
+}
+.env-chart-wrapper {
+  position: relative;
+  width: 100%;
+  flex: 1;
+}
+.env-highlight-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2em 0.6em;
+  background: rgba(64, 169, 255, 0.2);
+  color: #559eff;
+  border-radius: 6px;
+  font-size: 12px;
+}

@@ -8,6 +8,7 @@ import {
   detectRiskyPropAccessPatterns,
   autoWireSubComponentProps,
   rewriteSubcomponentResourceImportsToProps,
+  stripResourcePropsFromDefineProps,
 } from '../props-wiring-guard.js';
 import {
   validateSubcomponentResourceDeps,
@@ -589,5 +590,121 @@ const props = defineProps({ title: String })
     const r = validateSubcomponentResourceDeps(content, 'package/components/X.vue', mapping);
     expect(r.valid).toBe(false);
     expect(r.missingVars).toContain('icon1');
+  });
+});
+
+// ──────────────────────────────────────────────
+// 🔁 层② 反转（2026-09-11）：子组件资源 prop → 本地 import（去 prop 声明）
+// ──────────────────────────────────────────────
+describe('层② stripResourcePropsFromDefineProps（去资源 prop，为本地 import 让路）', () => {
+  const mapping = [
+    {
+      assignedVarName: 'bg2',
+      semanticVarName: 'bgTabActive',
+      resourceFile: 'images/bg2.png',
+      downloadStatus: 'success',
+    },
+    {
+      assignedVarName: 'iconWeather',
+      semanticVarName: 'iconWeather',
+      resourceFile: 'images/icon-weather.png',
+      downloadStatus: 'success',
+    },
+  ];
+
+  it('对象形态：删资源 prop，保留业务 prop', () => {
+    const content = `<script setup lang="ts">
+const props = defineProps({
+  bg2: { type: String, required: true },
+  title: { type: String, default: '' },
+  iconWeather: { type: String, required: true },
+})
+</script>
+<template>
+  <div :style="{ backgroundImage: \`url(\${bg2})\` }">
+    <img :src="iconWeather" />{{ title }}
+  </div>
+</template>`;
+    const r = stripResourcePropsFromDefineProps(content, mapping);
+    expect(r.changed).toBe(true);
+    expect(r.removed.sort()).toEqual(['bg2', 'iconWeather']);
+    expect(r.content).toContain('title');
+    expect(r.content).not.toMatch(/defineProps\(\{\s*bg2/);
+    expect(r.content).not.toContain('iconWeather:');
+  });
+
+  it('数组形态：删资源名，保业务名', () => {
+    const content = `<script setup>
+defineProps(['bg2', 'title', 'iconWeather'])
+</script>
+<template><img :src="iconWeather" />{{ title }}<div :style="{ backgroundImage: \`url(\${bg2})\` }"></div></template>`;
+    const r = stripResourcePropsFromDefineProps(content, mapping);
+    expect(r.changed).toBe(true);
+    expect(r.removed.sort()).toEqual(['bg2', 'iconWeather']);
+    expect(r.content).toContain('defineProps([\'title\'])');
+  });
+
+  it('泛型形态：删泛型内资源字段，保业务字段', () => {
+    const content = `<script setup lang="ts">
+const props = defineProps<{ bg2?: string; title: string; iconWeather?: string }>()
+</script>
+<template><img :src="iconWeather" /><div :style="{ backgroundImage: \`url(\${bg2})\` }"></div>{{ title }}</template>`;
+    const r = stripResourcePropsFromDefineProps(content, mapping);
+    expect(r.changed).toBe(true);
+    expect(r.removed.sort()).toEqual(['bg2', 'iconWeather']);
+    expect(r.content).toContain('title: string');
+    expect(r.content).not.toContain('bg2?:');
+  });
+
+  it('幂等：无资源 prop 时零副作用', () => {
+    const content = `<script setup>
+defineProps({ title: String })
+</script>
+<template>{{ title }}</template>`;
+    const r = stripResourcePropsFromDefineProps(content, mapping);
+    expect(r.changed).toBe(false);
+    expect(r.removed).toEqual([]);
+    expect(r.content).toBe(content);
+  });
+
+  it('无 mapping 时不动（不误删同名业务 prop）', () => {
+    const content = `<script setup>
+defineProps({ bg2: String })
+</script>
+<template><div :style="{ backgroundImage: \`url(\${bg2})\` }"></div></template>`;
+    const r = stripResourcePropsFromDefineProps(content, []);
+    expect(r.changed).toBe(false);
+  });
+
+  it('反转链路：strip 之后 injectResourceImports 才能注入本地 import', () => {
+    const content = `<script setup lang="ts">
+const props = defineProps({
+  bg2: { type: String, required: true },
+  title: String,
+})
+</script>
+<template><div :style="{ backgroundImage: \`url(\${bg2})\` }">{{ title }}</div></template>`;
+    const stripped = stripResourcePropsFromDefineProps(content, mapping);
+    const injected = injectResourceImports(
+      stripped.content,
+      mapping,
+      '../../resources/images/',
+    );
+    // 资源 prop 已去 → 撞名复核放行 → 本地 import 注入成功
+    expect(injected).toContain("import bg2 from '../../resources/images/bg2.png'");
+  });
+
+  it('反转前置条件：未 strip 时 injectResourceImports 因 prop 撞名而拒绝注入', () => {
+    const content = `<script setup lang="ts">
+const props = defineProps({ bg2: { type: String, required: true } })
+</script>
+<template><div :style="{ backgroundImage: \`url(\${bg2})\` }"></div></template>`;
+    const injected = injectResourceImports(
+      content,
+      mapping,
+      '../../resources/images/',
+    );
+    // 证明顺序不可颠倒：prop 仍在 → collectDeclaredBindings 记已声明 → 拒绝注入
+    expect(injected).not.toContain("import bg2 from");
   });
 });

@@ -1,0 +1,430 @@
+.dark {
+  /* === [自动修复] v3.5 模板驱动 fallback 规则 === */
+  /* [自动修复] 模板 class .c-flow-forecast → 匹配元素 section-forecast */
+  /* [自动修复] 模板 class .c-flow-forecast-accuracy → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-flow-forecast-accuracy-item → 匹配元素 card-tunnel-type-stat-item-x-0 */
+  /* [自动修复] 模板 class .c-flow-forecast-chart → 匹配元素 section-chart-tunnel */
+  /* [自动修复] 模板 class .c-flow-forecast-chart-wrapper → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-flow-forecast-controls → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-flow-forecast-header → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-flow-forecast-link → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-flow-forecast-tab → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-flow-forecast-tabs → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-flow-forecast-title → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-flow-forecast-title-block → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-flow-forecast-title-icon → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-bridge-chart → 匹配元素 section-chart-tunnel */
+  /* [自动修复] 模板 class .c-monitor-bridge-chart-root → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-bridge-chart-wrapper → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-bridge-decor → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-bridge-header → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-bridge-title → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-root → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-total-traffic → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-body → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-header → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-select → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-stat → 匹配元素 stat-tunnel */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-stat--bridge → 匹配元素 stat-bridge */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-stat--tunnel → 匹配元素 stat-tunnel */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-stat-label → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-stat-value → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-stat-value--bridge → 匹配元素 stat-bridge */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-stat-value--tunnel → 匹配元素 stat-tunnel */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-title → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-title-icon → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-title-text → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-tunnel-chart-container → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-tunnel-chart-header → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-tunnel-chart-indicator → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-tunnel-chart-legend → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-tunnel-chart-legend-dot → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-tunnel-chart-legend-item → 匹配元素 card-tunnel-type-stat-item-x-0 */
+  /* [自动修复] 模板 class .c-monitor-tunnel-chart-root → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-tunnel-chart-title → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vehicle-type-wrap → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vt-dot → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vt-header → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vt-label → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vt-list → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vt-row → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vt-subtitle → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vt-title → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vt-track → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vt-track-inner → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vt-value → 匹配元素 section-daily-total */
+}
+.dark .c-flow-forecast {
+  display: flex;
+}
+.dark .c-flow-forecast-accuracy {
+  display: flex;
+}
+.dark .c-flow-forecast-accuracy-item {
+  display: flex;
+}
+.dark .c-flow-forecast-chart {
+  display: flex;
+}
+.dark .c-flow-forecast-chart-wrapper {
+  display: flex;
+}
+.dark .c-flow-forecast-controls {
+  display: flex;
+}
+.dark .c-flow-forecast-header {
+  display: flex;
+}
+.dark .c-flow-forecast-link {
+  display: flex;
+}
+.dark .c-flow-forecast-tab {
+  display: flex;
+}
+.dark .c-flow-forecast-tabs {
+  display: flex;
+}
+.dark .c-flow-forecast-title {
+  display: flex;
+}
+.dark .c-flow-forecast-title-block {
+  display: flex;
+}
+.dark .c-flow-forecast-title-icon {
+  display: flex;
+}
+.dark .c-monitor-bridge-chart {
+  display: flex;
+}
+.dark .c-monitor-bridge-chart-root {
+  display: flex;
+}
+.dark .c-monitor-bridge-chart-wrapper {
+  display: flex;
+}
+.dark .c-monitor-bridge-decor {
+  display: flex;
+}
+.dark .c-monitor-bridge-header {
+  display: flex;
+}
+.dark .c-monitor-bridge-title {
+  display: flex;
+}
+.dark .c-monitor-root {
+  display: flex;
+}
+.dark .c-monitor-total-traffic {
+  display: flex;
+}
+.dark .c-monitor-total-traffic-body {
+  display: flex;
+}
+.dark .c-monitor-total-traffic-header {
+  display: flex;
+}
+.dark .c-monitor-total-traffic-select {
+  display: flex;
+}
+.dark .c-monitor-total-traffic-stat {
+  display: flex;
+}
+.dark .c-monitor-total-traffic-stat--bridge {
+  display: flex;
+}
+.dark .c-monitor-total-traffic-stat--tunnel {
+  display: flex;
+}
+.dark .c-monitor-total-traffic-stat-label {
+  display: flex;
+}
+.dark .c-monitor-total-traffic-stat-value {
+  display: flex;
+}
+.dark .c-monitor-total-traffic-stat-value--bridge {
+  display: flex;
+}
+.dark .c-monitor-total-traffic-stat-value--tunnel {
+  display: flex;
+}
+.dark .c-monitor-total-traffic-title {
+  display: flex;
+}
+.dark .c-monitor-total-traffic-title-icon {
+  display: flex;
+}
+.dark .c-monitor-total-traffic-title-text {
+  display: flex;
+}
+.dark .c-monitor-tunnel-chart-container {
+  display: flex;
+}
+.dark .c-monitor-tunnel-chart-header {
+  display: flex;
+}
+.dark .c-monitor-tunnel-chart-indicator {
+  display: flex;
+}
+.dark .c-monitor-tunnel-chart-legend {
+  display: flex;
+}
+.dark .c-monitor-tunnel-chart-legend-dot {
+  display: flex;
+}
+.dark .c-monitor-tunnel-chart-legend-item {
+  display: flex;
+}
+.dark .c-monitor-tunnel-chart-root {
+  display: flex;
+}
+.dark .c-monitor-tunnel-chart-title {
+  display: flex;
+}
+.dark .vehicle-type-wrap {
+  display: flex;
+}
+.dark .vt-dot {
+  display: flex;
+}
+.dark .vt-header {
+  display: flex;
+}
+.dark .vt-label {
+  display: flex;
+}
+.dark .vt-list {
+  display: flex;
+}
+.dark .vt-row {
+  display: flex;
+}
+.dark .vt-subtitle {
+  display: flex;
+}
+.dark .vt-title {
+  display: flex;
+}
+.dark .vt-track {
+  display: flex;
+}
+.dark .vt-track-inner {
+  display: flex;
+}
+.dark .vt-value {
+  display: flex;
+}
+.light {
+  /* === [自动修复] v3.5 模板驱动 fallback 规则 === */
+  /* [自动修复] 模板 class .c-flow-forecast → 匹配元素 section-forecast */
+  /* [自动修复] 模板 class .c-flow-forecast-accuracy → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-flow-forecast-accuracy-item → 匹配元素 card-tunnel-type-stat-item-x-0 */
+  /* [自动修复] 模板 class .c-flow-forecast-chart → 匹配元素 section-chart-tunnel */
+  /* [自动修复] 模板 class .c-flow-forecast-chart-wrapper → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-flow-forecast-controls → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-flow-forecast-header → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-flow-forecast-link → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-flow-forecast-tab → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-flow-forecast-tabs → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-flow-forecast-title → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-flow-forecast-title-block → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-flow-forecast-title-icon → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-bridge-chart → 匹配元素 section-chart-tunnel */
+  /* [自动修复] 模板 class .c-monitor-bridge-chart-root → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-bridge-chart-wrapper → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-bridge-decor → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-bridge-header → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-bridge-title → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-root → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-total-traffic → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-body → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-header → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-select → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-stat → 匹配元素 stat-tunnel */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-stat--bridge → 匹配元素 stat-bridge */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-stat--tunnel → 匹配元素 stat-tunnel */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-stat-label → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-stat-value → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-stat-value--bridge → 匹配元素 stat-bridge */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-stat-value--tunnel → 匹配元素 stat-tunnel */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-title → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-title-icon → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-title-text → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-tunnel-chart-container → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-tunnel-chart-header → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-tunnel-chart-indicator → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-tunnel-chart-legend → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-tunnel-chart-legend-dot → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-tunnel-chart-legend-item → 匹配元素 card-tunnel-type-stat-item-x-0 */
+  /* [自动修复] 模板 class .c-monitor-tunnel-chart-root → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-tunnel-chart-title → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vehicle-type-wrap → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vt-dot → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vt-header → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vt-label → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vt-list → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vt-row → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vt-subtitle → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vt-title → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vt-track → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vt-track-inner → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vt-value → 匹配元素 section-daily-total */
+}
+.light .c-flow-forecast {
+  display: flex;
+}
+.light .c-flow-forecast-accuracy {
+  display: flex;
+}
+.light .c-flow-forecast-accuracy-item {
+  display: flex;
+}
+.light .c-flow-forecast-chart {
+  display: flex;
+}
+.light .c-flow-forecast-chart-wrapper {
+  display: flex;
+}
+.light .c-flow-forecast-controls {
+  display: flex;
+}
+.light .c-flow-forecast-header {
+  display: flex;
+}
+.light .c-flow-forecast-link {
+  display: flex;
+}
+.light .c-flow-forecast-tab {
+  display: flex;
+}
+.light .c-flow-forecast-tabs {
+  display: flex;
+}
+.light .c-flow-forecast-title {
+  display: flex;
+}
+.light .c-flow-forecast-title-block {
+  display: flex;
+}
+.light .c-flow-forecast-title-icon {
+  display: flex;
+}
+.light .c-monitor-bridge-chart {
+  display: flex;
+}
+.light .c-monitor-bridge-chart-root {
+  display: flex;
+}
+.light .c-monitor-bridge-chart-wrapper {
+  display: flex;
+}
+.light .c-monitor-bridge-decor {
+  display: flex;
+}
+.light .c-monitor-bridge-header {
+  display: flex;
+}
+.light .c-monitor-bridge-title {
+  display: flex;
+}
+.light .c-monitor-root {
+  display: flex;
+}
+.light .c-monitor-total-traffic {
+  display: flex;
+}
+.light .c-monitor-total-traffic-body {
+  display: flex;
+}
+.light .c-monitor-total-traffic-header {
+  display: flex;
+}
+.light .c-monitor-total-traffic-select {
+  display: flex;
+}
+.light .c-monitor-total-traffic-stat {
+  display: flex;
+}
+.light .c-monitor-total-traffic-stat--bridge {
+  display: flex;
+}
+.light .c-monitor-total-traffic-stat--tunnel {
+  display: flex;
+}
+.light .c-monitor-total-traffic-stat-label {
+  display: flex;
+}
+.light .c-monitor-total-traffic-stat-value {
+  display: flex;
+}
+.light .c-monitor-total-traffic-stat-value--bridge {
+  display: flex;
+}
+.light .c-monitor-total-traffic-stat-value--tunnel {
+  display: flex;
+}
+.light .c-monitor-total-traffic-title {
+  display: flex;
+}
+.light .c-monitor-total-traffic-title-icon {
+  display: flex;
+}
+.light .c-monitor-total-traffic-title-text {
+  display: flex;
+}
+.light .c-monitor-tunnel-chart-container {
+  display: flex;
+}
+.light .c-monitor-tunnel-chart-header {
+  display: flex;
+}
+.light .c-monitor-tunnel-chart-indicator {
+  display: flex;
+}
+.light .c-monitor-tunnel-chart-legend {
+  display: flex;
+}
+.light .c-monitor-tunnel-chart-legend-dot {
+  display: flex;
+}
+.light .c-monitor-tunnel-chart-legend-item {
+  display: flex;
+}
+.light .c-monitor-tunnel-chart-root {
+  display: flex;
+}
+.light .c-monitor-tunnel-chart-title {
+  display: flex;
+}
+.light .vehicle-type-wrap {
+  display: flex;
+}
+.light .vt-dot {
+  display: flex;
+}
+.light .vt-header {
+  display: flex;
+}
+.light .vt-label {
+  display: flex;
+}
+.light .vt-list {
+  display: flex;
+}
+.light .vt-row {
+  display: flex;
+}
+.light .vt-subtitle {
+  display: flex;
+}
+.light .vt-title {
+  display: flex;
+}
+.light .vt-track {
+  display: flex;
+}
+.light .vt-track-inner {
+  display: flex;
+}
+.light .vt-value {
+  display: flex;
+}

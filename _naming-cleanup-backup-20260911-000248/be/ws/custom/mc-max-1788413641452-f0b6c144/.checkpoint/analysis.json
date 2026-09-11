@@ -1,0 +1,431 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 82,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[3].body.items[0].children[1].children",
+        "message": "车型分布区域嵌套过深（4层），stat-card、donut-chart、stat-card横向排列应平铺在同一父容器",
+        "suggestion": "将 vehicle-tunnel 的 children[1] 从 row 容器提升为 body.items 直接子元素，减少嵌套层级"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "charts[0] 和 charts[1]",
+        "message": "两个小时流量图表定义完全相同（series/colors/tooltip），但应对应不同section（隧道vs大桥）",
+        "suggestion": "检查数据源绑定，确保 chart-tunnel 和 chart-bridge 对应各自的数据系列"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "layout.sections[3].body.items[0].children[1].children[1]",
+        "message": "donut-chart 同时标记 type 和 resourceFile，recommendedUsage 为 backgroundBlock 语义矛盾",
+        "suggestion": "环形图应为图表组件（echarts），背景图应独立标记，不应混用 resourceFile 作为图表占位"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body.items[1]",
+        "message": "汽车装饰图标（77x52）作为独立 item 插入两列数值之间，破坏对称布局",
+        "suggestion": "考虑将装饰图作为 body 的 backgroundImage 或伪元素，而非占用 items 插槽"
+      }
+    ],
+    "recommendations": [
+      "车型分布区域建议采用 grid 布局（2列），每列包含 [label, stat-row]，stat-row 内平铺三要素（客车卡片+环形图+货车卡片），减少 row 嵌套",
+      "图表配置建议补充 xAxis/yAxis 具体配置（type、data、min/max），当前仅文字描述不利于代码生成",
+      "建议将重复的背景资源（bg-_m-35/36）提取为 CSS 变量或主题 token，避免硬编码路径重复"
+    ],
+    "summary": "结构基本合理，覆盖率78%符合预期。主要问题：车型分布区域嵌套过深（4层），图表定义重复且缺失轴配置，装饰元素布局位置不当。建议优化嵌套、明确图表数据绑定、统一资源引用方式。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）— 浅色科技监测风主题",
+      "--colorPrimary": "rgba(24,144,255,1)",
+      "--colorPrimaryLight": "rgba(237,244,251,1)",
+      "--colorWarning": "rgba(255,140,0,1)",
+      "--colorSuccess": "rgba(82,196,26,1)",
+      "--colorTextBase": "rgba(51,51,51,1)",
+      "--colorBg": "rgba(237,244,251,1)",
+      "--colorSurface": "rgba(255,255,255,1)",
+      "--fontSize": "14px",
+      "--fontSizeXl": "28px",
+      "--fontSizeLg": "20px",
+      "--fontSizeSm": "12px",
+      "--borderRadius": "4px",
+      "--borderRadiusLg": "8px",
+      "--shadowGlow": "0 0 12px rgba(24,144,255,0.45)",
+      "--dividerGradient": "linear-gradient(90deg, rgba(24,144,255,0.8) 0%, rgba(24,144,255,0.1) 100%)"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射 — 对应上方CSS变量，供 theme-vars.less 的 .theme-light() 使用",
+      "@color-primary": "rgba(24,144,255,1)",
+      "@color-primary-light": "rgba(237,244,251,1)",
+      "@color-warning": "rgba(255,140,0,1)",
+      "@color-success": "rgba(82,196,26,1)",
+      "@color-text-base": "rgba(51,51,51,1)",
+      "@color-bg": "rgba(237,244,251,1)",
+      "@color-surface": "rgba(255,255,255,1)",
+      "@font-size-base": "14px",
+      "@font-size-xl": "28px",
+      "@font-size-lg": "20px",
+      "@font-size-sm": "12px",
+      "@border-radius-base": "4px",
+      "@border-radius-lg": "8px",
+      "@shadow-glow": "0 0 12px rgba(24,144,255,0.45)",
+      "@divider-gradient": "linear-gradient(90deg, rgba(24,144,255,0.8) 0%, rgba(24,144,255,0.1) 100%)"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类 — 覆盖浅色科技监测风的核心视觉元素",
+      ".monitor-container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "width": "100%",
+        "height": "100%",
+        "background": "rgba(237,244,251,1)",
+        "font-size": "var(--fontSize, 14px)",
+        "color": "var(--colorTextBase, rgba(51,51,51,1))"
+      },
+      ".section-card": {
+        "background": "rgba(255,255,255,1)",
+        "border-radius": "var(--borderRadiusLg, 8px)",
+        "padding": "1em 1.2em",
+        "box-shadow": "0 2px 8px rgba(24,144,255,0.08)"
+      },
+      ".section-title": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "0.5em",
+        "font-size": "var(--fontSizeLg, 20px)",
+        "font-weight": "600",
+        "color": "var(--colorTextBase, rgba(51,51,51,1))",
+        "margin-bottom": "0.5em"
+      },
+      ".section-title::before": {
+        "content": "''",
+        "display": "inline-block",
+        "width": "0.5em",
+        "height": "0.5em",
+        "background": "var(--colorPrimary, rgba(24,144,255,1))",
+        "border-radius": "2px",
+        "transform": "rotate(45deg)",
+        "flex-shrink": "0"
+      },
+      ".section-divider": {
+        "height": "2px",
+        "background": "var(--dividerGradient, linear-gradient(90deg, rgba(24,144,255,0.8) 0%, rgba(24,144,255,0.1) 100%))",
+        "border": "none",
+        "margin": "0.4em 0 0.8em 0",
+        "border-radius": "1px"
+      },
+      ".value-primary": {
+        "font-size": "var(--fontSizeXl, 28px)",
+        "font-weight": "700",
+        "color": "var(--colorPrimary, rgba(24,144,255,1))",
+        "line-height": "1.2",
+        "letter-spacing": "0.02em"
+      },
+      ".value-blue": {
+        "font-size": "var(--fontSizeLg, 20px)",
+        "font-weight": "600",
+        "color": "var(--colorPrimary, rgba(24,144,255,1))"
+      },
+      ".value-orange": {
+        "font-size": "var(--fontSizeLg, 20px)",
+        "font-weight": "600",
+        "color": "var(--colorWarning, rgba(255,140,0,1))"
+      },
+      ".tag-success": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "gap": "0.25em",
+        "padding": "0.15em 0.6em",
+        "background": "rgba(82,196,26,0.12)",
+        "color": "var(--colorSuccess, rgba(82,196,26,1))",
+        "border-radius": "1em",
+        "font-size": "var(--fontSizeSm, 12px)",
+        "font-weight": "500"
+      },
+      ".tag-success::before": {
+        "content": "''",
+        "display": "inline-block",
+        "width": "0.5em",
+        "height": "0.5em",
+        "background": "var(--colorSuccess, rgba(82,196,26,1))",
+        "border-radius": "50%"
+      },
+      ".glow-icon-wrapper": {
+        "display": "flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "filter": "drop-shadow(var(--shadowGlow, 0 0 12px rgba(24,144,255,0.45)))"
+      },
+      ".ring-chart-wrapper": {
+        "position": "relative",
+        "display": "flex",
+        "align-items": "center",
+        "justify-content": "center"
+      },
+      ".ring-chart-label": {
+        "position": "absolute",
+        "text-align": "center",
+        "font-size": "var(--fontSizeSm, 12px)",
+        "color": "var(--colorTextBase, rgba(51,51,51,1))"
+      },
+      ".data-row": {
+        "display": "flex",
+        "align-items": "baseline",
+        "justify-content": "space-between",
+        "padding": "0.3em 0",
+        "border-bottom": "1px solid rgba(24,144,255,0.08)"
+      },
+      ".data-label": {
+        "font-size": "var(--fontSizeSm, 12px)",
+        "color": "rgba(51,51,51,0.65)"
+      }
+    },
+    "tokenCoverage": 0.93,
+    "mappingNotes": [
+      "主色蓝 rgba(24,144,255,1) 映射为 --colorPrimary，用于数值强调、装饰图标、分隔线",
+      "背景浅蓝灰 rgba(237,244,251,1) 映射为 --colorBg，直接写入容器背景字面量值，不依赖变量兜底",
+      "白色卡片背景 rgba(255,255,255,1) 映射为 --colorSurface，用于子区域卡片",
+      "橙色货车数值 rgba(255,140,0,1) 映射为 --colorWarning，通过 .value-orange 类复用",
+      "绿色准确率标签 rgba(82,196,26,1) 映射为 --colorSuccess，通过 .tag-success 类复用",
+      "菱形装饰通过 .section-title::before 伪元素实现，rotate(45deg) 产生菱形效果",
+      "蓝色发光汽车装饰图使用 --shadowGlow drop-shadow 模拟发光效果，实际图片资源需由 resource-dom-mapping 引用",
+      "分隔线使用 --dividerGradient 渐变，从蓝色 80% 透明度渐变至 10%，体现科技感",
+      "环形图渐变色环需在 ECharts 配置中用 colorPrimary/colorWarning 定义，非纯 CSS 实现",
+      "34620 / 82379 大号蓝色数值使用 .value-primary（28px），客车数值用 .value-blue（20px），货车用 .value-orange",
+      "fontSizeXl/fontSizeLg/fontSizeSm 统一以 CSS 变量管理，支持平台字体缩放注入"
+    ],
+    "elementStyleMap": {
+      "daily-total": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-2": {
+        "align-items": "center",
+        "justify-content": "space-around"
+      },
+      "hourly-flow-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-10": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-_m-35.png)",
+        "background-size": "100% auto",
+        "background-position": "center top",
+        "background-repeat": "no-repeat"
+      },
+      "hourly-flow-bridge": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-13": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-_m-35.png)",
+        "background-size": "100% auto",
+        "background-position": "center top",
+        "background-repeat": "no-repeat"
+      },
+      "vehicle-type": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "tunnel-car": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "tunnel-truck": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-row-x-17": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "bridge-car": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "bridge-truck": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-row-x-26": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "flow-forecast": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-35": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-_m-35.png)",
+        "background-size": "100% auto",
+        "background-position": "center top",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "daily-total",
+        "responsibility": "当日总流量（请按功能拆分）",
+        "elementCount": 0,
+        "title": "当日总流量",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 0,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 0
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "hourly-flow-tunnel",
+        "responsibility": "江阴靖江长江隧道（请按功能拆分）",
+        "elementCount": 1,
+        "title": "江阴靖江长江隧道",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 1,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "hourly-flow-bridge",
+        "responsibility": "江阴大桥（请按功能拆分）",
+        "elementCount": 1,
+        "title": "江阴大桥",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 1,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "vehicle-type",
+        "responsibility": "车型分布（请按功能拆分）",
+        "elementCount": 0,
+        "title": "车型分布",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 0,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 0
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "flow-forecast",
+        "responsibility": "流量预测（请按功能拆分）",
+        "elementCount": 1,
+        "title": "流量预测",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 1,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      }
+    ],
+    "isForced": true,
+    "minFiles": 5,
+    "reason": "有效 sections=5 ≥ 3 或存在高复杂度 section → 强制拆分",
+    "internalSubcomponents": []
+  }
+}

@@ -1,0 +1,551 @@
+@import './themes/theme-vars.less';
+
+// 组件根容器 - 设置字体缩放基准
+.c-monitor-root {
+  font-size: var(--fontSize, 14px);
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+// ==================== 区域通用样式 ====================
+
+.c-monitor-section {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.c-monitor-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+
+.c-monitor-section-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.c-monitor-section-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.c-monitor-section-icon-right {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  cursor: pointer;
+  object-fit: contain;
+}
+
+.c-monitor-section-title {
+  font-size: calc(@fontSize * 1.143); // 16px
+  font-weight: 500;
+  color: #333333;
+  line-height: 1.5;
+}
+
+.c-monitor-section-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+// ==================== 当日总流量区域 ====================
+
+.c-monitor-daily-flow {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.c-monitor-time-selector {
+  flex-shrink: 0;
+}
+
+.c-monitor-select {
+  padding: 6px 12px;
+  font-size: @fontSize;
+  color: #333333;
+  background: #ffffff;
+  border: 1px solid #a1ceff;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s;
+
+  &:hover {
+    background: rgba(24, 144, 255, 0.05);
+  }
+
+  &:focus {
+    outline: none;
+    border-color: #1890ff;
+  }
+}
+
+.c-monitor-flow-cards {
+  display: flex;
+  gap: 16px;
+  padding: 20px 16px;
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+  min-height: 120px;
+}
+
+.c-monitor-flow-card {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 16px;
+  position: relative;
+  overflow: hidden;
+}
+
+.c-monitor-card-label {
+  font-size: calc(@fontSize * 1.143); // 16px
+  font-weight: 500;
+  color: #333333;
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+.c-monitor-card-value {
+  font-size: calc(@fontSize * 1.714); // 24px
+  font-weight: 900;
+  color: #0c9dbe;
+  line-height: 1.2;
+}
+
+.c-monitor-card-icon-wrapper {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 80px;
+  height: 80px;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+// ==================== 图表区域通用 ====================
+
+.c-monitor-chart-wrapper {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  background-size: 100% auto;
+  background-position: center top;
+  background-repeat: no-repeat;
+}
+
+.c-monitor-chart-container {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.c-monitor-chart-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+// ==================== 隧道图表 ====================
+
+.c-monitor-tunnel-chart {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.c-monitor-tunnel-chart-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.c-monitor-tunnel-chart-icon {
+  width: 3px;
+  height: 12px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #388dff 0%, #388dff 100%);
+}
+
+.c-monitor-tunnel-chart-title {
+  font-size: @fontSize;
+  font-weight: 400;
+  color: #333333;
+  line-height: 1.5;
+}
+
+.c-monitor-tunnel-chart-legend {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.c-monitor-tunnel-chart-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: calc(@fontSize * 0.857); // 12px
+  color: #333333;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  opacity: 1;
+  transition: opacity 0.2s;
+
+  &:not(.c-monitor-tunnel-chart-legend-item-active) {
+    opacity: 0.4;
+  }
+}
+
+.c-monitor-tunnel-chart-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+.c-monitor-tunnel-chart-legend-dot-primary {
+  background: #1588f8;
+}
+
+.c-monitor-tunnel-chart-legend-dot-success {
+  background: #00d0ff;
+}
+
+.c-monitor-tunnel-chart-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.c-monitor-tunnel-chart-container {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+// ==================== 大桥图表 ====================
+
+.c-monitor-bridge-chart {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.c-monitor-bridge-chart-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.c-monitor-bridge-chart-title-bar {
+  width: 3px;
+  height: 12px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #388dff 0%, #388dff 100%);
+}
+
+.c-monitor-bridge-chart-title {
+  font-size: @fontSize;
+  font-weight: 400;
+  color: #333333;
+  line-height: 1.5;
+}
+
+.c-monitor-bridge-chart-legend {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.c-monitor-bridge-chart-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: calc(@fontSize * 0.857); // 12px
+  color: #333333;
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: opacity 0.2s;
+
+  &.is-off {
+    opacity: 0.4;
+  }
+}
+
+.c-monitor-bridge-chart-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 1.6px;
+  flex-shrink: 0;
+}
+
+.c-monitor-bridge-chart-legend-dot-bj {
+  background: #1588f8;
+}
+
+.c-monitor-bridge-chart-legend-dot-sh {
+  background: #00d0ff;
+}
+
+.c-monitor-bridge-chart-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+// ==================== 车型分布 ====================
+
+.c-monitor-vehicle-type-distribution {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.c-monitor-vehicle-grid {
+  display: flex;
+  gap: 16px;
+  min-height: 160px;
+}
+
+.c-monitor-vehicle-cards {
+  display: flex;
+  gap: 16px;
+  min-height: 160px;
+}
+
+.c-monitor-vehicle-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 20px 16px;
+  background-size: 100% auto;
+  background-position: center top;
+  background-repeat: no-repeat;
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.c-monitor-vehicle-chart {
+  width: 100px;
+  height: 100px;
+  flex-shrink: 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+.c-monitor-vehicle-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.c-monitor-vehicle-stat-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.c-monitor-stat-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.c-monitor-stat-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 1.6px;
+  flex-shrink: 0;
+}
+
+.c-monitor-stat-passenger .c-monitor-stat-dot {
+  background: #1588f8;
+}
+
+.c-monitor-stat-truck .c-monitor-stat-dot {
+  background: #00d0ff;
+}
+
+.c-monitor-vehicle-label {
+  font-size: calc(@fontSize * 0.857); // 12px
+  color: #333333;
+  line-height: 1.5;
+}
+
+.c-monitor-stat-label {
+  font-size: calc(@fontSize * 0.857); // 12px
+  color: #333333;
+  line-height: 1.5;
+}
+
+.c-monitor-vehicle-value {
+  font-size: calc(@fontSize * 1.286); // 18px
+  font-weight: 600;
+  color: #333333;
+  line-height: 1.5;
+  margin-left: auto;
+}
+
+.c-monitor-stat-value {
+  font-size: calc(@fontSize * 1.286); // 18px
+  font-weight: 600;
+  color: #333333;
+  line-height: 1.5;
+  margin-left: auto;
+}
+
+.c-monitor-vehicle-tag {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 12px;
+  font-size: calc(@fontSize * 0.857); // 12px
+  color: #333333;
+  white-space: nowrap;
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+// ==================== 流量预测 ====================
+
+.c-monitor-flow-prediction {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  min-height: 200px;
+}
+
+.c-monitor-title-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.c-monitor-title-icon {
+  width: 3px;
+  height: 12px;
+  background: linear-gradient(180deg, #388dff 0%, #388dff 100%);
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.c-monitor-title-icon-bar {
+  width: 3px;
+  height: 12px;
+  background: linear-gradient(180deg, #388dff 0%, #388dff 100%);
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.c-monitor-title-text {
+  font-size: calc(@fontSize * 1.143); // 16px
+  font-weight: 500;
+  color: #333333;
+  line-height: 1.5;
+}
+
+.c-monitor-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.c-monitor-location-tabs {
+  display: flex;
+  gap: 4px;
+  background: #edf4fb;
+  border-radius: 4px;
+  padding: 2px;
+}
+
+.c-monitor-tab-item {
+  padding: 6px 12px;
+  font-size: calc(@fontSize * 0.857); // 12px
+  color: #333333;
+  cursor: pointer;
+  border-radius: 2px;
+  transition: all 0.3s;
+  white-space: nowrap;
+  flex-shrink: 0;
+  
+  &:hover {
+    background: rgba(24, 144, 255, 0.05);
+  }
+  
+  &.active {
+    background: #1890ff;
+    color: #ffffff;
+  }
+}
+
+.c-monitor-holiday-btn {
+  font-size: calc(@fontSize * 0.857); // 12px
+  color: #1890ff;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: opacity 0.3s;
+  
+  &:hover {
+    opacity: 0.8;
+  }
+}
+
+.c-monitor-info-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  cursor: pointer;
+  object-fit: contain;
+}

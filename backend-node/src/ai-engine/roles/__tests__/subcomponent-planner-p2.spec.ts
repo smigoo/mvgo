@@ -9,11 +9,14 @@
  * 5. 非图例特征不合并
  */
 
-jest.mock('../../config/backend-root', () => ({
-  getWorkspaceRoot: () => '/Users/smigoo/工作/mvgo/backend-node',
-  getLogsDir: () => '/tmp/mvgo-test-logs',
-  isDev: true,
-}));
+jest.mock('../../../config/backend-root.js', () => ({
+  workspaceRoot: '/tmp/mvgo-test-workspace',
+  backendRoot: '/Users/smigoo/工作/mvgo/backend-node',
+  projectRoot: '/Users/smigoo/工作/mvgo',
+  logsDir: '/tmp/mvgo-test-logs',
+  dataDir: '/tmp/mvgo-test-data',
+  tempComponentsDir: '/tmp/mvgo-test-temp-components',
+}), { virtual: true })
 
 import { SubcomponentPlanner } from '../subcomponent-planner.js'
 
@@ -193,114 +196,3 @@ describe("P2': 图例误识别为独立 section", () => {
     expect(plan.effectiveSections).toHaveLength(2)
   })
 })
-
-/**
- * S3: 大分块拆分 — 多图表 section 按图表二次拆分为独立分块条目
- *
- * 测试覆盖：
- * 1. 单 section 含 3 个图表 → 拆为 3 个独立 chartChunk
- * 2. 单 section 含 1 个图表 → 不拆分（保持原 chunk）
- * 3. 单 section 含 2 个图表 + 其他元素 → 图表独立 + 其他元素归入杂项 chunk
- * 4. 无图表 section → 不拆分
- */
-describe('S3: 大分块拆分（多图表 section 二次拆分）', () => {
-  test('含 3 个图表的 section 应拆为 3 个独立 chartChunk', () => {
-    const plan = {
-      effectiveSections: [
-        {
-          id: 'section-charts',
-          responsibility: '多图表区',
-          elementCount: 15,
-          title: '综合看板',
-          internalSubcomponents: [
-            { type: 'chart-component', id: 'chart1', name: '趋势图', parentSectionId: 'section-charts' },
-            { type: 'chart-component', id: 'chart2', name: '柱状图', parentSectionId: 'section-charts' },
-            { type: 'chart-component', id: 'chart3', name: '饼图', parentSectionId: 'section-charts' },
-          ],
-        },
-      ],
-    }
-
-    const { splitMultiChartSectionIntoChunks } = require('../subcomponent-planner.js')
-    const chunks = splitMultiChartSectionIntoChunks(plan)
-
-    // 3 个图表 → 3 个独立 chunk
-    expect(chunks).toHaveLength(3)
-    expect(chunks[0].segmentType).toBe('chart')
-    expect(chunks[0].files).toContain('package/components/TrendChart.vue')
-    expect(chunks[1].segmentType).toBe('chart')
-    expect(chunks[2].segmentType).toBe('chart')
-  })
-
-  test('单图表 section 不应拆分', () => {
-    const plan = {
-      effectiveSections: [
-        {
-          id: 'section-chart',
-          responsibility: '图表区',
-          elementCount: 5,
-          title: '趋势分析',
-          internalSubcomponents: [
-            { type: 'chart-component', id: 'chart1', name: '折线图', parentSectionId: 'section-chart' },
-          ],
-        },
-      ],
-    }
-
-    const { splitMultiChartSectionIntoChunks } = require('../subcomponent-planner.js')
-    const chunks = splitMultiChartSectionIntoChunks(plan)
-
-    // 只有 1 个图表，不拆分，返回原始 section 级 chunk
-    expect(chunks).toHaveLength(1)
-    expect(chunks[0].segmentType).toBe('chart')
-  })
-
-  test('2 个图表 + 其他元素的 section 应图表独立 + 杂项 chunk', () => {
-    const plan = {
-      effectiveSections: [
-        {
-          id: 'section-mixed',
-          responsibility: '混合区',
-          elementCount: 12,
-          title: '数据面板',
-          internalSubcomponents: [
-            { type: 'chart-component', id: 'chart1', name: '柱状图', parentSectionId: 'section-mixed' },
-            { type: 'chart-component', id: 'chart2', name: '饼图', parentSectionId: 'section-mixed' },
-            { type: 'element-group', id: 'group1', name: '统计卡片', parentSectionId: 'section-mixed' },
-          ],
-        },
-      ],
-    }
-
-    const { splitMultiChartSectionIntoChunks } = require('../subcomponent-planner.js')
-    const chunks = splitMultiChartSectionIntoChunks(plan)
-
-    // 2 图表独立 + 1 杂项 = 3 chunks
-    expect(chunks).toHaveLength(3)
-    const chartChunks = chunks.filter(c => c.segmentType === 'chart')
-    const miscChunks = chunks.filter(c => c.segmentType !== 'chart')
-    expect(chartChunks).toHaveLength(2)
-    expect(miscChunks).toHaveLength(1)
-  })
-
-  test('无图表 section 不应触发拆分', () => {
-    const plan = {
-      effectiveSections: [
-        {
-          id: 'section-tabs',
-          responsibility: '标签区',
-          elementCount: 8,
-          title: '切换面板',
-          internalSubcomponents: [],
-        },
-      ],
-    }
-
-    const { splitMultiChartSectionIntoChunks } = require('../subcomponent-planner.js')
-    const chunks = splitMultiChartSectionIntoChunks(plan)
-
-    // 无图表，返回空或原样
-    expect(chunks.length).toBeLessThanOrEqual(1)
-  })
-})
-

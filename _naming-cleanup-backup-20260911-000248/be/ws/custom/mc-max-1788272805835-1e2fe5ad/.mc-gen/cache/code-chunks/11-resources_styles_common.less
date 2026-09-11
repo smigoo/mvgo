@@ -1,0 +1,529 @@
+@import './themes/theme-vars.less';
+
+.common();
+.theme-dark();
+
+// ============================================================
+// 根容器
+// ============================================================
+.c-monitor-root {
+  font-size: var(--fontSize, 14px);
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-sizing: border-box;
+}
+
+// ============================================================
+// 当日总流量 - DailyTotalFlow
+// ============================================================
+.c-monitor-daily-total {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.c-monitor-daily-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 30px;
+  margin-bottom: 8px;
+}
+
+.c-monitor-daily-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.c-monitor-daily-title-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.c-monitor-daily-title-text {
+  font-size: calc(@fontSize * 1.1429);
+  color: #333333;
+  font-weight: 500;
+  text-shadow: 0px 5px 5px rgba(255, 255, 255, 0.8);
+  line-height: 1.5;
+}
+
+.c-monitor-daily-select {
+  width: 100px;
+}
+
+.c-monitor-daily-body {
+  width: 100%;
+  height: 91px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  box-sizing: border-box;
+  background-size: 100% auto;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+
+.c-monitor-daily-stat {
+  display: flex;
+  flex-direction: column;
+}
+
+.c-monitor-daily-stat-tunnel {
+  align-items: flex-start;
+}
+
+.c-monitor-daily-stat-bridge {
+  align-items: flex-end;
+}
+
+.c-monitor-daily-stat-label {
+  font-size: calc(@fontSize * 1.1429);
+  color: #333333;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.c-monitor-daily-stat-value {
+  font-size: calc(@fontSize * 1.7143);
+  font-weight: 900;
+  line-height: 1.17;
+}
+
+// ============================================================
+// 小时流量（隧道）- HourlyFlowTunnel
+// ============================================================
+.c-monitor-hourly-tunnel {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+// ============================================================
+// 小时流量（大桥）- HourlyFlowBridge
+// ============================================================
+.c-monitor-hourly-flow-bridge {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+// ============================================================
+// 通用区块头部
+// ============================================================
+.c-monitor-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  margin-bottom: 8px;
+}
+
+.c-monitor-section-title-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.c-monitor-section-icon {
+  width: 3px;
+  height: 12px;
+  background: linear-gradient(180deg, #388dff 0%, #388dff 100%);
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.c-monitor-section-title {
+  font-size: @fontSize;
+  color: #333333;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+// ============================================================
+// 图表通用样式
+// ============================================================
+.c-monitor-chart-wrapper {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.c-monitor-chart-area {
+  width: 100%;
+  flex: 1;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+.c-monitor-chart-body {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  background-size: 100% auto;
+  background-position: center top;
+  background-repeat: no-repeat;
+}
+
+.c-monitor-chart-container {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.c-monitor-chart-legend {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+
+.c-monitor-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: calc(@fontSize * 0.8571);
+  color: #333333;
+  cursor: pointer;
+  transition: opacity 0.3s;
+
+  &.inactive,
+  &:not(.active) {
+    opacity: 0.4;
+  }
+
+  &.active {
+    opacity: 1;
+  }
+}
+
+.c-monitor-legend-dot {
+  width: 10px;
+  height: 10px;
+  display: inline-block;
+  border-radius: 2px;
+  flex-shrink: 0;
+
+  &.beijing {
+    background: #1588f8;
+  }
+
+  &.shanghai {
+    background: #00d0ff;
+  }
+
+  &.actual {
+    background: #3385ff;
+  }
+
+  &.predicted {
+    background: #00cccc;
+  }
+}
+
+.c-monitor-legend-text {
+  font-size: calc(@fontSize * 0.8571);
+  color: #333333;
+  line-height: 1.29;
+}
+
+// ============================================================
+// 车型分布 - VehicleDistribution
+// ============================================================
+.c-monitor-vehicle-distribution {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.c-monitor-vehicle-distribution-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.c-monitor-vehicle-header-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.c-monitor-vehicle-distribution-title {
+  font-size: calc(@fontSize * 1.1429);
+  font-weight: 500;
+  color: #333333;
+  line-height: 1.5;
+  text-shadow: 0px 5px 5px rgba(255, 255, 255, 0.8);
+}
+
+.c-monitor-vehicle-cards {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.c-monitor-vehicle-card {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px 10px;
+  overflow: hidden;
+  position: relative;
+}
+
+.c-monitor-vehicle-card-label {
+  font-size: @fontSize;
+  font-weight: 500;
+  color: #333333;
+  line-height: 1.5;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-bottom: 4px;
+}
+
+.c-monitor-vehicle-card-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+
+.c-monitor-vehicle-pie {
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+}
+
+.c-monitor-vehicle-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.c-monitor-vehicle-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1;
+}
+
+.c-monitor-vehicle-stat-label {
+  font-size: calc(@fontSize * 0.8571);
+  color: #333333;
+  line-height: 1.5;
+}
+
+.c-monitor-vehicle-stat-value {
+  font-size: calc(@fontSize * 1.2857);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.c-monitor-vehicle-stat-value--blue {
+  color: #1399ff;
+}
+
+.c-monitor-vehicle-stat-value--orange {
+  color: #ff6a00;
+}
+
+// ============================================================
+// 流量预测 - FlowPrediction
+// ============================================================
+.c-monitor-flow-prediction {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.c-monitor-title-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.c-monitor-title-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.c-monitor-location-tabs {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.c-monitor-location-tab {
+  padding: 6px 16px;
+  font-size: @fontSize;
+  color: rgba(255, 255, 255, 0.8);
+  background: #6680a0;
+  border: 0.73px solid #acc4e1;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.3s;
+  white-space: nowrap;
+  flex-shrink: 0;
+
+  &:hover {
+    background: rgba(25, 144, 255, 0.8);
+  }
+
+  &.active {
+    background: #1990ff;
+    border-color: #1990ff;
+    color: #ffffff;
+  }
+}
+
+.c-monitor-holiday-link {
+  font-size: @fontSize;
+  color: #1990ff;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: opacity 0.3s;
+
+  &:hover {
+    opacity: 0.8;
+  }
+}
+
+.c-monitor-accuracy-labels {
+  position: absolute;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  pointer-events: none;
+}
+
+.c-monitor-accuracy-label {
+  font-size: calc(@fontSize * 0.8571);
+  color: #666666;
+  white-space: nowrap;
+}
+
+// ============================================================
+// 辅助内容区（统计项、图表区）
+// ============================================================
+.tunnel-stat,
+.bridge-stat {
+  display: flex;
+  flex-direction: column;
+}
+
+.hourly-flow-tunnel,
+.hourly-flow-bridge {
+  display: flex;
+  flex-direction: column;
+}
+
+.vehicle-distribution {
+  display: flex;
+  flex-direction: column;
+}
+
+.tunnel-vehicles-stats-x-2,
+.bridge-vehicles-stats-x-2 {
+  display: flex;
+  flex-direction: column;
+}
+
+.tunnel-vehicles,
+.bridge-vehicles {
+  display: flex;
+  flex-direction: row;
+}
+
+.el-stats-x-22,
+.el-stats-x-28 {
+  display: flex;
+  flex-direction: column;
+}
+
+.flow-prediction {
+  display: flex;
+  flex-direction: column;
+}
+
+.daily-total-flow {
+  display: flex;
+  flex-direction: column;
+}
+
+.el-el-x-12,
+.el-el-x-15,
+.el-el-x-32 {
+  display: flex;
+  flex-direction: column;
+  background-size: 100% auto;
+  background-position: center top;
+  background-repeat: no-repeat;
+}
+
+.el-el-x-18 {
+  background-size: 100% auto;
+  background-position: center top;
+  background-repeat: no-repeat;
+}
+
+// ============================================================
+// Ant Design 组件覆盖（使用 :deep）
+// ============================================================
+.c-monitor-daily-select {
+  :deep(.ant-select-selector) {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    height: 30px !important;
+  }
+
+  :deep(.ant-select-selection-item) {
+    font-size: @fontSize;
+    color: #333333;
+    line-height: 30px !important;
+  }
+
+  :deep(.ant-select-arrow) {
+    color: #333333;
+  }
+}

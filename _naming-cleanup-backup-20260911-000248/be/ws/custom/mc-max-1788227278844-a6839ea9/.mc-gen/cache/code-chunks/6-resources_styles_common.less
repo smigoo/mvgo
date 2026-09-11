@@ -1,0 +1,103 @@
+.c-env-monitor-root {
+  font-size: var(--fontSize, 14px);
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: @spacing-sm;
+  box-sizing: border-box;
+}
+
+.c-env-monitor-tabs {
+  display: flex;
+  flex-direction: row;
+  flex-shrink: 0;
+}
+
+.c-env-monitor-tabs-wrapper {
+  background-image: url(../images/bg-7890.png);
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+
+.c-env-monitor-tabs-list {
+  // 标签列表容器，背景/圆角已由 Figma 真值在 SectionTabs.vue 中定义，此处不重复
+}
+
+.c-env-monitor-tabs-icons {
+  // 图标按钮组容器
+}
+
+.c-env-monitor-tab-item {
+  // 单个标签项，交互态样式已在 SectionTabs.vue 中定义
+}
+
+.c-env-monitor-tab-active-bg {
+  // 激活态背景层，样式已在 SectionTabs.vue 中定义
+}
+
+.c-env-monitor-tab-text {
+  font-size: @fontSize;
+}
+
+.c-env-monitor-icon-btn {
+  // 图标按钮，样式已在 SectionTabs.vue 中定义
+}
+
+.c-env-monitor-icon-bar {
+  // 柱状图图标，样式已在 SectionTabs.vue 中定义
+}
+
+.c-env-monitor-icon-list {
+  // 列表图标，样式已在 SectionTabs.vue 中定义
+}
+
+.c-env-monitor-badge {
+  font-size: calc(@fontSize * 0.85);
+}
+
+.c-env-monitor-chart-section {
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: @spacing-xs;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.c-env-monitor-chart-container {
+  flex: 1 1 auto;
+  min-height: 80px;
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.c-env-monitor-chart-legend {
+  display: flex;
+  align-items: center;
+  gap: @spacing-sm;
+  flex-shrink: 0;
+  padding-left: @spacing-xs;
+  cursor: pointer;
+  user-select: none;
+}
+
+.c-env-monitor-chart-legend-color {
+  width: 14px;
+  height: 2px;
+  background: #0fcd7d;
+  border-radius: 1.6px;
+  flex-shrink: 0;
+}
+
+.c-env-monitor-chart-legend-text {
+  font-size: calc(@fontSize * 0.6857);
+  line-height: 1.4;
+  color: #333333;
+  font-family: 'Source Han Sans CN', 'PingFang SC', sans-serif;
+}

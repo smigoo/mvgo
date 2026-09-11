@@ -1,0 +1,244 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 82,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body",
+        "message": "body中重复渲染了标题文本，与header.title冗余",
+        "suggestion": "移除body中的文本节点，保持标题区结构简洁"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[1]",
+        "message": "tool-icons父节点错误挂载了resourceFile等图标属性",
+        "suggestion": "清理icon-group父级上的冗余图标属性，仅保留在子节点"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "headerRelation为title-itself但内部仍划分了header和body",
+        "suggestion": "若为纯标题区，建议移除body或调整headerRelation语义"
+      }
+    ],
+    "recommendations": [
+      "统一图表Y轴标签与图例的语义，修正设计稿中的'辆'与'CO浓度'冲突",
+      "将背景图配置统一收敛至styles或独立的background层，避免body属性散乱"
+    ],
+    "summary": "整体布局清晰，嵌套深度合理。但存在标题文本冗余、图标组属性挂载错误及headerRelation语义不一致等结构问题，修复后可达优秀标准。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorBg": "#EDF4FB",
+      "--colorPrimary": "#559EFF",
+      "--colorSuccess": "#2ecc71",
+      "--colorDanger": "#f53f3f",
+      "--colorWhite": "#ffffff",
+      "--colorTextBase": "#1f2d3d",
+      "--fontSize": "14px",
+      "--borderRadius": "6px",
+      "--chartAreaOpacity": "0.25"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-bg": "var(--colorBg)",
+      "@color-primary": "var(--colorPrimary)",
+      "@color-success": "var(--colorSuccess)",
+      "@color-danger": "var(--colorDanger)",
+      "@color-white": "var(--colorWhite)",
+      "@color-text-base": "var(--colorTextBase)",
+      "@font-size-base": "var(--fontSize)",
+      "@border-radius-base": "var(--borderRadius)",
+      "@chart-area-opacity": "var(--chartAreaOpacity)"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "background": "#EDF4FB",
+        "color": "var(--colorTextBase, #1f2d3d)",
+        "font-size": "var(--fontSize, 14px)",
+        "min-height": "100%",
+        "padding": "20px"
+      },
+      ".card": {
+        "background": "#ffffff",
+        "border-radius": "var(--borderRadius, 6px)",
+        "box-shadow": "0 2px 8px rgba(85, 158, 255, 0.15)"
+      },
+      ".tab-nav": {
+        "display": "flex",
+        "gap": "8px"
+      },
+      ".tab-item": {
+        "padding": "6px 16px",
+        "border-radius": "var(--borderRadius, 6px)",
+        "background": "#ffffff",
+        "color": "var(--colorTextBase, #1f2d3d)",
+        "cursor": "pointer",
+        "border": "none"
+      },
+      ".tab-item.is-active": {
+        "background": "var(--colorPrimary, #559EFF)",
+        "color": "#ffffff"
+      },
+      ".badge": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "min-width": "18px",
+        "height": "18px",
+        "padding": "0 6px",
+        "border-radius": "9px",
+        "background": "var(--colorDanger, #f53f3f)",
+        "color": "#ffffff",
+        "font-size": "12px",
+        "font-weight": "600"
+      },
+      ".area-chart-fill": {
+        "fill": "rgba(46, 204, 113, 0.25)",
+        "stroke": "var(--colorSuccess, #2ecc71)",
+        "stroke-width": "2"
+      },
+      ".warning-line": {
+        "border-top": "2px dashed var(--colorDanger, #f53f3f)"
+      }
+    },
+    "tokenCoverage": 1,
+    "mappingNotes": [
+      "背景色 #EDF4FB 映射为 --colorBg，作为浅灰蓝色主背景。",
+      "主蓝色 #559EFF 映射为 --colorPrimary，用于选中 Tab 背景、强调边框和交互状态。",
+      "绿色 #2ecc71 映射为 --colorSuccess，作为面积图填充色，并叠加 rgba(46,204,113,0.25) 实现浅色面积填充。",
+      "红色 #f53f3f 映射为 --colorDanger，用于红色虚线预警线和 Badge 数字背景。",
+      "#ffffff 映射为 --colorWhite，用于卡片、Tab 默认背景及 Badge 文字颜色。",
+      "额外推导深色文字颜色 --colorTextBase: #1f2d3d，确保浅色背景下文字可读。",
+      "CSS 变量统一使用 camelCase 命名，例如 --colorPrimary 而非 --color-primary。"
+    ],
+    "elementStyleMap": {
+      "section-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-controls": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tab-list": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tool-icons": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-14": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-header",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 2,
+        "title": "环境监测",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 2,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "section-controls",
+        "responsibility": "标签页切换区",
+        "elementCount": 4,
+        "title": "Tab切换与工具栏",
+        "complexityScore": 20,
+        "complexityReasons": {
+          "elementCount": 4,
+          "charts": 1,
+          "interactions": 4,
+          "maxDepth": 2
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "浓度趋势图",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 1,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 或存在高复杂度 section → 强制拆分",
+    "internalSubcomponents": []
+  }
+}

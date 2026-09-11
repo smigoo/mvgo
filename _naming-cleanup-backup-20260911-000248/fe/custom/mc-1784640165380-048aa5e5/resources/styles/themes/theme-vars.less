@@ -1,0 +1,27 @@
+/* 主题变量定义 */
+
+/* 框架级变量（可选） */
+.common() {
+  /* 如需框架级 CSS 变量可在此定义 */
+}
+
+/* 深色主题变量 */
+.theme-dark() {
+  @color-primary: #00f0ff;
+  @color-text-base: rgba(255, 255, 255, 1);
+  @color-text-secondary: rgba(255, 255, 255, 0.8);
+  @color-bg-base: rgba(5, 49, 51, 1);
+  @color-value-highlight: #00f0ff;
+}
+
+/* 浅色主题变量 */
+.theme-light() {
+  @color-primary: #1890ff;
+  @color-text-base: rgba(0, 0, 0, 0.85);
+  @color-text-secondary: rgba(0, 0, 0, 0.65);
+  @color-bg-base: #ffffff;
+  @color-value-highlight: #1890ff;
+}
+
+/* 全局调用深色主题作为默认值 */
+.theme-dark();

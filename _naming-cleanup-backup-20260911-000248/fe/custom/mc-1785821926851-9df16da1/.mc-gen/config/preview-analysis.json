@@ -1,0 +1,584 @@
+{
+  "generatedAt": "2026-04-27T10:19:15.595Z",
+  "stage": "preview-analysis",
+  "componentName": "运单信息",
+  "componentTitle": "运单信息",
+  "analysisModel": "gpt-5.4",
+  "sourceImage": {
+    "path": "{outputPath}/c-lljc/resources/images/mc-preview.png",
+    "size": 709937,
+    "mtimeMs": 1777285034334,
+    "sha1": "4ef988ae2dbf004f8a071940c71e9b64e4a43dd7"
+  },
+  "summary": "深色主题弹窗组件，展示危化品运单信息。包含顶部标题栏（含车牌标签）、运单列表表格（支持行选中）、以及选中运单的详细信息（文本字段网格布局 + 监控截图）。",
+  "layout": {
+    "type": "vertical-stack",
+    "direction": "vertical",
+    "sections": [
+      {
+        "id": "section-header",
+        "name": "弹窗标题栏",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "title-itself",
+        "slotCandidate": null,
+        "header": {
+          "title": "运单信息",
+          "controls": [
+            {
+              "id": "vehicle-tag",
+              "name": "车牌号标签",
+              "role": "badge",
+              "value": "苏A 12345"
+            },
+            {
+              "id": "close-btn",
+              "name": "关闭按钮",
+              "role": "icon-button",
+              "value": "X",
+              "resourceFile": "../resources/images/分割线-98952.png",
+              "resourceVarName": "icon1",
+              "recommendedUsage": "decorativeBlock",
+              "downloadStatus": "success"
+            }
+          ]
+        },
+        "body": {
+          "layout": "horizontal",
+          "bgPlaceholder": "header-bg",
+          "children": [
+            {
+              "id": "header-icon",
+              "name": "标题左侧图标",
+              "role": "装饰",
+              "type": "icon",
+              "resourceFile": "../resources/images/分割线-98952.png",
+              "recommendedUsage": "decorativeBlock",
+              "resourceVarName": "icon1",
+              "downloadStatus": "success"
+            },
+            {
+              "id": "header-title-text",
+              "name": "标题文字",
+              "role": "文本",
+              "type": "text",
+              "text": "运单信息",
+              "styles": {
+                "fontSize": "18px",
+                "color": "#ffffff",
+                "fontWeight": "bold"
+              }
+            },
+            {
+              "id": "header-badge",
+              "name": "车牌标签",
+              "role": "标签",
+              "type": "badge",
+              "text": "苏A 12345",
+              "styles": {
+                "backgroundColor": "#B07B00",
+                "color": "#ffffff",
+                "borderRadius": "2px",
+                "padding": "2px 8px"
+              }
+            },
+            {
+              "id": "header-close",
+              "name": "关闭按钮",
+              "role": "按钮",
+              "type": "icon-button",
+              "resourceFile": "../resources/images/分割线-98952.png",
+              "recommendedUsage": "decorativeBlock",
+              "resourceVarName": "icon1",
+              "downloadStatus": "success"
+            }
+          ],
+          "backgroundImage": {
+            "src": "../resources/images/bg-2.png",
+            "recommendedUsage": "backgroundStyle"
+          },
+          "backgroundSize": "cover",
+          "backgroundPosition": "center",
+          "backgroundRepeat": "no-repeat"
+        }
+      },
+      {
+        "id": "section-table",
+        "name": "运单列表表格",
+        "role": "常驻",
+        "layout": "vertical",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "body": {
+          "layout": "table",
+          "bgPlaceholder": "table-bg",
+          "children": [
+            {
+              "id": "table-header-row",
+              "name": "表头",
+              "role": "表头",
+              "type": "table-row",
+              "children": [
+                {
+                  "type": "th",
+                  "text": "运单编号"
+                },
+                {
+                  "type": "th",
+                  "text": "危化品名称"
+                },
+                {
+                  "type": "th",
+                  "text": "超运地"
+                },
+                {
+                  "type": "th",
+                  "text": "实际发车时间"
+                },
+                {
+                  "type": "th",
+                  "text": "目的地"
+                },
+                {
+                  "type": "th",
+                  "text": "预计到达时间"
+                },
+                {
+                  "type": "th",
+                  "text": "满载情况"
+                },
+                {
+                  "type": "th",
+                  "text": "运输状态"
+                }
+              ]
+            },
+            {
+              "id": "table-row-1",
+              "name": "运单行1（选中）",
+              "role": "数据行",
+              "type": "table-row",
+              "active": true,
+              "children": [
+                {
+                  "type": "td",
+                  "text": "3203502388..."
+                },
+                {
+                  "type": "td",
+                  "text": "烟花"
+                },
+                {
+                  "type": "td",
+                  "text": "江阴"
+                },
+                {
+                  "type": "td",
+                  "text": "2023-11-22 06:20:46"
+                },
+                {
+                  "type": "td",
+                  "text": "靖江"
+                },
+                {
+                  "type": "td",
+                  "text": "--"
+                },
+                {
+                  "type": "td",
+                  "text": "满载"
+                },
+                {
+                  "type": "td",
+                  "text": "在途"
+                }
+              ]
+            },
+            {
+              "id": "table-row-2",
+              "name": "运单行2",
+              "role": "数据行",
+              "type": "table-row",
+              "active": false,
+              "children": [
+                {
+                  "type": "td",
+                  "text": "3203502388..."
+                },
+                {
+                  "type": "td",
+                  "text": "硫酸"
+                },
+                {
+                  "type": "td",
+                  "text": "无锡"
+                },
+                {
+                  "type": "td",
+                  "text": "2023-11-20 06:20:46"
+                },
+                {
+                  "type": "td",
+                  "text": "泰州"
+                },
+                {
+                  "type": "td",
+                  "text": "--"
+                },
+                {
+                  "type": "td",
+                  "text": "满载"
+                },
+                {
+                  "type": "td",
+                  "text": "在途"
+                }
+              ]
+            },
+            {
+              "id": "table-row-3",
+              "name": "运单行3",
+              "role": "数据行",
+              "type": "table-row",
+              "active": false,
+              "children": [
+                {
+                  "type": "td",
+                  "text": "3203502388..."
+                },
+                {
+                  "type": "td",
+                  "text": "硫酸"
+                },
+                {
+                  "type": "td",
+                  "text": "江阴"
+                },
+                {
+                  "type": "td",
+                  "text": "2023-11-19 06:20:46"
+                },
+                {
+                  "type": "td",
+                  "text": "靖江"
+                },
+                {
+                  "type": "td",
+                  "text": "--"
+                },
+                {
+                  "type": "td",
+                  "text": "满载"
+                },
+                {
+                  "type": "td",
+                  "text": "在途"
+                }
+              ]
+            }
+          ],
+          "backgroundImage": {
+            "src": "../resources/images/bg-2.png",
+            "recommendedUsage": "backgroundStyle"
+          },
+          "backgroundSize": "cover",
+          "backgroundPosition": "center",
+          "backgroundRepeat": "no-repeat"
+        }
+      },
+      {
+        "id": "section-detail",
+        "name": "运单详情",
+        "role": "常驻",
+        "layout": "vertical",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "header": {
+          "title": "运单详情",
+          "controls": []
+        },
+        "body": {
+          "layout": "horizontal",
+          "bgPlaceholder": "detail-bg",
+          "children": [
+            {
+              "id": "detail-text-grid",
+              "name": "详情文本信息",
+              "role": "文本组",
+              "layout": "grid-2-columns",
+              "children": [
+                {
+                  "id": "field-origin",
+                  "type": "key-value",
+                  "label": "起运地",
+                  "value": "江苏省无锡市江阴市"
+                },
+                {
+                  "id": "field-danger-name",
+                  "type": "key-value",
+                  "label": "危险品名称",
+                  "value": "烟花"
+                },
+                {
+                  "id": "field-category",
+                  "type": "key-value",
+                  "label": "分类名称",
+                  "value": "危险品(1类4项)"
+                },
+                {
+                  "id": "field-dest",
+                  "type": "key-value",
+                  "label": "目的地",
+                  "value": "江苏省泰州市靖江市"
+                },
+                {
+                  "id": "field-distance",
+                  "type": "key-value",
+                  "label": "运输里程",
+                  "value": "200(KM)"
+                },
+                {
+                  "id": "field-depart-time",
+                  "type": "key-value",
+                  "label": "发车时间",
+                  "value": "2023-11-22 06:20:46"
+                },
+                {
+                  "id": "field-arrive-time",
+                  "type": "key-value",
+                  "label": "预计到达时间",
+                  "value": "2023-11-22 12:04:21"
+                },
+                {
+                  "id": "field-load",
+                  "type": "key-value",
+                  "label": "满载情况",
+                  "value": "满载货物"
+                },
+                {
+                  "id": "field-weight",
+                  "type": "key-value",
+                  "label": "总重量",
+                  "value": "9.8(吨)"
+                },
+                {
+                  "id": "field-driver",
+                  "type": "key-value",
+                  "label": "驾驶员姓名",
+                  "value": "张悦"
+                },
+                {
+                  "id": "field-phone",
+                  "type": "key-value",
+                  "label": "驾驶员电话",
+                  "value": "13955086495"
+                },
+                {
+                  "id": "field-remark",
+                  "type": "key-value",
+                  "label": "备注",
+                  "value": "栖霞大道浦口104国道桥宁马高速路路二桥百水桥栖霞大道",
+                  "span": "full-width"
+                }
+              ]
+            },
+            {
+              "id": "detail-image",
+              "name": "监控截图",
+              "role": "图片",
+              "type": "image",
+              "resourceFile": "../resources/images/img-99044.png",
+              "recommendedUsage": "imgSrc",
+              "styles": {
+                "width": "237px",
+                "height": "155px",
+                "border": "1px solid rgba(255,255,255,0.2)"
+              }
+            }
+          ],
+          "backgroundImage": {
+            "src": "../resources/images/bg-2.png",
+            "recommendedUsage": "backgroundStyle"
+          },
+          "backgroundSize": "cover",
+          "backgroundPosition": "center",
+          "backgroundRepeat": "no-repeat"
+        }
+      }
+    ]
+  },
+  "styles": {
+    "theme": "深色科技数据风",
+    "backgroundBrightness": "dark",
+    "colors": [
+      "rgba(0, 48, 50, 1)",
+      "rgba(255, 255, 255, 1)",
+      "rgba(176, 123, 0, 1)",
+      "rgba(0, 240, 255, 1)"
+    ],
+    "background": "深青色背景 (#003032)",
+    "decorations": [
+      "标题左侧菱形/矢量图标",
+      "详情标题前的白色小方块装饰"
+    ],
+    "emphasis": [
+      "选中表格行高亮",
+      "黄色车牌标签"
+    ]
+  },
+  "interactions": [
+    {
+      "target": "运单列表表格行",
+      "type": "tab-switch",
+      "description": "点击不同行切换下方运单详情内容",
+      "defaultState": "第一行默认选中（高亮）",
+      "evidence": "第一行背景色与其他行不同，且下方详情数据与第一行对应（烟花、江阴）"
+    },
+    {
+      "target": "右上角关闭按钮",
+      "type": "button",
+      "description": "关闭弹窗",
+      "defaultState": "常驻",
+      "evidence": "标准的 'X' 图标位于右上角"
+    }
+  ],
+  "charts": [],
+  "doNotInvent": [
+    "表格分页控件（未显示）",
+    "详情内容的编辑功能（纯展示）",
+    "监控图片的点击放大功能（未显示）",
+    "更多的运单数据（仅显示3行）"
+  ],
+  "notes": [
+    "表格列'运单编号'内容被截断显示为 '3203502388...'",
+    "详情文本布局为两列网格，'备注'字段横跨底部",
+    "监控截图位于详情区域最右侧"
+  ],
+  "coverageReport": {
+    "totalFigma": 108,
+    "matchedCount": 0,
+    "missingCount": 67,
+    "uncertainCount": 16,
+    "coverageRate": 0,
+    "missing": [
+      {
+        "name": "弹窗2",
+        "type": "GROUP",
+        "depth": 0
+      },
+      {
+        "name": "header",
+        "type": "GROUP",
+        "depth": 1
+      },
+      {
+        "name": "Frame 2136637420",
+        "type": "FRAME",
+        "depth": 2
+      },
+      {
+        "name": "点背景",
+        "type": "FRAME",
+        "depth": 3
+      },
+      {
+        "name": "Group 4272",
+        "type": "GROUP",
+        "depth": 4
+      },
+      {
+        "name": "分割线",
+        "type": "GROUP",
+        "depth": 3
+      },
+      {
+        "name": "Group 4114",
+        "type": "GROUP",
+        "depth": 2
+      },
+      {
+        "name": "常住人口",
+        "type": "TEXT",
+        "depth": 2
+      },
+      {
+        "name": "Frame 2136639137",
+        "type": "FRAME",
+        "depth": 2
+      },
+      {
+        "name": "常住人口",
+        "type": "TEXT",
+        "depth": 3
+      },
+      {
+        "name": "slot-con",
+        "type": "FRAME",
+        "depth": 1
+      },
+      {
+        "name": "@antd/table",
+        "type": "FRAME",
+        "depth": 2
+      },
+      {
+        "name": "bg",
+        "type": "FRAME",
+        "depth": 3
+      },
+      {
+        "name": "运单编号",
+        "type": "TEXT",
+        "depth": 3
+      },
+      {
+        "name": "危化品名称",
+        "type": "TEXT",
+        "depth": 3
+      }
+    ],
+    "uncertain": [
+      {
+        "name": "烟花",
+        "type": "TEXT"
+      },
+      {
+        "name": "江阴",
+        "type": "TEXT"
+      },
+      {
+        "name": "靖江",
+        "type": "TEXT"
+      },
+      {
+        "name": "满载",
+        "type": "TEXT"
+      },
+      {
+        "name": "在途",
+        "type": "TEXT"
+      },
+      {
+        "name": "硫酸",
+        "type": "TEXT"
+      },
+      {
+        "name": "泰州",
+        "type": "TEXT"
+      },
+      {
+        "name": "满载",
+        "type": "TEXT"
+      },
+      {
+        "name": "在途",
+        "type": "TEXT"
+      },
+      {
+        "name": "硫酸",
+        "type": "TEXT"
+      }
+    ],
+    "summary": "需关注"
+  }
+}

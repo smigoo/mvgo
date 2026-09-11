@@ -1,0 +1,262 @@
+{
+  "schemaVersion": 1,
+  "mode": "shadow",
+  "pipeline": "vue3",
+  "iteration": 0,
+  "generatedAt": "2026-09-02T15:08:58.063Z",
+  "productionInputMode": "legacy",
+  "engineerInputChanged": false,
+  "metrics": {
+    "legacyEstimatedBytes": 65461,
+    "generationInputBytes": 3555,
+    "reductionBytes": 61906,
+    "reductionRate": 94.57,
+    "issueCount": 1,
+    "rejectedClaimCount": 1
+  },
+  "trustVerdict": {
+    "level": "restricted",
+    "reasons": [
+      "覆盖率偏低 (50%)"
+    ],
+    "visual": {
+      "verdict": "warning",
+      "reason": "覆盖率偏低 (50%)",
+      "coverageRate": 50,
+      "recognizedSections": 0
+    },
+    "restrictions": [
+      "no-unsupported-decoration",
+      "no-style-fallback",
+      "resolve-legend-owner"
+    ]
+  },
+  "budget": {
+    "limits": {
+      "totalBytes": 30720,
+      "designFactsBytes": 12288,
+      "componentPlanBytes": 8192,
+      "resourceManifestBytes": 30720,
+      "currentIssuesBytes": 4096,
+      "maxIssues": 20
+    },
+    "sections": {
+      "designFacts": 656,
+      "componentPlan": 499,
+      "resourceManifest": 782,
+      "currentIssues": 131
+    },
+    "totalBytes": 3553,
+    "passed": true,
+    "violations": []
+  },
+  "generationInput": {
+    "schemaVersion": 1,
+    "designFacts": {
+      "root": {
+        "nodeId": "2:7879",
+        "nodeName": "cp-环境监测",
+        "size": {
+          "width": 420,
+          "height": 186,
+          "unit": "css-px",
+          "source": "figma-api"
+        },
+        "styleEvidence": {
+          "background": {
+            "allowed": false,
+            "source": "figma-api",
+            "evidenceCount": 0
+          },
+          "border": {
+            "allowed": false,
+            "source": "figma-api",
+            "evidenceCount": 0
+          },
+          "borderRadius": {
+            "allowed": false,
+            "value": null,
+            "source": "figma-api"
+          },
+          "boxShadow": {
+            "allowed": false,
+            "source": "figma-api",
+            "evidenceCount": 0
+          }
+        }
+      },
+      "charts": [
+        {
+          "id": "chart-area",
+          "type": "area",
+          "series": [
+            "CO浓度"
+          ],
+          "legend": {
+            "items": [],
+            "owner": "none",
+            "position": "top-right"
+          },
+          "source": "visual-analysis"
+        }
+      ],
+      "provenance": {
+        "deterministicSource": "figma-api",
+        "semanticSource": "visual-analysis"
+      }
+    },
+    "componentPlan": {
+      "effectiveSections": [
+        {
+          "id": "header-tabs",
+          "title": "顶部tab栏",
+          "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+          "elementCount": 4
+        },
+        {
+          "id": "chart-controls",
+          "title": "图表控制栏",
+          "responsibility": "图表/数据可视化区",
+          "elementCount": 3
+        },
+        {
+          "id": "chart-area",
+          "title": "图表区域",
+          "responsibility": "图表/数据可视化区",
+          "elementCount": 4
+        }
+      ],
+      "isForced": true,
+      "minFiles": 5,
+      "reason": "有效 sections=3 ≥ 3 或存在高复杂度 section → 强制拆分"
+    },
+    "resourceManifest": [
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundStyle",
+        "figmaNodeId": "2:7880"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:7890"
+      },
+      {
+        "resourceId": "bg-tab-active",
+        "fileName": "bg-tab-active",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:7891"
+      },
+      {
+        "resourceId": "tabs-icon",
+        "fileName": "tabs-icon",
+        "role": null,
+        "recommendedUsage": "decorativeBlock",
+        "figmaNodeId": "89:43"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7941"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7945"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:7950"
+      }
+    ],
+    "currentIssues": [
+      {
+        "id": "CONTEXT-ROOT-BACKGROUND-CONFLICT",
+        "status": "open",
+        "severity": "warning",
+        "expectedAction": "do-not-generate-root-background"
+      }
+    ],
+    "trustVerdict": {
+      "level": "restricted",
+      "reasons": [
+        "覆盖率偏低 (50%)"
+      ],
+      "visual": {
+        "verdict": "warning",
+        "reason": "覆盖率偏低 (50%)",
+        "coverageRate": 50,
+        "recognizedSections": 0
+      },
+      "restrictions": [
+        "no-unsupported-decoration",
+        "no-style-fallback",
+        "resolve-legend-owner"
+      ]
+    },
+    "contextManifest": {
+      "stage": "engineer",
+      "mode": "shadow-only",
+      "included": [
+        "schemaVersion",
+        "designFacts",
+        "componentPlan",
+        "resourceManifest",
+        "currentIssues",
+        "trustVerdict"
+      ],
+      "excluded": [
+        "figmaData",
+        "figmaNodeData",
+        "figmaStyleTree",
+        "visualAnalysis",
+        "visualElements",
+        "reviewResult",
+        "styleMappings",
+        "previousCritiques"
+      ],
+      "diagnosticsRef": {
+        "figma": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mv-max-1788361436694-e145a6d3/.checkpoint/figma.json",
+        "visual": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mv-max-1788361436694-e145a6d3/.checkpoint/visual.json",
+        "analysis": "/Users/smigoo/工作/mvgo/temp-components/6a51f7caed28c5d5b13c61a5/mv-max-1788361436694-e145a6d3/.checkpoint/analysis.json"
+      },
+      "conflictSummary": {
+        "rejectedClaimCount": 1,
+        "rejectedClaimIds": [
+          "visual-analysis:root.background"
+        ]
+      },
+      "budget": {
+        "limits": {
+          "totalBytes": 30720,
+          "designFactsBytes": 12288,
+          "componentPlanBytes": 8192,
+          "resourceManifestBytes": 30720,
+          "currentIssuesBytes": 4096,
+          "maxIssues": 20
+        },
+        "sections": {
+          "designFacts": 656,
+          "componentPlan": 499,
+          "resourceManifest": 782,
+          "currentIssues": 131
+        },
+        "totalBytes": 3553,
+        "passed": true,
+        "violations": []
+      }
+    }
+  }
+}

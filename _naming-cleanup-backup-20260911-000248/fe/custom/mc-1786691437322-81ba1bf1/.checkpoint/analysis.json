@@ -1,0 +1,289 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 75,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections",
+        "message": "顶部统计指标（设备类型、总数、完好率）在 headerSlots 和 summary 中明确提及，但在 layout.sections 中完全缺失，导致该部分 UI 无法生成。",
+        "suggestion": "在 layout.sections 顶部补充一个 header-stats 区域，用于渲染 headerSlots 中定义的统计指标，确保 UI 完整性。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[1].body.children[1].items",
+        "message": "device-grid 中的 12 个设备项结构高度重复，在 JSON 中完全展开导致结构臃肿，增加解析和代码生成负担。",
+        "suggestion": "在布局结构中仅定义一个设备项模板（Template），在实际代码生成阶段通过 v-for 和数据驱动进行循环渲染。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[0].body.items[0].children",
+        "message": "卡片内部嵌套层级过深（达到 5-6 层），包含不必要的 content-group 和 label-row 包装层，增加了 DOM 节点复杂度。",
+        "suggestion": "扁平化卡片内部结构，移除冗余的包装层，直接使用 flex 布局对齐图标、标签和数值。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body.backgroundImage & layout.sections[1].body.backgroundImage",
+        "message": "top-cards 和 main-content-area 的 body 均引用了相同的背景图 bg-8788.png，可能导致背景重叠、层级混乱或渲染异常。",
+        "suggestion": "将背景图统一设置在外层父容器（如 main-content-area 或整个 layout 根节点）上，避免在相邻子 section 中重复引用。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[0]",
+        "message": "sidebar-tabs 使用了 width: 60 固定像素宽度，不符合微码规范中'容器布局禁止固定宽度'的约束。",
+        "suggestion": "将固定宽度改为 flex: 0 0 60px，以确保在自适应布局中的正确表现和响应式能力。"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "layout.sections[*].bgPlaceholder",
+        "message": "bgPlaceholder 命名存在冗余（如 section-bg-top-cards 和 body-bg-top-cards），且部分字段在实际代码生成中可能未被有效利用。",
+        "suggestion": "简化 bgPlaceholder 命名，或直接使用语义化的 CSS 类名（如 bg-top-cards），保持命名简洁清晰。"
+      }
+    ],
+    "recommendations": [
+      "补充顶部统计指标区域的布局结构，确保 headerSlots 中定义的元素在 layout 中有对应的渲染位置。",
+      "将 device-grid 中的重复设备项抽象为单一模板，在代码生成时通过 v-for 循环渲染，大幅减少 JSON 体积。",
+      "统一背景图的使用，避免在相邻的 section 中重复引用同一张背景图，建议提取到外层容器统一管理。",
+      "简化卡片内部的嵌套层级，移除不必要的 content-group 和 label-row 包装，直接使用 flex 布局提升渲染性能。",
+      "将内联的 style 属性（如卡片的 background、borderRadius）提取到统一的 styles 对象或 CSS 类中，保持布局结构与样式的分离。"
+    ],
+    "summary": "整体布局采用了清晰的上下和左右分区设计，符合常规监测面板的交互逻辑。但存在顶部统计区域结构缺失的严重问题，且设备列表部分存在大量冗余节点和过深的嵌套。建议补充缺失区域、抽象重复模板、简化嵌套层级，并统一背景图配置，以提升结构的完整性、可维护性和生成性能。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1990ff",
+      "--colorSecondary": "#08a3a5",
+      "--colorDanger": "#f53f3f",
+      "--colorTextBase": "#333333",
+      "--colorBgBase": "#edf4fb",
+      "--fontSize": "14px",
+      "--fontSizeLarge": "24px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#1990ff",
+      "@color-secondary": "#08a3a5",
+      "@color-danger": "#f53f3f",
+      "@color-text-base": "#333333",
+      "@color-bg-base": "#edf4fb",
+      "@font-size-base": "14px",
+      "@font-size-large": "24px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "16px",
+        "background": "rgba(237,244,251,1)",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)"
+      },
+      ".tab-active": {
+        "background-color": "var(--colorPrimary)",
+        "color": "#ffffff",
+        "border-radius": "4px"
+      },
+      ".card-gradient": {
+        "background": "linear-gradient(135deg, rgba(25,144,255,0.08) 0%, rgba(8,163,165,0.04) 100%)",
+        "border-radius": "8px",
+        "padding": "16px",
+        "border": "1px solid rgba(25,144,255,0.1)"
+      },
+      ".value-large-blue": {
+        "font-size": "var(--fontSizeLarge)",
+        "font-weight": "bold",
+        "color": "var(--colorPrimary)"
+      },
+      ".value-large-cyan": {
+        "font-size": "var(--fontSizeLarge)",
+        "font-weight": "bold",
+        "color": "var(--colorSecondary)"
+      },
+      ".value-large-red": {
+        "font-size": "var(--fontSizeLarge)",
+        "font-weight": "bold",
+        "color": "var(--colorDanger)"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 #1990ff 映射为 --colorPrimary，用于左侧Tab选中态和蓝色数值",
+      "辅助青色 #08a3a5 映射为 --colorSecondary，用于青色数值和渐变点缀",
+      "异常红色 #f53f3f 映射为 --colorDanger，用于异常数高亮和红色数值",
+      "基础文字 #333333 映射为 --colorTextBase",
+      "浅蓝灰背景 #edf4fb 映射为 --colorBgBase，容器背景直接落地为 Figma 字面量值 rgba(237,244,251,1)",
+      "顶部卡片渐变背景使用主色和辅色的低透明度线性渐变实现科技风质感",
+      "大号数值通过 --fontSizeLarge 和对应的颜色变量组合实现视觉强调效果"
+    ],
+    "elementStyleMap": {
+      "el-el-x-2": {
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "card-tunnel-content-group-x-1-label-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-tunnel-content-group-x-1-label-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-tunnel-content-group-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-tunnel": {
+        "background": "linear-gradient(90deg, #4facfe 0%, #00f2fe 100%)",
+        "border-radius": "8px",
+        "padding": "16px",
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-content-group-x-5-label-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-content-group-x-5-label-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-content-group-x-5": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-label-row-x-6": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-label-row-x-9": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-north-south-content-group-x-1-label-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-north-south-content-group-x-1-label-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-north-south-content-group-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-north-south": {
+        "background": "rgba(230, 235, 240, 1)",
+        "border-radius": "8px",
+        "padding": "16px",
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-content-group-x-14-label-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-content-group-x-14-label-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-content-group-x-14": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-label-row-x-15": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-label-row-x-18": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "main-content-area": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "sidebar-tabs": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-22": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-el-x-31": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-el-x-34": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-el-x-37": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-el-x-40": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-el-x-43": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-el-x-46": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-el-x-49": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-el-x-52": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-el-x-55": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-el-x-58": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-el-x-61": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-el-x-64": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      }
+    }
+  }
+}

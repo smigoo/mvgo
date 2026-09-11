@@ -1,0 +1,105 @@
+@import './themes/theme-vars.less';
+
+.c-mc-1785743893840-a9bcc0ba-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 12px;
+  box-sizing: border-box;
+  // 禁止设置 background, box-shadow, border-radius，由 base-panel 统一处理
+}
+
+.c-mc-1785743893840-a9bcc0ba-tabs-section {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.c-mc-1785743893840-a9bcc0ba-tabs-list {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  background: linear-gradient(90deg, @tab-bg-start, @tab-bg-end);
+  border: 0.72px solid rgba(255, 255, 255, 1);
+  border-radius: 4px;
+  padding: 3px;
+  gap: 4px;
+}
+
+.c-mc-1785743893840-a9bcc0ba-tab-item {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 12px;
+  color: @tab-text-color;
+  padding: 6px 12px;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  border: 0.6px solid transparent;
+  
+  &:hover {
+    color: @tab-active-text-color;
+  }
+
+  &.is-active {
+    color: @tab-active-text-color;
+    background: linear-gradient(90deg, @tab-active-start, @tab-active-end);
+    border: 0.6px solid rgba(255, 255, 255, 1);
+    box-shadow: 0 0.6px 0 rgba(0, 111, 227, 1);
+  }
+}
+
+// 独立状态类，确保精确匹配框架提取的 class 列表
+.is-active {
+  color: @tab-active-text-color;
+  background: linear-gradient(90deg, @tab-active-start, @tab-active-end);
+  border: 0.6px solid rgba(255, 255, 255, 1);
+  box-shadow: 0 0.6px 0 rgba(0, 111, 227, 1);
+}
+
+.c-mc-1785743893840-a9bcc0ba-toolbar {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+}
+
+.c-mc-1785743893840-a9bcc0ba-toolbar-icon {
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  display: block;
+}
+
+.c-mc-1785743893840-a9bcc0ba-badge {
+  width: 14px;
+  height: 14px;
+  background: @badge-bg;
+  border-radius: 50%;
+  color: #ffffff;
+  font-family: 'PingFang SC', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 14px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.c-mc-1785743893840-a9bcc0ba-chart-section {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.c-mc-1785743893840-a9bcc0ba-chart-container {
+  flex: 1;
+  width: 100%;
+  min-height: 100px;
+}

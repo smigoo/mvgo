@@ -1,0 +1,180 @@
+.c-mc-max-1786072596911-a2f6d560-env-monitor {
+  width: 100%;
+  height: 100%;
+  background-color: #edf4fb;
+  box-shadow: 0 4px 10px rgba(74, 117, 141, 0.25);
+  padding: 20px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+.c-mc-max-1786072596911-a2f6d560-indicator-list {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+}
+.c-mc-max-1786072596911-a2f6d560-indicator-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 8px;
+}
+.c-mc-max-1786072596911-a2f6d560-indicator-icon {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+.c-mc-max-1786072596911-a2f6d560-indicator-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.c-mc-max-1786072596911-a2f6d560-indicator-label {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  color: #666666;
+  line-height: 1.5;
+}
+.c-mc-max-1786072596911-a2f6d560-indicator-value {
+  font-family: 'Roboto', sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  color: #333333;
+  line-height: 1.2;
+}
+.c-mc-max-1786072596911-a2f6d560-indicator-unit {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  color: #666666;
+  margin-left: 2px;
+}
+.dark .c-mc-max-1786072596911-a2f6d560-env-monitor {
+  width: 100%;
+  height: 100%;
+  background-color: #1a2332;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+  padding: 20px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+.dark .c-mc-max-1786072596911-a2f6d560-indicator-list {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+}
+.dark .c-mc-max-1786072596911-a2f6d560-indicator-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 8px;
+}
+.dark .c-mc-max-1786072596911-a2f6d560-indicator-icon {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+.dark .c-mc-max-1786072596911-a2f6d560-indicator-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.dark .c-mc-max-1786072596911-a2f6d560-indicator-label {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  color: #a0a0a0;
+  line-height: 1.5;
+}
+.dark .c-mc-max-1786072596911-a2f6d560-indicator-value {
+  font-family: 'Roboto', sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.2;
+}
+.dark .c-mc-max-1786072596911-a2f6d560-indicator-unit {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  color: #a0a0a0;
+  margin-left: 2px;
+}
+.light .c-mc-max-1786072596911-a2f6d560-env-monitor {
+  width: 100%;
+  height: 100%;
+  background-color: #edf4fb;
+  box-shadow: 0 4px 10px rgba(74, 117, 141, 0.25);
+  padding: 20px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+.light .c-mc-max-1786072596911-a2f6d560-indicator-list {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+}
+.light .c-mc-max-1786072596911-a2f6d560-indicator-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 8px;
+}
+.light .c-mc-max-1786072596911-a2f6d560-indicator-icon {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+.light .c-mc-max-1786072596911-a2f6d560-indicator-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.light .c-mc-max-1786072596911-a2f6d560-indicator-label {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  color: #666666;
+  line-height: 1.5;
+}
+.light .c-mc-max-1786072596911-a2f6d560-indicator-value {
+  font-family: 'Roboto', sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  color: #333333;
+  line-height: 1.2;
+}
+.light .c-mc-max-1786072596911-a2f6d560-indicator-unit {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  color: #666666;
+  margin-left: 2px;
+}

@@ -1,0 +1,650 @@
+{
+  "completed": [
+    "1-declare.json",
+    "2-package/index.vue",
+    "3-package/index.vue",
+    "4-package/index.vue",
+    "5-resources/styles/themes/theme-vars.less",
+    "6-resources/styles/common.less",
+    "5-package/components/SectionHeaderStats.vue",
+    "7-package/components/SectionHeader.vue",
+    "8-package/components/Frame2136638825.vue",
+    "9-package/components/Frame2136638826.vue",
+    "10-package/components/Frame2136638827.vue",
+    "6-package/components/SectionMainContent.vue",
+    "11-package/components/SectionSwitch.vue",
+    "12-package/components/SectionActive.vue",
+    "13-package/components/SectionActiveLine1.vue",
+    "14-package/components/SectionActiveLine2.vue",
+    "15-package/components/SectionActiveIcon.vue",
+    "17-package/components/SectionDefaultLine1.vue",
+    "16-package/components/SectionDefault.vue",
+    "18-package/components/SectionDefaultLine2.vue",
+    "19-package/components/SectionDefaultIcon.vue",
+    "21-package/components/SectionCons.vue",
+    "20-package/components/SectionAntdTab.vue",
+    "22-package/components/GroupCamera.vue",
+    "23-package/components/GroupCameraDecor.vue",
+    "24-package/components/GroupRobot.vue",
+    "25-package/components/GroupRobotDecor.vue",
+    "26-package/components/GroupCoviDetector.vue",
+    "27-package/components/GroupCoviDecor.vue",
+    "28-package/components/GroupLightMeter.vue",
+    "29-package/components/GroupLightDecor.vue",
+    "30-package/components/GroupLidar.vue",
+    "31-package/components/GroupLidarDecor.vue",
+    "33-package/components/GroupWindDecor.vue",
+    "32-package/components/GroupWindSensor.vue",
+    "34-package/components/GroupTempHumidity.vue",
+    "35-package/components/GroupTempDecor.vue",
+    "36-package/components/GroupEmergencyPhone.vue",
+    "37-package/components/GroupEmergencyDecor.vue",
+    "38-package/components/GroupHeightDetector.vue",
+    "39-package/components/GroupHeightDecor.vue",
+    "40-package/components/GroupCo2Sensor.vue",
+    "41-package/components/GroupCo2Decor.vue",
+    "42-package/components/GroupPressureSensor.vue",
+    "43-package/components/GroupPressureDecor.vue",
+    "44-package/components/GroupWaterQuality.vue",
+    "45-package/components/GroupWaterDecor.vue",
+    "47-package/components/Group1321317970A.vue",
+    "46-package/components/Group2136637321.vue",
+    "48-package/components/Group2136637552.vue",
+    "49-package/components/Group1321317970B.vue",
+    "50-package/components/Group2136637555.vue",
+    "51-package/components/Group1321317970C.vue",
+    "53-package/components/Group1321317970D.vue",
+    "52-package/components/Group2136637558.vue",
+    "54-package/components/Group2136637550.vue",
+    "55-package/components/Group1321317970E.vue",
+    "57-package/components/Group1321317970F.vue",
+    "58-package/components/Group2136637556.vue",
+    "59-package/components/Group1321317970G.vue",
+    "56-package/components/Group2136637553.vue",
+    "60-package/components/Group2136637559.vue",
+    "61-package/components/Group1321317970H.vue",
+    "63-package/components/Group1321317970I.vue",
+    "62-package/components/Group2136637551.vue",
+    "64-package/components/Group2136637554.vue",
+    "65-package/components/Group1321317970J.vue",
+    "66-package/components/Group2136637557.vue",
+    "67-package/components/Group1321317970K.vue",
+    "68-package/components/Group2136637560.vue",
+    "69-package/components/Group1321317970L.vue",
+    "70-resources/styles/themes/theme-vars.less"
+  ],
+  "total": 6,
+  "updatedAt": 1789015856016,
+  "files": {
+    "declare.json": [
+      {
+        "index": 1,
+        "file": "1-declare.json",
+        "segmentType": "declare",
+        "scriptPart": ""
+      }
+    ],
+    "package/index.vue": [
+      {
+        "index": 2,
+        "file": "2-package_index.vue",
+        "segmentType": "template",
+        "scriptPart": ""
+      },
+      {
+        "index": 3,
+        "file": "3-package_index.vue",
+        "segmentType": "script",
+        "scriptPart": "state"
+      },
+      {
+        "index": 4,
+        "file": "4-package_index.vue",
+        "segmentType": "script",
+        "scriptPart": "lifecycle"
+      }
+    ],
+    "resources/styles/themes/theme-vars.less": [
+      {
+        "index": 5,
+        "file": "5-resources_styles_themes_theme-vars.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      },
+      {
+        "index": 70,
+        "file": "70-resources_styles_themes_theme-vars.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      }
+    ],
+    "resources/styles/common.less": [
+      {
+        "index": 6,
+        "file": "6-resources_styles_common.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/SectionHeaderStats.vue": [
+      {
+        "index": 5,
+        "file": "5-package_components_SectionHeaderStats.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/SectionHeader.vue": [
+      {
+        "index": 7,
+        "file": "7-package_components_SectionHeader.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/Frame2136638825.vue": [
+      {
+        "index": 8,
+        "file": "8-package_components_Frame2136638825.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/Frame2136638826.vue": [
+      {
+        "index": 9,
+        "file": "9-package_components_Frame2136638826.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/Frame2136638827.vue": [
+      {
+        "index": 10,
+        "file": "10-package_components_Frame2136638827.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/SectionMainContent.vue": [
+      {
+        "index": 6,
+        "file": "6-package_components_SectionMainContent.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/SectionSwitch.vue": [
+      {
+        "index": 11,
+        "file": "11-package_components_SectionSwitch.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/SectionActive.vue": [
+      {
+        "index": 12,
+        "file": "12-package_components_SectionActive.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/SectionActiveLine1.vue": [
+      {
+        "index": 13,
+        "file": "13-package_components_SectionActiveLine1.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/SectionActiveLine2.vue": [
+      {
+        "index": 14,
+        "file": "14-package_components_SectionActiveLine2.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/SectionActiveIcon.vue": [
+      {
+        "index": 15,
+        "file": "15-package_components_SectionActiveIcon.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/SectionDefaultLine1.vue": [
+      {
+        "index": 17,
+        "file": "17-package_components_SectionDefaultLine1.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/SectionDefault.vue": [
+      {
+        "index": 16,
+        "file": "16-package_components_SectionDefault.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/SectionDefaultLine2.vue": [
+      {
+        "index": 18,
+        "file": "18-package_components_SectionDefaultLine2.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/SectionDefaultIcon.vue": [
+      {
+        "index": 19,
+        "file": "19-package_components_SectionDefaultIcon.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/SectionCons.vue": [
+      {
+        "index": 21,
+        "file": "21-package_components_SectionCons.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/SectionAntdTab.vue": [
+      {
+        "index": 20,
+        "file": "20-package_components_SectionAntdTab.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/GroupCamera.vue": [
+      {
+        "index": 22,
+        "file": "22-package_components_GroupCamera.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/GroupCameraDecor.vue": [
+      {
+        "index": 23,
+        "file": "23-package_components_GroupCameraDecor.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/GroupRobot.vue": [
+      {
+        "index": 24,
+        "file": "24-package_components_GroupRobot.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/GroupRobotDecor.vue": [
+      {
+        "index": 25,
+        "file": "25-package_components_GroupRobotDecor.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/GroupCoviDetector.vue": [
+      {
+        "index": 26,
+        "file": "26-package_components_GroupCoviDetector.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/GroupCoviDecor.vue": [
+      {
+        "index": 27,
+        "file": "27-package_components_GroupCoviDecor.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/GroupLightMeter.vue": [
+      {
+        "index": 28,
+        "file": "28-package_components_GroupLightMeter.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/GroupLightDecor.vue": [
+      {
+        "index": 29,
+        "file": "29-package_components_GroupLightDecor.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/GroupLidar.vue": [
+      {
+        "index": 30,
+        "file": "30-package_components_GroupLidar.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/GroupLidarDecor.vue": [
+      {
+        "index": 31,
+        "file": "31-package_components_GroupLidarDecor.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/GroupWindDecor.vue": [
+      {
+        "index": 33,
+        "file": "33-package_components_GroupWindDecor.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/GroupWindSensor.vue": [
+      {
+        "index": 32,
+        "file": "32-package_components_GroupWindSensor.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/GroupTempHumidity.vue": [
+      {
+        "index": 34,
+        "file": "34-package_components_GroupTempHumidity.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/GroupTempDecor.vue": [
+      {
+        "index": 35,
+        "file": "35-package_components_GroupTempDecor.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/GroupEmergencyPhone.vue": [
+      {
+        "index": 36,
+        "file": "36-package_components_GroupEmergencyPhone.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/GroupEmergencyDecor.vue": [
+      {
+        "index": 37,
+        "file": "37-package_components_GroupEmergencyDecor.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/GroupHeightDetector.vue": [
+      {
+        "index": 38,
+        "file": "38-package_components_GroupHeightDetector.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/GroupHeightDecor.vue": [
+      {
+        "index": 39,
+        "file": "39-package_components_GroupHeightDecor.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/GroupCo2Sensor.vue": [
+      {
+        "index": 40,
+        "file": "40-package_components_GroupCo2Sensor.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/GroupCo2Decor.vue": [
+      {
+        "index": 41,
+        "file": "41-package_components_GroupCo2Decor.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/GroupPressureSensor.vue": [
+      {
+        "index": 42,
+        "file": "42-package_components_GroupPressureSensor.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/GroupPressureDecor.vue": [
+      {
+        "index": 43,
+        "file": "43-package_components_GroupPressureDecor.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/GroupWaterQuality.vue": [
+      {
+        "index": 44,
+        "file": "44-package_components_GroupWaterQuality.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/GroupWaterDecor.vue": [
+      {
+        "index": 45,
+        "file": "45-package_components_GroupWaterDecor.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/Group1321317970A.vue": [
+      {
+        "index": 47,
+        "file": "47-package_components_Group1321317970A.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/Group2136637321.vue": [
+      {
+        "index": 46,
+        "file": "46-package_components_Group2136637321.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/Group2136637552.vue": [
+      {
+        "index": 48,
+        "file": "48-package_components_Group2136637552.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/Group1321317970B.vue": [
+      {
+        "index": 49,
+        "file": "49-package_components_Group1321317970B.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/Group2136637555.vue": [
+      {
+        "index": 50,
+        "file": "50-package_components_Group2136637555.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/Group1321317970C.vue": [
+      {
+        "index": 51,
+        "file": "51-package_components_Group1321317970C.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/Group1321317970D.vue": [
+      {
+        "index": 53,
+        "file": "53-package_components_Group1321317970D.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/Group2136637558.vue": [
+      {
+        "index": 52,
+        "file": "52-package_components_Group2136637558.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/Group2136637550.vue": [
+      {
+        "index": 54,
+        "file": "54-package_components_Group2136637550.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/Group1321317970E.vue": [
+      {
+        "index": 55,
+        "file": "55-package_components_Group1321317970E.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/Group1321317970F.vue": [
+      {
+        "index": 57,
+        "file": "57-package_components_Group1321317970F.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/Group2136637556.vue": [
+      {
+        "index": 58,
+        "file": "58-package_components_Group2136637556.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/Group1321317970G.vue": [
+      {
+        "index": 59,
+        "file": "59-package_components_Group1321317970G.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/Group2136637553.vue": [
+      {
+        "index": 56,
+        "file": "56-package_components_Group2136637553.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/Group2136637559.vue": [
+      {
+        "index": 60,
+        "file": "60-package_components_Group2136637559.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/Group1321317970H.vue": [
+      {
+        "index": 61,
+        "file": "61-package_components_Group1321317970H.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/Group1321317970I.vue": [
+      {
+        "index": 63,
+        "file": "63-package_components_Group1321317970I.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/Group2136637551.vue": [
+      {
+        "index": 62,
+        "file": "62-package_components_Group2136637551.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/Group2136637554.vue": [
+      {
+        "index": 64,
+        "file": "64-package_components_Group2136637554.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/Group1321317970J.vue": [
+      {
+        "index": 65,
+        "file": "65-package_components_Group1321317970J.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/Group2136637557.vue": [
+      {
+        "index": 66,
+        "file": "66-package_components_Group2136637557.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/Group1321317970K.vue": [
+      {
+        "index": 67,
+        "file": "67-package_components_Group1321317970K.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/Group2136637560.vue": [
+      {
+        "index": 68,
+        "file": "68-package_components_Group2136637560.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/Group1321317970L.vue": [
+      {
+        "index": 69,
+        "file": "69-package_components_Group1321317970L.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ]
+  }
+}

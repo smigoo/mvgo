@@ -1,0 +1,396 @@
+@import './themes/theme-vars.less';
+
+// ─── 头部区域 ───────────────────────────────────────────────
+/* [Layout Refine] Figma header g bbox 8×8 → title-dot 8×8 */
+.c-mc-max-1785981394966-e19214f4-title-dot {
+  width: 8px;
+  height: 8px;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+/* [Layout Refine] Figma header Frame2136638825/826/827 layoutMode=HORIZONTAL counterAxisAlignItems=CENTER → flex row align-items center */
+.c-mc-max-1785981394966-e19214f4-header-stats {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  /* [Layout Refine] Figma Frame2136638826.x - Frame2136638825.x - Frame2136638825.width = 1681-1595-80=6 → gap approx 6px; Frame2136638827.x - Frame2136638826.x - Frame2136638826.width = 1802-1681-115=6 */
+  gap: 6px;
+}
+
+/* [Layout Refine] Figma Frame2136638825 layoutMode=HORIZONTAL counterAxisAlignItems=CENTER itemSpacing=1 */
+.c-mc-max-1785981394966-e19214f4-stat-group {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  /* [Layout Refine] Figma itemSpacing=1 */
+  gap: 1px;
+}
+
+/* [Style Refine] Figma 设备类型 fills SOLID rgb(51,51,51); font Source Han Sans CN 14px w400 lh21 */
+.c-mc-max-1785981394966-e19214f4-stat-label {
+  font-family: @font-body;
+  font-size: @font-size-md;
+  font-weight: 400;
+  line-height: 21px;
+  color: @color-stat-label;
+  white-space: nowrap;
+}
+
+/* [Style Refine] Figma 28/68562 fills GRADIENT_LINEAR + SOLID rgb(25,144,255); font Roboto 20px w700 lh23.4 */
+.c-mc-max-1785981394966-e19214f4-stat-value {
+  font-family: @font-num;
+  font-size: @font-size-xl;
+  font-weight: 700;
+  line-height: 23px;
+  color: @color-stat-value;
+  white-space: nowrap;
+}
+
+/* [Style Refine] Figma 98% fills SOLID rgb(8,163,165); font Roboto 20px w700 lh23.4 */
+.c-mc-max-1785981394966-e19214f4-stat-value-green {
+  font-family: @font-num;
+  font-size: @font-size-xl;
+  font-weight: 700;
+  line-height: 23px;
+  color: @color-stat-value-green;
+  white-space: nowrap;
+}
+
+/* [Layout Refine] Figma Frame(Vector) bbox 16×16 */
+.c-mc-max-1785981394966-e19214f4-header-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+// ─── 主体内容区 ──────────────────────────────────────────────
+/* [Layout Refine] Figma slot-con bbox 407×380 内含 switch(h≈65) + @antd/tab(h=317); padding从slot-con与switch偏移量推算: switch.y - slot-con.y = 475-475=0 top padding, switch.x - slot-con.x = 1486-1475=11 left padding */
+.c-mc-max-1785981394966-e19214f4-body {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  /* [Layout Refine] slot-con内 switch到@antd/tab间距: tab.y - switch.y - switch.height = 538-475-65≈-2 → 实为紧邻, 用gap:2px */
+  gap: 2px;
+  padding: 0 0 0 11px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+// ─── 顶部切换区（隧道设备 / 南北接线设备）────────────────────
+/* [Layout Refine] Figma switch bbox 396×65, contains active(w≈193) + default(w≈193); layoutMode未标注但两子项并排 → flex row */
+.c-mc-max-1785981394966-e19214f4-switch-row {
+  display: flex;
+  flex-direction: row;
+  /* [Layout Refine] default.x - active.x - active.width = 1689-1486-193≈10 → gap 10px */
+  gap: 10px;
+  width: 100%;
+  /* [Layout Refine] Figma switch height=65 → flex-shrink:0 固定高度 */
+  height: 65px;
+  flex-shrink: 0;
+}
+
+/* [Layout Refine] Figma active/default bbox各≈193×65 */
+.c-mc-max-1785981394966-e19214f4-switch-item {
+  /* [Layout Refine] 两个switch-item各占约193px，总396px含gap10，每个flex:1 */
+  flex: 1;
+  min-width: 0;
+  height: 65px;
+  /* [Style Refine] Figma active bg cornerRadius=6 */
+  border-radius: @radius-md;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  /* [Layout Refine] icon bbox x=1504, active.x=1486 → padding-left≈18; text starts at x=1500→padding-left≈14; 取14px */
+  padding: 0 10px 0 14px;
+  box-sizing: border-box;
+  /* [Layout Refine] icon(w=35) 与 info区 间距: line1.x - icon.x - icon.w = 1550-1504-35=11 → gap≈8px */
+  gap: 8px;
+  cursor: pointer;
+  transition: @transition-base;
+  position: relative;
+  overflow: hidden;
+}
+
+/* [Layout Refine] Figma icon bbox 35×28 */
+.c-mc-max-1785981394966-e19214f4-switch-icon {
+  width: 35px;
+  height: 28px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+/* [Layout Refine] Figma switch-info 包含 t-标题 + line1(h=23) + line2(h=23); flex column */
+.c-mc-max-1785981394966-e19214f4-switch-info {
+  display: flex;
+  flex-direction: column;
+  /* [Layout Refine] line1.y - active.y = 481-475=6; t-隧道设备.y - active.y = 514-475=39; line2.y - active.y = 510-475=35 → title在下方，line1在上；实为 line1顶部offset=6, title offset=39, line2 offset=35 → 排列顺序: title置底部，line1/line2在右侧上方。Figma结构: t-隧道设备在左侧(x=1500)，line1/line2在右侧(x=1550)，但icon同在左侧(x=1504)。实际布局: icon左，右侧分上下两块：上(line1+line2)，下(标题)。但标题y=514 > line2.y=510,两者几乎同高，标题在line2下方。取 column gap=2 */
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+/* [Style Refine] Figma t-隧道设备 fills SOLID rgb(255,255,255); font YouSheBiaoTiHei 12px w400 lh15.6 */
+.c-mc-max-1785981394966-e19214f4-switch-title--active {
+  font-family: @font-icon-label;
+  font-size: @font-size-sm;
+  font-weight: 400;
+  line-height: 16px;
+  color: @color-switch-title-active;
+}
+
+/* [Style Refine] Figma t-南北接线设备 fills SOLID rgb(51,51,51); font YouSheBiaoTiHei 12px w400 */
+.c-mc-max-1785981394966-e19214f4-switch-title--default {
+  font-family: @font-icon-label;
+  font-size: @font-size-sm;
+  font-weight: 400;
+  line-height: 16px;
+  color: @color-switch-title-default;
+}
+
+/* [Layout Refine] Figma line1/line2 layoutMode=HORIZONTAL counterAxisAlignItems=CENTER itemSpacing=1 */
+.c-mc-max-1785981394966-e19214f4-switch-data-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 1px;
+}
+
+/* [Style Refine] Figma active t-总数: fills SOLID rgb(255,255,255); Source Han Sans CN 14px w400 lh21 */
+.c-mc-max-1785981394966-e19214f4-switch-data-label {
+  font-family: @font-body;
+  font-size: @font-size-md;
+  font-weight: 400;
+  line-height: 21px;
+  color: @color-switch-data-label-active;
+  white-space: nowrap;
+}
+
+/* [Style Refine] Figma active d-56302 fills GRADIENT+SOLID rgb(255,255,255); Roboto 20px w700 lh23.4 */
+.c-mc-max-1785981394966-e19214f4-switch-data-value {
+  font-family: @font-num;
+  font-size: @font-size-xl;
+  font-weight: 700;
+  line-height: 23px;
+  color: @color-switch-data-value-active;
+  white-space: nowrap;
+}
+
+/* [Style Refine] Figma default t-总数: fills SOLID rgb(51,51,51) */
+.c-mc-max-1785981394966-e19214f4-switch-item--default {
+  .c-mc-max-1785981394966-e19214f4-switch-data-label {
+    color: @color-switch-data-label-default;
+  }
+  .c-mc-max-1785981394966-e19214f4-switch-data-value {
+    color: @color-switch-data-value-default;
+  }
+}
+
+/* [Style Refine] 异常数值用红色: active d-5 fills SOLID rgb(224,52,52) */
+.c-mc-max-1785981394966-e19214f4-switch-data-value--error {
+  color: @color-switch-data-value-error;
+}
+
+// ─── 主区域：左侧 Tab + 右侧卡片网格 ─────────────────────────
+/* [Layout Refine] Figma @antd/tab bbox: tabs(w=46,h=317) + cons(w=367,h=295); 水平排列 */
+.c-mc-max-1785981394966-e19214f4-main-area {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+  /* [Layout Refine] cons.x - tabs.x - tabs.width = 1518-1475-46=-3 → tabs与cons紧邻，实际cons.x=1518，tabs右边=1475+46=1521, diff=-3; gap≈0，用3px间距 */
+  gap: 3px;
+}
+
+// ─── 左侧竖向 Tab ─────────────────────────────────────────────
+/* [Layout Refine] Figma tabs bbox w=46, h=317; 内部tab-active(h=54)+tab(h=44)+tab(h=40)+tab(h=56)+tab(h=72)+tab(h=40) → flex column */
+.c-mc-max-1785981394966-e19214f4-tab-list {
+  display: flex;
+  flex-direction: column;
+  /* [Layout Refine] tab间距: tab照明.y - tab-active.y - tab-active.h = 591-538-54=-1 → 紧邻无gap */
+  gap: 0;
+  flex-shrink: 0;
+  /* [Layout Refine] Figma tabs width=46 */
+  width: 46px;
+}
+
+/* [Layout Refine] Figma tab-active bg bbox 34×44 (offset y=548从tab-active.y=538偏移10); tab-active整体h=54 */
+.c-mc-max-1785981394966-e19214f4-tab-item {
+  /* [Layout Refine] Figma tab bg width=34 */
+  width: 34px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 0;
+  box-sizing: border-box;
+  cursor: pointer;
+  transition: @transition-base;
+  position: relative;
+  gap: 2px;
+}
+
+/* [Layout Refine] Figma tab-active高度=54px: 含Frame2136638920(h=18,y=538) + bg(h=44,y=548) + t-监控(h=36) */
+.c-mc-max-1785981394966-e19214f4-tab-item--monitor {
+  height: 54px;
+}
+
+/* [Layout Refine] Figma tab照明 h=44 */
+.c-mc-max-1785981394966-e19214f4-tab-item--lighting {
+  height: 44px;
+}
+
+/* [Layout Refine] Figma tab通风 h=40 */
+.c-mc-max-1785981394966-e19214f4-tab-item--ventilation {
+  height: 40px;
+}
+
+/* [Layout Refine] Figma tab消防 h=40 */
+.c-mc-max-1785981394966-e19214f4-tab-item--fire {
+  height: 40px;
+}
+
+/* [Layout Refine] Figma tab交通诱导 h=72 */
+.c-mc-max-1785981394966-e19214f4-tab-item--traffic-guide {
+  height: 72px;
+}
+
+/* [Layout Refine] Figma tab供配电 h=56 */
+.c-mc-max-1785981394966-e19214f4-tab-item--power {
+  height: 56px;
+}
+
+/* [Style Refine] Figma tab-active t-监控 fills SOLID rgb(255,255,255) font Source Han Sans CN 14px w700 lh18 */
+/* [Style Refine] Figma tab d-照明等 fills SOLID rgb(59,128,231) font Source Han Sans CN 14px w400 lh16 */
+.c-mc-max-1785981394966-e19214f4-tab-label {
+  font-family: @font-body;
+  font-size: @font-size-md;
+  font-weight: 400;
+  line-height: 16px;
+  color: @color-tab-label-default;
+  text-align: center;
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  white-space: nowrap;
+}
+
+.c-mc-max-1785981394966-e19214f4-tab-item--active {
+  .c-mc-max-1785981394966-e19214f4-tab-label {
+    /* [Style Refine] Figma tab-active t-监控 w700 color #ffffff */
+    font-weight: 700;
+    color: @color-tab-label-active;
+  }
+}
+
+/* [Style Refine] Figma Frame2136638920: fills SOLID rgb(255,255,255); DROP_SHADOW offset(0,1) radius2 rgba(51,101,144,0.4); stroke SOLID rgb(37,141,200) 1px; bbox 38×18; padding L2 R2; itemSpacing=10 */
+/* [Layout Refine] Figma Frame2136638920 layoutMode=HORIZONTAL primaryAxisAlignItems=CENTER counterAxisAlignItems=CENTER; bbox 38×18 */
+.c-mc-max-1785981394966-e19214f4-tab-badge-active {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  width: 38px;
+  height: 18px;
+  padding: 0 2px;
+  box-sizing: border-box;
+  background: @color-tab-badge-bg-active;
+  /* [Style Refine] Figma stroke SOLID rgb(37,141,200) strokeWeight=1 */
+  border: 1px solid @color-tab-badge-border-active;
+  /* [Style Refine] Figma DROP_SHADOW offset(0,1) radius2 rgba(51,101,144,0.4) */
+  box-shadow: 0 1px 2px 0 rgba(51, 101, 144, 0.4);
+  /* [Style Refine] Figma d-3/3740 fills SOLID rgb(59,128,231); Source Han Sans CN 14px w500 lh18 */
+  font-family: @font-body;
+  font-size: @font-size-md;
+  font-weight: 500;
+  line-height: 18px;
+  color: @color-tab-badge-text-active;
+  white-space: nowrap;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+/* [Style Refine] Figma Group1321315882 bg fills SOLID rgb(245,63,63) cornerRadius=29; d-3 fills SOLID rgb(255,255,255) Roboto 12px w500 lh14 */
+.c-mc-max-1785981394966-e19214f4-tab-badge-alert {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* [Layout Refine] Figma Group1321315882 bbox 14×14 */
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  box-sizing: border-box;
+  background: @color-tab-badge-bg-alert;
+  /* [Style Refine] Figma cornerRadius=29 */
+  border-radius: 29px;
+  font-family: @font-num;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 14px;
+  color: @color-tab-badge-text-alert;
+  white-space: nowrap;
+  flex-shrink: 0;
+  position: absolute;
+  /* [Layout Refine] Figma Group1321315882.x - tab.x = 1498-1475=23; Group1321315882.y - tab.y = 591-591=0 → top-right corner */
+  top: 0;
+  right: 0;
+}
+
+// ─── 右侧设备卡片网格 ─────────────────────────────────────────
+/* [Layout Refine] Figma cons bbox 367×295; 含3列×4行=12卡片，每卡117×64; 列间距: Group2136637553.x - Group2136637321.x - 117 = 1643-1518-117=8 → col-gap=8; 行间距: Group2136637552.y - Group2136637321.y - 64 = 627-550-64=13 → row-gap=13 */
+.c-mc-max-1785981394966-e19214f4-device-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 117px);
+  grid-template-rows: repeat(4, 64px);
+  /* [Layout Refine] col间距≈8, row间距≈13 */
+  column-gap: 8px;
+  row-gap: 13px;
+  flex: 1;
+  min-width: 0;
+  align-content: start;
+  overflow: hidden;
+}
+
+/* [Layout Refine] Figma 每个设备card bbox 117×64; icon bbox 27×32 padding-left = icon.x - group.x = 1524-1518=6; 文字x = 1557-1518=39 → padding区计算 padding: 0 8px 0 6px */
+.c-mc-max-1785981394966-e19214f4-device-card {
+  width: 117px;
+  height: 64px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  /* [Layout Refine] icon.x - group.x = 6px left; text.x - (icon.x + icon.w) = 1557-1524-27=6 → gap=6 */
+  padding: 0 8px 0 6px;
+  box-sizing: border-box;
+  gap: 6px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+/* [Layout Refine] Figma icon(摄像机等) bbox 27×32 */
+.c-mc-max-1785981394966-e19214f4-device-icon {
+  width: 27px;
+  height: 32px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+/* [Layout Refine] device-info: 名称(h=18) + 数值(h=21); flex column */
+.c-mc-max-1785981394966-e19214f4-device-info {
+  display: flex;
+  flex-direction: column;
+  /* [Layout Refine] 摄像机.y=1563, (2/484).y=1585; 数值y - 名称y - 名称h = 585-563-18=4 → gap≈4px */
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+/* [Style Refine] Figma 摄像机等 TEXT fills SOLID rgb(51,51,51); Source Han Sans CN 12px w400 lh18 */
+.c-mc-max-1785981394966-e19214f4-device-name {
+  font-family: @font-body;
+  font-size: @font-size-sm;
+  font-weight: 400;
+  line-height: 18px;
+  color: @color-device-name;
+  white-space: nowrap;
+  overflow: hidden;

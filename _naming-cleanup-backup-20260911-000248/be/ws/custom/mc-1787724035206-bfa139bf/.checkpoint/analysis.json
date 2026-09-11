@@ -1,0 +1,188 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 82,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body.children[1]",
+        "message": "section-header的header.title与body中的标题文本重复，会导致标题渲染两次，应先由header统一渲染，body只保留装饰。",
+        "suggestion": "移除body中的重复文本节点，或将该节配置为title-itself时仅使用body渲染。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[1]",
+        "message": "icon-group节点上误挂了resourceFile等单图标资源字段，易造成渲染歧义或重复加载。",
+        "suggestion": "删除icon-group上的资源字段，只保留具体icon-button内的icon资源。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[1].body.children[1].children[0].icon",
+        "message": "控制栏按钮嵌套层级达5层，建议将icon-button与icon合并为单个button配置，减少嵌套。",
+        "suggestion": "使用iconButton直接承载icon属性，不再拆分icon对象。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[2].body.children[0].children",
+        "message": "图表容器children平铺了axis/legend/reference等子元素，结构过深，建议图表数据抽为配置化字段。",
+        "suggestion": "将图表的坐标轴、图例、预警线配置统一放入chart配置中，而不是children。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[0].children[0].elements[0]",
+        "message": "y轴标签第一个元素为“辆”，会被误当作刻度值，建议将单位移到单独unit字段或末尾。",
+        "suggestion": "在y-axis-labels中增加unit字段，存储单位“辆”，刻度elements只保留数字。"
+      }
+    ],
+    "recommendations": [
+      "抽离公共装饰组为单背景图，减少重复图标节点",
+      "图表元素采用配置式描述，提高可读性和扩展性",
+      "用SVG/canvas绘制坐标轴和预警线，降低DOM节点数量"
+    ],
+    "summary": "整体布局结构清晰，但存在标题重复、资源字段错位及少量深层嵌套，需清理冗余并规范化层级。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorBg": "#EDF4FB",
+      "--colorPrimary": "#559EFF",
+      "--colorSuccess": "#00B42A",
+      "--colorDanger": "#F53F3F",
+      "--colorTextBase": "#1D2129",
+      "--colorTextSecondary": "#86909C",
+      "--fontSize": "14px",
+      "--borderRadius": "4px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-bg": "#EDF4FB",
+      "@color-primary": "#559EFF",
+      "@color-success": "#00B42A",
+      "@color-danger": "#F53F3F",
+      "@color-text-base": "#1D2129",
+      "@color-text-secondary": "#86909C",
+      "@font-size-base": "14px",
+      "@border-radius-base": "4px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "background-color": "#EDF4FB",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)"
+      },
+      ".title-decoration": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "4px"
+      },
+      ".title-decoration-dot": {
+        "width": "6px",
+        "height": "6px",
+        "border-radius": "50%",
+        "background-color": "var(--colorPrimary)"
+      },
+      ".tab-active": {
+        "background-color": "var(--colorPrimary)",
+        "color": "#FFFFFF",
+        "border-radius": "var(--borderRadius)"
+      },
+      ".warning-line": {
+        "border-top": "2px dashed var(--colorDanger)"
+      },
+      ".badge-danger": {
+        "background-color": "var(--colorDanger)",
+        "color": "#FFFFFF",
+        "border-radius": "50%",
+        "width": "16px",
+        "height": "16px",
+        "display": "flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "font-size": "12px",
+        "font-weight": "bold"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "背景色 #EDF4FB 映射为 --colorBg，作为浅色科技监测风的基础底色",
+      "主色调 #559EFF 映射为 --colorPrimary，用于Tab选中态及标题装饰元素",
+      "状态色 #00B42A (绿) 和 #F53F3F (红) 分别映射为 --colorSuccess 和 --colorDanger，用于预警线和Badge",
+      "辅助文字/边框色 #86909C 映射为 --colorTextSecondary",
+      "标题左侧三色圆点通过 .title-decoration 和 .title-decoration-dot 组合实现复用",
+      "红色Badge数字6通过 .badge-danger 类实现，固定宽高和圆形背景",
+      "容器背景应优先直接落地为 Figma 字面量值，避免关键可见背景只依赖 CSS 变量"
+    ],
+    "elementStyleMap": {
+      "section-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-decoration-group-x-2": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-controls": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-tab-group-x-8": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-icon-group-x-13": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-17-chart-container-x-0-reference-line-预警线-2": {
+        "color": "#F53F3F"
+      },
+      "el-el-x-17": {
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "el-chart-container-x-18-reference-line-预警线-2": {
+        "color": "#F53F3F"
+      },
+      "el-reference-line-预警线-40": {
+        "color": "#F53F3F"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-header",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 5,
+        "title": "环境监测"
+      },
+      {
+        "id": "section-controls",
+        "responsibility": "控制栏（请按功能拆分）",
+        "elementCount": 8,
+        "title": "控制栏"
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 24,
+        "title": "图表区"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 → 强制拆分"
+  }
+}

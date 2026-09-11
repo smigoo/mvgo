@@ -1,0 +1,306 @@
+{
+  "generatedAt": "2026-04-27T10:19:15.595Z",
+  "stage": "preview-analysis",
+  "componentName": "管辖范围",
+  "componentTitle": "管辖范围",
+  "analysisModel": "gpt-5.4",
+  "sourceImage": {
+    "path": "{outputPath}/c-lljc/resources/images/mc-preview.png",
+    "size": 709937,
+    "mtimeMs": 1777285034334,
+    "sha1": "4ef988ae2dbf004f8a071940c71e9b64e4a43dd7"
+  },
+  "summary": "展示管辖范围内的主线长度、隧道数量、桥梁数量和工区数量。包含标题栏和四个横向排列的统计指标项，每个项包含图标、标签和数值。",
+  "layout": {
+    "type": "vertical-stack",
+    "direction": "vertical",
+    "sections": [
+      {
+        "id": "jurisdiction-scope",
+        "name": "管辖范围",
+        "role": "常驻",
+        "layout": "vertical",
+        "bgPlaceholder": "section-bg-jurisdiction",
+        "headerRelation": "title-itself",
+        "slotCandidate": null,
+        "header": {
+          "title": "管辖范围",
+          "controls": [],
+          "titleLeftIcon": {
+            "type": "icon",
+            "resourceFile": "../resources/images/Group_4114-1199.png",
+            "recommendedUsage": "imgSrc",
+            "width": 17,
+            "height": 18
+          }
+        },
+        "body": {
+          "layout": "horizontal-4-items",
+          "bgPlaceholder": "body-bg-jurisdiction",
+          "backgroundImage": {
+            "src": "../resources/images/bg-954.png",
+            "recommendedUsage": "backgroundStyle"
+          },
+          "items": [
+            {
+              "id": "stat-mainline",
+              "layout": "horizontal",
+              "alignItems": "center",
+              "gap": "12px",
+              "icon": {
+                "placeholder": "icon-mainline",
+                "resourceFile": "../resources/images/icon-1955.png",
+                "recommendedUsage": "imgSrc",
+                "position": "left",
+                "width": 40,
+                "height": 40,
+                "decoration": "bottom-glow"
+              },
+              "content": {
+                "layout": "vertical",
+                "position": "right",
+                "elements": [
+                  {
+                    "type": "label",
+                    "text": "主线",
+                    "figmaNode": "unknown",
+                    "styles": {
+                      "fontSize": "14px",
+                      "color": "rgba(255, 255, 255, 0.8)",
+                      "fontWeight": "normal"
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "position": "bottom",
+                    "parts": [
+                      {
+                        "text": "185.6",
+                        "type": "number",
+                        "figmaNode": "unknown",
+                        "styles": {
+                          "fontSize": "28px",
+                          "color": "rgba(255, 255, 255, 1)",
+                          "fontWeight": "bold"
+                        }
+                      },
+                      {
+                        "text": "km",
+                        "type": "unit",
+                        "figmaNode": "unknown",
+                        "styles": {
+                          "fontSize": "14px",
+                          "color": "rgba(255, 255, 255, 0.8)",
+                          "fontWeight": "normal"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "stat-tunnel",
+              "layout": "horizontal",
+              "alignItems": "center",
+              "gap": "12px",
+              "icon": {
+                "placeholder": "icon-tunnel",
+                "resourceFile": "../resources/images/icon-1961.png",
+                "recommendedUsage": "imgSrc",
+                "position": "left",
+                "width": 40,
+                "height": 40,
+                "decoration": "bottom-glow"
+              },
+              "content": {
+                "layout": "vertical",
+                "position": "right",
+                "elements": [
+                  {
+                    "type": "label",
+                    "text": "隧道",
+                    "figmaNode": "unknown",
+                    "styles": {
+                      "fontSize": "14px",
+                      "color": "rgba(255, 255, 255, 0.8)",
+                      "fontWeight": "normal"
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "position": "bottom",
+                    "parts": [
+                      {
+                        "text": "1",
+                        "type": "number",
+                        "figmaNode": "unknown",
+                        "styles": {
+                          "fontSize": "28px",
+                          "color": "rgba(255, 255, 255, 1)",
+                          "fontWeight": "bold"
+                        }
+                      },
+                      {
+                        "text": "条",
+                        "type": "unit",
+                        "figmaNode": "unknown",
+                        "styles": {
+                          "fontSize": "14px",
+                          "color": "rgba(255, 255, 255, 0.8)",
+                          "fontWeight": "normal"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "stat-bridge",
+              "layout": "horizontal",
+              "alignItems": "center",
+              "gap": "12px",
+              "icon": {
+                "placeholder": "icon-bridge",
+                "resourceFile": "../resources/images/icon-1964.png",
+                "recommendedUsage": "imgSrc",
+                "position": "left",
+                "width": 40,
+                "height": 40,
+                "decoration": "bottom-glow"
+              },
+              "content": {
+                "layout": "vertical",
+                "position": "right",
+                "elements": [
+                  {
+                    "type": "label",
+                    "text": "桥",
+                    "figmaNode": "unknown",
+                    "styles": {
+                      "fontSize": "14px",
+                      "color": "rgba(255, 255, 255, 0.8)",
+                      "fontWeight": "normal"
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "position": "bottom",
+                    "parts": [
+                      {
+                        "text": "3",
+                        "type": "number",
+                        "figmaNode": "unknown",
+                        "styles": {
+                          "fontSize": "28px",
+                          "color": "rgba(255, 255, 255, 1)",
+                          "fontWeight": "bold"
+                        }
+                      },
+                      {
+                        "text": "座",
+                        "type": "unit",
+                        "figmaNode": "unknown",
+                        "styles": {
+                          "fontSize": "14px",
+                          "color": "rgba(255, 255, 255, 0.8)",
+                          "fontWeight": "normal"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "stat-workzone",
+              "layout": "horizontal",
+              "alignItems": "center",
+              "gap": "12px",
+              "icon": {
+                "placeholder": "icon-workzone",
+                "position": "left",
+                "width": 40,
+                "height": 40,
+                "decoration": "bottom-glow",
+                "note": "Resource missing, use CSS or placeholder"
+              },
+              "content": {
+                "layout": "vertical",
+                "position": "right",
+                "elements": [
+                  {
+                    "type": "label",
+                    "text": "工区",
+                    "figmaNode": "unknown",
+                    "styles": {
+                      "fontSize": "14px",
+                      "color": "rgba(255, 255, 255, 0.8)",
+                      "fontWeight": "normal"
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "position": "bottom",
+                    "parts": [
+                      {
+                        "text": "1",
+                        "type": "number",
+                        "figmaNode": "unknown",
+                        "styles": {
+                          "fontSize": "28px",
+                          "color": "rgba(255, 255, 255, 1)",
+                          "fontWeight": "bold"
+                        }
+                      },
+                      {
+                        "text": "个",
+                        "type": "unit",
+                        "figmaNode": "unknown",
+                        "styles": {
+                          "fontSize": "14px",
+                          "color": "rgba(255, 255, 255, 0.8)",
+                          "fontWeight": "normal"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "styles": {
+    "theme": "深色科技数据风",
+    "backgroundBrightness": "dark",
+    "colors": [
+      "rgba(5, 49, 51, 1)",
+      "rgba(255, 255, 255, 1)",
+      "rgba(255, 255, 255, 0.8)",
+      "rgba(0, 240, 255, 1)"
+    ],
+    "background": "深色蓝绿色背景，带有科技感线条和发光效果",
+    "decorations": [
+      "图标底部的蓝色发光圆环/底座",
+      "标题左侧的青色菱形图标",
+      "标题下方的青色分割线/装饰条"
+    ],
+    "emphasis": [
+      "大号白色数值 (185.6, 1, 3, 1)"
+    ]
+  },
+  "interactions": [],
+  "charts": [],
+  "doNotInvent": [
+    "不要臆造点击交互，目前看来是纯展示组件",
+    "不要臆造第四个图标的具体样式，资源缺失"
+  ],
+  "notes": [
+    "Figma结构中部分图标资源下载失败，已使用可用资源或placeholder替代",
+    "布局为横向4列，每列内部为左图标右文字（文字分上下两行）"
+  ]
+}

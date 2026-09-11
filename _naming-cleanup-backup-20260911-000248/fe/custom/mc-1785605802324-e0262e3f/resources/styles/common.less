@@ -1,0 +1,179 @@
+/* [Layout Refine] Figma layoutMode=HORIZONTAL → flex-direction: row, align-items: center */
+.c-mc-1785600410600-f8e51929-header-right {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+}
+
+/* [Style Refine] fills[0].gradientStops → linear-gradient(90deg, #1990ff, rgba(90, 126, 255, 0.83)) */
+.c-mc-1785600410600-f8e51929-update-tip {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 21px;
+  background: linear-gradient(90deg, #1990ff 0%, rgba(90, 126, 255, 0.83) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* [Layout Refine] Figma layoutMode=HORIZONTAL, itemSpacing=8.03 → flex-direction: row, gap: 8px */
+.c-mc-1785600410600-f8e51929-tabs {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  align-items: center;
+}
+
+/* [Style Refine] Figma cornerRadius=20.46, strokeWeight=0.73, fontSize=14 → 精确还原 */
+.c-mc-1785600410600-f8e51929-tab-item {
+  height: 19px;
+  line-height: 19px;
+  padding: 0 10px;
+  border-radius: 20.46px;
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  text-align: center;
+  border: 0.73px solid;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+}
+
+/* [Style Refine] fills[0].color → #1990ff, strokes[0].color → #c7dfff, fills.text → #ffffff */
+.c-mc-1785600410600-f8e51929-tab-item--active {
+  background-color: #1990ff;
+  color: #ffffff;
+  font-weight: 500;
+  border-color: #c7dfff;
+}
+
+/* [Style Refine] fills[0].color → #6680a0, strokes[0].color → #abc2e0, fills.text → #333333 */
+.c-mc-1785600410600-f8e51929-tab-item--inactive {
+  background-color: #6680a0;
+  color: #333333;
+  font-weight: 400;
+  border-color: #abc2e0;
+}
+
+/* [Style Refine] root 容器禁令 → 背景与阴影应用到 content 区域 */
+/* [Style Refine] fills[0].color → #edf4fb, effects[0] → 0 4px 10px rgba(74, 116, 140, 0.25) */
+.c-mc-1785600410600-f8e51929-content {
+  background: #edf4fb;
+  box-shadow: 0 4px 10px rgba(74, 116, 140, 0.25);
+  padding: 20px;
+  min-height: 0;
+}
+
+/* [Layout Refine] Figma layoutMode=HORIZONTAL → flex-direction: row, align-items: center */
+.c-mc-1785600410600-f8e51929-sub-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.c-mc-1785600410600-f8e51929-sub-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+/* [Style Refine] typography → 16px/500/24px, fills → #333333, effects → text-shadow */
+.c-mc-1785600410600-f8e51929-sub-title {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  color: #333333;
+  text-shadow: 0 5px 5px rgba(255, 255, 255, 0.8);
+}
+
+/* [Layout Refine] Figma 3 columns → flex-direction: row, 按真实比例分配 */
+.c-mc-1785600410600-f8e51929-cards {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  min-height: 0;
+}
+
+/* [Layout Refine] Figma bbox height=74.19 → height: 74px */
+/* [Style Refine] 删除无依据的 rgba(255,255,255,0.5) 背景，使用真实卡片背景图 */
+.c-mc-1785600410600-f8e51929-card-item {
+  flex: 1;
+  height: 74px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 0 12px;
+  position: relative;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* [CRITICAL] 红线规则 1：背景图精确还原，严禁 cover/contain，必须使用 100% 100% */
+.c-mc-1785600410600-f8e51929-card-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-size: 100% 100%
+  z-index: 0;
+}
+
+/* [Style Refine] Figma bbox width=47.52, height=47.52 → 48x48 */
+.c-mc-1785600410600-f8e51929-card-icon {
+  width: 48px;
+  height: 48px;
+  margin-right: 12px;
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+}
+
+.c-mc-1785600410600-f8e51929-card-text {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 1;
+  min-height: 0;
+}
+
+/* [Style Refine] typography → 12.32px/400/18.48px, fills → #333333 */
+.c-mc-1785600410600-f8e51929-card-label {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  color: #333333;
+}
+
+/* [Layout Refine] Figma layoutMode=HORIZONTAL → flex-direction: row, align-items: baseline */
+.c-mc-1785600410600-f8e51929-card-value-row {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  margin-top: 4px;
+}
+
+/* [Style Refine] typography → 20px/700/23.4px, Roboto, 颜色由内联样式控制 */
+.c-mc-1785600410600-f8e51929-card-value {
+  font-family: 'Roboto', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 23px;
+}
+
+/* [Style Refine] typography → 12.32px/400/18.48px, fills → #333333 */
+.c-mc-1785600410600-f8e51929-card-unit {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  color: #333333;
+  margin-left: 2px;
+}

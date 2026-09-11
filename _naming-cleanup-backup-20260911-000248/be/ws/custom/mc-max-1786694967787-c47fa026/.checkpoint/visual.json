@@ -1,0 +1,1110 @@
+{
+  "layoutStructure": {
+    "generatedAt": "2023-10-27T10:00:00Z",
+    "stage": "preview-analysis",
+    "componentName": "设备监测",
+    "componentTitle": "设备监测",
+    "analysisModel": "visual-parser-v2",
+    "sourceImage": {
+      "path": "mc-preview.png",
+      "size": 0,
+      "mtimeMs": 0,
+      "sha1": ""
+    },
+    "summary": "设备监测面板，包含顶部统计指标（设备类型、总数、完好率），左侧垂直Tab导航（监控、照明等），右侧顶部两个汇总卡片（隧道设备、南北接线设备），以及下方3x4网格的设备状态列表。",
+    "layout": {
+      "type": "vertical",
+      "direction": "column",
+      "sections": [
+        {
+          "id": "header-stats",
+          "name": "顶部统计指标",
+          "role": "常驻",
+          "layout": "horizontal",
+          "headerRelation": "title-same-row",
+          "slotCandidate": "header-right",
+          "body": {
+            "layout": "horizontal",
+            "gap": "20px",
+            "children": [
+              {
+                "id": "stat-type",
+                "name": "设备类型",
+                "role": "stat-item",
+                "layout": "horizontal",
+                "children": [
+                  {
+                    "type": "label",
+                    "text": "设备类型",
+                    "styles": {
+                      "fontSize": 14,
+                      "color": "#333333"
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "text": "28",
+                    "styles": {
+                      "fontSize": 20,
+                      "color": "#1990FF",
+                      "fontWeight": "bold"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "stat-total",
+                "name": "设备总数",
+                "role": "stat-item",
+                "layout": "horizontal",
+                "children": [
+                  {
+                    "type": "label",
+                    "text": "设备总数",
+                    "styles": {
+                      "fontSize": 14,
+                      "color": "#333333"
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "text": "68562",
+                    "styles": {
+                      "fontSize": 20,
+                      "color": "#1990FF",
+                      "fontWeight": "bold"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "stat-rate",
+                "name": "完好率",
+                "role": "stat-item",
+                "layout": "horizontal",
+                "children": [
+                  {
+                    "type": "label",
+                    "text": "完好率",
+                    "styles": {
+                      "fontSize": 14,
+                      "color": "#333333"
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "text": "98%",
+                    "styles": {
+                      "fontSize": 20,
+                      "color": "#08A3A5",
+                      "fontWeight": "bold"
+                    }
+                  }
+                ]
+              }
+            ],
+            "backgroundImage": {
+              "src": "../resources/images/bg-8788.png",
+              "recommendedUsage": "backgroundBlock"
+            },
+            "backgroundSize": "cover",
+            "backgroundPosition": "center",
+            "backgroundRepeat": "no-repeat"
+          }
+        },
+        {
+          "id": "main-content",
+          "name": "主体内容区",
+          "role": "常驻",
+          "layout": "horizontal",
+          "headerRelation": "content-below-title",
+          "slotCandidate": null,
+          "body": {
+            "layout": "horizontal",
+            "gap": "10px",
+            "children": [
+              {
+                "id": "sidebar-tabs",
+                "name": "左侧导航",
+                "role": "tabs",
+                "layout": "vertical",
+                "width": "46px",
+                "bgPlaceholder": "section-bg-sidebar",
+                "children": [
+                  {
+                    "type": "tab",
+                    "text": "监控",
+                    "active": true,
+                    "styles": {
+                      "backgroundColor": "#1990FF",
+                      "color": "#ffffff"
+                    }
+                  },
+                  {
+                    "type": "tab",
+                    "text": "照明",
+                    "active": false,
+                    "badge": "3",
+                    "styles": {
+                      "color": "#333333"
+                    }
+                  },
+                  {
+                    "type": "tab",
+                    "text": "通风",
+                    "active": false,
+                    "styles": {
+                      "color": "#333333"
+                    }
+                  },
+                  {
+                    "type": "tab",
+                    "text": "供配电",
+                    "active": false,
+                    "styles": {
+                      "color": "#333333"
+                    }
+                  },
+                  {
+                    "type": "tab",
+                    "text": "消防",
+                    "active": false,
+                    "styles": {
+                      "color": "#333333"
+                    }
+                  },
+                  {
+                    "type": "tab",
+                    "text": "交通诱导",
+                    "active": false,
+                    "styles": {
+                      "color": "#333333"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "right-content",
+                "name": "右侧内容",
+                "layout": "vertical",
+                "flex": 1,
+                "children": [
+                  {
+                    "id": "summary-cards",
+                    "name": "汇总卡片",
+                    "layout": "horizontal",
+                    "gap": "10px",
+                    "children": [
+                      {
+                        "id": "card-tunnel",
+                        "name": "隧道设备",
+                        "role": "stat-card",
+                        "layout": "horizontal",
+                        "bgPlaceholder": "bg-card-blue",
+                        "children": [
+                          {
+                            "type": "icon",
+                            "resourceFile": "../resources/images/icon-8444.png",
+                            "recommendedUsage": "imgSrc"
+                          },
+                          {
+                            "type": "content",
+                            "layout": "vertical",
+                            "children": [
+                              {
+                                "type": "label",
+                                "text": "隧道设备",
+                                "styles": {
+                                  "fontSize": 12,
+                                  "color": "#ffffff"
+                                }
+                              },
+                              {
+                                "type": "row",
+                                "layout": "horizontal",
+                                "children": [
+                                  {
+                                    "type": "label",
+                                    "text": "总数:",
+                                    "styles": {
+                                      "fontSize": 12,
+                                      "color": "#ffffff"
+                                    }
+                                  },
+                                  {
+                                    "type": "value",
+                                    "text": "56302",
+                                    "styles": {
+                                      "fontSize": 24,
+                                      "color": "#ffffff",
+                                      "fontWeight": "bold"
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "row",
+                                "layout": "horizontal",
+                                "children": [
+                                  {
+                                    "type": "label",
+                                    "text": "异常数:",
+                                    "styles": {
+                                      "fontSize": 12,
+                                      "color": "#ffffff"
+                                    }
+                                  },
+                                  {
+                                    "type": "value",
+                                    "text": "5",
+                                    "styles": {
+                                      "fontSize": 16,
+                                      "color": "#F53F3F",
+                                      "fontWeight": "bold"
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "id": "card-north-south",
+                        "name": "南北接线设备",
+                        "role": "stat-card",
+                        "layout": "horizontal",
+                        "bgPlaceholder": "bg-card-gray",
+                        "children": [
+                          {
+                            "type": "icon",
+                            "resourceFile": "../resources/images/icon-8473.png",
+                            "recommendedUsage": "imgSrc"
+                          },
+                          {
+                            "type": "content",
+                            "layout": "vertical",
+                            "children": [
+                              {
+                                "type": "label",
+                                "text": "南北接线设备",
+                                "styles": {
+                                  "fontSize": 12,
+                                  "color": "#333333"
+                                }
+                              },
+                              {
+                                "type": "row",
+                                "layout": "horizontal",
+                                "children": [
+                                  {
+                                    "type": "label",
+                                    "text": "总数:",
+                                    "styles": {
+                                      "fontSize": 12,
+                                      "color": "#333333"
+                                    }
+                                  },
+                                  {
+                                    "type": "value",
+                                    "text": "1280",
+                                    "styles": {
+                                      "fontSize": 24,
+                                      "color": "#1990FF",
+                                      "fontWeight": "bold"
+                                    }
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "row",
+                                "layout": "horizontal",
+                                "children": [
+                                  {
+                                    "type": "label",
+                                    "text": "异常数:",
+                                    "styles": {
+                                      "fontSize": 12,
+                                      "color": "#333333"
+                                    }
+                                  },
+                                  {
+                                    "type": "value",
+                                    "text": "3",
+                                    "styles": {
+                                      "fontSize": 16,
+                                      "color": "#F53F3F",
+                                      "fontWeight": "bold"
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "id": "device-grid",
+                    "name": "设备列表",
+                    "role": "content-grid",
+                    "layout": "grid",
+                    "gridColumns": 3,
+                    "gap": "10px",
+                    "items": [
+                      {
+                        "layout": "vertical",
+                        "bgPlaceholder": "bg-item",
+                        "icon": {
+                          "resourceFile": "../resources/images/icon-8503.png",
+                          "recommendedUsage": "imgSrc",
+                          "position": "top"
+                        },
+                        "content": {
+                          "layout": "vertical",
+                          "elements": [
+                            {
+                              "type": "label",
+                              "text": "摄像机",
+                              "styles": {
+                                "fontSize": 12,
+                                "color": "#333333"
+                              }
+                            },
+                            {
+                              "type": "value",
+                              "parts": [
+                                {
+                                  "text": "2",
+                                  "type": "number",
+                                  "styles": {
+                                    "fontSize": 14,
+                                    "color": "#F53F3F",
+                                    "fontWeight": "bold"
+                                  }
+                                },
+                                {
+                                  "text": "/484",
+                                  "type": "unit",
+                                  "styles": {
+                                    "fontSize": 12,
+                                    "color": "#999999"
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "layout": "vertical",
+                        "bgPlaceholder": "bg-item",
+                        "icon": {
+                          "resourceFile": "../resources/images/icon-8532.png",
+                          "recommendedUsage": "imgSrc",
+                          "position": "top"
+                        },
+                        "content": {
+                          "layout": "vertical",
+                          "elements": [
+                            {
+                              "type": "label",
+                              "text": "风速风向仪",
+                              "styles": {
+                                "fontSize": 12,
+                                "color": "#333333"
+                              }
+                            },
+                            {
+                              "type": "value",
+                              "parts": [
+                                {
+                                  "text": "1",
+                                  "type": "number",
+                                  "styles": {
+                                    "fontSize": 14,
+                                    "color": "#F53F3F",
+                                    "fontWeight": "bold"
+                                  }
+                                },
+                                {
+                                  "text": "/484",
+                                  "type": "unit",
+                                  "styles": {
+                                    "fontSize": 12,
+                                    "color": "#999999"
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "layout": "vertical",
+                        "bgPlaceholder": "bg-item",
+                        "icon": {
+                          "resourceFile": "../resources/images/icon-8561.png",
+                          "recommendedUsage": "imgSrc",
+                          "position": "top"
+                        },
+                        "content": {
+                          "layout": "vertical",
+                          "elements": [
+                            {
+                              "type": "label",
+                              "text": "超高检测器",
+                              "styles": {
+                                "fontSize": 12,
+                                "color": "#333333"
+                              }
+                            },
+                            {
+                              "type": "value",
+                              "parts": [
+                                {
+                                  "text": "0",
+                                  "type": "number",
+                                  "styles": {
+                                    "fontSize": 14,
+                                    "color": "#08A3A5",
+                                    "fontWeight": "bold"
+                                  }
+                                },
+                                {
+                                  "text": "/484",
+                                  "type": "unit",
+                                  "styles": {
+                                    "fontSize": 12,
+                                    "color": "#999999"
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "layout": "vertical",
+                        "bgPlaceholder": "bg-item",
+                        "icon": {
+                          "resourceFile": "../resources/images/icon-8590.png",
+                          "recommendedUsage": "imgSrc",
+                          "position": "top"
+                        },
+                        "content": {
+                          "layout": "vertical",
+                          "elements": [
+                            {
+                              "type": "label",
+                              "text": "烟道机器人",
+                              "styles": {
+                                "fontSize": 12,
+                                "color": "#333333"
+                              }
+                            },
+                            {
+                              "type": "value",
+                              "parts": [
+                                {
+                                  "text": "0",
+                                  "type": "number",
+                                  "styles": {
+                                    "fontSize": 14,
+                                    "color": "#08A3A5",
+                                    "fontWeight": "bold"
+                                  }
+                                },
+                                {
+                                  "text": "/484",
+                                  "type": "unit",
+                                  "styles": {
+                                    "fontSize": 12,
+                                    "color": "#999999"
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "layout": "vertical",
+                        "bgPlaceholder": "bg-item",
+                        "icon": {
+                          "resourceFile": "../resources/images/icon-8619.png",
+                          "recommendedUsage": "imgSrc",
+                          "position": "top"
+                        },
+                        "content": {
+                          "layout": "vertical",
+                          "elements": [
+                            {
+                              "type": "label",
+                              "text": "激光雷达",
+                              "styles": {
+                                "fontSize": 12,
+                                "color": "#333333"
+                              }
+                            },
+                            {
+                              "type": "value",
+                              "parts": [
+                                {
+                                  "text": "0",
+                                  "type": "number",
+                                  "styles": {
+                                    "fontSize": 14,
+                                    "color": "#08A3A5",
+                                    "fontWeight": "bold"
+                                  }
+                                },
+                                {
+                                  "text": "/484",
+                                  "type": "unit",
+                                  "styles": {
+                                    "fontSize": 12,
+                                    "color": "#999999"
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "layout": "vertical",
+                        "bgPlaceholder": "bg-item",
+                        "icon": {
+                          "resourceFile": "../resources/images/icon-8648.png",
+                          "recommendedUsage": "imgSrc",
+                          "position": "top"
+                        },
+                        "content": {
+                          "layout": "vertical",
+                          "elements": [
+                            {
+                              "type": "label",
+                              "text": "CO₂传感器",
+                              "styles": {
+                                "fontSize": 12,
+                                "color": "#333333"
+                              }
+                            },
+                            {
+                              "type": "value",
+                              "parts": [
+                                {
+                                  "text": "0",
+                                  "type": "number",
+                                  "styles": {
+                                    "fontSize": 14,
+                                    "color": "#08A3A5",
+                                    "fontWeight": "bold"
+                                  }
+                                },
+                                {
+                                  "text": "/484",
+                                  "type": "unit",
+                                  "styles": {
+                                    "fontSize": 12,
+                                    "color": "#999999"
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "layout": "vertical",
+                        "bgPlaceholder": "bg-item",
+                        "icon": {
+                          "resourceFile": "../resources/images/icon-8677.png",
+                          "recommendedUsage": "imgSrc",
+                          "position": "top"
+                        },
+                        "content": {
+                          "layout": "vertical",
+                          "elements": [
+                            {
+                              "type": "label",
+                              "text": "CO/VI检测器",
+                              "styles": {
+                                "fontSize": 12,
+                                "color": "#333333"
+                              }
+                            },
+                            {
+                              "type": "value",
+                              "parts": [
+                                {
+                                  "text": "0",
+                                  "type": "number",
+                                  "styles": {
+                                    "fontSize": 14,
+                                    "color": "#08A3A5",
+                                    "fontWeight": "bold"
+                                  }
+                                },
+                                {
+                                  "text": "/484",
+                                  "type": "unit",
+                                  "styles": {
+                                    "fontSize": 12,
+                                    "color": "#999999"
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "layout": "vertical",
+                        "bgPlaceholder": "bg-item",
+                        "icon": {
+                          "resourceFile": "../resources/images/icon-8706.png",
+                          "recommendedUsage": "imgSrc",
+                          "position": "top"
+                        },
+                        "content": {
+                          "layout": "vertical",
+                          "elements": [
+                            {
+                              "type": "label",
+                              "text": "温湿度传感器",
+                              "styles": {
+                                "fontSize": 12,
+                                "color": "#333333"
+                              }
+                            },
+                            {
+                              "type": "value",
+                              "parts": [
+                                {
+                                  "text": "0",
+                                  "type": "number",
+                                  "styles": {
+                                    "fontSize": 14,
+                                    "color": "#08A3A5",
+                                    "fontWeight": "bold"
+                                  }
+                                },
+                                {
+                                  "text": "/484",
+                                  "type": "unit",
+                                  "styles": {
+                                    "fontSize": 12,
+                                    "color": "#999999"
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "layout": "vertical",
+                        "bgPlaceholder": "bg-item",
+                        "icon": {
+                          "resourceFile": "../resources/images/icon-8735.png",
+                          "recommendedUsage": "imgSrc",
+                          "position": "top"
+                        },
+                        "content": {
+                          "layout": "vertical",
+                          "elements": [
+                            {
+                              "type": "label",
+                              "text": "压力传感器",
+                              "styles": {
+                                "fontSize": 12,
+                                "color": "#333333"
+                              }
+                            },
+                            {
+                              "type": "value",
+                              "parts": [
+                                {
+                                  "text": "0",
+                                  "type": "number",
+                                  "styles": {
+                                    "fontSize": 14,
+                                    "color": "#08A3A5",
+                                    "fontWeight": "bold"
+                                  }
+                                },
+                                {
+                                  "text": "/484",
+                                  "type": "unit",
+                                  "styles": {
+                                    "fontSize": 12,
+                                    "color": "#999999"
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "layout": "vertical",
+                        "bgPlaceholder": "bg-item",
+                        "icon": {
+                          "resourceFile": "../resources/images/icon-8764.png",
+                          "recommendedUsage": "imgSrc",
+                          "position": "top"
+                        },
+                        "content": {
+                          "layout": "vertical",
+                          "elements": [
+                            {
+                              "type": "label",
+                              "text": "光照度变送器",
+                              "styles": {
+                                "fontSize": 12,
+                                "color": "#333333"
+                              }
+                            },
+                            {
+                              "type": "value",
+                              "parts": [
+                                {
+                                  "text": "0",
+                                  "type": "number",
+                                  "styles": {
+                                    "fontSize": 14,
+                                    "color": "#08A3A5",
+                                    "fontWeight": "bold"
+                                  }
+                                },
+                                {
+                                  "text": "/484",
+                                  "type": "unit",
+                                  "styles": {
+                                    "fontSize": 12,
+                                    "color": "#999999"
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "layout": "vertical",
+                        "bgPlaceholder": "bg-item",
+                        "icon": {
+                          "resourceFile": "../resources/images/icon-8444.png",
+                          "recommendedUsage": "imgSrc",
+                          "position": "top"
+                        },
+                        "content": {
+                          "layout": "vertical",
+                          "elements": [
+                            {
+                              "type": "label",
+                              "text": "紧急电话",
+                              "styles": {
+                                "fontSize": 12,
+                                "color": "#333333"
+                              }
+                            },
+                            {
+                              "type": "value",
+                              "parts": [
+                                {
+                                  "text": "0",
+                                  "type": "number",
+                                  "styles": {
+                                    "fontSize": 14,
+                                    "color": "#08A3A5",
+                                    "fontWeight": "bold"
+                                  }
+                                },
+                                {
+                                  "text": "/484",
+                                  "type": "unit",
+                                  "styles": {
+                                    "fontSize": 12,
+                                    "color": "#999999"
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "layout": "vertical",
+                        "bgPlaceholder": "bg-item",
+                        "icon": {
+                          "resourceFile": "../resources/images/icon-8473.png",
+                          "recommendedUsage": "imgSrc",
+                          "position": "top"
+                        },
+                        "content": {
+                          "layout": "vertical",
+                          "elements": [
+                            {
+                              "type": "label",
+                              "text": "水质监测设备",
+                              "styles": {
+                                "fontSize": 12,
+                                "color": "#333333"
+                              }
+                            },
+                            {
+                              "type": "value",
+                              "parts": [
+                                {
+                                  "text": "0",
+                                  "type": "number",
+                                  "styles": {
+                                    "fontSize": 14,
+                                    "color": "#08A3A5",
+                                    "fontWeight": "bold"
+                                  }
+                                },
+                                {
+                                  "text": "/484",
+                                  "type": "unit",
+                                  "styles": {
+                                    "fontSize": 12,
+                                    "color": "#999999"
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "backgroundImage": {
+              "src": "../resources/images/bg-8788.png",
+              "recommendedUsage": "backgroundBlock"
+            },
+            "backgroundSize": "cover",
+            "backgroundPosition": "center",
+            "backgroundRepeat": "no-repeat"
+          }
+        }
+      ]
+    },
+    "styles": {
+      "theme": "浅色科技监测风",
+      "backgroundBrightness": "light",
+      "colors": [
+        "#1990FF",
+        "#08A3A5",
+        "#F53F3F",
+        "#333333",
+        "#EDF4FB"
+      ],
+      "background": "浅蓝灰色背景 (#EDF4FB)",
+      "decorations": [
+        "左侧Tab选中态蓝色背景",
+        "汇总卡片箭头形状背景",
+        "网格项圆角矩形背景"
+      ],
+      "emphasis": [
+        "大号蓝色数值 (设备总数)",
+        "红色异常数值",
+        "绿色/青色零异常数值"
+      ]
+    },
+    "interactions": [
+      {
+        "target": "左侧导航栏",
+        "type": "tab-switch",
+        "description": "切换设备分类（监控、照明、通风等）",
+        "defaultState": "常驻，选中'监控'",
+        "options": [
+          "监控",
+          "照明",
+          "通风",
+          "供配电",
+          "消防",
+          "交通诱导"
+        ],
+        "activeIndex": 0
+      }
+    ],
+    "charts": [],
+    "doNotInvent": [
+      "不要臆造点击设备卡片后的详情弹窗",
+      "不要臆造'数据实时更新'的具体刷新逻辑",
+      "不要臆造左侧Tab的具体子页面内容（除当前显示的监控页外）"
+    ],
+    "headerSlots": [
+      {
+        "slotType": "header-right",
+        "elementType": "statistic",
+        "content": "设备类型 28, 设备总数 68562, 完好率 98%",
+        "figmaNodeId": "header-stats-group"
+      }
+    ],
+    "notes": [
+      "左侧'照明'Tab有一个红色角标'3'，表示有3个异常或待处理项。",
+      "网格中数值格式为'异常数/总数'，异常数>0显示红色，=0显示青绿色。",
+      "顶部两个大卡片背景分别为蓝色渐变和灰色渐变。"
+    ],
+    "coverageReport": {
+      "totalFigma": 216,
+      "matchedCount": 0,
+      "missingCount": 114,
+      "uncertainCount": 0,
+      "coverageRate": 0,
+      "missing": [
+        {
+          "name": "cp-设备监测",
+          "type": "FRAME",
+          "depth": 0
+        },
+        {
+          "name": "header",
+          "type": "GROUP",
+          "depth": 1
+        },
+        {
+          "name": "g",
+          "type": "GROUP",
+          "depth": 2
+        },
+        {
+          "name": "设备监测",
+          "type": "TEXT",
+          "depth": 2
+        },
+        {
+          "name": "Frame 2136638825",
+          "type": "FRAME",
+          "depth": 2
+        },
+        {
+          "name": "设备类型",
+          "type": "TEXT",
+          "depth": 3
+        },
+        {
+          "name": "Frame 2136638826",
+          "type": "FRAME",
+          "depth": 2
+        },
+        {
+          "name": "设备总数",
+          "type": "TEXT",
+          "depth": 3
+        },
+        {
+          "name": "Frame 2136638827",
+          "type": "FRAME",
+          "depth": 2
+        },
+        {
+          "name": "完好率",
+          "type": "TEXT",
+          "depth": 3
+        },
+        {
+          "name": "Frame",
+          "type": "FRAME",
+          "depth": 2
+        },
+        {
+          "name": "slot-con",
+          "type": "FRAME",
+          "depth": 1
+        },
+        {
+          "name": "switch",
+          "type": "FRAME",
+          "depth": 2
+        },
+        {
+          "name": "active",
+          "type": "GROUP",
+          "depth": 3
+        },
+        {
+          "name": "bg",
+          "type": "GROUP",
+          "depth": 4
+        }
+      ],
+      "uncertain": [],
+      "summary": "需关注"
+    }
+  },
+  "visualElements": {
+    "theme": "浅色科技监测风",
+    "backgroundBrightness": "light",
+    "colors": [
+      "#1990FF",
+      "#08A3A5",
+      "#F53F3F",
+      "#333333",
+      "#EDF4FB"
+    ],
+    "background": "浅蓝灰色背景 (#EDF4FB)",
+    "decorations": [
+      "左侧Tab选中态蓝色背景",
+      "汇总卡片箭头形状背景",
+      "网格项圆角矩形背景"
+    ],
+    "emphasis": [
+      "大号蓝色数值 (设备总数)",
+      "红色异常数值",
+      "绿色/青色零异常数值"
+    ]
+  },
+  "interactions": [
+    {
+      "target": "左侧导航栏",
+      "type": "tab-switch",
+      "description": "切换设备分类（监控、照明、通风等）",
+      "defaultState": "常驻，选中'监控'",
+      "options": [
+        "监控",
+        "照明",
+        "通风",
+        "供配电",
+        "消防",
+        "交通诱导"
+      ],
+      "activeIndex": 0
+    }
+  ],
+  "charts": [],
+  "headerSlots": [
+    {
+      "slotType": "header-right",
+      "elementType": "statistic",
+      "content": "设备类型 28, 设备总数 68562, 完好率 98%",
+      "figmaNodeId": "header-stats-group"
+    }
+  ],
+  "analysisType": "",
+  "analysisTarget": "",
+  "analysisDescription": "",
+  "analysisEvidence": [],
+  "headerValidation": {
+    "passed": true,
+    "headerElements": [],
+    "headerRightElements": [],
+    "suggestions": [],
+    "confidence": "low",
+    "componentType": "microcode"
+  },
+  "headerSlotValidation": {
+    "validatedSlots": [],
+    "rejectedNodes": [],
+    "warnings": []
+  }
+}

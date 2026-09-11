@@ -17,8 +17,8 @@ import {
   extractComponentTagNames,
   VUE_BUILTIN_COMPONENTS,
 } from '../../utils/sfc-semantics.js';
-import { ensureSubComponentImport, postProcessIndexVue } from './resource-mounter.js';
-import { buildChunkMiddle, buildTemplateChunkMiddle, buildScriptChunkMiddle, buildScriptChunkMiddlePart, buildRetryPrompt } from './prompt-builder.js';
+import { ensureSubComponentImport, pruneDeadSubComponentImports, postProcessIndexVue } from './resource-mounter.js';
+import { buildChunkMiddle, buildTemplateChunkMiddle, buildScriptChunkMiddle, buildScriptChunkMiddlePart, buildRetryPrompt, resolvePlanSections } from './prompt-builder.js';
 import { parseCodeOutput, detectFileTruncation } from './code-parser.js';
 import { invokeWithTimeout } from '../../utils/llm-timeout.js';
 import { getMaxTokens, coerceLLMText, resolveModelCapability } from '../../utils/model-config.js';
@@ -29,7 +29,8 @@ import {
   extractResourceVarNames,
   resolveResourceDomMapping,
 } from '../../utils/resource-import-guard.js';
-import { collectLeafSections } from '../../utils/section-tree.js';
+import { collectLeafSections, assignSectionComponentNames } from '../../utils/section-tree.js';
+import { detectContentRootClass } from '../../utils/root-container-normalizer.js';
 
 function defaultNormalizeComponentId(name = '') {
   const raw = String(name || '').trim();
@@ -94,12 +95,79 @@ export function assembleIndexVue(templateContent, scriptContent, input, options 
     let assembled = parts.join('\n\n') + '\n';
     // 🛡️ 拼装后兜底：自动补齐 template 引用但 script 漏 import 的子组件（复杂组件常见，防语义门禁 fail-closed）
     assembled = ensureSubComponentImport(assembled);
+    // 🛡️ 层①（2026-09-11）：删除死子组件 import（模板未引用），与 ensureSubComponentImport 对称，
+    // 杜绝「LLM 脚本 import 错名/多 import」→ CODE-021 死代码门禁 BLOCK。
+    assembled = pruneDeadSubComponentImports(assembled, options);
 
     // 🛡️ Phase 2 后处理兜底（TDD: T02/T03/T04）
     assembled = postProcessIndexVue(assembled, input, options);
 
     return assembled;
   }
+
+/**
+ * 🛡️ 层①（2026-09-11）：确定性 index.vue 模板装配 —— 治 COMP-001 / CODE-021 / 语义门禁。
+ *
+ * 背景：index.vue 的 <template> 原本由 LLM 分块手写（buildTemplateChunkMiddle 只给「强制命名 +
+ * 禁止内联」软约束）。LLM 跨 chunk 各写各的 → 同一份 section 契约被多次解释，出现
+ * 「componentPlan 规划 4 个 section 但 index.vue 只组装 1 个（COMP-001）」「import 了子组件但
+ * 模板 0 处引用（CODE-021）」「模板引用 script 未声明的变量（语义门禁）」——三者同源，都是
+ * 「装配」这一步没有单一事实源。
+ *
+ * 方案：系统从 planner 的 effectiveSections 树（R1 单一事实源）+ 确定性命名（R2 assignSectionComponentNames）
+ * 直接产出 <template> 骨架（base-panel 包裹 + header 插槽 + 子组件标签顺序）。子组件文件由下游
+ * _detectSubComponents 从 index.vue 的 import 反推生成，脚本段由 ensureSubComponentImport 补齐 import。
+ * LLM 只负责每个子组件内部的 DOM，不再写装配。
+ *
+ * 🛡️ R1-2（2026-09-11）布局事实数据流化：返回值从 string 扩展为 facts 对象
+ * `{ template, rootContainerClass, sectionRoots }`，供下游 rootLayoutFacts 消费，
+ * 消灭「下游靠命名枚举猜根容器」的两连复发机制。
+ *
+ * @returns {{ template: string, rootContainerClass: string|null, sectionRoots: Array<{id, component, type}> }|null}
+ *   无计划子组件时返回 null（回退 LLM 生成）
+ */
+export function buildDeterministicIndexTemplate(input, options = {}) {
+  const treeSections = resolvePlanSections(input);
+  const leaves = collectLeafSections(treeSections);
+  if (!leaves.length) return null;
+
+  const nameOf = assignSectionComponentNames(treeSections);
+  const panelType = input.panelType || 'default-panel';
+  // input.componentName 已是 _deriveClassPrefix 的干净语义名（如 device-monitor / env-monitor）
+  const semantic = String(input.componentName || '')
+    .replace(/^c-/, '')
+    .toLowerCase() || 'component';
+
+  const headerLeaves = leaves.filter((s) => s.type === 'header');
+  const bodyLeaves = leaves.filter((s) => s.type !== 'header');
+
+  const tagFor = (sec, fallback) => nameOf.get(String(sec.id)) || fallback;
+
+  const rootContainerClass = bodyLeaves.length > 0 ? `c-${semantic}-slot-con` : null;
+  const sectionRoots = leaves.map((s) => ({
+    id: String(s.id),
+    component: tagFor(s, s.type === 'header' ? 'HeaderSection' : 'ContentSection'),
+    type: s.type || 'content',
+  }));
+
+  const lines = ['<template>'];
+  lines.push(`  <base-panel panelKey="${panelType}">`);
+  for (const h of headerLeaves) {
+    lines.push(`    <template #header-right>`);
+    lines.push(`      <${tagFor(h, 'HeaderSection')} />`);
+    lines.push(`    </template>`);
+  }
+  if (bodyLeaves.length > 0) {
+    lines.push(`    <div class="${rootContainerClass}">`);
+    for (const b of bodyLeaves) {
+      lines.push(`      <${tagFor(b, 'ContentSection')} />`);
+    }
+    lines.push(`    </div>`);
+  }
+  lines.push(`  </base-panel>`);
+  lines.push(`</template>`);
+  return { template: lines.join('\n'), rootContainerClass, sectionRoots };
+}
 
 export async function generateIndexVue(runChunk, input, { splitDecision, allFiles }, options = {}) {
     const scriptSplit = !!splitDecision.scriptSplit;
@@ -121,10 +189,42 @@ export async function generateIndexVue(runChunk, input, { splitDecision, allFile
       estTokens: estTemplate,
       contextFiles: [{ path: 'declare.json', content: declContent }],
     };
-    const resT = await runChunk(chunkT, buildTemplateChunkMiddle);
-    // 🛡️ P0 防护：runChunk 异常路径可能返回 undefined/不完整对象
-    const safeResT = resT && typeof resT === 'object' ? resT : { files: {}, debug: {} };
-    const templateContent = (safeResT.files?.['package/index.vue'] || '').trim();
+    // 🛡️ 层①（2026-09-11）：有计划子组件时，模板骨架由系统确定性生成（不再让 LLM 写装配），
+    // 从机制上消灭 COMP-001（section 漏组装）/ CODE-021（死 import）/ 语义门禁（模板引用未声明）。
+    let templateContent;
+    const _detTemplate = buildDeterministicIndexTemplate(input, options);
+    if (_detTemplate) {
+      options.logger?.info?.(
+        '🧩 确定性模板装配：跳过 LLM template 段（系统从 effectiveSections 生成骨架）',
+        {
+          componentName: input.componentName,
+          sectionCount: collectLeafSections(resolvePlanSections(input)).length,
+        },
+      );
+      templateContent = _detTemplate.template;
+      // 🛡️ R1-2：布局事实（确定性模板单一事实源）挂到 input，由 generateCode 返回
+      // indexTemplateFacts → execute.rootLayoutFacts → 下游归一器/规则②改读事实、不再猜命名。
+      input._indexTemplateFacts = {
+        rootContainerClass: _detTemplate.rootContainerClass,
+        sectionRoots: _detTemplate.sectionRoots,
+        source: 'deterministic-template',
+      };
+    } else {
+      const resT = await runChunk(chunkT, buildTemplateChunkMiddle);
+      // 🛡️ P0 防护：runChunk 异常路径可能返回 undefined/不完整对象
+      const safeResT = resT && typeof resT === 'object' ? resT : { files: {}, debug: {} };
+      templateContent = (safeResT.files?.['package/index.vue'] || '').trim();
+      // 🛡️ R1-2：LLM 模板回退路径 —— 落盘前从 template 提取一次内容根类写入 facts，
+      // 供下游归一器消费（词尾猜测在这里发生一次、固化，下游不再各自猜）。
+      const _detCls = detectContentRootClass(templateContent);
+      if (_detCls) {
+        input._indexTemplateFacts = {
+          rootContainerClass: _detCls,
+          sectionRoots: [],
+          source: 'detected-llm-template',
+        };
+      }
+    }
 
     let scriptContent = '';
     if (scriptSplit) {

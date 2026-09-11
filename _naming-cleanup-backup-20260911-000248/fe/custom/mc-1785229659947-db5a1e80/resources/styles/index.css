@@ -1,0 +1,582 @@
+.c-mc-1785229659947-db5a1e80-title-left {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 380px;
+  height: 28.09px;
+  overflow: hidden;
+}
+.c-mc-1785229659947-db5a1e80-title-left::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  right: 0;
+  bottom: 2px;
+  height: 6px;
+  background: linear-gradient(90deg, #559eff 0%, rgba(85, 158, 255, 0) 100%);
+  opacity: 0.88;
+  pointer-events: none;
+}
+.c-mc-1785229659947-db5a1e80-title-left::after {
+  content: '重点车辆监测';
+  position: absolute;
+  left: 14px;
+  top: 0;
+  font-family: 'Noto Sans SC', 'Source Han Sans CN', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 19.2px;
+  color: #1990ff;
+  background: linear-gradient(90deg, #1990ff 0%, #5a7eff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  white-space: nowrap;
+}
+.c-mc-1785229659947-db5a1e80-title-dot {
+  position: absolute;
+  left: 0;
+  top: 10px;
+  display: block;
+  width: 8px;
+  height: 8px;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+.c-mc-1785229659947-db5a1e80-title-right {
+  display: flex;
+  align-items: center;
+  width: 86px;
+  height: 24.34px;
+  gap: 4px;
+  overflow: hidden;
+}
+.c-mc-1785229659947-db5a1e80-title-right-icon {
+  display: block;
+  width: 18px;
+  height: 18.25px;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+.c-mc-1785229659947-db5a1e80-title-right-text {
+  display: block;
+  width: 64px;
+  height: 24.34px;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  color: #333333;
+  text-align: left;
+  white-space: nowrap;
+  text-shadow: 0 5.05px 5.05px rgba(255, 255, 255, 0.8);
+}
+.c-mc-1785229659947-db5a1e80-tabs {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 204.04px;
+  height: 19px;
+  gap: 8px;
+  overflow: visible;
+}
+.c-mc-1785229659947-db5a1e80-tab-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 19px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  border: 0.73px solid #acc4e1;
+  background: #6680a0;
+  color: #333333;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 21px;
+  text-align: center;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+.c-mc-1785229659947-db5a1e80-tab-item[aria-selected='true'] {
+  width: 128px;
+  border-color: #c7e0ff;
+  background: #1990ff;
+  color: #ffffff;
+  font-weight: 500;
+}
+.c-mc-1785229659947-db5a1e80-tab-item[aria-selected='false'] {
+  width: 68px;
+}
+.c-mc-1785229659947-db5a1e80-body {
+  width: 100%;
+  height: 86px;
+  box-sizing: border-box;
+  padding-top: 11.8px;
+  overflow: hidden;
+}
+.c-mc-1785229659947-db5a1e80-card-list {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  width: 377.48px;
+  height: 74.2px;
+  margin: 0 auto;
+  overflow: visible;
+}
+.c-mc-1785229659947-db5a1e80-card-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 74.2px;
+  box-sizing: border-box;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+.c-mc-1785229659947-db5a1e80-card-item:nth-child(1) {
+  width: 140.48px;
+  padding-left: 12px;
+}
+.c-mc-1785229659947-db5a1e80-card-item:nth-child(2) {
+  width: 120px;
+  padding-left: 4px;
+}
+.c-mc-1785229659947-db5a1e80-card-item:nth-child(3) {
+  width: 141px;
+  padding-left: 8px;
+}
+.c-mc-1785229659947-db5a1e80-card-icon {
+  display: block;
+  width: 47.52px;
+  height: 47.52px;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+.c-mc-1785229659947-db5a1e80-card-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  margin-left: 6px;
+  height: 44px;
+  overflow: visible;
+}
+.c-mc-1785229659947-db5a1e80-card-label {
+  display: block;
+  height: 18px;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 18px;
+  color: #333333;
+  white-space: nowrap;
+}
+.c-mc-1785229659947-db5a1e80-card-value {
+  display: block;
+  height: 23px;
+  margin-top: 1px;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 23px;
+  color: #1990ff;
+  white-space: nowrap;
+}
+.c-mc-1785229659947-db5a1e80-card-unit {
+  display: inline-block;
+  margin-left: 2px;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  color: #333333;
+  vertical-align: baseline;
+}
+.dark .c-mc-1785229659947-db5a1e80-title-left {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 380px;
+  height: 28.09px;
+  overflow: hidden;
+}
+.dark .c-mc-1785229659947-db5a1e80-title-left::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  right: 0;
+  bottom: 2px;
+  height: 6px;
+  background: linear-gradient(90deg, #559eff 0%, rgba(85, 158, 255, 0) 100%);
+  opacity: 0.88;
+  pointer-events: none;
+}
+.dark .c-mc-1785229659947-db5a1e80-title-left::after {
+  content: '重点车辆监测';
+  position: absolute;
+  left: 14px;
+  top: 0;
+  font-family: 'Noto Sans SC', 'Source Han Sans CN', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 19.2px;
+  color: #1990ff;
+  background: linear-gradient(90deg, #1990ff 0%, #5a7eff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  white-space: nowrap;
+}
+.dark .c-mc-1785229659947-db5a1e80-title-dot {
+  position: absolute;
+  left: 0;
+  top: 10px;
+  display: block;
+  width: 8px;
+  height: 8px;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+.dark .c-mc-1785229659947-db5a1e80-title-right {
+  display: flex;
+  align-items: center;
+  width: 86px;
+  height: 24.34px;
+  gap: 4px;
+  overflow: hidden;
+}
+.dark .c-mc-1785229659947-db5a1e80-title-right-icon {
+  display: block;
+  width: 18px;
+  height: 18.25px;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+.dark .c-mc-1785229659947-db5a1e80-title-right-text {
+  display: block;
+  width: 64px;
+  height: 24.34px;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  color: #333333;
+  text-align: left;
+  white-space: nowrap;
+  text-shadow: 0 5.05px 5.05px rgba(255, 255, 255, 0.8);
+}
+.dark .c-mc-1785229659947-db5a1e80-tabs {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 204.04px;
+  height: 19px;
+  gap: 8px;
+  overflow: visible;
+}
+.dark .c-mc-1785229659947-db5a1e80-tab-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 19px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  border: 0.73px solid #acc4e1;
+  background: #6680a0;
+  color: #333333;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 21px;
+  text-align: center;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+.dark .c-mc-1785229659947-db5a1e80-tab-item[aria-selected='true'] {
+  width: 128px;
+  border-color: #c7e0ff;
+  background: #1990ff;
+  color: #ffffff;
+  font-weight: 500;
+}
+.dark .c-mc-1785229659947-db5a1e80-tab-item[aria-selected='false'] {
+  width: 68px;
+}
+.dark .c-mc-1785229659947-db5a1e80-body {
+  width: 100%;
+  height: 86px;
+  box-sizing: border-box;
+  padding-top: 11.8px;
+  overflow: hidden;
+}
+.dark .c-mc-1785229659947-db5a1e80-card-list {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  width: 377.48px;
+  height: 74.2px;
+  margin: 0 auto;
+  overflow: visible;
+}
+.dark .c-mc-1785229659947-db5a1e80-card-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 74.2px;
+  box-sizing: border-box;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+.dark .c-mc-1785229659947-db5a1e80-card-item:nth-child(1) {
+  width: 140.48px;
+  padding-left: 12px;
+}
+.dark .c-mc-1785229659947-db5a1e80-card-item:nth-child(2) {
+  width: 120px;
+  padding-left: 4px;
+}
+.dark .c-mc-1785229659947-db5a1e80-card-item:nth-child(3) {
+  width: 141px;
+  padding-left: 8px;
+}
+.dark .c-mc-1785229659947-db5a1e80-card-icon {
+  display: block;
+  width: 47.52px;
+  height: 47.52px;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+.dark .c-mc-1785229659947-db5a1e80-card-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  margin-left: 6px;
+  height: 44px;
+  overflow: visible;
+}
+.dark .c-mc-1785229659947-db5a1e80-card-label {
+  display: block;
+  height: 18px;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 18px;
+  color: #333333;
+  white-space: nowrap;
+}
+.dark .c-mc-1785229659947-db5a1e80-card-value {
+  display: block;
+  height: 23px;
+  margin-top: 1px;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 23px;
+  color: #1990ff;
+  white-space: nowrap;
+}
+.dark .c-mc-1785229659947-db5a1e80-card-unit {
+  display: inline-block;
+  margin-left: 2px;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  color: #333333;
+  vertical-align: baseline;
+}
+.light .c-mc-1785229659947-db5a1e80-title-left {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 380px;
+  height: 28.09px;
+  overflow: hidden;
+}
+.light .c-mc-1785229659947-db5a1e80-title-left::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  right: 0;
+  bottom: 2px;
+  height: 6px;
+  background: linear-gradient(90deg, #559eff 0%, rgba(85, 158, 255, 0) 100%);
+  opacity: 0.88;
+  pointer-events: none;
+}
+.light .c-mc-1785229659947-db5a1e80-title-left::after {
+  content: '重点车辆监测';
+  position: absolute;
+  left: 14px;
+  top: 0;
+  font-family: 'Noto Sans SC', 'Source Han Sans CN', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 19.2px;
+  color: #1990ff;
+  background: linear-gradient(90deg, #1990ff 0%, #5a7eff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  white-space: nowrap;
+}
+.light .c-mc-1785229659947-db5a1e80-title-dot {
+  position: absolute;
+  left: 0;
+  top: 10px;
+  display: block;
+  width: 8px;
+  height: 8px;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+.light .c-mc-1785229659947-db5a1e80-title-right {
+  display: flex;
+  align-items: center;
+  width: 86px;
+  height: 24.34px;
+  gap: 4px;
+  overflow: hidden;
+}
+.light .c-mc-1785229659947-db5a1e80-title-right-icon {
+  display: block;
+  width: 18px;
+  height: 18.25px;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+.light .c-mc-1785229659947-db5a1e80-title-right-text {
+  display: block;
+  width: 64px;
+  height: 24.34px;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  color: #333333;
+  text-align: left;
+  white-space: nowrap;
+  text-shadow: 0 5.05px 5.05px rgba(255, 255, 255, 0.8);
+}
+.light .c-mc-1785229659947-db5a1e80-tabs {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 204.04px;
+  height: 19px;
+  gap: 8px;
+  overflow: visible;
+}
+.light .c-mc-1785229659947-db5a1e80-tab-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 19px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  border: 0.73px solid #acc4e1;
+  background: #6680a0;
+  color: #333333;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 21px;
+  text-align: center;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+.light .c-mc-1785229659947-db5a1e80-tab-item[aria-selected='true'] {
+  width: 128px;
+  border-color: #c7e0ff;
+  background: #1990ff;
+  color: #ffffff;
+  font-weight: 500;
+}
+.light .c-mc-1785229659947-db5a1e80-tab-item[aria-selected='false'] {
+  width: 68px;
+}
+.light .c-mc-1785229659947-db5a1e80-body {
+  width: 100%;
+  height: 86px;
+  box-sizing: border-box;
+  padding-top: 11.8px;
+  overflow: hidden;
+}
+.light .c-mc-1785229659947-db5a1e80-card-list {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  width: 377.48px;
+  height: 74.2px;
+  margin: 0 auto;
+  overflow: visible;
+}
+.light .c-mc-1785229659947-db5a1e80-card-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 74.2px;
+  box-sizing: border-box;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+.light .c-mc-1785229659947-db5a1e80-card-item:nth-child(1) {
+  width: 140.48px;
+  padding-left: 12px;
+}
+.light .c-mc-1785229659947-db5a1e80-card-item:nth-child(2) {
+  width: 120px;
+  padding-left: 4px;
+}
+.light .c-mc-1785229659947-db5a1e80-card-item:nth-child(3) {
+  width: 141px;
+  padding-left: 8px;
+}
+.light .c-mc-1785229659947-db5a1e80-card-icon {
+  display: block;
+  width: 47.52px;
+  height: 47.52px;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+.light .c-mc-1785229659947-db5a1e80-card-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  margin-left: 6px;
+  height: 44px;
+  overflow: visible;
+}
+.light .c-mc-1785229659947-db5a1e80-card-label {
+  display: block;
+  height: 18px;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 18px;
+  color: #333333;
+  white-space: nowrap;
+}
+.light .c-mc-1785229659947-db5a1e80-card-value {
+  display: block;
+  height: 23px;
+  margin-top: 1px;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 23px;
+  color: #1990ff;
+  white-space: nowrap;
+}
+.light .c-mc-1785229659947-db5a1e80-card-unit {
+  display: inline-block;
+  margin-left: 2px;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  color: #333333;
+  vertical-align: baseline;
+}

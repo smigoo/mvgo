@@ -1,0 +1,11 @@
+// 样式入口（系统自动生成，勿手改）
+@import './themes/theme-vars.less';
+
+// 默认主题：必须在**根作用域**生效，否则组件在无 .dark/.light 祖先的真实 DOM 上样式全部失效
+.common();
+.theme-light();
+@import (multiple) './common.less';
+
+// 说明：宿主当前不给组件根注入 .dark/.light 类，故不引入 themes/dark.less、themes/light.less
+//（引入只会产出 .dark .c-xxx 这类永不命中的死规则）。宿主支持主题切换后，
+//   设置环境变量 MC_EMIT_THEME_OVERRIDES=1 即可自动恢复覆盖层导入。

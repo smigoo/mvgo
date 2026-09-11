@@ -1,0 +1,238 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 78,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[1].body",
+        "message": "分类统计卡片嵌套深度超过建议值（约5层），结构冗余，影响可维护性。",
+        "suggestion": "将stat-card内部扁平化，移除content-group中间层，或使用更紧凑的数据结构。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].headerRelation",
+        "message": "top-cards和main-content缺少header定义，但headerRelation为content-below-title，标题缺失，语义矛盾。",
+        "suggestion": "补充header标题，或将body内已有标题节点提升为header。"
+      }
+    ],
+    "recommendations": [
+      "统一控制嵌套深度在3层以内，简化统计卡片结构。",
+      "确保每个section的headerRelation与实际header存在性一致。",
+      "为device-item补充children结构，明确图标与文本的渲染位置。"
+    ],
+    "summary": "整体分区清晰，但存在嵌套过深和header缺失问题，建议优化后再发布。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorBg": "rgba(237,244,251,1)",
+      "--colorPrimary": "rgba(25,144,255,1)",
+      "--colorSecondary": "rgba(8,163,165,1)",
+      "--colorDanger": "#f53f3f",
+      "--colorTextBase": "rgba(51,51,51,1)",
+      "--fontSize": "14px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-bg": "rgba(237,244,251,1)",
+      "@color-primary": "rgba(25,144,255,1)",
+      "@color-secondary": "rgba(8,163,165,1)",
+      "@color-danger": "#f53f3f",
+      "@color-text-base": "rgba(51,51,51,1)",
+      "@font-size-base": "14px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "16px",
+        "background": "var(--colorBg)",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)"
+      },
+      ".card": {
+        "background": "#ffffff",
+        "border-radius": "8px",
+        "padding": "16px",
+        "box-shadow": "0 2px 8px rgba(0,0,0,0.04)"
+      },
+      ".highlight-value": {
+        "color": "var(--colorPrimary)",
+        "font-weight": "bold",
+        "font-size": "1.5em"
+      },
+      ".warning-value": {
+        "color": "var(--colorDanger)",
+        "font-weight": "bold",
+        "font-size": "1.5em"
+      },
+      ".secondary-accent": {
+        "color": "var(--colorSecondary)"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主题背景色 rgba(237,244,251,1) 映射为 --colorBg，作为全局容器背景",
+      "蓝色高亮数值映射为 --colorPrimary，用于核心数据展示",
+      "红色异常警示映射为 --colorDanger，用于异常状态和负向指标",
+      "青绿色 rgba(8,163,165,1) 映射为 --colorSecondary，用于辅助图表或次要高亮",
+      "主文本色 rgba(51,51,51,1) 映射为 --colorTextBase，保证浅色背景下的高可读性",
+      "容器背景应优先直接落地为 Figma 字面量值，避免关键可见背景只依赖 CSS 变量"
+    ],
+    "elementStyleMap": {
+      "header-stats": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-text-group-设备类型-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-text-group-设备总数-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-text-group-完好率-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "el-text-group-设备类型-3": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-text-group-设备总数-6": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-text-group-完好率-9": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-tunnel-content-group-x-1-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-tunnel-content-group-x-1-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-tunnel-content-group-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-tunnel": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-content-group-x-15-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-content-group-x-15-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-content-group-x-15": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-16": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-row-x-19": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-north-south-content-group-x-1-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-north-south-content-group-x-1-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-north-south-content-group-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-north-south": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-content-group-x-24-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-content-group-x-24-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-content-group-x-24": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-25": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-row-x-28": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "main-content": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "sidebar-tabs": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-32": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "header-stats",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 9,
+        "title": "设备监测"
+      },
+      {
+        "id": "top-cards",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 0,
+        "title": "分类统计卡片"
+      },
+      {
+        "id": "main-content",
+        "responsibility": "列表项布局区",
+        "elementCount": 20,
+        "title": "设备列表区"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 → 强制拆分"
+  }
+}

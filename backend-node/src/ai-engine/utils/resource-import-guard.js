@@ -1127,4 +1127,61 @@ export default {
   buildResourceUsageCorpus,
   isResourceUsedInCorpus,
   ensureRuntimeLibraryImports,
+  pruneUnmountedResourceImports,
+}
+
+/**
+ * 🛡️ CODE-022 修复器（2026-09-11 根治方案 R3-2）：资源 import 未挂载 → 确定性删除。
+ *
+ * 根因：LLM 偶发「import bg1 后模板/脚本 0 处引用」→ CODE-022 BLOCK → 全量重试 →
+ * 常犯同一错 → 3×BLOCK 耗尽。与 ensureSubComponentImport / pruneDeadSubComponentImports
+ * 同族：确定性自愈优先于重试。
+ *
+ * 规则：资源变量（resourceDomMapping 注册名）在 <script> 里有具名 import，但「剥掉该
+ * import 行后」的模板/脚本/样式中零引用（\b 词边界）→ 删除该 import 行。
+ * 注意：W2 别名转发（const alias = primary）计入 primary 的引用（别名声明本身在
+ * 非 import 区域，词边界命中）→ 有别名时 primary 不会被误删。
+ *
+ * 幂等：删无可删时零副作用。只动 <script> 内 import 行，不碰模板/样式。
+ *
+ * @param {string} content .vue 文件内容
+ * @param {Array} resourceDomMapping 资源映射（识别资源变量名）
+ * @param {Object} [options] { logger }
+ * @returns {{ content: string, changed: boolean, pruned: string[] }}
+ */
+export function pruneUnmountedResourceImports(content, resourceDomMapping, options = {}) {
+  const result = { content, changed: false, pruned: [] };
+  if (typeof content !== 'string' || !content) return result;
+  const { varToMapping } = buildVarToMapping(resourceDomMapping || []);
+  if (varToMapping.size === 0) return result;
+  const scriptMatch = content.match(/<script[^>]*>([\s\S]*?)<\/script>/i);
+  if (!scriptMatch) return result;
+
+  let script = scriptMatch[1];
+  for (const varName of varToMapping.keys()) {
+    const esc = String(varName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const importRe = new RegExp(
+      `^[ \\t]*import[ \\t]+${esc}[ \\t]+from[ \\t]*['"][^'"]*['"][ \\t]*;?[ \\t]*\\n?`,
+      'm',
+    );
+    if (!importRe.test(script)) continue;
+    const scriptWithout = script.replace(importRe, '');
+    const rest = content.replace(scriptMatch[1], scriptWithout);
+    const usageRe = new RegExp(`\\b${esc}\\b`);
+    if (usageRe.test(rest)) continue;
+    script = scriptWithout;
+    result.pruned.push(varName);
+  }
+
+  if (result.pruned.length === 0) return result;
+  const cleaned = script.replace(/\n{3,}/g, '\n\n');
+  const newContent = content.replace(scriptMatch[1], cleaned);
+  result.content = newContent;
+  result.changed = newContent !== content;
+  if (options.logger && typeof options.logger.warn === 'function') {
+    options.logger.warn('🛡️ CODE-022 修复：删除未挂载的资源 import（落盘前）', {
+      pruned: result.pruned,
+    });
+  }
+  return result;
 }

@@ -1,0 +1,81 @@
+.common() {
+  // 设计稿事实：背景图片及铺陈方式
+  @em-bg-image: url(../resources/images/bg-7890.png);
+  @em-bg-size: 100% 100%;
+  @em-bg-position: center center;
+  @em-bg-repeat: no-repeat;
+
+  // 基础尺寸与圆角（非颜色变量）
+  @em-font-size-base: 14px;
+  @em-font-size-sm: 12px;
+  @em-font-size-lg: 16px;
+  @em-border-radius-base: 2px;
+  @em-border-radius-sm: 2px;
+  @em-border-radius-lg: 4px;
+}
+
+.theme-light() {
+  // 品牌色
+  @em-color-primary: #1677ff;
+  @em-color-primary-hover: #4096ff;
+  @em-color-primary-active: #0958d9;
+
+  // 功能色
+  @em-color-success: #52c41a;
+  @em-color-warning: #faad14;
+  @em-color-error: #ff4d4f;
+  @em-color-info: #1677ff;
+
+  // 背景色
+  @em-bg-color: #ffffff;
+  @em-bg-color-secondary: #f5f5f5;
+  @em-bg-color-elevated: #ffffff;
+
+  // 文字色
+  @em-text-color: rgba(0, 0, 0, 0.88);
+  @em-text-color-secondary: rgba(0, 0, 0, 0.65);
+  @em-text-color-disabled: rgba(0, 0, 0, 0.25);
+  @em-text-color-inverse: rgba(255, 255, 255, 0.92);
+
+  // 边框色
+  @em-border-color: #d9d9d9;
+  @em-border-color-split: #f0f0f0;
+  @em-border-color-hover: #40a9ff;
+
+  // 阴影
+  @em-shadow-color: rgba(0, 0, 0, 0.08);
+  @em-shadow-light: rgba(0, 0, 0, 0.04);
+}
+
+.theme-dark() {
+  // 品牌色（暗色下微调，保持对比度）
+  @em-color-primary: #1668dc;
+  @em-color-primary-hover: #3c89e8;
+  @em-color-primary-active: #0f4fa8;
+
+  // 功能色（暗色下增亮）
+  @em-color-success: #49aa19;
+  @em-color-warning: #d89614;
+  @em-color-error: #d9363e;
+  @em-color-info: #1668dc;
+
+  // 背景色
+  @em-bg-color: #141414;
+  @em-bg-color-secondary: #1f1f1f;
+  @em-bg-color-elevated: #1f1f1f;
+
+  // 文字色（深色面板禁止使用黑色系）
+  @em-text-color: rgba(255, 255, 255, 0.85);
+  @em-text-color-secondary: rgba(255, 255, 255, 0.65);
+  @em-text-color-disabled: rgba(255, 255, 255, 0.30);
+  @em-text-color-inverse: rgba(0, 0, 0, 0.88);
+
+  // 边框色
+  @em-border-color: #424242;
+  @em-border-color-split: #303030;
+  @em-border-color-hover: #1668dc;
+
+  // 阴影
+  @em-shadow-color: rgba(0, 0, 0, 0.45);
+  @em-shadow-light: rgba(0, 0, 0, 0.25);
+}

@@ -47,6 +47,7 @@ import {
   formatSectionTreeForPrompt,
   findSectionById,
   assignSectionComponentNames,
+  dedupeDuplicateSections,
 } from '../../utils/section-tree.js';
 
 /**
@@ -1625,9 +1626,14 @@ export function extractFigmaColorEssentials(figmaNodeData, maxNodes = 220) {
 export function resolvePlanSections(input) {
   const genPlan = input?.generationInput?.componentPlan;
   const subPlan = genPlan || input?.subComponentPlan;
-  return subPlan && typeof subPlan === 'object' && Array.isArray(subPlan.effectiveSections)
-    ? subPlan.effectiveSections
-    : [];
+  const sections =
+    subPlan && typeof subPlan === 'object' && Array.isArray(subPlan.effectiveSections)
+      ? subPlan.effectiveSections
+      : [];
+  // 🛡️ 治本（2026-09-11 · c-device-monitor-hsvmkuvd-cfb53488）：planner 双重解释去重
+  // （同一主内容区被 @antd/tab 壳 + 臆造语义壳各解释一次 → 双 tabs 副本）。
+  // R1 单一事实源出口统一归一，模板装配/命名/prompt/COMP-001 全链自动受益。
+  return dedupeDuplicateSections(sections);
 }
 
 export function buildLayoutSkeleton(layoutStructure, planSections) {

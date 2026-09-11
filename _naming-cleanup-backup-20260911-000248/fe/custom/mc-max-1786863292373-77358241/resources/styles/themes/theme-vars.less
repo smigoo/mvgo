@@ -1,0 +1,30 @@
+@env-monitor-font-family: 'Noto Sans SC', 'Source Han Sans CN', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+@env-monitor-number-font-family: Roboto, 'DIN Alternate', Arial, sans-serif;
+@env-monitor-root-padding: 10px 20px 9px;
+@click: inherit;
+
+.theme-dark() {
+  @env-monitor-text-color: #d6effc;
+  @env-monitor-primary-text-color: #ffffff;
+  @env-monitor-sub-text-color: rgba(214, 239, 252, 0.78);
+  @env-monitor-tab-text-color: #9bd4ff;
+  @env-monitor-card-bg-color: rgba(16, 153, 177, 0.16);
+  @env-monitor-card-border-color: rgba(85, 158, 255, 0.35);
+  @env-monitor-control-bg-color: rgba(18, 82, 250, 0.14);
+  @env-monitor-control-border-color: rgba(85, 158, 255, 0.42);
+}
+
+.theme-light() {
+  @env-monitor-text-color: #333333;
+  @env-monitor-primary-text-color: #1990ff;
+  @env-monitor-sub-text-color: #666666;
+  @env-monitor-tab-text-color: #2c9bea;
+  @env-monitor-card-bg-color: rgba(255, 255, 255, 0.58);
+  @env-monitor-card-border-color: rgba(255, 255, 255, 0.86);
+  @env-monitor-control-bg-color: rgba(255, 255, 255, 0.6);
+  @env-monitor-control-border-color: rgba(44, 155, 234, 0.32);
+}
+
+:root {
+  .theme-light();
+}

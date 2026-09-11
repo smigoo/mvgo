@@ -1,0 +1,343 @@
+/* ============================================================
+ * 设备监测业务样式（device-monitor）
+ * 所有 class 前缀：c-c-monitor-
+ * 数据来源：Figma 真值表 + elementStyleMap
+ * 注意：禁止在根容器上设置背景/阴影/圆角，面板外壳由 base-panel 提供
+ * ============================================================ */
+
+/* ---------- 标题装饰点 ---------- */
+.c-c-monitor-title-dot {
+  display: inline-block;
+  position: relative;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+}
+
+.c-c-monitor-title-dot-outer,
+.c-c-monitor-title-dot-inner,
+.c-c-monitor-title-dot-core {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ---------- 头部指标区 ---------- */
+.c-c-monitor-header-metrics {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.c-c-monitor-update-text {
+  background: linear-gradient(#1990ff, #5a7eff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-size: 14px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.c-c-monitor-header-metric {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.c-c-monitor-header-label {
+  color: #333333;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.c-c-monitor-header-value {
+  color: #1990ff;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.c-c-monitor-header-value--accent {
+  color: #08a3a5;
+}
+
+.c-c-monitor-header-icon {
+  width: 24px;
+  height: 24px;
+  margin-left: 4px;
+  display: block;
+}
+
+/* ---------- 根容器（仅布局，无背景/阴影/圆角） ---------- */
+.c-c-monitor-root {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ---------- 概览区 ---------- */
+.c-c-monitor-overview-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.c-c-monitor-overview-list {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+}
+
+.c-c-monitor-overview-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  padding: 12px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: pointer;
+  text-align: left;
+  transition: filter 0.2s ease;
+}
+
+.c-c-monitor-overview-card--active {
+  /* 激活卡片内文字颜色在下方规则中覆盖 */
+}
+
+.c-c-monitor-overview-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-image: url(../resources/images/bg-8788.png);
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+  pointer-events: none;
+}
+
+.c-c-monitor-overview-icon {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+}
+
+.c-c-monitor-overview-icon-part,
+.c-c-monitor-overview-icon-main {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.c-c-monitor-overview-text {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.c-c-monitor-overview-name {
+  color: #333333;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+.c-c-monitor-overview-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.c-c-monitor-overview-label {
+  color: #333333;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.c-c-monitor-overview-number {
+  color: #1990ff;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.c-c-monitor-overview-number--danger {
+  color: #e03434;
+}
+
+/* 激活卡片内部文字色变白 */
+.c-c-monitor-overview-card--active .c-c-monitor-overview-name,
+.c-c-monitor-overview-card--active .c-c-monitor-overview-label {
+  color: #ffffff;
+}
+
+.c-c-monitor-overview-card--active .c-c-monitor-overview-number {
+  color: #ffffff;
+}
+
+/* ---------- 分类区 ---------- */
+.c-c-monitor-category-section {
+  display: flex;
+  flex-direction: row;
+}
+
+.c-c-monitor-category-tabs {
+  width: 100%;
+}
+
+.c-c-monitor-category-tab {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 12px;
+}
+
+.c-c-monitor-category-tab-name {
+  font-size: 14px;
+  font-weight: inherit;
+  color: inherit;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.c-c-monitor-category-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  min-width: 48px;
+  height: 24px;
+  background: #ffffff;
+  border: 1px solid #258dc8;
+  border-radius: 4px;
+  box-shadow: 0 1px 2px rgba(51, 101, 144, 0.4);
+  color: #3b80e7;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+/* ---------- 设备网格区 ---------- */
+.c-c-monitor-device-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.c-c-monitor-device-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  overflow: hidden;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+}
+
+.c-c-monitor-device-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-image: url(../resources/images/bg-8788.png);
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+  pointer-events: none;
+}
+
+.c-c-monitor-device-text {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.c-c-monitor-device-name {
+  color: #333333;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+.c-c-monitor-device-value {
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1;
+  text-shadow: 0 0 0 rgba(0, 0, 0, 0.5);
+}
+
+.c-c-monitor-device-icon {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+}
+
+.c-c-monitor-device-icon-part,
+.c-c-monitor-device-icon-main {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ---------- antd 左侧 Tabs 深度覆盖 ---------- */
+:deep(.c-c-monitor-category-tabs .ant-tabs-tab) {
+  background: linear-gradient(#85baff, #bfe2ff);
+  border: 1px solid #f0f5ff;
+  border-radius: 6px;
+  color: #3b80e7;
+  font-size: 14px;
+  font-weight: 400;
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+:deep(.c-c-monitor-category-tabs .ant-tabs-tab-active) {
+  background: linear-gradient(#318aff, #70bfff);
+  border: 1px solid #f0f5ff;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+:deep(.c-c-monitor-category-tabs .ant-tabs-tab-btn) {
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+:deep(.c-c-monitor-category-tabs .ant-tabs-tab-active .ant-tabs-tab-btn) {
+  color: #ffffff;
+}
+
+:deep(.c-c-monitor-category-tabs .ant-tabs-nav) {
+  min-width: 120px;
+}

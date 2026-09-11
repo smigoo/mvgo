@@ -1,0 +1,38 @@
+.common() {
+@mc-primary-color: #1990ff;
+  @mc-primary-gradient-start: #1990ff;
+  @mc-primary-gradient-end: #5a7eff;
+  @mc-accent-blue: #559eff;
+  @mc-cyan-blue: #57caff;
+  @mc-title-gradient-start: #1252fa;
+  @mc-title-gradient-end: #d6effc;
+  @mc-text-primary: #333333;
+  @mc-text-inverse: #ffffff;
+  @mc-tab-inactive-bg: #6680a0;
+  @mc-tab-active-border: rgba(199, 224, 255, 1);
+  @mc-tab-inactive-border: rgba(172, 196, 225, 1);
+  @mc-panel-shadow: 0 4px 10px rgba(74, 117, 141, 0.25);
+  @click: inherit; // 自动添加
+}
+
+.theme-dark() {
+  .common();
+
+  @mc-panel-bg: #edf4fb;
+  @mc-body-bg: #edf4fb;
+  @mc-subtitle-text: #333333;
+  @mc-card-text: #333333;
+}
+
+.theme-light() {
+  .common();
+
+  @mc-panel-bg: #edf4fb;
+  @mc-body-bg: #edf4fb;
+  @mc-subtitle-text: #333333;
+  @mc-card-text: #333333;
+}
+
+:root {
+  .theme-dark();
+}

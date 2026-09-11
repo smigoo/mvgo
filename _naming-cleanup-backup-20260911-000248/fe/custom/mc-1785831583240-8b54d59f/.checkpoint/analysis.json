@@ -1,0 +1,174 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 75,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections",
+        "message": "notes和interactions中明确提到的'顶部标题栏车牌号标签(苏A 12345)'和'右上角关闭按钮'在layout结构中完全缺失，导致交互和视觉元素无法落地。",
+        "suggestion": "在layout最外层增加一个header section，或者在现有结构顶部补充对应的DOM节点，以承载车牌号标签和关闭按钮，确保结构与交互描述一致。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[0].body & layout.sections[1].body",
+        "message": "两个section的body中均设置了完全相同的backgroundImage(bg-2.png)。在垂直堆叠布局中，这会导致背景图被重复解析和渲染，不仅增加DOM渲染负担，还可能导致背景图拼接不自然或产生视觉割裂。",
+        "suggestion": "将backgroundImage提取到最外层的layout节点，或在一个统一的父容器中设置背景，避免子区块重复设置背景图。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body.children[0].children",
+        "message": "表格表头(table-header)和行数据(table-row)中的8个列均未定义宽度比例（如flex或width）。由于各列文本长度差异较大（如'实际发车时间'与'运输状态'），默认均分可能导致布局不美观、文本溢出或对齐混乱。",
+        "suggestion": "为table-header和table-row的每个子元素添加flex属性（例如：时间列flex: 2，编号列flex: 1.5，状态列flex: 1），以精确控制列宽比例。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "coverageReport显示coverageRate为0，且missingCount高达67，说明Figma节点与当前布局结构的匹配存在严重断层，可能是解析工具异常或节点映射失败。",
+        "suggestion": "重新运行Figma解析工具，检查节点映射关系和图层命名，确保生成的layout结构能准确覆盖设计稿中的核心元素，消除覆盖率异常。"
+      }
+    ],
+    "recommendations": [
+      "补充顶部Header结构：根据设计稿和交互说明，补充包含车牌号标签和关闭按钮的顶部区域，完善弹窗的整体结构。",
+      "优化背景图渲染：将重复的背景图配置提升至全局或父级容器，减少不必要的DOM背景重复绘制，提升渲染性能。",
+      "细化表格列宽控制：在表格结构中引入flex比例或明确的宽度约束，确保长文本（如时间、地址）与短文本（如状态）在视觉上对齐且美观。",
+      "修复Figma解析映射：排查coverageReport为0的根因，重新对齐Figma图层与微码组件的节点关系，确保设计稿还原度。"
+    ],
+    "summary": "该布局结构整体框架清晰，区域划分（表格与详情）合理，嵌套深度符合规范。但存在关键结构缺失（如车牌号标签和关闭按钮未体现）、背景图重复设置导致的性能与视觉隐患，以及表格列宽未定义的问题。此外，Figma覆盖率报告异常提示解析过程可能存在偏差。建议修复上述结构和性能问题后，重新进行设计稿映射校验。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#18ffc6",
+      "--colorBgBase": "#003032",
+      "--colorTextBase": "#ffffff",
+      "--colorWarning": "#b07b00",
+      "--colorRowHighlight": "rgba(24, 255, 198, 0.12)",
+      "--fontSize": "14px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#18ffc6",
+      "@color-bg-base": "#003032",
+      "@color-text-base": "#ffffff",
+      "@color-warning": "#b07b00",
+      "@color-row-highlight": "rgba(24, 255, 198, 0.12)",
+      "@font-size-base": "14px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "width": "100%",
+        "height": "100%",
+        "background-color": "#003032",
+        "color": "#ffffff",
+        "font-size": "14px",
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      ".section-header": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "8px",
+        "padding": "12px 16px"
+      },
+      ".title-icon-diamond": {
+        "width": "12px",
+        "height": "12px",
+        "background-color": "#18ffc6",
+        "transform": "rotate(45deg)"
+      },
+      ".data-table": {
+        "width": "100%",
+        "border-collapse": "collapse"
+      },
+      ".table-row-highlight": {
+        "background-color": "rgba(24, 255, 198, 0.12)",
+        "transition": "background-color 0.3s ease"
+      },
+      ".license-plate-tag": {
+        "display": "inline-block",
+        "padding": "2px 8px",
+        "background-color": "#b07b00",
+        "color": "#ffffff",
+        "border-radius": "4px",
+        "font-weight": "bold",
+        "font-size": "12px"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调映射为 --colorPrimary (#18ffc6)，用于科技风高亮、选中状态及菱形图标。",
+      "背景色 #003032 直接落地为 --colorBgBase，确保深色监控风的基础底色，避免仅依赖CSS变量导致首屏闪烁。",
+      "黄色 #b07b00 映射为 --colorWarning，专用于车牌标签等需要强视觉强调的元素。",
+      "表格行高亮背景使用主色 #18ffc6 的透明度变体 (rgba)，保持科技风视觉统一且不刺眼。",
+      "菱形标题图标通过 .title-icon-diamond 类实现，采用 CSS transform 旋转生成，无需额外图片资源。"
+    ],
+    "elementStyleMap": {
+      "section-table": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-2-table-header-x-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-table-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-table-row-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-table-row-x-3": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-2.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-table-header-x-3": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-table-row-x-12": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-table-row-x-21": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-table-row-x-30": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-39-image-监控截图-1": {
+        "object-fit": "cover",
+        "border": "1px solid rgba(255,255,255,0.2)"
+      },
+      "el-el-x-39": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-2.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-image-监控截图-53": {
+        "object-fit": "cover",
+        "border": "1px solid rgba(255,255,255,0.2)"
+      }
+    }
+  }
+}

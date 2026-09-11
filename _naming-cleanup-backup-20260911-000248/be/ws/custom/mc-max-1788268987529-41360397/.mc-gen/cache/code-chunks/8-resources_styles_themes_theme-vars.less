@@ -1,0 +1,55 @@
+// 微码组件主题变量文件
+// 定义 common、dark、light 三个 mixin，由系统生成的 dark.less/light.less 调用
+
+.common() {
+  // 字体缩放基准令牌（微码组件要求）
+  @fontSize: 14px;
+  
+  // 基础字体尺寸
+  @font-size-base: 14px;
+  @font-size-lg: 16px;
+  @font-size-xl: 24px;
+  @font-size-xxl: 32px;
+  
+  // 圆角
+  @border-radius-base: 4px;
+  @border-radius-lg: 8px;
+}
+
+.theme-light() {
+  // 主题色（从 Figma 设计稿映射）
+  @color-primary: #1990ff;
+  @color-warning: #fa8c16;
+  @color-success: #52c41a;
+  
+  // 文本颜色
+  @color-text-base: #333333;
+  @color-text-secondary: #666666;
+  @color-text-tertiary: #999999;
+  
+  // 背景颜色
+  @color-bg-base: #edf4fb;
+  @color-bg-container: #ffffff;
+  
+  // 边框颜色
+  @color-border: #d9d9d9;
+}
+
+.theme-dark() {
+  // 主题色（深色模式保持一致）
+  @color-primary: #1990ff;
+  @color-warning: #fa8c16;
+  @color-success: #52c41a;
+  
+  // 文本颜色（深色面板禁止使用黑色系）
+  @color-text-base: #e8e8e8;
+  @color-text-secondary: #b8b8b8;
+  @color-text-tertiary: #8c8c8c;
+  
+  // 背景颜色
+  @color-bg-base: #141414;
+  @color-bg-container: #1f1f1f;
+  
+  // 边框颜色
+  @color-border: #434343;
+}

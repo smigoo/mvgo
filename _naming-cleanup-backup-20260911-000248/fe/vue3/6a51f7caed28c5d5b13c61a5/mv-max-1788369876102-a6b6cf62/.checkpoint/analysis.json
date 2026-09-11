@@ -1,0 +1,594 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 78,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[1].children[2]",
+        "message": "badge-num 作为 icon-group 的平级子节点存在定位错误，position:absolute 但无父级 relative 容器，badge 将脱离 icon-table 图标游离",
+        "suggestion": "将 badge-num 内嵌到 icon-table 节点内，并为 icon-table 设置 position:relative 容器包裹"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[0]",
+        "message": "chart-yaxis-label 文本为「辆」但 Y 轴刻度为 0~40，与 chartDataHints 中值域（0/200/400/600）不一致，单位标注可能有误",
+        "suggestion": "核查 Y 轴实际量纲，统一 chart-yaxis-label 与 chart-yaxis-ticks 的数值范围"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body",
+        "message": "chart-warning-line 的 role 为 decoration 而非 threshold-line，且无绝对定位父容器，无法精准叠加在图表 Y 轴对应位置",
+        "suggestion": "将 chart-area 与 chart-warning-line 包裹在 position:relative 容器内，预警线使用 position:absolute 精确定位"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "layout.sections[1].body.children[1]",
+        "message": "tabs-icon 节点同时携带 resourceFile/resourceVarName 字段，与其 icon-group 聚合角色矛盾，子节点已各自声明资源",
+        "suggestion": "删除 tabs-icon 父节点上的 resourceFile/resourceVarName，资源声明下移至各 icon-button 子节点"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[2].body",
+        "message": "section-chart body 同时声明了 bgPlaceholder、backgroundImage 和 CSS background 三套背景，存在冗余覆盖",
+        "suggestion": "根据资源下载状态二选一：优先使用 backgroundImage（bg-7890.png），失败时降级为 CSS background，删除 bgPlaceholder 冗余字段"
+      }
+    ],
+    "recommendations": [
+      "badge 组件应始终作为目标图标的直接子节点并配套 position:relative 父容器，避免全局定位漂移",
+      "图表区建议统一用一个 position:relative 包装层承载 chart-area、axis、legend、threshold-line，减少绝对定位散落节点",
+      "coverageReport 显示 sub-t（FRAME）与 num（GROUP）两个节点未覆盖，建议确认是否对应 badge 容器及 Tab 数字，补充到布局结构中"
+    ],
+    "summary": "整体结构清晰，三段式分层合理，主要问题集中在 badge 定位容器缺失、预警线叠层方案不完整、背景声明冗余三点，修复后可达良好水平。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）— 深色科技监测风主题",
+      "--colorBgBase": "rgba(30,40,60,1)",
+      "--colorPrimary": "rgba(85,158,255,1)",
+      "--colorSuccess": "rgba(0,230,120,1)",
+      "--colorDanger": "rgba(245,63,63,1)",
+      "--colorTextBase": "rgba(255,255,255,0.8)",
+      "--colorSurface": "rgba(237,244,251,0.1)",
+      "--colorPrimaryBg": "rgba(85,158,255,0.15)",
+      "--colorBadgeBg": "#f53f3f",
+      "--fontSize": "14px",
+      "--borderRadius": "4px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射 — 对应 theme-vars.less 中 .theme-dark()",
+      "@color-bg-base": "rgba(30,40,60,1)",
+      "@color-primary": "rgba(85,158,255,1)",
+      "@color-success": "rgba(0,230,120,1)",
+      "@color-danger": "rgba(245,63,63,1)",
+      "@color-text-base": "rgba(255,255,255,0.8)",
+      "@color-surface": "rgba(237,244,251,0.1)",
+      "@color-primary-bg": "rgba(85,158,255,0.15)",
+      "@color-badge-bg": "#f53f3f",
+      "@color-divider-start": "rgba(85,158,255,0.8)",
+      "@color-divider-end": "rgba(85,158,255,0)",
+      "@color-chart-area-start": "rgba(0,230,120,0.3)",
+      "@color-chart-area-end": "rgba(0,230,120,0)",
+      "@color-tab-active-bg": "rgba(85,158,255,1)",
+      "@color-tab-active-text": "rgba(255,255,255,1)",
+      "@color-tab-default-text": "rgba(255,255,255,0.6)",
+      "@color-threshold-line": "rgba(245,63,63,1)",
+      "@font-size-base": "14px",
+      "@border-radius-base": "4px"
+    },
+    "cssClasses": {
+      "comment": "可复用CSS类 — 深色科技监测风",
+      ".monitor-container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "width": "100%",
+        "height": "100%",
+        "background": "var(--colorBgBase)",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)"
+      },
+      ".monitor-header": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "0.57em",
+        "padding": "0.86em 1.14em 0",
+        "position": "relative"
+      },
+      ".monitor-header__icon": {
+        "comment": "标题左侧菱形/圆形装饰图标（渐变色）",
+        "width": "0.86em",
+        "height": "0.86em",
+        "flex-shrink": "0",
+        "background": "linear-gradient(135deg, var(--colorPrimary), var(--colorSuccess))",
+        "border-radius": "2px",
+        "transform": "rotate(45deg)"
+      },
+      ".monitor-header__title": {
+        "font-size": "1em",
+        "font-weight": "600",
+        "color": "var(--colorTextBase)",
+        "letter-spacing": "0.05em"
+      },
+      ".monitor-header__badge": {
+        "comment": "红色 badge，数字6",
+        "display": "inline-flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "min-width": "1.14em",
+        "height": "1.14em",
+        "padding": "0 0.3em",
+        "border-radius": "0.57em",
+        "background": "var(--colorBadgeBg)",
+        "color": "#ffffff",
+        "font-size": "0.79em",
+        "font-weight": "700",
+        "line-height": "1"
+      },
+      ".monitor-divider": {
+        "comment": "标题下方水平分隔线（渐变）",
+        "width": "100%",
+        "height": "1px",
+        "margin": "0.57em 0",
+        "background": "linear-gradient(90deg, var(--colorPrimary) 0%, rgba(85,158,255,0) 100%)",
+        "border": "none"
+      },
+      ".monitor-tabs": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "0.29em",
+        "padding": "0 1.14em"
+      },
+      ".monitor-tabs__item": {
+        "padding": "0.29em 0.86em",
+        "border-radius": "var(--borderRadius)",
+        "font-size": "0.86em",
+        "color": "var(--colorTabDefaultText, rgba(255,255,255,0.6))",
+        "cursor": "pointer",
+        "transition": "background 0.2s, color 0.2s",
+        "background": "transparent"
+      },
+      ".monitor-tabs__item--active": {
+        "comment": "激活Tab使用蓝色背景高亮",
+        "background": "var(--colorPrimary)",
+        "color": "#ffffff",
+        "font-weight": "600"
+      },
+      ".monitor-chart": {
+        "flex": "1",
+        "min-height": "0",
+        "padding": "0.57em 1.14em",
+        "position": "relative"
+      },
+      ".monitor-chart__surface": {
+        "comment": "折线图下方绿色面积填充（ECharts areaStyle 配置，此处为容器占位）",
+        "width": "100%",
+        "height": "100%"
+      },
+      ".monitor-chart__threshold": {
+        "comment": "红色虚线预警阈值线（markLine 配置提示）",
+        "position": "absolute",
+        "left": "0",
+        "right": "0",
+        "height": "1px",
+        "border-top": "1px dashed var(--colorDanger)",
+        "pointer-events": "none"
+      },
+      ".monitor-card": {
+        "background": "var(--colorSurface)",
+        "border-radius": "var(--borderRadius)",
+        "padding": "0.86em 1.14em"
+      }
+    },
+    "echartsThemeHint": {
+      "comment": "ECharts 系列颜色配置建议（JS侧使用，非CSS）",
+      "coLineSeries": {
+        "lineColor": "rgba(0,230,120,1)",
+        "areaColorStart": "rgba(0,230,120,0.3)",
+        "areaColorEnd": "rgba(0,230,120,0)"
+      },
+      "thresholdMarkLine": {
+        "lineColor": "rgba(245,63,63,1)",
+        "lineType": "dashed",
+        "lineWidth": 1
+      },
+      "axisColor": "rgba(255,255,255,0.3)",
+      "splitLineColor": "rgba(255,255,255,0.08)"
+    },
+    "tokenCoverage": 0.94,
+    "mappingNotes": [
+      "backgroundBrightness=dark：所有背景字面量直接硬编码为 rgba(30,40,60,1)，不依赖 CSS 变量兜底",
+      "6色全部映射为具名语义变量（primary/success/danger/surface/text/bg），避免 common.less 中出现裸色值",
+      "渐变装饰（标题图标、分隔线、图表面积）均拆分为起止颜色变量，便于主题覆盖",
+      "ECharts 折线色、面积填充、虚线阈值线属于 JS 配置域，CSS 变量无法直接驱动，建议在 THEME_COLORS[theme] 对象中引用对应 Less 变量字面量",
+      "badge #f53f3f 与 --colorDanger rgba(245,63,63,1) 视觉等价，统一映射到 --colorBadgeBg / --colorDanger 两个语义变量，按用途区分",
+      "Tab 激活态背景复用 --colorPrimary，文字切为纯白 #ffffff，避免透明度叠加后对比度不足",
+      "所有尺寸单位使用 em，根字号挂载在 .monitor-container 上，缩放时整体等比响应"
+    ],
+    "elementStyleMap": {
+      "section-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "section-tabs": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tabs-list": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tabs-icon": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-16": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-header",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 2,
+        "title": "面板标题栏",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 2,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "section-tabs",
+        "responsibility": "标签页切换区",
+        "elementCount": 9,
+        "title": "Tab切换栏与操作区",
+        "complexityScore": 55,
+        "complexityReasons": {
+          "elementCount": 9,
+          "charts": 1,
+          "interactions": 7,
+          "maxDepth": 2
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [
+          {
+            "type": "interaction-area",
+            "id": "section-tabs-interactive",
+            "name": "InteractiveArea",
+            "responsibility": "交互控件区",
+            "reason": "R4: 交互复杂度拆分（7个交互元素）",
+            "props": [],
+            "emits": [
+              "action"
+            ]
+          }
+        ],
+        "shouldSplitInternally": true
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 7,
+        "title": "CO浓度折线图",
+        "complexityScore": 50,
+        "complexityReasons": {
+          "elementCount": 7,
+          "charts": 7,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [
+          {
+            "type": "chart-component",
+            "id": "chart-yaxis-label",
+            "name": "Y轴单位标签",
+            "responsibility": "图表组件：Y轴单位标签",
+            "reason": "R1: 图表隔离策略",
+            "props": [
+              "chartData",
+              "chartConfig"
+            ],
+            "emits": [
+              "legendClick",
+              "dataZoom"
+            ]
+          },
+          {
+            "type": "chart-component",
+            "id": "chart-legend",
+            "name": "图例：zk3+785CO浓度",
+            "responsibility": "图表组件：图例：zk3+785CO浓度",
+            "reason": "R1: 图表隔离策略",
+            "props": [
+              "chartData",
+              "chartConfig"
+            ],
+            "emits": [
+              "legendClick",
+              "dataZoom"
+            ]
+          },
+          {
+            "type": "chart-component",
+            "id": "chart-area",
+            "name": "折线图主体",
+            "responsibility": "图表组件：折线图主体",
+            "reason": "R1: 图表隔离策略",
+            "props": [
+              "chartData",
+              "chartConfig"
+            ],
+            "emits": [
+              "legendClick",
+              "dataZoom"
+            ]
+          },
+          {
+            "type": "chart-component",
+            "id": "chart-warning-line",
+            "name": "预警线（红色虚线）",
+            "responsibility": "图表组件：预警线（红色虚线）",
+            "reason": "R1: 图表隔离策略",
+            "props": [
+              "chartData",
+              "chartConfig"
+            ],
+            "emits": [
+              "legendClick",
+              "dataZoom"
+            ]
+          },
+          {
+            "type": "chart-component",
+            "id": "chart-yaxis-ticks",
+            "name": "Y轴刻度值",
+            "responsibility": "图表组件：Y轴刻度值",
+            "reason": "R1: 图表隔离策略",
+            "props": [
+              "chartData",
+              "chartConfig"
+            ],
+            "emits": [
+              "legendClick",
+              "dataZoom"
+            ]
+          },
+          {
+            "type": "chart-component",
+            "id": "chart-xaxis-ticks",
+            "name": "X轴时间刻度",
+            "responsibility": "图表组件：X轴时间刻度",
+            "reason": "R1: 图表隔离策略",
+            "props": [
+              "chartData",
+              "chartConfig"
+            ],
+            "emits": [
+              "legendClick",
+              "dataZoom"
+            ]
+          },
+          {
+            "type": "chart-component",
+            "id": "chart-xaxis-unit",
+            "name": "X轴单位：时",
+            "responsibility": "图表组件：X轴单位：时",
+            "reason": "R1: 图表隔离策略",
+            "props": [
+              "chartData",
+              "chartConfig"
+            ],
+            "emits": [
+              "legendClick",
+              "dataZoom"
+            ]
+          }
+        ],
+        "shouldSplitInternally": true
+      }
+    ],
+    "isForced": true,
+    "minFiles": 11,
+    "reason": "有效 sections=3 ≥ 3 或存在高复杂度 section → 强制拆分",
+    "internalSubcomponents": [
+      {
+        "type": "interaction-area",
+        "id": "section-tabs-interactive",
+        "name": "InteractiveArea",
+        "responsibility": "交互控件区",
+        "reason": "R4: 交互复杂度拆分（7个交互元素）",
+        "props": [],
+        "emits": [
+          "action"
+        ],
+        "parentSectionId": "section-tabs",
+        "parentSectionTitle": "Tab切换栏与操作区"
+      },
+      {
+        "type": "chart-component",
+        "id": "chart-yaxis-label",
+        "name": "Y轴单位标签",
+        "responsibility": "图表组件：Y轴单位标签",
+        "reason": "R1: 图表隔离策略",
+        "props": [
+          "chartData",
+          "chartConfig"
+        ],
+        "emits": [
+          "legendClick",
+          "dataZoom"
+        ],
+        "parentSectionId": "section-chart",
+        "parentSectionTitle": "CO浓度折线图"
+      },
+      {
+        "type": "chart-component",
+        "id": "chart-legend",
+        "name": "图例：zk3+785CO浓度",
+        "responsibility": "图表组件：图例：zk3+785CO浓度",
+        "reason": "R1: 图表隔离策略",
+        "props": [
+          "chartData",
+          "chartConfig"
+        ],
+        "emits": [
+          "legendClick",
+          "dataZoom"
+        ],
+        "parentSectionId": "section-chart",
+        "parentSectionTitle": "CO浓度折线图"
+      },
+      {
+        "type": "chart-component",
+        "id": "chart-area",
+        "name": "折线图主体",
+        "responsibility": "图表组件：折线图主体",
+        "reason": "R1: 图表隔离策略",
+        "props": [
+          "chartData",
+          "chartConfig"
+        ],
+        "emits": [
+          "legendClick",
+          "dataZoom"
+        ],
+        "parentSectionId": "section-chart",
+        "parentSectionTitle": "CO浓度折线图"
+      },
+      {
+        "type": "chart-component",
+        "id": "chart-warning-line",
+        "name": "预警线（红色虚线）",
+        "responsibility": "图表组件：预警线（红色虚线）",
+        "reason": "R1: 图表隔离策略",
+        "props": [
+          "chartData",
+          "chartConfig"
+        ],
+        "emits": [
+          "legendClick",
+          "dataZoom"
+        ],
+        "parentSectionId": "section-chart",
+        "parentSectionTitle": "CO浓度折线图"
+      },
+      {
+        "type": "chart-component",
+        "id": "chart-yaxis-ticks",
+        "name": "Y轴刻度值",
+        "responsibility": "图表组件：Y轴刻度值",
+        "reason": "R1: 图表隔离策略",
+        "props": [
+          "chartData",
+          "chartConfig"
+        ],
+        "emits": [
+          "legendClick",
+          "dataZoom"
+        ],
+        "parentSectionId": "section-chart",
+        "parentSectionTitle": "CO浓度折线图"
+      },
+      {
+        "type": "chart-component",
+        "id": "chart-xaxis-ticks",
+        "name": "X轴时间刻度",
+        "responsibility": "图表组件：X轴时间刻度",
+        "reason": "R1: 图表隔离策略",
+        "props": [
+          "chartData",
+          "chartConfig"
+        ],
+        "emits": [
+          "legendClick",
+          "dataZoom"
+        ],
+        "parentSectionId": "section-chart",
+        "parentSectionTitle": "CO浓度折线图"
+      },
+      {
+        "type": "chart-component",
+        "id": "chart-xaxis-unit",
+        "name": "X轴单位：时",
+        "responsibility": "图表组件：X轴单位：时",
+        "reason": "R1: 图表隔离策略",
+        "props": [
+          "chartData",
+          "chartConfig"
+        ],
+        "emits": [
+          "legendClick",
+          "dataZoom"
+        ],
+        "parentSectionId": "section-chart",
+        "parentSectionTitle": "CO浓度折线图"
+      }
+    ]
+  }
+}

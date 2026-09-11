@@ -1,0 +1,164 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 75,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body",
+        "message": "标题区的 header 已包含标题文本，body 内又重复渲染“环境监测”文本，造成结构冗余。",
+        "suggestion": "保留 header 标题，删除 body 中的重复 text 子节点。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "charts[0].axes",
+        "message": "Y轴单位标注为“辆”，与CO浓度语义不符，疑似模板残留。",
+        "suggestion": "将单位修正为浓度单位，如 ppm 或 mg/m³，或暂置空。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "覆盖率仅53%，missing 7个节点，预警线、图例、Y轴刻度未纳入布局结构。",
+        "suggestion": "补齐图表子元素或在 chart 组件内明确渲染，避免信息缺失。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[1].body.children[0]",
+        "message": "Tab 列表从 section 到 tab 嵌套超过3层，结构偏深。",
+        "suggestion": "合并 tabs-list 与 children 层级，或采用扁平 role 结构。"
+      }
+    ],
+    "recommendations": [
+      "去除标题区 body 中的重复标题文本，仅保留 header 标题。",
+      "修正图表 Y 轴单位，并补齐预警线、图例等缺失节点。",
+      "将 Tab 区嵌套层级扁平化至3层以内。"
+    ],
+    "summary": "整体分区清晰，但存在标题重复、Y轴单位残留、覆盖率低及Tab嵌套偏深等问题，需优化后使用。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#559EFF",
+      "--colorBg": "#EDF4FB",
+      "--colorTextBase": "#333333",
+      "--colorSuccess": "#52C41A",
+      "--colorDanger": "#F53F3F",
+      "--fontSize": "14px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#559EFF",
+      "@color-bg": "#EDF4FB",
+      "@color-text-base": "#333333",
+      "@color-success": "#52C41A",
+      "@color-danger": "#F53F3F",
+      "@font-size-base": "14px",
+      "@border-radius-base": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "16px",
+        "background": "#EDF4FB",
+        "color": "#333333"
+      },
+      ".tab-bar": {
+        "display": "flex",
+        "background": "linear-gradient(90deg, #559EFF, #80B8FF)",
+        "border-radius": "8px 8px 0 0"
+      },
+      ".tab-item-active": {
+        "color": "#ffffff",
+        "background": "rgba(255, 255, 255, 0.2)",
+        "font-weight": "bold"
+      },
+      ".chart-area": {
+        "fill": "#52C41A",
+        "fill-opacity": "0.2"
+      },
+      ".warning-line": {
+        "stroke": "#F53F3F",
+        "stroke-width": "2px",
+        "stroke-dasharray": "4 4"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主题色 #559EFF 映射为 --colorPrimary，用于Tab高亮和渐变背景基础色",
+      "容器背景 #EDF4FB 优先直接落地为 Figma 字面量值，同时映射为 --colorBg 供全局复用",
+      "图表绿色面积填充使用 --colorSuccess (#52C41A) 配合透明度实现渐变或半透明效果",
+      "红色预警线使用 --colorDanger (#F53F3F) 强调异常状态，建议配合虚线样式",
+      "文本色 #333333 映射为 --colorTextBase，符合浅色科技监测风的视觉规范"
+    ],
+    "elementStyleMap": {
+      "title-section": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "tabs-section": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tabs-list": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "view-icons": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "chart-section": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-14": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "title-section",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 1,
+        "title": "环境监测"
+      },
+      {
+        "id": "tabs-section",
+        "responsibility": "标签页切换区",
+        "elementCount": 8,
+        "title": "Tab切换与工具栏"
+      },
+      {
+        "id": "chart-section",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "数据图表区"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 → 强制拆分"
+  }
+}

@@ -1,0 +1,91 @@
+.common() {
+  // 字体
+  @font-title: 'Noto Sans SC', sans-serif;
+  @font-body: 'Source Han Sans CN', sans-serif;
+  @font-num: 'Roboto', sans-serif;
+  @font-icon-label: 'YouSheBiaoTiHei', sans-serif;
+
+  // 字号
+  @font-size-sm: 12px;
+  @font-size-md: 14px;
+  @font-size-lg: 16px;
+  @font-size-xl: 20px;
+
+  // 间距
+  @spacing-xs: 4px;
+  @spacing-sm: 6px;
+  @spacing-md: 8px;
+  @spacing-lg: 12px;
+  @spacing-xl: 16px;
+
+  // 圆角
+  @radius-sm: 4px;
+  @radius-md: 6px;
+
+  // 过渡
+  @transition-base: all 0.2s ease;
+}
+
+.theme-light() {
+  // 面板背景
+  @bg-panel: #edf4fb;
+  @shadow-panel: 0 4px 10px 0 rgba(74, 117, 141, 0.25);
+
+  // 头部统计
+  @color-stat-label: #333333;
+  @color-stat-value: #1990ff;
+  @color-stat-value-green: #08a3a5;
+
+  // Switch 切换区
+  @color-switch-title-active: #ffffff;
+  @color-switch-title-default: #333333;
+  @color-switch-data-label: #333333;
+  @color-switch-data-value: #1990ff;
+
+  // Tab 标签
+  @color-tab-label-active: #ffffff;
+  @color-tab-label-default: #333333;
+  @color-tab-badge-bg: rgba(255, 255, 255, 0.25);
+  @color-tab-badge-text: #ffffff;
+  @color-tab-badge-bg-default: rgba(25, 144, 255, 0.15);
+  @color-tab-badge-text-default: #1990ff;
+
+  // 设备卡片
+  @color-device-name: #333333;
+  @color-device-ratio: #1990ff;
+  @color-device-ratio-alert: #ff4d4f;
+}
+
+.theme-dark() {
+  // 面板背景（深色）
+  @bg-panel: #0d1a2e;
+  @shadow-panel: 0 4px 10px 0 rgba(0, 0, 0, 0.5);
+
+  // 头部统计
+  @color-stat-label: rgba(255, 255, 255, 0.65);
+  @color-stat-value: #40a9ff;
+  @color-stat-value-green: #36cfc9;
+
+  // Switch 切换区
+  @color-switch-title-active: #ffffff;
+  @color-switch-title-default: rgba(255, 255, 255, 0.65);
+  @color-switch-data-label: rgba(255, 255, 255, 0.65);
+  @color-switch-data-value: #40a9ff;
+
+  // Tab 标签
+  @color-tab-label-active: #ffffff;
+  @color-tab-label-default: rgba(255, 255, 255, 0.65);
+  @color-tab-badge-bg: rgba(64, 169, 255, 0.3);
+  @color-tab-badge-text: #ffffff;
+  @color-tab-badge-bg-default: rgba(64, 169, 255, 0.15);
+  @color-tab-badge-text-default: #40a9ff;
+
+  // 设备卡片
+  @color-device-name: rgba(255, 255, 255, 0.85);
+  @color-device-ratio: #40a9ff;
+  @color-device-ratio-alert: #ff7875;
+}
+
+// 全局默认调用（light 主题 + common 变量，禁止调用 dark）
+.theme-light();
+.common();

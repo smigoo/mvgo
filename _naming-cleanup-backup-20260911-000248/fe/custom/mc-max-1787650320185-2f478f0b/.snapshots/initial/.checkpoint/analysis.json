@@ -1,0 +1,195 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 80,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[3].body",
+        "message": "notes指出车型分布使用环形图，但layout中仅用stat-item文本展示，缺少chart组件，设计与结构不一致。",
+        "suggestion": "在body.children中补充chart组件定义，或修改notes以匹配实际文本统计结构。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].header",
+        "message": "header中包含controls控件，但slotCandidate为null。按规范标题栏控件应映射到插槽。",
+        "suggestion": "将slotCandidate设置为title-right或header-right，以正确映射交互控件。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[3].body.children",
+        "message": "vehicle-tunnel/bridge卡片内再嵌套stat-item，增加冗余DOM层级。",
+        "suggestion": "移除中间card层，直接在horizontal-2-columns下平铺stat-item，或合并为单一统计组。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "chartDataHints",
+        "message": "三个图表的labels和values完全相同且混入无关文本，未正确区分各图表独立数据。",
+        "suggestion": "修正数据解析逻辑，为每个图表提取独立的坐标轴标签和数值，剔除无关全局文本。"
+      }
+    ],
+    "recommendations": [
+      "提取各section body中重复且src为null的backgroundImage配置到全局styles中，减少冗余。",
+      "将两个流量图表section合并为一个，通过Tab切换展示，减少页面纵向长度。"
+    ],
+    "summary": "整体布局清晰，符合微码规范，但存在设计与结构不一致、插槽映射遗漏及数据解析错误等问题，需修正。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorBg": "#edf4fb",
+      "--colorTextBase": "#333333",
+      "--colorPrimary": "#1990ff",
+      "--colorWarning": "#fa8c16",
+      "--colorSuccess": "#52c41a",
+      "--fontSize": "14px",
+      "--fontSizeLarge": "32px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-bg": "#edf4fb",
+      "@color-text-base": "#333333",
+      "@color-primary": "#1990ff",
+      "@color-warning": "#fa8c16",
+      "@color-success": "#52c41a",
+      "@font-size-base": "14px",
+      "@font-size-large": "32px",
+      "@border-radius-base": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "20px",
+        "background-color": "var(--colorBg, #edf4fb)",
+        "color": "var(--colorTextBase, #333333)",
+        "font-size": "var(--fontSize, 14px)"
+      },
+      ".header": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "8px",
+        "font-size": "1.2em",
+        "font-weight": "bold",
+        "color": "var(--colorTextBase, #333333)"
+      },
+      ".diamond-icon": {
+        "width": "12px",
+        "height": "12px",
+        "background-color": "var(--colorPrimary, #1990ff)",
+        "transform": "rotate(45deg)"
+      },
+      ".stat-value": {
+        "font-size": "var(--fontSizeLarge, 32px)",
+        "font-weight": "bold",
+        "color": "var(--colorPrimary, #1990ff)",
+        "line-height": "1.2"
+      },
+      ".accuracy-text": {
+        "color": "var(--colorSuccess, #52c41a)",
+        "font-weight": "500"
+      },
+      ".warning-text": {
+        "color": "var(--colorWarning, #fa8c16)"
+      },
+      ".decoration-car": {
+        "position": "absolute",
+        "filter": "drop-shadow(0 0 8px rgba(25, 144, 255, 0.6))",
+        "pointer-events": "none"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "背景色 #edf4fb 映射为 --colorBg，作为浅色科技监测风的基础底色",
+      "主色调 #1990ff 映射为 --colorPrimary，用于大号数值和核心强调元素",
+      "绿色 #52c41a 映射为 --colorSuccess，专门用于准确率等正向指标文字",
+      "橙色 #fa8c16 映射为 --colorWarning，用于次要强调或预警提示",
+      "大号数值使用 --fontSizeLarge (32px) 配合 --colorPrimary 实现视觉强调",
+      "菱形标题图标通过 .diamond-icon 类实现，使用主色并旋转45度",
+      "发光汽车图标装饰通过 .decoration-car 类添加 drop-shadow 滤镜实现发光效果"
+    ],
+    "elementStyleMap": {
+      "section-total-flow": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-tunnel": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "stat-bridge": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "section-chart-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-chart-bridge": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-vehicle-type": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-tunnel": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "vehicle-bridge": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-flow-prediction": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-total-flow",
+        "responsibility": "当日总流量（请按功能拆分）",
+        "elementCount": 6,
+        "title": "当日总流量"
+      },
+      {
+        "id": "section-chart-tunnel",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "江阴靖江长江隧道"
+      },
+      {
+        "id": "section-chart-bridge",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "江阴大桥"
+      },
+      {
+        "id": "section-vehicle-type",
+        "responsibility": "车型分布（请按功能拆分）",
+        "elementCount": 6,
+        "title": "车型分布"
+      },
+      {
+        "id": "section-flow-prediction",
+        "responsibility": "流量预测（请按功能拆分）",
+        "elementCount": 5,
+        "title": "流量预测"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 5,
+    "reason": "有效 sections=5 ≥ 3 → 强制拆分"
+  }
+}

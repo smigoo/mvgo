@@ -1,0 +1,152 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 78,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[*].body.backgroundImage",
+        "message": "背景图在多个 section 中重复定义。`section-header`、`section-table` 和 `section-details` 的 body 中都设置了相同的 `bg-2.png`，这会导致代码生成时产生大量冗余的 CSS 背景样式。",
+        "suggestion": "将 `bg-2.png` 提取到最外层 `layout` 根节点或组件根容器中统一设置，移除各个 section body 中的重复背景图配置。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body",
+        "message": "`section-header` 的 body 被定义为 `layout: 'empty'`，但内部却包含了 `backgroundImage`。空的 body 节点在代码生成时没有实际意义，且背景图挂载在空节点上不符合常规逻辑。",
+        "suggestion": "如果 header 区域需要背景图，应直接将 `backgroundImage` 属性提升到 `section-header` 节点层级，并移除空的 `body` 对象。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].header.title",
+        "message": "存在面板标题冗余风险。`section-header` 中定义了 `title: '运单信息'`。根据微码规范，如果该组件作为标准面板（`base-panel`）使用，标题会自动生成。虽然 summary 提到是'弹窗组件'，但若误用标准面板会导致标题重复渲染。",
+        "suggestion": "明确组件的使用场景。如果是标准数据面板，请删除 `section-header` 中的 `title` 和 `controls`，交由 `base-panel` 处理；如果是独立弹窗，则保留当前结构，但需在代码生成时确保不使用 `base-panel` 包裹。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[2].body.children[0]",
+        "message": "详情文本区域（`details-text`）嵌套层级过深。从 `layout` 到 `info-item` 达到了 6 层（layout -> sections -> section-details -> body -> children -> details-text -> children -> info-item），增加了 DOM 复杂度和维护成本。",
+        "suggestion": "将 `details-text` 的 `children` 扁平化，直接作为 `section-details.body.children` 的一部分；或者将 `details-text` 的 `layout: 'grid-2-columns'` 属性直接应用到 `section-details.body` 上，减少一层无意义的包裹。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[1].body",
+        "message": "表格包含 8 列数据（运单编号、危化品名称、超运地、实际发车时间等），在窄屏或分辨率较低的设备下极易发生内容溢出或挤压，但布局结构中未体现任何响应式或滚动机制。",
+        "suggestion": "在 `section-table` 或 `table` 布局节点中增加 `overflow: 'auto'` 或 `scrollable: true` 的标识，提示代码生成器添加横向滚动条；或者考虑将次要列（如预计到达时间）折叠或移至详情区。"
+      }
+    ],
+    "recommendations": [
+      "统一背景管理：全局背景图应只在根节点定义一次，避免在每个子区块重复声明，这不仅能减少代码冗余，还能避免背景图在区块拼接处出现断层或重复渲染。",
+      "优化表格交互：针对 8 列的宽表格，建议增加行点击高亮联动（当前 interactions 中已提及，需在代码中落实），并在表头增加固定列或横向滚动提示，提升数据可读性。",
+      "精简 DOM 结构：在微码组件中，尽量减少无实际业务意义的包裹层（如空的 body 或仅用于布局的中间层），利用 CSS Grid 或 Flexbox 直接在父节点实现子元素的排列，提升渲染性能。"
+    ],
+    "summary": "该布局结构整体划分清晰，能够准确反映'运单信息'弹窗的三大核心区域（标题、列表、详情）。但在背景图管理、节点嵌套深度以及表格响应式设计方面存在明显瑕疵。特别是背景图的重复定义和空 body 节点的设计，违背了微码组件的简洁性原则。建议优化全局背景配置，扁平化详情区嵌套，并为多列表格补充横向滚动机制，以达到更优的代码生成质量。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "深色科技数据风 CSS 变量（camelCase 命名）",
+      "--colorPrimary": "#18ffc6",
+      "--colorBg": "#003032",
+      "--colorTextBase": "#ffffff",
+      "--colorEmphasis": "#b07b00",
+      "--fontSize": "14px",
+      "--borderRadius": "4px"
+    },
+    "lessVariables": {
+      "comment": "Less 变量映射，与 CSS 变量一一对应",
+      "@color-primary": "#18ffc6",
+      "@color-bg": "#003032",
+      "@color-text-base": "#ffffff",
+      "@color-emphasis": "#b07b00",
+      "@font-size-base": "14px",
+      "@border-radius-base": "4px"
+    },
+    "cssClasses": {
+      "comment": "可复用的 CSS 类，涵盖布局、装饰与强调元素",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-color": "#003032",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)"
+      },
+      ".header": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "8px",
+        "padding": "12px 16px"
+      },
+      ".diamond-icon": {
+        "width": "10px",
+        "height": "10px",
+        "background-color": "var(--colorPrimary)",
+        "transform": "rotate(45deg)",
+        "flex-shrink": "0"
+      },
+      ".data-table": {
+        "width": "100%",
+        "border-collapse": "collapse",
+        "font-size": "var(--fontSize)"
+      },
+      ".table-row-highlight": {
+        "background-color": "rgba(24, 255, 198, 0.08)",
+        "transition": "background-color 0.2s ease"
+      },
+      ".table-first-row-highlight": {
+        "background-color": "rgba(24, 255, 198, 0.15)",
+        "color": "var(--colorPrimary)",
+        "font-weight": "600"
+      },
+      ".license-plate-tag": {
+        "display": "inline-block",
+        "background-color": "var(--colorEmphasis)",
+        "color": "var(--colorTextBase)",
+        "padding": "2px 8px",
+        "border-radius": "2px",
+        "font-size": "12px",
+        "font-weight": "bold",
+        "line-height": "1.5"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调映射为 --colorPrimary (#18ffc6)，体现深色科技数据风的荧光青视觉特征",
+      "容器背景直接落地为 Figma 字面量值 #003032，同时映射为 --colorBg 供全局复用",
+      "强调色（黄色车牌标签）映射为 --colorEmphasis (#b07b00)，用于高亮关键数据",
+      "表格行高亮与首行高亮使用主色调 (#18ffc6) 的低透明度叠加，保持深色背景下的层次感",
+      "菱形标题图标通过 CSS transform: rotate(45deg) 实现，避免引入额外图片资源"
+    ],
+    "elementStyleMap": {
+      "el-el-x-1": {
+        "background-image": "url(../resources/images/bg-2.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "section-table": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-5": {
+        "background-image": "url(../resources/images/bg-2.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "section-details": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-11": {
+        "background-image": "url(../resources/images/bg-2.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  }
+}

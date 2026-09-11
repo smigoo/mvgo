@@ -1,0 +1,259 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 82,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[1].children[1].items",
+        "message": "device-grid 中展开了 12 个结构完全相同的设备项节点，导致 JSON 结构极其臃肿（占据大量篇幅），且不利于 AI 生成简洁的 v-for 循环代码。",
+        "suggestion": "将 device-grid.items 抽象为单一模板节点，并通过 data 字段或注释说明实际渲染时通过 v-for 循环数据数组生成，大幅精简 JSON 结构。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[0]",
+        "message": "sidebar-tabs 设置了固定宽度 width: '46px'。虽然 Tab 栏通常固定宽度，但包含'交通诱导'等较长中文文本时，46px 极易导致文字截断、换行或溢出。",
+        "suggestion": "建议将 width 改为 min-width: '46px'，或根据设计稿实际文字长度适当增加宽度（如 60px-80px），并在样式预期中添加 overflow: hidden 和 text-overflow: ellipsis 兜底。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[1].children[0]",
+        "message": "summary-cards 下的两个汇总卡片未指定宽度分配策略（如 flex 比例），在容器宽度变化时可能导致卡片宽度不均或不符合设计预期。",
+        "suggestion": "为两个卡片节点添加 flex: 1 属性，确保它们平分右侧内容区的宽度，符合宽度自适应约束。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body",
+        "message": "header-stats 被标记为 slotCandidate: 'header-right'，意味着它将被提取到面板标题右侧插槽。但其 body 中仍定义了 backgroundImage (bg-8788.png)。如果该背景图是用于整个内容区的，放在 header 插槽中会导致背景重复或视觉错位。",
+        "suggestion": "确认 bg-8788.png 的作用域。如果是整体内容区背景，应仅保留在 main-content 中，移除 header-stats 的背景图配置；如果是 header 专属背景，需确保 main-content 中不再重复引用。"
+      }
+    ],
+    "recommendations": [
+      "在 AI 代码生成阶段，明确提示 AI 使用 v-for 渲染 device-grid 和 summary-cards，避免生成大量重复的 DOM 节点代码，提升代码可维护性。",
+      "左侧 Tab 导航若必须展示较长文字，建议在设计稿或布局中考虑采用'图标+文字'的垂直排列方式，或增加 Tab 栏宽度，以保证可读性和交互体验。",
+      "确保 header-stats 提取到 header-right 插槽后，其内部样式（如 padding、背景）能与 base-panel 的 header 区域完美融合，不破坏面板整体视觉规范。"
+    ],
+    "summary": "整体布局结构清晰，区域划分合理，正确使用了面板插槽机制（header-right）和自适应布局（flex）。主要问题在于设备列表网格的数据结构过于冗余，左侧 Tab 固定宽度过小可能导致长文本截断，以及部分卡片缺少宽度分配策略。建议优化 JSON 结构的精简度，并完善自适应布局细节。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1990FF",
+      "--colorSuccess": "#08A3A5",
+      "--colorDanger": "#F53F3F",
+      "--colorTextBase": "#333333",
+      "--colorBgBase": "#EDF4FB",
+      "--fontSize": "14px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#1990FF",
+      "@color-success": "#08A3A5",
+      "@color-danger": "#F53F3F",
+      "@color-text-base": "#333333",
+      "@color-bg-base": "#EDF4FB",
+      "@font-size-base": "14px",
+      "@border-radius-base": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "16px",
+        "background": "var(--colorBgBase, #EDF4FB)",
+        "color": "var(--colorTextBase, #333333)",
+        "font-size": "var(--fontSize, 14px)"
+      },
+      ".tab-active": {
+        "background": "var(--colorPrimary, #1990FF)",
+        "color": "#ffffff",
+        "border-radius": "var(--borderRadius, 8px)"
+      },
+      ".summary-card": {
+        "position": "relative",
+        "background": "#ffffff",
+        "border-radius": "var(--borderRadius, 8px)",
+        "padding": "16px",
+        "box-shadow": "0 2px 8px rgba(0, 0, 0, 0.05)"
+      },
+      ".grid-item": {
+        "background": "#ffffff",
+        "border-radius": "var(--borderRadius, 8px)",
+        "padding": "12px"
+      },
+      ".value-primary": {
+        "font-size": "2em",
+        "font-weight": "bold",
+        "color": "var(--colorPrimary, #1990FF)"
+      },
+      ".value-danger": {
+        "color": "var(--colorDanger, #F53F3F)",
+        "font-weight": "bold"
+      },
+      ".value-success": {
+        "color": "var(--colorSuccess, #08A3A5)",
+        "font-weight": "bold"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 #1990FF 映射为 --colorPrimary，用于左侧Tab选中态及大号蓝色数值强调",
+      "异常状态色 #F53F3F 映射为 --colorDanger，零异常/正常状态色 #08A3A5 映射为 --colorSuccess",
+      "基础背景色 #EDF4FB 映射为 --colorBgBase，容器背景应优先直接落地为 Figma 字面量值，避免关键可见背景只依赖 CSS 变量",
+      "基础文字色 #333333 映射为 --colorTextBase，确保浅色主题下的阅读对比度",
+      "汇总卡片和网格项使用纯白背景配合统一圆角，在浅蓝灰底色上突出层级关系"
+    ],
+    "elementStyleMap": {
+      "header-stats": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "stat-type": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "stat-total": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "stat-rate": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "main-content": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "sidebar-tabs": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-tunnel-content-x-1-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-tunnel-content-x-1-row-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-tunnel-content-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-tunnel": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-north-south-content-x-1-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-north-south-content-x-1-row-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-north-south-content-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-north-south": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "summary-cards": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "right-content": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-13": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-row-x-24": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-row-x-27": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-row-x-33": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-row-x-36": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-40": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-43": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-46": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-49": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-52": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-55": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-58": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-61": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-64": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-67": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-70": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-73": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    }
+  }
+}

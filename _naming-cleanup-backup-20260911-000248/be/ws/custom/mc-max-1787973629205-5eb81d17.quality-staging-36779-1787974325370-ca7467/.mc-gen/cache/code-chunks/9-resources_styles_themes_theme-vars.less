@@ -1,0 +1,47 @@
+// 主题变量定义文件
+// 结构：.common() 公共变量 + .theme-dark() 深色主题 + .theme-light() 浅色主题
+
+.common() {
+  // 公共变量（与主题无关的尺寸、间距等）
+  @component-padding: 16px;
+  @component-margin: 8px;
+}
+
+.theme-dark() {
+  // 深色主题变量
+  // 根据 backgroundBrightness=dark，所有文字颜色禁止使用黑色系
+  
+  // 背景相关
+  @bg-image-url: url(../resources/images/bg-8788.png);
+  @bg-size: 100% 100%;
+  @bg-position: center center;
+  @bg-repeat: no-repeat;
+  
+  // 文字颜色（深色面板使用浅色文字）
+  @text-primary: #ffffff;
+  @text-secondary: rgba(255, 255, 255, 0.65);
+  @text-disabled: rgba(255, 255, 255, 0.35);
+  
+  // 边框颜色
+  @border-color: rgba(255, 255, 255, 0.15);
+  @border-color-hover: rgba(255, 255, 255, 0.25);
+}
+
+.theme-light() {
+  // 浅色主题变量（默认主题，与设计稿一致）
+  
+  // 背景相关
+  @bg-image-url: url(../resources/images/bg-8788.png);
+  @bg-size: 100% 100%;
+  @bg-position: center center;
+  @bg-repeat: no-repeat;
+  
+  // 文字颜色
+  @text-primary: #333333;
+  @text-secondary: rgba(0, 0, 0, 0.65);
+  @text-disabled: rgba(0, 0, 0, 0.35);
+  
+  // 边框颜色
+  @border-color: rgba(0, 0, 0, 0.15);
+  @border-color-hover: rgba(0, 0, 0, 0.25);
+}

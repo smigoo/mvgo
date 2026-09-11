@@ -14,6 +14,7 @@ import { createLogger } from '../logger/index.js'
 import { LayoutSpatialAnalyzer } from '../utils/layout-spatial-analyzer.js'
 import { LayoutResponsiveAgent } from '../agents/layout-responsive-agent.js'
 import { sanitizeVueStyleBlock } from '../utils/css-sanitizer.js'
+import { extractSfcTemplate } from '../utils/sfc-template-extractor.js'
 
 const logger = createLogger({ name: 'graph:layout-responsive' })
 
@@ -260,10 +261,10 @@ function buildPreviewDocuments(vueCode, layoutData) {
 
 function wrapAsPreviewHtml(vueCode, layoutData, breakpoint) {
   // 提取 template / script / style
-  const templateMatch = vueCode.match(/<template>([\s\S]*?)<\/template>/)
+  // 🛡️ 共享边界法（lazy </template> 截断家族缺陷，0ca84358）
+  let template = extractSfcTemplate(vueCode) || '';
   const styleMatch = vueCode.match(/<style[^>]*>([\s\S]*?)<\/style>/)
 
-  let template = templateMatch ? templateMatch[1] : ''
   const style = styleMatch ? styleMatch[1] : ''
 
   // 静态化模板：移除/替换 Vue 动态绑定，生成纯静态 HTML

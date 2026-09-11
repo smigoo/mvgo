@@ -1,0 +1,682 @@
+.dark {
+  /* === [自动修复] v3.5 模板驱动 fallback 规则 === */
+  /* [自动修复] 模板 class .c-monitor-forecast-legend-dot--actual → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-forecast-legend-dot--forecast → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-forecast-legend-line--actual → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-forecast-legend-line--forecast → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-forecast-tab--active → 匹配元素 section-daily-total */
+}
+.dark .c-monitor-root {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  font-family: 'Source Han Sans CN', 'Roboto', sans-serif;
+  color: #ffffff;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+.dark .c-monitor-section {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+.dark .c-monitor-section-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.dark .c-monitor-section-title-group {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.dark .c-monitor-section-deco {
+  width: 16px;
+  height: 16px;
+}
+.dark .c-monitor-section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+}
+.dark .c-monitor-total-traffic {
+  display: flex;
+  flex-direction: column;
+}
+.dark .c-monitor-title-icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+}
+.dark .c-monitor-title-text {
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+}
+.dark .c-monitor-time-select {
+  width: 120px;
+}
+.dark .c-monitor-time-select :deep(.ant-select-selector) {
+  background: transparent !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: 4px !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+  font-size: 12px;
+}
+.dark .c-monitor-stat-cards {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 16px;
+  border-radius: 8px;
+  background-color: rgba(255, 255, 255, 0.05);
+}
+.dark .c-monitor-stat-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.dark .c-monitor-stat-label {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
+  margin-bottom: 8px;
+}
+.dark .c-monitor-stat-value {
+  font-size: 28px;
+  font-weight: bold;
+  font-family: 'Roboto', sans-serif;
+}
+.dark .c-monitor-stat-value-tunnel {
+  color: #3385ff;
+}
+.dark .c-monitor-stat-value-bridge {
+  color: #00cccc;
+}
+.dark .c-monitor-chart-block {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 16px;
+}
+.dark .c-monitor-chart-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.dark .c-monitor-chart-title {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 500;
+  color: #ffffff;
+}
+.dark .c-monitor-chart-title-bar {
+  display: inline-block;
+  width: 3px;
+  height: 14px;
+  background-color: #3385ff;
+  border-radius: 2px;
+  margin-right: 8px;
+}
+.dark .c-monitor-chart-legend {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+}
+.dark .c-monitor-legend-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+}
+.dark .c-monitor-legend-item.active {
+  color: #ffffff;
+}
+.dark .c-monitor-legend-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+.dark .c-monitor-chart-container {
+  width: 100%;
+  height: 200px;
+}
+.dark .c-monitor-vehicle-type {
+  display: flex;
+  flex-direction: column;
+}
+.dark .c-monitor-vehicle-cards {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+}
+.dark .c-monitor-vehicle-card {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px;
+  border-radius: 8px;
+  background-color: rgba(255, 255, 255, 0.05);
+  min-height: 100px;
+}
+.dark .c-monitor-vehicle-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.dark .c-monitor-vehicle-label {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
+  margin-bottom: 8px;
+}
+.dark .c-monitor-vehicle-value {
+  font-size: 24px;
+  font-weight: bold;
+  font-family: 'Roboto', sans-serif;
+}
+.dark .c-monitor-vehicle-value-blue {
+  color: #3385ff;
+}
+.dark .c-monitor-vehicle-value-orange {
+  color: #fa8c16;
+}
+.dark .c-monitor-vehicle-icon {
+  width: 48px;
+  height: 48px;
+}
+.dark .c-monitor-forecast {
+  display: flex;
+  flex-direction: column;
+}
+.dark .c-monitor-forecast-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.dark .c-monitor-forecast-title {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+.dark .c-monitor-forecast-title-icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+}
+.dark .c-monitor-forecast-title-text {
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+}
+.dark .c-monitor-forecast-tabs {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+}
+.dark .c-monitor-forecast-tab {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  padding: 4px 0;
+  position: relative;
+}
+.dark .c-monitor-forecast-tab--active {
+  color: #3385ff;
+  font-weight: 500;
+}
+.dark .c-monitor-forecast-tab--active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background-color: #3385ff;
+  border-radius: 1px;
+}
+.dark .c-monitor-forecast-link {
+  font-size: 12px;
+  color: #3385ff;
+  text-decoration: none;
+}
+.dark .c-monitor-forecast-link:hover {
+  opacity: 0.8;
+}
+.dark .c-monitor-forecast-body {
+  display: flex;
+  flex-direction: column;
+}
+.dark .c-monitor-forecast-legend {
+  display: flex;
+  flex-direction: row;
+  gap: 24px;
+  margin-bottom: 12px;
+}
+.dark .c-monitor-forecast-legend-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+}
+.dark .c-monitor-forecast-legend-item--active {
+  color: #ffffff;
+}
+.dark .c-monitor-forecast-legend-line {
+  display: inline-block;
+  width: 16px;
+  height: 2px;
+  margin-right: 4px;
+}
+.dark .c-monitor-forecast-legend-line--actual {
+  background-color: #3385ff;
+}
+.dark .c-monitor-forecast-legend-line--forecast {
+  background-color: #00cccc;
+}
+.dark .c-monitor-forecast-legend-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+.dark .c-monitor-forecast-legend-dot--actual {
+  background-color: #3385ff;
+}
+.dark .c-monitor-forecast-legend-dot--forecast {
+  background-color: #00cccc;
+}
+.dark .c-monitor-forecast-legend-text {
+  font-size: 12px;
+}
+.dark .c-monitor-forecast-chart {
+  width: 100%;
+  height: 240px;
+}
+.dark .c-monitor-forecast-accuracy {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-end;
+  gap: 16px;
+  margin-top: 8px;
+}
+.dark .c-monitor-forecast-accuracy-item {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.65);
+}
+.dark .c-monitor-forecast-legend-dot--actual {
+  display: flex;
+}
+.dark .c-monitor-forecast-legend-dot--forecast {
+  display: flex;
+}
+.dark .c-monitor-forecast-legend-line--actual {
+  display: flex;
+}
+.dark .c-monitor-forecast-legend-line--forecast {
+  display: flex;
+}
+.dark .c-monitor-forecast-tab--active {
+  display: flex;
+}
+.light {
+  /* === [自动修复] v3.5 模板驱动 fallback 规则 === */
+  /* [自动修复] 模板 class .c-monitor-forecast-legend-dot--actual → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-forecast-legend-dot--forecast → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-forecast-legend-line--actual → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-forecast-legend-line--forecast → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-forecast-tab--active → 匹配元素 section-daily-total */
+}
+.light .c-monitor-root {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  font-family: 'Source Han Sans CN', 'Roboto', sans-serif;
+  color: #1f2329;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+.light .c-monitor-section {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+.light .c-monitor-section-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.light .c-monitor-section-title-group {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.light .c-monitor-section-deco {
+  width: 16px;
+  height: 16px;
+}
+.light .c-monitor-section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2329;
+}
+.light .c-monitor-total-traffic {
+  display: flex;
+  flex-direction: column;
+}
+.light .c-monitor-title-icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+}
+.light .c-monitor-title-text {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2329;
+}
+.light .c-monitor-time-select {
+  width: 120px;
+}
+.light .c-monitor-time-select :deep(.ant-select-selector) {
+  background: transparent !important;
+  border: 1px solid #e8e8e8 !important;
+  border-radius: 4px !important;
+  color: rgba(0, 0, 0, 0.65) !important;
+  font-size: 12px;
+}
+.light .c-monitor-stat-cards {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 16px;
+  border-radius: 8px;
+  background-color: #f5f7fa;
+}
+.light .c-monitor-stat-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.light .c-monitor-stat-label {
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.65);
+  margin-bottom: 8px;
+}
+.light .c-monitor-stat-value {
+  font-size: 28px;
+  font-weight: bold;
+  font-family: 'Roboto', sans-serif;
+}
+.light .c-monitor-stat-value-tunnel {
+  color: #3385ff;
+}
+.light .c-monitor-stat-value-bridge {
+  color: #00cccc;
+}
+.light .c-monitor-chart-block {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 16px;
+}
+.light .c-monitor-chart-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.light .c-monitor-chart-title {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 500;
+  color: #1f2329;
+}
+.light .c-monitor-chart-title-bar {
+  display: inline-block;
+  width: 3px;
+  height: 14px;
+  background-color: #3385ff;
+  border-radius: 2px;
+  margin-right: 8px;
+}
+.light .c-monitor-chart-legend {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+}
+.light .c-monitor-legend-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.65);
+  cursor: pointer;
+}
+.light .c-monitor-legend-item.active {
+  color: #1f2329;
+}
+.light .c-monitor-legend-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+.light .c-monitor-chart-container {
+  width: 100%;
+  height: 200px;
+}
+.light .c-monitor-vehicle-type {
+  display: flex;
+  flex-direction: column;
+}
+.light .c-monitor-vehicle-cards {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+}
+.light .c-monitor-vehicle-card {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px;
+  border-radius: 8px;
+  background-color: #f5f7fa;
+  min-height: 100px;
+}
+.light .c-monitor-vehicle-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.light .c-monitor-vehicle-label {
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.65);
+  margin-bottom: 8px;
+}
+.light .c-monitor-vehicle-value {
+  font-size: 24px;
+  font-weight: bold;
+  font-family: 'Roboto', sans-serif;
+}
+.light .c-monitor-vehicle-value-blue {
+  color: #3385ff;
+}
+.light .c-monitor-vehicle-value-orange {
+  color: #fa8c16;
+}
+.light .c-monitor-vehicle-icon {
+  width: 48px;
+  height: 48px;
+}
+.light .c-monitor-forecast {
+  display: flex;
+  flex-direction: column;
+}
+.light .c-monitor-forecast-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.light .c-monitor-forecast-title {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+.light .c-monitor-forecast-title-icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+}
+.light .c-monitor-forecast-title-text {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2329;
+}
+.light .c-monitor-forecast-tabs {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+}
+.light .c-monitor-forecast-tab {
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.65);
+  cursor: pointer;
+  padding: 4px 0;
+  position: relative;
+}
+.light .c-monitor-forecast-tab--active {
+  color: #3385ff;
+  font-weight: 500;
+}
+.light .c-monitor-forecast-tab--active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background-color: #3385ff;
+  border-radius: 1px;
+}
+.light .c-monitor-forecast-link {
+  font-size: 12px;
+  color: #3385ff;
+  text-decoration: none;
+}
+.light .c-monitor-forecast-link:hover {
+  opacity: 0.8;
+}
+.light .c-monitor-forecast-body {
+  display: flex;
+  flex-direction: column;
+}
+.light .c-monitor-forecast-legend {
+  display: flex;
+  flex-direction: row;
+  gap: 24px;
+  margin-bottom: 12px;
+}
+.light .c-monitor-forecast-legend-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.65);
+  cursor: pointer;
+}
+.light .c-monitor-forecast-legend-item--active {
+  color: #1f2329;
+}
+.light .c-monitor-forecast-legend-line {
+  display: inline-block;
+  width: 16px;
+  height: 2px;
+  margin-right: 4px;
+}
+.light .c-monitor-forecast-legend-line--actual {
+  background-color: #3385ff;
+}
+.light .c-monitor-forecast-legend-line--forecast {
+  background-color: #00cccc;
+}
+.light .c-monitor-forecast-legend-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+.light .c-monitor-forecast-legend-dot--actual {
+  background-color: #3385ff;
+}
+.light .c-monitor-forecast-legend-dot--forecast {
+  background-color: #00cccc;
+}
+.light .c-monitor-forecast-legend-text {
+  font-size: 12px;
+}
+.light .c-monitor-forecast-chart {
+  width: 100%;
+  height: 240px;
+}
+.light .c-monitor-forecast-accuracy {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-end;
+  gap: 16px;
+  margin-top: 8px;
+}
+.light .c-monitor-forecast-accuracy-item {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.45);
+}
+.light .c-monitor-forecast-legend-dot--actual {
+  display: flex;
+}
+.light .c-monitor-forecast-legend-dot--forecast {
+  display: flex;
+}
+.light .c-monitor-forecast-legend-line--actual {
+  display: flex;
+}
+.light .c-monitor-forecast-legend-line--forecast {
+  display: flex;
+}
+.light .c-monitor-forecast-tab--active {
+  display: flex;
+}

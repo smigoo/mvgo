@@ -166,8 +166,13 @@ const buildInit = ({ method = 'GET', body, headers, signal, ...rest } = {}, fina
 const resolveErrorMessage = (response, data) => {
   if (data && typeof data === 'object') {
     // NestJS 异常对象 { statusCode, message: string[], error } 需要扁平化
-    const raw = data.detail || data.message || data.error || `请求失败(${response.status})`
-    return typeof raw === 'string' ? raw : String(raw)
+    // 注意：后端 detail 可能是对象（如 { path: '...' }），直接 String() 会得到 [object Object]
+    const candidates = [
+      typeof data.message === 'string' ? data.message : '',
+      typeof data.error === 'string' ? data.error : '',
+      typeof data.detail === 'string' ? data.detail : '',
+    ]
+    return candidates.find(Boolean) || `请求失败(${response.status})`
   }
   if (typeof data === 'string' && data.trim()) return data
   return `请求失败(${response.status})`
@@ -193,11 +198,12 @@ export const raw = (url, options = {}) => {
  * @returns {Promise<*>} 后端响应体
  */
 export const request = async (url, options = {}) => {
-  const finalUrl = appendParams(resolveUrl(url), options.params)
+  const { silent401, ...rawOptions } = options
+  const finalUrl = appendParams(resolveUrl(url), rawOptions.params)
   let response
 
   try {
-    response = await raw(url, options)
+    response = await raw(url, rawOptions)
   } catch (error) {
     // 网络层失败（断网、跨域、被中断）
     if (error?.name === 'AbortError') throw error
@@ -222,7 +228,7 @@ export const request = async (url, options = {}) => {
 
   if (!response.ok) {
     const message = resolveErrorMessage(response, data)
-    if (response.status === 401) notifyUnauthorized(message)
+    if (response.status === 401 && !silent401) notifyUnauthorized(message)
     throw new HttpError(message, { status: response.status, data, url: finalUrl })
   }
 

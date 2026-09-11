@@ -174,15 +174,15 @@ export class ApifoxService {
   }
 
   // ─── API 目录持久化 ─────────────────────────────────
-  saveCatalog(catalog: ApiCatalog): void {
+  saveCatalog(catalog: ApiCatalog, ownerId?: string): void {
     if (!existsSync(this.catalogDir)) mkdirSync(this.catalogDir, { recursive: true });
     // 保存完整目录
     const catalogPath = join(this.catalogDir, `${catalog.catalogId}.json`);
     writeFileSync(catalogPath, JSON.stringify(catalog, null, 2), 'utf-8');
-    // 更新索引
+    // 更新索引（写入 ownerId 用于用户隔离）
     const index = this.readCatalogIndex();
     const idx = index.findIndex((c) => c.catalogId === catalog.catalogId);
-    const summary = {
+    const summary: any = {
       catalogId: catalog.catalogId,
       apifoxProjectId: catalog.apifoxProjectId,
       projectName: catalog.projectName,
@@ -190,6 +190,7 @@ export class ApifoxService {
       totalApiCount: catalog.totalApiCount,
       totalModuleCount: catalog.totalModuleCount,
     };
+    if (ownerId) summary.ownerId = ownerId;
     if (idx >= 0) {
       index[idx] = summary;
     } else {
@@ -207,8 +208,11 @@ export class ApifoxService {
     return JSON.parse(readFileSync(catalogPath, 'utf-8'));
   }
 
-  listCatalogs(): { catalogId: string; apifoxProjectId: string; projectName?: string; generatedAt: string; totalApiCount: number; totalModuleCount: number }[] {
-    return this.readCatalogIndex();
+  listCatalogs(ownerId?: string): { catalogId: string; apifoxProjectId: string; projectName?: string; generatedAt: string; totalApiCount: number; totalModuleCount: number }[] {
+    const all = this.readCatalogIndex();
+    if (!ownerId) return all;
+    // 按 ownerId 过滤；历史无 ownerId 的记录视为公共（兼容老数据）
+    return all.filter((c) => !c.ownerId || c.ownerId === ownerId);
   }
 
   private readCatalogIndex(): any[] {

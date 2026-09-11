@@ -72,7 +72,7 @@ export class FigmaClient {
    */
   async exportImage(fileKey, nodeId, options = {}) {
     const format = options.format || 'png';
-    const scale = options.scale || 2;
+    const scale = options.scale || 1;
 
     const url = `${this.baseUrl}/images/${fileKey}?ids=${nodeId}&format=${format}&scale=${scale}`;
 

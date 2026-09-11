@@ -1,0 +1,40 @@
+@color-primary: #3677f8;
+@color-bg: #0f0f0f;
+@color-panel-bg: rgba(255, 255, 255, 0.06);
+@color-text-base: #ffffff;
+@color-text-secondary: rgba(255, 255, 255, 0.65);
+@color-border: rgba(255, 255, 255, 0.12);
+@font-size-base: 14px;
+@border-radius-base: 8px;
+
+.common() {
+  :root {
+  .common();
+  .theme-dark();
+    --fontSize: @font-size-base;
+    --borderRadius: @border-radius-base;
+  }
+}
+
+.theme-dark() {
+  :root {
+    --colorPrimary: @color-primary;
+    --colorBg: @color-bg;
+    --colorPanelBg: @color-panel-bg;
+    --colorTextBase: @color-text-base;
+    --colorTextSecondary: @color-text-secondary;
+    --colorBorder: @color-border;
+  }
+}
+
+.theme-light() {
+  :root {
+    --colorPrimary: #1990ff;
+    --colorBg: #edf4fb;
+    --colorPanelBg: rgba(255, 255, 255, 0.72);
+    --colorTextBase: #333333;
+    --colorTextSecondary: #666666;
+    --colorBorder: rgba(255, 255, 255, 1);
+  }
+}
+

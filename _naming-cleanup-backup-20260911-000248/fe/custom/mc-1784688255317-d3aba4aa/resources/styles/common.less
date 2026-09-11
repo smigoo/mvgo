@@ -1,0 +1,174 @@
+/* [Style Refine] Container should not have panel chrome styles (base-panel rule) */
+.c-mc-1784688255317-d3aba4aa-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+// Tab 区域样式
+/* [Style Refine] No background on wrapper - uses background-image from template */
+.c-mc-1784688255317-d3aba4aa-tabs-wrapper {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 4px;
+}
+
+.c-mc-1784688255317-d3aba4aa-tabs-container {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+}
+
+/* [Style Refine] Frame 2136638769 fills[0].color rgba(0.400, 0.501, 0.628, 1) → rgb(102, 128, 160) → #6680A0 */
+/* [Style Refine] Frame 2136638769 strokes[0].color rgba(0.675, 0.767, 0.882, 1) → rgb(172, 196, 225) → #ACC4E1, strokeWeight 0.7307692170143127px */
+/* [Style Refine] Text fills[0].color rgba(0.2, 0.2, 0.2, 1) → rgb(51, 51, 51) → #333333, fontSize 14, fontWeight 400, lineHeight 21px */
+.c-mc-1784688255317-d3aba4aa-tab-item {
+  padding: 4px 12px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 21px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background-color: #6680A0;
+  color: #333333;
+  border: 0.73px solid #ACC4E1;
+  
+  &:hover {
+    opacity: 0.85;
+  }
+  /* [Style Refine] Frame 2136638771 fills[0].color rgba(0.098, 0.565, 1, 1) → rgb(25, 144, 255) → #1990FF */
+  /* [Style Refine] Frame 2136638771 strokes[0].color rgba(0.780, 0.878, 1, 1) → rgb(199, 224, 255) → #C7E0FF, strokeWeight 0.7307692170143127px */
+  /* [Style Refine] Text fills[0].color rgba(1, 1, 1, 1) → #FFFFFF, fontWeight 500 */
+  &.active {
+    background-color: #1990FF;
+    color: #FFFFFF;
+    font-weight: 500;
+    border: 0.73px solid #C7E0FF;
+  }
+}
+
+// 统计区域样式
+.c-mc-1784688255317-d3aba4aa-stats-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.c-mc-1784688255317-d3aba4aa-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+}
+
+.c-mc-1784688255317-d3aba4aa-title-icon {
+  width: 18px;
+  height: 18px;
+}
+
+/* [Style Refine] "今日累计" Text fills[0].color rgba(0.2, 0.2, 0.2, 1) → rgb(51, 51, 51) → #333333 */
+/* [Style Refine] fontSize 16, fontWeight 500, lineHeight 24px */
+/* [Style Refine] effects DROP_SHADOW offset(0, 5.048), radius 5.048, color rgba(1, 1, 1, 0.8) → rgba(255, 255, 255, 0.8) */
+.c-mc-1784688255317-d3aba4aa-section-title {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  color: #333333;
+  text-shadow: 0 5.048px 5.048px rgba(255, 255, 255, 0.8);
+}
+
+/* [Style Refine] No background on stats-body - uses background-image from template */
+.c-mc-1784688255317-d3aba4aa-stats-body {
+  flex: 1;
+  padding: 12px;
+  border-radius: 4px;
+}
+
+.c-mc-1784688255317-d3aba4aa-cards-grid {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  height: 100%;
+}
+
+// 统计卡片样式
+/* [Style Refine] Card background rgba(255, 255, 255, 0.6) from elementStyleMap */
+.c-mc-1784688255317-d3aba4aa-stat-card {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 8px;
+  backdrop-filter: blur(4px);
+  transition: transform 0.2s ease;
+  
+  &:hover {
+    transform: translateY(-2px);
+  }
+}
+
+.c-mc-1784688255317-d3aba4aa-card-icon {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+}
+
+.c-mc-1784688255317-d3aba4aa-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;flex: 1;
+}
+
+/* [Style Refine] Label text color estimated from secondary text context */
+.c-mc-1784688255317-d3aba4aa-card-label {
+  font-size: 12px;
+  font-weight: 400;
+  color: #666666;
+  line-height: 1.5;
+}
+
+.c-mc-1784688255317-d3aba4aa-card-value-wrapper {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.c-mc-1784688255317-d3aba4aa-card-value {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
+  font-family: 'DIN Alternate', 'Arial', sans-serif;
+}
+
+/* [Style Refine] Danger color from theme mapping #FF4D4F */
+.c-mc-1784688255317-d3aba4aa-value-dangerous {
+  color: #FF4D4F;
+  text-shadow: 0 2px 4px rgba(255, 77, 79, 0.3);
+}
+
+/* [Style Refine] Info color from theme mapping #1890FF */
+.c-mc-1784688255317-d3aba4aa-value-heavy {
+  color: #1890FF;
+  text-shadow: 0 2px 4px rgba(24, 144, 255, 0.3);
+}
+
+/* [Style Refine] Warning color from theme mapping #FA8C16 */
+.c-mc-1784688255317-d3aba4aa-value-oversize {
+  color: #FA8C16;
+  text-shadow: 0 2px 4px rgba(250, 140, 22, 0.3);
+}
+
+.c-mc-1784688255317-d3aba4aa-card-unit {
+  font-size: 12px;
+  font-weight: 400;
+  color: #999999;
+  line-height: 1.5;
+}

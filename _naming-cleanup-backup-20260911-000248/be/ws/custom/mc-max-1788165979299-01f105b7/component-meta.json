@@ -1,0 +1,7 @@
+{
+  "degradedFiles": [
+    "package/components/HeaderTabs.vue"
+  ],
+  "degradedAt": 1788166419167,
+  "reason": "SFC 编译失败，已隔离降级（可二次生成）"
+}

@@ -1,0 +1,581 @@
+{
+  "layoutStructure": {
+    "generatedAt": "2025-06-15T10:30:00Z",
+    "stage": "preview-analysis",
+    "componentName": "环境监测",
+    "componentTitle": "环境监测",
+    "analysisModel": "claude-3-7-sonnet-20250219",
+    "sourceImage": {
+      "path": "mc-preview.png",
+      "size": 0,
+      "mtimeMs": 0,
+      "sha1": ""
+    },
+    "summary": "包含tab切换栏、统计指标、面积图的环境监测面板。深色风格，支持多维度查看（气化版、能见度、洞内照明、洞外光强）。右上角有图标按钮和数值展示。图表显示24小时趋势，包含阈值线。",
+    "layout": {
+      "type": "vertical-stack",
+      "direction": "vertical",
+      "sections": [
+        {
+          "id": "header-tabs",
+          "name": "tab切换栏",
+          "role": "常驻",
+          "layout": "horizontal",
+          "headerRelation": "title-same-row",
+          "slotCandidate": "header-right",
+          "body": {
+            "layout": "horizontal",
+            "bgPlaceholder": "bg-tab-active",
+            "children": [
+              {
+                "id": "tab-1",
+                "name": "气化版",
+                "role": "tab",
+                "active": true,
+                "styles": {
+                  "fontSize": 14,
+                  "color": "rgba(255,255,255,1)",
+                  "fontWeight": "bold"
+                }
+              },
+              {
+                "id": "tab-2",
+                "name": "能见度",
+                "role": "tab",
+                "active": false,
+                "styles": {
+                  "fontSize": 14,
+                  "color": "rgba(255,255,255,0.6)",
+                  "fontWeight": "normal"
+                }
+              },
+              {
+                "id": "tab-3",
+                "name": "洞内照明",
+                "role": "tab",
+                "active": false,
+                "styles": {
+                  "fontSize": 14,
+                  "color": "rgba(255,255,255,0.6)",
+                  "fontWeight": "normal"
+                }
+              },
+              {
+                "id": "tab-4",
+                "name": "洞外光强",
+                "role": "tab",
+                "active": false,
+                "styles": {
+                  "fontSize": 14,
+                  "color": "rgba(255,255,255,0.6)",
+                  "fontWeight": "normal"
+                }
+              }
+            ],
+            "backgroundImage": {
+              "src": "../resources/images/bg-7890.png",
+              "recommendedUsage": "backgroundBlock"
+            },
+            "backgroundSize": "100% 100%",
+            "backgroundPosition": "center center",
+            "backgroundRepeat": "no-repeat"
+          }
+        },
+        {
+          "id": "header-controls",
+          "name": "右侧控件区",
+          "role": "常驻",
+          "layout": "horizontal",
+          "headerRelation": "title-same-row",
+          "slotCandidate": "header-right",
+          "body": {
+            "layout": "horizontal",
+            "children": [
+              {
+                "id": "chart-icon",
+                "name": "图表图标",
+                "role": "icon",
+                "resourceFile": "../resources/images/icon-7941.png",
+                "recommendedUsage": "imgSrc",
+                "styles": {
+                  "width": 24,
+                  "height": 24
+                },
+                "resourceVarName": "icon1",
+                "downloadStatus": "success"
+              },
+              {
+                "id": "export-icon",
+                "name": "导出图标",
+                "role": "icon",
+                "resourceFile": "../resources/images/icon-7941.png",
+                "recommendedUsage": "imgSrc",
+                "styles": {
+                  "width": 24,
+                  "height": 24
+                },
+                "resourceVarName": "icon1",
+                "downloadStatus": "success"
+              },
+              {
+                "id": "stat-badge",
+                "name": "统计徽章",
+                "role": "badge",
+                "value": "8",
+                "styles": {
+                  "fontSize": 12,
+                  "color": "rgba(255,255,255,1)",
+                  "backgroundColor": "#f53f3f",
+                  "borderRadius": "50%",
+                  "width": 16,
+                  "height": 16
+                }
+              },
+              {
+                "id": "stat-value",
+                "name": "统计数值",
+                "role": "statistic",
+                "text": "2k3+78560×威",
+                "styles": {
+                  "fontSize": 12,
+                  "color": "rgba(255,255,255,0.8)"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "chart-section",
+          "name": "图表区域",
+          "role": "常驻",
+          "layout": "vertical",
+          "headerRelation": "content-below-title",
+          "slotCandidate": null,
+          "body": {
+            "layout": "vertical",
+            "bgPlaceholder": "bg2",
+            "children": [
+              {
+                "id": "threshold-label",
+                "name": "阈值标签",
+                "role": "label",
+                "text": "阈值线",
+                "position": "top-right",
+                "styles": {
+                  "fontSize": 12,
+                  "color": "#f53f3f"
+                }
+              },
+              {
+                "id": "chart-container",
+                "name": "图表容器",
+                "role": "chart-container",
+                "layout": "vertical",
+                "children": [
+                  {
+                    "id": "area-chart",
+                    "name": "面积图",
+                    "role": "chart",
+                    "type": "area",
+                    "styles": {
+                      "width": 380,
+                      "height": 140
+                    }
+                  }
+                ]
+              }
+            ],
+            "backgroundImage": {
+              "src": "../resources/images/bg-7890.png",
+              "recommendedUsage": "backgroundBlock"
+            },
+            "backgroundSize": "100% 100%",
+            "backgroundPosition": "center center",
+            "backgroundRepeat": "no-repeat"
+          }
+        }
+      ]
+    },
+    "styles": {
+      "backgroundBrightness": "light",
+      "theme": "浅色科技监测风",
+      "colors": [
+        "rgba(237,244,251,1)",
+        "rgba(85,158,255,1)",
+        "rgba(245,63,63,1)",
+        "rgba(255,255,255,1)",
+        "rgba(255,255,255,0.6)",
+        "rgba(0,197,255,1)"
+      ],
+      "background": "浅蓝灰色底色，带有细微渐变纹理",
+      "decorations": [
+        "tab激活态有蓝色底色背景",
+        "图表区域有浅色网格线",
+        "顶部有装饰性分隔线",
+        "红色虚线表示阈值"
+      ],
+      "emphasis": [
+        "激活tab使用白色粗体文字+蓝色背景",
+        "统计徽章使用红色圆形背景突出显示",
+        "阈值线使用红色虚线+文字标注"
+      ]
+    },
+    "interactions": [
+      {
+        "target": "tab切换栏",
+        "type": "tab-switch",
+        "description": "切换不同监测维度（气化版/能见度/洞内照明/洞外光强）",
+        "defaultState": "常驻，气化版激活",
+        "evidence": "激活tab有蓝色背景和白色文字，其他tab为半透明白字"
+      },
+      {
+        "target": "右侧图标按钮",
+        "type": "icon-button",
+        "description": "可能触发图表视图切换或数据导出",
+        "defaultState": "常驻",
+        "evidence": "有独立图标元素，视觉上可点击"
+      },
+      {
+        "target": "面积图",
+        "type": "chart-hover",
+        "description": "可能支持鼠标悬停显示具体数值",
+        "defaultState": "常驻显示，无tooltip截图",
+        "evidence": "图表类型通常支持交互，但截图中未显示tooltip"
+      }
+    ],
+    "charts": [
+      {
+        "section": "chart-section",
+        "type": "area",
+        "series": [
+          "气化版数据"
+        ],
+        "legend": [],
+        "legendPosition": "",
+        "seriesColors": [
+          "rgba(0,197,255,0.3)"
+        ],
+        "legendType": "",
+        "axes": "X轴为24小时时间刻度（0-24时），Y轴为数值（0-40范围），有网格线辅助",
+        "tooltip": "截图中未显示tooltip",
+        "notes": [
+          "红色虚线表示阈值线（Y=30位置）",
+          "阈值线右上角有'阈值线'文字标注",
+          "面积图填充使用浅蓝色半透明",
+          "曲线边缘使用青色描边",
+          "X轴刻度：2,4,6,8,10,12,14,16,18,20,22,24",
+          "Y轴刻度：0,10,20,30,40"
+        ]
+      }
+    ],
+    "headerSlots": [
+      {
+        "slotType": "header-right",
+        "elementType": "tab",
+        "content": "气化版/能见度/洞内照明/洞外光强 四选项tab切换",
+        "figmaNodeId": "7882"
+      },
+      {
+        "slotType": "header-right",
+        "elementType": "icon",
+        "content": "图表视图图标",
+        "figmaNodeId": "7941"
+      },
+      {
+        "slotType": "header-right",
+        "elementType": "icon",
+        "content": "导出/分享图标",
+        "figmaNodeId": "7945"
+      },
+      {
+        "slotType": "header-right",
+        "elementType": "statistic",
+        "content": "统计徽章数值8 + 统计文本2k3+78560×威"
+      }
+    ],
+    "doNotInvent": [
+      "tab切换后的具体数据内容（能见度/洞内照明/洞外光强的图表数据）",
+      "图标按钮的具体功能（是视图切换还是数据导出）",
+      "图表tooltip的固定显示逻辑和数据格式",
+      "阈值线的动态计算规则",
+      "统计徽章'8'的具体含义和更新逻辑",
+      "右上角统计文本的实际数据结构",
+      "图表是否支持缩放、拖拽等高级交互",
+      "数据刷新频率和自动更新机制"
+    ],
+    "notes": [
+      "组件主体是base-panel的slot内容，无需输出面板外壳",
+      "tab切换栏位于标题行右侧，属于header-right插槽",
+      "图表区域占据主要内容区，背景有浅色纹理",
+      "统计徽章和数值紧邻图标按钮，可能作为快速统计展示",
+      "阈值线固定在Y=30位置，红色虚线+文字标注",
+      "X轴时间刻度完整显示0-24小时",
+      "Y轴数值刻度为0,10,20,30,40",
+      "面积图使用青蓝色渐变填充，边缘有青色描边"
+    ],
+    "coverageReport": {
+      "totalFigma": 14,
+      "matchedCount": 5,
+      "missingCount": 5,
+      "uncertainCount": 0,
+      "coverageRate": 50,
+      "missing": [
+        {
+          "name": "cp-环境监测",
+          "type": "FRAME",
+          "depth": 0
+        },
+        {
+          "name": "环境监测",
+          "type": "TEXT",
+          "depth": 2
+        },
+        {
+          "name": "sub-t",
+          "type": "FRAME",
+          "depth": 2
+        },
+        {
+          "name": "一氧化碳",
+          "type": "TEXT",
+          "depth": 4
+        },
+        {
+          "name": "num",
+          "type": "GROUP",
+          "depth": 3
+        }
+      ],
+      "uncertain": [],
+      "summary": "需关注"
+    },
+    "chartDataHints": [
+      {
+        "chartTitle": "area",
+        "chartType": "area",
+        "labels": [
+          {
+            "label": "40\n30\n20\n10\n0",
+            "name": "40 30 20 10 0"
+          },
+          {
+            "label": "辆",
+            "name": "辆"
+          },
+          {
+            "label": "预警线",
+            "name": "预警线"
+          },
+          {
+            "label": "时",
+            "name": "时"
+          },
+          {
+            "label": "zk3+785CO浓度",
+            "name": "zk3+785CO浓度"
+          },
+          {
+            "label": "一氧化碳",
+            "name": "一氧化碳"
+          },
+          {
+            "label": "洞内照明",
+            "name": "洞内照明"
+          },
+          {
+            "label": "洞外光强",
+            "name": "洞外光强"
+          },
+          {
+            "label": "能见度",
+            "name": "能见度"
+          }
+        ],
+        "values": [
+          {
+            "label": "600",
+            "value": 600,
+            "unit": ""
+          },
+          {
+            "label": "400",
+            "value": 400,
+            "unit": ""
+          },
+          {
+            "label": "200",
+            "value": 200,
+            "unit": ""
+          },
+          {
+            "label": "600",
+            "value": 600,
+            "unit": ""
+          },
+          {
+            "label": "0",
+            "value": 0,
+            "unit": ""
+          },
+          {
+            "label": "600",
+            "value": 600,
+            "unit": ""
+          },
+          {
+            "label": "2",
+            "value": 2,
+            "unit": ""
+          },
+          {
+            "label": "4",
+            "value": 4,
+            "unit": ""
+          },
+          {
+            "label": "6",
+            "value": 6,
+            "unit": ""
+          },
+          {
+            "label": "8",
+            "value": 8,
+            "unit": ""
+          },
+          {
+            "label": "10",
+            "value": 10,
+            "unit": ""
+          },
+          {
+            "label": "12",
+            "value": 12,
+            "unit": ""
+          }
+        ]
+      }
+    ]
+  },
+  "visualElements": {
+    "backgroundBrightness": "light",
+    "theme": "浅色科技监测风",
+    "colors": [
+      "rgba(237,244,251,1)",
+      "rgba(85,158,255,1)",
+      "rgba(245,63,63,1)",
+      "rgba(255,255,255,1)",
+      "rgba(255,255,255,0.6)",
+      "rgba(0,197,255,1)"
+    ],
+    "background": "浅蓝灰色底色，带有细微渐变纹理",
+    "decorations": [
+      "tab激活态有蓝色底色背景",
+      "图表区域有浅色网格线",
+      "顶部有装饰性分隔线",
+      "红色虚线表示阈值"
+    ],
+    "emphasis": [
+      "激活tab使用白色粗体文字+蓝色背景",
+      "统计徽章使用红色圆形背景突出显示",
+      "阈值线使用红色虚线+文字标注"
+    ]
+  },
+  "interactions": [
+    {
+      "target": "tab切换栏",
+      "type": "tab-switch",
+      "description": "切换不同监测维度（气化版/能见度/洞内照明/洞外光强）",
+      "defaultState": "常驻，气化版激活",
+      "evidence": "激活tab有蓝色背景和白色文字，其他tab为半透明白字"
+    },
+    {
+      "target": "右侧图标按钮",
+      "type": "icon-button",
+      "description": "可能触发图表视图切换或数据导出",
+      "defaultState": "常驻",
+      "evidence": "有独立图标元素，视觉上可点击"
+    },
+    {
+      "target": "面积图",
+      "type": "chart-hover",
+      "description": "可能支持鼠标悬停显示具体数值",
+      "defaultState": "常驻显示，无tooltip截图",
+      "evidence": "图表类型通常支持交互，但截图中未显示tooltip"
+    }
+  ],
+  "charts": [
+    {
+      "section": "chart-section",
+      "type": "area",
+      "series": [
+        "气化版数据"
+      ],
+      "legend": [],
+      "legendPosition": "",
+      "seriesColors": [
+        "rgba(0,197,255,0.3)"
+      ],
+      "legendType": "",
+      "axes": "X轴为24小时时间刻度（0-24时），Y轴为数值（0-40范围），有网格线辅助",
+      "tooltip": "截图中未显示tooltip",
+      "notes": [
+        "红色虚线表示阈值线（Y=30位置）",
+        "阈值线右上角有'阈值线'文字标注",
+        "面积图填充使用浅蓝色半透明",
+        "曲线边缘使用青色描边",
+        "X轴刻度：2,4,6,8,10,12,14,16,18,20,22,24",
+        "Y轴刻度：0,10,20,30,40"
+      ]
+    }
+  ],
+  "headerSlots": [
+    {
+      "slotType": "header-right",
+      "elementType": "tab",
+      "content": "气化版/能见度/洞内照明/洞外光强 四选项tab切换",
+      "figmaNodeId": "7882"
+    },
+    {
+      "slotType": "header-right",
+      "elementType": "icon",
+      "content": "图表视图图标",
+      "figmaNodeId": "7941"
+    },
+    {
+      "slotType": "header-right",
+      "elementType": "icon",
+      "content": "导出/分享图标",
+      "figmaNodeId": "7945"
+    },
+    {
+      "slotType": "header-right",
+      "elementType": "statistic",
+      "content": "统计徽章数值8 + 统计文本2k3+78560×威"
+    }
+  ],
+  "analysisType": "",
+  "analysisTarget": "",
+  "analysisDescription": "",
+  "analysisEvidence": [],
+  "headerValidation": {
+    "passed": true,
+    "headerElements": [],
+    "headerRightElements": [],
+    "suggestions": [],
+    "confidence": "low",
+    "componentType": "microcode"
+  },
+  "headerSlotValidation": {
+    "validatedSlots": [],
+    "rejectedNodes": [],
+    "warnings": [
+      "预览图检测到undefined，但Figma中未找到同行节点",
+      "预览图检测到undefined，但Figma中未找到同行节点",
+      "预览图检测到undefined，但Figma中未找到同行节点",
+      "预览图检测到undefined，但Figma中未找到同行节点"
+    ],
+    "componentType": "microcode",
+    "derivedSlots": [],
+    "contractSlots": []
+  }
+}

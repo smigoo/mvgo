@@ -293,3 +293,114 @@ describe('consolidateSubComponentClasses', () => {
   })
 })
 
+/**
+ * 🛡️ P1.2 修饰符专项（2026-09-11，260ff122 实锤回归）
+ *
+ * 事故：scoped 里正确的 `.c-x-tab-item--active { 白字 }` 被旧映射（剥修饰符基名 +
+ * first-wins）改写成 `.c-x-tab-item { 白字 }` → 激活态规则污染全部 tab，盖掉 Figma
+ * 真值 #2c9bea（像素取证渲染为 #bacff3）。
+ */
+describe('consolidateSubComponentClasses · 修饰符类（260ff122 回归）', () => {
+  it('standalone --active 选择器保留后缀；基类规则不被覆盖', () => {
+    const files = {
+      'resources/styles/common.less': '.c-env-monitor-root {\n  width: 100%;\n}\n',
+      'package/components/Tabs.vue': `<template>
+  <div class="c-env-monitor-tab">
+    <div class="c-env-monitor-tab-item" :class="{ 'c-env-monitor-tab-item--active': active === t.value }">t</div>
+  </div>
+</template>
+<script setup></script>
+<style lang="less" scoped>
+.c-env-monitor-tab-item {
+  color: #2c9bea;
+}
+.c-env-monitor-tab-item--active {
+  color: #ffffff;
+}
+</style>
+`,
+    }
+    const out = consolidateSubComponentClasses(files, { logger })
+    const css = out['resources/styles/common.less']
+    expect(css).toContain('.c-env-monitor-tab-item--active')
+    // 关键：激活态规则不得以基类名写入（否则污染全部元素）
+    const baseBlocks = css.split('\n').filter((l) => l.trim() === '.c-env-monitor-tab-item {')
+    expect(baseBlocks.length).toBeLessThanOrEqual(1)
+    expect(css).not.toMatch(/\.c-env-monitor-tab-item\s*\{\s*\n\s*color:\s*#ffffff/s)
+  })
+
+  it('DOM 具完整长形修饰符类时直接用长形（含后缀）', () => {
+    const files = {
+      'resources/styles/common.less': '.c-demo-root {\n  width: 100%;\n}\n',
+      'package/components/Tabs.vue': `<template>
+  <div class="c-demo-tabs-malvtjd5-c-demo-tab-item"
+       :class="{ 'c-demo-tabs-malvtjd5-c-demo-tab-item--active': active === 'a' }">t</div>
+</template>
+<script setup></script>
+<style lang="less" scoped>
+.c-demo-tab-item--active {
+  color: #ffffff;
+}
+.c-demo-tab-item {
+  color: #2c9bea;
+}
+</style>
+`,
+    }
+    const out = consolidateSubComponentClasses(files, { logger })
+    const css = out['resources/styles/common.less']
+    expect(css).toContain('.c-demo-tabs-malvtjd5-c-demo-tab-item--active')
+    expect(css).not.toContain('.c-demo-tab-item--active {')
+  })
+
+  it('属性书写顺序反转 → 收敛结果一致（消除顺序依赖）', () => {
+    const mk = (staticFirst: boolean) => ({
+      'resources/styles/common.less': '.c-demo-root {\n  width: 100%;\n}\n',
+      'package/components/Order.vue': staticFirst
+        ? `<template>
+  <div class="c-demo-item" :class="{ 'c-demo-item--active': on }">x</div>
+</template>
+<script setup></script>
+<style lang="less" scoped>
+.c-demo-item--active {
+  color: #fff;
+}
+</style>
+`
+        : `<template>
+  <div :class="{ 'c-demo-item--active': on }" class="c-demo-item">x</div>
+</template>
+<script setup></script>
+<style lang="less" scoped>
+.c-demo-item--active {
+  color: #fff;
+}
+</style>
+`,
+    })
+    const a = consolidateSubComponentClasses(mk(true), { logger })
+    const b = consolidateSubComponentClasses(mk(false), { logger })
+    expect(a['resources/styles/common.less']).toBe(b['resources/styles/common.less'])
+    expect(a['resources/styles/common.less']).toContain('.c-demo-item--active')
+  })
+
+  it('幂等：带修饰符的收敛二次执行内容不变', () => {
+    const files = {
+      'resources/styles/common.less': '.c-demo-root {\n  width: 100%;\n}\n',
+      'package/components/Idem.vue': `<template>
+  <div class="c-demo-idem-item" :class="{ 'c-demo-idem-item--active': on }">x</div>
+</template>
+<script setup></script>
+<style lang="less" scoped>
+.c-demo-idem-item--active {
+  color: #fff;
+}
+</style>
+`,
+    }
+    const once = consolidateSubComponentClasses(files, { logger })
+    const twice = consolidateSubComponentClasses(once, { logger })
+    expect(twice['resources/styles/common.less']).toBe(once['resources/styles/common.less'])
+  })
+})
+

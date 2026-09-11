@@ -1,0 +1,208 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "issues": [
+      {
+        "id": "response_parse_failed",
+        "type": "response_parse_failed",
+        "severity": "warning",
+        "message": "布局审查响应解析失败，结果不可信"
+      }
+    ],
+    "score": 0,
+    "recommendations": [],
+    "degraded": true
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "浅色科技监测风主题CSS变量（camelCase命名）",
+      "--colorBg": "#edf4fb",
+      "--colorPrimary": "#1990ff",
+      "--colorWarning": "#fa8c16",
+      "--colorTextBase": "#333333",
+      "--colorSuccess": "#52c41a",
+      "--fontSize": "14px",
+      "--borderRadius": "4px",
+      "--cardBg": "#ffffff",
+      "--shadowColor": "rgba(25, 144, 255, 0.15)"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射，与CSS变量一一对应",
+      "@color-bg": "#edf4fb",
+      "@color-primary": "#1990ff",
+      "@color-warning": "#fa8c16",
+      "@color-text-base": "#333333",
+      "@color-success": "#52c41a",
+      "@font-size-base": "14px",
+      "@border-radius-base": "4px",
+      "@card-bg": "#ffffff",
+      "@shadow-color": "rgba(25, 144, 255, 0.15)"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "min-height": "100vh",
+        "padding": "20px",
+        "background": "var(--colorBg, @color-bg)",
+        "font-size": "var(--fontSize, @font-size-base)",
+        "color": "var(--colorTextBase, @color-text-base)"
+      },
+      ".card": {
+        "background": "var(--cardBg, #ffffff)",
+        "border-radius": "var(--borderRadius, @border-radius-base)",
+        "box-shadow": "0 2px 8px var(--shadowColor, rgba(25, 144, 255, 0.15))",
+        "padding": "16px",
+        "margin-bottom": "12px"
+      },
+      ".highlight-number": {
+        "color": "var(--colorPrimary, @color-primary)",
+        "font-size": "32px",
+        "font-weight": "600",
+        "line-height": "1.2",
+        "letter-spacing": "1px",
+        "font-family": "DIN Alternate, Roboto, sans-serif"
+      },
+      ".highlight-warning": {
+        "color": "var(--colorWarning, @color-warning)",
+        "font-size": "24px",
+        "font-weight": "600",
+        "line-height": "1.2",
+        "font-family": "DIN Alternate, Roboto, sans-serif"
+      },
+      ".deco-diamond": {
+        "display": "inline-block",
+        "width": "12px",
+        "height": "12px",
+        "background": "var(--colorPrimary, @color-primary)",
+        "transform": "rotate(45deg)",
+        "border-radius": "2px",
+        "margin-right": "8px"
+      },
+      ".deco-truck": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "width": "40px",
+        "height": "40px",
+        "border-radius": "50%",
+        "background": "rgba(25, 144, 255, 0.10)",
+        "border": "2px solid var(--colorPrimary, @color-primary)",
+        "color": "var(--colorPrimary, @color-primary)"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主题色 #1990ff 映射为 --colorPrimary，作为蓝色大号数值(34,620 / 82,379)的主色",
+      "橙色 #fa8c16 映射为 --colorWarning，用于货车运输数值强调",
+      "浅蓝灰 #edf4fb 映射为 --colorBg，作为整体背景色",
+      "装饰元素（菱形/圆形车图标）通过CSS类提供容器与基础样式，实际图形建议使用SVG或iconfont资源",
+      "所有CSS变量遵循camelCase命名规范，Less变量与CSS变量对应并作为回退值",
+      "背景色直接落地为Figma字面量值，避免关键可见背景仅依赖运行时CSS变量"
+    ],
+    "elementStyleMap": {
+      "section-daily-total": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-bridge": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "chart-tunnel-flow": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "chart-bridge-flow": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-vehicle-type": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-tunnel-el-x-1-stat-item-x-0": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-tunnel-el-x-1-stat-item-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-tunnel-el-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "vehicle-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-item-x-19": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-item-x-22": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-bridge-el-x-1-stat-item-x-0": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-bridge-el-x-1-stat-item-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-bridge-el-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "vehicle-bridge": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-item-x-27": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-item-x-30": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-flow-prediction": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-daily-total",
+        "responsibility": "当日总流量（请按功能拆分）",
+        "elementCount": 13,
+        "title": "当日总流量"
+      },
+      {
+        "id": "section-vehicle-type",
+        "responsibility": "车型分布（请按功能拆分）",
+        "elementCount": 18,
+        "title": "车型分布"
+      },
+      {
+        "id": "section-flow-prediction",
+        "responsibility": "流量预测（请按功能拆分）",
+        "elementCount": 1,
+        "title": "流量预测"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 → 强制拆分"
+  }
+}

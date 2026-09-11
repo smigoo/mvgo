@@ -1,0 +1,535 @@
+/* [Style Refine] bg node fills[0].color rgba(0.929, 0.956, 0.984, 1) → rgb(237, 244, 251) */
+/* [Style Refine] Frame 2136638769 (inactive tab) fills[0] → rgb(102, 128, 160), strokes[0] → rgba(172, 196, 225, 1) */
+/* [Style Refine] Frame 2136638771 (active tab) fills[0] → rgb(25, 144, 255), strokes[0] → rgba(199, 224, 255, 1) */
+/* [Style Refine] bg node effects[0] DROP_SHADOW → rgba(74, 117, 141, 0.25) */
+:root {
+  --em-color-danger: #ff4d4f;
+  --em-color-primary: #1890ff;
+  --em-color-warning: #fa8c16;
+  --em-brand-blue: #1990ff;
+  --em-brand-gradient-start: #1990ff;
+  --em-brand-gradient-end: #5a7eff;
+  --em-spacing-xs: 4px;
+  --em-spacing-sm: 8px;
+  --em-spacing-md: 12px;
+  --em-spacing-lg: 16px;
+  --em-spacing-xl: 20px;
+  --em-radius-sm: 4px;
+  --em-radius-md: 8px;
+  --em-font-size-sm: 12px;
+  --em-font-size-base: 14px;
+  --em-font-size-lg: 16px;
+  --em-font-size-xl: 20px;
+  --em-font-size-xxl: 28px;
+  --em-bg-base: #edf4fb;
+  --em-bg-card: rgba(255, 255, 255, 0.9);
+  --em-text-primary: #333333;
+  --em-text-secondary: #666666;
+  --em-text-tertiary: #999999;
+  --em-tab-bg: #6680a0;
+  --em-tab-border: #acc4e1;
+  --em-tab-text: #333333;
+  --em-tab-active-bg: #1990ff;
+  --em-tab-active-border: #c7e0ff;
+  --em-tab-active-text: #ffffff;
+  --em-border-base: rgba(0, 0, 0, 0.1);
+  --em-border-light: rgba(0, 0, 0, 0.06);
+  --em-shadow-base: 0px 4px 10px rgba(74, 117, 141, 0.25);
+}
+.c-mc-1784774080869-c537eb47-tabs-container {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  align-items: center;
+}
+/* [Style Refine] Frame 2136638769 fills[0].color rgba(0.400, 0.501, 0.628, 1) → rgb(102, 128, 160) */
+/* [Style Refine] Frame 2136638769 strokes[0].color rgba(0.675, 0.767, 0.882, 1) → rgba(172, 196, 225, 1) */
+/* [Style Refine] Frame 2136638769 strokeWeight 0.731 → 0.73px */
+/* [Style Refine] 大桥 text fills[0].color rgba(0.2, 0.2, 0.2, 1) → rgb(51, 51, 51) */
+/* [Style Refine] 大桥 text typography fontSize 14, fontWeight 400, lineHeight 21 */
+.c-mc-1784774080869-c537eb47-tab-item {
+  padding: 4px 16px;
+  border-radius: 4px;
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 21px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: #6680a0;
+  border: 0.73px solid #acc4e1;
+  color: #333333;
+}
+.c-mc-1784774080869-c537eb47-tab-item:hover {
+  opacity: 0.9;
+}
+/* [Style Refine] Frame 2136638771 fills[0].color rgba(0.098, 0.565, 1, 1) → rgb(25, 144, 255) */
+/* [Style Refine] Frame 2136638771 strokes[0].color rgba(0.780, 0.878, 1, 1) → rgba(199, 224, 255, 1) */
+/* [Style Refine] Frame 2136638771 strokeWeight 0.731 → 0.73px */
+/* [Style Refine] 项目主体 text fills[0].color rgba(1, 1, 1, 1) → rgb(255, 255, 255) */
+/* [Style Refine] 项目主体 text typography fontSize 14, fontWeight 500, lineHeight 21 */
+.c-mc-1784774080869-c537eb47-tab-active {
+  background: #1990ff;
+  border: 0.73px solid #c7e0ff;
+  color: #ffffff;
+  font-weight: 500;
+}
+/* [Style Refine] bg node fills[0].color rgba(0.929, 0.956, 0.984, 1) → rgb(237, 244, 251) - applied to content container */
+/* [Style Refine] bg node effects[0] DROP_SHADOW offset(0, 4), radius 10, color rgba(0.291, 0.458, 0.551, 0.25) */
+.c-mc-1784774080869-c537eb47-content {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: #edf4fb;
+  box-shadow: 0px 4px 10px rgba(74, 117, 141, 0.25);
+}
+.c-mc-1784774080869-c537eb47-subtitle-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid;
+  border-image: linear-gradient(90deg, #559eff 0%, #559eff 100%) 1;
+}
+.c-mc-1784774080869-c537eb47-subtitle-icon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+/* [Style Refine] 重点车辆监测 text fills[0] GRADIENT_LINEAR from rgba(0.097, 0.564, 1, 1) to rgba(0.352, 0.495, 1, 0.83) */
+/* [Style Refine] 重点车辆监测 text typography fontFamily "Noto Sans SC", fontSize 16, fontWeight 700, lineHeight 19.2 */
+/* [Style Refine] 重点车辆监测 text effects[0] is not present - no text shadow in original design */
+.c-mc-1784774080869-c537eb47-subtitle-text {
+  font-family: 'Noto Sans SC', 'Source Han Sans CN', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 19.2px;
+  background: linear-gradient(180deg, #1990ff 0%, rgba(90, 126, 255, 0.83) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.c-mc-1784774080869-c537eb47-cards-container {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+  align-items: stretch;
+  justify-content: space-between;
+}
+.c-mc-1784774080869-c537eb47-card {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border-radius: 8px;
+  min-height: 80px;
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.c-mc-1784774080869-c537eb47-card-icon {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.c-mc-1784774080869-c537eb47-text-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+.c-mc-1784774080869-c537eb47-card-label {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  color: #333333;
+  line-height: 20px;
+}
+.c-mc-1784774080869-c537eb47-card-value-group {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 4px;
+}
+.c-mc-1784774080869-c537eb47-card-value {
+  font-family: 'DIN Alternate', 'DIN', 'Arial', sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+}
+.c-mc-1784774080869-c537eb47-value-danger {
+  color: #ff4d4f;
+}
+.c-mc-1784774080869-c537eb47-value-primary {
+  color: #1890ff;
+}
+.c-mc-1784774080869-c537eb47-value-warning {
+  color: #fa8c16;
+}
+.c-mc-1784774080869-c537eb47-card-unit {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  color: #666666;
+  line-height: 20px;
+}
+.dark {
+  --em-color-danger: #ff4d4f;
+  --em-color-primary: #1890ff;
+  --em-color-warning: #fa8c16;
+  --em-brand-blue: #1990ff;
+  --em-brand-gradient-start: #1990ff;
+  --em-brand-gradient-end: #5a7eff;
+  --em-spacing-xs: 4px;
+  --em-spacing-sm: 8px;
+  --em-spacing-md: 12px;
+  --em-spacing-lg: 16px;
+  --em-spacing-xl: 20px;
+  --em-radius-sm: 4px;
+  --em-radius-md: 8px;
+  --em-font-size-sm: 12px;
+  --em-font-size-base: 14px;
+  --em-font-size-lg: 16px;
+  --em-font-size-xl: 20px;
+  --em-font-size-xxl: 28px;
+  --em-bg-base: #1e2837;
+  --em-bg-card: rgba(45, 55, 70, 0.8);
+  --em-text-primary: rgba(255, 255, 255, 0.85);
+  --em-text-secondary: rgba(255, 255, 255, 0.65);
+  --em-text-tertiary: rgba(255, 255, 255, 0.45);
+  --em-tab-bg: rgba(102, 128, 160, 0.6);
+  --em-tab-border: rgba(172, 196, 225, 0.3);
+  --em-tab-text: rgba(255, 255, 255, 0.85);
+  --em-tab-active-bg: #1990ff;
+  --em-tab-active-border: rgba(199, 224, 255, 0.5);
+  --em-tab-active-text: #ffffff;
+  --em-border-base: rgba(255, 255, 255, 0.15);
+  --em-border-light: rgba(255, 255, 255, 0.08);
+  --em-shadow-base: 0 4px 10px rgba(0, 0, 0, 0.3);
+  /* [Style Refine] Frame 2136638769 fills[0].color rgba(0.400, 0.501, 0.628, 1) → rgb(102, 128, 160) */
+  /* [Style Refine] Frame 2136638769 strokes[0].color rgba(0.675, 0.767, 0.882, 1) → rgba(172, 196, 225, 1) */
+  /* [Style Refine] Frame 2136638769 strokeWeight 0.731 → 0.73px */
+  /* [Style Refine] 大桥 text fills[0].color rgba(0.2, 0.2, 0.2, 1) → rgb(51, 51, 51) */
+  /* [Style Refine] 大桥 text typography fontSize 14, fontWeight 400, lineHeight 21 */
+  /* [Style Refine] Frame 2136638771 fills[0].color rgba(0.098, 0.565, 1, 1) → rgb(25, 144, 255) */
+  /* [Style Refine] Frame 2136638771 strokes[0].color rgba(0.780, 0.878, 1, 1) → rgba(199, 224, 255, 1) */
+  /* [Style Refine] Frame 2136638771 strokeWeight 0.731 → 0.73px */
+  /* [Style Refine] 项目主体 text fills[0].color rgba(1, 1, 1, 1) → rgb(255, 255, 255) */
+  /* [Style Refine] 项目主体 text typography fontSize 14, fontWeight 500, lineHeight 21 */
+  /* [Style Refine] bg node fills[0].color rgba(0.929, 0.956, 0.984, 1) → rgb(237, 244, 251) - applied to content container */
+  /* [Style Refine] bg node effects[0] DROP_SHADOW offset(0, 4), radius 10, color rgba(0.291, 0.458, 0.551, 0.25) */
+  /* [Style Refine] 重点车辆监测 text fills[0] GRADIENT_LINEAR from rgba(0.097, 0.564, 1, 1) to rgba(0.352, 0.495, 1, 0.83) */
+  /* [Style Refine] 重点车辆监测 text typography fontFamily "Noto Sans SC", fontSize 16, fontWeight 700, lineHeight 19.2 */
+  /* [Style Refine] 重点车辆监测 text effects[0] is not present - no text shadow in original design */
+}
+.dark .c-mc-1784774080869-c537eb47-tabs-container {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  align-items: center;
+}
+.dark .c-mc-1784774080869-c537eb47-tab-item {
+  padding: 4px 16px;
+  border-radius: 4px;
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 21px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: #6680a0;
+  border: 0.73px solid #acc4e1;
+  color: #333333;
+}
+.dark .c-mc-1784774080869-c537eb47-tab-item:hover {
+  opacity: 0.9;
+}
+.dark .c-mc-1784774080869-c537eb47-tab-active {
+  background: #1990ff;
+  border: 0.73px solid #c7e0ff;
+  color: #ffffff;
+  font-weight: 500;
+}
+.dark .c-mc-1784774080869-c537eb47-content {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: #edf4fb;
+  box-shadow: 0px 4px 10px rgba(74, 117, 141, 0.25);
+}
+.dark .c-mc-1784774080869-c537eb47-subtitle-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid;
+  border-image: linear-gradient(90deg, #559eff 0%, #559eff 100%) 1;
+}
+.dark .c-mc-1784774080869-c537eb47-subtitle-icon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+.dark .c-mc-1784774080869-c537eb47-subtitle-text {
+  font-family: 'Noto Sans SC', 'Source Han Sans CN', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 19.2px;
+  background: linear-gradient(180deg, #1990ff 0%, rgba(90, 126, 255, 0.83) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.dark .c-mc-1784774080869-c537eb47-cards-container {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+  align-items: stretch;
+  justify-content: space-between;
+}
+.dark .c-mc-1784774080869-c537eb47-card {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border-radius: 8px;
+  min-height: 80px;
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.dark .c-mc-1784774080869-c537eb47-card-icon {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.dark .c-mc-1784774080869-c537eb47-text-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+.dark .c-mc-1784774080869-c537eb47-card-label {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  color: #333333;
+  line-height: 20px;
+}
+.dark .c-mc-1784774080869-c537eb47-card-value-group {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 4px;
+}
+.dark .c-mc-1784774080869-c537eb47-card-value {
+  font-family: 'DIN Alternate', 'DIN', 'Arial', sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+}
+.dark .c-mc-1784774080869-c537eb47-value-danger {
+  color: #ff4d4f;
+}
+.dark .c-mc-1784774080869-c537eb47-value-primary {
+  color: #1890ff;
+}
+.dark .c-mc-1784774080869-c537eb47-value-warning {
+  color: #fa8c16;
+}
+.dark .c-mc-1784774080869-c537eb47-card-unit {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  color: #666666;
+  line-height: 20px;
+}
+.light {
+  --em-color-danger: #ff4d4f;
+  --em-color-primary: #1890ff;
+  --em-color-warning: #fa8c16;
+  --em-brand-blue: #1990ff;
+  --em-brand-gradient-start: #1990ff;
+  --em-brand-gradient-end: #5a7eff;
+  --em-spacing-xs: 4px;
+  --em-spacing-sm: 8px;
+  --em-spacing-md: 12px;
+  --em-spacing-lg: 16px;
+  --em-spacing-xl: 20px;
+  --em-radius-sm: 4px;
+  --em-radius-md: 8px;
+  --em-font-size-sm: 12px;
+  --em-font-size-base: 14px;
+  --em-font-size-lg: 16px;
+  --em-font-size-xl: 20px;
+  --em-font-size-xxl: 28px;
+  --em-bg-base: #edf4fb;
+  --em-bg-card: rgba(255, 255, 255, 0.9);
+  --em-text-primary: #333333;
+  --em-text-secondary: #666666;
+  --em-text-tertiary: #999999;
+  --em-tab-bg: #6680a0;
+  --em-tab-border: #acc4e1;
+  --em-tab-text: #333333;
+  --em-tab-active-bg: #1990ff;
+  --em-tab-active-border: #c7e0ff;
+  --em-tab-active-text: #ffffff;
+  --em-border-base: rgba(0, 0, 0, 0.1);
+  --em-border-light: rgba(0, 0, 0, 0.06);
+  --em-shadow-base: 0px 4px 10px rgba(74, 117, 141, 0.25);
+  /* [Style Refine] Frame 2136638769 fills[0].color rgba(0.400, 0.501, 0.628, 1) → rgb(102, 128, 160) */
+  /* [Style Refine] Frame 2136638769 strokes[0].color rgba(0.675, 0.767, 0.882, 1) → rgba(172, 196, 225, 1) */
+  /* [Style Refine] Frame 2136638769 strokeWeight 0.731 → 0.73px */
+  /* [Style Refine] 大桥 text fills[0].color rgba(0.2, 0.2, 0.2, 1) → rgb(51, 51, 51) */
+  /* [Style Refine] 大桥 text typography fontSize 14, fontWeight 400, lineHeight 21 */
+  /* [Style Refine] Frame 2136638771 fills[0].color rgba(0.098, 0.565, 1, 1) → rgb(25, 144, 255) */
+  /* [Style Refine] Frame 2136638771 strokes[0].color rgba(0.780, 0.878, 1, 1) → rgba(199, 224, 255, 1) */
+  /* [Style Refine] Frame 2136638771 strokeWeight 0.731 → 0.73px */
+  /* [Style Refine] 项目主体 text fills[0].color rgba(1, 1, 1, 1) → rgb(255, 255, 255) */
+  /* [Style Refine] 项目主体 text typography fontSize 14, fontWeight 500, lineHeight 21 */
+  /* [Style Refine] bg node fills[0].color rgba(0.929, 0.956, 0.984, 1) → rgb(237, 244, 251) - applied to content container */
+  /* [Style Refine] bg node effects[0] DROP_SHADOW offset(0, 4), radius 10, color rgba(0.291, 0.458, 0.551, 0.25) */
+  /* [Style Refine] 重点车辆监测 text fills[0] GRADIENT_LINEAR from rgba(0.097, 0.564, 1, 1) to rgba(0.352, 0.495, 1, 0.83) */
+  /* [Style Refine] 重点车辆监测 text typography fontFamily "Noto Sans SC", fontSize 16, fontWeight 700, lineHeight 19.2 */
+  /* [Style Refine] 重点车辆监测 text effects[0] is not present - no text shadow in original design */
+}
+.light .c-mc-1784774080869-c537eb47-tabs-container {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  align-items: center;
+}
+.light .c-mc-1784774080869-c537eb47-tab-item {
+  padding: 4px 16px;
+  border-radius: 4px;
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 21px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: #6680a0;
+  border: 0.73px solid #acc4e1;
+  color: #333333;
+}
+.light .c-mc-1784774080869-c537eb47-tab-item:hover {
+  opacity: 0.9;
+}
+.light .c-mc-1784774080869-c537eb47-tab-active {
+  background: #1990ff;
+  border: 0.73px solid #c7e0ff;
+  color: #ffffff;
+  font-weight: 500;
+}
+.light .c-mc-1784774080869-c537eb47-content {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: #edf4fb;
+  box-shadow: 0px 4px 10px rgba(74, 117, 141, 0.25);
+}
+.light .c-mc-1784774080869-c537eb47-subtitle-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid;
+  border-image: linear-gradient(90deg, #559eff 0%, #559eff 100%) 1;
+}
+.light .c-mc-1784774080869-c537eb47-subtitle-icon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+.light .c-mc-1784774080869-c537eb47-subtitle-text {
+  font-family: 'Noto Sans SC', 'Source Han Sans CN', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 19.2px;
+  background: linear-gradient(180deg, #1990ff 0%, rgba(90, 126, 255, 0.83) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.light .c-mc-1784774080869-c537eb47-cards-container {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+  align-items: stretch;
+  justify-content: space-between;
+}
+.light .c-mc-1784774080869-c537eb47-card {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border-radius: 8px;
+  min-height: 80px;
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.light .c-mc-1784774080869-c537eb47-card-icon {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.light .c-mc-1784774080869-c537eb47-text-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+.light .c-mc-1784774080869-c537eb47-card-label {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  color: #333333;
+  line-height: 20px;
+}
+.light .c-mc-1784774080869-c537eb47-card-value-group {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 4px;
+}
+.light .c-mc-1784774080869-c537eb47-card-value {
+  font-family: 'DIN Alternate', 'DIN', 'Arial', sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+}
+.light .c-mc-1784774080869-c537eb47-value-danger {
+  color: #ff4d4f;
+}
+.light .c-mc-1784774080869-c537eb47-value-primary {
+  color: #1890ff;
+}
+.light .c-mc-1784774080869-c537eb47-value-warning {
+  color: #fa8c16;
+}
+.light .c-mc-1784774080869-c537eb47-card-unit {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  color: #666666;
+  line-height: 20px;
+}

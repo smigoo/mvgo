@@ -1,0 +1,189 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 60,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "Figma 节点覆盖率极低（coverageRate: 0），缺失节点数高达 170 个（包括 header、sub-header、基础文本等核心节点）。这将导致生成的 UI 严重丢失设计稿细节，无法还原真实设计。",
+        "suggestion": "在生成代码前，必须重新执行 Figma 解析流程或检查解析配置，确保节点覆盖率至少达到 85% 以上。当前布局数据不具备直接生成高质量代码的条件。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "chartDataHints",
+        "message": "图表数据提示（chartDataHints）存在严重的数据污染。`labels` 数组中混入了大量非图表坐标轴的文本（如 '24小时', '当日总流量', '江阴大桥', '建议分流' 等），这会导致 ECharts 渲染时 X 轴、图例或 Tooltip 出现错误数据。",
+        "suggestion": "清洗图表数据提示，确保 `labels` 仅包含 X 轴刻度（如 '0时', '2时'...）和系列名称，`values` 仅包含 Y 轴数值。非图表数据应归类到对应的 section 文本节点中。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[0].body.children",
+        "message": "布局嵌套存在冗余。`daily-total-flow` 的 body 中，`children` 仅包含一个 `stats-row`，而 `stats-row` 又包含具体的 `stat-card`。这增加了一层无意义的 DOM 嵌套，不利于后续样式控制。",
+        "suggestion": "将 `stats-row` 的布局属性（`horizontal-2-columns`）直接应用到 `body` 上，或者将其子节点（stat-card）提升为 body 的直接子节点，减少一层冗余嵌套。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1] & layout.sections[2]",
+        "message": "存在高度重复的区块结构。`hourly-flow-tunnel` 和 `hourly-flow-bridge` 结构完全一致，仅标题和 ID 不同。在代码生成时会导致大量重复的模板和逻辑代码，降低可维护性。",
+        "suggestion": "在代码生成阶段，建议将这两个区块抽象为一个可复用的子组件（如 `HourlyFlowChart.vue`），通过 props 传入标题、图表数据等；或者在布局上合并为一个区块，使用 Tab 进行地点切换。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[3].body",
+        "message": "`vehicle-distribution` 使用了 `horizontal-2-columns`，内部包含六边形背景（`bgShape: 'hexagon'`）的统计项。六边形通常具有固定的宽高比，如果父容器宽度不足，极易导致元素重叠或溢出。",
+        "suggestion": "在代码生成时，确保六边形容器使用 `flex: 1` 和 `min-width: 0`，并设置 `overflow: hidden` 作为视觉兜底。同时需确保六边形内部图标/文字使用相对单位或 `max-width: 100%` 以适应容器缩放。"
+      }
+    ],
+    "recommendations": [
+      "1. 重新解析 Figma 文件：当前 0% 的覆盖率是致命问题，必须修复解析链路，确保所有 FRAME、TEXT、GROUP 节点被正确映射到布局 JSON 中。",
+      "2. 规范图表数据源：建立严格的图表数据清洗规则，将 UI 文本（如标题、单位）与图表配置数据（X/Y轴数据、系列名）严格分离，避免 ECharts 渲染异常。",
+      "3. 提取公共子组件：针对隧道和大桥的重复结构（小时流量、车型分布），在代码生成时强制使用 Vue 组件化思维，提取公共组件以减少代码体积并提高可维护性。",
+      "4. 强化自适应布局约束：在生成六边形、圆形等特殊形状容器时，必须强制应用 `min-width: 0` 和 `overflow: hidden`，防止在窄屏或容器缩放时发生布局崩溃。"
+    ],
+    "summary": "当前布局结构在宏观区域划分和微码规范（如 header/body 区分、交互识别）上基本合理，但存在两个致命缺陷：一是 Figma 节点覆盖率极低（0%），导致布局数据严重缺失；二是图表数据提示（chartDataHints）存在严重的数据污染。此外，局部存在不必要的 DOM 嵌套和高度重复的区块结构。建议先修复 Figma 解析问题并清洗图表数据后，再进入代码生成阶段。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1990ff",
+      "--colorBgBase": "#edf4fb",
+      "--colorTextBase": "#333333",
+      "--colorWarning": "#fa8c16",
+      "--colorSuccess": "#52c41a",
+      "--fontSize": "14px",
+      "--fontSizeHeadingLarge": "32px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#1990ff",
+      "@color-bg-base": "#edf4fb",
+      "@color-text-base": "#333333",
+      "@color-warning": "#fa8c16",
+      "@color-success": "#52c41a",
+      "@font-size-base": "14px",
+      "@font-size-heading-large": "32px",
+      "@border-radius-base": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "width": "100%",
+        "height": "100%",
+        "background-color": "#edf4fb",
+        "padding": "16px",
+        "box-sizing": "border-box",
+        "position": "relative"
+      },
+      ".section-title": {
+        "display": "flex",
+        "align-items": "center",
+        "font-size": "var(--fontSizeHeadingLarge, @font-size-heading-large)",
+        "color": "var(--colorTextBase, @color-text-base)",
+        "font-weight": "bold",
+        "margin-bottom": "16px"
+      },
+      ".title-icon": {
+        "width": "24px",
+        "height": "24px",
+        "margin-right": "8px",
+        "background-size": "contain",
+        "background-repeat": "no-repeat",
+        "background-position": "center"
+      },
+      ".hexagon-value-bg": {
+        "position": "relative",
+        "display": "flex",
+        "justify-content": "center",
+        "align-items": "center",
+        "width": "120px",
+        "height": "120px",
+        "background-size": "100% 100%",
+        "background-repeat": "no-repeat",
+        "background-position": "center"
+      },
+      ".hexagon-value-bg--passenger": {
+        "background-image": "url('../../images/hexagon-blue.png')"
+      },
+      ".hexagon-value-bg--freight": {
+        "background-image": "url('../../images/hexagon-orange.png')"
+      },
+      ".large-value": {
+        "font-size": "28px",
+        "font-weight": "bold",
+        "color": "var(--colorPrimary, @color-primary)",
+        "z-index": "1"
+      },
+      ".accuracy-text": {
+        "font-size": "16px",
+        "color": "var(--colorSuccess, @color-success)",
+        "font-weight": "500",
+        "margin-top": "8px"
+      },
+      ".center-decoration": {
+        "position": "absolute",
+        "top": "50%",
+        "left": "50%",
+        "transform": "translate(-50%, -50%)",
+        "width": "64px",
+        "height": "64px",
+        "background-size": "contain",
+        "background-repeat": "no-repeat",
+        "background-position": "center",
+        "pointer-events": "none",
+        "z-index": "0"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 #1990ff 映射为 --colorPrimary，用于大号数值和核心强调元素",
+      "背景色 #edf4fb 直接落地为 .monitor-container 的 background-color，同时映射为 --colorBgBase 以支持主题切换",
+      "六边形背景建议使用 background-image 引入实际切图（客车蓝/货车橙），避免纯 CSS 绘制导致还原度低",
+      "绿色准确率文字使用 --colorSuccess 变量，确保在深色/浅色主题切换时颜色语义一致",
+      "菱形标题图标和中间圆形装饰图标通过 .title-icon 和 .center-decoration 类控制尺寸和背景图，中间图标使用绝对定位居中并设置 pointer-events: none 防止阻挡交互"
+    ],
+    "elementStyleMap": {
+      "daily-total-flow": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-bridge": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "hourly-flow-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "hourly-flow-bridge": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-distribution": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "dist-tunnel": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "dist-bridge": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "flow-prediction": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    }
+  }
+}

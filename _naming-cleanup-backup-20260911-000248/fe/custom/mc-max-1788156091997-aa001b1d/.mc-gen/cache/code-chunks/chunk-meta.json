@@ -1,0 +1,69 @@
+{
+  "completed": [
+    "1-declare.json",
+    "2-package/index.vue",
+    "3-package/index.vue",
+    "6-package/components/ChartArea.vue",
+    "5-package/components/TabSwitch.vue",
+    "7-resources/styles/themes/theme-vars.less",
+    "8-resources/styles/common.less"
+  ],
+  "total": 6,
+  "updatedAt": 1788156427178,
+  "files": {
+    "declare.json": [
+      {
+        "index": 1,
+        "file": "1-declare.json",
+        "segmentType": "declare",
+        "scriptPart": ""
+      }
+    ],
+    "package/index.vue": [
+      {
+        "index": 2,
+        "file": "2-package_index.vue",
+        "segmentType": "template",
+        "scriptPart": ""
+      },
+      {
+        "index": 3,
+        "file": "3-package_index.vue",
+        "segmentType": "script",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/ChartArea.vue": [
+      {
+        "index": 6,
+        "file": "6-package_components_ChartArea.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/TabSwitch.vue": [
+      {
+        "index": 5,
+        "file": "5-package_components_TabSwitch.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "resources/styles/themes/theme-vars.less": [
+      {
+        "index": 7,
+        "file": "7-resources_styles_themes_theme-vars.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      }
+    ],
+    "resources/styles/common.less": [
+      {
+        "index": 8,
+        "file": "8-resources_styles_common.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      }
+    ]
+  }
+}

@@ -1,0 +1,109 @@
+{
+  "completed": [
+    "1-declare.json",
+    "2-package/index.vue",
+    "3-package/index.vue",
+    "4-package/index.vue",
+    "5-package/components/DailyTotal.vue",
+    "6-package/components/TunnelFlowChart.vue",
+    "7-package/components/BridgeFlowChart.vue",
+    "8-package/components/VehicleTypeDistribution.vue",
+    "9-package/components/FlowPrediction.vue",
+    "10-resources/styles/themes/theme-vars.less",
+    "11-resources/styles/common.less"
+  ],
+  "total": 6,
+  "updatedAt": 1788308404392,
+  "files": {
+    "declare.json": [
+      {
+        "index": 1,
+        "file": "1-declare.json",
+        "segmentType": "declare",
+        "scriptPart": ""
+      }
+    ],
+    "package/index.vue": [
+      {
+        "index": 2,
+        "file": "2-package_index.vue",
+        "segmentType": "template",
+        "scriptPart": ""
+      },
+      {
+        "index": 3,
+        "file": "3-package_index.vue",
+        "segmentType": "script",
+        "scriptPart": "state"
+      },
+      {
+        "index": 4,
+        "file": "4-package_index.vue",
+        "segmentType": "script",
+        "scriptPart": "lifecycle"
+      },
+      {
+        "index": 6,
+        "file": "6-package_index.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/DailyTotal.vue": [
+      {
+        "index": 5,
+        "file": "5-package_components_DailyTotal.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/TunnelFlowChart.vue": [
+      {
+        "index": 6,
+        "file": "6-package_components_TunnelFlowChart.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/BridgeFlowChart.vue": [
+      {
+        "index": 7,
+        "file": "7-package_components_BridgeFlowChart.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/VehicleTypeDistribution.vue": [
+      {
+        "index": 8,
+        "file": "8-package_components_VehicleTypeDistribution.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/FlowPrediction.vue": [
+      {
+        "index": 9,
+        "file": "9-package_components_FlowPrediction.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "resources/styles/themes/theme-vars.less": [
+      {
+        "index": 10,
+        "file": "10-resources_styles_themes_theme-vars.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      }
+    ],
+    "resources/styles/common.less": [
+      {
+        "index": 11,
+        "file": "11-resources_styles_common.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      }
+    ]
+  }
+}

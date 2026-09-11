@@ -1,0 +1,32 @@
+.common() {
+@text-color: #333333;
+  @primary-color: #1990ff;
+  @success-color: #08a3a5;
+  @bg-color: #edf4fb;
+  @white-color: #ffffff;
+  @border-color: rgba(74, 117, 141, 0.25);
+  @click: inherit; // 自动添加
+}
+
+.theme-light() {
+  @text-color: #333333;
+  @primary-color: #1990ff;
+  @success-color: #08a3a5;
+  @bg-color: #edf4fb;
+  @white-color: #ffffff;
+  @border-color: rgba(74, 117, 141, 0.25);
+}
+
+.theme-dark() {
+  @text-color: #e0e6ed;
+  @primary-color: #409eff;
+  @success-color: #67c23a;
+  @bg-color: #1a2332;
+  @white-color: #ffffff;
+  @border-color: rgba(255, 255, 255, 0.1);
+}
+
+:root {
+  .theme-light();
+  .common();
+}

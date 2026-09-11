@@ -1,0 +1,211 @@
+.c-env-monitor-root {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.c-env-monitor-section-title {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  flex-shrink: 0;
+  align-items: center;
+  height: 28px;
+  margin-bottom: 8px;
+}
+
+.c-env-monitor-title-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.c-env-monitor-title-icon {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+}
+
+.c-env-monitor-icon-circle {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #1252fa 0%, #d6effc 100%);
+  position: relative;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 2.4px;
+    height: 2.4px;
+    background: #559eff;
+    border-radius: 50%;
+  }
+}
+
+.c-env-monitor-title-line {
+  flex: 1;
+  height: 6px;
+  background: linear-gradient(90deg, #559eff 0%, #559eff 100%);
+  border-radius: 3px;
+  min-width: 0;
+}
+
+.c-env-monitor-title-text {
+  font-family: 'Noto Sans SC', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 19px;
+  background: linear-gradient(90deg, #1990ff 0%, #5a7eff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.c-env-monitor-section-tabs {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  height: 32px;
+  flex-shrink: 0;
+  gap: 12px;
+}
+
+.c-env-monitor-tabs-list {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0;
+  flex: 1;
+  min-width: 0;
+  height: 27px;
+  position: relative;
+  background: linear-gradient(to right, #b5deff 0%, #d1ecff 100%);
+  border: 0.72px solid rgba(255, 255, 255, 1);
+  border-radius: 4px;
+  padding: 3px;
+}
+
+.c-env-monitor-tab-item {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 12px;
+  color: #2c9bea;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.3s;
+  position: relative;
+  border-radius: 2px;
+
+  &:hover {
+    opacity: 0.8;
+  }
+}
+
+.c-env-monitor-tab-item--active {
+  color: #ffffff;
+  text-shadow: 0 0.6px 0 rgba(0, 111, 227, 1);
+  background: linear-gradient(to right, #1099b1 0%, #038fff 100%);
+  border: 0.6px solid rgba(255, 255, 255, 1);
+}
+
+.c-env-monitor-tabs-icons {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.c-env-monitor-icon-wrapper {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(to bottom, #ffffff 0%, #e2f0ff 36%, #deedff 69%, #ffffff 100%);
+  border: 1px solid rgba(161, 206, 255, 1);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s;
+  position: relative;
+
+  &:hover {
+    background: linear-gradient(to bottom, #f0f8ff 0%, #d0e8ff 36%, #cce6ff 69%, #f0f8ff 100%);
+  }
+}
+
+.c-env-monitor-icon-wrapper--badge,
+.c-env-monitor-icon-wrapper-badge {
+  position: relative;
+}
+
+.c-env-monitor-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.c-env-monitor-badge {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f53f3f;
+  border-radius: 29px;
+  font-family: 'PingFang SC', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 14px;
+  color: #ffffff;
+}
+
+.c-env-monitor-section-chart {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 100px;
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+  padding: 12px 16px;
+  box-sizing: border-box;
+}
+
+.c-env-monitor-chart-section {
+  flex: 1;
+  min-height: 100px;
+  min-width: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.c-env-monitor-chart-container {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}

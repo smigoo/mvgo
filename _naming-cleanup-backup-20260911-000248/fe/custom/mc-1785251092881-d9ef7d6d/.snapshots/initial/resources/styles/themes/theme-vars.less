@@ -1,0 +1,42 @@
+.common() {
+--color-total: #1990FF;
+  --color-online: #52C41A;
+  --color-abnormal: #FAAD14;
+  --color-rate: #13C2C2;
+  --color-warning-tag: #FAAD14;
+  --system-panel-bg: rgba(0, 0, 0, 0.45);
+  --system-panel-title: #FFFFFF;
+  --color-rate-low: #FF4D4F;
+  --color-rate-normal: #52C41A;
+  @click: inherit; // 自动添加
+}
+
+.theme-dark() {
+  .common();
+  --color-total: #1990FF;
+  --color-online: #52C41A;
+  --color-abnormal: #FAAD14;
+  --color-rate: #13C2C2;
+  --color-warning-tag: #FAAD14;
+  --system-panel-bg: rgba(0, 0, 0, 0.45);
+  --system-panel-title: #FFFFFF;
+  --color-rate-low: #FF4D4F;
+  --color-rate-normal: #52C41A;
+}
+
+.theme-light() {
+  .common();
+  --color-total: #1990FF;
+  --color-online: #52C41A;
+  --color-abnormal: #FAAD14;
+  --color-rate: #13C2C2;
+  --color-warning-tag: #FAAD14;
+  --system-panel-bg: rgba(255, 255, 255, 0.78);
+  --system-panel-title: #1F2D3D;
+  --color-rate-low: #FF4D4F;
+  --color-rate-normal: #52C41A;
+}
+
+:root {
+  .theme-dark();
+}

@@ -1,0 +1,356 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 78,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "header-tabs section 缺少 header 层级，tab 组应在 body 内而非作为独立 section",
+        "suggestion": "将 tab 组移入主 section 的 header.children，或合并到 chart-controls"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1]",
+        "message": "chart-controls 与 header-tabs 应合并为一个 header，避免割裂顶部控制区",
+        "suggestion": "建议合并为单一 header section，左侧 tab 组 + 右侧控制按钮"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "charts[0]",
+        "message": "图表元信息 chart-meta 应归入 charts 配置的 legend 或 notes，而非单独 child",
+        "suggestion": "将 '2k3+785CO浓度' 映射为图表标题，'预警线' 归入 legend"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "layout.sections[1].body.children[0-1]",
+        "message": "stat-icon 和 list-icon 共享同一 resourceFile，应合并为按钮组变量",
+        "suggestion": "统一命名为 view-toggle-buttons，避免资源变量冗余"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "charts[0].axes",
+        "message": "坐标轴信息缺少结构化字段（xAxis/yAxis 对象），仅为文本描述",
+        "suggestion": "改为 {xAxis: {type: 'time', range: [0,24]}, yAxis: {range: [0,50]}}"
+      }
+    ],
+    "recommendations": [
+      "将 header-tabs 和 chart-controls 合并为单一 header section（左 tab 组 + 右控制区），减少层级",
+      "chart-meta 的监测点位和预警线标注应归入 charts[0] 的 title 和 legend 字段",
+      "补充 charts[0] 的结构化坐标轴配置和 tooltip 模板"
+    ],
+    "summary": "结构基本合理但顶部区域过度拆分，建议合并 header-tabs 和 chart-controls 为单一 header；图表元信息应归入 charts 配置而非独立 child；坐标轴需结构化。修复后可达良好水平。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorBgBase": "rgba(237,244,251,1)",
+      "--colorPrimary": "rgba(77,150,255,1)",
+      "--colorTextSecondary": "rgba(102,102,102,1)",
+      "--colorError": "rgba(245,63,63,1)",
+      "--colorSuccess": "rgba(82,196,26,1)",
+      "--colorSuccessLight": "rgba(82,196,26,0.3)",
+      "--colorBorderBase": "rgba(77,150,255,0.2)",
+      "--colorBorderError": "rgba(245,63,63,1)",
+      "--fontSize": "14px",
+      "--fontSizeTitle": "16px",
+      "--borderRadiusBase": "4px",
+      "--paddingBase": "16px",
+      "--gapBase": "12px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-bg-base": "rgba(237,244,251,1)",
+      "@color-primary": "rgba(77,150,255,1)",
+      "@color-text-secondary": "rgba(102,102,102,1)",
+      "@color-error": "rgba(245,63,63,1)",
+      "@color-success": "rgba(82,196,26,1)",
+      "@color-success-light": "rgba(82,196,26,0.3)",
+      "@color-border-base": "rgba(77,150,255,0.2)",
+      "@color-border-error": "rgba(245,63,63,1)",
+      "@font-size-base": "14px",
+      "@font-size-title": "16px",
+      "@border-radius-base": "4px",
+      "@padding-base": "16px",
+      "@gap-base": "12px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "width": "100%",
+        "height": "100%",
+        "background": "rgba(237,244,251,1)",
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "var(--paddingBase)",
+        "box-sizing": "border-box"
+      },
+      ".decoration-line-top": {
+        "position": "absolute",
+        "top": "0",
+        "left": "0",
+        "width": "100%",
+        "height": "3px",
+        "background": "var(--colorPrimary)"
+      },
+      ".tab-active": {
+        "background": "var(--colorPrimary)",
+        "color": "#ffffff",
+        "border-radius": "var(--borderRadiusBase)",
+        "padding": "6px 16px",
+        "font-weight": "500"
+      },
+      ".tab-default": {
+        "background": "transparent",
+        "color": "var(--colorTextSecondary)",
+        "border-radius": "var(--borderRadiusBase)",
+        "padding": "6px 16px",
+        "cursor": "pointer",
+        "transition": "all 0.3s"
+      },
+      ".badge-notification": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "min-width": "18px",
+        "height": "18px",
+        "padding": "0 6px",
+        "background": "var(--colorError)",
+        "color": "#ffffff",
+        "border-radius": "9px",
+        "font-size": "12px",
+        "font-weight": "500"
+      },
+      ".threshold-line": {
+        "border-top": "2px dashed var(--colorBorderError)",
+        "position": "relative"
+      },
+      ".area-fill-success": {
+        "fill": "var(--colorSuccessLight)",
+        "opacity": "1"
+      },
+      ".card-base": {
+        "background": "#ffffff",
+        "border-radius": "var(--borderRadiusBase)",
+        "padding": "var(--paddingBase)",
+        "box-shadow": "0 2px 8px rgba(0,0,0,0.06)"
+      },
+      ".chart-container": {
+        "width": "100%",
+        "height": "100%",
+        "position": "relative"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "背景色 rgba(237,244,251,1) 映射为 --colorBgBase，容器背景优先使用字面量值确保视觉准确",
+      "蓝色主题色 rgba(77,150,255,1) 映射为 --colorPrimary，用于激活态和装饰线",
+      "红色预警 rgba(245,63,63,1) 映射为 --colorError，用于通知徽章和预警阈值线",
+      "绿色成功色 rgba(82,196,26,1) 映射为 --colorSuccess，半透明版本映射为 --colorSuccessLight 用于填充区域",
+      "灰色文本 rgba(102,102,102,1) 映射为 --colorTextSecondary，用于非激活态文本",
+      "顶部蓝色装饰线使用 .decoration-line-top 类，高度 3px",
+      "tab 激活态使用 .tab-active（蓝色背景白字），默认态使用 .tab-default（透明背景灰字）",
+      "红色通知徽章使用 .badge-notification，圆角 50%",
+      "红色虚线预警阈值使用 .threshold-line，2px dashed",
+      "绿色半透明填充区域使用 .area-fill-success，opacity 保持在 CSS 类中",
+      "所有 CSS 变量严格使用 camelCase 命名规范"
+    ],
+    "elementStyleMap": {
+      "header-tabs": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "chart-controls": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "chart-area": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "chart-meta": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-12": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "header-tabs",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 4,
+        "title": "顶部tab栏",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 4,
+          "charts": 0,
+          "interactions": 1,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "chart-controls",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 3,
+        "title": "图表控制栏",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 3,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "chart-area",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 4,
+        "title": "图表区域",
+        "complexityScore": 30,
+        "complexityReasons": {
+          "elementCount": 4,
+          "charts": 2,
+          "interactions": 0,
+          "maxDepth": 2
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [
+          {
+            "type": "chart-component",
+            "id": "chart-meta",
+            "name": "图表元信息",
+            "responsibility": "图表组件：图表元信息",
+            "reason": "R1: 图表隔离策略",
+            "props": [
+              "chartData",
+              "chartConfig"
+            ],
+            "emits": [
+              "legendClick",
+              "dataZoom"
+            ]
+          },
+          {
+            "type": "chart-component",
+            "id": "area-chart",
+            "name": "面积图",
+            "responsibility": "图表组件：面积图",
+            "reason": "R1: 图表隔离策略",
+            "props": [
+              "chartData",
+              "chartConfig"
+            ],
+            "emits": [
+              "legendClick",
+              "dataZoom"
+            ]
+          }
+        ],
+        "shouldSplitInternally": true
+      }
+    ],
+    "isForced": true,
+    "minFiles": 5,
+    "reason": "有效 sections=3 ≥ 3 或存在高复杂度 section → 强制拆分",
+    "internalSubcomponents": [
+      {
+        "type": "chart-component",
+        "id": "chart-meta",
+        "name": "图表元信息",
+        "responsibility": "图表组件：图表元信息",
+        "reason": "R1: 图表隔离策略",
+        "props": [
+          "chartData",
+          "chartConfig"
+        ],
+        "emits": [
+          "legendClick",
+          "dataZoom"
+        ],
+        "parentSectionId": "chart-area",
+        "parentSectionTitle": "图表区域"
+      },
+      {
+        "type": "chart-component",
+        "id": "area-chart",
+        "name": "面积图",
+        "responsibility": "图表组件：面积图",
+        "reason": "R1: 图表隔离策略",
+        "props": [
+          "chartData",
+          "chartConfig"
+        ],
+        "emits": [
+          "legendClick",
+          "dataZoom"
+        ],
+        "parentSectionId": "chart-area",
+        "parentSectionTitle": "图表区域"
+      }
+    ]
+  }
+}

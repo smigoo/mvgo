@@ -1,0 +1,229 @@
+.c-env-monitor-root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: @em-bg-color;
+  color: @em-text-color;
+  padding: 12px;
+  box-sizing: border-box;
+  overflow: hidden;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+}
+
+.c-env-monitor-tabs {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+
+.c-env-monitor-tab-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #2c9bea;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  
+  &.is-active {
+    color: #ffffff;
+    text-shadow: 0 0.6px 0 rgba(0, 111, 227, 1);
+  }
+}
+
+.c-env-monitor-tab-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.c-env-monitor-content {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  gap: 12px;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.c-env-monitor-params-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 140px;
+  flex-shrink: 0;
+}
+
+.c-env-monitor-param-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: @em-card-bg;
+  border-radius: 6px;
+  border: 1px solid @em-border-color;
+  transition: transform 0.2s ease;
+  
+  &:hover {
+    transform: translateY(-2px);
+  }
+}
+
+.c-env-monitor-param-icon {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+}
+
+.c-env-monitor-param-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow: hidden;
+}
+
+.c-env-monitor-param-label {
+  font-size: 12px;
+  color: @em-text-secondary;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.c-env-monitor-param-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: @em-text-color;
+  white-space: nowrap;
+  
+  small {
+    font-size: 12px;
+    font-weight: 400;
+    color: @em-text-secondary;
+    margin-left: 2px;
+  }
+}
+
+.c-env-monitor-right-section {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 12px;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.c-env-monitor-trend-card {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: 12px;
+  border-radius: 6px;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.c-env-monitor-trend-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+
+.c-env-monitor-trend-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: @em-text-color;
+}
+
+.c-env-monitor-trend-chart {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+}
+
+.c-env-monitor-status-card {
+  display: flex;
+  flex-direction: column;
+  height: 130px;
+  padding: 12px;
+  border-radius: 6px;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.c-env-monitor-status-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+
+.c-env-monitor-status-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: @em-text-color;
+}
+
+.c-env-monitor-status-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  overflow-y: auto;
+  
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: @em-border-color;
+    border-radius: 2px;
+  }
+}
+
+.c-env-monitor-status-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  background: @em-card-bg;
+  border-radius: 4px;
+}
+
+.c-env-monitor-status-name {
+  font-size: 12px;
+  color: @em-text-color;
+}
+
+.c-env-monitor-status-tag {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  color: #ffffff;
+  font-weight: 500;
+}
+
+.is-normal {
+  background-color: @em-success-color;
+}
+
+.is-warning {
+  background-color: @em-danger-color;
+}

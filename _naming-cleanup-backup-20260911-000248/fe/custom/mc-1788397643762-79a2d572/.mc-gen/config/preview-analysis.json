@@ -1,0 +1,1297 @@
+{
+  "generatedAt": "2026-09-03T01:07:34.339Z",
+  "stage": "preview-analysis",
+  "componentName": "设备监测",
+  "componentTitle": "设备监测",
+  "analysisModel": "Claude Opus 4.8",
+  "sourceImage": {
+    "path": "mc-preview.png",
+    "size": 0,
+    "mtimeMs": 0,
+    "sha1": ""
+  },
+  "summary": "设备监测面板，包含标题栏统计指标（设备类型/设备总数/完好率）、顶部两个汇总卡片（隧道设备/南北横线设备）、左侧垂直Tab切换栏（监控/照明/通风/供配电/消防/交通诱导）、以及3×4网格布局的设备类型列表（12个设备卡片，每卡片含图标+设备名+当前数/总数）",
+  "headerSlots": [
+    {
+      "slotType": "title-left",
+      "elementType": "icon",
+      "content": "装饰性小图标（菱形/圆点）",
+      "figmaNodeId": "header>g"
+    },
+    {
+      "slotType": "header-right",
+      "elementType": "statistic",
+      "content": "设备类型 28",
+      "figmaNodeId": "Frame 2136638825"
+    },
+    {
+      "slotType": "header-right",
+      "elementType": "statistic",
+      "content": "设备总数 68562",
+      "figmaNodeId": "Frame 2136638826"
+    },
+    {
+      "slotType": "header-right",
+      "elementType": "statistic",
+      "content": "完好率 98%",
+      "figmaNodeId": "Frame 2136638827"
+    }
+  ],
+  "layout": {
+    "type": "single-panel",
+    "direction": "vertical",
+    "sections": [
+      {
+        "id": "section-summary-cards",
+        "name": "汇总卡片区",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "no-header",
+        "slotCandidate": null,
+        "bgPlaceholder": "section-bg-summary-cards",
+        "body": {
+          "layout": "horizontal-2-columns",
+          "bgPlaceholder": "body-bg-summary-cards",
+          "children": [
+            {
+              "id": "card-tunnel",
+              "name": "隧道设备汇总卡",
+              "role": "summary-card",
+              "layout": "vertical",
+              "bgPlaceholder": "body-bg-summary-cards",
+              "resourceFile": "../resources/images/bg-8788.png",
+              "recommendedUsage": "backgroundBlock",
+              "styles": {
+                "width": "190px",
+                "height": "65px",
+                "borderRadius": "4px",
+                "padding": "8px 12px",
+                "background": "linear-gradient(135deg, rgba(0,120,255,0.18) 0%, rgba(0,60,160,0.25) 100%)"
+              },
+              "children": [
+                {
+                  "type": "row",
+                  "layout": "horizontal",
+                  "alignItems": "center",
+                  "gap": "6px",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "resourceFile": "../resources/images/icon-8798.png",
+                      "recommendedUsage": "imgSrc",
+                      "figmaNodeId": "active>icon",
+                      "styles": {
+                        "width": "32px",
+                        "height": "32px"
+                      }
+                    },
+                    {
+                      "type": "group",
+                      "layout": "vertical",
+                      "children": [
+                        {
+                          "type": "label",
+                          "text": "隧道设备",
+                          "figmaNodeId": "active>label",
+                          "styles": {
+                            "fontSize": "12px",
+                            "color": "rgba(255,255,255,0.85)",
+                            "fontWeight": "normal"
+                          }
+                        },
+                        {
+                          "type": "value-row",
+                          "layout": "horizontal",
+                          "alignItems": "baseline",
+                          "gap": "4px",
+                          "children": [
+                            {
+                              "type": "label",
+                              "text": "总 数:",
+                              "styles": {
+                                "fontSize": "12px",
+                                "color": "rgba(255,255,255,0.75)",
+                                "fontWeight": "normal"
+                              }
+                            },
+                            {
+                              "type": "number",
+                              "text": "56302",
+                              "styles": {
+                                "fontSize": "18px",
+                                "color": "rgba(255,255,255,1)",
+                                "fontWeight": "bold"
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "value-row",
+                          "layout": "horizontal",
+                          "alignItems": "baseline",
+                          "gap": "4px",
+                          "children": [
+                            {
+                              "type": "label",
+                              "text": "异常数:",
+                              "styles": {
+                                "fontSize": "12px",
+                                "color": "rgba(255,255,255,0.75)",
+                                "fontWeight": "normal"
+                              }
+                            },
+                            {
+                              "type": "number",
+                              "text": "5",
+                              "styles": {
+                                "fontSize": "14px",
+                                "color": "rgba(255,80,80,1)",
+                                "fontWeight": "bold"
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "backgroundSize": "100% 100%",
+              "backgroundPosition": "center center",
+              "backgroundRepeat": "no-repeat"
+            },
+            {
+              "id": "card-north-south",
+              "name": "南北横线设备汇总卡",
+              "role": "summary-card",
+              "layout": "vertical",
+              "resourceFile": "../resources/images/bg-8807.png",
+              "recommendedUsage": "backgroundBlock",
+              "styles": {
+                "width": "190px",
+                "height": "65px",
+                "borderRadius": "4px",
+                "padding": "8px 12px",
+                "background": "linear-gradient(135deg, rgba(0,120,255,0.18) 0%, rgba(0,60,160,0.25) 100%)"
+              },
+              "children": [
+                {
+                  "type": "row",
+                  "layout": "horizontal",
+                  "alignItems": "center",
+                  "gap": "6px",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "resourceFile": "../resources/images/icon-8817.png",
+                      "recommendedUsage": "imgSrc",
+                      "figmaNodeId": "default>icon",
+                      "styles": {
+                        "width": "32px",
+                        "height": "32px"
+                      }
+                    },
+                    {
+                      "type": "group",
+                      "layout": "vertical",
+                      "children": [
+                        {
+                          "type": "label",
+                          "text": "南北横线设备",
+                          "figmaNodeId": "default>label",
+                          "styles": {
+                            "fontSize": "12px",
+                            "color": "rgba(255,255,255,0.85)",
+                            "fontWeight": "normal"
+                          }
+                        },
+                        {
+                          "type": "value-row",
+                          "layout": "horizontal",
+                          "alignItems": "baseline",
+                          "gap": "4px",
+                          "children": [
+                            {
+                              "type": "label",
+                              "text": "总 数:",
+                              "styles": {
+                                "fontSize": "12px",
+                                "color": "rgba(255,255,255,0.75)"
+                              }
+                            },
+                            {
+                              "type": "number",
+                              "text": "1280",
+                              "styles": {
+                                "fontSize": "18px",
+                                "color": "rgba(255,255,255,1)",
+                                "fontWeight": "bold"
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "value-row",
+                          "layout": "horizontal",
+                          "alignItems": "baseline",
+                          "gap": "4px",
+                          "children": [
+                            {
+                              "type": "label",
+                              "text": "异常数:",
+                              "styles": {
+                                "fontSize": "12px",
+                                "color": "rgba(255,255,255,0.75)"
+                              }
+                            },
+                            {
+                              "type": "number",
+                              "text": "3",
+                              "styles": {
+                                "fontSize": "14px",
+                                "color": "rgba(255,80,80,1)",
+                                "fontWeight": "bold"
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "backgroundSize": "100% 100%",
+              "backgroundPosition": "center center",
+              "backgroundRepeat": "no-repeat"
+            }
+          ]
+        }
+      },
+      {
+        "id": "section-main-content",
+        "name": "主内容区（Tab+设备列表）",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "no-header",
+        "slotCandidate": null,
+        "bgPlaceholder": "section-bg-main-content",
+        "body": {
+          "layout": "horizontal",
+          "bgPlaceholder": "body-bg-main-content",
+          "children": [
+            {
+              "id": "section-vertical-tabs",
+              "name": "垂直Tab切换栏",
+              "role": "tabs",
+              "layout": "vertical",
+              "headerRelation": "no-header",
+              "slotCandidate": null,
+              "figmaNodeId": "@antd/tab>tabs",
+              "styles": {
+                "width": "46px",
+                "flexDirection": "column",
+                "alignItems": "center",
+                "gap": "0px"
+              },
+              "children": [
+                {
+                  "type": "tab",
+                  "name": "监控",
+                  "active": true,
+                  "badge": "3",
+                  "styles": {
+                    "fontSize": "12px",
+                    "color": "rgba(255,255,255,1)",
+                    "backgroundColor": "rgba(25,144,255,0.25)",
+                    "width": "46px",
+                    "padding": "6px 4px",
+                    "textAlign": "center"
+                  }
+                },
+                {
+                  "type": "tab",
+                  "name": "照明",
+                  "active": false,
+                  "badge": "3",
+                  "styles": {
+                    "fontSize": "12px",
+                    "color": "rgba(255,255,255,0.75)",
+                    "backgroundColor": "transparent",
+                    "width": "46px",
+                    "padding": "6px 4px",
+                    "textAlign": "center"
+                  }
+                },
+                {
+                  "type": "tab",
+                  "name": "通风",
+                  "active": false,
+                  "styles": {
+                    "fontSize": "12px",
+                    "color": "rgba(255,255,255,0.75)",
+                    "backgroundColor": "transparent",
+                    "width": "46px",
+                    "padding": "6px 4px",
+                    "textAlign": "center"
+                  }
+                },
+                {
+                  "type": "tab",
+                  "name": "供配电",
+                  "active": false,
+                  "styles": {
+                    "fontSize": "12px",
+                    "color": "rgba(255,255,255,0.75)",
+                    "backgroundColor": "transparent",
+                    "width": "46px",
+                    "padding": "6px 4px",
+                    "textAlign": "center"
+                  }
+                },
+                {
+                  "type": "tab",
+                  "name": "消防",
+                  "active": false,
+                  "styles": {
+                    "fontSize": "12px",
+                    "color": "rgba(255,255,255,0.75)",
+                    "backgroundColor": "transparent",
+                    "width": "46px",
+                    "padding": "6px 4px",
+                    "textAlign": "center"
+                  }
+                },
+                {
+                  "type": "tab",
+                  "name": "交通诱导",
+                  "active": false,
+                  "styles": {
+                    "fontSize": "12px",
+                    "color": "rgba(255,255,255,0.75)",
+                    "backgroundColor": "transparent",
+                    "width": "46px",
+                    "padding": "6px 4px",
+                    "textAlign": "center"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "section-device-grid",
+              "name": "设备类型网格列表",
+              "role": "常驻",
+              "layout": "grid",
+              "gridColumns": 3,
+              "headerRelation": "no-header",
+              "slotCandidate": null,
+              "figmaNodeId": "@antd/tab>cons",
+              "bgPlaceholder": "body-bg-device-grid",
+              "styles": {
+                "width": "367px",
+                "display": "grid",
+                "gridTemplateColumns": "repeat(3, 1fr)",
+                "gap": "8px",
+                "padding": "8px"
+              },
+              "items": [
+                {
+                  "id": "device-camera",
+                  "name": "摄像机",
+                  "layout": "vertical",
+                  "alignItems": "center",
+                  "resourceFile": "../resources/images/bg-8439.png",
+                  "recommendedUsage": "backgroundBlock",
+                  "styles": {
+                    "padding": "8px",
+                    "borderRadius": "4px",
+                    "alignItems": "center",
+                    "justifyContent": "center"
+                  },
+                  "icon": {
+                    "resourceFile": "../resources/images/icon-8444.png",
+                    "recommendedUsage": "imgSrc",
+                    "figmaNodeId": "cons>icon-8444",
+                    "styles": {
+                      "width": "36px",
+                      "height": "36px"
+                    }
+                  },
+                  "content": {
+                    "layout": "vertical",
+                    "alignItems": "center",
+                    "children": [
+                      {
+                        "type": "label",
+                        "text": "摄像机",
+                        "styles": {
+                          "fontSize": "12px",
+                          "color": "rgba(255,255,255,0.85)",
+                          "textAlign": "center"
+                        }
+                      },
+                      {
+                        "type": "value",
+                        "parts": [
+                          {
+                            "text": "2",
+                            "type": "number",
+                            "styles": {
+                              "fontSize": "12px",
+                              "color": "rgba(255,80,80,1)",
+                              "fontWeight": "bold"
+                            }
+                          },
+                          {
+                            "text": "/484",
+                            "type": "unit",
+                            "styles": {
+                              "fontSize": "12px",
+                              "color": "rgba(255,255,255,0.6)"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "backgroundSize": "100% 100%",
+                  "backgroundPosition": "center center",
+                  "backgroundRepeat": "no-repeat"
+                },
+                {
+                  "id": "device-anemometer",
+                  "name": "风速风向仪",
+                  "layout": "vertical",
+                  "alignItems": "center",
+                  "resourceFile": "../resources/images/bg-8439.png",
+                  "recommendedUsage": "backgroundBlock",
+                  "styles": {
+                    "padding": "8px",
+                    "borderRadius": "4px",
+                    "alignItems": "center"
+                  },
+                  "icon": {
+                    "resourceFile": "../resources/images/icon-8473.png",
+                    "recommendedUsage": "imgSrc",
+                    "figmaNodeId": "cons>icon-8473",
+                    "styles": {
+                      "width": "36px",
+                      "height": "36px"
+                    }
+                  },
+                  "content": {
+                    "layout": "vertical",
+                    "alignItems": "center",
+                    "children": [
+                      {
+                        "type": "label",
+                        "text": "风速风向仪",
+                        "styles": {
+                          "fontSize": "12px",
+                          "color": "rgba(255,255,255,0.85)",
+                          "textAlign": "center"
+                        }
+                      },
+                      {
+                        "type": "value",
+                        "parts": [
+                          {
+                            "text": "1",
+                            "type": "number",
+                            "styles": {
+                              "fontSize": "12px",
+                              "color": "rgba(255,80,80,1)",
+                              "fontWeight": "bold"
+                            }
+                          },
+                          {
+                            "text": "/484",
+                            "type": "unit",
+                            "styles": {
+                              "fontSize": "12px",
+                              "color": "rgba(255,255,255,0.6)"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "backgroundSize": "100% 100%",
+                  "backgroundPosition": "center center",
+                  "backgroundRepeat": "no-repeat"
+                },
+                {
+                  "id": "device-height-detector",
+                  "name": "超高检测器",
+                  "layout": "vertical",
+                  "alignItems": "center",
+                  "resourceFile": "../resources/images/bg-8439.png",
+                  "recommendedUsage": "backgroundBlock",
+                  "styles": {
+                    "padding": "8px",
+                    "borderRadius": "4px",
+                    "alignItems": "center"
+                  },
+                  "icon": {
+                    "resourceFile": "../resources/images/icon-8503.png",
+                    "recommendedUsage": "imgSrc",
+                    "figmaNodeId": "cons>icon-8503",
+                    "styles": {
+                      "width": "36px",
+                      "height": "36px"
+                    }
+                  },
+                  "content": {
+                    "layout": "vertical",
+                    "alignItems": "center",
+                    "children": [
+                      {
+                        "type": "label",
+                        "text": "超高检测器",
+                        "styles": {
+                          "fontSize": "12px",
+                          "color": "rgba(255,255,255,0.85)",
+                          "textAlign": "center"
+                        }
+                      },
+                      {
+                        "type": "value",
+                        "parts": [
+                          {
+                            "text": "0",
+                            "type": "number",
+                            "styles": {
+                              "fontSize": "12px",
+                              "color": "rgba(255,255,255,0.6)",
+                              "fontWeight": "bold"
+                            }
+                          },
+                          {
+                            "text": "/484",
+                            "type": "unit",
+                            "styles": {
+                              "fontSize": "12px",
+                              "color": "rgba(255,255,255,0.6)"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "backgroundSize": "100% 100%",
+                  "backgroundPosition": "center center",
+                  "backgroundRepeat": "no-repeat"
+                },
+                {
+                  "id": "device-chimney-robot",
+                  "name": "烟道机器人",
+                  "layout": "vertical",
+                  "alignItems": "center",
+                  "resourceFile": "../resources/images/bg-8439.png",
+                  "recommendedUsage": "backgroundBlock",
+                  "styles": {
+                    "padding": "8px",
+                    "borderRadius": "4px",
+                    "alignItems": "center"
+                  },
+                  "icon": {
+                    "resourceFile": "../resources/images/icon-8532.png",
+                    "recommendedUsage": "imgSrc",
+                    "figmaNodeId": "cons>icon-8532",
+                    "styles": {
+                      "width": "36px",
+                      "height": "36px"
+                    }
+                  },
+                  "content": {
+                    "layout": "vertical",
+                    "alignItems": "center",
+                    "children": [
+                      {
+                        "type": "label",
+                        "text": "烟道机器人",
+                        "styles": {
+                          "fontSize": "12px",
+                          "color": "rgba(255,255,255,0.85)",
+                          "textAlign": "center"
+                        }
+                      },
+                      {
+                        "type": "value",
+                        "parts": [
+                          {
+                            "text": "0",
+                            "type": "number",
+                            "styles": {
+                              "fontSize": "12px",
+                              "color": "rgba(255,255,255,0.6)",
+                              "fontWeight": "bold"
+                            }
+                          },
+                          {
+                            "text": "/484",
+                            "type": "unit",
+                            "styles": {
+                              "fontSize": "12px",
+                              "color": "rgba(255,255,255,0.6)"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "backgroundSize": "100% 100%",
+                  "backgroundPosition": "center center",
+                  "backgroundRepeat": "no-repeat"
+                },
+                {
+                  "id": "device-lidar",
+                  "name": "激光雷达",
+                  "layout": "vertical",
+                  "alignItems": "center",
+                  "resourceFile": "../resources/images/bg-8439.png",
+                  "recommendedUsage": "backgroundBlock",
+                  "styles": {
+                    "padding": "8px",
+                    "borderRadius": "4px",
+                    "alignItems": "center"
+                  },
+                  "icon": {
+                    "resourceFile": "../resources/images/icon-8561.png",
+                    "recommendedUsage": "imgSrc",
+                    "figmaNodeId": "cons>icon-8561",
+                    "styles": {
+                      "width": "36px",
+                      "height": "36px"
+                    }
+                  },
+                  "content": {
+                    "layout": "vertical",
+                    "alignItems": "center",
+                    "children": [
+                      {
+                        "type": "label",
+                        "text": "激光雷达",
+                        "styles": {
+                          "fontSize": "12px",
+                          "color": "rgba(255,255,255,0.85)",
+                          "textAlign": "center"
+                        }
+                      },
+                      {
+                        "type": "value",
+                        "parts": [
+                          {
+                            "text": "0",
+                            "type": "number",
+                            "styles": {
+                              "fontSize": "12px",
+                              "color": "rgba(255,255,255,0.6)",
+                              "fontWeight": "bold"
+                            }
+                          },
+                          {
+                            "text": "/484",
+                            "type": "unit",
+                            "styles": {
+                              "fontSize": "12px",
+                              "color": "rgba(255,255,255,0.6)"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "backgroundSize": "100% 100%",
+                  "backgroundPosition": "center center",
+                  "backgroundRepeat": "no-repeat"
+                },
+                {
+                  "id": "device-co2-sensor",
+                  "name": "CO₂传感器",
+                  "layout": "vertical",
+                  "alignItems": "center",
+                  "resourceFile": "../resources/images/bg-8439.png",
+                  "recommendedUsage": "backgroundBlock",
+                  "styles": {
+                    "padding": "8px",
+                    "borderRadius": "4px",
+                    "alignItems": "center"
+                  },
+                  "icon": {
+                    "resourceFile": "../resources/images/icon-8590.png",
+                    "recommendedUsage": "imgSrc",
+                    "figmaNodeId": "cons>icon-8590",
+                    "styles": {
+                      "width": "36px",
+                      "height": "36px"
+                    }
+                  },
+                  "content": {
+                    "layout": "vertical",
+                    "alignItems": "center",
+                    "children": [
+                      {
+                        "type": "label",
+                        "text": "CO₂传感器",
+                        "styles": {
+                          "fontSize": "12px",
+                          "color": "rgba(255,255,255,0.85)",
+                          "textAlign": "center"
+                        }
+                      },
+                      {
+                        "type": "value",
+                        "parts": [
+                          {
+                            "text": "0",
+                            "type": "number",
+                            "styles": {
+                              "fontSize": "12px",
+                              "color": "rgba(255,255,255,0.6)",
+                              "fontWeight": "bold"
+                            }
+                          },
+                          {
+                            "text": "/484",
+                            "type": "unit",
+                            "styles": {
+                              "fontSize": "12px",
+                              "color": "rgba(255,255,255,0.6)"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "backgroundSize": "100% 100%",
+                  "backgroundPosition": "center center",
+                  "backgroundRepeat": "no-repeat"
+                },
+                {
+                  "id": "device-covi-detector",
+                  "name": "CO/VI检测器",
+                  "layout": "vertical",
+                  "alignItems": "center",
+                  "resourceFile": "../resources/images/bg-8439.png",
+                  "recommendedUsage": "backgroundBlock",
+                  "styles": {
+                    "padding": "8px",
+                    "borderRadius": "4px",
+                    "alignItems": "center"
+                  },
+                  "icon": {
+                    "resourceFile": "../resources/images/icon-8619.png",
+                    "recommendedUsage": "imgSrc",
+                    "figmaNodeId": "cons>icon-8619",
+                    "styles": {
+                      "width": "36px",
+                      "height": "36px"
+                    }
+                  },
+                  "content": {
+                    "layout": "vertical",
+                    "alignItems": "center",
+                    "children": [
+                      {
+                        "type": "label",
+                        "text": "CO/VI检测器",
+                        "styles": {
+                          "fontSize": "12px",
+                          "color": "rgba(255,255,255,0.85)",
+                          "textAlign": "center"
+                        }
+                      },
+                      {
+                        "type": "value",
+                        "parts": [
+                          {
+                            "text": "0",
+                            "type": "number",
+                            "styles": {
+                              "fontSize": "12px",
+                              "color": "rgba(255,255,255,0.6)",
+                              "fontWeight": "bold"
+                            }
+                          },
+                          {
+                            "text": "/484",
+                            "type": "unit",
+                            "styles": {
+                              "fontSize": "12px",
+                              "color": "rgba(255,255,255,0.6)"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "backgroundSize": "100% 100%",
+                  "backgroundPosition": "center center",
+                  "backgroundRepeat": "no-repeat"
+                },
+                {
+                  "id": "device-temp-humidity",
+                  "name": "温湿度传感器",
+                  "layout": "vertical",
+                  "alignItems": "center",
+                  "resourceFile": "../resources/images/bg-8439.png",
+                  "recommendedUsage": "backgroundBlock",
+                  "styles": {
+                    "padding": "8px",
+                    "borderRadius": "4px",
+                    "alignItems": "center"
+                  },
+                  "icon": {
+                    "resourceFile": "../resources/images/icon-8648.png",
+                    "recommendedUsage": "imgSrc",
+                    "figmaNodeId": "cons>icon-8648",
+                    "styles": {
+                      "width": "36px",
+                      "height": "36px"
+                    }
+                  },
+                  "content": {
+                    "layout": "vertical",
+                    "alignItems": "center",
+                    "children": [
+                      {
+                        "type": "label",
+                        "text": "温湿度传感器",
+                        "styles": {
+                          "fontSize": "12px",
+                          "color": "rgba(255,255,255,0.85)",
+                          "textAlign": "center"
+                        }
+                      },
+                      {
+                        "type": "value",
+                        "parts": [
+                          {
+                            "text": "0",
+                            "type": "number",
+                            "styles": {
+                              "fontSize": "12px",
+                              "color": "rgba(255,255,255,0.6)",
+                              "fontWeight": "bold"
+                            }
+                          },
+                          {
+                            "text": "/484",
+                            "type": "unit",
+                            "styles": {
+                              "fontSize": "12px",
+                              "color": "rgba(255,255,255,0.6)"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "backgroundSize": "100% 100%",
+                  "backgroundPosition": "center center",
+                  "backgroundRepeat": "no-repeat"
+                },
+                {
+                  "id": "device-pressure-sensor",
+                  "name": "压力传感器",
+                  "layout": "vertical",
+                  "alignItems": "center",
+                  "resourceFile": "../resources/images/bg-8439.png",
+                  "recommendedUsage": "backgroundBlock",
+                  "styles": {
+                    "padding": "8px",
+                    "borderRadius": "4px",
+                    "alignItems": "center"
+                  },
+                  "icon": {
+                    "resourceFile": "../resources/images/icon-8677.png",
+                    "recommendedUsage": "imgSrc",
+                    "figmaNodeId": "cons>icon-8677",
+                    "styles": {
+                      "width": "36px",
+                      "height": "36px"
+                    }
+                  },
+                  "content": {
+                    "layout": "vertical",
+                    "alignItems": "center",
+                    "children": [
+                      {
+                        "type": "label",
+                        "text": "压力传感器",
+                        "styles": {
+                          "fontSize": "12px",
+                          "color": "rgba(255,255,255,0.85)",
+                          "textAlign": "center"
+                        }
+                      },
+                      {
+                        "type": "value",
+                        "parts": [
+                          {
+                            "text": "0",
+                            "type": "number",
+                            "styles": {
+                              "fontSize": "12px",
+                              "color": "rgba(255,255,255,0.6)",
+                              "fontWeight": "bold"
+                            }
+                          },
+                          {
+                            "text": "/484",
+                            "type": "unit",
+                            "styles": {
+                              "fontSize": "12px",
+                              "color": "rgba(255,255,255,0.6)"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "backgroundSize": "100% 100%",
+                  "backgroundPosition": "center center",
+                  "backgroundRepeat": "no-repeat"
+                },
+                {
+                  "id": "device-illuminance",
+                  "name": "光照度变送器",
+                  "layout": "vertical",
+                  "alignItems": "center",
+                  "resourceFile": "../resources/images/bg-8439.png",
+                  "recommendedUsage": "backgroundBlock",
+                  "styles": {
+                    "padding": "8px",
+                    "borderRadius": "4px",
+                    "alignItems": "center"
+                  },
+                  "icon": {
+                    "resourceFile": "../resources/images/icon-8706.png",
+                    "recommendedUsage": "imgSrc",
+                    "figmaNodeId": "cons>icon-8706",
+                    "styles": {
+                      "width": "36px",
+                      "height": "36px"
+                    }
+                  },
+                  "content": {
+                    "layout": "vertical",
+                    "alignItems": "center",
+                    "children": [
+                      {
+                        "type": "label",
+                        "text": "光照度变送器",
+                        "styles": {
+                          "fontSize": "12px",
+                          "color": "rgba(255,255,255,0.85)",
+                          "textAlign": "center"
+                        }
+                      },
+                      {
+                        "type": "value",
+                        "parts": [
+                          {
+                            "text": "0",
+                            "type": "number",
+                            "styles": {
+                              "fontSize": "12px",
+                              "color": "rgba(255,255,255,0.6)",
+                              "fontWeight": "bold"
+                            }
+                          },
+                          {
+                            "text": "/484",
+                            "type": "unit",
+                            "styles": {
+                              "fontSize": "12px",
+                              "color": "rgba(255,255,255,0.6)"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "backgroundSize": "100% 100%",
+                  "backgroundPosition": "center center",
+                  "backgroundRepeat": "no-repeat"
+                },
+                {
+                  "id": "device-emergency-phone",
+                  "name": "紧急电话",
+                  "layout": "vertical",
+                  "alignItems": "center",
+                  "resourceFile": "../resources/images/bg-8439.png",
+                  "recommendedUsage": "backgroundBlock",
+                  "styles": {
+                    "padding": "8px",
+                    "borderRadius": "4px",
+                    "alignItems": "center"
+                  },
+                  "icon": {
+                    "resourceFile": "../resources/images/icon-8735.png",
+                    "recommendedUsage": "imgSrc",
+                    "figmaNodeId": "cons>icon-8735",
+                    "styles": {
+                      "width": "36px",
+                      "height": "36px"
+                    }
+                  },
+                  "content": {
+                    "layout": "vertical",
+                    "alignItems": "center",
+                    "children": [
+                      {
+                        "type": "label",
+                        "text": "紧急电话",
+                        "styles": {
+                          "fontSize": "12px",
+                          "color": "rgba(255,255,255,0.85)",
+                          "textAlign": "center"
+                        }
+                      },
+                      {
+                        "type": "value",
+                        "parts": [
+                          {
+                            "text": "0",
+                            "type": "number",
+                            "styles": {
+                              "fontSize": "12px",
+                              "color": "rgba(255,255,255,0.6)",
+                              "fontWeight": "bold"
+                            }
+                          },
+                          {
+                            "text": "/484",
+                            "type": "unit",
+                            "styles": {
+                              "fontSize": "12px",
+                              "color": "rgba(255,255,255,0.6)"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "backgroundSize": "100% 100%",
+                  "backgroundPosition": "center center",
+                  "backgroundRepeat": "no-repeat"
+                },
+                {
+                  "id": "device-water-monitor",
+                  "name": "水质监测设备",
+                  "layout": "vertical",
+                  "alignItems": "center",
+                  "resourceFile": "../resources/images/bg-8439.png",
+                  "recommendedUsage": "backgroundBlock",
+                  "styles": {
+                    "padding": "8px",
+                    "borderRadius": "4px",
+                    "alignItems": "center"
+                  },
+                  "icon": {
+                    "resourceFile": "../resources/images/icon-8764.png",
+                    "recommendedUsage": "imgSrc",
+                    "figmaNodeId": "cons>icon-8764",
+                    "styles": {
+                      "width": "36px",
+                      "height": "36px"
+                    }
+                  },
+                  "content": {
+                    "layout": "vertical",
+                    "alignItems": "center",
+                    "children": [
+                      {
+                        "type": "label",
+                        "text": "水质监测设备",
+                        "styles": {
+                          "fontSize": "12px",
+                          "color": "rgba(255,255,255,0.85)",
+                          "textAlign": "center"
+                        }
+                      },
+                      {
+                        "type": "value",
+                        "parts": [
+                          {
+                            "text": "0",
+                            "type": "number",
+                            "styles": {
+                              "fontSize": "12px",
+                              "color": "rgba(255,255,255,0.6)",
+                              "fontWeight": "bold"
+                            }
+                          },
+                          {
+                            "text": "/484",
+                            "type": "unit",
+                            "styles": {
+                              "fontSize": "12px",
+                              "color": "rgba(255,255,255,0.6)"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "backgroundSize": "100% 100%",
+                  "backgroundPosition": "center center",
+                  "backgroundRepeat": "no-repeat"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "styles": {
+    "theme": "浅色科技监测风",
+    "backgroundBrightness": "light",
+    "colors": [
+      "rgba(237,244,251,1)",
+      "rgba(25,144,255,1)",
+      "rgba(8,163,165,1)",
+      "rgba(51,51,51,1)",
+      "rgba(255,80,80,1)",
+      "rgba(255,255,255,1)",
+      "rgba(0,0,0,1)"
+    ],
+    "background": "浅蓝灰色背景 rgba(237,244,251,1)，整体偏浅色科技风",
+    "decorations": [
+      "标题行装饰性小图标（菱形/圆点组合）",
+      "标题下方渐变分隔线",
+      "设备卡片带半透明背景底图（bg-8439.png）",
+      "汇总卡片带独立背景图（bg-8788/bg-8807.png）",
+      "左侧Tab栏分隔线"
+    ],
+    "emphasis": [
+      "异常数字使用红色 rgba(255,80,80,1) 强调",
+      "完好率数值使用青色 rgba(8,163,165,1)",
+      "设备类型/总数数值使用蓝色 rgba(25,144,255,1)",
+      "汇总卡片总数使用大号白色字体"
+    ]
+  },
+  "interactions": [
+    {
+      "target": "左侧垂直Tab栏（监控/照明/通风/供配电/消防/交通诱导）",
+      "type": "tab-switch",
+      "description": "切换不同设备类型分类的设备列表",
+      "defaultState": "常驻，监控Tab激活",
+      "evidence": "监控Tab有高亮背景，其余Tab无高亮；截图中可见3/3740文字提示活跃状态"
+    },
+    {
+      "target": "设备列表中每个设备卡片",
+      "type": "link",
+      "description": "点击设备卡片可能跳转详情页，但无截图证明",
+      "defaultState": "常驻展示",
+      "evidence": "仅推测，无明确视觉线索，禁止臆造点击行为"
+    }
+  ],
+  "charts": [],
+  "doNotInvent": [
+    "Tab切换后各分类下的具体设备列表数据（只有监控分类可见）",
+    "设备卡片点击后的详情页内容或跳转逻辑",
+    "异常数字对应的具体告警信息",
+    "设备总数484的计算逻辑或数据来源",
+    "3/3740数值的具体含义（仅在截图左侧可见，语义不明）",
+    "照明Tab的角标'3'含义（推测为异常数，不确认）",
+    "自动刷新逻辑",
+    "tooltip或悬浮卡片内容"
+  ],
+  "notes": [
+    "面板背景（bg节点 420×425 rgba(237,244,251,1)）下载失败，使用CSS纯色背景 background: rgba(237,244,251,1) 替代",
+    "header区域的 *数据实时更新 文本为设计师注释，已过滤不输出",
+    "设备网格12个卡片均复用同一背景图 bg-8439.png，但各自图标不同（icon-8444到icon-8764共12个）",
+    "左侧Tab栏中'3/3740'文字含义不明，可能是页码或筛选结果数，需业务确认",
+    "摄像机异常数为2，风速风向仪异常数为1，其余10个设备异常数均为0，与隧道设备异常数5相符",
+    "南北横线设备汇总卡异常数3，但网格中所有设备异常均为0，可能网格只展示了当前Tab（监控）的数据"
+  ],
+  "coverageReport": {
+    "totalFigma": 86,
+    "matchedCount": 24,
+    "missingCount": 32,
+    "uncertainCount": 0,
+    "coverageRate": 43,
+    "missing": [
+      {
+        "name": "cp-设备监测",
+        "type": "FRAME",
+        "depth": 0
+      },
+      {
+        "name": "设备监测",
+        "type": "TEXT",
+        "depth": 2
+      },
+      {
+        "name": "设备总数",
+        "type": "TEXT",
+        "depth": 3
+      },
+      {
+        "name": "完好率",
+        "type": "TEXT",
+        "depth": 3
+      },
+      {
+        "name": "switch",
+        "type": "FRAME",
+        "depth": 2
+      },
+      {
+        "name": "active",
+        "type": "GROUP",
+        "depth": 3
+      },
+      {
+        "name": "line1",
+        "type": "FRAME",
+        "depth": 4
+      },
+      {
+        "name": "t-总数:",
+        "type": "TEXT",
+        "depth": 5
+      },
+      {
+        "name": "line2",
+        "type": "FRAME",
+        "depth": 4
+      },
+      {
+        "name": "d-5",
+        "type": "TEXT",
+        "depth": 5
+      },
+      {
+        "name": "default",
+        "type": "GROUP",
+        "depth": 3
+      },
+      {
+        "name": "line1",
+        "type": "FRAME",
+        "depth": 4
+      },
+      {
+        "name": "t-总数:",
+        "type": "TEXT",
+        "depth": 5
+      },
+      {
+        "name": "line2",
+        "type": "FRAME",
+        "depth": 4
+      },
+      {
+        "name": "d-3",
+        "type": "TEXT",
+        "depth": 5
+      }
+    ],
+    "uncertain": [],
+    "summary": "需关注"
+  }
+}

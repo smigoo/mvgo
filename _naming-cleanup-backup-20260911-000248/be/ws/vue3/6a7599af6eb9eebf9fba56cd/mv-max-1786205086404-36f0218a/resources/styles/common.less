@@ -1,0 +1,147 @@
+// 环境监测面板共享业务 class
+
+.mv3-mv-max-1786205086404-36f0218a-root {
+  .common();
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  background-color: #121a28;
+  box-shadow: 0px 4px 10px rgba(74, 117, 141, 0.25);
+}
+
+.mv3-mv-max-1786205086404-36f0218a-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 6px 12px;
+  flex-shrink: 0;
+}
+
+.mv3-mv-max-1786205086404-36f0218a-header-decoration {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mv3-mv-max-1786205086404-36f0218a-header-title {
+  font-size: 16px;
+  font-weight: 700;
+  background: linear-gradient(90deg, #1990ff 0%, #5a7eff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 19px;
+}
+
+.mv3-mv-max-1786205086404-36f0218a-header-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(85, 158, 255, 0.6) 0%, rgba(85, 158, 255, 0) 100%);
+  margin-left: 8px;
+}
+
+.mv3-mv-max-1786205086404-36f0218a-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0 12px 8px;
+}
+
+.mv3-mv-max-1786205086404-36f0218a-tab-bar {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  flex-shrink: 0;
+}
+
+.mv3-mv-max-1786205086404-36f0218a-tabs-group {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  position: relative;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 0.72px solid rgba(255, 255, 255, 1);
+}
+
+.mv3-mv-max-1786205086404-36f0218a-tab-item {
+  padding: 4px 14px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #2c9bea;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  z-index: 1;
+  white-space: nowrap;
+  line-height: 12px;
+}
+
+.mv3-mv-max-1786205086404-36f0218a-tab-item.active {
+  color: #ffffff;
+  text-shadow: 0 0.6px 0 rgba(0, 111, 227, 1);
+}
+
+.mv3-mv-max-1786205086404-36f0218a-tab-active-bg {
+  position: absolute;
+  top: 3px;
+  height: 21px;
+  border-radius: 3px;
+  border: 0.6px solid rgba(255, 255, 255, 1);
+  transition: left 0.3s ease, width 0.3s ease;
+  z-index: 0;
+  background: linear-gradient(90deg, #1099b1 0%, #038fff 100%);
+}
+
+.mv3-mv-max-1786205086404-36f0218a-view-controls {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.mv3-mv-max-1786205086404-36f0218a-view-icon {
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mv3-mv-max-1786205086404-36f0218a-view-icon img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
+.mv3-mv-max-1786205086404-36f0218a-badge {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  min-width: 14px;
+  height: 14px;
+  border-radius: 29px;
+  background: #f53f3f;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+  line-height: 14px;
+}
+
+.mv3-mv-max-1786205086404-36f0218a-chart-container {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}

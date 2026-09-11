@@ -1,0 +1,41 @@
+// 主题变量定义文件
+// 包含颜色、字体、间距等主题token
+
+// 颜色变量
+@color-bg-base: rgba(237, 244, 251, 1);
+@color-primary: rgba(85, 158, 255, 1);
+@color-success: rgba(82, 196, 26, 1);
+@color-error: rgba(245, 63, 63, 1);
+@color-text-base: rgba(0, 0, 0, 0.65);
+@color-text-secondary: rgba(0, 0, 0, 0.45);
+@color-white: #ffffff;
+
+// 字体变量
+@font-size-base: 14px;
+@font-size-small: 12px;
+@font-size-large: 16px;
+@font-weight-normal: 400;
+@font-weight-medium: 500;
+@font-weight-bold: 700;
+
+// 间距变量
+@spacing-xs: 4px;
+@spacing-sm: 8px;
+@spacing-md: 12px;
+@spacing-base: 16px;
+@spacing-lg: 20px;
+
+// 边框变量
+@border-radius-base: 4px;
+@border-color-base: rgba(0, 0, 0, 0.15);
+
+// 主题mixin（占位，保持结构一致性）
+.common() {}
+.theme-dark() {}
+.theme-light() {}
+
+// 默认应用浅色主题
+
+:root {
+  .theme-light();
+}

@@ -684,6 +684,43 @@ function splitSectionInternally(section, sectionIndex) {
   return subcomponents;
 }
 
+/**
+ * 🛡️ R1-1（2026-09-11）：收集 section 归属的 Figma 节点 id 集合（sourceNodeIds）。
+ * 动机：planner 对同一区域双重解释时（cfb53488：@antd/tab 壳 `89:37` + 臆造 `section-main-content`），
+ * 二者 type/responsibility 可能相同（可被现有措辞去重兜底）也可能不同（漏网）——
+ * 靠「sourceNodeIds 交集」做**不依赖措辞**的单一归属判定：任一 Figma 节点 id 只能归属一个叶子 section。
+ * 来源：显式 sourceNodeIds > figmaNode/nodeId > 形如 `数字:数字` 的 id（Figma node id 格式）>
+ * tabStructure.panels 引用的节点 id（纳入归属图）> 子元素 figmaNode/nodeId。
+ */
+function collectSourceNodeIds(sec) {
+  const ids = [];
+  const push = (v) => {
+    if (v == null) return;
+    const s = String(v).trim();
+    if (s && !ids.includes(s)) ids.push(s);
+  };
+  if (Array.isArray(sec?.sourceNodeIds)) sec.sourceNodeIds.forEach(push);
+  push(sec?.figmaNode);
+  push(sec?.nodeId);
+  if (/^\d+:\d+$/.test(String(sec?.id || ''))) push(sec.id);
+  if (Array.isArray(sec?.tabStructure?.panels)) {
+    sec.tabStructure.panels.forEach(push);
+  }
+  const children =
+    sec?.body?.children ||
+    sec?.body?.elements ||
+    sec?.children ||
+    sec?.elements;
+  if (Array.isArray(children)) {
+    for (const c of children) {
+      push(c?.figmaNode);
+      push(c?.nodeId);
+      if (/^\d+:\d+$/.test(String(c?.id || ''))) push(c.id);
+    }
+  }
+  return ids;
+}
+
 function buildEffectiveSection(sec, idx, ctx) {
   if (isLayoutContainerSection(sec)) {
     const children = (sec.children || []).map((child, i) =>
@@ -763,6 +800,8 @@ function buildEffectiveSection(sec, idx, ctx) {
     renderHint: collapsed ? 'v-for' : undefined,
     itemCount: collapsed ? elementCount : undefined,
     items: collapsed ? sec.items : undefined,
+    // 🛡️ R1-1：归属的 Figma 节点 id 集合（供 dedupeDuplicateSections 做不依赖措辞的单一归属去重）
+    sourceNodeIds: collectSourceNodeIds(tabStructured),
     complexityScore: scoreResult.score,
     complexityReasons: scoreResult.reasons,
     layoutMetadata,
@@ -921,123 +960,3 @@ export class SubcomponentPlanner {
 }
 
 export const subcomponentPlanner = new SubcomponentPlanner();
-
-// ========================================
-// S3: 大分块拆分 — 多图表 section 按图表二次拆分为独立分块条目
-// 落点：纯函数，接收 planner.plan 产物，输出 chunk 列表
-// 策略：单图表=单分块，多图表各自独立，非图表元素归入杂项 chunk
-// ========================================
-
-/**
- * 把 subComponentPlan 中的多图表 section 拆为独立分块。
- *
- * 规则：
- * 1. 某 section 的 internalSubcomponents 含 ≥2 个 chart-component → 每个图表独立 chunk
- * 2. 仅 1 个 chart-component → 返回该 section 作为单 chunk
- * 3. 无 chart-component → 返回空数组（不触发 S3 拆分，由外层按原逻辑处理）
- * 4. 图表之外的 internalSubcomponents 归入一个 misc chunk（避免丢失）
- *
- * @param {Object} subComponentPlan - planner.plan() 的返回值
- * @returns {Array<{segmentType: string, files: string[], title: string, sectionId: string, scopedInput?: Object}>}
- */
-export function splitMultiChartSectionIntoChunks(subComponentPlan) {
-  const sections = collectLeafSections(subComponentPlan?.effectiveSections || []);
-  if (!Array.isArray(sections) || sections.length === 0) return [];
-
-  const chunks = [];
-
-  for (const sec of sections) {
-    const subs = sec.internalSubcomponents || [];
-    if (subs.length === 0) continue;
-
-    // 🎯 治本 D（2026-09-10）：S3 与 planner 内部拆分互斥。
-    // planner 已在 splitSectionInternally（R1 图表隔离 / R2 密度拆分）对该 section 做过
-    // 内部子组件拆分；若此处再按图表二次拆，会与 planner 的 chart-component 正交叠加，
-    // 导致 traffic 1 张图裂成 X轴/柱体/分组/tooltip/图例 各自成件（30+ 子组件）。
-    // 互斥规则：planner 已 shouldSplitInternally → S3 直接采用 planner 结果，跳过二次拆分；
-    // 否则回落到下方原生 S3 按图表切分（保留向后兼容）。
-    if (sec.shouldSplitInternally) {
-      // planner 已拆：把其 internalSubcomponents 直接映射为 chunk（不再按图表二次切）
-      const chartSubs = subs.filter(s => s.type === 'chart-component');
-      const nonChartSubs = subs.filter(s => s.type !== 'chart-component');
-      if (chartSubs.length === 0 && nonChartSubs.length === 0) continue;
-      for (const chart of chartSubs) {
-        const compName = pascalCase(chart.name || chart.id || 'Chart');
-        chunks.push({
-          segmentType: 'chart',
-          files: [`package/components/${compName}.vue`],
-          title: chart.name || chart.id || '图表',
-          sectionId: sec.id,
-          scopedInput: {
-            focusedChartId: chart.id,
-            focusedChartName: chart.name,
-          },
-        });
-      }
-      if (nonChartSubs.length > 0) {
-        chunks.push({
-          segmentType: 'misc',
-          files: nonChartSubs.map(s => {
-            const name = pascalCase(s.name || s.id || 'Misc');
-            return `package/components/${name}.vue`;
-          }),
-          title: `${sec.title || sec.id} 附属内容`,
-          sectionId: sec.id,
-          scopedInput: { nonChartSubcomponents: nonChartSubs },
-        });
-      }
-      continue;
-    }
-
-    const chartSubs = subs.filter(s => s.type === 'chart-component');
-    const nonChartSubs = subs.filter(s => s.type !== 'chart-component');
-
-    if (chartSubs.length === 0) continue; // 无图表，S3 不处理
-
-    // 每个图表独立 chunk
-    for (const chart of chartSubs) {
-      const compName = pascalCase(chart.name || chart.id || 'Chart');
-      chunks.push({
-        segmentType: 'chart',
-        files: [`package/components/${compName}.vue`],
-        title: chart.name || chart.id || '图表',
-        sectionId: sec.id,
-        scopedInput: {
-          focusedChartId: chart.id,
-          focusedChartName: chart.name,
-        },
-      });
-    }
-
-    // 非图表元素归入一个杂项 chunk（当它们存在时）
-    if (nonChartSubs.length > 0) {
-      chunks.push({
-        segmentType: 'misc',
-        files: nonChartSubs.map(s => {
-          const name = pascalCase(s.name || s.id || 'Misc');
-          return `package/components/${name}.vue`;
-        }),
-        title: `${sec.title || sec.id} 附属内容`,
-        sectionId: sec.id,
-        scopedInput: {
-          nonChartSubcomponents: nonChartSubs,
-        },
-      });
-    }
-  }
-
-  return chunks;
-}
-
-/**
- * 简易 PascalCase 转换（去除空格/短横线/下划线，首字母大写）。
- */
-function pascalCase(str) {
-  return String(str)
-    .replace(/[^a-zA-Z0-9\u4e00-\u9fff]+/g, ' ')
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-    .join('') || 'Component';
-}

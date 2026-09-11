@@ -1,0 +1,170 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 65,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0].header",
+        "message": "违反核心规范：`header-stats` 中包含了 `header.title: '设备监测'` 且 `headerRelation: 'title-itself'`。根据微码规范，组件面板标题必须由 `<base-panel>` 通过 `componentName` 自动处理，组件内部严禁重复生成面板标题和标题栏。",
+        "suggestion": "移除 `header-stats` 中的 `header` 对象，将其重命名为 `top-stats` 或 `summary-stats`，仅保留纯业务统计内容。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[0].body.children[*]",
+        "message": "嵌套深度过深：`stat-item` 内部又嵌套了 `label` 和 `value` 子节点，导致逻辑层级达到 5 层（layout -> sections -> body -> children -> children），超出了建议的 ≤3 层规范，会增加 DOM 节点数量。",
+        "suggestion": "扁平化结构，将 `label` 和 `value` 的文本及样式直接作为 `stat-item` 的属性（如 `labelText`, `valueText`, `labelStyles`, `valueStyles`），消除内部包裹层。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[*].body.backgroundImage",
+        "message": "背景图重复声明：三个 section 均独立设置了相同的 `backgroundImage` (bg-8788.png)，这会导致重复的资源引用和渲染计算，影响性能。",
+        "suggestion": "将背景图配置提升至最外层 `layout` 或根容器级别统一设置，子 section 仅负责内容布局，无需重复声明背景。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children",
+        "message": "交互状态缺失：`interactions` 中明确指出顶部两个大卡片是 Tab 切换关系，但在 `category-cards` 的结构中，仅通过 `bgPlaceholder` 区分了激活/默认态，缺少明确的 `active` 状态字段，不利于代码生成时的状态绑定。",
+        "suggestion": "在 `card-tunnel` 和 `card-north-south` 节点中增加 `active: true/false` 字段，明确其互斥的 Tab 切换语义。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "Figma 覆盖率异常：`coverageRate` 为 0，`missingCount` 高达 114，说明大量设计稿节点未被正确解析或匹配，可能存在解析异常或设计稿结构过于碎片化。",
+        "suggestion": "需检查 Figma 解析日志，确认是否因组件命名不规范或图层未分组导致的大面积漏识别，必要时需在设计稿侧进行图层整理。"
+      }
+    ],
+    "recommendations": [
+      "严格遵循‘零装饰与面板托管’原则，彻底清理组件内部的标题、边框、背景等应由 `<base-panel>` 托管的样式和结构。",
+      "优化数据模型结构，对于简单的‘标签-数值’对，尽量使用扁平化的属性配置而非嵌套的 children 数组，以降低渲染时的 DOM 深度。",
+      "统一背景资源管理，对于全局或大区块的背景图，优先在父容器或根节点声明，避免子节点重复继承或覆盖。",
+      "在描述具有交互属性的组件（如 Tab、卡片切换）时，必须在结构节点中显式声明状态字段（如 `active`, `selected`），确保 UI 结构与交互逻辑强绑定。"
+    ],
+    "summary": "该布局结构在区域划分和业务模块组织上较为清晰，但存在违反微码核心规范的严重问题（重复生成面板标题），且存在嵌套过深、背景图重复声明、交互状态表达不完整等缺陷。此外，Figma 节点覆盖率极低，需排查解析问题。必须修正违规项并优化结构扁平度后方可通过审查。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1990ff",
+      "--colorSuccess": "#08a3a5",
+      "--colorError": "#f53f3f",
+      "--colorTextBase": "#333333",
+      "--colorBgBase": "#edf4fb",
+      "--fontSize": "14px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#1990ff",
+      "@color-success": "#08a3a5",
+      "@color-error": "#f53f3f",
+      "@color-text-base": "#333333",
+      "@color-bg-base": "#edf4fb",
+      "@font-size-base": "14px",
+      "@border-radius-base": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "16px",
+        "background": "var(--colorBgBase, #edf4fb)"
+      },
+      ".card-header": {
+        "position": "relative",
+        "border-radius": "var(--borderRadius, 8px)",
+        "background-image": "url('../../images/card-header-bg.png')",
+        "background-size": "cover",
+        "background-repeat": "no-repeat"
+      },
+      ".tab-item.active": {
+        "background": "var(--colorPrimary, #1990ff)",
+        "color": "#ffffff",
+        "border-radius": "4px",
+        "font-weight": "500"
+      },
+      ".value-primary": {
+        "color": "var(--colorPrimary, #1990ff)",
+        "font-weight": "bold"
+      },
+      ".value-success": {
+        "color": "var(--colorSuccess, #08a3a5)",
+        "font-weight": "bold"
+      },
+      ".value-error": {
+        "color": "var(--colorError, #f53f3f)",
+        "font-weight": "bold"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 #1990ff 映射为 --colorPrimary，用于主要数值展示及左侧Tab选中态蓝色块",
+      "容器背景 #edf4fb 应优先直接落地为 Figma 字面量值，避免关键可见背景只依赖 CSS 变量",
+      "异常数值 #f53f3f 映射为 --colorError，完好率 #08a3a5 映射为 --colorSuccess，基础文字 #333333 映射为 --colorTextBase",
+      "顶部卡片六边形/圆角矩形背景建议通过 background-image 引入实际切图资源，辅以 border-radius 兜底",
+      "左侧Tab选中态使用蓝色块，通过 .tab-item.active 类实现背景色与圆角控制"
+    ],
+    "elementStyleMap": {
+      "header-stats": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "stat-type": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "stat-total": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "stat-rate": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "card-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-north-south": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-13": {
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "device-list-container": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "sidebar-tabs": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-23": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  }
+}

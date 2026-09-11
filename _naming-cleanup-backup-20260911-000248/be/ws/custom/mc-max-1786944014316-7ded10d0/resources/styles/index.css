@@ -1,0 +1,298 @@
+.dark {
+  /* === [自动修复] v3.5 模板驱动 fallback 规则 === */
+  /* [自动修复] 模板 class .c-env-monitor-stats-value--danger → 匹配元素 section-header */
+}
+.dark .c-env-monitor-root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  box-sizing: border-box;
+}
+.dark .c-env-monitor-stats {
+  margin-bottom: 16px;
+}
+.dark .c-env-monitor-stats-overview {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  width: 100%;
+}
+.dark .c-env-monitor-stats-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dark .c-env-monitor-stats-icon {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.dark .c-env-monitor-stats-info {
+  display: flex;
+  flex-direction: column;
+}
+.dark .c-env-monitor-stats-label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.65);
+  line-height: 16px;
+}
+.dark .c-env-monitor-stats-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: #ffffff;
+  line-height: 24px;
+}
+.dark .c-env-monitor-stats-value--danger {
+  color: #f53f3f;
+}
+.dark .c-env-monitor-tabs {
+  margin-bottom: 16px;
+}
+.dark .c-env-monitor-tabs-root {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 32px;
+}
+.dark .c-env-monitor-tabs-list {
+  position: relative;
+  flex: 1;
+  height: 27px;
+  margin-right: 12px;
+}
+.dark .c-env-monitor-tabs-bg {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, #b5deff 0%, #d1ecff 100%);
+  border: 0.72px solid #ffffff;
+  border-radius: 4px;
+}
+.dark .c-env-monitor-tabs-active-bg {
+  position: absolute;
+  top: 3px;
+  height: 21px;
+  transition: left 0.3s ease;
+}
+.dark .c-env-monitor-tab-item {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  cursor: pointer;
+  font-family: 'Source Han Sans CN', 'PingFang SC', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: #2c9bea;
+  transition: all 0.3s ease;
+}
+.dark .c-env-monitor-tab-item.is-active {
+  color: #ffffff;
+  text-shadow: 0 0.6px 0 #006fe3;
+}
+.dark .c-env-monitor-tabs-icons {
+  flex-shrink: 0;
+}
+.dark .c-env-monitor-tabs-icon-wrapper {
+  position: relative;
+  width: 52px;
+  height: 24px;
+}
+.dark .c-env-monitor-tabs-icon-img {
+  width: 52px;
+  height: 24px;
+  display: block;
+}
+.dark .c-env-monitor-tabs-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 14px;
+  height: 14px;
+  border-radius: 29px;
+  background: #f53f3f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-family: 'PingFang SC', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 14px;
+}
+.dark .c-env-monitor-chart {
+  flex: 1;
+  min-height: 0;
+}
+.dark .c-env-monitor-chart-root {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.dark .c-env-monitor-chart-container {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+}
+.dark .c-env-monitor-stats-value--danger {
+  display: flex;
+}
+.light {
+  /* === [自动修复] v3.5 模板驱动 fallback 规则 === */
+  /* [自动修复] 模板 class .c-env-monitor-stats-value--danger → 匹配元素 section-header */
+}
+.light .c-env-monitor-root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  box-sizing: border-box;
+}
+.light .c-env-monitor-stats {
+  margin-bottom: 16px;
+}
+.light .c-env-monitor-stats-overview {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  width: 100%;
+}
+.light .c-env-monitor-stats-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.light .c-env-monitor-stats-icon {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.light .c-env-monitor-stats-info {
+  display: flex;
+  flex-direction: column;
+}
+.light .c-env-monitor-stats-label {
+  font-size: 12px;
+  color: #666666;
+  line-height: 16px;
+}
+.light .c-env-monitor-stats-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: #333333;
+  line-height: 24px;
+}
+.light .c-env-monitor-stats-value--danger {
+  color: #f53f3f;
+}
+.light .c-env-monitor-tabs {
+  margin-bottom: 16px;
+}
+.light .c-env-monitor-tabs-root {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 32px;
+}
+.light .c-env-monitor-tabs-list {
+  position: relative;
+  flex: 1;
+  height: 27px;
+  margin-right: 12px;
+}
+.light .c-env-monitor-tabs-bg {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, #b5deff 0%, #d1ecff 100%);
+  border: 0.72px solid #ffffff;
+  border-radius: 4px;
+}
+.light .c-env-monitor-tabs-active-bg {
+  position: absolute;
+  top: 3px;
+  height: 21px;
+  transition: left 0.3s ease;
+}
+.light .c-env-monitor-tab-item {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  cursor: pointer;
+  font-family: 'Source Han Sans CN', 'PingFang SC', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: #2c9bea;
+  transition: all 0.3s ease;
+}
+.light .c-env-monitor-tab-item.is-active {
+  color: #ffffff;
+  text-shadow: 0 0.6px 0 #006fe3;
+}
+.light .c-env-monitor-tabs-icons {
+  flex-shrink: 0;
+}
+.light .c-env-monitor-tabs-icon-wrapper {
+  position: relative;
+  width: 52px;
+  height: 24px;
+}
+.light .c-env-monitor-tabs-icon-img {
+  width: 52px;
+  height: 24px;
+  display: block;
+}
+.light .c-env-monitor-tabs-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 14px;
+  height: 14px;
+  border-radius: 29px;
+  background: #f53f3f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-family: 'PingFang SC', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 14px;
+}
+.light .c-env-monitor-chart {
+  flex: 1;
+  min-height: 0;
+}
+.light .c-env-monitor-chart-root {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.light .c-env-monitor-chart-container {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+}
+.light .c-env-monitor-stats-value--danger {
+  display: flex;
+}

@@ -1,0 +1,49 @@
+.common() {
+  @font-family-base: 'Noto Sans SC', 'Source Han Sans CN', 'PingFang SC', 'Roboto', sans-serif;
+  @font-size-base: 14px;
+  @font-size-sm: 12px;
+  @font-size-lg: 16px;
+  
+  @border-radius-base: 4px;
+  @border-radius-lg: 8px;
+  
+  @spacing-xs: 4px;
+  @spacing-sm: 8px;
+  @spacing-md: 12px;
+  @spacing-lg: 16px;
+  
+  @transition-base: all 0.3s ease;
+}
+
+.theme-light() {
+  @bg-color: #EDF4FB;
+  @text-color-primary: #333333;
+  @text-color-secondary: #666666;
+  @text-color-disabled: #999999;
+  
+  @color-primary: #1990FF;
+  @color-success: #0FCD7D;
+  @color-warning: #F53F3F;
+  @color-info: #559EFF;
+  
+  @border-color: rgba(0, 0, 0, 0.08);
+  @shadow-color: rgba(74, 117, 141, 0.25);
+}
+
+.theme-dark() {
+  @bg-color: #1A2332;
+  @text-color-primary: #FFFFFF;
+  @text-color-secondary: rgba(255, 255, 255, 0.65);
+  @text-color-disabled: rgba(255, 255, 255, 0.35);
+  
+  @color-primary: #1990FF;
+  @color-success: #0FCD7D;
+  @color-warning: #F53F3F;
+  @color-info: #559EFF;
+  
+  @border-color: rgba(255, 255, 255, 0.15);
+  @shadow-color: rgba(0, 0, 0, 0.5);
+}
+
+.theme-light();
+.common();

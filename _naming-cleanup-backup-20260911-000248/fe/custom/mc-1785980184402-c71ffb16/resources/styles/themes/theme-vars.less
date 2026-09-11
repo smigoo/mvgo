@@ -1,0 +1,42 @@
+.common() {
+  /* [Style Refine] fills[0].color → #EDF4FB */
+  @bg-color: #EDF4FB;
+  @text-color: #333333;
+  @primary-color: #1990FF;
+  @error-color: #F53F3F;
+  @success-color: #08A3A5;
+  
+  /* [Style Refine] 移除无依据的卡片背景色，改用Figma真实渐变 */
+  @card-active-bg: linear-gradient(270deg, #2B9CFF 0%, #2999FF 100%);
+  @card-default-bg: linear-gradient(270deg, #93CCFF 0%, #93CCFF 100%);
+  
+  /* [Style Refine] effects[0] DROP_SHADOW → 0px 4px 10px rgba(74, 117, 141, 0.25) */
+  @shadow-color: rgba(74, 117, 141, 0.25);
+  
+  @border-radius-base: 6px;
+}
+
+.theme-dark() {
+  @bg-color: #1a2332;
+  @text-color: #e0e6ed;
+  @primary-color: #409eff;
+  @error-color: #f56c6c;
+  @success-color: #67c23a;
+  @card-active-bg: linear-gradient(270deg, #1a5fb4 0%, #318aff 100%);
+  @card-default-bg: linear-gradient(270deg, #243042 0%, #243042 100%);
+  @shadow-color: rgba(0, 0, 0, 0.5);
+}
+
+.theme-light() {
+  @bg-color: #EDF4FB;
+  @text-color: #333333;
+  @primary-color: #1990FF;
+  @error-color: #F53F3F;
+  @success-color: #08A3A5;
+  @card-active-bg: linear-gradient(270deg, #2B9CFF 0%, #2999FF 100%);
+  @card-default-bg: linear-gradient(270deg, #93CCFF 0%, #93CCFF 100%);
+  @shadow-color: rgba(74, 117, 141, 0.25);
+}
+
+.theme-light();
+.common();

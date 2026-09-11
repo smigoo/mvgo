@@ -1,0 +1,66 @@
+.environment-monitor-container {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+.environment-monitor-header {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+.environment-monitor-tabs {
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+}
+.environment-monitor-chart {
+  display: flex;
+  flex-direction: column;
+  border-radius: 4px;
+}
+.gradient-title {
+  background: linear-gradient(90deg, #1990ff 0%, #5a7eff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.tab-item-base {
+  padding: 6px 16px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border-radius: 4px;
+}
+.tab-item-base:hover {
+  opacity: 0.8;
+}
+.chart-label {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.45);
+}
+.control-icon-base {
+  position: relative;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.control-icon-base:hover {
+  opacity: 0.8;
+}
+.badge-base {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 4px;
+  background: #f53f3f;
+  border-radius: 50%;
+  font-size: 10px;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 500;
+}

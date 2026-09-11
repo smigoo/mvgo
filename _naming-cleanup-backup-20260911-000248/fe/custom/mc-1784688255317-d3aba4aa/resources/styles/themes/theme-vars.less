@@ -1,0 +1,110 @@
+// 通用变量(不区分主题)
+.common() {
+/* [Style Refine] Primary color from Frame 2136638771 fills[0].color rgba(0.098, 0.565, 1, 1) → rgb(25, 144, 255) → #1990FF */
+  @primary-color: #1990FF;
+  @primary-hover: #40a9ff;
+  @primary-active: #096dd9;
+  
+  // 功能色
+  @danger-color: #FF4D4F;
+  @info-color: #1890FF;
+  @warning-color: #FA8C16;
+  @success-color: #52c41a;
+  
+  // 圆角
+  @border-radius-base: 4px;
+  @border-radius-sm: 2px;
+  @border-radius-lg: 8px;
+  // 间距
+  @spacing-xs: 4px;
+  @spacing-sm: 8px;
+  @spacing-md: 12px;
+  @spacing-lg: 16px;
+  @spacing-xl: 24px;
+  
+  // 字体
+  @font-size-base: 14px;
+  @font-size-sm: 12px;
+  @font-size-lg: 16px;
+  @font-size-xl: 20px;
+  @font-size-xxl: 24px;
+  
+  // 字重
+  @font-weight-normal: 400;
+  @font-weight-medium: 500;
+  @font-weight-bold: 700;
+  @click: inherit; // 自动添加
+}
+
+// 浅色主题
+.theme-light() {
+  .common();
+  
+  /* [Style Refine] bg node fills[0].color rgba(0.929, 0.956, 0.984, 1) → rgb(237, 244, 251) → #EDF4FB */
+  @bg-color: #EDF4FB;
+  @bg-card: rgba(255, 255, 255, 0.6);
+  @bg-overlay: rgba(255, 255, 255, 0.9);
+  
+  /* [Style Refine] Text colors from Figma text nodes */
+  /* [Style Refine] rgba(0.2, 0.2, 0.2, 1) → rgb(51, 51, 51) → #333333 */
+  @text-color-primary: #333333;
+  @text-color-secondary: #666666;
+  @text-color-tertiary: #999999;
+  /* [Style Refine] rgba(1, 1, 1, 1) → #FFFFFF */
+  @text-color-inverse: #FFFFFF;
+  
+  /* [Style Refine] Border colors from tab strokes */
+  /* [Style Refine] Frame 2136638769 strokes[0].color rgba(0.675, 0.767, 0.882, 1) → rgb(172, 196, 225) → #ACC4E1 */
+  @border-color-light: #ACC4E1;
+  /* [Style Refine] Frame 2136638771 strokes[0].color rgba(0.780, 0.878, 1, 1) → rgb(199, 224, 255) → #C7E0FF */
+  @border-color-active: #C7E0FF;
+  /* [Style Refine] bg node effects DROP_SHADOW offset(0, 4), radius 10, color rgba(0.291, 0.458, 0.551, 0.25) → rgba(74, 117, 141, 0.25) */
+  @shadow-base: 0 2px 8px rgba(0, 0, 0, 0.08);
+  @shadow-card: 0 4px 10px rgba(74, 117, 141, 0.25);
+  
+  /* [Style Refine] Tab backgrounds from Figma Frame nodes */
+  /* [Style Refine] Frame 2136638769 fills[0].color rgba(0.400, 0.501, 0.628, 1) → rgb(102, 128, 160) → #6680A0 */
+  @tab-bg-default: #6680A0;
+  /* [Style Refine] Frame 2136638771 fills[0].color rgba(0.098, 0.565, 1, 1) → rgb(25, 144, 255) → #1990FF */
+  @tab-bg-active: #1990FF;
+  /* [Style Refine] Text fills rgba(0.2, 0.2, 0.2, 1) → #333333 */
+  @tab-text-default: #333333;
+  /* [Style Refine] Text fills rgba(1, 1, 1, 1) → #FFFFFF */
+  @tab-text-active: #FFFFFF;
+}
+
+// 深色主题
+.theme-dark() {
+  .common();
+  
+  // 背景色
+  @bg-color: #1a1a1a;
+  @bg-card: rgba(40, 40, 40, 0.6);
+  @bg-overlay: rgba(30, 30, 30, 0.9);
+  
+  // 文字色
+  @text-color-primary: #e8e8e8;
+  @text-color-secondary: #b8b8b8;
+  @text-color-tertiary: #888888;
+  @text-color-inverse: #1a1a1a;
+  
+  // 边框色
+  @border-color-light: rgba(80, 80, 80, 1);
+  @border-color-active: rgba(100, 150, 200, 1);
+  
+  // 阴影
+  @shadow-base: 0 2px 8px rgba(0, 0, 0, 0.3);
+  @shadow-card: 0 4px 10px rgba(0, 0, 0, 0.4);
+  
+  // Tab 背景
+  @tab-bg-default: rgba(60, 80, 100, 1);
+  @tab-bg-active: rgba(25, 144, 255, 1);
+  @tab-text-default: #e8e8e8;
+  @tab-text-active: #ffffff;
+}
+
+// 默认使用浅色主题
+
+:root {
+  .theme-light();
+}

@@ -1,0 +1,320 @@
+{
+  "schemaVersion": 1,
+  "mode": "shadow",
+  "pipeline": "vue3",
+  "iteration": 0,
+  "generatedAt": "2026-08-25T09:00:09.824Z",
+  "productionInputMode": "legacy",
+  "engineerInputChanged": false,
+  "metrics": {
+    "legacyEstimatedBytes": 66721,
+    "generationInputBytes": 4548,
+    "reductionBytes": 62173,
+    "reductionRate": 93.18,
+    "issueCount": 2,
+    "rejectedClaimCount": 1
+  },
+  "trustVerdict": {
+    "level": "restricted",
+    "reasons": [
+      "覆盖率偏低 (53%)"
+    ],
+    "visual": {
+      "verdict": "warning",
+      "reason": "覆盖率偏低 (53%)",
+      "coverageRate": 53,
+      "recognizedSections": 0
+    },
+    "restrictions": [
+      "no-unsupported-decoration",
+      "no-style-fallback",
+      "resolve-legend-owner"
+    ]
+  },
+  "budget": {
+    "limits": {
+      "totalBytes": 30720,
+      "designFactsBytes": 12288,
+      "componentPlanBytes": 8192,
+      "resourceManifestBytes": 6144,
+      "currentIssuesBytes": 4096,
+      "maxIssues": 20
+    },
+    "sections": {
+      "designFacts": 691,
+      "componentPlan": 351,
+      "resourceManifest": 1682,
+      "currentIssues": 259
+    },
+    "totalBytes": 4546,
+    "passed": true,
+    "violations": []
+  },
+  "generationInput": {
+    "schemaVersion": 1,
+    "designFacts": {
+      "root": {
+        "nodeId": "2:7879",
+        "nodeName": "cp-环境监测",
+        "size": {
+          "width": 420,
+          "height": 186,
+          "unit": "css-px",
+          "source": "figma-api"
+        },
+        "styleEvidence": {
+          "background": {
+            "allowed": false,
+            "source": "figma-api",
+            "evidenceCount": 0
+          },
+          "border": {
+            "allowed": false,
+            "source": "figma-api",
+            "evidenceCount": 0
+          },
+          "borderRadius": {
+            "allowed": false,
+            "value": null,
+            "source": "figma-api"
+          },
+          "boxShadow": {
+            "allowed": false,
+            "source": "figma-api",
+            "evidenceCount": 0
+          }
+        }
+      },
+      "charts": [
+        {
+          "id": "section-content",
+          "type": "area",
+          "series": [
+            "zk3+785CO浓度"
+          ],
+          "legend": {
+            "items": [
+              "zk3+785CO浓度"
+            ],
+            "owner": "unresolved",
+            "position": "top-right"
+          },
+          "source": "visual-analysis"
+        }
+      ],
+      "provenance": {
+        "deterministicSource": "figma-api",
+        "semanticSource": "visual-analysis"
+      }
+    },
+    "componentPlan": {
+      "effectiveSections": [
+        {
+          "id": "section-title",
+          "title": "环境监测",
+          "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+          "elementCount": 4
+        },
+        {
+          "id": "section-content",
+          "title": "内容区",
+          "responsibility": "主内容区",
+          "elementCount": 11
+        }
+      ],
+      "isForced": false,
+      "minFiles": 0,
+      "reason": "有效 sections=2 < 3 → 不强制拆分"
+    },
+    "resourceManifest": [
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundStyle",
+        "figmaNodeId": "2:7880"
+      },
+      {
+        "resourceId": "g",
+        "fileName": "g",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7883"
+      },
+      {
+        "resourceId": "circle",
+        "fileName": "circle",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7884"
+      },
+      {
+        "resourceId": "circle",
+        "fileName": "circle",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7885"
+      },
+      {
+        "resourceId": "path",
+        "fileName": "path",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7886"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:7890"
+      },
+      {
+        "resourceId": "bg-tab-active",
+        "fileName": "bg-tab-active",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:7891"
+      },
+      {
+        "resourceId": "tabs-icon",
+        "fileName": "tabs-icon",
+        "role": null,
+        "recommendedUsage": "decorativeBlock",
+        "figmaNodeId": "89:43"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7941"
+      },
+      {
+        "resourceId": "柱状图_filled 1",
+        "fileName": "柱状图_filled 1",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7943"
+      },
+      {
+        "resourceId": "Vector",
+        "fileName": "Vector",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7944"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7945"
+      },
+      {
+        "resourceId": "属性 列表 详情2 1",
+        "fileName": "属性 列表 详情2 1",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7947"
+      },
+      {
+        "resourceId": "Vector",
+        "fileName": "Vector",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7948"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:7950"
+      }
+    ],
+    "currentIssues": [
+      {
+        "id": "CONTEXT-ROOT-BACKGROUND-CONFLICT",
+        "status": "open",
+        "severity": "warning",
+        "expectedAction": "do-not-generate-root-background"
+      },
+      {
+        "id": "CHART-LEGEND-OWNER:section-content",
+        "status": "open",
+        "severity": "warning",
+        "expectedAction": "choose-dom-or-echarts-owner"
+      }
+    ],
+    "trustVerdict": {
+      "level": "restricted",
+      "reasons": [
+        "覆盖率偏低 (53%)"
+      ],
+      "visual": {
+        "verdict": "warning",
+        "reason": "覆盖率偏低 (53%)",
+        "coverageRate": 53,
+        "recognizedSections": 0
+      },
+      "restrictions": [
+        "no-unsupported-decoration",
+        "no-style-fallback",
+        "resolve-legend-owner"
+      ]
+    },
+    "contextManifest": {
+      "stage": "engineer",
+      "mode": "shadow-only",
+      "included": [
+        "schemaVersion",
+        "designFacts",
+        "componentPlan",
+        "resourceManifest",
+        "currentIssues",
+        "trustVerdict"
+      ],
+      "excluded": [
+        "figmaData",
+        "figmaNodeData",
+        "figmaStyleTree",
+        "visualAnalysis",
+        "visualElements",
+        "reviewResult",
+        "styleMappings",
+        "previousCritiques"
+      ],
+      "diagnosticsRef": {
+        "figma": "/Users/smigoo/工作/mvgo/temp-components/6a7599af6eb9eebf9fba56cd/mv-1787648244465-7399d07c-mv-max-1787647025927-eb0150ab/.checkpoint/figma.json",
+        "visual": "/Users/smigoo/工作/mvgo/temp-components/6a7599af6eb9eebf9fba56cd/mv-1787648244465-7399d07c-mv-max-1787647025927-eb0150ab/.checkpoint/visual.json",
+        "analysis": "/Users/smigoo/工作/mvgo/temp-components/6a7599af6eb9eebf9fba56cd/mv-1787648244465-7399d07c-mv-max-1787647025927-eb0150ab/.checkpoint/analysis.json"
+      },
+      "conflictSummary": {
+        "rejectedClaimCount": 1,
+        "rejectedClaimIds": [
+          "visual-analysis:root.background"
+        ]
+      },
+      "budget": {
+        "limits": {
+          "totalBytes": 30720,
+          "designFactsBytes": 12288,
+          "componentPlanBytes": 8192,
+          "resourceManifestBytes": 6144,
+          "currentIssuesBytes": 4096,
+          "maxIssues": 20
+        },
+        "sections": {
+          "designFacts": 691,
+          "componentPlan": 351,
+          "resourceManifest": 1682,
+          "currentIssues": 259
+        },
+        "totalBytes": 4546,
+        "passed": true,
+        "violations": []
+      }
+    }
+  }
+}

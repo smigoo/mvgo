@@ -1,0 +1,268 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 82,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].header",
+        "message": "section-tabs-and-icons和section-chart包含空header对象，属于冗余结构，建议移除空header。",
+        "suggestion": "删除无实际内容的空header对象，精简DOM结构。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "panel-title未将Tab和图标映射为标题插槽，而是拆分为独立section，导致面板标题栏插槽失效。",
+        "suggestion": "将Tab和图标按钮合并至panel-title的header插槽中，保持面板头部结构完整。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "chartDataHints[0]",
+        "message": "chartDataHints中labels包含换行符及无关文本，values数据与图表实际提示不符，存在解析错误。",
+        "suggestion": "修正数据提取逻辑，确保坐标轴标签和数值准确对应，清理无关字符。"
+      }
+    ],
+    "recommendations": [
+      "将Tab和图标按钮合并至panel-title的header插槽中，保持面板头部结构完整。",
+      "清理所有section中无实际内容的空header对象，精简DOM结构。",
+      "修正chartDataHints的数据提取逻辑，确保坐标轴标签和数值准确对应。"
+    ],
+    "summary": "整体布局层次清晰，但存在空header冗余及标题插槽映射错误，图表数据提示解析有误，需优化结构并修正数据。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorBg": "rgba(237,244,251,1)",
+      "--colorPrimary": "rgba(85,158,255,1)",
+      "--colorDanger": "rgba(245,63,63,1)",
+      "--colorSuccess": "rgba(70,210,160,1)",
+      "--colorTextSecondary": "rgba(80,100,130,1)",
+      "--colorTextBase": "rgba(80,100,130,1)",
+      "--colorWhite": "rgba(255,255,255,1)",
+      "--fontSize": "14px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-bg": "var(--colorBg)",
+      "@color-primary": "var(--colorPrimary)",
+      "@color-danger": "var(--colorDanger)",
+      "@color-success": "var(--colorSuccess)",
+      "@color-text-secondary": "var(--colorTextSecondary)",
+      "@color-text-base": "var(--colorTextBase)",
+      "@color-white": "var(--colorWhite)"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "width": "100%",
+        "height": "100%",
+        "background": "rgba(237,244,251,1)",
+        "font-size": "var(--fontSize)",
+        "color": "var(--colorTextBase)"
+      },
+      ".tab-active": {
+        "background": "rgba(85,158,255,1)",
+        "color": "rgba(255,255,255,1)",
+        "border-radius": "4px",
+        "padding": "4px 12px",
+        "font-weight": "500",
+        "transition": "all 0.3s ease"
+      },
+      ".warning-line": {
+        "border-top": "2px dashed rgba(245,63,63,1)",
+        "position": "relative",
+        "width": "100%"
+      },
+      ".warning-line-label": {
+        "position": "absolute",
+        "top": "-18px",
+        "right": "0",
+        "color": "rgba(245,63,63,1)",
+        "font-size": "12px",
+        "white-space": "nowrap"
+      },
+      ".badge": {
+        "position": "absolute",
+        "top": "-6px",
+        "right": "-6px",
+        "background": "rgba(245,63,63,1)",
+        "color": "rgba(255,255,255,1)",
+        "border-radius": "50%",
+        "min-width": "16px",
+        "height": "16px",
+        "display": "flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "font-size": "10px",
+        "font-weight": "bold",
+        "padding": "0 4px",
+        "box-sizing": "border-box"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主题色映射为--colorPrimary，用于Tab选中态及高亮元素",
+      "容器背景应优先直接落地为 Figma 字面量值 rgba(237,244,251,1)，避免关键可见背景只依赖 CSS 变量",
+      "预警线和角标统一使用--colorDanger (rgba(245,63,63,1)) 保持视觉一致性",
+      "辅助色--colorSuccess用于正常状态数据展示（如健康指标）",
+      "文字颜色使用--colorTextSecondary (rgba(80,100,130,1)) 作为基础文本色，适配浅蓝灰底色"
+    ],
+    "elementStyleMap": {
+      "panel-title": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-tabs-and-icons": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tabs-list": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tabs-icon": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "chart-container": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-13": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "panel-title",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 0,
+        "title": "面板标题",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 0,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 0
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "section-tabs-and-icons",
+        "responsibility": "标签页切换区",
+        "elementCount": 8,
+        "title": "Tab切换与操作图标",
+        "complexityScore": 40,
+        "complexityReasons": {
+          "elementCount": 8,
+          "charts": 1,
+          "interactions": 9,
+          "maxDepth": 2
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [
+          {
+            "type": "interaction-area",
+            "id": "section-tabs-and-icons-interactive",
+            "name": "InteractiveArea",
+            "responsibility": "交互控件区",
+            "reason": "R4: 交互复杂度拆分（9个交互元素）",
+            "props": [],
+            "emits": [
+              "action"
+            ]
+          }
+        ],
+        "shouldSplitInternally": true
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "CO浓度折线图",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 1,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      }
+    ],
+    "isForced": true,
+    "minFiles": 4,
+    "reason": "有效 sections=3 ≥ 3 或存在高复杂度 section → 强制拆分",
+    "internalSubcomponents": [
+      {
+        "type": "interaction-area",
+        "id": "section-tabs-and-icons-interactive",
+        "name": "InteractiveArea",
+        "responsibility": "交互控件区",
+        "reason": "R4: 交互复杂度拆分（9个交互元素）",
+        "props": [],
+        "emits": [
+          "action"
+        ],
+        "parentSectionId": "section-tabs-and-icons",
+        "parentSectionTitle": "Tab切换与操作图标"
+      }
+    ]
+  }
+}

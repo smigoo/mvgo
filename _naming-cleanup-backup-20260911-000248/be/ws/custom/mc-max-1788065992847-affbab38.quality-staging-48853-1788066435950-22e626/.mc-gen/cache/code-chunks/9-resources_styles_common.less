@@ -1,0 +1,221 @@
+// 业务样式文件 - 设备监测组件
+// 所有业务 class 必须以 .c- 为前缀
+
+// 引入公共变量和主题变量
+@import './themes/theme-vars.less';
+
+// 应用公共变量
+.common();
+
+// 根容器
+.c-monitor-root {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  height: 100%;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+// ==================== 头部统计区域 ====================
+.c-monitor-header-stats {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 24px;
+  padding: 16px 24px;
+  background-image: url(../resources/images/bg-8788.png);
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+  border-radius: 6px;
+  box-shadow: 0px 4px 10px rgba(74, 117, 141, 0.25);
+}
+
+.c-monitor-stat-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+.c-monitor-stat-label {
+  font-size: 14px;
+  font-weight: 400;
+  color: #333333;
+  line-height: 1.5;
+}
+
+.c-monitor-stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+  // 颜色由内联样式控制（不同统计项有不同颜色）
+}
+
+// ==================== 设备分类Tab区域 ====================
+.c-monitor-device-tabs {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+}
+
+.c-monitor-tab-item {
+  flex: 1;
+  padding: 16px;
+  background: linear-gradient(135deg, rgba(147, 204, 255, 1) 0%, rgba(147, 204, 255, 1) 100%);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(25, 144, 255, 0.2);
+  }
+}
+
+.c-monitor-tab-item--active {
+  background: linear-gradient(135deg, rgba(43, 155, 255, 1) 0%, rgba(41, 154, 255, 1) 100%);
+  box-shadow: 0 4px 12px rgba(25, 144, 255, 0.3);
+  
+  .c-monitor-tab-label {
+    color: #ffffff;
+  }
+  
+  .c-monitor-tab-stat-label {
+    color: #ffffff;
+  }
+  
+  .c-monitor-tab-stat-value {
+    color: #ffffff;
+  }
+  
+  .c-monitor-tab-stat-value--error {
+    color: #e03434;
+  }
+}
+
+.c-monitor-tab-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.c-monitor-tab-header {
+  display: flex;
+  align-items: center;
+}
+
+.c-monitor-tab-label {
+  font-size: 12px;
+  font-weight: 400;
+  color: #333333;
+  line-height: 1.5;
+}
+
+.c-monitor-tab-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.c-monitor-tab-stat {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.c-monitor-tab-stat-label {
+  font-size: 14px;
+  font-weight: 400;
+  color: #333333;
+  line-height: 1.5;
+}
+
+.c-monitor-tab-stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1990ff;
+  line-height: 1.2;
+}
+
+.c-monitor-tab-stat-value--error {
+  color: #e03434;
+}
+
+// ==================== 设备网格列表区域 ====================
+.c-monitor-device-grid {
+  flex: 1;
+  overflow: auto;
+}
+
+.c-monitor-device-grid-container {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  width: 100%;
+}
+
+.c-monitor-device-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px 12px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(230, 242, 255, 0.6) 100%);
+  border: 1px solid rgba(37, 141, 200, 0.3);
+  border-radius: 6px;
+  box-shadow: 0px 1px 2px rgba(51, 101, 144, 0.4);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    border-color: rgba(25, 144, 255, 0.5);
+    box-shadow: 0 4px 12px rgba(25, 144, 255, 0.2);
+    transform: translateY(-2px);
+  }
+}
+
+.c-monitor-device-icon {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.c-monitor-device-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+}
+
+.c-monitor-device-name {
+  font-size: 12px;
+  font-weight: 400;
+  color: #333333;
+  line-height: 1.5;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.c-monitor-device-value {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: #3b80e7;
+  
+  &--error {
+    color: #f53f3f;
+  }
+  
+  &--normal {
+    color: #52c41a;
+  }
+}

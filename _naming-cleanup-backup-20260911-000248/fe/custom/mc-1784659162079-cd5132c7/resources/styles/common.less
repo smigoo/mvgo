@@ -1,0 +1,84 @@
+//管辖范围组件 - 公共样式
+// Class 前缀: .c-test-e2e-v3-
+
+// 标题装饰图标
+.c-test-e2e-v3-title-decoration {
+  width: 16.53px;
+  height: 17.6px;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+// 根容器
+.c-test-e2e-v3-root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  padding: 34px 14px 14px 14px;
+  box-sizing: border-box;
+}
+
+// Header装饰元素区域
+.c-test-e2e-v3-header-decorations {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 34px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+// 分割线装饰
+.c-test-e2e-v3-decoration-divider {
+  position: absolute;
+  top: 30px;
+  left: 21px;
+  width: 418px;
+  height: 4px;
+}
+
+// 矩形装饰1
+.c-test-e2e-v3-decoration-rect-1 {
+  position: absolute;
+  top: 16px;
+  right: 30px;
+  width: 20.04px;
+  height: 0.8px;
+}
+
+// 矩形装饰2
+.c-test-e2e-v3-decoration-rect-2 {
+  position: absolute;
+  top: 14px;
+  left: 30px;
+  width: 12.13px;
+  height: 2.4px;
+}
+
+// 内容区容器
+.c-test-e2e-v3-content {
+  width: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  padding: 20px 14px 16px 14px;
+  box-sizing: border-box;
+  // 发光底座效果
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90%;
+    height: 14px;
+    background: linear-gradient(180deg, rgba(6, 70, 56, 1) 0%, rgba(14, 107, 85, 1) 100%);
+    border-radius: 0 0 4px 4px;
+}
+}

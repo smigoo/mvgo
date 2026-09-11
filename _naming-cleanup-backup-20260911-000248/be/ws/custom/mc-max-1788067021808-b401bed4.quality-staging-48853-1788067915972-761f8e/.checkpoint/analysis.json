@@ -1,0 +1,437 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 78,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[3].body.children[0].children[2]",
+        "message": "stat-row 不应作为 chart-with-stats 的 children，应与 chart 平级",
+        "suggestion": "将 stat-row 提升到与 chart-container 同级，作为 body.children 的独立元素"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "charts[0] 和 charts[1]",
+        "message": "两个小时流量柱状图结构完全相同但未复用，chartId 应指向同一图表配置",
+        "suggestion": "使用同一 chartId（如 hourly-bar-chart），通过数据源区分隧道/大桥"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[3].body.children[0]",
+        "message": "车型分布区域嵌套 4 层（body → chart-with-stats → children → stat-item），超过建议深度",
+        "suggestion": "将 label、chart、stat-row 拆为 body.children 的三个平级元素，消除 chart-with-stats 包装层"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "charts",
+        "message": "charts 数组未明确关联 section.id，仅通过 section 字段匹配存在歧义",
+        "suggestion": "在 body.children 的 chart-container 中直接引用 chartId，或在 charts 中添加 sectionId 字段"
+      }
+    ],
+    "recommendations": [
+      "将车型分布的 chart-with-stats 改为平铺结构：[label, chart-container, stat-row]，降低嵌套深度",
+      "统一两个柱状图配置，使用数据绑定区分数据源，避免重复定义",
+      "明确 chart-container 与 charts 数组的关联方式，建议在 chart-container 中添加 chartConfig 引用"
+    ],
+    "summary": "整体结构清晰，section 划分合理，但车型分布区域嵌套过深且 stat-row 位置不当。两个柱状图配置重复，应复用。修复后可达良好水平。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "rgba(56, 141, 255, 1)",
+      "--colorWarning": "rgba(255, 135, 82, 1)",
+      "--colorSuccess": "rgba(82, 196, 26, 1)",
+      "--colorBg": "rgba(237, 244, 251, 1)",
+      "--colorTextBase": "rgba(51, 51, 51, 1)",
+      "--colorTextSecondary": "rgba(102, 102, 102, 1)",
+      "--fontSizeBase": "14px",
+      "--fontSizeLarge": "36px",
+      "--fontSizeMedium": "16px",
+      "--borderRadiusBase": "8px",
+      "--spacingBase": "16px",
+      "--spacingLarge": "24px",
+      "--shadowCard": "0 2px 8px rgba(0, 0, 0, 0.08)"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "rgba(56, 141, 255, 1)",
+      "@color-warning": "rgba(255, 135, 82, 1)",
+      "@color-success": "rgba(82, 196, 26, 1)",
+      "@color-bg": "rgba(237, 244, 251, 1)",
+      "@color-text-base": "rgba(51, 51, 51, 1)",
+      "@color-text-secondary": "rgba(102, 102, 102, 1)",
+      "@font-size-base": "14px",
+      "@font-size-large": "36px",
+      "@font-size-medium": "16px",
+      "@border-radius-base": "8px",
+      "@spacing-base": "16px",
+      "@spacing-large": "24px",
+      "@shadow-card": "0 2px 8px rgba(0, 0, 0, 0.08)"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "width": "100%",
+        "height": "100%",
+        "background": "rgba(237, 244, 251, 1)",
+        "padding": "var(--spacingLarge)",
+        "box-sizing": "border-box"
+      },
+      ".stats-card": {
+        "background": "#ffffff",
+        "border-radius": "var(--borderRadiusBase)",
+        "padding": "var(--spacingBase)",
+        "box-shadow": "var(--shadowCard)",
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center",
+        "justify-content": "center"
+      },
+      ".stats-value": {
+        "font-size": "var(--fontSizeLarge)",
+        "color": "var(--colorPrimary)",
+        "font-weight": "600",
+        "line-height": "1.2"
+      },
+      ".stats-label": {
+        "font-size": "var(--fontSizeBase)",
+        "color": "var(--colorTextSecondary)",
+        "margin-top": "0.5em"
+      },
+      ".section-header": {
+        "display": "flex",
+        "align-items": "center",
+        "margin-bottom": "var(--spacingBase)",
+        "color": "var(--colorTextBase)"
+      },
+      ".section-title": {
+        "font-size": "var(--fontSizeMedium)",
+        "font-weight": "500",
+        "display": "flex",
+        "align-items": "center",
+        "gap": "0.5em"
+      },
+      ".section-title::before": {
+        "content": "''",
+        "display": "inline-block",
+        "width": "4px",
+        "height": "16px",
+        "background": "var(--colorPrimary)",
+        "transform": "rotate(45deg)"
+      },
+      ".chart-container": {
+        "background": "#ffffff",
+        "border-radius": "var(--borderRadiusBase)",
+        "padding": "var(--spacingBase)",
+        "box-shadow": "var(--shadowCard)",
+        "height": "100%"
+      },
+      ".tooltip-label": {
+        "font-size": "var(--fontSizeBase)",
+        "color": "var(--colorTextBase)",
+        "font-weight": "500"
+      },
+      ".accuracy-rate": {
+        "color": "var(--colorSuccess)",
+        "font-weight": "600"
+      },
+      ".threshold-line": {
+        "border-top": "2px dashed var(--colorWarning)",
+        "position": "relative"
+      },
+      ".map-icon-decoration": {
+        "width": "48px",
+        "height": "48px",
+        "opacity": "0.1",
+        "position": "absolute",
+        "top": "50%",
+        "left": "50%",
+        "transform": "translate(-50%, -50%)"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调蓝色映射为--colorPrimary，用于数值强调和主要元素",
+      "橙色映射为--colorWarning，用于警戒阈值线",
+      "绿色映射为--colorSuccess，用于准确率等正向指标",
+      "浅灰蓝背景rgba(237, 244, 251, 1)直接落地为容器背景，保证可见性",
+      "大号数值36px映射为--fontSizeLarge，用于统计卡片核心数据",
+      "section标题的菱形装饰通过::before伪元素实现旋转效果",
+      "图表容器统一使用白色背景和圆角阴影，与浅色科技风格匹配",
+      "所有间距采用em单位或CSS变量，确保响应式适配",
+      "颜色值保留原始rgba格式，便于透明度调整"
+    ],
+    "elementStyleMap": {
+      "daily-total-flow": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "tunnel-flow": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "bridge-flow": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "hourly-flow-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "hourly-flow-bridge": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-type-distribution": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "tunnel-vehicle-type-stat-row-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tunnel-vehicle-type": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-row-x-17": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "bridge-vehicle-type-stat-row-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "bridge-vehicle-type": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-row-x-23": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "flow-prediction": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "daily-total-flow",
+        "responsibility": "当日总流量（请按功能拆分）",
+        "elementCount": 6,
+        "title": "当日总流量",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 6,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 2
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "hourly-flow-tunnel",
+        "responsibility": "江阴靖江长江隧道（请按功能拆分）",
+        "elementCount": 1,
+        "title": "江阴靖江长江隧道",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 1,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "hourly-flow-bridge",
+        "responsibility": "江阴大桥（请按功能拆分）",
+        "elementCount": 1,
+        "title": "江阴大桥",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 1,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "vehicle-type-distribution",
+        "responsibility": "车型分布（请按功能拆分）",
+        "elementCount": 12,
+        "title": "车型分布",
+        "complexityScore": 70,
+        "complexityReasons": {
+          "elementCount": 12,
+          "charts": 2,
+          "interactions": 0,
+          "maxDepth": 3
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [
+          {
+            "type": "chart-component",
+            "id": "chart-1",
+            "name": "图表1",
+            "responsibility": "图表组件：图表1",
+            "reason": "R1: 图表隔离策略",
+            "props": [
+              "chartData",
+              "chartConfig"
+            ],
+            "emits": [
+              "legendClick",
+              "dataZoom"
+            ]
+          },
+          {
+            "type": "chart-component",
+            "id": "chart-2",
+            "name": "图表2",
+            "responsibility": "图表组件：图表2",
+            "reason": "R1: 图表隔离策略",
+            "props": [
+              "chartData",
+              "chartConfig"
+            ],
+            "emits": [
+              "legendClick",
+              "dataZoom"
+            ]
+          }
+        ],
+        "shouldSplitInternally": true
+      },
+      {
+        "id": "flow-prediction",
+        "responsibility": "流量预测（请按功能拆分）",
+        "elementCount": 1,
+        "title": "流量预测",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 1,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      }
+    ],
+    "isForced": true,
+    "minFiles": 7,
+    "reason": "有效 sections=5 ≥ 3 或存在高复杂度 section → 强制拆分",
+    "internalSubcomponents": [
+      {
+        "type": "chart-component",
+        "id": "chart-1",
+        "name": "图表1",
+        "responsibility": "图表组件：图表1",
+        "reason": "R1: 图表隔离策略",
+        "props": [
+          "chartData",
+          "chartConfig"
+        ],
+        "emits": [
+          "legendClick",
+          "dataZoom"
+        ],
+        "parentSectionId": "vehicle-type-distribution",
+        "parentSectionTitle": "车型分布"
+      },
+      {
+        "type": "chart-component",
+        "id": "chart-2",
+        "name": "图表2",
+        "responsibility": "图表组件：图表2",
+        "reason": "R1: 图表隔离策略",
+        "props": [
+          "chartData",
+          "chartConfig"
+        ],
+        "emits": [
+          "legendClick",
+          "dataZoom"
+        ],
+        "parentSectionId": "vehicle-type-distribution",
+        "parentSectionTitle": "车型分布"
+      }
+    ]
+  }
+}

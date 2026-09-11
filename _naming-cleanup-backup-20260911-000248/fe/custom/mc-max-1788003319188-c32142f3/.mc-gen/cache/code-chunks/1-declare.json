@@ -1,0 +1,64 @@
+{
+  "componentName": "cp-流量监测",
+  "panelKey": "",
+  "businessEvents": {
+    "monitor-onload": {
+      "eventId": "monitor-onload",
+      "eventName": "组件加载完成",
+      "eventDataSchema": {
+        "componentId": {
+          "key": "componentId",
+          "name": "组件ID",
+          "type": "string",
+          "required": true
+        },
+        "timestamp": {
+          "key": "timestamp",
+          "name": "时间戳",
+          "type": "number",
+          "required": true
+        }
+      }
+    },
+    "monitor-refresh": {
+      "eventId": "monitor-refresh",
+      "eventName": "流量数据刷新",
+      "eventDataSchema": {
+        "componentId": {
+          "key": "componentId",
+          "name": "组件ID",
+          "type": "string",
+          "required": true
+        },
+        "value": {
+          "key": "value",
+          "name": "当前流量值",
+          "type": "number",
+          "required": false
+        },
+        "timestamp": {
+          "key": "timestamp",
+          "name": "时间戳",
+          "type": "number",
+          "required": true
+        }
+      }
+    }
+  },
+  "businessStatuses": {
+    "loading": {
+      "key": "loading",
+      "name": "加载中",
+      "type": "boolean",
+      "defaultValue": false
+    },
+    "empty": {
+      "key": "empty",
+      "name": "无数据",
+      "type": "boolean",
+      "defaultValue": false
+    }
+  },
+  "cssVariableConfig": [],
+  "businessConfig": {}
+}

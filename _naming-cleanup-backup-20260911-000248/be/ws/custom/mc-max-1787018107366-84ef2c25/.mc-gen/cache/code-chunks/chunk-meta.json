@@ -1,0 +1,22 @@
+{
+  "completed": [
+    "1-declare.json",
+    "2-package/index.vue",
+    "3-package/index.vue",
+    "6-package/components/DeviceStatusChart.vue",
+    "5-package/components/DeviceStats.vue",
+    "7-package/components/DeviceList.vue",
+    "8-resources/styles/common.less,resources/styles/themes/theme-vars.less"
+  ],
+  "total": 6,
+  "updatedAt": 1787019038243,
+  "files": {
+    "declare.json": "1-declare.json",
+    "package/index.vue": "3-package_index.vue",
+    "package/components/DeviceStatusChart.vue": "6-package_components_DeviceStatusChart.vue",
+    "package/components/DeviceStats.vue": "5-package_components_DeviceStats.vue",
+    "package/components/DeviceList.vue": "7-package_components_DeviceList.vue",
+    "resources/styles/common.less": "8-resources_styles_common.less",
+    "resources/styles/themes/theme-vars.less": "8-resources_styles_themes_theme-vars.less"
+  }
+}

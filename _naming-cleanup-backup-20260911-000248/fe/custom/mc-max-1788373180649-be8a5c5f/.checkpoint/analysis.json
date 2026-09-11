@@ -1,0 +1,232 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 78,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "Tab切换栏未正确分层header/body，4个tab项应为body.children而非直接列为section子级",
+        "suggestion": "将tab项放入section.body.children，保持与section-chart一致的结构层级"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "headerSlots",
+        "message": "右上角切换图标已归入headerSlots但未在section-tabs.header中体现，层级映射不清晰",
+        "suggestion": "在section-tabs增设header字段承载右上角控件，明确其与body的层级关系"
+      },
+      {
+        "level": "error",
+        "type": "naming",
+        "location": "charts[0].axes",
+        "message": "Y轴单位标注为「辆」明显与CO浓度语义不符，应标记为待确认或ppm/mg/m³等合理单位",
+        "suggestion": "在doNotInvent中明确单位待核实，避免将识别错误固化到结构中"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections",
+        "message": "Tab内容切换逻辑未体现：切换tab后图表数据源/类型如何变化缺少结构映射",
+        "suggestion": "考虑在section-chart增加dataSourceBinding字段关联当前激活tab，或标注为动态slot"
+      }
+    ],
+    "recommendations": [
+      "统一section结构：所有section均应含header（可空）+ body二级结构，tab项应归入body.children",
+      "补全图表元信息：legendPosition已标注top-right但图例实际渲染位置需与图表坐标轴关系一并确认",
+      "明确交互边界：右上角图表/表格切换与tab切换的优先级、联动关系应在interactions中补充说明"
+    ],
+    "summary": "整体结构清晰但存在局部层级不统一问题：tab栏与图表区section结构不对称，右上角控件归属模糊，Y轴单位识别错误未纠正。建议统一header/body分层，补全交互联动逻辑。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）—— 深色科技监测风主题",
+      "--colorBgBase": "#1a2a3a",
+      "--colorPrimary": "#1890ff",
+      "--colorSuccess": "#52c41a",
+      "--colorDanger": "#f5222d",
+      "--colorTextBase": "rgba(255,255,255,0.8)",
+      "--colorTextSecondary": "rgba(255,255,255,0.45)",
+      "--colorChartFill": "rgba(82,196,26,0.15)",
+      "--colorWarningLine": "#f5222d",
+      "--colorTabActiveBg": "#1890ff",
+      "--colorAxisText": "rgba(255,255,255,0.8)",
+      "--fontSize": "14px",
+      "--fontSizeSmall": "12px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射 —— 对应上方CSS变量，供theme-vars.less的.theme-dark() mixin使用",
+      "@color-bg-base": "#1a2a3a",
+      "@color-primary": "#1890ff",
+      "@color-success": "#52c41a",
+      "@color-danger": "#f5222d",
+      "@color-text-base": "rgba(255,255,255,0.8)",
+      "@color-text-secondary": "rgba(255,255,255,0.45)",
+      "@color-chart-fill": "rgba(82,196,26,0.15)",
+      "@color-warning-line": "#f5222d",
+      "@color-tab-active-bg": "#1890ff",
+      "@color-axis-text": "rgba(255,255,255,0.8)",
+      "@font-size-base": "14px",
+      "@font-size-small": "12px"
+    },
+    "cssClasses": {
+      "comment": "可复用CSS类 —— 深色科技监测风，所有类写入 common.less",
+      ".monitor-container": {
+        "width": "100%",
+        "height": "100%",
+        "display": "flex",
+        "flex-direction": "column",
+        "background": "linear-gradient(180deg, #1a2a3a 0%, #0d1b2a 100%)",
+        "color": "var(--colorTextBase, @color-text-base)"
+      },
+      ".monitor-tab-bar": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "0.5em",
+        "padding": "0.5em 1em"
+      },
+      ".monitor-tab-item": {
+        "padding": "0.3em 1em",
+        "border-radius": "4px",
+        "font-size": "var(--fontSize, @font-size-base)",
+        "color": "var(--colorTextSecondary, @color-text-secondary)",
+        "cursor": "pointer",
+        "transition": "background 0.2s, color 0.2s"
+      },
+      ".monitor-tab-item.is-active": {
+        "background": "var(--colorTabActiveBg, @color-tab-active-bg)",
+        "color": "var(--colorTextBase, @color-text-base)"
+      },
+      ".monitor-chart-wrapper": {
+        "position": "relative",
+        "width": "100%",
+        "flex": "1",
+        "min-height": "0"
+      },
+      ".chart-axis-label": {
+        "font-size": "var(--fontSizeSmall, @font-size-small)",
+        "color": "var(--colorAxisText, @color-axis-text)",
+        "line-height": "1.4"
+      },
+      ".chart-warning-line": {
+        "position": "absolute",
+        "left": "0",
+        "right": "0",
+        "border-top": "1px dashed var(--colorWarningLine, @color-warning-line)",
+        "pointer-events": "none"
+      },
+      ".chart-warning-label": {
+        "position": "absolute",
+        "right": "0.5em",
+        "font-size": "var(--fontSizeSmall, @font-size-small)",
+        "color": "var(--colorWarningLine, @color-warning-line)",
+        "transform": "translateY(-100%)"
+      },
+      ".chart-area-fill": {
+        "comment": "ECharts areaStyle 对应色值，JS侧直接引用 @color-chart-fill 字面量",
+        "background": "var(--colorChartFill, @color-chart-fill)"
+      }
+    },
+    "tokenCoverage": 0.93,
+    "mappingNotes": [
+      "背景采用 linear-gradient(180deg, #1a2a3a 0%, #0d1b2a 100%) 模拟深海军蓝/深蓝灰渐变，字面量直接落地到 .monitor-container，不依赖单一CSS变量",
+      "Tab激活态蓝色填充背景映射为 --colorTabActiveBg: #1890ff，通过 .is-active 类切换",
+      "图表绿色半透明面积填充映射为 --colorChartFill: rgba(82,196,26,0.15)，ECharts areaStyle.color 应在 JS 侧直接取该字面量值",
+      "预警虚线及标注红色统一映射为 --colorWarningLine: #f5222d，.chart-warning-line 用 border-top dashed 实现",
+      "Y轴/X轴刻度白色小字统一使用 .chart-axis-label，依赖 --colorAxisText 与 --fontSizeSmall",
+      "所有样式类写入 common.less，按注释分段组织；主题差异变量在 theme-vars.less 的 .theme-dark() 中定义",
+      "Less变量命名遵循 kebab-case（@color-xxx），CSS变量遵循 camelCase（--colorXxx），两者在 .common() mixin 中完成映射"
+    ],
+    "elementStyleMap": {
+      "section-tabs": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-8": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-tabs",
+        "responsibility": "标签页切换区",
+        "elementCount": 4,
+        "title": "Tab切换栏",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 4,
+          "charts": 0,
+          "interactions": 1,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "CO浓度趋势图",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 1,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      }
+    ],
+    "isForced": false,
+    "minFiles": 0,
+    "reason": "有效 sections=2 < 3 且无高复杂度 section → 不强制拆分",
+    "internalSubcomponents": []
+  }
+}

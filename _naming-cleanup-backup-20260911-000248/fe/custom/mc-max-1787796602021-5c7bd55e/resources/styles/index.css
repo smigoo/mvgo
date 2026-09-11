@@ -1,0 +1,474 @@
+.dark {
+  /* 业务样式（common.less） */
+  /* 所有 class 均以 .c- 前缀，从模板提取的类名必须全部覆盖 */
+  /* 根容器：仅布局，禁止背景/边框/圆角/阴影 */
+  /* 顶部统计栏 */
+  /* 汇总卡片区 */
+  /* 卡片基础 */
+  /* 隧道设备卡（渐变蓝） */
+  /* 南北接线设备卡（浅灰蓝） */
+  /* 卡片内部行 */
+  /* 图标区域 */
+  /* 卡片总数文本 */
+  /* 卡片名称 */
+  /* 异常数文本 */
+  /* 主体内容区（左右排布） */
+  /* 左侧垂直 Tab 导航 */
+  /* 右侧设备状态网格 */
+  /* 辅助 class（由列表强制要求） */
+}
+.dark .c-monitor-root {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.dark .c-monitor-header-stats {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 24px;
+}
+.dark .c-monitor-header-stat {
+  display: flex;
+  flex-direction: column;
+}
+.dark .c-monitor-header-stat-label {
+  font-size: 14px;
+  font-weight: 400;
+  color: #333333;
+}
+.dark .c-monitor-header-stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.dark .c-monitor-stat-blue {
+  color: #1990ff;
+}
+.dark .c-monitor-stat-teal {
+  color: #08a3a5;
+}
+.dark .c-monitor-header-decoration {
+  height: 425px;
+  width: 420px;
+  display: flex;
+  align-items: center;
+  max-width: 100%;
+  max-height: 100vh;
+  box-sizing: border-box;
+}
+.dark .c-monitor-header-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #1990ff;
+}
+.dark .c-monitor-header-time {
+  font-size: 14px;
+  font-weight: 400;
+  background-image: linear-gradient(#1990ff, #5a7eff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.dark .c-monitor-summary-cards {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+}
+.dark .c-monitor-card {
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  border-radius: 8px;
+  flex: 1;
+}
+.dark .c-monitor-card-tunnel {
+  background: linear-gradient(270deg, #318aff 0%, #70bfff 100%);
+}
+.dark .c-monitor-card-north-south {
+  background: #EDF4FB;
+}
+.dark .c-monitor-card-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+.dark .c-monitor-card-row-bottom {
+  margin-top: 12px;
+  justify-content: space-between;
+}
+.dark .c-monitor-card-icon-wrap {
+  width: 32px;
+  height: 32px;
+  margin-right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dark .c-monitor-card-icon {
+  max-width: 100%;
+  max-height: 100%;
+}
+.dark .c-monitor-card-total {
+  font-size: 20px;
+  font-weight: 700;
+}
+.dark .c-monitor-card-total-light {
+  color: #ffffff;
+}
+.dark .c-monitor-card-total-blue {
+  color: #1990ff;
+}
+.dark .c-monitor-card-name {
+  font-size: 12px;
+}
+.dark .c-monitor-card-name-light {
+  color: #ffffff;
+}
+.dark .c-monitor-card-name-dark {
+  color: #333333;
+}
+.dark .c-monitor-card-abnormal {
+  font-size: 14px;
+  font-weight: 400;
+}
+.dark .c-monitor-card-abnormal-danger {
+  color: #e03434;
+}
+.dark .c-monitor-main-content {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+}
+.dark .c-monitor-vertical-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+  width: 120px;
+}
+.dark .c-monitor-tab-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  cursor: pointer;
+  background: #ffffff;
+  border: 1px solid #258dc8;
+  border-radius: 6px;
+  box-shadow: 0px 1px 2px rgba(51, 101, 144, 0.4);
+  color: #3b80e7;
+  font-size: 14px;
+}
+.dark .c-monitor-tab-item-active {
+  background: linear-gradient(#85baff, #bfe2ff);
+  border-color: #f0f5ff;
+  color: #ffffff;
+  box-shadow: none;
+}
+.dark .c-monitor-tab-text {
+  font-weight: 400;
+}
+.dark .c-monitor-tab-badge {
+  background: #f53f3f;
+  border-radius: 29px;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 1px 6px;
+  line-height: 1.5;
+  min-width: 18px;
+  text-align: center;
+}
+.dark .c-monitor-device-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  flex: 1;
+}
+.dark .c-monitor-device-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 8px;
+}
+.dark .c-monitor-device-icon-wrap {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dark .c-monitor-device-icon {
+  max-width: 100%;
+  max-height: 100%;
+}
+.dark .c-monitor-device-name {
+  font-size: 12px;
+  color: #333333;
+  margin-top: 4px;
+}
+.dark .c-monitor-device-value {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  margin-top: 4px;
+}
+.dark .c-monitor-device-count {
+  font-weight: 500;
+  color: #333333;
+}
+.dark .c-monitor-device-count-danger {
+  color: #e03434;
+}
+.dark .c-monitor-device-count-normal {
+  color: #333333;
+}
+.dark .c-monitor-device-total {
+  color: #999999;
+}
+.dark .c-monitor-danger {
+  color: #e03434;
+}
+.dark .c-monitor-normal {
+  color: #333333;
+}
+.light {
+  /* 业务样式（common.less） */
+  /* 所有 class 均以 .c- 前缀，从模板提取的类名必须全部覆盖 */
+  /* 根容器：仅布局，禁止背景/边框/圆角/阴影 */
+  /* 顶部统计栏 */
+  /* 汇总卡片区 */
+  /* 卡片基础 */
+  /* 隧道设备卡（渐变蓝） */
+  /* 南北接线设备卡（浅灰蓝） */
+  /* 卡片内部行 */
+  /* 图标区域 */
+  /* 卡片总数文本 */
+  /* 卡片名称 */
+  /* 异常数文本 */
+  /* 主体内容区（左右排布） */
+  /* 左侧垂直 Tab 导航 */
+  /* 右侧设备状态网格 */
+  /* 辅助 class（由列表强制要求） */
+}
+.light .c-monitor-root {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.light .c-monitor-header-stats {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 24px;
+}
+.light .c-monitor-header-stat {
+  display: flex;
+  flex-direction: column;
+}
+.light .c-monitor-header-stat-label {
+  font-size: 14px;
+  font-weight: 400;
+  color: #333333;
+}
+.light .c-monitor-header-stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.light .c-monitor-stat-blue {
+  color: #1990ff;
+}
+.light .c-monitor-stat-teal {
+  color: #08a3a5;
+}
+.light .c-monitor-header-decoration {
+  height: 425px;
+  width: 420px;
+  display: flex;
+  align-items: center;
+  max-width: 100%;
+  max-height: 100vh;
+  box-sizing: border-box;
+}
+.light .c-monitor-header-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #1990ff;
+}
+.light .c-monitor-header-time {
+  font-size: 14px;
+  font-weight: 400;
+  background-image: linear-gradient(#1990ff, #5a7eff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.light .c-monitor-summary-cards {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+}
+.light .c-monitor-card {
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  border-radius: 8px;
+  flex: 1;
+}
+.light .c-monitor-card-tunnel {
+  background: linear-gradient(270deg, #318aff 0%, #70bfff 100%);
+}
+.light .c-monitor-card-north-south {
+  background: #EDF4FB;
+}
+.light .c-monitor-card-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+.light .c-monitor-card-row-bottom {
+  margin-top: 12px;
+  justify-content: space-between;
+}
+.light .c-monitor-card-icon-wrap {
+  width: 32px;
+  height: 32px;
+  margin-right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.light .c-monitor-card-icon {
+  max-width: 100%;
+  max-height: 100%;
+}
+.light .c-monitor-card-total {
+  font-size: 20px;
+  font-weight: 700;
+}
+.light .c-monitor-card-total-light {
+  color: #ffffff;
+}
+.light .c-monitor-card-total-blue {
+  color: #1990ff;
+}
+.light .c-monitor-card-name {
+  font-size: 12px;
+}
+.light .c-monitor-card-name-light {
+  color: #ffffff;
+}
+.light .c-monitor-card-name-dark {
+  color: #333333;
+}
+.light .c-monitor-card-abnormal {
+  font-size: 14px;
+  font-weight: 400;
+}
+.light .c-monitor-card-abnormal-danger {
+  color: #e03434;
+}
+.light .c-monitor-main-content {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+}
+.light .c-monitor-vertical-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+  width: 120px;
+}
+.light .c-monitor-tab-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  cursor: pointer;
+  background: #ffffff;
+  border: 1px solid #258dc8;
+  border-radius: 6px;
+  box-shadow: 0px 1px 2px rgba(51, 101, 144, 0.4);
+  color: #3b80e7;
+  font-size: 14px;
+}
+.light .c-monitor-tab-item-active {
+  background: linear-gradient(#85baff, #bfe2ff);
+  border-color: #f0f5ff;
+  color: #ffffff;
+  box-shadow: none;
+}
+.light .c-monitor-tab-text {
+  font-weight: 400;
+}
+.light .c-monitor-tab-badge {
+  background: #f53f3f;
+  border-radius: 29px;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 1px 6px;
+  line-height: 1.5;
+  min-width: 18px;
+  text-align: center;
+}
+.light .c-monitor-device-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  flex: 1;
+}
+.light .c-monitor-device-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 8px;
+}
+.light .c-monitor-device-icon-wrap {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.light .c-monitor-device-icon {
+  max-width: 100%;
+  max-height: 100%;
+}
+.light .c-monitor-device-name {
+  font-size: 12px;
+  color: #333333;
+  margin-top: 4px;
+}
+.light .c-monitor-device-value {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  margin-top: 4px;
+}
+.light .c-monitor-device-count {
+  font-weight: 500;
+  color: #333333;
+}
+.light .c-monitor-device-count-danger {
+  color: #e03434;
+}
+.light .c-monitor-device-count-normal {
+  color: #333333;
+}
+.light .c-monitor-device-total {
+  color: #999999;
+}
+.light .c-monitor-danger {
+  color: #e03434;
+}
+.light .c-monitor-normal {
+  color: #333333;
+}

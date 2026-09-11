@@ -180,7 +180,7 @@ describe('anchorRootContainerInFiles（中性锚定语义）', () => {
     )
   })
 
-  it('缺 figmaNodeData no-op（generation-context 第三入口安全）', () => {
+  it('缺 figmaNodeData no-op（安全兜底语义）', () => {
     const files = { 'package/index.vue': DIAMOND_INCIDENT_VUE }
     expect(anchorRootContainerInFiles(files)).toBe(files)
   })
@@ -220,3 +220,19 @@ describe('registerBuiltinFixRules（STYLE 阶段接线）', () => {
     expect(res.files['package/index.vue']).toContain('aspect-ratio: 425 / 807;')
   })
 })
+
+/**
+ * 🔴 接线回归守卫说明（2026-09-11 P2-1 更新）
+ *
+ * 事故：2026-08-31「迁出为共享规则」重构后，旧 `generation-context.js#createFixPipeline`
+ * 死包装漏传 `figmaNodeData` → `registerBuiltinFixRules` 里 `if (figmaNodeData)` 恒假
+ * → `anchor-root-container` 从未注册（死接线盲区，静态 grep 看不出）。
+ *
+ * 治本（P2-1）：① 死包装 generation-context.js 已删除 —— 真实接线点只有
+ * microcode-engineer.js:6012（clean pipeline）与 :6061（fix pipeline），均显式传
+ * figmaNodeData；② 终验链新增 normalizeRootContainerLayout（含 figma bbox
+ * aspect-ratio 兜底），布局保障**不再依赖 fix pipeline 是否接线**；
+ * ③ 新增 scripts/mechanism-reachability-audit.mjs 防死接线复发。
+ * 原「createFixPipeline 接线回归」describe 块测的是死包装本身，随包装一并移除；
+ * 上方 registerBuiltinFixRules / anchor 语义用例保留（figmaNodeData 门语义不变）。
+ */

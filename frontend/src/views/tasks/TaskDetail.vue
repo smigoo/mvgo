@@ -2514,9 +2514,12 @@ const timelineSteps = computed(() => {
         : stage.status === 'running'
           // 🔧 任务已结束时（failed/cancelled/completed），running 阶段不可能真的在跑
           // 后端某些 catch 块漏发 failed 状态（只发了 error 事件），前端这里兜底修正
+          // 🔧 2026-09-11 修复：任务 completed 时，running 阶段应映射为 completed，确保进度条到 100%
           ? (task.value.status === 'failed' || task.value.status === 'cancelled'
               ? 'failed'
-              : 'active')
+              : task.value.status === 'completed'
+                ? 'completed'
+                : 'active')
           : stage.status === 'failed'
             ? 'failed'
             : 'pending'

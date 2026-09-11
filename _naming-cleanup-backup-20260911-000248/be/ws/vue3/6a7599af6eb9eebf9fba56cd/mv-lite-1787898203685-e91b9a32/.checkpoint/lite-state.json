@@ -1,0 +1,112 @@
+{
+  "stage": "codegen_done",
+  "brief": {
+    "layout": "垂直布局，从上到下分为标题区、Tab 导航区、图表区。整体左对齐，图表占据主体空间",
+    "regions": [
+      {
+        "name": "标题区",
+        "description": "环境监测",
+        "position": "top-left",
+        "size": "宽度约占 20%，高度约占 10%"
+      },
+      {
+        "name": "Tab 导航区",
+        "description": "包含四个 Tab：二氧化碳、能见度、洞内照明、洞外光强",
+        "position": "top-center",
+        "size": "宽度约占 60%，高度约占 10%"
+      },
+      {
+        "name": "右上角工具栏",
+        "description": "两个图标按钮，右侧带红色数字角标 6",
+        "position": "top-right",
+        "size": "宽度约占 15%，高度约占 10%"
+      },
+      {
+        "name": "图表区",
+        "description": "折线图，展示二氧化碳浓度随时间变化，包含坐标轴、数据线、预警线",
+        "position": "center",
+        "size": "宽度约占 95%，高度约占 80%"
+      }
+    ],
+    "spacing": {
+      "outer": "整体内容距离容器边缘约 20-30px",
+      "gap": "标题与 Tab 区间距约 10px，Tab 区与图表区间距约 15px",
+      "padding": "Tab 内部左右 padding 约 20px，图表区内边距约 20px"
+    },
+    "colors": {
+      "primary": "#4A90E2",
+      "background": "#B0B8BE",
+      "surface": "#D3D8DC",
+      "text": "#5A5A5A",
+      "border": "#8A9AA8",
+      "accent": "#FF4D4D",
+      "chartFill": "#7ED9C4"
+    },
+    "typography": {
+      "size": "标题约 32px，Tab 文字约 18px，图表标签约 16px，坐标轴数字约 14px",
+      "weight": "标题 bold，Tab 正常，图表文字正常",
+      "lineHeight": "约 1.4-1.6 倍"
+    },
+    "components": [
+      "标题文本",
+      "Tab 切换栏（箭头型胶囊按钮组）",
+      "图标按钮（柱状图图标）",
+      "图标按钮（列表图标，带红色数字角标）",
+      "折线图（area chart）",
+      "虚线（预警线）",
+      "文本标签"
+    ],
+    "textContent": [
+      "环境监测",
+      "二氧化碳",
+      "能见度",
+      "洞内照明",
+      "洞外光强",
+      "zk3+785CO浓度",
+      "预警线",
+      "辅",
+      "时",
+      "0",
+      "10",
+      "20",
+      "30",
+      "40",
+      "2",
+      "4",
+      "6",
+      "8",
+      "10",
+      "12",
+      "14",
+      "16",
+      "18",
+      "20",
+      "22",
+      "24",
+      "6"
+    ],
+    "visualDetails": [
+      "标题文字为蓝色（#4A90E2）",
+      "Tab 为箭头型胶囊设计，激活项（二氧化碳）填充蓝色，未激活项为灰白色",
+      "Tab 之间有箭头形状连接，形成连续的导航条",
+      "右上角图标按钮有白色圆角矩形背景，第二个按钮有红色圆形角标，显示数字 6",
+      "图表网格线为浅灰色虚线",
+      "预警线为红色虚线（#FF4D4D），标注文字也为红色",
+      "数据线为绿色（#7ED9C4），下方有半透明绿色填充区域",
+      "图表边框无明显描边",
+      "整体无明显阴影效果",
+      "背景为灰色系渐变"
+    ],
+    "interactions": [
+      "Tab 切换栏：4 个 Tab（二氧化碳、能见度、洞内照明、洞外光强），当前激活项为「二氧化碳」",
+      "右上角柱状图按钮（可能用于切换图表类型或查看统计）",
+      "右上角列表按钮，带红色角标数字 6（可能用于查看通知或消息列表）"
+    ]
+  },
+  "width": 420,
+  "height": 186,
+  "sourceType": "figma",
+  "componentType": "vue3",
+  "generationTier": "lite",
+  "vueCode": "<template>\n  <div class=\"mv-lite-1787898203685-e91b9a32\">\n    <!-- 标题区 + Tab 导航区 + 右上角工具栏 -->\n    <div class=\"header-section\">\n      <div class=\"title\">环境监测</div>\n      \n      <div class=\"tabs\">\n        <div\n          v-for=\"tab in tabs\"\n          :key=\"tab\"\n          class=\"tab\"\n          :class=\"{ active: activeTab === tab }\"\n          @click=\"activeTab = tab\"\n        >\n          {{ tab }}\n        </div>\n      </div>\n      \n      <div class=\"toolbar\">\n        <div class=\"icon-btn\">\n          <svg viewBox=\"0 0 24 24\" fill=\"currentColor\">\n            <rect x=\"4\" y=\"14\" width=\"4\" height=\"10\" />\n            <rect x=\"10\" y=\"8\" width=\"4\" height=\"16\" />\n            <rect x=\"16\" y=\"4\" width=\"4\" height=\"20\" />\n          </svg>\n        </div>\n        <div class=\"icon-btn has-badge\">\n          <svg viewBox=\"0 0 24 24\" fill=\"currentColor\">\n            <rect x=\"4\" y=\"6\" width=\"16\" height=\"3\" rx=\"1\" />\n            <rect x=\"4\" y=\"11\" width=\"16\" height=\"3\" rx=\"1\" />\n            <rect x=\"4\" y=\"16\" width=\"16\" height=\"3\" rx=\"1\" />\n          </svg>\n          <span class=\"badge\">6</span>\n        </div>\n      </div>\n    </div>\n    \n    <!-- 图表区 -->\n    <div class=\"chart-section\">\n      <div ref=\"chartRef\" class=\"chart\"></div>\n    </div>\n  </div>\n</template>\n\n<script setup>\nimport { ref, onMounted, onUnmounted } from 'vue'\nimport * as echarts from 'echarts'\n\nconst tabs = ['二氧化碳', '能见度', '洞内照明', '洞外光强']\nconst activeTab = ref('二氧化碳')\n\nconst chartRef = ref(null)\nlet chart = null\nlet resizeObserver = null\n\nconst xAxisData = ref([2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24])\nconst chartData = ref([5, 7, 6, 5, 8, 12, 15, 12, 8, 5, 3, 2])\n\nonMounted(() => {\n  resizeObserver = new ResizeObserver(() => {\n    if (!chartRef.value || chart) {\n      if (chart && chartRef.value.clientWidth > 0 && chartRef.value.clientHeight > 0) {\n        chart.resize()\n      }\n      return\n    }\n    \n    const { clientWidth, clientHeight } = chartRef.value\n    if (clientWidth > 0 && clientHeight > 0) {\n      chart = echarts.init(chartRef.value)\n      \n      chart.setOption({\n        grid: {\n          left: 60,\n          right: 40,\n          top: 50,\n          bottom: 50\n        },\n        xAxis: {\n          type: 'category',\n          data: xAxisData.value,\n          axisLine: { lineStyle: { color: '#8A9AA8' } },\n          axisLabel: { color: '#5A5A5A', fontSize: 14 },\n          name: '时',\n          nameLocation: 'end',\n          nameTextStyle: { color: '#5A5A5A', fontSize: 14, padding: [0, 0, 0, 10] }\n        },\n        yAxis: {\n          type: 'value',\n          min: 0,\n          max: 40,\n          interval: 10,\n          axisLine: { show: false },\n          axisLabel: { color: '#5A5A5A', fontSize: 14 },\n          splitLine: { lineStyle: { color: '#8A9AA8', type: 'dashed' } },\n          name: '辅',\n          nameLocation: 'end',\n          nameTextStyle: { color: '#5A5A5A', fontSize: 14 }\n        },\n        series: [\n          {\n            type: 'line',\n            data: chartData.value,\n            smooth: true,\n            lineStyle: { color: '#7ED9C4', width: 2 },\n            areaStyle: {\n              color: {\n                type: 'linear',\n                x: 0,\n                y: 0,\n                x2: 0,\n                y2: 1,\n                colorStops: [\n                  { offset: 0, color: 'rgba(126, 217, 196, 0.6)' },\n                  { offset: 1, color: 'rgba(126, 217, 196, 0.1)' }\n                ]\n              }\n            },\n            symbol: 'none',\n            name: 'zk3+785CO浓度'\n          },\n          {\n            type: 'line',\n            data: Array(xAxisData.value.length).fill(30),\n            lineStyle: { color: '#FF4D4D', type: 'dashed', width: 2 },\n            symbol: 'none',\n            name: '预警线',\n            markLine: {\n              silent: true,\n              label: {\n                show: true,\n                position: 'end',\n                formatter: '预警线',\n                color: '#FF4D4D',\n                fontSize: 14\n              },\n              lineStyle: { type: 'dashed', color: '#FF4D4D', width: 2 }\n            }\n          }\n        ],\n        legend: {\n          data: ['zk3+785CO浓度'],\n          right: 20,\n          top: 10,\n          textStyle: { color: '#5A5A5A', fontSize: 14 },\n          itemWidth: 30,\n          itemHeight: 2\n        }\n      })\n      \n      resizeObserver.observe(chartRef.value)\n    }\n  })\n  \n  if (chartRef.value) {\n    resizeObserver.observe(chartRef.value)\n  }\n})\n\nonUnmounted(() => {\n  if (resizeObserver) {\n    resizeObserver.disconnect()\n  }\n  if (chart) {\n    chart.dispose()\n  }\n})\n</script>\n\n<style scoped>\n.mv-lite-1787898203685-e91b9a32 {\n  width: 100%;\n  height: 100%;\n  box-sizing: border-box;\n  background: linear-gradient(135deg, #B0B8BE 0%, #D3D8DC 100%);\n  padding: 20px 30px;\n  display: flex;\n  flex-direction: column;\n  min-height: 0;\n}\n\n.header-section {\n  display: flex;\n  align-items: center;\n  gap: 20px;\n  margin-bottom: 15px;\n}\n\n.title {\n  font-size: 32px;\n  font-weight: bold;\n  color: #4A90E2;\n  line-height: 1.4;\n  white-space: nowrap;\n}\n\n.tabs {\n  display: flex;\n  align-items: center;\n  flex: 1;\n  gap: 0;\n}\n\n.tab {\n  position: relative;\n  padding: 8px 20px;\n  font-size: 18px;\n  color: #5A5A5A;\n  background: #E8EBED;\n  cursor: pointer;\n  white-space: nowrap;\n  clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 50%, calc(100% - 15px) 100%, 0 100%, 15px 50%);\n  margin-left: -15px;\n}\n\n.tab:first-child {\n  margin-left: 0;\n  clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 50%, calc(100% - 15px) 100%, 0 100%);\n}\n\n.tab:last-child {\n  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 15px 50%);\n}\n\n.tab.active {\n  background: #4A90E2;\n  color: white;\n  z-index: 1;\n}\n\n.toolbar {\n  display: flex;\n  gap: 10px;\n  align-items: center;\n}\n\n.icon-btn {\n  position: relative;\n  width: 40px;\n  height: 40px;\n  background: white;\n  border-radius: 8px;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  cursor: pointer;\n  color: #5A5A5A;\n}\n\n.icon-btn svg {\n  width: 20px;\n  height: 20px;\n}\n\n.badge {\n  position: absolute;\n  top: -6px;\n  right: -6px;\n  background: #FF4D4D;\n  color: white;\n  font-size: 12px;\n  font-weight: bold;\n  width: 20px;\n  height: 20px;\n  border-radius: 50%;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n}\n\n.chart-section {\n  flex: 1;\n  min-height: 0;\n  background: rgba(255, 255, 255, 0.1);\n  border-radius: 8px;\n  padding: 20px;\n}\n\n.chart {\n  width: 100%;\n  height: 100%;\n}\n</style>"
+}

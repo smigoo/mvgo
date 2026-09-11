@@ -1,0 +1,155 @@
+// =============================================================================
+// 微码组件主题变量
+// 默认主题：light（组件默认展示色）
+// 本文件由系统生成的 dark.less/light.less 在主题选择器内调用
+// =============================================================================
+
+// =============================================================================
+// 公共变量（不随主题变化）
+// =============================================================================
+.common() {
+  // 字体族
+  @font-family: 'PingFang SC', -apple-system, BlinkMacSystemFont, 'Microsoft YaHei',
+    'Noto Sans', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  @font-family-mono: 'SF Mono', 'JetBrains Mono', 'Fira Code', Menlo, Consolas,
+    'Liberation Mono', monospace;
+
+  // 字号
+  @font-size-xs: 12px;
+  @font-size-sm: 13px;
+  @font-size-md: 14px;
+  @font-size-lg: 16px;
+  @font-size-xl: 18px;
+  @font-size-xxl: 20px;
+
+  // 圆角
+  @radius-xs: 2px;
+  @radius-sm: 4px;
+  @radius-md: 6px;
+  @radius-lg: 8px;
+  @radius-xl: 12px;
+  @radius-full: 50%;
+
+  // 间距
+  @spacing-xs: 4px;
+  @spacing-sm: 8px;
+  @spacing-md: 12px;
+  @spacing-lg: 16px;
+  @spacing-xl: 24px;
+  @spacing-xxl: 32px;
+
+  // 过渡
+  @transition-duration: 0.24s;
+  @transition-easing: cubic-bezier(0.4, 0, 0.2, 1);
+
+  // 背景图片（Figma 真值：el-el-x-2 / el-el-x-13）
+  @bg-image-7890: url(../resources/images/bg-7890.png);
+
+  // z-index
+  @z-index-base: 1;
+  @z-index-dropdown: 10;
+  @z-index-sticky: 100;
+  @z-index-modal: 1000;
+}
+
+// =============================================================================
+// 深色主题变量（backgroundBrightness=dark）
+// 注意：所有文字颜色禁止使用黑色系
+// =============================================================================
+.theme-dark() {
+  // ---- 背景色 ----
+  @bg-color: #161f2e; // 页面背景
+  @bg-color-container: #1e293b; // 容器背景
+  @bg-color-elevated: #263449; // 悬浮/浮层背景
+  @bg-color-hover: #2c3b52; // 悬停背景
+  @bg-color-active: #33435c; // 激活背景
+  @bg-color-disabled: #1a2434; // 禁用背景
+
+  // ---- 文字色 ----
+  @text-color: #e8ecf1; // 主文字（非黑）
+  @text-color-secondary: #b5c0d1; // 次文字（非黑）
+  @text-color-tertiary: #7d8ba3; // 辅助文字（非黑）
+  @text-color-disabled: #5a6a85; // 禁用文字（非黑）
+  @text-color-inverse: #e8ecf1; // 反转文字（非黑）
+
+  // ---- 边框色 ----
+  @border-color: #3a4659; // 边框
+  @border-color-hover: #4a5a70; // 悬停边框
+  @border-color-active: #5b6d88; // 激活边框
+  @border-color-disabled: #2c3748; // 禁用边框
+
+  // ---- 分隔线 ----
+  @divider-color: #2e3a4d; // 分隔线
+  @divider-color-light: #273346; // 浅分隔线
+
+  // ---- 遮罩与阴影 ----
+  @mask-color: rgba(0, 0, 0, 0.62); // 遮罩
+  @shadow-color: rgba(0, 0, 0, 0.35); // 阴影
+  @shadow-color-light: rgba(0, 0, 0, 0.18); // 浅阴影
+
+  // ---- 滚动条 ----
+  @scrollbar-color: #4a5a70; // 滚动条滑块
+  @scrollbar-track-color: #1a2434; // 滚动条轨道
+
+  // ---- 状态色（基于 antd 深色背景适配，不臆造品牌色） ----
+  @state-primary: #4b8df8; // 主色
+  @state-success: #52c28b; // 成功
+  @state-warning: #e6a23c; // 警告
+  @state-danger: #f56c6c; // 危险
+  @state-info: #7d8ba3; // 信息
+
+  // ---- 特殊效果色 ----
+  @highlight-bg: rgba(75, 141, 248, 0.16); // 高亮背景
+  @selected-bg: rgba(75, 141, 248, 0.22); // 选中背景
+}
+
+// =============================================================================
+// 浅色主题变量（默认主题，组件默认展示色）
+// 注：Figma 提取未覆盖的颜色属性按 ant-design-vue 默认浅色风格补齐
+// =============================================================================
+.theme-light() {
+  // ---- 背景色 ----
+  @bg-color: #f5f7fa; // 页面背景
+  @bg-color-container: #ffffff; // 容器背景
+  @bg-color-elevated: #ffffff; // 悬浮/浮层背景
+  @bg-color-hover: #ecf5ff; // 悬停背景
+  @bg-color-active: #e6f0ff; // 激活背景
+  @bg-color-disabled: #f5f7fa; // 禁用背景
+
+  // ---- 文字色 ----
+  @text-color: #303133; // 主文字
+  @text-color-secondary: #606266; // 次文字
+  @text-color-tertiary: #909399; // 辅助文字
+  @text-color-disabled: #c0c4cc; // 禁用文字
+  @text-color-inverse: #ffffff; // 反转文字
+
+  // ---- 边框色 ----
+  @border-color: #dcdfe6; // 边框
+  @border-color-hover: #c0c4cc; // 悬停边框
+  @border-color-active: #a0a8b8; // 激活边框
+  @border-color-disabled: #e4e7ed; // 禁用边框
+
+  // ---- 分隔线 ----
+  @divider-color: #e4e7ed; // 分隔线
+  @divider-color-light: #ebeef5; // 浅分隔线
+
+  // ---- 遮罩与阴影 ----
+  @mask-color: rgba(0, 0, 0, 0.45); // 遮罩
+  @shadow-color: rgba(0, 0, 0, 0.1); // 阴影
+  @shadow-color-light: rgba(0, 0, 0, 0.06); // 浅阴影
+
+  // ---- 滚动条 ----
+  @scrollbar-color: #c0c4cc; // 滚动条滑块
+  @scrollbar-track-color: #f0f2f5; // 滚动条轨道
+
+  // ---- 状态色（ant-design-vue 默认浅色主题） ----
+  @state-primary: #1677ff; // 主色
+  @state-success: #52c41a; // 成功
+  @state-warning: #faad14; // 警告
+  @state-danger: #ff4d4f; // 危险
+  @state-info: #909399; // 信息
+
+  // ---- 特殊效果色 ----
+  @highlight-bg: rgba(22, 119, 255, 0.1); // 高亮背景
+  @selected-bg: rgba(22, 119, 255, 0.16); // 选中背景
+}

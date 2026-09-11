@@ -1,0 +1,270 @@
+.c-mc-1785743893840-a9bcc0ba-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 12px;
+  box-sizing: border-box;
+}
+.c-mc-1785743893840-a9bcc0ba-tabs-section {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.c-mc-1785743893840-a9bcc0ba-tabs-list {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  background: linear-gradient(90deg, #b5deff, #d1ecff);
+  border: 0.72px solid #ffffff;
+  border-radius: 4px;
+  padding: 3px;
+  gap: 4px;
+}
+.c-mc-1785743893840-a9bcc0ba-tab-item {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 12px;
+  color: #2c9bea;
+  padding: 6px 12px;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  border: 0.6px solid transparent;
+}
+.c-mc-1785743893840-a9bcc0ba-tab-item:hover {
+  color: #ffffff;
+}
+.c-mc-1785743893840-a9bcc0ba-tab-item.is-active {
+  color: #ffffff;
+  background: linear-gradient(90deg, #1099b1, #038fff);
+  border: 0.6px solid #ffffff;
+  box-shadow: 0 0.6px 0 #006fe3;
+}
+.is-active {
+  color: #ffffff;
+  background: linear-gradient(90deg, #1099b1, #038fff);
+  border: 0.6px solid #ffffff;
+  box-shadow: 0 0.6px 0 #006fe3;
+}
+.c-mc-1785743893840-a9bcc0ba-toolbar {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+}
+.c-mc-1785743893840-a9bcc0ba-toolbar-icon {
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  display: block;
+}
+.c-mc-1785743893840-a9bcc0ba-badge {
+  width: 14px;
+  height: 14px;
+  background: #f53f3f;
+  border-radius: 50%;
+  color: #ffffff;
+  font-family: 'PingFang SC', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 14px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.c-mc-1785743893840-a9bcc0ba-chart-section {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.c-mc-1785743893840-a9bcc0ba-chart-container {
+  flex: 1;
+  width: 100%;
+  min-height: 100px;
+}
+.dark .c-mc-1785743893840-a9bcc0ba-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 12px;
+  box-sizing: border-box;
+}
+.dark .c-mc-1785743893840-a9bcc0ba-tabs-section {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.dark .c-mc-1785743893840-a9bcc0ba-tabs-list {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  background: linear-gradient(90deg, #2a3b4c, #3a4b5c);
+  border: 0.72px solid #ffffff;
+  border-radius: 4px;
+  padding: 3px;
+  gap: 4px;
+}
+.dark .c-mc-1785743893840-a9bcc0ba-tab-item {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 12px;
+  color: #8ab4f8;
+  padding: 6px 12px;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  border: 0.6px solid transparent;
+}
+.dark .c-mc-1785743893840-a9bcc0ba-tab-item:hover {
+  color: #ffffff;
+}
+.dark .c-mc-1785743893840-a9bcc0ba-tab-item.is-active {
+  color: #ffffff;
+  background: linear-gradient(90deg, #1099b1, #038fff);
+  border: 0.6px solid #ffffff;
+  box-shadow: 0 0.6px 0 #006fe3;
+}
+.dark .is-active {
+  color: #ffffff;
+  background: linear-gradient(90deg, #1099b1, #038fff);
+  border: 0.6px solid #ffffff;
+  box-shadow: 0 0.6px 0 #006fe3;
+}
+.dark .c-mc-1785743893840-a9bcc0ba-toolbar {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+}
+.dark .c-mc-1785743893840-a9bcc0ba-toolbar-icon {
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  display: block;
+}
+.dark .c-mc-1785743893840-a9bcc0ba-badge {
+  width: 14px;
+  height: 14px;
+  background: #f53f3f;
+  border-radius: 50%;
+  color: #ffffff;
+  font-family: 'PingFang SC', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 14px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dark .c-mc-1785743893840-a9bcc0ba-chart-section {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.dark .c-mc-1785743893840-a9bcc0ba-chart-container {
+  flex: 1;
+  width: 100%;
+  min-height: 100px;
+}
+.light .c-mc-1785743893840-a9bcc0ba-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 12px;
+  box-sizing: border-box;
+}
+.light .c-mc-1785743893840-a9bcc0ba-tabs-section {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.light .c-mc-1785743893840-a9bcc0ba-tabs-list {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  background: linear-gradient(90deg, #b5deff, #d1ecff);
+  border: 0.72px solid #ffffff;
+  border-radius: 4px;
+  padding: 3px;
+  gap: 4px;
+}
+.light .c-mc-1785743893840-a9bcc0ba-tab-item {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 12px;
+  color: #2c9bea;
+  padding: 6px 12px;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  border: 0.6px solid transparent;
+}
+.light .c-mc-1785743893840-a9bcc0ba-tab-item:hover {
+  color: #ffffff;
+}
+.light .c-mc-1785743893840-a9bcc0ba-tab-item.is-active {
+  color: #ffffff;
+  background: linear-gradient(90deg, #1099b1, #038fff);
+  border: 0.6px solid #ffffff;
+  box-shadow: 0 0.6px 0 #006fe3;
+}
+.light .is-active {
+  color: #ffffff;
+  background: linear-gradient(90deg, #1099b1, #038fff);
+  border: 0.6px solid #ffffff;
+  box-shadow: 0 0.6px 0 #006fe3;
+}
+.light .c-mc-1785743893840-a9bcc0ba-toolbar {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+}
+.light .c-mc-1785743893840-a9bcc0ba-toolbar-icon {
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  display: block;
+}
+.light .c-mc-1785743893840-a9bcc0ba-badge {
+  width: 14px;
+  height: 14px;
+  background: #f53f3f;
+  border-radius: 50%;
+  color: #ffffff;
+  font-family: 'PingFang SC', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 14px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.light .c-mc-1785743893840-a9bcc0ba-chart-section {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.light .c-mc-1785743893840-a9bcc0ba-chart-container {
+  flex: 1;
+  width: 100%;
+  min-height: 100px;
+}

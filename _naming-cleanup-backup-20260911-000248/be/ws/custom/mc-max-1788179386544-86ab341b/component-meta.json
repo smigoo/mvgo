@@ -1,0 +1,8 @@
+{
+  "degradedFiles": [
+    "package/components/ChartControls.vue",
+    "package/components/HeaderTabs.vue"
+  ],
+  "degradedAt": 1788180109249,
+  "reason": "SFC 编译失败，已隔离降级（可二次生成）"
+}

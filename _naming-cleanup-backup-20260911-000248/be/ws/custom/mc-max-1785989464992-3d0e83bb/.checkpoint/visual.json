@@ -1,0 +1,51 @@
+{
+  "layoutStructure": {
+    "generatedAt": "2026-08-06T04:11:24.444Z",
+    "stage": "preview-analysis",
+    "degraded": true,
+    "degradeReason": "404 请求的资源未找到，请检查请求路径或联系管理员。\n\n\nTroubleshooting URL: https://js.langchain.com/docs/troubleshooting/errors/MODEL_NOT_FOUND/\n",
+    "layout": {
+      "type": "vertical",
+      "direction": "top-to-bottom",
+      "sections": []
+    },
+    "styles": {
+      "theme": "未知",
+      "colors": [],
+      "background": "",
+      "decorations": [],
+      "emphasis": [],
+      "backgroundBrightness": "dark"
+    },
+    "interactions": [],
+    "charts": []
+  },
+  "visualElements": {
+    "theme": "未知",
+    "colors": [],
+    "background": "",
+    "decorations": [],
+    "emphasis": [],
+    "backgroundBrightness": "dark"
+  },
+  "interactions": [],
+  "charts": [],
+  "headerSlots": [],
+  "analysisType": "",
+  "analysisTarget": "",
+  "analysisDescription": "",
+  "analysisEvidence": [],
+  "headerValidation": {
+    "passed": true,
+    "headerElements": [],
+    "headerRightElements": [],
+    "suggestions": [],
+    "confidence": "low",
+    "componentType": "microcode"
+  },
+  "headerSlotValidation": {
+    "validatedSlots": [],
+    "rejectedNodes": [],
+    "warnings": []
+  }
+}

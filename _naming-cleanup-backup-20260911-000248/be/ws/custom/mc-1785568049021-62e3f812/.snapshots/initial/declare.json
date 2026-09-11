@@ -1,0 +1,23 @@
+{
+  "componentId": "mc-1785568049021-62e3f812",
+  "componentName": "流量监测",
+  "panelType": "default-panel",
+  "defaultTheme": "dark",
+  "size": {
+    "width": 460,
+    "height": 138
+  },
+  "businessEvents": [
+    {
+      "eventId": "mc-1785568049021-62e3f812-onload",
+      "eventName": "组件加载",
+      "description": "组件加载时触发"
+    }
+  ],
+  "businessStatuses": [],
+  "dataSources": [],
+  "formSources": [],
+  "layoutConfig": {},
+  "themeConfig": {},
+  "businessConfig": {}
+}

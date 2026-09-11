@@ -1,0 +1,369 @@
+.c-mc-1785600410600-f8e51929-tabs {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  align-items: center;
+}
+.c-mc-1785600410600-f8e51929-tab-item {
+  border-radius: 10px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-family: 'Source Han Sans CN', sans-serif;
+  line-height: 21px;
+  text-align: center;
+  border: 0.73px solid #c7e0ff;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.3s ease;
+}
+.c-mc-1785600410600-f8e51929-tab-item--active {
+  background-color: #1990ff;
+  color: #ffffff;
+  font-weight: 500;
+  border-color: #c7e0ff;
+}
+.c-mc-1785600410600-f8e51929-tab-item--inactive {
+  background-color: transparent;
+  color: #6680a0;
+  font-weight: 400;
+}
+.c-mc-1785600410600-f8e51929-content {
+  padding: 16px;
+}
+.c-mc-1785600410600-f8e51929-sub-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+  position: relative;
+}
+.c-mc-1785600410600-f8e51929-sub-icon {
+  width: 18px;
+  height: 18px;
+  margin-right: 8px;
+}
+.c-mc-1785600410600-f8e51929-sub-title {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  color: #333333;
+  text-shadow: 0 5px 5px rgba(255, 255, 255, 0.8);
+}
+.c-mc-1785600410600-f8e51929-sub-decoration {
+  width: 8px;
+  height: 8px;
+  margin-left: auto;
+}
+.c-mc-1785600410600-f8e51929-cards {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+}
+.c-mc-1785600410600-f8e51929-card-item {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+}
+.c-mc-1785600410600-f8e51929-card-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+  opacity: 0.3;
+  z-index: 0;
+}
+.c-mc-1785600410600-f8e51929-card-icon {
+  width: 48px;
+  height: 48px;
+  margin-right: 12px;
+  position: relative;
+  z-index: 1;
+}
+.c-mc-1785600410600-f8e51929-card-text {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 1;
+}
+.c-mc-1785600410600-f8e51929-card-label {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  color: #333333;
+  margin-bottom: 4px;
+}
+.c-mc-1785600410600-f8e51929-card-value-row {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+}
+.c-mc-1785600410600-f8e51929-card-value {
+  font-family: 'Roboto', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 23px;
+}
+.c-mc-1785600410600-f8e51929-card-unit {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  color: #333333;
+  margin-left: 2px;
+}
+.dark .c-mc-1785600410600-f8e51929-tabs {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  align-items: center;
+}
+.dark .c-mc-1785600410600-f8e51929-tab-item {
+  border-radius: 10px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-family: 'Source Han Sans CN', sans-serif;
+  line-height: 21px;
+  text-align: center;
+  border: 0.73px solid #c7e0ff;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.3s ease;
+}
+.dark .c-mc-1785600410600-f8e51929-tab-item--active {
+  background-color: #1990ff;
+  color: #ffffff;
+  font-weight: 500;
+  border-color: #c7e0ff;
+}
+.dark .c-mc-1785600410600-f8e51929-tab-item--inactive {
+  background-color: transparent;
+  color: #6680a0;
+  font-weight: 400;
+}
+.dark .c-mc-1785600410600-f8e51929-content {
+  padding: 16px;
+}
+.dark .c-mc-1785600410600-f8e51929-sub-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+  position: relative;
+}
+.dark .c-mc-1785600410600-f8e51929-sub-icon {
+  width: 18px;
+  height: 18px;
+  margin-right: 8px;
+}
+.dark .c-mc-1785600410600-f8e51929-sub-title {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  color: #333333;
+  text-shadow: 0 5px 5px rgba(255, 255, 255, 0.8);
+}
+.dark .c-mc-1785600410600-f8e51929-sub-decoration {
+  width: 8px;
+  height: 8px;
+  margin-left: auto;
+}
+.dark .c-mc-1785600410600-f8e51929-cards {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+}
+.dark .c-mc-1785600410600-f8e51929-card-item {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+}
+.dark .c-mc-1785600410600-f8e51929-card-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+  opacity: 0.3;
+  z-index: 0;
+}
+.dark .c-mc-1785600410600-f8e51929-card-icon {
+  width: 48px;
+  height: 48px;
+  margin-right: 12px;
+  position: relative;
+  z-index: 1;
+}
+.dark .c-mc-1785600410600-f8e51929-card-text {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 1;
+}
+.dark .c-mc-1785600410600-f8e51929-card-label {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  color: #333333;
+  margin-bottom: 4px;
+}
+.dark .c-mc-1785600410600-f8e51929-card-value-row {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+}
+.dark .c-mc-1785600410600-f8e51929-card-value {
+  font-family: 'Roboto', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 23px;
+}
+.dark .c-mc-1785600410600-f8e51929-card-unit {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  color: #333333;
+  margin-left: 2px;
+}
+.light .c-mc-1785600410600-f8e51929-tabs {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  align-items: center;
+}
+.light .c-mc-1785600410600-f8e51929-tab-item {
+  border-radius: 10px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-family: 'Source Han Sans CN', sans-serif;
+  line-height: 21px;
+  text-align: center;
+  border: 0.73px solid #c7e0ff;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.3s ease;
+}
+.light .c-mc-1785600410600-f8e51929-tab-item--active {
+  background-color: #1990ff;
+  color: #ffffff;
+  font-weight: 500;
+  border-color: #c7e0ff;
+}
+.light .c-mc-1785600410600-f8e51929-tab-item--inactive {
+  background-color: transparent;
+  color: #6680a0;
+  font-weight: 400;
+}
+.light .c-mc-1785600410600-f8e51929-content {
+  padding: 16px;
+}
+.light .c-mc-1785600410600-f8e51929-sub-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+  position: relative;
+}
+.light .c-mc-1785600410600-f8e51929-sub-icon {
+  width: 18px;
+  height: 18px;
+  margin-right: 8px;
+}
+.light .c-mc-1785600410600-f8e51929-sub-title {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  color: #333333;
+  text-shadow: 0 5px 5px rgba(255, 255, 255, 0.8);
+}
+.light .c-mc-1785600410600-f8e51929-sub-decoration {
+  width: 8px;
+  height: 8px;
+  margin-left: auto;
+}
+.light .c-mc-1785600410600-f8e51929-cards {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+}
+.light .c-mc-1785600410600-f8e51929-card-item {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+}
+.light .c-mc-1785600410600-f8e51929-card-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+  opacity: 0.3;
+  z-index: 0;
+}
+.light .c-mc-1785600410600-f8e51929-card-icon {
+  width: 48px;
+  height: 48px;
+  margin-right: 12px;
+  position: relative;
+  z-index: 1;
+}
+.light .c-mc-1785600410600-f8e51929-card-text {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 1;
+}
+.light .c-mc-1785600410600-f8e51929-card-label {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  color: #333333;
+  margin-bottom: 4px;
+}
+.light .c-mc-1785600410600-f8e51929-card-value-row {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+}
+.light .c-mc-1785600410600-f8e51929-card-value {
+  font-family: 'Roboto', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 23px;
+}
+.light .c-mc-1785600410600-f8e51929-card-unit {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  color: #333333;
+  margin-left: 2px;
+}

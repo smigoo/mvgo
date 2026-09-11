@@ -1,0 +1,69 @@
+.common() {
+  // 字体缩放基准令牌（根容器通过 CSS 变量 --fontSize 驱动，默认 14px）
+  @fontSize: 14px;
+
+  // 字体尺寸
+  @font-size-base: 14px;
+  @font-size-lg: 16px;
+
+  // 圆角
+  @border-radius-lg: 8px;
+}
+
+.theme-dark() {
+  // 深色主题背景
+  @color-bg-base: #1a2332;
+  @color-bg-elevated: #243044;
+
+  // 深色主题边框
+  @color-border: rgba(255, 255, 255, 0.1);
+
+  // 深色主题文字（禁止黑色系）
+  @color-text-base: rgba(255, 255, 255, 0.85);
+  @color-text-secondary: rgba(255, 255, 255, 0.55);
+
+  // 主色
+  @color-primary: rgba(85, 158, 255, 1);
+
+  // 状态色
+  @color-success: rgba(82, 196, 26, 1);
+  @color-success-bg: rgba(82, 196, 26, 0.1);
+  @color-success-border: rgba(82, 196, 26, 1);
+  @color-error: rgba(255, 77, 79, 1);
+  @color-error-line: rgba(255, 77, 79, 1);
+
+  // 背景图
+  @bg-image-panel: url('../../images/bg-7890.png');
+}
+
+.theme-light() {
+  // 浅色主题背景（Figma 真值）
+  @color-bg-base: rgba(237, 244, 251, 1);
+  @color-bg-elevated: #ffffff;
+
+  // 浅色主题边框（Figma 真值）
+  @color-border: rgba(0, 0, 0, 0.06);
+
+  // 浅色主题文字（Figma 真值）
+  @color-text-base: rgba(0, 0, 0, 0.65);
+  @color-text-secondary: rgba(0, 0, 0, 0.45);
+
+  // 主色（Figma 真值）
+  @color-primary: rgba(85, 158, 255, 1);
+
+  // 状态色（Figma 真值）
+  @color-success: rgba(82, 196, 26, 1);
+  @color-success-bg: rgba(82, 196, 26, 0.1);
+  @color-success-border: rgba(82, 196, 26, 1);
+  @color-error: rgba(255, 77, 79, 1);
+  @color-error-line: rgba(255, 77, 79, 1);
+
+  // 背景图
+  @bg-image-panel: url('../../images/bg-7890.png');
+}
+
+// 自动添加：将 .common() 中的 Less 变量暴露到全局作用域
+
+:root {
+  .common();
+}

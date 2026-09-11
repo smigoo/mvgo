@@ -1,0 +1,313 @@
+{
+  "schemaVersion": 1,
+  "mode": "shadow",
+  "pipeline": "phase2",
+  "iteration": 0,
+  "generatedAt": "2026-08-25T09:01:04.352Z",
+  "productionInputMode": "legacy",
+  "engineerInputChanged": false,
+  "metrics": {
+    "legacyEstimatedBytes": 64580,
+    "generationInputBytes": 4418,
+    "reductionBytes": 60162,
+    "reductionRate": 93.16,
+    "issueCount": 2,
+    "rejectedClaimCount": 1
+  },
+  "trustVerdict": {
+    "level": "restricted",
+    "reasons": [
+      "覆盖率偏低 (40%)"
+    ],
+    "visual": {
+      "verdict": "warning",
+      "reason": "覆盖率偏低 (40%)",
+      "coverageRate": 40,
+      "recognizedSections": 0
+    },
+    "restrictions": [
+      "no-unsupported-decoration",
+      "no-style-fallback",
+      "resolve-legend-owner"
+    ]
+  },
+  "budget": {
+    "limits": {
+      "totalBytes": 30720,
+      "designFactsBytes": 12288,
+      "componentPlanBytes": 8192,
+      "resourceManifestBytes": 6144,
+      "currentIssuesBytes": 4096,
+      "maxIssues": 20
+    },
+    "sections": {
+      "designFacts": 689,
+      "componentPlan": 333,
+      "resourceManifest": 1574,
+      "currentIssues": 257
+    },
+    "totalBytes": 4416,
+    "passed": true,
+    "violations": []
+  },
+  "generationInput": {
+    "schemaVersion": 1,
+    "designFacts": {
+      "root": {
+        "nodeId": "2:7879",
+        "nodeName": "cp-环境监测",
+        "size": {
+          "width": 420,
+          "height": 186,
+          "unit": "css-px",
+          "source": "figma-api"
+        },
+        "styleEvidence": {
+          "background": {
+            "allowed": false,
+            "source": "figma-api",
+            "evidenceCount": 0
+          },
+          "border": {
+            "allowed": false,
+            "source": "figma-api",
+            "evidenceCount": 0
+          },
+          "borderRadius": {
+            "allowed": false,
+            "value": null,
+            "source": "figma-api"
+          },
+          "boxShadow": {
+            "allowed": false,
+            "source": "figma-api",
+            "evidenceCount": 0
+          }
+        }
+      },
+      "charts": [
+        {
+          "id": "section-chart",
+          "type": "area",
+          "series": [
+            "zk3+785CO浓度"
+          ],
+          "legend": {
+            "items": [
+              "zk3+785CO浓度"
+            ],
+            "owner": "unresolved",
+            "position": "top-right"
+          },
+          "source": "visual-analysis"
+        }
+      ],
+      "provenance": {
+        "deterministicSource": "figma-api",
+        "semanticSource": "visual-analysis"
+      }
+    },
+    "componentPlan": {
+      "effectiveSections": [
+        {
+          "id": "section-controls",
+          "title": "控制栏",
+          "responsibility": "控制栏（请按功能拆分）",
+          "elementCount": 8
+        },
+        {
+          "id": "section-chart",
+          "title": "浓度趋势图",
+          "responsibility": "图表/数据可视化区",
+          "elementCount": 1
+        }
+      ],
+      "isForced": false,
+      "minFiles": 0,
+      "reason": "有效 sections=2 < 3 → 不强制拆分"
+    },
+    "resourceManifest": [
+      {
+        "resourceId": "g",
+        "fileName": "g",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7883"
+      },
+      {
+        "resourceId": "circle",
+        "fileName": "circle",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7884"
+      },
+      {
+        "resourceId": "circle",
+        "fileName": "circle",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7885"
+      },
+      {
+        "resourceId": "path",
+        "fileName": "path",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7886"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:7890"
+      },
+      {
+        "resourceId": "bg-tab-active",
+        "fileName": "bg-tab-active",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:7891"
+      },
+      {
+        "resourceId": "tabs-icon",
+        "fileName": "tabs-icon",
+        "role": null,
+        "recommendedUsage": "decorativeBlock",
+        "figmaNodeId": "89:43"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7941"
+      },
+      {
+        "resourceId": "柱状图_filled 1",
+        "fileName": "柱状图_filled 1",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7943"
+      },
+      {
+        "resourceId": "Vector",
+        "fileName": "Vector",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7944"
+      },
+      {
+        "resourceId": "icon",
+        "fileName": "icon",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7945"
+      },
+      {
+        "resourceId": "属性 列表 详情2 1",
+        "fileName": "属性 列表 详情2 1",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7947"
+      },
+      {
+        "resourceId": "Vector",
+        "fileName": "Vector",
+        "role": null,
+        "recommendedUsage": "imgSrc",
+        "figmaNodeId": "2:7948"
+      },
+      {
+        "resourceId": "bg",
+        "fileName": "bg",
+        "role": null,
+        "recommendedUsage": "backgroundBlock",
+        "figmaNodeId": "2:7950"
+      }
+    ],
+    "currentIssues": [
+      {
+        "id": "CONTEXT-ROOT-BACKGROUND-CONFLICT",
+        "status": "open",
+        "severity": "warning",
+        "expectedAction": "do-not-generate-root-background"
+      },
+      {
+        "id": "CHART-LEGEND-OWNER:section-chart",
+        "status": "open",
+        "severity": "warning",
+        "expectedAction": "choose-dom-or-echarts-owner"
+      }
+    ],
+    "trustVerdict": {
+      "level": "restricted",
+      "reasons": [
+        "覆盖率偏低 (40%)"
+      ],
+      "visual": {
+        "verdict": "warning",
+        "reason": "覆盖率偏低 (40%)",
+        "coverageRate": 40,
+        "recognizedSections": 0
+      },
+      "restrictions": [
+        "no-unsupported-decoration",
+        "no-style-fallback",
+        "resolve-legend-owner"
+      ]
+    },
+    "contextManifest": {
+      "stage": "engineer",
+      "mode": "shadow-only",
+      "included": [
+        "schemaVersion",
+        "designFacts",
+        "componentPlan",
+        "resourceManifest",
+        "currentIssues",
+        "trustVerdict"
+      ],
+      "excluded": [
+        "figmaData",
+        "figmaNodeData",
+        "figmaStyleTree",
+        "visualAnalysis",
+        "visualElements",
+        "reviewResult",
+        "styleMappings",
+        "previousCritiques"
+      ],
+      "diagnosticsRef": {
+        "figma": "/Users/smigoo/工作/mvgo/temp-components/6a7599af6eb9eebf9fba56cd/mc-1787648248088-aa7128e6-mc-max-1787643746515-05ef2694/.checkpoint/figma.json",
+        "visual": "/Users/smigoo/工作/mvgo/temp-components/6a7599af6eb9eebf9fba56cd/mc-1787648248088-aa7128e6-mc-max-1787643746515-05ef2694/.checkpoint/visual.json",
+        "analysis": "/Users/smigoo/工作/mvgo/temp-components/6a7599af6eb9eebf9fba56cd/mc-1787648248088-aa7128e6-mc-max-1787643746515-05ef2694/.checkpoint/analysis.json"
+      },
+      "conflictSummary": {
+        "rejectedClaimCount": 1,
+        "rejectedClaimIds": [
+          "visual-analysis:root.background"
+        ]
+      },
+      "budget": {
+        "limits": {
+          "totalBytes": 30720,
+          "designFactsBytes": 12288,
+          "componentPlanBytes": 8192,
+          "resourceManifestBytes": 6144,
+          "currentIssuesBytes": 4096,
+          "maxIssues": 20
+        },
+        "sections": {
+          "designFacts": 689,
+          "componentPlan": 333,
+          "resourceManifest": 1574,
+          "currentIssues": 257
+        },
+        "totalBytes": 4416,
+        "passed": true,
+        "violations": []
+      }
+    }
+  }
+}

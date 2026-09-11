@@ -129,8 +129,15 @@ const polluted4aEnc = []; // declare 污染 且 目录名也是任务号（随 A
 const polluted4aCan = []; // declare 污染 且 目录名是规范 c-*（**不可删**）
 const polluted4aOther = []; // declare 污染、目录名既非任务号也非规范 c-*（需人工看）
 const noTail = []; // 任务号名但取不到尾 8hex（异常，单独看）
+/** 发布器 quality-staging 临时目录（崩溃残留，属瞬态垃圾，可无条件回收） */
+const STAGING_RE = /\.quality-staging-\d+-\d+-[0-9a-f]+$/i;
+const staging = [];
 
 for (const e of entries) {
+  if (STAGING_RE.test(e.name)) {
+    staging.push(e);
+    continue;
+  }
   if (!e.encoded) {
     if (e.declaredId && ENCODED_RE.test(e.declaredId)) {
       if (e.canonical) polluted4aCan.push(e);
@@ -164,6 +171,7 @@ const summary = {
     A_safe: bucketA.length,
     B_risky: bucketB.length,
     noTail: noTail.length,
+    staging: staging.length,
     polluted4aEnc: polluted4aEnc.length,
     polluted4aCan: polluted4aCan.length,
     polluted4aOther: polluted4aOther.length,
@@ -176,7 +184,7 @@ const summary = {
 };
 
 if (JSON_ONLY) {
-  console.log(JSON.stringify({ summary, bucketA, bucketB, noTail, polluted4aEnc, polluted4aCan, polluted4aOther }, null, 2));
+  console.log(JSON.stringify({ summary, bucketA, bucketB, noTail, staging, polluted4aEnc, polluted4aCan, polluted4aOther }, null, 2));
   process.exit(0);
 }
 
@@ -206,6 +214,8 @@ if (polluted4aCan.length) {
   for (const e of polluted4aCan.slice(0, 5)) console.log(`    ${pad(e.name, 46)} ${e.rootKey}  declare=${e.declaredId}`);
 }
 
+console.log(`\n--- 发布器 quality-staging 残留（瞬态，可无条件回收）: ${staging.length} ---`);
+for (const e of staging.slice(0, 6)) console.log(`    ${pad(e.name, 64)} ${e.rootKey}`);
 if (noTail.length) console.log(`\n--- 无尾 8hex 的任务号目录（异常，需人工看）: ${noTail.length} ---`);
 
 // ---------- 落 manifest ----------
@@ -215,7 +225,7 @@ const stamp = new Date();
 const p = (n) => String(n).padStart(2, '0');
 const ts = `${stamp.getFullYear()}${p(stamp.getMonth() + 1)}${p(stamp.getDate())}-${p(stamp.getHours())}${p(stamp.getMinutes())}${p(stamp.getSeconds())}`;
 const manifestPath = path.join(manifestDir, `naming-cleanup-manifest-${ts}.json`);
-fs.writeFileSync(manifestPath, JSON.stringify({ summary, bucketA, bucketB, noTail, polluted4aEnc, polluted4aCan, polluted4aOther }, null, 2), 'utf8');
+fs.writeFileSync(manifestPath, JSON.stringify({ summary, bucketA, bucketB, noTail, staging, polluted4aEnc, polluted4aCan, polluted4aOther }, null, 2), 'utf8');
 console.log(`\nmanifest 已写入: ${manifestPath}`);
 
 // ---------- 执行回收 ----------
@@ -224,7 +234,7 @@ if (!APPLY) {
   process.exit(0);
 }
 
-const targets = ONLY_SAFE ? [...bucketA] : [...bucketA, ...bucketB];
+const targets = ONLY_SAFE ? [...bucketA] : [...bucketA, ...bucketB, ...noTail, ...staging];
 const recycleRoot = path.join(projectRoot, `_naming-cleanup-backup-${ts}`);
 console.log(`\n=== 开始回收（不是 rm，可回滚）→ ${recycleRoot} ===`);
 

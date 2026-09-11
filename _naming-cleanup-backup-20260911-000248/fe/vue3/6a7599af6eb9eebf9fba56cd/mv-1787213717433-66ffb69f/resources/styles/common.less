@@ -1,0 +1,179 @@
+// 共享业务 class，按功能语义命名，避免组件 ID 前缀
+.traffic-monitor-root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #edf4fb;
+  box-shadow: 0 4px 10px rgba(74,117,141,0.25);
+  overflow: auto;
+  padding: 24px 23px;
+  box-sizing: border-box;
+}
+.section {
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.section-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.section-icon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+.section-title {
+  font-size: 16px;
+  font-weight: 500;
+  color: #333333;
+  text-shadow: 0 5.05px 5.05px rgba(255,255,255,0.8);
+}
+.chart-container {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+.chart-item {
+  margin-bottom: 12px;
+}
+.chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.chart-title {
+  font-size: 14px;
+  font-weight: 400;
+  color: #333333;
+}
+.chart-legend {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: #333333;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  display: inline-block;
+  border-radius: 2px;
+}
+.daily-total-cards {
+  display: flex;
+  gap: 16px;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-radius: 8px;
+  padding: 12px;
+}
+.stat-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.stat-label {
+  font-size: 14px;
+  color: #333333;
+}
+.stat-value {
+  font-size: 28px;
+  font-weight: bold;
+  color: #1990ff;
+}
+.vehicle-type-cards {
+  display: flex;
+  gap: 16px;
+}
+.vehicle-card {
+  flex: 1;
+  border: 1px solid #d9e2ec;
+  border-radius: 8px;
+  padding: 12px;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.vehicle-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.vehicle-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333333;
+}
+.vehicle-stats {
+  display: flex;
+  gap: 16px;
+}
+.vehicle-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.vehicle-stat-label {
+  font-size: 12px;
+  color: #333333;
+}
+.vehicle-stat-value {
+  font-size: 18px;
+  font-weight: 700;
+}
+.forecast-tabs {
+  display: flex;
+  gap: 8px;
+}
+.forecast-tab {
+  padding: 4px 16px;
+  border-radius: 20px;
+  font-size: 14px;
+  cursor: pointer;
+  background: #6680a0;
+  color: #fff;
+  border: 1px solid rgba(172,196,225,1);
+  user-select: none;
+}
+.forecast-tab.active {
+  background: #1990ff;
+  border-color: rgba(199,224,255,1);
+  font-weight: 500;
+}
+.holiday-link {
+  color: #1990ff;
+  font-size: 12px;
+  text-decoration: none;
+  cursor: pointer;
+}
+.forecast-chart-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.forecast-accuracy {
+  display: flex;
+  justify-content: center;
+  gap: 21px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #333333;
+}

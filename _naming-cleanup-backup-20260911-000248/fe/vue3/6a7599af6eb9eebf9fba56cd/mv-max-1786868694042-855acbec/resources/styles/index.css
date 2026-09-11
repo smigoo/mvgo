@@ -1,0 +1,52 @@
+.environment-section-title {
+  color: var(--colorTextBase, #ffffff);
+  font-size: 0;
+  line-height: 0;
+}
+.environment-header-line {
+  height: 6px;
+  background: linear-gradient(90deg, #559eff 0%, rgba(85, 158, 255, 0) 100%);
+}
+.environment-title-gradient {
+  color: #1990ff;
+  font-family: 'Noto Sans SC', 'Source Han Sans CN', Arial, sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 19.2px;
+}
+.monitor-tabs-shell {
+  background-size: 100% 100%;
+  background-position: 0 0;
+  background-repeat: no-repeat;
+  box-sizing: border-box;
+}
+.monitor-tab-active-bg {
+  background-size: 100% 100%;
+  background-position: 0 0;
+  background-repeat: no-repeat;
+}
+.monitor-warning-badge {
+  width: 14px;
+  height: 14px;
+  border-radius: 29px;
+  background: #f53f3f;
+  color: #ffffff;
+  font-family: 'PingFang SC', Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 14px;
+  text-align: center;
+}
+.chart-axis-text {
+  color: #666666;
+  font-family: Roboto, Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+}
+.chart-legend-text {
+  color: #333333;
+  font-family: 'Source Han Sans CN', Arial, sans-serif;
+  font-size: 9.6px;
+  font-weight: 400;
+  line-height: 14.4px;
+}

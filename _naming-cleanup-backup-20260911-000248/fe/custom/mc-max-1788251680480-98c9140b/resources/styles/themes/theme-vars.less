@@ -1,0 +1,53 @@
+.common() {
+  @fontSize: 14px;
+  @font-size-base: 14px;
+  @font-weight-strong: 600;
+  @border-radius-base: 8px;
+}
+
+.theme-light() {
+  @color-primary: rgba(24, 144, 255, 1);
+  @color-success: rgba(82, 196, 154, 1);
+  @color-warning: rgba(245, 63, 63, 1);
+  @color-text-base: rgba(255, 255, 255, 0.65);
+  @color-text-primary: #1a2b3c;
+  @color-text-secondary: #333333;
+  @color-bg-base: #f0f5fa;
+  @color-bg-gradient-start: #eaf3fb;
+  @color-bg-gradient-end: #f7fafd;
+  @color-tab-active-bg-start: rgba(24, 144, 255, 0.85);
+  @color-tab-active-bg-end: rgba(24, 144, 255, 0.55);
+  @color-grid-line: rgba(24, 144, 255, 0.12);
+  @color-chart-area-fill: rgba(82, 196, 154, 0.24);
+  @color-chart-line: rgba(82, 196, 154, 1);
+  @color-warning-dash: rgba(245, 63, 63, 1);
+  @color-warning-badge-bg: rgba(245, 63, 63, 1);
+}
+
+.theme-dark() {
+  @color-primary: rgba(24, 144, 255, 1);
+  @color-success: rgba(82, 196, 154, 1);
+  @color-warning: rgba(245, 63, 63, 1);
+  @color-text-base: rgba(255, 255, 255, 0.65);
+  @color-text-primary: #ffffff;
+  @color-text-secondary: rgba(255, 255, 255, 0.65);
+  @color-bg-base: #141b26;
+  @color-bg-gradient-start: #1a2332;
+  @color-bg-gradient-end: #0f151e;
+  @color-tab-active-bg-start: rgba(24, 144, 255, 0.85);
+  @color-tab-active-bg-end: rgba(24, 144, 255, 0.55);
+  @color-grid-line: rgba(24, 144, 255, 0.12);
+  @color-chart-area-fill: rgba(82, 196, 154, 0.24);
+  @color-chart-line: rgba(82, 196, 154, 1);
+  @color-warning-dash: rgba(245, 63, 63, 1);
+  @color-warning-badge-bg: rgba(245, 63, 63, 1);
+}
+// 写盘门禁自动补全缺失变量
+@fontSize: 0px;
+@fontSize: 0px;
+
+// 自动添加：将 .common() 中的 Less 变量暴露到全局作用域
+
+:root {
+  .common();
+}

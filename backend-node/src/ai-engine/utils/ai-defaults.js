@@ -374,8 +374,12 @@ export function resolveVisionConfig(config = {}) {
   if (saved.thinkingType) primary.thinkingType = saved.thinkingType
 
   // 供应商池：主配置并入池后择优 pick（向下兼容，主配置不失效）
+  // 🔒 用户配置隔离（2026-09-11）：当 merged.providers 是数组（即使是空数组）时，
+  // 使用 merged，不回退到 saved.providers（全局配置）。
+  // 这样用户只配了 1 个模型时，故障转移只在用户配置的主模型中切换（通过 primaryEntry 注入），
+  // 不会切换到开发者的模型池。
   const poolConfig =
-    Array.isArray(merged.providers) && merged.providers.length
+    Array.isArray(merged.providers)
       ? merged
       : { ...merged, providers: saved.providers, pickStrategy: merged.pickStrategy ?? saved.pickStrategy }
   const pooled = resolveProvider(poolConfig, primary, 'vision')
@@ -437,9 +441,12 @@ export function resolveTextConfig(config = {}) {
   if (saved.thinkingType) primary.thinkingType = saved.thinkingType
 
   // 供应商池：主配置并入池后择优 pick（向下兼容，主配置不失效）
-  // 调用方未自带 providers 时，用已保存配置的池（获得与生成管线一致的故障转移能力）
+  // 🔒 用户配置隔离（2026-09-11）：当 merged.providers 是数组（即使是空数组）时，
+  // 使用 merged，不回退到 saved.providers（全局配置）。
+  // 这样用户只配了 1 个模型时，故障转移只在用户配置的主模型中切换（通过 primaryEntry 注入），
+  // 不会切换到开发者的模型池。
   const poolConfig =
-    Array.isArray(merged.providers) && merged.providers.length
+    Array.isArray(merged.providers)
       ? merged
       : { ...merged, providers: saved.providers, pickStrategy: merged.pickStrategy ?? saved.pickStrategy }
   const pooled = resolveProvider(poolConfig, primary, 'text')

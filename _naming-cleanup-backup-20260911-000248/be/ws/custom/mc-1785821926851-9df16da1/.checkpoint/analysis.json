@@ -1,0 +1,171 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 72,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "section-header 中同时存在 header 对象和 body.children 中的标题/控件元素，导致结构冗余和重复定义。",
+        "suggestion": "移除 header 对象，仅保留 body.children 中的具体 UI 节点进行渲染，消除重复的语义描述。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0].body.children[1]",
+        "message": "生成了标题文字 '运单信息'。若该组件作为标准面板使用 <base-panel> 包裹，则直接违反了'禁止生成组件面板标题和边框样式'的核心规范。",
+        "suggestion": "若为标准面板组件，请删除该标题节点，交由 base-panel 通过 declare.json 的 componentName 自动渲染。若确为独立弹窗(Modal)则保留，但需确保不使用 base-panel。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[*].body.backgroundImage",
+        "message": "三个 section 的 body 均独立设置了相同的背景图 bg-2.png，会导致 DOM 节点冗余、重复渲染以及 section 间距处的背景断裂。",
+        "suggestion": "将背景图配置提取到根 layout 节点统一设置，移除各 section 内部的 backgroundImage 配置。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[1].styles",
+        "message": "监控截图 detail-image 使用了固定宽度 'width: 237px'，违反了'容器布局禁止固定宽度'的自适应约束，在窄屏下可能导致布局溢出或挤压。",
+        "suggestion": "将固定 width 改为 max-width: 237px，并结合 flex 比例或 aspect-ratio 确保响应式自适应。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "Figma 覆盖率 (coverageRate) 为 0，缺失 67 个节点，说明布局解析存在严重遗漏或设计稿图层结构未被正确识别。",
+        "suggestion": "重新运行 Figma 解析流程，检查设计稿图层命名和分组结构，确保所有 UI 元素被正确映射到布局 JSON 中。"
+      }
+    ],
+    "recommendations": [
+      "统一背景管理：将全局背景图、背景色提升至组件根容器，避免子区块重复设置导致的性能损耗和视觉割裂。",
+      "明确组件容器类型：在生成代码前明确该组件是独立弹窗还是面板内嵌组件。若是面板，必须严格剥离标题栏和面板边框样式。",
+      "优化图片资源引用：在代码生成阶段，确保所有 resourceFile 引用的图片采用 base64 内联或同源 URL 方式，严禁使用 ESM import 引入本地图片，避免触发 RUNTIME-004 运行时错误。",
+      "增强表格响应式：表格列数较多（8列），建议在代码实现时考虑横向滚动或固定列宽比例，防止在窄屏下表格内容被过度挤压。"
+    ],
+    "summary": "该布局结构整体区域划分较为清晰，能够准确表达运单信息弹窗的业务逻辑（标题、列表、详情）。但存在明显的结构冗余（header重复定义）、潜在的规范违反（面板标题重复生成）以及性能隐患（背景图重复设置）。此外，Figma 解析覆盖率为 0 是一个严重问题，表明当前布局数据可能未能完整反映设计稿。建议修复上述结构问题并重新核对设计稿解析结果后，再进行代码生成。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "rgba(0, 240, 255, 1)",
+      "--colorBg": "rgba(0, 48, 50, 1)",
+      "--colorTextBase": "rgba(255, 255, 255, 1)",
+      "--colorWarning": "rgba(176, 123, 0, 1)",
+      "--colorRowActive": "rgba(0, 240, 255, 0.15)",
+      "--fontSize": "14px",
+      "--borderRadius": "4px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "rgba(0, 240, 255, 1)",
+      "@color-bg": "rgba(0, 48, 50, 1)",
+      "@color-text-base": "rgba(255, 255, 255, 1)",
+      "@color-warning": "rgba(176, 123, 0, 1)",
+      "@color-row-active": "rgba(0, 240, 255, 0.15)",
+      "@font-size-base": "14px",
+      "@border-radius-base": "4px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".tech-container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "16px",
+        "background": "var(--colorBg, #003032)",
+        "color": "var(--colorTextBase, #ffffff)",
+        "font-size": "var(--fontSize, 14px)"
+      },
+      ".section-title": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "8px",
+        "font-size": "1.14em",
+        "font-weight": "bold",
+        "color": "var(--colorTextBase, #ffffff)"
+      },
+      ".section-title::before": {
+        "content": "''",
+        "display": "inline-block",
+        "width": "8px",
+        "height": "8px",
+        "background": "var(--colorPrimary, #00f0ff)",
+        "transform": "rotate(45deg)"
+      },
+      ".detail-title": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "6px",
+        "font-size": "1em",
+        "color": "var(--colorTextBase, #ffffff)"
+      },
+      ".detail-title::before": {
+        "content": "''",
+        "display": "inline-block",
+        "width": "6px",
+        "height": "6px",
+        "background": "var(--colorTextBase, #ffffff)"
+      },
+      ".table-row-active": {
+        "background": "var(--colorRowActive, rgba(0, 240, 255, 0.15))",
+        "border-left": "2px solid var(--colorPrimary, #00f0ff)"
+      },
+      ".tag-license-plate": {
+        "display": "inline-block",
+        "padding": "2px 8px",
+        "background": "var(--colorWarning, #b07b00)",
+        "color": "var(--colorTextBase, #ffffff)",
+        "border-radius": "var(--borderRadius, 4px)",
+        "font-size": "0.85em",
+        "font-weight": "bold"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "深青色背景 rgba(0, 48, 50, 1) 映射为 --colorBg，容器背景优先落地为字面量 #003032 或 rgba 值",
+      "科技青色 rgba(0, 240, 255, 1) 映射为 --colorPrimary，用于主色调、高亮及装饰",
+      "黄色 rgba(176, 123, 0, 1) 映射为 --colorWarning，专用于车牌标签等强调元素",
+      "标题左侧菱形装饰通过 .section-title::before 的 rotate(45deg) 实现",
+      "详情标题前的白色小方块通过 .detail-title::before 实现",
+      "选中表格行高亮使用主色半透明 --colorRowActive 结合左侧边框实现科技感"
+    ],
+    "elementStyleMap": {
+      "section-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-2.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "section-table": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-10": {
+        "background-image": "url(../resources/images/bg-2.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "section-detail": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-48": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-2.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  }
+}

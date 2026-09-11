@@ -1,0 +1,187 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 72,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].header.controls",
+        "message": "左侧垂直导航栏不应作为header的control，应独立为section或侧边栏结构。",
+        "suggestion": "将category-sidebar从header.controls移出，重构为独立的左侧section或与body并排的flex布局。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body.children",
+        "message": "device-total名称为设备总览，但缺失异常数等指标，与coverageReport中的设备总数不匹配。",
+        "suggestion": "核对Figma源文件，修正stat-card的name和value映射，补充缺失的异常数等统计项。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "覆盖率仅14%，大量Figma节点如状态组、具体数值文本未被识别映射，结构不完整。",
+        "suggestion": "重新分析源图，补全缺失的文本、状态组及交互元素，确保UI元素高覆盖率。"
+      }
+    ],
+    "recommendations": [
+      "重新审视左侧分类栏的布局位置，避免将其错误地塞入顶部标题栏的控件区。",
+      "仔细核对设备概览区的统计卡片，确保名称、数值及子指标与源图完全一致。",
+      "提高Figma节点的解析覆盖率，补充遗漏的文本和状态元素，完善组件数据结构。"
+    ],
+    "summary": "布局整体划分清晰，但左侧导航栏被错误放置在header控件中，且设备概览区指标映射有误、整体覆盖率过低，需重点修正结构与数据映射。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1890ff",
+      "--colorSuccess": "#05a3a5",
+      "--colorError": "#f53f3f",
+      "--colorBgBase": "#edf4fb",
+      "--colorBgContainer": "#ffffff",
+      "--colorTextBase": "#333333",
+      "--colorTextSecondary": "#999999",
+      "--fontSize": "14px",
+      "--fontSizeHeading": "28px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#1890ff",
+      "@color-success": "#05a3a5",
+      "@color-error": "#f53f3f",
+      "@color-bg-base": "#edf4fb",
+      "@color-bg-container": "#ffffff",
+      "@color-text-base": "#333333",
+      "@color-text-secondary": "#999999",
+      "@font-size-base": "14px",
+      "@font-size-heading": "28px",
+      "@border-radius-base": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".dashboard-container": {
+        "display": "flex",
+        "width": "100%",
+        "height": "100%",
+        "background-color": "var(--colorBgBase, #edf4fb)",
+        "color": "var(--colorTextBase, #333333)",
+        "font-size": "var(--fontSize, 14px)"
+      },
+      ".left-nav": {
+        "display": "flex",
+        "flex-direction": "column",
+        "width": "200px",
+        "background-color": "var(--colorBgContainer, #ffffff)",
+        "border-radius": "var(--borderRadius, 8px)",
+        "padding": "16px",
+        "margin": "16px"
+      },
+      ".main-content": {
+        "flex": "1",
+        "display": "grid",
+        "grid-template-columns": "repeat(auto-fit, minmax(300px, 1fr))",
+        "gap": "16px",
+        "padding": "16px 16px 16px 0"
+      },
+      ".card": {
+        "display": "flex",
+        "flex-direction": "column",
+        "border-radius": "var(--borderRadius, 8px)",
+        "overflow": "hidden",
+        "box-shadow": "0 2px 8px rgba(0,0,0,0.05)"
+      },
+      ".card-info": {
+        "background-color": "var(--colorPrimary, #1890ff)",
+        "color": "#ffffff",
+        "padding": "16px"
+      },
+      ".card-content": {
+        "background-color": "var(--colorBgContainer, #ffffff)",
+        "padding": "16px",
+        "flex": "1"
+      },
+      ".highlight-value": {
+        "color": "var(--colorPrimary, #1890ff)",
+        "font-weight": "bold"
+      },
+      ".device-icon": {
+        "width": "48px",
+        "height": "48px",
+        "border-radius": "50%",
+        "background-color": "var(--colorBgBase, #edf4fb)",
+        "display": "flex",
+        "align-items": "center",
+        "justify-content": "center"
+      },
+      ".emphasis-number": {
+        "font-size": "var(--fontSizeHeading, 28px)",
+        "font-weight": "bold",
+        "color": "var(--colorPrimary, #1890ff)",
+        "line-height": "1.2"
+      },
+      ".text-secondary": {
+        "color": "var(--colorTextSecondary, #999999)",
+        "font-size": "12px"
+      },
+      ".status-success": {
+        "color": "var(--colorSuccess, #05a3a5)"
+      },
+      ".status-error": {
+        "color": "var(--colorError, #f53f3f)"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主题色 #1890ff 映射为 --colorPrimary，用于蓝色信息块和数值高亮",
+      "背景色 #edf4fb 映射为 --colorBgBase，作为大屏整体浅灰蓝底色",
+      "卡片内容块使用纯白 #ffffff 作为 --colorBgContainer，与蓝色信息块形成对比",
+      "强调数字（如总数56302、完好率98%）使用 .emphasis-number 类，结合 --fontSizeHeading 和 --colorPrimary 突出显示",
+      "圆形设备图标使用 .device-icon 类，通过 border-radius: 50% 实现",
+      "左侧竖向分类导航使用 .left-nav 类，采用 flex 纵向布局",
+      "容器背景应优先直接落地为 Figma 字面量值，避免关键可见背景只依赖 CSS 变量"
+    ],
+    "elementStyleMap": {
+      "device-overview": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-2": {
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "device-categories": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-7": {
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "device-overview",
+        "responsibility": "数据统计指标区（数字+标签+趋势）",
+        "elementCount": 3,
+        "title": "设备概览"
+      },
+      {
+        "id": "device-categories",
+        "responsibility": "设备类型分类（请按功能拆分）",
+        "elementCount": 12,
+        "title": "设备类型分类"
+      }
+    ],
+    "isForced": false,
+    "minFiles": 0,
+    "reason": "有效 sections=2 < 3 → 不强制拆分"
+  }
+}

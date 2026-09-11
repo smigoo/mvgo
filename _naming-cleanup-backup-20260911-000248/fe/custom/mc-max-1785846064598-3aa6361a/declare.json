@@ -1,0 +1,62 @@
+{
+  "name": "智慧养护-98934",
+  "title": "运单信息监控组件",
+  "description": "用于展示危化品运输运单列表及详情信息的监控大屏组件",
+  "props": [
+    {
+      "name": "tagText",
+      "type": "String",
+      "default": "苏A 12345",
+      "description": "顶部显示的运单编号标签"
+    },
+    {
+      "name": "columns",
+      "type": "Array",
+      "default": [],
+      "description": "表格列定义"
+    },
+    {
+      "name": "tableData",
+      "type": "Array",
+      "default": [],
+      "description": "表格行数据"
+    },
+    {
+      "name": "selectedRowId",
+      "type": "String",
+      "default": "",
+      "description": "当前选中的行ID"
+    },
+    {
+      "name": "detailInfo",
+      "type": "Object",
+      "default": {},
+      "description": "运单详情数据对象"
+    },
+    {
+      "name": "imageUrl",
+      "type": "String",
+      "default": "",
+      "description": "监控抓拍图片地址"
+    }
+  ],
+  "events": [
+    {
+      "name": "close",
+      "description": "点击关闭按钮时触发"
+    },
+    {
+      "name": "row-select",
+      "description": "点击表格行时触发，返回行数据",
+      "params": [
+        "row"
+      ]
+    }
+  ],
+  "style": {
+    "width": "100%",
+    "height": "auto",
+    "minHeight": "600px"
+  },
+  "attribute": {}
+}

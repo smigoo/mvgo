@@ -1,0 +1,128 @@
+// --- 主题变量定义 ---
+// 本文件只定义 mixin，根级禁止调用任何主题 mixin
+
+.common() {
+  // --- 字体 ---
+  @font-family-base: 'Source Han Sans CN', 'Noto Sans SC', sans-serif;
+  @font-family-roboto: 'Roboto', sans-serif;
+  @font-family-alibaba: 'Alibaba PuHuiTi', 'Source Han Sans CN', sans-serif;
+
+  // --- 字体大小 ---
+  @font-size-xs: 10px;
+  @font-size-sm: 12px;
+  @font-size-md: 14px;
+  @font-size-lg: 16px;
+  @font-size-xl: 18px;
+  @font-size-xxl: 24px;
+
+  // --- 间距 ---
+  @spacing-xs: 4px;
+  @spacing-sm: 8px;
+  @spacing-md: 12px;
+  @spacing-lg: 16px;
+  @spacing-xl: 24px;
+
+  // --- 圆角 ---
+  @border-radius-sm: 2px;
+  @border-radius-md: 4px;
+  @border-radius-lg: 8px;
+  @border-radius-pill: 20.4615px;
+
+  // --- 功能性颜色（深浅色主题基本不变） ---
+  @color-primary: #1890ff;
+  @color-primary-hover: #40a9ff;
+  @color-primary-light: #69c0ff;
+  @color-primary-lighter: #91d5ff;
+  @color-primary-gradient-start: #1990ff;
+  @color-primary-gradient-end: #5a7eff;
+  @color-blue-dark: #006fe3;
+  @color-cyan: #0c9dbe;
+  @color-orange-dark: #ff6a00;
+  @color-success: #52c41a;
+  @color-warning: #fa8c16;
+  @color-error: #f5222d;
+
+  // --- 阴影 ---
+  @shadow-title-light: 0px 5.0479px 5.0479px rgba(255, 255, 255, 0.8);
+  @shadow-title-dark: 0px 5.0479px 5.0479px rgba(0, 0, 0, 0.3);
+
+  // --- 过渡 ---
+  @transition-base: all 0.2s ease;
+
+  // --- 图表相关 ---
+  @chart-tooltip-padding: 8px 12px;
+  @chart-font-size-sm: 10px;
+  @chart-font-size-md: 12px;
+}
+
+.theme-dark() {
+  // --- 文字颜色 ---
+  @text-color-primary: rgba(255, 255, 255, 0.85);
+  @text-color-secondary: rgba(255, 255, 255, 0.65);
+  @text-color-tertiary: rgba(255, 255, 255, 0.45);
+  @text-color-inverse: #ffffff;
+
+  // --- 背景 ---
+  @bg-tab-inactive: #6680a0;
+  @bg-card-hover: rgba(255, 255, 255, 0.05);
+
+  // --- 边框 ---
+  @border-color: rgba(255, 255, 255, 0.15);
+  @border-color-light: rgba(255, 255, 255, 0.25);
+  @border-color-lighter: rgba(255, 255, 255, 0.1);
+  @border-color-tab: rgba(172, 196, 225, 0.35);
+  @border-color-tab-active: rgba(199, 224, 255, 0.6);
+  @border-radius-tab: 20.4615px;
+
+  // --- 下拉选择 ---
+  @select-arrow-color: rgba(255, 255, 255, 0.65);
+  @select-text-color: rgba(255, 255, 255, 0.85);
+
+  // --- 图表 ---
+  @chart-axis-line: rgba(255, 255, 255, 0.2);
+  @chart-split-line: rgba(255, 255, 255, 0.08);
+  @chart-axis-label: rgba(255, 255, 255, 0.5);
+  @chart-tooltip-bg: rgba(20, 30, 50, 0.95);
+  @chart-tooltip-border: rgba(255, 255, 255, 0.15);
+  @chart-tooltip-text: rgba(255, 255, 255, 0.85);
+  @chart-mark-line: rgba(250, 140, 22, 0.9);
+
+  // --- 阴影 ---
+  @shadow-title: @shadow-title-dark;
+}
+
+.theme-light() {
+  // --- 文字颜色 ---
+  @text-color-primary: #333333;
+  @text-color-secondary: #666666;
+  @text-color-tertiary: #999999;
+  @text-color-inverse: #ffffff;
+
+  // --- 背景 ---
+  @bg-tab-inactive: #6680a0;
+  @bg-card-hover: #ffffff;
+
+  // --- 边框 ---
+  @border-color: #e8e8e8;
+  @border-color-light: #d9d9d9;
+  @border-color-lighter: #e0e6f0;
+  @border-color-tab: rgba(172, 196, 225, 1);
+  @border-color-tab-active: rgba(199, 224, 255, 1);
+  @border-radius-tab: 20.4615px;
+
+  // --- 下拉选择 ---
+  @select-arrow-color: #333333;
+  @select-text-color: #333333;
+
+  // --- 图表 ---
+  @chart-axis-line: #d9d9d9;
+  @chart-split-line: #e8ecf0;
+  @chart-axis-label: #666666;
+  @chart-tooltip-bg: rgba(255, 255, 255, 0.95);
+  @chart-tooltip-border: #e8e8e8;
+  @chart-tooltip-text: #333333;
+  @chart-mark-line: rgba(250, 140, 22, 0.9);
+
+  // --- 阴影 ---
+  @shadow-title: @shadow-title-light;
+}

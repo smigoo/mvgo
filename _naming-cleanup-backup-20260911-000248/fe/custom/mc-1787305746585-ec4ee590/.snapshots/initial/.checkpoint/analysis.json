@@ -1,0 +1,230 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 78,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[0]",
+        "message": "图表容器使用了固定宽度 `width: 378`，违反‘容器布局禁止固定宽度’规范，会导致组件无法自适应父容器宽度。",
+        "suggestion": "移除 `width: 378`，改为 `width: '100%'` 或使用 flex 布局自适应，仅保留明确的高度 `height: 140`。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0].body.children[1] & children[2]",
+        "message": "`chart-tunnel` 和 `chart-bridge` 的 body 中仅有 `legend-row`，缺少实际的图表渲染容器（如 `chart-canvas`），会导致 ECharts 实例无处挂载。",
+        "suggestion": "在 `body.children` 中补充图表渲染容器节点（如 `{ type: 'chart-canvas', width: '100%', height: '100%' }`），并将 legend 与 chart-canvas 包裹在同一个垂直 flex 容器中。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[0].body.children[0]",
+        "message": "`stats-row` 嵌套层级达到 5 层（section -> body -> stats-row -> stat-card -> label/value），DOM 结构略显冗余，增加不必要的渲染开销。",
+        "suggestion": "建议将 `stat-card` 的样式扁平化，直接在 `stats-row` 的子元素中定义 label 和 value，减少不必要的 div 嵌套。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body.children[1].header",
+        "message": "`chart-tunnel` 和 `chart-bridge` 的 `header` 为空（`controls: []`），且 `title` 与外层 section 或 stat-card 重复，结构冗余。",
+        "suggestion": "如果不需要子标题，建议直接移除 `header` 节点；或者将 `legend-row` 移至 `header.controls` 中，使结构更紧凑。"
+      }
+    ],
+    "recommendations": [
+      "严格遵循自适应布局规范，所有图表和容器宽度使用 `100%` 或 `flex: 1`，绝对禁止使用固定 px 宽度限制容器伸缩。",
+      "确保每个 ECharts 图表在布局中都有明确的 `chart-canvas` 容器节点，并设置 `width: 100%` 和明确的高度，同时外层 flex 子项需设置 `min-width: 0` 防止溢出。",
+      "优化图例（Legend）的布局位置，建议将其与图表容器放在同一个父级 flex 容器中，便于后续在代码中实现图例点击与图表的联动交互。",
+      "审查深层嵌套的统计卡片（如当日总流量、车型分布），尽量扁平化 DOM 结构，利用 CSS 直接控制子元素样式，提升渲染性能。"
+    ],
+    "summary": "整体布局结构清晰，区域划分合理，符合微码组件的基本规范。但存在图表渲染容器缺失和固定宽度等违反核心规范的问题，需要修正以确保代码生成时的自适应性和图表正常挂载。建议优化嵌套层级和冗余节点，提升结构的可维护性与性能。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorBgBase": "#edf4fb",
+      "--colorTextBase": "#333333",
+      "--colorPrimary": "#1890ff",
+      "--colorWarning": "#fa8c16",
+      "--colorSuccess": "#52c41a",
+      "--fontSize": "14px",
+      "--fontSizeLarge": "24px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-bg-base": "#edf4fb",
+      "@color-text-base": "#333333",
+      "@color-primary": "#1890ff",
+      "@color-warning": "#fa8c16",
+      "@color-success": "#52c41a",
+      "@font-size-base": "14px",
+      "@font-size-large": "24px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "width": "100%",
+        "height": "100%",
+        "background-color": "#edf4fb",
+        "color": "#333333",
+        "font-size": "14px",
+        "padding": "16px"
+      },
+      ".section-title": {
+        "display": "flex",
+        "align-items": "center",
+        "font-size": "16px",
+        "font-weight": "bold",
+        "color": "#333333",
+        "gap": "8px"
+      },
+      ".icon-diamond": {
+        "width": "8px",
+        "height": "8px",
+        "background-color": "#1890ff",
+        "transform": "rotate(45deg)"
+      },
+      ".threshold-line": {
+        "width": "100%",
+        "border-bottom": "1px dashed #fa8c16"
+      },
+      ".value-large": {
+        "font-size": "24px",
+        "font-weight": "bold",
+        "color": "#1890ff",
+        "line-height": "1.2"
+      },
+      ".text-success": {
+        "color": "#52c41a",
+        "font-weight": "500"
+      }
+    },
+    "tokenCoverage": 1,
+    "mappingNotes": [
+      "主题色映射为--colorPrimary，采用科技蓝#1890ff",
+      "容器背景直接落地为浅灰蓝色#edf4fb，符合浅色科技监测风",
+      "大号蓝色数值使用.value-large类，结合--fontSizeLarge和--colorPrimary",
+      "橙色虚线阈值线使用border-bottom dashed实现，颜色映射为--colorWarning",
+      "绿色准确率文字使用.text-success类，颜色映射为--colorSuccess",
+      "菱形标题图标通过CSS transform rotate(45deg)实现，无需额外图片资源"
+    ],
+    "elementStyleMap": {
+      "section-daily-total": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-tunnel": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "stat-bridge": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "chart-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-legend-row-x-11": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "chart-bridge": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-legend-row-x-15": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-vehicle-type": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-tunnel-stat-item-x-0": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "vehicle-tunnel-stat-item-x-2": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "vehicle-tunnel": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center",
+        "justify-content": "space-between"
+      },
+      "el-stat-item-x-21": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-stat-item-x-25": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "vehicle-bridge-stat-item-x-0": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "vehicle-bridge-stat-item-x-2": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "vehicle-bridge": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center",
+        "justify-content": "space-between"
+      },
+      "el-stat-item-x-29": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-stat-item-x-33": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "section-prediction": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-daily-total",
+        "responsibility": "当日总流量（请按功能拆分）",
+        "elementCount": 16,
+        "title": "当日总流量"
+      },
+      {
+        "id": "section-vehicle-type",
+        "responsibility": "车型分布（请按功能拆分）",
+        "elementCount": 16,
+        "title": "车型分布"
+      },
+      {
+        "id": "section-prediction",
+        "responsibility": "流量预测（请按功能拆分）",
+        "elementCount": 1,
+        "title": "流量预测"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 → 强制拆分"
+  }
+}

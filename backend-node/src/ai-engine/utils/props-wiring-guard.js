@@ -116,6 +116,45 @@ function splitTopLevel(text) {
       start = i + 1
     }
   }
+    parts.push(text.slice(start))
+  return parts.map((p) => p.trim()).filter(Boolean)
+}
+
+/**
+ * 同 splitTopLevel，但顶层分隔符同时接受 `,` 与 `;`。
+ * 用途：TS 泛型 props 定义常用 `;` 分隔（`defineProps<{ a?: string; b: string }>()`），
+ * 只按 `,` 切会把整段当一个成员 → 只能识别首个字段名，漏删其余资源字段。
+ * 嵌套对象/数组内的 `;`（如 `icon1: { type: String; required: true }`）位于 depth>0，不受影响。
+ */
+function splitTopLevelLoose(text) {
+  const parts = []
+  let start = 0
+  let depth = 0
+  let quote = null
+  let escaped = false
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i]
+    if (quote) {
+      if (escaped) {
+        escaped = false
+      } else if (ch === '\\') {
+        escaped = true
+      } else if (ch === quote) {
+        quote = null
+      }
+      continue
+    }
+    if (ch === '"' || ch === "'" || ch === '`') {
+      quote = ch
+      continue
+    }
+    if (ch === '{' || ch === '[' || ch === '(') depth += 1
+    if (ch === '}' || ch === ']' || ch === ')') depth = Math.max(0, depth - 1)
+    if ((ch === ',' || ch === ';') && depth === 0) {
+      parts.push(text.slice(start, i))
+      start = i + 1
+    }
+  }
   parts.push(text.slice(start))
   return parts.map((p) => p.trim()).filter(Boolean)
 }
@@ -380,6 +419,127 @@ export function rewriteSubcomponentResourceImportsToProps(content = '', resource
   result.content = newContent
   result.changed = newContent !== content
   result.rewritten = localResourceImports
+  return result
+}
+
+function propNameOfPart(part) {
+  const text = String(part || '').trim()
+  if (!text) return null
+  const quoted = text.match(/^(['"])([^'"]+)\1\s*[?:]/)
+  if (quoted) return quoted[2]
+  const keyed = text.match(/^([A-Za-z_$][\w$-]*)\s*[?:]/)
+  if (keyed) return keyed[1]
+  const shorthand = text.match(/^([A-Za-z_$][\w$]*)$/)
+  return shorthand ? shorthand[1] : null
+}
+
+/**
+ * 🔁 层② 反转（2026-09-11）：子组件资源「prop → 本地 import」的第一步（去 prop 声明）。
+ *
+ * 背景：P0/D「资源只在主组件 import、子组件 defineProps 接收 + 父透传」契约在多轮实测中反复
+ * 触发 CODE-019 不收敛（LLM 写盘时漏传 props，重试仍漏），且与层①「系统生成 index.vue 模板骨架」
+ * 冲突（系统确定性生成的子组件标签不带 props）。故反转契约：**子组件自己 import 自己用到的资源**，
+ * 父组件不再需要透传，CODE-019 的检测面直接归零。
+ *
+ * 执行顺序（关键，不可颠倒）：本函数必须在 injectResourceImports **之前**调用——
+ *   ① 先删掉 defineProps 里的资源 prop；否则 collectDeclaredBindings 会把同名 prop 记为「已声明」，
+ *      injectResourceImports 的撞名复核（safeImports）会拒绝注入 import → 资源运行时静默 undefined；
+ *   ② 再由 injectResourceImports 默认分支扫描模板实际引用的资源变量，注入子组件本地 import。
+ *
+ * 幂等：defineProps 内已无资源 prop 时零副作用；只删「资源类」prop，绝不触碰 chartData/activeTab
+ * 等业务 prop。支持三种形态：对象 `defineProps({ icon1: {...} })`、数组 `defineProps(['icon1'])`、
+ * 泛型 `defineProps<{ icon1?: string }>()`。
+ *
+ * @param {string} content 子组件 .vue 文件内容
+ * @param {Array} resourceDomMapping 资源映射（识别哪些是资源变量）
+ * @returns {{ content: string, changed: boolean, removed: string[] }}
+ */
+export function stripResourcePropsFromDefineProps(content = '', resourceDomMapping = []) {
+  const result = { content, changed: false, removed: [] }
+  if (typeof content !== 'string' || !content.includes('defineProps')) return result
+  const resourceNames = resolveResourceVarNameSet({ resourceDomMapping })
+  if (resourceNames.size === 0) return result
+
+  const scriptMatch = content.match(/<script[^>]*>([\s\S]*?)<\/script>/i)
+  if (!scriptMatch) return result
+  const script = scriptMatch[1]
+  const calls = extractDefinePropsCalls(script)
+  if (calls.length === 0) return result
+
+  const removed = []
+  const edits = [] // { start, end, text }
+  const DP_LEN = 'defineProps'.length
+
+  const stripObjectBody = (body, loose = false) => {
+    const kept = []
+    const parts = loose
+      ? splitTopLevelLoose(stripLineAndBlockComments(body))
+      : splitTopLevel(stripLineAndBlockComments(body))
+    for (const part of parts) {
+      const trimmed = String(part || '').trim()
+      if (!trimmed) continue
+      const name = propNameOfPart(trimmed)
+      if (name && resourceNames.has(name)) {
+        removed.push(name)
+        continue
+      }
+      kept.push(trimmed)
+    }
+    return kept.length > 0 ? `{\n  ${kept.join(',\n  ')}\n}` : '{}'
+  }
+
+  for (const call of calls) {
+    const parenIdx = call.start + DP_LEN + String(call.generic || '').length
+    const argsSpan = { start: parenIdx + 1, end: call.end - 1 }
+    const args = String(call.args || '')
+    if (args.startsWith('{')) {
+      const end = findMatching(args, 0, '{', '}')
+      const body = end >= 0 ? args.slice(1, end) : args.slice(1)
+      edits.push({ ...argsSpan, text: stripObjectBody(body) })
+    } else if (args.startsWith('[')) {
+      const end = findMatching(args, 0, '[', ']')
+      const body = end >= 0 ? args.slice(1, end) : args.slice(1)
+      const kept = []
+      for (const m of body.matchAll(/(['"])([^'"]+)\1/g)) {
+        if (resourceNames.has(m[2])) {
+          removed.push(m[2])
+          continue
+        }
+        kept.push(`${m[1]}${m[2]}${m[1]}`)
+      }
+      edits.push({ ...argsSpan, text: `[${kept.join(', ')}]` })
+    } else if (args === '' && String(call.generic || '').includes('<')) {
+      // 泛型形态：defineProps<{ icon1?: string }>()
+      const generic = String(call.generic)
+      const lt = generic.indexOf('<')
+      const gt = generic.lastIndexOf('>')
+      if (lt < 0 || gt <= lt) continue
+      const obj = generic.slice(lt + 1, gt).trim()
+      if (!obj.startsWith('{')) continue
+      const end = findMatching(obj, 0, '{', '}')
+      const body = end >= 0 ? obj.slice(1, end) : obj.slice(1)
+      const newObj = stripObjectBody(body, true)
+      edits.push({
+        start: call.start + DP_LEN + lt + 1,
+        end: call.start + DP_LEN + gt,
+        text: newObj,
+      })
+    }
+  }
+
+  if (removed.length === 0 || edits.length === 0) return result
+
+  // 从后往前替换，保持前面的偏移有效
+  let newScript = script
+  for (const e of edits.sort((a, b) => b.start - a.start)) {
+    newScript = newScript.slice(0, e.start) + e.text + newScript.slice(e.end)
+  }
+  newScript = newScript.replace(/\n{3,}/g, '\n\n')
+
+  const newContent = content.replace(scriptMatch[1], newScript)
+  result.content = newContent
+  result.changed = newContent !== content
+  result.removed = removed
   return result
 }
 

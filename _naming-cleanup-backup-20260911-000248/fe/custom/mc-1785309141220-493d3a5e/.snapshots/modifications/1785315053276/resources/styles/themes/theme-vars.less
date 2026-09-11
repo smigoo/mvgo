@@ -1,0 +1,31 @@
+.common() {
+--em-bg-color: #edf4fb;
+  --em-text-color: #333333;
+  --em-primary-color: #1990ff;
+  --em-success-color: #08a3a5;
+  --em-gradient-primary: linear-gradient(180deg, #e1f0ff 0%, #00ccff 100%);
+  --em-gradient-title: linear-gradient(90deg, #1990ff 0%, #5a7eff 100%);
+  @click: inherit; // 自动添加
+}
+
+.theme-dark() {
+  --em-bg-color: #1a2332;
+  --em-text-color: #ffffff;
+  --em-primary-color: #1990ff;
+  --em-success-color: #08a3a5;
+  --em-gradient-primary: linear-gradient(180deg, #e1f0ff 0%, #00ccff 100%);
+  --em-gradient-title: linear-gradient(90deg, #1990ff 0%, #5a7eff 100%);
+}
+
+.theme-light() {
+  --em-bg-color: #edf4fb;
+  --em-text-color: #333333;
+  --em-primary-color: #1990ff;
+  --em-success-color: #08a3a5;
+  --em-gradient-primary: linear-gradient(180deg, #e1f0ff 0%, #00ccff 100%);
+  --em-gradient-title: linear-gradient(90deg, #1990ff 0%, #5a7eff 100%);
+}
+
+:root {
+  .theme-dark();
+}

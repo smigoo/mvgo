@@ -1,0 +1,103 @@
+{
+  "stage": "codegen_done",
+  "brief": {
+    "layout": "垂直布局，自上而下分为标题区、导航控制区（Tab与功能按钮）、图表展示区。整体左对齐为主，图表区占满剩余空间。",
+    "regions": [
+      {
+        "name": "标题区",
+        "description": "左上角显示蓝色粗体标题「环境监测」，下方有一条极细的装饰线或阴影。",
+        "position": "top",
+        "size": "高度约20px，宽度占满左侧约1/3"
+      },
+      {
+        "name": "导航控制区",
+        "description": "包含横向排列的Tab切换栏和右侧的功能图标按钮组。Tab栏呈长条箭头状，当前选中项「一氧化碳」为深蓝色背景白字，其余项为浅蓝色背景蓝字。右侧有两个方形图标按钮，第二个按钮右上角有红色数字徽章。",
+        "position": "top",
+        "size": "高度约30px，位于标题下方，横跨大部分宽度"
+      },
+      {
+        "name": "图表展示区",
+        "description": "包含折线/面积图。右上角有图例「zk3+785CO浓度」。Y轴在左侧（0-40），标有单位「辆」；X轴在底部（2-24），标有单位「时」。图中有红色虚线「预警线」位于数值30处。绿色曲线在14-20时段隆起。",
+        "position": "center",
+        "size": "占满剩余高度约130px，宽度占满"
+      }
+    ],
+    "spacing": {
+      "outer": "整体内边距约10px",
+      "gap": "标题与导航区间距约10px，导航区与图表区间距约10px",
+      "padding": "图表区内部padding约10px"
+    },
+    "theme": "light",
+    "colors": {
+      "primary": "#3B82F6",
+      "background": "#F0F6FF",
+      "surface": "#FFFFFF",
+      "text": "#1F2937",
+      "border": "#E5E7EB"
+    },
+    "typography": {
+      "size": "标题约18px，Tab文字约14px，坐标轴数字约12px，图例文字约12px",
+      "weight": "标题Bold，Tab选中项Medium，其余Regular",
+      "lineHeight": "约1.5倍字号"
+    },
+    "components": [
+      "Tab切换栏",
+      "图标按钮",
+      "徽章(Badge)",
+      "折线面积图",
+      "图例",
+      "参考线(预警线)"
+    ],
+    "textContent": [
+      "环境监测",
+      "一氧化碳",
+      "能见度",
+      "洞内照明",
+      "洞外光强",
+      "6",
+      "zk3+785CO浓度",
+      "预警线",
+      "30",
+      "40",
+      "20",
+      "10",
+      "0",
+      "2",
+      "4",
+      "6",
+      "8",
+      "10",
+      "12",
+      "14",
+      "16",
+      "18",
+      "20",
+      "22",
+      "24",
+      "辆",
+      "时"
+    ],
+    "name": {
+      "cn": "环境监测",
+      "en": "environment-monitoring"
+    },
+    "visualDetails": [
+      "Tab栏左侧呈箭头状突出",
+      "图表曲线下方有绿色渐变填充",
+      "预警线为红色虚线",
+      "右上角图标为圆角矩形，内含白色图形",
+      "徽章为红色圆形，白色数字"
+    ],
+    "interactions": [
+      "Tab切换栏：当前激活「一氧化碳」，可点击切换至「能见度」、「洞内照明」、「洞外光强」",
+      "功能按钮：柱状图图标按钮，列表图标按钮（带未读消息数6）"
+    ],
+    "_themeSource": "pixel"
+  },
+  "width": 421,
+  "height": 186,
+  "sourceType": "screenshot",
+  "componentType": "vue3",
+  "generationTier": "lite",
+  "vueCode": "<template>\n  <div class=\"environment-monitoring\">\n    <!-- 标题区 -->\n    <div class=\"em-header\">\n      <h2 class=\"em-title\">环境监测</h2>\n    </div>\n\n    <!-- 导航控制区 -->\n    <div class=\"em-nav\">\n      <div class=\"em-tabs-container\">\n        <div \n          v-for=\"tab in tabs\" \n          :key=\"tab\"\n          class=\"em-tab\"\n          :class=\"{ active: activeTab === tab }\"\n          @click=\"activeTab = tab\"\n        >\n          {{ tab }}\n        </div>\n      </div>\n      \n      <div class=\"em-actions\">\n        <button class=\"em-icon-btn\">\n          <svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\">\n            <path d=\"M18 20V10M12 20V4M6 20v-6\" />\n          </svg>\n        </button>\n        <button class=\"em-icon-btn relative\">\n          <svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\">\n            <path d=\"M4 6h16M4 12h16M4 18h16\" />\n          </svg>\n          <span class=\"em-badge\">6</span>\n        </button>\n      </div>\n    </div>\n\n    <!-- 图表展示区 -->\n    <div class=\"em-chart-wrapper\">\n      <div ref=\"chartRef\" class=\"em-chart\"></div>\n    </div>\n  </div>\n</template>\n\n<script setup>\nimport { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';\nimport * as echarts from 'echarts';\n\n// 状态数据\nconst tabs = ['一氧化碳', '能见度', '洞内照明', '洞外光强'];\nconst activeTab = ref('一氧化碳');\n\n// 图表数据 (响应式)\nconst xData = ref(['0', '2', '4', '6', '8', '10', '12', '14', '16', '18', '20', '22', '24']);\nconst yData = ref([4, 6, 5, 4, 3, 3, 5, 10, 13, 12, 10, 5, 1]);\n\n// DOM 引用\nconst chartRef = ref(null);\nlet chart = null;\nlet resizeObserver = null;\n\n// 初始化图表逻辑\nconst initChartWhenReady = () => {\n  if (!chartRef.value) return;\n  if (chartRef.value.clientWidth === 0 || chartRef.value.clientHeight === 0) return;\n  if (chart) return; // 防重复初始化\n\n  chart = echarts.init(chartRef.value);\n  \n  const option = {\n    grid: {\n      top: 30,\n      right: 20,\n      bottom: 20,\n      left: 30,\n      containLabel: false\n    },\n    tooltip: {\n      trigger: 'axis'\n    },\n    legend: {\n      data: ['zk3+785CO浓度'],\n      top: 0,\n      right: 0,\n      textStyle: {\n        fontSize: 10,\n        color: '#666'\n      },\n      icon: 'rect'\n    },\n    xAxis: {\n      type: 'category',\n      boundaryGap: false,\n      data: xData.value,\n      axisLine: { show: false },\n      axisTick: { show: false },\n      axisLabel: {\n        color: '#999',\n        fontSize: 10,\n        margin: 10\n      },\n      name: '时',\n      nameLocation: 'end',\n      nameTextStyle: {\n        color: '#999',\n        fontSize: 10,\n        padding: [0, 0, 0, 10]\n      }\n    },\n    yAxis: {\n      type: 'value',\n      min: 0,\n      max: 40,\n      interval: 10,\n      splitLine: {\n        lineStyle: {\n          type: 'dashed',\n          color: '#E5E7EB'\n        }\n      },\n      axisLabel: {\n        color: '#999',\n        fontSize: 10\n      },\n      name: '辆',\n      nameLocation: 'end',\n      nameTextStyle: {\n        color: '#999',\n        fontSize: 10,\n        padding: [0, 0, 10, 0]\n      }\n    },\n    series: [\n      {\n        name: 'zk3+785CO浓度',\n        type: 'line',\n        smooth: true,\n        symbol: 'none',\n        lineStyle: {\n          color: '#10B981', // 绿色\n          width: 2\n        },\n        areaStyle: {\n          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [\n            { offset: 0, color: 'rgba(16, 185, 129, 0.4)' },\n            { offset: 1, color: 'rgba(16, 185, 129, 0.05)' }\n          ])\n        },\n        data: yData.value,\n        markLine: {\n          symbol: ['none', 'none'],\n          label: {\n            formatter: '预警线',\n            position: 'end',\n            color: '#EF4444',\n            fontSize: 10\n          },\n          lineStyle: {\n            type: 'dashed',\n            color: '#EF4444'\n          },\n          data: [\n            { yAxis: 30 }\n          ]\n        }\n      }\n    ]\n  };\n\n  chart.setOption(option);\n};\n\n// 监听 ref 变化\nwatch(chartRef, (el) => {\n  if (el && !chart) {\n    nextTick(() => initChartWhenReady());\n  }\n}, { immediate: true });\n\nonMounted(() => {\n  nextTick(() => initChartWhenReady());\n  \n  // 监听尺寸变化\n  if (chartRef.value) {\n    resizeObserver = new ResizeObserver(() => {\n      if (chart) {\n        chart.resize();\n      } else {\n        initChartWhenReady();\n      }\n    });\n    resizeObserver.observe(chartRef.value);\n  }\n});\n\nonUnmounted(() => {\n  if (resizeObserver) {\n    resizeObserver.disconnect();\n  }\n  if (chart) {\n    chart.dispose();\n    chart = null;\n  }\n});\n</script>\n\n<style scoped>\n.environment-monitoring {\n  width: 100%;\n  height: 100%;\n  box-sizing: border-box;\n  background-color: #F0F6FF; /* 浅蓝背景 */\n  padding: 10px;\n  display: flex;\n  flex-direction: column;\n  font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif;\n  overflow: hidden;\n}\n\n/* 标题区 */\n.em-header {\n  height: 24px;\n  display: flex;\n  align-items: center;\n  margin-bottom: 8px;\n}\n\n.em-title {\n  margin: 0;\n  font-size: 18px;\n  font-weight: bold;\n  color: #3B82F6; /* 蓝色标题 */\n  line-height: 1.2;\n}\n\n/* 导航控制区 */\n.em-nav {\n  height: 32px;\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  margin-bottom: 10px;\n}\n\n.em-tabs-container {\n  display: flex;\n  background-color: #DDEEFF; /* 浅蓝底 */\n  border-radius: 4px;\n  overflow: hidden;\n  height: 28px;\n  align-items: center;\n  /* 模拟左侧箭头形状 */\n  clip-path: polygon(0 50%, 12px 0, 100% 0, 100% 100%, 12px 100%);\n  padding-left: 12px; /* 补偿 clip-path 切掉的部分 */\n}\n\n.em-tab {\n  padding: 0 12px;\n  font-size: 13px;\n  color: #3B82F6;\n  cursor: pointer;\n  height: 100%;\n  display: flex;\n  align-items: center;\n  white-space: nowrap;\n  transition: all 0.3s;\n}\n\n.em-tab.active {\n  background-color: #3B82F6; /* 深蓝选中 */\n  color: #FFFFFF;\n  font-weight: 500;\n}\n\n.em-actions {\n  display: flex;\n  gap: 8px;\n  align-items: center;\n}\n\n.em-icon-btn {\n  width: 28px;\n  height: 28px;\n  background-color: #3B82F6;\n  border: none;\n  border-radius: 4px;\n  color: white;\n  display: flex;\n  justify-content: center;\n  align-items: center;\n  cursor: pointer;\n  padding: 0;\n}\n\n.em-icon-btn svg {\n  width: 16px;\n  height: 16px;\n}\n\n.em-icon-btn.relative {\n  position: relative;\n}\n\n.em-badge {\n  position: absolute;\n  top: -6px;\n  right: -6px;\n  background-color: #EF4444;\n  color: white;\n  font-size: 10px;\n  font-weight: bold;\n  border-radius: 10px;\n  width: 16px;\n  height: 16px;\n  display: flex;\n  justify-content: center;\n  align-items: center;\n  border: 1px solid #F0F6FF; /* 与背景同色描边，制造镂空感 */\n  z-index: 10;\n}\n\n/* 图表区 */\n.em-chart-wrapper {\n  flex: 1;\n  min-height: 0; /* 关键：防止 flex 子元素撑破 */\n  position: relative;\n  background-color: transparent;\n}\n\n.em-chart {\n  width: 100%;\n  height: 100%;\n}\n</style>"
+}

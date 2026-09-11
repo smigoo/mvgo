@@ -1,0 +1,248 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 82,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body.children",
+        "message": "body中重复定义标题文本'环境监测'，与header.title冗余，会导致重复渲染。",
+        "suggestion": "移除body.children中的text节点，仅保留header.title。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[1]",
+        "message": "icon-group错误包含resourceFile等属性，这些应属于其子元素icon，层级混乱。",
+        "suggestion": "将icon-group上的resourceFile等属性移至对应的子icon节点中。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[0].body & layout.sections[2].body",
+        "message": "header和chart的body均配置相同背景图bg-7890.png，可能导致背景重复渲染。",
+        "suggestion": "统一在组件根节点或外层容器设置背景图，移除内部section的重复背景配置。"
+      }
+    ],
+    "recommendations": [
+      "建议将section-header和section-toolbar合并为一个section，减少不必要的DOM层级。",
+      "图表Y轴单位识别为'辆'与CO浓度不符，建议在数据映射时进行单位修正或隐藏Y轴单位标签。"
+    ],
+    "summary": "整体布局结构清晰，但存在标题重复渲染、图标组属性层级错乱及背景图重复配置等问题，需优化以提升性能和规范性。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#0072ff",
+      "--colorPrimaryBg": "rgba(0, 114, 255, 0.12)",
+      "--colorBg": "#EDF4FB",
+      "--colorSuccess": "#52c41a",
+      "--colorDanger": "#f53f3f",
+      "--colorTextBase": "#666666",
+      "--fontSize": "14px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#0072ff",
+      "@color-primary-bg": "rgba(0, 114, 255, 0.12)",
+      "@color-bg": "#EDF4FB",
+      "@color-success": "#52c41a",
+      "@color-danger": "#f53f3f",
+      "@color-text-base": "#666666",
+      "@font-size-base": "14px",
+      "@border-radius-base": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "height": "100%",
+        "padding": "1em",
+        "background": "var(--colorBg)",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)"
+      },
+      ".tab": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "gap": "0.4em",
+        "padding": "0.5em 1em",
+        "border-radius": "var(--borderRadius)",
+        "cursor": "pointer"
+      },
+      ".tab-active": {
+        "background": "linear-gradient(135deg, var(--colorPrimary), rgba(0, 114, 255, 0.65))",
+        "color": "#ffffff"
+      },
+      ".chart-area-fill": {
+        "fill": "var(--colorSuccess)",
+        "opacity": "0.2"
+      },
+      ".alert-line": {
+        "border-top": "2px solid var(--colorDanger)",
+        "background": "var(--colorDanger)"
+      },
+      ".badge-danger": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "min-width": "1.6em",
+        "height": "1.6em",
+        "padding": "0 0.4em",
+        "background": "var(--colorDanger)",
+        "color": "#ffffff",
+        "border-radius": "999px",
+        "font-size": "0.85em"
+      }
+    },
+    "tokenCoverage": 0.92,
+    "mappingNotes": [
+      "主题蓝色 #0072ff 映射为 --colorPrimary 及主色背景 rgba 变量，用于 Tab 选中态渐变",
+      "浅蓝灰背景 #EDF4FB 映射为 --colorBg，作为页面容器背景",
+      "图表绿色 #52c41a 映射为 --colorSuccess，用于面积填充",
+      "红色 #f53f3f 映射为 --colorDanger，用于预警线与角标数字",
+      "灰色 #666666 映射为 --colorTextBase，作为基础文字颜色"
+    ],
+    "elementStyleMap": {
+      "section-header": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "section-toolbar": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tab-group": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-tab-item-一氧化碳-6": {
+        "background-image": "url(../resources/images/bg-tab-active-7891.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "icon-group": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-14": {
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-header",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 1,
+        "title": "环境监测",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 1,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "section-toolbar",
+        "responsibility": "标签页切换区",
+        "elementCount": 4,
+        "title": "Tab与工具栏",
+        "complexityScore": 10,
+        "complexityReasons": {
+          "elementCount": 4,
+          "charts": 1,
+          "interactions": 3,
+          "maxDepth": 2
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "浓度趋势图",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 1,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 或存在高复杂度 section → 强制拆分",
+    "internalSubcomponents": []
+  }
+}

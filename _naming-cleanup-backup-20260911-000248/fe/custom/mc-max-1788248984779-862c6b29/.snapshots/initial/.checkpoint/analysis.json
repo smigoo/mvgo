@@ -1,0 +1,243 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 68,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0].headerRelation",
+        "message": "tabs-section本质是面板顶部Tab控件而非独立内容区，未映射为title-right/header-right插槽却标为常驻section",
+        "suggestion": "结合coverageReport中缺失的cp-环境监测/环境监测标题节点，将Tab栏改为header插槽候选并补充slotCandidate"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "headerSlots",
+        "message": "headerSlots声明了柱状图图标和带角标8的列表图标，但layout.sections中无对应DOM节点，doNotInvent又称按钮功能未知",
+        "suggestion": "删除无证据的headerSlots条目，或在tabs-section body中补充对应icon子节点并标注slotCandidate为header-right"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "charts[0]",
+        "message": "chart对象legendPosition为top-right但legend数组为空，series仅1项与chartDataHints中多指标标签不一致",
+        "suggestion": "补全legend内容或将legendPosition置为none，并说明series与chartDataHints标签的对应关系"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "layout.sections[0].body.children[0].styles.color",
+        "message": "激活Tab颜色为白字(rgba 255,255,255)但styles.colors列表未包含蓝色背景色，视觉高亮机制缺失背景色定义",
+        "suggestion": "为tab-active补充background/backgroundColor字段以体现'蓝底白字'描述"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "coverageRate仅50%，缺失一氧化碳/num等关键Figma节点未在layout中体现，可能遗漏子指标卡片",
+        "suggestion": "核对原图，将一氧化碳数值卡片等缺失节点补充进对应section的children"
+      }
+    ],
+    "recommendations": [
+      "为Tab栏补充header插槽映射并去除无证据的图标按钮声明",
+      "完善chart的legend与chartDataHints的对应关系，避免数据结构脱节",
+      "针对coverageReport缺失节点逐一核实并补全layout，提升覆盖率至80%以上"
+    ],
+    "summary": "整体结构层级清晰未超3层，但Tab栏插槽映射缺失、headerSlots臆造图标、图表legend不完整，且Figma覆盖率仅50%，需补充修正。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "rgba(85, 158, 255, 1)",
+      "--colorPrimaryLight": "rgba(85, 158, 255, 0.3)",
+      "--colorDanger": "rgba(255, 78, 78, 1)",
+      "--colorTextBase": "rgba(0, 0, 0, 0.65)",
+      "--colorBg": "rgba(255, 255, 255, 1)",
+      "--colorBgSecondary": "rgba(237, 244, 251, 1)",
+      "--fontSize": "14px",
+      "--fontSizeBase": "14px",
+      "--borderRadius": "4px",
+      "--borderRadiusLg": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "rgba(85, 158, 255, 1)",
+      "@color-primary-light": "rgba(85, 158, 255, 0.3)",
+      "@color-danger": "rgba(255, 78, 78, 1)",
+      "@color-text-base": "rgba(0, 0, 0, 0.65)",
+      "@color-bg": "rgba(255, 255, 255, 1)",
+      "@color-bg-secondary": "rgba(237, 244, 251, 1)",
+      "@font-size-base": "14px",
+      "@border-radius-base": "4px",
+      "@border-radius-lg": "8px",
+      "@border-style-dashed": "2px dashed @color-danger",
+      "@badge-size": "16px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".light-panel": {
+        "background": "rgba(237, 244, 251, 1)",
+        "color": "var(--colorTextBase)"
+      },
+      ".tab-container": {
+        "display": "flex",
+        "gap": "8px",
+        "background": "var(--colorBg)"
+      },
+      ".tab-item": {
+        "padding": "8px 16px",
+        "cursor": "pointer",
+        "border-radius": "var(--borderRadius)",
+        "transition": "all 0.3s ease",
+        "color": "var(--colorTextBase)"
+      },
+      ".tab-item--active": {
+        "background": "var(--colorPrimary)",
+        "color": "var(--colorBg)"
+      },
+      ".threshold-line": {
+        "border-top": "2px dashed var(--colorDanger)",
+        "position": "relative"
+      },
+      ".dot-indicator": {
+        "width": "6px",
+        "height": "6px",
+        "border-radius": "50%",
+        "display": "inline-block"
+      },
+      ".dot-indicator--primary": {
+        "background": "var(--colorPrimary)"
+      },
+      ".dot-indicator--danger": {
+        "background": "var(--colorDanger)"
+      },
+      ".badge": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "min-width": "16px",
+        "height": "16px",
+        "padding": "0 4px",
+        "font-size": "12px",
+        "line-height": "1",
+        "border-radius": "8px",
+        "background": "var(--colorDanger)",
+        "color": "var(--colorBg)"
+      },
+      ".card-container": {
+        "background": "var(--colorBg)",
+        "border-radius": "var(--borderRadiusLg)",
+        "padding": "16px",
+        "box-shadow": "0 2px 8px rgba(0, 0, 0, 0.08)"
+      },
+      ".highlight-text": {
+        "color": "var(--colorPrimary)",
+        "font-weight": "500"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调(rgba(85, 158, 255, 1))映射为--colorPrimary，用于激活态Tab和强调元素",
+      "浅蓝色(rgba(85, 158, 255, 0.3))映射为--colorPrimaryLight，用于次要高亮",
+      "红色(rgba(255, 78, 78, 1))映射为--colorDanger，用于预警线和角标",
+      "文字颜色(rgba(0, 0, 0, 0.65))映射为--colorTextBase，保持中性灰度",
+      "主背景(rgba(255, 255, 255, 1))映射为--colorBg，用于卡片和容器",
+      "次要背景(rgba(237, 244, 251, 1))映射为--colorBgSecondary，用于面板整体背景",
+      "红色虚线通过.threshold-line类实现，使用--colorDanger",
+      "圆点装饰通过.dot-indicator类实现，支持主色和危险色变体",
+      "右上角角标通过.badge类实现，红底白字",
+      "所有CSS变量采用camelCase命名规范"
+    ],
+    "elementStyleMap": {
+      "tabs-section": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "chart-section": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-8": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "tabs-section",
+        "responsibility": "标签页切换区",
+        "elementCount": 4,
+        "title": "Tab切换栏",
+        "complexityScore": 20,
+        "complexityReasons": {
+          "elementCount": 4,
+          "charts": 0,
+          "interactions": 5,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "chart-section",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "24小时趋势图表",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 1,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      }
+    ],
+    "isForced": false,
+    "minFiles": 0,
+    "reason": "有效 sections=2 < 3 且无高复杂度 section → 不强制拆分",
+    "internalSubcomponents": []
+  }
+}

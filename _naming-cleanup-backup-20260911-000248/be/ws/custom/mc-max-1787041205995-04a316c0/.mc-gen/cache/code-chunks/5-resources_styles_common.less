@@ -1,0 +1,284 @@
+.c-monitor-root {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  height: 100%;
+  box-sizing: border-box;
+  color: @monitor-text-primary;
+  font-family: @monitor-font-family;
+}
+
+.c-monitor-top-stats {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  padding: 16px;
+  background-image: url(../resources/images/bg-8788.png);
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  flex-shrink: 0;
+}
+
+.c-monitor-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 4px;
+  min-width: 0;
+}
+
+.c-monitor-stat-label {
+  font-size: 12px;
+  color: @monitor-text-label;
+  line-height: 1.5;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.c-monitor-stat-value {
+  font-size: 24px;
+  font-weight: 600;
+  color: @monitor-text-value;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.c-monitor-category-cards {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.c-monitor-category-card {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-width: 240px;
+  padding: 12px;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  gap: 12px;
+  box-sizing: border-box;
+}
+
+.c-monitor-category-card:nth-child(1) {
+  background-image: url(../resources/images/bg-8807.png);
+}
+
+.c-monitor-category-card:nth-child(2) {
+  background-image: url(../resources/images/bg-8788.png);
+}
+
+.c-monitor-card-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.c-monitor-card-icon {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.c-monitor-card-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: @monitor-text-primary;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.c-monitor-stats-row {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.c-monitor-stat-item-horizontal {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 0;
+  min-width: 80px;
+  background: @monitor-card-bg-color;
+  border-radius: 6px;
+  padding: 8px;
+  box-sizing: border-box;
+}
+
+.c-monitor-item-icon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.c-monitor-text-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.c-monitor-item-label {
+  font-size: 12px;
+  color: @monitor-text-label;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.c-monitor-item-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: @monitor-text-value;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.c-monitor-device-section {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+
+.c-monitor-nav-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+  width: 100px;
+}
+
+.c-monitor-nav-tab {
+  padding: 10px 12px;
+  background-image: url(../resources/images/bg-8439.png);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 13px;
+  color: @monitor-text-secondary;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  user-select: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.c-monitor-nav-tab:hover {
+  color: @monitor-text-primary;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.c-monitor-nav-tab.is-active {
+  color: @monitor-highlight-color;
+  font-weight: 600;
+  box-shadow: 0 0 0 1px @monitor-highlight-color, 0 4px 8px rgba(0, 0, 0, 0.1);
+  background-color: @monitor-tab-active-bg;
+}
+
+.c-monitor-device-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  align-content: start;
+}
+
+.c-monitor-device-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 8px;
+  background-image: url(../resources/images/bg-8788.png);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-sizing: border-box;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.c-monitor-device-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+
+.c-monitor-device-icon-wrapper {
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: @monitor-icon-bg-color;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.c-monitor-device-icon {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.c-monitor-device-name {
+  font-size: 13px;
+  color: @monitor-text-primary;
+  text-align: center;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.c-monitor-device-status {
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+  white-space: nowrap;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+.c-monitor-device-status.status-online {
+  color: @monitor-status-online;
+  background-color: fade(@monitor-status-online, 15%);
+}
+
+.c-monitor-device-status.status-offline {
+  color: @monitor-status-offline;
+  background-color: fade(@monitor-status-offline, 15%);
+}
+
+.c-monitor-device-status.status-fault {
+  color: @monitor-status-fault;
+  background-color: fade(@monitor-status-fault, 15%);
+}
+
+.is-active {
+  /* 通用激活状态占位 */
+}

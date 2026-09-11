@@ -20,6 +20,8 @@
  * 抽成独立模块的目的：纯函数、可单测，不依赖 MicrocodeEngineer 实例。
  */
 
+import { extractSfcTemplateRegion } from './sfc-template-extractor.js';
+
 /** 剥离 class 上的实例 ID 前缀（`c-mc-max-<ts>-<hex>-` / `c-mv-max-...`） */
 export function stripInstanceClsPrefix(s) {
   return String(s || '')
@@ -93,8 +95,8 @@ export function boxAreaRatio(mapping) {
 export function inferComponentPrefix(files) {
   const idx = files?.['package/index.vue'];
   if (typeof idx !== 'string') return '';
-  const tpl = idx.match(/<template>([\s\S]*?)<\/template>/i);
-  const body = tpl ? tpl[1] : idx;
+  // 🛡️ 共享边界法 + 剥具名插槽（lazy </template> 会被插槽提前截断——0ca84358 家族缺陷）
+  const body = extractSfcTemplateRegion(idx, { stripSlots: true }) || idx;
   const withPanel = body.match(
     /<base-panel[^>]*>[\s\S]*?<[a-zA-Z][^>]*\bclass="([\w-]+)"/,
   );

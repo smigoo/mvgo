@@ -1,0 +1,123 @@
+// 微码组件主题变量文件
+// 由三个 mixin 组成：.common()、.theme-dark()、.theme-light()
+// 系统将在 dark.less/light.less 中调用对应 mixin
+
+// 公共变量（跨主题复用）
+.common() {
+  // 字体缩放基准令牌（根容器通过 CSS 变量 --fontSize 驱动，默认 14px）
+  @fontSize: 14px;
+  
+  // 基础字号
+  @font-size-base: 14px;
+  @font-size-title: 16px;
+  @font-size-small: 12px;
+  
+  // 圆角
+  @border-radius-base: 4px;
+  @border-radius-large: 8px;
+  
+  // 间距
+  @spacing-xs: 4px;
+  @spacing-sm: 8px;
+  @spacing-md: 12px;
+  @spacing-lg: 16px;
+  @spacing-xl: 24px;
+  
+  // 过渡动画
+  @transition-base: all 0.3s ease;
+  @transition-fast: all 0.2s ease;
+}
+
+// 深色主题（面板默认主题，必须与设计稿一致）
+.theme-dark() {
+  // 背景色
+  @color-bg-base: #1a2a3a;
+  @color-bg-elevated: rgba(255, 255, 255, 0.05);
+  @color-bg-overlay: rgba(0, 0, 0, 0.5);
+  
+  // 主题色
+  @color-primary: #559eff;
+  @color-primary-hover: lighten(#559eff, 10%);
+  @color-primary-active: darken(#559eff, 5%);
+  
+  // 状态色
+  @color-success: rgba(0, 200, 120, 0.8);
+  @color-warning: #f53f3f;
+  @color-error: #f53f3f;
+  @color-info: #559eff;
+  
+  // 文本色（深色面板禁止使用黑色系）
+  @color-text-base: rgba(255, 255, 255, 0.7);
+  @color-text-strong: #ffffff;
+  @color-text-secondary: rgba(255, 255, 255, 0.5);
+  @color-text-disabled: rgba(255, 255, 255, 0.3);
+  
+  // 边框色
+  @color-border-base: rgba(255, 255, 255, 0.1);
+  @color-border-light: rgba(255, 255, 255, 0.05);
+  @color-border-strong: rgba(255, 255, 255, 0.2);
+  
+  // Tab 激活态背景
+  @color-tab-active-bg: #559eff;
+  
+  // 图表颜色
+  @color-chart-line: rgba(0, 200, 100, 1);
+  @color-chart-fill-start: rgba(0, 200, 120, 0.4);
+  @color-chart-fill-end: rgba(0, 200, 120, 0);
+  @color-alert-line: #f53f3f;
+  
+  // 阴影
+  @shadow-base: 0 2px 8px rgba(0, 0, 0, 0.15);
+  @shadow-card: 0 4px 12px rgba(0, 0, 0, 0.1);
+  @shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+// 浅色主题
+.theme-light() {
+  // 背景色
+  @color-bg-base: #f5f7fa;
+  @color-bg-elevated: #ffffff;
+  @color-bg-overlay: rgba(0, 0, 0, 0.3);
+  
+  // 主题色
+  @color-primary: #559eff;
+  @color-primary-hover: lighten(#559eff, 10%);
+  @color-primary-active: darken(#559eff, 5%);
+  
+  // 状态色
+  @color-success: rgba(0, 200, 120, 1);
+  @color-warning: #ff7d00;
+  @color-error: #f53f3f;
+  @color-info: #559eff;
+  
+  // 文本色
+  @color-text-base: rgba(0, 0, 0, 0.85);
+  @color-text-strong: rgba(0, 0, 0, 1);
+  @color-text-secondary: rgba(0, 0, 0, 0.65);
+  @color-text-disabled: rgba(0, 0, 0, 0.25);
+  
+  // 边框色
+  @color-border-base: rgba(0, 0, 0, 0.1);
+  @color-border-light: rgba(0, 0, 0, 0.06);
+  @color-border-strong: rgba(0, 0, 0, 0.15);
+  
+  // Tab 激活态背景
+  @color-tab-active-bg: #559eff;
+  
+  // 图表颜色
+  @color-chart-line: rgba(0, 200, 100, 1);
+  @color-chart-fill-start: rgba(0, 200, 120, 0.4);
+  @color-chart-fill-end: rgba(0, 200, 120, 0);
+  @color-alert-line: #f53f3f;
+  
+  // 阴影
+  @shadow-base: 0 2px 8px rgba(0, 0, 0, 0.08);
+  @shadow-card: 0 4px 12px rgba(0, 0, 0, 0.05);
+  @shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+// 自动添加：将 .common() 中的 Less 变量暴露到全局作用域
+
+:root {
+  .common();
+}

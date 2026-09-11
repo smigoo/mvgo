@@ -1,0 +1,321 @@
+{
+  "generatedAt": "2026-04-27T10:19:15.595Z",
+  "stage": "preview-analysis",
+  "componentName": "管辖范围",
+  "componentTitle": "管辖范围",
+  "analysisModel": "gpt-5.4",
+  "sourceImage": {
+    "path": "{outputPath}/c-lljc/resources/images/mc-preview.png",
+    "size": 709937,
+    "mtimeMs": 1777285034334,
+    "sha1": "4ef988ae2dbf004f8a071940c71e9b64e4a43dd7"
+  },
+  "summary": "包含标题栏和四个横向排列的统计数据项（主线、隧道、桥、工区），展示管辖范围内的基础设施数据。",
+  "layout": {
+    "type": "vertical",
+    "direction": "column",
+    "sections": [
+      {
+        "id": "jurisdiction-scope",
+        "name": "管辖范围",
+        "role": "常驻",
+        "layout": "vertical",
+        "bgPlaceholder": "section-bg-jurisdiction",
+        "headerRelation": "title-itself",
+        "slotCandidate": null,
+        "header": {
+          "text": "管辖范围",
+          "figmaNode": "1452:1950",
+          "styles": {
+            "fontSize": 20,
+            "fontWeight": "bold",
+            "color": "rgba(255,255,255,1)"
+          },
+          "controls": [],
+          "slots": [
+            {
+              "slotType": "title-left",
+              "elementType": "icon",
+              "content": "装饰图标",
+              "figmaNodeId": "1452:1952"
+            }
+          ]
+        },
+        "body": {
+          "layout": "horizontal-4-items",
+          "bgPlaceholder": "body-bg-jurisdiction",
+          "items": [
+            {
+              "id": "item-mainline",
+              "layout": "horizontal",
+              "alignItems": "center",
+              "gap": "12px",
+              "icon": {
+                "placeholder": "icon-mainline",
+                "figmaNode": "1452:1955",
+                "position": "left",
+                "resourceFile": "../resources/images/icon-1955.png",
+                "recommendedUsage": "imgSrc",
+                "width": 40,
+                "height": 40
+              },
+              "content": {
+                "layout": "vertical",
+                "position": "right",
+                "elements": [
+                  {
+                    "type": "label",
+                    "text": "主线",
+                    "figmaNode": "1452:1960",
+                    "position": "top",
+                    "styles": {
+                      "fontSize": 14,
+                      "color": "rgba(255,255,255,0.8)",
+                      "fontWeight": "normal"
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "position": "bottom",
+                    "parts": [
+                      {
+                        "text": "185.6",
+                        "type": "number",
+                        "figmaNode": "1452:1965",
+                        "styles": {
+                          "fontSize": 32,
+                          "color": "rgba(255,255,255,1)",
+                          "fontWeight": "bold"
+                        }
+                      },
+                      {
+                        "text": "km",
+                        "type": "unit",
+                        "figmaNode": "1452:1966",
+                        "styles": {
+                          "fontSize": 14,
+                          "color": "rgba(255,255,255,0.8)",
+                          "fontWeight": "normal"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "item-tunnel",
+              "layout": "horizontal",
+              "alignItems": "center",
+              "gap": "12px",
+              "icon": {
+                "placeholder": "icon-tunnel",
+                "figmaNode": "1452:1970",
+                "position": "left",
+                "resourceFile": "../resources/images/icon-1958.png",
+                "recommendedUsage": "imgSrc",
+                "width": 40,
+                "height": 40
+              },
+              "content": {
+                "layout": "vertical",
+                "position": "right",
+                "elements": [
+                  {
+                    "type": "label",
+                    "text": "隧道",
+                    "figmaNode": "1452:1975",
+                    "position": "top",
+                    "styles": {
+                      "fontSize": 14,
+                      "color": "rgba(255,255,255,0.8)",
+                      "fontWeight": "normal"
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "position": "bottom",
+                    "parts": [
+                      {
+                        "text": "1",
+                        "type": "number",
+                        "figmaNode": "1452:1980",
+                        "styles": {
+                          "fontSize": 32,
+                          "color": "rgba(255,255,255,1)",
+                          "fontWeight": "bold"
+                        }
+                      },
+                      {
+                        "text": "条",
+                        "type": "unit",
+                        "figmaNode": "1452:1981",
+                        "styles": {
+                          "fontSize": 14,
+                          "color": "rgba(255,255,255,0.8)",
+                          "fontWeight": "normal"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "item-bridge",
+              "layout": "horizontal",
+              "alignItems": "center",
+              "gap": "12px",
+              "icon": {
+                "placeholder": "icon-bridge",
+                "figmaNode": "1452:1985",
+                "position": "left",
+                "resourceFile": "../resources/images/icon-1961.png",
+                "recommendedUsage": "imgSrc",
+                "width": 40,
+                "height": 40
+              },
+              "content": {
+                "layout": "vertical",
+                "position": "right",
+                "elements": [
+                  {
+                    "type": "label",
+                    "text": "桥",
+                    "figmaNode": "1452:1990",
+                    "position": "top",
+                    "styles": {
+                      "fontSize": 14,
+                      "color": "rgba(255,255,255,0.8)",
+                      "fontWeight": "normal"
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "position": "bottom",
+                    "parts": [
+                      {
+                        "text": "3",
+                        "type": "number",
+                        "figmaNode": "1452:1995",
+                        "styles": {
+                          "fontSize": 32,
+                          "color": "rgba(255,255,255,1)",
+                          "fontWeight": "bold"
+                        }
+                      },
+                      {
+                        "text": "座",
+                        "type": "unit",
+                        "figmaNode": "1452:1996",
+                        "styles": {
+                          "fontSize": 14,
+                          "color": "rgba(255,255,255,0.8)",
+                          "fontWeight": "normal"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "item-workzone",
+              "layout": "horizontal",
+              "alignItems": "center",
+              "gap": "12px",
+              "icon": {
+                "placeholder": "icon-workzone",
+                "figmaNode": "1452:2000",
+                "position": "left",
+                "resourceFile": "../resources/images/icon-1964.png",
+                "recommendedUsage": "imgSrc",
+                "width": 40,
+                "height": 40
+              },
+              "content": {
+                "layout": "vertical",
+                "position": "right",
+                "elements": [
+                  {
+                    "type": "label",
+                    "text": "工区",
+                    "figmaNode": "1452:2005",
+                    "position": "top",
+                    "styles": {
+                      "fontSize": 14,
+                      "color": "rgba(255,255,255,0.8)",
+                      "fontWeight": "normal"
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "position": "bottom",
+                    "parts": [
+                      {
+                        "text": "1",
+                        "type": "number",
+                        "figmaNode": "1452:2010",
+                        "styles": {
+                          "fontSize": 32,
+                          "color": "rgba(255,255,255,1)",
+                          "fontWeight": "bold"
+                        }
+                      },
+                      {
+                        "text": "个",
+                        "type": "unit",
+                        "figmaNode": "1452:2011",
+                        "styles": {
+                          "fontSize": 14,
+                          "color": "rgba(255,255,255,0.8)",
+                          "fontWeight": "normal"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ],
+          "backgroundImage": {
+            "src": "../resources/images/bg-956.png",
+            "recommendedUsage": "backgroundStyle"
+          },
+          "backgroundSize": "cover",
+          "backgroundPosition": "center",
+          "backgroundRepeat": "no-repeat"
+        }
+      }
+    ]
+  },
+  "styles": {
+    "theme": "深色科技数据风",
+    "backgroundBrightness": "dark",
+    "colors": [
+      "rgba(5,49,51,1)",
+      "rgba(255,255,255,1)",
+      "rgba(255,255,255,0.8)",
+      "rgba(0,240,255,1)"
+    ],
+    "background": "深蓝绿色背景，带有科技感光效和边框",
+    "decorations": [
+      "标题左侧装饰图标",
+      "底部发光线条"
+    ],
+    "emphasis": [
+      "大号白色数值"
+    ]
+  },
+  "interactions": [],
+  "charts": [],
+  "doNotInvent": [
+    "不要臆造点击交互，这看起来是纯展示组件",
+    "不要臆造更多数据项"
+  ],
+  "notes": [
+    "组件包含四个结构相同的数据项，横向排列",
+    "每个数据项包含图标、标签和数值（含单位）",
+    "背景图资源已下载，需使用 resourceFile 引用"
+  ]
+}

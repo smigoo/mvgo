@@ -1,0 +1,22 @@
+{
+  "completed": [
+    "1-declare.json",
+    "2-package/index.vue",
+    "3-package/index.vue",
+    "6-package/components/MetricCards.vue",
+    "5-package/components/EnvironmentTabs.vue",
+    "7-package/components/TrendChart.vue",
+    "8-resources/styles/common.less,resources/styles/themes/theme-vars.less"
+  ],
+  "total": 6,
+  "updatedAt": 1786899501436,
+  "files": {
+    "declare.json": "1-declare.json",
+    "package/index.vue": "3-package_index.vue",
+    "package/components/MetricCards.vue": "6-package_components_MetricCards.vue",
+    "package/components/EnvironmentTabs.vue": "5-package_components_EnvironmentTabs.vue",
+    "package/components/TrendChart.vue": "7-package_components_TrendChart.vue",
+    "resources/styles/common.less": "8-resources_styles_common.less",
+    "resources/styles/themes/theme-vars.less": "8-resources_styles_themes_theme-vars.less"
+  }
+}

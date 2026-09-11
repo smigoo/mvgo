@@ -1,0 +1,193 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 85,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "header.title与body内text重复，均为流量监测，存在冗余。建议移除body内text，将icon整合至header。",
+        "suggestion": "移除body.children[1]，将icon移入header或保留body仅做装饰。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[1].body.children[1]",
+        "message": "chart-container内嵌套chart-title和chart，导致嵌套深度达4层。建议将title属性内聚到chart组件中。",
+        "suggestion": "将chart-title的文本作为chart组件的title属性，减少DOM层级。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[0]",
+        "message": "vehicle-tunnel的role为stat-card，但实际内容为环形图与文本，语义不符。建议改为chart-container。",
+        "suggestion": "将role修改为chart-container或donut-chart-group以准确反映组件类型。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "chartDataHints",
+        "message": "三个图表的labels和values数据完全相同且包含无关文本，存在严重冗余。需根据实际图表重新提取数据。",
+        "suggestion": "根据各图表实际类型和坐标轴重新提取并区分labels和values数据。"
+      }
+    ],
+    "recommendations": [
+      "建议统一图表标题的处理方式，优先使用图表组件内置的title属性，避免额外包裹chart-title节点。",
+      "建议清理chartDataHints中的冗余数据，确保每个图表的数据提示与其实际坐标轴和系列严格对应。"
+    ],
+    "summary": "布局整体结构清晰，section划分合理。主要问题在于局部节点冗余、嵌套略深及数据提示重复。修正后结构更精简。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1990ff",
+      "--colorBg": "#edf4fb",
+      "--colorTextBase": "#333333",
+      "--colorSuccess": "#52c41a",
+      "--colorWarning": "#fa8c16",
+      "--fontSize": "14px",
+      "--fontSizeLarge": "32px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#1990ff",
+      "@color-bg": "#edf4fb",
+      "@color-text-base": "#333333",
+      "@color-success": "#52c41a",
+      "@color-warning": "#fa8c16",
+      "@font-size-base": "14px",
+      "@font-size-large": "32px",
+      "@border-radius-base": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "16px",
+        "background": "#edf4fb",
+        "border-radius": "8px"
+      },
+      ".header": {
+        "display": "flex",
+        "justify-content": "space-between",
+        "align-items": "center",
+        "color": "var(--colorTextBase)"
+      },
+      ".gradient-title": {
+        "background": "linear-gradient(90deg, #1990ff, #52c41a)",
+        "-webkit-background-clip": "text",
+        "-webkit-text-fill-color": "transparent",
+        "background-clip": "text",
+        "color": "transparent",
+        "font-size": "18px",
+        "font-weight": "bold"
+      },
+      ".diamond-icon": {
+        "width": "16px",
+        "height": "16px",
+        "display": "inline-block",
+        "vertical-align": "middle"
+      },
+      ".emphasis-value": {
+        "font-size": "var(--fontSizeLarge, 32px)",
+        "color": "var(--colorPrimary)",
+        "font-weight": "bold",
+        "line-height": "1.2"
+      },
+      ".accuracy-text": {
+        "color": "var(--colorSuccess)",
+        "font-size": "14px",
+        "font-weight": "500"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 #1990ff 映射为 --colorPrimary，用于大号数值和渐变标题",
+      "背景色 #edf4fb 直接落地为 .container 的 background 字面量，同时映射为 --colorBg 和 @color-bg",
+      "绿色 #52c41a 映射为 --colorSuccess，用于准确率文字",
+      "橙色 #fa8c16 映射为 --colorWarning，用于次要强调或警告状态",
+      "渐变标题文字使用 background-clip: text 配合 transparent 实现文字渐变效果",
+      "菱形装饰图标在模板中需使用 <img :src> 进行渲染（禁止 import 本地图片），.diamond-icon 类仅用于控制其尺寸与对齐"
+    ],
+    "elementStyleMap": {
+      "header-title": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-total-traffic": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-card-江阴靖江长江隧道-5": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-card-江阴大桥-7": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "chart-tunnel-hourly": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "chart-bridge-hourly": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-vehicle-distribution": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-tunnel": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "vehicle-bridge": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-traffic-prediction": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-accuracy-labels-x-26": {
+        "display": "flex",
+        "flex-direction": "row"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "header-title",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 2,
+        "title": "流量监测"
+      },
+      {
+        "id": "section-total-traffic",
+        "responsibility": "当日总流量（请按功能拆分）",
+        "elementCount": 9,
+        "title": "当日总流量"
+      },
+      {
+        "id": "section-vehicle-distribution",
+        "responsibility": "车型分布（请按功能拆分）",
+        "elementCount": 8,
+        "title": "车型分布"
+      },
+      {
+        "id": "section-traffic-prediction",
+        "responsibility": "流量预测（请按功能拆分）",
+        "elementCount": 5,
+        "title": "流量预测"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 4,
+    "reason": "有效 sections=4 ≥ 3 → 强制拆分"
+  }
+}

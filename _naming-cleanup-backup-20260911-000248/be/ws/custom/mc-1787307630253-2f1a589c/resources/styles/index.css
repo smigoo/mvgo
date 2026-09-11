@@ -1,0 +1,538 @@
+.dark {
+  /* === [自动修复] v3.5 模板驱动 fallback 规则 === */
+  /* [自动修复] 模板 class .actual → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .bridge → 匹配元素 stat-bridge */
+  /* [自动修复] 模板 class .c-monitor-bridge-flow → 匹配元素 section-flow-prediction */
+  /* [自动修复] 模板 class .c-monitor-bridge-flow-chart → 匹配元素 section-chart-tunnel */
+  /* [自动修复] 模板 class .c-monitor-bridge-flow-chart-wrapper → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-bridge-flow-header → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-bridge-flow-legend → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-bridge-flow-legend-dot → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-bridge-flow-legend-item → 匹配元素 vehicle-tunnel-stat-item-x-0 */
+  /* [自动修复] 模板 class .c-monitor-bridge-flow-title → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-bridge-flow-title-bar → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-legend-dot → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-legend-item → 匹配元素 vehicle-tunnel-stat-item-x-0 */
+  /* [自动修复] 模板 class .c-monitor-legend-text → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-total-traffic → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-body → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-header → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-select → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-stat → 匹配元素 stat-tunnel */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-stat-label → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-stat-value → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-title → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-title-icon → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-traffic-prediction → 匹配元素 section-flow-prediction */
+  /* [自动修复] 模板 class .c-monitor-traffic-prediction-accuracy → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-traffic-prediction-body → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-traffic-prediction-chart-area → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-traffic-prediction-chart-container → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-traffic-prediction-controls → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-traffic-prediction-header → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-traffic-prediction-icon → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-traffic-prediction-legend → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-traffic-prediction-legend-dot → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-traffic-prediction-legend-item → 匹配元素 vehicle-tunnel-stat-item-x-0 */
+  /* [自动修复] 模板 class .c-monitor-traffic-prediction-legend-line → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-traffic-prediction-link → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-traffic-prediction-tab-item → 匹配元素 vehicle-tunnel-stat-item-x-0 */
+  /* [自动修复] 模板 class .c-monitor-traffic-prediction-tabs → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-traffic-prediction-title → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-traffic-prediction-title-text → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-tunnel-chart → 匹配元素 section-chart-tunnel */
+  /* [自动修复] 模板 class .c-monitor-tunnel-header → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-tunnel-legend → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-tunnel-section → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-tunnel-title-icon → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-tunnel-title-text → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .forecast → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .tunnel → 匹配元素 stat-tunnel */
+  /* [自动修复] 模板 class .vd-chart → 匹配元素 section-chart-tunnel */
+  /* [自动修复] 模板 class .vd-content → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vd-count → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vd-donut → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vd-donut-center → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vd-dot → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vd-header → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vd-legend → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vd-legend-item → 匹配元素 vehicle-tunnel-stat-item-x-0 */
+  /* [自动修复] 模板 class .vd-percent → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vd-subtitle → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vd-title → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vd-total → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vd-total-label → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vd-type → 匹配元素 section-vehicle-type */
+  /* [自动修复] 模板 class .vehicle-distribution → 匹配元素 section-daily-total */
+}
+.dark .c-monitor-root {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto auto auto;
+  gap: 16px;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 16px;
+}
+.dark .actual {
+  display: flex;
+}
+.dark .bridge {
+  display: flex;
+}
+.dark .c-monitor-bridge-flow {
+  display: flex;
+}
+.dark .c-monitor-bridge-flow-chart {
+  display: flex;
+}
+.dark .c-monitor-bridge-flow-chart-wrapper {
+  display: flex;
+}
+.dark .c-monitor-bridge-flow-header {
+  display: flex;
+}
+.dark .c-monitor-bridge-flow-legend {
+  display: flex;
+}
+.dark .c-monitor-bridge-flow-legend-dot {
+  display: flex;
+}
+.dark .c-monitor-bridge-flow-legend-item {
+  display: flex;
+}
+.dark .c-monitor-bridge-flow-title {
+  display: flex;
+}
+.dark .c-monitor-bridge-flow-title-bar {
+  display: flex;
+}
+.dark .c-monitor-legend-dot {
+  display: flex;
+}
+.dark .c-monitor-legend-item {
+  display: flex;
+}
+.dark .c-monitor-legend-text {
+  display: flex;
+}
+.dark .c-monitor-total-traffic {
+  display: flex;
+}
+.dark .c-monitor-total-traffic-body {
+  display: flex;
+}
+.dark .c-monitor-total-traffic-header {
+  display: flex;
+}
+.dark .c-monitor-total-traffic-select {
+  display: flex;
+}
+.dark .c-monitor-total-traffic-stat {
+  display: flex;
+}
+.dark .c-monitor-total-traffic-stat-label {
+  display: flex;
+}
+.dark .c-monitor-total-traffic-stat-value {
+  display: flex;
+}
+.dark .c-monitor-total-traffic-title {
+  display: flex;
+}
+.dark .c-monitor-total-traffic-title-icon {
+  display: flex;
+}
+.dark .c-monitor-traffic-prediction {
+  display: flex;
+}
+.dark .c-monitor-traffic-prediction-accuracy {
+  display: flex;
+}
+.dark .c-monitor-traffic-prediction-body {
+  display: flex;
+}
+.dark .c-monitor-traffic-prediction-chart-area {
+  display: flex;
+}
+.dark .c-monitor-traffic-prediction-chart-container {
+  display: flex;
+}
+.dark .c-monitor-traffic-prediction-controls {
+  display: flex;
+}
+.dark .c-monitor-traffic-prediction-header {
+  display: flex;
+}
+.dark .c-monitor-traffic-prediction-icon {
+  display: flex;
+}
+.dark .c-monitor-traffic-prediction-legend {
+  display: flex;
+}
+.dark .c-monitor-traffic-prediction-legend-dot {
+  display: flex;
+}
+.dark .c-monitor-traffic-prediction-legend-item {
+  display: flex;
+}
+.dark .c-monitor-traffic-prediction-legend-line {
+  display: flex;
+}
+.dark .c-monitor-traffic-prediction-link {
+  display: flex;
+}
+.dark .c-monitor-traffic-prediction-tab-item {
+  display: flex;
+}
+.dark .c-monitor-traffic-prediction-tabs {
+  display: flex;
+}
+.dark .c-monitor-traffic-prediction-title {
+  display: flex;
+}
+.dark .c-monitor-traffic-prediction-title-text {
+  display: flex;
+}
+.dark .c-monitor-tunnel-chart {
+  display: flex;
+}
+.dark .c-monitor-tunnel-header {
+  display: flex;
+}
+.dark .c-monitor-tunnel-legend {
+  display: flex;
+}
+.dark .c-monitor-tunnel-section {
+  display: flex;
+}
+.dark .c-monitor-tunnel-title-icon {
+  display: flex;
+}
+.dark .c-monitor-tunnel-title-text {
+  display: flex;
+}
+.dark .forecast {
+  display: flex;
+}
+.dark .tunnel {
+  display: flex;
+}
+.dark .vd-chart {
+  display: flex;
+}
+.dark .vd-content {
+  display: flex;
+}
+.dark .vd-count {
+  display: flex;
+}
+.dark .vd-donut {
+  display: flex;
+}
+.dark .vd-donut-center {
+  display: flex;
+}
+.dark .vd-dot {
+  display: flex;
+}
+.dark .vd-header {
+  display: flex;
+}
+.dark .vd-legend {
+  display: flex;
+}
+.dark .vd-legend-item {
+  display: flex;
+}
+.dark .vd-percent {
+  display: flex;
+}
+.dark .vd-subtitle {
+  display: flex;
+}
+.dark .vd-title {
+  display: flex;
+}
+.dark .vd-total {
+  display: flex;
+}
+.dark .vd-total-label {
+  display: flex;
+}
+.dark .vd-type {
+  display: flex;
+}
+.dark .vehicle-distribution {
+  display: flex;
+}
+.light {
+  /* === [自动修复] v3.5 模板驱动 fallback 规则 === */
+  /* [自动修复] 模板 class .actual → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .bridge → 匹配元素 stat-bridge */
+  /* [自动修复] 模板 class .c-monitor-bridge-flow → 匹配元素 section-flow-prediction */
+  /* [自动修复] 模板 class .c-monitor-bridge-flow-chart → 匹配元素 section-chart-tunnel */
+  /* [自动修复] 模板 class .c-monitor-bridge-flow-chart-wrapper → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-bridge-flow-header → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-bridge-flow-legend → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-bridge-flow-legend-dot → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-bridge-flow-legend-item → 匹配元素 vehicle-tunnel-stat-item-x-0 */
+  /* [自动修复] 模板 class .c-monitor-bridge-flow-title → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-bridge-flow-title-bar → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-legend-dot → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-legend-item → 匹配元素 vehicle-tunnel-stat-item-x-0 */
+  /* [自动修复] 模板 class .c-monitor-legend-text → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-total-traffic → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-body → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-header → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-select → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-stat → 匹配元素 stat-tunnel */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-stat-label → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-stat-value → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-title → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-total-traffic-title-icon → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-traffic-prediction → 匹配元素 section-flow-prediction */
+  /* [自动修复] 模板 class .c-monitor-traffic-prediction-accuracy → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-traffic-prediction-body → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-traffic-prediction-chart-area → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-traffic-prediction-chart-container → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-traffic-prediction-controls → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-traffic-prediction-header → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-traffic-prediction-icon → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-traffic-prediction-legend → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-traffic-prediction-legend-dot → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-traffic-prediction-legend-item → 匹配元素 vehicle-tunnel-stat-item-x-0 */
+  /* [自动修复] 模板 class .c-monitor-traffic-prediction-legend-line → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-traffic-prediction-link → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-traffic-prediction-tab-item → 匹配元素 vehicle-tunnel-stat-item-x-0 */
+  /* [自动修复] 模板 class .c-monitor-traffic-prediction-tabs → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-traffic-prediction-title → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-traffic-prediction-title-text → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-tunnel-chart → 匹配元素 section-chart-tunnel */
+  /* [自动修复] 模板 class .c-monitor-tunnel-header → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-tunnel-legend → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-tunnel-section → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-tunnel-title-icon → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .c-monitor-tunnel-title-text → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .forecast → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .tunnel → 匹配元素 stat-tunnel */
+  /* [自动修复] 模板 class .vd-chart → 匹配元素 section-chart-tunnel */
+  /* [自动修复] 模板 class .vd-content → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vd-count → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vd-donut → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vd-donut-center → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vd-dot → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vd-header → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vd-legend → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vd-legend-item → 匹配元素 vehicle-tunnel-stat-item-x-0 */
+  /* [自动修复] 模板 class .vd-percent → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vd-subtitle → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vd-title → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vd-total → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vd-total-label → 匹配元素 section-daily-total */
+  /* [自动修复] 模板 class .vd-type → 匹配元素 section-vehicle-type */
+  /* [自动修复] 模板 class .vehicle-distribution → 匹配元素 section-daily-total */
+}
+.light .c-monitor-root {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto auto auto;
+  gap: 16px;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 16px;
+}
+.light .actual {
+  display: flex;
+}
+.light .bridge {
+  display: flex;
+}
+.light .c-monitor-bridge-flow {
+  display: flex;
+}
+.light .c-monitor-bridge-flow-chart {
+  display: flex;
+}
+.light .c-monitor-bridge-flow-chart-wrapper {
+  display: flex;
+}
+.light .c-monitor-bridge-flow-header {
+  display: flex;
+}
+.light .c-monitor-bridge-flow-legend {
+  display: flex;
+}
+.light .c-monitor-bridge-flow-legend-dot {
+  display: flex;
+}
+.light .c-monitor-bridge-flow-legend-item {
+  display: flex;
+}
+.light .c-monitor-bridge-flow-title {
+  display: flex;
+}
+.light .c-monitor-bridge-flow-title-bar {
+  display: flex;
+}
+.light .c-monitor-legend-dot {
+  display: flex;
+}
+.light .c-monitor-legend-item {
+  display: flex;
+}
+.light .c-monitor-legend-text {
+  display: flex;
+}
+.light .c-monitor-total-traffic {
+  display: flex;
+}
+.light .c-monitor-total-traffic-body {
+  display: flex;
+}
+.light .c-monitor-total-traffic-header {
+  display: flex;
+}
+.light .c-monitor-total-traffic-select {
+  display: flex;
+}
+.light .c-monitor-total-traffic-stat {
+  display: flex;
+}
+.light .c-monitor-total-traffic-stat-label {
+  display: flex;
+}
+.light .c-monitor-total-traffic-stat-value {
+  display: flex;
+}
+.light .c-monitor-total-traffic-title {
+  display: flex;
+}
+.light .c-monitor-total-traffic-title-icon {
+  display: flex;
+}
+.light .c-monitor-traffic-prediction {
+  display: flex;
+}
+.light .c-monitor-traffic-prediction-accuracy {
+  display: flex;
+}
+.light .c-monitor-traffic-prediction-body {
+  display: flex;
+}
+.light .c-monitor-traffic-prediction-chart-area {
+  display: flex;
+}
+.light .c-monitor-traffic-prediction-chart-container {
+  display: flex;
+}
+.light .c-monitor-traffic-prediction-controls {
+  display: flex;
+}
+.light .c-monitor-traffic-prediction-header {
+  display: flex;
+}
+.light .c-monitor-traffic-prediction-icon {
+  display: flex;
+}
+.light .c-monitor-traffic-prediction-legend {
+  display: flex;
+}
+.light .c-monitor-traffic-prediction-legend-dot {
+  display: flex;
+}
+.light .c-monitor-traffic-prediction-legend-item {
+  display: flex;
+}
+.light .c-monitor-traffic-prediction-legend-line {
+  display: flex;
+}
+.light .c-monitor-traffic-prediction-link {
+  display: flex;
+}
+.light .c-monitor-traffic-prediction-tab-item {
+  display: flex;
+}
+.light .c-monitor-traffic-prediction-tabs {
+  display: flex;
+}
+.light .c-monitor-traffic-prediction-title {
+  display: flex;
+}
+.light .c-monitor-traffic-prediction-title-text {
+  display: flex;
+}
+.light .c-monitor-tunnel-chart {
+  display: flex;
+}
+.light .c-monitor-tunnel-header {
+  display: flex;
+}
+.light .c-monitor-tunnel-legend {
+  display: flex;
+}
+.light .c-monitor-tunnel-section {
+  display: flex;
+}
+.light .c-monitor-tunnel-title-icon {
+  display: flex;
+}
+.light .c-monitor-tunnel-title-text {
+  display: flex;
+}
+.light .forecast {
+  display: flex;
+}
+.light .tunnel {
+  display: flex;
+}
+.light .vd-chart {
+  display: flex;
+}
+.light .vd-content {
+  display: flex;
+}
+.light .vd-count {
+  display: flex;
+}
+.light .vd-donut {
+  display: flex;
+}
+.light .vd-donut-center {
+  display: flex;
+}
+.light .vd-dot {
+  display: flex;
+}
+.light .vd-header {
+  display: flex;
+}
+.light .vd-legend {
+  display: flex;
+}
+.light .vd-legend-item {
+  display: flex;
+}
+.light .vd-percent {
+  display: flex;
+}
+.light .vd-subtitle {
+  display: flex;
+}
+.light .vd-title {
+  display: flex;
+}
+.light .vd-total {
+  display: flex;
+}
+.light .vd-total-label {
+  display: flex;
+}
+.light .vd-type {
+  display: flex;
+}
+.light .vehicle-distribution {
+  display: flex;
+}

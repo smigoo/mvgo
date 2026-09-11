@@ -1,0 +1,30 @@
+{
+  "componentId": "test-e2e-v2",
+  "componentName": "test-e2e-v2",
+  "version": "v1.0.0",
+  "panelKey": "default-panel",
+  "attribute": {
+    "aspectRatio": [460, 138]
+  },
+  "businessEvents": {
+    "test-e2e-v2-onload": {
+      "eventId": "test-e2e-v2-onload",
+      "eventName": "组件加载",
+      "eventDataSchema": {}
+    }
+  },
+  "businessStatuses": {},
+  "themeConfig": {
+    "default": "dark",
+    "list": [
+      {
+        "name": "深色主题",
+        "key": "dark"
+      },
+      {
+        "name": "亮色主题",
+        "key": "light"
+      }
+    ]
+  }
+}

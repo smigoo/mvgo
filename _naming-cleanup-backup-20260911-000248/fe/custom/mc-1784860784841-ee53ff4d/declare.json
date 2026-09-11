@@ -1,0 +1,60 @@
+{
+  "componentId": "c-lljc-test",
+  "componentName": "c-lljc-test",
+  "version": "v1.0.0",
+  "panelKey": "default-panel",
+  "attribute": {
+    "aspectRatio": [460, 138]
+  },
+  "businessEvents": {
+    "c-lljc-test-onload": {
+      "eventId": "c-lljc-test-onload",
+      "eventName": "组件加载完成",
+      "eventDataSchema": {}
+    }
+  },
+  "businessStatuses": {},
+  "dataSources": [],
+  "formSources": [],
+  "layoutConfig": {
+    "default": "one",
+    "list": [
+      {
+        "name": "默认布局",
+        "key": "one",
+        "previewName": "mc-preview.png"
+      }
+    ]
+  },
+  "themeConfig": {
+    "default": "light",
+    "list": [
+      {
+        "name": "亮色主题",
+        "key": "light"
+      },
+      {
+        "name": "深色主题",
+        "key": "dark"
+      }
+    ]
+  },
+  "cssVariableConfig": [
+    {
+      "name": "字体大小",
+      "key": "fontSize",
+      "type": "size"
+    },
+    {
+      "name": "主色调",
+      "key": "colorPrimary",
+      "type": "color"
+    },
+    {
+      "name": "文本颜色",
+      "key": "colorTextBase",
+      "type": "color"
+    }
+  ],
+  "businessConfig": []
+}

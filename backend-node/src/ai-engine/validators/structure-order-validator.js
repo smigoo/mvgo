@@ -24,6 +24,7 @@
  */
 
 import { extractSections } from '../utils/figma-format.js'
+import { extractSfcTemplate } from '../utils/sfc-template-extractor.js'
 
 const logger = {
   info: (...args) => console.log('[structure-order-validator]', ...args),
@@ -60,8 +61,8 @@ function extractAllBlocks(template) {
  * 从 <template> 提取内容
  */
 function extractTemplate(vueSource) {
-  const m = vueSource.match(/<template>([\s\S]*?)<\/template>/)
-  return m ? m[1] : null
+  // 🛡️ 共享边界法（lazy </template> 会被具名插槽提前截断——0ca84358 家族缺陷）
+  return extractSfcTemplate(vueSource)
 }
 
 /**

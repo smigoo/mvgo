@@ -1,0 +1,24 @@
+.common() {
+@mc-font-family: 'Source Han Sans CN', 'Roboto', sans-serif;
+  @mc-primary-color: #1990ff;
+  @mc-text-color: #333333;
+  @mc-bg-color: #edf4fb;
+  @click: inherit; // 自动添加
+}
+
+.theme-dark() {
+  @mc-text-color: #ffffff;
+  @mc-bg-color: #1a2332;
+}
+
+.theme-light() {
+  @mc-text-color: #333333;
+  @mc-bg-color: #edf4fb;
+}
+
+// 全局调用默认主题
+
+:root {
+  .theme-light();
+  .common();
+}

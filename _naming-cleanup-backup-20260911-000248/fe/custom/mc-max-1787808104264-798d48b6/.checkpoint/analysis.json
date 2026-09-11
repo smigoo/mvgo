@@ -1,0 +1,188 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 70,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0].body",
+        "message": "body为vertical布局，但左侧tab-list与右侧device-grid应为左右水平结构，当前平铺会导致布局错乱。",
+        "suggestion": "增加一个horizontal容器包裹tab-list和device-grid，实现左右分栏。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body.children[0]",
+        "message": "覆盖率仅18%，stat-card内部结构被过度简化，丢失了总数、异常数等关键数据维度。",
+        "suggestion": "补充stat-card内部的line1、line2等子节点结构，还原完整数据展示。"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "interactions[0]",
+        "message": "交互描述提及左侧分类标签栏，但layout中tab-list未明确标记为左侧定位，易产生歧义。",
+        "suggestion": "在tab-list中增加position或role属性明确其左侧边栏角色。"
+      }
+    ],
+    "recommendations": [
+      "重新解析Figma源文件，提升节点覆盖率，确保统计卡片内的多行数据完整映射。",
+      "优化主体区域布局，使用flex或grid实现左侧标签栏与右侧设备网格的自适应左右分栏。"
+    ],
+    "summary": "整体框架基本完整，但主体区域左右布局结构缺失导致平铺错乱，且Figma节点覆盖率极低，关键数据维度丢失，需重点修复布局层级与补充缺失节点。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名，浅色设备监测面板）",
+      "--colorPrimary": "#1890ff",
+      "--colorPrimaryActive": "#2a7bff",
+      "--colorPrimaryBg": "#edf4fb",
+      "--colorError": "#f53f3f",
+      "--colorTextBase": "#333333",
+      "--colorTextSecondary": "#8aa6c7",
+      "--colorGrid": "#8aa6c7",
+      "--fontSize": "14px",
+      "--fontWeightStrong": "600",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射（与CSS变量一一对应）",
+      "@color-primary": "#1890ff",
+      "@color-primary-active": "#2a7bff",
+      "@color-primary-bg": "#edf4fb",
+      "@color-error": "#f53f3f",
+      "@color-text-base": "#333333",
+      "@color-text-secondary": "#8aa6c7",
+      "@color-grid": "#8aa6c7",
+      "@font-size-base": "14px",
+      "@font-weight-strong": "600",
+      "@border-radius-base": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类（使用var()并保留字面量回退）",
+      ".monitoring-panel": {
+        "display": "flex",
+        "flex-direction": "column",
+        "width": "100%",
+        "height": "100%",
+        "padding": "20px",
+        "background": "var(--colorPrimaryBg, #edf4fb)",
+        "color": "var(--colorTextBase, #333333)",
+        "font-size": "var(--fontSize, 14px)"
+      },
+      ".top-statistics-bar": {
+        "display": "flex",
+        "align-items": "center",
+        "justify-content": "space-between",
+        "padding": "12px 16px",
+        "background": "linear-gradient(90deg, var(--colorPrimary, #1890ff), var(--colorPrimaryActive, #2a7bff))",
+        "color": "#ffffff",
+        "border-radius": "var(--borderRadius, 8px)"
+      },
+      ".left-category-tab": {
+        "display": "flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "writing-mode": "vertical-rl",
+        "padding": "10px 6px",
+        "background": "var(--colorPrimaryBg, #edf4fb)",
+        "color": "var(--colorPrimary, #1890ff)",
+        "border-radius": "var(--borderRadius, 8px) 0 0 var(--borderRadius, 8px)",
+        "font-weight": "var(--fontWeightStrong, 600)"
+      },
+      ".device-card": {
+        "position": "relative",
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center",
+        "gap": "8px",
+        "padding": "16px",
+        "background": "var(--colorPrimaryBg, #edf4fb)",
+        "border": "1px solid var(--colorGrid, #8aa6c7)",
+        "border-radius": "var(--borderRadius, 8px)"
+      },
+      ".device-card.highlight": {
+        "background": "var(--colorPrimary, #1890ff)",
+        "border-color": "var(--colorPrimaryActive, #2a7bff)",
+        "color": "#ffffff"
+      },
+      ".device-icon": {
+        "width": "40px",
+        "height": "40px",
+        "border-radius": "50%",
+        "background": "var(--colorPrimary, #1890ff)",
+        "color": "#ffffff",
+        "display": "flex",
+        "align-items": "center",
+        "justify-content": "center"
+      },
+      ".grid-card": {
+        "background": "var(--colorPrimaryBg, #edf4fb)",
+        "border": "1px dashed var(--colorGrid, #8aa6c7)",
+        "border-radius": "var(--borderRadius, 8px)"
+      },
+      ".stat-number": {
+        "color": "var(--colorPrimary, #1890ff)",
+        "font-weight": "var(--fontWeightStrong, 600)",
+        "font-size": "1.2em"
+      },
+      ".error-number": {
+        "color": "var(--colorError, #f53f3f)",
+        "font-weight": "var(--fontWeightStrong, 600)"
+      }
+    },
+    "tokenCoverage": 0.93,
+    "mappingNotes": [
+      "主色#1890ff映射为--colorPrimary，用于蓝色高亮卡片、统计条与圆形设备图标",
+      "辅助蓝#2a7bff映射为--colorPrimaryActive，用于高亮卡边框、渐变统计条尾部与交互状态",
+      "浅灰蓝#edf4fb映射为--colorPrimaryBg，承载面板底色与普通灰蓝网格卡片",
+      "异常红#f53f3f映射为--colorError，仅用于异常数值，避免与主蓝语义混淆",
+      "灰蓝#8aa6c7同时作为--colorGrid与--colorTextSecondary，用于网格卡片描边和次要文字",
+      "深灰#333333映射为--colorTextBase，作为浅色面板主体文字色",
+      "容器背景优先直接使用#edf4fb字面量回退，避免关键可见背景仅依赖CSS变量导致缺失"
+    ],
+    "elementStyleMap": {
+      "device-summary": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-2-stats-row-x-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2-tab-list-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "el-stats-row-x-3": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-tab-list-x-7": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "device-summary",
+        "responsibility": "数据统计指标区（数字+标签+趋势）",
+        "elementCount": 24,
+        "title": "设备监测"
+      }
+    ],
+    "isForced": false,
+    "minFiles": 0,
+    "reason": "有效 sections=1 < 3 → 不强制拆分"
+  }
+}

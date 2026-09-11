@@ -1,0 +1,288 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 74,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body",
+        "message": "标题装饰图标与下划线放在body，与header职责混淆，应归属标题插槽。",
+        "suggestion": "将图标移入header title-left，下划线作为header底部装饰或独立层。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1] / layout.sections[2]",
+        "message": "激活Tab为“气化版”，但图表区标题与系列均为“能见度”，状态不一致。",
+        "suggestion": "统一激活Tab与图表内容，或调整激活态与图表数据绑定关系。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "charts[0]",
+        "message": "charts元数据缺失legendPosition/legendType，工具提示未配置。",
+        "suggestion": "单系列可显式标注legend:none，并补全tooltip配置。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "charts[0] / chartDataHints",
+        "message": "Y轴为0-50能见度，但chartDataHints出现0-600及一氧化碳，数据维不一致。",
+        "suggestion": "按当前Tab清理无关CO浓度数据，保证单图数据一致性。"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "layout.sections[2].body.children[0].children[0]",
+        "message": "标签“2k3+785CD入度”疑似OCR错误，应为“zk3+785CO浓度”。",
+        "suggestion": "校核源图文本，修正指标名称。"
+      }
+    ],
+    "recommendations": [
+      "梳理标题区装饰与header插槽归属，减少body冗余",
+      "统一Tab激活态与图表内容绑定关系",
+      "补充图表图例与tooltip元数据，清理跨指标数据提示"
+    ],
+    "summary": "整体三区划分清晰，嵌套深度基本合理，但存在标题装饰归属不当、激活Tab与图表内容不一致、图例元数据缺失及数据维度冲突等问题，建议修正后复用。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorBgBase": "rgba(237, 244, 251, 1)",
+      "--colorPrimary": "rgba(85, 158, 255, 1)",
+      "--colorSuccess": "rgba(82, 196, 26, 1)",
+      "--colorError": "rgba(245, 63, 63, 1)",
+      "--colorTextBase": "rgba(0, 0, 0, 0.65)",
+      "--colorTextSecondary": "rgba(0, 0, 0, 0.45)",
+      "--fontSize": "14px",
+      "--fontSizeTitle": "16px",
+      "--borderRadiusBase": "4px",
+      "--spacingBase": "16px",
+      "--spacingSmall": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-bg-base": "rgba(237, 244, 251, 1)",
+      "@color-primary": "rgba(85, 158, 255, 1)",
+      "@color-success": "rgba(82, 196, 26, 1)",
+      "@color-error": "rgba(245, 63, 63, 1)",
+      "@color-text-base": "rgba(0, 0, 0, 0.65)",
+      "@color-text-secondary": "rgba(0, 0, 0, 0.45)",
+      "@font-size-base": "14px",
+      "@font-size-title": "16px",
+      "@border-radius-base": "4px",
+      "@spacing-base": "16px",
+      "@spacing-small": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".tech-monitor-container": {
+        "width": "100%",
+        "height": "100%",
+        "background": "rgba(237, 244, 251, 1)",
+        "padding": "var(--spacingBase)",
+        "box-sizing": "border-box"
+      },
+      ".section-title": {
+        "position": "relative",
+        "display": "flex",
+        "align-items": "center",
+        "font-size": "var(--fontSizeTitle)",
+        "font-weight": "500",
+        "color": "var(--colorTextBase)",
+        "margin-bottom": "var(--spacingBase)",
+        "padding-left": "var(--spacingSmall)"
+      },
+      ".section-title::before": {
+        "content": "''",
+        "position": "absolute",
+        "left": "0",
+        "width": "4px",
+        "height": "4px",
+        "background": "var(--colorPrimary)",
+        "border-radius": "50%"
+      },
+      ".section-title::after": {
+        "content": "''",
+        "position": "absolute",
+        "bottom": "-4px",
+        "left": "0",
+        "right": "0",
+        "height": "2px",
+        "background": "linear-gradient(90deg, var(--colorPrimary) 0%, rgba(85, 158, 255, 0) 100%)"
+      },
+      ".tab-container": {
+        "display": "flex",
+        "gap": "var(--spacingSmall)",
+        "background": "transparent"
+      },
+      ".tab-item": {
+        "padding": "6px 16px",
+        "font-size": "var(--fontSize)",
+        "color": "var(--colorTextSecondary)",
+        "background": "transparent",
+        "border": "none",
+        "border-radius": "var(--borderRadiusBase)",
+        "cursor": "pointer",
+        "transition": "all 0.3s ease"
+      },
+      ".tab-item.active": {
+        "color": "#ffffff",
+        "background": "linear-gradient(135deg, rgba(85, 158, 255, 1) 0%, rgba(85, 158, 255, 0.7) 100%)",
+        "box-shadow": "0 2px 8px rgba(85, 158, 255, 0.3)"
+      },
+      ".tab-item:hover:not(.active)": {
+        "color": "var(--colorPrimary)",
+        "background": "rgba(85, 158, 255, 0.08)"
+      },
+      ".adjust-line": {
+        "position": "absolute",
+        "border": "none",
+        "border-top": "1px dashed var(--colorError)",
+        "width": "100%",
+        "z-index": "10"
+      },
+      ".chart-container": {
+        "width": "100%",
+        "height": "100%",
+        "position": "relative"
+      },
+      ".area-chart-green": {
+        "fill": "linear-gradient(180deg, rgba(82, 196, 26, 0.3) 0%, rgba(82, 196, 26, 0) 100%)"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "背景色 #EDF4FB 映射为 --colorBgBase，应直接使用字面量值",
+      "蓝色主题色 #559EFF 映射为 --colorPrimary",
+      "绿色成功色 #52C41A 映射为 --colorSuccess（用于面积图渐变）",
+      "红色警示色 #F53F3F 映射为 --colorError（用于调整线）",
+      "标题左侧蓝色圆点通过 ::before 伪元素实现",
+      "标题下方渐变线通过 ::after 伪元素实现",
+      "Tab 激活态使用蓝色渐变背景 + 白色文字",
+      "调整线使用红色虚线样式（border-top: 1px dashed）",
+      "面积图渐变建议在 ECharts 配置中使用 areaStyle.color",
+      "所有颜色值已提取为 CSS 变量，便于主题切换"
+    ],
+    "elementStyleMap": {
+      "section-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-tabs": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-10-stat-label-当前指标-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-10": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-stat-label-当前指标-11": {
+        "display": "flex",
+        "flex-direction": "row"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-header",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 2,
+        "title": "环境监测",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 2,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "section-tabs",
+        "responsibility": "标签页切换区",
+        "elementCount": 4,
+        "title": "Tab切换栏",
+        "complexityScore": 20,
+        "complexityReasons": {
+          "elementCount": 4,
+          "charts": 0,
+          "interactions": 5,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 8,
+        "title": "能见度图表区",
+        "complexityScore": 20,
+        "complexityReasons": {
+          "elementCount": 8,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 2
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 或存在高复杂度 section → 强制拆分",
+    "internalSubcomponents": []
+  }
+}

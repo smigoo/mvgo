@@ -17,6 +17,7 @@ import {
   customComponentsDir,
   vue3ComponentsDir,
   resolveFrontendWorkspacePath,
+  tempComponentsDir,
 } from '../config/backend-root';
 
 /**
@@ -200,6 +201,55 @@ export class PreviewController {
           } catch {
             // 该根无法列举群组，跳过
           }
+        }
+      }
+    }
+
+    // 🆕 治本（2026-09-10）：公共池组件若从未被 publishQualityPreview 提升到 custom-components
+    // （publishComponent 仅翻 DB 标志、不复制文件；或生成期发布根与预览根不一致），
+    // 其产物仍驻留在 temp-components/{groupId}/{componentId}。预览为只读静态资源、
+    // 组件 id 带随机后缀不可猜，允许匿名兜底读取，避免公共池组件 404 空白。
+    if (!componentDir) {
+      for (const root of [tempComponentsDir]) {
+        // 第一步：路由指定的 groupId 下精确查找
+        const groupPath = join(root, groupId);
+        try {
+          const compDirs = await readdir(groupPath);
+          const matchedDir =
+            compDirs.find((dir) => dir === componentId) ||
+            compDirs.find((dir) => dir.startsWith(`${componentId}-`));
+          if (matchedDir) {
+            componentDir = join(groupPath, matchedDir);
+            break;
+          }
+        } catch {
+          // 指定群组下不存在，继续兜底
+        }
+        // 第二步：兜底扫描 temp-components 下所有群组目录（groupId 缺失/错传）
+        try {
+          const groupDirs = await readdir(root);
+          for (const g of groupDirs) {
+            if (g === groupId) continue;
+            const candidate = join(root, g);
+            let st;
+            try {
+              st = await stat(candidate);
+            } catch {
+              continue;
+            }
+            if (!st.isDirectory()) continue;
+            const compDirs = await readdir(candidate);
+            const matchedDir =
+              compDirs.find((dir) => dir === componentId) ||
+              compDirs.find((dir) => dir.startsWith(`${componentId}-`));
+            if (matchedDir) {
+              componentDir = join(candidate, matchedDir);
+              break;
+            }
+          }
+          if (componentDir) break;
+        } catch {
+          // temp-components 根无法列举，跳过
         }
       }
     }

@@ -1,0 +1,364 @@
+@import './themes/theme-vars.less';
+
+/* [Layout Refine] Figma root FRAME 420x425 → flex column */
+.c-device-monitor-root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 20px 12px 20px;
+  box-sizing: border-box;
+  font-family: @dm-font-family;
+  color: @dm-text-primary;
+  /* [Style Refine] fills[0].color → rgb(237, 244, 251) */
+  background: #EDF4FB;
+  /* [Style Refine] effects[0] DROP_SHADOW → box-shadow */
+  box-shadow: 0px 4px 10px rgba(74, 116, 140, 0.25);
+}
+
+/* [Layout Refine] Figma header GROUP → flex row, space-between */
+.c-device-monitor-header {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  height: 30px;
+  margin-bottom: 4px;
+}
+
+.c-device-monitor-header-left {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+}
+
+/* [Style Refine] fills[0] GRADIENT_LINEAR → background-clip text */
+.c-device-monitor-title {
+  font-size: 16px;
+  font-weight: 700;
+  background: linear-gradient(90deg, #1990FF 0%, rgba(90, 126, 255, 0.83) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.c-device-monitor-stat {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+.c-device-monitor-stat-label {
+  font-size: 14px;
+  font-weight: 400;
+  color: #333333;
+}
+
+.c-device-monitor-stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: @dm-font-family-number;
+}
+
+.text-gradient-primary {
+  background: linear-gradient(180deg, #E1F0FF 0%, #00CCFF 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  /* fallback */
+  color: #1990FF; 
+}
+
+.text-gradient-secondary {
+  background: linear-gradient(180deg, #E1F0FF 0%, #00CCFF 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: #08A3A5;
+}
+
+.text-gradient-white {
+  background: linear-gradient(180deg, #E1F0FF 0%, #00CCFF 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: #FFFFFF;
+}
+
+.text-gradient-danger {
+  background: linear-gradient(180deg, #E1F0FF 0%, #00CCFF 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: #E03434;
+}
+
+.c-device-monitor-header-right {
+  font-size: 14px;
+  font-weight: 400;
+  background: linear-gradient(90deg, #1990FF 0%, rgba(90, 126, 255, 0.83) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.c-device-monitor-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* [Layout Refine] Figma switch FRAME → flex row, 2 cards */
+.c-device-monitor-switch {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  height: 65px;
+  margin-bottom: 0;
+}
+
+.c-device-monitor-switch-card {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 12px;
+  border-radius: 6px;
+  position: relative;
+  /* [Style Refine] fills[0] GRADIENT_LINEAR inactive */
+  background: linear-gradient(90deg, #93CCFF 0%, rgba(147, 204, 255, 0) 100%);
+  opacity: 0.8;
+  box-sizing: border-box;
+
+  &.active {
+    /* [Style Refine] fills[0] GRADIENT_LINEAR active */
+    background: linear-gradient(90deg, #2B9BFF 0%, rgba(43, 155, 255, 0.6) 100%);
+    opacity: 1;
+  }
+}
+
+.switch-card-icon {
+  width: 35px;
+  height: 28px;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.switch-icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.switch-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.switch-card-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+.switch-label {
+  font-size: 14px;
+  color: #FFFFFF;
+}
+
+.active .switch-label {
+  color: #FFFFFF;
+}
+
+.c-device-monitor-switch-card:not(.active) .switch-label {
+  color: #333333;
+}
+
+.switch-value {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: @dm-font-family-number;
+}
+
+.c-device-monitor-switch-card:not(.active) .switch-value {
+  -webkit-text-fill-color: initial;
+  background: none;
+}
+
+.c-device-monitor-switch-card:not(.active) .text-gradient-primary {
+  color: #1990FF;
+  -webkit-text-fill-color: #1990FF;
+}
+
+.c-device-monitor-switch-card:not(.active) .text-gradient-danger {
+  color: #E03434;
+  -webkit-text-fill-color: #E03434;
+}
+
+.switch-card-title {
+  position: absolute;
+  bottom: 8px;
+  left: 12px;
+  font-size: 12px;
+  color: #FFFFFF;
+}
+
+.c-device-monitor-switch-card:not(.active) .switch-card-title {
+  color: #333333;
+}
+
+/* [Layout Refine] Figma @antd/tab → flex row */
+.c-device-monitor-main {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  margin-top: 8px;
+  min-height: 0;
+}
+
+.c-device-monitor-tabs {
+  width: 46px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.tab-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  /* [Style Refine] fills[0] GRADIENT_LINEAR inactive tab */
+  background: linear-gradient(180deg, #85BAFF 0%, #C0E2FF 100%);
+  border: 1px solid #F0F5FF;
+  box-sizing: border-box;
+  position: relative;
+  gap: 2px;
+
+  &.active {
+    /* [Style Refine] fills[0] GRADIENT_LINEAR active tab */
+    background: linear-gradient(180deg, #318AFF 0%, #70BFFF 100%);
+  }
+}
+
+.tab-text {
+  font-size: 14px;
+  font-weight: 400;
+  color: #3B80E6;
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  letter-spacing: 2px;
+}
+
+.active .tab-text {
+  font-weight: 700;
+  color: #FFFFFF;
+}
+
+.tab-badge-white {
+  background: #FFFFFF;
+  border: 1px solid #258DC8;
+  border-radius: 9px;
+  padding: 0 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #3B80E6;
+  line-height: 18px;
+  box-shadow: 0px 1px 2px rgba(51, 100, 144, 0.4);
+}
+
+.tab-badge-red {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 14px;
+  height: 14px;
+  background: #F53F3F;
+  border-radius: 14px;
+  font-size: 10px;
+  font-weight: 500;
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* [Layout Refine] Figma cons GROUP → grid 3x4 */
+.c-device-monitor-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 13px 8px;
+  padding-left: 8px;
+  align-content: start;
+}
+
+.grid-item {
+  height: 64px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 12px;
+  border-radius: 4px;
+  /* [Style Refine] fills[0] GRADIENT_LINEAR grid bg */
+  background: linear-gradient(180deg, rgba(71, 166, 250, 0) 0%, rgba(71, 166, 250, 0.5) 100%);
+  box-sizing: border-box;
+}
+
+.grid-item-icon {
+  width: 26px;
+  height: 32px;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.grid-icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.grid-item-info {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+}
+
+.grid-item-name {
+  font-size: 12px;
+  font-weight: 400;
+  color: #333333;
+  line-height: 18px;
+}
+
+.grid-item-value {
+  font-size: 16px;
+  font-weight: 500;
+  font-family: @dm-font-family-number;
+  text-shadow: 0px 0px 0px rgba(0, 0, 0, 0.5);
+  line-height: 18px;
+}
+
+.has-abnormal {
+  color: #FFFFFF;
+}
+
+.val-danger {
+  color: #E03434;
+}
+
+.val-primary {
+  color: #1990FF;
+}
+
+.no-abnormal {
+  color: #08A3A5;
+}

@@ -1,0 +1,194 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 75,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body.children[0]",
+        "message": "标题“环境监测”在header.title与body文本节点中重复，产生冗余结构。",
+        "suggestion": "保留header.title，删除body内重复文本节点。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].headerRelation",
+        "message": "sections[1]和sections[2]标记content-below-title，但header.title为空，语义不一致。",
+        "suggestion": "无标题时移除headerRelation或将其置为title-itself。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[1].body.children[0].items",
+        "message": "tabs-list从section到items嵌套超过建议的3层，body/children/tabs-list层级较多。",
+        "suggestion": "简化tabs-list到items的层级，减少中间包装。"
+      },
+      {
+        "level": "error",
+        "type": "naming",
+        "location": "layout.sections[*].body.backgroundImage.src",
+        "message": "背景图路径bg-7890.png与notes中bg-7880.png不一致，且多个section重复引用。",
+        "suggestion": "核对资源文件名，并将共用背景提升到顶层统一样式。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "charts[0].axes",
+        "message": "图表Y轴单位“辆”与CO浓度语义及chartDataHints数值(600/400/200)不匹配。",
+        "suggestion": "确认Y轴单位应为ppm或mg/m³，并统一刻度和数据范围。"
+      }
+    ],
+    "recommendations": [
+      "标题仅保留header.title，body不重复文本；headerRelation为空时使用none或省略。",
+      "梳理背景图资源路径与重复引用，将共用背景提升到顶层样式。",
+      "完善图表Y轴单位/刻度与数值一致性，并补充缺失的图标资源。"
+    ],
+    "summary": "整体结构基本清晰，但存在标题重复、headerRelation语义不一致、背景图路径不一致及图表单位冲突等问题，需修正后使用。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#559eff",
+      "--colorBgBase": "#edf4fb",
+      "--colorBgContainer": "#ffffff",
+      "--colorTextBase": "#333333",
+      "--colorWarning": "#f53f3f",
+      "--colorSuccess": "#008080",
+      "--fontSize": "14px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#559eff",
+      "@color-bg-base": "#edf4fb",
+      "@color-bg-container": "#ffffff",
+      "@color-text-base": "#333333",
+      "@color-warning": "#f53f3f",
+      "@color-success": "#008080",
+      "@font-size-base": "14px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "16px",
+        "background-color": "var(--colorBgBase, #edf4fb)",
+        "color": "var(--colorTextBase, #333333)",
+        "font-size": "var(--fontSize, 14px)"
+      },
+      ".card-container": {
+        "background-color": "var(--colorBgContainer, #ffffff)",
+        "border-radius": "8px",
+        "padding": "16px",
+        "box-shadow": "0 2px 8px rgba(0,0,0,0.05)"
+      },
+      ".tab-item": {
+        "padding": "8px 16px",
+        "color": "var(--colorTextBase, #333333)",
+        "cursor": "pointer",
+        "transition": "all 0.3s"
+      },
+      ".tab-item.active": {
+        "color": "var(--colorPrimary, #559eff)",
+        "border-bottom": "2px solid var(--colorPrimary, #559eff)",
+        "font-weight": "bold"
+      },
+      ".warning-line": {
+        "border-top": "2px dashed var(--colorWarning, #f53f3f)",
+        "position": "relative"
+      },
+      ".warning-label": {
+        "color": "var(--colorWarning, #f53f3f)",
+        "font-size": "12px",
+        "position": "absolute",
+        "top": "-18px",
+        "right": "0"
+      },
+      ".area-chart-fill": {
+        "fill": "var(--colorSuccess, #008080)",
+        "opacity": "0.2"
+      }
+    },
+    "tokenCoverage": 1,
+    "mappingNotes": [
+      "主色调 #559eff 映射为 --colorPrimary，用于选中Tab蓝色高亮等强调元素",
+      "背景色 #edf4fb 映射为 --colorBgBase，作为页面或组件的浅灰蓝底色",
+      "预警色 #f53f3f 映射为 --colorWarning，用于红色虚线预警线及红色标注",
+      "图表填充色 #008080 映射为 --colorSuccess，用于绿色面积图填充",
+      "容器背景 #ffffff 映射为 --colorBgContainer，用于卡片或内容区块背景",
+      "容器背景应优先直接落地为 Figma 字面量值，避免关键可见背景只依赖 CSS 变量"
+    ],
+    "elementStyleMap": {
+      "section-header-title": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "section-tabs-controls": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tabs-list": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "view-icons": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-5": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-15": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-header-title",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 1,
+        "title": "环境监测"
+      },
+      {
+        "id": "section-tabs-controls",
+        "responsibility": "标签页切换区",
+        "elementCount": 4,
+        "title": "监测类型与视图控制"
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "浓度趋势图"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 → 强制拆分"
+  }
+}

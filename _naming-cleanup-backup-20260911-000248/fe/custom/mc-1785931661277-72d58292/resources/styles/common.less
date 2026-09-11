@@ -1,0 +1,178 @@
+@import './themes/theme-vars.less';
+
+/* [Layout Refine] Root container - Figma bbox: 420x186, vertical stack */
+.c-mc-max-1785931427277-447daf34-container {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow: hidden;
+  /* [Style Refine] bg fills[0].color → rgb(237,244,251) */
+  background: rgb(237, 244, 251);
+  /* [Style Refine] bg effects[0] → box-shadow */
+  box-shadow: 0px 4px 10px rgba(74, 117, 141, 0.25);
+}
+
+/* [Layout Refine] Header section - Figma header GROUP: height=28 */
+.c-mc-max-1785931427277-447daf34-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 28px;
+  padding: 0 20px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+/* [Layout Refine] Title icon - Figma g GROUP: 8x8 */
+.c-mc-max-1785931427277-447daf34-title-icon {
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+
+/* [Style Refine] Title text - Figma "环境监测" TEXT: fontSize=16, fontWeight=700, gradient fill */
+.c-mc-max-1785931427277-447daf34-title-text {
+  font-family: 'Noto Sans SC', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 19px;
+  /* [Style Refine] fills[0] GRADIENT_LINEAR → background gradient */
+  background: linear-gradient(to right, rgb(25, 144, 255), rgba(90, 126, 255, 0.83));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* [Layout Refine] Content area - Figma slot-con: height=145 */
+.c-mc-max-1785931427277-447daf34-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: 0 20px;
+  box-sizing: border-box;
+}
+
+/* [Layout Refine] Tab bar - Figma sub-t: height=32, horizontal layout */
+.c-mc-max-1785931427277-447daf34-tab-bar {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  height: 32px;
+  flex-shrink: 0;
+}
+
+/* [Layout Refine] Tabs list - Figma tabs-list GROUP: horizontal */
+.c-mc-max-1785931427277-447daf34-tabs-list {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  /* [Style Refine] bg fills[0] GRADIENT_LINEAR */
+  background: linear-gradient(to right, rgb(181, 222, 255), rgb(209, 236, 255));
+  /* [Style Refine] bg strokes[0] → border */
+  border: 0.72px solid rgb(255, 255, 255);
+  border-radius: 4px;
+  padding: 3px;
+  box-sizing: border-box;
+}
+
+/* [Style Refine] Tab item - Figma TEXT: fontSize=14, fontWeight=500 */
+.c-mc-max-1785931427277-447daf34-tab-item {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 12px;
+  padding: 5px 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  /* [Style Refine] inactive fills[0].color → rgb(44,155,234) */
+  color: rgb(44, 155, 234);
+  border-radius: 3px;
+  transition: all 0.2s;
+}
+
+/* [Style Refine] Tab active - Figma bg-tab-active fills[0] GRADIENT_LINEAR */
+.c-mc-max-1785931427277-447daf34-tab-item.active {
+  /* [Style Refine] bg-tab-active fills[0] GRADIENT_LINEAR */
+  background: linear-gradient(to right, rgb(16, 153, 177), rgb(4, 143, 255));
+  /* [Style Refine] bg-tab-active strokes[0] → border */
+  border: 0.6px solid rgb(255, 255, 255);
+  /* [Style Refine] active text fills[0].color → rgb(255,255,255) */
+  color: rgb(255, 255, 255);
+  /* [Style Refine] active text effects[0] DROP_SHADOW */
+  text-shadow: 0px 0.6px 0px rgba(0, 111, 227, 1);
+}
+
+/* [Layout Refine] Right icons - Figma tabs-icon FRAME: 52x24, horizontal */
+.c-mc-max-1785931427277-447daf34-tab-icons {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+/* [Style Refine] Icon button - Figma Rectangle: 24x24, cornerRadius=4 */
+.c-mc-max-1785931427277-447daf34-icon-btn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* [Style Refine] fills[0] SOLID + GRADIENT_LINEAR */
+  background: linear-gradient(to bottom, rgb(255, 255, 255) 0%, rgb(226, 239, 255) 36%, rgb(222, 237, 255) 69%, rgb(255, 255, 255) 100%);
+  /* [Style Refine] strokes[0] → border */
+  border: 1px solid rgb(161, 206, 255);
+  border-radius: 4px;
+  cursor: pointer;
+  position: relative;
+}
+
+/* [Style Refine] Icon svg - Figma Vector fills[0].color → rgb(44,155,234) */
+.c-mc-max-1785931427277-447daf34-icon-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: rgb(44, 155, 234);
+}
+
+/* [Style Refine] Badge - Figma num GROUP: 14x14, cornerRadius=29 */
+.c-mc-max-1785931427277-447daf34-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* [Style Refine] bg fills[0].color → rgb(245,63,63) */
+  background: rgb(245, 63, 63);
+  border-radius: 29px;
+  padding: 0 3px;
+  box-sizing: border-box;
+}
+
+/* [Style Refine] Badge text - Figma TEXT: fontSize=12, fontWeight=500, color=white */
+.c-mc-max-1785931427277-447daf34-badge-text {
+  font-family: 'PingFang SC', sans-serif;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 14px;
+  color: rgb(255, 255, 255);
+}
+
+/* [Layout Refine] Chart area - Figma @echarts/line GROUP: height=113 */
+.c-mc-max-1785931427277-447daf34-chart-area {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.c-mc-max-1785931427277-447daf34-chart {
+  width: 100%;
+  height: 100%;
+}

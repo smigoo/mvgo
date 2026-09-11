@@ -75,6 +75,7 @@ app.use(
         httpOnly: true,
         sameSite: 'lax',
         maxAge: 24 * 60 * 60 * 1000, // 24小时（实际有效期受 portal token 过期时间约束）
+        path: '/', // 让所有 /api/* 请求都能携带 session cookie
       },
     }),
   );

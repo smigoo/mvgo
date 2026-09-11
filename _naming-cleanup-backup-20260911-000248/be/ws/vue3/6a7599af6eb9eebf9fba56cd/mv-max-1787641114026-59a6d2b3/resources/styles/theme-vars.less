@@ -1,0 +1,43 @@
+// 主题变量与 Mixin 定义
+// 仅定义变量与 mixin，不产出实际 class
+
+.theme-light() {
+  :root {
+    --color-primary: #559EFF;
+    --color-primary-bg: rgba(85, 158, 255, 0.1);
+    --color-bg: #EDF4FB;
+    --color-bg-container: #ffffff;
+    --color-text-base: #333333;
+    --color-text-secondary: #666666;
+    --color-success: #52c41a;
+    --color-danger: #F53F3F;
+    --font-size-base: 14px;
+    --font-size-heading: 18px;
+    --border-radius-base: 8px;
+  }
+}
+
+.theme-dark() {
+  :root {
+    --color-primary: #559EFF;
+    --color-primary-bg: rgba(85, 158, 255, 0.15);
+    --color-bg: #1a1a1a;
+    --color-bg-container: #2a2a2a;
+    --color-text-base: #ffffff;
+    --color-text-secondary: #aaaaaa;
+    --color-success: #52c41a;
+    --color-danger: #F53F3F;
+  }
+}
+
+.common() {
+  // 共享 mixin，可用于通用样式片段
+  .flex-center() {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+// 默认调用浅色主题
+.theme-light();

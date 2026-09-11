@@ -1,0 +1,492 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 72,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "存在重复生成面板标题的问题。结构中包含 panel-title section、header.title 与 body.children.title-text，且 notes 也提示宿主 base-panel 已提供标题。根据微码规范，组件标题应由 base-panel/default-panel 和 declare.json.componentName 自动显示，内容区不应再生成标题文字或标题装饰。",
+        "suggestion": "删除 panel-title section 及 title-text；将中文标题仅保留为 declare.json.componentName='环境监测'。若标题左侧装饰由宿主插槽支持，应映射到宿主 header slot，而不是作为内容区常驻 DOM。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.headerSlots[0]",
+        "message": "标题左侧蓝色装饰圆点被识别为 headerSlots，但规范明确 default-panel 已处理标题装饰线/圆点，禁止在组件内容中重复生成标题装饰。",
+        "suggestion": "若宿主 panel 支持 title-left 插槽且业务确需复用，可作为宿主配置项处理；否则应移除该装饰节点，避免与 base-panel 标题区重复。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[2].body.children[0].children",
+        "message": "图表区域嵌套层级偏深，chart-container 下继续拆分 y-axis-label、grid、warning-line、series-line、x/y labels、legend，其中 legend 内还包含 legend-item、decoration、label，实际 DOM 深度可能超过建议的 3 层。",
+        "suggestion": "图表主体建议交由 ECharts option 表达，模板层只保留 chart-wrapper、chart-container 和必要的自定义 legend/action；坐标轴、网格线、预警线、折线不建议拆成多个 DOM 装饰节点。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[0]",
+        "message": "折线图被拆解为静态 decoration/line/text-group，容易导致图表数据、缩放、自适应、tooltip、阈值线与坐标轴关系失真，也不符合存在图表时应使用完整 ECharts option 的实现预期。",
+        "suggestion": "使用 ECharts line 配置统一实现 grid、xAxis、yAxis、series、markLine/阈值线、tooltip；预警线建议用 markLine 或自定义 series 实现，避免写死绝对定位 DOM。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[0].children[0]",
+        "message": "Y 轴单位标注为“辆”，但当前 Tab 为“一氧化碳”，图例为“CO浓度”，单位与业务语义明显不匹配。chartDataHints 中也出现 600/400/200 等值，与 layout 中 40/30/20/10/0 刻度不一致。",
+        "suggestion": "核对设计稿和业务口径：CO 浓度通常应使用 ppm、mg/m³ 或设计稿实际单位；若截图确为“辆”，应在 notes 中标记为疑似识别错误，不应直接作为确定单位输出。同步修正 chartDataHints 与 axes 描述。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[1-2]",
+        "message": "右侧图标按钮与红色角标被作为两个并列兄弟节点描述，缺少明确的叠放/定位父子关系。角标通常应挂载在图标按钮容器内，以 absolute 定位到右上角，否则水平布局会导致角标占据额外宽度、位置偏移。",
+        "suggestion": "将 badge-count 作为 tabs-action-icon 的子节点或包一层 action-wrapper，wrapper 设置 position: relative，badge 使用 absolute top/right 定位。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1]",
+        "message": "Tab 切换栏与右侧控件处于同一个 horizontal body，但未描述左右空间分配关系。tabs-list 固定 295px、图标 52px、角标 14px，在 420px 面板内加上 gap/padding 后容易接近或超过可用宽度，响应式风险较高。",
+        "suggestion": "父容器应使用 width:100%、display:flex、align-items:center；tabs-list 使用 flex:1、min-width:0，右侧 action 使用 flex:none。Figma 像素宽度仅作为视觉参考，不应硬编码为主布局宽度。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[2].body.children[0].children[1-6]",
+        "message": "图表网格、坐标轴刻度、预警线、折线、图例均以多个 DOM 节点描述，节点数量偏多，且绝对定位装饰会增加布局维护成本。",
+        "suggestion": "减少静态 DOM，使用 canvas/SVG 图表库统一绘制；自定义图例若必须存在，保留少量 DOM 并实现与 ECharts legend 状态联动。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "charts[0]",
+        "message": "图表信息有一定完整度，包含 type、series、legend、legendPosition、axes，但缺少 tooltip 配置语义。分析中写“截图中未显示 tooltip”，但微码规范要求只要存在 ECharts 图表，就必须提供 option.tooltip，坐标系图表默认 trigger='axis'。",
+        "suggestion": "在 charts 或实现建议中补充 tooltip: { trigger: 'axis' }；不要因为截图未显示 tooltip 就省略 tooltip，也不要写死常驻 tooltip DOM。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "interactions[0]",
+        "message": "Tab 交互仅描述切换不同环境监测指标，但未说明切换后图表数据联动。根据规范，Tab/Select 切换必须更新图表数据，禁止只改变 active 样式。",
+        "suggestion": "补充每个 Tab 对应的数据源结构或至少定义 dataMap 占位，并在实现阶段通过 activeTab + watch 更新 ECharts option。若无设计数据，应使用明确的 mock 数据并标注来源，不臆造业务含义。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[*].body.backgroundImage",
+        "message": "多个 section 的 body 都重复引用同一背景 bg-7890.png，而 styles.backgroundResource 又声明整体背景 bg-7880.png 覆盖 420x186。背景职责重复，可能导致切片重复铺设、视觉叠加或资源浪费。",
+        "suggestion": "将整体面板内容背景只挂在一个内容根容器上；各 section 默认透明。除非设计稿明确每个区域都有独立背景，否则不要在每个 body 重复设置 backgroundImage。"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "layout.sections[1].body.children[0].children[0].id",
+        "message": "tab-co2 的 id 与文本“一氧化碳”存在语义偏差。CO 是一氧化碳，CO2 是二氧化碳，命名容易误导维护者。",
+        "suggestion": "将 id 改为 tab-co 或 tab-carbon-monoxide；series-line-zk3 也可改为 series-line-co-zk3，以保持业务语义准确。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "coverageReport 中 matchedCount=0、coverageRate=0，但布局又声称识别了大量 Figma 节点和资源映射，数据自相矛盾，说明结构可信度需要复核。",
+        "suggestion": "重新校验 Figma 节点匹配逻辑。至少应将已映射的 header、环境监测、tabs、legend、axis label 等计入 matched 或 uncertain，避免覆盖率报告误导后续生成。"
+      }
+    ],
+    "recommendations": [
+      "整体结构建议压缩为两个主要内容区：metric-toolbar（Tab + action/badge）和 chart-section（chart container + 可选自定义 legend），删除 panel-title。",
+      "图表不要以静态 DOM 拆解坐标轴、网格和折线，优先用 ECharts option 表达，并补充 tooltip.trigger='axis'、grid.containLabel=true、markLine 预警线。",
+      "遵守 base-panel 规范：标题、标题装饰、面板背景、边框、外层 padding 不应在组件内容中重复生成。",
+      "将固定宽度 295px、360px、330px 改为 width:100%、flex:1、min-width:0 和合理的 max-width/height，避免在不同容器宽度下溢出。",
+      "修正 CO 指标单位、坐标刻度和 chartDataHints 的不一致问题；不确定内容应标记 uncertain，不应作为确定结构输出。",
+      "右侧图标与 badge 应形成明确的相对定位父子关系，并为图标按钮补充 title/aria-label；不要臆造按钮具体业务功能。",
+      "如果保留自定义图例，需要在实现中增加点击联动逻辑；如果使用 ECharts 内置 legend，则不要再额外生成重复 DOM 图例。",
+      "背景资源应统一挂载到内容根容器，避免每个 section 重复引用同一背景图。"
+    ],
+    "summary": "该布局对可见元素的识别较完整，区域划分基本能反映“指标切换 + 图表”的内容结构，但与微码规范存在多处冲突：最主要问题是重复生成面板标题和标题装饰、图表被过度拆分为静态 DOM、固定宽度较多、单位和数据提示不一致、Tab/图例联动描述不足。整体可作为视觉分析草稿参考，但不建议直接进入代码生成；需先按 base-panel、ECharts、自适应和交互联动规范重构后再使用。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名），浅色科技监测风主题Token",
+      "--colorPrimary": "#559eff",
+      "--colorPrimaryActive": "#559eff",
+      "--colorPrimaryBg": "rgba(85,158,255,0.14)",
+      "--colorPrimaryBgHover": "rgba(85,158,255,0.22)",
+      "--colorBg": "#edf4fb",
+      "--colorPanelBg": "rgba(255,255,255,0.65)",
+      "--colorTextBase": "#4b5a63",
+      "--colorTextInverse": "#ffffff",
+      "--colorSuccess": "#33c6a4",
+      "--colorWarning": "#c65069",
+      "--colorDanger": "#f53f3f",
+      "--colorGridLine": "rgba(75,90,99,0.18)",
+      "--colorBorderSoft": "rgba(85,158,255,0.42)",
+      "--fontSize": "14px",
+      "--titleSize": "16px",
+      "--badgeSize": "18px",
+      "--borderRadius": "8px",
+      "--capsuleRadius": "999px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射，应在 resources/styles/themes/theme-vars.less 中与CSS变量保持对应",
+      "@color-primary": "var(--colorPrimary)",
+      "@color-primary-active": "var(--colorPrimaryActive)",
+      "@color-primary-bg": "var(--colorPrimaryBg)",
+      "@color-primary-bg-hover": "var(--colorPrimaryBgHover)",
+      "@color-bg": "var(--colorBg)",
+      "@color-panel-bg": "var(--colorPanelBg)",
+      "@color-text-base": "var(--colorTextBase)",
+      "@color-text-inverse": "var(--colorTextInverse)",
+      "@color-success": "var(--colorSuccess)",
+      "@color-warning": "var(--colorWarning)",
+      "@color-danger": "var(--colorDanger)",
+      "@color-grid-line": "var(--colorGridLine)",
+      "@color-border-soft": "var(--colorBorderSoft)",
+      "@font-size-base": "var(--fontSize)",
+      "@title-size": "var(--titleSize)",
+      "@badge-size": "var(--badgeSize)",
+      "@border-radius-base": "var(--borderRadius)",
+      "@capsule-radius": "var(--capsuleRadius)"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS/Less类，业务样式建议统一写入 resources/styles/common.less",
+      ".tech-monitor-panel": {
+        "position": "relative",
+        "width": "100%",
+        "height": "100%",
+        "box-sizing": "border-box",
+        "overflow": "hidden",
+        "font-size": "var(--fontSize, @font-size-base)",
+        "color": "var(--colorTextBase, @color-text-base)",
+        "background-color": "#edf4fb",
+        "background-image": "url('../resources/images/bg-7880.png')",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      ".tech-monitor-panel-bg-420-186": {
+        "width": "420px",
+        "height": "186px",
+        "background-image": "url('../resources/images/bg-7880.png')",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      ".panel-glass-content": {
+        "position": "relative",
+        "box-sizing": "border-box",
+        "padding": "1em",
+        "border-radius": "var(--borderRadius, @border-radius-base)",
+        "background": "var(--colorPanelBg, @color-panel-bg)",
+        "backdrop-filter": "blur(4px)"
+      },
+      ".section-title": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "0.5em",
+        "font-size": "var(--titleSize, @title-size)",
+        "font-weight": "600",
+        "line-height": "1.4",
+        "color": "var(--colorTextBase, @color-text-base)"
+      },
+      ".section-title::before": {
+        "content": "''",
+        "display": "inline-block",
+        "width": "0.5em",
+        "height": "0.5em",
+        "border-radius": "50%",
+        "background": "var(--colorPrimary, @color-primary)",
+        "box-shadow": "0 0 0 0.25em rgba(85,158,255,0.16)"
+      },
+      ".tab-capsule-group": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "gap": "0.25em",
+        "box-sizing": "border-box",
+        "padding": "0.25em",
+        "border": "1px solid var(--colorBorderSoft, @color-border-soft)",
+        "border-radius": "var(--capsuleRadius, @capsule-radius)",
+        "background": "var(--colorPrimaryBg, @color-primary-bg)"
+      },
+      ".tab-capsule-item": {
+        "min-width": "5.5em",
+        "height": "2em",
+        "padding": "0 0.85em",
+        "border": "none",
+        "border-radius": "var(--capsuleRadius, @capsule-radius)",
+        "color": "var(--colorPrimary, @color-primary)",
+        "background": "transparent",
+        "font-size": "1em",
+        "line-height": "2em",
+        "text-align": "center",
+        "cursor": "pointer",
+        "transition": "all 0.2s ease"
+      },
+      ".tab-capsule-item.is-active": {
+        "color": "var(--colorTextInverse, @color-text-inverse)",
+        "background": "var(--colorPrimary, @color-primary)",
+        "box-shadow": "0 0.25em 0.75em rgba(85,158,255,0.28)"
+      },
+      ".chart-grid-area": {
+        "position": "relative",
+        "min-height": "10em",
+        "background-image": "linear-gradient(to right, var(--colorGridLine, @color-grid-line) 1px, transparent 1px), linear-gradient(to bottom, var(--colorGridLine, @color-grid-line) 1px, transparent 1px)",
+        "background-size": "20% 25%",
+        "background-position": "left bottom"
+      },
+      ".chart-line-success": {
+        "color": "var(--colorSuccess, @color-success)",
+        "stroke": "var(--colorSuccess, @color-success)",
+        "fill": "none",
+        "stroke-width": "2",
+        "filter": "drop-shadow(0 0 0.35em rgba(51,198,164,0.35))"
+      },
+      ".warning-threshold-line": {
+        "position": "absolute",
+        "left": "0",
+        "right": "0",
+        "top": "30%",
+        "border-top": "1px dashed var(--colorDanger, @color-danger)",
+        "color": "var(--colorDanger, @color-danger)",
+        "font-size": "0.86em",
+        "line-height": "1.4"
+      },
+      ".warning-threshold-line::after": {
+        "content": "'预警线'",
+        "position": "absolute",
+        "right": "0.5em",
+        "top": "-1.8em",
+        "color": "var(--colorDanger, @color-danger)",
+        "white-space": "nowrap"
+      },
+      ".count-badge": {
+        "position": "absolute",
+        "right": "0.6em",
+        "top": "0.6em",
+        "min-width": "var(--badgeSize, @badge-size)",
+        "height": "var(--badgeSize, @badge-size)",
+        "padding": "0 0.35em",
+        "border-radius": "999px",
+        "box-sizing": "border-box",
+        "display": "inline-flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "font-size": "0.8em",
+        "font-weight": "600",
+        "line-height": "1",
+        "color": "#ffffff",
+        "background": "var(--colorDanger, @color-danger)",
+        "box-shadow": "0 0.15em 0.45em rgba(245,63,63,0.35)"
+      },
+      ".text-muted-tech": {
+        "color": "rgba(75,90,99,0.72)"
+      },
+      ".text-warning-tech": {
+        "color": "var(--colorWarning, @color-warning)"
+      },
+      ".text-danger-tech": {
+        "color": "var(--colorDanger, @color-danger)"
+      }
+    },
+    "tokenCoverage": 0.96,
+    "mappingNotes": [
+      "整体浅灰蓝内容区映射为 --colorBg: #edf4fb，并在 .tech-monitor-panel 中直接落地 background-color，保证关键可见背景不完全依赖变量。",
+      "Figma bg 资源 ../resources/images/bg-7880.png 已通过 background-image 引用，尺寸场景提供 .tech-monitor-panel-bg-420-186 对应 420x186 区域。",
+      "主蓝 #559eff 映射为 --colorPrimary，用于选中 Tab 胶囊、标题圆点、描边与科技高亮。",
+      "绿色 #33c6a4 映射为 --colorSuccess，用于 zk3+785CO浓度折线。",
+      "红色 #f53f3f 映射为 --colorDanger，用于预警虚线、预警线文字与右上角数量角标。",
+      "#c65069 映射为 --colorWarning，保留为偏暗红/告警辅助文本色。",
+      "#4b5a63 映射为 --colorTextBase，适合浅色面板中的基础文字与坐标轴文字。",
+      "rgba(255,255,255,0.65) 映射为 --colorPanelBg，用于半透明玻璃面板内容层。",
+      "浅灰虚线网格使用 --colorGridLine 派生，降低视觉干扰并符合浅色科技监测风。",
+      "CSS变量均采用 camelCase 命名；Less变量与CSS变量一一对应，可放入 theme-vars.less 的 .common() / .theme-light() 中维护。"
+    ],
+    "elementStyleMap": {
+      "panel-title": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "metric-tabs-and-actions": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tab-co2": {
+        "font-size": "14px",
+        "color": "#ffffff",
+        "font-weight": 700,
+        "line-height": "24px",
+        "text-align": "center",
+        "background-color": "rgba(63, 169, 214, 0.95)",
+        "border-radius": "12px",
+        "padding": "0px 12px",
+        "border": "1px solid rgba(255, 255, 255, 0.55)"
+      },
+      "tab-visibility": {
+        "font-size": "14px",
+        "color": "#559eff",
+        "font-weight": 700,
+        "line-height": "24px",
+        "text-align": "center",
+        "background-color": "transparent",
+        "border-radius": "12px",
+        "padding": "0px 8px",
+        "border": "0"
+      },
+      "tab-lighting": {
+        "font-size": "14px",
+        "color": "#559eff",
+        "font-weight": 700,
+        "line-height": "24px",
+        "text-align": "center",
+        "background-color": "transparent",
+        "border-radius": "12px",
+        "padding": "0px 8px",
+        "border": "0"
+      },
+      "tab-outside-light": {
+        "font-size": "14px",
+        "color": "#559eff",
+        "font-weight": 700,
+        "line-height": "24px",
+        "text-align": "center",
+        "background-color": "transparent",
+        "border-radius": "12px",
+        "padding": "0px 8px",
+        "border": "0"
+      },
+      "tabs-list": {
+        "width": "295px",
+        "height": "27px",
+        "padding": "0px 8px",
+        "gap": "8px",
+        "background": "rgba(230, 242, 252, 0.65)",
+        "border-radius": "14px",
+        "overflow": "hidden",
+        "border": "1px solid rgba(85, 158, 255, 0.45)"
+      },
+      "tabs-action-icon": {
+        "width": "52px",
+        "height": "24px",
+        "padding": "0px",
+        "gap": "0px",
+        "background": "transparent",
+        "border-radius": "4px",
+        "overflow": "visible",
+        "object-fit": "contain",
+        "opacity": 1
+      },
+      "badge-count": {
+        "width": "14px",
+        "height": "14px",
+        "font-size": "10px",
+        "font-weight": 700,
+        "color": "#ffffff",
+        "line-height": "14px",
+        "text-align": "center",
+        "background-color": "#f53f3f",
+        "border-radius": "7px",
+        "padding": "0px",
+        "border": "0"
+      },
+      "el-el-x-5": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "co2-trend-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "chart-grid": {
+        "background": "repeating-linear-gradient(to right, rgba(120,140,150,0.35) 0 4px, transparent 4px 8px)",
+        "width": "330px",
+        "height": "72px",
+        "position": "absolute",
+        "opacity": 1
+      },
+      "warning-line": {
+        "background": "repeating-linear-gradient(to right, rgba(205,80,105,0.75) 0 5px, transparent 5px 9px)",
+        "width": "330px",
+        "height": "1px",
+        "position": "absolute",
+        "opacity": 1
+      },
+      "series-line-zk3": {
+        "background": "#33c6a4",
+        "width": "330px",
+        "height": "2px",
+        "position": "absolute",
+        "opacity": 1
+      },
+      "legend-zk3-decoration-绿色线段-0": {
+        "background": "#33c6a4",
+        "width": "18px",
+        "height": "2px",
+        "position": "relative",
+        "opacity": 1
+      },
+      "chart-container": {
+        "width": "360px",
+        "height": "105px",
+        "padding": "2px 0px 0px 0px",
+        "gap": "0px",
+        "background": "transparent",
+        "border-radius": "0",
+        "overflow": "visible"
+      },
+      "el-el-x-14": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-decoration-绿色线段-42": {
+        "background": "#33c6a4",
+        "width": "18px",
+        "height": "2px",
+        "position": "relative",
+        "opacity": 1
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "panel-title",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 1,
+        "title": "环境监测"
+      },
+      {
+        "id": "metric-tabs-and-actions",
+        "responsibility": "标签页切换区",
+        "elementCount": 7,
+        "title": "指标切换与右侧控件"
+      },
+      {
+        "id": "co2-trend-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 30,
+        "title": "一氧化碳浓度趋势图"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 → 强制拆分"
+  }
+}

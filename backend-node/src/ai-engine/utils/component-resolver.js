@@ -39,18 +39,28 @@ export function isEncodedComponentName(name) {
 const CANONICAL_NAME_RE = /^c-[a-z]/
 
 /**
+ * 「伪规范名」指纹 —— 13 位毫秒时间戳只会出现在任务号里。
+ * 规范名形态是 `c-<语义段>-<尾 8hex>`，**绝不会**含 13 位时间戳；
+ * 而历史产物存在 `c-mc-lite-1788491849328-99e8660b` 这类「c- 前缀裹着任务号」的目录，
+ * 它会被 CANONICAL_NAME_RE 误判为规范名（rank 0）从而在同尾缀多命中时胜出。故先按此指纹降级。
+ */
+const EMBEDDED_TASK_ID_RE = /\d{13}/
+
+/**
  * 目录名「规范度」排序权重：0 = 规范 c- 名（最优），2 = 任务号名（垫底），1 = 其他。
  * 用于 S2 让规范目录在同尾缀多命中时胜出。
  */
-function namingRank(name) {
+export function namingRank(name) {
   const n = String(name ?? '')
+  // 伪规范名（c- 前缀裹任务号）必须先降级，否则会盖过真规范名
+  if (EMBEDDED_TASK_ID_RE.test(n)) return 2
   if (CANONICAL_NAME_RE.test(n)) return 0
   if (isEncodedComponentName(n)) return 2
   return 1
 }
 
 /** 按规范度稳定排序：同权重保持传入顺序（= roots 顺序），保证解析结果确定 */
-function rankDirsByNaming(dirs) {
+export function rankDirsByNaming(dirs) {
   return dirs
     .map((dir, index) => ({ dir, index, rank: namingRank(basename(dir)) }))
     .sort((a, b) => a.rank - b.rank || a.index - b.index)

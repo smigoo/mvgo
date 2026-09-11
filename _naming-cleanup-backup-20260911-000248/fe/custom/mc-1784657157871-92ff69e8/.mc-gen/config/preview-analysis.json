@@ -1,0 +1,357 @@
+{
+  "generatedAt": "2026-04-27T10:19:15.595Z",
+  "stage": "preview-analysis",
+  "componentName": "管辖范围",
+  "componentTitle": "管辖范围",
+  "analysisModel": "gpt-5.4",
+  "sourceImage": {
+    "path": "{outputPath}/c-lljc/resources/images/mc-preview.png",
+    "size": 709937,
+    "mtimeMs": 1777285034334,
+    "sha1": "4ef988ae2dbf004f8a071940c71e9b64e4a43dd7"
+  },
+  "summary": "展示管辖范围内的主线长度、隧道数量、桥梁数量和工区数量的统计数据。包含标题栏和四个横向排列的数据项。",
+  "layout": {
+    "type": "vertical",
+    "direction": "column",
+    "sections": [
+      {
+        "id": "header-section",
+        "name": "标题栏",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "title-itself",
+        "slotCandidate": null,
+        "header": {
+          "title": "管辖范围",
+          "controls": []
+        },
+        "body": {
+          "layout": "vertical",
+          "bgPlaceholder": "section-bg-header",
+          "children": [
+            {
+              "type": "decoration",
+              "name": "标题左侧图标",
+              "resourceFile": "../resources/images/Group_4114-1199.png",
+              "recommendedUsage": "imgSrc",
+              "width": 17,
+              "height": 18,
+              "style": {
+                "position": "absolute",
+                "left": "10px",
+                "top": "8px"
+              }
+            },
+            {
+              "type": "decoration",
+              "name": "分割线",
+              "resourceFile": "../resources/images/分割线-1195.png",
+              "recommendedUsage": "decorativeBlock",
+              "width": 418,
+              "height": 4,
+              "style": {
+                "position": "absolute",
+                "bottom": "0",
+                "left": "20px"
+              }
+            }
+          ],
+          "backgroundImage": {
+            "src": "../resources/images/bg-956.png",
+            "recommendedUsage": "backgroundStyle"
+          },
+          "backgroundSize": "cover",
+          "backgroundPosition": "center",
+          "backgroundRepeat": "no-repeat"
+        }
+      },
+      {
+        "id": "stats-section",
+        "name": "统计数据",
+        "role": "常驻",
+        "layout": "horizontal-4-items",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "header": {
+          "title": null,
+          "controls": []
+        },
+        "body": {
+          "layout": "horizontal-4-items",
+          "bgPlaceholder": "body-bg-stats",
+          "items": [
+            {
+              "id": "stat-mainline",
+              "layout": "horizontal",
+              "alignItems": "center",
+              "gap": "10px",
+              "icon": {
+                "placeholder": "icon-mainline",
+                "resourceFile": "../resources/images/icon-1955.png",
+                "recommendedUsage": "imgSrc",
+                "figmaNode": "1452:1955",
+                "position": "left",
+                "width": 40,
+                "height": 40
+              },
+              "content": {
+                "layout": "vertical",
+                "position": "right",
+                "elements": [
+                  {
+                    "type": "label",
+                    "text": "主线",
+                    "figmaNode": "1452:1960",
+                    "position": "top",
+                    "styles": {
+                      "fontSize": "14px",
+                      "color": "rgba(255, 255, 255, 0.8)",
+                      "fontWeight": "normal"
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "position": "bottom",
+                    "parts": [
+                      {
+                        "text": "185.6",
+                        "type": "number",
+                        "figmaNode": "1452:1965",
+                        "styles": {
+                          "fontSize": "28px",
+                          "color": "rgba(0, 240, 255, 1)",
+                          "fontWeight": "bold"
+                        }
+                      },
+                      {
+                        "text": "km",
+                        "type": "unit",
+                        "figmaNode": "1452:1966",
+                        "styles": {
+                          "fontSize": "12px",
+                          "color": "rgba(255, 255, 255, 0.8)",
+                          "fontWeight": "normal"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "stat-tunnel",
+              "layout": "horizontal",
+              "alignItems": "center",
+              "gap": "10px",
+              "icon": {
+                "placeholder": "icon-tunnel",
+                "resourceFile": "../resources/images/icon-1958.png",
+                "recommendedUsage": "imgSrc",
+                "figmaNode": "1452:1958",
+                "position": "left",
+                "width": 40,
+                "height": 40
+              },
+              "content": {
+                "layout": "vertical",
+                "position": "right",
+                "elements": [
+                  {
+                    "type": "label",
+                    "text": "隧道",
+                    "figmaNode": "1452:1975",
+                    "position": "top",
+                    "styles": {
+                      "fontSize": "14px",
+                      "color": "rgba(255, 255, 255, 0.8)",
+                      "fontWeight": "normal"
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "position": "bottom",
+                    "parts": [
+                      {
+                        "text": "1",
+                        "type": "number",
+                        "figmaNode": "1452:1980",
+                        "styles": {
+                          "fontSize": "28px",
+                          "color": "rgba(0, 240, 255, 1)",
+                          "fontWeight": "bold"
+                        }
+                      },
+                      {
+                        "text": "条",
+                        "type": "unit",
+                        "figmaNode": "1452:1981",
+                        "styles": {
+                          "fontSize": "12px",
+                          "color": "rgba(255, 255, 255, 0.8)",
+                          "fontWeight": "normal"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "stat-bridge",
+              "layout": "horizontal",
+              "alignItems": "center",
+              "gap": "10px",
+              "icon": {
+                "placeholder": "icon-bridge",
+                "resourceFile": "../resources/images/icon-1961.png",
+                "recommendedUsage": "imgSrc",
+                "figmaNode": "1452:1961",
+                "position": "left",
+                "width": 40,
+                "height": 40
+              },
+              "content": {
+                "layout": "vertical",
+                "position": "right",
+                "elements": [
+                  {
+                    "type": "label",
+                    "text": "桥",
+                    "figmaNode": "1452:1990",
+                    "position": "top",
+                    "styles": {
+                      "fontSize": "14px",
+                      "color": "rgba(255, 255, 255, 0.8)",
+                      "fontWeight": "normal"
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "position": "bottom",
+                    "parts": [
+                      {
+                        "text": "3",
+                        "type": "number",
+                        "figmaNode": "1452:1995",
+                        "styles": {
+                          "fontSize": "28px",
+                          "color": "rgba(0, 240, 255, 1)",
+                          "fontWeight": "bold"
+                        }
+                      },
+                      {
+                        "text": "座",
+                        "type": "unit",
+                        "figmaNode": "1452:1996",
+                        "styles": {
+                          "fontSize": "12px",
+                          "color": "rgba(255, 255, 255, 0.8)",
+                          "fontWeight": "normal"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "id": "stat-workzone",
+              "layout": "horizontal",
+              "alignItems": "center",
+              "gap": "10px",
+              "icon": {
+                "placeholder": "icon-workzone",
+                "resourceFile": "../resources/images/icon-1964.png",
+                "recommendedUsage": "imgSrc",
+                "figmaNode": "1452:1964",
+                "position": "left",
+                "width": 40,
+                "height": 40
+              },
+              "content": {
+                "layout": "vertical",
+                "position": "right",
+                "elements": [
+                  {
+                    "type": "label",
+                    "text": "工区",
+                    "figmaNode": "1452:2005",
+                    "position": "top",
+                    "styles": {
+                      "fontSize": "14px",
+                      "color": "rgba(255, 255, 255, 0.8)",
+                      "fontWeight": "normal"
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "position": "bottom",
+                    "parts": [
+                      {
+                        "text": "1",
+                        "type": "number",
+                        "figmaNode": "1452:2010",
+                        "styles": {
+                          "fontSize": "28px",
+                          "color": "rgba(0, 240, 255, 1)",
+                          "fontWeight": "bold"
+                        }
+                      },
+                      {
+                        "text": "个",
+                        "type": "unit",
+                        "figmaNode": "1452:2011",
+                        "styles": {
+                          "fontSize": "12px",
+                          "color": "rgba(255, 255, 255, 0.8)",
+                          "fontWeight": "normal"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ],
+          "backgroundImage": {
+            "src": "../resources/images/bg-956.png",
+            "recommendedUsage": "backgroundStyle"
+          },
+          "backgroundSize": "cover",
+          "backgroundPosition": "center",
+          "backgroundRepeat": "no-repeat"
+        }
+      }
+    ]
+  },
+  "styles": {
+    "theme": "深色科技风",
+    "backgroundBrightness": "dark",
+    "colors": [
+      "rgba(0, 240, 255, 1)",
+      "rgba(255, 255, 255, 1)",
+      "rgba(5, 49, 51, 1)"
+    ],
+    "background": "深色背景，带有科技感光效和底图",
+    "decorations": [
+      "标题左侧蓝色图标",
+      "标题下方分割线",
+      "图标下方发光底座"
+    ],
+    "emphasis": [
+      "大号青色数值"
+    ]
+  },
+  "interactions": [],
+  "charts": [],
+  "doNotInvent": [
+    "未显示具体的隧道、桥梁名称列表",
+    "未显示工区的具体位置信息",
+    "未显示数据更新时间"
+  ],
+  "notes": [
+    "数值颜色为青色 (#00f0ff)，标签和单位颜色为白色/浅灰色",
+    "图标下方有发光圆环装饰效果"
+  ]
+}

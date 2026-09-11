@@ -1,0 +1,249 @@
+// 业务样式文件
+// 注意：所有 class 必须以 .c- 为前缀
+
+// 引入主题变量
+@import './themes/theme-vars.less';
+
+// 应用公共变量和主题变量
+.common();
+.theme-light();
+
+
+// 根容器：无背景/边框/圆角/阴影（base-panel 已处理面板外壳）
+.c-mc-max-1788003430879-6ed1df16-c-env-monitor-root {
+  width: 420px;
+  height: 186px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+
+  max-width: 100%;
+  max-height: 100vh;
+  box-sizing: border-box;}
+
+// 图表区域
+.c-mc-max-1788003430879-6ed1df16-c-env-monitor-chart-section {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  box-sizing: border-box;
+}
+
+
+// HeaderTabs 根容器
+.c-mc-max-1788003430879-6ed1df16-c-env-monitor-header-tabs {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+// Tab 列表容器（背景图 bg2）
+.c-mc-max-1788003430879-6ed1df16-c-env-monitor-tabs-list {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 27px;
+  padding: 0 4px;
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+  overflow: hidden;
+}
+
+// Tab 激活态背景块（背景图 bg3，位置动画）
+.c-mc-max-1788003430879-6ed1df16-c-env-monitor-tab-active-bg {
+  position: absolute;
+  top: 50%;
+  left: 4px;
+  width: 78px;
+  height: 21px;
+  transform: translateY(-50%);
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+  transition: transform 0.3s ease;
+  pointer-events: none;
+  z-index: 1;
+}
+
+// Tab 项
+.c-mc-max-1788003430879-6ed1df16-c-env-monitor-tab-item {
+  position: relative;
+  z-index: 2;
+  width: 78px;
+  height: 21px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 12px;
+  color: #2c9bea;
+  cursor: pointer;
+  transition: color 0.3s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+
+  &.active {
+    color: #ffffff;
+    text-shadow: 0 0.6px 0 rgba(0, 111, 227, 1);
+  }
+}
+
+// 右侧图标按钮组
+.c-mc-max-1788003430879-6ed1df16-c-env-monitor-tabs-icon {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+// 图标按钮容器
+.c-mc-max-1788003430879-6ed1df16-c-env-monitor-icon-btn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #ffffff 0%, #e2f0ff 36%, #deedff 69%, #ffffff 100%);
+  border: 1px solid rgba(161, 206, 255, 1);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: opacity 0.3s ease;
+
+  &:hover {
+    opacity: 0.8;
+  }
+}
+
+// 图标图片
+.c-mc-max-1788003430879-6ed1df16-c-env-monitor-icon-img {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+// 角标数字（红色圆形徽章）
+.c-mc-max-1788003430879-6ed1df16-c-env-monitor-badge {
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f53f3f;
+  border-radius: 29px;
+  flex-shrink: 0;
+}
+
+.c-mc-max-1788003430879-6ed1df16-c-env-monitor-badge-num {
+  font-family: 'PingFang SC', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 14px;
+  color: #ffffff;
+}
+
+
+// 图表标题行
+.c-mc-max-1788003430879-6ed1df16-c-env-monitor-chart-header {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-bottom: 8px;
+}
+
+.c-mc-max-1788003430879-6ed1df16-c-env-monitor-chart-label {
+  font-size: 12px;
+  color: #559eff;
+  font-weight: normal;
+}
+
+.c-mc-max-1788003430879-6ed1df16-c-env-monitor-chart-value {
+  font-size: 12px;
+  color: #559eff;
+  font-weight: normal;
+}
+
+.c-mc-max-1788003430879-6ed1df16-c-env-monitor-chart-location {
+  margin-left: auto;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.65);
+  font-weight: normal;
+}
+
+// 阈值线
+.c-mc-max-1788003430879-6ed1df16-c-env-monitor-threshold-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-bottom: 8px;
+}
+
+.c-mc-max-1788003430879-6ed1df16-c-env-monitor-threshold-value {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.45);
+  font-weight: normal;
+  flex-shrink: 0;
+}
+
+.c-mc-max-1788003430879-6ed1df16-c-env-monitor-threshold-dash {
+  flex: 1;
+  height: 0;
+  border-top: 1px dashed rgba(245, 63, 63, 0.6);
+}
+
+.c-mc-max-1788003430879-6ed1df16-c-env-monitor-threshold-label {
+  font-size: 10px;
+  color: #f53f3f;
+  font-weight: normal;
+  flex-shrink: 0;
+}
+
+// 图表主体
+.c-mc-max-1788003430879-6ed1df16-c-env-monitor-chart-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.c-mc-max-1788003430879-6ed1df16-c-env-monitor-chart-container {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+// X轴时间刻度
+.c-mc-max-1788003430879-6ed1df16-c-env-monitor-x-axis {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+  margin-top: 4px;
+  padding: 0 40px 0 40px;
+}
+
+.c-mc-max-1788003430879-6ed1df16-c-env-monitor-x-axis-item {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.45);
+  font-weight: normal;
+}
+
+.c-mc-max-1788003430879-6ed1df16-c-env-monitor-x-axis-unit {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.45);
+  font-weight: normal;
+}

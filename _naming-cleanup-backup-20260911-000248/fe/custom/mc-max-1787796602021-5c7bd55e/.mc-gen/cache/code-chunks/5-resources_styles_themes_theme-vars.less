@@ -1,0 +1,77 @@
+.common() {
+  // 字体
+  @font-family: "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+  @font-size-base: 14px;
+  @font-size-sm: 12px;
+  @font-size-lg: 16px;
+
+  // 圆角（来自 card-tunnel / card-north-south）
+  @border-radius-base: 8px;
+
+  // 过渡
+  @transition-duration: 0.3s;
+  @transition-timing: ease;
+
+  // 装饰背景图（el-el-x-2，非根容器）
+  @el-el-x-2-bg-image: url("../resources/images/bg-8788.png");
+  @el-el-x-2-bg-size: 100% 100%;
+  @el-el-x-2-bg-position: center center;
+  @el-el-x-2-bg-repeat: no-repeat;
+}
+
+.theme-dark() {
+  // 品牌色（与 light 一致，依据设计稿事实）
+  @brand-primary: #318aff;
+  @brand-primary-light: #70bfff;
+  @brand-gradient: linear-gradient(270deg, #318aff 0%, #70bfff 100%);
+  @card-tunnel-bg: @brand-gradient;
+
+  // 卡片背景（深色主题：由 light 背景 #EDF4FB 推导，避免纯黑）
+  @card-north-south-bg: darken(#EDF4FB, 72%);
+
+  // 文字颜色（深色面板禁用黑色系）
+  @text-color: #dee6f0;
+  @text-color-secondary: #9fb0c7;
+  @heading-color: #f0f4fa;
+  @disabled-color: rgba(255, 255, 255, 0.4);
+
+  // 常规 UI 颜色
+  @primary-color: #318aff;
+  @info-color: #318aff;
+  @success-color: #52c41a;
+  @warning-color: #faad14;
+  @error-color: #f5222d;
+
+  @background-color: darken(#EDF4FB, 85%);
+  @component-background: darken(#EDF4FB, 72%);
+  @border-color: rgba(255, 255, 255, 0.15);
+}
+
+.theme-light() {
+  // 品牌色（与设计稿事实完全一致）
+  @brand-primary: #318aff;
+  @brand-primary-light: #70bfff;
+  @brand-gradient: linear-gradient(270deg, #318aff 0%, #70bfff 100%);
+  @card-tunnel-bg: @brand-gradient;
+
+  // 卡片背景（设计稿事实）
+  @card-north-south-bg: #EDF4FB;
+
+  // 文字颜色
+  @text-color: #1a2332;
+  @text-color-secondary: #5c6b7a;
+  @heading-color: #1a2332;
+  @disabled-color: rgba(0, 0, 0, 0.25);
+
+  // 常规 UI 颜色
+  @primary-color: #318aff;
+  @info-color: #318aff;
+  @success-color: #52c41a;
+  @warning-color: #faad14;
+  @error-color: #f5222d;
+
+  @background-color: #EDF4FB;
+  @component-background: #EDF4FB;
+  @border-color: #d8e2ec;
+}
+```

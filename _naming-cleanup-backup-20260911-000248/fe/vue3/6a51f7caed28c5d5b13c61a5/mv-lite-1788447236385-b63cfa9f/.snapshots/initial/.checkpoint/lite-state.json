@@ -1,0 +1,96 @@
+{
+  "stage": "codegen_done",
+  "brief": {
+    "layout": "整体为垂直布局，顶部为标题与导航控制区，下方为数据图表展示区。主轴方向为纵向，内容左对齐为主，图表区占满剩余空间。",
+    "regions": [
+      {
+        "name": "头部控制区",
+        "description": "包含左上角标题「环境监测」，下方为Tab导航栏（一氧化碳、能见度等），右侧为两个功能图标按钮（柱状图、列表）及红色角标。Tab栏呈长条胶囊状，当前选中项背景高亮。",
+        "position": "top",
+        "size": "高度约占整体25%，宽度占满100%"
+      },
+      {
+        "name": "图表展示区",
+        "description": "包含Y轴（0-40及单位「辆」）、X轴（2-24及单位「时」）、图例（zk3+785CO浓度）、红色虚线预警线（数值30）、绿色折线及下方渐变填充区域。",
+        "position": "center",
+        "size": "高度约占整体75%，宽度占满100%"
+      }
+    ],
+    "spacing": {
+      "outer": "约10px",
+      "gap": "约10px",
+      "padding": "约15px"
+    },
+    "theme": "light",
+    "colors": {
+      "primary": "#5DADE2",
+      "background": "#F0F8FF",
+      "surface": "#FFFFFF",
+      "text": "#2C3E50",
+      "border": "#D6EAF8"
+    },
+    "typography": {
+      "size": "标题约16px、Tab文字约14px、坐标轴数字约12px、图例文字约12px",
+      "weight": "标题加粗、Tab选中项加粗、预警线文字常规",
+      "lineHeight": "约1.5倍字号"
+    },
+    "components": [
+      "Tab切换栏",
+      "图标按钮",
+      "徽章(Badge)",
+      "折线图(Line Chart)",
+      "图例(Legend)"
+    ],
+    "textContent": [
+      "环境监测",
+      "一氧化碳",
+      "能见度",
+      "洞内照明",
+      "洞外光强",
+      "6",
+      "zk3+785CO浓度",
+      "预警线",
+      "30",
+      "40",
+      "20",
+      "10",
+      "0",
+      "2",
+      "4",
+      "6",
+      "8",
+      "10",
+      "12",
+      "14",
+      "16",
+      "18",
+      "20",
+      "22",
+      "24",
+      "辆",
+      "时"
+    ],
+    "name": {
+      "cn": "环境监测",
+      "en": "environment-monitoring"
+    },
+    "visualDetails": [
+      "Tab栏为浅蓝色胶囊背景，选中项为深蓝色块白色文字",
+      "折线为绿色实线，下方有浅绿色渐变填充",
+      "预警线为红色虚线",
+      "列表图标右上角有红色圆形角标显示数字6",
+      "背景有淡淡的网格线或地图底图痕迹"
+    ],
+    "interactions": [
+      "Tab切换栏：包含「一氧化碳」（当前激活）、「能见度」、「洞内照明」、「洞外光强」",
+      "右侧功能按钮：柱状图图标、列表图标（带角标6）"
+    ],
+    "_themeSource": "pixel"
+  },
+  "width": 439,
+  "height": 194,
+  "sourceType": "screenshot",
+  "componentType": "vue3",
+  "generationTier": "lite",
+  "vueCode": "<template>\n  <div class=\"environment-monitoring\">\n    <!-- 头部控制区 -->\n    <div class=\"environment-monitoring-header\">\n      <div class=\"header-title-row\">\n        <h2 class=\"main-title\">环境监测</h2>\n        <div class=\"header-actions\">\n          <div class=\"action-btn chart-btn\">\n            <svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"#5DADE2\">\n              <path d=\"M4 9h4v11H4V9zm6-6h4v17h-4V3zm6 9h4v8h-4v-8z\"/>\n            </svg>\n          </div>\n          <div class=\"action-btn list-btn\">\n            <div class=\"badge\">6</div>\n            <svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"#5DADE2\">\n              <path d=\"M4 6h16v2H4V6zm0 5h16v2H4v-2zm0 5h16v2H4v-2z\"/>\n            </svg>\n          </div>\n        </div>\n      </div>\n      \n      <div class=\"tabs-wrapper\">\n        <div \n          v-for=\"tab in tabs\" \n          :key=\"tab\"\n          :class=\"['tab-item', { active: activeTab === tab }]\"\n          @click=\"activeTab = tab\"\n        >\n          {{ tab }}\n        </div>\n      </div>\n    </div>\n\n    <!-- 图表展示区 -->\n    <div class=\"environment-monitoring-chart-area\">\n      <div ref=\"chartRef\" class=\"chart-container\"></div>\n    </div>\n  </div>\n</template>\n\n<script setup>\nimport { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';\nimport * as echarts from 'echarts';\n\nconst activeTab = ref('一氧化碳');\nconst tabs = ['一氧化碳', '能见度', '洞内照明', '洞外光强'];\n\nconst chartRef = ref(null);\nlet chartInstance = null;\nlet resizeObserver = null;\n\n// Mock data based on screenshot\nconst xData = ref([2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24]);\nconst yData = ref([4, 5, 3, 2, 3, 5, 10, 13, 12, 10, 5, 1]);\n\nconst initChartWhenReady = () => {\n  if (!chartRef.value) return;\n  if (chartInstance) return;\n  \n  // Check dimensions\n  if (chartRef.value.clientWidth === 0 || chartRef.value.clientHeight === 0) {\n    return; // Wait for resize observer or next tick\n  }\n\n  chartInstance = echarts.init(chartRef.value);\n  \n  const option = {\n    grid: {\n      top: 30,\n      bottom: 20,\n      left: 30,\n      right: 40,\n      containLabel: false\n    },\n    tooltip: {\n      trigger: 'axis'\n    },\n    legend: {\n      data: ['zk3+785CO浓度'],\n      right: 10,\n      top: 0,\n      textStyle: {\n        color: '#2C3E50',\n        fontSize: 10\n      },\n      icon: 'rect',\n      itemWidth: 12,\n      itemHeight: 2\n    },\n    xAxis: {\n      type: 'category',\n      boundaryGap: false,\n      data: xData.value,\n      axisLine: { lineStyle: { color: '#D6EAF8' } },\n      axisTick: { show: false },\n      axisLabel: {\n        color: '#7F8C8D',\n        fontSize: 10,\n        margin: 8\n      },\n      name: '时',\n      nameLocation: 'end',\n      nameTextStyle: {\n        color: '#7F8C8D',\n        fontSize: 10,\n        padding: [0, 0, 0, 10]\n      }\n    },\n    yAxis: {\n      type: 'value',\n      min: 0,\n      max: 40,\n      interval: 10,\n      splitLine: {\n        lineStyle: {\n          type: 'dashed',\n          color: '#D6EAF8'\n        }\n      },\n      axisLabel: {\n        color: '#7F8C8D',\n        fontSize: 10\n      },\n      name: '辆',\n      nameLocation: 'end',\n      nameTextStyle: {\n        color: '#7F8C8D',\n        fontSize: 10,\n        padding: [0, 0, 20, 0] // Adjust position\n      }\n    },\n    series: [\n      {\n        name: 'zk3+785CO浓度',\n        type: 'line',\n        smooth: true,\n        symbol: 'none',\n        lineStyle: {\n          color: '#2ECC71',\n          width: 2\n        },\n        areaStyle: {\n          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [\n            { offset: 0, color: 'rgba(46, 204, 113, 0.3)' },\n            { offset: 1, color: 'rgba(46, 204, 113, 0.05)' }\n          ])\n        },\n        data: yData.value,\n        markLine: {\n          symbol: ['none', 'none'],\n          label: {\n            show: true,\n            position: 'end',\n            formatter: '预警线',\n            color: '#E74C3C',\n            fontSize: 10\n          },\n          lineStyle: {\n            type: 'dashed',\n            color: '#E74C3C'\n          },\n          data: [\n            { yAxis: 30 }\n          ]\n        }\n      }\n    ]\n  };\n\n  chartInstance.setOption(option);\n};\n\nwatch(chartRef, (el) => {\n  if (el && !chartInstance) {\n    nextTick(() => initChartWhenReady());\n  }\n}, { immediate: true });\n\nonMounted(() => {\n  nextTick(() => {\n    initChartWhenReady();\n    if (chartRef.value && !resizeObserver) {\n      resizeObserver = new ResizeObserver(() => {\n        if (chartInstance) {\n          chartInstance.resize();\n        } else {\n          // Retry init if size becomes available\n          initChartWhenReady();\n        }\n      });\n      resizeObserver.observe(chartRef.value);\n    }\n  });\n});\n\nonUnmounted(() => {\n  if (resizeObserver) {\n    resizeObserver.disconnect();\n  }\n  if (chartInstance) {\n    chartInstance.dispose();\n    chartInstance = null;\n  }\n});\n</script>\n\n<style scoped>\n.environment-monitoring {\n  width: 100%;\n  height: 100%;\n  box-sizing: border-box;\n  background-color: #F4F9FD; /* Light blueish background */\n  display: flex;\n  flex-direction: column;\n  padding: 10px;\n  font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif;\n  overflow: hidden;\n}\n\n.environment-monitoring-header {\n  height: 50px;\n  flex-shrink: 0;\n  display: flex;\n  flex-direction: column;\n  justify-content: space-between;\n}\n\n.header-title-row {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  margin-bottom: 6px;\n}\n\n.main-title {\n  margin: 0;\n  font-size: 16px;\n  color: #5DADE2;\n  font-weight: bold;\n  letter-spacing: 1px;\n}\n\n.header-actions {\n  display: flex;\n  gap: 8px;\n}\n\n.action-btn {\n  width: 24px;\n  height: 24px;\n  background: #fff;\n  border: 1px solid #D6EAF8;\n  border-radius: 4px;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  cursor: pointer;\n  position: relative;\n}\n\n.badge {\n  position: absolute;\n  top: -6px;\n  right: -6px;\n  background-color: #E74C3C;\n  color: white;\n  font-size: 10px;\n  width: 14px;\n  height: 14px;\n  border-radius: 50%;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  font-weight: bold;\n  z-index: 2;\n}\n\n.tabs-wrapper {\n  display: flex;\n  background-color: #E1F0FA;\n  border-radius: 12px;\n  padding: 2px;\n  align-items: center;\n}\n\n.tab-item {\n  flex: 1;\n  text-align: center;\n  font-size: 12px;\n  color: #7FB3D5;\n  padding: 4px 0;\n  cursor: pointer;\n  border-radius: 10px;\n  transition: all 0.3s;\n  white-space: nowrap;\n}\n\n.tab-item.active {\n  background-color: #5DADE2;\n  color: #fff;\n  font-weight: bold;\n  box-shadow: 0 2px 4px rgba(93, 173, 226, 0.3);\n}\n\n.environment-monitoring-chart-area {\n  flex: 1;\n  min-height: 0;\n  position: relative;\n  width: 100%;\n}\n\n.chart-container {\n  width: 100%;\n  height: 100%;\n}\n</style>"
+}

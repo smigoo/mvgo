@@ -1,0 +1,351 @@
+.c-119ab2-root {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.c-119ab2-filter-bar {
+  flex-shrink: 0;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  position: relative;
+  z-index: 2;
+}
+.c-119ab2-tabs-list {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.c-119ab2-tab-item {
+  position: relative;
+  width: 70px;
+  height: 27px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 1;
+}
+.c-119ab2-tab-active-bg {
+  position: absolute;
+  width: 78px;
+  height: 21px;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 0;
+  pointer-events: none;
+}
+.c-119ab2-tab-text {
+  position: relative;
+  z-index: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: #2c9bea;
+  white-space: nowrap;
+}
+.c-119ab2-tab-item--active .c-119ab2-tab-text {
+  color: #ffffff;
+  text-shadow: 0 0.6px 0 #006fe3;
+}
+.c-119ab2-view-icons {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.c-119ab2-tabs-icon {
+  width: 52px;
+  height: 24px;
+  display: block;
+}
+.c-119ab2-badge {
+  position: absolute;
+  top: -4px;
+  right: -2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 29px;
+  background: #f53f3f;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  z-index: 10;
+}
+.c-119ab2-chart-section {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 1;
+}
+.c-119ab2-chart-legend {
+  position: absolute;
+  top: 8px;
+  right: 16px;
+  z-index: 2;
+}
+.c-119ab2-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.c-119ab2-legend-line {
+  display: inline-block;
+  width: 14px;
+  height: 2px;
+  background: #0fcd7d;
+}
+.c-119ab2-legend-text {
+  font-size: 10px;
+  color: #333333;
+  white-space: nowrap;
+}
+.c-119ab2-chart-container {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+}
+.dark .c-119ab2-root {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.dark .c-119ab2-filter-bar {
+  flex-shrink: 0;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  position: relative;
+  z-index: 2;
+}
+.dark .c-119ab2-tabs-list {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dark .c-119ab2-tab-item {
+  position: relative;
+  width: 70px;
+  height: 27px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 1;
+}
+.dark .c-119ab2-tab-active-bg {
+  position: absolute;
+  width: 78px;
+  height: 21px;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 0;
+  pointer-events: none;
+}
+.dark .c-119ab2-tab-text {
+  position: relative;
+  z-index: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: #8ab4f8;
+  white-space: nowrap;
+}
+.dark .c-119ab2-tab-item--active .c-119ab2-tab-text {
+  color: #ffffff;
+  text-shadow: 0 0.6px 0 #006fe3;
+}
+.dark .c-119ab2-view-icons {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.dark .c-119ab2-tabs-icon {
+  width: 52px;
+  height: 24px;
+  display: block;
+}
+.dark .c-119ab2-badge {
+  position: absolute;
+  top: -4px;
+  right: -2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 29px;
+  background: #f53f3f;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  z-index: 10;
+}
+.dark .c-119ab2-chart-section {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 1;
+}
+.dark .c-119ab2-chart-legend {
+  position: absolute;
+  top: 8px;
+  right: 16px;
+  z-index: 2;
+}
+.dark .c-119ab2-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dark .c-119ab2-legend-line {
+  display: inline-block;
+  width: 14px;
+  height: 2px;
+  background: #0fcd7d;
+}
+.dark .c-119ab2-legend-text {
+  font-size: 10px;
+  color: #e0e0e0;
+  white-space: nowrap;
+}
+.dark .c-119ab2-chart-container {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+}
+.light .c-119ab2-root {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.light .c-119ab2-filter-bar {
+  flex-shrink: 0;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  position: relative;
+  z-index: 2;
+}
+.light .c-119ab2-tabs-list {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.light .c-119ab2-tab-item {
+  position: relative;
+  width: 70px;
+  height: 27px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 1;
+}
+.light .c-119ab2-tab-active-bg {
+  position: absolute;
+  width: 78px;
+  height: 21px;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 0;
+  pointer-events: none;
+}
+.light .c-119ab2-tab-text {
+  position: relative;
+  z-index: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: #2c9bea;
+  white-space: nowrap;
+}
+.light .c-119ab2-tab-item--active .c-119ab2-tab-text {
+  color: #ffffff;
+  text-shadow: 0 0.6px 0 #006fe3;
+}
+.light .c-119ab2-view-icons {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.light .c-119ab2-tabs-icon {
+  width: 52px;
+  height: 24px;
+  display: block;
+}
+.light .c-119ab2-badge {
+  position: absolute;
+  top: -4px;
+  right: -2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 29px;
+  background: #f53f3f;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  z-index: 10;
+}
+.light .c-119ab2-chart-section {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 1;
+}
+.light .c-119ab2-chart-legend {
+  position: absolute;
+  top: 8px;
+  right: 16px;
+  z-index: 2;
+}
+.light .c-119ab2-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.light .c-119ab2-legend-line {
+  display: inline-block;
+  width: 14px;
+  height: 2px;
+  background: #0fcd7d;
+}
+.light .c-119ab2-legend-text {
+  font-size: 10px;
+  color: #333333;
+  white-space: nowrap;
+}
+.light .c-119ab2-chart-container {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+}

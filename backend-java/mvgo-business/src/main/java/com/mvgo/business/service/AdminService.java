@@ -435,12 +435,22 @@ public class AdminService {
         vo.setHasConfig(cfg != null);
         vo.setConfig(cfg != null ? decryptAndMask(cfg.getConfigEnc()) : null);
         // 生成统计（组件数/任务数/接口数）；无 Node 统计时保持 0
+        // 🛡️ 对齐 Node 2026-09-09 修复：components.creatorId 同时存在 ObjectId(hex) 与门户 UID 两种形态，
+        // Node /admin/user-stats 按 creatorId 聚合，返回 map 的键可能是 hex 也可能是 UID 字符串。
+        // 原逻辑只按 u.getId()(hex) 单键取，组件以门户 UID 写入的用户（如周彤）统计恒为 0。
+        // 此处补 uid 候选键（u.getUid() 或 portal.uid），两键数据互不重叠，加性合并。
         int[] st = statsMap.get(u.getId());
-        if (st != null) {
-            vo.setComponentCount(st[0]);
-            vo.setTaskCount(st[1]);
-            vo.setApiTaskCount(st[2]);
-            vo.setApiCount(st[3]);
+        int[] stByUid = null;
+        String uidKey = (u.getUid() != null && !u.getUid().isBlank()) ? u.getUid()
+                : (portalUid != null && !portalUid.isBlank() ? portalUid : null);
+        if (st == null && uidKey != null) {
+            stByUid = statsMap.get(uidKey);
+        }
+        if (st != null || stByUid != null) {
+            vo.setComponentCount((st != null ? st[0] : 0) + (stByUid != null ? stByUid[0] : 0));
+            vo.setTaskCount((st != null ? st[1] : 0) + (stByUid != null ? stByUid[1] : 0));
+            vo.setApiTaskCount((st != null ? st[2] : 0) + (stByUid != null ? stByUid[2] : 0));
+            vo.setApiCount((st != null ? st[3] : 0) + (stByUid != null ? stByUid[3] : 0));
         }
         vo.setCreatedAt(u.getCreatedAt());
         vo.setUpdatedAt(u.getUpdatedAt());

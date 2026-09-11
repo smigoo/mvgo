@@ -1,0 +1,48 @@
+.common() {
+@bg-color: #003032;
+  @primary-color: #18ffc6;
+  @text-color: #ffffff;
+  @accent-color: #b07b00;
+  @border-color: rgba(255, 255, 255, 0.2);
+  @header-bg: #00373a;
+  @row-bg: #00464b;
+  @row-active-bg: #004347;
+  @text-secondary: rgba(255, 255, 255, 0.7);
+  @click: inherit; // 自动添加
+  @color-bg-base: inherit; // 自动添加
+  @color-text-base: inherit; // 自动添加
+  @color-primary: inherit; // 自动添加
+  @color-warning: inherit; // 自动添加
+  @color-row-active: inherit; // 自动添加
+  @color-row-normal: inherit; // 自动添加
+  @color-table-header: inherit; // 自动添加
+}
+
+.theme-dark() {
+  @bg-color: #003032;
+  @primary-color: #18ffc6;
+  @text-color: #ffffff;
+  @accent-color: #b07b00;
+  @border-color: rgba(255, 255, 255, 0.2);
+  @header-bg: #00373a;
+  @row-bg: #00464b;
+  @row-active-bg: #004347;
+  @text-secondary: rgba(255, 255, 255, 0.7);
+}
+
+.theme-light() {
+  @bg-color: #f0f5f5;
+  @primary-color: #008f7a;
+  @text-color: #333333;
+  @accent-color: #d99b00;
+  @border-color: rgba(0, 0, 0, 0.1);
+  @header-bg: #e0f2f1;
+  @row-bg: #ffffff;
+  @row-active-bg: #e8f5e9;
+  @text-secondary: rgba(0, 0, 0, 0.6);
+}
+
+:root {
+  .theme-light();
+  .common();
+}

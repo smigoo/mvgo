@@ -25,6 +25,16 @@
         </router-link>
       </template>
       <span v-else class="af-link af-link-disabled" @click="showDisabledHint('工作流编排')"> 工作流编排 </span>
+
+      <!-- 建议反馈：跳转公司统一反馈表单（外部地址，新窗口打开） -->
+      <a
+        class="af-link"
+        href="https://aio.microvideo.cn/tzy/biz/formCustSql/formCustSqlView/njgd_yjfk"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        建议反馈
+      </a>
     </nav>
   </footer>
 </template>

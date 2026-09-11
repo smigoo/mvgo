@@ -1,0 +1,160 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 72,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "header-tabs section 缺少 header/body 分层，children 直接放在 body 下违反规范",
+        "suggestion": "Tab 切换栏应作为独立交互组件，不应作为 section，或明确其 header 为空"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "charts[0]",
+        "message": "图表信息不完整：legendPosition 为 null，缺少 tooltip 配置，seriesColors 只有填充色",
+        "suggestion": "补充 legendPosition（如 top-right）、tooltip 结构、折线颜色（当前只有填充色）"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "headerSlots[0]",
+        "message": "统计指标内容'当前值 2k3+785CO浓度'混淆了标签和数值，应拆分为 label + value",
+        "suggestion": "明确区分标签（'当前值'）和数值（'2k3+785CO浓度'），或标注为占位符"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body.children",
+        "message": "Tab 项的 resourceFile 背景图仅对激活态有效，非激活态样式不完整",
+        "suggestion": "补充非激活态的完整 styles（padding、borderRadius 等），或统一背景处理方式"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "chartDataHints",
+        "message": "chartTitle 为 'area' 应为图表实际标题，labels/values 混杂了 Tab 文字和轴刻度",
+        "suggestion": "chartDataHints 应仅包含图表内数据线索，Tab 文字不属于图表数据"
+      }
+    ],
+    "recommendations": [
+      "将 header-tabs 改为独立的 TabBar 组件而非 section，或在 section 内明确 header 为空、body 仅含 Tab 列表",
+      "补全图表的 legend、tooltip、坐标轴配置，明确折线颜色与填充色的区别",
+      "统一 Tab 组件的样式结构，避免激活态与非激活态配置不对称"
+    ],
+    "summary": "布局层次基本合理，但 Tab 栏作为 section 不符合规范，图表配置不完整，headerSlots 内容需拆分标签与数值。建议重构 Tab 为独立组件并补全图表元信息。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "--text-color": "#333333",
+      "--bg": "#ffffff",
+      "--primary": "#1677ff",
+      "--border": "rgba(0, 0, 0, 0.08)",
+      "--border-radius-base": "8px",
+      "--font-size-base": "14px",
+      "--gap": "12px"
+    },
+    "lessVariables": {
+      "@text-color": "#333333",
+      "@bg": "#ffffff",
+      "@primary": "#1677ff",
+      "@border": "rgba(0, 0, 0, 0.08)",
+      "@border-radius-base": "8px",
+      "@font-size-base": "14px",
+      "@gap": "12px"
+    },
+    "cssClasses": {},
+    "tokenCoverage": 0.95,
+    "synthesizedFallback": true,
+    "elementStyleMap": {
+      "header-tabs": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tab-co": {
+        "background-image": "url(../resources/images/bg-tab-active-7891.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "chart-section": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-7": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "header-tabs",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 4,
+        "title": "Tab切换栏",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 4,
+          "charts": 0,
+          "interactions": 1,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "chart-section",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "图表区域",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 1,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      }
+    ],
+    "isForced": false,
+    "minFiles": 0,
+    "reason": "有效 sections=2 < 3 且无高复杂度 section → 不强制拆分",
+    "internalSubcomponents": []
+  }
+}

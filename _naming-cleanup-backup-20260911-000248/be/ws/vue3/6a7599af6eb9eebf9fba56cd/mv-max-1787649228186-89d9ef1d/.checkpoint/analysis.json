@@ -1,0 +1,247 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 80,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[4].body.children[0]",
+        "message": "车型分布卡片内嵌套header和body，导致层级达6层，违反≤3层规范。",
+        "suggestion": "移除card内部的header和body，将标题作为label，数据直接平铺在children中。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "面板标题被放置在body中，而非使用section的header属性，导致结构冗余。",
+        "suggestion": "将标题文本和装饰图标移至section-header的header.title和header.controls中。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "chartDataHints",
+        "message": "图表数据提示中混入了非图表文本（如'江阴大桥'），存在数据提取错误。",
+        "suggestion": "清洗chartDataHints，确保仅包含对应图表的坐标轴和图例数据。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children",
+        "message": "stat-card缺乏统一的card结构定义，与车型分布中的card结构不一致。",
+        "suggestion": "统一stat-card的role和结构，明确区分卡片容器与内部数据项。"
+      }
+    ],
+    "recommendations": [
+      "统一卡片组件结构，建议所有数据卡片采用标准的 header+body 或纯 children 扁平化设计。",
+      "优化图表数据提取逻辑，避免将页面其他模块的文本错误关联到图表数据提示中。"
+    ],
+    "summary": "整体布局清晰，但存在局部嵌套过深及标题结构冗余问题。图表数据提取存在明显错误，需修正。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名），用于浅色科技监测风主题",
+      "--colorPrimary": "#1990ff",
+      "--colorBg": "#edf4fb",
+      "--colorTextBase": "#333333",
+      "--colorWarning": "#fa8c16",
+      "--colorSuccess": "#52c41a",
+      "--fontSize": "14px",
+      "--fontSizeLarge": "32px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射，用于编译期计算与回退",
+      "@color-primary": "#1990ff",
+      "@color-bg": "#edf4fb",
+      "@color-text-base": "rgba(255, 255, 255, 1)",
+      "@color-warning": "#fa8c16",
+      "@color-success": "#52c41a",
+      "@font-size-base": "14px",
+      "@font-size-large": "32px",
+      "@border-radius-base": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类，包含布局、装饰与数据强调样式",
+      ".monitor-container": {
+        "width": "100%",
+        "height": "100%",
+        "padding": "1.25em",
+        "background-color": "var(--colorBg, #edf4fb)",
+        "box-sizing": "border-box",
+        "font-family": "system-ui, -apple-system, sans-serif"
+      },
+      ".section-header": {
+        "display": "flex",
+        "align-items": "center",
+        "margin-bottom": "1em",
+        "color": "var(--colorTextBase, #333333)",
+        "font-size": "1.14em",
+        "font-weight": "600"
+      },
+      ".title-decoration": {
+        "width": "1.5em",
+        "height": "1.5em",
+        "margin-right": "0.5em",
+        "background-size": "contain",
+        "background-repeat": "no-repeat",
+        "background-position": "center",
+        "flex-shrink": "0"
+      },
+      ".data-card": {
+        "flex": "1",
+        "padding": "1.2em",
+        "border-radius": "var(--borderRadius, 8px)",
+        "background-color": "#ffffff",
+        "box-shadow": "0 2px 12px rgba(25, 144, 255, 0.08)",
+        "position": "relative",
+        "overflow": "hidden"
+      },
+      ".card-decoration-icon": {
+        "position": "absolute",
+        "right": "1em",
+        "bottom": "1em",
+        "width": "2.5em",
+        "height": "2.5em",
+        "opacity": "0.8",
+        "background-size": "contain",
+        "background-repeat": "no-repeat",
+        "background-position": "center"
+      },
+      ".value-primary": {
+        "font-size": "var(--fontSizeLarge, 32px)",
+        "font-weight": "700",
+        "color": "var(--colorPrimary, #1990ff)",
+        "line-height": "1.2",
+        "margin-bottom": "0.25em"
+      },
+      ".value-warning": {
+        "font-size": "var(--fontSizeLarge, 32px)",
+        "font-weight": "700",
+        "color": "var(--colorWarning, #fa8c16)",
+        "line-height": "1.2",
+        "margin-bottom": "0.25em"
+      },
+      ".label-text": {
+        "font-size": "var(--fontSize, 14px)",
+        "color": "var(--colorTextBase, #333333)",
+        "opacity": "0.65"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 #1990ff 映射为 --colorPrimary，用于大号蓝色数值及主要视觉引导。",
+      "容器背景 #edf4fb 直接落地为 --colorBg，确保浅色科技风的基础底色，避免关键可见背景只依赖 CSS 变量。",
+      "橙色 #fa8c16 和绿色 #52c41a 分别映射为 --colorWarning 和 --colorSuccess，用于货车数值强调和状态指示。",
+      "标题左侧菱形/圆形组合图标及数据卡片间的汽车图标装饰，建议通过 background-image 或 <img> 引入实际图片资源，CSS 类中仅预留定位和尺寸样式。",
+      "大号数值（如 34,620, 82,379）使用 --fontSizeLarge 配合对应的颜色变量进行视觉强调，提升数据监测的科技感与可读性。"
+    ],
+    "elementStyleMap": {
+      "section-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-icon-group-标题装饰图标-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-daily-total": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-tunnel": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "stat-bridge": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "section-hourly-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-hourly-bridge": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-vehicle-type": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-item-x-20": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-item-x-23": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-bridge": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-item-x-27": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-item-x-30": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-forecast": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-header",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 4,
+        "title": "流量监测"
+      },
+      {
+        "id": "section-daily-total",
+        "responsibility": "当日总流量（请按功能拆分）",
+        "elementCount": 6,
+        "title": "当日总流量"
+      },
+      {
+        "id": "section-hourly-tunnel",
+        "responsibility": "江阴靖江长江隧道（请按功能拆分）",
+        "elementCount": 1,
+        "title": "江阴靖江长江隧道"
+      },
+      {
+        "id": "section-hourly-bridge",
+        "responsibility": "江阴大桥（请按功能拆分）",
+        "elementCount": 1,
+        "title": "江阴大桥"
+      },
+      {
+        "id": "section-vehicle-type",
+        "responsibility": "车型分布（请按功能拆分）",
+        "elementCount": 14,
+        "title": "车型分布"
+      },
+      {
+        "id": "section-forecast",
+        "responsibility": "流量预测（请按功能拆分）",
+        "elementCount": 1,
+        "title": "流量预测"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 6,
+    "reason": "有效 sections=6 ≥ 3 → 强制拆分"
+  }
+}

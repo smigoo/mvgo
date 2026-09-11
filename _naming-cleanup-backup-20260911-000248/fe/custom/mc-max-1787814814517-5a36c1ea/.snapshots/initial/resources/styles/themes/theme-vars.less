@@ -1,0 +1,32 @@
+// 微码组件主题变量（theme-vars.less）
+// 仅定义主题 mixin：.common()、.theme-light()、.theme-dark()
+// 根级禁止调用任何主题 mixin；由系统生成的 dark.less/light.less 在主题选择器内调用后再导入 common.less
+
+.common() {
+  // 背景图公共变量（来源：el-el-x-2 / el-el-x-24）
+  @em-el-bg-image: url(../resources/images/bg-8788.png);
+  @em-el-bg-size: 100% 100%;
+  @em-el-bg-position: center center;
+  @em-el-bg-repeat: no-repeat;
+
+  // 卡片圆角公共变量（来源：card-tunnel / card-connection）
+  @em-card-radius: 8px;
+}
+
+.theme-light() {
+  // 默认主题为 light，以下颜色必须与设计稿事实一致
+  @em-card-tunnel-start: #318aff;
+  @em-card-tunnel-end: #70bfff;
+  @em-card-tunnel-bg: linear-gradient(270deg, @em-card-tunnel-start 0%, @em-card-tunnel-end 100%);
+
+  @em-card-connection-bg: rgba(255, 255, 255, 0.6);
+}
+
+.theme-dark() {
+  // 事实未覆盖暗色主题，按默认 light 风格补齐；禁止臆造品牌色
+  @em-card-tunnel-start: #318aff;
+  @em-card-tunnel-end: #70bfff;
+  @em-card-tunnel-bg: linear-gradient(270deg, @em-card-tunnel-start 0%, @em-card-tunnel-end 100%);
+
+  @em-card-connection-bg: rgba(255, 255, 255, 0.6);
+}

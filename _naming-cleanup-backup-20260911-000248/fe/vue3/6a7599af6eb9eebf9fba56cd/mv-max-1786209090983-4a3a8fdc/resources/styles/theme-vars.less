@@ -1,0 +1,34 @@
+// 主题变量与 mixin 定义（仅定义变量与 mixin，不产出实际 class）
+
+.theme-light() {
+  :root {
+    --color-primary: rgba(55, 120, 200, 1);
+    --color-bg-base: rgba(237, 244, 251, 1);
+    --color-success: #52c41a;
+    --color-danger: #f53f3f;
+    --color-text-base: #333333;
+    --color-text-secondary: #666666;
+    --font-size-base: 14px;
+    --border-radius-base: 4px;
+  }
+}
+
+.theme-dark() {
+  :root {
+    --color-primary: rgba(55, 120, 200, 1);
+    --color-bg-base: #1a1a1a;
+    --color-success: #52c41a;
+    --color-danger: #f53f3f;
+    --color-text-base: #ffffff;
+    --color-text-secondary: #aaaaaa;
+    --font-size-base: 14px;
+    --border-radius-base: 4px;
+  }
+}
+
+.common() {
+  // 通用 mixin 占位
+}
+
+// 默认使用浅色主题
+.theme-light();

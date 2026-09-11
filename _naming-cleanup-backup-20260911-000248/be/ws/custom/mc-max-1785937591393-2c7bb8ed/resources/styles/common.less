@@ -1,0 +1,273 @@
+@import './themes/theme-vars.less';
+
+/* [Layout Refine] 重构整体布局，匹配 Figma 垂直堆叠结构 */
+.c-device-monitor-content {
+  width: 100%;
+  height: 100%;
+  /* [Style Refine] fills[0].color → rgb(237, 244, 251) */
+  background: @bg-color;
+  /* [Style Refine] effects[0] → DROP_SHADOW 0px 4px 10px rgba(74, 117, 141, 0.25) */
+  box-shadow: 0px 4px 10px rgba(74, 117, 141, 0.25);
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px;
+  box-sizing: border-box;
+  min-height: 0;
+}
+
+/* Header 区域 */
+.dm-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  height: 30px;
+  margin-bottom: 4px;
+}
+
+.dm-title {
+  /* [Style Refine] fills[0] → GRADIENT_LINEAR #1890FF to #5A7EFF */
+  font-size: 16px;
+  font-weight: 700;
+  background: linear-gradient(180deg, #1890FF 0%, #5A7EFF 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.dm-stats {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+}
+
+.dm-stat-item {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.dm-stat-label {
+  /* [Style Refine] fills[0].color → rgb(51, 51, 51) */
+  font-size: 14px;
+  color: @text-color;
+}
+
+.dm-stat-value {
+  /* [Style Refine] typography → Roboto 20px 700 */
+  font-size: 20px;
+  font-weight: 700;
+  font-family: 'Roboto', sans-serif;
+  /* [Style Refine] fills[1].color → rgb(25, 144, 255) */
+  color: @primary-color;
+  
+  &.success {
+    /* [Style Refine] fills[1].color → rgb(8, 163, 165) */
+    color: @success-color;
+  }
+}
+
+/* Switch 汇总卡片区域 */
+.dm-switch {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.dm-switch-card {
+  flex: 1;
+  height: 65px;
+  border-radius: 6px;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-sizing: border-box;
+  position: relative;
+  overflow: hidden;
+  
+  &.active {
+    /* [Style Refine] fills[0] → GRADIENT_LINEAR #318aff to #70bfff */
+    background: linear-gradient(90deg, #318aff 0%, #70bfff 100%);
+    color: #ffffff;
+  }
+  
+  &.default {
+    /* [Style Refine] fills[0] → 浅蓝背景带透明度 */
+    background: rgba(237, 244, 251, 0.8);
+    color: @text-color;
+    border: 1px solid rgba(25, 144, 255, 0.2);
+  }
+}
+
+.dm-switch-top {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.dm-switch-icon {
+  width: 28px;
+  height: 28px;
+}
+
+.dm-switch-title {
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.dm-switch-data {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dm-switch-row {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 14px;
+}
+
+.dm-switch-val {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: 'Roboto', sans-serif;
+  
+  .active & { color: #ffffff; }
+  .default & { color: @primary-color; }
+  
+  &.danger {
+    /* [Style Refine] fills[1].color → rgb(245, 63, 63) */
+    color: @danger-color !important;
+  }
+}
+
+/* Main: Tabs & Grid 区域 */
+.dm-main {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  gap: 0;
+  min-height: 0;
+}
+
+.dm-tabs {
+  width: 46px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.dm-tab-item {
+  width: 34px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* [Style Refine] typography → 14px 竖排文字 */
+  font-size: 14px;
+  color: #3B80E6;
+  background: linear-gradient(180deg, #85B9FF 0%, #C0E2FF 100%);
+  border: 1px solid #F0F5FF;
+  border-radius: 4px;
+  cursor: pointer;
+  position: relative;
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  
+  &.active {
+    /* [Style Refine] fills[0] → GRADIENT_LINEAR #318AFF to #70BFFF */
+    background: linear-gradient(180deg, #318AFF 0%, #70BFFF 100%);
+    color: #ffffff;
+    font-weight: 700;
+  }
+}
+
+.dm-tab-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  /* [Style Refine] fills[0].color → rgb(244, 63, 63) */
+  background: @danger-color;
+  color: #ffffff;
+  font-size: 12px;
+  padding: 0 4px;
+  border-radius: 10px;
+  writing-mode: horizontal-tb;
+  line-height: 16px;
+}
+
+.dm-grid {
+  flex: 1;
+  display: grid;
+  /* [Layout Refine] Figma gridColumns=3 → grid-template-columns: repeat(3, 1fr) */
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding-left: 8px;
+  align-content: start;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.dm-grid-item {
+  width: 100%;
+  height: 64px;
+  border-radius: 4px;
+  /* [Style Refine] fills[0] → 复杂线性渐变近似 */
+  background: linear-gradient(180deg, rgba(44, 104, 157, 0.5) 0%, rgba(44, 104, 157, 0.1) 100%);
+  border: 1px solid rgba(25, 144, 255, 0.3);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 0 12px;
+  gap: 8px;
+  box-sizing: border-box;
+}
+
+.dm-grid-icon {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+}
+
+.dm-grid-info {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+
+.dm-grid-name {
+  /* [Style Refine] typography → 12px #333333 */
+  font-size: 12px;
+  color: @text-color;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dm-grid-val {
+  /* [Style Refine] typography → Roboto 16px 500 */
+  font-size: 16px;
+  font-weight: 500;
+  font-family: 'Roboto', sans-serif;
+  color: #ffffff;
+  /* [Style Refine] effects[0] → DROP_SHADOW 0px 0px 0px rgba(0,0,0,0.5) */
+  text-shadow: 0px 0px 1px rgba(0, 0, 0, 0.5);
+  
+  &.danger { 
+    color: @danger-color; 
+    text-shadow: none;
+  }
+  &.success { 
+    color: @success-color; 
+    text-shadow: none;
+  }
+}

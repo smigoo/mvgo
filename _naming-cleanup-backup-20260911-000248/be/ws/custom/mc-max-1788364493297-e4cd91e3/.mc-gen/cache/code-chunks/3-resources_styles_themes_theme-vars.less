@@ -1,0 +1,78 @@
+// 微码组件主题变量文件
+// 本文件定义组件的主题变量，通过 mixin 方式组织
+
+// 公共变量 mixin（所有主题共享）
+.common() {
+  // 字体缩放基准令牌（根容器通过 CSS 变量 --fontSize 驱动）
+  @fontSize: 14px;
+  
+  // 字体大小
+  @font-size-base: 14px;
+  @font-size-small: 12px;
+  
+  // 圆角
+  @border-radius: 4px;
+  @border-radius-badge: 50%;
+}
+
+// 深色主题 mixin（面板默认主题）
+.theme-dark() {
+  // 主题色
+  @color-primary: rgba(85, 158, 255, 1);
+  
+  // 文字颜色
+  @color-text-base: rgba(237, 244, 251, 1);
+  @color-text-secondary: rgba(255, 255, 255, 0.8);
+  @color-text-muted: rgba(255, 255, 255, 0.4);
+  
+  // 状态色
+  @color-danger: #f53f3f;
+  @color-success: rgba(0, 200, 100, 0.6);
+  @color-warning-line: #f53f3f;
+  
+  // Tab 选项卡颜色
+  @color-tab-active-bg: rgba(85, 158, 255, 1);
+  @color-tab-active-text: rgba(237, 244, 251, 1);
+  
+  // 坐标轴颜色
+  @color-axis-line: rgba(255, 255, 255, 0.2);
+  @color-axis-label: rgba(255, 255, 255, 0.4);
+  
+  // 面板背景
+  @color-panel-bg: rgba(10, 20, 45, 0.75);
+  
+  // 图表填充色
+  @color-chart-fill-start: rgba(0, 200, 100, 0.6);
+  @color-chart-fill-end: rgba(0, 200, 100, 0);
+}
+
+// 浅色主题 mixin
+.theme-light() {
+  // 主题色
+  @color-primary: rgba(24, 144, 255, 1);
+  
+  // 文字颜色
+  @color-text-base: rgba(0, 0, 0, 0.85);
+  @color-text-secondary: rgba(0, 0, 0, 0.65);
+  @color-text-muted: rgba(0, 0, 0, 0.45);
+  
+  // 状态色
+  @color-danger: #ff4d4f;
+  @color-success: rgba(82, 196, 26, 1);
+  @color-warning-line: #ff4d4f;
+  
+  // Tab 选项卡颜色
+  @color-tab-active-bg: rgba(24, 144, 255, 1);
+  @color-tab-active-text: rgba(255, 255, 255, 1);
+  
+  // 坐标轴颜色
+  @color-axis-line: rgba(0, 0, 0, 0.15);
+  @color-axis-label: rgba(0, 0, 0, 0.45);
+  
+  // 面板背景
+  @color-panel-bg: rgba(255, 255, 255, 0.95);
+  
+  // 图表填充色
+  @color-chart-fill-start: rgba(82, 196, 26, 0.6);
+  @color-chart-fill-end: rgba(82, 196, 26, 0);
+}

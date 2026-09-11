@@ -454,11 +454,11 @@ export class FigmaConnector {
    *优化：一次 API 调用获取多个节点的渲染 URL（减少网络往返）
    * @param {string} fileKey - Figma 文件 Key
    * @param {Array<string>} nodeIds - 节点 ID 数组
-   * @param {Object} options - 选项 { format: 'png', scale: 2 }
+   * @param {Object} options - 选项 { format: 'png', scale: 1 }
    * @returns {Promise<Map<string, string>>} nodeId → renderUrl 映射
    */
   async batchGetImageUrls(fileKey, nodeIds, options = {}) {
-    const { format = 'png', scale = 2 } = options;
+    const { format = 'png', scale = 1 } = options;
     const urlMap = new Map();
 
     if (nodeIds.length === 0) return urlMap;
@@ -1094,11 +1094,11 @@ export class FigmaConnector {
    * @param {string} nodeName - 节点名称（用作文件名）
    * @param {string} outputDir - 输出目录
    * @param {object} options - 可选配置
-   * @param {number} options.scale - 缩放比例，默认 2
+   * @param {number} options.scale - 缩放比例，默认 1
    * @param {string} options.format - 图片格式，默认 'png'
    */
   async downloadImageAsset(fileKey, nodeId, nodeName, outputDir, options = {}) {
-    const { scale = 2, format = 'png' } = options;
+    const { scale = 1, format = 'png' } = options;
 
     //AbortController 强制超时（axios timeout 在 socket hang 时不一定会触发）
     const controller = new AbortController();

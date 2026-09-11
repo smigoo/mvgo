@@ -89,12 +89,13 @@ export class ApifoxController {
     }
   }
 
-  // 列出所有 API 目录
+  // 列出当前用户的 API 目录（按 ownerId 隔离）
   @Get('catalogs')
-  listCatalogs() {
+  @UseGuards(SessionGuard)
+  listCatalogs(@CurrentUser() userId: string) {
     return {
       success: true,
-      items: this.apifoxService.listCatalogs(),
+      items: this.apifoxService.listCatalogs(userId),
     };
   }
 

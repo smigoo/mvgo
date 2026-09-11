@@ -1,0 +1,183 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 60,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0].header",
+        "message": "违反了“禁止生成组件面板标题”的核心规范。`header.title` 为 '环境监测'，该标题应由 `base-panel` 通过 `componentName` 自动渲染，禁止在组件内部重复生成标题栏。",
+        "suggestion": "移除 `section-header-controls` 的 `header` 节点，或将该 section 重命名为纯控件栏（如 `section-controls`），仅保留 Tab 和视图切换图标等业务内容。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "布局覆盖率过低（仅48%），缺失大量关键节点（如Y轴标签、预警线文本、图例、slot-con等），结构不完整，无法准确指导代码生成。",
+        "suggestion": "重新分析设计稿，补全缺失的节点，特别是图表的坐标轴、图例和预警线等关键元素，确保覆盖率提升至 80% 以上。"
+      },
+      {
+        "level": "error",
+        "type": "naming",
+        "location": "layout.sections[0].body.children[1].children",
+        "message": "“柱状图视图”和“列表视图”两个图标使用了完全相同的资源文件 `tabs-icon-43.png`，存在明显的识别或资源映射错误，会导致两个按钮显示相同的图标。",
+        "suggestion": "重新核对设计稿中的图标资源，为“列表视图”分配正确的、独立的图标资源文件。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body.backgroundImage & layout.sections[1].body.backgroundImage",
+        "message": "背景图 `bg-7890.png` 在两个 section 的 body 中重复设置。如果这是组件的全局背景，在子节点重复设置会导致背景图重叠渲染或层级混乱。",
+        "suggestion": "将背景图提取到根节点 `layout` 中统一设置，或根据设计稿明确各区块的独立背景并区分资源。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "charts[0].axes",
+        "message": "Y轴单位显示为“辆”，与CO浓度的物理意义（通常为 ppm 或 mg/m³）严重不符，notes中也指出了这可能是模板复用导致的错误。",
+        "suggestion": "修正Y轴单位及图例语义，确保与“CO浓度”的业务逻辑一致，避免直接复用不相关的模板数据。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[1].body.children[0].styles",
+        "message": "图表容器高度固定为 `120px`，对于包含图例、坐标轴、预警线和面积填充的图表来说空间过于拥挤，影响数据可读性。",
+        "suggestion": "建议将图表高度调整为 `160px` - `200px`，并确保外层容器使用 `flex: 1` 或 `min-height` 以适应不同屏幕尺寸。"
+      }
+    ],
+    "recommendations": [
+      "严格遵守“禁止生成组件面板标题”规范，移除布局中的面板标题节点，交由 `base-panel` 统一处理。",
+      "提高布局覆盖率，重新解析设计稿中缺失的图表元素（坐标轴、图例、预警线等），确保结构完整性达到生成标准。",
+      "优化背景图的管理，避免在子节点中重复设置相同的全局背景图，建议提升至根节点统一管理。",
+      "修正图标资源的映射错误，确保不同功能的视图切换图标使用正确的资源文件。",
+      "校验图表数据的业务语义，修正Y轴单位等因模板复用导致的明显逻辑错误。"
+    ],
+    "summary": "该布局结构存在违反核心规范（生成面板标题）的严重问题，且覆盖率仅为48%，缺失大量关键节点，无法有效指导代码生成。此外，存在图标资源映射错误、背景图重复设置以及图表单位语义错误等问题。建议重新解析设计稿，补全缺失节点，修正违规项和识别错误后再次提交审查。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名），映射浅色科技监测风主题",
+      "--colorPrimary": "#559eff",
+      "--colorPrimaryActive": "#2b7de9",
+      "--colorPrimaryBg": "#edf4fb",
+      "--colorBg": "#edf4fb",
+      "--colorTextBase": "#333333",
+      "--colorSuccess": "#00b578",
+      "--colorDanger": "#f53f3f",
+      "--fontSize": "14px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射，用于theme-vars.less中的mixin定义",
+      "@color-primary": "#559eff",
+      "@color-primary-active": "#2b7de9",
+      "@color-primary-bg": "#edf4fb",
+      "@color-bg": "#edf4fb",
+      "@color-text-base": "#333333",
+      "@color-success": "#00b578",
+      "@color-danger": "#f53f3f",
+      "@font-size-base": "14px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类，包含布局、装饰与强调元素",
+      ".monitor-container": {
+        "width": "100%",
+        "height": "100%",
+        "background-color": "#edf4fb",
+        "color": "#333333",
+        "font-size": "14px",
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      ".tab-active": {
+        "background-color": "#2b7de9",
+        "color": "#ffffff",
+        "border-radius": "4px",
+        "padding": "4px 12px",
+        "font-weight": "500"
+      },
+      ".badge-danger": {
+        "background-color": "#f53f3f",
+        "color": "#ffffff",
+        "border-radius": "50%",
+        "min-width": "18px",
+        "height": "18px",
+        "line-height": "18px",
+        "text-align": "center",
+        "font-size": "12px",
+        "font-weight": "bold"
+      },
+      ".warning-line": {
+        "border-top": "1px dashed #f53f3f",
+        "width": "100%",
+        "position": "relative"
+      },
+      ".area-chart-fill": {
+        "fill": "rgba(0, 181, 120, 0.2)",
+        "stroke": "#00b578",
+        "stroke-width": "2"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 #559eff 映射为 --colorPrimary，用于常规科技蓝元素",
+      "选中Tab深蓝色背景提取为 --colorPrimaryActive (#2b7de9)，比主色更深以突出激活状态",
+      "背景色 #edf4fb 映射为 --colorBg 和 --colorPrimaryBg，作为容器基础背景，建议直接落地为字面量值",
+      "文字颜色 #333333 映射为 --colorTextBase，确保浅色背景下的最佳可读性",
+      "成功色 #00b578 映射为 --colorSuccess，用于绿色面积图填充（使用20%透明度）及正向指标",
+      "危险色 #f53f3f 映射为 --colorDanger，用于红色虚线预警线及Badge数字高亮",
+      "面积图填充使用 rgba(0, 181, 120, 0.2) 实现半透明绿色渐变效果，避免纯色遮挡网格线"
+    ],
+    "elementStyleMap": {
+      "section-header-controls": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "tabs-container": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "view-icons": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "section-chart-area": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-12": {
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-header-controls",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 8,
+        "title": "环境监测"
+      },
+      {
+        "id": "section-chart-area",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "浓度趋势图表"
+      }
+    ],
+    "isForced": false,
+    "minFiles": 0,
+    "reason": "有效 sections=2 < 3 → 不强制拆分"
+  }
+}

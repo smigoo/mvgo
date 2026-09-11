@@ -206,11 +206,12 @@ export class AiConfigController {
       const apiKey = String(m?.apiKey || '').trim();
       const baseURL = String(m?.baseURL || '').trim();
       const model = String(m?.model || '').trim();
-      // 不完整条目跳过（由前端/存储层校验兜底）；脱敏回传 Key = 用户未改动，沿用既往实测事实
-      if (!apiKey || !baseURL || !model) continue;
+      // 脱敏回传 Key（连续 *）= 用户未改动凭据，沿用既往实测事实，跳过校验
       if (/\*{3,}/.test(apiKey)) continue;
-
       const label = String(m?.name || '').trim() || model;
+      // 完全空白的模型卡片（四个标识字段都空）跳过；只要有一项有内容就视为用户意图保存的模型，
+      // 必须走服务端实测校验——否则仅填了 name+apiKey+model 而漏 baseURL 的垃圾模型会漏过校验入库。
+      if (!apiKey && !baseURL && !model && !label) continue;
       const rec = verified[modelBindKey(apiKey, baseURL, model)];
       // 必须已执行过检测（rec 存在且至少一个维度有结论）
       if (!rec || (typeof rec.text !== 'boolean' && typeof rec.vision !== 'boolean')) {

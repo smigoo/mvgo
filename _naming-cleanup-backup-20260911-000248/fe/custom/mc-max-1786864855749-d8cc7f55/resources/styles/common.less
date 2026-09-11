@@ -1,0 +1,500 @@
+.c-device-monitor-root {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 425px;
+  padding: 46px 12px 12px;
+  box-sizing: border-box;
+  overflow: hidden;
+  color: @device-monitor-text-primary;
+  font-family: @device-monitor-font-family;
+}
+
+.c-device-monitor-overview {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+.c-device-monitor-stat-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 64px;
+  padding: 8px 10px;
+  box-sizing: border-box;
+  border-radius: 6px;
+  overflow: hidden;
+
+  flex-direction: column;}
+
+.c-device-monitor-stat-icon {
+  flex: 0 0 auto;
+  width: 35px;
+  height: 28px;
+  object-fit: contain;
+  margin-right: 8px;
+}
+
+.c-device-monitor-stat-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  line-height: 1;
+}
+
+.c-device-monitor-stat-label {
+  color: @device-monitor-text-regular;
+  font-family: @device-monitor-title-font-family;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 15.6px;
+  white-space: nowrap;
+}
+
+.c-device-monitor-stat-value {
+  display: inline-flex;
+  align-items: baseline;
+  margin-top: 4px;
+  color: @device-monitor-primary;
+  font-family: @device-monitor-number-font-family;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 23.4375px;
+  white-space: nowrap;
+
+  flex-direction: column;}
+
+.c-device-monitor-stat-value small {
+  margin-left: 2px;
+  color: @device-monitor-text-secondary;
+  font-family: @device-monitor-font-family;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.c-device-monitor-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  width: 100%;
+  min-height: 0;
+  margin-bottom: 8px;
+}
+
+.c-device-monitor-section {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: 10px 10px 8px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.c-device-monitor-device-section {
+  height: 132px;
+}
+
+.c-device-monitor-alarm-section {
+  height: 132px;
+}
+
+.c-device-monitor-category-section {
+  height: 172px;
+}
+
+.c-device-monitor-health-section {
+  height: 172px;
+}
+
+.c-device-monitor-maintenance-section {
+  height: 172px;
+}
+
+.c-device-monitor-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  height: 22px;
+  margin-bottom: 6px;
+
+  flex-direction: column;}
+
+.c-device-monitor-section-title {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  color: @device-monitor-primary;
+  font-family: @device-monitor-font-family;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 18px;
+  white-space: nowrap;
+
+  flex-direction: column;}
+
+.c-device-monitor-section-title::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1252fa 0%, #d6effc 100%);
+  box-shadow: 0 0 0 1px rgba(85, 158, 255, 0.18);
+}
+
+.c-device-monitor-tab-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+
+  flex-direction: column;}
+
+.c-device-monitor-tab-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  border: 1px solid @device-monitor-border-color;
+  border-radius: 3px;
+  background: @device-monitor-tab-bg;
+  color: @device-monitor-text-secondary;
+  font-family: @device-monitor-font-family;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  cursor: pointer;
+  outline: none;
+  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+
+  flex-direction: column;}
+
+.c-device-monitor-tab-item:hover,
+.c-device-monitor-tab-item.is-active {
+  border-color: @device-monitor-primary;
+  background: @device-monitor-tab-active-bg;
+  color: @device-monitor-primary;
+  font-weight: 700;
+}
+
+.c-device-monitor-device-content {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.c-device-monitor-ring-panel {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+
+.c-device-monitor-chart-container {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.c-device-monitor-status-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 5px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.c-device-monitor-status-item {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  border-radius: 4px;
+  overflow: hidden;
+
+  flex-direction: column;}
+
+.c-device-monitor-status-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: @device-monitor-text-regular;
+  font-family: @device-monitor-font-family;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.c-device-monitor-status-count {
+  flex: 0 0 auto;
+  color: @device-monitor-primary;
+  font-family: @device-monitor-number-font-family;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 18.75px;
+}
+
+.c-device-monitor-status-unit {
+  flex: 0 0 auto;
+  margin-left: 2px;
+  color: @device-monitor-text-secondary;
+  font-family: @device-monitor-font-family;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.c-device-monitor-alarm-content {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.c-device-monitor-select-wrapper {
+  position: relative;
+  flex: 0 0 auto;
+  z-index: 5;
+}
+
+.c-device-monitor-select-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 78px;
+  height: 22px;
+  padding: 0 7px;
+  box-sizing: border-box;
+  border: 1px solid @device-monitor-border-color;
+  border-radius: 3px;
+  background: @device-monitor-select-bg;
+  cursor: pointer;
+
+  flex-direction: column;}
+
+.c-device-monitor-select-value {
+  color: @device-monitor-text-regular;
+  font-family: @device-monitor-font-family;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.c-device-monitor-select-arrow {
+  width: 0;
+  height: 0;
+  margin-left: 4px;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid @device-monitor-primary;
+  transition: transform 0.2s ease;
+}
+
+.c-device-monitor-select-arrow.is-open {
+  transform: rotate(180deg);
+}
+
+.c-device-monitor-select-dropdown {
+  position: absolute;
+  top: 26px;
+  right: 0;
+  width: 88px;
+  padding: 4px 0;
+  box-sizing: border-box;
+  border: 1px solid @device-monitor-border-color;
+  border-radius: 4px;
+  background: @device-monitor-dropdown-bg;
+  box-shadow: 0 4px 10px rgba(74, 117, 141, 0.18);
+}
+
+.c-device-monitor-select-option {
+  height: 24px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  color: @device-monitor-text-regular;
+  font-family: @device-monitor-font-family;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 24px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.c-device-monitor-select-option:hover,
+.c-device-monitor-select-option.is-active {
+  color: @device-monitor-primary;
+  background: @device-monitor-option-active-bg;
+}
+
+.c-device-monitor-bottom {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  width: 100%;
+  min-height: 0;
+}
+
+.c-device-monitor-category-content {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.c-device-monitor-health-content {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.c-device-monitor-health-card {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 5px 8px;
+  box-sizing: border-box;
+  border-radius: 4px;
+  overflow: hidden;
+
+  flex-direction: column;}
+
+.c-device-monitor-health-icon {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  margin-right: 7px;
+  object-fit: contain;
+}
+
+.c-device-monitor-health-text {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  column-gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.c-device-monitor-health-label {
+  grid-column: 1 / 2;
+  color: @device-monitor-text-regular;
+  font-family: @device-monitor-font-family;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.c-device-monitor-health-value {
+  grid-column: 2 / 3;
+  grid-row: 1 / 3;
+  align-self: center;
+  color: @device-monitor-health-color;
+  font-family: @device-monitor-number-font-family;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 21px;
+  white-space: nowrap;
+}
+
+.c-device-monitor-health-trend {
+  grid-column: 1 / 2;
+  color: @device-monitor-success;
+  font-family: @device-monitor-font-family;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 14px;
+  white-space: nowrap;
+}
+
+.c-device-monitor-health-trend.down {
+  color: @device-monitor-danger;
+}
+
+.c-device-monitor-task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.c-device-monitor-task-item {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 5px 8px;
+  box-sizing: border-box;
+  border-radius: 4px;
+  overflow: hidden;
+
+  flex-direction: column;}
+
+.c-device-monitor-task-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.c-device-monitor-task-name {
+  color: @device-monitor-text-regular;
+  font-family: @device-monitor-font-family;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.c-device-monitor-task-desc {
+  margin-top: 1px;
+  color: @device-monitor-text-secondary;
+  font-family: @device-monitor-font-family;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.c-device-monitor-task-status {
+  flex: 0 0 auto;
+  height: 20px;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: @device-monitor-status-tag-bg;
+  color: @device-monitor-primary;
+  font-family: @device-monitor-font-family;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+.themeType {
+  color: inherit;
+}

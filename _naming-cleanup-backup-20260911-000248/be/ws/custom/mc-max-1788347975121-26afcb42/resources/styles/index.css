@@ -1,0 +1,116 @@
+.c-env-monitor-panel-title {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  flex-shrink: 0;
+  overflow: hidden;
+  font-family: 'Noto Sans SC', sans-serif;
+}
+.c-env-monitor-panel-title__indicator {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+}
+.c-env-monitor-panel-title__indicator-ring {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  background: #000000;
+  border-radius: 50%;
+}
+.c-env-monitor-panel-title__indicator-core {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 6px;
+  height: 6px;
+  background: linear-gradient(135deg, #1252fa 0%, #d6effc 100%);
+  border-radius: 50%;
+}
+.c-env-monitor-panel-title__text {
+  font-size: calc(var(--fontSize, 14px) * 1.1429);
+  font-weight: 700;
+  line-height: 19px;
+  background: linear-gradient(90deg, #1990ff 0%, #5a7eff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.c-env-monitor-panel-title__bar {
+  flex: 1;
+  height: 6px;
+  background: #559eff;
+  border-radius: 3px;
+  min-width: 20px;
+}
+.c-env-monitor-section-chart {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+  font-size: var(--fontSize, 14px);
+}
+.c-env-monitor-chart-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+}
+.c-env-monitor-section-tabs-container {
+  display: flex;
+  flex-direction: row;
+  flex: 1 1 0;
+  width: 100%;
+  align-items: center;
+  justify-content: flex-end;
+}
+.c-env-monitor-tabs-wrapper {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  padding: 4px;
+}
+.c-env-monitor-tab-button {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: var(--fontSize, 14px);
+  color: #2c9bea;
+  font-weight: 500;
+}
+.c-env-monitor-tab-button.active {
+  background: linear-gradient(#1099b1, #038fff);
+  border: 1px solid #ffffff;
+  color: #ffffff;
+  text-shadow: 0px 0.6px 0px #006fe3;
+}
+.c-env-monitor-tab-icon {
+  display: flex;
+  flex-direction: row;
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+.c-env-monitor-tab-label {
+  white-space: nowrap;
+}

@@ -1,0 +1,89 @@
+{
+  "componentId": "mc-1785773052434-99c7a448",
+  "componentName": "弹窗2",
+  "version": "v1.0.0",
+  "panelKey": "model-panels",
+  "attribute": {
+    "aspectRatio": [
+      460,
+      138
+    ],
+    "title": "弹窗2",
+    "description": "弹窗2"
+  },
+  "businessEvents": {
+    "mc-1785773052434-99c7a448-onload": {
+      "eventId": "mc-1785773052434-99c7a448-onload",
+      "eventName": "组件加载",
+      "eventDataSchema": {
+        "componentId": {
+          "key": "componentId",
+          "name": "组件ID",
+          "type": "string",
+          "required": true
+        },
+        "timestamp": {
+          "key": "timestamp",
+          "name": "时间戳",
+          "type": "number",
+          "required": true
+        }
+      }
+    },
+    "modal-close": {
+      "eventId": "modal-close",
+      "eventName": "关闭弹窗",
+      "eventDataSchema": {
+        "componentId": {
+          "key": "componentId",
+          "name": "组件ID",
+          "type": "string",
+          "required": true
+        },
+        "timestamp": {
+          "key": "timestamp",
+          "name": "时间戳",
+          "type": "number",
+          "required": true
+        }
+      }
+    }
+  },
+  "businessStatuses": {
+    "show-modal": {
+      "statusId": "show-modal",
+      "statusName": "显示弹窗",
+      "parameters": {}
+    }
+  },
+  "themeConfig": {
+    "default": "dark",
+    "list": [
+      {
+        "name": "深色主题",
+        "key": "dark"
+      },
+      {
+        "name": "亮色主题",
+        "key": "light"
+      }
+    ]
+  },
+  "layoutConfig": {
+    "default": "one",
+    "list": [
+      {
+        "name": "默认布局",
+        "key": "one",
+        "previewName": "mc-preview.png"
+      }
+    ]
+  },
+  "size": {
+    "width": 796,
+    "height": 486
+  },
+  "dataSources": null,
+  "formSources": null,
+  "cssVariableConfig": []
+}

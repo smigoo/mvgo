@@ -1,0 +1,99 @@
+// 组件内共享的业务 class（按功能语义命名，禁止用组件 ID 作前缀）
+
+// 渐变标题样式
+.gradient-title {
+  background: @gradient-primary;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: @font-weight-bold;
+  line-height: @line-height-tight;
+}
+
+// 统计卡片样式
+.stat-card {
+  background: @color-bg-card;
+  border-radius: @border-radius-lg;
+  padding: @spacing-lg @spacing-xl;
+  box-shadow: @shadow-base;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  }
+}
+
+// 统计数值样式
+.stat-value {
+  font-size: @font-size-xl;
+  font-weight: @font-weight-bold;
+  color: @color-primary;
+  line-height: @line-height-tight;
+}
+
+// 统计标签样式
+.stat-label {
+  font-size: @font-size-base;
+  color: @color-text-base;
+  margin-top: @spacing-sm;
+}
+
+// 角标样式
+.badge-common {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 @spacing-xs;
+  font-size: 10px;
+  line-height: 1;
+  border-radius: @border-radius-circle;
+  background: @color-error;
+  color: @color-bg-card;
+  font-weight: @font-weight-medium;
+}
+
+// 图表容器样式
+.chart-wrapper {
+  flex: 1;
+  background: @color-bg-card;
+  border-radius: @border-radius-lg;
+  padding: @spacing-lg;
+  position: relative;
+  min-height: 0;
+}
+
+// 选项卡容器样式
+.tab-container-common {
+  display: flex;
+  gap: @spacing-sm;
+  padding: @spacing-sm;
+  background: @color-bg-card;
+  border-radius: @border-radius-base;
+}
+
+// 成功状态背景
+.success-bg-common {
+  background: @color-success-bg;
+  padding: @spacing-sm @spacing-md;
+  border-radius: @border-radius-base;
+}
+
+// 成功状态指示器
+.success-indicator-common {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: @color-success;
+  display: inline-block;
+  margin-right: @spacing-sm;
+}
+
+// 分隔线样式
+.divider-common {
+  height: 1px;
+  background: @color-border-base;
+  margin: @spacing-md 0;
+}

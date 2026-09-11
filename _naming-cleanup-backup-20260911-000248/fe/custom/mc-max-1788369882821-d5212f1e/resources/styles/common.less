@@ -1,0 +1,214 @@
+@import './themes/theme-vars.less';
+
+// 根容器（字体缩放基准点）
+.c-env-monitor-env-monitor-container {
+  font-size: var(--fontSize, 14px);
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+// 监测头部
+.c-env-monitor-monitor-header {
+  margin-bottom: calc(var(--fontSize, 14px) * 1.7143); // 24px;
+}
+
+.c-env-monitor-monitor-title {
+  font-size: calc(var(--fontSize, 14px) * 1.1429); // 16px;
+  font-weight: 700;
+  margin: 0;
+  background: linear-gradient(90deg, #1990ff 0%, #5a7eff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+// 卡片网格
+.c-env-monitor-monitor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: calc(var(--fontSize, 14px) * 1.1429); // 16px;
+}
+
+// 监测卡片
+.c-env-monitor-monitor-card {
+  display: flex;
+  align-items: center;
+  padding: calc(var(--fontSize, 14px) * 1.4286); // 20px;
+  background: linear-gradient(135deg, rgba(181, 222, 255, 1) 0%, rgba(209, 236, 255, 1) 100%);
+  border: 1px solid #ffffff;
+  border-radius: calc(var(--fontSize, 14px) * 0.8571); // 12px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.c-env-monitor-monitor-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0px 4px 10px rgba(74, 117, 141, 0.25);
+}
+
+// 卡片图标
+.c-env-monitor-card-icon {
+  font-size: calc(var(--fontSize, 14px) * 2.2857); // 32px;
+  margin-right: calc(var(--fontSize, 14px) * 1.1429); // 16px;
+}
+
+// 卡片内容
+.c-env-monitor-card-content {
+  flex: 1;
+}
+
+.c-env-monitor-card-label {
+  font-size: var(--fontSize, 14px); // 14px;
+  color: #666666;
+  margin-bottom: calc(var(--fontSize, 14px) * 0.2857); // 4px;
+}
+
+.c-env-monitor-card-value {
+  font-size: calc(var(--fontSize, 14px) * 1.7143); // 24px;
+  font-weight: 600;
+  color: #333333;
+}
+
+// 图表容器
+.c-env-monitor-chart-wrapper {
+  width: 100%;
+  flex: 113 1 0;
+  min-height: 100px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.c-env-monitor-chart-container {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+// 响应式适配
+@media (max-width: 768px) {
+  .c-env-monitor-monitor-grid {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
+  
+  .c-env-monitor-card-value {
+    font-size: calc(var(--fontSize, 14px) * 1.4286); // 20px;
+  }
+}
+
+
+/* === [自动修复] v3.5 模板驱动 fallback 规则 === */
+/* [自动修复] 模板 class .c-env-monitor-badge → 匹配元素 section-tabs */
+
+.c-env-monitor-badge {
+  display: flex;
+  flex-direction: row;
+}
+
+/* [自动修复] 模板 class .c-env-monitor-chart-legend → 匹配元素 section-tabs */
+
+.c-env-monitor-chart-legend {
+  display: flex;
+  flex-direction: row;
+}
+
+/* [自动修复] 模板 class .c-env-monitor-chart-section → 匹配元素 section-tabs */
+
+.c-env-monitor-chart-section {
+  display: flex;
+  flex-direction: row;
+}
+
+/* [自动修复] 模板 class .c-env-monitor-header-right → 匹配元素 section-tabs */
+
+.c-env-monitor-header-right {
+  display: flex;
+  flex-direction: row;
+}
+
+/* [自动修复] 模板 class .c-env-monitor-icon-btn → 匹配元素 section-tabs */
+
+.c-env-monitor-icon-btn {
+  display: flex;
+  flex-direction: row;
+}
+
+/* [自动修复] 模板 class .c-env-monitor-icon-btn-badge → 匹配元素 section-tabs */
+
+.c-env-monitor-icon-btn-badge {
+  display: flex;
+  flex-direction: row;
+}
+
+/* [自动修复] 模板 class .c-env-monitor-icon-img → 匹配元素 section-tabs */
+
+.c-env-monitor-icon-img {
+  display: flex;
+  flex-direction: row;
+}
+
+/* [自动修复] 模板 class .c-env-monitor-legend-item → 匹配元素 section-tabs */
+
+.c-env-monitor-legend-item {
+  display: flex;
+  flex-direction: row;
+}
+
+/* [自动修复] 模板 class .c-env-monitor-legend-line → 匹配元素 section-tabs */
+
+.c-env-monitor-legend-line {
+  display: flex;
+  flex-direction: row;
+}
+
+/* [自动修复] 模板 class .c-env-monitor-legend-text → 匹配元素 section-tabs */
+
+.c-env-monitor-legend-text {
+  display: flex;
+  flex-direction: row;
+}
+
+/* [自动修复] 模板 class .c-env-monitor-root → 匹配元素 section-tabs */
+
+.c-env-monitor-root {display: flex;
+  flex-direction: row;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 420 / 186;
+  font-size: var(--fontSize, 14px);
+
+/* [自动修复] 模板 class .c-env-monitor-tab-active-bg → 匹配元素 section-tabs */
+
+}
+.c-env-monitor-tab-active-bg {
+  display: flex;
+  flex-direction: row;
+}
+
+/* [自动修复] 模板 class .c-env-monitor-tab-item → 匹配元素 section-tabs */
+
+.c-env-monitor-tab-item {
+  display: flex;
+  flex-direction: row;
+}
+
+/* [自动修复] 模板 class .c-env-monitor-tab-label → 匹配元素 section-tabs */
+
+.c-env-monitor-tab-label {
+  display: flex;
+  flex-direction: row;
+}
+
+/* [自动修复] 模板 class .c-env-monitor-tabs-list → 匹配元素 section-tabs */
+
+.c-env-monitor-tabs-list {
+  display: flex;
+  flex-direction: row;
+}
+
+/* [自动修复] 模板 class .c-env-monitor-tabs-section → 匹配元素 section-tabs */
+
+.c-env-monitor-tabs-section {
+  display: flex;
+  flex-direction: row;
+}

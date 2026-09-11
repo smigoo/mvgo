@@ -1,0 +1,83 @@
+// 微码组件业务样式文件
+// 所有 class 必须以 .c- 为前缀
+// 引入主题变量
+@import './themes/theme-vars.less';
+
+// 应用通用变量
+.common();
+
+// 应用深色主题（组件默认主题）
+.theme-dark();
+
+// 根容器：设置字体缩放基准
+.c-env-monitor-root {
+  font-size: var(--fontSize, 14px);
+}
+
+// Tab 标签页区域
+.c-env-monitor-tabs-section {
+  // 布局已在 scoped 样式中定义
+}
+
+// Tab 列表容器
+.c-env-monitor-tabs-list {
+  // 布局和背景已在 scoped 样式中定义
+}
+
+// Tab 单项
+.c-env-monitor-tab-item {
+  position: relative;
+  transition: all 0.2s ease;
+  
+  &:hover:not(&--active) {
+    opacity: 0.8;
+  }
+}
+
+// Tab 图标区域
+.c-env-monitor-tabs-icons {
+  // 布局已在 scoped 样式中定义
+}
+
+// Tab 图标包装器
+.c-env-monitor-tab-icon-wrapper {
+  cursor: pointer;
+  transition: transform 0.2s ease;
+  
+  &:hover {
+    transform: scale(1.05);
+  }
+}
+
+// Tab 图标
+.c-env-monitor-tab-icon {
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+  
+  &:hover {
+    opacity: 0.8;
+  }
+}
+
+// Tab 徽章
+.c-env-monitor-tab-badge {
+  pointer-events: none;
+  user-select: none;
+}
+
+// 图表区域
+.c-env-monitor-chart-section {
+  // 布局已在 scoped 样式中定义
+}
+
+// Y轴标签
+.c-env-monitor-y-axis-label {
+  user-select: none;
+  pointer-events: none;
+}
+
+// 图表容器
+.c-env-monitor-chart-container {
+  // ECharts 容器，无需额外装饰样式
+  // 尺寸和布局已在 scoped 样式中定义
+}

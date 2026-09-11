@@ -1,0 +1,145 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 72,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body",
+        "message": "右上角视图切换图标位于body而非header-right插槽，slotCandidate为null不准确；建议映射至header-right",
+        "suggestion": "将view-icons作为面板标题栏的header-right插槽元素"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[*].header",
+        "message": "两个section的header.title均为null却声明content-below-title，标题层级缺失；建议补标题或清理声明",
+        "suggestion": "补充环境监测/浓度趋势图标题，或移除无效headerRelation"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "Figma节点覆盖率仅40%，缺失Y轴刻度、预警线、组件标题等关键元素，影响还原完整性",
+        "suggestion": "补齐未匹配和不确定节点后再进入代码生成"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "charts[0].axes",
+        "message": "Y轴单位标签'辆'与CO浓度不匹配，疑似模板笔误；应改为浓度单位或标注待定",
+        "suggestion": "修正Y轴单位，避免误导数据语义"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[1].body",
+        "message": "图表容器固定宽高380x120且body使用relative定位，响应式适配能力不足",
+        "suggestion": "改用百分比或弹性尺寸，避免固定像素导致不同分辨率溢出"
+      }
+    ],
+    "recommendations": [
+      "将标题栏与右上角图标控件纳入header插槽统一管理，避免body混合控制与内容",
+      "补齐未匹配的Figma关键节点（Y轴刻度、预警线、标题等）后再进入生成",
+      "修正Y轴单位并采用弹性尺寸，提升多分辨率适配性"
+    ],
+    "summary": "布局总体方向清晰，Tab与图表分区合理；但标题插槽缺失、部分Figma节点未匹配、Y轴单位存疑，需修正后进入生成。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorBg": "#EDF4FB",
+      "--colorPrimary": "#1890ff",
+      "--colorSuccess": "#52c41a",
+      "--colorDanger": "#f53f3f",
+      "--colorTextBase": "#333333",
+      "--fontSize": "14px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-bg": "#EDF4FB",
+      "@color-primary": "#1890ff",
+      "@color-success": "#52c41a",
+      "@color-danger": "#f53f3f",
+      "@color-text-base": "#333333",
+      "@font-size-base": "14px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "width": "100%",
+        "height": "100%",
+        "background-color": "#EDF4FB",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)"
+      },
+      ".tab-highlight": {
+        "color": "var(--colorPrimary)",
+        "border-bottom": "2px solid var(--colorPrimary)",
+        "font-weight": "bold"
+      },
+      ".warning-line": {
+        "border-top": "2px dashed var(--colorDanger)",
+        "width": "100%"
+      },
+      ".area-chart-fill": {
+        "fill": "var(--colorSuccess)",
+        "opacity": "0.2"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "背景色 #EDF4FB 映射为 --colorBg，作为浅色科技风的基础背景",
+      "主色调 #1890ff 映射为 --colorPrimary，用于一氧化碳Tab高亮等强调元素",
+      "预警色 #f53f3f 映射为 --colorDanger，用于红色虚线预警线装饰",
+      "正常/填充色 #52c41a 映射为 --colorSuccess，用于绿色面积图填充装饰",
+      "文本色 #333333 映射为 --colorTextBase，保证浅色背景下的良好可读性",
+      "容器背景应优先直接落地为 Figma 字面量值，避免关键可见背景只依赖 CSS 变量"
+    ],
+    "elementStyleMap": {
+      "section-controls": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tab-group": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "view-icons": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-11": {
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-controls",
+        "responsibility": "控制栏（请按功能拆分）",
+        "elementCount": 8,
+        "title": "控制栏"
+      },
+      {
+        "id": "section-chart",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "浓度趋势图"
+      }
+    ],
+    "isForced": false,
+    "minFiles": 0,
+    "reason": "有效 sections=2 < 3 → 不强制拆分"
+  }
+}

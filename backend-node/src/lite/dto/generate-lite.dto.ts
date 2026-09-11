@@ -84,13 +84,13 @@ export class GenerateLiteDto {
   @IsString()
   previewToken?: string;
 
-  /** 已确认的 Figma 节点逻辑宽度（CSS px，不是 scale=2 导出图像素） */
+  /** 已确认的 Figma 节点逻辑宽度（CSS px，不是 scale=1 导出图像素） */
   @IsOptional()
   @IsNumber()
   @Min(1)
   previewWidth?: number;
 
-  /** 已确认的 Figma 节点逻辑高度（CSS px，不是 scale=2 导出图像素） */
+  /** 已确认的 Figma 节点逻辑高度（CSS px，不是 scale=1 导出图像素） */
   @IsOptional()
   @IsNumber()
   @Min(1)

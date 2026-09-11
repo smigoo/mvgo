@@ -282,4 +282,161 @@ describe('Loop 2.1.A mergeInlineRowsIntoSections', () => {
       expect(out.sections.some((s) => s.id === 'header-tabs')).toBe(true)
     })
   })
+
+  // 覆盖率根因（2026-09-11 · env-monitor 10% 实锤）：inline-row 子节点 name 之前只写节点号，
+  // 覆盖率把 tab 文案判 missing → 虚低。治本：name 用 member 子树文案拼接。
+  describe('inline-row 子节点 name 用子树文案（非节点号）', () => {
+    const figmaData = {
+      document: {
+        id: 'root',
+        children: [
+          {
+            id: '89:42',
+            name: 'sub-t',
+            children: [
+              {
+                id: '2:7889',
+                name: 'tabs-list',
+                children: [
+                  { id: '2:7892', name: 'TEXT', type: 'TEXT', characters: '一氧化碳' },
+                  { id: '2:7893', name: 'TEXT', type: 'TEXT', characters: '洞内照明' },
+                ],
+              },
+              { id: '89:43', name: 'tabs-icon', children: [] },
+            ],
+          },
+        ],
+      },
+    }
+    const rows = [{ id: '89:42', name: 'sub-t', layout: 'horizontal', members: ['2:7889', '89:43'] }]
+
+    test('member 子树有文案 → name = 拼接文案（覆盖率可子串命中）', () => {
+      const out = mergeInlineRowsIntoSections({ type: 'vertical', sections: [] }, rows, figmaData)
+      const block = out.sections.find((s) => s.id === '89:42')
+      const first = block.children.find((c) => c.figmaNode === '2:7889')
+      expect(first.name).toBe('一氧化碳洞内照明')
+    })
+
+    test('member 子树无文案 → 回退节点号（保持原行为）', () => {
+      const out = mergeInlineRowsIntoSections({ type: 'vertical', sections: [] }, rows, figmaData)
+      const block = out.sections.find((s) => s.id === '89:42')
+      const icon = block.children.find((c) => c.figmaNode === '89:43')
+      expect(icon.name).toBe('89:43')
+    })
+
+    test('无 figmaData → 回退节点号（零回归）', () => {
+      const out = mergeInlineRowsIntoSections({ type: 'vertical', sections: [] }, rows)
+      const block = out.sections.find((s) => s.id === '89:42')
+      expect(block.children.map((c) => c.name)).toEqual(['2:7889', '89:43'])
+    })
+  })
+
+  // ─────────────────────────────────────────────────────────────
+  // 🛡️ 治本（2026-09-11 · mc-max-1789097821000-c6194696 设备监测实锤）
+  // 重复 tabs 根因：语义壳 section-main（figmaNode=null）的直接子元素是「左侧竖向Tab切换栏/
+  // 右侧内容区」纯语义名，无可匹配 token；但深层 tab 项的 name（监控/照明…）能命中几何行
+  // 89:37 子树的 characters。旧 childCoveredByEvidence 不递归 → 去重失效 → 两套 tabs。
+  // 治本：递归语义壳子元素，收集后代 name/text/label + resourceFile 尾号与几何行子树证据比对。
+  // ─────────────────────────────────────────────────────────────
+  describe('语义壳深层子元素递归去重（重复 tabs 根治）', () => {
+    // 复刻设备监测真值：89:37 几何行子树含 tabs(TEXT characters=监控/照明/摄像机) + cons
+    const figmaData = {
+      document: {
+        id: 'root',
+        name: 'cp-设备监测',
+        children: [
+          {
+            id: '89:37',
+            name: '@antd/tab',
+            children: [
+              {
+                id: '89:39',
+                name: 'tabs',
+                children: [
+                  { id: '2:8827', name: 't-监控', type: 'TEXT', characters: '监控' },
+                  { id: '2:8832', name: 'd-照明', type: 'TEXT', characters: '照明' },
+                ],
+              },
+              {
+                id: '2:8437',
+                name: 'cons',
+                children: [
+                  { id: '2:8439', name: '摄像机', type: 'TEXT', characters: '摄像机' },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    }
+    const rows = [{ id: '89:37', name: '@antd/tab', layout: 'horizontal', members: ['89:39', '2:8437'] }]
+
+    // 语义壳：直接子元素无 token，但深层 tab 项 name 能命中几何行子树 characters
+    const layoutWithDeepShell = {
+      type: 'vertical',
+      sections: [
+        {
+          id: 'section-main',
+          name: '主内容区',
+          body: {
+            layout: 'horizontal',
+            children: [
+              {
+                id: 'section-left-tabs',
+                name: '左侧竖向Tab切换栏',
+                children: [
+                  { id: 'tab-monitor', name: '监控', active: true },
+                  { id: 'tab-lighting', name: '照明', active: false },
+                ],
+              },
+              {
+                id: 'section-right-content',
+                name: '右侧内容区',
+                children: [{ id: 'dev-1', name: '摄像机' }],
+              },
+            ],
+          },
+        },
+      ],
+    }
+
+    test('深层 tab 项 name 命中几何行子树 → section-main 被剔除（根治重复 tabs）', () => {
+      const out = mergeInlineRowsIntoSections(layoutWithDeepShell, rows, figmaData)
+      expect(out.sections.some((s) => s.id === 'section-main')).toBe(false)
+    })
+
+    test('几何行本身保留（去重只针对语义壳）', () => {
+      const out = mergeInlineRowsIntoSections(layoutWithDeepShell, rows, figmaData)
+      expect(out.sections.some((s) => s.id === '89:37')).toBe(true)
+    })
+
+    test('深层子元素不命中几何行 → 语义壳保留（不误删真实区块）', () => {
+      const unrelated = {
+        type: 'vertical',
+        sections: [
+          {
+            id: 'section-footer',
+            name: '底部信息区',
+            body: {
+              layout: 'vertical',
+              children: [
+                {
+                  id: 'footer-1',
+                  name: '版权说明',
+                  children: [{ id: 'f1', name: '沪ICP备' }],
+                },
+              ],
+            },
+          },
+        ],
+      }
+      const out = mergeInlineRowsIntoSections(unrelated, rows, figmaData)
+      expect(out.sections.some((s) => s.id === 'section-footer')).toBe(true)
+    })
+
+    test('无 figmaData → 不做去重（零回归）', () => {
+      const out = mergeInlineRowsIntoSections(layoutWithDeepShell, rows)
+      expect(out.sections.some((s) => s.id === 'section-main')).toBe(true)
+    })
+  })
 })

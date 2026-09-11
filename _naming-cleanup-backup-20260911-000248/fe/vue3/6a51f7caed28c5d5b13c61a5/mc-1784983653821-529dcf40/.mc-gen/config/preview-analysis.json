@@ -1,0 +1,226 @@
+{
+  "generatedAt": "2026-04-27T10:19:15.595Z",
+  "stage": "preview-analysis",
+  "componentName": "环境监测",
+  "componentTitle": "环境监测",
+  "analysisModel": "gpt-5.4",
+  "sourceImage": {
+    "path": "{outputPath}/c-hjjc/resources/images/mc-preview.png",
+    "size": 0,
+    "mtimeMs": 0,
+    "sha1": ""
+  },
+  "summary": "环境监测面板，包含标题、监测类型Tab切换栏（一氧化碳/能见度等）、右上角功能图标（带Badge）、以及CO浓度折线面积图（含预警线）。",
+  "layout": {
+    "type": "vertical-stack",
+    "direction": "vertical",
+    "sections": [
+      {
+        "id": "header-title",
+        "name": "面板标题",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "title-itself",
+        "slotCandidate": null,
+        "header": {
+          "title": "环境监测",
+          "controls": []
+        },
+        "body": {
+          "layout": "vertical",
+          "children": [],
+          "backgroundImage": {
+            "src": "../resources/images/bg-7890.png",
+            "recommendedUsage": "backgroundStyle"
+          },
+          "backgroundSize": "cover",
+          "backgroundPosition": "center",
+          "backgroundRepeat": "no-repeat"
+        }
+      },
+      {
+        "id": "monitor-controls",
+        "name": "监测类型切换与工具栏",
+        "role": "常驻",
+        "layout": "horizontal",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "header": {
+          "title": null,
+          "controls": []
+        },
+        "body": {
+          "layout": "horizontal",
+          "bgPlaceholder": "body-bg-monitor-controls",
+          "children": [
+            {
+              "id": "tab-switch",
+              "name": "监测类型Tab",
+              "role": "tabs",
+              "type": "tab-switch",
+              "options": [
+                "一氧化碳",
+                "能见度",
+                "洞内照明",
+                "洞外光强"
+              ],
+              "activeIndex": 0,
+              "style": {
+                "background": "linear-gradient(to right, #559eff, #8ec5ff)",
+                "borderRadius": "4px",
+                "color": "#ffffff",
+                "fontSize": "12px"
+              }
+            },
+            {
+              "id": "action-icons",
+              "name": "功能图标组",
+              "role": "常驻",
+              "layout": "horizontal",
+              "children": [
+                {
+                  "type": "icon",
+                  "name": "图表视图",
+                  "resourceFile": "../resources/images/tabs-icon-43.png",
+                  "recommendedUsage": "imgSrc",
+                  "style": {
+                    "width": "20px",
+                    "height": "20px",
+                    "color": "#559eff"
+                  }
+                },
+                {
+                  "type": "icon-badge",
+                  "name": "列表视图",
+                  "badge": {
+                    "text": "6",
+                    "color": "#ff4d4f",
+                    "bgColor": "#ff4d4f"
+                  },
+                  "style": {
+                    "width": "20px",
+                    "height": "20px",
+                    "color": "#559eff"
+                  }
+                }
+              ]
+            }
+          ],
+          "backgroundImage": {
+            "src": "../resources/images/bg-7890.png",
+            "recommendedUsage": "backgroundStyle"
+          },
+          "backgroundSize": "cover",
+          "backgroundPosition": "center",
+          "backgroundRepeat": "no-repeat"
+        }
+      },
+      {
+        "id": "chart-section",
+        "name": "CO浓度监测图表",
+        "role": "常驻",
+        "layout": "vertical",
+        "headerRelation": "content-below-title",
+        "slotCandidate": null,
+        "header": {
+          "title": null,
+          "controls": []
+        },
+        "body": {
+          "layout": "vertical",
+          "bgPlaceholder": "body-bg-chart",
+          "children": [
+            {
+              "id": "echarts-line",
+              "name": "折线面积图",
+              "role": "chart",
+              "chartType": "line-area",
+              "style": {
+                "width": "100%",
+                "height": "113px"
+              }
+            }
+          ],
+          "backgroundImage": {
+            "src": "../resources/images/bg-7890.png",
+            "recommendedUsage": "backgroundStyle"
+          },
+          "backgroundSize": "cover",
+          "backgroundPosition": "center",
+          "backgroundRepeat": "no-repeat"
+        }
+      }
+    ]
+  },
+  "styles": {
+    "theme": "浅色科技监测风",
+    "backgroundBrightness": "light",
+    "colors": [
+      "#EDF4FB",
+      "#559EFF",
+      "#78D9B5",
+      "#D9534F",
+      "#333333"
+    ],
+    "background": "浅灰蓝色背景 (#EDF4FB)",
+    "decorations": [
+      "红色虚线预警线",
+      "Tab栏左侧箭头装饰"
+    ],
+    "emphasis": [
+      "绿色CO浓度曲线",
+      "红色预警线(30)"
+    ]
+  },
+  "interactions": [
+    {
+      "target": "监测类型Tab栏",
+      "type": "tab-switch",
+      "description": "切换不同的环境监测指标（一氧化碳、能见度等）",
+      "defaultState": "常驻，选中'一氧化碳'",
+      "evidence": "横向排列的可选标签，'一氧化碳'有高亮背景"
+    },
+    {
+      "target": "右上角功能图标",
+      "type": "icon-button",
+      "description": "切换图表视图或查看列表详情",
+      "defaultState": "常驻",
+      "evidence": "柱状图和列表图标，列表图标带有红色数字Badge"
+    }
+  ],
+  "charts": [
+    {
+      "section": "chart-section",
+      "type": "line-area",
+      "series": [
+        "zk3+785CO浓度"
+      ],
+      "legend": [
+        "zk3+785CO浓度"
+      ],
+      "legendPosition": "top-right",
+      "seriesColors": [
+        "#78D9B5"
+      ],
+      "legendType": "horizontal",
+      "axes": "X轴为时间(2-24时)，Y轴为数值(0-40，标签显示'辆')",
+      "tooltip": "显示具体时间的CO浓度值",
+      "notes": [
+        "包含红色虚线'预警线'，数值约为30",
+        "Y轴标签'辆'与图例'CO浓度'单位可能不匹配，如实记录",
+        "图表为绿色面积图"
+      ]
+    }
+  ],
+  "doNotInvent": [
+    "不要臆造Tab栏的其他选项（如通风、供配电等），只列出可见的4个",
+    "不要臆造图表的具体数据点数值，只描述趋势和范围",
+    "不要假设右上角图标的具体功能（如导出、设置），只描述为视图切换或列表",
+    "不要修正Y轴标签'辆'与图例'CO浓度'的不一致，如实记录"
+  ],
+  "notes": [
+    "背景色为浅灰蓝 (#EDF4FB)，属于浅色主题",
+    "Figma结构中 sub-t (tabs) 位于 slot-con 内，视觉上位于图表上方",
+    "右上角Badge数字为6"
+  ]
+}

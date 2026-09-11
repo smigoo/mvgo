@@ -1,0 +1,53 @@
+.c-环境监测-简单-tabs图表-c-env-monitor-root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-width: 100%;
+  max-height: 100vh;
+  box-sizing: border-box;
+  font-size: var(--fontSize, 14px);
+}
+.c-环境监测-简单-tabs图表-c-env-monitor-tabs-container {
+  flex-shrink: 0;
+  height: 32px;
+  align-items: center;
+  gap: 0;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: row;
+}
+.c-环境监测-简单-tabs图表-c-env-monitor-tab-item {
+  flex: 1;
+  height: 27px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0px;
+  font-weight: 500;
+  color: #2c9bea;
+  cursor: pointer;
+  transition: all 0.3s;
+  user-select: none;
+}
+.c-环境监测-简单-tabs图表-c-env-monitor-tab-item.active {
+  color: #ffffff;
+  background-image: url('../images/bg-tab-active-7891.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  text-shadow: 0 0.6px 0 #006fe3;
+}
+.c-环境监测-简单-tabs图表-c-env-monitor-chart-section {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.c-环境监测-简单-tabs图表-c-env-monitor-chart-container {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}

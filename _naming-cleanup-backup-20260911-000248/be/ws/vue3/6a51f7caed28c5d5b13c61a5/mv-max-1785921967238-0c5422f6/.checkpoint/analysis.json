@@ -1,0 +1,238 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 65,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "违规生成面板标题。布局中包含了“面板标题”section，并生成了“环境监测”标题文本及背景。根据微码核心规范，组件面板标题由 `<base-panel>` 统一处理，绝对禁止在组件内部重复生成标题栏和面板背景。",
+        "suggestion": "删除 `section-title` 整个 section，直接从 `section-content` 开始构建业务内容。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[0].style",
+        "message": "容器使用固定宽度。`tab-bar-container` 使用了 `width: \"380px\"` 的固定宽度，严重违反“容器布局禁止固定宽度”的规范，会导致组件无法自适应不同尺寸的面板。",
+        "suggestion": "将 `width` 修改为 `\"100%\"`，并确保父容器使用 flex 布局进行自适应。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[1].style",
+        "message": "图表容器使用固定宽度。`chart-container` 使用了 `width: \"380px\"`，同样违反了宽度自适应规范，会导致图表区域无法随容器拉伸。",
+        "suggestion": "将 `width` 修改为 `\"100%\"`，高度 `113px` 可保留作为明确高度约束。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[1].body.children[1].style",
+        "message": "图表容器缺少防溢出约束。图表容器仅设置了宽高，缺少 `min-width: 0` 和 `overflow: hidden` 等防溢出约束，在 flex 布局中可能导致 ECharts 图表撑破容器边界。",
+        "suggestion": "在 `chart-container` 的 style 中补充 `minWidth: \"0\"` 和 `overflow: \"hidden\"`。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body.backgroundImage",
+        "message": "背景图重复配置。`section-title` 和 `section-content` 都配置了相同的背景图 `bg-7890.png`。由于 `section-title` 属于违规生成，且 `base-panel` 可能已处理部分背景，重复配置会导致背景图重复渲染或层级错乱。",
+        "suggestion": "删除 `section-title` 后，确保背景图只在必要的业务根容器（如 `section-content`）上配置一次。"
+      }
+    ],
+    "recommendations": [
+      "严格区分“面板级”元素和“组件级”元素：面板标题、边框、背景等应由 `<base-panel>` 统一处理，不要在组件内部布局中重复识别和生成。",
+      "在将 Figma 设计稿转换为布局结构时，必须将固定的 px 宽度转换为相对宽度（如 `100%`、`flex: 1`），以保证组件在不同尺寸面板下的自适应能力。",
+      "对于图表容器，除了设置明确的高度外，必须补充 `min-width: 0` 和 `overflow: hidden` 等防溢出样式，确保 ECharts 渲染不会破坏整体布局。",
+      "检查 `charts` 配置中的 `legendPosition: \"top-right\"`，如果设计稿中图例是自定义 DOM，需在 `chart-container` 中补充图例容器节点；如果是 ECharts 内置图例，则无需补充，但需确保代码中启用了 legend。"
+    ],
+    "summary": "该布局结构存在严重的规范违反问题。首先，错误地将面板标题识别为组件内部元素并重复生成，违反了“禁止生成组件面板标题”的核心规范；其次，多处容器直接使用了 Figma 的固定 px 宽度，违反了“容器布局禁止固定宽度”的规范，导致组件丧失自适应能力。此外，图表容器缺少必要的防溢出约束。建议删除违规的面板标题 section，将所有固定宽度改为自适应宽度，并补充图表容器的防溢出样式后重新生成。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorBgBase": "rgba(237, 244, 251, 1)",
+      "--colorPrimary": "rgba(85, 158, 255, 1)",
+      "--colorPrimaryActive": "rgba(40, 110, 200, 1)",
+      "--colorError": "#f53f3f",
+      "--colorSuccess": "#52c41a",
+      "--colorTextBase": "#1d2129",
+      "--colorBorderSecondary": "rgba(85, 158, 255, 0.2)",
+      "--borderRadiusBase": "8px",
+      "--fontSize": "14px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-bg-base": "rgba(237, 244, 251, 1)",
+      "@color-primary": "rgba(85, 158, 255, 1)",
+      "@color-primary-active": "rgba(40, 110, 200, 1)",
+      "@color-error": "#f53f3f",
+      "@color-success": "#52c41a",
+      "@color-text-base": "#1d2129",
+      "@color-border-secondary": "rgba(85, 158, 255, 0.2)",
+      "@border-radius-base": "8px",
+      "@font-size-base": "14px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "width": "100%",
+        "height": "100%",
+        "background-color": "var(--colorBgBase)",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)"
+      },
+      ".tab-container": {
+        "display": "flex",
+        "align-items": "center",
+        "background-color": "rgba(255, 255, 255, 0.6)",
+        "border-radius": "var(--borderRadiusBase)",
+        "padding": "4px"
+      },
+      ".tab-item-active": {
+        "background-color": "var(--colorPrimaryActive)",
+        "color": "#ffffff",
+        "border-radius": "calc(var(--borderRadiusBase) - 2px)",
+        "font-weight": "500"
+      },
+      ".chart-grid": {
+        "stroke": "var(--colorBorderSecondary)",
+        "stroke-width": "1px",
+        "stroke-dasharray": "4 4"
+      },
+      ".warning-line": {
+        "stroke": "var(--colorError)",
+        "stroke-width": "2px",
+        "stroke-dasharray": "6 4"
+      },
+      ".badge-error": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "background-color": "var(--colorError)",
+        "color": "#ffffff",
+        "border-radius": "10px",
+        "font-size": "12px",
+        "min-width": "20px",
+        "height": "20px",
+        "padding": "0 6px"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "浅色科技监测风，背景使用浅灰蓝色 rgba(237, 244, 251, 1) 作为基础底色",
+      "选中Tab深蓝色背景通过 --colorPrimaryActive 映射，与主色 --colorPrimary 形成视觉层级",
+      "红色预警线和Badge统一使用 --colorError (#f53f3f) 保持警示语义一致",
+      "图表网格线使用主色的半透明值 rgba(85, 158, 255, 0.2) 以维持科技风视觉统一",
+      "容器背景应优先直接落地为 Figma 字面量值，避免关键可见背景只依赖 CSS 变量"
+    ],
+    "elementStyleMap": {
+      "section-title": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "section-content": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "tabs-list-tab-一氧化碳-0": {
+        "background": "url('../resources/images/bg-tab-active-7891.png')",
+        "background-size": "cover",
+        "color": "#ffffff",
+        "border-radius": "4px"
+      },
+      "tabs-list-tab-能见度-1": {
+        "color": "rgba(0,0,0,0.6)"
+      },
+      "tabs-list-tab-洞内照明-2": {
+        "color": "rgba(0,0,0,0.6)"
+      },
+      "tabs-list-tab-洞外光强-3": {
+        "color": "rgba(0,0,0,0.6)"
+      },
+      "tabs-list": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tabs-icons-icon-柱状图视图-0": {
+        "width": "20px",
+        "height": "20px",
+        "color": "#ffffff"
+      },
+      "tabs-icons-icon-button-列表视图-1": {
+        "width": "20px",
+        "height": "20px",
+        "color": "#ffffff",
+        "position": "relative"
+      },
+      "tabs-icons": {
+        "width": "52px",
+        "height": "24px",
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tab-bar-container": {
+        "width": "380px",
+        "height": "32px",
+        "background": "rgba(255,255,255,0.5)",
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "chart-container-chart-x-0": {
+        "background": "transparent"
+      },
+      "chart-container": {
+        "width": "380px",
+        "height": "113px",
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-5": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-tab-一氧化碳-8": {
+        "background": "url('../resources/images/bg-tab-active-7891.png')",
+        "background-size": "cover",
+        "color": "#ffffff",
+        "border-radius": "4px"
+      },
+      "el-tab-能见度-9": {
+        "color": "rgba(0,0,0,0.6)"
+      },
+      "el-tab-洞内照明-10": {
+        "color": "rgba(0,0,0,0.6)"
+      },
+      "el-tab-洞外光强-11": {
+        "color": "rgba(0,0,0,0.6)"
+      },
+      "el-icon-柱状图视图-13": {
+        "width": "20px",
+        "height": "20px",
+        "color": "#ffffff"
+      },
+      "el-icon-button-列表视图-14": {
+        "width": "20px",
+        "height": "20px",
+        "color": "#ffffff",
+        "position": "relative"
+      },
+      "el-chart-x-16": {
+        "background": "transparent"
+      }
+    }
+  }
+}

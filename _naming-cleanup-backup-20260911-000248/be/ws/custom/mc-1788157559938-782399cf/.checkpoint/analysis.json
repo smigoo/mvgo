@@ -1,0 +1,256 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 76,
+    "issues": [
+      {
+        "level": "error",
+        "type": "naming",
+        "location": "layout.sections[1].body.children[1]",
+        "message": "icon-chart 与 icon-doc 复用同一 resourceFile 与 resourceVarName，文档图标 Figma 节点为 7945，资源引用错误。",
+        "suggestion": "分别使用 icon-7941 和 icon-7945 并命名为 icon1、icon2。"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "layout.sections[1]",
+        "message": "stats-indicator 名称含统计指标，但 body 仅两个图标，与实际内容不符，易产生误导。",
+        "suggestion": "改名为 header-actions 或归入 headerSlots。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body",
+        "message": "chart-area 同时声明 resourceFile 与 backgroundImage.src，且同为 bg-7890，存在配置冗余，嵌套层级偏深。",
+        "suggestion": "保留单处背景声明，并将 children 收敛到单层。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "charts[0].seriesColors",
+        "message": "seriesColors 为蓝色，但 styles 与 notes 描述为绿色渐变填充，图表配色信息冲突。",
+        "suggestion": "统一为绿色渐变或修正 seriesColors。"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "layout.sections[2].body.children[0]",
+        "message": "stat-value 显示 '2k3+785CO2浓度'，与 chartDataHints 中的 'zk3+785CO浓度' 不一致。",
+        "suggestion": "以 Figma 或 OCR 结果为准统一文案。"
+      }
+    ],
+    "recommendations": [
+      "补齐 icon-doc 独立资源引用并分别命名资源变量。",
+      "统一图表面积填充颜色与实时数值文案。",
+      "精简 chart-area 背景声明，使用单处 resourceFile 控制背景。"
+    ],
+    "summary": "整体布局结构清晰，header slots 判断基本合理，但存在图标资源复用错误、背景配置冗余、图表信息不一致等问题，建议修正后使用。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "--text-color": "#333333",
+      "--bg": "#ffffff",
+      "--primary": "#1677ff",
+      "--border": "rgba(0, 0, 0, 0.08)",
+      "--border-radius-base": "8px",
+      "--font-size-base": "14px",
+      "--gap": "12px"
+    },
+    "lessVariables": {
+      "@text-color": "#333333",
+      "@bg": "#ffffff",
+      "@primary": "#1677ff",
+      "@border": "rgba(0, 0, 0, 0.08)",
+      "@border-radius-base": "8px",
+      "@font-size-base": "14px",
+      "@gap": "12px"
+    },
+    "cssClasses": {},
+    "tokenCoverage": 0.6,
+    "elementStyleMap": {
+      "tab-switch": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tab-1": {
+        "background-image": "url(../resources/images/bg-tab-active-7891.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "stats-indicator": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "chart-area": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-10": {
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      }
+    },
+    "synthesizedFallback": true
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "tab-switch",
+        "responsibility": "标签页切换区",
+        "elementCount": 4,
+        "title": "指标切换tabs",
+        "complexityScore": 20,
+        "complexityReasons": {
+          "elementCount": 4,
+          "charts": 0,
+          "interactions": 5,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "stats-indicator",
+        "responsibility": "数据统计指标区（数字+标签+趋势）",
+        "elementCount": 2,
+        "title": "统计指标区",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 2,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "chart-area",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 4,
+        "title": "面积图区域",
+        "complexityScore": 30,
+        "complexityReasons": {
+          "elementCount": 4,
+          "charts": 2,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [
+          {
+            "type": "chart-component",
+            "id": "threshold-line",
+            "name": "阈值线",
+            "responsibility": "图表组件：阈值线",
+            "reason": "R1: 图表隔离策略",
+            "props": [
+              "chartData",
+              "chartConfig"
+            ],
+            "emits": [
+              "legendClick",
+              "dataZoom"
+            ]
+          },
+          {
+            "type": "chart-component",
+            "id": "area-chart",
+            "name": "面积图",
+            "responsibility": "图表组件：面积图",
+            "reason": "R1: 图表隔离策略",
+            "props": [
+              "chartData",
+              "chartConfig"
+            ],
+            "emits": [
+              "legendClick",
+              "dataZoom"
+            ]
+          }
+        ],
+        "shouldSplitInternally": true
+      }
+    ],
+    "isForced": true,
+    "minFiles": 5,
+    "reason": "有效 sections=3 ≥ 3 或存在高复杂度 section → 强制拆分",
+    "internalSubcomponents": [
+      {
+        "type": "chart-component",
+        "id": "threshold-line",
+        "name": "阈值线",
+        "responsibility": "图表组件：阈值线",
+        "reason": "R1: 图表隔离策略",
+        "props": [
+          "chartData",
+          "chartConfig"
+        ],
+        "emits": [
+          "legendClick",
+          "dataZoom"
+        ],
+        "parentSectionId": "chart-area",
+        "parentSectionTitle": "面积图区域"
+      },
+      {
+        "type": "chart-component",
+        "id": "area-chart",
+        "name": "面积图",
+        "responsibility": "图表组件：面积图",
+        "reason": "R1: 图表隔离策略",
+        "props": [
+          "chartData",
+          "chartConfig"
+        ],
+        "emits": [
+          "legendClick",
+          "dataZoom"
+        ],
+        "parentSectionId": "chart-area",
+        "parentSectionTitle": "面积图区域"
+      }
+    ]
+  }
+}

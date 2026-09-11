@@ -1,0 +1,218 @@
+{
+  "reviewResult": {
+    "reviewResult": "pass",
+    "issues": [],
+    "score": 50,
+    "recommendations": []
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1990ff",
+      "--colorPrimaryBg": "#edf4fb",
+      "--colorPrimaryBgHover": "rgba(25, 144, 255, 0.12)",
+      "--colorTextBase": "#333333",
+      "--colorTextSecondary": "#666666",
+      "--colorTextTertiary": "#999999",
+      "--colorSuccess": "#52c41a",
+      "--colorDanger": "#ff4d4f",
+      "--colorInfo": "#08a3a5",
+      "--colorBg": "#edf4fb",
+      "--statCardGradient": "linear-gradient(135deg, #1990ff 0%, #08a3a5 100%)",
+      "--fontSize": "14px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#1990ff",
+      "@color-primary-bg": "#edf4fb",
+      "@color-primary-bg-hover": "rgba(25, 144, 255, 0.12)",
+      "@color-text-base": "rgba(255, 255, 255, 1)",
+      "@color-text-secondary": "#666666",
+      "@color-text-tertiary": "#999999",
+      "@color-success": "#52c41a",
+      "@color-danger": "#ff4d4f",
+      "@color-info": "#08a3a5",
+      "@color-bg": "#edf4fb",
+      "@stat-card-gradient": "linear-gradient(135deg, #1990ff 0%, #08a3a5 100%)",
+      "@font-size-base": "14px",
+      "@border-radius-base": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "background": "var(--colorBg, #edf4fb)",
+        "color": "var(--colorTextBase, #333333)",
+        "font-size": "var(--fontSize, 14px)",
+        "min-height": "100%"
+      },
+      ".stat-card": {
+        "background": "var(--statCardGradient, linear-gradient(135deg, #1990ff 0%, #08a3a5 100%))",
+        "border-radius": "var(--borderRadius, 8px)",
+        "color": "#ffffff",
+        "padding": "16px"
+      },
+      ".device-icon": {
+        "display": "flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "width": "40px",
+        "height": "40px",
+        "border-radius": "50%",
+        "background": "var(--colorPrimaryBg, #edf4fb)"
+      },
+      ".nav-item-active": {
+        "background": "var(--colorPrimary, #1990ff)",
+        "color": "#ffffff",
+        "border-left": "3px solid var(--colorPrimary, #1990ff)"
+      },
+      ".value-primary": {
+        "color": "var(--colorPrimary, #1990ff)",
+        "font-weight": "600"
+      },
+      ".value-success": {
+        "color": "var(--colorSuccess, #52c41a)"
+      },
+      ".value-danger": {
+        "color": "var(--colorDanger, #ff4d4f)",
+        "font-weight": "700"
+      }
+    },
+    "tokenCoverage": 0.93,
+    "mappingNotes": [
+      "浅灰蓝背景映射为--colorBg，并在容器中保留字面量 #edf4fb 回退，避免关键可见背景仅依赖CSS变量",
+      "蓝色渐变统计卡片背景映射为--statCardGradient，.stat-card 使用该变量",
+      "异常/正常/总数语义色分别映射为--colorDanger/--colorSuccess/--colorPrimary，并生成对应数值类",
+      "设备图标圆形底座与左侧导航激活态高亮分别映射为.device-icon与.nav-item-active"
+    ],
+    "elementStyleMap": {
+      "header-stats": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "switch-cards": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-caitong": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-nanbei": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-8": {
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-el-x-10": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-15": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "main-content": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "side-nav": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-20": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "device-camera": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-anemometer": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-height-detector": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-robot": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-lidar": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-co-sensor": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-covi": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-temp-humidity": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-pressure": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-light-sensor": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-emergency-phone": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "device-water-quality": {
+        "display": "flex",
+        "flex-direction": "column"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "header-stats",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 0,
+        "title": "设备监测"
+      },
+      {
+        "id": "switch-cards",
+        "responsibility": "标签页切换区",
+        "elementCount": 2,
+        "title": "设备总览切换卡片区"
+      },
+      {
+        "id": "main-content",
+        "responsibility": "网格卡片布局区",
+        "elementCount": 2,
+        "title": "主内容区（导航+设备网格）"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 → 强制拆分"
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "componentId": "mc-1785977550903-5ec08759",
+  "componentName": "cp-设备监测",
+  "version": "v1.0.0",
+  "panelKey": "default-panel",
+  "attribute": {
+    "aspectRatio": [
+      460,
+      138
+    ]
+  },
+  "businessEvents": {
+    "mc-1785977550903-5ec08759-onload": {
+      "eventId": "mc-1785977550903-5ec08759-onload",
+      "eventName": "组件加载",
+      "eventDataSchema": {}
+    }
+  },
+  "businessStatuses": {},
+  "themeConfig": {
+    "default": "light",
+    "list": [
+      {
+        "name": "亮色主题",
+        "key": "light"
+      },
+      {
+        "name": "深色主题",
+        "key": "dark"
+      }
+    ]
+  }
+}

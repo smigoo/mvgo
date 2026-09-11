@@ -1,0 +1,307 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 78,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[1].body.children[0].children",
+        "message": "主要设备分类卡片内部存在 content-group -> row -> children 等多层嵌套，加上 section -> body -> children -> card 层级，超过了推荐的 3 层嵌套深度，增加理解和维护成本。",
+        "suggestion": "简化卡片内部结构，合并 row 与 content-group，或使用 CSS 直接控制布局，减少中间包装层级。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].headerRelation",
+        "message": "section-summary-cards 未定义 header 字段，但 headerRelation 设置为 content-below-title，且 slotCandidate 为 null，导致标题关系不明确，生成器无法判断是否有标题。",
+        "suggestion": "若该区域无显式标题，应将 headerRelation 设为 null；若存在标题，则补充 header 定义并调整 slotCandidate。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].headerRelation",
+        "message": "section-main-content 同样未定义 header，却使用 content-below-title，结构不一致。",
+        "suggestion": "补充 header 或修改 headerRelation 为 null，使 section 内部层级符合微码规范。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[*].body.backgroundImage",
+        "message": "三个 section 的 body 均重复引用同一背景图 bg-8788.png，并分别设置 backgroundSize/Position/Repeat，导致不必要的资源绘制和性能损耗。",
+        "suggestion": "将背景图提升到最外层容器统一设置，避免每个 section 重复加载和渲染背景。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[0].width",
+        "message": "左侧导航 Tab 固定宽度为 50px，但 Tab 文本如“交通诱导”无法完整显示，可能造成文字截断或布局挤压。",
+        "suggestion": "重新评估侧边栏宽度，或采用图标 + Tooltip/缩写方式展示 Tab，确保文本可读性。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body.children",
+        "message": "顶部统计区的文本与数值交替扁平排列，缺少对每个统计指标的语义分组，不便于样式复用和后续维护。",
+        "suggestion": "将每组标签和数值包裹为 stat-item 容器，形成清晰的指标单元，提高可维护性。"
+      }
+    ],
+    "recommendations": [
+      "简化卡片内部结构，减少嵌套层级至 3 层以内。",
+      "统一 section 的 header 定义与 headerRelation 字段，避免歧义。",
+      "将共享背景图提升到容器根部，避免重复加载。",
+      "优化顶部统计区结构，使用分组容器提高语义清晰度。",
+      "调整左侧导航宽度或展示方式，保证中文 Tab 文本完整显示。",
+      "关注 coverageReport 中 28% 的低覆盖率，必要时补充 missing 节点信息以使布局更完整。"
+    ],
+    "summary": "整体布局结构按顶部统计、分类卡片、列表与导航三大区域划分，区域职责基本清晰。但存在 header 定义不一致、部分结构嵌套过深、背景图重复引用、侧边栏宽度不足等问题，建议按上述问题进行优化后再进入生成阶段。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1990FF",
+      "--colorBg": "#EDF4FB",
+      "--colorTextBase": "#333333",
+      "--colorDanger": "#F53F3F",
+      "--colorSuccess": "#08A3A5",
+      "--fontSize": "14px",
+      "--borderRadius": "8px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#1990FF",
+      "@color-bg": "#EDF4FB",
+      "@color-text-base": "#333333",
+      "@color-danger": "#F53F3F",
+      "@color-success": "#08A3A5",
+      "@font-size-base": "14px",
+      "@border-radius-base": "8px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "16px",
+        "background": "var(--colorBg, #EDF4FB)",
+        "color": "var(--colorTextBase, #333333)"
+      },
+      ".highlight-primary": {
+        "color": "var(--colorPrimary, #1990FF)",
+        "font-weight": "bold"
+      },
+      ".highlight-danger": {
+        "color": "var(--colorDanger, #F53F3F)",
+        "font-weight": "bold"
+      },
+      ".highlight-success": {
+        "color": "var(--colorSuccess, #08A3A5)",
+        "font-weight": "bold"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 #1990FF 映射为 --colorPrimary，用于总数蓝色高亮",
+      "异常数红色高亮 #F53F3F 映射为 --colorDanger",
+      "完好率绿色高亮 #08A3A5 映射为 --colorSuccess",
+      "基础文字颜色 #333333 映射为 --colorTextBase",
+      "浅蓝灰色背景 #EDF4FB 映射为 --colorBg，容器背景应优先直接落地为 Figma 字面量值，避免关键可见背景只依赖 CSS 变量"
+    ],
+    "elementStyleMap": {
+      "section-header-stats": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "card-tunnel-content-group-x-1-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-tunnel-content-group-x-1-row-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-tunnel-content-group-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-tunnel": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-north-south-content-group-x-1-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-north-south-content-group-x-1-row-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "card-north-south-content-group-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "card-north-south": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-11": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-content-group-x-14-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-content-group-x-14-row-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-content-group-x-14": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-16": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-row-x-19": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-content-group-x-24-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-content-group-x-24-row-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-content-group-x-24": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-row-x-26": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-row-x-29": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-main-content": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "sidebar-tabs": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-33": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-8788.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-el-x-42": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-el-x-45": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-el-x-48": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-el-x-51": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-el-x-54": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-el-x-57": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-el-x-60": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-el-x-63": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-el-x-66": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-el-x-69": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-el-x-72": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-el-x-75": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-header-stats",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 7,
+        "title": "设备监测"
+      },
+      {
+        "id": "section-summary-cards",
+        "responsibility": "数据统计指标区（数字+标签+趋势）",
+        "elementCount": 20,
+        "title": "主要设备分类统计"
+      },
+      {
+        "id": "section-main-content",
+        "responsibility": "列表项布局区",
+        "elementCount": 8,
+        "title": "设备列表与导航"
+      }
+    ],
+    "isForced": true,
+    "minFiles": 3,
+    "reason": "有效 sections=3 ≥ 3 → 强制拆分"
+  }
+}

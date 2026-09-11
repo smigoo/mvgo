@@ -1,0 +1,162 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 60,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "最外层 `modal-header` 生成了组件标题 '运单信息'，严重违反了'禁止生成组件面板标题和边框样式'的核心规范。面板标题应由 `<base-panel>` 统一处理。",
+        "suggestion": "删除 `modal-header` 整个 section。如果 '运单信息' 是面板标题，直接依赖 `declare.json` 中的 `componentName`；如果是内部区块标题，需调整层级并移除关闭按钮（面板关闭由外层控制）。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "Figma 覆盖率报告为 0%，`missingCount` 高达 67，说明当前布局结构与设计稿图层严重脱节，或 Figma 解析过程完全失败。",
+        "suggestion": "重新检查 Figma 设计稿的图层结构，确保布局节点与设计稿图层正确映射。建议重新运行 Figma 解析脚本或手动核对设计稿。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[*].body.backgroundImage",
+        "message": "每个 section 的 body 都重复引用了相同的背景图 `bg-2.png`，会导致 DOM 冗余、增加网络请求和渲染性能下降。",
+        "suggestion": "将背景图提取到最外层根容器统一设置，或仅在需要独立背景视觉的特定区块（如表格区）设置，避免全局重复平铺。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].header.controls[0]",
+        "message": "关闭按钮的 value 为 'X'，在代码生成阶段极易被实现为纯文本字符或 Emoji，违反'禁止使用 Emoji 作为功能图标'规范。",
+        "suggestion": "在生成代码时，必须使用正式的图标组件（如 `<CloseIcon />`）或 SVG，并提供 `title` 或 `aria-label` 属性。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[0]",
+        "message": "详情文本区使用 `grid-2-columns` 布局，但 `notes` 中提到'备注字段可能跨列'，当前 JSON 结构未明确配置跨列属性。",
+        "suggestion": "在生成代码时，确保'备注'字段的容器使用 `grid-column: span 2` 或等效的 CSS 属性实现跨列布局，避免破坏两列网格。"
+      }
+    ],
+    "recommendations": [
+      "彻底移除最外层的 `modal-header`，让 `<base-panel>` 自动接管组件标题、边框和背景样式，避免样式冲突和重复渲染。",
+      "优化背景图策略：将 `bg-2.png` 挂载到组件根容器，子区块通过 `background: transparent` 或局部遮罩来实现层次感，而非每个区块都加载一次背景图。",
+      "针对 Figma 覆盖率 0% 的问题，建议检查 Figma 插件的导出日志，确认是否因为图层未命名、未分组或使用了不支持的组件类型导致解析失败。",
+      "表格区域建议明确使用语义化的 `<table>` 标签或成熟的 UI 表格组件，并通过 CSS 变量或 Less 变量控制高亮选中态的背景色，确保符合深色科技风主题。"
+    ],
+    "summary": "该布局结构存在违反微码核心规范的严重问题（重复生成面板标题），且 Figma 解析覆盖率极低，表明结构与设计稿严重脱节。此外，背景图的重复引用和潜在的图标使用不规范也影响了代码质量。建议修复 Figma 解析问题，移除冗余的面板标题，并优化背景图加载策略后重新提交审查。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorBgBase": "#003032",
+      "--colorTextBase": "#FFFFFF",
+      "--colorPrimary": "#18FFCE",
+      "--colorInfo": "#00F0FF",
+      "--colorWarning": "#B07B00",
+      "--colorRowHighlight": "rgba(24, 255, 206, 0.12)",
+      "--fontSize": "14px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-bg-base": "#003032",
+      "@color-text-base": "#FFFFFF",
+      "@color-primary": "#18FFCE",
+      "@color-info": "#00F0FF",
+      "@color-warning": "#B07B00",
+      "@color-row-highlight": "rgba(24, 255, 206, 0.12)",
+      "@font-size-base": "14px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "width": "100%",
+        "height": "100%",
+        "background-color": "var(--colorBgBase, #003032)",
+        "color": "var(--colorTextBase, #FFFFFF)",
+        "font-size": "var(--fontSize, 14px)",
+        "font-family": "PingFang SC, Microsoft YaHei, sans-serif"
+      },
+      ".data-table": {
+        "width": "100%",
+        "border-collapse": "collapse",
+        "color": "var(--colorTextBase, #FFFFFF)"
+      },
+      ".table-row-highlight": {
+        "background-color": "var(--colorRowHighlight, rgba(24, 255, 206, 0.12))",
+        "transition": "background-color 0.3s ease"
+      },
+      ".tag-license-plate": {
+        "display": "inline-block",
+        "padding": "2px 8px",
+        "background-color": "var(--colorWarning, #B07B00)",
+        "color": "#FFFFFF",
+        "border-radius": "2px",
+        "font-weight": "bold",
+        "font-size": "0.85em",
+        "line-height": "1.5"
+      },
+      ".icon-diamond": {
+        "display": "inline-block",
+        "width": "8px",
+        "height": "8px",
+        "background-color": "var(--colorPrimary, #18FFCE)",
+        "transform": "rotate(45deg)",
+        "margin-right": "8px"
+      },
+      ".text-primary": {
+        "color": "var(--colorPrimary, #18FFCE)"
+      },
+      ".text-info": {
+        "color": "var(--colorInfo, #00F0FF)"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "深青色背景 (#003032) 映射为 --colorBgBase，作为全局基础背景色，容器背景应优先直接落地为 Figma 字面量值",
+      "亮青色 (#18FFCE) 和 亮蓝色 (#00F0FF) 分别映射为 --colorPrimary 和 --colorInfo，用于科技风数据强调与图表配色",
+      "黄色 (#B07B00) 映射为 --colorWarning，专用于车牌标签等需要强视觉提示的元素",
+      "表格行高亮和第一行选中态使用主色 (#18FFCE) 的透明度变体 (--colorRowHighlight)，保持深色主题下的视觉统一且不刺眼",
+      "菱形装饰图标通过 .icon-diamond 类实现，采用 CSS transform 旋转生成，若设计稿有复杂纹理建议替换为实际图片资源"
+    ],
+    "elementStyleMap": {
+      "modal-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-2.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "table-section": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-7": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-2.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "details-section": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-13": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-2.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  }
+}

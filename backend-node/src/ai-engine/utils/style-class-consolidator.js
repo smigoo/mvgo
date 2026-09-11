@@ -39,6 +39,13 @@ const COMMON_LESS_PATH = 'resources/styles/common.less';
 /** 顶层规则起始：行首 .cls / &  / @media 之外只收类选择器 */
 const RULE_START_RE = /^(\.[a-zA-Z][\w-]*)/;
 
+import {
+  collectClassFacts,
+  collectFileClassFact,
+  resolveDomClass,
+} from './class-facts.js';
+import { extractSfcTemplate } from './sfc-template-extractor.js';
+
 /**
  * 从 SFC 源码中提取 style 块内容（可能多个），返回拼接后的 Less 文本。
  * @param {string} sfc 组件源码
@@ -341,101 +348,119 @@ function looksLikeShortClass(selectorToken = '') {
  *  （其内部的 `.c-x` 已由父块选择器提供上下文，不该被改写为 DOM 长类）。
  *
  * @param {string} text 块文本（含选择器、块体、末尾 `}`）
- * @param {(short: string) => string} rewriteShort 短类 → 真实 DOM 类
- * @returns {string} 重写后文本（选择器行中的 .c- 短类对齐 DOM；块体/声明行原样保留）
+ * @param {(clsName: string) => {variants: string[]}|null} resolveDom
+ *        类名 → DOM 候选（多候选 = 长短并存，调用方逗号双写）；null = fail-open 保留原样
+ * @returns {string[]} 重写后的块文本变体（1 个 = 常规；>1 = 多形态候选，需双写）
  */
-function rewriteBlockText(text = '', rewriteShort) {
+function rewriteBlockTextVariants(text = '', resolveDom) {
   const lines = String(text).split('\n');
-  const out = [];
+  // 收集每行的重写替换点（行号 → [{clsName, variants}]）
+  const perLine = new Map();
+  let combinationCount = 1;
   for (let i = 0; i < lines.length; i++) {
-    const rawLine = lines[i];
-    const trimmed = rawLine.trim();
+    const trimmed = lines[i].trim();
     // 仅「选择器行」参与重写：行内含 {（选择器 + 块开始）或以 , 结尾（跨行选择器续行）。
     // 声明行（以 ; 结尾 / 纯属性）与 url(...) / 字符串值里的 .c- 片段一律不动（防误改）。
     const isSelectorLine = trimmed.includes('{') || /,\s*$/.test(trimmed);
-    if (!isSelectorLine) {
-      out.push(rawLine);
-      continue;
+    if (!isSelectorLine) continue;
+    const hits = [];
+    for (const m of trimmed.matchAll(/\.([a-zA-Z][\w-]*)/g)) {
+      const clsName = m[1];
+      if (!looksLikeShortClass(clsName)) continue;
+      const res = resolveDom(clsName);
+      if (!res || !res.variants || res.variants.length === 0) continue;
+      if (res.variants.length === 1 && res.variants[0] === clsName) continue;
+      hits.push({ clsName, variants: res.variants });
+      combinationCount *= res.variants.length;
     }
-    const newTrimmed = trimmed.replace(/\.([a-zA-Z][\w-]*)/g, (full, clsName) => {
-      if (!looksLikeShortClass(clsName)) return full;
-      const target = rewriteShort(clsName);
-      if (!target || target === clsName) return full;
-      return `.${target}`;
-    });
-    if (newTrimmed === trimmed) {
-      out.push(rawLine);
-    } else {
-      // 保留原行缩进
-      const indent = /^\s*/.exec(rawLine)[0];
-      out.push(indent + newTrimmed);
-    }
+    if (hits.length > 0) perLine.set(i, hits);
   }
-  return out.join('\n');
+  // 组合爆炸保护：>4 组合时退化为「每个替换点取第一个候选」（确定性，避免指数膨胀）
+  const capExceeded = combinationCount > 4;
+  const buildVariant = (pickFirst) => {
+    const out = [];
+    for (let i = 0; i < lines.length; i++) {
+      const rawLine = lines[i];
+      const hits = perLine.get(i);
+      if (!hits) {
+        out.push(rawLine);
+        continue;
+      }
+      let replaced = rawLine;
+      // 逆序替换，避免下标漂移
+      const ordered = [...hits].reverse();
+      for (const h of ordered) {
+        const target = pickFirst ? h.variants[0] : h.variants[0];
+        replaced = replaceClassToken(replaced, h.clsName, target);
+      }
+      out.push(replaced);
+    }
+    return out.join('\n');
+  };
+  if (capExceeded) return [buildVariant(true)];
+  // 笛卡尔积展开（≤4）：每个替换点逐个候选生成变体
+  const variants = [];
+  const expand = (idx, picks) => {
+    if (idx === perLine.size) {
+      const out = [];
+      const entries = [...perLine.entries()];
+      for (let i = 0; i < lines.length; i++) {
+        const hitEntry = entries.find(([ln]) => ln === i);
+        if (!hitEntry) {
+          out.push(lines[i]);
+          continue;
+        }
+        let replaced = lines[i];
+        const hits = [...hitEntry[1]].reverse();
+        for (const h of hits) {
+          const target = picks.get(`${i}:${h.clsName}`) || h.variants[0];
+          replaced = replaceClassToken(replaced, h.clsName, target);
+        }
+        out.push(replaced);
+      }
+      variants.push(out.join('\n'));
+      return;
+    }
+    const [lineNo, hits] = [...perLine.entries()][idx];
+    for (const h of hits) {
+      for (const v of h.variants) {
+        picks.set(`${lineNo}:${h.clsName}`, v);
+        expand(idx + 1, picks);
+      }
+    }
+    picks.delete(`${lineNo}:${hits[0].clsName}`);
+  };
+  expand(0, new Map());
+  return variants.length > 0 ? variants : [text];
+}
+
+/** 精确替换单个 `.cls` token（避免子串误替换：要求前后非 [\w-]） */
+function replaceClassToken(line = '', clsName = '', target = '') {
+  const esc = String(clsName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return String(line).replace(
+    new RegExp(`\\.${esc}(?![\\w-])`, 'g'),
+    `.${target}`,
+  );
 }
 
 /**
- * 以子组件 template DOM 实际类名为事实源，构建「短类 → 长类名」重写映射。
+ * 🛡️ P1.1/P1.2（2026-09-11）：DOM 类事实 → 选择器解析器。
  *
- * 【为什么必须 DOM 驱动（2026-09-09 取证）】
- *  LLM 给同一节点生成两套类名：scoped 短类（.c-x-header-stats）与 DOM 长类
- *  （c-x-{instanceId}-c-x-header-stats）。若「长类 = 硬拼 c-{instanceId}- + 短类」，
- *  会漏掉 DOM 上的真实差异（如 c-device-monitor-header-stats 的实际 DOM 长类是
- *  c-device-monitor-malvtjd5-c-device-monitor-header-stats，其中 malvtjd5 恰为 componentId 尾段，
- *  但真实 DOM 与硬拼前缀不总是同构）。故扫描 template class 属性：凡「DOM 短类含 c- 语义」
- *  则登记其**真实出现 token**（可能带 c-{instanceId}- 前缀，也可能就是短类本身）。
+ * 事实采集**唯一实现**在 utils/class-facts.js（`collectFileClassFact` / `collectClassFacts`），
+ * 本模块不再自扫模板（旧 `buildClassRewriteMap` + `registerClassToken` 已删）。
  *
- * @param {string} template SFC template 块文本（不含 <template> 标签亦可）
- * @returns {Object<string,string>} shortBase → 真实 DOM 类 token
+ * 🔴 旧实现两宗罪（260ff122 实锤）：
+ *  ① 用「剥修饰符的基名」做键 + first-wins → `.c-x-tab-item--active` 与 `.c-x-tab-item`
+ *     抢占同一键：先见静态 class → 激活选择器被改写成基类（**激活态污染全部元素**）；
+ *     先见 :class → 基类选择器被改写成激活类（镜像形态）。攻击面随书写顺序漂移。
+ *  ② 单值返回 → 同基名长短并存时只能择一，天然不可靠。
+ * 治本：精确命中优先 + 修饰符逐字保留 + 多候选返回全部（调用方逗号双写）。
+ *
+ * @param {import('./class-facts.js').FileClassFact} fact
+ * @returns {(clsName: string) => ({variants: string[]}|null)}
  */
-function buildClassRewriteMap(template = '') {
-  const map = {};
-  if (!template) return map;
-  // 提取所有 class / :class 属性值（含 :class="['a', {'b': x}]" 数组/对象字面量），
-  // 按配对引号整体截取（避免内部单引号截断）。
-  const attrRe = /(?:class|:class)\s*=\s*["']/gi;
-  let m;
-  while ((m = attrRe.exec(template))) {
-    const quote = m[0].slice(-1);
-    const start = m.index + m[0].length;
-    let end = -1;
-    for (let i = start; i < template.length; i++) {
-      if (template[i] === '\\') { i += 1; continue; }
-      if (template[i] === quote) { end = i; break; }
-    }
-    if (end < 0) continue;
-    const value = template.slice(start, end);
-    // value 内引号包裹的字符串 token 即是 DOM 真实 class（静态 / 数组元素 / 对象 key）
-    const strRe = /["']([^"']+)["']/g;
-    let sm;
-    while ((sm = strRe.exec(value))) {
-      const tok = sm[1].trim();
-      if (!tok || tok.includes(' ')) continue;
-      registerClassToken(map, tok);
-    }
-    // 纯静态（无 JS 字面量字符）按空格拆
-    if (!/[{}[\],:]/.test(value)) {
-      for (const tok of value.split(/\s+/).filter(Boolean)) registerClassToken(map, tok);
-    }
-  }
-  return map;
-}
-
-/**
- * 把一个 DOM class token 登记进「短类基名 → 真实 token」映射。
- * 短类基名 = 带实例前缀的长类剥外层到内层 c- 语义（如 c-x-{id}-c-x-header-stats → c-x-header-stats）；
- * 无前缀则直接用自身短类。实例前缀段数不固定，用 indexOf('-c-') > 0 剥离，而非固定段数正则。
- */
-function registerClassToken(map, tok) {
-  const lower = String(tok).toLowerCase();
-  const idx = lower.indexOf('-c-');
-  if (idx > 0) {
-    const base = normalizeShortClass(lower.slice(idx + 1));
-    if (base && !map[base]) map[base] = tok;
-    return;
-  }
-  const base = normalizeShortClass(lower);
-  if (base && !map[base]) map[base] = tok;
+function makeDomResolver(fact) {
+  return (clsName) => resolveDomClass(fact, clsName);
 }
 
 /**
@@ -445,6 +470,8 @@ function registerClassToken(map, tok) {
  * @param {Object<string,string>} files 产物文件表（path → content）
  * @param {Object} [options]
  * @param {{warn?:Function,info?:Function,log?:Function}} [options.logger]
+ * @param {import('./class-facts.js').ClassFacts} [options.classFacts]
+ *        产物级类事实（engineer 生成期注入；缺省时本模块用同一实现 self-collect，行为等价）
  * @returns {Object<string,string>} 新文件表（原对象不被修改；无变化时返回新对象但内容等价）
  */
 export function consolidateSubComponentClasses(files = {}, options = {}) {
@@ -464,38 +491,64 @@ export function consolidateSubComponentClasses(files = {}, options = {}) {
   if (subPaths.length === 0 || typeof rawCommonLess !== 'string') return next;
   const commonLess = sanitizeCommonLessText(rawCommonLess);
 
+  // 🛡️ P1.1/P1.2：类事实优先用注入产物（engineer 生成期一次性采集），缺省时用同一实现
+  // self-collect（确定性等价，保证单测/老路径行为一致）。
+  const facts = options.classFacts || collectClassFacts(next);
+
   const blocks = [];
   for (const p of subPaths) {
     const sfc = next[p];
     const styleText = extractStyleBlocks(sfc);
     if (!styleText.trim()) continue;
 
-    // ④ #648/#649：以该子组件 template 真实 DOM 类名为事实源，构建「短类 → 长/短真实类」映射。
-    // 失败（无 template / 无映射）时 map 为空 → rewriteShort 一律返回原短类 → 行为与原版一致（fail-open）。
-    const tplMatch = sfc.match(/<template[^>]*>([\s\S]*?)<\/template>/i);
-    const rewriteMap = buildClassRewriteMap(tplMatch ? tplMatch[1] : '');
-    const rewriteShort = (shortClass) => {
-      const base = normalizeShortClass(shortClass);
-      if (base && rewriteMap[base]) return rewriteMap[base];
-      return shortClass; // fail-open：无 DOM 对应则保留 scoped 原短类
-    };
+    // ④ #648/#649 + 🛡️ 2026-09-11 修饰符修复：以该子组件 template 真实 DOM 类事实为唯一依据，
+    // 精确命中优先 / 修饰符逐字保留 / 多候选逗号双写；无事实 → fail-open 保留原选择器。
+    const fact = facts.byFile?.[p] || collectFileClassFact(extractSfcTemplate(sfc) || '');
+    const resolveDom = makeDomResolver(fact);
 
     for (const b of splitTopLevelClassBlocks(styleText)) {
       if (!isValidLessRuleBlock(b.text)) continue;
-      let targetText = b.text;
-      if (rewriteMap && Object.keys(rewriteMap).length > 0) {
-        const rewritten = rewriteBlockText(b.text, rewriteShort);
-        if (rewritten !== null && rewritten !== '') targetText = rewritten;
+      const variants = rewriteBlockTextVariants(b.text, resolveDom);
+      for (const v of variants) {
+        if (!v) continue;
+        // 变体去重（多候选双向写时同块可能重复），selector 取重写后的首选择器
+        const headSel = (/^\s*([^{]+)\{/.exec(v) || [])[1];
+        const selector = headSel ? headSel.trim().slice(0, 200) : b.selector;
+        blocks.push({ selector, sourceSelector: b.selector, text: v });
       }
-      // 跳过已完全相同的块（幂等，避免重复追加）
-      blocks.push({ selector: b.selector, text: targetText });
     }
   }
   if (blocks.length === 0) return next;
 
-  // 去重：同一 selector 只保留最后一个（子组件内/间重复时后者优先）
+  // 🛡️ 碰撞守卫（2026-09-11）：不同源选择器 → 同一目标选择器 = 映射缺陷（本次事故的
+  // 破坏形态正是静默合并 + 后者覆盖）。命中则 fail-open 保留双方**原选择器**（惰性 > 污染）
+  // 并 WARN，避免把激活态规则写到基类名下污染全部元素。
+  const byTarget = new Map();
+  for (const b of blocks) {
+    if (!byTarget.has(b.selector)) byTarget.set(b.selector, []);
+    byTarget.get(b.selector).push(b);
+  }
+  const collisions = [];
+  const resolvedBlocks = [];
+  for (const [target, group] of byTarget) {
+    const sources = new Set(group.map((g) => g.sourceSelector));
+    if (group.length > 1 && sources.size > 1) {
+      collisions.push({ target, sources: [...sources].slice(0, 4) });
+      for (const g of group) resolvedBlocks.push({ ...g, text: g.text, selector: g.sourceSelector });
+    } else {
+      resolvedBlocks.push(group[group.length - 1]);
+    }
+  }
+  if (collisions.length > 0) {
+    warn(
+      `[style-class-consolidator] 目标选择器碰撞 ${collisions.length} 处，已 fail-open 保留原选择器（防激活态污染基类）`,
+      { collisions: collisions.slice(0, 5) },
+    );
+  }
+
+  // 去重：同一（最终）selector 只保留最后一个（子组件内/间重复时后者优先）
   const dedup = new Map();
-  for (const b of blocks) dedup.set(b.selector, b);
+  for (const b of resolvedBlocks) dedup.set(b.selector, b);
   const uniqueBlocks = [...dedup.values()];
 
   const merged = mergeIntoCommonLess(commonLess, uniqueBlocks);

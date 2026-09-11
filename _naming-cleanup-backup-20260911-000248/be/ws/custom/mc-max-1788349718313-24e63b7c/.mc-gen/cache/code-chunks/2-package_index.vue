@@ -1,0 +1,29 @@
+<template>
+  <base-panel panelKey="default-panel">
+    <div class="c-monitor-root">
+      <DailyTotalFlow
+        class="c-monitor-daily-total-flow"
+        :bg1="bg1"
+        :icon1="icon1"
+        :bg3="bg3"
+        :bg5="bg5"
+      />
+      <TunnelHourlyFlow
+        class="c-monitor-tunnel-hourly-flow"
+      />
+      <BridgeHourlyFlow
+        class="c-monitor-bridge-hourly-flow"
+      />
+      <VehicleTypeDistribution
+        class="c-monitor-vehicle-type-section"
+        :bg2="bg2"
+        :bg4="bg4"
+        :icon2="icon2"
+      />
+      <FlowPrediction
+        class="c-monitor-flow-prediction"
+        :icon3="icon3"
+      />
+    </div>
+  </base-panel>
+</template>

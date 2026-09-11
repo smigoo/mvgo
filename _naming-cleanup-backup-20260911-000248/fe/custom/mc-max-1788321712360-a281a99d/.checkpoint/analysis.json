@@ -1,0 +1,407 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 85,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].header",
+        "message": "header含控件但slotCandidate为null，未映射插槽，影响渲染定位。",
+        "suggestion": "将time-selector映射至title-right或header-right插槽。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[4].header",
+        "message": "header含地点Tab和节假日链接，但slotCandidate为null，控件插槽未明确。",
+        "suggestion": "为location-tab与holiday-link指定header-right插槽。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body.backgroundImage.src",
+        "message": "背景图资源与notes不一致：当日总流量应为bg-_m-34.png，当前为bg-_m-35.png。",
+        "suggestion": "核对并修正各区域背景图资源引用。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[3].body.children[0]",
+        "message": "车型分布stat-group内嵌stat-item再嵌label/value，层级偏深。",
+        "suggestion": "合并stat-item内部为扁平文本组，控制在3层内。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[3].body.backgroundImage.src",
+        "message": "车型分布body背景图仅使用bg-_m-35.png，未体现notes所述bg-_m-36.png。",
+        "suggestion": "检查车型分布卡片是否正确使用背景资源。"
+      }
+    ],
+    "recommendations": [
+      "为所有含控件的header明确插槽映射，避免渲染歧义。",
+      "统一背景图资源命名与notes描述，确保资源引用准确。",
+      "简化车型分布卡片层级，使用原子组件减少DOM深度。"
+    ],
+    "summary": "整体布局清晰，区域划分合理，图表信息基本完整；主要问题集中在插槽未映射、背景图资源不一致和局部嵌套偏深。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1990ff",
+      "--colorAccent": "#fa8c16",
+      "--colorTextBase": "#333333",
+      "--colorBg": "#edf4fb",
+      "--fontSize": "14px",
+      "--fontSizeLarge": "32px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#1990ff",
+      "@color-accent": "#fa8c16",
+      "@color-text-base": "rgba(255, 255, 255, 1)",
+      "@color-bg": "#edf4fb",
+      "@font-size-base": "14px",
+      "@font-size-large": "32px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".monitor-container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "20px",
+        "background": "var(--colorBg, #edf4fb)",
+        "color": "var(--colorTextBase, #333333)"
+      },
+      ".value-primary": {
+        "font-size": "var(--fontSizeLarge, 32px)",
+        "font-weight": "bold",
+        "color": "var(--colorPrimary, #1990ff)"
+      },
+      ".value-accent": {
+        "font-size": "var(--fontSizeLarge, 32px)",
+        "font-weight": "bold",
+        "color": "var(--colorAccent, #fa8c16)"
+      },
+      ".decoration-diamond": {
+        "width": "12px",
+        "height": "12px",
+        "background": "var(--colorPrimary, #1990ff)",
+        "transform": "rotate(45deg)"
+      },
+      ".decoration-ring": {
+        "width": "24px",
+        "height": "24px",
+        "border": "2px solid var(--colorPrimary, #1990ff)",
+        "border-radius": "50%"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 #1990ff 映射为 --colorPrimary，用于大号蓝色数值及菱形图标等核心视觉元素",
+      "强调色 #fa8c16 映射为 --colorAccent，专门用于突出显示橙色货车数值",
+      "背景色 rgba(237,244,251,1) 直接落地为 --colorBg，容器背景优先使用字面量值以确保浅色科技监测风的视觉一致性",
+      "基础文字色 #333333 映射为 --colorTextBase，保障在浅色背景下的良好可读性",
+      "装饰元素（菱形、圆环）通过独立的 CSS 类进行样式封装，提升组件复用性"
+    ],
+    "elementStyleMap": {
+      "section-total-flow": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "stat-tunnel": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "stat-bridge": {
+        "display": "flex",
+        "flex-direction": "column",
+        "align-items": "center"
+      },
+      "el-el-x-2": {
+        "background-image": "url(../resources/images/bg-_m-35.png)",
+        "background-size": "100% auto",
+        "background-position": "center top",
+        "background-repeat": "no-repeat"
+      },
+      "section-chart-tunnel": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-11": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-_m-35.png)",
+        "background-size": "100% auto",
+        "background-position": "center top",
+        "background-repeat": "no-repeat"
+      },
+      "section-chart-bridge": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-14": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-_m-35.png)",
+        "background-size": "100% auto",
+        "background-position": "center top",
+        "background-repeat": "no-repeat"
+      },
+      "section-vehicle-type": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-tunnel-stat-item-x-0": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-tunnel-stat-item-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-tunnel": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "vehicle-bridge-stat-item-x-0": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-bridge-stat-item-x-1": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "vehicle-bridge": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-17": {
+        "background-image": "url(../resources/images/bg-_m-35.png)",
+        "background-size": "100% auto",
+        "background-position": "center top",
+        "background-repeat": "no-repeat"
+      },
+      "el-stat-item-x-19": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-item-x-22": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-item-x-26": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-stat-item-x-29": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "section-prediction": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-33": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-_m-35.png)",
+        "background-size": "100% auto",
+        "background-position": "center top",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-total-flow",
+        "responsibility": "当日总流量（请按功能拆分）",
+        "elementCount": 6,
+        "title": "当日总流量",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 6,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 2
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "section-chart-tunnel",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "江阴靖江长江隧道",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 1,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "section-chart-bridge",
+        "responsibility": "图表/数据可视化区",
+        "elementCount": 1,
+        "title": "江阴大桥",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 1,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "section-vehicle-type",
+        "responsibility": "车型分布（请按功能拆分）",
+        "elementCount": 14,
+        "title": "车型分布",
+        "complexityScore": 40,
+        "complexityReasons": {
+          "elementCount": 14,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 3
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [
+          {
+            "type": "element-group",
+            "id": "section-vehicle-type-group1",
+            "name": "Group1",
+            "responsibility": "元素分组 1（高密度拆分）",
+            "reason": "R2: 元素密度拆分（总计14个元素）",
+            "props": [],
+            "emits": []
+          },
+          {
+            "type": "element-group",
+            "id": "section-vehicle-type-group2",
+            "name": "Group2",
+            "responsibility": "元素分组 2（高密度拆分）",
+            "reason": "R2: 元素密度拆分（总计14个元素）",
+            "props": [],
+            "emits": []
+          }
+        ],
+        "shouldSplitInternally": true
+      },
+      {
+        "id": "section-prediction",
+        "responsibility": "流量预测（请按功能拆分）",
+        "elementCount": 1,
+        "title": "流量预测",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 1,
+          "charts": 1,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      }
+    ],
+    "isForced": true,
+    "minFiles": 7,
+    "reason": "有效 sections=5 ≥ 3 或存在高复杂度 section → 强制拆分",
+    "internalSubcomponents": [
+      {
+        "type": "element-group",
+        "id": "section-vehicle-type-group1",
+        "name": "Group1",
+        "responsibility": "元素分组 1（高密度拆分）",
+        "reason": "R2: 元素密度拆分（总计14个元素）",
+        "props": [],
+        "emits": [],
+        "parentSectionId": "section-vehicle-type",
+        "parentSectionTitle": "车型分布"
+      },
+      {
+        "type": "element-group",
+        "id": "section-vehicle-type-group2",
+        "name": "Group2",
+        "responsibility": "元素分组 2（高密度拆分）",
+        "reason": "R2: 元素密度拆分（总计14个元素）",
+        "props": [],
+        "emits": [],
+        "parentSectionId": "section-vehicle-type",
+        "parentSectionTitle": "车型分布"
+      }
+    ]
+  }
+}

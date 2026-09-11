@@ -1,0 +1,32 @@
+// 主题变量与 mixin 定义
+// 仅定义变量与 mixin，不产出实际 class
+
+.theme-light() {
+  :root {
+    --color-primary: rgb(24, 255, 206);
+    --color-bg: rgb(0, 48, 50);
+    --color-text-base: #FFFFFF;
+    --color-text-secondary: rgba(255,255,255,0.6);
+    --color-emphasis: rgb(176, 123, 0);
+    --font-size-base: 14px;
+  }
+}
+
+.theme-dark() {
+  :root {
+    --color-primary: rgb(24, 255, 206);
+    --color-bg: rgb(0, 48, 50);
+    --color-text-base: #FFFFFF;
+    --color-text-secondary: rgba(255,255,255,0.6);
+    --color-emphasis: rgb(176, 123, 0);
+    --font-size-base: 14px;
+  }
+}
+
+.common() {
+  // 共享基础 mixin，可在此添加通用重置或排版规则
+  box-sizing: border-box;
+}
+
+// 默认调用深色主题
+.theme-dark();

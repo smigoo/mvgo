@@ -1,0 +1,133 @@
+// 流量监测组件主题变量
+// 定义浅色科技监测风的色彩、字体、圆角等token
+
+// Light主题变量
+.theme-light() {
+  :root {
+    /* [Style Refine] 背景色 #edf4fb */
+    --color-bg: #edf4fb;
+    /* [Style Refine] 基础文字色 #333333 */
+    --color-text-base: #333333;
+    --color-text-secondary: #666666;
+    /* [Style Refine] 主色 #1990ff */
+    --color-primary: #1990ff;
+    --color-primary-light: #5a7eff;
+    /* [Style Refine] 隧道数值色 #006ee3 */
+    --color-primary-dark: #006ee3;
+    --color-warning: #f5a623;
+    /* [Style Refine] 准确率色 #17c02e */
+    --color-success: #17c02e;
+    --color-info: #00cccc;
+    --color-border: #dddddd;
+    --color-border-light: #eeeeee;
+    --color-card-bg: #ffffff;
+    /* [Style Refine] 隧道数值色 #006ee3 */
+    --color-tunnel-value: #006ee3;
+    /* [Style Refine] 大桥数值色 #0c9dbe */
+    --color-bridge-value: #0c9dbe;
+    /* [Style Refine] 客车数值色 #1399ff */
+    --color-passenger: #1399ff;
+    /* [Style Refine] 货车数值色 #ff6a00 */
+    --color-truck: #ff6a00;
+    --color-bar-blue: #2f74d6;
+    --color-bar-cyan: #5bc0de;
+    /* [Style Refine] 实际流量线色 #3385ff */
+    --color-line-blue: #3385ff;
+    /* [Style Refine] 预测流量线色 #00cccc */
+    --color-line-cyan: #00cccc;
+    --font-size-base: 14px;
+    --font-size-small: 12px;
+    --font-size-large: 24px;
+    --font-size-xlarge: 28px;
+    --font-size-title: 16px;
+    --border-radius-base: 8px;
+    --border-radius-small: 4px;
+    --border-radius-round: 20px;
+    /* [Style Refine] 阴影 0px 4px 10px rgba(74, 117, 141, 0.25) */
+    --shadow-card: 0px 4px 10px rgba(74, 117, 141, 0.25);
+    --shadow-dropdown: 0 2px 8px rgba(0, 0, 0, 0.15);
+  }
+}
+
+// Dark主题变量（预留）
+.theme-dark() {
+  :root {
+    --color-bg: #1a2332;
+    --color-text-base: #e0e0e0;
+    --color-text-secondary: #999999;
+    --color-primary: #1990ff;
+    --color-primary-light: #5a7eff;
+    --color-primary-dark: #4db3ff;
+    --color-warning: #f5a623;
+    --color-success: #17c02e;
+    --color-info: #00cccc;
+    --color-border: #3a4a5c;
+    --color-border-light: #2a3a4c;
+    --color-card-bg: #243447;
+    --color-tunnel-value: #4db3ff;
+    --color-bridge-value: #36d7e8;
+    --color-passenger: #4db3ff;
+    --color-truck: #ff8c3a;
+    --color-bar-blue: #4a8ee0;
+    --color-bar-cyan: #7dd4e8;
+    --color-line-blue: #5a9eff;
+    --color-line-cyan: #33dddd;
+    --font-size-base: 14px;
+    --font-size-small: 12px;
+    --font-size-large: 24px;
+    --font-size-xlarge: 28px;
+    --font-size-title: 16px;
+    --border-radius-base: 8px;
+    --border-radius-small: 4px;
+    --border-radius-round: 20px;
+    --shadow-card: 0 4px 10px rgba(0, 0, 0, 0.4);
+    --shadow-dropdown: 0 2px 8px rgba(0, 0, 0, 0.5);
+  }
+}
+
+// 通用mixin
+.common() {
+  // Flex布局快捷方式
+  .flex-row() {
+    display: flex;
+    flex-direction: row;
+  }
+  
+  .flex-col() {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .flex-center() {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .flex-between() {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  
+  // 文本截断
+  .text-ellipsis() {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  
+  // 渐变文字
+  .gradient-text(@start, @end) {
+    background: linear-gradient(90deg, @start 0%, @end 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+}
+
+// 调用通用mixin
+.common();
+
+// 默认使用light主题
+.theme-light();

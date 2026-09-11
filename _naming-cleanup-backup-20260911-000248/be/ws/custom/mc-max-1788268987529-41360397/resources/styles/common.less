@@ -1,0 +1,361 @@
+// 微码组件业务样式文件
+// 所有 class 必须以 .c- 为前缀，引用 theme-vars.less 中的变量
+
+// 根容器（禁止设置背景、边框、圆角、阴影）
+.c-monitor-root {width: 100%;
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  font-size: var(--fontSize, 14px);
+
+// 区块容器
+}
+.c-monitor-section {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+// 区块标题
+.c-monitor-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.c-monitor-section-title {
+  font-size: calc(var(--fontSize, 14px) * 1.1429);
+  font-weight: 500;
+  color: #333333;
+  line-height: 1.5;
+}
+
+// ========================================
+// 当日总流量区块
+// ========================================
+
+.c-monitor-daily-total {
+  display: flex;
+  flex-direction: column;
+}
+
+.c-monitor-daily-total-section {
+  width: 100%;
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.c-monitor-daily-total-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+  margin-bottom: 12px;
+}
+
+.c-monitor-daily-total-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.c-monitor-daily-total-icon {
+  width: 18px;
+  height: 18px;
+  background: #1990ff;
+  transform: rotate(45deg);
+  flex-shrink: 0;
+}
+
+.c-monitor-daily-total-title-text {
+  font-size: calc(var(--fontSize, 14px) * 1.1429);
+  font-weight: 500;
+  color: #333333;
+}
+
+.c-monitor-daily-total-time-selector {
+  flex-shrink: 0;
+}
+
+.c-monitor-time-select {
+  width: 100px;
+}
+
+.c-monitor-daily-total-stats {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+  height: 91px;
+  padding: 0 32px;
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+  margin-bottom: 16px;
+}
+
+.c-monitor-stat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.c-monitor-stat-tunnel {
+  display: flex;
+  flex-direction: column;
+}
+
+.c-monitor-stat-bridge {
+  display: flex;
+  flex-direction: column;
+}
+
+.c-monitor-stat-label {
+  font-size: calc(var(--fontSize, 14px) * 1.1429);
+  color: #333333;
+  line-height: 1.5;
+}
+
+.c-monitor-stat-value {
+  font-size: calc(var(--fontSize, 14px) * 1.7143);
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.c-monitor-stat-value-tunnel {
+  color: #0c9dbe;
+}
+
+.c-monitor-stat-value-bridge {
+  color: #006fe3;
+}
+
+// 图表区块
+.c-monitor-chart-section {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  margin-bottom: 16px;
+}
+
+.c-monitor-chart-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.c-monitor-chart-icon {
+  width: 6px;
+  height: 6px;
+  background: #388dff;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.c-monitor-chart-title-text {
+  font-size: var(--fontSize, 14px);
+  color: #333333;
+  font-weight: 400;
+}
+
+.c-monitor-chart-container {
+  width: 100%;
+  height: 180px;
+  flex-shrink: 0;
+}
+
+// ========================================
+// 车型分布区块
+// ========================================
+
+.c-monitor-vehicle-type {
+  display: flex;
+  flex-direction: column;
+}
+
+.c-monitor-vehicle-type-section {
+  flex: 1 1 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.c-monitor-title-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.c-monitor-title-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.c-monitor-vehicle-type-body {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+
+.c-monitor-vehicle-card {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  min-height: 0;
+}
+
+.c-monitor-vehicle-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.c-monitor-vehicle-icon {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+}
+
+.c-monitor-vehicle-label {
+  font-size: calc(var(--fontSize, 14px) * 0.8571);
+  color: #666666;
+  line-height: 1.5;
+}
+
+.c-monitor-vehicle-value {
+  font-size: calc(var(--fontSize, 14px) * 1.2857);
+  font-weight: bold;
+  line-height: 1.2;
+}
+
+.c-monitor-vehicle-value-primary {
+  color: #1990ff;
+}
+
+.c-monitor-vehicle-value-warning {
+  color: #fa8c16;
+}
+
+// ========================================
+// 流量预测区块
+// ========================================
+
+.c-monitor-forecast {
+  display: flex;
+  flex-direction: column;
+}
+
+.c-monitor-forecast-section {
+  width: 100%;
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.c-monitor-forecast-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+  height: 32px;
+  margin-bottom: 12px;
+}
+
+.c-monitor-forecast-title-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.c-monitor-forecast-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.c-monitor-forecast-title {
+  font-size: calc(var(--fontSize, 14px) * 1.1429);
+  font-weight: 500;
+  color: #333333;
+  line-height: 24px;
+}
+
+.c-monitor-forecast-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.c-monitor-forecast-tabs {
+  display: flex;
+  gap: 2px;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 4px;
+  padding: 2px;
+}
+
+.c-monitor-forecast-tab-item {
+  padding: 4px 12px;
+  font-size: var(--fontSize, 14px);
+  color: #666666;
+  cursor: pointer;
+  border-radius: 2px;
+  transition: all 0.3s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.c-monitor-forecast-link {
+  font-size: var(--fontSize, 14px);
+  color: #1890ff;
+  text-decoration: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.c-monitor-forecast-body {
+  flex: 1;
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background-image: url(../images/bg-3525.png);
+  background-size: 100% auto;
+  background-position: center top;
+  background-repeat: no-repeat;
+}
+
+.c-monitor-forecast-chart-wrapper {
+  min-height: 0;
+  min-width: 0;
+}
+
+.c-monitor-forecast-chart-container {
+  width: 100%;
+  height: 100%;
+}
+
+.c-monitor-forecast-accuracy-row {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding: 8px 0;
+  flex-shrink: 0;
+}
+
+.c-monitor-forecast-accuracy-item {
+  font-size: calc(var(--fontSize, 14px) * 0.8571);
+  color: #666666;
+}

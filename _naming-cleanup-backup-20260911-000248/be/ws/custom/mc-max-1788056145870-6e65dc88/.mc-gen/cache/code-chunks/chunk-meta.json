@@ -1,0 +1,24 @@
+{
+  "completed": [
+    "1-declare.json",
+    "2-package/index.vue",
+    "3-package/index.vue",
+    "6-package/components/HeaderControls.vue",
+    "7-package/components/ChartSection.vue",
+    "8-resources/styles/themes/theme-vars.less",
+    "9-resources/styles/common.less",
+    "6-package/components/EnvTabBar.vue",
+    "5-package/components/HeaderControls.vue"
+  ],
+  "total": 6,
+  "updatedAt": 1788056865533,
+  "files": {
+    "declare.json": "1-declare.json",
+    "package/index.vue": "3-package_index.vue",
+    "package/components/HeaderControls.vue": "5-package_components_HeaderControls.vue",
+    "package/components/ChartSection.vue": "7-package_components_ChartSection.vue",
+    "resources/styles/themes/theme-vars.less": "8-resources_styles_themes_theme-vars.less",
+    "resources/styles/common.less": "9-resources_styles_common.less",
+    "package/components/EnvTabBar.vue": "6-package_components_EnvTabBar.vue"
+  }
+}

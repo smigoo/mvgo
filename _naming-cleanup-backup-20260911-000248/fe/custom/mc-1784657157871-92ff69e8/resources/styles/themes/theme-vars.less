@@ -1,0 +1,48 @@
+// 主题颜色变量定义
+
+.common() {
+  // 品牌色
+  --em-primary: rgba(0, 240, 255, 1);
+  --em-cyan-glow: rgba(14, 205, 190, 1);
+  --em-text-white: rgba(255, 255, 255, 1);
+  
+  // 背景色
+  --em-bg-dark-base: rgba(5, 49, 51, 1);
+  --em-bg-dark-gradient-start: rgba(6, 70, 56, 1);
+  --em-bg-dark-gradient-end: rgba(14, 107, 85, 1);
+  
+  // 边框色
+  --em-border-dark: rgba(8, 99, 99, 1);
+  --em-border-cyan: rgba(24, 255, 206, 1);
+  
+  // 发光色
+  --em-glow-green: rgba(4, 254, 197, 1);
+  --em-glow-blue: rgba(48, 245, 255, 1);
+  --em-glow-cyan: rgba(53, 255, 123, 1);
+  
+  // 文本色
+  --em-text-label: rgba(255, 255, 255, 0.7);
+  --em-text-value: rgba(0, 240, 255, 1);
+  --em-text-unit: rgba(255, 255, 255, 0.6);
+}
+
+.theme-dark() {
+  .common();
+  
+  // 深色主题特有变量
+  --em-bg-overlay: rgba(0, 0, 0, 0.3);
+  --em-shadow-dark: rgba(0, 0, 0, 0.5);
+}
+
+.theme-light() {
+  .common();
+  
+  // 浅色主题（预留，当前项目使用深色）
+  --em-bg-light-base: rgba(240, 248, 255, 1);
+  --em-text-dark: rgba(0, 0, 0, 0.85);
+}
+
+// 默认使用深色主题（与 backgroundBrightness=dark 一致）
+:root {
+  .theme-dark();
+}

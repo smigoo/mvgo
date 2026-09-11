@@ -23,6 +23,8 @@
    - ❌ 硬编码静态坐标点（如 `points="0,92 40,70 80,78 ..."`）模拟数据走势
    - ❌ 用纯文本/CSS 画柱状或饼图
 8. **坐标轴刻度/标签必须还原（axisLabel）**：`xAxis`/`yAxis` 的 `axisLabel.show` 必须为 `true` 且渲染**真实刻度**——Y 轴数值（如 `40/30/20/10/0`）、X 轴时间/类目（如 `2/4/.../24`）；`axisTick.show` 必须为 `true`；`data` 必须取自 Figma 节点树的真实文本，**禁止 `data: []` 空数组**；需单位时用 `name`（如 `name: '时'`）。坐标轴标签缺失（空轴/无刻度数字）即判定不合格。
+9. **坐标轴必须用数组格式（xAxis/yAxis 数组）**：`xAxis`/`yAxis` 一律写 `xAxis: [{ ... }]` 数组格式，**禁止对象格式 `xAxis: { ... }`**（部分 ECharts 版本会报 `xAxis "0" not found`）；`series` 中 cartesian 系列（bar/line/scatter 等）**必须显式写 `xAxisIndex: 0, yAxisIndex: 0`**，且索引为数字**禁止字符串 `'0'`**。
+10. **禁止 LESS 变量泄漏进 JS formatter**：`tooltip.formatter` / `axisLabel.formatter` 等 JS 回调返回的内联 HTML `style` 中，**禁止出现 `@fontSize` 等 LESS 变量**（浏览器无法解析 `calc(@fontSize * ...)` 会静默丢字号）；需要用字体大小时写 `calc(var(--fontSize, 14px) * N)` 或直接硬编码 px。
 
 参考示例：
 ```vue
@@ -47,20 +49,22 @@ const updateChart = () => {
     tooltip: { trigger: 'axis' },
     grid: { containLabel: true },
     // ⚠️ data 必须取自 Figma 节点树的真实刻度/类目文本，禁止留空 []
-    xAxis: {
+    // 🔴🔴 xAxis/yAxis 必须用【数组】格式（非对象），否则部分 ECharts 版本会报 `xAxis "0" not found`
+    xAxis: [{
       type: 'category',
       data: ['2', '4', '6', '8', '10', '12', '14', '16', '18', '20', '22', '24'], // 时间刻度，按设计稿
       name: '时',                // 单位标识，按设计稿
       axisLabel: { show: true }, // 🔴 必须显示刻度标签
       axisTick: { show: true },
-    },
-    yAxis: {
+    }],
+    yAxis: [{
       type: 'value',
       min: 0, max: 50,          // 按设计稿真实量程
       axisLabel: { show: true }, // 🔴 必须显示数值刻度（40/30/20/10/0 等）
       axisTick: { show: true },
-    },
-    series: [{ type: 'line', data: [] }]
+    }],
+    // 🔴 柱状图/折线图/散点图等 cartesian 系列【必须】显式写 xAxisIndex: 0, yAxisIndex: 0
+    series: [{ type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: [] }]
   }
   chart.setOption(option, true)
 }

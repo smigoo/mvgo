@@ -1,0 +1,176 @@
+// 微码组件业务样式
+// ⚠️ 所有 class 必须以 .c- 为前缀
+// ⚠️ 字体尺寸必须使用 @fontSize 变量或 calc(@fontSize * 系数)
+// ⚠️ elementStyleMap 有明确值的属性必须直接写精确值，禁止用主题变量覆盖
+
+@import './themes/theme-vars.less';
+
+// 根容器
+.c-env-monitor-root {width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  font-size: var(--fontSize, 14px);
+
+// Header Tabs 区域
+}
+.c-env-monitor-header-tabs {
+  width: 100%;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  height: 32px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.c-env-monitor-tabs-list {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 27px;
+  overflow: hidden;
+  position: relative;
+}
+
+.c-env-monitor-tab-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  height: 100%;
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.2s;
+
+  &--active {
+    background: linear-gradient(90deg, #1099b1 0%, #038fff 100%);
+    border: 0.6px solid rgba(255, 255, 255, 1);
+    border-radius: 3px;
+  }
+}
+
+.c-env-monitor-tab-text {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: var(--fontSize, 14px);
+  font-weight: 500;
+  line-height: 12px;
+  color: #2c9bea;
+  white-space: nowrap;
+
+  &--active {
+    color: #ffffff;
+    text-shadow: 0px 0.6px 0px rgba(0, 111, 227, 1);
+  }
+}
+
+.c-env-monitor-tabs-icons {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.c-env-monitor-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:hover {
+    opacity: 0.8;
+  }
+}
+
+.c-env-monitor-icon-img {
+  width: 24px;
+  height: 24px;
+  display: block;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+// Chart Area 区域
+.c-env-monitor-chart-area {
+  flex: 145 1 0;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.c-env-monitor-chart-body {
+  width: 100%;
+  flex: 1 1 0;
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+  display: flex;
+  position: relative;
+  padding: 12px;
+  box-sizing: border-box;
+}
+
+.c-env-monitor-chart-container {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+}
+
+// Stat Display 区域
+.c-env-monitor-stat-display {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 16px;
+  flex-shrink: 0;
+}
+
+.c-env-monitor-stat-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.c-env-monitor-stat-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(15, 205, 125, 1);
+  flex-shrink: 0;
+}
+
+.c-env-monitor-stat-dot-secondary {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(82, 196, 26, 1);
+  flex-shrink: 0;
+}
+
+.c-env-monitor-stat-label {
+  font-size: calc(var(--fontSize, 14px) * 0.857);
+  color: rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
+}
+
+.c-env-monitor-stat-value {
+  font-size: calc(var(--fontSize, 14px) * 2.857);
+  font-weight: bold;
+  color: rgba(0, 0, 0, 0.85);
+  line-height: 1.2;
+}

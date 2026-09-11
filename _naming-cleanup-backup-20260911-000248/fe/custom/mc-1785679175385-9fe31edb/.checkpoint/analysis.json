@@ -1,0 +1,129 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 65,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "生成了组件面板标题（header-title section）。根据微码核心规范，组件标题由 base-panel 通过 declare.json 的 componentName 自动显示，禁止在组件内容中重复生成标题栏和标题文字。",
+        "suggestion": "删除 layout.sections[0] (header-title) 整个节点。将 chart-control-section 作为第一个 section，并确保其 headerRelation 正确。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[0]",
+        "message": "图表容器 (co-chart) 使用了固定宽度 (width: 380px)。根据宽度自适应约束，容器布局禁止使用固定 px 宽度，必须自适应容器宽度。",
+        "suggestion": "将 co-chart 的 width 修改为 '100%'，保留 height: '113px'。确保图表外层 flex 子项设置 min-width: 0 以防止内容挤压溢出。"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "charts[0].axes",
+        "message": "Y轴标签识别为'辆'，但图例为'CO浓度'，存在语义不一致。虽然 notes 中已提示，但布局结构中未作修正。",
+        "suggestion": "在生成图表配置时，需结合业务语义将 Y 轴单位修正为 CO 浓度的标准单位（如 mg/m³ 或 ppm），而不是保留错误的 '辆'。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[1].body.children",
+        "message": "嵌套深度达到 5 层 (layout -> sections -> section -> body -> children -> child)，略高于建议的 ≤3 层。",
+        "suggestion": "如果微码框架允许，可考虑将 body.children 扁平化；若此结构为框架强制要求则保持现状，但需注意避免在子组件中继续增加无意义的嵌套。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "sourceImage",
+        "message": "sourceImage 的 size, mtimeMs, sha1 均为 0 或空字符串，可能导致资源校验失败或缓存机制异常。",
+        "suggestion": "确保预览图资源正确生成，并填充真实的 size、mtimeMs 和 sha1 校验值。"
+      }
+    ],
+    "recommendations": [
+      "严格遵循'禁止生成面板标题'规范，移除所有由 base-panel 托管的 UI 元素（如外层标题、边框、背景、阴影等），只保留业务内容区。",
+      "所有图表和布局容器必须使用百分比宽度（width: 100%）或 flex 布局，严禁使用固定 px 宽度，以保证组件在不同分辨率下的自适应能力。",
+      "在图表配置生成阶段，需结合上下文语义修正明显的识别错误（如将 CO 浓度的 Y 轴单位从 '辆' 修正为正确的浓度单位）。",
+      "确保资源文件（如预览图）的元数据（size, sha1）正确计算和填充，以支持后续的增量更新和缓存机制。"
+    ],
+    "summary": "该布局结构整体区域划分较为清晰，图表和交互元素（如 Tab 切换、视图图标）识别基本准确。但存在两个严重的规范违反：一是重复生成了组件面板标题，违反了 base-panel 托管原则；二是图表容器使用了固定宽度，违反了宽度自适应约束。此外，Y轴单位识别存在语义错误。建议修复上述核心问题后重新提交审查。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名），在css-vars.js和theme-vars.less中配置",
+      "--colorBg": "#edf4fb",
+      "--colorPrimary": "#038fff",
+      "--colorSecondary": "#1099b1",
+      "--colorDanger": "#f53f3f",
+      "--colorSuccess": "#52c41a",
+      "--colorTextBase": "#333333",
+      "--fontSize": "14px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射，在theme-vars.less的.common() mixin中映射CSS变量",
+      "@colorBg": "var(--colorBg)",
+      "@colorPrimary": "var(--colorPrimary)",
+      "@colorSecondary": "var(--colorSecondary)",
+      "@colorDanger": "var(--colorDanger)",
+      "@colorSuccess": "var(--colorSuccess)",
+      "@colorTextBase": "var(--colorTextBase)",
+      "@fontSize": "var(--fontSize)"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类，统一写在common.less中，使用注释分段",
+      ".monitor-container": {
+        "background": "var(--colorBg)",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)",
+        "width": "100%",
+        "height": "100%",
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      ".tab-active": {
+        "background": "linear-gradient(135deg, var(--colorSecondary), var(--colorPrimary))",
+        "color": "#ffffff",
+        "border-radius": "4px",
+        "font-weight": "500"
+      },
+      ".warning-line": {
+        "border-top": "2px dashed var(--colorDanger)",
+        "position": "relative",
+        "width": "100%"
+      },
+      ".chart-area-success": {
+        "fill": "rgba(82, 196, 26, 0.15)",
+        "stroke": "var(--colorSuccess)",
+        "stroke-width": "2px"
+      },
+      ".chart-line-danger": {
+        "stroke": "var(--colorDanger)",
+        "stroke-width": "2px",
+        "stroke-dasharray": "6, 4"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "背景色 #edf4fb 映射为 --colorBg，作为浅色科技风的基础底色",
+      "主色调 #038fff 映射为 --colorPrimary，辅助科技蓝 #1099b1 映射为 --colorSecondary",
+      "预警红色 #f53f3f 映射为 --colorDanger，用于红色虚线预警线及图表危险线",
+      "正常绿色 #52c41a 映射为 --colorSuccess，用于绿色CO浓度曲线及面积填充",
+      "Tab选中态使用 --colorSecondary 到 --colorPrimary 的 135deg 渐变背景",
+      "红色预警线(值30)通过 .chart-line-danger 类实现虚线样式 (stroke-dasharray: 6, 4)"
+    ],
+    "elementStyleMap": {
+      "header-title": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "chart-control-section": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "co-chart": {
+        "width": "380px",
+        "height": "113px",
+        "background": "transparent"
+      }
+    }
+  }
+}

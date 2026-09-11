@@ -1,0 +1,17 @@
+{
+  "componentId": "mc-lite-1785900468356-f69b4a30",
+  "componentName": "mc-test-chart-echarts",
+  "panelType": "default-panel",
+  "defaultTheme": "dark",
+  "size": {
+    "width": 440,
+    "height": 202
+  },
+  "businessEvents": [],
+  "businessStatuses": [],
+  "dataSources": [],
+  "formSources": [],
+  "layoutConfig": {},
+  "themeConfig": {},
+  "businessConfig": {}
+}

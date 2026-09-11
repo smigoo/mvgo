@@ -1,0 +1,344 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 75,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "标题“环境监测”同时出现在header.title和body.children，会重复渲染。",
+        "suggestion": "以header.title为唯一标题源，body仅保留背景或装饰。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body.backgroundImage",
+        "message": "bg-7890.png 注释称为整体背景，但仅挂在标题区body，覆盖范围可能不足。",
+        "suggestion": "将整体背景图提升至根布局或外层容器，标题区只保留局部装饰。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[0].children[1]",
+        "message": "视图切换图标位于内容区Tab行，未作为标题栏控件或声明slotCandidate。",
+        "suggestion": "若为面板右上角控件，应映射至header.controls或title-right插槽。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[1].body.children[0]",
+        "message": "Tab栏、图标组及子节点嵌套层级过深，接近或超过3层建议值。",
+        "suggestion": "合并容器或扁平化children，减少纯布局包裹层。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "charts[0].notes",
+        "message": "Y轴残留“辆”单位，与CO浓度语义不符。",
+        "suggestion": "删除残留文案，并显式设置浓度单位。"
+      }
+    ],
+    "recommendations": [
+      "标题与顶部控件按header/body插槽分离，避免重复与混层。",
+      "整体背景资源提升至根容器，标题区仅保留局部装饰。",
+      "清理图表残留单位并显式补充系列或单位信息。"
+    ],
+    "summary": "结构总体清晰，但存在标题重复、背景图挂载层级不当、图标控件未插槽化、局部嵌套过深及图表单位残留，需按规范收敛。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）- 浅色科技监测风",
+      "--colorPrimary": "#559eff",
+      "--colorPrimaryActive": "#559eff",
+      "--colorPrimaryBg": "rgba(85, 158, 255, 0.08)",
+      "--colorPrimaryBgHover": "rgba(85, 158, 255, 0.16)",
+      "--colorBg": "#edf4fb",
+      "--colorCardBg": "#ffffff",
+      "--colorTextBase": "#1d2129",
+      "--colorTextSecondary": "#4e5969",
+      "--colorWarning": "#f53f3f",
+      "--colorWarningBg": "rgba(245, 63, 63, 0.1)",
+      "--colorSuccess": "#52c41a",
+      "--colorSuccessBg": "rgba(82, 196, 26, 0.1)",
+      "--colorBorder": "rgba(85, 158, 255, 0.2)",
+      "--fontSize": "14px",
+      "--fontSizeSm": "12px",
+      "--borderRadius": "4px",
+      "--borderRadiusCapsule": "999px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射（theme-vars.less中通过.common()映射）",
+      "@color-primary": "#559eff",
+      "@color-primary-active": "#559eff",
+      "@color-primary-bg": "rgba(85, 158, 255, 0.08)",
+      "@color-primary-bg-hover": "rgba(85, 158, 255, 0.16)",
+      "@color-bg": "#edf4fb",
+      "@color-card-bg": "#ffffff",
+      "@color-text-base": "#1d2129",
+      "@color-text-secondary": "#4e5969",
+      "@color-warning": "#f53f3f",
+      "@color-warning-bg": "rgba(245, 63, 63, 0.1)",
+      "@color-success": "#52c41a",
+      "@color-success-bg": "rgba(82, 196, 26, 0.1)",
+      "@color-border": "rgba(85, 158, 255, 0.2)",
+      "@font-size-base": "14px",
+      "@font-size-sm": "12px",
+      "@border-radius-base": "4px",
+      "@border-radius-capsule": "999px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类（写入common.less，使用var() + Less变量回退）",
+      ".monitor-container": {
+        "width": "100%",
+        "height": "100%",
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "1em",
+        "background": "#edf4fb",
+        "font-size": "var(--fontSize, 14px)",
+        "color": "var(--colorTextBase, #1d2129)",
+        "box-sizing": "border-box"
+      },
+      ".monitor-card": {
+        "background": "var(--colorCardBg, #ffffff)",
+        "border": "1px solid rgba(85, 158, 255, 0.2)",
+        "border-radius": "var(--borderRadius, 4px)",
+        "box-shadow": "0 2px 8px rgba(85, 158, 255, 0.08)",
+        "padding": "1em"
+      },
+      ".monitor-tabs": {
+        "display": "flex",
+        "gap": "0.5em",
+        "padding": "0.25em",
+        "background": "rgba(85, 158, 255, 0.08)",
+        "border-radius": "999px"
+      },
+      ".monitor-tab": {
+        "padding": "0.35em 1.2em",
+        "border-radius": "999px",
+        "font-size": "var(--fontSize, 14px)",
+        "color": "var(--colorTextSecondary, #4e5969)",
+        "cursor": "pointer",
+        "transition": "all 0.25s ease",
+        "user-select": "none"
+      },
+      ".monitor-tab--active": {
+        "background": "#559eff",
+        "color": "#ffffff",
+        "font-weight": "500",
+        "box-shadow": "0 2px 8px rgba(85, 158, 255, 0.35)"
+      },
+      ".warning-line": {
+        "comment": "红色预警线（图表阈值线DOM兜底/图例示意）",
+        "height": "0",
+        "border-top": "1px dashed #f53f3f"
+      },
+      ".warning-line-label": {
+        "color": "#f53f3f",
+        "font-size": "var(--fontSizeSm, 12px)",
+        "background": "rgba(245, 63, 63, 0.1)",
+        "padding": "0 0.4em",
+        "border-radius": "2px"
+      },
+      ".chart-area-fill": {
+        "comment": "图表绿色面积填充（DOM兜底渐变，ECharts中同值配置areaStyle）",
+        "background": "linear-gradient(180deg, rgba(82, 196, 26, 0.25) 0%, rgba(82, 196, 26, 0.02) 100%)"
+      },
+      ".status-tag--success": {
+        "color": "#52c41a",
+        "background": "rgba(82, 196, 26, 0.1)",
+        "border": "1px solid rgba(82, 196, 26, 0.3)",
+        "border-radius": "var(--borderRadius, 4px)",
+        "padding": "0.1em 0.6em",
+        "font-size": "var(--fontSizeSm, 12px)"
+      },
+      ".status-tag--warning": {
+        "color": "#f53f3f",
+        "background": "rgba(245, 63, 63, 0.1)",
+        "border": "1px solid rgba(245, 63, 63, 0.3)",
+        "border-radius": "var(--borderRadius, 4px)",
+        "padding": "0.1em 0.6em",
+        "font-size": "var(--fontSizeSm, 12px)"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色 #559eff 映射为 --colorPrimary/@color-primary，用于一氧化碳Tab高亮、主按钮、边框强调",
+      "背景 #edf4fb 映射为 --colorBg/@color-bg，容器背景直接落地 Figma 字面量值，避免关键可见背景只依赖 CSS 变量",
+      "预警红 #f53f3f 映射为 --colorWarning，用于红色预警线（ECharts markLine 建议配置 color:'#f53f3f' + lineStyle.type:'dashed'）及异常状态标签",
+      "成功绿 #52c41a 映射为 --colorSuccess，图表面积填充采用 rgba(82,196,26,0.25→0.02) 纵向渐变，ECharts areaStyle 同步该色值",
+      "Tab栏胶囊背景通过 .monitor-tabs（半透明蓝底）+ .monitor-tab--active（实心蓝+白色文字+投影）组合实现，圆角统一 999px",
+      "浅色主题文字色 #1d2129/#4e5969 为基于浅色背景的合理推断值，设计稿未显式提供，已映射为 --colorTextBase/--colorTextSecondary 便于平台侧覆盖",
+      "装饰与强调元素均不硬编码颜色，全部通过 var(--xxx, @fallback) 引用，满足三层默认值兜底（Less层 .theme-light() / declare.json default:'light' / JS层 fallback）"
+    ],
+    "elementStyleMap": {
+      "section-header": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      },
+      "section-content": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "tabs-list": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "action-icons": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "row-tabs-icons": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center",
+        "justify-content": "space-between"
+      },
+      "chart-container-annotation-line-预警线-3": {
+        "color": "#f53f3f"
+      },
+      "el-annotation-line-预警线-18": {
+        "color": "#f53f3f"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-header",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 1,
+        "title": "环境监测",
+        "complexityScore": 0,
+        "complexityReasons": {
+          "elementCount": 1,
+          "charts": 0,
+          "interactions": 0,
+          "maxDepth": 1
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [],
+        "shouldSplitInternally": false
+      },
+      {
+        "id": "section-content",
+        "responsibility": "主内容区",
+        "elementCount": 14,
+        "title": "监测内容区",
+        "complexityScore": 80,
+        "complexityReasons": {
+          "elementCount": 14,
+          "charts": 2,
+          "interactions": 2,
+          "maxDepth": 3
+        },
+        "layoutMetadata": {
+          "direction": "column",
+          "alignItems": "flex-start",
+          "justifyContent": "flex-start",
+          "gap": 0,
+          "height": 0,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "internalSubcomponents": [
+          {
+            "type": "chart-component",
+            "id": "chart-1",
+            "name": "图表视图",
+            "responsibility": "图表组件：图表视图",
+            "reason": "R1: 图表隔离策略",
+            "props": [
+              "chartData",
+              "chartConfig"
+            ],
+            "emits": [
+              "legendClick",
+              "dataZoom"
+            ]
+          },
+          {
+            "type": "chart-component",
+            "id": "chart-container",
+            "name": "浓度趋势图表",
+            "responsibility": "图表组件：浓度趋势图表",
+            "reason": "R1: 图表隔离策略",
+            "props": [
+              "chartData",
+              "chartConfig"
+            ],
+            "emits": [
+              "legendClick",
+              "dataZoom"
+            ]
+          }
+        ],
+        "shouldSplitInternally": true
+      }
+    ],
+    "isForced": true,
+    "minFiles": 4,
+    "reason": "有效 sections=2 ≥ 3 或存在高复杂度 section → 强制拆分",
+    "internalSubcomponents": [
+      {
+        "type": "chart-component",
+        "id": "chart-1",
+        "name": "图表视图",
+        "responsibility": "图表组件：图表视图",
+        "reason": "R1: 图表隔离策略",
+        "props": [
+          "chartData",
+          "chartConfig"
+        ],
+        "emits": [
+          "legendClick",
+          "dataZoom"
+        ],
+        "parentSectionId": "section-content",
+        "parentSectionTitle": "监测内容区"
+      },
+      {
+        "type": "chart-component",
+        "id": "chart-container",
+        "name": "浓度趋势图表",
+        "responsibility": "图表组件：浓度趋势图表",
+        "reason": "R1: 图表隔离策略",
+        "props": [
+          "chartData",
+          "chartConfig"
+        ],
+        "emits": [
+          "legendClick",
+          "dataZoom"
+        ],
+        "parentSectionId": "section-content",
+        "parentSectionTitle": "监测内容区"
+      }
+    ]
+  }
+}

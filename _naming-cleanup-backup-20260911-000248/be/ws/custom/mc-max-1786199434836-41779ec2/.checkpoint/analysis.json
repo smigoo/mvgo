@@ -1,0 +1,189 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 72,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[0]",
+        "message": "图表容器设置了固定宽度 width: 380，严重违反了微码规范中‘容器布局禁止固定宽度’的强制规则（🔴），会导致组件无法自适应父容器，在不同屏幕尺寸下可能溢出或留白。",
+        "suggestion": "将 width: 380 修改为 width: 100% 或使用 flex: 1 进行自适应布局。高度可保留固定值（如 height: 110）或改为 minHeight，并确保外层容器设置 min-width: 0 和 overflow: hidden。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[0].body & layout.sections[1].body",
+        "message": "两个相邻的 section 都设置了完全相同的背景图 (bg-7890.png)，会导致背景图在 DOM 中重复渲染，可能产生视觉割裂、拼接缝隙以及不必要的性能开销。",
+        "suggestion": "将背景图提升到组件根容器（layout 级别）或最外层包裹 div 中，作为整个组件的统一背景，并移除各个 section 内部的重复 backgroundImage 设置。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[0].children[0]",
+        "message": "Y轴单位被识别为‘辆’，但当前组件是‘环境监测’（CO浓度），单位明显识别错误，不符合业务逻辑（可能是混淆了交通流量监测组件的数据）。",
+        "suggestion": "修正 Y 轴单位为 CO 浓度的标准单位（如 ppm 或 mg/m³），或在代码生成前根据实际设计稿重新核对坐标轴数据。"
+      },
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[0].body.children[1].children[1]",
+        "message": "为了 Badge 的相对定位增加了一层 icon-group，导致局部嵌套深度达到 5 层，增加了不必要的 DOM 节点，略微影响可维护性。",
+        "suggestion": "在代码生成时，可直接在父级 view-icons 或列表图标本身使用 position: relative 来承载 Badge，从而减少一层 DOM 嵌套。"
+      },
+      {
+        "level": "info",
+        "type": "structure",
+        "location": "layout.sections[1].body.children[1]",
+        "message": "图例 (legend) 作为独立 DOM 与 chart-container 平级，需确保在代码生成时隐藏 ECharts 内置图例，避免图例重复显示。",
+        "suggestion": "在生成 ECharts 配置时，确保设置 legend: { show: false }，并通过自定义 DOM 实现图例的点击联动交互（遵循微码图例交互约束）。"
+      }
+    ],
+    "recommendations": [
+      "移除所有容器的固定 px 宽度，全面采用 flex 布局或百分比宽度，确保组件在不同屏幕尺寸下的自适应能力。",
+      "统一背景图管理，将重复的背景图提升至组件根节点，避免多区块重复渲染导致的性能浪费和视觉瑕疵。",
+      "在代码生成阶段，严格校验业务数据（如坐标轴单位），避免将其他组件（如交通流量）的数据特征错误迁移到当前环境监测组件中。",
+      "确保 Tab 切换和自定义图例在代码实现时具备完整的数据联动和状态管理，遵循微码交互规范（Tab 切换必须更新图表数据，图例点击必须联动 ECharts）。"
+    ],
+    "summary": "布局结构整体清晰，区域划分合理，符合微码组件的基本层级规范，且正确避免了生成面板标题等冗余元素。但存在一处违反‘禁止固定宽度’的强规则问题，且背景图重复设置、Y轴单位识别错误。建议修复固定宽度问题，优化背景图层级，并修正业务数据单位，以确保生成代码的自适应性和业务准确性。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorBg": "#edf4fb",
+      "--colorPrimary": "#1890ff",
+      "--colorSuccess": "#2fc25b",
+      "--colorDanger": "#f53f3f",
+      "--colorTextSecondary": "#8c8c8c",
+      "--fontSize": "14px",
+      "--borderRadius": "4px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-bg": "#edf4fb",
+      "@color-primary": "#1890ff",
+      "@color-success": "#2fc25b",
+      "@color-danger": "#f53f3f",
+      "@color-text-secondary": "#8c8c8c",
+      "@font-size-base": "14px",
+      "@border-radius-base": "4px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "width": "100%",
+        "height": "100%",
+        "background-color": "#edf4fb",
+        "font-size": "var(--fontSize)"
+      },
+      ".tab-bar": {
+        "display": "flex",
+        "align-items": "center",
+        "position": "relative",
+        "padding": "0 16px"
+      },
+      ".tab-bar-arrow": {
+        "position": "absolute",
+        "left": "0",
+        "top": "0",
+        "bottom": "0",
+        "width": "24px",
+        "background": "var(--colorPrimary)",
+        "clip-path": "polygon(0 0, 100% 0, 75% 100%, 0 100%)"
+      },
+      ".tab-item": {
+        "padding": "8px 16px",
+        "color": "var(--colorTextSecondary)",
+        "cursor": "pointer",
+        "transition": "color 0.3s",
+        "position": "relative",
+        "z-index": "1"
+      },
+      ".tab-item.active": {
+        "color": "var(--colorPrimary)",
+        "font-weight": "bold",
+        "border-bottom": "2px solid var(--colorPrimary)"
+      },
+      ".chart-container": {
+        "flex": "1",
+        "position": "relative",
+        "padding": "16px"
+      },
+      ".chart-grid-line": {
+        "border-bottom": "1px dashed rgba(140, 140, 140, 0.2)"
+      },
+      ".warning-line": {
+        "border-bottom": "2px dashed var(--colorDanger)"
+      },
+      ".badge": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "min-width": "20px",
+        "height": "20px",
+        "padding": "0 6px",
+        "background-color": "var(--colorDanger)",
+        "color": "#ffffff",
+        "font-size": "12px",
+        "border-radius": "10px",
+        "font-weight": "bold",
+        "line-height": "1"
+      }
+    },
+    "tokenCoverage": 0.92,
+    "mappingNotes": [
+      "背景色 #edf4fb 映射为 --colorBg，容器背景应优先直接落地为 Figma 字面量值，避免关键可见背景只依赖 CSS 变量",
+      "主色 #1890ff 映射为 --colorPrimary，用于选中Tab蓝色高亮及主要交互元素",
+      "预警色 #f53f3f 映射为 --colorDanger，用于红色预警线和红色Badge数字",
+      "成功色 #2fc25b 映射为 --colorSuccess，用于正常状态指示",
+      "辅助色 #8c8c8c 映射为 --colorTextSecondary，用于次要文本和图表网格线",
+      "Tab栏左侧箭头形状背景通过 .tab-bar-arrow 独立类结合 clip-path 实现，避免伪元素在JSON中无法序列化的问题",
+      "图表网格线和预警线使用 CSS border-bottom 模拟，颜色引用对应主题变量，若使用ECharts/SVG可直接取对应的Less变量"
+    ],
+    "elementStyleMap": {
+      "section-tabs-controls": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tab-list": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "view-icons": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "align-items": "center",
+        "justify-content": "space-between",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "section-chart": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-14-chart-container-x-0-warning-line-x-3": {
+        "color": "#f53f3f"
+      },
+      "el-el-x-14": {
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-chart-container-x-15-warning-line-x-3": {
+        "color": "#f53f3f"
+      },
+      "el-warning-line-x-19": {
+        "color": "#f53f3f"
+      }
+    }
+  }
+}

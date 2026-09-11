@@ -1,0 +1,82 @@
+.common() {
+@color-primary: #1990ff;
+  @color-danger: #f53f3f;
+  @color-success: #08a3a5;
+  @color-text-primary: #333333;
+  @color-bg-base: #edf4fb;
+  
+  @color-total: #1990FF;
+  @color-online: #52C41A;
+  @color-abnormal: #FAAD14;
+  @color-rate: #13C2C2;
+  @color-warning-tag: #FAAD14;
+  @system-panel-bg: rgba(0, 0, 0, 0.45);
+  @system-panel-title: #FFFFFF;
+  @color-rate-low: #FF4D4F;
+  @color-rate-normal: #52C41A;
+
+  @text-color: #333333;
+  @text-color-secondary: #666666;
+  @text-color-light: #999999;
+  
+  @border-color: #e8e8e8;
+  
+  @bg-color: #ffffff;
+  @bg-color-light: #f5f7fa;
+  @click: inherit; // 自动添加
+}
+
+.theme-light() {
+  @color-primary: #1990ff;
+  @color-danger: #f53f3f;
+  @color-success: #08a3a5;
+  @color-text-primary: #333333;
+  @color-bg-base: #edf4fb;
+  
+  @color-total: #1990FF;
+  @color-online: #52C41A;
+  @color-abnormal: #FAAD14;
+  @color-rate: #13C2C2;
+  @color-warning-tag: #FAAD14;
+  @system-panel-bg: rgba(0, 0, 0, 0.45);
+  @system-panel-title: #FFFFFF;
+  @color-rate-low: #FF4D4F;
+  @color-rate-normal: #52C41A;
+
+  @text-color: #333333;
+  @text-color-secondary: #666666;
+  @text-color-light: #999999;
+  @border-color: #e8e8e8;
+  @bg-color: #ffffff;
+  @bg-color-light: #f5f7fa;
+}
+
+.theme-dark() {
+  @color-primary: #1990ff;
+  @color-danger: #f53f3f;
+  @color-success: #08a3a5;
+  @color-text-primary: #ffffff;
+  @color-bg-base: #1a2332;
+  
+  @color-total: #1990FF;
+  @color-online: #52C41A;
+  @color-abnormal: #FAAD14;
+  @color-rate: #13C2C2;
+  @color-warning-tag: #FAAD14;
+  @system-panel-bg: rgba(0, 0, 0, 0.65);
+  @system-panel-title: #FFFFFF;
+  @color-rate-low: #FF4D4F;
+  @color-rate-normal: #52C41A;
+
+  @text-color: #ffffff;
+  @text-color-secondary: #cccccc;
+  @text-color-light: #999999;
+  @border-color: #303a4a;
+  @bg-color: #1f2937;
+  @bg-color-light: #2d3748;
+}
+
+:root {
+  .theme-light();
+  .common();
+}

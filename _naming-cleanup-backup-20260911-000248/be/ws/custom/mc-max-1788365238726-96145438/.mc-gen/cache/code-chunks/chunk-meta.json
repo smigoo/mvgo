@@ -1,0 +1,62 @@
+{
+  "completed": [
+    "1-declare.json",
+    "2-package/index.vue",
+    "3-package/components/HeaderTabs.vue",
+    "4-package/components/ChartArea.vue",
+    "5-resources/styles/themes/theme-vars.less",
+    "6-resources/styles/common.less"
+  ],
+  "total": 3,
+  "updatedAt": 1788365410068,
+  "files": {
+    "declare.json": [
+      {
+        "index": 1,
+        "file": "1-declare.json",
+        "segmentType": "declare",
+        "scriptPart": ""
+      }
+    ],
+    "package/index.vue": [
+      {
+        "index": 2,
+        "file": "2-package_index.vue",
+        "segmentType": "",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/HeaderTabs.vue": [
+      {
+        "index": 3,
+        "file": "3-package_components_HeaderTabs.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/ChartArea.vue": [
+      {
+        "index": 4,
+        "file": "4-package_components_ChartArea.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "resources/styles/themes/theme-vars.less": [
+      {
+        "index": 5,
+        "file": "5-resources_styles_themes_theme-vars.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      }
+    ],
+    "resources/styles/common.less": [
+      {
+        "index": 6,
+        "file": "6-resources_styles_common.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      }
+    ]
+  }
+}

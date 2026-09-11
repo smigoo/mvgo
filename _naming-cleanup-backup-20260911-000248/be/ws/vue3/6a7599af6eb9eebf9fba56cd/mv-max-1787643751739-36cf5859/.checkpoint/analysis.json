@@ -1,0 +1,177 @@
+{
+  "reviewResult": {
+    "reviewResult": "warning",
+    "score": 75,
+    "issues": [
+      {
+        "level": "warning",
+        "type": "nesting_depth",
+        "location": "layout.sections[0].body.children[0]",
+        "message": "decoration-group嵌套3个icon导致层级过深，增加DOM复杂度。建议合并为单一背景图或SVG。",
+        "suggestion": "将3个icon合并为1个装饰性背景图或CSS伪元素实现。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[1].header.controls[1]",
+        "message": "icon-button-group错误包含resourceFile等属性，这些应属于其子元素icon-button。",
+        "suggestion": "将resourceFile等属性移至对应的icon-button子节点中。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "charts[0].axes",
+        "message": "Y轴单位被识别为'辆'，与CO浓度业务逻辑严重不符，属于明显识别或设计错误。",
+        "suggestion": "修正Y轴单位标签为CO浓度的正确单位（如mg/m³或ppm）。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[1].body.children[0].children",
+        "message": "坐标轴ticks硬编码了所有刻度文本，会导致生成过多DOM节点。",
+        "suggestion": "移除硬编码的ticks，交由图表渲染引擎根据数据范围动态计算和渲染。"
+      }
+    ],
+    "recommendations": [
+      "统一面板标题与装饰图标的实现方式，尽量使用CSS背景或单一图标组件，降低DOM嵌套深度。",
+      "审查图表数据提示中的异常值（如600），确保与Y轴最大值(40)及业务逻辑匹配。"
+    ],
+    "summary": "整体布局结构清晰，但存在局部属性错位、DOM嵌套过深及Y轴单位识别错误等问题，需修正属性归属并优化图表渲染逻辑。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#1890FF",
+      "--colorBgLayout": "#EDF4FB",
+      "--colorSuccess": "#52C41A",
+      "--colorError": "#F53F3F",
+      "--colorPrimaryHover": "#559EFF",
+      "--colorTextBase": "#333333",
+      "--fontSize": "14px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#1890FF",
+      "@color-bg-layout": "#EDF4FB",
+      "@color-success": "#52C41A",
+      "@color-error": "#F53F3F",
+      "@color-primary-hover": "#559EFF",
+      "@color-text-base": "rgba(255, 255, 255, 1)",
+      "@font-size-base": "14px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "16px",
+        "background-color": "#EDF4FB",
+        "color": "var(--colorTextBase)",
+        "font-size": "var(--fontSize)"
+      },
+      ".header": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "8px",
+        "margin-bottom": "16px",
+        "font-size": "1.14em",
+        "font-weight": "600"
+      },
+      ".header-decoration": {
+        "width": "4px",
+        "height": "1em",
+        "background-color": "var(--colorPrimary)",
+        "border-radius": "2px"
+      },
+      ".tab-item": {
+        "padding": "6px 16px",
+        "border-radius": "4px",
+        "cursor": "pointer",
+        "transition": "all 0.3s"
+      },
+      ".tab-item--active": {
+        "background-color": "var(--colorPrimaryHover)",
+        "color": "#ffffff"
+      },
+      ".chart-area": {
+        "fill": "var(--colorSuccess)",
+        "fill-opacity": "0.2",
+        "stroke": "var(--colorSuccess)",
+        "stroke-width": "2"
+      },
+      ".warning-line": {
+        "stroke": "var(--colorError)",
+        "stroke-width": "1.5",
+        "stroke-dasharray": "4 4"
+      },
+      ".warning-text": {
+        "fill": "var(--colorError)",
+        "font-size": "0.85em"
+      },
+      ".badge": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "min-width": "1.4em",
+        "height": "1.4em",
+        "padding": "0 6px",
+        "background-color": "var(--colorError)",
+        "color": "#ffffff",
+        "border-radius": "1em",
+        "font-size": "0.85em",
+        "font-weight": "bold"
+      }
+    },
+    "tokenCoverage": 0.92,
+    "mappingNotes": [
+      "主色调 #1890FF 映射为 --colorPrimary",
+      "浅蓝灰背景 #EDF4FB 映射为 --colorBgLayout，并在 .container 中直接落地为字面量值以保证关键可见背景",
+      "绿色 #52C41A 映射为 --colorSuccess，用于图表面积填充",
+      "红色 #F53F3F 映射为 --colorError，用于预警线、预警文字及Badge",
+      "浅蓝色 #559EFF 映射为 --colorPrimaryHover，用于Tab选中态背景",
+      "标题左侧蓝色几何装饰图标通过 .header-decoration 独立DOM或伪元素实现",
+      "图表相关样式（.chart-area, .warning-line）提取为通用类，便于ECharts/SVG配置复用"
+    ],
+    "elementStyleMap": {
+      "section-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-decoration-group-标题装饰图标-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-chart-control": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-8": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "100% 100%",
+        "background-position": "center center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  },
+  "subComponentPlan": {
+    "effectiveSections": [
+      {
+        "id": "section-header",
+        "responsibility": "顶部标题区/控件区（标题、副标题、操作按钮等）",
+        "elementCount": 5,
+        "title": "环境监测"
+      },
+      {
+        "id": "section-chart-control",
+        "responsibility": "标签页切换区",
+        "elementCount": 4,
+        "title": "监测指标切换与图表"
+      }
+    ],
+    "isForced": false,
+    "minFiles": 0,
+    "reason": "有效 sections=2 < 3 → 不强制拆分"
+  }
+}

@@ -1,0 +1,35 @@
+.c-env-monitor-root {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 420 / 186;
+  font-size: var(--fontSize, 14px);
+}
+.c-env-monitor-tab-item {
+  position: relative;
+  transition: all 0.2s ease;
+}
+.c-env-monitor-tab-item:hover:not(.c-env-monitor-tab-item--active) {
+  opacity: 0.8;
+}
+.c-env-monitor-tab-icon-wrapper {
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+.c-env-monitor-tab-icon-wrapper:hover {
+  transform: scale(1.05);
+}
+.c-env-monitor-tab-icon {
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+.c-env-monitor-tab-icon:hover {
+  opacity: 0.8;
+}
+.c-env-monitor-tab-badge {
+  pointer-events: none;
+  user-select: none;
+}
+.c-env-monitor-y-axis-label {
+  user-select: none;
+  pointer-events: none;
+}

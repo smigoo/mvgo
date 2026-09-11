@@ -77,6 +77,7 @@ import {
 } from '../utils/artifact-integrity.js';
 //S11: 文档页面元素覆盖率校验器（L0-B 扩展）
 import { ElementCoverageValidator } from '../validators/element-coverage-validator.js';
+import { computeGateScore } from '../utils/gate-score.js';
 import { formatFigmaStyleData } from '../utils/figma-format.js';
 import { GenerationContext } from '../types/generation-context.js';
 import { runGenerationContextShadow } from '../context/generation-context-shadow.js';
@@ -2763,10 +2764,17 @@ export function createPhase2Graph(config = {}) {
       logger.warn('🧠 自优化记录失败（非阻塞）', e.message);
     }
 
+    const _softFail = !!state._l0SoftFail;
+    const _gs = state._gateScore || null;
     state.onProgress?.({
       stage: '完成',
-      message: `🎉 Figma精修完成! 耗时 ${durationSec}s ${scopedCompliant ? '| ✅ 样式标准合规' : ''}`,
+      message:
+        _softFail && _gs
+          ? `⚠️ 组件已生成（降级完成，评分 ${_gs.score}/100，${_gs.blockCount} 项阻断待修复）耗时 ${durationSec}s`
+          : `🎉 Figma精修完成! 耗时 ${durationSec}s ${scopedCompliant ? '| ✅ 样式标准合规' : ''}`,
       status: 'completed',
+      gateScore: _gs,
+      l0SoftFail: _softFail,
     });
 
     return {
@@ -2790,6 +2798,9 @@ export function createPhase2Graph(config = {}) {
       //  透出 Figma 覆盖率与告警，供前端/任务结果展示
       figmaCoverageRate: state._figmaCoverageRate ?? null,
       figmaCoverageWarning: state._figmaCoverageWarning || null,
+      // 🛡️ 软失败评分透出（2026-09-11）：L0-B 重试耗尽降级完成时，供前端展示评分明细
+      l0SoftFail: !!state._l0SoftFail,
+      gateScore: state._gateScore || null,
       warnings: [
         ...(state.runtimeGate?.warning ? [state.runtimeGate.warning] : []),
         ...(state._figmaCoverageWarning ? [state._figmaCoverageWarning] : []),
@@ -2975,24 +2986,9 @@ export function createPhase2Graph(config = {}) {
       });
       const injectedNav = finalPlan !== plan;
 
-      // 🆕 S3: 大分块拆分 — 多图表 section 按图表二次拆分为独立分块条目
-      const { splitMultiChartSectionIntoChunks } =
-        await import('../roles/subcomponent-planner.js');
-      const s3Chunks = splitMultiChartSectionIntoChunks(finalPlan);
-      const s3Applied = s3Chunks.length > 0;
-      if (s3Applied) {
-        logger.info(
-          `🧩 S3: 多图表 section 二次拆分为 ${s3Chunks.length} 个独立分块`,
-          {
-            chartChunks: s3Chunks.filter(c => c.segmentType === 'chart').length,
-            miscChunks: s3Chunks.filter(c => c.segmentType !== 'chart').length,
-          },
-        );
-      }
-
       state.onProgress?.({
         stage: '子组件规划',
-        message: `✅ 完成：${finalPlan.effectiveSections.length} 个 section${finalPlan.isForced ? '（强制拆分）' : '（不强拆）'}${injectedNav ? '（已强制注入导航 section）' : ''}${s3Applied ? `（S3 拆分为 ${s3Chunks.length} 分块）` : ''}`,
+        message: `✅ 完成：${finalPlan.effectiveSections.length} 个 section${finalPlan.isForced ? '（强制拆分）' : '（不强拆）'}${injectedNav ? '（已强制注入导航 section）' : ''}`,
         status: 'completed',
       });
       // 保存到 analysis checkpoint（与 reviewResult/styleMappings 同批），便于断点续跑
@@ -3845,6 +3841,10 @@ export function createPhase2Graph(config = {}) {
       }
     }
 
+    // 🛡️ 软失败评分（2026-09-11）：重试耗尽不再写「失败」，而是降级完成 + 展示评分明细。
+    // 评分 = 单一 0-100 分 + 维度拆解（结构/资源/类名/语义），挂到 result 供条件边/complete 消费。
+    result.gateScore = computeGateScore(result.issues);
+
     return {
       codeValidationResult: result,
       // L0-B 重试计数：失败且未绕过 → +1；通过 → 重置 0（避免跨轮累积耗尽预算）。
@@ -4009,13 +4009,22 @@ export function createPhase2Graph(config = {}) {
         );
         return 'microcode-engineer';
       }
-      // BLOCK 且重试耗尽 → 终态失败节点，禁止发布（fail-closed）
-      logger.error('L0-B 校验 BLOCK 且重试耗尽，禁止发布', {
-        blockIds: (r.issues || [])
-          .filter((i) => i.severity === 'BLOCK')
-          .map((i) => i.id),
+      // 🛡️ 软失败兜底（2026-09-11）：BLOCK 且重试耗尽 → 不再写「失败」，改为降级完成 + 评分明细。
+      // 路由到 complete（其产物完整性硬门禁仍会拦截「缺文件/空产物」这类完全不可用情况，作硬底线）。
+      const _gs = r.gateScore || computeGateScore(r.issues);
+      state._l0SoftFail = true;
+      state._gateScore = _gs;
+      state.onProgress?.({
+        stage: 'L0-B校验',
+        message: `⚠️ 代码结构校验未通过且重试耗尽，降级完成（评分 ${_gs.score}/100，${_gs.blockCount} 项阻断）`,
+        status: 'warning',
       });
-      return 'l0b-fail';
+      logger.warn('🛡️ L0-B 软失败：重试耗尽，降级完成并附带评分', {
+        score: _gs.score,
+        blockCount: _gs.blockCount,
+        warnCount: _gs.warnCount,
+      });
+      return 'complete';
     }
 
     // generate 模式：L0-B 通过 / 已降级 bypass → 先跑结构顺序门禁（P0-2，零 LLM），

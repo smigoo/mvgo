@@ -1,0 +1,171 @@
+// 微码组件公共样式
+// 组件ID前缀：c-mc-1784866519623-07f2451c
+
+// Tab容器
+.c-mc-1784866519623-07f2451c-tabs-container {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  align-items: center;
+}
+
+// Tab 项
+.c-mc-1784866519623-07f2451c-tab-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 16px;
+  height: 19px;
+  background: #6680a0;
+  border: 0.73px solid rgba(172, 196, 225, 1);
+  border-radius: 2px;
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 21px;
+  text-align: center;
+  color: #333333;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+
+  &:hover {
+    opacity: 0.9;
+  }
+}
+
+// Tab 激活态
+.c-mc-1784866519623-07f2451c-tab-item-active {
+  background: #1990ff;
+  border-color: rgba(199, 224, 255, 1);
+  color: #ffffff;
+  font-weight: 500;
+}
+
+// 主内容区域
+.c-mc-1784866519623-07f2451c-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0;
+}
+
+// 副标题行
+.c-mc-1784866519623-07f2451c-subheader {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  height: 24px;
+}
+
+// 菱形图标
+.c-mc-1784866519623-07f2451c-diamond-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+// 状态图标
+.c-mc-1784866519623-07f2451c-status-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+// 副标题文字
+.c-mc-1784866519623-07f2451c-subheader-text {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  color: #333333;
+  text-shadow: 0 5px 5px rgba(255, 255, 255, 0.8);
+}
+
+//卡片容器
+.c-mc-1784866519623-07f2451c-cards {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  align-items: stretch;
+}
+
+// 单个卡片
+.c-mc-1784866519623-07f2451c-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  padding: 12px 8px;
+  border-radius: 4px;
+  position: relative;
+  background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+
+// 卡片图标
+.c-mc-1784866519623-07f2451c-card-icon {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+// 卡片标签
+.c-mc-1784866519623-07f2451c-card-label {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 18px;
+  text-align: center;
+  color: var(--em-card-label-color);
+  white-space: nowrap;
+}
+
+// 卡片数值容器
+.c-mc-1784866519623-07f2451c-card-value {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 4px;
+  justify-content: center;
+}
+
+// 数值数字
+.c-mc-1784866519623-07f2451c-value-number {
+  font-family: 'DIN Alternate', 'Arial', sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+}
+
+// 危险状态数值（红色）
+.c-mc-1784866519623-07f2451c-value-danger {
+  color: #ff4d4f;
+}
+
+// 主要状态数值（蓝色）
+.c-mc-1784866519623-07f2451c-value-primary {
+  color: #1990ff;
+}
+
+// 警告状态数值（橙色）
+.c-mc-1784866519623-07f2451c-value-warning {
+  color: #fa8c16;
+}
+
+// 数值单位
+.c-mc-1784866519623-07f2451c-value-unit {
+  font-family: 'Source Han Sans CN', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1;
+  color: var(--em-value-unit-color);
+}

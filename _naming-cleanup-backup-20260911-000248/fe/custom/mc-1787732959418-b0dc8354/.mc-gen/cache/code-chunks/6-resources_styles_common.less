@@ -1,0 +1,182 @@
+.c-env-monitor-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.c-env-monitor-controls {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.c-env-monitor-tabs {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+}
+
+.c-env-monitor-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 12px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #2c9bea;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s;
+  line-height: 1.5;
+
+  &:hover {
+    color: #1099b1;
+  }
+}
+
+.c-env-monitor-tab--active {
+  background: linear-gradient(180deg, #1099b1, #038fff);
+  border: 1px solid #ffffff;
+  color: #ffffff;
+  text-shadow: 0px 0.6px 0px #006fe3;
+}
+
+.c-env-monitor-icon-group {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+}
+
+.c-env-monitor-icon-btn {
+  width: 24px;
+  height: 24px;
+  background: #ffffff;
+  border: 1px solid #a1ceff;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s;
+
+  &:hover {
+    border-color: #2c9bea;
+  }
+}
+
+.c-env-monitor-icon-btn--badge {
+  position: relative;
+}
+
+.c-env-monitor-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 16px;
+  height: 16px;
+  background: #f53f3f;
+  border-radius: 29px;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.c-env-monitor-chart-section {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.c-env-monitor-chart-legend {
+  display: flex;
+  flex-direction: row;
+  margin-bottom: 8px;
+}
+
+.c-env-monitor-legend-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin-right: 16px;
+  cursor: pointer;
+
+  &:last-child {
+    margin-right: 0;
+  }
+}
+
+.c-env-monitor-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 1.6px;
+  margin-right: 6px;
+}
+
+.c-env-monitor-legend-text {
+  color: #333333;
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+.c-env-monitor-chart-container {
+  flex: 1;
+  width: 100%;
+  min-height: 200px;
+}
+
+.c-env-monitor-title {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.c-env-monitor-title-dots {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin-right: 8px;
+}
+
+.c-env-monitor-title-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 4px;
+  display: inline-block;
+
+  &:last-child {
+    margin-right: 0;
+  }
+}
+
+.c-env-monitor-title-dot--black {
+  background: #000000;
+}
+
+.c-env-monitor-title-dot--blue {
+  background: linear-gradient(180deg, #1252fa, #d6effc);
+}
+
+.c-env-monitor-title-dot--path {
+  background: #559eff;
+}
+
+.c-env-monitor-title-text {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.2;
+  background: linear-gradient(90deg, #1990ff, #5a7eff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: transparent;
+}

@@ -17,6 +17,7 @@
 
 // ── 可选依赖：acorn / acorn-walk（仅用于 <script> 内部自由变量检测）──
 import { createRequire } from 'node:module'
+import { extractSfcTemplate } from './sfc-template-extractor.js'
 const _require = createRequire(import.meta.url)
 let acornParser = null
 let acornWalker = null
@@ -372,8 +373,8 @@ export function validateVueScriptSemantics(content, filePath = '', opts = {}) {
   const hasScriptTag = /<script[\s>]/.test(content) || opts.templateContent !== undefined
 
   if (!templateContent) {
-    const tplMatch = content.match(/<template>([\s\S]*?)<\/template>/)
-    if (tplMatch) templateContent = tplMatch[1]
+    // 🛡️ 共享边界法（lazy </template> 会被具名插槽提前截断——0ca84358 家族缺陷）
+    templateContent = extractSfcTemplate(content) || undefined
   }
 
   // 1. 重复 import

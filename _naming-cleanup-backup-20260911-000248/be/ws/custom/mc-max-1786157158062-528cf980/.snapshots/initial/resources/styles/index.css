@@ -1,0 +1,519 @@
+.c-mc-max-1786157158062-528cf980-title-decor {
+  width: 8px;
+  height: 8px;
+}
+.c-mc-max-1786157158062-528cf980-header-stats {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.c-mc-max-1786157158062-528cf980-stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.c-mc-max-1786157158062-528cf980-stat-label {
+  font-size: 14px;
+  color: #666666;
+  line-height: 21px;
+}
+.c-mc-max-1786157158062-528cf980-stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: Roboto, sans-serif;
+  line-height: 23px;
+}
+.c-mc-max-1786157158062-528cf980-stat-value-blue {
+  color: #1990ff;
+}
+.c-mc-max-1786157158062-528cf980-stat-value-green {
+  color: #08a3a5;
+}
+.c-mc-max-1786157158062-528cf980-header-icon {
+  width: 16px;
+  height: 16px;
+  margin-left: 8px;
+}
+.c-mc-max-1786157158062-528cf980-content {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+.c-mc-max-1786157158062-528cf980-switch-container {
+  display: flex;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.c-mc-max-1786157158062-528cf980-switch-card {
+  flex: 1;
+  height: 65px;
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  gap: 12px;
+  cursor: pointer;
+  box-sizing: border-box;
+  border-radius: 6px;
+}
+.c-mc-max-1786157158062-528cf980-switch-card--active .c-mc-max-1786157158062-528cf980-switch-title,
+.c-mc-max-1786157158062-528cf980-switch-card--active .c-mc-max-1786157158062-528cf980-switch-text,
+.c-mc-max-1786157158062-528cf980-switch-card--active .c-mc-max-1786157158062-528cf980-switch-num {
+  color: #ffffff;
+}
+.c-mc-max-1786157158062-528cf980-switch-icon {
+  width: 35px;
+  height: 28px;
+  flex-shrink: 0;
+}
+.c-mc-max-1786157158062-528cf980-switch-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.c-mc-max-1786157158062-528cf980-switch-title {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  color: #666666;
+}
+.c-mc-max-1786157158062-528cf980-switch-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.c-mc-max-1786157158062-528cf980-switch-text {
+  font-size: 14px;
+  color: #666666;
+  line-height: 21px;
+}
+.c-mc-max-1786157158062-528cf980-switch-num {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: Roboto, sans-serif;
+  color: #333333;
+  line-height: 23px;
+}
+.c-mc-max-1786157158062-528cf980-main-content {
+  flex: 1;
+  display: flex;
+  gap: 12px;
+  min-height: 0;
+}
+.c-mc-max-1786157158062-528cf980-tab-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 46px;
+  flex-shrink: 0;
+}
+.c-mc-max-1786157158062-528cf980-tab-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+  font-size: 14px;
+  color: #666666;
+  cursor: pointer;
+  padding: 10px 0;
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  letter-spacing: 2px;
+}
+.c-mc-max-1786157158062-528cf980-tab-item--active {
+  color: #1990ff;
+  font-weight: 700;
+}
+.c-mc-max-1786157158062-528cf980-card-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  align-content: start;
+}
+.c-mc-max-1786157158062-528cf980-device-card {
+  height: 64px;
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 8px;
+  box-sizing: border-box;
+}
+.c-mc-max-1786157158062-528cf980-device-icon {
+  width: 26px;
+  height: 32px;
+  flex-shrink: 0;
+}
+.c-mc-max-1786157158062-528cf980-device-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.c-mc-max-1786157158062-528cf980-device-name {
+  font-size: 12px;
+  color: #333333;
+  line-height: 18px;
+}
+.c-mc-max-1786157158062-528cf980-device-status {
+  font-size: 16px;
+  font-weight: 500;
+  font-family: Roboto, sans-serif;
+  color: #333333;
+  line-height: 19px;
+}
+.dark .c-mc-max-1786157158062-528cf980-title-decor {
+  width: 8px;
+  height: 8px;
+}
+.dark .c-mc-max-1786157158062-528cf980-header-stats {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.dark .c-mc-max-1786157158062-528cf980-stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.dark .c-mc-max-1786157158062-528cf980-stat-label {
+  font-size: 14px;
+  color: #a0a0a0;
+  line-height: 21px;
+}
+.dark .c-mc-max-1786157158062-528cf980-stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: Roboto, sans-serif;
+  line-height: 23px;
+}
+.dark .c-mc-max-1786157158062-528cf980-stat-value-blue {
+  color: #1990ff;
+}
+.dark .c-mc-max-1786157158062-528cf980-stat-value-green {
+  color: #08a3a5;
+}
+.dark .c-mc-max-1786157158062-528cf980-header-icon {
+  width: 16px;
+  height: 16px;
+  margin-left: 8px;
+}
+.dark .c-mc-max-1786157158062-528cf980-content {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+.dark .c-mc-max-1786157158062-528cf980-switch-container {
+  display: flex;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.dark .c-mc-max-1786157158062-528cf980-switch-card {
+  flex: 1;
+  height: 65px;
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  gap: 12px;
+  cursor: pointer;
+  box-sizing: border-box;
+  border-radius: 6px;
+}
+.dark .c-mc-max-1786157158062-528cf980-switch-card--active .c-mc-max-1786157158062-528cf980-switch-title,
+.dark .c-mc-max-1786157158062-528cf980-switch-card--active .c-mc-max-1786157158062-528cf980-switch-text,
+.dark .c-mc-max-1786157158062-528cf980-switch-card--active .c-mc-max-1786157158062-528cf980-switch-num {
+  color: #ffffff;
+}
+.dark .c-mc-max-1786157158062-528cf980-switch-icon {
+  width: 35px;
+  height: 28px;
+  flex-shrink: 0;
+}
+.dark .c-mc-max-1786157158062-528cf980-switch-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dark .c-mc-max-1786157158062-528cf980-switch-title {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  color: #a0a0a0;
+}
+.dark .c-mc-max-1786157158062-528cf980-switch-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.dark .c-mc-max-1786157158062-528cf980-switch-text {
+  font-size: 14px;
+  color: #a0a0a0;
+  line-height: 21px;
+}
+.dark .c-mc-max-1786157158062-528cf980-switch-num {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: Roboto, sans-serif;
+  color: #e0e0e0;
+  line-height: 23px;
+}
+.dark .c-mc-max-1786157158062-528cf980-main-content {
+  flex: 1;
+  display: flex;
+  gap: 12px;
+  min-height: 0;
+}
+.dark .c-mc-max-1786157158062-528cf980-tab-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 46px;
+  flex-shrink: 0;
+}
+.dark .c-mc-max-1786157158062-528cf980-tab-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+  font-size: 14px;
+  color: #a0a0a0;
+  cursor: pointer;
+  padding: 10px 0;
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  letter-spacing: 2px;
+}
+.dark .c-mc-max-1786157158062-528cf980-tab-item--active {
+  color: #1990ff;
+  font-weight: 700;
+}
+.dark .c-mc-max-1786157158062-528cf980-card-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  align-content: start;
+}
+.dark .c-mc-max-1786157158062-528cf980-device-card {
+  height: 64px;
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 8px;
+  box-sizing: border-box;
+}
+.dark .c-mc-max-1786157158062-528cf980-device-icon {
+  width: 26px;
+  height: 32px;
+  flex-shrink: 0;
+}
+.dark .c-mc-max-1786157158062-528cf980-device-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.dark .c-mc-max-1786157158062-528cf980-device-name {
+  font-size: 12px;
+  color: #e0e0e0;
+  line-height: 18px;
+}
+.dark .c-mc-max-1786157158062-528cf980-device-status {
+  font-size: 16px;
+  font-weight: 500;
+  font-family: Roboto, sans-serif;
+  color: #e0e0e0;
+  line-height: 19px;
+}
+.light .c-mc-max-1786157158062-528cf980-title-decor {
+  width: 8px;
+  height: 8px;
+}
+.light .c-mc-max-1786157158062-528cf980-header-stats {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.light .c-mc-max-1786157158062-528cf980-stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.light .c-mc-max-1786157158062-528cf980-stat-label {
+  font-size: 14px;
+  color: #666666;
+  line-height: 21px;
+}
+.light .c-mc-max-1786157158062-528cf980-stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: Roboto, sans-serif;
+  line-height: 23px;
+}
+.light .c-mc-max-1786157158062-528cf980-stat-value-blue {
+  color: #1990ff;
+}
+.light .c-mc-max-1786157158062-528cf980-stat-value-green {
+  color: #08a3a5;
+}
+.light .c-mc-max-1786157158062-528cf980-header-icon {
+  width: 16px;
+  height: 16px;
+  margin-left: 8px;
+}
+.light .c-mc-max-1786157158062-528cf980-content {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+.light .c-mc-max-1786157158062-528cf980-switch-container {
+  display: flex;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.light .c-mc-max-1786157158062-528cf980-switch-card {
+  flex: 1;
+  height: 65px;
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  gap: 12px;
+  cursor: pointer;
+  box-sizing: border-box;
+  border-radius: 6px;
+}
+.light .c-mc-max-1786157158062-528cf980-switch-card--active .c-mc-max-1786157158062-528cf980-switch-title,
+.light .c-mc-max-1786157158062-528cf980-switch-card--active .c-mc-max-1786157158062-528cf980-switch-text,
+.light .c-mc-max-1786157158062-528cf980-switch-card--active .c-mc-max-1786157158062-528cf980-switch-num {
+  color: #ffffff;
+}
+.light .c-mc-max-1786157158062-528cf980-switch-icon {
+  width: 35px;
+  height: 28px;
+  flex-shrink: 0;
+}
+.light .c-mc-max-1786157158062-528cf980-switch-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.light .c-mc-max-1786157158062-528cf980-switch-title {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  color: #666666;
+}
+.light .c-mc-max-1786157158062-528cf980-switch-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.light .c-mc-max-1786157158062-528cf980-switch-text {
+  font-size: 14px;
+  color: #666666;
+  line-height: 21px;
+}
+.light .c-mc-max-1786157158062-528cf980-switch-num {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: Roboto, sans-serif;
+  color: #333333;
+  line-height: 23px;
+}
+.light .c-mc-max-1786157158062-528cf980-main-content {
+  flex: 1;
+  display: flex;
+  gap: 12px;
+  min-height: 0;
+}
+.light .c-mc-max-1786157158062-528cf980-tab-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 46px;
+  flex-shrink: 0;
+}
+.light .c-mc-max-1786157158062-528cf980-tab-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+  font-size: 14px;
+  color: #666666;
+  cursor: pointer;
+  padding: 10px 0;
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  letter-spacing: 2px;
+}
+.light .c-mc-max-1786157158062-528cf980-tab-item--active {
+  color: #1990ff;
+  font-weight: 700;
+}
+.light .c-mc-max-1786157158062-528cf980-card-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  align-content: start;
+}
+.light .c-mc-max-1786157158062-528cf980-device-card {
+  height: 64px;
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 8px;
+  box-sizing: border-box;
+}
+.light .c-mc-max-1786157158062-528cf980-device-icon {
+  width: 26px;
+  height: 32px;
+  flex-shrink: 0;
+}
+.light .c-mc-max-1786157158062-528cf980-device-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.light .c-mc-max-1786157158062-528cf980-device-name {
+  font-size: 12px;
+  color: #333333;
+  line-height: 18px;
+}
+.light .c-mc-max-1786157158062-528cf980-device-status {
+  font-size: 16px;
+  font-weight: 500;
+  font-family: Roboto, sans-serif;
+  color: #333333;
+  line-height: 19px;
+}

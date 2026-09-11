@@ -1,0 +1,1338 @@
+.c-device-monitor-root {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 425px;
+  padding: 46px 12px 12px;
+  box-sizing: border-box;
+  overflow: hidden;
+  color: #333333;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+}
+.c-device-monitor-overview {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 10px;
+}
+.c-device-monitor-stat-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 64px;
+  padding: 8px 10px;
+  box-sizing: border-box;
+  border-radius: 6px;
+  overflow: hidden;
+  flex-direction: column;
+}
+.c-device-monitor-stat-icon {
+  flex: 0 0 auto;
+  width: 35px;
+  height: 28px;
+  object-fit: contain;
+  margin-right: 8px;
+}
+.c-device-monitor-stat-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  line-height: 1;
+}
+.c-device-monitor-stat-label {
+  color: #333333;
+  font-family: YouSheBiaoTiHei, 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 15.6px;
+  white-space: nowrap;
+}
+.c-device-monitor-stat-value {
+  display: inline-flex;
+  align-items: baseline;
+  margin-top: 4px;
+  color: #1990ff;
+  font-family: Roboto, Arial, sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 23.4375px;
+  white-space: nowrap;
+  flex-direction: column;
+}
+.c-device-monitor-stat-value small {
+  margin-left: 2px;
+  color: #66788a;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+.c-device-monitor-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  width: 100%;
+  min-height: 0;
+  margin-bottom: 8px;
+}
+.c-device-monitor-section {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: 10px 10px 8px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.c-device-monitor-device-section {
+  height: 132px;
+}
+.c-device-monitor-alarm-section {
+  height: 132px;
+}
+.c-device-monitor-category-section {
+  height: 172px;
+}
+.c-device-monitor-health-section {
+  height: 172px;
+}
+.c-device-monitor-maintenance-section {
+  height: 172px;
+}
+.c-device-monitor-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  height: 22px;
+  margin-bottom: 6px;
+  flex-direction: column;
+}
+.c-device-monitor-section-title {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  color: #1990ff;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 18px;
+  white-space: nowrap;
+  flex-direction: column;
+}
+.c-device-monitor-section-title::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1252fa 0%, #d6effc 100%);
+  box-shadow: 0 0 0 1px rgba(85, 158, 255, 0.18);
+}
+.c-device-monitor-tab-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  flex-direction: column;
+}
+.c-device-monitor-tab-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  border: 1px solid rgba(85, 158, 255, 0.35);
+  border-radius: 3px;
+  background: rgba(225, 240, 255, 0.55);
+  color: #66788a;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  cursor: pointer;
+  outline: none;
+  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+  flex-direction: column;
+}
+.c-device-monitor-tab-item:hover,
+.c-device-monitor-tab-item.is-active {
+  border-color: #1990ff;
+  background: rgba(25, 144, 255, 0.14);
+  color: #1990ff;
+  font-weight: 700;
+}
+.c-device-monitor-device-content {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.c-device-monitor-ring-panel {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+.c-device-monitor-chart-container {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+.c-device-monitor-status-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 5px;
+  min-width: 0;
+  min-height: 0;
+}
+.c-device-monitor-status-item {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  border-radius: 4px;
+  overflow: hidden;
+  flex-direction: column;
+}
+.c-device-monitor-status-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: #333333;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.c-device-monitor-status-count {
+  flex: 0 0 auto;
+  color: #1990ff;
+  font-family: Roboto, Arial, sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 18.75px;
+}
+.c-device-monitor-status-unit {
+  flex: 0 0 auto;
+  margin-left: 2px;
+  color: #66788a;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+.c-device-monitor-alarm-content {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.c-device-monitor-select-wrapper {
+  position: relative;
+  flex: 0 0 auto;
+  z-index: 5;
+}
+.c-device-monitor-select-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 78px;
+  height: 22px;
+  padding: 0 7px;
+  box-sizing: border-box;
+  border: 1px solid rgba(85, 158, 255, 0.35);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.82);
+  cursor: pointer;
+  flex-direction: column;
+}
+.c-device-monitor-select-value {
+  color: #333333;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  white-space: nowrap;
+}
+.c-device-monitor-select-arrow {
+  width: 0;
+  height: 0;
+  margin-left: 4px;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid #1990ff;
+  transition: transform 0.2s ease;
+}
+.c-device-monitor-select-arrow.is-open {
+  transform: rotate(180deg);
+}
+.c-device-monitor-select-dropdown {
+  position: absolute;
+  top: 26px;
+  right: 0;
+  width: 88px;
+  padding: 4px 0;
+  box-sizing: border-box;
+  border: 1px solid rgba(85, 158, 255, 0.35);
+  border-radius: 4px;
+  background: #ffffff;
+  box-shadow: 0 4px 10px rgba(74, 117, 141, 0.18);
+}
+.c-device-monitor-select-option {
+  height: 24px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  color: #333333;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 24px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.c-device-monitor-select-option:hover,
+.c-device-monitor-select-option.is-active {
+  color: #1990ff;
+  background: rgba(25, 144, 255, 0.1);
+}
+.c-device-monitor-bottom {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  width: 100%;
+  min-height: 0;
+}
+.c-device-monitor-category-content {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.c-device-monitor-health-content {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.c-device-monitor-health-card {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 5px 8px;
+  box-sizing: border-box;
+  border-radius: 4px;
+  overflow: hidden;
+  flex-direction: column;
+}
+.c-device-monitor-health-icon {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  margin-right: 7px;
+  object-fit: contain;
+}
+.c-device-monitor-health-text {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  column-gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.c-device-monitor-health-label {
+  grid-column: 1 / 2;
+  color: #333333;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.c-device-monitor-health-value {
+  grid-column: 2 / 3;
+  grid-row: 1 / 3;
+  align-self: center;
+  color: #08a3a5;
+  font-family: Roboto, Arial, sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 21px;
+  white-space: nowrap;
+}
+.c-device-monitor-health-trend {
+  grid-column: 1 / 2;
+  color: #08a3a5;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 14px;
+  white-space: nowrap;
+}
+.c-device-monitor-health-trend.down {
+  color: #f05252;
+}
+.c-device-monitor-task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.c-device-monitor-task-item {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 5px 8px;
+  box-sizing: border-box;
+  border-radius: 4px;
+  overflow: hidden;
+  flex-direction: column;
+}
+.c-device-monitor-task-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.c-device-monitor-task-name {
+  color: #333333;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.c-device-monitor-task-desc {
+  margin-top: 1px;
+  color: #66788a;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.c-device-monitor-task-status {
+  flex: 0 0 auto;
+  height: 20px;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: rgba(25, 144, 255, 0.1);
+  color: #1990ff;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 20px;
+  white-space: nowrap;
+}
+.themeType {
+  color: inherit;
+}
+.dark .c-device-monitor-root {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 425px;
+  padding: 46px 12px 12px;
+  box-sizing: border-box;
+  overflow: hidden;
+  color: #ffffff;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+}
+.dark .c-device-monitor-overview {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 10px;
+}
+.dark .c-device-monitor-stat-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 64px;
+  padding: 8px 10px;
+  box-sizing: border-box;
+  border-radius: 6px;
+  overflow: hidden;
+  flex-direction: column;
+}
+.dark .c-device-monitor-stat-icon {
+  flex: 0 0 auto;
+  width: 35px;
+  height: 28px;
+  object-fit: contain;
+  margin-right: 8px;
+}
+.dark .c-device-monitor-stat-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  line-height: 1;
+}
+.dark .c-device-monitor-stat-label {
+  color: rgba(255, 255, 255, 0.86);
+  font-family: YouSheBiaoTiHei, 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 15.6px;
+  white-space: nowrap;
+}
+.dark .c-device-monitor-stat-value {
+  display: inline-flex;
+  align-items: baseline;
+  margin-top: 4px;
+  color: #559eff;
+  font-family: Roboto, Arial, sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 23.4375px;
+  white-space: nowrap;
+  flex-direction: column;
+}
+.dark .c-device-monitor-stat-value small {
+  margin-left: 2px;
+  color: rgba(255, 255, 255, 0.62);
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+.dark .c-device-monitor-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  width: 100%;
+  min-height: 0;
+  margin-bottom: 8px;
+}
+.dark .c-device-monitor-section {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: 10px 10px 8px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.dark .c-device-monitor-device-section {
+  height: 132px;
+}
+.dark .c-device-monitor-alarm-section {
+  height: 132px;
+}
+.dark .c-device-monitor-category-section {
+  height: 172px;
+}
+.dark .c-device-monitor-health-section {
+  height: 172px;
+}
+.dark .c-device-monitor-maintenance-section {
+  height: 172px;
+}
+.dark .c-device-monitor-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  height: 22px;
+  margin-bottom: 6px;
+  flex-direction: column;
+}
+.dark .c-device-monitor-section-title {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  color: #559eff;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 18px;
+  white-space: nowrap;
+  flex-direction: column;
+}
+.dark .c-device-monitor-section-title::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1252fa 0%, #d6effc 100%);
+  box-shadow: 0 0 0 1px rgba(85, 158, 255, 0.18);
+}
+.dark .c-device-monitor-tab-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  flex-direction: column;
+}
+.dark .c-device-monitor-tab-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  border: 1px solid rgba(85, 158, 255, 0.46);
+  border-radius: 3px;
+  background: rgba(25, 144, 255, 0.12);
+  color: rgba(255, 255, 255, 0.62);
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  cursor: pointer;
+  outline: none;
+  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+  flex-direction: column;
+}
+.dark .c-device-monitor-tab-item:hover,
+.dark .c-device-monitor-tab-item.is-active {
+  border-color: #559eff;
+  background: rgba(25, 144, 255, 0.28);
+  color: #559eff;
+  font-weight: 700;
+}
+.dark .c-device-monitor-device-content {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.dark .c-device-monitor-ring-panel {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+.dark .c-device-monitor-chart-container {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+.dark .c-device-monitor-status-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 5px;
+  min-width: 0;
+  min-height: 0;
+}
+.dark .c-device-monitor-status-item {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  border-radius: 4px;
+  overflow: hidden;
+  flex-direction: column;
+}
+.dark .c-device-monitor-status-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: rgba(255, 255, 255, 0.86);
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dark .c-device-monitor-status-count {
+  flex: 0 0 auto;
+  color: #559eff;
+  font-family: Roboto, Arial, sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 18.75px;
+}
+.dark .c-device-monitor-status-unit {
+  flex: 0 0 auto;
+  margin-left: 2px;
+  color: rgba(255, 255, 255, 0.62);
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+.dark .c-device-monitor-alarm-content {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.dark .c-device-monitor-select-wrapper {
+  position: relative;
+  flex: 0 0 auto;
+  z-index: 5;
+}
+.dark .c-device-monitor-select-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 78px;
+  height: 22px;
+  padding: 0 7px;
+  box-sizing: border-box;
+  border: 1px solid rgba(85, 158, 255, 0.46);
+  border-radius: 3px;
+  background: rgba(15, 46, 74, 0.92);
+  cursor: pointer;
+  flex-direction: column;
+}
+.dark .c-device-monitor-select-value {
+  color: rgba(255, 255, 255, 0.86);
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  white-space: nowrap;
+}
+.dark .c-device-monitor-select-arrow {
+  width: 0;
+  height: 0;
+  margin-left: 4px;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid #559eff;
+  transition: transform 0.2s ease;
+}
+.dark .c-device-monitor-select-arrow.is-open {
+  transform: rotate(180deg);
+}
+.dark .c-device-monitor-select-dropdown {
+  position: absolute;
+  top: 26px;
+  right: 0;
+  width: 88px;
+  padding: 4px 0;
+  box-sizing: border-box;
+  border: 1px solid rgba(85, 158, 255, 0.46);
+  border-radius: 4px;
+  background: #17304a;
+  box-shadow: 0 4px 10px rgba(74, 117, 141, 0.18);
+}
+.dark .c-device-monitor-select-option {
+  height: 24px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  color: rgba(255, 255, 255, 0.86);
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 24px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.dark .c-device-monitor-select-option:hover,
+.dark .c-device-monitor-select-option.is-active {
+  color: #559eff;
+  background: rgba(25, 144, 255, 0.18);
+}
+.dark .c-device-monitor-bottom {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  width: 100%;
+  min-height: 0;
+}
+.dark .c-device-monitor-category-content {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.dark .c-device-monitor-health-content {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.dark .c-device-monitor-health-card {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 5px 8px;
+  box-sizing: border-box;
+  border-radius: 4px;
+  overflow: hidden;
+  flex-direction: column;
+}
+.dark .c-device-monitor-health-icon {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  margin-right: 7px;
+  object-fit: contain;
+}
+.dark .c-device-monitor-health-text {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  column-gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.dark .c-device-monitor-health-label {
+  grid-column: 1 / 2;
+  color: rgba(255, 255, 255, 0.86);
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dark .c-device-monitor-health-value {
+  grid-column: 2 / 3;
+  grid-row: 1 / 3;
+  align-self: center;
+  color: #08a3a5;
+  font-family: Roboto, Arial, sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 21px;
+  white-space: nowrap;
+}
+.dark .c-device-monitor-health-trend {
+  grid-column: 1 / 2;
+  color: #08d1b2;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 14px;
+  white-space: nowrap;
+}
+.dark .c-device-monitor-health-trend.down {
+  color: #ff6b6b;
+}
+.dark .c-device-monitor-task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.dark .c-device-monitor-task-item {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 5px 8px;
+  box-sizing: border-box;
+  border-radius: 4px;
+  overflow: hidden;
+  flex-direction: column;
+}
+.dark .c-device-monitor-task-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.dark .c-device-monitor-task-name {
+  color: rgba(255, 255, 255, 0.86);
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dark .c-device-monitor-task-desc {
+  margin-top: 1px;
+  color: rgba(255, 255, 255, 0.62);
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dark .c-device-monitor-task-status {
+  flex: 0 0 auto;
+  height: 20px;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: rgba(25, 144, 255, 0.16);
+  color: #559eff;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 20px;
+  white-space: nowrap;
+}
+.dark .themeType {
+  color: inherit;
+}
+.light .c-device-monitor-root {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 425px;
+  padding: 46px 12px 12px;
+  box-sizing: border-box;
+  overflow: hidden;
+  color: #333333;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+}
+.light .c-device-monitor-overview {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 10px;
+}
+.light .c-device-monitor-stat-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 64px;
+  padding: 8px 10px;
+  box-sizing: border-box;
+  border-radius: 6px;
+  overflow: hidden;
+  flex-direction: column;
+}
+.light .c-device-monitor-stat-icon {
+  flex: 0 0 auto;
+  width: 35px;
+  height: 28px;
+  object-fit: contain;
+  margin-right: 8px;
+}
+.light .c-device-monitor-stat-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  line-height: 1;
+}
+.light .c-device-monitor-stat-label {
+  color: #333333;
+  font-family: YouSheBiaoTiHei, 'Source Han Sans CN', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 15.6px;
+  white-space: nowrap;
+}
+.light .c-device-monitor-stat-value {
+  display: inline-flex;
+  align-items: baseline;
+  margin-top: 4px;
+  color: #1990ff;
+  font-family: Roboto, Arial, sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 23.4375px;
+  white-space: nowrap;
+  flex-direction: column;
+}
+.light .c-device-monitor-stat-value small {
+  margin-left: 2px;
+  color: #66788a;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+.light .c-device-monitor-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  width: 100%;
+  min-height: 0;
+  margin-bottom: 8px;
+}
+.light .c-device-monitor-section {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: 10px 10px 8px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.light .c-device-monitor-device-section {
+  height: 132px;
+}
+.light .c-device-monitor-alarm-section {
+  height: 132px;
+}
+.light .c-device-monitor-category-section {
+  height: 172px;
+}
+.light .c-device-monitor-health-section {
+  height: 172px;
+}
+.light .c-device-monitor-maintenance-section {
+  height: 172px;
+}
+.light .c-device-monitor-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  height: 22px;
+  margin-bottom: 6px;
+  flex-direction: column;
+}
+.light .c-device-monitor-section-title {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  color: #1990ff;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 18px;
+  white-space: nowrap;
+  flex-direction: column;
+}
+.light .c-device-monitor-section-title::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1252fa 0%, #d6effc 100%);
+  box-shadow: 0 0 0 1px rgba(85, 158, 255, 0.18);
+}
+.light .c-device-monitor-tab-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  flex-direction: column;
+}
+.light .c-device-monitor-tab-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  border: 1px solid rgba(85, 158, 255, 0.35);
+  border-radius: 3px;
+  background: rgba(225, 240, 255, 0.55);
+  color: #66788a;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  cursor: pointer;
+  outline: none;
+  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+  flex-direction: column;
+}
+.light .c-device-monitor-tab-item:hover,
+.light .c-device-monitor-tab-item.is-active {
+  border-color: #1990ff;
+  background: rgba(25, 144, 255, 0.14);
+  color: #1990ff;
+  font-weight: 700;
+}
+.light .c-device-monitor-device-content {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.light .c-device-monitor-ring-panel {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+.light .c-device-monitor-chart-container {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+.light .c-device-monitor-status-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 5px;
+  min-width: 0;
+  min-height: 0;
+}
+.light .c-device-monitor-status-item {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  border-radius: 4px;
+  overflow: hidden;
+  flex-direction: column;
+}
+.light .c-device-monitor-status-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: #333333;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.light .c-device-monitor-status-count {
+  flex: 0 0 auto;
+  color: #1990ff;
+  font-family: Roboto, Arial, sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 18.75px;
+}
+.light .c-device-monitor-status-unit {
+  flex: 0 0 auto;
+  margin-left: 2px;
+  color: #66788a;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+.light .c-device-monitor-alarm-content {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.light .c-device-monitor-select-wrapper {
+  position: relative;
+  flex: 0 0 auto;
+  z-index: 5;
+}
+.light .c-device-monitor-select-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 78px;
+  height: 22px;
+  padding: 0 7px;
+  box-sizing: border-box;
+  border: 1px solid rgba(85, 158, 255, 0.35);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.82);
+  cursor: pointer;
+  flex-direction: column;
+}
+.light .c-device-monitor-select-value {
+  color: #333333;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  white-space: nowrap;
+}
+.light .c-device-monitor-select-arrow {
+  width: 0;
+  height: 0;
+  margin-left: 4px;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid #1990ff;
+  transition: transform 0.2s ease;
+}
+.light .c-device-monitor-select-arrow.is-open {
+  transform: rotate(180deg);
+}
+.light .c-device-monitor-select-dropdown {
+  position: absolute;
+  top: 26px;
+  right: 0;
+  width: 88px;
+  padding: 4px 0;
+  box-sizing: border-box;
+  border: 1px solid rgba(85, 158, 255, 0.35);
+  border-radius: 4px;
+  background: #ffffff;
+  box-shadow: 0 4px 10px rgba(74, 117, 141, 0.18);
+}
+.light .c-device-monitor-select-option {
+  height: 24px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  color: #333333;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 24px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.light .c-device-monitor-select-option:hover,
+.light .c-device-monitor-select-option.is-active {
+  color: #1990ff;
+  background: rgba(25, 144, 255, 0.1);
+}
+.light .c-device-monitor-bottom {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  width: 100%;
+  min-height: 0;
+}
+.light .c-device-monitor-category-content {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.light .c-device-monitor-health-content {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.light .c-device-monitor-health-card {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 5px 8px;
+  box-sizing: border-box;
+  border-radius: 4px;
+  overflow: hidden;
+  flex-direction: column;
+}
+.light .c-device-monitor-health-icon {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  margin-right: 7px;
+  object-fit: contain;
+}
+.light .c-device-monitor-health-text {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  column-gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.light .c-device-monitor-health-label {
+  grid-column: 1 / 2;
+  color: #333333;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.light .c-device-monitor-health-value {
+  grid-column: 2 / 3;
+  grid-row: 1 / 3;
+  align-self: center;
+  color: #08a3a5;
+  font-family: Roboto, Arial, sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 21px;
+  white-space: nowrap;
+}
+.light .c-device-monitor-health-trend {
+  grid-column: 1 / 2;
+  color: #08a3a5;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 14px;
+  white-space: nowrap;
+}
+.light .c-device-monitor-health-trend.down {
+  color: #f05252;
+}
+.light .c-device-monitor-task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.light .c-device-monitor-task-item {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 5px 8px;
+  box-sizing: border-box;
+  border-radius: 4px;
+  overflow: hidden;
+  flex-direction: column;
+}
+.light .c-device-monitor-task-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.light .c-device-monitor-task-name {
+  color: #333333;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.light .c-device-monitor-task-desc {
+  margin-top: 1px;
+  color: #66788a;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.light .c-device-monitor-task-status {
+  flex: 0 0 auto;
+  height: 20px;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: rgba(25, 144, 255, 0.1);
+  color: #1990ff;
+  font-family: 'Source Han Sans CN', 'Noto Sans SC', Arial, sans-serif;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 20px;
+  white-space: nowrap;
+}
+.light .themeType {
+  color: inherit;
+}

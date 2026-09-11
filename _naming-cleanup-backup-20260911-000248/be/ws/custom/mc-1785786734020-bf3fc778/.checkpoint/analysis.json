@@ -1,0 +1,193 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 65,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "section-modal-header 中 header 和 body 存在严重的内容冗余。header 已定义了 title('运单信息') 和 controls(车牌号标签、关闭按钮)，但 body 中又重复定义了相同的 text、tag 和 icon，会导致渲染时出现重复的标题和按钮。",
+        "suggestion": "移除 body 中的重复元素，仅保留 header 定义；或者如果 body 是实际渲染区域，则清空 header 中的 title 和 controls，保持职责单一。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0].body.children[2]",
+        "message": "关闭按钮的 resourceFile 被错误地指定为 '分割线-98952.png'，资源文件名与 UI 语义严重不匹配。",
+        "suggestion": "将关闭按钮的图标资源替换为正确的关闭图标（如 close.png 或使用 iconfont），分割线应作为独立的装饰元素或从该节点移除。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[*].body.backgroundImage",
+        "message": "每个 section 的 body 都重复设置了相同的背景图 (bg-2.png)。这会导致背景图在组件内部重复渲染、叠加，产生不必要的 DOM 节点和性能开销。",
+        "suggestion": "将背景图提升至组件的最外层根容器，移除各个 section 内部的 backgroundImage 设置，实现全局统一背景。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[1]",
+        "message": "监控截图 (image) 使用了固定宽度 '237px'，违反了宽度自适应约束，可能导致在小屏幕或容器缩放时布局溢出或留白。",
+        "suggestion": "移除固定 width，改用 flex 布局（如设置 flex: 0 0 237px 并配合 max-width: 100%，或让左侧 info-grid 使用 flex: 1 自动填充剩余空间）。"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "layout.sections[0].header.title",
+        "message": "组件顶层 componentTitle 为 '运单信息'，而 section-modal-header 的标题也是 '运单信息'。根据微码规范，若使用 base-panel，面板标题会自动生成，禁止在内容中重复生成标题。",
+        "suggestion": "如果该组件作为面板嵌入，请移除 section-modal-header 中的标题文字，或将其改为仅包含车牌号标签和关闭按钮的操作栏；如果是独立弹窗，请确保不使用 base-panel 包裹。"
+      }
+    ],
+    "recommendations": [
+      "统一背景图管理：将全局背景图（如 bg-2.png）提取到组件根节点，避免在每个 section 中重复声明，减少 DOM 节点和渲染开销。",
+      "规范 Header/Body 职责：在 section 结构中，明确 header 用于标题和操作区，body 用于内容区，避免在两者中放置相同的 UI 元素，防止代码生成时出现重复 DOM。",
+      "资源语义校验：在生成布局 JSON 时，增加资源文件名与 UI 语义的校验逻辑，避免将分割线图片误用作关闭按钮图标。",
+      "弹性布局优化：对于详情区的图文混排，建议左侧 info-grid 使用 flex: 1，右侧 image 使用比例或 max-width 限制，确保整体布局的响应式能力。"
+    ],
+    "summary": "该布局结构整体区域划分较为清晰，能够反映运单信息弹窗的业务逻辑。但存在明显的结构冗余（header与body内容重复）、资源匹配错误（分割线用作关闭图标）以及背景图重复声明等严重问题。此外，部分元素使用了固定宽度，不符合自适应规范。建议修复上述结构性错误，重新梳理层级关系后再进行代码生成。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorBgBase": "#003032",
+      "--colorTextBase": "#FFFFFF",
+      "--colorPrimary": "#00F0CE",
+      "--colorWarning": "#B07B00",
+      "--colorPrimaryBg": "rgba(0, 240, 206, 0.1)",
+      "--colorBorderSecondary": "rgba(0, 240, 206, 0.2)",
+      "--fontSize": "14px"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-bg-base": "#003032",
+      "@color-text-base": "#FFFFFF",
+      "@color-primary": "#00F0CE",
+      "@color-warning": "#B07B00",
+      "@color-primary-bg": "rgba(0, 240, 206, 0.1)",
+      "@color-border-secondary": "rgba(0, 240, 206, 0.2)",
+      "@font-size-base": "14px"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "16px",
+        "background-color": "var(--colorBgBase, #003032)",
+        "color": "var(--colorTextBase, #FFFFFF)",
+        "font-size": "var(--fontSize, 14px)"
+      },
+      ".header": {
+        "display": "flex",
+        "align-items": "center",
+        "gap": "8px",
+        "font-size": "1.2em",
+        "font-weight": "bold",
+        "color": "var(--colorTextBase, #FFFFFF)"
+      },
+      ".diamond-icon": {
+        "width": "8px",
+        "height": "8px",
+        "background-color": "var(--colorPrimary, #00F0CE)",
+        "transform": "rotate(45deg)"
+      },
+      ".data-table": {
+        "width": "100%",
+        "border-collapse": "collapse",
+        "margin-top": "12px"
+      },
+      ".table-row": {
+        "border-bottom": "1px solid var(--colorBorderSecondary, rgba(0, 240, 206, 0.2))"
+      },
+      ".table-row-highlight": {
+        "background-color": "var(--colorPrimaryBg, rgba(0, 240, 206, 0.1))"
+      },
+      ".license-plate-tag": {
+        "display": "inline-block",
+        "padding": "2px 8px",
+        "background-color": "var(--colorWarning, #B07B00)",
+        "color": "var(--colorTextBase, #FFFFFF)",
+        "border-radius": "2px",
+        "font-size": "0.85em",
+        "font-weight": "500"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "深青色背景 (#003032) 映射为 --colorBgBase，作为组件基础背景",
+      "青绿色 (#00F0CE) 映射为 --colorPrimary，用于科技风点缀、菱形装饰及表格分隔线",
+      "黄色 (#B07B00) 映射为 --colorWarning，用于车牌标签等强调元素",
+      "表格第一行高亮背景使用 --colorPrimary 的 10% 透明度 (--colorPrimaryBg) 实现",
+      "表格行分隔线使用 --colorPrimary 的 20% 透明度 (--colorBorderSecondary) 实现，保持科技风视觉统一"
+    ],
+    "elementStyleMap": {
+      "section-modal-header": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "display": "flex",
+        "flex-direction": "row",
+        "background-image": "url(../resources/images/bg-2.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "section-waybill-table": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-9-table-header-x-0": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-9-table-row-x-1": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-9-table-row-x-2": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-9-table-row-x-3": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-9": {
+        "display": "flex",
+        "flex-direction": "column",
+        "background-image": "url(../resources/images/bg-2.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "el-table-header-x-10": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-table-row-x-19": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-table-row-x-28": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-table-row-x-37": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "section-waybill-detail": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-47": {
+        "background-image": "url(../resources/images/bg-2.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  }
+}

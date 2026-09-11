@@ -1,0 +1,91 @@
+// 主题变量定义文件
+// 结构：.common() 定义共享变量，.theme-dark() 和 .theme-light() 定义主题特定颜色
+
+.common() {
+  // 字体缩放基准令牌（根容器通过 CSS 变量 --fontSize 驱动，默认 14px）
+  @fontSize: 14px;
+  
+  // 共享尺寸变量
+  @border-radius-base: 4px;
+  @border-radius-sm: 2px;
+  @border-radius-lg: 8px;
+  
+  // 共享间距变量
+  @spacing-xs: 4px;
+  @spacing-sm: 8px;
+  @spacing-md: 16px;
+  @spacing-lg: 24px;
+  @spacing-xl: 32px;
+}
+
+.theme-light() {
+  // 背景颜色（从 Figma 设计稿提取）
+  @bg-tab-active: url(../resources/images/bg-tab-active-7891.png);
+  @bg-main: url(../resources/images/bg-7890.png);
+  
+  // 主色调
+  @primary-color: #1890ff;
+  @success-color: #52c41a;
+  @warning-color: #faad14;
+  @error-color: #ff4d4f;
+  @info-color: #1890ff;
+  
+  // 文本颜色
+  @text-color-primary: #262626;
+  @text-color-secondary: #595959;
+  @text-color-tertiary: #8c8c8c;
+  @text-color-disabled: #bfbfbf;
+  @text-color-inverse: #ffffff;
+  
+  // 边框颜色
+  @border-color-base: #d9d9d9;
+  @border-color-light: #e8e8e8;
+  @border-color-dark: #bfbfbf;
+  
+  // 背景色
+  @bg-color-base: #ffffff;
+  @bg-color-light: #fafafa;
+  @bg-color-dark: #f5f5f5;
+  @bg-color-hover: #f0f0f0;
+  
+  // 阴影
+  @shadow-base: 0 2px 8px rgba(0, 0, 0, 0.15);
+  @shadow-light: 0 1px 4px rgba(0, 0, 0, 0.08);
+  @shadow-dark: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.theme-dark() {
+  // 背景颜色（从 Figma 设计稿提取，深色模式）
+  @bg-tab-active: url(../resources/images/bg-tab-active-7891.png);
+  @bg-main: url(../resources/images/bg-7890.png);
+  
+  // 主色调（深色模式调整）
+  @primary-color: #177ddc;
+  @success-color: #49aa19;
+  @warning-color: #d89614;
+  @error-color: #d32029;
+  @info-color: #177ddc;
+  
+  // 文本颜色（深色面板禁止使用黑色系）
+  @text-color-primary: #e8e8e8;
+  @text-color-secondary: #c9c9c9;
+  @text-color-tertiary: #a6a6a6;
+  @text-color-disabled: #595959;
+  @text-color-inverse: #262626;
+  
+  // 边框颜色
+  @border-color-base: #434343;
+  @border-color-light: #303030;
+  @border-color-dark: #595959;
+  
+  // 背景色
+  @bg-color-base: #1f1f1f;
+  @bg-color-light: #141414;
+  @bg-color-dark: #0a0a0a;
+  @bg-color-hover: #262626;
+  
+  // 阴影
+  @shadow-base: 0 2px 8px rgba(0, 0, 0, 0.45);
+  @shadow-light: 0 1px 4px rgba(0, 0, 0, 0.3);
+  @shadow-dark: 0 4px 16px rgba(0, 0, 0, 0.6);
+}

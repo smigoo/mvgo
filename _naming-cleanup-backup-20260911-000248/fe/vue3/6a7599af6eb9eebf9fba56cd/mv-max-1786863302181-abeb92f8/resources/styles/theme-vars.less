@@ -1,0 +1,68 @@
+@color-primary: #3677f8;
+@color-bg: #0f0f0f;
+@color-bg-container: #1f1f1f;
+@color-text-base: #ffffff;
+@color-text-secondary: #a6a6a6;
+@font-size-base: 14px;
+@border-radius-base: 8px;
+@border-color: #303030;
+@monitor-blue: #2c9bea;
+@monitor-active-blue: #038fff;
+@monitor-title-blue: #1990ff;
+@monitor-green: #0fcd7d;
+@monitor-danger: #d32f2f;
+
+.common() {
+  :root {
+  .theme-dark();
+    --colorPrimary: @color-primary;
+    --colorBg: @color-bg;
+    --colorBgContainer: @color-bg-container;
+    --colorTextBase: @color-text-base;
+    --colorTextSecondary: @color-text-secondary;
+    --fontSize: @font-size-base;
+    --borderRadius: @border-radius-base;
+    --borderColor: @border-color;
+    --monitorBlue: @monitor-blue;
+    --monitorActiveBlue: @monitor-active-blue;
+    --monitorTitleBlue: @monitor-title-blue;
+    --monitorGreen: @monitor-green;
+    --monitorDanger: @monitor-danger;
+  }
+}
+
+.theme-dark() {
+  :root {
+    --colorPrimary: #3677f8;
+    --colorBg: #0f0f0f;
+    --colorBgContainer: #1f1f1f;
+    --colorTextBase: #ffffff;
+    --colorTextSecondary: #a6a6a6;
+    --fontSize: 14px;
+    --borderRadius: 8px;
+    --borderColor: #303030;
+    --monitorBlue: #2c9bea;
+    --monitorActiveBlue: #038fff;
+    --monitorTitleBlue: #1990ff;
+    --monitorGreen: #0fcd7d;
+    --monitorDanger: #d32f2f;
+  }
+}
+
+.theme-light() {
+  :root {
+    --colorPrimary: #1990ff;
+    --colorBg: #edf4fb;
+    --colorBgContainer: #ffffff;
+    --colorTextBase: #333333;
+    --colorTextSecondary: #666666;
+    --fontSize: 14px;
+    --borderRadius: 8px;
+    --borderColor: rgba(44, 155, 234, 0.28);
+    --monitorBlue: #2c9bea;
+    --monitorActiveBlue: #038fff;
+    --monitorTitleBlue: #1990ff;
+    --monitorGreen: #0fcd7d;
+    --monitorDanger: #d32f2f;
+  }
+}

@@ -1,0 +1,127 @@
+.c-mc-max-1788171201725-c1914947-c-env-monitor-root {
+  width: 420px;
+  height: 186px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  max-width: 100%;
+  max-height: 100vh;
+  box-sizing: border-box;
+  font-size: var(--fontSize, 14px);
+}
+.c-mc-max-1788171201725-c1914947-c-env-monitor-controls-block {
+  width: 100%;
+  flex-shrink: 0;
+}
+.c-mc-max-1788171201725-c1914947-c-env-monitor-controls {
+  width: 100%;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+.c-mc-max-1788171201725-c1914947-c-env-monitor-tabs {
+  flex: 1;
+  min-width: 0;
+  height: 27px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 3px;
+  box-sizing: border-box;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #b5deff 0%, #d1ecff 100%);
+  border: 1px solid #ffffff;
+  overflow: hidden;
+}
+.c-mc-max-1788171201725-c1914947-c-env-monitor-tab-item {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #2c9bea;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+.c-mc-max-1788171201725-c1914947-c-env-monitor-tab-item:hover {
+  opacity: 0.8;
+}
+.c-mc-max-1788171201725-c1914947-c-env-monitor-tab-item-active {
+  color: #ffffff;
+  text-shadow: 0 0.6px 0 #006fe3;
+}
+.c-mc-max-1788171201725-c1914947-c-env-monitor-view-icons {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+.c-mc-max-1788171201725-c1914947-c-env-monitor-view-icon {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: opacity 0.3s ease;
+}
+.c-mc-max-1788171201725-c1914947-c-env-monitor-view-icon:hover {
+  opacity: 0.7;
+}
+.c-mc-max-1788171201725-c1914947-c-env-monitor-view-icon-active {
+  opacity: 1;
+}
+.c-mc-max-1788171201725-c1914947-c-env-monitor-view-icon-img {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+.c-mc-max-1788171201725-c1914947-c-env-monitor-view-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 2px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 29px;
+  background: #f53f3f;
+  color: #ffffff;
+  font-size: calc(14px * 0.8571);
+  font-weight: 500;
+  line-height: 1;
+}
+.c-mc-max-1788171201725-c1914947-c-env-monitor-chart-block {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+}
+.c-mc-max-1788171201725-c1914947-c-env-monitor-chart {
+  width: 100%;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.c-mc-max-1788171201725-c1914947-c-env-monitor-chart-canvas {
+  width: 100%;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}

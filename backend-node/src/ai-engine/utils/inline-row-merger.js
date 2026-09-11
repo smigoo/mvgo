@@ -100,21 +100,42 @@ function childRefTokens(child) {
   return out
 }
 
-/** 单个元素是否被某个几何行的子树证据覆盖（id 精确命中 / id 尾号命中 / 文案命中 / 语义名命中） */
+/** 元素上可用于回指 Figma 的引用（节点 id + 资源文件名尾号，如 icon-7941 → 7941）——已抽到 childRefTokens */
+
+/**
+ * 单个元素是否被某个几何行的子树证据覆盖（id 精确命中 / id 尾号命中 / 文案命中 / 语义名命中）。
+ *
+ * 🛡️ 治本（2026-09-11 · mc-max-1789097821000-c6194696 设备监测实锤）：语义壳（section-main，
+ * figmaNode=null）的**直接子元素**是「左侧竖向Tab切换栏 / 右侧内容区」这类纯语义名，无任何
+ * 可回指 Figma 的 token，旧逻辑只查这一层 → 判不出覆盖 → 去重失效 → 两套 tabs 重复渲染。
+ * 但语义壳**深层** tab 项的 name（监控/照明/摄像机…）恰好是几何行子树 TEXT 的 characters——
+ * 只要递归收集后代的 name/text/label 与 resourceFile 尾号，就能命中并正确判为「被覆盖」。
+ * 治本：递归 child 自身 + 其 children 后代，任一后代命中即视为该语义壳子元素被几何行覆盖。
+ */
 function childCoveredByEvidence(child, ev) {
-  for (const token of childRefTokens(child)) {
-    const sfx = idSuffixOf(token)
-    if (sfx && ev.idSuffixes.has(sfx)) return true
-    if (ev.ids.has(token)) return true
+  // 🛡️ 递归命中判定：child 自身及其所有后代（children 递归）中，任一命中证据即 true。
+  const walk = (node, depth) => {
+    if (!node || typeof node !== 'object') return false
+    if (depth > 8) return false // 防病态深链，语义壳正常深度 ≤ 4
+    for (const token of childRefTokens(node)) {
+      const sfx = idSuffixOf(token)
+      if (sfx && ev.idSuffixes.has(sfx)) return true
+      if (ev.ids.has(token)) return true
+    }
+    for (const key of ['name', 'text', 'label']) {
+      const v = node[key]
+      if (typeof v !== 'string') continue
+      const t = v.trim()
+      if (t.length < 2) continue
+      if (ev.texts.has(t) || ev.names.has(t)) return true
+    }
+    const kids = node.children || node.items || node.elements
+    if (Array.isArray(kids)) {
+      for (const k of kids) if (walk(k, depth + 1)) return true
+    }
+    return false
   }
-  for (const key of ['name', 'text', 'label']) {
-    const v = child[key]
-    if (typeof v !== 'string') continue
-    const t = v.trim()
-    if (t.length < 2) continue
-    if (ev.texts.has(t) || ev.names.has(t)) return true
-  }
-  return false
+  return walk(child, 0)
 }
 
 export function mergeInlineRowsIntoSections(layout, inlineRows, figmaData) {
@@ -191,12 +212,20 @@ export function mergeInlineRowsIntoSections(layout, inlineRows, figmaData) {
     if (!row || !Array.isArray(row.members) || row.members.length < 2) continue
     // 同一行已存在于 sections（id 命中）则跳过，避免重复追加
     if (merged.some((s) => s && s.id === row.id)) continue
-    const children = row.members.map((m, i) => ({
-      id: `${row.id}-m${i + 1}`,
-      name: String(m),
-      role: 'item',
-      figmaNode: m,
-    }))
+    const children = row.members.map((m, i) => {
+      // 🛡️ 覆盖率根因（2026-09-11 · env-monitor 10% 实锤）：name 只写节点号（String(m)）会让覆盖率
+      // 把「一氧化碳/洞内照明/洞外光强」等 tab 文案判 missing（节点号 vs 文案子串匹配不上）→ 虚低覆盖率。
+      // 治本：从 member 的 figma 子树抽真实文案（TEXT.characters，collectSubtreeEvidence 已收 texts），
+      // 拼接作为 name，覆盖率子串即可命中。抽不到文案才回退节点号（保持原行为）。
+      const ev = getIndex() ? collectSubtreeEvidence(getIndex(), m) : null
+      const texts = ev && ev.texts ? [...ev.texts] : []
+      return {
+        id: `${row.id}-m${i + 1}`,
+        name: texts.join('') || String(m),
+        role: 'item',
+        figmaNode: m,
+      }
+    })
     newBlocks.push({
       id: row.id,
       name: row.name || 'inline-row',

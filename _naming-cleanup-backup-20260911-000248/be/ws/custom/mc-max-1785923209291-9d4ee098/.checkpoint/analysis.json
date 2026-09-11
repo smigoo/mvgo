@@ -1,0 +1,189 @@
+{
+  "reviewResult": {
+    "reviewResult": "reject",
+    "score": 60,
+    "issues": [
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "layout.sections[0]",
+        "message": "header-area 中包含了组件标题 '环境监测' (header.title)，违反了'禁止生成组件面板标题和边框样式'的核心规范。base-panel 会自动处理面板标题，组件内部不应重复生成。",
+        "suggestion": "移除 header-area 中的 title 字段。右上角的功能图标应通过 base-panel 的 extra 插槽传入，或在组件内部顶部构建独立的操作栏（仅包含图标，不包含标题）。"
+      },
+      {
+        "level": "error",
+        "type": "structure",
+        "location": "coverageReport",
+        "message": "Figma 节点覆盖率 (coverageRate) 为 0，matchedCount 为 0，missingCount 高达 26。这意味着布局结构未能与设计稿节点正确映射，可能导致生成的代码严重偏离设计稿。",
+        "suggestion": "检查 Figma 文件结构是否规范，或重新运行视觉解析工具 (visual-parser) 以确保节点正确匹配，解决覆盖率归零的问题。"
+      },
+      {
+        "level": "warning",
+        "type": "performance",
+        "location": "layout.sections[*].body.backgroundImage",
+        "message": "每个 section 的 body 都重复设置了相同的背景图 (bg-7890.png)。这会导致不必要的 DOM 节点和样式冗余，影响渲染性能。",
+        "suggestion": "将背景图统一设置在组件的最外层根容器上，移除各个 section body 中重复的 backgroundImage 配置。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "layout.sections[2].body.children[0]",
+        "message": "图表配置 (line-chart-co) 中缺少 tooltip 的定义。根据规范，只要存在 ECharts 图表，就必须提供 tooltip 配置，禁止省略。",
+        "suggestion": "在图表配置中补充 tooltip 属性，例如设置 trigger: 'axis' 及相应的样式配置，确保交互时能正常显示数据提示。"
+      },
+      {
+        "level": "warning",
+        "type": "naming",
+        "location": "layout.sections[2].body.children[0].yAxis.label",
+        "message": "Y轴单位被识别为 '辆'，但监测指标为 'CO浓度'，单位通常为 'ppm' 或 'mg/m³'。'辆' 明显是识别错误或设计稿笔误。",
+        "suggestion": "虽然遵循'按图显示记录'原则，但建议在代码生成前与设计师核实该单位。若确认为设计稿错误，应修正为正确的浓度单位。"
+      },
+      {
+        "level": "warning",
+        "type": "structure",
+        "location": "interactions[0]",
+        "message": "Tab 切换交互仅描述了 UI 状态，未体现切换后图表数据联动的数据源映射结构。",
+        "suggestion": "在布局或数据结构中补充不同 Tab 对应的数据源映射 (如 dataMap)，确保代码生成时能实现 Tab 切换与图表数据的联动，而非仅切换 UI 样式。"
+      }
+    ],
+    "recommendations": [
+      "重新解析 Figma 文件，解决 coverageRate 为 0 的问题，确保所有设计稿节点被正确识别和映射。",
+      "严格遵循 base-panel 规范，移除组件内部自行生成的标题栏，将右上角图标移至 base-panel 的 extra 插槽。",
+      "优化背景图渲染策略，将全局背景图提升至根容器，避免子区块重复设置导致 DOM 冗余。",
+      "完善图表配置，补充 tooltip 和 legend 的详细配置，确保符合 ECharts 渲染规范。",
+      "在代码生成阶段，确保 Tab 切换逻辑包含完整的数据联动 (watch + updateChart)，满足微码组件的交互约束。"
+    ],
+    "summary": "该布局结构存在违反核心规范（重复生成面板标题）的严重问题，且 Figma 节点覆盖率完全为 0，表明解析过程存在重大缺陷。此外，背景图重复设置、图表缺少 tooltip 配置等问题也影响了结构的合理性和规范性。建议修复解析映射问题，并严格按照微码组件规范重构布局结构后重新审查。"
+  },
+  "styleMappings": {
+    "themeVars": {
+      "comment": "CSS变量（camelCase命名）",
+      "--colorPrimary": "#559EFF",
+      "--colorBgBase": "#EDF4FB",
+      "--colorSuccess": "#52C41A",
+      "--colorError": "#F53F3F",
+      "--colorTextBase": "#333333",
+      "--fontSize": "14px",
+      "--borderRadius": "8px",
+      "--colorBorderSecondary": "#E0E0E0"
+    },
+    "lessVariables": {
+      "comment": "Less变量映射",
+      "@color-primary": "#559EFF",
+      "@color-bg-base": "#EDF4FB",
+      "@color-success": "#52C41A",
+      "@color-error": "#F53F3F",
+      "@color-text-base": "#333333",
+      "@font-size-base": "14px",
+      "@border-radius-base": "8px",
+      "@color-border-secondary": "#E0E0E0"
+    },
+    "cssClasses": {
+      "comment": "可复用的CSS类",
+      ".container": {
+        "display": "flex",
+        "flex-direction": "column",
+        "padding": "16px",
+        "background": "#EDF4FB",
+        "color": "var(--colorTextBase, #333333)",
+        "font-size": "var(--fontSize, 14px)"
+      },
+      ".tab-bar": {
+        "display": "flex",
+        "gap": "8px",
+        "background": "rgba(255, 255, 255, 0.6)",
+        "border-radius": "var(--borderRadius, 8px)",
+        "padding": "4px"
+      },
+      ".tab-item": {
+        "padding": "6px 16px",
+        "border-radius": "6px",
+        "color": "var(--colorTextBase, #333333)",
+        "cursor": "pointer",
+        "transition": "all 0.3s"
+      },
+      ".tab-item-active": {
+        "background": "var(--colorPrimary, #559EFF)",
+        "color": "#ffffff",
+        "font-weight": "500"
+      },
+      ".chart-grid": {
+        "stroke": "var(--colorBorderSecondary, #E0E0E0)",
+        "stroke-width": "1px",
+        "stroke-dasharray": "4 4"
+      },
+      ".warning-line": {
+        "stroke": "var(--colorError, #F53F3F)",
+        "stroke-width": "2px",
+        "stroke-dasharray": "6 4"
+      },
+      ".badge": {
+        "display": "inline-flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "min-width": "20px",
+        "height": "20px",
+        "padding": "0 6px",
+        "background": "var(--colorError, #F53F3F)",
+        "color": "#ffffff",
+        "border-radius": "10px",
+        "font-size": "12px",
+        "font-weight": "bold"
+      }
+    },
+    "tokenCoverage": 0.95,
+    "mappingNotes": [
+      "主色调 #559EFF 映射为 --colorPrimary，用于选中Tab背景等强调元素",
+      "背景色 #EDF4FB 直接落地为容器背景字面量，同时映射为 --colorBgBase 供其他组件复用",
+      "红色 #F53F3F 映射为 --colorError，用于预警虚线和Badge高亮",
+      "绿色 #52C41A 映射为 --colorSuccess，用于正常状态指示",
+      "图表网格线使用浅灰色虚线样式，保持科技监测风的简洁感"
+    ],
+    "elementStyleMap": {
+      "header-area": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "el-el-x-2": {
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "tab-switch-area": {
+        "display": "flex",
+        "flex-direction": "row"
+      },
+      "tab-co": {
+        "background-color": "#559EFF",
+        "color": "#FFFFFF",
+        "border-radius": "4px"
+      },
+      "tab-visibility": {
+        "color": "#666666"
+      },
+      "tab-tunnel-light": {
+        "color": "#666666"
+      },
+      "tab-outside-light": {
+        "color": "#666666"
+      },
+      "el-el-x-6": {
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      },
+      "chart-area": {
+        "display": "flex",
+        "flex-direction": "column"
+      },
+      "el-el-x-12": {
+        "background-image": "url(../resources/images/bg-7890.png)",
+        "background-size": "cover",
+        "background-position": "center",
+        "background-repeat": "no-repeat"
+      }
+    }
+  }
+}
