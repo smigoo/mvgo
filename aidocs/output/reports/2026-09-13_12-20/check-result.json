@@ -1,0 +1,10 @@
+{
+  "specVersion": "v1.0.20",
+  "checkedAt": "2026-09-13T04:20:41.917Z",
+  "components": [
+    {
+      "dirName": "/Users/smigoo/工作/mvgo/backend-node/workspace/custom-components/c-vehicle-monitor-ahscsupc-3eef1eb3",
+      "error": "目录不存在：/Users/smigoo/工作/mvgo/src/workspace/custom-components/Users/smigoo/工作/mvgo/backend-node/workspace/custom-components/c-vehicle-monitor-ahscsupc-3eef1eb3"
+    }
+  ]
+}
