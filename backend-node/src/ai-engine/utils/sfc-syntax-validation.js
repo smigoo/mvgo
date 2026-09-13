@@ -8,11 +8,30 @@ import {
   parse as parseSfc
 } from '@vue/compiler-sfc'
 
+/**
+ * 统一格式化编译/解析错误。
+ *
+ * 🛡️ 2026-09-13：补 LESS 错误形态（`{line, column, filename, extract}`）——
+ * 旧实现只看 `error.loc`，而 less 抛出的错误**只有** `line/column/extract`，于是
+ * 「style: Missing closing ')'」这种**没有行号、没有代码帧**的报错被写进日志/P1-4
+ * rawErrors，排查时必须手工二分复现整条变换链才能定位（事故 mc-1789308308127：
+ * 实际是 `:not()` 被掏空，改动点却在类名归一器，跨模块）。
+ * 现在把「位置 + 3 行代码帧（`@here` 标记行）」一并输出，一次定位到行。
+ */
 function formatCompilerError(error, filePath, kind) {
   const message = error?.message || String(error || `${kind} 编译失败`)
   const loc = error?.loc?.start || error?.loc
-  if (!loc) return `${filePath || 'Vue SFC'} ${kind}: ${message}`
-  return `${filePath || 'Vue SFC'}:${loc.line || 1}:${(loc.column || 0) + 1} ${kind}: ${message}`
+  // less 错误形态：{ type, message, filename, line, column, extract: [before, at, after] }
+  const lessLine = Number(error?.line)
+  const hasLessLoc = !loc && Number.isFinite(lessLine) && lessLine > 0
+  const frameLines = Array.isArray(error?.extract) ? error.extract.filter(Boolean) : []
+  const frame = frameLines.length > 0 ? `\n    ${frameLines.join('\n    ')}` : ''
+  if (hasLessLoc) {
+    const col = Number(error?.column) > 0 ? `:${Number(error.column) + 1}` : ''
+    return `${filePath || 'Vue SFC'}:${lessLine}${col} ${kind}: ${message}${frame}`
+  }
+  if (!loc) return `${filePath || 'Vue SFC'} ${kind}: ${message}${frame}`
+  return `${filePath || 'Vue SFC'}:${loc.line || 1}:${(loc.column || 0) + 1} ${kind}: ${message}${frame}`
 }
 
 function validateScriptBlock(block, source, filePath, errors) {

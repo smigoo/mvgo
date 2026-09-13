@@ -27,6 +27,9 @@ import {
   scoreMountTarget,
   inferComponentPrefix,
 } from '../../utils/mount-target-scoring.js';
+import {
+  collectDeclaredBindings,
+} from '../../utils/resource-import-guard.js';
 import { safeLogger } from '../../logger/safe-logger.js';
 import { extractSfcTemplate } from '../../utils/sfc-template-extractor.js';
 import { collectResourceVarRefsFromSfc } from '../../utils/resource-facts.js';
@@ -430,9 +433,27 @@ export function ensureResourceImportsForRefs(files = {}, resourceDomMapping = []
   return { files: out, injected, unresolved };
 }
 
-/** 确保目标 vue 文件 script 中存在该资源变量的 import */
+/**
+ * 确保目标 vue 文件 script 中存在该资源变量的 import。
+ *
+ * 🛡️ 刀 7b（2026-09-13）：**撞名复核**——注入前用唯一事实源 collectDeclaredBindings
+ * 检查该名字在文件内是否已被 const/let/var 声明（含解构 / 多声明符 / 裸声明）。
+ *
+ * 事故 mc-max-1789279605053-c9e4a435：LLM 在 MainSection 写 `const bg6 = bg3`
+ * （12 张设备卡共用同一张 bg-8439.png，视觉序编号成 bg3…bg14，模型用别名转发）。
+ * 旧实现只查 `import bg6 from` → 判定「未 import」→ 注入 `import bg6`
+ * → `const bg6` 与 `import bg6` 同作用域重复声明 → MainSection SFC 编译失败
+ * → P1-4 隔离降级 → 主内容区（tab 导航 + 12 设备网格）整体丢失，
+ * 最终只剩 Header/Switch/Tabs，设备图标被早期 LLM 错塞进 tab 项。
+ *
+ * 语义：LLM 自己已给出绑定（无论是 import 还是 const 别名），一律尊重、不再注入。
+ * 这是「宁可不注入，也不炸 SyntaxError」的保守取舍——遗漏绑定由 T08 幽灵引用剥离
+ * 与 RESOURCE-R2 门禁兜底，而重复声明会直接毁掉整个子组件。
+ */
 export function ensureResourceImportInVue(content, varName, mapping, filePath) {
   if (new RegExp(`import\\s+${varName}\\s+from`).test(content)) return content;
+  // 🛡️ 刀 7b：撞名复核（单一事实源，覆盖 const/let/var + 解构 + 多声明符）
+  if (collectDeclaredBindings(content).has(varName)) return content;
   const file = String(mapping.resourceFile || '')
     .split('/')
     .pop();
@@ -2582,8 +2603,8 @@ export function detectSubComponents(indexVueContent) {
 export function ensureSubComponentImport(content, options = {}) {
   const logger = safeLogger(options.logger);
   if (!content || typeof content !== 'string') return content;
-  const tplMatch = content.match(/<template>([\s\S]*?)<\/template>/i);
-  if (!tplMatch) return content;
+  const tpl = extractSfcTemplate(content);
+  if (!tpl) return content;
 
   // 提取 template 里的 PascalCase 子组件标签（排除 Vue 内置组件）
   const VUE_BUILTINS = new Set([
@@ -2598,7 +2619,7 @@ export function ensureSubComponentImport(content, options = {}) {
     'Slot',
   ]);
   const subComps = new Set();
-  for (const m of tplMatch[1].matchAll(/<([A-Z][\w]*)\b/g)) {
+  for (const m of tpl.matchAll(/<([A-Z][\w]*)\b/g)) {
     if (!VUE_BUILTINS.has(m[1])) subComps.add(m[1]);
   }
   if (subComps.size === 0) return content;

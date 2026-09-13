@@ -49,7 +49,43 @@ export const FLEX_GROW_SCALES = Object.freeze({
 
 const FLEX_DECL_RX = /(?:^|[;{\n])\s*flex\s*:\s*([^;}]+)/gi;
 const GROW_DECL_RX = /(?:^|[;{\n])\s*flex-grow\s*:\s*([^;}]+)/gi;
-const CLASS_RX = /\.([a-zA-Z][\w-]*)/g;
+
+/**
+ * 🛡️ 刀 16a（2026-09-13）：一条 CSS 规则**真正作用的元素**上的 class（= 最右复合选择器）。
+ *
+ * CSS 语义：规则只作用于选择器**最右**的复合选择器（目标元素），左侧全是祖先/条件。
+ *   `.a > .b { flex: 0 0 46px }` → 只作用于 .b（`.a` 只是祖先条件）
+ *   `.a .b { … }`                → 只作用于 .b
+ *   `.a.b { … }`                 → 同一元素同时带 a/b → 两个都算
+ *   `.a, .b { … }`               → 逗号分组各自独立作用 → 两个都算
+ *   `.a:not(.b) > .c { … }`      → 只作用于 .c（`:not()` 参数内的 .b 不是目标元素）
+ *
+ * 旧实现（`CLASS_RX` 直扫 selector）对选择器里**所有** class 一视同仁登记同一组声明 →
+ * `.A > .B { flex: 0 0 46px }` 把 B 的值记到 A 头上 → 同一文件里 A 出现两个 grow
+ * （自己的 1 与后代的 0）→ FLEX-003 假阳性 BLOCK。
+ * 实锤 `mc-1789313554441-b3bc70a3`：`.c-device-monitor-section-main-content` 被
+ * `.c-device-monitor-section-main-content > .c-device-monitor-tab { flex: 0 0 46px }` 污染。
+ *
+ * 伪类参数剥离是**文本级**的（与 class-dialect-normalizer#findPseudoArgRanges 同源思路，
+ * 但那返回范围数组、且会引入跨模块依赖；此处保持本模块零依赖）。
+ *
+ * @param {string} selector 规则的选择器原文（可含逗号分组 / 组合符 / 伪类）
+ * @returns {string[]} 目标元素上的 class（去重，保序）
+ */
+export function targetClassesOf(selector = '') {
+  const out = [];
+  for (const group of String(selector).split(',')) {
+    // 剥掉伪类函数参数（`:not(.x)` / `:is(.y)` 里的类名不是目标元素）；两遍覆盖一层嵌套
+    let cleaned = group;
+    for (let i = 0; i < 2; i += 1) {
+      cleaned = cleaned.replace(/:[a-zA-Z-]+\([^()]*\)/g, ':');
+    }
+    const compounds = cleaned.trim().split(/[\s>+~]+/).filter(Boolean);
+    const last = compounds[compounds.length - 1] || '';
+    for (const m of last.matchAll(/\.(-?[A-Za-z_][\w-]*)/g)) out.push(m[1]);
+  }
+  return [...new Set(out)];
+}
 
 const VOID_TAGS = new Set([
   'img', 'br', 'hr', 'input', 'meta', 'link', 'path', 'circle',
@@ -210,10 +246,9 @@ export function buildFlexIndex(sources = []) {
         .map((v) => parseGrowFromFlexValue(v))
         .filter((g) => g !== null && Number.isFinite(g));
 
-      CLASS_RX.lastIndex = 0;
-      let cm;
-      while ((cm = CLASS_RX.exec(b.selector)) !== null) {
-        const cls = cm[1];
+      // 🛡️ 刀 16a：只登记「目标元素」上的 class（最右复合选择器），
+      // 避免 `.A > .B { flex }` 把 B 的值记到祖先 A 头上 → 同文件出现两个 grow → FLEX-003 假阳性。
+      for (const cls of targetClassesOf(b.selector)) {
         if (!byClass.has(cls)) byClass.set(cls, []);
         byClass.get(cls).push({ file: src.file, scoped: src.scoped, values: flexVals, grows });
       }
@@ -394,11 +429,8 @@ export function detectFlexSiblingIssues(files = []) {
   for (const src of sources) {
     for (const b of extractStyleBlocks(src.content)) {
       if (!/display\s*:\s*flex/i.test(b.body)) continue;
-      CLASS_RX.lastIndex = 0;
-      let cm;
-      while ((cm = CLASS_RX.exec(b.selector)) !== null) {
-        flexContainerClasses.add(cm[1]);
-      }
+      // 🛡️ 刀 16a：flex 容器 = `display:flex` 规则的**目标元素**；祖先不因后代规则而变 flex。
+      for (const cls of targetClassesOf(b.selector)) flexContainerClasses.add(cls);
     }
   }
 
@@ -660,11 +692,8 @@ export function normalizeFlexSiblingScale(files = []) {
   for (const src of sources) {
     for (const b of extractStyleBlocks(src.content)) {
       if (!/display\s*:\s*flex/i.test(b.body)) continue;
-      CLASS_RX.lastIndex = 0;
-      let cm;
-      while ((cm = CLASS_RX.exec(b.selector)) !== null) {
-        flexContainerClasses.add(cm[1]);
-      }
+      // 🛡️ 刀 16a：flex 容器 = `display:flex` 规则的**目标元素**；祖先不因后代规则而变 flex。
+      for (const cls of targetClassesOf(b.selector)) flexContainerClasses.add(cls);
     }
   }
 

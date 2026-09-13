@@ -43,7 +43,8 @@ import {
   stripLlmTailGarbageFromFiles,
   stripLlmTailGarbage,
 } from '../utils/llm-tail-garbage.js';
-import { invokeWithTimeout } from '../utils/llm-timeout.js';
+// 🛡️ 2026-09-13：`invokeWithTimeout` 死 import 已移除——微码 LLM 调用点早前已下沉到
+// microcode/code-generator.js（分块生成器），此处仅剩 import 无任何调用（死接线）。
 import { generateDeclareJson as _templateDeclareJson } from '../templates/component-template.js';
 import {
   validateVueScriptSemantics,
@@ -154,6 +155,7 @@ import {
   zhToSemanticEn,
   resolveComponentIdCheckpoint,
   applyDeclareCheckpoint,
+  sanitizeComponentId,
 } from '../utils/component-naming.js';
 // 🛡️ 2026-09-03（管线 A 方案）：写盘前把子组件类样式收敛进 common.less
 import { consolidateSubComponentClasses } from '../utils/style-class-consolidator.js';
@@ -2050,6 +2052,33 @@ export class MicrocodeEngineer extends BaseAgent {
         throw new Error(
           `LLM 输出文件不完整：${otherTruncationIssues.join('；')}`,
         );
+      }
+
+      // 🛡️ 刀 12（2026-09-13）：**跨侧基名对齐必须早于「类名交叉校验 + 兜底 stub 生成」**。
+      // 缺陷链：模板与样式源由两次独立 LLM 调用产出 → 同一元素落到两个基名上
+      // （实测 mc-1789305950498-6a45b6f2：模板 c-device-monitor-tab / --active，
+      //   样式 .c-device-monitor-tab-item / .c-device-monitor-tab-item--active）
+      // → 交叉校验报「模板 class 未定义」→ 兜底按 elementStyleMap 补**只含布局属性**的 stub
+      //   → 告警被遮掉，但设计样式（背景色/圆角/内边距/字重/激活态底色）**永不生效**。
+      // 对齐后立刻重算 classNamesList：否则仍拿旧名单校验新模板，会为旧名补出死 stub。
+      // 同时把 R1/R2 方言归一提早到这里（写盘出口那次保留作幂等兜底），
+      // 使「交叉校验 → 兜底」看到的就是最终类名，避免 stub 被后续归一变死（历史 C4 噪声来源）。
+      try {
+        const _dialect = normalizeClassNameDialect(allFiles);
+        if (_dialect.changes.length > 0) {
+          for (const [k, v] of Object.entries(_dialect.files)) allFiles[k] = v;
+          classNamesList = this._extractTemplateClassNames(
+            allFiles,
+            input.componentName,
+          ).fullList;
+          this.logger.info('🛡️ 类名对齐（刀 12 跨侧基名 + R1/R2 方言）', {
+            count: _dialect.changes.length,
+            crossSide: _dialect.changes.filter((ch) => ch.rule === 'R4').length,
+            samples: _dialect.changes.slice(0, 3),
+          });
+        }
+      } catch (e) {
+        this.logger.warn(`类名对齐失败，按原样继续校验: ${e?.message || e}`);
       }
 
       //  Class 名交叉校验（模板 vs common.less）+ 自动修复
@@ -4126,34 +4155,42 @@ export class MicrocodeEngineer extends BaseAgent {
     // （2026-09-09 实锤：告警 "无法解析 declare.json 进行后校验 {_forceChanged is not defined}"）。
     let _forceChanged = false;
     if (_checkpointId && _sessionId) {
-      d.componentId = _checkpointId;
+      // 🛡️ 刀 9（2026-09-13）：检查点 id 也必须过「可剥离闸门」。
+      // 历史脏检查点（四段 c-device-monitor-00g6b7vh-075b13a4）若原样沿用，
+      // classPrefixOf 剥不掉随机中段 → CODE-003 双前缀会随重跑复发。
+      // 净化后若与检查点不一致 → 判定检查点为脏值，回写内存检查点自愈。
+      const _cleanCkptId = sanitizeComponentId(_checkpointId, {
+        sessionId: _sessionId,
+        fallbackToken: componentName || displayName || '',
+      });
+      d.componentId = _cleanCkptId;
       changed = true;
+      if (_cleanCkptId !== _checkpointId) {
+        _forceChanged = true;
+        _componentIdCheckpoints.set(_sessionId, _cleanCkptId);
+      }
       // 检查点已命中 → 跳过所有 normalization 逻辑
-      const _ckptPrefix = classPrefixOf(_checkpointId) || 'c-component';
+      const _ckptPrefix = classPrefixOf(_cleanCkptId) || 'c-component';
       // 跳转到 class 前缀处理之后（line ~3874 的逻辑将被检查点短路后的代码取用）
     } else {
     // （非检查点分支）
     if (_sessionId && _llmComponentId) {
-      // 已是本任务唯一 id（尾 8hex === sessionId 尾）→ 幂等跳过，避免重跑修复噪音
-      // 跳过还需语义段有效：c-9abce496-9abce496 这类双尾编码（语义段即纯 hex，
-      // semanticSegmentOf 返回 ''）必须重建，不能幂等残留。
-      const _tailMatch = _llmComponentId.match(/-([0-9a-f]{8})$/);
-      let _seg = semanticSegmentOf(_llmComponentId);
-      const _alreadyUnique =
-        !!(_tailMatch && _seg) && _tailMatch[1] === _sessionId.slice(-8);
+      // 🛡️ 刀 9（2026-09-13·修正）：先经「可剥离闸门」判定，而非拿原始 id 的尾 hex 比对。
+      // 原实现只看 `-([0-9a-f]{8})$ === sessionId 尾` 就判 _alreadyUnique=true 直接绕过修复，
+      // 但四段脏 id `c-env-monitor-6ajwy8yn-b81edc3b` 的尾 b81edc3b 恰好等于 session 尾，
+      // 于是随机中段 6ajwy8yn 被原样保留 → classPrefixOf 剥离失败 → CODE-003 双前缀复发。
+      // 新判据：对 id 走 sanitizeComponentId 收敛，收敛结果 === 原 id 才算「已规范」。
+      const _sanitized = sanitizeComponentId(_llmComponentId, {
+        sessionId: _sessionId,
+        fallbackToken: componentName || displayName || '',
+      });
+      const _alreadyUnique = _sanitized === _llmComponentId;
       if (!_alreadyUnique) {
-        if (!_seg) {
-          _seg = semanticTokenFrom({
-            displayName: displayName || '',
-            zhName: displayName || '',
-            figmaName: nodeData?.name || '',
-            fallbackToken: componentName || '',
-          });
-        }
-        d.componentId = buildComponentId(_seg || 'component', _sessionId);
+        d.componentId = _sanitized;
         changed = true;
         _forceChanged = true;
       }
+    } else if (_sessionId) {
     } else if (_sessionId) {
       // LLM 未产出 componentId → 从 displayName 语义派生唯一 id
       const _seg = semanticTokenFrom({
@@ -4250,18 +4287,29 @@ export class MicrocodeEngineer extends BaseAgent {
       changed = true;
     }
     // 🛡️ onload 事件归一：LLM 可能用无前缀的 eventId（如 "e2elabv2-onload"），
-    // 与规范前缀 onloadId（"c-e2elabv2-onload"）重复。先找已有 *-onload 事件并统一，
-    // 没有才新建，避免出现两个 onload。
-    const existingOnloadKey = Object.keys(d.businessEvents).find(
+    // 与规范前缀 onloadId（"c-e2elabv2-onload"）重复，统一收拢到规范槽，避免出现两个 onload。
+    // 🛡️ 刀 9（2026-09-13·修正）：折叠**全部**非规范 *-onload（原实现用 find() 只处理第一个）。
+    // 双轨（c-device-monitor-00g6b7vh-onload + device-monitor-onload）折叠后曾仍残留一条，
+    // 与模板 publishEvent 单轨不符，形成 CODE-024 类方言残留。改为 filter 全量折叠。
+    const strayOnloadKeys = Object.keys(d.businessEvents).filter(
       (k) => /-onload$/.test(k) && k !== onloadId,
     );
-    if (existingOnloadKey) {
-      const evt = d.businessEvents[existingOnloadKey];
-      delete d.businessEvents[existingOnloadKey];
-      if (evt && typeof evt === 'object') {
-        evt.eventId = onloadId;
-        d.businessEvents[onloadId] = evt;
+    if (strayOnloadKeys.length > 0) {
+      // 优先保留规范槽已有事件；否则取首个非规范事件的业务数据（保留 eventDataSchema 等）
+      const _canonical = d.businessEvents[onloadId];
+      let _folded =
+        _canonical && typeof _canonical === 'object' ? _canonical : null;
+      for (const k of strayOnloadKeys) {
+        const evt = d.businessEvents[k];
+        if (!_folded && evt && typeof evt === 'object') _folded = evt;
+        delete d.businessEvents[k];
       }
+      d.businessEvents[onloadId] = _folded || {
+        eventId: onloadId,
+        eventName: '组件加载完成',
+        eventDataSchema: this._defaultEventSchema(d.componentId),
+      };
+      d.businessEvents[onloadId].eventId = onloadId;
       changed = true;
     }
     if (!d.businessEvents[onloadId]) {

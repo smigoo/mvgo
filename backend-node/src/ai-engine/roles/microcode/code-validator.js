@@ -1360,11 +1360,19 @@ export async function validateAndFixGeneratedFiles(
         vueFilesForFix,
       );
 
-      if (prefixFixResult.fixedClasses.length > 0) {
+      if (prefixFixResult.fixedClasses.length > 0 || prefixFixResult.collapsed > 0) {
         fixedFiles[commonLessPath] = prefixFixResult.commonLess;
-        fixes.push(
-          `CODE-003: common.less 中 ${prefixFixResult.fixedClasses.length} 个 class 已补齐前缀 .${componentName}-: ${prefixFixResult.fixedClasses.slice(0, 3).join(', ')}${prefixFixResult.fixedClasses.length > 3 ? '...' : ''}`,
-        );
+        if (prefixFixResult.fixedClasses.length > 0) {
+          fixes.push(
+            `CODE-003: common.less 中 ${prefixFixResult.fixedClasses.length} 个 class 已补齐前缀 .${componentName}-: ${prefixFixResult.fixedClasses.slice(0, 3).join(', ')}${prefixFixResult.fixedClasses.length > 3 ? '...' : ''}`,
+          );
+        }
+        // 🛡️ 刀 8c（2026-09-13）：历史「组件前缀重复叠加」病灶就地折叠（幂等自愈）
+        if (prefixFixResult.collapsed > 0) {
+          fixes.push(
+            `CODE-003-FOLD: 已折叠 ${prefixFixResult.collapsed} 处重复组件前缀（<stem>-<slug>-<stem>-x → <stem>-x）`,
+          );
+        }
 
         // 联动修复的 .vue 文件
         for (const vueFile of prefixFixResult.vueFiles) {

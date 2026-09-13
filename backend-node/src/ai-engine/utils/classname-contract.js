@@ -22,6 +22,11 @@ import {
   isAliasModifierToken,
   modifierKeyOf,
 } from './class-facts.js';
+// 🛡️ 刀 13b（2026-09-13）：嵌套 `&` 选择器的父选择器栈解析（与归一器共用同一实现）
+import { buildParentSelectorMap, expandAmpSelector } from './less-selector-stack.js';
+// 🛡️ 刀 14（2026-09-13）：C3 判据必须先剥 `[自动修复]` 兜底 stub 段（同一实现，禁手搓正则）。
+// 单向依赖：class-dialect-normalizer 不 import 本模块，无环。
+import { stripAutoFixSection } from './class-dialect-normalizer.js';
 
 /**
  * 契约意义上的「修饰符类」判定（**比 splitModifier 更严格**，防语义类名误判）。
@@ -40,8 +45,18 @@ export function isContractModifier(cls = '') {
 /** 收集全部样式源文本（.less/.css + 各 .vue 的 <style>） */
 export function collectAllStyleSources(files = {}) {
   let all = '';
+  // 🛡️ 刀 14（2026-09-13）：编译产物 `.css` 不入样式源 —— 同名 `.less` 存在时该 `.css` 是它的
+  // LESS 派生，且 `[自动修复]` 兜底段经主题层（`&.dark { @import '../common.less' }`）与
+  // `@import (multiple)` 展开后，**标记注释与规则块分离**，`stripAutoFixSection` 只能剥掉一部分
+  // → 残留 `.dark .c-x { display:flex; flex-direction:row }` 会把「只有 stub」误判成「样式侧存在」
+  // → C3 的可修/不可修二分失效（刀 12 已在 `buildStyleClassIndex` 落过这条原则，此处补齐，
+  // 保持「编译产物不是设计意图」的单一口径）。
   for (const [p, c] of Object.entries(files)) {
     if (typeof c !== 'string') continue;
+    if (/\.css$/i.test(p)) {
+      const lessSibling = p.replace(/\.css$/i, '.less');
+      if (Object.prototype.hasOwnProperty.call(files, lessSibling)) continue;
+    }
     if (/\.(less|css)$/i.test(p)) all += `\n/*${p}*/\n${c}`;
     else if (/\.vue$/i.test(p)) {
       const m = c.match(/<style[^>]*>([\s\S]*?)<\/style>/gi);
@@ -60,12 +75,20 @@ export function collectAllStyleSources(files = {}) {
  */
 export function extractModifierRules(styles = '') {
   const out = [];
+  // 🛡️ 刀 13b（2026-09-13）：先把嵌套 `&` 还原成完整选择器再抽 token。
+  // 否则归一后的 `&--active`（选择器里连 `.` 都没有）会**完全不可见** → 契约层
+  // 「样式修饰符规则无模板使用」这项判定出现新盲区（归一器把样式改对了，门禁却看不见，
+  // 既不能报警也不能确认）。父选择器栈与归一器共用同一实现（less-selector-stack）。
+  const parents = buildParentSelectorMap(styles);
+  let lineIdx = -1;
   // 只取选择器行（含 { 或以 , 结尾）
   for (const line of String(styles).split('\n')) {
+    lineIdx += 1;
     const t = line.trim();
     if (!t.includes('{') && !/,\s*$/.test(t)) continue;
-    const selector = t.replace(/\{.*$/, '').trim();
-    if (!selector) continue;
+    const selectorRaw = t.replace(/\{.*$/, '').trim();
+    if (!selectorRaw) continue;
+    const selector = expandAmpSelector(selectorRaw, parents[lineIdx]) || selectorRaw;
     // 拆出选择器中的类 token
     const tokens = [...selector.matchAll(/\.(-?[A-Za-z_][\w-]*)/g)].map((m) => m[1]);
     if (tokens.length === 0) continue;
@@ -79,7 +102,8 @@ export function extractModifierRules(styles = '') {
           bareToken: tk,
           modKey: `${base.toLowerCase()}${normalizeModifierSuffix(suffix)}`,
           aliasForm: false,
-          raw: selector,
+          raw: selectorRaw,
+          resolvedSelector: selector,
         });
       }
       continue;
@@ -95,7 +119,8 @@ export function extractModifierRules(styles = '') {
             bareToken: `${base}.${alias}`,
             modKey: modifierKeyOf(base) || `*${normalizeModifierSuffix(alias)}`,
             aliasForm: true,
-            raw: selector,
+            raw: selectorRaw,
+            resolvedSelector: selector,
             aliasToken: alias,
           });
         }
@@ -109,7 +134,8 @@ export function extractModifierRules(styles = '') {
         bareToken: alias,
         modKey: modifierKeyOf(alias),
         aliasForm: true,
-        raw: selector,
+        raw: selectorRaw,
+        resolvedSelector: selector,
         aliasToken: alias,
       });
     }
@@ -158,11 +184,26 @@ export function checkClassNameContract(files = {}, classFacts = null) {
   const styles = collectAllStyleSources(files);
   const styleRules = extractModifierRules(styles);
   const styleRuleKeys = new Set(styleRules.map((r) => r.modKey).filter(Boolean));
-  // 精确类名集合（用于 C3 的宽松命中）
+  // 🛡️ 刀 14（2026-09-13）：C3 的「样式侧是否存在」判定必须**先剥 [自动修复] 兜底 stub**。
+  // 兜底 stub（`display:flex;flex-direction:row`）不是设计意图，却会让「样式侧有同名类」成立
+  // → 掩盖「模板基名与样式基名体系脱节」的真缺陷（刀 12 铁律：stub 是症状遮罩）。
+  // 反过来，剥掉后「模板基类只剩 stub」就成了**设计缺失**的确凿信号 → 支撑下面的可修/不可修二分。
+  const designStyles = stripAutoFixSection(styles);
+  // 精确类名集合（用于 C3 的宽松命中）—— 基于设计样式（已剥 stub）
   const styleClassSet = new Set();
-  for (const m of styles.matchAll(/\.(-?[A-Za-z_][\w-]*)/g)) {
+  for (const m of designStyles.matchAll(/\.(-?[A-Za-z_][\w-]*)/g)) {
     if (/^c-mc-[a-z]+-\d{10,}/.test(m[1])) continue;
     styleClassSet.add(m[1].toLowerCase());
+  }
+  // 设计样式里的「基名 → 该基名已有的修饰符后缀集合」（不可修 C3 给候选基名用）
+  const designBaseMods = new Map();
+  for (const r of styleRules) {
+    if (!r.baseToken) continue;
+    const k = r.baseToken.toLowerCase();
+    const sfx = String(r.modKey || '').slice(k.length);
+    const s = designBaseMods.get(k) || new Set();
+    if (sfx) s.add(sfx);
+    designBaseMods.set(k, s);
   }
 
   // ——— C1 方言：模板出现布尔别名修饰符 → error（应已在归一阶段消除） ———
@@ -181,6 +222,17 @@ export function checkClassNameContract(files = {}, classFacts = null) {
   }
 
   // ——— C3 模板 → 样式：修饰符类必须有对应规则 ———
+  //
+  // 🛡️ 刀 14（2026-09-13）**可修 / 不可修二分**（与刀 13 A 的 COMP-001 同源设计）。
+  // 事故 mc-1789310631072-8fb4f52f：模板两张卡片写作 `.c-device-monitor-active` /
+  // `.c-device-monitor-default`（+ 状态类 `--on` / `--active`），而样式侧的设计基名是
+  // `.c-device-monitor-switch-item{&--active{…}}` —— **完全换名**（非前缀扩展，R4 判据够不到）。
+  // 门禁 C3 报「模板修饰符类无对应样式规则」是**真**的，但要求 LLM「补样式」是**不可达成**的：
+  // 样式侧根本没有该状态的设计真值，补出来的只能是臆造。表现为每轮 BLOCK 各不相同
+  // （LESS-COMPILE-001 → CODE-015 → CODE-024 C3 = 打地鼠），3 轮软失败。
+  // 故：基类在设计样式里**存在** → 可修（保持 error，补一条规则即可）；
+  //     基类在设计样式里**不存在**（只有 stub 或完全没有）→ 不可修，降 warn 并在文案里
+  //     给出「带同修饰符的设计基名候选」，引导对齐基名而不是空转重试。
   for (const p of vueFiles) {
     const fact = byFile[p] || {};
     for (const tok of fact.exact || []) {
@@ -190,6 +242,31 @@ export function checkClassNameContract(files = {}, classFacts = null) {
       const key = modifierKeyOf(tok);
       if (key && styleRuleKeys.has(key)) continue;
       if (key && key.startsWith('*') && styleRuleKeys.has(key)) continue;
+
+      const { base, suffix } = splitModifier(tok);
+      const baseKey = base ? String(base).toLowerCase() : '';
+      const baseInDesign = baseKey ? styleClassSet.has(baseKey) : false;
+      if (!baseInDesign && baseKey) {
+        const sfxKey = normalizeModifierSuffix(suffix);
+        const candidates = [...designBaseMods.entries()]
+          .filter(([, mods]) => mods.has(sfxKey))
+          .map(([b]) => b)
+          .slice(0, 3);
+        violations.push({
+          id: 'CLASSNAME-C3-UNREACHABLE',
+          code: 'C3',
+          severity: 'warn',
+          file: p,
+          message:
+            `模板修饰符类 \`${tok}\` 无对应样式规则，且其基类 \`${base}\` 在样式侧**无设计规则**` +
+            `（仅兜底 [自动修复] stub 或完全缺失）——补样式只会臆造设计，重试无法收敛。` +
+            `请把模板基名对齐到样式侧的设计基名` +
+            (candidates.length
+              ? `（带 \`${sfxKey}\` 的候选：${candidates.map((c) => `\`${c}\``).join(' / ')}）`
+              : `（样式侧无同修饰符的设计基名，建议删除该状态类或统一两侧基名）`),
+        });
+        continue;
+      }
       violations.push({
         id: 'CLASSNAME-C3',
         code: 'C3',

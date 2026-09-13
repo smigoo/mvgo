@@ -27,6 +27,9 @@ import { dedupeScriptDeclarations, findDuplicateImports, findDuplicateScriptDecl
 // 🆕 2026-09-04（方案 A/C）：组件语义命名工具——中文→语义映射 / 确定性唯一 componentId
 // c-<语义>-<sessionId 尾 8hex>（与 max 管线同一契约）
 import { zhToSemanticEn, buildComponentId } from '../ai-engine/utils/component-naming.js';
+// 🛡️ 2026-09-11 治本（LESS 编译竞态）：发布前对 outputPath 跑 Less 变量完整性检查器，
+// 把"被使用但未定义"的变量补进 theme-vars.less 的 .common()，保证候选快照自带可编译 LESS。
+import { LessVariableChecker } from '../ai-engine/validators/less-variable-checker.js';
 import { resolvePrivateGroupId as resolvePrivateGroupIdCore } from '../common/group-resolver';
 // 动态导入 ESM 模块（workspace-preview-publisher.js 依赖 ESM 的 logger）
 const loadPreviewPublisher = () => import('../ai-engine/utils/workspace-preview-publisher.js');
@@ -2559,6 +2562,17 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
     groupId: string,
     target: 'microcode' | 'vue3',
   ): Promise<void> {
+    // 🛡️ 2026-09-11 治本（首次预览走快照报 "variable @x is undefined"，刷新走 workspace 才成功）：
+    // createCandidate 会把 outputPath 定格为候选快照。若此时 theme-vars.less 仍缺变量
+    // （修复器在后续迭代才补齐），快照即"不可编译"，首次预览编译失败。此处发布前先跑
+    // LessVariableChecker 补齐缺失变量，使快照与最终 workspace 一致、均可编译。
+    // 检查器幂等（已补齐则 no-op）；失败仅告警，不阻断发布事务。
+    try {
+      await LessVariableChecker.check(outputPath)
+    } catch (lessCheckErr: any) {
+      console.warn('[lite] 预发布 Less 变量检查跳过', lessCheckErr?.message)
+    }
+
     const candidate = this.taskCodeSnapshotService.createCandidate({
       sessionId,
       componentId: sessionId,
@@ -3170,7 +3184,7 @@ ${businessStyles}
   /**
    * 🛡️ P1.8（2026-09-11）微码 index.vue 落盘前处理（单一实现）：
    *   ① 补 `@import '../resources/styles/index.less'`（mc-check M4-8：样式入口引用）
-   *   ② 硬编码字号归一为 `calc(var(--fontSize, 14px) * ratio)`（M5-6/M5-7）
+   *   ② 硬编码字号归一为 `@fontSize` / `calc(@fontSize * ratio)`（LESS 变量；M5-6/M5-7）
    */
   private async prepareMicrocodeVueContent(vueCode: string, isMicrocode: boolean): Promise<string> {
     if (!isMicrocode || typeof vueCode !== 'string') return vueCode;

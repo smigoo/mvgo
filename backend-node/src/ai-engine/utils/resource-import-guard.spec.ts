@@ -700,3 +700,55 @@ const x = 1;
  * （被咬中的渐变是 Figma 渐变文字「流量监测」的正确还原，非 bg 替代），L0-B 重试 3 轮逐字
  * 复现耗尽 → 生成失败。判定已从 L0-B 门禁与 adversarial-checker 全量移除。
  */
+
+describe('刀 7e：注释里的资源变量名不得触发注入（device 主内容区 CODE-022 治本）', () => {
+  const mapping: any[] = [
+    {
+      name: 'bg-main',
+      previewAnalysisRole: 'bg',
+      assignedVarName: 'bg1',
+      resourceFile: '../resources/images/bg-8788.png',
+      downloadStatus: 'success',
+    },
+    {
+      name: 'icon-panel',
+      previewAnalysisRole: 'icon',
+      assignedVarName: 'icon1',
+      resourceFile: '../resources/images/icon-8817.png',
+      downloadStatus: 'success',
+    },
+    {
+      name: 'bg-card',
+      previewAnalysisRole: 'bg',
+      assignedVarName: 'bg4',
+      resourceFile: '../resources/images/bg-8439.png',
+      downloadStatus: 'success',
+    },
+  ];
+
+  it('负面对照：仅在注释里枚举 bg1/icon1 → 不注入（旧实现误注 → CODE-022）', () => {
+    const sfc = `<template>
+  <div :style="{ backgroundImage: \`url(\${bg4})\` }" />
+</template>
+<script setup>
+// 系统自动注入 bg1~bg14、icon1~icon14，无需手写 import
+const x = 1
+</script>`;
+    const out = injectResourceImports(sfc, mapping, '../resources/images/');
+    // bg4 真使用 → 注入；bg1/icon1 仅注释提及 → 不得注入
+    expect(out).toMatch(/import bg4 from '\.\.\/resources\/images\/bg-8439\.png'/);
+    expect(out).not.toMatch(/import bg1 /);
+    expect(out).not.toMatch(/import icon1 /);
+  });
+
+  it('正面对照：真实引用仍注入', () => {
+    const sfc = `<template>
+  <img :src="icon1" />
+</template>
+<script setup>
+const x = 1
+</script>`;
+    const out = injectResourceImports(sfc, mapping, '../resources/images/');
+    expect(out).toMatch(/import icon1 from '\.\.\/resources\/images\/icon-8817\.png'/);
+  });
+});

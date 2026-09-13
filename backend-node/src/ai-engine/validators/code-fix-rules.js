@@ -1054,6 +1054,10 @@ export function registerBuiltinFixRules(pipeline, engineer, context = {}) {
     // 实锤：common.less 正确写 width:160px，子组件又写 width:100% 覆盖 → 侧边栏撑满，
     // 且触发 FLEX-003 BLOCK。只归一 flex 不够（width 才是元凶），故按「同名 class +
     // 同名布局属性」通用剥离，保留子组件独有属性（如 min-height）。细节见 style-dedup-guard.js。
+    // 🔴 刀 13-C（2026-09-13）：本规则的 fixFiles 收到的是**对象 map**（Object<string,string>，
+    //    见 code-fix-pipeline.js 的 apply 契约）。此前 pruneDuplicateStyleDecls 只认数组形态，
+    //    导致本规则静默失效（FLEX-003 真机 0 命中）。现已由 utils/file-collection.js 归一并
+    //    **形态跟随**（对象 map 进 → 对象 map 出），本处按契约原样返回 r.files 即可。
     pipeline.register({
       id: 'prune-duplicate-style-decls',
       name: '剥离子组件与共享样式表重复的布局声明',

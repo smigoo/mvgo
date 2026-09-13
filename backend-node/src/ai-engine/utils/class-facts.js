@@ -92,8 +92,143 @@ export function modifierKeyOf(tok = '') {
 }
 
 /**
+ * 🛡️ 刀 11a（D1，2026-09-13）：提取**顶层属性键**（对象字面量 `{ k: expr, ... }`）。
+ * 值位置是 JS 表达式（不是类名），必须整段丢弃——这正是「`selectedSwitch === 'active'`
+ * 里的 `'active'` 被当成类名」的入口。
+ * @param {string} objText 形如 `{ ... }` 的文本
+ * @returns {string[]} 键列表（引号串取内容 / 计算键 `['a']` 取内层 / 裸标识符原样）
+ */
+function extractTopLevelObjectKeys(objText = '') {
+  const raw = String(objText);
+  // 剥掉最外层花括号，只扫「属性层」（否则外部 `{` 会让 depth 从 1 起算，属性永不被切分）
+  const open = raw.indexOf('{');
+  const close = raw.lastIndexOf('}');
+  const s = open >= 0 && close > open ? raw.slice(open + 1, close) : raw;
+  const parts = [];
+  let depth = 0;
+  let cur = '';
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === '"' || ch === "'" || ch === '`') {
+      let j = i + 1;
+      while (j < s.length && s[j] !== ch) {
+        if (s[j] === '\\') j += 1;
+        j += 1;
+      }
+      cur += s.slice(i, j + 1);
+      i = j;
+      continue;
+    }
+    if (ch === '{' || ch === '[' || ch === '(') depth += 1;
+    else if (ch === '}' || ch === ']' || ch === ')') depth -= 1;
+    if (ch === ',' && depth === 0) {
+      parts.push(cur);
+      cur = '';
+      continue;
+    }
+    cur += ch;
+  }
+  if (cur.trim()) parts.push(cur);
+
+  const keys = [];
+  for (const p of parts) {
+    // 取该属性「深度 0 处」的第一个冒号，之前即键（值位置整段丢弃）
+    let key = String(p);
+    let d = 0;
+    for (let i = 0; i < key.length; i++) {
+      const ch = key[i];
+      if (ch === '"' || ch === "'" || ch === '`') {
+        let j = i + 1;
+        while (j < key.length && key[j] !== ch) {
+          if (key[j] === '\\') j += 1;
+          j += 1;
+        }
+        i = j;
+        continue;
+      }
+      if (ch === '{' || ch === '[' || ch === '(') d += 1;
+      else if (ch === '}' || ch === ']' || ch === ')') d -= 1;
+      else if (ch === ':' && d === 0) {
+        key = key.slice(0, i);
+        break;
+      }
+    }
+    let k = key.trim();
+    const m = /^["'`]([\s\S]*)["'`]$/.exec(k);
+    if (m) k = m[1];
+    const m2 = /^\[\s*["'`]([\s\S]*?)["'`]\s*\]$/.exec(k.trim());
+    if (m2) k = m2[1];
+    k = k.trim();
+    if (k) keys.push(k);
+  }
+  return keys;
+}
+
+/**
+ * 🛡️ 刀 11a（D1）：遮掉「表达式位置」的字符串字面量（比较运算两侧 / 函数调用实参）。
+ * 剩下的引号文本才是类名位置。
+ * @param {string} v
+ * @returns {string} 掩码后的文本（占位符不含引号）
+ */
+function maskExpressionLiterals(v = '') {
+  let s = String(v);
+  // ① 函数调用实参：`ident(...)` / `.method(...)` / `](...)`（跑两轮覆盖一层嵌套）
+  for (let round = 0; round < 2; round += 1) {
+    s = s.replace(/([\w$)\]])\s*\(([^()]*)\)/g, (m, head, inner) =>
+      /["']/.test(inner) ? `${head}(/*expr*/)` : m,
+    );
+  }
+  // ② 比较运算两侧的字面量（`x === 'active'` / `'a' === x`）
+  s = s.replace(/(===|!==|==|!=|<=|>=|[<>])\s*(["'])([^"']*)\2/g, (m, op) => `${op}/*expr*/`);
+  s = s.replace(/(["'])([^"']*)\1\s*(===|!==|==|!=|<=|>=|[<>])/g, (m, _q, _c, op) => `/*expr*/${op}`);
+  return s;
+}
+
+/**
+ * 🛡️ 刀 11a（D1，2026-09-13）：从 class / :class 绑定值中提取**类名位置**的 token。
+ *
+ * 缺陷（实测事故 `mc-1789284222821-075b13a4`）：旧实现用 `/["']([^"']+)["']/g`
+ * **无差别**抓取引号内文本，把 JS 表达式里的字符串字面量也当成类名：
+ *   `:class="{ 'c-…--selected': selectedSwitch === 'active' }"` → 提取出伪造 token `active`
+ *   → 门禁 C1（非标准修饰符方言）+ C3（无对应样式规则）双双误报（并污染 C4 判定面）。
+ * 与刀 7d「资源引用扫描把值当引用」属同一缺陷类：**扫描前必须先剥离表达式位置**。
+ *
+ * 判定（确定性，不引 JS 解析器）：
+ *   ① 纯静态 class（无 `{ [ ] :` 结构、无引号）→ 空格拆分；
+ *   ② 对象字面量 `{ ... }` → **只取顶层属性键**（裸标识符键也是类名）；
+ *   ③ 其它（数组 / 三元 / 字符串字面量）→ 先遮表达式位置字面量，再取剩余引号文本
+ *      （内容再按空格拆，兼容 `:class="'a b'"`）。
+ * @param {string} value 属性值（不含外层引号）
+ * @returns {string[]}
+ */
+export function extractClassTokensFromBindingValue(value = '') {
+  const out = [];
+  const v = String(value == null ? '' : value).trim();
+  if (!v) return out;
+
+  // ① 纯静态 class
+  if (!/[{}[\]:]/.test(v) && !/["'`]/.test(v)) {
+    return v.split(/\s+/).filter(Boolean);
+  }
+  // ② 对象字面量 → 仅键
+  if (v.startsWith('{')) {
+    for (const k of extractTopLevelObjectKeys(v)) {
+      for (const t of k.split(/\s+/)) if (t) out.push(t);
+    }
+    return out;
+  }
+  // ③ 其它形态 → 值位置字面量
+  const masked = maskExpressionLiterals(v);
+  for (const sm of masked.matchAll(/["'`]([^"'`]+)["'`]/g)) {
+    for (const t of sm[1].trim().split(/\s+/)) if (t) out.push(t);
+  }
+  return out;
+}
+
+/**
  * 从 SFC 模板文本提取 DOM 实际出现的 class token（原样保留，含修饰符）。
  * 覆盖：静态 class 属性、:class 字符串数组、:class 对象字面量的 key、纯静态空格拆分。
+ * 🛡️ 刀 11a：`:class` 的值统一改走 extractClassTokensFromBindingValue（剥离表达式位置字面量）。
  * @param {string} templateText
  * @returns {string[]} 去重后的 token 列表（保持出现顺序）
  */
@@ -127,12 +262,8 @@ export function collectDomTokensFromTemplate(templateText = '') {
     }
     if (end < 0) continue;
     const value = templateText.slice(start, end);
-    // JS 字面量内引号包裹的 token（数组元素 / 对象 key）
-    for (const sm of value.matchAll(/["']([^"']+)["']/g)) push(sm[1]);
-    // 纯静态 class（无 JS 字面量语法）按空格拆
-    if (!/[{}[\],:]/.test(value)) {
-      for (const tok of value.split(/\s+/)) push(tok);
-    }
+    // 🛡️ 刀 11a：只取「类名位置」的 token（表达式里的字符串字面量一律剔除）
+    for (const tok of extractClassTokensFromBindingValue(value)) push(tok);
   }
   return out;
 }
@@ -169,6 +300,17 @@ export function collectFileClassFact(templateText = '') {
       const sk = suffix.toLowerCase();
       if (!bases[key].mods[sk]) bases[key].mods[sk] = [];
       if (!bases[key].mods[sk].includes(vToken)) bases[key].mods[sk].push(vToken);
+      // 🛡️ 刀 11b（D2，2026-09-13）：单横线形态（`-active`）**有歧义**——`c-device-monitor-active`
+      // 既是「语义类名（active 卡片）」，也可能被读成「`-active` 旧产物修饰符」。契约层已用
+      // isContractModifier 只认 `--mod` 与布尔别名来排除误判，但 bases 分组（C2/C4 的 DOM 事实源）
+      // 仍按 splitModifier 判定 → `bare` 为空 → domAllBases 缺该基名 → C2 误报「基类不在 DOM」
+      // （实测 `.c-device-monitor-active--selected` 的基类被判不在 DOM）。
+      // 治本：单横线形态**额外**把 token 登记为其自身基名的 bare（双登记，纯增量、不移除既有能力）。
+      if (/^-[^-]/.test(suffix)) {
+        const selfKey = tok.toLowerCase();
+        if (!bases[selfKey]) bases[selfKey] = { bare: [], mods: {} };
+        if (!bases[selfKey].bare.includes(vToken)) bases[selfKey].bare.push(vToken);
+      }
     }
   };
   // ① 真实 DOM token（原样）

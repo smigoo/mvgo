@@ -45,7 +45,12 @@ import { compileDesignFacts } from '../context/design-facts-compiler.js';
 import { validateNodeSizes } from '../utils/node-size-validator.js';
 // 🆕 2026-09-04：componentId 确定性格式 c-<语义>-<sessionId 尾 8hex>，
 // class 前缀事实源经 classPrefixOf 剥离尾段（c-monitor-43e7fe45 → c-monitor）。
-import { classPrefixOf } from '../utils/component-naming.js';
+// 🛡️ 刀 8b/8c（2026-09-13）：额外剥离「装饰性随机尾段」并修复历史双前缀病灶。
+import {
+  classPrefixOf,
+  stripDecorSlugTail,
+  isDecorSlugSegment,
+} from '../utils/component-naming.js';
 // 🛡️ CODE-018（2026-08-31）：子组件资源依赖声明检查 —— 复用方案 3 落地的共享纯函数
 // （单一事实源在 resource-import-guard.js，microcode-engineer 编译前置校验与 L0-B 门禁共用）
 import { validateSubcomponentResourceDeps, filterAvailableResources, buildResourceUsageCorpus, isResourceUsedInCorpus } from '../utils/resource-import-guard.js';
@@ -54,7 +59,7 @@ import { validateSubcomponentResourceDeps, filterAvailableResources, buildResour
 import { detectTextOrderDrift } from '../utils/text-order-guard.js';
 // 🛡️ COMP-001（2026-09-02）：模块组装覆盖 —— 事实源在 section-coverage-guard.js
 // （规划的 section 必须全部组装进 index.vue，否则预览整块缺失）
-import { detectMissingSections } from '../utils/section-coverage-guard.js';
+import { detectMissingSections, detectUnmaterializedSections } from '../utils/section-coverage-guard.js';
 import { collectLeafSections } from '../utils/section-tree.js';
 // 🛡️ TEXT-TRUTH（2026-09-02）：文字真值白名单 —— 事实源在 text-truth-guard.js
 // （产物文字必须落在 Figma characters 真值内，否则是 vision OCR 误读/臆造）
@@ -324,8 +329,15 @@ export function findPrefixViolations(content = '', prefixId = '') {
     // 统一归一化为「含 c- 的标准前缀」再匹配；旧实现直接拼 .c-${prefixId}，
     // 当 componentId 已含 c- 时会叠成 .c-c-env-monitor-，永远不匹配实际 class 导致误报。
     const barePrefix = prefixId.startsWith('c-') ? prefixId : `c-${prefixId}`;
-    if (c.startsWith(`.${barePrefix}-`) || c.startsWith(`.${barePrefix}`))
-      return false;
+    // 🛡️ 刀 8c（2026-09-13）：同时接受「装饰性随机段已剥离」的语义干形态。
+    // 例：全前缀 c-device-monitor-00g6b7vh（随机兜底段）的语义干是 c-device-monitor，
+    // 而 LLM 生成的自然是 .c-device-monitor-*。若只认带装饰段的全前缀，
+    // 会把**正确**的类判为「缺前缀」并二次叠加 → common.less ~半数规则死样式。
+    const stem = stripDecorSlugTail(barePrefix);
+    for (const p of new Set([barePrefix, stem])) {
+      if (!p) continue;
+      if (c.startsWith(`.${p}-`) || c.startsWith(`.${p}`)) return false;
+    }
     return true;
   });
 }
@@ -648,11 +660,19 @@ export class CodeStructureValidator {
    */
   static validate(generatedFiles, componentId, options = {}) {
     const files = Array.isArray(generatedFiles) ? generatedFiles : [];
+    // 🛡️ 刀 10（2026-09-13）：整产物级检查（CODE-024/025/026）的输入集。
+    // 增量校验时 `files` 可能只是「变更文件 ∪ {common.less, declare.json}」子集，
+    // 在其上做跨文件/全产物一致性判定会误报「文件缺失」。调用方通过 options.productFiles
+    // 传全量产物；缺省回退 files（保持既有行为）。
+    const productFiles =
+      Array.isArray(options?.productFiles) && options.productFiles.length > 0
+        ? options.productFiles
+        : files;
     const issues = [];
 
     // 🛡️ R5: L0-B 空集不得 pass=true（此前空产物恒 pass，绿灯直达发布阶段，
     // 直到 workspace-preview-publisher 才回滚「缺少 package/index.vue」）
-    const hasNonEmptyVue = files.some(
+    const hasNonEmptyVue = productFiles.some(
       (f) =>
         f &&
         (f.path || '').endsWith('.vue') &&
@@ -697,7 +717,7 @@ export class CodeStructureValidator {
     // 空壳照样 pass 发布 → 用户看到空面板。本检查与 EMPTY_ARTIFACT 互补：
     // EMPTY_ARTIFACT 检测「没有任何 .vue 文件」，EMPTY_BODY 检测「有 index.vue 但默认插槽为空」。
     {
-      const indexVue = files.find(
+      const indexVue = productFiles.find(
         (f) => f && (f.path || '').endsWith('package/index.vue'),
       );
       if (indexVue && indexVue.content) {
@@ -869,7 +889,9 @@ export class CodeStructureValidator {
     // （Task1 的 bg2 正是如此），死变量本身不直接造成视觉缺陷，BLOCK 会误杀已正确的产物；
     // 真正的「资源完全没渲染」由 RES-UNUSED 门禁 BLOCK 兜底，两者分工不重叠。
     try {
-      const lessFiles = files.filter((f) => /\.less$/i.test(f.path || ''));
+      // 🛡️ 刀 10：定义面与「消费语料」都必须是全产物集——增量校验时 files 是变更子集，
+      // 只看子集会把「定义在未变更 .less、消费在未变更 .vue」的资源变量误判零消费（假 WARN）。
+      const lessFiles = productFiles.filter((f) => /\.less$/i.test(f.path || ''));
       const assetVarDefs = new Map();
       for (const f of lessFiles) {
         (f.content || '').split('\n').forEach((line, i) => {
@@ -884,7 +906,7 @@ export class CodeStructureValidator {
         });
       }
       if (assetVarDefs.size > 0) {
-        const corpus = files
+        const corpus = productFiles
           .filter((f) => /\.(vue|less|css)$/i.test(f.path || ''))
           .map((f) => f.content || '')
           .join('\n');
@@ -2146,10 +2168,11 @@ export class CodeStructureValidator {
     // 触发 L0-B 重试让模型把缺失模块补回。
     if (!isVue3 && options?.componentPlan) {
       try {
-        const missingSections = detectMissingSections(
+        const missingAll = detectMissingSections(
           files,
           options.componentPlan,
         );
+        const missingSections = missingAll.filter((s) => s.hasFile);
         if (missingSections.length > 0) {
           const total =
             collectLeafSections(options.componentPlan.effectiveSections)
@@ -2165,6 +2188,31 @@ export class CodeStructureValidator {
             hint: {
               suggestion:
                 '检查 package/components/ 下已生成但未被 index.vue import/使用的子组件，把它们组装进模板',
+            },
+          });
+        }
+        // 🛡️ COMP-001-UNMATERIALIZED（2026-09-13 治本）：section **连组件文件都没有** 时，
+        // 「组装」不是问题（LLM 无法组装一个不存在的组件），重试只会重放同一份源码
+        // （R12 已完成分块从缓存恢复）→ 若对此 BLOCK 即「要求不可达成的条件」，必然
+        // 重试耗尽软失败（事故 mc-1789308308127：SwitchSection.vue 被 P1-4 隔离后，
+        // COMP-001 连拦 3 轮，每轮产物完全相同）。故降为 WARN 并指向降级/物化链路，
+        // 保留可观测性而不烧预算。
+        const unmaterialized = detectUnmaterializedSections(
+          files,
+          options.componentPlan,
+        );
+        if (unmaterialized.length > 0) {
+          const titles = unmaterialized
+            .map((s) => `「${s.title}」→${s.expected}.vue`)
+            .join('、');
+          issues.push({
+            id: 'COMP-001-UNMATERIALIZED',
+            severity: 'WARN',
+            file: 'package/index.vue',
+            message: `模块未物化（非阻断）：规划了 ${unmaterialized.length} 个 section，但 package/components/ 下不存在对应组件文件（${titles}）——无法通过「组装」修复（组件不存在）。若 component-meta.json 的 degradedFiles / server.log「P1-4 坏文件隔离降级」含这些文件，需对该子组件重生成；否则是子组件分块生成遗漏`,
+            hint: {
+              suggestion:
+                '查 component-meta.json.degradedFiles 与 server.log 的「P1-4 坏文件隔离降级」，必要时对该子组件单独重生成',
             },
           });
         }
@@ -2310,7 +2358,7 @@ export class CodeStructureValidator {
     // COMP-001 只拦「section 整块缺失」，不拦「import 了却 0 引用」；本检测纯正则、确定性高，
     // 检测器异常也 BLOCK（fail-closed），不静默放行。
     {
-      const indexVue = files.find(
+      const indexVue = productFiles.find(
         (f) => f && (f.path || '').endsWith('package/index.vue'),
       );
       if (indexVue && indexVue.content) {
@@ -2349,11 +2397,11 @@ export class CodeStructureValidator {
     // 排除：Vue 内置/模板白名单（extractComponentTagNames 已排除）+ 组件库 PascalCase 形态
     // （BasePanel / El/Van/Ant/N/AR 前缀），避免把全局注册组件误判为悬空。
     {
-      const indexVue = files.find(
+      const indexVue = productFiles.find(
         (f) => f && (f.path || '').endsWith('package/index.vue'),
       );
       const compFiles = new Set();
-      for (const f of files) {
+      for (const f of productFiles) {
         const m = /package\/components\/([A-Za-z][\w]*)\.vue$/.exec(
           String(f?.path || ''),
         );
@@ -2445,28 +2493,39 @@ export class CodeStructureValidator {
     // ========== 🛡️ CODE-022: 资源变量 import 未挂载（fail-closed BLOCK，2026-09-10）==========
     // 事故 P0-6：bg-8788/bg-8807/bg-8439 import 后模板 0 处 background-image/:style → 大卡/标签背景整块丢失。
     // 只查「import 后完全未引用」的变量（间接引用链不做，避免误报）；纯正则、fail-closed。
+    // 2026-09-13：vehicle 中卡无背景实锤——子组件 StatsSection import bg2 但 0 引用，
+    // 旧实现只扫 package/index.vue → 漏报。扩扫 package/index.vue + package/components/*.vue。
     {
-      const indexVue = files.find(
-        (f) => f && (f.path || '').endsWith('package/index.vue'),
-      );
-      if (indexVue && indexVue.content) {
+      const vueTargets = (files || []).filter((f) => {
+        if (!f || typeof f.content !== 'string') return false;
+        const p = String(f.path || '').replace(/\\/g, '/');
+        if (!p.endsWith('.vue')) return false;
+        return (
+          p.endsWith('package/index.vue') ||
+          p.includes('/package/components/') ||
+          p.startsWith('package/components/')
+        );
+      });
+      for (const vueFile of vueTargets) {
+        const filePath = String(vueFile.path || '').replace(/\\/g, '/');
         let unmounted = [];
         try {
-          unmounted = findUnmountedResourceVars(indexVue.content);
+          unmounted = findUnmountedResourceVars(vueFile.content);
         } catch (err) {
           issues.push({
             id: 'CODE-022-ERROR',
             severity: 'BLOCK',
-            file: 'package/index.vue',
+            file: filePath,
             message: `资源变量未挂载检测器执行异常（fail-closed）：${err?.message || String(err)}`,
           });
+          continue;
         }
         if (unmounted.length > 0) {
           issues.push({
             id: 'CODE-022',
             severity: 'BLOCK',
-            file: 'package/index.vue',
-            message: `资源变量未挂载：index.vue import 了 ${unmounted.length} 个资源变量但模板/脚本 0 处引用（${unmounted.join('、')}）。背景/图标资源只 import 不挂载会导致大卡/标签背景整块丢失，请在模板中用 :src="icon" 或 :style="{ backgroundImage: 'url(' + bg + ')' }" 挂载，或删除未使用的 import`,
+            file: filePath,
+            message: `资源变量未挂载：${filePath} import 了 ${unmounted.length} 个资源变量但模板/脚本 0 处引用（${unmounted.join('、')}）。背景/图标资源只 import 不挂载会导致大卡/标签背景整块丢失，请在模板中用 :src="icon" 或 :style="{ backgroundImage: 'url(' + bg + ')' }" 挂载，或删除未使用的 import`,
             hint: {
               suggestion:
                 '用 :src 或 :style backgroundImage 把已 import 的资源变量挂载到对应元素，或删除未使用的 import',
@@ -2517,11 +2576,11 @@ export class CodeStructureValidator {
       let contractViolations = [];
       try {
         const facts = collectClassFacts(
-          (files || []).filter((f) => f && typeof f.content === 'string'),
+          (productFiles || []).filter((f) => f && typeof f.content === 'string'),
         );
         contractViolations = checkClassNameContract(
           Object.fromEntries(
-            (files || [])
+            (productFiles || [])
               .filter((f) => f && typeof f.content === 'string')
               .map((f) => [f.path, f.content]),
           ),
@@ -2580,7 +2639,7 @@ export class CodeStructureValidator {
       let resourceViolations = [];
       try {
         const fileMap = Object.fromEntries(
-          (files || [])
+          (productFiles || [])
             .filter((f) => f && typeof f.content === 'string')
             .map((f) => [f.path, f.content]),
         );
@@ -2634,7 +2693,7 @@ export class CodeStructureValidator {
       let skeletonViolations = [];
       try {
         const fileMap = Object.fromEntries(
-          (files || [])
+          (productFiles || [])
             .filter((f) => f && typeof f.content === 'string')
             .map((f) => [f.path, f.content]),
         );
@@ -3279,6 +3338,46 @@ export function autoFixStyleTag(content, filePath) {
 }
 
 /**
+ * 🛡️ 刀 8c（2026-09-13）：折叠「组件语义前缀被重复叠加」的历史病灶（幂等自愈，纯函数）。
+ *
+ * 病灶成因：CODE-003 曾用「带装饰性随机段的全前缀」（如 c-device-monitor-00g6b7vh）
+ * 判定 LLM 生成的 .c-device-monitor-* 为「缺前缀」，于是在 common.less / .vue 上
+ * 二次叠加，产出 .c-device-monitor-00g6b7vh-c-device-monitor-switch —— 该选择器
+ * 与模板（c-device-monitor-switch）永不匹配 → 死样式（CODE-003-HIT-RATE 实测 48%）。
+ *
+ * 折叠规则：`<stem>-<slug8>-<stem>-<rest>` → `<stem>-<rest>`
+ *   - stem = 语义干（如 c-device-monitor）
+ *   - slug8 必须命中 isDecorSlugSegment（随机段特征：含数字 + 非 hex 字母），
+ *     避免误伤语义词（overview / register 等）。
+ * 只做文本级替换，不动其他内容；不含该形态时零改动（幂等）。
+ *
+ * @param {string} text - common.less 或 .vue 原文
+ * @param {string} prefixId - 组件前缀（含装饰段或语义干皆可）
+ * @returns {{ text: string, count: number }}
+ */
+export function collapseDoubledComponentPrefix(text, prefixId = '') {
+  const s = typeof text === 'string' ? text : '';
+  if (!s) return { text: s, count: 0 };
+  const bare = String(prefixId || '').startsWith('c-')
+    ? String(prefixId)
+    : `c-${prefixId}`;
+  const stem = stripDecorSlugTail(bare).replace(/^-+|-+$/g, '');
+  // stem 必须自带至少一个连字符（c-xxx），否则不足以构成「语义前缀」形态
+  if (!stem || !stem.includes('-')) return { text: s, count: 0 };
+  let count = 0;
+  const re = new RegExp(
+    `${escapeRegExp(stem)}-([a-z0-9]{8})-${escapeRegExp(stem)}-`,
+    'gi',
+  );
+  const out = s.replace(re, (full, slug) => {
+    if (!isDecorSlugSegment(slug)) return full; // 非随机段 → 不动
+    count += 1;
+    return `${stem}-`;
+  });
+  return { text: out, count };
+}
+
+/**
  * 🛡️ L0-B 自动修复: 修复 common.less 的 CODE-003（class 缺少组件前缀）
  * 将无前缀的 class 选择器加上 .c-{componentId}- 前缀，
  * 同时修复引用这些 class 的 .vue 文件中的 class 属性值。
@@ -3286,7 +3385,7 @@ export function autoFixStyleTag(content, filePath) {
  * @param {string} commonLessContent - common.less 文件内容
  * @param {string} componentId - 组件 ID（如 c-env-monitor）
  * @param {string[]} vueFiles - 需要联动修复的 .vue 文件内容数组 [{ path, content }]
- * @returns {{ commonLess: string, vueFiles: Array<{path, content}>, fixedClasses: string[] }}
+ * @returns {{ commonLess: string, vueFiles: Array<{path, content}>, fixedClasses: string[], collapsed: number }}
  */
 export function autoFixPrefixViolations(
   commonLessContent,
@@ -3294,24 +3393,44 @@ export function autoFixPrefixViolations(
   vueFiles = [],
 ) {
   if (!commonLessContent || typeof commonLessContent !== 'string') {
-    return { commonLess: commonLessContent, vueFiles, fixedClasses: [] };
-  }
-
-  const violations = findPrefixViolations(commonLessContent, componentId);
-  if (violations.length === 0) {
-    return { commonLess: commonLessContent, vueFiles, fixedClasses: [] };
+    return { commonLess: commonLessContent, vueFiles, fixedClasses: [], collapsed: 0 };
   }
 
   // 归一化 componentId 为标准前缀（剥离尾 8 hex，防止 c-device-monitor-4luni2f5 作为 class 前缀）
   const barePrefix = classPrefixOf(componentId) || componentId.replace(/^c-/, '') || 'component';
-  const fixedClasses = [];
-  let fixedContent = commonLessContent;
+  // 🛡️ 刀 8c（2026-09-13）：新增前缀一律写「语义干」，绝不把装饰性随机段写进 class 契约。
+  // 装饰段（如 00g6b7vh）是历史随机兜底的产物，写进类名只会制造永不命中的死样式。
+  const stemPrefix = stripDecorSlugTail(barePrefix) || barePrefix;
 
+  // 🛡️ 刀 8c：先把「历史双前缀病灶」就地折叠（幂等自愈），必须在 early-return 之前执行 ——
+  // 折叠后的类名命中语义干形态，findPrefixViolations 不再报违规，若放在 early-return
+  // 之后则纯折叠场景（无新增违规）永远不会被写回。
+  // 形态：`<stem>-<slug8>-<stem>-x` → `<stem>-x`（slug 必须是装饰性随机段）。
+  // 例：.c-device-monitor-00g6b7vh-c-device-monitor-tab-item--active → .c-device-monitor-tab-item--active
+  const collapseLess = collapseDoubledComponentPrefix(commonLessContent, barePrefix);
+  let collapsed = collapseLess.count;
+  let fixedContent = collapseLess.text;
+  for (const vueFile of vueFiles) {
+    if (typeof vueFile?.content !== 'string') continue;
+    const r = collapseDoubledComponentPrefix(vueFile.content, barePrefix);
+    if (r.count > 0) {
+      vueFile.content = r.text;
+      collapsed += r.count;
+    }
+  }
+
+  const violations = findPrefixViolations(commonLessContent, componentId);
+  if (violations.length === 0) {
+    // 纯折叠场景：内容已变，交由调用方按 collapsed>0 写回
+    return { commonLess: fixedContent, vueFiles, fixedClasses: [], collapsed };
+  }
+
+  const fixedClasses = [];
   // 逐个修复违规 class
   for (const cls of violations) {
     // cls 形如 ".wrapper" ".item"（已含 . 前缀）
     const className = cls.startsWith('.') ? cls.slice(1) : cls;
-    const prefixedName = `${barePrefix}-${className}`;
+    const prefixedName = `${stemPrefix}-${className}`;
 
     // 替换 class 选择器声明（.wrapper { → .c-xxx-wrapper {）
     // 只替换声明位置（.{className} 后跟 { 或 : 或 ,），不替换内部引用
@@ -3380,7 +3499,7 @@ export function autoFixPrefixViolations(
     }
   }
 
-  return { commonLess: fixedContent, vueFiles, fixedClasses };
+  return { commonLess: fixedContent, vueFiles, fixedClasses, collapsed };
 }
 
 /** JS 标识符（对象字面量可裸写的 key） */

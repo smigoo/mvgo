@@ -67,3 +67,26 @@ export function computeGateScore(issues = []) {
 
   return { score, blockCount: totalBlock, warnCount: totalWarn, dimensions };
 }
+
+// 🛡️ 发布硬闸（2026-09-13）：这些 BLOCK 一旦命中，无论软失败评分如何，都禁止
+// publish-to-workspace / copyToWorkspace / 标 completed——它们代表「产物结构确定性地
+// 不可用」（死子组件 import 未挂、悬空标签渲染空白、资源只 import 不挂），软失败降级
+// 只该放行「布局/视觉欠佳」，不该放行「预览必然空白/缺块」的硬伤。
+// 事实源：单一 ids 集 + hasHardPublishBlock 纯函数，graph / service / publisher 三处共用。
+const HARD_PUBLISH_BLOCK_IDS = new Set([
+  'CODE-021', 'CODE-021-ERROR', // 子组件死代码 import
+  'CODE-022', 'CODE-022-ERROR', // 资源变量只 import 不挂载
+  'CODE-023', 'CODE-023-ERROR', // 悬空子组件标签（三要素不齐备）
+]);
+
+/**
+ * 判断 issue 列表中是否存在「禁止发布」的硬闸 BLOCK。
+ * @param {Array<{id:string, severity:string}>} issues
+ * @returns {boolean}
+ */
+export function hasHardPublishBlock(issues = []) {
+  const list = Array.isArray(issues) ? issues : [];
+  return list.some(
+    (i) => i?.severity === 'BLOCK' && HARD_PUBLISH_BLOCK_IDS.has(i?.id),
+  );
+}

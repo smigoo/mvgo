@@ -25,6 +25,10 @@ import { resolvePrivateGroupId } from '../common/group-resolver';
 import { packageEntryFilter } from '../common/utils/package-filter';
 import { validateVueSfcDirectory } from '../ai-engine/utils/sfc-syntax-validation.js';
 import { resolveComponentDirStrict } from '../ai-engine/utils/component-resolver.js';
+// 🛡️ 2026-09-13 治本（首次预览走快照报 "variable @x is undefined"，刷新走 workspace 才好）：
+// onFilesReady 在 graph complete 节点 LessVariableChecker 补齐变量【之前】触发，快照定格时
+// theme-vars.less 仍缺被 SFC 使用的变量。发布前补跑一次，使快照与最终 workspace 一致、均可编译。
+import { LessVariableChecker } from '../ai-engine/validators/less-variable-checker.js';
 // P4（增量修改）：把 refineType 翻译成 refiner 的 _reviseTarget，避免精修范围被静默放大
 import { resolveRefineTarget } from './refine-target.js';
 // 动态导入 ESM 模块（workspace-preview-publisher.js 依赖 ESM 的 logger）
@@ -768,6 +772,21 @@ export class Phase2Service {
             for (const top of ['component.js', 'declare.js', 'declare.json', '_figma-size.json', 'component-meta.json']) {
               const abs = join(outputPath, top)
               if (existsSync(abs) && !(top in files)) files[top] = readFileSync(abs, 'utf-8')
+            }
+            // 🛡️ 2026-09-13 治本：本 onFilesReady 由 engineer 在 graph complete 节点的
+            // LessVariableChecker 补齐变量【之前】触发，此时 outputPath 的 theme-vars.less 仍是
+            // "被使用但未定义"的半成品 → 候选快照不可编译，首次预览报 "variable @x is undefined"，
+            // 刷新落到 checker 修好的 workspace 才成功。这里 createCandidate 定格前先补变量，并强制
+            // 用磁盘修复版覆盖内存旧版（mergeFromDisk 只补缺不覆盖），使快照 == workspace 均可编译。
+            try {
+              await LessVariableChecker.check(outputPath)
+            } catch (lessCheckErr: any) {
+              this.logger.warn(`[Phase2] 预发布 Less 变量检查跳过: ${lessCheckErr?.message}`)
+            }
+            const _themeVarsRel = 'resources/styles/themes/theme-vars.less'
+            const _themeVarsAbs = join(outputPath, 'resources', 'styles', 'themes', 'theme-vars.less')
+            if (existsSync(_themeVarsAbs)) {
+              files[_themeVarsRel] = readFileSync(_themeVarsAbs, 'utf-8')
             }
           }
           // 仅接收生成角色确认完整的 files map；SSE 只通知 revision，不传源码。

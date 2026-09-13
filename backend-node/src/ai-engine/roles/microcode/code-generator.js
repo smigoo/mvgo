@@ -141,9 +141,36 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
   const headerLeaves = leaves.filter((s) => s.type === 'header');
   const bodyLeaves = leaves.filter((s) => s.type !== 'header');
 
+  // 🛡️ 刀 5c（2026-09-13）：header-right 归属单一事实源 = headerSlots 契约，而非 type==='header' 词猜。
+  // 旧实现按 type 二分把内容区「小标题」误判进 header-right，与真正标题行 tabs（type=tabs 进 body）
+  // 双轨/过拆（vehicle 小标题 vs tabs、traffic 三个 header 叶实锤）。治本：收集 headerSlots 契约的
+  // figmaNodeId 集合，凡叶子 sourceNodeIds 与之相交 → 进 header-right；body 排除同 node（只落一次）。
+  // 匹配不到（vision 未产出契约 / node 对不上）→ 回退 type==='header' 二分，保持旧行为零回归。
+  const headerSlotNodeIds = new Set();
+  const slotList = Array.isArray(input?.headerSlots) ? input.headerSlots : [];
+  for (const slot of slotList) {
+    const st = String(slot?.slotType || '').toLowerCase();
+    if (st === 'header-right' || st === 'title-right') {
+      const nid = slot?.figmaNodeId || slot?.id;
+      if (nid) headerSlotNodeIds.add(String(nid));
+    }
+  }
+  let headerLeavesFinal = headerLeaves;
+  let bodyLeavesFinal = bodyLeaves;
+  if (headerSlotNodeIds.size > 0) {
+    headerLeavesFinal = leaves.filter((s) => {
+      const ids = Array.isArray(s?.sourceNodeIds)
+        ? s.sourceNodeIds.map((v) => String(v))
+        : [];
+      return ids.some((id) => headerSlotNodeIds.has(id));
+    });
+    const headerSet = new Set(headerLeavesFinal);
+    bodyLeavesFinal = leaves.filter((s) => !headerSet.has(s));
+  }
+
   const tagFor = (sec, fallback) => nameOf.get(String(sec.id)) || fallback;
 
-  const rootContainerClass = bodyLeaves.length > 0 ? `c-${semantic}-slot-con` : null;
+  const rootContainerClass = bodyLeavesFinal.length > 0 ? `c-${semantic}-slot-con` : null;
   const sectionRoots = leaves.map((s) => ({
     id: String(s.id),
     component: tagFor(s, s.type === 'header' ? 'HeaderSection' : 'ContentSection'),
@@ -152,14 +179,14 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
 
   const lines = ['<template>'];
   lines.push(`  <base-panel panelKey="${panelType}">`);
-  for (const h of headerLeaves) {
+  for (const h of headerLeavesFinal) {
     lines.push(`    <template #header-right>`);
     lines.push(`      <${tagFor(h, 'HeaderSection')} />`);
     lines.push(`    </template>`);
   }
-  if (bodyLeaves.length > 0) {
+  if (bodyLeavesFinal.length > 0) {
     lines.push(`    <div class="${rootContainerClass}">`);
-    for (const b of bodyLeaves) {
+    for (const b of bodyLeavesFinal) {
       lines.push(`      <${tagFor(b, 'ContentSection')} />`);
     }
     lines.push(`    </div>`);
@@ -482,15 +509,56 @@ export function mergeScriptParts(...parts) {
     return `<script setup>\n${merged}\n</script>`;
   }
 
+/**
+ * 🛡️ 刀 8a（2026-09-13）：declare.json componentId 的确定性装配（纯函数，可单测）。
+ *
+ * 设计契约：componentId = `c-<语义段>-<sessionId 尾 8 hex>`。尾段必须是 **纯 hex**，
+ * 因为 classPrefixOf 依赖 `-[0-9a-f]{8}$` 剥离尾段还原 class 前缀语义干。
+ *
+ * 历史缺陷（本次修复）：旧实现在取不到 sessionId 时用
+ * `Math.random().toString(36).slice(2, 10)` 兜底，产出 8 位 **base36** 随机段
+ * （如 00g6b7vh，含 g/v/h 等非 hex 字母）：
+ *   ① phase2 微码链路 engineer input 顶层无 sessionId（只在 input.ctx 内）→ 恒走随机兜底；
+ *   ② 随机段非纯 hex → classPrefixOf 剥离失效 → 随机段滞留进 class 前缀契约；
+ *   ③ 与 LLM 自然生成的 `c-<语义>-*` 失配 → CODE-003 全量误判 → autoFix 双前缀叠加
+ *      （common.less ~半数规则死样式，CODE-003-HIT-RATE 实测 48%）。
+ *
+ * 现策略：sessionId 取值链 input.sessionId → input.ctx.sessionId → options.sessionId；
+ * 仍取不到时 **不注入任何随机尾段**（componentId 保持 `c-<语义段>`），
+ * 宁可牺牲跨任务唯一性，也绝不让不可剥离的随机段污染 class 前缀契约。
+ *
+ * @param {object} input - engineer input（可含顶层 sessionId 或 ctx.sessionId）
+ * @param {object} [options] - 可含 sessionId / normalizeComponentId
+ * @returns {{ componentId: string, baseComponentId: string, sessionIdSuffix: string }}
+ */
+export function resolveDeclareComponentId(input = {}, options = {}) {
+  const normalizeComponentId =
+    options.normalizeComponentId || defaultNormalizeComponentId;
+  const baseComponentId = normalizeComponentId(input?.componentName || '');
+  const sessionId = String(
+    input?.sessionId || input?.ctx?.sessionId || options.sessionId || '',
+  ).trim();
+  // 仅接受「以 hex 结尾」的 sessionId（规范形态 mc-<ts>-<8hex>）——
+  // 若上游给的身份串尾段非 hex，宁可不加尾段，避免污染可剥离性契约。
+  const tail = sessionId.slice(-8);
+  const sessionIdSuffix = /^[0-9a-f]{8}$/.test(tail) ? tail : '';
+  return {
+    componentId: sessionIdSuffix
+      ? `${baseComponentId}-${sessionIdSuffix}`
+      : baseComponentId,
+    baseComponentId,
+    sessionIdSuffix,
+  };
+}
+
 export async function safeGenerateDeclareJson(runChunk, input, chunkD, options = {}) {
     // 🛡️ P2 修复：componentId 必须带 "c-" 前缀（declare-json.md 规范），
     // 仅清洗 kebab-case 会导致 e2emodalp2 这类无前缀 ID 被校验器打 BLOCK。
     // 🛡️ 2026-09-04 修复截图串图：componentId 必须带 sessionId 后缀保证唯一性
     // 不同任务可能生成相同组件名（如"设备监测"→c-monitor），导致截图 URL 冲突
-    const normalizeComponentId = options.normalizeComponentId || defaultNormalizeComponentId;
-    const baseComponentId = normalizeComponentId(input.componentName);
-    const sessionIdSuffix = input.sessionId ? input.sessionId.slice(-8) : Math.random().toString(36).slice(2, 10);
-    const componentId = `${baseComponentId}-${sessionIdSuffix}`;
+    // 🛡️ 刀 8a（2026-09-13）：装配逻辑抽为纯函数 resolveDeclareComponentId，见其 JSDoc。
+    const { componentId } = resolveDeclareComponentId(input, options);
+
 
     // 1. 生成完整骨架（结构字段由模板保证）
     const skeleton = templateDeclareJson({

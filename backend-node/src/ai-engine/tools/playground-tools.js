@@ -14,7 +14,7 @@ import componentResolver from '../utils/component-resolver.js'
 import snapshotManager from './snapshot-manager.js'
 import { createLogger } from '../logger/index.js'
 import { validateVueSfc } from '../utils/sfc-syntax-validation.js'
-import { buildComponentId, semanticTokenFrom } from '../utils/component-naming.js'
+import { buildComponentId, semanticTokenFrom, sanitizeComponentId } from '../utils/component-naming.js'
 
 const { resolveComponentDirStrict, resolveWritableComponentDirs, isEncodedComponentName } =
   componentResolver
@@ -57,7 +57,13 @@ export function normalizeDeclareComponentId(raw, fallbackComponentId, filePath) 
     zhName: parsed.componentName || parsed.name || '',
     fallbackToken: String(fallbackComponentId || '').replace(/^(mc|mv)-/i, ''),
   })
-  const normalized = buildComponentId(seg, fallbackComponentId || current)
+  // 🛡️ 刀 9（2026-09-13）：经可剥离闸门收敛。semanticTokenFrom 可能从编码型 current id
+  // 提取到含随机中段（00g6b7vh）的 seg → buildComponentId 污染。sanitize 先剥装饰段再派生，
+  // 保证落盘 id 必为 c-<语义>-<8hex尾> 契约形态。
+  const normalized = sanitizeComponentId(buildComponentId(seg, fallbackComponentId || current), {
+    sessionId: fallbackComponentId || current,
+    fallbackToken: String(fallbackComponentId || '').replace(/^(mc|mv)-/i, ''),
+  })
   parsed.componentId = normalized
   logger.warn('declare.componentId 为任务号形态，写盘前已归一', {
     filePath,

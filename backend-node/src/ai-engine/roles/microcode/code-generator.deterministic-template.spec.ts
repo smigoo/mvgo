@@ -107,6 +107,40 @@ describe('层① 确定性 index.vue 模板装配', () => {
     expect(tpl).not.toContain('#header-right')
     expect(tpl).toContain('<TabsSection />')
   })
+
+  test('刀 5c：headerSlots 契约 figmaNodeId 匹配 sourceNodeIds → tabs 进 header-right，body 不重复', () => {
+    // vehicle 实锤：tabs（标题行控件）与内容区「小标题」都进过 header/body 双轨。
+    // 治本：header-right 只消费 headerSlots 契约命中的 node；body 排除同 node（只落一次）。
+    const secs = [
+      { id: '2:7954', type: 'tabs', responsibility: '标签页切换区', sourceNodeIds: ['2:7954'] },
+      { id: '2:7959', type: 'content', responsibility: '小标题', sourceNodeIds: ['2:7959'] },
+      { id: 'section-cards', type: 'stats', responsibility: '统计卡片区', sourceNodeIds: ['2:8023'] },
+    ]
+    const input = makeInput(secs)
+    ;(input as any).headerSlots = [
+      { slotType: 'header-right', elementType: 'tab', figmaNodeId: '2:7954', content: '危化/重型/超高' },
+    ]
+    const facts = buildDeterministicIndexTemplate(input)
+    const tpl = facts!.template
+    expect(tpl).toContain('<template #header-right>')
+    expect(tpl).toContain('<TabsSection />')
+    // 核心：body（slot-con 之后）不再出现 TabsSection（同 figmaNodeId 只落一次，杜绝双轨）
+    const slotConIdx = tpl.indexOf('slot-con')
+    const bodyPart = tpl.slice(slotConIdx)
+    expect(bodyPart).not.toContain('<TabsSection />')
+    // 统计卡叶子仍在 body
+    expect(bodyPart).toContain('<StatsSection />')
+  })
+
+  test('刀 5c：无 headerSlots 契约 → 回退 type==="header" 二分（旧行为零回归）', () => {
+    const secs = [
+      { id: '2:8419', type: 'header', responsibility: '顶部标题区' },
+      { id: '89:37', type: 'tabs', responsibility: '标签页切换区' },
+    ]
+    const facts = buildDeterministicIndexTemplate(makeInput(secs))
+    expect(facts!.template).toContain('<HeaderSection />')
+    expect(facts!.template).toContain('<TabsSection />')
+  })
 })
 
 describe('层① pruneDeadSubComponentImports（删死 import）', () => {

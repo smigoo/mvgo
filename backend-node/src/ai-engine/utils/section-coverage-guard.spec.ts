@@ -1,4 +1,4 @@
-import { detectMissingSections, ensureSectionAssembly } from './section-coverage-guard.js'
+import { detectMissingSections, detectUnmaterializedSections, ensureSectionAssembly } from './section-coverage-guard.js'
 import { CodeStructureValidator } from '../validators/code-structure-validator.js'
 
 /**
@@ -420,5 +420,110 @@ describe('ensureSectionAssembly 自愈（COMP-001 前置）', () => {
     const out = ensureSectionAssembly(filesObj(FLOW_FILES), FLOW_PLAN)
     const arr = Object.entries(out).map(([path, content]) => ({ path, content }))
     expect(detectMissingSections(arr, FLOW_PLAN)).toHaveLength(0)
+  })
+})
+
+/**
+ * 🛡️ 刀 13（2026-09-13）：命名单一事实源 + 未物化分离。
+ *
+ * 事故 mc-1789308308127-356073d1（设备监测）真实形态：
+ *   componentPlan 4 个叶子（id 是噪声名、type 正确）——
+ *     header(type=header) / switch(type=switch) / @antd/tab(type=tabs) / 主内容区(type=body)
+ *   产物命名由层① `buildDeterministicIndexTemplate` → `assignSectionComponentNames` 决定：
+ *     HeaderSection / SwitchSection / TabsSection / MainSection
+ *   旧实现用 `kebabToPascal(section.id)` **自造**名字（Header / Switch / @antd/tab / 主内容区）
+ *   → 3 个恒不命中 → index.vue 明明组装了全部 3 个存活子组件，仍报「未组装 3 个」
+ *   → COMP-001 BLOCK ×3 轮不收敛（软失败发布，主内容区整块消失）。
+ */
+describe('刀 13 · COMP-001 命名单一事实源 / 未物化分离', () => {
+  const NOISE_PLAN = plan([
+    { id: 'header', type: 'header', title: '标题', responsibility: '标题栏' },
+    { id: 'switch', type: 'switch', title: 'switch', responsibility: '状态切换' },
+    { id: '@antd/tab', type: 'tabs', title: '@antd/tab', responsibility: '标签页切换区' },
+    { id: '主内容区', type: 'body', title: '主内容区', responsibility: '主内容区' },
+  ])
+
+  const INDEX_VUE = {
+    path: 'package/index.vue',
+    content: `<template>
+  <base-panel>
+    <template #header-right><HeaderSection /></template>
+    <div class="c-x-slot-con">
+      <TabsSection />
+      <MainSection />
+    </div>
+  </base-panel>
+</template>
+<script setup>
+import HeaderSection from './components/HeaderSection.vue'
+import TabsSection from './components/TabsSection.vue'
+import MainSection from './components/MainSection.vue'
+</script>`,
+  }
+  const COMP = (n: string) => ({ path: `package/components/${n}.vue`, content: `<template><div>${n}</div></template>` })
+
+  it('🔴 噪声 section.id + 确定性命名产物 → 不得误报（旧版报 switch/@antd/tab/主内容区 3 个）', () => {
+    // 复测产物真实形态：SwitchSection.vue 被 P1-4 隔离 → 只剩 3 个子组件；
+    // index.vue 已组装 HeaderSection / TabsSection / MainSection
+    const files = [INDEX_VUE, COMP('HeaderSection'), COMP('TabsSection'), COMP('MainSection')]
+    const missing = detectMissingSections(files, NOISE_PLAN)
+    // `@antd/tab`(type=tabs→TabsSection) 与 `主内容区`(type=body→MainSection) 均已组装 → 不再误报
+    expect(missing.map((m) => m.id)).toEqual(['switch'])
+  })
+
+  it('未物化（组件文件不存在）→ hasFile=false，且可被 detectUnmaterializedSections 单独取出', () => {
+    const files = [INDEX_VUE, COMP('HeaderSection'), COMP('TabsSection'), COMP('MainSection')]
+    const missing = detectMissingSections(files, NOISE_PLAN)
+    expect(missing[0].hasFile).toBe(false)
+    expect(detectUnmaterializedSections(files, NOISE_PLAN)).toEqual([
+      { id: 'switch', title: 'switch', expected: 'SwitchSection' },
+    ])
+  })
+
+  it('有组件文件但未组装 → hasFile=true（可 BLOCK / 可确定性注入）', () => {
+    const files = [
+      INDEX_VUE,
+      COMP('HeaderSection'),
+      COMP('TabsSection'),
+      COMP('MainSection'),
+      COMP('SwitchSection'),
+    ]
+    const missing = detectMissingSections(files, NOISE_PLAN)
+    expect(missing.map((m) => ({ id: m.id, hasFile: m.hasFile }))).toEqual([
+      { id: 'switch', hasFile: true },
+    ])
+    expect(detectUnmaterializedSections(files, NOISE_PLAN)).toHaveLength(0)
+  })
+
+  it('ensureSectionAssembly 按确定性命中文件名注入（`switch` → SwitchSection.vue）', () => {
+    const files = {
+      'package/index.vue': INDEX_VUE.content,
+      'package/components/HeaderSection.vue': '<template><div>h</div></template>',
+      'package/components/TabsSection.vue': '<template><div>t</div></template>',
+      'package/components/MainSection.vue': '<template><div>m</div></template>',
+      'package/components/SwitchSection.vue': '<template><div>s</div></template>',
+    }
+    const out = ensureSectionAssembly(files, NOISE_PLAN)
+    expect(out['package/index.vue']).toContain("import SwitchSection from './components/SwitchSection.vue'")
+    expect(out['package/index.vue']).toContain('<SwitchSection />')
+  })
+
+  it('门禁：仅「未物化」时不再 BLOCK，只发 COMP-001-UNMATERIALIZED WARN', () => {
+    const files = [INDEX_VUE, COMP('HeaderSection'), COMP('TabsSection'), COMP('MainSection')]
+    const res = CodeStructureValidator.validate(files, 'c-x', {
+      target: 'microcode',
+      componentPlan: NOISE_PLAN,
+    } as any)
+    const comp = res.issues.filter((i: any) => i.id.startsWith('COMP-001'))
+    expect(comp.filter((i: any) => i.severity === 'BLOCK')).toHaveLength(0)
+    // 4 个 section 里 switch 的组件文件不存在 → WARN（不可修，重试无意义）
+    expect(comp.map((i: any) => i.id)).toContain('COMP-001-UNMATERIALIZED')
+    expect(comp.find((i: any) => i.id === 'COMP-001-UNMATERIALIZED').severity).toBe('WARN')
+  })
+
+  it('零回归：旧 kebab 命名产物仍被识别（不新增阻断）', () => {
+    expect(detectMissingSections(FLOW_FILES, FLOW_PLAN)).toHaveLength(4)
+    expect(detectMissingSections(MONITOR_FILES, MONITOR_PLAN)).toHaveLength(0)
+    expect(detectMissingSections(DRIFT_FILES, DRIFT_PLAN)).toHaveLength(0)
   })
 })

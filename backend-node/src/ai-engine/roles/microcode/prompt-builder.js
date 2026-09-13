@@ -2342,6 +2342,14 @@ ${fileList}
 - elementStyleMap 有明确值的属性必须直接写精确值，禁止用主题变量覆盖
 - 不确定变量名是否存在时，直接写 elementStyleMap 精确值（写盘门禁会自动补缺失变量）
 
+**🎨 颜色变量化铁律（治本，2026-09-13）**：
+- **禁止颜色字面量直写**：\`color: rgba(51,51,51,1)\` / \`background: #1990ff\` 一律改写为变量引用
+${(options.componentType || 'microcode') !== 'vue3'
+  ? `- **微码组件：优先用 CSS 变量** \`var(--colorXxx)\`（**camelCase**，如 \`--colorPrimary\`/\`--colorTextBase\`/\`--colorDanger\`/\`--colorWarning\`/\`--colorBorder\`）；宿主运行时把 css-vars.js 的变量注入组件根元素 inline style，var() 引用即实现 dark/light 主题切换`
+  : `- **vue3 组件：用 less 变量** \`@xxx\`（theme-vars.less 槽位已定义），禁止 \`var(--xxx)\`（\`<style scoped>\` 下 :root 变量会失效）`}
+- **禁止**在 common.less 顶部重复定义 \`@color-*: <字面量>\`（槽位定义在 theme-vars.less，勿重复）
+- **唯一例外**：只有 \`darken()/lighten()/fade()/mix()\` 等 less 颜色函数参与运算的颜色，才允许用 less 字面量变量（\`@xxx: #hex\`），因 less 颜色函数遇 \`var()\` 会编译报错
+
 **🚫 禁止面板外壳样式泄漏**：
 - common.less 中**禁止**在 \`.c-${componentName}-content\` 上设置 \`background\`、\`box-shadow\`、\`border-radius\`
 - 原因：base-panel 已提供面板标题、边框、阴影等外壳样式，重复生成会导致双层边框/阴影

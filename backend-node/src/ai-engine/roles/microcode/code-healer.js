@@ -1791,6 +1791,42 @@ const THEME_PRESET_NAMES = [
 ];
 
 /**
+ * Less **编译期颜色函数** —— 参数必须是「可求值的颜色」（#hex / rgba() / 具名色）。
+ * 传入 CSS 运行时 `var()` 会在编译期报
+ * `Error evaluating function \`lighten\`: Argument cannot be evaluated to a color`，
+ * 进而整个 style 块编译失败 → P1-4 坏文件隔离降级 → 子组件整块消失。
+ */
+const LESS_COLOR_FUNCS = [
+  'lighten',
+  'darken',
+  'fade',
+  'fadein',
+  'fadeout',
+  'saturate',
+  'desaturate',
+  'spin',
+  'mix',
+  'tint',
+  'shade',
+  'greyscale',
+  'contrast',
+];
+
+/**
+ * 该变量是否被 Less 颜色函数（作为实参）引用。
+ * 只认「同一份样式文本内」的引用 —— 调用方已把范围收敛到 .less 全文或单个 <style> 块。
+ * @param {string} content
+ * @param {string} varName 不含 @
+ */
+function isUsedByLessColorFn(content, varName) {
+  const re = new RegExp(
+    `\\b(?:${LESS_COLOR_FUNCS.join('|')})\\s*\\([^)]*@${varName}\\b`,
+    'i',
+  );
+  return re.test(content);
+}
+
+/**
  * 🛡️ 预设字面量声明 → var 透传（2026-09-04，A2 治本）：
  * LLM 在 style/less 顶层写 `@colorPrimary: #409EFF;` / `@fontSize: 14px;`（本地字面量覆盖
  * 主题预设）→ 触发 THEME-PRESET-OVERRIDE BLOCK，且 3 轮重试难消（mc-max-1788505197306 实锤）。
@@ -1800,6 +1836,13 @@ const THEME_PRESET_NAMES = [
  * 不再自愈→门禁死循环。
  * 保守：仅处理非 themes/ 目录的纯样式文本（.less 全文 / .vue 的 <style> 块）；
  * 值已是 var()、含 var(/注释/嵌套分号 → 不干预（避免破坏 mixin 闭包或复杂表达式）。
+ *
+ * 🛡️ 2026-09-13（与颜色 var() 透传回退同一治本线）：**被 Less 颜色函数引用的变量豁免**。
+ * 根因（`mc-1789311919345-edeb2177` 实锤）：本函数把 `@colorPrimary: #409EFF;` 改写成
+ * `var(--colorPrimary, #409EFF)` 后，同文件 `lighten(@colorPrimary, 30%)` 在编译期无法求值 →
+ * `Argument cannot be evaluated to a color` → 整个 <style> 编译失败 → P1-4 隔离 → 子组件消失。
+ * 注意它与 file-writer#safeLessVarValue / less-variable-checker 是**三条独立**的 var 注入路径：
+ * 只回退前两处时，本函数会「接手」把 hex 再变回 var（值已是 var 才跳过 → 回退后反而开始改写）。
  *
  * @param {string} content 样式文本（less 全文或 style 块）
  * @param {string} [filePath] 文件相对路径（themes/ 目录豁免）
@@ -1819,7 +1862,8 @@ export function healPresetLiteralDecls(content, filePath = '') {
       !v ||
       /^var\(/i.test(v) ||          // 已透传形态（file-writer 自愈产物）→ 保持
       /var\(/i.test(v) ||           // 值内嵌 var → 复杂表达式不干预
-      v.includes('//') || v.includes('/*') || v.includes('*/') // 含注释 → 保守跳过
+      v.includes('//') || v.includes('/*') || v.includes('*/') || // 含注释 → 保守跳过
+      isUsedByLessColorFn(content, decl.slice(1)) // 🛡️ 被 lighten()/darken()/fade() 等引用 → var() 编译期不可求值，保留真颜色
     ) {
       return full;
     }
@@ -1846,40 +1890,76 @@ export function healPresetLiteralDecls(content, filePath = '') {
  * @returns {string}
  */
 export function healSlotHexToVarRefs(content, themeVarsContent) {
-  if (typeof content !== 'string' || !content.includes('#')) return content;
-  if (typeof themeVarsContent !== 'string' || !themeVarsContent.includes('#')) {
-    return content;
-  }
-  // 1) hex → cssVar 唯一映射（同 hex 多变量 → 不收录）
-  const hexVarCount = new Map(); // hexLower -> Set<cssVar>
+  if (typeof content !== 'string') return content;
+  if (typeof themeVarsContent !== 'string') return content;
+  // 🛡️ 治本 D（2026-09-13）：此前只治 hex（`#[0-9a-fA-F]{3,8}`），漏掉 rgb/rgba 字面量——
+  // 而 LLM 写死的颜色绝大多数是 `rgba(25,144,255,1)` 形态（c-vehicle-monitor 22 处全是 rgba），
+  // 导致自愈漏治、M5-10 事后暴露。现扩展：hex 与 rgb/rgba 统一收录、统一替换。
+  const hasColor = /#|rgba?\(/.test(content);
+  const tvHasColor = /#|rgba?\(/.test(themeVarsContent);
+  if (!hasColor || !tvHasColor) return content;
+
+  // 1) 颜色字面量 → cssVar 映射（hex 与 rgb/rgba 统一归一化键，同值多变量 → 兜底收录第一个）
+  const colorVarCount = new Map(); // 归一化颜色值 -> Set<cssVar>
   for (const m of themeVarsContent.matchAll(
-    /@([a-z][a-z0-9-]*)\s*:\s*(#[0-9a-fA-F]{3,8})\s*;/g,
+    /@([a-z][a-z0-9-]*)\s*:\s*(#[0-9a-fA-F]{3,8}|rgba?\([^)]*\))\s*;/gi,
   )) {
     const cssVar =
       '--' + m[1].replace(/-([a-z0-9])/g, (_, c) => c.toUpperCase());
-    const hex = m[2].toLowerCase();
-    if (!hexVarCount.has(hex)) hexVarCount.set(hex, new Set());
-    hexVarCount.get(hex).add(cssVar);
+    const color = normalizeColorToken(m[2]);
+    if (!colorVarCount.has(color)) colorVarCount.set(color, new Set());
+    colorVarCount.get(color).add(cssVar);
   }
-  const hexToVar = new Map();
-  for (const [hex, vars] of hexVarCount) {
-    // 🛡️ 2026-09-10：同 hex 多变量时兜底收录第一个（如 #333333 同时是
-    // @color-axis-label / @color-axis-unit 两个槽值）。旧逻辑仅收录唯一映射 → healer
-    // 跳过多变量 hex → 门禁 THEME-SLOT-COLOR 对残留字面量硬 BLOCK
-    //（env 01407ff1 实锤 6 处漏治）。兜底收录后门禁检测 var(...) 即跳过。
-    hexToVar.set(hex, [...vars][0]);
+  const colorToVar = new Map();
+  for (const [color, vars] of colorVarCount) {
+    // 🛡️ 同色多变量时兜底收录第一个（#333333 同时是 @color-axis-label/@color-axis-unit 槽值，
+    // env 01407ff1 实锤 6 处漏治）；兜底收录后门禁检测 var(...) 即跳过。
+    colorToVar.set(color, [...vars][0]);
   }
-  if (hexToVar.size === 0) return content;
+  if (colorToVar.size === 0) return content;
 
-  // 2) 颜色属性 = 纯槽 hex 字面量 → var(--x, #hex)
+  // 2) 颜色属性 = 纯颜色字面量（hex 或 rgb/rgba）→ var(--x, <原值>)
+  //    仅匹配「颜色呈现属性」的直接字面量值，不碰 linear-gradient/text-shadow 等函数。
   let changed = false;
   const out = content.replace(
-    /(^|[\s;{])(color|background(?:-color)?|border-(?:top|right|bottom|left)-color|outline(?:-color)?|caret-color|accent-color)\s*:\s*(#[0-9a-fA-F]{3,8})(\s*!important)?\s*;/gm,
-    (full, pre, prop, hex, imp) => {
-      const varName = hexToVar.get(hex.toLowerCase());
+    /(^|[\s;{])(color|background(?:-color)?|border-(?:top|right|bottom|left)-color|outline(?:-color)?|caret-color|accent-color)\s*:\s*(#[0-9a-fA-F]{3,8}|rgba?\([^)]*\))(\s*!important)?\s*;/gm,
+    (full, pre, prop, colorVal, imp) => {
+      const varName = colorToVar.get(normalizeColorToken(colorVal));
       if (!varName) return full;
       changed = true;
-      return `${pre}${prop}: var(${varName}, ${hex})${imp || ''};`;
+      return `${pre}${prop}: var(${varName}, ${colorVal})${imp || ''};`;
+    },
+  );
+  return changed ? out : content;
+}
+
+/** 归一化颜色字面量：去空白 + 小写（hex 与 rgba 统一键，避免空格差异导致映射 miss） */
+function normalizeColorToken(v) {
+  return String(v).replace(/\s+/g, '').toLowerCase();
+}
+
+/**
+ * 🛡️ 治本 F（2026-09-13）：CSS 变量名 kebab→camel 归一。
+ * 根因：LLM 常写 \`var(--color-text-base)\` / \`var(--color-primary)\` 等 kebab-case 变量名，
+ * 但宿主通过 css-vars.js + Vue :style 注入的是 **camelCase**（\`--colorTextBase\`/\`--colorPrimary\`）。
+ * CSS 变量名大小写敏感 → kebab 引用永不生效（fallback 兜底、主题不响应，c-vehicle-monitor 5 处实锤）。
+ * 仅归一 \`--color-*\` 系列（css-vars.js 的 key 均为 camelCase）；camelCase 形态（无连字符）原样保留。
+ * @param {string} content 样式文本
+ * @returns {string}
+ */
+export function healVarNameCase(content) {
+  if (typeof content !== 'string' || !content.includes('var(--')) return content;
+  let changed = false;
+  const out = content.replace(
+    /var\((--color-[a-z0-9]*-[a-z0-9-]*)/g,
+    (full, varName) => {
+      // varName 形如 --color-text-base；去掉前导 --，kebab→camel，再补回 --
+      const camel =
+        '--' +
+        varName.slice(2).replace(/-([a-z0-9])/g, (_, c) => c.toUpperCase());
+      if (camel === varName) return full;
+      changed = true;
+      return `var(${camel}`;
     },
   );
   return changed ? out : content;

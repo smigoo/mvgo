@@ -31,7 +31,7 @@
  *   - 检测器自身异常走 fail-open（WARN，不阻断），交由下游门禁与人工复核。
  */
 
-import { collectLeafSections } from './section-tree.js';
+import { collectLeafSections, assignSectionComponentNames, dedupeDuplicateSections } from './section-tree.js';
 import { extractSfcTemplate } from './sfc-template-extractor.js';
 
 /**
@@ -58,6 +58,54 @@ function normalizeSectionId(id) {
   return String(id || '').replace(/^section[-_]/, '');
 }
 
+/**
+ * 🛡️ 命名单一事实源（2026-09-13 治本，事故 mc-1789308308127-356073d1）。
+ *
+ * 缺陷：本模块此前**自造**组件名 —— `kebabToPascal(normalizeSectionId(section.id))`，
+ * 而产物命名早已改由层① `buildDeterministicIndexTemplate` → `assignSectionComponentNames`
+ * 决定（按 section.type 稳定映射）。两套命名口径并存 → 门禁按「id 猜名」永远匹配不上
+ * 真实产物名 → **不可达成的 BLOCK**：
+ *   - id `@antd/tab`（type=tabs，真实产物 `TabsSection.vue`）→ 猜出 `@antd/tab`，恒不命中；
+ *   - id `主内容区`（type=body，真实产物 `MainSection.vue`）→ 猜出 `主内容区`，恒不命中；
+ *   - id `switch`（type=switch，真实产物 `SwitchSection.vue`）→ 猜出 `Switch`，恒不命中。
+ * 实锤：componentPlan 4 个 section、index.vue **已组装全部 3 个**子组件，门禁仍报
+ * 「未组装 3 个（switch、@antd/tab、主内容区）」→ COMP-001 BLOCK ×3 轮不收敛（软失败，
+ * 带瑕疵发布，主内容区整块消失）。
+ *
+ * 治本：名字候选**取并集** —— ① 确定性命名（与产物同源）；② 旧 kebab 形态（兼容
+ * 事故 mc-max-1788306635802 时代 LLM 自由命名的产物）。任一命中即视为已落地/已组装，
+ * 只会**减少误报**，不会新增阻断。
+ *
+ * @param {object} componentPlan
+ * @returns {Map<string, string[]>} section.id → 组件名候选（按优先级，去重）
+ */
+function sectionNameCandidates(componentPlan) {
+  const plan =
+    componentPlan && Array.isArray(componentPlan.effectiveSections)
+      ? componentPlan
+      : componentPlan?.generationInput?.componentPlan;
+  const tree = dedupeDuplicateSections(plan?.effectiveSections);
+  let deterministic = new Map();
+  try {
+    deterministic = assignSectionComponentNames(tree) || new Map();
+  } catch (_) {
+    // 确定性命名异常 → 退化为仅 kebab 候选（fail-open，不因命名失败误报）
+    deterministic = new Map();
+  }
+  const out = new Map();
+  for (const sec of collectLeafSections(tree)) {
+    const id = String(sec?.id || '');
+    if (!id || out.has(id)) continue;
+    const cands = [];
+    const det = deterministic.get(id);
+    if (det) cands.push(String(det));
+    const kebab = kebabToPascal(normalizeSectionId(id));
+    if (kebab && !cands.includes(kebab)) cands.push(kebab);
+    out.set(id, cands);
+  }
+  return out;
+}
+
 function isListLikeSection(sec) {
   if (!sec || typeof sec !== 'object') return false;
   if (sec.collapsed === true || sec.renderHint === 'v-for') return true;
@@ -81,17 +129,26 @@ function sectionCoveredByVFor(tpl, reachable, itemCount) {
 }
 
 /**
- * 检测 componentPlan 中「规划了但未被 index.vue 组装」的 section。
+ * 组装覆盖分析（`detectMissingSections` / `detectUnmaterializedSections` 的共同内核）。
  *
- * @param {Array<{path:string, content:string}>} files 生成产物文件数组
- * @param {object} componentPlan { effectiveSections: [{id,title,...}], isForced, ... }
- * @returns {Array<{id:string, title:string}>} 缺失（未组装）的 section 列表；无法判定/无缺失返回 []
+ * @param {Array<{path:string, content:string}>} files
+ * @param {object} componentPlan
+ * @returns {{ missing: Array<{id:string,title:string,expected:string,hasFile:boolean}> }}
+ *   `missing` = 规划了但 index.vue 未组装的 section，逐项带 `hasFile`：
+ *   - `hasFile=true`  → **可修**（补 import + 标签即解决）→ 消费方 BLOCK / 确定性注入；
+ *   - `hasFile=false` → **不可修**（组件文件不存在，LLM 无法「组装」它；重试只会重放
+ *     同一份源码）→ 消费方降级为 WARN，指向降级/物化链路，不烧重试预算。
  */
-export function detectMissingSections(files, componentPlan) {
+function analyzeSectionCoverage(files, componentPlan) {
+  const empty = { missing: [] };
   // 🛡️ A′ Phase 5：只校验叶子 section。布局容器不占 .vue，不能当缺失模块。
-  const sections = collectLeafSections(componentPlan?.effectiveSections);
+  const plan =
+    componentPlan && Array.isArray(componentPlan.effectiveSections)
+      ? componentPlan
+      : componentPlan?.generationInput?.componentPlan;
+  const sections = collectLeafSections(plan?.effectiveSections);
   if (!componentPlan?.isForced || sections.length < 2) {
-    return [];
+    return empty;
   }
 
   const fileByPath = new Map();
@@ -99,7 +156,7 @@ export function detectMissingSections(files, componentPlan) {
     if (f && f.path) fileByPath.set(String(f.path), String(f.content || ''));
   }
   const indexContent = fileByPath.get('package/index.vue');
-  if (!indexContent) return [];
+  if (!indexContent) return empty;
 
   // 🛡️ 共享边界法（lazy </template> 会被具名插槽提前截断——0ca84358 家族缺陷）
   const tpl = extractSfcTemplate(indexContent) || '';
@@ -127,6 +184,7 @@ export function detectMissingSections(files, componentPlan) {
     const p = `package/components/${m[2]}.vue`;
     if (fileByPath.has(p)) reachable += '\n' + fileByPath.get(p);
   }
+  const assembled = (name) => usedTags.has(name) || importedNames.has(name);
 
   // 信号3 命名漂移豁免（2026-09-02 事故 mc-max-1788327432319-a6198738 环境监测）：
   // 规划 section.id 与 LLM 实际组件命名不一致时（如 tab-tools→TabTools vs 实际
@@ -144,19 +202,17 @@ export function detectMissingSections(files, componentPlan) {
     if (m) compFileNames.push(kebabToPascal(m[1]));
   }
   if (compFileNames.length >= sections.length && compFileNames.length > 0) {
-    const allAssembled = compFileNames.every(
-      (n) => usedTags.has(n) || importedNames.has(n),
-    );
-    if (allAssembled) return [];
+    if (compFileNames.every((n) => assembled(n))) return empty;
   }
 
+  const candidates = sectionNameCandidates(componentPlan);
   const missing = [];
   for (const sec of sections) {
     const id = String(sec?.id || '');
     const title = String(sec?.title || '').trim();
-    const pascal = kebabToPascal(normalizeSectionId(id));
-    const viaComponent =
-      pascal && (usedTags.has(pascal) || importedNames.has(pascal));
+    const cands = candidates.get(id) || [];
+    const expected = cands[0] || kebabToPascal(normalizeSectionId(id));
+    const viaComponent = cands.some((n) => n && assembled(n));
     const viaTitle = title.length >= 2 && reachable.includes(title);
     const viaListTemplate =
       isListLikeSection(sec) &&
@@ -167,11 +223,41 @@ export function detectMissingSections(files, componentPlan) {
           reachable,
           Number(sec.itemCount) || (Array.isArray(sec.items) ? sec.items.length : 0),
         ));
-    if (!viaComponent && !viaTitle && !viaListTemplate) {
-      missing.push({ id, title: title || id });
-    }
+    if (viaComponent || viaTitle || viaListTemplate) continue;
+    const hasFile = cands.some((n) => n && fileByPath.has(`package/components/${n}.vue`));
+    missing.push({ id, title: title || id, expected, hasFile });
   }
-  return missing;
+  return { missing };
+}
+
+/**
+ * 检测 componentPlan 中「规划了但未被 index.vue 组装」的 section。
+ *
+ * @param {Array<{path:string, content:string}>} files 生成产物文件数组
+ * @param {object} componentPlan { effectiveSections: [{id,title,...}], isForced, ... }
+ * @returns {Array<{id:string, title:string, expected:string, hasFile:boolean}>}
+ *   缺失（未组装）的 section 列表；无法判定/无缺失返回 []。
+ *   `hasFile` 区分两种消费语义：true → 可 BLOCK / 可确定性注入；false → 只能 WARN。
+ */
+export function detectMissingSections(files, componentPlan) {
+  return analyzeSectionCoverage(files, componentPlan).missing;
+}
+
+/**
+ * 检测「连子组件文件都不存在」的未组装 section（物化失败 / 被 P1-4 隔离降级）。
+ *
+ * **不可修**形态：LLM 无法「组装」一个不存在的组件，重试只会重放同一份源码
+ * （R12 已完成分块从缓存恢复）→ 若对此 BLOCK 即「规则要求了不可达成的条件」，
+ * 重试预算耗尽后软失败发布。故消费方只发 WARN，并指向 degradedFiles / 重生成链路。
+ *
+ * @param {Array<{path:string, content:string}>} files
+ * @param {object} componentPlan
+ * @returns {Array<{id:string, title:string, expected:string}>}
+ */
+export function detectUnmaterializedSections(files, componentPlan) {
+  return analyzeSectionCoverage(files, componentPlan)
+    .missing.filter((m) => !m.hasFile)
+    .map(({ id, title, expected }) => ({ id, title, expected }));
 }
 
 /**
@@ -208,12 +294,13 @@ export function ensureSectionAssembly(files, componentPlan, logger) {
   const indexContent = files[indexPath];
   if (!indexContent || typeof indexContent !== 'string') return files;
 
-  // 1. 找出缺失且存在对应组件文件的 section（PascalCase(section.id).vue）
+  // 1. 找出缺失且存在对应组件文件的 section（候选名取并集，命中哪个用哪个）
+  const candidates = sectionNameCandidates(componentPlan);
   const injectable = [];
   for (const m of missing) {
-    const pascal = kebabToPascal(normalizeSectionId(m.id));
-    const fp = `package/components/${pascal}.vue`;
-    if (typeof files[fp] === 'string') injectable.push({ pascal, fp, title: m.title });
+    const cands = candidates.get(String(m.id)) || [];
+    const hit = cands.find((n) => n && typeof files[`package/components/${n}.vue`] === 'string');
+    if (hit) injectable.push({ pascal: hit, fp: `package/components/${hit}.vue`, title: m.title });
   }
   if (injectable.length === 0) return files;
 

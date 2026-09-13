@@ -3,6 +3,7 @@
  * 覆盖：子组件死代码 import / 资源变量未挂载 / 反向类名不命中。
  */
 import {
+  CodeStructureValidator,
   findDeadSubComponentImports,
   findUnmountedResourceVars,
   findUndefinedComponentClasses,
@@ -100,6 +101,40 @@ const use = bg10
     const res = findUnmountedResourceVars(content)
     expect(res).toContain('bg1')
     expect(res).not.toContain('bg10')
+  })
+
+  test('validate 扫子组件：StatsSection 只 import 不挂 bg2 → CODE-022 BLOCK（index 干净不误报）', () => {
+    const files = [
+      {
+        path: 'package/index.vue',
+        content: `<template>
+  <base-panel>
+    <StatsSection />
+  </base-panel>
+</template>
+<script setup>
+import StatsSection from './components/StatsSection.vue'
+</script>
+<style scoped lang="less">
+@import '../resources/styles/common.less';
+</style>`,
+      },
+      {
+        path: 'package/components/StatsSection.vue',
+        content: `<template><div class="card">中间卡</div></template>
+<script setup>
+import bg2 from '../../resources/images/bg-8807.png'
+</script>`,
+      },
+    ]
+    const res = CodeStructureValidator.validate(files, 'c-vehicle-monitor', {
+      target: 'microcode',
+    })
+    const code022 = (res.issues || []).filter((i) => i.id === 'CODE-022')
+    expect(code022.length).toBeGreaterThanOrEqual(1)
+    expect(code022.some((i) => String(i.file).includes('StatsSection.vue'))).toBe(true)
+    expect(code022.some((i) => /bg2/.test(i.message))).toBe(true)
+    expect(code022.some((i) => String(i.file).endsWith('package/index.vue'))).toBe(false)
   })
 })
 

@@ -21,6 +21,8 @@ import {
 } from '../utils/figma-rate-limiter.js';
 import { isPanelResource } from '../utils/resource-mapping-formatter.js';
 import { isSemanticMountTarget } from '../utils/mount-target-scoring.js';
+// 🛡️ 刀 4（2026-09-13）：视觉序编号纯函数（独立模块，零 import.meta 依赖，供 jest 单测共用）
+import { assignVisualOrderVarNames } from '../utils/visual-order-assign.js';
 import { generateContainerSignature } from '../utils/asset-signature.js';
 
 const logger = createLogger({ name: 'figma-connector' });
@@ -2343,6 +2345,7 @@ export class FigmaConnector {
     // （微码 filterPanelResources:true 过滤，Vue3 :false 保留）。编号与过滤彻底解耦，
     // 保证：同一个资源在微码/Vue3 两种模式下 assignedVarName 恒一致，永不漂移。
     const roleIndex = { bg: 0, icon: 0, img: 0 };
+    const successMappings = [];
     for (const m of mappings) {
       // 复用单一事实源 isPanelResource（与 filterPanelResources 同源）
       m.isPanelResource = isPanelResource(m);
@@ -2402,14 +2405,16 @@ export class FigmaConnector {
       if (!Object.prototype.hasOwnProperty.call(roleIndex, role)) {
         continue;
       }
-      roleIndex[role]++;
       // 统一用固化位置编号（bg1/bg2/icon1/icon2...）。semanticVarName 仅作语义描述（供
       // prompt 的 hint/targetDomSelector 说明用途），绝不作为变量名——否则语义名（如
       // bgtabActive）会被 injectResourceImports 当作 import 变量注入，与模型手写的
       // `const bgtabActive = bg1` 别名映射冲突，产生重复声明（2026-08-16 事故）。
-      // 编号基于全量 success 资源稳定遍历顺序，语义名与编号彻底解耦。
-      m.assignedVarName = `${role}${roleIndex[role]}`;
+      // 语义名与编号彻底解耦。此处只收集，编号统一移到循环后的「视觉序」阶段。
+      successMappings.push({ m, role });
     }
+
+    // 视觉序编号（刀 4，2026-09-13）：见下方 assignVisualOrderVarNames 纯函数。
+    assignVisualOrderVarNames(successMappings);
 
     return mappings;
   }

@@ -243,6 +243,10 @@ export class LessVariableChecker {
       // 优先级 1：从同文件的 sibling mixin（theme-light/theme-dark）复制真值
       if (existingVars.has(v)) {
         const value = existingVars.get(v)
+        // 🛡️ 2026-09-13 回退 var() 透传：颜色变量必须用真实颜色（#/rgba），
+        // 否则 LESS 颜色函数 lighten()/darken()/fade() 无法求值（var() 不是颜色，编译报
+        // "Error evaluating function `lighten`: Argument cannot be evaluated to a color"）。
+        // 主题切换由 .theme-light()/.theme-dark() mixin 提供不同真实颜色，无需 CSS 运行时 var()。
         return `  @${v}: ${value}; // 自动添加（从 theme mixin 复制）`
       }
       // 优先级 2：按变量名语义猜测

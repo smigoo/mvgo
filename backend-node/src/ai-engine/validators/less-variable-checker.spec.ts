@@ -101,7 +101,8 @@ describe('LessVariableChecker', () => {
       join(root, 'resources', 'styles', 'themes', 'theme-vars.less'),
       'utf-8',
     )
-    // safeLessVarValue('@unknown-bg') → /bg/ → '#ffffff'
+    // safeLessVarValue('@unknown-bg') → /bg/ → 颜色分支返回真实颜色 #ffffff
+    // （2026-09-13 回退 var() 透传：真实颜色才能被 lighten()/fade() 求值）
     expect(content).toContain('@unknown-bg: #ffffff; // 自动添加（语义推断）')
   })
 

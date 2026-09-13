@@ -74,6 +74,24 @@ import icon1 from '../../resources/images/icon-8798.png'
 </script>`;
     expect(collectResourceVarRefsFromSfc(sfc).template.has('icon1')).toBe(true);
   });
+
+  it('刀 7d：对象属性名不被误判为资源引用（device 主内容区二次误杀）', () => {
+    // `{ icon: icon9 }` 的 key `icon`、`device.bgIndex` 的成员名 `bgIndex` 都不是变量引用；
+    // 旧实现按标识符扫描 → 误判 R2 幽灵引用（`icon`/`bgIndex` 未登记）→ L0-B BLOCK。
+    const sfc = `<template><div /></template>
+<script setup>
+import icon9 from '../../resources/images/icon-8444.png'
+import bg4 from '../../resources/images/bg-8439.png'
+const deviceList = [{ id: 1, name: 'x', bgIndex: 1, icon: icon9 }]
+const bgMap = { 1: bg4 }
+const getDeviceBg = (index) => bgMap[index] || bg4
+</script>`;
+    const refs = collectResourceVarRefsFromSfc(sfc);
+    expect(refs.script.has('icon')).toBe(false);    // 对象键
+    expect(refs.script.has('bgIndex')).toBe(false); // 对象键 + 成员名
+    expect(refs.script.has('icon9')).toBe(true);    // 真实引用保留
+    expect(refs.script.has('bg4')).toBe(true);      // 真实引用保留
+  });
 });
 
 describe('buildResourceFacts / checkResourceContract', () => {
@@ -124,6 +142,48 @@ const deviceBgs = [bg1]
     };
     const facts = buildResourceFacts({ mapping: MAPPING, files });
     expect(checkResourceContract(files, facts).filter((x) => x.severity === 'error')).toEqual([]);
+  });
+
+  it('刀 7c：W2 别名转发 const bgN = bg3 不算幽灵引用（device 主内容区治本）', () => {
+    // 12 张同图设备卡被视觉序拆成 bg3…bg14，首个 import bg3，其余生成 const 别名转发。
+    // 旧实现只认 import 为绑定 → 把 bg4/bg7/bg10/bg12/bg13 误判成 R2 幽灵引用 → L0-B BLOCK 误杀整组件。
+    const files = {
+      'package/components/MainSection.vue': `<template>
+  <div class="c-device-monitor-cons">
+    <div :style="{ backgroundImage: \`url(\${bg12})\` }"><img :src="icon12" /></div>
+    <div :style="{ backgroundImage: \`url(\${bg7})\` }"><img :src="icon7" /></div>
+    <div :style="{ backgroundImage: \`url(\${bg4})\` }"><img :src="icon4" /></div>
+    <div :style="{ backgroundImage: \`url(\${bg10})\` }"><img :src="icon10" /></div>
+    <div :style="{ backgroundImage: \`url(\${bg13})\` }"><img :src="icon13" /></div>
+  </div>
+</template>
+<script setup>
+import bg3 from '../../resources/images/bg-8439.png'
+import icon12 from '../../resources/images/icon-8532.png'
+import icon7 from '../../resources/images/icon-8561.png'
+import icon4 from '../../resources/images/icon-8590.png'
+import icon10 from '../../resources/images/icon-8619.png'
+import icon13 from '../../resources/images/icon-8648.png'
+const bg12 = bg3
+const bg7 = bg3
+const bg4 = bg3
+const bg10 = bg3
+const bg13 = bg3
+</script>`,
+    };
+    const aliasMapping = [
+      ...MAPPING,
+      { assignedVarName: 'bg3', resourceFile: '../resources/images/bg-8439.png', name: 'bg' },
+      { assignedVarName: 'bg12', resourceFile: '../resources/images/bg-8439.png', name: 'bg' },
+      { assignedVarName: 'bg7', resourceFile: '../resources/images/bg-8439.png', name: 'bg' },
+      { assignedVarName: 'bg4', resourceFile: '../resources/images/bg-8439.png', name: 'bg' },
+      { assignedVarName: 'bg10', resourceFile: '../resources/images/bg-8439.png', name: 'bg' },
+      { assignedVarName: 'bg13', resourceFile: '../resources/images/bg-8439.png', name: 'bg' },
+    ];
+    const facts = buildResourceFacts({ mapping: aliasMapping, files });
+    const blocking = checkResourceContract(files, facts).filter((x) => x.severity === 'error');
+    expect(facts.unresolved.map((u) => u.varName)).toEqual([]); // 关键：无 R2 幽灵引用
+    expect(blocking).toEqual([]);
   });
 });
 

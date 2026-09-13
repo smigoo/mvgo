@@ -22,9 +22,19 @@
  *   3. 只剥离「共享表里同名 class 也声明了的属性」——子组件独有属性（如 min-height:0）
  *      保留，避免丢失必要样式；
  *   4. 剥离后块内无剩余声明 → 整块删除（不留空壳规则）。
+ *
+ * 🔴 刀 13-C 治本（2026-09-13，FLEX-003 真机 0 命中实锤）：
+ * 本函数此前只认**数组形态**（`if (!Array.isArray(files) || files.length < 2) return`），
+ * 而唯一的生产调用方 CodeFixPipeline.apply 传的是**对象 map** `Object<string,string>`
+ * （code-fix-pipeline.js:137 → `fixFiles(out)`）→ 恒早退、`changes` 恒空、日志
+ * 「样式重复声明剥离」永不打印、修复永不生效，并且**完全静默**（返回原引用，
+ * 管线检测不到改动）。真机 grep `样式重复声明剥离` = 0 命中即此。
+ * 现改为经 `file-collection.js` 归一：**数组进数组出 / 对象 map 进对象 map 出**，
+ * 两种契约都成立；且跨文件比对所需的 common.less 与 *.vue 都能取到。
  */
 
 import { extractStyleBlocks } from './flex-sibling-guard.js';
+import { toFileArray, mergeFileArray } from './file-collection.js';
 
 /**
  * 参与剥离的布局尺寸类属性白名单。
@@ -163,19 +173,24 @@ export function pruneVueStyleAgainstShared(content, sharedClasses) {
  *
  * 幂等：剥离后再跑，子组件已无冲突属性 → removed=0 → 不变。
  *
- * @param {Array<{path:string, content:string}>} files 全量产物文件（内存态）
- * @returns {{ files: Array, changes: string[] }} 未改动则返回原引用
+ * 🔴 形态契约（刀 13-C）：输入支持「数组 `[{path,content}]`」与「对象 map `{path:content}`」
+ * 两种形态，**返回形态与输入一致**；无改动时返回**输入原引用**（供管线判定 applied）。
+ *
+ * @param {Array<{path:string, content:string}>|Object<string,string>} files 全量产物文件（内存态）
+ * @returns {{ files: Array|Object, changes: string[] }} 未改动则返回原引用 + 空 changes
  */
 export function pruneDuplicateStyleDecls(files = []) {
-  if (!Array.isArray(files) || files.length < 2) return { files, changes: [] };
+  // 形态归一（单一事实源）：数组 / 对象 map 都能取到 common.less 与 *.vue
+  const list = toFileArray(files);
+  if (list.length < 2) return { files, changes: [] };
 
   // 共享样式表：产物根 resources/styles/ 下的 common.less（其次 index.less）
-  const shared = files.find(
+  const shared = list.find(
     (f) =>
       f &&
       typeof f.content === 'string' &&
       /resources\/styles\/common\.less$/i.test(f.path || ''),
-  ) || files.find(
+  ) || list.find(
     (f) =>
       f &&
       typeof f.content === 'string' &&
@@ -188,7 +203,7 @@ export function pruneDuplicateStyleDecls(files = []) {
 
   const allChanges = [];
   let changed = false;
-  const out = files.map((f) => {
+  const out = list.map((f) => {
     if (!f || !/\.vue$/i.test(f.path || '')) return f;
     const r = pruneVueStyleAgainstShared(f.content, sharedClasses);
     if (r.changes.length === 0) return f;
@@ -197,5 +212,6 @@ export function pruneDuplicateStyleDecls(files = []) {
     return { ...f, content: r.content };
   });
 
-  return { files: changed ? out : files, changes: allChanges };
+  // 形态跟随（对象 map 进 → 对象 map 出；数组进 → 数组出）
+  return { files: changed ? mergeFileArray(files, out) : files, changes: allChanges };
 }

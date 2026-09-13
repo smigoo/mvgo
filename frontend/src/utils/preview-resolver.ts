@@ -50,9 +50,11 @@ export function selectPreviewSnapshot(
   partial?: PreviewSnapshotLike | null,
   lastGood?: PreviewSnapshotLike | null,
 ): { snapshot: PreviewSnapshotLike | null; source: PreviewDescriptor['source'] } {
+  // 🛡️ 2026-09-11 治本（双保险）：有 last-good 时优先用它，而非早期"validating"候选快照。
+  // 否则生成完成后立即跳转预览，可能选中修复器补齐变量前的坏候选（首次编译失败、刷新才好）。
+  if (lastGood) return { snapshot: lastGood, source: 'last-good' }
   if (candidate) return { snapshot: candidate, source: sourceOfSnapshot(candidate) }
   if (partial) return { snapshot: partial, source: 'partial' }
-  if (lastGood) return { snapshot: lastGood, source: 'last-good' }
   return { snapshot: null, source: 'workspace' }
 }
 

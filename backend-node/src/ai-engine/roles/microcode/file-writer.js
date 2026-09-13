@@ -21,7 +21,7 @@ import {
   extractLessGlobalVars,
 } from '../../utils/sfc-syntax-validation.js';
 import { repairScopedThirdPartySelectors, ensureFlexDirectionInVueSfc, ensureFlexDirection } from '../../utils/css-sanitizer.js';
-import { fixSpuriousLineBreaks, injectMissingTabUi, healVueEmbeddedStyleBraces, healThemeMixinVarRefs, healThemeMixinVarRefsInVue, healLessResourceVarInterpolation, healPresetLiteralDecls, healSlotHexToVarRefs, applyHealToVueStyleBlocks, injectThemeVarDeclsForLess } from './code-healer.js';
+import { fixSpuriousLineBreaks, injectMissingTabUi, healVueEmbeddedStyleBraces, healThemeMixinVarRefs, healThemeMixinVarRefsInVue, healLessResourceVarInterpolation, healPresetLiteralDecls, healSlotHexToVarRefs, healVarNameCase, applyHealToVueStyleBlocks, injectThemeVarDeclsForLess } from './code-healer.js';
 import { healLessSource, healRootFixedSize } from '../../validators/less-compile-gate.js';
 import { safeLogger } from '../../logger/safe-logger.js';
 
@@ -294,7 +294,8 @@ export function safeLessVarValue(name = '') {
   if (/(zindex|z-index)/.test(n)) return '1';
   if (/(weight|fw)/.test(n)) return '400';
   if (/(duration|delay|speed)/.test(n)) return '0.2s';
-  // 颜色型
+  // 颜色型：必须返回真实颜色（#/rgba），否则 lighten()/darken()/fade() 等 LESS 颜色函数无法求值。
+  // 主题切换由 .theme-light()/.theme-dark() mixin 提供不同真实颜色，无需 CSS 运行时 var()。
   if (/border/.test(n)) return '#e8e8e8';
   if (/(bg|background)/.test(n)) return '#ffffff';
   if (/(primary|accent)/.test(n)) return '#409EFF';
@@ -495,7 +496,8 @@ export function writeFiles(files, outputPath, options = {}) {
           if (typeof themeVarsForVue === 'string') {
             const themedVue = applyHealToVueStyleBlocks(sanitizedContent, (css) => {
               const slotHealed = healSlotHexToVarRefs(css, themeVarsForVue);
-              return healPresetLiteralDecls(slotHealed, relativePath);
+              const presetHealed = healPresetLiteralDecls(slotHealed, relativePath);
+              return healVarNameCase(presetHealed);
             });
             if (themedVue !== sanitizedContent) {
               sanitizedContent = themedVue;
@@ -748,11 +750,12 @@ export function writeFiles(files, outputPath, options = {}) {
           ) {
             const slotHealedLess = healSlotHexToVarRefs(sanitizedContent, themeVarsForLess);
             const presetHealedLess = healPresetLiteralDecls(slotHealedLess, relativePath);
-            if (presetHealedLess !== sanitizedContent) {
-              sanitizedContent = presetHealedLess;
+            const varCaseHealedLess = healVarNameCase(presetHealedLess);
+            if (varCaseHealedLess !== sanitizedContent) {
+              sanitizedContent = varCaseHealedLess;
               if (logger) {
                 logger.warn(
-                  `🧩 主题变量化自愈: ${relativePath}（槽位 hex → var() 引用 / 预设字面量 → var 透传）`,
+                  `🧩 主题变量化自愈: ${relativePath}（槽位 hex → var() 引用 / 预设字面量 → var 透传 / 变量名 camelCase 归一）`,
                 );
               }
             }
@@ -1069,18 +1072,38 @@ export function buildCssVarsFile(options = {}) {
   const includeLight = options.includeLight !== false;
   const extraDark = options.extraDarkVars && typeof options.extraDarkVars === 'object' ? options.extraDarkVars : {};
   const tokens = options.styleTokens && typeof options.styleTokens === 'object' ? options.styleTokens : null;
-  // dark 槽位：契约 darkWithDesign（= 枚举三核心 + 设计变量轨）或回退纯枚举三核心；再叠加额外注入
-  const dark = { ...(tokens?.darkWithDesign || MC_DARK_THEME_COLOR_ENUM_CORE), ...extraDark };
-  // light 槽位：契约值（Figma 提取/派生算法）或回退通用浅色模板
+  // 🛡️ 治本 E1（2026-09-13）：通用语义色兜底——danger/warning/success/border/secondary 是
+  // 跨组件一致的通用语义色（非 Figma 提取），故固定注入，让组件 var(--colorDanger) 等引用
+  // 真正命中宿主注入的 CSS 变量（此前契约只含 primary/textBase，语义色缺失 → 引用 fallback 兜底、主题不响应）。
+  const SEMANTIC_COLORS_DARK = {
+    colorTextSecondary: MC_DARK_THEME_COLOR_ENUM.colorTextSecondary,
+    colorDanger: MC_DARK_THEME_COLOR_ENUM.colorDanger,
+    colorWarning: MC_DARK_THEME_COLOR_ENUM.colorWarning,
+    colorSuccess: MC_DARK_THEME_COLOR_ENUM.colorSuccess,
+    colorBorder: MC_DARK_THEME_COLOR_ENUM.colorBorder,
+  };
+  const SEMANTIC_COLORS_LIGHT = {
+    colorTextSecondary: '#666666',
+    colorDanger: '#f5222d',
+    colorWarning: '#faad14',
+    colorSuccess: '#52c41a',
+    colorBorder: '#e8e8e8',
+  };
+  // dark 槽位：契约 darkWithDesign（= 枚举三核心 + 设计变量轨）或回退纯枚举三核心；再叠加语义色 + 额外注入
+  const dark = { ...(tokens?.darkWithDesign || MC_DARK_THEME_COLOR_ENUM_CORE), ...SEMANTIC_COLORS_DARK, ...extraDark };
+  // light 槽位：契约值（Figma 提取/派生算法）或回退通用浅色模板；再叠加语义色
   const light = includeLight
-    ? (tokens?.light || {
-        colorTextBase: '#333333',
-        colorPrimary: '#2f6bff',
-        colorPrimaryBg: '#e8f0ff',
-        colorPrimaryHover: '#5c8aff',
-        colorPrimaryActive: '#1f4fd0',
-        colorPrimaryBgHover: 'rgba(47, 107, 255, 0.12)',
-      })
+    ? {
+        ...(tokens?.light || {
+          colorTextBase: '#333333',
+          colorPrimary: '#2f6bff',
+          colorPrimaryBg: '#e8f0ff',
+          colorPrimaryHover: '#5c8aff',
+          colorPrimaryActive: '#1f4fd0',
+          colorPrimaryBgHover: 'rgba(47, 107, 255, 0.12)',
+        }),
+        ...SEMANTIC_COLORS_LIGHT,
+      }
     : null;
   const darkBody = buildCssVarsObjectBody(dark);
   const lightBody = light ? buildCssVarsObjectBody(light) : null;
@@ -1100,6 +1123,11 @@ const common = {
   colorPrimaryActive: '${MC_DARK_THEME_COLOR_ENUM.colorPrimaryActive}',
   colorPrimaryBg: '${MC_DARK_THEME_COLOR_ENUM.colorPrimaryBg}',
   colorPrimaryBgHover: '${MC_DARK_THEME_COLOR_ENUM.colorPrimaryBgHover}',
+  colorTextSecondary: '${MC_DARK_THEME_COLOR_ENUM.colorTextSecondary}',
+  colorDanger: '${MC_DARK_THEME_COLOR_ENUM.colorDanger}',
+  colorWarning: '${MC_DARK_THEME_COLOR_ENUM.colorWarning}',
+  colorSuccess: '${MC_DARK_THEME_COLOR_ENUM.colorSuccess}',
+  colorBorder: '${MC_DARK_THEME_COLOR_ENUM.colorBorder}',
 };
 
 const dark = {

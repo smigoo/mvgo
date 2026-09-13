@@ -16,6 +16,9 @@ import {
   classifyBadVueFile,
   isolateBadVueFiles,
   fixSpuriousLineBreaks,
+  healSlotHexToVarRefs,
+  healVarNameCase,
+  healPresetLiteralDecls,
 } from './code-healer.js'
 
 /** 构造完整日志器（safeLogger 对完整日志器 identity 返回，便于断言原始调用参数） */
@@ -768,5 +771,102 @@ const count = ref(0)
     // 注意：不一定每次都会触发回滚，取决于修复逻辑
     // 这里只验证 logger 被正确传递
     expect(logger).toBeDefined()
+  })
+})
+
+describe('healSlotHexToVarRefs —— 槽位颜色字面量 → var()（治本 D：hex + rgba 双支持）', () => {
+  const themeVars = `
+.common() {
+  @color-primary: rgba(25, 144, 255, 1);
+  @color-text-base: #333333;
+  @color-tab-active-text: #ffffff;
+}
+`
+
+  it('rgba 字面量 → var(--colorPrimary, rgba(...))（治本 D 新增，此前只治 hex 漏 rgba）', () => {
+    const content = `.x {\n  color: rgba(25, 144, 255, 1);\n}`
+    const out = healSlotHexToVarRefs(content, themeVars)
+    expect(out).toContain('color: var(--colorPrimary, rgba(25, 144, 255, 1));')
+  })
+
+  it('hex 字面量 → var(--colorTextBase, #hex)（原能力保留）', () => {
+    const content = `.x {\n  background: #333333;\n}`
+    const out = healSlotHexToVarRefs(content, themeVars)
+    expect(out).toContain('background: var(--colorTextBase, #333333);')
+  })
+
+  it('rgba 空格差异不影响映射（归一化键）', () => {
+    const content = `.x {\n  color: rgba(25,144,255,1);\n}` // 无空格
+    const out = healSlotHexToVarRefs(content, themeVars)
+    expect(out).toContain('var(--colorPrimary, rgba(25,144,255,1))')
+  })
+
+  it('渐变/阴影里的 rgba 不误伤（非颜色属性直写）', () => {
+    const content = `.x {\n  background: linear-gradient(90deg, #1990ff 0%, #5a7eff 100%);\n  text-shadow: 0 0 4px rgba(255,255,255,0.8);\n}`
+    const out = healSlotHexToVarRefs(content, themeVars)
+    // 渐变首色 #1990ff 不在槽位、阴影色不在槽位 → 原样保留（不误伤）
+    expect(out).toContain('linear-gradient(90deg, #1990ff')
+    expect(out).toContain('text-shadow: 0 0 4px rgba(255,255,255,0.8)')
+  })
+})
+
+describe('healVarNameCase —— CSS 变量名 kebab→camel 归一（治本 F）', () => {
+  it('kebab 变量名 → camelCase（宿主注入的是 camelCase）', () => {
+    const content = `.x { color: var(--color-text-base, #333); background: var(--color-tab-active-bg, #fff); }`
+    const out = healVarNameCase(content)
+    expect(out).toContain('var(--colorTextBase, #333)')
+    expect(out).toContain('var(--colorTabActiveBg, #fff)')
+  })
+
+  it('已是 camelCase 的变量名原样保留（无连字符不归一）', () => {
+    const content = `.x { color: var(--colorTextBase, #333); }`
+    const out = healVarNameCase(content)
+    expect(out).toBe(content)
+  })
+
+  it('非 color 变量名不受影响', () => {
+    const content = `.x { font-size: var(--fontSize, 14px); }`
+    const out = healVarNameCase(content)
+    expect(out).toBe(content)
+  })
+})
+
+describe('healPresetLiteralDecls —— 预设字面量 var 透传 + 🛡️ Less 颜色函数豁免', () => {
+  it('普通预设字面量 → var 透传（原有行为不回退）', () => {
+    const out = healPresetLiteralDecls('@colorPrimary: #409EFF;', 'package/components/X.vue')
+    expect(out).toBe('@colorPrimary: var(--colorPrimary, #409EFF);')
+  })
+
+  it('🛡️ 被 lighten() 引用 → 保留真颜色（var() 在 LESS 编译期不可求值）', () => {
+    const src = [
+      '@colorPrimary: #409EFF;',
+      '.x { background: lighten(@colorPrimary, 30%); }',
+    ].join('\n')
+    const out = healPresetLiteralDecls(src, 'package/components/X.vue')
+    expect(out).toBe(src) // 完全不动
+    expect(out).not.toContain('var(--colorPrimary')
+  })
+
+  it('🛡️ darken/fade/mix 同理豁免；仅属性引用（无颜色函数）不豁免', () => {
+    const fadeSrc = '@colorPrimary: #409EFF;\n.x { box-shadow: 0 0 4px fade(@colorPrimary, 40%); }'
+    expect(healPresetLiteralDecls(fadeSrc, 'a.vue')).toBe(fadeSrc)
+
+    const mixSrc = '@colorPrimary: #409EFF;\n.x { color: mix(@colorPrimary, #fff); }'
+    expect(healPresetLiteralDecls(mixSrc, 'a.vue')).toBe(mixSrc)
+
+    const plainSrc = '@colorPrimary: #409EFF;\n.x { border-color: @colorPrimary; }'
+    expect(healPresetLiteralDecls(plainSrc, 'a.vue')).toContain('var(--colorPrimary')
+  })
+
+  it('值已是 var() → 保持（不回环改写）', () => {
+    const src = '@colorPrimary: var(--colorPrimary, #409EFF);'
+    expect(healPresetLiteralDecls(src, 'a.vue')).toBe(src)
+  })
+
+  it('themes/ 目录豁免 + 非预设名不干预', () => {
+    expect(
+      healPresetLiteralDecls('@colorPrimary: #409EFF;', 'resources/styles/themes/dark.less'),
+    ).toBe('@colorPrimary: #409EFF;')
+    expect(healPresetLiteralDecls('@myVar: 1px;', 'a.vue')).toBe('@myVar: 1px;')
   })
 })

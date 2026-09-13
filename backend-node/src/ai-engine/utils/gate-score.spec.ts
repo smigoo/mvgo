@@ -1,4 +1,23 @@
-import { computeGateScore } from './gate-score.js';
+import { computeGateScore, hasHardPublishBlock } from './gate-score.js';
+
+describe('hasHardPublishBlock（发布硬闸 021/022/023）', () => {
+  test('空列表 / 无 BLOCK → false', () => {
+    expect(hasHardPublishBlock([])).toBe(false);
+    expect(hasHardPublishBlock([{ id: 'FLEX-003', severity: 'WARN' }])).toBe(false);
+    expect(hasHardPublishBlock([{ id: 'CODE-020', severity: 'BLOCK' }])).toBe(false);
+  });
+
+  test('021/022/023 BLOCK → true（含 -ERROR 变体）', () => {
+    expect(hasHardPublishBlock([{ id: 'CODE-021', severity: 'BLOCK' }])).toBe(true);
+    expect(hasHardPublishBlock([{ id: 'CODE-022', severity: 'BLOCK' }])).toBe(true);
+    expect(hasHardPublishBlock([{ id: 'CODE-023', severity: 'BLOCK' }])).toBe(true);
+    expect(hasHardPublishBlock([{ id: 'CODE-023-ERROR', severity: 'BLOCK' }])).toBe(true);
+  });
+
+  test('021 为 WARN（非 BLOCK）→ false', () => {
+    expect(hasHardPublishBlock([{ id: 'CODE-021', severity: 'WARN' }])).toBe(false);
+  });
+});
 
 describe('computeGateScore（软失败评分）', () => {
   test('无 issue → 满分 100，四维度皆空', () => {

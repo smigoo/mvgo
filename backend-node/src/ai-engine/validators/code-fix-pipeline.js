@@ -159,6 +159,27 @@ export class CodeFixPipeline {
           continue;
         }
         if (nextFiles && typeof nextFiles === 'object') {
+          // 🛡️ 刀 13-C 契约守卫（2026-09-13）：fixFiles 的契约是「返回 Object<string,string>
+          // （路径 → 内容）」。此前任何异形态返回（数组、`{files, changes}` 之类包装对象）
+          // 都会走进下面的 for 循环、因 `typeof c !== 'string'` 而被**静默丢弃**——
+          // 规则看似跑过、日志一片正常、修复实际全丢。实锤：prune-duplicate-style-decls
+          // 把 `{files, changes}` 原样返回，FLEX-003 剥离一整天 0 命中且无任何告警。
+          // 现改为「出声」：形态不对就记 warn，让同类问题下次一眼可见。
+          if (Array.isArray(nextFiles)) {
+            this._warn(
+              `文件集规则返回了数组，契约要求 Object<string,string>（本次修复被丢弃）: ${rule.id}`,
+            );
+            continue;
+          }
+          const nonStringKeys = Object.entries(nextFiles)
+            .filter(([, c]) => typeof c !== 'string')
+            .map(([k]) => k);
+          if (nonStringKeys.length > 0) {
+            this._warn(
+              `文件集规则返回了非字符串值（疑似包装对象 / 数组，这些键被丢弃）: ${rule.id}`,
+              { keys: nonStringKeys.slice(0, 5), total: nonStringKeys.length },
+            );
+          }
           for (const [p, c] of Object.entries(nextFiles)) {
             if (typeof c === 'string' && c !== out[p]) {
               out[p] = c;

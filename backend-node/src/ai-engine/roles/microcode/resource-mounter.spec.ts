@@ -1,4 +1,4 @@
-import { fixSectionHeightsForResource, ensureHeaderSlots, injectFailedResourceFallbacks, dedupeSameImageAliases, stripEmptyShellBindings } from './resource-mounter.js'
+import { fixSectionHeightsForResource, ensureHeaderSlots, injectFailedResourceFallbacks, dedupeSameImageAliases, stripEmptyShellBindings, ensureResourceImportInVue } from './resource-mounter.js'
 
 /**
  * 🛡️ fix-section-heights 规则②：组件根 height:100% 不得改写（2026-09-02 实锤）。
@@ -661,5 +661,61 @@ describe('stripEmptyShellBindings: C2 空壳解绑', () => {
     const allFiles = { 'package/index.vue': '<template><div></div></template>' }
     const result = stripEmptyShellBindings(allFiles, [])
     expect(result.fixes.length).toBe(0)
+  })
+})
+
+// ══════════════════════════════════════════════════════════════
+// 🛡️ 刀 7b（2026-09-13）：ensureResourceImportInVue 撞名复核
+// 实锤 mc-max-1789279605053-c9e4a435（c-device-monitor-6ajwy8yn-c9e4a435）：
+// MainSection.vue 被注入 import bg6 而文件内已有 `const bg6 = bg3`
+// → Identifier 'bg6' has already been declared → P1-4 隔离降级 → 主内容区整体消失。
+// ══════════════════════════════════════════════════════════════
+describe('ensureResourceImportInVue 刀 7b: 撞名复核（防重复声明毁掉整个子组件）', () => {
+  const mapping = {
+    assignedVarName: 'bg6',
+    resourceFile: 'resources/images/bg-8439.png',
+  }
+  const filePath = 'package/components/MainSection.vue'
+
+  it('⭐ 已有 const 别名声明 → 不注入 import（实锤：const bg6 = bg3）', () => {
+    const content = `<template><div :style="{ backgroundImage: 'url(' + bg6 + ')' }"></div></template>
+<script setup>
+import bg3 from '../../resources/images/bg-8439.png'
+const bg6 = bg3
+const deviceItems = [{ bg: bg6 }]
+</script>`
+    const out = ensureResourceImportInVue(content, 'bg6', mapping, filePath)
+    expect(out).toBe(content)
+    expect(out).not.toMatch(/import\s+bg6\s+from/)
+  })
+
+  it('已有 const 解构声明 → 不注入', () => {
+    const content = `<script setup>
+const { bg6 } = defineProps(['bg6'])
+</script>`
+    expect(ensureResourceImportInVue(content, 'bg6', mapping, filePath)).toBe(content)
+  })
+
+  it('已有 let 裸声明 → 不注入', () => {
+    const content = `<script setup>
+let bg6;
+</script>`
+    expect(ensureResourceImportInVue(content, 'bg6', mapping, filePath)).toBe(content)
+  })
+
+  it('已有 import → 不重复注入（原有行为保留）', () => {
+    const content = `<script setup>
+import bg6 from '../../resources/images/bg-8439.png'
+</script>`
+    expect(ensureResourceImportInVue(content, 'bg6', mapping, filePath)).toBe(content)
+  })
+
+  it('⭐ 无任何声明 → 正常注入 import（真实缺失场景不被放过）', () => {
+    const content = `<template><div :style="{ backgroundImage: 'url(' + bg6 + ')' }"></div></template>
+<script setup>
+import { ref } from 'vue'
+</script>`
+    const out = ensureResourceImportInVue(content, 'bg6', mapping, filePath)
+    expect(out).toMatch(/import\s+bg6\s+from\s+'\.\.\/\.\.\/resources\/images\/bg-8439\.png'/)
   })
 })

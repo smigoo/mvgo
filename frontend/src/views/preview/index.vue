@@ -165,6 +165,7 @@ import {
 import { BINARY_EXTS as BINARY_EXTS_SHARED, extOf } from '@/utils/sfc-loader-binary'
 import { buildSnapshotFileUrl, resolvePreviewDescriptor } from '@/utils/preview-resolver'
 import http from '@/core/http'
+import { getComponentBySessionId } from '@/api/component'
 
 const route = useRoute()
 const router = useRouter()
@@ -210,17 +211,23 @@ async function ensureLatestSnapshot() {
   const sessionId = String(route.query.sessionId || componentId || '')
   if (!sessionId) return
   try {
-    // latest 接口返回 { candidate, lastGood, partial }；优先级 candidate > partial > lastGood
-    const data = await http.get(`/api/tasks/${encodeURIComponent(sessionId)}/code-snapshots/latest`, undefined, { silent401: true })
-    const candidate = data?.candidate
-    const partial = data?.partial
-    const lastGood = data?.lastGood
-    const snap = candidate || partial || lastGood
+    // latest 接口返回 { candidate, lastGood, partial }；优先级 lastGood > candidate > partial。
+    // 🛡️ 2026-09-13 治本（"找不到文件 package/components/XxxSection.vue，刷新后消失"）：
+    // candidate 可能是 chunk 级中间态（缺某些子组件文件，实测 r-3b40de29/r-9e368c21 缺 TabsSection.vue），
+    // 而 lastGood 是完整最终快照。生成完成跳转预览应优先 lastGood，避免加载不完整候选。
+    const resp = await http.get(`/api/tasks/${encodeURIComponent(sessionId)}/code-snapshots/latest`, undefined, { silent401: true })
+    // 🛡️ 2026-09-13 根因：NestJS 全局拦截器把返回包成 { success, code, message, data:{...} }，
+    // candidate/lastGood 嵌套在 data 里。旧代码取顶层 data?.candidate 永远 undefined → 快照源（含 lastGood）从未生效。
+    const d = resp?.data ?? resp
+    const candidate = d?.candidate
+    const partial = d?.partial
+    const lastGood = d?.lastGood
+    const snap = lastGood || candidate || partial
     if (snap?.revision) {
       latestSnapshotSource.value = {
         sessionId,
         revision: snap.revision,
-        kind: candidate ? 'candidate' : (partial ? 'partial' : 'last-good'),
+        kind: lastGood ? 'last-good' : (candidate ? 'candidate' : 'partial'),
       }
     }
   } catch (e) {
@@ -228,15 +235,17 @@ async function ensureLatestSnapshot() {
     // 再用真实 sessionId 重试。避免因入口只传了 componentId 没传 sessionId 导致 RUNTIME-007。
     if (route.query.sessionId !== sessionId && componentId && componentId !== sessionId) {
       try {
-        const resolveData = await http.get('/api/tasks/resolve-session', { componentId })
-        if (resolveData?.success && resolveData.sessionId) {
-          const retry = await http.get(`/api/tasks/${encodeURIComponent(resolveData.sessionId)}/code-snapshots/latest`, undefined, { silent401: true })
-          const snap = retry?.candidate || retry?.partial || retry?.lastGood
+        const resolveResp = await http.get('/api/tasks/resolve-session', { componentId })
+        const rd0 = resolveResp?.data ?? resolveResp
+        if (rd0?.success && rd0.sessionId) {
+          const retry = await http.get(`/api/tasks/${encodeURIComponent(rd0.sessionId)}/code-snapshots/latest`, undefined, { silent401: true })
+          const rd = retry?.data ?? retry
+          const snap = rd?.lastGood || rd?.candidate || rd?.partial
           if (snap?.revision) {
             latestSnapshotSource.value = {
-              sessionId: resolveData.sessionId,
+              sessionId: rd0.sessionId,
               revision: snap.revision,
-              kind: retry.candidate ? 'candidate' : (retry.partial ? 'partial' : 'last-good'),
+              kind: rd.lastGood ? 'last-good' : (rd.candidate ? 'candidate' : 'partial'),
             }
           }
         }
@@ -245,6 +254,22 @@ async function ensureLatestSnapshot() {
       }
     }
   }
+}
+
+// 🛡️ 2026-09-13 治本（"未找到组件 mc-max-*，刷新后消失"）：
+// workspace 目录用语义化 componentId（c-xxx-<尾8hex>），而跳转预览 URL 用的是 sessionId（mc-max-*/mv-*）。
+// 快照源能按 sessionId 命中（快照按 sessionId 存），但 workspace 源按 sessionId 拼目录永远找不到。
+// 生成完成一刹那快照源未就绪时退到 workspace 源 → 报「未找到组件」。这里在走 workspace 源前，
+// 把 sessionId 反查成语义化 componentId（component/by-session 接口），使 workspace 源能命中语义化名目录。
+async function resolveWorkspaceComponentId(id: string): Promise<string> {
+  if (!id || !/^(mc|mv)-/.test(id)) return id
+  try {
+    const component = await getComponentBySessionId(id)
+    if (component?.componentId) return component.componentId
+  } catch {
+    // 反查失败 → 回退原 id（保持现有容错，不阻断）
+  }
+  return id
 }
 
 const snapshotSource = computed(() => {
@@ -597,6 +622,9 @@ async function loadDev() {
   // 🛡️ F3-全：URL 缺带 revision 时先 await latest API 拿快照 revision，
   // 让 B 分支（dev 静态 import）退化到 A 分支（快照源），不依赖 workspace 目录。
   await ensureLatestSnapshot()
+  // 🛡️ 2026-09-13 治本：workspace 源按语义化 componentId 定位，而跳转 URL 带的是 sessionId。
+  // 快照源按 sessionId 命中（快照按 sessionId 存），workspace 源必须反查语义化名，否则「未找到组件」。
+  const resolvedId = snapshotSource.value ? componentId : await resolveWorkspaceComponentId(componentId)
   if (snapshotSource.value) {
     if (!isVue3) await loadMicrocodeDeclare()
     return await loadVue3FromWorkspace(componentId, {
@@ -611,7 +639,7 @@ async function loadDev() {
   }
 
   if (isPage) {
-    return await loadVue3FromWorkspace(componentId, {
+    return await loadVue3FromWorkspace(resolvedId, {
       isProd: false,
       explicitGroupId: groupId,
       instance,
@@ -622,7 +650,7 @@ async function loadDev() {
   }
 
   if (isVue3) {
-    return await loadVue3FromWorkspace(componentId, {
+    return await loadVue3FromWorkspace(resolvedId, {
       isProd: false,
       explicitGroupId: groupId,
       instance,
@@ -634,7 +662,7 @@ async function loadDev() {
   // 微码组件在独立预览中没有 wujie childAppData，需显式加载 declare.json，
   // 并通过根组件 props 把 componentName 交给 $mcComponentBuilder → base-panel。
   await loadMicrocodeDeclare()
-  return await loadVue3FromWorkspace(componentId, {
+  return await loadVue3FromWorkspace(resolvedId, {
     isProd: false,
     workspacePath: 'custom-components',
     instance,
@@ -649,6 +677,8 @@ async function loadProd() {
   window.__MVGO_PREVIEW_MOCK__ = true
   // 🛡️ F3-全：URL 缺带 revision 时先 await latest API 拿快照 revision。
   await ensureLatestSnapshot()
+  // 🛡️ 2026-09-13 治本：workspace 源按语义化 componentId 定位，sessionId 反查（同 loadDev）。
+  const resolvedId = snapshotSource.value ? componentId : await resolveWorkspaceComponentId(componentId)
   if (snapshotSource.value) {
     if (!isVue3) await loadMicrocodeDeclare()
     return await loadVue3FromWorkspace(componentId, {
@@ -664,7 +694,7 @@ async function loadProd() {
 
   // 页面骨架：走 vue3-pages 运行时编译
   if (isPage) {
-    return await loadVue3FromWorkspace(componentId, {
+    return await loadVue3FromWorkspace(resolvedId, {
       isProd: true,
       explicitGroupId: groupId,
       instance,
@@ -676,7 +706,7 @@ async function loadProd() {
 
   // Vue3 普通组件：复用统一的运行时编译加载器（含 LESS 预编译，避免 getFile('less') 失败）
   if (isVue3) {
-    return await loadVue3FromWorkspace(componentId, {
+    return await loadVue3FromWorkspace(resolvedId, {
       isProd: true,
       explicitGroupId: groupId,
       instance,
@@ -704,12 +734,12 @@ async function loadProd() {
     app.component('base-panel', BasePanel.default || BasePanel)
   }
 
-  const base = `/api/preview/${groupId}/${componentId}`
+  const base = `/api/preview/${groupId}/${resolvedId}`
 
   // Vue3 普通组件：入口是 index.vue（可能在 package/ 子目录或根目录），CSS 内联在 SFC 中
   const entryPath = isVue3
-    ? `/${componentId}/package/index.vue`
-    : `/${componentId}/package/index.vue`
+    ? `/${resolvedId}/package/index.vue`
+    : `/${resolvedId}/package/index.vue`
 
   // 注入后端预编译好的 CSS（仅微码组件需要，Vue3 SFC 的 <style scoped> 由 vue3-sfc-loader 处理）
   if (!isVue3) {
@@ -718,7 +748,7 @@ async function loadProd() {
       if (cssRes.ok) {
         const css = await cssRes.text()
         const style = document.createElement('style')
-        style.setAttribute('data-preview-css', componentId)
+        style.setAttribute('data-preview-css', resolvedId)
         style.setAttribute('data-preview-style-scope', previewStyleScopeId)
         style.textContent = css
         document.head.appendChild(style)
@@ -732,7 +762,7 @@ async function loadProd() {
   // 避免两边扩展名列表漂移导致某类资源在一个环境能加载、另一个环境损坏）。
   const BINARY_EXTS = BINARY_EXTS_SHARED
   const resolveRelPath = (p) => {
-    const mm = String(p).match(new RegExp(`${componentId}/(.+)$`))
+    const mm = String(p).match(new RegExp(`${resolvedId}/(.+)$`))
     return mm ? mm[1] : String(p).replace(/^\.?\//, '')
   }
 

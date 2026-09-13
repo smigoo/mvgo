@@ -102,15 +102,20 @@ describe('checkSkeletonCompleteness（门禁 CODE-026 判据）', () => {
 });
 
 describe('normalizeFontSizeLiterals（M5-6/M5-7）', () => {
-  it('基准值 14px → var(--fontSize, 14px)', () => {
+  // 🛡️ 2026-09-13：断言口径修正——契约是 **LESS 变量 `@fontSize`**（由 theme-vars.less
+  // 定义为 `@fontSize: var(--fontSize)`），而非 CSS 变量 `var(--fontSize, 14px)`。
+  // 依据：prompt-builder.js 的 M5-6 约束（`font-size` 必须引用 @fontSize 或 calc(@fontSize * N)）
+  //   + microcode-engineer.js 生成的 theme-vars `@fontSize: var(--fontSize)`。
+  // 原断言是 P1.8 之前旧的 CSS 变量形态，实现切到 LESS 变量后未同步 → 长期红灯（假信号）。
+  it('基准值 14px → @fontSize（LESS 变量）', () => {
     const r = normalizeFontSizeLiterals('.a { font-size: 14px; }');
-    expect(r.text).toContain('var(--fontSize, 14px)');
+    expect(r.text).toContain('font-size: @fontSize');
   });
 
-  it('非基准值 → calc(var(--fontSize, 14px) * ratio)（与 max 合格产物同款）', () => {
+  it('非基准值 → calc(@fontSize * ratio)（与 max 合格产物同款）', () => {
     const r = normalizeFontSizeLiterals('.a { font-size: 12px; }\n.b { font-size: 26px; }');
-    expect(r.text).toContain('calc(var(--fontSize, 14px) * 0.8571)');
-    expect(r.text).toContain('calc(var(--fontSize, 14px) * 1.8571)');
+    expect(r.text).toContain('calc(@fontSize * 0.8571)');
+    expect(r.text).toContain('calc(@fontSize * 1.8571)');
     expect(r.changes.length).toBe(2);
   });
 
@@ -131,8 +136,8 @@ describe('normalizeFontSizeLiterals（M5-6/M5-7）', () => {
     };
     const { files: out, changes } = normalizeFontSizesInFiles(files);
     expect(out['package/index.vue']).toContain(`const s = 'font-size: 20px'`);
-    expect(out['package/index.vue']).toContain('calc(var(--fontSize, 14px) * 1.4286)');
-    expect(out['resources/styles/common.less']).toContain('calc(var(--fontSize, 14px) * 1.2857)');
+    expect(out['package/index.vue']).toContain('calc(@fontSize * 1.4286)');
+    expect(out['resources/styles/common.less']).toContain('calc(@fontSize * 1.2857)');
     expect(changes.length).toBe(2);
   });
 

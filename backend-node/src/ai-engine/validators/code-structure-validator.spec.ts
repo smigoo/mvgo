@@ -1,4 +1,9 @@
-import { CodeStructureValidator } from './code-structure-validator.js'
+import {
+  CodeStructureValidator,
+  findPrefixViolations,
+  autoFixPrefixViolations,
+  collapseDoubledComponentPrefix,
+} from './code-structure-validator.js'
 
 /**
  * CODE-011 回归测试：echarts.init 时序检测。
@@ -1777,5 +1782,188 @@ describe('CODE-023 悬空子组件标签', () => {
     ]
     const issues = runCode023(files)
     expect(issues.filter((i: any) => i.id.startsWith('CODE-023'))).toHaveLength(0)
+  })
+})
+
+/**
+ * 🛡️ 刀 8c（2026-09-13）· CODE-003 前缀判定与 autoFix 的双前缀防治
+ *
+ * 事故形态（c-device-monitor-00g6b7vh-075b13a4）：
+ *   classPrefix（带不可剥离的 base36 随机段）与 LLM 自然生成的 c-device-monitor-* 失配
+ *   → findPrefixViolations 误报 42 项 → autoFix 二次叠加 →
+ *   .c-device-monitor-00g6b7vh-c-device-monitor-switch 永 不 命 中 模 板
+ *   → CODE-003-HIT-RATE 死样式 48%。
+ *
+ * 本 spec 锁定两条治本：
+ *   ① 判定容忍「装饰段已剥离」的语义干形态 → 不再把正确类判为违规；
+ *   ② collapseDoubledComponentPrefix 幂等折叠历史双前缀病灶（新旧产物自愈）。
+ */
+describe('刀 8c: CODE-003 前缀判定与折叠', () => {
+  const SLUG_PREFIX = 'c-device-monitor-00g6b7vh' // 带随机段的全前缀（历史 classPrefix）
+  const STEM = 'c-device-monitor' // 语义干（LLM 实际使用）
+
+  it('findPrefixViolations：语法干类名不再被判「缺前缀」', () => {
+    const less = `
+.c-device-monitor-switch { display: flex; }
+.c-device-monitor-tab-item--active { color: #1990ff; }
+.wrapper { color: red; }
+`
+    const bad = findPrefixViolations(less, SLUG_PREFIX)
+    // 只有真正缺前缀的 .wrapper 违规；两个语法干类不得违规（否则被二次叠加）
+    expect(bad).toEqual(['.wrapper'])
+  })
+
+  it('findPrefixViolations：全前缀形态仍零违规（既有行为不回归）', () => {
+    const less = '.c-device-monitor-00g6b7vh-switch { display: flex; }'
+    expect(findPrefixViolations(less, SLUG_PREFIX)).toEqual([])
+    expect(findPrefixViolations(less, STEM)).toEqual([])
+  })
+
+  it('collapseDoubledComponentPrefix：折叠 <stem>-<slug>-<stem>-x → <stem>-x', () => {
+    const less = `
+.c-device-monitor-00g6b7vh-c-device-monitor-switch { display: flex; }
+.c-device-monitor-00g6b7vh-c-device-monitor-tab-item--active { color: #1990ff; }
+.dark .c-device-monitor-00g6b7vh-c-device-monitor-tab-item-bg--active { opacity: 1; }
+`
+    const r = collapseDoubledComponentPrefix(less, SLUG_PREFIX)
+    expect(r.count).toBe(3)
+    expect(r.text).toContain('.c-device-monitor-switch {')
+    expect(r.text).toContain('.c-device-monitor-tab-item--active {')
+    expect(r.text).toContain('.dark .c-device-monitor-tab-item-bg--active {')
+    expect(r.text).not.toContain('00g6b7vh')
+  })
+
+  it('collapseDoubledComponentPrefix：语义词段（overview）不被当随机段误折叠', () => {
+    const less = '.c-vehicle-overview-abc12345-c-vehicle-overview-item { color: red; }'
+    const r = collapseDoubledComponentPrefix(less, 'c-vehicle-overview-abc12345')
+    expect(r.count).toBe(0)
+    expect(r.text).toBe(less)
+  })
+
+  it('collapseDoubledComponentPrefix：幂等（二次调用零改动）', () => {
+    const once = collapseDoubledComponentPrefix(
+      '.c-device-monitor-00g6b7vh-c-device-monitor-switch { display: flex; }',
+      SLUG_PREFIX,
+    )
+    const twice = collapseDoubledComponentPrefix(once.text, SLUG_PREFIX)
+    expect(twice.count).toBe(0)
+    expect(twice.text).toBe(once.text)
+  })
+
+  it('collapseDoubledComponentPrefix：无该形态时零改动', () => {
+    const less = '.c-device-monitor-switch { display: flex; }'
+    const r = collapseDoubledComponentPrefix(less, SLUG_PREFIX)
+    expect(r.count).toBe(0)
+    expect(r.text).toBe(less)
+  })
+
+  it('autoFixPrefixViolations：纯折叠场景也写回（collapsed>0，early-return 不吞修复）', () => {
+    const less = '.c-device-monitor-00g6b7vh-c-device-monitor-switch { display: flex; }'
+    const vueFiles = [
+      {
+        path: 'package/components/SwitchSection.vue',
+        content: '<template><div class="c-device-monitor-00g6b7vh-c-device-monitor-switch"></div></template>',
+      },
+    ]
+    const res = autoFixPrefixViolations(less, SLUG_PREFIX, vueFiles)
+    expect(res.fixedClasses).toEqual([])
+    expect(res.collapsed).toBe(2) // common.less 1 处 + .vue 1 处
+    expect(res.commonLess).toContain('.c-device-monitor-switch {')
+    expect(res.commonLess).not.toContain('00g6b7vh')
+    expect(res.vueFiles[0].content).toContain('class="c-device-monitor-switch"')
+  })
+
+  it('autoFixPrefixViolations：新增前缀写「语义干」，绝不写随机段', () => {
+    const less = '.wrapper { color: red; }'
+    const vueFiles = [
+      { path: 'package/index.vue', content: '<template><div class="wrapper"></div></template>' },
+    ]
+    const res = autoFixPrefixViolations(less, SLUG_PREFIX, vueFiles)
+    expect(res.fixedClasses).toEqual(['wrapper'])
+    expect(res.commonLess).toContain('.c-device-monitor-wrapper {')
+    expect(res.commonLess).not.toContain('00g6b7vh')
+    expect(res.vueFiles[0].content).toContain('class="c-device-monitor-wrapper"')
+  })
+})
+
+
+/**
+ * 🛡️ 刀 10（2026-09-13）：整产物级检查不得在「增量校验子集」上误报。
+ *
+ * 真实事故（2026-09-13 07:26–07:57，session mc-1789285935903-97e8f48e）：
+ *   L0-B 增量校验把文件集裁成「变更文件 ∪ {common.less, declare.json}」，
+ *   未变更的骨架文件（index.less / themes/{dark,light}.less / css-vars.js）缺席
+ *   → CODE-026 报「缺少必要文件」（磁盘上其实齐全）→ 假阳性烧光重试预算 → 软失败降级。
+ * 治本：整产物级检查（CODE-024/025/026 + EMPTY_ARTIFACT/EMPTY_BODY/CODE-021/023）
+ * 走 options.productFiles（全量产物集）。
+ */
+describe('刀 10: 整产物级检查用 productFiles 而非增量子集', () => {
+  const VUE = `package/index.vue`
+  const SUB_VUE = `package/components/StatsSection.vue`
+  const indexVue = `<template><div class="c-x-root"><StatsSection /></div></template>
+<script setup>
+import StatsSection from './components/StatsSection.vue'
+</script>
+<style lang="less" scoped>@import '../../resources/styles/index.less';</style>`
+  // 完整骨架（code=8 项齐备）
+  const fullProduct = [
+    { path: VUE, content: indexVue },
+    { path: SUB_VUE, content: '<template><div class="c-x-stat"></div></template>' },
+    { path: 'declare.json', content: '{"componentId":"c-x-9abce496"}' },
+    { path: 'declare.js', content: 'export default {}' },
+    { path: 'resources/config/css-vars.js', content: 'export const v = 1' },
+    { path: 'resources/styles/index.less', content: "@import './themes/theme-vars.less';\n.common();" },
+    { path: 'resources/styles/common.less', content: '.c-x-root { width: 100%; }' },
+    { path: 'resources/styles/themes/theme-vars.less', content: '.common() { --x: 1; }' },
+    { path: 'resources/styles/themes/dark.less', content: '.dark { }' },
+    { path: 'resources/styles/themes/light.less', content: '.light { }' },
+  ]
+  // 增量校验子集：本轮只改了 package/index.vue + declare.json，
+  // 未变更的骨架文件（index.less / themes/{dark,light}.less / css-vars.js / common.less）全缺席。
+  // 注意：checkSkeletonCompleteness 需「index.vue 且 declare.json」才判定为微码产物，
+  // 故子集必须含 index.vue —— 这也与真实事故一致（07:57 那次 index.vue 参与校验）。
+  const incrementalSubset = fullProduct.filter(
+    (f) => f.path === VUE || f.path === 'declare.json',
+  )
+
+  it('增量子集 + productFiles=全量 → CODE-026 不再误报', () => {
+    const res = CodeStructureValidator.validate(incrementalSubset, 'c-x-9abce496', {
+      target: 'microcode',
+      productFiles: fullProduct,
+    })
+    const ids = (res.issues || []).map((i) => i.id)
+    expect(ids).not.toContain('CODE-026')
+    expect(ids).not.toContain('EMPTY_ARTIFACT')
+  })
+
+  it('回归锁定：不给 productFiles（旧行为）时，增量子集确实会误报骨架缺失', () => {
+    const res = CodeStructureValidator.validate(incrementalSubset, 'c-x-9abce496', {
+      target: 'microcode',
+    })
+    const ids = (res.issues || []).map((i) => i.id)
+    expect(ids).toContain('CODE-026')
+  })
+
+  it('骨架真缺（全量集本身就缺）仍必须 BLOCK —— 不得放行', () => {
+    const broken = fullProduct.filter(
+      (f) => f.path !== 'resources/config/css-vars.js',
+    )
+    const res = CodeStructureValidator.validate(broken, 'c-x-9abce496', {
+      target: 'microcode',
+      productFiles: broken,
+    })
+    expect((res.issues || []).map((i) => i.id)).toContain('CODE-026')
+    expect(res.pass).toBe(false)
+  })
+
+  it('只改 .less 的轮次：EMPTY_ARTIFACT/EMPTY_BODY 不因 .vue 缺席而误判', () => {
+    const styleOnly = fullProduct.filter((f) => /\.less$/.test(f.path))
+    const res = CodeStructureValidator.validate(styleOnly, 'c-x-9abce496', {
+      target: 'microcode',
+      productFiles: fullProduct,
+    })
+    const ids = (res.issues || []).map((i) => i.id)
+    expect(ids).not.toContain('EMPTY_ARTIFACT')
+    expect(ids).not.toContain('EMPTY_BODY')
   })
 })

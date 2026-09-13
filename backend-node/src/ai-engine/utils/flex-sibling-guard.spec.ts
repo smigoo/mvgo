@@ -1,4 +1,12 @@
-import { normalizeFlexSourceConflicts, normalizeFlexSiblingScale, detectFlexSiblingIssues } from './flex-sibling-guard.js';
+import {
+  normalizeFlexSourceConflicts,
+  normalizeFlexSiblingScale,
+  detectFlexSiblingIssues,
+  targetClassesOf,
+  buildFlexIndex,
+  collectStyleSources,
+} from './flex-sibling-guard.js';
+import { checkFlexSourceConflicts } from '../validators/code-structure-validator.js';
 
 /**
  * FLEX-003 确定性归一回归（2026-09-02，mc-max-1788362388732-1ae956dc 重试耗尽实锤）
@@ -157,5 +165,73 @@ describe('normalizeFlexSiblingScale —— FLEX-005 量纲归一（像素→比�
       { path: 'resources/styles/common.less', content: '.c-body { display: flex; flex-direction: column; }' },
     ];
     expect(normalizeFlexSiblingScale(files)).toBe(files);
+  });
+});
+
+describe('targetClassesOf —— 刀 16a 选择器「目标元素」归属（FLEX-003 假阳性根因）', () => {
+  it('后代/子选择器：只取最右复合选择器（祖先不被登记）', () => {
+    expect(targetClassesOf('.a > .b')).toEqual(['b']);
+    expect(targetClassesOf('.a .b')).toEqual(['b']);
+    expect(targetClassesOf('.a > .b .c')).toEqual(['c']);
+  });
+
+  it('复合选择器 / 逗号分组：目标元素上的多个 class 都要', () => {
+    expect(targetClassesOf('.a.b')).toEqual(['a', 'b']);
+    expect(targetClassesOf('.a, .b')).toEqual(['a', 'b']);
+    expect(targetClassesOf('.x > .a, .y .b')).toEqual(['a', 'b']);
+  });
+
+  it('伪类参数内的类名不算目标（:not / :is / :nth-child）', () => {
+    expect(targetClassesOf('.a:not(.b)')).toEqual(['a']);
+    expect(targetClassesOf('.a:not(.b) > .c')).toEqual(['c']);
+    expect(targetClassesOf('.a:nth-child(2)')).toEqual(['a']);
+  });
+
+  it('目标元素无 class（如 `.a > div`）→ 空（不误归到 .a）', () => {
+    expect(targetClassesOf('.a > div')).toEqual([]);
+  });
+});
+
+describe('FLEX-003 归属回归 —— `.A > .B { flex }` 不得污染祖先（刀 16a）', () => {
+  it('真实事故形态：祖先/后代各一条 flex → 祖先只拿自己的值', () => {
+    const files = [
+      {
+        path: 'package/components/MainSection.vue',
+        content: `<template><div class="c-device-monitor-section-main-content"><div class="c-device-monitor-tab"></div></div></template>
+<style lang="less" scoped>
+.c-device-monitor-section-main-content { width: 100%; flex: 1 1 0; min-height: 0; }
+.c-device-monitor-section-main-content > .c-device-monitor-tab { width: 46px; height: 317px; flex: 0 0 46px; }
+</style>`,
+      },
+      {
+        path: 'resources/styles/common.less',
+        content: `.c-device-monitor-section-main-content { width: 100%; flex: 1 1 0; }
+.c-device-monitor-section-main-content > .c-device-monitor-tab { flex: 0 0 46px; }
+`,
+      },
+    ];
+    const { byClass } = buildFlexIndex(collectStyleSources(files));
+    expect(
+      (byClass.get('c-device-monitor-section-main-content') || []).map((e) => e.values.join('|')),
+    ).toEqual(['1 1 0', '1 1 0']);
+    expect((byClass.get('c-device-monitor-tab') || []).map((e) => e.values.join('|'))).toEqual([
+      '0 0 46px',
+      '0 0 46px',
+    ]);
+    // 端到端：不再报 FLEX-003
+    expect(checkFlexSourceConflicts(files).filter((i) => i.id === 'FLEX-003')).toHaveLength(0);
+  });
+
+  it('真跨文件 grow 冲突（像素 vs 比例）仍要报（防放松）', () => {
+    const files = [
+      {
+        path: 'package/index.vue',
+        content: `<template><div class="c-root"></div></template><style scoped>.c-chart { flex: 113 1 0; }</style>`,
+      },
+      { path: 'resources/styles/common.less', content: '.c-chart { flex: 1 1 0; }' },
+    ];
+    const blocks = checkFlexSourceConflicts(files).filter((i) => i.id === 'FLEX-003');
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].severity).toBe('BLOCK');
   });
 });

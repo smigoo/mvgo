@@ -126,6 +126,22 @@ describe('upsertFileSegment', () => {
     expect(upsertFileSegment(m, 'a', { index: 1, file: '' } as any)).toBe(m)
     expect(m.a).toBe('a.vue')
   })
+
+  it('刀 6：非 index.vue 同路径双写 → 后写覆盖（只保留最新一段，杜绝两套命名）', () => {
+    const m: any = {}
+    // 语义名一波 + 通用名一波各写一份完整子组件（traffic 实锤）
+    upsertFileSegment(m, 'package/components/ContentSection.vue', seg(8, '8-ContentSection.vue'))
+    upsertFileSegment(m, 'package/components/ContentSection.vue', seg(15, '15-ContentSection.vue'))
+    expect(m['package/components/ContentSection.vue']).toHaveLength(1)
+    expect(m['package/components/ContentSection.vue'][0].file).toBe('15-ContentSection.vue')
+  })
+
+  it('刀 6：index.vue 仍按 index 维护多段（template/script 分段不覆盖）', () => {
+    const m: any = {}
+    upsertFileSegment(m, 'package/index.vue', seg(2, '2-package_index.vue', { segmentType: 'template' }))
+    upsertFileSegment(m, 'package/index.vue', seg(3, '3-package_index.vue', { segmentType: 'script' }))
+    expect(m['package/index.vue'].map((s: any) => s.index)).toEqual([2, 3])
+  })
 })
 
 describe('planSegmentMerge', () => {

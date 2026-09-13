@@ -29,6 +29,14 @@ export const MC_DARK_THEME_COLOR_ENUM = {
   colorPrimaryHover: '#78ECFF',
   colorPrimaryActive: '#00BBFF',
   colorPrimaryBgHover: '#4B4B4B',
+  // 🛡️ 治本 E2（2026-09-13）：通用语义色补齐——组件用 var(--colorDanger)/var(--colorWarning)
+  // 等引用时，dark 槽位必须有对应值，否则主题切换下这些引用 fallback 兜底、语义色不响应。
+  // 值参考 safeLessVarValue 既有约定（danger #f5222d / warning #faad14 / success #52c41a）
+  // 按深色主题提亮（深底需更高亮度保证对比度）。
+  colorDanger: '#ff5a50',
+  colorWarning: '#ffb03c',
+  colorSuccess: '#5cdb6b',
+  colorBorder: '#4b4b4b',
   scrollbarTrackBg: '#424242',
   scrollbarThumbBg: '#646464',
 };
@@ -50,6 +58,12 @@ export const MC_FRAMEWORK_PRESET_VARS = [
   'colorPrimaryActive',
   'colorPrimaryBg',
   'colorPrimaryBgHover',
+  // 🛡️ 治本 E2：语义色纳入框架预设（免声明，供 var(--colorXxx) 引用）
+  'colorTextSecondary',
+  'colorDanger',
+  'colorWarning',
+  'colorSuccess',
+  'colorBorder',
 ];
 
 // ══════════════════════════════════════════════════════════════

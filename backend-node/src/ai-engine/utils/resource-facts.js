@@ -15,6 +15,10 @@
  */
 
 import { extractSfcTemplate } from './sfc-template-extractor.js';
+// 🛡️ 刀 7c（2026-09-13）：声明名单一事实源，覆盖 import / const / let / var / 解构 / 多声明符。
+// R2 幽灵引用判定必须与 injectResourceImports / 撞名复核用同一集合，否则会误杀 W2 别名转发
+// 子组件（const bgN = bg3）。详见 resource-import-guard.js#collectDeclaredBindings（刀 7a）。
+import { collectDeclaredBindings } from './resource-import-guard.js';
 
 /** 资源变量命名前缀（与 model/prompt 约定一致：bg1 / icon2 / img3 …） */
 export const RESOURCE_VAR_RE = /^(bg|icon|img|image|pic|photo|avatar)/i;
@@ -68,6 +72,11 @@ export function collectResourceVarRefsFromSfc(sfc = '') {
     ); // 模板字面量 → 仅保留插值
     // 去注释，避免注释里的示例名被当引用
     body = body.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1 ');
+    // 🛡️ 刀 7d（2026-09-13）：剥离「属性名」——成员访问 `.prop` 与对象字面量键 `{ key: ... }`。
+    //   否则 `device.bgIndex` / `{ icon: icon9 }` 里的 `bgIndex` / `icon` 会被当资源变量引用，
+    //   触发 R2 幽灵引用误报（device 主内容区二次误杀实证）。值位置（`icon9`）仍被保留。
+    body = body.replace(/(?<!\.)\.\s*[A-Za-z_$][\w$]*/g, '.'); // 成员访问名（保留 `...` 展开）
+    body = body.replace(/([{,]\s*)([A-Za-z_$][\w$]*)(\s*:)/g, '$1$3'); // 对象字面量键
     for (const m of body.matchAll(/\b([A-Za-z_$][\w$]*)\b/g)) {
       const name = m[1];
       if (!isResourceVarName(name)) continue;
@@ -129,6 +138,9 @@ export function buildResourceFacts({ mapping = [], files = {} } = {}) {
   }
 
   const importedByFile = {};
+  // 🛡️ 刀 7c：declaredByFile = 该 vue 内所有「绑定声明」变量名（import + const/let/var 别名 + 解构）。
+  //   R2 幽灵引用判定必须认这些绑定，否则 W2 别名转发（const bg12 = bg3）会被误判成未定义。
+  const declaredByFile = {};
   for (const [p, c] of Object.entries(files || {})) {
     if (!/\.vue$/i.test(p) || typeof c !== 'string') continue;
     const imported = new Set();
@@ -137,6 +149,9 @@ export function buildResourceFacts({ mapping = [], files = {} } = {}) {
       for (const m of scriptM[1].matchAll(/import\s+([A-Za-z_$][\w$]*)\s+from\s+['"][^'"]*(?:images|assets)[^'"]*['"]/g)) {
         imported.add(m[1]);
       }
+      declaredByFile[p] = collectDeclaredBindings(scriptM[1]);
+    } else {
+      declaredByFile[p] = new Set();
     }
     importedByFile[p] = imported;
   }
@@ -146,8 +161,10 @@ export function buildResourceFacts({ mapping = [], files = {} } = {}) {
   const unresolved = [];
   for (const [p, r] of Object.entries(refs.byFile)) {
     const imported = importedByFile[p] || new Set();
+    const declared = declaredByFile[p] || new Set();
     for (const varName of r.all) {
-      if (imported.has(varName)) continue;
+      // 已 import 或已以任意形式声明（别名转发）→ 有绑定，跳过（治本 R2 误杀 W2 别名子组件）
+      if (imported.has(varName) || declared.has(varName)) continue;
       if (varToFile[varName]) missingImports.push({ path: p, varName, file: varToFile[varName] });
       else unresolved.push({ path: p, varName });
     }

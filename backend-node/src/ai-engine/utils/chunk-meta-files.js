@@ -98,6 +98,15 @@ export function upsertFileSegment(filesMap, relPath, seg) {
     segmentType: String(seg.segmentType || ''),
     scriptPart: String(seg.scriptPart || ''),
   };
+  // 🛡️ 刀 6（2026-09-13）：非 index.vue 的文件（完整子组件/样式/声明）多段 = 同路径双写。
+  // 根因：语义名一波（TotalFlowSection）+ 通用名一波（ContentSection）两波 chunk 各写一份
+  // 完整 .vue，旧实现 append 两段 → 读侧 concat 拼出「两份完整 SFC 拼一起」+ total 虚高
+  // （traffic 18 个 vue 实锤）。多段（template/script 分段）只发生在 index.vue 上
+  // （见 isIndexVuePath 注释），故非 index.vue 一律「后写覆盖」，只保留最新一段。
+  if (!isIndexVuePath(relPath)) {
+    filesMap[relPath] = [next];
+    return filesMap;
+  }
   const existing = normalizeFileSegments(filesMap[relPath]).filter(
     (s) => s.index !== index && s.file !== next.file,
   );

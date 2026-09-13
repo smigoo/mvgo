@@ -86,6 +86,10 @@
 ## 关键规则
 
 1. **禁止硬编码颜色**：所有颜色必须使用 CSS 变量
+   - 只允许 `var(--colorXxx)` 或 `var(--colorXxx, fallback)` 形态（变量名 camelCase，如 `--colorPrimary`/`--colorTextBase`/`--colorDanger`/`--colorWarning`/`--colorBorder`）
+   - **禁止** `rgba()/rgb()/#hex` 字面量直写（`color: rgba(51,51,51,1)` / `color: #333`）
+   - **禁止** `@color-*: <字面量>` 局部变量定义（`@color-primary: rgba(25,144,255,1)`）
+   - 例外：`themes/theme-vars.less` 的 `.common()/.theme-light()/.theme-dark()` 槽位定义处允许字面量（唯一允许硬编码色值的位置）
 2. **证据链必填**：每个修改必须提供 Figma 数据来源
 3. **置信度评估**：如果无法从 Figma 提取，置信度降低
 4. **不要越界**：不要修改布局和间距相关的 CSS

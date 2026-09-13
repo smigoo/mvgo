@@ -77,7 +77,7 @@ import {
 } from '../utils/artifact-integrity.js';
 //S11: 文档页面元素覆盖率校验器（L0-B 扩展）
 import { ElementCoverageValidator } from '../validators/element-coverage-validator.js';
-import { computeGateScore } from '../utils/gate-score.js';
+import { computeGateScore, hasHardPublishBlock } from '../utils/gate-score.js';
 import { formatFigmaStyleData } from '../utils/figma-format.js';
 import { GenerationContext } from '../types/generation-context.js';
 import { runGenerationContextShadow } from '../context/generation-context-shadow.js';
@@ -1161,6 +1161,15 @@ export function createPhase2Graph(config = {}) {
         // 子组件规划结果（subcomponent-planner 产出）：engineer 据此生成强制子组件清单
         subComponentPlan: state.subComponentPlan,
         componentName: state.componentName,
+        // 🛡️ 刀 8a（2026-09-13）：sessionId 必须作为顶层字段透传。
+        // 此前只存在于 input.ctx.sessionId（GenerationContext 内），而 code-generator.js
+        // safeGenerateDeclareJson 读的是顶层 input.sessionId → 恒为空 → 走
+        // `Math.random().toString(36).slice(2,10)` 随机兜底，把 8 位 base36 随机段
+        // 拼进 componentId（如 c-device-monitor-00g6b7vh-075b13a4）。该随机段非纯 hex，
+        // classPrefixOf 的 `-[0-9a-f]{8}$` 剥离失效 → classPrefix 含随机段 →
+        // 与 LLM 生成的 c-device-monitor-* 失配 → CODE-003 全量误判 + autoFix 双前缀叠加
+        // → common.less 约半数规则死样式（CODE-003-HIT-RATE 48%）。
+        sessionId: state.sessionId,
         displayName, //  Figma 节点中文名称
         outputPath: state.outputPath,
         stage: 'figma',
@@ -1278,7 +1287,19 @@ export function createPhase2Graph(config = {}) {
       }
 
       return {
-        generatedFiles: result.writtenFiles,
+        // 🛡️ 刀 10（2026-09-13）：`state.generatedFiles` 必须是「产物文件全集」，
+        // 不能取 `writtenFiles`（本轮实际写盘清单）——原因有二：
+        //   ① file-writer 对「内容未变化」的文件走增量补丁跳过写盘（reason=identical），
+        //      这些路径不进 `written` 数组：早期 bootstrap 写过的 index.less / themes/{dark,light}.less
+        //      在后续轮次恒 identical → 从集合中消失；
+        //   ② `buildMcPlatformFiles` 产出的 css-vars.js 只随「统一终态落盘」写入，
+        //      未被聚合进 engineer 返回的 writtenFiles。
+        // 后果（实测 2026-09-13 07:26–07:57）：L0-B 只按该清单读盘 → 骨架文件读不到 →
+        // CODE-026 误报「缺少必要文件」（磁盘上其实齐全）→ 假阳性烧光重试预算 → 软失败降级。
+        // 正解：取 engineer 返回的全量产物 map（finalTruthFiles）的 keys。
+        generatedFiles: result.generatedFiles
+          ? Object.keys(result.generatedFiles)
+          : result.writtenFiles,
         componentStructure: result.componentStructure,
         // L0-B 重试计数由 code-structure-validator 节点负责（失败才 +1、通过即重置），
         // engineer 不再无条件自增，避免首次失败即耗尽预算（off-by-one）且跨轮累积。
@@ -2542,6 +2563,18 @@ export function createPhase2Graph(config = {}) {
   addNodeWithSkip('complete', async (state) => {
     logger.info('节点: Figma阶段完成');
 
+    // 🛡️ 发布硬闸兜底（2026-09-13）：若条件边判定硬闸 BLOCK 后仍被路由进 complete，
+    // 此处作为最后一道防线 fail-closed，禁止发布 / 标 completed。正常路径不会走到这里
+    // （条件边已转 l0b-fail），此处纯防御，不引入新分支语义。
+    if (state._l0HardBlock) {
+      const err = new Error(
+        'L0-B 硬闸 BLOCK（CODE-021/022/023）命中，禁止发布组件',
+      );
+      err.code = 'L0B_HARD_BLOCK';
+      err.codeValidationResult = state.codeValidationResult;
+      throw err;
+    }
+
     // 🛡️ R5: 产物完整性硬门禁（第一步，fail-closed）
     // 此前缺失主入口只在 workspace-preview-publisher 才回滚，孤儿清理 / Less 检查 /
     // scoped 扫描全部空转一整轮。这里在收口最前端就拦截，并把上游失败原因透出。
@@ -3550,6 +3583,11 @@ export function createPhase2Graph(config = {}) {
       componentId,
       {
         target: 'microcode',
+        // 🛡️ 刀 10（2026-09-13）：整产物级检查（CODE-024 类名契约 / CODE-025 资源契约 /
+        // CODE-026 骨架完整性）必须跑在**全量产物文件集**上。增量校验会把 filesForValidation
+        // 裁成「变更文件 ∪ {common.less, declare.json}」→ 未变更的骨架/模板文件缺席 →
+        // 整产物检查误报「缺文件」（07:26–07:57 实测：CODE-026 假阳性烧光重试预算）。
+        productFiles: filesForCheck,
         layoutStructure: state.layoutStructure,
         visualElements: state.visualElements,
         resourceDomMapping: state.resourceDomMapping,
@@ -4011,6 +4049,17 @@ export function createPhase2Graph(config = {}) {
       }
       // 🛡️ 软失败兜底（2026-09-11）：BLOCK 且重试耗尽 → 不再写「失败」，改为降级完成 + 评分明细。
       // 路由到 complete（其产物完整性硬门禁仍会拦截「缺文件/空产物」这类完全不可用情况，作硬底线）。
+      // 🛡️ 发布硬闸（2026-09-13）：021/022/023 这类「预览必然空白/缺块」的确定性硬伤，软失败
+      // 不得降级放行——命中即走 l0b-fail fail-closed，禁止 publish / 标 completed。
+      if (hasHardPublishBlock(r.issues)) {
+        logger.error('🛡️ L0-B 硬闸 BLOCK（021/022/023）且重试耗尽：禁止发布，转 fail-closed', {
+          hardBlocks: (r.issues || [])
+            .filter((i) => i.severity === 'BLOCK' && /^CODE-02[123]/.test(i.id))
+            .map((i) => i.id),
+        });
+        state._l0HardBlock = true;
+        return 'l0b-fail';
+      }
       const _gs = r.gateScore || computeGateScore(r.issues);
       state._l0SoftFail = true;
       state._gateScore = _gs;

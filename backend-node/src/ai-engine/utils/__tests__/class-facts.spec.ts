@@ -12,6 +12,7 @@ import {
   hasModifier,
   normalizeModifierSuffix,
   collectDomTokensFromTemplate,
+  extractClassTokensFromBindingValue,
   collectFileClassFact,
   resolveDomClass,
   collectClassFacts,
@@ -150,5 +151,79 @@ describe('collectClassFacts（产物级）', () => {
       'package/index.vue',
     ]);
     expect(resolveDomClass(facts.byFile['package/components/A.vue'], 'c-x-tab-item')).toBeTruthy();
+  });
+});
+
+// ============================================================================
+// 🛡️ 刀 11（2026-09-13）：CODE-024 假阳性根治——「类名位置」判定
+//    D1 `:class` 表达式里的字符串字面量被当类名 → C1/C3 误报
+//    D2 单横线语义类名（c-x-active）被拆成修饰符 → bases.bare 为空 → C2 误报
+// ============================================================================
+describe('刀 11a(D1)：:class 绑定值只取「类名位置」的 token', () => {
+  it('对象字面量 → 只取键；比较运算的值不得成为类名', () => {
+    const toks = extractClassTokensFromBindingValue(
+      `{ 'c-x-a--selected': cur === 'active' }`,
+    );
+    expect(toks).toContain('c-x-a--selected');
+    expect(toks).not.toContain('active');
+  });
+
+  it('函数调用实参里的字面量不得成为类名', () => {
+    const toks = extractClassTokensFromBindingValue(
+      `{ 'c-x-b--on': list.includes('active') }`,
+    );
+    expect(toks).toContain('c-x-b--on');
+    expect(toks).not.toContain('active');
+  });
+
+  it('裸标识符键（Vue 合法）仍采集', () => {
+    expect(extractClassTokensFromBindingValue('{ active: on }')).toContain('active');
+  });
+
+  it('数组 + 三元：分支字面量保留，比较操作数字面量剔除', () => {
+    const toks = extractClassTokensFromBindingValue(`['c-x-a', cur === 'b' ? 'c-x-c' : '']`);
+    expect(toks).toContain('c-x-a');
+    expect(toks).toContain('c-x-c');
+    expect(toks).not.toContain('b');
+  });
+
+  it('纯字符串字面量整体按空格拆为类名', () => {
+    expect(extractClassTokensFromBindingValue(`'c-x-a c-x-b'`)).toEqual(['c-x-a', 'c-x-b']);
+  });
+
+  it('纯静态 class 空格拆分（既有行为）', () => {
+    expect(extractClassTokensFromBindingValue('c-x-a c-x-b')).toEqual(['c-x-a', 'c-x-b']);
+  });
+
+  it('端到端：事故形态整模板提取不再产生伪造 token', () => {
+    const toks = collectDomTokensFromTemplate(
+      `<template><div class="c-device-monitor-active" :class="{ 'c-device-monitor-active--selected': selectedSwitch === 'active' }"></div></template>`,
+    );
+    expect(toks).toContain('c-device-monitor-active');
+    expect(toks).toContain('c-device-monitor-active--selected');
+    expect(toks).not.toContain('active');
+  });
+});
+
+describe('刀 11b(D2)：单横线语义类名同时登记为自身基名的 bare', () => {
+  const TPL = `<template><div class="c-device-monitor-active" :class="{ 'c-device-monitor-active--selected': cur === 'active' }"></div></template>`;
+
+  it('c-x-active 作为 bare 出现在自身基名下（C2 判据的数据基础）', () => {
+    const f = collectFileClassFact(TPL);
+    expect(f.bases['c-device-monitor-active']?.bare).toContain('c-device-monitor-active');
+  });
+
+  it('--mod 修饰符仍独立成键（不跨修饰符合并的不变量保持）', () => {
+    const f = collectFileClassFact(TPL);
+    expect(f.bases['c-device-monitor-active']?.mods?.['--selected']).toContain(
+      'c-device-monitor-active--selected',
+    );
+  });
+
+  it('单横线旧产物修饰符解析不受影响（resolveDomClass 精确命中优先）', () => {
+    const f = collectFileClassFact(
+      `<template><div class="c-x-item c-x-item-active"></div></template>`,
+    );
+    expect(resolveDomClass(f, 'c-x-item-active')?.variants).toEqual(['c-x-item-active']);
   });
 });

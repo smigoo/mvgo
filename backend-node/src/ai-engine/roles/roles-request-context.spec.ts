@@ -13,7 +13,10 @@ describe('roles request context wiring', () => {
     const styleRefiner = readRole('style-refiner');
     const mergedRefiner = readRole('layout-style-refiner');
     const adversarialChecker = readRole('adversarial-checker');
-    const microcodeEngineer = readRole('microcode-engineer');
+    // 🛡️ 2026-09-13：microcode 的 LLM 调用点已从 microcode-engineer.js 下沉到
+    // microcode/code-generator.js（分块生成器持有 invokeWithTimeout 调用），
+    // 故 signal / 请求预算透传的契约断言随之迁移到新位置（意图不变）。
+    const codeGenerator = readRole('microcode/code-generator');
     const visualParser = readRole('visual-parser');
     const visualComparator = readRole('visual-comparator');
 
@@ -31,12 +34,13 @@ describe('roles request context wiring', () => {
     expect(adversarialChecker).toContain('requestMaxRetries: options.requestMaxRetries');
     expect(adversarialChecker).toContain('return await this.check(files, layoutStructure, retryCount + 1, componentType, sfcFacts, options)');
 
-    expect(microcodeEngineer).toContain('signal: input.signal');
-    expect(microcodeEngineer).toContain('requestTimeoutMs: Math.min(input.requestTimeoutMs || CHUNK_TIMEOUT_MS, CHUNK_TIMEOUT_MS)');
+    expect(codeGenerator).toContain('signal: input.signal');
+    expect(codeGenerator).toContain('requestTimeoutMs: Math.max(');
 
     expect(visualParser).toContain('signal = null');
     expect(visualParser).toContain('requestTimeoutMs,');
-    expect(visualParser).toContain('this.visionAgent.analyzeImage(imagePath, prompt, requestOptions)');
+    // 🛡️ 2026-09-13：可选参数对象已更名 requestOptions → visionRequestOptions（同名断言同步）
+    expect(visualParser).toContain('this.visionAgent.analyzeImage(imagePath, prompt, visionRequestOptions)');
 
     expect(visualComparator).toContain('async compare(figmaImagePath, renderedImagePath, options = {})');
     expect(visualComparator).toContain('COMPARISON_PROMPT,');

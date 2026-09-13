@@ -109,8 +109,15 @@ export function extractResourceVarNames(resourceDomMapping) {
  *
  * @param {string} code
  * @returns {Set<string>} 已声明的变量名集合
+ *
+ * 🛡️ 刀 7a（2026-09-13）：导出为公共 API。
+ * 事故 mc-max-1789279605053-c9e4a435（device 主内容区整体消失）：LLM 在 MainSection
+ * 用 `const bg6 = bg3` 复用同名资源别名，而 resource-mounter 的 ensureResourceImportInVue
+ * 只检查 `import bg6 from` 就注入 import → 与 const 声明撞名 → 整个 SFC 编译失败
+ * → P1-4 隔离降级 → 主内容区丢失。撞名判定必须复用本函数（同一事实源），
+ * 禁止下游各写一套 `import X from` 正则。
  */
-function collectDeclaredBindings(code) {
+export function collectDeclaredBindings(code) {
   const declared = new Set()
   if (typeof code !== 'string' || code.length === 0) return declared
   // import bg2 from '...' / import { a, b } from '...' / import * as ns from '...'
@@ -247,10 +254,15 @@ export function validateSubcomponentResourceDeps(content, filePath, resourceDomM
   if (varToMapping.size === 0) return result
 
   // 1) 收集代码中「使用」的资源变量（编号模式 + 语义模式，只保留已注册的）
+  // 🛡️ 刀 7e：同样先剥离注释，避免注释里枚举的 `bg1~bg14` 被误判为「使用」→ 误报缺失。
   const usedVars = new Set()
+  const scanContent = content
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(^|[^:])\/\/[^\n]*/g, '$1 ')
+    .replace(/<!--[\s\S]*?-->/g, ' ')
   const numberedPattern = /\b(bg|icon|img)(\d+)\b/g
   let numMatch
-  while ((numMatch = numberedPattern.exec(content)) !== null) {
+  while ((numMatch = numberedPattern.exec(scanContent)) !== null) {
     if (varToMapping.has(numMatch[0])) {
       usedVars.add(numMatch[0])
     }
@@ -258,7 +270,7 @@ export function validateSubcomponentResourceDeps(content, filePath, resourceDomM
   for (const varName of varToMapping.keys()) {
     if (/^(bg|icon|img)\d+$/.test(varName)) continue
     const semPattern = new RegExp(`\\b${varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`)
-    if (semPattern.test(content)) {
+    if (semPattern.test(scanContent)) {
       usedVars.add(varName)
     }
   }
@@ -384,10 +396,18 @@ export function injectResourceImports(code, resourceDomMapping, resourceRelBase 
       if (v) usedVars.add(v)
     }
   } else {
+    // 🛡️ 刀 7e（2026-09-13）：扫描前先剥离注释——否则注释里枚举的变量名
+    //   （实测 `// 系统自动注入 bg1~bg14、icon1~icon14`）会被当成「已使用」→
+    //   注入无用的 bg1/icon1 import → CODE-022（import 未挂载）误杀整个组件。
+    //   与 resource-facts#collectResourceVarRefsFromSfc 的注释剥离保持一致（单一事实源）。
+    const scanCode = code
+      .replace(/\/\*[\s\S]*?\*\//g, ' ')
+      .replace(/(^|[^:])\/\/[^\n]*/g, '$1 ')
+      .replace(/<!--[\s\S]*?-->/g, ' ');
     // 1) 编号模式扫描
     const numberedPattern = /\b(bg|icon|img)(\d+)\b/g
     let numMatch
-    while ((numMatch = numberedPattern.exec(code)) !== null) {
+    while ((numMatch = numberedPattern.exec(scanCode)) !== null) {
       if (varToMapping.has(numMatch[0])) {
         usedVars.add(numMatch[0])
       }
@@ -397,7 +417,7 @@ export function injectResourceImports(code, resourceDomMapping, resourceRelBase 
     for (const varName of varToMapping.keys()) {
       if (/^(bg|icon|img)\d+$/.test(varName)) continue
       const semPattern = new RegExp(`\\b${varName}\\b`)
-      if (semPattern.test(code)) {
+      if (semPattern.test(scanCode)) {
         usedVars.add(varName)
       }
     }

@@ -23,6 +23,8 @@ import {
   isLayoutContainerSection,
   collectLeafSections,
 } from '../utils/section-tree.js';
+// 🛡️ 刀 5a（2026-09-13）：section type 推导抽离到纯函数模块（无 import.meta 依赖，可单测）
+import { deriveSectionType } from '../utils/section-type-derive.js';
 
 export { isLayoutContainerSection, collectLeafSections };
 
@@ -43,36 +45,6 @@ const TYPE_RESPONSIBILITY = {
   nav: '竖向导航区（分类/菜单切换）',
   toolbar: '工具栏',
 };
-
-// 从 section.id / name 推断 type 的关键词表（英文 id 片段 + 中文 name 片段）
-// 注意：顺序敏感！复合词（如 header-stats）要排在单一词（如 header）之前，
-// 否则 "header-stats" 会先命中 "header" 导致类型误判（2026-09-04 实锤）。
-const TYPE_KEYWORDS = [
-  ['stats', ['header-stats', 'stat', 'metric', 'summary', 'overview', '统计', '概览', '指标']],
-  ['header', ['header', 'title', 'top', '顶部', '标题', '头部']],
-  ['footer', ['footer', 'bottom', '底部', '页脚']],
-  ['tabs', ['tab', '标签', '切换']],
-  ['chart', ['chart', 'graph', 'trend', '图表', '趋势', '曲线']],
-  ['grid', ['grid', '网格']],
-  ['list', ['list', '列表', '清单']],
-  ['card', ['card', '卡片']],
-  ['sidebar', ['sidebar', 'aside', '侧边']],
-  [
-    'nav',
-    [
-      'nav',
-      'navigation',
-      '导航',
-      '菜单',
-      '侧边',
-      '菜单栏',
-      '纵向导航',
-      '竖向导航',
-    ],
-  ],
-  ['toolbar', ['toolbar', 'action', '工具栏', '操作栏']],
-  ['body', ['body', 'content', 'main', '主体', '内容']],
-];
 
 function compactDiagnosticItem(item) {
   if (item == null) return null;
@@ -169,25 +141,6 @@ function summarizePipelineDiagnostics(opts = {}) {
 
 // 识别 panel-header（微码 base-panel 已自带标题栏，应过滤避免误算）
 const PANEL_HEADER_PATTERN = /panel[-_ ]?header|标题栏|^header$/i;
-
-/**
- * 推断 section 语义类型。
- * 真实 visual-parser 产物不带 `type` 字段，语义藏在 `id` 与中文 `name` 里。
- */
-function deriveSectionType(sec) {
-  const explicit = sec?.type || sec?.header?.type;
-  if (explicit) return String(explicit).toLowerCase();
-
-  const idPart = String(sec?.id || '').replace(/^section[-_]?/i, '');
-  const haystack =
-    `${idPart} ${sec?.name || ''} ${sec?.header?.title || ''}`.toLowerCase();
-  if (!haystack.trim()) return '';
-
-  for (const [type, keywords] of TYPE_KEYWORDS) {
-    if (keywords.some((kw) => haystack.includes(kw))) return type;
-  }
-  return '';
-}
 
 /**
  * 统计 section 内元素数量（递归，深度受限防止畸形数据爆栈）。
