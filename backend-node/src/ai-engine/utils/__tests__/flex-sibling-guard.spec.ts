@@ -25,6 +25,7 @@ import {
   collectStyleSources,
   buildFlexIndex,
   detectFlexSiblingIssues,
+  healMissingFlexContainers,
 } from '../flex-sibling-guard.js';
 import { CodeStructureValidator } from '../../validators/code-structure-validator.js';
 
@@ -390,5 +391,88 @@ describe('FLEX-005 L0-B 门禁集成（CodeStructureValidator）', () => {
     // 事故形态同时命中 003（scoped vs common 同 class 两套值）+ 005（兄弟组量纲混用）
     expect(ids.has('FLEX-003')).toBe(true);
     expect(ids.has('FLEX-005')).toBe(true);
+  });
+});
+
+describe('healMissingFlexContainers —— 刀 20：父容器缺 display:flex', () => {
+  const indexVue = (slotCls: string) => `<template>
+  <div class="c-x-slot-con">
+    <SwitchSection />
+    <TabsSection />
+    <MainSection />
+  </div>
+</template>
+<script setup>
+import SwitchSection from './components/SwitchSection.vue'
+import TabsSection from './components/TabsSection.vue'
+import MainSection from './components/MainSection.vue'
+</script>`;
+
+  const build = (slotCls: string) => {
+    const index = `<template>
+  <div class="${slotCls}">
+    <SwitchSection />
+    <TabsSection />
+    <MainSection />
+  </div>
+</template>
+
+<script setup>
+import SwitchSection from './components/SwitchSection.vue'
+import TabsSection from './components/TabsSection.vue'
+import MainSection from './components/MainSection.vue'
+</script>`
+    const switchVue = `<template><div class="c-x-switch">s</div></template>`
+    const tabsVue = `<template><div class="c-x-tabs-section">t</div></template>`
+    const mainVue = `<template><div class="c-x-main-section">m</div></template>`
+    const less = `.c-x-slot-con { width: 100%; height: 100%; }
+.c-x-switch { flex: 0 0 180px; }
+.c-x-tabs-section { flex: 1 1 0; width: 100%; }
+.c-x-main-section { flex: 1 1 0; }`
+    return [
+      { path: 'package/index.vue', content: index },
+      { path: 'package/components/SwitchSection.vue', content: switchVue },
+      { path: 'package/components/TabsSection.vue', content: tabsVue },
+      { path: 'package/components/MainSection.vue', content: mainVue },
+      { path: 'resources/styles/common.less', content: less },
+    ];
+  };
+
+  it('事故形态：slot-con 无 display，三个子组件根带 flex 值 → 补 display:flex', () => {
+    const files = build('c-x-slot-con');
+    const out = healMissingFlexContainers(files);
+    expect(out.fixed.length).toBeGreaterThanOrEqual(1);
+    expect(out.fixed.map((f) => f.cls)).toContain('c-x-slot-con');
+    const lessFile = out.files.find((f) => f.path === 'resources/styles/common.less');
+    expect(lessFile?.content).toMatch(/\.c-x-slot-con[^{]*\{[^}]*display:\s*flex;/s);
+  });
+
+  it('父容器已有 display:flex → 不动', () => {
+    const files = build('c-x-slot-con');
+    const less = files.find((f) => f.path!.endsWith('common.less'))!;
+    less.content += `\n.c-x-slot-con { display: flex; }`;
+    const out = healMissingFlexContainers(files);
+    expect(out.fixed.length).toBe(0);
+  });
+
+  it('子项不带 flex 值 → 不动（纵向列表不误伤）', () => {
+    const index = `<template>
+  <div class="c-x-list-con">
+    <div class="c-x-item">a</div>
+    <div class="c-x-item">b</div>
+  </div>
+</template>`
+    const less = `.c-x-item { width: 100%; }`
+    const out = healMissingFlexContainers([
+      { path: 'package/index.vue', content: index },
+      { path: 'resources/styles/common.less', content: less },
+    ]);
+    expect(out.fixed.length).toBe(0);
+  });
+
+  it('幂等：补完再跑一次不再变化', () => {
+    const once = healMissingFlexContainers(build('c-x-slot-con'));
+    const twice = healMissingFlexContainers(once.files);
+    expect(twice.fixed.length).toBe(0);
   });
 });

@@ -20,6 +20,7 @@
  * @param {number} [opts.yOverlapRatio=0.5] y 重叠高度占较小高度的最小比例（低于则非同行）
  * @param {number} [opts.xOverlapRatio=0.15] x 重叠宽度占较小宽度的最大允许比例（超过则视为真正重叠/嵌套）
  * @returns {Array<{id:string,name:string,layout:'horizontal',members:string[]}>} 检测到的行内复合 section
+ *          `members` 语义固定为 **视觉左→右（按 bbox.x 升序）**——下游 inline-row-merger 依赖该契约
  */
 import { inferFlexDirection } from './flex-direction-inferrer.js'
 
@@ -67,7 +68,19 @@ export function rebuildSectionsPreservingInlineRows(doc, opts = {}) {
             id: node.id,
             name: node.name || 'inline-row',
             layout: 'horizontal',
-            members: groups[g].map((i) => rows[i].node.id),
+            // 🛡️ 治本（2026-09-14 · c-traffic-monitor-21e2afd6 实锤）：members 必须按 Figma
+            //   **x 升序**（视觉左→右），这是 horizontal 行成员顺序的唯一事实源。
+            //   旧实现直接 `groups[g].map(...)`，而 groups 是按 **y 升序**扫描 rows 得到的：
+            //   行内兄弟 y 相同或近似，稳定排序就保留了原始数组序 → members 变成「右→左」。
+            //   实证 2:3660：children 数组序 [2:3680(x=271.8), 2:3683(x=42.8)] 正好倒序，
+            //   LLM 按「数组序 = 左到右」写出「左=江阴大桥 82,379 / 右=隧道 34,620」→ 左右对调；
+            //   88:32 同病（2:3545 的框更高 → y 更小 → 「24小时」被排到「当日总流量」前面）。
+            //   inline-row-merger 的契约注释本就写「children 为 members（按 x 升序还原左右顺序）」，
+            //   本条修复让生产端真正满足该契约（此前是契约假设与实现不一致）。
+            members: groups[g]
+              .slice()
+              .sort((a, b) => rows[a].x - rows[b].x || rows[a].y - rows[b].y)
+              .map((i) => rows[i].node.id),
           })
         }
       }

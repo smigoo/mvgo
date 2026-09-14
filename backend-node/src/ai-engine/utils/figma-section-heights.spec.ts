@@ -1,4 +1,4 @@
-import { buildSectionHeightsMap } from './figma-section-heights.js';
+import { buildSectionHeightsMap, buildSectionLayoutFacts } from './figma-section-heights.js';
 
 /**
  * TASK #523：A4 比例确定性落到 CSS —— 验证子组件根 class → Figma 高度 px 映射构建正确。
@@ -88,6 +88,60 @@ describe('buildSectionHeightsMap (A4→CSS)', () => {
     });
   });
 
+  it('🎯 2026-09-14 真机：planner 已按 Figma 实测高度修复时，数值必须取修复值（不再用 vision 自报系数）', () => {
+    // 实锤事故 c-traffic-monitor-3147d679：一对 Figma 高度同为 131px 的等高柱状图，
+    // vision 自报 flexGrow = 3.73 / 0.952（3.9 倍失配），planner applyFigmaHeightGrow
+    // 已按 Figma 高度归一改写为 1.327 / 1.327。
+    // 治本前：顺序取 repaired plan、数值却取 raw styles.flexGrow → 两处不同源 → 错误系数
+    // 一路写进 common.less（`flex: 3.73 1 0`）→ 高度塔状失衡（大空白 + 区块挤压重叠）。
+    // 治本后：顺序与数值同源于 repaired plan leaf。
+    const layout = {
+      layout: {
+        sections: [
+          { id: 'sec-0', title: '区块0', styles: { flexGrow: 3.73 } },
+          { id: 'sec-1', title: '区块1', styles: { flexGrow: 0.952 } },
+        ],
+      },
+    };
+    const params = {
+      subComponentPlan: {
+        effectiveSections: [
+          { id: 'sec-0', layoutMetadata: { height: 131, flexGrow: 1.327 } },
+          { id: 'sec-1', layoutMetadata: { height: 131, flexGrow: 1.327 } },
+        ],
+      },
+    };
+    const map = buildSectionHeightsMap(modelFiles, layout, params);
+    expect(map).toEqual({
+      'c-monitor-overview-cards': 1.327,
+      'c-monitor-device-list': 1.327,
+    });
+  });
+
+  it('plan 叶子未携带修复系数时仍回退 raw section 系数（保持向后兼容 / fail-open 契约不变）', () => {
+    const layout = {
+      layout: {
+        sections: [
+          { id: 'sec-0', title: '区块0', styles: { flexGrow: 0.5 } },
+          { id: 'sec-1', title: '区块1', styles: { flexGrow: 1.5 } },
+        ],
+      },
+    };
+    const params = {
+      subComponentPlan: {
+        effectiveSections: [
+          { id: 'sec-0', layoutMetadata: { height: 100 } },
+          { id: 'sec-1', layoutMetadata: { height: 300 } },
+        ],
+      },
+    };
+    const map = buildSectionHeightsMap(modelFiles, layout, params);
+    expect(map).toEqual({
+      'c-monitor-overview-cards': 0.5,
+      'c-monitor-device-list': 1.5,
+    });
+  });
+
   it('顶层 sections 缺 flexGrow 系数（量纲缺失） → fail-open 返回 null', () => {
     // 🎯 2026-09-09：只认 styles.flexGrow（A4 系数），无系数即 fail-open，
     // 不再回退像素 figmaHeightPx（否则系数/像素混排 → flex:800 1 0 量纲冲突）。
@@ -147,5 +201,55 @@ describe('buildSectionHeightsMap (A4→CSS)', () => {
       'c-monitor-overview-cards': 0.5,
       'c-monitor-device-list': 1.5,
     });
+  });
+});
+
+// ──────────────────────────────────────────────
+// 🛡️ 删减法批次 3 loop 3a（2026-09-14 · 914 §13）：布局事实单一事实源
+// ──────────────────────────────────────────────
+describe('buildSectionLayoutFacts（display/gridColumns/flexDirection）', () => {
+  const mkFiles = (subA: string, subB: string) => ({
+    'package/index.vue': `<template>
+  <div class="c-monitor-root">
+    <GridSection />
+    <ChartSection />
+  </div>
+</template>`,
+    'package/components/GridSection.vue': subA,
+    'package/components/ChartSection.vue': subB,
+  });
+  const gridSub = `<template><div class="c-monitor-device-grid"><span>{{ d.name }}</span></div></template>`;
+  const chartSub = `<template><div class="c-monitor-hourly-chart"><div class="c-monitor-chart-canvas"></div></div></template>`;
+
+  it('栅格 section（gridColumns=3）→ display:grid + 列数事实', () => {
+    const layout: any = { layout: { sections: [
+      { id: '2:8440', layout: 'grid', gridColumns: 3, styles: { flexGrow: 1.2, figmaHeightPx: 264 } },
+      { id: '2:7459', layout: 'vertical', styles: { flexGrow: 0.8, figmaHeightPx: 170 } },
+    ] } };
+    const facts = buildSectionLayoutFacts(mkFiles(gridSub, chartSub), layout, {});
+    expect(facts['c-monitor-device-grid']).toEqual({
+      flexGrow: 1.2, heightPx: 264, display: 'grid', gridColumns: 3, flexDirection: 'column',
+    });
+  });
+
+  it('普通 section（无栅格）→ display:flex + 方向事实（horizontal→row）', () => {
+    const layout: any = { layout: { sections: [
+      { id: '2:8440', layout: 'horizontal', styles: { flexGrow: 1 } },
+      { id: '2:7459', layout: 'vertical', styles: { flexGrow: 2 } },
+    ] } };
+    const facts = buildSectionLayoutFacts(mkFiles(gridSub, chartSub), layout, {});
+    expect(facts['c-monitor-device-grid'].display).toBe('flex');
+    expect(facts['c-monitor-device-grid'].flexDirection).toBe('row');
+    expect(facts['c-monitor-device-grid'].heightPx).toBeNull();
+    expect(facts['c-monitor-hourly-chart'].flexDirection).toBe('column');
+    expect(facts['c-monitor-hourly-chart'].flexGrow).toBe(2);
+  });
+
+  it('对齐失败（标签与 section 数不匹配）→ fail-open 返回 null', () => {
+    const layout: any = { layout: { sections: [
+      { id: '2:8440', layout: 'grid', gridColumns: 3, styles: { flexGrow: 1 } },
+    ] } };
+    expect(buildSectionLayoutFacts(mkFiles(gridSub, chartSub), layout, {})).toBeNull();
+    expect(buildSectionLayoutFacts(null as any, layout, {})).toBeNull();
   });
 });

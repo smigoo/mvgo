@@ -42,6 +42,8 @@
  * 量纲判定宁可偏宽也不可留缝。注意 flexGrow 系数（~1 量级）天然落在 RATIO_MAX 内，
  * 所以正常生成的组件不会触发像素告警——阈值设计已成为安全兜底。
  */
+import { ensureDisplayFlexForClass, ensureDisplayFlexForClassInVue } from './css-sanitizer.js';
+
 export const FLEX_GROW_SCALES = Object.freeze({
   PIXEL_MIN: 20,
   RATIO_MAX: 19,
@@ -776,4 +778,378 @@ export function normalizeFlexSiblingScale(files = []) {
     return f;
   });
   return changedAny ? outFiles : files;
+}
+
+/**
+ * 🛡️ 刀 20（2026-09-14）：「父容器缺 display:flex → 子项 flex 值全部失效」检测 + 确定性修复。
+ *
+ * 症状（mc-1789319878658-485d724d，用户贴设计稿对比「差距太大」）：
+ *   `index.vue` 的 `.c-device-monitor-slot-con`（无任何 display）纵向堆叠
+ *   SwitchSection/TabsSection/MainSection，而设计稿是「左 Tab 窄列 + 右内容区」横排骨架；
+ *   子组件根元素上的 `flex: 1 1 0` 在 block 容器里**全部无效** → 设备网格被挤出视口。
+ *
+ * 为什么既有门禁看不见：`detectFlexSiblingIssues`（FLEX-003/005）在 `!parentFlexProvable`
+ * 时**直接 continue** —— 「父不可证 flex」恰恰是本刀的病灶形态，旧逻辑当它不存在；
+ * 而 CSS 本身合法（没有 grid-template-* 那种自含意图属性），ensureGridDisplay 也够不着。
+ *
+ * 检测条件（全部满足才动）：
+ *   ① 兄弟组 ≥2 个子项，且 ≥2 个子项可解析出生效 flex 值（inline 或经 class 查 flexIndex，
+ *      组件子项解析其模板根 —— 复用 FLEX-003 的 describeSiblingGrow 全套事实源）；
+ *   ② 父容器不可证 flex（inline / class 命中 display:flex 全集 / 组件根同理）；
+ *   ③ 父容器 class（或组件根 class）在样式源中存在规则块、且块内无 display 声明。
+ *
+ * 修复：给该 class 的规则块补 `display: flex;`（方向取 flex 默认 row —— 本应纵向的容器
+ * 其子项一般不带 flex 值，命中不了条件①；能命中说明作者就是想要 flex 分配）。
+ *
+ * @param {Array<{path:string, content:string}>} files 产物文件表
+ * @param {object} [logger]
+ * @returns {{ files: Array, fixed: Array<{path:string, cls:string}>, warnings: string[] }}
+ */
+export function healMissingFlexContainers(files = [], logger = null) {
+  const result = { files, fixed: [], warnings: [] };
+  if (!Array.isArray(files) || files.length === 0) return result;
+
+  const sources = collectStyleSources(files);
+  const flexIndex = buildFlexIndex(sources);
+
+  // flex 容器 class 全集（与 detectFlexSiblingIssues 同一口径）
+  const flexContainerClasses = new Set();
+  for (const src of sources) {
+    for (const b of extractStyleBlocks(src.content)) {
+      if (!/display\s*:\s*flex/i.test(b.body)) continue;
+      for (const cls of targetClassesOf(b.selector)) flexContainerClasses.add(cls);
+    }
+  }
+
+  const vueFiles = files.filter(
+    (f) => f && typeof f.content === 'string' && /\.vue$/i.test(f.path || ''),
+  );
+  if (vueFiles.length === 0) return result;
+
+  // 组件标签名 → 子组件模板根（与 detectFlexSiblingIssues 同口径）
+  const compRoots = new Map();
+  for (const f of vueFiles) {
+    const parsed = parseVueTemplate(f.content);
+    if (parsed.roots.length === 1) {
+      const base = (f.path || '').replace(/.*\//, '').replace(/\.vue$/i, '');
+      compRoots.set(base, parsed.roots[0]);
+    }
+  }
+
+  const next = files.map((f) => ({ ...f }));
+  const seen = new Set();
+
+  for (const f of vueFiles) {
+    const parsed = parseVueTemplate(f.content);
+    for (const group of parsed.groups) {
+      if (group.siblings.length < 2) continue;
+      const parent = group.parent;
+
+      let provable =
+        parent.inlineDisplayFlex || parent.classes.some((c) => flexContainerClasses.has(c));
+      let compRoot = null;
+      if (!provable && /^[A-Z]/.test(parent.tag)) {
+        compRoot = compRoots.get(parent.tag) || compRoots.get(parent.tag.toLowerCase()) || null;
+        if (compRoot) {
+          provable =
+            compRoot.inlineDisplayFlex ||
+            compRoot.classes.some((c) => flexContainerClasses.has(c));
+        }
+      }
+      if (provable) continue;
+
+      // 子项 flex 承载统计（≥2 个带值才构成「塌方」）
+      const bearing = [];
+      for (const sib of group.siblings) {
+        const info = describeSiblingGrow(sib, flexIndex, compRoots);
+        if (info && info.grows.length > 0) bearing.push(info);
+      }
+      if (bearing.length < 2) continue;
+
+      const targetCls =
+        parent.classes[0] || (compRoot && compRoot.classes[0]) || null;
+      if (!targetCls) {
+        result.warnings.push(
+          `父容器 <${parent.tag}>（${f.path}:${parent.line}）${bearing.length} 个子项带 flex 值但容器缺 display:flex，且无法定位父 class，跳过修复`,
+        );
+        continue;
+      }
+      const key = `${targetCls}|${parent.line}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      let done = false;
+      for (const file of next) {
+        const p = file.path || '';
+        if (typeof file.content !== 'string') continue;
+        if (/\.vue$/i.test(p)) {
+          const out = ensureDisplayFlexForClassInVue(file.content, targetCls, null);
+          if (out !== file.content) {
+            file.content = out;
+            result.fixed.push({ path: p, cls: targetCls });
+            done = true;
+          }
+        } else if (/\.(less|css)$/i.test(p)) {
+          const out = ensureDisplayFlexForClass(file.content, targetCls, null);
+          if (out !== file.content) {
+            file.content = out;
+            result.fixed.push({ path: p, cls: targetCls });
+            done = true;
+          }
+        }
+      }
+      if (done) {
+        logger?.warn?.(
+          `🛡️ 已为 flex 容器 .${targetCls} 补 display:flex（${f.path}:${parent.line} 处 ${bearing.length} 个子项的 flex 值原本全部失效）`,
+        );
+      } else {
+        result.warnings.push(
+          `父容器 .${targetCls}（${f.path}:${parent.line}）${bearing.length} 个子项带 flex 值但容器缺 display:flex，样式源中未找到该 class 的规则块`,
+        );
+      }
+    }
+  }
+
+  result.files = next;
+  return result;
+}
+
+/**
+ * 🛡️ 刀 22-grid（2026-09-14）：「设备网格本应是 N 列 grid，LLM 却写成
+ * display: flex; flex-wrap: wrap + 每张卡 `width: calc(25% - …)`」确定性治愈。
+ *
+ * 实证（c-device-monitor-54038a3a / 80021ec7）：analysis.json 已明确
+ *   `device-grid { layout: "grid", gridColumns: 3 }`，
+ * 双层约束（外层横向 row + 内层栅格）也写进了 prompt，但 LLM 仍写出
+ *   `.c-device-monitor-cons { display: flex; flex-wrap: wrap; gap: 8px }
+ *    .c-device-monitor-group { width: calc(25% - 6px); min-width: 120px }`
+ * → 12 卡按 flex-wrap 流动排布（3 列时每卡占 25%，但 flex 会按内容高度错位、
+ * 且 `min-width: 120px` 在窄容器内把 3 列撑成 2 列甚至 1 列），与设计稿严格的
+ * 3 列等高栅格不符；更糟时 flex 把卡片压成单行 → 被外壳 overflow 裁掉。
+ * 所有代码门禁（L0-B / 契约层）全部绿灯 —— CSS 合法、DOM 存在，纯视觉坏。
+ *
+ * 与 healMissingFlexContainers 同源思路（治本不靠类名硬编码，靠结构事实）：
+ *   ① 父容器规则块当前是 `display: flex` 且（带 flex-wrap 或子项等宽流式分布）
+ *      OR 干脆「无 display」但有 ≥ gridColumns 个等宽子项；
+ *   ② 子项数量 ≥ gridColumns 且子项**结构同质**（同一 class 或同父同形）、
+ *      每个子项带「宽度占比声明」（width/calc(N% - …)/flex-basis 百分比/aspect-ratio），
+ *      说明作者本意是「固定列数的等宽网格」而非「自适应流式」；
+ *   ③ 父容器规则块**尚未**是 `display: grid`（已是 grid 的绝不改，尊重作者意图）。
+ *
+ * 修复：把父容器规则块确定性改写为
+ *   `display: grid; grid-template-columns: repeat(N, 1fr);` （N = gridColumns 事实源），
+ * 并**删除**子项的百分比宽度/calc 宽度/flex-basis 百分比（grid 下它们会破坏列宽），
+ * 保留子项其余样式（padding/border/background/flex-grow 清空）。幂等。
+ *
+ * 注意：N 来自事实源 gridColumns（analysis/preview 透传的确定性值），不臆测列数；
+ * 事实源缺失（gridColumns 不可得）时本刀**不动作**（宁可漏修不可乱改列数）。
+ *
+ * @param {Array<{path:string, content:string}>} files 产物文件表（内存态）
+ * @param {object} [opts]
+ * @param {number[]} [opts.gridColumnsList] 事实源候选列数集合（来自 planner effectiveSections
+ *   的 gridColumns，可能多段栅格）；为空则不动作（绝不臆测列数）
+ * @param {object} [logger]
+ * @returns {{ files: Array, fixed: Array<{path:string, cls:string, cols:number}>, warnings: string[] }}
+ */
+export function healGridContainer(files = [], opts = {}, logger = null) {
+  const result = { files, fixed: [], warnings: [] };
+  const candidates = [
+    ...new Set(
+      (Array.isArray(opts?.gridColumnsList) ? opts.gridColumnsList : [])
+        .map((n) => Math.round(Number(n)))
+        .filter((n) => Number.isFinite(n) && n >= 2),
+    ),
+  ].sort((a, b) => b - a); // 降序：优先选能整除子项数的较大列数
+  if (!Array.isArray(files) || files.length === 0 || candidates.length === 0) {
+    return result;
+  }
+
+  const sources = collectStyleSources(files);
+  const vueFiles = files.filter(
+    (f) => f && typeof f.content === 'string' && /\.vue$/i.test(f.path || ''),
+  );
+  if (vueFiles.length === 0) return result;
+
+  // 组件标签名 → 子组件模板根（与 detectFlexSiblingIssues 同口径）
+  const compRoots = new Map();
+  for (const f of vueFiles) {
+    const parsed = parseVueTemplate(f.content);
+    if (parsed.roots.length === 1) {
+      const base = (f.path || '').replace(/.*\//, '').replace(/\.vue$/i, '');
+      compRoots.set(base, parsed.roots[0]);
+    }
+  }
+
+  // 检测「子项带宽度占比意图」的声明：width: N% / calc(N% - …)，N 为 1~99（即「N 等分列」写法）。
+  // ⚠️ 排除 width:100%（=「拉伸填满」，真 flex 行语义）——100% 视为无栅格意图。
+  const WIDTH_INTENT_RX = /\b(?:width|flex-basis)\s*:\s*(?:calc\(\s*(\d{1,2})(?:\.\d+)?%\s*-|\b(\d{1,2})(?:\.\d+)?%)/i;
+  // 真 flex 子项（flex:1 / flex: 1 1 0 / flex-grow:1）→ 作者要的是拉伸分配，绝非固定列栅格
+  const FLEX_GROW_INTENT_RX = /(?:^|[;{\s])flex(?:-grow)?\s*:\s*(?:1|\d+(?:\.\d+)?\s+1\s+\d+)\s*(?:;|$)/im;
+
+  const next = files.map((f) => ({ ...f }));
+  const seen = new Set();
+
+  for (const f of vueFiles) {
+    const parsed = parseVueTemplate(f.content);
+    // ⚠️ 不能用 parsed.groups（只收「≥2 直接子元素」的父节点）：设备网格用 `v-for` 渲染 →
+    //    模板里父容器只有 **1 个** 元素节点（真实卡片数运行时才展开，c-device-monitor-54038a3a 实锤）。
+    //    这里自行遍历所有「带 ≥1 子节点」的父容器。
+    const pairList = [];
+    const walkPairs = (node) => {
+      if (Array.isArray(node.children) && node.children.length >= 1) {
+        pairList.push({ parent: node, children: node.children });
+      }
+      (node.children || []).forEach(walkPairs);
+    };
+    parsed.roots.forEach(walkPairs);
+
+    for (const group of pairList) {
+      const parent = group.parent;
+
+      // 解析父容器 class（含组件子项根）
+      let targetCls = parent.classes[0] || null;
+      let compRoot = null;
+      if (!targetCls && /^[A-Z]/.test(parent.tag)) {
+        compRoot = compRoots.get(parent.tag) || compRoots.get(parent.tag.toLowerCase()) || null;
+        if (compRoot) targetCls = compRoot.classes[0] || null;
+      }
+      if (!targetCls) continue; // 无 class 无法定位规则块；静默跳过
+
+      // 条件①（强信号，必需）：子项带**占比宽度意图**（N% / calc(N% - …)，N=1~99）
+      //   → 作者本意是「N 等分固定列数等宽网格」，却在 flex 容器里用 width 百分比模拟。
+      // ⚠️ 真 flex 子项（flex:1 / flex-grow:1）→ 拉伸分配，绝非固定列栅格，跳过。
+      // ⚠️ width:100% → 拉伸填满（flex 行语义），不视为栅格意图，跳过。
+      const sibCls = group.children[0]?.classes?.[0] || null;
+      if (!sibCls) continue;
+      let childWidthPct = null; // 子项宽度百分比（用于推断列数）
+      let childIsFlexGrow = false;
+      for (const src of sources) {
+        for (const b of extractStyleBlocks(src.content)) {
+          if (!targetClassesOf(b.selector).includes(sibCls)) continue;
+          if (FLEX_GROW_INTENT_RX.test(b.body)) childIsFlexGrow = true;
+          const pm = b.body.match(WIDTH_INTENT_RX);
+          if (pm) {
+            const num = (pm[1] ?? pm[2]);
+            if (num !== undefined && Number(num) > 0 && Number(num) < 100) {
+              childWidthPct = Number(num);
+              break;
+            }
+          }
+        }
+        if (childWidthPct !== null) break;
+      }
+      if (childWidthPct === null || childIsFlexGrow) continue; // 无等宽意图 / 真 flex 拉伸 → 不误改
+
+      const key = `${targetCls}|${parent.line}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      // 条件②：父容器规则块当前必须是 flex（非 grid）或干脆无 display，才治愈
+      let currentDisplay = 'none';
+      for (const src of sources) {
+        for (const b of extractStyleBlocks(src.content)) {
+          if (targetClassesOf(b.selector).includes(targetCls)) {
+            const dm = b.body.match(/display\s*:\s*([a-z-]+)/i);
+            if (dm) currentDisplay = dm[1].toLowerCase();
+          }
+        }
+      }
+      if (currentDisplay === 'grid') continue; // 已是 grid：尊重作者意图，不动
+      const isFlex = currentDisplay === 'flex' || currentDisplay === 'inline-flex';
+
+      // 列数：事实源优先。若子项百分比能整除推出列数且命中候选，采用之（对上 LLM 的宽度写法）；
+      // 否则取候选首个（gridColumns 事实，绝不臆测）。
+      const impliedCols = childWidthPct > 0 ? Math.round(100 / childWidthPct) : null;
+      const cols = (impliedCols && candidates.includes(impliedCols)) ? impliedCols : candidates[0];
+
+      let done = false;
+      for (const file of next) {
+        const p = file.path || '';
+        if (typeof file.content !== 'string') continue;
+        if (/\.vue$/i.test(p)) {
+          const out = healGridForClassInVue(file.content, targetCls, cols, isFlex, sibCls, null);
+          if (out !== file.content) {
+            file.content = out;
+            result.fixed.push({ path: p, cls: targetCls, cols });
+            done = true;
+          }
+        } else if (/\.(less|css)$/i.test(p)) {
+          const out = healGridForClass(file.content, targetCls, cols, isFlex, sibCls, null);
+          if (out !== file.content) {
+            file.content = out;
+            result.fixed.push({ path: p, cls: targetCls, cols });
+            done = true;
+          }
+        }
+      }
+      if (done) {
+        logger?.warn?.(
+          `🛡️ 已把 .${targetCls} 确定性改为 ${cols} 列 grid（${f.path}:${parent.line} 子项 .${sibCls} 用 width:${childWidthPct}% 模拟等宽栅格，LLM 误写 flex-wrap）`,
+        );
+      } else {
+        result.warnings.push(
+          `父容器 .${targetCls}（${f.path}:${parent.line}）子项 .${sibCls} 表达等宽网格意图，但样式源中未找到该 class 的规则块`,
+        );
+      }
+    }
+  }
+
+  result.files = next;
+  return result;
+}
+
+/**
+ * 把单个 .less/.css 规则块（按 class 定位）确定性改写为 grid：
+ *   - 规则块加/改 `display: grid; grid-template-columns: repeat(N, 1fr)`
+ *   - 若原是 flex 容器（带 flex-wrap/align 等无意义属性），清理 flex-direction/flex-wrap/justify/align
+ *   - 同文件里该类**子项**规则块的百分比宽度/calc 宽度/flex-basis 百分比删除
+ * @returns {string} 新内容（未改返回原）
+ */
+function healGridForClass(cssContent, className, cols, isFlex, childCls, logger) {
+  if (!cssContent || !className) return cssContent;
+  const clsEsc = String(className).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const childEsc = childCls ? String(childCls).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : null;
+
+  let out = cssContent;
+  // ① 父容器规则块：display grid + 列数
+  out = out.replace(new RegExp(`(\\.${clsEsc}(?![\\w-])\\s*\\{)([^{}]*)(\\})`, 'g'), (whole, head, body, close) => {
+    if (/display\s*:\s*grid/i.test(body)) return whole; // 已 grid 不动
+    let nb = body;
+    nb = nb.replace(/\s*(flex-direction|flex-wrap|justify-content|align-items|align-content)\s*:[^;]*;/gi, '');
+    if (!/display\s*:/i.test(nb)) nb = `display: grid;${nb}`;
+    else nb = nb.replace(/display\s*:\s*(flex|inline-flex)/gi, 'display: grid');
+    const colsRx = /grid-template-columns\s*:[^;]*;/i;
+    const colsDecl = `grid-template-columns: repeat(${cols}, 1fr);`;
+    nb = colsRx.test(nb) ? nb.replace(colsRx, `${colsDecl} `) : `${nb} ${colsDecl}`;
+    return head + nb + close;
+  });
+
+  // ② 子项规则块：清理百分比/固定宽度相关声明（grid 下破坏列宽，由 grid-template-columns 接管）
+  if (childEsc) {
+    out = out.replace(new RegExp(`(\\.${childEsc}(?![\\w-])\\s*\\{)([^{}]*)(\\})`, 'g'), (whole, head, body, close) => {
+      const newBody = body
+        .replace(/\s*(?:width)\s*:\s*calc\(\s*\d+(?:\.\d+)?%\s*-[^;]*;?/gi, '')
+        .replace(/\s*(?:width|max-width)\s*:\s*\d+(?:\.\d+)?%\s*;/gi, '')
+        .replace(/\s*(?:min-width|max-width)\s*:\s*\d+(?:\.\d+)?px\s*;/gi, '') // 固定最小宽的卡片在 grid 下按 1fr 自适应，min-width 会让窄容器塌列
+        .replace(/\s*flex-basis\s*:\s*\d+(?:\.\d+)?%\s*;/gi, '')
+        .replace(/\s*flex\s*:\s*(0\s+0\s+auto|1\s+1\s+0|0\s+1\s+0|1\s+0\s+0)/gi, '');
+      if (newBody === body) return whole;
+      return head + newBody + close;
+    });
+  }
+  return out;
+}
+
+/** healGridForClass 的 SFC <style> 版 */
+function healGridForClassInVue(vueContent, className, cols, isFlex, childCls, logger) {
+  if (!vueContent || !className) return vueContent;
+  let changed = false;
+  const out = vueContent.replace(/<style([^>]*)>([\s\S]*?)<\/style>/gi, (whole, attrs, body) => {
+    const healed = healGridForClass(body, className, cols, isFlex, childCls, null);
+    if (healed === body) return whole;
+    changed = true;
+    const at = whole.indexOf(body);
+    return whole.slice(0, at) + healed + whole.slice(at + body.length);
+  });
+  return changed ? out : vueContent;
 }

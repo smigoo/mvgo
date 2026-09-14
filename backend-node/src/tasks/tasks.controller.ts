@@ -5,10 +5,9 @@ import { TaskCodeSnapshotService } from './task-code-snapshot.service';
 import { SnapshotQualityService } from './snapshot-quality.service';
 import { TaskQueueService } from '../queue/task-queue.service';
 import { SessionGuard } from '../auth/session.guard';
-import { CurrentUser } from '../auth/current-user.decorator';
+import { CurrentUser, OptionalUser } from '../auth/current-user.decorator';
 
 @Controller('tasks')
-@UseGuards(SessionGuard)
 export class TasksController {
   constructor(
     private readonly tasksService: TasksService,
@@ -25,6 +24,7 @@ export class TasksController {
    *   result.figmaNodeData/figmaStyleTree/code 等重负载字段，响应 5.6MB → KB 级）
    */
   @Get()
+  @UseGuards(SessionGuard)
   getAllTasks(
     @CurrentUser() userId: string,
     @Query('limit') limit?: string,
@@ -47,6 +47,7 @@ export class TasksController {
    * 获取当前用户的任务统计摘要
    */
   @Get('summary')
+  @UseGuards(SessionGuard)
   getTaskSummary(@CurrentUser() userId: string) {
     const summary = this.tasksService.getTaskSummary(userId);
     return {
@@ -60,6 +61,7 @@ export class TasksController {
    * 获取当前用户最近的任务
    */
   @Get('recent')
+  @UseGuards(SessionGuard)
   getRecentTasks(
     @Query('limit') limit: string | undefined,
     @CurrentUser() userId: string,
@@ -83,6 +85,7 @@ export class TasksController {
    * 获取指定任务的状态
    */
   @Get('status/:sessionId')
+  @UseGuards(SessionGuard)
   getTaskStatus(@Param('sessionId') sessionId: string, @CurrentUser() userId: string) {
     return this.tasksService.getTaskStatus(sessionId, userId);
   }
@@ -95,6 +98,8 @@ export class TasksController {
    * GET /api/tasks/resolve-session?componentId=c-device-monitor-xxx
    * → { success: true, sessionId: "mc-max-1788917080373-xxx" }
    * → { success: false, sessionId: null }
+   * 
+   * 🆓 2026-09-14：预览页独立打开时无 token，此接口免认证
    */
   @Get('resolve-session')
   resolveSessionByComponentId(@Query('componentId') componentId: string) {
@@ -114,7 +119,7 @@ export class TasksController {
    * /api/tasks/c-env-monitor/code-snapshots/latest 404）。先按入参直查，失败则按 componentId
    * 反查任务取真实 sessionId（getTaskByComponentId 取 startTime 最新）。
    */
-  private resolveSnapshotSessionId(id: string, userId: string): string {
+  private resolveSnapshotSessionId(id: string, userId?: string): string {
     if (this.tasksService.getTaskStatus(id, userId).success) return id;
     const byComponent = this.tasksService.getTaskByComponentId(id);
     return byComponent?.sessionId || id;
@@ -123,11 +128,13 @@ export class TasksController {
   /**
    * GET /api/tasks/:sessionId/code-snapshots/latest
    * 获取生成中的最新候选及 last-good 版本摘要。
+   * 
+   * 🆓 2026-09-14：预览页独立打开时无 token，此接口免认证
    */
   @Get(':sessionId/code-snapshots/latest')
   getLatestCodeSnapshot(
     @Param('sessionId') rawId: string,
-    @CurrentUser() userId: string,
+    @OptionalUser() userId: string | undefined,
   ) {
     const sessionId = this.resolveSnapshotSessionId(rawId, userId);
     const access = this.tasksService.getTaskStatus(sessionId, userId);
@@ -146,12 +153,14 @@ export class TasksController {
   /**
    * GET /api/tasks/:sessionId/code-snapshots/:revision/manifest
    * 获取指定不可变 revision 的文件清单。
+   * 
+   * 🆓 2026-09-14：预览页独立打开时无 token，此接口免认证
    */
   @Get(':sessionId/code-snapshots/:revision/manifest')
   getCodeSnapshotManifest(
     @Param('sessionId') rawId: string,
     @Param('revision') revision: string,
-    @CurrentUser() userId: string,
+    @OptionalUser() userId: string | undefined,
   ) {
     const sessionId = this.resolveSnapshotSessionId(rawId, userId);
     this.assertSnapshotAccessible(sessionId, userId, revision);
@@ -164,6 +173,8 @@ export class TasksController {
   /**
    * GET /api/tasks/:sessionId/code-snapshots/:revision/file?path=package/index.vue
    * 按 revision 读取文件，避免从多个 workspace 根混读不同版本。
+   * 
+   * 🆓 2026-09-14：预览页独立打开时无 token，此接口免认证
    */
   @Get(':sessionId/code-snapshots/:revision/file')
   getCodeSnapshotFile(
@@ -172,7 +183,7 @@ export class TasksController {
     @Query('path') path: string,
     @Query('preview') preview: string,
     @Query('exists') exists: string,
-    @CurrentUser() userId: string,
+    @OptionalUser() userId: string | undefined,
     @Res() res: Response,
   ) {
     const sessionId = this.resolveSnapshotSessionId(rawId, userId);
@@ -329,7 +340,7 @@ export class TasksController {
    *
    * 注：本接口位于已登录会话之后，且 sessionId 为随机能力 URL，磁盘降级不构成越权暴露。
    */
-  private assertSnapshotAccessible(sessionId: string, userId: string, revision: string): void {
+  private assertSnapshotAccessible(sessionId: string, userId: string | undefined, revision: string): void {
     const access = this.tasksService.getTaskStatus(sessionId, userId);
     if (access.success) return;
     if (access.error === '无权访问此任务') {

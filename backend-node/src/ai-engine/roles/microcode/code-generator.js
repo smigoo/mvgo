@@ -25,6 +25,7 @@ import { getMaxTokens, coerceLLMText, resolveModelCapability } from '../../utils
 import { enforceInputBudget } from '../../utils/input-budget.js';
 import { getIndexVueChunkBudgets } from './chunk-budget.js';
 import { getProviderPool } from '../../utils/provider-pool.js';
+import { safeLogger } from '../../logger/safe-logger.js';
 import {
   extractResourceVarNames,
   resolveResourceDomMapping,
@@ -98,11 +99,88 @@ export function assembleIndexVue(templateContent, scriptContent, input, options 
     // 🛡️ 层①（2026-09-11）：删除死子组件 import（模板未引用），与 ensureSubComponentImport 对称，
     // 杜绝「LLM 脚本 import 错名/多 import」→ CODE-021 死代码门禁 BLOCK。
     assembled = pruneDeadSubComponentImports(assembled, options);
+    // 🛡️ 推 A（2026-09-14 · mc-max-1789376057659-2290591b 实锤）：索引层「引用谁」的确定性约束。
+    // 规划 section 经分配命名派生的 componentFiles 是 index 层子组件文件集的唯一事实源；
+    // LLM 在 script 段臆造的、指向「规划外子组件」的 import（如未生成的 SubHeaderSection.vue）
+    // 一律剥离 —— 从构造上消灭索引层悬空引用（与 detectDanglingComponentRefs 事后 WARN 形成双重保险）。
+    const allowed = (input?._indexTemplateFacts?.componentFiles || []).filter(Boolean);
+    if (allowed.length > 0) {
+      assembled = stripUnplannedSubComponentImports(assembled, allowed, options);
+    }
 
     // 🛡️ Phase 2 后处理兜底（TDD: T02/T03/T04）
     assembled = postProcessIndexVue(assembled, input, options);
 
     return assembled;
+  }
+
+  /**
+   * 🛡️ 推 A（2026-09-14 · mc-max-1789376057659-2290591b 实锤）：索引层「引用谁」的确定性约束。
+   *
+   * 背景：assembleIndexVue 的 import 由「template 标签反推」（ensureSubComponentImport）或
+   * LLM script 段自由书写，二者都不受 planner 规划约束。2290591b 中 LLM 在 ContentSection 内
+   * 臆造 `import SubHeaderSection from './SubHeaderSection.vue'`（规划外、文件未生成）→ 运行时
+   * 「找不到文件」、内容空白。该函数的**索引层**形态同理：若 LLM 在 index.vue 写了规划外 import，
+   * 必须剥离，不能让它进入产物。
+   *
+   * 规则：`buildDeterministicIndexTemplate` 返回的 `componentFiles`（规划 section 经分配命名派生的
+   * 确定性子组件文件集）是 index 层「引用谁」的唯一事实源。`allowed` 非空时，凡指向
+   * `./components/X.vue` 的相对 import（静态 `import X from` / `defineAsyncComponent(() => import(...))`
+   * 内联形式）其 X 不在 `allowed` 中 → 视为「未规划子组件引用」剥离其 import 绑定。
+   *
+   * **只处理 index.vue**：子组件内部（如 ContentSection.vue）引用未生成文件的场景由
+   * section-coverage-guard 的 detectDanglingComponentRefs 事后 WARN 兜底（那里剥离会破坏已正确
+   * 工作的内联组件，故此处不递归进子组件）。
+   *
+   * 纯函数、无 import.meta、fail-open（异常返回原串）。仅删 import 绑定，不删模板标签（避免误删
+   * 已规划但 import 被剥离的合法标签——标签由 buildDeterministicIndexTemplate 保证规划内）。
+   *
+   * @param {string} content 拼装后的 index.vue
+   * @param {string[]} allowed 规划内子组件名（不含 .vue）
+   * @returns {string} 剥离未规划 import 后的内容
+   */
+  export function stripUnplannedSubComponentImports(content, allowed, options = {}) {
+    const logger = safeLogger(options.logger);
+    if (!content || typeof content !== 'string') return content;
+    if (!Array.isArray(allowed) || allowed.length === 0) return content;
+    const allowSet = new Set(allowed);
+    const scriptMatch = content.match(/<script[^>]*>([\s\S]*?)<\/script>/i);
+    if (!scriptMatch) return content;
+    const scriptBody = scriptMatch[1];
+    if (!/['"]\.\/components\//.test(scriptBody)) return content;
+
+    const referenced = new Set();
+    // 静态 import：import X from './components/X.vue'
+    for (const m of scriptBody.matchAll(
+      /import\s+[A-Za-z_$][\w$]*\s+from\s*['"]\.\/components\/([\w-]+)\.vue['"]/g,
+    )) {
+      referenced.add(m[1]);
+    }
+    // 动态 import：defineAsyncComponent(() => import('./components/X.vue')) / import('./components/X.vue')
+    for (const m of scriptBody.matchAll(/import\(\s*['"]\.\/components\/([\w-]+)\.vue['"]\s*\)/g)) {
+      referenced.add(m[1]);
+    }
+
+    const unplanned = [...referenced].filter((n) => !allowSet.has(n));
+    if (unplanned.length === 0) return content;
+
+    let newScript = scriptBody;
+    for (const name of unplanned) {
+      // 删静态 import 行
+      newScript = newScript.replace(
+        new RegExp(`import\\s+[A-Za-z_$][\\w$]*\\s+from\\s*['"]\\.\\/components\\/${name}\\.vue['"]\\s*\\n?`, 'g'),
+        '',
+      );
+      // 删动态 import('./components/X.vue')（保留外层的 defineAsyncComponent 包裹，仅去 import 表达式）
+      newScript = newScript.replace(
+        new RegExp(`import\\(\\s*['"]\\.\\/components\\/${name}\\.vue['"]\\s*\\)`, 'g'),
+        `null /* 未规划子组件 ${name} */`,
+      );
+    }
+    if (logger) {
+      logger.warn('🔧 已剥离未规划子组件 import（规划外引用）', { unplanned });
+    }
+    return content.replace(scriptBody, newScript);
   }
 
 /**
@@ -123,8 +201,10 @@ export function assembleIndexVue(templateContent, scriptContent, input, options 
  * `{ template, rootContainerClass, sectionRoots }`，供下游 rootLayoutFacts 消费，
  * 消灭「下游靠命名枚举猜根容器」的两连复发机制。
  *
- * @returns {{ template: string, rootContainerClass: string|null, sectionRoots: Array<{id, component, type}> }|null}
- *   无计划子组件时返回 null（回退 LLM 生成）
+ * @returns {{ template: string, rootContainerClass: string|null, sectionRoots: Array<{id, component, type}>, componentFiles: string[] }|null}
+ *   无计划子组件时返回 null（回退 LLM 生成）。
+ *   `componentFiles` = 规划 section 经确定性命名派生的**子组件文件集**（PascalCase 名，不含 .vue），
+ *   是 index 层「引用谁」的唯一事实源；assembleIndexVue 据此约束 import，从构造上消灭索引层悬空引用。
  */
 export function buildDeterministicIndexTemplate(input, options = {}) {
   const treeSections = resolvePlanSections(input);
@@ -137,6 +217,10 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
   const semantic = String(input.componentName || '')
     .replace(/^c-/, '')
     .toLowerCase() || 'component';
+
+  // 🛡️ 推 A（2026-09-14）：确定性子组件文件集 —— index 层「引用谁」的唯一事实源。
+  // 来自 nameOf（与 template 标签、子组件文件名同一份映射），assembleIndexVue 据此约束 import。
+  const componentFiles = [...new Set([...nameOf.values()])];
 
   const headerLeaves = leaves.filter((s) => s.type === 'header');
   const bodyLeaves = leaves.filter((s) => s.type !== 'header');
@@ -193,7 +277,7 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
   }
   lines.push(`  </base-panel>`);
   lines.push(`</template>`);
-  return { template: lines.join('\n'), rootContainerClass, sectionRoots };
+  return { template: lines.join('\n'), rootContainerClass, sectionRoots, componentFiles };
 }
 
 export async function generateIndexVue(runChunk, input, { splitDecision, allFiles }, options = {}) {
@@ -234,6 +318,7 @@ export async function generateIndexVue(runChunk, input, { splitDecision, allFile
       input._indexTemplateFacts = {
         rootContainerClass: _detTemplate.rootContainerClass,
         sectionRoots: _detTemplate.sectionRoots,
+        componentFiles: _detTemplate.componentFiles || [],
         source: 'deterministic-template',
       };
     } else {
@@ -633,9 +718,13 @@ export async function safeGenerateDeclareJson(runChunk, input, chunkD, options =
 export function mergeDeclareFragment(skeleton, fragment, componentId) {
     const merged = { ...skeleton };
 
-    // componentName：LLM 输出优先
+    // componentName：🛡️ P1-2 · 事实源 = Figma 节点名（已在 skeleton 中），LLM 输出只在骨架缺失时使用
+    // 避免 LLM 把 Tab 文案（如"实时车流监测"）当成组件名覆盖 Figma 真值
     if (fragment.componentName && typeof fragment.componentName === 'string') {
-      merged.componentName = fragment.componentName;
+      // 只有骨架是默认值 '未知组件' 或空时，才允许 LLM 覆盖
+      if (!merged.componentName || merged.componentName === '未知组件') {
+        merged.componentName = fragment.componentName;
+      }
     }
 
     // panelKey：LLM 输出覆盖

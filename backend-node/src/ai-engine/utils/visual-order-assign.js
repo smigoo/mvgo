@@ -31,10 +31,29 @@ export function assignVisualOrderVarNames(successMappings = []) {
       if (ay !== by) return ay - by;
       return (a.figmaBox?.x || 0) - (b.figmaBox?.x || 0);
     });
+    // 🛡️ 删减法批次 2 loop 2c（2026-09-14 · 485d724d §13 实锤）：同图共享编号。
+    // 12 卡共享同一张 bg-8439.png 却发 bg3~bg14 十二别名 → prompt 诱导 LLM 多别名引用/
+    // 别名转发（刀 7b 事故）→ dedupeSameImageAliases 事后合并。治本：同 resourceFile
+    // 共享首个（视觉序）编号，非首条目标记 isSharedAlias（prompt/validator 折叠），
+    // 编号只被不同文件消耗。sharedBy 聚合到首条目（与 resource-mount-plan 口径一致）。
     let n = 0;
+    const fileToFirst = new Map(); // resourceFile -> 首条目 m
     for (const m of bucket) {
+      const file = m.resourceFile || null;
+      const first = file ? fileToFirst.get(file) : null;
+      if (first) {
+        m.assignedVarName = first.assignedVarName;
+        m.isSharedAlias = true;
+        if (!first.sharedBy) first.sharedBy = [String(first.figmaNodeId)];
+        if (m.figmaNodeId != null) first.sharedBy.push(String(m.figmaNodeId));
+        continue;
+      }
+      // 清掉上轮可能的共享标记（幂等：重复调用按全新一轮重算）
+      delete m.isSharedAlias;
+      delete m.sharedBy;
       n += 1;
       m.assignedVarName = `${role}${n}`;
+      if (file) fileToFirst.set(file, m);
     }
   }
   return list;

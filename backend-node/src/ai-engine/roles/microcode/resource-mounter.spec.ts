@@ -1,4 +1,4 @@
-import { fixSectionHeightsForResource, ensureHeaderSlots, injectFailedResourceFallbacks, dedupeSameImageAliases, stripEmptyShellBindings, ensureResourceImportInVue } from './resource-mounter.js'
+import { fixSectionHeightsForResource, ensureHeaderSlots, injectFailedResourceFallbacks, stripEmptyShellBindings, ensureResourceImportInVue } from './resource-mounter.js'
 
 /**
  * 🛡️ fix-section-heights 规则②：组件根 height:100% 不得改写（2026-09-02 实锤）。
@@ -158,6 +158,72 @@ describe('fixSectionHeightsForResource 规则② A4 加权（2026-09-04 实锤 m
     })
     expect(out).toContain('height: 100%')
     expect(out).not.toContain('flex: 425 1 0')
+  })
+})
+
+describe('fixSectionHeightsForResource 升级分支治本（2026-09-14 真机 c-traffic-monitor-3147d679）', () => {
+  // 🎯 事故：一对 Figma 高度同为 131px 的等高柱状图，vision 自报系数 3.73 / 0.952
+  // （3.9 倍失配）被 LLM 直接写进 common.less。旧的升级分支**只认字面量** `flex: 1 1 0`，
+  // 遇到已经写错的 `flex: 3.73 1 0` 完全不匹配 → 错误比例原样落盘 → 高度塔状失衡。
+  // 治本：命中映射的 section 根类，其 ratio 量级 flex 声明一律改写为权威系数。
+  const CTX = {
+    path: 'resources/styles/common.less',
+    sectionHeights: {
+      'c-traffic-monitor-chart-tunnel': 1.327,
+      'c-traffic-monitor-chart-bridge': 1.327,
+    },
+  }
+
+  it('⭐ LLM 写了错误的小数系数 flex: 3.73 1 0 → 改写为权威系数（旧逻辑会因小数不匹配而漏改）', () => {
+    const input = [
+      '.c-traffic-monitor-chart-tunnel {',
+      '  display: flex;',
+      '  flex-direction: column;',
+      '  flex: 3.73 1 0;',
+      '  min-height: 0;',
+      '}',
+    ].join('\n')
+    const out = fixSectionHeightsForResource(input, CTX)
+    expect(out).toContain('flex: 1.327 1 0')
+    expect(out).not.toContain('3.73')
+  })
+
+  it('第二张等高图 0.952 同样被改写（两图最终等高，符合 Figma 真值 131px/131px）', () => {
+    const input = [
+      '.c-traffic-monitor-chart-bridge {',
+      '  display: flex;',
+      '  flex-direction: column;',
+      '  flex: 0.952 1 0;',
+      '  min-height: 0;',
+      '}',
+    ].join('\n')
+    const out = fixSectionHeightsForResource(input, CTX)
+    expect(out).toContain('flex: 1.327 1 0')
+    expect(out).not.toContain('0.952')
+  })
+
+  it('防误伤：grow=0 的附属区（flex: 0 0 46px）不被改写', () => {
+    const input = [
+      '.c-traffic-monitor-chart-tunnel {',
+      '  display: flex;',
+      '  flex-direction: column;',
+      '  flex: 0 0 46px;',
+      '}',
+    ].join('\n')
+    const out = fixSectionHeightsForResource(input, CTX)
+    expect(out).toContain('flex: 0 0 46px')
+  })
+
+  it('幂等：改写后再跑一次值不变（重复执行不产生二次漂移）', () => {
+    const input = [
+      '.c-traffic-monitor-chart-tunnel {',
+      '  display: flex;',
+      '  flex: 3.73 1 0;',
+      '}',
+    ].join('\n')
+    const once = fixSectionHeightsForResource(input, CTX)
+    const twice = fixSectionHeightsForResource(once, CTX)
+    expect(twice).toBe(once)
   })
 })
 
@@ -485,96 +551,6 @@ describe('injectFailedResourceFallbacks: B2 下载失败背景 CSS 兜底', () =
     const mapping = [makeMapping({ downloadStatus: 'success' })]
     const fixes = injectFailedResourceFallbacks(allFiles, mapping)
     expect(fixes.length).toBe(0)
-  })
-})
-
-/**
- * 🛡️ C1（2026-09-07，#568）：同图多别名去重。
- *
- * 背景：同一张背景图被 LLM 以多个别名（bg4~bg14）绑进多层 spread 嵌套 :style，
- * 最终只生效一张，其余都是噪音。根因是 figma-connector 按 Figma 节点分配编号，
- * 同一张图可能被多个容器节点引用。
- *
- * 修复策略：按 resourceFile 聚合所有 success 的 bg 资源，若同一 resourceFile
- * 有 ≥2 个 mapping，选评分最高者保留，剥离其余别名的模板引用。
- */
-describe('dedupeSameImageAliases: C1 同图多别名去重', () => {
-  const makeMapping = (overrides: Record<string, any> = {}) => ({
-    previewAnalysisRole: 'bg',
-    downloadStatus: 'success',
-    assignedVarName: 'bg1',
-    semanticVarName: null,
-    resourceFile: 'resources/images/bg.png',
-    mountTarget: 'container-root',
-    targetDomHint: 'container',
-    figmaPath: 'frame/bg',
-    name: 'bg-[m]',
-    ...overrides,
-  })
-
-  it('⭐ 同图多别名 → 只保留评分最高者，剥离其余引用', () => {
-    const allFiles = {
-      'package/index.vue': `<template>
-  <div class="outer" :style="{ backgroundImage: \`url(\${bg4})\` }">
-    <div class="inner" :style="{ backgroundImage: \`url(\${bg5})\` }"></div>
-  </div>
-</template>
-<style></style>`,
-    }
-    // bg4 和 bg5 指向同一张图，bg4 的 mountTarget 匹配 outer（评分更高）
-    const mapping = [
-      makeMapping({ assignedVarName: 'bg4', mountTarget: 'outer', targetDomHint: 'outer container' }),
-      makeMapping({ assignedVarName: 'bg5', mountTarget: 'inner', targetDomHint: 'inner container' }),
-    ]
-    const result = dedupeSameImageAliases(allFiles, mapping)
-    expect(result.fixes.length).toBe(1)
-    expect(result.fixes[0].keptVar).toBe('bg4')
-    expect(result.fixes[0].removedVar).toBe('bg5')
-    // bg5 的引用被剥离（inner 的 :style 只有 background，整条删除）
-    expect(result.files['package/index.vue']).not.toContain('bg5')
-    // bg4 保留
-    expect(result.files['package/index.vue']).toContain('bg4')
-  })
-
-  it('不同图不触发去重', () => {
-    const allFiles = {
-      'package/index.vue': `<template>
-  <div class="a" :style="{ backgroundImage: \`url(\${bg1})\` }"></div>
-  <div class="b" :style="{ backgroundImage: \`url(\${bg2})\` }"></div>
-</template>
-<style></style>`,
-    }
-    const mapping = [
-      makeMapping({ assignedVarName: 'bg1', resourceFile: 'resources/images/a.png' }),
-      makeMapping({ assignedVarName: 'bg2', resourceFile: 'resources/images/b.png' }),
-    ]
-    const result = dedupeSameImageAliases(allFiles, mapping)
-    expect(result.fixes.length).toBe(0)
-    expect(result.files['package/index.vue']).toContain('bg1')
-    expect(result.files['package/index.vue']).toContain('bg2')
-  })
-
-  it('只有一个别名被引用时不去重', () => {
-    const allFiles = {
-      'package/index.vue': `<template>
-  <div class="root" :style="{ backgroundImage: \`url(\${bg1})\` }"></div>
-</template>
-<style></style>`,
-    }
-    const mapping = [
-      makeMapping({ assignedVarName: 'bg1', resourceFile: 'resources/images/same.png' }),
-      makeMapping({ assignedVarName: 'bg2', resourceFile: 'resources/images/same.png' }),
-    ]
-    const result = dedupeSameImageAliases(allFiles, mapping)
-    // bg2 未被引用，不触发去重
-    expect(result.fixes.length).toBe(0)
-    expect(result.files['package/index.vue']).toContain('bg1')
-  })
-
-  it('空 mapping 返回空 fixes', () => {
-    const allFiles = { 'package/index.vue': '<template><div></div></template>' }
-    const result = dedupeSameImageAliases(allFiles, [])
-    expect(result.fixes.length).toBe(0)
   })
 })
 

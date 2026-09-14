@@ -1,4 +1,4 @@
-import { detectMissingSections, detectUnmaterializedSections, ensureSectionAssembly } from './section-coverage-guard.js'
+import { detectMissingSections, detectUnmaterializedSections, ensureSectionAssembly, detectDanglingComponentRefs, stripDanglingComponentRefs } from './section-coverage-guard.js'
 import { CodeStructureValidator } from '../validators/code-structure-validator.js'
 
 /**
@@ -525,5 +525,140 @@ import MainSection from './components/MainSection.vue'
     expect(detectMissingSections(FLOW_FILES, FLOW_PLAN)).toHaveLength(4)
     expect(detectMissingSections(MONITOR_FILES, MONITOR_PLAN)).toHaveLength(0)
     expect(detectMissingSections(DRIFT_FILES, DRIFT_PLAN)).toHaveLength(0)
+  })
+})
+
+// ──────────────────────────────────────────────
+// 🛡️ COMP-001-DANGLING（2026-09-14 · mc-max-1789376057659-2290591b 实锤）：递归悬空引用检测
+// ──────────────────────────────────────────────
+describe('detectDanglingComponentRefs（递归悬空引用）', () => {
+  const FILE = (path, content) => ({ path, content })
+  const CONTENT_SECTION = FILE(
+    'package/components/ContentSection.vue',
+    `<template><div><SubHeaderSection /><StatGroupSection /></div></template>
+<script setup>
+const SubHeaderSection = defineAsyncComponent(() => import('./SubHeaderSection.vue'))
+import StatGroupSection from './StatGroupSection.vue'
+</script>`,
+  )
+
+  it('子组件内部引用了未生成文件 → 检出悬空引用（defineAsyncComponent 形态）', () => {
+    const files = [
+      FILE('package/index.vue', '<template><ContentSection /></template>'),
+      CONTENT_SECTION,
+    ]
+    const d = detectDanglingComponentRefs(files)
+    const refs = d.map((x) => x.ref).sort()
+    expect(refs).toEqual(['StatGroupSection', 'SubHeaderSection'])
+    d.forEach((x) =>
+      expect(x.expected).toBe(`package/components/${x.ref}.vue`),
+    )
+  })
+
+  it('index.vue 已组装全部子组件（无孤儿）→ 旧豁免不报错，但悬空引用仍独立检出', () => {
+    // 模拟 2290591b：index 引用了 ContentSection（真实存在），但 ContentSection 内部引用了缺失文件
+    const files = [
+      FILE('package/index.vue', "<template><ContentSection /></template><script setup>\nimport ContentSection from './components/ContentSection.vue'\n</script>"),
+      CONTENT_SECTION,
+    ]
+    // 旧 analyzeSectionCoverage 的命名漂移豁免会让 detectMissingSections 返回空
+    expect(detectMissingSections(files, { isForced: true, effectiveSections: [{ id: 'a', type: 'body', responsibility: '主体' }] })).toHaveLength(0)
+    // 但递归悬空检测必须单独拦下
+    expect(detectDanglingComponentRefs(files).length).toBe(2)
+  })
+
+  it('引用的文件真实存在 → 不报悬空', () => {
+    const files = [
+      CONTENT_SECTION,
+      FILE('package/components/SubHeaderSection.vue', '<template><div>ok</div></template>'),
+      FILE('package/components/StatGroupSection.vue', '<template><div>ok</div></template>'),
+    ]
+    expect(detectDanglingComponentRefs(files)).toHaveLength(0)
+  })
+
+  it('异常 fail-open：files 为 null / 畸形 → 返回 [] 不抛', () => {
+    expect(detectDanglingComponentRefs(null)).toEqual([])
+    expect(detectDanglingComponentRefs(undefined)).toEqual([])
+    expect(detectDanglingComponentRefs([{ path: 'a.vue', content: undefined }])).toEqual([])
+  })
+})
+
+// ──────────────────────────────────────────────
+// 🛡️ 推 A 全 .vue 层（2026-09-14 · mc-max-1789376057659-2290591b 实锤）：悬空子组件引用剥离
+// ──────────────────────────────────────────────
+describe('stripDanglingComponentRefs（全 .vue 层悬空引用剥离）', () => {
+  const FILE = (path: string, content: string) => ({ path, content })
+
+  // 复刻 2290591b：ContentSection 空壳引用 7 个未生成的兄弟 section
+  const CONTENT_SECTION = FILE(
+    'package/components/ContentSection.vue',
+    `<template>
+  <div class="c-content">
+    <SubHeaderSection />
+    <StatGroupSection />
+    <VehicleDistSection></VehicleDistSection>
+  </div>
+</template>
+<script setup>
+import { defineAsyncComponent } from 'vue'
+const SubHeaderSection = defineAsyncComponent(() => import('./SubHeaderSection.vue'))
+import StatGroupSection from './StatGroupSection.vue'
+const VehicleDistSection = defineAsyncComponent(() => import('./VehicleDistSection.vue'))
+</script>`,
+  )
+
+  it('子组件层越权 import 未生成文件 → 剥离 import + 模板孤儿标签', () => {
+    const files: Record<string, string> = {
+      'package/index.vue': '<template><ContentSection /></template>',
+      'package/components/ContentSection.vue': CONTENT_SECTION.content,
+      'package/components/HeaderSection.vue': '<template><div>ok</div></template>',
+    }
+    const before = files['package/components/ContentSection.vue']
+    const { files: out, stripped } = stripDanglingComponentRefs(files)
+    const c = out['package/components/ContentSection.vue']
+    expect(stripped).toHaveLength(1)
+    expect(stripped[0].refs.sort()).toEqual(['StatGroupSection', 'SubHeaderSection', 'VehicleDistSection'])
+    // import 全部移除了
+    expect(c).not.toMatch(/SubHeaderSection\.vue|StatGroupSection\.vue|VehicleDistSection\.vue/)
+    // defineAsyncComponent 死声明整行删除，不残留 `= null`（避免 CODE-021 / Vue 警告）
+    expect(c).not.toMatch(/defineAsyncComponent\(\s*\(\)\s*=>\s*null/)
+    expect(c).not.toMatch(/const\s+(SubHeaderSection|StatGroupSection|VehicleDistSection)\s*=/)
+    // defineAsyncComponent 的正确 import 保留（供 HeaderSection 使用）
+    expect(c).toMatch(/import \{ defineAsyncComponent \} from 'vue'/)
+    // 模板孤儿标签移除（自闭合 + 成对）
+    expect(c).not.toMatch(/<SubHeaderSection|<StatGroupSection|<VehicleDistSection/)
+    // 未受影响的其它文件零触碰
+    expect(out['package/components/HeaderSection.vue']).toContain('ok')
+    expect(before).toContain('SubHeaderSection.vue')
+  })
+
+  it('被剥离后内容自洽：不再有指向缺失文件的 import', () => {
+    const files: Record<string, string> = {
+      'package/index.vue': '<template><ContentSection /></template>',
+      'package/components/ContentSection.vue': CONTENT_SECTION.content,
+    }
+    const { files: out } = stripDanglingComponentRefs(files)
+    const dangling = detectDanglingComponentRefs(
+      Object.entries(out).map(([path, content]) => ({ path, content })),
+    )
+    expect(dangling).toHaveLength(0)
+  })
+
+  it('引用的文件真实存在 → 原样返回，零改动', () => {
+    const files: Record<string, string> = {
+      'package/components/ContentSection.vue': CONTENT_SECTION.content,
+      'package/components/SubHeaderSection.vue': '<template><div>ok</div></template>',
+      'package/components/StatGroupSection.vue': '<template><div>ok</div></template>',
+      'package/components/VehicleDistSection.vue': '<template><div>ok</div></template>',
+    }
+    const { files: out, stripped } = stripDanglingComponentRefs(files)
+    expect(stripped).toHaveLength(0)
+    expect(out).toEqual(files)
+  })
+
+  it('异常 fail-open：files 为 null → 原样返回不抛', () => {
+    const r = stripDanglingComponentRefs(null as unknown as Record<string, string>)
+    expect(r.files).toBe(null)
+    expect(r.stripped).toEqual([])
   })
 })

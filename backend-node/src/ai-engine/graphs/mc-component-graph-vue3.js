@@ -1583,6 +1583,97 @@ export function createPhase2Graph(config = {}) {
   graph.addNode('complete', async (state) => {
     logger.info('节点: Figma阶段完成');
 
+    // 🎯 2026-09-14 治本⑤：运行时门禁降级可见化（与 phase2 图 complete 节点同款）。
+    // 降级放行时产物未经真实渲染验证，必须写进 component-meta.json 让 UI 可见，不再静默。
+    if (state.outputPath && state.runtimeGate) {
+      try {
+        const { readFileSync, writeFileSync, existsSync } = await import('fs');
+        const { join } = await import('path');
+        const metaPath = join(state.outputPath, 'component-meta.json');
+        let prevMeta = {};
+        try {
+          prevMeta = existsSync(metaPath)
+            ? JSON.parse(readFileSync(metaPath, 'utf-8'))
+            : {};
+        } catch (_) {
+          /* 旧 meta 损坏则重建 */
+        }
+        const runtimeVerified = !state._runtimeGateDowngraded;
+        const nextMeta = {
+          ...prevMeta,
+          runtimeVerified,
+          ...(runtimeVerified
+            ? {}
+            : {
+                runtimeGateDowngradedAt: Date.now(),
+                runtimeGateIssues: (state.runtimeGate?.issues || []).map(
+                  (i) => ({ id: i.id, severity: i.severity, message: i.message }),
+                ),
+                runtimeGateNote:
+                  '运行时门禁降级放行（如真实预览页不可达）：产物未经真实渲染验证',
+              }),
+        };
+        writeFileSync(metaPath, JSON.stringify(nextMeta, null, 2), 'utf-8');
+        if (!runtimeVerified) {
+          logger.warn('🩹 运行时门禁降级已留痕 component-meta.json', {
+            issues: nextMeta.runtimeGateIssues?.length || 0,
+          });
+        }
+      } catch (metaErr) {
+        logger.warn('⚠️ 运行时验证标记写入失败（非阻断）', {
+          error: metaErr?.message || String(metaErr),
+        });
+      }
+    }
+
+    // 🎯 2026-09-14 治本①②：section 内容映射守卫（左右序 + 内容错装），与 phase2 图同款。
+    try {
+      const { checkSectionContent } = await import(
+        '../utils/section-content-guard.js'
+      );
+      const { readdirSync: _rds, readFileSync: _rfs, existsSync: _ex } = await import('fs');
+      const { join: _j } = await import('path');
+      const compDir = _j(state.outputPath, 'package', 'components');
+      const files = [];
+      if (_ex(compDir)) {
+        for (const name of _rds(compDir)) {
+          if (!name.endsWith('.vue')) continue;
+          files.push({ path: `package/components/${name}`, content: _rfs(_j(compDir, name), 'utf-8') });
+        }
+      }
+      const contentCheck = checkSectionContent({
+        files,
+        plan: state.subComponentPlan,
+        figmaRoot:
+          state.figmaNodeData ||
+          state._uiCache?.figmaNodeData ||
+          state._visualParserCache?.figmaNodeData,
+      });
+      if (
+        contentCheck.memberOrderIssues.length > 0 ||
+        contentCheck.duplicateTextIssues.length > 0
+      ) {
+        const metaPath = _j(state.outputPath, 'component-meta.json');
+        let prev = {};
+        try { prev = _ex(metaPath) ? JSON.parse(_rfs(metaPath, 'utf-8')) : {}; } catch (_) {}
+        const { writeFileSync: _wfs } = await import('fs');
+        _wfs(metaPath, JSON.stringify({ ...prev, contentMappingIssues: { memberOrderIssues: contentCheck.memberOrderIssues, duplicateTextIssues: contentCheck.duplicateTextIssues, checkedAt: Date.now() } }, null, 2), 'utf-8');
+        logger.warn('🩹 内容映射守卫发现问题（左右序/内容错装，已留痕）', {
+          memberOrderIssues: contentCheck.memberOrderIssues.length,
+          duplicateTextIssues: contentCheck.duplicateTextIssues.length,
+        });
+        state.onProgress?.({
+          stage: '内容映射校验',
+          message: `⚠️ 内容映射守卫：${contentCheck.memberOrderIssues.length} 处左右序异常、${contentCheck.duplicateTextIssues.length} 处文本重复/错装`,
+          status: 'warning',
+        });
+      }
+    } catch (contentGuardErr) {
+      logger.warn('⚠️ 内容映射守卫执行失败（非阻断）', {
+        error: contentGuardErr?.message || String(contentGuardErr),
+      });
+    }
+
     // 🧹 孤儿组件检测与清理
     logger.info('开始孤儿组件检测');
     state.onProgress?.({
@@ -1893,6 +1984,8 @@ export function createPhase2Graph(config = {}) {
     try {
       const plan = subcomponentPlanner.plan(state.layoutStructure, {
         skipPanelHeaderFilter: true,
+        // 🛡️ 臆造壳锚定事实源（2026-09-14 · 34750940）：planner 内 anchorPhantomSections 消费
+        figmaNodeData: state.figmaNodeData,
       }); // Vue3 无 base-panel，header 要独立拆
       // 🛡️ P0：导航作为必含 section —— 若检测到导航信号（styleMappings/elementStyleMap/figmaNodeData 任一含导航关键词）
       // 但 effectiveSections 尚无 nav，则强制注入，确保左侧竖向导航进入生成（含其样式事实）。

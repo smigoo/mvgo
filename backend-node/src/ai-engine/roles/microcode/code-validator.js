@@ -11,6 +11,7 @@ import {
   validateResourceUsage as _validateResourceUsagePure,
 } from '../../utils/post-process.js';
 import { resolveClassPrefixId } from '../../validators/code-structure-validator.js';
+import { detectRootContainerClass } from '../../validators/code-fix-rules.js';
 
 export function detectFileTruncation(files) {
     const issues = [];
@@ -1006,7 +1007,10 @@ export async function validateAndFixGeneratedFiles(
           /(\.c-[\w-]*root\s*)\{([^}]*)\}/g,
           (full, sel, body) => {
             const stripped = body.replace(/font-size\s*:[^;]+;/g, '').trim();
-            return `${sel}{${stripped ? stripped + '\n  ' : ''}font-size: var(--fontSize, 14px);`;
+            // 🛡️ 2026-09-14 治本（mc-max-1789352370414-e4c8afa0 实锤）：
+            // 替换模板必须补回闭合 `}`，否则 `.c-env-monitor-root { ... font-size: var(--fontSize, 14px);`
+            // 缺 `}` → LESS 编译到样式块末尾报 Unrecognised input → 首次预览失败。
+            return `${sel}{${stripped ? stripped + '\n  ' : ''}font-size: var(--fontSize, 14px);\n}`;
           },
         );
         // ② 其余 font-size: Npx → @fontSize / calc(@fontSize * 系数)（相对根基准 14px）
@@ -1058,13 +1062,13 @@ export async function validateAndFixGeneratedFiles(
         continue;
       if (!fileContent || typeof fileContent !== 'string') continue;
 
-      // 提取根 class 名（第一个 .class-name { ）
+      // 提取模板真正的根 class（使用 detectRootContainerClass，避免误检装饰元素）
+      const rootClassName = detectRootContainerClass(fileContent);
+      if (!rootClassName) continue;
+      
       const styleMatch = fileContent.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
       if (!styleMatch) continue;
       const styleContent = styleMatch[1];
-      const rootClassMatch = styleContent.match(/^\s*\.([\w-]+)\s*\{/m);
-      if (!rootClassMatch) continue;
-      const rootClassName = rootClassMatch[1];
 
       // 检查该 class 是否已有 width 声明
       const rootClassBlockRegex = new RegExp(

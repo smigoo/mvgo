@@ -261,6 +261,249 @@ export function detectUnmaterializedSections(files, componentPlan) {
 }
 
 /**
+ * 🛡️ COMP-001-DANGLING（2026-09-14 · mc-max-1789376057659-2290591b 实锤）：
+ * **递归悬空引用检测** —— 治 analyzeSectionCoverage「命名漂移豁免」的盲区。
+ *
+ * 实锤链路：2290591b 规划 8 个 section，LLM 生成了 8 个 .vue；index.vue 确实组装了全部
+ * 8 个（无孤儿）→ 命中信号3 豁免分支 `return empty`，判定「模块全部落地」。**但**
+ * `ContentSection.vue` 内部又引用了 7 个**从未生成**的子组件
+ * （SubHeaderSection / StatGroupSection / VehicleDistSection / ForecastHeaderSection /
+ * HourlyChartJinjiangSection / HourlyChartBridgeSection / ForecastChartSection）——
+ * 运行时 `找不到文件: package/components/SubHeaderSection.vue`，内容大片空白。
+ *
+ * 原检测只看「index.vue 一层组装」，对「叶子内部再套语法引用」完全不可见。本函数独立
+ * 补这一层：对**所有** .vue 文件做引用完整性扫描，凡 `import ... from './X.vue'` /
+ * `defineAsyncComponent(() => import('./X.vue'))` / `require('./X.vue')` 指向的
+ * 同目录相对路径 .vue 文件在产物中不存在 → 收集为悬空引用。
+ *
+ * 消费语义：**WARN（非阻断）**。理由同 COMP-001-UNMATERIALIZED —— 文件不存在时 LLM
+ * 无法通过「组装」修复，重试只会重放同一份源码 → BLOCK 必然重试耗尽。故只发 WARN，
+ * 指向 degradedFiles / 子组件重生成链路，保留可观测性而不烧重试预算。
+ *
+ * 纯函数、无 import.meta、fail-open（异常返回 []）。
+ *
+ * @param {Array<{path:string, content:string}>|Object<string,string>} files
+ * @returns {Array<{file:string, ref:string, expected:string}>}
+ *   `file` = 发起引用的 .vue（相对产物根）；`ref` = 引用的绑定名/原始 specifier；
+ *   `expected` = 期望存在的相对路径（如 package/components/SubHeaderSection.vue）
+ */
+/**
+ * 🛡️ 悬空引用解析的**单一事实源**（detect 与 strip 共用）。
+ *
+ * 把一条 specifier（如 `./X.vue` / `../Y/X.vue` / `components/X.vue`）解析成文件集内的绝对路径；
+ * 解析失败（非 .vue / `../` 越界）返回 null。调用方据此与 present 集合比对：命中 → 存在；
+ * null 或未命中 → 悬空。
+ *
+ * ⚠️ **关键**：引用识别正则的前缀 `(?:\.\/)?` 会**吃掉** `./`，所以捕获组常常是裸名
+ * （`'./X.vue'` → `X.vue`），无法靠捕获组区分「裸名」与「同目录相对」。因此本函数**默认按
+ * fromFile 所在目录解析**（产物内部 import 一律是「相对本文件」语义），并支持 `..` 逐级出栈；
+ * 若按目录解析未命中，再退化为「裸路径直连 present」——覆盖 `package/` 根写成
+ * `components/X.vue` 的形态。这样同一套判定同时约束 detect（报告）与 strip（修复），
+ * 杜绝「检测用归一化、剥离用 startsWith 却永远 false」的逻辑错位（此前两次事故的根因）。
+ *
+ * @param {string} fromFile 发起引用的文件（绝对路径，如 package/components/ContentSection.vue）
+ * @param {string} rel specifier（去引号后的原始串，可能含 ./ 或 ../）
+ * @param {Set<string>} present 文件集路径集合（已存在的文件绝对路径）
+ * @returns {string|null} 解析到的绝对路径；不存在/越界/非法 → null
+ */
+export function resolveSpecifierToPath(fromFile, rel, present) {
+  const clean = String(rel || '')
+    .replace(/['"]/g, '')
+    .trim();
+  if (!/\.vue$/i.test(clean)) return null;
+
+  // ① 按 fromFile 目录解析（相对语义，支持 ../）
+  const stack = fromFile.split('/').slice(0, -1);
+  let escaped = false;
+  for (const part of clean.split('/')) {
+    if (part === '' || part === '.') continue;
+    if (part === '..') {
+      if (stack.length === 0) {
+        escaped = true;
+        break;
+      }
+      stack.pop();
+    } else {
+      stack.push(part);
+    }
+  }
+  if (!escaped) {
+    const resolved = stack.join('/');
+    if (present.has(resolved)) return resolved;
+  }
+  // ② 回退：裸路径直连（如 'components/X.vue' 直接命中 present）
+  if (present.has(clean)) return clean;
+  // ③ 都未命中：返回按目录解析的结果（若越界则 null），供调用方判为悬空
+  return escaped ? null : stack.join('/');
+}
+
+export function detectDanglingComponentRefs(files) {
+  try {
+    const list = Array.isArray(files) ? files : filesObjectToArray(files);
+    const present = new Set(
+      list.filter((f) => f && f.path).map((f) => String(f.path)),
+    );
+    // 只扫 .vue 产物（含 components/ 下所有层级）
+    const vues = list.filter(
+      (f) => f && typeof f.content === 'string' && /\.vue$/i.test(String(f.path)),
+    );
+    const out = [];
+    const seen = new Set();
+    for (const f of vues) {
+      const filePath = String(f.path);
+      const content = String(f.content);
+      // 引用形态：静态 import / 动态 import() / require()，均要求 specifier 以 .vue 结尾
+      const re =
+        /(?:import\s+(?:[\w$*{},\s]+\s+from\s+)?|import\s*\(\s*|require\s*\(\s*)['"](?:\.\/)?([\w./-]+\.vue)['"]/g;
+      for (const m of content.matchAll(re)) {
+        const rel = m[1];
+        const resolved = resolveSpecifierToPath(filePath, rel, present);
+        if (resolved && present.has(resolved)) continue;
+        // 裸 specifier 且未命中时，resolved 为 null，仍记为悬空
+        const key = `${filePath}::${rel}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push({
+          file: filePath,
+          ref: rel.replace(/\.vue$/, ''),
+          expected: resolved || rel,
+        });
+      }
+    }
+    return out;
+  } catch (_) {
+    // fail-open：检测器异常不阻断生成
+    return [];
+  }
+}
+
+/**
+ * 🛡️ 推 A 全 .vue 层（2026-09-14 · mc-max-1789376057659-2290591b 实锤）：
+ * **悬空子组件引用剥离（构造保证）** —— detectDanglingComponentRefs 的「修复」对偶。
+ *
+ * 背景：detectDanglingComponentRefs 只在门禁层**报告**悬空引用（WARN，不拦不修），
+ * 而 stripUnplannedSubComponentImports（code-generator）只守 **index.vue 一层**。
+ * 2290591b 的真实崩溃点在**子组件层**：`ContentSection.vue` 用 defineAsyncComponent
+ * 导入了 7 个从未生成的兄弟 section（SubHeaderSection 等）→ 浏览器加载即 404
+ * （RUNTIME-007）+ async 组件加载失败抛错 → 整页 render-error（RUNTIME-004）。
+ *
+ * 治本：写盘前对**所有** .vue 文件做一次引用完整性收口 —— 凡指向「产物中不存在的
+ * 同目录相对 .vue 文件」的 import（静态 / defineAsyncComponent 内联 / require）一律剥离，
+ * 并同步移除模板里对应的 `<X />` / `<X></X>` 自闭合标签，避免「标签在、绑定没了」
+ * 触发语义门禁「模板引用未声明变量」。剥离后内容自洽：不残留悬空 import，也无孤儿标签。
+ *
+ * 与 detectDanglingComponentRefs 共用同一套引用识别正则（单一事实源），保证「报告的」
+ * 与「能修的」是同一集合。仅处理 `.vue` 产物；只删「指向缺失文件的引用」，对存在的引用
+ * 零触碰（fail-open，异常返回原对象引用）。
+ *
+ * ⚠️ **单一事实源契约**：本函数是「悬空子组件引用」剥离的唯一权威实现，code-healer 的
+ * `pruneDanglingSubComponentImports`（2026-08-30 静态 import 专用）已**委派**到此处，
+ * 旧实现只认静态 `import X from`，漏掉 `defineAsyncComponent(() => import(...))` 动态形态
+ * （即 mc-max-1789376057659-2290591b 的真实崩溃点）。任何「剥悬空 import」诉求都走本函数，
+ * 禁止再写第二套正则，否则会重新出现「自检通过、动态形态漏剥」的盲区。
+ *
+ * 路径解析：支持同目录 `./X.vue`、裸 `components/X.vue`、以及跨目录 `../X.vue`（`..` 逐级出栈），
+ * 与归一化后的 `present` 集合比对；解析失败/越界一律视为悬空（保守剥离）。
+ *
+ * @param {Object<string,string>} files 路径 → 内容（如 { 'package/index.vue': '...' }）
+ * @param {Array<{path:string, content:string}>} [fileList] 可选显式文件清单（含内容），
+ *   用于「存在性」判定；不传则由 files 自身推导。
+ * @param {boolean} [mutate=true] 是否原地修改 files（write choke 用 true；code-healer 委派时
+ *   传 false 以保持「非变异、返回新对象」的旧契约）。
+ * @returns {{ files: Object<string,string>, stripped: Array<{file:string, refs:string[]}> }}
+ *   `stripped` = 每个被改动的文件及其剥离的组件名清单（供日志/观测）；无改动时原样返回。
+ */
+export function stripDanglingComponentRefs(files, fileList, mutate = true) {
+  const result = { files, stripped: [] };
+  try {
+    if (!files || typeof files !== 'object') return result;
+    const list = Array.isArray(fileList)
+      ? fileList.filter((f) => f && typeof f.path === 'string')
+      : filesObjectToArray(files);
+    const present = new Set(list.map((f) => String(f.path)));
+
+    // 非变异模式：在浅拷贝上操作，保持原对象引用不被触碰。
+    const target = mutate ? files : { ...files };
+    for (const [filePath, content] of Object.entries(files)) {
+      if (typeof content !== 'string' || !/\.vue$/i.test(filePath)) continue;
+      // 与 detectDanglingComponentRefs 完全一致的引用识别正则（同集合）。
+      const re =
+        /(?:import\s+(?:[\w$*{},\s]+\s+from\s+)?|import\s*\(\s*|require\s*\(\s*)['"](?:\.\/)?([\w./-]+\.vue)['"]/g;
+      const danglingNames = new Set();
+      const specs = new Set();
+      for (const m of content.matchAll(re)) {
+        const rel = m[1];
+        // 与 detectDanglingComponentRefs 共用 resolveSpecifierToPath（单一事实源）：
+        // 解析到在集路径 → 存在，跳过；解析失败（非 .vue / 越界 ../）→ 悬空；
+        // 裸 specifier 未命中文件集 → 悬空。
+        const resolved = resolveSpecifierToPath(filePath, rel, present);
+        if (resolved && present.has(resolved)) continue;
+        danglingNames.add(rel.replace(/\.vue$/, '').split('/').pop());
+        specs.add(rel);
+      }
+      if (danglingNames.size === 0) continue;
+
+      let next = content;
+      for (const spec of specs) {
+        const name = spec.replace(/\.vue$/, '').split('/').pop();
+        const specEsc = spec.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const specAlt = `(?:\\./)?${specEsc}`;
+        // ① 整行删除 `const X = defineAsyncComponent(() => import('./X.vue'))`
+        //    （含可选 await / 泛型包裹），避免残留 `= null` 死声明喂给 CODE-021 / Vue 警告。
+        next = next.replace(
+          new RegExp(
+            `^[ \\t]*(?:const|let|var)\\s+[A-Za-z_$][\\w$]*\\s*=\\s*defineAsyncComponent\\(\\s*(?:async\\s*)?\\(?\\s*\\)?\\s*=>\\s*(?:await\\s+)?import\\(\\s*['"]${specAlt}['"]\\s*\\)\\s*\\)\\s*;?[ \\t]*\\n?`,
+            'gm',
+          ),
+          '',
+        );
+        // ② 整行删除 `const X = () => import('./X.vue')`（无 defineAsyncComponent 包装）
+        next = next.replace(
+          new RegExp(
+            `^[ \\t]*(?:const|let|var)\\s+[A-Za-z_$][\\w$]*\\s*=\\s*(?:async\\s*)?\\(?\\s*\\)?\\s*=>\\s*(?:await\\s+)?import\\(\\s*['"]${specAlt}['"]\\s*\\)\\s*;?[ \\t]*\\n?`,
+            'gm',
+          ),
+          '',
+        );
+        // ③ 删静态 import 行：import X from './X.vue'（可带 ./ 前缀或裸名）
+        next = next.replace(
+          new RegExp(
+            `^[ \\t]*import\\s+[A-Za-z_$][\\w$]*\\s+from\\s*['"]${specAlt}['"]\\s*;?[ \\t]*\\n?`,
+            'gm',
+          ),
+          '',
+        );
+        // ④ 兜底：残余裸 import('./X.vue') / require('./X.vue') → null
+        //    （规范产物走 ①②③ 整行删除；此处仅兜异常形态，保证不残留悬空 specifier）
+        next = next.replace(
+          new RegExp(`(?:import|require)\\(\\s*['"]${specAlt}['"]\\s*\\)`, 'g'),
+          `null /* 悬空子组件 ${name}（文件未生成） */`,
+        );
+        // ⑤ 模板自闭合标签 <X /> 或 <X/>
+        next = next.replace(
+          new RegExp(`<${name}\\b[^>]*?/>`, 'g'),
+          '',
+        );
+        // ⑥ 模板成对标签 <X ...>...</X>
+        next = next.replace(
+          new RegExp(`<${name}\\b[^>]*>[\\s\\S]*?<\\/${name}>`, 'g'),
+          '',
+        );
+      }
+      if (next !== content) {
+        target[filePath] = next;
+        result.stripped.push({ file: filePath, refs: [...danglingNames] });
+      }
+    }
+    result.files = target;
+    return result;
+  } catch (_) {
+    // fail-open：修复器异常不阻断生成（保留原 files 引用）
+    return { files, stripped: [] };
+  }
+}
+
+/**
  * 把 files 对象（{ path: content }）转成 detectMissingSections 需要的数组形态。
  */
 function filesObjectToArray(files) {

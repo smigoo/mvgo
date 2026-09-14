@@ -481,9 +481,11 @@ async function loadAspectRatio() {
     // 【统一规则】第一步：尝试从 _figma-size.json 读取 Figma 原始尺寸（所有管线都会产出）
     // 文件名不带「.」前缀：NestJS @Get('*path') 通配符不支持「.」开头的路径段，prod 端点会 404
     let figmaData = null
+    // 先解析 sessionId → 语义化 componentId（workspace 目录是语义化名）
+    const resolvedId = snapshotSource.value ? componentId : await resolveWorkspaceComponentId(componentId)
     const basePath = isVue3
-      ? `vue3-components/${groupId}/${componentId}`
-      : `custom-components/${componentId}`
+      ? `vue3-components/${groupId}/${resolvedId}`
+      : `custom-components/${resolvedId}`
 
     if (snapshotSource.value) {
       figmaData = await safeJson(await http.raw(snapshotFileUrl('_figma-size.json')))
@@ -579,6 +581,9 @@ async function loadMicrocodeDeclare() {
   // 任何路径（snapshot / dev / prod）取不到都「不阻断」预览渲染（统一容错返回 null）。
   // 与同文件 _figma-size.json (:393-399)、同项目 loadVue3Runtime.js (:405-413)
   // 「先 ?exists=1 探测再读取」的既有模式保持一致 —— 零新概念、零新分支。
+  // 🛡️ P1-1 · workspace 路径必须用语义化 componentId（c-xxx-<尾8hex>），
+  // 而不是 sessionId（mc-max-*）。与 loadAspectRatio 共用 resolveWorkspaceComponentId。
+  const resolvedId = snapshotSource.value ? componentId : await resolveWorkspaceComponentId(componentId)
   try {
     if (snapshotSource.value) {
       // A · 快照源（带 revision 走 /api/tasks/{sid}/code-snapshots/{rev}/file）。
@@ -589,13 +594,13 @@ async function loadMicrocodeDeclare() {
       // B · dev 静态 import（URL 没带 revision 时退化到此）。
       // workspace 缺失 → 探测失败 → 留 null，不抛、不出 404 噪音。
       const probe = await fetch(
-        `/__raw/workspace/custom-components/${componentId}/declare.json?exists=1`,
+        `/__raw/workspace/custom-components/${resolvedId}/declare.json?exists=1`,
       )
       if (probe.ok) {
         const probeData = await probe.json().catch(() => ({ exists: false }))
         if (probeData?.exists) {
           const mod = await import(
-            /* @vite-ignore */ `../../../workspace/custom-components/${componentId}/declare.json`,
+            /* @vite-ignore */ `../../../workspace/custom-components/${resolvedId}/declare.json`,
           )
           microcodeDeclare.value = mod.default || mod
         }

@@ -8,6 +8,7 @@
  *   - 不命名子组件（命名权交给 engineer LLM）
  *   - 按 section.id 强制拆分：isForced = 有效 sections 数 >= 3
  *   - 微码流程过滤 panel-header（base-panel 已自带标题栏），Vue3 不过滤
+ *   - 视觉顺序由 Figma absoluteBoundingBox 事实源决定（sortSectionsByFigmaY）
  *   - 产出：{ effectiveSections: [{id, responsibility, elementCount, title, children?}], isForced, minFiles }
  *   - 🛡️ A′ Phase 5（2026-09-10）：container-rebuild 容器保留嵌套，不 flatten。
  *     容器 isLayoutContainer=true，不占独立 .vue 槽；minFiles / isForced 按叶子计数。
@@ -22,6 +23,10 @@ import {
 import {
   isLayoutContainerSection,
   collectLeafSections,
+  anchorPhantomSections,
+  sortSectionsByFigmaY,
+  indexFigmaNodes,
+  figmaSectionBox,
 } from '../utils/section-tree.js';
 // 🛡️ 刀 5a（2026-09-13）：section type 推导抽离到纯函数模块（无 import.meta 依赖，可单测）
 import { deriveSectionType } from '../utils/section-type-derive.js';
@@ -743,16 +748,43 @@ function buildEffectiveSection(sec, idx, ctx) {
     ? '标签页切换区（顶部横向 tab，下方为对应内容区，禁止竖向侧栏布局）'
     : responsibility;
 
+  // 🛡️ 栅格列数事实透传（2026-09-14 · a612a9f7 实锤）：视觉分析
+  //   preview-analysis.json 的 section 已含 `layout`（如 "grid"）与 `gridColumns`（如 3，
+  //   schema 默认值 3），但原 buildEffectiveSection 只提取 layoutMetadata、把这两个字段丢了
+  //   → 代码生成 prompt 的 `s.body.gridColumns` 恒为 null → LLM 自由发挥（真机偶发 4 列，
+  //   设计稿 3 列）。这里把视觉事实原样透传，供 prompt-builder/constraint-reinforcement/
+  //   code-structure-validator 消费（三处均已按 `section.body.gridColumns` 取值）。
+  const rawLayout = String(sec.layout || sec.body?.layout || '').toLowerCase();
+  const gridColumns = Number(
+    sec.gridColumns ?? sec.body?.gridColumns ?? NaN,
+  );
+  const hasGridColumns = Number.isFinite(gridColumns) && gridColumns > 1;
+  const layoutFact = rawLayout || (hasGridColumns ? 'grid' : '');
+
   return {
     id: sec.id || `section-${idx + 1}`,
     responsibility: effectiveResponsibility,
     elementCount,
     title: String(title).trim().slice(0, 30),
     type: effectiveType || undefined,
+    // 🛡️ 布局事实（视觉分析原值）：'grid' | 'horizontal' | 'vertical' | ...
+    ...(layoutFact ? { layout: layoutFact } : {}),
+    // 🛡️ 栅格列数事实：仅当视觉分析明确给出才透传（缺失时下游保持自由发挥，不硬编码默认值）
+    ...(hasGridColumns ? { gridColumns: Math.round(gridColumns) } : {}),
     collapsed,
     renderHint: collapsed ? 'v-for' : undefined,
     itemCount: collapsed ? elementCount : undefined,
     items: collapsed ? sec.items : undefined,
+    // 🛡️ 下游消费契约：prompt-builder/constraint-reinforcement/code-structure-validator
+    //   统一按 `section.body.gridColumns` 取值，故这里把脊柱字段收敛到 body。
+    ...(layoutFact || hasGridColumns
+      ? {
+          body: {
+            ...(layoutFact ? { layout: layoutFact } : {}),
+            ...(hasGridColumns ? { gridColumns: Math.round(gridColumns) } : {}),
+          },
+        }
+      : {}),
     // 🛡️ R1-1：归属的 Figma 节点 id 集合（供 dedupeDuplicateSections 做不依赖措辞的单一归属去重）
     sourceNodeIds: collectSourceNodeIds(tabStructured),
     complexityScore: scoreResult.score,
@@ -790,6 +822,63 @@ function applyFlexGrowFallback(nodes) {
   apply(nodes);
 }
 
+/**
+ * 🛡️ 治本（2026-09-14 · c-traffic-monitor-21e2afd6 实锤）：flex 比例改由 Figma 实测高度决定。
+ *
+ * 铁律：**事实源优先于 LLM 猜测**（同刀 16b「消费端事实优先于名字猜测」）。
+ *
+ * 实证：两张结构完全相同的双系列柱状图（2:7459 / 2:7628）Figma 高度**都是 131px**，
+ *   而 vision 给出的 flexGrow 是 3.73 / 0.952（3.9 倍差）→ 原样写进 CSS →
+ *   上一张图被拉高、下一张被压扁，是用户截图里「糟糕且可怕」的主要来源。
+ *   prompt 契约里 flexGrow 的定义本就是「平均值为 1、比例 = 设计稿高度比」，
+ *   Figma 实测高度是该定义唯一可靠的事实源，vision 的自报系数只能算猜测。
+ *
+ * 规则（逐层、可部分生效）：
+ *   - 每一层独立归一：只统计本层「非 header 且能取到 Figma 高度」的 section；
+ *   - 本层可测者 ≥ 2 → grow = 高度 / 本层平均高度（四舍五入 3 位），覆盖旧值；
+ *   - 可测者 < 2 或取不到几何 → 保留原值（不动，交给 applyFlexGrowFallback 兜底）。
+ *
+ * @param {Array} nodes effectiveSections
+ * @param {Map} figmaIndex indexFigmaNodes(figmaNodeData) 的产物
+ * @returns {number} 被改写的 section 数（0 = 无事实源或不生效）
+ */
+function applyFigmaHeightGrow(nodes, figmaIndex) {
+  if (!figmaIndex || typeof figmaIndex.get !== 'function' || figmaIndex.size === 0) {
+    return 0;
+  }
+  let changed = 0;
+  const apply = (list) => {
+    if (!Array.isArray(list) || list.length === 0) return;
+    const measured = [];
+    for (const s of list) {
+      // header section 归 base-panel 标题栏插槽，不参与列内 flex 分配，也不该污染平均值。
+      if (s?.type === 'header') continue;
+      const box = figmaSectionBox(s, figmaIndex);
+      if (box && box.height > 0) measured.push({ s, height: box.height });
+    }
+    if (measured.length >= 2) {
+      const avg =
+        measured.reduce((sum, m) => sum + m.height, 0) / measured.length;
+      if (avg > 0) {
+        for (const { s, height } of measured) {
+          const meta = s.layoutMetadata;
+          if (!meta) continue;
+          const next = Math.round((height / avg) * 1000) / 1000;
+          if (meta.flexGrow !== next) {
+            meta.flexGrow = next;
+            changed += 1;
+          }
+        }
+      }
+    }
+    for (const s of list) {
+      if (Array.isArray(s.children)) apply(s.children);
+    }
+  };
+  apply(nodes);
+  return changed;
+}
+
 export class SubcomponentPlanner {
   /**
    * 基于 layoutStructure 产出子组件清单
@@ -823,6 +912,12 @@ export class SubcomponentPlanner {
     }
 
     // 过滤 panel-header（仅微码流程）
+    // ⚠️ 刻意**不**在此复用 chrome-section-filter#isChromeOnlySection：实证（2026-09-14
+    //   c-traffic-monitor-21e2afd6）raw section 全部为 role='inline-row' 且 children[].role='item'，
+    //   而 hasBusinessBody 的业务正则为 /…|item|…/ → 恒为 true → 该过滤器对 inline-row 永远
+    //   返回 false（死判据，加了也不生效）；且它命中即「整节剥离」，会连「当日总流量/流量预测
+    //   tabs」一起删掉（上游 headerSlots 为 [] 无兜底），与「chrome 剥离仅微码」的既有契约冲突。
+    //   真正的事实源在上游 visual-parser#_postProcessAnalysis 的 stripChromeSectionsInPlace。
     let sections = skipPanelHeaderFilter
       ? rawSections
       : rawSections.filter((sec) => !isPanelHeader(sec));
@@ -863,9 +958,61 @@ export class SubcomponentPlanner {
     }
 
     const allInternalSubcomponents = [];
-    const effectiveSections = sections.map((sec, idx) =>
+    let effectiveSections = sections.map((sec, idx) =>
       buildEffectiveSection(sec, idx, { enableInternalSplit, allInternalSubcomponents }),
     );
+
+    // 🛡️ 治本（2026-09-14 · c-traffic-monitor-34750940 实锤）：无归属壳锚定真实 Figma 节点。
+    //   vision 用语义 id 起 section 名 → 真实 @echarts 图表节点被臆造成 src=[] 壳，
+    //   下游判别力去重双输（真图表被当碎片杀、假壳被判超集留）。在裁决前先用 figma
+    //   节点树（事实源）把壳锚定回真实节点；无 figmaNodeData 时零影响。
+    if (opts.figmaNodeData && typeof opts.figmaNodeData === 'object') {
+      const beforeAnchor = effectiveSections;
+      effectiveSections = anchorPhantomSections(
+        effectiveSections,
+        opts.figmaNodeData,
+      );
+      if (effectiveSections !== beforeAnchor) {
+        logger.info('无归属壳已锚定真实 Figma 节点', {
+          anchored: effectiveSections
+            .filter(
+              (s, i) =>
+                (beforeAnchor[i]?.sourceNodeIds || []).length === 0 &&
+                (s?.sourceNodeIds || []).length > 0,
+            )
+            .map((s) => ({ id: s.id, sourceNodeIds: s.sourceNodeIds })),
+        });
+      }
+
+      // 🛡️ 治本（2026-09-14 · c-traffic-monitor-21e2afd6 实锤）：按 Figma 视觉坐标重排。
+      //   位置必须在 anchorPhantomSections **之后**（臆造图表壳此刻才拿到 sourceNodeIds）；
+      //   planner 之后的所有下游——index.vue 组装、子组件命名、布局高度映射——全部按
+      //   effectiveSections 顺序消费，这里不排就是全链路顺序错。
+      //   实证：vision 数组序把「车型分布」(y=573) 排在两张柱状图 (y=287/428) 之前。
+      const beforeSort = effectiveSections;
+      effectiveSections = sortSectionsByFigmaY(
+        effectiveSections,
+        opts.figmaNodeData,
+      );
+      if (effectiveSections !== beforeSort) {
+        logger.info('effectiveSections 已按 Figma 视觉坐标重排', {
+          from: beforeSort.map((s) => s.id),
+          to: effectiveSections.map((s) => s.id),
+        });
+      }
+
+      // 🛡️ 治本：flex 比例同样以 Figma 实测高度为事实源（vision 自报 flexGrow 只作兜底）。
+      const figmaIndex = indexFigmaNodes(opts.figmaNodeData);
+      const growChanged = applyFigmaHeightGrow(effectiveSections, figmaIndex);
+      if (growChanged > 0) {
+        logger.info('flexGrow 已按 Figma 实测高度重新归一', {
+          changed: growChanged,
+          sections: effectiveSections
+            .filter((s) => s.type !== 'header')
+            .map((s) => ({ id: s.id, flexGrow: s.layoutMetadata?.flexGrow })),
+        });
+      }
+    }
 
     applyFlexGrowFallback(effectiveSections);
 

@@ -19,6 +19,9 @@ import {
   healSlotHexToVarRefs,
   healVarNameCase,
   healPresetLiteralDecls,
+  injectThemeVarDeclsForLess,
+  healUnquotedObjectKeysInVue,
+  healClassPrefixedDataKeys,
 } from './code-healer.js'
 
 /** 构造完整日志器（safeLogger 对完整日志器 identity 返回，便于断言原始调用参数） */
@@ -868,5 +871,217 @@ describe('healPresetLiteralDecls —— 预设字面量 var 透传 + 🛡️ Les
       healPresetLiteralDecls('@colorPrimary: #409EFF;', 'resources/styles/themes/dark.less'),
     ).toBe('@colorPrimary: #409EFF;')
     expect(healPresetLiteralDecls('@myVar: 1px;', 'a.vue')).toBe('@myVar: 1px;')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('injectThemeVarDeclsForLess —— 刀 16b：颜色函数实参的注入值保障', () => {
+  const themeVars = [
+    '.common() {',
+    '  @fontSize: var(--fontSize);',
+    '  @color-primary: #409EFF;',
+    '  @color-slot: var(--colorSlot);',
+    '}',
+    '.common();',
+  ].join('\n')
+
+  it('基线：值原样注入（var() 形态的 @fontSize 不变，保 M5-6）', () => {
+    const out = injectThemeVarDeclsForLess(
+      '.c-root { font-size: @fontSize; }',
+      themeVars,
+    )
+    expect(out).toContain('@fontSize: var(--fontSize);')
+  })
+
+  it('被 lighten() 引用的变量、theme 原值为 var() → 注入中立真颜色（否则编译失败）', () => {
+    const out = injectThemeVarDeclsForLess(
+      '.c-root { color: lighten(@color-slot, 10%); }',
+      themeVars,
+    )
+    expect(out).toContain('@color-slot: #333333;')
+    expect(out).not.toContain('var(--colorSlot)')
+  })
+
+  it('theme 原值是真颜色 → 即使被颜色函数引用也原样注入（不做无谓改写）', () => {
+    const out = injectThemeVarDeclsForLess(
+      '.c-root { color: darken(@color-primary, 10%); }',
+      themeVars,
+    )
+    expect(out).toContain('@color-primary: #409EFF;')
+  })
+
+  it('未被颜色函数引用 → var() 形态照旧注入（@fontSize 场景零回归）', () => {
+    const out = injectThemeVarDeclsForLess(
+      '.c-root { font-size: @fontSize; line-height: @fontSize; }',
+      themeVars,
+    )
+    expect(out).toContain('@fontSize: var(--fontSize);')
+    expect(out).not.toContain('#333333')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * 刀 18（2026-09-14）：绑定表达式对象字面量的**连字符裸键**必须加引号。
+ * 事故 mc-1789317647118-7ba35f11：刀 12 类名对齐把 `:class="{ active: … }"` 的键
+ * 改写成 `c-x-switch-item--active` → 不是合法 JS 标识符 → SFC 解析失败 →
+ * P1-4 把整个 SwitchSection 剔除（那一块 UI 凭空消失）。
+ */
+describe('healUnquotedObjectKeysInVue —— 绑定表达式对象键引号补全', () => {
+  const sfc = (clsExpr: string) => `<template>
+  <div class="c-x-switch">
+    <div class="c-x-switch-item" :class="${clsExpr}">x</div>
+  </div>
+</template>
+<script setup>
+import { ref } from 'vue'
+const activeTab = ref('tunnel')
+</script>`
+
+  it('事故形态：连字符裸键 → 补单引号', () => {
+    const src = sfc("{ c-device-monitor-switch-item--active: activeTab === 'tunnel' }")
+    const out = healUnquotedObjectKeysInVue(src)
+    expect(out).toContain("'c-device-monitor-switch-item--active':")
+    expect(out).not.toContain('{ c-device-monitor-switch-item--active:')
+  })
+
+  it('端到端：补全后 SFC 能被校验器接受（补全前必然解析失败）', () => {
+    const { validateVueSfc } = require('../../utils/sfc-syntax-validation.js')
+    const broken = sfc("{ c-device-monitor-switch-item--active: activeTab === 'tunnel' }")
+    // 前置断言：未修时确实是坏的（否则本用例毫无意义）
+    expect(validateVueSfc(broken, 'package/components/SwitchSection.vue', {}).valid).toBe(false)
+    const healed = healUnquotedObjectKeysInVue(broken)
+    expect(
+      validateVueSfc(healed, 'package/components/SwitchSection.vue', {}).valid,
+    ).toBe(true)
+  })
+
+  it('合法标识符的键一律不动（不制造无关变更）', () => {
+    const src = sfc("{ active: activeTab === 'tunnel' }")
+    expect(healUnquotedObjectKeysInVue(src)).toBe(src)
+  })
+
+  it('已带引号的键不重复加引号', () => {
+    const src = sfc("{ 'c-x-item--active': activeTab === 'tunnel' }")
+    expect(healUnquotedObjectKeysInVue(src)).toBe(src)
+  })
+
+  it('不误伤字符串值里形似 key 的内容（如 url(...) / font-size:）', () => {
+    const src = `<template>
+  <div :style="{ backgroundImage: 'url(' + bg2 + ')', font: 'font-size: 12px' }">x</div>
+</template>`
+    expect(healUnquotedObjectKeysInVue(src)).toBe(src)
+  })
+
+  it(':style 多行对象里的连字符键同样补全', () => {
+    const src = `<template>
+  <div
+    :style="{
+      is-active: flag,
+      backgroundSize: '100% 100%'
+    }"
+  >x</div>
+</template>`
+    const out = healUnquotedObjectKeysInVue(src)
+    expect(out).toContain("'is-active':")
+  })
+
+  it('数组形式 :class="[\'c-x-item\', { active: x }]" —— 内嵌对象也要补（真机形态）', () => {
+    const src = `<template>
+  <div
+    v-for="item in switchItems"
+    :key="item.value"
+    :class="['c-device-monitor-switch-item', { c-device-monitor-switch-item--active: current === item.value }]"
+    :style="{ backgroundImage: \`url(\${item.bg})\` }"
+  >x</div>
+</template>`
+    const out = healUnquotedObjectKeysInVue(src)
+    expect(out).toContain("'c-device-monitor-switch-item--active':")
+    // 数组里的字符串类名（合法引号内）不受影响
+    expect(out).toContain("['c-device-monitor-switch-item',")
+    // 模板字符串里的 ${…} 插值不能被误当成对象键
+    expect(out).toContain('`url(${item.bg})`')
+  })
+
+  it('事件属性里的对象实参同样覆盖', () => {
+    const src = `<template><div @click="fn({ c-x-a: 1 })">x</div></template>`
+    expect(healUnquotedObjectKeysInVue(src)).toContain("'c-x-a': 1")
+  })
+
+  it('幂等：补全后再跑一次不再变化', () => {
+    const once = healUnquotedObjectKeysInVue(
+      sfc("{ c-x-item--active: activeTab === 'tunnel' }"),
+    )
+    expect(healUnquotedObjectKeysInVue(once)).toBe(once)
+  })
+
+  it('无 template / 非字符串输入原样返回', () => {
+    expect(healUnquotedObjectKeysInVue('<script>const a=1</script>')).toBe(
+      '<script>const a=1</script>',
+    )
+    expect(healUnquotedObjectKeysInVue(undefined as any)).toBeUndefined()
+  })
+})
+
+describe('healClassPrefixedDataKeys —— 数据键被写成类名 → 模板取值恒空', () => {
+  const sfc = (tplExpr: string, dataBlock: string) => `<template>
+  <div class="c-device-monitor-switch">
+    <span class="c-device-monitor-switch-value c-device-monitor-error">${tplExpr}</span>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+const switchItems = ref([
+  ${dataBlock}
+])
+</script>`
+
+  it('事故形态：模板 {{ item.error }} 但键是 c-device-monitor-error → 还原为 error', () => {
+    const src = sfc('{{ item.error }}', "{ value: 'tunnel', total: '56302', 'c-device-monitor-error': '5', bg: null }")
+    const out = healClassPrefixedDataKeys(src)
+    // 保留引号是刻意的：后缀可能含 `-`（如 monitor-error），裸键会变成非法标识符
+    expect(out).toContain("'error': '5'")
+    expect(out).not.toContain("'c-device-monitor-error'")
+    // 模板里的类名一个字都不能动
+    expect(out).toContain('class="c-device-monitor-switch-value c-device-monitor-error"')
+  })
+
+  it('上一轮形态：{{ tab.label }} 但键是 c-device-monitor-label → 还原为 label', () => {
+    const src = `<template><span>{{ tab.label }}</span></template>
+<script setup>
+const tabs = ref([{ 'c-device-monitor-label': '实时监控', value: 'realtime' }])
+</script>`
+    const out = healClassPrefixedDataKeys(src)
+    expect(out).toContain("'label': '实时监控'")
+    expect(out).toContain("value: 'realtime'")
+  })
+
+  it('模板不访问的后缀 → 不动（保守，宁可不改）', () => {
+    const src = sfc('{{ item.total }}', "{ 'c-device-monitor-error': '5' }")
+    expect(healClassPrefixedDataKeys(src)).toBe(src)
+  })
+
+  it('已存在同名裸键 → 不改（避免产出重复键）', () => {
+    const src = sfc('{{ item.error }}', "{ error: '5', 'c-device-monitor-error': '9' }")
+    expect(healClassPrefixedDataKeys(src)).toBe(src)
+  })
+
+  it('最短后缀优先：c-device-monitor-error 取 error 而非 monitor-error', () => {
+    const src = sfc('{{ item.error }} {{ item.monitor-error }}', "{ 'c-device-monitor-error': '5' }")
+    const out = healClassPrefixedDataKeys(src)
+    expect(out).toContain("'error': '5'")
+  })
+
+  it('幂等：还原后再跑一次不再变化', () => {
+    const once = healClassPrefixedDataKeys(
+      sfc('{{ item.error }}', "{ 'c-device-monitor-error': '5' }"),
+    )
+    expect(healClassPrefixedDataKeys(once)).toBe(once)
+  })
+
+  it('非 c- 前缀的带引号键不受影响', () => {
+    const src = sfc('{{ item.error }}', "{ 'error-code': '5' }")
+    expect(healClassPrefixedDataKeys(src)).toBe(src)
   })
 })

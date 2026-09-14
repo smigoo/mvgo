@@ -2638,8 +2638,17 @@ ${layoutSkeleton}
       : '';
 
     // 🎯 Phase 2 方案5: 在 template 分块中注入布局约束强化
+    // 🛡️ 治本（2026-09-14 · 80021ec7）：约束层与装配骨架**必须同源**。
+    //   原实现传 `input.layoutStructure`（原始视觉分析，含独立的 device-grid section），
+    //   而装配用 `resolvePlanSections(input)`（去重合并后，gridColumns 已并入 tabs 宿主）
+    //   → 两棵树不一致 → LLM 生成 TabsSection 时看不到「内层 3 列栅格」约束
+    //   → 把内层 cons 写成 flex-direction: row 单行。
+    //   改为优先用规划树，缺失时回退原始 layoutStructure（保持向后兼容）。
+    const _constraintSections = resolvePlanSections(input);
     const layoutConstraintReinforcement = buildLayoutConstraintReinforcement(
-      input.layoutStructure,
+      _constraintSections.length > 0
+        ? { sections: _constraintSections }
+        : input.layoutStructure,
     );
     let contextBlock = '';
     if (chunk.contextFiles && chunk.contextFiles.length > 0) {

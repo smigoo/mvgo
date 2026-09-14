@@ -13,6 +13,7 @@ import * as microcodePrompt from './microcode/prompt-builder.js';
 import * as microcodeValidator from './microcode/code-validator.js';
 import * as microcodeGenerator from './microcode/code-generator.js';
 import * as microcodeResources from './microcode/resource-mounter.js';
+import * as resourceMountPlan from './microcode/resource-mount-plan.js';
 // P1-Slice2（增量补丁式更新）：分块快照推送器 —— 先合并再推送，杜绝并行 worker 交错导致快照回退
 import { pushChunkSnapshot } from './microcode/chunk-snapshot-pusher.js';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
@@ -26,11 +27,12 @@ import {
   getModelMaxOutputTokens,
 } from '../utils/model-config.js';
 import { buildModelSuggestion } from '../utils/model-suggestion.js';
-import { buildSectionHeightsMap } from '../utils/figma-section-heights.js';
+import { buildSectionHeightsMap, buildSectionLayoutFacts } from '../utils/figma-section-heights.js';
 import {
   collectLeafSections,
   formatSectionTreeForPrompt,
   findSectionById,
+  dedupeDuplicateSections,
 } from '../utils/section-tree.js';
 import {
   buildAllConstraintReinforcements,
@@ -74,6 +76,7 @@ import {
   ensureFlexDirectionInVueSfc,
 } from '../utils/css-sanitizer.js';
 import { buildRetryPrompt } from '../utils/retry-prompt.js';
+import { buildSectionContentContract } from '../utils/section-content-guard.js';
 import { enforceInputBudget } from '../utils/input-budget.js';
 import { healLessSource } from '../validators/less-compile-gate.js';
 import {
@@ -90,7 +93,7 @@ import {
   getIndexVueChunkBudgets,
   getMaxIndexVueChunkBudget,
 } from './microcode/chunk-budget.js';
-import { resolveEchartsType, normalizeSeriesInSource, normalizeChartAxesInSource } from '../utils/chart-type-guard.js';
+import { resolveEchartsType, normalizeSeriesInSource, normalizeChartAxesInSource, buildChartTypeTruthSet } from '../utils/chart-type-guard.js';
 import {
   audit as auditManifest,
   auditSelfConsistency,
@@ -112,7 +115,7 @@ import {
   pruneUnmountedResourceImports,
 } from '../utils/resource-import-guard.js';
 import { isSessionLocked } from '../utils/session-lock-registry.js';
-import { normalizeFlexSourceConflicts, normalizeFlexSiblingScale } from '../utils/flex-sibling-guard.js';
+import { healMissingFlexContainers, healGridContainer, normalizeFlexSourceConflicts, normalizeFlexSiblingScale } from '../utils/flex-sibling-guard.js';
 import { formatResourceMapping } from '../utils/resource-mapping-formatter.js';
 // 🛡️ 层③（2026-09-11）：模板类名统一补前缀（CODE-020 确定性自愈）
 import { fixMissingClassPrefixes } from '../utils/class-prefix-fixer.js';
@@ -162,6 +165,7 @@ import { consolidateSubComponentClasses } from '../utils/style-class-consolidato
 import { collectClassFacts } from '../utils/class-facts.js';
 import { normalizeClassNameDialect } from '../utils/class-dialect-normalizer.js';
 import { extractSfcTemplate } from '../utils/sfc-template-extractor.js';
+import { stripDanglingComponentRefs } from '../utils/section-coverage-guard.js';
 import {
   extractSections,
   extractElements,
@@ -555,7 +559,12 @@ export class MicrocodeEngineer extends BaseAgent {
               minFiles: 0,
               reason: '未传入 subComponentPlan',
             };
-    const effectiveSections = subPlan.effectiveSections || [];
+    // 🛡️ 治本（2026-09-14 · c-device-monitor-485d724d 实锤）：planner 双重解释去重**单点收口**。
+    // 裂缝：buildDeterministicIndexTemplate / resolvePlanSections 已过 dedupeDuplicateSections，
+    // 但此处直接取 subPlan.effectiveSections → 同一事实两处消费、只有一处去重 →
+    // 模板骨架只挂 1 个子组件，而 prompt/子组件生成仍按 3 个（Switch/Tabs/Main）各生成一份 →
+    // 重复内容 + 视口挤出。统一在「取用点」去重，与 prompt-builder 同源。
+    const effectiveSections = dedupeDuplicateSections(subPlan.effectiveSections || []) || [];
 
     // 🎯 A' Phase 5: 叶子遍历（布局容器不占 .vue 槽，只做纵向包裹）
     const leafSections = collectLeafSections(effectiveSections);
@@ -924,6 +933,36 @@ export class MicrocodeEngineer extends BaseAgent {
             }
             p += `\n`;
           });
+        }
+
+        // 🎯 2026-09-14 治本·阶段1：per-section 内容归属契约（无条件生效）。
+        // 事实源 = Figma 子树文本 + bbox.x（utils/section-content-guard#buildSectionContentContract）。
+        // 从源头防两类 LLM 段错误：左右镜像（横向 section 成员按 x 序）+ 借邻居内容（跨 section 复制文本）。
+        const contentContract = buildSectionContentContract(
+          subPlan,
+          input.figmaNodeData,
+        );
+        if (contentContract.length > 0) {
+          p += `\n**内容归属契约（每个 section 只渲染自己子树内的文本，禁止借用其它 section 的文本）**：\n`;
+          for (const c of contentContract) {
+            if (c.members) {
+              // 横向 section：成员级配对，按 x 从左到右（标题↔数值成对，杜绝配对错乱）
+              const memberLines = c.members.map(
+                (m, i) =>
+                  `   ${i + 1}. 标题「${m.title ?? ''}」 数值「${m.value ?? ''}」${m.x != null ? ` (x≈${m.x})` : ''}`,
+              );
+              p += `- \`${c.id}\`（横向 row，成员从左到右）：\n${memberLines.join('\n')}\n`;
+            } else {
+              const ordered = [...c.texts].sort(
+                (a, b) => (a.x ?? 0) - (b.x ?? 0),
+              );
+              const items = ordered
+                .map((t) => `${t.text}${t.x != null ? `(x≈${t.x})` : ''}`)
+                .join('、');
+              p += `- \`${c.id}\`（${c.title || c.direction}）：${items}\n`;
+            }
+          }
+          p += `\n**铁律**：文本必须出现在归属它的 section 对应组件内；横向（row）section 按成员序号从左到右排列，且每个成员的「标题」「数值」必须成对放对（标题=位置小字、数值=大字，禁止互换）；禁止把某个 section 的文本写到另一个 section 的组件里。\n`;
         }
 
         // 🆕 V2（2026-09-01）：section 尺寸比例强制规则（无条件生效，无论是否强制拆分）
@@ -2081,6 +2120,96 @@ export class MicrocodeEngineer extends BaseAgent {
         this.logger.warn(`类名对齐失败，按原样继续校验: ${e?.message || e}`);
       }
 
+      // 🛡️ 刀 18（2026-09-14）：紧接类名对齐之后 —— 它会把 `:class="{ active: … }"` 的
+      // **对象键**也当类名改写（`active` → `c-x-switch-item--active`），带连字符的裸键
+      // 不是合法 JS 标识符 → SFC 解析失败 → P1-4 把整个子组件剔除。
+      // 此处把这类裸键统一补引号，收口在「改写器之后、校验之前」。
+      try {
+        let keyFixes = 0;
+        for (const [k, v] of Object.entries(allFiles)) {
+          if (!k.endsWith('.vue') || typeof v !== 'string') continue;
+          const healed = microcodeHealer.healUnquotedObjectKeysInVue(v);
+          if (healed !== v) {
+            allFiles[k] = healed;
+            keyFixes += 1;
+          }
+        }
+        if (keyFixes > 0) {
+          this.logger.warn(
+            `🛡️ 已为 ${keyFixes} 个 .vue 补全绑定表达式对象键引号（防连字符裸键致 SFC 解析失败）`,
+          );
+        }
+      } catch (e) {
+        this.logger.warn(`对象键引号补全失败，按原样继续: ${e?.message || e}`);
+      }
+
+      // 🛡️ 刀 19（2026-09-14）：LLM 偶发把**数据对象的键**写成类名
+      // （`{ 'c-device-monitor-error': '5' }` 配 `{{ item.error }}`）→ 取值恒 undefined
+      // → 文字/数字凭空消失。语法合法、类名真实存在 → L0-B 与契约层都拦不住，
+      // 只能拿「模板实际访问的 .prop」当事实源做确定性还原。
+      try {
+        let dataKeyFixes = 0;
+        for (const [k, v] of Object.entries(allFiles)) {
+          if (!k.endsWith('.vue') || typeof v !== 'string') continue;
+          const healed = microcodeHealer.healClassPrefixedDataKeys(v);
+          if (healed !== v) {
+            allFiles[k] = healed;
+            dataKeyFixes += 1;
+          }
+        }
+        if (dataKeyFixes > 0) {
+          this.logger.warn(
+            `🛡️ 已为 ${dataKeyFixes} 个 .vue 还原被写成类名的数据键（防模板取值恒空）`,
+          );
+        }
+      } catch (e) {
+        this.logger.warn(`数据键还原失败，按原样继续: ${e?.message || e}`);
+      }
+
+      // 🛡️ 刀 20（2026-09-14）：父容器缺 display:flex → 子组件根的 flex 值全部失效
+      // → 本应「左 Tab + 右内容」的骨架塌成纵向堆叠、内容被挤出视口（CSS 合法、门禁全绿）。
+      // 检测与修复全部复用 FLEX-003 的兄弟组事实源（parseVueTemplate + flexIndex + compRoots）。
+      try {
+        const _flexFix = healMissingFlexContainers(
+          Object.entries(allFiles).map(([path, content]) => ({ path, content })),
+          this.logger,
+        );
+        if (_flexFix.fixed.length > 0 || _flexFix.warnings.length > 0) {
+          for (const fx of _flexFix.fixed) {
+            allFiles[fx.path] = _flexFix.files.find((x) => x.path === fx.path)?.content ?? allFiles[fx.path];
+          }
+          this.logger.warn(`🛡️ 刀 20 flex 容器补全：${JSON.stringify(_flexFix.fixed)}，警告: ${JSON.stringify(_flexFix.warnings)}`);
+        }
+      } catch (e) {
+        this.logger.warn(`flex 容器补全失败，按原样继续: ${e?.message || e}`);
+      }
+
+      // 🛡️ 刀 22-grid（2026-09-14）：设备网格本应是 N 列 grid，LLM 却写成
+      //   `display: flex; flex-wrap: wrap; ... width: calc(25% - …)`（c-device-monitor-54038a3a 实锤）。
+      // 事实源 = planner effectiveSections 透传的 gridColumns（与 prompt/约束层同源，绝不臆测列数）。
+      // 结构判定（不靠类名硬编码）：父容器子项同质/带等宽意图 + 父当前是 flex 或缺失 display →
+      // 确定性改写为 `display: grid; grid-template-columns: repeat(N, 1fr)` 并清掉子项百分比宽度。
+      try {
+        const gridCandidates = (dedupeDuplicateSections(effectiveSections || []) || [])
+          .map((s) => Number(s?.gridColumns ?? s?.body?.gridColumns ?? NaN))
+          .filter((n) => Number.isFinite(n) && n >= 2);
+        if (gridCandidates.length > 0) {
+          const _gridFix = healGridContainer(
+            Object.entries(allFiles).map(([path, content]) => ({ path, content })),
+            { gridColumnsList: gridCandidates },
+            this.logger,
+          );
+          if (_gridFix.fixed.length > 0 || _gridFix.warnings.length > 0) {
+            for (const fx of _gridFix.fixed) {
+              allFiles[fx.path] = _gridFix.files.find((x) => x.path === fx.path)?.content ?? allFiles[fx.path];
+            }
+            this.logger.warn(`🛡️ 刀 22 设备网格 grid 治愈：${JSON.stringify(_gridFix.fixed)}，警告: ${JSON.stringify(_gridFix.warnings)}`);
+          }
+        }
+      } catch (e) {
+        this.logger.warn(`设备网格 grid 治愈失败，按原样继续: ${e?.message || e}`);
+      }
+
       //  Class 名交叉校验（模板 vs common.less）+ 自动修复
       const validationResult = this._validateClassNames(
         allFiles,
@@ -2279,58 +2408,34 @@ export class MicrocodeEngineer extends BaseAgent {
         });
       }
 
-      // 🛡️ P0-1：区域/状态背景兜底自动挂载（确定性后处理，2026-08-27）
-      // 门禁前把「未被引用的 bg」按关键词匹配模板容器注入 :style；匹配不到兜底挂模板根元素。
-      // 回滚：env BG_AUTO_MOUNT=false。
-      // 🛡️ P1-2 冲突消解：兜底挂根容器前检查 styleEvidence（figma-api 真值）——若根容器 background.allowed===false，
-      // 则禁止把 bg 挂到根容器（会触发 CODE-014 根容器臆造 BLOCK），保留未使用状态交给 RES-UNUSED WARN 提示。
+      // 🛡️ 删减法批次 2（2026-09-14 · 485d724d 实锤）：计划驱动资源挂载。
+      // 取代旧 autoMountUnusedBackgrounds/Icons 的「关键词猜测 + 跨文件/根回退」：
+      // buildResourceMountPlan 以 section 归属（批次 1 已锚定）+ figma 祖先链确定 owner，
+      // 同 resourceFile 单变量 + sharedBy；mountPlannedResources 限定 owner 文件挂载、
+      // 目标不命中只记诊断（fail-closed，不再回退挂根容器——那正是「背景消失/错位」根源）。
+      // 回滚：env RESOURCE_PLANNED_MOUNT=false（回滚后不再有任何兜底挂载，漏用由门禁 WARN 提示）。
       if (
-        process.env.BG_AUTO_MOUNT !== 'false' &&
+        process.env.RESOURCE_PLANNED_MOUNT !== 'false' &&
         effectiveMapping &&
         effectiveMapping.length > 0
       ) {
-        const styleEvidence =
-          input?.generationInput?.designFacts?.root?.styleEvidence || null;
-        const mountedBg = this._autoMountUnusedBackgrounds(
+        const mountResult = this._mountPlannedResources(
           allFiles,
+          effectiveSections,
           effectiveMapping,
-          styleEvidence,
+          input,
         );
-        if (mountedBg.length > 0) {
-          this.logger.info('🛡️ P0-1 背景兜底自动挂载完成', {
-            mounted: mountedBg,
-          });
+        if (mountResult.mounted.length > 0) {
           input.onProgress?.({
-            stage: '背景兜底挂载',
-            message: `🛡️ 已自动挂载 ${mountedBg.length} 个未使用背景（${mountedBg.map((x) => x.var).join('、')}）`,
+            stage: '资源计划挂载',
+            message: `🛡️ 已按计划挂载 ${mountResult.mounted.length} 个资源（${mountResult.mounted.map((x) => x.var).join('、')}）`,
             status: 'warning',
-            details: mountedBg,
+            details: mountResult.mounted,
           });
         }
-      }
-
-      // 🛡️ P0-1 对称扩展：icon/img 兜底自动挂载（2026-08-28）
-      // 补齐「bg 有兜底、icon 没有」的不对称缺口：已成功下载的图标若模型漏用，
-      // 此处与 bg 同策略兜底，让「漏用」先在门禁前被确定性修复。
-      // 回滚：env ICON_AUTO_MOUNT=false。
-      if (
-        process.env.ICON_AUTO_MOUNT !== 'false' &&
-        effectiveMapping &&
-        effectiveMapping.length > 0
-      ) {
-        const mountedIcons = this._autoMountUnusedIcons(
-          allFiles,
-          effectiveMapping,
-        );
-        if (mountedIcons.length > 0) {
-          this.logger.info('🛡️ P0-1 图标兜底自动挂载完成', {
-            mounted: mountedIcons,
-          });
-          input.onProgress?.({
-            stage: '图标兜底挂载',
-            message: `🛡️ 已自动挂载 ${mountedIcons.length} 个未使用图标（${mountedIcons.map((x) => x.var).join('、')}）`,
-            status: 'warning',
-            details: mountedIcons,
+        if (mountResult.diagnostics.length > 0) {
+          this.logger.warn('🛡️ 资源计划挂载诊断（fail-closed，未回退）', {
+            diagnostics: mountResult.diagnostics,
           });
         }
       }
@@ -2391,19 +2496,9 @@ export class MicrocodeEngineer extends BaseAgent {
         );
       }
 
-      // 🛡️ C1（2026-09-07，#568）：同图多别名去重。同一张背景图被以 bg4~bg14 等多个
-      // 别名绑进多层 spread 嵌套 style，最终只生效一张，其余都是噪音。按 resourceFile
-      // 聚合，同图只保留评分最高者，其余别名引用全部剥离。
-      const _c1Result = this._dedupeSameImageAliases(
-        allFiles,
-        effectiveMapping,
-      );
-      if (_c1Result.fixes.length > 0) {
-        Object.assign(allFiles, _c1Result.files);
-        this.logger.warn('🛡️ C1 已去重同图多别名绑定', {
-          fixes: _c1Result.fixes,
-        });
-      }
+      // 🛡️ C1 已随删减法批次 2 loop 2c 删除（2026-09-14）：同图多别名在编号阶段根治
+      // （visual-order-assign 同 resourceFile 共享 assignedVarName + prompt 侧折叠 isSharedAlias），
+      // LLM 只会见到同图单变量，事后合并失去存在理由。
 
       // 🛡️ C2（2026-09-07，#568）：空壳解绑。T1 标题剥离后，原父容器 div 残留
       // :style 绑定变成空壳（只有 background 引用，无 class/子内容）。清理这些无效绑定，
@@ -2538,16 +2633,17 @@ export class MicrocodeEngineer extends BaseAgent {
           }
         }
 
-        // 自愈：未引用的 bg → 真实挂载到容器（非 display:none 假绑定）
+        // 自愈：未引用的 bg → 计划驱动挂载（与门禁前同一 helper，幂等，非 display:none 假绑定）
         if (unusedBgs.length > 0) {
-          const bgMountResults = this._autoMountUnusedBackgrounds(
+          const bgMountResults = this._mountPlannedResources(
             allFiles,
+            effectiveSections,
             resolveResourceDomMapping(
               input.resourceDomMapping,
               input.outputPath,
             ),
-            null, // styleEvidence
-          );
+            input,
+          ).mounted;
           if (bgMountResults.length > 0) {
             this.logger.warn(
               `🛡️ 已自愈挂载 ${bgMountResults.length} 个未引用 bg 资源: ${bgMountResults.map((r) => r.var).join(', ')}`,
@@ -2839,6 +2935,24 @@ export class MicrocodeEngineer extends BaseAgent {
           });
           allFiles['declare.json'] = JSON.stringify(fallbackDeclare, null, 2);
         }
+      }
+
+      // 🛡️ 推 A 全 .vue 层（2026-09-14 · mc-max-1789376057659-2290591b 实锤）：写盘前对**所有**
+      // .vue 做悬空子组件引用剥离。今日 commit 的 stripUnplannedSubComponentImports 只守 index.vue
+      // 一层，无法覆盖「子组件内部越权 import 未生成兄弟 section」的真实崩溃点（2290591b 的
+      // ContentSection.vue 导入 7 个不存在的 .vue → 运行时 404 → RUNTIME-004/007 硬 BLOCK）。
+      // 此处与 detectDanglingComponentRefs（门禁层 WARN）共用同一套引用识别，凡指向产物中
+      // 不存在的 .vue 的 import 一律剥离，并同步移除模板孤儿标签，保证落盘内容自洽、零悬空。
+      // fail-open：异常或无可剥离项时原样返回。
+      try {
+        const _stripRes = stripDanglingComponentRefs(allFiles);
+        if (_stripRes.stripped.length > 0) {
+          this.logger.warn('🔧 已剥离全 .vue 层悬空子组件引用（避免运行时 404 / render-error）', {
+            stripped: _stripRes.stripped,
+          });
+        }
+      } catch (_stripErr) {
+        this.logger.warn('🔧 悬空引用剥离异常（非阻断）', { error: _stripErr?.message || String(_stripErr) });
       }
 
       this.logger.info('✅ 组件代码分块生成完成', {
@@ -4087,8 +4201,8 @@ export class MicrocodeEngineer extends BaseAgent {
     return microcodeWriter.extractUndefinedLessMixins(errors);
   }
 
-  _safeLessVarValue(name = '') {
-    return microcodeWriter.safeLessVarValue(name);
+  _safeLessVarValue(name = '', ctx = {}) {
+    return microcodeWriter.safeLessVarValue(name, ctx);
   }
 
   /**
@@ -4245,17 +4359,23 @@ export class MicrocodeEngineer extends BaseAgent {
     }
 
     // attribute
+    // 🛡️ P1-2 · aspectRatio 事实源：Figma bbox 宽高比 > 默认 16:9
+    // 避免默认 16:9 与 Figma 实际比例（如 1:1、4:3）不符导致预览拉伸
+    const figmaAspectRatio = nodeData?.absoluteBoundingBox?.width && nodeData?.absoluteBoundingBox?.height
+      ? [Math.round(nodeData.absoluteBoundingBox.width), Math.round(nodeData.absoluteBoundingBox.height)]
+      : null;
     if (!d.attribute || typeof d.attribute !== 'object') {
       d.attribute = {
         imgUrl: null,
-        aspectRatio: [16, 9],
+        aspectRatio: figmaAspectRatio || [16, 9],
         title: d.componentName,
         description: d.componentName,
       };
       changed = true;
     } else {
-      if (!d.attribute.aspectRatio) {
-        d.attribute.aspectRatio = [16, 9];
+      if (!d.attribute.aspectRatio || (figmaAspectRatio && JSON.stringify(d.attribute.aspectRatio) === JSON.stringify([16, 9]))) {
+        // 缺失 或 仍是默认 16:9 → 用 Figma bbox 覆盖
+        d.attribute.aspectRatio = figmaAspectRatio || [16, 9];
         changed = true;
       }
       if (!d.attribute.title) {
@@ -4850,21 +4970,20 @@ export class MicrocodeEngineer extends BaseAgent {
   }
 
   /**
-   * P0-1 主入口：自动挂载未被引用的 bg 资源。
-   * unused 判定与 resource-attribution-validator 同口径（排除 import 行的词边界匹配）。
-   * @returns {Array<{var, file, keyword, bgRole, mountTarget}>} 挂载结果清单
+   * 🛡️ 删减法批次 2（2026-09-14）：计划驱动资源挂载——替代旧 _autoMountUnusedBackgrounds/Icons。
+   * buildResourceMountPlan（section 归属 + figma 祖先链定 owner、同图单变量 sharedBy）
+   * + mountPlannedResources（限定 owner 文件、fail-closed 诊断）。
+   * @returns {{mounted: Array, diagnostics: Array}}
    */
-  _autoMountUnusedBackgrounds(
-    allFiles,
-    resourceDomMapping,
-    styleEvidence = null,
-  ) {
-    return microcodeResources.autoMountUnusedBackgrounds(
-      allFiles,
-      resourceDomMapping,
-      styleEvidence,
-      { logger: this.logger },
+  _mountPlannedResources(allFiles, effectiveSections, resourceDomMapping, input = {}) {
+    const plan = resourceMountPlan.buildResourceMountPlan(
+      effectiveSections || [],
+      resourceDomMapping || [],
+      { figmaRoot: input.figmaNodeData || null },
     );
+    return resourceMountPlan.mountPlannedResources(allFiles, plan, {
+      logger: this.logger,
+    });
   }
 
   /**
@@ -4930,28 +5049,6 @@ export class MicrocodeEngineer extends BaseAgent {
   }
 
   /**
-   * 🛡️ P0-1 对称扩展（2026-08-28）：自动挂载未被引用的 icon / img 资源。
-   *
-   * 与 bg 的 _autoMountUnusedBackgrounds 同策略兜底，让「漏用」先在门禁前被确定性修复。
-   * 同时被 code-fix-rules.js 的 RESOURCE-001 自愈规则调用（L0-B 重试时触发）。
-   *
-   * 策略与 bg 完全一致（复用同一套关键词/容器工具）：
-   *   1) 按 mountTarget / 资源名 / targetDomHint / figmaPath 关键词匹配模板容器（index.vue 优先）；
-   *   2) 匹配不到 → 轮流分配区域容器（不同图标尽量挂不同 section，符合设计意图）；
-   *   3) 仍匹配不到 → 兜底插到模板根元素（<img> 非背景装饰，不触发 CODE-014 根容器臆造门禁）。
-   * 回滚：env ICON_AUTO_MOUNT=false。
-   *
-   * @returns {Array<{var, file, keyword, role, mountTarget}>} 挂载结果清单
-   */
-  _autoMountUnusedIcons(allFiles, resourceDomMapping) {
-    return microcodeResources.autoMountUnusedIcons(
-      allFiles,
-      resourceDomMapping,
-      { logger: this.logger },
-    );
-  }
-
-  /**
    * 🛡️ P0-1 扩展：<style> 内错误 LESS 变量引用归一化（2026-08-27）
    * 模型把资源变量名 bg2/bg3 当 LESS 变量写成 url(@bg2)/url(@bg3)，并发明 theme-vars 里
    * 不存在的 @color-tab-default-text。validateVueSfc 的 less preprocess（strip 相对
@@ -4988,19 +5085,6 @@ export class MicrocodeEngineer extends BaseAgent {
    */
   _injectFailedResourceFallbacks(allFiles, resourceDomMapping) {
     return microcodeResources.injectFailedResourceFallbacks(
-      allFiles,
-      resourceDomMapping,
-      { logger: this.logger },
-    );
-  }
-
-  /**
-   * 🛡️ C1（2026-09-07，#568）：同图多别名去重。
-   * 同一张背景图被以 bg4~bg14 等多个别名绑进多层 spread 嵌套 style，
-   * 按 resourceFile 聚合，同图只保留评分最高者。
-   */
-  _dedupeSameImageAliases(allFiles, resourceDomMapping) {
-    return microcodeResources.dedupeSameImageAliases(
       allFiles,
       resourceDomMapping,
       { logger: this.logger },
@@ -5650,11 +5734,18 @@ export class MicrocodeEngineer extends BaseAgent {
         // 现改为 chart-type-guard.normalizeSeriesInSource：真值先归一 + 括号配平 + 只改元素顶层 type。
         try {
           const _truthChartType = resolveEchartsType(chartsArr[0]?.type);
+          // 🛡️ 2026-09-14 · T-01 治本（§15b.4）：多图组件由 charts[] 构造「真值集」{
+          // bar,line,...}，逐 series 互不覆盖。**严禁「首图真值覆盖全文件」**——
+          // 否则会主动把本应 area 的合法 line/area 改成首图 bar（流量监测 c6c228fb 实锤）。
+          const _truthChartTypeSet = buildChartTypeTruthSet(chartsArr);
           let _illegalFixed = 0;
           for (const [fp, fc] of Object.entries(codeResult.files || {})) {
             if (!fp.endsWith('.vue') || typeof fc !== 'string') continue;
             if (!fc.includes('series')) continue;
-            const r = normalizeSeriesInSource(fc, { chartType: _truthChartType });
+            const r = normalizeSeriesInSource(fc, {
+              chartType: _truthChartType,
+              chartTypeSet: _truthChartTypeSet,
+            });
             if (r.changed > 0) {
               codeResult.files[fp] = r.text;
               _illegalFixed += r.changed;
@@ -5662,7 +5753,7 @@ export class MicrocodeEngineer extends BaseAgent {
           }
           if (_illegalFixed > 0) {
             this.logger.warn(
-              `🛡️ [mc] 2.1.E 非法 series.type 已收敛 ${_illegalFixed} 处（真值=${_truthChartType || 'none→line'}）`,
+              `🛡️ [mc] 2.1.E 非法 series.type 已收敛 ${_illegalFixed} 处（真值集=${[..._truthChartTypeSet].join(',') || 'none→line'}）`,
             );
           }
         } catch (ctErr) {
@@ -6248,6 +6339,14 @@ export default declareInfo
           ),
           figmaNodeData,
           sectionHeights: this._buildSectionHeightsMap(
+            modelFiles,
+            layoutStructure,
+            params,
+          ),
+          // 🛡️ 删减法批次 3 loop 3a（2026-09-14）：布局事实单一事实源（display/gridColumns/
+          // flexDirection/flexGrow），供 fix-section-heights 规则⑤ 确定性写出布局 block ——
+          // 取代 healGridContainer/ensureGridDisplay 的事后猜测修补。
+          sectionLayoutFacts: buildSectionLayoutFacts(
             modelFiles,
             layoutStructure,
             params,

@@ -38,7 +38,7 @@ import {
 import { buildResourceManifest } from '../utils/resource-manifest.js';
 import { inferChartMinHeight } from '../utils/post-process.js';
 import { assessNumericLiteralRewrite } from '../utils/numeric-literal-guard.js';
-import { resolveEchartsType, normalizeSeriesInSource, normalizeChartAxesInSource } from '../utils/chart-type-guard.js';
+import { resolveEchartsType, normalizeSeriesInSource, normalizeChartAxesInSource, buildChartTypeTruthSet } from '../utils/chart-type-guard.js';
 import { stripLlmTailGarbage } from '../utils/llm-tail-garbage.js';
 import { normalizeFlexSourceConflicts } from '../utils/flex-sibling-guard.js';
 // 🧩 Vue3 拆分模块（2026-08-30：prompt / healer / style-entry 纯函数化，主类改委托壳）
@@ -1278,11 +1278,17 @@ export class Vue3Engineer extends MicrocodeEngineer {
         // 治本同 mc：真值先归一 + 括号配平 + 只改元素顶层 type（不碰 lineStyle/渐变 type）。
         try {
           const _truthChartType3 = resolveEchartsType(chartsArr3[0]?.type);
+          // 🛡️ 2026-09-14 · T-01 治本（§15b.4）：多图组件由 charts[] 构造「真值集」，逐 series 互不覆盖，
+          // 严禁「首图真值覆盖全文件」（与 mc 端对齐）。
+          const _truthChartTypeSet3 = buildChartTypeTruthSet(chartsArr3);
           let _illegalFixed3 = 0;
           for (const [fp, fc] of Object.entries(codeResult.files)) {
             if (!fp.endsWith('.vue') || typeof fc !== 'string') continue;
             if (!fc.includes('series')) continue;
-            const r = normalizeSeriesInSource(fc, { chartType: _truthChartType3 });
+            const r = normalizeSeriesInSource(fc, {
+              chartType: _truthChartType3,
+              chartTypeSet: _truthChartTypeSet3,
+            });
             if (r.changed > 0) {
               codeResult.files[fp] = r.text;
               _illegalFixed3 += r.changed;
@@ -1290,7 +1296,7 @@ export class Vue3Engineer extends MicrocodeEngineer {
           }
           if (_illegalFixed3 > 0) {
             this.logger.warn(
-              `🛡️ [vue3] 2.1.E 非法 series.type 已收敛 ${_illegalFixed3} 处（真值=${_truthChartType3 || 'none→line'}）`,
+              `🛡️ [vue3] 2.1.E 非法 series.type 已收敛 ${_illegalFixed3} 处（真值集=${[..._truthChartTypeSet3].join(',') || 'none→line'}）`,
             );
           }
         } catch (ctErr3) {

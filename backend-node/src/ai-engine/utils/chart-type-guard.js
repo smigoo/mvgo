@@ -26,6 +26,22 @@
  * 另注：Figma 节点名 → 类型的映射见 `chart-type-mapper.js`，两者职责不同：
  * 本文件负责「任意脏值 → echarts 注册名」，输出保证落在 REGISTERED_ECHARTS_TYPES。
  *
+ * ─────────────────────────────────────────────────────────────────────────
+ * 🔴 2026-09-14 修订：多图互踩（流量监测 c-traffic-monitor-c6c228fb 实锤）
+ * ─────────────────────────────────────────────────────────────────────────
+ * 旧实现单值 `block.chartType` 取自 `chartsArr[0]?.type` → 全文件所有 series.type 被
+ * 强制收敛到**第一张图**的类型。多图时「chart A 真值」硬塞给 chart B：
+ *   charts 真值 = [bar(隧道), bar(大桥), area(流量预测)]，产物预测图应为 area/line，
+ *   却被首图 bar 覆盖 → 折线图画成柱状图。
+ * 与 2.1.E 原始事故（真值洗白）同族，但**真值本身合法**，错的是「一个真值跨图适用」。
+ *
+ * 治本：**真值集驱动**（而非按产物源码分布判定）。新增
+ *   - `buildChartTypeTruthSet(charts)`：由 charts[] 真值构造允许集（area→line）→ {bar,line}；
+ *   - `block.chartTypeSet`：逐 series 互不覆盖——series.type 落在集内即合法原样保留，
+ *     只有落在集外才 fail-closed 收敛到集内。**禁用「首图真值覆盖全文件」**。
+ * 单图（无集合）维持 2.1.E「chartType 冻结进 block」语义；`isMultiChartSource` 保留为
+ * 无集合时的兜底自动判定。
+ *
  * 纯函数、零依赖、无 import.meta，便于 jest 单测；不修改入参。
  */
 
@@ -211,25 +227,75 @@ export function isValidEchartsType(type, block) {
 }
 
 /**
+ * 由 charts[] 真值构造「允许 type 集合」：每种 chart.type 经 resolveEchartsType 归一后的注册名。
+ * 流量监测实锤（c6c228fb）：charts = [bar, bar, area] → 集合 {bar, line}（area 在 echarts 是 line + areaStyle）。
+ * 调用点把该集合作为 `chartTypeSet` 传给守卫，即可**逐 series 互不覆盖**地收敛，
+ * 杜绝「首图真值覆盖全文件」（T-01 根因，§15b.4）。
+ *
+ * @param {Array<{type?:string}>} charts - vision/Figma 的 charts[] 真值
+ * @returns {Set<string>}
+ */
+export function buildChartTypeTruthSet(charts) {
+  const set = new Set()
+  if (Array.isArray(charts)) {
+    for (const c of charts) {
+      const t = resolveEchartsType(c && c.type)
+      if (t) set.add(t)
+    }
+  }
+  return set
+}
+
+/**
  * 把 option.series[].type 规范成合法 echarts 注册名。
  * - 已是注册名且与真值一致 → 保留
  * - 真值存在 → 真值优先（fail-closed）
  * - 真值缺失/非法 → 用别名归一结果
  * - 都无法识别 → 'line'（不臆造）
  *
+ * 🛡️ 多图（chartTypeSet 模式，2026-09-14）：series.type 只需落在真值集内即合法，
+ *    绝不用「首图真值」覆盖另一个 chart 的合法类型（T-01 治本，§15b.4）。
+ *
  * @param {Object} option - echarts option（含 series）
- * @param {Object} [block] - 真值块
+ * @param {Object} [block] - 真值块（{ chartType?, chartTypeSet? }）
  * @returns {Object} 新 option（series.type 已规范化）
  */
 export function normalizeChartOptionType(option, block) {
   if (!option || typeof option !== 'object') return option
   const truth = resolveEchartsType(block && block.chartType)
+  const truthSet = block && block.chartTypeSet instanceof Set ? block.chartTypeSet : null
+  // 🛡️ 多图模式：调用方传了真值集 → 启用逐 series 互不覆盖。
+  const useSetMode = !!truthSet && truthSet.size > 0
+  // 兜底自动判定（无显式集合时）：同 option.series 出现 ≥2 种注册名 → 禁用真值覆盖。
+  const distinct = new Set(
+    (Array.isArray(option.series) ? option.series : [])
+      .map((s) => (s && typeof s === 'object' ? resolveEchartsType(s.type) : null))
+      .filter(Boolean),
+  )
+  const multiChart = useSetMode || distinct.size >= 2
   const next = Array.isArray(option.series)
     ? option.series.map((s) => {
         if (!s || typeof s !== 'object') return s
         const raw = String(s.type ?? '').trim()
+        const resolved = resolveEchartsType(raw)
+        if (multiChart) {
+          // 🛡️ 真值集模式：series.type 只需落在集内即合法，互不覆盖（T-01 治本，§15b.4）。
+          // 避免「首图真值（bar）覆盖本应 area 的合法 line/area」——旧版核心危害。
+          if (useSetMode && truthSet) {
+            let chosen
+            if (REGISTERED_ECHARTS_TYPES.has(raw) && truthSet.has(raw)) chosen = raw
+            else if (resolved && truthSet.has(resolved)) chosen = resolved
+            else chosen = truthSet.size ? truthSet.values().next().value : 'line'
+            if (chosen === raw) return s
+            return { ...s, type: chosen }
+          }
+          // 兜底：无显式集合时沿用旧多图逻辑（已合法/可归一一律保留，不可识别才用真值兜底）。
+          const chosen = resolved || truth || 'line'
+          if (chosen === raw) return s
+          return { ...s, type: chosen }
+        }
         if (REGISTERED_ECHARTS_TYPES.has(raw) && (!truth || truth === raw)) return s
-        const chosen = truth || resolveEchartsType(raw) || 'line'
+        const chosen = truth || resolved || 'line'
         if (chosen === raw) return s
         return { ...s, type: chosen }
       })
@@ -333,16 +399,97 @@ export function findSeriesArraySpans(src) {
 }
 
 /**
+ * 只读扫描：收集源码中所有 series 顶层 type 经 `resolveEchartsType` 归一后的注册名集合。
+ * 用于判定「多图互踩」——同一文件出现 ≥2 种不同注册名即视为多图，
+ * 此时必须放弃「单一真值覆盖」，改为逐 series 别名归一 + 已合法注册名保留。
+ */
+function collectSeriesLegalTypes(src) {
+  const set = new Set()
+  const spans = findSeriesArraySpans(src)
+  if (!spans.length) return set
+  for (const sp of spans) {
+    const slice = src.slice(sp.start, sp.end)
+    let i = 0
+    let bracket = 0
+    let brace = 0
+    while (i < slice.length) {
+      const skipped = skipNonCode(slice, i)
+      if (skipped !== i) {
+        i = skipped
+        continue
+      }
+      const c = slice[i]
+      if (c === '[') {
+        bracket += 1
+        i += 1
+        continue
+      }
+      if (c === ']') {
+        bracket -= 1
+        i += 1
+        continue
+      }
+      if (c === '{') {
+        brace += 1
+        i += 1
+        continue
+      }
+      if (c === '}') {
+        brace -= 1
+        i += 1
+        continue
+      }
+      if (bracket === 1 && brace === 1) {
+        const m = /^type\s*:\s*(['"])([^'"]*)\1/.exec(slice.slice(i, i + 200))
+        if (m) {
+          const r = resolveEchartsType(m[2].trim())
+          if (r) set.add(r)
+          i += m[0].length
+          continue
+        }
+      }
+      i += 1
+    }
+  }
+  return set
+}
+
+/**
+ * 判断一个 series 元素对象**顶层**是否携带饼/环图特征键（radius / center / startAngle 等）。
+ * 真机实锤（c-traffic-monitor-6b803ab0 · ContentSection4）：环形图（doughnut）被 LLM 误写成
+ * `type:'bar'` 但带着 `radius:['55%','75%']` / `center:['50%','50%']` 这类饼图特征字段。
+ * echarts 把 `bar` 当 cartesian → 找不到 xAxis → 抛 `xAxis "0" not found` → mounted 崩溃（RUNTIME-004）。
+ *
+ * @param {string} elemText - 单个 series 元素文本（含外层 {}）
+ * @returns {boolean}
+ */
+function hasPieFeatureKeys(elemText) {
+  // 顶层键：radius / center / startAngle / roseType / clockwise / selectedMode 都是饼图族专属
+  return /\b(radius|center|roseType|startAngle|clockwise|selectedMode)\s*:/.test(elemText)
+}
+
+/**
  * 只改 series 数组**元素对象第一层**的 `type` 键。
  * 深层（lineStyle.type / areaStyle.color.type / markLine…）一律不碰。
+ *
+ * 🛡️ 形状错配归一（2026-09-14 · RUNTIME-004 治本）：series 元素含饼图特征键
+ * （radius/center/startAngle…）且 type 是 cartesian（bar/line 等）→ 归一成 `pie`
+ * （echarts 中 doughnut = `pie` + `radius`，不是 `bar`）。否则 bar 找不到 xAxis 崩 `xAxis "0" not found`。
+ * 此归一优先于真值集/单图真值覆盖：饼图特征是不可辩驳的「这是饼图」事实。
+ *
+ * @param {string} arrText - series 数组文本
+ * @param {Object} [block] - 真值块（{ chartType, chartTypeSet? }）
+ * @param {boolean} [multiChart] - 是否启用真值集模式（调用点传了 chartTypeSet）
+ * @param {Set<string>|null} [truthSet] - 真值集（charts[] 归一后的注册名集合，如 {bar,line}）
  */
-function rewriteSeriesElementTypes(arrText, block) {
+function rewriteSeriesElementTypes(arrText, block, multiChart, truthSet) {
   const truth = resolveEchartsType(block && block.chartType)
   let out = ''
   let i = 0
   let changed = 0
   let bracket = 0
   let brace = 0
+  let elemStart = -1 // 🛡️ 当前顶层 series 元素的 `{` 起点（用于「只判当前元素」而非整个数组）
   while (i < arrText.length) {
     const skipped = skipNonCode(arrText, i)
     if (skipped !== i) {
@@ -364,6 +511,7 @@ function rewriteSeriesElementTypes(arrText, block) {
       continue
     }
     if (c === '{') {
+      if (bracket === 1 && brace === 0) elemStart = i // 仅记录顶层元素起点
       brace += 1
       out += c
       i += 1
@@ -379,9 +527,41 @@ function rewriteSeriesElementTypes(arrText, block) {
       const m = /^type\s*:\s*(['"])([^'"]*)\1/.exec(arrText.slice(i, i + 200))
       if (m) {
         const raw = m[2].trim()
-        const keepAsIs =
-          REGISTERED_ECHARTS_TYPES.has(raw) && (!truth || truth === raw)
-        const chosen = keepAsIs ? raw : truth || resolveEchartsType(raw) || 'line'
+        const resolved = resolveEchartsType(raw)
+        // 🛡️ 只对「当前元素文本」做饼图特征判定（findBalancedSpan 取完整元素切片），
+        // 绝不传整个 series 数组——否则同数组内「饼图 + 柱/线图」混排时，柱图会被误归一成 pie。
+        const elemSpan = elemStart >= 0 ? findBalancedSpan(arrText, elemStart, '{', '}') : null
+        const elemText = elemSpan ? arrText.slice(elemSpan.start, elemSpan.end) : arrText
+        let chosen
+        // 🛡️ 形状错配归一（RUNTIME-004 治本）：饼图特征优先于一切类型归一。
+        // series 元素带 radius/center/startAngle 等饼图特征，却被标成 cartesian（bar/line）→
+        // 归一成 pie（echarts doughnut = pie + radius），否则 bar 找不到 xAxis 崩 `xAxis "0" not found`。
+        // 例外：已（归一为）pie 的原样保留；完全不可识别也不臆造成饼图（走下面 fail-closed）。
+        if (hasPieFeatureKeys(elemText) && resolved && resolved !== 'pie') {
+          chosen = 'pie'
+        } else if (multiChart && truthSet) {
+          // 🛡️ 真值集模式（2026-09-14 · 流量监测 T-01 治本，§15b.4）：
+          // 多图组件 series.type 只需落在真值集内即合法，**绝不用「首图真值」去覆盖**
+          // 另一个 chart 的合法类型（这是旧版「chartsArr[0] 全文件覆盖」的核心危害：
+          // 会主动把本应 area 的合法 line/area 改成首图 bar）。
+          //   - 已合法注册名且落在集内 → 保留（互不覆盖）
+          //   - 别名（area-line）→ 归一并查集，在集内才用归一结果
+          //   - 完全不可识别的脏值 → fail-closed 到集首个元素，再不行落 'line'（不臆造）
+          // 注：本模式只**消除守卫主动破坏**；若 LLM 已把 forecast 图写成 bar（c6c228fb 实锤），
+          // 因 bar 也在真值集内，守卫不会改它——彻底按文件真值修复需 §16 StatefulSectionContract。
+          if (REGISTERED_ECHARTS_TYPES.has(raw) && truthSet.has(raw)) {
+            chosen = raw
+          } else if (resolved && truthSet.has(resolved)) {
+            chosen = resolved
+          } else {
+            chosen = truthSet.size ? truthSet.values().next().value : 'line'
+          }
+        } else {
+          // 单图：保持 2.1.E「chartType 冻结进 block」语义——真值优先覆盖。
+          const keepAsIs =
+            REGISTERED_ECHARTS_TYPES.has(raw) && (!truth || truth === raw)
+          chosen = keepAsIs ? raw : truth || resolved || 'line'
+        }
         if (chosen !== raw) {
           changed += 1
           out += `type: '${chosen}'`
@@ -455,20 +635,47 @@ function repairNestedTypeKeys(text) {
  * 对源码文本做 series 类型收敛（治本入口，供 mc / vue3 两条产线共用）。
  * 幂等：对已合规文本调用返回 changed = 0。
  *
+ * 两种模式（§15b.4）：
+ *  - 单图（默认）：`block.chartType` 单一真值，保持 2.1.E「chartType 冻结进 block」语义。
+ *  - 多图真值集（推荐）：`block.chartTypeSet`（由 charts[] 构造的允许集）→ 逐 series 互不覆盖，
+ *    杜绝「首图真值覆盖全文件」（T-01 根因）。调用点传 `buildChartTypeTruthSet(charts)`。
+ *
  * @param {string} src - .vue 源码
- * @param {Object} [block] - 真值块（{ chartType }）
+ * @param {Object} [block] - 真值块（{ chartType?, chartTypeSet? }）
  * @returns {{text:string, changed:number}}
  */
+/**
+ * 判定多图：同一文件/源码里出现 ≥2 种不同 echarts 注册名（基于 series 顶层 type）。
+ * 多图时 `normalizeSeriesInSource` 放弃「单一真值覆盖」，改为逐 series 别名归一，
+ * 避免把 chart A 的真值 type 硬塞给 chart B（流量监测 c6c228fb 实锤：bar/bar/area 互踩）。
+ */
+export function isMultiChartSource(src) {
+  const types = collectSeriesLegalTypes(src)
+  return types.size >= 2
+}
+
 export function normalizeSeriesInSource(src, block) {
   if (typeof src !== 'string' || !src) return { text: src, changed: 0 }
   const spans = findSeriesArraySpans(src)
   if (!spans.length) return { text: src, changed: 0 }
+  // 🛡️ 多图真值集模式（2026-09-14 · 流量监测 T-01 治本，§15b.4）：
+  // 调用方传了 charts[] 构造的 chartTypeSet → 启用逐 series 互不覆盖，
+  // 禁用「首图真值覆盖全文件」。否则退回旧的「文件内分布自动判定」兜底（多图不覆盖）。
+  const truthSet =
+    block && block.chartTypeSet instanceof Set ? block.chartTypeSet : null
+  const useSetMode = !!truthSet && truthSet.size > 0
+  const multiChart = useSetMode || isMultiChartSource(src)
   let out = ''
   let cursor = 0
   let changed = 0
   for (const sp of spans) {
     out += src.slice(cursor, sp.start)
-    const r1 = rewriteSeriesElementTypes(src.slice(sp.start, sp.end), block)
+    const r1 = rewriteSeriesElementTypes(
+      src.slice(sp.start, sp.end),
+      block,
+      multiChart,
+      useSetMode ? truthSet : null,
+    )
     const r2 = repairNestedTypeKeys(r1.text)
     changed += r1.changed + r2.changed
     out += r2.text
@@ -578,14 +785,31 @@ function endsWithTrailingComma(out) {
 }
 
 /**
+ * 检测源码是否已声明 xAxis/yAxis（数组或对象形态）。无轴时给 series 注入 xAxisIndex/yAxisIndex
+ * 是**无效补丁**——echarts 对缺轴 cartesian series 仍崩 `xAxis "0" not found`（真机实锤
+ * c-traffic-monitor-6b803ab0）。注入索引只在「轴已存在」时有意义（消除字符串索引 / 显式化默认值）。
+ *
+ * @param {string} src - .vue 源码
+ * @returns {boolean}
+ */
+function hasAxisDeclared(src) {
+  if (typeof src !== 'string' || !src) return false
+  return /(^|[^A-Za-z])xAxis\s*:/.test(src) || /(^|[^A-Za-z])yAxis\s*:/.test(src)
+}
+
+/**
  * ②③ series 数组内轴索引修正：字符串索引 → 数字 + cartesian 缺索引注入。
  * 用 bracket/brace 深度追踪定位「顶层元素」：只有 brace===1 && bracket===1 时
  * 才识别 type/xAxisIndex/yAxisIndex 键，嵌套对象（lineStyle 等）与嵌套数组（data）不误判。
  *
+ * 🛡️ 无轴守卫（2026-09-14 · RUNTIME-004 收敛）：`hasAxis` 为 false 时**不注入**索引，
+ * 因为缺轴 option 的崩溃根因是「没有轴对象」，注入索引是噪音且无效（治本在 2.1.E 形状归一）。
+ *
  * @param {string} arrText - series 数组文本（形如 "[{...},{...}]"）
+ * @param {boolean} [hasAxis] - 整个 option 是否声明了 xAxis/yAxis
  * @returns {{text:string, changed:number}}
  */
-function rewriteSeriesAxisIndex(arrText) {
+function rewriteSeriesAxisIndex(arrText, hasAxis = true) {
   let out = ''
   let i = 0
   let changed = 0
@@ -630,7 +854,8 @@ function rewriteSeriesAxisIndex(arrText) {
     if (c === '}') {
       if (brace === 1 && bracket === 1) {
         const injections = []
-        if (CARTESIAN_SERIES_TYPES.has(elemType)) {
+        // 无轴守卫：option 未声明轴时不注入（缺轴崩溃靠 2.1.E 形状归一治本，注入索引无效）。
+        if (hasAxis && CARTESIAN_SERIES_TYPES.has(elemType)) {
           if (!elemHasXIndex) injections.push('xAxisIndex: 0')
           if (!elemHasYIndex) injections.push('yAxisIndex: 0')
         }
@@ -719,14 +944,15 @@ export function normalizeChartAxesInSource(src) {
   let text = a.text
   let changed = a.changed
 
-  // ②③ series 轴索引修正
+  // ②③ series 轴索引修正（无轴 option 不注入索引 → 消除无效补丁）
+  const hasAxis = hasAxisDeclared(text)
   const spans = findSeriesArraySpans(text)
   if (spans.length) {
     let out = ''
     let cursor = 0
     for (const sp of spans) {
       out += text.slice(cursor, sp.start)
-      const r = rewriteSeriesAxisIndex(text.slice(sp.start, sp.end))
+      const r = rewriteSeriesAxisIndex(text.slice(sp.start, sp.end), hasAxis)
       changed += r.changed
       out += r.text
       cursor = sp.end

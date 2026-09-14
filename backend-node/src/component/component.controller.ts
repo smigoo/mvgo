@@ -23,11 +23,10 @@ import { SessionGuard } from '../auth/session.guard';
 import { PermissionsGuard } from '../auth/permissions.guard';
 import { Permissions } from '../auth/permissions.decorator';
 import { PERMISSIONS } from '../auth/permission.constants';
-import { CurrentUser } from '../auth/current-user.decorator';
+import { CurrentUser, OptionalUser } from '../auth/current-user.decorator';
 import { ListComponentsDto } from './dto/list-components.dto';
 
 @Controller('component')
-@UseGuards(SessionGuard)
 export class ComponentController {
   private readonly logger = new Logger(ComponentController.name);
 
@@ -67,6 +66,7 @@ export class ComponentController {
   }
 
   @Get('list')
+  @UseGuards(SessionGuard)
   async listComponents(
     @Query() query: ListComponentsDto,
     @CurrentUser() userId: string,
@@ -83,6 +83,7 @@ export class ComponentController {
   }
 
   @Get()
+  @UseGuards(SessionGuard)
   async getGroupComponents(
     @Query('groupId') groupId: string,
     @CurrentUser() userId: string,
@@ -101,7 +102,7 @@ export class ComponentController {
   @Get('by-session/:sessionId')
   async getComponentBySessionId(
     @Param('sessionId') sessionId: string,
-    @CurrentUser() userId: string,
+    @OptionalUser() userId: string | undefined,
   ) {
     const component = await this.componentService.getComponentBySessionId(
       sessionId,
@@ -182,6 +183,7 @@ export class ComponentController {
   }
 
   @Get(':componentId')
+  @UseGuards(SessionGuard)
   async getComponentById(
     @Param('componentId') componentId: string,
     @CurrentUser() userId: string,

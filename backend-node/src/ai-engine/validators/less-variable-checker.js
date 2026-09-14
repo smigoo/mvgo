@@ -10,6 +10,7 @@ import { readFileSync, writeFileSync, readdirSync, statSync, existsSync } from '
 import { join, extname } from 'path'
 import { createLogger } from '../logger/index.js'
 import { safeLessVarValue } from '../roles/microcode/file-writer.js'
+import { collectColorFnVars } from '../utils/less-color-funcs.js'
 
 const logger = createLogger({ name: 'less-variable-checker' })
 
@@ -29,11 +30,14 @@ export class LessVariableChecker {
         missingVariables: [],
         fixed: false,
         uninferredVariables: [],  // 无法推断真值、用了兜底的变量（结构化告警）
+        // 🛡️ 刀 16b：被 LESS 颜色函数（lighten/darken/fade…）当**实参**引用的变量名集合。
+        // 这类变量的兜底值必须是「可求值的真颜色」，否则整个 <style> 块编译失败。
+        colorFnVariables: new Set(),
         error: null
       }
 
-      // 1. 扫描所有 .vue 和 .less 文件，收集使用的变量
-      this.scanUsedVariables(componentDir, result.usedVariables)
+      // 1. 扫描所有 .vue 和 .less 文件，收集使用的变量（含颜色函数实参变量）
+      this.scanUsedVariables(componentDir, result.usedVariables, result.colorFnVariables)
 
       // 2. 读取 theme-vars.less 中定义的变量
       const themeVarsPath = join(componentDir, 'resources/styles/themes/theme-vars.less')
@@ -54,7 +58,7 @@ export class LessVariableChecker {
       // 4. 如果有缺失的变量，自动添加到 .common()
       if (result.missingVariables.length > 0 && existsSync(themeVarsPath)) {
         const warnings = []
-        this.addMissingVariables(themeVarsPath, result.missingVariables, warnings)
+        this.addMissingVariables(themeVarsPath, result.missingVariables, warnings, result.colorFnVariables)
         result.fixed = true
         result.uninferredVariables = warnings
         logger.info('已自动添加缺失的 Less 变量', {
@@ -82,6 +86,7 @@ export class LessVariableChecker {
         missingVariables: [],
         fixed: false,
         uninferredVariables: [],
+        colorFnVariables: new Set(),
         error: error.message
       }
     }
@@ -89,8 +94,11 @@ export class LessVariableChecker {
 
   /**
    * 扫描目录中所有文件，收集使用的 Less 变量
+   * @param {string} dir
+   * @param {Set<string>} usedVariables 所有被引用的变量名
+   * @param {Set<string>} [colorFnVariables] 被 LESS 颜色函数当实参引用的变量名（刀 16b）
    */
-  static scanUsedVariables(dir, usedVariables) {
+  static scanUsedVariables(dir, usedVariables, colorFnVariables) {
     try {
       const files = readdirSync(dir)
 
@@ -100,12 +108,12 @@ export class LessVariableChecker {
 
         if (stat.isDirectory()) {
           // 递归扫描子目录
-          this.scanUsedVariables(filePath, usedVariables)
+          this.scanUsedVariables(filePath, usedVariables, colorFnVariables)
         } else if (stat.isFile()) {
           const ext = extname(file)
           // 只处理 .vue 和 .less 文件
           if (ext === '.vue' || ext === '.less') {
-            this.extractVariablesFromFile(filePath, usedVariables)
+            this.extractVariablesFromFile(filePath, usedVariables, colorFnVariables)
           }
         }
       }
@@ -116,8 +124,11 @@ export class LessVariableChecker {
 
   /**
    * 从文件中提取使用的 Less 变量
+   * @param {string} filePath
+   * @param {Set<string>} usedVariables
+   * @param {Set<string>} [colorFnVariables] 被 LESS 颜色函数当实参引用的变量名（刀 16b）
    */
-  static extractVariablesFromFile(filePath, usedVariables) {
+  static extractVariablesFromFile(filePath, usedVariables, colorFnVariables) {
     try {
       const content = readFileSync(filePath, 'utf-8')
       const sources = extname(filePath) === '.vue'
@@ -135,6 +146,12 @@ export class LessVariableChecker {
           }
         }
         variablePattern.lastIndex = 0
+
+        // 🛡️ 刀 16b：同一份样式文本里，收集出现在颜色函数实参位置的变量
+        // （`lighten(@x, 10%)`）—— 这些变量的兜底值必须是可求值真颜色。
+        if (colorFnVariables) {
+          for (const v of collectColorFnVars(source)) colorFnVariables.add(v)
+        }
       }
     } catch (error) {
       logger.error('提取变量失败', { filePath, error: error.message })
@@ -224,9 +241,11 @@ export class LessVariableChecker {
    *      不可见/崩溃，unset 回退到浏览器默认行为）
    * @param {string} themeVarsPath theme-vars.less 路径
    * @param {string[]} missingVariables 缺失的变量名列表
+   * @param {string[]} [warnings] 无法推断含义、用了兜底值的变量名清单（用于结构化告警）
+   * @param {Set<string>} [colorFnVariables] 被 LESS 颜色函数当实参引用的变量名（刀 16b）
    * @returns {string[]} 无法推断含义、用了兜底值的变量名清单（用于结构化告警）
    */
-  static addMissingVariables(themeVarsPath, missingVariables, warnings = []) {
+  static addMissingVariables(themeVarsPath, missingVariables, warnings = [], colorFnVariables = new Set()) {
     let content
     try {
       content = readFileSync(themeVarsPath, 'utf-8')
@@ -250,8 +269,17 @@ export class LessVariableChecker {
         return `  @${v}: ${value}; // 自动添加（从 theme mixin 复制）`
       }
       // 优先级 2：按变量名语义猜测
-      const guess = safeLessVarValue(`@${v}`)
+      // 🛡️ 刀 16b：名字猜测可能给出**非颜色**（`@line-alpha` → '1'、`@radius-x` → '8px'）或
+      // 'unset'。若该变量被 LESS 颜色函数当**实参**引用（`lighten(@v, 10%)`），这些值在编译期
+      // 不可求值 → `Argument cannot be evaluated to a color` → 整个 <style> 块失败 → 子组件消失。
+      // 故把「颜色函数实参」这一**消费端事实**交给 safeLessVarValue，由它换成中立真颜色。
+      const usesColorFn = colorFnVariables.has(v)
+      const guess = safeLessVarValue(`@${v}`, { usedByColorFn: usesColorFn })
       if (guess !== 'unset') {
+        if (usesColorFn) {
+          warnings.push(v)
+          return `  @${v}: ${guess}; // ⚠️ 自动添加（颜色函数实参，兜底中立色，请核对真值）`
+        }
         return `  @${v}: ${guess}; // 自动添加（语义推断）`
       }
       // 优先级 3：无法推断——记录结构化告警

@@ -692,6 +692,78 @@ function _extractFlexInfo(declarations) {
 }
 
 /**
+ * 🛡️ 样式文本「叶子声明块」扫描器（**单一事实源**）。
+ *
+ * 逐字符扫描定位每个 `{` 与其匹配的 `}`，产出**块内不再含 `{`** 的叶子块。
+ * 正确处理 `/* *\/` 注释与引号（避免把注释 / `url(...)` 里的花括号当结构）。
+ * 外层含嵌套子块的规则**不产出**（无法可靠判定声明归属），但会继续向内扫描，
+ * 使嵌套子块各自作为叶子块被产出（与 ensureFlexDirection 原有语义一致）。
+ *
+ * 两个消费方共用，不各自造一套：`ensureFlexDirection` / `ensureGridDisplay`。
+ *
+ * @param {string} text CSS/LESS 文本
+ * @returns {Array<{start:number,end:number,inner:string}>} end 为匹配 `}` 的索引
+ */
+function scanLeafDeclarationBlocks(text) {
+  const out = []
+  const src = String(text || '')
+  const chars = [...src]
+  const n = chars.length
+  let i = 0
+  let inComment = false
+  let quote = ''
+
+  while (i < n) {
+    const c = chars[i]
+    const next = chars[i + 1]
+
+    if (inComment) {
+      if (c === '*' && next === '/') { inComment = false; i += 2; continue }
+      i++; continue
+    }
+    if (quote) {
+      if (c === quote && chars[i - 1] !== '\\') quote = ''
+      i++; continue
+    }
+    if (c === '/' && next === '*') { inComment = true; i += 2; continue }
+    if (c === '"' || c === "'") { quote = c; i++; continue }
+
+    if (c === '{') {
+      let depth = 1
+      let j = i + 1
+      let innerComment = false
+      let innerQuote = ''
+      while (j < n && depth > 0) {
+        const cc = chars[j]
+        const nn = chars[j + 1]
+        if (innerComment) {
+          if (cc === '*' && nn === '/') { innerComment = false; j += 2; continue }
+          j++; continue
+        }
+        if (innerQuote) {
+          if (cc === innerQuote && chars[j - 1] !== '\\') innerQuote = ''
+          j++; continue
+        }
+        if (cc === '/' && nn === '*') { innerComment = true; j += 2; continue }
+        if (cc === '"' || cc === "'") { innerQuote = cc; j++; continue }
+        if (cc === '{') depth++
+        else if (cc === '}') { depth--; if (depth === 0) break }
+        j++
+      }
+      if (depth === 0) {
+        const inner = src.slice(i + 1, j)
+        if (!inner.includes('{')) out.push({ start: i, end: j, inner })
+      }
+      // 无论是外层嵌套块还是叶子块，都继续向内/向后扫描（保证子块也被产出）
+      i++
+      continue
+    }
+    i++
+  }
+  return out
+}
+
+/**
  * 🛡️ flex 方向确定性补全（治「上下布局变左右」）。
  *
  * 背景：LLM 生成的 CSS 中大量 `display: flex` 漏写 `flex-direction`，CSS 默认值是
@@ -727,79 +799,15 @@ export function ensureFlexDirection(cssContent, logger, options = {}) {
   let fixedCount = 0
   let result = cssContent
 
-  // 匹配每个规则块：selector { ... }，块内不再嵌套（解析声明级文本）。
-  // 用逐字符扫描定位每个 { 与匹配的 }，避免正则贪婪吞掉跨规则内容。
-  const chars = [...result]
   const edits = [] // 待插入位置（从后往前应用，避免索引漂移）
 
-  let i = 0
-  const n = chars.length
-  let inComment = false
-  let quote = ''
-
-  while (i < n) {
-    const c = chars[i]
-    const next = chars[i + 1]
-
-    if (inComment) {
-      if (c === '*' && next === '/') { inComment = false; i += 2; continue }
-      i++; continue
+  for (const b of scanLeafDeclarationBlocks(result)) {
+    const { hasFlexDisplay, flexDirection } = _extractFlexInfo(b.inner)
+    if (hasFlexDisplay && !flexDirection) {
+      // 插到匹配 } 之前
+      edits.push({ pos: b.end, text: `\n  flex-direction: ${flexDefault};` })
+      fixedCount++
     }
-    if (quote) {
-      if (c === quote && chars[i - 1] !== '\\') quote = ''
-      i++; continue
-    }
-    if (!quote && c === '/' && next === '*') { inComment = true; i += 2; continue }
-    if (!quote && (c === '"' || c === "'")) { quote = c; i++; continue }
-
-    if (c === '{') {
-      // 找到匹配的 }（同一嵌套层内，本函数只处理声明级块，简单括号匹配即可）
-      let depth = 1
-      let j = i + 1
-      let innerComment = false
-      let innerQuote = ''
-      while (j < n && depth > 0) {
-        const cc = chars[j]
-        const nn = chars[j + 1]
-        if (innerComment) {
-          if (cc === '*' && nn === '/') { innerComment = false; j += 2; continue }
-          j++; continue
-        }
-        if (innerQuote) {
-          if (cc === innerQuote && chars[j - 1] !== '\\') innerQuote = ''
-          j++; continue
-        }
-        if (!innerQuote && cc === '/' && nn === '*') { innerComment = true; j += 2; continue }
-        if (!innerQuote && (cc === '"' || cc === "'")) { innerQuote = cc; j++; continue }
-        if (cc === '{') depth++
-        else if (cc === '}') { depth--; if (depth === 0) break }
-        j++
-      }
-
-      if (depth === 0) {
-        // 块内容 = chars[i+1 .. j-1]
-        const inner = result.slice(i + 1, j)
-        // 只处理「叶子声明块」：若 inner 内还含嵌套 {（LESS 嵌套子块），
-        // 则外层块 display:flex 归属无法可靠判定；但内层子块仍需单独扫描补全，
-        // 因此此处 i++ 继续向后，而非 i=j+1 跳过整个块。
-        if (inner.includes('{')) {
-          i++
-          continue
-        }
-        const { hasFlexDisplay, flexDirection } = _extractFlexInfo(inner)
-        if (hasFlexDisplay && !flexDirection) {
-          // 在 } 之前插入证据指定的 flex-direction;
-          const insertAt = j // 插到 } 前
-          edits.push({ pos: insertAt, text: `\n  flex-direction: ${flexDefault};` })
-          fixedCount++
-        }
-        i = j + 1
-        continue
-      }
-      i++
-      continue
-    }
-    i++
   }
 
   if (edits.length === 0) return result
@@ -829,4 +837,167 @@ export function ensureFlexDirectionInVueSfc(vueContent, logger, options = {}) {
     const repaired = ensureFlexDirection(innerContent, logger, options)
     return `<style${attrs}>${repaired}</style>`
   })
+}
+
+/**
+ * 只有这些属性出现、而规则里**没有** `display`，才能确定作者意图是 grid。
+ * 刻意**不含** `gap` / `row-gap` / `column-gap`：它们在 flex 布局里同样合法，
+ * 单凭 gap 无法区分意图（宁可不改，不可误改）。
+ */
+const GRID_INTENT_PROP_RX =
+  /\b(?:grid-template-columns|grid-template-rows|grid-template-areas|grid-auto-flow|grid-auto-columns|grid-auto-rows)\s*:/
+
+/** 规则里是否已显式声明 display */
+const DISPLAY_PROP_RX = /\bdisplay\s*:/
+
+/**
+ * 🛡️ grid 布局确定性补全（治「多列网格塌成一列 / 内容溢出被裁」）。
+ *
+ * 背景（2026-09-14 实锤，`c-device-monitor-021848cc`）：LLM 常写出
+ * `.c-x-device-grid { grid-template-columns: repeat(3, 1fr) }` 却**漏写 `display: grid`**。
+ * 没有 `display: grid` 时 `grid-template-columns` 完全无效 —— 元素退回 `display: block`，
+ * 12 个设备卡被渲染成 12 行纵向堆叠 → 高度远超容器 → 被宿主外壳 `overflow: hidden` 裁掉，
+ * 视觉上表现为「整块内容凭空消失」，而所有代码门禁（L0-B）都**看不到**（CSS 合法、DOM 存在）。
+ *
+ * 存量扫描：8 个产物 / 18 条规则命中；且**零**「display 存在但不是 grid」的冲突案例
+ * → 保守规则「仅当完全没有 display 时才补」即可覆盖 100% 观测场景，绝不覆盖作者显式意图。
+ *
+ * 策略：
+ * - 只处理「含 grid-template-* / grid-auto-*」且「完全没有 display」的叶子声明块。
+ * - 插到匹配 `}` 之前；若前一条声明缺少结尾 `;` 自动补上（LESS/CSS 语法要求）。
+ * - 幂等：补全后规则里已有 display，再跑一次不再插入。
+ *
+ * 挂载点：microcode 写盘 sanitize 链（SFC `<style>` 块 + 独立 .less/.css）。
+ *
+ * @param {string} cssContent CSS/LESS 文本（纯样式内容，非 Vue SFC）
+ * @param {object} [logger] 可选日志对象
+ * @returns {string} 补全后的样式内容
+ */
+export function ensureGridDisplay(cssContent, logger) {
+  if (!cssContent || typeof cssContent !== 'string') return cssContent
+  if (!GRID_INTENT_PROP_RX.test(cssContent)) return cssContent
+
+  const positions = []
+  for (const b of scanLeafDeclarationBlocks(cssContent)) {
+    if (!GRID_INTENT_PROP_RX.test(b.inner)) continue
+    if (DISPLAY_PROP_RX.test(b.inner)) continue // 已有显式 display：不覆盖作者意图
+    positions.push(b.end)
+  }
+  if (positions.length === 0) return cssContent
+
+  let result = cssContent
+  // 从后往前应用，避免索引漂移
+  for (const pos of positions.sort((a, b) => b - a)) {
+    const before = result.slice(0, pos)
+    // 吃掉 `}` 前原有的空白/换行，统一只留一个换行，避免插入后多出空行
+    const trimmed = before.replace(/\s+$/, '')
+    // 前一条声明没有结尾 `;`（单行压缩写法）时必须先补 `;`，否则两条声明会粘在一起
+    const needSemi = trimmed && !/[;{}]$/.test(trimmed) ? ';' : ''
+    result = `${trimmed}${needSemi}\n  display: grid;` + result.slice(pos)
+  }
+
+  logger?.warn?.(
+    `🛡️ 已为 ${positions.length} 个含 grid-template-* 但缺 display 的规则补全 display: grid（防多列网格塌成一列被裁）`,
+  )
+  return result
+}
+
+/**
+ * 对 Vue SFC 内容中的所有 <style> 块执行 grid 布局补全。
+ * 幂等，可重复执行。
+ *
+ * @param {string} vueContent 完整 Vue SFC 内容
+ * @param {object} [logger] 可选日志对象
+ * @returns {string} 补全后的 Vue SFC 内容
+ */
+export function ensureGridDisplayInVueSfc(vueContent, logger) {
+  if (!vueContent || typeof vueContent !== 'string') return vueContent
+  return vueContent.replace(/<style([^>]*)>([\s\S]*?)<\/style>/gi, (fullMatch, attrs, innerContent) => {
+    const repaired = ensureGridDisplay(innerContent, logger)
+    return `<style${attrs}>${repaired}</style>`
+  })
+}
+
+/**
+ * 🛡️ 刀 20（2026-09-14）：按 class 给「缺 display 的 flex 容器」补 `display: flex`。
+ *
+ * 背景（`mc-1789319878658-485d724d`）：LLM 写出 `.c-x-slot-con`（无 display），
+ * 其子组件根却带 `flex: 1 1 0` 之类 —— **子项 flex 值在非 flex 容器下全部失效**，
+ * 容器退回 block → 本应「左 Tab 窄列 + 右内容区」的骨架塌成纵向堆叠，
+ * 设备网格被挤出视口 → 用户看到「与设计稿差距巨大」，而 CSS 合法、L0-B 全绿。
+ *
+ * 与 ensureGridDisplay 同族（「CSS 合法但视觉坏」），但定位方式不同：
+ * 那是「规则自带 grid 意图属性」可自含检测；本刀的意图证据在**模板结构**
+ * （≥2 个子项带 flex 值，见 flex-sibling-guard#healMissingFlexContainers），
+ * 这里只负责「给定 class，找到它的规则块补 display:flex」。
+ *
+ * 保守边界：
+ * - 规则体内已有任何 `display:` → 不动（不覆盖作者显式意图）；
+ * - 只补第一个命中的规则块；方向取 flex 默认 row（纵向意图的容器通常连子项
+ *   flex 值都不会写，命中不了本刀的检测条件）；
+ * - 幂等（补完再跑，DISPLAY_PROP_RX 命中即跳过）。
+ *
+ * @param {string} cssContent 纯样式内容（非 SFC）
+ * @param {string} className 不带点的 class 名
+ * @param {object} [logger]
+ * @returns {string}
+ */
+export function ensureDisplayFlexForClass(cssContent, className, logger) {
+  if (!cssContent || typeof cssContent !== 'string' || !className) return cssContent
+  const clsEsc = String(className).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const rx = new RegExp(`\\.${clsEsc}(?![\\w-])`, 'g')
+  let m
+  while ((m = rx.exec(cssContent)) !== null) {
+    const dot = m.index
+    // .cls 必须处在「选择器位置」：本段（上一个 } ; { 之后）到下一个 { 之间
+    const segStart = Math.max(
+      cssContent.lastIndexOf('}', dot),
+      cssContent.lastIndexOf(';', dot),
+      cssContent.lastIndexOf('{', dot),
+    ) + 1
+    const open = cssContent.indexOf('{', dot)
+    if (open < 0) continue
+    const nextClose = cssContent.indexOf('}', dot)
+    if (nextClose >= 0 && nextClose < open) continue // 在声明值/更深结构里，不是选择器
+    const selector = cssContent.slice(segStart, open)
+    if (!new RegExp(`\\.${clsEsc}(?![\\w-])`).test(selector)) continue
+    // 配对闭合 }（嵌套 LESS 父块也适用：display 属于父元素）
+    let depth = 1
+    let k = open + 1
+    for (; k < cssContent.length; k++) {
+      const c = cssContent[k]
+      if (c === '{') depth++
+      else if (c === '}') { depth--; if (depth === 0) break }
+    }
+    if (depth !== 0) continue
+    const body = cssContent.slice(open + 1, k)
+    if (DISPLAY_PROP_RX.test(body)) return cssContent
+    const trimmed = cssContent.slice(0, k).replace(/\s+$/, '')
+    const needSemi = trimmed && !/[;{}]$/.test(trimmed) ? ';' : ''
+    const out = `${trimmed}${needSemi}\n  display: flex;` + cssContent.slice(k)
+    logger?.warn?.(`🛡️ 已为 .${className} 补 display: flex（子项 flex 值在非 flex 容器下全部失效，布局塌方）`)
+    return out
+  }
+  return cssContent
+}
+
+/**
+ * ensureDisplayFlexForClass 的 SFC 版：只处理 <style> 块。
+ * @param {string} vueContent 完整 Vue SFC 内容
+ * @param {string} className 不带点的 class 名
+ * @param {object} [logger]
+ * @returns {string}
+ */
+export function ensureDisplayFlexForClassInVue(vueContent, className, logger) {
+  if (!vueContent || typeof vueContent !== 'string' || !className) return vueContent
+  let changed = false
+  const out = vueContent.replace(/<style([^>]*)>([\s\S]*?)<\/style>/gi, (whole, attrs, body) => {
+    const healed = ensureDisplayFlexForClass(body, className, null)
+    if (healed === body) return whole
+    changed = true
+    const at = whole.indexOf(body)
+    return whole.slice(0, at) + healed + whole.slice(at + body.length)
+  })
+  if (changed) logger?.warn?.(`🛡️ 已为 .${className} 补 display: flex（SFC scoped 样式）`)
+  return changed ? out : vueContent
 }

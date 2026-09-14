@@ -32,6 +32,7 @@ import {
 } from '../../utils/resource-import-guard.js';
 import { safeLogger } from '../../logger/safe-logger.js';
 import { extractSfcTemplate } from '../../utils/sfc-template-extractor.js';
+import { resolveSpecifierToPath } from '../../utils/section-coverage-guard.js';
 import { collectResourceVarRefsFromSfc } from '../../utils/resource-facts.js';
 import { normalizeFixedSizeFlex } from '../../utils/fixed-size-normalizer.js';
 // 量纲阈值与 FLEX 校验单点同源（code-structure-validator.js），杜绝「修复器一套、校验器一套」
@@ -573,199 +574,6 @@ export function dedupeBgMultiRefs(files, resourceDomMapping, options = {}) {
 // ══════════════════════════════════════════════════════════════
 
 /**
- * 🛡️ C1（2026-09-07，#568）：同图多别名去重。
- *
- * 问题：同一张背景图被 LLM 以多个别名（bg4~bg14）绑进多层 spread 嵌套 :style，
- * 最终只生效一张，其余都是噪音。根因是 figma-connector 按 Figma 节点分配编号，
- * 同一张图可能被多个容器节点引用，产生多个 assignedVarName 指向同一 resourceFile。
- *
- * 修复策略：按 resourceFile 聚合所有 success 的 bg 资源，若同一 resourceFile
- * 对应 ≥2 个 mapping，保留评分最高者（复用 pickBestMountTarget），其余别名的
- * 模板引用全部剥离（:style 仅含 background 相关属性则整条删除，否则只删 background 属性）。
- *
- * 与 dedupeBgMultiRefs 的区别：
- *   - dedupeBgMultiRefs：同一变量被挂到多个容器 → 保留评分最高者
- *   - dedupeSameImageAliases：不同变量指向同一张图 → 合并为一个变量
- */
-export function dedupeSameImageAliases(files, resourceDomMapping, options = {}) {
-  const logger = safeLogger(options.logger);
-  if (
-    !files ||
-    !Array.isArray(resourceDomMapping) ||
-    resourceDomMapping.length === 0
-  )
-    return { files, fixes: [] };
-
-  // 按 resourceFile 聚合 success 的 bg 资源
-  const fileToMappings = new Map();
-  for (const m of resourceDomMapping) {
-    if (
-      !m ||
-      m.downloadStatus !== 'success' ||
-      m.previewAnalysisRole !== 'bg' ||
-      !m.resourceFile ||
-      !m.assignedVarName
-    )
-      continue;
-    const key = m.resourceFile;
-    if (!fileToMappings.has(key)) fileToMappings.set(key, []);
-    fileToMappings.get(key).push(m);
-  }
-
-  // 找出同图多别名（≥2 个 mapping 指向同一 resourceFile）
-  const dupGroups = [];
-  for (const [file, mappings] of fileToMappings) {
-    if (mappings.length >= 2) {
-      dupGroups.push({ resourceFile: file, mappings });
-    }
-  }
-  if (dupGroups.length === 0) return { files, fixes: [] };
-
-  const out = { ...files };
-  const fixes = [];
-  const componentPrefix = inferComponentPrefix(out);
-  const allCands = collectMountCandidates(out);
-  const depthOf = new Map(allCands.map((c) => [c.tag, c.depth]));
-
-  for (const group of dupGroups) {
-    // 为每个 alias 收集模板引用
-    const aliasRefs = new Map(); // varName -> refs[]
-    for (const m of group.mappings) {
-      const varName = m.assignedVarName;
-      const refs = [];
-      for (const [p, c] of Object.entries(out)) {
-        if (typeof c !== 'string' || !p.endsWith('.vue')) continue;
-        const tagRe = /<([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>/])*)>/g;
-        let tm;
-        while ((tm = tagRe.exec(c)) !== null) {
-          const tag = tm[0];
-          if (!tag.includes(varName)) continue;
-          const classMatch =
-            tag.match(/class="([^"]*)"/) || tag.match(/class='([^']*')/);
-          const cls = classMatch ? classMatch[1].toLowerCase() : '';
-          refs.push({
-            file: p,
-            tag,
-            cls,
-            depth: depthOf.get(tag) ?? 0,
-          });
-        }
-      }
-      if (refs.length > 0) aliasRefs.set(varName, refs);
-    }
-
-    if (aliasRefs.size <= 1) continue; // 只有一个别名实际被引用，无需去重
-
-    // 选最佳别名：按评分最高者保留（复用 pickBestMountTarget）
-    let bestVarName = null;
-    let bestScore = -Infinity;
-    for (const [varName, refs] of aliasRefs) {
-      const m = group.mappings.find((mm) => mm.assignedVarName === varName);
-      const pool = refs.map((r) => ({
-        tag: r.tag,
-        cls: r.cls,
-        keyword: r.cls,
-        depth: r.depth,
-      }));
-      const best = pickBestMountTarget(m, pool, { componentPrefix });
-      const score = best ? best.score : -1;
-      if (score > bestScore) {
-        bestScore = score;
-        bestVarName = varName;
-      }
-    }
-    if (!bestVarName) continue;
-
-    // 剥离其余别名的引用
-    const removeVars = [...aliasRefs.keys()].filter((v) => v !== bestVarName);
-    for (const varName of removeVars) {
-      const refs = aliasRefs.get(varName);
-      for (const ref of refs) {
-        const styleMatch = ref.tag.match(/:style="([^"]*)"/);
-        if (!styleMatch) continue;
-        const inner = styleMatch[1].trim();
-        const isObjectLiteral = /^\{[\s\S]*\}$/.test(inner);
-        const hasSpread = /\.\.\./.test(inner);
-
-        // 提取非 background 属性
-        const bgKeys = [
-          'background',
-          'backgroundImage',
-          'backgroundSize',
-          'backgroundPosition',
-          'backgroundRepeat',
-        ];
-        let nonBgParts = [];
-        if (isObjectLiteral) {
-          // 简单解析对象字面量，提取非 background 属性
-          const stripped = inner.replace(
-            /\b(background(?:Image|Size|Position|Repeat)?)\s*:/g,
-            '__BG_KEY__:',
-          );
-          const pairs = stripped.split(',').map((s) => s.trim()).filter(Boolean);
-          for (const pair of pairs) {
-            if (!pair.startsWith('__BG_KEY__')) {
-              nonBgParts.push(pair);
-            }
-          }
-        }
-
-        let newTag;
-        if (!isObjectLiteral || hasSpread || nonBgParts.length > 0) {
-          // 只删 background 相关属性，保留其他
-          let newInner = inner;
-          for (const bgKey of bgKeys) {
-            newInner = newInner.replace(
-              new RegExp(`\\b${bgKey}\\s*:[^,}]+,?`, 'g'),
-              '',
-            );
-          }
-          newInner = newInner.replace(/\{\s*,/g, '{').replace(/,\s*\}/g, '}').trim();
-          if (newInner === '{}' || !/[a-zA-Z]+\s*:/.test(newInner)) {
-            newTag = ref.tag.replace(/\s*:style="[^"]*"/, '');
-          } else {
-            newTag = ref.tag.replace(
-              /:style="[^"]*"/,
-              `:style="${newInner}"`,
-            );
-          }
-        } else {
-          // 整条 :style 都是 background，直接删除
-          newTag = ref.tag.replace(/\s*:style="[^"]*"/, '');
-        }
-
-        const pos = out[ref.file].indexOf(ref.tag);
-        if (pos < 0) continue;
-        out[ref.file] =
-          out[ref.file].slice(0, pos) +
-          newTag +
-          out[ref.file].slice(pos + ref.tag.length);
-        fixes.push({
-          resourceFile: group.resourceFile,
-          keptVar: bestVarName,
-          removedVar: varName,
-          file: ref.file,
-          tag: ref.cls,
-        });
-      }
-    }
-  }
-
-  if (fixes.length > 0 && logger) {
-    logger.warn('🛡️ C1 已去重同图多别名（同一张图只保留一个最佳挂载点）', {
-      fixCount: fixes.length,
-      groups: dupGroups.length,
-    });
-  }
-
-  return { files: out, fixes };
-}
-
-// ══════════════════════════════════════════════════════════════
-//  Section 2c: C2 空壳解绑（#568）
-// ══════════════════════════════════════════════════════════════
-
-/**
  * 🛡️ C2（2026-09-07，#568）：空壳解绑。
  *
  * 问题：T1 标题剥离后，原标题元素（如 <div class="title-group">标题文字</div>）
@@ -926,149 +734,6 @@ export function mountSubStateBackground(allFiles, varName, m, options = {}) {
   return null;
 }
 
-/**
- * P0-1 主入口：自动挂载未被引用的 bg 资源。
- * @returns {Array<{var, file, keyword, bgRole, mountTarget}>} 挂载结果清单
- */
-export function autoMountUnusedBackgrounds(
-  allFiles,
-  resourceDomMapping,
-  styleEvidence = null,
-  options = {},
-) {
-  const logger = safeLogger(options.logger);
-  if (process.env.BG_AUTO_MOUNT === 'false') return [];
-  if (!Array.isArray(resourceDomMapping) || resourceDomMapping.length === 0)
-    return [];
-
-  const usageCorpus = buildResourceUsageCorpus(allFiles);
-  // R0-6（2026-09-01）：可用资源过滤统一走 filterAvailableResources 单一帮手
-  const candidates = filterAvailableResources(resourceDomMapping).filter(
-    (m) =>
-      m.previewAnalysisRole === 'bg' &&
-      m.assignedVarName &&
-      !m.skipMount &&
-      !m.isTinyDecoration &&
-      !isResourceUsedInCorpus(usageCorpus, m),
-  );
-  if (candidates.length === 0) return [];
-
-  const mounted = [];
-  const usedSectionContainers = new Set();
-  const mountPrefix = inferComponentPrefix(allFiles);
-  const usedMountTags = new Set();
-  for (const m of candidates) {
-    const varName = m.assignedVarName;
-    if (m.bgRole === 'sub-state') {
-      const stateMounted = mountSubStateBackground(
-        allFiles,
-        varName,
-        m,
-        options,
-      );
-      if (stateMounted) {
-        mounted.push(stateMounted);
-        continue;
-      }
-      // 🛡️ 修复（2026-08-31）：sub-state 背景找不到目标时，禁止回退
-      // 原逻辑：回退到普通容器挂载（可能误挂到根容器）
-      // 新逻辑：直接放弃挂载，避免误挂
-      logger.warn(
-        '🛡️ sub-state 背景未找到 active 状态元素，放弃挂载（禁止回退避免误挂）',
-        {
-          var: varName,
-          mountTarget: m.mountTarget || m.name || '',
-          reason: 'no-active-element-found',
-        },
-      );
-      continue; // 跳过，不再回退到普通容器挂载
-    }
-    const kws = extractMountKeywords(m);
-    const ordered = kws;
-    const mountCandidates = collectMountCandidates(allFiles);
-
-    const shortlist = [];
-    const vueEntries = Object.entries(allFiles)
-      .filter(
-        ([p, c]) =>
-          typeof p === 'string' && p.endsWith('.vue') && typeof c === 'string',
-      )
-      .sort(([a]) => (a === 'package/index.vue' ? -1 : 1));
-    const candIndex = new Map(
-      mountCandidates.map((c) => [`${c.file}::${c.tag}`, c]),
-    );
-    for (const [p, c] of vueEntries) {
-      for (const kw of ordered) {
-        const tag = findTagByClassKeyword(c, kw);
-        if (!tag) continue;
-        const meta = candIndex.get(`${p}::${tag}`);
-        if (shortlist.some((s) => s.file === p && s.tag === tag)) continue;
-        shortlist.push({
-          file: p,
-          tag,
-          keyword: kw,
-          cls: meta?.cls || '',
-          depth: meta?.depth ?? 0,
-          isHostShell: meta?.isHostShell ?? HOST_SHELL_TAG_RE.test(tag),
-          hasBgBinding: meta?.hasBgBinding ?? /background/i.test(tag),
-        });
-      }
-    }
-    let target = pickBestMountTarget(m, shortlist, {
-      componentPrefix: mountPrefix,
-      skipBound: true,
-      usedTags: usedMountTags,
-    });
-    if (!target) {
-      target = pickBestMountTarget(m, mountCandidates, {
-        componentPrefix: mountPrefix,
-        skipBound: true,
-        usedTags: usedMountTags,
-      });
-    }
-    if (!target) {
-      // Loop 0.D：关键词失败 → 不挂 region-fallback，记诊断。不要为「用完」乱挂。
-      logger.warn('🛡️ 背景兜底挂载已放弃：关键词未命中，禁止 region-fallback', {
-        var: varName,
-        reason: 'region-fallback-disabled',
-      });
-      continue;
-    }
-    if (!target) continue;
-
-    // 🛡️ 修复（2026-09-08）：资源归属精确化 — 检查该资源是否已被其他组件引用
-    // 同一 bg 被多个组件引用时，只允许挂载到第一个匹配的组件（按文件路径排序）
-    // 避免同一资源在多个子组件中重复挂载导致视觉混乱
-    const existingBinding = findExistingResourceBinding(allFiles, varName);
-    if (existingBinding && existingBinding.file !== target.file) {
-      logger.warn('🛡️ 资源已被其他组件引用，跳过重复挂载', {
-        var: varName,
-        existingFile: existingBinding.file,
-        existingTag: existingBinding.tag,
-        attemptedFile: target.file,
-        attemptedTag: target.tag,
-      });
-      continue;
-    }
-
-    const before = allFiles[target.file];
-    let updated = injectBgStyleBinding(before, target.tag, varName, m);
-    if (!updated) continue;
-    updated = ensureResourceImportInVue(updated, varName, m, target.file);
-    if (updated === before) continue;
-    allFiles[target.file] = updated;
-    usedMountTags.add(target.tag);
-    mounted.push({
-      var: varName,
-      file: target.file,
-      keyword: target.keyword,
-      bgRole: m.bgRole || null,
-      mountTarget: m.mountTarget || null,
-    });
-  }
-  return mounted;
-}
-
 // ══════════════════════════════════════════════════════════════
 //  Section 4: 自动挂载 — 图标 / 图片
 // ══════════════════════════════════════════════════════════════
@@ -1117,105 +782,6 @@ export function injectImgChild(content, openTag, varName, alt = '', size = null)
   const insertAt =
     pos + openTag.length + (existing ? existing[1].length : 0);
   return content.slice(0, insertAt) + imgTag + content.slice(insertAt);
-}
-
-/**
- * 自动挂载未被引用的 icon / img 资源。
- * @returns {Array<{var, file, keyword, role, mountTarget}>} 挂载结果清单
- */
-export function autoMountUnusedIcons(
-  allFiles,
-  resourceDomMapping,
-  options = {},
-) {
-  const logger = safeLogger(options.logger);
-  if (process.env.ICON_AUTO_MOUNT === 'false') return [];
-  if (!Array.isArray(resourceDomMapping) || resourceDomMapping.length === 0)
-    return [];
-
-  const usageCorpus = buildResourceUsageCorpus(allFiles);
-  // R0-6（2026-09-01）：可用资源过滤统一走 filterAvailableResources 单一帮手
-  const candidates = filterAvailableResources(resourceDomMapping).filter(
-    (m) =>
-      (m.previewAnalysisRole === 'icon' ||
-        m.previewAnalysisRole === 'img' ||
-        m.previewAnalysisRole === 'image') &&
-      m.assignedVarName &&
-      !m.skipMount &&
-      !m.isTinyDecoration &&
-      !isResourceUsedInCorpus(usageCorpus, m),
-  );
-  if (candidates.length === 0) return [];
-
-  const mounted = [];
-  const usedContainers = new Set();
-  // 🛡️ D-2（2026-09-02）：同一容器内多图标按 figmaBox.x 升序处理，配合 injectImgChild 追加
-  // 到已有 auto-mounted-icon 之后 → 最终 DOM 顺序与 Figma x 一致（icon1 x=1816 在左、icon2 x=1844 在右）。
-  // 优先取子资源自身 figmaBox（24×24），不取 missing 容器（52×24，父容器）。
-  const sortable = [...candidates].sort((a, b) => {
-    const ax = a.figmaBox?.x ?? a.visualMeta?.x ?? 0;
-    const bx = b.figmaBox?.x ?? b.visualMeta?.x ?? 0;
-    return ax - bx;
-  });
-  for (const m of sortable) {
-    const varName = m.assignedVarName;
-    const kws = extractMountKeywords(m);
-
-    let target = null;
-    const vueEntries = Object.entries(allFiles)
-      .filter(
-        ([p, c]) =>
-          typeof p === 'string' && p.endsWith('.vue') && typeof c === 'string',
-      )
-      .sort(([a]) => (a === 'package/index.vue' ? -1 : 1));
-    outer: for (const [p, c] of vueEntries) {
-      for (const kw of kws) {
-        const tag = findTagByClassKeyword(c, kw);
-        if (tag) {
-          target = { file: p, tag, keyword: kw };
-          break outer;
-        }
-      }
-    }
-
-    if (!target) {
-      // Loop 0.D：关键词失败 → 不挂 region-fallback / root-fallback。
-      logger.warn('🛡️ 图标兜底挂载已放弃：关键词未命中，禁止 region-fallback', {
-        var: varName,
-        reason: 'region-fallback-disabled',
-        role: m.previewAnalysisRole || null,
-        mountTarget: m.mountTarget || null,
-        resourceFile: m.resourceFile || m.name || null,
-      });
-      continue;
-    }
-    if (!target) continue;
-
-    const before = allFiles[target.file];
-    // 🛡️ D-1（2026-09-02）：icon 尺寸真值化——mapping 子资源自身 figmaBox（24×24）→ 精确
-    // width/height，clamp [12,128] 防异常；无尺寸回落 injectImgChild 内 AUTO_MOUNT_ICON_MAX_PX 兜底。
-    const _fb = m.figmaBox || m.visualMeta || {};
-    const _iconSize =
-      Number(_fb?.width) > 0 && Number(_fb?.height) > 0
-        ? {
-            width: Math.min(128, Math.max(12, Math.round(Number(_fb.width)))),
-            height: Math.min(128, Math.max(12, Math.round(Number(_fb.height)))),
-          }
-        : null;
-    let updated = injectImgChild(before, target.tag, varName, m.name || '', _iconSize);
-    if (!updated) continue;
-    updated = ensureResourceImportInVue(updated, varName, m, target.file);
-    if (updated === before) continue;
-    allFiles[target.file] = updated;
-    mounted.push({
-      var: varName,
-      file: target.file,
-      keyword: target.keyword,
-      role: m.previewAnalysisRole || null,
-      mountTarget: m.mountTarget || null,
-    });
-  }
-  return mounted;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1289,7 +855,7 @@ function extractBgFallbackValue(mapping) {
 
 /**
  * 兜底：通过关键词匹配找到目标容器，注入 fallback CSS 类。
- * 复用 autoMountUnusedBackgrounds 同一套关键词/容器匹配工具。
+ * 复用资源挂载计划（resource-mount-plan）同一套关键词/容器匹配工具。
  */
 function injectBgFallbackClass(
   content,
@@ -1571,7 +1137,10 @@ export function normalizeStyleLessVars(
     );
     if (inventedVars.length > 0) {
       const decl = inventedVars
-        .map((v) => `@${v}: ${safeLessVarValue('@' + v)};`)
+        .map(
+          (v) =>
+            `@${v}: ${safeLessVarValue('@' + v, { styleText: styleNow })};`,
+        )
         .join('\n');
       updated = updated.replace(/<style\b[^>]*>/g, (m) => `${m}\n${decl}\n`);
     }
@@ -1593,10 +1162,10 @@ export function normalizeStyleLessVars(
  *
  * 根因（mc-max-1788056145870-6e65dc88 实锤）：LLM 把 bg2 正确挂在 HeaderTabs.vue，
  * 但 HeaderTabs 被 P1-2 孤儿剔除删掉（index.vue 只用 EnvTabBar）→ 唯一正确挂载点消失
- * → autoMountUnusedBackgrounds 兜底时关键词匹配不到 → 降级 root-fallback 挂到 base-panel。
+ * → 旧兜底挂载关键词匹配不到会降级 root-fallback（已随批次 2 删除，改计划驱动 fail-closed）。
  * 治本：剔除前先迁移，正确挂载点不丢失，兜底不再错位。
  *
- * 只迁移 bg（icon 有独立 autoMountUnusedIcons 兜底，且 img 迁移语义与 bg 不同）。
+ * 只迁移 bg（icon/img 由 mountPlannedResources 计划驱动挂载，迁移语义不同）。
  * @param {Object} allFiles - 产物文件表
  * @param {Array} resourceDomMapping - 资源映射
  * @param {string[]} orphanPaths - 待剔除的孤儿文件路径
@@ -1657,7 +1226,7 @@ export function migrateOrphanResourceRefs(
           }
         }
       }
-      if (!target) continue; // 找不到替代点，交 autoMountUnusedBackgrounds 兜底
+      if (!target) continue; // 找不到替代点，交 mountPlannedResources 计划挂载
       let updated = injectBgStyleBinding(
         allFiles[target.file],
         target.tag,
@@ -1763,17 +1332,12 @@ export function pruneOrphanSubComponents(
   );
   const importVueRe =
     /^[ \t]*import\s+[A-Za-z_$][\w$]*\s+from\s+(['"])(\.[^'"]*\.vue)\1\s*;?[ \t]*$/gm;
-  const resolveRelativeVue = (fromFile, spec) => {
-    const clean = String(spec || '').replace(/['"]/g, '').trim();
-    if (!/\.vue$/i.test(clean) || !clean.startsWith('.')) return null;
-    const stack = fromFile.split('/').slice(0, -1);
-    for (const part of clean.split('/')) {
-      if (part === '.' || part === '') continue;
-      if (part === '..') stack.pop();
-      else stack.push(part);
-    }
-    return stack.join('/');
-  };
+  // 🛡️ 单一事实源：相对 .vue specifier 解析统一委托 section-coverage-guard#
+  // resolveSpecifierToPath（与 detect/strip 悬空引用同套逻辑），杜绝「资源挂载链 / 悬空
+  // 引用 / 孤儿剔除」各自写一套路径解析造成的行为漂移。
+  const present = new Set(Object.keys(allFiles));
+  const resolveRelativeVue = (fromFile, spec) =>
+    resolveSpecifierToPath(fromFile, spec, present);
   const refQueue = ['package/index.vue'];
   while (refQueue.length > 0) {
     const cur = refQueue.shift();
@@ -2482,11 +2046,28 @@ export function fixSectionHeightsForResource(content, ctx, options = {}) {
     if (ROOT_SELECTOR_RE.test(head)) return whole;
     const px = lookupSectionPx(head);
     // 升级分支：无 height:100% 但残留盲注 flex: 1 1 0 → 命中映射时改写为真值 flexGrow 系数
+    // 🎯 2026-09-14 治本（c-traffic-monitor-3147d679 真机实锤）：
+    // 原分支只认**字面量** `flex: 1 1 0`——LLM 若直接写了错误系数（如 vision 猜的
+    // `flex: 3.73 1 0`，一对 Figma 等高 131px 的柱状图被报成 3.73/0.952，3.9 倍失配），
+    // 正则完全不匹配 → 错误比例原样落盘 → 高度塔状失衡（大空白 + 区块挤压重叠）。
+    // 铁律：**sectionHeights（源自 repaired plan）是唯一权威**，凡是命中该映射的 section
+    // 根类，其 ratio 量级 flex 声明一律改写为权威系数；grow=0 的附属区（`flex: 0 0 Npx`）
+    // 与像素量级声明不碰。幂等：改写后再跑值不变。
     if (!/height:\s*100%\s*;?/i.test(body)) {
-      if (px > 0 && /flex\s*:\s*1\s+1\s+0\s*;?/i.test(body)) {
-        const newBody = body.replace(/flex\s*:\s*1\s+1\s+0\s*;?/gi, `flex: ${px} 1 0;`);
-        if (newBody !== body) changed = true;
-        return head + newBody + '}';
+      if (px > 0) {
+        const ratioMax = Number(FLEX_GROW_SCALES?.RATIO_MAX) || 19;
+        const newBody = body.replace(
+          /flex\s*:\s*(\d+(?:\.\d+)?)\s+([01])\s+(0|auto)\s*;?/gi,
+          (m, g, s, b) => {
+            const gv = Number(g);
+            if (!(gv > 0) || gv > ratioMax) return m;
+            return `flex: ${px} ${s} ${b};`;
+          },
+        );
+        if (newBody !== body) {
+          changed = true;
+          return head + newBody + '}';
+        }
       }
       return whole;
     }
@@ -2554,13 +2135,52 @@ export function fixSectionHeightsForResource(content, ctx, options = {}) {
     }
   }
 
+  // 🛡️ 规则⑤（删减法批次 3 loop 3a，2026-09-14）：布局事实确定性写出。
+  // 取代 healGridContainer（grid-template-* 漏 display:grid）/ ensureGridDisplay /
+  // ensureFlexDirection 的事后猜测修补：事实表（sectionLayoutFacts）直接给出
+  // display / gridColumns / flexDirection，这里只做「缺则补」，不覆盖 LLM 已写的 display。
+  const layoutFacts = ctx?.sectionLayoutFacts || null;
+  let out5 = out4;
+  if (layoutFacts) {
+    out5 = out4.replace(RULE_BLOCK_RE, (whole, head, body) => {
+      let facts = null;
+      for (const m of String(head).matchAll(/\.([A-Za-z][\w-]*)/g)) {
+        const f = layoutFacts[m[1]];
+        if (f) {
+          facts = f;
+          break;
+        }
+      }
+      if (!facts) return whole;
+      let newBody = body;
+      if (facts.display === 'grid') {
+        if (!/display\s*:\s*grid/i.test(newBody)) {
+          newBody = `\n  display: grid;${newBody}`;
+        }
+        if (
+          facts.gridColumns &&
+          !/grid-template-columns/i.test(newBody)
+        ) {
+          newBody += `\n  grid-template-columns: repeat(${facts.gridColumns}, 1fr);`;
+        }
+      } else if (!/display\s*:\s*flex/i.test(newBody)) {
+        newBody = `\n  display: flex;\n  flex-direction: ${facts.flexDirection || 'column'};${newBody}`;
+      }
+      if (newBody !== body) {
+        changed = true;
+        return head + newBody + '}';
+      }
+      return whole;
+    });
+  }
+
   if (changed && logger) {
     logger.warn(
-      '🛡️ 语义分流修复：flex-grow 臆造值 / height:100% section 根 → 等比例分配；固定 px 尺寸区块 → flex: 0 0 auto',
+      '🛡️ 语义分流修复：flex-grow 臆造值 / height:100% section 根 → 等比例分配；固定 px 尺寸区块 → flex: 0 0 auto；布局事实缺则补（display/grid/flex-direction）',
       { file: path },
     );
   }
-  return changed ? out4 : content;
+  return changed ? out5 : content;
 }
 
 /**

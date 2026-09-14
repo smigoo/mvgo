@@ -153,6 +153,11 @@ export function formatResourceMapping(mappings, options = {}) {
     filteredMappings = filterPanelResources(mappings)
   }
 
+  // 🛡️ 删减法批次 2 loop 2c（2026-09-14）：同图共享别名折叠。
+  // visual-order-assign 已把同 resourceFile 条目共用 assignedVarName 并标记 isSharedAlias；
+  // prompt 只呈现首个条目（单一事实），别名不再逐条列出诱导 LLM 多别名引用。
+  filteredMappings = filteredMappings.filter((m) => !m?.isSharedAlias)
+
   if (filteredMappings.length === 0) return ''
 
   const { available, failed } = partitionByStatus(filteredMappings)
@@ -456,6 +461,8 @@ export function formatResourceMappingCompact(mappings, options = {}) {
   if (doPanelFilter) {
     filteredMappings = filterPanelResources(mappings)
   }
+  // 🛡️ 2c：同图共享别名折叠（同 formatResourceMapping 主实现口径）
+  filteredMappings = filteredMappings.filter((m) => !m?.isSharedAlias)
   if (filteredMappings.length === 0) return ''
 
   const { available, failed } = partitionByStatus(filteredMappings)

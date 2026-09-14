@@ -15,8 +15,9 @@ export function buildLayoutConstraintReinforcement(layoutStructure) {
 
   const sections = layoutStructure.sections || []
   const sectionCount = sections.length
-  const hasGrid = sections.some(s => s.layout === 'grid' || (s.body && s.body.layout === 'grid'))
-  const hasTwoCol = sections.some(s => /2-?col/i.test(s.layout) || (s.body && /2-?col/i.test(s.body.layout)))
+  const hasNestedGrid = sections.some(
+    (s) => (s.gridColumns ?? (s.body && s.body.gridColumns)) && (s.layout || (s.body && s.body.layout)) !== 'grid',
+  )
 
   return `
 ## 🚫 布局约束铁律（违反将被L0-B门禁拦截）
@@ -38,38 +39,39 @@ export function buildLayoutConstraintReinforcement(layoutStructure) {
 - ✅ 正确：图表数量必须与 charts 数组长度完全一致
 - 📋 验证清单：生成的图表数量 === charts.length
 
-### 布局方向铁律
+### ⚠️ 布局方向由系统注入（LLM 勿写勿改）
+
+> 🛡️ 删减法批次 3 loop 3b（2026-09-14）：布局的 **display / flex-direction / 栅格列数**
+> 已由 sectionLayoutFacts（来自 Figma 真值：flexGrow / figmaHeightPx / layout / gridColumns）**确定性注入**，
+> 后处理按事实表「缺则补」（规则⑤）。LLM **不要再为 section 根手写这些布局属性**，也不要覆盖它们——
+> 手写 flex/grid 值会覆盖注入事实，引发布局错乱（卡片挤成单行等实锤）。
+> **你只需保证 section 的 DOM 结构与数量正确，布局交给系统。**
+>
+> ⚠️ **例外（双层结构内层栅格）**：当某一 section 外层是横排、内部还有 N 列栅格（如 @antd/tab 外层 tab + 右内容区 3 列设备栅格）
+> 时，内层内容区的栅格**目前事实表尚不能表达**（事实表是 section 级单层），故内层栅格的硬约束**仍由你遵守**
+> （见下方「内层栅格铁律」）。这是 3b 的唯一例外，待事实表支持双层内层后一并摘除。
 
 ${sections.map((s, i) => {
+  const name = s.name || s.title || s.responsibility || 'unnamed'
   const layout = s.layout || (s.body && s.body.layout) || 'vertical'
-  const gridCols = s.body && s.body.gridColumns
-
-  let rule = `**Section ${i + 1}: ${s.name || 'unnamed'}**\n`
-
-  if (layout === 'horizontal') {
-    rule += `- 布局方向: \`flex-direction: row\` (横向排列)\n`
-    rule += `- ❌ 禁止改为竖向堆叠\n`
-  } else if (layout === 'vertical') {
-    rule += `- 布局方向: \`flex-direction: column\` (竖向堆叠)\n`
-    rule += `- ❌ 禁止改为横向排列\n`
-  } else if (layout === 'grid' && gridCols) {
-    rule += `- 布局方向: \`display: grid; grid-template-columns: repeat(${gridCols}, 1fr)\`\n`
-    rule += `- ❌ 禁止改为 flex 布局\n`
-    rule += `- ❌ 禁止改变列数为 ${gridCols} 之外的值\n`
-  } else if (/2-?col/i.test(layout)) {
-    rule += `- 布局方向: \`flex-direction: row\` (两列并排)\n`
-    rule += `- ❌ 禁止改为上下堆叠\n`
+  const gridCols = (s.gridColumns ?? (s.body && s.body.gridColumns)) || null
+  let rule = `**Section ${i + 1}: ${name}**\n`
+  rule += `- 布局形态：${layout === 'horizontal' || /2-?col/i.test(layout) ? '横向排列（row / 两列并排）' : layout === 'grid' || gridCols ? (gridCols ? `网格（${gridCols} 列）` : '网格') : '竖向堆叠（column）'}（section 根 display/flex/grid 由系统注入，勿手写）\n`
+  // 🛡️ 双层结构内层栅格（事实表未覆盖，必须保留硬约束，否则内层塌缩为单行 —— 80021ec7 实锤）：
+  if (gridCols && layout !== 'grid') {
+    rule += `- ⚠️ 内层内容区（设备/卡片网格）必须用 \`display: grid; grid-template-columns: repeat(${gridCols}, 1fr)\`（系统暂不能注入，必须手动遵守）\n`
+    rule += `  - ❌ 内层网格禁止用 \`flex-direction: row\` 把卡片排成单行\n`
+    rule += `  - ❌ 内层列数禁止改为 ${gridCols} 之外的值\n`
   }
-
   return rule
 }).join('\n')}
 
 ### 自检清单（生成后必须检查）
 
 - [ ] Section 数量 === layoutStructure.sections.length (${sectionCount}个)
-- [ ] 每个 Section 的布局方向符合上述铁律
-${hasGrid ? '- [ ] 网格布局的列数与标注一致\n' : ''}${hasTwoCol ? '- [ ] 两列布局使用 flex-direction: row\n' : ''}- [ ] 没有臆造额外的统计卡片/列表列/图表
-- [ ] 所有元素都能在 layoutStructure 中找到对应节点
+- [ ] 没有臆造额外的统计卡片/列表列/图表
+- [ ] 没有为 section 根手写 display:flex/grid 或 flex-direction（已由系统注入）
+${hasNestedGrid ? '- [ ] 双层结构的内层栅格仍按要求用 grid + 正确列数（系统暂不能注入）\n' : ''}- [ ] 所有元素都能在 layoutStructure 中找到对应节点
 `
 }
 

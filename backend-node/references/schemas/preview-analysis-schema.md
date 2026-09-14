@@ -63,11 +63,15 @@
 
 `layout.sections` 表示从上到下的主模块列表。
 
-每个 section 节点允许递归嵌套，并支持 `header/body` 分层结构：
+每个 section 节点允许递归嵌套，并支持 `header/body` 分层结构。
+
+> ⚠️ **`id` 字段强制约束（源头治理，2026-09-14 · 流量监测 `34750940` 实证）**：
+> `section.id` / `children[].id` / `items[].id` **必须用 Figma 节点真实 id（形如 `"2:3550"` 的 `数字:数字`）**，**禁止用语义化字符串**（如 `"daily-total"` / `"stats-1"` / `"time-selector"`）。
+> 原因：下游 `collectSourceNodeIds`（`subcomponent-planner.js`）只认 `数字:数字` 正则，语义 id 会被直接丢弃 → `sourceNodeIds=[]` → section 变成「无归属壳」，触发不可锚去重误伤。即便本 schema 示例曾用语义 id，也已更正为节点 id 风格。
 
 ```json
 {
-  "id": "daily-total",
+  "id": "2:3550",
   "name": "当日总流量",
   "role": "常驻",
   "layout": "vertical",
@@ -77,7 +81,7 @@
     "title": "当日总流量",
     "controls": [
       {
-        "id": "time-selector",
+        "id": "89:37",
         "name": "时间选择",
         "role": "dropdown",
         "value": "24小时"
@@ -89,13 +93,13 @@
     "bgPlaceholder": "container-bg",
     "children": [
       {
-        "id": "stats-1",
+        "id": "90:12",
         "name": "江阴靖江长江隧道",
         "role": "stat-card",
         "value": "34,620"
       },
       {
-        "id": "stats-2",
+        "id": "90:13",
         "name": "江阴大桥",
         "role": "stat-card",
         "value": "82,379"
@@ -111,7 +115,7 @@
 
 ```json
 {
-  "id": "jurisdiction-scope",
+  "id": "1452:1950",
   "name": "管辖范围",
   "role": "常驻",
   "layout": "vertical",

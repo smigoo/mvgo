@@ -31,20 +31,36 @@ import { fixTextOrderDrift } from '../../utils/text-order-guard.js';
 import { parse as parseJavaScript } from '@babel/parser';
 import { inferChartMinHeight } from '../../utils/post-process.js';
 import { extractSfcTemplate } from '../../utils/sfc-template-extractor.js';
+import { stripDanglingComponentRefs } from '../../utils/section-coverage-guard.js';
+import {
+  isUsedByLessColorFn,
+  isColorEvaluable,
+  NEUTRAL_LESS_COLOR,
+} from '../../utils/less-color-funcs.js';
 
 function isIndexVuePath(path) {
   return /(^|\/)package\/index\.vue$/i.test(String(path || ''));
 }
 
 /**
- * 🛡️ 悬空子组件 import 剥离（2026-08-30）
+ * 🛡️ 悬空子组件 import 剥离（2026-08-30；2026-09-14 收口为「单一事实源」委派）
  *
  * 背景：planner 规划了 N 个 section，但子组件生成可能只兑现部分。模型基于「应该有」的预期，
  * 在产物里脑补 `import NavTabs from './NavTabs.vue'`——这些文件从未存在。
  *
- * 本规则显式化：任何 `from './X.vue'` 的相对 import，若目标文件不在文件集中，一律剥离，
- * 并**同步剥离模板中对应的组件标签**——只删 import 不删标签会留下未声明变量，
- * 反而触发「模板引用未声明变量」的语义校验失败。
+ * 本规则显式化：任何指向文件集内不存在 `.vue` 的相对 import，一律剥离，并**同步剥离模板中
+ * 对应的组件标签**——只删 import 不删标签会留下未声明变量，反而触发「模板引用未声明变量」
+ * 的语义校验失败。
+ *
+ * ⚠️ **单一事实源**：真正的剥离逻辑已统一到 `stripDanglingComponentRefs`
+ * （`utils/section-coverage-guard.js`），本函数仅做「非变异包装 + 日志」。历史教训：
+ * 2026-08-30 的旧实现只认静态 `import X from './X.vue'`，漏掉
+ * `defineAsyncComponent(() => import('./X.vue'))` 动态形态——那正是
+ * mc-max-1789376057659-2290591b 的真实崩溃点（子组件层越权 import 7 个不存在的兄弟
+ * section → 浏览器 404 + render-error）。收口后本函数（含 P1-4 降级链路）自动获得动态
+ * import 覆盖，不再有「自检通过、运行崩」的盲区。
+ *
+ * 契约保持：**非变异**（返回新对象，不改动入参 allFiles）、未改动时返回原对象引用。
  *
  * @param {Object<string,string>} allFiles 路径 → 内容
  * @param {Object} [options]
@@ -55,77 +71,16 @@ export function pruneDanglingSubComponentImports(allFiles, options = {}) {
   const logger = safeLogger(options.logger);
   if (!allFiles || typeof allFiles !== 'object') return allFiles;
 
-  const fileSet = new Set(Object.keys(allFiles).filter(Boolean));
+  // 非变异委派：mutate=false → stripDanglingComponentRefs 在浅拷贝上工作，不触碰入参。
+  const { files: out, stripped } = stripDanglingComponentRefs(allFiles, undefined, false);
+  if (stripped.length === 0 || out === allFiles) return allFiles;
 
-  /** 解析相对 import 说明符为文件集内的绝对路径 */
-  const resolveRelative = (fromFile, spec) => {
-    const clean = String(spec || '')
-      .replace(/['"]/g, '')
-      .trim();
-    if (!/\.vue$/i.test(clean)) return null;
-    if (!clean.startsWith('.')) return null; // 只处理相对路径
-    const stack = fromFile.split('/').slice(0, -1);
-    for (const part of clean.split('/')) {
-      if (part === '.' || part === '') continue;
-      if (part === '..') stack.pop();
-      else stack.push(part);
-    }
-    return stack.join('/');
-  };
-
-  const out = { ...allFiles };
-  let changed = false;
-  const removed = [];
-
-  // 匹配 import 语句（含结尾分号可选），捕获本地变量名与说明符
-  const importRe =
-    /^[ \t]*import\s+([A-Za-z_$][\w$]*)\s+from\s+(['"])(\.[^'"]*\.vue)\2\s*;?[ \t]*$/gm;
-
-  for (const [path, content] of Object.entries(out)) {
-    if (!/\.vue$/i.test(path) || typeof content !== 'string') continue;
-
-    const matches = [...content.matchAll(importRe)];
-    const dangling = [];
-    for (const m of matches) {
-      const varName = m[1];
-      const target = resolveRelative(path, m[3]);
-      if (!target || fileSet.has(target)) continue;
-      dangling.push({ varName, target, stmt: m[0] });
-    }
-    if (dangling.length === 0) continue;
-
-    let next = content;
-    for (const d of dangling) {
-      // 1) 删除 import 语句整行
-      next = next.replace(d.stmt, '');
-      // 2) 删除模板中的组件标签
-      const selfCloseRe = new RegExp(
-        `^[ \\t]*<${d.varName}\\b[^>]*\\/>[ \\t]*\\r?\\n?`,
-        'gm',
-      );
-      const pairRe = new RegExp(
-        `^[ \\t]*<${d.varName}\\b[^>]*>[\\s\\S]*?<\\/${d.varName}>[ \\t]*\\r?\\n?`,
-        'gm',
-      );
-      next = next.replace(pairRe, '').replace(selfCloseRe, '');
-      removed.push({ file: path, var: d.varName, missing: d.target });
-    }
-
-    // 清理可能因删除产生的连续空行（最多压成 1 个）
-    next = next.replace(/\n{3,}/g, '\n\n');
-    if (next !== content) {
-      out[path] = next;
-      changed = true;
-    }
-  }
-
-  if (changed && removed.length > 0 && logger) {
-    logger.warn(`🛡️ 已剥离 ${removed.length} 处指向不存在文件的子组件 import`, {
-      removed,
+  if (logger) {
+    logger.warn(`🛡️ 已剥离 ${stripped.length} 个文件中的悬空子组件 import`, {
+      removed: stripped.map((s) => ({ file: s.file, missing: s.refs })),
     });
   }
-
-  return changed ? out : allFiles;
+  return out;
 }
 
 /**
@@ -1464,6 +1419,9 @@ export function healThemeMixinVarRefs(content, themeVarsContent) {
  * （合规）；同时 LESS 编译不再报 variable undefined（原自愈的初衷照旧满足）。
  * 编译产物 CSS 与替换方案**完全等价**，不改变运行时行为（已用三样例 + less 4.9.0 验证）。
  *
+ * ⚠️ 唯一例外（刀 16b）：被 LESS 颜色函数当实参引用的变量，且 theme 原值为不可求值形态
+ * （`var()`）→ 注入中立真颜色，否则编译失败（见下方内联注释）。
+ *
  * @param {string} lessContent 业务样式源（common.less 等，不含 themes/）
  * @param {string} themeVarsContent theme-vars.less 内容
  * @returns {string} 注入后的内容（无缺失时原样返回）
@@ -1491,7 +1449,20 @@ export function injectThemeVarDeclsForLess(lessContent, themeVarsContent) {
   }
   if (!missing.length) return source;
 
-  const decl = missing.map((n) => `@${n}: ${decls.get(n)};`).join('\n');
+  const decl = missing
+    .map((n) => {
+      const value = decls.get(n);
+      // 🛡️ 刀 16b（2026-09-13）：注入的是 theme-vars 的**原样值**，它可能是 `var(--x)`
+      // （如 `@fontSize: var(--fontSize)`，M5-6 要求，必须保留）。但若本文件把该变量当
+      // LESS **颜色函数实参**用（`lighten(@n, 10%)`），原样注入会在编译期不可求值 →
+      // `Argument cannot be evaluated to a color` → 整个块失败 → P1-4 剔除子组件。
+      // 此时换中立真颜色（宁可颜色保守，不可编译失败）；非颜色函数引用者一律原样注入。
+      if (!isColorEvaluable(value) && isUsedByLessColorFn(source, n)) {
+        return `@${n}: ${NEUTRAL_LESS_COLOR};`;
+      }
+      return `@${n}: ${value};`;
+    })
+    .join('\n');
   return `${decl}\n${source}`;
 }
 
@@ -1791,40 +1762,11 @@ const THEME_PRESET_NAMES = [
 ];
 
 /**
- * Less **编译期颜色函数** —— 参数必须是「可求值的颜色」（#hex / rgba() / 具名色）。
- * 传入 CSS 运行时 `var()` 会在编译期报
- * `Error evaluating function \`lighten\`: Argument cannot be evaluated to a color`，
- * 进而整个 style 块编译失败 → P1-4 坏文件隔离降级 → 子组件整块消失。
+ * Less **编译期颜色函数**判定 —— 已抽到 `utils/less-color-funcs.js`（单一事实源，刀 15/16b）。
+ * 本文件只保留消费方：`healPresetLiteralDecls` 用它豁免「被颜色函数引用的变量」的 var 化。
+ * 为什么必须共用：`file-writer#safeLessVarValue` / `less-variable-checker` 是同一判据的
+ * 另两个消费方；各自造一套名单必然在扩名单（如补 `spin`/`tint`）时产生分歧。
  */
-const LESS_COLOR_FUNCS = [
-  'lighten',
-  'darken',
-  'fade',
-  'fadein',
-  'fadeout',
-  'saturate',
-  'desaturate',
-  'spin',
-  'mix',
-  'tint',
-  'shade',
-  'greyscale',
-  'contrast',
-];
-
-/**
- * 该变量是否被 Less 颜色函数（作为实参）引用。
- * 只认「同一份样式文本内」的引用 —— 调用方已把范围收敛到 .less 全文或单个 <style> 块。
- * @param {string} content
- * @param {string} varName 不含 @
- */
-function isUsedByLessColorFn(content, varName) {
-  const re = new RegExp(
-    `\\b(?:${LESS_COLOR_FUNCS.join('|')})\\s*\\([^)]*@${varName}\\b`,
-    'i',
-  );
-  return re.test(content);
-}
 
 /**
  * 🛡️ 预设字面量声明 → var 透传（2026-09-04，A2 治本）：
@@ -1963,6 +1905,141 @@ export function healVarNameCase(content) {
     },
   );
   return changed ? out : content;
+}
+
+/**
+ * 🛡️ 刀 18（2026-09-14）：Vue **绑定表达式里对象字面量的键**必须可解析 —— 含连字符的裸键要加引号。
+ *
+ * 事故（mc-1789317647118-7ba35f11）：刀 12「类名对齐」把模板里的
+ * `:class="{ active: activeTab === 'tunnel' }"` 的**对象键** `active` 也当类名改写为
+ * `c-device-monitor-switch-item--active`：
+ *   `:class="{ c-device-monitor-switch-item--active: ... }"`
+ * `c-device-monitor-switch-item--active` 带连字符、又没加引号 → **不是合法 JS 标识符** →
+ * Babel 报 `Error parsing JavaScript expression: Unexpected token, expected ","` →
+ * SFC 顶层解析失败 → **P1-4 把整个 SwitchSection 剔除** → 那一块 UI 凭空消失。
+ *
+ * 与刀 13/15 同源的「管线自伤」：**改写器不区分「类名字符串」与「JS 对象键」两种语境**。
+ * 与其让每个改写器各自记住「这里要加引号」，不如在**写盘/校验前收口**：
+ * 任何出现在绑定表达式对象字面量里、且不是合法标识符的裸键，一律补引号
+ * （补引号对「本就非法的裸键」永远正确，不会误改合法代码）。
+ * 顺带也兜住 LLM 直接写 `:class="{ is-active: x }"` 的情况。
+ *
+ * 保守边界：
+ *   - 只处理 `<template>` 段（script 里的对象字面量本就由 Babel 校验，不越界）；
+ *   - 只处理**单层**对象字面量（`[^{}]*`），不碰嵌套（嵌套里若真有非法裸键，
+ *     说明外层已被 Babel 拦下，交给既有门禁处理，不在此越界改写）；
+ *   - 只给「含 `-`」的裸键加引号（合法标识符一律不动，已带引号的更不会重复加）；
+ *   - 属性值用 `[^"]*` 整体取出后**在值内部**找对象字面量 —— 因此也覆盖数组形式
+ *     `:class="['c-x-item', { active: x }]"`、以及 `@click="fn({ a-b: 1 })"` 这类写法。
+ *
+ * @param {string} vueContent 完整 Vue SFC 内容
+ * @returns {string}
+ */
+export function healUnquotedObjectKeysInVue(vueContent) {
+  if (typeof vueContent !== 'string' || !vueContent.includes('<template')) {
+    return vueContent;
+  }
+  let changed = false;
+  const out = vueContent.replace(
+    /(<template\b[^>]*>)([\s\S]*?)(<\/template>)/gi,
+    (full, open, tpl, close) => {
+      const healed = tpl.replace(
+        // 绑定/事件属性（:class / :style / v-bind:xxx / @click / v-on:xxx）+ 双引号表达式
+        /((?::|v-bind:|@|v-on:)[a-zA-Z][\w:.-]*\s*=\s*")([^"]*)(")/g,
+        (attrFull, attrHead, expr, quote) => {
+          // ⚠️ 不能要求「属性值整体就是一个 {…}」——LLM 常见
+          // `:class="['c-x-item', { active: x }]"`（数组里嵌对象），那样会整个漏掉。
+          const newExpr = expr.replace(/\{([^{}]*)\}/g, (objFull, body) => {
+            // ⚠️ `body` 是**花括号之间**的内容（不含外层 `{`/`}`），所以第一个键前面
+            // 既没有 `{` 也没有 `,` —— 必须用 `(^|[{,])` 才能命中首键（写第一版时漏了 `^`）。
+            const newBody = body.replace(
+              /(^|[{,])(\s*)([A-Za-z_$][\w$-]*)(\s*):/g,
+              (kvFull, lead, ws1, key, ws2) =>
+                // 只补「含连字符、且未加引号」的裸键（其余原样返回）
+                key.includes('-') ? `${lead}${ws1}'${key}'${ws2}:` : kvFull,
+            );
+            return newBody === body ? objFull : `{${newBody}}`;
+          });
+          if (newExpr === expr) return attrFull;
+          changed = true;
+          return `${attrHead}${newExpr}${quote}`;
+        },
+      );
+      return `${open}${healed}${close}`;
+    },
+  );
+  return changed ? out : vueContent;
+}
+
+/**
+ * 🛡️ 刀 19（2026-09-14）：**数据对象键**被写成类名 → 模板取值恒为 undefined → 文字/数字凭空消失。
+ *
+ * 事故（mc-1789318926146-56c7b341 / mc-1789317647118-7ba35f11）：LLM 在重试轮把
+ *   `const switchItems = ref([{ value: 'tunnel', total: '56302', error: '5' }])`
+ * 写成
+ *   `const switchItems = ref([{ value: 'tunnel', total: '56302', 'c-device-monitor-error': '5' }])`
+ * 而模板是 `{{ item.error }}` → **取到 undefined → 「异常数」永远空白**。
+ * 上一轮同样形态：`{ 'c-device-monitor-label': '实时监控' }` 配 `{{ tab.label }}` → Tab 文字全空。
+ *
+ * ⚠️ 为什么所有门禁都放过它：
+ *   - 语法**完全合法**（带引号的键）—— 不像刀 18 那样会触发 Babel 报错；
+ *   - 类名**真实存在**（`.c-device-monitor-error` 就在 common.less 里）—— 契约层也不会报；
+ *   - DOM 存在、CSS 命中 —— 只有**渲染出来的值是空的**，纯代码门禁结构上无从判断。
+ *
+ * 已排除的嫌疑：离线重放 `normalizeClassNameDialect`（刀 12）**复现不出**（changes=[]，
+ * 它只处理 template/style 段，不动 script）→ 污染源是 **LLM 自身输出**，非管线改写器。
+ * 因此这里做**确定性后处理**：拿「模板真正访问过的 `.prop`」当事实源，
+ * 把类名化的数据键还原成模板要的那个名字。
+ *
+ * 保守边界（宁可不改，不可错改）：
+ *   - 只改 `<script>` 段（template 里的类名是另一个语境，由刀 18 管引号）；
+ *   - 只改**带引号的对象键**、且键以 `c-` 开头（组件类名前缀）；
+ *   - 只在其某个「后缀」（按 `-` 切分的最短优先）命中模板访问过的 prop 时才改；
+ *   - 该裸 prop 若**已经作为键存在**，则跳过（避免产出重复键）；
+ *   - 幂等（改完的键不再以 `c-` 开头）。
+ *
+ * @param {string} vueContent 完整 Vue SFC 内容
+ * @returns {string}
+ */
+export function healClassPrefixedDataKeys(vueContent) {
+  if (typeof vueContent !== 'string' || !vueContent.includes('<template')) {
+    return vueContent;
+  }
+  // 事实源：模板里真正被访问过的属性名（`item.error` / `tab.label` / `card.title` …）
+  const usedProps = new Set();
+  const tplMatch = vueContent.match(/<template\b[^>]*>([\s\S]*?)<\/template>/i);
+  if (!tplMatch) return vueContent;
+  for (const m of tplMatch[1].matchAll(/\.([A-Za-z_$][\w$]*)/g)) usedProps.add(m[1]);
+  if (usedProps.size === 0) return vueContent;
+
+  let changed = false;
+  const out = vueContent.replace(
+    /<script[^>]*>([\s\S]*?)<\/script>/gi,
+    (whole, body) => {
+      const newBody = body.replace(
+        /(['"])(c-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+)\1(\s*):/g,
+        (full, quote, key, ws) => {
+          const parts = key.split('-');
+          // 最短后缀优先：`c-device-monitor-error` → 先试 `error`，再 `monitor-error`…
+          for (let i = parts.length - 1; i >= 1; i -= 1) {
+            const cand = parts.slice(i).join('-');
+            if (!usedProps.has(cand)) continue;
+            // 已存在同名裸键 → 不改（否则对象里出现两个键，语义更乱）
+            const hasBare = new RegExp(`(?:^|[{,])\\s*${cand}\\s*:`, 'm').test(body);
+            if (hasBare) return full;
+            changed = true;
+            return `${quote}${cand}${quote}${ws}:`;
+          }
+          return full;
+        },
+      );
+      if (newBody === body) return whole;
+      const at = whole.indexOf(body);
+      if (at < 0) return whole;
+      return whole.slice(0, at) + newBody + whole.slice(at + body.length);
+    },
+  );
+  return changed ? out : vueContent;
 }
 
 /**

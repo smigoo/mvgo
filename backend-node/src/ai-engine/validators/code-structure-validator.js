@@ -59,7 +59,7 @@ import { validateSubcomponentResourceDeps, filterAvailableResources, buildResour
 import { detectTextOrderDrift } from '../utils/text-order-guard.js';
 // 🛡️ COMP-001（2026-09-02）：模块组装覆盖 —— 事实源在 section-coverage-guard.js
 // （规划的 section 必须全部组装进 index.vue，否则预览整块缺失）
-import { detectMissingSections, detectUnmaterializedSections } from '../utils/section-coverage-guard.js';
+import { detectMissingSections, detectUnmaterializedSections, detectDanglingComponentRefs } from '../utils/section-coverage-guard.js';
 import { collectLeafSections } from '../utils/section-tree.js';
 // 🛡️ TEXT-TRUTH（2026-09-02）：文字真值白名单 —— 事实源在 text-truth-guard.js
 // （产物文字必须落在 Figma characters 真值内，否则是 vision OCR 误读/臆造）
@@ -2213,6 +2213,28 @@ export class CodeStructureValidator {
             hint: {
               suggestion:
                 '查 component-meta.json.degradedFiles 与 server.log 的「P1-4 坏文件隔离降级」，必要时对该子组件单独重生成',
+            },
+          });
+        }
+        // 🛡️ COMP-001-DANGLING（2026-09-14 · mc-max-1789376057659-2290591b 实锤）：
+        // 递归悬空引用 —— index.vue 已组装全部子组件（无孤儿，走了命名漂移豁免），
+        // 但某个子组件内部又引用了【未生成】的孙子组件 → 运行时找不到文件、内容空白。
+        // 原 analyzeSectionCoverage 只看 index.vue 一层，对此不可见。独立递归扫描所有
+        // .vue 的 import 目标完整性。WARN 不阻断（文件不存在时重试只会重放源码）。
+        const dangling = detectDanglingComponentRefs(files);
+        if (dangling.length > 0) {
+          const samples = dangling
+            .slice(0, 8)
+            .map((d) => `「${d.file}」引用了缺失的「${d.ref}.vue」`)
+            .join('、');
+          issues.push({
+            id: 'COMP-001-DANGLING',
+            severity: 'WARN',
+            file: dangling[0].file,
+            message: `子组件悬空引用（非阻断）：检测到 ${dangling.length} 处 .vue 引用了产物中不存在的子组件文件（${samples}）——运行时将报「找不到文件」、对应内容空白。需对缺失的子组件单独重生成，或删除这些悬空 import`,
+            hint: {
+              suggestion:
+                '查 server.log 的「P1-4 坏文件隔离降级」与 component-meta.json.degradedFiles，对缺失子组件单独重生成；若确为冗余引用则删除',
             },
           });
         }

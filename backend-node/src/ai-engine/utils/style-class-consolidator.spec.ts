@@ -404,3 +404,89 @@ describe('consolidateSubComponentClasses · 修饰符类（260ff122 回归）', 
   })
 })
 
+/**
+ * 🛡️ P0-1 装饰元素保护（2026-09-14，菱形 8px 被撑成 1013×1013 事故）
+ *
+ * 事故：校验器对 style 第一个 class 注入 width:100%，而 consolidator 以子组件定义
+ * 无条件覆盖 common.less。菱形装饰元素（8px）被注入 width:100% → 撑成 1013×1013。
+ * 治本：consolidator 保护像素值不被百分比覆盖。
+ */
+describe('consolidateSubComponentClasses · 装饰元素保护（P0-1）', () => {
+  it('菱形装饰：common.less 像素值不被子组件百分比覆盖', () => {
+    const files = {
+      'resources/styles/common.less': `.c-traffic-monitor-diamond {
+  width: 8px;
+  height: 8px;
+  transform: rotate(45deg);
+}
+`,
+      'package/components/Diamond.vue': `<template>
+  <div class="c-traffic-monitor-diamond"></div>
+</template>
+<script setup></script>
+<style lang="less" scoped>
+.c-traffic-monitor-diamond {
+  width: 100%;
+  height: 100%;
+}
+</style>
+`,
+    }
+    const out = consolidateSubComponentClasses(files, { logger })
+    const css = out['resources/styles/common.less']
+    // 关键：common.less 的 8px 必须保留，不被 100% 覆盖
+    expect(css).toContain('width: 8px')
+    expect(css).toContain('height: 8px')
+    expect(css).not.toMatch(/\.c-traffic-monitor-diamond\s*\{[^}]*width:\s*100%/s)
+  })
+
+  it('车辆监测胶囊 tab：像素宽度不被百分比覆盖', () => {
+    const files = {
+      'resources/styles/common.less': `.c-vehicle-monitor-tab {
+  width: 120px;
+  padding: 8px 16px;
+}
+`,
+      'package/components/Tab.vue': `<template>
+  <div class="c-vehicle-monitor-tab">Tab</div>
+</template>
+<script setup></script>
+<style lang="less" scoped>
+.c-vehicle-monitor-tab {
+  width: 100%;
+}
+</style>
+`,
+    }
+    const out = consolidateSubComponentClasses(files, { logger })
+    const css = out['resources/styles/common.less']
+    // 关键：common.less 的 120px 必须保留
+    expect(css).toContain('width: 120px')
+    expect(css).not.toMatch(/\.c-vehicle-monitor-tab\s*\{[^}]*width:\s*100%/s)
+  })
+
+  it('正常场景：子组件像素值可以覆盖 common.less 百分比', () => {
+    const files = {
+      'resources/styles/common.less': `.c-demo-item {
+  width: 100%;
+}
+`,
+      'package/components/Item.vue': `<template>
+  <div class="c-demo-item">Item</div>
+</template>
+<script setup></script>
+<style lang="less" scoped>
+.c-demo-item {
+  width: 200px;
+}
+</style>
+`,
+    }
+    const out = consolidateSubComponentClasses(files, { logger })
+    const css = out['resources/styles/common.less']
+    // 正常场景：子组件像素值应该覆盖 common.less 百分比
+    expect(css).toContain('width: 200px')
+    expect(css).not.toContain('width: 100%')
+  })
+})
+

@@ -133,4 +133,78 @@ describe('LessVariableChecker', () => {
     expect(content).toContain('@my-custom-thing: unset;')
     expect(content).toContain('⚠️')
   })
+
+  // ── 刀 16b（2026-09-13）：颜色函数实参的兜底必须是可求值真颜色 ──
+  it('变量被颜色函数当实参引用 → 兜底为中立真颜色（而非 unset），并记录告警', async () => {
+    await writeFile(
+      join(root, 'package', 'index.vue'),
+      `<template><div class="root"></div></template>\n<style lang="less" scoped>.root { color: lighten(@my-custom-thing, 10%); }</style>`,
+      'utf-8',
+    )
+    await writeFile(
+      join(root, 'resources', 'styles', 'themes', 'theme-vars.less'),
+      `.common() { @existing-var: #000; }\n.common();\n`,
+      'utf-8',
+    )
+
+    const result = await LessVariableChecker.check(root)
+
+    expect(result.fixed).toBe(true)
+    // 扫描阶段收集到「颜色函数实参」变量
+    expect([...result.colorFnVariables]).toContain('my-custom-thing')
+    // 兜底值必须可被 lighten() 求值 —— unset 会让整个 <style> 块编译失败
+    const content = readFileSync(
+      join(root, 'resources', 'styles', 'themes', 'theme-vars.less'),
+      'utf-8',
+    )
+    expect(content).toContain('@my-custom-thing: #333333;')
+    expect(content).not.toContain('@my-custom-thing: unset;')
+    // 合成值需人工核对真值 → 仍要落结构化告警
+    expect(result.uninferredVariables).toContain('my-custom-thing')
+  })
+
+  it('名字分支本会给出非颜色（@radius-x → 8px）时，被颜色函数引用仍纠正为真颜色', async () => {
+    await writeFile(
+      join(root, 'package', 'index.vue'),
+      `<template><div class="root"></div></template>\n<style lang="less" scoped>.root { color: lighten(@radius-x, 10%); }</style>`,
+      'utf-8',
+    )
+    await writeFile(
+      join(root, 'resources', 'styles', 'themes', 'theme-vars.less'),
+      `.common() { @existing-var: #000; }\n.common();\n`,
+      'utf-8',
+    )
+
+    await LessVariableChecker.check(root)
+
+    const content = readFileSync(
+      join(root, 'resources', 'styles', 'themes', 'theme-vars.less'),
+      'utf-8',
+    )
+    // 只看名字会得到 '8px'（编译期不可求值）——消费端事实必须压过名字猜测
+    expect(content).toContain('@radius-x: #333333;')
+    expect(content).not.toContain('@radius-x: 8px;')
+  })
+
+  it('未被颜色函数引用 → 保持原有语义推断 / unset 行为（不刷无关变更）', async () => {
+    await writeFile(
+      join(root, 'package', 'index.vue'),
+      `<template><div class="root"></div></template>\n<style lang="less" scoped>.root { color: @my-custom-thing; border-radius: @radius-x; }</style>`,
+      'utf-8',
+    )
+    await writeFile(
+      join(root, 'resources', 'styles', 'themes', 'theme-vars.less'),
+      `.common() { @existing-var: #000; }\n.common();\n`,
+      'utf-8',
+    )
+
+    await LessVariableChecker.check(root)
+
+    const content = readFileSync(
+      join(root, 'resources', 'styles', 'themes', 'theme-vars.less'),
+      'utf-8',
+    )
+    expect(content).toContain('@my-custom-thing: unset;')
+    expect(content).toContain('@radius-x: 8px;')
+  })
 })

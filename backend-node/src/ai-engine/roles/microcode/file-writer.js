@@ -20,9 +20,14 @@ import {
   validateVueSfc,
   extractLessGlobalVars,
 } from '../../utils/sfc-syntax-validation.js';
-import { repairScopedThirdPartySelectors, ensureFlexDirectionInVueSfc, ensureFlexDirection } from '../../utils/css-sanitizer.js';
+import { repairScopedThirdPartySelectors, ensureFlexDirectionInVueSfc, ensureFlexDirection, ensureGridDisplay, ensureGridDisplayInVueSfc } from '../../utils/css-sanitizer.js';
 import { fixSpuriousLineBreaks, injectMissingTabUi, healVueEmbeddedStyleBraces, healThemeMixinVarRefs, healThemeMixinVarRefsInVue, healLessResourceVarInterpolation, healPresetLiteralDecls, healSlotHexToVarRefs, healVarNameCase, applyHealToVueStyleBlocks, injectThemeVarDeclsForLess } from './code-healer.js';
 import { healLessSource, healRootFixedSize } from '../../validators/less-compile-gate.js';
+import {
+  isColorEvaluable,
+  isColorFnConsumer,
+  NEUTRAL_LESS_COLOR,
+} from '../../utils/less-color-funcs.js';
 import { safeLogger } from '../../logger/safe-logger.js';
 
 /**
@@ -80,6 +85,16 @@ export function sanitizeFileContent(content, filePath = '', options = {}) {
 
   // 3. 去除中间可能出现的独立 markdown 围栏行（整行只有 ``` 或 ```lang）
   sanitized = sanitized.replace(/^[ \t]*```[a-zA-Z]*[ \t]*$/gm, '');
+
+  // 4L. 🎯 2026-09-14 治本（mc-max-1789390853889-4bda6d13 真机实锤）：
+  // .less/.css 文件混入 SFC 标签——LLM 输出样式块时把闭合标签一起带出（common.less:306
+  // 残留孤立 `</style>`，无开标签）。样式文件**永远不可能合法包含**这些标签 → 直接剥离，零误伤。
+  // 后果实证：`</style>` → LESS 编译 Unrecognised input → 最终 LESS 门禁 BLOCK、任务失败；
+  // 且 index.less @import common.less，一个污染点连锁成「几乎所有文件都报 LESS-COMPILE-001」。
+  // 此前微码链路只有 prompt 层"请别写"约束（lite/page-skeleton 等其他管线才有剥离逻辑）→ 必然复发。
+  if (/\.(less|css|scss)$/i.test(filePath)) {
+    sanitized = sanitized.replace(/<\/?(style|template|script)\b[^>]*>/gi, '');
+  }
 
   // 4. 对 .vue 文件：去除 </style> / </script> / </template> 之后的说明性文本/markdown残留
   if (filePath.endsWith('.vue')) {
@@ -272,12 +287,13 @@ export function extractUndefinedLessMixins(errors = []) {
 }
 
 /**
- * 按变量名推测安全的 less 变量默认值
- * @param {string} name 变量名（含 @ 前缀）
+ * 名字分支：**纯名字**推测安全值（不含消费端事实）。
+ * ⚠️ 它可能返回非颜色（`0px` / `1.5` / `1` / `400`）或兜底 `unset` ——
+ * 这些值被 LESS 颜色函数当实参时编译期不可求值，故必须经 `safeLessVarValue` 后置过滤。
+ * @param {string} n 已去 @、已小写的变量名
  * @returns {string}
  */
-export function safeLessVarValue(name = '') {
-  const n = String(name).replace(/^@/, '').toLowerCase();
+function guessLessVarValueByName(n = '') {
   // 数值型：给真实数值，确保算术（如 @gap + 4px）也能编译通过
   if (/radius/.test(n)) return '8px';
   // 🛡️ 顺序修复（2026-09-02）：font-size 必须排在 size 之前——否则 `fontsize` 含子串 `size`，
@@ -305,6 +321,29 @@ export function safeLessVarValue(name = '') {
   if (/(text|color|colour|font|fg|ink)/.test(n)) return '#333333';
   // 兜底：CSS 全局关键字，对几乎所有属性合法，保证编译通过（渲染为中性默认）
   return 'unset';
+}
+
+/**
+ * 按变量名推测安全的 less 变量默认值。
+ * @param {string} name 变量名（含 @ 前缀）
+ * @param {{styleText?: string, usedByColorFn?: boolean}} [ctx]
+ *   消费端事实（二选一）：`styleText` 现场推断，或 `usedByColorFn` 集合查表。
+ *   拿不到消费端上下文时可省略 —— 此时退化为纯名字猜测（与刀 16b 之前行为一致）。
+ * @returns {string}
+ */
+export function safeLessVarValue(name = '', ctx = {}) {
+  const n = String(name).replace(/^@/, '').toLowerCase();
+  const guess = guessLessVarValueByName(n);
+  // 🛡️ 刀 16b（2026-09-13）：**消费端事实优先于名字猜测**。
+  // 名字分支可能给出非颜色（`@line-alpha` → '1'、`@radius-x` → '8px'）或兜底 'unset'；
+  // 若该变量在样式里被 `lighten()/darken()/fade()` 等当**实参**引用，这些值在 LESS
+  // **编译期**不可求值 → 报 `Argument cannot be evaluated to a color` → 整个 `<style>`
+  // 块编译失败 → P1-4 坏文件隔离 → **子组件整块消失**。
+  // 所以只要「猜出的值不可求值 且 确实被颜色函数消费」，就换中立真颜色。
+  if (!isColorEvaluable(guess) && isColorFnConsumer(n, ctx)) {
+    return NEUTRAL_LESS_COLOR;
+  }
+  return guess;
 }
 
 /**
@@ -409,6 +448,9 @@ export function writeFiles(files, outputPath, options = {}) {
           logger,
           { flexDirectionDefault: 'none' },
         );
+        // 🛡️ 确定性自愈：grid-template-* 但漏写 display 时补 display:grid
+        // （否则 grid-template-columns 完全失效 → 多列塌成一列 → 溢出被外壳裁掉 = 整块内容消失）
+        sanitizedContent = ensureGridDisplayInVueSfc(sanitizedContent, logger);
         // 🛡️ 重复 <template> 去重（模型偶尔生成多个 <template> 块，导致写盘门禁跳过整个文件）
         const dedup = deduplicateTemplateBlocks(sanitizedContent);
         if (dedup.fixed) {
@@ -561,7 +603,7 @@ export function writeFiles(files, outputPath, options = {}) {
             if (missing.length > 0)
               declParts.push(
                 missing
-                  .map((v) => `@${v}: ${safeLessVarValue('@' + v)};`)
+                  .map((v) => `@${v}: ${safeLessVarValue('@' + v, { styleText: styleBlocks })};`)
                   .join('\n'),
               );
             if (missingMixins.length > 0)
@@ -579,7 +621,7 @@ export function writeFiles(files, outputPath, options = {}) {
             if (retry.valid) {
               sanitizedContent = fixed;
               if (missing.length > 0) {
-                pendingThemeVars += `${missing.map((v) => `@${v}: ${safeLessVarValue('@' + v)};`).join('\n')}\n`;
+                pendingThemeVars += `${missing.map((v) => `@${v}: ${safeLessVarValue('@' + v, { styleText: styleBlocks })};`).join('\n')}\n`;
                 if (logger) {
                   logger.warn(
                     `🛡️ 写盘门禁自动补全缺失 less 变量 ${missing.join(', ')}（${relativePath}）`,
@@ -624,6 +666,8 @@ export function writeFiles(files, outputPath, options = {}) {
           logger,
           { flexDirectionDefault: 'none' },
         );
+        // 🛡️ 确定性自愈：grid-template-* 但漏写 display 时补 display:grid（见 SFC 分支同名注释）
+        sanitizedContent = ensureGridDisplay(sanitizedContent, logger);
 
         // 🛡️ 确定性自愈：补全 LLM 漏写的右大括号 / 未闭合块注释。
         // 写盘即修复，避免把必然编译失败的 LESS 送到下游门禁（历史上表现为
@@ -938,12 +982,18 @@ export function writeFiles(files, outputPath, options = {}) {
           if (resMap[v]) continue; // 资源变量，跳过
           if (declaredSet.has(v)) continue; // 已在 theme-vars 声明，跳过
           if (isLessVarDeclared(styleBlocks, v)) continue; // 本文件已声明（局部），跳过
-          if (!globalMissing.has(v)) globalMissing.set(v, p);
+          // 记录「首次出现该变量的文件」+ 其样式文本 —— 后者供 safeLessVarValue 判定
+          // 该变量是否被 LESS 颜色函数消费（刀 16b：兜底值必须可求值）。
+          if (!globalMissing.has(v))
+            globalMissing.set(v, { path: p, styleText: styleBlocks });
         }
       }
       if (globalMissing.size > 0) {
-        const decl = [...globalMissing.keys()]
-          .map((v) => `@${v}: ${safeLessVarValue('@' + v)};`)
+        const decl = [...globalMissing.entries()]
+          .map(
+            ([v, info]) =>
+              `@${v}: ${safeLessVarValue('@' + v, { styleText: info?.styleText })};`,
+          )
           .join('\n');
         pendingThemeVars += `${decl}\n`;
         if (logger) {

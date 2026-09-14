@@ -720,11 +720,20 @@ export function registerBuiltinFixRules(pipeline, engineer, context = {}) {
     };
   }
   // 🛡️ R1-2（2026-09-11）：布局事实数据流 —— 把 rootLayoutFacts 并入 pipeline.context，
+  // 🛡️ 批次 3 loop 3a（2026-09-14）：sectionLayoutFacts 同路并入（display/grid 列数/方向），
+  // 供 fix-section-heights 规则⑤ 确定性写出布局 block（取代 healGridContainer/ensureGridDisplay 的猜测修补）。
   // 供 fix-section-heights 规则② 以「事实 rootContainerClass」作豁免依据（退役命名枚举）。
   if (context.rootLayoutFacts && pipeline && pipeline.context) {
     pipeline.context = {
       ...pipeline.context,
       rootLayoutFacts: context.rootLayoutFacts,
+    };
+  }
+  // 🛡️ 批次 3 loop 3a：section 根类 → 布局事实（display/gridColumns/flexDirection/flexGrow）
+  if (context.sectionLayoutFacts && pipeline && pipeline.context) {
+    pipeline.context = {
+      ...pipeline.context,
+      sectionLayoutFacts: context.sectionLayoutFacts,
     };
   }
 
@@ -826,21 +835,25 @@ export function registerBuiltinFixRules(pipeline, engineer, context = {}) {
 
   // ════════ 阶段 4：资源（RESOURCE）——跨文件 ════════
   if (resourceDomMapping && resourceDomMapping.length > 0) {
+    // 🛡️ 删减法批次 2（2026-09-14）：计划驱动挂载单规则，替代旧 auto-mount-backgrounds /
+    //   auto-mount-icons 双规则（关键词猜测 + 根回退）。owner 由 section 归属 + figma 祖先链
+    //   确定，同图单变量；fail-closed 诊断。与 engineer 门禁前调用同一 helper，幂等。
     pipeline.register({
-      id: 'auto-mount-backgrounds',
-      name: '未使用背景自动挂载',
+      id: 'planned-resource-mount',
+      name: '计划驱动资源挂载',
       phase: FIX_PHASE.RESOURCE,
-      enabled: () => process.env.BG_AUTO_MOUNT !== 'false',
-      fixFiles: (files) =>
-        engineer._autoMountUnusedBackgrounds(files, resourceDomMapping),
-    });
-    pipeline.register({
-      id: 'auto-mount-icons',
-      name: '未使用图标自动挂载',
-      phase: FIX_PHASE.RESOURCE,
-      enabled: () => process.env.ICON_AUTO_MOUNT !== 'false',
-      fixFiles: (files) =>
-        engineer._autoMountUnusedIcons(files, resourceDomMapping),
+      enabled: () => process.env.RESOURCE_PLANNED_MOUNT !== 'false',
+      fixFiles: (files) => {
+        const sections =
+          componentPlan?.effectiveSections ||
+          input?.generationInput?.componentPlan?.effectiveSections ||
+          [];
+        const r = engineer._mountPlannedResources(files, sections, resourceDomMapping, {
+          ...input,
+          figmaNodeData: figmaNodeData || input?.figmaNodeData || null,
+        });
+        return r.mounted;
+      },
     });
     pipeline.register({
       id: 'normalize-style-less-vars',

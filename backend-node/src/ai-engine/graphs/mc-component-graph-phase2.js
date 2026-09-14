@@ -2575,6 +2575,126 @@ export function createPhase2Graph(config = {}) {
       throw err;
     }
 
+    // 🎯 2026-09-14 治本⑤：运行时门禁降级可见化。
+    // 实锤（mc-1789391629602-29570c8e）：前端 2610/2611 不可达 → RUNTIME-001「真实预览页不可达」
+    // → generate 模式降级放行 → 产物**从未被真实渲染**却以"正常完成"姿态发布，UI 无任何痕迹。
+    // 治本：降级事实写进 component-meta.json（runtimeVerified:false + issues），
+    // UI/后续管线据此提示「未经真实渲染验证」，不再静默。
+    if (state.outputPath && state.runtimeGate) {
+      try {
+        const { readFileSync, writeFileSync } = await import('fs');
+        const { join: pathJoin } = await import('path');
+        const metaPath = pathJoin(state.outputPath, 'component-meta.json');
+        let prevMeta = {};
+        try {
+          prevMeta = existsSync(metaPath)
+            ? JSON.parse(readFileSync(metaPath, 'utf-8'))
+            : {};
+        } catch (_) {
+          /* 旧 meta 损坏则重建 */
+        }
+        const runtimeVerified = !state._runtimeGateDowngraded;
+        const nextMeta = {
+          ...prevMeta,
+          runtimeVerified,
+          ...(runtimeVerified
+            ? {}
+            : {
+                runtimeGateDowngradedAt: Date.now(),
+                runtimeGateIssues: (state.runtimeGate?.issues || []).map(
+                  (i) => ({ id: i.id, severity: i.severity, message: i.message }),
+                ),
+                runtimeGateNote:
+                  '运行时门禁降级放行（如真实预览页不可达）：产物未经真实渲染验证',
+              }),
+        };
+        writeFileSync(metaPath, JSON.stringify(nextMeta, null, 2), 'utf-8');
+        if (!runtimeVerified) {
+          logger.warn('🩹 运行时门禁降级已留痕 component-meta.json', {
+            issues: nextMeta.runtimeGateIssues?.length || 0,
+          });
+        }
+      } catch (metaErr) {
+        logger.warn('⚠️ 运行时验证标记写入失败（非阻断）', {
+          error: metaErr?.message || String(metaErr),
+        });
+      }
+    }
+
+    // 🎯 2026-09-14 治本①②：section 内容映射守卫（左右序 + 内容错装）。
+    // 验证优先于自愈：只产出 issues 写进 component-meta.json + 进度可见，不做自动重排/删除
+    // （自动重排会与 CSS 左右专属样式打架）。事实源 = Figma 子树文本 + bbox。
+    try {
+      const { checkSectionContent } = await import(
+        '../utils/section-content-guard.js'
+      );
+      const { readdirSync: _rds, readFileSync: _rfs } = await import('fs');
+      const { join: pathJoin } = await import('path');
+      const compDir = pathJoin(state.outputPath, 'package', 'components');
+      const files = [];
+      if (existsSync(compDir)) {
+        for (const name of _rds(compDir)) {
+          if (!name.endsWith('.vue')) continue;
+          files.push({
+            path: `package/components/${name}`,
+            content: _rfs(pathJoin(compDir, name), 'utf-8'),
+          });
+        }
+      }
+      const contentCheck = checkSectionContent({
+        files,
+        plan: state.subComponentPlan,
+        figmaRoot:
+          state.figmaNodeData ||
+          state._uiCache?.figmaNodeData ||
+          state._visualParserCache?.figmaNodeData,
+      });
+      const hasContentIssues =
+        contentCheck.memberOrderIssues.length > 0 ||
+        contentCheck.duplicateTextIssues.length > 0;
+      if (hasContentIssues) {
+        const metaPath = pathJoin(state.outputPath, 'component-meta.json');
+        let prev = {};
+        try {
+          prev = existsSync(metaPath)
+            ? JSON.parse(_rfs(metaPath, 'utf-8'))
+            : {};
+        } catch (_) {
+          /* 旧 meta 损坏则重建 */
+        }
+        const { writeFileSync: _wfs } = await import('fs');
+        _wfs(
+          metaPath,
+          JSON.stringify(
+            {
+              ...prev,
+              contentMappingIssues: {
+                memberOrderIssues: contentCheck.memberOrderIssues,
+                duplicateTextIssues: contentCheck.duplicateTextIssues,
+                checkedAt: Date.now(),
+              },
+            },
+            null,
+            2,
+          ),
+          'utf-8',
+        );
+        logger.warn('🩹 内容映射守卫发现问题（左右序/内容错装，已留痕）', {
+          memberOrderIssues: contentCheck.memberOrderIssues.length,
+          duplicateTextIssues: contentCheck.duplicateTextIssues.length,
+        });
+        state.onProgress?.({
+          stage: '内容映射校验',
+          message: `⚠️ 内容映射守卫：${contentCheck.memberOrderIssues.length} 处左右序异常、${contentCheck.duplicateTextIssues.length} 处文本重复/错装（详见 component-meta.json）`,
+          status: 'warning',
+        });
+      }
+    } catch (contentGuardErr) {
+      logger.warn('⚠️ 内容映射守卫执行失败（非阻断）', {
+        error: contentGuardErr?.message || String(contentGuardErr),
+      });
+    }
+
     // 🛡️ R5: 产物完整性硬门禁（第一步，fail-closed）
     // 此前缺失主入口只在 workspace-preview-publisher 才回滚，孤儿清理 / Less 检查 /
     // scoped 扫描全部空转一整轮。这里在收口最前端就拦截，并把上游失败原因透出。
@@ -2993,6 +3113,8 @@ export function createPhase2Graph(config = {}) {
       const { subcomponentPlanner } =
         await import('../roles/subcomponent-planner.js');
       const plan = subcomponentPlanner.plan(state.layoutStructure, {
+        // 🛡️ 臆造壳锚定事实源（2026-09-14 · 34750940）：planner 内 anchorPhantomSections 消费
+        figmaNodeData: state.figmaNodeData,
         diagnostics: {
           analysisDiagnostics: state._visualParserCache?.analysisDiagnostics || [],
           analysisFixes: state._visualParserCache?.analysisFixes || [],
@@ -4073,7 +4195,14 @@ export function createPhase2Graph(config = {}) {
         blockCount: _gs.blockCount,
         warnCount: _gs.warnCount,
       });
-      return 'complete';
+      // 🎯 2026-09-14 治本（mc-1789395734501-8ceee59d 实锤）：软失败不再直接短路 complete。
+      // 原 `return 'complete'` 绕过 do-not-invent-check → generate-runtime-verify，
+      // 导致降级产物**从不产真实渲染截图 screenshot.png**、不写 runtimeVerified，
+      // 用户只能在缩略图里看到设计图（mc-preview.png）而看不到真实效果。
+      // 改路由 do-not-invent-check：降级产物仍过「禁止臆造」硬闸 + 真实渲染 + runtimeVerified 留痕。
+      // 注意：语义不改变「降级=completed 成功发布」，只额外补上真实渲染与臆造硬校验。
+      return 'do-not-invent-check';
+
     }
 
     // generate 模式：L0-B 通过 / 已降级 bypass → 先跑结构顺序门禁（P0-2，零 LLM），

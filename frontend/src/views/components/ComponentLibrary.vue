@@ -74,12 +74,14 @@
       <button @click="loadComponents" class="retry-btn">重试</button>
     </div>
 
-    <!-- 组件内容：公共池用表格，我的/全部保留卡片网格 -->
+    <!-- 组件内容：全部范围统一使用公共组件池的表格列表样式 -->
     <div v-else-if="components.length > 0" class="component-list-area">
-      <!-- ══ 公共组件池：表格视图 ══ -->
-      <table v-if="activeScope === 'public'" class="pool-table">
+      <table class="pool-table">
         <thead>
           <tr>
+            <th v-if="showBatchColumn" class="col-check">
+              <input type="checkbox" :checked="allOwnSelected" title="全选" @change="toggleSelectAll" />
+            </th>
             <th class="col-thumb"></th>
             <th class="col-name">组件名</th>
             <th class="col-type">组件类型</th>
@@ -97,7 +99,16 @@
             v-for="component in components"
             :key="component._id"
             class="pool-row"
+            :class="{ selected: selectedIds.has(component._id) }"
           >
+            <td v-if="showBatchColumn" class="col-check" @click.stop>
+              <input
+                type="checkbox"
+                :checked="selectedIds.has(component._id)"
+                :disabled="!isOwnComponent(component)"
+                @change="toggleSelect(component._id)"
+              />
+            </td>
             <td class="col-thumb">
               <div class="thumb-wrap">
                 <img
@@ -145,8 +156,19 @@
               </button>
               <template v-if="isOwnComponent(component)">
                 <button
+                  v-if="component.visibility !== 'public'"
                   class="row-act"
-                  title="从公共池下架"
+                  title="发布到公共组件池"
+                  :disabled="publishingId === component._id"
+                  @click="publishComponentConfirm(component)"
+                >
+                  <CloudUploadOutlined class="row-act-icon" />
+                  <span>发布</span>
+                </button>
+                <button
+                  v-else
+                  class="row-act"
+                  title="从公共组件池下架"
                   :disabled="publishingId === component._id"
                   @click="unpublishComponentConfirm(component)"
                 >
@@ -166,129 +188,6 @@
           </tr>
         </tbody>
       </table>
-
-      <!-- 我的/全部：卡片网格 -->
-      <div v-else class="components-grid">
-      <div
-        v-for="component in components"
-        :key="component._id"
-        class="component-card"
-        :class="{ 'selected': selectedIds.has(component._id), 'batch-mode': batchMode, [componentTypeClass(component)]: true }"
-        :data-component-id="component._id"
-        @click="onCardClick(component)"
-      >
-        <!-- 批量选择复选框：非自己的组件禁勾（公共池删除仅限提供者） -->
-        <div v-if="batchMode" class="card-checkbox" @click.stop>
-          <input
-            type="checkbox"
-            :checked="selectedIds.has(component._id)"
-            :disabled="!isOwnComponent(component)"
-            @change="toggleSelect(component._id)"
-          />
-        </div>
-        <!-- 预览缩略图 -->
-        <div class="card-preview">
-          <!-- 标准预览图。图片进入视口附近才加载，不在列表页运行组件 iframe。 -->
-          <img
-            v-if="visiblePreviewIds.has(component._id) && !previewError[component._id]"
-            :src="getCardPreviewUrl(component)"
-            class="preview-image"
-            loading="lazy"
-            alt="组件预览图"
-            @load="onPreviewLoaded(component._id)"
-            @error="onPreviewError(component._id)"
-          />
-
-          <div v-else-if="!previewError[component._id]" class="preview-placeholder">
-            <span>滚动后加载预览</span>
-          </div>
-
-          <div
-            v-if="previewLoading[component._id] !== false && visiblePreviewIds.has(component._id) && !previewError[component._id]"
-            class="preview-loading"
-          >
-            <div class="preview-spinner"></div>
-            <span class="preview-loading-text">加载预览中...</span>
-          </div>
-
-          <!-- 错误占位图 -->
-          <div
-            v-if="previewError[component._id]"
-            class="preview-error"
-          >
-            <div class="error-icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            </div>
-            <span class="error-text">预览加载失败</span>
-            <button class="retry-btn-small" @click.stop="retryPreview(component._id)">重试</button>
-          </div>
-
-          <!-- 类型标签 -->
-          <span class="type-badge" :class="componentTypeClass(component)">
-            {{ componentTypeClass(component) === 'vue3' ? 'Vue3' : '微码' }}
-          </span>
-
-          <!-- 公共组件池徽标 -->
-          <span v-if="component.visibility === 'public'" class="public-badge">公共</span>
-
-          <div class="quality-panel">
-            <span class="quality-score">{{ formatQualityScore(component) }}</span>
-            <span class="quality-gate" :class="qualityGateClass(component)">{{ qualityGateText(component) }}</span>
-          </div>
-        </div>
-
-        <!-- 组件信息 -->
-        <div class="card-info">
-          <h3 class="component-name" :title="component.name">{{ component.name }}</h3>
-          <p class="component-meta">
-            <span class="creator">{{ component.creatorId?.username || '未知' }}</span>
-            <span class="time">编辑于 {{ formatTime(component.updatedAt) }}</span>
-          </p>
-          <div class="quality-flags">
-            <span :class="['quality-flag', passClass(component.runtimePass)]">运行 {{ passText(component.runtimePass) }}</span>
-            <span :class="['quality-flag', passClass(component.visualPass)]">视觉 {{ passText(component.visualPass) }}</span>
-          </div>
-        </div>
-
-        <!-- 操作按钮 -->
-        <div class="card-actions" @click.stop>
-          <button @click="openInPlayground(component)" class="action-btn icon-tooltip" data-tooltip="Playground" aria-label="Playground">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-          </button>
-          <button @click="downloadComponentZip(component)" class="action-btn icon-tooltip" data-tooltip="下载" aria-label="下载">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          </button>
-          <!-- 发布到公共池：仅自己的私有组件显示 -->
-          <button
-            v-if="isOwnComponent(component) && component.visibility !== 'public'"
-            @click="publishComponentConfirm(component)"
-            class="action-btn icon-tooltip"
-            data-tooltip="发布到公共池"
-            aria-label="发布到公共池"
-            :disabled="publishingId === component._id"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          </button>
-          <!-- 下架：仅自己的已发布组件显示 -->
-          <button
-            v-if="isOwnComponent(component) && component.visibility === 'public'"
-            @click="unpublishComponentConfirm(component)"
-            class="action-btn icon-tooltip"
-            data-tooltip="从公共池下架"
-            aria-label="从公共池下架"
-            :disabled="publishingId === component._id"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-          </button>
-          <button v-if="isOwnComponent(component)" @click="editComponent(component)" class="action-btn icon-tooltip" data-tooltip="编辑" aria-label="编辑">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-          </button>
-          <button v-if="isOwnComponent(component)" @click="deleteComponentConfirm(component)" class="action-btn danger icon-tooltip" data-tooltip="删除" aria-label="删除">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-          </button>
-        </div>
-      </div>
-      </div><!-- /.components-grid -->
     </div><!-- /.component-list-area -->
 
     <!-- 空状态 -->
@@ -318,7 +217,7 @@
 
 <script setup lang="ts">
 // 导入
-import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
   listComponents,
@@ -334,7 +233,7 @@ import { publishToPublicPool } from '@/utils/component-pool'
 import PublishToPoolModal from '@/components/PublishToPoolModal.vue'
 import { useUserStore } from '@/store'
 import { message, Modal } from 'ant-design-vue'
-import { DownloadOutlined, EyeOutlined, StopOutlined, DeleteOutlined } from '@ant-design/icons-vue'
+import { DownloadOutlined, EyeOutlined, StopOutlined, DeleteOutlined, CloudUploadOutlined } from '@ant-design/icons-vue'
 import http from '@/core/http'
 
 const router = useRouter()
@@ -345,16 +244,10 @@ const components = ref<Component[]>([])
 const loading = ref(false)
 const error = ref('')
 
-// 每个组件预览图的加载状态 { [componentId]: boolean }
-const previewLoading = ref<Record<string, boolean>>({})
-
 // 预览错误状态 { [componentId]: boolean }
 const previewError = ref<Record<string, boolean>>({})
 
-// 进入视口附近的卡片才会真正请求标准预览图
-const visiblePreviewIds = ref<Set<string>>(new Set())
 const loadMoreSentinel = ref<HTMLElement | null>(null)
-let previewObserver: IntersectionObserver | null = null
 let loadMoreObserver: IntersectionObserver | null = null
 
 // 查询参数
@@ -487,6 +380,18 @@ const batchMode = ref(false)
 const selectedIds = ref<Set<string>>(new Set())
 const batchDeleting = ref(false)
 
+// 表格勾选列：仅非公共池范围显示（公共池是平台级范围，不允许批量删除）
+const showBatchColumn = computed(() => batchMode.value && activeScope.value !== 'public')
+// 全选态：自己的组件是否已全部勾选
+const allOwnSelected = computed(() => {
+  const own = components.value.filter(c => isOwnComponent(c))
+  return own.length > 0 && own.every(c => selectedIds.value.has(c._id))
+})
+function toggleSelectAll() {
+  if (allOwnSelected.value) selectedIds.value = new Set()
+  else selectAll()
+}
+
 function getBusinessComponentId(component: Component): string {
   return component.componentId || component.metadata?.componentId || component.metadata?.sessionId || component._id
 }
@@ -520,9 +425,7 @@ async function loadComponents(reset = true) {
     loading.value = true
     currentPage.value = 1
     components.value = []
-    previewLoading.value = {}
     previewError.value = {}
-    visiblePreviewIds.value = new Set()
   } else {
     if (loadingMore.value || !hasMore.value) return
     loadingMore.value = true
@@ -550,12 +453,6 @@ async function loadComponents(reset = true) {
     totalComponents.value = result.total
     totalPages.value = result.totalPages
     hasMore.value = result.page < result.totalPages
-
-    const loadingMap: Record<string, boolean> = reset ? {} : { ...previewLoading.value }
-    result.components.forEach((c: Component) => {
-      loadingMap[c._id] = true
-    })
-    previewLoading.value = loadingMap
   } catch (err: any) {
     if (err.response?.status === 401 || err.response?.status === 403) {
       // 门户内刷新父页面重新鉴权（登录页已移除，门户鉴权模式）
@@ -572,12 +469,7 @@ async function loadComponents(reset = true) {
   } finally {
     loading.value = false
     loadingMore.value = false
-    // ⚠️ 必须等 loading=false 渲染完卡片 DOM 后再 observe：
-    // 卡片区是 v-else-if="components.length > 0"（loading 时不渲染），
-    // 若在 loading=true 的 nextTick 里 observe，querySelectorAll 拿到空集合，
-    // IntersectionObserver 永远不触发 → 所有卡片停留在「滚动后加载预览」占位。
     await nextTick()
-    observePreviewCards()
     observeLoadMore()
   }
 }
@@ -596,12 +488,8 @@ function handleSortChange() {
   loadComponents(true)
 }
 
-// 打开组件详情
-function openComponent(component: Component) {
-  router.push(`/components/${component._id}`)
-}
-
 // 直接在独立预览页打开组件（走 /preview 运行时，微码/Vue3 按类型分流）
+// 我的组件与公共组件池共用同一预览页，统一入口
 function openPreview(component: Component) {
   const sid = getBusinessComponentId(component)
   const gid = String(component.groupId || '')
@@ -610,15 +498,6 @@ function openPreview(component: Component) {
     ? getVue3PreviewUrl(gid, sid)
     : getMcPreviewUrl(sid) + `&groupId=${encodeURIComponent(gid)}`
   window.open(url, '_blank')
-}
-
-// 卡片点击（批量模式下切换选择）
-function onCardClick(component: Component) {
-  if (batchMode.value) {
-    toggleSelect(component._id)
-  } else {
-    openComponent(component)
-  }
 }
 
 // 批量管理模式
@@ -674,35 +553,6 @@ async function batchDelete() {
   })
 }
 
-// 编辑组件
-function editComponent(component: Component) {
-  // @deferred v2: 编辑组件 — 打开编辑对话框或跳转编辑页，当前仅 console.log 占位
-  console.log('编辑组件:', component)
-}
-
-function observePreviewCards() {
-  if (typeof IntersectionObserver === 'undefined') {
-    visiblePreviewIds.value = new Set(components.value.map(c => c._id))
-    return
-  }
-  if (!previewObserver) {
-    previewObserver = new IntersectionObserver((entries) => {
-      const next = new Set(visiblePreviewIds.value)
-      entries.forEach((entry) => {
-        if (!entry.isIntersecting) return
-        const id = (entry.target as HTMLElement).dataset.componentId
-        if (id) next.add(id)
-        previewObserver?.unobserve(entry.target)
-      })
-      visiblePreviewIds.value = next
-    }, { rootMargin: '360px 0px' })
-  }
-  document.querySelectorAll<HTMLElement>('.component-card[data-component-id]').forEach((card) => {
-    const id = card.dataset.componentId
-    if (id && !visiblePreviewIds.value.has(id)) previewObserver?.observe(card)
-  })
-}
-
 function observeLoadMore() {
   if (typeof IntersectionObserver === 'undefined' || !loadMoreSentinel.value) return
   if (!loadMoreObserver) {
@@ -717,21 +567,6 @@ function observeLoadMore() {
 // 预览加载错误
 function onPreviewError(componentId: string) {
   previewError.value[componentId] = true
-  previewLoading.value[componentId] = false
-}
-
-// 重试预览
-function retryPreview(componentId: string) {
-  previewError.value[componentId] = false
-  previewLoading.value[componentId] = true
-  const next = new Set(visiblePreviewIds.value)
-  next.delete(componentId)
-  visiblePreviewIds.value = next
-  nextTick(() => {
-    const restored = new Set(visiblePreviewIds.value)
-    restored.add(componentId)
-    visiblePreviewIds.value = restored
-  })
 }
 
 // 删除组件确认
@@ -755,21 +590,6 @@ function deleteComponentConfirm(component: Component) {
   })
 }
 
-// 预览图加载完成
-function onPreviewLoaded(componentId: string) {
-  previewLoading.value[componentId] = false
-}
-
-// 打开Playground。Playground 是 workspace 语义，必须使用业务组件号。
-function openInPlayground(component: Component) {
-  const componentId = getBusinessComponentId(component)
-  const target = getComponentTarget(component)
-  router.push({
-    path: `/demo/${componentId}`,
-    query: { type: target === 'vue3' ? 'vue3' : 'microcode' },
-  })
-}
-
 // 下载组件ZIP。下载是 workspace 语义，必须使用业务组件号。
 async function downloadComponentZip(component: Component) {
   try {
@@ -788,59 +608,12 @@ async function downloadComponentZip(component: Component) {
   }
 }
 
-function formatQualityScore(component: Component) {
-  return typeof component.qualityScore === 'number' ? `${Math.round(component.qualityScore)}分` : '未评分'
-}
-
-function qualityGateText(component: Component) {
-  if (component.qualityGate === 'passed') return '质量通过'
-  if (component.qualityGate === 'failed') return '失败'
-  return '需优化'
-}
-
-function qualityGateClass(component: Component) {
-  if (component.qualityGate === 'passed') return 'passed'
-  if (component.qualityGate === 'failed') return 'failed'
-  return 'warned'
-}
-
-function passText(value?: boolean) {
-  if (value === true) return '通过'
-  if (value === false) return '未过'
-  return '未知'
-}
-
-function passClass(value?: boolean) {
-  if (value === true) return 'passed'
-  if (value === false) return 'failed'
-  return 'unknown'
-}
-
-// 格式化时间
-function formatTime(dateString: string) {
-  const date = new Date(dateString)
-  const now = new Date()
-  const diff = now.getTime() - date.getTime()
-
-  const minutes = Math.floor(diff / 60000)
-  const hours = Math.floor(diff / 3600000)
-  const days = Math.floor(diff / 86400000)
-
-  if (minutes < 1) return '刚刚'
-  if (minutes < 60) return `${minutes}分钟前`
-  if (hours < 24) return `${hours}小时前`
-  if (days < 30) return `${days}天前`
-
-  return date.toLocaleDateString('zh-CN')
-}
-
 // 初始化
 onMounted(() => {
   loadComponents(true)
 })
 
 onBeforeUnmount(() => {
-  previewObserver?.disconnect()
   loadMoreObserver?.disconnect()
   clearTimeout(searchTimeout)
 })
@@ -1056,8 +829,21 @@ onBeforeUnmount(() => {
 .pool-row:hover {
   background: #f8fafc;
 }
+/* 批量勾选态 */
+.pool-row.selected {
+  background: #eff6ff;
+}
 .pool-row:last-child td {
   border-bottom: none;
+}
+.col-check { width: 44px; }
+.col-check input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--brand);
+  cursor: pointer;
+  margin: 0;
+  display: block;
 }
 .col-thumb { width: 64px; }
 .col-name { width: 26%; }
@@ -1210,351 +996,6 @@ onBeforeUnmount(() => {
 .row-act-danger:active:not(:disabled) {
   color: #b91c1c;
   border-color: #b91c1c;
-}
-
-/* 组件网格 */
-.components-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
-  margin: 16px 20px 20px;
-}
-
-.component-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  cursor: pointer;
-  transition: all 0.2s;
-  position: relative;
-}
-
-.component-card:hover {
-  border-color: var(--brand);
-  box-shadow: var(--shadow-sm);
-}
-
-/* 批量模式：卡片选择态 */
-.component-card.selected {
-  border-color: var(--brand);
-  box-shadow: 0 0 0 2px var(--brand-border, rgba(22,119,255,0.3));
-}
-.component-card.batch-mode {
-  cursor: pointer;
-}
-
-/* 批量选择复选框 */
-.card-checkbox {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 3;
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255,255,255,0.9);
-  border-radius: var(--radius-xs);
-  box-shadow: var(--shadow-sm);
-}
-.card-checkbox input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--brand);
-  cursor: pointer;
-  margin: 0;
-}
-
-.card-preview {
-  width: 100%;
-  height: 200px;
-  background: var(--bg-alt);
-  position: relative;
-  overflow: hidden;
-}
-
-.type-badge {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  z-index: 5;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 5px 12px;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  pointer-events: none;
-  box-shadow: var(--shadow-sm);
-}
-
-.type-badge .badge-icon {
-  font-size: 14px;
-  line-height: 1;
-}
-
-/* Vue3 普通组件：翡翠绿；微码组件：电气青蓝，避开品牌蓝 */
-.type-badge.vue3 {
-  background: var(--component-vue3);
-  color: var(--component-vue3-contrast);
-  border: 1px solid var(--component-vue3-strong);
-}
-
-.type-badge.phase2 {
-  background: var(--component-microcode);
-  color: var(--component-microcode-contrast);
-  border: 1px solid var(--component-microcode-strong);
-}
-
-/* 公共组件池徽标（右上角，避开左上类型标签） */
-.public-badge {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 5;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: #f59e0b;
-  color: #ffffff;
-  border: 1px solid #d97706;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1;
-}
-
-/* 卡片顶部色条：Vue3 绿 / 微码青蓝 */
-.component-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
-  z-index: 4;
-  pointer-events: none;
-}
-
-.component-card.vue3::before {
-  background: linear-gradient(90deg, var(--component-vue3-strong), var(--component-vue3));
-}
-
-.component-card.phase2::before {
-  background: linear-gradient(90deg, var(--component-microcode-strong), var(--component-microcode));
-}
-
-.preview-image {
-  width: 100%;
-  height: 100%;
-  display: block;
-  object-fit: cover;
-  background: var(--bg-alt);
-}
-
-.preview-placeholder {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-tertiary);
-  font-size: 13px;
-  background: var(--bg-alt);
-}
-
-.preview-loading {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  background: var(--bg-alt);
-  z-index: 2;
-  transition: opacity 0.3s ease;
-}
-
-.preview-spinner {
-  width: 28px;
-  height: 28px;
-  border: 3px solid var(--border-light);
-  border-top: 3px solid var(--brand);
-  border-radius: var(--radius-full);
-  animation: spin 1s linear infinite;
-}
-
-.preview-loading-text {
-  font-size: 12px;
-  color: var(--text-tertiary);
-}
-
-/* 预览错误占位 */
-.preview-error {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  background: var(--bg-alt);
-  z-index: 2;
-}
-
-.preview-error .error-icon {
-  font-size: 32px;
-  opacity: 0.6;
-}
-
-.preview-error .error-text {
-  font-size: 13px;
-  color: var(--text-tertiary);
-}
-
-.retry-btn-small {
-  padding: 4px 12px;
-  border: 1px solid var(--button-secondary-border);
-  border-radius: var(--radius-xs);
-  background: var(--button-secondary-bg);
-  color: var(--button-secondary-text);
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.retry-btn-small:hover {
-  border-color: var(--button-secondary-border-hover);
-  color: var(--brand);
-}
-
-.quality-panel {
-  position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: 10px;
-  z-index: 5;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  pointer-events: none;
-}
-
-.quality-score,
-.quality-gate {
-  display: inline-flex;
-  align-items: center;
-  height: 24px;
-  padding: 0 9px;
-  border-radius: var(--radius-sm);
-  border: 1px solid rgba(255, 255, 255, 0.65);
-  background: rgba(255, 255, 255, 0.92);
-  color: var(--text-primary);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.quality-gate.passed {
-  color: var(--success);
-}
-
-.quality-gate.warned {
-  color: var(--warning);
-}
-
-.quality-gate.failed {
-  color: var(--error);
-}
-
-.card-info {
-  padding: 12px 16px;
-}
-
-.component-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0 0 6px 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.component-meta {
-  font-size: 12px;
-  color: var(--text-tertiary);
-  margin: 0;
-  display: flex;
-  justify-content: space-between;
-}
-
-.quality-flags {
-  display: flex;
-  gap: 6px;
-  margin-top: 8px;
-}
-
-.quality-flag {
-  display: inline-flex;
-  align-items: center;
-  height: 20px;
-  padding: 0 6px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-default);
-  background: var(--bg-hover);
-  color: var(--text-tertiary);
-  font-size: 11px;
-}
-
-.quality-flag.passed {
-  border-color: var(--success-border, #b7eb8f);
-  background: var(--success-bg, #f6ffed);
-  color: var(--success);
-}
-
-.quality-flag.failed {
-  border-color: var(--error-border, #ffa39e);
-  background: var(--error-bg, #fff1f0);
-  color: var(--error);
-}
-
-.card-actions {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  display: flex;
-  gap: 8px;
-  opacity: 0;
-  transition: opacity 0.3s;
-}
-
-.component-card:hover .card-actions {
-  opacity: 1;
-}
-
-.action-btn {
-  width: 28px;
-  height: 28px;
-  border: none;
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-size: 14px;
-  transition: all 0.2s;
-  box-shadow: var(--shadow-sm);
-}
-
-.action-btn:hover {
-  transform: scale(1.05);
-  background: var(--bg-card);
-}
-
-.action-btn.danger:hover {
-  background: var(--error);
 }
 
 .load-more-sentinel {

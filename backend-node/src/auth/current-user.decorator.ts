@@ -14,3 +14,13 @@ export const CurrentUser = createParamDecorator(
     return userId;
   },
 );
+
+/**
+ * 可选用户装饰器：预览相关接口使用，未登录时返回 undefined 而非抛异常
+ */
+export const OptionalUser = createParamDecorator(
+  (_data: unknown, ctx: ExecutionContext): string | undefined => {
+    const request = ctx.switchToHttp().getRequest();
+    return request.session?.userId;
+  },
+);

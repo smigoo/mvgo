@@ -204,24 +204,62 @@ function removeClassBlocks(less = '', selectors = []) {
 }
 
 /**
+ * 检查块是否包含百分比尺寸值（如 width: 100%）
+ * @param {string} blockText 块文本
+ * @returns {boolean}
+ */
+function hasPercentageSize(blockText) {
+  return /\b(width|height)\s*:\s*\d+%/i.test(blockText);
+}
+
+/**
+ * 检查 common.less 中同名块是否包含像素尺寸值
+ * @param {string} commonLess common.less 内容
+ * @param {string} selector 选择器
+ * @returns {boolean}
+ */
+function hasPixelSizeInCommon(commonLess, selector) {
+  // 提取该选择器的块
+  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`, 'i');
+  const match = commonLess.match(regex);
+  if (!match) return false;
+  
+  // 检查是否有像素值
+  return /\b(width|height)\s*:\s*\d+px/i.test(match[1]);
+}
+
+/**
  * 把类规则块合并进 common.less：
  * ① 先删除 common.less 中所有同名块（含嵌套）→ 消除双源与优先级陷阱；
  * ② 再追加子组件版定义 → 子组件定义为唯一事实源。
+ * 
+ * 保护规则：如果 common.less 中有像素值（如 width: 8px），而子组件是百分比（如 width: 100%），
+ * 则保留 common.less 的版本，不覆盖。
  * @param {string} commonLess 原 common.less
  * @param {Array<{selector: string, text: string}>} blocks 待合并块
  * @returns {{content: string, replaced: string[], added: string[]}}
  */
 function mergeIntoCommonLess(commonLess = '', blocks = []) {
-  const selectors = blocks.map((b) => b.selector);
+  // 过滤掉会覆盖像素值的百分比块
+  const protectedBlocks = blocks.filter((b) => {
+    if (hasPercentageSize(b.text) && hasPixelSizeInCommon(commonLess, b.selector)) {
+      // 子组件是百分比，common.less 是像素 → 保留 common.less 版本
+      return false;
+    }
+    return true;
+  });
+
+  const selectors = protectedBlocks.map((b) => b.selector);
   const stripped = removeClassBlocks(commonLess, selectors);
   const oldSelectors = selectors.filter((s) => commonLess.includes(s));
-  const appended = blocks.map((b) => b.text).join('\n\n');
+  const appended = protectedBlocks.map((b) => b.text).join('\n\n');
 
   const content = `${stripped.replace(/\s*$/, '')}\n\n${appended}\n`;
   return {
     content,
     replaced: oldSelectors,
-    added: blocks.map((b) => b.selector).filter((s) => !oldSelectors.includes(s)),
+    added: protectedBlocks.map((b) => b.selector).filter((s) => !oldSelectors.includes(s)),
   };
 }
 

@@ -44,7 +44,7 @@ jest.mock('../../utils/provider-pool.js', () => ({
 
 jest.mock('../../utils/llm-timeout.js', () => ({ invokeWithTimeout: jest.fn() }))
 
-import { buildDeterministicIndexTemplate } from './code-generator.js'
+import { buildDeterministicIndexTemplate, stripUnplannedSubComponentImports } from './code-generator.js'
 import { pruneDeadSubComponentImports } from './resource-mounter.js'
 
 // 模拟 planner 的 effectiveSections（device-monitor 实锤：header + switch + tabs + section-main）
@@ -82,17 +82,24 @@ describe('层① 确定性 index.vue 模板装配', () => {
     expect(facts!.sectionRoots.map((s) => s.component)).toEqual([
       'HeaderSection', 'SwitchSection', 'TabsSection', 'MainSection',
     ])
+    // 🛡️ 推 A：确定性子组件文件集（index 层「引用谁」唯一事实源）
+    expect(facts!.componentFiles.sort()).toEqual([
+      'HeaderSection', 'MainSection', 'SwitchSection', 'TabsSection',
+    ])
   })
 
-  test('同名 type 去重：第二个 body 类 section 加序号', () => {
+  test('同 type 多 section：去重改为语义后缀（替代裸序号 2/3）', () => {
+    // 2026-09-14 命名治本：同类型多 section 不再用 ContentSection2/MainSection2 这类裸序号，
+    // 而按 section.id/title 派生确定性 PascalCase 后缀（Main + id 段 → MainA/MainB）。
     const secs = [
       { id: 'a', type: 'body', responsibility: '主内容区' },
       { id: 'b', type: 'body', responsibility: '副内容区' },
     ]
     const facts = buildDeterministicIndexTemplate(makeInput(secs))
     const tpl = facts!.template
-    expect(tpl).toContain('<MainSection />')
-    expect(tpl).toContain('<MainSection2 />')
+    expect(tpl).toContain('<MainA />')
+    expect(tpl).toContain('<MainB />')
+    expect(tpl).not.toContain('<MainSection2 />') // 不再产出裸序号
   })
 
   test('无计划子组件 → 返回 null（回退 LLM 生成）', () => {
@@ -173,5 +180,55 @@ import DynamicComp from './components/DynamicComp.vue'
 import TabsSection from './components/TabsSection.vue'
 </script>`
     expect(pruneDeadSubComponentImports(content)).toBe(content)
+  })
+})
+
+// ──────────────────────────────────────────────
+// 🛡️ 推 A（2026-09-14 · mc-max-1789376057659-2290591b 实锤）：索引层「引用谁」的确定性约束
+// ──────────────────────────────────────────────
+describe('stripUnplannedSubComponentImports（剥离未规划子组件 import）', () => {
+  const CNT = (script: string) => `<template><div class="x"><ContentSection /></div></template>
+<script setup>
+${script}
+</script>`
+
+  test('规划外静态 import 被剥离，规划内保留（2290591b 形态）', () => {
+    // 2290591b：规划只有 ContentSection，LLM 却 import 了未生成的 SubHeaderSection
+    const content = CNT(`import ContentSection from './components/ContentSection.vue'
+import SubHeaderSection from './components/SubHeaderSection.vue'`)
+    const out = stripUnplannedSubComponentImports(content, ['ContentSection'])
+    expect(out).toContain("import ContentSection from './components/ContentSection.vue'")
+    expect(out).not.toContain("import SubHeaderSection")
+  })
+
+  test('规划外 defineAsyncComponent 动态 import 表达式被消除', () => {
+    const content = CNT(`const SubHeaderSection = defineAsyncComponent(() => import('./components/SubHeaderSection.vue'))`)
+    const out = stripUnplannedSubComponentImports(content, ['ContentSection'])
+    expect(out).not.toContain("import('./components/SubHeaderSection.vue')")
+    expect(out).toContain('SubHeaderSection') // 变量声明保留（仅去 import 表达式，不破坏语法链）
+  })
+
+  test('全部规划内 → 原样返回（零改动）', () => {
+    const content = CNT(`import ContentSection from './components/ContentSection.vue'
+import HeaderSection from './components/HeaderSection.vue'`)
+    expect(stripUnplannedSubComponentImports(content, ['ContentSection', 'HeaderSection'])).toBe(content)
+  })
+
+  test('allowed 为空 → 不剥离（向后兼容无规划信息场景）', () => {
+    const content = CNT(`import X from './components/X.vue'`)
+    expect(stripUnplannedSubComponentImports(content, [])).toBe(content)
+  })
+
+  test('不触碰非 ./components/ 的 import（vue / 外部库保留）', () => {
+    const content = CNT(`import { ref } from 'vue'
+import ContentSection from './components/ContentSection.vue'`)
+    const out = stripUnplannedSubComponentImports(content, ['ContentSection'])
+    expect(out).toContain("import { ref } from 'vue'")
+    expect(out).toBe(content)
+  })
+
+  test('空/畸形输入 fail-open 原样返回', () => {
+    expect(stripUnplannedSubComponentImports('', ['A'])).toBe('')
+    expect(stripUnplannedSubComponentImports(null as any, ['A'])).toBeNull()
   })
 })
