@@ -38,5 +38,9 @@ node_modules/
 *.jar
 dist/
 
-# ==== 生成的临时报告文档 ====
+# ==== 生成的临时报告文档 / 一次性产物 ====
 artifacts/*.md
+artifacts/*.json
+
+# ==== 一次性 / adhoc 脚本（不进版本控制） ====
+scripts/adhoc/
