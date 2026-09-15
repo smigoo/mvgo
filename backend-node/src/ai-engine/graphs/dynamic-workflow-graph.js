@@ -68,7 +68,7 @@ async function instantiateRole(handlerName, state) {
   const roleCfg = {
     apiKey: cfg.apiKey,
     baseURL: cfg.baseURL,
-    model: cfg.model || 'claude-sonnet-4-6', // 🛡️ 防御性默认值：当 state.textAIConfig.model 未定义时使用默认模型
+    model: cfg.model || '', // cfg.model 来自 state.textAIConfig.model，空则下游抛错
     sessionId: state.sessionId || null, // 📊 透传给 agent，统一 invoke 出口登记「会话→模型」供日志渲染
     ...(state.workflowConfig?.[handlerName] || {}), // 节点级配置覆盖
   };

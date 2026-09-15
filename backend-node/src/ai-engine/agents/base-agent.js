@@ -26,6 +26,12 @@ export class BaseAgent {
     this.name = config.name;
     this.description = config.description;
     this.model = config.model || TEXT_DEFAULTS.model;
+    // 🔒 强制用户配置：模型不能为空，必须从用户配置中获取
+    if (!this.skipLLM && !this.model) {
+      throw new Error(
+        `${this.name}: 缺少 AI 模型配置，请在用户配置中设置文本模型`,
+      );
+    }
     // 📊 会话级模型登记：透传给 attachUnifiedInvoke，使统一 invoke 出口能记录
     // 「sessionId → 当前模型」，供进度日志渲染 [model] 标签。
     this.sessionId = config.sessionId || null;
@@ -119,7 +125,7 @@ export class BaseAgent {
             providerId: p.id,
             apiKey: p.apiKey,
             baseURL: p.baseURL || '',
-            model: p.model || this.model || 'claude-sonnet-4-6', // 🛡️ 防御性默认值：provider 无 model 时回退到实例 model
+            model: p.model || this.model || '', // 🛡️ provider 无 model 时回退到实例 model，空则下游抛错
             providerType: p.providerType || 'auto',
             thinkingType: p.thinkingType || '', // 🔧 per-provider 思考开关透传（deepseek disabled 等）
           };

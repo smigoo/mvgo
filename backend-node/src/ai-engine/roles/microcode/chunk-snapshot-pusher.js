@@ -1,3 +1,5 @@
+import { collectMissingVueImports } from '../../utils/vue-import-closure.js';
+
 /**
  * P1-Slice2（增量补丁式更新）：分块快照推送器。
  *
@@ -107,6 +109,37 @@ export async function pushChunkSnapshot({
     (!/<template[\s>]/i.test(idxContent) || !/<script[\s>]/i.test(idxContent))
   ) {
     return;
+  }
+
+  // ②c .vue import 闭包守卫（2026-09-15 事故 mc-max-1789446564243-f64ecbed）：
+  // 子组件是**并行**生成的（genSubComponents，默认并发 2），而 index.vue 的 template/script
+  // chunk 可能**先**完成 —— 此刻 allFiles 里 index.vue 已 `import ContentIndicator from
+  // './components/ContentIndicator.vue'`，但该子组件 chunk 还没产出。
+  // ②b 只看 <template>/<script> 判不出来（index.vue 自身是完整的），于是悬空 import 的
+  // 累积产物被推成 candidate → 前端按候选指针预览 → 拉子组件文件 404 →
+  // 用户看到「组件文件缺失或路径不正确（groupId / componentId 不匹配）。
+  // 原始错误：找不到文件: package/components/ContentIndicator.vue」，且**刷新无效**
+  // （候选指针一直指向那个坏 revision，直到末轮完整产物覆盖）。
+  //
+  // 判据与预览取源（task-code-snapshot.service#isRenderableRevision）同源：
+  // ai-engine/utils/vue-import-closure.js 的 collectMissingVueImports —— 单一事实源，
+  // 禁止两侧各写一套（漂移会出现「推送放行但预览拒绝」的割裂）。
+  // 不完整则本次不推送（累积产物已合并，末轮闭包齐全时的推送自然放行）。
+  if (typeof idxContent === 'string' && idxContent.length > 0) {
+    const missingImports = collectMissingVueImports(
+      'package/index.vue',
+      (p) => (typeof safeAllFiles[p] === 'string' ? safeAllFiles[p] : null),
+    );
+    if (missingImports.length > 0) {
+      if (warn) {
+        warn('候选快照暂不推送：index.vue 的 .vue import 闭包未闭合（生成中间态）', {
+          missing: missingImports,
+          stage,
+          hint: '子组件并行生成尚未产出，闭包齐全后的推送会自然放行；避免预览指向悬空引用',
+        });
+      }
+      return;
+    }
   }
 
   try {

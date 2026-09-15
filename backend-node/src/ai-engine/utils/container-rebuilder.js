@@ -19,10 +19,10 @@
  * @returns {object} 新的 layout（不修改入参）
  */
 import { inferFlexDirection } from './flex-direction-inferrer.js'
+import { indexFigmaNodes, getFigmaBox } from './section-tree.js'
 
 function getBBox(node) {
-  const bb = node && node.absoluteBoundingBox
-  return bb ? { x: bb.x, y: bb.y, w: bb.width, h: bb.height } : null
+  return getFigmaBox(node)
 }
 
 function collectFigmaNodes(node, acc) {
@@ -39,8 +39,9 @@ export function rebuildSlotConContainers(layout, figmaData) {
   if (!figmaData) return { ...layout, sections: sections.slice() }
 
   const secIds = new Set(sections.map((s) => s.id))
-  const allNodes = collectFigmaNodes(figmaData.document || figmaData, [])
-  const byId = new Map(allNodes.map((n) => [n.id, n]))
+  const figmaIndex = indexFigmaNodes(figmaData.document || figmaData)
+  const allNodes = [...figmaIndex.values()].map((record) => record.rawNode || record)
+  const byId = figmaIndex
 
   const rebuilt = []
   const consumed = new Set() // member section id 已被某容器占用
@@ -61,7 +62,7 @@ export function rebuildSlotConContainers(layout, figmaData) {
     // 纵向判定：member 的 bbox 主导方向为 vertical（无横向并列对）→ 才重建；
     // 横向容器（如 device cons 12 子 grid）交给 merger 处理，不在此重建。
     const memberBoxes = members
-      .map((m) => byId.get(m.id))
+      .map((m) => byId.get(String(m.id)))
       .filter(Boolean)
       .map(getBBox)
       .filter(Boolean)
@@ -72,8 +73,8 @@ export function rebuildSlotConContainers(layout, figmaData) {
       .map((m) => sections.find((s) => s.id === m.id))
       .filter(Boolean)
       .sort((a, b) => {
-        const ba = getBBox(byId.get(a.id)) || { y: 0 }
-        const bb = getBBox(byId.get(b.id)) || { y: 0 }
+        const ba = getBBox(byId.get(String(a.id))) || { y: 0 }
+        const bb = getBBox(byId.get(String(b.id))) || { y: 0 }
         return (ba.y || 0) - (bb.y || 0)
       })
 

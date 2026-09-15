@@ -24,6 +24,7 @@ import { getFrontendCandidates } from '../../config/runtime-env.js'
 // "require is not defined in ES module scope"（dist 原样复制 .js，Node ESM ModuleJob 直接加载）。
 // workspace-preview-publisher.js 已 module.exports named export resolveWorkspaceComponentId。
 import { resolveWorkspaceComponentId } from '../utils/workspace-preview-publisher.js'
+import { compareRenderedVsDesign, FIDELITY_VERDICTS } from '../utils/render-fidelity-gate.js'
 
 const logger = createLogger({ name: 'screenshot-renderer' })
 const RUNTIME_SELF_HEAL_WARNING_CODE = 'RUNTIME_SELF_HEAL_MISSING_ASSET'
@@ -1038,6 +1039,37 @@ export async function renderScreenshot(params) {
           evidence: pixelEvidence,
         })
       }
+
+      // 7-A：渲染产物 vs 设计稿 · 像素级比对门禁
+      if (!pixelEvidence.blank && previewImage && existsSync(previewImage)) {
+        try {
+          const fidelity = await compareRenderedVsDesign({
+            renderedPath: result.renderedImage,
+            designPath: previewImage,
+          })
+          result.visualFidelity = fidelity
+          if (fidelity.verdict === FIDELITY_VERDICTS.BLOCK) {
+            result.runtimeGate.issues.push({
+              id: 'VISUAL-002',
+              severity: 'BLOCK',
+              category: 'render-fidelity',
+              message: `渲染产物与设计稿像素差异过大（score=${fidelity.score}，阈值<${0.6}）`,
+              evidence: fidelity,
+            })
+          } else if (fidelity.verdict === FIDELITY_VERDICTS.WARN) {
+            result.runtimeGate.issues.push({
+              id: 'VISUAL-002',
+              severity: 'WARN',
+              category: 'render-fidelity',
+              message: `渲染产物与设计稿存在像素差异（score=${fidelity.score}，阈值 0.6~0.85）`,
+              evidence: fidelity,
+            })
+          }
+        } catch (e) {
+          logger.warn('渲染比对门禁执行失败，跳过', { error: e.message })
+        }
+      }
+
       return result
     }
 

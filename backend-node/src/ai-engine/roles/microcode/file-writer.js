@@ -20,7 +20,7 @@ import {
   validateVueSfc,
   extractLessGlobalVars,
 } from '../../utils/sfc-syntax-validation.js';
-import { repairScopedThirdPartySelectors, ensureFlexDirectionInVueSfc, ensureFlexDirection, ensureGridDisplay, ensureGridDisplayInVueSfc } from '../../utils/css-sanitizer.js';
+import { repairScopedThirdPartySelectors, ensureFlexDirectionInVueSfc, ensureFlexDirection, ensureGridDisplay, ensureGridDisplayInVueSfc, fixInvalidCssPropertiesInVue, fixInvalidCssProperties } from '../../utils/css-sanitizer.js';
 import { fixSpuriousLineBreaks, injectMissingTabUi, healVueEmbeddedStyleBraces, healThemeMixinVarRefs, healThemeMixinVarRefsInVue, healLessResourceVarInterpolation, healPresetLiteralDecls, healSlotHexToVarRefs, healVarNameCase, applyHealToVueStyleBlocks, injectThemeVarDeclsForLess } from './code-healer.js';
 import { healLessSource, healRootFixedSize } from '../../validators/less-compile-gate.js';
 import {
@@ -451,6 +451,8 @@ export function writeFiles(files, outputPath, options = {}) {
         // 🛡️ 确定性自愈：grid-template-* 但漏写 display 时补 display:grid
         // （否则 grid-template-columns 完全失效 → 多列塌成一列 → 溢出被外壳裁掉 = 整块内容消失）
         sanitizedContent = ensureGridDisplayInVueSfc(sanitizedContent, logger);
+        // 🛡️ 无效 CSS 属性名修正（LLM 幻觉属性如 line-min-height → min-height）
+        sanitizedContent = fixInvalidCssPropertiesInVue(sanitizedContent, logger);
         // 🛡️ 重复 <template> 去重（模型偶尔生成多个 <template> 块，导致写盘门禁跳过整个文件）
         const dedup = deduplicateTemplateBlocks(sanitizedContent);
         if (dedup.fixed) {
@@ -668,6 +670,8 @@ export function writeFiles(files, outputPath, options = {}) {
         );
         // 🛡️ 确定性自愈：grid-template-* 但漏写 display 时补 display:grid（见 SFC 分支同名注释）
         sanitizedContent = ensureGridDisplay(sanitizedContent, logger);
+        // 🛡️ 无效 CSS 属性名修正（LLM 幻觉属性如 line-min-height → min-height）
+        sanitizedContent = fixInvalidCssProperties(sanitizedContent, logger);
 
         // 🛡️ 确定性自愈：补全 LLM 漏写的右大括号 / 未闭合块注释。
         // 写盘即修复，避免把必然编译失败的 LESS 送到下游门禁（历史上表现为

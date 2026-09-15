@@ -15,7 +15,7 @@ export class VisualComparatorNode extends BaseAgent {
     super({
       name: 'visual-comparator',
       description: '截图 vs Figma 预览图视觉比对，输出相似度与差异报告',
-      model: config.model || 'gpt-4o',
+      model: config.model || '',
       temperature: 0,
       maxTokens: 4096,
       ...config,

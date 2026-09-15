@@ -119,6 +119,21 @@ export function findClosestTruth(text, truth) {
 }
 
 /**
+ * 🛡️ R5-dup（2026-09-15）：提取组件文件里「会渲染到界面」的文本（模板静态文本 + script 数据字段）。
+ * 与 detectUnknownText 共用同一套提取口径（extractTemplateText 剥离 HTML 注释/标签/插值；
+ * extractScriptDataFields 只取 label/name/text/title 数据字段）。
+ * 供 section-content-guard 的「文本是否渲染在文件」判定复用，替代裸 f.content.includes(text)——
+ * 后者会把 HTML 注释（如 `<!-- 当日总流量区域背景 -->`）误判为「渲染文本」→ duplicateTextIssues 假阳性。
+ * @param {string} content SFC 内容
+ * @returns {string} 渲染文本（空格分隔，供 includes 判定）
+ */
+export function extractRenderedText(content) {
+  const tpl = extractTemplateText(content);
+  const script = extractScriptDataFields(content);
+  return `${tpl} ${script}`;
+}
+
+/**
  * 提取模板里「会渲染到界面」的文本节点。
  * 剥离 HTML 注释 / 标签（含 alt/title/aria-label 等属性值）/ 插值表达式 {{ }}，
  * 只留下标签之间的静态文字（如 `<span>监控</span>` → 「监控」）。

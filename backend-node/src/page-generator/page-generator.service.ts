@@ -247,11 +247,6 @@ export class PageGeneratorService {
     } = metadata;
 
     try {
-      // 🆕 更新环境变量（如果提供了新配置）
-      if (config?.apiKey) process.env.MC_GEN_TEXT_API_KEY = config.apiKey;
-      if (config?.endpoint) process.env.MC_GEN_TEXT_ENDPOINT = config.endpoint;
-      if (config?.model) process.env.MC_GEN_TEXT_MODEL = config.model;
-
       // 动态导入，并按原任务 target 选择生成图
       const aiDefaultsModule = await import('../ai-engine/utils/ai-defaults.js');
       const { resolveVisionConfig, resolveTextConfig } = aiDefaultsModule;
@@ -355,11 +350,11 @@ export class PageGeneratorService {
         target,
         figmaToken: process.env.FIGMA_ACCESS_TOKEN,
         visionAIConfig: resolveVisionConfig({}),
-        textAIConfig: resolveTextConfig({}),
+        textAIConfig: resolveTextConfig({ textApiKey: config?.apiKey, textBaseURL: config?.endpoint, textModel: config?.model }),
         aiConfig: {
-          apiKey: process.env.MC_GEN_TEXT_API_KEY || process.env.ANTHROPIC_API_KEY,
-          baseURL: process.env.MC_GEN_TEXT_ENDPOINT || process.env.ANTHROPIC_BASE_URL,
-          model: process.env.MC_GEN_TEXT_MODEL || process.env.ANTHROPIC_MODEL,
+          apiKey: config?.apiKey || process.env.ANTHROPIC_API_KEY,
+          baseURL: config?.endpoint || process.env.ANTHROPIC_BASE_URL,
+          model: config?.model || process.env.ANTHROPIC_MODEL,
         },
         sessionId: retrySessionId,
         // 🆕 断点续跑数据

@@ -22,7 +22,7 @@ export class StyleMapper extends BaseAgent {
     super({
       name: 'style-mapper',
       description: '样式映射器',
-      model: config.model || 'claude-sonnet-4-6',
+      model: config.model || '',
       temperature: config.temperature || 0,
       maxTokens: config.maxTokens || 6144,
       ...config

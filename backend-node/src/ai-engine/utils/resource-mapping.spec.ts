@@ -263,4 +263,68 @@ describe('家族病 C/D 类：背景禁渐变替代 + 图标禁臆造边框', ()
     );
     expect(text).toContain('禁止用 CSS linear-gradient 渐变');
   });
+
+  /**
+   * 家族病 C 类**复发**（2026-09-15 · mc-max-1789452271404-7e0e19d2 实锤）：
+   *
+   * 上一轮只加了「禁止用 CSS 渐变替代」铁律，却仍在同一条目里把该 bg 的
+   * `visualMeta.fillsSummary`（= `linear-gradient(#b5deff 0%, #d1ecff 100%)`，即 bg-7890.png
+   * 那张胶囊底图本身的填充）以「样式:」吐给模型 → **一边禁止一边递刀**，模型照抄成
+   * `.c-env-monitor-tab-item`（错误元素）的 CSS 背景，且 CSS 版不透明 → 盖住了本该显示的图片。
+   *
+   * 修法：**可用（已下载）资源不再输出 fillsSummary**（同一视觉只允许一条落地路径 = 图片本身）；
+   * 该值仅在「资源缺失」分支作为兜底参考出现，并显式标注使用范围。
+   */
+  describe('复发回归：可用资源的 fillsSummary 不得进入 prompt', () => {
+    const bgWithFills = {
+      ...bgContainer,
+      visualMeta: {
+        width: 295,
+        height: 27,
+        fillsSummary: 'linear-gradient(#b5deff 0%, #d1ecff 100%)',
+      },
+    };
+
+    it('compact：success 的 bg 不输出「样式:」，且不得出现该填充色值', () => {
+      const text = formatResourceMapping([bgWithFills], { compact: true });
+      expect(text).not.toContain('样式:');
+      // ⚠️ 不能断言 not.toContain('linear-gradient')：铁律文案本身含该字样（compact 版写的是
+      //    「禁止用 CSS gradient/color 替代」，非 compact 版写的是「禁止用 CSS linear-gradient 渐变替代」）。
+      //    真正的不变量是「**填充色值**不得进入 prompt」。
+      expect(text).not.toContain('#b5deff');
+      expect(text).not.toContain('#d1ecff');
+      // 图片铁律仍在（不是删规则，是不再递刀）
+      expect(text).toContain('禁止用 CSS gradient/color 替代');
+      // 图本身与挂载信息必须还在
+      expect(text).toContain('bg-7890.png');
+      expect(text).toContain('bg1');
+    });
+
+    it('非 compact：同上（两处必须同口径，防只改一处）', () => {
+      const text = formatResourceMapping([bgWithFills], { importPrefix: './' });
+      expect(text).not.toContain('样式：');
+      expect(text).not.toContain('#b5deff');
+      expect(text).not.toContain('#d1ecff');
+      expect(text).toContain('禁止用 CSS linear-gradient 渐变');
+    });
+
+    it('尺寸/效果不是「另一种视觉表达」→ 仍保留', () => {
+      const text = formatResourceMapping(
+        [{ ...bgWithFills, visualMeta: { ...bgWithFills.visualMeta, effectsSummary: 'box-shadow: 0 1px 2px #000' } }],
+        { importPrefix: './' },
+      )
+      expect(text).toContain('295×27px')
+      expect(text).toContain('box-shadow')
+    })
+
+    it('负面对照：资源缺失（failed）时仍给填充参考，但标注「仅本资源缺失时使用」', () => {
+      const text = formatResourceMapping(
+        [{ ...bgWithFills, downloadStatus: 'missing', resourceFile: null }],
+        { compact: true },
+      )
+      expect(text).toContain('兜底填充参考')
+      expect(text).toContain('仅本资源缺失时使用')
+      expect(text).toContain('linear-gradient')
+    })
+  })
 });

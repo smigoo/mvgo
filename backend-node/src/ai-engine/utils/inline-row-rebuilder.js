@@ -22,39 +22,23 @@
  * @returns {Array<{id:string,name:string,layout:'horizontal',members:string[]}>} 检测到的行内复合 section
  *          `members` 语义固定为 **视觉左→右（按 bbox.x 升序）**——下游 inline-row-merger 依赖该契约
  */
-import { inferFlexDirection } from './flex-direction-inferrer.js'
+import { getFigmaBox, areBoxesSideBySide } from './section-tree.js'
 
 export function rebuildSectionsPreservingInlineRows(doc, opts = {}) {
-  const yOverlapRatio = opts.yOverlapRatio ?? 0.5
-  const xOverlapRatio = opts.xOverlapRatio ?? 0.15
   const sections = []
 
-  const bb = (n) =>
-    n && n.absoluteBoundingBox
-      ? { x: n.absoluteBoundingBox.x, y: n.absoluteBoundingBox.y, w: n.absoluteBoundingBox.width, h: n.absoluteBoundingBox.height }
-      : null
-  const yOverlap = (a, b) => Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y))
-  const xOverlap = (a, b) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x))
-  // 左右并列判定：复用 inferFlexDirection 的阈值（单一事实源）
-  const sideBySide = (a, b) => {
-    const yo = yOverlap(a, b)
-    if (yo <= yOverlapRatio * Math.min(a.h, b.h)) return false
-    if (xOverlap(a, b) >= xOverlapRatio * Math.min(a.w, b.w)) return false
-    return true
-  }
-
   const walk = (node) => {
-    const kids = (node.children || []).filter((c) => bb(c))
+    const kids = (node.children || []).filter((c) => getFigmaBox(c))
     if (kids.length >= 2) {
       // 行聚类：按 y 升序后，将满足左右并列的兄弟归入同一连通分量（行内复合结构）
-      const rows = kids.map((k, i) => ({ ...bb(k), idx: i, node: k }))
+      const rows = kids.map((k, i) => ({ ...getFigmaBox(k), idx: i, node: k }))
       rows.sort((a, b) => a.y - b.y)
       const parent = rows.map((_, i) => i)
       const find = (x) => (parent[x] === x ? x : (parent[x] = find(parent[x])))
       const union = (a, b) => { parent[find(a)] = find(b) }
       for (let i = 0; i < rows.length; i++) {
         for (let j = i + 1; j < rows.length; j++) {
-          if (sideBySide(rows[i], rows[j])) union(i, j)
+          if (areBoxesSideBySide(rows[i], rows[j], opts)) union(i, j)
         }
       }
       const groups = {}

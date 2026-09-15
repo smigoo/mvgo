@@ -42,7 +42,7 @@ import { toFileArray, mergeFileArray } from './file-collection.js';
  * 颜色/字体/背景等表现类属性留给子组件差异化，剥离会误伤视觉。
  */
 export const LAYOUT_PROPS = new Set([
-  'width', 'height', 'min-width', 'min-height', 'max-width', 'max-height',
+  'width', 'height', 'max-width', 'max-height',
   'flex', 'flex-grow', 'flex-shrink', 'flex-basis', 'flex-direction', 'flex-wrap',
   'display', 'align-items', 'align-self', 'justify-content', 'gap',
   'row-gap', 'column-gap',
@@ -51,6 +51,10 @@ export const LAYOUT_PROPS = new Set([
   'position', 'top', 'right', 'bottom', 'left',
   'overflow', 'overflow-x', 'overflow-y', 'box-sizing',
 ]);
+// 🛡️ R5-minheight（2026-09-15）：min-width/min-height 从白名单移除。
+// 它们是「防塌缩」安全网（图表容器 min-height:160px、flex 子项 min-height:0），
+// 冗余声明无害（CSS 取较大值，不冲突），且被「样式重复声明剥离」剥掉后图表/内容
+// 直接塌缩（环境监测 chart-container 实锤：T2 注入 min-height:160px 被剥 → 空规则块）。
 
 const CLASS_SELECTOR_RX = /^\.([\w-]+)$/;
 

@@ -15,7 +15,7 @@ export class DataAgent extends BaseAgent {
     super({
       name: 'data-agent',
       description: '组件数据结构生成器',
-      model: config.model || 'claude-sonnet-4-6',
+      model: config.model || '',
       temperature: config.temperature || 0,
       maxTokens: config.maxTokens || 4096,
       ...config

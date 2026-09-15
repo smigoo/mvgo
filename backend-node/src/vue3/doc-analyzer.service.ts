@@ -273,7 +273,7 @@ ${catalog}
       process.env.MC_GEN_TEXT_MODEL ||
       process.env.TEXT_MODEL ||
       process.env.ANTHROPIC_MODEL ||
-      'claude-opus-4-8'
+      ''
     ).trim();
 
     if (!apiKey || !baseURL) {

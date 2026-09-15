@@ -84,3 +84,9 @@ resources/styles/
    —— 缺 min-height 时被兄弟元素挤压到 ~10px，折线图视觉变形
 4. **横向分区**（如 Tab 区 + 右侧图标区）：Tab 区 `flex: 1; min-width: 0`，图标区 `flex-shrink: 0`
 5. Tab 项宽度按内容均分：`flex: 1` + `text-align: center`（每项等宽，不逐项设固定 px）
+
+## 3.3️⃣ 图标资源分档（禁止臆造 SVG，但 vector 节点允许手绘）
+
+1. **Figma 提供了该图标的图片资源**（资源清单里存在对应 icon 变量）→ **必须**引用该资源（`<img :src="iconX">`），**禁止**手写 `<svg>`/`<canvas>`。
+2. **Figma 该图标是 vector 节点、未导出图片资源**（资源清单里无对应项）→ 允许手写 `<svg>` 或用 CSS 实现，但**尺寸/颜色必须取自 Figma 真值**，不得臆造形状或配色。
+3. 禁止用 `<canvas>` 手绘任何图标/图表（图表必须用 echarts）。

@@ -1,10 +1,9 @@
 /**
- * AI Provider 硬编码默认配置
+ * AI Provider 配置
  *
- * 设计目的：当 .env / 环境变量 / 前端传入均缺失时，提供开箱即用的兜底配置，
- *           避免因配置缺失导致服务无法启动。
- *
- * 架构：视觉任务用 Qwen (DashScope)，文本任务用 Claude (自有端点)
+ * 设计目的：所有模型名称和密钥必须来自用户配置（数据库/data/ai-config.json/环境变量）。
+ *           用户未配置时静默使用兜底默认值，会掩盖「用户忘配模型」的致命错误。
+ *           ⚠️ 零硬编码回退原则：model 为空时必须抛出清晰错误，引导用户去配置面板。
  */
 
 import { getProviderPool } from './provider-pool.js'
@@ -134,7 +133,7 @@ export const VISION_DEFAULTS = {
     _savedVision.apiKey ||
     '',
   baseURL: _savedVision.baseURL || '',
-  model: _savedVision.model || 'qwen3.7-plus',
+  model: _savedVision.model || '',
 }
 
 // 文本任务默认配置（Figma/req 阶段 - 代码生成/审查/布局分析）
@@ -160,7 +159,7 @@ export const TEXT_DEFAULTS = {
     process.env.TEXT_MODEL ||
     process.env.ANTHROPIC_MODEL ||
     _savedText.model ||
-    'claude-opus-4-8',
+    '',
 }
 
 /**
@@ -388,7 +387,7 @@ export function resolveVisionConfig(config = {}) {
 
 /**
  * 解析文本任务配置
- * 优先级：前端传入 → MC_GEN_TEXT_* 环境变量 → TEXT_* 环境变量 → ANTHROPIC_* 兼容环境变量 → 硬编码默认
+ * 优先级：前端传入 → MC_GEN_TEXT_* 环境变量 → TEXT_* 环境变量 → ANTHROPIC_* 兼容环境变量 → 已保存配置
  * @param {object} config - 前端请求传入的配置
  * @returns {{apiKey:string, baseURL:string, model:string}}
  */

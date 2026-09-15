@@ -11,6 +11,7 @@
  * 4. 跨行 @import 路径修复
  * 5. 非法行跳过（LLM 评论文本），不截断后续合法行
  * 6. aggressiveClean：激进清洗 + 大括号闭合
+ * 7. 无效 CSS 属性修正（LLM 幻觉属性名）
  *
  * 注意：theme-vars.less 的 :root mixin 包裹是 LESS 专属逻辑，
  *       留在 phase2.service.ts 中作为后处理步骤，不在此工具内。
@@ -1000,4 +1001,61 @@ export function ensureDisplayFlexForClassInVue(vueContent, className, logger) {
   })
   if (changed) logger?.warn?.(`🛡️ 已为 .${className} 补 display: flex（SFC scoped 样式）`)
   return changed ? out : vueContent
+}
+
+/**
+ * 🛡️ 无效 CSS 属性名修正（2026-09-15）：LLM 幻觉出合法 CSS 属性名格式但实际不存在的属性。
+ *
+ * 背景（`c-device-monitor-ed4d4b73`）：LLM 生成 `line-min-height: 16px`，
+ * 浏览器完全不识别这个属性 → 行高失效 → 文字重叠/挤压。
+ * CSS 语法检查器（如 stylelint）也不会报错，因为属性名格式合法（`[\w-]+`）。
+ *
+ * 策略：维护已知无效属性名 → 正确属性名的映射表，写盘前确定性替换。
+ * 保守边界：只替换明确已知的幻觉属性，不猜测不确定的。
+ *
+ * @param {string} cssContent CSS/LESS 文本
+ * @param {object} [logger]
+ * @returns {string} 修正后的内容
+ */
+const INVALID_CSS_PROPERTY_MAP = {
+  'line-min-height': 'min-height',  // LLM 常把 line-height 和 min-height 混淆
+}
+
+const INVALID_CSS_PROPERTY_RX = new RegExp(
+  `\\b(${Object.keys(INVALID_CSS_PROPERTY_MAP).join('|')})\\s*:`,
+  'g'
+)
+
+export function fixInvalidCssProperties(cssContent, logger) {
+  if (!cssContent || typeof cssContent !== 'string') return cssContent
+  if (!INVALID_CSS_PROPERTY_RX.test(cssContent)) return cssContent
+
+  let fixedCount = 0
+  const result = cssContent.replace(INVALID_CSS_PROPERTY_RX, (match, propName) => {
+    const correct = INVALID_CSS_PROPERTY_MAP[propName]
+    if (correct) {
+      fixedCount++
+      return `${correct}:`
+    }
+    return match
+  })
+
+  if (fixedCount > 0) {
+    logger?.warn?.(`🛡️ 已修正 ${fixedCount} 个无效 CSS 属性名（LLM 幻觉属性 → 正确属性）`)
+  }
+  return result
+}
+
+/**
+ * fixInvalidCssProperties 的 SFC 版：处理所有 <style> 块。
+ * @param {string} vueContent 完整 Vue SFC 内容
+ * @param {object} [logger]
+ * @returns {string}
+ */
+export function fixInvalidCssPropertiesInVue(vueContent, logger) {
+  if (!vueContent || typeof vueContent !== 'string') return vueContent
+  return vueContent.replace(/<style([^>]*)>([\s\S]*?)<\/style>/gi, (fullMatch, attrs, innerContent) => {
+    const repaired = fixInvalidCssProperties(innerContent, logger)
+    return `<style${attrs}>${repaired}</style>`
+  })
 }

@@ -256,6 +256,9 @@ export function indexFigmaNodes(figmaRoot) {
         type: String(node.type || ''),
         bbox: node.absoluteBoundingBox || null,
         parentId,
+        // 兼容底层事实消费者：保留原始节点引用，避免下游重新 walk
+        // 或丢失 children/characters/fills 等事实。业务裁决仍不放在此处。
+        rawNode: node,
       })
     }
     const children = Array.isArray(node.children) ? node.children : []
@@ -263,6 +266,93 @@ export function indexFigmaNodes(figmaRoot) {
   }
   walk(figmaRoot, null)
   return index
+}
+
+/**
+/** 将原始节点或索引记录归一为统一几何 primitive。 */
+export function getFigmaBox(node) {
+  const source = node?.absoluteBoundingBox || node?.bbox
+  if (source && typeof source === 'object') {
+    const x = Number(source.x)
+    const y = Number(source.y)
+    const width = Number(source.width)
+    const height = Number(source.height)
+    if ([x, y, width, height].every(Number.isFinite)) return { x, y, w: width, h: height }
+  }
+  const x = Number(node?.x)
+  const y = Number(node?.y)
+  const width = Number(node?.w)
+  const height = Number(node?.h)
+  if (![x, y, width, height].every(Number.isFinite)) return null
+  return { x, y, w: width, h: height }
+}
+
+/**
+ * 统一的几何同行判定 primitive。仅表达几何事实，不决定 section 如何装配。
+ */
+export function areBoxesSideBySide(a, b, opts = {}) {
+  const left = getFigmaBox(a)
+  const right = getFigmaBox(b)
+  if (!left || !right) return false
+  const yOverlapRatio = opts.yOverlapRatio ?? 0.5
+  const xOverlapRatio = opts.xOverlapRatio ?? 0.15
+  const yOverlap = Math.max(0, Math.min(left.y + left.h, right.y + right.h) - Math.max(left.y, right.y))
+  const xOverlap = Math.max(0, Math.min(left.x + left.w, right.x + right.w) - Math.max(left.x, right.x))
+  return (
+    yOverlap > yOverlapRatio * Math.min(left.h, right.h) &&
+    xOverlap < xOverlapRatio * Math.min(left.w, right.w)
+  )
+}
+
+export function buildChildrenMap(index) {
+  const childrenOf = new Map()
+  if (!index || typeof index.values !== 'function') return childrenOf
+  for (const node of index.values()) {
+    if (!node?.parentId) continue
+    if (!childrenOf.has(node.parentId)) childrenOf.set(node.parentId, [])
+    childrenOf.get(node.parentId).push(node.id)
+  }
+  return childrenOf
+}
+
+/**
+ * 归一化 Figma 文本节点名：剥掉单字母命名前缀（t-/d-/n-/v- 等）。
+ */
+export function normalizeFigmaTextName(name) {
+  return String(name || '').replace(/^[a-zA-Z]-/, '').trim()
+}
+
+/**
+ * 收集节点子树内的文本事实。返回项保留文本类别和文本节点自身 bbox.x。
+ */
+export function collectSubtreeTexts(nodeId, index, childrenOf = buildChildrenMap(index)) {
+  const out = []
+  const seenKeys = new Set()
+  const seen = new Set()
+  const walk = (id) => {
+    const keyId = String(id)
+    if (seen.has(keyId)) return
+    seen.add(keyId)
+    const node = index?.get(keyId)
+    if (!node) return
+    if (node.type === 'TEXT' || node.type === 'CHARACTER') {
+      const raw = String(node.name || '')
+      const isTitle = /^[tT]-/.test(raw)
+      const text = normalizeFigmaTextName(raw)
+      const key = `${isTitle ? 't' : 'd'}:${text}`
+      if (text && !seenKeys.has(key)) {
+        seenKeys.add(key)
+        out.push({
+          text,
+          isTitle,
+          x: typeof node.bbox?.x === 'number' ? node.bbox.x : null,
+        })
+      }
+    }
+    for (const childId of childrenOf?.get(keyId) || []) walk(childId)
+  }
+  walk(nodeId)
+  return out
 }
 
 /**
@@ -510,6 +600,200 @@ export function anchorPhantomSections(sections, figmaRoot) {
     )
 
   return recurse(anchorLevel(sections))
+}
+
+/** Figma 节点 id 的严格形态（`89:42` / `2:7898`）。Vision 引用真值节点时必须长这样。 */
+const FIGMA_NODE_ID_RX = /^\d+:\d+$/
+
+/**
+ * 🛡️ 治本（2026-09-15 · c-device-monitor-228b63d5 实锤）：清洗「编造 id 空间」污染。
+ *
+ * 背景：Vision 偶发编造整套 Figma 格式 id（`8439:8500` 设备类型网格区、`8788:8439`
+ *   切换控制区、`3550:194` 江阴靖江隧道小时流量），这些 id 在真值树中出现 0 次。
+ *   `collectSourceNodeIds`（subcomponent-planner.js）只认 `数字:数字` 形态，把假 id 也塞进
+ *   sourceNodeIds → 编造 section 伪装成「有归属壳」→ 下游 anchorPhantomSections 的 isShell
+ *   （sourceNodeIds 空才锚定）与 dedupeByWholeRegionShell 的「无归属壳」判别力双双失效：
+ *     · 真 chart 壳（`3550:194` 对应 @echarts）不再被锚定 → 图表语义靠 type 兜底，脆弱；
+ *     · 假 grid 壳（`8439:8500`）被当成有归属兄弟 → 拆成独立 CardGrid，外层布局崩。
+ *
+ * 治本：在 anchor 之前，把 sourceNodeIds 里「Figma 格式但真值树不存在」的假 id 清掉，
+ *   让编造 section 回到「无归属壳」状态，由既有 anchor（锚定真 chart）+ dedupe（剔假壳）
+ *   正确接管。**只清 Figma 格式的假 id，语义 id（`slot-xxx` 等）原样保留**，避免误伤旧 schema。
+ *
+ * 纯函数、幂等：返回新数组；无 figmaRoot / 空索引时原样返回入参引用。
+ *
+ * @param {Array} sections effectiveSections 树
+ * @param {Object} [figmaRoot] figma.json 根（含 children，或 {document} 包装）
+ * @returns {Array} 清洗后的 sections
+ */
+export function stripFabricatedSourceIds(sections, figmaRoot) {
+  if (!Array.isArray(sections) || !figmaRoot || typeof figmaRoot !== 'object') {
+    return sections
+  }
+  const rootNode = figmaRoot.document || figmaRoot
+  const index = indexFigmaNodes(rootNode)
+  if (index.size === 0) return sections
+
+  const strip = (list) =>
+    list.map((sec) => {
+      if (!sec || typeof sec !== 'object') return sec
+      const src = (sec.sourceNodeIds || []).filter((id) => {
+        const s = String(id).trim()
+        // 非 Figma 格式（语义 id 如 slot-车型分布）原样保留，不参与真假判定
+        if (!FIGMA_NODE_ID_RX.test(s)) return true
+        return index.has(s)
+      })
+      const next = { ...sec, sourceNodeIds: src }
+      if (Array.isArray(sec.children)) next.children = strip(sec.children)
+      return next
+    })
+  return strip(sections)
+}
+
+/**
+ * 🛡️ 剔除「幻觉 section」：自身没有任何节点身份，却引用了 Figma 真值里不存在的节点。
+ *
+ * 背景（2026-09-15 · mc-max-1789446564243-f64ecbed 实锤）：
+ * Figma 真值 slot-con(89:41) 只有 **2 个**直接子节点 —— `89:42 sub-t`(y898 h32) 与
+ * `2:7898 @echarts/line`(y930 h113)。Vision 却输出了第三个 section `badge-indicator`
+ * （name「数值角标」、slotCandidate header-right），其唯一子元素 id 写的是 `89:37`
+ * —— 该 id 在整棵 Figma 树中出现 **0 次**（同命名空间的 89:41/89:42/89:43 都真实存在）。
+ * 下游 subcomponent-planner 按 sections 出子组件清单 → 多生成一个 `ContentIndicator.vue`：
+ *   · 角标「6」被渲染两遍（sub-t 行内已有 num，ContentIndicator 又画一份）；
+ *   · slot-con 从「tab 行 + 图表」两行变三行，多出的行按 flex 比例挤走图表高度。
+ * 而这类 section **代码门禁结构上不可见**：类名真实、LESS 合法、结构自洽，只是设计里不存在。
+ *
+ * 为什么判据必须「窄」（2026-09-15 · 162 份真机 vision 缓存离线实测）：
+ * 宽判据（「凡声明了 Figma 格式 id 而该 id 不存在 → 剔除」）在真实语料上命中 4 条，
+ * 其中 3 条是**真 section**：Vision 偶发编造整套 id 空间（`8000:8010 统计指标行`、
+ * `8100:8110 图表区域`、`8776:8787 Tab切换区域`），内容（图表/统计行/tab 区）真实存在
+ * 且是唯一来源 —— 一律剔除会把图表整块删掉。窄判据把「自身声明了节点身份」的 section
+ * 排除在外（无论该 id 真假），只处理**零节点身份**的伪容器：实测命中恰为 1 条真阳性、零误伤。
+ *
+ * 事实源：Figma 节点树（indexFigmaNodes，与 anchorPhantomSections / sortSectionsByFigmaY 同一份）。
+ * 纯函数、幂等：不修改入参，无 figmaRoot 时原样返回（零回归）。
+ *
+ * 残余（已知，未在此收口）：编造整套 id 空间的 section（`8000:x`/`8100:x` 型）仍会放行 ——
+ * 其 id 自称节点身份，无法与真 section 区分；该形态需靠 bbox 归属或证据重叠另行收口。
+ *
+ * @param {Array} sections 同层 section 数组（容器请自行逐层传入或依赖本函数递归 children）
+ * @param {Object} [figmaRoot] figma.json 根节点（含 children/absoluteBoundingBox）
+ * @returns {Array} 剔除幻觉后的新数组（无 figmaRoot / 无命中时返回原引用）
+ */
+export function dropHallucinatedSections(sections, figmaRoot) {
+  if (!Array.isArray(sections) || !figmaRoot || typeof figmaRoot !== 'object') {
+    return sections
+  }
+  // 根节点归一：真机常传 figma.json 包装对象 `{ fileKey, nodeId, document }`，
+  // indexFigmaNodes 只沿 `children` 走 → 不剥 `document` 会得到空索引（判据整体失效）。
+  // 与 tab-resource-guard#58 / figma-height-ratio#249 / visual-parser#2061 同口径。
+  const rootNode = figmaRoot.document || figmaRoot
+  const index = indexFigmaNodes(rootNode)
+  if (index.size === 0) return sections
+
+  // ① 自身是否「声明了节点身份」——显式引用字段（无论真假）或 id 写成 Figma 形态。
+  //    声明的 section 一律保留：宁可漏剔，不可误删真 section（见上方 162 样本实测）。
+  const selfClaimsNode = (sec) => {
+    if (!sec || typeof sec !== 'object') return false
+    const own = [sec.figmaNodeId, sec.figmaNode, ...(sec.sourceNodeIds || [])]
+    if (own.some((v) => v != null && String(v).trim() !== '')) return true
+    return FIGMA_NODE_ID_RX.test(String(sec.id ?? '').trim())
+  }
+
+  // ② 子元素（递归 children / body.children）是否引用了「真值不存在的 Figma 格式 id」
+  const hasFabricatedChildRef = (sec) => {
+    const stack = []
+    const push = (arr) => {
+      if (!Array.isArray(arr)) return
+      for (const c of arr) {
+        if (c && typeof c === 'object') stack.push(c)
+      }
+    }
+    push(sec.children)
+    if (sec.body && typeof sec.body === 'object') push(sec.body.children)
+    while (stack.length > 0) {
+      const cur = stack.pop()
+      for (const key of ['id', 'figmaNode', 'figmaNodeId']) {
+        const v = cur[key]
+        if (v == null) continue
+        const s = String(v).trim()
+        if (FIGMA_NODE_ID_RX.test(s) && !index.has(s)) return true
+      }
+      push(cur.children)
+      if (cur.body && typeof cur.body === 'object') push(cur.body.children)
+    }
+    return false
+  }
+
+  let dropped = 0
+  const filterLevel = (list) =>
+    list
+      .filter((sec) => {
+        if (!sec || typeof sec !== 'object') return true
+        if (selfClaimsNode(sec) || !hasFabricatedChildRef(sec)) return true
+        dropped += 1
+        return false
+      })
+      .map((sec) =>
+        Array.isArray(sec.children) ? { ...sec, children: filterLevel(sec.children) } : sec,
+      )
+
+  const result = filterLevel(sections)
+  return dropped > 0 ? result : sections
+}
+
+/**
+ * 🛡️ 幻觉 section 事实校验 —— **全链路**共用的唯一入口（2026-09-15）。
+ *
+ * 为什么必须「全链路」：Vision 结果有**三条**来源，且后两条是**命中即返回**的缓存短路，
+ * 完全绕过 `_postProcessAnalysis`：
+ *   ① 全新 Vision 分析 → 走 `_postProcessAnalysis`（内部已调用本函数）
+ *   ② `VisualParser.execute()` 的 vision-cache 命中分支（`.mc-gen/cache/vision-cache/*.json`）
+ *   ③ graph 节点的 `state._uiCache.previewAnalysis` 命中分支（`_shared-cache/*.json`）
+ * 缓存里存的是**加工后**结构（含 merger 产物 `layoutSource: inline-row`），
+ * 因此「后处理规则一旦变更，缓存命中的任务永远拿不到修复」——曾经的隐性坑。
+ * 事实校验是幂等纯函数、事实源是**实时 Figma 树**，故在缓存命中处补跑即可（不重跑形状归一，避免二次加工）。
+ *
+ * 形态兼容：扁平 parsed（`layout.sections`）、包装态（`layoutStructure.layout.sections`）、
+ * 以及两者同时存在的混合态。
+ *
+ * ⚠️ **就地写回**（2026-09-15 自证）：`_postProcessAnalysis` 依赖就地修改 `parsed`
+ * （调用方 `this._postProcessAnalysis(parsed, …)` 之后继续用同一个对象引用），
+ * 若本函数只返回新对象而不写回，全新路径上的剔除会**静默失效**。
+ * 故此处直接给 `parsed` 的容器字段重新赋值，并返回同一引用 —— 四处调用点语义统一
+ * （可安全用于 `return applyHallucinationDrop(x, figma)` 与「调用后继续用 x」两种写法）。
+ *
+ * @param {object} parsed vision 结构对象（任意来源；会被就地更新）
+ * @param {object} figmaData Figma 节点树（`{fileKey,nodeId,document}` 或直接根节点）
+ * @returns {object} 同一个对象引用（无 figmaData / 无命中时零改动）
+ */
+export function applyHallucinationDrop(parsed, figmaData) {
+  if (!parsed || typeof parsed !== 'object' || !figmaData) return parsed
+  const dropFor = (sections) => dropHallucinatedSections(sections, figmaData)
+
+  if (parsed.layout && Array.isArray(parsed.layout.sections)) {
+    const dropped = dropFor(parsed.layout.sections)
+    if (!Object.is(dropped, parsed.layout.sections)) {
+      parsed.layout = { ...parsed.layout, sections: dropped }
+    }
+  }
+  if (Array.isArray(parsed.sections)) {
+    const dropped = dropFor(parsed.sections)
+    if (!Object.is(dropped, parsed.sections)) parsed.sections = dropped
+  }
+  const lay = parsed.layoutStructure
+  if (lay && lay.layout && Array.isArray(lay.layout.sections)) {
+    const dropped = dropFor(lay.layout.sections)
+    if (!Object.is(dropped, lay.layout.sections)) {
+      parsed.layoutStructure = { ...lay, layout: { ...lay.layout, sections: dropped } }
+    }
+  } else if (lay && Array.isArray(lay.sections)) {
+    const dropped = dropFor(lay.sections)
+    if (!Object.is(dropped, lay.sections)) {
+      parsed.layoutStructure = { ...lay, sections: dropped }
+    }
+  }
+  return parsed
 }
 
 export function collectContainerSections(sections, acc = []) {

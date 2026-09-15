@@ -141,7 +141,21 @@ export function formatFigmaStyleData(figmaNodeData, depth = 0, maxDepth = 8) {
           const a = fill.color.a !== undefined ? fill.color.a : (fill.opacity || 1)
           lines.push(`${indent}    - SOLID: #${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}${a < 1 ? ` (alpha: ${a})` : ''}`)
         } else if (fill.type && fill.type.startsWith('GRADIENT')) {
-          lines.push(`${indent}    - ${fill.type}: ${fill.gradientStops ? fill.gradientStops.map(s => `#${Math.round(s.color.r * 255).toString(16).padStart(2, '0')}${Math.round(s.color.g * 255).toString(16).padStart(2, '0')}${Math.round(s.color.b * 255).toString(16).padStart(2, '0')} ${Math.round(s.position * 100)}%`).join(' → ') : '无渐变数据'}`)
+          // 🛡️ 2026-09-15（mc-max-1789452271404-7e0e19d2 实锤）：渐变输出必须带**填充级透明度**，
+          //   与 figma-connector#fillsSummary 同口径（stop 不透明度优先，其次填充级，最后 1）。
+          //   否则半透明渐变（本例 tabs-list 底图 0.6）会被 LLM 输出成不透明 → 遮挡下层。
+          const gradStops = fill.gradientStops
+            ? fill.gradientStops
+                .map((s) => {
+                  const r = Math.round(s.color.r * 255)
+                  const g = Math.round(s.color.g * 255)
+                  const b = Math.round(s.color.b * 255)
+                  const a = s.opacity ?? fill.opacity ?? 1
+                  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}${a < 1 ? ` (alpha: ${a})` : ''} ${Math.round(s.position * 100)}%`
+                })
+                .join(' → ')
+            : '无渐变数据'
+          lines.push(`${indent}    - ${fill.type}: ${gradStops}`)
         } else if (fill.type === 'IMAGE') {
           lines.push(`${indent}    - IMAGE: ${fill.imageRef || '无引用'}`)
         }

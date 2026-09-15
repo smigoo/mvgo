@@ -15,7 +15,7 @@ export class SubcomponentPlannerNode extends BaseAgent {
     super({
       name: 'subcomponent-planner',
       description: '基于 layoutStructure 规划子组件清单（纯确定性，无 LLM）',
-      model: config.model || 'gpt-4o-mini',
+      model: config.model || '',
       temperature: 0,
       maxTokens: 1024,
       skipLLM: true,

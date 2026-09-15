@@ -8,6 +8,7 @@ import { resolveFrontendWorkspace } from '../config/workspace.config';
 import { dataDir, customComponentsDir, vue3ComponentsDir, tempComponentsDir, workspaceRoot } from '../config/backend-root';
 import { Component, ComponentDocument } from '../schemas/component.schema';
 import { TaskQueueService } from '../queue/task-queue.service';
+import { PipelineMetricsService } from './pipeline-metrics.service';
 import type { ProgressService } from '../progress/progress.service';
 import { ModuleRef } from '@nestjs/core';
 import { redactSecrets } from '../common/utils/redact';
@@ -268,6 +269,8 @@ export class TasksService {
     private readonly componentModel?: Model<ComponentDocument>,
     @Optional() @Inject(forwardRef(() => TaskQueueService)) queueService?: TaskQueueService,
     private readonly moduleRef?: ModuleRef,
+    // P0-2 指标宽表写入器。必须可选：tasks.service.spec.ts 用 `new TasksService()` 无参构造。
+    @Optional() private readonly pipelineMetrics?: PipelineMetricsService,
   ) {
     if (queueService) {
       this.queueService = queueService;
@@ -320,16 +323,13 @@ export class TasksService {
       if (recovered) {
         recoveredCount++;
       } else {
-        task.status = 'failed';
         // 🛡️ F6（2026-09-01）：已有终态 error 不覆盖——保留真实根因（如 L0-B 质量门禁失败），
         // 避免「失败已落库但 status 尚未持久化迁移」窗口被通用文案抹掉，污染 A/B 分类
         // （mc-max-1788252098143-12469472 实锤：error 被覆写成「服务重启导致任务中断」）。
-        if (!task.error) {
-          task.error = '服务重启导致任务中断，请重新发起生成';
-        }
-        if (!task.endTime) {
-          task.endTime = Date.now();
-        }
+        this.finalizeTask(task, 'failed', {
+          error: '服务重启导致任务中断，请重新发起生成',
+          preserveExistingError: true,
+        });
         zombieCount++;
       }
     }
@@ -366,14 +366,11 @@ export class TasksService {
           if (restored) {
             queuedRecovered++;
           } else {
-            task.status = 'failed';
             // 🛡️ F6：已有终态 error 不覆盖（同 recoverZombieTasks 守卫）
-            if (!task.error) {
-              task.error = '服务重启导致队列清空，请重新发起生成';
-            }
-            if (!task.endTime) {
-              task.endTime = Date.now();
-            }
+            this.finalizeTask(task, 'failed', {
+              error: '服务重启导致队列清空，请重新发起生成',
+              preserveExistingError: true,
+            });
             queuedCleaned++;
           }
         }
@@ -538,10 +535,7 @@ export class TasksService {
           } else {
             // 所有步骤已完成：正常标记为 completed
             task.groupId = groupId;
-            task.status = 'completed';
-            task.endTime = Date.now();
-            task.duration = task.endTime - task.startTime;
-            task.error = undefined;
+            this.finalizeTask(task, 'completed', { refreshEndTime: true });
             if (!task.result) task.result = {};
             task.result.componentId = task.componentId;
             task.result.groupId = groupId;
@@ -704,10 +698,7 @@ export class TasksService {
             );
           } else {
             task.groupId = groupId;
-            task.status = 'completed';
-            task.endTime = Date.now();
-            task.duration = task.endTime - task.startTime;
-            task.error = undefined;
+            this.finalizeTask(task, 'completed', { refreshEndTime: true });
             if (!task.result) task.result = {};
             task.result.componentId = task.componentId;
             task.result.groupId = groupId;
@@ -780,10 +771,7 @@ export class TasksService {
             );
           } else {
             task.groupId = groupId || task.groupId;
-            task.status = 'completed';
-            task.endTime = Date.now();
-            task.duration = task.endTime - task.startTime;
-            task.error = undefined;
+            this.finalizeTask(task, 'completed', { refreshEndTime: true });
             if (!task.result) task.result = {};
             task.result.componentId = task.componentId;
             task.result.groupId = task.groupId;
@@ -1027,14 +1015,11 @@ export class TasksService {
           : task.startTime;
 
         if (now - lastUpdate > ZOMBIE_TIMEOUT) {
-          task.status = 'failed';
           // 🛡️ F6：已有终态 error 不覆盖（同 recoverZombieTasks 守卫）
-          if (!task.error) {
-            task.error = '任务超时（服务可能已重启）';
-          }
-          if (!task.endTime) {
-            task.endTime = now;
-          }
+          this.finalizeTask(task, 'failed', {
+            error: '任务超时（服务可能已重启）',
+            preserveExistingError: true,
+          });
           needsPersist = true;
           // 🆕 释放并发槽位：避免幽灵任务长期占用槽位，导致等待队列永不调度
           if (this.queueService) {
@@ -1698,6 +1683,80 @@ export class TasksService {
     return [];
   }
 
+  // ─── 终态收口（唯一入口）─────────────────────────────────────────────
+  /**
+   * 终态收口：**所有**进入 completed / failed / cancelled 的路径必须经此方法。
+   *
+   * 为什么必须收口（2026-09-15）：终态赋值此前散落在本文件 11 处（含 1 处动态还原），
+   * 任何新增统计口径（指标宽表、质量报表）都会漏记且**静默无感**。
+   * 收口后由 `npm run verify:terminal-writes` 强制校验「文件内不得再出现字面量终态赋值」。
+   *
+   * 语义约定（逐条对齐收口前的行为，未做任何行为变更）：
+   * - `completed` → 清空 error；其余状态按 opts.error 设置
+   * - `preserveExistingError=true` → 已有 error 不覆盖（F6 守卫：保护真实根因，避免
+   *   「失败已落库但 status 尚未持久化」窗口被通用文案抹掉，污染 A/B 分类）
+   * - `refreshEndTime=true` → 无条件刷新 endTime（与收口前 completeTask/failTask/cancelTask
+   *   一致）；否则仅补空（与僵尸清理 / 人工审核一致）
+   * - duration 一律按 endTime - startTime 重算
+   * - 不改 result（调用方负责先行组装），除非显式传 opts.result
+   * - **不调用 persist()**，由调用方决定持久化时机（gc 的批量循环只 persist 一次）
+   */
+  private finalizeTask(
+    task: Task,
+    status: 'completed' | 'failed' | 'cancelled',
+    opts: {
+      error?: string;
+      preserveExistingError?: boolean;
+      refreshEndTime?: boolean;
+      result?: any;
+      /** 取消原因（P0-3 ④ 埋点后传入）：user_cancel / queue_evict / timeout / superseded */
+      cancelReason?: string;
+    } = {},
+  ): void {
+    task.status = status;
+
+    if (status === 'completed') {
+      task.error = undefined;
+    } else if (opts.error !== undefined) {
+      if (!opts.preserveExistingError || !task.error) {
+        task.error = opts.error;
+      }
+    }
+
+    if (opts.refreshEndTime || !task.endTime) {
+      task.endTime = Date.now();
+    }
+    task.duration = task.endTime - task.startTime;
+
+    if (opts.result !== undefined) {
+      task.result = opts.result;
+    }
+
+    // 监控指标宽表落库（P0-2）：fire-and-forget，失败只记日志、不影响任务主流程。
+    // 放在最后，确保 qualityGate / completionModels / 降级清单已就绪，快照完整。
+    if (this.pipelineMetrics) {
+      this.pipelineMetrics.recordTerminal(task, status, {
+        cancelReason: opts.cancelReason,
+      });
+    }
+  }
+
+  /**
+   * 反向操作：把任务从终态还原（目前仅「撤回人工审核」使用）。
+   * 与 finalizeTask 配对，同样受 `verify:terminal-writes` 门禁约束。
+   * 还原时清空 endTime / duration，使任务回到「未终结」语义。
+   */
+  private unfinalizeTask(task: Task): void {
+    const revertTo = (task.humanReview?.previousStatus as TaskStatus) || 'failed';
+    task.status = revertTo;
+    task.error = task.humanReview?.previousError;
+    task.endTime = undefined;
+    task.duration = undefined;
+
+    // 宽表只承载终态：任务被还原后应从统计口径中移除
+    this.pipelineMetrics?.recordRevert(task.sessionId);
+  }
+
   /**
    * 标记完成
    */
@@ -1705,9 +1764,8 @@ export class TasksService {
     const task = this.tasks.get(sessionId);
     if (!task || task.status === 'cancelled') return;
 
-    task.status = 'completed';
-    task.error = undefined;
     // 最终状态契约：completed 只表示任务有产物；qualityGate 必须同时核验文本、运行时和视觉结果。
+    // 注意：终态写入统一由末尾的 finalizeTask 收口（P0-1），此处不再直接赋值。
     const checkResult = result?.checkResult;
     const qScore = (checkResult?.qualityScore ?? result?.finalQualityScore ?? 0);
     const runtimePass = result?.runtimeGate?.status === 'PASS';
@@ -1742,8 +1800,10 @@ export class TasksService {
     // 🛡️ #10 静默失败降级：gateSkippedFiles 持久化（Vue SFC 写盘门禁跳过的文件），供前端缺失提示
     task.gateSkippedFiles = Array.isArray(result?.gateSkippedFiles) ? result.gateSkippedFiles : [];
     task.result = result;
-    task.endTime = Date.now();
-    task.duration = task.endTime - task.startTime;
+
+    // 终态收口：等 qualityGate / completionModels / 降级清单全部就绪后再落终态，
+    // 保证指标宽表钩子（P0-2）读到的是完整快照。
+    this.finalizeTask(task, 'completed', { refreshEndTime: true });
     this.persist();
   }
 
@@ -1754,9 +1814,8 @@ export class TasksService {
     const task = this.tasks.get(sessionId);
     if (!task || task.status === 'cancelled' || task.status === 'completed') return;
 
-    task.status = 'failed';
     // 🆕 S1 友好提示优先：error.friendlyMessage（人话）> error.message（技术）> error
-    task.error = error.friendlyMessage || error.message || error;
+    // 终态写入统一由末尾的 finalizeTask 收口（P0-1）。
     // 保留经过业务侧构造的结构化诊断，任务详情/Playground 可恢复文件、行、列信息。
     if (error?.lessCompileGate || error?.runtimeGate || error?.codeValidationResult) {
       task.result = {
@@ -1766,8 +1825,11 @@ export class TasksService {
         ...(error.codeValidationResult ? { codeValidationResult: error.codeValidationResult } : {}),
       };
     }
-    task.endTime = Date.now();
-    task.duration = task.endTime - task.startTime;
+    // 终态收口（P0-1）：error 走「友好提示优先」链路，与收口前一致（不保留旧 error）。
+    this.finalizeTask(task, 'failed', {
+      error: error.friendlyMessage || error.message || error,
+      refreshEndTime: true,
+    });
     this.persist();
   }
 
@@ -1804,10 +1866,11 @@ export class TasksService {
 
     const originalStatus = task.status;
     
-    task.status = 'cancelled';
-    task.error = '用户主动终止';
-    task.endTime = Date.now();
-    task.duration = task.endTime - task.startTime;
+    // 终态收口（P0-1）。cancelReason 埋点（P0-3 ④）后续在此补入。
+    this.finalizeTask(task, 'cancelled', {
+      error: '用户主动终止',
+      refreshEndTime: true,
+    });
 
     this.removeAbortController(sessionId);
     this.persist();
@@ -2545,11 +2608,6 @@ export class TasksService {
       return { success: false, error: `任务状态为「${task.status}」，无法重试（仅失败/已取消任务可重试）` };
     }
 
-    // 换模型配置（可选）：写入环境变量，由 provider 池 / 配置解析在续跑时生效
-    if (config?.apiKey) process.env.MC_GEN_TEXT_API_KEY = config.apiKey;
-    if (config?.endpoint) process.env.MC_GEN_TEXT_ENDPOINT = config.endpoint;
-    if (config?.model) process.env.MC_GEN_TEXT_MODEL = config.model;
-
     // 断点续跑：outputPath 下有 figma/visual/analysis checkpoint → 复用缓存续跑
     const outputPath = task.outputPath || this._findOutputPathFromTemp(task);
     if (outputPath) {
@@ -2916,10 +2974,8 @@ export class TasksService {
       missingFiles: partialMissing.length > 0 ? partialMissing : undefined,
     };
 
-    task.status = 'completed';
-    task.error = undefined;
-    task.endTime = task.endTime || Date.now();
-    task.duration = task.duration || task.endTime - task.startTime;
+    // 终态收口（P0-1）：保留已有 endTime，与收口前 `task.endTime || Date.now()` 语义一致。
+    this.finalizeTask(task, 'completed');
 
     this.persist();
 
@@ -2957,11 +3013,8 @@ export class TasksService {
       return { success: false, message: '该审核已被撤回，无需重复操作' };
     }
 
-    // 还原状态
-    task.status = (task.humanReview.previousStatus as Task['status']) || 'failed';
-    task.error = task.humanReview.previousError;
-    task.endTime = undefined;
-    task.duration = undefined;
+    // 还原状态（反向收口，与 finalizeTask 配对）
+    this.unfinalizeTask(task);
 
     // 审计：保留原审核记录，action 改为 revoke
     task.humanReview.action = 'revoke';

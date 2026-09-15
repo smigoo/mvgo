@@ -312,7 +312,7 @@ export class ComponentController {
   @Get(':componentId/files')
   async getComponentFiles(
     @Param('componentId') componentId: string,
-    @CurrentUser() userId: string,
+    @OptionalUser() userId: string | undefined,
   ) {
     try {
       const files = await this.componentService.getComponentFiles(componentId, userId);
@@ -331,7 +331,7 @@ export class ComponentController {
   @Get(':componentId/declare')
   async getComponentDeclare(
     @Param('componentId') componentId: string,
-    @CurrentUser() userId: string,
+    @OptionalUser() userId: string | undefined,
   ) {
     try {
       const declare = await this.componentService.getComponentDeclare(componentId, userId);
@@ -481,7 +481,7 @@ export class ComponentController {
   @Get('download/:componentId')
   async downloadComponent(
     @Param('componentId') componentId: string,
-    @CurrentUser() userId: string,
+    @OptionalUser() userId: string | undefined,
     @Res() res: Response,
   ) {
     try {

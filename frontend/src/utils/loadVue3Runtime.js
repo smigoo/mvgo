@@ -355,8 +355,19 @@ export async function loadVue3FromWorkspace(
   let resolvedGroupId = null
   let resolvedEntry = null
 
+  const cacheKey = (() => {
+    try {
+      return new URLSearchParams(location.search).get('_t') || ''
+    } catch {
+      return ''
+    }
+  })()
+  const withCacheKey = (url) => {
+    if (!cacheKey || !url) return url
+    return `${url}${url.includes('?') ? '&' : '?'}_t=${encodeURIComponent(cacheKey)}`
+  }
   const snapshotFileUrl = (rel) => snapshotSource
-    ? buildSnapshotFileUrl(snapshotSource.sessionId, snapshotSource.revision, rel, true)
+    ? buildSnapshotFileUrl(snapshotSource.sessionId, snapshotSource.revision, rel, true, cacheKey)
     : ''
   const snapshotBase = snapshotSource
     ? `/api/tasks/${encodeURIComponent(snapshotSource.sessionId)}/code-snapshots/${encodeURIComponent(snapshotSource.revision)}/file`
@@ -507,7 +518,7 @@ export async function loadVue3FromWorkspace(
       const ext = extOf(rel)
       if (BINARY_EXTS.has(ext)) return ''
       // snapshot 通过固定 revision 文件接口读取；workspace 仍走原有来源。
-      const res = await http.raw(snapshotSource ? snapshotFileUrl(rel) : `${base}/${rel}`)
+      const res = await http.raw(snapshotSource ? snapshotFileUrl(rel) : withCacheKey(`${base}/${rel}`))
       if (!res.ok) throw new Error(`找不到文件: ${rel}`)
       let src = await res.text()
       // ── 修复 vue3-sfc-loader 不支持 import.meta 的根因 ──
@@ -519,7 +530,7 @@ export async function loadVue3FromWorkspace(
       // 组件源码本身保持标准 Vite/ESM 写法（真实 Vite 构建时 import.meta.url 原生可用，无需改动）。
       const fileUrl = snapshotSource
         ? `${location.origin}${snapshotFileUrl(rel)}`
-        : `${location.origin}${base}/${rel}`
+        : `${location.origin}${withCacheKey(`${base}/${rel}`)}`
       if (snapshotSource) {
         src = src.replace(
           /new\s+URL\(\s*(["'])([^"']+)\1\s*,\s*import\.meta\.url\s*\)/g,

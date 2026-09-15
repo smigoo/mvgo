@@ -299,6 +299,55 @@
 }
 ```
 
+### 图表内部元素归属铁律（阈值线 / 图例 / 轴标注）
+
+**核心原则：凡是在 ECharts 画布内绘制的元素（阈值线 markLine、图例 legend、轴单位、坐标刻度），其事实必须落在 `charts[]` 的对应字段上 —— 禁止拆成所属 section 的 `body.children` 兄弟节点。**
+
+实锤（mc-1789445437366-5b19ce4f 环境监测）：视觉分析把图表内部的红色阈值线拆成兄弟文本节点
+`{"id":"threshold-label","role":"text","text":"阈值线"}`，把右上角图例拆成
+`{"id":"range-indicator","role":"text","text":"2k3-7R5C0-X隧道"}` ——
+工程师阶段忠实照做，把它们渲染成图表容器**外部**的 DOM（`.c-env-monitor-threshold-label` / `.c-env-monitor-time-range`），
+同时又在 option 里补了一遍 `series[].markLine` → 设计稿里"图表的一部分"变成了图表外的游离标注。
+
+**禁止（错误示例）：**
+```json
+{
+  "id": "chart-section",
+  "body": { "children": [
+    {"id": "range-indicator", "role": "text", "text": "zk3+785CO浓度"},
+    {"id": "threshold-label", "role": "text", "text": "预警线"},
+    {"id": "chart-container", "role": "chart", "type": "area"}
+  ]}
+}
+```
+
+**正确（阈值线/图例进 charts[]）：**
+```json
+{
+  "id": "chart-section",
+  "body": { "children": [
+    {"id": "chart-container", "role": "chart", "type": "area"}
+  ]},
+  "charts": [{
+    "section": "chart-section",
+    "type": "area",
+    "series": ["zk3+785CO浓度"],
+    "legend": ["zk3+785CO浓度"],
+    "legendPosition": "top-right",
+    "legendType": "horizontal",
+    "markLine": [{
+      "axis": "y", "value": 30, "label": "预警线",
+      "color": "#ff5555", "lineStyle": "dashed", "labelPosition": "right"
+    }]
+  }]
+}
+```
+
+判定口径：
+- 元素**画在画布内**（与曲线/网格同一块区域，坐标随数据轴走）→ 归 `charts[]`
+- 元素在画布**外的独立 DOM 区**（图表上方的标题栏、下方的统计卡）→ 才可以作为 `body.children`
+- `notes` 只是备注自由文本，**不是**结构事实源；阈值线必须写 `markLine`，不得只在 `notes` 里提一句
+
 ### headerRelation 判断规则（面板插槽专用）
 
 **核心规则：只有与面板标题文字在同一水平行的元素，才能作为面板插槽的候选。**
@@ -382,6 +431,16 @@
   "legendType": "horizontal",
   "axes": "X轴为小时，Y轴为车辆数",
   "tooltip": "截图中显示 16 时的瞬态提示框",
+  "markLine": [
+    {
+      "axis": "y",
+      "value": 30,
+      "label": "预警线",
+      "color": "#ff5555",
+      "lineStyle": "dashed",
+      "labelPosition": "right"
+    }
+  ],
   "notes": ["有橙色建议分流阈值线"]
 }
 ```
@@ -393,13 +452,34 @@
 | `section` | string | ✅ | 所属section的id | `"tunnel-flow"` |
 | `type` | string | ✅ | 图表类型 | `"bar"` / `"line"` / `"pie"` / `"area"` |
 | `series` | array | ✅ | 系列名称数组 | `["北京方向", "上海方向"]` |
-| `legend` | array | ✅ | 图例文本数组（可为空） | `["北京方向", "上海方向"]` |
+| `legend` | array | ✅ | 图例文本数组（可为空，见下方一致性规则） | `["北京方向", "上海方向"]` |
 | `legendPosition` | string | 🔴 | **图例位置（有图例时必填）** | `"top-right"` / `"bottom-center"` / `"right"` |
 | `seriesColors` | array | 🔴 | **系列颜色数组（有系列时必填）** | `["#1890ff", "#52c41a"]` |
 | `legendType` | string | 🔴 | **图例布局类型（有图例时必填）** | `"horizontal"` / `"vertical"` |
 | `axes` | string | ⚠️ | 坐标轴说明（坐标系图表必填） | `"X轴为小时，Y轴为车辆数"` |
 | `tooltip` | string | ✅ | tooltip说明 | `"显示时间点、流量"` |
-| `notes` | array | ✅ | 其他备注 | `["有橙色虚线"]` |
+| `markLine` | array | ⚠️ | **阈值/预警线（画布内横线竖线必填）** | 见下方 `markLine` 结构 |
+| `notes` | array | ✅ | 其他备注（**不作为结构事实源**） | `["有橙色虚线"]` |
+
+### `markLine` 结构（画布内阈值线）
+
+设计稿在图表画布内画了横线/竖线（预警线、目标线、安全阈值），**必须**写进 `markLine`，
+禁止把它拆成 section 的兄弟 `role:"text"` 节点（那样会渲染成图表外的游离 DOM）。
+
+| 字段 | 类型 | 必填 | 说明 | 示例 |
+|------|------|------|------|------|
+| `axis` | string | ✅ | 线垂直于哪个轴 | `"y"`（横线，按 y 值画）/ `"x"`（竖线） |
+| `value` | number | ✅ | 线所在轴的数值 | `30` |
+| `label` | string | ⚠️ | 线旁标注文字（设计稿有则必填，无则省略） | `"预警线"` |
+| `color` | string | ✅ | 线颜色（取设计稿实测色） | `"#ff5555"` |
+| `lineStyle` | string | ⚠️ | 线型 | `"solid"` / `"dashed"` / `"dotted"` |
+| `labelPosition` | string | ⚠️ | 标注方位（设计稿可见时填） | `"right"` / `"start"` / `"end"` / `"top"` |
+
+识别规则：
+- 横跨曲线区域的单条横线 + 旁边短文字（如「预警线」）→ `axis: "y"` + `value` 取该线对应的 Y 轴刻度
+- 竖线（如「当前时刻」标线）→ `axis: "x"`，`value` 取类目/数值
+- 多条阈值线 → `markLine` 数组每项一条
+- **`value` 无法从刻度读出时**，按相邻刻度插值估算并在 `notes` 里说明「估算值」，**不得**凭空捏造精确值
 
 ### legendPosition 可选值
 
@@ -436,6 +516,11 @@
 - 重复结构图表也要分别列出
 - 不要把截图里瞬态 tooltip 当作常驻 DOM 结构
 - 🔴 **如果图表有图例（legend数组不为空），必须填写 legendPosition、seriesColors、legendType 三个字段**
+- 🔴 **反向一致性（2026-09-15 治本）：一旦填了 `legendPosition` / `legendType`，就说明你已看见图例 —— `legend` 数组必须回填图例文本，禁止留空数组。**
+  实锤 mc-1789445437366-5b19ce4f：`legend: []` 却填了 `legendPosition: "top-right"` + `legendType: "horizontal"` →
+  下游 `chart-standards.md` 的「有图例必生成 legend」规则因事实源为空而无着力点 → 图例整段丢失。
+  （仅当画布内确实**没有任何**图例时，才允许三个字段同时缺失；只要填了其中一个就必须配齐 `legend`。）
+- 🔴 **画布内阈值线一律写 `markLine` 数组**（见 `markLine` 结构），禁止拆成 `body.children` 的 `role:"text"` 兄弟节点
 
 ## `doNotInvent`
 
@@ -473,3 +558,7 @@
 3. 以 `styles` / `charts` / `interactions` 作为补充约束
 4. 把 `doNotInvent` 作为禁止项
 5. 若分析结果与截图不一致，以截图和更高证据重新修正
+6. 🔴 **图表内部元素一律从 `charts[]` 取，不从 `body.children` 取**：
+   - `charts[].legend` + `legendPosition` + `legendType` → 生成 ECharts `legend` 配置（**禁止**用 `<div>` 色块+文字自绘图例）
+   - `charts[].markLine` → 生成 `series[].markLine`（**禁止**在图容器外用绝对定位的 `<div class="...-threshold-label">` 画线/写标注）
+   - 只有当某个文本节点**不在** `charts[]` 里、且位于画布外独立 DOM 区时，才按普通 DOM 渲染

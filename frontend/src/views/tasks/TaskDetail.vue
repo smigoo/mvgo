@@ -2228,7 +2228,7 @@ const failedDownloadUrl = computed(() => {
   return `/api/tasks/${task.value.sessionId}/code-download`
 })
 
-function buildPreviewUrl(snapshot: TaskCodeSnapshotManifest | null = null) {
+function buildPreviewUrl(snapshot: TaskCodeSnapshotManifest | null = null, forceWorkspace = false) {
   if (!task.value) return ''
   const descriptor = resolvePreviewDescriptor(
     {
@@ -2252,6 +2252,8 @@ function buildPreviewUrl(snapshot: TaskCodeSnapshotManifest | null = null) {
     // 同一 revision 再次刷新时 URL 完全一致，浏览器/预览页会命中缓存而不重新加载；
     // 用递增 cacheKey 保证「刷新预览」是真的重载。
     cacheKey: previewReloadKey.value,
+    // 2026-09-15：artifactReady 时强制走 workspace（Playground 编辑态 / 任务完成后用户可能已编辑）
+    snapshot: forceWorkspace ? '0' : undefined,
   })
 }
 
@@ -2278,7 +2280,9 @@ const previewUrl = computed(() => {
   // 让 URL 带 sessionId + revision 走「快照源分支」，未发布组件也能预览。
   // codeSnapshot 为 null（无任何快照）才退化为 workspace 路径，
   // 失败任务也走 loadCodeSnapshot(:3663) 加载 candidate，理论上必有快照。
-  return buildPreviewUrl(codeSnapshot.value || activePreviewSnapshot.value || null)
+  // 2026-09-15：artifactReady 时强制走 workspace，Playground 编辑后任务页也能看到新效果。
+  const forceWorkspace = task.value?.artifactReady === true
+  return buildPreviewUrl(codeSnapshot.value || activePreviewSnapshot.value || null, forceWorkspace)
 })
 
 const shouldShowPreview = computed(() => {
@@ -3778,9 +3782,11 @@ function queuePreviewSnapshot(snapshot: TaskCodeSnapshotManifest | null) {
   }
 
   const slot = activePreviewSlot.value === 0 ? 1 : 0
+  // 2026-09-15：artifactReady 时强制走 workspace，Playground 编辑后任务页也能看到新效果
+  const forceWorkspace = task.value?.artifactReady === true
   previewFrames.value[slot] = {
     snapshot,
-    url: buildPreviewUrl(snapshot),
+    url: buildPreviewUrl(snapshot, forceWorkspace),
   }
   pendingPreviewSlot.value = slot
 }

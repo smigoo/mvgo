@@ -75,7 +75,7 @@ describe('detectRootContainerClass（rootCls 识别）', () => {
 })
 
 describe('anchorRootContainerInFiles（中性锚定语义）', () => {
-  it('蜂巢塌缩兜底：缺 width/height → 补 100% + aspect-ratio Figma 真值比例', () => {
+  it('蜂巢塌缩兜底：缺 width/height → 补 100% 双全（R4-b 起不注入 aspect-ratio）', () => {
     const files = { 'package/index.vue': DIAMOND_INCIDENT_VUE }
     const out = anchorRootContainerInFiles(files, {
       figmaNodeData: FIGMA_425x807,
@@ -85,8 +85,9 @@ describe('anchorRootContainerInFiles（中性锚定语义）', () => {
     )![1]
     expect(style).toContain('width: 100%;')
     expect(style).toContain('height: 100%;')
-    // root-container.md:27 语义：比例来自 Figma 真值（425/807），非写死 px
-    expect(style).toContain('aspect-ratio: 425 / 807;')
+    // R4-b（2026-09-15）：aspect-ratio 是 boxStyle 语义，误用为 CSS 属性会锁死
+    // 纵向多 section 容器高度 → 内容挤压。正确形态 = width/height 100% 双全。
+    expect(style).not.toContain('aspect-ratio')
     // 规范禁止写死 px 锚定（旧 N4 病灶）
     expect(style).not.toMatch(/width:\s*425px/)
     expect(style).not.toMatch(/height:\s*807px/)
@@ -105,11 +106,12 @@ describe('anchorRootContainerInFiles（中性锚定语义）', () => {
     // 菱形保持原尺寸（不被写成 426×807px）
     expect(less).toContain('.c-monitor-header-diamond { width: 8px; }')
     expect(less).not.toMatch(/c-monitor-header-diamond[^}]*426/)
-    // 根容器被中性锚定
-    expect(less).toMatch(/c-monitor-root[^}]*aspect-ratio: 425 \/ 807/s)
+    // 根容器被中性锚定（width/height 100% 双全，不再注入 aspect-ratio）
+    expect(less).toMatch(/c-monitor-root[^}]*width: 100%/s)
+    expect(less).toMatch(/c-monitor-root[^}]*height: 100%/s)
   })
 
-  it('862c6b29 拉锯根治：已有 width/height 不覆盖，且不注入无效 aspect-ratio', () => {
+  it('862c6b29 拉锯根治：已有 width/height 不覆盖，且不注入 aspect-ratio', () => {
     const files = {
       'package/index.vue': DIAMOND_INCIDENT_VUE,
       'resources/styles/common.less':
@@ -121,21 +123,23 @@ describe('anchorRootContainerInFiles（中性锚定语义）', () => {
     const less = out['resources/styles/common.less']
     expect(less).toContain('width: 420px;')
     expect(less).toContain('height: 186px;')
-    // 两者都全时 aspect-ratio 无效即噪声，不注入
+    // 两者都全时不再注入任何尺寸声明（含 aspect-ratio）
     expect(less).not.toContain('aspect-ratio')
   })
 
-  it('aspect-ratio 幂等：已有声明不重复注入', () => {
+  it('width/height 幂等：已有声明不重复补齐', () => {
     const files = {
       'package/index.vue': DIAMOND_INCIDENT_VUE,
       'resources/styles/common.less':
-        '.c-monitor-root { width: 100%; aspect-ratio: 425 / 807; }',
+        '.c-monitor-root { width: 100%; height: 100%; }',
     }
     const out = anchorRootContainerInFiles(files, {
       figmaNodeData: FIGMA_425x807,
     })
     const less = out['resources/styles/common.less']
-    expect(less.match(/aspect-ratio/g)?.length).toBe(1)
+    expect(less.match(/width:\s*100%/g)?.length).toBe(1)
+    expect(less.match(/height:\s*100%/g)?.length).toBe(1)
+    expect(less).not.toContain('aspect-ratio')
   })
 
   it('panelBg R7 剥离再注入：@var/纯色背景被剥，双文件路径按目标目录推导（R4）', () => {
@@ -217,7 +221,9 @@ describe('registerBuiltinFixRules（STYLE 阶段接线）', () => {
     expect(res.applied.some((a) => a.id === 'anchor-root-container')).toBe(
       true,
     )
-    expect(res.files['package/index.vue']).toContain('aspect-ratio: 425 / 807;')
+    expect(res.files['package/index.vue']).toContain('width: 100%;')
+    expect(res.files['package/index.vue']).toContain('height: 100%;')
+    expect(res.files['package/index.vue']).not.toContain('aspect-ratio')
   })
 })
 

@@ -198,14 +198,16 @@ const isVue3 = isPage || explicitType === 'vue3'
 // 通过 /api/tasks/{sessionId}/code-snapshots/latest 主动拿 candidate/partial/lastGood 任一可用快照的 revision，
 // 让 snapshotSource 在缺 URL 参数时自动补全 → 走「快照源」分支（不依赖 frontend/workspace 目录存在）。
 const latestSnapshotSource = ref(null)
-const hasExplicitSource = !!(route.query.sessionId && route.query.revision)
+// snapshot=0 必须压过 URL 里残留的 sessionId+revision（Playground 编辑态）。
+const forceWorkspaceSource = String(route.query.snapshot || '') === '0'
+const hasExplicitSource = !forceWorkspaceSource && !!(route.query.sessionId && route.query.revision)
 
 async function ensureLatestSnapshot() {
   if (hasExplicitSource) return
   // 2026-09-10：Playground / 编辑态入口带 `snapshot=0`，强制走 workspace 源。
   // 原因：AI 修复与代码编辑都写 workspace，而快照是生成时的旧内容，
   // 走快照会出现「代码已改但预览不变」。只有生成中（workspace 尚无产物）才需要快照。
-  if (String(route.query.snapshot || '') === '0') return
+  if (forceWorkspaceSource) return
   if (latestSnapshotSource.value) return
   // path 段是 componentId 可能是 componentId 或 sessionId（看入口），query.sessionId 优先；都没有就用 componentId
   const sessionId = String(route.query.sessionId || componentId || '')
@@ -273,6 +275,7 @@ async function resolveWorkspaceComponentId(id: string): Promise<string> {
 }
 
 const snapshotSource = computed(() => {
+  if (forceWorkspaceSource) return null
   if (hasExplicitSource) {
     return {
       sessionId: String(route.query.sessionId),
@@ -320,13 +323,22 @@ const previewErrorType = ref('')
 const instance = getCurrentInstance()
 const previewStyleScopeId = `preview-${groupId}-${componentId}`
 
-// 预览环境默认注入暗色主题 class（微码组件样式全部挂在 .dark/.light 父选择器下）
+// 预览环境注入主题 class（微码组件样式挂在 .dark/.light 父选择器下）
 // 不注入则所有样式规则匹配失败，导致样式完全失效
+// 优先级：URL query > Playground postMessage > declare.json themeConfig.default > 'dark' 兜底
+const playgroundTheme = ref(null) // 从 Playground 下发的主题（postMessage 实时联动）
 const resolvedThemeClass = computed(() => {
-  // 支持从 URL query 强制指定主题（?theme=light 或 ?theme=dark）
+  // 1. URL query 强制指定（最高优先级）
   const themeQuery = route.query.theme
-  if (themeQuery === 'light') return 'light'
-  // 默认暗色主题（与系统默认主题保持一致）
+  if (themeQuery === 'light' || themeQuery === 'dark') return themeQuery
+  // 2. Playground 实时下发（postMessage 联动）
+  if (playgroundTheme.value === 'light' || playgroundTheme.value === 'dark') {
+    return playgroundTheme.value
+  }
+  // 3. 从 declare.json 读取默认主题
+  const declareDefault = microcodeDeclare.value?.themeConfig?.default
+  if (declareDefault === 'light' || declareDefault === 'dark') return declareDefault
+  // 4. 兜底 dark
   return 'dark'
 })
 
@@ -1145,6 +1157,16 @@ function onPreviewMessage(event) {
     if (next !== globalPanelType.value) {
       globalPanelType.value = next
       console.log('🎨 [Preview] 父页面下发面板类型:', next || '(使用默认)')
+    }
+    return
+  }
+
+  // 2026-09-15：主题切换下发：Playground 内容主题下拉 → iframe 内实时生效
+  if (data.type === 'set-theme') {
+    const theme = data.theme
+    if (theme === 'light' || theme === 'dark') {
+      playgroundTheme.value = theme
+      console.log('🎨 [Preview] 父页面下发主题:', theme)
     }
     return
   }

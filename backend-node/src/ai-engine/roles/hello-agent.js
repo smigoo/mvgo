@@ -16,7 +16,7 @@ export class HelloAgent extends BaseAgent {
     super({
       name: 'hello-agent',
       description: '最小智能体示例：透传组件名并输出欢迎信息（不调用 LLM）',
-      model: config.model || 'gpt-4o-mini',
+      model: config.model || '',
       temperature: config.temperature || 0,
       maxTokens: config.maxTokens || 1024,
       skipLLM: true, // 纯确定性智能体：不构建 LLM 客户端，无 API key 也能运行

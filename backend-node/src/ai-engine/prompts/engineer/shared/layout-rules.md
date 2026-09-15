@@ -209,3 +209,37 @@ stat-item 元素的 `layout` 属性决定了其自身的 flex-direction，**必�
 
 **图标尺寸规则**：卡片/列表项中的业务图标尺寸取自 Figma 节点 absoluteBoundingBox，且 `flex-shrink: 0`。
 ≤12px 的圆点/短线属于**装饰元素**（资源映射中会标注 `🔸[装饰元素·非业务图标]`），**禁止**把它当作卡片或标题的主图标使用。
+
+## 3️⃣ flex-grow 比例分配铁律（FLEX_GROW_RATIO）
+
+> 唯一事实源：本节是「内容区块高度分配」的唯一规范，替代 root-container.md / ai-generation-constraints.md / chart-standards.md 中重复表述。
+
+**组件内有多个功能区块（header / tab / 图表区 / footer）时，禁止给内容区块写死固定高度。**
+
+| 区块类型 | 高度策略 | 示例 |
+|---------|---------|------|
+| 标题/表头/功能条 | 固定高度 + `flex-shrink: 0` | `height: 40px` |
+| Tab/筛选条 | 固定高度 + `flex-shrink: 0` | `height: 32px` |
+| 内容区块（数据卡/图表区/主内容区） | `flex: <flexGrow系数> 1 0; min-height: 0` | 系数 = 管线归一化值 |
+| 图表/数据区兜底 | 主图 `min-height: 160px`；紧凑图 `min-height: 100px` | — |
+| 底部状态栏 | 固定高度 + `flex-shrink: 0` | `height: 28px` |
+
+🔴 **核心禁令（逐条）**：
+1. **禁止把 Figma 像素高度直接写进 flex-grow**（如 `flex: 220 1 0`）——grow 是无单位弹性系数（0/1/小数值），不是像素。像素只能出现在 flex-basis（`flex: <系数> 1 <高度>px`）或固定区块的 height 里。
+2. **定宽/定高区块禁止 flex-grow**（2026-09-02 实锤 mc-max-1788280167414）：写了显式 `width/height: <px>` 的区块只配 `flex-shrink: 0`，禁止同块写 grow——grow 会覆盖显式尺寸（`flex-basis:0` 忽略 width），把 46px 侧栏撑满整个剩余宽度。
+3. **`height: 100%` 唯一合法位置是根容器**（`.c-*-root`）。子区块 `height: 100%` 会吃掉父容器剩余空间、挤压兄弟区块导致重叠/溢出。
+4. **禁止手工算术**：`flex: <flexGrow系数> 1 0` 比例分配自动等比压缩/放大，禁止手工计算缩放值或换算百分比（flexGrow 由管线归一化后下发，直接使用）。
+
+```less
+// ✅ 正确：固定功能条 + 内容区块 flex-grow 归一化系数
+.root-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  .header { height: 40px; flex-shrink: 0; }
+  .stat-cards { flex: 0.67 1 0; min-height: 0; }
+  .chart-area { flex: 1.33 1 0; min-height: 160px; }
+  .footer { height: 28px; flex-shrink: 0; }
+}
+```

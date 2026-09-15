@@ -32,7 +32,7 @@ export class LayoutStyleRefiner extends BaseAgent {
     super({
       name: 'layout-style-refiner',
       description: '布局+样式合并精修器',
-      model: config.model || 'claude-sonnet-4-6',
+      model: config.model || '',
       temperature: config.temperature || 0.1,
       maxTokens: config.maxTokens || 12288,  // 合并版需要更多 tokens（两份指令）
       ...config

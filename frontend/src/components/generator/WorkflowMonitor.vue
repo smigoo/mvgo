@@ -30,7 +30,7 @@
       <div
         class="wm-fab-total"
         :class="[totalClass, { 'slots-full': slotsFull }]"
-        :title="slotsFull ? `并发已满（${runningCount}/${maxConcurrent}），${queuedCount} 个任务排队中` : `${runningCount} 个任务正在运行（并发上限 ${maxConcurrent}）`"
+        :title="queuedCount > 0 ? queueReasonText : `${runningCount} 个任务正在运行（并发上限 ${maxConcurrent}）`"
       >
         <span class="wm-fab-total-num">{{ runningCount }}</span>
         <span class="wm-fab-total-label">运行</span>
@@ -69,7 +69,7 @@
               <span
                 v-if="queuedCount > 0"
                 class="wm-chip queued"
-                :title="slotsFull ? '并发槽位已满，等待运行中的任务结束后自动开始' : '槽位空闲，数秒内自动调度'"
+                :title="queueReasonText"
               >{{ queuedCount }} 排队</span>
               <span v-if="pausedCount > 0" class="wm-chip paused">{{ pausedCount }} 暂停</span>
             </div>
@@ -116,7 +116,7 @@
                   </div>
                   <!-- 排队等待 -->
                   <div v-else-if="task.status === 'queued' || task.status === 'rate_limited' || task.status === 'retry_scheduled'" class="wm-task-queued">
-                    ⏳ {{ getQueuedLabel(task) }}
+                    ⏳ {{ queueReasonText }}
                   </div>
                 </div>
                 <div class="wm-task-right">
@@ -348,9 +348,35 @@ const totalCount = computed(() => tasks.value.length)
 
 // 后端并发上限（由 /tasks/queue/stats 提供，拉取失败时回退到 2）
 const maxConcurrent = ref(2)
+// 排队原因诊断字段（后端返回）
+const userRunningCount = ref(0)
+const userMaxConcurrent = ref(2)
+const globalRunningCount = ref(0)
+const globalMaxConcurrent = ref(10)
+const queueReason = ref<'user_full' | 'global_full' | 'both' | 'other'>('other')
 
 // 槽位是否已满：满槽才是"排队不动"的正当理由
 const slotsFull = computed(() => runningCount.value >= maxConcurrent.value)
+
+// 排队原因诊断文案
+const queueReasonText = computed(() => {
+  const reason = queueReason.value
+  const userCount = userRunningCount.value
+  const userMax = userMaxConcurrent.value
+  const globalCount = globalRunningCount.value
+  const globalMax = globalMaxConcurrent.value
+
+  if (reason === 'user_full') {
+    return `您的并发槽位已满（${userCount}/${userMax}），请等待当前任务完成`
+  }
+  if (reason === 'global_full') {
+    return `系统并发已满（${globalCount}/${globalMax}），建议联系管理员升级服务器配置`
+  }
+  if (reason === 'both') {
+    return `您的槽位（${userCount}/${userMax}）和系统并发（${globalCount}/${globalMax}）均已满`
+  }
+  return '排队等待中...'
+})
 
 // 总活跃数 CSS 类（用于着色）
 const totalClass = computed(() => {
@@ -401,6 +427,12 @@ async function loadMaxConcurrent() {
   try {
     const stats = await getQueueStats()
     if (stats?.maxConcurrent > 0) maxConcurrent.value = stats.maxConcurrent
+    // 保存排队原因诊断字段
+    if (stats?.userRunningCount !== undefined) userRunningCount.value = stats.userRunningCount
+    if (stats?.userMaxConcurrent !== undefined) userMaxConcurrent.value = stats.userMaxConcurrent
+    if (stats?.globalRunningCount !== undefined) globalRunningCount.value = stats.globalRunningCount
+    if (stats?.globalMaxConcurrent !== undefined) globalMaxConcurrent.value = stats.globalMaxConcurrent
+    if (stats?.queueReason) queueReason.value = stats.queueReason
   } catch { /* 静默，沿用默认值 2 */ }
 }
 

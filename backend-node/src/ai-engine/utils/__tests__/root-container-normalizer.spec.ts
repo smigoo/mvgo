@@ -126,11 +126,11 @@ describe('normalizeRootContainerLayout', () => {
  * 布局类关键修复必须在「写盘前最后一刻」重跑。figmaNodeData bbox 有效时
  * 对内容根补 aspect-ratio（语义对齐 anchor：缺 width 或 height 才注入）。
  */
-describe('normalizeRootContainerLayout · figma bbox aspect-ratio 终验兜底', () => {
+describe('normalizeRootContainerLayout · figma bbox width/height 100% 终验兜底', () => {
   const FIGMA_425x807 = { document: { absoluteBoundingBox: { width: 425.4, height: 807.2 } } };
   const FIGMA_TINY = { document: { absoluteBoundingBox: { width: 30, height: 40 } } };
 
-  it('bbox 有效且缺 width → 补 aspect-ratio Figma 真值比例（I4）', () => {
+  it('bbox 有效且缺 width/height → 补 100% 双全（I4，R4-b 起不注入 aspect-ratio）', () => {
     const less = `.c-env-monitor-xh8jdcpy-c-env-monitor-slot-con {
   display: flex;
   flex-direction: column;
@@ -145,12 +145,14 @@ describe('normalizeRootContainerLayout · figma bbox aspect-ratio 终验兜底',
     );
     const actions = r.fixes.map((f) => f.action);
     expect(actions).toContain('flex-to-height');
-    expect(actions).toContain('aspect-ratio-injected');
-    expect(r.files[1].content).toMatch(/aspect-ratio:\s*425 \/ 807;/);
+    expect(actions).toContain('width-to-100');
+    expect(actions).not.toContain('aspect-ratio-injected');
+    expect(r.files[1].content).toMatch(/width:\s*100%;/);
     expect(r.files[1].content).toMatch(/height:\s*100%;/);
+    expect(r.files[1].content).not.toContain('aspect-ratio');
   });
 
-  it('width/height 都全 → 不注入无效 aspect-ratio（anchor 语义一致）', () => {
+  it('width/height 都全 → 零副作用（不补任何尺寸声明）', () => {
     const less = `.c-env-monitor-xh8jdcpy-c-env-monitor-slot-con {
   width: 420px;
   height: 186px;
@@ -166,10 +168,10 @@ describe('normalizeRootContainerLayout · figma bbox aspect-ratio 终验兜底',
     expect(r.files[1].content).not.toContain('aspect-ratio');
   });
 
-  it('已有 aspect-ratio → 幂等不重复注入', () => {
+  it('缺 width 只补 width，已有 height 不动（幂等语义）', () => {
     const less = `.c-env-monitor-xh8jdcpy-c-env-monitor-slot-con {
   height: 100%;
-  aspect-ratio: 425 / 807;
+  display: flex;
 }`;
     const r = normalizeRootContainerLayout(
       [
@@ -178,11 +180,13 @@ describe('normalizeRootContainerLayout · figma bbox aspect-ratio 终验兜底',
       ],
       { figmaNodeData: FIGMA_425x807 },
     );
-    expect(r.fixes).toEqual([]);
-    expect(r.files[1].content.match(/aspect-ratio/g)?.length).toBe(1);
+    expect(r.fixes.map((f) => f.action)).toEqual(['width-to-100']);
+    expect(r.files[1].content).toMatch(/width:\s*100%;/);
+    expect(r.files[1].content.match(/height:\s*100%/g)?.length).toBe(1);
+    expect(r.files[1].content).not.toContain('aspect-ratio');
   });
 
-  it('bbox 无效（W/H≤50）或缺 figmaNodeData → 不注入（旧语义不变）', () => {
+  it('bbox 无效（W/H≤50）或缺 figmaNodeData → 不补齐（旧语义不变）', () => {
     const less = `.c-env-monitor-xh8jdcpy-c-env-monitor-slot-con { flex: 1 1 0; }`;
     for (const opts of [
       { figmaNodeData: FIGMA_TINY },
@@ -196,6 +200,7 @@ describe('normalizeRootContainerLayout · figma bbox aspect-ratio 终验兜底',
         opts,
       );
       expect(r.fixes.map((f) => f.action)).not.toContain('aspect-ratio-injected');
+      expect(r.fixes.map((f) => f.action)).not.toContain('width-to-100');
     }
   });
 });

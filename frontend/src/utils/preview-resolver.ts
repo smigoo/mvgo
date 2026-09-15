@@ -102,7 +102,10 @@ export function buildPreviewUrl(
     type: descriptor.target,
     groupId: descriptor.groupId,
   })
-  if (descriptor.snapshot) {
+  // snapshot=0 = 强制 workspace。必须同时丢掉 revision，否则 preview 页
+  // hasExplicitSource = sessionId && revision 仍走快照 → 保存后预览不变。
+  const forceWorkspace = options.snapshot !== undefined && String(options.snapshot) === '0'
+  if (descriptor.snapshot && !forceWorkspace) {
     params.set('sessionId', descriptor.sessionId)
     params.set('revision', descriptor.snapshot.revision)
     params.set('source', descriptor.source)

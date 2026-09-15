@@ -24,13 +24,16 @@ const MAX_DEPTH = 5
  * @param {object} figmaData Figma 节点树
  * @returns {Array<{name:string, type:string, bbox:object, effectiveW:number, effectiveH:number, isTechComponent:boolean}>}
  */
+import { getFigmaBox } from './section-tree.js'
+
 export function collectFigmaNodes(figmaData) {
   const nodes = []
   const walk = (node, depth = 0) => {
     if (!node || typeof node !== 'object' || depth > MAX_DEPTH) return
     const name = String(node.name || '').trim()
+    const box = getFigmaBox(node)
     const bb = node.absoluteBoundingBox
-    if (name && bb && bb.width > 0 && bb.height > 0) {
+    if (name && bb && box && box.w > 0 && box.h > 0) {
       let effectiveW = bb.width
       let effectiveH = bb.height
       if (name.startsWith('@') && Array.isArray(node.children) && node.children.length) {

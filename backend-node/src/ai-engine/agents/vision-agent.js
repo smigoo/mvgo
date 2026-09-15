@@ -751,6 +751,16 @@ export class VisionAgent {
       "legendType": "图例类型（horizontal/vertical）",
       "axes": "坐标轴描述（如：X轴为时间，Y轴为数值）",
       "tooltip": "提示信息描述",
+      "markLine": [
+        {
+          "axis": "y",
+          "value": 30,
+          "label": "预警线",
+          "color": "#ff5555",
+          "lineStyle": "dashed",
+          "labelPosition": "right"
+        }
+      ],
       "notes": ["特殊标记1", "特殊标记2"]
     }
   ]
@@ -771,7 +781,10 @@ export class VisionAgent {
    - 明确 section 归属
    - 提取系列名称（legend）
    - 提取颜色值
-   - 记录特殊标记（预警线、阈值线等）
+   - 图例文本必须回填进 \`legend\` 数组（**禁止** legend 为空却填 legendPosition/legendType）
+   - **画布内的阈值线/预警线必须写进 \`markLine\` 数组**（\`axis\` + \`value\` + \`color\`，有文字标注则带 \`label\`），
+     ⚠️ **禁止**把阈值线/图例拆成 section 的 \`body.children\` 兄弟文本节点 ——
+     它们画在 ECharts 画布内，必须归 \`charts[]\`（实锤：拆成兄弟节点后会被渲染成图表容器外的游离 DOM）
 
 4. **颜色值提取**：
    - 必须提取实际的 16 进制颜色值（如 #52c41a）

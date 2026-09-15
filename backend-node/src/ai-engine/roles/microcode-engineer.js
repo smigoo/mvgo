@@ -33,6 +33,7 @@ import {
   formatSectionTreeForPrompt,
   findSectionById,
   dedupeDuplicateSections,
+  assignSectionComponentNames,
 } from '../utils/section-tree.js';
 import {
   buildAllConstraintReinforcements,
@@ -65,6 +66,9 @@ import {
   validateResourceUsage as _validateResourceUsagePure,
   autoFixSubComponentSize as _autoFixSubComponentSizePure,
   inferChartMinHeight as _inferChartMinHeightPure,
+  injectChartMinHeightIntoClass,
+  createChartClassBlockIfAbsent,
+  stripZeroMinHeightForClass,
 } from '../utils/post-process.js';
 import {
   validateVueSfc,
@@ -77,6 +81,10 @@ import {
 } from '../utils/css-sanitizer.js';
 import { buildRetryPrompt } from '../utils/retry-prompt.js';
 import { buildSectionContentContract } from '../utils/section-content-guard.js';
+import {
+  assessStatRowConfidence,
+  healStatRowMemberPairing,
+} from '../utils/inline-row-assembler.js';
 import { enforceInputBudget } from '../utils/input-budget.js';
 import { healLessSource } from '../validators/less-compile-gate.js';
 import {
@@ -270,7 +278,7 @@ export class MicrocodeEngineer extends BaseAgent {
     super({
       name: 'microcode-engineer',
       description: '微码组件代码生成器',
-      model: config.model || 'claude-sonnet-4-6',
+      model: config.model || '',
       temperature: config.temperature || 0,
       maxTokens: config.maxTokens || getMaxTokens(config.model, 16000),
       ...config,
@@ -434,7 +442,7 @@ export class MicrocodeEngineer extends BaseAgent {
     const estimateResult = this.estimateIndexVueSize(input);
     // 🛡️ 修复：BaseAgent 不设 this.config（只有 this.model），原 this.config.model 会抛
     // "Cannot read properties of undefined (reading 'model')"。统一改用 this.model（BaseAgent line 28 已建）。
-    const currentModel = this.model || 'claude-sonnet-4-6';
+    const currentModel = this.model || '';
     const suggestion = buildModelSuggestion(
       estimateResult.tokens,
       currentModel,
@@ -568,6 +576,23 @@ export class MicrocodeEngineer extends BaseAgent {
 
     // 🎯 A' Phase 5: 叶子遍历（布局容器不占 .vue 槽，只做纵向包裹）
     const leafSections = collectLeafSections(effectiveSections);
+
+    // 🎯 阶段 B 结构层接管（2026-09-15）：构建「子组件名 → 确定性统计行配对」映射。
+    // 真机证伪（mc-1789429951534-63bf998c）：命令式 prompt 对成员左右序/标题数值互换无效，
+    // LLM 写子组件模板仍按自身判断猜配对。故在子组件写盘前用 facts 确定性对齐 stat 卡片文本。
+    // 仅对 assessStatRowConfidence 判 high 的统计行 section 生效；命名与 index.vue 确定性模板
+    // （buildDeterministicIndexTemplate）共用 assignSectionComponentNames，保证同名映射。
+    const statRowHealMap = new Map();
+    if (input.figmaNodeData) {
+      const _nameOf = assignSectionComponentNames(effectiveSections);
+      for (const sec of leafSections) {
+        const r = assessStatRowConfidence(sec, input.figmaNodeData);
+        if (r.verdict === 'high') {
+          const compName = _nameOf.get(String(sec.id));
+          if (compName) statRowHealMap.set(compName, r.members);
+        }
+      }
+    }
 
     // 🎯 Phase 2 方案1: 内部子组件（来自增强子组件拆分）
     const internalSubcomponents = subPlan.internalSubcomponents || [];
@@ -951,7 +976,12 @@ export class MicrocodeEngineer extends BaseAgent {
                 (m, i) =>
                   `   ${i + 1}. 标题「${m.title ?? ''}」 数值「${m.value ?? ''}」${m.x != null ? ` (x≈${m.x})` : ''}`,
               );
-              p += `- \`${c.id}\`（横向 row，成员从左到右）：\n${memberLines.join('\n')}\n`;
+              if (c.deterministic) {
+                // 🎯 阶段 B：高置信确定性配对（系统已配好，禁止重排/互换）
+                p += `- \`${c.id}\`（横向 row，**成员配对已由系统确定性确定，禁止互换标题/数值、禁止左右调换、严格按此顺序渲染**）：\n${memberLines.join('\n')}\n`;
+              } else {
+                p += `- \`${c.id}\`（横向 row，成员从左到右）：\n${memberLines.join('\n')}\n`;
+              }
             } else {
               const ordered = [...c.texts].sort(
                 (a, b) => (a.x ?? 0) - (b.x ?? 0),
@@ -1675,6 +1705,22 @@ export class MicrocodeEngineer extends BaseAgent {
               fixed = this._injectChartMinHeight(fixed);
               // 🎯 Phase 2 方案7: 自动修复子组件尺寸约束
               fixed = _autoFixSubComponentSizePure(fixed);
+
+              // 🎯 阶段 B 结构层接管：确定性统计行配对对齐（跳过 LLM 的配对猜测）。
+              // 仅对 assessStatRowConfidence 判 high 的统计行子组件生效；严格前置校验
+              // 不满足即 no-op，不误伤其它子组件。配对事实源 = Figma 子树文本 + bbox.x。
+              const _statTag = f.split('/').pop().replace(/\.vue$/, '');
+              const _statMembers = statRowHealMap.get(_statTag);
+              if (_statMembers) {
+                const _healed = healStatRowMemberPairing(fixed, _statMembers);
+                if (_healed.changed) {
+                  fixed = _healed.content;
+                  this.logger.info(
+                    `🎯 阶段B 统计行配对确定性对齐: ${f}`,
+                    { pairs: _statMembers.map((m) => `${m.title}→${m.value}`) },
+                  );
+                }
+              }
 
               // 🔁 层② 反转（2026-09-11）：子组件资源「defineProps prop → 本地 import」。
               // 反转 P0/D 旧契约（资源只归主组件、子组件 defineProps 接收 + 父透传）：该契约要求
@@ -5665,26 +5711,41 @@ export class MicrocodeEngineer extends BaseAgent {
             );
           if (!elMatch) continue;
           const chartCls = elMatch[1].trim().split(/\s+/)[0];
-          const blockRe = new RegExp(`(\\.${chartCls}\\s*\\{)([^}]*)`, 'm');
-          const patched = fc.replace(blockRe, (m, head, body) => {
-            if (/min-height/.test(body)) return m;
-            const chartsForHeight = Array.isArray(charts) ? charts : [];
-            const minHeight = _inferChartMinHeightPure(chartCls, body, {
-              chartType: chartsForHeight[0]?.type,
-              chartRole: chartsForHeight[0]?.role,
-            });
-            return `${head}${body.replace(/\s*$/, '')}\n  min-height: ${minHeight}px; /* 🎯 防挤压：echarts 容器最小高度（主图160/紧凑图100） */\n`;
+          const chartsForHeight = Array.isArray(charts) ? charts : [];
+          const minHeight = _inferChartMinHeightPure(chartCls, '', {
+            chartType: chartsForHeight[0]?.type,
+            chartRole: chartsForHeight[0]?.role,
           });
+          // 🛡️ T2-C/T2-D（2026-09-15，收敛到 post-process 单一事实源）：
+          // min-height:0 不算保护（LLM 按 chart-standards 示例惯写 min-width:0;min-height:0），
+          // 旧守卫当已保护 → 跳过注入，兜底块又建在 @import 后（文件顶部）→ 后置 0 值块
+          // 级联反杀 160px（实锤 mc-1789446004258-677a6725 图表不显示）。
+          const { code: patchedOnce, injectedCount } =
+            injectChartMinHeightIntoClass(fc, chartCls, minHeight);
+          let patched = patchedOnce;
+          if (injectedCount === 0) {
+            // 🛡️ T2 增强（2026-09-15）：LLM 写了 echarts.init 但没写图表容器样式规则块 →
+            // 容器无高度塌缩（环境监测 ChartSection 实锤：.chart-container 在 style 段无规则）。
+            // 主动在 <style> 段 @import 后创建规则块并注入 min-height。
+            patched = createChartClassBlockIfAbsent(fc, chartCls, minHeight);
+          }
           if (patched !== fc) {
             codeResult.files[fp] = patched;
-            const chartsForHeight = Array.isArray(charts) ? charts : [];
-            const minHeight = _inferChartMinHeightPure(chartCls, fc, {
-              chartType: chartsForHeight[0]?.type,
-              chartRole: chartsForHeight[0]?.role,
-            });
             this.logger.info(
-              `🎯 [mc] echarts 容器最小高度已注入: ${fp} → .${chartCls} min-height: ${minHeight}px`,
+              `🎯 [mc] echarts 容器最小高度已注入: ${fp} → .${chartCls} min-height: ${minHeight}px（命中块 ${injectedCount || '兜底新建'}，min-height:0 反杀已剥除）`,
             );
+          }
+          // 🛡️ T2-D：共享表（common.less）常被 consolidateSubComponentClasses 搬入同名
+          // class 且带 `min-height: 0`（LLM 原值）→ 在事实源处把 0 一并剥除。
+          for (const [lf, lc] of Object.entries(codeResult.files || {})) {
+            if (!lf.endsWith('.less') || typeof lc !== 'string') continue;
+            const cleaned = stripZeroMinHeightForClass(lc, chartCls);
+            if (cleaned !== lc) {
+              codeResult.files[lf] = cleaned;
+              this.logger.info(
+                `🎯 [mc] 共享表 min-height:0 反杀已剥除: ${lf} → .${chartCls}`,
+              );
+            }
           }
         }
 

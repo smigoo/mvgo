@@ -142,6 +142,38 @@ describe('buildSectionHeightsMap (A4→CSS)', () => {
     });
   });
 
+  it('🎯 2026-09-15 真机：plan 含冗余 section（@antd/tab 的「设备网格」切片，flexGrow=0）→ dedupe 后对齐，不 fail-open', () => {
+    // 实锤事故 c-device-monitor-44384241：vision 把 @antd/tab（含 tabs+设备网格）拆成
+    // 两个 section——@antd/tab(89:37) 与冗余切片「设备网格」(8438，flexGrow=None→planner 归一后 0)。
+    // 治本前 buildSectionHeightsMap 直接用 plan.effectiveSections（4 叶子含冗余 8438），
+    // 而 code-generator 用 resolvePlanSections（dedupe 后 3 叶子）→ 两处不同源 →
+    // 叶子数(3, filter 掉 flexGrow=0)≠planLeaves(4) → fail-open null → switch/tab 比例退化为 flex:1。
+    // 治本后：先 dedupeDuplicateSections（与 resolvePlanSections 同源）再取叶子 → 对齐成功。
+    const layout = {
+      layout: {
+        sections: [
+          { id: 'sec-0', title: '区块0', styles: { flexGrow: 0.5 } },
+          { id: 'sec-1', title: '区块1', styles: { flexGrow: 1.5 } },
+          { id: 'sec-dup', title: '设备网格(冗余切片)', styles: {} }, // 无 flexGrow
+        ],
+      },
+    };
+    const params = {
+      subComponentPlan: {
+        effectiveSections: [
+          { id: 'sec-0', layoutMetadata: { flexGrow: 0.5 }, sourceNodeIds: ['n0'] },
+          { id: 'sec-1', layoutMetadata: { flexGrow: 1.5 }, sourceNodeIds: ['n1', 'n2', 'n3'] },
+          { id: 'sec-dup', layoutMetadata: { flexGrow: 0 }, sourceNodeIds: ['n2', 'n3'] },
+        ],
+      },
+    };
+    const map = buildSectionHeightsMap(modelFiles, layout, params);
+    expect(map).toEqual({
+      'c-monitor-overview-cards': 0.5,
+      'c-monitor-device-list': 1.5,
+    });
+  });
+
   it('顶层 sections 缺 flexGrow 系数（量纲缺失） → fail-open 返回 null', () => {
     // 🎯 2026-09-09：只认 styles.flexGrow（A4 系数），无系数即 fail-open，
     // 不再回退像素 figmaHeightPx（否则系数/像素混排 → flex:800 1 0 量纲冲突）。

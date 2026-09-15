@@ -39,17 +39,12 @@ function isGeometricSection(sec) {
   return ls === 'inline-row' || ls === 'container-rebuild'
 }
 
-/** 建立 id → node 索引（一次遍历，供 y 查找与子树证据共用） */
+import { indexFigmaNodes, getFigmaBox } from './section-tree.js'
+
+/** 将共享 index 适配为 merger 的历史 byId 契约；业务裁决仍留在本模块。 */
 function buildFigmaIndex(figmaData) {
   const root = (figmaData && (figmaData.document || figmaData)) || null
-  const byId = new Map()
-  const walk = (n) => {
-    if (!n) return
-    byId.set(n.id, n)
-    for (const c of n.children || []) walk(c)
-  }
-  if (root) walk(root)
-  return { root, byId }
+  return { root, byId: indexFigmaNodes(root) }
 }
 
 /** figma id 的尾段数字（"2:7890" → "7890"），用于跨前缀比对 */
@@ -67,20 +62,22 @@ function collectSubtreeEvidence(index, rootId) {
   const idSuffixes = new Set()
   const texts = new Set()
   const names = new Set()
-  const walk = (n) => {
-    if (!n) return
-    ids.add(n.id)
-    const sfx = idSuffixOf(n.id)
+  const walk = (nodeId) => {
+    const record = index?.byId?.get(String(nodeId))
+    if (!record) return
+    ids.add(record.id)
+    const sfx = idSuffixOf(record.id)
     if (sfx) idSuffixes.add(sfx)
-    if (n.type === 'TEXT' && n.characters) {
-      const t = String(n.characters).trim()
-      if (t) texts.add(t)
+    const rawNode = record.rawNode || record
+    if (record.type === 'TEXT') {
+      const text = String(rawNode.characters || '').trim()
+      if (text) texts.add(text)
     }
-    const nm = String(n.name || '').trim()
-    if (nm && !GENERIC_NODE_NAME.test(nm)) names.add(nm)
-    for (const c of n.children || []) walk(c)
+    const name = String(record.name || '').trim()
+    if (name && !GENERIC_NODE_NAME.test(name)) names.add(name)
+    for (const child of rawNode.children || []) walk(child.id)
   }
-  walk(index.byId.get(rootId))
+  walk(rootId)
   return { ids, idSuffixes, texts, names }
 }
 
@@ -197,9 +194,9 @@ export function mergeInlineRowsIntoSections(layout, inlineRows, figmaData) {
   }
   const figmaYOf = (id) => {
     if (!figmaData) return null
-    const node = getIndex().byId.get(id)
-    const bb = node && node.absoluteBoundingBox
-    return bb && Number.isFinite(bb.y) ? bb.y : null
+    const node = getIndex().byId.get(String(id))
+    const box = getFigmaBox(node)
+    return box && Number.isFinite(box.y) ? box.y : null
   }
   // 业务 section 的 y：优先用其 figmaNodeId / id 查 figma；查不到返回 Infinity（沉底，保持原序）
   const sectionY = (sec) => {

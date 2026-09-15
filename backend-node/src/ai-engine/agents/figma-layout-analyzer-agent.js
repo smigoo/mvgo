@@ -27,7 +27,7 @@ export class FigmaLayoutAnalyzerAgent extends BaseAgent {
     super({
       name: 'figma-layout-analyzer',
       description: '分析 Figma 节点树，提取大屏布局结构',
-      model: config.model || 'claude-sonnet-4-6',
+      model: config.model || '',
       temperature: config.temperature ?? 0.2,
       maxTokens: config.maxTokens || 8192,
       promptTemplate: 'src/prompts/figma-layout-system-prompt.md',

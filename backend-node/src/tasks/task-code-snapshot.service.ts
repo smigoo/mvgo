@@ -130,6 +130,20 @@ function sanitizeStyleFenceLeak(path: string, content: Buffer): Buffer {
   return content;
 }
 
+import { collectMissingVueImports } from '../ai-engine/utils/vue-import-closure.js';
+
+/**
+ * 抽出 SFC 里的「相对 .vue」静态 import specifier。
+ *
+ * 实现收口在 ai-engine/utils/vue-import-closure.js（与快照推送守卫共用单一事实源）。
+ * 此处仅再导出，保证既有消费方（单测 / 其他调用点）import 路径稳定。
+ */
+export {
+  extractRelativeVueImports,
+  resolveRelativeModulePath,
+  collectMissingVueImports,
+} from '../ai-engine/utils/vue-import-closure.js';
+
 @Injectable()
 export class TaskCodeSnapshotService {
   private readonly root = resolve(tempComponentsDir, '.task-code-snapshots');
@@ -250,11 +264,23 @@ export class TaskCodeSnapshotService {
   }
 
   /**
-   * 判定某 revision 是否「可渲染」（index.vue 含 <template> 块）。
+   * 判定某 revision 是否「可渲染」（index.vue 含 <template> 块 **且** import 闭包完整）。
    * 背景：生成末轮偶尔退化，只产出 <script setup> 而丢失 <template>/<style>，
    * 形成「看起来完成、实际无法预览」的不完整候选 revision。这类 revision 若直接作为
    * 预览源，前端加载 resources/styles/index.css 等资源会 404（组件资源加载失败）。
    * 通过检测 index.vue 是否含 <template> 识别不完整 revision，交由调用方回退到 last-good。
+   *
+   * 🛡️ 2026-09-15（mc-max-1789446564243-f64ecbed 实锤 · 补 import 闭包判据）：
+   * 原判据只看 <template>，漏掉「模板完整但 import 悬空」的生成中间态 ——
+   * 子组件**并行**生成，index.vue（已 import ContentSubT/ChartSection/ContentIndicator）
+   * 先于某个子组件 chunk 完成就被推成 candidate，其 body 有 <template>（判定通过）
+   * 但 `package/components/ContentIndicator.vue` 既不在 manifest 也不在磁盘
+   * → 前端 getFile 拉该文件 404 → 预览报
+   * 「组件文件缺失或路径不正确（groupId / componentId 不匹配）。原始错误：找不到文件: …」。
+   * 这类 revision 属**不完整产物**，必须与「缺 template」同等对待：不作为预览源，回退 last-good。
+   *
+   * 判据取「传递闭包」而非只看 index.vue 一层：index.vue → 子组件 → 孙组件同样可能出现
+   * 悬空 import（chunk 一次输出多文件时同批次缺失）。事实源 = manifest.files + revision 磁盘。
    */
   private isRenderableRevision(sessionId: string, revision: string): boolean {
     try {
@@ -265,10 +291,36 @@ export class TaskCodeSnapshotService {
       const absolutePath = this.resolveInside(revisionDir, 'package/index.vue');
       if (!existsSync(absolutePath)) return false;
       const content = readFileSync(absolutePath, 'utf-8');
-      return /<template[\s>]/.test(content);
+      if (!/<template[\s>]/.test(content)) return false;
+      return this.isVueImportClosureComplete(revisionDir, manifest, 'package/index.vue');
     } catch {
       return false;
     }
+  }
+
+  /**
+   * 相对 .vue import 的传递闭包是否全部落地。
+   *
+   * 判据实现收口在 `ai-engine/utils/vue-import-closure.js#collectMissingVueImports`
+   * —— 与快照推送守卫（chunk-snapshot-pusher）共用同一套遍历，禁止两侧各写一套
+   * （判据漂移会出现「推送放行但预览拒绝」的割裂）。
+   * 这里只注入「磁盘 + manifest」这一侧的事实源。
+   */
+  private isVueImportClosureComplete(
+    revisionDir: string,
+    manifest: TaskCodeSnapshotManifest,
+    entryPath: string,
+  ): boolean {
+    const known = new Set((manifest.files || []).map((f) => f.path));
+    const readFile = (path: string): string | null => {
+      if (!known.has(path)) return null; // 清单里没有 → 悬空
+      try {
+        return readFileSync(this.resolveInside(revisionDir, path), 'utf-8');
+      } catch {
+        return null; // 越界 / 磁盘缺失 / 非法文件 → 视为不完整
+      }
+    };
+    return collectMissingVueImports(entryPath, readFile).length === 0;
   }
 
   /**

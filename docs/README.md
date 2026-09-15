@@ -43,6 +43,7 @@
 | 文档 | 路径 | 适合谁看 |
 |------|------|---------|
 | Agent Builder 产品说明 | `product/agent-builder/prd.md` | 产品经理 / 开发者 |
+| 管线监控 PRD（管理员看板） | `product/pipeline-monitoring/prd.md` | 产品经理 / 后端开发者 |
 | 系统架构文档 | `architecture/系统架构文档.md` | 开发者 / 架构师 |
 | 双运行时职责边界 | `architecture/Node-Java-职责边界.md` | 后端开发者 |
 | 部署指南 | `operations/部署指南.md` | 运维 / 部署人员 |

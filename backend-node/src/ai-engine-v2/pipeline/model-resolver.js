@@ -9,7 +9,8 @@
  *   2. 档位级   tierProfile.defaultModels[nodeId] —— 如 lite 档统一降级
  *   3. 规范级   spec.defaultModels[nodeId]        —— 如微码 code-engineer 需强模型
  *   4. 通道级   env TEXT_MODEL / VISION_MODEL     —— 沿用旧管线全局配置
- *   5. 系统兜底 FALLBACK_MODELS[channel]
+ *   ⚠️ 无第五层系统兜底：用户必须显式配置至少一条有效路径，
+ *      resolveNodeModel 在全部 4 级皆空时会抛出清晰错误。
  *
  * 凭证（apiKey/baseURL）只按通道解析，不做节点级覆盖 —— 密钥属于部署配置，
  * 不应由前端请求携带（P1 迁 Java 后由服务端托管下发）。
@@ -17,11 +18,7 @@
 
 import { VISION_NODES, DETERMINISTIC_NODES, willCallLlm } from './tier-profile.js'
 
-/** 系统兜底模型，对齐旧管线 base-agent 默认值 */
-export const FALLBACK_MODELS = {
-  text: 'claude-sonnet-4-6',
-  vision: 'qwen3.7-plus'
-}
+/** 系统兜底模型（已删除）—— 零硬编码回退原则，所有模型必须来自用户配置或环境变量 */
 
 /** 节点所属通道 */
 export function getChannel(nodeId) {
@@ -76,11 +73,12 @@ export function resolveNodeModel(nodeId, { spec, tierProfile, modelOverrides, ai
     model = envModel
     source = 'env'
   } else {
-    model = FALLBACK_MODELS[channel]
-    source = 'fallback'
+    throw new Error(
+      `[model-resolver] 节点 "${nodeId}"（通道: ${channel}）未配置模型。` +
+      `请在 配置面板 > AI 配置 中设置 ${channel === 'vision' ? '视觉' : '文本'}模型。` +
+      `支持通过环境变量 ${channel === 'vision' ? 'VISION_MODEL' : 'TEXT_MODEL'} 或 ANTHROPIC_MODEL 配置。`
+    )
   }
-
-  return { nodeId, channel, model, source, apiKey, baseURL }
 }
 
 /**
@@ -150,7 +148,7 @@ export function listConfigurableNodes(tierProfile) {
 }
 
 export default {
-  FALLBACK_MODELS,
+  // 零硬编码回退 —— FALLBACK_MODELS 已删除
   getChannel,
   resolveChannelCredentials,
   resolveNodeModel,

@@ -12,7 +12,7 @@ export class ConfigGeneratorAgent extends BaseAgent {
     super({
       name: 'config-generator',
       description: '基于文档分析结果生成四个配置章节（businessEvents、businessStatuses、businessConfig、cssVariableConfig）',
-      model: config.model || process.env.ANTHROPIC_MODEL || 'claude-3-5-sonnet-20241022',
+      model: config.model || process.env.ANTHROPIC_MODEL || '',
       temperature: 0.2,
       maxTokens: 4096,
       promptTemplate: '../../../prompts/config-generator-prompt.md',

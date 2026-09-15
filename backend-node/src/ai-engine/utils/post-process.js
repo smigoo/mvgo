@@ -21,11 +21,105 @@ export function inferChartMinHeight(className = '', styles = '', options = {}) {
 }
 
 /**
+ * 🛡️ min-height 保护判据（2026-09-15 单一事实源）：
+ * `min-height: 0` / `0px` / `auto` **不算**保护 —— LLM 按 chart-standards 示例惯写
+ * `min-width: 0; min-height: 0`，旧守卫 `/min-height/` 把它当「已保护」→ 跳过注入，
+ * 且后置块级联反杀兜底值（实锤 mc-1789446004258-677a6725 图表不显示）。
+ *
+ * ⚠️ 必须用「取值后归一比较」而非 `min-height\s*:\s*(?!0...)` 这类 lookahead 正则：
+ * 后者可被 `\s*` 回溯绕过（`\s*` 退成 0 字宽后 lookahead 停在空格上即通过）→ 仍判成已保护。
+ */
+const CHART_MH_UNPROTECTED_VALUES = new Set([
+  '0',
+  '0px',
+  'auto',
+  'initial',
+  'unset',
+  'none',
+]);
+
+export function isChartMinHeightProtected(body) {
+  if (!body || typeof body !== 'string') return false;
+  const m = /min-height\s*:\s*([^;}]+)/i.exec(body);
+  if (!m) return false;
+  const v = m[1]
+    .trim()
+    .toLowerCase()
+    .replace(/\s*!important\s*$/, '');
+  return !CHART_MH_UNPROTECTED_VALUES.has(v);
+}
+
+// ⚠️ 交替顺序必须长值优先（0px 先于 0），否则 `min-height: 0px` 只吃掉 `0` 残留 `px`
+export const CHART_MH_ZERO_DECL_RE =
+  /(^|;)\s*min-height\s*:\s*(?:0px|0|auto|initial|unset|none)\s*;?/i;
+
+/**
+ * 剥掉指定 class 的所有块内 `min-height: 0/0px/auto` 声明（防止后置块级联反杀）。
+ * 用于共享表（common.less）与 SFC 双端收口。
+ */
+export function stripZeroMinHeightForClass(content, chartCls) {
+  if (!content || typeof content !== 'string') return content;
+  if (!content.includes(`.${chartCls}`)) return content;
+  return content.replace(
+    new RegExp(`(\\.${chartCls}\\s*\\{)([^}]*)\\}`, 'g'),
+    (m, head, body) => {
+      const nb = body.replace(CHART_MH_ZERO_DECL_RE, (mm, sep) =>
+        sep === ';' ? ';' : '',
+      );
+      return nb === body ? m : `${head}${nb}}`;
+    },
+  );
+}
+
+/**
+ * 给指定 class 的**全部**样式块注入分级 min-height（缺失或值为 0 时）。
+ * - 已有非零 min-height → 原样保留（尊重 Figma 真实尺寸）
+ * - 值为 0/0px/auto → 视为未保护，剥掉 0 再补兜底值
+ * - global 扫描：同一 class 出现多个块时全部收口，避免后置块反杀
+ * @returns {{ code: string, injectedCount: number }}
+ */
+export function injectChartMinHeightIntoClass(code, chartCls, minHeight) {
+  if (!code || typeof code !== 'string' || !chartCls) {
+    return { code, injectedCount: 0 };
+  }
+  let injectedCount = 0;
+  const out = code.replace(
+    new RegExp(`(\\.${chartCls}\\s*\\{)([^}]*)`, 'g'),
+    (m, head, body) => {
+      if (isChartMinHeightProtected(body)) return m;
+      injectedCount += 1;
+      const nb = body.replace(CHART_MH_ZERO_DECL_RE, (mm, sep) =>
+        sep === ';' ? ';' : '',
+      );
+      // 块内已有标记注释（如历史空块残留 `{/* 🎯 防挤压... */}`）→ 不重复追加，减噪
+      const marker = nb.includes('防挤压')
+        ? ''
+        : ' /* 🎯 防挤压：echarts 容器最小高度（主图160/紧凑图100） */';
+      return `${head}${nb.replace(/\s*$/, '')}\n  min-height: ${minHeight}px;${marker}\n`;
+    },
+  );
+  return { code: out, injectedCount };
+}
+
+/**
+ * class 规则块完全缺失时，在 <style> 段 @import 之后创建规则块并注入 min-height。
+ * （实锤环境监测 ChartSection：.chart-container 在 style 段无任何规则 → 容器塌陷）
+ */
+export function createChartClassBlockIfAbsent(code, chartCls, minHeight) {
+  if (!code || typeof code !== 'string' || !chartCls) return code;
+  return code.replace(
+    /(<style[^>]*>[\s\S]*?)(@import[^;]+;)/,
+    (m2, pre, imp) =>
+      `${pre}${imp}\n\n.${chartCls} {\n  min-height: ${minHeight}px; /* 🎯 防挤压：echarts 容器最小高度（主图160/紧凑图100） */\n}\n`,
+  );
+}
+
+/**
  * T03: 图表容器 min-height 注入
  * 检测图表容器（echarts/chart-），如果没有 min-height 则注入分级兜底高度。
  *
  * 🛡️ L3 / P0-4（2026-09-07）口径三合一 + #577 分级（2026-09-08）：
- * 主图 160px / 紧凑图（环形/仪表/小图）100px；已有 min-height 仍尊重不覆盖。
+ * 主图 160px / 紧凑图（环形/仪表/小图）100px；已有**非零** min-height 尊重不覆盖。
  */
 export function injectChartMinHeight(code, options = {}) {
   if (!code || typeof code !== 'string') return code;
@@ -37,12 +131,38 @@ export function injectChartMinHeight(code, options = {}) {
   const chartContainerRegex =
     /(\.c-[\w-]+-[\w-]*chart[\w-]*|\.chart-[\w-]+)\s*\{([^}]*)\}/gi;
 
-  code = code.replace(chartContainerRegex, (match, className, styles) => {
-    if (/min-height\s*:/i.test(styles)) return match;
-    const height = inferChartMinHeight(className, styles, options);
-    const newStyles = styles.trim() + `\n  min-height: ${height}px;\n`;
-    return `${className} {\n${newStyles}}`;
-  });
+  // 🛡️ R4-a 非容器后缀黑名单（2026-09-15，c-traffic-monitor 实锤）：
+  // 这些是图表「标题/图例/图标/section 根」等非 echarts 挂载容器，此前 `chart[\w-]*`
+  // 全量匹配 → 误注入 min-height:160px，把 chart-title/chart-legend/chart-bridge 等
+  // 撑到 160px 撑裂布局（真机「样式几乎看不到」根因之一）。
+  // 容器词（container/body/wrapper/root/box/area/canvas/panel/wrap/holder/main）、
+  // 数字编号（chart1/chart2）、chart 结尾（.forecast-chart）均不在黑名单 → 照常注入。
+  const CHART_NON_CONTAINER_RE =
+    /-(?:title|legend|icon|text|header|bridge|section|forecast|tunnel|item|dot|label|name|value|stat)(?:-|$)/i;
+
+  // 收集候选 class（去重）后统一走单一事实源注入
+  const seen = new Map();
+  const candidates = [];
+  let m;
+  while ((m = chartContainerRegex.exec(code)) !== null) {
+    // ⚠️ 捕获组 1 带前导点号（正则以 \. 开头），下游 injectChartMinHeightIntoClass
+    // 会自行拼 `\.`，必须先剥点，否则拼成 `\..c-xxx` 永不匹配（2026-09-15 回归实锤）。
+    const className = m[1].replace(/^\./, '');
+    if (CHART_NON_CONTAINER_RE.test(className)) continue;
+    if (seen.has(className)) continue;
+    seen.set(className, m[2] || '');
+    candidates.push(className);
+  }
+
+  for (const className of candidates) {
+    const height = inferChartMinHeight(className, seen.get(className) || '', options);
+    const { code: patched, injectedCount } = injectChartMinHeightIntoClass(
+      code,
+      className,
+      height,
+    );
+    if (injectedCount > 0) code = patched;
+  }
 
   return code;
 }

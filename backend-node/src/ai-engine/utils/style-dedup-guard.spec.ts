@@ -153,4 +153,25 @@ describe('pruneDuplicateStyleDecls', () => {
     expect(r.files[0].content).not.toMatch(/\.x\s*\{\s*\}/)
     expect(r.changes.length).toBeGreaterThan(0)
   })
+
+  it('R5-minheight：min-height 是防塌缩安全网，即使共享表同名 class 也声明，也不剥离', () => {
+    // 实锤（环境监测 chart-container）：T2 注入 min-height:160px 到子组件 scoped，
+    // consolidate 又复制到 common.less，旧逻辑按「属性名」剥离子组件 min-height →
+    // 图表容器塌缩。min-height 冗余无害（CSS 取较大值），必须保留。
+    const src = [
+      {
+        path: 'package/components/ChartSection.vue',
+        content: '<style lang="less" scoped>\n@import \'../../resources/styles/index.less\';\n\n.c-env-monitor-chart-container {\n  min-height: 160px;\n  width: 100%;\n}\n</style>',
+      },
+      {
+        path: 'resources/styles/common.less',
+        content: '.c-env-monitor-chart-container { min-height: 160px; width: 100%; }',
+      },
+    ]
+    const r = pruneDuplicateStyleDecls(src)
+    const vue = r.files.find((f) => f.path.includes('ChartSection'))!.content
+    // width 仍剥离（冲突），min-height 保留（安全网）
+    expect(vue).toMatch(/c-env-monitor-chart-container\s*\{[^}]*min-height:\s*160px/)
+    expect(vue).not.toMatch(/c-env-monitor-chart-container\s*\{[^}]*width:\s*100%/)
+  })
 })

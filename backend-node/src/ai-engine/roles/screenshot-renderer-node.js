@@ -15,7 +15,7 @@ export class ScreenshotRendererNode extends BaseAgent {
     super({
       name: 'screenshot-renderer',
       description: '渲染组件截图（puppeteer），输出截图路径与 issueCount',
-      model: config.model || 'gpt-4o-mini',
+      model: config.model || '',
       temperature: 0,
       maxTokens: 1024,
       skipLLM: true, // 纯 puppeteer 渲染，无 LLM 依赖

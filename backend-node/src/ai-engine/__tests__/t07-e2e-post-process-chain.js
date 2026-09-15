@@ -161,14 +161,26 @@ onBeforeUnmount(() => {
   })
 
   test('T07-B: 图表容器 min-height 正确注入', () => {
-    // 验证图表容器有 min-height（修复后注入 0 而非 200px，符合 CODE-013）
+    // 🛡️ 2026-09-15 事实源口径修正：T03 分级兜底（主图 160px）才是正确产物，
+    // `min-height: 0` 是 LLM 惯写的塌陷值（不算保护，见 post-process#isChartMinHeightProtected）。
+    // 旧断言期望 `min-height: 0`（历史 #577 前置状态），已随 T2-C 治本失效。
     const chartLineMatch = processedWithChart.match(/\.c-monitor-chart-line\s*\{([^}]*)\}/)
     assert.ok(chartLineMatch, '图表容器应存在')
-    assert.ok(/min-height\s*:\s*0/.test(chartLineMatch[1]), '图表容器应有 min-height: 0')
+    assert.ok(
+      /min-height\s*:\s*160px/.test(chartLineMatch[1]),
+      '折线图（主图）容器应有分级兜底 min-height: 160px'
+    )
 
     const chartBarMatch = processedWithChart.match(/\.c-monitor-chart-bar\s*\{([^}]*)\}/)
     assert.ok(chartBarMatch, '柱状图容器应存在')
-    assert.ok(/min-height\s*:\s*0/.test(chartBarMatch[1]), '柱状图容器应有 min-height: 0')
+    assert.ok(
+      /min-height\s*:\s*160px/.test(chartBarMatch[1]),
+      '柱状图（主图）容器应有分级兜底 min-height: 160px'
+    )
+    assert.ok(
+      !/min-height\s*:\s*0(?:px)?\b/.test(processedWithChart),
+      '产物中不得残留 min-height: 0（会级联反杀兜底值致图表塌陷）'
+    )
   })
 
   test('T07-C: 背景图去重正确工作', () => {

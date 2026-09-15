@@ -1434,10 +1434,10 @@ layout-collapse        关键区块高度 0 / 比例错误（含缺 display）
 
 1. **刀⑦ `.less` 残留 SFC 标签剥离**（file-writer#sanitizeFileContent 增加 .less/.css/.scss 分支）：4bda6d13 实锤 common.less:306 残留 `</style>` → LESS 门禁 BLOCK。此前只有 prompt 约束（lite/page-skeleton 才有剥离）。spec file-writer.spec.ts 5 例。
 2. **刀⑤ RUNTIME-001 降级可见化**：phase2/vue3 两图 complete 节点把 runtimeVerified:false + issues 写入 component-meta.json（不再静默）。
-3. **刀③ mc-preview 语义**：ensurePreviewImage 补下载设计图时同写 mc-design.png + meta `previewIsDesign:true`（19 处消费点不动，兼容保留）。TaskDetail 的 mc-preview 是"源设计稿"缩略图（语义正确）；真正误导在 ComponentLibrary。完整语义分离待 ⑥ 之后。
+3. **刀③ mc-preview 语义**：`mc-preview.png` 一直是管线下载的 Figma 设计预览图，合法用途是微码组件缩略图和布局识别；它不是实际渲染截图，也不应被拿来证明生成效果。此前临时增加的 `mc-design.png` / `previewIsDesign` 方案已回退，`ensurePreviewImage` 恢复原行为。真正的生成效果证据仍是 `screenshot.png`。
 4. **刀①左右序守卫 + 刀②内容错装守卫**（utils/section-content-guard.js，验证优先不自动改）：Figma 子树文本（t-/d- 前缀归一化）+ bbox.x 为唯一事实源。真机抓到 88:32/2:3660 两处左右反 + 3 处跨组件重复文本。签名选「组件文件中出现最少」的文本消歧（标题类文本跨 tabs/车型分布重复）。spec 5 例。两图 complete 节点留痕 component-meta.contentMappingIssues。
-5. **刀⑥ 渲染自给自足**：评估=需自建无头 SFC 打包渲染（=重实现前端预览），P2 工程，本轮不做；由⑤兜底可见化。screenshot-renderer 依赖 2610/2611（Vite 易静默退出）是环境脆弱点。
-6. **实锤**：TEXT-001 healer `code-healer#fixTextSiblingOrder` 导出后从未被调用（死代码）——左右反无人拦的根因；且其范围（同父文本兄弟）也不覆盖复合单元互换，①②守卫补位。
+5. **刀⑥ 渲染自给自足**：评估=需自建无头 SFC 打包渲染（=重实现前端预览），P2 工程，本轮不做；由⑤兜底可见化。screenshot-renderer 仍依赖 2610/2611（Vite 易静默退出），这是后续阶段 E 的环境脆弱点。
+6. **更正 TEXT-001 结论**：`code-healer#fixTextSiblingOrder` 并非死代码，已由 `code-healer.js`、`code-fix-rules.js` 和 `vue3-engineer.js` 接入，并委托 `text-order-guard#fixTextOrderDrift`。但其覆盖范围仅是同一父节点下的直接 TEXT 兄弟顺序，不能解决 `2:3660` / `88:32` 这类复合成员的标题、数值配对和跨组件归属，因此仍需内容契约与后续高置信 assembler。
 
 ## 真机验证方法（可复用）
 - 预种子共享缓存 `temp-components/_shared-cache/{fileKey}/{nodeId}/`（figma.json+visual.json 取 clean 无 daily-total 的 sibling，meta.json cachedAt=now 否则 24h TTL miss）→ `POST /api/phase2/generate` `reuseCache:true` + `-H 'Token: dev-local'`（SessionGuard 必须带）。
@@ -1448,7 +1448,9 @@ layout-collapse        关键区块高度 0 / 比例错误（含缺 display）
 - 回退 commit：phase2.service ensurePreviewImage 恢复原样（backend 0b0dc4b）。
 - 真正该修的：**L0-B 软失败短路**（code-structure-validator 重试耗尽 `return 'complete'`，绕过 generate-runtime-verify）→ 真实渲染截图 screenshot.png 无法产生，用户永远看不到真实效果。真渲染是 screenshot.png（screenshot-renderer 经前端预览页产出），与 mc-preview.png（设计图）是两回事。
 
-## 通用治理计划 · 确定性事实剥离（forward-looking，待评审）
+## 通用治理计划 · 确定性事实剥离（执行总纲，2026-09-14 20:54 起按序执行）
+> 状态说明：本节不是“已完成”声明。A~E 是执行顺序；每阶段完成前只标记已落地的具体文件、测试和证据，不把目标形态名称当作现有实现。
+
 目标：把「LLM 不该猜的确定性事实」系统性剥离到 planner/assembler，让生成质量不依赖 LLM 运气。
 原则：同一概念单点事实源 + 全链路接入 + 落盘闸门收口 + 每阶段可验证。
 
@@ -1465,3 +1467,84 @@ layout-collapse        关键区块高度 0 / 比例错误（含缺 display）
 - E 渲染自给自足：screenshot-renderer 不依赖前端 dev server（⑥ 收尾）。
 
 每阶段验证纪律：离线重放 → 真机重生成（前端在线）→ jest 基线逐字同名同数 → commit。
+
+## 阶段A 细化 · 事实源收口（当前执行记录）
+定标：结构事实暂以 `section-tree#indexFigmaNodes` 为共享入口（flat Map `id → {name,type,bbox,parentId}`）；section 几何以 `figmaSectionBox` 为共享入口；直接 TEXT 兄弟顺序仍由 `text-order-guard#collectFigmaTextSiblingGroups` 负责。这里的“共享入口”只表示当前已存在且已核实的公共能力，不表示全仓已经唯一化。
+
+**A0 盘点结论（已完成核对，2026-09-14）**：`indexFigmaNodes` 并非全仓唯一索引；`section-content-guard`、`inline-row-rebuilder`、`inline-row-merger`、`container-rebuilder`、`tab-resource-guard` 等模块仍有局部索引/文本/bbox 实现。`text-order-guard` 有真实消费者，不是死代码。`inline-row-rebuilder` 虽导入 `inferFlexDirection`，仍重复实现 `bb/xOverlap/yOverlap/sideBySide`，尚未完成几何事实收口。`inline-row-merger` 与 `container-rebuilder` 职责不同，不能通过合并文件解决重复问题。
+
+**A0 处理边界**：A 阶段只收口可安全共享的底层事实（节点索引、父子邻接、文本原始记录、文本归一化、bbox 几何 primitive）；不合并 TEXT-001 直接兄弟顺序、section 内容归属、标题/数值配对、inline-row 聚类/合并、纵向容器重建和 header slot 业务裁决。
+
+现状（以 A0 盘点为准）：`indexFigmaNodes` 已被 `subcomponent-planner`、`section-content-guard`、`section-tree` 内部等消费，但不是全仓唯一索引；`figma-height-ratio`、`visual-parser`、`figma-connector`、`flex-direction-inferrer`、`inline-row-rebuilder`、`inline-row-merger`、`container-rebuilder`、`tab-resource-guard` 仍需按返回契约逐一评估，不能依据旧的命中数直接替换。
+
+A1 消除并行实现（源码收口已完成，批次验收 ✅，2026-09-15）：
+- `section-tree.js` 已提供兼容性底层事实接口：`indexFigmaNodes` 保留 `rawNode`，并新增 `buildChildrenMap`、`normalizeFigmaTextName`、`collectSubtreeTexts`、`getFigmaBox`、`areBoxesSideBySide`；保留需要 `children/characters` 的调用方能力，没有强行改变业务返回契约。
+- `section-content-guard.js` 已删除私有 children/text 实现并改用共享入口；section 内容归属、成员配对、重复文本仍是它自己的业务裁决。
+- `inline-row-merger`、`container-rebuilder`、`tab-resource-guard`、`figma-height-ratio`、`flex-direction-inferrer`、`inline-row-rebuilder` 已按返回契约迁移底层 index/bbox/几何消费，未合并业务职责。
+- 离线真实 fixture 重放：498 个索引节点、105 个 TEXT、88 行；`2:3660` 成员按 bbox.x 输出 `2:3683 → 2:3680`。
+- A1 相关 Jest **8 套件 / 124 测试全绿**；context shadow 回归 **147 个完整样本库存、选取 5 个、5/5 通过**（invalid=0、rawFieldLeak=0、sizeMismatch=0、budgetFailure=0）。
+- 真机验收：任务 `mc-1789407629732-7e044a94` completed；2610/13030 在线；真实渲染截图 `.mc-gen/screenshots/mc-1789407629732-7e044a94-rendered.png` 67,431 bytes；`component-meta.json.runtimeVerified=true`。该产物仍记录 `memberOrderIssues` 和跨组件重复文本，证明 A1 只完成底层事实收口，不能冒充 B/C 内容治理完成。
+- `npm run build` 已通过并刷新 `dist`，`git diff --check` 通过。
+
+A1 已知边界：
+- 全量 Jest 仍有仓库既有失败集：ComponentService 权限 2、manifest golden hash 1、HttpExceptionFilter 1，以及若干 `import.meta` / 重复 `__filename` 加载失败；未观察到 A1 相关 suite 失败。
+- 当前运行中的 13030 是 build 前进程；下一阶段真机验证前必须按 runbook 先确认端口释放并重启到新 dist。
+
+A2 收敛下游重复（A1 验收后）：按返回契约和调用方向评估 `header-slot-validator` / `inline-header-slot-inferrer` / `header-relation-validator` 等剩余局部事实；每次只收口一个底层事实，不合并业务裁决。
+A3 header slot 三处收敛（独立批次，A1/A2 后）：`header-slot-validator` / `inline-header-slot-inferrer` / `header-relation-validator` 的底层节点事实可共享，但 slot 归属裁决仍需单独验证，不能先删任何一个入口。
+A4 prompt 反复要求收敛（低风险，A 阶段后半）：先盘点实际引用和冲突，再将 flex/layout 规则收敛到 `layout-rules.md` 单一片段；其余只引用，不重复重写。
+不动（生产者保留）：`figma-connector`（Figma API 生产者）、`visual-parser`（视觉分析生产者）；它们可以输出事实，但不应承担下游裁决。
+
+## 阶段 B · 高置信统计型 inline-row 确定性成员装配（执行记录）
+
+**定标**：只对满足高置信条件的统计型横向 inline-row 做确定性成员配对；不满足条件时整节回退 LLM，不产生半确定性混合结构。
+
+**B1 判定与装配纯函数（已完成 ✅，2026-09-15，commit `3e56f77`）**：
+- 新增 `utils/inline-row-assembler.js`（纯函数，仅依赖 `section-tree.js` 共享事实）：
+  - `assessStatRowConfidence(section, figmaRoot, opts)` → `{verdict:'high'|'fallback', members?, reason?}`。
+    高置信条件（全满足才 high）：① 横向 section；② ≥2 成员（sourceNodeIds 排除自身，或 children[].figmaNode）；③ 每成员子树恰好「1 标题 + 1 数值」；④ bbox.x 可解析且严格递增；⑤ 标题/数值跨成员唯一；⑥ 成员子树无图片资源。
+  - `assembleStatRowMembers(section, figmaRoot)` → high 返回按 x 升序的 `[{figmaNodeId,title,value,x}]`，否则 null。
+- 职责边界：不合并 `inline-row-rebuilder`（几何聚类）、`inline-row-merger`（结构变换）、`section-content-guard`（验证）——本模块只做「高置信判定 + 成员配对」。
+- 接入 `section-content-guard.js#buildSectionContentContract`：横向 section 先跑 assess，high → `deterministic:true`（配对含 figmaNodeId）；否则 `deterministic:false` 走既有 LLM 兜底。
+- 接入 `microcode-engineer.js` 内容契约注入：`deterministic:true` 用命令式文案「成员配对已由系统确定性确定，禁止互换标题/数值、禁止左右调换、严格按此顺序渲染」。
+- 真实 fixture 离线回放（`_shared-cache/1t7Dmmpsl5i0PC8BJt2QLf/2:9778`，c-traffic-monitor）：
+  - `2:3660` 统计行 → high，成员按 x 升序配对「江阴靖江长江隧道/34,620 左、江阴大桥/82,379 右」（正确）；
+  - `88:32` sub-header（成员无数值配对）→ fallback(member-shape-mismatch)，整节回退 LLM；
+  - 关键事实：merger 的 children[].figmaNode 已正确排除 bg 帧 `88:34`，`collectSourceNodeIds` 只收两统计成员，判定不受背景帧干扰。
+- 测试：新增 `inline-row-assembler.spec.ts`（12 用例）+ `section-content-guard.spec.ts` 更新 deterministic 正负例；相关 6 suite / 97 tests 全绿。
+- `npm run build` 通过，dist 含新模块。
+
+**B2 真机验证（已完成 ✅，2026-09-15，任务 `mc-1789429951534-63bf998c`）**：
+- 重启 13030 到最新 dist（PID 53143 → 70196），2610/8080 在线，`reuseCache:true` 重生成。
+- 结果：status=completed、error=null、`degradedFiles=[]`、`runtimeVerified=true`（真实渲染链路正常）。
+- **`duplicateTextIssues=[]`（消失）**：A1 曾报「24小时/当日总流量」跨组件重复，命令式 prompt 对此生效。
+- **`memberOrderIssues` 仍在**（2:3660）：`ContentSection.vue` 仍左右反 + 卡片内标题/数值 class 互换
+  （`stat-value` 装「江阴靖江长江隧道」、`stat-name` 装「34,620」）。
+- 用 dist 模块对真机 `analysis.json` 复核：`2:3660 → high`（配对「隧道/34,620 左、江阴大桥/82,379 右」正确）、
+  `88:32 → fallback`。**deterministic 配对正确产出，但命令式 prompt 无法保证 LLM 遵守**。
+
+**B 结论（真机证伪 prompt 层）**：
+- 命令式 prompt 对「跨组件重复文本」有作用（duplicateTextIssues 消失），但对「统计行成员左右配对 / 卡片内标题数值互换」**无效**——LLM 写子组件模板时仍按自身判断猜配对。
+- 印证阶段 B 立项判断：「prompt 只能预防，不能保证复杂统计成员配对」。
+- **必由之路 = 结构层接管**：让模板确定性装配器直接消费 `deterministic` 配对，生成统计行模板（标题+数值+左右序），跳过 LLM；prompt 层到此为止，不再追加更硬的措辞。
+
+**B3 结构层接管（已完成 ✅，2026-09-15，commit `779a6cb`）**：
+- 新增 `inline-row-assembler.js#healStatRowMemberPairing`：**内容驱动**（用 title/value 文本识别槽位，
+  不依赖 class 名——LLM 的 stat-name/stat-label 不稳定），严格前置校验（数量/集合匹配、已正确 no-op），
+  按 x 升序重写标题/数值槽位文本 → 修复「左右反」。
+- 接入 `microcode-engineer.js`：generateCode 早期用 `assignSectionComponentNames` + `assessStatRowConfidence`
+  构建 `statRowHealMap`（子组件名 → 确定性配对）；genSubComponents worker 写盘前对命中子组件调 heal。
+- 真机验证（任务 `mc-1789432238423-683674de`）：结构层接管日志出现；**`memberOrderIssues=[]`（归零）**——
+  A1/B2 都报 2:3660 左右反，结构层接管后彻底修复。产物 ContentSection.vue 标题/数值/左右序全部正确。
+
+**B 结论（结构层接管生效）**：
+- 命令式 prompt 无效（B2 实证）→ 结构层接管（写盘前用 facts 确定性对齐 stat 文本）生效，`memberOrderIssues` 归零。
+- 印证：**确定性事实必须在生成/写盘链路里由代码强制落盘，不能只靠 prompt 措辞**。
+
+**B 已知边界/残留（后续低优先）**：
+- class 互换（标题装进 value 类）：内容驱动只重排文本顺序、不改 class 结构；B2 形态的「卡片内 title/value
+  class 互换」残留（文字内容+左右序对、字号错）。需 CSS 字号识别或确定性 class 生成根治。
+- `duplicateTextIssues` 偶发（LLM 写重复文本，非系统性）；LLM 偶发拒绝（返回「我需要澄清」非 JSON，重试即成功）。
+
+**B 后续（下一阶段）**：
+- 阶段 C（守卫分级：高置信自愈/中置信诊断/低置信 BLOCK）、D（真实截图视觉验证）、E（渲染链路隔离 2610）仍 pending。

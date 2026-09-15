@@ -27,11 +27,13 @@ import {
 } from '../../utils/section-tree.js';
 import {
   AUTO_MOUNT_ICON_MAX_PX,
+  collectMountCandidates,
   ensureResourceImportInVue,
   findTagByClassKeyword,
   injectBgStyleBinding,
   injectImgChild,
   mountSubStateBackground,
+  pickBestMountTarget,
 } from './resource-mounter.js';
 
 export function buildResourceMountPlan(effectiveSections, resourceDomMapping, opts = {}) {
@@ -163,7 +165,18 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
       const key = `${compFile}|${mount.mountTarget}|${varName}|${g.kind}`;
       if (doneKeys.has(key)) continue;
 
-      const content = allFiles[compFile];
+      let content = allFiles[compFile];
+      let targetFile = compFile;
+      // 🛡️ 2026-09-15（激活图 owner-file-missing 实锤）：owner 组件文件可能不存在
+      //   （owner 由 section 名推导，但该 section 被 dedupe/合并后没有独立 .vue）。
+      //   此时回落到 index.vue（根组件内联），激活图/背景不因组件文件缺失而漏挂。
+      if (typeof content !== 'string' && compFile !== 'package/index.vue') {
+        const fallback = allFiles['package/index.vue'];
+        if (typeof fallback === 'string') {
+          content = fallback;
+          targetFile = 'package/index.vue';
+        }
+      }
       if (typeof content !== 'string') {
         diagnostics.push({ reason: 'owner-file-missing', file: compFile, var: varName });
         continue;
@@ -183,39 +196,65 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
       };
       let result = null;
 
-      if (g.kind === 'bg' && mount.bgRole === 'sub-state') {
-        // 限定 owner 文件作用域调用既有确定性原语（active 条件绑定）
-        const scoped = { [compFile]: content };
+      // 🛡️ 2026-09-15（P0 修复）：mountTarget 为 'active' 或 'default' 的资源走 mountSubStateBackground 路径
+      //   即使 bgRole 是 'container'（几何判断背景图填满父容器），也需要根据状态条件动态切换背景图
+      if (g.kind === 'bg' && (mount.bgRole === 'sub-state' || mount.mountTarget === 'active' || mount.mountTarget === 'default')) {
+        // 限定 owner 文件作用域调用既有确定性原语（active/default 条件绑定）
+        const scoped = { [targetFile]: content };
         const r = mountSubStateBackground(scoped, varName, mapping, options);
         if (r) {
-          allFiles[compFile] = scoped[compFile];
-          result = { ...r, file: compFile };
+          allFiles[targetFile] = scoped[targetFile];
+          result = { ...r, file: targetFile };
         }
       } else if (g.kind === 'bg') {
-        const tag = mount.mountTarget
-          ? findTagByClassKeyword(content, mount.mountTarget)
-          : null;
+        // 🛡️ P1（2026-09-15）：mountTarget 为 null 的 bg 资源兜底挂载
+        //   旧逻辑：mountTarget 为 null → findTagByClassKeyword(content, null) → 返回 null → 不挂载
+        //   新逻辑：mountTarget 为 null → 用 pickBestMountTarget 从候选池找最优挂载点
+        let tag = null;
+        if (mount.mountTarget) {
+          tag = findTagByClassKeyword(content, mount.mountTarget);
+        } else {
+          // 兜底：从当前文件的候选池中找最优挂载点
+          const candidates = collectMountCandidates({ [targetFile]: content });
+          const best = pickBestMountTarget(mapping, candidates, {
+            skipBound: true, // 优先选没有 bg 绑定的标签
+          });
+          if (best) {
+            tag = best.tag;
+          }
+        }
         if (tag) {
           let updated = injectBgStyleBinding(content, tag, varName, mapping);
           if (updated) {
-            updated = ensureResourceImportInVue(updated, varName, mapping, compFile);
+            updated = ensureResourceImportInVue(updated, varName, mapping, targetFile);
             if (updated && updated !== content) {
-              allFiles[compFile] = updated;
+              allFiles[targetFile] = updated;
               result = {
                 var: varName,
-                file: compFile,
-                keyword: mount.mountTarget,
+                file: targetFile,
+                keyword: mount.mountTarget || 'fallback-mount',
                 bgRole: mount.bgRole || null,
-                mountTarget: mount.mountTarget,
+                mountTarget: mount.mountTarget || null,
               };
             }
           }
         }
       } else {
         // icon / img：注入 img 子元素，尺寸按 figmaBox 真值、单边封顶 AUTO_MOUNT_ICON_MAX_PX
-        const tag = mount.mountTarget
-          ? findTagByClassKeyword(content, mount.mountTarget)
-          : null;
+        // 🛡️ P1（2026-09-15）：mountTarget 为 null 的 icon/img 资源兜底挂载
+        let tag = null;
+        if (mount.mountTarget) {
+          tag = findTagByClassKeyword(content, mount.mountTarget);
+        } else {
+          // 兜底：从当前文件的候选池中找最优挂载点
+          const candidates = collectMountCandidates({ [targetFile]: content });
+          const best = pickBestMountTarget(mapping, candidates, {
+            skipBound: false,
+          });
+          if (best) {
+            tag = best.tag;
+          }
+        }
         if (tag) {
           let size = null;
           const fb = mount.figmaBox;
@@ -231,12 +270,12 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
           }
           let updated = injectImgChild(content, tag, varName, '', size);
           if (updated) {
-            updated = ensureResourceImportInVue(updated, varName, mapping, compFile);
+            updated = ensureResourceImportInVue(updated, varName, mapping, targetFile);
             if (updated && updated !== content) {
-              allFiles[compFile] = updated;
+              allFiles[targetFile] = updated;
               result = {
                 var: varName,
-                file: compFile,
+                file: targetFile,
                 keyword: mount.mountTarget,
                 role: g.kind,
                 mountTarget: mount.mountTarget,
@@ -255,7 +294,7 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
             g.kind === 'bg' && mount.bgRole === 'sub-state'
               ? 'sub-state-target-not-found'
               : 'mount-target-not-found',
-          file: compFile,
+          file: targetFile,
           var: varName,
           mountTarget: mount.mountTarget,
         });

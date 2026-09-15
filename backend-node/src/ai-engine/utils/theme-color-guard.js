@@ -65,7 +65,29 @@ const COLOR_PROP_RE =
 const SVG_PAINT_PROP_RE = /(^|[;{])\s*(?:fill|stroke)\s*:\s*([^;]*)/gi;
 
 const HEX_RE = /#[0-9a-fA-F]{3,8}\b/g;
+const RGBA_RE = /rgba?\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([\d.]+))?\s*\)/gi;
 const SAMPLE_LIMIT = 3;
+
+/**
+ * rgba(r,g,b) / rgba(r,g,b,a) → #rrggbb / #rrggbbaa
+ * @param {string} rgba
+ * @returns {string|null}
+ */
+function rgbaToHex(rgba) {
+  const m = rgba.match(/^rgba?\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([\d.]+))?\s*\)$/i);
+  if (!m) return null;
+  const r = Math.min(255, Math.max(0, parseInt(m[1], 10)));
+  const g = Math.min(255, Math.max(0, parseInt(m[2], 10)));
+  const b = Math.min(255, Math.max(0, parseInt(m[3], 10)));
+  const a = m[4] !== undefined ? parseFloat(m[4]) : 1;
+  const hex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+  // alpha=1 → 6位 hex；alpha<1 → 8位 hex（含 alpha 通道）
+  if (a < 1) {
+    const aa = Math.round(a * 255).toString(16).padStart(2, '0');
+    return hex + aa;
+  }
+  return hex;
+}
 
 /**
  * 剥离 CSS 函数调用块（var(...) / linear-gradient(...) / rgba(...) / url(...)），
@@ -114,7 +136,7 @@ function extractStyleText(file) {
 }
 
 /**
- * 从主题槽位文件提取全部 hex 槽值；文件缺失或无 hex → null（调用方据此降级）。
+ * 从主题槽位文件提取全部 hex 槽值（含 rgba 转 hex）；文件缺失或无槽值 → null（调用方据此降级）。
  * @returns {Set<string>|null}
  */
 function collectSlotHexSet(files) {
@@ -122,8 +144,15 @@ function collectSlotHexSet(files) {
     (f) => f && /themes\/theme-vars\.less$/.test(String(f.path || '')) && f.content,
   );
   if (!slotFile) return null;
-  const hexes = String(slotFile.content).match(HEX_RE);
-  if (!hexes || hexes.length === 0) return null;
+  const content = String(slotFile.content);
+  const hexes = content.match(HEX_RE) || [];
+  // 2026-09-15 治本：rgba() 也要收集（LLM 常写 rgba(51,51,51,1) 而非 #333）
+  const rgbaMatches = content.match(RGBA_RE) || [];
+  for (const rgba of rgbaMatches) {
+    const hex = rgbaToHex(rgba);
+    if (hex) hexes.push(hex);
+  }
+  if (hexes.length === 0) return null;
   return new Set(hexes.map((h) => h.toLowerCase()));
 }
 

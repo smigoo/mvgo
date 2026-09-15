@@ -220,3 +220,80 @@ describe('P1-Slice2 · 分块快照推送（先合并再推送，杜绝并行 wo
     })
   })
 })
+
+describe('②c .vue import 闭包守卫（2026-09-15 · mc-max-1789446564243-f64ecbed 实锤）', () => {
+  const INDEX = [
+    '<template><div><ContentSubT /><ChartSection /><ContentIndicator /></div></template>',
+    '<script setup>',
+    "import ContentSubT from './components/ContentSubT.vue'",
+    "import ChartSection from './components/ChartSection.vue'",
+    "import ContentIndicator from './components/ContentIndicator.vue'",
+    '</script>',
+  ].join('\n')
+
+  const push = async (allFiles: Record<string, string>, pushed: any[], logger?: any) =>
+    pushChunkSnapshot({
+      allFiles,
+      resFiles: { 'package/index.vue': allFiles['package/index.vue'] },
+      onFilesReady: async (d) => { pushed.push(d) },
+      stage: 'microcode-engineer',
+      logger: logger || { warn: jest.fn() },
+    })
+
+  it('真机顺序：index.vue 先到、子组件并行未齐 → 不推送（避免预览指向悬空引用）', async () => {
+    const allFiles: Record<string, string> = {
+      'package/index.vue': INDEX,
+      'package/components/ContentSubT.vue': '<template><i>A</i></template>',
+      'package/components/ChartSection.vue': '<template><i>B</i></template>',
+      // ContentIndicator.vue 尚未产出
+    }
+    const pushed: any[] = []
+    const logger = { warn: jest.fn() }
+    await push(allFiles, pushed, logger)
+    expect(pushed).toEqual([])
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('import 闭包未闭合'),
+      expect.objectContaining({ missing: ['package/components/ContentIndicator.vue'] }),
+    )
+  })
+
+  it('闭包齐全后自然放行（累积产物不被阻断）', async () => {
+    const allFiles: Record<string, string> = {
+      'package/index.vue': INDEX,
+      'package/components/ContentSubT.vue': '<template><i>A</i></template>',
+      'package/components/ChartSection.vue': '<template><i>B</i></template>',
+      'package/components/ContentIndicator.vue': '<template><i>C</i></template>',
+    }
+    const pushed: any[] = []
+    await push(allFiles, pushed)
+    expect(pushed).toHaveLength(1)
+  })
+
+  it('传递闭包：孙组件缺失同样不推送', async () => {
+    const allFiles: Record<string, string> = {
+      'package/index.vue': "<template><A /></template>\n<script setup>import A from './components/A.vue'</script>",
+      'package/components/A.vue':
+        "<template><X /></template>\n<script setup>import X from './sub/X.vue'</script>",
+      // package/components/sub/X.vue 缺失
+    }
+    const pushed: any[] = []
+    await push(allFiles, pushed)
+    expect(pushed).toEqual([])
+  })
+
+  it('裸模块与资源相对引用不参与闭包（vue/echarts/png 缺失不阻断推送）', async () => {
+    const allFiles: Record<string, string> = {
+      'package/index.vue': [
+        '<template><img :src="bg" /></template>',
+        '<script setup>',
+        "import { ref } from 'vue'",
+        "import * as echarts from 'echarts'",
+        "import bg from '../../resources/images/bg.png'",
+        '</script>',
+      ].join('\n'),
+    }
+    const pushed: any[] = []
+    await push(allFiles, pushed)
+    expect(pushed).toHaveLength(1)
+  })
+})

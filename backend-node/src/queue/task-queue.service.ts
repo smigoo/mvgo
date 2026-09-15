@@ -604,14 +604,21 @@ export class TaskQueueService implements OnModuleInit, OnModuleDestroy {
 
   /**
    * 获取队列统计信息
+   * @param userId 可选，传入时计算该用户的排队原因
    */
-  getQueueStats(): {
+  getQueueStats(userId?: string): {
     totalQueued: number;
     runningCount: number;
     maxConcurrent: number;
     availableSlots: number;
     avgWaitTimeMs: number;
     maxWaitTimeMs: number;
+    // 新增：排队原因诊断字段
+    userRunningCount: number;
+    userMaxConcurrent: number;
+    globalRunningCount: number;
+    globalMaxConcurrent: number;
+    queueReason: 'user_full' | 'global_full' | 'both' | 'other';
   } {
     let totalWaitTime = 0;
     let maxWaitTime = 0;
@@ -623,14 +630,39 @@ export class TaskQueueService implements OnModuleInit, OnModuleDestroy {
       maxWaitTime = Math.max(maxWaitTime, waitTime);
     }
 
+    const userRunningCount = userId ? this.countRunningOf(userId) : 0;
+    const globalRunningCount = this.runningTasks.size;
+
     return {
       totalQueued: this.waitingQueue.size,
-      runningCount: this.runningTasks.size,
+      runningCount: globalRunningCount,
       maxConcurrent: this.MAX_CONCURRENT,
-      availableSlots: this.getAvailableSlots(),
+      availableSlots: this.getAvailableSlots(userId),
       avgWaitTimeMs: this.waitingQueue.size > 0 ? totalWaitTime / this.waitingQueue.size : 0,
       maxWaitTimeMs: maxWaitTime,
+      // 排队原因诊断
+      userRunningCount,
+      userMaxConcurrent: this.MAX_CONCURRENT,
+      globalRunningCount,
+      globalMaxConcurrent: this.GLOBAL_MAX_CONCURRENT,
+      queueReason: this.diagnoseQueueReason(userId),
     };
+  }
+
+  /**
+   * 诊断排队原因：区分「个人槽位满」vs「全局天花板满」vs「两者都满」
+   * 前端可据此显示不同文案，让用户知道是个人限制还是系统瓶颈
+   */
+  private diagnoseQueueReason(userId?: string): 'user_full' | 'global_full' | 'both' | 'other' {
+    if (!userId) return 'other';
+    
+    const userFull = this.countRunningOf(userId) >= this.MAX_CONCURRENT;
+    const globalFull = this.runningTasks.size >= this.GLOBAL_MAX_CONCURRENT;
+    
+    if (userFull && globalFull) return 'both';
+    if (userFull) return 'user_full';
+    if (globalFull) return 'global_full';
+    return 'other';
   }
 
   /**

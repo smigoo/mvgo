@@ -6,15 +6,21 @@
  *
  * 设计原则：宁可漏报，不可误伤。仅对结构 / 文案有清晰对照依据时判定违规。
  *
- * 当前实现两类高置信检查：
+ * 当前实现三类高置信检查：
  * 1. 核心文案篡改：本组件分析约束 analysis.doNotInvent 中声明的「X→Y / 不要将 X 写成 Y」
  *    类禁止替换对，若在生成代码中分析原词 X 缺失、却出现误词 Y → BLOCK。
  *    注意：无任何硬编码常识词表，完全由每组件动态声明驱动（不同组件约束不同）。
  * 2. 图表系列膨胀：视觉分析标明单系列（单折线 / 单柱），生成代码却出现多个不同
  *    命名系列 → BLOCK（清晰的数据臆造信号）。
+ * 3. 图表类型缺失：视觉分析识别到某类型图表（pie/doughnut/bar/line/area），但产物
+ *    全文件（含子组件）里没有任何该类型的 echarts series → BLOCK。
+ *    🛡️ 治本方向（2026-09-15 · mc-max-1789476464544-07e31fbb 实锤）：vision 识别到
+ *    环形图，但 LLM 拆分组件时把图表 DOM 容器漏写（template 无 <div ref=chartRef>），
+ *    script 里的 echarts.init 成了死代码。旧版只扫 index.vue（本组件是 50 行壳），
+ *    导致「vision 有图 → 产物无图」这种缺失永远查不到。现改为全产物文件扫描。
  *
  * @param {object} opts
- * @param {Record<string,string>} [opts.files] 文件名→文件内容（至少含 package/index.vue）
+ * @param {Record<string,string>} [opts.files] 文件名→文件内容（含 package/index.vue 及子组件）
  * @param {object} [opts.analysis] 视觉分析对象（charts / doNotInvent / layoutStructure）
  * @returns {{ pass: boolean, blockCount: number, issues: Array, _analyzed: boolean }}
  */
@@ -24,11 +30,15 @@ export function validateDoNotInvent({ files = {}, analysis = {} } = {}) {
   const issues = []
   const seen = new Set() // 去重：避免 doNotInvent 中重复声明同一「X→Y」产生多条相同违规
 
-  const vueContent =
-    files['package/index.vue'] ||
-    Object.values(files).find((f) => /index\.vue$/.test(f)) ||
-    ''
-  if (!vueContent) return { pass: true, issues: [], _analyzed: false }
+  // 🛡️ 治本（2026-09-15）：改为扫描**全部产物文件**（含 components/*.vue 子组件），
+  // 而非仅 index.vue。图表 echarts 初始化代码大多在子组件里，只扫 index.vue 会漏判。
+  const allVueContents = Object.entries(files)
+    .filter(([p, c]) => typeof c === 'string' && /\.vue$/.test(p))
+    .map(([, c]) => c)
+  if (allVueContents.length === 0) {
+    return { pass: true, issues: [], _analyzed: false }
+  }
+  const vueContent = allVueContents.join('\n')
 
   const text = extractTemplateText(vueContent)
   const doNotInvent =
@@ -78,6 +88,38 @@ export function validateDoNotInvent({ files = {}, analysis = {} } = {}) {
     }
   }
 
+  // ── 2.5 图表类型缺失（治本方向 · 2026-09-15 · 07e31fbb 实锤）──
+  // vision 识别到某类型图表，但产物全文件（含子组件）里没有对应类型的 echarts series。
+  // 例：vision 有 doughnut，LLM 拆组件时漏写 template 图表容器（chartRef），script 的
+  // echarts.init 成死代码 → 最终产物看不到图。旧版只扫 index.vue，查不到这种缺失。
+  if (analysisCharts.length > 0) {
+    const requiredTypes = new Set(
+      analysisCharts
+        .map((c) => normalizeChartType(c?.type))
+        .filter((t) => t !== null),
+    )
+    const generatedTypes = collectChartSeriesTypes(vueContent)
+    // echarts 的 series 对象缺省 type 时默认为 'line'：vision 说 line 时，
+    // 产物只要有任意 series 声明（即便未显式写 type:'line'）即视为满足。
+    const hasSeriesDecl = /series\s*:\s*\[/.test(vueContent)
+    for (const t of requiredTypes) {
+      const satisfied =
+        generatedTypes.has(t) || (t === 'line' && hasSeriesDecl)
+      if (!satisfied) {
+        const msg = `图表类型缺失：视觉分析识别到「${t}」类型图表，但产物代码中没有任何对应类型的 echarts series（图表容器/初始化可能漏写）`
+        if (!seen.has(msg)) {
+          seen.add(msg)
+          issues.push({
+            severity: 'BLOCK',
+            id: 'DO-NOT-INVENT-CHART-MISSING',
+            message: msg,
+            file: 'package/index.vue',
+          })
+        }
+      }
+    }
+  }
+
   // ── 3. 数据点膨胀 ──
   const analysisDataPoints = analysis.dataPoints || analysis.layoutStructure?.dataPoints
   if (typeof analysisDataPoints === 'number' && analysisDataPoints > 0) {
@@ -91,6 +133,26 @@ export function validateDoNotInvent({ files = {}, analysis = {} } = {}) {
           id: 'DO-NOT-INVENT-DATA',
           message: msg,
           file: 'package/index.vue',
+        })
+      }
+    }
+  }
+
+  // ── 3.5 echarts 挂载点缺失（治本 · 2026-09-15 · 07e31fbb 实锤）──
+  // script 写了 echarts.init(chartRef.value)，但 template 漏写 <div ref="chartRef"> 挂载点
+  // → chartRef.value 恒 null → 图表永不渲染。这是「图表类型缺失」抓不到的假阳性：
+  // series type:'pie' 确实在 script 里，但没有任何 DOM 挂载它。
+  const mountMissing = detectEchartsMountPointMissing(files)
+  if (mountMissing.length > 0) {
+    for (const { path, refName } of mountMissing) {
+      const msg = `echarts 挂载点缺失：${path} 的 script 调用了 echarts.init(${refName}.value)，但 template 中没有 <div ref="${refName}"> 挂载点 —— 图表永远无法渲染`
+      if (!seen.has(msg)) {
+        seen.add(msg)
+        issues.push({
+          severity: 'BLOCK',
+          id: 'DO-NOT-INVENT-CHART-MOUNT-MISSING',
+          message: msg,
+          file: path,
         })
       }
     }
@@ -197,6 +259,95 @@ export function countDataPoints(vueContent) {
     }
   }
   return max === 0 ? null : max
+}
+
+/**
+ * 把 vision 的图表 type 归一化为 echarts 语义的 category。
+ *
+ * vision 会输出 pie/doughnut/donut/bar/line/area/multiple 等；echarts 里 doughnut=pie 的子类，
+ * area 本质是 line+areaStyle。归一化后用于「图表类型缺失」检查：
+ * - pie / doughnut / donut → 'pie'
+ * - bar / column → 'bar'
+ * - line / area → 'line'
+ * - 其余无法归一化的（multiple/空/未知）→ null（跳过检查，避免误伤）
+ */
+export function normalizeChartType(type) {
+  const t = String(type || '').trim().toLowerCase()
+  if (!t) return null
+  if (/pie|doughnut|donut|ring|环形|饼图/.test(t)) return 'pie'
+  if (/bar|column|柱状|柱形/.test(t)) return 'bar'
+  if (/line|area|curve|折线|曲线|面积/.test(t)) return 'line'
+  if (/radar|雷达/.test(t)) return 'radar'
+  if (/gauge|仪表/.test(t)) return 'gauge'
+  if (/scatter|散点/.test(t)) return 'scatter'
+  return null
+}
+
+/**
+ * 收集产物代码中所有 echarts series 的 type 归一化集合。
+ *
+ * 扫描全产物（含子组件），提取 `type: 'pie'` / `type: "bar"` 等 series 声明，
+ * 归一化后返回 Set。用于「图表类型缺失」检查——vision 有某类型、产物无该类型 → BLOCK。
+ *
+ * 注意：series 数组内每个对象都可能有 type 字段；也兼容旧式单 series 直写 type。
+ */
+export function collectChartSeriesTypes(vueContent) {
+  const types = new Set()
+  if (!vueContent || typeof vueContent !== 'string') return types
+  // 匹配 series 对象内的 type: 'xxx'（含双引号/单引号）
+  const typeRe = /type\s*:\s*['"]([a-zA-Z]+)['"]/g
+  let m
+  while ((m = typeRe.exec(vueContent)) !== null) {
+    const norm = normalizeChartType(m[1])
+    if (norm) types.add(norm)
+  }
+  return types
+}
+
+/**
+ * 检测「echarts.init 存在但 template 无对应 ref 挂载点」的假阳性图表。
+ *
+ * 🛡️ 治本（2026-09-15 · mc-max-1789476464544-07e31fbb 实锤）：
+ * LLM 在 script 里写了完整 echarts 代码（`const chartRef = ref(null)` +
+ * `echarts.init(chartRef.value)`），但 template 里漏写 `<div ref="chartRef">` 挂载点
+ * → chartRef.value 恒为 null → 图表永不渲染。这种「script 有 echarts、template 无 DOM」
+ * 无法被「图表类型缺失」检查抓住（series type:'pie' 确实在 script 里）。
+ *
+ * 判据（精确、零误伤）：
+ * 1. 逐 .vue 文件独立检查（不跨文件），避免误判子组件；
+ * 2. 提取 script 里 `echarts.init(X.value)` / `echarts.init(X)` 的 ref 名 X；
+ * 3. 若 X 是简单标识符（排除 this.$refs / document.getElementById 等），
+ *    且该文件 template 里没有 `ref="X"` → 挂载点缺失。
+ *
+ * @param {Record<string,string>} files 文件名→内容
+ * @returns {Array<{ path: string, refName: string }>}
+ */
+export function detectEchartsMountPointMissing(files) {
+  const missing = []
+  for (const [path, content] of Object.entries(files)) {
+    if (typeof content !== 'string' || !/\.vue$/.test(path)) continue
+    if (!/echarts\.init\(/.test(content)) continue
+
+    const template = extractSfcTemplate(content)
+    if (!template) continue
+
+    // 提取 echarts.init(X) / echarts.init(X.value) 的 ref 名（只认简单标识符）
+    const initRe = /echarts\.init\(\s*([A-Za-z_$][\w$]*)(?:\.value)?\s*\)/g
+    const refNames = new Set()
+    let m
+    while ((m = initRe.exec(content)) !== null) {
+      refNames.add(m[1])
+    }
+    if (refNames.size === 0) continue // 提取不到 ref 名（this.$refs / getElementById 等）→ 跳过
+
+    for (const refName of refNames) {
+      const refAttr = new RegExp(`ref\\s*=\\s*["']${refName}["']`)
+      if (!refAttr.test(template)) {
+        missing.push({ path, refName })
+      }
+    }
+  }
+  return missing
 }
 
 /**

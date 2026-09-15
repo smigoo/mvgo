@@ -156,15 +156,23 @@ export function normalizeRootContainerLayout(files = [], options = {}) {
           });
         }
       }
-      // aspect-ratio 补齐（重算 nb 的 width/height：flex 归一可能刚注入 height:100%）
+      // 🛡️ R4-b（2026-09-15）：删除 aspect-ratio 补齐，改为 width/height 100% 双全。
+      // aspect-ratio 是 boxStyle（预览 iframe 比例）语义，不是 CSS 属性；宿主 .pannel-content
+      // 有明确高度（calc(100%-38px)），width/height:100% 双全即满足 I4 形态锁。对纵向多
+      // section 容器注入 aspect-ratio 会锁死高度 → 内容挤压（traffic-monitor 实锤）。
+      // 保留 bboxValid 门（与原 aspect-ratio 兜底一致：仅 figma bbox 有效时补齐）。
       if (bboxValid) {
         const nbHasWidth = /(^|[\s;{])width\s*:/.test(nb);
         const nbHasHeight = /(^|[\s;{])height\s*:/.test(nb);
-        const hasAR = /(^|[\s;{])aspect-ratio\s*:/.test(nb);
-        if (!hasAR && (!nbHasWidth || !nbHasHeight)) {
-          nb = `${nb.replace(/\s*$/, '')}\n  aspect-ratio: ${_W} / ${_H};`;
+        if (!nbHasWidth) {
+          nb = `width: 100%;\n${nb}`;
           changed = true;
-          fixes.push({ path, rootCls, action: 'aspect-ratio-injected' });
+          fixes.push({ path, rootCls, action: 'width-to-100' });
+        }
+        if (!nbHasHeight) {
+          nb = `height: 100%;\n${nb}`;
+          changed = true;
+          fixes.push({ path, rootCls, action: 'height-to-100' });
         }
       }
       if (nb !== body) {

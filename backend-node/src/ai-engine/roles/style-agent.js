@@ -15,7 +15,7 @@ export class StyleAgent extends BaseAgent {
     super({
       name: 'style-agent',
       description: '视觉样式CSS生成器',
-      model: config.model || 'claude-sonnet-4-6',
+      model: config.model || '',
       temperature: config.temperature || 0,
       maxTokens: config.maxTokens || 4096,
       ...config

@@ -1,4 +1,4 @@
-import { fixSectionHeightsForResource, ensureHeaderSlots, injectFailedResourceFallbacks, stripEmptyShellBindings, ensureResourceImportInVue } from './resource-mounter.js'
+import { fixSectionHeightsForResource, ensureHeaderSlots, injectFailedResourceFallbacks, stripEmptyShellBindings, ensureResourceImportInVue, mountSubStateBackground } from './resource-mounter.js'
 
 /**
  * 🛡️ fix-section-heights 规则②：组件根 height:100% 不得改写（2026-09-02 实锤）。
@@ -224,6 +224,31 @@ describe('fixSectionHeightsForResource 升级分支治本（2026-09-14 真机 c-
     const once = fixSectionHeightsForResource(input, CTX)
     const twice = fixSectionHeightsForResource(once, CTX)
     expect(twice).toBe(once)
+  })
+
+  it('🎯 2026-09-15 真机：单值 flex: 1 / 双值 flex: 1 1 简写也改写（旧正则只认三值 → tabs 比例失真）', () => {
+    // c-device-monitor-44384241 实锤：.c-device-monitor-tabs-section 的 CSS 是单值 `flex: 1`
+    // （等价 flex: 1 1 0）。旧正则只匹配三值 `flex: X Y Z` → tabs grow 保持 1 而非权威系数
+    // 1.661 → switch/tab 比例 1:2.95 而非 1:4.9。治本：扩展正则覆盖单/双值，缺省 shrink/basis
+    // 按 CSS 规范默认补齐（单值=1 1 0，双值=<grow> <shrink> 0）。
+    const single = [
+      '.c-traffic-monitor-chart-tunnel {',
+      '  display: flex;',
+      '  flex: 1;',
+      '  min-height: 0;',
+      '}',
+    ].join('\n')
+    const out1 = fixSectionHeightsForResource(single, CTX)
+    expect(out1).toContain('flex: 1.327 1 0')
+
+    const double = [
+      '.c-traffic-monitor-chart-tunnel {',
+      '  display: flex;',
+      '  flex: 1 1;',
+      '}',
+    ].join('\n')
+    const out2 = fixSectionHeightsForResource(double, CTX)
+    expect(out2).toContain('flex: 1.327 1 0')
   })
 })
 
@@ -693,5 +718,52 @@ import { ref } from 'vue'
 </script>`
     const out = ensureResourceImportInVue(content, 'bg6', mapping, filePath)
     expect(out).toMatch(/import\s+bg6\s+from\s+'\.\.\/\.\.\/resources\/images\/bg-8439\.png'/)
+  })
+})
+
+describe('mountSubStateBackground：激活态背景挂载（2026-09-15 刀24-A/D）', () => {
+  const m = { bgRole: 'sub-state', mountTarget: null }
+
+  it('认 `active` 字面量键 → 挂载 + 走 inferBackgroundStyle 尺寸（不再硬编码 100% 100%）', () => {
+    const files = {
+      'package/index.vue': `<template><div :class="{ active: isOn }">x</div></template>\n<script setup>\nimport { ref } from 'vue'\n</script>`,
+    }
+    const r = mountSubStateBackground(files, 'bgActive', m)
+    expect(r).toBeTruthy()
+    // 无 figmaBox/parentBox → 兜底 100% 100%（与旧行为一致），但 position/repeat 也走推断
+    expect(files['package/index.vue']).toMatch(/backgroundSize:\s*'100% 100%'/)
+    expect(files['package/index.vue']).toMatch(/backgroundRepeat:\s*'no-repeat'/)
+  })
+
+  it('认 `is-active` 前缀键（带引号）→ 挂载', () => {
+    const files = {
+      'package/index.vue': `<template><div :class="['c-tab', {'is-active': activeTab === tab }]">x</div></template>\n<script setup>\nimport { ref } from 'vue'\n</script>`,
+    }
+    const r = mountSubStateBackground(files, 'bgActive', m)
+    expect(r).toBeTruthy()
+    expect(files['package/index.vue']).toMatch(/backgroundImage/)
+  })
+
+  it('认 `c-xxx--active` BEM 类名键（旧正则漏挂，2026-09-15 实锤）→ 挂载', () => {
+    const files = {
+      'package/index.vue': `<template><div :class="['c-env-monitor-tab-item', { 'c-env-monitor-tab-item--active': activeTab === tab.value }]">x</div></template>\n<script setup>\nimport { ref } from 'vue'\n</script>`,
+    }
+    const r = mountSubStateBackground(files, 'bgActive', m)
+    expect(r).toBeTruthy()
+    expect(files['package/index.vue']).toMatch(/backgroundImage/)
+  })
+
+  it('`inactive` 反义键 → 不误挂', () => {
+    const files = {
+      'package/index.vue': `<template><div :class="{ 'inactive': !isOn }">x</div></template>\n<script setup>\nimport { ref } from 'vue'\n</script>`,
+    }
+    expect(mountSubStateBackground(files, 'bgActive', m)).toBeNull()
+  })
+
+  it('无 active 键 → 返回 null（不挂）', () => {
+    const files = {
+      'package/index.vue': `<template><div class="static">x</div></template>\n<script setup>\nimport { ref } from 'vue'\n</script>`,
+    }
+    expect(mountSubStateBackground(files, 'bgActive', m)).toBeNull()
   })
 })

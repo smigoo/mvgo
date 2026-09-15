@@ -703,11 +703,19 @@ export function mountSubStateBackground(allFiles, varName, m, options = {}) {
         typeof p === 'string' && p.endsWith('.vue') && typeof c === 'string',
     )
     .sort(([a]) => (a === 'package/index.vue' ? -1 : 1));
-  const ACTIVE_ARRAY_RE =
-    /:class="\[\s*['"][^'"]*['"]\s*,\s*\{\s*active\s*:\s*([^}]+?)\s*\}\s*\]"/;
-  const ACTIVE_OBJECT_RE = /:class="\{\s*active\s*:\s*([^}]+?)\s*\}"/;
+  // 🛡️ 2026-09-15（c-env-monitor-14 实锤）：active 键正则收窄——LLM 实际产出的激活态键名
+  //   是 `'c-env-monitor-tab-item--active'` / `'is-active'` / `active` 三种，旧正则只认字面量
+  //   `active:`（不带引号、不带前缀），导致 `--active` 类名形态的激活图永远挂不上。
+  //   新正则：键名 `[\w-]*active[\w-]*`（可带前缀/引号），负向后顾排除 `inactive` 反义键。
+  const ACTIVE_BINDING_RE =
+    /:class="[^"]*?\{\s*['"]?[\w-]*(?<![\w])active[\w-]*['"]?\s*:\s*([^}]+?)\s*\}[^"]*"/;
+  // 🛡️ 2026-09-15（P0 修复）：default 键正则——匹配 `c-device-monitor-switch-card--active` 类名
+  //   条件为 `item.isActive`，default 状态需要注入 `!item.isActive ? { backgroundImage: 'url(' + bg2 + ')' } : null`
+  const DEFAULT_BINDING_RE =
+    /:class="[^"]*?\{\s*['"]?[\w-]*(?<![\w])active[\w-]*['"]?\s*:\s*([^}]+?)\s*\}[^"]*"/;
+  
   for (const [p, c] of entries) {
-    const match = c.match(ACTIVE_ARRAY_RE) || c.match(ACTIVE_OBJECT_RE);
+    const match = c.match(ACTIVE_BINDING_RE);
     if (!match) continue;
     const condition = (match[1] || '').trim();
     if (!condition) continue;
@@ -716,9 +724,19 @@ export function mountSubStateBackground(allFiles, varName, m, options = {}) {
     if (tagClose < 0) continue;
     const between = c.slice(attrEnd, tagClose);
     if (/:style\s*=/.test(between)) continue;
+    // 🛡️ 2026-09-15（228b63d5）：size/position/repeat 不再硬编码 `100% 100%`，改走
+    //   inferBackgroundStyle（几何真值推断：铺满型→100% 100%，局部尺寸→写死 px + 偏移）。
+    const bgStyle = inferBackgroundStyle(m || {});
+    
+    // 🛡️ 2026-09-15（P0 修复）：根据 mountTarget 判断是 active 还是 default 状态
+    const isDefaultState = m.mountTarget === 'default';
+    const styleCondition = isDefaultState ? `!${condition}` : condition;
+    const styleKeyword = isDefaultState ? 'default-state' : 'active-state';
+    
     const styleAttr =
-      ` :style="${condition} ? { backgroundImage: 'url(' + ${varName} + ')',` +
-      ` backgroundSize: '100% 100%', backgroundRepeat: 'no-repeat' } : null"`;
+      ` :style="${styleCondition} ? { backgroundImage: 'url(' + ${varName} + ')',` +
+      ` backgroundSize: '${bgStyle.size}', backgroundPosition: '${bgStyle.position}',` +
+      ` backgroundRepeat: '${bgStyle.repeat}' } : null"`;
     let updated = c.slice(0, tagClose) + styleAttr + c.slice(tagClose);
     updated = ensureResourceImportInVue(updated, varName, m, p);
     if (!updated || updated === c) continue;
@@ -726,7 +744,7 @@ export function mountSubStateBackground(allFiles, varName, m, options = {}) {
     return {
       var: varName,
       file: p,
-      keyword: 'active-state',
+      keyword: styleKeyword,
       bgRole: m.bgRole || 'sub-state',
       mountTarget: m.mountTarget || null,
     };
@@ -2056,12 +2074,19 @@ export function fixSectionHeightsForResource(content, ctx, options = {}) {
     if (!/height:\s*100%\s*;?/i.test(body)) {
       if (px > 0) {
         const ratioMax = Number(FLEX_GROW_SCALES?.RATIO_MAX) || 19;
+        // 🛡️ 治本（2026-09-15 · c-device-monitor-44384241 实锤）：正则只认三值 `flex: X Y Z`，
+        // 但 LLM 常写单值 `flex: 1` / 双值 `flex: 1 1`（与三值等价的简写）→ 命中 sectionHeights 的
+        // section 根若写单值，grow 恒不改写（如 .c-device-monitor-tabs-section 的 `flex: 1` 保持 1，
+        // 而非权威系数 1.661）→ switch/tab 比例 1:2.95 而非 1:4.9。此处扩展正则覆盖单/双/三值，
+        // 缺省的 shrink/basis 按 CSS 规范默认补齐（单值=1 1 0，双值=<grow> <shrink> 0）。
         const newBody = body.replace(
-          /flex\s*:\s*(\d+(?:\.\d+)?)\s+([01])\s+(0|auto)\s*;?/gi,
+          /flex\s*:\s*(\d+(?:\.\d+)?)(\s+[01])?(\s+(?:0|auto|0%))?\s*;?/gi,
           (m, g, s, b) => {
             const gv = Number(g);
             if (!(gv > 0) || gv > ratioMax) return m;
-            return `flex: ${px} ${s} ${b};`;
+            const shrink = s ? s.trim() : '1';
+            const basis = b ? b.trim() : '0';
+            return `flex: ${px} ${shrink} ${basis};`;
           },
         );
         if (newBody !== body) {
@@ -2135,13 +2160,19 @@ export function fixSectionHeightsForResource(content, ctx, options = {}) {
     }
   }
 
-  // 🛡️ 规则⑤（删减法批次 3 loop 3a，2026-09-14）：布局事实确定性写出。
-  // 取代 healGridContainer（grid-template-* 漏 display:grid）/ ensureGridDisplay /
-  // ensureFlexDirection 的事后猜测修补：事实表（sectionLayoutFacts）直接给出
-  // display / gridColumns / flexDirection，这里只做「缺则补」，不覆盖 LLM 已写的 display。
+  // 🛡️ 规则⑤（删减法批次 3 loop 3a，2026-09-14；2026-09-15 补 flexGrow/inline-row）：
+  // 取代 healGridContainer / ensureGridDisplay / ensureFlexDirection 的事后猜测修补。
+  // 事实表（sectionLayoutFacts）给出 display / gridColumns / flexDirection / flexGrow，
+  // 这里只做「缺则补」，不覆盖 LLM 已写的 display / 已有 flex / 已有对齐。
+  //
+  // 🎯 2026-09-15 真机（c-traffic-monitor-933cbc4b）：规则② 要求块内已有 display:flex
+  // 才写 flexGrow；LLM 常只写 width/min-height → 规则② 整块跳过。规则⑤ 后补 display
+  // 却不写 flexGrow → 高度比例恒丢，图表靠 min-height:160px 硬撑。治本：规则② 门槛保留
+  // （防误伤非 flex 容器），规则⑤ 在补完 display 后同步写入 facts.flexGrow（缺则补）。
   const layoutFacts = ctx?.sectionLayoutFacts || null;
   let out5 = out4;
   if (layoutFacts) {
+    const ratioMax = Number(FLEX_GROW_SCALES?.RATIO_MAX) || 19;
     out5 = out4.replace(RULE_BLOCK_RE, (whole, head, body) => {
       let facts = null;
       for (const m of String(head).matchAll(/\.([A-Za-z][\w-]*)/g)) {
@@ -2165,6 +2196,32 @@ export function fixSectionHeightsForResource(content, ctx, options = {}) {
         }
       } else if (!/display\s*:\s*flex/i.test(newBody)) {
         newBody = `\n  display: flex;\n  flex-direction: ${facts.flexDirection || 'column'};${newBody}`;
+      }
+      // flexGrow：内容根（-root/-slot-con）不写（父级是 block，flex 失效）。
+      // 已有任何 flex: 声明（含 flex: 0 0 Npx / 已有正确 grow）不覆盖，交给规则②改错值。
+      const grow = Number(facts.flexGrow);
+      const hasFixedFlex = /flex\s*:\s*0\s+0\b/i.test(newBody);
+      const hasAnyFlex = /(?:^|[\s;{])flex\s*:/i.test(newBody);
+      if (
+        grow > 0 &&
+        grow <= ratioMax &&
+        !ROOT_SELECTOR_RE.test(head) &&
+        !hasFixedFlex &&
+        !hasAnyFlex
+      ) {
+        newBody += `\n  flex: ${grow} 1 0;`;
+        if (!/min-height\s*:/i.test(newBody)) {
+          newBody += `\n  min-height: 0;`;
+        }
+      }
+      // inline-row：横向 section 缺对齐时补两端对齐（不覆盖已有 align/justify；grid 不写）。
+      if (facts.flexDirection === 'row' && facts.display !== 'grid') {
+        if (!/align-items\s*:/i.test(newBody)) {
+          newBody += `\n  align-items: center;`;
+        }
+        if (!/justify-content\s*:/i.test(newBody)) {
+          newBody += `\n  justify-content: space-between;`;
+        }
       }
       if (newBody !== body) {
         changed = true;

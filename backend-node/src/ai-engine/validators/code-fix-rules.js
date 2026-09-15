@@ -240,9 +240,11 @@ export function anchorRootContainerInFiles(files, options = {}) {
       const injections = [];
       if (!hasWidth) injections.push('  width: 100%;');
       if (!hasHeight) injections.push('  height: 100%;');
-      if (!/(^|[\s;{])aspect-ratio\s*:/.test(nb) && (!hasWidth || !hasHeight)) {
-        injections.push(`  aspect-ratio: ${W} / ${H};`);
-      }
+      // 🛡️ R4-b（2026-09-15）：删除 aspect-ratio 注入。
+      // aspect-ratio 是 boxStyle（预览 iframe 容器比例）的语义，不是 CSS 属性；宿主
+      // .pannel-content 有明确高度（calc(100%-38px)），width/height:100% 双全即满足 I4
+      // 形态锁，无需 aspect-ratio。对纵向多 section 容器注入 aspect-ratio 会把高度锁死为
+      // 「宽×比例」，8 个 section 内容被挤压 →「样式几乎看不到」（traffic-monitor 实锤）。
       if (panelBg) {
         injections.push(`  background-image: url('${prefix}${bgFileName}');`);
         injections.push('  background-size: 100% 100%;');
@@ -290,7 +292,7 @@ export function anchorRootContainerInFiles(files, options = {}) {
   }
   if (changed && logger && typeof logger.info === 'function') {
     logger.info(
-      `🎯 根容器中性锚定: .${rootCls}（Figma ${W}×${H}，aspect-ratio 注入${panelBg ? ' + 面板背景 R7' : ''}）`,
+      `🎯 根容器中性锚定: .${rootCls}（Figma ${W}×${H}，width/height 100% 补齐${panelBg ? ' + 面板背景 R7' : ''}）`,
     );
   }
   return changed ? out : files;

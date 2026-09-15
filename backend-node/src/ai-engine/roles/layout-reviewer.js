@@ -18,7 +18,7 @@ export class LayoutReviewer extends BaseAgent {
     super({
       name: 'layout-reviewer',
       description: '布局结构审查器',
-      model: config.model || 'claude-sonnet-4-6',
+      model: config.model || '',
       temperature: config.temperature || 0,
       maxTokens: config.maxTokens || 8192,
       ...config

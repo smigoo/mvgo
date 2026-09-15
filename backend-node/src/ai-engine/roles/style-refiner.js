@@ -28,7 +28,7 @@ export class StyleRefiner extends BaseAgent {
     super({
       name: 'style-refiner',
       description: '样式精修器',
-      model: config.model || 'claude-sonnet-4-6',
+      model: config.model || '',
       temperature: config.temperature || 0.1,
       maxTokens: config.maxTokens || 8192,
       ...config
@@ -977,34 +977,27 @@ ${partialInstruction}
         let patched = false
 
         // ── 规则 1：bg-size 自动修补 ──
-        // CSS 属性形式：background-size: cover → 100% 100%
-        if (/background-size\s*:\s*cover/i.test(content)) {
-          content = content.replace(/background-size\s*:\s*cover/gi, 'background-size: 100% 100%')
-          patched = true
-        }
-        // CSS 属性形式：background-size: contain → 100% 100%
-        if (/background-size\s*:\s*contain/i.test(content)) {
-          content = content.replace(/background-size\s*:\s*contain/gi, 'background-size: 100% 100%')
-          patched = true
-        }
-        // JS inline style 形式：backgroundSize: 'cover' → '100% 100%'
-        if (/backgroundSize\s*:\s*['"]cover['"]/i.test(content)) {
-          content = content.replace(/backgroundSize\s*:\s*['"]cover['"]/gi, "backgroundSize: '100% 100%'")
-          patched = true
-        }
-        // 移除 background-position: center（100% 100% 不需要）
-        if (/background-position\s*:\s*center/i.test(content)) {
+        // 🛡️ 2026-09-15（228b63d5 实锤）：原「无条件 cover/contain→100% 100%」会误伤局部尺寸背景
+        //   （激活条 / tab 高亮条等非铺满背景，cover 是合法值），并无条件删 position/repeat。
+        //   收窄为：仅当 background-size 已是 `100% 100%`（铺满型）时，才删除多余的
+        //   position:center / repeat:no-repeat；cover/contain 保持原值（禁止改拉伸）。
+        const hasFullSize =
+          /background-size\s*:\s*100%\s+100%/i.test(content) ||
+          /backgroundSize\s*:\s*['"]100% 100%['"]/i.test(content);
+
+        // 移除 background-position: center（仅当已铺满 100% 100%）
+        if (hasFullSize && /background-position\s*:\s*center/i.test(content)) {
           content = content.replace(/[;\s]*background-position\s*:\s*center\s*;?/gi, '')
           patched = true
         }
-        // JS inline: backgroundPosition: 'center' → 移除
-        if (/backgroundPosition\s*:\s*['"]center['"]/i.test(content)) {
+        // JS inline: backgroundPosition: 'center' → 移除（仅当已铺满 100% 100%）
+        if (hasFullSize && /backgroundPosition\s*:\s*['"]center['"]/i.test(content)) {
           content = content.replace(/,\s*backgroundPosition\s*:\s*['"]center['"]/gi, '')
           content = content.replace(/backgroundPosition\s*:\s*['"]center['"]\s*,?\s*/gi, '')
           patched = true
         }
-        // 移除 background-repeat: no-repeat（100% 100% 不需要）
-        if (/background-repeat\s*:\s*no-repeat/i.test(content)) {
+        // 移除 background-repeat: no-repeat（仅当已铺满 100% 100%）
+        if (hasFullSize && /background-repeat\s*:\s*no-repeat/i.test(content)) {
           content = content.replace(/[;\s]*background-repeat\s*:\s*no-repeat\s*;?/gi, '')
           patched = true
         }

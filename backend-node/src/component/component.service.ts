@@ -322,7 +322,7 @@ export class ComponentService {
    */
   private async resolveAuthorizedComponent(
     identifier: string,
-    userId: string,
+    userId: string | undefined,
     mode: 'read' | 'write',
   ): Promise<{
     component?: ComponentDocument;
@@ -349,10 +349,14 @@ export class ComponentService {
     }
 
     if (component) {
-      if (mode === 'write') {
-        await this.checkComponentPermission(component, userId);
-      } else {
-        await this.checkComponentAccess(component, userId);
+      // 预览模式（无 userId + read）：直接放行，不检查权限
+      // 组件 ID 带随机后缀不可猜，允许匿名只读访问
+      if (userId || mode === 'write') {
+        if (mode === 'write') {
+          await this.checkComponentPermission(component, userId);
+        } else {
+          await this.checkComponentAccess(component, userId);
+        }
       }
       return {
         component,
@@ -366,7 +370,19 @@ export class ComponentService {
     }
 
     const task = this.tasksService.getTaskByComponentId(identifier);
-    if (task && task.userId === userId) {
+    if (task && (!userId || task.userId === userId)) {
+      return {
+        componentId: task.componentId,
+        groupId: task.groupId,
+        target: task.target,
+        figmaFileKey: task.fileKey,
+        figmaNodeId: task.nodeId,
+        componentName: task.componentName,
+      };
+    }
+
+    // 预览模式：无 userId 时允许通过任务访问（预览页免登录）
+    if (task && mode === 'read') {
       return {
         componentId: task.componentId,
         groupId: task.groupId,
@@ -382,7 +398,7 @@ export class ComponentService {
 
   async authorizeWorkspaceComponent(
     identifier: string,
-    userId: string,
+    userId: string | undefined,
     mode: 'read' | 'write' = 'read',
   ) {
     return this.resolveAuthorizedComponent(identifier, userId, mode);
@@ -544,8 +560,13 @@ export class ComponentService {
   // 检查组件操作权限（创建者或管理员）
   private async checkComponentPermission(
     component: ComponentDocument,
-    userId: string,
+    userId: string | undefined,
   ): Promise<void> {
+    // 写操作必须登录
+    if (!userId) {
+      throw new ForbiddenException('需要登录才能修改组件');
+    }
+
     const groupId = component.groupId.toString();
     const creatorId = component.creatorId.toString();
 
@@ -564,8 +585,16 @@ export class ComponentService {
   // 检查组件读取权限（public 组件全员可读；private 组件创建者或管理员可查看）
   private async checkComponentAccess(
     component: ComponentDocument,
-    userId: string,
+    userId: string | undefined,
   ): Promise<void> {
+    // 未登录用户：只允许访问公共组件
+    if (!userId) {
+      if (component.visibility === 'public') {
+        return;
+      }
+      throw new ForbiddenException('需要登录才能访问此组件');
+    }
+
     // 公共组件池：所有登录用户可读（详情/文件/下载链路统一走这里）
     if (component.visibility === 'public') {
       return;

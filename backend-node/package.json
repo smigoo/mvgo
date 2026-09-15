@@ -8,6 +8,7 @@
   "scripts": {
     "build": "nest build && node -e \"const fs=require('fs'),p=require('path');const r=p.join(__dirname,'references'),d=p.join(__dirname,'dist','references');if(fs.existsSync(r)){fs.cpSync(r,d,{recursive:true});console.log('✅ references copied to dist')}else{console.log('⚠️  references not found, skipping')}\"",
     "verify:classname": "node scripts/classname-writer-audit.mjs",
+    "verify:terminal-writes": "node scripts/check-terminal-writes.mjs",
     "verify:r1-3": "node scripts/r1-3-acceptance.mjs",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "node dist/main.js",

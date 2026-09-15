@@ -5,10 +5,13 @@
 ❌ **绝对禁止（vue3 环境未注入这些全局变量，引用即渲染崩溃）**：
 - ❌ `$mcComponentBuilder` / `componentProps` / `businessProps` / `runtimeBuilder` / `componentApi`
 - ❌ `runtimeBuilder.publishEvent()` / `eventBus`
-- ❌ `<base-panel>` 宿主标签（vue3 需真实还原面板外壳：背景/边框/圆角/阴影自己写）
-- ❌ **面板标题元素**（预览/宿主外壳已渲染面板标题与关闭按钮）：组件内**禁止**生成标题文字元素（如 Figma header 区的标题 TEXT「环境监测」/「流量监测」等）。
-      外壳自绘范围仅限：背景图/底色、边框、圆角、阴影；header 区只生成**右侧控件**（统计指标/Tab/图标），标题文字与左侧装饰留给外壳
+- ❌ `<base-panel>` 宿主标签（vue3 组件不使用微码运行时，面板外壳必须自己写，无宿主兜底）
 - ❌ declare.json / component.js（系统不消费）
+
+✅ **面板外壳自绘（vue3 必做；只有微码才把标题/背景交给 base-panel）**：
+- **标题文字**：按 Figma header 区的标题 TEXT 节点**生成**标题元素（如「环境监测」「流量监测」），组件自己渲染，不得省略
+- **背景/边框/圆角/阴影**：按 Figma 根节点真值自绘（背景图挂根容器，边框/圆角/阴影取 Figma 设计值）
+- **header 区左右装饰 + 右侧控件**：均按 Figma 节点生成，不得臆造、不得省略
 
 ✅ **标准 Vue3 写法**：
 ```vue
@@ -56,6 +59,19 @@ onBeforeUnmount(() => {
    —— 缺 min-height 时被兄弟元素挤压到 ~10px，折线图视觉变形
 4. **横向分区**（如 Tab 区 + 右侧图标区）：Tab 区 `flex: 1; min-width: 0`，图标区 `flex-shrink: 0`
 5. Tab 项宽度按内容均分：`flex: 1` + `text-align: center`（每项等宽，不逐项设固定 px）
+
+## 3.3️⃣ 资源归属铁律（背景/图标不得挂错、不得父子重复）
+
+1. **每个静态资源（bg1/bg2/icon1…）只对应 Figma 中一个节点**，`backgroundImage` 必须挂在该节点对应的 DOM 上。
+2. **禁止父子重复**：同一背景资源不得同时挂在父容器和它的子元素上（如 `bg1` 既挂 `tabs-section` 又挂它的子元素 `tabs-list`）——Figma 里该填充只在一个节点上，子元素重复挂会叠影/花屏。
+3. **兄弟复用允许**：多个平级元素可共享同一资源（如多个 tab 项共用同一 icon），但前提是 Figma 中这些平级节点各自都含该填充。
+4. **生成后自检**：逐个核对每个 `bg*/icon*` 变量在模板中的挂载位置，与 Figma 节点树（`figmaNodeId`/`figmaPath`/`parentBox`）是否一致，不一致就修正。
+
+## 3.4️⃣ 图标资源分档（禁止臆造 SVG，但 vector 节点允许手绘）
+
+1. **Figma 提供了该图标的图片资源**（资源清单里存在对应 icon 变量）→ **必须**引用该资源（`<img :src="iconX">`），**禁止**手写 `<svg>`/`<canvas>`。
+2. **Figma 该图标是 vector 节点、未导出图片资源**（资源清单里无对应项）→ 允许手写 `<svg>` 或用 CSS 实现，但**尺寸/颜色必须取自 Figma 真值**，不得臆造形状或配色。
+3. 禁止用 `<canvas>` 手绘任何图标/图表（图表必须用 echarts）。
 
 ## 4️⃣ 样式文件结构（index.less 必须完整）
 

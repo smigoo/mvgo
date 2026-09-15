@@ -226,7 +226,11 @@ export function formatResourceMapping(mappings, options = {}) {
         lines.push(`- 🔴 图片铁律：禁止用 CSS linear-gradient 渐变「替代」此图——设计稿是图片就必须用图片（mc-max-1787923972602 / mc-max-1788239096135-c19dfe56 实锤：模型用渐变替代 bg 导致视觉不符）`)
       }
       if (includeVisualMeta && mapping.visualMeta) {
-        if (mapping.visualMeta.fillsSummary) lines.push(`- 样式：${mapping.visualMeta.fillsSummary}`)
+        // 🛡️ 2026-09-15（与 compact 版同口径）：**可用资源不输出 fillsSummary**。
+        // 该值是节点自身的填充（其视觉已由 resourceFile 图片承载），吐出来等于给
+        // 「禁止用 CSS gradient 替代 bg」递刀 —— 模型会把它抄成某元素的 CSS 背景
+        // （实机：写到 .c-env-monitor-tab-item 上并盖住了本该显示的 bg-7890.png）。
+        // 尺寸/效果不是「另一种视觉表达」，保留。
         if (mapping.visualMeta.width && mapping.visualMeta.height) lines.push(`- 尺寸：${mapping.visualMeta.width}×${mapping.visualMeta.height}px（按 Figma 实际 UI 尺寸/比例渲染，禁止拉伸压扁）`)
         if (mapping.visualMeta.effectsSummary) lines.push(`- 效果：${mapping.visualMeta.effectsSummary}`)
       }
@@ -501,7 +505,15 @@ export function formatResourceMappingCompact(mappings, options = {}) {
     lines.push(`**${vn}** → \`${m.targetDomSelector || m.targetDomHint || '?'}\`${tagStr}`)
     const usageStr = m.usage ? `使用:\`${m.usage.replace(/bgX/g, vn).replace(/iconX/g, vn)}\`` : ''
     lines.push(`   资源:\`${m.resourceFile}\`${usageStr ? ' ' + usageStr : ''}`)
-    if (vm.fillsSummary) lines.push(`   样式:${vm.fillsSummary}`)
+    // 🛡️ 2026-09-15（mc-max-1789452271404-7e0e19d2 实锤）：**可用（已下载）资源不再输出「样式:fillsSummary」**。
+    //
+    // 背景：原实现只按 available/failed 分流，对 downloadStatus=success 的资源也把节点填充值当「样式」
+    // 吐出来（如 `样式:linear-gradient(#b5deff 0%, #d1ecff 100%)`）。这与本段开头的铁律
+    // 「命名为 bg 的节点必须作为 backgroundImage 使用，**禁止用 CSS gradient/color 替代**」
+    // **自相矛盾**，模型会照抄该值：实机产物把它写到 `.c-env-monitor-tab-item`（**错误元素**，应为
+    // tabs-list 容器）上，且因 CSS 版不透明而**盖住**本该显示的 bg-7890.png。
+    // 同一视觉只允许一条落地路径（单一事实源）= 图片本身；填充摘要对可用资源是纯噪声 + 误导。
+    // 该值只在「资源缺失」时才有兜底意义 —— 见下方 failed 分支（那里会显式标注）。
     if (vm.effectsSummary) lines.push(`   效果:${vm.effectsSummary}`)
     if (m.backgroundSize || m.backgroundPosition || m.backgroundRepeat) {
       lines.push(`   bgSizing: ${m.backgroundSize || 'cover'}/${m.backgroundPosition || 'center'}/${m.backgroundRepeat || 'no-repeat'}`)
@@ -520,7 +532,11 @@ export function formatResourceMappingCompact(mappings, options = {}) {
       const loc = useSemanticLocation ? extractSemanticLocation(m.figmaPath) : ''
       lines.push(`- ${m.previewAnalysisRole || '?'}${loc ? ` [${loc}]` : ''} ${m.targetDomHint || m.name || ''}: ${m.fallbackHint || '原图缺失'}`)
       if (m.cssValue) lines.push(`  CSS替代: ${m.cssValue}`)
-      if (m.visualMeta?.fillsSummary && m.visualMeta.fillsSummary !== '#00000000') lines.push(`  颜色: ${m.visualMeta.fillsSummary}`)
+      if (m.visualMeta?.fillsSummary && m.visualMeta.fillsSummary !== '#00000000') {
+        // 🛡️ 2026-09-15：仅当资源**确实缺失**时才给填充参考，且显式标注「兜底专用」——
+        // 避免被当成通用样式规范抄到别处（可用资源已在上面分支刻意不输出该值）。
+        lines.push(`  兜底填充参考（仅本资源缺失时使用，禁止用于其他元素）: ${m.visualMeta.fillsSummary}`)
+      }
     })
     lines.push('', '**缺失资源没有变量，用 CSS/伪元素替代或留空，禁止挪用其他图标！**', '')
   }

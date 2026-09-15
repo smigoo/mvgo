@@ -2571,8 +2571,10 @@ const previewUrl = computed(() => {
   // 2026-09-10：Playground 是编辑态，代码与 AI 修复都写 workspace；
   // 只要 workspace 已读到文件就强制走 workspace 源（snapshot=0），
   // 否则「保存/AI 修复成功但预览还是旧的」（快照是生成时内容）。
-  // 生成中 workspace 尚无产物时仍走快照源。
-  const useWorkspaceSource = componentFiles.value.length > 0
+  // 生成中 / 仅快照文件（snapshotOnly）时仍走快照源，保存会换新 revision。
+  const files = componentFiles.value
+  const snapshotOnly = files.length > 0 && files.every((f) => f.snapshotOnly)
+  const useWorkspaceSource = files.length > 0 && !snapshotOnly
   return import.meta.env.BASE_URL + buildResolvedPreviewUrl(descriptor, {
     width: previewContainerWidth.value,
     height: previewContainerHeight.value,
@@ -2581,9 +2583,14 @@ const previewUrl = computed(() => {
   }).replace(/^\//, '')
 })
 
-// iframe 加载完成后，推送当前 cssVars 到预览页（postMessage 桥接实时联动）
+// iframe 加载完成后，推送当前 cssVars 和主题到预览页（postMessage 桥接实时联动）
 function onPreviewFrameLoad() {
   sendStyleToPreview()
+  // 2026-09-15：iframe 加载/重新加载后，必须同步当前主题
+  // 否则主题切换后 iframe 重新加载（如保存代码触发 _t 变化）会丢失主题设置
+  if (formState.themeType) {
+    sendThemeToPreview(formState.themeType)
+  }
 }
 
 // ⚠️ 必须在使用 styles 的函数/watch 之前声明，避免 setup 期 TDZ 崩溃
@@ -3120,8 +3127,23 @@ function change(type, val) {
       }
     })
     .then((res) => {
-      if (type === 'themeType') init()
+      if (type === 'themeType') {
+        init()
+        // 2026-09-15：切换主题时通知预览 iframe 更新主题类
+        sendThemeToPreview(val)
+      }
     })
+}
+
+// 将主题类型推送到预览 iframe（通过 postMessage 桥接）
+function sendThemeToPreview(theme) {
+  const frame = previewFrame.value
+  if (!frame || !frame.contentWindow) return
+  try {
+    frame.contentWindow.postMessage({ type: 'set-theme', theme }, '*')
+  } catch (e) {
+    console.warn('[sendThemeToPreview] postMessage 失败:', e)
+  }
 }
 
 /**

@@ -25,6 +25,8 @@
  * @returns {{ hallucinations: Array<{tabId, resourceFile, figmaNodeId, figmaPath, reason}>, applied: number }}
  */
 
+import { indexFigmaNodes } from './section-tree.js'
+
 const TAB_ROLE_HINT = /tab/i
 
 /** resourceFile → figmaNodeId 映射 */
@@ -51,18 +53,20 @@ function buildResourceEntryMap(resourceDomMapping) {
   return map
 }
 
-/** 建 id → node 索引 + 收集某子树的所有 id（用于「资源 figmaNodeId 是否在 tab 子树内」判定） */
+/** 共享节点索引适配为本模块的 node/parent 视图；资源归属裁决仍留在本模块。 */
 function buildFigmaIndex(figmaData) {
+  const root = figmaData && (figmaData.document || figmaData)
+  const index = indexFigmaNodes(root)
   const byId = new Map()
   const parentOf = new Map()
-  const walk = (n, p) => {
-    if (!n) return
-    byId.set(String(n.id), n)
-    if (p) parentOf.set(String(n.id), p)
-    for (const c of n.children || []) walk(c, n)
+  for (const record of index.values()) {
+    byId.set(String(record.id), record.rawNode || record)
   }
-  const root = figmaData && (figmaData.document || figmaData)
-  if (root) walk(root, null)
+  for (const record of index.values()) {
+    if (record.parentId && byId.has(String(record.parentId))) {
+      parentOf.set(String(record.id), byId.get(String(record.parentId)))
+    }
+  }
   return { byId, parentOf }
 }
 

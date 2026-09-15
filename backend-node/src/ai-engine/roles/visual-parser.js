@@ -21,6 +21,8 @@ import { isChromeOnlySection, stripChromeSectionsInPlace } from '../utils/chrome
 import { collectFigmaNodes, applyFigmaElementHeightRatios } from '../utils/figma-height-ratio.js'
 // 🛡️ P0（2026-09-04）：Vision 结果与 Figma TEXT 节点交叉校验，在 vision 阶段就发现 OCR 误读/臆造
 import { collectFigmaTextTruth, findClosestTruth } from '../utils/text-truth-guard.js'
+// 🛡️ 6-B（2026-09-15）：seriesColors 臆造色真值修正（VLM 红蓝对比先验 vs Figma 蓝系真值）
+import { collectFigmaChartColors, resolveSeriesColors } from '../utils/figma-color-truth.js'
 
 const logger = createLogger({ name: 'visual-parser' })
 
@@ -81,6 +83,35 @@ export { mergeInlineRowsIntoSections }
 // 修 Vision 拆散 + merger 只提升「左右并列」子节点导致 slot-con 等纵向容器层级丢失。
 import { rebuildSlotConContainers, collectContainerHints } from '../utils/container-rebuilder.js'
 export { rebuildSlotConContainers, collectContainerHints }
+// 🛡️ 2026-09-15（mc-max-1789446564243-f64ecbed 实锤）：幻觉 section 剔除（纯函数，无 import.meta）。
+// Vision 会凭空产出「设计里不存在」的 section（如 badge-indicator，子节点 id 89:37 在 Figma 树中 0 命中），
+// 下游 planner 按 sections 出子组件清单 → 多生成一个 .vue（角标画两遍 + 多占一行挤走图表）。
+// 单一事实源：判据与形态适配都在 section-tree#dropHallucinatedSections / applyHallucinationDrop，
+// 此处只负责在合适的时机调用（含缓存命中路径，见下方调用点注释）。
+import {
+  dropHallucinatedSections,
+  applyHallucinationDrop,
+} from '../utils/section-tree.js'
+export { dropHallucinatedSections, applyHallucinationDrop }
+
+/**
+ * 统计「结构对象里所有 sections 数组的条数之和」——仅供日志对比用（判据不依赖它）。
+ * 兼容两种形态：扁平 parsed（layout.sections）与包装态（layoutStructure.layout.sections）。
+ */
+function readSectionCounts(target) {
+  const arrays = []
+  if (target && typeof target === 'object') {
+    if (target.layout && Array.isArray(target.layout.sections)) arrays.push(target.layout.sections)
+    if (Array.isArray(target.sections)) arrays.push(target.sections)
+    if (target.layoutStructure) {
+      const lay = target.layoutStructure
+      if (lay.layout && Array.isArray(lay.layout.sections)) arrays.push(lay.layout.sections)
+      if (Array.isArray(lay.sections)) arrays.push(lay.sections)
+    }
+  }
+  return arrays.reduce((sum, arr) => sum + arr.length, 0)
+}
+
 // 🛡️ P1（2026-09-09）：inlineCompositeRows → headerSlots 推断（纯函数，无 import.meta，jest 可 require）。
 // 单一事实源：visual-parser.js 不再内联实现，import 复用并对外导出。
 import {
@@ -1499,6 +1530,24 @@ ${analysisTask}`
         }
       } catch (e) {
         logger.warn({ err: e?.message }, '[L2] rebuildSectionsPreservingInlineRows 失败，跳过兜底')
+      }
+
+      // 🛡️ 幻觉 section 剔除（2026-09-15 · mc-max-1789446564243-f64ecbed 实锤）：
+      // 必须在 merger + container-rebuild **之后**执行 —— 两者的产物（几何行 89:42、
+      // 重建的纵向容器）才是结构表终态，幻觉 section 是终态里的多余项。
+      // 位置刻意放在 `if (inlineRows.length)` 之外：没有横向行可合并的组件同样可能被
+      // Vision 凭空加 section，那时也要剔。判据与误伤面见 section-tree#dropHallucinatedSections。
+      try {
+        const beforeSnapshot = readSectionCounts(parsed)
+        applyHallucinationDrop(parsed, figmaData)
+        const afterSnapshot = readSectionCounts(parsed)
+        if (beforeSnapshot !== afterSnapshot) {
+          logger.info(
+            `🛡️ 幻觉 section 已剔除（自身无节点身份却引用不存在的 Figma 节点）：${beforeSnapshot} → ${afterSnapshot}`,
+          )
+        }
+      } catch (e) {
+        logger.warn({ err: e?.message }, '[L2] dropHallucinatedSections 失败，跳过')
       }
     }
 
@@ -3200,6 +3249,33 @@ ${analysisTask}`
       if (chartDiagnostics.length > 0) {
         pushDiagnostic('chart-structure', '发现图表结构缺字段，需要下游谨慎消费', { items: chartDiagnostics })
       }
+
+      // 🛡️ 6-B（2026-09-15 · cd7d0172 实锤）：seriesColors 从 VLM 臆造色改为 Figma 真值。
+      // VLM 给 #ff7875（红）但 Figma 全树只有蓝系（#457aff/#00cccc 等）——色值可算，不该过概率模型。
+      // 用 collectFigmaChartColors 收集 Figma 图表色值集合，对 charts[].seriesColors 做零误伤修正。
+      if (figmaData) {
+        try {
+          const figmaChartColors = collectFigmaChartColors(figmaData)
+          if (figmaChartColors.size > 0) {
+            let colorReplaced = 0
+            for (const chart of parsed.charts) {
+              if (!chart || !Array.isArray(chart.seriesColors)) continue
+              const res = resolveSeriesColors(chart.seriesColors, figmaChartColors)
+              if (res.replaced > 0) {
+                chart.seriesColors = res.colors
+                colorReplaced += res.replaced
+              }
+            }
+            if (colorReplaced > 0) {
+              appliedKeys.add('seriesColors')
+              pushFix('seriesColors', `已用 Figma 真值替换 ${colorReplaced} 个臆造系列色`, { count: colorReplaced })
+              logger.warn('🛡️ seriesColors 臆造色已用 Figma 真值替换', { count: colorReplaced })
+            }
+          }
+        } catch (err) {
+          logger.warn('seriesColors 真值修正失败（非阻断）', { error: err?.message })
+        }
+      }
     }
 
     const normalizedHeaderSlots = Array.isArray(parsed.headerSlots) ? parsed.headerSlots : []
@@ -3463,8 +3539,15 @@ ${analysisTask}`
       const cached = this._readCache(cacheKey, cacheDir)
       if (cached) {
         logger.info('📦 Vision 分析命中缓存，跳过 AI 调用', { cacheKey })
-        this.onProgress?.({ stage: '视觉分析', message: '📦 命中缓���，跳过 AI 分析', status: 'completed' })
-        return cached
+        this.onProgress?.({ stage: '视觉分析', message: '📦 命中缓存，跳过 AI 分析', status: 'completed' })
+        // 🛡️ 缓存命中也要做事实校验（2026-09-15）：缓存存的是**加工后**结构，
+        // 后处理规则变更（如新增幻觉 section 剔除）对缓存任务永不生效 —— 这里补跑，
+        // 事实源是实时 Figma 树，幂等纯函数，不改形状归一（不做二次加工）。
+        const validated = applyHallucinationDrop(cached, figmaData)
+        if (validated !== cached) {
+          logger.info('🛡️ 缓存命中：已补跑幻觉 section 事实校验')
+        }
+        return validated
       }
     }
 

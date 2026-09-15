@@ -17,6 +17,7 @@ import { FigmaConnector } from '../roles/figma-connector.js';
 import {
   VisualParser,
   evaluateVisualTrustVerdict,
+  applyHallucinationDrop,
 } from '../roles/visual-parser.js';
 import { LayoutReviewer } from '../roles/layout-reviewer.js';
 import { StyleMapper } from '../roles/style-mapper.js';
@@ -312,6 +313,10 @@ export function createPhase2Graph(config = {}) {
           resourceDomMapping = null;
         }
 
+        // 6-A · 缓存路径也需构建颜色索引（与主路径同口径）
+        const cachedConnector = new FigmaConnector({ figmaToken: state.figmaToken });
+        const nodeColorIndex = cachedConnector.buildNodeColorIndex(cachedNodeData);
+
         return {
           figmaStyleTree: formatFigmaStyleData(cachedNodeData),
           previewImage: state._uiCache.previewImage || null,
@@ -319,6 +324,8 @@ export function createPhase2Graph(config = {}) {
           assets,
           resourceDomMapping,
           techStackHints: state._uiCache.techStackHints || [],
+          // 6-A · nodeId→fills 颜色索引（确定性事实源，供 6-B 颜色装配消费）
+          nodeColorIndex,
         };
       }
 
@@ -339,6 +346,9 @@ export function createPhase2Graph(config = {}) {
         result.figmaNodeData,
       );
       const figmaStyleTree = formatFigmaStyleData(optimizedFigmaData);
+
+      // 6-A · 构建 nodeId→fills 颜色索引（确定性事实源，供 6-B 颜色装配消费）
+      const nodeColorIndex = connector.buildNodeColorIndex(optimizedFigmaData);
 
       //保存 Figma checkpoint（断点续跑用）— 存裸节点数据，与微码图格式一致
       state._saveCheckpoint?.('figma', optimizedFigmaData);
@@ -366,6 +376,8 @@ export function createPhase2Graph(config = {}) {
         assets: result.assets,
         resourceDomMapping: result.resourceDomMapping,
         techStackHints: techStackHints,
+        // 6-A · nodeId→fills 颜色索引（确定性事实源，供 6-B 颜色装配消费）
+        nodeColorIndex,
       };
     } catch (error) {
       logger.error('Figma数据获取失败', { error: error.message });
@@ -400,7 +412,7 @@ export function createPhase2Graph(config = {}) {
           status: 'completed',
         });
         const cached = state._uiCache.previewAnalysis;
-        return {
+        const cachedResult = {
           layoutStructure: cached.layoutStructure,
           visualElements: cached.visualElements,
           interactions: cached.interactions || [],
@@ -421,6 +433,10 @@ export function createPhase2Graph(config = {}) {
           analysisEvidence: cached.analysisEvidence || [],
           _uiCacheHit: true,
         };
+        // 🛡️ 缓存命中也要做事实校验（2026-09-15）：uiCache 里存的是**加工后**结构，
+        // 后处理规则变更（如新增幻觉 section 剔除）对缓存任务永不生效 —— 补跑幂等事实校验。
+        // 事实源是实时 Figma 树（state.figmaNodeData），不是缓存里那份。
+        return applyHallucinationDrop(cachedResult, state.figmaNodeData);
       }
 
       // 视觉任务：使用 visionAIConfig（Qwen/DashScope）
@@ -1099,7 +1115,7 @@ export function createPhase2Graph(config = {}) {
 
       //检查是否有预启动的截图任务
       const screenshotPromise = state._screenshotPromise;
-      let renderedImage, isStaticFallback, runtimeGate;
+      let renderedImage, isStaticFallback, runtimeGate, visualFidelity;
 
       if (screenshotPromise) {
         logger.info('⏳ 等待预启动的截图任务完成...');
@@ -1113,6 +1129,7 @@ export function createPhase2Graph(config = {}) {
         renderedImage = result.renderedImage;
         isStaticFallback = result.isStaticFallback;
         runtimeGate = result.runtimeGate;
+        visualFidelity = result.visualFidelity;
       } else {
         logger.info('📷 无预启动任务,同步执行截图...');
         state.onProgress?.({
@@ -1142,6 +1159,7 @@ export function createPhase2Graph(config = {}) {
         renderedImage = result.renderedImage;
         isStaticFallback = result.isStaticFallback;
         runtimeGate = result.runtimeGate;
+        visualFidelity = result.visualFidelity;
       }
 
       let visualComparisonReport = null;
@@ -1208,6 +1226,7 @@ export function createPhase2Graph(config = {}) {
         renderedImageIsStaticFallback: isStaticFallback,
         runtimeGate,
         visualComparisonReport,
+        visualFidelity,
       };
     } catch (error) {
       const runtimeGate = {
@@ -1599,9 +1618,18 @@ export function createPhase2Graph(config = {}) {
           /* 旧 meta 损坏则重建 */
         }
         const runtimeVerified = !state._runtimeGateDowngraded;
+        // 6-A: nodeColorIndex 写进 component-meta.json（确定性颜色事实源，供后续 6-B 装配消费）
+        const nodeColorIndexPlain = state.nodeColorIndex
+          ? Object.fromEntries(state.nodeColorIndex instanceof Map ? state.nodeColorIndex : Object.entries(state.nodeColorIndex))
+          : undefined;
+
         const nextMeta = {
           ...prevMeta,
           runtimeVerified,
+          // 7-A: visualFidelity — 用 ?? 防止 parallel-quality-check 的 undefined 覆盖 visual-comparator 的有效值
+          ...(state.visualFidelity != null ? { visualFidelity: state.visualFidelity } : {}),
+          // 6-A: nodeColorIndex
+          ...(nodeColorIndexPlain && Object.keys(nodeColorIndexPlain).length > 0 ? { nodeColorIndex: nodeColorIndexPlain } : {}),
           ...(runtimeVerified
             ? {}
             : {
@@ -1627,11 +1655,14 @@ export function createPhase2Graph(config = {}) {
     }
 
     // 🎯 2026-09-14 治本①②：section 内容映射守卫（左右序 + 内容错装），与 phase2 图同款。
+    // 🛡️ 阶段 C（2026-09-15 序 5）：高置信 duplicateTextIssues 确定性自愈。
     try {
-      const { checkSectionContent } = await import(
-        '../utils/section-content-guard.js'
-      );
-      const { readdirSync: _rds, readFileSync: _rfs, existsSync: _ex } = await import('fs');
+      const {
+        checkSectionContent,
+        healDuplicateTextIssues,
+      } = await import('../utils/section-content-guard.js');
+      const { validateVueSfc } = await import('../utils/sfc-syntax-validation.js');
+      const { readdirSync: _rds, readFileSync: _rfs, existsSync: _ex, writeFileSync: _wfs3 } = await import('fs');
       const { join: _j } = await import('path');
       const compDir = _j(state.outputPath, 'package', 'components');
       const files = [];
@@ -1641,14 +1672,36 @@ export function createPhase2Graph(config = {}) {
           files.push({ path: `package/components/${name}`, content: _rfs(_j(compDir, name), 'utf-8') });
         }
       }
+      const figmaRootForGuard =
+        state.figmaNodeData ||
+        state._uiCache?.figmaNodeData ||
+        state._visualParserCache?.figmaNodeData;
       const contentCheck = checkSectionContent({
         files,
         plan: state.subComponentPlan,
-        figmaRoot:
-          state.figmaNodeData ||
-          state._uiCache?.figmaNodeData ||
-          state._visualParserCache?.figmaNodeData,
+        figmaRoot: figmaRootForGuard,
       });
+      if (contentCheck.duplicateTextIssues.length > 0) {
+        const healResult = healDuplicateTextIssues({
+          files,
+          plan: state.subComponentPlan,
+          figmaRoot: figmaRootForGuard,
+          validateSfc: (c, p) => validateVueSfc(c, p),
+        });
+        if (healResult.healed.length > 0) {
+          for (const h of healResult.healed) {
+            for (const wp of h.removedFrom) {
+              const rec = healResult.files.find((f) => f.path === wp);
+              if (rec && typeof rec.content === 'string') {
+                try { _wfs3(_j(state.outputPath, wp), rec.content, 'utf-8'); } catch (_) {}
+              }
+            }
+          }
+          logger.warn('🩹 内容映射守卫：高置信重复文本已确定性自愈', {
+            healed: healResult.healed.map((h) => ({ text: h.text, removedFrom: h.removedFrom })),
+          });
+        }
+      }
       if (
         contentCheck.memberOrderIssues.length > 0 ||
         contentCheck.duplicateTextIssues.length > 0
@@ -3186,6 +3239,7 @@ export function createPhase2Graph(config = {}) {
       });
       const runtimeGate = result.runtimeGate || evaluateRuntimeGate(result);
       state.runtimeGate = runtimeGate;
+      state.visualFidelity = result.visualFidelity;
       const classification = classifyRuntimeGate(runtimeGate);
       const action =
         classification?.action ||

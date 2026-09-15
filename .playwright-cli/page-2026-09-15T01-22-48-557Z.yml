@@ -1,0 +1,10 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]: 面板类型：
+    - combobox [ref=e6] [cursor=pointer]:
+      - option "使用默认" [selected]
+      - option "默认/浅色面板"
+      - option "弹窗面板"
+      - option "一体化/深色面板"
+      - option "无面板"
+  - generic [ref=e8]: 正在加载组件...

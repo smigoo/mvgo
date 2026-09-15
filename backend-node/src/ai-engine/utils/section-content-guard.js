@@ -15,60 +15,18 @@
  * 铁律：**验证优先于自愈**——不盲目重排 DOM（会与 CSS 左右专属样式打架）、不静默删文本；
  *       只产出可读 issues，由调用方决定留痕/BLOCK/重试。
  */
-import { indexFigmaNodes } from './section-tree.js';
+import {
+  buildChildrenMap,
+  collectSubtreeTexts,
+  indexFigmaNodes,
+  assignSectionComponentNames,
+} from './section-tree.js';
+import { assessStatRowConfidence } from './inline-row-assembler.js';
+import { extractRenderedText } from './text-truth-guard.js';
 
 const MIN_SIG_LEN = 2; // 成员签名文本最小长度（如「24小时」=3）
 const MIN_DUP_LEN = 4; // 重复检测文本最小长度（排除「24小时」类短共享词）
 
-/** 由扁平索引重建 parentId → children[] 邻接表 */
-function buildChildrenMap(index) {
-  const childrenOf = new Map();
-  for (const node of index.values()) {
-    if (!node.parentId) continue;
-    if (!childrenOf.has(node.parentId)) childrenOf.set(node.parentId, []);
-    childrenOf.get(node.parentId).push(node.id);
-  }
-  return childrenOf;
-}
-
-/**
- * 归一化 Figma 文本节点名：剥掉单字母命名前缀（t-/d-/n-/v- 等）。
- * 真机实证：统计行成员子树文本名为 "t-江阴大桥"/"d-82,379"（t-=标题、d-=数据），
- * 不归一化则无法与产物模板里的裸文本「江阴大桥」匹配 → 漏判。
- */
-function normalizeTextName(name) {
-  return String(name || '').replace(/^[a-zA-Z]-/, '').trim();
-}
-
-/** 收集节点子树内所有文本（TEXT/CHARACTER 节点 name），返回 [{text, isTitle, x}] 去重数组（x=文本节点自身 bbox.x） */
-function collectSubtreeTexts(nodeId, index, childrenOf) {
-  const out = [];
-  const seenKeys = new Set();
-  const seen = new Set();
-  const walk = (id) => {
-    if (seen.has(id)) return;
-    seen.add(id);
-    const node = index.get(id);
-    if (!node) return;
-    if (node.type === 'TEXT' || node.type === 'CHARACTER') {
-      const raw = String(node.name || '');
-      const isTitle = /^[tT]-/.test(raw);
-      const text = normalizeTextName(raw);
-      const key = `${isTitle ? 't' : 'd'}:${text}`;
-      if (text && !seenKeys.has(key)) {
-        seenKeys.add(key);
-        out.push({
-          text,
-          isTitle,
-          x: typeof node.bbox?.x === 'number' ? node.bbox.x : null,
-        });
-      }
-    }
-    for (const c of childrenOf.get(id) || []) walk(c);
-  };
-  walk(nodeId);
-  return out;
-}
 
 /**
  * 取成员视觉签名：优先「最独特」文本 —— 在组件文件中出现次数最少者（避免标题类文本
@@ -83,7 +41,7 @@ function signatureText(nodeId, index, childrenOf, vueFiles) {
   const scored = items
     .map((i) => ({
       ...i,
-      hostCount: vueFiles.filter((f) => f.content.includes(i.text)).length,
+      hostCount: vueFiles.filter((f) => f.renderedText.includes(i.text)).length,
     }))
     .filter((i) => i.hostCount >= 1); // 未在任何组件渲染的文本无法作为定位签名
   if (scored.length === 0) return null;
@@ -124,12 +82,19 @@ export function checkSectionContent({ files, plan, figmaRoot }) {
   if (index.size === 0) return result;
   const childrenOf = buildChildrenMap(index);
 
-  const vueFiles = files.filter(
-    (f) =>
-      typeof f?.path === 'string' &&
-      /package\/components\/[^/]+\.vue$/.test(f.path) &&
-      typeof f.content === 'string',
-  );
+  const vueFiles = files
+    .filter(
+      (f) =>
+        typeof f?.path === 'string' &&
+        /package\/components\/[^/]+\.vue$/.test(f.path) &&
+        typeof f.content === 'string',
+    )
+    .map((f) => ({
+      ...f,
+      // 🛡️ R5-dup：预提取「渲染文本」（剥离 HTML 注释/标签/插值），供下方 includes 判定。
+      // 裸 f.content.includes(text) 会把注释（`<!-- 当日总流量区域背景 -->`）误判为渲染 → 假阳性。
+      renderedText: extractRenderedText(f.content),
+    }));
   if (vueFiles.length === 0) return result;
 
   const sections = collectSections(plan.effectiveSections);
@@ -159,12 +124,16 @@ export function checkSectionContent({ files, plan, figmaRoot }) {
 
     const expected = [...entries].sort((a, b) => a.x - b.x); // 视觉左→右
     const hostFiles = vueFiles.filter((f) =>
-      expected.every((e) => f.content.includes(e.sig)),
+      expected.every((e) => f.renderedText.includes(e.sig)),
     );
     if (hostFiles.length === 0) continue; // 找不到同载体的宿主文件 → 无法判定
 
     const allWrong = hostFiles.every((f) => {
-      const idx = (e) => f.content.indexOf(e.sig);
+      // 🛡️ 2026-09-15（真机 mc-1789464855419 实锤）：序判定必须用 renderedText（剥离标签后），
+      //   与宿主判定同口径。旧实现用 `f.content.indexOf(e.sig)`（原始文本），而 sig 是归一化后
+      //   的纯文本（如「南北接线设备」），产物里却是「南北接线<br/>设备」（被 <br/> 断开）
+      //   → indexOf 返回 -1 → 被误判为「序反」（假阳性）。两处口径不一致是根因。
+      const idx = (e) => f.renderedText.indexOf(e.sig);
       let prev = -1;
       for (const e of expected) {
         const cur = idx(e);
@@ -204,7 +173,7 @@ export function checkSectionContent({ files, plan, figmaRoot }) {
   for (const [text, owners] of textOwners) {
     if (owners.size !== 1) continue; // 多 section 共有（图例类）→ 合法重复
     const ownerSection = [...owners][0];
-    const hostFiles = vueFiles.filter((f) => f.content.includes(text));
+    const hostFiles = vueFiles.filter((f) => f.renderedText.includes(text));
     if (hostFiles.length >= 2) {
       result.duplicateTextIssues.push({
         text,
@@ -216,6 +185,108 @@ export function checkSectionContent({ files, plan, figmaRoot }) {
   }
 
   return result;
+}
+
+/**
+ * 🛡️ 阶段 C（2026-09-15 · 序 5）：内容守卫分级——高置信自愈。
+ *
+ * 从 checkSectionContent 的 duplicateTextIssues 里挑「高置信」条目做确定性自愈：
+ *   · 唯一归属文本（Figma 子树真值）却渲染在 ≥2 组件 → 从**非 owner 组件**删除该文本的
+ *     模板静态文本节点（如 `<span>24小时</span>`）。
+ *   · owner 组件 = ownerSection 经 assignSectionComponentNames 得到的组件名；
+ *     renderedIn 里除 owner 组件外的其余文件 = 错装文件。
+ *
+ * 铁律（与 checkSectionContent 一致，验证优先于自愈）：
+ *   - 只在「模板里找到该文本的**独立静态文本节点**」时删除（`>…text…<` 且无其它语义文本），
+ *     绝不裸 split/join 字符串（会误删 script 数据字段、chart 配置、注释）。
+ *   - owner 组件不在 renderedIn 里（无法确定谁是错装）→ 跳过，不猜。
+ *   - 删除后校验 SFC 语法，非法则回退（fail-closed，宁可漏删不可删坏）。
+ *
+ * @param {object} params
+ * @param {Array<{path:string, content:string}>} params.files 产物文件（package/components/*.vue）
+ * @param {object} params.plan subComponentPlan（含 effectiveSections）
+ * @param {object} params.figmaRoot figmaNodeData（document 树）
+ * @param {Function} [params.validateSfc] 可选 SFC 语法校验（content, path）=> {valid}
+ * @returns {{files:Array, healed:Array<{text:string, removedFrom:Array<string>}>}}
+ */
+export function healDuplicateTextIssues({ files, plan, figmaRoot, validateSfc }) {
+  if (!Array.isArray(files) || files.length === 0) return { files, healed: [] };
+  if (!plan || !Array.isArray(plan.effectiveSections)) return { files, healed: [] };
+
+  const { duplicateTextIssues } = checkSectionContent({ files, plan, figmaRoot });
+  if (duplicateTextIssues.length === 0) return { files, healed: [] };
+
+  // section id → 组件名（owner 组件定位）
+  let nameOf;
+  try {
+    nameOf = assignSectionComponentNames(plan.effectiveSections);
+  } catch {
+    return { files, healed: [] };
+  }
+
+  const byPath = new Map(files.map((f) => [f.path, f]));
+  const healed = [];
+
+  for (const issue of duplicateTextIssues) {
+    const ownerName = nameOf.get(String(issue.ownerSection));
+    if (!ownerName) continue; // 无法确定 owner 组件 → 不猜
+    const ownerFile = `package/components/${ownerName}.vue`;
+    const renderedIn = Array.isArray(issue.renderedIn) ? issue.renderedIn : [];
+    // 错装文件 = renderedIn 里除 owner 组件外的其余文件
+    const wrongFiles = renderedIn.filter((p) => p !== ownerFile);
+    if (wrongFiles.length === 0) continue;
+
+    const removedFrom = [];
+    for (const wrongPath of wrongFiles) {
+      const rec = byPath.get(wrongPath);
+      if (!rec || typeof rec.content !== 'string') continue;
+      const text = String(issue.text);
+      const cleaned = removeStaticTextNode(rec.content, text);
+      if (cleaned === null) continue; // 未找到可安全删除的静态文本节点
+      if (validateSfc) {
+        const r = validateSfc(cleaned, wrongPath);
+        if (!r?.valid) continue; // 删坏 → 回退
+      }
+      rec.content = cleaned;
+      removedFrom.push(wrongPath);
+    }
+    if (removedFrom.length > 0) {
+      healed.push({ text: issue.text, removedFrom });
+    }
+  }
+
+  return { files: [...byPath.values()], healed };
+}
+
+/**
+ * 从 SFC 模板里删除「text 作为独立静态文本节点」的出现，返回新内容；
+ * 找不到可安全删除的节点时返回 null（不裸删字符串）。
+ *
+ * 仅匹配 `>…text…<`（标签之间纯文本，可含空白）这一种形态，且该节点内除 text 外
+ * 无其它中文字符（避免把 `<span>24小时趋势</span>` 里的「24小时」误删成「趋势」）。
+ */
+function removeStaticTextNode(content, text) {
+  const esc = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // 静态文本节点：标签闭合后、下一个 < 之前，纯 text（含空白），且无其它中文
+  const rx = new RegExp(
+    `>[\\s]*${esc}[\\s]*<(?![^>]*${esc})`,
+    'g',
+  );
+  const matches = [...content.matchAll(rx)];
+  if (matches.length === 0) return null;
+  let out = content;
+  // 从后往前替换，避免 offset 漂移
+  for (let i = matches.length - 1; i >= 0; i--) {
+    const m = matches[i];
+    // 仅当该文本片段左右无其它中文才删（避免子串误删）
+    const before = content.slice(Math.max(0, m.index - 12), m.index);
+    const after = content.slice(m.index + m[0].length, m.index + m[0].length + 12);
+    const hasOtherCJK = /[\u4e00-\u9fa5]/.test(before + after);
+    if (hasOtherCJK) continue;
+    // 删除整个文本片段（含包裹空白），保留空标签
+    out = out.slice(0, m.index) + '><' + out.slice(m.index + m[0].length);
+  }
+  return out === content ? null : out;
 }
 
 /**
@@ -245,31 +316,52 @@ export function buildSectionContentContract(plan, figmaRoot) {
       const isHorizontal = sec.body?.layout === 'horizontal';
 
       if (isHorizontal) {
-        // 🎯 横向 section：输出「成员级配对」——每个成员的标题↔数值成对 + 按 x 从左到右。
-        // 实锤（2:3660 统计行）：LLM 不仅左右反，还把卡片 2 内部的标题/数值也写反；
-        // 扁平文本列表治不了「配对错乱」，必须按成员配对给到。
-        const memberIds = ids.filter((id) => String(id) !== String(sec.id));
-        const members = memberIds
-          .map((id) => {
-            const items = collectSubtreeTexts(String(id), index, childrenOf);
-            const title = items.find((i) => i.isTitle)?.text || null;
-            const value = items.find((i) => !i.isTitle)?.text || null;
-            const bbox = index.get(String(id))?.bbox;
-            return {
-              title,
-              value,
-              x: typeof bbox?.x === 'number' ? Math.round(bbox.x) : null,
-            };
-          })
-          .filter((m) => m.title || m.value)
-          .sort((a, b) => (a.x ?? 0) - (b.x ?? 0));
-        if (members.length > 0) {
+        // 🎯 阶段 B（2026-09-15）：先尝试「高置信确定性装配」。
+        // 铁律：仅当 assessStatRowConfidence 判 high（成员唯一、x 可解析且严格递增、
+        //       「1标题+1数值」配对完整、无重复归属、无资源冲突）才确定性配对；
+        //       否则整节回退既有 LLM 路径（成员级配对，非确定性），不产生半确定性混合。
+        const assembly = assessStatRowConfidence(sec, figmaRoot);
+        if (assembly.verdict === 'high') {
           contract.push({
             id: String(sec.id),
             title: sec.title || '',
             direction: 'row',
-            members,
+            deterministic: true,
+            members: assembly.members.map((m) => ({
+              title: m.title,
+              value: m.value,
+              x: Math.round(m.x),
+              figmaNodeId: m.figmaNodeId,
+            })),
           });
+        } else {
+          // 回退 LLM：输出「成员级配对」——每个成员的标题↔数值成对 + 按 x 从左到右。
+          // 实锤（2:3660 统计行）：LLM 不仅左右反，还把卡片 2 内部的标题/数值也写反；
+          // 扁平文本列表治不了「配对错乱」，必须按成员配对给到（仍作预防，非确定性）。
+          const memberIds = ids.filter((id) => String(id) !== String(sec.id));
+          const members = memberIds
+            .map((id) => {
+              const items = collectSubtreeTexts(String(id), index, childrenOf);
+              const title = items.find((i) => i.isTitle)?.text || null;
+              const value = items.find((i) => !i.isTitle)?.text || null;
+              const bbox = index.get(String(id))?.bbox;
+              return {
+                title,
+                value,
+                x: typeof bbox?.x === 'number' ? Math.round(bbox.x) : null,
+              };
+            })
+            .filter((m) => m.title || m.value)
+            .sort((a, b) => (a.x ?? 0) - (b.x ?? 0));
+          if (members.length > 0) {
+            contract.push({
+              id: String(sec.id),
+              title: sec.title || '',
+              direction: 'row',
+              deterministic: false,
+              members,
+            });
+          }
         }
       } else {
         const merged = new Map();

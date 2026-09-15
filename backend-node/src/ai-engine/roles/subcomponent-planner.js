@@ -27,6 +27,7 @@ import {
   sortSectionsByFigmaY,
   indexFigmaNodes,
   figmaSectionBox,
+  stripFabricatedSourceIds,
 } from '../utils/section-tree.js';
 // 🛡️ 刀 5a（2026-09-13）：section type 推导抽离到纯函数模块（无 import.meta 依赖，可单测）
 import { deriveSectionType } from '../utils/section-type-derive.js';
@@ -967,6 +968,14 @@ export class SubcomponentPlanner {
     //   下游判别力去重双输（真图表被当碎片杀、假壳被判超集留）。在裁决前先用 figma
     //   节点树（事实源）把壳锚定回真实节点；无 figmaNodeData 时零影响。
     if (opts.figmaNodeData && typeof opts.figmaNodeData === 'object') {
+      // 🛡️ 治本（2026-09-15 · 228b63d5）：先清洗「编造 id 空间」污染的 sourceNodeIds，
+      //   让假 grid/tabs 壳回到「无归属壳」状态，anchor 才能锚定真 chart、dedupe 才能剔假壳。
+      //   位置必须在 anchorPhantomSections **之前**（假 id 不清，isShell 判据恒 false）。
+      effectiveSections = stripFabricatedSourceIds(
+        effectiveSections,
+        opts.figmaNodeData,
+      );
+
       const beforeAnchor = effectiveSections;
       effectiveSections = anchorPhantomSections(
         effectiveSections,

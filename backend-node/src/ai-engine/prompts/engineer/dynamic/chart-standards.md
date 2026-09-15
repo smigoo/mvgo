@@ -15,16 +15,17 @@
 2. **环形图环厚（radius）**：ECharts 环形图必须用 `radius: [内, 外]` 数组精确控制环厚（如 `['55%','75%']`），**禁止默认 `radius:'50%'` 过细或单值失真**；环厚按 Figma 视觉比例设定。
 3. **边框生成（border）**：Figma 标注 stroke 的面板/卡片/分区**必须**生成 `border: <width>px solid <color>`（圆角对应 `border-radius`），**禁止只设背景色漏边框**。
 4. **图例位置（legend.position）**：`legend` 的 top/bottom/left/right 必须对齐 Figma 图例实际方位，禁止默认堆顶部；多图共享图例时位置一致。
-5. **图例存在性（legend 必生成）**：Figma 有图例则**必须**生成对应 `legend` 配置，禁止只画 series 不画 legend（导致无法区分数据系列）。
-6. **交通预测/趋势卡片（区块还原）**：设计含"交通预测/趋势/预警"等卡片区块时，必须还原为真实 DOM（数值+单位+环比/趋势箭头/状态色），**禁止整块遗漏或用占位文本**。
-7. **图表必须用 ECharts（禁止替代方案）**：Figma 含折线图/柱状图/面积图/饼图/环形图/散点图时，**必须**用 `import * as echarts from 'echarts'` + `echarts.init()` + `setOption()` 渲染。**绝对禁止**以下替代方案（任一出现即判定为不合格）：
+5. **图例存在性（legend 必生成）**：Figma 有图例则**必须**生成对应 `legend` 配置，禁止只画 series 不画 legend（导致无法区分数据系列）。图例一律用 ECharts `legend`，**禁止**在图表容器外用 `<div>` 色块+文字自绘图例（实锤 mc-1789445437366-5b19ce4f：图例被渲染成容器外的 `.c-env-monitor-time-range` DOM）。
+6. **阈值线归属（markLine 必进 series）**：Figma 画布内的横线/竖线（预警线、目标线、安全阈值）**必须**写成 `series[].markLine`，**禁止**在图表容器外建兄弟 DOM（如 `<div class="xxx-threshold-label">`）画线或写标注。阈值线是图表的一部分，其坐标必须随数据轴走（`{ yAxis: 30 }`），不能是脱离画布的静态定位元素。
+7. **交通预测/趋势卡片（区块还原）**：设计含"交通预测/趋势/预警"等卡片区块时，必须还原为真实 DOM（数值+单位+环比/趋势箭头/状态色），**禁止整块遗漏或用占位文本**。
+8. **图表必须用 ECharts（禁止替代方案）**：Figma 含折线图/柱状图/面积图/饼图/环形图/散点图时，**必须**用 `import * as echarts from 'echarts'` + `echarts.init()` + `setOption()` 渲染。**绝对禁止**以下替代方案（任一出现即判定为不合格）：
    - ❌ SVG `<polyline>` / `<path>` / `<circle>` 手绘折线、柱状或饼图
    - ❌ `<canvas>` 手动绘制图表
    - ❌ 硬编码静态坐标点（如 `points="0,92 40,70 80,78 ..."`）模拟数据走势
    - ❌ 用纯文本/CSS 画柱状或饼图
-8. **坐标轴刻度/标签必须还原（axisLabel）**：`xAxis`/`yAxis` 的 `axisLabel.show` 必须为 `true` 且渲染**真实刻度**——Y 轴数值（如 `40/30/20/10/0`）、X 轴时间/类目（如 `2/4/.../24`）；`axisTick.show` 必须为 `true`；`data` 必须取自 Figma 节点树的真实文本，**禁止 `data: []` 空数组**；需单位时用 `name`（如 `name: '时'`）。坐标轴标签缺失（空轴/无刻度数字）即判定不合格。
-9. **坐标轴必须用数组格式（xAxis/yAxis 数组）**：`xAxis`/`yAxis` 一律写 `xAxis: [{ ... }]` 数组格式，**禁止对象格式 `xAxis: { ... }`**（部分 ECharts 版本会报 `xAxis "0" not found`）；`series` 中 cartesian 系列（bar/line/scatter 等）**必须显式写 `xAxisIndex: 0, yAxisIndex: 0`**，且索引为数字**禁止字符串 `'0'`**。
-10. **禁止 LESS 变量泄漏进 JS formatter**：`tooltip.formatter` / `axisLabel.formatter` 等 JS 回调返回的内联 HTML `style` 中，**禁止出现 `@fontSize` 等 LESS 变量**（浏览器无法解析 `calc(@fontSize * ...)` 会静默丢字号）；需要用字体大小时写 `calc(var(--fontSize, 14px) * N)` 或直接硬编码 px。
+9. **坐标轴刻度/标签必须还原（axisLabel）**：`xAxis`/`yAxis` 的 `axisLabel.show` 必须为 `true` 且渲染**真实刻度**——Y 轴数值（如 `40/30/20/10/0`）、X 轴时间/类目（如 `2/4/.../24`）；`axisTick.show` 必须为 `true`；`data` 必须取自 Figma 节点树的真实文本，**禁止 `data: []` 空数组**；需单位时用 `name`（如 `name: '时'`）。坐标轴标签缺失（空轴/无刻度数字）即判定不合格。
+10. **坐标轴必须用数组格式（xAxis/yAxis 数组）**：`xAxis`/`yAxis` 一律写 `xAxis: [{ ... }]` 数组格式，**禁止对象格式 `xAxis: { ... }`**（部分 ECharts 版本会报 `xAxis "0" not found`）；`series` 中 cartesian 系列（bar/line/scatter 等）**必须显式写 `xAxisIndex: 0, yAxisIndex: 0`**，且索引为数字**禁止字符串 `'0'`**。
+11. **禁止 LESS 变量泄漏进 JS formatter**：`tooltip.formatter` / `axisLabel.formatter` 等 JS 回调返回的内联 HTML `style` 中，**禁止出现 `@fontSize` 等 LESS 变量**（浏览器无法解析 `calc(@fontSize * ...)` 会静默丢字号）；需要用字体大小时写 `calc(var(--fontSize, 14px) * N)` 或直接硬编码 px。
 
 参考示例：
 ```vue
@@ -105,8 +106,10 @@ onUnmounted(() => {
 })
 </script>
 <style scoped lang="less">
-.chart-wrapper { width: 100%; height: 100%; }
-.chart-container { width: 100%; height: 100%; min-width: 0; min-height: 0; }
+.chart-wrapper { width: 100%; height: 100%; min-height: 0; }
+/* 🔴 echarts 挂载容器必须带【非零】 min-height 兜底：主图 160px / 紧凑图(环形/仪表) 100px
+   ⚠️ 禁止写 `min-height: 0` —— 容器内容为空时高度算成 0，图表直接看不见（真机实锤）。 */
+.chart-container { width: 100%; height: 100%; min-width: 0; min-height: 160px; }
 </style>
 ```
 
@@ -166,7 +169,7 @@ onUnmounted(() => {
 .chart-c { height: 60px; }
 ```
 
-**单一图表场景**：直接用 `flex: 1 1 0; min-height: 0`（单区块独占剩余空间）撑满。
+**单一图表场景**：直接用 `flex: 1 1 0; min-height: 160px`（单区块独占剩余空间撑满；`min-height` 必须是**非零兜底值**，写 0 会让空容器高度算成 0 → 图表不可见）。
 
 ```js
 // updateChart 通过 chart.setOption 更新

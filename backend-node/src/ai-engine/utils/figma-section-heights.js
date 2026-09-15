@@ -17,7 +17,11 @@
  * 🛡️ A′ Phase 5：plan 走叶子 section，布局容器不占高度槽。
  */
 
-import { collectLeafSections, findSectionById } from './section-tree.js';
+import {
+  collectLeafSections,
+  findSectionById,
+  dedupeDuplicateSections,
+} from './section-tree.js';
 
 /**
  * 取 SFC 根 <template> 内容（跳过 #header-right / v-slot 等具名插槽）。
@@ -47,6 +51,61 @@ function extractRootTemplate(src) {
 }
 
 /**
+ * 提取根 <template> 内容里「根元素」的直接子元素 class 列表（按文档顺序）。
+ *
+ * 用途（2026-09-15）：单文件组件（无 package/components/ 子组件目录）时，section 根是
+ * 模板里根 div 的直接子 div（LLM 自由命名，如 title-section / tab-section / chart-section），
+ * 而非大写子组件标签。buildSectionHeightsMap 的多子组件对齐路径（大写标签 ↔ plan 叶子）
+ * 对单文件组件天然失效（tags.length === 0 → fail-open null）。
+ * 此处按「直接子元素 class 文档顺序 ↔ vision sections 顺序」做保守 1:1 对齐，
+ * 数量不等/无 class 时返回 null 由调用方 fail-open。
+ *
+ * 只认根元素的第一层子元素（depth===1）；孙辈（嵌套 div）不参与。
+ * 自闭合标签（<img/>）与注释/DOCTYPE 跳过。纯函数、无副作用。
+ *
+ * @param {string} tpl 根 template 内容（extractRootTemplate 产出）
+ * @returns {Array<string>} 直接子元素的首 class（无 class 记空串占位以保序）；无法解析返回 []
+ */
+function extractRootDirectChildClasses(tpl) {
+  const s = String(tpl || '');
+  if (!s) return [];
+  const out = [];
+  let depth = 0;
+  let rootSeen = false;
+  // 开/闭标签统一匹配；attrs 用「引号内不截断」的段匹配，避免 class="a b" 被空格切开
+  const tagRe = /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>"'])*)(\/?)>/g;
+  let m;
+  while ((m = tagRe.exec(s)) !== null) {
+    const closing = m[1] === '/';
+    const tag = m[2];
+    const attrs = m[3] || '';
+    const selfClose = m[4] === '/';
+    if (tag[0] === '!' || tag[0] === '?') continue; // 注释 / DOCTYPE
+    if (!rootSeen) {
+      if (!closing) {
+        rootSeen = true;
+        depth = 1; // 进入根元素
+        if (selfClose) return []; // 根元素自闭合，无子元素
+      }
+      continue;
+    }
+    if (closing) {
+      depth -= 1;
+      if (depth === 0) break; // 根元素闭合，结束
+      continue;
+    }
+    if (depth === 1) {
+      // 根元素的直接子元素：取首 class（无 class 记空串占位，保持顺序语义）
+      const clsMatch =
+        attrs.match(/class\s*=\s*"([^"]*)"/) || attrs.match(/class\s*=\s*'([^']*)'/);
+      out.push(clsMatch ? clsMatch[1].trim().split(/\s+/)[0] : '');
+    }
+    if (!selfClose) depth += 1;
+  }
+  return out;
+}
+
+/**
  * 对齐「plan.effectiveSections 顺序 ↔ 主组件模板子组件标签顺序 ↔ 各子组件根 class」。
  *
  * 批次 3（2026-09-14）：从 buildSectionHeightsMap 抽出，供 buildSectionLayoutFacts 共用；
@@ -61,7 +120,14 @@ function alignSectionClasses(modelFiles, layoutStructure, params = {}) {
 
   const plan =
     params?.subComponentPlan || params?.generationInput?.componentPlan || null;
-  const planLeaves = collectLeafSections(plan?.effectiveSections);
+  // 🛡️ 治本（2026-09-15 · c-device-monitor-44384241 实锤）：与 code-generator 的
+  // resolvePlanSections 同源——先 dedupeDuplicateSections 再 collectLeafSections。
+  // 原实现直接用 plan.effectiveSections（未去重，含「设备网格」8438 这类 @antd/tab 的
+  // 冗余切片）→ 叶子数(4) ≠ 产物子组件数(3) → 对齐失败 → fail-open 返回 null →
+  // sectionHeights 映射丢失 → switch/tab 高度比例退化为 flex:1 平分（实锤 1:1 而非 1:4.9）。
+  const planLeaves = collectLeafSections(
+    dedupeDuplicateSections(plan?.effectiveSections || []),
+  );
   const secOf = (eff) =>
     findSectionById(rawSections, eff?.id) ||
     rawSections.find((s) => String(s?.id || '') === String(eff?.id || ''));
@@ -173,7 +239,11 @@ export function buildSectionHeightsMap(modelFiles, layoutStructure, params = {})
       return 0;
     };
     let orderedSections = null;
-    const planLeaves = collectLeafSections(plan?.effectiveSections);
+    // 🛡️ 治本（2026-09-15）：与 code-generator resolvePlanSections 同源——先 dedupe 再取叶子，
+    // 避免「设备网格」冗余切片（flexGrow=0 被 filter）导致叶子数(3)≠planLeaves(4) → fail-open null。
+    const planLeaves = collectLeafSections(
+      dedupeDuplicateSections(plan?.effectiveSections || []),
+    );
     // 🎯 治本（2026-09-14 · c-traffic-monitor-3147d679 真机实锤）：flexGrow 消费断链。
     // 原实现「顺序取 repaired plan.effectiveSections、数值取 raw vision 的 styles.flexGrow」，
     // 两处不同源：vision 自报系数是猜测（一对 Figma 高度同为 131px 的等高柱状图被报成
@@ -223,6 +293,26 @@ export function buildSectionHeightsMap(modelFiles, layoutStructure, params = {})
       const tag = m[1];
       if (tags.includes(tag)) continue;
       if (modelFiles[`package/components/${tag}.vue`]) tags.push(tag);
+    }
+
+    // 🆕 单文件组件（无子组件目录，2026-09-15）：section 根是根模板直接子 div（LLM 自由命名），
+    // 无大写子组件标签 → 多子组件对齐路径天然失效。此处按「直接子元素 class 文档顺序 ↔
+    // vision sections 顺序」保守 1:1 对齐；数量不等 / 有元素缺 class / 无法解析 → fail-open null。
+    // 与 figma-height-ratio.applyFigmaSectionRatios 的「数量相等才顺序配对」同口径（不猜）。
+    if (tags.length === 0) {
+      const directClasses = extractRootDirectChildClasses(tpl);
+      if (
+        directClasses.length >= 2 &&
+        directClasses.length === orderedSections.length &&
+        directClasses.every((cls) => typeof cls === 'string' && cls.length > 0)
+      ) {
+        const mono = {};
+        for (let i = 0; i < directClasses.length; i++) {
+          mono[directClasses[i]] = orderedSections[i];
+        }
+        return mono;
+      }
+      return null;
     }
     if (tags.length < 2 || tags.length !== orderedSections.length) return null;
 

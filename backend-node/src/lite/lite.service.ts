@@ -1187,7 +1187,7 @@ ${mappingSummary}`;
 
       const { buildChatUrl } = await import('../ai-engine/utils/chat-url.js');
       const fullUrl = buildChatUrl(baseURL);
-      const model = aiConfig.textModel || aiConfig.model || 'gpt-4o-mini';
+      const model = aiConfig.textModel || aiConfig.model || '';
 
       this.logger.log(`🤖 调用 AI 分析素材位置: ${model}`);
 
@@ -1350,7 +1350,7 @@ ${originalCode}`;
 
     const { buildChatUrl } = await import('../ai-engine/utils/chat-url.js');
     const fullUrl = buildChatUrl(baseURL);
-    const model = aiConfig.textModel || aiConfig.model || 'gpt-4o-mini';
+    const model = aiConfig.textModel || aiConfig.model || '';
     const axios = (await import('axios')).default;
     const response = await axios.post(
       fullUrl,

@@ -18,7 +18,7 @@ export class UrlParserAgent extends BaseAgent {
     super({
       name: 'url-parser-agent',
       description: '解析 Figma 链接为 fileKey/nodeId，供下游 figma-connector 使用',
-      model: config.model || 'gpt-4o-mini',
+      model: config.model || '',
       temperature: config.temperature || 0,
       maxTokens: config.maxTokens || 1024,
       skipLLM: true, // 纯确定性：无 LLM 依赖

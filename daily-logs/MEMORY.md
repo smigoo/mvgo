@@ -2,36 +2,37 @@
 
 ## 环境/构建/部署
 - 根 `/Users/smigoo/工作/mvgo`；子仓 backend-node/frontend/docs；Node 13030 / Java 8080 / 前端 2610。
-- Bash 跑构建/常驻服务必 `env -i PATH=".../22.22.2-3/bin:/usr/local/bin:/usr/bin:/bin" HOME=/Users/smigoo`（清 NODE_OPTIONS shim+代理）；jest 加 `NODE_OPTIONS=--max-old-space-size=1536 --runInBand --forceExit`；curl `--noproxy '*'`；多关键词 grep 必 `-E`；zsh 未加引号的 `--include=*.js` 会中止整条命令。
-- 构建 `rm -f tsconfig.build.tsbuildinfo && npm run build`（不清缓存改动不进 dist）；启动 `node start-node.js`（项目根）；日志 `backend-node/server.log`，重启前必看其尾部活动（否则误杀任务且不 resume）。
-- 勿设 FIELD_ENCRYPTION_KEY；AI 凭证 `data/ai-config.json`；勿加 package.json type:module；新增路由三处同步（docker nginx/公司 nginx/Java Proxy）。
-- ECS `root@iZbp1hik17it6sucvjuotaZ`（仅 FlClash 增强模式）：Node `set -a; . ./.env.production; set +a; NODE_ENV=production nohup node dist/main.js`；Java 先 cd backend-java + `SPRING_PROFILES_ACTIVE=prod`；`npm ci` 必设 `PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true`。
+- Bash 跑构建/常驻服务必 `env -i PATH=".../22.22.2-3/bin:/usr/local/bin:/usr/bin:/bin" HOME=/Users/smigoo`（清 NODE_OPTIONS shim+代理）；jest 加 `NODE_OPTIONS=--max-old-space-size=1536 --runInBand --forceExit`；curl `--noproxy '*'`；多关键词 grep 必 `-E`。
+- 构建 `rm -f tsconfig.build.tsbuildinfo && npm run build`；启动 `node start-node.js`（项目根）；日志 `backend-node/server.log`，重启前必看尾部活动。
+- 勿设 FIELD_ENCRYPTION_KEY；AI 凭证 `data/ai-config.json`；勿加 package.json type:module；新增路由三处同步。
+- 预览取源：`last-good > candidate > partial > workspace`。workspace 事实源 = `backend-node/workspace`。
 
 ## 核心原则
-**同一概念只允许一处实现 + 全链路接入 + 落盘闸门收口。** 门禁误报先问：事实源唯一吗？采集/判定是否被表达式、注释、别名、编译产物污染？修完铁律立刻 grep 全部同名判据落点。
-事实源：`class-facts`/`classname-contract`/`class-dialect-normalizer`/`less-selector-stack`/`collectDeclaredBindings`/`file-collection`/`resolveComponentDirStrict`/`rootLayoutFacts`/`state.productFiles`。
+**同一概念只允许一处实现 + 全链路接入 + 落盘闸门收口。** 门禁误报先问：事实源唯一吗？采集是否被表达式/注释/别名/编译产物污染？
+**删减法**：视觉确定性事实从 LLM 剥离，生成时装配，每接管一件事就删对应纠偏器。门禁总数只能降。
+**禁止改单个产物**（`frontend/workspace` / `temp-components` 打 CSS 补丁）。
 
-## 治本家族（2026-09-13，详见 2026-09-13.md）
-- 刀 7~11：资源绑定事实源（别名转发撞 import → 子组件消失）；componentId 可剥离性（`sanitizeComponentId` 闸门）；CODE-026 假阳性（`productFiles` vs `writtenFiles`）；CODE-024 假阳性（比较值被当类名）。
-- 刀 12 R4 跨侧对齐。铁律：**「样式是否存在」类判据必须先剥 `[自动修复]` stub，且编译产物 `.css` 不入样式源**。
-- 刀 13 COMP-001/R3：归一器掏空 `:not()` 参数 → 非法 LESS → P1-4 剔除子组件。治本 `findPseudoArgRanges`+`less-selector-stack`+契约层共用栈；门禁命名单一化 + 可修/不可修二分。刀 13-C `fixFiles` 契约错位（数组 vs 对象 map）→ 静默失效；`file-collection.js`+管线契约守卫。
-- 刀 14 CODE-024 C3 可修/不可修二分：契约层 `styleClassSet` 全文本扫描 → 编译产物 `index.css` 的 stub 经主题层展开后剥不干净 → 「只有 stub」误判「样式存在」。治本 `collectAllStyleSources` 排除同名 `.less` 存在的 `.css` + `stripAutoFixSection` + `designBaseMods`；基类存在→C3 error，否则→`CLASSNAME-C3-UNREACHABLE` warn（`f6171b3`，真机 BLOCK=0）。
-- 刀 15 颜色 var() 透传破坏 LESS 编译期颜色函数 —— **三条注入路径**：`file-writer#safeLessVarValue`／`less-variable-checker` 优先级 1／`code-healer#healPresetLiteralDecls`。核心：**var()（运行时）与 lighten()（编译期）根本冲突**，凡 var 化颜色都须排除被 Less 颜色函数（lighten/darken/fade/mix…）引用的变量；③「值已是 var 则跳过」会让它在 ①② 修好后**才开始改写**（**只修两条不够**）。真机 **4 模块齐全、`degradedFiles=[]`**（`0c0fb8c`）。
-- 刀 16a FLEX-003 假阳性 = **选择器「目标元素」归属**（**非** stub，原预判错）。CSS 规则只作用于**最右复合选择器**，左边是祖先/条件；旧 `CLASS_RX` 直扫 selector 全部 class → `.A > .B{flex:0 0 46px}` 的值记到祖先 `.A` 头上 → 同祖先 {grow 1, grow 0} → BLOCK。治本新增单一事实源 `targetClassesOf(selector)`（拆 `,` → 剥 `:fn(...)` 参数 → 按 `/[\s>+~]+/` 取**最后一段** → 抽 class → 去重），三处调用点改用并删 `CLASS_RX`。真机 **BLOCK=0、4 模块齐全**（`a43a45b`）。
-- 刀 16b **LESS 颜色函数实参的合成值必须可求值**（刀 15 的续集：**没有 var() 也一样炸**）。事实源 `utils/less-color-funcs.js`（`LESS_COLOR_FUNCS`/`isColorEvaluable`/`isUsedByLessColorFn`/`collectColorFnVars`/`NEUTRAL_LESS_COLOR`）。铁律：**消费端事实优先于名字猜测**（名字分支会给出 `8px`/`1`/`unset`，同样不可求值）→ `safeLessVarValue(name, ctx)` 后置过滤。4 条取值路径全收口：safeLessVarValue×3 调用点 / resource-mounter / less-variable-checker / injectThemeVarDeclsForLess（theme 原样注入）。`isColorEvaluable` 只认 `#hex`/`rgb*()`/`hsl*()`/`hsv*()`（用 `/^[a-z]+$/` 会把 unset 当颜色）。真机 BLOCK=0、4 模块齐全（`e5f9bcb`）。
-- 复现 `POST /api/phase2/generate?reuseCache:true` + `GET /api/tasks/status/<sid>`（**字段 `data.task.status`**；`data.task.progress` 是**日志数组**，别整包打印）；起跑记 `wc -l server.log`，结束 `tail -n +N`。jest 遇 `import.meta` 先 `jest.mock`。
-- 产物核验：SFC 里 `var(--x, hex)` 用于**普通 `color:`** 无害；只要不进颜色函数就不炸。全量 jest 基线 = `17 suite 加载失败（import.meta）+ 4 例断言红灯`，改动后须逐字同名同数。
+事实源：`class-facts`/`classname-contract`/`class-dialect-normalizer`/`less-selector-stack`/`collectDeclaredBindings`/`file-collection`/`resolveComponentDirStrict`/`rootLayoutFacts`/`state.productFiles`/`section-tree`/`inline-row-assembler`/`buildSectionLayoutFacts`。
 
-## 治本家族（2026-09-14，详见 2026-09-14.md）
-- 刀 17 `grid-template-*` 漏 `display:grid` → 多列塌一列被外壳裁掉 =「整块内容凭空消失」，**代码门禁结构上不可见**。治本 `ensureGridDisplay`（+SFC 版）与 `ensureFlexDirection` 共用新抽的 `scanLeafDeclarationBlocks`；触发属性刻意不含 gap（`15c631a`）。真机 healer 触发 4 次、BLOCK=0。
-- 刀 18 绑定表达式对象键：刀 12 类名对齐把 `:class="{ active: x }"` 的**键**改写成含连字符裸键 → 非法 JS → P1-4 剔除整个子组件。治本 `healUnquotedObjectKeysInVue` 补引号；扩展覆盖**数组形式** `:class="['c-x', { active: y }]"` 与事件属性（首版只认「值整体是 {…}」漏了真机形态）。键正则必须 `(^|[{,])`（`3d9842f` + `ecbadde`）。
-- 刀 19 **数据键被 LLM 写成类名**：`'c-device-monitor-error': '5'` 配 `{{ item.error }}` → 取值恒空（异常数/Tab 文字渲染空白）；语法合法+类名真实存在 → 全部门禁不可见。**先离线重放归一器排除管线嫌疑**（changes=[] → 污染源是 LLM 重试轮）。治本 `healClassPrefixedDataKeys`：以模板实际访问的 `.prop` 为事实源还原 script 段类名化键（后缀最短优先/裸键已存在跳过/保留引号）。存量 A/B：24895 .vue 修 26 文件，diff 全 script=true 非 script 0 处；跨 4 组件含交通监测 legendState 图例键（`ecbadde`）。真机复测见 2026-09-14.md。
+## 复现/验收
+- 复现：`POST /api/phase2/generate?reuseCache:true` + `GET /api/tasks/status/<sid>`（字段 `data.task.status`；`data.task.progress` 是日志数组）。
+- 改后处理规则前先确认走哪条 Vision 链路（全新 / vision-cache / `_uiCache`；reuseCache 走③，cache 是加工后结构）。
+- jest 基线 = `17 suite 加载失败（import.meta）+ 4 例断言红灯`，改动后须逐字同名同数。
+- `BLOCK=0` ≠ 视觉正确。构建后 `node --check` 扫 `src/**/*.js`。
 
-## 预览取源（2026-09-14 真机）
-- TaskDetail iframe **优先 last-good 快照**，不是 workspace。手改 frontend/backend workspace 刷新无效；必须改 `temp-components/.task-code-snapshots/<sessionId>/revisions/<last-good>/`。优先级：`last-good > candidate > partial > workspace`（`preview-resolver.ts#selectPreviewSnapshot`）。
-- `src/workspace` 是软链到 `frontend/workspace`。`getComponentImagePath` 的 `import.meta.glob('@/**/mc-preview*.png', { eager: true })` 会把 **全部组件缩略图**当 Vite 模块拉进任务页（`?import`），含无关 `c-env-monitor-*`。改预览图加载勿用 eager 全量 glob。
+## 已治本（详见 2026-09-13/14/15.md）
+- 刀 7~19：资源绑定、componentId、CODE-026/024、COMP-001、LESS var()/颜色函数、FLEX-003 目标元素、grid display、对象键引号、数据键类名化。
+- 刀 20~23：图表 min-height 反杀、schema 双副本、悬空 import 闭包、幻觉 section（宽进严出 + 全语料误伤审计）、`.js` 裸反引号崩 dist、vision 缓存短路。
+- 刀 24：success 资源不吐 fillsSummary + fillsSummary 补 g.opacity/方向。未竟：激活图 `owner-file-missing`+active 键正则；`formatFigmaStyleData` 仍丢填充级 opacity；`style-refiner`/`mountSubStateBackground` 硬编码 100%。
+- 阶段 B：stat 配对 prompt 真机证伪 → 结构层 `healStatRowMemberPairing` 才归零。
+- R4：aspect-ratio 误伤 / min-height 污染非图表容器已修（`82d5dab`）。
+- 高度比例管线双 bug（c-device-monitor-44384241 实锤）：① `buildSectionHeightsMap`/`alignSectionClasses` 与 code-generator `resolvePlanSections` **不同源**（未 dedupe，冗余「设备网格」切片致叶子数 4≠3 → fail-open null → flex:1 平分）；② `fixSectionHeightsForResource` 正则只认三值 `flex:X Y Z`、漏单值 `flex:1`/双值 `flex:1 1`。均已治本 + 回归用例。
 
-## 待治 backlog
-- **视觉覆盖门禁**（新，优先级高）：刀 17/19 都证明 `BLOCK=0` ≠ 视觉正确 —— 文字空白/整块消失全放行。需截图 vs 设计稿的视觉覆盖检查进管线。
-- **刀 16c/d**：治本 camelCase→kebab 映射主题变量（`@colorPrimary`→`@color-primary`，兼满足 M5-10）；LLM 偶发返回「示例骨架/裸 SFC」非 JSON（`rawOutputLength` 极短即信号）→ `code-parser` 加形态嗅探。门禁 C4 文案用 `rule.raw`（未展开）→ 改打印 `resolvedSelector`/`modKey`（仅文案，判据正确）。残余：`style-tokens#buildVue3ThemeMixinSnippet`/`mc-skeleton#tokensToLessVars` 构造 theme 文件、消费方任意 → 拿不到消费端事实（输入是设计稿实测色，暂安全）。
-- 4 例基线红灯：ComponentService 权限 ×2、HttpExceptionFilter、manifest-auditor golden hash。
+## 未竟（真机 09-15 再实锤）
+- **R2 序 4 item 级契约仍待做**：批次 3 只补 section 根 CSS（缺则补 display/flex/grid），**不写 item 内部 DOM**。device-monitor 的 switch 两列、tabs 横向窄条、card 内部结构仍 LLM 自由生成 → 同批 bug 复发。
+- R3：`ensureHeaderSlots` 延后。R5 阶段 C 待做。R7 视觉覆盖门禁待做。
+- **R6 颜色 fills 提取部分解除**（09-15 深夜）：`utils/figma-color-truth.js` 已做 seriesColors 臆造色真值修正（collectFigmaChartColors + resolveSeriesColors），R6 剩余「图标资源逐节点提取」「图例精确配对（系列名→色块）」仍待做。
+- **确定性 chart-builder（消除层）**：LLM 只声明 {sectionId,type,series,colors}，由确定性渲染器写 echarts，建好后删 `injectEchartsFallback`。与高度比例 dedupe 冲突：chart 叶子必须明确 flexGrow+排他 sourceNodeIds，否则 buildSectionHeightsMap fail-open。当前校验层已覆盖（do-not-invent 缺失方向 + 挂载点缺失 + seriesColors 真值）。
+- header 叶子（type='header'）在 `#header-right` 插槽、不参与 slot-con flex，但其高度比例 flexGrow 仍会写进 header 根类 CSS（`flex:0.219 1 0`）——flex-basis:0 副作用，理想应排除 header 叶子 + `extractRootTemplate` 跳过内部具名插槽（改动较大，另开）。
+- 复现样本：`c-device-monitor-228b63d5`（TabsSection 纵向+复制网格；`@color-text-base=#fff` 字看不见；自动修复 stub 给 label 灌 `display:flex`）。
+- 复现样本：`c-traffic-monitor-cd7d0172`（seriesColors 臆造 #ff7875）+ `c-max-1789476464544-07e31fbb`（echarts 挂载点缺失，环形图消失）。

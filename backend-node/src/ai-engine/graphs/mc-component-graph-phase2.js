@@ -18,6 +18,7 @@ import {
   VisualParser,
   evaluateVisualTrustVerdict,
   VISUAL_VERDICTS,
+  applyHallucinationDrop,
 } from '../roles/visual-parser.js';
 import { LayoutReviewer } from '../roles/layout-reviewer.js';
 import { StyleMapper } from '../roles/style-mapper.js';
@@ -496,6 +497,10 @@ export function createPhase2Graph(config = {}) {
           resourceDomMapping = null;
         }
 
+        // 6-A · 缓存路径也需构建颜色索引（与主路径同口径）
+        const cachedConnector = new FigmaConnector({ figmaToken: state.figmaToken });
+        const nodeColorIndex = cachedConnector.buildNodeColorIndex(cachedNodeData);
+
         return {
           figmaStyleTree: formatFigmaStyleData(cachedNodeData),
           previewImage: state._uiCache.previewImage || null,
@@ -504,6 +509,8 @@ export function createPhase2Graph(config = {}) {
           resourceDomMapping,
           techStackHints: cachedTechHints,
           docAnalysis: state.docAnalysis || null,
+          // 6-A · nodeId→fills 颜色索引（确定性事实源，供 6-B 颜色装配消费）
+          nodeColorIndex,
         };
       }
 
@@ -576,6 +583,9 @@ export function createPhase2Graph(config = {}) {
       );
       const figmaStyleTree = formatFigmaStyleData(optimizedFigmaData);
 
+      // 6-A · 构建 nodeId→fills 颜色索引（确定性事实源，供 6-B 颜色装配消费）
+      const nodeColorIndex = connector.buildNodeColorIndex(optimizedFigmaData);
+
       // 🏷️ 早提取组件中文名（根节点名 cp-流量监测 → 流量监测），随完成事件带给 service 层
       // 回写任务 displayName（监控浮窗/任务中心尽早显示中文名）。仅接受含 CJK 的标题。
       const _rootTitle = String(optimizedFigmaData?.name || '')
@@ -604,6 +614,8 @@ export function createPhase2Graph(config = {}) {
         techStackHints: techStackHints,
         //S10: 汇合后的文档分析产物
         docAnalysis,
+        // 6-A · nodeId→fills 颜色索引（确定性事实源，供 6-B 颜色装配消费）
+        nodeColorIndex,
       };
     } catch (error) {
       logger.error('Figma数据获取失败', { error: error.message });
@@ -668,11 +680,18 @@ export function createPhase2Graph(config = {}) {
             null,
           _uiCacheHit: true,
         };
-        if (isUntrustedVisualAnalysis(cachedResult)) {
-          const blockError = buildVisualAnalysisBlockError(cachedResult);
+        // 🛡️ 缓存命中也要做事实校验（2026-09-15）：uiCache 里存的是**加工后**结构，
+        // 后处理规则变更（如新增幻觉 section 剔除）对缓存任务永不生效 —— 补跑幂等事实校验。
+        // 事实源是实时 Figma 树（state.figmaNodeData），不是缓存里那份。
+        const validatedCachedResult = applyHallucinationDrop(
+          cachedResult,
+          state.figmaNodeData,
+        );
+        if (isUntrustedVisualAnalysis(validatedCachedResult)) {
+          const blockError = buildVisualAnalysisBlockError(validatedCachedResult);
           logger.error('🚫 命中的视觉缓存为降级结果，阻断后续生成', {
-            reason: cachedResult.degradeReason,
-            layoutSource: cachedResult.layoutSource,
+            reason: validatedCachedResult.degradeReason,
+            layoutSource: validatedCachedResult.layoutSource,
           });
           state.onProgress?.({
             stage: '视觉分析',
@@ -681,7 +700,7 @@ export function createPhase2Graph(config = {}) {
           });
           throw blockError;
         }
-        return cachedResult;
+        return validatedCachedResult;
       }
 
       // 视觉任务：使用 visionAIConfig（Qwen/DashScope）
@@ -1801,6 +1820,7 @@ export function createPhase2Graph(config = {}) {
       const screenshotResult = await state._screenshotPromise;
       state.renderedImage = screenshotResult.renderedImage;
       state.renderedImageIsStaticFallback = screenshotResult.isStaticFallback;
+      state.visualFidelity = screenshotResult.visualFidelity;
       logger.info('✅ 后台截图任务已完成，继续视觉比对');
     }
 
@@ -1909,7 +1929,7 @@ export function createPhase2Graph(config = {}) {
     try {
       if (!outputPath) throw new Error('缺少 outputPath');
 
-      let renderedImage, isStaticFallback, runtimeGate;
+      let renderedImage, isStaticFallback, runtimeGate, visualFidelity;
 
       //优先使用 adversarial-checker 预启动的截图 Promise（已并行执行）
       if (state._screenshotPromise) {
@@ -1918,10 +1938,11 @@ export function createPhase2Graph(config = {}) {
         renderedImage = result.renderedImage;
         isStaticFallback = result.isStaticFallback;
         runtimeGate = result.runtimeGate;
+        visualFidelity = result.visualFidelity;
         logger.info('✅ 预启动截图任务已完成');
       } else {
         // 回退路径：预启动未触发或不可用，走原同步逻辑
-        logger.info('📸 走同步截图路径（无预启动 Promise）');
+        logger.info(' 走同步截图路径（无预启动 Promise）');
         await publishQualityPreview({
           outputPath,
           componentId: sessionId,
@@ -1943,6 +1964,7 @@ export function createPhase2Graph(config = {}) {
         renderedImage = result.renderedImage;
         isStaticFallback = result.isStaticFallback;
         runtimeGate = result.runtimeGate;
+        visualFidelity = result.visualFidelity;
       }
 
       const duration = Date.now() - startTime;
@@ -1968,6 +1990,7 @@ export function createPhase2Graph(config = {}) {
         renderedImage,
         renderedImageIsStaticFallback: isStaticFallback,
         runtimeGate,
+        visualFidelity,
       };
     } catch (error) {
       const runtimeGate = {
@@ -2594,9 +2617,18 @@ export function createPhase2Graph(config = {}) {
           /* 旧 meta 损坏则重建 */
         }
         const runtimeVerified = !state._runtimeGateDowngraded;
+        // 6-A: nodeColorIndex 写进 component-meta.json（确定性颜色事实源，供后续 6-B 装配消费）
+        const nodeColorIndexPlain = state.nodeColorIndex
+          ? Object.fromEntries(state.nodeColorIndex instanceof Map ? state.nodeColorIndex : Object.entries(state.nodeColorIndex))
+          : undefined;
+
         const nextMeta = {
           ...prevMeta,
           runtimeVerified,
+          // 7-A: visualFidelity — 用 ?? 防止 parallel-quality-check 的 undefined 覆盖 visual-comparator 的有效值
+          ...(state.visualFidelity != null ? { visualFidelity: state.visualFidelity } : {}),
+          // 6-A: nodeColorIndex
+          ...(nodeColorIndexPlain && Object.keys(nodeColorIndexPlain).length > 0 ? { nodeColorIndex: nodeColorIndexPlain } : {}),
           ...(runtimeVerified
             ? {}
             : {
@@ -2624,11 +2656,15 @@ export function createPhase2Graph(config = {}) {
     // 🎯 2026-09-14 治本①②：section 内容映射守卫（左右序 + 内容错装）。
     // 验证优先于自愈：只产出 issues 写进 component-meta.json + 进度可见，不做自动重排/删除
     // （自动重排会与 CSS 左右专属样式打架）。事实源 = Figma 子树文本 + bbox。
+    // 🛡️ 阶段 C（2026-09-15 序 5）：高置信 duplicateTextIssues 做确定性自愈（唯一归属文本
+    //   从非 owner 组件删除），其余仍留痕。自愈在留痕之前，删除后写回产物文件。
     try {
-      const { checkSectionContent } = await import(
-        '../utils/section-content-guard.js'
-      );
-      const { readdirSync: _rds, readFileSync: _rfs } = await import('fs');
+      const {
+        checkSectionContent,
+        healDuplicateTextIssues,
+      } = await import('../utils/section-content-guard.js');
+      const { validateVueSfc } = await import('../utils/sfc-syntax-validation.js');
+      const { readdirSync: _rds, readFileSync: _rfs, writeFileSync: _wfs2 } = await import('fs');
       const { join: pathJoin } = await import('path');
       const compDir = pathJoin(state.outputPath, 'package', 'components');
       const files = [];
@@ -2641,14 +2677,49 @@ export function createPhase2Graph(config = {}) {
           });
         }
       }
+      const figmaRootForGuard =
+        state.figmaNodeData ||
+        state._uiCache?.figmaNodeData ||
+        state._visualParserCache?.figmaNodeData;
       const contentCheck = checkSectionContent({
         files,
         plan: state.subComponentPlan,
-        figmaRoot:
-          state.figmaNodeData ||
-          state._uiCache?.figmaNodeData ||
-          state._visualParserCache?.figmaNodeData,
+        figmaRoot: figmaRootForGuard,
       });
+      // 🛡️ 阶段 C 高置信自愈：唯一归属文本从非 owner 组件删除（写回产物）
+      if (contentCheck.duplicateTextIssues.length > 0) {
+        const healResult = healDuplicateTextIssues({
+          files,
+          plan: state.subComponentPlan,
+          figmaRoot: figmaRootForGuard,
+          validateSfc: (c, p) => validateVueSfc(c, p),
+        });
+        if (healResult.healed.length > 0) {
+          for (const h of healResult.healed) {
+            for (const wp of h.removedFrom) {
+              const rec = healResult.files.find((f) => f.path === wp);
+              if (rec && typeof rec.content === 'string') {
+                try {
+                  _wfs2(pathJoin(state.outputPath, wp), rec.content, 'utf-8');
+                } catch (_) {
+                  /* 写回失败不阻断 */
+                }
+              }
+            }
+          }
+          logger.warn('🩹 内容映射守卫：高置信重复文本已确定性自愈', {
+            healed: healResult.healed.map((h) => ({
+              text: h.text,
+              removedFrom: h.removedFrom,
+            })),
+          });
+          state.onProgress?.({
+            stage: '内容映射校验',
+            message: `🩹 已自愈 ${healResult.healed.length} 处唯一归属文本错装（从非 owner 组件删除）`,
+            status: 'warning',
+          });
+        }
+      }
       const hasContentIssues =
         contentCheck.memberOrderIssues.length > 0 ||
         contentCheck.duplicateTextIssues.length > 0;
@@ -4327,6 +4398,7 @@ export function createPhase2Graph(config = {}) {
       });
       const runtimeGate = result.runtimeGate || evaluateRuntimeGate(result);
       state.runtimeGate = runtimeGate;
+      state.visualFidelity = result.visualFidelity;
 
       // 使用 classifyRuntimeGate 判断是否需要真正阻断
       const classification = classifyRuntimeGate(runtimeGate);

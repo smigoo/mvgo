@@ -27,7 +27,7 @@ export class LayoutRefiner extends BaseAgent {
     super({
       name: 'layout-refiner',
       description: '布局精修器',
-      model: config.model || 'claude-sonnet-4-6',
+      model: config.model || '',
       temperature: config.temperature || 0.1,
       maxTokens: config.maxTokens || 8192,
       ...config

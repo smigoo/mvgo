@@ -923,9 +923,15 @@ export class FigmaConnector {
   pruneRedundantFields(node) {
     if (!node) return null;
 
+    // 🛡️ R5-visible（2026-09-15）：「*数据实时更新」泄漏实锤。设计师用「* 前缀 + visible:false」
+    // 标注注释，隐藏节点在 Figma 界面不可见，但 Figma API 仍返回其 name/characters。旧过滤只清
+    // characters 不清 name → extractFigmaHints 用 name 提取结构摘要 →「*数据实时更新」泄漏进
+    // vision prompt → LLM 当 UI 文本照抄。治本：隐藏节点清 name+characters（保留 bbox 供布局）。
+    const isHiddenNode = node.visible === false;
+
     const optimized = {
       id: node.id,
-      name: node.name,
+      name: isHiddenNode ? '' : node.name,
       type: node.type,
     };
 
@@ -1047,7 +1053,8 @@ export class FigmaConnector {
     }
 
     // 保留文本内容（ 过滤设计师注释/标注文本）
-    if (node.characters) {
+    // 🛡️ R5-visible：隐藏节点（visible:false）不提取 characters（其 name 也已在函数头清空）。
+    if (node.characters && !isHiddenNode) {
       const text = String(node.characters).trim();
       const fontSize = node.style?.fontSize;
       const isAnnotationPrefix =
@@ -1747,29 +1754,17 @@ export class FigmaConnector {
         const stops = fill.gradientStops
           .sort((a, b) => a.position - b.position)
           .map((s) => {
-            const hex = this._rgbaToHex(s.color, s.opacity ?? 1);
+            // stop 不透明度优先，其次填充级 opacity（否则半透明填充会输出成不透明）
+            const hex = this._rgbaToHex(s.color, s.opacity ?? fill.opacity ?? 1);
             return `${hex} ${Math.round(s.position * 100)}%`;
           });
-        // 推断渐变角度（从 gradientHandlePositions）
-        let angle = 180; // 默认从上到下
-        if (
-          fill.gradientHandlePositions &&
-          fill.gradientHandlePositions.length >= 2
-        ) {
-          const p0 = fill.gradientHandlePositions[0];
-          const p1 = fill.gradientHandlePositions[1];
-          const dx = p1.x - p0.x;
-          const dy = p1.y - p0.y;
-          // Figma 渐变方向 → CSS 角度（CSS 0deg=向上，Figma y 向下为正）
-          angle = Math.round((Math.atan2(dx, -dy) * 180) / Math.PI);
-          if (angle < 0) angle += 360;
-        }
-        cssParts.push(`linear-gradient(${angle}deg, ${stops.join(', ')})`);
+        // 方向由 gradientHandlePositions 推导（算法收口在 _gradientAngleDeg，避免多处各推一份）
+        cssParts.push(`linear-gradient(${this._gradientAngleDeg(fill)}deg, ${stops.join(', ')})`);
       } else if (fill.type === 'GRADIENT_RADIAL' && fill.gradientStops) {
         const stops = fill.gradientStops
           .sort((a, b) => a.position - b.position)
           .map((s) => {
-            const hex = this._rgbaToHex(s.color, s.opacity ?? 1);
+            const hex = this._rgbaToHex(s.color, s.opacity ?? fill.opacity ?? 1);
             return `${hex} ${Math.round(s.position * 100)}%`;
           });
         cssParts.push(`radial-gradient(circle, ${stops.join(', ')})`);
@@ -2497,13 +2492,28 @@ export class FigmaConnector {
       if (gradients.length > 0) {
         meta.fillsSummary = gradients
           .map((g) => {
+            // 🛡️ 2026-09-15（mc-max-1789452271404-7e0e19d2 实锤）：渐变必须带上**填充级透明度**
+            // 与**方向**，否则这段摘要作为 CSS 兜底/参考时是错的：
+            //   · 只取 `s.opacity`（每个 stop 的不透明度，Figma 里通常缺省）→ 丢掉 `g.opacity`
+            //     （本例 tabs-list 底图 = 0.6 半透明），输出**不透明**渐变 → 遮挡下层；
+            //   · 不带角度 → 模型只能自己编（实机产物出现 `linear-gradient(180deg, …)`，
+            //     而真值方向需从 gradientHandlePositions 推）。
+            // 与路径 A（_build…CssFromFills）同口径：stop 不透明度优先，其次填充级，最后 1。
             const stops = g.gradientStops
               .sort((a, b) => a.position - b.position)
               .map(
                 (s) =>
-                  `${this._rgbaToHex(s.color, s.opacity ?? 1)} ${Math.round(s.position * 100)}%`,
+                  `${this._rgbaToHex(s.color, s.opacity ?? g.opacity ?? 1)} ${Math.round(s.position * 100)}%`,
               );
-            return `${g.type === 'GRADIENT_LINEAR' ? 'linear' : g.type === 'GRADIENT_RADIAL' ? 'radial' : 'angular'}-gradient(${stops.join(', ')})`;
+            const kind =
+              g.type === 'GRADIENT_LINEAR'
+                ? 'linear'
+                : g.type === 'GRADIENT_RADIAL'
+                  ? 'radial'
+                  : 'angular';
+            // linear 带方向；radial/angular 无角度语义（与路径 A 同口径，角度算法收口在 _gradientAngleDeg）
+            const angle = kind === 'linear' ? `${this._gradientAngleDeg(g)}deg, ` : '';
+            return `${kind}-gradient(${angle}${stops.join(', ')})`;
           })
           .join('; ');
       }
@@ -2589,5 +2599,80 @@ export class FigmaConnector {
       return hex + a.toString(16).padStart(2, '0');
     }
     return hex;
+  }
+
+  /**
+   * 线性渐变方向（CSS 角度，0deg = 向上、顺时针）。
+   *
+   * 🛡️ 单一事实源（2026-09-15）：原先只有「可复现 CSS」那条路径内联推导角度，
+   * `visualMeta.fillsSummary` 那条不带方向 → 模型只能自己编角度（实机产物出现
+   * `linear-gradient(180deg, …)`）。两处收口到本方法，口径一致。
+   *
+   * Figma 的 y 轴向下为正，故取 `atan2(dx, -dy)`；无 handle 时回退 180（从上到下）。
+   */
+  _gradientAngleDeg(fill) {
+    const handles = fill && fill.gradientHandlePositions;
+    if (!Array.isArray(handles) || handles.length < 2) return 180;
+    const p0 = handles[0];
+    const p1 = handles[1];
+    if (!p0 || !p1) return 180;
+    const dx = (p1.x ?? 0) - (p0.x ?? 0);
+    const dy = (p1.y ?? 0) - (p0.y ?? 0);
+    let angle = Math.round((Math.atan2(dx, -dy) * 180) / Math.PI);
+    if (angle < 0) angle += 360;
+    return angle;
+  }
+
+  /**
+   * 6-A · 构建 nodeId→fills 颜色索引（确定性事实源）
+   *
+   * 遍历 Figma 节点树，为每个有 fills 的节点建立颜色映射。
+   * 文本节点的颜色归为 textColor，容器/形状节点的颜色归为 bgColor。
+   *
+   * 返回：Map<nodeId, { fillsSummary, textColor?, bgColor?, nodeType }>
+   * - fillsSummary: 原始 fills 摘要（复用 _extractVisualMeta 的口径）
+   * - textColor: 文本节点的文字颜色（hex）
+   * - bgColor: 容器/形状节点的背景颜色（hex 或 gradient CSS）
+   * - nodeType: 'text' | 'container' | 'resource'
+   *
+   * 用途：供 6-B 颜色确定性装配消费，按 nodeId 绑定颜色真值。
+   */
+  buildNodeColorIndex(figmaNodeData) {
+    const index = new Map();
+    if (!figmaNodeData) return index;
+
+    this.traverseFigmaTree(figmaNodeData, (node) => {
+      if (!node || !node.id) return;
+
+      // 提取 fills 摘要（复用 _extractVisualMeta 的颜色算法）
+      const visualMeta = this._extractVisualMeta(node);
+      if (!visualMeta || !visualMeta.fillsSummary) return;
+
+      const entry = {
+        fillsSummary: visualMeta.fillsSummary,
+        nodeType: 'container',
+      };
+
+      // 文本节点：颜色归为 textColor
+      if (node.type === 'TEXT') {
+        entry.nodeType = 'text';
+        entry.textColor = visualMeta.fillsSummary;
+      } else {
+        // 容器/形状节点：颜色归为 bgColor
+        // 资源节点（bg/icon/image）在资源映射里已处理，这里只索引业务节点
+        const isResource =
+          node.type === 'RECTANGLE' &&
+          node.absoluteBoundingBox &&
+          (node.absoluteBoundingBox.width > 100 || node.absoluteBoundingBox.height > 100);
+        if (isResource) {
+          entry.nodeType = 'resource';
+        }
+        entry.bgColor = visualMeta.fillsSummary;
+      }
+
+      index.set(node.id, entry);
+    });
+
+    return index;
   }
 }

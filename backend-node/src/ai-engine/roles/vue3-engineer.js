@@ -36,9 +36,18 @@ import {
   generateAttributionGuidance,
 } from '../validators/resource-attribution-validator.js';
 import { buildResourceManifest } from '../utils/resource-manifest.js';
-import { inferChartMinHeight } from '../utils/post-process.js';
+import {
+  inferChartMinHeight,
+  injectChartMinHeightIntoClass,
+  createChartClassBlockIfAbsent,
+  stripZeroMinHeightForClass,
+} from '../utils/post-process.js';
 import { assessNumericLiteralRewrite } from '../utils/numeric-literal-guard.js';
 import { resolveEchartsType, normalizeSeriesInSource, normalizeChartAxesInSource, buildChartTypeTruthSet } from '../utils/chart-type-guard.js';
+// 🛡️ A4→CSS 高度比例落表（2026-09-15）：Vue3 链路此前未接入 buildSectionLayoutFacts
+//（buildSectionHeightsMap 经 this._buildSectionHeightsMap 继承自 MicrocodeEngineer），
+// 导致图表 section 高度比例丢失（mv-max-1789477270646-3e3b7cb2 图表空白实锤）。
+import { buildSectionLayoutFacts } from '../utils/figma-section-heights.js';
 import { stripLlmTailGarbage } from '../utils/llm-tail-garbage.js';
 import { normalizeFlexSourceConflicts } from '../utils/flex-sibling-guard.js';
 // 🧩 Vue3 拆分模块（2026-08-30：prompt / healer / style-entry 纯函数化，主类改委托壳）
@@ -827,6 +836,25 @@ export class Vue3Engineer extends MicrocodeEngineer {
             componentName: input.componentName,
             outputPath: input.outputPath,
             figmaNodeData: input.figmaNodeData,
+            // 🛡️ 资源映射（2026-09-15）：Vue3 链路此前未给资源规则传 mapping，
+            // 导致 dedupe-bg-multi-refs（父子重复背景去重）等资源规则无法运行。
+            resourceDomMapping: resolveResourceDomMapping(
+              input.resourceDomMapping,
+              input.outputPath,
+            ),
+            // 🛡️ A4→CSS 高度比例（2026-09-15）：微码链路已接通（microcode-engineer.js:6402），
+            // Vue3 此前断链 → 图表 section 高度比例丢失。此处补传，供 fix-section-heights
+            // 规则②/⑤ 用权威 flexGrow 系数 + 布局事实确定性改写 section 根 CSS。
+            sectionHeights: this._buildSectionHeightsMap(
+              allFiles,
+              input.layoutStructure,
+              input,
+            ),
+            sectionLayoutFacts: buildSectionLayoutFacts(
+              allFiles,
+              input.layoutStructure,
+              input,
+            ),
           },
         });
         fixPipeline.registerAll([
@@ -849,6 +877,23 @@ export class Vue3Engineer extends MicrocodeEngineer {
             applyTo: /\.vue$/i,
             fix: (content, ctx) =>
               this._stripInterBlockProse(content, ctx.path),
+          },
+          // 🛡️ P2-3 资源去重（2026-09-15）：Vue3 链路此前未注册资源规则，
+          // bg1 父子重复（tabs-section + tabs-list 同挂 bg1）无去重通道 →
+          // 叠影/花屏（mv-max-1789481782934-578a1b70 实锤）。复用微码 _dedupeBgMultiRefs
+          //（pickBestMountTarget 评分保留最优挂载点、剔除其余），与微码链路同源。
+          {
+            id: 'dedupe-bg-multi-refs',
+            name: 'bg 整块背景多引用去重（父子重复）',
+            phase: FIX_PHASE.RESOURCE,
+            fixFiles: (files) =>
+              this._dedupeBgMultiRefs(
+                files,
+                resolveResourceDomMapping(
+                  input.resourceDomMapping,
+                  input.outputPath,
+                ),
+              ),
           },
           // 🆕 P1：echarts 坐标轴刻度/标签兜底（模型显式 show:false → true；不臆造 data）
           {
@@ -881,13 +926,19 @@ export class Vue3Engineer extends MicrocodeEngineer {
             applyTo: /\.vue$/i,
             fix: (content, ctx) => this._stripOrphanControls(content, ctx),
           },
-          // ⚠️ 已移除 fix-section-heights 注册（2026-09-01，缺口③ 附带修复）：
-          // 本文件从未定义 `this._fixSectionHeights`——全仓仅 microcode-engineer.js:3228
-          // 有实现（委托 roles/microcode/resource-mounter.js:fixSectionHeightsForResource）。
-          // 即此处调用的是 undefined 方法，属典型悬挂引用：apply 到该规则时抛 TypeError
-          // （是否被吞取决于 CodeFixPipeline，表现为规则静默失效或整个 fix 阶段中断），
-          // 且 id 与 validators/code-fix-rules.js:788 的 mc 注册重名，是「同 id 两份注册」的双轨隐患。
-          // 若日后 Vue3 也需要该修复：把实现抽到公共模块后两边共用，禁止在此处挂空调用。
+          // 🛡️ S1-P3 多区块高度按比例分配（2026-09-15 重新接入）：
+          // 此前此处因「本文件从未定义 this._fixSectionHeights」被移除（缺口③），
+          // 但 _fixSectionHeights 已由 MicrocodeEngineer 提供（microcode-engineer.js:3913，
+          // 委托 resource-mounter.fixSectionHeightsForResource）——Vue3 继承即可用。
+          // 高度系数与布局事实已在上方 CodeFixPipeline context 注入 sectionHeights /
+          // sectionLayoutFacts，此处仅需注册规则、由 ctx 传递。
+          {
+            id: 'fix-section-heights',
+            name: '多区块高度按比例分配（防溢出裁剪）',
+            phase: FIX_PHASE.STYLE,
+            applyTo: /\.(vue|less|css)$/i,
+            fix: (content, ctx) => this._fixSectionHeights(content, ctx),
+          },
           // 🛡️ TEXT-001（2026-09-01）：文本兄弟顺序按 Figma 视觉坐标重排（与微码链路对齐）。
           // code-structure-validator 的 TEXT-001 BLOCK 门禁两链共用（vue3 调用点同样传
           // figmaNodeData），故 Vue3 必须有对应自愈通道，否则漂移产物会被门禁杀而无修复机会。
@@ -1226,16 +1277,36 @@ export class Vue3Engineer extends MicrocodeEngineer {
             chartType: input.charts?.[0]?.type,
             chartRole: input.charts?.[0]?.role,
           });
-          const blockRe = new RegExp(`(\\.${chartCls}\\s*\\{)([^}]*)`, 'm');
-          const patched = fc.replace(blockRe, (m, head, body) => {
-            if (/min-height\s*:/i.test(body)) return m;
-            return `${head}${body.replace(/\s*$/, '')}\n  min-height: ${targetMinHeight}px; /* 🎯 防挤压：echarts 容器最小高度（主图160/紧凑图100） */\n`;
-          });
+          // 🛡️ T2-C/T2-D（2026-09-15，收敛到 post-process 单一事实源）：min-height:0 不算保护，
+          // 且同名 class 全部块统一收口，避免后置 0 值块级联反杀兜底值。
+          const { code: patchedOnce3, injectedCount3 } =
+            injectChartMinHeightIntoClass(fc, chartCls, targetMinHeight);
+          let patched = patchedOnce3;
+          if (injectedCount3 === 0) {
+            // 🛡️ T2 增强（2026-09-15）：LLM 写了 echarts.init 但没写图表容器样式规则块 →
+            // 容器无高度塌缩。主动在 <style> 段 @import 后创建规则块并注入 min-height。
+            patched = createChartClassBlockIfAbsent(
+              fc,
+              chartCls,
+              targetMinHeight,
+            );
+          }
           if (patched !== fc) {
             codeResult.files[fp] = patched;
             this.logger.info(
-              `🎯 echarts 容器最小高度已注入: ${fp} → .${chartCls} min-height: ${targetMinHeight}px`,
+              `🎯 echarts 容器最小高度已注入: ${fp} → .${chartCls} min-height: ${targetMinHeight}px（命中块 ${injectedCount3 || '兜底新建'}，min-height:0 反杀已剥除）`,
             );
+          }
+          // 🛡️ T2-D：共享表（common.less）同名 class 的 min-height:0 一并剥除。
+          for (const [lf, lc] of Object.entries(codeResult.files || {})) {
+            if (!lf.endsWith('.less') || typeof lc !== 'string') continue;
+            const cleaned = stripZeroMinHeightForClass(lc, chartCls);
+            if (cleaned !== lc) {
+              codeResult.files[lf] = cleaned;
+              this.logger.info(
+                `🎯 共享表 min-height:0 反杀已剥除: ${lf} → .${chartCls}`,
+              );
+            }
           }
         }
 

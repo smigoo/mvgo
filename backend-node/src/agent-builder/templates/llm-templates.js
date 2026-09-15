@@ -92,7 +92,7 @@ export class DynamicAgent extends BaseAgent {
     super({
       name: '${name}',
       description: '${(description || '').replace(/'/g, "\\'")}',
-      model: config.model || 'qwen3.7-plus',
+      model: config.model || '',
       temperature: config.temperature ?? 0.2,
       maxTokens: config.maxTokens || 4096,
       ...config,

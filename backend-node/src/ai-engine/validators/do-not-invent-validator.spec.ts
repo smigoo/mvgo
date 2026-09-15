@@ -1,4 +1,4 @@
-import { validateDoNotInvent, extractForbiddenPairs, countChartSeries, countDataPoints, extractSnippet } from './do-not-invent-validator.js'
+import { validateDoNotInvent, extractForbiddenPairs, countChartSeries, countDataPoints, extractSnippet, normalizeChartType, collectChartSeriesTypes, detectEchartsMountPointMissing } from './do-not-invent-validator.js'
 
 describe('do-not-invent-validator', () => {
   it('放行：无文件直接 pass', () => {
@@ -165,5 +165,133 @@ const option = { series: [{ data: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] }] }
 
   it('extractSnippet 找不到 keyword 返回 undefined', () => {
     expect(extractSnippet('hello world', 'zzz')).toBeUndefined()
+  })
+
+  // ── 图表类型缺失（BLOCK 级 · 2026-09-15 · 07e31fbb 实锤）──
+  it('BLOCK：vision 识别到 doughnut，但产物无 pie series（图表容器漏写）', () => {
+    const files = {
+      'package/index.vue': `<template><div></div></template>`,
+      'package/components/ListSection.vue': `<template><div>只有统计列表</div></template>`,
+    }
+    const res = validateDoNotInvent({
+      files,
+      analysis: { charts: [{ section: 'chart-container', type: 'doughnut', series: ['交通事故'] }] },
+    })
+    expect(res.pass).toBe(false)
+    const issue = res.issues.find((i) => i.id === 'DO-NOT-INVENT-CHART-MISSING')
+    expect(issue).toBeDefined()
+    expect(issue.severity).toBe('BLOCK')
+  })
+
+  it('放行：vision 识别到 doughnut，产物子组件里确有 type:pie series', () => {
+    const files = {
+      'package/index.vue': `<template><div></div></template>`,
+      'package/components/ChartPie.vue': `<script setup>
+const option = { series: [{ name: '客车', type: 'pie', data: [1, 2] }] }
+</script>`,
+    }
+    const res = validateDoNotInvent({
+      files,
+      analysis: { charts: [{ type: 'pie', series: ['客车', '货车'] }] },
+    })
+    expect(res.pass).toBe(true)
+  })
+
+  it('放行：vision line 且产物仅有裸 series（echarts 默认 line）不判缺失', () => {
+    const files = {
+      'package/index.vue': `<script setup>const o = { series: [{ name: '浓度' }] }</script>`,
+    }
+    const res = validateDoNotInvent({
+      files,
+      analysis: { charts: [{ type: 'line', series: ['浓度'] }] },
+    })
+    expect(res.pass).toBe(true)
+  })
+
+  it('放行：vision bar 但产物子组件有 type:bar（全产物扫描命中子组件）', () => {
+    const files = {
+      'package/index.vue': `<template><div></div></template>`,
+      'package/components/ChartBar.vue': `<script setup>
+const option = { series: [{ name: '方向', type: 'bar', data: [1, 2] }] }
+</script>`,
+    }
+    const res = validateDoNotInvent({
+      files,
+      analysis: { charts: [{ type: 'bar', series: ['北京方向'] }] },
+    })
+    expect(res.pass).toBe(true)
+  })
+
+  // ── normalizeChartType / collectChartSeriesTypes ──
+  it('normalizeChartType 归一化 vision type', () => {
+    expect(normalizeChartType('doughnut')).toBe('pie')
+    expect(normalizeChartType('pie')).toBe('pie')
+    expect(normalizeChartType('bar')).toBe('bar')
+    expect(normalizeChartType('area')).toBe('line')
+    expect(normalizeChartType('multiple')).toBe(null)
+    expect(normalizeChartType('')).toBe(null)
+  })
+
+  it('collectChartSeriesTypes 提取产物 series type 集合', () => {
+    const code = `series: [{ type: 'pie' }, { type: 'bar' }]`
+    const types = collectChartSeriesTypes(code)
+    expect(types.has('pie')).toBe(true)
+    expect(types.has('bar')).toBe(true)
+    expect(types.has('line')).toBe(false)
+  })
+
+  // ── echarts 挂载点缺失（BLOCK 级 · 2026-09-15 · 07e31fbb 实锤）──
+  it('BLOCK：script 有 echarts.init(chartRef.value) 但 template 无 ref="chartRef" 挂载点', () => {
+    const files = {
+      'package/index.vue': `<template><base-panel><ListSection /></base-panel></template>
+<script setup>
+const chartRef = ref(null)
+const initChart = () => { chart = echarts.init(chartRef.value) }
+const option = { series: [{ type: 'pie', data: [1, 2] }] }
+</script>`,
+    }
+    const res = validateDoNotInvent({
+      files,
+      analysis: { charts: [{ type: 'doughnut', series: ['交通事故'] }] },
+    })
+    expect(res.pass).toBe(false)
+    const issue = res.issues.find((i) => i.id === 'DO-NOT-INVENT-CHART-MOUNT-MISSING')
+    expect(issue).toBeDefined()
+    expect(issue.severity).toBe('BLOCK')
+  })
+
+  it('放行：script 有 echarts.init 且 template 有对应 ref 挂载点', () => {
+    const files = {
+      'package/index.vue': `<template><div ref="chartRef"></div></template>
+<script setup>
+const chartRef = ref(null)
+const init = () => { chart = echarts.init(chartRef.value) }
+</script>`,
+    }
+    const res = validateDoNotInvent({
+      files,
+      analysis: { charts: [{ type: 'pie' }] },
+    })
+    expect(res.issues.find((i) => i.id === 'DO-NOT-INVENT-CHART-MOUNT-MISSING')).toBeUndefined()
+  })
+
+  it('放行：echarts.init 用 this.$refs / getElementById（非简单标识符）→ 跳过不误报', () => {
+    const files = {
+      'package/index.vue': `<template><div ref="chart"></div></template>
+<script setup>
+const init = () => { chart = echarts.init(this.$refs.chart) }
+</script>`,
+    }
+    const res = validateDoNotInvent({ files, analysis: { charts: [{ type: 'pie' }] } })
+    expect(res.issues.find((i) => i.id === 'DO-NOT-INVENT-CHART-MOUNT-MISSING')).toBeUndefined()
+  })
+
+  it('detectEchartsMountPointMissing：提取 echarts.init 的 ref 名并校验挂载点', () => {
+    const files = {
+      'a.vue': `<template><div></div></template><script>echarts.init(chartRef.value)</script>`,
+      'b.vue': `<template><div ref="chartRef"></div></template><script>echarts.init(chartRef.value)</script>`,
+    }
+    const missing = detectEchartsMountPointMissing(files)
+    expect(missing).toEqual([{ path: 'a.vue', refName: 'chartRef' }])
   })
 })
