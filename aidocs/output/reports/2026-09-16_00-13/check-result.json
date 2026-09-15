@@ -1,0 +1,257 @@
+{
+  "specVersion": "v1.0.20",
+  "checkedAt": "2026-09-15T16:13:51.579Z",
+  "components": [
+    {
+      "dirName": "c-env-monitor-1cffd7ce",
+      "componentId": "c-env-monitor-1cffd7ce",
+      "componentName": "环境监测",
+      "version": "v1.0.0",
+      "totalChecks": 34,
+      "passCount": 33,
+      "failCount": 0,
+      "warningCount": 1,
+      "results": [
+        {
+          "id": "M1-1",
+          "name": "componentId规范",
+          "passed": true,
+          "level": "error",
+          "message": "通过"
+        },
+        {
+          "id": "M1-2",
+          "name": "componentName长度",
+          "passed": true,
+          "level": "error",
+          "message": "通过"
+        },
+        {
+          "id": "M1-3",
+          "name": "version格式",
+          "passed": true,
+          "level": "error",
+          "message": "通过"
+        },
+        {
+          "id": "M2-1",
+          "name": "必要文件存在性",
+          "passed": true,
+          "level": "error",
+          "message": "通过"
+        },
+        {
+          "id": "M2-2",
+          "name": "mc-preview.png存在",
+          "passed": true,
+          "level": "error",
+          "message": "通过"
+        },
+        {
+          "id": "M2-3",
+          "name": "css-vars.js存在性",
+          "passed": true,
+          "level": "error",
+          "message": "通过"
+        },
+        {
+          "id": "M2-4",
+          "name": "themes目录结构",
+          "passed": true,
+          "level": "error",
+          "message": "通过"
+        },
+        {
+          "id": "M2-5",
+          "name": "resources/styles/index.less存在",
+          "passed": true,
+          "level": "error",
+          "message": "通过"
+        },
+        {
+          "id": "M2-6",
+          "name": "layoutConfig预览图",
+          "passed": true,
+          "level": "error",
+          "message": "通过"
+        },
+        {
+          "id": "M2-7",
+          "name": "layoutConfig预览图唯一性",
+          "passed": true,
+          "level": "error",
+          "message": "通过"
+        },
+        {
+          "id": "M3-1",
+          "name": "declare.json必填字段",
+          "passed": true,
+          "level": "error",
+          "message": "通过"
+        },
+        {
+          "id": "M3-3",
+          "name": "businessEvents字段完整性",
+          "passed": true,
+          "level": "error",
+          "message": "通过"
+        },
+        {
+          "id": "M3-5",
+          "name": "layoutConfig字段完整性",
+          "passed": true,
+          "level": "error",
+          "message": "通过"
+        },
+        {
+          "id": "M3-2",
+          "name": "themeConfig字段完整性",
+          "passed": true,
+          "level": "error",
+          "message": "通过"
+        },
+        {
+          "id": "M3-12",
+          "name": "内容布局存在性",
+          "passed": true,
+          "level": "error",
+          "message": "通过"
+        },
+        {
+          "id": "M3-13",
+          "name": "dark主题配置",
+          "passed": true,
+          "level": "error",
+          "message": "通过"
+        },
+        {
+          "id": "M3-14",
+          "name": "废弃字段",
+          "passed": true,
+          "level": "warning",
+          "message": "通过"
+        },
+        {
+          "id": "M4-1",
+          "name": "declare.js格式",
+          "passed": true,
+          "level": "error",
+          "message": "通过"
+        },
+        {
+          "id": "M4-2",
+          "name": "declare.js传入cssVars",
+          "passed": true,
+          "level": "error",
+          "message": "通过"
+        },
+        {
+          "id": "M4-3",
+          "name": "component.js格式",
+          "passed": true,
+          "level": "error",
+          "message": "通过"
+        },
+        {
+          "id": "M4-4",
+          "name": "css-vars.js导出结构",
+          "passed": true,
+          "level": "error",
+          "message": "通过"
+        },
+        {
+          "id": "M4-5",
+          "name": "index.less引入主题文件",
+          "passed": true,
+          "level": "error",
+          "message": "通过"
+        },
+        {
+          "id": "M4-6",
+          "name": "index.less被引用",
+          "passed": true,
+          "level": "error",
+          "message": "通过"
+        },
+        {
+          "id": "M4-8",
+          "name": "css-vars.js导出dark",
+          "passed": true,
+          "level": "error",
+          "message": "通过"
+        },
+        {
+          "id": "M4-9",
+          "name": "dark核心变量完整性",
+          "passed": true,
+          "level": "error",
+          "message": "通过"
+        },
+        {
+          "id": "M4-10",
+          "name": "dark核心变量色值枚举",
+          "passed": true,
+          "level": "error",
+          "message": "通过"
+        },
+        {
+          "id": "M5-1",
+          "name": "<base-panel>包裹",
+          "passed": true,
+          "level": "error",
+          "message": "通过"
+        },
+        {
+          "id": "M5-2",
+          "name": "$mcComponentBuilder只调用一次",
+          "passed": true,
+          "level": "error",
+          "message": "通过"
+        },
+        {
+          "id": "M5-3",
+          "name": "禁用API检查",
+          "passed": true,
+          "level": "error",
+          "message": "通过"
+        },
+        {
+          "id": "M5-4",
+          "name": "publishEvent与businessEvents一致性",
+          "passed": true,
+          "level": "error",
+          "message": "通过"
+        },
+        {
+          "id": "M5-8",
+          "name": "base-panel背景色限制",
+          "passed": true,
+          "level": "error",
+          "message": "通过"
+        },
+        {
+          "id": "M5-9",
+          "name": "第一子元素背景色限制",
+          "passed": true,
+          "level": "error",
+          "message": "通过"
+        },
+        {
+          "id": "M5-6",
+          "name": "@fontSize变量声明与使用",
+          "passed": true,
+          "level": "error",
+          "message": "通过"
+        },
+        {
+          "id": "M5-10",
+          "name": "硬编码颜色",
+          "passed": false,
+          "level": "warning",
+          "message": "样式中存在硬编码颜色值，建议改用 CSS 变量：package/components/ContentSection.vue <style>:24、package/components/ContentSection.vue <style>:40、package/components/ContentSection.vue <style>:43"
+        }
+      ],
+      "canRelease": true
+    }
+  ]
+}
