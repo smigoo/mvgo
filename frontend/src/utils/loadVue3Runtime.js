@@ -244,7 +244,7 @@ export function injectVueAutoImports(src) {
  *                               不传则浏览器端无法解析 <style> 内的 @import '../resources/...' 外部文件。
  * @returns {Promise<string>}
  */
-async function precompileVueLess(src, lessCompiler, baseUrl = '', ignoreStyles = false) {
+export async function precompileVueLess(src, lessCompiler, baseUrl = '', ignoreStyles = false) {
   if (ignoreStyles) {
     return src.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '<style data-structure-preview>/* 无样式结构预览 */</style>')
   }

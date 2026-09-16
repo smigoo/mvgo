@@ -11,8 +11,12 @@ import { join, extname } from 'path'
 import { createLogger } from '../logger/index.js'
 import { safeLessVarValue } from '../roles/microcode/file-writer.js'
 import { collectColorFnVars } from '../utils/less-color-funcs.js'
+import { isColorVarName, FRAMEWORK_PRESET_NAMES, healFileLevelSlotOverrides } from '../utils/theme-color-guard.js'
 
 const logger = createLogger({ name: 'less-variable-checker' })
+
+/** 框架预设变量名集合（cssVariableConfig 的 key 同源；这类变量必须「透传映射」而非落真值） */
+const PRESET_VAR_NAMES = new Set(FRAMEWORK_PRESET_NAMES)
 
 export class LessVariableChecker {
   /**
@@ -33,6 +37,8 @@ export class LessVariableChecker {
         // 🛡️ 刀 16b：被 LESS 颜色函数（lighten/darken/fade…）当**实参**引用的变量名集合。
         // 这类变量的兜底值必须是「可求值的真颜色」，否则整个 <style> 块编译失败。
         colorFnVariables: new Set(),
+        // 🛡️ 2026-09-15：从 .common() 移除的、已被两个主题 mixin 定义的颜色变量名
+        healedCommonColorVars: [],
         error: null
       }
 
@@ -40,9 +46,16 @@ export class LessVariableChecker {
       this.scanUsedVariables(componentDir, result.usedVariables, result.colorFnVariables)
 
       // 2. 读取 theme-vars.less 中定义的变量
+      // 🛡️ 2026-09-15 治本：改扫**全部 mixin**（.common() + .theme-light() + .theme-dark()）。
+      //    历史 bug：只扫 .common() → 把 .theme-light()/.theme-dark() 已有的颜色变量
+      //    当「缺失」补进 .common() → LESS 的 mixin 变量**不覆盖 caller 作用域已有同名变量**，
+      //    .common() 抢先定义浅色值后 .theme-dark() 被静默忽略 → .dark/.light 编译结果完全相同
+      //    （c-env-monitor-1cffd7ce 实锤：7 处主题色零响应）。
+      //    主题 mixin 已定义的变量在 index.less 的 `.theme-light()`/`.theme-dark()` 调用后
+      //    即可见，无需补进 .common()。
       const themeVarsPath = join(componentDir, 'resources/styles/themes/theme-vars.less')
       if (existsSync(themeVarsPath)) {
-        this.scanDefinedVariables(themeVarsPath, result.definedVariables)
+        this.scanAllMixinVariables(themeVarsPath, result.definedVariables)
       }
 
       // 3. 找出缺失的变量
@@ -74,6 +87,36 @@ export class LessVariableChecker {
         this.addCommonMixinCall(themeVarsPath)
         result.fixed = true
         logger.info('已自动在 theme-vars.less 顶层添加 .common() 调用')
+      }
+
+      // 6. 🛡️ 2026-09-15 确定性自愈：清除 .common() 中「两个主题 mixin 都已定义」的颜色变量。
+      //    否则 LESS mixin 变量不覆盖 caller 同名变量 → .theme-dark() 被静默忽略 → 切主题零生效。
+      if (existsSync(themeVarsPath)) {
+        const healed = this.healCommonColorVars(themeVarsPath)
+        if (healed.removed > 0) {
+          result.fixed = true
+          result.healedCommonColorVars = healed.names
+          logger.info('已从 .common() 移除被主题 mixin 覆盖不到的颜色变量', {
+            count: healed.removed,
+            variables: healed.names,
+          })
+        }
+      }
+
+      // 7. 🛡️ 2026-09-16 确定性自愈：删除 common.less / .vue <style> 顶层对 @color-* / @shadow-* 的
+      //    【字面量】重声明。否则 LESS「首个定义者胜出」→ 主题 mixin 被静默忽略 → 切主题零生效
+      //    （实测 c-vehicle-monitor-326051b2：仅 2 行就让整套差异化失效）。自愈与门禁同源互逆，
+      //    删后磁盘文件干净，构建期 .dark/.light 才真分开。
+      {
+        const healedSlots = this.healFileLevelSlotOverrides(componentDir)
+        if (healedSlots.removed > 0) {
+          result.fixed = true
+          result.healedFileLevelSlotOverrides = healedSlots
+          logger.info('已删除文件级槽位字面量重声明', {
+            count: healedSlots.removed,
+            files: healedSlots.files.map(f => f.split('/').slice(-3).join('/')),
+          })
+        }
       }
 
       return result
@@ -181,10 +224,27 @@ export class LessVariableChecker {
   }
 
   /**
+   * 扫描 theme-vars.less 中**所有 mixin 块**（.common() / .theme-light() / .theme-dark() …）
+   * 定义的变量名集合。
+   *
+   * 🛡️ 2026-09-15：与 scanDefinedVariables（仅 .common()）的区别 ——
+   * 本方法用于「判断某变量是否已可见」，主题 mixin 里的变量在 index.less 调用
+   * `.theme-light()`/`.theme-dark()` 之后同样可见，因此**不应**被当成缺失补进 .common()。
+   * （补进去会让 .common() 抢先定义，theme mixin 的覆盖被 LESS 静默忽略。）
+   */
+  static scanAllMixinVariables(themeVarsPath, definedVariables) {
+    try {
+      const content = readFileSync(themeVarsPath, 'utf-8')
+      const vars = this.extractAllMixinVars(content)
+      for (const name of vars.keys()) definedVariables.add(name)
+    } catch (error) {
+      logger.error('扫描全部 mixin 变量失败', { themeVarsPath, error: error.message })
+    }
+  }
+
+  /**
    * 扫描 theme-vars.less 的 .common() 中定义的变量。
-   * ⚠️ 只限 .common() 作用域 —— .theme-light() / .theme-dark() 中的变量在顶层不受
-   * .common(); 调用暴露，对 LESS 编译来说不可见（2026-09-08 修复，原为扫全文件导致
-   * LLM 忘记写进 .common() 的错误被静默掩盖）。
+   * ⚠️ 只限 .common() 作用域 —— 用于判断「顶层是否需要 .common(); 调用暴露变量」。
    */
   static scanDefinedVariables(themeVarsPath, definedVariables) {
     try {
@@ -258,21 +318,21 @@ export class LessVariableChecker {
     const existingVars = this.extractAllMixinVars(content)
 
     const commonPattern = /\.common\s*\(\s*\)\s*\{([^}]*)\}/
-    const newVariableLines = missingVariables.map(v => {
+    // 🛡️ 2026-09-15 治本：颜色类变量**禁止**补进 .common()。
+    //    LESS 的 mixin 变量不覆盖 caller 作用域已有同名变量 —— .common() 一旦抢先定义
+    //    @colorX，随后的 .theme-dark() / .theme-light() 会被静默忽略 → 两主题编译结果
+    //    完全相同 → 切主题零生效（c-env-monitor-1cffd7ce 实锤）。
+    //    故：颜色类 → 补进两个主题 mixin；非颜色类（字号/圆角）→ 才进 .common()。
+    const isColourVar = (name) => /color|bg|background|border|fill|stroke/i.test(name)
+
+    const renderVarLine = (v) => {
       // 优先级 1：从同文件的 sibling mixin（theme-light/theme-dark）复制真值
       if (existingVars.has(v)) {
         const value = existingVars.get(v)
-        // 🛡️ 2026-09-13 回退 var() 透传：颜色变量必须用真实颜色（#/rgba），
-        // 否则 LESS 颜色函数 lighten()/darken()/fade() 无法求值（var() 不是颜色，编译报
-        // "Error evaluating function `lighten`: Argument cannot be evaluated to a color"）。
-        // 主题切换由 .theme-light()/.theme-dark() mixin 提供不同真实颜色，无需 CSS 运行时 var()。
+        // 颜色变量必须用真实颜色（#/rgba），否则 lighten()/darken()/fade() 无法求值。
         return `  @${v}: ${value}; // 自动添加（从 theme mixin 复制）`
       }
       // 优先级 2：按变量名语义猜测
-      // 🛡️ 刀 16b：名字猜测可能给出**非颜色**（`@line-alpha` → '1'、`@radius-x` → '8px'）或
-      // 'unset'。若该变量被 LESS 颜色函数当**实参**引用（`lighten(@v, 10%)`），这些值在编译期
-      // 不可求值 → `Argument cannot be evaluated to a color` → 整个 <style> 块失败 → 子组件消失。
-      // 故把「颜色函数实参」这一**消费端事实**交给 safeLessVarValue，由它换成中立真颜色。
       const usesColorFn = colorFnVariables.has(v)
       const guess = safeLessVarValue(`@${v}`, { usedByColorFn: usesColorFn })
       if (guess !== 'unset') {
@@ -285,22 +345,43 @@ export class LessVariableChecker {
       // 优先级 3：无法推断——记录结构化告警
       warnings.push(v)
       return `  @${v}: unset; // ⚠️ 自动添加（无真值源，请人工修正）`
-    })
-    const newVariables = newVariableLines.join('\n')
+    }
+
+    // 🛡️ 2026-09-16：框架预设名（= cssVariableConfig 的 key，如 colorTextBase/colorPrimary）
+    //    必须走**透传映射** `@key: var(--key);` 进 .common() —— 这是 css-variable-pattern.md
+    //    的规范形态（「.common() mixin 中映射了所有 cssVariableConfig 的 key」）。
+    //    若落成真值（@colorPrimary: #559EFF）会丢掉运行期 CSS 变量响应，属反模式。
+    const isPresetVar = (v) => PRESET_VAR_NAMES.has(v)
+    const presetVarNames = missingVariables.filter(isPresetVar)
+    const colourVarNames = missingVariables.filter((v) => !isPresetVar(v) && isColourVar(v))
+    const otherVarNames = missingVariables.filter((v) => !isPresetVar(v) && !isColourVar(v))
+
+    const presetLines = presetVarNames
+      .map((v) => `  @${v}: var(--${v}); // 自动添加（框架预设透传映射，规范形态）`)
+      .join('\n')
+    const newVariables = [presetLines, otherVarNames.map(renderVarLine).join('\n')]
+      .filter(Boolean)
+      .join('\n')
+    const themeVarLines = colourVarNames.map(renderVarLine).join('\n')
 
     try {
-      // 查找 .common() 混合宏的位置
-      const commonPattern = /\.common\s*\(\s*\)\s*\{([^}]*)\}/
+      // ── 非颜色变量 → .common()（字号/圆角等跨主题共享令牌）──
+      if (newVariables) {
+        const commonPattern = /\.common\s*\(\s*\)\s*\{([^}]*)\}/
+        if (commonPattern.test(content)) {
+          content = content.replace(commonPattern, (match, innerContent) => {
+            return `.common() {\n${innerContent.trim()}\n${newVariables}\n}`
+          })
+        } else {
+          content += `\n\n.common() {\n${newVariables}\n}\n`
+        }
+      }
 
-      if (commonPattern.test(content)) {
-        // 如果 .common() 已存在，在其中添加变量
-        content = content.replace(commonPattern, (match, innerContent) => {
-          return `.common() {\n${innerContent.trim()}\n${newVariables}\n}`
-        })
-      } else {
-        // 如果 .common() 不存在，创建一个
-        const commonMixin = `\n\n.common() {\n${newVariables}\n}\n`
-        content += commonMixin
+      // ── 颜色变量 → 两个主题 mixin（禁止进 .common()，否则挡住主题覆盖）──
+      if (themeVarLines) {
+        for (const mixinName of ['theme-light', 'theme-dark']) {
+          content = this.appendToMixin(content, mixinName, themeVarLines)
+        }
       }
 
       writeFileSync(themeVarsPath, content, 'utf-8')
@@ -310,6 +391,156 @@ export class LessVariableChecker {
       logger.error('添加变量失败', { themeVarsPath, error: error.message })
       throw error
     }
+  }
+
+  /**
+   * 向指定 mixin 块追加变量声明行（不存在则创建该 mixin）。
+   * @param {string} content theme-vars.less 内容
+   * @param {string} mixinName 如 'theme-light'
+   * @param {string} lines 变量声明行（已含缩进）
+   * @returns {string}
+   */
+  static appendToMixin(content, mixinName, lines) {
+    const re = new RegExp(`\\.${mixinName}\\s*\\(\\s*\\)\\s*\\{([^}]*)\\}`)
+    if (re.test(content)) {
+      return content.replace(re, (m, inner) =>
+        `.${mixinName}() {\n${String(inner).trim()}\n${lines}\n}`,
+      )
+    }
+    return content + `\n\n.${mixinName}() {\n${lines}\n}\n`
+  }
+
+  /**
+   * 提取指定 mixin 块内声明的变量名集合。
+   * @param {string} content theme-vars.less 内容
+   * @param {string} mixinName 如 'theme-light'
+   * @returns {Set<string>}
+   */
+  static mixinVarNames(content, mixinName) {
+    // ⚠️ 必须用 [^}]*（mixin 块内无嵌套）。用 [\s\S]*?\n\s*\} 会在 .common() 写成单行
+    // `{ ... }` 时跨块匹配到下一个 mixin 的右括号，误判变量归属并破坏文件结构。
+    const re = new RegExp(`\\.${mixinName}\\s*\\(\\s*\\)\\s*\\{([^}]*)\\}`)
+    const m = String(content).match(re)
+    if (!m) return new Set()
+    const names = new Set()
+    const vr = /@([a-zA-Z0-9_-]+)\s*:/g
+    let x
+    while ((x = vr.exec(m[1])) !== null) names.add(x[1])
+    return names
+  }
+
+  /**
+   * 🛡️ 2026-09-15 确定性自愈：清除 .common() 中「两个主题 mixin 都已定义」的颜色变量。
+   *
+   * 根因：LESS 的 mixin 变量**不覆盖** caller 作用域已存在的同名变量。
+   * index.less / dark.less / light.less 都是 `.common(); .theme-X();` 顺序调用，
+   * 故 `.common()` 里的 @colorX 会让随后 `.theme-light()`/`.theme-dark()` 的同名定义
+   * 被静默忽略 → `.dark`/`.light` 编译结果完全相同 → 切主题零生效。
+   *
+   * 安全性：只删「light 与 dark **都**已定义」的颜色类变量 —— 删除后仍可编译，
+   * 且恢复主题覆盖语义；几何/字号令牌（@border-radius-base 等）与非颜色变量一律保留。
+   *
+   * @param {string} themeVarsPath
+   * @returns {{removed:number, names:string[]}}
+   */
+  static healCommonColorVars(themeVarsPath) {
+    let content
+    try {
+      content = readFileSync(themeVarsPath, 'utf-8')
+    } catch (e) {
+      return { removed: 0, names: [] }
+    }
+    // ⚠️ [^}]* 而非 [\s\S]*?\n\s*\}：后者在 .common() 为单行时跨块误匹配（见 mixinVarNames 注释）
+    const commonM = content.match(/\.common\s*\(\s*\)\s*\{([^}]*)\}/)
+    if (!commonM) return { removed: 0, names: [] }
+
+    const lightVars = this.mixinVarNames(content, 'theme-light')
+    const darkVars = this.mixinVarNames(content, 'theme-dark')
+    if (lightVars.size === 0 || darkVars.size === 0) return { removed: 0, names: [] }
+
+    const kept = []
+    const names = []
+    for (const line of commonM[1].split('\n')) {
+      const m = line.match(/@([a-zA-Z0-9_-]+)\s*:\s*([^;]+);/)
+      if (m && isColorVarName(m[1]) && lightVars.has(m[1]) && darkVars.has(m[1])) {
+        names.push(m[1])
+        continue
+      }
+      kept.push(line)
+    }
+    if (names.length === 0) return { removed: 0, names: [] }
+
+    const inner = kept.join('\n').replace(/\n{3,}/g, '\n\n').replace(/\s+$/, '')
+    const next = content.replace(commonM[0], `.common() {${inner}\n}`)
+    try {
+      writeFileSync(themeVarsPath, next, 'utf-8')
+    } catch (e) {
+      logger.error('清除 .common() 颜色变量失败', { themeVarsPath, error: e.message })
+      return { removed: 0, names: [] }
+    }
+    return { removed: names.length, names }
+  }
+
+  /**
+   * 🛡️ 2026-09-16 确定性自愈（磁盘版）：读取组件目录下 common.less 与全部 .vue，
+   * 删除文件级槽位（@color-*、@shadow-*）字面量重声明，写回干净文件。
+   *
+   * 复用 theme-color-guard.healFileLevelSlotOverrides（与门禁 THEME-SLOT-LOCAL-OVERRIDE 同源互逆）。
+   * 仅对确实变化的文件写盘，避免无谓改动影响构建缓存。
+   *
+   * @param {string} componentDir
+   * @returns {{removed:number, files:string[]}}
+   */
+  static healFileLevelSlotOverrides(componentDir) {
+    const targets = []
+    try {
+      const commonLess = join(componentDir, 'resources/styles/common.less')
+      if (existsSync(commonLess)) targets.push(commonLess)
+      // 递归收集所有 .vue 文件
+      const walk = (dir) => {
+        let entries
+        try { entries = readdirSync(dir) } catch (e) { return }
+        for (const name of entries) {
+          const fp = join(dir, name)
+          let st
+          try { st = statSync(fp) } catch (e) { continue }
+          if (st.isDirectory()) walk(fp)
+          else if (st.isFile() && extname(fp) === '.vue') targets.push(fp)
+        }
+      }
+      walk(componentDir)
+    } catch (e) {
+      logger.error('收集自愈目标文件失败', { componentDir, error: e.message })
+    }
+
+    const files = []
+    for (const p of targets) {
+      try {
+        const content = readFileSync(p, 'utf-8')
+        files.push({ path: p, content })
+      } catch (e) {
+        logger.error('读取自愈目标文件失败', { p, error: e.message })
+      }
+    }
+    if (files.length === 0) return { removed: 0, files: [] }
+
+    const healResult = healFileLevelSlotOverrides(files)
+    if (!healResult.changed) return { removed: 0, files: [] }
+
+    const changedFiles = []
+    for (const f of files) {
+      // 仅内容确有变化的写回（path 在磁盘上、content 已被自愈 mutate）
+      const onDisk = readFileSync(f.path, 'utf-8')
+      if (onDisk !== f.content) {
+        try {
+          writeFileSync(f.path, f.content, 'utf-8')
+          changedFiles.push(f.path)
+        } catch (e) {
+          logger.error('写回自愈结果失败', { path: f.path, error: e.message })
+        }
+      }
+    }
+    return { removed: healResult.removed, files: changedFiles }
   }
 
   /**

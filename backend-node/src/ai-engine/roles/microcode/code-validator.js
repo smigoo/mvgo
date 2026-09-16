@@ -147,23 +147,52 @@ export function extractTemplateClassNames(allFiles, componentName, options = {})
       let match;
       while ((match = staticClassRx.exec(vueContent)) !== null) {
         const classValue = match[1];
-        // 跳过 Vue 绑定表达式（如 class="{ active: isActive }"）
-        if (classValue.startsWith('{') && classValue.endsWith('}')) {
-          // 提取对象键中的字符串字面量
-          let strMatch;
-          while ((strMatch = stringLiteralRx.exec(classValue)) !== null) {
-            const cn = strMatch[1].trim();
-            if (cn && !frameworkPrefixes.some((p) => cn.startsWith(p))) {
-              fullClassNames.add(cn);
-            }
-          }
-        } else {
-          // 普通 class 值，空格分隔
-          const tokens = classValue.split(/\s+/);
-          for (const cn of tokens) {
-            // 🛡️ v3.7-fix: 过滤非有效 class 名（避免 [ ] ( ? = 等表达式碎片污染）
+        // 🛡️ 2026-09-16 治本（M1.1，e6b2864d / b75436da 实锤）：绑定表达式绝不走空格切分。
+        // 旧实现在 `:class="['c-x-tab-item', { active: activeTab === index }]"`
+        // 上按空格切出 `activeTab` / `index` 这些**表达式标识符**冒充类名（假阳性 →
+        // 被当成缺失类生成垃圾 stub，再触发 NULL 类名噪声），同时把真正的裸键 `active:`
+        // 因含冒号过滤掉（假阴性 → 模板从未挂载 `active`，样式 `.c-x-tab-item--active`
+        // 也无从配对，激活态静默失效）。
+        // 绑定表达式统一交由下方「:class 绑定专用提取」处理：只取字符串字面量与对象键。
+        if (/[\[\]{}()'"`?:=!&|+<>]/.test(classValue)) continue;
+        // 纯静态 class 值，空格分隔
+        const tokens = classValue.split(/\s+/);
+        for (const cn of tokens) {
+          // 🛡️ v3.7-fix: 过滤非有效 class 名（避免 [ ] ( ? = 等表达式碎片污染）
+          if (!cn || !/^[a-zA-Z_][a-zA-Z0-9_-]*$/.test(cn)) continue;
+          if (frameworkPrefixes.some((p) => cn.startsWith(p))) continue;
+          fullClassNames.add(cn);
+        }
+      }
+
+      // 🛡️ 2026-09-16（M1.1）：:class 绑定表达式专用提取。
+      // 只取两类，绝不取裸标识符（防变量名冒充类名）：
+      //   ① 字符串字面量（数组元素 / 三元分支 / 单类名字符串）→ 'c-x-tab-item'
+      //   ② {...} 段内的对象键，含**裸键**（active / is-open）与引号键 → { active: cond }
+      {
+        const bindRx = /:class\s*=\s*(["'`])([\s\S]*?)\1/g;
+        let bMatch;
+        while ((bMatch = bindRx.exec(vueContent)) !== null) {
+          const expr = bMatch[2] || '';
+          // ① 字符串字面量
+          const litRx = /'([^'\n]+)'|"([^"\n]+)"/g;
+          let lMatch;
+          while ((lMatch = litRx.exec(expr)) !== null) {
+            const cn = (lMatch[1] ?? lMatch[2] ?? '').trim();
             if (!cn || !/^[a-zA-Z_][a-zA-Z0-9_-]*$/.test(cn)) continue;
-            if (cn && !frameworkPrefixes.some((p) => cn.startsWith(p))) {
+            if (frameworkPrefixes.some((p) => cn.startsWith(p))) continue;
+            fullClassNames.add(cn);
+          }
+          // ② {...} 段内的对象键（含裸键；限定在 {} 内，避免误抓三元 `x : y`）
+          const objSegRx = /\{([^{}]*)\}/g;
+          let oMatch;
+          while ((oMatch = objSegRx.exec(expr)) !== null) {
+            const keyRx = /(?:'([^'\n]+)'|"([^"\n]+)"|([A-Za-z_][\w-]*))\s*:/g;
+            let kMatch;
+            while ((kMatch = keyRx.exec(oMatch[1])) !== null) {
+              const cn = (kMatch[1] ?? kMatch[2] ?? kMatch[3] ?? '').trim();
+              if (!cn || !/^[a-zA-Z_][a-zA-Z0-9_-]*$/.test(cn)) continue;
+              if (frameworkPrefixes.some((p) => cn.startsWith(p))) continue;
               fullClassNames.add(cn);
             }
           }
@@ -367,11 +396,27 @@ export function reverseMapClassToElement(className, elementStyleMap) {
         }
       }
     }
-    // 如果没有语义匹配，返回第一个元素作为兜底
-    const firstKey = Object.keys(elementStyleMap)[0];
-    return firstKey
-      ? { elemId: firstKey, styles: elementStyleMap[firstKey] }
-      : null;
+    // 🎯 M1.4（2026-09-16 治本，e6b2864d / b75436da 实锤）：**取消「未匹配返回第一个元素」兜底**。
+    // 旧实现 unmatched → 拿 elementStyleMap 第一个元素的样式回填，等于给缺失类写入**假真值**：
+    // 实测 c-device-monitor-switch-item--active（Figma 无此激活态元素）被回填成首个元素的
+    // `display: flex; flex-direction: row;`，既不是激活态真值、又让「未匹配」完全不可见
+    // （日志显示「已生成 N 条 fallback」像是修好了）。这属于「用错误真值掩盖缺陷」，比留空更危险。
+    // 现改为返回 null：调用方落 TODO 空块 + 可观测告警，让缺陷暴露给重试/人工，而非静默写错。
+    return null;
+  }
+
+/**
+ * 🎯 A1 收回（2026-09-16）：生成 class 空块骨架。
+ * 把模板已确定的 class 名列表转为 `.c-xxx {}` 空块，注入 style chunk prompt，
+ * 让 LLM 只填 value、不再自由命名 class（结构强制，根治类名漂移）。
+ * @param {string[]} classNamesList 程序化提取的模板 class 名列表
+ * @returns {string} 空块骨架（每个 class 一块，块内仅 value 占位）
+ */
+export function generateEmptyClassSkeleton(classNamesList) {
+    if (!Array.isArray(classNamesList) || classNamesList.length === 0) return '';
+    return classNamesList
+      .map((c) => `.${c} {\n  /* ↓ 只填 value，勿改选择器 */\n}`)
+      .join('\n\n');
   }
 
 export function generateFallbackCssRule(className, styles) {
@@ -381,10 +426,12 @@ export function generateFallbackCssRule(className, styles) {
     const props = [];
     for (const [key, value] of Object.entries(styles)) {
       if (value === undefined || value === null || value === '') continue;
-      // 已是 CSS 属性名（含 -）则原样使用；否则把 camelCase 转为 kebab-case
+      // 🎯 A1 收回（2026-09-16）：display 已由空块骨架确定性写入（style chunk 前注入），
+      // fallback stub 不再补 display——否则会与骨架方向冲突或重复。此处过滤掉 display。
       const cssProp = key.includes('-')
         ? key
         : key.replace(/([A-Z])/g, '-$1').toLowerCase();
+      if (cssProp === 'display') continue;
       const v = typeof value === 'number' ? String(value) : value;
       props.push(`  ${cssProp}: ${v}`);
     }
@@ -393,6 +440,459 @@ export function generateFallbackCssRule(className, styles) {
     }
     return `.${className} {\n${props.join(';\n')};\n}`;
   }
+
+/**
+ * 🎯 M1.2（2026-09-16）：状态 / 修饰符类的「选择器级配对」门禁。
+ *
+ * 背景（实锤）：`validateClassNames` 只做**集合级**存在性检查（模板类名 ⊆ 样式类名），
+ * 无法发现「形态不匹配」这一整类缺陷：
+ *   - 模板 `:class="{ active: cond }"` 挂的是**裸类名** `active`；
+ *   - 样式写的是 `.c-x-tab-item--active`（LESS 里是 `&--active`）。
+ *   两者零交集，但集合检查只会说「`active` 未定义」（若已提取）或干脆漏检，
+ *   最终表现为**激活态静默失效**（tab 不变蓝、卡片不高亮），且不报任何错。
+ *
+ * 判据（确定性、低误伤）：
+ *   1. 模板 token 精确命中样式选择器（含各自 `.vue` 自有 `<style>`）→ 通过；
+ *   2. token 是「带基类的修饰符类」（`<base>--<state>` / `<base>.is-<state>`）：
+ *      样式里存在同名选择器，或存在 `--<state>` / `.is-<state>` 形态 → 通过；
+ *   3. token 是**裸状态词**（`active` / `is-open` / `selected` …）且样式里**没有** `.active`
+ *      这个精确选择器 → BLOCK `CLASS-PAIR-001`：裸类名不会命中 `--state` 形态，
+ *      必须改写为 `<基类>--<state>`（或补一条 `.active` 规则）。
+ *
+ * 只判「状态词形」token，不判普通类名——普通类名缺失已由 CLASS-MUST-EXIST 正向门禁覆盖，
+ * 本门禁刻意收窄命中面以避免与既有门禁重复计分。
+ *
+ * @param {Object<string,string>} allFiles - { path: content }
+ * @param {string[]} [classNamesList] - 模板类名清单（缺省时自行提取）
+ * @param {Object} [options] - { componentName, logger }
+ * @returns {{ mismatches: Array }}
+ */
+export function validateClassSelectorPairs(
+  allFiles,
+  classNamesList = null,
+  options = {},
+) {
+  const mismatches = [];
+  const files = allFiles && typeof allFiles === 'object' ? allFiles : {};
+
+  // 1. 收集样式侧「已定义类名」+ 原始样式文本（用于识别 &--state 等嵌套形态）
+  const defined = new Set();
+  const cssChunks = [];
+  for (const [p, c] of Object.entries(files)) {
+    if (typeof c !== 'string') continue;
+    if (/\.less$/i.test(p)) {
+      cssChunks.push(c);
+    } else if (/\.vue$/i.test(p)) {
+      for (const sm of c.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)) {
+        cssChunks.push(sm[1]);
+      }
+    }
+  }
+  const cssAll = cssChunks.join('\n');
+  for (const m of cssAll.matchAll(/\.(-?[A-Za-z_][\w-]*)/g)) {
+    defined.add(m[1]);
+  }
+
+  // 2. 取模板类名清单
+  const list =
+    Array.isArray(classNamesList) && classNamesList.length > 0
+      ? classNamesList
+      : (() => {
+          try {
+            return extractTemplateClassNames(
+              files,
+              options.componentName || '',
+              {},
+            ).fullList;
+          } catch {
+            return [];
+          }
+        })();
+
+  // 3. 逐 token 判「形态配对」
+  const seen = new Set();
+  for (const raw of list) {
+    const cls = String(raw || '').trim();
+    if (!cls || seen.has(cls)) continue;
+    seen.add(cls);
+    if (defined.has(cls)) continue; // ① 精确命中
+
+    const parsed = parseModifierClassName(cls);
+    if (!parsed) continue; // 非状态词形：交给 CLASS-MUST-EXIST 正向门禁
+
+    const { base, state } = parsed;
+    // ② 带基类的修饰符类：`--state` / `.is-state` 任一形态存在即通过
+    if (base && (cssAll.includes(`--${state}`) || cssAll.includes(`.is-${state}`) || cssAll.includes(`.has-${state}`))) {
+      continue;
+    }
+    // ③ 裸状态词：样式里必须有 `.active` 这个精确选择器，否则一定不命中
+    if (!base && (cssAll.includes(`--${state}`) || cssAll.includes(`.is-${state}`))) {
+      mismatches.push({
+        file: 'resources/styles/common.less',
+        className: cls,
+        gate: 'CLASS-PAIR-001',
+        message:
+          `模板在 :class 中挂了**裸类名** .${cls}，但样式侧只有 .*--${state} / .is-${state} 形态 —— ` +
+          `裸类名不会命中 BEM 修饰符选择器，该状态（激活/悬停等）将静默失效。` +
+          `请改写为 \`<元素基类>--${state}\`（如 'c-x-tab-item--${state}'），或补一条 .${cls} 规则。`,
+      });
+      continue;
+    }
+  }
+
+  // 🎯 M1.3（2026-09-16）：状态类「视觉属性下限」门禁（CLASS-STATE-VISUAL-001）。
+  // 状态类（--active / is-*）存在的唯一理由是与默认态产生**视觉差异**。
+  // 实测 c-device-monitor-switch-item--active 的规则体只有 `display/flex-direction` ——
+  // 纯结构属性、零视觉属性 → 激活态视觉静默丢失（Figma 里激活态必有 fill/stroke 差异）；
+  // 而既有门禁（含上方的 CLASS-PAIR-001）只管「选择器形态是否存在」，不管「块内有没有视觉」。
+  // 阈值纪律：只对「解析为状态词形 且 能取到规则体」的 class 判；规则体为空/TODO 单列提示。
+  const stateSeen = new Set();
+  for (const raw of list) {
+    const cls = String(raw || '').trim();
+    if (!cls || stateSeen.has(cls)) continue;
+    stateSeen.add(cls);
+    if (!parseModifierClassName(cls)) continue; // 非状态词形 → 不在本门禁范围
+    const bodies = extractRuleBodies(cssAll, cls);
+    if (bodies.length === 0) continue; // 取不到规则体 → 已由 CLASS-PAIR-001 / 正向门禁覆盖
+    const stripped = bodies.map((b) =>
+      b.replace(/\/\*[\s\S]*?\*\//g, '').trim(),
+    );
+    if (stripped.every((b) => b.length === 0)) {
+      mismatches.push({
+        file: 'resources/styles/common.less',
+        className: cls,
+        gate: 'CLASS-STATE-VISUAL-001',
+        message:
+          `状态类 .${cls} 的规则体是**空块**（只有骨架未填值），状态样式不会生效。` +
+          `请按设计稿补齐该状态的视觉声明。`,
+      });
+      continue;
+    }
+    if (!bodies.some((b) => VISUAL_PROP_RX.test(b))) {
+      mismatches.push({
+        file: 'resources/styles/common.less',
+        className: cls,
+        gate: 'CLASS-STATE-VISUAL-001',
+        message:
+          `状态类 .${cls} 只有结构属性（display / flex-direction / gap 等），**没有任何视觉属性** —— ` +
+          `状态与默认态视觉上无差异，等价于该状态失效。请补 ≥1 条视觉声明：` +
+          `background* / color / border(-color) / box-shadow / opacity。`,
+      });
+    }
+  }
+
+  if (mismatches.length > 0) {
+    options.logger?.warn?.('⚠️ CLASS-PAIR-001 状态类选择器配对失败', {
+      count: mismatches.length,
+      sample: mismatches.slice(0, 5).map((m) => m.className),
+    });
+  }
+  return { mismatches };
+}
+
+/** 状态 / 修饰符词表（用于判定 token 是否为「状态词形」） */
+const MODIFIER_STATE_WORDS = new Set([
+  'active',
+  'hover',
+  'selected',
+  'checked',
+  'disabled',
+  'enabled',
+  'open',
+  'closed',
+  'collapsed',
+  'expanded',
+  'current',
+  'focus',
+  'error',
+  'success',
+  'warning',
+  'danger',
+  'loading',
+  'empty',
+  'on',
+  'off',
+  'show',
+  'hidden',
+  'visible',
+]);
+
+/**
+ * 解析 token 的「基类 + 状态」：
+ *   `c-x-tab-item--active` → { base: 'c-x-tab-item', state: 'active' }
+ *   `is-open` / `has-error` → { base: '', state: 'open' / 'error' }
+ *   `active`（裸状态词）     → { base: '', state: 'active' }
+ *   普通类名                 → null（非状态词形，本门禁不管）
+ * 注意：跳过 `c-mc-<ts>-<hash>` 这类实例 ID 形态，避免把 ID 段误判成状态。
+ */
+function parseModifierClassName(cls) {
+  const bem = cls.match(/^(.*?)--([A-Za-z][\w-]*)$/);
+  if (bem) return { base: bem[1], state: bem[2] };
+  const semantic = cls.match(/^(is|has)-([A-Za-z][\w-]*)$/);
+  if (semantic) return { base: '', state: semantic[2] };
+  if (MODIFIER_STATE_WORDS.has(cls)) return { base: '', state: cls };
+  return null;
+}
+
+/**
+ * 🎯 M1.3 判据：CSS 声明「是否属于视觉属性」——只认填充 / 描边色 / 文字色 / 阴影 / 透明 / 滤镜。
+ * 刻意排除纯结构属性（display / flex-direction / gap / padding / **border-radius** / border-width 等）：
+ * 结构属性不产生状态间的**视觉差异**，不能作为状态类成立的证据。
+ * 注：`border-radius` / `border-width` / `border-style` **不会**被本正则命中
+ * （`border` 后只允许可选方位段 + 可选 `-color`，随后必须紧跟 `:`）。
+ */
+const VISUAL_PROP_RX =
+  /(?:^|[\s;{])(?:background(?:-color|-image)?|color|border(?:-(?:top|right|bottom|left))?(?:-color)?|box-shadow|opacity|fill|filter|outline(?:-color)?|text-shadow|backdrop-filter)\s*:/;
+
+/** 从 openIdx 处的 `{` 起做花括号配平，返回 `{}` 内文本；不配平返回 null */
+function braceBodyAt(css, openIdx) {
+  let depth = 0;
+  for (let i = openIdx; i < css.length; i++) {
+    const ch = css[i];
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) return css.slice(openIdx + 1, i);
+    }
+  }
+  return null;
+}
+
+/**
+ * 取某个 class 的样式规则体（顶层 `{}` 内文本，含其嵌套块）。
+ *
+ * 优先级：① 字面选择器 `.cls` 命中则**只用它**；
+ *         ② 字面取不到时才退回 LESS 嵌套形态 `&--<state>` / `.is-<state>`
+ *            （嵌套形态无法定位父选择器，故放第二位，避免拿别的元素的 `&--state` 充数）。
+ *
+ * 纯文本扫描 + 花括号配平，不依赖 LESS 编译（嵌套展开后完整类名不会出现在样式文本里）。
+ *
+ * @param {string} css 全部样式文本（各 .less 全文 + 各 .vue 的 <style> 合并）
+ * @param {string} cls 完整类名
+ * @returns {string[]} 命中的规则体列表（同 class 可命中多处）
+ */
+function extractRuleBodies(css, cls) {
+  const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const collect = (rx) => {
+    const out = [];
+    let from = 0;
+    for (;;) {
+      rx.lastIndex = from;
+      const m = rx.exec(css);
+      if (!m) break;
+      const open = css.indexOf('{', m.index + m[0].length);
+      const between = open < 0 ? '' : css.slice(m.index + m[0].length, open);
+      // 选择器与 `{` 之间不得跨过 `}` / `;`（否则是别的规则）
+      if (open >= 0 && !/[};]/.test(between)) {
+        const body = braceBodyAt(css, open);
+        if (body !== null) out.push(body);
+        from = open + 1;
+      } else {
+        from = m.index + m[0].length;
+      }
+    }
+    return out;
+  };
+  const literal = collect(new RegExp(`\\.${esc(cls)}(?![\\w-])`, 'g'));
+  if (literal.length > 0) return literal;
+  const parsed = parseModifierClassName(cls);
+  if (!parsed) return [];
+  const se = esc(parsed.state);
+  return [
+    ...collect(new RegExp(`&--${se}(?![\\w-])`, 'g')),
+    ...collect(new RegExp(`\\.is-${se}(?![\\w-])`, 'g')),
+  ];
+}
+
+/* ─────────────────────────── M2.2 色值槽位用途一致性 ─────────────────────────── */
+
+/** 槽位 token 归一：`@color-bg-card` / `--colorBgCard` → kebab 词根 `bg-card` */
+function normalizeColorSlotToken(raw) {
+  const s = String(raw || '').trim();
+  if (s.startsWith('@color-')) return s.slice('@color-'.length).toLowerCase();
+  const m = s.match(/^--color([A-Za-z0-9-]*)$/);
+  if (!m) return null;
+  return m[1]
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1-$2')
+    .replace(/^-+/, '')
+    .toLowerCase();
+}
+
+/**
+ * 槽位用途族：
+ *   'bg'      → 背景槽位（`bg` / `bg-card` / `bg-base` / `bg-nav`）
+ *   'text'    → 文字槽位（`text-base` / `text-secondary` / `tab-active-text` …）
+ *   'neutral' → 通用槽位（`primary` / `info` / `error` / `gradient-*`）——不判，避免误杀
+ */
+function colorSlotPurpose(token) {
+  const segs = String(token || '').split('-').filter(Boolean);
+  if (segs.includes('bg')) return 'bg';
+  if (segs.includes('text')) return 'text';
+  return 'neutral';
+}
+
+/**
+ * CSS 属性用途族：
+ *   'bg'      → 背景类属性（`background` / `background-color` / `background-image`）
+ *   'text'    → 前景/文字类属性（`color` / `-webkit-text-fill-color` / `caret-color`）
+ *   'neutral' → 其余（含 `border-color`：边框用背景系或语义色都合理，不判）
+ */
+function colorPropPurpose(prop) {
+  const p = String(prop || '').toLowerCase();
+  if (p.startsWith('background')) return 'bg';
+  if (
+    p === 'color' ||
+    p === '-webkit-text-fill-color' ||
+    p === 'caret-color'
+  ) {
+    return 'text';
+  }
+  return 'neutral';
+}
+
+const COLOR_VAR_RX = /@color-[a-z0-9-]+|var\(\s*--color[A-Za-z0-9-]+/g;
+
+/**
+ * 扫描产物里所有「颜色槽位引用」及其所在声明的属性名（带绝对下标，供精确改写）。
+ * @returns {Array<{file,prop,slot,purpose,propPurpose,absIndex,isWholeFile}>}
+ */
+function scanColorSlotDecls(allFiles) {
+  const out = [];
+  const files = allFiles && typeof allFiles === 'object' ? allFiles : {};
+  for (const [p, c] of Object.entries(files)) {
+    if (typeof c !== 'string') continue;
+    const isWholeFile = /\.(less|css)$/i.test(p);
+    const isVue = /\.vue$/i.test(p);
+    if (!isWholeFile && !isVue) continue;
+    // 仅 .less/.css 的 styleText === 文件全文，绝对下标可直接用于改写；
+    // .vue 的 <style> 是拼接串，下标不映射文件 → 只报不改（见 fixColorSlotPurpose）。
+    const styleText = isVue
+      ? [...c.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)]
+          .map((m) => m[1])
+          .join('\n')
+      : c;
+    if (!styleText) continue;
+    COLOR_VAR_RX.lastIndex = 0;
+    let v;
+    while ((v = COLOR_VAR_RX.exec(styleText)) !== null) {
+      const at = v.index;
+      // 向前回退到本声明的边界（最近的 ; { }），取其到槽位之间的文本判属性名
+      const boundary = Math.max(
+        styleText.lastIndexOf(';', at - 1),
+        styleText.lastIndexOf('{', at - 1),
+        styleText.lastIndexOf('}', at - 1),
+      );
+      const seg = styleText.slice(boundary + 1, at);
+      const propMatch = seg.match(/([-a-zA-Z][-a-zA-Z0-9]*)\s*:[^:;{}]*$/);
+      if (!propMatch) continue;
+      const prop = propMatch[1];
+      const propPurpose = colorPropPurpose(prop);
+      if (propPurpose === 'neutral') continue;
+      const rawSlot = v[0].replace(/^var\(\s*/, '');
+      const token = normalizeColorSlotToken(rawSlot);
+      if (!token) continue;
+      const purpose = colorSlotPurpose(token);
+      if (purpose === 'neutral' || purpose === propPurpose) continue;
+      out.push({
+        file: p,
+        prop,
+        slot: rawSlot,
+        purpose,
+        propPurpose,
+        // ⚠️ 必须指向**槽位名本身**的起始下标，而非 `var(` 的起始 —— 否则自愈会从
+        // `v` 开始按槽位长度截断，改出 `--colorBgCardxt, #ffffff)` 这类残串。
+        absIndex: at + (v[0].length - rawSlot.length),
+        isWholeFile,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * 🎯 M2.2（2026-09-16）：色值槽位「用途一致性」门禁（COLOR-SLOT-001）。
+ *
+ * 问题：槽位（`@color-*` / `var(--color*)`）是**编译期常量**，不是任意颜色 —— 每个槽位
+ * 被赋予固定语义（背景系 / 文字系 / 语义色）。跨用途引用会让属性拿到与设计意图无关的值，
+ * 且**不报错、不崩溃**，只表现为视觉错。实测 `c-vehicle-monitor-e6b2864e`：
+ *   L123 `color:      var(--colorTabActiveText, #ffffff);`  ← 正确（文字槽位 → 文字属性）
+ *   L156 `background: var(--colorTabActiveText, #ffffff);`  ← 违规（文字槽位 → 背景属性）
+ *   后果：卡片背景拿到白色 → 「卡片发白」。此前无任何门禁覆盖此类。
+ *
+ * @returns {{mismatches: Array}} 不修改入参
+ */
+export function detectColorSlotPurpose(allFiles, options = {}) {
+  const mismatches = [];
+  for (const hit of scanColorSlotDecls(allFiles)) {
+    mismatches.push({
+      file: hit.file,
+      className: '-',
+      gate: 'COLOR-SLOT-001',
+      prop: hit.prop,
+      slot: hit.slot,
+      message:
+        `${hit.prop}: 使用了${hit.purpose === 'text' ? '文字' : '背景'}槽位 ${hit.slot}，` +
+        `与属性用途（${hit.propPurpose === 'bg' ? '背景' : '文字'}）不符 —— ` +
+        `槽位是语义常量，跨用途引用会让该属性拿到与设计意图无关的值（静默视觉错）。` +
+        `请改用${hit.propPurpose === 'bg' ? '背景' : '文字'}槽位` +
+        `（LESS: @color-bg-card / CSS: var(--colorBgCard)）。`,
+    });
+  }
+  if (mismatches.length > 0) {
+    options.logger?.warn?.('⚠️ COLOR-SLOT-001 槽位用途不符', {
+      count: mismatches.length,
+      sample: mismatches.slice(0, 5).map((m) => `${m.prop}:${m.slot}`),
+    });
+  }
+  return { mismatches };
+}
+
+/**
+ * M2.2 确定性自愈：把「**文字槽位用在背景属性**」精确改写为背景槽位。
+ *
+ * 设计边界（刻意收窄，避免写入猜测值）：
+ *   - 只处理 `propPurpose === 'bg' && purpose === 'text'` 一个方向 —— 该方向语义唯一
+ *     （背景属性必须拿背景槽位）；反向（背景槽位用于文字）可能是有意的强调色 → 只报不改。
+ *   - 只改 **.less/.css**（绝对下标可映射文件）；.vue 的 <style> 是拼接串 → 只报不改。
+ *   - 只替换**槽位名**，原 fallback 字面量原样保留（如 `var(--colorTabActiveText, #ffffff)`
+ *     → `var(--colorBgCard, #ffffff)`），不引入任何设计稿色值猜测。
+ *   - 按文件内下标**从后往前**替换，避免位移错改。
+ *
+ * @returns {{files:Record<string,string>, fixes:Array<{file,prop,from,to}>}} 不修改入参
+ */
+export function fixColorSlotPurpose(allFiles, options = {}) {
+  const files = { ...(allFiles || {}) };
+  const fixes = [];
+  const TARGET = { less: '@color-bg-card', css: '--colorBgCard' };
+  const hits = scanColorSlotDecls(allFiles)
+    .filter(
+      (h) =>
+        h.isWholeFile && h.propPurpose === 'bg' && h.purpose === 'text',
+    )
+    .sort((a, b) =>
+      a.file === b.file
+        ? b.absIndex - a.absIndex
+        : a.file.localeCompare(b.file),
+    );
+  for (const h of hits) {
+    const cur = files[h.file];
+    if (typeof cur !== 'string') continue;
+    const to = h.slot.startsWith('@color-') ? TARGET.less : TARGET.css;
+    const next =
+      cur.slice(0, h.absIndex) + to + cur.slice(h.absIndex + h.slot.length);
+    if (next === cur) continue;
+    files[h.file] = next;
+    fixes.push({ file: h.file, prop: h.prop, from: h.slot, to });
+  }
+  if (fixes.length > 0) {
+    options.logger?.warn?.(
+      '🛡️ COLOR-SLOT-001 确定性自愈：文字槽位用于背景属性 → 改写为背景槽位',
+      { count: fixes.length, fixes: fixes.slice(0, 5) },
+    );
+  }
+  return { files, fixes };
+}
 
 export function validateClassNames(
   allFiles,
@@ -475,37 +975,88 @@ export function validateClassNames(
       }
     }
 
-    if (missingClasses.length > 0) {
-      for (const cn of missingClasses) {
-        mismatches.push({
-          file: 'resources/styles/common.less',
-          className: cn,
-          message: `模板中使用了 .${cn}，但 common.less 中未定义`,
-        });
-      }
-    }
-
-    // 反向校验（P0-①，2026-09-01）：common.less 定义了但模板未引用的 class → WARN。
-    // 与正向共用同一 prefixId 同源解析，杜绝「正向 A 口径、反向 B 口径」漂移；
-    // 仅 WARN 不阻断（可能是冗余样式或模板漏挂载，需人工/模型确认）。
+    // 🎯 A1 收回（2026-09-16）：先收集 less 中已定义的 class 集合（供漂移对照 + 反向校验共用），
+    // 避免「正向 A 口径、反向 B 口径」漂移。
+    const definedClasses = new Set();
     if (prefixId) {
       const definedRx = new RegExp(
         `\\.(${escapeRegExp(prefixId)}-[a-z0-9-]+)`,
         'g',
       );
-      const definedClasses = new Set();
       let dm;
       while ((dm = definedRx.exec(lessContent)) !== null) {
         definedClasses.add(dm[1]);
       }
+    }
+
+    // 🎯 A1 收回（2026-09-16）：forward mismatch（模板用了但 less 未定义）→ 先落「可观测告警」，
+    // 含漂移类名对照（模板期望名 vs less 实际名），而非静默 fallback。
+    // 漂移判定：less 中已定义 class 与缺失 class 共享前缀段数 >= 2（说明 LLM 把它改写成别的名字）。
+    const driftSegments = (name) => String(name || '').split('-');
+    if (missingClasses.length > 0) {
+      for (const cn of missingClasses) {
+        const cnSegs = driftSegments(cn);
+        // 找漂移候选：less 已定义、且与缺失 class 共享至少 2 段前缀的类名
+        const driftCandidates = [...definedClasses].filter((dc) => {
+          if (dc === cn) return false;
+          const dcSegs = driftSegments(dc);
+          let shared = 0;
+          const max = Math.min(cnSegs.length, dcSegs.length);
+          for (let i = 0; i < max; i++) {
+            if (cnSegs[i] !== dcSegs[i]) break;
+            shared++;
+          }
+          return shared >= 2;
+        });
+        mismatches.push({
+          file: 'resources/styles/common.less',
+          className: cn,
+          message:
+            driftCandidates.length > 0
+              ? `模板中使用了 .${cn}，但 common.less 中未定义（疑似被重命名为 ${driftCandidates.map((d) => `.${d}`).join(' / ')}）`
+              : `模板中使用了 .${cn}，但 common.less 中未定义`,
+          // 🎯 门禁：清单内 class 必须存在（forward）
+          gate: 'CLASS-MUST-EXIST',
+          drift: driftCandidates,
+        });
+      }
+    }
+
+    // 反向校验（P0-①，2026-09-01）：common.less 定义了但模板未引用的 class → WARN。
+    // 🎯 A1 收回（2026-09-16）：升级为门禁「新增/重命名 class 封锁」——less 出现清单外 class
+    // 即为 LLM 新增或重命名，可观测告警（含对照：实际 class vs 最接近的清单 class）。
+    if (prefixId) {
       const templateSet = new Set(classesToCheck);
       for (const dc of definedClasses) {
         if (!templateSet.has(dc)) {
+          const dcSegs = driftSegments(dc);
+          // 找最接近的清单 class（共享前缀段最多者），作漂移对照
+          let best = null;
+          let bestShared = 0;
+          for (const tc of classesToCheck) {
+            const tcSegs = driftSegments(tc);
+            let shared = 0;
+            const max = Math.min(dcSegs.length, tcSegs.length);
+            for (let i = 0; i < max; i++) {
+              if (dcSegs[i] !== tcSegs[i]) break;
+              shared++;
+            }
+            if (shared > bestShared) {
+              bestShared = shared;
+              best = tc;
+            }
+          }
           mismatches.push({
             file: 'resources/styles/common.less',
             className: dc,
-            message: `common.less 中定义了 .${dc}，但模板未引用（冗余样式或模板漏挂载）`,
+            message:
+              best && bestShared >= 2
+                ? `common.less 中定义了 .${dc}，但模板未引用（疑似由清单 .${best} 重命名而来）`
+                : `common.less 中定义了 .${dc}，但模板未引用（冗余样式或模板漏挂载）`,
             reverse: true,
+            // 🎯 门禁：新增/重命名 class 封锁（reverse）
+            gate: 'NO-NEW-RENAME-CLASS',
+            drift: best && bestShared >= 2 ? [best] : [],
           });
         }
       }
@@ -519,6 +1070,7 @@ export function validateClassNames(
       Object.keys(elementStyleMap).length > 0
     ) {
       const fallbackRules = [];
+      const unmatched = [];
       for (const cn of missingClasses) {
         const mapping = reverseMapClassToElement(cn, elementStyleMap);
         if (mapping) {
@@ -527,8 +1079,11 @@ export function validateClassNames(
           );
           fallbackRules.push(generateFallbackCssRule(cn, mapping.styles));
         } else {
+          // 🎯 M1.4：不再写「猜测真值」（见 reverseMapClassToElement 注释）。
+          // 未匹配的类只落 TODO 空块，并单独计数上报，保证缺陷可观测而非静默写错样式。
+          unmatched.push(cn);
           fallbackRules.push(
-            `/* [自动修复] 模板 class .${cn} → 未匹配到元素，请手动补充样式 */`,
+            `/* [自动修复] 模板 class .${cn} → 未匹配到 Figma 元素（不写入猜测样式） */`,
           );
           fallbackRules.push(`.${cn} {\n  /* TODO: 请根据设计稿补充样式 */\n}`);
         }
@@ -539,7 +1094,51 @@ export function validateClassNames(
         missingCount: missingClasses.length,
         generatedCount:
           fallbackRules.filter((r) => !r.includes('TODO')).length / 2,
+        unmatchedCount: unmatched.length,
         cssLength: fallbackCss.length,
+      });
+      if (unmatched.length > 0) {
+        options.logger?.warn?.(
+          '⚠️ fallback 有模板类未匹配到 Figma 元素（已改写为 TODO 空块，不再写入猜测样式）',
+          { count: unmatched.length, sample: unmatched.slice(0, 8) },
+        );
+      }
+    }
+
+    // 🎯 M1.2（2026-09-16）：状态类的「选择器级配对」门禁（CLASS-PAIR-001）。
+    // 集合级校验（上方 missingClasses / definedClasses）只能发现「类名不存在」，
+    // 发现不了「形态不匹配」——模板挂裸类名 `active`、样式写 `&--active` 时两边零交集，
+    // 集合口径会说「active 未定义」（甚至因裸键未被提取而完全不报），
+    // 真实后果是激活态静默失效且不报错。此处补一层形态配对判定。
+    // 非阻断包裹：本门禁异常不得影响既有类名校验主链。
+    try {
+      const pairResult = validateClassSelectorPairs(allFiles, classesToCheck, {
+        componentName,
+        logger: options.logger,
+      });
+      if (pairResult.mismatches.length > 0) {
+        mismatches.push(...pairResult.mismatches);
+      }
+    } catch (e) {
+      options.logger?.warn?.('CLASS-PAIR 校验异常（非阻断）', {
+        error: e?.message || String(e),
+      });
+    }
+
+    // 🎯 M2.2（2026-09-16）：色值槽位「用途一致性」门禁（COLOR-SLOT-001）。
+    // 与类名同层：槽位引用是 LESS/CSS 文本级事实，不需要额外的 Figma 真值输入。
+    // 确定性自愈（fixColorSlotPurpose）由调用方在**校验之前**执行，
+    // 故此处报出的都是自愈无法覆盖的残留（如 .vue <style> 内、或反向跨用途）。
+    try {
+      const slotResult = detectColorSlotPurpose(allFiles, {
+        logger: options.logger,
+      });
+      if (slotResult.mismatches.length > 0) {
+        mismatches.push(...slotResult.mismatches);
+      }
+    } catch (e) {
+      options.logger?.warn?.('COLOR-SLOT 校验异常（非阻断）', {
+        error: e?.message || String(e),
       });
     }
 
@@ -787,7 +1386,20 @@ export async function validateAndFixGeneratedFiles(
           isMcId(declare.componentName)
         ) {
           // 优先使用传入的 displayName，其次从 visualElements 提取，最后从 Figma header 提取
-          let fixName = displayName;
+          // 🛡️ 2026-09-16 加固：displayName 可能仍带 cp-/mc-/mv-/page- 前缀（历史链路/其他 graph）。
+          // 先剥离语义前缀再判断可用性——否则「仅因带前缀」就退化到 extractHeaderTitle 兜底，
+          // 而该兜底是「深度优先取第一个中文 TEXT」，会误抓 tabs 标签当组件名
+          // （实锤：抓到「江阴靖江长江隧道」，而真正的组件名「重点车辆监测」在 header 小标题里，位置更靠后）。
+          const _rawDisplay = String(displayName || '').trim();
+          const _strippedDisplay = _rawDisplay
+            .replace(/^(cp|mc|mv|page)-/, '')
+            .trim();
+          // 剥离后仍是 ID 形态（含 13 位时间戳 / 纯 hex 长串）→ 视为不可用，才走节点树兜底
+          const _displayIsIdLike =
+            !_strippedDisplay ||
+            /\d{13}/.test(_strippedDisplay) ||
+            /^[a-f0-9]{8,}$/i.test(_strippedDisplay);
+          let fixName = _displayIsIdLike ? null : _strippedDisplay;
           if (!fixName || hasIdPrefix(fixName) || isMcId(fixName)) {
             // 🔥 尝试从 Figma 节点树中提取 panel-header 标题
             fixName = nodeData ? options.extractHeaderTitle(nodeData) : null;

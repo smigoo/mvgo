@@ -89,14 +89,39 @@ type: reference
 
 ### 3. common.less / layout-xxx.less（样式使用）
 
+> 🔴 **统一铁律（2026-09-16 定，模式 B）**：**`var()` 只允许出现在 `theme-vars.less` 的
+> `.common()` 映射里**。业务样式（common.less / layout-xxx.less / .vue `<style>`）一律写
+> **Less 变量**（`@fontSize` / `@color-xxx`），**禁止直接写 `var(...)`**。
+
 ```less
 .c-component {
-  // ✅ 正确：使用 var() + Less 变量回退
-  font-size: var(--fontSize, @fontSize);
-  font-weight: var(--fontWeightStrong, @fontWeightStrong);
-  color: var(--colorTextBase, @color-text-primary);
+  // ✅ 正确：颜色用槽位变量（编译期由 .dark/.light 决定值）
+  color: @color-text-primary;
+  background: @color-bg-container;
+
+  // ✅ 正确：尺寸/框架预设用 .common() 映射好的 Less 变量（其值是 var(--fontSize)）
+  font-size: @fontSize;
+  font-weight: @fontWeightStrong;
+
+  // ❌ 禁止：业务样式直接写 var()
+  // color: var(--colorTextBase, @color-text-primary);
+  // font-size: var(--fontSize, 14px);
 }
 ```
+
+**为什么颜色不用 `var(--colorX, @槽位)`？**
+
+1. `var()` 是运行期值，Less 编译期无法解析 → `lighten()` / `darken()` / `fade()` /
+   `saturate()` 等颜色函数**全部报错**，业务里想做透明度/明暗派生就做不到。
+2. 纯槽位值编译期确定，Less 函数正常工作。
+3. **不依赖宿主注入**：深浅差异由 `.theme-dark()` / `.theme-light()` 两套槽位值保证。
+   历史上写成 `var(--colorXxx, #ffffff)` 的组件里，**49% 的 CSS 变量名是臆造的**
+   （`--colorTextLight` / `--colorCardBg` / `--colorSecondary`… 平台根本不注入），
+   fallback 又是写死字面量 → 深浅两侧渲染完全相同，主题开关完全失效。
+
+> ⚠️ 代价须知：改用纯槽位后，**平台侧运行时调整 CSS 变量不再影响颜色**，只影响
+> `fontSize` 等经 `.common()` 映射的尺寸变量。这是模式 B 的既定取舍（规范
+> `skills/frontend-mc-guideline/references/style-guide.md` L220-223 有论证）。
 
 ## 配置对应关系
 
@@ -198,22 +223,56 @@ export default { common, light, dark }
 // 缺少 .common();
 ```
 
-## 颜色值铁律（2026-09-04 增补，L0-B 门禁 BLOCK 兜底）
+### ❌ 错误 5：把颜色真值写进 .common()（最隐蔽，主题静默失效）
+
+```less
+// ❌ 错误：.common() 先定义 → 随后 .theme-dark() 的同名定义被 LESS **静默忽略**
+.common() {
+  @color-text-primary: #333333;   // 抢跑
+}
+.theme-light() { @color-text-primary: #333333; }
+.theme-dark()  { @color-text-primary: #ffffff; }  // 永远不生效！
+
+// ✅ 正确：.common() 只放「var() 透传映射」+ 非颜色令牌（字号/圆角）
+.common() {
+  @fontSize: var(--fontSize);
+  @colorTextBase: var(--colorTextBase);   // 透传：名字与 cssVariableConfig.key 一致
+  @border-radius-base: 4px;
+}
+.theme-light() { @color-text-primary: #333333; }
+.theme-dark()  { @color-text-primary: #ffffff; }
+```
+
+**原理**：LESS 的 mixin 变量**不覆盖** caller 作用域已存在的同名变量（**首个定义胜出**，不是「后定义覆盖」）。
+`index.less` / `dark.less` / `light.less` 都是 `.common(); .theme-X();` 顺序调用，所以 `.common()` 里
+一旦出现颜色槽位名，主题开关就彻底失效（`.dark` 与 `.light` 编译结果完全相同）。
+
+**命名分离是硬要求**：
+- CSS 变量（运行期注入）＝ camelCase，与 `cssVariableConfig.key` 同名 → `--colorTextBase`
+- theme mixin 槽位（编译期回退真值）＝ 语义 kebab → `@color-text-primary`
+
+两者**禁止同名**。`.common()` 里只允许出现前者的透传映射。
+
+## 颜色值铁律（2026-09-04 增补，L0-B 门禁 BLOCK 兜底；2026-09-16 改为模式 B）
 
 > 与 `engineer/shared/style-theme-rules.md` 同源。生成/精修/修订一律遵守：
 > **颜色值只允许出现在 theme-vars.less 的主题 mixin 槽位里；业务样式（common.less /
-> 布局 less / .vue <style>）一律变量引用，禁止抄写槽位色值字面量。**
+> 布局 less / .vue `<style>`）一律槽位变量引用，禁止抄写色值字面量，也禁止直接写 `var()`。**
 
 | 视觉意图 | 引用写法 | ❌ 禁止 |
 |----------|----------|--------|
-| 文字 | `color: var(--colorTextBase, #ffffff)` / vue3 `@colorTextBase` | `color: #333333` |
-| 主色 | `var(--colorPrimary, ...)` | `background: #1990FF` |
-| hover/按压 | `var(--colorPrimaryHover / colorPrimaryActive, ...)` | 各 hover 态再抄一份值 |
-| 主色浅底 | `var(--colorPrimaryBg / colorPrimaryBgHover, ...)` | `rgba(主色, 0.12)` |
-| 弱化文字 | `inherit` + `opacity: 0.6~0.85` | 另抄灰值 `#666666` |
+| 文字 | `color: @color-text-primary` | `color: #333333` / `var(--colorTextBase, #fff)` |
+| 主色 | `background: @color-primary` | `background: #1990FF` |
+| hover/按压 | `@color-primary-hover` / `@color-primary-active`（theme-* 各给一份） | 各 hover 态再抄一份值 |
+| 主色浅底 | `@color-primary-bg` / `@color-primary-bg-hover` | `rgba(主色, 0.12)` |
+| 弱化文字 | `@color-text-secondary`，或 `inherit` + `opacity: 0.6~0.85` | 另抄灰值 `#666666` |
 
 - ❌ 样式内 `@colorTextBase: #333;` / `--colorPrimary: #fff;`（预设名本地重声明，BLOCK）
-- ✅ fallback 写默认主题槽值：`var(--colorX, <槽值>)`；渐变内也可用 `var(--colorPrimary, ...)`
+- ❌ 业务样式直接写 `var(--colorX, ...)`（模式 A 残留，BLOCK）
+- ✅ **`.theme-dark()` 与 `.theme-light()` 必须给出不同的槽位值** —— 模式 B 的深浅差异
+  **100% 来自这两套槽位**，写成相同值＝主题开关彻底失效（历史上 41% 组件栽在这）
+- ✅ 需要透明度 / 明暗派生时直接用 Less 函数：`fade(@color-primary, 30%)`、
+  `lighten(@color-primary, 10%)` —— **只有纯槽位值支持，`var()` 不支持**
 - 设计专色（图例/状态/数据系列）：可在 theme-* mixin 各给一份深浅槽值并引用；实在无法变量化的专色保持 Figma 真值（WARN 提示，不阻断）
 
 ## 调试方法
@@ -254,6 +313,7 @@ color: #d81b43; /* 用户配置的颜色 */
 
 - [ ] `theme-vars.less` 中有 `.common()` mixin 定义
 - [ ] `.common()` mixin 中映射了所有 `cssVariableConfig` 的 key
+- [ ] `.common()` 中**没有**颜色槽位名（`@color-text-primary` 这类 kebab 语义槽）—— 颜色真值只允许在 `.theme-light()` / `.theme-dark()` 内
 - [ ] `.common();` 在文件末尾被调用
 - [ ] CSS 变量使用 camelCase 格式（`--colorTextBase`）
 - [ ] 样式中使用 `var(--key, @fallback)` 形式

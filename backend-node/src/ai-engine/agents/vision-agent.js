@@ -598,7 +598,7 @@ export class VisionAgent {
         // 这里解析校验失败则临时提升 temperature + 重新生成一次，避免损坏 JSON 被判降级阻断。
         if (
           !options._integrityRetry &&
-          !this._isAnalysisIntact(response.content)
+          !this._isAnalysisIntact(coerceLLMText(response.content))
         ) {
           logger.warn(
             '⚠️ Vision(Claude) 输出完成但 JSON 损坏，启动完整性自愈重试一次',
@@ -618,7 +618,11 @@ export class VisionAgent {
           }
         }
 
-        return response.content;
+        // 🛡️ 与 OpenAI 分支（`content: coerceLLMText(...)`）保持对称：LangChain AIMessage.content
+        // 可能是 [{type:'text',text:'...'}] 数组或 null，裸返回会让下游 extractMicrocodeOutput
+        // 收到 object 而直接丢弃产物（2026-09-15 实测 WARN「收到非字符串输入: object」
+        // → ERROR「Lite 生成失败 … 生成的组件代码为空或无效」）。
+        return coerceLLMText(response.content);
       }
     } catch (error) {
       logger.error('图片分析失败', { error: error.message });
@@ -1014,7 +1018,8 @@ export class VisionAgent {
         logger.info(`图片比对完成 (Claude, ${Date.now() - startTime}ms)`, {
           totalTokens: tokenUsage.totalTokens,
         });
-        return response.content;
+        // 🛡️ 同 analyzeImage：归一化 Claude 分支 content，避免下游收到数组/object。
+        return coerceLLMText(response.content);
       }
     } catch (error) {
       logger.error('图片比对失败', { error: error.message });

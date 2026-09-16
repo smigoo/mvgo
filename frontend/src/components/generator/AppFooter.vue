@@ -26,6 +26,11 @@
       </template>
       <span v-else class="af-link af-link-disabled" @click="showDisabledHint('工作流编排')"> 工作流编排 </span>
 
+      <!-- 更新日志：面向全体用户公开，不参与功能开关 -->
+      <router-link to="/help/changelog" class="af-link" active-class="active">
+        更新日志
+      </router-link>
+
       <!-- 建议反馈：跳转公司统一反馈表单（外部地址，新窗口打开） -->
       <a
         class="af-link"

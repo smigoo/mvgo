@@ -19,6 +19,10 @@ import {
   dropHallucinatedSections,
   applyHallucinationDrop,
   stripFabricatedSourceIds,
+  uniqueSectionIds,
+  deriveSectionsFromFigmaTree,
+  buildSectionStyleFacts,
+  semanticClassKeywords,
 } from './section-tree.js'
 
 describe('底层 Figma 事实索引', () => {
@@ -898,3 +902,264 @@ describe('applyHallucinationDrop 形态适配 + 就地写回', () => {
   })
 });
 
+
+describe('uniqueSectionIds（E1 治本 · 重复 id 唯一化，2026-09-16 c-traffic-monitor-bc0c25aa）', () => {
+  it('3 个同 id 图表 section → 加 -2/-3 后缀，保留第一个原样', () => {
+    const sections = [
+      { id: '426:807', type: 'chart', title: '江阴靖江长江隧道', sourceNodeIds: ['2:7459'] },
+      { id: '426:807', type: 'chart', title: '江阴大桥', sourceNodeIds: ['2:7628'] },
+      { id: '426:807', type: 'chart', title: '流量预测', sourceNodeIds: ['2:3604'] },
+    ]
+    const out = uniqueSectionIds(sections)
+    expect(out.map((s) => s.id)).toEqual(['426:807', '426:807-2', '426:807-3'])
+    // sourceNodeIds 不变（下游对齐事实源不受影响）
+    expect(out.map((s) => s.sourceNodeIds)).toEqual([['2:7459'], ['2:7628'], ['2:3604']])
+  })
+
+  it('无重复 id → 返回原引用（不拷贝）', () => {
+    const sections = [{ id: 'a' }, { id: 'b' }]
+    expect(uniqueSectionIds(sections)).toBe(sections)
+  })
+
+  it('递归处理 children 树', () => {
+    const sections = [
+      { id: 'x', children: [{ id: 'dup' }, { id: 'dup' }] },
+      { id: 'y' },
+    ]
+    const out = uniqueSectionIds(sections)
+    expect(out[0].children.map((c) => c.id)).toEqual(['dup', 'dup-2'])
+  })
+
+  it('幂等：再跑一次 id 不变', () => {
+    const sections = [
+      { id: '426:807', title: 'A' },
+      { id: '426:807', title: 'B' },
+      { id: '426:807', title: 'C' },
+    ]
+    const once = uniqueSectionIds(sections)
+    const twice = uniqueSectionIds(once)
+    expect(twice.map((s) => s.id)).toEqual(once.map((s) => s.id))
+  })
+})
+
+describe('deriveSectionsFromFigmaTree（E1 治本 · Figma 节点树确定性推导 section）', () => {
+  const box = (x, y, w, h) => ({ x, y, width: w, height: h })
+
+  const traffic5 = {
+    document: {
+      id: 'root', name: 'cp-流量监测', type: 'FRAME',
+      absoluteBoundingBox: box(0, 109, 425, 807),
+      children: [
+        { id: 'bg1', name: 'bg-[m]', type: 'BOOLEAN_OPERATION', absoluteBoundingBox: box(0, 109, 420, 807) },
+        { id: 'h1', name: 'header-', type: 'GROUP', absoluteBoundingBox: box(0, 119, 380, 32.5), children: [] },
+        { id: 's1', name: 'slot-当日总流量', type: 'FRAME', absoluteBoundingBox: box(0, 158.7, 425, 556.3), children: [] },
+        { id: 's2', name: 'slot-车型分布', type: 'GROUP', absoluteBoundingBox: box(0, 573, 387, 142), children: [] },
+        { id: 's3', name: 'slot-流量预测', type: 'FRAME', absoluteBoundingBox: box(0, 730, 378, 174), children: [] },
+      ],
+    },
+  }
+
+  it('5 子节点：4 section + 1 背景，header 归 header、slot 去前缀', () => {
+    const r = deriveSectionsFromFigmaTree(traffic5)
+    expect(r).not.toBeNull()
+    expect(r.sections).toHaveLength(4)
+    expect(r.backgrounds).toHaveLength(1)
+    expect(r.backgrounds[0].name).toBe('bg-[m]')
+    // header 归 header
+    expect(r.sections[0].type).toBe('header')
+    // slot 去前缀
+    expect(r.sections[1].name).toBe('当日总流量')
+    expect(r.sections[2].name).toBe('车型分布')
+  })
+
+  it('高度确定性透传：section 带 absoluteBoundingBox.height', () => {
+    const r = deriveSectionsFromFigmaTree(traffic5)
+    const s1 = r.sections.find((s) => s.id === 's1')
+    expect(s1.absoluteBoundingBox.height).toBe(556.3)
+    expect(s1.styles.figmaHeightPx).toBe(556.3)
+  })
+
+  it('按 y 升序排序（视觉从上到下）', () => {
+    const r = deriveSectionsFromFigmaTree(traffic5)
+    const ys = r.sections.map((s) => s.absoluteBoundingBox.y)
+    expect(ys).toEqual([119, 158.7, 573, 730])
+  })
+
+  it('2 子节点（header + slot-con，无背景）', () => {
+    const two = {
+      document: {
+        id: 'root', name: 'cp-环境监测', type: 'FRAME',
+        children: [
+          { id: 'h', name: 'header', type: 'GROUP', absoluteBoundingBox: box(0, 875, 380, 28) },
+          { id: 'c', name: 'slot-con', type: 'FRAME', absoluteBoundingBox: box(0, 898, 420, 145) },
+        ],
+      },
+    }
+    const r = deriveSectionsFromFigmaTree(two)
+    expect(r.sections).toHaveLength(2)
+    expect(r.backgrounds).toHaveLength(0)
+    expect(r.sections[0].type).toBe('header')
+  })
+
+  it('无 FRAME 根 / 空输入 → null', () => {
+    expect(deriveSectionsFromFigmaTree(null)).toBeNull()
+    expect(deriveSectionsFromFigmaTree({})).toBeNull()
+    expect(deriveSectionsFromFigmaTree({ document: { type: 'TEXT', name: 'x' } })).toBeNull()
+  })
+})
+
+describe('deriveSectionsFromFigmaTree · @echarts 图表语义（收尾）', () => {
+  const box = (x, y, w, h) => ({ x, y, width: w, height: h })
+  it('直接子节点含 @echarts 标记 → section 推导为 chart 类型', () => {
+    const figma = {
+      document: {
+        id: 'root', name: 'cp-流量监测', type: 'FRAME',
+        children: [
+          { id: 'h', name: 'header-', type: 'GROUP', absoluteBoundingBox: box(0, 119, 380, 32), children: [] },
+          {
+            id: 's1', name: 'slot-当日总流量', type: 'FRAME', absoluteBoundingBox: box(0, 158, 425, 556),
+            children: [
+              { id: 'c1', name: '@echarts/bar', type: 'GROUP', absoluteBoundingBox: box(0, 160, 200, 130) },
+              { id: 'c2', name: '@echarts/bar', type: 'GROUP', absoluteBoundingBox: box(200, 160, 200, 130) },
+            ],
+          },
+          { id: 's2', name: 'slot-车型分布', type: 'GROUP', absoluteBoundingBox: box(0, 573, 387, 142), children: [] },
+        ],
+      },
+    }
+    const r = deriveSectionsFromFigmaTree(figma)
+    const s1 = r.sections.find((s) => s.id === 's1')
+    const s2 = r.sections.find((s) => s.id === 's2')
+    // 含 @echarts 的 section 推导为 chart，无图表的保持无 type
+    expect(s1.type).toBe('chart')
+    expect(s2.type).toBeUndefined()
+    // @echarts 标记保留在 children 里，供下游 extractCharts 识别子类型
+    expect(s1.children.map((c) => c.name)).toEqual(['@echarts/bar', '@echarts/bar'])
+  })
+})
+
+describe('buildSectionStyleFacts（E1 治本 · 语义化样式事实）', () => {
+  const box = (x, y, w, h) => ({ x, y, width: w, height: h })
+
+  // 模拟设备监测的 tabs section：激活 tab 深蓝渐变 + 普通 tab 浅蓝渐变
+  const figma = {
+    document: {
+      id: 'root', name: 'cp-设备监测', type: 'FRAME',
+      children: [
+        {
+          id: '89:39', name: 'tabs', type: 'FRAME', absoluteBoundingBox: box(1475, 538, 46, 317),
+          children: [
+            {
+              id: '2:8825', name: 'tab-active', type: 'GROUP', absoluteBoundingBox: box(1475, 538, 46, 54),
+              children: [
+                {
+                  id: '2:8826', name: 'bg', type: 'RECTANGLE', absoluteBoundingBox: box(1475, 538, 34, 44),
+                  fills: [{ type: 'GRADIENT_LINEAR', visible: true, gradientStops: [
+                    { color: { r: 0.192, g: 0.541, b: 1 }, position: 0 },
+                    { color: { r: 0.439, g: 0.749, b: 1 }, position: 1 },
+                  ] }],
+                },
+                { id: '2:8827', name: 't-监控', type: 'TEXT', characters: '监控', absoluteBoundingBox: box(1475, 538, 15, 36), style: { fontSize: 14, fontWeight: 700 }, fills: [{ type: 'SOLID', visible: true, color: { r: 1, g: 1, b: 1 } }] },
+              ],
+            },
+            {
+              id: '2:8830', name: 'tab', type: 'GROUP', absoluteBoundingBox: box(1475, 591, 37, 44),
+              children: [
+                {
+                  id: '2:8831', name: 'bg', type: 'VECTOR', absoluteBoundingBox: box(1475, 591, 34, 40),
+                  fills: [{ type: 'GRADIENT_LINEAR', visible: true, gradientStops: [
+                    { color: { r: 0.522, g: 0.729, b: 1 }, position: 0 },
+                    { color: { r: 0.749, g: 0.886, b: 1 }, position: 1 },
+                  ] }],
+                },
+                { id: '2:8832', name: 'd-照明', type: 'TEXT', characters: '照明', absoluteBoundingBox: box(1475, 591, 15, 32), style: { fontSize: 14 }, fills: [{ type: 'SOLID', visible: true, color: { r: 0.231, g: 0.502, b: 0.906 } }] },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  }
+
+  const treeSections = [
+    {
+      id: '89:39', type: 'tabs', title: 'tabs', responsibility: '标签页切换区',
+      sourceNodeIds: ['89:39', '2:8825', '2:8830'],
+    },
+  ]
+
+  test('语义化样式：激活 tab 深蓝渐变 + 白字，普通 tab 浅蓝渐变 + 蓝字（可区分）', () => {
+    const out = buildSectionStyleFacts(treeSections, figma)
+    expect(out).toContain('tabs')
+    // 激活 tab 背景（#318aff 约等于 #318aff）
+    expect(out).toContain('#318aff')
+    // 普通 tab 背景（#85baff）
+    expect(out).toContain('#85baff')
+    // 文字色：监控白字 + 照明蓝字
+    expect(out).toContain('监控')
+    expect(out).toContain('照明')
+    // 激活 vs 普通 tab 背景不同（关键：不能统一成同一颜色）
+    const activeIdx = out.indexOf('#318aff')
+    const normalIdx = out.indexOf('#85baff')
+    expect(activeIdx).not.toBe(-1)
+    expect(normalIdx).not.toBe(-1)
+    expect(activeIdx).not.toBe(normalIdx)
+  })
+
+  test('无语义树 / 无 Figma 数据 → 返回空字符串', () => {
+    expect(buildSectionStyleFacts([], figma)).toBe('')
+    expect(buildSectionStyleFacts(treeSections, null)).toBe('')
+  })
+
+  test('type undefined 叶子也提取 + opacity 叠加（设备卡半透明背景）', () => {
+    // 设备卡：GROUP opacity=0.5 包 Vector（蓝色渐变），此前 type undefined 被跳过 + opacity 丢失
+    const figma2 = {
+      document: {
+        id: 'root', name: 'cp-设备监测', type: 'FRAME',
+        children: [
+          {
+            id: '2:8438', name: 'Group 2136637321', type: 'GROUP', absoluteBoundingBox: box(1518, 550, 117, 64),
+            children: [
+              {
+                id: '2:8439', name: 'bg', type: 'GROUP', absoluteBoundingBox: box(1518, 550, 117, 64), opacity: 0.5,
+                children: [
+                  {
+                    id: '2:8440', name: 'Vector', type: 'VECTOR', absoluteBoundingBox: box(1518, 550, 117, 64), opacity: 0.8,
+                    fills: [{ type: 'GRADIENT_LINEAR', visible: true, gradientStops: [
+                      { color: { r: 0.278, g: 0.651, b: 0.980 }, position: 0 },
+                      { color: { r: 0.278, g: 0.651, b: 0.980 }, position: 1 },
+                    ] }],
+                  },
+                ],
+              },
+              { id: '2:8442', name: '摄像机', type: 'TEXT', characters: '摄像机', absoluteBoundingBox: box(1518, 560, 36, 18), style: { fontSize: 12 }, fills: [{ type: 'SOLID', visible: true, color: { r: 0.2, g: 0.2, b: 0.2 } }] },
+            ],
+          },
+        ],
+      },
+    }
+    // cons 叶子 type=undefined，只有 title
+    const consTree = [{ id: '2:8437', type: 'container', title: 'cons', isLayoutContainer: true, children: [
+      { id: '2:8438', title: 'Group 2136637321', sourceNodeIds: ['2:8438'] },
+    ] }]
+    const out = buildSectionStyleFacts(consTree, figma2)
+    // type undefined 叶子（title=Group 2136637321）也提取了
+    expect(out).toContain('Group 2136637321')
+    // 半透明背景被提取（opacity 0.5 × 0.8 = 0.4）
+    expect(out).toContain('透明度')
+    expect(out).toContain('摄像机')
+  })
+})
+
+
+describe("semanticClassKeywords（中英文语义鸿沟桥接）", () => {
+  test("中文容器名展开为英文 class 关键词", () => {
+    expect(semanticClassKeywords("中间图表")).toEqual(["chart"])
+    expect(semanticClassKeywords("统计数据")).toEqual(["stats", "data"])
+    expect(semanticClassKeywords("switch")).toEqual(["switch"])
+  })
+  test("空输入返回空数组", () => {
+    expect(semanticClassKeywords("")).toEqual([])
+    expect(semanticClassKeywords(null)).toEqual([])
+  })
+})

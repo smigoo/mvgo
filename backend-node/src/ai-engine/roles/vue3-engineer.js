@@ -16,6 +16,8 @@ import { MicrocodeEngineer } from './microcode-engineer.js';
 // P1-Slice2（增量补丁式更新）：分块快照推送器 —— 先合并再推送，杜绝并行 worker 交错导致快照回退
 import { pushChunkSnapshot } from './microcode/chunk-snapshot-pusher.js';
 import * as microcodeHealer from './microcode/code-healer.js';
+// 🎯 M2.2（2026-09-16）：色值槽位用途自愈（双链路同源，与 microcode-engineer 同一实现）
+import * as microcodeValidator from './microcode/code-validator.js';
 import { validateVueSfc } from '../utils/sfc-syntax-validation.js';
 import { backendRoot } from '../../config/backend-root.js';
 import { writeFileSync, mkdirSync, existsSync, readFileSync, readdirSync } from 'fs';
@@ -49,7 +51,10 @@ import { resolveEchartsType, normalizeSeriesInSource, normalizeChartAxesInSource
 // 导致图表 section 高度比例丢失（mv-max-1789477270646-3e3b7cb2 图表空白实锤）。
 import { buildSectionLayoutFacts } from '../utils/figma-section-heights.js';
 import { stripLlmTailGarbage } from '../utils/llm-tail-garbage.js';
-import { normalizeFlexSourceConflicts } from '../utils/flex-sibling-guard.js';
+// 🛡️ E1 治本（2026-09-16）：语义化样式事实 + 中英文挂载桥接（与微码同源）
+import { buildSectionStyleFacts, semanticClassKeywords } from '../utils/section-tree.js';
+// 🛡️ 方案 E（2026-09-16）：双链路共用落盘前自愈链（资源终验/运行库/CODE-022/.value/FLEX-003/FLEX-005）
+import { runPreWriteSelfHealing } from '../utils/pre-write-self-healing.js';
 // 🧩 Vue3 拆分模块（2026-08-30：prompt / healer / style-entry 纯函数化，主类改委托壳）
 import {
   buildVue3CodePrompt,
@@ -1510,11 +1515,16 @@ export class Vue3Engineer extends MicrocodeEngineer {
               const chartSeries = (
                 Array.isArray(firstChart.series) ? firstChart.series : ['trend']
               ).join(', ');
+              // 🎯 D 系列第一刀：优先传视觉真值 legendItems
+              const legendItems = Array.isArray(firstChart.legend?.items)
+                ? firstChart.legend.items
+                : [];
               const healedForN2 =
                 microcodeHealer.healVueEmbeddedStyleBraces(targetFile);
               const patched = microcodeHealer.injectEchartsFallback(healedForN2, {
                 chartType,
                 chartSeries,
+                legendItems,
               });
               if (patched !== healedForN2) {
                 const guardN2 = validateVueSfc(patched, idxPathN2);
@@ -1573,7 +1583,12 @@ export class Vue3Engineer extends MicrocodeEngineer {
                 .filter(Boolean);
             let mountedCount = 0;
             for (const bg of bgMounts) {
-              const targetWords = new Set(wordsOf(bg.mountTarget));
+              // 🛡️ 中英文语义鸿沟桥接（2026-09-16 治本，与微码 N3 同源）：
+              // mountTarget 是 Figma 中文名（「中间图表」），产物 class 是英文
+              // （chart-container），wordsOf 中文词匹配不到英文 class → 背景挂载失败。
+              const targetWords = new Set(
+                semanticClassKeywords(bg.mountTarget).concat(wordsOf(bg.mountTarget)),
+              );
               if (targetWords.size === 0) continue;
               const varName = bg.assignedVarName;
               const hasImage = !!(bg.resourceFile && varName);
@@ -1742,26 +1757,35 @@ export class Vue3Engineer extends MicrocodeEngineer {
         });
       }
 
-      // 🛡️ FLEX-003 量纲归一（2026-09-02，mc-max-1788362388732-1ae956dc 同源）：
-      // 同一 class 跨文件 flex grow 量纲冲突时对齐到像素量级（与微码链路同事实源）。
-      const _flexFilesArr = Object.entries(codeResult.files || {})
-        .map(([path, content]) => ({ path, content }))
-        .filter((f) => typeof f.content === 'string');
-      const _flexNormalized = normalizeFlexSourceConflicts(_flexFilesArr);
-      if (_flexNormalized !== _flexFilesArr) {
-        let _flexNormCount = 0;
-        for (const nf of _flexNormalized) {
-          const prev = codeResult.files[nf.path];
-          if (prev !== undefined && prev !== nf.content) {
-            codeResult.files[nf.path] = nf.content;
-            _flexNormCount++;
-          }
-        }
-        if (_flexNormCount > 0) {
-          this.logger.info('🛡️ FLEX-003 量纲归一（vue3 落盘前）', {
-            files: _flexNormCount,
+      // 🛡️ 方案 E（2026-09-16）：双链路共用落盘前自愈链——资源 import 终验（injectVue3ResourceUrls）
+      // + 运行库兜底 + CODE-022 删未挂载 + .value 自愈 + FLEX-003/FLEX-005 量纲归一。
+      // 与 microcode-engineer 同源（新增守卫只加一处、双端生效）。取代原 FLEX-003 内联段。
+      {
+        const _healed = runPreWriteSelfHealing(
+          codeResult.files,
+          { resourceDomMapping, outputPath, injectFn: injectVue3ResourceUrls },
+          { logger: this.logger },
+        );
+        codeResult.files = _healed.files;
+      }
+
+      // 🎯 M2.2（2026-09-16）：双链路同源 —— 色值槽位用途自愈（文字槽位用于背景属性 → 背景槽位）。
+      // 与 microcode-engineer 同一实现（`code-validator.fixColorSlotPurpose`），只加这一处、双端生效。
+      // 只改写 .less/.css、只处理「文字槽位→背景」单向，fallback 字面量原样保留。
+      try {
+        const _slotFix = microcodeValidator.fixColorSlotPurpose(codeResult.files, {
+          logger: this.logger,
+        });
+        if (_slotFix.fixes.length > 0) {
+          codeResult.files = _slotFix.files;
+          this.logger.warn('🛡️ COLOR-SLOT 自愈已写回 Vue3 产物', {
+            count: _slotFix.fixes.length,
           });
         }
+      } catch (e) {
+        this.logger.warn('COLOR-SLOT 自愈异常（非阻断，按原样继续）', {
+          error: e?.message || String(e),
+        });
       }
 
       // 🛡️ 父类 MicrocodeEngineer.writeFiles 返回 { written, skipped }（对象，非数组）。

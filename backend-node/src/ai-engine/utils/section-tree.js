@@ -126,6 +126,55 @@ export function dedupeDuplicateSections(sections) {
 }
 
 /**
+ * 🛡️ E1 治本（2026-09-16 · c-traffic-monitor-bc0c25aa 实锤）：section id 唯一化。
+ *
+ * 动机：vision 对「同一 Figma 容器下的多个不同图表」会输出**相同的 section id**
+ * （如 3 个图表 section 的 id 全是 `426:807`，sourceNodeIds 却是 2:7459/2:7628/2:3604
+ * 三个不同节点）。dedupeDuplicateSections 按 sourceNodeIds 去重**正确地保留了这 3 个真图表**，
+ * 但重复的 id 进入 prompt（`426:807 — 江阴靖江长江隧道` / `426:807 — 江阴大桥` / `426:807 — 流量预测`）
+ * → LLM 把 3 个同 id section 混淆成「同一 section 重复 3 次」→ 生成 ChartForecast×3 空壳 +
+ * ChartChart/ChartChart2 命名碰撞。
+ *
+ * 规则：递归整棵树，统计 id 出现次数；重复 id 保留第一个原样，后续按出现序加 `-2`/`-3` 后缀。
+ * 幂等；id 仅用于 prompt 呈现与诊断，下游对齐全部走 sourceNodeIds，加后缀不破坏关联。
+ *
+ * @param {Array} sections effectiveSections 树
+ * @returns {Array} id 唯一化后的树（无重复时返回原引用）
+ */
+export function uniqueSectionIds(sections) {
+  if (!Array.isArray(sections)) return sections
+  const count = new Map()
+  const collect = (arr) => {
+    for (const sec of arr) {
+      if (!sec || typeof sec !== 'object') continue
+      const id = String(sec.id || '')
+      if (id) count.set(id, (count.get(id) || 0) + 1)
+      if (Array.isArray(sec.children)) collect(sec.children)
+    }
+  }
+  collect(sections)
+  if (![...count.values()].some((c) => c > 1)) return sections
+
+  const seen = new Map()
+  const walk = (arr) =>
+    arr.map((sec) => {
+      if (!sec || typeof sec !== 'object') return sec
+      const id = String(sec.id || '')
+      let next = sec
+      if (id && (count.get(id) || 0) > 1) {
+        const n = seen.get(id) || 0
+        seen.set(id, n + 1)
+        if (n > 0) next = { ...sec, id: `${id}-${n + 1}` }
+      }
+      if (Array.isArray(sec.children)) {
+        next = { ...next, children: walk(sec.children) }
+      }
+      return next
+    })
+  return walk(sections)
+}
+
+/**
  * 🛡️ P1（2026-09-14 · c-device-monitor-485d724d / a612a9f7 双实证）：无归属壳的判别力去重。
  *
  * 动机：planner 对同一主内容区会产出「无 Figma 归属壳」（sourceNodeIds=[]）与若干
@@ -851,8 +900,14 @@ export function formatSectionTreeForPrompt(sections, indent = 0) {
       const pad = '  '.repeat(indent)
       const title = sec.title || sec.name || sec.id
       const childIds = (sec.children || []).map((c) => c.id).join(' → ')
+      // 🛡️ 布局方向事实（2026-09-16 治本）：容器 layout 由 Figma 几何确定性推导，
+      //   switch=horizontal（两个 tab 一行）、tabs=vertical（竖排）。此前硬编码「纵向」，
+      //   导致 LLM 把 switch 渲染成上下堆叠（用户指正「两个 tab 应该在一行」）。
+      const layoutDir = String(sec.layout || 'vertical').toLowerCase()
+      const isHorizontal = layoutDir === 'horizontal'
+      const dirText = isHorizontal ? '横向（flex-direction: row）' : '纵向（flex-direction: column）'
       lines.push(
-        `${pad}- 容器 \`${sec.id}\`（${title}）：纵向 flex 包裹，不单独生成 .vue。子区块顺序 [${childIds}]。父模板必须用 column 包住下列子组件，禁止打平。`,
+        `${pad}- 容器 \`${sec.id}\`（${title}）：${dirText} flex 包裹，不单独生成 .vue。子区块顺序 [${childIds}]。父模板必须按 ${isHorizontal ? 'row' : 'column'} 包住下列子组件，禁止打平。`,
       )
       if (Array.isArray(sec.children)) {
         lines.push(formatSectionTreeForPrompt(sec.children, indent + 1))
@@ -1115,4 +1170,485 @@ export function assignSectionComponentNames(treeSections) {
     });
   }
   return nameOf;
+}
+
+/**
+ * 🛡️ E1 治本（2026-09-16）：从 Figma 节点树确定性推导 section 结构（递归版本）。
+ *
+ * 动机：vision（LLM）自由发挥划分 sections 是「布局崩塌」的根源——重复 sub-header、
+ * 命名混乱（ChartChart2/3）、高度缺失（vision 不输出 absoluteBoundingBox → flexGrow 拿不到）。
+ * 而 Figma 节点树（figma-node-data.json）有 100% 确定性事实：根 FRAME 的直接子节点就是
+ * section（FRAME/GROUP），背景/装饰是 VECTOR/BOOLEAN/RECTANGLE，高度 = absoluteBoundingBox。
+ *
+ * 🆕 递归推导（2026-09-16 治本）：不仅处理根节点的直接子节点，还递归推导嵌套 section。
+ *   - 对每个 section 的 children，识别 FRAME/GROUP 节点并提升为嵌套 section
+ *   - 所有层级的 section 都注入确定性高度（absoluteBoundingBox）
+ *   - 保留 @echarts 图表语义识别
+ *   - 保留背景节点过滤
+ *
+ * 输出「vision section 格式」（含 absoluteBoundingBox），planner 的 buildEffectiveSection
+ * 可零改动消费；sourceNodeIds 天然确定（= 节点 id），无需 vision 猜、无需 dedupe/anchor/strip。
+ *
+ * @param {Object} figmaNodeData figma-node-data.json 内容（{ document } 或直接是节点树）
+ * @returns {{sections:Array, backgrounds:Array, rootName:string, rootId:string}|null}
+ */
+export function deriveSectionsFromFigmaTree(figmaNodeData) {
+  const doc = figmaNodeData?.document ?? figmaNodeData
+  if (!doc || typeof doc !== 'object') return null
+  const root = findRootFrame(doc)
+  if (!root) return null
+
+  // 🛡️ 图表标记检测（兼容 Figma 常见拼写变体）：
+  //   @echarts（正确）/ @eachrts（设计稿拼写错误，mc-1789541776751 实锤）/ @echart / @e-charts。
+  //   同时兼容「中文图表类型词」（环形图/饼图/柱状图/折线图/雷达图）——设计稿常不给 @ 前缀，
+  //   只靠「环形图」等中文名表意（c-b6a 策略类型分布 @eachrts/环形图 实锤）。
+  const isChartMark = (name) => {
+    const n = String(name || '')
+    if (/@(?:eachrts|echarts?|e-charts|chartjs|charts?|plotly|g2|antv|d3|highcharts|bizcharts|vchart)\b/i.test(n)) return true
+    if (/环形图|饼图|柱状图|柱形图|折线图|雷达图|散点图|面积图|漏斗图|仪表盘|仪表图/.test(n)) return true
+    return false
+  }
+
+  const sections = []
+  const backgrounds = []
+  const BG_TYPES = new Set([
+    'VECTOR',
+    'BOOLEAN_OPERATION',
+    'RECTANGLE',
+    'ELLIPSE',
+    'LINE',
+    'STAR',
+    'POLYGON',
+    'REGULAR_POLYGON',
+  ])
+
+  // 🛡️ 递归推导辅助函数：判断节点是否应作为 section（而非普通 item）
+  const shouldPromoteToSection = (node, parentBox) => {
+    if (!node || typeof node !== 'object') return false
+    const type = String(node.type || '').toUpperCase()
+    const name = String(node.name || '')
+    
+    // 背景/装饰节点不作为 section
+    if (BG_TYPES.has(type) || /^bg(\b|[-_])/i.test(name)) return false
+    
+    // 只处理容器类型：FRAME / GROUP / INSTANCE / COMPONENT / COMPONENT_SET
+    const isContainer = ['FRAME', 'GROUP', 'INSTANCE', 'COMPONENT', 'COMPONENT_SET'].includes(type)
+    if (!isContainer) return false
+    
+    // 有子节点的容器优先提升为 section
+    const hasChildren = Array.isArray(node.children) && node.children.length > 0
+    if (hasChildren) return true
+    
+    // 无子节点但面积足够大（> 父节点 15%）也提升
+    const nodeBox = node.absoluteBoundingBox
+    if (nodeBox && parentBox && parentBox.height && parentBox.width) {
+      const nodeArea = (nodeBox.width || 0) * (nodeBox.height || 0)
+      const parentArea = parentBox.width * parentBox.height
+      if (parentArea > 0 && nodeArea / parentArea > 0.15) return true
+    }
+    
+    return false
+  }
+
+  // 🛡️ 递归推导嵌套 section
+  //   返回 { sections, hasNested }：hasNested 表示产出了「嵌套 section」（非 item），
+  //   父容器据此决定是否标记 isLayoutContainer（空间包裹容器，不占独立 .vue）。
+  const deriveNestedSections = (parentNode, depth = 0) => {
+    // 🛡️ 深度保护：最多拆 2 层嵌套（depth 0=顶层 section、1=嵌套区块、2=内容卡片）。
+    //   再往下（图标/文字/数字等原子元素）不再拆成 section，作为 item 保留。
+    if (depth > 2) {
+      const leafKids = (parentNode.children || []).filter((c) => c && typeof c === 'object')
+      return { sections: leafKids.map(mapChildNode), hasNested: false }
+    }
+    
+    const parentBox = parentNode.absoluteBoundingBox || null
+    const directKids = (parentNode.children || []).filter((c) => c && typeof c === 'object')
+    const nestedSections = []
+    
+    for (const child of directKids) {
+      if (!shouldPromoteToSection(child, parentBox)) continue
+      
+      const type = String(child.type || '').toUpperCase()
+      const name = String(child.name || '')
+      const box = child.absoluteBoundingBox || null
+      const id = String(child.id || '')
+      
+      const isHeader = /header/i.test(name)
+      const isStats = /统计|数据|概览|指标/.test(name)
+      const cleanName = name.replace(/^slot-/, '').trim()
+      const childKids = (child.children || []).filter((c) => c && typeof c === 'object')
+      
+      // 图表语义识别：节点自身或直接子节点含图表标记（@echarts/@eachrts/环形图等）
+      const hasEcharts = isChartMark(name) || childKids.some((c) => isChartMark(c.name))
+      
+      // 🛡️ 内容区块语义：header（标题区）与 stats（统计数据区）的子项是「内部内容」
+      //   （tabs/小标题/label+数值图例项），不是并列业务 section → 子项 item 化，不递归。
+      //   非内容区块容器（slot/con/内容区）才递归推导业务 section。
+      const isContentBlock = isHeader || isStats || /图例/.test(name)
+      
+      // 🛡️ header 语义：标题区内部结构（tabs/小标题/统计项）是 header 的组成部分，
+      //   不是并列业务 section → 子节点 item 化，不递归成 section。
+      //   非 header 容器（slot/con/内容区）才递归推导业务 section。
+      const sub = isContentBlock
+        ? { sections: childKids.map(mapChildNode), hasNested: false }
+        : deriveNestedSections(child, depth + 1)
+      
+      const nestedSection = {
+        id,
+        name: cleanName || name,
+        ...(isHeader ? { type: 'header' } : isStats ? { type: 'stats' } : hasEcharts ? { type: 'chart' } : {}),
+        figmaNodeId: id,
+        ...(box ? { absoluteBoundingBox: box } : {}),
+        layout: deriveChildLayout(child),
+        ...(isHeader ? { header: { title: cleanName || name } } : {}),
+        children: sub.sections,
+        // 🛡️ 容器标记：有嵌套业务 section 子节点 → 空间包裹容器（不占独立 .vue）
+        ...(sub.hasNested ? { isLayoutContainer: true } : {}),
+        styles: {
+          flexGrow: 0,
+          flexShrink: 1,
+          flexBasis: 0,
+          ...(box && box.height ? { figmaHeightPx: box.height } : {}),
+        },
+        // 🆕 标记为嵌套 section（供下游识别）
+        isNestedSection: depth > 0,
+      }
+      
+      nestedSections.push(nestedSection)
+    }
+    
+    // 如果没有提升为 section 的子节点，回退到 mapChildNode 保留原始 children 结构
+    if (nestedSections.length === 0) {
+      return { sections: directKids.map(mapChildNode), hasNested: false }
+    }
+    
+    // y 升序（视觉从上到下）
+    nestedSections.sort(
+      (a, b) => (a.absoluteBoundingBox?.y || 0) - (b.absoluteBoundingBox?.y || 0),
+    )
+    
+    return { sections: nestedSections, hasNested: true }
+  }
+
+  // 遍历根节点的直接子节点（顶层 section）
+  for (const child of root.children || []) {
+    if (!child || typeof child !== 'object') continue
+    const type = String(child.type || '').toUpperCase()
+    const name = String(child.name || '')
+    const box = child.absoluteBoundingBox || null
+    const id = String(child.id || '')
+
+    // 背景/装饰：非容器类型，或 name 带 bg 前缀
+    if (BG_TYPES.has(type) || /^bg(\b|[-_])/i.test(name)) {
+      backgrounds.push({
+        id,
+        name,
+        type: type.toLowerCase(),
+        absoluteBoundingBox: box,
+      })
+      continue
+    }
+
+    // section：FRAME / GROUP / INSTANCE / COMPONENT / COMPONENT_SET
+    const isHeader = /header/i.test(name)
+    const cleanName = name.replace(/^slot-/, '').trim()
+    const directKids = (child.children || []).filter((c) => c && typeof c === 'object')
+    
+    // 图表语义识别：节点自身或直接子节点含图表标记
+    const hasEcharts = isChartMark(name) || directKids.some((c) => isChartMark(c.name))
+    
+    // 🛡️ header 语义：标题区子节点 item 化；非 header 容器递归推导业务 section。
+    const sub = isHeader
+      ? { sections: directKids.map(mapChildNode), hasNested: false }
+      : deriveNestedSections(child, 1)
+    
+    sections.push({
+      id,
+      name: cleanName || name,
+      ...(isHeader ? { type: 'header' } : hasEcharts ? { type: 'chart' } : {}),
+      figmaNodeId: id,
+      // 🛡️ 关键：absoluteBoundingBox 确定性透传 —— extractLayoutMetadata 的 height 事实源
+      ...(box ? { absoluteBoundingBox: box } : {}),
+      layout: deriveChildLayout(child),
+      ...(isHeader ? { header: { title: cleanName || name } } : {}),
+      // 🆕 递归推导嵌套 section（核心改进）
+      children: sub.sections,
+      // 🛡️ 容器标记：非 header 且有嵌套业务 section → 空间包裹容器
+      ...(!isHeader && sub.hasNested ? { isLayoutContainer: true } : {}),
+      styles: {
+        flexGrow: 0,
+        flexShrink: 1,
+        flexBasis: 0,
+        ...(box && box.height ? { figmaHeightPx: box.height } : {}),
+      },
+    })
+  }
+
+  // y 升序（视觉从上到下）
+  sections.sort(
+    (a, b) => (a.absoluteBoundingBox?.y || 0) - (b.absoluteBoundingBox?.y || 0),
+  )
+
+  return {
+    sections,
+    backgrounds,
+    rootName: String(root.name || ''),
+    rootId: String(root.id || ''),
+  }
+}
+
+/** 定位根 FRAME：type=FRAME 且 children 非空；document 本身是 FRAME 时直接返回。 */
+function findRootFrame(node) {
+  if (!node || typeof node !== 'object') return null
+  const t = String(node.type || '').toUpperCase()
+  if (t === 'FRAME' && Array.isArray(node.children) && node.children.length > 0) {
+    return node
+  }
+  for (const c of node.children || []) {
+    const r = findRootFrame(c)
+    if (r) return r
+  }
+  return null
+}
+
+/** 从 Figma layoutMode 推导 section 布局方向（vision 的 layout 字段语义）。 */
+function deriveChildLayout(node) {
+  const mode = String(node?.layoutMode || '').toUpperCase()
+  if (mode === 'HORIZONTAL') return 'horizontal'
+  if (mode === 'VERTICAL') return 'vertical'
+  // 无 layoutMode：按子节点几何粗略推断（y 相近 → 横向排，x 相近 → 纵向排）
+  const kids = (node?.children || []).filter(
+    (c) => c && c.absoluteBoundingBox,
+  )
+  if (kids.length >= 2) {
+    const ys = kids.map((c) => c.absoluteBoundingBox.y)
+    const xs = kids.map((c) => c.absoluteBoundingBox.x)
+    const ySpread = Math.max(...ys) - Math.min(...ys)
+    const xSpread = Math.max(...xs) - Math.min(...xs)
+    if (xSpread > ySpread) return 'horizontal'
+    return 'vertical'
+  }
+  return 'vertical'
+}
+
+/** 子节点 → vision body.children 格式（递归保留嵌套结构，供下游 deriveSectionType/countElements 识别 tab/list/chart）。 */
+function mapChildNode(node, depth = 0) {
+  if (!node || typeof node !== 'object') return null
+  if (depth > 6) return null // 防御深度，避免超深节点树拖慢
+  const box = node.absoluteBoundingBox || null
+  const kids = (node.children || [])
+    .map((c) => mapChildNode(c, depth + 1))
+    .filter(Boolean)
+  return {
+    id: String(node.id || ''),
+    name: String(node.name || ''),
+    role: 'item',
+    figmaNode: String(node.id || ''),
+    ...(box ? { absoluteBoundingBox: box } : {}),
+    // 🛡️ 2026-09-16：递归保留 children——此前只映射一层，slot-con 内部的
+    //   switch/@antd/tab/12卡网格 全丢，组件被简化为「header+content」导致样式混乱。
+    ...(kids.length ? { children: kids } : {}),
+  }
+}
+
+/**
+ * 🛡️ E1 治本（样式视觉保真 · 2026-09-16）：语义化样式事实提取。
+ *
+ * 背景：`extractFigmaColorEssentials` 产出的「颜色真值表」是**无语义扁平列表**——
+ * 标注用 Figma 原始 name（`bg`/`VECTOR`/`circle`），设备监测 6 个 tab 的背景全是
+ * `bg [VECTOR] → linear-gradient(...)` 一模一样，LLM 无法区分哪个对应哪个 tab →
+ * tab-item/设备卡背景消失、颜色错。
+ *
+ * 治本：把 planner 的**语义树**（effectiveSections 叶子 + sourceNodeIds）与 Figma 精确
+ * 样式（fills 渐变/纯色、TEXT 颜色、bbox 尺寸）关联，产出「section 语义 → 内部元素样式」
+ * 的结构化事实，注入 prompt 后 LLM 能精确对应到「tabs 的第 2 个 tab 背景 = xx」。
+ *
+ * 纯函数、无 import.meta，供 prompt-builder / microcode-engineer 共用。
+ *
+ * @param {Array} treeSections planner effectiveSections 树（含 sourceNodeIds + type 语义）
+ * @param {Object} figmaNodeData Figma 节点树（document 或裸根）
+ * @param {Object} [opts] { maxLeaves=12, maxItemsPerSection=12, maxDepth=4 }
+ * @returns {string} 语义化样式事实文本（markdown），空则 ''
+ */
+export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
+  if (!Array.isArray(treeSections) || treeSections.length === 0) return ''
+  if (!figmaNodeData || typeof figmaNodeData !== 'object') return ''
+
+  const maxLeaves = opts.maxLeaves ?? 12
+  const maxItemsPerSection = opts.maxItemsPerSection ?? 12
+  const maxDepth = opts.maxDepth ?? 4
+
+  // 建 Figma 节点索引（id → rawNode）
+  const root = figmaNodeData?.document ?? figmaNodeData
+  const index = indexFigmaNodes(root)
+
+  // 颜色 → CSS
+  const rgbaToCss = (c, opacity) => {
+    if (!c || typeof c.r !== 'number') return null
+    const r = Math.round(c.r * 255), g = Math.round(c.g * 255), b = Math.round(c.b * 255)
+    const op = typeof opacity === 'number' ? Math.round(opacity * 100) / 100 : 1
+    return op < 1 ? `rgba(${r},${g},${b},${op})` : `#${((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1)}`
+  }
+  // fills → CSS（纯色优先，其次渐变，带方向 + 透明度）
+  const fillsToCss = (fills, fillOpacity) => {
+    if (!Array.isArray(fills) || fills.length === 0) return null
+    const visible = fills.filter((f) => f.visible !== false)
+    const solid = visible.find((f) => f.type === 'SOLID' && f.color)
+    if (solid) return rgbaToCss(solid.color, solid.opacity ?? fillOpacity)
+    const grad = visible.find((f) => f.type?.startsWith('GRADIENT_') && f.gradientStops?.length >= 2)
+    if (grad) {
+      const stops = grad.gradientStops
+        .slice()
+        .sort((a, b) => a.position - b.position)
+        .map((s) => `${rgbaToCss(s.color, s.opacity ?? grad.opacity ?? fillOpacity ?? 1)} ${Math.round(s.position * 100)}%`)
+        .join(', ')
+      const angle = grad.type === 'GRADIENT_LINEAR'
+        ? `${gradAngleDeg(grad)}deg, `
+        : grad.type === 'GRADIENT_RADIAL' ? 'radial, ' : 'conic, '
+      return `linear-gradient(${angle}${stops})`
+    }
+    return null
+  }
+  const gradAngleDeg = (grad) => {
+    const h = grad.gradientHandlePositions || []
+    if (h.length >= 2) {
+      const x0 = h[0].x ?? 0, y0 = h[0].y ?? 0
+      const x1 = h[1].x ?? 1, y1 = h[1].y ?? 0
+      const dx = x1 - x0, dy = y1 - y0
+      if (Math.abs(dx) > 1e-6 || Math.abs(dy) > 1e-6) {
+        const deg = (Math.atan2(dy, dx) * 180) / Math.PI
+        return Math.round(deg)
+      }
+    }
+    return 180
+  }
+
+  // 收集叶子 section（有 type 语义的，容器跳过）
+  const leaves = []
+  const walkLeaves = (secs) => {
+    for (const s of secs || []) {
+      if (!s) continue
+      if (isLayoutContainerSection(s)) { walkLeaves(s.children); continue }
+      leaves.push(s)
+    }
+  }
+  walkLeaves(treeSections)
+
+  const lines = []
+  let leafUsed = 0
+  for (const sec of leaves) {
+    if (leafUsed >= maxLeaves) break
+    const type = String(sec.type || '').toLowerCase()
+    const ids = Array.isArray(sec.sourceNodeIds)
+      ? sec.sourceNodeIds.map(String)
+      : (sec.figmaNodeId ? [String(sec.figmaNodeId)] : [String(sec.id)])
+    // 该 section 的 Figma 节点集合
+    const nodes = ids.map((id) => index.get(id)).filter(Boolean)
+    if (nodes.length === 0) continue
+
+    const title = sec.title || sec.name || sec.id
+    // 🛡️ 语义标签：type 优先（header/tabs/stats/chart），type 缺失时用 title/name
+    //   （cons/active/default 等叶子 type 可能为 undefined，但仍需提取样式事实）
+    const label = type && type !== 'container' ? type : title
+    const secLines = []
+    let itemCount = 0
+
+    // 对每个 sourceNode 的子树提取「直接业务子元素」样式（深度受控，累积父 opacity）
+    for (const rec of nodes) {
+      const raw = rec.rawNode
+      if (!raw) continue
+      // 收集该节点子树的样式条目。parentOpacity 累积：父 GROUP 的 opacity 作用于子节点背景
+      const collect = (node, depth, parentOpacity) => {
+        if (!node || depth > maxDepth || itemCount >= maxItemsPerSection) return
+        const name = String(node.name || '')
+        const typeN = String(node.type || '').toUpperCase()
+        const bbox = node.absoluteBoundingBox
+        // 🛡️ 透明度叠加：本节点 opacity 与父 opacity 相乘（缺省视为 1）
+        const ownOp = typeof node.opacity === 'number' ? node.opacity : 1
+        const effOp = (parentOpacity ?? 1) * ownOp
+        const css = fillsToCss(node.fills, effOp)
+        const isText = typeN === 'TEXT'
+        const chars = isText ? String(node.characters || '').trim() : ''
+        // 跳过无语义装饰（VECTOR/RECTANGLE 且无渐变），保留有样式价值的节点
+        const hasStyle = css || (isText && chars) || (bbox && (bbox.width >= 20 || bbox.height >= 20))
+        if (!hasStyle) { for (const c of node.children || []) collect(c, depth + 1, effOp); return }
+        // 去前缀 name
+        const clean = normalizeFigmaTextName(name) || name
+        const size = bbox ? `${Math.round(bbox.width)}×${Math.round(bbox.height)}` : null
+        const parts = []
+        if (isText && chars) parts.push(`文字「${chars.slice(0, 12)}」`)
+        if (isText) { if (css) parts.push(`color:${css}`) }
+        else if (css) parts.push(`bg:${css}`)
+        if (size) parts.push(`尺寸:${size}`)
+        if (typeof node.style?.fontSize === 'number' && node.style.fontSize > 0) parts.push(`font:${node.style.fontSize}px`)
+        if (typeof node.style?.fontWeight === 'number' && node.style.fontWeight >= 600) parts.push(`加粗`)
+        if (effOp < 1) parts.push(`透明度:${Math.round(effOp * 100) / 100}`)
+        if (parts.length > 0) {
+          secLines.push(`  - ${clean} → ${parts.join(' | ')}`)
+          itemCount++
+        }
+        for (const c of node.children || []) collect(c, depth + 1, effOp)
+      }
+      collect(raw, 1, 1)
+    }
+
+    if (secLines.length > 0) {
+      lines.push(`**${label}**（内部元素样式真值）：`)
+      lines.push(...secLines.slice(0, maxItemsPerSection))
+      leafUsed++
+    }
+  }
+
+  return lines.length > 0 ? lines.join('\n') : ''
+}
+
+/**
+ * 🛡️ 中文语义名 → 英文 class 关键词映射（2026-09-16 治本）。
+ *
+ * 背景：Figma 节点名常是中文（「中间图表」「统计数据」），但产物 class 是英文
+ * （`chart-container`/`stats-grid`）。N3 bg 强制挂载用 `wordsOf(mountTarget)` 匹配 class，
+ * 中文「中间图表」永远匹配不到英文 `chart-container` → 环形图背景挂载失败
+ * （c-b6a 策略类型分布 bg-环形图背景实锤）。
+ *
+ * 本映射把中文语义名展开为「中文词 + 英文词」两个 token 集合，供挂载匹配与 class 派生共用，
+ * 消除中英文语义鸿沟。纯函数、无 import.meta。
+ *
+ * @param {string} raw 中文/英文语义名
+ * @returns {string[]} 英文 class 关键词（去重，含原始英文片段）
+ */
+export function semanticClassKeywords(raw) {
+  const zh = String(raw || '').trim()
+  if (!zh) return []
+  const MAP = {
+    中间图表: ['chart'],
+    图表: ['chart'],
+    统计数据: ['stats'],
+    统计: ['stats'],
+    数据: ['data'],
+    列表: ['list'],
+    网格: ['grid'],
+    卡片: ['card'],
+    内容: ['content'],
+    主体: ['main'],
+    正文: ['body'],
+    侧边: ['sidebar'],
+    导航: ['nav'],
+    工具栏: ['toolbar'],
+    底部: ['footer'],
+    顶部: ['header'],
+    标题: ['header', 'title'],
+    图例: ['legend'],
+  }
+  const out = new Set()
+  for (const [k, en] of Object.entries(MAP)) {
+    if (zh.includes(k)) en.forEach((w) => out.add(w))
+  }
+  // 保留原始英文/拼音片段
+  const ascii = zh
+    .replace(/^slot-?/i, '')
+    .replace(/[^a-zA-Z0-9]+/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length >= 2);
+  ascii.forEach((w) => out.add(w.toLowerCase()))
+  return [...out]
 }

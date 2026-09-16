@@ -117,8 +117,9 @@ function readSectionCounts(target) {
 import {
   inferHeaderSlotsFromInlineRows,
   mergeHeaderSlots,
+  ensureHeaderSlots,
 } from '../utils/inline-header-slot-inferrer.js'
-export { inferHeaderSlotsFromInlineRows, mergeHeaderSlots }
+export { inferHeaderSlotsFromInlineRows, mergeHeaderSlots, ensureHeaderSlots }
 // 🛡️ P1（2026-09-11）：tab 项资源引用幻觉校验 + 纠正（纯函数，无 import.meta，jest 可 require）。
 // 治本：tab 项 resourceFile 反查 figmaNodeId 不在 tab 真实归属链内 → 判幻觉，摘除并改 CSS 渐变。
 import { detectAndFixTabResourceHallucination } from '../utils/tab-resource-guard.js'
@@ -3278,34 +3279,68 @@ ${analysisTask}`
       }
     }
 
-    const normalizedHeaderSlots = Array.isArray(parsed.headerSlots) ? parsed.headerSlots : []
-    if (sections.length > 0 && normalizedHeaderSlots.length === 0) {
-      const inferredSlots = this._inferHeaderSlots(parsed)
-      if (inferredSlots.length > 0) {
-        parsed.headerSlots = inferredSlots
+    // 🎯 E2 / R3(B)（2026-09-16）：headerSlots 装配统一为「事实优先 + 兜底补缺 union」。
+    // 顺序：① 视觉真值事实（headerRelation/slotCandidate → ensureHeaderSlots，确定性、零臆造）
+    //      ② sections.header.controls 结构推断（_inferHeaderSlots，补缺）
+    //      ③ inlineCompositeRows 几何 tab 行（_inferHeaderSlotsFromInlineRows，补缺）
+    // 三者均为去重 union，**绝不删任何既有 slot**；事实先行，启发式只填缺口。
+    let slotsAcc = Array.isArray(parsed.headerSlots) ? parsed.headerSlots : []
+
+    // ① 事实优先：headerRelation / slotCandidate 确定性装配
+    if (sections.length > 0) {
+      const ensured = ensureHeaderSlots(sections, slotsAcc)
+      if (ensured.derivedCount > 0) {
+        slotsAcc = ensured.headerSlots
         appliedKeys.add('headerSlots')
-        pushFix('headerSlots', '已从 sections 兜底推断 headerSlots', { count: inferredSlots.length })
+        pushFix(
+          'headerSlots',
+          `已从 headerRelation/slotCandidate 事实装配 ${ensured.derivedCount} 个 headerSlots`,
+          { count: ensured.derivedCount, total: slotsAcc.length },
+        )
+        logger.info('🎯 headerSlots 事实装配(ensureHeaderSlots)', {
+          derived: ensured.derivedCount,
+          total: slotsAcc.length,
+          headerSectionIds: ensured.headerSectionIds,
+        })
       }
     }
 
-    // 🛡️ P1-1（2026-09-08）：第二轮兜底——sections 中无 header controls（被 chrome-filter 剥离），
-    // 从 inlineCompositeRows 中提取 header- 前缀节点作为 headerSlots。
-    // 🛡️ P1（2026-09-09）：改为合并语义——保留现有 slot（section-inferred 或其他来源），
-    // 去重追加 inline 推断结果。确保所有 slot 携带 figmaNodeId 供下游 C-1 过滤。
-    // 合并去重逻辑抽到 utils/inline-header-slot-inferrer.js（mergeHeaderSlots，单一事实源）。
-    if (Array.isArray(parsed.inlineCompositeRows)) {
-      const inlineHeaderSlots = this._inferHeaderSlotsFromInlineRows(parsed)
-      if (inlineHeaderSlots.length > 0) {
-        const existingSlots = Array.isArray(parsed.headerSlots) ? parsed.headerSlots : []
-        const oldCount = existingSlots.length
-        parsed.headerSlots = mergeHeaderSlots(existingSlots, inlineHeaderSlots)
-        const newCount = parsed.headerSlots.length
-        if (newCount > oldCount) {
+    // ② 兜底：sections.header.controls 结构推断（补缺 union，不再受「仅空时」限制，
+    //    避免事实先占位后把结构推断整条抑制掉 → header 控件遗漏）
+    if (sections.length > 0) {
+      const inferredSlots = this._inferHeaderSlots(parsed)
+      if (inferredSlots.length > 0) {
+        const merged = mergeHeaderSlots(slotsAcc, inferredSlots)
+        if (merged.length !== slotsAcc.length) {
+          pushFix('headerSlots', '已从 sections 兜底推断 headerSlots（补缺）', {
+            count: merged.length - slotsAcc.length,
+          })
+          slotsAcc = merged
           appliedKeys.add('headerSlots')
-          pushFix('headerSlots', `已从 inlineCompositeRows 追加推断 headerSlots（合并 ${oldCount}+${newCount - oldCount} = ${newCount}）`, { count: newCount - oldCount, total: newCount })
         }
       }
     }
+
+    // ③ 兜底：inlineCompositeRows 几何 tab 行（补缺 union）。
+    // 🛡️ P1-1（2026-09-08）/ P1（2026-09-09）：保留现有 slot，去重追加。
+    // 合并去重逻辑在 utils/inline-header-slot-inferrer.js（mergeHeaderSlots，单一事实源）。
+    if (Array.isArray(parsed.inlineCompositeRows)) {
+      const inlineHeaderSlots = this._inferHeaderSlotsFromInlineRows(parsed)
+      if (inlineHeaderSlots.length > 0) {
+        const merged = mergeHeaderSlots(slotsAcc, inlineHeaderSlots)
+        if (merged.length !== slotsAcc.length) {
+          pushFix(
+            'headerSlots',
+            `已从 inlineCompositeRows 补入 headerSlots（合并 ${slotsAcc.length}+${merged.length - slotsAcc.length} = ${merged.length}）`,
+            { count: merged.length - slotsAcc.length, total: merged.length },
+          )
+          slotsAcc = merged
+          appliedKeys.add('headerSlots')
+        }
+      }
+    }
+
+    parsed.headerSlots = slotsAcc
 
     // 🛡️ P1-1（2026-09-08）§5.3.3：如果最终 headerSlots 仍为空但有视觉元素，记录诊断日志
     if ((!Array.isArray(parsed.headerSlots) || parsed.headerSlots.length === 0) && sections.length > 0) {

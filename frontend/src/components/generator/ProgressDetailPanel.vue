@@ -275,7 +275,7 @@
           </div>
           <div class="pdp-form-group">
             <label>API Endpoint</label>
-            <input v-model="retryConfig.endpoint" placeholder="例如: https://api.fenno.ai/v1" class="pdp-input" />
+            <input v-model="retryConfig.endpoint" placeholder="例如: https://dashscope.aliyuncs.com/compatible-mode/v1" class="pdp-input" />
           </div>
           <div class="pdp-form-group">
             <label>API Key</label>

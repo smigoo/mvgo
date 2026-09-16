@@ -28,7 +28,7 @@
  * 消费：code-structure-validator（L0-B）validate() 出口前调用 detectThemeColorViolations()。
  */
 
-const FRAMEWORK_PRESET_NAMES = [
+export const FRAMEWORK_PRESET_NAMES = [
   'fontSize',
   'fontWeightStrong',
   'colorTextBase',
@@ -57,6 +57,9 @@ const PRESET_VALUE_RE = new RegExp(
 const PRESET_WARN_UP_TO = 2; // 预设名字面量重声明 ≤2 处 → WARN
 const SLOT_WARN_UP_TO = 3;   // 槽位色值抄写 ≤3 处 → WARN
 
+// 🛡️ 2026-09-16：文件级槽位字面量重声明（与 collectFileLevelSlotOverrides 同源，检测器/自愈共用）
+const FILE_LEVEL_SLOT_OVERRIDE_RE = /^\s*@(color|shadow)-[A-Za-z0-9_-]+\s*:\s*(#|rgba?\(|hsla?\()/i;
+
 /** 颜色呈现属性（值必须主题变量化；兼容 `{ color: #x; }` 单行规则体） */
 const COLOR_PROP_RE =
   /(^|[;{])\s*(?:color|background(?:-color)?|border-(?:top|right|bottom|left)-color|outline(?:-color)?|caret-color|accent-color)\s*:\s*([^;]*)/gi;
@@ -67,6 +70,22 @@ const SVG_PAINT_PROP_RE = /(^|[;{])\s*(?:fill|stroke)\s*:\s*([^;]*)/gi;
 const HEX_RE = /#[0-9a-fA-F]{3,8}\b/g;
 const RGBA_RE = /rgba?\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([\d.]+))?\s*\)/gi;
 const SAMPLE_LIMIT = 3;
+
+/**
+ * `var(--name[, fallback])` 的变量名引用。
+ * 🛡️ 2026-09-16 新增：此前 `var(--x, #fff)` 整值被直接判为「合法引用」跳过（见文件头豁免说明），
+ * 但**名字不存在**时它其实等价于硬编码——运行期永远注入不进去，fallback 恒生效。
+ */
+const VAR_USE_RE = /var\(\s*--([A-Za-z0-9_-]+)/g;
+
+/**
+ * 🛡️ 2026-09-16 新增：`var(...)` 后面拼接非法后缀（如 `var(--color-bg, #fff)-card`）。
+ * 这类写法是「非法 CSS 值」——浏览器会忽略整条声明（背景/边框不生效），比「主题不响应」
+ * 更严重。实锤：healThemeMixinVarRefs 正则 `\b` 边界 bug 把 `@color-bg-card` 误改写成
+ * `var(--color-bg, rgba(237,244,251,1))-card`（c-vehicle-monitor-71dd6494 stat-card 背景失效）。
+ * 用 `[^;{}]*` 跨过 var() 内部嵌套括号，再断言 `)` 后紧跟 `-` 或字母。
+ */
+const VAR_SUFFIX_RE = /var\(\s*--[A-Za-z0-9_-]+[^;{}]*\)\s*[-a-zA-Z]/g;
 
 /**
  * rgba(r,g,b) / rgba(r,g,b,a) → #rrggbb / #rrggbbaa
@@ -161,6 +180,280 @@ function stripComments(line) {
   return String(line).replace(/\/\*[\s\S]*?\*\//g, '').split('//')[0];
 }
 
+/** 颜色语义变量名（.common() 内出现即疑似槽位色值本地定义） */
+const COLOR_VAR_NAME_RE =
+  /color|bg|background|border|fill|stroke|shadow|primary|secondary|danger|success|warning|error/i;
+/** 几何/尺寸类令牌（名字含 border 时勿误判为颜色，如 @border-radius-base / @bg-size） */
+const GEOMETRY_TOKEN_RE =
+  /radius|size|width|height|space|gap|padding|margin|weight|opacity|alpha|duration|delay|z-?index/i;
+/** 颜色字面量（hex / rgb() / rgba() / hsl() / hsla()） */
+const COLOR_LITERAL_RE = /#[0-9a-fA-F]{3,8}\b|\brgba?\s*\(|\bhsla?\s*\(/i;
+
+/** 变量名是否指向颜色槽位（供 less-variable-checker 确定性自愈复用，保证判定同源） */
+export function isColorVarName(name) {
+  if (!COLOR_VAR_NAME_RE.test(name)) return false;
+  // 名字显式含 color → 必为颜色（@border-color / @color-bg-base）
+  if (/color/i.test(name)) return true;
+  // 否则若含几何语义（@border-radius-base / @bg-size）→ 不是颜色
+  return !GEOMETRY_TOKEN_RE.test(name);
+}
+
+/**
+ * 🛡️ 2026-09-15 治本：检测 theme-vars.less 的 `.common()` 块内是否定义了颜色变量。
+ *
+ * 根因：LESS 的 mixin 变量**不覆盖** caller 作用域已存在的同名变量。
+ * index.less / dark.less / light.less 均为 `.common(); .theme-X();` 顺序调用，
+ * 若 `.common()` 先定义了 @colorX，随后 `.theme-dark()` 的同名定义被**静默忽略**
+ * → `.dark` 与 `.light` 编译结果完全相同 → 切主题零生效
+ * （c-env-monitor-1cffd7ce 实锤：7 处颜色零响应，`.common()` 里 12 个颜色变量是元凶）。
+ *
+ * 颜色槽值只能定义在 `.theme-light()` / `.theme-dark()` 内。
+ * @returns {Array<{name:string, value:string}>}
+ */
+function collectCommonMixinColorVars(files) {
+  const slotFile = (files || []).find(
+    (f) => f && /themes\/theme-vars\.less$/.test(String(f.path || '')) && f.content,
+  );
+  if (!slotFile) return [];
+  const content = String(slotFile.content);
+  const block = content.match(/\.common\s*\(\s*\)\s*\{([\s\S]*?)\n\s*\}/);
+  if (!block) return [];
+  const hits = [];
+  const re = /@([a-zA-Z0-9_-]+)\s*:\s*([^;]+);/g;
+  let m;
+  while ((m = re.exec(block[1])) !== null) {
+    const name = m[1];
+    const value = m[2].trim();
+    // var() 透传是「接入主题变量」形态（如 @fontSize: var(--fontSize)）→ 不算违规
+    if (/^var\(/i.test(value)) continue;
+    if (isColorVarName(name) || COLOR_LITERAL_RE.test(value)) {
+      hits.push({ name: `@${name}`, value: value.slice(0, 40) });
+    }
+  }
+  return hits;
+}
+
+/**
+ * 收集「组件实际提供的」CSS 变量名（事实源）——三者并集：
+ *   ① `resources/config/css-vars.js` 的对象键（`common` 与各主题对象）= 主题变量唯一事实源
+ *   ② `FRAMEWORK_PRESET_NAMES` = 框架预设（平台必定注入）
+ *   ③ `declare.json` 的 `cssVariableConfig[].key` = 业务可配变量（运行期同样会注入）
+ *
+ * 并集之外的名字运行期不会被注入 → `var(--x, fallback)` 恒等于硬编码。
+ * 返回 `null` 表示拿不到 css-vars.js（信息不足）→ fail-open，由调用方跳过不判违规。
+ *
+ * 🛡️ 2026-09-16：c-env-monitor 系列实测——产物只引用 `--colorWhite`/`--colorError`，
+ * 而 css-vars.js 提供的是 `colorTextBase`/`colorDanger` 等，名字对不上 → 切主题零生效。
+ */
+/**
+ * 🛡️ 2026-09-16 模式 B（skill 规范主推，`style-guide.md` L161-241）新增：
+ * 检测 `.theme-dark()` 与 `.theme-light()` 的槽位值是否**逐字完全相同**。
+ *
+ * 模式 B 是**编译期差异化**：深浅差异 100% 来自这两套槽位值，由 `&.dark` / `&.light`
+ * 作用域在编译期展开。两套值相同 → `.dark` 与 `.light` 编译结果逐字一致 →
+ * 主题开关彻底失效（且不像模式 A 那样还能靠运行期注入补救）。
+ *
+ * 全语料审计（2026-09-16）：247 个组件中 **102 个命中（41%）**。
+ *
+ * @param {Array<{path:string, content:string}>} files
+ * @returns {null | {slotCount:number}} null = 未命中/无法判定；否则返回相同槽位个数
+ */
+export function collectIdenticalThemeMixins(files) {
+  const list = Array.isArray(files) ? files : [];
+  const themeFile = list.find((f) =>
+    /themes\/theme-vars\.less$/.test(String(f?.path || '')),
+  );
+  if (!themeFile) return null;
+  const src = String(themeFile.content || '');
+
+  // 抓取某个 mixin 块的正文（mixin 内无嵌套花括号，深度计数即可，勿用跨块正则）
+  const grab = (name) => {
+    const i = src.indexOf(name);
+    if (i < 0) return null;
+    const s = src.indexOf('{', i);
+    if (s < 0) return null;
+    let depth = 0;
+    for (let j = s; j < src.length; j++) {
+      if (src[j] === '{') depth++;
+      else if (src[j] === '}') {
+        depth--;
+        if (depth === 0) return src.slice(s + 1, j);
+      }
+    }
+    return null;
+  };
+  const norm = (s) => (s || '').replace(/\s+/g, ' ').trim();
+
+  const dark = grab('.theme-dark()');
+  const light = grab('.theme-light()');
+  // 缺任一 mixin 属「结构缺失」，由 less-variable-checker 的补变量逻辑负责，此处不重复报
+  if (dark === null || light === null) return null;
+  if (norm(dark) !== norm(light)) return null; // 有差异 → 正常
+
+  const slotCount = (norm(dark).match(/@[A-Za-z0-9_-]+\s*:/g) || []).length;
+  return { slotCount };
+}
+
+/**
+ * 🛡️ 2026-09-16 新增：检测业务样式里的**文件级**槽位变量字面量重声明。
+ *
+ * 根因（LESS 语义）：mixin 变量**首个定义者胜出**。common.less 若在文件顶层写
+ *   `@color-text-base: rgba(51,51,51,1);`
+ * 会抢在 `.theme-dark()` / `.theme-light()` 之前定义同名变量 → 两套槽位值被**静默忽略**
+ * → `&.dark` 与 `&.light` 编译结果逐字相同，主题开关彻底失效。
+ *
+ * 实测（`c-vehicle-monitor-326051b2`，2026-09-16）：common.less 仅 **2 行**顶部重声明，
+ * 就让 9 个正确配置过的深浅槽位全部作废；删掉这 2 行后 `.dark`/`.light` 立刻出现 6 处差异。
+ *
+ * 与既有检查的关系（互补，不重叠）：
+ *   - `THEME-COMMON-COLOR-VAR` 查 `.common()` mixin 内
+ *   - `PRESET_OVERRIDE_RE`     查框架预设名 **camelCase**（`@colorTextBase`）
+ *   - 本函数                   查 common.less / .vue 的**文件级 kebab 槽位名**（`@color-text-base`）
+ *
+ * 判定「文件级」的方式：逐行累计花括号深度，仅深度为 0 时的赋值算文件级。
+ *
+ * @param {Array<{path:string, content:string}>} files
+ * @returns {Array<{file:string, line:number, sample:string}>}
+ */
+export function collectFileLevelSlotOverrides(files) {
+  const hits = [];
+  const list = Array.isArray(files) ? files : [];
+  // 仅认颜色/阴影槽位名，且值必须是字面量（var() / 引用其它变量不算）
+  const RE = /^\s*@(color|shadow)-[A-Za-z0-9_-]+\s*:\s*(#|rgba?\(|hsla?\()/i;
+
+  for (const file of list) {
+    const p = String(file?.path || '');
+    if (/\/themes\//.test(p) || /\/config\//.test(p)) continue;
+    if (!p.endsWith('.less') && !p.endsWith('.vue')) continue;
+    const styleText = extractStyleText(file);
+    if (!styleText) continue;
+
+    let depth = 0;
+    const lines = styleText.split(/\r?\n/);
+    for (let i = 0; i < lines.length; i++) {
+      const raw = lines[i];
+      const line = stripComments(raw);
+      if (depth === 0 && RE.test(line)) {
+        hits.push({ file: p, line: i + 1, sample: raw.trim().slice(0, 90) });
+      }
+      // 累计深度（基于剥离注释后的文本，避免注释里的花括号干扰）
+      for (const ch of line) {
+        if (ch === '{') depth++;
+        else if (ch === '}') {
+          depth--;
+          if (depth < 0) depth = 0;
+        }
+      }
+    }
+  }
+  return hits;
+}
+
+/**
+ * 🛡️ 2026-09-16 确定性自愈：从 `generatedFiles`（内存 content）中删除文件级
+ * `@color-*` / `@shadow-*` 的【字面量】重声明行。
+ *
+ * 与 `collectFileLevelSlotOverrides` 同源、互逆 —— 检测器报什么，自愈删什么。
+ * 直接 mutate `file.content`（不改 path），调用方写盘即落干净产物；重试时
+ * 内存 content 已是干净版，门禁 `THEME-SLOT-LOCAL-OVERRIDE` 不再 BLOCK → 不会重试耗尽。
+ *
+ * 安全性（与检测器一致）：
+ *  - 仅删 depth 0 的【字面量】赋值（#hex / rgba() / hsla()），var()/变量引用不删（合法透传）。
+ *  - 规则块内（depth>0）一律不删（局部作用域，不污染主题 mixin）。
+ *  - themes/ 与 config/ 豁免。
+ *
+ * @param {Array<{path:string, content:string}>} files
+ * @returns {boolean} 是否修改过
+ */
+export function healFileLevelSlotOverrides(files) {
+  const list = Array.isArray(files) ? files : [];
+  let changed = false;
+  let removed = 0;
+  for (const file of list) {
+    const p = String(file?.path || '');
+    if (/\/themes\//.test(p) || /\/config\//.test(p)) continue;
+    if (!p.endsWith('.less') && !p.endsWith('.vue')) continue;
+    const content = String(file?.content || '');
+    const r = healStyleContent(content, p.endsWith('.vue'));
+    if (r.changed) {
+      file.content = r.content;
+      changed = true;
+      removed += r.removed;
+    }
+  }
+  return { changed, removed };
+}
+
+/** 逐行扫描样式文本，删文件级（depth 0）槽位字面量重声明；.vue 仅样式段内生效。 */
+function healStyleContent(content, isVue) {
+  const lines = String(content).split(/\r?\n/);
+  let depth = 0;
+  let inStyle = !isVue;
+  let changed = false;
+  let removed = 0;
+  const out = [];
+  for (const line of lines) {
+    if (isVue) {
+      const enter = /<style\b[^>]*>/i.test(line) && !/<\/style>/i.test(line);
+      const exit = /<\/style>/i.test(line) && !/<style\b[^>]*>/i.test(line);
+      if (enter) { inStyle = true; out.push(line); continue; }
+      if (exit) { inStyle = false; depth = 0; out.push(line); continue; }
+    }
+    const isTop = inStyle && depth === 0;
+    if (isTop && FILE_LEVEL_SLOT_OVERRIDE_RE.test(stripComments(line))) {
+      changed = true;
+      removed += 1; // 删除该行
+      continue;
+    }
+    out.push(line);
+    if (inStyle) {
+      for (const ch of line) {
+        if (ch === '{') depth++;
+        else if (ch === '}') depth = Math.max(0, depth - 1);
+      }
+    }
+  }
+  return { content: out.join('\n'), changed, removed };
+}
+
+export function collectProvidedVarNames(generatedFiles) {
+  const files = Array.isArray(generatedFiles) ? generatedFiles : [];
+
+  const cssVarsFile = files.find(
+    (f) => f && /config[\\/]css-vars\.js$/.test(String(f.path || '')) && f.content,
+  );
+  // 拿不到事实源 → 不判（避免把「无法取证」误报成违规）
+  if (!cssVarsFile) return null;
+
+  const provided = new Set(FRAMEWORK_PRESET_NAMES);
+
+  // ① css-vars.js：对象字面量键（含带引号的 kebab 名）
+  const objRe = /(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*\{([^}]*)\}/g;
+  let om;
+  while ((om = objRe.exec(String(cssVarsFile.content))) !== null) {
+    const keyRe = /(?:^|[,{\s])(?:'([^']+)'|"([^"]+)"|([A-Za-z_$][\w$-]*))\s*:/g;
+    let km;
+    while ((km = keyRe.exec(om[1])) !== null) {
+      const name = km[1] || km[2] || km[3];
+      if (name) provided.add(name);
+    }
+  }
+
+  // ③ declare.json / declare.js：cssVariableConfig 的 key
+  for (const f of files) {
+    const p = String(f?.path || '');
+    if (!/declare\.(json|js)$/.test(p) || !f.content) continue;
+    const body = String(f.content);
+    const cfgIdx = body.indexOf('cssVariableConfig');
+    const scope = cfgIdx >= 0 ? body.slice(cfgIdx) : body;
+    const keyRe = /"key"\s*:\s*"([^"]+)"/g;
+    let km;
+    while ((km = keyRe.exec(scope)) !== null) provided.add(km[1]);
+  }
+
+  return provided;
+}
+
 /**
  * 主检测入口。
  * @param {Array<{path:string, content:string}>} generatedFiles
@@ -174,6 +467,17 @@ export function detectThemeColorViolations(generatedFiles) {
   const presets = [];
   const slotHits = [];
   const specialHits = [];
+  // 🛡️ 2026-09-15：.common() 内本地定义颜色变量 → 静默挡住主题 mixin 覆盖
+  const commonColorVars = collectCommonMixinColorVars(files);
+  // 🛡️ 2026-09-16：var(--name) 名字存在性 —— 名字不在提供集里 = 运行期注入不到 = 恒走 fallback
+  const providedVars = collectProvidedVarNames(files);
+  const varNameHits = [];
+  // 🛡️ 2026-09-16：var()-后缀非法拼接（声明失效，比主题不响应更严重）
+  const varSuffixHits = [];
+  // 🛡️ 2026-09-16 模式 B：两套 theme mixin 槽位值逐字相同 → 编译期无差异 → 主题开关彻底失效
+  const identicalMixins = collectIdenticalThemeMixins(files);
+  // 🛡️ 2026-09-16：common.less/.vue 文件级槽位字面量重声明 → 抢先定义 → 两套槽位值被静默忽略
+  const slotOverrides = collectFileLevelSlotOverrides(files);
 
   const collect = (line, rawLine, path, lineNo) => {
     // ── ① 预设变量本地重声明 ──
@@ -190,6 +494,41 @@ export function detectThemeColorViolations(generatedFiles) {
       return;
     }
 
+    // ── ③ 业务样式直引 var()（2026-09-16 新增；同日晚改模式 B）──
+    // 模式 B：`var()` 只允许出现在 theme-vars.less 的 `.common()` 透传映射里。
+    // 本循环已排除 themes/ 与 config/，故命中的都是 common.less / .vue <style>，
+    // 一律属**模式 A 残留** —— 颜色差异化本该由编译期两套槽位承担，写 var() 反而退化成
+    // 「依赖运行期注入」，而平台并不注入这些名字（`--colorTextLight` / `--colorCardBg`…）
+    // → fallback 恒生效且多写死字面量 → 深浅两侧渲染完全相同。
+    // 注意 VAR_USE_RE 是 /g，逐行复用必须重置 lastIndex。
+    VAR_USE_RE.lastIndex = 0;
+    let vu;
+    while ((vu = VAR_USE_RE.exec(line)) !== null) {
+      const name = vu[1];
+      // 仅拦截颜色/阴影/背景/边框类；--fontSize 等尺寸类暂放行（历史产物可能合法映射）
+      if (!/^(color|shadow|bg|border|text)/i.test(name)) continue;
+      varNameHits.push({
+        file: path,
+        line: lineNo,
+        name: `--${name}`,
+        provided: providedVars ? providedVars.has(name) : null,
+        sample: rawLine.trim().slice(0, 90),
+      });
+    }
+
+    // ── ④ var()-后缀非法拼接（2026-09-16 · c-vehicle-monitor-71dd6494 实锤）──
+    // `var(--x, #fff)-card` 这类「var() 结束后又拼 -后缀」是非法 CSS 值 → 浏览器忽略整条声明。
+    // ③ 只查「变量名存在性」、② 以 /^var\(/ 直接豁免，都拦不住这种写法。
+    VAR_SUFFIX_RE.lastIndex = 0;
+    let vs;
+    while ((vs = VAR_SUFFIX_RE.exec(line)) !== null) {
+      varSuffixHits.push({
+        file: path,
+        line: lineNo,
+        sample: rawLine.trim().slice(0, 90),
+      });
+    }
+
     // ── ② 颜色呈现属性 ──
     const examine = (regex, isSvgPaint) => {
       regex.lastIndex = 0;
@@ -202,14 +541,21 @@ export function detectThemeColorViolations(generatedFiles) {
         // 剥离所有函数块：若整体都是函数块（var/gradient/rgba/url…）→ 无独立字面量
         const outside = stripFnBlocks(value).trim();
         const hexes = outside.match(HEX_RE) || [];
-        if (hexes.length === 0) {
-          // 纯 rgba()/gradient() 值或空 → WARN 提示（半透明/渐变装饰色不精确比对）
-          if (/(?:gradient|rgba?|hsla?\()/i.test(value)) {
+        // 🛡️ 2026-09-15 治本：rgba(r,g,b[,a]) 等价 hex 一并参与槽位比对。
+        // 此前只认 #hex，LLM 写 rgba(51,51,51,1) 时被当成「半透明装饰色」降 WARN，
+        // 导致 .theme-light()/.theme-dark() 槽值被抄写却零拦截（c-env-monitor 实锤）。
+        const rgbaHexes = (value.match(RGBA_RE) || [])
+          .map((x) => rgbaToHex(x))
+          .filter(Boolean);
+        const allHexes = hexes.concat(rgbaHexes);
+        if (allHexes.length === 0) {
+          // 纯 gradient()/hsl() 值或空 → WARN 提示（渐变装饰色不精确比对）
+          if (/(?:gradient|hsla?\()/i.test(value)) {
             specialHits.push({ file: path, line: lineNo, literal: value.slice(0, 60), sample: rawLine.trim().slice(0, 90) });
           }
           continue;
         }
-        for (const hx of hexes) {
+        for (const hx of allHexes) {
           const low = hx.toLowerCase();
           if (slotAware && slotHex.has(low)) {
             // 槽位色值抄写
@@ -246,6 +592,24 @@ export function detectThemeColorViolations(generatedFiles) {
     return `${body}${arr.length > SAMPLE_LIMIT ? ` 等 ${arr.length} 处` : ''}`;
   };
 
+  if (commonColorVars.length > 0) {
+    // ⚠️ 2026-09-15 全语料审计：244 个存量组件中 172 个命中（70%），属**系统性**形态，
+    // 且后果是「主题静默失效」而非「编译失败」。若设 BLOCK 会让大批任务重试耗尽
+    // （参照 mc-max-1788505197306 教训）→ 统一 WARN，配合 less-variable-checker 的
+    // 确定性自愈（变量已在两个主题 mixin 定义时从 .common() 移除）渐进收敛。
+    const varList = commonColorVars.map((v) => `${v.name}: ${v.value}`).join('、');
+    issues.push({
+      id: 'THEME-COMMON-COLOR-VAR',
+      severity: 'WARN',
+      file: 'resources/styles/themes/theme-vars.less',
+      message: `.common() 内定义了 ${commonColorVars.length} 个颜色变量（${varList}）→ LESS 的 mixin 变量不覆盖 caller 已有同名变量，.common() 抢先定义后 .theme-light()/.theme-dark() 被静默忽略 → .dark/.light 编译结果完全相同、切主题零生效。请把这些颜色变量移入 .theme-light() 与 .theme-dark() 各自定义，.common() 只保留字号/圆角等跨主题共享令牌。`,
+      hint: {
+        suggestion:
+          '删除 .common() 内的 @colorX 定义，分别写进 .theme-light() / .theme-dark()（两处都要有，避免其中一个主题缺值编译失败）',
+      },
+    });
+  }
+
   if (presets.length > 0) {
     // 🛡️ 2026-09-04 阈值降级：≤PRESET_WARN_UP_TO 处降 WARN（少量残留不硬失败），超阈值仍 BLOCK
     const severity = presets.length <= PRESET_WARN_UP_TO ? 'WARN' : 'BLOCK';
@@ -261,23 +625,93 @@ export function detectThemeColorViolations(generatedFiles) {
       hint: { suggestion: '删除样式内的 @colorTextBase/@colorPrimary 等本地声明；直接 var(--colorX)（microcode）或 @colorX（vue3）' },
     });
   }
+  if (identicalMixins) {
+    // ⚠️ 全语料审计（2026-09-16）：247 个组件中 102 个命中（41%），属系统性形态。
+    // 设 BLOCK 会让大批任务重试耗尽（参照 mc-max-1788505197306 教训）→ 统一 WARN，
+    // 待新生成的组件收敛后再评估是否升级为 BLOCK。
+    issues.push({
+      id: 'THEME-MIXINS-IDENTICAL',
+      severity: 'WARN',
+      file: 'resources/styles/themes/theme-vars.less',
+      message: `.theme-dark() 与 .theme-light() 的 ${identicalMixins.slotCount} 个槽位值完全相同 → 模式 B（编译期差异化）下 &.dark 与 &.light 展开出的 CSS 完全一致，主题开关彻底失效，且不像模式 A 那样还有运行期注入可补救。请分别为两套 mixin 填入深色稿 / 浅色稿的真实色值。`,
+      hint: {
+        suggestion:
+          '从 Figma 深色稿取一套色值写进 .theme-dark()，浅色稿取一套写进 .theme-light()；两者不得逐字相同（如文字色 #ffffff vs #333333、主色 #44E4FF vs #0c9d60）',
+      },
+    });
+  }
+
+  if (slotOverrides.length > 0) {
+    // 🔴 与其它主题门禁不同，本项设 **BLOCK**：
+    //   ① 后果最重 —— 直接让 .theme-dark()/.theme-light() 两套槽位全部作废，
+    //      .dark 与 .light 编译结果逐字相同，主题开关彻底失效；
+    //   ② 修复最轻 —— 纯删除即可，且可由 less-variable-checker 确定性自愈，
+    //      不需要 LLM 重新生成；
+    //   ③ 命中面可控 —— 全语料 53/254（20%），远低于 THEME-MIXINS-IDENTICAL 的 41%。
+    const nameList = slotOverrides
+      .map((h) => String(h.sample).split(':')[0].trim())
+      .slice(0, 6)
+      .join('、');
+    issues.push({
+      id: 'THEME-SLOT-LOCAL-OVERRIDE',
+      severity: 'BLOCK',
+      file: slotOverrides[0].file,
+      message: `业务样式里有 ${slotOverrides.length} 处**文件级**槽位变量字面量重声明（${nameList}）→ LESS 变量「首个定义者胜出」，会在 .theme-dark()/.theme-light() 之前抢先定义同名变量，导致两套槽位值被静默忽略 → .dark 与 .light 编译结果逐字相同，主题开关彻底失效。删除这些声明即可恢复（实测：删 2 行就让 9 个槽位恢复生效）。${fmt(slotOverrides)}`,
+      hint: {
+        suggestion:
+          '删除 common.less / .vue <style> 文件顶层的 @color-*: <字面量> 声明；需要该颜色时直接引用槽位变量（值由 .theme-dark()/.theme-light() 提供）。色值只允许出现在 theme-vars.less 的主题 mixin 里',
+      },
+    });
+  }
+
+  if (varNameHits.length > 0) {
+    // ⚠️ 2026-09-16：与 THEME-COMMON-COLOR-VAR 同策略**统一 WARN**——
+    // 命中的是「变量名错配」这一系统性形态（c-env-monitor 系列实测 7/8 命中），
+    // 后果是「主题静默失效」而非编译失败；硬 BLOCK 会让大批任务重试耗尽
+    // （参照 mc-max-1788505197306 教训）。
+    const nameList = [...new Set(varNameHits.map((v) => v.name))].slice(0, 6).join('、');
+    issues.push({
+      id: 'THEME-VAR-NAME-MISMATCH',
+      severity: 'WARN',
+      file: varNameHits[0].file,
+      message: `业务样式（common.less / .vue <style>）里直引了 ${varNameHits.length} 处 CSS 变量（${nameList}）→ 模式 A 残留。模式 B 下颜色差异化由 .theme-dark()/.theme-light() 两套槽位在**编译期**决定，业务样式应写 @color-xxx 槽位变量；直引 var() 会退化成依赖运行期注入，而平台并不注入这些名字 → fallback 恒生效（且多为写死字面量）→ 切主题零生效。${fmt(varNameHits)}`,
+      hint: {
+        suggestion:
+          '删除业务样式里的 var(--colorX, ...)，改为引用 theme-vars.less 中 .theme-dark()/.theme-light() 已定义的 @color-xxx 槽位变量；var() 只保留在 .common() 的透传映射里（如 @fontSize: var(--fontSize)）',
+      },
+    });
+  }
+  if (varSuffixHits.length > 0) {
+    // 🔴 设 BLOCK：`var(...)-card` 是**非法 CSS 值**，浏览器忽略整条声明（背景/边框不生效），
+    // 且不是「主题不响应」而是「样式完全不生效」。源头（healThemeMixinVarRefs \b bug）已修，
+    // 正常情况下不应再产出；若仍命中说明有新的改写器 bug，应 BLOCK 逼出重试/定位。
+    issues.push({
+      id: 'VAR-SUFFIX-ILLEGAL',
+      severity: 'BLOCK',
+      file: varSuffixHits[0].file,
+      message: `检测到 ${varSuffixHits.length} 处 var() 后拼接非法后缀（如 var(--x, #fff)-card）→ 这是**非法 CSS 值**，浏览器会忽略整条声明（背景/边框不生效），比主题不响应更严重。请改为完整槽位变量引用（如 @color-bg-card）或正确命名（var(--colorBgCard, #fff)）。${fmt(varSuffixHits)}`,
+      hint: {
+        suggestion:
+          '把 var(--color-bg, #fff)-card 改为 @color-bg-card（模式 B 槽位）或 var(--colorBgCard, #fff)；var() 结束后禁止再拼 -xxx 后缀',
+      },
+    });
+  }
   if (slotHits.length > 0) {
     // 🛡️ 2026-09-04 阈值降级：≤SLOT_WARN_UP_TO 处降 WARN（自愈后少量残留不硬失败）
     const severity = slotHits.length <= SLOT_WARN_UP_TO ? 'WARN' : 'BLOCK';
     const thresholdNote =
       severity === 'WARN'
-        ? `（≤${SLOT_WARN_UP_TO} 处降级 WARN：建议在精修期改为 var(--colorX, 槽值) 引用，不阻断本次生成）`
+        ? `（≤${SLOT_WARN_UP_TO} 处降级 WARN：建议在精修期改为 @color-xxx 槽位变量引用，不阻断本次生成）`
         : '';
     issues.push({
       id: 'THEME-SLOT-COLOR',
       severity,
       file: slotHits[0].file,
-      message: `主题槽位色值被抄写成样式字面量 ${slotHits.length} 处（色值与 theme-vars.less 槽值相同但直接写 #hex）→ 该元素不响应主题/颜色变量。改为变量引用：文字 → var(--colorTextBase, 槽值)；主色/强调 → var(--colorPrimary / colorPrimaryHover / colorPrimaryActive, 槽值)；主色浅底 → var(--colorPrimaryBg / colorPrimaryBgHover, 槽值)；字号 → var(--fontSize)。${fmt(slotHits)}${thresholdNote}`,
-      hint: { suggestion: '抄写槽值=硬编码。颜色一律 var(--colorX, 槽位默认值) 引用' },
+      message: `主题槽位色值被抄写成样式字面量 ${slotHits.length} 处（色值与 theme-vars.less 槽值相同但直接写 #hex）→ 该元素不响应主题。改为槽位变量引用（模式 B）：文字 → @color-text-base；主色/强调 → @color-primary / @color-primary-hover / @color-primary-active；主色浅底 → @color-primary-bg / @color-primary-bg-hover；字号 → @fontSize。${fmt(slotHits)}${thresholdNote}`,
+      hint: { suggestion: '抄写槽值=硬编码。颜色一律用 @color-xxx 槽位变量引用（模式 B：值在 .theme-dark()/.theme-light() 各给一份）' },
     });
   }
-  if (specialHits.length > 0) {
-    issues.push({
+  if (specialHits.length > 0) {    issues.push({
       id: 'THEME-SPECIAL-COLOR',
       severity: 'WARN',
       file: specialHits[0].file,

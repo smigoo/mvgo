@@ -1,38 +1,35 @@
-# mvgo（感智晓界）速查（详史见同目录 2026-*.md）
+# mvgo 项目速查
 
-## 环境/构建/部署
-- 根 `/Users/smigoo/工作/mvgo`；子仓 backend-node/frontend/docs；Node 13030 / Java 8080 / 前端 2610。
-- Bash 跑构建/常驻服务必 `env -i PATH=".../22.22.2-3/bin:/usr/local/bin:/usr/bin:/bin" HOME=/Users/smigoo`（清 NODE_OPTIONS shim+代理）；jest 加 `NODE_OPTIONS=--max-old-space-size=1536 --runInBand --forceExit`；curl `--noproxy '*'`；多关键词 grep 必 `-E`。
-- 构建 `rm -f tsconfig.build.tsbuildinfo && npm run build`；启动 `node start-node.js`（项目根）；日志 `backend-node/server.log`，重启前必看尾部活动。
-- 勿设 FIELD_ENCRYPTION_KEY；AI 凭证 `data/ai-config.json`；勿加 package.json type:module；新增路由三处同步。
-- 预览取源：`last-good > candidate > partial > workspace`。workspace 事实源 = `backend-node/workspace`。
+## 环境与构建
+- 根目录 `/Users/smigoo/工作/mvgo`；子仓 `backend-node`、`frontend`、`docs`。Node 后端 13030，Java 8080，前端 2610。
+- WorkBuddy 中运行 Node/npm 必须清环境：`env -i PATH="/Users/smigoo/.workbuddy/binaries/node/versions/22.22.2-3/bin:/usr/local/bin:/usr/bin:/bin" HOME="/Users/smigoo" ...`，避免 NODE_OPTIONS shim/代理导致构建或启动卡死。
+- 后端构建：backend-node 下先 `rm -f tsconfig.build.tsbuildinfo`，再 `npm run build`；启动只能用根目录 `/Users/smigoo/工作/mvgo/start-node.js`。日志 `backend-node/server.log`。
+- 杀端口只用 `lsof -ti:PORT -sTCP:LISTEN`，避免误杀客户端连接。重启前查看日志尾部及活动任务。
+- 改源码、`.env` 或构建产物后必须重启；构建后用 `node --check` 检查关键 dist JS。API 探活使用 `curl --noproxy '*' http://localhost:13030/api`，不要假设 `/api/health` 存在。
+- 不设置 `FIELD_ENCRYPTION_KEY`；AI 凭证在 `backend-node/data/ai-config.json`。本地开发自动登录由 `start-node.js` 注入。
+- 生产 Nginx（容器 `nginx`，`/etc/nginx/vhost/gzxj.conf`）里 `location /api` **默认整体转发 Java 8080**（见 `docs/deployment/nginx/mvgo-nginx-frontend.conf:62-70` 注释「统一业务入口：全部进 Java」）。凡属 Node 13030 的 `/api/*`（component、mc-spec、tasks、progress、demo、admin…）**必须逐个写在 `/api` 之前**显式 `proxy_pass http://192.168.112.1:13030/...`；漏配的会被 Java 兜底吃掉 →（Java 未启动时）502。
+- **`/api/auth/*` 归 Java 8080，不归 Node**：`backend-node/src/auth/auth.module.ts:29` 已写成 `controllers: [/* AuthController -- 已迁 Java */]`，AuthController 只是保留了源文件与 import，HTTP 路由不注册。实测本地 Node `POST /api/auth/{login,logout,register}`、`GET /api/auth/current` **全部 404**（而 `/api/tasks` 是 401、`/api` 是 200，证明服务正常、仅 auth 不挂载）。所以 `location /api/auth → 192.168.112.1:8080` 是**正确配置**，不要改指 13030。
+- Java 部署形态：`/home/mvbt/mvgo/backend-java/` + `deploy-java.sh`（fat jar `mvgo-app-1.0.0-SNAPSHOT.jar`，健康检查 `/api/health`，冷启 30~60s）。必须 `export MONGODB_URI`（与 Node `.env.production` 同值）。`PORTAL_BASE_URL` 默认 `http://192.168.112.1:39680/portlet/api`——**门户 token 校验必须带 `/portlet/api` 前缀**，否则 401。`ADMIN_STATS_KEY` 未注入会让用户管理「使用统计」四格恒为 0（静默降级）。
 
-## 核心原则
-**同一概念只允许一处实现 + 全链路接入 + 落盘闸门收口。** 门禁误报先问：事实源唯一吗？采集是否被表达式/注释/别名/编译产物污染？
-**删减法**：视觉确定性事实从 LLM 剥离，生成时装配，每接管一件事就删对应纠偏器。门禁总数只能降。
-**禁止改单个产物**（`frontend/workspace` / `temp-components` 打 CSS 补丁）。
+## 项目原则
+- 确定性事实只保留一个事实源；视觉确定内容由 pipeline facts/assembler 装配，不能修改单个生成产物。
+- 删减法：每接管一个事实就删除或收缩对应 fallback/纠偏器；门禁总量原则上只能下降。
+- 预览事实源：`last-good > candidate > partial > workspace`，workspace 为 `backend-node/workspace`。
+- 修改后符号级验证使用 `grep -E`；混合 `.js/.ts` 搜索不要只限定 `*.ts`。
 
-事实源：`class-facts`/`classname-contract`/`class-dialect-normalizer`/`less-selector-stack`/`collectDeclaredBindings`/`file-collection`/`resolveComponentDirStrict`/`rootLayoutFacts`/`state.productFiles`/`section-tree`/`inline-row-assembler`/`buildSectionLayoutFacts`。
+## 已完成
+- Mode B 主题编译期差异化已确定为长期标准：业务 LESS 只用 `@color-*` 槽位；`var()` 仅允许在 `theme-vars.less` 的 `.common()` 透传映射；深浅 theme mixin 必须有不同硬编码值；ECharts 使用 `THEME_COLORS[props.theme]`。
+- 主题文件级槽位覆盖已加入 `THEME-SLOT-LOCAL-OVERRIDE` 检测与自愈；内存产物和磁盘 common.less/.vue style 均清理；theme guard 回归曾达到 37 passed。
+- 高度比例、stat 配对、资源绑定、componentId、LESS 编译及多项结构门禁已有修复，详见每日工作日志。
 
-## 复现/验收
-- 复现：`POST /api/phase2/generate?reuseCache:true` + `GET /api/tasks/status/<sid>`（字段 `data.task.status`；`data.task.progress` 是日志数组）。
-- 改后处理规则前先确认走哪条 Vision 链路（全新 / vision-cache / `_uiCache`；reuseCache 走③，cache 是加工后结构）。
-- jest 基线 = `17 suite 加载失败（import.meta）+ 4 例断言红灯`，改动后须逐字同名同数。
-- `BLOCK=0` ≠ 视觉正确。构建后 `node --check` 扫 `src/**/*.js`。
+## 当前未竟
+- A1 类名骨架化：以模板 `classNamesList` 确定性生成样式骨架，LLM 只填值；需确认所有 complexity 分支、fallback 标记和 CODE-020 观测。
+- D 图表消除层：`injectEchartsFallback` 仍需按视觉真值生成 type/series/legend/data，并对非笛卡尔图跳过坐标轴；最终建设 chart-builder 后删除旧 fallback。
+- H item-level DOM contract 尚未完成；R2 目前主要只接管 section 根布局。
+- R3 header slots、R5 阶段 C、R6 图标/图例精确真值、R7 视觉覆盖门禁待推进。
+- 文档 `docs/确定性收回清单-2026-09-16.md` 需同步 A1/D/E3/G/H、A2 方向及 E1→E2 依赖。
 
-## 已治本（详见 2026-09-13/14/15.md）
-- 刀 7~19：资源绑定、componentId、CODE-026/024、COMP-001、LESS var()/颜色函数、FLEX-003 目标元素、grid display、对象键引号、数据键类名化。
-- 刀 20~23：图表 min-height 反杀、schema 双副本、悬空 import 闭包、幻觉 section（宽进严出 + 全语料误伤审计）、`.js` 裸反引号崩 dist、vision 缓存短路。
-- 刀 24：success 资源不吐 fillsSummary + fillsSummary 补 g.opacity/方向。未竟：激活图 `owner-file-missing`+active 键正则；`formatFigmaStyleData` 仍丢填充级 opacity；`style-refiner`/`mountSubStateBackground` 硬编码 100%。
-- 阶段 B：stat 配对 prompt 真机证伪 → 结构层 `healStatRowMemberPairing` 才归零。
-- R4：aspect-ratio 误伤 / min-height 污染非图表容器已修（`82d5dab`）。
-- 高度比例管线双 bug（c-device-monitor-44384241 实锤）：① `buildSectionHeightsMap`/`alignSectionClasses` 与 code-generator `resolvePlanSections` **不同源**（未 dedupe，冗余「设备网格」切片致叶子数 4≠3 → fail-open null → flex:1 平分）；② `fixSectionHeightsForResource` 正则只认三值 `flex:X Y Z`、漏单值 `flex:1`/双值 `flex:1 1`。均已治本 + 回归用例。
-
-## 未竟（真机 09-15 再实锤）
-- **R2 序 4 item 级契约仍待做**：批次 3 只补 section 根 CSS（缺则补 display/flex/grid），**不写 item 内部 DOM**。device-monitor 的 switch 两列、tabs 横向窄条、card 内部结构仍 LLM 自由生成 → 同批 bug 复发。
-- R3：`ensureHeaderSlots` 延后。R5 阶段 C 待做。R7 视觉覆盖门禁待做。
-- **R6 颜色 fills 提取部分解除**（09-15 深夜）：`utils/figma-color-truth.js` 已做 seriesColors 臆造色真值修正（collectFigmaChartColors + resolveSeriesColors），R6 剩余「图标资源逐节点提取」「图例精确配对（系列名→色块）」仍待做。
-- **确定性 chart-builder（消除层）**：LLM 只声明 {sectionId,type,series,colors}，由确定性渲染器写 echarts，建好后删 `injectEchartsFallback`。与高度比例 dedupe 冲突：chart 叶子必须明确 flexGrow+排他 sourceNodeIds，否则 buildSectionHeightsMap fail-open。当前校验层已覆盖（do-not-invent 缺失方向 + 挂载点缺失 + seriesColors 真值）。
-- header 叶子（type='header'）在 `#header-right` 插槽、不参与 slot-con flex，但其高度比例 flexGrow 仍会写进 header 根类 CSS（`flex:0.219 1 0`）——flex-basis:0 副作用，理想应排除 header 叶子 + `extractRootTemplate` 跳过内部具名插槽（改动较大，另开）。
-- 复现样本：`c-device-monitor-228b63d5`（TabsSection 纵向+复制网格；`@color-text-base=#fff` 字看不见；自动修复 stub 给 label 灌 `display:flex`）。
-- 复现样本：`c-traffic-monitor-cd7d0172`（seriesColors 臆造 #ff7875）+ `c-max-1789476464544-07e31fbb`（echarts 挂载点缺失，环形图消失）。
+## 验收与记忆
+- Jest 基线按项目既有记录对比；通常使用 `NODE_OPTIONS="--max-old-space-size=1536" ... jest --runInBand --forceExit`。
+- 每次 substantive 工作完成后，追加 `/Users/smigoo/工作/mvgo/.workbuddy/memory/YYYY-MM-DD.md`；长期项目事实才写本文件。
+- 中文、结构化、优先给出根因/文件/验证证据；完成修改后确认是否提交，但未经用户要求不主动 commit。

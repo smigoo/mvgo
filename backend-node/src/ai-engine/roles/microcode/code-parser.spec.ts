@@ -50,3 +50,45 @@ describe('parseCodeOutput 空兜底短路修复（#B EMPTY_ARTIFACT）', () => {
     expect(() => parseCodeOutput('随便一段不是代码的文本', null)).toThrow();
   });
 });
+
+describe('parseCodeOutput 裸代码降级（// path 注释 + 裸 <template>，2026-09-16 921cc083 实锤）', () => {
+  it('⭐ 模型吐「// package/components/Xxx.vue + 裸 SFC」→ 重建 files', () => {
+    const raw = [
+      '// package/components/ContentSubHeader.vue',
+      '<template>',
+      '  <div class="sub-header">x</div>',
+      '</template>',
+      '<script setup>',
+      "import { onMounted } from 'vue'",
+      '</script>',
+      '<style scoped>',
+      '.sub-header { display: flex; }',
+      '</style>',
+    ].join('\n');
+    const result = parseCodeOutput(raw, null);
+    expect(result.files['package/components/ContentSubHeader.vue']).toBeTruthy();
+    expect(result.files['package/components/ContentSubHeader.vue']).toContain('<template>');
+    expect(result.files['package/components/ContentSubHeader.vue']).toContain('<style scoped>');
+  });
+
+  it('裸 less（// resources/styles/common.less + CSS）→ 重建', () => {
+    const raw = [
+      '// resources/styles/common.less',
+      '.c-a { display: flex; }',
+      '.c-b { color: red; }',
+    ].join('\n');
+    const result = parseCodeOutput(raw, null);
+    expect(result.files['resources/styles/common.less']).toContain('.c-a');
+  });
+
+  it('正常 JSON 不回归', () => {
+    const raw = JSON.stringify({ files: { 'package/index.vue': '<template>x</template>' } });
+    const result = parseCodeOutput(raw, null);
+    expect(result.files['package/index.vue']).toBe('<template>x</template>');
+  });
+
+  it('// path 后跟纯中文说明（无代码特征）→ 不误判为文件，仍抛错', () => {
+    const raw = '// package/index.vue\n以下是组件生成说明，请参考布局结构。';
+    expect(() => parseCodeOutput(raw, null)).toThrow();
+  });
+});

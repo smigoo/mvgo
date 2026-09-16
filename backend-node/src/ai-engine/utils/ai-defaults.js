@@ -9,59 +9,34 @@
 import { getProviderPool } from './provider-pool.js'
 import { isReasoningModel } from './model-config.js'
 import { createLogger } from '../logger/index.js'
-import fs from 'node:fs'
-import path from 'node:path'
-import { dataDir } from '../../config/backend-root.js'
 
 const logger = createLogger({ name: 'ai-defaults' })
 
-/**
- * 从 data/ai-config.json 读已保存的 AI 凭证（2026-09-10）
- *
- * 背景：Playground AI 修改器 / 规范检查修复等入口只用 TEXT_DEFAULTS（读环境变量），
- * 而用户的 Key 存在 ai-config.json 里、只在「跑生成任务」时才被注入 process.env，
- * 服务一重启就丢 → 这些入口报「API Key 未配置」并秒失败。这里做服务端兜底读取。
- */
-// ── 已保存配置读取（data/ai-config.json）────────────────────────────────────
-// 缓存按 mtime 失效：配置页改完配置无需重启后端即可生效。
-let aiConfigCache = null
-let aiConfigMtime = 0
-function readAiConfig() {
-  try {
-    const p = path.join(dataDir, 'ai-config.json')
-    const st = fs.statSync(p)
-    if (aiConfigCache && st.mtimeMs === aiConfigMtime) return aiConfigCache
-    aiConfigCache = JSON.parse(fs.readFileSync(p, 'utf8'))
-    aiConfigMtime = st.mtimeMs
-  } catch {
-    if (!aiConfigCache) aiConfigCache = {}
-  }
-  return aiConfigCache
-}
-
-const numOrUndef = (v) =>
-  v !== undefined && v !== null && v !== '' && !Number.isNaN(Number(v)) ? Number(v) : undefined
+// 进程生命周期内同模型只打一次「thinking disabled」日志，避免每次任务重复刷 WARN
+const _loggedThinkingDisabled = new Set()
 
 /**
  * 取「当前生效配置」的某个角色槽（text / vision）的完整参数。
  *
- * 背景（2026-09-10 实锤）：Playground AI 修改器 / 规范检查 AI 修复 / 预览渲染修复等入口
- * 调用 resolveTextConfig({}) 不传任何 config，而用户的真实配置只存在于 data/ai-config.json
- * （生成任务路径由前端传入 config，这些入口没有）→ 之前只有 apiKey 做了文件兜底，
- * baseURL 为空、model 用硬编码 claude-opus-4-8 → 用 deepseek 的 key 打 Anthropic 端点，
- * 报 "temperature is not supported for claude-opus-4-8"。
- *
- * 这里做完整的槽位解析（模型库 binding 降维优先，回退 legacy 扁平字段），
- * 与 config.service.ts#resolveBindingToLegacy 同语义，保证「UI 显示什么就用什么」。
+ * 🛡️ 2026-09-16 全局模型配置清理：不再从 data/ai-config.json 读模型字段。
+ * 背景：此前 Playground / 规范检查修复等无入参入口用 ai-config.json 里的模型兜底，
+ * 但全局兜底会「掩盖用户忘配模型」+「用户配 deepseek 却因 providers 回退全局池而
+ * 降级到 z-ai/glm」。模型必须由用户级配置（getMergedAiConfig）或 process.env 提供。
  *
  * @param {'text'|'vision'} role
  * @returns {{apiKey:string, baseURL:string, model:string, providerType:string, temperature?:number, thinkingType?:string, providers:Array, pickStrategy?:string, modelMode?:string}}
  */
 function resolveSavedSlot(role = 'text') {
-  const cfg = readAiConfig() || {}
-  const modelMode = cfg.modelMode === 'unified' ? 'unified' : 'separate'
-  const slot = modelMode === 'unified' ? 'unified' : role
-  const out = {
+  // 🛡️ 2026-09-16 全局模型配置清理（用户需求：不需要全局模型兜底）：
+  // 此前从 data/ai-config.json 读 text/vision 槽的模型名/密钥/池，供无入参入口
+  // （Playground / 规范检查修复）兜底。但全局兜底会「掩盖用户忘配模型」+ 造成
+  // 「用户配 deepseek 却因 providers 回退到全局池而降级到 z-ai/glm」。
+  // 现改为：不再读 ai-config.json 的模型字段——apiKey/baseURL/model 仅由
+  // process.env（部署级）或调用方 config 提供；providers 恒 []（不回退全局池），
+  // modelMode 默认 'separate'，temperature/thinkingType 不读全局。
+  // 注：figmaToken/apifoxToken/gitlabToken 等非模型凭证仍由 config.service 的
+  // getMergedAiConfig 单独处理，不在此函数范围。
+  return {
     apiKey: '',
     baseURL: '',
     model: '',
@@ -69,54 +44,9 @@ function resolveSavedSlot(role = 'text') {
     temperature: undefined,
     thinkingType: undefined,
     providers: [],
-    pickStrategy: cfg.pickStrategy,
-    modelMode,
+    pickStrategy: undefined,
+    modelMode: 'separate',
   }
-
-  const models = Array.isArray(cfg.models) ? cfg.models : []
-  const byId = new Map()
-  for (const m of models) if (m && m.id) byId.set(m.id, m)
-  const binding = cfg.binding || {}
-  const b = binding[slot]
-  const primaryModel = b?.primaryId ? byId.get(b.primaryId) : null
-
-  if (primaryModel) {
-    out.apiKey = primaryModel.apiKey || ''
-    out.baseURL = primaryModel.baseURL || ''
-    out.model = primaryModel.model || ''
-    out.providerType = primaryModel.providerType || 'auto'
-    out.temperature = numOrUndef(primaryModel.temperature)
-    out.thinkingType = primaryModel.thinkingType || undefined
-  } else {
-    // 回退 legacy 扁平字段（未做模型库绑定 / 旧结构）
-    out.apiKey = cfg[`${slot}ApiKey`] || ''
-    out.baseURL = cfg[`${slot}BaseURL`] || ''
-    out.model = cfg[`${slot}Model`] || ''
-    out.providerType = cfg[`${slot}ProviderType`] || 'auto'
-    out.temperature = numOrUndef(cfg[`${slot}Temperature`])
-  }
-
-  // 池成员：unified 槽的 poolIds 参与所有角色，separate 槽各自独立
-  const poolIds = Array.isArray(b?.poolIds) ? b.poolIds : []
-  out.providers = poolIds
-    .map((id) => byId.get(id))
-    .filter(Boolean)
-    .map((m) => ({
-      id: m.id,
-      name: m.name,
-      apiKey: m.apiKey,
-      baseURL: m.baseURL,
-      model: m.model,
-      providerType: m.providerType || 'auto',
-      role: slot === 'unified' ? 'both' : slot,
-      ...(numOrUndef(m.temperature) !== undefined ? { temperature: numOrUndef(m.temperature) } : {}),
-      ...(numOrUndef(m.rpm) !== undefined ? { rpm: numOrUndef(m.rpm) } : {}),
-      ...(numOrUndef(m.tpm) !== undefined ? { tpm: numOrUndef(m.tpm) } : {}),
-      ...(numOrUndef(m.weight) !== undefined ? { weight: numOrUndef(m.weight) } : {}),
-      ...(m.thinkingType ? { thinkingType: m.thinkingType } : {}),
-    }))
-
-  return out
 }
 
 
@@ -234,10 +164,15 @@ function resolveProvider(config = {}, primary = null, role = 'text') {
     }
     if (tt === 'disabled') {
       // deepseek v4 系可关推理 → 注入 disabled（保留使用，避免默认推理烧光预算）
-      logger.warn('🔧 deepseek v4 系默认关推理（thinking disabled），避免烧光输出预算', {
-        model: p.model,
-        providerId: p.id,
-      })
+      // 同模型进程内只 WARN 一次，避免每次任务重复刷日志
+      const logKey = `${p.model}|${p.id}`
+      if (!_loggedThinkingDisabled.has(logKey)) {
+        _loggedThinkingDisabled.add(logKey)
+        logger.warn('🔧 deepseek v4 系默认关推理（thinking disabled），避免烧光输出预算', {
+          model: p.model,
+          providerId: p.id,
+        })
+      }
       return { ...p, thinkingType: 'disabled' }
     }
     return p
@@ -373,14 +308,12 @@ export function resolveVisionConfig(config = {}) {
   if (saved.thinkingType) primary.thinkingType = saved.thinkingType
 
   // 供应商池：主配置并入池后择优 pick（向下兼容，主配置不失效）
-  // 🔒 用户配置隔离（2026-09-11）：当 merged.providers 是数组（即使是空数组）时，
-  // 使用 merged，不回退到 saved.providers（全局配置）。
-  // 这样用户只配了 1 个模型时，故障转移只在用户配置的主模型中切换（通过 primaryEntry 注入），
-  // 不会切换到开发者的模型池。
+  // 🔒 用户配置隔离（2026-09-16 强化）：merged.providers 非数组时不再回退 saved.providers
+  // （全局 ai-config.json 池），改为 providers: [] —— 空池走主配置，绝不降级到全局模型。
   const poolConfig =
     Array.isArray(merged.providers)
       ? merged
-      : { ...merged, providers: saved.providers, pickStrategy: merged.pickStrategy ?? saved.pickStrategy }
+      : { ...merged, providers: [], pickStrategy: merged.pickStrategy }
   const pooled = resolveProvider(poolConfig, primary, 'vision')
   return pooled || primary
 }
@@ -440,14 +373,12 @@ export function resolveTextConfig(config = {}) {
   if (saved.thinkingType) primary.thinkingType = saved.thinkingType
 
   // 供应商池：主配置并入池后择优 pick（向下兼容，主配置不失效）
-  // 🔒 用户配置隔离（2026-09-11）：当 merged.providers 是数组（即使是空数组）时，
-  // 使用 merged，不回退到 saved.providers（全局配置）。
-  // 这样用户只配了 1 个模型时，故障转移只在用户配置的主模型中切换（通过 primaryEntry 注入），
-  // 不会切换到开发者的模型池。
+  // 🔒 用户配置隔离（2026-09-16 强化）：merged.providers 非数组时不再回退 saved.providers
+  // （全局 ai-config.json 池），改为 providers: [] —— 空池走主配置，绝不降级到全局模型。
   const poolConfig =
     Array.isArray(merged.providers)
       ? merged
-      : { ...merged, providers: saved.providers, pickStrategy: merged.pickStrategy ?? saved.pickStrategy }
+      : { ...merged, providers: [], pickStrategy: merged.pickStrategy }
   const pooled = resolveProvider(poolConfig, primary, 'text')
   return pooled || primary
 }

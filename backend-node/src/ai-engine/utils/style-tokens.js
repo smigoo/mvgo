@@ -266,6 +266,36 @@ export function extractFigmaColorPalette(figmaNodeData) {
   return { textColors, fillColors, topText, topBg, topPrimary, topAccent };
 }
 
+/**
+ * 确定性亮度判定：用 Figma 实测背景色覆盖 Vision 的 backgroundBrightness 误判。
+ *
+ * 背景（2026-09-16 · c-traffic-monitor-a9a8edc9 实锤）：vision 把浅色背景（#edf4fb，亮度 244）
+ * 误判为 dark → index.less 根作用域走 .theme-dark() → @color-text-base=白，叠加 Figma 真值
+ * 黑字 #333 → 「黑白各一套」。vision 亮度判定不可靠，而 Figma 实测背景色是确定性真值。
+ *
+ * 规则：取面积最大的填充色（= 背景），算 WCAG 相对亮度，≥0.5 判 light、<0.5 判 dark；
+ * 与 vision 一致则保持，矛盾则以实测为准（确定性，不猜）。
+ *
+ * @param {object|null} figmaNodeData Figma 节点树
+ * @param {('dark'|'light')} [visionBrightness='dark'] vision 判定
+ * @returns {'dark'|'light'}
+ */
+export function resolveBackgroundBrightness(figmaNodeData, visionBrightness = 'dark') {
+  const vb = visionBrightness === 'light' ? 'light' : 'dark';
+  if (!figmaNodeData || typeof figmaNodeData !== 'object') return vb;
+  try {
+    const palette = extractFigmaColorPalette(figmaNodeData);
+    const bgHex = palette.topBg || palette.fillColors?.[0]?.hex;
+    if (!bgHex) return vb;
+    const rgb = hexToRgb(bgHex);
+    if (!rgb) return vb;
+    const measured = relativeLuminance(rgb) >= 0.5 ? 'light' : 'dark';
+    return measured === vb ? vb : measured;
+  } catch {
+    return vb;
+  }
+}
+
 // ══════════════════════════════════════════════════════════════
 // light 槽位构建
 // ══════════════════════════════════════════════════════════════

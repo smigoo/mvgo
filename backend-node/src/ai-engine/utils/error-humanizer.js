@@ -24,8 +24,20 @@ export function humanizeGenerationError(message) {
   if (/节点执行超时|执行超时|600000|node.*timeout|总超时/i.test(m)) {
     return '该组件较复杂，分析耗时超过上限。建议换更快的模型，或稍后重试'
   }
-  // max_tokens 截断
-  if (/截断|max_tokens|maxTokens|超出.*上限/.test(m)) {
+  // 🛡️ 2026-09-16 治本（da7d931c 实锤）：分块拼装缺失脚本段。
+  // 必须排在下面「截断」分支【之前】——否则会被 `/截断/` 抢先命中，页面显示
+  // 「超出单次生成上限，建议换上下文更长的模型」；而实测该任务全部 chunk 的
+  // finishReason 均为 stop（输入 12.9~14.2 万 / 输出仅 1k~6.6k），与上下文长度无关，
+  // 换模型解决不了，属 scriptSplit 分段合并产物残缺。
+  if (/缺少 <script setup>|分块拼装|分段拼装|拼装后必然残缺/.test(m)) {
+    return '组件脚本分段拼装不完整，系统已自动重试修正；若持续失败请简化组件（与模型上下文长度无关）'
+  }
+  // max_tokens 截断（仅确凿证据；「可能/疑似被截断」这类推测措辞不再命中）
+  if (
+    /\bmax_?tokens\b|maxTokens|finish_?reason\s*[:=]\s*['"]?length|输出被截断|超出.*上限/.test(
+      m,
+    )
+  ) {
     return '组件内容较多，超出单次生成上限。建议换上下文更长的模型重试'
   }
   // 语义不完整 / 自由变量拦截
@@ -44,7 +56,9 @@ export function humanizeGenerationError(message) {
       : '视觉分析覆盖率不足，已中止以免盲写。重试会重新识别设计稿（不复用缓存）'
   }
   // 视觉分析降级阻断（盲生成保护）
-  if (/视觉分析失败或降级|盲生成|臆造/.test(m)) {
+  // 🛡️ 2026-09-16 治本：去掉「臆造」——「禁止臆造校验未通过」（DO-NOT-INVENT 门禁）是
+  // 代码质量门禁类错误，却被「臆造」误匹配到视觉降级分支，页面显示「视觉识别未完成」误导用户。
+  if (/视觉分析失败或降级|盲生成/.test(m)) {
     return '视觉识别未完成，为避免盲生成已中止。重试会重新识别设计稿，更快完成'
   }
   // 额度耗尽 / 限流
@@ -52,7 +66,7 @@ export function humanizeGenerationError(message) {
     return '模型额度已用尽或触发限流。建议稍后重试，或切换其他模型'
   }
   // 代码质量门禁
-  if (/FLEX-\d|CODE-\d|LESS-COMPILE|结构校验|质量门禁/.test(m)) {
+  if (/FLEX-\d|CODE-\d|LESS-COMPILE|结构校验|质量门禁|禁止臆造|DO-NOT-INVENT/.test(m)) {
     return '生成代码未通过质量检查，系统已自动重试修正'
   }
 

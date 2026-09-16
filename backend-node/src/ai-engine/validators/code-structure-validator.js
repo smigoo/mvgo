@@ -66,7 +66,7 @@ import { collectLeafSections } from '../utils/section-tree.js';
 import { detectUnknownText, resolveTextTruthSeverity } from '../utils/text-truth-guard.js';
 // 🛡️ THEME-COLOR（2026-09-04）：样式主题变量化门禁 —— 事实源在 theme-color-guard.js
 // （槽位色值抄写/预设名本地重声明 → BLOCK；设计专色 → WARN。mc-max-1788485095835 实锤）
-import { detectThemeColorViolations } from '../utils/theme-color-guard.js';
+import { detectThemeColorViolations, healFileLevelSlotOverrides } from '../utils/theme-color-guard.js';
 // 🛡️ CODE-019（2026-09-07）：Props 接线校验 —— 事实源在 props-wiring-guard.js
 // （主组件调用子组件时必须传入所有 required props，否则运行时 Vue 警告 + 渲染异常）
 import { detectMissingPropsWiring } from '../utils/props-wiring-guard.js';
@@ -524,6 +524,44 @@ export function findUnmountedResourceVars(content = '') {
     if (refCount === 0) unmounted.push(name);
   }
   return unmounted;
+}
+
+/**
+ * 🛡️ CODE-027（2026-09-16）：静态资源 `.value` 误用检测。
+ *
+ * 根因（mv-max-1789490989951-f68aedb6 实锤）：Vite 静态 import（`import bg1 from '.../bg.png'`）
+ * 返回 **URL 字符串（非 ref）**，LLM 却写 `bg1.value` / `icon3.value` → 恒为 `undefined` →
+ * `:src="item.icon"` / `:style="{backgroundImage:'url('+bg+')'}"` 拿到 undefined → 图片不渲染。
+ * CODE-022（未挂载）因 `icon3.value` 词边界命中 `icon3` 而漏判「引用方式错误」——纯盲区。
+ *
+ * 只认「import 图片资源」的变量（import X from '...bg/icon/img...png'）；这类 import 在 Vite 下
+ * 必是 URL 字符串，`.value` 恒 undefined。普通 `ref()` 变量不在 import 图片清单内，绝不误杀。
+ *
+ * @param {string} content .vue 文件内容
+ * @returns {string[]} 误用了 `.value` 的资源变量名
+ */
+export function findResourceValueMisuse(content = '') {
+  if (!content || typeof content !== 'string') return [];
+  const scriptMatch = content.match(/<script[^>]*>([\s\S]*?)<\/script>/i);
+  const scriptBody = scriptMatch ? scriptMatch[1] : '';
+  if (!scriptBody) return [];
+  const importRe =
+    /import\s+([A-Za-z_$][\w$]*)\s+from\s*['"][^'"]*(?:bg|icon|img)[\w-]*\.(?:png|jpe?g|svg|gif|webp)['"]/gi;
+  const misuse = [];
+  let m;
+  while ((m = importRe.exec(scriptBody))) {
+    const name = m[1];
+    const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // 排除 import 语句本身后，查找 `name.value`（词边界，避免 icon3.value 误匹配 icon3 外的场景）
+    const bodyWithoutImport = content.replace(
+      new RegExp(`import\\s+${esc}\\s+from[^\\n]*`),
+      '',
+    );
+    if (new RegExp(`\\b${esc}\\.value\\b`).test(bodyWithoutImport)) {
+      misuse.push(name);
+    }
+  }
+  return misuse;
 }
 
 /**
@@ -1988,7 +2026,15 @@ export class CodeStructureValidator {
           .map((m) => String(m.resourceFile).split('/').pop()),
       );
       if (bgResourceFiles.size > 0) {
-        const allCode = generatedFiles.map((f) => f.content || '').join('\n');
+        // 🛡️ 2026-09-16 治本（c-env-monitor-9ce490ed 误报实锤）：排除编译产物 index.css。
+        //   CODE-017 数的是「直写路径」——但 index.css 是 LESS 编译产物（common.less 里 1 条
+        //   background-image 会被编译复制到 index.css 多处 scope/theme），把它算进去就得到
+        //   「bg-7890.png 直写 4 次」的假象（真实挂载只有 index.vue 的 1 个变量引用）。
+        //   只扫 .vue/.less 源文件（直写真实发生处），编译复制不是资源分发错误。
+        const allCode = generatedFiles
+          .filter((f) => !String(f.path || '').endsWith('.css'))
+          .map((f) => f.content || '')
+          .join('\n');
         // 变量 → 资源文件名：解析 import bg2 from '../resources/images/bg-7890.png'
         const varToFile = new Map();
         for (const m of allCode.matchAll(
@@ -2323,6 +2369,10 @@ export class CodeStructureValidator {
     // 文本与主题槽值集合比对），槽位色抄写/预设名本地重声明 BLOCK，设计专色 WARN。
     {
       try {
+        // 🛡️ 2026-09-16 确定性自愈：先删内存 content 里的文件级槽位字面量重声明，
+        // 否则 THEME-SLOT-LOCAL-OVERRIDE 会 BLOCK 且重试时内存 content 仍是脏的 → 重试耗尽。
+        // 自愈与检测器同源互逆（检测器报什么、自愈删什么），删后门禁不再命中。
+        healFileLevelSlotOverrides(files);
         const themeColorIssues = detectThemeColorViolations(files);
         issues.push(...themeColorIssues);
       } catch (err) {
@@ -2551,6 +2601,44 @@ export class CodeStructureValidator {
             hint: {
               suggestion:
                 '用 :src 或 :style backgroundImage 把已 import 的资源变量挂载到对应元素，或删除未使用的 import',
+            },
+          });
+        }
+      }
+    }
+
+    // ========== 🛡️ CODE-027: 静态资源 .value 误用（WARN，2026-09-16 · f68aedb6 实锤）==========
+    // Vite 静态 import 图片返回 URL 字符串（非 ref），写 X.value 恒 undefined → 图片不渲染。
+    // CODE-022 因 .value 词边界命中 X 而漏判「引用方式错误」。先 WARN 观察（自愈链同源化未就绪，
+    // 纯 BLOCK 会让 LLM 反复犯同一错 → 重试耗尽）；自愈落地后升 BLOCK。
+    {
+      const vueTargets = (files || []).filter((f) => {
+        if (!f || typeof f.content !== 'string') return false;
+        const p = String(f.path || '').replace(/\\/g, '/');
+        if (!p.endsWith('.vue')) return false;
+        return (
+          p.endsWith('package/index.vue') ||
+          p.includes('/package/components/') ||
+          p.startsWith('package/components/')
+        );
+      });
+      for (const vueFile of vueTargets) {
+        const filePath = String(vueFile.path || '').replace(/\\/g, '/');
+        let misuse = [];
+        try {
+          misuse = findResourceValueMisuse(vueFile.content);
+        } catch {
+          continue; // 检测器异常不阻断（纯 WARN 观察期）
+        }
+        if (misuse.length > 0) {
+          issues.push({
+            id: 'CODE-027',
+            severity: 'WARN',
+            file: filePath,
+            message: `静态资源 .value 误用：${filePath} 中 ${misuse.join('、')} 是 import 的图片 URL 字符串（非 ref），写 ${misuse.map((n) => n + '.value').join(' / ')} 恒为 undefined → 图片不渲染。应直接使用变量名（:src="icon" / :style 直接拼 bg），去掉 .value`,
+            hint: {
+              suggestion:
+                '静态 import 图片是 URL 字符串，直接使用变量名（不要 .value）',
             },
           });
         }

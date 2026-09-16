@@ -59,30 +59,13 @@ export class AiConfigController {
   ) {
     const action = body?.action || 'save-current';
     let result: Record<string, any>;
+    // 🛡️ 2026-09-16 删除管理员全局模板死代码：apply/create/update/delete 已移除。
+    // 方案 B（2026-09-04）后生成链路只认用户级配置，全局模型模板不再参与任何生成，
+    // 仅保留 save-current（用户级保存）。
     switch (action) {
-      // 🆕 方案 B（2026-09-04）：apply/create/update/delete 操作的是「全局模型模板」
-      // （模型库 + 方案），影响所有人 → 仅管理员可执行（口径同 Java AdminInterceptor：isAdmin=true）。
-      case 'apply':
-        await this.svc.assertProfileAdmin(userId);
-        result = this.svc.applyProfile(body.activeProfileId, userId);
-        break;
-      case 'create':
-        await this.svc.assertProfileAdmin(userId);
-        result = this.svc.createProfile(body.name, body.config, userId);
-        break;
-      case 'update':
-        await this.svc.assertProfileAdmin(userId);
-        result = this.svc.updateProfile(body.profileId, body.name, body.config, userId);
-        break;
-      case 'delete':
-        await this.svc.assertProfileAdmin(userId);
-        result = this.svc.deleteProfile(body.profileId, userId);
-        break;
       case 'save-current':
       default:
         // 🆕 方案 B：面板保存仅写用户级（下方 saveUserConfig），不再刷全局模板。
-        // 旧实现这里调 saveCurrentProfile 把个人保存 last-writer-wins 进全局文件，
-        // 导致未配置用户「跟随管理员最后一次保存」——与「每个人都不同」语义冲突，废止。
         result = { config: await this.svc.getUserMergedConfig(userId) };
         break;
     }

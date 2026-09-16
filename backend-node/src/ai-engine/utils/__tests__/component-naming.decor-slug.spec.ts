@@ -15,6 +15,7 @@ import {
   stripDecorSlugTail,
   classPrefixOf,
   semanticSegmentOf,
+  semanticTokenFrom,
   buildComponentId,
   sanitizeComponentId,
 } from '../component-naming.js';
@@ -232,5 +233,27 @@ describe('刀 9: 落盘前闸门不变量（防复发核心断言）', () => {
     });
     expect(clean).toBe('c-env-monitor-b81edc3b');
     expect(clean).not.toContain('6ajwy8yn');
+  });
+});
+
+describe('刀 9 补丁: semanticTokenFrom 13 位时间戳污染判空（2026-09-16 c-max-<ts>-<hex>-<hex>）', () => {
+  it('⭐ LLM 把任务号当 componentName（mc-max-1789…-77f2ae7d）→ 无语义，收敛为 c-component-<8hex>', () => {
+    const sessionId = 'mc-max-1789494573361-77f2ae7d';
+    const clean = sanitizeComponentId('c-max-1789494573361-77f2ae7d-77f2ae7d', {
+      sessionId,
+      fallbackToken: sessionId, // 脏 fallback = 任务号本身
+    });
+    expect(clean).toBe('c-component-77f2ae7d');
+    expect(clean).not.toMatch(/13位|\d{13}/);
+    expect(classPrefixOf(clean)).toBe('c-component');
+  });
+
+  it('semanticTokenFrom 对含 13 位 ts 的输入直接判空（不再返回 max-<ts>-<hex>）', () => {
+    expect(semanticTokenFrom({ displayName: 'mc-max-1789494573361-77f2ae7d' })).toBe('');
+  });
+
+  it('正常中文/英文语义零回归', () => {
+    expect(semanticTokenFrom({ displayName: '环境监测' })).toBe('env-monitor');
+    expect(semanticTokenFrom({ displayName: 'device-monitor' })).toBe('device-monitor');
   });
 });

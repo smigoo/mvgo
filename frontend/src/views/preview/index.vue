@@ -161,6 +161,7 @@ import {
   loadVue3FromWorkspace,
   injectVueAutoImports,
   applyScopeToPreviewStyles,
+  precompileVueLess,
 } from '@/utils/loadVue3Runtime'
 import { BINARY_EXTS as BINARY_EXTS_SHARED, extOf } from '@/utils/sfc-loader-binary'
 import { buildSnapshotFileUrl, resolvePreviewDescriptor } from '@/utils/preview-resolver'
@@ -527,12 +528,24 @@ async function loadAspectRatio() {
       if (snapshotSource.value) {
         declare = await safeJson(await http.raw(snapshotFileUrl('declare.json')))
       } else if (import.meta.env.DEV) {
-        const mod = await import(
-          /* @vite-ignore */ `../../../workspace/custom-components/${componentId}/declare.json`
-        )
-        declare = mod.default || mod
+        // 🛡️ I 类治本（2026-09-16）：dev 兜底必须用 resolvedId（语义化 componentId）。
+        // 旧写法用裸 componentId（=sessionId）→ custom-components/<sessionId> 不存在 →
+        // Vite dev 命中 SPA fallback 返回 HTML → `import()` 解析 HTML 抛错 → 整页报错卡。
+        // 与 :610 loadMicrocodeDeclare 同款「?exists=1 探测 + 非阻断」，并改用 resolvedId（同 :498 basePath）。
+        const declareUrl = `/__raw/workspace/custom-components/${resolvedId}/declare.json`
+        const existsData = await safeJson(await fetch(`${declareUrl}?exists=1`))
+        if (existsData?.exists) {
+          try {
+            const mod = await import(
+              /* @vite-ignore */ `../../../workspace/custom-components/${resolvedId}/declare.json`
+            )
+            declare = mod.default || mod
+          } catch {
+            // declare.json 仅用于尺寸兜底与 componentName，读不到不阻断预览
+          }
+        }
       } else {
-        declare = await http.get(`/api/preview/${groupId}/${componentId}/declare.json`)
+        declare = await http.get(`/api/preview/${groupId}/${resolvedId}/declare.json`)
       }
       const size = declare?.size || declare?.data?.size // 兼容顶层/旧规范
       if (size?.width > 0 && size?.height > 0) {
@@ -734,13 +747,17 @@ async function loadProd() {
 
   await loadMicrocodeDeclare()
 
-  const [{ loadModule }, Vue, echarts, { $mcComponentBuilder }, BasePanel] = await Promise.all([
+  const [{ loadModule }, Vue, echarts, { $mcComponentBuilder }, BasePanel, lessMod] = await Promise.all([
     import('vue3-sfc-loader'),
     import('vue'),
     import('echarts'),
     import('@/utils/auto-import/common.js'),
-    import('@/components/base-components/base-panel/index.vue')
+    import('@/components/base-components/base-panel/index.vue'),
+    import('less')
   ])
+  // 🛡️ 2026-09-16：app 内置 less 编译器——微码子组件带 <style lang="less">，不预编译会触发
+  // vue3-sfc-loader 的 getFile('less')（dev/prod 都无该资源 → 404 →「找不到文件: less」→ 组件加载失败）。
+  const less = lessMod.default || lessMod
 
   // 注入全局 $mcComponentBuilder（源码里是自由变量，原靠 auto-import）
   globalThis.$mcComponentBuilder = $mcComponentBuilder.default || $mcComponentBuilder
@@ -804,7 +821,13 @@ async function loadProd() {
       // 直接依赖 auto-import；此处与 loadVue3Runtime 的 getFile 保持一致，避免 prod 微码预览
       // 因 ref/computed 等未定义而崩溃（dev 与 Vue3 prod 路径已通过 loadVue3FromWorkspace 注入）。
       src = injectVueAutoImports(src)
-      // 微码组件：剥掉入口 .vue 的 <style> 块（CSS 已预编译注入）
+      // 🛡️ 2026-09-16 治本（mc-max-...-dcc8b98d「找不到文件: less」+ ...-3912b7b3「一片蓝色什么都没有」同源实锤）：
+      // 微码**子组件**（package/components/*.vue）带 <style lang="less">（含 less 变量/嵌套/@import，
+      // 全语料 988 个 style 块中 202 有变量 / 421 有嵌套）→ 原实现只剥 index.vue，子组件未处理 →
+      // vue3-sfc-loader 调 getFile('less') 拉编译器 → dev/prod 都无该资源 → 404 → 组件加载整体失败。
+      // 对齐 Vue3 路径：用 app 内置 less 预编译成纯 CSS（去掉 lang），保留全部私有样式。
+      src = await precompileVueLess(src, less, `${base}/${rel}`)
+      // 微码组件：剥掉入口 .vue 的 <style> 块（CSS 已预编译注入 index.css）
       // Vue3 组件：保留 <style scoped>，由 vue3-sfc-loader 编译
       if (!isVue3 && rel.endsWith('index.vue')) {
         src = src.replace(/<style[\s\S]*?<\/style>/gi, '')

@@ -36,7 +36,7 @@ const loadPreviewPublisher = () => import('../ai-engine/utils/workspace-preview-
 import sharp from 'sharp';
 import { VisionAgent } from '../ai-engine/agents/vision-agent.js';
 import { resolveVisionConfig } from '../ai-engine/utils/ai-defaults.js';
-import { resolveVisionCapability } from '../ai-engine/utils/model-config.js';
+import { resolveVisionCapability, coerceLLMText } from '../ai-engine/utils/model-config.js';
 import { resolveFrontendWorkspace } from '../config/workspace.config';
 import { workspaceRoot, customComponentsDir, vue3ComponentsDir, tempComponentsDir } from '../config/backend-root';
 import { InjectModel } from '@nestjs/mongoose';
@@ -591,13 +591,21 @@ ${businessStyles}
 
       // ---------- 终态：complete ----------
       const target = componentType;
+      // 🛡️ I 类治本（2026-09-16）：microcode 的 workspace 目录名与 declare.componentId 都是
+      // 语义化 `c-<语义>-<8hex>`（buildComponentId，见上方 uniqueComponentId），但此前这里仍写
+      // sessionId → 前端按 componentId / workspacePath 拼 workspace 目录 → 「未找到组件」→ 预览报错。
+      // 与 declare 同源重建，保证「目录名 = declare = 组件记录 = 任务结果」四者一致。
+      // ⚠️ vue3 分支目录本就是 sessionId（vue3-components/<gid>/<sessionId>），保持原样。
+      const resultComponentId = isMicrocode
+        ? buildComponentId(finalComponentName || 'component', sessionId)
+        : sessionId;
       const workspacePath = isMicrocode
-        ? join(resolveFrontendWorkspace(), 'custom-components', sessionId)
+        ? join(resolveFrontendWorkspace(), 'custom-components', resultComponentId)
         : join(resolveFrontendWorkspace(), 'vue3-components', groupId, sessionId);
 
       this.progressService.sendComplete(sessionId, {
         taskId: sessionId,
-        componentId: sessionId,
+        componentId: resultComponentId,
         groupId,
         target,
         sourceType,
@@ -2293,10 +2301,16 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
 
   /** 从生成文本中提取 Vue 代码和 declare.json */
   private extractMicrocodeOutput(text: string): { vueCode: string; declareJson: any } {
-    // 🛡️ 类型防护：LLM 可能返回非字符串（对象/数组）
+    // 🛡️ 类型防护：LLM 可能返回非字符串（对象/数组/null）。
+    // 这里不再直接丢弃产物，而是先用 coerceLLMText 抢救一次；仍为空才判定生成失败。
+    // 背景（2026-09-15 实测）：vision-agent 的 Claude 分支曾裸返回 AIMessage.content（数组形态），
+    // 导致此处收到 object → 直接返回空 → 「Lite 生成失败 … 生成的组件代码为空或无效」。
     if (typeof text !== 'string') {
-      this.logger.warn(`extractMicrocodeOutput 收到非字符串输入: ${typeof text}`);
-      return { vueCode: '', declareJson: null };
+      const rescued = coerceLLMText(text);
+      this.logger.warn(
+        `extractMicrocodeOutput 收到非字符串输入: ${typeof text}，已归一化抢救（${rescued.length} 字符）`,
+      );
+      text = rescued;
     }
     if (!text) {
       return { vueCode: '', declareJson: null };
@@ -2823,7 +2837,14 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
         type: componentType,
         target: componentType,
         taskId: sessionId,
-        componentId: sessionId,
+        // 🛡️ I 类治本（2026-09-16）：组件记录（Mongo）的 componentId 必须与 declare / workspace
+        // 目录同源的语义 id，否则前端 `GET /component/by-session/:sid` 反查拿到 sessionId →
+        // resolveWorkspaceComponentId 无法映射到语义目录 → 预览「未找到组件」（lite 专属；max 走 Java 已正常）。
+        // ⚠️ vue3 分支目录本就是 sessionId，保持原样。
+        componentId:
+          componentType === 'microcode'
+            ? buildComponentId(componentName || 'component', sessionId)
+            : sessionId,
         sessionId,
         sourceType,
         generationTier,

@@ -183,9 +183,11 @@ export class Vue3Service {
 
       this.logger.log(`Starting Vue3 generation for session ${sessionId}`);
 
+      // 🛡️ 2026-09-16 全局模型配置清理：userId 为空时不再回退全局 ai-config.json 的模型，
+      // 模型必须由用户级配置提供；figmaToken 由下方 resolveFigmaToken 单独处理。
       const mergedAiConfig = params.userId
         ? await this.aiConfigService.getMergedAiConfig(params.userId)
-        : this.aiConfigService.getAiConfig() || {};
+        : {};
       const finalAiConfig = { ...mergedAiConfig, ...config };
       const effectiveFigmaToken = await this.resolveFigmaToken(
         config?.figmaToken,
@@ -529,7 +531,7 @@ export class Vue3Service {
 
     const cfg = userId
       ? await this.aiConfigService.getMergedAiConfig(userId)
-      : this.aiConfigService.getAiConfig() || {};
+      : {}; // 🛡️ 2026-09-16 彻底去全局配置：userId 为空不再回退全局 ai-config.json
     const savedToken = cfg?.figmaToken;
     const persistedToken = typeof savedToken === 'string' ? savedToken.trim() : '';
     if (persistedToken) {

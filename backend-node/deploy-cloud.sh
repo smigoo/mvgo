@@ -54,6 +54,28 @@ else
   exit 1
 fi
 
+# 用户管理「使用统计」跨服务 key（Node 校验 Java 发来的 x-admin-stats-key）
+# ⚠️ 必须与 Java 端 ADMIN_STATS_KEY **同值**：为空/不等 → Node 返 503/403 → Java 直接跳过拉取
+#    → 用户管理抽屉「生成组件/生成任务/接口批数/接口总数」四格**恒为 0（且不报错）**。
+# 策略同 SESSION_SECRET：export 优先 → 否则复用服务器已有值 → 都没有则生成新随机串（首次）。
+# ⚠️ 本脚本用 `cat > .env.production` 整体重建该文件，**手工编辑 .env.production 会在下次部署被覆盖**，
+#    所以该变量必须在这里维护（这正是 2026-09-16 生产「使用统计全 0」的原因之一）。
+EXISTING_STATS_KEY=""
+if [ -f .env.production ]; then
+  EXISTING_STATS_KEY=$(grep -E '^ADMIN_STATS_KEY=' .env.production 2>/dev/null | head -1 | cut -d= -f2-)
+fi
+if [ -n "${ADMIN_STATS_KEY:-}" ]; then
+  echo "✅ 使用 export 的 ADMIN_STATS_KEY"
+elif [ -n "${EXISTING_STATS_KEY:-}" ]; then
+  ADMIN_STATS_KEY="$EXISTING_STATS_KEY"
+  echo "✅ 复用服务器已有 ADMIN_STATS_KEY"
+else
+  ADMIN_STATS_KEY="$(openssl rand -hex 24)"
+  echo "⚠️  未找到已有 ADMIN_STATS_KEY，已生成新随机串（首次部署）"
+  echo "   ⚠️ 这个 key 必须与 Java 端一致，否则「使用统计」仍为 0。请接着执行："
+  echo "      export ADMIN_STATS_KEY='$ADMIN_STATS_KEY' && bash deploy-java.sh"
+fi
+
 # Node 版本
 NODE_VERSION="22"
 
@@ -66,7 +88,15 @@ MC_PREVIEW_BASE_URL="https://go.microvideo.cn/mvgo"
 # 前端 workspace 绝对路径（生产必填）
 FRONTEND_WORKSPACE="/home/mvbt/mvgo/frontend/workspace"
 # Java 后端地址（操作日志 fire-and-forget 上报目标）
-JAVA_BACKEND_URL="http://backend-java:8080/api"
+# ⚠️ 必须**同时**满足「主机可达」+「带 /api」两个条件（2026-09-16 生产实测踩全了两个坑）：
+#   ① 主机名：生产是「公司 nginx 容器 + 内网裸服务」，裸服务上 **解析不了容器名 backend-java**
+#      → 必须用内网 IP 192.168.112.1。原默认值写的是 http://backend-java:8080/api，属误用。
+#   ② 路径：Java 端点是 @RequestMapping("/api/operation-log") 且**无 context-path**，
+#      故必须带 /api。生产曾配成 http://192.168.112.1:8080（缺 /api）→ Node 打到
+#      /operation-log 无匹配 handler → 被 GlobalExceptionHandler 兜成 500 →
+#      而 Node 侧是 fire-and-forget（5s 超时 + 失败不报错）→ **操作日志静默丢失、无人察觉**。
+# 允许 export 覆盖（容器化新环境可传 http://backend-node:13030/api 之类）。
+JAVA_BACKEND_URL="${JAVA_BACKEND_URL:-http://192.168.112.1:8080/api}"
 # 系统管理员白名单（node 模式，逗号分隔的门户 uid；qs 模式可留空）
 DEFAULT_ADMIN_UIDS="zhjie"
 
@@ -143,6 +173,7 @@ PORTAL_BASE_URL=$PORTAL_BASE_URL
 MC_PREVIEW_BASE_URL=$MC_PREVIEW_BASE_URL
 FRONTEND_WORKSPACE=$FRONTEND_WORKSPACE
 JAVA_BACKEND_URL=$JAVA_BACKEND_URL
+ADMIN_STATS_KEY=$ADMIN_STATS_KEY
 FIELD_ENCRYPTION_KEY=$FIELD_ENCRYPTION_KEY
 DEFAULT_ADMIN_UIDS=$DEFAULT_ADMIN_UIDS
 MAX_ITERATIONS=$MAX_ITERATIONS
@@ -220,4 +251,7 @@ echo "  端口: $PORT"
   echo "  停止进程: OLD=\$(lsof -ti:${PORT}); [ -n \"\$OLD\" ] && kill \$OLD"
   echo "  (本脚本不再使用 pm2；进程由 setsid 脱离会话启动，重启已自动兼容端口持有者)"
 echo "  MongoDB: $MONGODB_URI"
+# 自报两个「静默降级」型配置，避免部署完看不出问题（2026-09-16 加）
+echo "  Java上报: JAVA_BACKEND_URL=$JAVA_BACKEND_URL"
+echo "  使用统计: ADMIN_STATS_KEY=$([ -n "$ADMIN_STATS_KEY" ] && echo "已写入(长度 ${#ADMIN_STATS_KEY})" || echo '⚠️ 为空 —— 用户管理「使用统计」将恒为 0')"
 echo "============================================"

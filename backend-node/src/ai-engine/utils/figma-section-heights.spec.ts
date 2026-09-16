@@ -1,9 +1,32 @@
-import { buildSectionHeightsMap, buildSectionLayoutFacts } from './figma-section-heights.js';
+import {
+  buildSectionHeightsMap,
+  buildSectionLayoutFacts,
+  resolveSubComponentPlan,
+} from './figma-section-heights.js';
 
 /**
  * TASK #523：A4 比例确定性落到 CSS —— 验证子组件根 class → Figma 高度 px 映射构建正确。
  * 用 25e40782（2:8417）真实产物结构的最小复刻做回归断言。
  */
+
+describe('resolveSubComponentPlan（2026-09-16 c-vehicle-monitor-f177f631 治本）', () => {
+  const legacy = { effectiveSections: [{ id: 's1' }], isForced: true, minFiles: 1, reason: 'legacy' };
+  const genPlan = { effectiveSections: [{ id: 's2' }], isForced: false, minFiles: 2, reason: 'gen' };
+
+  it('优先取 generationInput.componentPlan', () => {
+    expect(resolveSubComponentPlan({ componentPlan: genPlan }, legacy)).toBe(genPlan);
+  });
+  it('generationInput 无 componentPlan 时 fallback subComponentPlan', () => {
+    expect(resolveSubComponentPlan({}, legacy)).toBe(legacy);
+    expect(resolveSubComponentPlan(null, legacy)).toBe(legacy);
+  });
+  it('两者皆空返回空兜底（恒有 effectiveSections 数组）', () => {
+    const r = resolveSubComponentPlan(null, null);
+    expect(Array.isArray(r.effectiveSections)).toBe(true);
+    expect(r.effectiveSections.length).toBe(0);
+    expect(r.isForced).toBe(false);
+  });
+});
 
 const indexVue = `<template>
   <base-panel class="c-mc-xxx" panelKey="default-panel">
@@ -260,8 +283,25 @@ describe('buildSectionLayoutFacts（display/gridColumns/flexDirection）', () =>
     ] } };
     const facts = buildSectionLayoutFacts(mkFiles(gridSub, chartSub), layout, {});
     expect(facts['c-monitor-device-grid']).toEqual({
-      flexGrow: 1.2, heightPx: 264, display: 'grid', gridColumns: 3, flexDirection: 'column',
+      // 🎯 M2.1-A（2026-09-16）：grid 容器**不产出 flexDirection**（改前误产 'column'）。
+      // display 已是 grid，flexDirection 无意义；且让 FLEX-006 无法区分
+      // 「真值就是 column」与「压根没有真值」。此处 null = 无真值。
+      flexGrow: 1.2, heightPx: 264, display: 'grid', gridColumns: 3, flexDirection: null,
     });
+  });
+
+  it('🎯 M2.1-A：非 horizontal/vertical 的 layout（grid / 缺失）→ flexDirection 为 null（无真值）', () => {
+    // 改前 `layout === 'horizontal' ? 'row' : 'column'` 会把 grid / undefined 一律写成 'column'，
+    // 静默写错方向且不可辨识。现只认明确值。
+    for (const L of ['grid', undefined, '', 'unknown-value']) {
+      const layout: any = { layout: { sections: [
+        { id: '2:8440', layout: L, styles: { flexGrow: 1 } },
+        { id: '2:7459', layout: L, styles: { flexGrow: 2 } },
+      ] } };
+      const facts = buildSectionLayoutFacts(mkFiles(gridSub, chartSub), layout, {});
+      expect(facts['c-monitor-device-grid'].flexDirection).toBeNull();
+      expect(facts['c-monitor-hourly-chart'].flexDirection).toBeNull();
+    }
   });
 
   it('普通 section（无栅格）→ display:flex + 方向事实（horizontal→row）', () => {
@@ -283,5 +323,28 @@ describe('buildSectionLayoutFacts（display/gridColumns/flexDirection）', () =>
     ] } };
     expect(buildSectionLayoutFacts(mkFiles(gridSub, chartSub), layout, {})).toBeNull();
     expect(buildSectionLayoutFacts(null as any, layout, {})).toBeNull();
+  });
+
+  it('⭐ 2026-09-16（c-vehicle-monitor-b82c9d84）：reuseCache 时 layoutStructure 空，但 plan.effectiveSections 有视觉真值 → 回退 eff 本身对齐成功', () => {
+    // layoutStructure 空（{}），plan.effectiveSections 的 section 自带 layout/layoutMetadata.flexGrow
+    const layout: any = {};
+    const plan = {
+      effectiveSections: [
+        { id: '2:7959', layout: 'horizontal', layoutMetadata: { flexGrow: 0.606 } },
+        { id: '2:7954', layout: 'horizontal', layoutMetadata: { flexGrow: 0.549 } },
+      ],
+    };
+    // 两个子组件标签对应两个叶子
+    const files = {
+      'package/index.vue': '<template><div><AaaSection /><BbbSection /></div></template>',
+      'package/components/AaaSection.vue': '<template><div class="c-monitor-a"></div></template>',
+      'package/components/BbbSection.vue': '<template><div class="c-monitor-b"></div></template>',
+    };
+    const facts = buildSectionLayoutFacts(files, layout, { subComponentPlan: plan });
+    expect(facts).not.toBeNull();
+    expect(facts!['c-monitor-a'].flexDirection).toBe('row');
+    expect(facts!['c-monitor-a'].flexGrow).toBe(0.606);
+    expect(facts!['c-monitor-b'].flexDirection).toBe('row');
+    expect(facts!['c-monitor-b'].flexGrow).toBe(0.549);
   });
 });

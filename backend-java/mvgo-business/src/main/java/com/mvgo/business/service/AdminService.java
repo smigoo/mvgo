@@ -126,7 +126,7 @@ public class AdminService {
         // 生成统计（组件数/任务数/接口数）：task 与 apifox 台账只存 Node data 目录，
         // Java 无法直查 → 跨服务拉一次 Node /api/admin/user-stats（带内部 key）。
         // Node 不可达 / 未配置 key 时静默降级，统计字段为 0，不影响列表返回。
-        Map<String, int[]> statsMap = fetchUserStats();
+        Map<String, UserStats> statsMap = fetchUserStats();
 
         List<AdminUserVO> list = users.stream()
                 .map(u -> toUserVO(u, configMap.get(u.getId()), statsMap))
@@ -140,7 +140,17 @@ public class AdminService {
      * 拉取 Node user-stats（全量 { userId → [componentCount, taskCount, apiTaskCount, apiCount] }）。
      * 任何失败返回空 Map（调用方降级为 0）。
      */
-    private Map<String, int[]> fetchUserStats() {
+    /**
+     * Node user-stats 的单用户视图。
+     * <p>counts[0..3] = 组件数 / 任务数 / 接口批数 / 接口总数；
+     * componentByType = 组件类型构成（target → 数量），Node 未返回该字段时为空 map。
+     */
+    private static class UserStats {
+        final int[] counts = new int[4];
+        Map<String, Integer> componentByType = java.util.Collections.emptyMap();
+    }
+
+    private Map<String, UserStats> fetchUserStats() {
         if (nodeBackendUrl == null || nodeBackendUrl.isBlank()
                 || adminStatsKey == null || adminStatsKey.isBlank()) {
             return java.util.Collections.emptyMap();
@@ -162,13 +172,27 @@ public class AdminService {
                 return java.util.Collections.emptyMap();
             }
             Map<String, Object> all = (Map<String, Object>) data;
-            Map<String, int[]> out = new java.util.HashMap<>(Math.max(all.size() * 2, 16));
+            Map<String, UserStats> out = new java.util.HashMap<>(Math.max(all.size() * 2, 16));
             for (Map.Entry<String, Object> e : all.entrySet()) {
                 if (!(e.getValue() instanceof Map)) continue;
                 Map<?, ?> m = (Map<?, ?>) e.getValue();
-                out.put(e.getKey(), new int[]{
-                        intVal(m.get("componentCount")), intVal(m.get("taskCount")),
-                        intVal(m.get("apiTaskCount")), intVal(m.get("apiCount"))});
+                UserStats us = new UserStats();
+                us.counts[0] = intVal(m.get("componentCount"));
+                us.counts[1] = intVal(m.get("taskCount"));
+                us.counts[2] = intVal(m.get("apiTaskCount"));
+                us.counts[3] = intVal(m.get("apiCount"));
+                // 组件类型构成（Node 2026-09-16 起返回）：target → 数量。
+                // 缺失时保持 emptyMap，VO 侧 componentByType 为 null，前端整块隐藏。
+                Object byType = m.get("componentByType");
+                if (byType instanceof Map) {
+                    Map<String, Integer> t = new java.util.HashMap<>();
+                    for (Map.Entry<?, ?> te : ((Map<?, ?>) byType).entrySet()) {
+                        if (te.getKey() == null) continue;
+                        t.put(String.valueOf(te.getKey()), intVal(te.getValue()));
+                    }
+                    us.componentByType = t;
+                }
+                out.put(e.getKey(), us);
             }
             return out;
         } catch (Exception ex) {
@@ -416,7 +440,7 @@ public class AdminService {
         return map;
     }
 
-    private AdminUserVO toUserVO(UserDocument u, UserAiConfigDocument cfg, Map<String, int[]> statsMap) {
+    private AdminUserVO toUserVO(UserDocument u, UserAiConfigDocument cfg, Map<String, UserStats> statsMap) {
         AdminUserVO vo = new AdminUserVO();
         vo.setId(u.getId());
         vo.setUid(u.getUid());
@@ -439,18 +463,39 @@ public class AdminService {
         // Node /admin/user-stats 按 creatorId 聚合，返回 map 的键可能是 hex 也可能是 UID 字符串。
         // 原逻辑只按 u.getId()(hex) 单键取，组件以门户 UID 写入的用户（如周彤）统计恒为 0。
         // 此处补 uid 候选键（u.getUid() 或 portal.uid），两键数据互不重叠，加性合并。
-        int[] st = statsMap.get(u.getId());
-        int[] stByUid = null;
+        // 🛡️ 对齐 Node 2026-09-09 修复：components.creatorId 同时存在 ObjectId(hex) 与门户 UID 两种形态，
+        // Node /admin/user-stats 按 creatorId 聚合，返回 map 的键可能是 hex 也可能是 UID 字符串。
+        // 两键数据互不重叠 → **加性合并**（Node 即如此；本注释原意亦为加性）。
+        // 2026-09-16 修正：旧代码写成 `st == null 才查 uid` 的**独占**取法，与注释、与 Node 均不符，
+        // 会漏计「同一用户 hex 键与 UID 键各有数据」的部分；改为两键皆取、分别相加。
+        java.util.List<UserStats> cand = new java.util.ArrayList<>(2);
+        UserStats byId = statsMap.get(u.getId());
+        if (byId != null) cand.add(byId);
         String uidKey = (u.getUid() != null && !u.getUid().isBlank()) ? u.getUid()
                 : (portalUid != null && !portalUid.isBlank() ? portalUid : null);
-        if (st == null && uidKey != null) {
-            stByUid = statsMap.get(uidKey);
+        if (uidKey != null) {
+            UserStats byUid = statsMap.get(uidKey);
+            if (byUid != null) cand.add(byUid);
         }
-        if (st != null || stByUid != null) {
-            vo.setComponentCount((st != null ? st[0] : 0) + (stByUid != null ? stByUid[0] : 0));
-            vo.setTaskCount((st != null ? st[1] : 0) + (stByUid != null ? stByUid[1] : 0));
-            vo.setApiTaskCount((st != null ? st[2] : 0) + (stByUid != null ? stByUid[2] : 0));
-            vo.setApiCount((st != null ? st[3] : 0) + (stByUid != null ? stByUid[3] : 0));
+        if (!cand.isEmpty()) {
+            int c0 = 0, c1 = 0, c2 = 0, c3 = 0;
+            // 组件类型构成：同样按候选键相加；全部为空时不 setComponentByType（VO 保持 null，前端整块隐藏）
+            Map<String, Integer> byType = new java.util.LinkedHashMap<>();
+            for (UserStats s : cand) {
+                c0 += s.counts[0];
+                c1 += s.counts[1];
+                c2 += s.counts[2];
+                c3 += s.counts[3];
+                for (Map.Entry<String, Integer> te : s.componentByType.entrySet()) {
+                    Integer prev = byType.get(te.getKey());
+                    byType.put(te.getKey(), (prev == null ? 0 : prev) + intVal(te.getValue()));
+                }
+            }
+            vo.setComponentCount(c0);
+            vo.setTaskCount(c1);
+            vo.setApiTaskCount(c2);
+            vo.setApiCount(c3);
+            if (!byType.isEmpty()) vo.setComponentByType(byType);
         }
         vo.setCreatedAt(u.getCreatedAt());
         vo.setUpdatedAt(u.getUpdatedAt());

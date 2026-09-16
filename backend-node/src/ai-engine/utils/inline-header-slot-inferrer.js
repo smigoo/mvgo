@@ -58,13 +58,17 @@ export function inferHeaderSlotsFromInlineRows(analysisResult) {
   for (const row of rows) {
     if (!row || typeof row !== 'object') continue;
     const rowName = String(row.componentName || row.name || row.id || '').toLowerCase();
-    // Loop 2.0.D：只处理标题栏行。内容区 @antd/tab / tabs 不得编成 header-right。
-    // 🎯 治本 B（2026-09-10）：顶部 tab 行（组件顶部 15% 区）应作为 headerSlots 候选保留，
-    //   修复 aacfa51 移除 \btab\b 匹配后连顶部 tab 行也整段丢失的问题（device 顶部 @antd/tab 头）。
+    // 🎯 E2 / R3(B)（2026-09-16）：**收缩行名启发式**（删减法「或收缩」）。
+    // 旧实现 isTitleBarRow = startsWith('header-'|'title-') **∨ 含 header/title-bar/title 字样**，
+    // 后者（松散子串正则 /\bheader\b|\btitle-bar\b|\btitle\b/）是「小标题/tabs 该进 header 却进
+    // 内容区」无唯一事实源的根因 → 本次删除该子串分支。
+    // 保留 startsWith('header-'|'title-')：这是**结构性命名约定**（非猜测），且是 0908 P1-2
+    // 在无几何/无事实的 bbox 路径下的受保护兜底（spec 锁定），待 bbox 路径接入事实源后再删。
+    // header 归属的权威来源已是 ①headerRelation/slotCandidate → ensureHeaderSlots ②Figma header
+    // 容器 → deriveHeaderSlotsFromFigma；几何信号（顶部 15% tab/导航行）作为无事实时的补充。
+    // ⚠️ 内容区 @antd/tab 仍不得编成 header-right。
     const isTitleBarRow =
-      rowName.startsWith('header-') ||
-      rowName.startsWith('title-') ||
-      /\bheader\b|\btitle-bar\b|\btitle\b/.test(rowName);
+      rowName.startsWith('header-') || rowName.startsWith('title-');
     const isTopTabRow =
       /tab|标签页|导航|标签/.test(rowName) &&
       isInTopRegion(row, rootBBox);
@@ -95,7 +99,7 @@ export function inferHeaderSlotsFromInlineRows(analysisResult) {
           /tab-switch|tab|icon-group|icon-button/.test(childType) ||
           /tab|导航|nav/.test(childName)
         ) {
-          // 🎯 治本 B：顶部 tab 行的 tab 子节点标记为 header-tabs（不混同 header-right 统计项）
+          // 顶部 tab 行的 tab 子节点 → header-tabs（否则 title-bar 行的 controls → header-right）
           const slotType = isTopTabRow ? 'header-tabs' : 'header-right';
           slots.push({
             slotType,
@@ -108,7 +112,7 @@ export function inferHeaderSlotsFromInlineRows(analysisResult) {
       }
     } else {
       // 🛡️ P1：bbox 重建路径——仅有 {id,name}，无子节点结构信息。
-      // 行名本身就是 header- 相关，以行本身作为插槽候选并携带 figmaNodeId。
+      // 行名本身即 header-/title- 前缀（或几何顶部 tab 行），以行本身作为插槽候选并携带 figmaNodeId。
       const name = String(row.name || '').trim();
       if (name) {
         slots.push({
@@ -172,4 +176,123 @@ export function mergeHeaderSlots(existingSlots, inlineSlots, opts = {}) {
   });
   if (newSlots.length === 0) return base;
   return [...base, ...newSlots];
+}
+
+// ============================================================================
+// 🎯 E2 / R3(A)（2026-09-16）：header 归属「事实优先」装配
+// ----------------------------------------------------------------------------
+// 现状：header 归属由 inferHeaderSlotsFromInlineRows 的**行名启发式**猜测
+//   （startsWith('header-'|'title-') / 顶部 15% tab），与 deriveHeaderSlotsFromFigma
+//   双源并存 → 「小标题/tabs 该进 header 插槽却进内容区」缺乏唯一确定性事实源。
+// 本刀：把视觉分析已产出的 headerRelation / slotCandidate **视觉真值**接为权威事实，
+//   确定性装配 headerSlots（纯函数、零臆造、增量 union、不删任何既有 slot）。
+//   —— 只加不改：不触碰既有 _inferHeaderSlots / mergeHeaderSlots 分支。
+// ============================================================================
+
+/**
+ * header 归属的权威关系集：这些 headerRelation 的 section 属 base-panel 外壳（chrome），
+ * 其 slotCandidate 应确定性进入 headerSlots，section 本身不进入业务内容区。
+ * ⚠️ 与 utils/chrome-section-filter.js 的 CHROME_HEADER_RELATIONS 同源（单一事实源）。
+ */
+export const HEADER_CHROME_RELATIONS = new Set([
+  'title-itself',
+  'panel-title',
+  'title-note',
+  'sub-header',
+  'header-only',
+])
+
+/** 标题同行控件关系：控件应进 header 插槽，但整节不剥离（内容仍在同行）。 */
+export const HEADER_SAME_ROW_RELATION = 'title-same-row'
+
+/** 归一化 section 的 headerRelation（兼容 header.relation / relation 别名）。 */
+export function normalizeHeaderRelation(section) {
+  return String(
+    section?.headerRelation ?? section?.header?.relation ?? section?.relation ?? '',
+  )
+    .trim()
+    .toLowerCase()
+}
+
+/**
+ * slotCandidate（视觉真值）→ 契约形态 header slot。
+ * 形态：`string`（视为 slotType，如 'header-right'）或
+ *      `object { slotType?, elementType?, content?, figmaNodeId?, ... }`。
+ * 无候选返回 null（不臆造）。content 缺失时回退 section 标题/名称。
+ */
+export function normalizeSlotCandidate(candidate, section = {}) {
+  if (!candidate) return null
+  const isObj = typeof candidate === 'object'
+  const content = isObj
+    ? String(candidate.content ?? candidate.label ?? candidate.text ?? '').trim()
+    : ''
+  const slotType = isObj
+    ? String(candidate.slotType ?? candidate.role ?? '').trim()
+    : String(candidate).trim()
+  const elementType = isObj ? String(candidate.elementType ?? candidate.type ?? '').trim() : ''
+  const figmaNodeId = isObj ? String(candidate.figmaNodeId ?? candidate.id ?? '').trim() : ''
+  const fallbackContent = String(section?.title ?? section?.name ?? section?.id ?? '').trim()
+  const finalContent = content || fallbackContent
+  if (!slotType && !finalContent && !figmaNodeId) return null
+  return {
+    slotType: slotType || 'header-right',
+    elementType: elementType || 'statistic',
+    content: finalContent,
+    sectionId: section?.id || '',
+    figmaNodeId: figmaNodeId || '',
+  }
+}
+
+/**
+ * ensureHeaderSlots — 以 headerRelation / slotCandidate 为权威事实，确定性装配 headerSlots。
+ *
+ * 规则（确定性、无启发式）：
+ *   - headerRelation ∈ HEADER_CHROME_RELATIONS：该 section 属 header 外壳 → 记入 headerSectionIds；
+ *     其 slotCandidate 规范化为 header slot 加入。
+ *   - headerRelation === 'title-same-row'：同行控件 → slotCandidate 加入（section 不记入 header 剥离集）。
+ *   - 其他（no-header / content-below-title 等）：不归 header，slots 不加入。
+ * 安全：仅做去重 union，**不删既有 slot**；命中 rejectedKeys 的候选不加。
+ *
+ * @param {Array} sections preview-analysis sections（携带 headerRelation / slotCandidate）
+ * @param {Array} headerSlots 既有 headerSlots
+ * @param {{ rejectedKeys?: Set }} [opts]
+ * @returns {{ headerSlots: Array, headerSectionIds: string[], derivedCount: number, existingCount: number }}
+ */
+export function ensureHeaderSlots(sections, headerSlots = [], opts = {}) {
+  const list = Array.isArray(sections) ? sections : []
+  const existing = Array.isArray(headerSlots) ? headerSlots : []
+  const rejectedKeys = opts?.rejectedKeys instanceof Set ? opts.rejectedKeys : new Set()
+
+  const byKey = new Map()
+  for (const s of existing) {
+    const k = slotKey(s)
+    if (k) byKey.set(k, s)
+  }
+
+  const headerSectionIds = []
+  let derivedCount = 0
+
+  for (const sec of list) {
+    if (!sec || typeof sec !== 'object') continue
+    const rel = normalizeHeaderRelation(sec)
+    const isChrome = HEADER_CHROME_RELATIONS.has(rel)
+    const isSameRow = rel === HEADER_SAME_ROW_RELATION
+    if (!isChrome && !isSameRow) continue
+    if (isChrome) headerSectionIds.push(String(sec.id || sec.name || ''))
+
+    const cand = sec.slotCandidate ?? sec.header?.slotCandidate ?? null
+    const slot = normalizeSlotCandidate(cand, sec)
+    if (!slot) continue
+    const key = slotKey(slot)
+    if (!key || rejectedKeys.has(key) || byKey.has(key)) continue
+    byKey.set(key, slot)
+    derivedCount += 1
+  }
+
+  return {
+    headerSlots: [...byKey.values()],
+    headerSectionIds,
+    derivedCount,
+    existingCount: existing.length,
+  }
 }

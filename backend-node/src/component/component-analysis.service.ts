@@ -171,14 +171,12 @@ export class ComponentAnalysisService {
   }
 
   private resolveVisionConfig(config: AnalysisConfig) {
-    const saved = this.aiConfigService.getAiConfig() || {};
+    // 🛡️ 2026-09-16 全局模型配置清理：不再回退全局 ai-config.json 的 vision 模型，
+    // 模型必须由请求 config 提供（缺则下游报「未配置」引导用户去配置面板）。
     return {
-      apiKey:
-        this.pick(config.visionApiKey, saved.visionApiKey, saved.unifiedApiKey) || undefined,
-      baseURL:
-        this.pick(config.visionBaseURL, saved.visionBaseURL, saved.unifiedBaseURL) || undefined,
-      model:
-        this.pick(config.visionModel, saved.visionModel, saved.unifiedModel) || undefined,
+      apiKey: config.visionApiKey || undefined,
+      baseURL: config.visionBaseURL || undefined,
+      model: config.visionModel || undefined,
     };
   }
 

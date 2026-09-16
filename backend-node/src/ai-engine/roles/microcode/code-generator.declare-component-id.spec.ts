@@ -115,4 +115,24 @@ describe('刀 8a: resolveDeclareComponentId', () => {
     })
     expect(classPrefixOf(r.componentId)).toBe('c-device-monitor')
   })
+
+  // 🛡️ S4（2026-09-16）· 收敛到 sanitizeComponentId 的回归锁
+  it('语义段优先 componentName：中文业务名 → 语义英文（语义优先于裸 id）', () => {
+    const r = resolveDeclareComponentId({
+      componentName: '环境监测',
+      sessionId: SID,
+    })
+    expect(r.componentId).toBe('c-env-monitor-075b13a4')
+  })
+
+  it('四段脏 id（c-max-<ts>-<hex>-<hex>）被确定性收敛、随机中段不滞留', () => {
+    // 历史事故形态：LLM/旧产物把任务号当 componentName 喂入
+    const r = resolveDeclareComponentId({
+      componentName: 'c-max-1788491328748-9abce496-075b13a4',
+      sessionId: SID,
+    })
+    // 语义段无效 → 退化为 component；尾段仍来自 sessionId（可剥离）
+    expect(r.componentId).toBe('c-component-075b13a4')
+    expect(classPrefixOf(r.componentId)).toBe('c-component')
+  })
 })

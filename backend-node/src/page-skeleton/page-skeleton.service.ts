@@ -1201,9 +1201,8 @@ ${rows}
   // ============================================================
 
   private async renderFigmaImage(figmaUrl: string): Promise<{ buffer: Buffer; width: number; height: number }> {
-    // Figma Token：优先全局配置（设置→模型配置），回退环境变量
-    const aiCfg = (this.aiConfigService.getAiConfig() as any) || {};
-    const figmaToken = aiCfg.figmaToken || process.env.FIGMA_ACCESS_TOKEN || process.env.FIGMA_TOKEN;
+    // 🛡️ 2026-09-16 彻底去全局配置：不再读全局 ai-config.json 的 figmaToken，仅保留部署级环境变量。
+    const figmaToken = process.env.FIGMA_ACCESS_TOKEN || process.env.FIGMA_TOKEN;
     if (!figmaToken) {
       throw new BadRequestException(
         '未配置 Figma Token，请在「设置 → 模型配置」中配置 Figma Token，或设置环境变量 FIGMA_ACCESS_TOKEN',

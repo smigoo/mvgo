@@ -29,6 +29,14 @@ NODE_BACKEND_URL="${NODE_BACKEND_URL:-http://192.168.112.1:13030/api}"
 # 字段加密密钥（与 Node 的 FIELD_ENCRYPTION_KEY 同 key，解密 user_ai_configs.configEnc 必需；
 # 未设置时 Java 降级开发派生密钥，/api/admin/ai-configs 返回列表但配置解密为空，并打启动 warn）
 FIELD_ENCRYPTION_KEY="${FIELD_ENCRYPTION_KEY:-}"
+# 用户管理「使用统计」跨服务 key（Java 拉 Node /admin/user-stats 的 header x-admin-stats-key）。
+# ⚠️ 必须与 Node 端 ADMIN_STATS_KEY **同值**。Java 侧为空 → 直接跳过拉取（不报错）
+#    → 「生成组件/生成任务/接口批数/接口总数」四格**恒为 0**，是最难发现的静默降级。
+ADMIN_STATS_KEY="${ADMIN_STATS_KEY:-}"
+if [ -z "$ADMIN_STATS_KEY" ]; then
+  echo "⚠️  未设置 ADMIN_STATS_KEY：用户管理「使用统计」将恒为 0（Java 会跳过向 Node 拉取）。" >&2
+  echo "   启用方式：export ADMIN_STATS_KEY='<与 Node 相同的值>' 后重新部署。" >&2
+fi
 # ----------------------------------------
 
 echo "============================================"
@@ -120,6 +128,7 @@ perl -e 'use POSIX qw(setsid); setsid(); fork() and exit; exec @ARGV' \
       PORTAL_BASE_URL="$PORTAL_BASE_URL" \
       NODE_BACKEND_URL="$NODE_BACKEND_URL" \
       FIELD_ENCRYPTION_KEY="$FIELD_ENCRYPTION_KEY" \
+      ADMIN_STATS_KEY="$ADMIN_STATS_KEY" \
   "$JAVA_BIN" -jar "$JAR_PATH" >> "$LOG_FILE" 2>&1 < /dev/null &
 echo "   已后台启动，日志: $LOG_FILE"
 
@@ -149,5 +158,6 @@ echo "  进程查看: lsof -ti:$PORT | xargs ps -o pid,ppid,cmd -p 2>/dev/null"
 echo "  停止进程: OLD=\$(lsof -ti:$PORT); [ -n \"\$OLD\" ] && kill \$OLD"
 echo "  门户校验: PORTAL_BASE_URL=$PORTAL_BASE_URL"
 echo "  Node回源: NODE_BACKEND_URL=$NODE_BACKEND_URL"
+echo "  使用统计: ADMIN_STATS_KEY=$([ -n "$ADMIN_STATS_KEY" ] && echo '已注入' || echo '⚠️ 未注入（使用统计将恒为 0）')"
 echo "  MongoDB : $MONGODB_URI"
 echo "============================================"

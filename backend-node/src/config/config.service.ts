@@ -1,12 +1,9 @@
-import { BadRequestException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { UserAiConfigService } from './user-ai-config.service';
 import * as fs from 'fs';
 import * as path from 'path';
 import { z } from 'zod';
 import { dataDir } from './backend-root';
-import { User } from '../schemas/user.schema';
 
 /**
  * 服务端 AI 配置存储（接口保存，替代前端 localStorage）。
@@ -206,8 +203,7 @@ const AI_CONFIG_PROFILE_SCHEMA = {
         .optional(),
     ),
   activeProfileId: stringField,
-  // 🆕 根级审计 meta（2026-09-03 补 schema 同步）：写盘（saveCurrentProfile/applyProfile/
-  // createProfile/updateProfile/deleteProfile）已在根对象带 lastModifiedBy/updatedAt，
+  // 🆕 根级审计 meta（历史写盘遗留）：旧版全局写盘会在根对象带 lastModifiedBy/updatedAt，
   // 但 AI_CONFIG_SCHEMA 为 .strict() 漏声明这两个 key → readRawConfig 读回即抛
   // `Unrecognized keys: "lastModifiedBy", "updatedAt"` → 面板加载/保存前置读取全失败。
   // 此处与写盘字段对齐（白名单放行，仍是 strict 拦截其它臆造 key）。
@@ -244,20 +240,7 @@ export class AiConfigService {
 
   constructor(
     private readonly userAiConfigService: UserAiConfigService,
-    @InjectModel(User.name) private readonly userModel: Model<any>,
   ) {}
-
-  /**
-   * 🆕 方案 B（2026-09-04）：全局模型模板管理（apply/create/update/delete）仅限管理员。
-   * 口径与 Java AdminInterceptor 一致：users.isAdmin === true。
-   */
-  async assertProfileAdmin(userId?: string): Promise<void> {
-    if (!userId) throw new ForbiddenException('未登录，仅管理员可管理全局模型模板');
-    const user = await this.userModel.findById(userId).lean().exec();
-    if (!(user as any)?.isAdmin) {
-      throw new ForbiddenException('仅管理员可管理全局模型模板');
-    }
-  }
 
   /**
    * 读取当前生效（active）方案的扁平配置（含默认值）。
@@ -274,32 +257,6 @@ export class AiConfigService {
       this.logger.warn(`[AiConfigService] 读取 AI 配置失败: ${e.message}`);
       return this.applyDefaults({});
     }
-  }
-
-  /**
-   * 读取含方案元信息的配置：返回 active 扁平 config + profiles 列表 + activeProfileId。
-   * 前端设置面板据此渲染「方案下拉」并加载当前方案。
-   */
-  getAiConfigWithProfiles(): {
-    config: Record<string, any>;
-    profiles: Array<{ id: string; name: string; modelMode?: string }>;
-    activeProfileId: string;
-  } {
-    const raw = this.readRawConfig();
-    const { profiles, activeProfileId, activeProfile } = this.resolveProfiles(raw);
-    return {
-      // 🆕 前端读取入口迁移：旧结构（legacy 字段）自动补 models/binding，
-      // 前端模型库 UI 据此渲染（幂等：已有 models 时透传；确定性 id 保证前端 id 稳定）。
-      config: migrateLegacyToModels(this.applyDefaults(
-        this.normalizeConfigInput(activeProfile.config || {}, '读取 AI 配置'),
-      )),
-      profiles: profiles.map((p) => ({
-        id: p.id,
-        name: p.name || p.id,
-        modelMode: p.config?.modelMode,
-      })),
-      activeProfileId,
-    };
   }
 
   /**
@@ -342,7 +299,6 @@ export class AiConfigService {
    * modelMode==='unified' 时将 unified* 补全为 vision/text 角色字段，兼容直接读取 role 字段的调用点（lite 等）。
    */
   async getMergedAiConfig(userId?: string): Promise<Record<string, any>> {
-    const globalCfg = this.getAiConfig() || {};
     let userCfg: Record<string, any> = {};
     if (userId) {
       try {
@@ -353,10 +309,9 @@ export class AiConfigService {
         userCfg = {};
       }
     }
+    // 🛡️ 2026-09-16 彻底去全局配置：不再读全局 ai-config.json 的 figmaToken/apifoxToken/gitlabToken。
+    // 所有凭证（模型 + Figma/Apifox/GitLab token）一律只由用户级配置（user_ai_configs）提供。
     const merged: Record<string, any> = {};
-    for (const k of ['figmaToken', 'apifoxToken', 'gitlabToken']) {
-      if (globalCfg[k] !== undefined) merged[k] = globalCfg[k];
-    }
     Object.assign(merged, userCfg);
     if (merged.modelMode === 'unified') {
       // 统一模式：unified* 为唯一真相源，强制 vision*/text* 与之同源。
@@ -395,146 +350,6 @@ export class AiConfigService {
     return migrateLegacyToModels(merged);
   }
 
-  /** 保存当前编辑内容到 active 方案，并同步根扁平字段（保回退链路不回归） */
-  saveCurrentProfile(input: Record<string, any>, operatorUserId?: string): Record<string, any> {
-    try {
-      const raw = this.readRawConfig();
-      const { profiles, activeProfileId } = this.resolveProfiles(raw);
-      const active = profiles.find((p) => p.id === activeProfileId) || profiles[0];
-      const patch = this.normalizeConfigInput(input || {}, '保存当前方案');
-      const merged = { ...(active.config || {}), ...patch };
-      // 🆕 写时降维：新结构（models/binding）持久化前先解析出完整 legacy 字段 + providers，
-      // 保证磁盘上的 config 永远具备完整 legacy 字段，任务快照重跑时下游也能正常解析。
-      const mergedResolved = resolveBindingToLegacy(merged);
-      // 统一模式：保存时以 unified* 为唯一真相源，强制 vision*/text* 同步
-      if (mergedResolved.modelMode === 'unified') {
-        for (const role of ['vision', 'text']) {
-          mergedResolved[`${role}ApiKey`] = mergedResolved.unifiedApiKey;
-          mergedResolved[`${role}BaseURL`] = mergedResolved.unifiedBaseURL;
-          mergedResolved[`${role}Model`] = mergedResolved.unifiedModel;
-          mergedResolved[`${role}ProviderType`] = mergedResolved.unifiedProviderType;
-          mergedResolved[`${role}Temperature`] = mergedResolved.unifiedTemperature;
-        }
-      }
-      const nextConfig = this.applyDefaults(mergedResolved);
-      active.config = nextConfig;
-      const root = {
-        ...nextConfig,
-        profiles,
-        activeProfileId,
-        lastModifiedBy: operatorUserId || 'unknown',
-        updatedAt: new Date().toISOString(),
-      };
-      this.atomicWrite(root);
-      const who = operatorUserId || 'unknown';
-      const sig = `text=${nextConfig.textModel || '-'}|vision=${nextConfig.visionModel || '-'}|unified=${nextConfig.unifiedModel || '-'}|mode=${nextConfig.modelMode || '-'}`;
-      this.logger.log(`[AiConfigService] 保存当前方案 by user=${who} at ${new Date().toISOString()} | ${sig}`);
-      return this.getAiConfigWithProfiles();
-    } catch (e: any) {
-      this.logger.error(`[AiConfigService] 保存当前方案失败: ${e.message}`);
-      throw e;
-    }
-  }
-
-  /** 旧调用兼容：等同保存当前方案（save-current） */
-  saveAiConfig(input: Record<string, any>, operatorUserId?: string): Record<string, any> {
-    return this.saveCurrentProfile(input, operatorUserId);
-  }
-
-  /** 切换 active 方案（仅影响新任务） */
-  applyProfile(profileId: string, operatorUserId?: string): Record<string, any> {
-    if (!profileId) throw new BadRequestException('请指定要应用的方案 ID');
-    const raw = this.readRawConfig();
-    const { profiles } = this.resolveProfiles(raw);
-    if (!profiles.find((p) => p.id === profileId)) {
-      throw new BadRequestException(`方案不存在: ${profileId}`);
-    }
-    const root = {
-      ...raw,
-      activeProfileId: profileId,
-      lastModifiedBy: operatorUserId || 'unknown',
-      updatedAt: new Date().toISOString(),
-    };
-    this.atomicWrite(root);
-    this.logger.log(`[AiConfigService] 已切换至方案: ${profileId} by user=${operatorUserId || 'unknown'} at ${new Date().toISOString()}`);
-    return this.getAiConfigWithProfiles();
-  }
-
-  /** 新建方案（保存当前编辑内容为新方案，并设为 active） */
-  createProfile(name: string, config: Record<string, any>, operatorUserId?: string): Record<string, any> {
-    const raw = this.readRawConfig();
-    const { profiles, activeProfileId } = this.resolveProfiles(raw);
-    const id = `p_${Date.now()}`;
-    const nextConfig = this.applyDefaults(
-      resolveBindingToLegacy(this.normalizeConfigInput(config || {}, '创建方案')),
-    );
-    profiles.push({ id, name: name || '未命名方案', config: nextConfig });
-    const root = {
-      ...raw,
-      profiles,
-      activeProfileId: id,
-      lastModifiedBy: operatorUserId || 'unknown',
-      updatedAt: new Date().toISOString(),
-    };
-    this.atomicWrite(root);
-    this.logger.log(`[AiConfigService] 已创建方案: ${id} (${name}) by user=${operatorUserId || 'unknown'} at ${new Date().toISOString()}`);
-    return this.getAiConfigWithProfiles();
-  }
-
-  /** 更新指定方案的名称与配置（覆盖式） */
-  updateProfile(
-    profileId: string,
-    name?: string,
-    config?: Record<string, any>,
-    operatorUserId?: string,
-  ): Record<string, any> {
-    if (!profileId) throw new BadRequestException('请指定要更新的方案 ID');
-    const raw = this.readRawConfig();
-    const { profiles, activeProfileId } = this.resolveProfiles(raw);
-    const target = profiles.find((p) => p.id === profileId);
-    if (!target) throw new BadRequestException(`方案不存在: ${profileId}`);
-    if (name != null) target.name = name;
-    if (config != null) {
-      target.config = this.applyDefaults(
-        resolveBindingToLegacy(this.normalizeConfigInput(config, '更新方案')),
-      );
-    }
-    const root = {
-      ...raw,
-      profiles,
-      activeProfileId,
-      lastModifiedBy: operatorUserId || 'unknown',
-      updatedAt: new Date().toISOString(),
-    };
-    this.atomicWrite(root);
-    this.logger.log(`[AiConfigService] 已更新方案: ${profileId} by user=${operatorUserId || 'unknown'} at ${new Date().toISOString()}`);
-    return this.getAiConfigWithProfiles();
-  }
-
-  /** 删除方案（default / 当前 active 不允许删除） */
-  deleteProfile(profileId: string, operatorUserId?: string): Record<string, any> {
-    if (!profileId) throw new BadRequestException('请指定要删除的方案 ID');
-    if (profileId === 'default') {
-      throw new BadRequestException('默认方案不可删除');
-    }
-    const raw = this.readRawConfig();
-    const { profiles, activeProfileId } = this.resolveProfiles(raw);
-    if (!profiles.find((p) => p.id === profileId)) {
-      throw new BadRequestException(`方案不存在: ${profileId}`);
-    }
-    const nextProfiles = profiles.filter((p) => p.id !== profileId);
-    const nextActive = activeProfileId === profileId ? 'default' : activeProfileId;
-    const root = {
-      ...raw,
-      profiles: nextProfiles,
-      activeProfileId: nextActive,
-      lastModifiedBy: operatorUserId || 'unknown',
-      updatedAt: new Date().toISOString(),
-    };
-    this.atomicWrite(root);
-    this.logger.log(`[AiConfigService] 已删除方案: ${profileId} by user=${operatorUserId || 'unknown'} at ${new Date().toISOString()}`);
-    return this.getAiConfigWithProfiles();
-  }
 
   /**
    * 构建任务「创建时刻配置快照」—— 语义 = 任务创建时的参考/审计配置，**不是实际执行配置**。

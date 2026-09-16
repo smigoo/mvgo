@@ -15,6 +15,7 @@ import { formatResourceMapping } from '../../utils/resource-mapping-formatter.js
 import {
   collectLeafSections,
   formatSectionTreeForPrompt,
+  buildSectionStyleFacts,
 } from '../../utils/section-tree.js';
 
 /**
@@ -455,6 +456,25 @@ ${JSON.stringify(visualElements || {}, null, 1)}
 > 节点未标注 layoutMode 时，按上文「🃏 卡片 / 列表项布局规则」判断（有图标+文字即 row）。
 
 ${figmaStyleBlock}
+`;
+      }
+
+      // 🛡️ E1 治本（2026-09-16）：语义化样式真值（与微码 buildSectionStyleFacts 同源）。
+      // 此前 vue3 只注入「扁平节点样式树」，内部元素（tab 项/卡片/图例）的精确背景/文字色/尺寸
+      // 无语义归属 → LLM 自由发挥（tab 背景消失、颜色统一）。这里把 planner 语义树 + Figma
+      // 精确样式关联，产出「section 语义 → 内部元素样式」的确定性事实，与微码链路对齐。
+      const sectionStyleFacts = buildSectionStyleFacts(effectiveSections, figmaNodeData);
+      if (sectionStyleFacts) {
+        prompt += `\n## 🧩 语义化样式真值（按业务区块归属 · 最高优先级，生成 <style> 必须逐条精确使用）
+
+下面是**按 section 语义归属**后的精确样式事实（背景渐变/文字色/尺寸）。生成每个子组件 .vue 的
+\`<style lang="less" scoped>\` 时，**每个内部元素（tab 项/卡片/图例项）的背景、文字色、尺寸必须
+与下表逐条对应**，禁止臆造、禁止统一成同一颜色。激活态与普通态的背景/文字色必须分别实现。
+
+${sectionStyleFacts}
+
+⚠️ 示例：tab-active → bg:#318aff→#70bfff + 白字，普通 tab → bg:#85baff→#bfe2ff + 蓝字，
+两者背景与文字色必须不同，禁止都用同一背景。
 `;
       }
     }

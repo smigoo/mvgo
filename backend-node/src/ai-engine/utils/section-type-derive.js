@@ -22,7 +22,7 @@ export const TYPE_KEYWORDS = [
   ['header', ['header', 'titlebar', '标题栏', '页头']],
   ['footer', ['footer', 'bottom', '底部', '页脚']],
   ['tabs', ['tab', '标签', '切换']],
-  ['chart', ['chart', 'graph', 'trend', '图表', '趋势', '曲线']],
+  ['chart', ['chart', 'graph', 'trend', '图表', '趋势', '曲线', '环形图', '饼图', '柱状图', '柱形图', '折线图', '雷达图', '散点图', '面积图', '漏斗图', '仪表盘', '仪表图', 'eachrts', 'echarts']],
   ['grid', ['grid', '网格']],
   ['list', ['list', '列表', '清单']],
   ['card', ['card', '卡片']],

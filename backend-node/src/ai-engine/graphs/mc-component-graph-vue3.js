@@ -31,6 +31,7 @@ import { Vue3Engineer } from '../roles/vue3-engineer.js';
 import { GenerationContext } from '../types/generation-context.js';
 import { runGenerationContextShadow } from '../context/generation-context-shadow.js';
 import { subcomponentPlanner } from '../roles/subcomponent-planner.js';
+import { resolveBackgroundBrightness } from '../utils/style-tokens.js';
 import { AdversarialChecker } from '../roles/adversarial-checker.js';
 import { VisualComparator } from '../roles/visual-comparator.js';
 import { isFeatureEnabled } from '../config/v3-mode-features.js';
@@ -89,6 +90,10 @@ import {
   detectNavSignal,
   injectNavSectionIfMissing,
 } from '../utils/nav-section.js';
+import {
+  detectChartSignal,
+  injectChartSectionIfMissing,
+} from '../utils/chart-section.js';
 import { withTimeout } from '../orchestrator/orchestrator.js';
 
 const logger = createLogger({ name: 'mc-component-graph-vue3' });
@@ -313,9 +318,7 @@ export function createPhase2Graph(config = {}) {
           resourceDomMapping = null;
         }
 
-        // 6-A · 缓存路径也需构建颜色索引（与主路径同口径）
-        const cachedConnector = new FigmaConnector({ figmaToken: state.figmaToken });
-        const nodeColorIndex = cachedConnector.buildNodeColorIndex(cachedNodeData);
+        // 6-A · 缓存路径（颜色索引已废弃，见 figma-connector#buildNodeColorIndex 注释）
 
         return {
           figmaStyleTree: formatFigmaStyleData(cachedNodeData),
@@ -324,8 +327,6 @@ export function createPhase2Graph(config = {}) {
           assets,
           resourceDomMapping,
           techStackHints: state._uiCache.techStackHints || [],
-          // 6-A · nodeId→fills 颜色索引（确定性事实源，供 6-B 颜色装配消费）
-          nodeColorIndex,
         };
       }
 
@@ -346,9 +347,6 @@ export function createPhase2Graph(config = {}) {
         result.figmaNodeData,
       );
       const figmaStyleTree = formatFigmaStyleData(optimizedFigmaData);
-
-      // 6-A · 构建 nodeId→fills 颜色索引（确定性事实源，供 6-B 颜色装配消费）
-      const nodeColorIndex = connector.buildNodeColorIndex(optimizedFigmaData);
 
       //保存 Figma checkpoint（断点续跑用）— 存裸节点数据，与微码图格式一致
       state._saveCheckpoint?.('figma', optimizedFigmaData);
@@ -376,8 +374,6 @@ export function createPhase2Graph(config = {}) {
         assets: result.assets,
         resourceDomMapping: result.resourceDomMapping,
         techStackHints: techStackHints,
-        // 6-A · nodeId→fills 颜色索引（确定性事实源，供 6-B 颜色装配消费）
-        nodeColorIndex,
       };
     } catch (error) {
       logger.error('Figma数据获取失败', { error: error.message });
@@ -782,10 +778,13 @@ export function createPhase2Graph(config = {}) {
         //  per-element 样式映射（来自 Style Mapper）
         elementStyleMap: state.styleMappings?.elementStyleMap,
         //面板明暗主题（用于 theme-vars.less 默认主题）
-        backgroundBrightness:
+        // 🛡️ 2026-09-16 治本（c-traffic-monitor-a9a8edc9 黑白叠字）：vision 亮度误判，Figma 实测覆盖。
+        backgroundBrightness: resolveBackgroundBrightness(
+          state.figmaNodeData,
           state.visualElements?.backgroundBrightness ||
-          state.layoutStructure?.styles?.backgroundBrightness ||
-          'dark',
+            state.layoutStructure?.styles?.backgroundBrightness ||
+            'dark',
+        ),
         //暂停检查回调（由 phase2.service 注入，每个分块前调用）
         pauseChecker: state.pauseChecker || null,
         onFilesReady: state.onFilesReady || null,
@@ -1618,18 +1617,12 @@ export function createPhase2Graph(config = {}) {
           /* 旧 meta 损坏则重建 */
         }
         const runtimeVerified = !state._runtimeGateDowngraded;
-        // 6-A: nodeColorIndex 写进 component-meta.json（确定性颜色事实源，供后续 6-B 装配消费）
-        const nodeColorIndexPlain = state.nodeColorIndex
-          ? Object.fromEntries(state.nodeColorIndex instanceof Map ? state.nodeColorIndex : Object.entries(state.nodeColorIndex))
-          : undefined;
 
         const nextMeta = {
           ...prevMeta,
           runtimeVerified,
           // 7-A: visualFidelity — 用 ?? 防止 parallel-quality-check 的 undefined 覆盖 visual-comparator 的有效值
           ...(state.visualFidelity != null ? { visualFidelity: state.visualFidelity } : {}),
-          // 6-A: nodeColorIndex
-          ...(nodeColorIndexPlain && Object.keys(nodeColorIndexPlain).length > 0 ? { nodeColorIndex: nodeColorIndexPlain } : {}),
           ...(runtimeVerified
             ? {}
             : {
@@ -1972,10 +1965,12 @@ export function createPhase2Graph(config = {}) {
             // 传入完整 layoutStructure 而非只传 elements[]，因为 SM 的 _extractElementStyles
             // 支持直接处理 layoutStructure 对象（内部会调用 _collectElementsFromStructure）
             elements: state.layoutStructure,
-            backgroundBrightness:
+            backgroundBrightness: resolveBackgroundBrightness(
+              state.figmaNodeData,
               state.visualElements?.backgroundBrightness ||
-              state.layoutStructure?.styles?.backgroundBrightness ||
-              'dark',
+                state.layoutStructure?.styles?.backgroundBrightness ||
+                'dark',
+            ),
             onProgress: state.onProgress,
             signal: state.signal || state.__abortSignal || null,
             requestConcurrency: state.requestConcurrency,
@@ -2048,14 +2043,22 @@ export function createPhase2Graph(config = {}) {
         elementStyleMap: state.elementStyleMap,
         figmaNodeData: state.figmaNodeData,
       });
-      const finalPlan = injectNavSectionIfMissing(plan, navSignal, {
+      let currentPlan = injectNavSectionIfMissing(plan, navSignal, {
         figmaNodeData: state.figmaNodeData,
         elementStyleMap: state.elementStyleMap,
       });
-      const injectedNav = finalPlan !== plan;
+      const injectedNav = currentPlan !== plan;
+
+      // ️ 图表 section 兜底注入（2026-09-16）
+      const chartSignal = detectChartSignal({ figmaNodeData: state.figmaNodeData, charts: state.charts });
+      const finalPlan = injectChartSectionIfMissing(currentPlan, chartSignal, {
+        figmaNodeData: state.figmaNodeData,
+        charts: state.charts,
+      });
+      const injectedChart = finalPlan !== currentPlan;
       state.onProgress?.({
         stage: '子组件规划',
-        message: `✅ 完成：${finalPlan.effectiveSections.length} 个 section${finalPlan.isForced ? '（强制拆分）' : '（不强拆）'}${injectedNav ? '（已强制注入导航 section）' : ''}`,
+        message: `✅ 完成：${finalPlan.effectiveSections.length} 个 section${finalPlan.isForced ? '（强制拆分）' : '（不强拆）'}${injectedNav ? '（已强制注入导航 section）' : ''}${injectedChart ? '（已强制注入图表 section）' : ''}`,
         status: 'completed',
       });
       // 保存到 analysis checkpoint（与 reviewResult/styleMappings 同批），便于断点续跑

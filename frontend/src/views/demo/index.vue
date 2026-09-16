@@ -2860,6 +2860,27 @@ function init() {
   })
 }
 
+/**
+ * 补默认主题（2026-09-16）。
+ *
+ * 首次 `init()` 在 onMounted 里同步执行，此时 `declareConfig` 往往还是 `{}`
+ * （临时组件不在 componentStore 中，见 2428 行取值方式），`themeConfig.default`
+ * 取不到 → `formState.themeType` 为空 → 「内容主题」下拉**没有默认选中**，
+ * 必须手动切一次主题才会被 3131 行那次 `init()` 补上。
+ *
+ * 本函数在 `loadDeclareConfig()` 完成后调用补齐；**仅在用户尚未选择时**写入，
+ * 不覆盖已有选择（避免加载完成瞬间把用户刚选的值改掉）。
+ * 补齐后走与 `change('themeType')` 相同的规范路径：刷新 cssVars + 下发主题 class。
+ */
+function ensureThemeDefault() {
+  if (formState.themeType) return
+  const fallback = themeConfig.value?.default
+  if (!fallback) return
+  formState.themeType = fallback
+  styles.value = getStyleConfig()
+  sendThemeToPreview(fallback)
+}
+
 onMounted(async () => {
   init()
   const artifactReady = await loadTaskStatus()
@@ -3007,6 +3028,8 @@ async function loadComponentFiles() {
 
     // 兜底加载 declare.json（临时组件可能不在 componentStore 中）
     await loadDeclareConfig()
+    // declare 就绪后补默认主题：首次 init() 跑在它之前，那时 themeConfig.default 取不到
+    ensureThemeDefault()
 
     // 支持从预览错误卡片携带 file/line/column 跳转并精确定位。
     const requestedPath = typeof route.query.file === 'string' ? route.query.file : ''
@@ -3129,7 +3152,12 @@ function change(type, val) {
     .then((res) => {
       if (type === 'themeType') {
         init()
-        // 2026-09-15：切换主题时通知预览 iframe 更新主题类
+        // 2026-09-15：切主题走「规范路径」——立即按新主题刷新 cssVars 并注入 iframe
+        // （不依赖 formState 的 1s 防抖，避免切换后短暂无变化）。
+        // getThemeConfig() 已按 common + cssVars[theme] 合并，styles.value 更新后
+        // watch 会触发 sendStyleToPreview() → 预览页 :root 注入 --colorX。
+        styles.value = getStyleConfig()
+        // 兜底路径：宿主未注入变量时，靠 .dark/.light 作用域下 var() 的 fallback 差异
         sendThemeToPreview(val)
       }
     })

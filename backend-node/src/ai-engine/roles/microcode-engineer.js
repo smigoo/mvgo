@@ -27,13 +27,18 @@ import {
   getModelMaxOutputTokens,
 } from '../utils/model-config.js';
 import { buildModelSuggestion } from '../utils/model-suggestion.js';
-import { buildSectionHeightsMap, buildSectionLayoutFacts } from '../utils/figma-section-heights.js';
+import {
+  buildSectionHeightsMap,
+  buildSectionLayoutFacts,
+  resolveSubComponentPlan,
+} from '../utils/figma-section-heights.js';
 import {
   collectLeafSections,
   formatSectionTreeForPrompt,
   findSectionById,
   dedupeDuplicateSections,
   assignSectionComponentNames,
+  semanticClassKeywords,
 } from '../utils/section-tree.js';
 import {
   buildAllConstraintReinforcements,
@@ -124,6 +129,8 @@ import {
 } from '../utils/resource-import-guard.js';
 import { isSessionLocked } from '../utils/session-lock-registry.js';
 import { healMissingFlexContainers, healGridContainer, normalizeFlexSourceConflicts, normalizeFlexSiblingScale } from '../utils/flex-sibling-guard.js';
+// 🛡️ 方案 E（2026-09-16）：双链路共用落盘前自愈链（资源终验/运行库/CODE-022/.value/FLEX-003/FLEX-005）
+import { runPreWriteSelfHealing } from '../utils/pre-write-self-healing.js';
 import { formatResourceMapping } from '../utils/resource-mapping-formatter.js';
 // 🛡️ 层③（2026-09-11）：模板类名统一补前缀（CODE-020 确定性自愈）
 import { fixMissingClassPrefixes } from '../utils/class-prefix-fixer.js';
@@ -555,18 +562,8 @@ export class MicrocodeEngineer extends BaseAgent {
     // - isForced=false 时仅作为建议（让 LLM 自行裁量）
     // - 命名权交给 LLM（planner 不再产出 name）
     // 🛡️ 接管（P1）：优先消费 Context Assembler 裁决的 componentPlan（单一事实源），fallback 到 legacy。
-    const _genPlan = input.generationInput?.componentPlan;
-    const subPlan =
-      _genPlan && typeof _genPlan === 'object'
-        ? _genPlan
-        : subComponentPlan && typeof subComponentPlan === 'object'
-          ? subComponentPlan
-          : {
-              effectiveSections: [],
-              isForced: false,
-              minFiles: 0,
-              reason: '未传入 subComponentPlan',
-            };
+    // 🛡️ 2026-09-16 收口到 resolveSubComponentPlan（单一事实源，消除与 execute 的重复构造）。
+    const subPlan = resolveSubComponentPlan(input.generationInput, subComponentPlan);
     // 🛡️ 治本（2026-09-14 · c-device-monitor-485d724d 实锤）：planner 双重解释去重**单点收口**。
     // 裂缝：buildDeterministicIndexTemplate / resolvePlanSections 已过 dedupeDuplicateSections，
     // 但此处直接取 subPlan.effectiveSections → 同一事实两处消费、只有一处去重 →
@@ -2256,6 +2253,25 @@ export class MicrocodeEngineer extends BaseAgent {
         this.logger.warn(`设备网格 grid 治愈失败，按原样继续: ${e?.message || e}`);
       }
 
+      // 🎯 M2.2（2026-09-16）确定性自愈：色值槽位用途一致性（COLOR-SLOT-001）。
+      // 必须在 _validateClassNames **之前**执行 —— 先修再验，避免门禁报出已修好的项。
+      // 只改写「文字槽位用于背景属性」这一个方向，且只动 .less/.css（fallback 字面量保留）。
+      try {
+        const _slotFix = microcodeValidator.fixColorSlotPurpose(allFiles, {
+          logger: this.logger,
+        });
+        if (_slotFix.fixes.length > 0) {
+          Object.assign(allFiles, _slotFix.files);
+          this.logger.warn('🛡️ COLOR-SLOT 自愈已写回产物', {
+            count: _slotFix.fixes.length,
+          });
+        }
+      } catch (e) {
+        this.logger.warn('COLOR-SLOT 自愈异常（非阻断，按原样继续）', {
+          error: e?.message || String(e),
+        });
+      }
+
       //  Class 名交叉校验（模板 vs common.less）+ 自动修复
       const validationResult = this._validateClassNames(
         allFiles,
@@ -2299,6 +2315,34 @@ export class MicrocodeEngineer extends BaseAgent {
           this.logger.info('已将 fallback CSS 规则追加到 common.less', {
             addedBytes: validationResult.fallbackCss.length,
           });
+          // 🛡️ 治本（2026-09-16 · c-device-monitor-24254234 实锤）：fallback 为「模板用了但
+          // common.less 未定义」的 section 根容器生成残缺块（generateFallbackCssRule 只从
+          // elementStyleMap 抄 flexGrow/minHeight/gap/width，不含 display），导致同行元素纵排、
+          // 各占 100% 宽。此处复用规则⑤ 的布局事实（sectionLayoutFacts）补 display/flex-direction，
+          // 幂等只补不覆盖，方向跟随事实源（horizontal→row / vertical→column / grid→grid）。
+          const _fbFacts = buildSectionLayoutFacts(
+            allFiles,
+            input.layoutStructure,
+            { subComponentPlan: { effectiveSections } },
+          );
+          if (_fbFacts) {
+            const _lessPath = 'resources/styles/common.less';
+            const _lessCur = allFiles[_lessPath];
+            if (typeof _lessCur === 'string') {
+              const _lessFixed = microcodeResources.fixSectionHeightsForResource(
+                _lessCur,
+                { path: _lessPath, sectionLayoutFacts: _fbFacts },
+                { logger: this.logger },
+              );
+              if (_lessFixed !== _lessCur) {
+                allFiles[_lessPath] = _lessFixed;
+                this.logger.warn(
+                  '🛡️ fallback 段补 display/flex-direction（section 根容器，24254234 治本）',
+                  { file: _lessPath },
+                );
+              }
+            }
+          }
         }
       }
 
@@ -4623,13 +4667,10 @@ export class MicrocodeEngineer extends BaseAgent {
    * 输入 "E2eModalP2" → "c-e2emodalp2"；已带 c-/cp-/mv-/page- 前缀则保留
    */
   _normalizeComponentId(name = '') {
-    const cleaned = String(name)
-      .toLowerCase()
-      .replace(/[^a-z0-9-]/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '');
-    if (!cleaned) return 'c-unknown-component';
-    return /^(c|cp|mv|page)-/.test(cleaned) ? cleaned : `c-${cleaned}`;
+    // 🛡️ S4（2026-09-16）· 收敛到单一事实源 sanitizeComponentId（无 sessionId → c-<语义段>）。
+    // 替代旧的「仅 kebab 清洗」实现：旧实现对四段脏 id（c-max-<ts>-<hex>-<hex>）不收敛，
+    // 随机中段滞留 → classPrefixOf 剥离失败 → CODE-003 双前缀复发。语义段优先原 name。
+    return sanitizeComponentId(name, {});
   }
 
   /** 默认 eventDataSchema（带 key/name/type/required 元数据，与 component-template 结构一致） */
@@ -4705,10 +4746,47 @@ export class MicrocodeEngineer extends BaseAgent {
       }
     }
 
-    // 兜底：在整个节点树中查找第一个中文 TEXT 节点
-    const anyTextNode = findText(nodeData);
+    // 🛡️ 2026-09-16 加固：导航性节点（tabs / nav / breadcrumb …）里的中文是
+    // 「页签/地点标签」（如「江阴靖江长江隧道」「江阴大桥」），不是组件名。
+    // 兜底若直接深度优先取第一个中文 TEXT，会抓到 tabs 第一个 tab
+    // （组件名「重点车辆监测」在 header 的「小标题」里，位置更靠后）。
+    const NAV_NODE_RE =
+      /^(tabs?|tab[-_]?bar|nav|nav[-_]?bar|breadcrumb|menu|menu[-_]?bar|pagination|pager|segmented|stepper|steps)$/i;
+    const findTextSkippingNav = (node) => {
+      if (!node) return null;
+      if (NAV_NODE_RE.test(node.name || '')) return null;
+      if (node.type === 'TEXT' && node.characters && node.characters.trim())
+        return node;
+      if (node.children && Array.isArray(node.children)) {
+        for (const child of node.children) {
+          const found = findTextSkippingNav(child);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+
+    // 第二优先：header 区域内的标题（跳过 tabs 等导航子节点）
+    const headerLike = findNode(nodeData, /^header$/i);
+    if (headerLike) {
+      const textNode = findTextSkippingNav(headerLike);
+      if (textNode) {
+        const title = extractChinese(textNode.characters);
+        if (title) return title;
+      }
+    }
+
+    // 兜底：在整个节点树中查找第一个中文 TEXT 节点（跳过导航性节点）
+    const anyTextNode = findTextSkippingNav(nodeData);
     if (anyTextNode) {
       const title = extractChinese(anyTextNode.characters);
+      if (title) return title;
+    }
+
+    // 最后兜底：连导航节点也接受（宁可拿到一个中文名，也不要返回 null）
+    const fallbackTextNode = findText(nodeData);
+    if (fallbackTextNode) {
+      const title = extractChinese(fallbackTextNode.characters);
       if (title) return title;
     }
 
@@ -5383,6 +5461,7 @@ export class MicrocodeEngineer extends BaseAgent {
       onFilesReady = null, //  完整 files map 候选快照回调
       ctx = null, //  1-1 接入：生成上下文值对象（档位/类型/资源映射）
       generationInput = null, // 🆕 Context Assembler 裁决事实
+      subComponentPlan = null, // 🛡️ 子组件规划（phase2 直传，execute 曾漏解构 → 下游 input is not defined）
       _attributionGuidance = null, // 🛡️ 资源归属指导（方案5，上一轮漏用背景的重试指导）
     } = params;
 
@@ -5423,6 +5502,14 @@ export class MicrocodeEngineer extends BaseAgent {
     const effectiveVisualElements = visualElements;
     const effectiveReviewResult = reviewResult;
     const effectiveStyleMappings = styleMappings;
+    // 🛡️ 治本（2026-09-16 · c-vehicle-monitor-f177f631 实锤）：execute 曾引用未定义的
+    // subPlan/effectiveSections（从 generateCode 迁移时变量名未同步）→ N1 数字剥离 + 清洗层 +
+    // 确定性修复（含 fix-section-heights 规则②）全部因 `input is not defined` 被 catch 吞掉，
+    // 表现为 section 根 height:100% 未改写 → 多区块各占 100% 高互相溢出 → 仅首块可见/三卡消失。
+    // 收口到 resolveSubComponentPlan（与 generateCode 同一事实源）。
+    const subPlan = resolveSubComponentPlan(generationInput, subComponentPlan);
+    const effectiveSections =
+      dedupeDuplicateSections(subPlan.effectiveSections || []) || [];
     if (useGenerationInput) {
       this.logger.info(
         '🆕 [Context Assembler] 裁决事实已注入 Engineer（仅信任等级 + 问题清单）',
@@ -5871,9 +5958,7 @@ export class MicrocodeEngineer extends BaseAgent {
           collectTextChars(figmaNodeData?.document || figmaNodeData);
           const numericRewriteDecision = assessNumericLiteralRewrite({
             layoutStructure,
-            visualElements: input.visualElements,
-            elements: input.elements,
-            chunks: input.chunks,
+            visualElements,
             charts,
             subComponentPlan: subPlan,
             effectiveSections,
@@ -5962,12 +6047,17 @@ export class MicrocodeEngineer extends BaseAgent {
                   ? firstChart.series
                   : ['趋势图']
               ).join(', ');
+              // 🎯 D 系列第一刀：优先传视觉真值 legendItems
+              const legendItems = Array.isArray(firstChart.legend?.items)
+                ? firstChart.legend.items
+                : [];
               // 前置：先自愈产物自身的 SFC 内嵌 style 括号缺失（与注入解耦，各自独立生效）
               const healedForN2 =
                 microcodeHealer.healVueEmbeddedStyleBraces(targetFile);
               const patched = microcodeHealer.injectEchartsFallback(healedForN2, {
                 chartType,
                 chartSeries,
+                legendItems,
               });
               if (patched !== healedForN2) {
                 // 🛡️ 注入器自检防线：注入后立即本地校验 SFC，失败即回滚（不注入比注入坏产物好）
@@ -6028,7 +6118,13 @@ export class MicrocodeEngineer extends BaseAgent {
                 .filter(Boolean);
             let mountedCount = 0;
             for (const bg of bgMounts) {
-              const targetWords = new Set(wordsOf(bg.mountTarget));
+              // 🛡️ 中英文语义鸿沟桥接（2026-09-16 治本）：mountTarget 是 Figma 中文名
+              //   （「中间图表」「统计数据」），产物 class 是英文（chart-container/stats-grid），
+              //   wordsOf 中文词永远匹配不到英文 class → 背景挂载失败（c-b6a 环形图背景实锤）。
+              //   用 semanticClassKeywords 把中文展开为英文关键词（中间图表→chart）。
+              const targetWords = new Set(
+                semanticClassKeywords(bg.mountTarget).concat(wordsOf(bg.mountTarget)),
+              );
               if (targetWords.size === 0) continue;
               const varName = bg.assignedVarName;
               const hasImage = !!(bg.resourceFile && varName);
@@ -6343,7 +6439,7 @@ export default declareInfo
             resourceDomMapping,
             outputPath,
           ),
-          input: params,
+          input: { subComponentPlan: subPlan, generationInput },
         });
         const cleanRes = cleanPipeline.applyCleanOnly(modelFiles, {
           componentName,
@@ -6402,7 +6498,7 @@ export default declareInfo
           sectionHeights: this._buildSectionHeightsMap(
             modelFiles,
             layoutStructure,
-            params,
+            { subComponentPlan: subPlan, generationInput },
           ),
           // 🛡️ 删减法批次 3 loop 3a（2026-09-14）：布局事实单一事实源（display/gridColumns/
           // flexDirection/flexGrow），供 fix-section-heights 规则⑤ 确定性写出布局 block ——
@@ -6410,11 +6506,11 @@ export default declareInfo
           sectionLayoutFacts: buildSectionLayoutFacts(
             modelFiles,
             layoutStructure,
-            params,
+            { subComponentPlan: subPlan, generationInput },
           ),
           // 🛡️ R1-2：布局事实（fix-section-heights 规则②豁免依据，退役命名枚举）
           rootLayoutFacts,
-          input: params,
+          input: { subComponentPlan: subPlan, generationInput },
         });
         const fixRes = fixPipeline.apply(modelFiles, {
           componentName,
@@ -6612,124 +6708,17 @@ export default declareInfo
       // writeFiles 自愈只写磁盘不回写内存 → workspace / candidate / 磁盘三方分叉。
       // 此处把最终事实（allFiles + fixedFiles）一次性落盘：writeFiles 自愈幂等（不会二次改动），
       // 且自带用户编辑保护（isUserPatched 跳过不覆盖）。候选快照与 workspace 从此同内容。
-      const finalTruthFiles = { ...allFiles, ...fixedFiles };
-      // 🛡️ 资源 import 终验兜底注入（落盘前，2026-09-02 事故 mc-max-1788330634941-53e4d387）：
-      // CODE-018「子组件资源依赖缺失」确定性复现的根因——generateCode 内注入（约 1725 行）成功补了
-      // bg1 import，但后续 CodeFixPipeline / validateAndFixGeneratedFiles 产出的 fixedFiles 覆盖了
-      // 注入后的子组件，导致最终落盘缺 bg1 import → L0-B 误报 CODE-018 → 全量重写 3 轮空转、
-      // 「好的改坏」。LLM 重试无法修复「系统注入被覆盖」的问题，故在最终事实源落盘前再做一次
-      // 幂等兜底注入（injectResourceImports 只补缺失 import、绝不删已有内容，零回归风险）。
-      const _finalMapping = resolveResourceDomMapping(
-        resourceDomMapping,
-        outputPath,
-      );
-      if (Array.isArray(_finalMapping) && _finalMapping.length > 0) {
-        for (const [fp, fc] of Object.entries(finalTruthFiles)) {
-          if (!fp.endsWith('.vue') || typeof fc !== 'string') continue;
-          const relBase = /^package\/components\//.test(fp)
-            ? '../../resources/images/'
-            : '../resources/images/';
-          // 🔁 层② 反转（2026-09-11）：落盘终验兜底不再按契约注入主组件 import。资源归各自组件
-          // 本地持有，主/子组件统一走默认分支（仅补模板实际引用而缺失的资源 import，幂等只补不删）。
-          const injected = injectResourceImports(
-            fc,
-            _finalMapping,
-            relBase,
-          );
-          if (injected !== fc) {
-            finalTruthFiles[fp] = injected;
-            this.logger.info('🛡️ 资源 import 终验兜底注入（落盘前）', {
-              file: fp,
-            });
-          }
-        }
-      }
-      // 🛡️ 修复 B（运行库 import 兜底，2026-09-02）：资源 import 终验之后、落盘之前，
-      // 幂等补齐 vue/echarts 运行库 import（fixedFiles 覆写可能丢 vue/echarts → 预览 echarts is not defined）。
-      // 纯函数只补缺失、绝不删已有，零回归；且放在资源兜底之后，确保二者叠加后 import 完整。
-      for (const [fp, fc] of Object.entries(finalTruthFiles)) {
-        if (!fp.endsWith('.vue') || typeof fc !== 'string') continue;
-        const ensured = ensureRuntimeLibraryImports(fc);
-        if (ensured !== fc) {
-          finalTruthFiles[fp] = ensured;
-          this.logger.info('🛡️ 运行库 import 兜底补齐（落盘前）', { file: fp });
-        }
-      }
-      // 🛡️ CODE-022 修复器（2026-09-11 根治方案 R3-2）：未挂载的资源 import 确定性删除。
-      // LLM 偶发「import bg1 后 0 处引用」→ CODE-022 BLOCK → 重试常犯同一错 → 耗尽。
-      // 确定性自愈优先于重试；放在运行库 import 兜底之后、FLEX 归一之前（同为幂等纯函数）。
+      let finalTruthFiles = { ...allFiles, ...fixedFiles };
+      // 🛡️ 方案 E（2026-09-16）：双链路共用落盘前自愈链——资源 import 终验 + 运行库兜底 +
+      // CODE-022 删未挂载 + .value 自愈 + FLEX-003/FLEX-005 量纲归一（与 vue3-engineer 同源，
+      // 新增守卫只加一处、双端生效）。取代下方内联段，行为等价 + 新增 .value 自愈。
       {
-        const _pruneMapping = resolveResourceDomMapping(
-          resourceDomMapping,
-          outputPath,
+        const _healed = runPreWriteSelfHealing(
+          finalTruthFiles,
+          { resourceDomMapping, outputPath, injectFn: injectResourceImports },
+          { logger: this.logger },
         );
-        if (Array.isArray(_pruneMapping) && _pruneMapping.length > 0) {
-          for (const [fp, fc] of Object.entries(finalTruthFiles)) {
-            if (!fp.endsWith('.vue') || typeof fc !== 'string') continue;
-            try {
-              const _pr = pruneUnmountedResourceImports(fc, _pruneMapping);
-              if (_pr.changed) {
-                finalTruthFiles[fp] = _pr.content;
-                this.logger.warn('🛡️ CODE-022 修复：删除未挂载的资源 import', {
-                  file: fp,
-                  pruned: _pr.pruned,
-                });
-              }
-            } catch (prErr) {
-              this.logger.warn('🛡️ CODE-022 修复器异常（非阻断）', {
-                file: fp,
-                error: prErr?.message || String(prErr),
-              });
-            }
-          }
-        }
-      }
-      // 🛡️ FLEX-003 确定性归一（2026-09-02，mc-max-1788362388732-1ae956dc 重试耗尽）：
-      // 同一 class 跨文件 flex grow 量纲冲突（scoped 像素量级 vs common.less 比例量级）时，
-      // 把比例量级那份对齐到像素量级（规范 `flex: <Figma高度px> 1 0`）。LLM 重试反复犯同一
-      // 错误（冗余写死样式 + 量纲误写），系统必须归一，否则 FLEX-003 每轮 BLOCK → 重试必耗尽。
-      const _flexFilesArr = Object.entries(finalTruthFiles).map(
-        ([path, content]) => ({ path, content }),
-      );
-      const _flexNormalized = normalizeFlexSourceConflicts(_flexFilesArr);
-      if (_flexNormalized !== _flexFilesArr) {
-        let _flexNormCount = 0;
-        for (const nf of _flexNormalized) {
-          const prev = finalTruthFiles[nf.path];
-          if (prev !== undefined && prev !== nf.content) {
-            finalTruthFiles[nf.path] = nf.content;
-            _flexNormCount++;
-          }
-        }
-        if (_flexNormCount > 0) {
-          this.logger.info('🛡️ FLEX-003 量纲归一（落盘前）', {
-            files: _flexNormCount,
-          });
-        }
-      }
-      // 🛡️ FLEX-005 确定性归一（2026-09-03，mc-max-1788373364090 重试耗尽）：
-      // 不同兄弟 class 之间量纲混用（SummaryCards flex:1 比例 vs TabAndContent flex:317 像素）。
-      // LLM 拿不到 section Figma 高度真值（vision section 无 absoluteBoundingBox.height），
-      // 重试确定性复现 flex:1 vs flex:317 → FLEX-005 每轮 BLOCK → 重试耗尽。此处把像素量级
-      // 兄弟统一改写为 flex:1 1 0（等分近似），消除混用，避免耗尽与像素 section 独占 90% 高度。
-      const _flexSiblingArr = Object.entries(finalTruthFiles).map(
-        ([path, content]) => ({ path, content }),
-      );
-      const _flexSiblingNormalized = normalizeFlexSiblingScale(_flexSiblingArr);
-      if (_flexSiblingNormalized !== _flexSiblingArr) {
-        let _sibNormCount = 0;
-        for (const nf of _flexSiblingNormalized) {
-          const prev = finalTruthFiles[nf.path];
-          if (prev !== undefined && prev !== nf.content) {
-            finalTruthFiles[nf.path] = nf.content;
-            _sibNormCount++;
-          }
-        }
-        if (_sibNormCount > 0) {
-          this.logger.info('🛡️ FLEX-005 量纲归一（落盘前，统一到比例量级）', {
-            files: _sibNormCount,
-          });
-        }
+        finalTruthFiles = _healed.files;
       }
       // 🛡️ 层①配套（2026-09-11 · c-device-monitor-1fduq67s 实锤）：子组件 import 落盘终验兜底。
       // 后处理/AI 修复可能重写 index.vue script 并丢掉子组件 import（实测：模板 4 个标签只剩

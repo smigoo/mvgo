@@ -13,6 +13,29 @@ function normalizeSectionNode(section) {
   const children = Array.isArray(section.children)
     ? section.children.map(normalizeSectionNode).filter(Boolean)
     : undefined
+  // 🛡️ 治本（2026-09-16 · mc-1789501340553-e25b9b55 实锤）：透传 layoutMetadata。
+  //   此前 normalizeSectionNode 完全丢弃 layoutMetadata → Engineer 拿不到 height/flexGrow/direction
+  //   → context-shadow.json 全是 None → 代码生成 prompt 没有布局比例信息 → 所有 section flex:1 平分。
+  //   analysis.json 显示 flexGrow 有值（0.606/0.549/0.703/2.142），说明 planner 的 applyFigmaHeightGrow 生效了，
+  //   但 context-shadow 丢了这些事实 → Engineer 只能盲猜。
+  const layoutMetadata = section.layoutMetadata && typeof section.layoutMetadata === 'object'
+    ? {
+        height: Number.isFinite(section.layoutMetadata.height) ? section.layoutMetadata.height : null,
+        flexGrow: Number.isFinite(section.layoutMetadata.flexGrow) ? section.layoutMetadata.flexGrow : null,
+        direction: section.layoutMetadata.direction || null,
+        alignItems: section.layoutMetadata.alignItems || null,
+        justifyContent: section.layoutMetadata.justifyContent || null,
+        gap: Number.isFinite(section.layoutMetadata.gap) ? section.layoutMetadata.gap : null,
+        padding: section.layoutMetadata.padding && typeof section.layoutMetadata.padding === 'object'
+          ? {
+              top: Number.isFinite(section.layoutMetadata.padding.top) ? section.layoutMetadata.padding.top : 0,
+              right: Number.isFinite(section.layoutMetadata.padding.right) ? section.layoutMetadata.padding.right : 0,
+              bottom: Number.isFinite(section.layoutMetadata.padding.bottom) ? section.layoutMetadata.padding.bottom : 0,
+              left: Number.isFinite(section.layoutMetadata.padding.left) ? section.layoutMetadata.padding.left : 0,
+            }
+          : undefined,
+      }
+    : undefined
   return {
     id: section.id || null,
     title: section.title || null,
@@ -30,6 +53,8 @@ function normalizeSectionNode(section) {
     sourceNodeIds: Array.isArray(section.sourceNodeIds)
       ? section.sourceNodeIds.map((s) => String(s)).filter(Boolean)
       : undefined,
+    // 🛡️ 2026-09-16：透传布局元数据（height/flexGrow/direction/gap/padding）
+    ...(layoutMetadata ? { layoutMetadata } : {}),
     ...(children && children.length > 0 ? { children } : {}),
   }
 }

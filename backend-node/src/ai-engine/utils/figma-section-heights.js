@@ -24,6 +24,34 @@ import {
 } from './section-tree.js';
 
 /**
+ * 解析「子组件规划」（subComponentPlan）的单一事实源。
+ *
+ * 背景（2026-09-16 · c-vehicle-monitor-f177f631 实锤）：generateCode 与 execute 两处各自
+ * 内联了「generationInput.componentPlan → subComponentPlan → 空兜底」的优先级选择，逻辑重复。
+ * 且 execute 曾因迁移时变量名（input/subPlan/effectiveSections）未同步，导致运行时
+ * `input is not defined` 被 catch 吞掉 → N1 数字剥离 + 清洗层 + 确定性修复（含 fix-section-heights）
+ * 整段静默失败 → section 根 height:100% 未改写 → 多区块各占 100% 高互相溢出、仅首块可见。
+ * 此处收口为纯函数，两处复用 + 可单测。
+ *
+ * @param {object|null} [generationInput] Context Assembler 裁决事实（优先取 .componentPlan）
+ * @param {object|null} [subComponentPlan] graph 直传的子组件规划（fallback）
+ * @returns {object} 规划对象，恒有 effectiveSections 数组
+ */
+export function resolveSubComponentPlan(generationInput, subComponentPlan) {
+  const plan = generationInput?.componentPlan;
+  if (plan && typeof plan === 'object') return plan;
+  if (subComponentPlan && typeof subComponentPlan === 'object') {
+    return subComponentPlan;
+  }
+  return {
+    effectiveSections: [],
+    isForced: false,
+    minFiles: 0,
+    reason: '未传入 subComponentPlan',
+  };
+}
+
+/**
  * 取 SFC 根 <template> 内容（跳过 #header-right / v-slot 等具名插槽）。
  *
  * 为什么不能直接 /<template>([\s\S]*?)<\/template>/：非贪婪会停在第一个 </template>，
@@ -116,10 +144,17 @@ function extractRootDirectChildClasses(tpl) {
 function alignSectionClasses(modelFiles, layoutStructure, params = {}) {
   const rawSections =
     layoutStructure?.layout?.sections || layoutStructure?.sections || [];
-  if (!Array.isArray(rawSections) || rawSections.length < 2) return null;
-
   const plan =
     params?.subComponentPlan || params?.generationInput?.componentPlan || null;
+  // 🛡️ 治本（2026-09-16 · c-vehicle-monitor-b82c9d84）：reuseCache 时 layoutStructure 为空 →
+  // rawSections=[]，但 plan.effectiveSections 仍有视觉真值（layout/layoutMetadata.flexGrow）。
+  // 此时不应提前 return null，而是继续走 secOf（回退 eff 本身）。仅当「rawSections 与 plan 都空」才 fail-open。
+  if (
+    (!Array.isArray(rawSections) || rawSections.length < 2) &&
+    !(Array.isArray(plan?.effectiveSections) && plan.effectiveSections.length >= 2)
+  ) {
+    return null;
+  }
   // 🛡️ 治本（2026-09-15 · c-device-monitor-44384241 实锤）：与 code-generator 的
   // resolvePlanSections 同源——先 dedupeDuplicateSections 再 collectLeafSections。
   // 原实现直接用 plan.effectiveSections（未去重，含「设备网格」8438 这类 @antd/tab 的
@@ -128,9 +163,28 @@ function alignSectionClasses(modelFiles, layoutStructure, params = {}) {
   const planLeaves = collectLeafSections(
     dedupeDuplicateSections(plan?.effectiveSections || []),
   );
-  const secOf = (eff) =>
-    findSectionById(rawSections, eff?.id) ||
-    rawSections.find((s) => String(s?.id || '') === String(eff?.id || ''));
+  const secOf = (eff) => {
+    const found =
+      findSectionById(rawSections, eff?.id) ||
+      rawSections.find((s) => String(s?.id || '') === String(eff?.id || ''));
+    if (found) return found;
+    // 🛡️ 治本（2026-09-16 · c-vehicle-monitor-b82c9d84 实锤）：reuseCache 场景下 layoutStructure
+    // 为空（context-shadow.generationInput 无 layoutStructure 字段）→ rawSections=[] → secOf 找不到
+    // → ordered 兜底空 → `tags(4) !== ordered(0)` → 对齐失败 → 规则⑤失去 facts，只能靠「flex 属性信号」猜。
+    // 而 effectiveSections 的 section 本身就有 layout/layoutMetadata.flexGrow（视觉真值），只是字段结构
+    // 与 rawSections 不同（flexGrow 在 layoutMetadata 而非 styles）。此处回退 eff 本身 + 补 styles 包装，
+    // 使 buildSectionLayoutFacts 能从同一份视觉真值确定性读出 layout/flexGrow，不再依赖 layoutStructure。
+    if (eff && (eff.layout || eff.body?.layout || eff.layoutMetadata)) {
+      return {
+        ...eff,
+        styles: {
+          flexGrow: Number(eff.layoutMetadata?.flexGrow) || 0,
+          figmaHeightPx: Number(eff.layoutMetadata?.height) || null,
+        },
+      };
+    }
+    return null;
+  };
 
   let ordered = null;
   if (planLeaves.length >= 2) {
@@ -181,7 +235,9 @@ function alignSectionClasses(modelFiles, layoutStructure, params = {}) {
  *   - `sections[].styles.figmaHeightPx`（审计用像素）
  *   - `sections[].layout`（'grid'|'horizontal'|'vertical'）+ `sections[].gridColumns` / `body.gridColumns`
  *
- * @returns {Record<string,{flexGrow:number,heightPx:number|null,display:string,gridColumns:number|null,flexDirection:string}>|null}
+ * @returns {Record<string,{flexGrow:number,heightPx:number|null,display:string,gridColumns:number|null,flexDirection:('row'|'column'|null)}>|null}
+ *   注：`flexDirection` 为 null 表示「设计稿未给出明确方向」（非 'horizontal'/'vertical'），
+ *   下游写盘可兜底为 column，但方向类门禁（FLEX-006）必须跳过 null，不可当作 column 校验。
  */
 export function buildSectionLayoutFacts(modelFiles, layoutStructure, params = {}) {
   try {
@@ -198,7 +254,18 @@ export function buildSectionLayoutFacts(modelFiles, layoutStructure, params = {}
       );
       const hasGrid = Number.isFinite(gridColumnsRaw) && gridColumnsRaw > 1;
       const display = hasGrid || layout === 'grid' ? 'grid' : 'flex';
-      const flexDirection = layout === 'horizontal' ? 'row' : 'column';
+      // 🎯 M2.1-A（2026-09-16 治本）：旧式 `layout === 'horizontal' ? 'row' : 'column'` 对
+      // **任何非 'horizontal' 的值**（含 undefined / 'grid' / 未知串）一律产 'column' ——
+      // 既静默写错方向，又让下游 FLEX-006 无法区分「真值就是 column」与「压根没有真值」。
+      // 现只认明确值：horizontal→row、vertical→column；其余一律 null（= 无真值）。
+      // 写盘行为不变（resource-mounter 用 `facts.flexDirection || 'column'` 兜底），
+      // 但 FLEX-006 见 null 即跳过不判（阈值纪律：宁可漏报，不误杀）。
+      const flexDirection =
+        layout === 'horizontal'
+          ? 'row'
+          : layout === 'vertical'
+            ? 'column'
+            : null;
       map[cls] = {
         flexGrow,
         heightPx: Number.isFinite(heightPxRaw) && heightPxRaw > 0 ? Math.round(heightPxRaw) : null,

@@ -7,6 +7,7 @@ import {
   findDeadSubComponentImports,
   findUnmountedResourceVars,
   findUndefinedComponentClasses,
+  findResourceValueMisuse,
 } from '../code-structure-validator.js'
 
 describe('CODE-021 findDeadSubComponentImports（子组件死代码 import）', () => {
@@ -135,6 +136,49 @@ import bg2 from '../../resources/images/bg-8807.png'
     expect(code022.some((i) => String(i.file).includes('StatsSection.vue'))).toBe(true)
     expect(code022.some((i) => /bg2/.test(i.message))).toBe(true)
     expect(code022.some((i) => String(i.file).endsWith('package/index.vue'))).toBe(false)
+  })
+})
+
+describe('CODE-027 findResourceValueMisuse（静态资源 .value 误用）', () => {
+  test('import 图片后写 bg1.value / icon3.value → 判误用', () => {
+    const content = `<template><div :style="\`url(\${bg1.value})\`"></div></template>
+<script setup>
+import bg1 from '../resources/images/bg-8788.png'
+import icon3 from '../resources/images/icon-8503.png'
+const stats = [{ icon: icon3.value, bgImage: bg1.value }]
+</script>`
+    const res = findResourceValueMisuse(content).sort()
+    expect(res).toEqual(['bg1', 'icon3'].sort())
+  })
+
+  test('正确用法（直接变量名，无 .value）→ 不报', () => {
+    const content = `<template><div :style="\`url(\${bg1})\`"><img :src="icon3"></div></template>
+<script setup>
+import bg1 from '../resources/images/bg-8788.png'
+import icon3 from '../resources/images/icon-8503.png'
+const stats = [{ icon: icon3, bgImage: bg1 }]
+</script>`
+    expect(findResourceValueMisuse(content)).toEqual([])
+  })
+
+  test('普通 ref 变量的 .value 不误杀（chartRef 非图片 import）', () => {
+    const content = `<template><div ref="chartRef"></div></template>
+<script setup>
+import { ref, onMounted } from 'vue'
+import * as echarts from 'echarts'
+const chartRef = ref(null)
+onMounted(() => { echarts.init(chartRef.value) })
+</script>`
+    expect(findResourceValueMisuse(content)).toEqual([])
+  })
+
+  test('import 语句本身不误判（只查 import 之外的 .value）', () => {
+    const content = `<template><div>x</div></template>
+<script setup>
+import bg1 from '../resources/images/bg-8788.png'
+// 只 import 不引用，也不写 .value
+</script>`
+    expect(findResourceValueMisuse(content)).toEqual([])
   })
 })
 

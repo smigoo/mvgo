@@ -13,6 +13,7 @@ import {
   readFileSync,
 } from 'fs';
 import { join, dirname } from 'path';
+import { createHash } from 'node:crypto';
 import { createLogger } from '../logger/index.js';
 import tunnel from 'tunnel';
 import {
@@ -368,11 +369,29 @@ export class FigmaConnector {
         const stat = statSync(outputPath);
         if (stat.size > 1000) {
           // > 1KB 认为有效（空文件/损坏文件 < 1KB）
-          logger.info('✅ 预览图缓存命中，跳过 Figma Images API', {
-            path: outputPath,
-            sizeKB: Math.round(stat.size / 1024),
-          });
-          return outputPath;
+          // 🛡️ 2026-09-16：旁路 tokenHash 校验 —— token 变了不复用旧预览图
+          //（否则换 token 重新生成时，旧 token 有权限下载的预览图被误当「成功」复用）。
+          const tokenHashFile = `${outputPath}.tokenhash`;
+          const curHash = createHash('sha256')
+            .update(this.figmaToken || '')
+            .digest('hex')
+            .slice(0, 8);
+          let savedHash = '';
+          try {
+            savedHash = existsSync(tokenHashFile)
+              ? readFileSync(tokenHashFile, 'utf-8').trim()
+              : '';
+          } catch {
+            // 旁路文件读失败视为无校验，重新下载
+          }
+          if (savedHash === curHash) {
+            logger.info('✅ 预览图缓存命中，跳过 Figma Images API', {
+              path: outputPath,
+              sizeKB: Math.round(stat.size / 1024),
+            });
+            return outputPath;
+          }
+          logger.info('🔄 预览图缓存 token 已变，重新下载', { fileKey, nodeId });
         }
       }
     } catch (cacheErr) {
@@ -407,6 +426,17 @@ export class FigmaConnector {
 
     // 3. 保存图片
     writeFileSync(outputPath, response.data);
+    // 🛡️ 2026-09-16：写 tokenHash 旁路文件，供下次缓存短路校验
+    try {
+      writeFileSync(
+        `${outputPath}.tokenhash`,
+        createHash('sha256').update(this.figmaToken || '').digest('hex').slice(0, 8),
+      );
+    } catch (e) {
+      logger.warn('预览图 tokenHash 旁路文件写入失败（不影响生成）', {
+        error: e.message,
+      });
+    }
 
     logger.info('✅ 预览图下载成功', {
       path: outputPath,
@@ -1421,15 +1451,24 @@ export class FigmaConnector {
       if (existsSync(nodeCacheFile)) {
         try {
           const nodeCache = JSON.parse(readFileSync(nodeCacheFile, 'utf-8'));
+          // 🛡️ 2026-09-16：缓存命中追加 token 哈希校验，token 变了不再复用旧节点树。
+          // 此前只比 fileKey+nodeId，换 token 后仍命中旧缓存 → 跳过 Figma API，
+          // 用旧 token 拉的节点树「假成功」（实际新 token 可能无权限）。
+          const tokenHash = createHash('sha256')
+            .update(this.figmaToken || '')
+            .digest('hex')
+            .slice(0, 8);
           if (
             nodeCache.fileKey === fileKey &&
             nodeCache.nodeId === nodeId &&
+            nodeCache.tokenHash === tokenHash &&
             nodeCache.document
           ) {
             nodeData = nodeCache.document;
             logger.info('✅ 节点树缓存命中，跳过 Figma 节点树 API', {
               fileKey,
               nodeId,
+              tokenHash,
             });
           }
         } catch (cacheErr) {
@@ -1549,6 +1588,11 @@ export class FigmaConnector {
       const cacheData = {
         fileKey,
         nodeId,
+        // 🛡️ 2026-09-16：缓存附带 token 哈希，读取侧校验（token 变了不复用旧节点树）
+        tokenHash: createHash('sha256')
+          .update(this.figmaToken || '')
+          .digest('hex')
+          .slice(0, 8),
         cachedAt: new Date().toISOString(),
         document: nodeData,
       };
@@ -2355,15 +2399,21 @@ export class FigmaConnector {
           .split('/')
           .filter(Boolean);
         if (segs.length >= 3) {
-          m.mountTarget = segs[segs.length - 2];
+          let mountTarget = segs[segs.length - 2];
           // ── F3：无语义 mountTarget 过滤（2026-09-01，mc-max-1788252098143-12469472 实锤）──
           // 单字符（'t'）/ 纯「类型+编号」（Group 2136636802 / Frame 1280）等 Figma 作者随手命名
           // → 清空挂载目标，不参与 CODE-016 强制挂载（匹配过宽/不可执行，RESOURCE-003 误报根源）。
           // 注意：不能置 skipMount —— N4 根容器注入（vue3-engineer.js:1470 / microcode-engineer.js:5078）
           // 用 .find(skipMount bg) 选「面板整体背景」，置 skipMount 会被误选铺到根容器。
-          if (!isSemanticMountTarget(m.mountTarget)) {
-            m.mountTarget = null;
+          if (!isSemanticMountTarget(mountTarget)) {
+            // 🛡️ E1 治本（2026-09-16）：直接父容器无语义（数字/Group 命名）时，回退到
+            //   「语义祖先」——沿祖先链找最近一个有业务语义的容器名（确定性事实，非猜）。
+            //   此前直接置 null → bg 失去确定性挂载点 → 只能靠 pickBestMountTarget 评分猜
+            //   （设备监测 12 卡共享 bg3 父容器「Group 2136637321」无语义 → null → 背景挂错/缺失）。
+            const ancestor = this._semanticAncestor(segs.slice(0, -1));
+            mountTarget = ancestor || null;
           }
+          m.mountTarget = mountTarget;
         } else {
           m.skipMount = true;
         }
@@ -2626,53 +2676,9 @@ export class FigmaConnector {
   /**
    * 6-A · 构建 nodeId→fills 颜色索引（确定性事实源）
    *
-   * 遍历 Figma 节点树，为每个有 fills 的节点建立颜色映射。
-   * 文本节点的颜色归为 textColor，容器/形状节点的颜色归为 bgColor。
-   *
-   * 返回：Map<nodeId, { fillsSummary, textColor?, bgColor?, nodeType }>
-   * - fillsSummary: 原始 fills 摘要（复用 _extractVisualMeta 的口径）
-   * - textColor: 文本节点的文字颜色（hex）
-   * - bgColor: 容器/形状节点的背景颜色（hex 或 gradient CSS）
-   * - nodeType: 'text' | 'container' | 'resource'
-   *
-   * 用途：供 6-B 颜色确定性装配消费，按 nodeId 绑定颜色真值。
+   * 🛡️ 已废弃（2026-09-16）：此索引是「死数据」——graph 层构建后只写进 component-meta.json，
+   * 从未被 prompt/engineer 消费（6-B 装配从未实现）。语义化样式事实已由
+   * section-tree#buildSectionStyleFacts 接管（planner 语义树 + Figma 精确样式，
+   * 产出「section 语义 → 内部元素样式」，微码/vue3 双链路共用）。
+   * 保留此注释作历史留痕，方法体已删除。
    */
-  buildNodeColorIndex(figmaNodeData) {
-    const index = new Map();
-    if (!figmaNodeData) return index;
-
-    this.traverseFigmaTree(figmaNodeData, (node) => {
-      if (!node || !node.id) return;
-
-      // 提取 fills 摘要（复用 _extractVisualMeta 的颜色算法）
-      const visualMeta = this._extractVisualMeta(node);
-      if (!visualMeta || !visualMeta.fillsSummary) return;
-
-      const entry = {
-        fillsSummary: visualMeta.fillsSummary,
-        nodeType: 'container',
-      };
-
-      // 文本节点：颜色归为 textColor
-      if (node.type === 'TEXT') {
-        entry.nodeType = 'text';
-        entry.textColor = visualMeta.fillsSummary;
-      } else {
-        // 容器/形状节点：颜色归为 bgColor
-        // 资源节点（bg/icon/image）在资源映射里已处理，这里只索引业务节点
-        const isResource =
-          node.type === 'RECTANGLE' &&
-          node.absoluteBoundingBox &&
-          (node.absoluteBoundingBox.width > 100 || node.absoluteBoundingBox.height > 100);
-        if (isResource) {
-          entry.nodeType = 'resource';
-        }
-        entry.bgColor = visualMeta.fillsSummary;
-      }
-
-      index.set(node.id, entry);
-    });
-
-    return index;
-  }
-}

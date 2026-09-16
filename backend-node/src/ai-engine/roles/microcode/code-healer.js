@@ -30,6 +30,7 @@ import { healMissingLessBraces } from '../../validators/less-compile-gate.js';
 import { fixTextOrderDrift } from '../../utils/text-order-guard.js';
 import { parse as parseJavaScript } from '@babel/parser';
 import { inferChartMinHeight } from '../../utils/post-process.js';
+import { CARTESIAN_SERIES_TYPES } from '../../utils/chart-type-guard.js';
 import { extractSfcTemplate } from '../../utils/sfc-template-extractor.js';
 import { stripDanglingComponentRefs } from '../../utils/section-coverage-guard.js';
 import {
@@ -1392,7 +1393,12 @@ export function healThemeMixinVarRefs(content, themeVarsContent) {
       for (const [name, def] of mixinVars) {
         if (localDeclared.has(name)) continue;
         // 值位置引用：@name 后非冒号（排除声明）、非 { （排除 @{} 插值）
-        const re = new RegExp(`@${name}\\b(?!\\s*:)(?!\\{)`, 'g');
+        // 🛡️ 治本（2026-09-16 · c-vehicle-monitor-71dd6494 实锤）：原 `@${name}\b` 的 \b 把
+        // `-` 当词边界 → `@color-bg` 误匹配 `@color-bg-card` 的前缀 → 产出
+        // `var(--color-bg, ...)-card`（非法 CSS，背景/边框声明被浏览器忽略）。改为
+        // `(?![-\w])` 负向前瞻：后面若是 `-` 或词字符（即同名前缀槽位如 -card/-hover/-base）
+        // 一律不匹配，杜绝「短槽位名吞长槽位名前缀」。
+        const re = new RegExp(`@${name}(?![\\w-])(?!\\s*:)(?!\\{)`, 'g');
         if (re.test(outLine)) {
           outLine = outLine.replace(re, `var(--${name}, ${def})`);
           changed = true;
@@ -1538,7 +1544,12 @@ export function injectEchartsFallback(content, options = {}) {
   if (typeof content !== 'string' || !content.trim()) return content;
   if (content.includes('echarts.init(')) return content; // 已有 echarts，无需注入
   const chartType = String(options.chartType || 'line').toLowerCase();
-  const chartSeries = String(options.chartSeries || '趋势图');
+  // 🎯 D 系列第一刀：优先使用视觉真值 legendItems，回退 chartSeries
+  const legendItems = Array.isArray(options.legendItems) ? options.legendItems : [];
+  const chartSeries = legendItems.length > 0
+    ? legendItems.join(', ')
+    : String(options.chartSeries || '趋势图');
+  const isCartesian = CARTESIAN_SERIES_TYPES.has(chartType);
 
   const scriptM = content.match(/<script\b[^>]*>([\s\S]*?)<\/script>/i);
   if (!scriptM) return content;
@@ -1608,9 +1619,12 @@ export function injectEchartsFallback(content, options = {}) {
     ...importLines,
     `const ${chartRefVar} = ref(null); let ${chartVar} = null; let ${observerVar} = null`,
     `const ${optionVar} = () => ({`,
-    `  grid: { left: 40, right: 20, top: 20, bottom: 30, containLabel: true },`,
-    `  xAxis: { type: 'category', data: ['2','4','6','8','10','12','14','16','18','20','22','24'] },`,
-    `  yAxis: { type: 'value' },`,
+    // 🎯 D 系列第一刀：非笛卡尔图（pie/donut/gauge/radar）跳过 xAxis/yAxis/grid
+    ...(isCartesian ? [
+      `  grid: { left: 40, right: 20, top: 20, bottom: 30, containLabel: true },`,
+      `  xAxis: { type: 'category', data: ['2','4','6','8','10','12','14','16','18','20','22','24'] },`,
+      `  yAxis: { type: 'value' },`,
+    ] : []),
     `  series: [{ name: ${JSON.stringify(chartSeries)}, type: '${chartType}', data: [] }]`,
     `})`,
     `const ${resizeVar} = () => { ${chartVar}?.resize() }`,

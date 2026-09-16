@@ -91,6 +91,7 @@ import { resolveNodeExclusivity } from '../utils/node-exclusivity.js';
 import { validateDoNotInvent } from '../validators/do-not-invent-validator.js';
 import { createLogger } from '../logger/index.js';
 import { subcomponentPlanner } from '../roles/subcomponent-planner.js';
+import { resolveBackgroundBrightness } from '../utils/style-tokens.js';
 // 自优化器：基于历史 metrics 自动优化 Prompt 和参数
 import {
   recordRun,
@@ -112,6 +113,10 @@ import {
   detectNavSignal,
   injectNavSectionIfMissing,
 } from '../utils/nav-section.js';
+import {
+  detectChartSignal,
+  injectChartSectionIfMissing,
+} from '../utils/chart-section.js';
 
 const logger = createLogger({ name: 'mc-component-graph-phase2-v3' });
 
@@ -497,9 +502,7 @@ export function createPhase2Graph(config = {}) {
           resourceDomMapping = null;
         }
 
-        // 6-A · 缓存路径也需构建颜色索引（与主路径同口径）
-        const cachedConnector = new FigmaConnector({ figmaToken: state.figmaToken });
-        const nodeColorIndex = cachedConnector.buildNodeColorIndex(cachedNodeData);
+        // 6-A · 缓存路径（颜色索引已废弃，见 figma-connector#buildNodeColorIndex 注释）
 
         return {
           figmaStyleTree: formatFigmaStyleData(cachedNodeData),
@@ -509,8 +512,6 @@ export function createPhase2Graph(config = {}) {
           resourceDomMapping,
           techStackHints: cachedTechHints,
           docAnalysis: state.docAnalysis || null,
-          // 6-A · nodeId→fills 颜色索引（确定性事实源，供 6-B 颜色装配消费）
-          nodeColorIndex,
         };
       }
 
@@ -583,9 +584,6 @@ export function createPhase2Graph(config = {}) {
       );
       const figmaStyleTree = formatFigmaStyleData(optimizedFigmaData);
 
-      // 6-A · 构建 nodeId→fills 颜色索引（确定性事实源，供 6-B 颜色装配消费）
-      const nodeColorIndex = connector.buildNodeColorIndex(optimizedFigmaData);
-
       // 🏷️ 早提取组件中文名（根节点名 cp-流量监测 → 流量监测），随完成事件带给 service 层
       // 回写任务 displayName（监控浮窗/任务中心尽早显示中文名）。仅接受含 CJK 的标题。
       const _rootTitle = String(optimizedFigmaData?.name || '')
@@ -614,8 +612,6 @@ export function createPhase2Graph(config = {}) {
         techStackHints: techStackHints,
         //S10: 汇合后的文档分析产物
         docAnalysis,
-        // 6-A · nodeId→fills 颜色索引（确定性事实源，供 6-B 颜色装配消费）
-        nodeColorIndex,
       };
     } catch (error) {
       logger.error('Figma数据获取失败', { error: error.message });
@@ -1152,10 +1148,22 @@ export function createPhase2Graph(config = {}) {
       });
 
       // 提取 Figma 节点中文名称作为 displayName（用于 declare.json componentName）
-      const displayName =
+      // ⚠️ 必须剥离 cp-/mc-/mv-/page- 前缀，与上方「早提取」（_rootTitle，第 591 行）逐字一致。
+      // 2026-09-16 实锤：此处不去前缀 → displayName = 'cp-重点车辆监测' →
+      //   ① prompt-builder 把带前缀的值写进 declare componentName 约束；
+      //   ② code-validator 的 hasIdPrefix() 判定「含 ID 前缀」→ 用 displayName 修，
+      //      但 displayName 自己也含前缀 → 触发 extractHeaderTitle 兜底；
+      //   ③ 该兜底是「深度优先找第一个中文 TEXT」→ 抓到 tabs 第一个 tab 文本
+      //      「江阴靖江长江隧道」（而真正的组件名「重点车辆监测」在 header 小标题里，更靠后）；
+      //   ④ declare.componentName 被写成 tab 标签 → phase2.service 权威回写
+      //      → 任务中心/面包屑显示「江阴靖江长江隧道」。
+      const _rawDisplayName =
         state.figmaNodeData?.name ||
         state.analysisTarget ||
         state.componentName;
+      const displayName = String(_rawDisplayName || '')
+        .replace(/^(cp|mc|mv|page)-/, '')
+        .trim();
 
       if (
         state._visualDegraded ||
@@ -1231,10 +1239,14 @@ export function createPhase2Graph(config = {}) {
         //  per-element 样式映射（来自 Style Mapper）
         elementStyleMap: state.styleMappings?.elementStyleMap,
         //面板明暗主题（用于 theme-vars.less 默认主题）
-        backgroundBrightness:
+        // 🛡️ 2026-09-16 治本（c-traffic-monitor-a9a8edc9 黑白叠字）：vision 亮度判定不可靠
+        //（浅色背景误判 dark → 白字叠加黑字），改用 Figma 实测背景色确定性覆盖。
+        backgroundBrightness: resolveBackgroundBrightness(
+          state.figmaNodeData,
           state.visualElements?.backgroundBrightness ||
-          state.layoutStructure?.styles?.backgroundBrightness ||
-          'dark',
+            state.layoutStructure?.styles?.backgroundBrightness ||
+            'dark',
+        ),
         //视觉降级防线：engineer 内部也会兜底拒绝，避免未来改边绕过 visual-parser 闸门
         _visualDegraded: state._visualDegraded,
         _visualDegradeReason: state._visualDegradeReason,
@@ -2617,18 +2629,12 @@ export function createPhase2Graph(config = {}) {
           /* 旧 meta 损坏则重建 */
         }
         const runtimeVerified = !state._runtimeGateDowngraded;
-        // 6-A: nodeColorIndex 写进 component-meta.json（确定性颜色事实源，供后续 6-B 装配消费）
-        const nodeColorIndexPlain = state.nodeColorIndex
-          ? Object.fromEntries(state.nodeColorIndex instanceof Map ? state.nodeColorIndex : Object.entries(state.nodeColorIndex))
-          : undefined;
 
         const nextMeta = {
           ...prevMeta,
           runtimeVerified,
           // 7-A: visualFidelity — 用 ?? 防止 parallel-quality-check 的 undefined 覆盖 visual-comparator 的有效值
           ...(state.visualFidelity != null ? { visualFidelity: state.visualFidelity } : {}),
-          // 6-A: nodeColorIndex
-          ...(nodeColorIndexPlain && Object.keys(nodeColorIndexPlain).length > 0 ? { nodeColorIndex: nodeColorIndexPlain } : {}),
           ...(runtimeVerified
             ? {}
             : {
@@ -3206,15 +3212,25 @@ export function createPhase2Graph(config = {}) {
         elementStyleMap: state.elementStyleMap,
         figmaNodeData: state.figmaNodeData,
       });
-      const finalPlan = injectNavSectionIfMissing(plan, navSignal, {
+      let currentPlan = injectNavSectionIfMissing(plan, navSignal, {
         figmaNodeData: state.figmaNodeData,
         elementStyleMap: state.elementStyleMap,
       });
-      const injectedNav = finalPlan !== plan;
+      const injectedNav = currentPlan !== plan;
+
+      // ️ 图表 section 兜底注入（2026-09-16 · mc-1789501340553-e25b9b55 实锤）
+      // 若 Figma 节点树中有 @echarts 标记节点但 effectiveSections 尚无 chart section，
+      // 则强制注入，确保图表区域进入生成。
+      const chartSignal = detectChartSignal({ figmaNodeData: state.figmaNodeData, charts: state.charts });
+      const finalPlan = injectChartSectionIfMissing(currentPlan, chartSignal, {
+        figmaNodeData: state.figmaNodeData,
+        charts: state.charts,
+      });
+      const injectedChart = finalPlan !== currentPlan;
 
       state.onProgress?.({
         stage: '子组件规划',
-        message: `✅ 完成：${finalPlan.effectiveSections.length} 个 section${finalPlan.isForced ? '（强制拆分）' : '（不强拆）'}${injectedNav ? '（已强制注入导航 section）' : ''}`,
+        message: `✅ 完成：${finalPlan.effectiveSections.length} 个 section${finalPlan.isForced ? '（强制拆分）' : '（不强拆）'}${injectedNav ? '（已强制注入导航 section）' : ''}${injectedChart ? '（已强制注入图表 section）' : ''}`,
         status: 'completed',
       });
       // 保存到 analysis checkpoint（与 reviewResult/styleMappings 同批），便于断点续跑

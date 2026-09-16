@@ -846,7 +846,7 @@ onBeforeUnmount(() => {
   display: block;
 }
 .col-thumb { width: 64px; }
-.col-name { width: 26%; }
+.col-name { width: 20%; }
 .col-type { width: 88px; }
 .col-code { width: 190px; }
 .col-spec { width: 100px; }

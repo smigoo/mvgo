@@ -31,10 +31,20 @@
 export const RETRY_POLICIES = [
   {
     // ⚠️ 必须排在最前：截断导致的语法错误，重试同样会截断，唯一解是加大预算/增分块
+    // 🛡️ 2026-09-16 治本（da7d931c 实锤）：本策略排最前且 selfHealable=false，
+    //    一旦误命中就会「零重试直接放弃」并遮蔽后面的 semantic-incomplete（可自愈，budget 1）。
+    //    旧 match 含裸 `/被截断/`，会命中 sfc-semantics 的**推测性**措辞
+    //    「缺少 <script setup> 标签（输出可能被截断）」——而该任务全部 chunk 的
+    //    finishReason 均为 stop（无任何真实截断）。故收紧为「确凿截断证据」白名单：
+    //      · max_tokens / finish_reason=length / length limit / maximum context length
+    //      · unexpected end of（JSON/文件中途结束，截断的确凿签名）
+    //      · 「输出被截断」（code-generator 提高上限后仍截断时抛出的确定性措辞）
+    //    裸 `/被截断/`、`incomplete` 已移除：推测措辞（可能/疑似）不再命中，
+    //    此类错误落回语义类策略，由重试修正。
     id: 'truncation',
     name: '输出被截断',
     match: (msg) =>
-      /max_tokens|max tokens|length limit|maximum (?:context )?length|被截断|incomplete|unexpected end of/i.test(
+      /max_?tokens|max tokens|finish_?reason\s*[:=]\s*['"]?length|length limit|maximum (?:context )?length|unexpected end of|输出被截断/i.test(
         msg,
       ),
     budget: 0,

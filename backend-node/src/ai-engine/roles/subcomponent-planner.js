@@ -28,6 +28,8 @@ import {
   indexFigmaNodes,
   figmaSectionBox,
   stripFabricatedSourceIds,
+  uniqueSectionIds,
+  deriveSectionsFromFigmaTree,
 } from '../utils/section-tree.js';
 // 🛡️ 刀 5a（2026-09-13）：section type 推导抽离到纯函数模块（无 import.meta 依赖，可单测）
 import { deriveSectionType } from '../utils/section-type-derive.js';
@@ -865,8 +867,13 @@ function applyFigmaHeightGrow(nodes, figmaIndex) {
           const meta = s.layoutMetadata;
           if (!meta) continue;
           const next = Math.round((height / avg) * 1000) / 1000;
-          if (meta.flexGrow !== next) {
+          // 🛡️ 治本（2026-09-16 · mc-1789501340553-e25b9b55 实锤）：同步写入 Figma 实测高度。
+          //   此前只更新 flexGrow 不更新 height → height 始终为 0（extractLayoutMetadata 从 LLM 产出的
+          //   section 读不到 absoluteBoundingBox）→ microcode-engineer.js line 935 的 `if (meta.height > 0)`
+          //   恒 false → 整个布局提示块被跳过 → LLM 拿不到 flex 比例信息 → 所有 section flex:1 平分。
+          if (meta.flexGrow !== next || !(meta.height > 0)) {
             meta.flexGrow = next;
+            meta.height = height;
             changed += 1;
           }
         }
@@ -902,7 +909,102 @@ export class SubcomponentPlanner {
     const rawSections =
       layoutStructure?.layout?.sections || layoutStructure?.sections || [];
 
-    if (!Array.isArray(rawSections) || rawSections.length === 0) {
+    // 🛡️ E1 治本（2026-09-16）：用 Figma 节点树确定性递归推导 section 结构，
+    // 替代 vision（LLM）的自由发挥划分。vision 划分是「布局崩塌」的根源——
+    // 重复 sub-header、命名混乱、高度缺失、横向容器（header 内 tabs）被
+    // rebuildSlotConContainers 跳过导致嵌套丢失。
+    // 治本规则：deterministic 递归结构 = 结构骨架（嵌套层级 + 确定性高度），
+    // vision = 语义回填（type/role，按 figmaNodeId 匹配），两者合并。
+    let sections = skipPanelHeaderFilter
+      ? rawSections
+      : rawSections.filter((sec) => !isPanelHeader(sec));
+    let filteredCount = rawSections.length - sections.length;
+
+    if (opts.figmaNodeData && typeof opts.figmaNodeData === 'object') {
+      // 🛡️ 先尝试确定性递归推导（结构事实源）
+      const derived = deriveSectionsFromFigmaTree(opts.figmaNodeData);
+      if (derived && Array.isArray(derived.sections) && derived.sections.length > 0) {
+        // 收集 vision 语义（完整字段），按 figmaNodeId 建索引
+        const visionSemantic = new Map();
+        const collectSemantic = (secs) => {
+          for (const s of secs || []) {
+            if (!s || typeof s !== 'object') continue;
+            const key = String(s.figmaNodeId || s.id || '');
+            if (key && !visionSemantic.has(key)) {
+              visionSemantic.set(key, s);
+            }
+            collectSemantic(s.children);
+          }
+        };
+        collectSemantic(rawSections);
+
+        // 🛡️ 语义回填：vision 的「语义字段」优先（id/type/name/role/sourceNodeIds/header/body），
+        // deterministic 的「结构字段」优先（children 嵌套层级、isLayoutContainer、
+        // absoluteBoundingBox、styles.figmaHeightPx）。这是「方案 C 混合模式」的核心：
+        // 结构来自 Figma 树（确定性），语义来自 vision（LLM 识别 chart/tabs/stats）。
+        const enrich = (secs) => {
+          for (const s of secs) {
+            if (!s || typeof s !== 'object') continue;
+            const sem = visionSemantic.get(String(s.figmaNodeId || s.id || ''));
+            if (sem) {
+              // vision 语义 id 优先（chart 的「江阴靖江长江隧道」等 LLM 语义命名）
+              if (sem.id && sem.id !== s.id) s.id = sem.id;
+              // vision type 优先（chart/tabs/stats 等 LLM 语义分类）
+              if (sem.type) s.type = sem.type;
+              // vision role 优先（inline-row/item/常驻）
+              if (sem.role) s.role = sem.role;
+              // vision 语义 name 优先（「江阴靖江长江隧道」优于「@echarts/bar」）
+              if (sem.name && sem.name !== s.name) s.name = sem.name;
+              // vision sourceNodeIds 优先（chart 数据关联）
+              if (Array.isArray(sem.sourceNodeIds) && sem.sourceNodeIds.length > 0) {
+                s.sourceNodeIds = sem.sourceNodeIds;
+              }
+              // vision header 优先（标题真值）
+              if (sem.header) s.header = sem.header;
+              // vision body 优先（叶子内容结构）
+              if (sem.body) s.body = sem.body;
+            }
+            if (Array.isArray(s.children)) enrich(s.children);
+          }
+        };
+        enrich(derived.sections);
+
+        sections = derived.sections;
+        logger.info('E1 治本：确定性递归结构已替代 vision sections', {
+          deterministic: sections.length,
+          vision: rawSections.length,
+        });
+      } else {
+        // 🛡️ 兜底：确定性推导失败时，退回「vision 划分 + 确定性高度注入」互补模式
+        const figmaRoot = opts.figmaNodeData?.document || opts.figmaNodeData;
+        const figmaIndex = indexFigmaNodes(figmaRoot);
+        const heightById = new Map();
+        for (const [id, rec] of figmaIndex) {
+          if (rec?.bbox && rec.bbox.height > 0) {
+            heightById.set(id, rec.bbox);
+          }
+        }
+        let injected = 0;
+        sections = sections.map((s) => {
+          const box = heightById.get(String(s.figmaNodeId || s.id || ''));
+          if (box && box.height > 0) {
+            injected += 1;
+            return {
+              ...s,
+              absoluteBoundingBox: box,
+              styles: { ...(s.styles || {}), figmaHeightPx: box.height },
+            };
+          }
+          return s;
+        });
+        logger.info('E1 兜底：确定性高度已注入 vision sections', {
+          injected,
+          total: sections.length,
+        });
+      }
+    }
+
+    if (!Array.isArray(sections) || sections.length === 0) {
       return {
         effectiveSections: [],
         isForced: false,
@@ -912,18 +1014,13 @@ export class SubcomponentPlanner {
       };
     }
 
-    // 过滤 panel-header（仅微码流程）
+    // 过滤 panel-header（仅微码流程，且仅 vision 路径需要）
     // ⚠️ 刻意**不**在此复用 chrome-section-filter#isChromeOnlySection：实证（2026-09-14
     //   c-traffic-monitor-21e2afd6）raw section 全部为 role='inline-row' 且 children[].role='item'，
     //   而 hasBusinessBody 的业务正则为 /…|item|…/ → 恒为 true → 该过滤器对 inline-row 永远
     //   返回 false（死判据，加了也不生效）；且它命中即「整节剥离」，会连「当日总流量/流量预测
     //   tabs」一起删掉（上游 headerSlots 为 [] 无兜底），与「chrome 剥离仅微码」的既有契约冲突。
     //   真正的事实源在上游 visual-parser#_postProcessAnalysis 的 stripChromeSectionsInPlace。
-    let sections = skipPanelHeaderFilter
-      ? rawSections
-      : rawSections.filter((sec) => !isPanelHeader(sec));
-
-    const filteredCount = rawSections.length - sections.length;
     if (filteredCount > 0) {
       logger.info(`过滤 ${filteredCount} 个 panel-header section`);
     }
@@ -1024,6 +1121,12 @@ export class SubcomponentPlanner {
     }
 
     applyFlexGrowFallback(effectiveSections);
+
+    // 🛡️ E1 治本（2026-09-16 · c-traffic-monitor-bc0c25aa 实锤）：id 唯一化。
+    // vision 对同一容器下多个图表输出重复 id（426:807×3），dedupe 按 sourceNodeIds 正确保留了
+    // 3 个真图表，但重复 id 进 prompt 令 LLM 混淆 → ChartForecast×3 空壳 + 命名碰撞。
+    // 此处对重复 id 加 `-2`/`-3` 后缀，使 prompt 里 3 个 section 可区分。
+    effectiveSections = uniqueSectionIds(effectiveSections);
 
     const leafSections = collectLeafSections(effectiveSections);
     const hasComplexSection = leafSections.some((s) => s.shouldSplitInternally);

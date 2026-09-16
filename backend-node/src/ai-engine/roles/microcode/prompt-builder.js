@@ -48,7 +48,10 @@ import {
   findSectionById,
   assignSectionComponentNames,
   dedupeDuplicateSections,
+  buildSectionStyleFacts,
 } from '../../utils/section-tree.js';
+// 🎯 A1 收回（2026-09-16）：空块骨架生成器，注入 style chunk 让 LLM 只填 value
+import { generateEmptyClassSkeleton } from './code-validator.js';
 
 /**
  * 构建代码生成 Prompt（主入口）
@@ -536,7 +539,28 @@ ${outputFormatWarnings(true)}
 
     const chartCore = hasCharts
       ? `
-5. 图表图例：设计稿有明确自定义图例样式时使用 DOM 图例并与图表联动（dispatchAction）；无特殊样式要求时使用 ECharts 内置 legend 组件
+5. 图表类型识别（E3-2 · 2026-09-16 · 源头治本）：
+   - 环形图（donut/ring）：series.type='pie' + radius: ['40%', '70%']（内径+外径），禁止 type='doughnut'（ECharts 无此类型）
+   - 饼图（pie）：series.type='pie' + radius: '70%'（单值或百分比）
+   - 折线图/面积图：series.type='line'，面积图加 areaStyle: {}
+   - 柱状图：series.type='bar'
+   - 堆叠图：series.type='bar' 或 'line' + stack: 'total'
+   - 雷达图：series.type='radar'
+   - 散点图：series.type='scatter'
+   - 仪表盘：series.type='gauge'
+   - 进度条：series.type='gauge' + detail.formatter
+   - 若视觉稿显示"环形"或"圆环"，必须用 pie + radius 数组，禁止臆造 doughnut 类型
+
+6. 图例归属判定（E3-2 · 2026-09-16 · 源头治本）：
+   - 设计稿有自定义图例样式（如圆点+文字+数值、带背景色的卡片式图例）→ 使用 DOM 图例 + echarts dispatchAction 联动
+   - 设计稿为默认图例样式（纯文字列表、无特殊装饰）→ 使用 echarts 内置 legend 组件
+   - 判定依据：视觉稿中图例是否有自定义样式（颜色块、图标、特殊布局），而非猜测
+
+7. 图表数据完整性（E3-2 · 2026-09-16 · 源头治本）：
+   - legend.data 数组必须与 series[].name 一一对应，禁止重复项（如 ['策略A', '策略A']）
+   - 每个 series 必须有 name 字段，且 name 在 legend.data 中存在
+   - 若视觉稿显示 N 个图例项，则 legend.data.length = N 且 series.length = N
+   - 禁止在 legend.data 中留空字符串或 undefined
 `
       : '';
 
@@ -694,6 +718,7 @@ export function buildChecklistByType(fileType, input, options = {}) {
   - ✅ 正确：\`<img :src="icon1">\` 或 \`<div :style="{ backgroundImage: 'url(' + bg1 + ')' }">\`
   - ❌ 错误：在 \`<style>\` 块内写 \`url(\${bg1})\` / \`url(@bg1)\` / \`url(\$bg1)\` —— LESS 会把它们当变量解析，未声明即编译崩溃
   - ❌ 错误：手写 \`import bg1 from '...'\` —— 资源 import 由系统后处理注入
+- [ ] **bg/icon DOM 语义铁律（违反即门禁重试）**：\`bg*\` 资源（背景图）是**父元素的 CSS 背景**，**禁止**为它单独创建 DOM 节点；\`icon*\`/\`img*\` 资源（图标/图片）才是独立 DOM。正确做法是把 bg 直接绑定到**已有业务容器**的 \`:style\` 上（如 \`:style="{ backgroundImage: 'url(' + bg3 + ')' }"\` 挂在卡片容器上），**禁止**再包一层 \`<div class="xxx-bg"><div class="xxx-deco"></div></div>\` 空壳节点
 - [ ] **L4-003**: common.less 中所有 class 都使用了 \`.c-\` 前缀（如 \`.c-vehicle-card\`，没有 .item、.box、.wrapper 等通用名）
 - [ ] **index.less**: 不要输出 resources/styles/index.less（由生成器按「根作用域默认主题 + @import common.less」固定模板生成）
 - [ ] **common.less 作用域**: common.less 内所有业务 class 写在文件根层，**禁止**用 \`.dark {}\` / \`.light {}\` / 任何外层选择器包裹（宿主不会给组件根加主题类，包裹后编译成 \`.dark .c-xxx\`，真实 DOM 0 命中 → 样式全部失效）
@@ -772,6 +797,7 @@ export function buildChecklistByType(fileType, input, options = {}) {
 ## 🔍 资源使用规范（必须遵守，违反会导致生成失败）
 
 - [ ] **禁止用 CSS gradient 替代已下载的 bg 资源**：如果 resource-dom-mapping 里有 bg 资源（如 bg2、bg3），必须用 :style="{ backgroundImage: \`url(\${bgX})\` }" 绑定，禁止在 CSS 里写 background: linear-gradient(...)
+- [ ] **bg 是父元素背景、禁止独立 DOM**：\`bg*\` 资源直接绑定到**已有业务容器**（卡片/区块根元素）的 \`:style\` 上，**禁止**为 bg 单独创建 \`<div class="xxx-bg">\` 或 \`<div class="xxx-deco">\` 等空壳节点；只有 \`icon*\`/\`img*\` 才生成独立 DOM（\`<img :src="...">\`）
 - [ ] **禁止在 scoped CSS 里用 url(varName)**：scoped CSS 中的 url(bg3) 不会解析为 import 的变量，必须改用 inline :style 绑定（如 :style="{ backgroundImage: \`url(\${bg3})\` }"）
 - [ ] **图表区域使用 echarts 内置能力**：如果组件包含图表，必须使用 echarts 的 legend/markLine/markPoint 等内置能力，不要拆成独立 DOM（如 chart-header、chart-badge）。整个图表区域应是一个 echarts 实例
 - [ ] **阈值线/平均线必须用 markLine**：如果设计稿中有阈值线、平均线、预警线等参考线，必须使用 echarts 的 markLine 或 markArea 实现，**禁止创建伪造的 series**（如 name: '阈值', type: 'line', data: [100, 100, 100]）。正确做法：在真实数据 series 中添加 markLine: { data: [{ yAxis: 100, name: '阈值' }] }
@@ -1907,7 +1933,7 @@ export function buildChunkMiddle(chunk, input) {
     );
     const availVarsBlock =
       _availVars && _availVars.length > 0
-        ? `本次**仅以下资源变量可用**，禁止使用清单之外的任何变量名（如 icon3/icon4/bg5 若不在清单中则不存在）：\n  - \`${_availVars.join('`、`')}\`\n  **用法铁律**：这些变量只能以模板插值使用（\`<img :src="icon1">\` / \`:style="{ backgroundImage: 'url(' + bg1 + ')' }"\`），**禁止**写进 \`<style>\` 块（\`url(\${bg1})\`/\`url(@bg1)\`/\`url(\$bg1)\` 会令 LESS 编译崩溃），**禁止**手写 import（系统注入）`
+        ? `本次**仅以下资源变量可用**，禁止使用清单之外的任何变量名（如 icon3/icon4/bg5 若不在清单中则不存在）：\n  - \`${_availVars.join('`、`')}\`\n  **用法铁律**：这些变量只能以模板插值使用（\`<img :src="icon1">\` / \`:style="{ backgroundImage: 'url(' + bg1 + ')' }"\`），**禁止**写进 \`<style>\` 块（\`url(\${bg1})\`/\`url(@bg1)\`/\`url(\$bg1)\` 会令 LESS 编译崩溃），**禁止**手写 import（系统注入）\n  **🚫 变量名只能是编号**：变量名必须是清单里的 \`bg1\`/\`icon1\` 等编号，**禁止**用资源语义名（如 \`bg环形图背景\`/\`bg-环形图背景\`）当变量名——语义名只是用途描述，实际 import 的变量永远是编号名，写语义名会导致 undefined 变量、背景/图标加载失败\n  **bg/icon DOM 语义**：\`bg*\` 是父元素 CSS 背景，直接挂到已有业务容器的 \`:style\` 上，**禁止**为 bg 单独创建 \`<div class="xxx-bg">\` 空壳节点；只有 \`icon*\`/\`img*\` 才生成独立 DOM（\`<img :src="...">\`）`
         : '（无已下载资源变量，模板不得引用 iconN/bgN/imgN 等资源变量）';
     let contextBlock = '';
     if (chunk.contextFiles && chunk.contextFiles.length > 0) {
@@ -1942,6 +1968,20 @@ ${fileList}
   - **必须基于功能/语义命名**，class 名反映元素用途而非组件标识。
   - 🆔 根容器的实例 id 类 \`c-mc-max-{INSTANCE_ID}\`（INSTANCE_ID 为运行时随机标识）由**系统自动注入**，你无需也无法手写它；只需给根元素一个语义 class（如 \`c-env-monitor-root\`），系统会另行追加实例 id 类。内部 class 切勿手写 \`c-mc-max-...\` 长前缀（会被后处理剥离并导致 .vue/.less 错配）。
 - **资源变量白名单**：${availVarsBlock}
+${buildSectionStyleFacts(resolvePlanSections(input), input.figmaNodeData)
+  ? `
+## 🧩 语义化样式真值（按业务区块归属 · 生成 style 块时最高优先级）
+
+下面是**按 section 语义归属**后的精确样式事实（背景渐变/文字色/尺寸）。生成子组件 .vue 的
+style scoped 时，**每个内部元素（tab 项/卡片/图例项）的背景、文字色、尺寸必须与下表逐条对应**，
+禁止臆造、禁止统一成同一颜色。激活态与普通态的背景/文字色必须分别实现。
+
+${buildSectionStyleFacts(resolvePlanSections(input), input.figmaNodeData)}
+
+⚠️ 示例：tab-active → bg:#318aff→#70bfff + 白字，普通 tab → bg:#85baff→#bfe2ff + 蓝字，
+两者背景与文字色必须不同，禁止都用同一背景。
+`
+  : ''}
 ${contextBlock}
 # 输出格式
 
@@ -2345,10 +2385,10 @@ ${fileList}
 **🎨 颜色变量化铁律（治本，2026-09-13）**：
 - **禁止颜色字面量直写**：\`color: rgba(51,51,51,1)\` / \`background: #1990ff\` 一律改写为变量引用
 ${(options.componentType || 'microcode') !== 'vue3'
-  ? `- **微码组件：优先用 CSS 变量** \`var(--colorXxx)\`（**camelCase**，如 \`--colorPrimary\`/\`--colorTextBase\`/\`--colorDanger\`/\`--colorWarning\`/\`--colorBorder\`）；宿主运行时把 css-vars.js 的变量注入组件根元素 inline style，var() 引用即实现 dark/light 主题切换`
+  ? `- **微码组件：颜色一律用 Less 槽位变量** \`@color-xxx\`（**kebab-case**；槽位在 theme-vars.less 的 \`.theme-dark()\` 与 \`.theme-light()\` 各定义一份，**两处值必须不同**——模式 B 的深浅差异 100% 来自这两套槽位）。\`var()\` 只允许出现在 \`.common()\` 的透传映射里（如 \`@fontSize: var(--fontSize)\`），业务样式禁止直接写 \`var(--colorX, ...)\``
   : `- **vue3 组件：用 less 变量** \`@xxx\`（theme-vars.less 槽位已定义），禁止 \`var(--xxx)\`（\`<style scoped>\` 下 :root 变量会失效）`}
 - **禁止**在 common.less 顶部重复定义 \`@color-*: <字面量>\`（槽位定义在 theme-vars.less，勿重复）
-- **唯一例外**：只有 \`darken()/lighten()/fade()/mix()\` 等 less 颜色函数参与运算的颜色，才允许用 less 字面量变量（\`@xxx: #hex\`），因 less 颜色函数遇 \`var()\` 会编译报错
+- **Less 颜色函数**：\`darken()/lighten()/fade()/mix()\` 需要编译期真实色值，遇 \`var()\` 会编译报错 —— 这正是颜色必须走 \`@color-xxx\` 槽位（编译期真实值）而非 \`var()\` 的原因
 
 **🚫 禁止面板外壳样式泄漏**：
 - common.less 中**禁止**在 \`.c-${componentName}-content\` 上设置 \`background\`、\`box-shadow\`、\`border-radius\`
@@ -2365,7 +2405,23 @@ ${extractFigmaColorEssentials(figmaNodeData)}
 
 ⚠️ **颜色铁律**：每个卡片/区块的背景色、文字色、圆角、阴影必须与上表逐节点对应；
 不同卡片有**不同**背景色调时（如各分类卡），必须分别使用各自的值，禁止统一成同一颜色。
-elementStyleMap（见下）与上表冲突时以上表 Figma 真值为准。
+冲突优先级（从高到低）：**语义化样式真值（见下） > 本颜色真值表 > elementStyleMap**。
+`
+    : ''
+}
+
+${buildSectionStyleFacts(resolvePlanSections(input), figmaNodeData)
+  ? `
+## 🧩 语义化样式真值（按业务区块归属 · 最高优先级，必须逐条精确使用）
+
+下面是**按 section 语义归属**后的精确样式事实（背景渐变/文字色/尺寸）。它比上面的扁平颜色表
+更能告诉你「哪个样式属于哪个 tab/卡片」。**生成 common.less 时，每个内部元素（tab 项/卡片/
+图例项）的背景、文字色、尺寸必须与下表逐条对应**，禁止臆造、禁止统一成同一颜色。
+
+${buildSectionStyleFacts(resolvePlanSections(input), figmaNodeData)}
+
+⚠️ 示例理解：若上表出现 tab-active → bg:#318aff→#70bfff 与 tab → bg:#85baff→#bfe2ff，
+说明激活 tab 用深蓝渐变背景 + 白字，普通 tab 用浅蓝渐变背景 + 蓝字，**必须分别实现，不能都用同一背景**。
 `
     : ''
 }
@@ -2375,19 +2431,19 @@ ${!figmaNodeData && (!elementStyleMap || Object.keys(elementStyleMap).length ===
 ${
   elementStyleMap && Object.keys(elementStyleMap).length > 0
     ? `
-## Per-Element 样式映射（必须遵守）
+## Per-Element 样式映射（补充参考 · 仅内部元素在语义化真值表中缺失时才采用）
 
-以下是从设计稿分析得出的每个元素的完整 CSS 属性。**这些值必须直接写入 CSS，禁止用主题变量覆盖。**
+以下是从设计稿分析得出的每个元素的完整 CSS 属性（仅覆盖部分顶层容器，内部元素可能缺失）。
 
 \`\`\`json
 ${JSON.stringify(elementStyleMap, null, 2)}
 \`\`\`
 
-⚠️ **样式直接值优先规则**：
-1. elementStyleMap 中有明确颜色值时，CSS 必须直接写（如 \`color: rgba(255,255,255,0.8)\`），禁止替换为主题变量
-2. elementStyleMap 中有明确尺寸值时，CSS 必须直接写（如 \`font-size: 20px\`）
-3. 主题变量只用于 elementStyleMap 中没有明确值的属性
-4. 深色内容区所有文字颜色禁止使用黑色系
+⚠️ **样式取值优先级（从高到低）**：
+1. **语义化样式真值表**（上文 🧩 区块）——最精确、按业务元素归属，内部元素的背景/文字色/尺寸以它为准
+2. **Figma 节点颜色真值表**（上文 🎨 区块）——扁平颜色事实
+3. 本 elementStyleMap——仅当前两者都未覆盖该元素时才采用
+4. 主题变量——仅以上都没有明确值时才用
 `
     : ''
 }
@@ -2402,7 +2458,7 @@ ${JSON.stringify(elementStyleMap, null, 2)}
 ${
   classNamesList.length > 0
     ? `
-## ⚠️ 强制约束：class 选择器必须精确匹配模板（v3.5 硬约束）
+## ⚠️ 强制约束：class 选择器必须精确匹配模板（v3.5 硬约束 · A1 结构强制）
 
 以下是从所有已生成的 Vue 模板中**程序化提取**的 class 名完整列表。
 你必须在 common.less 中为**每一个** class 生成对应的 CSS 规则。
@@ -2418,6 +2474,21 @@ ${classNamesList.map((c) => `.${c}`).join('\n')}
 4. ❌ **禁止**合并多个 class（如把 vehicle-card 和 vehicle-title 合并为一个）
 5. ✅ 样式值从 elementStyleMap 获取精确值，禁止用主题变量覆盖
 6. ✅ 如果你不确定某个 class 的含义，参考上方已生成参考文件中的使用上下文
+
+## 🎯 结构强制：你只负责「填 value」，禁止改动选择器
+
+以下空块骨架已由系统确定性生成，是本次 common.less 的**唯一合法结构**。
+你必须在每个 \`.c-xxx {}\` 空块内填入样式值，**禁止增删/重命名任何选择器**。
+
+\`\`\`less
+${generateEmptyClassSkeleton(classNamesList)}
+\`\`\`
+
+**填值规则**：
+1. ✅ 每个空块都必须保留，且至少填入一条有效样式
+2. ✅ 样式值从 elementStyleMap 精确取值，禁止用主题变量覆盖
+3. ❌ 禁止新增空块之外的业务 class；禁止删除空块；禁止改选择器名
+4. ✅ display/flex-direction/grid 由系统按布局事实确定性写入，你无需手写
 `
     : ''
 }
@@ -2569,7 +2640,7 @@ ${JSON.stringify(elementStyleMap, null, 2)}
 ${
   classNamesList.length > 0
     ? `
-## ⚠️ 强制约束：class 选择器必须精确匹配模板（v3.5 硬约束）
+## ⚠️ 强制约束：class 选择器必须精确匹配模板（v3.5 硬约束 · A1 结构强制）
 
 以下是从所有已生成的 Vue 模板中**程序化提取**的 class 名完整列表。
 你必须在 common.less 中为**每一个** class 生成对应的 CSS 规则。
@@ -2585,6 +2656,21 @@ ${classNamesList.map((c) => `.${c}`).join('\n')}
 4. ❌ **禁止**合并多个 class（如把 vehicle-card 和 vehicle-title 合并为一个）
 5. ✅ 样式值从 elementStyleMap 获取精确值，禁止用主题变量覆盖
 6. ✅ 如果你不确定某个 class 的含义，参考上方已生成参考文件中的使用上下文
+
+## 🎯 结构强制：你只负责「填 value」，禁止改动选择器
+
+以下空块骨架已由系统确定性生成，是本次 common.less 的**唯一合法结构**。
+你必须在每个 \`.c-xxx {}\` 空块内填入样式值，**禁止增删/重命名任何选择器**。
+
+\`\`\`less
+${generateEmptyClassSkeleton(classNamesList)}
+\`\`\`
+
+**填值规则**：
+1. ✅ 每个空块都必须保留，且至少填入一条有效样式
+2. ✅ 样式值从 elementStyleMap 精确取值，禁止用主题变量覆盖
+3. ❌ 禁止新增空块之外的业务 class；禁止删除空块；禁止改选择器名
+4. ✅ display/flex-direction/grid 由系统按布局事实确定性写入，你无需手写
 `
     : ''
 }
@@ -2667,7 +2753,7 @@ ${layoutSkeleton}
     );
     const availVarsBlock =
       _availVars && _availVars.length > 0
-        ? `本次**仅以下资源变量可用**，禁止使用清单之外的任何变量名（如 icon3/icon4/bg5 若不在清单中则不存在）：\n- \`${_availVars.join('`、`')}\`\n  **用法铁律**：只能模板插值（\`<img :src="icon1">\` / \`:style="{ backgroundImage: 'url(' + bg1 + ')' }"\`），**禁止**写进 \`<style>\` 块（\`url(\${bg1})\`/\`url(@bg1)\`/\`url(\$bg1)\` 会令 LESS 编译崩溃），**禁止**手写 import（系统注入）`
+        ? `本次**仅以下资源变量可用**，禁止使用清单之外的任何变量名（如 icon3/icon4/bg5 若不在清单中则不存在）：\n- \`${_availVars.join('`、`')}\`\n  **用法铁律**：只能模板插值（\`<img :src="icon1">\` / \`:style="{ backgroundImage: 'url(' + bg1 + ')' }"\`），**禁止**写进 \`<style>\` 块（\`url(\${bg1})\`/\`url(@bg1)\`/\`url(\$bg1)\` 会令 LESS 编译崩溃），**禁止**手写 import（系统注入）\n  **🚫 变量名只能是编号**：变量名必须是清单里的 \`bg1\`/\`icon1\` 等编号，**禁止**用资源语义名（如 \`bg环形图背景\`）当变量名——语义名只是用途描述，实际 import 的变量永远是编号名\n  **bg/icon DOM 语义**：\`bg*\` 是父元素 CSS 背景，直接挂到已有业务容器的 \`:style\` 上，**禁止**为 bg 单独创建 \`<div class="xxx-bg">\` 空壳节点；只有 \`icon*\`/\`img*\` 才生成独立 DOM（\`<img :src="...">\`）`
         : '（无已下载资源变量，模板不得引用 iconN/bgN/imgN 等资源变量）';
     return `
 # 任务要求（分块生成 · 第 ${chunk.index || 1}/${chunk.total || 1} 批：${chunk.title || ''}）

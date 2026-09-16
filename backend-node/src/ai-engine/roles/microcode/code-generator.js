@@ -30,19 +30,9 @@ import {
   extractResourceVarNames,
   resolveResourceDomMapping,
 } from '../../utils/resource-import-guard.js';
-import { collectLeafSections, assignSectionComponentNames } from '../../utils/section-tree.js';
+import { collectLeafSections, assignSectionComponentNames, isLayoutContainerSection } from '../../utils/section-tree.js';
 import { detectContentRootClass } from '../../utils/root-container-normalizer.js';
-
-function defaultNormalizeComponentId(name = '') {
-  const raw = String(name || '').trim();
-  const cleaned = raw
-    .replace(/^mc-(max-)?\d{13}-/i, '')
-    .replace(/[^a-zA-Z0-9_-]/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-    .toLowerCase();
-  return cleaned.startsWith('c-') ? cleaned : 'c-' + (cleaned || 'component');
-}
+import { sanitizeComponentId, tailHexOf } from '../../utils/component-naming.js';
 
 export function assembleIndexVue(templateContent, scriptContent, input, options = {}) {
     let tpl = (templateContent || '').trim();
@@ -111,7 +101,140 @@ export function assembleIndexVue(templateContent, scriptContent, input, options 
     // 🛡️ Phase 2 后处理兜底（TDD: T02/T03/T04）
     assembled = postProcessIndexVue(assembled, input, options);
 
+    // 🛡️ E3-1（2026-09-16 · c-max-1789499487971-12bc3750 实锤）：chartRef 容器位置收口。
+    // LLM 自由写 echarts 容器时，常把 <div ref="chartRef"> 写到 </base-panel> 之后（兄弟节点）→
+    // 图表脱离 slot-con 的 flex 布局 → 环形图跑最右边/错位。确定性收口：chartRef 容器必须回到
+    // base-panel 内（在 </base-panel> 之前），绝不留在外壳外。
+    assembled = containChartRefInsidePanel(assembled, options);
+
+    // 🛡️ D3（2026-09-16 · mc-1789501342336-ad390852 实锤）：图例文本确定性去重。
+    // LLM 写 echarts option 时，legend.data 和 series[].name 常出现重复文本（同一分类名出现多次）
+    // → ECharts 渲染异常（图例重叠/系列错乱）。确定性收口：legend 数组 + series[].name 去重，
+    // 保持首次出现顺序，绝不新增/删除分类。
+    assembled = dedupeLegendText(assembled, options);
+
     return assembled;
+  }
+
+  /**
+   * 🛡️ E3-1（2026-09-16 · c-max-1789499487971-12bc3750 实锤）：chartRef 容器位置收口。
+   *
+   * 背景：LLM 自由写 echarts 容器时，常把 `<div ref="chartRef">` 写到 `</base-panel>` 之后（兄弟节点），
+   * 图表因此脱离 slot-con 的 flex 布局 → 环形图跑到最右边 / 位置错乱。确定性收口：chartRef 容器
+   * 必须回到 base-panel 内（slot-con 闭合 `</div>` 之前），绝不留在宿主外壳外。
+   *
+   * 纯函数、无 import.meta、fail-open（异常/无 chartRef/无 base-panel 原样返回）。
+   * 只在「chartRef 确实在 base-panel 外」时移动，base-panel 内的一律不动（零误伤）。
+   */
+  export function containChartRefInsidePanel(content, options = {}) {
+    const logger = safeLogger(options.logger);
+    if (!content || typeof content !== 'string') return content;
+
+    // chartRef 容器（含 style 等属性，单行或多行）
+    const chartRefRe = /<div\b[^>]*\bref=["']chartRef["'][^>]*>[\s\S]*?<\/div>/i;
+    const m = content.match(chartRefRe);
+    if (!m) return content;
+    const chartRefHtml = m[0];
+    const chartRefIdx = m.index;
+
+    const panelClose = content.indexOf('</base-panel>');
+    if (panelClose < 0) return content;
+
+    // chartRef 已在 base-panel 内 → 不动（零误伤）
+    if (chartRefIdx < panelClose) return content;
+
+    // chartRef 在 base-panel 外 → 先移除，再插回 base-panel 内（slot-con 闭合处）
+    let next = content.slice(0, chartRefIdx) + content.slice(chartRefIdx + chartRefHtml.length);
+    next = next.slice(0, panelClose) + '\n  ' + chartRefHtml + '\n' + next.slice(panelClose);
+    if (logger) {
+      logger.warn('🛡️ E3-1 chartRef 位置收口：chartRef 容器已移回 base-panel 内', {});
+    }
+    return next;
+  }
+
+  /**
+   * 🛡️ D3（2026-09-16 · mc-1789501342336-ad390852 实锤）：图例文本确定性去重。
+   *
+   * 背景：LLM 写 echarts option 时，`legend.data` 和 `series[].name` 常出现重复文本
+   *（同一分类名出现多次）→ ECharts 渲染异常（图例重叠/系列错乱）。
+   *
+   * 确定性收口：
+   * 1. `legend: { data: [...] }` → 去重，保持首次出现顺序
+   * 2. `series: [{ name: 'X', ... }, { name: 'X', ... }]` → 同名系列合并（保留第一个，累加 data）
+   * 3. `chartData.value.legend = [...]` / `chartData.value.series = [...]` → 同样去重
+   *
+   * 纯函数、无 import.meta、fail-open（异常/无匹配原样返回）。
+   * 只处理 script 段内的 echarts option 和 chartData 定义，不动模板/样式。
+   */
+  export function dedupeLegendText(content, options = {}) {
+    const logger = safeLogger(options.logger);
+    if (!content || typeof content !== 'string') return content;
+
+    const scriptMatch = content.match(/<script[^>]*>([\s\S]*?)<\/script>/i);
+    if (!scriptMatch) return content;
+    const scriptBody = scriptMatch[1];
+
+    let changed = false;
+
+    // ① legend.data 数组去重：legend: { data: ['A','B','A','C'] } → ['A','B','C']
+    // 匹配 legend: { data: [...] } 或 legend: { ..., data: [...] }
+    const legendDataRe = /data\s*:\s*\[([^\]]*?)\]/g;
+    let newScript = scriptBody.replace(legendDataRe, (match, inner) => {
+      // 只处理看起来像字符串数组的（包含引号）
+      if (!/['"]/.test(inner)) return match;
+      const items = inner.split(',').map(s => s.trim()).filter(s => s.length > 0);
+      const seen = new Set();
+      const deduped = [];
+      for (const item of items) {
+        // 提取字符串值用于去重比较
+        const val = item.replace(/^['"]|['"]$/g, '');
+        if (!seen.has(val)) {
+          seen.add(val);
+          deduped.push(item);
+        } else {
+          changed = true;
+        }
+      }
+      if (deduped.length === items.length) return match;
+      return `data: [${deduped.join(', ')}]`;
+    });
+
+    // ② series 数组去重：同名系列合并（保留第一个，累加 data 数组）
+    // 匹配 series: [ { name: 'X', ... }, { name: 'X', ... } ]
+    // 简化处理：提取所有 name 值，如果有重复则标记
+    const seriesNameRe = /name\s*:\s*['"]([^'"]+)['"]/g;
+    const nameCounts = new Map();
+    let m;
+    while ((m = seriesNameRe.exec(newScript)) !== null) {
+      const name = m[1];
+      nameCounts.set(name, (nameCounts.get(name) || 0) + 1);
+    }
+    const dupNames = [...nameCounts.entries()].filter(([_, c]) => c > 1).map(([n]) => n);
+    if (dupNames.length > 0) {
+      changed = true;
+      if (logger) {
+        logger.warn('🛡️ D3 图例文本去重：发现重复 series name', { dupNames });
+      }
+      // 对重复 name 的系列，保留第一个，后续的 name 加后缀区分
+      let suffixCount = new Map();
+      newScript = newScript.replace(/name\s*:\s*(['"])([^'"]+)\1/g, (match, quote, name) => {
+        if (dupNames.includes(name)) {
+          const count = suffixCount.get(name) || 0;
+          suffixCount.set(name, count + 1);
+          if (count > 0) {
+            return `name: ${quote}${name}_${count}${quote}`;
+          }
+        }
+        return match;
+      });
+    }
+
+    if (!changed) return content;
+
+    if (logger) {
+      logger.warn('🛡️ D3 图例文本去重：已对 legend/series 做确定性去重', {});
+    }
+    return content.replace(scriptBody, newScript);
   }
 
   /**
@@ -242,12 +365,20 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
   let headerLeavesFinal = headerLeaves;
   let bodyLeavesFinal = bodyLeaves;
   if (headerSlotNodeIds.size > 0) {
-    headerLeavesFinal = leaves.filter((s) => {
+    const matched = leaves.filter((s) => {
       const ids = Array.isArray(s?.sourceNodeIds)
         ? s.sourceNodeIds.map((v) => String(v))
         : [];
       return ids.some((id) => headerSlotNodeIds.has(id));
     });
+    // 🛡️ 治本（2026-09-16）：headerSlots 契约的 figmaNodeId 是 vision 编造 id（如 8:3/8:4/8:5），
+    //   与 planner 真实 header 叶子 sourceNodeIds（2:8419）对不上 → matched 空 → header 整个丢失。
+    //   匹配不到时回退 type==='header' 二分（与注释承诺一致，此前漏实现）。
+    if (matched.length > 0) {
+      headerLeavesFinal = matched;
+    } else {
+      headerLeavesFinal = headerLeaves;
+    }
     const headerSet = new Set(headerLeavesFinal);
     bodyLeavesFinal = leaves.filter((s) => !headerSet.has(s));
   }
@@ -270,8 +401,69 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
   }
   if (bodyLeavesFinal.length > 0) {
     lines.push(`    <div class="${rootContainerClass}">`);
-    for (const b of bodyLeavesFinal) {
-      lines.push(`      <${tagFor(b, 'ContentSection')} />`);
+    // 🛡️ E1 治本（2026-09-16）：递归保留容器层级。此前用 bodyLeavesFinal 平铺叶子，
+    //   switch/@antd-tab 等中间容器被丢弃 → active/default/tabs/cons 全部平级，
+    //   用户指正「switch 没有组成一个元素，而是和下面所有内容全部 flex 了」。
+    //   治本：按树递归渲染，容器（isLayoutContainer）生成 wrapper <div class="c-xxx-container">，
+    //   叶子生成子组件标签；容器 class 用语义名派生，保证样式侧可精确命中。
+    const renderBodyNode = (sec, indent) => {
+      const pad = '      ' + '  '.repeat(indent);
+      if (isLayoutContainerSection(sec)) {
+        // 🛡️ 容器 class 语义化：中文容器名（中间图表/统计数据）映射为英文 class，
+        //   否则 [^a-zA-Z0-9-] 会把中文全删光 → 退化成无语义的 c-xxx-container。
+        const containerClassFor = (raw) => {
+          const zh = String(raw || '');
+          const MAP = {
+            中间图表: 'chart',
+            图表: 'chart',
+            统计数据: 'stats',
+            统计: 'stats',
+            数据: 'data',
+            列表: 'list',
+            网格: 'grid',
+            卡片: 'card',
+            内容: 'content',
+            主体: 'main',
+            正文: 'body',
+            侧边: 'sidebar',
+            导航: 'nav',
+            工具栏: 'toolbar',
+            底部: 'footer',
+            顶部: 'header',
+          };
+          for (const [k, v] of Object.entries(MAP)) {
+            if (zh.includes(k)) return v;
+          }
+          const ascii = zh
+            .replace(/^slot-?/i, '')
+            .replace(/[^a-zA-Z0-9-]+/g, '-')
+            .replace(/^-+|-+$/g, '')
+            .toLowerCase();
+          return ascii || null;
+        };
+        const containerName = containerClassFor(sec.name || sec.title || sec.id);
+        const cls = containerName ? `c-${semantic}-${containerName}-con` : `c-${semantic}-container`;
+        // 🛡️ 布局方向事实（2026-09-16 治本）：容器 flex 方向由 planner 的 layout 确定性给出
+        //   （switch=horizontal 两 tab 一行、tabs=vertical 竖排）。直接内联到容器 div，
+        //   不依赖 LLM 给容器类写样式（此前 switch-con 在 common.less 里 0 定义 → 方向丢失）。
+        const flexDir = String(sec.layout || 'vertical').toLowerCase() === 'horizontal' ? 'row' : 'column';
+        lines.push(`${pad}<div class="${cls}" style="display:flex;flex-direction:${flexDir};">`);
+        for (const child of sec.children || []) {
+          renderBodyNode(child, indent + 1);
+        }
+        lines.push(`${pad}</div>`);
+      } else if (sec) {
+        lines.push(`${pad}<${tagFor(sec, 'ContentSection')} />`);
+      }
+    };
+    for (const root of treeSections) {
+      // 只渲染 body 侧顶层节点（header 叶子已进 header 插槽，这里跳过）
+      if (root?.type === 'header') continue;
+      // header 插槽命中的叶子也不在此重复渲染（刀 5c：同 node 只落一次）
+      const rootIds = Array.isArray(root?.sourceNodeIds) ? root.sourceNodeIds.map(String) : [];
+      const isHeaderNode = rootIds.some((id) => headerSlotNodeIds.has(id));
+      if (isHeaderNode) continue;
+      renderBodyNode(root, 0);
     }
     lines.push(`    </div>`);
   }
@@ -617,23 +809,22 @@ export function mergeScriptParts(...parts) {
  * @returns {{ componentId: string, baseComponentId: string, sessionIdSuffix: string }}
  */
 export function resolveDeclareComponentId(input = {}, options = {}) {
-  const normalizeComponentId =
-    options.normalizeComponentId || defaultNormalizeComponentId;
-  const baseComponentId = normalizeComponentId(input?.componentName || '');
+  const rawName = String(input?.componentName || '').trim();
   const sessionId = String(
     input?.sessionId || input?.ctx?.sessionId || options.sessionId || '',
   ).trim();
-  // 仅接受「以 hex 结尾」的 sessionId（规范形态 mc-<ts>-<8hex>）——
-  // 若上游给的身份串尾段非 hex，宁可不加尾段，避免污染可剥离性契约。
-  const tail = sessionId.slice(-8);
-  const sessionIdSuffix = /^[0-9a-f]{8}$/.test(tail) ? tail : '';
-  return {
-    componentId: sessionIdSuffix
-      ? `${baseComponentId}-${sessionIdSuffix}`
-      : baseComponentId,
-    baseComponentId,
-    sessionIdSuffix,
-  };
+  // 🛡️ S4（2026-09-16）· componentId 收敛到单一事实源 sanitizeComponentId：
+  // 旧实现用 defaultNormalizeComponentId（仅剥 mc- 前缀 + kebab），对四段脏 id
+  // （c-max-<ts>-<hex>-<hex>）不收敛 → 随机中段滞留 → classPrefixOf 剥离失败 →
+  // CODE-003 双前缀复发。统一走 sanitizeComponentId 后，脏 id / 随机中段 /
+  // 装饰 slug 全部被确定性收敛为 c-<语义段>-<sessionId 尾 8hex>（可剥离契约）。
+  // 语义段优先 componentName（fallbackToken 同源），sessionId 决定唯一尾段。
+  const componentId = sanitizeComponentId(rawName, { sessionId, fallbackToken: rawName });
+  const tail = tailHexOf(sessionId);
+  const baseComponentId = tail
+    ? componentId.slice(0, componentId.length - (tail.length + 1))
+    : componentId;
+  return { componentId, baseComponentId, sessionIdSuffix: tail };
 }
 
 export async function safeGenerateDeclareJson(runChunk, input, chunkD, options = {}) {

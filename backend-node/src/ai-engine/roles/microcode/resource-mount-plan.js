@@ -26,10 +26,11 @@ import {
   collectLeafSections,
 } from '../../utils/section-tree.js';
 import {
-  AUTO_MOUNT_ICON_MAX_PX,
   collectMountCandidates,
+  ensureReferencedIconSize,
   ensureResourceImportInVue,
   findTagByClassKeyword,
+  iconSizeFromFigmaBox,
   injectBgStyleBinding,
   injectImgChild,
   mountSubStateBackground,
@@ -118,6 +119,7 @@ export function buildResourceMountPlan(effectiveSections, resourceDomMapping, op
       bgRole: m.bgRole || null,
       kind,
       figmaBox: m.figmaBox || null,
+      parentBox: m.parentBox || null,
     });
     const comp = owner || 'index';
     if (!byComponent.has(comp)) byComponent.set(comp, []);
@@ -142,7 +144,7 @@ export function buildResourceMountPlan(effectiveSections, resourceDomMapping, op
  *   ② 同 var+target 去重——共享底图（12 卡 bg-8439）单绑定单 import；
  *   ③ fail-closed——目标不命中只记诊断，不乱挂（旧实现回退挂根容器正是「背景消失/错位」根源）。
  *
- * 幂等：变量已被引用（含上轮挂载结果）即跳过。
+ * 幂等：bg 变量已被引用即跳过；icon/img 已引用但缺 px 尺寸时仍按 figmaBox 装配（不另插 img）。
  *
  * @param {Object<string,string>} allFiles 产物文件表（原地更新）
  * @param {{byFile: Map}} plan buildResourceMountPlan 产出
@@ -181,8 +183,29 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
         diagnostics.push({ reason: 'owner-file-missing', file: compFile, var: varName });
         continue;
       }
-      // 幂等：变量已被 LLM 引用（或上轮已挂）→ 跳过
+      // 幂等：变量已被 LLM 引用（或上轮已挂）
+      //   - bg：跳过，避免重复 :style
+      //   - icon/img：不另插 img，但缺 px 尺寸时按 figmaBox 装配（89c245a1 巨大菱形根因）
       if (new RegExp(`\\b${varName}\\b`).test(content)) {
+        if (g.kind === 'icon' || g.kind === 'img') {
+          const size = iconSizeFromFigmaBox(mount.figmaBox);
+          if (size) {
+            const sized = ensureReferencedIconSize(content, varName, size);
+            if (sized.patched) {
+              allFiles[targetFile] = sized.content;
+              doneKeys.add(key);
+              mounted.push({
+                var: varName,
+                file: targetFile,
+                keyword: mount.mountTarget,
+                role: g.kind,
+                mountTarget: mount.mountTarget,
+                reason: 'referenced-icon-size',
+              });
+              continue;
+            }
+          }
+        }
         doneKeys.add(key);
         continue;
       }
@@ -193,6 +216,8 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
         mountTarget: mount.mountTarget,
         bgRole: mount.bgRole,
         previewAnalysisRole: g.kind,
+        figmaBox: mount.figmaBox || null,
+        parentBox: mount.parentBox || null,
       };
       let result = null;
 
@@ -213,7 +238,11 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
         let tag = null;
         if (mount.mountTarget) {
           tag = findTagByClassKeyword(content, mount.mountTarget);
-        } else {
+        }
+        // 🛡️ S7（2026-09-16 · c-env-monitor-5ed7a5f8 实锤）：mountTarget 精确不在模板（类名漂移，
+        //   如 mountTarget="tabs-list" 但模板类名是 "tab"）→ 原逻辑 tag 保持 null → 静默不挂载 →
+        //   背景缺失。此处回退 pickBestMountTarget 兜底（候选池评分）并 WARN，避免静默丢背景。
+        if (!tag) {
           // 兜底：从当前文件的候选池中找最优挂载点
           const candidates = collectMountCandidates({ [targetFile]: content });
           const best = pickBestMountTarget(mapping, candidates, {
@@ -221,6 +250,11 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
           });
           if (best) {
             tag = best.tag;
+            options.logger?.warn?.('🛡️ S7：资源 mountTarget 不在模板类名，已回退最优挂载点', {
+              varName,
+              mountTarget: mount.mountTarget || '(null)',
+              file: targetFile,
+            });
           }
         }
         if (tag) {
@@ -245,7 +279,9 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
         let tag = null;
         if (mount.mountTarget) {
           tag = findTagByClassKeyword(content, mount.mountTarget);
-        } else {
+        }
+        // 🛡️ S7（2026-09-16）：mountTarget 精确不在模板 → 回退兜底（同 bg 分支）。
+        if (!tag) {
           // 兜底：从当前文件的候选池中找最优挂载点
           const candidates = collectMountCandidates({ [targetFile]: content });
           const best = pickBestMountTarget(mapping, candidates, {
@@ -253,21 +289,15 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
           });
           if (best) {
             tag = best.tag;
+            options.logger?.warn?.('🛡️ S7：icon/img mountTarget 不在模板类名，已回退最优挂载点', {
+              varName,
+              mountTarget: mount.mountTarget || '(null)',
+              file: targetFile,
+            });
           }
         }
         if (tag) {
-          let size = null;
-          const fb = mount.figmaBox;
-          if (fb && Number(fb.width) > 0 && Number(fb.height) > 0) {
-            const scale = Math.min(
-              1,
-              AUTO_MOUNT_ICON_MAX_PX / Math.max(Number(fb.width), Number(fb.height)),
-            );
-            size = {
-              width: Math.round(Number(fb.width) * scale),
-              height: Math.round(Number(fb.height) * scale),
-            };
-          }
+          const size = iconSizeFromFigmaBox(mount.figmaBox);
           let updated = injectImgChild(content, tag, varName, '', size);
           if (updated) {
             updated = ensureResourceImportInVue(updated, varName, mapping, targetFile);

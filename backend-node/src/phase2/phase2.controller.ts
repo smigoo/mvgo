@@ -47,9 +47,15 @@ export class Phase2Controller implements OnModuleInit {
    * POST /phase2/figma-preview
    */
   @Post('figma-preview')
-  async getFigmaPreview(@Body() body: { figmaUrl: string; figmaToken?: string; config?: any }) {
+  async getFigmaPreview(
+    @Body() body: { figmaUrl: string; figmaToken?: string; config?: any },
+    @Req() req: any,
+  ) {
     try {
-      const result = await this.phase2Service.getFigmaPreview(body.figmaUrl, body.figmaToken, body.config);
+      // 🛡️ 2026-09-16：透传 userId，让预览也读用户级 figmaToken（与生成链路一致），
+      // 避免「截图成功（前端手动 token）、生成报错（用户级未保存）」的路径不一致。
+      const userId = req?.session?.userId;
+      const result = await this.phase2Service.getFigmaPreview(body.figmaUrl, body.figmaToken, body.config, userId);
       return result;
     } catch (err: any) {
       this.logger.error(`figma-preview 失败: ${err.message}`);

@@ -1,10 +1,10 @@
 // 生产只读查询：哪些人配置了晓界 / 哪些人生成了组件
 // 用法（ECS backend-node 目录下）：
-//   export MONGODB_URI='mongodb://root:Microvideo%402026@dds-bp13ae3414783164.mongodb.rds.aliyuncs.com:3717/langgraph-server?replicaSet=mgset-102332332&authSource=admin'
+//   export MONGODB_URI='<你的 MongoDB URI，从环境变量注入，勿硬编码生产密码>'
 //   node query-mvgo-users.cjs
 const { MongoClient, ObjectId } = require('mongodb');
 
-const URI = process.env.MONGODB_URI || 'mongodb://root:Microvideo%402026@dds-bp13ae3414783164.mongodb.rds.aliyuncs.com:3717/langgraph-server?replicaSet=mgset-102332332&authSource=admin';
+const URI = process.env.MONGODB_URI; if (!URI) { console.error('MONGODB_URI 未设置，禁止硬编码生产密码'); process.exit(1); }
 const DB_NAME = (() => { try { return new URL(URI).pathname.replace(/^\//, '') || 'langgraph-server'; } catch { return 'langgraph-server'; } })();
 
 const toStr = (v) => (v && typeof v === 'object' && typeof v.toString === 'function') ? v.toString() : String(v);

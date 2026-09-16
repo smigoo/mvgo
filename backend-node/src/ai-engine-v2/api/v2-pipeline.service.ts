@@ -376,9 +376,9 @@ export class V2PipelineService implements OnModuleInit {
     const direct = typeof requestToken === 'string' ? requestToken.trim() : '';
     if (direct) return direct;
 
-    const saved = this.aiConfigService.getAiConfig()?.figmaToken;
-    const persisted = typeof saved === 'string' ? saved.trim() : '';
-    return persisted || process.env.FIGMA_ACCESS_TOKEN || process.env.FIGMA_TOKEN;
+    // 🛡️ 2026-09-16 彻底去全局配置：不再读全局 ai-config.json 的 figmaToken。
+    // 仅保留部署级环境变量兜底（FIGMA_ACCESS_TOKEN / FIGMA_TOKEN）。
+    return process.env.FIGMA_ACCESS_TOKEN || process.env.FIGMA_TOKEN;
   }
 
   /** 暂无分组概念时按用户 uid 落到私人组（与 Lite/Phase2/Vue3 一致）；供控制器解析一次后透传 */

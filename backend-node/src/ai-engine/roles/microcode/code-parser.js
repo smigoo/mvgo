@@ -400,6 +400,31 @@ function recoverFilesFromRawText(text, logger) {
     }
   }
 
+  // 3. 裸代码：`// package/components/Xxx.vue` 注释 + 直接 <template>/<script>/<style>
+  //    （2026-09-16 mc-max-1789497367952-921cc083 实锤）：模型 max_tokens 截断后放弃 JSON 包装，
+  //    直接吐「// 文件路径」注释 + 裸代码（既非 JSON 也非 ```围栏）→ JSON 解析 position 1 失败 →
+  //    重试 2 次耗尽。按「// <相对路径>」注释切分重建文件（单文件 chunk 只有这一种形态）。
+  const barePathRe =
+    /(?:^|\n)\s*\/\/\s*((?:package|resources)\/[^\r\n]*?(?:\.vue|\.less|\.css|\.js|\.json))\s*\r?\n/g;
+  const bareMatches = [...text.matchAll(barePathRe)];
+  if (bareMatches.length > 0) {
+    for (let i = 0; i < bareMatches.length; i++) {
+      const bm = bareMatches[i];
+      const barePath = bm[1].trim();
+      const contentStart = bm.index + bm[0].length;
+      const contentEnd =
+        i + 1 < bareMatches.length ? bareMatches[i + 1].index : text.length;
+      const bareContent = text.slice(contentStart, contentEnd).trim();
+      // 校验：路径合法 + 内容含代码特征（< 或 { 或 CSS 属性）——过滤纯中文说明段落。
+      if (
+        bareContent &&
+        (/[<{]/.test(bareContent) || /[\w-]+\s*:\s*[^;]+;/.test(bareContent))
+      ) {
+        files[barePath] = bareContent;
+      }
+    }
+  }
+
   return Object.keys(files).length > 0 ? files : null;
 }
 

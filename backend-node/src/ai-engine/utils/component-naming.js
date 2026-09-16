@@ -125,6 +125,11 @@ export function semanticTokenFrom({
   const src = String(displayName || figmaName || zhName || '')
     .replace(/^(cp|mc|mv|page)-(\d{13}-)?/i, '')
     .trim();
+  // 🛡️ 治本（2026-09-16 c-max-<ts>-<hex>-<hex> 实锤）：src 若仍含 13 位时间戳（如
+  // "max-1789494573361-77f2ae7d"，即 LLM 把任务号 mc-max-... 当 componentName），说明这是
+  // 任务号污染、不是语义段。与 semanticSegmentOf 的 /\d{13}/ 判空同源——此处判空返回 ''，
+  // 让 sanitizeComponentId 走 fallbackToken 或保底 'component'，杜绝脏语义段进 componentId。
+  if (/\d{13}/.test(src)) return '';
   // 1. ASCII token 提取（如 env-overview / sales-trend / data-card；先拆 camelCase）
   const asciiTokens = camelSplit(src).match(
     /[A-Za-z][A-Za-z0-9]*(?:[-_][A-Za-z0-9]+)*/g,
@@ -138,7 +143,7 @@ export function semanticTokenFrom({
   if (zhMapped) return zhMapped;
   // 3. fallbackToken（如用户显式名/derive 结果）清洗
   const fb = toKebab(fallbackToken);
-  if (fb) return fb.slice(0, 32);
+  if (fb && !/\d{13}/.test(fb)) return fb.slice(0, 32);
   // 4. 保底
   return 'component';
 }

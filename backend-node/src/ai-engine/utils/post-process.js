@@ -3,6 +3,8 @@
  * 用于 TDD 测试，不依赖 MicrocodeEngineer 类的复杂依赖链
  */
 
+import { inferBackgroundStyle } from './background-size-inference.js';
+
 const COMPACT_CHART_RE = /(?:donut|ring|pie|gauge|radar|mini|small|compact|spark|仪表|环形|环图|小图)/i;
 
 /**
@@ -244,6 +246,89 @@ export function fixBackgroundImageSize(code) {
   }
 
   return code;
+}
+
+/**
+ * 🛡️ S6（2026-09-16 · c-env-monitor-5ed7a5f8 实锤）：背景 `:style` 补全自愈。
+ *
+ * 根因：LLM 手写的背景 `:style` 常**只有 `backgroundImage`**，缺 `backgroundSize`/`backgroundRepeat`/
+ * `backgroundPosition` → 背景图按**原尺寸平铺重复**、位置错（用户报「背景重复了 + 位置大小不对」）。
+ * 对照：系统注入的背景 `:style` 是完整的（`backgroundSize: '100% 100%', backgroundPosition: '0px 0px',
+ * backgroundRepeat: 'no-repeat'`）。
+ *
+ * `fixBackgroundImageSize`（上方）只管「已是 `Xpx Ypx` → `cover`」，**完全不管「缺失」**——本函数补这个缺口。
+ * 只对「同一对象字面量内缺 size/repeat/position」的 backgroundImage 补默认值，绝不覆盖已有；幂等。
+ * 逐字符扫描跳过字符串/模板字符串（`` `url(${bg1})` `` 里的 `${}` 不误判为对象边界）。
+ *
+ * @param {string} content .vue 文件内容
+ * @returns {string} 补全后的内容（无改动时原样返回，引用相等）
+ */
+export function ensureBackgroundStyleComplete(content) {
+  if (typeof content !== 'string' || !content) return content;
+  if (!/backgroundImage\s*:/.test(content)) return content;
+
+  const edits = [];
+  const bgRe = /backgroundImage\s*:/g;
+  let m;
+  while ((m = bgRe.exec(content)) !== null) {
+    const valStart = m.index + m[0].length;
+    // ① 找 backgroundImage 值结束（下一个 , 或 }），跳过字符串/模板字符串
+    let valEnd = -1;
+    let inStr = null;
+    for (let i = valStart; i < content.length; i++) {
+      const ch = content[i];
+      if (inStr) {
+        if (ch === inStr && content[i - 1] !== '\\') inStr = null;
+      } else if (ch === "'" || ch === '"' || ch === '`') {
+        inStr = ch;
+      } else if (ch === ',' || ch === '}') {
+        valEnd = i;
+        break;
+      }
+    }
+    if (valEnd < 0) continue;
+    // ② 找所属对象开 `{`（向前，跨 `}`/`=` 即停）
+    let open = -1;
+    for (let j = m.index; j >= 0; j--) {
+      if (content[j] === '{') { open = j; break; }
+      if (content[j] === '}' || content[j] === '=') break;
+    }
+    if (open < 0) continue;
+    // ③ 找匹配的 `}`（平衡括号，跳过字符串/模板字符串）
+    let close = -1;
+    let depth = 0;
+    inStr = null;
+    for (let j = open; j < content.length; j++) {
+      const ch = content[j];
+      if (inStr) {
+        if (ch === inStr && content[j - 1] !== '\\') inStr = null;
+        continue;
+      }
+      if (ch === "'" || ch === '"' || ch === '`') { inStr = ch; continue; }
+      if (ch === '{') depth++;
+      else if (ch === '}') { depth--; if (depth === 0) { close = j; break; } }
+    }
+    if (close < 0) continue;
+    // ④ 检查「整个对象」内是否已有 size/repeat/position（不是只到 backgroundImage 值的逗号）
+    const objSlice = content.slice(open, close);
+    // 🛡️ 使用默认推断值（资源映射表暂未实现）
+    const inferred = inferBackgroundStyle({});
+    const patches = [];
+    if (!/backgroundSize\s*:/.test(objSlice)) patches.push(`backgroundSize: '${inferred.size}'`);
+    if (!/backgroundRepeat\s*:/.test(objSlice)) patches.push(`backgroundRepeat: '${inferred.repeat}'`);
+    if (!/backgroundPosition\s*:/.test(objSlice)) patches.push(`backgroundPosition: '${inferred.position}'`);
+    if (patches.length === 0) continue;
+    edits.push({ at: valEnd, text: ', ' + patches.join(', ') });
+  }
+
+  if (edits.length === 0) return content;
+  // 从后往前插入（避免位置偏移）
+  edits.sort((a, b) => b.at - a.at);
+  let out = content;
+  for (const e of edits) {
+    out = out.slice(0, e.at) + e.text + out.slice(e.at);
+  }
+  return out;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

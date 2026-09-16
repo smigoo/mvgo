@@ -651,7 +651,13 @@ export class Phase2Service {
         );
       }
 
-      const effectiveFigmaToken = this.resolveFigmaToken(config?.figmaToken);
+      // 🛡️ 2026-09-16 修复：figmaToken 走 mergedAiConfig（用户级优先），不再只读原始 config 或全局。
+      // 此前只读 config?.figmaToken（前端传）+ getAiConfig().figmaToken（全局），漏掉用户级
+      // user_ai_configs 的 figmaToken → 用户配了自己的 Figma token（访问私有文件）却在 max 生成时
+      // 被全局 token 覆盖 → Figma API 404（无权限）。
+      const effectiveFigmaToken = this.resolveFigmaToken(
+        config?.figmaToken || mergedAiConfig?.figmaToken,
+      );
 
       genResult = await runGeneration({
         componentName,
@@ -1823,14 +1829,8 @@ export class Phase2Service {
     if (directToken) {
       return directToken;
     }
-
-    const savedToken = this.aiConfigService.getAiConfig()?.figmaToken;
-    const persistedToken = typeof savedToken === 'string' ? savedToken.trim() : '';
-    if (persistedToken) {
-      return persistedToken;
-    }
-
-    throw new Error('缺少 Figma Token：当前请求未传入，且服务端已保存配置中也不存在');
+    // 🛡️ 2026-09-16 彻底去全局配置：不再回退全局 ai-config.json 的 figmaToken。
+    throw new Error('缺少 Figma Token：当前请求未传入，请在配置面板配置 Figma Token');
   }
 
   private async ensurePreviewImage(
@@ -2066,6 +2066,7 @@ export default component
     figmaUrl: string,
     figmaToken?: string,
     config?: any,
+    userId?: string,
   ): Promise<{ success: boolean; imageUrl?: string; previewToken?: string; nodeName?: string; width?: number; height?: number; error?: string }> {
     // 动态导入 Figma 工具
     const { parseFigmaUrl } = await import('../ai-engine/utils/figma-url-parser.js');
@@ -2078,8 +2079,19 @@ export default component
       return { success: false, error: '无效的 Figma URL，缺少 fileKey' };
     }
 
-    // 2. 获取 Figma Token（请求 > 配置 > 环境变量）
-    const token = figmaToken || config?.figmaToken || process.env.FIGMA_ACCESS_TOKEN;
+    // 2. 获取 Figma Token（请求 > 配置 > 用户级 > 环境变量）
+    // 🛡️ 2026-09-16：补用户级 figmaToken，与生成链路（resolveFigmaToken）对齐，
+    // 避免「截图用前端手动 token 成功、生成读用户级为空报错」的路径不一致。
+    let userSavedToken = '';
+    if (userId) {
+      try {
+        userSavedToken =
+          (await this.aiConfigService.getMergedAiConfig(userId))?.figmaToken || '';
+      } catch {
+        // 读用户级失败不阻断，继续走环境变量兜底
+      }
+    }
+    const token = figmaToken || config?.figmaToken || userSavedToken || process.env.FIGMA_ACCESS_TOKEN;
     if (!token) {
       return { success: false, error: '缺少 Figma Token' };
     }
@@ -2108,8 +2120,13 @@ export default component
       // 预览图分辨率参数化（默认 1.0：下载体积 461KB→242KB、耗时 5.3s→3.1s，预览确认够用；可 env 覆盖）
       const previewScale = Math.min(Math.max(Number(process.env.FIGMA_PREVIEW_SCALE ?? 1.0) || 1.0, 0.5), 4);
 
-      // 5b. 内存缓存命中：同一 fileKey+nodeId+scale 重复请求直接复用，免调 Figma
-      const cacheKey = `${parsed.fileKey}:${apiNodeId}:${previewScale}`;
+      // 5b. 内存缓存命中：key 含 token 哈希 —— token 变了不再命中旧缓存。
+      // 🛡️ 2026-09-16 治本：此前 key 只有 fileKey+nodeId+scale，不含 token，
+      // 导致「换 token 后仍命中旧缓存图」——用户 A 用 token1 截的图，用户 B 用 token2
+      // 访问同一 fileKey 会拿到 A 的缓存图（token2 实际无权限时还误显「成功」）。
+      const { createHash } = await import('crypto');
+      const tokenHash = createHash('sha256').update(token).digest('hex').slice(0, 8);
+      const cacheKey = `${parsed.fileKey}:${apiNodeId}:${previewScale}:${tokenHash}`;
       const cacheTtlMs =
         Math.max(1, Number(process.env.FIGMA_PREVIEW_CACHE_TTL_HOURS ?? 24)) * 3600 * 1000;
       const cached = this._previewCache.get(cacheKey);

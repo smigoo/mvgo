@@ -48,7 +48,7 @@
 
       <div class="mg-table-wrap">
         <a-table
-          class="mg-table"
+          class="mg-table mg-table-clickable"
           size="middle"
           :columns="userColumns"
           :data-source="filteredUsers"
@@ -56,15 +56,19 @@
           :pagination="pagination"
           :scroll="{ x: 1080 }"
           row-key="id"
+          :custom-row="rowClickable"
           @change="onTableChange"
         >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'isAdmin'">
-            <a-switch
-              :checked="record.isAdmin"
-              :loading="!!record._saving"
-              @change="(checked: boolean) => setAdmin(record, checked)"
-            />
+            <!-- @click.stop：避免触发整行点击（行点击 = 打开详情抽屉） -->
+            <span @click.stop>
+              <a-switch
+                :checked="record.isAdmin"
+                :loading="!!record._saving"
+                @change="(checked: boolean) => setAdmin(record, checked)"
+              />
+            </span>
           </template>
           <template v-else-if="column.key === 'hasConfig'">
             <a-tag :color="record.hasConfig ? 'green' : 'default'">
@@ -75,7 +79,7 @@
             <span class="mg-muted">{{ formatTime(record.createdAt) }}</span>
           </template>
           <template v-else-if="column.key === 'action'">
-            <a-button type="link" size="small" class="mg-action-btn" @click="openDrawer(record)">查看配置</a-button>
+            <a-button type="link" size="small" class="mg-action-btn" @click.stop="openDrawer(record)">查看配置</a-button>
             <a-popconfirm
               title="确定删除该用户？"
               :description="`将同时删除该用户的组件、配置、文档等所有数据，不可恢复`"
@@ -131,6 +135,17 @@
           <div class="ud-stat">
             <span class="ud-stat-num">{{ activeUser.apiCount ?? 0 }}</span>
             <span class="ud-stat-label">接口总数</span>
+          </div>
+        </div>
+
+        <!-- 组件构成：只看 微码 / Vue3 两类各几个 -->
+        <div v-if="(activeUser.componentCount ?? 0) > 0" class="ud-type-block">
+          <div class="ud-subtitle">组件构成（按生成类型）</div>
+          <div class="ud-types">
+            <div v-for="t in drawerTypeEntries" :key="t.key" class="ud-stat">
+              <span class="ud-stat-num">{{ t.count }}</span>
+              <span class="ud-stat-label">{{ t.label }}</span>
+            </div>
           </div>
         </div>
 
@@ -330,6 +345,27 @@ function openDrawer(record: any) {
   drawerVisible.value = true
 }
 
+/** 行可点：单击整行打开详情抽屉（开关/按钮已用 @click.stop 阻断冒泡） */
+const rowClickable = (record: any) => ({
+  onClick: () => openDrawer(record),
+  style: { cursor: 'pointer' },
+})
+
+/**
+ * 组件构成的展示项：**只要 microcode / vue3 两类**（固定顺序、含 0）。
+ * `components.target` 缺失的存量记录（unlabeled）不展示——那是数据缺口，不是「类型」。
+ */
+const TYPE_ORDER: Array<{ key: string; label: string; color: string }> = [
+  { key: 'microcode', label: '微码组件', color: 'blue' },
+  { key: 'vue3', label: 'Vue3 组件', color: 'green' },
+]
+
+/** 抽屉「组件构成」：固定两项，无数据的类型显示 0 */
+const drawerTypeEntries = computed(() => {
+  const by = (activeUser.value?.componentByType || {}) as Record<string, number>
+  return TYPE_ORDER.map((t) => ({ ...t, count: Number(by[t.key]) || 0 }))
+})
+
 // ---------- 设置管理员（动态开关） ----------
 async function setAdmin(record: any, checked: boolean) {
   record._saving = true
@@ -401,6 +437,14 @@ onMounted(() => {
   min-width: 1080px;
 }
 
+// 行可点：整行单击打开详情抽屉（开关/按钮已用 @click.stop 阻断冒泡）
+.mg-table-clickable :deep(.ant-table-tbody > tr) {
+  cursor: pointer;
+}
+.mg-table-clickable :deep(.ant-table-tbody > tr:hover > td) {
+  background: #f5f8fc;
+}
+
 .mg-action-btn {
   white-space: nowrap;
 }
@@ -429,6 +473,18 @@ onMounted(() => {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
+}
+
+// 组件构成（按生成类型）：复用 .ud-stat 卡片样式，2 列排布
+.ud-type-block {
+  margin-top: 14px;
+}
+
+.ud-types {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-top: 8px;
 }
 
 .ud-stat-num {

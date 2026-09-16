@@ -252,6 +252,236 @@ describe('fixSectionHeightsForResource 升级分支治本（2026-09-14 真机 c-
   })
 })
 
+describe('fixSectionHeightsForResource 规则⑤ 补 flexGrow / inline-row（2026-09-15 真机 c-traffic-monitor-933cbc4b）', () => {
+  // 🎯 事故：LLM 给 section 根只写 width/min-height，不写 display:flex。规则② 因
+  // display 门槛整块跳过；规则⑤ 后补 display 却不写 flexGrow → 高度比例恒丢。
+  // 治本：规则⑤ 在补完 display 后同步写入 facts.flexGrow（缺则补），规则② 门槛保留。
+  const CTX = {
+    path: 'resources/styles/common.less',
+    sectionLayoutFacts: {
+      'c-traffic-monitor-chart-tunnel': {
+        flexGrow: 3.73,
+        heightPx: 556,
+        display: 'flex',
+        gridColumns: null,
+        flexDirection: 'column',
+      },
+      'c-traffic-monitor-header': {
+        flexGrow: 0.204,
+        heightPx: 30,
+        display: 'flex',
+        gridColumns: null,
+        flexDirection: 'row',
+      },
+    },
+  }
+
+  it('⭐ 无 display、无 flex 的 section 根 → 补 display:flex + flex: <grow> 1 0', () => {
+    const input = [
+      '.c-traffic-monitor-chart-tunnel {',
+      '  width: 100%;',
+      '  min-height: 0;',
+      '}',
+    ].join('\n')
+    const out = fixSectionHeightsForResource(input, CTX)
+    expect(out).toContain('display: flex')
+    expect(out).toContain('flex-direction: column')
+    expect(out).toContain('flex: 3.73 1 0')
+    expect(out).toContain('min-height: 0')
+  })
+
+  it('已有正确 flex: 1.327 1 0 不覆盖', () => {
+    const input = [
+      '.c-traffic-monitor-chart-tunnel {',
+      '  display: flex;',
+      '  flex: 1.327 1 0;',
+      '}',
+    ].join('\n')
+    const out = fixSectionHeightsForResource(input, CTX)
+    expect(out).toContain('flex: 1.327 1 0')
+    expect(out).not.toContain('flex: 3.73 1 0')
+  })
+
+  it('防误伤：flex: 0 0 46px 不碰', () => {
+    const input = [
+      '.c-traffic-monitor-chart-tunnel {',
+      '  display: flex;',
+      '  flex: 0 0 46px;',
+      '}',
+    ].join('\n')
+    const out = fixSectionHeightsForResource(input, CTX)
+    expect(out).toContain('flex: 0 0 46px')
+    expect(out).not.toContain('flex: 3.73 1 0')
+  })
+
+  it('幂等：无 display 块补完后再跑一次值不变', () => {
+    const input = [
+      '.c-traffic-monitor-chart-tunnel {',
+      '  width: 100%;',
+      '  min-height: 0;',
+      '}',
+    ].join('\n')
+    const once = fixSectionHeightsForResource(input, CTX)
+    const twice = fixSectionHeightsForResource(once, CTX)
+    expect(twice).toBe(once)
+  })
+
+  it('row 缺对齐 → 补 align-items:center + justify-content:space-between（无 gap 时）', () => {
+    const input = [
+      '.c-traffic-monitor-header {',
+      '  display: flex;',
+      '}',
+    ].join('\n')
+    const out = fixSectionHeightsForResource(input, CTX)
+    expect(out).toContain('align-items: center')
+    expect(out).toContain('justify-content: space-between')
+    // 🛡️ 2026-09-16 收窄：row 容器不写 flexGrow（防止固定高度内容被压缩）
+    expect(out).not.toContain('flex: 0.204 1 0')
+  })
+
+  it('🛡️ 2026-09-16：row 容器不写 flexGrow（防止 c-device-monitor-switch 被压扁）', () => {
+    const input = [
+      '.c-device-monitor-switch {',
+      '  display: flex;',
+      '  flex-direction: row;',
+      '  gap: 12px;',
+      '}',
+    ].join('\n')
+    const out = fixSectionHeightsForResource(input, {
+      path: 'resources/styles/common.less',
+      sectionLayoutFacts: {
+        'c-device-monitor-switch': {
+          flexGrow: 0.472,
+          display: 'flex',
+          flexDirection: 'row',
+        },
+      },
+    })
+    expect(out).not.toContain('flex: 0.472 1 0')
+    expect(out).toContain('gap: 12px')
+  })
+
+  it('🛡️ 2026-09-16：已有 gap 的 row 容器不注入 justify-content（防止破坏自然间距）', () => {
+    const input = [
+      '.c-traffic-monitor-header {',
+      '  display: flex;',
+      '  gap: 24px;',
+      '}',
+    ].join('\n')
+    const out = fixSectionHeightsForResource(input, CTX)
+    expect(out).toContain('align-items: center')
+    expect(out).not.toContain('justify-content: space-between')
+    expect(out).toContain('gap: 24px')
+  })
+
+  it('已有 align/justify 不覆盖', () => {
+    const input = [
+      '.c-traffic-monitor-header {',
+      '  display: flex;',
+      '  align-items: flex-start;',
+      '  justify-content: flex-start;',
+      '}',
+    ].join('\n')
+    const out = fixSectionHeightsForResource(input, CTX)
+    expect(out).toContain('align-items: flex-start')
+    expect(out).toContain('justify-content: flex-start')
+    expect(out).not.toContain('align-items: center')
+    expect(out).not.toContain('justify-content: space-between')
+  })
+
+  it('组件根 -slot-con 即使命中 facts 也不写 flexGrow（父级是 block）', () => {
+    const input = [
+      '.c-traffic-monitor-slot-con {',
+      '  width: 100%;',
+      '  height: 100%;',
+      '}',
+    ].join('\n')
+    const out = fixSectionHeightsForResource(input, {
+      path: 'resources/styles/common.less',
+      sectionLayoutFacts: {
+        'c-traffic-monitor-slot-con': {
+          flexGrow: 1,
+          display: 'flex',
+          flexDirection: 'column',
+        },
+      },
+    })
+    expect(out).not.toContain('flex: 1 1 0')
+    expect(out).toContain('height: 100%')
+  })
+
+  it('⭐ 2026-09-16 兜底（c-vehicle-monitor-54c256c7）：facts 对齐失败（layoutFacts=null）时，flex 比例缺 display → 补 display:flex + row', () => {
+    // vision 5 个 section vs 4 个子组件 → alignSectionClasses 数量不等 → sectionLayoutFacts=null
+    // → 旧逻辑规则⑤整段空转 → section 根容器只有 flex 比例无 display → 全纵向。
+    const input = [
+      '.c-vehicle-monitor-content-section {',
+      '  width: 100%;',
+      '  flex: 2.142 1 0;',
+      '  min-height: 0;',
+      '}',
+    ].join('\n')
+    const out = fixSectionHeightsForResource(input, {
+      path: 'resources/styles/common.less',
+      sectionLayoutFacts: null,
+    })
+    expect(out).toContain('display: flex')
+    expect(out).toContain('flex-direction: row')
+  })
+
+  it('兜底不误伤：无 flex 比例、或已有 display 的块不补', () => {
+    const noFlex = [
+      '.c-monitor-plain {',
+      '  width: 100%;',
+      '  height: 50px;',
+      '}',
+    ].join('\n')
+    expect(fixSectionHeightsForResource(noFlex, { path: 'resources/styles/common.less', sectionLayoutFacts: null })).toBe(noFlex)
+
+    const hasDisplay = [
+      '.c-monitor-x {',
+      '  display: flex;',
+      '  flex-direction: column;',
+      '  flex: 1 1 0;',
+      '}',
+    ].join('\n')
+    const out = fixSectionHeightsForResource(hasDisplay, { path: 'resources/styles/common.less', sectionLayoutFacts: null })
+    expect(out).toContain('flex-direction: column')
+    expect(out).not.toContain('flex-direction: row')
+  })
+
+  it('⭐ 2026-09-16（c-vehicle-monitor-b82c9d84）：gap 但无 display 的卡片容器 → 补 display:flex + row', () => {
+    // stat-cards 有 gap:8px（暗示 flex/grid），但没 display:flex → 卡片纵向堆叠。
+    const input = '.c-vehicle-monitor-stat-cards {width: 100%;\n  gap: 8px}'
+    const out = fixSectionHeightsForResource(input, {
+      path: 'resources/styles/common.less',
+      sectionLayoutFacts: null,
+    })
+    expect(out).toContain('display: flex')
+    expect(out).toContain('flex-direction: row')
+  })
+
+  it('⭐ 2026-09-16（c-vehicle-monitor-b82c9d84）：flex-direction/align 等 flex 专属属性但无 display → 补 display（保留已有 direction）', () => {
+    // stat-card 有 flex-direction:row 但无 display → 补 display 让已有 direction 生效。
+    const card = '.c-vehicle-monitor-stat-card {min-width: 0;\n  flex-direction: row;\n  box-sizing: border-box}'
+    const outCard = fixSectionHeightsForResource(card, {
+      path: 'resources/styles/common.less',
+      sectionLayoutFacts: null,
+    })
+    expect(outCard).toContain('display: flex')
+    expect(outCard).toContain('flex-direction: row')
+
+    // 已有 flex-direction:column 的块 → 只补 display，不覆盖 column
+    const col = '.c-monitor-y {flex-direction: column; gap: 4px}'
+    const outCol = fixSectionHeightsForResource(col, {
+      path: 'resources/styles/common.less',
+      sectionLayoutFacts: null,
+    })
+    expect(outCol).toContain('display: flex')
+    expect(outCol).toContain('flex-direction: column')
+    expect(outCol).not.toContain('flex-direction: row')
+  })
+})
+
 describe('fixSectionHeightsForResource 规则④：固定 px 尺寸区块禁 flex-grow（2026-09-02 实锤）', () => {
   const CTX = { path: 'resources/styles/common.less' }
 

@@ -365,8 +365,14 @@ export function validateVueScriptSemantics(content, filePath = '', opts = {}) {
     issues.push(`${filePath}: <script> 标签未闭合`)
     return { issues }
   } else if (requireScriptTag) {
-    // 脚本段/index.vue 必须携带 <script setup> 包裹，否则拼装后必然残缺
-    issues.push(`${filePath}: 缺少 <script setup> 标签（输出可能被截断）`)
+    // 脚本段/index.vue 必须携带 <script setup> 包裹，否则拼装后必然残缺。
+    // 🛡️ 2026-09-16 治本（da7d931c 实锤）：措辞必须「去推测化」。
+    // 旧文案「（输出可能被截断）」含「被截断」二字，会被 retry-policy 的 truncation 策略
+    // （排在最前、selfHealable=false）误命中 → 零重试直接放弃，并遮蔽本应生效的
+    // semantic-incomplete（可自愈，budget 1）。实测该任务全部 chunk 的 finishReason=stop，
+    // 无任何真实截断（输入 12.9~14.2 万 tokens / 输出仅 1k~6.6k），属分块拼装问题而非截断。
+    // 现改为中性描述：本错误将落到 semantic-incomplete 策略，可正常重试修正。
+    issues.push(`${filePath}: 缺少 <script setup> 标签（分块拼装缺失脚本段）`)
     return { issues }
   }
 

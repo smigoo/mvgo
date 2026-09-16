@@ -351,6 +351,73 @@ export function pickBestMountTarget(mapping, pool, opts = {}) {
 }
 
 /**
+ * 按 figmaBox 推导 icon/img 渲染尺寸（单边封顶 AUTO_MOUNT_ICON_MAX_PX）。
+ * 无有效尺寸返回 null（调用方走 max-* 兜底或跳过）。
+ */
+export function iconSizeFromFigmaBox(figmaBox) {
+  if (!figmaBox || Number(figmaBox.width) <= 0 || Number(figmaBox.height) <= 0) return null;
+  const scale = Math.min(
+    1,
+    AUTO_MOUNT_ICON_MAX_PX / Math.max(Number(figmaBox.width), Number(figmaBox.height)),
+  );
+  return {
+    width: Math.round(Number(figmaBox.width) * scale),
+    height: Math.round(Number(figmaBox.height) * scale),
+  };
+}
+
+function imgTagHasPxSize(tag) {
+  if (!tag) return false;
+  const hasAttr =
+    /(?:^|\s)width\s*=\s*["']?\d+(?:\.\d+)?(?:px)?["']?/i.test(tag) &&
+    /(?:^|\s)height\s*=\s*["']?\d+(?:\.\d+)?(?:px)?["']?/i.test(tag);
+  const hasStyle =
+    /(?:^|[;\s"'])width\s*:\s*\d+(?:\.\d+)?px/i.test(tag) &&
+    /(?:^|[;\s"'])height\s*:\s*\d+(?:\.\d+)?px/i.test(tag);
+  return hasAttr || hasStyle;
+}
+
+function applyPxSizeToImgTag(tag, size) {
+  const w = Math.round(Number(size.width));
+  const h = Math.round(Number(size.height));
+  const dim = `width:${w}px;height:${h}px;object-fit:contain`;
+  if (/style\s*=\s*"/i.test(tag)) {
+    return tag.replace(/style\s*=\s*"([^"]*)"/i, (_m, s) => {
+      const next = String(s)
+        .replace(/(?:^|;)\s*width\s*:\s*[^;]*/gi, '')
+        .replace(/(?:^|;)\s*height\s*:\s*[^;]*/gi, '')
+        .replace(/(?:^|;)\s*object-fit\s*:\s*[^;]*/gi, '')
+        .replace(/^[;\s]+|[;\s]+$/g, '');
+      return `style="${next ? `${next};${dim}` : dim}"`;
+    });
+  }
+  return tag.replace(/\s*\/?>$/, (tail) => ` style="${dim}"${tail}`);
+}
+
+/**
+ * 🛡️ 2026-09-16（c-traffic-monitor-89c245a1 实锤）：LLM 已写 `<img :src="icon1">`
+ * 但未带 figmaBox 像素尺寸（常配 `width/height:100%` + 无界父容器）→ 图标被撑成整面板。
+ * 不另插 auto-mounted-icon，只给已有 img 装配 width/height px。已有 px 尺寸则幂等跳过。
+ *
+ * @returns {{ content: string, patched: boolean }}
+ */
+export function ensureReferencedIconSize(content, varName, size) {
+  if (!content || !varName || !size || Number(size.width) <= 0 || Number(size.height) <= 0) {
+    return { content, patched: false };
+  }
+  const srcRe = new RegExp(`:src\\s*=\\s*["']${varName}["']`);
+  const imgRe = /<img\b[^>]*>/gi;
+  let patched = false;
+  const next = content.replace(imgRe, (tag) => {
+    if (!srcRe.test(tag)) return tag;
+    if (imgTagHasPxSize(tag)) return tag;
+    patched = true;
+    return applyPxSizeToImgTag(tag, size);
+  });
+  return { content: next, patched };
+}
+
+/**
  * 向开标签注入/合并 :style 背景绑定。
  * @param {Object} [mapping] - resourceDomMapping 条目；有 figmaBox 时用实际尺寸
  */
@@ -2171,10 +2238,10 @@ export function fixSectionHeightsForResource(content, ctx, options = {}) {
   // （防误伤非 flex 容器），规则⑤ 在补完 display 后同步写入 facts.flexGrow（缺则补）。
   const layoutFacts = ctx?.sectionLayoutFacts || null;
   let out5 = out4;
-  if (layoutFacts) {
-    const ratioMax = Number(FLEX_GROW_SCALES?.RATIO_MAX) || 19;
-    out5 = out4.replace(RULE_BLOCK_RE, (whole, head, body) => {
-      let facts = null;
+  const ratioMax = Number(FLEX_GROW_SCALES?.RATIO_MAX) || 19;
+  out5 = out4.replace(RULE_BLOCK_RE, (whole, head, body) => {
+    let facts = null;
+    if (layoutFacts) {
       for (const m of String(head).matchAll(/\.([A-Za-z][\w-]*)/g)) {
         const f = layoutFacts[m[1]];
         if (f) {
@@ -2182,9 +2249,32 @@ export function fixSectionHeightsForResource(content, ctx, options = {}) {
           break;
         }
       }
-      if (!facts) return whole;
-      let newBody = body;
-      if (facts.display === 'grid') {
+    }
+    let newBody = body;
+    if (!facts) {
+      // 🛡️ 2026-09-16 兜底（c-vehicle-monitor-54c256c7 / b82c9d84 实锤）：facts 对齐失败（vision
+      // section 数与子组件数不等 → layoutFacts 为 null）时，规则⑤整段空转 → 内部容器写了
+      // `flex:X 1 0` / `gap` / `flex-direction` / `align-items` 等 flex 专属属性、却漏了
+      // display:flex → 这些属性被浏览器忽略 → 子元素 block 纵向堆叠（「内部页应该 display 却没有」）。
+      // 兜底：出现任意 flex 专属属性就说明意图是 flex 布局，缺 display 时补 display:flex；
+      // 已有 flex-direction 则保留（只补 display），否则默认补 row（内容多数横向）。
+      const hasFlexGrow = /flex\s*:\s*\d+(?:\.\d+)?\s+1\s+0\b/.test(body);
+      const hasFlexOnly =
+        /(?:flex-direction|align-items|justify-content|align-content|gap|flex-wrap)\s*:/.test(
+          body,
+        );
+      if ((hasFlexGrow || hasFlexOnly) && !/display\s*:/i.test(body)) {
+        if (/flex-direction\s*:/.test(body)) {
+          newBody = `\n  display: flex;${body}`;
+        } else {
+          newBody = `\n  display: flex;\n  flex-direction: row;${body}`;
+        }
+        changed = true;
+        return head + newBody + '}';
+      }
+      return whole;
+    }
+    if (facts.display === 'grid') {
         if (!/display\s*:\s*grid/i.test(newBody)) {
           newBody = `\n  display: grid;${newBody}`;
         }
@@ -2199,15 +2289,19 @@ export function fixSectionHeightsForResource(content, ctx, options = {}) {
       }
       // flexGrow：内容根（-root/-slot-con）不写（父级是 block，flex 失效）。
       // 已有任何 flex: 声明（含 flex: 0 0 Npx / 已有正确 grow）不覆盖，交给规则②改错值。
+      // 🛡️ 2026-09-16 收窄：row 容器不写 flexGrow（row 容器的高度不应由 flexGrow 决定，
+      // 否则会被压缩到极小高度，内部固定高度内容溢出）。
       const grow = Number(facts.flexGrow);
       const hasFixedFlex = /flex\s*:\s*0\s+0\b/i.test(newBody);
       const hasAnyFlex = /(?:^|[\s;{])flex\s*:/i.test(newBody);
+      const isRowContainer = facts.flexDirection === 'row';
       if (
         grow > 0 &&
         grow <= ratioMax &&
         !ROOT_SELECTOR_RE.test(head) &&
         !hasFixedFlex &&
-        !hasAnyFlex
+        !hasAnyFlex &&
+        !isRowContainer
       ) {
         newBody += `\n  flex: ${grow} 1 0;`;
         if (!/min-height\s*:/i.test(newBody)) {
@@ -2215,11 +2309,14 @@ export function fixSectionHeightsForResource(content, ctx, options = {}) {
         }
       }
       // inline-row：横向 section 缺对齐时补两端对齐（不覆盖已有 align/justify；grid 不写）。
-      if (facts.flexDirection === 'row' && facts.display !== 'grid') {
+      // 🛡️ 2026-09-16 收窄：已有 gap 的容器不注入 justify-content（gap 已定义间距，
+      // space-between 会破坏自然间距，导致内容被挤到容器边缘）。
+      if (isRowContainer && facts.display !== 'grid') {
         if (!/align-items\s*:/i.test(newBody)) {
           newBody += `\n  align-items: center;`;
         }
-        if (!/justify-content\s*:/i.test(newBody)) {
+        const hasGap = /gap\s*:/i.test(newBody);
+        if (!hasGap && !/justify-content\s*:/i.test(newBody)) {
           newBody += `\n  justify-content: space-between;`;
         }
       }
@@ -2229,7 +2326,6 @@ export function fixSectionHeightsForResource(content, ctx, options = {}) {
       }
       return whole;
     });
-  }
 
   if (changed && logger) {
     logger.warn(

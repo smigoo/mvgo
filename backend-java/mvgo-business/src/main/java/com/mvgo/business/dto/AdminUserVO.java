@@ -31,6 +31,11 @@ public class AdminUserVO {
     private int apiTaskCount;
     /** Apifox 接口生成接口总数（来自 Node user-stats） */
     private int apiCount;
+    /**
+     * 组件类型构成：target(`microcode`/`vue3`) → 数量（来自 Node user-stats.componentByType）。
+     * 供用户管理「组件构成」下钻（各类型组件分别几个）。Node 未返回该字段时保持 null。
+     */
+    private Map<String, Integer> componentByType;
     private Date createdAt;
     private Date updatedAt;
 
@@ -152,6 +157,14 @@ public class AdminUserVO {
 
     public void setApiCount(int apiCount) {
         this.apiCount = apiCount;
+    }
+
+    public Map<String, Integer> getComponentByType() {
+        return componentByType;
+    }
+
+    public void setComponentByType(Map<String, Integer> componentByType) {
+        this.componentByType = componentByType;
     }
 
     public Date getCreatedAt() {

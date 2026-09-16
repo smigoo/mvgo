@@ -1148,6 +1148,7 @@ export default {
   isResourceUsedInCorpus,
   ensureRuntimeLibraryImports,
   pruneUnmountedResourceImports,
+  stripResourceValueMisuse,
 }
 
 /**
@@ -1205,3 +1206,36 @@ export function pruneUnmountedResourceImports(content, resourceDomMapping, optio
   }
   return result;
 }
+
+/**
+ * 🛡️ CODE-027 自愈（2026-09-16 · f68aedb6 实锤）：静态资源 `.value` 误用 → 去掉 `.value`。
+ *
+ * 根因：Vite 静态 import（`import bg1 from '.../bg.png'`）返回 **URL 字符串（非 ref）**，
+ * LLM 却写 `bg1.value` / `icon3.value` → 恒为 undefined → 图片不渲染。CODE-022 因词边界命中
+ * 而漏判「引用方式错误」；此处确定性自愈把 `X.value` → `X`（X 是 import 图片变量）。
+ *
+ * 只动「import 图片变量名」的 `.value`——普通 `ref()` 变量不在图片 import 清单内，绝不误杀。
+ * import 语句本身不含 `.value`（正则天然跳过）。幂等：替换后不再有 `X.value`。
+ *
+ * @param {string} content .vue 文件内容
+ * @returns {string} 去掉 `.value` 后的内容（无改动时原样返回，引用相等）
+ */
+export function stripResourceValueMisuse(content) {
+  if (typeof content !== 'string' || !content) return content;
+  const scriptMatch = content.match(/<script[^>]*>([\s\S]*?)<\/script>/i);
+  const scriptBody = scriptMatch ? scriptMatch[1] : '';
+  if (!scriptBody) return content;
+  const importRe =
+    /import\s+([A-Za-z_$][\w$]*)\s+from\s*['"][^'"]*(?:bg|icon|img)[\w-]*\.(?:png|jpe?g|svg|gif|webp)['"]/gi;
+  const names = new Set();
+  let m;
+  while ((m = importRe.exec(scriptBody))) names.add(m[1]);
+  if (names.size === 0) return content;
+  let out = content;
+  for (const name of names) {
+    const esc = String(name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    out = out.replace(new RegExp(`\\b${esc}\\.value\\b`, 'g'), name);
+  }
+  return out;
+}
+

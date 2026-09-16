@@ -680,6 +680,23 @@ describe('healThemeMixinVarRefs —— mixin 闭包变量引用改写为 var()',
     const src = `.a { color: @c; }`
     expect(healThemeMixinVarRefs(src, tv)).toContain('var(--c, #111)')
   })
+
+  it('🛡️ 同名前缀槽位不误伤（@color-bg 不吞 @color-bg-card）—— 2026-09-16 治本', () => {
+    const tv = `.theme-dark() {
+  @color-bg: rgba(237, 244, 251, 1);
+  @color-bg-card: #ffffff;
+}
+`
+    const src = `.a { background: @color-bg-card; }
+.b { background: @color-bg; }`
+    const out = healThemeMixinVarRefs(src, tv)
+    // 长槽位 @color-bg-card 必须被完整改写为 var(--color-bg-card, ...)，不能被短槽位吞前缀
+    expect(out).toContain('background: var(--color-bg-card, #ffffff);')
+    // 短槽位 @color-bg 正常改写
+    expect(out).toContain('background: var(--color-bg, rgba(237, 244, 251, 1));')
+    // 关键：绝不出现非法 -card 后缀（旧 bug 会产出 var(--color-bg, ...)-card）
+    expect(out).not.toContain(')-card')
+  })
 })
 
 // ============================================================

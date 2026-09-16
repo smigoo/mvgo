@@ -60,9 +60,32 @@ export interface UserStat {
   apiTaskCount: number;
   /** Apifox 接口生成接口总数 */
   apiCount: number;
+  /**
+   * 组件类型构成：`components.target` → 数量（`microcode` / `vue3` / `unlabeled`）。
+   * 供用户管理抽屉「组件构成」下钻展示（这个人开发的各类型组件分别几个）。
+   * 维度取 schema 的 `target`（注释即「组件目标类型」）——componentId 前缀**不可靠**
+   * （实测 `c-env-monitor` 会被误切成 `c-env`），schema 亦无品类字段。
+   */
+  componentByType: Record<string, number>;
 }
 
-const EMPTY_STATS: UserStat = { componentCount: 0, taskCount: 0, apiTaskCount: 0, apiCount: 0 };
+const EMPTY_STATS: UserStat = {
+  componentCount: 0,
+  taskCount: 0,
+  apiTaskCount: 0,
+  apiCount: 0,
+  componentByType: {},
+};
+
+/**
+ * 构造一份**独立可变**的空统计。
+ *
+ * ⚠️ 不可直接用 `{ ...EMPTY_STATS }`：`componentByType` 是对象，浅拷贝会让所有
+ * 用户共享同一个可变对象 → 统计互相串号。凡需要独立副本处一律走本函数。
+ */
+function emptyStats(): UserStat {
+  return { ...EMPTY_STATS, componentByType: {} };
+}
 
 /**
  * 管理后台只读服务。
@@ -199,7 +222,7 @@ export class AdminService {
         // 修法：按 id + uid 两个候选键求和聚合 statsMap（同一用户的两路数据互不重叠，可加性合并）。
         const st: UserStat = (() => {
           const candidates = [id, uid].filter(Boolean);
-          const merged: UserStat = { ...EMPTY_STATS };
+          const merged: UserStat = emptyStats();
           for (const k of candidates) {
             const v = statsMap[k];
             if (v) {
@@ -207,6 +230,10 @@ export class AdminService {
               merged.taskCount += v.taskCount;
               merged.apiTaskCount += v.apiTaskCount;
               merged.apiCount += v.apiCount;
+              // 类型构成同样按候选键相加（两路数据互不重叠，可加性合并）
+              for (const [t, n] of Object.entries(v.componentByType || {})) {
+                merged.componentByType[t] = (merged.componentByType[t] || 0) + (n || 0);
+              }
             }
           }
           return merged;
@@ -223,6 +250,7 @@ export class AdminService {
           isAdmin: !!u.isAdmin,
           hasConfig: !!cfg,
           componentCount: st.componentCount,
+          componentByType: st.componentByType,
           taskCount: st.taskCount,
           apiTaskCount: st.apiTaskCount,
           apiCount: st.apiCount,
@@ -246,18 +274,25 @@ export class AdminService {
    */
   async listUserStats(): Promise<Record<string, UserStat>> {
     const stats: Record<string, UserStat> = {};
-    const ensure = (key: string): UserStat => (stats[key] ||= { ...EMPTY_STATS });
+    const ensure = (key: string): UserStat => (stats[key] ||= emptyStats());
 
-    // 1) 组件库记录数：components group by creatorId
+    // 1) 组件库记录数：components group by (creatorId, target)
+    //    同一趟聚合同时产出「总数」与「类型构成」，避免二次全表扫描。
     try {
       const rows = await this.componentModel
-        .aggregate<{ _id: any; n: number }>([
-          { $group: { _id: '$creatorId', n: { $sum: 1 } } },
+        .aggregate<{ _id: { c: any; t?: string }; n: number }>([
+          { $group: { _id: { c: '$creatorId', t: '$target' }, n: { $sum: 1 } } },
         ])
         .exec();
       for (const r of rows) {
-        if (!r._id) continue;
-        ensure(String(r._id)).componentCount += r.n;
+        const owner = r?._id?.c;
+        if (!owner) continue;
+        const st = ensure(String(owner));
+        const n = r.n || 0;
+        st.componentCount += n;
+        // target 缺失的存量记录归入 unlabeled，保证各类型之和 === componentCount
+        const t = r?._id?.t || 'unlabeled';
+        st.componentByType[t] = (st.componentByType[t] || 0) + n;
       }
     } catch (err: any) {
       this.logger.warn(`[listUserStats] components 聚合失败: ${err.message}`);

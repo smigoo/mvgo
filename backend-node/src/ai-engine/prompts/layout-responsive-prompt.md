@@ -137,6 +137,6 @@
 - Vue 3 `<script setup>` + TypeScript
 - `<style lang="less" scoped>` 
 - 代码可直接在 Vite + Vue 3 项目中运行
-- 所有颜色使用 CSS 变量（`var(--color-primary)` 风格）
+- 所有颜色使用 Less 槽位变量（`@color-primary` 风格；槽位在 theme-vars.less 的 `.theme-dark()` / `.theme-light()` 各一份且值必须不同）—— 禁止业务样式直写 `var(--color-primary)` 这类模式 A 残留
 - 命名遵循 BEM 模式：`screen-*` / `zone-*` / `panel-*`
 - Template 不超过 200 行，逻辑复杂部分提取为 `computed` 或子组件

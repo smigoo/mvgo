@@ -91,3 +91,72 @@ describe('pruneRedundantFields · visible:false 隐藏节点过滤', () => {
     expect(pruned.children[1].characters).toBe('设备监测');
   });
 });
+
+/**
+ * Auto Layout 属性保留（布局保真回归门禁）
+ * 背景：曾有误判「pruneRedundantFields 误删 layoutMode 致布局错误」。git blame 证实 layoutMode 等
+ * Auto Layout 属性自 2026-08-28(e05cab41) 起即被显式保留。本组用例固化该行为，防止重构时
+ * 误删或凭空注入，导致 Figma→Vue3 / 微码组件 flex 映射失真。
+ */
+describe('pruneRedundantFields · Auto Layout 属性保留（布局保真）', () => {
+  const conn = new FigmaConnector({ figmaToken: 'fake-token-for-test' });
+
+  const mkFrame = (overrides: Record<string, unknown> = {}) => ({
+    id: '1:1',
+    name: 'root',
+    type: 'FRAME',
+    layoutMode: 'HORIZONTAL',
+    primaryAxisAlignItems: 'SPACE_BETWEEN',
+    counterAxisAlignItems: 'CENTER',
+    itemSpacing: 12,
+    layoutWrap: 'WRAP',
+    primaryAxisSizingMode: 'FIXED',
+    counterAxisSizingMode: 'AUTO',
+    clipsContent: true,
+    paddingLeft: 8,
+    paddingRight: 8,
+    paddingTop: 4,
+    paddingBottom: 4,
+    absoluteBoundingBox: { x: 0, y: 0, width: 100, height: 40 },
+    children: [],
+    ...overrides,
+  });
+
+  it('FRAME 的 Auto Layout 属性全部保留（不误删 layoutMode 等）', () => {
+    const pruned = conn.pruneRedundantFields(mkFrame() as any);
+    expect(pruned.layoutMode).toBe('HORIZONTAL');
+    expect(pruned.primaryAxisAlignItems).toBe('SPACE_BETWEEN');
+    expect(pruned.counterAxisAlignItems).toBe('CENTER');
+    expect(pruned.itemSpacing).toBe(12);
+    expect(pruned.layoutWrap).toBe('WRAP');
+    expect(pruned.primaryAxisSizingMode).toBe('FIXED');
+    expect(pruned.counterAxisSizingMode).toBe('AUTO');
+    expect(pruned.clipsContent).toBe(true);
+    expect(pruned.paddingLeft).toBe(8);
+    expect(pruned.paddingRight).toBe(8);
+    expect(pruned.paddingTop).toBe(4);
+    expect(pruned.paddingBottom).toBe(4);
+  });
+
+  it('嵌套子 FRAME 各自保留自身 Auto Layout（不向上/向下污染）', () => {
+    const tree = mkFrame({
+      children: [
+        mkFrame({ id: '2:1', name: 'child', layoutMode: 'VERTICAL', itemSpacing: 6 }),
+      ],
+    });
+    const pruned = conn.pruneRedundantFields(tree as any);
+    expect(pruned.layoutMode).toBe('HORIZONTAL');
+    expect(pruned.children[0].layoutMode).toBe('VERTICAL');
+    expect(pruned.children[0].itemSpacing).toBe(6);
+  });
+
+  it('无 Auto Layout 的节点不凭空注入 layoutMode', () => {
+    const pruned = conn.pruneRedundantFields({
+      id: '3:1',
+      name: 'plain',
+      type: 'RECTANGLE',
+      absoluteBoundingBox: { x: 0, y: 0, width: 10, height: 10 },
+    } as any);
+    expect(pruned.layoutMode).toBeUndefined();
+  });
+});

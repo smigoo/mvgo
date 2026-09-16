@@ -44,7 +44,7 @@ jest.mock('../../utils/provider-pool.js', () => ({
 
 jest.mock('../../utils/llm-timeout.js', () => ({ invokeWithTimeout: jest.fn() }))
 
-import { buildDeterministicIndexTemplate, stripUnplannedSubComponentImports } from './code-generator.js'
+import { buildDeterministicIndexTemplate, stripUnplannedSubComponentImports, containChartRefInsidePanel } from './code-generator.js'
 import { pruneDeadSubComponentImports } from './resource-mounter.js'
 
 // 模拟 planner 的 effectiveSections（device-monitor 实锤：header + switch + tabs + section-main）
@@ -148,6 +148,72 @@ describe('层① 确定性 index.vue 模板装配', () => {
     expect(facts!.template).toContain('<HeaderSection />')
     expect(facts!.template).toContain('<TabsSection />')
   })
+
+  test('E1 治本：容器嵌套保留（switch/@antd-tab 生成 wrapper div，不拍平叶子）', () => {
+    // device-monitor 实锤：con 容器下 switch（active/default）+ @antd/tab（tabs/cons），
+    // 旧实现拍平叶子导致 switch 与 tab 全部平级 flex（用户指正「switch 没组成一个元素」）。
+    const tree = [
+      { id: '2:8419', type: 'header', responsibility: '顶部标题区' },
+      {
+        id: '89:40', type: 'container', name: 'con', isLayoutContainer: true,
+        responsibility: '纵向布局容器',
+        children: [
+          {
+            id: '89:38', type: 'container', name: 'switch', isLayoutContainer: true,
+            responsibility: '纵向布局容器',
+            children: [
+              { id: '2:8787', type: 'content', name: 'active', responsibility: 'active' },
+              { id: '2:8806', type: 'content', name: 'default', responsibility: 'default' },
+            ],
+          },
+          {
+            id: '89:37', type: 'container', name: '@antd/tab', isLayoutContainer: true,
+            responsibility: '纵向布局容器',
+            children: [
+              { id: '89:39', type: 'tabs', responsibility: '标签页切换区' },
+              { id: '2:8437', type: 'content', name: 'cons', responsibility: 'cons' },
+            ],
+          },
+        ],
+      },
+    ]
+    const facts = buildDeterministicIndexTemplate(makeInput(tree))
+    const tpl = facts!.template
+    // header 进插槽
+    expect(tpl).toContain('<template #header-right>')
+    expect(tpl).toContain('<HeaderSection />')
+    // 容器生成 wrapper div，子叶子归属正确
+    expect(tpl).toContain('c-device-monitor-switch-con')
+    expect(tpl).toContain('c-device-monitor-antd-tab-con')
+    // 结构顺序：switch 容器在 active/default 之前，active/default 在 antd-tab 容器之前，
+    // tabs 在 antd-tab 容器之后（验证容器包裹关系，不拍平）
+    const switchIdx = tpl.indexOf('c-device-monitor-switch-con')
+    const tabIdx = tpl.indexOf('c-device-monitor-antd-tab-con')
+    const tabsIdx = tpl.indexOf('<TabsSection />')
+    expect(switchIdx).toBeGreaterThan(-1)
+    expect(tabIdx).toBeGreaterThan(-1)
+    expect(switchIdx).toBeLessThan(tabIdx)
+    expect(tabIdx).toBeLessThan(tabsIdx)
+    // switch 容器的闭合 div 必须在 antd-tab 容器开始之后（两个容器互不嵌套、平级包裹各自叶子）
+    expect(tpl.indexOf('</div>', switchIdx)).toBeLessThan(tabIdx)
+  })
+
+  test('E1 治本：headerSlots 编造 id 匹配不到 → 回退 type=header 二分（header 不丢）', () => {
+    // device-monitor 实锤：headerSlots 契约 figmaNodeId 是 vision 编造 id（8:3/8:4/8:5），
+    // 真实 header 叶子 sourceNodeIds 是 2:8419 → 匹配不到 → header 整个丢失。
+    const secs = [
+      { id: '2:8419', type: 'header', responsibility: '顶部标题区', sourceNodeIds: ['2:8419'] },
+      { id: '89:37', type: 'tabs', responsibility: '标签页切换区' },
+    ]
+    const input = makeInput(secs)
+    ;(input as any).headerSlots = [
+      { slotType: 'header-right', elementType: 'statistic', figmaNodeId: '8:3' },
+      { slotType: 'header-right', elementType: 'statistic', figmaNodeId: '8:4' },
+    ]
+    const facts = buildDeterministicIndexTemplate(input)
+    expect(facts!.template).toContain('<template #header-right>')
+    expect(facts!.template).toContain('<HeaderSection />')
+  })
 })
 
 describe('层① pruneDeadSubComponentImports（删死 import）', () => {
@@ -230,5 +296,32 @@ import ContentSection from './components/ContentSection.vue'`)
   test('空/畸形输入 fail-open 原样返回', () => {
     expect(stripUnplannedSubComponentImports('', ['A'])).toBe('')
     expect(stripUnplannedSubComponentImports(null as any, ['A'])).toBeNull()
+  })
+})
+
+describe('E3-1 containChartRefInsidePanel（chartRef 容器位置收口，2026-09-16 12bc3750）', () => {
+  test('⭐ chartRef 在 base-panel 外 → 移回 base-panel 内', () => {
+    const input = [
+      '<template>',
+      '  <base-panel panelKey="default-panel">',
+      '    <div class="c-x-slot-con">',
+      '      <ListSection />',
+      '    </div>',
+      '  </base-panel>',
+      '  <div ref="chartRef" class="c-x-chart" style="width:100%;height:100%"></div>',
+      '</template>',
+    ].join('\n')
+    const out = containChartRefInsidePanel(input, {})
+    expect(out.indexOf('ref="chartRef"')).toBeLessThan(out.indexOf('</base-panel>'))
+  })
+
+  test('chartRef 已在 base-panel 内 → 原样返回（零误伤）', () => {
+    const input = '<template>\n  <base-panel>\n    <div class="slot-con">\n      <div ref="chartRef"></div>\n    </div>\n  </base-panel>\n</template>'
+    expect(containChartRefInsidePanel(input, {})).toBe(input)
+  })
+
+  test('无 chartRef / 无 base-panel → 原样返回', () => {
+    expect(containChartRefInsidePanel('<template><div>x</div></template>', {})).toBe('<template><div>x</div></template>')
+    expect(containChartRefInsidePanel('', {})).toBe('')
   })
 })
