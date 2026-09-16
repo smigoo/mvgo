@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-08-20T18:27:03+08:00",
+  "purpose": "分析汇合层与 Engineer 上下文重整前的代码和行为基线",
+  "repository": {
+    "path": "/Users/smigoo/工作/mvgo/backend-node",
+    "activeBranch": "main",
+    "baselineBranch": "backup/context-assembler-baseline-20260820",
+    "baselineCommit": "614f6557dec2b03a80a7de39c5d9849beeb209e3",
+    "branchSwitched": false,
+    "newCommitCreated": false,
+    "reasonNoCommit": "目标源码相对 HEAD 无未提交差异，使用基线分支固定当前已提交代码，避免制造空提交。"
+  },
+  "sourceScope": [
+    {
+      "path": "src/ai-engine/graphs/mc-component-graph-vue3.js",
+      "sha256": "570e2afd77d6ed8e2302bb2cced1e8ffb7010234e3a3d411ffcfadb9d16b5907"
+    },
+    {
+      "path": "src/ai-engine/graphs/mc-component-graph-phase2.js",
+      "sha256": "835d77c03f738680ea2a1fa68ee28459f174e2dd4e09f2a99163c5dbd4c31701"
+    },
+    {
+      "path": "src/ai-engine/types/generation-context.js",
+      "sha256": "ebca2b4282e99a9230c44dceb5cc35634c16a6a175b4a661d62331fbd9d2abda"
+    },
+    {
+      "path": "src/ai-engine/roles/vue3-engineer.js",
+      "sha256": "0283bb42b8d6a10d9d4af456bfed01bc88b64f0fc67af994e6e6dd4e8fa6f82e"
+    },
+    {
+      "path": "src/ai-engine/roles/microcode-engineer.js",
+      "sha256": "e67fa71a5ebbccf2abbf638f5deb4a939d241bd61e4b62e8f8ba322eaeec350e"
+    }
+  ],
+  "excludedUntrackedPaths": [
+    "config/agents/figma-analyzer.json",
+    "config/dynamic-roles/figma-analyzer.js",
+    "config/recipes/",
+    "config/workflows/figma-count.json"
+  ],
+  "behaviorSample": {
+    "component": "cp-流量监测",
+    "sampleRoot": "/Users/smigoo/工作/mvgo/temp-components/6a7599af6eb9eebf9fba56cd/mv-1787213717433-66ffb69f-mv-max-1787192699501-724aa82b",
+    "copyPolicy": "只读引用并记录哈希，不复制整个 temp-components 目录。",
+    "sampleIntegrityNote": "figma/visual/analysis checkpoint 为历史分析结果；package/index.vue 与 resources/styles/common.less 已经过人工修正，不作为原始坏代码基线。",
+    "facts": {
+      "figmaRootSizeCssPx": {
+        "width": 425.8275146484375,
+        "height": 807
+      },
+      "visualCoverageRate": 44,
+      "visualSourceImageMetadataComplete": false,
+      "layoutReview": {
+        "result": "warning",
+        "score": 0,
+        "degraded": true,
+        "issue": "response_parse_failed"
+      },
+      "styleMapping": {
+        "synthesizedFallback": true,
+        "conflictingBackground": "#0f0f0f",
+        "genericBorderRadius": "8px"
+      }
+    },
+    "files": [
+      {
+        "path": ".checkpoint/figma.json",
+        "sha256": "89df9fcd25e769dd159feefe88f42c9b90439c728cb88ee8d912ae40bbd42c16",
+        "state": "historical-checkpoint"
+      },
+      {
+        "path": ".checkpoint/visual.json",
+        "sha256": "98911e0d93d8bbb025c956c7cf292263640eafc13dbca3501cb525cf516bd522",
+        "state": "historical-checkpoint"
+      },
+      {
+        "path": ".checkpoint/analysis.json",
+        "sha256": "24a18d2efa0e9ac45bd56f8fbf008a584bd7bd6192e7152edb059a85fc57dbd0",
+        "state": "historical-checkpoint"
+      },
+      {
+        "path": "package/index.vue",
+        "sha256": "a7e4581afb380fb28be5245760c298a2170919ec67808b7b35aada34f18a12cc",
+        "state": "manually-corrected"
+      },
+      {
+        "path": "resources/styles/common.less",
+        "sha256": "ebdd13bb8b3f860c44ce20136e13e3f2578d0e44927cbce58bd3b18275aa83e1",
+        "state": "manually-corrected"
+      }
+    ]
+  },
+  "runtimeObservation": {
+    "nodeBackendPort": 13030,
+    "listenerPid": 26121,
+    "serviceRestarted": false
+  },
+  "nextStepBoundary": "下一步仅创建 Context Assembler 骨架和测试，不接入生产图，不改变 Engineer 输入。"
+}

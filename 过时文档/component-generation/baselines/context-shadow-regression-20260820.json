@@ -1,0 +1,292 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-20T10:53:39.738Z",
+  "mode": "offline-read-only",
+  "selectionPolicy": [
+    "优先纳入已知流量监测失败样本",
+    "覆盖 Vue3(mv) 与 Phase2(mc)",
+    "覆盖低/高 coverage、review degraded、style fallback",
+    "优先选择不同 Figma nodeId，数量不足时按最近完整样本补齐"
+  ],
+  "summary": {
+    "completeSampleCount": 160,
+    "invalidSampleCount": 0,
+    "selectedSampleCount": 5,
+    "passedSampleCount": 5,
+    "failedSampleCount": 0,
+    "trustDistribution": {
+      "restricted": 5
+    },
+    "averageReductionRate": 97.14,
+    "minReductionRate": 92.12,
+    "maxGenerationInputBytes": 4110,
+    "budgetFailureCount": 0,
+    "rawFieldLeakCount": 0,
+    "sizeMismatchCount": 0,
+    "trustedMisclassificationCount": 0
+  },
+  "samples": [
+    {
+      "sampleId": "mv-1787213717433-66ffb69f-mv-max-1787192699501-724aa82b",
+      "componentName": "cp-流量监测",
+      "nodeId": "2:9778",
+      "pipeline": "vue3",
+      "source": {
+        "sampleRoot": "/Users/smigoo/工作/mvgo/temp-components/6a7599af6eb9eebf9fba56cd/mv-1787213717433-66ffb69f-mv-max-1787192699501-724aa82b",
+        "coverageRate": 44,
+        "reviewDegraded": true,
+        "reviewScore": 0,
+        "styleFallback": true,
+        "chartCount": 2,
+        "figmaRootSize": {
+          "width": 425.8275146484375,
+          "height": 807
+        }
+      },
+      "result": {
+        "trustLevel": "restricted",
+        "issueCount": 5,
+        "issueIds": [
+          "CONTEXT-LAYOUT-REVIEW-DEGRADED",
+          "CONTEXT-STYLE-FALLBACK-REJECTED",
+          "CONTEXT-ROOT-BACKGROUND-CONFLICT",
+          "CHART-LEGEND-OWNER:section-hourly-charts",
+          "CHART-LEGEND-OWNER:section-forecast"
+        ],
+        "rawFieldLeaks": [],
+        "legacyEstimatedBytes": 208874,
+        "generationInputBytes": 3869,
+        "reductionRate": 98.15,
+        "budgetPassed": true,
+        "budgetViolations": [],
+        "actualRootSize": {
+          "width": 425.8275146484375,
+          "height": 807,
+          "unit": "css-px",
+          "source": "figma-api"
+        }
+      },
+      "assertions": {
+        "shadowCheckpointName": true,
+        "productionStillLegacy": true,
+        "engineerInputUnchanged": true,
+        "rootWidthPreserved": true,
+        "rootHeightPreserved": true,
+        "noRawFieldLeak": true,
+        "budgetPassed": true,
+        "restrictedWhenRequired": true
+      },
+      "failedAssertions": [],
+      "passed": true
+    },
+    {
+      "sampleId": "mc-max-1787041205995-04a316c0",
+      "componentName": "cp-设备监测",
+      "nodeId": "2:8417",
+      "pipeline": "phase2",
+      "source": {
+        "sampleRoot": "/Users/smigoo/工作/mvgo/temp-components/6a7599af6eb9eebf9fba56cd/mc-max-1787041205995-04a316c0",
+        "coverageRate": 40,
+        "reviewDegraded": false,
+        "reviewScore": 65,
+        "styleFallback": false,
+        "chartCount": 0,
+        "figmaRootSize": {
+          "width": 420,
+          "height": 425
+        }
+      },
+      "result": {
+        "trustLevel": "restricted",
+        "issueCount": 1,
+        "issueIds": [
+          "CONTEXT-ROOT-BACKGROUND-CONFLICT"
+        ],
+        "rawFieldLeaks": [],
+        "legacyEstimatedBytes": 240924,
+        "generationInputBytes": 2665,
+        "reductionRate": 98.89,
+        "budgetPassed": true,
+        "budgetViolations": [],
+        "actualRootSize": {
+          "width": 420,
+          "height": 425,
+          "unit": "css-px",
+          "source": "figma-api"
+        }
+      },
+      "assertions": {
+        "shadowCheckpointName": true,
+        "productionStillLegacy": true,
+        "engineerInputUnchanged": true,
+        "rootWidthPreserved": true,
+        "rootHeightPreserved": true,
+        "noRawFieldLeak": true,
+        "budgetPassed": true,
+        "restrictedWhenRequired": true
+      },
+      "failedAssertions": [],
+      "passed": true
+    },
+    {
+      "sampleId": "mc-max-1786952789516-84da09d9",
+      "componentName": "cp-环境监测",
+      "nodeId": "2:7879",
+      "pipeline": "phase2",
+      "source": {
+        "sampleRoot": "/Users/smigoo/工作/mvgo/temp-components/6a7599af6eb9eebf9fba56cd/mc-max-1786952789516-84da09d9",
+        "coverageRate": 48,
+        "reviewDegraded": true,
+        "reviewScore": 0,
+        "styleFallback": false,
+        "chartCount": 1,
+        "figmaRootSize": {
+          "width": 420,
+          "height": 186
+        }
+      },
+      "result": {
+        "trustLevel": "restricted",
+        "issueCount": 3,
+        "issueIds": [
+          "CONTEXT-LAYOUT-REVIEW-DEGRADED",
+          "CONTEXT-ROOT-BACKGROUND-CONFLICT",
+          "CHART-LEGEND-OWNER:section-chart"
+        ],
+        "rawFieldLeaks": [],
+        "legacyEstimatedBytes": 39001,
+        "generationInputBytes": 3072,
+        "reductionRate": 92.12,
+        "budgetPassed": true,
+        "budgetViolations": [],
+        "actualRootSize": {
+          "width": 420,
+          "height": 186,
+          "unit": "css-px",
+          "source": "figma-api"
+        }
+      },
+      "assertions": {
+        "shadowCheckpointName": true,
+        "productionStillLegacy": true,
+        "engineerInputUnchanged": true,
+        "rootWidthPreserved": true,
+        "rootHeightPreserved": true,
+        "noRawFieldLeak": true,
+        "budgetPassed": true,
+        "restrictedWhenRequired": true
+      },
+      "failedAssertions": [],
+      "passed": true
+    },
+    {
+      "sampleId": "mv-1787212758845-328d6c6b-mv-max-1787192699501-724aa82b",
+      "componentName": "cp-流量监测",
+      "nodeId": "2:9778",
+      "pipeline": "vue3",
+      "source": {
+        "sampleRoot": "/Users/smigoo/工作/mvgo/temp-components/6a7599af6eb9eebf9fba56cd/mv-1787212758845-328d6c6b-mv-max-1787192699501-724aa82b",
+        "coverageRate": 49,
+        "reviewDegraded": false,
+        "reviewScore": 62,
+        "styleFallback": false,
+        "chartCount": 3,
+        "figmaRootSize": {
+          "width": 425.8275146484375,
+          "height": 807
+        }
+      },
+      "result": {
+        "trustLevel": "restricted",
+        "issueCount": 4,
+        "issueIds": [
+          "CONTEXT-ROOT-BACKGROUND-CONFLICT",
+          "CHART-LEGEND-OWNER:section-chart-tunnel",
+          "CHART-LEGEND-OWNER:section-chart-bridge",
+          "CHART-LEGEND-OWNER:section-forecast"
+        ],
+        "rawFieldLeaks": [],
+        "legacyEstimatedBytes": 220770,
+        "generationInputBytes": 4110,
+        "reductionRate": 98.14,
+        "budgetPassed": true,
+        "budgetViolations": [],
+        "actualRootSize": {
+          "width": 425.8275146484375,
+          "height": 807,
+          "unit": "css-px",
+          "source": "figma-api"
+        }
+      },
+      "assertions": {
+        "shadowCheckpointName": true,
+        "productionStillLegacy": true,
+        "engineerInputUnchanged": true,
+        "rootWidthPreserved": true,
+        "rootHeightPreserved": true,
+        "noRawFieldLeak": true,
+        "budgetPassed": true,
+        "restrictedWhenRequired": true
+      },
+      "failedAssertions": [],
+      "passed": true
+    },
+    {
+      "sampleId": "mv-1787210276379-8f9c0045-mv-max-1787192699501-724aa82b",
+      "componentName": "cp-流量监测",
+      "nodeId": "2:9778",
+      "pipeline": "vue3",
+      "source": {
+        "sampleRoot": "/Users/smigoo/工作/mvgo/temp-components/6a7599af6eb9eebf9fba56cd/mv-1787210276379-8f9c0045-mv-max-1787192699501-724aa82b",
+        "coverageRate": 46,
+        "reviewDegraded": false,
+        "reviewScore": 80,
+        "styleFallback": false,
+        "chartCount": 2,
+        "figmaRootSize": {
+          "width": 425.8275146484375,
+          "height": 807
+        }
+      },
+      "result": {
+        "trustLevel": "restricted",
+        "issueCount": 3,
+        "issueIds": [
+          "CONTEXT-ROOT-BACKGROUND-CONFLICT",
+          "CHART-LEGEND-OWNER:section-daily-total",
+          "CHART-LEGEND-OWNER:section-flow-prediction"
+        ],
+        "rawFieldLeaks": [],
+        "legacyEstimatedBytes": 215588,
+        "generationInputBytes": 3405,
+        "reductionRate": 98.42,
+        "budgetPassed": true,
+        "budgetViolations": [],
+        "actualRootSize": {
+          "width": 425.8275146484375,
+          "height": 807,
+          "unit": "css-px",
+          "source": "figma-api"
+        }
+      },
+      "assertions": {
+        "shadowCheckpointName": true,
+        "productionStillLegacy": true,
+        "engineerInputUnchanged": true,
+        "rootWidthPreserved": true,
+        "rootHeightPreserved": true,
+        "noRawFieldLeak": true,
+        "budgetPassed": true,
+        "restrictedWhenRequired": true
+      },
+      "failedAssertions": [],
+      "passed": true
+    }
+  ],
+  "invalidSamples": [],
+  "decision": {
+    "eligibleForLiveShadowValidation": true,
+    "productionSwitchRecommended": false,
+    "reason": "离线回归只验证上下文收敛与事实保留；切换 Engineer 输入前仍需真实 shadow 运行。"
+  }
+}
