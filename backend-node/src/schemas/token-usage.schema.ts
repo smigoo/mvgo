@@ -44,6 +44,13 @@ export class TokenUsage {
 
   @Prop()
   nodeId?: string;
+
+  // R10 治本（2026-09-17）：让新 token 记录自带归属与端点，精确到调用级
+  @Prop()
+  userId?: string;
+
+  @Prop()
+  baseURL?: string;
 }
 
 export const TokenUsageSchema = SchemaFactory.createForClass(TokenUsage);

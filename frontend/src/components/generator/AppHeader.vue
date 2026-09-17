@@ -224,11 +224,10 @@ const mainTabsConfig = [
   // 「页面开发」「工作流编排」已移至页脚 AppFooter
 ]
 
-// 管理后台导航项：仅 admin 角色可见（不参与功能开关）
-const adminTab = { path: '/management', label: '操作日志', adminOnly: true }
-const usersTab = { path: '/users', label: '用户管理', adminOnly: true }
+// 管理后台导航项：仅 admin 角色可见（统一入口，内部通过侧边栏切换）
+const adminTab = { path: '/admin/operation-log', label: '管理后台', adminOnly: true }
 
-// 主导航最终列表：admin 角色额外追加「操作日志」「用户管理」
+// 主导航最终列表：admin 角色追加「管理后台」统一入口
 const mainTabs = computed(() => {
   const base = mainTabsConfig.map((tab) => ({
     ...tab,
@@ -236,7 +235,6 @@ const mainTabs = computed(() => {
   }))
   if (isAdmin.value) {
     base.push({ ...adminTab, enabled: true })
-    base.push({ ...usersTab, enabled: true })
   }
   return base
 })

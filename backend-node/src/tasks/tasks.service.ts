@@ -287,6 +287,15 @@ export class TasksService {
    * NestJS 生命周期钩子：异步初始化（在服务完全启动后执行）
    */
   async onModuleInit() {
+    // 🛡️ 治本（方案 A）：队列在恢复失败时无权重写任务磁盘状态，注入回调由本服务统一收口。
+    // 必须在 recoverZombieTasks() 之前注册——排队任务恢复是在其中「延迟 3 秒」执行的，
+    // 若注册晚于恢复，恢复失败的任务将只释放槽位、status 仍停在 queued 而残留磁盘。
+    if (this.queueService) {
+      this.queueService.onTaskFailed((sessionId, error) => {
+        void this.finalizeRecoverFailedTask(sessionId, error);
+      });
+    }
+
     // 僵尸任务恢复和队列清理（异步执行，不阻塞服务启动）
     await this.recoverZombieTasks();
 
@@ -1829,6 +1838,37 @@ export class TasksService {
     this.finalizeTask(task, 'failed', {
       error: error.friendlyMessage || error.message || error,
       refreshEndTime: true,
+    });
+    this.persist();
+  }
+
+  /**
+   * 🛡️ 治本（方案 A）：把「重启恢复失败」的任务收口为终态 failed 并写回磁盘。
+   *
+   * 典型触发：TaskQueueService 在服务重启后恢复 queued 任务，但所有 restore executor
+   * 都因脏数据（fileKey/nodeId 为空、target 无执行器等）返回 false —— 此时只有队列感知到失败，
+   * 队列自身无权改任务磁盘状态，便通过 onTaskFailed 回调交给本方法统一 finalize + persist。
+   *
+   * 若直接在 recoverZombieTasks 的 queued 分支里 finalize，恢复仍是延迟 3 秒异步执行，
+   * 且 restoreQueuedTask 内部还有「立即调度 → markTaskFailed」路径，二者口径不一会漏。
+   * 因此由队列在「确认失败」的那一刻回调本方法，保证语义唯一、不漏网。
+   */
+  private finalizeRecoverFailedTask(sessionId: string, error: string): void {
+    const task = this.tasks.get(sessionId);
+    if (!task) {
+      this.logger.warn(`[finalizeRecoverFailedTask] 任务不存在，跳过: ${sessionId}`);
+      return;
+    }
+    // 已是终态（completed/cancelled/failed）则不覆盖：防御性，避免回调晚到时覆盖真实结果。
+    if (task.status === 'completed' || task.status === 'cancelled') {
+      this.logger.debug(`[finalizeRecoverFailedTask] 任务已终态(${task.status})，跳过覆盖: ${sessionId}`);
+      return;
+    }
+    this.logger.warn(`[finalizeRecoverFailedTask] 排队任务恢复失败，标记终态 failed 并持久化: ${sessionId} (${error})`);
+    this.finalizeTask(task, 'failed', {
+      error,
+      refreshEndTime: true,
+      preserveExistingError: true,
     });
     this.persist();
   }

@@ -59,14 +59,15 @@ describe('ensureVue3StyleEntry + styleTokens（1.4）', () => {
     expect(files['resources/styles/theme-vars.less']).not.toContain('#44E4FF')
   })
 
-  it('theme-vars.less 已存在但缺 theme-light → 尾部追加契约渲染的 theme-light 块，保留原文件内容', () => {
-    const partial = `// LLM 生成
+  it('theme-vars.less 已存在（LLM 生成，含 kebab-case/裸属性）→ 系统确定性覆盖，不再保留 LLM 内容', () => {
+    const partial = `// LLM 生成（含裸属性 + kebab-case 变量，会被覆盖）
 .common() {
   @fontSize: 14px;
+  display: flex;
 }
 
 .theme-dark() {
-  @colorPrimary: #123456;
+  @color-text-base: #123456;
 }
 `
     const files = ensureVue3StyleEntry(
@@ -74,12 +75,14 @@ describe('ensureVue3StyleEntry + styleTokens（1.4）', () => {
       { logger, styleTokens: tokens() },
     )
     const out = files['resources/styles/theme-vars.less']
-    // 原 LLM 内容保留
-    expect(out).toContain('@colorPrimary: #123456;')
-    expect(out).toContain('@fontSize: 14px;')
-    // 契约 theme-light 追加（值来自派生槽位）
+    // 系统确定性覆盖：LLM 的 kebab-case 变量与裸属性被丢弃
+    expect(out).not.toContain('@color-text-base')
+    expect(out).not.toContain('display: flex')
+    // 系统契约 camelCase 变量 + 三 mixin 齐全
+    expect(out).toContain('@colorTextBase')
+    expect(out).toContain('.common() {')
+    expect(out).toContain('.theme-dark() {')
     expect(out).toContain('.theme-light() {')
-    expect(out).toContain('// === [自动修复] 补齐缺失 mixin 定义 ===')
   })
 
   it('文件已完整（3 mixin 齐）→ 原样保留、不追加', () => {

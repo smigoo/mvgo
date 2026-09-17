@@ -828,7 +828,12 @@ export class Phase2Service {
         },
         onTokenUsageRecord: (data) => {
           // 🆕 持久化 Token 用量到 MongoDB（异步非阻塞）
-          this.tokenTrackerService.recordUsage(data);
+          // R10 治本：userId + baseURL 让新 token 自带归属与端点
+          this.tokenTrackerService.recordUsage({
+            ...data,
+            userId: params.userId,
+            baseURL: config.aiBaseURL || process.env.ANTHROPIC_BASE_URL,
+          });
         },
         // 🆕 暂停检查回调：每个分块生成前由管线调用，返回当前任务状态
         pauseChecker: async () => {

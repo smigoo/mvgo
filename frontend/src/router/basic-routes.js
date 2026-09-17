@@ -48,29 +48,58 @@ export const basicRoutes = [
     }
   },
   {
-    name: 'Admin',
     path: '/admin',
-    component: () => import('@/views/admin/AdminGenerator.vue'),
+    component: () => import('@/views/admin/AdminLayout.vue'),
     meta: {
-      title: '后台管理系统'
-    }
-  },
-  {
-    name: 'Management',
-    path: '/management',
-    component: () => import('@/views/admin/ManagementView.vue'),
-    meta: {
-      title: '操作日志',
       adminOnly: true
-    }
-  },
-  {
-    name: 'Users',
-    path: '/users',
-    component: () => import('@/views/admin/UsersView.vue'),
-    meta: {
-      title: '用户管理',
-      adminOnly: true
-    }
+    },
+    redirect: '/admin/dashboard',
+    children: [
+      {
+        name: 'Dashboard',
+        path: 'dashboard',
+        component: () => import('@/views/admin/DashboardView.vue'),
+        meta: {
+          title: '概览',
+          adminOnly: true
+        }
+      },
+      {
+        name: 'OperationLog',
+        path: 'operation-log',
+        component: () => import('@/views/admin/ManagementView.vue'),
+        meta: {
+          title: '操作日志',
+          adminOnly: true
+        }
+      },
+      {
+        name: 'Users',
+        path: 'users',
+        component: () => import('@/views/admin/UsersView.vue'),
+        meta: {
+          title: '用户管理',
+          adminOnly: true
+        }
+      },
+      {
+        name: 'TaskStats',
+        path: 'task-stats',
+        component: () => import('@/views/admin/TaskStatsView.vue'),
+        meta: {
+          title: '任务统计',
+          adminOnly: true
+        }
+      },
+      {
+        name: 'MyStats',
+        path: 'my-stats',
+        component: () => import('@/views/admin/MyStatsView.vue'),
+        meta: {
+          title: '我的统计',
+          adminOnly: false  // 所有登录用户都可查看自己的统计
+        }
+      }
+    ]
   }
 ]

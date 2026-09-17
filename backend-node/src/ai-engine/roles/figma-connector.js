@@ -2037,17 +2037,14 @@ export class FigmaConnector {
         return 'image';
       }
 
-      // 2. 装饰矢量识别（仅针对无 IMAGE fill 的纯色/渐变矢量）：
-      //    中文几何名（椭圆/矩形/形状等）、Figma 自动编号（Group/Vector/Rectangle/Frame）、
-      //    占位名（g/circle/path）都是 UI 装饰矢量（开关/tab 图标/分隔符），不承载业务语义。
-      //    它们返回 unknown（不下载、不进映射、不被 validator 强制使用），
-      //    否则会像 mc-max-1787821650008-a53109f6 那样资源爆炸 + L0-B 误伤 156 个 BLOCK。
-      if (this._isDecorativeVectorName(nodeName)) {
-        return 'unknown';
-      }
-
-      // 3. GROUP/FRAME 容器识别：如果子节点全是 VECTOR/LINE/ELLIPSE 等矢量图形，
-      //    将整个容器视为单个 icon 资源（避免子节点被分别下载）
+      // 2. GROUP/FRAME 矢量组识别（2026-09-17 提前到装饰名判定之前 ·
+      //    mc-1789634453886-e0cdf905 实锤）：如果子节点全是 VECTOR/LINE/ELLIPSE 等
+      //    矢量图形，将整个容器视为单个 icon 资源（避免子节点被分别下载）。
+      //    ⚠️ 此前该判定排在 _isDecorativeVectorName 之后：FRAME 默认名（"Frame"）
+      //    先被装饰名规则吃掉返回 unknown → 「FRAME 包 VECTOR」的真实 icon 容器
+      //    （2:8856 "Frame" 含 2:8857 VECTOR，header 右侧图标）不下载、不进资源映射
+      //    → LLM 只能脑补硬编码 SVG。矢量组是**结构信号**（子节点全矢量 = 整体是图），
+      //    比「名字是 Figma 默认名」的命名猜测更强，故优先。
       if (
         (node.type === 'GROUP' || node.type === 'FRAME') &&
         node.children &&
@@ -2069,6 +2066,16 @@ export class FigmaConnector {
           childCount: node.children.length,
         });
         return 'icon';
+      }
+
+      // 3. 装饰矢量识别（仅针对无 IMAGE fill 的纯色/渐变矢量）：
+      //    中文几何名（椭圆/矩形/形状等）、Figma 自动编号（Group/Vector/Rectangle/Frame）、
+      //    占位名（g/circle/path）都是 UI 装饰矢量（开关/tab 图标/分隔符），不承载业务语义。
+      //    它们返回 unknown（不下载、不进映射、不被 validator 强制使用），
+      //    否则会像 mc-max-1787821650008-a53109f6 那样资源爆炸 + L0-B 误伤 156 个 BLOCK。
+      //    ⚠️ 「FRAME/GROUP 包纯矢量子节点」已被上方步骤 2 识别为整体 icon，不会到这里。
+      if (this._isDecorativeVectorName(nodeName)) {
+        return 'unknown';
       }
 
       // 4. 小尺寸 VECTOR/COMPONENT 且无文字 → 疑似 icon
@@ -2682,3 +2689,4 @@ export class FigmaConnector {
    * 产出「section 语义 → 内部元素样式」，微码/vue3 双链路共用）。
    * 保留此注释作历史留痕，方法体已删除。
    */
+}

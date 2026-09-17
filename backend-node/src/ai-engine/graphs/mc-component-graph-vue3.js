@@ -2982,6 +2982,19 @@ export function createPhase2Graph(config = {}) {
           '- 禁止手写 import 本地图片，由 injectResourceImports 自动注入\n';
         retryGuidance +=
           '- declare.json componentName 必须等于预览图识别的组件标题\n';
+        // 🛡️ 输出格式铁律（2026-09-17 根治）：重试指导此前未重申输出格式，LLM 收到
+        // 「修复指导」后切换成代码审查模式，输出 <write_to_file> 自然语言而非分隔符格式，
+        // code-parser 解析失败 → EMPTY_ARTIFACT（vue3 重试耗尽实锤）。必须在此兜底重申。
+        retryGuidance +=
+          '\n\n🚫 **输出格式铁律（与首次生成完全一致，务必遵守）**：\n';
+        retryGuidance +=
+          '- 直接输出每个文件的内容，用 `// === 文件路径 ===` 作为分隔符开头（如 `// === package/index.vue ===`）\n';
+        retryGuidance +=
+          '- **禁止**输出 `<write_to_file>` / `<path>` / `<content>` 等 XML 标签\n';
+        retryGuidance +=
+          '- **禁止**输出自然语言说明、修复思路、分析过程——只输出文件内容本身\n';
+        retryGuidance +=
+          '- 不要包裹在 JSON 代码块、markdown 代码块中\n';
 
         // R1' 重试轮结构锚定：注入组件树骨架，约束 LLM 不得重排结构
         const skeleton = CodeStructureValidator.extractComponentSkeleton(filesForCheck);

@@ -19,6 +19,7 @@ import {
   ensureRuntimeLibraryImports,
   pruneUnmountedResourceImports,
   stripResourceValueMisuse,
+  stripResourceWriteback,
 } from './resource-import-guard.js';
 import {
   normalizeFlexSourceConflicts,
@@ -47,6 +48,7 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
     runtimeImport: 0,
     pruned: 0,
     valueFixed: 0,
+    writebackFixed: 0,
     flex003: 0,
     flex005: 0,
     bgStyleComplete: 0,
@@ -111,6 +113,21 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
       result[fp] = stripped;
       summary.valueFixed++;
       logger?.warn?.('🛡️ CODE-027 修复：静态资源 .value 误用已去掉 .value', { file: fp });
+    }
+  }
+
+  // ④-b CODE-028 自愈（2026-09-17 · ef00bb27 实锤）：静态 import 图片变量被写回 → 删除。
+  // 注入侧把 `const bg2 = ref('')` 换成只读 `import bg2` 后，残留 `bg2.value = props.bg2`
+  // （经 ④ 变 `bg2 = props.bg2`）→ 对 ESM 只读绑定赋值 → 运行时 "bg2 is read-only." → 渲染失败。
+  // 只读绑定不可写，这些写回语句既无效又致命，确定删除（正确写法直接引用 props.bg2）。
+  // 必须排在 .value 自愈（④）之后：先 `X.value`→`X`，再删裸 `X = ...`，避免二次残留。
+  for (const [fp, fc] of Object.entries(result)) {
+    if (!fp.endsWith('.vue') || typeof fc !== 'string') continue;
+    const stripped = stripResourceWriteback(fc);
+    if (stripped !== fc) {
+      result[fp] = stripped;
+      summary.writebackFixed = (summary.writebackFixed || 0) + 1;
+      logger?.warn?.('🛡️ CODE-028 修复：删除对静态资源只读绑定的写回（避免 "is read-only"）', { file: fp });
     }
   }
 

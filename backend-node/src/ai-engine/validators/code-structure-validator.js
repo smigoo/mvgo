@@ -84,7 +84,11 @@ import { checkSkeletonCompleteness } from '../utils/mc-skeleton.js';
 
 function normalizeCssLiteral(value = '') {
   return String(value || '')
-    .replace(/\s+/g, ' ')
+    // 🛡️ 2026-09-17 根治：颜色字面量里的空格无关紧要，此前只把「多空格→单空格」，
+    //   导致产物 `rgba(237, 244, 251, 1)`（有空格）与期望 `rgba(237,244,251,1)`（无空格）
+    //   永远不匹配 → CODE-007 误报 BLOCK（vue3 根背景字面量明明已落地仍被拒，重试耗尽实锤）。
+    //   改为去掉所有空白（空格/换行/制表符），保证 rgba/rgb/hex 归一化后逐字可比。
+    .replace(/\s+/g, '')
     .trim()
     .toLowerCase();
 }

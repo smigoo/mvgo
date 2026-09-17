@@ -2309,6 +2309,12 @@ ${fileList}
 - 颜色变量定义在 mixin 内部；根级禁止调用任何主题 mixin（由系统生成的 dark.less/light.less 在主题选择器内先调用 \`.common()\` 与对应主题 mixin，再导入 common.less）
 - 面板默认主题为 **${defaultTheme}**：\`.theme-${defaultTheme}()\` 中的颜色即组件默认展示色，必须与设计稿一致
 
+**🚫 mixin 只放变量定义，禁止写 CSS 属性（2026-09-17 治本）**：
+- 三个 mixin（\`.common()\`/\`.theme-dark()\`/\`.theme-light()\`）内**只能写 \`@变量: 值;\` 定义**，**严禁**出现任何 CSS 属性（\`display\`/\`flex-direction\`/\`position\`/\`width\`/\`margin\` 等）
+- 原因：mixin 在根作用域调用时，mixin 内的 CSS 属性会展开成「根级裸属性」→ LESS 编译报错 \`Properties must be inside selector blocks\`（重点车辆实锤）
+- 错误示例：\`.common() { display: flex; }\` ← 编译崩溃；正确示例：\`.common() { @fontSize: 14px; }\`
+- CSS 属性只能写在 common.less / 各 .vue 的 \`<style>\` 选择器块内，禁止进 mixin
+
 **🚫 禁止 CSS 变量**：
 - 只允许 Less 变量（\`@xxx\`），禁止 \`var(--xxx)\`（Less 颜色函数 darken()/lighten()/fade() 遇 CSS 变量会编译报错）
 - 错误示例：\`@color: var(--em-bg-color);\` ← 编译报错；正确示例：\`@bg-color: #1a2332;\`

@@ -152,6 +152,51 @@ export function findTagByClassKeyword(content, kw) {
 }
 
 /**
+ * 🛡️ 阶段3（2026-09-17）：识别模板里 v-for 重复单元的开标签（含 class）。
+ *
+ * 背景：12 卡共享 bg3（sharedBy=12）应挂到「每个卡片」（v-for item）而非「卡片容器」。
+ * 此前挂载用 mountTarget 关键词匹配到外层容器 class，bg 被 background-size:100% 拉伸
+ * 铺满整个容器（而非逐卡铺 117×64 单元背景）。本函数找到 v-for 循环的 item 开标签，
+ * 供共享背景精确挂到 item（每个循环渲染的卡片都获得背景）。
+ *
+ * 🛡️ 阶段4修复（2026-09-17）：vue3 单文件里常有**多个 v-for**（左侧导航 nav-tab +
+ * 右侧设备网格 device-card），此前盲目返回第一个 → bg3 误挂到导航 tab（vue3 错位实锤）。
+ * 本函数改为：收集所有 v-for item，优先匹配 preferKeywords（mountTarget 语义），
+ * 否则返回**最后一个**（数据网格通常在导航之后，共享背景挂数据单元而非导航）。
+ *
+ * @param {string} content owner 组件内容（.vue 全文）
+ * @param {string[]} [preferKeywords] 优先匹配的语义关键词（如 ['cons','device','grid','card']）
+ * @returns {string|null} v-for item 的开标签（含 class），找不到返回 null
+ */
+export function findVForItemTag(content, preferKeywords = []) {
+  if (!content || typeof content !== 'string') return null;
+  const tagRe = /<([a-zA-Z][a-zA-Z0-9-]*)\b([^>]*?)>/g;
+  const items = [];
+  let m;
+  while ((m = tagRe.exec(content)) !== null) {
+    const attrs = m[2] || '';
+    if (!/\bv-for\b/.test(attrs)) continue;
+    if (/^script$/i.test(m[1]) || /^style$/i.test(m[1])) continue;
+    // 提取静态 class（仅 `class=`，排除 `:class=` 动态绑定——动态类名不是可挂载的确定性单元）
+    const clsM = attrs.match(/(?:^|\s)class\s*=\s*["']([^"']*)["']/);
+    if (clsM && clsM[1].trim()) {
+      items.push({ tag: m[0], cls: clsM[1].toLowerCase() });
+    }
+  }
+  if (items.length === 0) return null;
+  // 优先匹配语义关键词（mountTarget 语义，如 cons→device/grid/card）
+  const kws = (Array.isArray(preferKeywords) ? preferKeywords : [])
+    .map((k) => String(k).toLowerCase())
+    .filter((k) => k.length >= 2);
+  if (kws.length > 0) {
+    const hit = items.find((it) => kws.some((k) => it.cls.includes(k)));
+    if (hit) return hit.tag;
+  }
+  // 默认返回最后一个（数据网格通常在导航之后；共享背景挂数据单元而非导航）
+  return items[items.length - 1].tag;
+}
+
+/**
  * 找模板根元素（<template> 后第一个开标签）。
  *
  * P0-5：根元素是宿主外壳（base-panel / mc-panel）时返回 null。
@@ -595,15 +640,28 @@ export function dedupeBgMultiRefs(files, resourceDomMapping, options = {}) {
       }
     }
     if (refs.length <= 1) continue;
-    const best = pickBestMountTarget(bg, refs, { componentPrefix });
-    if (!best) {
-      logger.warn('🛡️ P2-3 去重跳过：无候选能给出正分挂载评分', {
-        var: varName,
-        refs: refs.map((r) => r.cls),
-      });
-      continue;
+    // 🛡️ 阶段3（2026-09-17）：共享背景（sharedBy>1，如 12 卡共享 bg3）的 v-for item 引用
+    //   是正确挂载点（每个卡片各获得背景），而容器引用是「整块拉伸」的错误挂载。此前
+    //   pickBestMountTarget 按 mountTarget 语义评分保留了容器（score 更高），把 v-for item
+    //   当「重复引用」移除 → 背景回到整块拉伸。这里优先保留 v-for item 引用。
+    const sharedCount = Array.isArray(bg.sharedBy) ? bg.sharedBy.length : 0;
+    let keep = null;
+    let best = null;
+    if (sharedCount > 1) {
+      const vForRef = refs.find((r) => /\bv-for\b/.test(r.tag));
+      if (vForRef) keep = vForRef;
     }
-    const keep = refs.find((r) => r.tag === best.tag) || refs[0];
+    if (!keep) {
+      best = pickBestMountTarget(bg, refs, { componentPrefix });
+      if (!best) {
+        logger.warn('🛡️ P2-3 去重跳过：无候选能给出正分挂载评分', {
+          var: varName,
+          refs: refs.map((r) => r.cls),
+        });
+        continue;
+      }
+      keep = refs.find((r) => r.tag === best.tag) || refs[0];
+    }
     const removeList = refs.filter((r) => r.tag !== keep.tag);
     for (const ref of removeList) {
       const styleMatch = ref.tag.match(/:style="([^"]*)"/);
@@ -627,7 +685,7 @@ export function dedupeBgMultiRefs(files, resourceDomMapping, options = {}) {
       logger.warn('🛡️ P2-3 已去重 bg 多引用（统一挂载点评分最高者保留）', {
         var: varName,
         kept: keep.cls,
-        keptScore: Number(best.score.toFixed(3)),
+        keptScore: best ? Number(best.score.toFixed(3)) : 'v-for-item',
         removed: ref.cls,
         file: ref.file,
       });
@@ -2575,4 +2633,104 @@ export function stripBasePanelShellLeak(content) {
     changed: removedCount > 0,
     removedCount,
   };
+}
+
+/**
+ * 🛡️ 阶段4修复（2026-09-17）：absolute 遮罩层父容器补 position:relative。
+ *
+ * 背景：微码设备监测「一片蓝」实锤——`.card-bg` 是 `position:absolute; top/left/right/bottom:0`
+ * 的遮罩层，但其父容器 `.device-card` 无 `position:relative` → 遮罩层绝对定位一路向上
+ * 找到最近的 positioned 祖先（整个面板），12 张卡片遮罩叠加铺满全屏 → 截图 99.9% 蓝。
+ *
+ * 治本：解析模板建立「子元素 class → 父元素 class」，凡父容器内的子元素用了
+ * `position:absolute` 而父容器无任何 position 声明 → 给父容器补 `position: relative;`。
+ *
+ * @param {Object<string,string>} files 产物文件表（原地修改）
+ * @param {Object} [options] { logger }
+ * @returns {Array<{file:string, parentClass:string}>} 修复清单
+ */
+export function healAbsoluteOverlayParents(files, options = {}) {
+  const logger = safeLogger(options.logger);
+  const fixed = [];
+  if (!files || typeof files !== 'object') return fixed;
+
+  for (const [path, content] of Object.entries(files)) {
+    if (typeof content !== 'string' || !path.endsWith('.vue')) continue;
+    const styleBlock =
+      (content.match(/<style[^>]*>([\s\S]*?)<\/style>/i) || [])[1] || '';
+    const tplBlock =
+      (content.match(/<template[^>]*>([\s\S]*?)<\/template>/i) || [])[1] || '';
+    if (!styleBlock || !tplBlock) continue;
+
+    // 1. 收集所有 position:absolute 的 class
+    const absClasses = new Set();
+    const ruleRe = /\.([a-zA-Z][\w-]*)\s*\{([^{}]*)\}/g;
+    let rm;
+    while ((rm = ruleRe.exec(styleBlock)) !== null) {
+      if (/position\s*:\s*absolute/i.test(rm[2])) absClasses.add(rm[1]);
+    }
+    if (absClasses.size === 0) continue;
+
+    // 2. 栈追踪模板，找 absolute class 元素的直接父元素 class
+    const parentClsSet = new Set();
+    const tagRe = /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>/])*)(\/?)>/g;
+    const VOID = /^(img|br|hr|input|meta|link|source|path|circle|rect)$/i;
+    const stack = [];
+    let m;
+    while ((m = tagRe.exec(tplBlock)) !== null) {
+      const [, slash, tag, attrs, selfClose] = m;
+      if (slash) {
+        stack.pop();
+        continue;
+      }
+      // 🛡️ 仅匹配静态 class=，排除 :class= 动态绑定（否则 `:class="['tab-item', {...}]"`
+      //   数组内容会被误当静态 class → 生成非法 `.` 规则 → TabsSection 编译崩溃被 P1-4 隔离）
+      const clsM = attrs.match(/(?:^|\s)class="([^"]*)"/);
+      const cls = clsM ? clsM[1] : '';
+      const clsList = cls.split(/\s+/).filter(Boolean);
+      for (const c of clsList) {
+        if (absClasses.has(c)) {
+          const parent = stack[stack.length - 1];
+          if (parent && parent.cls) {
+            for (const pc of parent.cls.split(/\s+/).filter(Boolean)) {
+              parentClsSet.add(pc);
+            }
+          }
+        }
+      }
+      if (!selfClose && !VOID.test(tag)) stack.push({ tag, cls });
+    }
+    if (parentClsSet.size === 0) continue;
+
+    // 3. 对每个父容器 class，缺 position 则补 position:relative
+    let updated = content;
+    for (const pc of parentClsSet) {
+      const esc = pc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const pcRule = new RegExp('\\.' + esc + '\\s*\\{([^{}]*)\\}', 'g');
+      let hasPosition = false;
+      let prm;
+      while ((prm = pcRule.exec(styleBlock)) !== null) {
+        if (/position\s*:/i.test(prm[1])) hasPosition = true;
+      }
+      if (hasPosition) continue;
+      const blockRe = new RegExp('(\\.' + esc + '\\s*\\{)', 'g');
+      if (blockRe.test(updated)) {
+        blockRe.lastIndex = 0;
+        updated = updated.replace(blockRe, '$1\n  position: relative;');
+      } else {
+        updated = updated.replace(
+          /<\/style>/i,
+          '.' + pc + ' { position: relative; }\n</style>',
+        );
+      }
+      fixed.push({ file: path, parentClass: pc });
+    }
+    if (updated !== content) files[path] = updated;
+  }
+  if (fixed.length > 0) {
+    logger.warn('🛡️ 已补 absolute 遮罩层父容器 position:relative', {
+      fixedCount: fixed.length,
+    });
+  }
+  return fixed;
 }

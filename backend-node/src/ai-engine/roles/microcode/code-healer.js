@@ -26,7 +26,7 @@
 import { planBadFileIsolation } from '../../utils/bad-file-isolation.js';
 import { validateVueSfc } from '../../utils/sfc-syntax-validation.js';
 import { safeLogger } from '../../logger/safe-logger.js';
-import { healMissingLessBraces } from '../../validators/less-compile-gate.js';
+import { healMissingLessBraces, healMissingSemicolons } from '../../validators/less-compile-gate.js';
 import { fixTextOrderDrift } from '../../utils/text-order-guard.js';
 import { parse as parseJavaScript } from '@babel/parser';
 import { inferChartMinHeight } from '../../utils/post-process.js';
@@ -1335,8 +1335,14 @@ export function healVueEmbeddedStyleBraces(content) {
   const out = content.replace(
     /<style\b[^>]*>([\s\S]*?)<\/style>/gi,
     (full, css) => {
-      const healed = healMissingLessBraces(css);
-      if (healed.changed) {
+      // 🛡️ 治本（2026-09-17 回归修复）：此前只补缺失右大括号（healMissingLessBraces），
+      // 漏写分号（如 `box-sizing: border-box` 后无 `;` 直接接下一声明）会被放行，
+      // 写盘后预览 less 编译报 Unrecognised input（实锤 mc-max-1789646354631-241fa856 ContentSection4.vue）。
+      // 先补括号再补分号，二者同属「确定性后处理」，与 .less 文件写盘路径（healLessSource）口径一致。
+      // 注意：传入的是 style 块正文（无 <style> 标签），须用 sourceType:'style'，否则 vue 守卫会整块跳过。
+      const healedBraces = healMissingLessBraces(css);
+      const healed = healMissingSemicolons(healedBraces.source, { sourceType: 'style' });
+      if (healed.changed || healedBraces.changed) {
         changed = true;
         return full.replace(css, healed.source);
       }

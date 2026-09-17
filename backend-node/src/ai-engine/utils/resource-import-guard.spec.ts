@@ -3,6 +3,7 @@ import {
   isResourceUsedInCorpus,
   injectResourceImports,
   healUnavailableResourceRefs,
+  stripResourceWriteback,
 } from './resource-import-guard.js';
 
 /**
@@ -752,3 +753,71 @@ const x = 1
     expect(out).toMatch(/import icon1 from '\.\.\/resources\/images\/icon-8817\.png'/);
   });
 });
+
+/**
+ * 🛡️ CODE-028 回归：静态 import 资源变量被写回 → 删除。
+ *
+ * 事故实证 mc-max-1789627809290-ef00bb27（c-device-monitor-ef00bb27）：
+ * LLM 原写 `const bg2 = ref('')` + `bg2.value = props.bg2`（此时可写、合法）；
+ * 注入侧把声明换成只读的 `import bg2 from '.../bg-8807.png'`，写回语句残留；
+ * CODE-027 把 `bg2.value = props.bg2` 变成 `bg2 = props.bg2` → 对 ESM 绑定赋值
+ * → 运行时抛 `"bg2" is read-only.` → 组件渲染失败，且门禁重试逐字复现。
+ */
+describe('stripResourceWriteback 删除对只读资源绑定的写回', () => {
+  const sfc = (script: string) => `<template>
+  <div :style="{ backgroundImage: \`url(${'${bg2}'})\` }"></div>
+</template>
+<script setup>
+${script}
+</script>`
+
+  it('⭐ 复现 ef00bb27：bg2 = props.bg2 被删除（修复前会抛 is read-only）', () => {
+    const src = sfc(`import bg2 from '../../resources/images/bg-8807.png'
+import icon1 from '../../resources/images/icon-8817.png'
+
+const props = defineProps({})
+bg2 = props.bg2
+icon1 = props.icon1`)
+    const out = stripResourceWriteback(src)
+    expect(out).not.toMatch(/^\s*bg2\s*=/m)
+    expect(out).not.toMatch(/^\s*icon1\s*=/m)
+    // import 保留（模板仍引用）
+    expect(out).toContain("import bg2 from '../../resources/images/bg-8807.png'")
+  })
+
+  it('bg2.value = props.bg2 形态一并删除', () => {
+    const src = sfc(`import bg2 from '../../resources/images/bg-8807.png'
+const props = defineProps({})
+bg2.value = props.bg2`)
+    const out = stripResourceWriteback(src)
+    expect(out).not.toMatch(/bg2\.value\s*=/)
+    expect(out).not.toMatch(/^\s*bg2\s*=/m)
+  })
+
+  it('负面对照：const 声明 / 普通 ref / 模板引用一律不动', () => {
+    const src = sfc(`import bg2 from '../../resources/images/bg-8807.png'
+import { ref } from 'vue'
+const bg2Name = ref('')
+const counter = 1
+let total = 2
+const props = defineProps({})
+const label = 'bg2 is a resource'
+function useIt() { return bg2 }`)
+    const out = stripResourceWriteback(src)
+    expect(out).toBe(src)
+  })
+
+  it('幂等：重复调用零副作用', () => {
+    const src = sfc(`import bg2 from '../../resources/images/bg-8807.png'
+const props = defineProps({})
+bg2 = props.bg2`)
+    const once = stripResourceWriteback(src)
+    expect(stripResourceWriteback(once)).toBe(once)
+  })
+
+  it('无图片 import → 原样返回（引用相等）', () => {
+    const src = sfc(`const props = defineProps({})
+const x = 1`)
+    expect(stripResourceWriteback(src)).toBe(src)
+  })
+})

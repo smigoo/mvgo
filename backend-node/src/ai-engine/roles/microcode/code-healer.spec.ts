@@ -460,6 +460,45 @@ describe('healVueEmbeddedStyleBraces —— SFC 内嵌 style 括号平衡', () =
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect(healVueEmbeddedStyleBraces(null as any)).toBeNull()
   })
+
+  it('style 块漏写分号（声明接下一声明无 ;）→ 补分号，否则预览 less 编译 Unrecognised input', () => {
+    // 实锤 mc-max-1789646354631-241fa856 ContentSection4.vue：
+    // `box-sizing: border-box` 后无 ; 直接接 `min-height: 0;`，写盘门禁报 Unrecognised input
+    // 致文件未落盘（gateSkippedFiles），预览跳转必崩。此前 healVueEmbeddedStyleBraces 只补括号不补分号。
+    const src = `<template><div class="c-x-root"></div></template>
+<style lang="less" scoped>
+.c-x-card-bg {flex: 1 1 0;
+  display: flex;
+  box-sizing: border-box
+  min-height: 0; /* VERT-004: 防 column flex 容器高度计算异常 */
+}
+</style>`
+    const out = healVueEmbeddedStyleBraces(src)
+    expect(out).not.toBe(src)
+    expect(out).toContain('box-sizing: border-box;')
+    // 补完后该 style 块应能被 less 干净编译
+    const styleBody = out.match(/<style[^>]*>([\s\S]*?)<\/style>/)![1]
+    const less = require('less')
+    return less
+      .render(styleBody, { filename: 'ContentSection4.vue' })
+      .then(() => undefined)
+      .catch((e) => {
+        throw new Error('修复后 style 仍无法编译: ' + e.message)
+      })
+  })
+
+  it('漏写分号修复后幂等：再跑一次不再变化', () => {
+    const src = `<template><div class="c-x-root"></div></template>
+<style lang="less" scoped>
+.c-x-a {
+  color: red
+  font-size: 12px;
+}
+</style>`
+    const once = healVueEmbeddedStyleBraces(src)
+    expect(once).toContain('color: red;')
+    expect(healVueEmbeddedStyleBraces(once)).toBe(once)
+  })
 })
 
 describe('injectEchartsFallback —— N2 图表兜底注入（治本版）', () => {

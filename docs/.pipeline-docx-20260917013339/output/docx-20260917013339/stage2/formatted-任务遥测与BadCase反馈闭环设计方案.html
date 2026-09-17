@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>任务遥测与 Bad Case 反馈闭环设计方案</title>
+  <style>
+    :root {
+      --typography-fontFamily-heading: PingFang SC, 苹方-简, 微软雅黑, sans-serif;
+      --typography-fontFamily-body: PingFang SC, 苹方-简, 微软雅黑, sans-serif;
+      --typography-fontFamily-bodyLatin: Inter, Helvetica Neue, Arial, sans-serif;
+      --typography-fontFamily-code: JetBrains Mono, Fira Code, Consolas, monospace;
+      --typography-fontSize-title: 24pt;
+      --typography-fontSize-h1: 18pt;
+      --typography-fontSize-h2: 15pt;
+      --typography-fontSize-h3: 13pt;
+      --typography-fontSize-body: 11pt;
+      --typography-fontSize-small: 9pt;
+      --typography-fontSize-caption: 9pt;
+      --typography-lineHeight-title: 1.4;
+      --typography-lineHeight-body: 1.7;
+      --typography-lineHeight-heading: 1.3;
+      --typography-fontWeight-heading: 600;
+      --typography-fontWeight-body: 400;
+      --color-primary: #2563EB;
+      --color-text: #111827;
+      --color-textSecondary: #6B7280;
+      --color-heading: #111827;
+      --color-border: #E5E7EB;
+      --color-divider: #F3F4F6;
+      --color-background: #FFFFFF;
+      --color-codeBackground: #F9FAFB;
+      --color-highlight: #FEF3C7;
+      --spacing-paragraph: 0.5em;
+      --spacing-paragraphAfter: 0.5em;
+      --spacing-indent: 0em;
+      --spacing-sectionGap: 2em;
+      --spacing-listItemGap: 0.4em;
+      --layout-marginTop: 2.5cm;
+      --layout-marginBottom: 2.0cm;
+      --layout-marginLeft: 2.5cm;
+      --layout-marginRight: 2.5cm;
+      --layout-pageSize: A4;
+      --layout-maxContentWidth: 165mm;
+    }
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: var(--typography-fontFamily-body);
+      font-size: var(--typography-fontSize-body);
+      line-height: var(--typography-lineHeight-body);
+      color: var(--color-text);
+      background: var(--color-background);
+      padding: var(--layout-marginTop) var(--layout-marginRight) var(--layout-marginBottom) var(--layout-marginLeft);
+      max-width: var(--layout-maxContentWidth);
+      margin: 0 auto;
+    }
+    
+    h1, h2, h3, h4, h5, h6 {
+      font-family: var(--typography-fontFamily-heading);
+      font-weight: var(--typography-fontWeight-heading);
+      line-height: var(--typography-lineHeight-heading);
+      color: var(--color-heading);
+      margin-top: var(--spacing-sectionGap);
+      margin-bottom: var(--spacing-paragraph);
+      page-break-after: avoid;
+    }
+    
+    h1 {
+      font-size: var(--typography-fontSize-title);
+      text-align: center;
+      margin-bottom: 1em;
+      border-bottom: 3px solid var(--color-primary);
+      padding-bottom: 0.5em;
+    }
+    
+    h2 {
+      font-size: var(--typography-fontSize-h1);
+      border-left: 4px solid var(--color-primary);
+      padding-left: 0.5em;
+    }
+    
+    h3 {
+      font-size: var(--typography-fontSize-h2);
+    }
+    
+    h4 {
+      font-size: var(--typography-fontSize-h3);
+    }
+    
+    p {
+      margin-bottom: var(--spacing-paragraphAfter);
+      text-align: justify;
+    }
+    
+    code {
+      font-family: var(--typography-fontFamily-code);
+      font-size: 0.9em;
+      background: var(--color-codeBackground);
+      padding: 0.2em 0.4em;
+      border-radius: 3px;
+    }
+    
+    pre {
+      font-family: var(--typography-fontFamily-code);
+      font-size: 0.85em;
+      line-height: 1.5;
+      background: var(--color-codeBackground);
+      padding: 1em;
+      border-radius: 4px;
+      overflow-x: auto;
+      margin: 1em 0;
+      page-break-inside: avoid;
+    }
+    
+    pre code {
+      background: none;
+      padding: 0;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1em 0;
+      font-size: var(--typography-fontSize-body);
+      page-break-inside: avoid;
+    }
+    
+    th, td {
+      border: 1px solid var(--color-border);
+      padding: 0.5em;
+      text-align: left;
+    }
+    
+    th {
+      background: var(--color-primary);
+      color: white;
+      font-weight: var(--typography-fontWeight-heading);
+    }
+    
+    tr:nth-child(even) {
+      background: var(--color-divider);
+    }
+    
+    ul, ol {
+      margin: 0.5em 0;
+      padding-left: 2em;
+    }
+    
+    li {
+      margin-bottom: var(--spacing-listItemGap);
+    }
+    
+    blockquote {
+      border-left: 4px solid var(--color-primary);
+      padding-left: 1em;
+      margin: 1em 0;
+      color: var(--color-textSecondary);
+      font-style: italic;
+    }
+    
+    strong {
+      font-weight: var(--typography-fontWeight-heading);
+      color: var(--color-heading);
+    }
+    
+    em {
+      font-style: italic;
+    }
+    
+    a {
+      color: var(--color-primary);
+      text-decoration: none;
+    }
+    
+    a:hover {
+      text-decoration: underline;
+    }
+    
+    .toc {
+      background: var(--color-codeBackground);
+      padding: 1em;
+      border-radius: 4px;
+      margin: 1em 0;
+      page-break-inside: avoid;
+    }
+    
+    .toc h2 {
+      font-size: var(--typography-fontSize-h2);
+      margin-top: 0;
+      border: none;
+      padding: 0;
+    }
+    
+    .toc ul {
+      list-style: none;
+      padding-left: 0;
+    }
+    
+    .toc li {
+      margin-bottom: 0.3em;
+    }
+    
+    .toc a {
+      color: var(--color-text);
+    }
+    
+    .highlight-box {
+      background: var(--color-highlight);
+      border-left: 4px solid #F59E0B;
+      padding: 1em;
+      margin: 1em 0;
+      border-radius: 4px;
+    }
+    
+    .warning-box {
+      background: #FEF2F2;
+      border-left: 4px solid #EF4444;
+      padding: 1em;
+      margin: 1em 0;
+      border-radius: 4px;
+    }
+    
+    .success-box {
+      background: #F0FDF4;
+      border-left: 4px solid #10B981;
+      padding: 1em;
+      margin: 1em 0;
+      border-radius: 4px;
+    }
+    
+    @media print {
+      body {
+        padding: 0;
+      }
+      
+      h1, h2, h3 {
+        page-break-after: avoid;
+      }
+      
+      table, pre, blockquote {
+        page-break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>任务遥测与 Bad Case 反馈闭环设计方案</h1>
+  
+  <div class="toc">
+    <h2>目录</h2>
+    <ul>
+      <li><a href="#section-1">一、背景与问题</a></li>
+      <li><a href="#section-2">二、数据收集方案</a></li>
+      <li><a href="#section-3">三、遥测数据模型</a></li>
+      <li><a href="#section-4">四、管理员仪表盘</a></li>
+      <li><a href="#section-5">五、前端展示设计</a></li>
+      <li><a href="#section-6">六、数据存储与维护</a></li>
+      <li><a href="#section-7">七、实现优先级</a></li>
+      <li><a href="#section-8">八、日志优化（已完成）</a></li>
+    </ul>
+  </div>
+  
+  <h2 id="section-1">一、背景与问题</h2>
+  
+  <h3>1.1 核心矛盾</h3>
+  
+  <p>当前系统存在一个根本性盲区：<strong>成功/失败 ≠ 效果好/差</strong>。</p>
+  
+  <table>
+    <thead>
+      <tr>
+        <th>系统视角</th>
+        <th>用户视角</th>
+        <th>真实情况</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>门禁通过</td>
+        <td>效果差</td>
+        <td>⚠️ <strong>漏网</strong>（门禁太松）</td>
+      </tr>
+      <tr>
+        <td>门禁拦截</td>
+        <td>效果还行</td>
+        <td>⚠️ <strong>误杀</strong>（门禁太严）</td>
+      </tr>
+      <tr>
+        <td>门禁通过</td>
+        <td>效果好</td>
+        <td>✅ 正确放行</td>
+      </tr>
+      <tr>
+        <td>门禁拦截</td>
+        <td>效果差</td>
+        <td>✅ 正确拦截</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  <p><strong>问题</strong>：系统只能看到"成功/失败"，看不到"效果好/差"。没有用户满意度反馈，就无法校准门禁阈值。</p>
+  
+  <h3>1.2 数据飞轮缺失</h3>
+  
+  <p>理想的优化闭环：</p>
+  
+  <pre><code>收集地面真值 → 识别问题 → 调整门禁/模型 → 验证效果 → 迭代</code></pre>
+  
+  <p>当前缺失的是第一步：<strong>地面真值数据</strong>。没有它，所有优化都是盲人摸象。</p>
+  
+  <h2 id="section-2">二、数据收集方案</h2>
+  
+  <h3>2.1 满意度信号层级</h3>
+  
+  <p>用户满意度不是二元的"满意/不满意"，而是一个连续光谱。通过行为信号推断真实满意度：</p>
+  
+  <table>
+    <thead>
+      <tr>
+        <th>信号强度</th>
+        <th>用户行为</th>
+        <th>含义</th>
+        <th>收集方式</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>⭐⭐⭐⭐⭐</td>
+        <td>提交到公共组件库</td>
+        <td>非常满意，愿意分享</td>
+        <td>自动记录</td>
+      </tr>
+      <tr>
+        <td>⭐⭐⭐⭐</td>
+        <td>下载组件</td>
+        <td>满意，愿意使用</td>
+        <td>自动记录</td>
+      </tr>
+      <tr>
+        <td>⭐⭐⭐</td>
+        <td>预览页停留 &gt; 30s</td>
+        <td>效果还行，在仔细看</td>
+        <td>自动记录</td>
+      </tr>
+      <tr>
+        <td>⭐⭐</td>
+        <td>任务完成但没下载</td>
+        <td>不确定，可能忘了</td>
+        <td>主动询问</td>
+      </tr>
+      <tr>
+        <td>⭐</td>
+        <td>预览 &lt; 5s 就关闭</td>
+        <td>可能不满意</td>
+        <td>主动询问</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  <h3>2.2 智能触发策略</h3>
+  
+  <p><strong>核心原则</strong>：强满意信号不打扰，弱信号才询问。</p>
+  
+  <table>
+    <thead>
+      <tr>
+        <th>场景</th>
+        <th>策略</th>
+        <th>理由</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>用户下载/提交公共</td>
+        <td>不询问</td>
+        <td>已经是强满意信号，询问会打扰</td>
+      </tr>
+      <tr>
+        <td>任务完成 24h 后仍没下载</td>
+        <td>询问「效果不满意吗？」</td>
+        <td>弱信号，需要确认</td>
+      </tr>
+      <tr>
+        <td>预览 &lt; 5s 就关闭</td>
+        <td>询问「需要重新生成吗？」</td>
+        <td>可能效果差，主动提供帮助</td>
+      </tr>
+      <tr>
+        <td>任务失败</td>
+        <td>询问「需要查看失败原因吗？」</td>
+        <td>提供调试支持</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  <h2 id="section-3">三、遥测数据模型</h2>
+  
+  <h3>3.1 TaskTelemetry 完整结构</h3>
+  
+  <pre><code>interface TaskTelemetry {
+  // === 基础信息 ===
+  sessionId: string;
+  userId: string;
+  createdAt: Date;
+  status: 'success' | 'failed';
+  
+  // === 复杂度指标（归一化用）===
+  complexity: {
+    subcomponentCount: number;      // 子组件数量
+    totalLines: number;             // 总代码行数
+    fileCount: number;              // 文件数量
+    hasEcharts: boolean;            // 是否含图表
+    hasResource: boolean;           // 是否含资源图片
+    panelType: string;              // 面板类型
+  };
+  
+  // === 输入源 ===
+  input: {
+    sourceType: 'figma' | 'screenshot' | 'html';
+    figmaNodeKey?: string;
+    sourceImageUrl?: string;        // 源设计图 URL
+  };
+  
+  // === 管线配置 ===
+  config: {
+    textModel: string;              // 文本模型名称
+    visionModel: string;            // 视觉模型名称
+    v3Mode: 'minimal' | 'standard' | 'full';
+  };
+  
+  // === 模型级遥测（按 baseURL 聚合）===
+  modelUsage: Array&lt;{
+    modelName: string;              // 'deepseek-v4-pro' | 'claude-sonnet-5'
+    providerType: string;           // 'openai-compatible' | 'anthropic'
+    baseURL: string;                // 'https://api.deepseek.com'
+    providerId: string;             // 供应池中的 ID
+    callCount: number;              // 调用次数
+    totalDuration: number;          // 总耗时 ms
+    totalTokens: number;            // 总 token 消耗
+    successCount: number;
+    failCount: number;
+    nodesUsedIn: Array&lt;{
+      nodeName: string;
+      callCount: number;
+      avgDuration: number;
+    }&gt;;
+  }&gt;;
+  
+  // === 管线节点遥测 ===
+  nodes: Array&lt;{
+    name: string;                   // 'figma-parse' | 'visual-parser' | ...
+    duration: number;               // 节点耗时 ms
+    status: 'ok' | 'skip' | 'fail' | 'retry';
+    retryCount: number;
+    modelCalls?: Array&lt;{
+      modelName: string;
+      providerType: string;
+      baseURL: string;
+      duration: number;
+      tokens: number;
+      status: 'ok' | 'fail';
+    }&gt;;
+    gateResults?: Array&lt;{
+      name: string;
+      passed: boolean;
+      score?: number;
+    }&gt;;
+  }&gt;;
+  
+  // === 最终产物 ===
+  output: {
+    visualCoverage?: number;        // 视觉覆盖率
+    totalDuration: number;          // 总耗时 ms
+  };
+  
+  // === 用户行为信号 ===
+  userActions: {
+    previewOpenedAt?: Date;
+    previewDuration?: number;       // 预览停留时长 ms
+    downloadedAt?: Date;
+    submittedToPublicAt?: Date;
+  };
+  
+  // === 用户反馈 ===
+  userFeedback?: {
+    rating?: 1 | 2 | 3 | 4 | 5;
+    issueType?: string;             // 'layout' | 'color' | 'text' | 'chart' | ...
+    comment?: string;
+  };
+}</code></pre>
+  
+  <h3>3.2 关键设计决策</h3>
+  
+  <div class="highlight-box">
+    <p><strong>决策 1：为什么按 baseURL 分组模型遥测？</strong></p>
+    <ul>
+      <li><strong>背景</strong>：同一模型（如 deepseek-v4-pro）可能通过不同厂商端点调用，效果差异大</li>
+      <li><strong>最终选择</strong>：按 baseURL 聚合</li>
+      <li><strong>理由</strong>：实际运维中发现，同一模型通过代理端点调用时，失败率和耗时显著高于直连官方 API</li>
+    </ul>
+  </div>
+  
+  <div class="highlight-box">
+    <p><strong>决策 2：为什么需要复杂度指标？</strong></p>
+    <ul>
+      <li><strong>背景</strong>：不同任务的复杂度差异巨大（1 个子组件 vs 10 个子组件）</li>
+      <li><strong>问题</strong>：直接比较"总耗时"不公平</li>
+      <li><strong>解决方案</strong>：归一化效率指标
+        <ul>
+          <li>每子组件耗时 = 总耗时 / 子组件数</li>
+          <li>每百行代码耗时 = 总耗时 / (代码行数 / 100)</li>
+        </ul>
+      </li>
+    </ul>
+  </div>
+  
+  <h2 id="section-4">四、管理员仪表盘</h2>
+  
+  <h3>4.1 门禁校准矩阵</h3>
+  
+  <p>这是最核心的视图，直接回答"门禁是松还是严"：</p>
+  
+  <table>
+    <thead>
+      <tr>
+        <th></th>
+        <th>用户好评</th>
+        <th>用户差评</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>门禁通过</strong></td>
+        <td>✅ 正确放行</td>
+        <td>⚠️ 漏网（门禁太松）</td>
+      </tr>
+      <tr>
+        <td><strong>门禁拦截</strong></td>
+        <td>⚠️ 误杀（门禁太严）</td>
+        <td>✅ 正确拦截</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  <p><strong>行动指引</strong>：</p>
+  <ul>
+    <li>漏网多 → 收紧门禁阈值</li>
+    <li>误杀多 → 放松门禁阈值</li>
+    <li>正确放行多 → 当前阈值合理</li>
+  </ul>
+  
+  <h3>4.2 模型效果对比（按 baseURL 分组）</h3>
+  
+  <table>
+    <thead>
+      <tr>
+        <th>模型</th>
+        <th>厂商端点</th>
+        <th>调用</th>
+        <th>成功</th>
+        <th>失败</th>
+        <th>平均耗时</th>
+        <th>平均 tokens</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>deepseek-v4-pro</td>
+        <td>api.deepseek.com</td>
+        <td>120</td>
+        <td>118</td>
+        <td>2</td>
+        <td>3.2s</td>
+        <td>4,500</td>
+      </tr>
+      <tr>
+        <td>deepseek-v4-pro</td>
+        <td>proxy.example.com</td>
+        <td>45</td>
+        <td>38</td>
+        <td>7</td>
+        <td>8.5s ⚠️</td>
+        <td>4,200</td>
+      </tr>
+      <tr>
+        <td>claude-sonnet-5</td>
+        <td>api.anthropic.com</td>
+        <td>80</td>
+        <td>79</td>
+        <td>1</td>
+        <td>4.1s</td>
+        <td>5,800</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  <p><strong>洞察</strong>：proxy.example.com 端点失败率高、耗时长，建议切换到直连官方 API。</p>
+  
+  <h3>4.3 管线瓶颈热力图</h3>
+  
+  <table>
+    <thead>
+      <tr>
+        <th>节点</th>
+        <th>平均耗时</th>
+        <th>失败率</th>
+        <th>重试率</th>
+        <th>状态</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>figma-parse</td>
+        <td>8s</td>
+        <td>5%</td>
+        <td>2%</td>
+        <td>✅ 健康</td>
+      </tr>
+      <tr>
+        <td>visual-parser</td>
+        <td>45s</td>
+        <td>12%</td>
+        <td>8%</td>
+        <td>⚠️ 需关注</td>
+      </tr>
+      <tr>
+        <td>microcode-engineer</td>
+        <td>120s</td>
+        <td>18%</td>
+        <td>15%</td>
+        <td>🔴 最大瓶颈</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  <p><strong>行动指引</strong>：优先优化 microcode-engineer 节点（耗时最长、失败率最高）。</p>
+  
+  <h3>4.4 归一化效率</h3>
+  
+  <table>
+    <thead>
+      <tr>
+        <th>任务 ID</th>
+        <th>子组件数</th>
+        <th>代码行数</th>
+        <th>总耗时</th>
+        <th>每子组件耗时</th>
+        <th>每百行耗时</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>task-001</td>
+        <td>3</td>
+        <td>450</td>
+        <td>180s</td>
+        <td>60s</td>
+        <td>40s</td>
+      </tr>
+      <tr>
+        <td>task-002</td>
+        <td>8</td>
+        <td>1200</td>
+        <td>480s</td>
+        <td>60s</td>
+        <td>40s</td>
+      </tr>
+      <tr>
+        <td>task-003</td>
+        <td>2</td>
+        <td>200</td>
+        <td>150s</td>
+        <td>75s ⚠️</td>
+        <td>75s ⚠️</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  <p><strong>洞察</strong>：task-003 效率异常，可能是模型能力不足或任务复杂度过高。</p>
+  
+  <h2 id="section-5">五、前端展示设计</h2>
+  
+  <h3>5.1 集成到现有 UsersView</h3>
+  
+  <p><strong>全局统计卡片（顶部）</strong>：</p>
+  <ul>
+    <li>总任务数</li>
+    <li>下载率（下载数 / 任务数）</li>
+    <li>公共提交率（提交数 / 任务数）</li>
+    <li>平均视觉覆盖率</li>
+    <li>主动反馈数</li>
+  </ul>
+  
+  <p><strong>用户列表表格新增列</strong>：</p>
+  <ul>
+    <li>下载率</li>
+    <li>平均视觉覆盖率</li>
+    <li>反馈数</li>
+  </ul>
+  
+  <p><strong>用户抽屉新增区块</strong>：</p>
+  <ul>
+    <li>「质量指标」：下载率、视觉覆盖率、反馈数</li>
+    <li>「最近任务」：可展开查看每个任务的遥测详情</li>
+  </ul>
+  
+  <h3>5.2 TaskDetail 页面增强</h3>
+  
+  <p><strong>侧边栏新增「复杂度」区块</strong>：</p>
+  <ul>
+    <li>子组件数</li>
+    <li>代码行数</li>
+    <li>文件数</li>
+    <li>含图表/资源标签</li>
+  </ul>
+  
+  <p><strong>主内容区新增「管线耗时」瀑布图</strong>：</p>
+  <ul>
+    <li>按节点展示耗时占比</li>
+    <li>可展开查看每个节点的模型调用明细</li>
+  </ul>
+  
+  <p><strong>主内容区新增「模型调用明细」</strong>：</p>
+  <ul>
+    <li>按节点展开</li>
+    <li>显示每次模型调用的 baseURL、耗时、tokens</li>
+  </ul>
+  
+  <p><strong>归一化效率展示</strong>：</p>
+  <ul>
+    <li>每子组件耗时</li>
+    <li>每百行代码耗时</li>
+    <li>与历史平均值对比</li>
+  </ul>
+  
+  <h2 id="section-6">六、数据存储与维护</h2>
+  
+  <h3>6.1 数据量估算</h3>
+  
+  <table>
+    <thead>
+      <tr>
+        <th>维度</th>
+        <th>单任务</th>
+        <th>每天 100 任务</th>
+        <th>每月</th>
+        <th>每年</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>大小</td>
+        <td>5-10 KB</td>
+        <td>500 KB - 1 MB</td>
+        <td>15-30 MB</td>
+        <td>180-360 MB</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  <p><strong>压缩后</strong>：年存储 ~90 MB（可接受）。</p>
+  
+  <h3>6.2 三层数据分层</h3>
+  
+  <table>
+    <thead>
+      <tr>
+        <th>层级</th>
+        <th>时间范围</th>
+        <th>存储格式</th>
+        <th>用途</th>
+        <th>大小</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>热数据</td>
+        <td>最近 30 天</td>
+        <td>JSON（未压缩）</td>
+        <td>管理员仪表盘、实时分析</td>
+        <td>~30 MB</td>
+      </tr>
+      <tr>
+        <td>温数据</td>
+        <td>30-180 天</td>
+        <td>JSONL + gzip（按月聚合）</td>
+        <td>历史趋势分析</td>
+        <td>~20 MB 压缩</td>
+      </tr>
+      <tr>
+        <td>冷数据</td>
+        <td>&gt; 180 天</td>
+        <td>JSONL + gzip（按半年聚合）</td>
+        <td>长期趋势、年度复盘</td>
+        <td>~40 MB 压缩</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  <h3>6.3 自动化维护</h3>
+  
+  <p><strong>Cron 任务</strong>：</p>
+  <ul>
+    <li>每月 1 号凌晨 3 点：归档 30 天前的热数据</li>
+    <li>每年 1 月 1 号凌晨 4 点：归档上一年冷数据</li>
+  </ul>
+  
+  <p><strong>维护成本</strong>：极低（自动化执行，无需人工干预）。</p>
+  
+  <h2 id="section-7">七、实现优先级</h2>
+  
+  <h3>7.1 阶段划分</h3>
+  
+  <table>
+    <thead>
+      <tr>
+        <th>阶段</th>
+        <th>功能</th>
+        <th>工作量</th>
+        <th>优先级</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>P0</strong></td>
+        <td>后端：管线节点耗时采集（wrapNodeWithTiming）</td>
+        <td>1 天</td>
+        <td>🔴 最高</td>
+      </tr>
+      <tr>
+        <td><strong>P0</strong></td>
+        <td>后端：ai-request-gateway 记录每次模型调用</td>
+        <td>0.5 天</td>
+        <td>🔴 最高</td>
+      </tr>
+      <tr>
+        <td><strong>P0</strong></td>
+        <td>后端：复杂度指标计算</td>
+        <td>0.5 天</td>
+        <td>🔴 最高</td>
+      </tr>
+      <tr>
+        <td><strong>P0</strong></td>
+        <td>后端：遥测 JSON 落盘（含 modelUsage）</td>
+        <td>0.5 天</td>
+        <td>🔴 最高</td>
+      </tr>
+      <tr>
+        <td><strong>P0</strong></td>
+        <td>后端：下载/提交公共事件钩子</td>
+        <td>0.5 天</td>
+        <td>🔴 最高</td>
+      </tr>
+      <tr>
+        <td><strong>P1</strong></td>
+        <td>前端：TaskDetail 侧边栏加「复杂度」区块</td>
+        <td>0.5 天</td>
+        <td>🟡 高</td>
+      </tr>
+      <tr>
+        <td><strong>P1</strong></td>
+        <td>前端：TaskDetail 主内容区加「管线耗时」瀑布图</td>
+        <td>1 天</td>
+        <td>🟡 高</td>
+      </tr>
+      <tr>
+        <td><strong>P1</strong></td>
+        <td>前端：TaskDetail 侧边栏「AI 模型」增强</td>
+        <td>0.5 天</td>
+        <td>🟡 高</td>
+      </tr>
+      <tr>
+        <td><strong>P1</strong></td>
+        <td>前端：归一化效率展示</td>
+        <td>0.

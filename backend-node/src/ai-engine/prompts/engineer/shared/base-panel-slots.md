@@ -59,6 +59,15 @@
 - ❌ 不要用 `<h2>` / `<h3>` 包裹标题 — base-panel 已渲染标题
 - ❌ 不要在默认插槽内放置 header_right 的控件 — 它们必须在 `<template #header_right>` 中
 
+## 🔴 铁律：header 插槽禁止臆造装饰元素（2026-09-17 治本）
+
+「你的内容」列是从 Figma 标题栏**确定性提取**的真实内容清单，是 header 区的**唯一事实源**。
+
+- ❌ **禁止臆造**清单之外的元素：分隔线（divider）、渐变条（gradient-bar）、箭头图标（arrow）、刷新按钮（refresh）、装饰性圆点/图标（deco-circle/deco-line/icon-circle 等）——这些在视觉分析里未被识别为业务内容，生成它们会导致 header 出现 Figma 里不存在的多余元素
+- ❌ **禁止**从 Figma 节点树里「忠实还原」装饰性 divider/line/icon 节点——布局结构（layoutStructure）与「你的内容」清单才是权威，Figma 树的装饰节点不是业务内容
+- ✅ **只渲染**「你的内容」列里逐条列出的元素（如 3 个 statistic），每个元素对应一个真实 DOM
+- ✅ 若「你的内容」显示 `(无明确分配)`，才可按 Figma 节点树中 header 区**业务内容**（非纯装饰）自行判断，且不得臆造装饰线/装饰图标
+
 ## 🔴 铁律：命名插槽仅用于 header 区控件
 
 **命名插槽（`#title_left` / `#title_right` / `#header_right` / `#close`）仅用于放置 header 区控件**（如 tabs、按钮、标题、统计指标等）。

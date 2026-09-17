@@ -26,10 +26,16 @@ import {
   collectLeafSections,
 } from '../../utils/section-tree.js';
 import {
+  validateVueSfc,
+  extractLessGlobalVars,
+} from '../../utils/sfc-syntax-validation.js';
+import {
   collectMountCandidates,
   ensureReferencedIconSize,
   ensureResourceImportInVue,
   findTagByClassKeyword,
+  findTemplateRootTag,
+  findVForItemTag,
   iconSizeFromFigmaBox,
   injectBgStyleBinding,
   injectImgChild,
@@ -157,6 +163,27 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
     return { mounted, diagnostics };
   }
 
+  // 🛡️ 注入器自检防线（2026-09-17 · 重点车辆监测 mc-max-1789608574046 实锤）：
+  //   资源挂载（bg/icon）会把 :style / <img> / import 注入目标 .vue；若注入点错配
+  //   （如「超高车辆」卡背景 bg1 经 S7 回退挂到「危化品车」卡 ContentSection5），
+  //   注入会破坏 SFC 表达式 → P1-4 隔离 → 整块叶子静默消失（3 卡变 2 卡）。
+  //   治本：每次写盘前用真实 SFC 编译器自检，失败即回滚该文件的本次注入，
+  //   让坏文件根本不进入 P1-4 隔离链路。零硬编码、通用，覆盖任意注入破坏。
+  const lessGlobalVars = extractLessGlobalVars(allFiles);
+  const writeGuarded = (targetFile, updated, original) => {
+    if (updated === original) return false;
+    const check = validateVueSfc(updated, targetFile, { lessGlobalVars });
+    if (check.valid) {
+      allFiles[targetFile] = updated;
+      return true;
+    }
+    options.logger?.warn?.('🛡️ 注入器自检失败，已回滚（拒绝把合格产物改坏）', {
+      file: targetFile,
+      errors: (check.errors || []).slice(0, 2),
+    });
+    return false;
+  };
+
   const doneKeys = new Set();
   for (const [resourceFile, g] of plan.byFile) {
     const varName = g.varName;
@@ -186,13 +213,20 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
       // 幂等：变量已被 LLM 引用（或上轮已挂）
       //   - bg：跳过，避免重复 :style
       //   - icon/img：不另插 img，但缺 px 尺寸时按 figmaBox 装配（89c245a1 巨大菱形根因）
-      if (new RegExp(`\\b${varName}\\b`).test(content)) {
+      // 🛡️ P-06 例外（2026-09-17 · 43c19171 实锤）：container 状态背景（bgRole=container +
+      //   target=active/default）的 var 可能被 LLM 挂在「内层 div」而非组件根。此时文件里已含该
+      //   var，但挂载位置错误——若此处幂等早退，分支永远拿不到执行机会，背景要么消失要么错位。
+      //   故对 container 状态背景不做早退，直接落到下方分支：根已有→只清洗；根没有→注入根。
+      const isContainerStateBg =
+        g.kind === 'bg' &&
+        mount.bgRole === 'container' &&
+        (mount.mountTarget === 'active' || mount.mountTarget === 'default');
+      if (new RegExp(`\\b${varName}\\b`).test(content) && !isContainerStateBg) {
         if (g.kind === 'icon' || g.kind === 'img') {
           const size = iconSizeFromFigmaBox(mount.figmaBox);
           if (size) {
             const sized = ensureReferencedIconSize(content, varName, size);
-            if (sized.patched) {
-              allFiles[targetFile] = sized.content;
+            if (sized.patched && writeGuarded(targetFile, sized.content, content)) {
               doneKeys.add(key);
               mounted.push({
                 var: varName,
@@ -221,17 +255,152 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
       };
       let result = null;
 
+      // 🛡️ P-06 核心一刀（2026-09-17 · 1c98bab9 实锤）：container 状态背景
+      //   （bgRole=container + target=active/default）对应「独立状态子组件」（ContentActive/ContentDefault）。
+      //   背景必须挂到该子组件**模板根**，再清洗该 var 在异文件 + 同文件非根标签的串用/误挂引用。
+      //   单一事实源 = resourceDomMapping 的 mountTarget/owner，不再用 class 关键词猜——
+      //   findTagByClassKeyword('active') 猜中内层 .active-bg 正是「双背景 / 背景错位」根因。
+      if (
+        g.kind === 'bg' &&
+        mount.bgRole === 'container' &&
+        (mount.mountTarget === 'active' || mount.mountTarget === 'default')
+      ) {
+        const cap = (s) =>
+          String(s || '').charAt(0).toUpperCase() + String(s || '').slice(1);
+        const ownerComp =
+          mount.owner || `Content${cap(mount.mountTarget)}`;
+        const ownerFile = `package/components/${ownerComp}.vue`;
+        let tgt = allFiles[ownerFile];
+        let tgtFile = ownerFile;
+        if (
+          typeof tgt !== 'string' &&
+          typeof allFiles['package/index.vue'] === 'string'
+        ) {
+          tgt = allFiles['package/index.vue'];
+          tgtFile = 'package/index.vue';
+        }
+        if (typeof tgt === 'string') {
+          const rootTag = findTemplateRootTag(tgt);
+          if (rootTag) {
+            // 🛡️ 关键修正（2026-09-17 · a772a7a6 实锤）：上一版用「文件内是否含 var」判 already-at-root
+            // 是错的——LLM 把 bg 挂在内层 div（如 .active-bg）时文件已含该 var，但根并未挂载，
+            // 误判后只清洗不挂根 → 背景整体消失/错位（default 背景没出现 / active 错位）。
+            // 正确判据：根标签本身是否含该 var。根没有 → 必须注入根；根已有 → 才是 already-at-root。
+            const rootHasVar = new RegExp(`\\b${varName}\\b`).test(rootTag);
+            if (!rootHasVar) {
+              let upd = injectBgStyleBinding(tgt, rootTag, varName, mapping);
+              if (upd)
+                upd = ensureResourceImportInVue(upd, varName, mapping, tgtFile);
+              if (upd && writeGuarded(tgtFile, upd, tgt)) {
+                result = {
+                  var: varName,
+                  file: tgtFile,
+                  keyword: mount.mountTarget,
+                  bgRole: 'container',
+                  mountTarget: mount.mountTarget,
+                  reason: 'container-state-root',
+                };
+              }
+            } else {
+              result = {
+                var: varName,
+                file: tgtFile,
+                keyword: mount.mountTarget,
+                bgRole: 'container',
+                mountTarget: mount.mountTarget,
+                reason: 'already-at-root',
+              };
+            }
+            // 清洗：该 var 在异文件 + 同文件非根标签的串用/误挂引用
+            if (result) {
+              const cleaned = removeContainerBgOffTargetRefs(allFiles, varName, tgtFile, rootTag, {
+                logger: options.logger,
+                lessGlobalVars,
+              });
+              for (const [k, v] of Object.entries(cleaned)) allFiles[k] = v;
+            }
+          }
+        }
+        // fail-closed：未命中只记诊断，不猜不挂（与设计原则一致）
+        if (!result)
+          diagnostics.push({
+            reason: 'container-state-root-miss',
+            file: ownerFile,
+            var: varName,
+          });
+        else mounted.push(result);
+        doneKeys.add(key);
+        continue;
+      }
+
       // 🛡️ 2026-09-15（P0 修复）：mountTarget 为 'active' 或 'default' 的资源走 mountSubStateBackground 路径
       //   即使 bgRole 是 'container'（几何判断背景图填满父容器），也需要根据状态条件动态切换背景图
       if (g.kind === 'bg' && (mount.bgRole === 'sub-state' || mount.mountTarget === 'active' || mount.mountTarget === 'default')) {
         // 限定 owner 文件作用域调用既有确定性原语（active/default 条件绑定）
         const scoped = { [targetFile]: content };
         const r = mountSubStateBackground(scoped, varName, mapping, options);
-        if (r) {
-          allFiles[targetFile] = scoped[targetFile];
+        if (r && writeGuarded(targetFile, scoped[targetFile], content)) {
           result = { ...r, file: targetFile };
+        } else {
+          // 🛡️ P2（2026-09-17 · e4709ad0 实锤）：active/default 被拆成独立子组件
+          //   （ContentActive / ContentDefault）时模板没有 :class="{ active: ... }" 条件绑定，
+          //   mountSubStateBackground 必然失败 → bg1 静默丢失。
+          //   回退：静态挂到 owner 文件根/关键词命中节点（独立组件本身就是该状态）。
+          let tag = mount.mountTarget ? findTagByClassKeyword(content, String(mount.mountTarget).toLowerCase()) : null;
+          if (!tag) {
+            const candidates = collectMountCandidates({ [targetFile]: content });
+            const best = pickBestMountTarget(mapping, candidates, { skipBound: true });
+            if (best) tag = best.tag;
+          }
+          if (tag) {
+            let updated = injectBgStyleBinding(content, tag, varName, mapping);
+            if (updated) {
+              updated = ensureResourceImportInVue(updated, varName, mapping, targetFile);
+              if (updated && writeGuarded(targetFile, updated, content)) {
+                result = {
+                  var: varName,
+                  file: targetFile,
+                  keyword: mount.mountTarget || 'standalone-state',
+                  bgRole: mount.bgRole || null,
+                  mountTarget: mount.mountTarget || null,
+                  reason: 'standalone-state-static-fallback',
+                };
+                options.logger?.warn?.('🛡️ 独立状态组件无 :class active 绑定，已静态挂背景', {
+                  varName,
+                  mountTarget: mount.mountTarget || '(null)',
+                  file: targetFile,
+                });
+              }
+            }
+          }
         }
       } else if (g.kind === 'bg') {
+        // 🛡️ 阶段3（2026-09-17）：共享背景（sharedBy>1，如 12 卡共享 bg3）应挂到 v-for item
+        //   （每个卡片），而非外层容器。此前 mountTarget 关键词匹配到容器 class，bg 被
+        //   background-size:100% 拉伸铺满整个容器，视觉错误（逐卡 117×64 单元背景变成整块大背景）。
+        const sharedCount = Array.isArray(g.sharedBy) ? g.sharedBy.length : 0;
+        if (sharedCount > 1) {
+          const itemTag = findVForItemTag(content);
+          if (itemTag) {
+            const itemUpdated = injectBgStyleBinding(content, itemTag, varName, mapping);
+            if (itemUpdated) {
+              const withImport = ensureResourceImportInVue(itemUpdated, varName, mapping, targetFile);
+              if (withImport && writeGuarded(targetFile, withImport, content)) {
+                result = {
+                  var: varName,
+                  file: targetFile,
+                  keyword: 'v-for-item',
+                  bgRole: mount.bgRole || null,
+                  mountTarget: 'v-for-item',
+                };
+                options.logger?.info?.(`🎯 [资源挂载] ${varName} 共享背景（${sharedCount} 卡）挂到 v-for item`, {
+                  file: targetFile,
+                });
+                continue;
+              }
+            }
+          }
+        }
         // 🛡️ P1（2026-09-15）：mountTarget 为 null 的 bg 资源兜底挂载
         //   旧逻辑：mountTarget 为 null → findTagByClassKeyword(content, null) → 返回 null → 不挂载
         //   新逻辑：mountTarget 为 null → 用 pickBestMountTarget 从候选池找最优挂载点
@@ -261,8 +430,7 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
           let updated = injectBgStyleBinding(content, tag, varName, mapping);
           if (updated) {
             updated = ensureResourceImportInVue(updated, varName, mapping, targetFile);
-            if (updated && updated !== content) {
-              allFiles[targetFile] = updated;
+            if (updated && writeGuarded(targetFile, updated, content)) {
               result = {
                 var: varName,
                 file: targetFile,
@@ -301,8 +469,7 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
           let updated = injectImgChild(content, tag, varName, '', size);
           if (updated) {
             updated = ensureResourceImportInVue(updated, varName, mapping, targetFile);
-            if (updated && updated !== content) {
-              allFiles[targetFile] = updated;
+            if (updated && writeGuarded(targetFile, updated, content)) {
               result = {
                 var: varName,
                 file: targetFile,
@@ -332,4 +499,100 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
     }
   }
   return { mounted, diagnostics };
+}
+
+/**
+ * 🛡️ P-06 核心一刀配套（2026-09-17）：container 状态背景「清洗」——删除目标 var 在
+ * 异文件 + 同文件非根标签的串用/误挂引用。
+ *
+ * 背景：LLM 会把 bg 资源自由挂到内层 div（如 `.active-bg`）甚至跨状态子组件（bg2 出现在
+ * ContentActive）。核心一刀把 var 挂到 owner 子组件模板根后，必须把这些多余引用清掉，
+ * 否则残留引用造成「双背景 / 错位」。
+ *
+ * 判定（无硬编码，按 var + 根标签事实）：
+ *   - owner 文件内：仅保留 `tag === rootTag` 的那一次引用；其余含该 var 的 :style 引用删除
+ *   - 异文件：全部含该 var 的 :style 引用删除
+ * 删除粒度：:style 仅含 background* 键 → 删整个 :style 属性；含其它键 → 仅删 background* 键
+ *   （保留 icon/width 等业务样式，不误伤）。每文件改后用真实 SFC 编译器校验，失败则回滚该文件。
+ *
+ * @param {Object<string,string>} allFiles 产物文件表（原地更新，返回被修改的文件子集）
+ * @param {string} varName 背景资源变量名（如 bg2）
+ * @param {string} ownerFile owner 子组件文件路径（如 package/components/ContentDefault.vue）
+ * @param {string} rootTag owner 文件模板根开标签字符串
+ * @returns {Object<string,string>} 被修改的文件 map
+ */
+export function removeContainerBgOffTargetRefs(
+  allFiles,
+  varName,
+  ownerFile,
+  rootTag,
+  options = {},
+) {
+  const logger = options.logger || null;
+  const varRe = new RegExp(`\\b${varName}\\b`);
+  const bgKeyRe = /\b(?:background(?:Image|Size|Position|Repeat)?)\s*:[^,}]+,?/g;
+  const out = {};
+  for (const [p, c] of Object.entries(allFiles)) {
+    if (!p.endsWith('.vue') || typeof c !== 'string' || !varRe.test(c)) continue;
+    const tplMatch = c.match(/<template>([\s\S]*?)<\/template>/);
+    if (!tplMatch) continue;
+    let tpl = tplMatch[1];
+    const tagRe = /<([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>])*?)>/g;
+    let m;
+    // 🛡️ 根标签判据必须基于「当前文件内容」重算：branch 注入后根标签已带 :style，
+    // 若用注入前的 rootTag 快照做精确字符串比较会漏判根 → 把刚挂上的背景误删（a772a7a6 实锤）。
+    const fileRootTag = p === ownerFile ? findTemplateRootTag(c) : null;
+    const removals = [];
+    while ((m = tagRe.exec(tpl)) !== null) {
+      const tag = m[0];
+      if (!varRe.test(tag) || !/:style\s*=/.test(tag)) continue;
+      const isRoot = fileRootTag && tag === fileRootTag;
+      if (isRoot) continue; // 根上的引用是正确挂载点，保留
+      removals.push(tag);
+    }
+    if (removals.length === 0) continue;
+    let changed = false;
+    for (const tag of removals) {
+      const styleMatch = tag.match(/:style="([^"]*)"/);
+      if (!styleMatch) continue;
+      const inner = styleMatch[1];
+      const isObj = /^\{[\s\S]*\}$/.test(inner.trim());
+      if (!isObj) continue;
+      const stripped = inner.replace(bgKeyRe, '');
+      const onlyBg = !/[a-zA-Z]+\s*:/.test(stripped.replace(/\s/g, ''));
+      let newTag;
+      if (onlyBg) {
+        newTag = tag.replace(/\s*:style="[^"]*"/, ''); // 仅背景 → 删整个 :style
+      } else {
+        newTag = tag.replace(
+          /:style="\{/,
+          ':style="{',
+        ).replace(bgKeyRe, '');
+      }
+      if (newTag === tag) continue;
+      const pos = tpl.indexOf(tag);
+      if (pos < 0) continue;
+      tpl = tpl.slice(0, pos) + newTag + tpl.slice(pos + tag.length);
+      changed = true;
+    }
+    if (changed) {
+      const newCode = c.replace(tplMatch[0], `<template>${tpl}</template>`);
+      const check = validateVueSfc(newCode, p, {
+        lessGlobalVars: options.lessGlobalVars,
+      });
+      if (check.valid) {
+        out[p] = newCode;
+        logger?.warn?.('🛡️ P-06 已清洗 container bg 串用引用', {
+          file: p,
+          var: varName,
+        });
+      } else {
+        logger?.warn?.('🛡️ P-06 清洗后 SFC 校验失败，已跳过该文件', {
+          file: p,
+          errors: (check.errors || []).slice(0, 2),
+        });
+      }
+    }
+  }
+  return out;
 }

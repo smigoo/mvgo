@@ -145,8 +145,8 @@ export function buildVue3CodePrompt(input, chunkSpec, options = {}) {
 4. **LESS 与样式隔离（强制）**：
    - 每个 \`.vue\` 的样式写在 \`<style lang="less" scoped">\` 内，**必须**通过 \`@import\` 引入共享 less。
    - ⚠️ **@import 路径规则**：产物保持 \`package/\` 与根 \`resources/\` 两个目录，所以主组件 \`package/index.vue\` 必须写 \`@import '../resources/styles/index.less';\`；子组件 \`package/components/*.vue\` 必须写 \`@import '../../resources/styles/index.less';\`。禁止按扁平目录使用 \`./resources/\` 或 \`../resources/\`。
-   - \`resources/styles/theme-vars.less\`：**仅定义变量与 mixin（不产出实际 class）**，被各组件 @import 共享主题 token；必须定义三个 mixin \`.common()\` / \`.theme-dark()\` / \`.theme-light()\`。
-   - ⚠️ **主题 token 一律用 less 变量 \`@xxx\`（编译期替换），禁止用运行时 CSS 变量 \`var(--xxx)\`**。原因：这些 less 经 \`<style scoped>\` 的 \`@import\` 引入后，\`:root { --xxx }\` 会被编译成 \`:root[data-v-hash]\`，而 html 元素不在组件模板内、没有 data-v 属性 → 变量永不生效，导致标题渐变文字透明消失、tab 文字颜色回退。正确写法：\`@color-primary: #1890ff;\`（顶层 less 变量），\`common.less\` 里用 \`color: @color-primary;\` 引用；\`<style>\` 内也直接写 \`@color-primary\` 或字面量，**严禁 \`var(--color-primary)\`**。三个 mixin \`.common()\` / \`.theme-dark()\` / \`.theme-light()\` 保留为空占位即可（末尾调用 \`.theme-light();\` 兼容既有结构）。
+   - \`resources/styles/theme-vars.less\`：**由系统自动生成，你无需输出、也无需在 prompt 里描述其内容**。系统会确定性地生成 \`.common()\` / \`.theme-dark()\` / \`.theme-light()\` 三个 mixin 及主题变量。
+   - ⚠️ **样式里颜色直接用字面量**：\`<style>\` 内的颜色（文字色/背景色/边框色/渐变）**直接写 Figma 字面量**（\`#1990ff\` / \`rgba(...)\` / \`linear-gradient(...)\`），**不要**自行发明 \`@color-text-base\` / \`@color-text-secondary\` 这类 less 变量引用（系统变量是 camelCase 如 \`@colorTextBase\`，你臆造的 kebab-case 变量不会存在、会编译报错）。专色/渐变字面量完全允许保留。
    - \`resources/styles/common.less\`：组件内共享的业务 class（**按功能语义命名**，如 \`.vehicle-card\` / \`.chart-header\` / \`.stat-panel\`，**禁止用组件 ID 作前缀**），主组件与子组件按需 @import。
    - \`resources/styles/index.less\`：\`@import './theme-vars.less';\` + \`@import './common.less';\`。
    - 样式隔离靠 Vue 的 \`scoped\` 实现，每个组件样式互不污染；**禁止**写全局/裸 class 污染其它组件。
@@ -602,7 +602,7 @@ ${contextBlock}
 - 每个文件用 \`// === 文件路径 ===\` 分隔符开头，内容为原始代码（不转义换行/引号）
 - 分隔符只能标记文件开始，禁止在注释/说明中使用
 - **不要**输出 declare.json / component.js / base-panel 等微码运行时文件
-- \`.less\` 文件必须输出：\`theme-vars.less\`（变量+mixin，末尾调用 \`.theme-dark()\`）、\`common.less\`（业务 class，建议前缀 \`.mv3-<组件名>-\`）。\`index.less\` 由系统自动生成（@import 前两者），**无需**输出。
+- \`.less\` 文件只需输出 \`common.less\`（业务 class，建议前缀 \`.mv3-<组件名>-\`）。\`theme-vars.less\` 与 \`index.less\` 均由系统自动生成，**无需输出**。
 - 每个 \`.vue\` 的 \`<style lang="less" scoped">\` 顶部必须 \`@import\` 根共享 less（主组件 \`../resources/styles/index.less\`、子组件 \`../../resources/styles/index.less\`）；禁止按扁平目录少退一级
 - 若根面板存在背景，\`package/index.vue\` 的根选择器必须直接出现可执行的 \`background\` / \`background-image\` / \`background-color\` 字面量值，不能只引用 \`var(--color-bg)\` / \`var(--colorBg)\`
 `;

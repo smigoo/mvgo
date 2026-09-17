@@ -3,6 +3,7 @@ import {
   collectIdenticalThemeMixins,
   collectFileLevelSlotOverrides,
   healFileLevelSlotOverrides,
+  healBusinessStyleVarRefs,
 } from './theme-color-guard.js'
 
 /**
@@ -32,6 +33,29 @@ describe('THEME-COLOR theme-color-guard 主题变量化门禁', () => {
     const issues = detectThemeColorViolations([
       { path: 'resources/styles/themes/theme-vars.less', content: THEME_VARS },
     ])
+    expect(issues).toHaveLength(0)
+  })
+
+  it('vue3 theme-vars.less（无 themes/ 子目录）同样豁免（2026-09-17 治本）', () => {
+    // vue3 路径是 resources/styles/theme-vars.less，此前 /\/themes\// 排除漏掉它，
+    // .theme-dark() 硬编码槽位值被误判 THEME-PRESET-OVERRIDE BLOCK
+    const vue3ThemeVars = `.common() {
+  @fontSize: var(--fontSize, 14px);
+  @colorTextBase: var(--colorTextBase, #ffffff);
+}
+.theme-dark() {
+  @colorTextBase: #ffffff;
+  @colorPrimary: #44E4FF;
+}
+.theme-light() {
+  @colorTextBase: #333333;
+  @colorPrimary: #1890ff;
+}
+`
+    const issues = detectThemeColorViolations([
+      { path: 'resources/styles/theme-vars.less', content: vue3ThemeVars },
+    ])
+    // 主题变量定义文件整体豁免，不应有任何 issue
     expect(issues).toHaveLength(0)
   })
 
@@ -576,5 +600,37 @@ describe('VAR-SUFFIX-ILLEGAL var()-后缀非法拼接（2026-09-16 · c-vehicle-
       { path: 'resources/styles/themes/theme-vars.less', content: '.common() { @fontSize: var(--fontSize); }' },
     ])
     expect(findBy(issues, 'VAR-SUFFIX-ILLEGAL')).toHaveLength(0)
+  })
+})
+
+describe('healBusinessStyleVarRefs：业务样式 var() 直引自愈（模式 A→B，2026-09-17）', () => {
+  it('var(--colorTextBase, 浅色) → @color-text-base（文字白色黑底根治）', () => {
+    const files = {
+      'resources/styles/themes/theme-vars.less': `.theme-light() { @color-text-base: #000000; @color-primary: #1890ff; }`,
+      'package/index.vue': `<style>.a { color: var(--colorTextBase, rgba(230, 237, 245, 1)); }</style>`,
+    }
+    const fixed = healBusinessStyleVarRefs(files, { logger: { warn() {} } })
+    expect(fixed.length).toBe(1)
+    expect(files['package/index.vue']).toContain('color: @color-text-base;')
+    expect(files['package/index.vue']).not.toContain('var(--colorTextBase')
+  })
+
+  it('槽位不存在的 var → 回退 fallback 字面量（丢弃 var）', () => {
+    const files = {
+      'resources/styles/themes/theme-vars.less': `.theme-light() { @color-text-base: #000000; }`,
+      'package/index.vue': `<style>.b { color: var(--color-success, rgba(8,163,165,1)); }</style>`,
+    }
+    const fixed = healBusinessStyleVarRefs(files, { logger: { warn() {} } })
+    expect(files['package/index.vue']).toContain('color: rgba(8,163,165,1);')
+    expect(files['package/index.vue']).not.toContain('var(--color-success')
+  })
+
+  it('theme-vars.less 自身透传 @x: var(--x) 不被改动', () => {
+    const files = {
+      'resources/styles/themes/theme-vars.less': `.common() { @fontSize: var(--fontSize); }`,
+    }
+    const fixed = healBusinessStyleVarRefs(files, { logger: { warn() {} } })
+    expect(fixed.length).toBe(0)
+    expect(files['resources/styles/themes/theme-vars.less']).toContain('@fontSize: var(--fontSize)')
   })
 })

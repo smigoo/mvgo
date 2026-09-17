@@ -36,6 +36,12 @@ public class AdminUserVO {
      * 供用户管理「组件构成」下钻（各类型组件分别几个）。Node 未返回该字段时保持 null。
      */
     private Map<String, Integer> componentByType;
+    /** 有墙钟耗时的组件任务数（来自 Node user-stats） */
+    private int durationSampleCount;
+    /** 组件任务墙钟 p50（含排队，毫秒）；无样本时为 null */
+    private Long durationP50Ms;
+    /** 组件任务墙钟 p90（含排队，毫秒）；无样本时为 null */
+    private Long durationP90Ms;
     private Date createdAt;
     private Date updatedAt;
 
@@ -165,6 +171,30 @@ public class AdminUserVO {
 
     public void setComponentByType(Map<String, Integer> componentByType) {
         this.componentByType = componentByType;
+    }
+
+    public int getDurationSampleCount() {
+        return durationSampleCount;
+    }
+
+    public void setDurationSampleCount(int durationSampleCount) {
+        this.durationSampleCount = durationSampleCount;
+    }
+
+    public Long getDurationP50Ms() {
+        return durationP50Ms;
+    }
+
+    public void setDurationP50Ms(Long durationP50Ms) {
+        this.durationP50Ms = durationP50Ms;
+    }
+
+    public Long getDurationP90Ms() {
+        return durationP90Ms;
+    }
+
+    public void setDurationP90Ms(Long durationP90Ms) {
+        this.durationP90Ms = durationP90Ms;
     }
 
     public Date getCreatedAt() {

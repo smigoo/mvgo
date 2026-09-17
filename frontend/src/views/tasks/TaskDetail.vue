@@ -200,6 +200,10 @@
               <span class="info-val info-mono" v-if="task.startTime">
                 {{ formatTime(task.startTime) }}
               </span>
+              <span class="info-key" v-if="taskDurationLabel">耗时</span>
+              <span class="info-val info-mono" v-if="taskDurationLabel" :title="taskDurationHint">
+                {{ taskDurationLabel }}
+              </span>
               <!-- <template v-if="modelsUsed.length">
                 <span class="info-key">模型</span>
                 <span class="info-val info-mono">{{ modelsUsed.join(', ') }}</span>
@@ -416,6 +420,24 @@
                         </div>
                       </template>
                     </div>
+                  </div>
+
+                  <!-- LLM 节点耗时（token_usages 按 node 汇总，不是管线 waterfall） -->
+                  <div class="llm-timing" v-if="llmNodeBars.length">
+                    <div class="llm-timing-head">
+                      <span class="llm-timing-title">LLM 调用耗时</span>
+                      <span class="llm-timing-meta">{{ llmTimingMeta }}</span>
+                    </div>
+                    <div class="llm-bar-row" v-for="row in llmNodeBars" :key="row.nodeName">
+                      <span class="llm-bar-name" :title="row.nodeName">{{ row.nodeName }}</span>
+                      <div class="llm-bar-track">
+                        <i :style="{ width: row.pct + '%' }"></i>
+                      </div>
+                      <span class="llm-bar-val">{{ row.durationLabel }} · {{ row.callCount }} 次</span>
+                    </div>
+                    <p class="llm-timing-hint">
+                      仅 LLM 调用墙钟之和，不含排队与非 LLM 阶段；端到端见侧栏「耗时」。
+                    </p>
                   </div>
 
                   <!-- ── 失败任务：醒目的错误摘要卡片 ── -->
@@ -1263,6 +1285,22 @@
                         </div>
 
                         <div class="fgc-actions">
+                          <!-- 后端分析的可执行动作（优先展示） -->
+                          <button
+                            v-if="failureAnalysis?.actionable && failureAnalysis.actionType === 'retry_with_model'"
+                            class="fgc-btn-secondary fgc-btn-recommended-secondary"
+                            :disabled="retrying"
+                            :title="`切换到 ${failureAnalysis.actionPayload?.model} 模型重新生成`"
+                            @click="handleRetryWithModel(failureAnalysis.actionPayload?.model)"
+                          >
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                              <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                              <path d="M2 17l10 5 10-5"/>
+                              <path d="M2 12l10 5 10-5"/>
+                            </svg>
+                            {{ `换用 ${failureAnalysis.actionPayload?.model} 重试` }}
+                            <span class="fgc-rec-badge fgc-rec-inline">推荐</span>
+                          </button>
                           <button
                             v-if="!pageTaskFlag && codeSnapshot"
                             class="fgc-btn-secondary fgc-btn-force-preview"
@@ -1279,7 +1317,7 @@
                           <GradientButton
                             v-if="canOpenPlayground"
                             class="fgc-btn-primary"
-                            :class="{ 'fgc-btn-recommended': failureDiagnosis.recommendation === 'playground' }"
+                            :class="{ 'fgc-btn-recommended': failureDiagnosis.recommendation === 'playground' && !failureAnalysis?.actionable }"
                             :border-width="2"
                             :border-radius="14"
                             :blur="0"
@@ -1289,7 +1327,7 @@
                           >
                             <CodeOutlined style="margin-right: 6px;" />
                             进入 Playground 修复
-                            <span class="fgc-rec-badge" v-if="failureDiagnosis.recommendation === 'playground'">推荐</span>
+                            <span class="fgc-rec-badge" v-if="failureDiagnosis.recommendation === 'playground' && !failureAnalysis?.actionable">推荐</span>
                           </GradientButton>
                           <!-- 🛡️ 2026-09-04：原生 href 下载不带 Token 头 → 生产 401，改 fetch+Blob -->
                           <button
@@ -1543,9 +1581,11 @@ import {
   cancelQueuedTask,
   startQueuedTask,
   createProgressStream,
+  getTaskTokenUsage,
   type TaskCodeSnapshotManifest,
   type TaskCodeSnapshotFile
 } from '@/api/generator/generator'
+import type { TaskUsageResponse } from '@/types/token-usage'
 import {
   getComponentBySessionId,
   getComponentFiles,
@@ -2064,6 +2104,103 @@ const statusBadgeClass = computed(() => {
 const qualityGateLabel = computed(() => {
   const map: Record<string, string> = { passed: '通过', warned: '警告', failed: '阻断' }
   return map[task.value?.qualityGate] || task.value?.qualityGate || ''
+})
+
+function formatClockMs(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return '—'
+  if (ms < 1000) return `${Math.round(ms)}ms`
+  const sec = ms / 1000
+  if (sec < 60) return `${sec < 10 ? sec.toFixed(1) : Math.round(sec)}s`
+  const m = Math.floor(sec / 60)
+  const s = Math.round(sec % 60)
+  if (m < 60) return s ? `${m}m ${s}s` : `${m}m`
+  const h = Math.floor(m / 60)
+  const rm = m % 60
+  return rm ? `${h}h ${rm}m` : `${h}h`
+}
+
+const taskDurationMs = computed(() => {
+  void elapsedTick.value
+  const t = task.value
+  if (!t?.startTime) return null
+  const start = Number(t.startTime)
+  if (!Number.isFinite(start) || start <= 0) return null
+  const stored = Number(t.duration)
+  if (Number.isFinite(stored) && stored > 0) return stored
+  const end = Number(t.endTime)
+  if (Number.isFinite(end) && end > start) return end - start
+  const live = ['running', 'queued', 'paused', 'rate_limited', 'retry_scheduled', 'pending']
+  if (live.includes(String(t.status))) return Math.max(0, Date.now() - start)
+  return null
+})
+
+const taskDurationLabel = computed(() => {
+  if (taskDurationMs.value == null) return ''
+  return formatClockMs(taskDurationMs.value)
+})
+
+const taskDurationHint = computed(() => {
+  const t = task.value
+  if (!t) return ''
+  if (t.duration) return 'endTime − startTime（含排队）'
+  if (t.endTime) return '由 endTime − startTime 推算（含排队）'
+  return '进行中：自创建起的墙钟时间（含排队）'
+})
+
+const tokenUsage = ref<TaskUsageResponse | null>(null)
+let tokenUsageSeq = 0
+
+async function loadTokenUsage(id: string) {
+  const seq = ++tokenUsageSeq
+  if (!id) {
+    tokenUsage.value = null
+    return
+  }
+  try {
+    const data = await getTaskTokenUsage(id)
+    if (seq !== tokenUsageSeq) return
+    tokenUsage.value = data || null
+  } catch {
+    if (seq !== tokenUsageSeq) return
+    tokenUsage.value = null
+  }
+}
+
+watch(
+  () => [sessionId.value, task.value?.status] as const,
+  ([id]) => {
+    void loadTokenUsage(String(id || ''))
+  },
+  { immediate: true },
+)
+
+const llmNodeBars = computed(() => {
+  const records = tokenUsage.value?.records || []
+  if (!records.length) return []
+  const map = new Map<string, { duration: number; callCount: number }>()
+  for (const r of records) {
+    const name = String(r.nodeName || 'unknown')
+    const cur = map.get(name) || { duration: 0, callCount: 0 }
+    cur.duration += Number(r.duration) || 0
+    cur.callCount += 1
+    map.set(name, cur)
+  }
+  const rows = [...map.entries()].map(([nodeName, v]) => ({ nodeName, ...v }))
+  rows.sort((a, b) => b.duration - a.duration)
+  const max = Math.max(1, ...rows.map((r) => r.duration))
+  return rows.map((r) => ({
+    nodeName: r.nodeName,
+    callCount: r.callCount,
+    durationLabel: formatClockMs(r.duration),
+    pct: Math.max(2, Math.round((r.duration / max) * 100)),
+  }))
+})
+
+const llmTimingMeta = computed(() => {
+  const s = tokenUsage.value?.summary
+  if (!s) return ''
+  const llmSum = (tokenUsage.value?.records || []).reduce((n, r) => n + (Number(r.duration) || 0), 0)
+  return `${s.callCount} 次调用 · LLM ${formatClockMs(llmSum)}`
 })
 
 const modelsUsed = computed(() => {
@@ -2675,6 +2812,31 @@ function recomputeFilteredLogs() {
 }
 
 // 失败根因摘要：从 task.error、日志错误、步骤失败名中提取最具体的原因
+// 后端失败分析结果（优先使用，降级到前端本地诊断）
+const failureAnalysis = ref<{
+  category: string
+  reason: string
+  suggestion: string
+  actionable: boolean
+  actionType?: string
+  actionPayload?: any
+} | null>(null)
+
+/** 加载后端失败分析 */
+async function loadFailureAnalysis() {
+  if (!sessionId.value || task.value?.status !== 'failed') return
+  
+  try {
+    const resp = await http.get(`/api/task-stats/failure-analysis?sessionId=${sessionId.value}`)
+    const data = resp?.data || resp
+    if (data?.success && data?.data) {
+      failureAnalysis.value = data.data
+    }
+  } catch (err) {
+    console.warn('[loadFailureAnalysis] 后端分析加载失败，使用前端本地诊断', err)
+  }
+}
+
 const failureSummary = computed(() => {
   const t = task.value
   if (!t || t.status !== 'failed') return ''
@@ -2722,6 +2884,67 @@ interface FailureDiagnosis {
 }
 
 const failureDiagnosis = computed<FailureDiagnosis>(() => {
+  // 优先使用后端分析结果（更精确）
+  if (failureAnalysis.value) {
+    const analysis = failureAnalysis.value
+    const categoryMap: Record<string, FailureDiagnosis> = {
+      compile_error: {
+        type: 'syntax_error',
+        icon: '🐛',
+        color: '#ef4444',
+        recommendation: 'playground',
+        explanation: analysis.suggestion || '代码存在语法错误或未定义变量。Playground 的 AI 修复可以自动识别并修复这些问题。'
+      },
+      resource_missing: {
+        type: 'syntax_error',
+        icon: '🖼️',
+        color: '#f97316',
+        recommendation: 'playground',
+        explanation: analysis.suggestion || '设计稿中的图片资源无法访问或映射失败。Playground 支持替换资源或调整引用。'
+      },
+      model_capability: {
+        type: 'quality_gate',
+        icon: '🤖',
+        color: '#8b5cf6',
+        recommendation: 'playground',
+        explanation: analysis.suggestion || '当前模型能力不足以完成此设计稿。建议尝试更高级的模型或简化设计复杂度。'
+      },
+      timeout: {
+        type: 'timeout',
+        icon: '⏱️',
+        color: '#f59e0b',
+        recommendation: 'playground',
+        explanation: analysis.suggestion || '生成过程可能已产出代码，但质量检查未通过。建议进入 Playground 查看并修复。'
+      },
+      rate_limit: {
+        type: 'network',
+        icon: '🚦',
+        color: '#3b82f6',
+        recommendation: 'retry',
+        explanation: analysis.suggestion || 'AI 服务调用频率超限。建议稍后重试，或联系管理员调整配额。'
+      },
+      auth_error: {
+        type: 'network',
+        icon: '🔑',
+        color: '#ef4444',
+        recommendation: 'check_logs',
+        explanation: analysis.suggestion || 'AI 服务凭证无效或已过期。请联系管理员检查配置。'
+      },
+      validation_error: {
+        type: 'quality_gate',
+        icon: '🚧',
+        color: '#f97316',
+        recommendation: 'playground',
+        explanation: analysis.suggestion || '代码已生成但未通过质量检查。Playground 支持 AI 自动修复语法错误、缺失引用等常见问题。'
+      }
+    }
+    
+    if (categoryMap[analysis.category]) {
+      return categoryMap[analysis.category]
+    }
+  }
+  
+  // 降级到前端本地诊断（后端 API 失败或无结果时）
   const summary = failureSummary.value.toLowerCase()
   
   // 1. 超时
@@ -3927,6 +4150,16 @@ async function loadTask() {
       taskMissingRetries.value = 0
       await loadWorkspaceDimensions(found)
       await loadCodeSnapshot()
+      
+      // 失败任务：加载后端失败分析（优先使用后端精确分析，降级到前端本地诊断）
+      if (found.status === 'failed') {
+        await loadFailureAnalysis()
+      }
+      
+      // 失败任务：加载后端失败分析（优先使用后端精确分析，降级到前端本地诊断）
+      if (found.status === 'failed') {
+        await loadFailureAnalysis()
+      }
 
       // 更新 SSE 阶段数据 + 从历史 progress 恢复日志（带去重聚合）
       // 后端 task.progress 是数组 [{ type, stage, status, message, ... }]
@@ -4091,9 +4324,15 @@ async function handleContinueGeneration() {
   if (!task.value) return
   try {
     startingContinue.value = true
-    await startQueuedTask(task.value.sessionId)
-    message.success('已触发继续生成')
-    await loadTask()
+    const resp = await startQueuedTask(task.value.sessionId)
+    // 据实反馈：后端返回 success=false 时必须提示失败原因，
+    // 不能无脑弹“已触发”（否则出现“提示已触发但任务没动静”的假象）。
+    if (resp?.success) {
+      message.success(resp.message || '已触发继续生成')
+      await loadTask()
+    } else {
+      message.error(resp?.message || '继续生成失败：任务未能启动')
+    }
   } catch (error: any) {
     message.error('继续生成失败: ' + (error.message || '未知错误'))
   } finally {
@@ -4154,6 +4393,66 @@ async function handleRevokeReview() {
     await loadTask()
   } catch (error: any) {
     message.error('撤回失败: ' + (error.message || '未知错误'))
+  }
+}
+
+/** 换用指定模型重新生成（来自后端失败分析的可执行动作） */
+async function handleRetryWithModel(model: string) {
+  if (!task.value || !model) return
+  const t = task.value
+  let closeLoading: ReturnType<typeof message.loading> | null = null
+
+  try {
+    retrying.value = true
+    closeLoading = message.loading({ content: `正在切换到 ${model} 模型重新生成...`, duration: 0 })
+
+    if (!t.fileKey || !t.nodeId) {
+      closeLoading?.()
+      message.warning('该任务缺少 Figma 参数，无法重试')
+      return
+    }
+
+    const rawCfg =
+      (configStore.config as any)?.value !== undefined
+        ? (configStore.config as any).value
+        : configStore.config
+    const requestData: any = {
+      sessionId: t.sessionId,
+      sourceType: t.sourceType,
+      generationTier: t.generationTier,
+      target: t.target,
+      fileKey: t.fileKey,
+      nodeId: t.nodeId,
+      componentId: t.componentId,
+      componentName: t.componentName,
+      groupId: t.groupId,
+      config: { ...(rawCfg || {}), textModel: model, visionModel: model }, // 覆盖模型配置
+      reuseCache: true, // 复用 Figma 缓存，只换模型
+    }
+
+    const response =
+      t.target === 'vue3'
+        ? await generateVue3Component(requestData)
+        : await generateComponent(requestData)
+
+    closeLoading?.()
+
+    if (response.success) {
+      message.success(`已切换到 ${model} 模型，重试已启动`)
+      const newSessionId = response.data?.sessionId
+      if (newSessionId) {
+        router.push(`/tasks/${newSessionId}`)
+      } else {
+        await loadTask()
+      }
+    } else {
+      message.error(response.error || '重试失败')
+    }
+  } catch (error: any) {
+    closeLoading?.()
+    message.error('重试失败: ' + (error.message || '未知错误'))
+  } finally {
+    retrying.value = false
   }
 }
 
@@ -4848,6 +5147,69 @@ watch(bindingWizardOpen, (open) => {
   50% {
     opacity: 0.4;
   }
+}
+
+.llm-timing {
+  margin: 12px 0 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-secondary, #e5e7eb);
+  border-radius: 10px;
+  background: var(--bg-elevated, rgba(255, 255, 255, 0.04));
+}
+.llm-timing-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.llm-timing-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.llm-timing-meta {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.llm-bar-row {
+  display: grid;
+  grid-template-columns: minmax(72px, 140px) 1fr minmax(88px, auto);
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+  font-size: 12px;
+}
+.llm-bar-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+.llm-bar-track {
+  height: 8px;
+  background: var(--fill-tertiary, #f0f0f0);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.llm-bar-track i {
+  display: block;
+  height: 100%;
+  background: #1677ff;
+  border-radius: 99px;
+}
+.llm-bar-val {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.llm-timing-hint {
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  line-height: 1.5;
 }
 
 .model-tags {

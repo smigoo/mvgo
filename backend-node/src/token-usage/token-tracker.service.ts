@@ -127,6 +127,9 @@ export class TokenTrackerService {
           componentName: data.componentName,
           fileKey: data.fileKey,
           nodeId: data.nodeId,
+          // R10 治本：userId + baseURL 可选，向后兼容
+          userId: data.userId,
+          baseURL: data.baseURL,
         } as Record<string, unknown>);
       } catch (err) {
         // 静默失败：token 记录不应影响生成流程

@@ -15,6 +15,10 @@ import com.mvgo.common.BizException;
 import com.mvgo.common.Result;
 import com.mvgo.data.entity.ComponentDocument;
 
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -24,6 +28,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -56,6 +61,34 @@ public class AdminController {
     @GetMapping("users")
     public Result<AdminUserPage> listUsers() {
         return Result.success(service.listUsers());
+    }
+
+    /**
+     * 时间窗生成日志导出（md/html 附件）。
+     * 浏览器走 Java 8080；内部用 60s RestTemplate 拉 Node /api/admin/internal/usage-export。
+     */
+    @GetMapping("usage-export")
+    public ResponseEntity<byte[]> usageExport(
+            @RequestParam(required = false) String preset,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to,
+            @RequestParam(required = false) String dept,
+            @RequestParam(required = false) String format) {
+        AdminService.UsageExportFile file = service.fetchUsageExport(preset, from, to, dept, format);
+        byte[] bytes = file.body.getBytes(StandardCharsets.UTF_8);
+        ContentDisposition cd = ContentDisposition.attachment()
+                .filename(file.filename, StandardCharsets.UTF_8)
+                .build();
+        MediaType mediaType;
+        try {
+            mediaType = MediaType.parseMediaType(file.contentType);
+        } catch (Exception ex) {
+            mediaType = MediaType.TEXT_PLAIN;
+        }
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, cd.toString())
+                .contentType(mediaType)
+                .body(bytes);
     }
 
     /**

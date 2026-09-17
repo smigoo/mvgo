@@ -2,10 +2,15 @@ import {
   Controller,
   Get,
   Headers,
+  Query,
   ForbiddenException,
   ServiceUnavailableException,
+  UseGuards,
 } from '@nestjs/common';
 import { AdminService } from './admin.service';
+import { SessionGuard } from '../auth/session.guard';
+import { CurrentUser } from '../auth/current-user.decorator';
+import { TaskStatsService } from '../task-stats/task-stats.service';
 
 /**
  * 用户生成统计端点（内部服务间调用专用）。
@@ -21,9 +26,67 @@ import { AdminService } from './admin.service';
  */
 @Controller('admin')
 export class AdminStatsController {
-  constructor(private readonly adminService: AdminService) {}
+  private readonly logger = console;
 
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly taskStatsService: TaskStatsService,
+  ) {}
+
+  /**
+   * 用户维度聚合统计（供前端调用，SessionGuard 鉴权）
+   * GET /api/admin/user-stats?preset=week
+   * 按用户聚合：任务数、成功率、耗时 p50/p90、最近使用时间、常用模型
+   *
+   * 2026-09-17 修复：合并 adminService.listUserStats() 的 componentCount/apiTaskCount/apiCount
+   * 前端 UsersView 需要这三个字段（生成组件数、接口批数、接口总数），但 taskStatsService.userStats()
+   * 只统计了 tasks.json 的 taskCount，缺少 MongoDB components 和 apifox-tasks.json 的数据。
+   */
   @Get('user-stats')
+  @UseGuards(SessionGuard)
+  async userStats(
+    @CurrentUser() userId: string,
+    @Query('preset') preset?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    await this.taskStatsService.assertAdmin(userId);
+    const res = await this.taskStatsService.userStats({ preset, from, to });
+
+    // 合并 adminService.listUserStats() 的 componentCount/apiTaskCount/apiCount
+    let extraMap: Record<string, any> = {};
+    try {
+      const extra = await this.adminService.listUserStats();
+      extraMap = extra;
+    } catch (err) {
+      // 降级：合并失败不影响主流程
+      this.logger.warn(`[user-stats] listUserStats 合并失败: ${err.message}`);
+    }
+
+    const mergedList = res.list.map((item: any) => {
+      const uid = item.userId;
+      const extra = extraMap[uid] || {};
+      return {
+        ...item,
+        componentCount: extra.componentCount ?? 0,
+        apiTaskCount: extra.apiTaskCount ?? 0,
+        apiCount: extra.apiCount ?? 0,
+      };
+    });
+
+    return {
+      success: true,
+      list: mergedList,
+      count: res.count,
+      windowLabel: res.windowLabel,
+    };
+  }
+
+  /**
+   * 用户统计（供 Java 内部调用，x-admin-stats-key 鉴权）
+   * GET /api/admin/internal/user-stats
+   */
+  @Get('internal/user-stats')
   async listUserStats(@Headers('x-admin-stats-key') key?: string) {
     const expect = process.env.ADMIN_STATS_KEY || '';
     if (!expect) {
@@ -34,5 +97,30 @@ export class AdminStatsController {
     }
     const data = await this.adminService.listUserStats();
     return { success: true, data };
+  }
+
+  /**
+   * 时间窗生成报告（JSON，供 Java 代理下载）。
+   * 路径与 SessionGuard 附件路由 GET admin/usage-export 错开，避免双注册。
+   * 鉴权同 user-stats：x-admin-stats-key。
+   */
+  @Get('internal/usage-export')
+  async usageExport(
+    @Headers('x-admin-stats-key') key?: string,
+    @Query('preset') preset?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('dept') dept?: string,
+    @Query('format') format?: string,
+  ) {
+    const expect = process.env.ADMIN_STATS_KEY || '';
+    if (!expect) {
+      throw new ServiceUnavailableException('服务端未配置 ADMIN_STATS_KEY，usage-export 不可用');
+    }
+    if (!key || key !== expect) {
+      throw new ForbiddenException('内部调用 key 无效');
+    }
+    const file = await this.adminService.buildUsageExport({ preset, from, to, dept, format });
+    return { success: true, ...file };
   }
 }

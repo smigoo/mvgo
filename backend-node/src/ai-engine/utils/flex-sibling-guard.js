@@ -120,7 +120,16 @@ export function extractStyleBlocks(styleContent) {
   // 使 selector 含 '@' 被整体跳过，该块的 flex-grow（如 flex:131 1 0）漏索引 → FLEX-005
   // 漏检（流量监测 mc-max-1788366123410 高度比例事故实锤）。带块的 @media/@keyframes 以
   // '{' 结尾（无 ';'），不会被本正则误剥。
-  const cleaned = styleContent.replace(/@[a-zA-Z][\w-]*\b[^;{]*;/gi, '');
+  const cleaned = styleContent
+    // 剥离 LESS/CSS 注释（含 // 单行与 /* */ 块注释）。
+    // 🛡️ 2026-09-17 根治：此前只剥 @ 指令与变量定义，漏了 // 单行注释 ——
+    // vue3 产物 <style> 顶部常写 `// 引入根共享 less...`、`// 根容器（零添加铁律...）`，
+    // 正则 `([^{}]+)\{` 把注释连同 selector 一起吞进 selector（注释里无 {}），
+    // 导致 FLEX-002 误报「该 selector 无 flex 子属性」、或把真实 flex 规则整块错配。
+    // 先剥注释再匹配，selector 才是纯类名。
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|\n)\s*\/\/[^\n]*/g, '$1')
+    .replace(/@[a-zA-Z][\w-]*\b[^;{]*;/gi, '');
   const re = /([^{}]+)\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}/g;
   let m;
   while ((m = re.exec(cleaned)) !== null) {

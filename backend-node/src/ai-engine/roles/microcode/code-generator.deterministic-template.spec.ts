@@ -44,7 +44,8 @@ jest.mock('../../utils/provider-pool.js', () => ({
 
 jest.mock('../../utils/llm-timeout.js', () => ({ invokeWithTimeout: jest.fn() }))
 
-import { buildDeterministicIndexTemplate, stripUnplannedSubComponentImports, containChartRefInsidePanel } from './code-generator.js'
+import { buildDeterministicIndexTemplate, stripUnplannedSubComponentImports, containChartRefInsidePanel, flexItemStyleFromWidths, flexItemStyleFromHeights, resolveSectionFlexSize } from './code-generator.js'
+import { indexFigmaNodes } from '../../utils/section-tree.js'
 import { pruneDeadSubComponentImports } from './resource-mounter.js'
 
 // 模拟 planner 的 effectiveSections（device-monitor 实锤：header + switch + tabs + section-main）
@@ -71,12 +72,13 @@ describe('层① 确定性 index.vue 模板装配', () => {
     expect(tpl).toContain('<base-panel panelKey="default-panel">')
     expect(tpl).toContain('<template #header-right>')
     expect(tpl).toContain('<HeaderSection />')
-    expect(tpl).toContain('<SwitchSection />')
-    expect(tpl).toContain('<TabsSection />')
-    expect(tpl).toContain('<MainSection />')
-    expect(tpl).toContain('class="c-device-monitor-slot-con"')
-    expect(tpl.indexOf('<SwitchSection />')).toBeLessThan(tpl.indexOf('<TabsSection />'))
-    expect(tpl.indexOf('<TabsSection />')).toBeLessThan(tpl.indexOf('<MainSection />'))
+    // 🛡️ P5（2026-09-17）：叶子子组件标签内联传导样式（flex:1;min-height:0）
+    expect(tpl).toContain('<SwitchSection style="flex:1;min-height:0;" />')
+    expect(tpl).toContain('<TabsSection style="flex:1;min-height:0;" />')
+    expect(tpl).toContain('<MainSection style="flex:1;min-height:0;" />')
+    expect(tpl).toContain('class="c-device-monitor-slot-con" style="display:flex;flex-direction:column;"')
+    expect(tpl.indexOf('<SwitchSection')).toBeLessThan(tpl.indexOf('<TabsSection'))
+    expect(tpl.indexOf('<TabsSection')).toBeLessThan(tpl.indexOf('<MainSection'))
     // 🛡️ R1-2：facts 单一事实源（rootContainerClass + sectionRoots）
     expect(facts!.rootContainerClass).toBe('c-device-monitor-slot-con')
     expect(facts!.sectionRoots.map((s) => s.component)).toEqual([
@@ -97,9 +99,42 @@ describe('层① 确定性 index.vue 模板装配', () => {
     ]
     const facts = buildDeterministicIndexTemplate(makeInput(secs))
     const tpl = facts!.template
-    expect(tpl).toContain('<MainA />')
-    expect(tpl).toContain('<MainB />')
+    expect(tpl).toContain('<MainA style="flex:1;min-height:0;" />')
+    expect(tpl).toContain('<MainB style="flex:1;min-height:0;" />')
     expect(tpl).not.toContain('<MainSection2 />') // 不再产出裸序号
+  })
+
+  test('水平 flex 子项按 Figma 宽度比例分配，tabs 46 / cons 367 不能均分', () => {
+    // 🛡️ P6 wrapper 容器化合并（2026-09-17）：helper 只输出比例 + min 约束，
+    //   display:flex 随 wrapper 消失，由目标元素（容器/子组件根）自身承载。
+    expect(flexItemStyleFromWidths([46, 367], 0)).toBe('flex:0.111;min-width:0;')
+    expect(flexItemStyleFromWidths([46, 367], 1)).toBe('flex:0.889;min-width:0;')
+    expect(flexItemStyleFromWidths([0, 0], 0)).toBe('flex:1;min-width:0;')
+    expect(flexItemStyleFromHeights([32, 207], 0)).toBe('flex:0.134;min-height:0;')
+    expect(flexItemStyleFromHeights([0, 0], 0)).toBe('flex:1;min-height:0;')
+    const secs = [{
+      id: '89:40',
+      name: 'slot-con',
+      isLayoutContainer: true,
+      layout: 'vertical',
+      children: [{
+        id: '89:37',
+        name: '@antd/tab',
+        isLayoutContainer: true,
+        layout: 'horizontal',
+        children: [
+          { id: '89:39', type: 'tabs', title: 'tabs', absoluteBoundingBox: { width: 46, height: 317 } },
+          { id: '2:8437', type: 'body', title: 'cons', absoluteBoundingBox: { width: 367, height: 295 } },
+        ],
+      }],
+    }]
+    const tpl = buildDeterministicIndexTemplate(makeInput(secs))!.template
+    // P6：比例直接内联到子组件标签（无 wrapper 中转）
+    expect(tpl).toContain('<TabsSection style="flex:0.111;min-width:0;" />')
+    expect(tpl).toContain('<MainSection style="flex:0.889;min-width:0;" />')
+    // P6：不再产出任何纯比例空壳 wrapper div
+    expect(tpl).not.toContain('<div style="flex:')
+    expect(tpl).not.toMatch(/antd-tab-con[\s\S]*flex:1;min-width:0;[\s\S]*flex:1;min-width:0;/)
   })
 
   test('无计划子组件 → 返回 null（回退 LLM 生成）', () => {
@@ -112,7 +147,7 @@ describe('层① 确定性 index.vue 模板装配', () => {
     const facts = buildDeterministicIndexTemplate(makeInput(secs))
     const tpl = facts!.template
     expect(tpl).not.toContain('#header-right')
-    expect(tpl).toContain('<TabsSection />')
+    expect(tpl).toContain('<TabsSection style="flex:1;min-height:0;" />')
   })
 
   test('刀 5c：headerSlots 契约 figmaNodeId 匹配 sourceNodeIds → tabs 进 header-right，body 不重复', () => {
@@ -134,9 +169,9 @@ describe('层① 确定性 index.vue 模板装配', () => {
     // 核心：body（slot-con 之后）不再出现 TabsSection（同 figmaNodeId 只落一次，杜绝双轨）
     const slotConIdx = tpl.indexOf('slot-con')
     const bodyPart = tpl.slice(slotConIdx)
-    expect(bodyPart).not.toContain('<TabsSection />')
+    expect(bodyPart).not.toContain('<TabsSection')
     // 统计卡叶子仍在 body
-    expect(bodyPart).toContain('<StatsSection />')
+    expect(bodyPart).toContain('<StatsSection')
   })
 
   test('刀 5c：无 headerSlots 契约 → 回退 type==="header" 二分（旧行为零回归）', () => {
@@ -146,7 +181,7 @@ describe('层① 确定性 index.vue 模板装配', () => {
     ]
     const facts = buildDeterministicIndexTemplate(makeInput(secs))
     expect(facts!.template).toContain('<HeaderSection />')
-    expect(facts!.template).toContain('<TabsSection />')
+    expect(facts!.template).toContain('<TabsSection style="flex:1;min-height:0;" />')
   })
 
   test('E1 治本：容器嵌套保留（switch/@antd-tab 生成 wrapper div，不拍平叶子）', () => {
@@ -189,11 +224,18 @@ describe('层① 确定性 index.vue 模板装配', () => {
     // tabs 在 antd-tab 容器之后（验证容器包裹关系，不拍平）
     const switchIdx = tpl.indexOf('c-device-monitor-switch-con')
     const tabIdx = tpl.indexOf('c-device-monitor-antd-tab-con')
-    const tabsIdx = tpl.indexOf('<TabsSection />')
+    const tabsIdx = tpl.indexOf('<TabsSection')
     expect(switchIdx).toBeGreaterThan(-1)
     expect(tabIdx).toBeGreaterThan(-1)
     expect(switchIdx).toBeLessThan(tabIdx)
     expect(tabIdx).toBeLessThan(tabsIdx)
+    // 🛡️ P6 wrapper 容器化合并：容器 div 直接吃父比例（本例 con-con 无父分配 → flex:1;min-height:0）
+    //   + 对子方向（本例两个容器 layout 未显式声明 → 默认 vertical/column）；
+    //   无任何纯比例空壳 wrapper。
+    expect(tpl).toContain('c-device-monitor-switch-con" data-section-id="89:38" style="flex:1;min-height:0;display:flex;flex-direction:column;"')
+    expect(tpl).toContain('c-device-monitor-antd-tab-con" data-section-id="89:37" style="flex:1;min-height:0;display:flex;flex-direction:column;"')
+    // P6：模板中不再有 wrapper 空壳 div（纯 style 无 class 的 div）
+    expect(tpl).not.toContain('<div style="flex:')
     // switch 容器的闭合 div 必须在 antd-tab 容器开始之后（两个容器互不嵌套、平级包裹各自叶子）
     expect(tpl.indexOf('</div>', switchIdx)).toBeLessThan(tabIdx)
   })
@@ -323,5 +365,52 @@ describe('E3-1 containChartRefInsidePanel（chartRef 容器位置收口，2026-0
   test('无 chartRef / 无 base-panel → 原样返回', () => {
     expect(containChartRefInsidePanel('<template><div>x</div></template>', {})).toBe('<template><div>x</div></template>')
     expect(containChartRefInsidePanel('', {})).toBe('')
+  })
+})
+
+describe('resolveSectionFlexSize / 装配回查 Figma bbox（d70a19bf）', () => {
+  test('树上无 bbox 时按 figmaNodeId / sourceNodeIds 回查宽度', () => {
+    const figma = {
+      document: {
+        id: 'root', name: 'root', type: 'FRAME',
+        children: [
+          { id: '3:74', name: 'left', type: 'FRAME', absoluteBoundingBox: { x: 303, y: 2282, width: 220, height: 170 } },
+          { id: '287:4', name: 'chart', type: 'FRAME', absoluteBoundingBox: { x: 561, y: 2267, width: 207, height: 207 } },
+          { id: '3:110', name: 'right', type: 'FRAME', absoluteBoundingBox: { x: 806, y: 2282, width: 220, height: 170 } },
+        ],
+      },
+    }
+    const index = indexFigmaNodes(figma.document)
+    expect(resolveSectionFlexSize({ id: '287:5-left', sourceNodeIds: ['3:74'] }, index, 'width')).toBe(220)
+    expect(resolveSectionFlexSize({ id: '287:4', figmaNodeId: '287:4' }, index, 'width')).toBe(207)
+    expect(resolveSectionFlexSize({ id: '287:5-right', sourceNodeIds: ['3:110'] }, index, 'width')).toBe(220)
+  })
+
+  test('planner 丢掉 bbox 时三栏按 220/207/220 分配，不回退 flex:1', () => {
+    const sections = [
+      {
+        id: '287:6', type: 'container', isLayoutContainer: true, layout: 'horizontal',
+        children: [
+          { id: '287:5-left', type: 'stats', title: '统计数据-left', sourceNodeIds: ['3:74'] },
+          { id: '287:4', type: 'chart', title: '中间图表', figmaNodeId: '287:4' },
+          { id: '287:5-right', type: 'stats', title: '统计数据-right', sourceNodeIds: ['3:110'] },
+        ],
+      },
+    ]
+    const input = makeInput(sections, 'd70a19')
+    ;(input as any).figmaNodeData = {
+      document: {
+        id: 'root', name: 'cp', type: 'FRAME',
+        children: [
+          { id: '3:74', name: 'left', type: 'FRAME', absoluteBoundingBox: { x: 303, y: 2282, width: 220, height: 170 } },
+          { id: '287:4', name: '中间图表', type: 'FRAME', absoluteBoundingBox: { x: 561, y: 2267, width: 207, height: 207 } },
+          { id: '3:110', name: 'right', type: 'FRAME', absoluteBoundingBox: { x: 806, y: 2282, width: 220, height: 170 } },
+        ],
+      },
+    }
+    const tpl = buildDeterministicIndexTemplate(input)!.template
+    expect(tpl).toContain('flex:0.340;min-width:0;')
+    expect(tpl).toContain('flex:0.320;min-width:0;')
+    expect(tpl.match(/flex:1;min-width:0;/g) || []).toHaveLength(0)
   })
 })

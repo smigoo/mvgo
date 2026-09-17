@@ -113,4 +113,131 @@ describe('TaskQueueService per-user 并发槽位', () => {
     expect(q.getRunningCount('anyUser')).toBe(0); // 匿名任务不计入任何用户桶
     expect(q.getAvailableSlots('anyUser')).toBe(MAX);
   });
+
+  /**
+   * 伪成功回归（2026-09-17）。
+   * 背景：mc-max-1789620070991-4f0b5b54 卡在 queued，前端点「继续生成」提示「已触发」，
+   * 但任务实际没跑。根因是 startQueuedTask 调用 scheduleSpecificWaiting 后无条件返回
+   * success:true —— 即使执行器缺失/抛错、任务被退回队列，也谎报成功。
+   * 下面三条钉死「必须如实返回成败」。
+   */
+  describe('startQueuedTask 如实返回调度结果', () => {
+    it('无执行器 → success=false，且不谎报已触发', async () => {
+      // 入队但不给 executeFn（模拟进程重启后闭包丢失、restoreExecutor 又未接管）
+      await q.enqueue(mkTask('noExec', 'userA'), 'concurrency_full');
+      const r = await q.startQueuedTask('noExec', 'userA');
+      expect(r.success).toBe(false);
+      expect(r.message).toMatch(/执行上下文|无法/);
+      // 任务仍留在队列，等待真正可恢复时再处理
+      expect(q.getQueueStatus('noExec').inQueue).toBe(true);
+    });
+
+    it('执行器抛错 → success=false，任务退回队列', async () => {
+      await q.enqueue(mkTask('boom', 'userA'), 'concurrency_full', async () => {
+        throw new Error('executor exploded');
+      });
+      const r = await q.startQueuedTask('boom', 'userA');
+      expect(r.success).toBe(false);
+      expect(q.getQueueStatus('boom').inQueue).toBe(true);
+      expect(q.isRunning('boom')).toBe(false);
+    });
+
+    it('执行器正常 → success=true', async () => {
+      let ran = false;
+      // 直接种入等待队列，绕开 enqueue 的自动调度
+      //（本用例只验证 startQueuedTask 的返回值语义，不验证入队调度）
+      (q as any).waitingQueue.set('ok', {
+        ...mkTask('ok', 'userA'),
+        status: 'queued',
+        enqueuedAt: Date.now(),
+        executeFn: async () => {
+          ran = true;
+        },
+      });
+      const r = await q.startQueuedTask('ok', 'userA');
+      expect(r.success).toBe(true);
+      expect(ran).toBe(true);
+    });
+
+    it('任务不在队列 → success=false', async () => {
+      const r = await q.startQueuedTask('ghost-task', 'userA');
+      expect(r.success).toBe(false);
+      expect(r.message).toMatch(/不在等待队列/);
+    });
+  });
+
+  /**
+   * 治本（方案 A）回归（2026-09-17）。
+   * 背景：重启后恢复 queued 任务，若所有 restore executor 都因脏数据（fileKey/nodeId 为空等）
+   * 返回 false，队列此前只释放槽位、不更新任务状态 → 任务继续以 queued 残留在磁盘，
+   * 下次重启又恢复、又失败、又留孤儿。
+   * 现在队列通过 onTaskFailed 回调把失败上报给 TasksService，由其 finalize + 持久化。
+   */
+  describe('重启恢复失败 → onTaskFailed 上报', () => {
+    it('restore executor 因 fileKey/nodeId 为空返回 false → 触发 onTaskFailed（含 fileKey 提示）', async () => {
+      const failed: Array<{ sessionId: string; error: string }> = [];
+      q.onTaskFailed((sessionId, error) => failed.push({ sessionId, error }));
+
+      // 注册一个「像 phase2/vue3 那样因脏数据拒绝」的执行器
+      q.registerRestoreExecutor(async (task: any) => {
+        if (!task.fileKey || !task.nodeId) return false;
+        return true;
+      });
+
+      // fileKey/nodeId 为空的脏数据任务
+      const dirty: any = {
+        ...mkTask('dirty', 'userA'),
+        fileKey: '',
+        nodeId: '',
+        status: 'queued',
+        enqueuedAt: Date.now(),
+      };
+      await q.restoreQueuedTask(dirty);
+      // 恢复是异步调度（restoreQueuedTask 内部 await scheduleNextWaiting），等待微任务
+      await new Promise((r) => setImmediate(r));
+
+      expect(failed.length).toBe(1);
+      expect(failed[0].sessionId).toBe('dirty');
+      expect(failed[0].error).toMatch(/fileKey\/nodeId/);
+      // 槽位必须已释放，不允许幽灵占用
+      expect(q.isRunning('dirty')).toBe(false);
+    });
+
+    it('restore executor 全部未处理（无 fileKey 提示）→ 也触发 onTaskFailed', async () => {
+      const failed: Array<{ sessionId: string; error: string }> = [];
+      q.onTaskFailed((sessionId, error) => failed.push({ sessionId, error }));
+
+      q.registerRestoreExecutor(async () => false); // 谁都不接管
+
+      const orphan: any = {
+        ...mkTask('orphan', 'userA'),
+        status: 'queued',
+        enqueuedAt: Date.now(),
+      };
+      await q.restoreQueuedTask(orphan);
+      await new Promise((r) => setImmediate(r));
+
+      expect(failed.length).toBe(1);
+      expect(failed[0].sessionId).toBe('orphan');
+      expect(failed[0].error).toMatch(/恢复执行器/);
+      expect(q.isRunning('orphan')).toBe(false);
+    });
+
+    it('恢复成功的任务不触发 onTaskFailed', async () => {
+      const failed: Array<{ sessionId: string; error: string }> = [];
+      q.onTaskFailed((sessionId, error) => failed.push({ sessionId, error }));
+
+      q.registerRestoreExecutor(async (task: any) => Boolean(task.fileKey && task.nodeId));
+
+      const good: any = {
+        ...mkTask('good', 'userA'),
+        status: 'queued',
+        enqueuedAt: Date.now(),
+      };
+      await q.restoreQueuedTask(good);
+      await new Promise((r) => setImmediate(r));
+
+      expect(failed.length).toBe(0);
+    });
+  });
 });

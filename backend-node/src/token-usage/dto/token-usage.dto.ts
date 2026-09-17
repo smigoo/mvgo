@@ -16,6 +16,9 @@ export interface TokenUsageRecord {
   componentName?: string;
   fileKey?: string;
   nodeId?: string;
+  // R10 治本（2026-09-17）：让新 token 记录自带归属与端点，精确到调用级
+  userId?: string;
+  baseURL?: string;
 }
 
 /** 按任务查询的返回结构 */

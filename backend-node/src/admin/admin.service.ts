@@ -12,6 +12,19 @@ import { resolveAdminRole } from './admin-role.util';
 import { ROLES } from '../common/constants';
 import { QuotaService } from '../quota/quota.service';
 import { dataDir } from '../config/backend-root';
+import {
+  UsagePreset,
+  normalizePreset,
+  resolveWindows,
+  aggregateUsage,
+  buildUserIndex,
+  buildReport,
+  renderHtml,
+  renderMarkdown,
+  exportFilename,
+  percentileMs,
+} from './usage-export';
+import { loadSlimComponentTasks, loadSlimApiTasks } from './usage-export-io';
 
 /** 密钥类字段：admin 视图中脱敏展示，不暴露明文 */
 const SECRET_FIELDS = [
@@ -67,6 +80,18 @@ export interface UserStat {
    * （实测 `c-env-monitor` 会被误切成 `c-env`），schema 亦无品类字段。
    */
   componentByType: Record<string, number>;
+  /** 有墙钟耗时的组件任务数（≤ taskCount；进行中无 endTime 的不计入） */
+  durationSampleCount: number;
+  /** 组件任务墙钟 p50（含排队），毫秒 */
+  durationP50Ms: number | null;
+  /** 组件任务墙钟 p90（含排队），毫秒 */
+  durationP90Ms: number | null;
+  /** 原始样本，供 id/uid 两键合并后重算分位 */
+  durationMs: number[];
+  /** 用户实际使用的文本模型统计（模型名 → 使用次数） */
+  usedTextModels: Record<string, number>;
+  /** 用户实际使用的视觉模型统计（模型名 → 使用次数） */
+  usedVisionModels: Record<string, number>;
 }
 
 const EMPTY_STATS: UserStat = {
@@ -75,6 +100,12 @@ const EMPTY_STATS: UserStat = {
   apiTaskCount: 0,
   apiCount: 0,
   componentByType: {},
+  durationSampleCount: 0,
+  durationP50Ms: null,
+  durationP90Ms: null,
+  durationMs: [],
+  usedTextModels: {},
+  usedVisionModels: {},
 };
 
 /**
@@ -84,7 +115,14 @@ const EMPTY_STATS: UserStat = {
  * 用户共享同一个可变对象 → 统计互相串号。凡需要独立副本处一律走本函数。
  */
 function emptyStats(): UserStat {
-  return { ...EMPTY_STATS, componentByType: {} };
+  return { ...EMPTY_STATS, componentByType: {}, durationMs: [], usedTextModels: {}, usedVisionModels: {} };
+}
+
+function freezeUserDuration(st: UserStat): UserStat {
+  st.durationSampleCount = st.durationMs.length;
+  st.durationP50Ms = percentileMs(st.durationMs, 50);
+  st.durationP90Ms = percentileMs(st.durationMs, 90);
+  return st;
 }
 
 /**
@@ -234,10 +272,47 @@ export class AdminService {
               for (const [t, n] of Object.entries(v.componentByType || {})) {
                 merged.componentByType[t] = (merged.componentByType[t] || 0) + (n || 0);
               }
+              if (v.durationMs?.length) merged.durationMs.push(...v.durationMs);
+              // 合并实际使用模型统计
+              for (const [m, c] of Object.entries(v.usedTextModels || {})) {
+                merged.usedTextModels[m] = (merged.usedTextModels[m] || 0) + (c || 0);
+              }
+              for (const [m, c] of Object.entries(v.usedVisionModels || {})) {
+                merged.usedVisionModels[m] = (merged.usedVisionModels[m] || 0) + (c || 0);
+              }
             }
           }
-          return merged;
+          return freezeUserDuration(merged);
         })();
+        // 提取 providers 池（脱敏）和 models 模型库
+        const configProviders: any[] = [];
+        const configModels: any[] = [];
+        if (cfg) {
+          const providers = Array.isArray(cfg.providers) ? cfg.providers : [];
+          for (const p of providers) {
+            configProviders.push({
+              id: p.id,
+              name: p.name || p.id,
+              model: p.model || '',
+              baseURL: p.baseURL || '',
+              role: p.role || 'both',
+              providerType: p.providerType || 'auto',
+              apiKey: maskSecret(p.apiKey),
+            });
+          }
+          const models = Array.isArray(cfg.models) ? cfg.models : [];
+          for (const m of models) {
+            configModels.push({
+              id: m.id,
+              name: m.name || m.id,
+              model: m.model || '',
+              baseURL: m.baseURL || '',
+              role: m.role || 'both',
+              providerType: m.providerType || 'auto',
+              apiKey: maskSecret(m.apiKey),
+            });
+          }
+        }
         return {
           id,
           uid,
@@ -254,9 +329,16 @@ export class AdminService {
           taskCount: st.taskCount,
           apiTaskCount: st.apiTaskCount,
           apiCount: st.apiCount,
+          durationSampleCount: st.durationSampleCount,
+          durationP50Ms: st.durationP50Ms,
+          durationP90Ms: st.durationP90Ms,
+          usedTextModels: st.usedTextModels,
+          usedVisionModels: st.usedVisionModels,
           createdAt: u.createdAt,
           updatedAt: u.updatedAt,
           config: cfg ? { secrets, plain } : null,
+          configProviders,
+          configModels,
         };
       })
       .sort((a, b) => (a.username || '').localeCompare(b.username || ''));
@@ -270,6 +352,7 @@ export class AdminService {
    *   不含 workflow/page）；
    * - apiTaskCount / apiCount：Apifox 接口生成批数 / 接口总数（data/apifox-tasks.json 按 ownerId，
    *   apiCount 为各批 totalApiCount 之和）。
+   * - durationP50Ms / durationP90Ms：组件任务墙钟分位（stored duration 或 end-start；进行中无 end 不计）。
    * 数据源分别来自 Mongo components 与 Node data 目录两个磁盘台账（task/apifox 无 DB 副本）。
    */
   async listUserStats(): Promise<Record<string, UserStat>> {
@@ -298,16 +381,22 @@ export class AdminService {
       this.logger.warn(`[listUserStats] components 聚合失败: ${err.message}`);
     }
 
-    // 2) 组件生成任务数：data/tasks.json（仅 component 类任务）
+    // 2) 组件生成任务数 + 墙钟耗时 + 实际使用模型：流式读 tasks.json（仅 component 类任务）
     try {
-      const tPath = join(dataDir, 'tasks.json');
-      if (existsSync(tPath)) {
-        const raw = JSON.parse(readFileSync(tPath, 'utf-8'));
-        const tasks = Array.isArray(raw) ? raw : raw.tasks || [];
-        for (const t of tasks) {
-          if (!t?.userId) continue;
-          if (t.taskType === 'component' || t.taskType === undefined || t.taskType === null) {
-            ensure(String(t.userId)).taskCount += 1;
+      const tasks = await loadSlimComponentTasks();
+      for (const t of tasks) {
+        if (!t?.userId) continue;
+        if (t.taskType === 'component' || t.taskType === undefined || t.taskType === null) {
+          const st = ensure(String(t.userId));
+          st.taskCount += 1;
+          const d = Number(t.duration);
+          if (Number.isFinite(d) && d > 0) st.durationMs.push(d);
+          // 统计实际使用的模型
+          if (t.textModel) {
+            st.usedTextModels[t.textModel] = (st.usedTextModels[t.textModel] || 0) + 1;
+          }
+          if (t.visionModel) {
+            st.usedVisionModels[t.visionModel] = (st.usedVisionModels[t.visionModel] || 0) + 1;
           }
         }
       }
@@ -334,7 +423,66 @@ export class AdminService {
       this.logger.warn(`[listUserStats] apifox-tasks.json 读取失败: ${err.message}`);
     }
 
+    for (const st of Object.values(stats)) freezeUserDuration(st);
     return stats;
+  }
+
+  /**
+   * 时间窗生成日志报告（用户管理导出）。
+   * 组件次数来自 tasks.json 流式抽取；接口来自 apifox-tasks.json；部门来自 users.portalInfo。
+   */
+  async buildUsageExport(query: {
+    preset?: string;
+    from?: string;
+    to?: string;
+    dept?: string;
+    format?: string;
+  }): Promise<{ filename: string; contentType: string; body: string }> {
+    let preset: UsagePreset;
+    try {
+      preset = normalizePreset(query.preset);
+    } catch (e: any) {
+      throw new BadRequestException(e.message);
+    }
+    let windows: ReturnType<typeof resolveWindows>;
+    try {
+      windows = resolveWindows({
+        preset,
+        from: query.from,
+        to: query.to,
+      });
+    } catch (e: any) {
+      throw new BadRequestException(e.message);
+    }
+    const deptFilter = String(query.dept || '').trim() || null;
+    const format = String(query.format || 'md').toLowerCase() === 'html' ? 'html' : 'md';
+
+    const [users, componentTasks] = await Promise.all([
+      this.userModel.find().select('_id uid username portalInfo').lean().exec(),
+      loadSlimComponentTasks(),
+    ]);
+    const apiTasks = loadSlimApiTasks();
+    const agg = aggregateUsage({
+      componentTasks,
+      apiTasks,
+      userIndex: buildUserIndex(users),
+      current: windows.current,
+      previous: windows.previous,
+      deptFilter,
+    });
+    const report = buildReport({
+      preset,
+      deptFilter,
+      current: windows.current,
+      previous: windows.previous,
+      agg,
+    });
+    const body = format === 'html' ? renderHtml(report) : renderMarkdown(report);
+    return {
+      filename: exportFilename(report, format),
+      contentType: format === 'html' ? 'text/html; charset=utf-8' : 'text/markdown; charset=utf-8',
+      body,
+    };
   }
 
   /** 全量组件列表（越过 groupId/creatorId 过滤），支持搜索/分页 */

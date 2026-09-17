@@ -151,15 +151,35 @@ function summarizePipelineDiagnostics(opts = {}) {
 const PANEL_HEADER_PATTERN = /panel[-_ ]?header|标题栏|^header$/i;
 
 /**
+ * 🛡️ 归一 section/节点 的子元素列表（零硬编码、兼容多 schema）。
+ *
+ * vision 缓存 schema 实测存在两种子元素字段：flat 格式用 `body.children`、
+ * schema 格式用 `body.items`（figma-height-ratio.js 注释同口径）；此外历史产物
+ * 还出现过顶层 `children`/`items`/`elements` 与 `body.elements`。旧实现 6 处
+ * 各自只读 `body.children || body.elements || children || elements`，漏掉 `items`
+ * → countElements 恒 0 → 拆分误判（3 卡当 2 卡、图例 section 漏识）。
+ * 此处收敛为单一事实源，各消费方（计数/深度/图表/交互/归属/图例）统一调用。
+ */
+function sectionChildrenOf(sec) {
+  if (!sec || typeof sec !== 'object') return undefined;
+  const body = sec.body;
+  return (
+    (Array.isArray(body?.children) && body.children) ||
+    (Array.isArray(body?.items) && body.items) ||
+    (Array.isArray(body?.elements) && body.elements) ||
+    (Array.isArray(sec.children) && sec.children) ||
+    (Array.isArray(sec.items) && sec.items) ||
+    (Array.isArray(sec.elements) && sec.elements) ||
+    undefined
+  );
+}
+
+/**
  * 统计 section 内元素数量（递归，深度受限防止畸形数据爆栈）。
  */
 function countElements(sec, depth = 0) {
   if (depth > 4) return 0;
-  const list =
-    sec?.body?.children ||
-    sec?.body?.elements ||
-    sec?.children ||
-    sec?.elements;
+  const list = sectionChildrenOf(sec);
   if (!Array.isArray(list)) return 0;
   let total = 0;
   for (const child of list) {
@@ -174,11 +194,7 @@ function countElements(sec, depth = 0) {
  */
 function calculateDepth(sec, currentDepth = 0) {
   if (currentDepth > 10) return currentDepth;
-  const list =
-    sec?.body?.children ||
-    sec?.body?.elements ||
-    sec?.children ||
-    sec?.elements;
+  const list = sectionChildrenOf(sec);
   if (!Array.isArray(list) || list.length === 0) return currentDepth;
 
   let maxChildDepth = currentDepth;
@@ -232,11 +248,7 @@ function extractCharts(sec) {
     }
 
     // 递归子节点
-    const children =
-      node?.body?.children ||
-      node?.body?.elements ||
-      node?.children ||
-      node?.elements;
+    const children = sectionChildrenOf(node);
     if (Array.isArray(children)) {
       for (const child of children) {
         traverse(child, depth + 1);
@@ -245,11 +257,7 @@ function extractCharts(sec) {
   }
 
   // 只遍历 section 的直接子节点，不遍历 section 本身（避免 section id 被误识别）
-  const children =
-    sec?.body?.children ||
-    sec?.body?.elements ||
-    sec?.children ||
-    sec?.elements;
+  const children = sectionChildrenOf(sec);
   if (Array.isArray(children)) {
     for (const child of children) {
       traverse(child, 0);
@@ -295,11 +303,7 @@ function countInteractions(sec) {
 
     if (isInteractive) count++;
 
-    const children =
-      node?.body?.children ||
-      node?.body?.elements ||
-      node?.children ||
-      node?.elements;
+    const children = sectionChildrenOf(node);
     if (Array.isArray(children)) {
       for (const child of children) {
         traverse(child, depth + 1);
@@ -386,11 +390,7 @@ function isPanelHeader(sec) {
  * 图例特征：至少 1 个 color-block + 至少 1 个 text，且无交互元素。
  */
 function isLegendSection(sec) {
-  const children =
-    sec?.body?.children ||
-    sec?.body?.elements ||
-    sec?.children ||
-    sec?.elements;
+  const children = sectionChildrenOf(sec);
   if (!Array.isArray(children) || children.length < 2) return false;
 
   // 统计元素类型
@@ -667,11 +667,7 @@ function collectSourceNodeIds(sec) {
   if (Array.isArray(sec?.tabStructure?.panels)) {
     sec.tabStructure.panels.forEach(push);
   }
-  const children =
-    sec?.body?.children ||
-    sec?.body?.elements ||
-    sec?.children ||
-    sec?.elements;
+  const children = sectionChildrenOf(sec);
   if (Array.isArray(children)) {
     for (const c of children) {
       push(c?.figmaNode);
@@ -761,8 +757,25 @@ function buildEffectiveSection(sec, idx, ctx) {
   const gridColumns = Number(
     sec.gridColumns ?? sec.body?.gridColumns ?? NaN,
   );
-  const hasGridColumns = Number.isFinite(gridColumns) && gridColumns > 1;
-  const layoutFact = rawLayout || (hasGridColumns ? 'grid' : '');
+  // 🛡️ 通用列数抽取（2026-09-17 治本）：vision 的布局字符串可能隐含列数事实
+  //   （"horizontal-3-columns" / "grid-4" / "3-col" / "horizontal-2-items" 等），
+  //   此前只透传字符串、列数恒 NaN → LLM 自由发挥（策略类型分布三列被退成 2 列 grid）。
+  //   用正则抽 `\d+` 后接 column/col/item 的数字，零硬编码、兼容任意列数。
+  const layoutColMatch = rawLayout.match(/(\d+)\s*[-_\s]*(?:col|column|item|grid)/);
+  const layoutColumns = layoutColMatch ? Number(layoutColMatch[1]) : NaN;
+  const effectiveColumns =
+    Number.isFinite(gridColumns) && gridColumns > 1
+      ? gridColumns
+      : Number.isFinite(layoutColumns) && layoutColumns > 1
+        ? layoutColumns
+        : NaN;
+  const hasGridColumns = Number.isFinite(effectiveColumns) && effectiveColumns > 1;
+  // 布局字符串被解析出列数时，归一为 'grid'（下游据此生成 repeat(N,1fr)）；
+  // 否则保留原布局语义（horizontal/vertical/...）。
+  const layoutFact =
+    hasGridColumns && !/grid/.test(rawLayout)
+      ? 'grid'
+      : rawLayout || (hasGridColumns ? 'grid' : '');
 
   return {
     id: sec.id || `section-${idx + 1}`,
@@ -773,7 +786,7 @@ function buildEffectiveSection(sec, idx, ctx) {
     // 🛡️ 布局事实（视觉分析原值）：'grid' | 'horizontal' | 'vertical' | ...
     ...(layoutFact ? { layout: layoutFact } : {}),
     // 🛡️ 栅格列数事实：仅当视觉分析明确给出才透传（缺失时下游保持自由发挥，不硬编码默认值）
-    ...(hasGridColumns ? { gridColumns: Math.round(gridColumns) } : {}),
+    ...(hasGridColumns ? { gridColumns: Math.round(effectiveColumns) } : {}),
     collapsed,
     renderHint: collapsed ? 'v-for' : undefined,
     itemCount: collapsed ? elementCount : undefined,
@@ -784,7 +797,7 @@ function buildEffectiveSection(sec, idx, ctx) {
       ? {
           body: {
             ...(layoutFact ? { layout: layoutFact } : {}),
-            ...(hasGridColumns ? { gridColumns: Math.round(gridColumns) } : {}),
+            ...(hasGridColumns ? { gridColumns: Math.round(effectiveColumns) } : {}),
           },
         }
       : {}),
@@ -970,6 +983,37 @@ export class SubcomponentPlanner {
         enrich(derived.sections);
 
         sections = derived.sections;
+
+        // 🛡️ 纯 chrome 标题栏剥离（2026-09-17 · 环境监测实锤，零硬编码、通用）：
+        //   E1 确定性推导对任何名为 header 的 Figma 节点标 type:header，其中「纯装饰标题栏」
+        //   （VECTOR×N + 单标题文本，无业务控件/容器）是 base-panel 外壳、应由微码宿主渲染，
+        //   engineer 拿到它会在 default slot 臆造 divider/circles/gradient-bar（环境监测
+        //   c-env-monitor-header-section）。视觉路径的 stripChromeSectionsInPlace 覆盖不到
+        //   确定性推导分支，故在此对微码流程按 `chromeOnly` 标记剥离；Vue3 保留（自行渲染外壳）。
+        if (!skipPanelHeaderFilter) {
+          const stripChromeOnly = (list) =>
+            list
+              .filter((s) => {
+                if (!s || typeof s !== 'object') return true;
+                // 只剥离「type=header 且 chromeOnly」的纯装饰标题栏；
+                // 业务 header（含 tabs/stat/双文本）chromeOnly=false，绝不误伤。
+                if (s.type === 'header' && s.chromeOnly === true) return false;
+                return true;
+              })
+              .map((s) =>
+                s && typeof s === 'object' && Array.isArray(s.children)
+                  ? { ...s, children: stripChromeOnly(s.children) }
+                  : s,
+              );
+          const beforeChrome = sections.length;
+          sections = stripChromeOnly(sections);
+          if (sections.length !== beforeChrome) {
+            logger.info('E1 纯 chrome 标题栏已剥离（base-panel 宿主渲染）', {
+              removed: beforeChrome - sections.length,
+            });
+          }
+        }
+
         logger.info('E1 治本：确定性递归结构已替代 vision sections', {
           deterministic: sections.length,
           vision: rawSections.length,

@@ -68,6 +68,15 @@ export class TaskQueueService implements OnModuleInit, OnModuleDestroy {
   // 任务执行回调（由外部注入，已废弃，优先使用 per-task executeFn）
   private executeCallback: (() => Promise<void>) | null = null;
 
+  /**
+   * 终态失败回调（由 TasksService 注入）。
+   * 当队列在「无任务级失败通知」的场景下需要把一个任务标记为终态失败时
+   * （典型：服务重启后恢复 queued 任务，但所有 restore executor 均因 fileKey/nodeId 为空等脏数据返回 false，
+   * 此时只有队列能释放槽位、却无权写任务磁盘状态），通过此回调让 TasksService 统一 finalize + 持久化，
+   * 避免任务留在 `queued` 状态 → 下次重启又恢复、又失败、又留孤儿。
+   */
+  private taskFailedCallback: ((sessionId: string, error: string) => void) | null = null;
+
   // 恢复执行器列表：服务重启后，把磁盘上残留的 queued 任务重新入队时使用。
   // 由业务模块（Phase2/Vue3 controller）在 onModuleInit 注册多个执行器，
   // 每个执行器负责一种 target，返回 true 表示已处理该任务。
@@ -144,6 +153,16 @@ export class TaskQueueService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * 注册「任务终态失败」回调（由 TasksService 注入）。
+   * 队列自身只管并发槽位，不掌握任务磁盘状态；当某个失败只能由队列感知
+   * （如重启恢复时 restore executor 因脏数据放弃处理）时，通过此回调通知上层
+   * 把任务 finalize + 持久化为 failed，防止它继续以 queued 状态残留在磁盘上。
+   */
+  onTaskFailed(callback: (sessionId: string, error: string) => void): void {
+    this.taskFailedCallback = callback;
+  }
+
+  /**
    * 移除任务的执行函数注册
    */
   unregisterExecuteFn(sessionId: string): void {
@@ -202,6 +221,17 @@ export class TaskQueueService implements OnModuleInit, OnModuleDestroy {
         this.logger.warn(
           `排队任务 ${task.sessionId} 恢复执行失败：所有执行器均未处理，释放槽位避免幽灵占用`,
         );
+        // 🛡️ 治本（方案 A）：队列只管槽位、不掌握任务磁盘状态。恢复失败的任务若只释放槽位、
+        // 不更新 status，它会继续以 `queued` 残留在磁盘 tasks.json，下次重启又恢复、又失败、又留孤儿。
+        // 通过 taskFailedCallback 通知 TasksService 把任务 finalize('failed') + 持久化写回磁盘，
+        // 使其彻底终态、不再被恢复。
+        if (this.taskFailedCallback) {
+          const reason =
+            !task.fileKey || !task.nodeId
+              ? '服务重启后排队任务无法恢复：缺少 Figma 文件标识（fileKey/nodeId 为空），请重新发起生成'
+              : '服务重启后排队任务无法恢复：无匹配的恢复执行器，请重新发起生成';
+          this.taskFailedCallback(task.sessionId, reason);
+        }
         await this.markTaskFailed(task.sessionId);
       };
     }
@@ -598,7 +628,15 @@ export class TaskQueueService implements OnModuleInit, OnModuleDestroy {
       return { success: false, message: '任务缺少执行上下文，无法手动启动，请重新发起生成' };
     }
 
-    await this.scheduleSpecificWaiting(sessionId);
+    // 据实返回调度结果：scheduleSpecificWaiting 返回 triggered=false 时（执行函数缺失/抛错退回队列），
+    // 不能再谎报“已触发”，否则前端会显示成功而任务实际没跑。
+    const result = await this.scheduleSpecificWaiting(sessionId);
+    if (!result.triggered) {
+      return {
+        success: false,
+        message: result.reason || '任务未能进入执行，请重新发起生成',
+      };
+    }
     return { success: true, message: '已触发排队任务启动' };
   }
 
@@ -686,9 +724,16 @@ export class TaskQueueService implements OnModuleInit, OnModuleDestroy {
 
   // ─── 内部调度 ───────────────────────────────────
 
-  private async scheduleSpecificWaiting(sessionId: string): Promise<void> {
+  /**
+   * 手动调度指定任务：返回真实调度结果。
+   * triggered=false 表示任务并未真正进入执行（执行上下文缺失 / 执行函数抛错被退回队列），
+   * 调用方据此如实返回成败，避免「提示已触发但实际没跑」的伪成功。
+   */
+  private async scheduleSpecificWaiting(
+    sessionId: string,
+  ): Promise<{ triggered: boolean; reason?: string }> {
     const task = this.waitingQueue.get(sessionId);
-    if (!task) return;
+    if (!task) return { triggered: false, reason: '任务已不在等待队列中' };
 
     this.waitingQueue.delete(sessionId);
     this.registerRunning(sessionId, task.userId);
@@ -704,6 +749,7 @@ export class TaskQueueService implements OnModuleInit, OnModuleDestroy {
       try {
         await executor();
         this.logger.log(`等待任务 ${sessionId} 已触发执行函数`);
+        return { triggered: true };
       } catch (error) {
         this.logger.error(`调度等待任务失败: ${sessionId}`, error);
         this.releaseSlotInternal(sessionId);
@@ -711,11 +757,13 @@ export class TaskQueueService implements OnModuleInit, OnModuleDestroy {
         task.enqueuedAt = Date.now();
         this.waitingQueue.set(sessionId, task);
         await this.scheduleNextWaiting();
+        return { triggered: false, reason: '执行函数抛出异常，任务已退回队列' };
       }
     } else {
       this.logger.warn(`任务 ${sessionId} 既无 executeFn 也无全局回调，无法调度`);
       this.releaseSlotInternal(sessionId);
       this.waitingQueue.set(sessionId, task);
+      return { triggered: false, reason: '任务缺少执行上下文，无法手动启动，请重新发起生成' };
     }
   }
 

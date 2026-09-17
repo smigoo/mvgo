@@ -102,6 +102,31 @@ describe('FLEX-005 纯函数：extractStyleBlocks @import 粘连修复', () => {
     expect(hit).toBeDefined();
     expect(hit.body).toContain('131 1 0');
   });
+
+  it('// 单行注释与 /* */ 块注释不再吞进 selector（vue3 产物 FLEX-002 误报实锤）', () => {
+    const style = `// 引入根共享 less（主组件路径：../resources/styles/index.less）
+@import '../resources/styles/index.less';
+
+// 根容器（零添加铁律：预览图里没有的样式绝对禁止添加）
+.device-monitor-root {
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  gap: 24px;
+}
+/* 块注释也不应吞 selector */
+.header-title { background: linear-gradient(#1990ff, #5a7eff); }`;
+    const blocks = extractStyleBlocks(style);
+    const root = blocks.find((b: any) => b.selector === '.device-monitor-root');
+    expect(root).toBeDefined();
+    // selector 应是纯类名，不含注释文本
+    expect(root.selector).not.toContain('引入根共享');
+    expect(root.selector).not.toContain('零添加');
+    expect(root.body).toContain('flex-direction');
+    const title = blocks.find((b: any) => b.selector === '.header-title');
+    expect(title).toBeDefined();
+    expect(title.selector).not.toContain('块注释');
+  });
 });
 
 describe('FLEX-005 纯函数：parseVueTemplate 兄弟组解析', () => {

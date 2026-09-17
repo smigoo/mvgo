@@ -3,15 +3,37 @@
     <header class="mg-header">
       <div>
         <h1 class="mg-title">操作日志</h1>
-        <p class="mg-sub">站点操作审计流水，记录每位用户的请求路径、方法与耗时；支持勾选删除与定时自动清理</p>
+        <p class="mg-sub">异常请求监控台，聚焦错误、慢请求与敏感操作；支持筛选、删除与定时清理</p>
       </div>
       <a-tag color="default" class="mg-readonly-tag">可清理</a-tag>
     </header>
 
+    <!-- 异常摘要条 -->
+    <div class="diagnostic-summary-bar">
+      <div class="diagnostic-summary-item">
+        <span class="diagnostic-summary-value danger">{{ summary.errorCount }}</span>
+        <span class="diagnostic-summary-label">错误请求</span>
+      </div>
+      <div class="diagnostic-summary-item">
+        <span class="diagnostic-summary-value warning">{{ summary.slowCount }}</span>
+        <span class="diagnostic-summary-label">慢请求（>1s）</span>
+      </div>
+      <div class="diagnostic-summary-item">
+        <span class="diagnostic-summary-value info">{{ summary.sensitiveCount }}</span>
+        <span class="diagnostic-summary-label">敏感操作</span>
+      </div>
+    </div>
+
     <section class="mg-section">
       <div class="mg-section-head">
-        <h2 class="mg-section-title">操作日志</h2>
+        <h2 class="mg-section-title">异常监控</h2>
         <div class="mg-log-filters">
+          <a-select v-model:value="logFilterType" class="mg-filter-select" @change="onLogSearch">
+            <a-select-option value="all">全部异常</a-select-option>
+            <a-select-option value="error">仅错误（4xx/5xx）</a-select-option>
+            <a-select-option value="slow">仅慢请求（>1s）</a-select-option>
+            <a-select-option value="sensitive">仅敏感操作</a-select-option>
+          </a-select>
           <a-input-search
             v-model:value="logSearch"
             placeholder="按路径搜索"
@@ -56,7 +78,7 @@
         class="mg-table"
         size="middle"
         :columns="logColumns"
-        :data-source="logs"
+        :data-source="filteredLogs"
         :loading="logLoading"
         :pagination="logPagination"
         :row-selection="rowSelection"
@@ -64,11 +86,19 @@
         @change="onLogTableChange"
       >
         <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'user'">
+          <template v-if="column.key === 'category'">
+            <a-tag :color="getCategoryColor(record)">{{ getCategoryLabel(record) }}</a-tag>
+          </template>
+          <template v-else-if="column.key === 'user'">
             <span>{{ logUserName(record) }}</span>
           </template>
           <template v-else-if="column.key === 'method'">
             <a-tag :color="methodColor(record.method)">{{ record.method }}</a-tag>
+          </template>
+          <template v-else-if="column.key === 'path'">
+            <a-tooltip :title="record.path">
+              <span class="mg-path-ellipsis">{{ shortPath(record.path) }}</span>
+            </a-tooltip>
           </template>
           <template v-else-if="column.key === 'status'">
             <a-tag :color="record.statusCode < 400 ? 'green' : 'red'">{{ record.statusCode }}</a-tag>
@@ -77,7 +107,9 @@
             <span class="mg-muted">{{ formatTime(record.createdAt) }}</span>
           </template>
           <template v-else-if="column.key === 'duration'">
-            <span class="mg-muted">{{ record.durationMs }}ms</span>
+            <span :class="record.durationMs > 1000 ? 'mg-duration-slow' : 'mg-muted'">
+              {{ record.durationMs }}ms
+            </span>
           </template>
           <template v-else>
             <span>{{ record[column.key] || '-' }}</span>
@@ -97,7 +129,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { message, Modal } from 'ant-design-vue'
 import http from '@/core/http'
 
@@ -115,18 +147,70 @@ const logLoading = ref(false)
 const logError = ref('')
 const logSearch = ref('')
 const logUser = ref('')
-// 时间范围快捷筛选：all=全部 | today=今日 | week=本周(周一0点起) | month=本月(1号0点起)
 const logTimeRange = ref('all')
+const logFilterType = ref('all')
+
+// 敏感路径关键词（写操作、管理操作）
+const SENSITIVE_KEYWORDS = ['/delete', '/cleanup', '/admin', '/user', '/auth', '/config']
+
+// 异常摘要
+const summary = computed(() => {
+  const all = logs.value
+  return {
+    errorCount: all.filter(l => l.statusCode >= 400).length,
+    slowCount: all.filter(l => l.durationMs > 1000).length,
+    sensitiveCount: all.filter(l => SENSITIVE_KEYWORDS.some(k => l.path?.includes(k))).length,
+  }
+})
+
+// 异常过滤
+const filteredLogs = computed(() => {
+  return logs.value.filter((l) => {
+    if (logFilterType.value === 'error' && l.statusCode < 400) return false
+    if (logFilterType.value === 'slow' && l.durationMs <= 1000) return false
+    if (logFilterType.value === 'sensitive' && !SENSITIVE_KEYWORDS.some(k => l.path?.includes(k))) return false
+    return true
+  })
+})
 
 const logColumns = [
-  { title: '时间', key: 'createdAt', width: 150 },
-  { title: '用户', key: 'user', width: 140 },
-  { title: '方法', key: 'method', width: 80 },
+  { title: '类型', key: 'category', width: 80 },
+  { title: '时间', key: 'createdAt', width: 140 },
+  { title: '用户', key: 'user', width: 100 },
+  { title: '方法', key: 'method', width: 70 },
   { title: '路径', key: 'path', ellipsis: true },
-  { title: '状态', key: 'status', width: 80 },
-  { title: 'IP', key: 'ip', width: 130, ellipsis: true },
-  { title: '耗时', key: 'duration', width: 90 },
+  { title: '状态', key: 'status', width: 70 },
+  { title: 'IP', key: 'ip', width: 120, ellipsis: true },
+  { title: '耗时', key: 'duration', width: 80 },
 ]
+
+// 分类标签
+function getCategoryLabel(record: any): string {
+  if (record.statusCode >= 500) return '服务端错误'
+  if (record.statusCode >= 400) return '客户端错误'
+  if (record.durationMs > 1000) return '慢请求'
+  if (SENSITIVE_KEYWORDS.some(k => record.path?.includes(k))) return '敏感操作'
+  return '正常'
+}
+
+function getCategoryColor(record: any): string {
+  if (record.statusCode >= 500) return 'red'
+  if (record.statusCode >= 400) return 'orange'
+  if (record.durationMs > 1000) return 'gold'
+  if (SENSITIVE_KEYWORDS.some(k => record.path?.includes(k))) return 'purple'
+  return 'default'
+}
+
+// 路径缩写
+function shortPath(path: string): string {
+  if (!path) return '-'
+  // 去掉 /api 前缀，保留有意义的部分
+  const cleaned = path.replace(/^\/api/, '')
+  // 取最后两段
+  const parts = cleaned.split('/').filter(Boolean)
+  if (parts.length <= 2) return cleaned
+  return '/' + parts.slice(-2).join('/')
+}
 
 // ---------- 行选择 + 删除 / 清理 ----------
 const selectedRowKeys = ref<string[]>([])
@@ -195,18 +279,12 @@ function logUserName(record: any): string {
 }
 function methodColor(method: string): string {
   switch (method) {
-    case 'GET':
-      return 'blue'
-    case 'POST':
-      return 'green'
-    case 'PUT':
-      return 'orange'
-    case 'DELETE':
-      return 'red'
-    case 'PATCH':
-      return 'purple'
-    default:
-      return 'default'
+    case 'GET': return 'blue'
+    case 'POST': return 'green'
+    case 'PUT': return 'orange'
+    case 'DELETE': return 'red'
+    case 'PATCH': return 'purple'
+    default: return 'default'
   }
 }
 
@@ -233,14 +311,13 @@ async function loadLogs() {
   }
 }
 
-// 快捷时间范围的起点（epoch ms，本地时区）；all 返回 null 表示不限
 function logRangeStart(range: string): number | null {
   if (range === 'all') return null
   const now = new Date()
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()) // 今日 0 点
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   if (range === 'today') return start.getTime()
   if (range === 'week') {
-    const daysFromMonday = (now.getDay() + 6) % 7 // 周一=0 … 周日=6
+    const daysFromMonday = (now.getDay() + 6) % 7
     start.setDate(start.getDate() - daysFromMonday)
     return start.getTime()
   }
@@ -267,12 +344,15 @@ onMounted(() => {
 </script>
 
 <style lang="less" scoped>
-// 基础 .mg-* 样式已抽到全局 src/assets/styles/admin.less，此处仅保留本页特有样式
 .mg-log-filters {
   display: flex;
   gap: 10px;
   align-items: center;
   flex-wrap: wrap;
+}
+
+.mg-filter-select {
+  width: 140px;
 }
 
 .mg-time-select {
@@ -290,5 +370,61 @@ onMounted(() => {
 .mg-actions-tip {
   color: var(--mg-muted, #8c8c8c);
   font-size: 12px;
+}
+
+.mg-path-ellipsis {
+  display: inline-block;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mg-duration-slow {
+  color: #fa8c16;
+  font-weight: 600;
+}
+
+/* 异常摘要条 */
+.diagnostic-summary-bar {
+  display: flex;
+  gap: 24px;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #fff5f5 0%, #fff 100%);
+  border: 1px solid #ffccc7;
+  border-radius: 8px;
+  margin: 0 16px 16px;
+}
+
+.diagnostic-summary-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 120px;
+}
+
+.diagnostic-summary-value {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-primary, #333);
+  line-height: 1.2;
+}
+
+.diagnostic-summary-value.danger {
+  color: #ff4d4f;
+}
+
+.diagnostic-summary-value.warning {
+  color: #fa8c16;
+}
+
+.diagnostic-summary-value.info {
+  color: #722ed1;
+}
+
+.diagnostic-summary-label {
+  font-size: 12px;
+  color: var(--text-secondary, #888);
+  margin-top: 4px;
 }
 </style>

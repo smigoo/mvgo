@@ -25,7 +25,6 @@ const ROUTE_FEATURE_MAP = {
   '/generator/api-docs':          'generator.api-docs',
   '/tasks':                       'tasks',
   '/screen':                      'screen',
-  '/admin':                       'admin',
   '/mc-generator':                'mc-generator',
   '/debug':                       'debug',
   '/demo/c-mc-demo':              'demo',

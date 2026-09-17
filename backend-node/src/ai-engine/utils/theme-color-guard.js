@@ -574,7 +574,12 @@ export function detectThemeColorViolations(generatedFiles) {
 
   for (const file of files) {
     const path = String(file?.path || '');
+    // 🛡️ 2026-09-17：主题变量定义文件一律排除——微码在 themes/ 子目录，
+    // vue3 在根（resources/styles/theme-vars.less，无 themes/ 子目录）。此前只排除 /\/themes\//，
+    // vue3 的系统生成 theme-vars 被当业务样式扫描 → .theme-dark() 里 @colorTextBase:#ffffff
+    // 硬编码槽位值被误判 THEME-PRESET-OVERRIDE BLOCK（重试耗尽实锤）。
     if (/\/themes\//.test(path) || /\/config\//.test(path)) continue;
+    if (/theme-vars\.less$/.test(path)) continue;
     if (!path.endsWith('.less') && !path.endsWith('.vue')) continue;
     const styleText = extractStyleText(file);
     if (!styleText) continue;
@@ -720,4 +725,71 @@ export function detectThemeColorViolations(generatedFiles) {
     });
   }
   return issues;
+}
+
+/**
+ * camelCase → kebab-case（colorTextBase → color-text-base）。
+ */
+function camelToKebab(s) {
+  return String(s || '').replace(/[A-Z]/g, (c) => '-' + c.toLowerCase());
+}
+
+/**
+ * 🛡️ 2026-09-17 治本：业务样式 var() 直引自愈（模式 A → 模式 B）。
+ *
+ * 背景：设备监测「文字白色、设计黑色」实锤——业务样式写了
+ * `color: var(--colorTextBase, rgba(230,237,245,1))`，平台并不注入 `--colorTextBase`
+ * → 浅色 fallback 恒生效 → 文字与浅色背景融为一体看不清。THEME-VAR-NAME-MISMATCH
+ * 门禁只报 WARN 不阻断，var() 残留。
+ *
+ * 治本：把业务样式里的 `var(--xxx, fallback)` 确定性转成 Less 槽位引用：
+ *   - `--colorTextBase` → `@color-text-base`（theme-vars.less 的 .theme-light()/.theme-dark()
+ *     已定义对应槽位，模式 B 编译期差异化，深浅主题各有真值）
+ *   - 槽位不存在时 → 回退 fallback 字面量（丢弃 var，避免 undefined）
+ *
+ * 只处理 .vue <style> 与 common.less（theme-vars.less 自身透传 `@x: var(--x)` 保留）。
+ * @param {Object<string,string>} files 产物文件表（原地修改）
+ * @param {Object} [options] { logger }
+ * @returns {Array<{file:string}>} 修复清单
+ */
+export function healBusinessStyleVarRefs(files, options = {}) {
+  const logger = options.logger || { warn() {} };
+  const fixed = [];
+  if (!files || typeof files !== 'object') return fixed;
+
+  // 1. 收集 theme-vars.less 里已定义的槽位名（@xxx）
+  const slotNames = new Set();
+  for (const [p, c] of Object.entries(files)) {
+    if (typeof c !== 'string' || !/theme-vars\.less$/.test(p)) continue;
+    for (const m of c.matchAll(/@([a-zA-Z][\w-]*)\s*:/g)) slotNames.add(m[1]);
+  }
+  if (slotNames.size === 0) return fixed;
+
+  // 2. 扫描业务样式，把颜色 var 直引转成 Less 槽位
+  for (const [path, content] of Object.entries(files)) {
+    if (typeof content !== 'string') continue;
+    const isVue = path.endsWith('.vue');
+    const isLess = path.endsWith('.less') && !/theme-vars\.less$/.test(path);
+    if (!isVue && !isLess) continue;
+    const updated = content.replace(
+      // 🛡️ fallback 可能含嵌套括号（rgba(230, 237, 245, 1)），专门按颜色字面量形态匹配
+      /var\(\s*--([a-zA-Z][\w-]*)\s*,\s*((?:rgba?\([^)]*\)|#[0-9a-fA-F]{3,8}|[^)]+?))\s*\)/g,
+      (m, varName, fallback) => {
+        const kebab = camelToKebab(varName);
+        if (slotNames.has(kebab)) return '@' + kebab;
+        if (fallback !== undefined && String(fallback).trim()) return String(fallback).trim();
+        return m;
+      },
+    );
+    if (updated !== content) {
+      files[path] = updated;
+      fixed.push({ file: path });
+    }
+  }
+  if (fixed.length > 0) {
+    logger.warn('🛡️ 业务样式 var() 直引自愈为 Less 槽位（模式 A→B）', {
+      fixedCount: fixed.length,
+    });
+  }
+  return fixed;
 }

@@ -1944,6 +1944,9 @@ ${originalCode}`;
               sessionId: undefined,
               componentName: undefined,
               sourceType,
+              // R10 治本：userId + baseURL 让新 token 自带归属与端点
+              userId,
+              baseURL,
             });
           } catch {
             /* 非阻塞 */

@@ -42,6 +42,21 @@
             allow-clear
             @search="onSearch"
           />
+          <a-select v-model:value="exportPreset" class="mg-export-preset" @click.stop>
+            <a-select-option value="week">本周</a-select-option>
+            <a-select-option value="d30">近30天</a-select-option>
+            <a-select-option value="d60">近60天</a-select-option>
+            <a-select-option value="custom">自定义</a-select-option>
+          </a-select>
+          <a-range-picker
+            v-if="exportPreset === 'custom'"
+            v-model:value="exportRange"
+            class="mg-export-range"
+            value-format="YYYY-MM-DD"
+            @click.stop
+          />
+          <a-button size="small" :loading="exporting === 'md'" @click.stop="downloadUsage('md')">导出 MD</a-button>
+          <a-button size="small" :loading="exporting === 'html'" @click.stop="downloadUsage('html')">导出 HTML</a-button>
           <span class="mg-count">共 {{ filteredUsers.length }} 位用户</span>
         </div>
       </div>
@@ -99,6 +114,99 @@
       </div>
 
       <a-alert v-if="error" type="error" :message="error" show-icon class="mg-alert" />
+    </section>
+
+    <!-- 用户统计（部门汇总 + 个人明细） -->
+    <section class="mg-section">
+      <div class="mg-section-head">
+        <h2 class="mg-section-title">用户统计</h2>
+        <span class="mg-count">共 {{ userStatsList.length }} 个用户 · {{ departments.length }} 个部门</span>
+      </div>
+
+      <!-- 部门汇总 -->
+      <div v-if="departments.length > 0" class="ts-dept-summary">
+        <h4 class="ts-sub-title">部门汇总</h4>
+        <div class="ts-dept-grid">
+          <div v-for="dept in departments" :key="dept.department" class="ts-dept-card">
+            <div class="ts-dept-name">{{ dept.department }}</div>
+            <div class="ts-dept-stats">
+              <div class="ts-dept-stat">
+                <span class="ts-dept-label">用户</span>
+                <span class="ts-dept-value">{{ dept.userCount }}</span>
+              </div>
+              <div class="ts-dept-stat">
+                <span class="ts-dept-label">任务</span>
+                <span class="ts-dept-value">{{ dept.taskCount }}</span>
+              </div>
+              <div class="ts-dept-stat">
+                <span class="ts-dept-label">成功率</span>
+                <span class="ts-dept-value" :style="{ color: successColor(dept) }">
+                  {{ rateText(dept.successRate) }}
+                </span>
+              </div>
+              <div class="ts-dept-stat">
+                <span class="ts-dept-label">耗时 P50</span>
+                <span class="ts-dept-value">{{ formatDurationMs(dept.durationP50Ms) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 个人明细 -->
+      <div class="ts-user-detail">
+        <h4 class="ts-sub-title">个人明细</h4>
+        <div class="mg-table-wrap">
+          <a-table
+            class="mg-table"
+            size="small"
+            :columns="userStatsColumns"
+            :data-source="userStatsList"
+            :loading="userStatsLoading"
+            :pagination="false"
+            :scroll="{ x: 1000 }"
+            row-key="userId"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'username'">
+                <a-tooltip :title="record.userId">
+                  <span class="mg-muted">{{ record.username || '-' }}</span>
+                </a-tooltip>
+              </template>
+              <template v-else-if="column.key === 'department'">
+                <span class="mg-muted">{{ record.department || '-' }}</span>
+              </template>
+              <template v-else-if="column.key === 'successRate'">
+                <span :style="{ color: successColor(record) }">{{ rateText(record.successRate) }}</span>
+              </template>
+              <template v-else-if="column.key === 'durationP50Ms'">
+                {{ formatDurationMs(record.durationP50Ms) }}
+              </template>
+              <template v-else-if="column.key === 'lastUsedAt'">
+                {{ formatTime(record.lastUsedAt) }}
+              </template>
+              <template v-else-if="column.key === 'topModels'">
+                <div class="ts-top-models">
+                  <span v-for="(m, i) in record.topModels" :key="i" class="ts-model-tag">
+                    {{ shortModel(m.model) }}<span v-if="m.count > 1" class="ts-model-count">×{{ m.count }}</span>
+                  </span>
+                  <span v-if="!record.topModels?.length" class="mg-muted">-</span>
+                </div>
+              </template>
+              <template v-else-if="column.key === 'smallSample'">
+                <a-tag v-if="record.smallSample" color="default">样本少</a-tag>
+                <span v-else class="mg-muted">✓</span>
+              </template>
+            </template>
+          </a-table>
+        </div>
+      </div>
+
+      <p class="ts-hint">
+        <b>怎么看：</b>部门汇总显示各部门的整体使用情况；个人明细按任务数降序排列。
+        成功率 = 成功 ÷ (成功 + 失败)，排除取消。「常用模型」显示该用户使用最多的前 3 个模型及次数。
+        样本 &lt; 3 的结论仅供参考。
+      </p>
     </section>
 
     <!-- 配置详情抽屉 -->
@@ -160,6 +268,40 @@
             <span v-if="!drawerSecretTags.length" class="mg-muted">无</span>
           </div>
 
+          <div v-if="drawerProviders.length" class="ud-subtitle" style="margin-top:16px;">供应商池（providers）</div>
+          <div v-if="drawerProviders.length" class="ud-providers-list">
+            <div v-for="p in drawerProviders" :key="p.id" class="ud-provider-card">
+              <div class="ud-provider-header">
+                <span class="ud-provider-name">{{ p.name }}</span>
+                <a-tag :color="p.role === 'vision' ? 'purple' : p.role === 'text' ? 'blue' : 'cyan'" size="small">
+                  {{ p.role === 'vision' ? '视觉' : p.role === 'text' ? '文本' : '通用' }}
+                </a-tag>
+              </div>
+              <div class="ud-provider-detail">
+                <div><span class="ud-provider-label">模型:</span> {{ p.model }}</div>
+                <div><span class="ud-provider-label">类型:</span> {{ p.providerType }}</div>
+                <div><span class="ud-provider-label">Key:</span> {{ p.apiKey || '未配置' }}</div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="drawerModels.length" class="ud-subtitle" style="margin-top:16px;">模型库（models）</div>
+          <div v-if="drawerModels.length" class="ud-providers-list">
+            <div v-for="m in drawerModels" :key="m.id" class="ud-provider-card">
+              <div class="ud-provider-header">
+                <span class="ud-provider-name">{{ m.name }}</span>
+                <a-tag :color="m.role === 'vision' ? 'purple' : m.role === 'text' ? 'blue' : 'cyan'" size="small">
+                  {{ m.role === 'vision' ? '视觉' : m.role === 'text' ? '文本' : '通用' }}
+                </a-tag>
+              </div>
+              <div class="ud-provider-detail">
+                <div><span class="ud-provider-label">模型:</span> {{ m.model }}</div>
+                <div><span class="ud-provider-label">类型:</span> {{ m.providerType }}</div>
+                <div><span class="ud-provider-label">Key:</span> {{ m.apiKey || '未配置' }}</div>
+              </div>
+            </div>
+          </div>
+
           <div class="ud-subtitle" style="margin-top:16px;">其他配置</div>
           <div v-if="plainEntries.length" class="ud-plain">
             <div v-for="p in plainEntries" :key="p.key" class="ud-plain-row">
@@ -170,6 +312,27 @@
           <span v-else class="mg-muted">无</span>
         </template>
         <a-empty v-else description="该用户尚未配置 AI / API" />
+
+        <template v-if="activeUser.usedTextModels || activeUser.usedVisionModels">
+          <a-divider orientation="left">实际使用模型（任务统计）</a-divider>
+          <div v-if="drawerUsedTextModels.length" class="ud-subtitle">文本模型</div>
+          <div v-if="drawerUsedTextModels.length" class="ud-used-models">
+            <div v-for="m in drawerUsedTextModels" :key="m.model" class="ud-used-model-row">
+              <span class="ud-used-model-name">{{ m.model }}</span>
+              <span class="ud-used-model-count">{{ m.count }} 次</span>
+            </div>
+          </div>
+          <span v-if="!drawerUsedTextModels.length" class="mg-muted">无文本模型使用记录</span>
+
+          <div v-if="drawerUsedVisionModels.length" class="ud-subtitle" style="margin-top:12px;">视觉模型</div>
+          <div v-if="drawerUsedVisionModels.length" class="ud-used-models">
+            <div v-for="m in drawerUsedVisionModels" :key="m.model" class="ud-used-model-row">
+              <span class="ud-used-model-name">{{ m.model }}</span>
+              <span class="ud-used-model-count">{{ m.count }} 次</span>
+            </div>
+          </div>
+          <span v-if="!drawerUsedVisionModels.length" class="mg-muted">无视觉模型使用记录</span>
+        </template>
       </template>
     </a-drawer>
   </div>
@@ -180,6 +343,7 @@ import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { useUserStore } from '@/store/modules/user'
 import http from '@/core/http'
+import { downloadByUrl } from '@/utils/download-file'
 
 const userStore = useUserStore()
 
@@ -191,6 +355,21 @@ function formatTime(v: any): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
+/** 与 TaskDetail / usage-export 同一套墙钟展示 */
+function formatDurationMs(ms: unknown): string {
+  const n = Number(ms)
+  if (!Number.isFinite(n) || n < 0) return '—'
+  if (n < 1000) return `${Math.round(n)}ms`
+  const sec = n / 1000
+  if (sec < 60) return `${sec < 10 ? sec.toFixed(1) : Math.round(sec)}s`
+  const m = Math.floor(sec / 60)
+  const s = Math.round(sec % 60)
+  if (m < 60) return s ? `${m}m ${s}s` : `${m}m`
+  const h = Math.floor(m / 60)
+  const rm = m % 60
+  return rm ? `${h}h ${rm}m` : `${h}h`
+}
+
 // ---------- 用户列表 ----------
 const users = ref<any[]>([])
 const loading = ref(false)
@@ -200,6 +379,9 @@ const deptFilter = ref('')
 // 使用状态筛选（多选，非互斥）：[]=全部 | configured=已配置 | hasComponent=已生成组件 | hasApi=已生成接口
 // 满足任一选中状态即命中（并集）
 const usageFilter = ref<string[]>([])
+const exportPreset = ref<'week' | 'd30' | 'd60' | 'custom'>('week')
+const exportRange = ref<[string, string] | undefined>()
+const exporting = ref<'md' | 'html' | ''>('')
 
 // 部门下拉选项（从当前用户数据动态提取去重，按字母排序）
 const departmentOptions = computed(() => {
@@ -340,6 +522,32 @@ const plainEntries = computed(() => {
     .map((k) => ({ key: k, label: PLAIN_LABELS[k], value: plain[k] }))
 })
 
+/** 供应商池（providers）—— 与 config 同级，不在 config 内部 */
+const drawerProviders = computed(() => {
+  return activeUser.value?.configProviders || []
+})
+
+/** 模型库（models）—— 与 config 同级 */
+const drawerModels = computed(() => {
+  return activeUser.value?.configModels || []
+})
+
+/** 实际使用的文本模型统计（按使用次数降序） */
+const drawerUsedTextModels = computed(() => {
+  const map = activeUser.value?.usedTextModels || {}
+  return Object.entries(map)
+    .map(([model, count]) => ({ model, count: count as number }))
+    .sort((a, b) => b.count - a.count)
+})
+
+/** 实际使用的视觉模型统计（按使用次数降序） */
+const drawerUsedVisionModels = computed(() => {
+  const map = activeUser.value?.usedVisionModels || {}
+  return Object.entries(map)
+    .map(([model, count]) => ({ model, count: count as number }))
+    .sort((a, b) => b.count - a.count)
+})
+
 function openDrawer(record: any) {
   activeUser.value = record
   drawerVisible.value = true
@@ -404,8 +612,83 @@ async function handleDeleteUser(record: any) {
   }
 }
 
+async function downloadUsage(format: 'md' | 'html') {
+  if (exporting.value) return
+  if (exportPreset.value === 'custom' && (!exportRange.value?.[0] || !exportRange.value?.[1])) {
+    message.warning('自定义时间请先选择起止日期')
+    return
+  }
+  exporting.value = format
+  const params = new URLSearchParams()
+  params.set('preset', exportPreset.value)
+  params.set('format', format)
+  if (deptFilter.value) params.set('dept', deptFilter.value)
+  if (exportPreset.value === 'custom' && exportRange.value) {
+    params.set('from', exportRange.value[0])
+    params.set('to', exportRange.value[1])
+  }
+  try {
+    await downloadByUrl(`/api/admin/usage-export?${params.toString()}`, `usage-export.${format}`)
+  } finally {
+    exporting.value = ''
+  }
+}
+
+// ---------- 用户统计 ----------
+const userStatsList = ref<any[]>([])
+const departments = ref<any[]>([])
+const userStatsLoading = ref(false)
+
+const userStatsColumns = [
+  { title: '用户', key: 'username', width: 120 },
+  { title: '部门', key: 'department', width: 120 },
+  { title: '任务数', key: 'taskCount', width: 80, sorter: (a: any, b: any) => a.taskCount - b.taskCount },
+  { title: '成功', key: 'completed', width: 60 },
+  { title: '失败', key: 'failed', width: 60 },
+  { title: '成功率', key: 'successRate', width: 80, sorter: (a: any, b: any) => (a.successRate || 0) - (b.successRate || 0) },
+  { title: '耗时 P50', key: 'durationP50Ms', width: 90, sorter: (a: any, b: any) => (a.durationP50Ms || 0) - (b.durationP50Ms || 0) },
+  { title: '最近使用', key: 'lastUsedAt', width: 130, sorter: (a: any, b: any) => (a.lastUsedAt || 0) - (b.lastUsedAt || 0) },
+  { title: '常用模型', key: 'topModels', width: 200 },
+  { title: '样本', key: 'smallSample', width: 70 },
+]
+
+function rateText(r: number | null): string {
+  if (r === null || r === undefined) return '-'
+  return `${(r * 100).toFixed(0)}%`
+}
+
+function successColor(record: any): string {
+  const r = record?.successRate
+  if (r === null || r === undefined) return 'inherit'
+  if (r >= 0.8) return '#52c41a'
+  if (r >= 0.5) return '#faad14'
+  return '#ff4d4f'
+}
+
+function shortModel(name: string): string {
+  if (!name) return '-'
+  // 取最后一段（如 qwen-plus → qwen-plus；gpt-4o → gpt-4o）
+  const parts = name.split('/')
+  return parts[parts.length - 1].slice(0, 16)
+}
+
+async function loadUserStats() {
+  userStatsLoading.value = true
+  try {
+    const data = await http.get('/api/admin/user-stats')
+    userStatsList.value = data.data.list || []
+    departments.value = data.data.departments || []
+  } catch (e: any) {
+    // 静默失败：用户统计非核心功能，不阻塞用户管理主页面
+    console.warn('加载用户统计失败', e.message)
+  } finally {
+    userStatsLoading.value = false
+  }
+}
+
 onMounted(() => {
   loadUsers()
+  loadUserStats()
 })
 </script>
 
@@ -425,6 +708,14 @@ onMounted(() => {
 
 .mg-usage-select {
   width: 210px;
+}
+
+.mg-export-preset {
+  width: 110px;
+}
+
+.mg-export-range {
+  width: 230px;
 }
 
 .mg-table-wrap {
@@ -485,6 +776,16 @@ onMounted(() => {
   grid-template-columns: repeat(2, 1fr);
   gap: 8px;
   margin-top: 8px;
+}
+
+.ud-types-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.ud-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--text-secondary);
 }
 
 .ud-stat-num {
@@ -558,5 +859,163 @@ onMounted(() => {
 .ud-plain-val {
   color: var(--text-primary);
   word-break: break-all;
+}
+
+// 供应商池 / 模型库卡片列表
+.ud-providers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ud-provider-card {
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+}
+
+.ud-provider-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.ud-provider-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.ud-provider-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.ud-provider-label {
+  color: var(--text-secondary);
+  margin-right: 4px;
+}
+
+// 实际使用模型统计
+.ud-used-models {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ud-used-model-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.ud-used-model-name {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.ud-used-model-count {
+  color: var(--brand, #1677ff);
+  font-weight: 600;
+  font-size: 12px;
+}
+
+// 用户统计区域
+.ts-dept-summary {
+  margin-bottom: 24px;
+}
+
+.ts-sub-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #333);
+  margin: 0 0 12px;
+}
+
+.ts-dept-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.ts-dept-card {
+  padding: 12px;
+  background: var(--bg-elevated, #fafafa);
+  border: 1px solid var(--border-color, #eee);
+  border-radius: 8px;
+}
+
+.ts-dept-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #333);
+  margin-bottom: 8px;
+}
+
+.ts-dept-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.ts-dept-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ts-dept-label {
+  font-size: 11px;
+  color: var(--text-secondary, #888);
+}
+
+.ts-dept-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #333);
+}
+
+.ts-user-detail {
+  margin-top: 24px;
+}
+
+.ts-top-models {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.ts-model-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  font-size: 11px;
+  background: var(--bg-elevated, #fafafa);
+  border: 1px solid var(--border-color, #eee);
+  border-radius: 4px;
+  color: var(--text-primary, #333);
+}
+
+.ts-model-count {
+  margin-left: 2px;
+  color: var(--text-secondary, #888);
+  font-size: 10px;
+}
+
+.ts-hint {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--text-secondary, #888);
+  line-height: 1.7;
 }
 </style>

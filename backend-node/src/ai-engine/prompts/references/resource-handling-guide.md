@@ -153,6 +153,24 @@ const headerStyle = computed(() => ({
 <img :src="bgHeader" class="card-bg">
 ```
 
+**❌ 错误：生成独立的「背景 div 子元素」（2026-09-17 治本）**
+```vue
+<!-- 禁止！bg 是父元素的 CSS background，不是独立的空 div 子元素 -->
+<div class="card">
+  <div class="card-bg" :style="{ backgroundImage: `url(${bgHeader})` }"></div>  <!-- ❌ 独立背景元素 -->
+  <div class="card-content">...</div>
+</div>
+```
+
+**✅ 正确：bg 直接挂到内容所在的父容器（bg = 父元素 background）**
+```vue
+<div class="card" :style="{ backgroundImage: `url(${bgHeader})`, backgroundSize: '100% 100%' }">
+  <div class="card-content">...</div>
+</div>
+```
+
+**铁律**：`bg*` 资源是「父级元素的 background-image CSS」，必须作为**内容所在容器自身**的 `:style`/`background` 落地，**禁止**生成 `<div class="xxx-bg">` / `<div class="xxx-bg-active">` 这类独立背景子元素（它们会让背景与内容错位、或产生多余的空 div）。同理，`bg` 也不能挂到 icon/img 子元素上——必须挂到承载整个卡片的容器。
+
 ### 图标使用规范
 
 **✅ 正确：使用 img 标签**

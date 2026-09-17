@@ -7,6 +7,8 @@ import {
   Query,
   Body,
   UseGuards,
+  Header,
+  StreamableFile,
 } from '@nestjs/common';
 import { SessionGuard } from '../auth/session.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -64,5 +66,23 @@ export class AdminController {
     await this.adminService.assertAdmin(userId);
     const data = await this.adminService.listComponents(query);
     return { success: true, ...data };
+  }
+
+  @Get('usage-export')
+  async usageExport(
+    @CurrentUser() userId: string,
+    @Query('preset') preset?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('dept') dept?: string,
+    @Query('format') format?: string,
+  ) {
+    await this.adminService.assertAdmin(userId);
+    const file = await this.adminService.buildUsageExport({ preset, from, to, dept, format });
+    const encoded = encodeURIComponent(file.filename);
+    return new StreamableFile(Buffer.from(file.body, 'utf-8'), {
+      type: file.contentType,
+      disposition: `attachment; filename="${file.filename}"; filename*=UTF-8''${encoded}`,
+    });
   }
 }

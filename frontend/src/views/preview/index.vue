@@ -166,6 +166,7 @@ import {
 import { BINARY_EXTS as BINARY_EXTS_SHARED, extOf } from '@/utils/sfc-loader-binary'
 import { buildSnapshotFileUrl, resolvePreviewDescriptor } from '@/utils/preview-resolver'
 import http from '@/core/http'
+import appConfig from '@/config'
 import { getComponentBySessionId } from '@/api/component'
 
 const route = useRoute()
@@ -570,6 +571,21 @@ async function loadAspectRatio() {
 }
 
 const isEmbedded = computed(() => !!window.parent && window.parent !== window)
+
+// 🛡️ P-05（2026-09-17 · 窄组件预览文字极小实锤）：独立窗口态锁定 rem 基准。
+//   rem.js 全局按 1920 设计稿缩放（rem = vW × 16/1920），420px 视口 → html font-size 3.5px
+//   → 微码字号全 rem（fontSize=0.75rem）渲染仅 2.6px。嵌入态有父窗口字号兜底（rem.js:16），
+//   独立预览窗口（质量截图 / 新标签打开）无父窗口 → 兜底失效。
+//   治本：独立窗口态把 html font-size 锁定为 pxtorem.baseSize（真实像素基准），
+//   组件按 Figma 原始尺寸 1:1 渲染——预览即所见。嵌入态不动（尊重宿主缩放）。
+if (!isEmbedded.value) {
+  const baseSize = appConfig?.pxtorem?.baseSize || 16
+  document.documentElement.style.fontSize = baseSize + 'px'
+  // 阻断 rem.js 的 resize 重算（其计算值小于基准时会被锁值覆盖回来）
+  window.addEventListener('resize', () => {
+    document.documentElement.style.fontSize = baseSize + 'px'
+  })
+}
 
 // 🎨 全局面板类型（用于实时切换预览）
 const globalPanelType = ref('')

@@ -694,3 +694,495 @@ export function rewriteFakeThresholdSeries(code) {
 
   return result;
 }
+
+/**
+ * 🛡️ T1' header 装饰元素确定性剥离（2026-09-17 · mc-1789634453886-e0cdf905 实锤）
+ *
+ * 现象：微码 header 插槽组件（HeaderSection.vue，挂在 <template #header-right>）里
+ *   LLM 生成 Figma 设计中不存在的装饰元素：divider（分隔线）、decorator/dot/
+ *   gradient-line（装饰圆点/渐变线）、spacer（占位）、以及脑补的内联 <svg> 图标
+ *   （c-device-monitor-header-icon）。prompt 铁律「禁止臆造装饰元素」未能约束。
+ *
+ * 根因：Figma header 子树里确实有装饰 VECTOR（2:8420/8421/8425），LLM「忠实还原」
+ *   了它们；但微码契约是「标题栏装饰由 base-panel 外壳渲染，组件只输出业务控件」。
+ *
+ * 治本（确定性后处理，不依赖 LLM 遵守 prompt）：
+ *   对 header 插槽组件的模板做白名单剥离——只保留：
+ *     ① 含业务文本的元素（Figma header 子树 TEXT 真实文本：统计标签/数值等）
+ *     ② 资源 <img>（真实下载的 icon/bg 资源）
+ *     ③ 布局容器（.xxx-stats / .xxx-stat-group 等包裹业务内容的容器）
+ *   剥离：
+ *     ① 纯装饰类名元素（divider/decorator/dot/gradient-line/spacer/deco 类）
+ *     ② 脑补的内联 <svg>（资源未映射时 LLM 手画的图标）
+ *
+ * 保守原则（宁可漏删、不可误删）：
+ *   - 只对「header 插槽组件」生效（调用方传入 isHeaderSlotFile 标记）；
+ *   - 找不到业务文本清单时（Figma header 缺失），只剥装饰类名 + 内联 svg，
+ *     绝不动其他元素；
+ *   - 剥离后若模板为空（连一个业务元素都没有），整体不剥离（防误删全空）。
+ *
+ * @param {string} code .vue 文件内容
+ * @param {{ headerTexts?: string[], isHeaderSlotFile?: boolean }} options
+ * @returns {string} 处理后的 code
+ */
+export function stripHeaderChromeDecorations(code, options = {}) {
+  if (!code || typeof code !== 'string') return code;
+  if (!options.isHeaderSlotFile) return code;
+
+  const DECOR_CLASS_RE =
+    /(divider|decorator|deco|gradient-line|gradient-bar|-gradient\b|-dot\b|spacer|ornament)/i;
+  const headerTextSet = new Set(
+    (options.headerTexts || [])
+      .map((t) => (t == null ? '' : String(t).trim()))
+      .filter(Boolean),
+  );
+  let removed = 0;
+
+  // ── 0) 定位 <template> 段（script/style 里的字符串不做 DOM 剥离）──
+  const tplMatch = code.match(/<template>[\s\S]*<\/template>/);
+  const tplStart = tplMatch ? code.indexOf(tplMatch[0]) : -1;
+  if (tplStart === -1) return code; // 无模板段（异常兜底）：原样返回
+  const tplEnd = tplStart + tplMatch[0].length;
+  const tpl = tplMatch[0];
+
+  // ── 1) 栈式标签树解析（自闭合 + 配对标签，容忍游离闭合标签）──
+  const svgOpenRe = /^<svg\b[^>]*>/i;
+  const tokens = [];
+  let pos = 0;
+  const pushText = (text) => {
+    if (text) tokens.push({ kind: 'text', raw: text });
+  };
+  while (pos < tpl.length) {
+    const lt = tpl.indexOf('<', pos);
+    if (lt === -1) {
+      pushText(tpl.slice(pos));
+      break;
+    }
+    pushText(tpl.slice(pos, lt));
+    if (tpl.startsWith('<!--', lt)) {
+      const end = tpl.indexOf('-->', lt);
+      const stop = end === -1 ? tpl.length : end + 3;
+      tokens.push({ kind: 'comment', raw: tpl.slice(lt, stop) });
+      pos = stop;
+      continue;
+    }
+    if (svgOpenRe.test(tpl.slice(lt))) {
+      const close = tpl.toLowerCase().indexOf('</svg>', lt);
+      const stop = close === -1 ? tpl.length : close + 6;
+      tokens.push({ kind: 'svgblock', raw: tpl.slice(lt, stop) });
+      pos = stop;
+      continue;
+    }
+    const tagM = tpl.slice(lt).match(/^<(\/?[a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>"'])*)>/);
+    if (!tagM) {
+      pushText(tpl.slice(lt, lt + 1));
+      pos = lt + 1;
+      continue;
+    }
+    const tagRaw = tagM[0];
+    let tagName = tagM[1];
+    let closing = false;
+    if (tagName[0] === '/') {
+      closing = true;
+      tagName = tagName.slice(1);
+    }
+    const attrs = tagM[2] || '';
+    if (/\/>$/.test(tagRaw)) {
+      tokens.push({ kind: 'selfclose', tag: tagName, attrs, raw: tagRaw });
+    } else if (closing) {
+      tokens.push({ kind: 'close', tag: tagName, raw: tagRaw });
+    } else {
+      tokens.push({ kind: 'open', tag: tagName, attrs, raw: tagRaw });
+    }
+    pos = lt + tagRaw.length;
+  }
+
+  // ── 2) 建树（open 压栈；close 弹到匹配项；游离 close 保留为文本级节点）──
+  const root = { kind: 'root', tag: null, children: [] };
+  const stack = [root];
+  for (const tk of tokens) {
+    const top = stack[stack.length - 1];
+    if (tk.kind === 'open') {
+      const node = {
+        kind: 'elem', tag: tk.tag, attrs: tk.attrs, raw: tk.raw,
+        children: [], dead: false,
+      };
+      top.children.push(node);
+      stack.push(node);
+    } else if (tk.kind === 'close') {
+      let idx = -1;
+      for (let i = stack.length - 1; i >= 1; i -= 1) {
+        if (stack[i].tag === tk.tag) { idx = i; break; }
+      }
+      if (idx === -1) {
+        top.children.push({ kind: 'stray', raw: tk.raw });
+      } else {
+        stack[idx].closeRaw = tk.raw;
+        stack.length = idx; // 弹栈到匹配层（中间未闭合层用默认 </tag> 补齐）
+      }
+    } else {
+      top.children.push(tk);
+    }
+  }
+
+  const classOf = (node) => {
+    const m = (node.attrs || '').match(/\sclass="([^"]*)"/);
+    return m ? m[1] : '';
+  };
+  const isDecor = (node) =>
+    node.kind === 'elem' && DECOR_CLASS_RE.test(classOf(node));
+  // 节点子树是否含业务文本（header 真实文本）
+  const hasBusiness = (node) => {
+    if (node.kind === 'text') {
+      return headerTextSet.size > 0
+        && [...headerTextSet].some((t) => node.raw.includes(t));
+    }
+    if (node.kind === 'elem' || node.kind === 'root') {
+      return (node.children || []).some((c) => hasBusiness(c));
+    }
+    return false;
+  };
+  const hasImg = (node) => {
+    if (node.kind === 'selfclose') return node.tag === 'img';
+    if (node.kind === 'elem' || node.kind === 'root') {
+      return (node.children || []).some((c) => hasImg(c));
+    }
+    return false;
+  };
+  // 🛡️ P-04A 白名单结构特征（2026-09-17 · 020992ba 实锤「类名打地鼠」）：
+  //   装饰元素无论叫什么名（status-dot → header-dot → header-indicator → …），
+  //   结构上永远是「无业务锚点的空 div」。把删除判据从「类名像装饰」反转为
+  //   「子树无任何业务锚点」——业务锚点 = 真实业务文本（Figma header 真值）、
+  //   资源 <img>、动态插值 {{ }}、指令绑定（v-/:/@）。装饰 div 不含这些。
+  //   与 DECOR_CLASS_RE（类名快路径）互补：类名命中直接剥（现状），
+  //   类名不命中但子树全空 → 也剥（本新增）。改名永远逃不掉。
+  const hasBusinessAnchor = (node) => {
+    if (node.kind === 'text') {
+      const raw = node.raw || '';
+      // 动态插值是业务锚点（{{ item.label }} 等）
+      if (/\{\{[\s\S]*?\}\}/.test(raw)) return true;
+      // Figma header 真实文本是业务锚点
+      return headerTextSet.size > 0
+        && [...headerTextSet].some((t) => raw.includes(t));
+    }
+    if (node.kind === 'selfclose') {
+      // img 是否装饰由尺寸决定（isHollow 的 isDecorImg 职责），此处不锚定；
+      // 非 img 自闭合元素带指令/绑定（如 <Comp v-if>）是业务锚点
+      if (node.tag === 'img') return false;
+      return /(\s(v-|:|@)[\w:-]+=|v-html)/.test(node.attrs || '');
+    }
+    if (node.kind === 'elem') {
+      // 带指令/绑定的容器是业务锚点
+      if (/(\s(v-|:|@)[\w:-]+=|v-html)/.test(node.attrs || '')) return true;
+      return (node.children || []).some((c) => hasBusinessAnchor(c));
+    }
+    if (node.kind === 'root') {
+      return (node.children || []).some((c) => hasBusinessAnchor(c));
+    }
+    return false;
+  };
+  // 空子树判定：全部子节点均为空白文本/注释（P-04A 结构路径专用）。
+  //   img 特判：inline style 含 ≤24px 装饰尺寸（width:8px/16px 等）→ 视为装饰图，
+  //   不阻止父容器判 hollow（装饰点 2:8421=8×8、功能图标 2:8856=16×16 实锤）；
+  //   大尺寸 img 保守视为业务图（阻止剥离）。
+  const DECOR_IMG_MAX_PX = 24;
+  const isDecorImg = (node) => {
+    if (node.kind !== 'selfclose' || node.tag !== 'img') return false;
+    const styleM = (node.attrs || '').match(/\sstyle="([^"]*)"/);
+    const w = styleM ? Number((styleM[1].match(/width:\s*(\d+(?:\.\d+)?)px/) || [])[1]) : NaN;
+    const h = styleM ? Number((styleM[1].match(/height:\s*(\d+(?:\.\d+)?)px/) || [])[1]) : NaN;
+    if (!Number.isFinite(w) && !Number.isFinite(h)) return false; // 无尺寸信息 → 保守不判装饰
+    return (Number.isFinite(w) ? w : h) <= DECOR_IMG_MAX_PX;
+  };
+  const isHollow = (node) => {
+    if (node.dead) return true; // 自底向上：子先标 dead 后父判定，dead 子视为已空
+    if (node.kind === 'text') return !(node.raw || '').trim();
+    if (node.kind === 'comment') return true;
+    if (node.kind === 'selfclose') return isDecorImg(node);
+    if (node.kind === 'elem') return (node.children || []).every(isHollow);
+    return false;
+  };
+
+  // ── 3) 标记删除（自底向上，避免先删子导致父判定失真）──
+  //   两条删除路径：
+  //   ① 类名快路径（DECOR_CLASS_RE）——类名像装饰且无业务锚点
+  //   ② P-04A 结构路径——类名任意，但子树完全无业务锚点（纯空壳装饰 div）
+  //     仅当 header 真值文本清单可用时启用（防 Figma 缺失时误删一切）。
+  const markDecor = (node) => {
+    for (const c of node.children || []) markDecor(c);
+    // P-04A 结构路径（自闭合分支）：自闭合空 div（<div class="x" />）在标签树里
+    // 是 selfclose 节点，无子树可言——无绑定/非 img 即空壳装饰。
+    if (node.kind === 'selfclose') {
+      if (node.tag === 'img' || hasBusinessAnchor(node)) return;
+      if (headerTextSet.size > 0) {
+        node.dead = true;
+        removed += 1;
+      }
+      return;
+    }
+    if (node.kind !== 'elem') return;
+    // 保护：含业务文本/插值/指令绑定不剥（防误删）——两条路径共用
+    if (hasBusinessAnchor(node)) return;
+    if (isDecor(node)) {
+      node.dead = true;
+      removed += 1;
+      return;
+    }
+    // P-04A 结构路径：无类名装饰特征，但子树全空（无业务文本/无大图/无绑定）
+    // 仅当 header 真值文本清单可用时启用（防 Figma 缺失时误删一切）。
+    if (headerTextSet.size > 0 && isHollow(node)) {
+      node.dead = true;
+      removed += 1;
+    }
+  };
+  markDecor(root);
+
+  // ── 4) 剥脑补内联 svg：模板无 <img> 时全剥；有 <img> 时保留（保守）──
+  if (!hasImg(root)) {
+    const isHollowChild = (c) =>
+      c.dead ||
+      (c.kind === 'text' && !c.raw.trim()) ||
+      (c.kind === 'comment' && c.dead);
+    const stripSvgs = (node) => {
+      for (const c of node.children || []) stripSvgs(c);
+      if (node.kind === 'svgblock') { node.dead = true; removed += 1; }
+      // svg 剥掉后空壳 icon wrapper：<div class="xxx-icon">子全 dead/空白</div> 一并标记
+      if (node.kind === 'elem' && !node.dead &&
+          /-icon\b/i.test(classOf(node)) &&
+          node.children.length > 0 &&
+          node.children.every(isHollowChild)) {
+        node.dead = true;
+        removed += 1;
+      }
+    };
+    stripSvgs(root);
+  }
+
+  // ── 5) 序列化（dead 节点整棵子树丢弃）──
+  const serialize = (node) => {
+    let out = '';
+    for (const c of node.children || []) {
+      if (c.dead) continue;
+      switch (c.kind) {
+        case 'elem':
+          out += c.raw + serialize(c) + (c.closeRaw || '</' + c.tag + '>');
+          break;
+        case 'text':
+        case 'comment':
+        case 'stray':
+        case 'selfclose':
+        case 'svgblock':
+          out += c.raw;
+          break;
+        default:
+          break;
+      }
+    }
+    return out;
+  };
+  let newTpl = serialize(root);
+
+  // 剥离后清理悬挂空行（删除节点留下的连续空行，压缩为最多一空行）
+  newTpl = newTpl.replace(/\n[ \t]*\n[ \t]*\n/g, '\n\n');
+
+  // 防误删全空：若模板内已无任何业务内容，回退不剥离
+  const anyBizLeft = /<img\b/i.test(newTpl)
+    || (headerTextSet.size > 0 && [...headerTextSet].some((t) => newTpl.includes(t)))
+    || /[\u4e00-\u9fa5]/.test(newTpl.replace(/<!--[\s\S]*?-->/g, ''));
+  if (!anyBizLeft && removed > 0) {
+    return code;
+  }
+
+  // ── 6) 连带清理已剥离类名的 <style> 规则（模板中已不存在该类 → 死 CSS）──
+  const tplClasses = new Set();
+  for (const m of newTpl.matchAll(/class="([^"]*)"/g)) {
+    for (const c of m[1].split(/\s+/)) if (c) tplClasses.add(c);
+  }
+  const allClasses = new Set();
+  for (const m of code.matchAll(/class="([^"]*)"/g)) {
+    for (const c of m[1].split(/\s+/)) if (c) allClasses.add(c);
+  }
+  const deadClasses = [...allClasses].filter(
+    (c) => !tplClasses.has(c) && (DECOR_CLASS_RE.test(c) || /-icon\b/i.test(c)),
+  );
+  let rest = code.slice(tplEnd);
+  if (deadClasses.length > 0) {
+    const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const classAlt = deadClasses.map((c) => '\\.' + esc(c) + '\\b').join('|');
+    const cssRuleRe = new RegExp('(^|\\n)[^{}@]*?(' + classAlt + ')[^{}]*?\\{[^}]*\\}', 'g');
+    rest = rest.replace(cssRuleRe, (m) => (m.startsWith('\n') ? '\n' : ''));
+  }
+
+  const out = code.slice(0, tplStart) + newTpl + rest;
+  if (removed > 0) {
+    console.info('[T1\' header 装饰剥离] 已剥离 ' + removed + ' 个装饰元素');
+  }
+  return out;
+}
+
+/**
+ * 🛡️ P-04B header 插槽根容器方向确定化（2026-09-17 · c-device-monitor-cd3625c0 实锤）
+ *
+ * 现象：HeaderSection.vue 根类 `.c-xxx-header { width:100%; gap:8px; flex:1 1 0 }`
+ *   **无 display:flex** → block 流，icon img / stats 容器全部独占一行竖排；
+ *   gap 完全失效。而 Figma 真值里 header 统计区全是 HORIZONTAL Auto Layout。
+ *
+ * 根因：容器方向事实（rootLayoutFacts）只覆盖 body 侧 index.vue 装配；
+ *   header 插槽子组件内部布局无确定性来源，LLM 漏写 display:flex 无门禁兜底。
+ *
+ * 治本（确定性后处理）：对 header 插槽组件的**模板根元素**内联
+ *   `display:flex;flex-direction:row;align-items:center;`
+ *   —— 与 slot-con 确定化（P5）同思路：布局骨架不依赖 LLM 样式。
+ *   仅当根元素**未自带** display 声明时注入（已有布局声明则尊重，防双写冲突）。
+ *   同步在其 <style>/<common.less> 的同名根类规则上补齐（若类规则存在且缺 display）。
+ *
+ * 判定依据（无硬编码）：调用方传 isHeaderSlotFile（header 插槽文件）即注入 row——
+ *   header-right 槽在微码契约里语义就是「标题栏右侧横向控件行」，方向由契约决定，
+ *   不按组件名特判。
+ *
+ * @param {string} code .vue 文件内容
+ * @param {{ isHeaderSlotFile?: boolean }} options
+ * @returns {string} 处理后的 code
+ */
+export function ensureHeaderSlotRowLayout(code, options = {}) {
+  if (!code || typeof code !== 'string') return code;
+  if (!options.isHeaderSlotFile) return code;
+
+  const ROW_STYLE = 'display:flex;flex-direction:row;align-items:center;';
+
+  // ── 1) 定位模板第一个开标签（根元素）──
+  const tplMatch = code.match(/<template>\s*<([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>"'])*)>/);
+  if (!tplMatch) return code;
+  const rootTag = tplMatch[1];
+  const rootAttrs = tplMatch[2] || '';
+  const rootOpenStart = code.indexOf(tplMatch[0]);
+
+  // ── 2) 根元素已有 display 声明（inline style）→ 尊重，不注入 ──
+  const styleM = rootAttrs.match(/\sstyle="([^"]*)"/);
+  if (styleM && /display\s*:/.test(styleM[1])) return code;
+
+  // ── 3) 注入 inline style 到根元素开标签 ──
+  //   已有 style 属性 → 合并进去（row 声明追加在尾部，后者优先级高）；
+  //   无 style → 在开标签末尾追加新属性（保持既有属性顺序）。
+  let out;
+  const rootOpenEnd = rootOpenStart + tplMatch[0].length; // 含 '>'
+  if (styleM) {
+    const merged = rootAttrs.replace(
+      /\sstyle="([^"]*)"/,
+      (m, s) => ` style="${s}${s.endsWith(';') ? '' : ';'}${ROW_STYLE}"`,
+    );
+    const newOpen = tplMatch[0].replace(rootAttrs, merged);
+    out = code.slice(0, rootOpenStart) + newOpen + code.slice(rootOpenEnd);
+  } else {
+    const insertAt = rootOpenEnd - 1; // '>' 前
+    out = code.slice(0, insertAt)
+      + ` style="${ROW_STYLE}"`
+      + code.slice(insertAt);
+  }
+
+  console.info('[P-04B header 根容器方向确定化] 已注入 row 布局到根元素 <' + rootTag + '>');
+  return out;
+}
+
+/**
+ * 🛡️ P-01 背景空壳节点剥离 + 声明上移（2026-09-17 · a4f899c1 实锤系统性复发）
+ *
+ * 现象：LLM 对「有背景的元素」系统性拆成 宿主 > 背景空壳 div > 内容 三层——
+ *   `<div class="c-x-card-bg"></div>`（样式仅 background 系、border-radius、opacity 等纯视觉声明）。
+ *   用户铁律：背景必须挂在承载内容的元素上，禁止 -bg 空壳 DOM。跨组件类型复发
+ *   （ChartSection/ContentSection/TabsSection/ContentDefault/card 全中），prompt 约束无效。
+ *
+ * 治本（确定性后处理，按结构特征识别，不按组件名）：
+ *   匹配「class 以 -bg/background 词尾 + 空元素（无子无文本无绑定）」的 div：
+ *   ① 收集其 CSS 规则中的**纯背景类声明**（background 系、border-radius、box-shadow、opacity）
+ *   ② 上移合并到其**父元素**（父 class 规则追加，父已有同名属性则丢弃——父优先）
+ *   ③ 删除空壳 div 与其死 CSS 规则
+ *
+ * 保守原则：
+ *   - 空壳无任何可收集声明 → 只删节点；
+ *   - 父 inline 有 backgroundImage（资源图）时不与 class 渐变强行并层（避免覆盖资源图），
+ *     渐变声明丢弃——资源图背景是视觉真值优先。
+ *
+ * @param {string} code .vue 文件内容
+ * @returns {string} 处理后的 code
+ */
+export function collapseBackgroundShellDivs(code) {
+  if (!code || typeof code !== 'string') return code;
+
+  // ── 1) 找模板里的空壳 div（class 含 -bg/background 词尾，空元素无绑定）──
+  // 🛡️ P-06/D（2026-09-17）：空壳判定容忍 `>\s*</div>` 内部空白（换行/缩进逃逸），
+  // 此前只匹配紧邻 `></div>`，LLM 在空壳 div 内写换行空白即逃逸 → 渐变空壳残留。
+  const SHELL_RE = /<div\s+class="([^"]*(?:-bg|background)[^"]*)"\s*>\s*<\/div>|<div\s+class="([^"]*(?:-bg|background)[^"]*)"\s*\/>/g;
+  const shells = [...code.matchAll(SHELL_RE)]
+    .map((m) => ({ full: m[0], cls: m[1] || m[2] }))
+    .filter((s) => !/\{\{|\sv-|:|@/.test(s.full));
+  if (shells.length === 0) return code;
+
+  let out = code;
+  let collapsed = 0;
+
+  for (const shell of shells) {
+    // ── 2) 从 <style> 收集该 class 的纯视觉声明（无 style 段 → 无声明可并，仅删节点）──
+    const clsEsc = shell.cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const styleSeg = out.match(/<style[^>]*>([\s\S]*?)<\/style>/);
+    const ruleRe = new RegExp('\\.' + clsEsc + '\\s*\\{([^}]*)\\}', 'g');
+    let decls = '';
+    if (styleSeg) {
+      for (const rm of styleSeg[1].match(ruleRe) || []) {
+        decls += (rm.match(/\{([^}]*)\}/) || [])[1] || '';
+        decls += ';';
+      }
+    }
+    const VISUAL_RE = /^(background(?:-[a-z]+)?|border-radius|box-shadow|opacity|backdrop-filter)\s*:/i;
+    const visualDecls = decls
+      .split(';')
+      .map((d) => d.trim())
+      .filter((d) => d && VISUAL_RE.test(d));
+
+    // ── 3) 定位父开标签（空壳之前最近的未闭合 div 开标签）──
+    const shellIdx = out.indexOf(shell.full);
+    if (shellIdx === -1) continue;
+    const before = out.slice(0, shellIdx);
+    const parentOpenM = before.match(/<div\b[^>]*>(?=[^<]*$)/);
+    if (!parentOpenM) continue;
+    const parentOpen = parentOpenM[0];
+    const parentClsM = parentOpen.match(/class="([^"]*)"/);
+    const firstCls = parentClsM ? parentClsM[1].trim().split(/\s+/)[0] : null;
+
+    // ── 4) 合并声明到父 class 规则（父已有同名属性 → 空壳声明丢弃）──
+    let merged = false;
+    if (firstCls && visualDecls.length > 0) {
+      const firstClsEsc = firstCls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const parentRuleRe = new RegExp('(\\.' + firstClsEsc + '\\s*\\{)([^}]*)\\}');
+      const searchFrom = out.indexOf(styleSeg[0]);
+      const seg = out.slice(searchFrom);
+      const parentRuleM = seg.match(parentRuleRe);
+      if (parentRuleM) {
+        const existingBody = parentRuleM[2];
+        const additions = visualDecls.filter((d) => {
+          const prop = d.split(':')[0].trim().toLowerCase();
+          return !new RegExp('(^|;)\\s*' + prop + '\\s*:', 'i').test(existingBody);
+        });
+        if (additions.length > 0) {
+          const newSeg = seg.replace(
+            parentRuleRe,
+            (_m, open, body) => open + body.replace(/\s*$/, '') + (body.trim().endsWith(';') || !body.trim() ? '' : ';') + ' ' + additions.join('; ') + ' }',
+          );
+          out = out.slice(0, searchFrom) + newSeg;
+          merged = true;
+        }
+      }
+    }
+
+    // ── 5) 删空壳节点 + 死 CSS 规则 ──
+    out = out.replace(shell.full, '');
+    out = out.replace(new RegExp('[^{}@]*?\\.' + clsEsc + '\\s*\\{[^}]*\\}\\s*', 'g'), '');
+    collapsed += 1;
+    void merged;
+  }
+
+  if (collapsed > 0) {
+    console.info('[P-01 背景空壳剥离] 已合并 ' + collapsed + ' 个 -bg 空壳节点到父元素');
+  }
+  return out;
+}

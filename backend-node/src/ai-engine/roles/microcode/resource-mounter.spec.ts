@@ -1,4 +1,4 @@
-import { fixSectionHeightsForResource, ensureHeaderSlots, injectFailedResourceFallbacks, stripEmptyShellBindings, ensureResourceImportInVue, mountSubStateBackground } from './resource-mounter.js'
+import { fixSectionHeightsForResource, ensureHeaderSlots, injectFailedResourceFallbacks, stripEmptyShellBindings, ensureResourceImportInVue, mountSubStateBackground, findVForItemTag, dedupeBgMultiRefs, healAbsoluteOverlayParents } from './resource-mounter.js'
 
 /**
  * 🛡️ fix-section-heights 规则②：组件根 height:100% 不得改写（2026-09-02 实锤）。
@@ -995,5 +995,171 @@ describe('mountSubStateBackground：激活态背景挂载（2026-09-15 刀24-A/D
       'package/index.vue': `<template><div class="static">x</div></template>\n<script setup>\nimport { ref } from 'vue'\n</script>`,
     }
     expect(mountSubStateBackground(files, 'bgActive', m)).toBeNull()
+  })
+})
+
+describe('findVForItemTag：识别 v-for 重复单元（阶段3）', () => {
+  it('识别 v-for item 的 class（12 卡共享背景挂载点）', () => {
+    const content = `<template>
+  <div class="c-device-monitor-cons">
+    <div v-for="(device, index) in deviceList" :key="index" class="c-device-monitor-device-card">
+      <span>{{ device.name }}</span>
+    </div>
+  </div>
+</template>`
+    const tag = findVForItemTag(content)
+    expect(tag).toBeDefined()
+    expect(tag).toContain('v-for')
+    expect(tag).toContain('c-device-monitor-device-card')
+  })
+
+  it('无 v-for 时返回 null', () => {
+    const content = `<template>
+  <div class="c-root">
+    <div class="static-card">静态卡片</div>
+  </div>
+</template>`
+    expect(findVForItemTag(content)).toBeNull()
+  })
+
+  it('v-for 无静态 class 时返回 null（动态 :class 不算可挂载单元）', () => {
+    const content = `<template><div v-for="x in list" :class="dynClass">{{ x }}</div></template>`
+    expect(findVForItemTag(content)).toBeNull()
+  })
+})
+
+describe('dedupeBgMultiRefs：共享背景保留 v-for item（阶段3）', () => {
+  it('共享背景（sharedBy=12）的 v-for item 引用被保留，容器引用被移除', () => {
+    const files = {
+      'package/components/ContentCons.vue': `<template>
+  <div class="c-device-monitor-cons" :style="{ backgroundImage: 'url(' + bg3 + ')', backgroundSize: '100% 100%', backgroundPosition: '0px 0px', backgroundRepeat: 'no-repeat' }">
+    <div v-for="item in deviceList" :key="item.id" class="c-device-monitor-device-card" :style="{ backgroundImage: 'url(' + bg3 + ')', backgroundSize: '100% 100%', backgroundPosition: '0px 0px', backgroundRepeat: 'no-repeat' }">
+      <span>{{ item.name }}</span>
+    </div>
+  </div>
+</template>`,
+    }
+    const rdm = [
+      {
+        assignedVarName: 'bg3',
+        previewAnalysisRole: 'bg',
+        bgRole: 'container',
+        resourceFile: '../resources/images/bg-8439.png',
+        mountTarget: 'cons',
+        figmaBox: { width: 117, height: 64 },
+        sharedBy: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'],
+      },
+    ]
+    const out = dedupeBgMultiRefs(files, rdm, { logger: { warn() {}, info() {} } })
+    const c = out['package/components/ContentCons.vue']
+    // 容器引用被移除（不再有 cons 上的 bg3）
+    expect(c).not.toMatch(/c-device-monitor-cons[^>]*bg3/)
+    // v-for item 引用保留
+    expect(c).toMatch(/v-for[^>]*bg3/)
+  })
+
+  it('非共享背景（无 sharedBy）走原评分去重', () => {
+    const files = {
+      'package/index.vue': `<template>
+  <div class="c-x-header" :style="{ backgroundImage: 'url(' + bg1 + ')' }"></div>
+  <div class="c-x-body" :style="{ backgroundImage: 'url(' + bg1 + ')' }"></div>
+</template>`,
+    }
+    const rdm = [
+      {
+        assignedVarName: 'bg1',
+        previewAnalysisRole: 'bg',
+        bgRole: 'container',
+        resourceFile: '../resources/images/bg-x.png',
+        mountTarget: 'header',
+        figmaBox: { width: 100, height: 100 },
+      },
+    ]
+    const out = dedupeBgMultiRefs(files, rdm, { logger: { warn() {}, info() {} } })
+    const c = out['package/index.vue']
+    // 两个引用被去重为 1 个（header 语义命中保留，body 移除）
+    const cnt = (c.match(/bg1/g) || []).length
+    expect(cnt).toBe(1)
+  })
+})
+
+describe('healAbsoluteOverlayParents：absolute 遮罩层父容器补 relative（阶段4）', () => {
+  it('card-bg absolute + 父容器 device-card 无 position → 补 relative（一片蓝根治）', () => {
+    const files = {
+      'package/components/ContentCons.vue': `<template>
+  <div class="c-device-monitor-device-card">
+    <div class="c-device-monitor-card-bg"></div>
+    <div class="c-device-monitor-card-content">x</div>
+  </div>
+</template>
+<style lang="less" scoped>
+.c-device-monitor-card-bg { position: absolute; top: 0; left: 0; right: 0; bottom: 0; }
+.c-device-monitor-card-content { z-index: 1; }
+</style>`,
+    }
+    const fixed = healAbsoluteOverlayParents(files, { logger: { warn() {} } })
+    expect(fixed.length).toBe(1)
+    expect(fixed[0].parentClass).toBe('c-device-monitor-device-card')
+    // device-card 被补了 position: relative
+    expect(files['package/components/ContentCons.vue']).toMatch(/c-device-monitor-device-card\s*\{[^}]*position:\s*relative/s)
+  })
+
+  it('父容器已有 position 声明 → 不重复补', () => {
+    const files = {
+      'package/index.vue': `<template>
+  <div class="a"><div class="b-mask"></div></div>
+</template>
+<style>
+.a { position: relative; }
+.b-mask { position: absolute; }
+</style>`,
+    }
+    const fixed = healAbsoluteOverlayParents(files, { logger: { warn() {} } })
+    expect(fixed.length).toBe(0)
+  })
+
+  it('无 absolute 元素 → 不改动', () => {
+    const files = {
+      'package/index.vue': `<template><div class="a"><span>x</span></div></template><style>.a { display: flex; }</style>`,
+    }
+    const fixed = healAbsoluteOverlayParents(files, { logger: { warn() {} } })
+    expect(fixed.length).toBe(0)
+  })
+})
+
+describe('healAbsoluteOverlayParents：:class 动态绑定边界（2026-09-17 回归）', () => {
+  it('父容器 :class 动态绑定不应被误判（TabsSection 编译崩溃根治）', () => {
+    const files = {
+      'package/components/TabsSection.vue': `<template>
+  <div v-for="tab in tabs" :key="tab.key" :class="['c-device-monitor-tab-item', { 'c-device-monitor-tab-item--active': active === tab.key }]">
+    <div class="c-device-monitor-tab-badge"></div>
+  </div>
+</template>
+<style lang="less" scoped>
+.c-device-monitor-tab-badge { position: absolute; top: 0; right: 0; }
+.c-device-monitor-tab-item { display: flex; }
+</style>`,
+    }
+    const fixed = healAbsoluteOverlayParents(files, { logger: { warn() {} } })
+    const c = files['package/components/TabsSection.vue']
+    // 不能生成非法规则（. 开头的数组内容）
+    expect(c).not.toMatch(/\.\[|\.\{/)
+    // 若 tab-item 有静态 class 且有样式块，才可能补 relative（此处 :class 动态，cls 为空，不应补到非法处）
+  })
+
+  it(':class 动态绑定元素即使含 absolute 子元素，也不生成非法 . 规则', () => {
+    const files = {
+      'package/a.vue': `<template>
+  <div :class="['x', {'y': true}]">
+    <div class="mask"></div>
+  </div>
+</template>
+<style>
+.mask { position: absolute; }
+.x { display: block; }
+</style>`,
+    }
+    const fixed = healAbsoluteOverlayParents(files, { logger: { warn() {} } })
+    expect(files['package/a.vue']).not.toMatch(/\.\[|\.\{/)
   })
 })

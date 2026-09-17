@@ -1239,3 +1239,53 @@ export function stripResourceValueMisuse(content) {
   return out;
 }
 
+/**
+ * 🛡️ CODE-028 自愈（2026-09-17 · mc-max-1789627809290-ef00bb27 实锤）：
+ * 对静态 import 图片变量的「写回」→ 确定性删除。
+ *
+ * 根因链：LLM 写 `const bg2 = ref('')` + `bg2.value = props.bg2`（此时合法，可写）。
+ * 资源注入侧把 `const bg2 = ref('')` 替换成静态 `import bg2 from '.../bg.png'`（只读绑定），
+ * 但没清掉后面的写回语句；CODE-027 又把 `bg2.value = props.bg2` 变成 `bg2 = props.bg2`
+ * → 对 ESM import 绑定赋值 → 运行时抛 `"bg2" is read-only.` → 组件渲染失败。
+ * 且这是**确定性错误**：门禁重试每轮逐字复现，重试预算纯浪费。
+ *
+ * 治本：只读绑定本就不可写，这些写回语句既无效又致命，落盘前一律删除。
+ * 正确写法是直接引用 `props.bg2`（见 ContentActive.vue），不依赖写回本地同名变量。
+ *
+ * 只针对「静态图片 import 变量名」，绝不动普通 ref/普通变量赋值：
+ *   - `bg2.value = props.bg2`  → 删除
+ *   - `bg2 = props.bg2`        → 删除
+ *   - `bg2 = icon1`            → 删除
+ * 不动：`import bg2 ...`、`const bg2 = ...`、模板 `url(${bg2})` 引用。
+ * 幂等：删无可删时返回原引用。
+ *
+ * @param {string} content .vue 文件内容
+ * @returns {string} 去掉非法写回后的内容
+ */
+export function stripResourceWriteback(content) {
+  if (typeof content !== 'string' || !content) return content;
+  const scriptMatch = content.match(/<script[^>]*>([\s\S]*?)<\/script>/i);
+  const scriptBody = scriptMatch ? scriptMatch[1] : '';
+  if (!scriptBody) return content;
+  const importRe =
+    /import\s+([A-Za-z_$][\w$]*)\s+from\s*['"][^'"]*(?:bg|icon|img)[\w-]*\.(?:png|jpe?g|svg|gif|webp)['"]/gi;
+  const names = new Set();
+  let m;
+  while ((m = importRe.exec(scriptBody))) names.add(m[1]);
+  if (names.size === 0) return content;
+
+  let out = content;
+  for (const name of names) {
+    const esc = String(name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // ① `bg2.value = ...`（整语句，到行尾/分号止）
+    out = out.replace(new RegExp(`[ \\t]*\\b${esc}\\.value[ \\t]*=[^\\n;]*;?[ \\t]*[ \\t]*\\n?`, 'g'), '');
+    // ② 裸赋值 `bg2 = props.bg2`：左侧必须是该变量名，且前面不是 const/let/var/import（避免误删声明）
+    out = out.replace(
+      new RegExp(`(^|[;\\n{][ \\t]*)\\b${esc}[ \\t]*=[^=\\n;]*;?[ \\t]*\\n?`, 'gm'),
+      (full, lead) => (/\b(?:const|let|var)\s*$/.test(lead) ? full : lead),
+    );
+  }
+  out = out.replace(/\n{3,}/g, '\n\n');
+  return out;
+}
+

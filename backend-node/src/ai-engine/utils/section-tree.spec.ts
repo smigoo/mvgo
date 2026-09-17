@@ -23,6 +23,9 @@ import {
   deriveSectionsFromFigmaTree,
   buildSectionStyleFacts,
   semanticClassKeywords,
+  headerIsChromeOnly,
+  clusterItemsByColumnX,
+  reorganizeCenteredChartLayout,
 } from './section-tree.js'
 
 describe('底层 Figma 事实索引', () => {
@@ -1149,6 +1152,98 @@ describe('buildSectionStyleFacts（E1 治本 · 语义化样式事实）', () =>
     expect(out).toContain('透明度')
     expect(out).toContain('摄像机')
   })
+
+  test('12 卡同构网格：内部横向布局 + 文字色进入事实，不被 12 张卡挤出', () => {
+    const makeCard = (id, x, y, label, value) => ({
+      id, name: `Group ${id}`, type: 'GROUP', absoluteBoundingBox: box(x, y, 117, 64),
+      children: [
+        { id: `${id}-bg`, name: 'bg', type: 'GROUP', absoluteBoundingBox: box(x, y, 117, 64) },
+        { id: `${id}-icon`, name: 'icon', type: 'GROUP', absoluteBoundingBox: box(x + 6, y + 16, 27, 32) },
+        { id: `${id}-label`, name: label, type: 'TEXT', characters: label, absoluteBoundingBox: box(x + 39, y + 13, 36, 18), style: { fontSize: 12 }, fills: [{ type: 'SOLID', visible: true, color: { r: 0.2, g: 0.2, b: 0.2 } }] },
+        { id: `${id}-value`, name: value, type: 'TEXT', characters: value, absoluteBoundingBox: box(x + 39, y + 35, 55, 21), style: { fontSize: 16 }, fills: [{ type: 'SOLID', visible: true, color: { r: 1, g: 1, b: 1 } }] },
+      ],
+    })
+    const cards = Array.from({ length: 12 }, (_, i) => makeCard(`c${i}`, 1518 + (i % 3) * 125, 550 + Math.floor(i / 3) * 77, '摄像机', '(2/484)'))
+    const figma3 = {
+      document: {
+        id: 'root', name: 'cp-设备监测', type: 'FRAME',
+        children: [{
+          id: '2:8437', name: 'cons', type: 'FRAME', absoluteBoundingBox: box(1475, 538, 367, 295),
+          children: cards,
+        }],
+      },
+    }
+    const tree = [{
+      id: '2:8437', title: 'cons', figmaNodeId: '2:8437',
+      sourceNodeIds: ['2:8437', ...cards.flatMap((c) => [c.id, `${c.id}-bg`, `${c.id}-icon`, `${c.id}-label`, `${c.id}-value`])],
+    }]
+    const out = buildSectionStyleFacts(tree, figma3)
+    expect(out).toContain('重复单元×12')
+    expect(out).toContain('横向 flex：左侧 icon')
+    expect(out).toContain('#ffffff')
+    expect(out).toContain('#333333')
+    expect(out).toContain('(2/484)')
+  })
+
+  test('🛡️ 深度递归不抛 ReferenceError（walkChildren 漏定义回归，2026-09-17 73137ad9）', () => {
+    // 实锤：collect() 末尾误写 `walkChildren(node)`（该函数从未定义）→ ReferenceError:
+    //   walkChildren is not defined → buildChunkMiddle 崩溃 → 任务 fail
+    //   （mc-max-1789625514255-73137ad9 实锤）。治本：改回 collect 递归。
+    // 本用例构造 4 层嵌套（超过 maxDepth=3 也需要安全返回），确保不再有未定义符号。
+    const deep = {
+      document: {
+        id: 'root', name: 'cp-策略类型分布', type: 'FRAME',
+        children: [{
+          id: 'slot', name: 'slot-con', type: 'FRAME', absoluteBoundingBox: box(0, 0, 400, 300),
+          children: [{
+            id: 'mid', name: '中间图表', type: 'FRAME', absoluteBoundingBox: box(10, 10, 200, 200),
+            children: [{
+              id: 'inner', name: 'inner-group', type: 'GROUP', absoluteBoundingBox: box(20, 20, 100, 100),
+              children: [{
+                id: 'deep', name: 'deep-text', type: 'TEXT', characters: '28%',
+                absoluteBoundingBox: box(30, 30, 40, 20), style: { fontSize: 14 },
+                fills: [{ type: 'SOLID', visible: true, color: { r: 1, g: 1, b: 1 } }],
+              }],
+            }],
+          }],
+        }],
+      },
+    }
+    const sections = [{ id: 'slot', title: 'slot-con', figmaNodeId: 'slot', sourceNodeIds: ['slot'] }]
+    // 核心断言：不抛异常，且能提取到子树样式（证明递归真的走通了）
+    expect(() => buildSectionStyleFacts(sections, deep)).not.toThrow()
+    const out = buildSectionStyleFacts(sections, deep)
+    expect(out).toContain('28%')
+  })
+
+  test('图例条 fill.opacity=0.1 + 同色描边写入事实（d70a19bf）', () => {
+    const red = { r: 1, g: 98 / 255, b: 98 / 255 }
+    const figma = {
+      document: {
+        id: 'root', name: 'cp', type: 'FRAME',
+        children: [{
+          id: '3:74', name: 'Frame 2136638592', type: 'FRAME',
+          absoluteBoundingBox: box(303, 2282, 220, 32),
+          fills: [{ type: 'SOLID', visible: true, opacity: 0.1, color: red }],
+          strokes: [{ type: 'SOLID', visible: true, color: red }],
+          strokeWeight: 1,
+          children: [
+            { id: '3:74-t', name: '交通事故', type: 'TEXT', characters: '交通事故',
+              absoluteBoundingBox: box(320, 2286, 56, 21),
+              fills: [{ type: 'SOLID', visible: true, color: red }] },
+          ],
+        }],
+      },
+    }
+    const tree = [{
+      id: '287:5-left', type: 'stats', title: '统计数据-left',
+      sourceNodeIds: ['3:74', '3:74-t'],
+    }]
+    const out = buildSectionStyleFacts(tree, figma)
+    expect(out).toContain('rgba(255,98,98,0.1)')
+    expect(out).toContain('描边:1px #ff6262')
+    expect(out).toContain('交通事故')
+  })
 })
 
 
@@ -1161,5 +1256,208 @@ describe("semanticClassKeywords（中英文语义鸿沟桥接）", () => {
   test("空输入返回空数组", () => {
     expect(semanticClassKeywords("")).toEqual([])
     expect(semanticClassKeywords(null)).toEqual([])
+  })
+})
+
+describe("headerIsChromeOnly（纯 chrome 标题栏判定）", () => {
+  test("纯装饰标题栏（VECTOR×N + circle/path + 单标题文本）→ chrome", () => {
+    const envHeader = {
+      type: "GROUP",
+      name: "header",
+      children: [
+        { type: "VECTOR", name: "Vector 1484" },
+        {
+          type: "GROUP",
+          name: "g",
+          children: [
+            { type: "VECTOR", name: "circle" },
+            { type: "VECTOR", name: "circle" },
+            { type: "VECTOR", name: "path" },
+          ],
+        },
+        { type: "VECTOR", name: "Vector 1476" },
+        { type: "TEXT", name: "环境监测", characters: "环境监测" },
+      ],
+    }
+    expect(headerIsChromeOnly(envHeader)).toBe(true)
+  })
+
+  test("业务 header（含 tabs FRAME）→ 非 chrome", () => {
+    const vehHeader = {
+      type: "FRAME",
+      name: "header",
+      children: [
+        {
+          type: "FRAME",
+          name: "tabs",
+          children: [{ type: "TEXT", name: "江阴靖江长江隧道" }],
+        },
+        {
+          type: "GROUP",
+          name: "小标题",
+          children: [
+            { type: "TEXT", name: "重点车辆监测" },
+            { type: "TEXT", name: "*数据实时更新" },
+          ],
+        },
+      ],
+    }
+    expect(headerIsChromeOnly(vehHeader)).toBe(false)
+  })
+
+  test("业务 header（双文本小标题，无 FRAME）→ 非 chrome", () => {
+    const header = {
+      type: "GROUP",
+      name: "header",
+      children: [
+        { type: "GROUP", name: "g" },
+        { type: "TEXT", name: "标题" },
+        { type: "TEXT", name: "副标题说明" },
+      ],
+    }
+    expect(headerIsChromeOnly(header)).toBe(false)
+  })
+
+  test("业务 header（含 tab 语义命名 GROUP）→ 非 chrome", () => {
+    const header = {
+      type: "GROUP",
+      name: "header",
+      children: [
+        { type: "GROUP", name: "tab-switch" },
+        { type: "TEXT", name: "标题" },
+      ],
+    }
+    expect(headerIsChromeOnly(header)).toBe(false)
+  })
+
+  test("空/非法输入/无子节点 → 保守保留（不剥离）", () => {
+    expect(headerIsChromeOnly(null)).toBe(false)
+    expect(headerIsChromeOnly(undefined)).toBe(false)
+    expect(headerIsChromeOnly({ type: 'GROUP', name: 'header', children: [] })).toBe(false)
+  })
+})
+
+describe("clusterItemsByColumnX（按 x 坐标聚类分列）", () => {
+  const item = (x: number, y: number, id = `${x}:${y}`) => ({
+    id,
+    name: id,
+    role: 'item',
+    figmaNode: id,
+    absoluteBoundingBox: { x, y, width: 220, height: 32 },
+  })
+  test("8 项按 x 聚成左右两列（各 4 项，y 递增）→ 2 列", () => {
+    const items = [
+      item(303, 2282, '3:74'), item(806, 2282, '3:110'),
+      item(303, 2328, '3:75'), item(806, 2328, '3:115'),
+      item(303, 2374, '3:80'), item(806, 2374, '3:120'),
+      item(303, 2420, '3:85'), item(806, 2420, '3:125'),
+    ]
+    const cols = clusterItemsByColumnX(items)
+    expect(cols).toHaveLength(2)
+    expect(cols![0].columnX).toBe(303)
+    expect(cols![1].columnX).toBe(806)
+    expect(cols![0].items).toHaveLength(4)
+    expect(cols![1].items).toHaveLength(4)
+    // 每列内部按 y 升序
+    expect(cols![0].items[0].id).toBe('3:74')
+    expect(cols![0].items[3].id).toBe('3:85')
+  })
+
+  test("单列（同一 x）→ null（不拆）", () => {
+    const items = [
+      item(303, 100, 'a'), item(303, 132, 'b'),
+      item(303, 164, 'c'), item(303, 196, 'd'),
+    ]
+    expect(clusterItemsByColumnX(items)).toBeNull()
+  })
+
+  test("item 总数 < 4 → null", () => {
+    expect(clusterItemsByColumnX([item(303, 100), item(806, 100)])).toBeNull()
+  })
+
+  test("某列仅 1 项（不均匀）→ null（保守不拆）", () => {
+    const items = [
+      item(303, 100), item(303, 132),
+      item(806, 100),
+    ]
+    expect(clusterItemsByColumnX(items)).toBeNull()
+  })
+
+  test("空/非法输入 → null", () => {
+    expect(clusterItemsByColumnX([])).toBeNull()
+    expect(clusterItemsByColumnX(null)).toBeNull()
+  })
+})
+
+describe("reorganizeCenteredChartLayout（图表居中 + 图例分两侧）", () => {
+  const stat = (x: number, y: number, id: string) => ({
+    id, name: id, role: 'item', figmaNode: id,
+    absoluteBoundingBox: { x, y, width: 220, height: 32 },
+  })
+  const statsSection = {
+    id: '287:5',
+    name: '统计数据',
+    type: 'stats',
+    figmaNodeId: '287:5',
+    layout: 'horizontal',
+    absoluteBoundingBox: { x: 303, y: 2282, width: 723, height: 170 },
+    children: [
+      stat(303, 2282, '3:74'), stat(806, 2282, '3:110'),
+      stat(303, 2328, '3:75'), stat(806, 2328, '3:115'),
+      stat(303, 2374, '3:80'), stat(806, 2374, '3:120'),
+      stat(303, 2420, '3:85'), stat(806, 2420, '3:125'),
+    ],
+  }
+  const chartSection = {
+    id: '287:4',
+    name: '中间图表',
+    type: 'chart',
+    figmaNodeId: '287:4',
+    absoluteBoundingBox: { x: 561, y: 2267, width: 207, height: 207 },
+    children: [],
+  }
+
+  test("chart 居中于 stats 两列空档 → 重组为 [left-stats, chart, right-stats]", () => {
+    const out = reorganizeCenteredChartLayout([chartSection, statsSection])
+    expect(out).toHaveLength(3)
+    expect(out.map((s) => s.type)).toEqual(['stats', 'chart', 'stats'])
+    expect(out[0].id).toBe('287:5-left')
+    expect(out[1].id).toBe('287:4')
+    expect(out[2].id).toBe('287:5-right')
+    // 左列 4 项（交通事故列）、右列 4 项
+    expect(out[0].children).toHaveLength(4)
+    expect(out[2].children).toHaveLength(4)
+    expect(out[0].children[0].id).toBe('3:74')
+    expect(out[2].children[0].id).toBe('3:110')
+    // 🛡️ figmaNodeId 唯一化：left/right 各用子列首项，防止 planner enrich 按 figmaNodeId
+    //   回填时把两个 stats 都覆盖成原 stats 的 figmaNodeId（287:5）→ 左右列语义丢失。
+    expect(out[0].figmaNodeId).toBe('3:74')
+    expect(out[2].figmaNodeId).toBe('3:110')
+    expect(out[0].figmaNodeId).not.toBe(out[2].figmaNodeId)
+  })
+
+  test("chart 不在两列空档（偏左）→ 原样返回", () => {
+    const offChart = { ...chartSection, absoluteBoundingBox: { x: 200, y: 2267, width: 207, height: 207 } }
+    const out = reorganizeCenteredChartLayout([offChart, statsSection])
+    expect(out).toHaveLength(2)
+    expect(out[0].id).toBe('287:4')
+  })
+
+  test("无 chart 或无 stats → 原样返回", () => {
+    expect(reorganizeCenteredChartLayout([statsSection])).toHaveLength(1)
+    expect(reorganizeCenteredChartLayout([])).toEqual([])
+    expect(reorganizeCenteredChartLayout(null)).toBeNull()
+  })
+
+  test("stats 内部非两列 → 原样返回（不误拆）", () => {
+    const singleColStats = {
+      ...statsSection,
+      children: [
+        stat(303, 100, 'a'), stat(303, 132, 'b'),
+        stat(303, 164, 'c'), stat(303, 196, 'd'),
+      ],
+    }
+    const out = reorganizeCenteredChartLayout([chartSection, singleColStats])
+    expect(out).toHaveLength(2)
   })
 })

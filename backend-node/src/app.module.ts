@@ -24,6 +24,7 @@ import { PageSkeletonModule } from './page-skeleton/page-skeleton.module';
 import { DemoModule } from './demo/demo.module';
 import { AiConfigModule } from './config/config.module';
 import { AdminModule } from './admin/admin.module';
+import { TaskStatsModule } from './task-stats/task-stats.module';
 import { OperationLogModule } from './operation-log/operation-log.module';
 import { OperationLogInterceptor } from './operation-log/operation-log.interceptor';
 import { QuotaModule } from './quota/quota.module';
@@ -74,6 +75,7 @@ import { AppService } from './app.service';
     DemoModule, // Playground AI 对话式组件修改器
     AiConfigModule, // 服务端 AI 配置（接口保存，替代前端 localStorage）
     AdminModule, // 管理后台只读接口（admin 跨用户查看配置与组件）
+    TaskStatsModule, // 任务统计（管理员视角：任务日志 + 模型效果对比）
     OperationLogModule, // 操作日志（全局拦截器写入 + admin 只读查询）
     QuotaModule, // 组件生成配额限制（全局模块）
     LiteModule, // 轻量组件生成（截图/Figma → Vue3/微码 Lite/Max）

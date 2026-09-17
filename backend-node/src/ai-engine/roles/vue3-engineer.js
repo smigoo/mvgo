@@ -53,6 +53,10 @@ import { buildSectionLayoutFacts } from '../utils/figma-section-heights.js';
 import { stripLlmTailGarbage } from '../utils/llm-tail-garbage.js';
 // 🛡️ E1 治本（2026-09-16）：语义化样式事实 + 中英文挂载桥接（与微码同源）
 import { buildSectionStyleFacts, semanticClassKeywords } from '../utils/section-tree.js';
+// 🛡️ 阶段4（2026-09-17）：v-for 重复单元识别（共享背景精确挂到 item，与微码同源）
+import { findVForItemTag, healAbsoluteOverlayParents } from './microcode/resource-mounter.js';
+// 🛡️ 阶段4（2026-09-17）：业务样式 var() 直引自愈（模式 A → B）
+import { healBusinessStyleVarRefs } from '../utils/theme-color-guard.js';
 // 🛡️ 方案 E（2026-09-16）：双链路共用落盘前自愈链（资源终验/运行库/CODE-022/.value/FLEX-003/FLEX-005）
 import { runPreWriteSelfHealing } from '../utils/pre-write-self-healing.js';
 // 🧩 Vue3 拆分模块（2026-08-30：prompt / healer / style-entry 纯函数化，主类改委托壳）
@@ -1244,6 +1248,59 @@ export class Vue3Engineer extends MicrocodeEngineer {
         }
       }
 
+      // 🛡️ E1 融合（2026-09-17）：LESS 变量归一化（复用微码父类 _normalizeStyleLessVars）。
+      //   vue3 此前缺这一步——LLM 在 <style> 里用 @color-text-base/@color-text-secondary 等
+      //   主题变量，但 theme-vars.less 未定义 → LESS-COMPILE-001「variable is undefined」BLOCK，
+      //   重试耗尽（vue3 反复失败实锤）。微码有 normalizeStyleLessVars 把「未声明变量自动补默认值」，
+      //   vue3 复用同一能力，消除变量未定义的 BLOCK 根源。
+      try {
+        const _styleVarFixed = this._normalizeStyleLessVars(
+          codeResult.files,
+          effectiveMapping,
+        );
+        if (_styleVarFixed?.length > 0) {
+          this.logger.warn('🛡️ [vue3] LESS 变量归一化完成', {
+            fixedCount: _styleVarFixed.length,
+          });
+        }
+      } catch (e) {
+        this.logger.warn('⚠️ [vue3] LESS 变量归一化执行失败（非阻断）', {
+          error: e.message,
+        });
+      }
+
+      // 🛡️ 阶段4（2026-09-17）：absolute 遮罩层父容器补 position:relative（与微码同源）。
+      try {
+        const _absHealed = healAbsoluteOverlayParents(codeResult.files, {
+          logger: this.logger,
+        });
+        if (_absHealed?.length > 0) {
+          this.logger.warn('🛡️ [vue3] 已补 absolute 遮罩层父容器 position:relative', {
+            fixedCount: _absHealed.length,
+          });
+        }
+      } catch (e) {
+        this.logger.warn('⚠️ [vue3] absolute 遮罩层修复失败（非阻断）', {
+          error: e.message,
+        });
+      }
+
+      // 🛡️ 阶段4（2026-09-17）：业务样式 var() 直引自愈（模式 A → B，与微码同源）。
+      try {
+        const _varHealed = healBusinessStyleVarRefs(codeResult.files, {
+          logger: this.logger,
+        });
+        if (_varHealed?.length > 0) {
+          this.logger.warn('🛡️ [vue3] 业务样式 var() 直引自愈为 Less 槽位', {
+            fixedCount: _varHealed.length,
+          });
+        }
+      } catch (e) {
+        this.logger.warn('⚠️ [vue3] 业务样式 var() 直引自愈失败（非阻断）', {
+          error: e.message,
+        });
+      }
+
       // 🎯 确定性后处理（治本，不依赖 LLM 遵守 prompt）：
       //   T1 面板标题剥离：预览/宿主外壳已渲染标题，组件内渲染相同文字即重复（mv-max-1787576934056 实锤）
       //   T2 echarts 容器最小高度：图表容器被 flex 兄弟挤压到 ~10px，折线视觉变形
@@ -1583,6 +1640,54 @@ export class Vue3Engineer extends MicrocodeEngineer {
                 .filter(Boolean);
             let mountedCount = 0;
             for (const bg of bgMounts) {
+              // 🛡️ 阶段4（2026-09-17）：共享背景（sharedBy>1）优先挂到 v-for item，
+              //   与微码 mountPlannedResources 同源。否则 vue3 的 12 卡共享 bg3 会挂到
+              //   容器被 background-size:100% 整块拉伸（逐卡单元背景变成整块大背景）。
+              const sharedCount = Array.isArray(bg.sharedBy) ? bg.sharedBy.length : 0;
+              if (sharedCount > 1) {
+                const svName = bg.assignedVarName;
+                const svHasImage = !!(bg.resourceFile && svName);
+                if (svHasImage) {
+                  let svMounted = false;
+                  for (const [fpath, fcontent] of Object.entries(
+                    codeResult.files || {},
+                  )) {
+                    if (typeof fcontent !== 'string' || !fpath.endsWith('.vue'))
+                      continue;
+                    const itemTag = findVForItemTag(
+                      fcontent,
+                      semanticClassKeywords(bg.mountTarget),
+                    );
+                    if (!itemTag || itemTag.includes('backgroundImage')) continue;
+                    // 注入 :style 到 v-for item（背景四件套与下方统一口径一致）
+                    const svFw = Math.round(bg.figmaBox?.width || bg.visualMeta?.width || 0);
+                    const svFh = Math.round(bg.figmaBox?.height || bg.visualMeta?.height || 0);
+                    const svSize = svFw > 0 && svFh > 0 ? `${svFw}px ${svFh}px` : '100% 100%';
+                    const svBgCss =
+                      `backgroundImage: \`url(\${${svName}})\`, backgroundSize: '${svSize}', backgroundPosition: '0px 0px', backgroundRepeat: 'no-repeat'`;
+                    const newItemTag = itemTag.replace(/\/?>$/, (t) =>
+                      ` :style="{ ${svBgCss} }"${t}`,
+                    );
+                    if (newItemTag !== itemTag) {
+                      const pos = fcontent.indexOf(itemTag);
+                      if (pos >= 0) {
+                        codeResult.files[fpath] =
+                          fcontent.slice(0, pos) +
+                          newItemTag +
+                          fcontent.slice(pos + itemTag.length);
+                        svMounted = true;
+                        mountedCount++;
+                        this.logger.info(
+                          `🎯 [vue3] ${svName} 共享背景（${sharedCount} 卡）挂到 v-for item`,
+                          { file: fpath },
+                        );
+                        break;
+                      }
+                    }
+                  }
+                  if (svMounted) continue;
+                }
+              }
               // 🛡️ 中英文语义鸿沟桥接（2026-09-16 治本，与微码 N3 同源）：
               // mountTarget 是 Figma 中文名（「中间图表」），产物 class 是英文
               // （chart-container），wordsOf 中文词匹配不到英文 class → 背景挂载失败。

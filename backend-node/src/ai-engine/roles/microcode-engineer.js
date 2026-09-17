@@ -14,6 +14,8 @@ import * as microcodeValidator from './microcode/code-validator.js';
 import * as microcodeGenerator from './microcode/code-generator.js';
 import * as microcodeResources from './microcode/resource-mounter.js';
 import * as resourceMountPlan from './microcode/resource-mount-plan.js';
+// 🛡️ 阶段4（2026-09-17）：业务样式 var() 直引自愈（模式 A → B，文字颜色白字黑底根治）
+import { healBusinessStyleVarRefs } from '../utils/theme-color-guard.js';
 // P1-Slice2（增量补丁式更新）：分块快照推送器 —— 先合并再推送，杜绝并行 worker 交错导致快照回退
 import { pushChunkSnapshot } from './microcode/chunk-snapshot-pusher.js';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
@@ -74,6 +76,9 @@ import {
   injectChartMinHeightIntoClass,
   createChartClassBlockIfAbsent,
   stripZeroMinHeightForClass,
+  stripHeaderChromeDecorations as _stripHeaderChromeDecorationsPure,
+  ensureHeaderSlotRowLayout as _ensureHeaderSlotRowLayoutPure,
+  collapseBackgroundShellDivs as _collapseBackgroundShellDivsPure,
 } from '../utils/post-process.js';
 import {
   validateVueSfc,
@@ -2885,6 +2890,48 @@ export class MicrocodeEngineer extends BaseAgent {
           message: `🛡️ 已归一化 ${_styleVarNormalized.length} 个文件的错误 LESS 变量引用（资源变量→真实路径 / 发明变量→默认值）`,
           status: 'warning',
           details: _styleVarNormalized,
+        });
+      }
+
+      // 🛡️ 阶段4（2026-09-17）：absolute 遮罩层父容器补 position:relative。
+      //   「一片蓝」根治——card-bg 的 absolute 遮罩铺满全屏（父容器缺 relative）。
+      try {
+        const _absHealed = microcodeResources.healAbsoluteOverlayParents(
+          allFiles,
+          { logger: this.logger },
+        );
+        if (_absHealed.length > 0) {
+          input.onProgress?.({
+            stage: '定位遮罩修复',
+            message: `🛡️ 已补 ${_absHealed.length} 个 absolute 遮罩层父容器的 position:relative`,
+            status: 'warning',
+            details: _absHealed,
+          });
+        }
+      } catch (e) {
+        this.logger.warn('⚠️ absolute 遮罩层修复失败（非阻断）', {
+          error: e.message,
+        });
+      }
+
+      // 🛡️ 阶段4（2026-09-17）：业务样式 var() 直引自愈（模式 A → B）。
+      //   「文字白色、设计黑色」根治——var(--colorTextBase, 浅色) 平台不注入 → 浅色恒生效。
+      //   转成 @color-text-base（theme-vars.less 槽位，模式 B 编译期差异化）。
+      try {
+        const _varHealed = healBusinessStyleVarRefs(allFiles, {
+          logger: this.logger,
+        });
+        if (_varHealed.length > 0) {
+          input.onProgress?.({
+            stage: '主题变量直引自愈',
+            message: `🛡️ 已将 ${_varHealed.length} 个文件的业务样式 var() 直引自愈为 Less 槽位（模式 A→B）`,
+            status: 'warning',
+            details: _varHealed,
+          });
+        }
+      } catch (e) {
+        this.logger.warn('⚠️ 业务样式 var() 直引自愈失败（非阻断）', {
+          error: e.message,
         });
       }
 
@@ -5773,6 +5820,69 @@ export class MicrocodeEngineer extends BaseAgent {
                 `🎯 [mc] 面板标题元素已剥离（外壳渲染）：${fp} → 「${titleText}」`,
               );
             }
+          }
+        }
+
+        // T1' header 插槽组件装饰剥离（2026-09-17 · e0cdf905 实锤）：
+        //   HeaderSection.vue 挂在 <template #header-right>，其内部的
+        //   divider/decorator/dot/gradient-line/spacer 是 LLM 对 Figma 装饰 VECTOR
+        //   的臆造还原（微码契约：标题栏装饰由 base-panel 外壳渲染）；
+        //   内联 <svg> 是资源映射缺 icon 时 LLM 手画的臆造图标。
+        //   只对 header 插槽文件生效（文件名含 Header/HeaderSection），纯函数可单测。
+        if (headerNode2) {
+          const headerTextSet2 = new Set(
+            headerTexts2.map((h) => h.t).filter(Boolean),
+          );
+          for (const [fp, fc] of Object.entries(codeResult.files || {})) {
+            if (!fp.endsWith('.vue') || typeof fc !== 'string') continue;
+            const base = String(fp).split('/').pop() || '';
+            if (!/Header/i.test(base)) continue;
+            const stripped = _stripHeaderChromeDecorationsPure(fc, {
+              isHeaderSlotFile: true,
+              headerTexts: [...headerTextSet2],
+            });
+            if (stripped !== fc) {
+              codeResult.files[fp] = stripped;
+              this.logger.info(
+                `🎯 [mc] header 插槽装饰元素已剥离（T1'）：${fp}`,
+              );
+            }
+          }
+        }
+
+        // P-04B header 插槽根容器方向确定化（2026-09-17 · cd3625c0 实锤）：
+        //   根类漏 display:flex → block 流 icon/stats 竖排错位。header-right 槽
+        //   契约语义即「标题栏右侧横向控件行」，确定性内联 row 布局（与 slot-con
+        //   确定化同思路），已有 display 声明则尊重不注入。纯函数可单测。
+        if (headerNode2) {
+          for (const [fp, fc] of Object.entries(codeResult.files || {})) {
+            if (!fp.endsWith('.vue') || typeof fc !== 'string') continue;
+            const base = String(fp).split('/').pop() || '';
+            if (!/Header/i.test(base)) continue;
+            const rowified = _ensureHeaderSlotRowLayoutPure(fc, {
+              isHeaderSlotFile: true,
+            });
+            if (rowified !== fc) {
+              codeResult.files[fp] = rowified;
+              this.logger.info(
+                `🎯 [mc] header 插槽根容器 row 布局已注入（P-04B）：${fp}`,
+              );
+            }
+          }
+        }
+
+        // P-01 背景空壳节点剥离（2026-09-17 · a4f899c1 实锤系统性复发）：
+        //   LLM 对有背景元素系统性拆 宿主>-bg空壳>内容 三层（card-bg/tab-bg 跨组件复发，
+        //   20+ 历史组件中招）。确定性后处理：空壳删除 + 纯视觉声明上移合并到父元素。
+        //   父 inline 已有资源图背景时资源图优先（渐变丢弃）。所有 .vue 通用。
+        for (const [fp, fc] of Object.entries(codeResult.files || {})) {
+          if (!fp.endsWith('.vue') || typeof fc !== 'string') continue;
+          const collapsed = _collapseBackgroundShellDivsPure(fc);
+          if (collapsed !== fc) {
+            codeResult.files[fp] = collapsed;
+            this.logger.info(
+              `🎯 [mc] 背景空壳节点已合并到父元素（P-01）：${fp}`,
+            );
           }
         }
 

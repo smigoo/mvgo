@@ -1,0 +1,57 @@
+{
+  "description": "模型定价配置（单位：元/千tokens）",
+  "pricing": {
+    "qwen3.7-plus": {
+      "input": 0.004,
+      "output": 0.012
+    },
+    "qwen-plus": {
+      "input": 0.004,
+      "output": 0.012
+    },
+    "qwen-max": {
+      "input": 0.04,
+      "output": 0.12
+    },
+    "qwen-turbo": {
+      "input": 0.002,
+      "output": 0.006
+    },
+    "deepseek-chat": {
+      "input": 0.001,
+      "output": 0.002
+    },
+    "deepseek-coder": {
+      "input": 0.001,
+      "output": 0.002
+    },
+    "deepseek-v4-flash": {
+      "input": 0.001,
+      "output": 0.002
+    },
+    "gpt-4o-mini": {
+      "input": 0.0015,
+      "output": 0.006
+    },
+    "gpt-4o": {
+      "input": 0.025,
+      "output": 0.1
+    },
+    "claude-opus-4-8": {
+      "input": 0.015,
+      "output": 0.075
+    },
+    "claude-3-5-sonnet": {
+      "input": 0.003,
+      "output": 0.015
+    },
+    "claude-3-sonnet": {
+      "input": 0.003,
+      "output": 0.015
+    },
+    "default": {
+      "input": 0.004,
+      "output": 0.012
+    }
+  }
+}

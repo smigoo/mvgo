@@ -222,7 +222,12 @@ export class Vue3Service {
         },
         onTokenUsageRecord: (data) => {
           // 持久化 Token 用量到 MongoDB（异步非阻塞）
-          this.tokenTrackerService.recordUsage(data);
+          // R10 治本：userId + baseURL 让新 token 自带归属与端点
+          this.tokenTrackerService.recordUsage({
+            ...data,
+            userId: params.userId,
+            baseURL: config.aiBaseURL || process.env.ANTHROPIC_BASE_URL,
+          });
         },
         pauseChecker: async () => {
           const task = this.tasksService.getTask(sessionId);

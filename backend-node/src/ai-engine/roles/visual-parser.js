@@ -1103,9 +1103,29 @@ ${analysisTask}`
         const lum = this._colorLuminance(rootBgColor)
         if (lum !== null) {
           const fromColor = lum > 0.5 ? 'light' : 'dark'
-          if (fromColor !== result.styles.backgroundBrightness) {
+          const reported = result.styles.backgroundBrightness
+          // 🛡️ 2026-09-17 治本（设备监测「浅灰蓝」白字黑底实锤）：vision 的 colors[0]
+          //   契约不稳定——有时是主背景色、有时是主题色。当文字描述（background/theme）与
+          //   自报一致时（都说「浅」），此时颜色明度矛盾更可能是「colors[0] 是主题蓝
+          //   #1890ff 而非背景色」→ 信任自报、不覆盖。否则会把正确的 light 反向覆盖成 dark。
+          const bgText = String(result.styles?.background || '')
+          const themeText = String(result.styles?.theme || '')
+          const textSaysLight = /浅|白|light|bright/i.test(bgText + themeText)
+          const textSaysDark = /深|黑|dark/i.test(bgText + themeText)
+          const textConsistentWithReport =
+            (textSaysLight && reported === 'light') ||
+            (textSaysDark && reported === 'dark')
+          if (textConsistentWithReport && fromColor !== reported) {
+            logger.warn('backgroundBrightness 文字描述与自报一致，颜色明度矛盾疑似主题色干扰，信任自报不覆盖', {
+              reported,
+              fromColor,
+              rootBgColor,
+              luminance: lum.toFixed(2),
+              backgroundText: bgText.slice(0, 24),
+            })
+          } else if (fromColor !== reported) {
             logger.warn('backgroundBrightness与根背景色明度矛盾，以颜色为准', {
-              reported: result.styles.backgroundBrightness,
+              reported,
               fromColor,
               rootBgColor,
               luminance: lum.toFixed(2),

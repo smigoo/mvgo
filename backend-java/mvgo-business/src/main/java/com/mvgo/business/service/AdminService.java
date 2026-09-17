@@ -25,6 +25,7 @@ import com.mvgo.data.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -80,9 +81,13 @@ public class AdminService {
     private final FieldCipher fieldCipher;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    /** 跨服务拉取 Node user-stats 用（容器内唯一 RestTemplate：sessionGuardRestTemplate，3s 超时） */
-    @Autowired
-    private RestTemplate restTemplate;
+    /**
+     * 跨服务拉取 Node user-stats / usage-export 用：60s 读超时。
+     * 两个接口都要流式扫 tasks.json（可达 ~227MB），3s 必超时，禁止复用 sessionGuard。
+     * 构造器注入 + @Qualifier 精确定位，避免 @Autowired(required=false) 字段注入静默
+     * fallback 到 @Primary 的 3s sessionGuardRestTemplate（曾导致 Read timed out）。
+     */
+    private final RestTemplate usageExportRestTemplate;
 
     /** Node 后端地址（/api 前缀结尾），如 http://192.168.112.1:13030/api；本地默认 127.0.0.1 */
     @Value("${NODE_BACKEND_URL:http://127.0.0.1:13030/api}")
@@ -96,11 +101,13 @@ public class AdminService {
             UserRepository userRepository,
             ComponentRepository componentRepository,
             MongoTemplate mongoTemplate,
-            @Value("${FIELD_ENCRYPTION_KEY:}") String encryptionKey) {
+            @Value("${FIELD_ENCRYPTION_KEY:}") String encryptionKey,
+            @Qualifier("adminUsageExportRestTemplate") RestTemplate usageExportRestTemplate) {
         this.userRepository = userRepository;
         this.componentRepository = componentRepository;
         this.mongoTemplate = mongoTemplate;
         this.fieldCipher = new FieldCipher(encryptionKey);
+        this.usageExportRestTemplate = usageExportRestTemplate;
         if (encryptionKey == null || encryptionKey.isBlank()) {
             log.warn("[AdminService] 未配置 FIELD_ENCRYPTION_KEY，使用开发派生密钥解密；"
                     + "生产环境将无法解密 user_ai_configs.configEnc，请注入与 Node 相同的 key");
@@ -148,11 +155,13 @@ public class AdminService {
     private static class UserStats {
         final int[] counts = new int[4];
         Map<String, Integer> componentByType = java.util.Collections.emptyMap();
+        java.util.List<Long> durationMs = java.util.Collections.emptyList();
     }
 
     private Map<String, UserStats> fetchUserStats() {
         if (nodeBackendUrl == null || nodeBackendUrl.isBlank()
-                || adminStatsKey == null || adminStatsKey.isBlank()) {
+                || adminStatsKey == null || adminStatsKey.isBlank()
+                || usageExportRestTemplate == null) {
             return java.util.Collections.emptyMap();
         }
         try {
@@ -162,7 +171,7 @@ public class AdminService {
             String url = nodeBackendUrl.endsWith("/")
                     ? nodeBackendUrl + "admin/user-stats"
                     : nodeBackendUrl + "/admin/user-stats";
-            ResponseEntity<Map> resp = restTemplate.exchange(url, HttpMethod.GET, entity, Map.class);
+            ResponseEntity<Map> resp = usageExportRestTemplate.exchange(url, HttpMethod.GET, entity, Map.class);
             Map body = resp.getBody();
             if (body == null || !Boolean.TRUE.equals(body.get("success"))) {
                 return java.util.Collections.emptyMap();
@@ -181,6 +190,7 @@ public class AdminService {
                 us.counts[1] = intVal(m.get("taskCount"));
                 us.counts[2] = intVal(m.get("apiTaskCount"));
                 us.counts[3] = intVal(m.get("apiCount"));
+                us.durationMs = longList(m.get("durationMs"));
                 // 组件类型构成（Node 2026-09-16 起返回）：target → 数量。
                 // 缺失时保持 emptyMap，VO 侧 componentByType 为 null，前端整块隐藏。
                 Object byType = m.get("componentByType");
@@ -203,6 +213,98 @@ public class AdminService {
 
     private static int intVal(Object o) {
         return o instanceof Number ? ((Number) o).intValue() : 0;
+    }
+
+    private static long longVal(Object o) {
+        return o instanceof Number ? ((Number) o).longValue() : 0L;
+    }
+
+    private static java.util.List<Long> longList(Object raw) {
+        if (!(raw instanceof java.util.List<?> list) || list.isEmpty()) {
+            return java.util.Collections.emptyList();
+        }
+        java.util.List<Long> out = new java.util.ArrayList<>(list.size());
+        for (Object x : list) {
+            long n = longVal(x);
+            if (n > 0) out.add(n);
+        }
+        return out;
+    }
+
+    /**
+     * 代理 Node 内部 usage-export（JSON：filename / contentType / body）。
+     * ADMIN_STATS_KEY 或长超时 RestTemplate 缺失时明确失败，不做 0 降级。
+     */
+    public UsageExportFile fetchUsageExport(String preset, String from, String to, String dept, String format) {
+        if (nodeBackendUrl == null || nodeBackendUrl.isBlank()) {
+            throw new BizException(503, "未配置 NODE_BACKEND_URL，无法导出生成日志");
+        }
+        if (adminStatsKey == null || adminStatsKey.isBlank()) {
+            throw new BizException(503, "未配置 ADMIN_STATS_KEY，无法导出生成日志");
+        }
+        if (usageExportRestTemplate == null) {
+            throw new BizException(503, "未注入 adminUsageExportRestTemplate，无法导出生成日志");
+        }
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("x-admin-stats-key", adminStatsKey);
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            StringBuilder qs = new StringBuilder();
+            appendQs(qs, "preset", preset);
+            appendQs(qs, "from", from);
+            appendQs(qs, "to", to);
+            appendQs(qs, "dept", dept);
+            appendQs(qs, "format", format);
+            String url = nodeBackendUrl.endsWith("/")
+                    ? nodeBackendUrl + "admin/internal/usage-export" + qs
+                    : nodeBackendUrl + "/admin/internal/usage-export" + qs;
+            ResponseEntity<Map> resp = usageExportRestTemplate.exchange(url, HttpMethod.GET, entity, Map.class);
+            Map body = resp.getBody();
+            if (body == null || !Boolean.TRUE.equals(body.get("success"))) {
+                throw new BizException(502, "Node usage-export 返回失败");
+            }
+            String filename = asString(body.get("filename"));
+            String contentType = asString(body.get("contentType"));
+            String fileBody = asString(body.get("body"));
+            if (fileBody == null) {
+                throw new BizException(502, "Node usage-export 无正文");
+            }
+            return new UsageExportFile(
+                    filename != null ? filename : "usage-export.md",
+                    contentType != null ? contentType : "text/markdown; charset=utf-8",
+                    fileBody);
+        } catch (BizException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            log.warn("[AdminService] 拉取 Node usage-export 失败: {}", ex.getMessage());
+            throw new BizException(502, "拉取生成日志失败: " + ex.getMessage());
+        }
+    }
+
+    private static void appendQs(StringBuilder qs, String key, String value) {
+        if (value == null || value.isBlank()) return;
+        qs.append(qs.isEmpty() ? '?' : '&').append(key).append('=').append(java.net.URLEncoder.encode(value.trim(), java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    public static final class UsageExportFile {
+        public final String filename;
+        public final String contentType;
+        public final String body;
+
+        public UsageExportFile(String filename, String contentType, String body) {
+            this.filename = filename;
+            this.contentType = contentType;
+            this.body = body;
+        }
+    }
+
+    /** nearest-rank：ceil(p/100 * n) - 1，与 Node percentileMs 同口径 */
+    private static Long percentileMs(java.util.List<Long> values, int p) {
+        if (values == null || values.isEmpty()) return null;
+        java.util.List<Long> sorted = new java.util.ArrayList<>(values);
+        java.util.Collections.sort(sorted);
+        int idx = Math.min(sorted.size() - 1, Math.max(0, (int) Math.ceil(p / 100.0 * sorted.size()) - 1));
+        return sorted.get(idx);
     }
 
     /** 动态设置用户管理员标志 */
@@ -481,6 +583,7 @@ public class AdminService {
             int c0 = 0, c1 = 0, c2 = 0, c3 = 0;
             // 组件类型构成：同样按候选键相加；全部为空时不 setComponentByType（VO 保持 null，前端整块隐藏）
             Map<String, Integer> byType = new java.util.LinkedHashMap<>();
+            java.util.List<Long> durations = new java.util.ArrayList<>();
             for (UserStats s : cand) {
                 c0 += s.counts[0];
                 c1 += s.counts[1];
@@ -490,12 +593,16 @@ public class AdminService {
                     Integer prev = byType.get(te.getKey());
                     byType.put(te.getKey(), (prev == null ? 0 : prev) + intVal(te.getValue()));
                 }
+                if (s.durationMs != null && !s.durationMs.isEmpty()) durations.addAll(s.durationMs);
             }
             vo.setComponentCount(c0);
             vo.setTaskCount(c1);
             vo.setApiTaskCount(c2);
             vo.setApiCount(c3);
             if (!byType.isEmpty()) vo.setComponentByType(byType);
+            vo.setDurationSampleCount(durations.size());
+            vo.setDurationP50Ms(percentileMs(durations, 50));
+            vo.setDurationP90Ms(percentileMs(durations, 90));
         }
         vo.setCreatedAt(u.getCreatedAt());
         vo.setUpdatedAt(u.getUpdatedAt());

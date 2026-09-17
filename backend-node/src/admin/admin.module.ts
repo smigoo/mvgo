@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AdminController } from './admin.controller';
 import { AdminStatsController } from './admin-stats.controller';
@@ -6,6 +6,7 @@ import { AdminService } from './admin.service';
 import { ComponentModule } from '../component/component.module';
 import { AiConfigModule } from '../config/config.module';
 import { OperationLogModule } from '../operation-log/operation-log.module';
+import { TaskStatsModule } from '../task-stats/task-stats.module';
 import { User, UserSchema } from '../schemas/user.schema';
 import { Component, ComponentSchema } from '../schemas/component.schema';
 
@@ -22,6 +23,7 @@ import { Component, ComponentSchema } from '../schemas/component.schema';
     ComponentModule,
     AiConfigModule,
     OperationLogModule,
+    forwardRef(() => TaskStatsModule),
     MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
       { name: 'Group', schema: require('../schemas/group.schema').GroupSchema },

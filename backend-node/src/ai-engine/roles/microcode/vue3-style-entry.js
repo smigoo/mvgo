@@ -48,17 +48,22 @@ export function ensureVue3StyleEntry(files = {}, options = {}) {
   // 注意：注释里不用 ".common()" 格式，否则 less-compile-gate 的正则 /\.common\s*\(/ 会匹配到注释
   const hasStyleTokens =
     options.styleTokens && typeof options.styleTokens === 'object';
-  if (!files[themeVarsPath]) {
-    if (hasStyleTokens) {
-      options.logger.warn(
-        '🛡️ Vue3 theme-vars.less 缺失，已按 styleTokens 契约渲染补齐（含主题 mixin 变量）',
-      );
-      files[themeVarsPath] = buildVue3ThemeVarsLess(options.styleTokens);
-    } else {
-      options.logger.warn(
-        '🛡️ Vue3 theme-vars.less 缺失，已自动补齐空模板（含 mixin 定义）',
-      );
-      files[themeVarsPath] = `// 自动补空模板 - 模型漏生成时系统自动补齐
+  if (hasStyleTokens) {
+    // 🛡️ E1 治本（2026-09-17）：theme-vars.less **总是**由系统确定性渲染，覆盖 LLM 生成。
+    //   此前只在「缺失」时用 buildVue3ThemeVarsLess，LLM 生成的 theme-vars 被保留 →
+    //   ① LLM 用 kebab-case @color-text-base，系统模板是 camelCase @colorTextBase → 永远 undefined
+    //   ② LLM 在 .common() mixin 里偶发写裸属性 display:flex → 根级裸属性 LESS 编译错
+    //   ③ LLM 自由添加 @color-text-secondary 等系统未定义变量 → THEME-SPECIAL-COLOR 矛盾
+    //   治本：theme-vars 内容 100% 系统确定，LLM 不参与（<style> 里只用字面量色值或系统变量）。
+    files[themeVarsPath] = buildVue3ThemeVarsLess(options.styleTokens);
+    options.logger?.info?.(
+      '🛡️ Vue3 theme-vars.less 已按 styleTokens 契约确定性渲染（覆盖 LLM 生成）',
+    );
+  } else if (!files[themeVarsPath]) {
+    options.logger.warn(
+      '🛡️ Vue3 theme-vars.less 缺失，已自动补齐空模板（含 mixin 定义）',
+    );
+    files[themeVarsPath] = `// 自动补空模板 - 模型漏生成时系统自动补齐
 // 主题变量和 mixins 定义
 
 .common() {
@@ -70,7 +75,6 @@ export function ensureVue3StyleEntry(files = {}, options = {}) {
 .theme-light() {
 }
 `;
-    }
   } else {
     // theme-vars.less 已存在，检查是否缺少必要 mixin 定义并自动补齐
     // 根因：LLM 有时生成只含变量/注释的文件，漏掉 .common/.theme-dark/.theme-light 定义

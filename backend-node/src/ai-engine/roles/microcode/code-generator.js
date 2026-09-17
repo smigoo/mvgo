@@ -30,7 +30,7 @@ import {
   extractResourceVarNames,
   resolveResourceDomMapping,
 } from '../../utils/resource-import-guard.js';
-import { collectLeafSections, assignSectionComponentNames, isLayoutContainerSection } from '../../utils/section-tree.js';
+import { collectLeafSections, assignSectionComponentNames, isLayoutContainerSection, indexFigmaNodes, figmaSectionBox } from '../../utils/section-tree.js';
 import { detectContentRootClass } from '../../utils/root-container-normalizer.js';
 import { sanitizeComponentId, tailHexOf } from '../../utils/component-naming.js';
 
@@ -307,6 +307,107 @@ export function assembleIndexVue(templateContent, scriptContent, input, options 
   }
 
 /**
+ * 🛡️ P2（2026-09-17 · e4709ad0 实锤）：水平 flex 子项按 Figma 宽度比例分配 flex-grow。
+ * tabs 46px + cons 367px 不能写成统一 flex:1（50:50 均分）。无宽度时回退 flex:1。
+ * @param {number[]} widths
+ * @param {number} index
+ * @returns {string}
+ */
+export function flexItemStyleFromWidths(widths, index) {
+  const nums = (Array.isArray(widths) ? widths : []).map((w) => Number(w) || 0);
+  const total = nums.reduce((sum, w) => sum + w, 0);
+  const w = nums[index] || 0;
+  // 🛡️ P6 wrapper 容器化合并（2026-09-17 · 1c98bab9 层次过深实锤）：比例不再由独立
+  //   wrapper div 承载，而是直接内联到目标元素（容器 div / 子组件标签）自身的 style。
+  //   因此这里只输出「比例 + min 约束」，不再输出 display:flex（那是容器自身的职责）。
+  //   传导语义不变：目标元素吃父比例；它是 flex item（父是 flex 容器），
+  //   若它自身又是容器则自带 display:flex 对子传导。
+  if (total > 0 && w > 0) {
+    return `flex:${(w / total).toFixed(3)};min-width:0;`;
+  }
+  return 'flex:1;min-width:0;';
+}
+
+/**
+ * 🛡️ P3（2026-09-17 · 8529b7e2 实锤）：垂直 flex 子项按 Figma 高度比例分配 flex-grow。
+ * 解决垂直容器子项完全无高度约束 → collapse 到 0 的核心问题。
+ * 与 flexItemStyleFromWidths 对称：子项高度比例 = height / totalHeight。
+ * 无高度信息时回退 flex:1（保持向后兼容）。
+ * @param {number[]} heights
+ * @param {number} index
+ * @returns {string}
+ */
+export function flexItemStyleFromHeights(heights, index) {
+  const nums = (Array.isArray(heights) ? heights : []).map((h) => Number(h) || 0);
+  const total = nums.reduce((sum, h) => sum + h, 0);
+  const h = nums[index] || 0;
+  // 🛡️ P6 wrapper 容器化合并（同 flexItemStyleFromWidths）：只输出比例 + min 约束，
+  //   目标元素（容器 div / 子组件标签）自身内联该比例，无需 wrapper 中转。
+  if (total > 0 && h > 0) {
+    return `flex:${(h / total).toFixed(3)};min-height:0;`;
+  }
+  return 'flex:1;min-height:0;';
+}
+
+/**
+ * 🛡️ P4（2026-09-17 · mc-max-1789624984895-d70a19bf 实锤）：装配层按 Figma bbox 回查子项尺寸。
+ *
+ * 根因：planner enrich 之后的 effectiveSections 常**丢掉 absoluteBoundingBox**
+ *   （图例分列把 `287:5` 拆成 `287:5-left` / `287:5-right` 两个合成 id；中间图表被标成
+ *   isLayoutContainer 且 sourceNodeIds=[]）→ 装配层只读 `c.absoluteBoundingBox` 全为 0
+ *   → flexItemStyleFromWidths/Heights 一律回退 `flex:1` → 三栏被 1:1:1 均分（设计为 220/207/220）。
+ *
+ * 这是**数据使用问题**，不是「没记 Figma 数据」：Figma 真值一直存在，只是装配层没有回查。
+ * 治本：树上有 bbox 直接用；没有则依次按 `figmaNodeId` → `id` → `sourceNodeIds` 回查
+ * indexFigmaNodes 索引。全部落空才返回 0（下游回退 flex:1，保持向后兼容）。
+ *
+ * 纯函数、无 import.meta、不修改入参。
+ *
+ * @param {Object} sec effectiveSections 叶子/容器节点
+ * @param {Map} figmaIndex indexFigmaNodes(figmaRoot) 的产物（可为 null）
+ * @param {'width'|'height'} axis 取哪一维
+ * @returns {number} 该维尺寸（px）；无法确定时为 0
+ */
+export function resolveSectionFlexSize(sec, figmaIndex, axis = 'width') {
+  if (!sec || typeof sec !== 'object') return 0;
+  const pick = (box) => {
+    if (!box || typeof box !== 'object') return 0;
+    const v = axis === 'height'
+      ? (box.height ?? box.h)
+      : (box.width ?? box.w);
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  };
+
+  // ① 树上自带的 bbox 优先（planner 保留尺寸时的快路径）
+  const own = pick(sec.absoluteBoundingBox) || pick(sec.bbox);
+  if (own > 0) return own;
+
+  if (!figmaIndex || typeof figmaIndex.get !== 'function') return 0;
+
+  // ② 按 figmaNodeId / id 精确回查
+  for (const key of [sec.figmaNodeId, sec.id]) {
+    if (!key) continue;
+    const hit = pick(figmaIndex.get(String(key))?.bbox) || pick(figmaIndex.get(String(key))?.rawNode?.absoluteBoundingBox);
+    if (hit > 0) return hit;
+  }
+
+  // ③ 按 sourceNodeIds 回查（拆列合成 id 落在此分支）
+  const ids = Array.isArray(sec.sourceNodeIds) ? sec.sourceNodeIds : [];
+  for (const raw of ids) {
+    const hit = pick(figmaIndex.get(String(raw))?.bbox);
+    if (hit > 0) return hit;
+  }
+
+  // ④ 容器节点无自身归属时，回退到其子树最上节点的 box（figmaSectionBox 同源口径）
+  const viaSection = figmaSectionBox(sec, figmaIndex);
+  const viaBox = pick(viaSection);
+  if (viaBox > 0) return viaBox;
+
+  return 0;
+}
+
+/**
  * 🛡️ 层①（2026-09-11）：确定性 index.vue 模板装配 —— 治 COMP-001 / CODE-021 / 语义门禁。
  *
  * 背景：index.vue 的 <template> 原本由 LLM 分块手写（buildTemplateChunkMiddle 只给「强制命名 +
@@ -344,6 +445,14 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
   // 🛡️ 推 A（2026-09-14）：确定性子组件文件集 —— index 层「引用谁」的唯一事实源。
   // 来自 nameOf（与 template 标签、子组件文件名同一份映射），assembleIndexVue 据此约束 import。
   const componentFiles = [...new Set([...nameOf.values()])];
+
+  // 🛡️ P4（2026-09-17 · d70a19bf 实锤）：装配层回查 Figma bbox 的索引。
+  // planner 拆列合成 id（287:5-left）在 effectiveSections 里没有 absoluteBoundingBox，
+  // 必须按 sourceNodeIds 回查真实 Figma 节点尺寸，否则三栏被 flex:1 均分。
+  // 单一事实源：与 anchorPhantomSections / sortSectionsByFigmaY 共用 indexFigmaNodes。
+  const figmaIndex = indexFigmaNodes(
+    input?.figmaNodeData?.document || input?.figmaNodeData || null,
+  );
 
   const headerLeaves = leaves.filter((s) => s.type === 'header');
   const bodyLeaves = leaves.filter((s) => s.type !== 'header');
@@ -400,13 +509,25 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
     lines.push(`    </template>`);
   }
   if (bodyLeavesFinal.length > 0) {
-    lines.push(`    <div class="${rootContainerClass}">`);
+    // 🛡️ P5 高度传导（2026-09-17 · e0cdf905 实锤）：slot-con 确定化为 flex column 容器。
+    //   此前它是 block（display 由 LLM 的 less 决定），顶层容器/叶子失去 flex item 身份，
+    //   高度只能靠 less 里的 height:100%（LLM 写了才有）。确定化后整条链从 pannel-content
+    //   → slot-con → 容器 → wrapper → 子项 全程 flex 传导，不再依赖 LLM 样式。
+    lines.push(`    <div class="${rootContainerClass}" style="display:flex;flex-direction:column;">`);
     // 🛡️ E1 治本（2026-09-16）：递归保留容器层级。此前用 bodyLeavesFinal 平铺叶子，
     //   switch/@antd-tab 等中间容器被丢弃 → active/default/tabs/cons 全部平级，
     //   用户指正「switch 没有组成一个元素，而是和下面所有内容全部 flex 了」。
     //   治本：按树递归渲染，容器（isLayoutContainer）生成 wrapper <div class="c-xxx-container">，
     //   叶子生成子组件标签；容器 class 用语义名派生，保证样式侧可精确命中。
-    const renderBodyNode = (sec, indent) => {
+    // 🛡️ P6 wrapper 容器化合并（2026-09-17 · 1c98bab9 层次过深实锤）：
+    //   P2/P3/P5 曾给每个子项无条件包一层「比例分配 wrapper」空壳 div（flex:0.xxx +
+    //   display:flex 传导），再叠 E1 语义容器 div → 模板一半是空壳标签，可读性差。
+    //   治本：比例直接内联到目标元素自身 style ——
+    //   · 容器 div：吃父比例（parentFlexStyle）+ 对子方向（display:flex;flex-direction）
+    //   · 叶子子组件标签：吃父比例（parentFlexStyle，Vue attrs 继承透传到子组件根元素）
+    //   一层承载全部职责，wrapper 整体消失。传导链不变：
+    //   pannel-content → slot-con → 容器(比例+方向) → 子元素(比例) 全程 flex。
+    const renderBodyNode = (sec, indent, parentFlexStyle = '') => {
       const pad = '      ' + '  '.repeat(indent);
       if (isLayoutContainerSection(sec)) {
         // 🛡️ 容器 class 语义化：中文容器名（中间图表/统计数据）映射为英文 class，
@@ -447,13 +568,52 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
         //   （switch=horizontal 两 tab 一行、tabs=vertical 竖排）。直接内联到容器 div，
         //   不依赖 LLM 给容器类写样式（此前 switch-con 在 common.less 里 0 定义 → 方向丢失）。
         const flexDir = String(sec.layout || 'vertical').toLowerCase() === 'horizontal' ? 'row' : 'column';
-        lines.push(`${pad}<div class="${cls}" style="display:flex;flex-direction:${flexDir};">`);
-        for (const child of sec.children || []) {
-          renderBodyNode(child, indent + 1);
+        const isHorizontal = flexDir === 'row';
+        // 🛡️ P1 修复（2026-09-17）：容器 div 添加 data-section-id，让 resource-mounter 能精确匹配
+        //   到递归渲染后的 DOM 层级（此前无此属性 → targetDomSelector 匹配失败 → 资源挂载丢失）。
+        const sectionIdAttr = sec.id ? ` data-section-id="${sec.id}"` : '';
+        // 🛡️ P5 高度传导（2026-09-17 · e0cdf905 实锤）：容器 div 必须内联 flex:1;min-height:0 ——
+        //   它处于父 flex 容器内部，不内联则高度退回内容流 auto → 塌陷。
+        //   🛡️ P6 合并：容器自身的 flex 比例优先用父分配的 parentFlexStyle（无分配时回退 flex:1），
+        //   min 约束对齐父容器主轴（水平父→min-width:0 / 垂直父→min-height:0）。
+        //   align-items:stretch 保留（水平容器交叉轴撑满高度）。
+        const parentIsHorizontal = parentFlexStyle.includes('min-width:0');
+        const ownFlex = parentFlexStyle || `flex:1;${parentIsHorizontal ? 'min-width:0' : 'min-height:0'};`;
+        lines.push(`${pad}<div class="${cls}"${sectionIdAttr} style="${ownFlex}display:flex;flex-direction:${flexDir};${isHorizontal ? 'align-items:stretch;' : ''}">`);
+        // 🛡️ P2 修复（2026-09-17）：水平 flex 子项按 Figma 实际宽度比例分配 flex-grow，
+        //   替代旧版统一 flex:1 均分（此前 tabs 46px 和 cons 367px 被 50:50 均分，严重失真）。
+        //   计算逻辑：收集所有子节点宽度 → 求和 → 每个子项 flex-grow = width / totalWidth。
+        //   无宽度信息时回退 flex:1（保持向后兼容）。
+        // 🛡️ P2/P3 修复（2026-09-17）：水平容器按宽度比例、垂直容器按高度比例分配 flex-grow。
+        //   此前垂直容器完全没有高度约束 → 子项 collapse 到 0（8529b7e2 echarts-bar-con 高度为 0 实锤）。
+        const childWidths = isHorizontal
+          ? (sec.children || []).map((c) => resolveSectionFlexSize(c, figmaIndex, 'width'))
+          : [];
+        const childHeights = !isHorizontal
+          ? (sec.children || []).map((c) => resolveSectionFlexSize(c, figmaIndex, 'height'))
+          : [];
+        
+        for (let i = 0; i < (sec.children || []).length; i++) {
+          const child = sec.children[i];
+          // 🛡️ P0/P2/P3（2026-09-17）：子项按 Figma 宽度/高度比例分配 flex-grow，
+          //   解决「统一 flex:1 均分失真」与「无约束 collapse 到 0」。
+          //   🛡️ P6 合并：比例不再包 wrapper，直接传给子节点内联到其自身标签。
+          if (isHorizontal) {
+            const flexStyle = flexItemStyleFromWidths(childWidths, i);
+            renderBodyNode(child, indent + 1, flexStyle);
+          } else {
+            const flexStyle = flexItemStyleFromHeights(childHeights, i);
+            renderBodyNode(child, indent + 1, flexStyle);
+          }
         }
         lines.push(`${pad}</div>`);
       } else if (sec) {
-        lines.push(`${pad}<${tagFor(sec, 'ContentSection')} />`);
+        // 🛡️ P6 合并：叶子子组件标签直接内联父分配的比例（parentFlexStyle）。
+        //   Vue3 组件标签上的 style 经 attrs 继承透传到子组件根元素，子组件根
+        //   自身就是 flex item，无需 wrapper 中转。无分配时回退 flex:1;min-height:0
+        //   （顶层叶子直挂 slot-con 的兜底，slot-con 是 column 容器）。
+        const leafStyle = parentFlexStyle || 'flex:1;min-height:0;';
+        lines.push(`${pad}<${tagFor(sec, 'ContentSection')} style="${leafStyle}" />`);
       }
     };
     for (const root of treeSections) {
