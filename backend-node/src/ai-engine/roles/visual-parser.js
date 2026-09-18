@@ -23,6 +23,9 @@ import { collectFigmaNodes, applyFigmaElementHeightRatios } from '../utils/figma
 import { collectFigmaTextTruth, findClosestTruth } from '../utils/text-truth-guard.js'
 // 🛡️ 6-B（2026-09-15）：seriesColors 臆造色真值修正（VLM 红蓝对比先验 vs Figma 蓝系真值）
 import { collectFigmaChartColors, resolveSeriesColors } from '../utils/figma-color-truth.js'
+// 🛡️ 治本（2026-09-18）：fill → rgba 统一纯函数（fill.opacity 优先于 color.a），
+// 修复 mc-max-1789646258134-d21c0618 stat-card 半透明底被输出成不透明全饱和色。
+import { fillToRgba } from '../utils/section-tree.js'
 
 const logger = createLogger({ name: 'visual-parser' })
 
@@ -516,10 +519,8 @@ ${analysisTask}`
     if (node.fills && node.fills.length > 0) {
       const colors = node.fills
         .filter(f => f.visible !== false && f.color)
-        .map(f => {
-          const c = f.color
-          return `rgba(${Math.round((c.r || 0) * 255)},${Math.round((c.g || 0) * 255)},${Math.round((c.b || 0) * 255)},${c.a !== undefined ? c.a : 1})`
-        })
+        .map(f => fillToRgba(f))
+        .filter(Boolean)
       if (colors.length > 0) colorStr = ` color=[${colors.join(';')}]`
 
       // 渐变信息

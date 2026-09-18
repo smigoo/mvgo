@@ -1,3 +1,5 @@
+import { buildNodeLayoutFacts } from '../utils/figma-node-layout-facts.js'
+
 function visiblePaints(paints) {
   return Array.isArray(paints) ? paints.filter((paint) => paint && paint.visible !== false) : []
 }
@@ -142,6 +144,11 @@ export function compileDesignFacts({ figmaNodeData, visualAnalysis } = {}) {
       },
     },
     charts: normalizeCharts(visualAnalysis?.charts || visualAnalysis?.layoutStructure?.charts),
+    // 🛡️ B' 事实层（2026-09-18 治本）：每 figma 节点的布局模型（display/flex-direction），
+    // 由 Figma 几何确定性编译（标准读 layoutMode；不标准读 absoluteBoundingBox 几何推断，默认 flex）。
+    // 覆盖 sectionLayoutFacts（vision 派生 + 仅 section 范围）的局限，含子组件内部容器。
+    // engineer prompt 据此作为强制约束下发（见 constraint-reinforcement.buildNodeLayoutFactsReinforcement）。
+    nodeLayoutFacts: buildNodeLayoutFacts(figmaNodeData),
     provenance: {
       deterministicSource: root ? 'figma-api' : 'none',
       semanticSource: visualAnalysis ? 'visual-analysis' : 'none',

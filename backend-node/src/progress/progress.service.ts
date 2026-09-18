@@ -377,7 +377,25 @@ export class ProgressService {
     this.tasksService.completeTask(sessionId, result);
 
     // 🔒 广播前脱敏：剥离 figmaToken / aiApiKey 等密钥明文
-    const safeResult = redactSecrets(result);
+    // 🛡️ 2026-09-18 防崩兜底（b58918b5 等四轮实锤）：本方法在生成成功回调链上被 await，
+    //   其中任何异常都会成为未捕获异常 → 直接杀掉后端进程（旧 redactSecrets 遇循环
+    //   引用栈溢出即此）。redactSecrets 已改为迭代+循环安全，此处再加一层 fail-safe：
+    //   即使脱敏/序列化意外失败，也降级为最小安全载荷广播，绝不向外抛异常、绝不回退
+    //   到未脱敏原文（避免密钥泄露）。
+    let safeResult: any;
+    try {
+      safeResult = redactSecrets(result);
+    } catch (err: any) {
+      this.logger.warn(
+        `完成消息脱敏失败，降级为最小载荷广播（不回退原文）: ${err?.message || String(err)}`,
+        { sessionId },
+      );
+      safeResult = {
+        sessionId,
+        redacted: true,
+        degraded: { reason: 'redact-failed', message: err?.message || String(err) },
+      };
+    }
 
     // 2. 向所有连接广播完成消息并关闭
     const conns = this.sessions.get(sessionId);

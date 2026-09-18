@@ -76,6 +76,59 @@ ${hasNestedGrid ? '- [ ] 双层结构的内层栅格仍按要求用 grid + 正�
 }
 
 /**
+ * 🛡️ B' 布局事实强化（2026-09-18 治本）：把几何编译出的 nodeLayoutFacts 下发为
+ * 「逐 figma 节点强制布局约束」，覆盖 LLM 默认，禁止违背。
+ *
+ * 与 buildLayoutConstraintReinforcement（vision 派生、仅 section 范围）互补：
+ * 本函数覆盖【所有】 figma 节点（含子组件内部容器，如 tab 列表），来源是 Figma 几何真值，
+ * 确定性更强。env-monitor 的 `.c-env-monitor-tabs-list`（figma 节点 2:7889，4 子项横排、
+ * layoutMode 缺失）即靠此被强制 display:flex; flex-direction:row。
+ *
+ * @param {Record<string,{display,flexDirection,source,confidence}>} nodeLayoutFacts
+ * @param {Object} [figmaNodeData] 用于把 node id 解析成可读名称
+ * @returns {string} 注入 engineer 样式 prompt 的约束块（空串=无事实）
+ */
+export function buildNodeLayoutFactsReinforcement(nodeLayoutFacts, figmaNodeData) {
+  if (!nodeLayoutFacts || typeof nodeLayoutFacts !== 'object') return ''
+  const entries = Object.entries(nodeLayoutFacts).filter(
+    ([, fact]) => fact && fact.display,
+  )
+  if (entries.length === 0) return ''
+
+  // 建 figma node id -> name 索引（便于 LLM 把「约束」对到它要生成的 class）
+  const nameIndex = new Map()
+  const walk = (node) => {
+    if (!node || typeof node !== 'object') return
+    if (node.id != null) nameIndex.set(String(node.id), node.name || String(node.id))
+    if (Array.isArray(node.children)) for (const c of node.children) walk(c)
+  }
+  const root =
+    figmaNodeData && typeof figmaNodeData === 'object'
+      ? figmaNodeData.document ?? figmaNodeData
+      : null
+  if (root) walk(root)
+
+  const lines = entries.map(([nodeId, fact]) => {
+    const name = nameIndex.get(nodeId) || nodeId
+    return (
+      `- figma 节点 \`${nodeId}\`（${name}）：其容器 CSS **必须**写为 ` +
+      `\`display: ${fact.display}; flex-direction: ${fact.flexDirection};\`` +
+      `（Figma 几何真值来源：${fact.source}，置信度：${fact.confidence}）。` +
+      `⚠️ 禁止省略 display、禁止用 absolute 还原定位、禁止改成其他方向。`
+    )
+  })
+
+  return `
+## 🛡️ 布局模型确定性约束（Figma 几何真值 · 覆盖 LLM 默认，禁止违背）
+
+以下容器的布局方向由 Figma 节点几何**确定性给出**，不是建议。你生成对应 figma 节点（id 见上）的 class 时，
+**必须**原样写入 \`display\` / \`flex-direction\`，不得省略、不得改成 \`absolute\`、不得反向。
+
+${lines.join('\n')}
+`
+}
+
+/**
  * 资源约束强化文本
  * 在 template/script 生成段注入，防止资源变量误用
  */
@@ -257,7 +310,7 @@ export function buildStyleConstraintReinforcement() {
  * 在主 prompt 中注入
  */
 export function buildAllConstraintReinforcements(options = {}) {
-  const { layoutStructure, availableResources } = options
+  const { layoutStructure, availableResources, figmaNodeData, designFacts } = options
 
   let reinforcement = '\n\n# 🔴 关键约束铁律（生成前必读）\n\n'
   reinforcement += '以下约束来自视觉分析和系统规范，违反将导致L0-B门禁拦截或编译崩溃。\n\n'
@@ -270,6 +323,18 @@ export function buildAllConstraintReinforcements(options = {}) {
     reinforcement += buildResourceConstraintReinforcement(availableResources)
   }
 
+  // 🛡️ B' P3.5（2026-09-18）：component chunk（index.vue/子组件 .vue）的 scoped 样式段
+  // 此前无 Figma 几何布局约束（style chunk 有、component chunk 没有）→ LLM 在 scoped 段
+  // 漏写 display（实测 c-env-monitor-5c2a93d7：chunk 2 三个 section 全漏、chunk 3/4/5 为 0），
+  // 全靠收敛层规则①②事后补。把 nodeLayoutFacts 强化同样注入 component chunk prompt，
+  // LLM 在 scoped 段也必须写 display/flex-direction。
+  // facts 优先取 designFacts.nodeLayoutFacts（assembler 已算好）；缺省时用作用域内
+  // figmaNodeData 现算（scopedInput 子树自动裁剪 → 子组件只看到自己的节点，token 不膨胀）。
+  const nodeFacts = designFacts?.nodeLayoutFacts || buildNodeLayoutFacts(figmaNodeData)
+  if (nodeFacts && Object.keys(nodeFacts).length > 0) {
+    reinforcement += buildNodeLayoutFactsReinforcement(nodeFacts, figmaNodeData)
+  }
+
   reinforcement += buildStyleConstraintReinforcement()
 
   return reinforcement
@@ -277,6 +342,7 @@ export function buildAllConstraintReinforcements(options = {}) {
 
 export default {
   buildLayoutConstraintReinforcement,
+  buildNodeLayoutFactsReinforcement,
   buildResourceConstraintReinforcement,
   buildStyleConstraintReinforcement,
   buildAllConstraintReinforcements

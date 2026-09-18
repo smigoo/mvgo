@@ -20,6 +20,17 @@ import { stripLlmTailGarbage } from '../utils/llm-tail-garbage.js';
 import { ensureSectionAssembly } from '../utils/section-coverage-guard.js';
 import { detectUnknownText } from '../utils/text-truth-guard.js';
 import { pruneDuplicateStyleDecls } from '../utils/style-dedup-guard.js';
+import {
+  collapseBackgroundShellDivs,
+  injectStateSwitchInteraction,
+  extractPerCharTextTruth,
+  injectPerCharTextSegments,
+  validateDynamicClassStyles,
+  ensureFlexLayoutForSiblings,
+  validateResourceBindingLevel,
+  extractNodeLevelColorTruth,
+  injectNodeLevelColorTruth,
+} from '../utils/post-process.js';
 import { extractSfcTemplateRegion } from '../utils/sfc-template-extractor.js';
 
 const VUE = /\.vue$/i;
@@ -1092,6 +1103,68 @@ export function registerBuiltinFixRules(pipeline, engineer, context = {}) {
         }
       },
     });
+    // 🛡️ P-01/P-07/P-10 背景空壳治理 + P-09 状态切换装配（2026-09-17 · 2bfeaac7 实锤）：
+    //   engineer 主路径（execute 后处理段）只覆盖「首轮生成」；L0-B 重试轮走
+    //   CodeFixPipeline 路径时这些治理从未执行 → tab 背景消失/切换交互缺失在
+    //   重试轮复发。统一注册进 POLISH 阶段（幂等，与主路径重复执行结果一致）。
+    pipeline.register({
+      id: 'collapse-background-shell-divs',
+      name: '背景空壳/wrapper 治理（P-01/P-07/P-10）',
+      phase: FIX_PHASE.POLISH,
+      fix: (content, ctx) => {
+        if (!ctx || !/\.vue$/i.test(ctx.path || '')) return content;
+        try {
+          return collapseBackgroundShellDivs(content);
+        } catch (e) {
+          pipeline.logger?.warn?.('背景空壳治理失败（非阻断）', { error: e?.message, file: ctx.path });
+          return content;
+        }
+      },
+    });
+    pipeline.register({
+      id: 'inject-state-switch-interaction',
+      name: '双状态卡切换交互装配（P-09）',
+      phase: FIX_PHASE.POLISH,
+      fixFiles: (files) => {
+        try {
+          const r = injectStateSwitchInteraction(files, resourceDomMapping);
+          if (r.applied && pipeline.logger) {
+            pipeline.logger.info(
+              `🎯 [mc] 双状态卡切换交互已装配（P-09，pipeline 路径）：active=${r.details.active} default=${r.details.default}`,
+            );
+          }
+          return { ...files }; // 原地更新 + 新对象返回（契约）
+        } catch (e) {
+          pipeline.logger?.warn?.('P-09 装配失败（非阻断）', { error: e?.message });
+          return files;
+        }
+      },
+    });
+    // 🛡️ P-11 per-character 分段着色（双路径覆盖：L0-B 重试走 CodeFixPipeline，
+    //    engineer 主路径的治理在此**不会**执行，必须同步注册，否则重试轮颜色又丢）。
+    //    真值源 = figmaNodeData（prune 后已保留 characterStyleOverrides/styleOverrideTable）。
+    pipeline.register({
+      id: 'inject-per-char-text-segments',
+      name: 'per-character 分段着色装配（P-11）',
+      phase: FIX_PHASE.POLISH,
+      fixFiles: (files) => {
+        try {
+          const truth = extractPerCharTextTruth(figmaNodeData);
+          if (truth.length === 0) return files;
+          const r = injectPerCharTextSegments(files, truth);
+          if (r.applied && pipeline.logger) {
+            pipeline.logger.info(
+              `🎯 [mc] per-character 分段着色已装配（P-11，pipeline 路径）：` +
+                `${(r.details.files || []).join(', ')} | abnormal=${r.details.abnormalColor}`,
+            );
+          }
+          return { ...files };
+        } catch (e) {
+          pipeline.logger?.warn?.('P-11 装配失败（非阻断）', { error: e?.message });
+          return files;
+        }
+      },
+    });
     // 🛡️ TEXT-001（2026-09-01）：文本兄弟顺序按 Figma 视觉坐标重排。
     // 事故 mc-max-1788251680480-98c9140b：tabs 数组按 children 序而非视觉 x 序，
     // 文案全对只有顺序错，全部存在性门禁放行（盲区）。事实源 utils/text-order-guard.js，
@@ -1101,6 +1174,78 @@ export function registerBuiltinFixRules(pipeline, engineer, context = {}) {
       name: '文本兄弟顺序按视觉坐标重排',
       phase: FIX_PHASE.POLISH,
       fixFiles: (files) => engineer._fixTextSiblingOrder(files, figmaNodeData),
+    });
+    // 🛡️ P-12 防御性治理规则（2026-09-18）
+    // 背景：c-env-monitor-a27a33f7 TabSwitcher 布局错乱 + c-device-monitor-7de62721 颜色错误
+    // 根因：LLM 产出结构性错误（动态 class 无样式、容器缺 flex、资源绑定层级错误、颜色真值提取失败）
+    // 规则：
+    //   P-12a validate-dynamic-class-styles：扫描模板中所有 class 名，与 style 选择器交叉比对，缺失的补空规则
+    //   P-12b ensure-flex-layout-for-siblings：检测父容器下有多个直接子元素且无 flex，注入 display: flex + align-items + gap
+    //   P-12c validate-resource-binding-level：检测 backgroundImage 绑定位置，与 Figma 节点树对比，层级不匹配时警告
+    //   P-12d extract-node-level-color-truth：提取每个 TEXT 节点的颜色真值（默认 fill + per-char 覆盖色）
+    pipeline.register({
+      id: 'validate-dynamic-class-styles',
+      name: '动态 class 样式校验（P-12a）',
+      phase: FIX_PHASE.POLISH,
+      fix: (content, ctx) => {
+        if (!ctx || !/\.vue$/i.test(ctx.path || '')) return content;
+        try {
+          return validateDynamicClassStyles(content);
+        } catch (e) {
+          pipeline.logger?.warn?.('P-12a 动态 class 样式校验失败（非阻断）', { error: e?.message, file: ctx.path });
+          return content;
+        }
+      },
+    });
+    pipeline.register({
+      id: 'ensure-flex-layout-for-siblings',
+      name: 'Flex 布局自动注入（P-12b）',
+      phase: FIX_PHASE.POLISH,
+      fix: (content, ctx) => {
+        if (!ctx || !/\.vue$/i.test(ctx.path || '')) return content;
+        try {
+          return ensureFlexLayoutForSiblings(content);
+        } catch (e) {
+          pipeline.logger?.warn?.('P-12b Flex 布局自动注入失败（非阻断）', { error: e?.message, file: ctx.path });
+          return content;
+        }
+      },
+    });
+    pipeline.register({
+      id: 'validate-resource-binding-level',
+      name: '资源绑定层级校验（P-12c）',
+      phase: FIX_PHASE.POLISH,
+      fix: (content, ctx) => {
+        if (!ctx || !/\.vue$/i.test(ctx.path || '')) return content;
+        try {
+          return validateResourceBindingLevel(content, resourceDomMapping);
+        } catch (e) {
+          pipeline.logger?.warn?.('P-12c 资源绑定层级校验失败（非阻断）', { error: e?.message, file: ctx.path });
+          return content;
+        }
+      },
+    });
+    pipeline.register({
+      id: 'extract-node-level-color-truth',
+      name: '节点级颜色真值提取（P-12d）',
+      phase: FIX_PHASE.POLISH,
+      fixFiles: (files) => {
+        try {
+          const colorTruth = extractNodeLevelColorTruth(figmaNodeData);
+          if (colorTruth.length === 0) return files;
+          const r = injectNodeLevelColorTruth(files, colorTruth);
+          if (r.applied && pipeline.logger) {
+            pipeline.logger.info(
+              `🎯 [mc] 节点级颜色真值已注入（P-12d，pipeline 路径）：` +
+                `${(r.details.files || []).join(', ')} | nodes=${r.details.nodeCount}`,
+            );
+          }
+          return { ...files };
+        } catch (e) {
+          pipeline.logger?.warn?.('P-12d 节点级颜色真值注入失败（非阻断）', { error: e?.message });
+          return files;
+        }
+      },
     });
   }
 
@@ -1191,6 +1336,12 @@ export const BUILTIN_RULE_IDS = [
   'strip-orphan-controls',
   'fix-section-heights',
   'anchor-root-container',
+  'collapse-background-shell-divs',
+  'inject-state-switch-interaction',
+  'validate-dynamic-class-styles',
+  'ensure-flex-layout-for-siblings',
+  'validate-resource-binding-level',
+  'extract-node-level-color-truth',
 ];
 
 export default { registerBuiltinFixRules, BUILTIN_RULE_IDS };

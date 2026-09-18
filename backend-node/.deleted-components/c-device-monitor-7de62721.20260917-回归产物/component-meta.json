@@ -1,0 +1,13 @@
+{
+  "codeVersion": {
+    "gitHash": "a209fa5",
+    "distBuildAt": "2026-09-17T19:43:31.801Z",
+    "writtenAt": 1789674580096
+  },
+  "degradedFiles": [
+    "package/components/ContentActive.vue"
+  ],
+  "degradedAt": 1789674580096,
+  "reason": "SFC 编译失败，已隔离降级（可二次生成）",
+  "runtimeVerified": true
+}

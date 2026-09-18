@@ -163,6 +163,9 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
     return { mounted, diagnostics };
   }
 
+  // 🛡️ P-08：figma 节点索引（bg 父卡片的几何真值），由调用方传入
+  const figmaIndex = options.figmaIndex || null;
+
   // 🛡️ 注入器自检防线（2026-09-17 · 重点车辆监测 mc-max-1789608574046 实锤）：
   //   资源挂载（bg/icon）会把 :style / <img> / import 注入目标 .vue；若注入点错配
   //   （如「超高车辆」卡背景 bg1 经 S7 回退挂到「危化品车」卡 ContentSection5），
@@ -310,6 +313,23 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
                 mountTarget: mount.mountTarget,
                 reason: 'already-at-root',
               };
+            }
+            // 🛡️ P-08 根布局确定化（2026-09-17 · 36c3a630 实锤 ContentDefault 根无 display）：
+            //   状态子组件根的内部布局靠 LLM 自由发挥——ContentActive 写了 display:flex、
+            //   ContentDefault 漏写 → block 竖排 + 内容溢出容器。治本：按 Figma 卡片
+            //   （bg 节点的父节点）直接子节点 bbox 几何分类：x 区间两两不相交 → row、
+            //   y 区间两两不相交 → column；根 class 规则无 display 声明时注入
+            //   display:flex;flex-direction:<方向>;align-items:center。
+            //   事实源 = figmaRoot 索引（不是 LLM 输出）。
+            if (result) {
+              const laidOut = ensureStateRootFlexLayout(
+                allFiles[tgtFile],
+                options.figmaIndex,
+                mount.figmaNodeId,
+              );
+              if (laidOut && writeGuarded(tgtFile, laidOut, allFiles[tgtFile])) {
+                allFiles[tgtFile] = laidOut;
+              }
             }
             // 清洗：该 var 在异文件 + 同文件非根标签的串用/误挂引用
             if (result) {
@@ -576,7 +596,23 @@ export function removeContainerBgOffTargetRefs(
       changed = true;
     }
     if (changed) {
-      const newCode = c.replace(tplMatch[0], `<template>${tpl}</template>`);
+      let newCode = c.replace(tplMatch[0], `<template>${tpl}</template>`);
+      // 🛡️ P-06b（2026-09-17 · 15f69c59 实锤 CODE-022 BLOCK）：清洗删除该 var 的
+      //   全部错挂引用后，若文件内（模板+script）已无任何剩余引用，其 import 成为
+      //   孤儿 → CODE-022「资源变量未挂载」硬闸 BLOCK 且重试耗尽（CODE-022 修复器
+      //   在清洗之前已跑过，没人兜底）。此处同步删除孤儿 import（该 var 的正确挂载
+      //   在 owner 文件，本文件本就不该持有）。
+      const tplAfter = newCode.match(/<template>([\s\S]*?)<\/template>/);
+      const restRefs =
+        (tplAfter ? varRe.test(tplAfter[1]) : false) ||
+        new RegExp(`\\b${varName}\\s*\\.`).test(newCode);
+      const importRe = new RegExp(
+        `^import\\s+${varName}\\s+from\\s+['"][^'"]+['"];?[ \\t]*\\n?`,
+        'm',
+      );
+      if (!restRefs && importRe.test(newCode)) {
+        newCode = newCode.replace(importRe, '');
+      }
       const check = validateVueSfc(newCode, p, {
         lessGlobalVars: options.lessGlobalVars,
       });
@@ -595,4 +631,87 @@ export function removeContainerBgOffTargetRefs(
     }
   }
   return out;
+}
+
+/**
+ * 🛡️ P-08 状态子组件根布局确定化（2026-09-17 · 36c3a630 实锤）。
+ *
+ * 现象：ContentActive 根写了 display:flex（横向 icon+文字），ContentDefault 根漏写
+ * display → block 竖排 + 内容溢出容器。同一 Figma 卡片结构，两份产物风格漂移。
+ *
+ * 治本（事实源 = Figma 几何，零 LLM 依赖）：
+ *   1. 取 bg 节点的父节点（状态卡片 GROUP）；
+ *   2. 读卡片直接子节点（icon/text/line…）的 absoluteBoundingBox；
+ *   3. 几何分类：所有子节点 x 区间两两不相交 → row；y 区间两两不相交 → column；
+ *      都不满足 → 不注入（fail-closed，不猜）；
+ *   4. 根 class 的顶层规则无 display 声明时，注入
+ *      display:flex; flex-direction:<方向>; align-items:center。
+ *      已有 display（无论值）→ 尊重不覆盖。
+ *
+ * @param {string} content owner .vue 全文
+ * @param {Map|null} figmaIndex nodeId→node 索引（含 __parent 反链）
+ * @param {string|null} bgNodeId bg 资源的 figmaNodeId
+ * @returns {string|null} 有改动返回新内容；无需/无法注入返回 null
+ */
+export function ensureStateRootFlexLayout(content, figmaIndex, bgNodeId) {
+  if (typeof content !== 'string' || !figmaIndex || !bgNodeId) return null;
+  const bgNode = figmaIndex.get(String(bgNodeId));
+  if (!bgNode) return null;
+  const card = bgNode.__parent || null;
+  if (!card) return null;
+  const kids = (card.children || []).filter(
+    (k) => k && k.absoluteBoundingBox && String(k.id) !== String(bgNodeId),
+  );
+  if (kids.length < 2) return null;
+
+  const boxes = kids.map((k) => k.absoluteBoundingBox).filter(Boolean);
+  if (boxes.length < 2) return null;
+  // 🛡️ 几何分类（分组感知）：真实卡片常为「icon | 右侧竖排文字」嵌套结构——
+  //   直接两两判定会因组内重叠 fail-closed。先按 x 聚簇（簇间 x 不相交），
+  //   簇数 ≥2 → 根 row（簇内方向由内层容器负责）；否则按 y 两两不相交 → column。
+  const sortedX = [...boxes].sort((a, b) => a.x - b.x);
+  const xClusters = [];
+  let cur = [sortedX[0]];
+  for (let i = 1; i < sortedX.length; i++) {
+    const prev = cur[cur.length - 1];
+    if (sortedX[i].x >= prev.x + prev.width - 1) xClusters.push(cur), (cur = [sortedX[i]]);
+    else cur.push(sortedX[i]);
+  }
+  xClusters.push(cur);
+  let direction = null;
+  if (xClusters.length >= 2) direction = 'row';
+  else {
+    const yDisjoint = boxes.every((a, i) =>
+      boxes.every((b, j) => i === j || a.y + a.height <= b.y + 1 || b.y + b.height <= a.y + 1),
+    );
+    if (yDisjoint) direction = 'column';
+  }
+  if (!direction) return null; // 无法安全判定 → 不猜
+
+  // 根 class 提取 + display 缺则注入
+  const rootTag = findTemplateRootTag(content);
+  if (!rootTag) return null;
+  const clsM = rootTag.match(/class="([^"]*)"/);
+  if (!clsM) return null;
+  const firstCls = clsM[1].trim().split(/\s+/)[0];
+  if (!firstCls) return null;
+
+  const styleSeg = content.match(/<style[^>]*>([\s\S]*?)<\/style>/);
+  if (!styleSeg) return null;
+  const clsEsc = firstCls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const headRe = new RegExp('(?:^|\\n|\\})\\s*(\\.' + clsEsc + ')\\s*\\{');
+  const headM = styleSeg[1].match(headRe);
+  if (!headM) return null;
+  // 直属声明体（到嵌套 { 或闭合 } 为止）
+  const afterHead = styleSeg[1].slice(styleSeg[1].indexOf(headM[0]) + headM[0].length);
+  const directBody = afterHead.split(/[{}]/)[0] || '';
+  if (/display\s*:/i.test(directBody)) return null; // 已有 display → 尊重
+
+  const insertAt =
+    content.indexOf(styleSeg[0]) + styleSeg[0].indexOf(headM[0]) + headM[0].length;
+  return (
+    content.slice(0, insertAt) +
+    '\n  display: flex;\n  flex-direction: ' + direction + ';\n  align-items: center;\n' +
+    content.slice(insertAt)
+  );
 }

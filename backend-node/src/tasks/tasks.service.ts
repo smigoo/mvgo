@@ -1335,6 +1335,24 @@ export class TasksService {
   /**
    * 获取任务状态（精简版）
    */
+  /**
+   * 🛡️ 循环引用安全化：figmaNodeData（含子组件内部容器树）在生成期被注入 `__parent` 反链供几何判定，
+   * 但 `__parent` 与 `children` 形成循环引用，直接 JSON.stringify 会抛
+   * "Converting circular structure to JSON"（实测 GET /api/tasks/status/:sessionId 500）。
+   * 前端从不消费 `__parent`，故返回前递归剥离该键（深度防御避免栈溢出）。仅剔除键、不丢其他数据。
+   */
+  private stripParentRefs(value: any, depth = 0): any {
+    if (value === null || typeof value !== 'object') return value;
+    if (depth > 200) return undefined; // 防御：异常深 / 环时截断，避免栈溢出
+    if (Array.isArray(value)) return value.map((v) => this.stripParentRefs(v, depth + 1));
+    const out: Record<string, any> = {};
+    for (const k of Object.keys(value)) {
+      if (k === '__parent') continue;
+      out[k] = this.stripParentRefs(value[k], depth + 1);
+    }
+    return out;
+  }
+
   getTaskStatus(sessionId: string, userId?: string) {
     const task = this.tasks.get(sessionId);
 
@@ -1376,8 +1394,8 @@ export class TasksService {
         componentName: task.componentName,
         displayName: task.displayName, // 🏷️ 组件中文名（展示优先于 componentName）
         error: task.error,
-        progress: task.progress, // 🆕 返回完整的流程历史
-        result: task.result,
+        progress: this.stripParentRefs(task.progress), // 🆕 返回完整的流程历史（剥离 __parent 循环引用，避免 500）
+        result: this.stripParentRefs(task.result),
         // 🆕 返回 fileKey/nodeId，供前端「重试」重建 Figma URL
         fileKey: task.fileKey,
         nodeId: task.nodeId,
@@ -1635,7 +1653,7 @@ export class TasksService {
     if (userId && task.userId && task.userId !== userId) return null;
     const children = this.getChildren(sessionId);
     return {
-      ...task,
+      ...this.stripParentRefs(task),
       children: children.map((c) => ({
         sessionId: c.sessionId,
         componentId: c.componentId,
@@ -1652,7 +1670,7 @@ export class TasksService {
         duration: c.duration,
         progressCount: c.progressCount,
         error: c.error,
-        result: c.result,
+        result: this.stripParentRefs(c.result),
       })),
     };
   }

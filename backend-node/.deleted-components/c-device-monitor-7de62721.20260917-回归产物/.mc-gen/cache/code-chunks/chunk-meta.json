@@ -1,0 +1,89 @@
+{
+  "completed": [
+    "1-declare.json",
+    "3-package/index.vue",
+    "6-package/components/ContentActive.vue",
+    "5-package/components/HeaderSection.vue",
+    "7-package/components/ContentDefault.vue",
+    "8-package/components/TabsSection.vue",
+    "9-package/components/ContentCons.vue",
+    "10-resources/styles/themes/theme-vars.less",
+    "11-resources/styles/common.less"
+  ],
+  "total": 6,
+  "updatedAt": 1789674579961,
+  "files": {
+    "declare.json": [
+      {
+        "index": 1,
+        "file": "1-declare.json",
+        "segmentType": "declare",
+        "scriptPart": ""
+      }
+    ],
+    "package/index.vue": [
+      {
+        "index": 3,
+        "file": "3-package_index.vue",
+        "segmentType": "script",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/ContentActive.vue": [
+      {
+        "index": 6,
+        "file": "6-package_components_ContentActive.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/HeaderSection.vue": [
+      {
+        "index": 5,
+        "file": "5-package_components_HeaderSection.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/ContentDefault.vue": [
+      {
+        "index": 7,
+        "file": "7-package_components_ContentDefault.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/TabsSection.vue": [
+      {
+        "index": 8,
+        "file": "8-package_components_TabsSection.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "package/components/ContentCons.vue": [
+      {
+        "index": 9,
+        "file": "9-package_components_ContentCons.vue",
+        "segmentType": "component",
+        "scriptPart": ""
+      }
+    ],
+    "resources/styles/themes/theme-vars.less": [
+      {
+        "index": 10,
+        "file": "10-resources_styles_themes_theme-vars.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      }
+    ],
+    "resources/styles/common.less": [
+      {
+        "index": 11,
+        "file": "11-resources_styles_common.less",
+        "segmentType": "style",
+        "scriptPart": ""
+      }
+    ]
+  }
+}

@@ -2009,3 +2009,28 @@ export function semanticClassKeywords(raw) {
   ascii.forEach((w) => out.add(w.toLowerCase()))
   return [...out]
 }
+
+/**
+ * Figma fill → rgba() 字符串（供视觉分析 hint / 颜色真值表使用）。
+ *
+ * 🛡️ 治本（2026-09-18 · mc-max-1789646258134-d21c0618）：fill 级透明度丢失。
+ * Figma SOLID fill 结构 = { color: {r,g,b,a}, opacity }，其中 color.a 几乎恒为 1，
+ * 真正的图层级透明度在 fill.opacity。旧 visual-parser 只取 color.a → 半透明卡片背景
+ * （fill.opacity=0.10）被输出成不透明全饱和色 rgba(...,1) → LLM 把浅色底满铺、文字叠深底。
+ * 本函数统一口径：fill.opacity 优先于 color.a，二者都缺省则 1，透明度 round 到 2 位小数
+ * （吞掉 Figma 返回的 0.10000000149011612 浮点尾差）。与
+ * figma-connector._rgbaToHex / prompt-builder.toCssColor / 本文件 rgbaToCss 口径一致。
+ *
+ * @param {{ color?: {r?:number,g?:number,b?:number,a?:number}, opacity?:number }} fill
+ * @returns {string|null} rgba(r,g,b,a)；颜色缺失时 null
+ */
+export function fillToRgba(fill) {
+  const c = fill && typeof fill === 'object' ? fill.color : null
+  if (!c || typeof c.r !== 'number') return null
+  const r = Math.round(c.r * 255)
+  const g = Math.round(c.g * 255)
+  const b = Math.round(c.b * 255)
+  const rawOp = fill.opacity !== undefined ? fill.opacity : (c.a !== undefined ? c.a : 1)
+  const op = Math.round(rawOp * 100) / 100
+  return `rgba(${r},${g},${b},${op})`
+}

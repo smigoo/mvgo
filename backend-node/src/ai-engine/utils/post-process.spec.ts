@@ -12,6 +12,7 @@ import {
   stripHeaderChromeDecorations,
   ensureHeaderSlotRowLayout,
   collapseBackgroundShellDivs,
+  injectStateSwitchInteraction,
 } from './post-process.js';
 
 const HEADER_SECTION_VUE = `<template>
@@ -296,5 +297,219 @@ describe('collapseBackgroundShellDivs（P-01 背景空壳剥离+声明上移）'
   it('无 -bg 空壳 → 原样返回', () => {
     const src = '<template><div class="a"><span>x</span></div></template>';
     expect(collapseBackgroundShellDivs(src)).toBe(src);
+  });
+});
+
+describe('collapseBackgroundShellDivs · P-01b（36c3a630 tab 背景消失回归）', () => {
+  // 复现真实 LLM chunk（8-package_components_TabsSection.vue）结构：
+  // 父标签是动态 :class 数组 + 壳样式含 position:absolute（装饰层）+ 嵌套 active 变体
+  const TAB_SRC = `<template>
+  <div class="c-x-tabs">
+    <div
+      v-for="(tab, index) in tabs"
+      :key="tab.key"
+      :class="['c-x-tab-item', { 'c-x-tab-item--active': activeTab === tab.key }]"
+      @click="handleTabClick(tab.key)"
+    >
+      <div class="c-x-tab-bg"></div>
+      <div class="c-x-tab-content">
+        <span class="c-x-tab-label">{{ tab.label }}</span>
+      </div>
+    </div>
+  </div>
+</template>
+<style lang="less" scoped>
+.c-x-tab-item {
+  position: relative;
+  width: 46px;
+  cursor: pointer;
+
+  &--active {
+    .c-x-tab-bg {
+      background: linear-gradient(180deg, #318aff 0%, #70bfff 100%);
+      border: 1px solid #f0f5ff;
+    }
+    .c-x-tab-label { color: #ffffff; font-weight: 700; }
+  }
+}
+
+.c-x-tab-bg {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 34px;
+  height: 100%;
+  background: linear-gradient(180deg, #85baff 0%, #bfe2ff 100%);
+  border: 1px solid #f0f5ff;
+  border-radius: 4px;
+}
+</style>`;
+
+  it('绝对定位装饰层（position:absolute）→ 转宿主 ::before 伪元素：DOM 壳删除、渐变与几何保留（根因 3 + P-01c）', () => {
+    const out = collapseBackgroundShellDivs(TAB_SRC);
+    // DOM 壳已删除（模板中不再出现空壳 div）
+    expect(out).not.toMatch(/<div\s+class="c-x-tab-bg"[^>]*>\s*<\/div>/);
+    // 样式转伪元素：宿主::before + content 占位 + 原绝对定位几何 + 普通态渐变
+    expect(out).toMatch(new RegExp('\\.c-x-tab-item::before\\s*\\{[\\s\\S]*?content:'));
+    expect(out).toMatch(/position: absolute/);
+    expect(out).toMatch(/linear-gradient\(180deg, #85baff/);
+    // 激活态变体仍可覆盖伪元素（嵌套 .bg → &::before）
+    expect(out).toMatch(/&::before[\s\S]*?linear-gradient\(180deg, #318aff/);
+  });
+
+  it('非定位空壳 + 动态 :class 父 → 渐变并入父规则（根因 1）', () => {
+    const src = TAB_SRC.replace(/position: absolute;[\s\S]*?border-radius: 4px;/, 'background: linear-gradient(180deg, #85baff 0%, #bfe2ff 100%); border-radius: 4px;');
+    const out = collapseBackgroundShellDivs(src);
+    expect(out).not.toContain('c-x-tab-bg'); // 壳已删
+    expect(out).toMatch(/\.c-x-tab-item\s*\{[\s\S]*?linear-gradient\(180deg, #85baff/); // 渐变并入父顶层规则
+  });
+
+  it('合并落空（父规则缺失）且壳有视觉声明 → fail-closed 保留壳（根因 1 收口）', () => {
+    const src = `<template>
+  <div :class="['c-x-item', { on: x }]">
+    <div class="c-x-item-bg"></div>
+    <span>内容</span>
+  </div>
+</template>
+<style lang="less" scoped>
+.c-x-item-bg { background: linear-gradient(90deg, #111 0%, #222 100%); border-radius: 4px; }
+</style>`;
+    const out = collapseBackgroundShellDivs(src);
+    // 父类提取成功（动态数组）但父规则不存在 → merge 返回 null → 未合并
+    // → 壳有视觉声明且父无资源图 → 保留壳
+    expect(out).toContain('c-x-item-bg');
+    expect(out).toMatch(/linear-gradient\(90deg/);
+  });
+
+  it('嵌套变体块内的 .bg 规则 → 视觉声明上提到变体块直属（根因 2）', () => {
+    const src = `<template>
+  <div class="c-x-tab-item">
+    <div class="c-x-tab-bg"></div>
+    <span>标签</span>
+  </div>
+</template>
+<style lang="less" scoped>
+.c-x-tab-item {
+  width: 46px;
+  cursor: pointer;
+
+  &--active {
+    .c-x-tab-bg {
+      background: linear-gradient(180deg, #318aff 0%, #70bfff 100%);
+      border: 1px solid #f0f5ff;
+    }
+    .c-x-tab-label { color: #ffffff; }
+  }
+}
+
+.c-x-tab-bg {
+  background: linear-gradient(180deg, #85baff 0%, #bfe2ff 100%);
+  border-radius: 4px;
+}
+</style>`;
+    const out = collapseBackgroundShellDivs(src);
+    expect(out).not.toContain('c-x-tab-bg'); // 壳与规则删除
+    // 普通态渐变并入父顶层
+    expect(out).toMatch(/\.c-x-tab-item\s*\{[\s\S]*?linear-gradient\(180deg, #85baff/);
+    // 激活态渐变上提到变体块直属
+    expect(out).toMatch(/&--active\s*\{[\s\S]*?linear-gradient\(180deg, #318aff/);
+  });
+});
+
+describe('P-07 定位残尸 -bg wrapper unwrap（36c3a630 ContentDefault 实锤）', () => {
+  it('根挂资源图 + 内层纯定位 wrapper → 子内容上提、wrapper 与死规则删除', () => {
+    const src = `<template>
+  <div class="c-x-default" :style="{ backgroundImage: 'url(' + bg2 + ')' }">
+    <div class="c-x-default-bg">
+      <div class="c-x-default-icon"><img :src="icon3" /></div>
+      <div class="c-x-default-text">
+        <div class="c-x-default-title">南北接线</div>
+      </div>
+    </div>
+  </div>
+</template>
+<style lang="less" scoped>
+.c-x-default { width: 100%; height: 100%; min-height: 0; }
+.c-x-default-bg {position: relative}
+</style>`;
+    const out = collapseBackgroundShellDivs(src);
+    expect(out).not.toContain('c-x-default-bg'); // wrapper 与死规则删除
+    expect(out).toContain('c-x-default-icon'); // 子内容上提保留
+    expect(out).toContain('c-x-default-text');
+    expect(out).toContain("backgroundImage: 'url(' + bg2 + ')'"); // 根背景保留
+    expect(out).not.toMatch(/\.c-x-default-bg\s*\{/); // 死规则清除
+  });
+
+  it('wrapper 规则含 display/尺寸声明（非纯定位）→ 不 unwrap（防误伤真实布局层）', () => {
+    const src = `<template>
+  <div class="c-x-default">
+    <div class="c-x-default-bg">
+      <span>内容</span>
+    </div>
+  </div>
+</template>
+<style lang="less" scoped>
+.c-x-default-bg { display: flex; align-items: center; position: relative; }
+</style>`;
+    const out = collapseBackgroundShellDivs(src);
+    expect(out).toContain('c-x-default-bg'); // 保留
+    expect(out).toMatch(/display:\s*flex/);
+  });
+});
+
+// ══════════ P-09 双状态卡切换交互（2026-09-17 · 36c3a630 实锤缺失）══════════
+describe('injectStateSwitchInteraction（P-09 状态切换确定性装配）', () => {
+  const mapping = [
+    { resourceFile: '../resources/images/bg-8788.png', figmaNodeId: '2:8788', mountTarget: 'active', bgRole: 'container', previewAnalysisRole: 'bg', assignedVarName: 'bg1' },
+    { resourceFile: '../resources/images/bg-8807.png', figmaNodeId: '2:8807', mountTarget: 'default', bgRole: 'container', previewAnalysisRole: 'bg', assignedVarName: 'bg2' },
+  ];
+  const files = () => ({
+    'package/index.vue': `<template>
+  <base-panel>
+    <div class="c-x-slot-con" style="display:flex;flex-direction:column;">
+      <ContentActive style="flex:0.500;min-width:0;" />
+      <ContentDefault style="flex:0.500;min-width:0;" />
+    </div>
+  </base-panel>
+</template>
+<script setup>
+import { ref } from 'vue'
+import ContentActive from './components/ContentActive.vue'
+import ContentDefault from './components/ContentDefault.vue'
+</script>`,
+    'resources/styles/common.less': '.c-x-slot-con { display: flex; }',
+  });
+
+  it('状态对存在 → 装配 ref + @click + :class + CSS 变量（静态 style 合并进 :style）', () => {
+    const f = files();
+    const r = injectStateSwitchInteraction(f, mapping);
+    expect(r.applied).toBe(true);
+    const idx = f['package/index.vue'];
+    expect(idx).toContain("const switchSelected = ref('active')");
+    expect(idx).toContain("@click=\"switchSelected = 'active'\"");
+    expect(idx).toContain("@click=\"switchSelected = 'default'\"");
+    expect(idx).toContain("switchSelected === 'active' ? 'state-switch state-switch--active' : 'state-switch'");
+    expect(idx).toMatch(/'display':\s*'flex'/); // 静态 style 已合并
+    expect(idx).not.toMatch(/\sstyle="display:flex/); // 原静态 style 已移除
+    expect(idx).toContain("--state-bg");
+    expect(f['resources/styles/common.less']).toContain('state-switch--active');
+  });
+
+  it('无状态对（只有 active 无 default）→ 零改动', () => {
+    const f = files();
+    const before = f['package/index.vue'];
+    const r = injectStateSwitchInteraction(f, [mapping[0]]);
+    expect(r.applied).toBe(false);
+    expect(f['package/index.vue']).toBe(before);
+  });
+
+  it('幂等：已含 switchSelected → 原样返回', () => {
+    const f = files();
+    injectStateSwitchInteraction(f, mapping);
+    const after1 = f['package/index.vue'];
+    const r2 = injectStateSwitchInteraction(f, mapping);
+    expect(r2.applied).toBe(false);
+    expect(f['package/index.vue']).toBe(after1);
   });
 });

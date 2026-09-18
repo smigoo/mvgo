@@ -10,7 +10,7 @@
  * 治本：计划层把「同 resourceFile」固化为单变量 + sharedBy，并按 sourceNodeIds（批次 1
  *   已锚定）+ figma 祖先链解析 owner 组件，下游挂载零猜测。
  */
-import { buildResourceMountPlan, mountPlannedResources } from './resource-mount-plan.js'
+import { buildResourceMountPlan, mountPlannedResources, ensureStateRootFlexLayout } from './resource-mount-plan.js'
 
 // ── 真实形态 fixture：c-device-monitor-485d724d（914 §11/§13 取证值）──
 const deviceSections: any[] = [
@@ -397,5 +397,50 @@ const { runtimeBuilder } = $mcComponentBuilder()
     // 无论挂载成功与否，文件内容不得被注入破坏到「非法」
     // （已有 bg3 引用 → 幂等跳过，内容不变）
     expect(f['package/components/CardGrid.vue']).toBe(before)
+  })
+})
+
+// ══════════ P-08 状态子组件根布局确定化（2026-09-17 · 36c3a630 实锤）══════════
+describe('ensureStateRootFlexLayout（P-08 根布局几何注入）', () => {
+  // 「icon | 右侧竖排文字」嵌套卡片（复刻 2:8806 default 卡几何）
+  const figmaIndex = new Map<string, any>()
+  const bgNode: any = { id: '2:8807', name: 'bg', type: 'GROUP' }
+  const cardNode: any = {
+    id: '2:8806', name: 'default', type: 'GROUP',
+    children: [
+      bgNode,
+      { id: '2:8810', name: 'line1', absoluteBoundingBox: { x: 1764, y: 481, width: 93, height: 23 } },
+      { id: '2:8813', name: 'line2', absoluteBoundingBox: { x: 1764, y: 510, width: 59, height: 23 } },
+      { id: '2:8816', name: 'title', absoluteBoundingBox: { x: 1703, y: 513, width: 45, height: 20 } },
+      { id: '2:8817', name: 'icon', absoluteBoundingBox: { x: 1707, y: 481, width: 35, height: 28 } },
+    ],
+  }
+  bgNode.__parent = cardNode
+  for (const n of [bgNode, ...cardNode.children]) figmaIndex.set(String(n.id), n)
+
+  const vueNoDisplay = `<template>
+  <div class="c-x-default" :style="{ backgroundImage: 'url(' + bg2 + ')' }">
+    <div class="c-x-default-icon"><img :src="icon3" /></div>
+    <div class="c-x-default-text"><span>南北接线</span></div>
+  </div>
+</template>
+<style lang="less" scoped>
+.c-x-default { width: 100%; height: 100%; min-height: 0; }
+</style>`
+
+  it('根无 display + 卡片 x 聚簇≥2（icon|文字组）→ 注入 row 布局', () => {
+    const r = ensureStateRootFlexLayout(vueNoDisplay, figmaIndex, '2:8807')
+    expect(r).toMatch(/display:\s*flex/)
+    expect(r).toMatch(/flex-direction:\s*row/)
+    expect(r).toMatch(/align-items:\s*center/)
+  })
+
+  it('根已有 display 声明 → 尊重不覆盖（返回 null）', () => {
+    const vueHas = vueNoDisplay.replace('width: 100%;', 'width: 100%; display: flex;')
+    expect(ensureStateRootFlexLayout(vueHas, figmaIndex, '2:8807')).toBeNull()
+  })
+
+  it('bg 节点不在索引 → fail-closed 返回 null', () => {
+    expect(ensureStateRootFlexLayout(vueNoDisplay, figmaIndex, '9:9999')).toBeNull()
   })
 })

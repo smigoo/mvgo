@@ -1,0 +1,62 @@
+// 微码组件主题变量定义
+// 结构：三个 mixin（.common / .theme-dark / .theme-light）仅存放变量定义，禁止 CSS 属性
+
+.common() {
+  // 字体缩放基准令牌（根容器通过 --fontSize 驱动）
+  @fontSize: 14px;
+  
+  // 字体大小
+  @font-size-base: 14px;
+  @font-size-lg: 16px;
+  @font-size-xl: 18px;
+  
+  // 圆角
+  @border-radius-base: 4px;
+  @border-radius-lg: 8px;
+}
+
+.theme-dark() {
+  // 主色系
+  @color-primary: #1890ff;
+  @color-success: #52c41a;
+  @color-danger: #ff4d4f;
+  
+  // 文字色（深色面板禁止使用黑色系）
+  @color-text-base: rgba(255, 255, 255, 0.85);
+  @color-text-secondary: rgba(255, 255, 255, 0.65);
+  @color-text-tertiary: rgba(255, 255, 255, 0.45);
+  
+  // 背景色
+  @color-bg: #141414;
+  @color-bg-container: #1f1f1f;
+  
+  // 边框色
+  @color-border: rgba(255, 255, 255, 0.15);
+  
+  // 阴影
+  @shadow-card: 0 2px 8px rgba(0, 0, 0, 0.45);
+  @shadow-icon: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.theme-light() {
+  // 主色系
+  @color-primary: #1890ff;
+  @color-success: #52c41a;
+  @color-danger: #ff4d4f;
+  
+  // 文字色（面板默认主题，必须与设计稿一致）
+  @color-text-base: rgba(0, 0, 0, 0.85);
+  @color-text-secondary: rgba(51, 51, 51, 0.65);
+  @color-text-tertiary: rgba(51, 51, 51, 0.45);
+  
+  // 背景色
+  @color-bg: #f0f2f5;
+  @color-bg-container: #ffffff;
+  
+  // 边框色
+  @color-border: #d9d9d9;
+  
+  // 阴影
+  @shadow-card: 0 2px 8px rgba(0, 0, 0, 0.15);
+  @shadow-icon: 0 2px 4px rgba(0, 0, 0, 0.1);
+}

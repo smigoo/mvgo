@@ -16,6 +16,7 @@ import {
 import {
   buildAllConstraintReinforcements,
   buildLayoutConstraintReinforcement,
+  buildNodeLayoutFactsReinforcement,
   buildResourceConstraintReinforcement,
   buildStyleConstraintReinforcement,
 } from '../../utils/constraint-reinforcement.js';
@@ -323,6 +324,9 @@ ${
       resourceDomMapping,
       input.outputPath,
     ),
+    // 🛡️ B' P3.5：component chunk 同样注入 Figma 几何布局约束（scoped 段 display 必写）
+    figmaNodeData,
+    designFacts: input.designFacts,
   })
 }
 
@@ -2434,6 +2438,8 @@ ${buildSectionStyleFacts(resolvePlanSections(input), figmaNodeData)}
 
 ${!figmaNodeData && (!elementStyleMap || Object.keys(elementStyleMap).length === 0) && visualElements ? formatVisualStyle(visualElements) : ''}
 
+${buildNodeLayoutFactsReinforcement(input?.designFacts?.nodeLayoutFacts, figmaNodeData)}
+
 ${
   elementStyleMap && Object.keys(elementStyleMap).length > 0
     ? `
@@ -2613,6 +2619,8 @@ ${figmaStyleTree ?? formatFigmaStyleData(figmaNodeData)}
 `
     : ''
 }
+
+${buildNodeLayoutFactsReinforcement(input?.designFacts?.nodeLayoutFacts, figmaNodeData)}
 
 ${(!elementStyleMap || Object.keys(elementStyleMap).length === 0) && visualElements ? formatVisualStyle(visualElements) : ''}
 

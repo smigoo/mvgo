@@ -26,6 +26,20 @@ import MongoStore from 'connect-mongo';
 import { json, urlencoded } from 'express';
 import { validateRuntimeEnv } from './config/runtime-env';
 
+// 🛡️ 2026-09-18 进程级防崩网（治本配套 · b58918b5/80648377/9967c679/c2026822 四轮实锤）：
+//   生成任务**成功后**，回调链上的异步异常（旧 redactSecrets 遇循环引用栈溢出是其一）
+//   成为未捕获拒绝 → Node 默认直接退出，后端被杀、在途任务全丢且需人工重启。
+//   根因已修（redact 迭代化 + fallback），此处补最后一道网：未捕获拒绝**只记录不退出**，
+//   保证单点 bug 不再升级为整服务中断；日志 loudly 打全栈，问题仍可被发现与修复。
+//   注：uncaughtException（同步未捕获）**刻意不吞**——同步异常可能意味着状态已损坏，
+//   静默续跑风险更高，交由进程退出 + 上层守护重启处理。
+process.on('unhandledRejection', (reason: any) => {
+  const msg = reason instanceof Error ? (reason.stack || reason.message) : String(reason);
+  console.error(
+    `🛡️ [unhandledRejection] 未捕获的 Promise 拒绝（进程保持存活，请据此定位修复）:\n${msg}`,
+  );
+});
+
 async function bootstrap() {
   // 启动期环境校验：生产缺失必填变量直接失败（fail-fast），开发打印配置来源。
   // 必须在创建 App 之前调用，确保「配置问题」在启动阶段就暴露，而非上线后静默失效。

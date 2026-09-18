@@ -1,0 +1,486 @@
+@fontSize: var(--fontSize);
+// 微码组件业务样式
+// 所有 class 必须以 .c- 为前缀
+// 颜色必须使用 @color-xxx 变量（禁止字面量）
+// 字体必须使用 @fontSize 变量（禁止 px 字面量）
+
+@import './themes/theme-vars.less';
+
+
+// Header Section（顶部统计区）
+
+
+
+.c-device-monitor-header-left {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}.c-device-monitor-header-icon {
+  width: 8px;
+  height: 8px;
+  
+  object-fit: contain;
+  flex: 0 0 auto;}.c-device-monitor-header-divider {
+  width: 362px;
+  height: 6px;
+  background: linear-gradient(180deg, #559eff 0%, #559eff 100%);
+  flex: 0 0 auto;}
+
+
+.c-device-monitor-header-stats {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+.c-device-monitor-stat-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+
+
+
+
+// Active Card（深色激活卡片）
+
+
+.c-device-monitor-active {
+  width: 100%;
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  position: relative;
+  overflow: hidden;
+}.c-device-monitor-active-icon {width: 35px;
+  height: 28px;
+  
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+  flex: 0 0 auto;
+}
+
+.c-device-monitor-active-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0; /* VERT-004: 防 column flex 容器高度计算异常 */;
+}
+
+.c-device-monitor-active-title {
+  font-size: calc(@fontSize * 0.8571);
+  color: var(--colorBgContainer, #ffffff);
+  line-height: 1.33;
+  white-space: nowrap;
+}
+
+.c-device-monitor-active-stats {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+}
+
+.c-device-monitor-active-stat-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+.c-device-monitor-active-label {
+  font-size: @fontSize;
+  color: var(--colorBgContainer, #ffffff);
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.c-device-monitor-active-value {
+  font-size: calc(@fontSize * 1.4286);
+  font-weight: 700;
+  color: var(--colorBgContainer, #ffffff);
+  line-height: 1.15;
+}
+
+.c-device-monitor-active-value-error {
+  color: #e03434;
+}
+
+
+// Default Card（浅色默认卡片）
+
+
+
+.c-device-monitor-default-bg {
+  width: 100%;
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 6px;
+  position: relative;
+  overflow: hidden;
+}.c-device-monitor-default-icon {
+  width: 35px;
+  height: 28px;
+  
+  object-fit: contain;
+  flex: 0 0 auto;}
+
+.c-device-monitor-default-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-left: 12px;
+  min-height: 0; /* VERT-004: 防 column flex 容器高度计算异常 */;
+}
+
+
+.c-device-monitor-default-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0; /* VERT-004: 防 column flex 容器高度计算异常 */;
+}
+
+.c-device-monitor-default-stat-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+
+
+
+
+// Tabs Section（垂直选项卡）
+
+
+.c-device-monitor-tabs {
+  width: 100%;
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0; /* VERT-004: 防 column flex 容器高度计算异常 */;
+}
+
+
+.c-device-monitor-tab-item--active {
+  background: linear-gradient(180deg, #318aff 0%, #70bfff 100%);
+  border: 1px solid #f0f5ff;
+}
+
+.c-device-monitor-tab-label {
+  font-size: @fontSize;
+  color: #3b80e7;
+  line-height: 1.29;
+  writing-mode: vertical-rl;
+  text-align: center;
+  white-space: nowrap;
+
+  .c-device-monitor-tab-item--active & {
+    color: var(--colorBgContainer, #ffffff);
+    font-weight: 700;
+  }
+}
+
+.c-device-monitor-tab-badge {
+  margin-top: 4px;
+  padding: 2px 4px;
+  border-radius: 2px;
+  background: #f53f3f;
+  color: var(--colorBgContainer, #ffffff);
+  font-size: calc(@fontSize * 0.8571);
+  line-height: 1.17;
+  white-space: nowrap;
+}
+
+.c-device-monitor-tab-badge--active {
+  background: var(--colorBgContainer, #ffffff);
+  color: #3b80e7;
+  border: 1px solid #258dc8;
+  font-size: @fontSize;
+  font-weight: 500;
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+
+
+// Content Cons（设备网格）
+
+
+.c-device-monitor-cons-root {width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+
+  align-items: center;
+  justify-content: space-between;
+  font-size: var(--fontSize, 14px);
+  min-height: 0; /* VERT-004: 防 column flex 容器高度计算异常 */;
+}
+
+
+
+
+
+
+
+
+// Layout Containers（布局容器）
+
+
+.c-device-monitor-slot-con {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0; /* VERT-004: 防 column flex 容器高度计算异常 */;
+}
+
+.c-device-monitor-con-con {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.c-device-monitor-switch-con {
+  width: 100%;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.c-device-monitor-antd-tab-con {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 8px;
+}
+
+
+/* === [自动修复] v3.5 模板驱动 fallback 规则 === */
+/* [自动修复] 模板 class .c-device-monitor-default-icon-wrapper → 未匹配到 Figma 元素（不写入猜测样式） */
+
+
+/* [自动修复] 模板 class .c-device-monitor-default-line1 → 未匹配到 Figma 元素（不写入猜测样式） */
+
+.c-device-monitor-default-line1 {
+  /* TODO: 请根据设计稿补充样式 */
+}
+
+/* [自动修复] 模板 class .c-device-monitor-default-line2 → 未匹配到 Figma 元素（不写入猜测样式） */
+
+.c-device-monitor-default-line2 {
+  /* TODO: 请根据设计稿补充样式 */
+}
+
+/* 🛡️ P-09 状态切换交互（确定性装配） */
+.c-device-monitor-state-switch {
+  transition: opacity 0.2s ease;
+  cursor: pointer;
+}
+.state-switch--active,
+.c-device-monitor-state-switch--default {
+  opacity: 1;
+}
+.c-device-monitor-state-switch:not(.state-switch--active):not(.state-switch--default) {
+  opacity: 0.55;
+}
+
+.c-device-monitor-header { display: flex; flex-direction: row;  width: 100%;
+position: relative}
+
+.c-device-monitor-header-title {font-size: calc(@fontSize * 1.143);
+  font-weight: 700;
+  line-height: 1.2;
+  background: linear-gradient(180deg, #1990ff 0%, #5a7eff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  white-space: nowrap}
+
+.c-device-monitor-stat-label {
+  font-size: @fontSize;
+  color: @color-text-secondary;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.c-device-monitor-stat-value {
+  font-size: calc(@fontSize * 1.429);
+  font-weight: 700;
+  line-height: 1.17;
+  color: @color-primary;
+  white-space: nowrap;
+}
+
+.c-device-monitor-stat-value-success {
+  color: @color-success;
+}
+
+.c-device-monitor-default { display: flex; flex-direction: row;  width: 100%;
+padding: 12px 16px;
+  box-sizing: border-box;
+  overflow: hidden}
+
+.c-device-monitor-default-icon-wrapper {
+  flex-shrink: 0;
+  width: 35px;
+  height: 28px;
+  margin-right: 12px;
+}
+
+.c-device-monitor-default-icon {object-fit: contain}
+
+.c-device-monitor-default-line1,
+.c-device-monitor-default-line2 {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.c-device-monitor-default-label {
+  font-size: calc(@fontSize * 1);
+  color: @color-text-base;
+  line-height: 1.5;
+}
+
+.c-device-monitor-default-value {
+  font-size: calc(@fontSize * 1.43);
+  font-weight: 700;
+  color: @color-primary;
+  line-height: 1.17;
+}
+
+.c-device-monitor-default-value-danger {
+  font-size: calc(@fontSize * 1.43);
+  font-weight: 700;
+  color: #e03434;
+  line-height: 1.17;
+}
+
+.c-device-monitor-default-title {
+  font-size: calc(@fontSize * 0.86);
+  color: @color-text-base;
+  line-height: 1.25;
+  margin-top: 4px;
+}
+
+.c-device-monitor-tab-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 4px;
+  cursor: pointer;
+  transition: all 0.3s;
+  border-radius: 4px;
+  margin-bottom: 4px;
+
+  &:not(.c-device-monitor-tab-item--active) {
+    background: linear-gradient(180deg, #85baff 0%, #bfe2ff 100%);
+    border: 1px solid #f0f5ff;
+
+    .c-device-monitor-tab-label {
+      white-space: nowrap;
+  color: #3b80e7;
+      font-size: calc(@fontSize * 1);
+      font-weight: normal;
+      line-height: 1.14;
+      writing-mode: vertical-rl;
+      text-align: center;
+    }
+
+    .c-device-monitor-tab-badge {
+      background: #f53f3f;
+      color: var(--colorBgContainer, #ffffff);
+      font-size: calc(@fontSize * 0.857);
+      font-weight: normal;
+      padding: 2px 4px;
+      border-radius: 2px;
+      margin-top: 4px;
+    }
+  }
+
+  &--active {
+    background: linear-gradient(180deg, #318aff 0%, #70bfff 100%);
+    border: 1px solid #f0f5ff;
+
+    .c-device-monitor-tab-label {
+      white-space: nowrap;
+  color: var(--colorBgContainer, #ffffff);
+      font-size: calc(@fontSize * 1);
+      font-weight: bold;
+      line-height: 1.29;
+      writing-mode: vertical-rl;
+      text-align: center;
+    }
+
+    .c-device-monitor-tab-badge {
+      background: var(--colorBgContainer, #ffffff);
+      color: #3b80e7;
+      border: 1px solid #258dc8;
+      font-size: calc(@fontSize * 1);
+      font-weight: normal;
+      padding: 4px 6px;
+      border-radius: 4px;
+      margin-top: 4px;
+      line-height: 1.29;
+    }
+  }
+}
+
+.c-device-monitor-cons-grid { display: grid;grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(4, 1fr)}
+
+.c-device-monitor-cons-item { display: flex; flex-direction: row;background-size: 100% 100%;
+  background-position: center center;
+  background-repeat: no-repeat}
+
+.c-device-monitor-cons-icon-img {object-fit: contain}
+
+.c-device-monitor-cons-item-text { display: flex; flex-direction: column;min-width: 0}
+
+.c-device-monitor-cons-label {font-size: calc(@fontSize * 0.857);
+  color: #333333;
+  line-height: 1.5;
+  white-space: nowrap;
+  text-overflow: ellipsis}
+
+.c-device-monitor-cons-value {font-size: calc(@fontSize * 1.143);
+  font-weight: 500;
+  color: var(--colorBgContainer, #ffffff);
+  line-height: 1.3;
+  white-space: nowrap;
+  text-overflow: ellipsis}

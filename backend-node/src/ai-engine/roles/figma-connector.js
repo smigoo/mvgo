@@ -1110,6 +1110,48 @@ export class FigmaConnector {
       }
     }
 
+    // 🛡️ P-11 per-character 分段着色（2026-09-18 · device-monitor 实锤）：
+    //   Figma 用 characterStyleOverrides + styleOverrideTable 表达「同一文本节点内分段着色」——
+    //   实测 `(2/484)`：默认 fill 是纯白，但 overrides=[69,71,69,...] 让「2」=红 rgb(224,52,52)、
+    //   其余字符=蓝 rgb(25,144,255)；`(0/484)` 的「0」=青绿 rgb(8,163,165)（异常数为 0 的正常态）。
+    //   旧白名单裁剪丢这两个字段 → LLM 只看到节点默认白 fill → 文字全白、设计色彩整段丢失
+    //   （用户反馈「device-count 文字依旧是白色，设计上有色彩」的真根因）。
+    //   精简策略：只留渲染必需的 fills/fontSize/fontWeight，丢弃 fontFamily 等大字段控体积。
+    if (
+      node.type === 'TEXT' &&
+      Array.isArray(node.characterStyleOverrides) &&
+      node.characterStyleOverrides.length > 0
+    ) {
+      optimized.characterStyleOverrides = node.characterStyleOverrides;
+    }
+    if (
+      node.type === 'TEXT' &&
+      node.styleOverrideTable &&
+      Object.keys(node.styleOverrideTable).length > 0
+    ) {
+      const slimTable = {};
+      for (const [key, ov] of Object.entries(node.styleOverrideTable)) {
+        if (!ov || typeof ov !== 'object') continue;
+        const slim = {};
+        if (Array.isArray(ov.fills) && ov.fills.length > 0) {
+          slim.fills = ov.fills
+            .filter((f) => f && f.type === 'SOLID' && f.color)
+            .map((f) => ({
+              type: f.type,
+              color: f.color,
+              visible: f.visible !== false,
+            }));
+        }
+        if (typeof ov.fontSize === 'number') slim.fontSize = ov.fontSize;
+        if (typeof ov.fontWeight === 'number') slim.fontWeight = ov.fontWeight;
+        // 只在该覆盖确实携带可渲染信息时才落表，避免空对象污染
+        if (slim.fills || slim.fontSize || slim.fontWeight) slimTable[key] = slim;
+      }
+      if (Object.keys(slimTable).length > 0) {
+        optimized.styleOverrideTable = slimTable;
+      }
+    }
+
     // 保留样式引用
     if (node.styles) {
       optimized.styles = node.styles;

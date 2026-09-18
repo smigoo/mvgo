@@ -79,6 +79,9 @@ import {
   stripHeaderChromeDecorations as _stripHeaderChromeDecorationsPure,
   ensureHeaderSlotRowLayout as _ensureHeaderSlotRowLayoutPure,
   collapseBackgroundShellDivs as _collapseBackgroundShellDivsPure,
+  injectStateSwitchInteraction as _injectStateSwitchInteractionPure,
+  extractPerCharTextTruth as _extractPerCharTextTruthPure,
+  injectPerCharTextSegments as _injectPerCharTextSegmentsPure,
 } from '../utils/post-process.js';
 import {
   validateVueSfc,
@@ -5152,8 +5155,23 @@ export class MicrocodeEngineer extends BaseAgent {
       resourceDomMapping || [],
       { figmaRoot: input.figmaNodeData || null },
     );
+    // 🛡️ P-08：构建 nodeId→node 索引（含 __parent 反链）供状态根布局几何判定
+    const figmaIndex = new Map();
+    if (input.figmaNodeData && typeof input.figmaNodeData === 'object') {
+      const walk = (node, parent) => {
+        if (!node || typeof node !== 'object') return;
+        if (node.id != null) {
+          const idxNode = node;
+          idxNode.__parent = parent;
+          figmaIndex.set(String(node.id), idxNode);
+        }
+        for (const c of node.children || []) walk(c, node);
+      };
+      walk(input.figmaNodeData.document || input.figmaNodeData, null);
+    }
     return resourceMountPlan.mountPlannedResources(allFiles, plan, {
       logger: this.logger,
+      figmaIndex: figmaIndex.size > 0 ? figmaIndex : null,
     });
   }
 
@@ -5871,18 +5889,58 @@ export class MicrocodeEngineer extends BaseAgent {
           }
         }
 
-        // P-01 背景空壳节点剥离（2026-09-17 · a4f899c1 实锤系统性复发）：
+        // P-01/P-07 背景空壳节点剥离 + 定位残尸 wrapper unwrap（2026-09-17 · a4f899c1/36c3a630 实锤）：
         //   LLM 对有背景元素系统性拆 宿主>-bg空壳>内容 三层（card-bg/tab-bg 跨组件复发，
-        //   20+ 历史组件中招）。确定性后处理：空壳删除 + 纯视觉声明上移合并到父元素。
-        //   父 inline 已有资源图背景时资源图优先（渐变丢弃）。所有 .vue 通用。
+        //   20+ 历史组件中招）。确定性后处理：空壳删除 + 纯视觉声明上移合并到父元素
+        //   （动态 :class 父支持 / 嵌套变体上提 / 绝对定位装饰层转 ::before 伪元素 /
+        //   fail-closed 保留）。P-07：P-06 背景上移根后的纯定位 -bg wrapper unwrap。
         for (const [fp, fc] of Object.entries(codeResult.files || {})) {
           if (!fp.endsWith('.vue') || typeof fc !== 'string') continue;
           const collapsed = _collapseBackgroundShellDivsPure(fc);
           if (collapsed !== fc) {
             codeResult.files[fp] = collapsed;
             this.logger.info(
-              `🎯 [mc] 背景空壳节点已合并到父元素（P-01）：${fp}`,
+              `🎯 [mc] 背景空壳/wrapper 已治理（P-01/P-07）：${fp}`,
             );
+          }
+        }
+
+        // P-09 双状态卡切换交互确定性装配（2026-09-17 · 36c3a630 实锤缺失）：
+        //   interactions 真值有「双卡 tab-switch」但跨 ContentActive/ContentDefault/index
+        //   三文件无归属，分块生成各自为政 → 交互静默丢失。事实源=resourceDomMapping
+        //   状态对（active+default bgRole=container），确定性装配 index 状态 ref +
+        //   子组件标签 @click/:class + CSS 变量背景。幂等；无状态对则零改动。
+        //   🛡️ 9967c679 实锤：用主干作用域 effectiveMapping（in-memory 优先、
+        //   31 条真值），不能临时 resolveResourceDomMapping——input.resourceDomMapping
+        //   为空且磁盘 mapping 尚未落盘时会拿到 null → 装配静默跳过。
+        {
+          const sw = _injectStateSwitchInteractionPure(
+            codeResult.files || {},
+            effectiveMapping,
+          );
+          if (sw.applied) {
+            this.logger.info(
+              `🎯 [mc] 双状态卡切换交互已装配（P-09）：active=${sw.details.active} default=${sw.details.default}`,
+            );
+          }
+        }
+
+        // P-11 per-character 分段着色（2026-09-18 实锤）：Figma 用
+        //   characterStyleOverrides + styleOverrideTable 做「同文本节点内分段着色」
+        //   （`(2/484)` 的「2」红、`(0/484)` 的「0」青绿、其余蓝；节点默认 fill 是白
+        //   且被覆盖完全架空）。裁剪函数曾删掉这两个字段 → LLM 只看到白 fill → 白字。
+        //   此处做确定性装配：提取真值 → 注入 helper + 模板 v-for 分段渲染。
+        //   fail-closed：无真值/结构不匹配 → 零改动。
+        {
+          const truth = _extractPerCharTextTruthPure(input.figmaNodeData);
+          if (truth.length > 0) {
+            const pc = _injectPerCharTextSegmentsPure(codeResult.files || {}, truth);
+            if (pc.applied) {
+              this.logger.info(
+                `🎯 [mc] per-character 分段着色已装配（P-11）：${(pc.details.files || []).join(', ')} ` +
+                  `| base=${pc.details.baseColor} abnormal=${pc.details.abnormalColor} normal=${pc.details.normalColor}`,
+              );
+            }
           }
         }
 

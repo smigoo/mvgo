@@ -229,13 +229,89 @@ function hasPixelSizeInCommon(commonLess, selector) {
   return /\b(width|height)\s*:\s*\d+px/i.test(match[1]);
 }
 
+/** 布局类声明（决定横向/纵向、grid 列数的关键属性） */
+const LAYOUT_DECL_RE = /^(?:display|flex-direction|grid-template-columns)\s*:/;
+
+/**
+ * 从 common.less 提取同名选择器块的「布局类声明」（display / flex-direction / grid-template-columns）。
+ * 只取无嵌套的第一层块体（布局声明通常位于该层）；同名选择器在 common.less 不存在时返回空数组。
+ * @param {string} lessText common.less 文本
+ * @param {string} selector 选择器（如 '.c-x-tabs-section'）
+ * @returns {string[]} 布局声明（无分号结尾，如 ['display: flex', 'flex-direction: row']）
+ */
+function extractLayoutDecls(lessText, selector) {
+  if (!lessText || !selector) return [];
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const m = String(lessText).match(new RegExp(`${escaped}\\s*\\{([^{}]*)\\}`, 'i'));
+  if (!m) return [];
+  const decls = [];
+  for (const raw of m[1].split('\n')) {
+    const t = raw.trim();
+    if (LAYOUT_DECL_RE.test(t)) decls.push(t.replace(/;$/, '').trim());
+  }
+  return decls;
+}
+
+/**
+ * 把布局声明「缺则补」进子组件块（幂等：已存在的声明不重复注入）。
+ * 仅当块内缺失对应声明时才从 common.less 补齐，避免覆盖子组件已有的布局意图。
+ * @param {string} blockText 子组件块原文（如 '.c-x {  width: 100%;\nmin-height: 0 }'）
+ * @param {string[]} layoutDecls 来自 common.less 的布局声明
+ * @returns {string} 补齐后的块文本
+ */
+function injectMissingLayoutDecls(blockText, layoutDecls) {
+  if (!Array.isArray(layoutDecls) || layoutDecls.length === 0) return blockText;
+  const missing = layoutDecls.filter((d) => {
+    const prop = d.split(':')[0].trim();
+    return !new RegExp(`${prop.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*:`).test(blockText);
+  });
+  if (missing.length === 0) return blockText;
+  const idx = blockText.indexOf('{');
+  if (idx === -1) return blockText;
+  const declStr = missing.map((d) => `${d};`).join(' ');
+  return `${blockText.slice(0, idx + 1)} ${declStr}${blockText.slice(idx + 1)}`;
+}
+
+/**
+ * flex 信号补 display（治本 2026-09-18 · mc-1789666658926-b4a26c1a）。
+ *
+ * 现象：子组件根块体写了 `align-items: center` / `justify-content` / `gap` / `flex: X 1 0`
+ * 等 flex 专属属性，却漏写 `display: flex` → 这些属性在非 flex 容器下全部不生效 →
+ * 子元素 block 纵向堆叠（「ContentDefault 的 icon+文字竖排」实锤）。
+ * style chunk（common.less）与 component chunk（scoped）两边都漏写时，保护规则 2 的
+ * 「从 common.less 补齐」无 display 可补，故此处补一道「自身 flex 信号 → display:flex」。
+ *
+ * 与 resource-mounter 规则⑤ 兜底口径一致（hasFlexGrow || hasFlexOnly）。
+ * 幂等：已含 display 不重复注入。
+ * @param {string} blockText 子组件块原文
+ * @returns {string} 补齐 display 后的块文本
+ */
+function injectDisplayFromFlexSignals(blockText) {
+  if (typeof blockText !== 'string' || /display\s*:/.test(blockText)) return blockText;
+  const open = blockText.indexOf('{');
+  const close = blockText.lastIndexOf('}');
+  if (open === -1 || close <= open) return blockText;
+  const body = blockText.slice(open + 1, close);
+  const hasFlexGrow = /flex\s*:\s*\d+(?:\.\d+)?\s+1\s+0\b/.test(body);
+  const hasFlexOnly =
+    /(?:flex-direction|align-items|justify-content|align-content|gap|flex-wrap)\s*:/.test(body);
+  if (!hasFlexGrow && !hasFlexOnly) return blockText;
+  return `${blockText.slice(0, open + 1)} display: flex;${blockText.slice(open + 1)}`;
+}
+
 /**
  * 把类规则块合并进 common.less：
  * ① 先删除 common.less 中所有同名块（含嵌套）→ 消除双源与优先级陷阱；
  * ② 再追加子组件版定义 → 子组件定义为唯一事实源。
  * 
- * 保护规则：如果 common.less 中有像素值（如 width: 8px），而子组件是百分比（如 width: 100%），
+ * 保护规则 1：如果 common.less 中有像素值（如 width: 8px），而子组件是百分比（如 width: 100%），
  * 则保留 common.less 的版本，不覆盖。
+ *
+ * 保护规则 2（2026-09-18 · mc-max-1789661127982-51408ba2）：布局声明（display / flex-direction /
+ * grid-template-columns）「缺则保留 common.less」。子组件 scoped 常缺 display（LLM 受
+ * 「display 由系统确定性写入」影响只写 width/min-height），而 common.less（style chunk）写了
+ * 完整 display:flex + flex-direction:row。旧逻辑「以子组件为准」无脑后置覆盖 → display 丢失 →
+ * 同行元素纵排、各占 100% 宽。此处对布局声明做幂等补齐，不覆盖子组件已写的布局意图。
  * @param {string} commonLess 原 common.less
  * @param {Array<{selector: string, text: string}>} blocks 待合并块
  * @returns {{content: string, replaced: string[], added: string[]}}
@@ -250,16 +326,28 @@ function mergeIntoCommonLess(commonLess = '', blocks = []) {
     return true;
   });
 
-  const selectors = protectedBlocks.map((b) => b.selector);
+  // 🛡️ 布局声明保留（保护规则 2）：合并前先补齐子组件缺失的 display/flex-direction；
+  //    再补「flex 信号 → display」（scoped 有 align-items 却漏 display 时确定性补 display:flex）。
+  const mergedBlocks = protectedBlocks.map((b) => {
+    let text = b.text;
+    const layout = extractLayoutDecls(commonLess, b.selector);
+    if (layout && layout.length > 0) {
+      text = injectMissingLayoutDecls(text, layout);
+    }
+    text = injectDisplayFromFlexSignals(text);
+    return { ...b, text };
+  });
+
+  const selectors = mergedBlocks.map((b) => b.selector);
   const stripped = removeClassBlocks(commonLess, selectors);
   const oldSelectors = selectors.filter((s) => commonLess.includes(s));
-  const appended = protectedBlocks.map((b) => b.text).join('\n\n');
+  const appended = mergedBlocks.map((b) => b.text).join('\n\n');
 
   const content = `${stripped.replace(/\s*$/, '')}\n\n${appended}\n`;
   return {
     content,
     replaced: oldSelectors,
-    added: protectedBlocks.map((b) => b.selector).filter((s) => !oldSelectors.includes(s)),
+    added: mergedBlocks.map((b) => b.selector).filter((s) => !oldSelectors.includes(s)),
   };
 }
 

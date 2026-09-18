@@ -29,27 +29,49 @@ export class OrphanComponentDetector {
         errors: []
       }
 
-      // 1. 读取主组件文件
-      const mainComponentPath = join(componentDir, 'package/index.vue')
-      if (!existsSync(mainComponentPath)) {
-        logger.warn('主组件文件不存在', { mainComponentPath })
-        return result
-      }
-
-      const mainContent = readFileSync(mainComponentPath, 'utf-8')
-
-      // 2. 查找所有子组件文件
+      // 1. 定位 package 目录与主组件
       const packageDir = join(componentDir, 'package')
       if (!existsSync(packageDir)) {
         return result
       }
 
-      const childComponents = this.findChildComponents(packageDir)
+      const mainComponentPath = join(packageDir, 'index.vue')
+      if (!existsSync(mainComponentPath)) {
+        logger.warn('主组件文件不存在', { mainComponentPath })
+        return result
+      }
 
-      // 3. 检查每个子组件是否被引用
+      // 2. 递归查找 package/ 下所有 .vue（真实子组件位于 package/components/**，
+      //    只读 package/ 顶层永远扫不到 → 检测器静默失效）
+      const allVueFiles = this.findVueFiles(packageDir)
+
+      // 3. 以「除自身外的全部 .vue 源码」为引用语料：
+      //    子组件既可能被 index.vue 引用，也可能被兄弟子组件引用，
+      //    只看 index.vue 会把「被兄弟引用」的文件误删。
+      const contentMap = new Map()
+      for (const vuePath of allVueFiles) {
+        try {
+          contentMap.set(vuePath, readFileSync(vuePath, 'utf-8'))
+        } catch (error) {
+          logger.error('读取组件源码失败', { vuePath, error: error.message })
+          contentMap.set(vuePath, '')
+        }
+      }
+
+      // 4. 逐个判断（主组件 index.vue 不是候选孤儿）
+      const rootIndexPath = join(packageDir, 'index.vue')
+      const childComponents = allVueFiles.filter((p) => p !== rootIndexPath)
+
       for (const childPath of childComponents) {
         const childName = basename(childPath, '.vue')
-        const isReferenced = this.isComponentReferenced(mainContent, childName, childPath)
+
+        let corpus = ''
+        for (const [vuePath, content] of contentMap) {
+          if (vuePath === childPath) continue
+          corpus += content + '\n'
+        }
+
+        const isReferenced = this.isComponentReferenced(corpus, childName, childPath)
 
         if (!isReferenced) {
           result.orphans.push(childPath)
@@ -87,35 +109,54 @@ export class OrphanComponentDetector {
   }
 
   /**
-   * 查找所有子组件文件
+   * 查找子组件文件（递归，含 package/components/**）
    * @param {string} packageDir - package 目录路径
-   * @returns {string[]} 子组件文件路径数组
+   * @returns {string[]} 子组件文件路径数组（不含主组件 index.vue）
    */
   static findChildComponents(packageDir) {
-    const childComponents = []
+    const rootIndexPath = join(packageDir, 'index.vue')
+    return this.findVueFiles(packageDir).filter((p) => p !== rootIndexPath)
+  }
 
-    try {
-      const files = readdirSync(packageDir)
+  /**
+   * 递归收集目录下所有 .vue 文件
+   * 跳过 node_modules 与隐藏目录（.snapshots/.mc-gen/.checkpoint 等）
+   * @param {string} dir - 起始目录
+   * @returns {string[]} 所有 .vue 文件路径
+   */
+  static findVueFiles(dir) {
+    const collected = []
 
-      for (const file of files) {
-        const filePath = join(packageDir, file)
-        const stat = statSync(filePath)
+    const walk = (currentDir) => {
+      let entries
+      try {
+        entries = readdirSync(currentDir)
+      } catch (error) {
+        logger.error('读取目录失败', { currentDir, error: error.message })
+        return
+      }
 
-        // 跳过主组件 index.vue
-        if (file === 'index.vue') {
+      for (const entry of entries) {
+        if (entry === 'node_modules' || entry.startsWith('.')) continue
+
+        const entryPath = join(currentDir, entry)
+        let stat
+        try {
+          stat = statSync(entryPath)
+        } catch {
           continue
         }
 
-        // 只处理 .vue 文件
-        if (stat.isFile() && file.endsWith('.vue')) {
-          childComponents.push(filePath)
+        if (stat.isDirectory()) {
+          walk(entryPath)
+        } else if (stat.isFile() && entry.endsWith('.vue')) {
+          collected.push(entryPath)
         }
       }
-    } catch (error) {
-      logger.error('查找子组件失败', { error: error.message })
     }
 
-    return childComponents
+    walk(dir)
+    return collected
   }
 
   /**

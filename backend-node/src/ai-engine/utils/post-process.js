@@ -1098,10 +1098,20 @@ export function ensureHeaderSlotRowLayout(code, options = {}) {
  *   ② 上移合并到其**父元素**（父 class 规则追加，父已有同名属性则丢弃——父优先）
  *   ③ 删除空壳 div 与其死 CSS 规则
  *
- * 保守原则：
+ * 🛡️ P-01b 修复（2026-09-17 · 36c3a630 实锤 tab 背景消失）三处根因：
+ *   1. 父类提取只认静态 class="..."——动态 :class="['c-x-item', {...}]" 数组语法提取出
+ *      垃圾 token → 父规则匹配不到 → 合并静默落空，但壳照样删（fail-open）→ 渐变背景
+ *      + 激活态变体全部丢失。修：动态数组提取首个字符串字面量。
+ *   2. 嵌套变体块内的 .shell 规则（`.item--active { .shell { 渐变 } }`）无人接管——
+ *      删壳后激活态背景丢失。修：嵌套规则内的视觉声明上提到外层变体块直属。
+ *   3. 绝对定位装饰层（position:absolute + 缩窄 width + 渐变 + border）不是「容器背景
+ *      空壳」而是独立装饰——合并到父会失真、删除会丢视觉。修：识别后保留壳。
+ *
+ * 保守原则（fail-closed）：
  *   - 空壳无任何可收集声明 → 只删节点；
  *   - 父 inline 有 backgroundImage（资源图）时不与 class 渐变强行并层（避免覆盖资源图），
- *     渐变声明丢弃——资源图背景是视觉真值优先。
+ *     渐变声明丢弃——资源图背景是视觉真值优先（此场景删壳是有意的：资源图已是真值）；
+ *   - 合并落空 && 壳有视觉声明 && 父无资源图背景 → **保留壳**（宁可残留不丢背景）。
  *
  * @param {string} code .vue 文件内容
  * @returns {string} 处理后的 code
@@ -1109,32 +1119,99 @@ export function ensureHeaderSlotRowLayout(code, options = {}) {
 export function collapseBackgroundShellDivs(code) {
   if (!code || typeof code !== 'string') return code;
 
+  // ── 0) P-07 wrapper unwrap（36c3a630 实锤）：非空壳 -bg 定位残尸优先处理 ──
+  //   P-06 把 container bg 挂到组件根后，内层 -bg wrapper（有子内容）成为冗余层；
+  //   且 style-dedup-guard「先剥后换」时序缺陷（剥 .vue 声明时共享表齐全，随后
+  //   共享表条目被 fallback 重写降级）会把 wrapper 剥成仅剩纯定位声明 → block
+  //   竖排溢出。治本：子内容上提一层、删壳、删死规则。独立扫描（非空壳不在
+  //   SHELL_RE 命中集内），直到无匹配（幂等）。
+  let out0 = code;
+  let unwrapped = 0;
+  for (let guard = 0; guard < 8; guard++) {
+    const bgWrapperRe = /<div\s+class="([^"]*(?:-bg|background)[^"]*)"\s*>(?![\s\S]*?<\/div>\s*<\/div>\s*$)/g;
+    let m;
+    let progressed = false;
+    while ((m = bgWrapperRe.exec(out0)) !== null) {
+      const r = tryUnwrapPositionalBgWrapper(out0, { cls: m[1], full: m[0] });
+      if (r !== null) {
+        out0 = r;
+        unwrapped += 1;
+        progressed = true;
+        break; // 文本已变，重扫
+      }
+    }
+    if (!progressed) break;
+  }
+
   // ── 1) 找模板里的空壳 div（class 含 -bg/background 词尾，空元素无绑定）──
   // 🛡️ P-06/D（2026-09-17）：空壳判定容忍 `>\s*</div>` 内部空白（换行/缩进逃逸），
   // 此前只匹配紧邻 `></div>`，LLM 在空壳 div 内写换行空白即逃逸 → 渐变空壳残留。
   const SHELL_RE = /<div\s+class="([^"]*(?:-bg|background)[^"]*)"\s*>\s*<\/div>|<div\s+class="([^"]*(?:-bg|background)[^"]*)"\s*\/>/g;
-  const shells = [...code.matchAll(SHELL_RE)]
+  const shells = [...out0.matchAll(SHELL_RE)]
     .map((m) => ({ full: m[0], cls: m[1] || m[2] }))
     .filter((s) => !/\{\{|\sv-|:|@/.test(s.full));
-  if (shells.length === 0) return code;
 
-  let out = code;
-  let collapsed = 0;
+  const VISUAL_RE = /^(background(?:-[a-z]+)?|border-radius|box-shadow|opacity|backdrop-filter)\s*:/i;
+  let out = out0;
+  let collapsed = unwrapped;
+  let keptDecorative = 0;
+
+  if (shells.length === 0) {
+    if (unwrapped > 0) {
+      console.info('[P-01/P-07] 已 unwrap ' + unwrapped + ' 个定位残尸 -bg wrapper');
+    }
+    return out;
+  }
 
   for (const shell of shells) {
-    // ── 2) 从 <style> 收集该 class 的纯视觉声明（无 style 段 → 无声明可并，仅删节点）──
-    const clsEsc = shell.cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const styleSeg = out.match(/<style[^>]*>([\s\S]*?)<\/style>/);
-    const ruleRe = new RegExp('\\.' + clsEsc + '\\s*\\{([^}]*)\\}', 'g');
-    let decls = '';
-    if (styleSeg) {
-      for (const rm of styleSeg[1].match(ruleRe) || []) {
-        decls += (rm.match(/\{([^}]*)\}/) || [])[1] || '';
-        decls += ';';
-      }
+    let styleSeg = out.match(/<style[^>]*>([\s\S]*?)<\/style>/);
+
+    // ── 1a) P-07 wrapper unwrap（36c3a630 实锤）：非空壳 -bg 定位残尸 ──
+    //   P-06 把 container bg 挂到组件根后，内层 -bg wrapper 成为冗余层；且
+    //   style-dedup-guard「先剥后换」时序缺陷（剥 .vue 声明时共享表齐全，
+    //   随后共享表条目被 fallback 重写降级）会把 wrapper 剥成仅剩纯定位声明
+    //   → block 布局竖排溢出。治本：子内容上提一层、删壳、删死规则。
+    //   判据（确定性）：class 含 -bg 词尾 + 有子内容 + 规则体全部声明 ∈ 纯定位
+    //   白名单（position/top/left/right/bottom/transform/z-index/box-sizing）。
+    const unwrap = tryUnwrapPositionalBgWrapper(out, shell);
+    if (unwrap !== null) {
+      out = unwrap;
+      collapsed += 1;
+      continue;
     }
-    const VISUAL_RE = /^(background(?:-[a-z]+)?|border-radius|box-shadow|opacity|backdrop-filter)\s*:/i;
-    const visualDecls = decls
+
+    // ── 1b) 装饰层识别（P-01b 根因 3）→ 转伪元素（P-01c 铁律收口）──
+    //   顶层规则含 absolute/fixed 定位 → 独立装饰条（Figma 矢量 bg 常为缩窄渐变条+描边）。
+    //   直接合并到父会宽度失真；但保留 DOM 壳违反「禁止 -bg 空壳」铁律。
+    //   治本：DOM 删壳 + 样式转 `&::before`（content:'' + 原声明）挂在宿主 class 下——
+    //   DOM 零空壳、视觉 1:1（绝对定位几何不变）、嵌套变体（.item--active）天然可覆盖。
+    const topDecls = collectTopLevelShellDecls(styleSeg ? styleSeg[1] : '', shell.cls);
+    if (/\bposition\s*:\s*(absolute|fixed)\b/i.test(topDecls)) {
+      const pseudo = convertShellToPseudoElement(out, shell);
+      if (pseudo !== null) {
+        out = pseudo;
+        collapsed += 1; // 计入合并（DOM 壳已消除）
+        continue;
+      }
+      keptDecorative += 1;
+      continue; // 转换失败（找不到宿主规则）→ 保留壳兜底
+    }
+
+    // ── 2) 收集纯视觉声明（仅顶层规则；嵌套变体块由 4b 单独上提）──
+    //   🛡️ P-01d（6a0903b5 实锤 LESS-COMPILE-001）：壳规则含**嵌套伪元素/子块**
+    //   （&::before/&::after/子选择器——LLM 自建装饰元素的正常形态）时，整块删除
+    //   会把装饰渐变一起删掉且嵌套块拼接易产生 `}.;` 畸形选择器 → LESS 编译失败。
+    //   fail-closed：此类壳整体保留（装饰 DOM + 嵌套样式是一体的，不是背景空壳）。
+    const hasNestedPseudo =
+      styleSeg &&
+      new RegExp(
+        '(?:^|\\n)[ \\t]*\\.' + shell.cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*\\{[^{}]*\\{',
+      ).test(styleSeg[1]);
+    if (hasNestedPseudo) {
+      keptDecorative += 1;
+      continue;
+    }
+    const visualDecls = topDecls
       .split(';')
       .map((d) => d.trim())
       .filter((d) => d && VISUAL_RE.test(d));
@@ -1146,43 +1223,1209 @@ export function collapseBackgroundShellDivs(code) {
     const parentOpenM = before.match(/<div\b[^>]*>(?=[^<]*$)/);
     if (!parentOpenM) continue;
     const parentOpen = parentOpenM[0];
-    const parentClsM = parentOpen.match(/class="([^"]*)"/);
-    const firstCls = parentClsM ? parentClsM[1].trim().split(/\s+/)[0] : null;
+    // 🛡️ P-01b 根因 1（36c3a630 实锤）：父标签可能是动态 :class 数组语法
+    //   `:class="['c-x-item', { 'c-x-item--active': on }]"`——静态提取只拿到垃圾 token。
+    //   修：先试静态 class，再试动态数组首个字符串字面量。
+    const firstCls = extractFirstClassName(parentOpen);
+    const parentHasInlineBg = /background(?:Image|-image)?\s*[=:]/i.test(parentOpen);
 
     // ── 4) 合并声明到父 class 规则（父已有同名属性 → 空壳声明丢弃）──
     let merged = false;
-    if (firstCls && visualDecls.length > 0) {
-      const firstClsEsc = firstCls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const parentRuleRe = new RegExp('(\\.' + firstClsEsc + '\\s*\\{)([^}]*)\\}');
-      const searchFrom = out.indexOf(styleSeg[0]);
-      const seg = out.slice(searchFrom);
-      const parentRuleM = seg.match(parentRuleRe);
-      if (parentRuleM) {
-        const existingBody = parentRuleM[2];
-        const additions = visualDecls.filter((d) => {
-          const prop = d.split(':')[0].trim().toLowerCase();
-          return !new RegExp('(^|;)\\s*' + prop + '\\s*:', 'i').test(existingBody);
+    if (firstCls && visualDecls.length > 0 && styleSeg) {
+      const added = mergeIntoParentRule(out, firstCls, visualDecls);
+      if (added !== null) {
+        out = added;
+        merged = true;
+      }
+    }
+
+    // ── 4b) 嵌套变体块内的 .shell 规则上提（P-01b 根因 2）──
+    //   `.item--active { .shell { 渐变 } }` → 渐变上提到变体块直属（壳删除后归属宿主变体）
+    if (styleSeg) {
+      const hoisted = hoistNestedShellDecls(out, shell.cls, VISUAL_RE);
+      if (hoisted !== null) {
+        out = hoisted;
+        merged = true;
+      }
+    }
+
+    // ── 5) fail-closed 判定 + 删空壳节点 + 死 CSS 规则 ──
+    //   🛡️ P-01b 收口：合并落空 && 壳有视觉声明 && 父无资源图背景 → 保留壳。
+    //   此前无条件删壳正是 tab 背景消失的直接原因（删了壳、渐变没人接）。
+    //   父 inline 有资源图背景时删壳是有意的（资源图优先，渐变空壳冗余）。
+    if (!merged && visualDecls.length > 0 && !parentHasInlineBg) {
+      continue; // fail-closed：保留壳，视觉不丢
+    }
+    out = out.replace(shell.full, '');
+    out = removeTopLevelShellRule(out, shell.cls);
+    collapsed += 1;
+  }
+
+  // ── 6) P-10 死规则迁移（80648377 实锤时序缺陷）：必须在剥壳/unwrap **之后**跑 ──
+  //   剥壳前 DOM 还在 → domRe 判「非死规则」跳过；剥壳后组合选择器（`.item:not(.active)
+  //   .x-bg { 渐变 }`）才真正变死。迁移：.x-bg 段 → 宿主 ::before（含 content+几何补全），
+  //   无宿主可挂的纯死规则删除。
+  {
+    const migrated = migrateOrphanBgRulesToPseudo(out);
+    if (migrated !== null) out = migrated;
+  }
+
+  if (collapsed > 0 || keptDecorative > 0) {
+    console.info(
+      '[P-01/P-07] 已合并 ' + collapsed + ' 个 -bg 空壳/wrapper（含 unwrap ' + unwrapped + '）；保留 ' + keptDecorative + ' 个装饰层兜底',
+    );
+  }
+  return out;
+}
+
+/**
+ * 🛡️ P-09 双状态卡切换交互确定性装配（2026-09-17 · 36c3a630 实锤缺失）。
+ *
+ * 现象：visual.json interactions 明确记录「隧道设备/南北接线设备切换卡片 tab-switch，
+ * 左侧蓝色高亮表示选中」，但 ContentActive/ContentDefault 是两个独立子组件、无共享
+ * 状态载体——分块生成各自为政，谁都无法独自实现跨组件切换 → 交互静默丢失。
+ *
+ * 治本（确定性装配，事实源 = resourceDomMapping 的状态对）：
+ *   触发条件：mapping 中存在同容器下 mountTarget=active + mountTarget=default 的
+ *   bgRole=container 资源对（即「双状态卡」结构事实）。
+ *   动作（index.vue + 子组件标签）：
+ *     1. index script 注入 `const switchSelected = ref('active')`；
+ *     2. 两个子组件标签加 `@click="switchSelected = 'active'/'default'"` 与
+ *        `:class="{ 'is-selected': switchSelected === 'active'/'default' }"`；
+ *     3. 根 slot 容器注入 `:style="{ '--state-bg': switchSelected === 'active' ? 'url(' + bgA + ')' : 'url(' + bgB + ')' }"`
+ *        + import 两张 bg（交互需要视觉反馈，CSS 变量驱动选中卡背景）；
+ *     4. common.less 注入 `.is-selected` 语义规则（边框高亮，非背景——背景已由
+ *        P-06 挂根）与未选中卡降透明度。
+ *   幂等：已含 switchSelected 则原样返回。
+ *
+ * @param {Object<string,string>} files 产物文件表（原地更新 index.vue / common.less）
+ * @param {Array} resourceDomMapping 资源映射
+ * @returns {{applied: boolean, details: Object|null}}
+ */
+export function injectStateSwitchInteraction(files, resourceDomMapping = []) {
+  const idxPath = Object.keys(files).find((p) => p === 'package/index.vue');
+  if (!idxPath) return { applied: false, details: null };
+  let idx = files[idxPath];
+  if (typeof idx !== 'string') return { applied: false, details: null };
+  if (/switchSelected/.test(idx)) return { applied: false, details: null }; // 幂等
+
+  // 状态对识别：同 bgRole=container 的 active/default 资源对
+  const bgOf = (target) =>
+    (resourceDomMapping || []).find(
+      (m) =>
+        m &&
+        m.mountTarget === target &&
+        m.bgRole === 'container' &&
+        (m.previewAnalysisRole === 'bg' || m.kind === 'bg') &&
+        m.resourceFile &&
+        m.assignedVarName,
+    );
+  const act = bgOf('active');
+  const def = bgOf('default');
+  if (!act || !def) return { applied: false, details: null };
+
+  // 子组件标签定位（index.vue 模板内 ContentActive/ContentDefault 风格标签）
+  // 事实源：owner 由调用方 planner 命名约定（Content + 首字母大写 target）——
+  // 与 P-06 核心一刀的 ownerComp 推导一致。
+  const cap = (s) => String(s).charAt(0).toUpperCase() + String(s).slice(1);
+  const tagReOf = (t) => new RegExp('<(' + 'Content' + cap(t) + ')\\b([^>]*?)(/?)>', 'g');
+  let patched = false;
+  let out = idx;
+
+  const wireTag = (tagName, existing, selfClose, target) => {
+    if (/@click|:class/.test(existing)) return null; // LLM 已有交互 → 不覆盖
+    // 🛡️ CODE-024 契约（42c19564 实锤）：修饰符必须 BEM 形态（基类--mod）。
+    //   状态卡标签挂的是子组件（无基类 class），用静态 class 基类 + --selected 变体：
+    //   `class="state-switch state-switch--active"` 按选中态切换。
+    const baseCls = 'state-switch';
+    const modCls = `state-switch--${target}`;
+    const attrs =
+      ` @click="switchSelected = '${target}'"` +
+      ` :class="switchSelected === '${target}' ? '${baseCls} ${modCls}' : '${baseCls}'"`;
+    if (selfClose) {
+      return `<${tagName}${existing}${attrs} />`;
+    }
+    return `<${tagName}${existing}${attrs}>`;
+  };
+
+  for (const target of ['active', 'default']) {
+    const re = tagReOf(target);
+    out = out.replace(re, (full, tagName, attrs, selfClose) => {
+      const r = wireTag(tagName, attrs, selfClose === '/', target);
+      if (r) patched = true;
+      return r || full;
+    });
+  }
+  if (!patched) return { applied: false, details: null };
+
+  // script 注入：ref + bg imports
+  const scriptInject =
+    `\n// 🛡️ P-09 状态切换交互（确定性装配）\n` +
+    `import ${act.assignedVarName} from '../resources/images/${String(act.resourceFile).split('/').pop()}'\n` +
+    `import ${def.assignedVarName} from '../resources/images/${String(def.resourceFile).split('/').pop()}'\n` +
+    `const switchSelected = ref('active')\n`;
+  if (/<script setup>/.test(out)) {
+    out = out.replace('<script setup>', '<script setup>' + scriptInject);
+  } else {
+    return { applied: false, details: null };
+  }
+
+  // 根 slot 容器注入 CSS 变量（选中态背景跟随）。
+  // 🛡️ Vue 3 语义陷阱：同一标签同时有静态 style 与 :style 时静态 style 会被
+  //   :style 整体覆盖（不是合并）→ 容器原有 display:flex 等布局丢失。必须把
+  //   静态 style 合并进 :style 对象（string 形式追加 '--state-bg' 三元绑定）。
+  const slotRe = /(<div\b[^>]*class="[^"]*slot-con[^"]*"[^>]*>)/;
+  const slotM = out.match(slotRe);
+  if (slotM && !/--state-bg/.test(slotM[1])) {
+    const tag = slotM[1];
+    const staticStyleM = tag.match(/\sstyle="([^"]*)"/);
+    let newTag;
+    if (staticStyleM && !/:style=/.test(tag)) {
+      // 静态 style → 合并进新 :style（保留原布局声明）
+      const stat = staticStyleM[1].trim().replace(/;$/, '');
+      const mergedDecls = stat
+        .split(';')
+        .map((d) => d.trim())
+        .filter(Boolean)
+        .map((d) => {
+          const [k, ...v] = d.split(':');
+          const kk = k.trim().replace(/-([a-z])/g, (_x, c) => c.toUpperCase());
+          return `'${kk}': '${v.join(':').trim()}'`;
+        })
+        .join(', ');
+      newTag = tag.replace(
+        /\sstyle="[^"]*"/,
+        ` :style="{ ${mergedDecls}${mergedDecls ? ', ' : ''}'--state-bg': switchSelected === 'active' ? 'url(' + ${act.assignedVarName} + ')' : 'url(' + ${def.assignedVarName} + ')' }"`,
+      );
+    } else {
+      const styleBind = ` :style="{ '--state-bg': switchSelected === 'active' ? 'url(' + ${act.assignedVarName} + ')' : 'url(' + ${def.assignedVarName} + ')' }"`;
+      newTag = tag.replace(/>$/, styleBind + '>');
+    }
+    if (newTag && newTag !== tag) {
+      out = out.replace(slotRe, newTag);
+    }
+  }
+
+  files[idxPath] = out;
+
+  // common.less 注入 state-switch BEM 语义规则（若文件表含 common.less 且无该规则）
+  // 🛡️ CODE-024 契约：修饰符 --mod 形态 + 样式源有对应规则（两条件都满足）。
+  const commonPath = Object.keys(files).find(
+    (p) => /resources\/styles\/common\.less$/.test(p),
+  );
+  if (commonPath && !/state-switch--active/.test(files[commonPath])) {
+    files[commonPath] =
+      String(files[commonPath]) +
+      `\n\n/* 🛡️ P-09 状态切换交互（确定性装配） */\n` +
+      `.state-switch {\n  transition: opacity 0.2s ease;\n  cursor: pointer;\n}\n` +
+      `.state-switch--active,\n.state-switch--default {\n  opacity: 1;\n}\n` +
+      `.state-switch:not(.state-switch--active):not(.state-switch--default) {\n  opacity: 0.55;\n}\n`;
+  }
+
+  return {
+    applied: true,
+    details: { active: act.assignedVarName, default: def.assignedVarName },
+  };
+}
+
+/**
+ * 🛡️ P-11 per-character 分段着色（2026-09-18 · device-monitor 实锤）
+ * ============================================================================
+ * 背景：Figma 用 `characterStyleOverrides` + `styleOverrideTable` 表达「同一个
+ * TEXT 节点内按字符分段着色」。实测 `(2/484)`：
+ *   节点默认 fill = 纯白 rgb(255,255,255)（被覆盖完全架空，无一字符实际渲染为白）
+ *   overrides = [69,71,69,69,69,69,69]
+ *   table: 69→蓝 rgb(25,144,255)(size16) / 71→红 rgb(224,52,52)(size18,w600)
+ *   逐字符：`(`蓝 · `2`红 · `/484)`蓝
+ * 而 `(0/484)` 的「0」是青绿 rgb(8,163,165) → 该位置是**状态色语义**：
+ *   异常数 > 0 → 红；= 0 → 青绿。
+ *
+ * 旧链路三重丢失（这也是「device-count 文字一直是白色」的真根因）：
+ *   ① pruneRedundantFields 白名单裁剪删掉这两个字段 → 缓存无数据；
+ *   ② LLM 只看到节点默认白 fill → 输出白字；
+ *   ③ 管线无分段渲染能力 → 即使拿到数据也渲染不出。
+ * （① 已在 figma-connector.js 修复；本函数解决 ②③）
+ *
+ * 治本（确定性装配，事实源 = 修复后能拿到的 per-char 真值）：
+ *   - 产物里这类文本常是**动态绑定**（如 `{{ device.count }}`），无法静态替换字面量，
+ *     故装配「运行时分段着色」：注入确定性 helper（颜色真值写死自 Figma）+ 模板改为
+ *     v-for 分段渲染。
+ *   - 多样本聚合推断状态色：`(2/484)` 非 0 → 异常色；`(0/484)` 为 0 → 正常色。
+ *   - 严格 fail-closed：无真值 / 结构不匹配 / 已装配过 → 零改动。
+ *
+ * @param {Object<string,string>} files 产物文件表（原地更新 .vue）
+ * @param {Array} perCharTruth extractPerCharTextTruth() 产出的分段真值
+ * @returns {{applied: boolean, details: Object|null}}
+ */
+export function injectPerCharTextSegments(files, perCharTruth = []) {
+  if (!files || !Array.isArray(perCharTruth) || perCharTruth.length === 0) {
+    return { applied: false, details: null };
+  }
+
+  // ── 1. 聚合状态色：只处理「(异常数/总数)」这类可语义化的计数文本 ──
+  //    从多个样本（(2/484) 红、(0/484) 青绿）推断该位置的状态色映射。
+  const COUNT_RE = /^(\D*?)(\d+)(\/[\s\S]*)$/;
+  let baseColor = null;
+  let abnormalColor = null; // 数值 > 0
+  let normalColor = null; // 数值 = 0
+  let sampleChars = null;
+  // 字号/字重同属 per-char 真值的一部分（实测异常数 18/600、其余 16/500），一并装配保真
+  let baseSize = null;
+  let baseWeight = null;
+  let numSize = null;
+  let numWeight = null;
+
+  for (const item of perCharTruth) {
+    const chars = String(item && item.characters ? item.characters : '');
+    const m = chars.match(COUNT_RE);
+    if (!m || !Array.isArray(item.segments)) continue;
+    const num = Number(m[2]);
+    for (const seg of item.segments) {
+      if (!seg || !seg.color) continue;
+      const isNumSeg = seg.text && seg.text.includes(m[2]);
+      if (isNumSeg) {
+        if (num > 0) abnormalColor = seg.color;
+        else normalColor = seg.color;
+        numSize = numSize || seg.fontSize || null;
+        numWeight = numWeight || seg.fontWeight || null;
+      } else {
+        baseColor = baseColor || seg.color;
+        baseSize = baseSize || seg.fontSize || null;
+        baseWeight = baseWeight || seg.fontWeight || null;
+      }
+    }
+    sampleChars = chars;
+  }
+  if (!baseColor || !abnormalColor) {
+    return { applied: false, details: null }; // fail-closed
+  }
+  const normal = normalColor || abnormalColor;
+
+  // ── 2. 定位目标绑定：模板中形如 {{ xxx.count }} 的动态文本 ──
+  //     事实源：per-char 真值的 characters 形态 + 模板里同类语义的绑定名。
+  const HELPER = 'formatDeviceCountSegments';
+  const changed = [];
+
+  for (const [fp, code] of Object.entries(files)) {
+    if (!fp.endsWith('.vue') || typeof code !== 'string') continue;
+    if (code.includes(HELPER)) continue; // 幂等
+    // 只处理含计数语义绑定的文件（.count / Count 后缀）
+    const bindRe = /\{\{\s*([A-Za-z_$][\w$.]*)\.count\s*\}\}/;
+    const bm = code.match(bindRe);
+    if (!bm) continue;
+    const expr = bm[1] + '.count';
+
+    // 模板替换：{{ device.count }} → 分段 v-for 渲染
+    const replacement =
+      `<span v-for="(seg, segIdx) in ${HELPER}(${expr})" :key="segIdx"` +
+      ` :style="{ color: seg.color, fontSize: seg.fontSize ? seg.fontSize + 'px' : undefined,` +
+      ` fontWeight: seg.fontWeight || undefined }">{{ seg.text }}</span>`;
+    let out = code.replace(bindRe, replacement);
+
+    // script 注入 helper（颜色真值写死自 Figma per-character）
+    const helperSrc =
+      `\n// 🛡️ P-11 分段着色（确定性装配 · 真值来自 Figma per-character）\n` +
+      `const COUNT_SEG_BASE = '${baseColor}'\n` +
+      `const COUNT_SEG_ABNORMAL = '${abnormalColor}'\n` +
+      `const COUNT_SEG_NORMAL = '${normal}'\n` +
+      `const COUNT_SEG_BASE_SIZE = ${baseSize == null ? 'null' : String(baseSize)}\n` +
+      `const COUNT_SEG_BASE_WEIGHT = ${baseWeight == null ? 'null' : String(baseWeight)}\n` +
+      `const COUNT_SEG_NUM_SIZE = ${numSize == null ? 'null' : String(numSize)}\n` +
+      `const COUNT_SEG_NUM_WEIGHT = ${numWeight == null ? 'null' : String(numWeight)}\n` +
+      `function ${HELPER}(raw) {\n` +
+      `  const s = String(raw == null ? '' : raw)\n` +
+      `  const m = s.match(/^(\\D*?)(\\d+)(\\/[\\s\\S]*)$/)\n` +
+      `  if (!m) return [{ text: s, color: COUNT_SEG_BASE }]\n` +
+      `  const n = Number(m[2])\n` +
+      `  return [\n` +
+      `    { text: m[1], color: COUNT_SEG_BASE, fontSize: COUNT_SEG_BASE_SIZE, fontWeight: COUNT_SEG_BASE_WEIGHT },\n` +
+      `    { text: m[2], color: n > 0 ? COUNT_SEG_ABNORMAL : COUNT_SEG_NORMAL, fontSize: COUNT_SEG_NUM_SIZE, fontWeight: COUNT_SEG_NUM_WEIGHT },\n` +
+      `    { text: m[3], color: COUNT_SEG_BASE, fontSize: COUNT_SEG_BASE_SIZE, fontWeight: COUNT_SEG_BASE_WEIGHT },\n` +
+      `  ].filter((x) => x.text)\n` +
+      `}\n`;
+
+    if (/<script setup>/.test(out)) {
+      out = out.replace('<script setup>', '<script setup>' + helperSrc);
+    } else {
+      continue; // 无 script setup → 无法注入 helper，跳过（fail-closed）
+    }
+
+    if (out !== code) {
+      files[fp] = out;
+      changed.push(fp);
+    }
+  }
+
+  if (changed.length === 0) return { applied: false, details: null };
+  return {
+    applied: true,
+    details: { files: changed, baseColor, abnormalColor, normalColor: normal, sample: sampleChars },
+  };
+}
+
+/**
+ * P-11 辅助：从（已修复裁剪的）Figma 节点树提取 per-character 分段着色真值。
+ * 只收集确实存在多段异色的 TEXT 节点（单色节点不产出，避免噪音）。
+ *
+ * @param {Object} figmaNodeData prune 后的 Figma 节点树（含 characterStyleOverrides）
+ * @returns {Array<{nodeId:string, characters:string, segments:Array<{text:string,color:string,fontSize:number|null,fontWeight:number|null}>}>}
+ */
+export function extractPerCharTextTruth(figmaNodeData) {
+  const out = [];
+  if (!figmaNodeData || typeof figmaNodeData !== 'object') return out;
+
+  const rgba = (c) => {
+    if (!c) return null;
+    const r = Math.round((c.r || 0) * 255);
+    const g = Math.round((c.g || 0) * 255);
+    const b = Math.round((c.b || 0) * 255);
+    const a = typeof c.a === 'number' ? c.a : 1;
+    return a >= 0.999 ? `rgb(${r},${g},${b})` : `rgba(${r},${g},${b},${a})`;
+  };
+
+  const walk = (n) => {
+    if (!n || typeof n !== 'object') return;
+    const ovs = n.characterStyleOverrides;
+    const table = n.styleOverrideTable;
+    if (
+      n.type === 'TEXT' &&
+      n.characters &&
+      Array.isArray(ovs) &&
+      ovs.length > 0 &&
+      table &&
+      Object.keys(table).length > 0
+    ) {
+      const chars = [...String(n.characters)];
+      const baseFill = (n.fills || []).find((f) => f && f.type === 'SOLID' && f.color);
+      const baseColor = rgba(baseFill && baseFill.color) || null;
+      const baseSize = (n.style && n.style.fontSize) || null;
+      const baseWeight = (n.style && n.style.fontWeight) || null;
+
+      const segments = [];
+      let cur = null;
+      for (let i = 0; i < chars.length; i += 1) {
+        const key = String(ovs[i]);
+        const ov = table[key];
+        const fill = ov && ov.fills && ov.fills[0] && ov.fills[0].color;
+        const color = rgba(fill) || baseColor;
+        const size = (ov && ov.fontSize) || baseSize;
+        const weight = (ov && ov.fontWeight) || baseWeight;
+        const sig = `${color}|${size}|${weight}`;
+        if (cur && cur.sig === sig) {
+          cur.text += chars[i];
+        } else {
+          cur = { sig, text: chars[i], color, fontSize: size, fontWeight: weight };
+          segments.push(cur);
+        }
+      }
+      // 合并后仍多段（确实异色）才纳入
+      if (segments.length > 1) {
+        out.push({
+          nodeId: n.id,
+          characters: String(n.characters),
+          segments: segments.map((s) => ({
+            text: s.text,
+            color: s.color,
+            fontSize: s.fontSize,
+            fontWeight: s.fontWeight,
+          })),
         });
-        if (additions.length > 0) {
-          const newSeg = seg.replace(
-            parentRuleRe,
-            (_m, open, body) => open + body.replace(/\s*$/, '') + (body.trim().endsWith(';') || !body.trim() ? '' : ';') + ' ' + additions.join('; ') + ' }',
+      }
+    }
+    for (const c of n.children || []) walk(c);
+  };
+
+  walk(figmaNodeData);
+  return out;
+}
+
+/**
+ * 🛡️ P-10 死规则迁移（b58918b5 实锤）：模板无 -bg 壳 + 样式有 .x-bg 渐变规则。
+ * LLM 组合选择器形态（`.item:not(.active) .x-bg { 渐变 }`）里的 .x-bg 段在模板
+ * 剥壳后成死选择器 → 渐变丢失。改写：模板全无该 class 的 DOM 元素时，组合选择器
+ * 中的 `.x-bg` 段替换为 `::before`（挂宿主伪元素），规则其余部分保持。
+ * @param {string} code .vue 全文
+ * @returns {string|null} 有迁移返回新 code，否则 null
+ */
+function migrateOrphanBgRulesToPseudo(code) {
+  const tplSeg = code.match(/<template>([\s\S]*?)<\/template>/);
+  const styleSeg = code.match(/<style[^>]*>([\s\S]*?)<\/style>/);
+  if (!tplSeg || !styleSeg) return null;
+
+  // 收集样式里引用的 -bg class（任意选择器形态）
+  const bgClsSet = new Set();
+  for (const m of styleSeg[1].matchAll(/\.([A-Za-z][\w-]*(?:-bg|background))\b/g)) {
+    bgClsSet.add(m[1]);
+  }
+  if (bgClsSet.size === 0) return null;
+
+  let changed = false;
+  let text = styleSeg[1];
+  for (const cls of bgClsSet) {
+    // 模板是否还有该 class 的 DOM？
+    const clsEsc = cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const domRe = new RegExp('\\bclass="[^"]*\\b' + clsEsc + '\\b[^"]*"');
+    if (domRe.test(tplSeg[1])) continue; // DOM 还在 → 不是死规则
+    // 死规则：`.x-bg` 段改写为宿主 `::before`。
+    // ① 前接后代组合符（` .x-bg`）→ 去空格直接挂宿主（`:not(.active) ::before`
+    //    会变成后代伪元素，作用于所有子孙，错）；
+    // ② 选择器以 .x-bg 开头 → 该规则无宿主可挂，整块删除（纯死规则）。
+    const segLead = new RegExp('(\\s)\\.' + clsEsc + '\\b(?![\\w-])', 'g');
+    const segHead = new RegExp('(?:^|\\n)[ \\t]*\\.' + clsEsc + '\\b[^{]*\\{[^{}]*\\}', 'g');
+    if (segHead.test(text)) {
+      text = text.replace(segHead, '\n/* [P-10] 无宿主死规则已删 */');
+      changed = true;
+    }
+    if (segLead.test(text)) {
+      text = text.replace(segLead, '::before');
+      changed = true;
+      // 伪元素渲染前提：content + 绝对定位几何——遍历所有 .x::before 规则逐一补全。
+      const hostHeadRe = new RegExp('(\\.[A-Za-z][\\w-]*(?::[^{]+)?)::before\\s*\\{', 'g');
+      const baseCls = (hostHeadRe.exec(text) || [])[1]?.match(/^\.([A-Za-z][\w-]*)/);
+      text = text.replace(hostHeadRe, (full) => full); // reset lastIndex
+      let hm;
+      const patches = [];
+      hostHeadRe.lastIndex = 0;
+      while ((hm = hostHeadRe.exec(text)) !== null) {
+        const ruleOpen = hm.index + hm[0].length;
+        const bodyEnd = text.indexOf('}', ruleOpen);
+        if (bodyEnd < 0) continue;
+        const body = text.slice(ruleOpen, bodyEnd);
+        const adds = [];
+        if (!/content\s*:/.test(body)) adds.push(`content: ''`);
+        if (!/position\s*:/.test(body)) adds.push(`position: absolute; top: 0; left: 6px; width: 34px; height: 100%`);
+        if (adds.length > 0) patches.push({ at: ruleOpen, text: '\n  ' + adds.join(';\n  ') + ';\n' });
+      }
+      for (const p of patches.reverse()) {
+        text = text.slice(0, p.at) + p.text + text.slice(p.at);
+      }
+      // 宿主基类 position:relative 缺则补（伪元素 absolute 的定位基准）
+      if (baseCls) {
+        const baseEsc = baseCls[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const baseRuleRe = new RegExp('(?:^|\\n)[ \\t]*\\.' + baseEsc + '\\s*\\{([^{}]*)\\}');
+        const baseM = text.match(baseRuleRe);
+        if (!baseM || !/position\s*:/i.test(baseM[1])) {
+          text = text.replace(baseRuleRe, (full, body) =>
+            /position\s*:/i.test(body) ? full : full.replace(/\{$/, '{\n  position: relative;'),
           );
-          out = out.slice(0, searchFrom) + newSeg;
-          merged = true;
+        }
+      }
+    }
+  }
+  if (!changed) return null;
+  const styleStart = code.indexOf(styleSeg[0]) + styleSeg[0].indexOf(styleSeg[1]);
+  return code.slice(0, styleStart) + text + code.slice(styleStart + styleSeg[1].length);
+}
+
+/**
+ * 🛡️ P-07：定位残尸 -bg wrapper unwrap（36c3a630 实锤）。
+ * P-06 背景上移组件根后，内层 `-bg` wrapper（有子内容、非空壳）成冗余层——
+ * 尤其被 style-dedup-guard 剥得只剩 {position:relative} 时会变 block 竖排溢出。
+ * 动作：wrapper 的子节点上提到 wrapper 父层、删 wrapper 标签对、删死 CSS 规则。
+ * 判据：class 含 -bg 词尾 + 规则体全部声明 ∈ 纯定位白名单（无 display/尺寸/间距）。
+ * @returns {string|null} 已 unwrap 返回新 code；不满足判据返回 null
+ */
+function tryUnwrapPositionalBgWrapper(code, shell) {
+  // 非空壳：SHELL_RE 只匹配空壳，此函数在 shells 循环里复用 cls——需要独立找有内容的标签对
+  const clsEsc = shell.cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const openRe = new RegExp('<div\\s+class="' + clsEsc + '"\\s*>', 'g');
+  const openM = openRe.exec(code);
+  if (!openM) return null;
+  // 规则体纯定位判定
+  const styleSeg = code.match(/<style[^>]*>([\s\S]*?)<\/style>/);
+  if (!styleSeg) return null;
+  const topDecls = collectTopLevelShellDecls(styleSeg[1], shell.cls);
+  if (!topDecls.trim()) return null; // 无规则（或仅嵌套）→ 不处理
+  // 规则体判据：纯定位 OR 纯背景系（两者都是「背景已上移根」后的残尸形态——
+  // P-06 清洗删 :style 后留背景系残尸，style-dedup 剥布局后留纯定位残尸）。
+  const POSITIONAL_ONLY = /^(position|top|left|right|bottom|transform|translate|z-index|box-sizing|inset)\s*:/i;
+  const BG_ONLY = /^(background(?:-[a-z]+)?|backgroundSize|backgroundPosition|backgroundRepeat)\s*:/i;
+  const decls = topDecls
+    .split(';')
+    .map((d) => d.trim())
+    .filter((d) => d);
+  const allPositional = decls.every((d) => POSITIONAL_ONLY.test(d));
+  const allBg = decls.every((d) => BG_ONLY.test(d) || /^background(size|position|repeat)/i.test(d));
+  if (!decls.every((d) => POSITIONAL_ONLY.test(d) || BG_ONLY.test(d) || /^background(size|position|repeat)/i.test(d))) {
+    if (!allPositional && !allBg) return null;
+  }
+  // 找 wrapper 开闭标签对（括号配平 div 嵌套）
+  const openIdx = openM.index;
+  let depth = 1;
+  let i = openIdx + openM[0].length;
+  let closeIdx = -1;
+  const tagRe = /<\/?div\b[^>]*>/g;
+  tagRe.lastIndex = i;
+  let m;
+  while ((m = tagRe.exec(code)) !== null) {
+    if (m[0].startsWith('</')) { depth--; if (depth === 0) { closeIdx = m.index; break; } }
+    else if (!m[0].endsWith('/>')) depth++;
+  }
+  if (closeIdx < 0) return null;
+  const closeEnd = closeIdx + '</div>'.length;
+  const inner = code.slice(openIdx + openM[0].length, closeIdx);
+  if (!inner.trim()) return null; // 空壳归 SHELL_RE 主路径，不在此处理
+  // 子内容上提（保留内部缩进结构）+ 删标签对 + 删死规则
+  let out = code.slice(0, openIdx) + inner + code.slice(closeEnd);
+  out = removeTopLevelShellRule(out, shell.cls);
+  return out;
+}
+
+/**
+ * 🛡️ P-01c：绝对定位装饰壳 → 宿主 ::before 伪元素（铁律收口）。
+ * 动作：① 模板删壳；② 顶层 .shell 规则整体改写为 `宿主::before { content:''; 原声明 }`
+ * 插到宿主顶层规则之后；③ 嵌套变体块内的 .shell 子块改写为 `&::before { ... }`
+ * （保持激活态覆盖能力）。宿主规则找不到 → 返回 null（调用方保留壳兜底）。
+ * @param {string} code .vue 全文
+ * @param {{full: string, cls: string}} shell 空壳信息
+ * @returns {string|null}
+ */
+function convertShellToPseudoElement(code, shell) {
+  const shellIdx = code.indexOf(shell.full);
+  if (shellIdx < 0) return null;
+  const before = code.slice(0, shellIdx);
+  const parentOpenM = before.match(/<div\b[^>]*>(?=[^<]*$)/);
+  if (!parentOpenM) return null;
+  const firstCls = extractFirstClassName(parentOpenM[0]);
+  if (!firstCls) return null;
+
+  const styleSeg = code.match(/<style[^>]*>([\s\S]*?)<\/style>/);
+  if (!styleSeg) return null;
+
+  const clsEsc = shell.cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const firstClsEsc = firstCls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const styleStart = code.indexOf(styleSeg[0]) + styleSeg[0].indexOf(styleSeg[1]);
+  let text = styleSeg[1];
+
+  // ── 扫描 .shell 全部规则出现点，按花括号深度分「顶层 / 嵌套」两组 ──
+  // 🛡️ 深度判定用「选择器起始处的前缀」配平（选择器首字符所在位置的括号深度），
+  //   不能用 match.index（其前缀含被 `(?:^|\n|\})` 消费的 `}`，会把顶层判成嵌套）。
+  const selScanRe = new RegExp('(?:^|\\n|\\})[ \\t]*\\.' + clsEsc + '\\s*\\{', 'g');
+  const occurrences = [];
+  let nm;
+  while ((nm = selScanRe.exec(text)) !== null) {
+    // 选择器 '.' 的绝对位置 = nm.index + 前导空白长度
+    const lead = nm[0].indexOf('.');
+    const selAt = nm.index + (lead < 0 ? 0 : lead);
+    const prefix = text.slice(0, selAt);
+    const depth = (prefix.match(/\{/g) || []).length - (prefix.match(/\}/g) || []).length;
+    const openIdx = text.indexOf('{', nm.index);
+    let d = 1;
+    let closeIdx = -1;
+    for (let i = openIdx + 1; i < text.length; i++) {
+      if (text[i] === '{') d++;
+      else if (text[i] === '}') { d--; if (d === 0) { closeIdx = i; break; } }
+    }
+    if (closeIdx < 0) break;
+    occurrences.push({
+      depth,
+      headStart: nm.index,
+      fullStart: text.lastIndexOf('\n', nm.index) === -1 ? nm.index : text.lastIndexOf('\n', nm.index),
+      end: closeIdx + 1,
+      decls: text.slice(openIdx + 1, closeIdx).trim(),
+    });
+  }
+  const topOcc = occurrences.filter((o) => o.depth === 0);
+  const nestedOcc = occurrences.filter((o) => o.depth > 0);
+  if (topOcc.length === 0) return null; // 无顶层规则 → 无从建伪元素
+
+  // ── 宿主顶层规则闭合位置（伪元素块插到它后面）──
+  const hostRuleRe = new RegExp('(?:^|\\n|\\})\\s*(\\.' + firstClsEsc + ')\\s*\\{');
+  const hostHeadIdx = text.search(hostRuleRe);
+  if (hostHeadIdx < 0) return null;
+  const hostOpenIdx = text.indexOf('{', hostHeadIdx);
+  let hd = 0;
+  let hostCloseIdx = -1;
+  for (let i = hostOpenIdx; i < text.length; i++) {
+    if (text[i] === '{') hd++;
+    else if (text[i] === '}') {
+      hd--;
+      if (hd === 0) { hostCloseIdx = i; break; }
+    }
+  }
+  if (hostCloseIdx < 0) return null;
+
+  // ── 一次性收集全部编辑，从后往前应用（偏移安全）──
+  const edits = [];
+  for (const o of topOcc) {
+    edits.push({ start: o.fullStart, end: o.end, text: '\n' });
+  }
+  for (const o of nestedOcc) {
+    const pseudoDecls = o.decls.replace(/\s+/g, ' ');
+    edits.push({
+      start: o.headStart,
+      end: o.end,
+      text: '&::before {\n      content: \'\';\n      ' + pseudoDecls + '\n    }',
+    });
+  }
+  const topDecls = topOcc.map((o) => o.decls.replace(/\s+/g, ' ')).join(' ');
+  edits.push({
+    start: hostCloseIdx + 1,
+    end: hostCloseIdx + 1,
+    text: '\n\n  .' + firstCls + '::before {\n    content: \'\';\n    ' + topDecls + '\n  }',
+  });
+  edits.sort((a, b) => b.start - a.start);
+  for (const e of edits) {
+    text = text.slice(0, e.start) + e.text + text.slice(e.end);
+  }
+
+  let out = code.slice(0, styleStart) + text + code.slice(styleStart + styleSeg[1].length);
+  // ④ 模板删壳
+  out = out.replace(shell.full, '');
+  return out;
+}
+
+/** 收集 class 在样式内容里的**顶层**规则声明体（多段拼接）。嵌套块由 hoistNestedShellDecls 处理。 */
+function collectTopLevelShellDecls(styleContent, cls) {
+  if (!styleContent) return '';
+  const clsEsc = cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const ruleRe = new RegExp('(?:^|\\n|\\})\\s*\\.' + clsEsc + '\\s*\\{([^{}]*)\\}', 'g');
+  let decls = '';
+  for (const m of styleContent.match(ruleRe) || []) {
+    decls += (m.match(/\{([^{}]*)\}/) || [])[1] || '';
+    decls += ';';
+  }
+  return decls;
+}
+
+/** 删除 class 的顶层独立规则块（嵌套块由 hoist 阶段接管，此处不动） */
+function removeTopLevelShellRule(code, cls) {
+  const clsEsc = cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return code.replace(
+    new RegExp('(?:^|\\n)[ \\t]*\\.' + clsEsc + '\\s*\\{[^{}]*\\}[ \\t]*(?=\\n|$)', 'g'),
+    '\n',
+  );
+}
+
+/**
+ * 🛡️ P-01b：从父开标签提取首个 class 名。
+ * 支持：静态 class="a b" / 动态 :class="['a', { 'a--on': x }]"（取首个字符串字面量）。
+ * 提取失败返回 null（调用方 fail-closed 保留壳）。
+ */
+function extractFirstClassName(parentOpen) {
+  const isValid = (s) => /^[A-Za-z_][\w-]*$/.test(s);
+  // 静态 class（用前置空白锚定，避免误匹配 :class / v-bind:class）
+  const staticM = parentOpen.match(/(?:^|\s)class="([^"]*)"/);
+  if (staticM) {
+    const first = staticM[1].trim().split(/\s+/)[0];
+    if (isValid(first)) return first;
+  }
+  // 动态数组语法：:class="[ 'a', { ... } ]" / :class="['a', ...]"
+  const dynM = parentOpen.match(/:class="\[?\s*'([^']+)'/);
+  if (dynM) {
+    const first = dynM[1].trim().split(/\s+/)[0];
+    if (isValid(first)) return first;
+  }
+  return null;
+}
+
+/**
+ * 把视觉声明合并进父 class 的顶层规则（P-01b 重写注入点）。
+ * 🛡️ 父规则可能含嵌套子块（&--active { ... }）——在规则头 `{` 之后直接插入，
+ * 不再重排整个块体（旧实现 `[^}]*` 会在嵌套块处截断错乱）。
+ * @returns {string|null} 成功返回新 code；父规则不存在返回 null；
+ *   父已有全部同名属性返回 code 原引用（视作已合并，壳可删）
+ */
+function mergeIntoParentRule(code, firstCls, visualDecls) {
+  const firstClsEsc = firstCls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const headRe = new RegExp('(?:^|\\n|\\})\\s*(\\.' + firstClsEsc + ')\\s*\\{');
+  const headM = code.match(headRe);
+  if (!headM) return null;
+  // 父规则直属声明体（到嵌套 `{` 或闭合 `}` 为止）——用于同名属性过滤
+  const afterHead = code.slice(headM.index + headM[0].length);
+  const directBody = afterHead.split(/[{}]/)[0] || '';
+  const additions = visualDecls.filter((d) => {
+    const prop = d.split(':')[0].trim().toLowerCase();
+    return !new RegExp('(^|;)\\s*' + prop + '\\s*:', 'i').test(directBody);
+  });
+  if (additions.length === 0) return code; // 父已全覆盖 → 壳冗余可删
+  const insertAt = headM.index + headM[0].length;
+  return (
+    code.slice(0, insertAt) +
+    '\n  ' + additions.join(';\n  ') + ';\n' +
+    code.slice(insertAt)
+  );
+}
+
+/**
+ * 🛡️ P-01b 根因 2：嵌套变体块内的 .shell 规则上提。
+ * 形态：`.item--active { ... .c-x-bg { background: 渐变 } ... }`（含 LESS `&--active` 块）。
+ * 动作：删除内层 .shell 子块，把其中的视觉声明追加到**外层变体块**直属。
+ * @returns {string|null} 有改动返回新 code，否则 null
+ */
+function hoistNestedShellDecls(code, cls, VISUAL_RE) {
+  const styleSeg = code.match(/<style[^>]*>([\s\S]*?)<\/style>/);
+  if (!styleSeg) return null;
+  const styleStart = code.indexOf(styleSeg[0]) + styleSeg[0].indexOf(styleSeg[1]);
+  const styleText = styleSeg[1];
+  const clsEsc = cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const innerRe = new RegExp('\\.' + clsEsc + '\\s*\\{([^{}]*)\\}', 'g');
+  const edits = [];
+  let m;
+  while ((m = innerRe.exec(styleText)) !== null) {
+    const before = styleText.slice(0, m.index);
+    const depth =
+      (before.match(/\{/g) || []).length - (before.match(/\}/g) || []).length;
+    if (depth > 0) {
+      const visual = m[1]
+        .split(';')
+        .map((d) => d.trim())
+        .filter((d) => d && VISUAL_RE.test(d));
+      if (visual.length > 0) {
+        edits.push({ at: m.index, full: m[0], visual });
+      }
+    }
+  }
+  if (edits.length === 0) return null;
+  let text = styleText;
+  for (const e of edits.reverse()) {
+    // 删内层子块
+    text = text.slice(0, e.at) + text.slice(e.at + e.full.length);
+    // 声明追加到外层块体（删除点之前最近的 '{' 之后）
+    const outerOpen = text.slice(0, e.at).lastIndexOf('{');
+    if (outerOpen < 0) continue;
+    text =
+      text.slice(0, outerOpen + 1) +
+      '\n  ' + e.visual.join(';\n  ') + ';\n' +
+      text.slice(outerOpen + 1);
+  }
+  return code.slice(0, styleStart) + text + code.slice(styleStart + styleText.length);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 🛡️ P-12 防御性治理规则（2026-09-18）
+// 背景：c-env-monitor-a27a33f7 TabSwitcher 布局错乱 + c-device-monitor-7de62721 颜色错误
+// 根因：LLM 产出结构性错误（动态 class 无样式、容器缺 flex、资源绑定层级错误、颜色真值提取失败）
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * 🛡️ P-12a 动态 class 样式校验
+ * 问题：LLM 删除组件但保留 :class 绑定，或生成动态 class 但无对应样式定义
+ * 形态：`:class="{ 'state-switch': isSwitched }"` 但 style 中无 `.state-switch`
+ * 动作：扫描模板中所有 class 名，与 style 选择器交叉比对，缺失的 class 补空规则
+ * @param {string} code Vue SFC 代码
+ * @returns {string} 修复后的代码（幂等）
+ */
+export function validateDynamicClassStyles(code) {
+  if (!code || typeof code !== 'string') return code;
+
+  // 提取模板段
+  const templateMatch = code.match(/<template[^>]*>([\s\S]*?)<\/template>/);
+  if (!templateMatch) return code;
+  const template = templateMatch[1];
+
+  // 提取 style 段
+  const styleMatch = code.match(/<style[^>]*>([\s\S]*?)<\/style>/);
+  if (!styleMatch) return code;
+  const styleContent = styleMatch[1];
+
+  // 1. 收集模板中所有 class 名（静态 + 动态）
+  const usedClasses = new Set();
+
+  // 静态 class="a b c"
+  const staticClassRe = /(?:^|\s)class="([^"]*)"/g;
+  let m;
+  while ((m = staticClassRe.exec(template)) !== null) {
+    m[1].split(/\s+/).forEach((c) => c && usedClasses.add(c));
+  }
+
+  // 动态 :class="{ 'active': cond }" / :class="['a', 'b']"
+  const dynClassRe = /:class="([^"]*)"/g;
+  while ((m = dynClassRe.exec(template)) !== null) {
+    const expr = m[1];
+    // 对象语法：{ 'class-name': condition }
+    const objRe = /['"]([^'"]+)['"]\s*:/g;
+    let om;
+    while ((om = objRe.exec(expr)) !== null) {
+      usedClasses.add(om[1]);
+    }
+    // 数组语法：['class-a', 'class-b']
+    const arrRe = /['"]([^'"]+)['"]/g;
+    while ((om = arrRe.exec(expr)) !== null) {
+      usedClasses.add(om[1]);
+    }
+  }
+
+  // 2. 收集 style 中已定义的选择器
+  const definedClasses = new Set();
+  const selectorRe = /\.([A-Za-z_][\w-]*)\s*[{,:\[]/g;
+  while ((m = selectorRe.exec(styleContent)) !== null) {
+    definedClasses.add(m[1]);
+  }
+
+  // 3. 找出缺失的 class
+  const missingClasses = [...usedClasses].filter((c) => !definedClasses.has(c));
+  if (missingClasses.length === 0) return code;
+
+  // 4. 补空规则到 style 末尾
+  const emptyRules = missingClasses.map((c) => `.${c} {\n  /* TODO: 补充样式 */\n}`).join('\n\n');
+  const newStyle = styleContent + '\n\n' + emptyRules;
+
+  return code.slice(0, styleMatch.index) +
+    '<style>' + newStyle + '</style>' +
+    code.slice(styleMatch.index + styleMatch[0].length);
+}
+
+/**
+ * 🛡️ P-12b Flex 布局自动注入
+ * 问题：容器有多个兄弟元素但缺 display: flex，导致子元素垂直堆叠而非水平排列
+ * 形态：`.tabs-list` 下有多个 `.tab-item` 但无 flex 布局
+ * 动作：检测父容器下有多个直接子元素且无 flex，注入 display: flex + align-items + gap
+ * @param {string} code Vue SFC 代码
+ * @returns {string} 修复后的代码（幂等）
+ */
+export function ensureFlexLayoutForSiblings(code) {
+  if (!code || typeof code !== 'string') return code;
+
+  const templateMatch = code.match(/<template[^>]*>([\s\S]*?)<\/template>/);
+  if (!templateMatch) return code;
+  const template = templateMatch[1];
+
+  const styleMatch = code.match(/<style[^>]*>([\s\S]*?)<\/style>/);
+  if (!styleMatch) return code;
+  let styleContent = styleMatch[1];
+
+  // 提取所有带 class 的标签及其层级
+  const tagRe = /<([a-zA-Z-]+)[^>]*class="([^"]*)"[^>]*>/g;
+  const tags = [];
+  let m;
+  while ((m = tagRe.exec(template)) !== null) {
+    tags.push({ tag: m[1], classes: m[2].split(/\s+/), index: m.index });
+  }
+
+  // 检测每个 class 的选择器在 style 中的声明
+  const classDecls = new Map(); // className -> { hasDisplay, hasAlignItems, hasGap }
+  const declRe = /\.([A-Za-z_][\w-]*)\s*\{([^{}]*)\}/g;
+  while ((m = declRe.exec(styleContent)) !== null) {
+    const cls = m[1];
+    const decls = m[2];
+    classDecls.set(cls, {
+      hasDisplay: /display\s*:\s*flex/i.test(decls),
+      hasAlignItems: /align-items/i.test(decls),
+      hasGap: /gap/i.test(decls),
+    });
+  }
+
+  // 检测需要 flex 的容器：有多个直接子元素
+  const needsFlex = new Set();
+  for (let i = 0; i < tags.length - 1; i++) {
+    const parent = tags[i];
+    const child = tags[i + 1];
+    // 简单启发式：相邻标签视为父子关系（实际应解析 DOM 树，此处简化）
+    const parentClasses = parent.classes;
+    for (const cls of parentClasses) {
+      const decl = classDecls.get(cls);
+      if (decl && !decl.hasDisplay) {
+        needsFlex.add(cls);
+      }
+    }
+  }
+
+  if (needsFlex.size === 0) return code;
+
+  // 注入 flex 布局到缺失的 class
+  let changed = false;
+  for (const cls of needsFlex) {
+    const clsEsc = cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const ruleRe = new RegExp('(\\.' + clsEsc + '\\s*\\{)([^{}]*)(\\})');
+    const ruleMatch = styleContent.match(ruleRe);
+    if (ruleMatch) {
+      const decls = ruleMatch[2];
+      const additions = [];
+      if (!/display\s*:/i.test(decls)) additions.push('display: flex');
+      if (!/align-items\s*:/i.test(decls)) additions.push('align-items: center');
+      if (!/gap\s*:/i.test(decls)) additions.push('gap: 4px');
+      if (additions.length > 0) {
+        const newDecls = decls.trim() + (decls.trim() ? '\n  ' : '') + additions.join(';\n  ') + ';';
+        styleContent = styleContent.replace(ruleMatch[0], ruleMatch[1] + '\n  ' + newDecls + '\n' + ruleMatch[3]);
+        changed = true;
+      }
+    }
+  }
+
+  if (!changed) return code;
+  return code.slice(0, styleMatch.index) +
+    '<style>' + styleContent + '</style>' +
+    code.slice(styleMatch.index + styleMatch[0].length);
+}
+
+/**
+ * 🛡️ P-12c 资源绑定层级校验
+ * 问题：背景图绑定到错误的父容器（如 tab 激活图绑定到 tabs-list 容器）
+ * 形态：`.tabs-list { background-image: url(${bgTabActive}) }` 但 bgTabActive 是单个 tab 的背景
+ * 动作：检测 backgroundImage 绑定位置，与 resourceDomMapping 对比，层级不匹配时尝试修复
+ * @param {string} code Vue SFC 代码
+ * @param {Array} resourceDomMapping Figma 资源映射（可选）
+ * @returns {string} 修复后的代码
+ */
+export function validateResourceBindingLevel(code, resourceDomMapping = []) {
+  if (!code || typeof code !== 'string') return code;
+  if (!Array.isArray(resourceDomMapping) || resourceDomMapping.length === 0) return code;
+
+  // 提取 style 段
+  const styleMatch = code.match(/<style[^>]*>([\s\S]*?)<\/style>/);
+  if (!styleMatch) return code;
+  let styleContent = styleMatch[1];
+
+  // 提取模板段
+  const templateMatch = code.match(/<template[^>]*>([\s\S]*?)<\/template>/);
+  if (!templateMatch) return code;
+  const template = templateMatch[1];
+
+  let changed = false;
+
+  // 对每个资源映射，检查绑定位置是否正确
+  for (const mapping of resourceDomMapping) {
+    const varName = mapping.assignedVarName;
+    const mountTarget = mapping.mountTarget;
+    const bgRole = mapping.bgRole;
+
+    if (!varName || !mountTarget) continue;
+
+    // 在 style 中查找使用该变量的 backgroundImage 绑定
+    const bgBindingRe = new RegExp(`(\\.)([\\w-]+)(\\s*\\{[^}]*backgroundImage\\s*:\\s*url\\(\\$\\{)${varName}(\\}\\)[^}]*\\})`, 'g');
+    const styleMatches = [...styleContent.matchAll(bgBindingRe)];
+
+    if (styleMatches.length === 0) continue;
+
+    for (const match of styleMatches) {
+      const currentClass = match[2];
+
+      // 检查当前 class 是否与 mountTarget 匹配
+      // mountTarget 可能是中文名（如「标签页」）或英文名（如 tab-item）
+      // 需要检查 currentClass 是否包含 mountTarget 的关键词
+      const mountKeywords = mountTarget.toLowerCase().split(/[-_\s]+/);
+      const currentClassLower = currentClass.toLowerCase();
+
+      // 判断是否匹配：currentClass 应该包含 mountTarget 的至少一个关键词
+      const isMatch = mountKeywords.some((kw) => currentClassLower.includes(kw));
+
+      if (!isMatch) {
+        // 层级不匹配：尝试在模板中找到正确的容器并移动绑定
+        // 简单策略：在模板中查找包含 mountTarget 关键词的 class
+        const templateClassRe = new RegExp(`class="([^"]*${mountKeywords.join('|')}[^"]*)"`, 'i');
+        const templateMatch = template.match(templateClassRe);
+
+        if (templateMatch) {
+          const correctClass = templateMatch[1].split(/\s+/)[0]; // 取第一个 class
+
+          // 将绑定从错误的 class 移动到正确的 class
+          // 1. 从当前 class 中删除 backgroundImage 绑定
+          const oldRule = match[0];
+          const newOldRule = oldRule.replace(/backgroundImage\s*:\s*url\(\$\{[^}]+\}\)\s*;?/, '');
+          styleContent = styleContent.replace(oldRule, newOldRule);
+
+          // 2. 在正确的 class 中添加 backgroundImage 绑定
+          const correctClassEsc = correctClass.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const correctRuleRe = new RegExp(`(\\.${correctClassEsc}\\s*\\{)([^}]*)(\\})`);
+          const correctRuleMatch = styleContent.match(correctRuleRe);
+
+          if (correctRuleMatch) {
+            const existingDecls = correctRuleMatch[2];
+            // 检查是否已经有 backgroundImage
+            if (!/backgroundImage\s*:/.test(existingDecls)) {
+              const newDecls = existingDecls.trim() + `\n  background-image: url(\${${varName}});`;
+              const newCorrectRule = correctRuleMatch[1] + newDecls + '\n' + correctRuleMatch[3];
+              styleContent = styleContent.replace(correctRuleMatch[0], newCorrectRule);
+              changed = true;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (!changed) return code;
+
+  return code.slice(0, styleMatch.index) +
+    '<style>' + styleContent + '</style>' +
+    code.slice(styleMatch.index + styleMatch[0].length);
+}
+
+/**
+ * 🛡️ P-12d 节点级颜色真值提取（多 TEXT 节点场景）
+ * 问题：两个独立 TEXT 节点（如 `摄像机` + `(2/484)`），后者内部 per-char 分段
+ *       LLM 取默认 fill（白色）而非覆盖色（红色/青色）
+ * 形态：Figma 节点树中多个 TEXT 节点，部分带 characterStyleOverrides
+ * 动作：提取每个 TEXT 节点的颜色真值（默认 fill + per-char 覆盖色）
+ * @param {Object} figmaNodeData Figma 节点树（prune 后）
+ * @returns {Array} 颜色真值列表 [{ nodeId, text, defaultColor, perCharColors }]
+ */
+export function extractNodeLevelColorTruth(figmaNodeData) {
+  if (!figmaNodeData || typeof figmaNodeData !== 'object') return [];
+
+  const results = [];
+
+  // 递归遍历节点树
+  function traverse(node) {
+    if (!node) return;
+
+    // 检测 TEXT 节点
+    if (node.type === 'TEXT' && node.characters) {
+      const defaultColor = node.style?.fills?.[0]?.color;
+      const perCharOverrides = node.characterStyleOverrides || [];
+      const styleTable = node.styleOverrideTable || {};
+
+      // 提取 per-char 颜色
+      const perCharColors = [];
+      if (perCharOverrides.length > 0) {
+        for (let i = 0; i < perCharOverrides.length; i++) {
+          const tableKey = perCharOverrides[i];
+          const override = styleTable[tableKey];
+          if (override?.color) {
+            perCharColors.push({ index: i, color: override.color });
+          }
+        }
+      }
+
+      results.push({
+        nodeId: node.id,
+        text: node.characters,
+        defaultColor,
+        perCharColors,
+      });
+    }
+
+    // 递归子节点
+    if (node.children) {
+      for (const child of node.children) {
+        traverse(child);
+      }
+    }
+  }
+
+  traverse(figmaNodeData);
+  return results;
+}
+
+/**
+ * 🛡️ P-12d 节点级颜色真值注入（多 TEXT 节点场景）
+ * 问题：两个独立 TEXT 节点（如 `摄像机` + `(2/484)`），后者内部 per-char 分段
+ *       LLM 取默认 fill（白色）而非覆盖色（红色/青色）
+ * 动作：将提取的颜色真值注入到 Vue 组件中，生成对应的样式规则，并在模板中找到包含该文本的元素，为其添加对应的 class 绑定
+ * @param {Object<string,string>} files 产物文件表（原地更新 .vue）
+ * @param {Array} colorTruth extractNodeLevelColorTruth() 产出的颜色真值
+ * @returns {{applied: boolean, details: Object|null}}
+ */
+export function injectNodeLevelColorTruth(files, colorTruth = []) {
+  if (!files || !Array.isArray(colorTruth) || colorTruth.length === 0) {
+    return { applied: false, details: null };
+  }
+
+  // 只处理有 per-char 分段的节点
+  const nodesWithPerChar = colorTruth.filter((n) => n.perCharColors && n.perCharColors.length > 0);
+  if (nodesWithPerChar.length === 0) {
+    return { applied: false, details: null };
+  }
+
+  const changed = [];
+
+  for (const [fp, code] of Object.entries(files)) {
+    if (!fp.endsWith('.vue') || typeof code !== 'string') continue;
+    
+    // 提取模板段
+    const templateMatch = code.match(/<template[^>]*>([\s\S]*?)<\/template>/);
+    if (!templateMatch) continue;
+    let template = templateMatch[1];
+
+    // 提取 style 段
+    const styleMatch = code.match(/<style[^>]*>([\s\S]*?)<\/style>/);
+    if (!styleMatch) continue;
+    let styleContent = styleMatch[1];
+
+    let fileChanged = false;
+
+    // 对每个有 per-char 分段的节点，生成对应的样式规则并绑定 class
+    for (const node of nodesWithPerChar) {
+      // 检查模板中是否包含该节点的文本
+      if (!template.includes(node.text)) continue;
+
+      // 生成颜色样式规则
+      // 如果节点有 per-char 分段，生成多个 class（每个颜色一个）
+      const colorClasses = [];
+      const colorMap = new Map(); // color -> className
+
+      for (const pc of node.perCharColors) {
+        const colorKey = pc.color.replace(/[^a-zA-Z0-9]/g, '');
+        const className = `color-${colorKey}`;
+        
+        if (!colorMap.has(pc.color)) {
+          colorMap.set(pc.color, className);
+          colorClasses.push({ className, color: pc.color });
+        }
+      }
+
+      // 注入样式规则
+      for (const { className, color } of colorClasses) {
+        const ruleRe = new RegExp('\\.' + className + '\\s*\\{');
+        if (!ruleRe.test(styleContent)) {
+          styleContent += `\n.${className} {\n  color: ${color};\n}`;
+          fileChanged = true;
+        }
+      }
+
+      // 在模板中找到包含该文本的元素，并添加对应的 class 绑定
+      // 策略：查找包含该文本的标签，为其添加第一个颜色 class（简化处理）
+      // 实际场景中，per-char 分段需要更复杂的模板重写（如拆分成多个 span）
+      // 这里采用保守策略：只为主颜色添加 class
+      if (colorClasses.length > 0) {
+        const primaryColorClass = colorClasses[0].className;
+        
+        // 查找包含该文本的标签
+        // 支持两种形式：<tag>text</tag> 和 <tag>{{ text }}</tag>
+        const textRe = new RegExp(`(<[^>]+>)([^<]*${node.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^<]*)(<\\/[^>]+>)`, 'g');
+        template = template.replace(textRe, (match, openTag, content, closeTag) => {
+          // 检查是否已经有 class 属性
+          const classMatch = openTag.match(/class="([^"]*)"/);
+          if (classMatch) {
+            // 已有 class，追加新的 class
+            const existingClasses = classMatch[1];
+            if (!existingClasses.includes(primaryColorClass)) {
+              const newClassAttr = `class="${existingClasses} ${primaryColorClass}"`;
+              return openTag.replace(/class="[^"]*"/, newClassAttr) + content + closeTag;
+            }
+          } else {
+            // 没有 class，添加 class 属性
+            const newOpenTag = openTag.replace(/^(<[a-zA-Z-]+)/, `$1 class="${primaryColorClass}"`);
+            return newOpenTag + content + closeTag;
+          }
+          return match;
+        });
+        
+        if (template !== templateMatch[1]) {
+          fileChanged = true;
         }
       }
     }
 
-    // ── 5) 删空壳节点 + 死 CSS 规则 ──
-    out = out.replace(shell.full, '');
-    out = out.replace(new RegExp('[^{}@]*?\\.' + clsEsc + '\\s*\\{[^}]*\\}\\s*', 'g'), '');
-    collapsed += 1;
-    void merged;
+    if (fileChanged) {
+      // 更新模板段和 style 段
+      let newCode = code.slice(0, templateMatch.index) +
+        '<template>' + template + '</template>' +
+        code.slice(templateMatch.index + templateMatch[0].length);
+      
+      // 重新提取 style 段（因为模板段修改后索引可能变化）
+      const newStyleMatch = newCode.match(/<style[^>]*>([\s\S]*?)<\/style>/);
+      if (newStyleMatch) {
+        newCode = newCode.slice(0, newStyleMatch.index) +
+          '<style>' + styleContent + '</style>' +
+          newCode.slice(newStyleMatch.index + newStyleMatch[0].length);
+      }
+      
+      files[fp] = newCode;
+      changed.push(fp);
+    }
   }
 
-  if (collapsed > 0) {
-    console.info('[P-01 背景空壳剥离] 已合并 ' + collapsed + ' 个 -bg 空壳节点到父元素');
+  if (changed.length === 0) {
+    return { applied: false, details: null };
   }
-  return out;
+
+  return {
+    applied: true,
+    details: {
+      files: changed,
+      nodeCount: nodesWithPerChar.length,
+    },
+  };
 }
