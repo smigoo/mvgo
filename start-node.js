@@ -8,6 +8,9 @@
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const fetch = require('node-fetch');
+
+async function main() {
 
 // 用当前运行 node 的绝对路径（process.execPath），避免 managed node 版本目录变化（如 22.22.2 → 22.22.2-2）导致 ENOENT
 const NODE_BIN = process.execPath;
@@ -72,6 +75,36 @@ env.MONGODB_URI = 'mongodb://localhost:27017/langgraph-server';
 // 开发态自动建号：任意 Token 头即可建立本地 dev-local 身份，便于本地联调
 env.DEV_AUTO_LOGIN = 'true';
 
+// 重启前检查活动任务（P1-3 graceful drain）
+async function checkActiveTasks() {
+  if (process.env.FORCE_KILL) return false;
+  
+  try {
+    // 用 dev token 访问任务列表
+    const res = await fetch('http://localhost:13030/api/tasks', {
+      headers: { 'Authorization': 'Bearer dev' }
+    });
+    const tasks = await res.json();
+    
+    const active = tasks.filter(t => ['running', 'queued', 'rate_limited'].includes(t.status));
+    if (active.length > 0) {
+      console.error(`⚠️ ${active.length} 个生成任务进行中（${active.map(t => t.sessionId).join(',')}）`);
+      console.error('   等待完成或 FORCE_KILL=1 node start-node.js 强制重启');
+      return true; // 有活动任务，阻止重启
+    }
+  } catch (e) {
+    // 如果 API 不可用（如服务未启动），继续重启
+    console.warn('[start-node] 无法检查活动任务:', e.message);
+  }
+  return false;
+}
+
+// 检查活动任务，如果有则退出
+const hasActive = await checkActiveTasks();
+if (hasActive) {
+  process.exit(1);
+}
+
 const child = spawn(NODE_BIN, ['dist/main.js'], {
   cwd: BE_DIR,
   detached: true,          // Unix 下 -> 新 session/process group（等同 setsid）
@@ -86,3 +119,11 @@ child.on('error', (e) => console.error('[start-node] spawn error:', e.message));
 child.on('exit', (code, sig) => {
   console.error('[start-node] backend exited code=' + code + ' sig=' + sig);
 });
+
+// 等待子进程启动
+setTimeout(() => {
+  console.log('[start-node] 服务启动完成');
+}, 3000);
+}
+
+main();

@@ -437,6 +437,10 @@ export default defineConfig(({ command, mode }) => {
         ['/api/admin/user-stats']: { target: 'http://localhost:13030', changeOrigin: true, secure: false },
         ['/api/admin/usage-export']: { target: 'http://localhost:13030', changeOrigin: true, secure: false },
         ['/api/admin/internal']: { target: 'http://localhost:13030', changeOrigin: true, secure: false },
+        ['/api/admin/dept-report']: { target: 'http://localhost:13030', changeOrigin: true, secure: false },
+        ['/api/admin/ai-configs']: { target: 'http://localhost:13030', changeOrigin: true, secure: false },
+        ['/api/admin/users']: { target: 'http://localhost:13030', changeOrigin: true, secure: false },
+        ['/api/admin/components']: { target: 'http://localhost:13030', changeOrigin: true, secure: false },
         ['/api/admin']: { target: 'http://localhost:8080', changeOrigin: true, secure: false },
         // 操作日志：读接口在 Java 侧（Node 只有 fire-and-forget 写，无 GET），显式路由到 8080
         // 不补这条则前端请求落到默认 /api → Node 13030 → 404

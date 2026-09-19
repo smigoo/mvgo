@@ -229,75 +229,17 @@ function hasPixelSizeInCommon(commonLess, selector) {
   return /\b(width|height)\s*:\s*\d+px/i.test(match[1]);
 }
 
-/** 布局类声明（决定横向/纵向、grid 列数的关键属性） */
-const LAYOUT_DECL_RE = /^(?:display|flex-direction|grid-template-columns)\s*:/;
-
 /**
- * 从 common.less 提取同名选择器块的「布局类声明」（display / flex-direction / grid-template-columns）。
- * 只取无嵌套的第一层块体（布局声明通常位于该层）；同名选择器在 common.less 不存在时返回空数组。
- * @param {string} lessText common.less 文本
- * @param {string} selector 选择器（如 '.c-x-tabs-section'）
- * @returns {string[]} 布局声明（无分号结尾，如 ['display: flex', 'flex-direction: row']）
+ * 🗑️ P4 删减法收口（2026-09-19）：以下三个补偿器已删除——
+ *   - extractLayoutDecls / injectMissingLayoutDecls（保护规则 2「布局声明缺则保留」，89f28cb）
+ *   - injectDisplayFromFlexSignals（规则①「flex 信号补 display」，8404de1）
+ * 删除依据（B' 布局事实层接管 display 判定权）：
+ *   1. P1 buildNodeLayoutFacts（Figma 几何真值，全节点覆盖含子组件内部容器）；
+ *   2. P2 compileDesignFacts.nodeLayoutFacts 挂入 designFacts；
+ *   3. P3 style chunk prompt 注入强制约束；P3.5 component chunk（buildCodePrompt 路径）同样注入。
+ * 真机验证（P3.5 后 3 任务 A/B 离线重放）：删规则①②后容器级 display 全保留，
+ * 唯一差异是叶子节点 display:block 丢失——flex item 自动 blockify，无视觉影响。
  */
-function extractLayoutDecls(lessText, selector) {
-  if (!lessText || !selector) return [];
-  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const m = String(lessText).match(new RegExp(`${escaped}\\s*\\{([^{}]*)\\}`, 'i'));
-  if (!m) return [];
-  const decls = [];
-  for (const raw of m[1].split('\n')) {
-    const t = raw.trim();
-    if (LAYOUT_DECL_RE.test(t)) decls.push(t.replace(/;$/, '').trim());
-  }
-  return decls;
-}
-
-/**
- * 把布局声明「缺则补」进子组件块（幂等：已存在的声明不重复注入）。
- * 仅当块内缺失对应声明时才从 common.less 补齐，避免覆盖子组件已有的布局意图。
- * @param {string} blockText 子组件块原文（如 '.c-x {  width: 100%;\nmin-height: 0 }'）
- * @param {string[]} layoutDecls 来自 common.less 的布局声明
- * @returns {string} 补齐后的块文本
- */
-function injectMissingLayoutDecls(blockText, layoutDecls) {
-  if (!Array.isArray(layoutDecls) || layoutDecls.length === 0) return blockText;
-  const missing = layoutDecls.filter((d) => {
-    const prop = d.split(':')[0].trim();
-    return !new RegExp(`${prop.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*:`).test(blockText);
-  });
-  if (missing.length === 0) return blockText;
-  const idx = blockText.indexOf('{');
-  if (idx === -1) return blockText;
-  const declStr = missing.map((d) => `${d};`).join(' ');
-  return `${blockText.slice(0, idx + 1)} ${declStr}${blockText.slice(idx + 1)}`;
-}
-
-/**
- * flex 信号补 display（治本 2026-09-18 · mc-1789666658926-b4a26c1a）。
- *
- * 现象：子组件根块体写了 `align-items: center` / `justify-content` / `gap` / `flex: X 1 0`
- * 等 flex 专属属性，却漏写 `display: flex` → 这些属性在非 flex 容器下全部不生效 →
- * 子元素 block 纵向堆叠（「ContentDefault 的 icon+文字竖排」实锤）。
- * style chunk（common.less）与 component chunk（scoped）两边都漏写时，保护规则 2 的
- * 「从 common.less 补齐」无 display 可补，故此处补一道「自身 flex 信号 → display:flex」。
- *
- * 与 resource-mounter 规则⑤ 兜底口径一致（hasFlexGrow || hasFlexOnly）。
- * 幂等：已含 display 不重复注入。
- * @param {string} blockText 子组件块原文
- * @returns {string} 补齐 display 后的块文本
- */
-function injectDisplayFromFlexSignals(blockText) {
-  if (typeof blockText !== 'string' || /display\s*:/.test(blockText)) return blockText;
-  const open = blockText.indexOf('{');
-  const close = blockText.lastIndexOf('}');
-  if (open === -1 || close <= open) return blockText;
-  const body = blockText.slice(open + 1, close);
-  const hasFlexGrow = /flex\s*:\s*\d+(?:\.\d+)?\s+1\s+0\b/.test(body);
-  const hasFlexOnly =
-    /(?:flex-direction|align-items|justify-content|align-content|gap|flex-wrap)\s*:/.test(body);
-  if (!hasFlexGrow && !hasFlexOnly) return blockText;
-  return `${blockText.slice(0, open + 1)} display: flex;${blockText.slice(open + 1)}`;
-}
 
 /**
  * 把类规则块合并进 common.less：
@@ -326,22 +268,38 @@ function mergeIntoCommonLess(commonLess = '', blocks = []) {
     return true;
   });
 
-  // 🛡️ 布局声明保留（保护规则 2）：合并前先补齐子组件缺失的 display/flex-direction；
-  //    再补「flex 信号 → display」（scoped 有 align-items 却漏 display 时确定性补 display:flex）。
-  const mergedBlocks = protectedBlocks.map((b) => {
-    let text = b.text;
-    const layout = extractLayoutDecls(commonLess, b.selector);
-    if (layout && layout.length > 0) {
-      text = injectMissingLayoutDecls(text, layout);
+  // 🗑️ P4：extractLayoutDecls/injectMissingLayoutDecls/injectDisplayFromFlexSignals 补偿器
+  //    已删除（display 判定权由 B' 布局事实层接管，见文件头说明）。此层不再事后补 display。
+  const mergedBlocks = protectedBlocks;
+
+  // 🔧 修复（2026-09-19）：同名类合并而非重复追加
+  // 问题：多个子组件可能生成同名类（如 .c-f9e8c1-stat-card），旧逻辑直接追加导致
+  // common.less 中出现重复定义，后面的属性覆盖前面的。
+  // 修复：按 selector 分组合并属性，确保每个类只出现一次。
+  const selectorGroups = new Map();
+  for (const b of mergedBlocks) {
+    if (!selectorGroups.has(b.selector)) {
+      selectorGroups.set(b.selector, []);
     }
-    text = injectDisplayFromFlexSignals(text);
-    return { ...b, text };
-  });
+    selectorGroups.get(b.selector).push(b.text);
+  }
+
+  // 合并同名类的所有属性
+  const uniqueBlocks = [];
+  for (const [selector, texts] of selectorGroups) {
+    if (texts.length === 1) {
+      uniqueBlocks.push(texts[0]);
+    } else {
+      // 多个同名类，合并属性
+      const merged = mergeCssBlocks(selector, texts);
+      uniqueBlocks.push(merged);
+    }
+  }
 
   const selectors = mergedBlocks.map((b) => b.selector);
   const stripped = removeClassBlocks(commonLess, selectors);
   const oldSelectors = selectors.filter((s) => commonLess.includes(s));
-  const appended = mergedBlocks.map((b) => b.text).join('\n\n');
+  const appended = uniqueBlocks.join('\n\n');
 
   const content = `${stripped.replace(/\s*$/, '')}\n\n${appended}\n`;
   return {
@@ -349,6 +307,44 @@ function mergeIntoCommonLess(commonLess = '', blocks = []) {
     replaced: oldSelectors,
     added: mergedBlocks.map((b) => b.selector).filter((s) => !oldSelectors.includes(s)),
   };
+}
+
+/**
+ * 合并多个同名 CSS 块的属性（2026-09-19 新增）
+ * @param {string} selector 选择器（如 '.c-f9e8c1-stat-card'）
+ * @param {string[]} blocks 多个块文本（如 ['.c-f9e8c1-stat-card { gap: 44px; }', '.c-f9e8c1-stat-card { gap: 4px; }']）
+ * @returns {string} 合并后的块文本
+ */
+function mergeCssBlocks(selector, blocks) {
+  if (blocks.length === 0) return '';
+  if (blocks.length === 1) return blocks[0];
+
+  // 提取每个块的属性
+  const allDeclarations = new Map();
+  for (const block of blocks) {
+    const match = block.match(/\{([^}]*)\}/);
+    if (!match) continue;
+    const body = match[1];
+    // 解析属性（支持多行）
+    const lines = body.split('\n').map(l => l.trim()).filter(Boolean);
+    for (const line of lines) {
+      // 提取 property: value
+      const declMatch = line.match(/^([^:]+):\s*([^;]+);?$/);
+      if (declMatch) {
+        const prop = declMatch[1].trim();
+        const value = declMatch[2].trim();
+        // 后出现的属性覆盖先出现的（CSS 标准行为）
+        allDeclarations.set(prop, value);
+      }
+    }
+  }
+
+  // 重新生成块
+  const declarations = Array.from(allDeclarations.entries())
+    .map(([prop, value]) => `  ${prop}: ${value};`)
+    .join('\n');
+  
+  return `${selector} {\n${declarations}\n}`;
 }
 
 /** 括号平衡校验（防止把残缺块写进 common.less） */
@@ -587,6 +583,419 @@ function replaceClassToken(line = '', clsName = '', target = '') {
  */
 function makeDomResolver(fact) {
   return (clsName) => resolveDomClass(fact, clsName);
+}
+
+/**
+ * 🛡️ 根因 B 修复（2026-09-18）：确保子组件根元素接收父组件 attrs 透传。
+ *
+ * 背景：确定性模板装配（code-generator.js:611-616）假设 "Vue3 attrs 继承自动透传 style 到子组件根"，
+ * 但子组件根元素没有 `v-bind="$attrs"` 时，父组件的 `:style="{ backgroundImage: ... }"` 等绑定
+ * **无法生效** → 资源背景丢失、flex 比例失效。
+ *
+ * 修复：对 `package/components/*.vue` 子组件，检查根元素是否有 `v-bind="$attrs"`，缺失则补上。
+ * 同时确保 script setup 中没有 `defineOptions({ inheritAttrs: false })`（显式关闭 attrs 继承）。
+ *
+ * @param {Object<string,string>} files 产物文件表
+ * @returns {Object<string,string>} 修复后的文件表
+ */
+export function ensureSubComponentAttrsBinding(files = {}) {
+  const next = { ...files };
+  const subPaths = Object.keys(next).filter((p) => SUB_COMPONENT_RE.test(p));
+
+  for (const p of subPaths) {
+    const sfc = next[p];
+    if (typeof sfc !== 'string') continue;
+
+    // 提取 template 块
+    const tplMatch = sfc.match(/<template[^>]*>([\s\S]*?)<\/template>/i);
+    if (!tplMatch) continue;
+    const tplContent = tplMatch[1];
+
+    // 找根元素（template 下第一个带标签的元素）
+    const rootMatch = tplContent.match(/<([a-zA-Z][\w-]*)\b[^>]*>/);
+    if (!rootMatch) continue;
+    const rootTag = rootMatch[1];
+    const rootTagFull = rootMatch[0];
+
+    // 已有 v-bind="$attrs" 或 v-bind='$attrs' → 跳过
+    if (/v-bind=["']\$attrs["']/.test(rootTagFull)) continue;
+
+    // 检查是否显式关闭了 attrs 继承（defineOptions({ inheritAttrs: false })）
+    const scriptMatch = sfc.match(/<script[^>]*>([\s\S]*?)<\/script>/i);
+    if (scriptMatch && /defineOptions\s*\(\s*\{\s*inheritAttrs\s*:\s*false/.test(scriptMatch[1])) {
+      continue; // 显式关闭了，不强制加
+    }
+
+    // 在根元素标签末尾添加 v-bind="$attrs"
+    const newRootTag = rootTagFull.replace(/>$/, ' v-bind="$attrs">');
+    const newSfc = sfc.replace(rootTagFull, newRootTag);
+    if (newSfc !== sfc) {
+      next[p] = newSfc;
+    }
+  }
+
+  return next;
+}
+
+/**
+ * 🛡️ 根因 C 修复（2026-09-18）：确保子组件根元素有 width: 100%; height: 100%。
+ *
+ * 背景：子组件根元素缺少 width/height 时，内部 ECharts 容器 0 高不渲染、flex 比例失效。
+ * style-class-consolidator 只补 display/flex-direction，不补 width/height。
+ *
+ * 修复：对 `package/components/*.vue` 子组件，检查其根 class 在 common.less 中的样式规则，
+ * 缺失 width/height 时补 width: 100%; height: 100%。
+ *
+ * @param {Object<string,string>} files 产物文件表
+ * @returns {Object<string,string>} 修复后的文件表
+ */
+export function ensureSubComponentRootDimensions(files = {}) {
+  const next = { ...files };
+  const subPaths = Object.keys(next).filter((p) => SUB_COMPONENT_RE.test(p));
+  const commonLess = next[COMMON_LESS_PATH];
+  if (typeof commonLess !== 'string') return next;
+
+  let updatedCommonLess = commonLess;
+
+  for (const p of subPaths) {
+    const sfc = next[p];
+    if (typeof sfc !== 'string') continue;
+
+    // 提取 template 块
+    const tplMatch = sfc.match(/<template[^>]*>([\s\S]*?)<\/template>/i);
+    if (!tplMatch) continue;
+    const tplContent = tplMatch[1];
+
+    // 找根元素的 class
+    const rootMatch = tplContent.match(/<([a-zA-Z][\w-]*)\b[^>]*\bclass=["']([^"']+)["']/);
+    if (!rootMatch) continue;
+    const rootClass = rootMatch[2].split(/\s+/)[0]; // 取第一个 class
+    if (!rootClass || !rootClass.startsWith('c-')) continue;
+
+    // 在 common.less 中找该 class 的规则块
+    const classRe = new RegExp(`(\\.${rootClass.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{)([^}]*)(\\})`, 'g');
+    const match = classRe.exec(updatedCommonLess);
+    if (!match) continue;
+
+    const [fullMatch, openBrace, body, closeBrace] = match;
+    const hasWidth = /(^|[\s;{])width\s*:/i.test(body);
+    const hasHeight = /(^|[\s;{])height\s*:/i.test(body);
+
+    if (!hasWidth || !hasHeight) {
+      let newBody = body;
+      if (!hasWidth) {
+        newBody = `width: 100%;\n${newBody}`;
+      }
+      if (!hasHeight) {
+        newBody = `height: 100%;\n${newBody}`;
+      }
+      const newRule = openBrace + newBody + closeBrace;
+      updatedCommonLess = updatedCommonLess.replace(fullMatch, newRule);
+    }
+  }
+
+  if (updatedCommonLess !== commonLess) {
+    next[COMMON_LESS_PATH] = updatedCommonLess;
+  }
+
+  return next;
+}
+
+/**
+ * 🛡️ 治本（2026-09-19，c-env-monitor-c9e0be8a 实锤）：确保图表容器有完整尺寸。
+ * 
+ * 根因：ECharts 需要明确的宽高才能正确渲染。子组件内的图表容器（通常带 ref="chartRef"）
+ * 只有 min-width/min-height，缺少 width: 100%; height: 100% → 图表不可见。
+ * 
+ * 修复策略：
+ * 1. 扫描所有子组件 template，找到带 ref="chartRef" 的容器元素
+ * 2. 提取其 class，确保在 common.less 中有 width: 100%; height: 100%
+ */
+export function ensureChartContainerDimensions(files = {}) {
+  const next = { ...files };
+  const subPaths = Object.keys(next).filter((p) => SUB_COMPONENT_RE.test(p));
+  const commonLess = next[COMMON_LESS_PATH];
+  if (typeof commonLess !== 'string') return next;
+
+  let updatedCommonLess = commonLess;
+
+  for (const p of subPaths) {
+    const sfc = next[p];
+    if (typeof sfc !== 'string') continue;
+
+    // 提取 template 块
+    const tplMatch = sfc.match(/<template[^>]*>([\s\S]*?)<\/template>/i);
+    if (!tplMatch) continue;
+    const tplContent = tplMatch[1];
+
+    // 找带 ref="chartRef" 的容器元素的 class
+    const chartContainerRe = /<([a-zA-Z][\w-]*)\b[^>]*\bref=["']chartRef["'][^>]*\bclass=["']([^"']+)["']/g;
+    let match;
+    while ((match = chartContainerRe.exec(tplContent)) !== null) {
+      const chartClass = match[2].split(/\s+/)[0]; // 取第一个 class
+      if (!chartClass || !chartClass.startsWith('c-')) continue;
+
+      // 在 common.less 中找该 class 的规则块
+      const classRe = new RegExp(`(\\.${chartClass.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{)([^}]*)(\\})`, 'g');
+      const classMatch = classRe.exec(updatedCommonLess);
+      if (!classMatch) continue;
+
+      const [fullMatch, openBrace, body, closeBrace] = classMatch;
+      const hasWidth = /(^|[\s;{])width\s*:/i.test(body);
+      const hasHeight = /(^|[\s;{])height\s*:/i.test(body);
+
+      if (!hasWidth || !hasHeight) {
+        let newBody = body;
+        if (!hasWidth) {
+          newBody = `width: 100%;\n${newBody}`;
+        }
+        if (!hasHeight) {
+          newBody = `height: 100%;\n${newBody}`;
+        }
+        const newRule = openBrace + newBody + closeBrace;
+        updatedCommonLess = updatedCommonLess.replace(fullMatch, newRule);
+      }
+    }
+  }
+
+  if (updatedCommonLess !== commonLess) {
+    next[COMMON_LESS_PATH] = updatedCommonLess;
+  }
+
+  return next;
+}
+
+/**
+ * 🛡️ 治本（2026-09-19，c-env-monitor-c9e0be8a 实锤）：确保中间层容器有宽度。
+ * 
+ * 根因：index.vue 中的中间层容器（如 sub-t-con）用于承载背景图等内容，
+ * 但只有 flex 值和 min-height，缺少 width: 100% → 背景图无法正确显示。
+ * 
+ * 修复策略：
+ * 1. 扫描 index.vue template，找到所有带 class 的 div 容器
+ * 2. 排除根容器（已有专门处理）和子组件标签
+ * 3. 对每个中间层容器，确保在 common.less 中有 width: 100%
+ */
+export function ensureMiddleContainerWidth(files = {}) {
+  const next = { ...files };
+  const commonLess = next[COMMON_LESS_PATH];
+  if (typeof commonLess !== 'string') return next;
+
+  let updatedCommonLess = commonLess;
+
+  // 找 index.vue
+  const indexPath = Object.keys(next).find((p) => /(^|\/)package\/index\.vue$/i.test(p)) ||
+    Object.keys(next).find((p) => /(^|\/)index\.vue$/i.test(p));
+  if (!indexPath) return next;
+
+  const indexContent = next[indexPath];
+  if (typeof indexContent !== 'string') return next;
+
+  // 提取 template 块
+  const tplMatch = indexContent.match(/<template[^>]*>([\s\S]*?)<\/template>/i);
+  if (!tplMatch) return next;
+  const tplContent = tplMatch[1];
+
+  // 找所有带 class 的 div 容器（排除子组件标签）
+  const divRe = /<div\b[^>]*\bclass=["']([^"']+)["'][^>]*>/g;
+  let match;
+  while ((match = divRe.exec(tplContent)) !== null) {
+    const classes = match[1].split(/\s+/);
+    for (const cls of classes) {
+      if (!cls || !cls.startsWith('c-')) continue;
+      // 跳过根容器（已有专门处理）
+      if (/-slot-con$|-root$/.test(cls)) continue;
+
+      // 在 common.less 中找该 class 的规则块
+      const classRe = new RegExp(`(\\.${cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{)([^}]*)(\\})`, 'g');
+      const classMatch = classRe.exec(updatedCommonLess);
+      if (!classMatch) continue;
+
+      const [fullMatch, openBrace, body, closeBrace] = classMatch;
+      const hasWidth = /(^|[\s;{])width\s*:/i.test(body);
+
+      if (!hasWidth) {
+        const newBody = `width: 100%;\n${body}`;
+        const newRule = openBrace + newBody + closeBrace;
+        updatedCommonLess = updatedCommonLess.replace(fullMatch, newRule);
+      }
+    }
+  }
+
+  if (updatedCommonLess !== commonLess) {
+    next[COMMON_LESS_PATH] = updatedCommonLess;
+  }
+
+  return next;
+}
+
+/**
+ * 🛡️ 治本（2026-09-19，c-vehicle-monitor-33780657 实锤）：确保背景层使用绝对定位。
+ * 
+ * 根因：卡片的背景层元素（通常带 pointer-events: none）应该有 position: absolute，
+ * 但 LLM 经常只写 pointer-events: none 而漏掉 position: absolute → 背景层参与 flex 布局
+ * 而不是覆盖在内容上方 → 卡片布局错误。
+ * 
+ * 修复策略：
+ * 1. 扫描所有样式，找到带 pointer-events: none 的 class
+ * 2. 确保它们有 position: absolute（或 position: fixed）
+ */
+export function ensureBackgroundLayerPosition(files = {}) {
+  const next = { ...files };
+  const commonLess = next[COMMON_LESS_PATH];
+  if (typeof commonLess !== 'string') return next;
+
+  let updatedCommonLess = commonLess;
+
+  // 匹配所有带 pointer-events: none 的规则块
+  const pointerEventsRe = /(\.[a-zA-Z][\w-]*\s*\{)([^}]*pointer-events\s*:\s*none[^}]*)(\})/g;
+  updatedCommonLess = updatedCommonLess.replace(pointerEventsRe, (fullMatch, openBrace, body, closeBrace) => {
+    const hasPosition = /(^|[\s;{])position\s*:/i.test(body);
+    if (!hasPosition) {
+      const newBody = `position: absolute;\n${body}`;
+      return openBrace + newBody + closeBrace;
+    }
+    return fullMatch;
+  });
+
+  if (updatedCommonLess !== commonLess) {
+    next[COMMON_LESS_PATH] = updatedCommonLess;
+  }
+
+  return next;
+}
+
+/**
+ * 🛡️ 治本（2026-09-19，c-vehicle-monitor-33780657 实锤）：确保按钮有合理的最小高度。
+ * 
+ * 根因：LLM 生成的按钮只有 padding，没有明确高度 → 按钮高度过小。
+ * 
+ * 修复策略：
+ * 1. 扫描所有样式，找到带 cursor: pointer 的 class（按钮特征）
+ * 2. 确保它们有 min-height（如果没有 height 或 min-height）
+ */
+export function ensureButtonMinHeight(files = {}) {
+  const next = { ...files };
+  const commonLess = next[COMMON_LESS_PATH];
+  if (typeof commonLess !== 'string') return next;
+
+  let updatedCommonLess = commonLess;
+
+  // 匹配所有带 cursor: pointer 的规则块
+  const cursorPointerRe = /(\.[a-zA-Z][\w-]*\s*\{)([^}]*cursor\s*:\s*pointer[^}]*)(\})/g;
+  updatedCommonLess = updatedCommonLess.replace(cursorPointerRe, (fullMatch, openBrace, body, closeBrace) => {
+    const hasHeight = /(^|[\s;{])height\s*:/i.test(body);
+    const hasMinHeight = /(^|[\s;{])min-height\s*:/i.test(body);
+    if (!hasHeight && !hasMinHeight) {
+      const newBody = `min-height: 24px;\n${body}`;
+      return openBrace + newBody + closeBrace;
+    }
+    return fullMatch;
+  });
+
+  if (updatedCommonLess !== commonLess) {
+    next[COMMON_LESS_PATH] = updatedCommonLess;
+  }
+
+  return next;
+}
+
+/**
+ * 🛡️ 治本（2026-09-19，c-vehicle-monitor-a03089cb 实锤）：确保带背景图的容器有 width:100%; height:100%。
+ *
+ * 根因：LLM 生成的 card-bg 容器使用内联 :style 设置 backgroundImage，但其 class 在
+ * scoped style 和 common.less 中都没有 width/height → 容器没有尺寸 → 背景图无法撑开。
+ *
+ * 修复策略：
+ * 1. 扫描所有 .vue 文件的 template，找带 :style 包含 backgroundImage 的元素
+ * 2. 提取其 class 名
+ * 3. 确保该 class 在 scoped style 和 common.less 中有 width:100%; height:100%
+ */
+export function ensureBackgroundContainerDimensions(files = {}) {
+  const next = { ...files };
+  const commonLess = next[COMMON_LESS_PATH];
+  if (typeof commonLess !== 'string') return next;
+
+  let updatedCommonLess = commonLess;
+  const classTargets = new Set(); // 需要确保有 width/height 的 class 名
+
+  // Step 1: 扫描所有 .vue 文件 template 中 backgroundImage 的元素
+  for (const [filePath, content] of Object.entries(next)) {
+    if (!/\.vue$/i.test(filePath) || typeof content !== 'string') continue;
+    const tplMatch = content.match(/<template[^>]*>([\s\S]*?)<\/template>/i);
+    if (!tplMatch) continue;
+    const tpl = tplMatch[1];
+
+    // 找带 :style 含 backgroundImage 的元素
+    const bgRe = /<(\w+)\b[^>]*\bclass=["']([^"']+)["'][^>]*:style=["'][^"']*backgroundImage[^"']*["'][^>]*>/g;
+    let m;
+    while ((m = bgRe.exec(tpl)) !== null) {
+      const classes = m[2].split(/\s+/);
+      for (const cls of classes) {
+        if (cls && cls.startsWith('c-')) classTargets.add(cls);
+      }
+    }
+    // 也匹配 :style 在 class 前面的情况
+    const bgRe2 = /<(\w+)\b[^>]*:style=["'][^"']*backgroundImage[^"']*["'][^>]*\bclass=["']([^"']+)["'][^>]*>/g;
+    while ((m = bgRe2.exec(tpl)) !== null) {
+      const classes = m[2].split(/\s+/);
+      for (const cls of classes) {
+        if (cls && cls.startsWith('c-')) classTargets.add(cls);
+      }
+    }
+  }
+
+  if (classTargets.size === 0) return next;
+
+  // Step 2: 确保这些 class 在 common.less 中有 width:100%; height:100%
+  for (const cls of classTargets) {
+    const escaped = cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const classRe = new RegExp(`(\\.${escaped}\\s*\\{)([^}]*)(\\})`, 'g');
+    const classMatch = classRe.exec(updatedCommonLess);
+    if (classMatch) {
+      const [fullMatch, openBrace, body, closeBrace] = classMatch;
+      const hasWidth = /(^|[\s;{])width\s*:/i.test(body);
+      const hasHeight = /(^|[\s;{])height\s*:/i.test(body);
+      if (!hasWidth || !hasHeight) {
+        let prefix = '';
+        if (!hasWidth) prefix += 'width: 100%;\n';
+        if (!hasHeight) prefix += 'height: 100%;\n';
+        const newBody = prefix + body;
+        updatedCommonLess = updatedCommonLess.replace(fullMatch, openBrace + newBody + closeBrace);
+      }
+    }
+  }
+
+  // Step 3: 同时确保子组件 scoped style 中也有 width/height
+  for (const [filePath, content] of Object.entries(next)) {
+    if (!/\.vue$/i.test(filePath) || typeof content !== 'string') continue;
+    let updated = content;
+    for (const cls of classTargets) {
+      const escaped = cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      // 找 scoped style 中的 class 规则块
+      const scopedRe = new RegExp(`(\\.${escaped}\\s*\\{)([^}]*)(\\})`, 'g');
+      updated = updated.replace(scopedRe, (fullMatch, openBrace, body, closeBrace) => {
+        const hasWidth = /(^|[\s;{])width\s*:/i.test(body);
+        const hasHeight = /(^|[\s;{])height\s*:/i.test(body);
+        if (!hasWidth || !hasHeight) {
+          let prefix = '';
+          if (!hasWidth) prefix += 'width: 100%;\n';
+          if (!hasHeight) prefix += 'height: 100%;\n';
+          return openBrace + prefix + body + closeBrace;
+        }
+        return fullMatch;
+      });
+    }
+    if (updated !== content) {
+      next[filePath] = updated;
+    }
+  }
+
+  if (updatedCommonLess !== commonLess) {
+    next[COMMON_LESS_PATH] = updatedCommonLess;
+  }
+
+  return next;
 }
 
 /**

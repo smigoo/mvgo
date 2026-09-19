@@ -57,6 +57,7 @@
           />
           <a-button size="small" :loading="exporting === 'md'" @click.stop="downloadUsage('md')">导出 MD</a-button>
           <a-button size="small" :loading="exporting === 'html'" @click.stop="downloadUsage('html')">导出 HTML</a-button>
+          <a-button size="small" :loading="exportingDept" @click.stop="downloadDeptReport">部门报表</a-button>
           <span class="mg-count">共 {{ filteredUsers.length }} 位用户</span>
         </div>
       </div>
@@ -382,6 +383,7 @@ const usageFilter = ref<string[]>([])
 const exportPreset = ref<'week' | 'd30' | 'd60' | 'custom'>('week')
 const exportRange = ref<[string, string] | undefined>()
 const exporting = ref<'md' | 'html' | ''>('')
+const exportingDept = ref(false)
 
 // 部门下拉选项（从当前用户数据动态提取去重，按字母排序）
 const departmentOptions = computed(() => {
@@ -631,6 +633,16 @@ async function downloadUsage(format: 'md' | 'html') {
     await downloadByUrl(`/api/admin/usage-export?${params.toString()}`, `usage-export.${format}`)
   } finally {
     exporting.value = ''
+  }
+}
+
+async function downloadDeptReport() {
+  if (exportingDept.value) return
+  exportingDept.value = true
+  try {
+    await downloadByUrl('/api/admin/dept-report', 'dept-report.html')
+  } finally {
+    exportingDept.value = false
   }
 }
 

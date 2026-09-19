@@ -2620,7 +2620,7 @@ ${figmaStyleTree ?? formatFigmaStyleData(figmaNodeData)}
     : ''
 }
 
-${buildNodeLayoutFactsReinforcement(input?.designFacts?.nodeLayoutFacts, figmaNodeData)}
+${buildNodeLayoutFactsReinforcement(input?.designFacts?.nodeLayoutFacts, figmaNodeData, componentName)}
 
 ${(!elementStyleMap || Object.keys(elementStyleMap).length === 0) && visualElements ? formatVisualStyle(visualElements) : ''}
 

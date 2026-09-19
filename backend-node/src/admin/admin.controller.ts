@@ -82,7 +82,18 @@ export class AdminController {
     const encoded = encodeURIComponent(file.filename);
     return new StreamableFile(Buffer.from(file.body, 'utf-8'), {
       type: file.contentType,
-      disposition: `attachment; filename="${file.filename}"; filename*=UTF-8''${encoded}`,
+      disposition: `attachment; filename="export"; filename*=UTF-8''${encoded}`,
+    });
+  }
+
+  @Get('dept-report')
+  async deptReport(@CurrentUser() userId: string) {
+    await this.adminService.assertAdmin(userId);
+    const file = await this.adminService.buildDeptReport();
+    const encoded = encodeURIComponent(file.filename);
+    return new StreamableFile(Buffer.from(file.body, 'utf-8'), {
+      type: file.contentType,
+      disposition: `attachment; filename="report"; filename*=UTF-8''${encoded}`,
     });
   }
 }

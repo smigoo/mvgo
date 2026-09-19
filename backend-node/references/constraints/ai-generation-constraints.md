@@ -882,3 +882,61 @@ const updateChart = () => {
   }, true)
 }
 ```
+
+## 8. 对称结构统一性约束（必须）
+
+### 🔴 左右对称元素必须使用完全相同的类名、DOM 结构、内联样式写法
+
+当设计稿存在**左右对称**的结构（如：左侧统计卡片 vs 右侧统计卡片、左图例 vs 右图例、左右两列布局），生成代码时必须保证：
+
+1. **类名一致**：对称位置的元素必须使用**相同的类名**，不得左侧用 `.stat-row`、右侧用 `.stat-item`
+2. **DOM 结构一致**：对称位置的 DOM 层级必须完全相同，不得左侧是 `div > span + div`、右侧是 `div > div > span`
+3. **内联样式写法一致**：
+   - 颜色：统一用 `borderColor` 或 `border`，不得混用
+   - 尺寸：统一用 `width/height` 或 `flex`，不得一侧写死像素、另一侧用 flex
+   - 背景：统一用 `background` 或 `backgroundColor`，不得混用
+4. **生成前自检**：左右两侧的 template 结构应该可以**互换而不影响样式**
+
+### 错误示例（mc-max-1789794186781-ed081346）
+
+```vue
+<!-- ❌ 左侧 -->
+<div class="stat-row">
+  <span class="label">总数</span>
+  <span class="value">123</span>
+</div>
+
+<!-- ❌ 右侧（类名不同、结构不同） -->
+<div class="stat-item">
+  <div class="stat-label">总数</div>
+  <div class="stat-value">123</div>
+</div>
+```
+
+### 正确示例
+
+```vue
+<!-- ✅ 左侧 -->
+<div class="stat-row">
+  <span class="label">总数</span>
+  <span class="value">123</span>
+</div>
+
+<!-- ✅ 右侧（完全相同的类名和结构） -->
+<div class="stat-row">
+  <span class="label">总数</span>
+  <span class="value">123</span>
+</div>
+```
+
+### 内联样式统一性
+
+```vue
+<!-- ❌ 混用写法 -->
+<div :style="{ borderColor: '#fff' }">...</div>  <!-- 左侧 -->
+<div :style="{ border: '1px solid #fff' }">...</div>  <!-- 右侧 -->
+
+<!-- ✅ 统一写法 -->
+<div :style="{ borderColor: '#fff' }">...</div>  <!-- 左侧 -->
+<div :style="{ borderColor: '#fff' }">...</div>  <!-- 右侧 -->
+```

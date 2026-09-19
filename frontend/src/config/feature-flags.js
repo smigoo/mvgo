@@ -88,6 +88,9 @@ export default {
     'theme.toggle': { enabled: true, label: '主题切换' },
 
     // 组件预览独立页 — /preview/:componentId 路由
-    'component.preview': { enabled: true, label: '组件预览页' }
+    'component.preview': { enabled: true, label: '组件预览页' },
+
+    // 质量评分 v1 — 任务详情管理员预览（specScore + styleScore），成熟后再公开
+    qualityScoreV1: { enabled: true, label: '质量评分v1（管理员预览）' }
   }
 }

@@ -184,7 +184,7 @@ import {
   sanitizeComponentId,
 } from '../utils/component-naming.js';
 // 🛡️ 2026-09-03（管线 A 方案）：写盘前把子组件类样式收敛进 common.less
-import { consolidateSubComponentClasses } from '../utils/style-class-consolidator.js';
+import { consolidateSubComponentClasses, ensureSubComponentAttrsBinding, ensureSubComponentRootDimensions, ensureChartContainerDimensions, ensureMiddleContainerWidth, ensureBackgroundLayerPosition, ensureButtonMinHeight, ensureBackgroundContainerDimensions } from '../utils/style-class-consolidator.js';
 import { collectClassFacts } from '../utils/class-facts.js';
 import { normalizeClassNameDialect } from '../utils/class-dialect-normalizer.js';
 import { extractSfcTemplate } from '../utils/sfc-template-extractor.js';
@@ -842,6 +842,15 @@ export class MicrocodeEngineer extends BaseAgent {
                 if (sub.emits && sub.emits.length > 0) {
                   p += `         Emits: ${sub.emits.join(', ')}\n`;
                 }
+                // 🛡️ 2026-09-19 R2 治本：element-group 成员清单（确定性归属，杜绝同源混淆）
+                if (sub.type === 'element-group') {
+                  if (Array.isArray(sub.elementNames) && sub.elementNames.length > 0) {
+                    p += `         📎 成员元素（只许使用以下元素，禁止混入其他分组的内容）: ${sub.elementNames.join(' | ')}\n`;
+                  }
+                  if (Array.isArray(sub.textTruths) && sub.textTruths.length > 0) {
+                    p += `         📝 文本真值: ${sub.textTruths.join(' / ')}\n`;
+                  }
+                }
               });
             }
           });
@@ -874,6 +883,19 @@ export class MicrocodeEngineer extends BaseAgent {
               subcomps.forEach((sub, idx) => {
                 p += `\n${idx + 1}. **${sub.type}** — ${sub.responsibility}\n`;
                 p += `   拆分原因：${sub.reason}\n`;
+
+                // 🛡️ 2026-09-19 R2 治本：element-group 成员清单（确定性归属）
+                if (sub.type === 'element-group') {
+                  if (Array.isArray(sub.elementNames) && sub.elementNames.length > 0) {
+                    p += `   📎 成员元素（只许使用以下元素，禁止混入其他分组的内容）: ${sub.elementNames.join(' | ')}\n`;
+                  }
+                  if (Array.isArray(sub.textTruths) && sub.textTruths.length > 0) {
+                    p += `   📝 文本真值: ${sub.textTruths.join(' / ')}\n`;
+                  }
+                  if (Array.isArray(sub.sourceNodeIds) && sub.sourceNodeIds.length > 0) {
+                    p += `   🔗 Figma 节点: ${sub.sourceNodeIds.join(', ')}\n`;
+                  }
+                }
 
                 if (sub.props && sub.props.length > 0) {
                   p += `   Props 定义：\n`;
@@ -1624,8 +1646,14 @@ export class MicrocodeEngineer extends BaseAgent {
         for (const subPath of group.paths) {
           // 🧩 SubcomponentContract：本子组件专属事实（figma 子树/elementStyleMap 子集/sections 子集），
           // 替代全量重复的 215KB figmaNodeData —— 预计单块 -60%+ tokens；匹配失败自动回退全量（保真）。
-          // 🆕 方案 2：同组子组件共享 scopedInput（按目录缓存，减少重复构建）
-          const cacheKey = group.name;
+          // 🛡️ 2026-09-19 缓存污染修复（mc-max-1789811323065 实锤）：原实现按 group.name（目录名）
+          //   缓存 scopedInput —— 同目录子组件（如 components/ 下 ContentSection/4/5 + HeaderSection）
+          //   全部复用第一个子组件的裁剪事实。注释假设「同组引用相同 figma 父节点区域」不成立：
+          //   实测 5 个子组件同组，仅 HeaderSection 构建过 scopedInput（日志「事实裁剪」仅 1 个 subPath），
+          //   三张卡拿到空 scopedInput（全量数据）+ 模糊 R2 分组指示 → 卡片内容同源混淆
+          //   （危化品车51次丢失、两组件重复锚定 data-section-id="136:127"）。
+          //   治本：cacheKey 改为 subPath，每子组件独立构建专属事实（分组仍保留，仅用于并发调度）。
+          const cacheKey = subPath;
           if (!_scopedInputCache.has(cacheKey)) {
             _scopedInputCache.set(
               cacheKey,
@@ -4284,6 +4312,20 @@ export class MicrocodeEngineer extends BaseAgent {
         logger: this.logger,
         classFacts: _facts,
       });
+      // 🛡️ 根因 B 修复（2026-09-18）：确保子组件根元素接收父组件 attrs 透传
+      targetFiles = ensureSubComponentAttrsBinding(targetFiles);
+      // 🛡️ 根因 C 修复（2026-09-18）：确保子组件根元素有 width/height
+      targetFiles = ensureSubComponentRootDimensions(targetFiles);
+      // 🛡️ 根因 D 修复（2026-09-19）：确保图表容器有 width/height（ECharts 需要明确宽高才能渲染）
+      targetFiles = ensureChartContainerDimensions(targetFiles);
+      // 🛡️ 根因 E 修复（2026-09-19）：确保中间层容器有 width（背景图等需要容器有明确宽度才能显示）
+      targetFiles = ensureMiddleContainerWidth(targetFiles);
+      // 🛡️ 根因 F 修复（2026-09-19）：确保背景层有 position: absolute（pointer-events: none 的元素应该是绝对定位）
+      targetFiles = ensureBackgroundLayerPosition(targetFiles);
+      // 🛡️ 根因 G 修复（2026-09-19）：确保按钮有 min-height（cursor: pointer 的元素应该有合理高度）
+      targetFiles = ensureButtonMinHeight(targetFiles);
+      // 🛡️ 根因 H 修复（2026-09-19）：确保带背景图的容器有 width:100%; height:100%（card-bg 等背景容器需要明确尺寸才能撑开）
+      targetFiles = ensureBackgroundContainerDimensions(targetFiles);
     } catch (e) {
       // 🛡️ 2026-09-04 C：logger 判空 + 记录调用栈（生产曾现 reading 'log' 且无堆栈无法溯源）
       const errText = `[style-class-consolidator] 收敛失败，按原样写盘: ${e?.message || e}`;
@@ -4850,6 +4892,7 @@ export class MicrocodeEngineer extends BaseAgent {
     backgroundBrightness = 'dark',
     displayName = null,
     nodeData = null,
+    nodeLayoutFacts = null,
   ) {
     return microcodeValidator.validateAndFixGeneratedFiles(
       files,
@@ -4879,6 +4922,7 @@ export class MicrocodeEngineer extends BaseAgent {
         emitThemeOverrides: EMIT_THEME_OVERRIDES,
         styleTokens: this._lastStyleTokens || null,
       },
+      nodeLayoutFacts,
     );
   }
 
@@ -6424,10 +6468,9 @@ export class MicrocodeEngineer extends BaseAgent {
         try {
           const { autoFixNodeSizes } =
             await import('../utils/node-size-validator.js');
-          const mapping = resolveResourceDomMapping(
-            resourceDomMapping,
-            outputPath,
-          );
+          // 🔧 修复：使用主干作用域的 effectiveMapping（第 1526 行定义），
+          // 而非未定义的 resourceDomMapping（导致 ReferenceError）
+          const mapping = effectiveMapping || [];
           const filesArr = Object.entries(codeResult.files).map(
             ([path, content]) => ({ path, content }),
           );
@@ -6787,6 +6830,7 @@ export default declareInfo
         backgroundBrightness,
         compDisplayName,
         figmaNodeData,
+        input?.designFacts?.nodeLayoutFacts || null,
       );
 
       // 🛡️ 合并分块阶段自动修复记录（TAIL-GARBAGE 尾部垃圾剥离 / P1-4 坏文件隔离降级）。

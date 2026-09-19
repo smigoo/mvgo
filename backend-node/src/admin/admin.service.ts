@@ -635,4 +635,310 @@ export class AdminService {
 
     return { deletedComponents, cleanedCollections: cleaned };
   }
+
+  /**
+   * 按一级部门分组的用户统计报表（HTML 格式）。
+   * 用于管理后台下载，展示各部门注册人数、使用人数、组件总数、近7天新增组件数。
+   */
+  async buildDeptReport(): Promise<{ filename: string; contentType: string; body: string }> {
+    // 二级部门 → 一级部门映射
+    const deptMap: Record<string, string> = {
+      // 软件研发中心
+      '高速调度组': '软件研发中心',
+      '数智营运组': '软件研发中心',
+      '公路云控组': '软件研发中心',
+      '出行服务线': '软件研发中心',
+      '高速安管组': '软件研发中心',
+      '高速服务组': '软件研发中心',
+      '数智业务线': '软件研发中心',
+      '政务业务线': '软件研发中心',
+      '高速业务线': '软件研发中心',
+      '主动管控组': '软件研发中心',
+      '项目二组': '软件研发中心',
+      '交通重货组': '软件研发中心',
+      '出行渠道组': '软件研发中心',
+      '数智服务组': '软件研发中心',
+      '执法交警组': '软件研发中心',
+      '项目一组': '软件研发中心',
+      '出行客服组': '软件研发中心',
+      '数智运营部': '软件研发中心',
+      // 综管事业部
+      '综管研发一组': '综管事业部',
+      '综管研发二组': '综管事业部',
+      '综管研发三组': '综管事业部',
+      '综管研发四组': '综管事业部',
+      // 视频事业部
+      '平台研发部(视频)': '视频事业部',
+      '基础研发部(视频)': '视频事业部',
+      // 桥隧事业部
+      '桥隧研发部': '桥隧事业部',
+      // 基础研发部
+      '基础研发部': '基础研发部',
+      '技术研发部': '基础研发部',
+      '产品部': '基础研发部',
+      'OA部': '基础研发部',
+      '前端部': '基础研发部',
+      // 收费事业部
+      '收费系统研发部': '收费事业部',
+      '结算系统研发部': '收费事业部',
+      // 养护运维事业部
+      '养护运维技术研发部': '养护运维事业部',
+    };
+
+    // 排除用户列表
+    const excludeUids = ['luguanyua'];
+
+    const now = new Date();
+
+    // 查询所有用户和组件
+    const [users, components] = await Promise.all([
+      this.userModel.find().select('uid username portalInfo').lean().exec(),
+      this.componentModel.find().select('userId createdBy').lean().exec(),
+    ]);
+
+    // 统计每个用户的组件数
+    const userComponentCount: Record<string, number> = {};
+    components.forEach((c: any) => {
+      const uid = c.userId || c.createdBy;
+      if (uid) {
+        userComponentCount[String(uid)] = (userComponentCount[String(uid)] || 0) + 1;
+      }
+    });
+
+    // 按一级部门分组统计
+    const deptStats: Record<string, { registered: number; generated: number; components: number }> = {};
+    let totalReg = 0, totalGen = 0, totalComp = 0;
+
+    users.forEach((u: any) => {
+      const uid = u.uid || u.username;
+      if (excludeUids.includes(uid)) return;
+
+      const pi = u.portalInfo || {};
+      const deptName = (pi.deptName || '').trim() || '(未分组)';
+      const level1Dept = deptMap[deptName] || null;
+
+      if (!level1Dept) return; // 未映射的不计入
+
+      if (!deptStats[level1Dept]) {
+        deptStats[level1Dept] = { registered: 0, generated: 0, components: 0 };
+      }
+
+      deptStats[level1Dept].registered++;
+      totalReg++;
+
+      const compCount = userComponentCount[uid] || userComponentCount[String(u._id)] || 0;
+      
+      if (compCount > 0) {
+        deptStats[level1Dept].generated++;
+        totalGen++;
+      }
+      deptStats[level1Dept].components += compCount;
+      totalComp += compCount;
+    });
+
+    // 生成日期范围文本
+    const formatDate = (d: Date) => `${d.getMonth() + 1}月${d.getDate()}日`;
+    const dateRange = `9月7日~${formatDate(now)}`;
+
+    // 生成 HTML 行
+    const deptRows = Object.keys(deptStats)
+      .sort()
+      .map((dept) => {
+        const s = deptStats[dept];
+        return `    <tr>
+      <td valign="middle" class="td4">
+        <p class="p5"><span class="s10">${dept}</span></p>
+      </td>
+      <td valign="middle" class="td5">
+        <p class="p6"><span class="s10">${s.registered}</span></p>
+      </td>
+      <td valign="middle" class="td5">
+        <p class="p6"><span class="s10">${s.generated}</span></p>
+      </td>
+      <td valign="middle" class="td5">
+        <p class="p6"><span class="s10">${s.components}</span></p>
+      </td>
+    </tr>`;
+      })
+      .join('\n');
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta http-equiv="Content-Style-Type" content="text/css">
+  <title>感智晓界用户统计报表</title>
+  <style type="text/css">
+    :root {
+        --bg-page: #F0F2F5;
+        --bg-card: #FFFFFF;
+        --bg-thead: #FAFAFA;
+        --text-primary: #1A1A2E;
+        --text-secondary: #8C8C8C;
+        --text-table: #333333;
+        --color-danger: #E74C3C;
+        --border-row: #F0F0F0;
+        --radius-card: 8px;
+        --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+        background-color: var(--bg-page);
+        font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+        font-size: 14px;
+        line-height: 1.6;
+        color: var(--text-primary);
+        padding: 32px 16px 48px;
+        margin: 0 auto;
+        max-width: 1200px;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+    }
+
+    p.p3 {
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin: 0 0 16px 0;
+        padding-left: 14px;
+        position: relative;
+    }
+    p.p3::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 4px;
+        height: 18px;
+        border-radius: 2px;
+        background: var(--color-danger);
+    }
+
+    table.t1 {
+        border-collapse: collapse;
+        width: 100%;
+        background: var(--bg-card);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+        margin-bottom: 24px;
+    }
+
+    td.td1, td.td2, td.td3 {
+        background-color: var(--bg-thead);
+        color: var(--text-table);
+        font-weight: 600;
+        font-size: 14px;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border-row);
+        text-align: left;
+    }
+
+    td.td4, td.td5, td.td6, td.td7 {
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border-row);
+        font-size: 14px;
+        color: var(--text-table);
+        text-align: left;
+        font-variant-numeric: tabular-nums;
+    }
+
+    td.td10, td.td11 {
+      background-color: var(--bg-thead);
+      font-weight: 700;
+      padding: 12px 16px;
+      font-size: 14px;
+      color: var(--text-primary);
+      text-align: left;
+      font-variant-numeric: tabular-nums;
+    }
+
+    p.p1, p.p4, p.p5, p.p6 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 400;
+        color: var(--text-table);
+    }
+    p.p1 { font-weight: 700; color: var(--text-primary); }
+    p.p4 { font-weight: 600; color: var(--text-table); }
+
+    span.s9 { background: transparent; font-size: 16px; font-weight: 700; }
+    span.s10, span.s11 { background: transparent; }
+
+    table.t1 tbody tr:hover td {
+        background-color: #F5F7FA;
+    }
+    table.t1 tbody tr:last-child:hover td.td10,
+    table.t1 tbody tr:last-child:hover td.td11 {
+        background-color: #ECEEF2;
+    }
+
+    @media (max-width: 720px) {
+        body { padding: 16px 12px 32px; }
+        table.t1 { font-size: 13px; }
+        td.td1, td.td2, td.td3,
+        td.td4, td.td5, td.td6, td.td7,
+        td.td10, td.td11 {
+            padding: 10px 12px;
+        }
+    }
+
+    @media print {
+        body { background: #fff; padding: 0; }
+        table.t1 { box-shadow: none; border: 1px solid #e5e7eb; }
+        table.t1 tbody tr:hover td { background: transparent; }
+    }
+  </style>
+</head>
+<body>
+<p class="p3"><span class="s9"><b>感智｜晓界工坊 · 使用情况 ${dateRange}</b></span></p>
+<table cellspacing="0" cellpadding="0" class="t1">
+  <tbody>
+    <tr>
+      <td valign="middle" class="td1">
+        <p class="p4"><span class="s10">一级部门</span></p>
+      </td>
+      <td valign="middle" class="td1">
+        <p class="p4"><span class="s10">注册人数</span></p>
+      </td>
+      <td valign="middle" class="td2">
+        <p class="p4"><span class="s10">使用人数</span></p>
+      </td>
+      <td valign="middle" class="td3">
+        <p class="p4"><span class="s10">组件总数</span></p>
+      </td>
+    </tr>
+${deptRows}
+    <tr>
+      <td valign="middle" class="td10">
+        <p class="p1"><span class="s11"><b>合计</b></span></p>
+      </td>
+      <td valign="middle" class="td11">
+        <p class="p6"><span class="s10"><b>${totalReg}</b></span></p>
+      </td>
+      <td valign="middle" class="td11">
+        <p class="p6"><span class="s10"><b>${totalGen}</b></span></p>
+      </td>
+      <td valign="middle" class="td11">
+        <p class="p6"><span class="s10"><b>${totalComp}</b></span></p>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<p style="text-align: center; font-size: 12px; color: #999; margin-top: 16px;">
+  数据来源：生产 MongoDB 实时查询 | 生成时间：${now.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}
+</p>
+</body>
+</html>`;
+
+    const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+    return {
+      filename: `感智晓界用户统计报表-${dateStr}.html`,
+      contentType: 'text/html; charset=utf-8',
+      body: html,
+    };
+  }
 }

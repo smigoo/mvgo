@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import AdmZip from 'adm-zip';
-import { resolveComponentDirStrict } from '../ai-engine/utils/component-resolver.js';
+import { resolveComponentDirStrict, resolveWritableComponentDirs } from '../ai-engine/utils/component-resolver.js';
 
 /** 自定义 skill 标识：小写字母/数字开头，允许 - 与 _（防目录穿越与大小写歧义） */
 const SKILL_ID_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
@@ -449,5 +449,88 @@ export class McSpecService {
     if (!/^[\w-]+$/.test(componentId) || !/^[\d_-]+$/.test(stamp)) return null;
     const p = path.join(this.reportsDir, componentId, stamp, 'mc-report.html');
     return fs.existsSync(p) ? p : null;
+  }
+
+  /**
+   * 管理员预览：对已落盘组件做 v1 确定性评分（不调 LLM）。
+   *
+   * ⚠️ 写盘契约（与管线写入方一致）：同一组件在 backend-node/workspace 与 frontend/workspace
+   * 各有一份副本，后端 resolveComponentDirStrict 优先读 backend-node 那份。因此必须同步写入
+   * resolveWritableComponentDirs 返回的所有副本，否则前端读到的那份没有 quality（显示「尚未评分」）。
+   */
+  async scoreQualityV1(componentId: string, opts: { persist?: boolean } = {}) {
+    const id = String(componentId || '').trim();
+    if (!id) throw new BadRequestException('缺少 componentId');
+    const componentDir = await resolveComponentDirStrict(id);
+    if (!componentDir) {
+      throw new NotFoundException(`未找到该组件的产物目录: ${id}`);
+    }
+    const { scoreComponentDir } = await import('../ai-engine/utils/quality-score-v1.js');
+    const persist = opts.persist !== false;
+    const result = await scoreComponentDir(componentDir, { componentId: id, persist: false });
+    if (persist) {
+      await this.persistQualityToReplicas(id, result.quality);
+    }
+    return result;
+  }
+
+  /** 把 v1 评分 merge 写入所有正式副本的 component-meta.json.quality */
+  private async persistQualityToReplicas(componentId: string, quality: any) {
+    let writable: string[] = [];
+    try {
+      writable = await resolveWritableComponentDirs(componentId);
+    } catch {
+      writable = [];
+    }
+    if (writable.length === 0) {
+      // 兜底：至少写回严格解析出的目录
+      const strict = await resolveComponentDirStrict(componentId);
+      if (strict) writable = [strict];
+    }
+    for (const dir of writable) {
+      try {
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        const metaPath = path.join(dir, 'component-meta.json');
+        let prev: any = {};
+        try {
+          if (fs.existsSync(metaPath)) prev = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+        } catch {
+          prev = {};
+        }
+        const merged = {
+          ...prev,
+          quality: { ...(prev.quality || {}), ...quality },
+        };
+        fs.writeFileSync(metaPath, JSON.stringify(merged, null, 2), 'utf8');
+      } catch {
+        /* 单个副本写失败不影响其它副本 */
+      }
+    }
+  }
+
+  /** 读取已写入 component-meta.json 的 v1 评分（未评分为 null）。副本回退扫描。 */
+  async readQualityV1(componentId: string) {
+    const id = String(componentId || '').trim();
+    if (!id) throw new BadRequestException('缺少 componentId');
+    const dirs = await resolveWritableComponentDirs(id);
+    if (dirs.length === 0) {
+      const strict = await resolveComponentDirStrict(id);
+      if (strict) dirs.push(strict);
+    }
+    const quality = (() => {
+      for (const dir of dirs) {
+        const metaPath = path.join(dir, 'component-meta.json');
+        try {
+          if (fs.existsSync(metaPath)) {
+            const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+            if (meta?.quality && typeof meta.quality === 'object') return meta.quality;
+          }
+        } catch {
+          /* 忽略坏文件 */
+        }
+      }
+      return null;
+    })();
+    return { componentDir: dirs[0] || null, componentId: id, quality };
   }
 }

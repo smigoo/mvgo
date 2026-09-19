@@ -221,7 +221,7 @@
             text-anchor="middle"
             font-size="12"
             fill="#666"
-            transform="rotate(-90, 12, {{ scatterChartHeight / 2 }})"
+            :transform="`rotate(-90, 12, ${scatterChartHeight / 2})`"
           >
             成功率
           </text>

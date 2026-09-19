@@ -50,7 +50,10 @@ function decideGeometricLayout(children, opts = {}) {
 }
 
 /**
- * 遍历 Figma 节点树，为每个「≥2 个带几何子节点」的节点产出布局事实。
+ * 遍历 Figma 节点树，为每个「有子节点」的节点产出布局事实。
+ * 🛡️ 约束覆盖范围扩大（2026-09-19）：单子节点容器也生成布局约束（默认 column），
+ * 避免 LLM 在单子节点容器上漏写 flex-direction 导致默认 row。
+ * 
  * @param {Object} figmaNodeData Figma 节点树（接受 {document} 包裹或直接根节点）
  * @param {Object} [opts] 透传给 areBoxesSideBySide（yOverlapRatio / xOverlapRatio）
  * @returns {Record<string,{display:string,flexDirection:'row'|'column',source:string,confidence:'high'|'low'}>}
@@ -67,7 +70,9 @@ export function buildNodeLayoutFacts(figmaNodeData, opts = {}) {
     if (!node || typeof node !== 'object') return
     const nodeId = node.id != null ? String(node.id) : ''
     const children = Array.isArray(node.children) ? node.children : []
-    if (children.length >= 2 && nodeId) {
+    
+    // 🛡️ 扩大覆盖范围：≥1 个子节点（原 ≥2）都生成布局事实
+    if (children.length >= 1 && nodeId) {
       const mode = node.layoutMode
       let fact = null
       if (mode === 'HORIZONTAL') {
@@ -84,7 +89,7 @@ export function buildNodeLayoutFacts(figmaNodeData, opts = {}) {
           source: 'figma-layoutMode',
           confidence: 'high',
         }
-      } else {
+      } else if (children.length >= 2) {
         // 非 Auto-Layout / 绝对定位文件 → 几何推断（默认 flex，不还原 absolute）
         const decide = decideGeometricLayout(children, opts)
         if (decide) {
@@ -94,6 +99,14 @@ export function buildNodeLayoutFacts(figmaNodeData, opts = {}) {
             source: 'geometric-inference',
             confidence: decide.confidence,
           }
+        }
+      } else {
+        // 🛡️ 单子节点容器：默认 column（用户定调：纵向堆叠是最常见的失败）
+        fact = {
+          display: 'flex',
+          flexDirection: 'column',
+          source: 'single-child-default',
+          confidence: 'low',
         }
       }
       if (fact) map[nodeId] = fact

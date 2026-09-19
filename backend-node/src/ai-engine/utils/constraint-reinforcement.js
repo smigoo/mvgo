@@ -4,6 +4,8 @@
  * 在关键位置注入强化版约束文本，显著降低LLM违规率
  */
 
+import { buildNodeLayoutFacts } from './figma-node-layout-facts.js'
+
 /**
  * 布局约束强化文本
  * 在 template 生成段注入，防止臆造结构
@@ -86,14 +88,16 @@ ${hasNestedGrid ? '- [ ] 双层结构的内层栅格仍按要求用 grid + 正�
  *
  * @param {Record<string,{display,flexDirection,source,confidence}>} nodeLayoutFacts
  * @param {Object} [figmaNodeData] 用于把 node id 解析成可读名称
- * @returns {string} 注入 engineer 样式 prompt 的约束块（空串=无事实）
+ * @param {string} [componentName] 组件 ID（如 c-device-monitor），用于构建 class 名映射
+ * @param {boolean} [returnMapping=false] 是否返回结构化映射表（用于后处理）
+ * @returns {string|Object} 注入 engineer 样式 prompt 的约束块（空串=无事实），或结构化映射表
  */
-export function buildNodeLayoutFactsReinforcement(nodeLayoutFacts, figmaNodeData) {
-  if (!nodeLayoutFacts || typeof nodeLayoutFacts !== 'object') return ''
+export function buildNodeLayoutFactsReinforcement(nodeLayoutFacts, figmaNodeData, componentName, returnMapping = false) {
+  if (!nodeLayoutFacts || typeof nodeLayoutFacts !== 'object') return returnMapping ? {} : ''
   const entries = Object.entries(nodeLayoutFacts).filter(
     ([, fact]) => fact && fact.display,
   )
-  if (entries.length === 0) return ''
+  if (entries.length === 0) return returnMapping ? {} : ''
 
   // 建 figma node id -> name 索引（便于 LLM 把「约束」对到它要生成的 class）
   const nameIndex = new Map()
@@ -108,15 +112,50 @@ export function buildNodeLayoutFactsReinforcement(nodeLayoutFacts, figmaNodeData
       : null
   if (root) walk(root)
 
+  // 🛡️ 约束映射增强（2026-09-19）：根据 figma 节点名推断对应的 class 名
+  // 规则：figma 节点名（如 "TabsSection"、"HeaderSection"）→ .c-{componentName}-{kebab-case}
+  const inferClassName = (figmaName) => {
+    if (!figmaName || !componentName) return null
+    // 移除特殊字符，转 kebab-case
+    const kebab = figmaName
+      .replace(/([a-z])([A-Z])/g, '$1-$2')
+      .replace(/[\s_]+/g, '-')
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, '')
+    if (!kebab) return null
+    return `.c-${componentName}-${kebab}`
+  }
+
+  // 🛡️ 构建结构化映射表（用于后处理）
+  const mapping = {}
   const lines = entries.map(([nodeId, fact]) => {
     const name = nameIndex.get(nodeId) || nodeId
+    const className = inferClassName(name)
+    const classHint = className ? ` → 对应 class \`${className}\`` : ''
+    
+    // 记录映射关系
+    if (className) {
+      mapping[className] = {
+        nodeId,
+        nodeName: name,
+        display: fact.display,
+        flexDirection: fact.flexDirection,
+        source: fact.source,
+        confidence: fact.confidence,
+      }
+    }
+    
     return (
-      `- figma 节点 \`${nodeId}\`（${name}）：其容器 CSS **必须**写为 ` +
+      `- figma 节点 \`${nodeId}\`（${name}）${classHint}：其容器 CSS **必须**写为 ` +
       `\`display: ${fact.display}; flex-direction: ${fact.flexDirection};\`` +
       `（Figma 几何真值来源：${fact.source}，置信度：${fact.confidence}）。` +
       `⚠️ 禁止省略 display、禁止用 absolute 还原定位、禁止改成其他方向。`
     )
   })
+
+  if (returnMapping) {
+    return mapping
+  }
 
   return `
 ## 🛡️ 布局模型确定性约束（Figma 几何真值 · 覆盖 LLM 默认，禁止违背）
@@ -332,7 +371,7 @@ export function buildAllConstraintReinforcements(options = {}) {
   // figmaNodeData 现算（scopedInput 子树自动裁剪 → 子组件只看到自己的节点，token 不膨胀）。
   const nodeFacts = designFacts?.nodeLayoutFacts || buildNodeLayoutFacts(figmaNodeData)
   if (nodeFacts && Object.keys(nodeFacts).length > 0) {
-    reinforcement += buildNodeLayoutFactsReinforcement(nodeFacts, figmaNodeData)
+    reinforcement += buildNodeLayoutFactsReinforcement(nodeFacts, figmaNodeData, layoutStructure?.componentId)
   }
 
   reinforcement += buildStyleConstraintReinforcement()

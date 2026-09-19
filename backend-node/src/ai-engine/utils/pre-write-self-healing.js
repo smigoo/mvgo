@@ -176,6 +176,41 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
     }
   }
 
+  // ⑧ data-section-id 重复锚定检测（2026-09-19 · mc-max-1789811323065 实锤）：
+  //   R2 element-group 拆分 + scopedInput 缓存污染曾导致两个子组件都锚定同一 section
+  //   （ContentSection 与 ContentSection5 均写 data-section-id="136:127"）→ 卡片内容
+  //   同源混淆、危化品车整卡丢失。同一 section id 只应由一个组件渲染；重复 = 锚定错位。
+  //   本步骤 fail-open：只检测告警不修改内容（确定性事实不足以自愈「哪个该改」），
+  //   issues 汇入 summary 供上游（重试 prompt / 门禁 / 日志取证）消费。
+  //   合法豁免：v-for 模板组件（多实例同 id 属正常，子组件文件内模板只有一处）。
+  summary.duplicateSectionAnchors = [];
+  const anchorMap = new Map(); // sectionId -> [{ file, count }]
+  for (const [fp, fc] of Object.entries(result)) {
+    if (!fp.endsWith('.vue') || typeof fc !== 'string') continue;
+    const ids = new Set();
+    for (const m of fc.matchAll(/data-section-id="([^"]+)"/g)) {
+      ids.add(m[1]);
+    }
+    for (const sid of ids) {
+      if (!anchorMap.has(sid)) anchorMap.set(sid, []);
+      anchorMap.get(sid).push({ file: fp });
+    }
+  }
+  for (const [sid, files] of anchorMap) {
+    if (files.length > 1) {
+      const issue = {
+        sectionId: sid,
+        files: files.map((f) => f.file),
+        hint: '同一 Figma section 被多个组件锚定，疑似 R2 拆分组件归属错位（检查该 section 各分组的成员清单）',
+      };
+      summary.duplicateSectionAnchors.push(issue);
+      logger?.warn?.(
+        `🛡️ SECTION-ANCHOR-DUP：section ${sid} 被 ${files.length} 个组件锚定`,
+        { files: issue.files },
+      );
+    }
+  }
+
   return { files: result, summary };
 }
 

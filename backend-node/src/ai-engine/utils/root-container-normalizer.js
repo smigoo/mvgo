@@ -130,6 +130,120 @@ export function normalizeRootContainerLayout(files = [], options = {}) {
 
   const headRe = new RegExp(`([^{}]*\\.${escapeRe(rootCls)}(?:\\s*,[^{}]*)?\\s*\\{)([^{}]*)\\}`, 'g');
 
+  // 🛡️ 根因 A 修复（2026-09-18，v3 参考 healMissingFlexContainers）：
+  // 条件性补全根容器 flex 布局声明。
+  // 判断逻辑（参考 healMissingFlexContainers 刀 20）：
+  //   1. 根容器内 ≥2 个子元素带 flex 值（在样式源中可证）
+  //   2. 根容器当前没有 display:flex（或不可证 flex）
+  //   3. 根容器 class 在样式源中存在规则块（由 headRe 匹配保证）
+  // 满足条件时才补 display:flex + flex-direction: column
+  const patchRootFlexIfNeeded = (source, path, allStyles) => {
+    // 从 index.vue 模板提取根容器的子元素 class
+    const idxFile = list.find((f) => /(^|\/)package\/index\.vue$/i.test(String(f?.path || ''))) ||
+      list.find((f) => /(^|\/)index\.vue$/i.test(String(f?.path || '')));
+    if (!idxFile || typeof idxFile.content !== 'string') return source;
+    
+    const tplStart = idxFile.content.search(/<template\b[^>]*>/i);
+    if (tplStart < 0) return source;
+    const rest = idxFile.content.slice(tplStart);
+    const endIdx = rest.search(/<script[\s>]|<style[\s>]/i);
+    const tpl = (endIdx > 0 ? rest.slice(0, endIdx) : rest).replace(/<!--[\s\S]*?-->/g, '');
+    
+    // 找到根容器标签（匹配 class 包含 rootCls 的标签）
+    // 不依赖闭合标签匹配，只找根容器的开始标签
+    const rootClassEscaped = escapeRe(rootCls);
+    const rootTagStartRe = new RegExp(`<([a-zA-Z][\\w-]*)\\b[^>]*\\bclass=["'][^"']*\\b${rootClassEscaped}\\b[^"']*["'][^>]*>`, 'i');
+    const rootStartMatch = tpl.match(rootTagStartRe);
+    if (!rootStartMatch) return source;
+    
+    // 从根容器开始位置向后截取，找到根容器内的所有子元素
+    const rootStartIdx = rootStartMatch.index + rootStartMatch[0].length;
+    const afterRootStart = tpl.slice(rootStartIdx);
+    
+    // 提取根容器内第一层子元素的 class（遇到嵌套同级别容器停止）
+    // 简单策略：匹配所有带 class 的子元素标签，直到遇到闭合标签
+    const childClassRe = /<([a-zA-Z][\w-]*)\b[^>]*\bclass=["']([^"']+)["'][^>]*>/gi;
+    const childClasses = [];
+    let cm;
+    let depth = 0;
+    let pos = 0;
+    const content = afterRootStart;
+    
+    // 简单解析：遇到开始标签 depth++，遇到闭合标签 depth--，depth=0 时停止
+    const tagRe = /<\/?([a-zA-Z][\w-]*)\b[^>]*>/g;
+    let tagMatch;
+    while ((tagMatch = tagRe.exec(content)) !== null) {
+      const isClosing = tagMatch[0].startsWith('</');
+      const tagName = tagMatch[1];
+      
+      if (isClosing) {
+        if (depth === 0) break; // 遇到根容器的闭合标签
+        depth--;
+      } else {
+        if (depth === 0 && tagMatch[0].includes('class=')) {
+          // 第一层子元素
+          const classMatch = tagMatch[0].match(/\bclass=["']([^"']+)["']/);
+          if (classMatch) {
+            const classes = classMatch[1].split(/\s+/);
+            childClasses.push(...classes);
+          }
+        }
+        depth++;
+      }
+    }
+    
+    // 检查这些 class 中有多少个在样式源中有 flex 值（flex-grow > 0 的任意 flex 简写）
+    // 匹配模式：
+    //   ① flex: N 1 0        （标准三值）
+    //   ② flex: 1 0 113px    （flex-basis 带单位）
+    //   ③ flex: 1            （简写，等价 1 1 0）
+    //   ④ flex: 1.5          （小数简写）
+    // 核心判据：flex-grow > 0（即第一个数字 > 0，且不是 flex: 0 开头）
+    const flexChildSet = new Set();
+    for (const cls of childClasses) {
+      if (!cls || !cls.startsWith('c-')) continue;
+      const clsRe = new RegExp(`\\.${escapeRe(cls)}\\s*\\{([^}]*)\\}`, 'g');
+      const styleMatch = clsRe.exec(allStyles);
+      if (styleMatch) {
+        const styleBody = styleMatch[1];
+        // 匹配 flex 简写：第一个值（flex-grow）> 0
+        // 模式：flex: <positive-number>... （排除 flex: 0 或 flex: 0px 等）
+        if (/(^|[\s;{])flex\s*:\s*([1-9]|0\.[0-9]*[1-9])/i.test(styleBody)) {
+          flexChildSet.add(cls);
+        }
+      }
+    }
+    
+    // 条件 1：至少 2 个子元素带 flex 值
+    if (flexChildSet.size < 2) return source;
+    
+    let out = source;
+    let changed = false;
+    out = out.replace(headRe, (whole, head, body) => {
+      const hasDisplayFlex = /(^|[\s;{])display\s*:\s*flex/i.test(body);
+      const hasFlexDir = /(^|[\s;{])flex-direction\s*:/i.test(body);
+      
+      if (hasDisplayFlex) {
+        // 已有 display:flex 但没有 flex-direction → 补 column
+        if (!hasFlexDir) {
+          const nb = `flex-direction: column;\n${body}`;
+          changed = true;
+          fixes.push({ path, rootCls, action: 'inject-flex-direction-column' });
+          return head + nb + '}';
+        }
+        return whole;
+      }
+      
+      // 没有 display:flex → 补 display:flex + flex-direction: column
+      const nb = `display: flex;\nflex-direction: column;\n${body}`;
+      changed = true;
+      fixes.push({ path, rootCls, action: 'inject-flex-column-layout' });
+      return head + nb + '}';
+    });
+    
+    return changed ? out : source;
+  };
+
   const patch = (source, path) => {
     let out = source;
     let changed = false;
@@ -183,7 +297,33 @@ export function normalizeRootContainerLayout(files = [], options = {}) {
     return changed ? out : source;
   };
 
-  const out = list.map((f) => {
+  // 🛡️ 先执行 flex 布局补全（在 patch 之前，确保 display:flex 和 flex-direction 都就位）
+  // 拼接全部样式源用于检查子元素是否有 flex 值
+  const allStyles = styleTextOf(list);
+  const afterFlexPatch = list.map((f) => {
+    const p = String(f?.path || '');
+    const c = f?.content;
+    if (typeof c !== 'string') return { path: p, content: c };
+    if (/\.less$/i.test(p)) {
+      const next = patchRootFlexIfNeeded(c, p, allStyles);
+      return { path: p, content: next };
+    }
+    if (/\.vue$/i.test(p)) {
+      let changed = false;
+      const next = c.replace(/<style[^>]*>([\s\S]*?)<\/style>/gi, (whole, body) => {
+        const nb = patchRootFlexIfNeeded(body, p, allStyles);
+        if (nb !== body) {
+          changed = true;
+          return whole.replace(body, nb);
+        }
+        return whole;
+      });
+      return { path: p, content: changed ? next : c };
+    }
+    return { path: p, content: c };
+  });
+
+  const out = afterFlexPatch.map((f) => {
     const p = String(f?.path || '');
     const c = f?.content;
     if (typeof c !== 'string') return { path: p, content: c };

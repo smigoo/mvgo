@@ -90,6 +90,35 @@ export class McSpecController {
     return { success: true, ...this.svc.removeSkill(skillId) };
   }
 
+  /**
+   * 管理员预览：v1 确定性质量评分（specScore + styleScore）。
+   * 不进任务列表；成熟前仅管理员 + 任务详情入口可见。
+   */
+  @Post('quality-score')
+  async scoreQuality(
+    @Body() body: Record<string, any>,
+    @CurrentUser() userId: string,
+  ) {
+    await this.adminService.assertAdmin(userId);
+    const componentId = String(body?.componentId || '').trim();
+    if (!componentId) {
+      throw new HttpException('缺少 componentId', HttpStatus.BAD_REQUEST);
+    }
+    const persist = body?.persist !== false && body?.persist !== 'false';
+    const result = await this.svc.scoreQualityV1(componentId, { persist });
+    return { success: true, result };
+  }
+
+  @Get('quality-score/:componentId')
+  async readQuality(
+    @Param('componentId') componentId: string,
+    @CurrentUser() userId: string,
+  ) {
+    await this.adminService.assertAdmin(userId);
+    const result = await this.svc.readQualityV1(componentId);
+    return { success: true, result };
+  }
+
   @Get('report/:componentId/:stamp')
   async report(
     @Param('componentId') componentId: string,

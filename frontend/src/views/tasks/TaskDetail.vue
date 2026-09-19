@@ -39,6 +39,10 @@
           v-if="!pageTaskFlag && taskTarget === 'microcode' && task && (task.status === 'completed' || (task.fileCount && task.fileCount > 0))"
           :component-id="task.componentId || sessionId"
         />
+        <QualityScoreAdminButton
+          v-if="showQualityScoreAdmin"
+          :component-id="task.componentId || sessionId"
+        />
         <button
           v-if="!pageTaskFlag && canPushGit && task && (task.status === 'completed' || (task.fileCount && task.fileCount > 0))"
           class="btn-action btn-gitlab-push"
@@ -1598,6 +1602,8 @@ import { publishToPublicPool } from '@/utils/component-pool'
 import { downloadByUrl } from '@/utils/download-file'
 import ComponentAnalysisDrawer from '@/components/ComponentAnalysisDrawer.vue'
 import McSpecCheckButton from '@/components/McSpecCheckButton.vue'
+import QualityScoreAdminButton from '@/components/QualityScoreAdminButton.vue'
+import { usePermission } from '@/composables/usePermission'
 import { useConfigStore } from '@/stores/config'
 import PreviewErrorBanner from '@/components/PreviewErrorBanner.vue'
 import TierBadge from '@/components/generate/TierBadge.vue'
@@ -1634,6 +1640,16 @@ const sessionId = computed(() => route.params.sessionId as string)
 
 // GitLab 推送
 const { isEnabled: isFeatureEnabled } = useFeatureFlag()
+const { isAdmin } = usePermission()
+const showQualityScoreAdmin = computed(() =>
+  Boolean(
+    !pageTaskFlag.value &&
+      isAdmin.value &&
+      isFeatureEnabled('qualityScoreV1') &&
+      task.value &&
+      (task.value.status === 'completed' || (task.value.fileCount && task.value.fileCount > 0)),
+  ),
+)
 const gitLabPushModalRef = ref<InstanceType<typeof GitLabPushModal> | null>(null)
 const canPushGit = computed(() => isFeatureEnabled('git.push'))
 const pushComponentId = computed(() => task.value?.componentId || task.value?.sessionId || '')

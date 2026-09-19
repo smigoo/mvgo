@@ -1186,6 +1186,7 @@ export async function validateAndFixGeneratedFiles(
   displayName = null,
   nodeData = null,
   options = {},
+  nodeLayoutFacts = null,
 ) {
     const fixedFiles = {};
 
@@ -2105,6 +2106,36 @@ export async function validateAndFixGeneratedFiles(
           fixedFiles[commonLessPath3] = normalizedContent;
           fixes.push(
             `L10: ${commonLessPath3} 归一化 ${normalized.length} 处定宽/定高区块 flex 属性（${normalized.slice(0, 3).join(', ')}${normalized.length > 3 ? '...' : ''}）`
+          );
+        }
+      }
+    }
+
+    // 2.11 LAYOUT-FACTS-INJECT 布局事实直接注入（2026-09-19 治本）
+    // 根据 nodeLayoutFacts 直接注入 display/flex-direction，覆盖 LLM 生成的值
+    // 解决：LLM 生成错误的布局方向、遗漏 display/flex-direction 等问题
+    if (nodeLayoutFacts && Object.keys(nodeLayoutFacts).length > 0) {
+      const { processAllStyleFiles, buildLayoutMapping } = await import('../../utils/layout-facts-injector.js');
+      
+      // 构建布局映射表（className → {display, flexDirection}）
+      const layoutMapping = buildLayoutMapping(nodeLayoutFacts, nodeData, componentName);
+      
+      if (Object.keys(layoutMapping).length > 0) {
+        const { fixedFiles: layoutFixedFiles, fixes: layoutFixes } = processAllStyleFiles(
+          mergedFiles,
+          layoutMapping,
+          { logger: options.logger }
+        );
+        
+        // 合并修复结果
+        for (const [filePath, content] of Object.entries(layoutFixedFiles)) {
+          fixedFiles[filePath] = content;
+        }
+        
+        // 记录修复日志
+        for (const fix of layoutFixes) {
+          fixes.push(
+            `LAYOUT-FACTS-INJECT: ${fix.filePath} [${fix.className}] ${fix.detail}`
           );
         }
       }

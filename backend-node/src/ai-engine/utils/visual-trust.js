@@ -82,6 +82,8 @@ export function evaluateVisualTrustVerdict(parsed) {
       reason: `覆盖率严重不足 (${coverageRate}%)，需定向重分析`,
       coverageRate,
       recognizedSections,
+      missing: coverageReport.missing || [],
+      missingCount: coverageReport.missingCount || 0,
     }
   }
 

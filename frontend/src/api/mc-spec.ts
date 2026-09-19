@@ -180,6 +180,55 @@ export async function uploadMcSpecSkill(
   return data?.skill as McSpecSkill
 }
 
+/** v1 质量评分（管理员预览） */
+export interface QualityScoreV1 {
+  version: string
+  specScore: number | null
+  styleScore: number | null
+  spec?: { score: number; blockCount: number; warnCount: number; issues?: Array<{ id: string; severity: string; message: string }> }
+  style?: { score: number | null; reason: string; coverage: number; diffs?: Array<{ dimension: string; expected: string; actual: string }> }
+  scoredAt?: string
+  fileCount?: number
+  excluded?: Record<string, string>
+  l0bError?: string
+}
+
+export interface QualityScoreV1Result {
+  componentDir: string
+  componentId: string
+  quality: QualityScoreV1 | null
+}
+
+/** 对已落盘组件执行 v1 确定性评分并写入 component-meta.json.quality（**仅管理员**） */
+export async function scoreQualityV1(
+  componentId: string,
+  opts: { persist?: boolean } = {},
+): Promise<QualityScoreV1Result> {
+  const res: any = await http.post('/api/mc-spec/quality-score', {
+    componentId,
+    persist: opts.persist !== false,
+  })
+  const data = unwrap(res) ?? res
+  if (data && data.success === false) {
+    const err: any = new Error(data.message || '评分失败')
+    err.data = { message: err.message }
+    throw err
+  }
+  return (data?.result || data) as QualityScoreV1Result
+}
+
+/** 读取已写入的 v1 评分（**仅管理员**） */
+export async function readQualityV1(componentId: string): Promise<QualityScoreV1Result> {
+  const res: any = await http.get(`/api/mc-spec/quality-score/${encodeURIComponent(componentId)}`)
+  const data = unwrap(res) ?? res
+  if (data && data.success === false) {
+    const err: any = new Error(data.message || '读取评分失败')
+    err.data = { message: err.message }
+    throw err
+  }
+  return (data?.result || data) as QualityScoreV1Result
+}
+
 /** 卸载自定义 skill（**仅管理员**，内置不可删） */
 export async function removeMcSpecSkill(skillId: string): Promise<void> {
   const res: any = await http.delete(`/api/mc-spec/skills/${encodeURIComponent(skillId)}`)

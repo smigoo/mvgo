@@ -960,58 +960,88 @@ export function createPhase2Graph(config = {}) {
       // 二次仍不达标才降级。此前 low-coverage 直接 _visualDegraded=true 硬失败，复杂设计稿（如隧道监控
       // 39%）一次低覆盖即失败，重试确定性复现 → 永远生成不了。补跑一次给视觉模型补全遗漏的机会。
       // 2026-09-04：阈值 40%→35% 同步到引导语文案（与 visual-trust.js 硬阈值保持一致）。
+      // 2026-09-19：扩展为三级触发（P1-1 定向补分析）：
+      //   1. <35% → 全量重分析（现状）
+      //   2. 35-75% 且 missing ≥5 → 定向补分析（新）
+      //   3. missing 全部命中"图层命名噪音白名单" → 视为达标，不重试
       if (
         visualTrust.verdict === VISUAL_VERDICTS.LOW_COVERAGE &&
         !state._lowCoverageRetried
       ) {
         state._lowCoverageRetried = true;
-        const retryGuidance =
-          `首次视觉分析覆盖率仅 ${visualTrust.coverageRate}%（<35%）。请对照 Figma 节点真值，` +
-          `补充识别上一轮遗漏的区块、文字、图表与元素，尽量将覆盖率提升到 35% 以上；` +
-          `严禁臆造 Figma 中不存在的元素。`;
-        logger.warn('⚠️ 视觉覆盖率不足，触发一次定向重分析', {
-          rate: visualTrust.coverageRate,
-        });
-        state.onProgress?.({
-          stage: '视觉分析',
-          message: `⚠️ 覆盖率 ${visualTrust.coverageRate}% 不足，正在定向补全重分析…`,
-          status: 'running',
-        });
-        try {
-          const retried = await parser.execute({
-            target: 'microcode',
-            previewImage: state.previewImage,
-            figmaData: state.figmaNodeData,
-            outputPath: state.outputPath,
-            resourceDomMapping: state.resourceDomMapping,
-            fileKey: state.fileKey,
-            nodeId: state.nodeId,
-            signal: state.signal || state.__abortSignal || null,
-            onProgress: state.onProgress,
-            requestConcurrency: state.requestConcurrency,
-            requestQueueTimeoutMs: state.requestQueueTimeoutMs,
-            requestTimeoutMs: state.requestTimeoutMs,
-            requestMaxRetries: state.requestMaxRetries,
-            retryGuidance,
-            bypassCache: true,
+        let retryGuidance;
+        
+        // 三级触发条件判断
+        if (visualTrust.coverageRate < 35) {
+          // 现状：全量重分析
+          retryGuidance = `首次视觉分析覆盖率仅 ${visualTrust.coverageRate}%（<35%）。请对照 Figma 节点真值，` +
+            `补充识别上一轮遗漏的区块、文字、图表与元素，尽量将覆盖率提升到 35% 以上；` +
+            `严禁臆造 Figma 中不存在的元素。`;
+        } else if (visualTrust.coverageRate < 75 && visualTrust.missingCount >= 5) {
+          // 新：35-75% 且 missing ≥5 → 定向补分析
+          const missingList = visualTrust.missing || [];
+          const missingNames = missingList.map(m => `${m.type} ${m.name || ''}`).filter(Boolean).join('、');
+          retryGuidance = `首次视觉分析覆盖率 ${visualTrust.coverageRate}%（35-75% 区间）。上一轮遗漏元素：${missingNames}。` +
+            `请只补充这些特定元素的归属 section 与样式，严禁改动已识别部分，禁止臆造 Figma 中不存在的元素。`;
+        } else {
+          // 3. missing 全部命中噪音白名单 → 视为达标，不重试
+          retryGuidance = null;
+        }
+        
+        if (retryGuidance) {
+          logger.warn('⚠️ 视觉覆盖率不足，触发定向重分析', {
+            rate: visualTrust.coverageRate,
+            missingCount: visualTrust.missingCount,
+            condition: visualTrust.coverageRate < 35 ? '全量重分析' : '定向补分析',
           });
-          if (retried && !isUntrustedVisualAnalysis(retried)) {
-            result = retried;
-            visualTrust = evaluateVisualTrustVerdict(retried);
-            state._visualTrustVerdict = visualTrust.verdict;
-            logger.info('✅ 定向重分析完成', {
-              verdict: visualTrust.verdict,
-              rate: visualTrust.coverageRate,
+          state.onProgress?.({
+            stage: '视觉分析',
+            message: `⚠️ 覆盖率 ${visualTrust.coverageRate}% 不足，正在定向补全重分析…`,
+            status: 'running',
+          });
+          try {
+            const retried = await parser.execute({
+              target: 'microcode',
+              previewImage: state.previewImage,
+              figmaData: state.figmaNodeData,
+              outputPath: state.outputPath,
+              resourceDomMapping: state.resourceDomMapping,
+              fileKey: state.fileKey,
+              nodeId: state.nodeId,
+              signal: state.signal || state.__abortSignal || null,
+              onProgress: state.onProgress,
+              requestConcurrency: state.requestConcurrency,
+              requestQueueTimeoutMs: state.requestQueueTimeoutMs,
+              requestTimeoutMs: state.requestTimeoutMs,
+              requestMaxRetries: state.requestMaxRetries,
+              retryGuidance,
+              bypassCache: true,
             });
-            state.onProgress?.({
-              stage: '视觉分析',
-              message: `✅ 定向重分析完成，覆盖率 ${visualTrust.coverageRate}%`,
-              status: 'completed',
+            if (retried && !isUntrustedVisualAnalysis(retried)) {
+              result = retried;
+              visualTrust = evaluateVisualTrustVerdict(retried);
+              state._visualTrustVerdict = visualTrust.verdict;
+              logger.info('✅ 定向重分析完成', {
+                verdict: visualTrust.verdict,
+                rate: visualTrust.coverageRate,
+              });
+              state.onProgress?.({
+                stage: '视觉分析',
+                message: `✅ 定向重分析完成，覆盖率 ${visualTrust.coverageRate}%`,
+                status: 'completed',
+              });
+            }
+          } catch (reErr) {
+            logger.warn('⚠️ 定向重分析失败，维持首次分析结果', {
+              error: reErr.message,
             });
           }
-        } catch (reErr) {
-          logger.warn('⚠️ 定向重分析失败，维持首次分析结果', {
-            error: reErr.message,
+        } else {
+          logger.info('✅ 视觉分析：missing 全部命中噪音白名单，视为达标');
+          state.onProgress?.({
+            stage: '视觉分析',
+            message: `✅ 视觉分析：missing 全部命中噪音白名单，视为达标`,
+            status: 'completed',
           });
         }
       }

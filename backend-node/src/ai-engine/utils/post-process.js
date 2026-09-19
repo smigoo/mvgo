@@ -2014,10 +2014,11 @@ export function validateDynamicClassStyles(code) {
   if (!templateMatch) return code;
   const template = templateMatch[1];
 
-  // 提取 style 段
-  const styleMatch = code.match(/<style[^>]*>([\s\S]*?)<\/style>/);
+  // 提取 style 段（保留原始标签属性如 lang="less" scoped）
+  const styleMatch = code.match(/(<style[^>]*>)([\s\S]*?)(<\/style>)/);
   if (!styleMatch) return code;
-  const styleContent = styleMatch[1];
+  const styleOpenTag = styleMatch[1];
+  const styleContent = styleMatch[2];
 
   // 1. 收集模板中所有 class 名（静态 + 动态）
   const usedClasses = new Set();
@@ -2062,7 +2063,7 @@ export function validateDynamicClassStyles(code) {
   const newStyle = styleContent + '\n\n' + emptyRules;
 
   return code.slice(0, styleMatch.index) +
-    '<style>' + newStyle + '</style>' +
+    styleOpenTag + newStyle + '</style>' +
     code.slice(styleMatch.index + styleMatch[0].length);
 }
 
@@ -2081,9 +2082,10 @@ export function ensureFlexLayoutForSiblings(code) {
   if (!templateMatch) return code;
   const template = templateMatch[1];
 
-  const styleMatch = code.match(/<style[^>]*>([\s\S]*?)<\/style>/);
+  const styleMatch = code.match(/(<style[^>]*>)([\s\S]*?)(<\/style>)/);
   if (!styleMatch) return code;
-  let styleContent = styleMatch[1];
+  const styleOpenTag = styleMatch[1];
+  let styleContent = styleMatch[2];
 
   // 提取所有带 class 的标签及其层级
   const tagRe = /<([a-zA-Z-]+)[^>]*class="([^"]*)"[^>]*>/g;
@@ -2145,7 +2147,7 @@ export function ensureFlexLayoutForSiblings(code) {
 
   if (!changed) return code;
   return code.slice(0, styleMatch.index) +
-    '<style>' + styleContent + '</style>' +
+    styleOpenTag + styleContent + '</style>' +
     code.slice(styleMatch.index + styleMatch[0].length);
 }
 
@@ -2162,10 +2164,11 @@ export function validateResourceBindingLevel(code, resourceDomMapping = []) {
   if (!code || typeof code !== 'string') return code;
   if (!Array.isArray(resourceDomMapping) || resourceDomMapping.length === 0) return code;
 
-  // 提取 style 段
-  const styleMatch = code.match(/<style[^>]*>([\s\S]*?)<\/style>/);
+  // 提取 style 段（保留原始标签属性如 lang="less" scoped）
+  const styleMatch = code.match(/(<style[^>]*>)([\s\S]*?)(<\/style>)/);
   if (!styleMatch) return code;
-  let styleContent = styleMatch[1];
+  const styleOpenTag = styleMatch[1];
+  let styleContent = styleMatch[2];
 
   // 提取模板段
   const templateMatch = code.match(/<template[^>]*>([\s\S]*?)<\/template>/);
@@ -2238,7 +2241,7 @@ export function validateResourceBindingLevel(code, resourceDomMapping = []) {
   if (!changed) return code;
 
   return code.slice(0, styleMatch.index) +
-    '<style>' + styleContent + '</style>' +
+    styleOpenTag + styleContent + '</style>' +
     code.slice(styleMatch.index + styleMatch[0].length);
 }
 
@@ -2323,15 +2326,17 @@ export function injectNodeLevelColorTruth(files, colorTruth = []) {
   for (const [fp, code] of Object.entries(files)) {
     if (!fp.endsWith('.vue') || typeof code !== 'string') continue;
     
-    // 提取模板段
-    const templateMatch = code.match(/<template[^>]*>([\s\S]*?)<\/template>/);
+    // 提取模板段（保留原始标签属性）
+    const templateMatch = code.match(/(<template[^>]*>)([\s\S]*?)(<\/template>)/);
     if (!templateMatch) continue;
-    let template = templateMatch[1];
+    const templateOpenTag = templateMatch[1];
+    let template = templateMatch[2];
 
-    // 提取 style 段
-    const styleMatch = code.match(/<style[^>]*>([\s\S]*?)<\/style>/);
+    // 提取 style 段（保留原始标签属性如 lang="less" scoped）
+    const styleMatch = code.match(/(<style[^>]*>)([\s\S]*?)(<\/style>)/);
     if (!styleMatch) continue;
-    let styleContent = styleMatch[1];
+    const styleOpenTag = styleMatch[1];
+    let styleContent = styleMatch[2];
 
     let fileChanged = false;
 
@@ -2399,16 +2404,16 @@ export function injectNodeLevelColorTruth(files, colorTruth = []) {
     }
 
     if (fileChanged) {
-      // 更新模板段和 style 段
+      // 更新模板段和 style 段（保留原始标签属性）
       let newCode = code.slice(0, templateMatch.index) +
-        '<template>' + template + '</template>' +
+        templateOpenTag + template + '</template>' +
         code.slice(templateMatch.index + templateMatch[0].length);
       
       // 重新提取 style 段（因为模板段修改后索引可能变化）
-      const newStyleMatch = newCode.match(/<style[^>]*>([\s\S]*?)<\/style>/);
+      const newStyleMatch = newCode.match(/(<style[^>]*>)([\s\S]*?)(<\/style>)/);
       if (newStyleMatch) {
         newCode = newCode.slice(0, newStyleMatch.index) +
-          '<style>' + styleContent + '</style>' +
+          newStyleMatch[1] + styleContent + '</style>' +
           newCode.slice(newStyleMatch.index + newStyleMatch[0].length);
       }
       

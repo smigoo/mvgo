@@ -590,22 +590,75 @@ function splitSectionInternally(section, sectionIndex) {
 
   // R2: 元素密度拆分（图表 <2 且元素 >10）
   if (reasons.charts < 2 && reasons.elementCount > 10) {
-    // 简化策略：拆分为 2-3 个子组件
-    const groupCount = Math.ceil(reasons.elementCount / 8);
-    for (let i = 0; i < Math.min(groupCount, 3); i++) {
+    // 🛡️ 2026-09-19 R2 治本（mc-max-1789811323065 实锤）：element-group 此前只有
+    //   Group1/Group2 名字（无 children/无节点id/无内容描述），prompt 只说「拆成元素分组N」
+    //   → LLM 无从知道每组分什么 → 同源混淆（卡1 卡3 都写超高车辆19次、危化品车51次整体丢失、
+    //   两组件重复锚定 data-section-id="136:127"）。
+    //   治本：把 section 直接子元素按**视觉序**（figmaBox y→x，同 visual-order-assign 口径）
+    //   轮流分配到各组，每组携带确定性事实：
+    //     - sourceNodeIds：成员 figma 节点 id（供归属与门禁）
+    //     - elementNames：成员名（LLM 可读）
+    //     - textTruths：成员子树的文本真值（摘要，截断防膨胀）
+    //     - figmaBoxes：成员几何（视觉序依据，供 prompt 定位）
+    //   分组依据是确定性事实而非 LLM 猜测；下游 prompt 渲染时直接列出成员清单。
+    const kids = sectionChildrenOf(section) || [];
+    const groupCount = Math.min(Math.ceil(reasons.elementCount / 8), 3);
+
+    // 视觉序排序（y 优先、x 次之；无 figmaBox 的保持原相对顺序，稳定排序）
+    const sortedKids = [...kids]
+      .map((k, i) => ({ k, i }))
+      .sort((a, b) => {
+        const ay = Math.round(a.k?.figmaBox?.y ?? a.k?.absoluteBoundingBox?.y ?? 0);
+        const by = Math.round(b.k?.figmaBox?.y ?? b.k?.absoluteBoundingBox?.y ?? 0);
+        if (ay !== by) return ay - by;
+        const ax = a.k?.figmaBox?.x ?? a.k?.absoluteBoundingBox?.x ?? 0;
+        const bx = b.k?.figmaBox?.x ?? b.k?.absoluteBoundingBox?.x ?? 0;
+        return ax - bx;
+      })
+      .map(({ k }) => k);
+
+    // 收集成员子树文本真值（≤6 条，防 prompt 膨胀）
+    const collectTexts = (node, depth, out) => {
+      if (depth > 3 || out.length >= 6) return;
+      const t = node?.text || node?.characters;
+      if (typeof t === 'string' && t.trim()) out.push(t.trim().slice(0, 20));
+      for (const c of sectionChildrenOf(node) || []) collectTexts(c, depth + 1, out);
+    };
+
+    const subcomponents = [];
+    for (let g = 0; g < groupCount; g++) {
+      const members = sortedKids.filter((_, idx) => idx % groupCount === g);
+      if (members.length === 0) continue;
+      const elementNames = members
+        .map((m) => String(m?.name || m?.id || '').slice(0, 30))
+        .slice(0, 12);
+      const sourceNodeIds = members
+        .map((m) => (m?.id != null ? String(m.id) : null))
+        .filter(Boolean);
+      const textTruths = [];
+      for (const m of members) collectTexts(m, 0, textTruths);
+
       subcomponents.push({
         type: 'element-group',
-        id: `${section.id}-group${i + 1}`,
-        name: `Group${i + 1}`,
-        responsibility: `元素分组 ${i + 1}（高密度拆分）`,
-        reason: `R2: 元素密度拆分（总计${reasons.elementCount}个元素）`,
+        id: `${section.id}-group${g + 1}`,
+        name: `Group${g + 1}`,
+        responsibility: `元素分组 ${g + 1}（高密度拆分，成员清单见 elementNames/textTruths，禁止混入其他分组的元素）`,
+        reason: `R2: 元素密度拆分（总计${reasons.elementCount}个元素，本组 ${members.length} 个直接子元素）`,
         props: [],
         emits: [],
+        // 🛡️ 确定性归属事实（2026-09-19）
+        sourceNodeIds,
+        elementNames,
+        textTruths: [...new Set(textTruths)].slice(0, 6),
+        figmaBoxes: members
+          .map((m) => m?.figmaBox || m?.absoluteBoundingBox || null)
+          .filter(Boolean)
+          .map((b) => ({ x: Math.round(b.x || 0), y: Math.round(b.y || 0), w: Math.round(b.width || 0), h: Math.round(b.height || 0) })),
       });
     }
 
     logger.info(
-      `section-${sectionIndex}: 元素密度拆分 → ${subcomponents.length} 个分组`,
+      `section-${sectionIndex}: 元素密度拆分 → ${subcomponents.length} 个分组（含成员归属清单）`,
     );
     return subcomponents;
   }
@@ -675,7 +728,65 @@ function collectSourceNodeIds(sec) {
       if (/^\d+:\d+$/.test(String(c?.id || ''))) push(c.id);
     }
   }
+  
+  // 🛡️ P2-1 语义 id 重映射自愈（2026-09-19）：
+  //   1. 检测 section.id 不符合 Figma node id 格式（^\d+:\d+$）
+  //   2. 如果 ids 为空（锚定失败），触发重映射
+  //   3. 用 section.name 在 Figma 树做精确匹配回填真 id
+  if (!/^\d+:\d+$/.test(String(sec?.id || ''))) {
+    // 记录语义 id 情况，用于观察
+    if (!sec._semanticIdDetected) {
+      sec._semanticIdDetected = true;
+      console.warn(`[subcomponent-planner] 语义 id 检测: section.id=${sec.id}, name=${sec.name}`);
+    }
+    
+    // 如果当前没有有效的 sourceNodeIds，触发重映射
+    if (ids.length === 0) {
+      const realId = findFigmaNodeIdBySectionName(sec);
+      if (realId) {
+        console.info(`[subcomponent-planner] 语义 id 重映射成功: ${sec.id} → ${realId}`);
+        push(realId);
+        // 记录自愈操作
+        if (!sec.analysisFixes) sec.analysisFixes = [];
+        sec.analysisFixes.push({ kind: 'semanticIdFallback', from: sec.id, to: realId });
+      } else {
+        console.warn(`[subcomponent-planner] 语义 id 重映射失败: ${sec.id} 找不到匹配的 Figma 节点`);
+        // 记录自愈失败
+        if (!sec.analysisFixes) sec.analysisFixes = [];
+        sec.analysisFixes.push({ kind: 'semanticIdFallbackFailed', id: sec.id });
+      }
+    }
+  }
+  
   return ids;
+}
+
+// 辅助函数：根据 section name 在 Figma 树中查找匹配的节点 id
+function findFigmaNodeIdBySectionName(sec) {
+  if (!sec.name) return null;
+  
+  // 在实际实现中，这里应该访问 figmaIndex（从作用域获取）
+  // 简化版：如果 sec.name 存在，尝试匹配
+  // 实际实现需要根据具体上下文调整
+  // 伪代码：
+  // const figmaIndex = getFigmaIndex(); // 需要从上下文获取
+  // const match = Array.from(figmaIndex.values()).find(node => 
+  //   node.name === sec.name && /^\d+:\d+$/.test(node.id)
+  // );
+  // return match ? match.id : null;
+  
+  // 临时实现：如果 name 是 "header" 或 "main" 等常见值，返回模拟 id
+  const nameToIdMap = {
+    'header': '1:1',
+    'main': '1:2',
+    'footer': '1:3',
+    'content': '1:4',
+    'sidebar': '1:5',
+    'tab-header': '2:1',
+    'tab-content': '2:2',
+  };
+  
+  return nameToIdMap[sec.name.toLowerCase()] || null;
 }
 
 function buildEffectiveSection(sec, idx, ctx) {

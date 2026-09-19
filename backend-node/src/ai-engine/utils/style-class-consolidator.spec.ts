@@ -56,26 +56,11 @@ describe('consolidateSubComponentClasses', () => {
     expect(css.match(/\.c-demo-icon-btn\s*\{/g)?.length).toBe(1)
   })
 
-  it('布局声明缺则保留：子组件缺 display，common.less 有 display:flex/flex-direction → 合并补齐', () => {
-    // 🛡️ 2026-09-18 治本（mc-max-1789661127982-51408ba2）：子组件 scoped 常缺 display
-    // （LLM 受「display 由系统确定性写入」影响只写 width/min-height），而 common.less
-    // （style chunk）写了完整 display:flex + flex-direction:row。旧逻辑「以子组件为准」无脑
-    // 后置覆盖 → display 丢失 → 同行元素纵排、各占 100% 宽。
-    const files = {
-      'resources/styles/common.less':
-        '.c-demo-tabs-section {\n  width: 100%;\n  display: flex;\n  flex-direction: row;\n  align-items: center;\n}\n',
-      'package/components/Tabs.vue': child('.c-demo-tabs-section', '  width: 100%;\n  min-height: 0;'),
-    }
-    const out = consolidateSubComponentClasses(files, { logger })
-    const css = out['resources/styles/common.less']
-    // display 与 flex-direction 必须保留（否则横向变纵向）
-    expect(css).toContain('display: flex')
-    expect(css).toContain('flex-direction: row')
-    // 子组件的 width/min-height 仍生效（取并集）
-    expect(css).toContain('min-height: 0')
-    // 只保留一份定义
-    expect(css.match(/\.c-demo-tabs-section\s*\{/g)?.length).toBe(1)
-  })
+  // 🗑️ P4（2026-09-19）已删除 4 条补偿器测试：
+  //   - 布局声明缺则保留（injectMissingLayoutDecls，89f28cb）
+  //   - flex 信号补 display / flex 信号幂等 / 无 flex 信号不注入（injectDisplayFromFlexSignals，8404de1）
+  // display 判定权已由 B' 布局事实层接管（buildNodeLayoutFacts → style+component chunk 双 prompt
+  // 强制约束），收敛层不再事后补 display。
 
   it('子组件已写 display 时不覆盖（以子组件布局意图为准）', () => {
     const files = {
@@ -88,58 +73,6 @@ describe('consolidateSubComponentClasses', () => {
     // 子组件明确写了 column，必须保留 column，不被 common.less 的 row 覆盖
     expect(css).toContain('flex-direction: column')
     expect(css).not.toContain('flex-direction: row')
-  })
-
-  it('布局声明保留幂等：重复执行不再变化', () => {
-    const files = {
-      'resources/styles/common.less':
-        '.c-demo-tabs-section {\n  display: flex;\n  flex-direction: row;\n}\n',
-      'package/components/Tabs.vue': child('.c-demo-tabs-section', '  width: 100%;\n  min-height: 0;'),
-    }
-    const first = consolidateSubComponentClasses(files, { logger })
-    const second = consolidateSubComponentClasses(first, { logger })
-    expect(second['resources/styles/common.less']).toBe(first['resources/styles/common.less'])
-    expect(second['resources/styles/common.less']).toContain('display: flex')
-  })
-
-  it('flex 信号补 display：scoped 有 align-items 却漏 display → 收敛后补 display:flex', () => {
-    // 🛡️ 2026-09-18 治本（mc-1789666658926-b4a26c1a）：ContentDefault 根只写 align-items:center
-    // + flex:1 1 0，漏写 display:flex，且 style chunk（common.less）里也漏（只有 font-size）。
-    // 保护规则 2 无 display 可补 → 需靠「自身 flex 信号」补 display。
-    const files = {
-      'resources/styles/common.less': '.c-demo-default {\n  font-size: 14px;\n}\n',
-      'package/components/Default.vue': child(
-        '.c-demo-default',
-        '  position: relative;\n  width: 100%;\n  flex: 1 1 0;\n  align-items: center;\n  padding: 0 16px;',
-      ),
-    }
-    const out = consolidateSubComponentClasses(files, { logger })
-    const css = out['resources/styles/common.less']
-    // 收敛后必须补上 display: flex（否则 icon/文字纵向堆叠）
-    expect(css).toContain('display: flex')
-    expect(css).toContain('align-items: center')
-  })
-
-  it('flex 信号补 display 幂等：重复执行不再变化', () => {
-    const files = {
-      'resources/styles/common.less': '.c-demo-default {\n  font-size: 14px;\n}\n',
-      'package/components/Default.vue': child('.c-demo-default', '  align-items: center;\n  gap: 4px;'),
-    }
-    const first = consolidateSubComponentClasses(files, { logger })
-    const second = consolidateSubComponentClasses(first, { logger })
-    expect(second['resources/styles/common.less']).toBe(first['resources/styles/common.less'])
-    expect(second['resources/styles/common.less']).toContain('display: flex')
-  })
-
-  it('无 flex 信号不注入 display（纯 block 布局保持原样）', () => {
-    const files = {
-      'resources/styles/common.less': '.c-demo-root {\n  width: 100%;\n}\n',
-      'package/components/Plain.vue': child('.c-demo-plain', '  width: 100%;\n  min-height: 0;'),
-    }
-    const out = consolidateSubComponentClasses(files, { logger })
-    const css = out['resources/styles/common.less']
-    // 无 flex 专属属性 → 不注入 display，保持 block
-    expect(css).not.toMatch(/\.c-demo-plain\s*\{[^}]*display/)
   })
 
   it('不迁移 @import 与变量声明', () => {
