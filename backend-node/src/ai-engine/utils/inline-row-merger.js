@@ -263,17 +263,68 @@ export function mergeInlineRowsIntoSections(layout, inlineRows, figmaData) {
 
   let keptSections = merged
   if (evidenceOf.length > 0) {
+    // 🛡️ 信息不丢失（2026-09-21 · c-device-monitor 实锤「device-grid 消失」）：
+    //   语义壳去重时，若语义壳携带结构化信息（gridColumns / items 数组 / role: content-grid）
+    //   而几何行只有扁平文本（collectSubtreeEvidence 把所有设备文本合并成一个字符串），
+    //   直接丢弃语义壳会导致 LLM 拿不到网格结构 → 产物只有背景图无设备列表。
+    //   治本：剔除语义壳前，将其结构化信息并入覆盖它的几何行 body。
+    const lostStructuralFacts = [] // { targetId, gridColumns, items, role }
     keptSections = merged.filter((s) => {
       if (!s || isGeometricSection(s)) return true
       const children = s.body && Array.isArray(s.body.children) ? s.body.children : null
       if (!children || children.length === 0) return true
       let hits = 0
+      let coveringEvidence = null
       for (const c of children) {
-        if (evidenceOf.some((ev) => childCoveredByEvidence(c, ev))) hits++
+        const matchedEv = evidenceOf.find((ev) => childCoveredByEvidence(c, ev))
+        if (matchedEv) {
+          hits++
+          if (!coveringEvidence) coveringEvidence = matchedEv
+        }
       }
       const coverage = hits / children.length
-      return !(hits > 0 && coverage >= SEMANTIC_SUPERSEDE_THRESHOLD)
+      const isSuperseded = hits > 0 && coverage >= SEMANTIC_SUPERSEDE_THRESHOLD
+      if (isSuperseded && coveringEvidence) {
+        // 语义壳被覆盖，检查是否携带结构化信息
+        const shellGridCols = Number(s.gridColumns ?? s.body?.gridColumns ?? NaN)
+        const shellItems = Array.isArray(s.body?.items) ? s.body.items : null
+        const shellRole = String(s.role || s.body?.role || '').trim()
+        const hasStructuralInfo =
+          (Number.isFinite(shellGridCols) && shellGridCols > 1) ||
+          (shellItems && shellItems.length > 0) ||
+          shellRole === 'content-grid'
+        if (hasStructuralInfo) {
+          // 收集结构化事实，待 filter 结束后并入对应几何行
+          lostStructuralFacts.push({
+            targetIds: coveringEvidence.ids,
+            gridColumns: Number.isFinite(shellGridCols) && shellGridCols > 1 ? Math.round(shellGridCols) : null,
+            items: shellItems,
+            role: shellRole || null,
+          })
+        }
+      }
+      return !isSuperseded
     })
+    // 并入结构化事实到覆盖它的几何行（在 keptSections + newBlocks 中查找）
+    if (lostStructuralFacts.length > 0) {
+      const allSections = [...keptSections, ...newBlocks]
+      for (const fact of lostStructuralFacts) {
+        // 找到覆盖它的几何行：其 id 在 fact.targetIds 中
+        const target = allSections.find((sec) => sec.id && fact.targetIds.has(sec.id))
+        if (!target || !target.body) continue
+        // 只补充，不覆盖：若几何行 body 已有 gridColumns/items 则跳过
+        if (fact.gridColumns && !(Number(target.body.gridColumns) > 1)) {
+          target.body.gridColumns = fact.gridColumns
+          target.gridColumns = fact.gridColumns
+        }
+        if (fact.items && (!Array.isArray(target.body.items) || target.body.items.length === 0)) {
+          target.body.items = fact.items
+        }
+        if (fact.role && !target.body.role) {
+          target.body.role = fact.role
+        }
+      }
+    }
   }
 
   // 有 figmaData：业务 section（带 _y）与 inline-row 按 y 升序统一重排。

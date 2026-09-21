@@ -444,3 +444,49 @@ describe('ensureStateRootFlexLayout（P-08 根布局几何注入）', () => {
     expect(ensureStateRootFlexLayout(vueNoDisplay, figmaIndex, '9:9999')).toBeNull()
   })
 })
+
+describe('#1 owner 文件缺失 → bg fail-closed（2026-09-20 · 9caed484 bg 挂错治本）', () => {
+  const indexVue = `<template>
+  <div class="c-env-monitor-root">
+    <div class="c-env-monitor-tabs-wrapper"><ChartSection /></div>
+  </div>
+</template>
+<script setup>
+import ChartSection from './components/ChartSection.vue'
+</script>`
+
+  // 用 type=chart（decideBaseName 确定返回 ChartSection），owner 名可预测，与脆弱命名无关。
+  const mk = (srcIds: string[]) => [
+    { id: '2:7889', type: 'chart', responsibility: '图表区', sourceNodeIds: srcIds },
+  ]
+  const figma = { id: 'r', name: 'root', children: [
+    { id: '2:7889', name: 'chart', children: [{ id: '2:7890', name: 'bg', type: 'RECTANGLE' }] },
+  ] }
+  const mapping = [
+    { assignedVarName: 'bg1', resourceFile: 'bg-7890.png', previewAnalysisRole: 'bg', downloadStatus: 'success', figmaNodeId: '2:7890', mountTarget: 'chart', bgRole: 'container' },
+  ]
+
+  it('owner 组件文件不存在 → bg 放弃挂载，不污染 index.vue', () => {
+    const files = {
+      // owner=ChartSection，但文件表里没有 ChartSection.vue（section 被合并/未生成）
+      'package/index.vue': indexVue,
+    }
+    const plan = buildResourceMountPlan(mk(['2:7889', '2:7890']), mapping, { figmaRoot: figma })
+    const r = mountPlannedResources(files, plan)
+    expect(r.mounted).toHaveLength(0) // 关键：owner 缺失 → 不强挂
+    expect(files['package/index.vue']).toBe(indexVue) // index.vue 零污染
+    expect(r.diagnostics.some((d) => d.reason === 'owner-file-missing-bg')).toBe(true)
+  })
+
+  it('owner 组件文件存在 → bg 正常挂载（不误伤）', () => {
+    const chartVue = `<template><div class="c-env-monitor-chart">chart</div></template>`
+    const files = {
+      'package/components/ChartSection.vue': chartVue,
+      'package/index.vue': indexVue,
+    }
+    const plan = buildResourceMountPlan(mk(['2:7889', '2:7890']), mapping, { figmaRoot: figma })
+    const r = mountPlannedResources(files, plan)
+    expect(r.mounted.length).toBeGreaterThanOrEqual(1)
+    expect(files['package/components/ChartSection.vue']).toContain('bg1')
+  })
+})

@@ -315,7 +315,20 @@ export function resolveVisionConfig(config = {}) {
       ? merged
       : { ...merged, providers: [], pickStrategy: merged.pickStrategy }
   const pooled = resolveProvider(poolConfig, primary, 'vision')
-  return pooled || primary
+  const result = pooled || primary
+
+  // 🛡️ 2026-09-19 空凭证拦截：model 有值但 apiKey 为空时，明确报错引导用户配置，
+  // 而非直接发起空凭证请求导致 401（401 错误信息晦涩，用户无从判断是凭证缺失还是配额耗尽）。
+  // 背景：resolveBindingToLegacy 降维可能产出 visionModel 有值但 visionApiKey 为空（用户只删了 key 没清 model），
+  // 或用户尚未在 Settings 保存过个人模型配置，providers 为空 + 主配置为空 → 空凭证。
+  if (result && result.model && !result.apiKey) {
+    throw new Error(
+      `视觉模型「${result.model}」未配置 API Key。` +
+      `请到「设置 - 模型配置」中添加视觉模型并保存（apiKey 不能为空），否则无法进行视觉分析（截图 / Figma 识别需要有效凭证）。`
+    )
+  }
+
+  return result
 }
 
 /**
@@ -380,7 +393,17 @@ export function resolveTextConfig(config = {}) {
       ? merged
       : { ...merged, providers: [], pickStrategy: merged.pickStrategy }
   const pooled = resolveProvider(poolConfig, primary, 'text')
-  return pooled || primary
+  const result = pooled || primary
+
+  // 🛡️ 2026-09-19 空凭证拦截：model 有值但 apiKey 为空时，明确报错引导用户配置。
+  if (result && result.model && !result.apiKey) {
+    throw new Error(
+      `文本模型「${result.model}」未配置 API Key。` +
+      `请到「设置 - 模型配置」中添加模型并保存（apiKey 不能为空）。`
+    )
+  }
+
+  return result
 }
 
 export default {

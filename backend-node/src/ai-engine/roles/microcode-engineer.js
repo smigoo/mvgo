@@ -33,7 +33,11 @@ import {
   buildSectionHeightsMap,
   buildSectionLayoutFacts,
   resolveSubComponentPlan,
+  alignSectionClasses,
 } from '../utils/figma-section-heights.js';
+import {
+  buildSelectorChildCounts,
+} from '../utils/figma-layout-facts.js';
 import {
   collectLeafSections,
   formatSectionTreeForPrompt,
@@ -826,6 +830,86 @@ export class MicrocodeEngineer extends BaseAgent {
                 Number(sec.itemCount) ||
                 (Array.isArray(sec.items) ? sec.items.length : 0);
               p += `   🚨 本 section 是 ${sec.type || 'list'}，含 ${n} 个同构 item。只生成 **1 个** 子组件文件（item 模板），用 \`v-for\` 渲染 ${n} 项。**禁止**拆成 DeviceCard1..${n} 或多个独立 .vue。\n`;
+
+              // 🛡️ 2026-09-20 ③ v-for 数据确定性注入（治 LLM 手工 iconMap 对位骰子）：
+              //   items[] 每项的深层确定性数据（文本真值/颜色/资源文件）直接写进 prompt，
+              //   LLM 模板引用 item.xxx、数据数组按此原样抄——比「N 个组件各自绑定」可靠一个数量级。
+              //   _vforData 由 repeated-section-collapser#enrichItemData 生成；
+              //   body.items（F1 回填的 vision 卡片语义）同样纳入。
+              const vforItems =
+                Array.isArray(sec.items) && sec.items.length > 0
+                  ? sec.items
+                  : Array.isArray(sec.body?.items)
+                    ? sec.body.items
+                    : [];
+              if (vforItems.length > 0) {
+                // 🛡️ bg 资源归属补充（2026-09-20）：vision 常只给 bgPlaceholder（card-bg-N）
+                //   而无 backgroundImage.src；用 resource-dom-mapping（bg 图 ↔ figmaNodeId）
+                //   按 item 的 sourceNodeIds ∩ mapping.figmaNodeId 唯一命中即取该 bg 图。
+                const rdm = Array.isArray(input?.resourceDomMapping)
+                  ? input.resourceDomMapping
+                  : [];
+                const bgForItem = (it) => {
+                  const direct = it?.backgroundImage?.src
+                    ? String(it.backgroundImage.src).split('/').pop()
+                    : null;
+                  if (direct) return direct;
+                  const srcIds = new Set(
+                    [
+                      ...(Array.isArray(it?.sourceNodeIds) ? it.sourceNodeIds : []),
+                      it?.figmaNodeId,
+                      it?.id,
+                    ]
+                      .filter(Boolean)
+                      .map(String),
+                  );
+                  if (srcIds.size === 0 || rdm.length === 0) return null;
+                  // ⚠️ 文件名取 resourceFile（mapping 的 name/fileName 常是无扩展名的 'bg'）
+                  const fileOf = (m) => {
+                    const base = String(m?.resourceFile || '').split('/').pop();
+                    if (/\.(png|svg|jpe?g)$/i.test(base)) return base;
+                    const nm = String(m?.fileName || m?.name || '');
+                    return /\.(png|svg|jpe?g)$/i.test(nm) ? nm : null;
+                  };
+                  const hits = rdm.filter(
+                    (m) =>
+                      m &&
+                      /^bg/i.test(String(fileOf(m) || '')) &&
+                      srcIds.has(String(m.figmaNodeId || m.nodeId || '')),
+                  );
+                  return hits.length === 1 ? fileOf(hits[0]) : null;
+                };
+                p += `   📊 v-for 数据数组（**共 ${vforItems.length} 项，必须原样照抄，禁止改值/换序/臆造**，模板用 item.xxx 引用）：\n`;
+                const rows = vforItems.slice(0, 12).map((it, idx) => {
+                  const d = it?._vforData || {};
+                  const texts = (d.texts || []).join('/');
+                  const colors = (d.textStyles || []).filter(Boolean).join('/');
+                  const bg = bgForItem(it);
+                  const iconFiles = (d.resourceFiles || []).filter((f) => /^icon/i.test(f));
+                  const files = [bg, ...iconFiles].filter(Boolean).join(',');
+                  const parts = [];
+                  if (texts) parts.push(`texts: ${texts}`);
+                  if (colors) parts.push(`colors: ${colors}`);
+                  if (files) parts.push(`files: ${files}`);
+                  return `      [${idx}] { ${parts.join(' | ')} }`;
+                });
+                p += rows.join('\n') + '\n';
+                p += `      ⚠️ 数组**顺序必须与上面 [0][1][2] 完全一致**；每项的颜色/文件属于该项自身（[0] 的 files 就是 [0] 的背景图与图标，不许跨项搬）。\n`;
+              }
+            } else {
+              // 🛡️ P1 文本真值输出（2026-09-20 · c3c3244f tabs 消失治本）：
+              //   非 listLike 的叶子（如 type=tabs）其 body.items 里可能带文本真值
+              //   （tabs 标签：一氧化碳/洞内照明/洞外光强/能见度），此前不在 v-for 分支
+              //   也不被任何分支消费 → LLM 拿不到 tab 文本 → do-not-invent 生效 → tabs DOM 消失。
+              //   这里把 body.items[].text 作为「必还原文本清单」注入 prompt。
+              const textItems = Array.isArray(sec.body?.items)
+                ? sec.body.items.filter((it) => it && typeof it.text === 'string' && it.text.trim())
+                : [];
+              if (textItems.length > 0) {
+                p += `   📝 文本真值（**必须全部原样还原，禁止遗漏/改字/臆造**）：${textItems
+                  .map((it) => it.text)
+                  .join(' / ')}\n`;
+              }
             }
 
             // 🎯 Phase 2 方案1: 显示该 section 的内部子组件
@@ -5859,7 +5943,21 @@ export class MicrocodeEngineer extends BaseAgent {
           return null;
         };
         const headerNode2 = findHeader2(rootNode2);
-        if (headerNode2) {
+        
+        // 🛡️ 2026-09-21 治本修复（c-device-monitor-bd796f8b 实锤）：
+        //   原逻辑只匹配文本内容，不判断标题节点在 Figma 树中的层级位置。
+        //   导致 section 内部的标题被误判为面板标题而剥离。
+        //   治本：判断 header 节点是否是根容器的直接子节点（面板标题），
+        //   还是在 section 内部（组件内部标题）。只有根容器的直接子节点才剥离。
+        let isPanelTitle = false;
+        if (headerNode2 && rootNode2?.children) {
+          // 检查 headerNode2 是否是根容器的直接子节点
+          isPanelTitle = rootNode2.children.some(
+            (child) => child === headerNode2 || child.id === headerNode2.id
+          );
+        }
+        
+        if (headerNode2 && isPanelTitle) {
           collectHeaderTexts2(headerNode2, headerTexts2);
           headerTexts2.sort((a, b) => a.x - b.x);
           titleText = headerTexts2[0]?.t || '';
@@ -6698,6 +6796,21 @@ export default declareInfo
             await import('../utils/text-trait-detector.js');
           this._verticalTextDetector = detectVerticalText;
         }
+        
+        // 🛡️ 2026-09-21 治本修复（c-device-monitor-bd796f8b 实锤）：
+        //   flex 过度注入根因：resource-mounter 规则⑤只看 CSS 属性名，不判断元素类型和子元素数量。
+        //   治本：从 Figma 节点树提取每个 CSS 选择器对应的子元素数量，传入 ctx.selectorChildCounts。
+        //   规则⑤根据子元素数量判断是否注入 flex（≤1 不加，≥2 加）。
+        const alignedSections = alignSectionClasses(
+          modelFiles,
+          layoutStructure,
+          { subComponentPlan: subPlan, generationInput },
+        );
+        const selectorChildCounts = buildSelectorChildCounts(
+          figmaNodeData,
+          alignedSections,
+        );
+        
         registerBuiltinFixRules(fixPipeline, this, {
           componentName,
           outputPath,
@@ -6719,6 +6832,8 @@ export default declareInfo
             layoutStructure,
             { subComponentPlan: subPlan, generationInput },
           ),
+          // 🛡️ 2026-09-21 治本修复：子元素数量映射（flex 注入判断依据）
+          selectorChildCounts,
           // 🛡️ R1-2：布局事实（fix-section-heights 规则②豁免依据，退役命名枚举）
           rootLayoutFacts,
           input: { subComponentPlan: subPlan, generationInput },
@@ -6830,7 +6945,11 @@ export default declareInfo
         backgroundBrightness,
         compDisplayName,
         figmaNodeData,
-        input?.designFacts?.nodeLayoutFacts || null,
+        // 🛡️ 2026-09-20 E2E 自测修复（mc-1789860203497 实锤）：此处原裸引用 `input`——
+        // execute(params) 作用域内并无 input 变量（generateCode 里的 input 是 generationInput），
+        // 落盘校验阶段直接 ReferenceError: input is not defined → 整任务 failed。
+        // 正确来源：generationInput.designFacts.nodeLayoutFacts（design-facts-compiler 产出）。
+        generationInput?.designFacts?.nodeLayoutFacts || null,
       );
 
       // 🛡️ 合并分块阶段自动修复记录（TAIL-GARBAGE 尾部垃圾剥离 / P1-4 坏文件隔离降级）。
@@ -6927,7 +7046,7 @@ export default declareInfo
       {
         const _healed = runPreWriteSelfHealing(
           finalTruthFiles,
-          { resourceDomMapping, outputPath, injectFn: injectResourceImports },
+          { resourceDomMapping, outputPath, injectFn: injectResourceImports, effectiveSections },
           { logger: this.logger },
         );
         finalTruthFiles = _healed.files;

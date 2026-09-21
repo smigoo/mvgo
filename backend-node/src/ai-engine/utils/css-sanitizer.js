@@ -841,7 +841,7 @@ export function ensureFlexDirectionInVueSfc(vueContent, logger, options = {}) {
 }
 
 /**
- * 只有这些属性出现、而规则里**没有** `display`，才能确定作者意图是 grid。
+ * 这些属性出现即可确定作者意图是 grid。
  * 刻意**不含** `gap` / `row-gap` / `column-gap`：它们在 flex 布局里同样合法，
  * 单凭 gap 无法区分意图（宁可不改，不可误改）。
  */
@@ -851,24 +851,26 @@ const GRID_INTENT_PROP_RX =
 /** 规则里是否已显式声明 display */
 const DISPLAY_PROP_RX = /\bdisplay\s*:/
 
+const DISPLAY_GRID_RX = /\bdisplay\s*:\s*(inline-)?grid\b/i
+
 /**
  * 🛡️ grid 布局确定性补全（治「多列网格塌成一列 / 内容溢出被裁」）。
  *
  * 背景（2026-09-14 实锤，`c-device-monitor-021848cc`）：LLM 常写出
  * `.c-x-device-grid { grid-template-columns: repeat(3, 1fr) }` 却**漏写 `display: grid`**。
- * 没有 `display: grid` 时 `grid-template-columns` 完全无效 —— 元素退回 `display: block`，
- * 12 个设备卡被渲染成 12 行纵向堆叠 → 高度远超容器 → 被宿主外壳 `overflow: hidden` 裁掉，
- * 视觉上表现为「整块内容凭空消失」，而所有代码门禁（L0-B）都**看不到**（CSS 合法、DOM 存在）。
+ * 没有 `display: grid` 时 `grid-template-columns` 完全无效 —— 元素退回 `display: block`。
  *
- * 存量扫描：8 个产物 / 18 条规则命中；且**零**「display 存在但不是 grid」的冲突案例
- * → 保守规则「仅当完全没有 display 时才补」即可覆盖 100% 观测场景，绝不覆盖作者显式意图。
+ * 缺口 2（2026-09-21 实锤，`c-device-monitor-4bc13256`）：P-12b 会在已有
+ * `grid-template-*` 的规则上再注入 `display:flex` → 浏览器忽略 grid 属性，12 卡挤成一行。
+ * 冲突时以 grid 为准：把非 grid 的 `display` 改写为 `display:grid`。
  *
  * 策略：
- * - 只处理「含 grid-template-* / grid-auto-*」且「完全没有 display」的叶子声明块。
- * - 插到匹配 `}` 之前；若前一条声明缺少结尾 `;` 自动补上（LESS/CSS 语法要求）。
- * - 幂等：补全后规则里已有 display，再跑一次不再插入。
+ * - 含 grid-template-* / grid-auto-* 且已是 display:grid → 不动。
+ * - 含 grid 意图但 display 不是 grid（含 flex）→ 改写为 display:grid。
+ * - 含 grid 意图且完全没有 display → 补 display:grid。
+ * - 幂等。
  *
- * 挂载点：microcode 写盘 sanitize 链（SFC `<style>` 块 + 独立 .less/.css）。
+ * 挂载点：microcode 写盘 sanitize 链 + CodeFixPipeline POLISH（P-12b 之后）。
  *
  * @param {string} cssContent CSS/LESS 文本（纯样式内容，非 Vue SFC）
  * @param {object} [logger] 可选日志对象
@@ -878,28 +880,50 @@ export function ensureGridDisplay(cssContent, logger) {
   if (!cssContent || typeof cssContent !== 'string') return cssContent
   if (!GRID_INTENT_PROP_RX.test(cssContent)) return cssContent
 
-  const positions = []
+  const inserts = []
+  const rewrites = []
   for (const b of scanLeafDeclarationBlocks(cssContent)) {
     if (!GRID_INTENT_PROP_RX.test(b.inner)) continue
-    if (DISPLAY_PROP_RX.test(b.inner)) continue // 已有显式 display：不覆盖作者意图
-    positions.push(b.end)
+    if (DISPLAY_GRID_RX.test(b.inner)) continue
+    if (DISPLAY_PROP_RX.test(b.inner)) {
+      rewrites.push({
+        start: b.start + 1,
+        end: b.end,
+        text: b.inner.replace(/\bdisplay\s*:\s*[^;{}]+/i, 'display: grid'),
+      })
+    } else {
+      inserts.push(b.end)
+    }
   }
-  if (positions.length === 0) return cssContent
+  if (inserts.length === 0 && rewrites.length === 0) return cssContent
 
   let result = cssContent
-  // 从后往前应用，避免索引漂移
-  for (const pos of positions.sort((a, b) => b - a)) {
-    const before = result.slice(0, pos)
-    // 吃掉 `}` 前原有的空白/换行，统一只留一个换行，避免插入后多出空行
-    const trimmed = before.replace(/\s+$/, '')
-    // 前一条声明没有结尾 `;`（单行压缩写法）时必须先补 `;`，否则两条声明会粘在一起
-    const needSemi = trimmed && !/[;{}]$/.test(trimmed) ? ';' : ''
-    result = `${trimmed}${needSemi}\n  display: grid;` + result.slice(pos)
+  const edits = [
+    ...rewrites.map((e) => ({ pos: e.start, ...e })),
+    ...inserts.map((pos) => ({ pos, type: 'insert' })),
+  ].sort((a, b) => b.pos - a.pos)
+
+  for (const e of edits) {
+    if (e.type === 'insert') {
+      const before = result.slice(0, e.pos)
+      const trimmed = before.replace(/\s+$/, '')
+      const needSemi = trimmed && !/[;{}]$/.test(trimmed) ? ';' : ''
+      result = `${trimmed}${needSemi}\n  display: grid;` + result.slice(e.pos)
+    } else {
+      result = result.slice(0, e.start) + e.text + result.slice(e.end)
+    }
   }
 
-  logger?.warn?.(
-    `🛡️ 已为 ${positions.length} 个含 grid-template-* 但缺 display 的规则补全 display: grid（防多列网格塌成一列被裁）`,
-  )
+  if (rewrites.length > 0) {
+    logger?.warn?.(
+      `🛡️ 已将 ${rewrites.length} 个「grid-template-* + 非 grid display」冲突规则改写为 display: grid`,
+    )
+  }
+  if (inserts.length > 0) {
+    logger?.warn?.(
+      `🛡️ 已为 ${inserts.length} 个含 grid-template-* 但缺 display 的规则补全 display: grid（防多列网格塌成一列被裁）`,
+    )
+  }
   return result
 }
 

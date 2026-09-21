@@ -2096,7 +2096,10 @@ export function ensureFlexLayoutForSiblings(code) {
   }
 
   // 检测每个 class 的选择器在 style 中的声明
-  const classDecls = new Map(); // className -> { hasDisplay, hasAlignItems, hasGap }
+  // 缺口 2：已有 grid-template-* 的规则是 grid 意图，P-12b 不得再灌 flex
+  const GRID_TEMPLATE_RX =
+    /\b(?:grid-template-columns|grid-template-rows|grid-template-areas|grid-auto-flow|grid-auto-columns|grid-auto-rows)\s*:/i;
+  const classDecls = new Map(); // className -> { hasDisplay, hasAlignItems, hasGap, hasGridTemplate }
   const declRe = /\.([A-Za-z_][\w-]*)\s*\{([^{}]*)\}/g;
   while ((m = declRe.exec(styleContent)) !== null) {
     const cls = m[1];
@@ -2105,6 +2108,7 @@ export function ensureFlexLayoutForSiblings(code) {
       hasDisplay: /display\s*:\s*flex/i.test(decls),
       hasAlignItems: /align-items/i.test(decls),
       hasGap: /gap/i.test(decls),
+      hasGridTemplate: GRID_TEMPLATE_RX.test(decls),
     });
   }
 
@@ -2117,7 +2121,7 @@ export function ensureFlexLayoutForSiblings(code) {
     const parentClasses = parent.classes;
     for (const cls of parentClasses) {
       const decl = classDecls.get(cls);
-      if (decl && !decl.hasDisplay) {
+      if (decl && !decl.hasDisplay && !decl.hasGridTemplate) {
         needsFlex.add(cls);
       }
     }

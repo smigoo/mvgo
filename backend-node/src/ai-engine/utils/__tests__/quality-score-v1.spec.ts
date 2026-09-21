@@ -27,16 +27,16 @@ describe('computeSpecScore', () => {
     expect(computeSpecScore({ blockCount: 1, warnCount: 0 }).score).toBe(79);
   });
 
-  it('仅 WARN 扣 5', () => {
-    expect(computeSpecScore({ blockCount: 0, warnCount: 1 }).score).toBe(95);
+  it('仅 WARN 扣 3', () => {
+    expect(computeSpecScore({ blockCount: 0, warnCount: 1 }).score).toBe(97);
   });
 
-  it('1 BLOCK + 1 WARN = 75', () => {
-    expect(computeSpecScore({ blockCount: 1, warnCount: 1 }).score).toBe(75);
+  it('1 BLOCK + 1 WARN = 79（硬顶）', () => {
+    expect(computeSpecScore({ blockCount: 1, warnCount: 1 }).score).toBe(79);
   });
 
   it('扣到 0 封底', () => {
-    expect(computeSpecScore({ blockCount: 5, warnCount: 5 }).score).toBe(0);
+    expect(computeSpecScore({ blockCount: 5, warnCount: 5 }).score).toBe(45);
   });
 
   it('可从 issues 计数', () => {
@@ -48,7 +48,7 @@ describe('computeSpecScore', () => {
     });
     expect(r.blockCount).toBe(1);
     expect(r.warnCount).toBe(1);
-    expect(r.score).toBe(75);
+    expect(r.score).toBe(79);
   });
 });
 

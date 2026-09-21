@@ -489,6 +489,101 @@ export function injectBgStyleBinding(content, tag, varName, mapping = null) {
 }
 
 /**
+ * 🛡️ 确定性修复（2026-09-21）：**移除从空 defineProps 解构资源变量的无效声明**。
+ *
+ * 事故 c-env-monitor-45e45542：LLM 在 TabsIcon.vue 生成：
+ * ```js
+ * const props = defineProps({})
+ * const { icon2, icon3 } = props
+ * ```
+ * 后果链：
+ * 1. `collectDeclaredBindings` 把 `{ icon2, icon3 }` 识别为"已声明"（解构）
+ * 2. `ensureResourceImportInVue` 撞名复核命中 → 跳过 import 注入
+ * 3. 运行时 `props.icon2` = undefined（defineProps 是空的）→ 图标不显示
+ *
+ * 本函数检测并移除这种无效模式：
+ * - `const { ...资源变量... } = props`（或 `= defineProps(...)`）
+ * - 且 defineProps 的参数对象不包含这些变量
+ *
+ * 移除后，`collectDeclaredBindings` 不再识别这些变量为已声明，
+ * 正常 import 注入流程（ensureResourceImportsForRefs）接管。
+ *
+ * @param {string} code Vue SFC 内容
+ * @returns {string} 修复后的内容
+ */
+export function fixBrokenPropsDestructuring(code) {
+  if (typeof code !== 'string' || code.length === 0) return code;
+
+  // 提取 <script setup> 块
+  const scriptMatch = code.match(/<script\s+setup[^>]*>([\s\S]*?)<\/script>/);
+  if (!scriptMatch) return code;
+
+  const scriptContent = scriptMatch[1];
+  let fixedScript = scriptContent;
+
+  // 检测 defineProps 的参数（支持对象和泛型两种形式）
+  const definePropsArgs = new Set();
+  // 形式1: defineProps({ icon1: { type: String }, icon2: String })
+  for (const m of scriptContent.matchAll(/defineProps\s*\(\s*\{([^}]*)\}\s*\)/g)) {
+    const args = m[1];
+    for (const part of args.split(',')) {
+      const name = part.trim().split(':')[0]?.trim().replace(/\?$/, '');
+      if (name) definePropsArgs.add(name);
+    }
+  }
+  // 形式2: defineProps<{ icon1: string; icon2: string }>()
+  for (const m of scriptContent.matchAll(/defineProps\s*<\s*\{([^}]*)\}\s*>\s*\(\s*\)/g)) {
+    const args = m[1];
+    for (const part of args.split(/[;,]/)) {
+      const name = part.trim().split(':')[0]?.trim().replace(/\?$/, '');
+      if (name) definePropsArgs.add(name);
+    }
+  }
+
+  // 检测并移除无效的资源变量解构
+  // 模式: const { icon2, icon3 } = props 或 const { icon2, icon3 } = defineProps(...)
+  const destructureRe = /const\s+\{([^}]+)\}\s*=\s*(?:props|defineProps\s*\([^)]*\))/g;
+  for (const m of fixedScript.matchAll(destructureRe)) {
+    const destructuredVars = m[1].split(',').map(s => s.trim()).filter(Boolean);
+    // 检查这些变量是否都是资源变量（bgN/iconN/imgN 模式）
+    const resourceVars = destructuredVars.filter(v => /^(bg|icon|img)\d+$/i.test(v));
+    if (resourceVars.length === 0) continue;
+
+    // 检查这些变量是否真的在 defineProps 中声明
+    const allDeclared = resourceVars.every(v => definePropsArgs.has(v));
+    if (allDeclared) continue; // 合法声明，保留
+
+    // 部分或全部未声明 → 移除整个解构语句
+    // 保留非资源变量（如果有）
+    const nonResourceVars = destructuredVars.filter(v => !/^(bg|icon|img)\d+$/i.test(v));
+    if (nonResourceVars.length > 0) {
+      // 替换为只包含非资源变量的解构
+      fixedScript = fixedScript.replace(m[0], `const { ${nonResourceVars.join(', ')} } = props`);
+    } else {
+      // 全部是无效资源变量，移除整行
+      fixedScript = fixedScript.replace(m[0], '');
+    }
+  }
+
+  // 同时移除孤立的 `const props = defineProps({})`（如果 defineProps 为空且 props 未被使用）
+  if (definePropsArgs.size === 0) {
+    // 检查 props 是否在模板或 script 中被使用（排除解构语句本身）
+    const propsUsage = fixedScript.replace(/const\s+\{[^}]*\}\s*=\s*props/g, '');
+    const propsReferenced = /\bprops\b/.test(propsUsage);
+    if (!propsReferenced) {
+      fixedScript = fixedScript.replace(/const\s+props\s*=\s*defineProps\s*\(\s*\{\s*\}\s*\)\s*;?\s*/g, '');
+    }
+  }
+
+  if (fixedScript === scriptContent) return code;
+
+  // 清理多余空行
+  fixedScript = fixedScript.replace(/\n\s*\n\s*\n/g, '\n\n');
+
+  return code.replace(/<script\s+setup[^>]*>[\s\S]*?<\/script>/, `<script setup>${fixedScript}</script>`);
+}
+
+/**
  * 🛡️ P1.7（2026-09-11）：**引用驱动的资源 import 补齐**（治本 13890774 `icon4 is not defined`）。
  *
  * 旧注入只认「模板里可识别的使用形态」（`${var}` / `:src`），而模型常把资源变量用在
@@ -497,6 +592,8 @@ export function injectBgStyleBinding(content, tag, varName, mapping = null) {
  *
  * 本函数以「引用采集（模板 + script，单一实现 utils/resource-facts）」为准，
  * 对每个「被引用但未 import 且事实源有该变量」的项，按 mapping 的文件补齐 import。
+ *
+ * 🛡️ 2026-09-21：先执行 fixBrokenPropsDestructuring 移除无效解构，避免撞名复核误判。
  *
  * @param {Object<string,string>} files 产物文件表
  * @param {Array} resourceDomMapping 资源映射（含 assignedVarName / resourceFile）
@@ -521,7 +618,8 @@ export function ensureResourceImportsForRefs(files = {}, resourceDomMapping = []
 
   for (const [p, c] of Object.entries(out)) {
     if (!/\.vue$/i.test(p) || typeof c !== 'string') continue;
-    let updated = c;
+    // 🛡️ 2026-09-21：先移除无效的资源变量解构，避免撞名复核误判
+    let updated = fixBrokenPropsDestructuring(c);
     const refs = collectResourceVarRefsFromSfc(updated);
     for (const varName of refs.all) {
       if (new RegExp(`import\\s+${varName}\\s+from`).test(updated)) continue;
@@ -2316,11 +2414,46 @@ export function fixSectionHeightsForResource(content, ctx, options = {}) {
       // display:flex → 这些属性被浏览器忽略 → 子元素 block 纵向堆叠（「内部页应该 display 却没有」）。
       // 兜底：出现任意 flex 专属属性就说明意图是 flex 布局，缺 display 时补 display:flex；
       // 已有 flex-direction 则保留（只补 display），否则默认补 row（内容多数横向）。
-      const hasFlexGrow = /flex\s*:\s*\d+(?:\.\d+)?\s+1\s+0\b/.test(body);
+      //
+      // 🛡️ 2026-09-20 E2E 自测修复（mc-1789860683527 实锤）：原正则 `(?:…|gap|…)\s*:`
+      //   无词首边界，把 Less **变量定义** `@gap: 12px;`（theme-vars.less 的 .common() mixin）
+      //   误判为 CSS `gap:` 属性 → 给 mixin 注入 `display: flex; flex-direction: row;`
+      //   → mixin 体内出现裸 CSS 属性 → LESS 编译 "Properties must be inside selector
+      //   blocks" → 整任务被最终 LESS 门禁 BLOCK。
+      //   修复①：正则加 `(^|[^@\w-])` 前置边界——`@gap:`/`-gap:`/`xgap:` 均不命中，仅裸 CSS 属性命中。
+      //   修复②：mixin 定义块（head 含 `.xxx()`）整体跳过——mixin 内只有 Less 变量，不是渲染规则。
+      const isMixinBlock = /\.[A-Za-z][\w-]*\([^)]*\)\s*$/.test(String(head).trim());
+      if (isMixinBlock) {
+        return whole;
+      }
+      
+      // 🛡️ 2026-09-21 治本修复（c-device-monitor-bd796f8b 实锤）：
+      //   原逻辑只看 CSS 属性名就强制补 display:flex，不判断元素类型和子元素数量。
+      //   导致叶子节点（img/span/单图标 wrapper）被注入 flex → 浏览器忽略无效属性。
+      //   治本：从 Figma 节点树提取每个 CSS 选择器对应的子元素数量，
+      //   子元素 ≤1 不加 flex（叶子节点或单元素容器），≥2 才注入 flex。
+      const childCounts = ctx?.selectorChildCounts || null;
+      let childCount = null;
+      if (childCounts) {
+        for (const m of String(head).matchAll(/\.([A-Za-z][\w-]*)/g)) {
+          if (childCounts[m[1]] !== undefined) {
+            childCount = childCounts[m[1]];
+            break;
+          }
+        }
+      }
+      
+      const hasFlexGrow = /(?:^|[^@\w-])flex\s*:\s*\d+(?:\.\d+)?\s+1\s+0\b/.test(body);
       const hasFlexOnly =
-        /(?:flex-direction|align-items|justify-content|align-content|gap|flex-wrap)\s*:/.test(
+        /(?:^|[^@\w-])(?:flex-direction|align-items|justify-content|align-content|gap|flex-wrap)\s*:/.test(
           body,
         );
+      
+      // 子元素 ≤1 不加 flex（叶子节点或单元素容器）
+      if (childCount !== null && childCount <= 1) {
+        return whole;
+      }
+      
       if ((hasFlexGrow || hasFlexOnly) && !/display\s*:/i.test(body)) {
         if (/flex-direction\s*:/.test(body)) {
           newBody = `\n  display: flex;${body}`;

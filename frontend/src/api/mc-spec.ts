@@ -229,6 +229,23 @@ export async function readQualityV1(componentId: string): Promise<QualityScoreV1
   return (data?.result || data) as QualityScoreV1Result
 }
 
+/** 自动修复质量评分中的可修复问题（**仅管理员**） */
+export async function fixQualityIssues(componentId: string): Promise<{
+  componentId: string
+  fixed: Array<{ file: string; rule: string; removed?: number }>
+  summary: { code008: number; themeVarMismatch: number }
+  newQuality: QualityScoreV1
+}> {
+  const res: any = await http.post('/api/mc-spec/quality-fix', { componentId })
+  const data = unwrap(res) ?? res
+  if (data && data.success === false) {
+    const err: any = new Error(data.message || '自动修复失败')
+    err.data = { message: err.message }
+    throw err
+  }
+  return (data?.result || data) as any
+}
+
 /** 卸载自定义 skill（**仅管理员**，内置不可删） */
 export async function removeMcSpecSkill(skillId: string): Promise<void> {
   const res: any = await http.delete(`/api/mc-spec/skills/${encodeURIComponent(skillId)}`)

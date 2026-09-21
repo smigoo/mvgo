@@ -10,8 +10,8 @@ import { existsSync, readdirSync, readFileSync, writeFileSync, statSync } from '
 import { join, relative, extname } from 'path'
 
 export const QUALITY_SCORE_V1_VERSION = 'v1'
-export const SPEC_BLOCK_PENALTY = 20
-export const SPEC_WARN_PENALTY = 5
+export const SPEC_BLOCK_PENALTY = 8
+export const SPEC_WARN_PENALTY = 3
 export const STYLE_COVERAGE_CAP = 60
 export const STYLE_COVERAGE_THRESHOLD = 0.4
 
@@ -35,7 +35,7 @@ export function clampScore(n) {
 }
 
 /**
- * specScore = clamp(0,100, 100 - 20×BLOCK - 5×WARN)
+ * specScore = clamp(0,100, 100 - 8×BLOCK - 3×WARN)
  * 有 BLOCK 时硬顶 79（不允许带阻断项显示为「良好」）。
  */
 export function computeSpecScore(l0b = {}) {
@@ -207,7 +207,9 @@ export function extractExpectedStyleLiterals(figmaNodeData) {
     }
     if (typeof node.style?.fontSize === 'number') fonts.push(`${node.style.fontSize}px`)
     if (typeof node.cornerRadius === 'number' && node.cornerRadius > 0) {
-      radii.push(`${node.cornerRadius}px`)
+      // 四舍五入到整数，避免浮点精度问题（如 1.7600001096725464 → 2）
+      const rounded = Math.round(node.cornerRadius)
+      if (rounded > 0) radii.push(`${rounded}px`)
     }
     if (Array.isArray(kids)) {
       for (const child of kids.slice(0, 80)) walk(child, depth + 1, childMaskCtx)
@@ -220,6 +222,183 @@ export function extractExpectedStyleLiterals(figmaNodeData) {
     font: uniqueStrings(fonts),
     radius: uniqueStrings(radii),
   }
+}
+
+/**
+ * 从 Figma 节点提取结构信息（布局类型、对齐方式、层级深度）
+ */
+export function extractExpectedStructure(figmaNodeData) {
+  const layouts = [] // flex/grid/none
+  const alignments = [] // align-items/justify-content
+  let maxDepth = 0
+  let nodeCount = 0
+  const root = figmaNodeData?.document || figmaNodeData
+  if (!root || typeof root !== 'object') {
+    return { layouts: [], alignments: [], maxDepth: 0, nodeCount: 0 }
+  }
+  const walk = (node, depth) => {
+    if (!node || typeof node !== 'object' || depth > 12) return
+    nodeCount++
+    if (depth > maxDepth) maxDepth = depth
+    const kids = Array.isArray(node.children)
+      ? node.children
+      : Array.isArray(node.document?.children)
+        ? node.document.children
+        : []
+    // 布局类型
+    const layoutMode = node.layoutMode
+    if (layoutMode === 'HORIZONTAL' || layoutMode === 'VERTICAL') {
+      layouts.push('flex')
+      // 对齐方式
+      const primary = node.primaryAxisAlignItems
+      const counter = node.counterAxisAlignItems
+      if (primary) {
+        const justifyMap = {
+          MIN: 'flex-start',
+          MAX: 'flex-end',
+          CENTER: 'center',
+          SPACE_BETWEEN: 'space-between',
+        }
+        alignments.push(`justify-content:${justifyMap[primary] || primary}`)
+      }
+      if (counter) {
+        const alignMap = {
+          MIN: 'flex-start',
+          MAX: 'flex-end',
+          CENTER: 'center',
+          BASELINE: 'baseline',
+        }
+        alignments.push(`align-items:${alignMap[counter] || counter}`)
+      }
+    } else if (layoutMode === 'GRID') {
+      layouts.push('grid')
+    } else if (kids.length > 1) {
+      // 多子节点但无 layoutMode，可能是绝对定位或无布局
+      layouts.push('none')
+    }
+    if (Array.isArray(kids)) {
+      for (const child of kids.slice(0, 80)) walk(child, depth + 1)
+    }
+  }
+  walk(root, 0)
+  return {
+    layouts: uniqueStrings(layouts),
+    alignments: uniqueStrings(alignments),
+    maxDepth,
+    nodeCount,
+  }
+}
+
+/**
+ * 从产物 CSS 提取结构信息
+ */
+export function extractActualStructure(files = []) {
+  const layouts = []
+  const alignments = []
+  let maxDepth = 0
+  let nodeCount = 0
+  const displayRe = /display\s*:\s*(flex|grid|block|inline-flex|inline-grid)/gi
+  const justifyRe = /justify-content\s*:\s*(flex-start|flex-end|center|space-between|space-around|space-evenly)/gi
+  const alignRe = /align-items\s*:\s*(flex-start|flex-end|center|baseline|stretch)/gi
+  const templateRe = /<template>([\s\S]*?)<\/template>/i
+  for (const f of files) {
+    const content = String(f?.content || '')
+    // 提取模板计算层级深度和节点数
+    const tplMatch = content.match(templateRe)
+    if (tplMatch) {
+      const tpl = tplMatch[1]
+      // 简单统计标签嵌套深度（非精确，但可用于比较）
+      let depth = 0
+      let maxD = 0
+      const tagRe = /<\/?([a-z][\w-]*)/gi
+      let m
+      while ((m = tagRe.exec(tpl))) {
+        if (m[0].startsWith('</')) {
+          depth--
+        } else {
+          depth++
+          if (depth > maxD) maxD = depth
+          nodeCount++
+        }
+      }
+      if (maxD > maxDepth) maxDepth = maxD
+    }
+    // 提取布局类型
+    let m
+    while ((m = displayRe.exec(content))) {
+      layouts.push(m[1])
+    }
+    while ((m = justifyRe.exec(content))) {
+      alignments.push(`justify-content:${m[1]}`)
+    }
+    while ((m = alignRe.exec(content))) {
+      alignments.push(`align-items:${m[1]}`)
+    }
+  }
+  return {
+    layouts: uniqueStrings(layouts),
+    alignments: uniqueStrings(alignments),
+    maxDepth,
+    nodeCount,
+  }
+}
+
+/**
+ * 结构维度评分：比较布局类型、对齐方式、层级深度、节点数量比例
+ */
+function scoreStructure(expected, actual) {
+  if (!expected || typeof expected !== 'object') {
+    return { scored: false, score: null, details: {} }
+  }
+  const details = {}
+  let totalScore = 0
+  let scoredDims = 0
+  // 布局类型匹配（flex/grid/none）
+  const expLayouts = new Set(expected.layouts || [])
+  const actLayouts = new Set(actual?.layouts || [])
+  if (expLayouts.size > 0) {
+    let layoutMatch = 0
+    for (const l of expLayouts) {
+      if (actLayouts.has(l)) layoutMatch++
+    }
+    const layoutRatio = layoutMatch / expLayouts.size
+    details.layout = { expected: expLayouts.size, matched: layoutMatch, ratio: layoutRatio }
+    totalScore += layoutRatio * 100
+    scoredDims++
+  }
+  // 对齐方式匹配
+  const expAligns = new Set(expected.alignments || [])
+  const actAligns = new Set(actual?.alignments || [])
+  if (expAligns.size > 0) {
+    let alignMatch = 0
+    for (const a of expAligns) {
+      if (actAligns.has(a)) alignMatch++
+    }
+    const alignRatio = alignMatch / expAligns.size
+    details.alignment = { expected: expAligns.size, matched: alignMatch, ratio: alignRatio }
+    totalScore += alignRatio * 100
+    scoredDims++
+  }
+  // 层级深度比较（允许 ±2 层误差）
+  if (expected.maxDepth > 0) {
+    const depthDiff = Math.abs((actual?.maxDepth || 0) - expected.maxDepth)
+    const depthRatio = Math.max(0, 1 - depthDiff / 5) // 每差 1 层扣 20%
+    details.depth = { expected: expected.maxDepth, actual: actual?.maxDepth || 0, ratio: depthRatio }
+    totalScore += depthRatio * 100
+    scoredDims++
+  }
+  // 节点数量比例（允许 ±30% 误差）
+  if (expected.nodeCount > 0) {
+    const nodeRatio = Math.min(1, (actual?.nodeCount || 0) / expected.nodeCount)
+    details.nodes = { expected: expected.nodeCount, actual: actual?.nodeCount || 0, ratio: nodeRatio }
+    totalScore += nodeRatio * 100
+    scoredDims++
+  }
+  if (scoredDims === 0) {
+    return { scored: false, score: null, details }
+  }
+  const score = clampScore(totalScore / scoredDims)
+  return { scored: true, score, details }
 }
 
 function scoreDimension(expected, actual, kind) {
@@ -243,7 +422,7 @@ function scoreDimension(expected, actual, kind) {
 }
 
 /**
- * 四维等权：color / spacing / font / radius。
+ * 五维等权：color / spacing / font / radius / structure。
  * 无任何期望 → null（不是 0，也不是 100）。
  * 某维无期望 → unscored，不进平均。
  */
@@ -257,13 +436,17 @@ export function computeStyleScore(expected, actual) {
     font: scoreDimension(expected.font, actual?.font, 'px'),
     radius: scoreDimension(expected.radius, actual?.radius, 'px'),
   }
+  // 结构维度单独处理（需要结构提取结果）
+  if (expected.structure || actual?.structure) {
+    dims.structure = scoreStructure(expected.structure, actual?.structure)
+  }
   const scored = Object.values(dims).filter((d) => d.scored)
   if (scored.length === 0) {
     return { score: null, reason: 'no-expected', coverage: 0, dimensions: dims, diffs: [] }
   }
   const avg = scored.reduce((s, d) => s + d.score, 0) / scored.length
-  const expectedTotal = scored.reduce((s, d) => s + d.expected, 0)
-  const matchedTotal = scored.reduce((s, d) => s + d.matched, 0)
+  const expectedTotal = scored.reduce((s, d) => s + (d.expected || 0), 0)
+  const matchedTotal = scored.reduce((s, d) => s + (d.matched || 0), 0)
   const coverage = expectedTotal ? matchedTotal / expectedTotal : 0
   let score = clampScore(avg)
   if (coverage < STYLE_COVERAGE_THRESHOLD) score = Math.min(score, STYLE_COVERAGE_CAP)
@@ -423,8 +606,13 @@ export async function scoreComponentDir(componentDir, opts = {}) {
 
   const spec = computeSpecScore(l0b)
   const figma = opts.figmaNodeData || findFigmaNodeData(componentDir)
-  const expected = extractExpectedStyleLiterals(figma)
-  const actual = extractDeclaredStyleLiterals(files)
+  const expectedStyle = extractExpectedStyleLiterals(figma)
+  const expectedStructure = extractExpectedStructure(figma)
+  const actualStyle = extractDeclaredStyleLiterals(files)
+  const actualStructure = extractActualStructure(files)
+  // 合并样式和结构到 expected/actual 对象
+  const expected = { ...expectedStyle, structure: expectedStructure }
+  const actual = { ...actualStyle, structure: actualStructure }
   const style = computeStyleScore(expected, actual)
 
   const quality = {

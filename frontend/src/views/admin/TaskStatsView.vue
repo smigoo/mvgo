@@ -155,46 +155,46 @@
                 <line v-for="(tick, i) in dashboardTrendTicks" :key="'grid-'+i" 
                       :x1="trendChartPadding" :y1="tick.y" 
                       :x2="trendChartWidth - trendChartPadding" :y2="tick.y" 
-                      stroke="#f0f0f0" stroke-width="1"/>
+                      class="ts-chart-grid"/>
                 <!-- 80% 参考线 -->
                 <line :x1="trendChartPadding" :y1="trendChartPadding + (trendChartHeight - 2 * trendChartPadding) * 0.2" 
                       :x2="trendChartWidth - trendChartPadding" :y2="trendChartPadding + (trendChartHeight - 2 * trendChartPadding) * 0.2" 
-                      stroke="#52c41a" stroke-width="1" stroke-dasharray="4,4" opacity="0.5"/>
+                      class="ts-chart-ref-line"/>
                 <text :x="trendChartWidth - trendChartPadding + 5" 
                       :y="trendChartPadding + (trendChartHeight - 2 * trendChartPadding) * 0.2 + 4" 
-                      font-size="10" fill="#52c41a">80%</text>
+                      font-size="10" class="ts-chart-ref-text">80%</text>
                 <!-- Y 轴 -->
                 <line :x1="trendChartPadding" :y1="trendChartPadding" 
                       :x2="trendChartPadding" :y2="trendChartHeight - trendChartPadding" 
-                      stroke="#d9d9d9" stroke-width="1"/>
+                      class="ts-chart-axis"/>
                 <!-- X 轴 -->
                 <line :x1="trendChartPadding" :y1="trendChartHeight - trendChartPadding" 
                       :x2="trendChartWidth - trendChartPadding" :y2="trendChartHeight - trendChartPadding" 
-                      stroke="#d9d9d9" stroke-width="1"/>
+                      class="ts-chart-axis"/>
                 <!-- Y 轴刻度 -->
                 <text v-for="(tick, i) in dashboardTrendTicks" :key="'y-'+i" 
                       :x="trendChartPadding - 8" :y="tick.y + 4" 
-                      text-anchor="end" font-size="11" fill="#666">{{ tick.label }}</text>
+                      text-anchor="end" font-size="11" class="ts-chart-label">{{ tick.label }}</text>
                 <!-- 面积填充 -->
                 <polygon :points="dashboardTrendAreaPoints" fill="url(#dashboardTrendGradient)" opacity="0.3"/>
                 <!-- 折线 -->
                 <polyline :points="dashboardTrendLinePoints" fill="none" 
-                          stroke="#1890ff" stroke-width="2.5" stroke-linejoin="round"/>
+                          class="ts-chart-line"/>
                 <!-- 数据点 -->
                 <circle v-for="(point, i) in dashboardTrendPoints" :key="'p-'+i" 
                         :cx="point.x" :cy="point.y" r="4" 
-                        fill="#fff" stroke="#1890ff" stroke-width="2">
+                        class="ts-chart-dot">
                   <title>{{ point.tooltip }}</title>
                 </circle>
                 <!-- X 轴标签 -->
                 <text v-for="(point, i) in dashboardTrendPoints.filter((_, idx) => idx % Math.ceil(dashboard.trends.length / 8) === 0)" 
                       :key="'x-'+i" :x="point.x" :y="trendChartHeight - trendChartPadding + 18" 
-                      text-anchor="middle" font-size="11" fill="#666">{{ point.dateLabel }}</text>
+                      text-anchor="middle" font-size="11" class="ts-chart-label">{{ point.dateLabel }}</text>
                 <!-- 渐变定义 -->
                 <defs>
                   <linearGradient id="dashboardTrendGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stop-color="#1890ff" stop-opacity="0.4"/>
-                    <stop offset="100%" stop-color="#1890ff" stop-opacity="0"/>
+                    <stop offset="0%" stop-color="var(--brand)" stop-opacity="0.4"/>
+                    <stop offset="100%" stop-color="var(--brand)" stop-opacity="0"/>
                   </linearGradient>
                 </defs>
               </svg>
@@ -554,18 +554,18 @@
           <div v-else class="ts-trend-chart">
             <svg :viewBox="`0 0 ${chartWidth} ${chartHeight}`" class="ts-trend-svg">
               <!-- 背景网格 -->
-              <line v-for="(tick, i) in yTicks" :key="'grid-'+i" :x1="chartPadding" :y1="tick.y" :x2="chartWidth - chartPadding" :y2="tick.y" stroke="#f0f0f0" stroke-width="1"/>
+              <line v-for="(tick, i) in yTicks" :key="'grid-'+i" :x1="chartPadding" :y1="tick.y" :x2="chartWidth - chartPadding" :y2="tick.y" class="ts-chart-grid"/>
               <!-- 80% 参考线（成功率时显示） -->
               <template v-if="trendMetric === 'successRate' && yMax <= 1">
-                <line :x1="chartPadding" :y1="chartPadding + (chartHeight - 2 * chartPadding) * (1 - 0.8)" :x2="chartWidth - chartPadding" :y2="chartPadding + (chartHeight - 2 * chartPadding) * (1 - 0.8)" stroke="#52c41a" stroke-width="1" stroke-dasharray="4,4" opacity="0.5"/>
-                <text :x="chartWidth - chartPadding + 5" :y="chartPadding + (chartHeight - 2 * chartPadding) * (1 - 0.8) + 4" font-size="10" fill="#52c41a">80%</text>
+                <line :x1="chartPadding" :y1="chartPadding + (chartHeight - 2 * chartPadding) * (1 - 0.8)" :x2="chartWidth - chartPadding" :y2="chartPadding + (chartHeight - 2 * chartPadding) * (1 - 0.8)" class="ts-chart-ref-line"/>
+                <text :x="chartWidth - chartPadding + 5" :y="chartPadding + (chartHeight - 2 * chartPadding) * (1 - 0.8) + 4" font-size="10" class="ts-chart-ref-text">80%</text>
               </template>
               <!-- Y 轴 -->
-              <line :x1="chartPadding" :y1="chartPadding" :x2="chartPadding" :y2="chartHeight - chartPadding" stroke="#d9d9d9" stroke-width="1"/>
+              <line :x1="chartPadding" :y1="chartPadding" :x2="chartPadding" :y2="chartHeight - chartPadding" class="ts-chart-axis"/>
               <!-- X 轴 -->
-              <line :x1="chartPadding" :y1="chartHeight - chartPadding" :x2="chartWidth - chartPadding" :y2="chartHeight - chartPadding" stroke="#d9d9d9" stroke-width="1"/>
+              <line :x1="chartPadding" :y1="chartHeight - chartPadding" :x2="chartWidth - chartPadding" :y2="chartHeight - chartPadding" class="ts-chart-axis"/>
               <!-- Y 轴刻度 -->
-              <text v-for="(tick, i) in yTicks" :key="'y-'+i" :x="chartPadding - 8" :y="tick.y + 4" text-anchor="end" font-size="11" fill="#666">{{ tick.label }}</text>
+              <text v-for="(tick, i) in yTicks" :key="'y-'+i" :x="chartPadding - 8" :y="tick.y + 4" text-anchor="end" font-size="11" class="ts-chart-label">{{ tick.label }}</text>
               <!-- 面积填充 -->
               <polygon
                 :points="trendAreaPoints"
@@ -576,9 +576,7 @@
               <polyline
                 :points="trendLinePoints"
                 fill="none"
-                stroke="#1890ff"
-                stroke-width="2.5"
-                stroke-linejoin="round"
+                class="ts-chart-line"
               />
               <!-- 数据点 -->
               <circle
@@ -587,9 +585,7 @@
                 :cx="point.x"
                 :cy="point.y"
                 r="4"
-                fill="#fff"
-                stroke="#1890ff"
-                stroke-width="2"
+                class="ts-chart-dot"
               >
                 <title>{{ point.tooltip }}</title>
               </circle>
@@ -601,13 +597,13 @@
                 :y="chartHeight - chartPadding + 18"
                 text-anchor="middle"
                 font-size="11"
-                fill="#666"
+                class="ts-chart-label"
               >{{ point.dateLabel }}</text>
               <!-- 渐变定义 -->
               <defs>
                 <linearGradient id="trendGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stop-color="#1890ff" stop-opacity="0.4"/>
-                  <stop offset="100%" stop-color="#1890ff" stop-opacity="0"/>
+                  <stop offset="0%" stop-color="var(--brand)" stop-opacity="0.4"/>
+                  <stop offset="100%" stop-color="var(--brand)" stop-opacity="0"/>
                 </linearGradient>
               </defs>
             </svg>
@@ -733,9 +729,9 @@ const dashboardTrendTicks = computed(() => {
 
 function successRateColor(rate: number | null): string {
   if (rate === null || rate === undefined) return 'var(--text-secondary)'
-  if (rate >= 0.8) return '#52c41a'
-  if (rate >= 0.5) return '#faad14'
-  return '#ff4d4f'
+  if (rate >= 0.8) return 'var(--success, #52c41a)'
+  if (rate >= 0.5) return 'var(--warning, #faad14)'
+  return 'var(--error, #ff4d4f)'
 }
 
 async function loadDashboard() {
@@ -961,10 +957,10 @@ function isBestSuccessRate(item: any): boolean {
 
 // 柱状图颜色
 function barColor(rate: number | null): string {
-  if (rate === null || rate === undefined) return '#d9d9d9'
-  if (rate >= 0.8) return '#52c41a'
-  if (rate >= 0.5) return '#faad14'
-  return '#ff4d4f'
+  if (rate === null || rate === undefined) return 'var(--border-default, #d9d9d9)'
+  if (rate >= 0.8) return 'var(--success, #52c41a)'
+  if (rate >= 0.5) return 'var(--warning, #faad14)'
+  return 'var(--error, #ff4d4f)'
 }
 
 // 耗时柱宽（相对最大值）
@@ -1368,13 +1364,13 @@ onMounted(() => {
   gap: 10px;
   padding: 10px 14px;
   margin-bottom: 12px;
-  background: var(--bg-elevated, #fafafa);
-  border: 1px solid var(--border-color, #eee);
-  border-radius: 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
 }
 .ts-window-label {
   font-weight: 600;
-  color: var(--text-primary, #333);
+  color: var(--text-primary);
 }
 .ts-window-select {
   width: 120px;
@@ -1384,7 +1380,7 @@ onMounted(() => {
 }
 .ts-window-info {
   font-size: 12px;
-  color: var(--text-secondary, #888);
+  color: var(--text-secondary);
   margin-left: auto;
 }
 .ts-filter-bar {
@@ -1397,7 +1393,7 @@ onMounted(() => {
   width: 200px;
 }
 .mg-muted {
-  color: var(--text-secondary, #888);
+  color: var(--text-secondary);
 }
 .ts-reason {
   display: inline-block;
@@ -1420,18 +1416,18 @@ onMounted(() => {
   gap: 2px;
   font-size: 12px;
 }
-.ts-model-text { color: var(--text-primary, #333); }
-.ts-model-vision { color: #722ed1; font-size: 11px; }
-.ts-proxy-inline { color: var(--text-secondary, #888); font-size: 11px; }
-.ts-tokens { color: var(--text-primary, #333); font-weight: 500; }
-.ts-lines { color: var(--text-secondary, #888); font-size: 11px; }
-.ts-fail-q { color: #ff4d4f; margin-right: 6px; }
-.ts-fail-e { color: #faad14; margin-right: 6px; }
-.ts-fail-o { color: #999; }
+.ts-model-text { color: var(--text-primary); }
+.ts-model-vision { color: var(--c-purple-500, #722ed1); font-size: 11px; }
+.ts-proxy-inline { color: var(--text-secondary); font-size: 11px; }
+.ts-tokens { color: var(--text-primary); font-weight: 500; }
+.ts-lines { color: var(--text-secondary); font-size: 11px; }
+.ts-fail-q { color: var(--error); margin-right: 6px; }
+.ts-fail-e { color: var(--warning); margin-right: 6px; }
+.ts-fail-o { color: var(--text-tertiary); }
 .ts-hint {
   margin: 12px 0 0;
   font-size: 12px;
-  color: var(--text-secondary, #888);
+  color: var(--text-secondary);
   line-height: 1.7;
 }
 
@@ -1449,11 +1445,11 @@ onMounted(() => {
   gap: 8px;
   padding: 12px 16px;
   margin: 12px 0;
-  background: linear-gradient(135deg, #e6f7ff 0%, #f0f5ff 100%);
-  border-radius: 8px;
+  background: var(--brand-bg);
+  border-radius: var(--radius-lg);
   font-size: 13px;
   line-height: 1.6;
-  color: var(--text-primary, #333);
+  color: var(--text-primary);
 }
 .ts-insight-icon {
   font-size: 18px;
@@ -1463,7 +1459,7 @@ onMounted(() => {
 .ts-trend-empty {
   text-align: center;
   padding: 40px 0;
-  color: var(--text-secondary, #888);
+  color: var(--text-secondary);
 }
 .ts-trend-chart {
   margin: 16px 0;
@@ -1471,9 +1467,9 @@ onMounted(() => {
 .ts-trend-svg {
   width: 100%;
   height: auto;
-  background: var(--bg-elevated, #fafafa);
-  border: 1px solid var(--border-color, #eee);
-  border-radius: 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
 }
 
 // 模型对比图表
@@ -1484,21 +1480,21 @@ onMounted(() => {
   margin: 16px 0;
 }
 .ts-chart-card {
-  background: var(--bg-elevated, #fafafa);
-  border: 1px solid var(--border-color, #eee);
-  border-radius: 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
   padding: 16px;
 }
 .ts-chart-title {
   margin: 0 0 12px;
   font-size: 14px;
   font-weight: 600;
-  color: var(--text-primary, #333);
+  color: var(--text-primary);
 }
 .ts-chart-sub {
   font-size: 12px;
   font-weight: 400;
-  color: var(--text-secondary, #888);
+  color: var(--text-secondary);
   margin-left: 6px;
 }
 .ts-bar-chart {
@@ -1521,14 +1517,14 @@ onMounted(() => {
 .ts-bar-model {
   font-size: 12px;
   font-weight: 500;
-  color: var(--text-primary, #333);
+  color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .ts-bar-proxy {
   font-size: 10px;
-  color: var(--text-secondary, #888);
+  color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1536,23 +1532,23 @@ onMounted(() => {
 .ts-bar-track {
   flex: 1;
   height: 24px;
-  background: var(--bg-base, #fff);
-  border: 1px solid var(--border-color, #eee);
-  border-radius: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
   position: relative;
   overflow: hidden;
 }
 .ts-bar-fill {
   height: 100%;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   transition: width 0.3s ease;
-  background: #1890ff;
+  background: var(--brand);
 }
 .ts-bar-fill-duration {
-  background: linear-gradient(90deg, #52c41a 0%, #faad14 50%, #ff4d4f 100%);
+  background: linear-gradient(90deg, var(--success) 0%, var(--warning) 50%, var(--error) 100%);
 }
 .ts-bar-fill-token {
-  background: linear-gradient(90deg, #722ed1 0%, #eb2f96 100%);
+  background: linear-gradient(90deg, var(--c-purple-600, #722ed1) 0%, var(--c-pink-500, #eb2f96) 100%);
 }
 .ts-bar-value {
   position: absolute;
@@ -1561,7 +1557,7 @@ onMounted(() => {
   transform: translateY(-50%);
   font-size: 12px;
   font-weight: 500;
-  color: var(--text-primary, #333);
+  color: var(--text-primary);
 }
 .ts-detail-collapse {
   margin-top: 16px;
@@ -1570,7 +1566,7 @@ onMounted(() => {
 }
 .ts-detail-collapse :deep(.ant-collapse-header) {
   font-size: 13px;
-  color: var(--text-secondary, #888);
+  color: var(--text-secondary);
   padding: 8px 0 !important;
 }
 .ts-detail-collapse :deep(.ant-collapse-content-box) {
@@ -1586,10 +1582,10 @@ onMounted(() => {
 }
 
 .dashboard-kpi-card {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--brand) 0%, var(--feature) 100%);
   color: white;
   padding: 20px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
@@ -1624,9 +1620,9 @@ onMounted(() => {
 }
 
 .dashboard-card {
-  background: var(--bg-elevated, #fafafa);
-  border: 1px solid var(--border-color, #eee);
-  border-radius: 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
   padding: 20px;
   margin-bottom: 20px;
 }
@@ -1634,14 +1630,14 @@ onMounted(() => {
 .dashboard-card-title {
   font-size: 16px;
   font-weight: 600;
-  color: var(--text-primary, #333);
+  color: var(--text-primary);
   margin: 0 0 16px 0;
 }
 
 .dashboard-empty {
   text-align: center;
   padding: 40px 0;
-  color: var(--text-secondary, #888);
+  color: var(--text-secondary);
 }
 
 .dashboard-model-ranking {
@@ -1655,8 +1651,8 @@ onMounted(() => {
   align-items: center;
   gap: 12px;
   padding: 8px;
-  background: var(--bg-base, #fff);
-  border-radius: 6px;
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
   transition: all 0.2s;
 }
 
@@ -1670,7 +1666,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #667eea;
+  background: var(--brand);
   color: white;
   border-radius: 50%;
   font-size: 13px;
@@ -1686,7 +1682,7 @@ onMounted(() => {
 .dashboard-model-name {
   font-size: 14px;
   font-weight: 500;
-  color: var(--text-primary, #333);
+  color: var(--text-primary);
   margin-bottom: 4px;
   display: flex;
   align-items: center;
@@ -1695,12 +1691,12 @@ onMounted(() => {
 
 .dashboard-model-meta {
   font-size: 12px;
-  color: var(--text-secondary, #888);
+  color: var(--text-secondary);
 }
 
 .dashboard-model-tasks {
   font-size: 12px;
-  color: var(--text-secondary, #888);
+  color: var(--text-secondary);
   white-space: nowrap;
 }
 
@@ -1713,9 +1709,9 @@ onMounted(() => {
 .dashboard-fail-bar {
   display: flex;
   height: 40px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   overflow: hidden;
-  background: var(--bg-base, #fff);
+  background: var(--bg-card);
 }
 
 .dashboard-fail-segment {
@@ -1729,16 +1725,16 @@ onMounted(() => {
 }
 
 .dashboard-fail-segment.quality {
-  background: #ff4d4f;
+  background: var(--error);
 }
 
 .dashboard-fail-segment.env {
-  background: #faad14;
+  background: var(--warning);
 }
 
 .dashboard-fail-segment.other {
-  background: #d9d9d9;
-  color: var(--text-primary, #333);
+  background: var(--border-default);
+  color: var(--text-primary);
 }
 
 .dashboard-fail-legend {
@@ -1762,26 +1758,26 @@ onMounted(() => {
 }
 
 .dashboard-fail-dot.quality {
-  background: #ff4d4f;
+  background: var(--error);
 }
 
 .dashboard-fail-dot.env {
-  background: #faad14;
+  background: var(--warning);
 }
 
 .dashboard-fail-dot.other {
-  background: #d9d9d9;
+  background: var(--border-default);
 }
 
 .dashboard-fail-count {
   margin-left: auto;
   font-weight: 600;
-  color: var(--text-primary, #333);
+  color: var(--text-primary);
 }
 
 .dashboard-fail-total {
   font-size: 13px;
-  color: var(--text-secondary, #888);
+  color: var(--text-secondary);
   text-align: right;
   margin-top: 8px;
 }
@@ -1790,31 +1786,31 @@ onMounted(() => {
   cursor: pointer;
   transition: background 0.2s;
   padding: 6px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 
 .dashboard-fail-item.clickable:hover {
-  background: var(--bg-elevated, #f5f5f5);
+  background: var(--bg-hover);
 }
 
 .dashboard-fail-expand {
   margin-left: 4px;
   font-size: 10px;
-  color: var(--text-secondary, #888);
+  color: var(--text-secondary);
 }
 
 .dashboard-fail-details {
   margin-top: 12px;
   padding: 12px;
-  background: var(--bg-elevated, #fafafa);
-  border-radius: 6px;
-  border: 1px solid var(--border-color, #eee);
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
 }
 
 .dashboard-fail-details-title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-primary, #333);
+  color: var(--text-primary);
   margin-bottom: 10px;
 }
 
@@ -1828,9 +1824,9 @@ onMounted(() => {
 
 .dashboard-fail-detail-item {
   padding: 10px;
-  background: var(--bg-base, #fff);
-  border-radius: 4px;
-  border: 1px solid var(--border-color, #e8e8e8);
+  background: var(--bg-card);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
 }
 
 .dashboard-fail-detail-header {
@@ -1843,17 +1839,17 @@ onMounted(() => {
 .dashboard-fail-detail-name {
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-primary, #333);
+  color: var(--text-primary);
 }
 
 .dashboard-fail-detail-time {
   font-size: 12px;
-  color: var(--text-secondary, #888);
+  color: var(--text-secondary);
 }
 
 .dashboard-fail-detail-error {
   font-size: 12px;
-  color: var(--error-color, #ff4d4f);
+  color: var(--error);
   word-break: break-all;
   line-height: 1.5;
   font-family: 'Courier New', monospace;
@@ -1866,8 +1862,8 @@ onMounted(() => {
 .dashboard-trend-svg {
   width: 100%;
   height: auto;
-  background: var(--bg-base, #fff);
-  border-radius: 6px;
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
 }
 
 /* 诊断台样式 */
@@ -1875,9 +1871,9 @@ onMounted(() => {
   display: flex;
   gap: 24px;
   padding: 16px 20px;
-  background: linear-gradient(135deg, #fff5f5 0%, #fff 100%);
-  border: 1px solid #ffccc7;
-  border-radius: 8px;
+  background: var(--error-bg);
+  border: 1px solid var(--error-border);
+  border-radius: var(--radius-lg);
   margin-bottom: 16px;
 }
 
@@ -1891,27 +1887,27 @@ onMounted(() => {
 .diagnostic-summary-value {
   font-size: 24px;
   font-weight: 600;
-  color: var(--text-primary, #333);
+  color: var(--text-primary);
   line-height: 1.2;
 }
 
 .diagnostic-summary-value.warning {
-  color: #fa8c16;
+  color: var(--warning);
 }
 
 .diagnostic-summary-value.danger {
-  color: #ff4d4f;
+  color: var(--error);
 }
 
 .diagnostic-summary-label {
   font-size: 12px;
-  color: var(--text-secondary, #888);
+  color: var(--text-secondary);
   margin-top: 4px;
 }
 
 .diagnostic-cost {
   font-family: 'Courier New', monospace;
-  color: var(--text-secondary, #666);
+  color: var(--text-secondary);
 }
 
 .diagnostic-conclusion {
@@ -1922,7 +1918,41 @@ onMounted(() => {
 
 .diagnostic-action {
   font-size: 12px;
-  color: var(--text-secondary, #666);
+  color: var(--text-secondary);
   line-height: 1.4;
+}
+
+/* ── SVG 图表主题类 ── */
+.ts-chart-grid {
+  stroke: var(--border-light, #f0f0f0);
+  stroke-width: 1;
+}
+.ts-chart-axis {
+  stroke: var(--border-default, #d9d9d9);
+  stroke-width: 1;
+}
+.ts-chart-label {
+  fill: var(--text-secondary, #666);
+  font-size: 11px;
+}
+.ts-chart-line {
+  stroke: var(--brand, #1890ff);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+}
+.ts-chart-dot {
+  fill: var(--bg-card, #fff);
+  stroke: var(--brand, #1890ff);
+  stroke-width: 2;
+}
+.ts-chart-ref-line {
+  stroke: var(--success, #52c41a);
+  stroke-width: 1;
+  stroke-dasharray: 4, 4;
+  opacity: 0.5;
+}
+.ts-chart-ref-text {
+  fill: var(--success, #52c41a);
+  font-size: 10px;
 }
 </style>

@@ -119,6 +119,24 @@ export class McSpecController {
     return { success: true, result };
   }
 
+  /**
+   * 管理员预览：自动修复质量评分中的可修复问题（CODE-008、THEME-VAR-NAME-MISMATCH）
+   * 修复后自动重新评分并写回 component-meta.json
+   */
+  @Post('quality-fix')
+  async fixQuality(
+    @Body() body: Record<string, any>,
+    @CurrentUser() userId: string,
+  ) {
+    await this.adminService.assertAdmin(userId);
+    const componentId = String(body?.componentId || '').trim();
+    if (!componentId) {
+      throw new HttpException('缺少 componentId', HttpStatus.BAD_REQUEST);
+    }
+    const result = await this.svc.fixQualityIssues(componentId);
+    return { success: true, result };
+  }
+
   @Get('report/:componentId/:stamp')
   async report(
     @Param('componentId') componentId: string,

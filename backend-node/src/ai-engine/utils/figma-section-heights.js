@@ -141,7 +141,7 @@ function extractRootDirectChildClasses(tpl) {
  *
  * @returns {Array<{cls:string, sec:object}>|null} 全对齐才返回，否则 null（fail-open）
  */
-function alignSectionClasses(modelFiles, layoutStructure, params = {}) {
+export function alignSectionClasses(modelFiles, layoutStructure, params = {}) {
   const rawSections =
     layoutStructure?.layout?.sections || layoutStructure?.sections || [];
   const plan =

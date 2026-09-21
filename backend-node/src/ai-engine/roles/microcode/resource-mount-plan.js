@@ -202,11 +202,28 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
       // 🛡️ 2026-09-15（激活图 owner-file-missing 实锤）：owner 组件文件可能不存在
       //   （owner 由 section 名推导，但该 section 被 dedupe/合并后没有独立 .vue）。
       //   此时回落到 index.vue（根组件内联），激活图/背景不因组件文件缺失而漏挂。
+      // 🛡️ R1（2026-09-20 · 评审修订）：owner 文件缺失说明宿主 section 的 DOM 整体不存在，
+      //   回落 index.vue 后若 mountTarget 仍找不到，**不得**再按名字相似度跨 section 兜底
+      //   （bg-7890 因此错挂 tabs-icon 区）。记 ownerFileMissing 供 S7 分支判定 fail-closed。
+      let ownerFileMissing = false;
+      // 🛡️ 禁止 container 状态背景回落到 index.vue（2026-09-21 · c-device-monitor 实锤）：
+      //   bgRole=container + mountTarget=active/default 的背景必须挂到独立状态子组件，
+      //   子组件不存在时回落到 index.vue 会导致「背景提升」错误（父组件 import 子组件资源）。
+      const isContainerStateBgMount =
+        g.kind === 'bg' &&
+        mount.bgRole === 'container' &&
+        (mount.mountTarget === 'active' || mount.mountTarget === 'default');
       if (typeof content !== 'string' && compFile !== 'package/index.vue') {
-        const fallback = allFiles['package/index.vue'];
-        if (typeof fallback === 'string') {
-          content = fallback;
-          targetFile = 'package/index.vue';
+        if (isContainerStateBgMount) {
+          // container 状态背景：不回落到 index.vue，直接标记 owner 文件缺失
+          ownerFileMissing = true;
+        } else {
+          const fallback = allFiles['package/index.vue'];
+          if (typeof fallback === 'string') {
+            content = fallback;
+            targetFile = 'package/index.vue';
+            ownerFileMissing = true;
+          }
         }
       }
       if (typeof content !== 'string') {
@@ -263,6 +280,9 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
       //   背景必须挂到该子组件**模板根**，再清洗该 var 在异文件 + 同文件非根标签的串用/误挂引用。
       //   单一事实源 = resourceDomMapping 的 mountTarget/owner，不再用 class 关键词猜——
       //   findTagByClassKeyword('active') 猜中内层 .active-bg 正是「双背景 / 背景错位」根因。
+      // 🛡️ 禁止回落到 index.vue（2026-09-21 · c-device-monitor 实锤「bg1/bg2 挂错层级」）：
+      //   子组件不存在时，挂到父组件 index.vue 会导致「状态背景提升」——父组件错误 import 资源、
+      //   绑定 CSS 变量，而子组件反而没有背景。正确行为：fail-closed，记诊断 + 放弃挂载。
       if (
         g.kind === 'bg' &&
         mount.bgRole === 'container' &&
@@ -275,12 +295,17 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
         const ownerFile = `package/components/${ownerComp}.vue`;
         let tgt = allFiles[ownerFile];
         let tgtFile = ownerFile;
-        if (
-          typeof tgt !== 'string' &&
-          typeof allFiles['package/index.vue'] === 'string'
-        ) {
-          tgt = allFiles['package/index.vue'];
-          tgtFile = 'package/index.vue';
+        // 🛡️ 禁止回落到 index.vue（2026-09-21）：container 状态背景必须挂到独立状态子组件，
+        //   子组件不存在时放弃挂载，避免错误提升到父组件
+        if (typeof tgt !== 'string') {
+          diagnostics.push({
+            reason: 'container-state-file-missing',
+            file: ownerFile,
+            var: varName,
+            message: `状态子组件 ${ownerComp}.vue 不存在，禁止回落到 index.vue（避免背景提升错误）`,
+          });
+          doneKeys.add(key);
+          continue;
         }
         if (typeof tgt === 'string') {
           const rootTag = findTemplateRootTag(tgt);
@@ -395,6 +420,29 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
           }
         }
       } else if (g.kind === 'bg') {
+        // 🛡️ #1（2026-09-20 · 9caed484 bg 挂错 tabs-wrapper 治本）：owner 文件缺失 = 宿主
+        //   section 的 DOM 整体不存在（LLM 命名漂移 TabsList→TabsSection，或 section 被合并）。
+        //   bg 语义是「直接父元素背景」，父 DOM 都不存在时，挂到回落后的 index.vue 任何位置
+        //   都是错位（bg-7890 因此挂到 tabs-wrapper）。此处**在 findTagByClassKeyword 之前**
+        //   fail-closed：直接丢弃 + 告警，绝不进入下方关键词匹配 / S7 名字相似兜底。
+        //   —— 这是对 R1（S7 三级）的补强：R1 只在「类名未命中」后才生效，而命中了错误类名
+        //   （父容器 wrapper）也会错挂，故 owner 缺失应更早短路。
+        //   ⚠️ 例外：container 状态背景（bgRole=container + active/default）有独立子组件
+        //   （ContentActive/ContentDefault），其 owner 文件名本就可能不同，不适用此短路。
+        if (ownerFileMissing && !isContainerStateBg) {
+          options.logger?.warn?.('🛡️ #1：owner 文件缺失（宿主 section DOM 不存在），bg 放弃挂载（fail-closed）', {
+            varName,
+            mountTarget: mount.mountTarget || '(null)',
+            owner: mount.owner || '(index)',
+          });
+          diagnostics.push({
+            reason: 'owner-file-missing-bg',
+            file: compFile,
+            var: varName,
+            mountTarget: mount.mountTarget,
+          });
+          continue;
+        }
         // 🛡️ 阶段3（2026-09-17）：共享背景（sharedBy>1，如 12 卡共享 bg3）应挂到 v-for item
         //   （每个卡片），而非外层容器。此前 mountTarget 关键词匹配到容器 class，bg 被
         //   background-size:100% 拉伸铺满整个容器，视觉错误（逐卡 117×64 单元背景变成整块大背景）。
@@ -431,19 +479,29 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
         // 🛡️ S7（2026-09-16 · c-env-monitor-5ed7a5f8 实锤）：mountTarget 精确不在模板（类名漂移，
         //   如 mountTarget="tabs-list" 但模板类名是 "tab"）→ 原逻辑 tag 保持 null → 静默不挂载 →
         //   背景缺失。此处回退 pickBestMountTarget 兜底（候选池评分）并 WARN，避免静默丢背景。
+        // 🛡️ R1（2026-09-20 · 评审修订）：仅当 owner 文件**存在**（类名漂移）时保留名字相似兜底；
+        //   owner 文件缺失（宿主 section DOM 整体不存在）→ fail-closed 丢弃 + 告警，禁止跨 section 错挂。
         if (!tag) {
-          // 兜底：从当前文件的候选池中找最优挂载点
-          const candidates = collectMountCandidates({ [targetFile]: content });
-          const best = pickBestMountTarget(mapping, candidates, {
-            skipBound: true, // 优先选没有 bg 绑定的标签
-          });
-          if (best) {
-            tag = best.tag;
-            options.logger?.warn?.('🛡️ S7：资源 mountTarget 不在模板类名，已回退最优挂载点', {
+          if (ownerFileMissing) {
+            options.logger?.warn?.('🛡️ R1：owner 文件缺失（宿主 DOM 不存在），放弃 bg 兜底挂载', {
               varName,
               mountTarget: mount.mountTarget || '(null)',
-              file: targetFile,
+              owner: mount.owner || '(index)',
             });
+          } else {
+            // 兜底：从当前文件的候选池中找最优挂载点
+            const candidates = collectMountCandidates({ [targetFile]: content });
+            const best = pickBestMountTarget(mapping, candidates, {
+              skipBound: true, // 优先选没有 bg 绑定的标签
+            });
+            if (best) {
+              tag = best.tag;
+              options.logger?.warn?.('🛡️ S7：资源 mountTarget 不在模板类名，已回退最优挂载点', {
+                varName,
+                mountTarget: mount.mountTarget || '(null)',
+                file: targetFile,
+              });
+            }
           }
         }
         if (tag) {
@@ -469,19 +527,28 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
           tag = findTagByClassKeyword(content, mount.mountTarget);
         }
         // 🛡️ S7（2026-09-16）：mountTarget 精确不在模板 → 回退兜底（同 bg 分支）。
+        // 🛡️ R1（2026-09-20）：owner 文件缺失时 fail-closed 丢弃，禁止跨 section 错挂 icon。
         if (!tag) {
-          // 兜底：从当前文件的候选池中找最优挂载点
-          const candidates = collectMountCandidates({ [targetFile]: content });
-          const best = pickBestMountTarget(mapping, candidates, {
-            skipBound: false,
-          });
-          if (best) {
-            tag = best.tag;
-            options.logger?.warn?.('🛡️ S7：icon/img mountTarget 不在模板类名，已回退最优挂载点', {
+          if (ownerFileMissing) {
+            options.logger?.warn?.('🛡️ R1：owner 文件缺失（宿主 DOM 不存在），放弃 icon/img 兜底挂载', {
               varName,
               mountTarget: mount.mountTarget || '(null)',
-              file: targetFile,
+              owner: mount.owner || '(index)',
             });
+          } else {
+            // 兜底：从当前文件的候选池中找最优挂载点
+            const candidates = collectMountCandidates({ [targetFile]: content });
+            const best = pickBestMountTarget(mapping, candidates, {
+              skipBound: false,
+            });
+            if (best) {
+              tag = best.tag;
+              options.logger?.warn?.('🛡️ S7：icon/img mountTarget 不在模板类名，已回退最优挂载点', {
+                varName,
+                mountTarget: mount.mountTarget || '(null)',
+                file: targetFile,
+              });
+            }
           }
         }
         if (tag) {

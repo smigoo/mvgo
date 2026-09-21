@@ -20,6 +20,9 @@
     :body-style="{ padding: '16px 18px', background: '#0f1722' }"
   >
     <div class="qs-tool">
+      <button class="qs-fix" :disabled="fixing || !quality" @click="runFix">
+        {{ fixing ? '修复中…' : '自动修复' }}
+      </button>
       <button class="qs-rerun" :disabled="scoring" @click="run(true)">
         {{ scoring ? '评分中…' : '重新评分并写入' }}
       </button>
@@ -55,10 +58,10 @@
       <section class="qs-card" v-if="quality.spec">
         <div class="qs-card-head"><h4>规范分明细</h4></div>
         <p class="qs-plain">
-          BLOCK {{ quality.spec.blockCount }} × 20 + WARN {{ quality.spec.warnCount }} × 5；有 BLOCK 时硬顶 79。
+          BLOCK {{ quality.spec.blockCount }} × 8 + WARN {{ quality.spec.warnCount }} × 3；有 BLOCK 时硬顶 79。
         </p>
         <div v-if="quality.spec.issues?.length" class="qs-issues">
-          <div v-for="(it, i) in quality.spec.issues.slice(0, 12)" :key="i" class="qs-issue">
+          <div v-for="(it, i) in quality.spec.issues" :key="i" class="qs-issue">
             <span class="qs-issue-sev" :class="String(it.severity).toLowerCase()">{{ it.severity }}</span>
             <span class="qs-issue-id">{{ it.id }}</span>
             <span class="qs-issue-msg">{{ it.message }}</span>
@@ -73,7 +76,7 @@
           原因 {{ quality.style.reason }} · 覆盖率 {{ pct(quality.style.coverage) }}
         </p>
         <div v-if="quality.style.diffs?.length" class="qs-issues">
-          <div v-for="(d, i) in quality.style.diffs.slice(0, 16)" :key="i" class="qs-issue">
+          <div v-for="(d, i) in quality.style.diffs" :key="i" class="qs-issue">
             <span class="qs-issue-id">{{ d.dimension }}</span>
             <span class="qs-issue-msg">期望 {{ d.expected }} / {{ d.actual }}</span>
           </div>
@@ -88,7 +91,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { message } from 'ant-design-vue'
-import { readQualityV1, scoreQualityV1, type QualityScoreV1 } from '@/api/mc-spec'
+import { readQualityV1, scoreQualityV1, fixQualityIssues, type QualityScoreV1 } from '@/api/mc-spec'
 
 const props = withDefaults(
   defineProps<{
@@ -102,6 +105,7 @@ defineOptions({ inheritAttrs: false })
 
 const drawerOpen = ref(false)
 const scoring = ref(false)
+const fixing = ref(false)
 const error = ref('')
 const quality = ref<QualityScoreV1 | null>(null)
 
@@ -168,6 +172,31 @@ async function handleOpen() {
   drawerOpen.value = true
   if (!quality.value) await loadCached()
 }
+
+async function runFix() {
+  if (!props.componentId) {
+    message.warning('缺少组件 ID')
+    return
+  }
+  fixing.value = true
+  error.value = ''
+  try {
+    const r = await fixQualityIssues(props.componentId)
+    if (r.fixed.length === 0) {
+      message.info('没有可自动修复的问题')
+    } else {
+      quality.value = r.newQuality || null
+      const parts = []
+      if (r.summary.code008 > 0) parts.push(`CODE-008 ×${r.summary.code008}`)
+      if (r.summary.themeVarMismatch > 0) parts.push(`THEME-VAR-MISMATCH ×${r.summary.themeVarMismatch}`)
+      message.success(`已修复 ${r.fixed.length} 处：${parts.join('、')}`)
+    }
+  } catch (e: any) {
+    error.value = e?.data?.message || e?.message || String(e)
+  } finally {
+    fixing.value = false
+  }
+}
 </script>
 
 <style scoped>
@@ -215,8 +244,10 @@ async function handleOpen() {
 .qs-tool {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
   margin-bottom: 12px;
 }
+.qs-fix,
 .qs-rerun,
 .qs-plain,
 .qs-hint,
@@ -224,6 +255,7 @@ async function handleOpen() {
   color: #9fb3c8;
   font-size: 12px;
 }
+.qs-fix,
 .qs-rerun {
   padding: 4px 12px;
   border-radius: 999px;
@@ -232,8 +264,19 @@ async function handleOpen() {
   color: #cfe3f5;
   cursor: pointer;
 }
+.qs-fix {
+  background: #1a3a28;
+  border-color: #2a5a3d;
+}
+.qs-fix:hover:not(:disabled) {
+  background: #1d4a30;
+  border-color: #3d8a5a;
+  color: #ffffff;
+}
+.qs-fix:disabled,
 .qs-rerun:disabled {
   opacity: 0.55;
+  cursor: not-allowed;
 }
 .qs-loading,
 .qs-error {
@@ -301,6 +344,9 @@ async function handleOpen() {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 .qs-issue {
   display: flex;

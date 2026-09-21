@@ -99,7 +99,23 @@ export const basicRoutes = [
           title: '我的统计',
           adminOnly: false  // 所有登录用户都可查看自己的统计
         }
-      }
+      },
     ]
+  },
+  {
+    name: 'Announcements',
+    path: '/announcements',
+    component: () => import('@/views/AnnouncementPage.vue'),
+    meta: {
+      title: '系统公告'
+    }
+  },
+  {
+    name: 'AnnouncementManage',
+    path: '/announcements/manage',
+    component: () => import('@/views/AnnouncementManage.vue'),
+    meta: {
+      title: '公告管理'
+    }
   }
 ]

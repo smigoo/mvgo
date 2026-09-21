@@ -32,6 +32,10 @@ import {
   injectNodeLevelColorTruth,
 } from '../utils/post-process.js';
 import { extractSfcTemplateRegion } from '../utils/sfc-template-extractor.js';
+import {
+  ensureGridDisplay,
+  ensureGridDisplayInVueSfc,
+} from '../utils/css-sanitizer.js';
 
 const VUE = /\.vue$/i;
 const STYLE = /\.(less|css)$/i;
@@ -610,7 +614,76 @@ export function stripBakedDecorationInStyle(text, carriers, rootCls = '') {
 }
 
 /**
- * 只处理规则体的**直属**声明（嵌套子块整段原样拷贝，子块会作为独立规则单独处理）。
+ * 🛡️ 防止子组件 width:100% 覆盖父级 flex 比例（2026-09-21）
+ * 
+ * 背景：c-device-monitor-70b93a3d tabs 宽度异常
+ * 根因：父组件 index.vue 对子组件设置了 flex 比例（如 flex: 0.3 / flex: 0.7），
+ *       但子组件根元素设置了 width: 100%，导致 width 覆盖 flex 比例控制。
+ * 
+ * 修复策略：
+ * 1. 扫描所有子组件文件（package/components/*.vue）
+ * 2. 对每个子组件，检查其根元素的 <style scoped> 中是否有 width: 100%
+ * 3. 如果有，移除这个声明（让父级的 flex 比例生效）
+ * 
+ * 幂等：移除后再跑一次结果不变。
+ * 
+ * @param {Object} files - 产物文件表（path → content）
+ * @returns {Object} 新文件表（无改动时返回原引用）
+ */
+export function removeSubComponentWidthOverride(files) {
+  if (!files || typeof files !== 'object') return files;
+  
+  // 只处理子组件文件（package/components/*.vue）
+  const subCompPaths = Object.keys(files).filter(
+    (p) => /\/components\/[^/]+\.vue$/i.test(p) && typeof files[p] === 'string'
+  );
+  if (subCompPaths.length === 0) return files;
+  
+  let changed = false;
+  const out = { ...files };
+  
+  for (const path of subCompPaths) {
+    const content = files[path];
+    // 匹配 <style scoped> 块
+    const styleRe = /(<style[^>]*>)([\s\S]*?)(<\/style>)/gi;
+    let styleChanged = false;
+    const nextContent = content.replace(styleRe, (whole, open, body, close) => {
+      // 移除根元素的 width: 100%（匹配 .c-xxx-root { ... width: 100%; ... }）
+      // 策略：找到根类名（通常是第一个 class），移除其 width: 100% 声明
+      const rootClassMatch = body.match(/^\.([\w-]+-root)\s*\{/m);
+      if (!rootClassMatch) return whole;
+      
+      const rootClass = rootClassMatch[1];
+      const rootClassRe = new RegExp(
+        `(\\.${rootClass}\\s*\\{)([^}]*)(\\})`,
+        'g'
+      );
+      
+      const nextBody = body.replace(rootClassRe, (match, open, decls, close) => {
+        // 移除 width: 100% 声明
+        const widthRe = /^\s*width\s*:\s*100%\s*;?\s*$/gm;
+        const nextDecls = decls.replace(widthRe, '');
+        if (nextDecls !== decls) {
+          styleChanged = true;
+          return open + nextDecls + close;
+        }
+        return match;
+      });
+      
+      return nextBody === body ? whole : open + nextBody + close;
+    });
+    
+    if (nextContent !== content) {
+      out[path] = nextContent;
+      changed = true;
+    }
+  }
+  
+  return changed ? out : files;
+}
+
+/**
+ * 只处理规则体的**直属**声明（嵌套子块整段原样拷贝,子块会作为独立规则单独处理）。
  */
 function _stripDecorationsInBody(body) {
   let out = '';
@@ -1211,6 +1284,27 @@ export function registerBuiltinFixRules(pipeline, engineer, context = {}) {
         }
       },
     });
+    // 🛡️ 缺口 2（2026-09-21 · c-device-monitor-4bc13256/c22ff970 实锤）：
+    //   P-12b 会往「已有 grid-template-* 的规则」灌 display:flex → grid 属性被
+    //   浏览器忽略，12 卡挤成一行。冲突时以 grid 为准。必须挂在 P-12b 之后
+    //   （同阶段按注册序执行），把灌进去的 flex 改回 grid。
+    pipeline.register({
+      id: 'ensure-grid-display-prefer-grid',
+      name: '冲突 CSS 以 grid 为准（缺口 2）',
+      phase: FIX_PHASE.POLISH,
+      fix: (content, ctx) => {
+        if (!ctx) return content;
+        const path = ctx.path || '';
+        try {
+          if (/\.vue$/i.test(path)) return ensureGridDisplayInVueSfc(content, pipeline.logger);
+          if (STYLE.test(path)) return ensureGridDisplay(content, pipeline.logger);
+          return content;
+        } catch (e) {
+          pipeline.logger?.warn?.('缺口 2 ensureGridDisplay 失败（非阻断）', { error: e?.message, file: path });
+          return content;
+        }
+      },
+    });
     pipeline.register({
       id: 'validate-resource-binding-level',
       name: '资源绑定层级校验（P-12c）',
@@ -1243,6 +1337,23 @@ export function registerBuiltinFixRules(pipeline, engineer, context = {}) {
           return { ...files };
         } catch (e) {
           pipeline.logger?.warn?.('P-12d 节点级颜色真值注入失败（非阻断）', { error: e?.message });
+          return files;
+        }
+      },
+    });
+    // 🛡️ 防止子组件 width:100% 覆盖父级 flex 比例（2026-09-21）
+    // 背景：c-device-monitor-70b93a3d tabs 宽度异常，父组件用 flex: 0.3/0.7 控制宽度，
+    // 但子组件根元素设置 width: 100% 覆盖了 flex 比例。
+    // 修复：移除子组件根元素的 width: 100%，让父级 flex 比例生效。
+    pipeline.register({
+      id: 'remove-subcomponent-width-override',
+      name: '移除子组件 width:100% 覆盖（防 flex 比例失效）',
+      phase: FIX_PHASE.STYLE,
+      fixFiles: (files) => {
+        try {
+          return removeSubComponentWidthOverride(files);
+        } catch (e) {
+          pipeline.logger?.warn?.('子组件 width:100% 移除失败（非阻断）', { error: e?.message });
           return files;
         }
       },
@@ -1342,6 +1453,7 @@ export const BUILTIN_RULE_IDS = [
   'ensure-flex-layout-for-siblings',
   'validate-resource-binding-level',
   'extract-node-level-color-truth',
+  'remove-subcomponent-width-override',
 ];
 
 export default { registerBuiltinFixRules, BUILTIN_RULE_IDS };

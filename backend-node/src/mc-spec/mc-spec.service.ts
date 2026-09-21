@@ -533,4 +533,56 @@ export class McSpecService {
     })();
     return { componentDir: dirs[0] || null, componentId: id, quality };
   }
+
+  /**
+   * 自动修复质量评分中的可修复问题（CODE-008、THEME-VAR-NAME-MISMATCH）
+   *
+   * 修复后自动重新评分并写回 component-meta.json
+   */
+  async fixQualityIssues(componentId: string) {
+    const id = String(componentId || '').trim();
+    if (!id) throw new BadRequestException('缺少 componentId');
+    const componentDir = await resolveComponentDirStrict(id);
+    if (!componentDir) {
+      throw new NotFoundException(`未找到该组件的产物目录: ${id}`);
+    }
+
+    // 1. 先评分，获取当前 issues
+    const { scoreComponentDir } = await import('../ai-engine/utils/quality-score-v1.js');
+    const scoreResult = await scoreComponentDir(componentDir, { componentId: id, persist: false });
+    const issues = scoreResult.quality?.spec?.issues || [];
+
+    // 2. 筛选可自动修复的问题
+    const fixableRules = new Set(['CODE-008', 'THEME-VAR-NAME-MISMATCH']);
+    const fixableIssues = issues.filter((i) => fixableRules.has(i.id));
+    if (fixableIssues.length === 0) {
+      return {
+        componentId: id,
+        fixed: [],
+        summary: { code008: 0, themeVarMismatch: 0 },
+        message: '没有可自动修复的问题',
+      };
+    }
+
+    // 3. 执行自动修复
+    const { runAutoFix, writeFixedFiles } = await import('../ai-engine/utils/quality-auto-fix.js');
+    const { fixed, files, summary } = runAutoFix(componentDir, fixableIssues);
+
+    // 4. 写回磁盘
+    const { written } = writeFixedFiles(componentDir, files);
+    this.logger.log(`[quality-fix] ${id}: 修复 ${fixed.length} 处，写入 ${written} 文件`);
+
+    // 5. 重新评分并写回 component-meta.json
+    const newResult = await scoreComponentDir(componentDir, { componentId: id, persist: true });
+
+    // 6. 同步到所有副本
+    await this.persistQualityToReplicas(id, newResult.quality);
+
+    return {
+      componentId: id,
+      fixed,
+      summary,
+      newQuality: newResult.quality,
+    };
+  }
 }

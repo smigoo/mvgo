@@ -33,6 +33,7 @@ import { LiteModule } from './lite/lite.module';
 import { V2PipelineModule } from './ai-engine-v2/api/v2-pipeline.module';
 import { RecipesModule } from './recipes/recipes.module';
 import { McSpecModule } from './mc-spec/mc-spec.module';
+import { AnnouncementModule } from './announcement/announcement.module';
 import { isV2Exposed } from './ai-engine-v2/api/dev-only.guard';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -81,6 +82,7 @@ import { AppService } from './app.service';
     LiteModule, // 轻量组件生成（截图/Figma → Vue3/微码 Lite/Max）
     RecipesModule, // 场景配方库（内置 + 另存为模板）
     McSpecModule, // 微码组件规范检查（调用 skills/frontend-mc-check 的 mc-check.cjs）
+    AnnouncementModule, // 系统公告（管理员发布，用户端通知铃铛）
     // v2 可配管线（规范 × 档位 × 模型），dev 专用：
     // 生产环境整个模块不注册，连路由都不存在；控制器上的 DevOnlyGuard 是第二道保险。
     ...(isV2Exposed() ? [V2PipelineModule] : []),

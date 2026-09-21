@@ -27,6 +27,8 @@ import {
 } from './flex-sibling-guard.js';
 // 🛡️ S6（2026-09-16）：背景 :style 补全自愈（backgroundImage 缺 size/repeat/position → 补默认值）
 import { ensureBackgroundStyleComplete } from './post-process.js';
+// 🛡️ D1（2026-09-20）：per-card 样式确定性改写（bg 图/数值色/icon 按 vision 真值）
+import { enforceCardVisualTruth } from './card-visual-truth-rewriter.js';
 
 /**
  * @param {Record<string,string>} files 产物文件集（path → content）
@@ -35,14 +37,15 @@ import { ensureBackgroundStyleComplete } from './post-process.js';
  * @param {string} [ctx.outputPath] 输出路径（resolveResourceDomMapping 磁盘兜底用）
  * @param {Function} [ctx.injectFn] 资源 import 注入函数
  *   （microcode 传 injectResourceImports，vue3 传 injectVue3ResourceUrls；签名均为 (content, mapping, relBase)）
+ * @param {Array} [ctx.effectiveSections] planner section 树（D1 per-card 真值源，含 F1 回填的 body.items）
  * @param {object} [deps]
  * @param {object} [deps.logger] 日志器
  * @returns {{ files: Record<string,string>, summary: object }} 自愈后的文件集 + 计数摘要
  */
 export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
-  const { resourceDomMapping, outputPath, injectFn } = ctx;
+  const { resourceDomMapping, outputPath, injectFn, effectiveSections } = ctx;
   const { logger } = deps;
-  const result = { ...files };
+  let result = { ...files };
   const summary = {
     resourceInject: 0,
     runtimeImport: 0,
@@ -173,6 +176,30 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
       result[fp] = completed;
       summary.bgStyleComplete++;
       logger?.warn?.('🛡️ S6 修复：背景 :style 补全 size/repeat/position', { file: fp });
+    }
+  }
+
+  // ⑨ D1 per-card 样式确定性改写（2026-09-20 · mc-1789869245851 实锤）：
+  //   F1 已把 vision 卡片语义送进 prompt，但 LLM 对「同形资源」（bg-124/125/126）与
+  //   「色值写法」仍随机漂移。此处按 effectiveSections 的 body.items 真值在落盘前
+  //   确定性改写：bg 图引用 / 数值颜色 / icon 文件。归属不明（多卡声明同文件）时跳过。
+  if (Array.isArray(effectiveSections) && effectiveSections.length > 0) {
+    try {
+      const d1 = enforceCardVisualTruth(result, effectiveSections, {
+        logger,
+        resourceDomMapping: mapping,
+      });
+      result = d1.files;
+      summary.d1BgFixed = d1.summary.bgFixed;
+      summary.d1ColorFixed = d1.summary.colorFixed;
+      summary.d1IconFixed = d1.summary.iconFixed;
+      summary.d1BgInjected = d1.summary.bgInjected || 0;
+      summary.d1ImgSized = d1.summary.imgSized || 0;
+      summary.d1Skipped = d1.summary.skipped;
+    } catch (d1Err) {
+      logger?.warn?.('🛡️ D1 per-card 改写异常（fail-open 跳过）', {
+        error: d1Err?.message || String(d1Err),
+      });
     }
   }
 

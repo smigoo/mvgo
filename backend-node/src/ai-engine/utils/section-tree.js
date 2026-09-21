@@ -878,15 +878,50 @@ function formatOne(sec, indent) {
   // 🛡️ 栅格列数事实透传（2026-09-14 · a612a9f7 实锤）：视觉分析已给出 device-grid 的
   //   `gridColumns: 3`，planner 透传后在此打印到 prompt 树，让 LLM 收到硬约束
   //   （`grid-template-columns: repeat(N, 1fr)`），避免真机偶发退化成 4 列。
-  const gridCols = sec.gridColumns ?? (sec.body && sec.body.gridColumns)
-  const gridNote =
-    gridCols && Number(gridCols) > 1
-      ? `，栅格 ${gridCols} 列 (display: grid; grid-template-columns: repeat(${gridCols}, 1fr))`
-      : ''
+  // 🛡️ 栅格信息增强（2026-09-21 · mc-max-1789984497669 实锤）：当 type=grid 但没有
+  //   gridColumns 时，从 children 推断列数，并标注"共 N 个子项"，让 LLM 能理解
+  //   grid section 的结构，避免生成空组件或错误布局。
+  let gridCols = sec.gridColumns ?? (sec.body && sec.body.gridColumns)
+  const childCount = Array.isArray(sec.children) ? sec.children.length : 0
+  let gridNote = ''
+  if (gridCols && Number(gridCols) > 1) {
+    gridNote = `，栅格 ${gridCols} 列 (display: grid; grid-template-columns: repeat(${gridCols}, 1fr))`
+  } else if (sec.type === 'grid' && childCount > 0) {
+    // 从 children 推断列数：取第一个有 children 的子项的子项数作为列数
+    let inferredCols = 0
+    for (const child of sec.children) {
+      if (Array.isArray(child.children) && child.children.length > 0) {
+        inferredCols = child.children.length
+        break
+      }
+    }
+    if (inferredCols > 0) {
+      gridNote = `，栅格 ${inferredCols} 列 (display: grid; grid-template-columns: repeat(${inferredCols}, 1fr))`
+    }
+  }
   const extra = sec.elementCount ? `，含 ${sec.elementCount} 个元素` : ''
+  const childInfo = sec.type === 'grid' && childCount > 0 ? `，共 ${childCount} 个子项` : ''
   const score =
     sec.complexityScore !== undefined ? `，复杂度 ${sec.complexityScore}` : ''
-  return `${pad}- \`${sec.id}\` — ${sec.responsibility || sec.type || '区块'}${title}${layout}${gridNote}${extra}${score}`
+  
+  // 🛡️ tabs section 区分度增强（2026-09-21 · c-env-monitor 实锤）：
+  //   多个 tabs section 时 LLM 易合并成单个组件。治本：提取 body.items 文本真值，
+  //   展示每个 tabs 的具体内容（如"一氧化碳/能见度/洞内照明"），让 LLM 能区分。
+  let tabsNote = ''
+  if (sec.type === 'tabs') {
+    const items = sec.body?.items || []
+    if (Array.isArray(items) && items.length > 0) {
+      const itemTexts = items
+        .map((item) => (typeof item === 'string' ? item : item?.text))
+        .filter(Boolean)
+        .slice(0, 5) // 最多展示 5 个，避免 prompt 过长
+      if (itemTexts.length > 0) {
+        tabsNote = `，标签项 [${itemTexts.join('、')}]`
+      }
+    }
+  }
+  
+  return `${pad}- \`${sec.id}\` — ${sec.responsibility || sec.type || '区块'}${title}${layout}${gridNote}${extra}${childInfo}${tabsNote}${score}`
 }
 
 /**
@@ -1141,9 +1176,17 @@ export function assignSectionComponentNames(treeSections) {
     }
     const seenSuffix = new Set(); // 同组内后缀去重（防止 Tab/Tabs 碰撞）
     secs.forEach((sec) => {
-      let suffix = semanticSuffixFor(sec, base);
-      // 退化形态（无语义 token）：用 id 派生稳定短后缀
-      if (!suffix) suffix = stableIdSuffix(sec);
+      // 🛡️ 列位置优先（2026-09-20 · R2 列检测元数据）
+      // 当 sec 含 columnPosition 时，直接用"Left/Right/Middle"作为后缀
+      let suffix = '';
+      if (sec.columnPosition) {
+        const colMap = { '左': 'Left', '右': 'Right', '中': 'Middle' };
+        suffix = colMap[sec.columnPosition] || `${sec.columnPosition}Col`;
+      } else {
+        suffix = semanticSuffixFor(sec, base);
+        // 退化形态（无语义 token）：用 id 派生稳定短后缀
+        if (!suffix) suffix = stableIdSuffix(sec);
+      }
       let name;
       if (suffix) {
         // 同组内后缀碰撞 → 加序号（确定性与遍历顺序无关）
@@ -1712,6 +1755,14 @@ function mapChildNode(node, depth = 0) {
     role: 'item',
     figmaNode: String(node.id || ''),
     ...(box ? { absoluteBoundingBox: box } : {}),
+    // 🛡️ 2026-09-20（mc-max-1789811323065 自测实锤）：保留 TEXT 节点的文本真值
+    //   （Figma 原始字段 characters）。此前被丢弃 → E1 确定性路径下 R2 element-group
+    //   的 collectTexts 收不到文本（textTruths=[]）→ 分组又回到「只有名字无内容」，
+    //   LLM 无从知道每组分什么 → 卡片内容同源混淆（危化品车51次丢失）。
+    //   字段名 text 与视觉分析 schema（item.text）对齐；截断防 prompt 膨胀。
+    ...(typeof node.characters === 'string' && node.characters.trim()
+      ? { text: node.characters.trim().slice(0, 40) }
+      : {}),
     // 🛡️ 2026-09-16：递归保留 children——此前只映射一层，slot-con 内部的
     //   switch/@antd/tab/12卡网格 全丢，组件被简化为「header+content」导致样式混乱。
     ...(kids.length ? { children: kids } : {}),

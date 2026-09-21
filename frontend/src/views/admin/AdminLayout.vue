@@ -78,8 +78,8 @@ const handleMenuClick = ({ key }) => {
 
 .admin-sidebar {
   width: 240px;
-  background: #fff;
-  border-right: 1px solid #e8e8e8;
+  background: var(--bg-card, #fff);
+  border-right: 1px solid var(--border-light, #e8e8e8);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
@@ -91,8 +91,8 @@ const handleMenuClick = ({ key }) => {
   padding: 20px 24px;
   font-size: 18px;
   font-weight: 600;
-  color: rgba(0, 0, 0, 0.85);
-  border-bottom: 1px solid #e8e8e8;
+  color: var(--text-primary, rgba(0, 0, 0, 0.85));
+  border-bottom: 1px solid var(--border-light, #e8e8e8);
   flex-shrink: 0;
 }
 
@@ -106,14 +106,32 @@ const handleMenuClick = ({ key }) => {
 
 :deep(.ant-menu) {
   border-right: none;
+  background: transparent !important;
+  color: var(--text-primary) !important;
 }
 
 :deep(.ant-menu-item) {
   margin: 8px;
   border-radius: 6px;
+  color: var(--text-primary) !important;
+  background: transparent !important;
+}
+
+:deep(.ant-menu-item:hover) {
+  background: var(--bg-hover) !important;
+  color: var(--text-primary) !important;
 }
 
 :deep(.ant-menu-item-selected) {
-  background-color: #e6f7ff;
+  background-color: var(--brand-bg) !important;
+  color: var(--brand) !important;
+}
+
+:deep(.ant-menu-item-selected::after) {
+  border-right-color: var(--brand) !important;
+}
+
+:deep(.ant-menu-item .anticon) {
+  color: inherit !important;
 }
 </style>

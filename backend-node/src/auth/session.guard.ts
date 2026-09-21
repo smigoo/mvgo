@@ -42,6 +42,8 @@ export class SessionGuard implements CanActivate {
           // 写入 session，后续请求不再重复验证
           request.session.userId = result.user._id.toString();
           request.session.username = result.user.username;
+          // 设置管理员标志（从数据库用户记录中获取）
+          request.session.isAdmin = result.user.isAdmin || false;
           return true;
         }
       } catch (err) {

@@ -216,12 +216,30 @@ describe('ensureGridDisplay —— grid 布局确定性补全', () => {
     expect(ensureGridDisplay('.c { grid-template-areas: "a b"; }')).toContain('display: grid;');
   });
 
-  it('已有 display 一律不覆盖作者意图（grid / flex 都不动）', () => {
+  it('已有 display:grid 不动；flex+grid-template 冲突以 grid 为准', () => {
     const g = `.a { display: grid; grid-template-columns: 1fr 1fr; }`;
     expect(ensureGridDisplay(g)).toBe(g);
-    // display:flex + grid-template-* 属作者显式意图，绝不改成 grid
+    // 缺口 2：P-12b 注入的 display:flex 会让 grid-template-* 失效，必须改写
     const f = `.b { display: flex; grid-template-columns: 1fr 1fr; }`;
-    expect(ensureGridDisplay(f)).toBe(f);
+    const out = ensureGridDisplay(f);
+    expect(out).toMatch(/display:\s*grid/);
+    expect(out).not.toMatch(/display:\s*flex/);
+    expect(out).toContain('grid-template-columns: 1fr 1fr');
+  });
+
+  it('4bc13256 事故形态：grid-template + display:flex + gap → 改写为 grid', () => {
+    const css = `.c-device-monitor-cons-grid {
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}`;
+    const result = ensureGridDisplay(css);
+    expect(result).toMatch(/display:\s*grid/);
+    expect(result).not.toMatch(/display:\s*flex/);
+    expect(result).toContain('repeat(3, 1fr)');
+    expect(result).toContain('align-items: center');
   });
 
   it('只有 gap 不算 grid 意图（flex 也用 gap，宁可不改）', () => {

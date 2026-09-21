@@ -17,7 +17,7 @@
 import { createLogger } from '../logger/index.js';
 import { enforceTabStructure } from './tab-structure-guard.js';
 import {
-  collapseRepeatedSiblingSections,
+  collapseSectionsDeep,
   isCollapsedListSection,
 } from '../utils/repeated-section-collapser.js';
 import {
@@ -30,6 +30,7 @@ import {
   stripFabricatedSourceIds,
   uniqueSectionIds,
   deriveSectionsFromFigmaTree,
+  clusterItemsByColumnX,
 } from '../utils/section-tree.js';
 // 🛡️ 刀 5a（2026-09-13）：section type 推导抽离到纯函数模块（无 import.meta 依赖，可单测）
 import { deriveSectionType } from '../utils/section-type-derive.js';
@@ -451,6 +452,22 @@ function isChartSection(sec) {
  * P2': 合并图例 section 到相邻图表 section。
  * 规则：图例必须与图表相邻（前后均可），中间不能有其他 section 间隔。
  */
+// 🛡️ 2026-09-20：递归折叠的深度计数（日志观测折叠效果：深层 items 收拢数）
+function countSectionsDeep(secs) {
+  let total = 0;
+  let collapsed = 0;
+  const walk = (list) => {
+    for (const s of list || []) {
+      if (!s || typeof s !== 'object') continue;
+      total++;
+      if (isCollapsedListSection(s)) collapsed++;
+      walk(s.children);
+    }
+  };
+  walk(secs);
+  return { total, collapsed };
+}
+
 function mergeLegendSections(sections) {
   if (!Array.isArray(sections) || sections.length === 0) return sections;
 
@@ -617,6 +634,33 @@ function splitSectionInternally(section, sectionIndex) {
       })
       .map(({ k }) => k);
 
+    // 🛡️ R2 列检测（2026-09-20 · mc-1789867600716 实锤）：
+    //   当子元素呈现明显的多列布局时（x 坐标聚类），按列分组而非轮流分配。
+    //   解决：LLM 不知道 Group1/Group2 的视觉关系 → 左右子组件处理不一致
+    //   （左边漏 value/flex-direction，右边漏背景色）。
+    //   检测规则：收集所有子元素的 x 坐标，聚类（间距 > 50px 视为不同列），
+    //   若检测到 ≥2 列且每列元素数 ≥2，则按列分组。
+    const xCoords = sortedKids.map(k => Math.round(k?.figmaBox?.x ?? k?.absoluteBoundingBox?.x ?? 0));
+    const uniqueX = [...new Set(xCoords)].sort((a, b) => a - b);
+    const columnGroups = [];
+    let currentCol = [uniqueX[0]];
+    for (let i = 1; i < uniqueX.length; i++) {
+      if (uniqueX[i] - uniqueX[i-1] > 50) {
+        columnGroups.push(currentCol);
+        currentCol = [uniqueX[i]];
+      } else {
+        currentCol.push(uniqueX[i]);
+      }
+    }
+    columnGroups.push(currentCol);
+    
+    const isMultiColumn = columnGroups.length >= 2 && columnGroups.every(col => 
+      sortedKids.filter(k => {
+        const x = Math.round(k?.figmaBox?.x ?? k?.absoluteBoundingBox?.x ?? 0);
+        return col.includes(x);
+      }).length >= 2
+    );
+
     // 收集成员子树文本真值（≤6 条，防 prompt 膨胀）
     const collectTexts = (node, depth, out) => {
       if (depth > 3 || out.length >= 6) return;
@@ -626,35 +670,76 @@ function splitSectionInternally(section, sectionIndex) {
     };
 
     const subcomponents = [];
-    for (let g = 0; g < groupCount; g++) {
-      const members = sortedKids.filter((_, idx) => idx % groupCount === g);
-      if (members.length === 0) continue;
-      const elementNames = members
-        .map((m) => String(m?.name || m?.id || '').slice(0, 30))
-        .slice(0, 12);
-      const sourceNodeIds = members
-        .map((m) => (m?.id != null ? String(m.id) : null))
-        .filter(Boolean);
-      const textTruths = [];
-      for (const m of members) collectTexts(m, 0, textTruths);
+    
+    if (isMultiColumn) {
+      // 按列分组
+      const colLabels = ['左', '右', '中', '第四', '第五'];
+      for (let c = 0; c < columnGroups.length; c++) {
+        const colX = columnGroups[c];
+        const members = sortedKids.filter(k => {
+          const x = Math.round(k?.figmaBox?.x ?? k?.absoluteBoundingBox?.x ?? 0);
+          return colX.includes(x);
+        });
+        if (members.length === 0) continue;
+        
+        const elementNames = members.map((m) => String(m?.name || m?.id || '').slice(0, 30)).slice(0, 12);
+        const sourceNodeIds = members.map((m) => (m?.id != null ? String(m.id) : null)).filter(Boolean);
+        const textTruths = [];
+        for (const m of members) collectTexts(m, 0, textTruths);
+        
+        const colLabel = colLabels[c] || `第${c+1}`;
+        const parentType = String(section.type || '').toLowerCase();
+        subcomponents.push({
+          type: parentType || 'element-group',  // 🛡️ 继承父 section type（2026-09-20）让 decideBaseName 识别
+          id: `${section.id}-col${c + 1}`,
+          name: `${colLabel}列`,
+          responsibility: `${colLabel}列元素（视觉位置：x≈${colX[0]}px，成员清单见 elementNames/textTruths，禁止混入其他列的元素）`,
+          reason: `R2: 列布局检测（总计${reasons.elementCount}个元素，${columnGroups.length}列布局，本列 ${members.length} 个元素）`,
+          props: [],
+          emits: [],
+          sourceNodeIds,
+          elementNames,
+          textTruths: [...new Set(textTruths)].slice(0, 6),
+          figmaBoxes: members
+            .map((m) => m?.figmaBox || m?.absoluteBoundingBox || null)
+            .filter(Boolean)
+            .map((b) => ({ x: Math.round(b.x || 0), y: Math.round(b.y || 0), w: Math.round(b.width || 0), h: Math.round(b.height || 0) })),
+          // ️ 列位置元数据（2026-09-20）
+          columnPosition: colLabel,
+          columnX: colX[0],
+        });
+      }
+    } else {
+      // 原有轮流分配逻辑
+      for (let g = 0; g < groupCount; g++) {
+        const members = sortedKids.filter((_, idx) => idx % groupCount === g);
+        if (members.length === 0) continue;
+        const elementNames = members
+          .map((m) => String(m?.name || m?.id || '').slice(0, 30))
+          .slice(0, 12);
+        const sourceNodeIds = members
+          .map((m) => (m?.id != null ? String(m.id) : null))
+          .filter(Boolean);
+        const textTruths = [];
+        for (const m of members) collectTexts(m, 0, textTruths);
 
-      subcomponents.push({
-        type: 'element-group',
-        id: `${section.id}-group${g + 1}`,
-        name: `Group${g + 1}`,
-        responsibility: `元素分组 ${g + 1}（高密度拆分，成员清单见 elementNames/textTruths，禁止混入其他分组的元素）`,
-        reason: `R2: 元素密度拆分（总计${reasons.elementCount}个元素，本组 ${members.length} 个直接子元素）`,
-        props: [],
-        emits: [],
-        // 🛡️ 确定性归属事实（2026-09-19）
-        sourceNodeIds,
-        elementNames,
-        textTruths: [...new Set(textTruths)].slice(0, 6),
-        figmaBoxes: members
-          .map((m) => m?.figmaBox || m?.absoluteBoundingBox || null)
-          .filter(Boolean)
-          .map((b) => ({ x: Math.round(b.x || 0), y: Math.round(b.y || 0), w: Math.round(b.width || 0), h: Math.round(b.height || 0) })),
-      });
+        subcomponents.push({
+          type: 'element-group',
+          id: `${section.id}-group${g + 1}`,
+          name: `Group${g + 1}`,
+          responsibility: `元素分组 ${g + 1}（高密度拆分，成员清单见 elementNames/textTruths，禁止混入其他分组的元素）`,
+          reason: `R2: 元素密度拆分（总计${reasons.elementCount}个元素，本组 ${members.length} 个直接子元素）`,
+          props: [],
+          emits: [],
+          sourceNodeIds,
+          elementNames,
+          textTruths: [...new Set(textTruths)].slice(0, 6),
+          figmaBoxes: members
+            .map((m) => m?.figmaBox || m?.absoluteBoundingBox || null)
+            .filter(Boolean)
+            .map((b) => ({ x: Math.round(b.x || 0), y: Math.round(b.y || 0), w: Math.round(b.width || 0), h: Math.round(b.height || 0) })),
+        });
+      }
     }
 
     logger.info(
@@ -789,8 +874,85 @@ function findFigmaNodeIdBySectionName(sec) {
   return nameToIdMap[sec.name.toLowerCase()] || null;
 }
 
+/**
+ * 缺口 1（2026-09-21 · 4bc13256 实锤）：Figma GROUP 无 layoutMode:GRID 时，
+ * 视觉分析 layout="horizontal"、gridColumns 缺失 → healGridContainer 空跳过。
+ * 用 GROUP 直接子节点的 x 聚类推出列数（复用 clusterItemsByColumnX）。
+ * 已有明确 gridColumns 时不覆盖；无 figmaIndex / 不满足保守条件返回 NaN。
+ */
+function inferGridColumnsFromGroupChildren(sec, figmaIndex) {
+  if (!figmaIndex || typeof figmaIndex.get !== 'function') return NaN;
+  const existing = Number(sec?.gridColumns ?? sec?.body?.gridColumns ?? NaN);
+  if (Number.isFinite(existing) && existing > 1) return NaN;
+
+  const ids = [];
+  const push = (v) => {
+    if (v == null) return;
+    const s = String(v).trim();
+    if (s && !ids.includes(s)) ids.push(s);
+  };
+  if (Array.isArray(sec?.sourceNodeIds)) sec.sourceNodeIds.forEach(push);
+  push(sec?.figmaNode);
+  push(sec?.nodeId);
+  if (/^\d+:\d+$/.test(String(sec?.id || ''))) push(sec.id);
+  if (ids.length === 0) return NaN;
+
+  let groupRec = null;
+  for (const id of ids) {
+    const rec = figmaIndex.get(id);
+    if (!rec) continue;
+    const type = String(rec.type || rec.rawNode?.type || '').toUpperCase();
+    const kids = rec.rawNode?.children;
+    if ((type === 'GROUP' || type === 'FRAME') && Array.isArray(kids) && kids.length >= 4) {
+      groupRec = rec;
+      break;
+    }
+  }
+  if (!groupRec) return NaN;
+
+  // 过滤装饰原子节点（TEXT/VECTOR/bg/icon 等），只留内容卡
+  const kids = (groupRec.rawNode.children || []).filter((c) => {
+    if (!c || typeof c !== 'object' || !c.absoluteBoundingBox) return false;
+    const t = String(c.type || '').toUpperCase();
+    const name = String(c.name || '').toLowerCase();
+    if (t === 'TEXT' || t === 'VECTOR' || t === 'BOOLEAN_OPERATION' || t === 'LINE') return false;
+    if (/^(bg|background|icon|vector|decorator|divider)$/i.test(name)) return false;
+    return true;
+  });
+  const cols = clusterItemsByColumnX(kids);
+  if (!cols || cols.length < 2) return NaN;
+  const sizes = cols.map((c) => c.items.length);
+  const minSize = Math.min(...sizes);
+  const maxSize = Math.max(...sizes);
+  if (minSize < 2) return NaN;
+  if (maxSize - minSize > 1) return NaN;
+  return cols.length;
+}
+
 function buildEffectiveSection(sec, idx, ctx) {
   if (isLayoutContainerSection(sec)) {
+    // 🛡️ 2026-09-20 R2 豁免（方案A · mc-max-1789811323065 / mc-1789861426638 实锤）：
+    //   横向并列容器（layout=horizontal/grid）内有 ≥2 个叶子子节点时，这些子节点互为
+    //   「同构并列卡」（如三张统计卡危化品车/重型货车/超高车辆）。它们各自元素多
+    //   （bg+icon+label+数值，10~15个）是**卡内富内容**，不是需要拆组件的复杂度信号。
+    //   若触发 R2 内部拆分，LLM 会把「Group1/Group2」生成为两张平级卡片塞进父容器卡槽
+    //   → 卡槽错位（半卡+重复卡+某卡消失，SECTION-ANCHOR-DUP 门禁实锤检出）。
+    //   治本：递归构建 children **之前**先在原始子节点上打 parallelSiblingCount，
+    //   叶子分支的 R2 触发点据此豁免——整卡作为最小组件单元，元素在卡内消化。
+    //   ⚠️ 必须在递归前打标（首版实现是递归后 map 补标 → R2 决策先于标记执行，豁免空转）。
+    const isHorizontalContainer =
+      /horizontal|grid|row/i.test(String(sec.layout || '')) ||
+      /horizontal|grid/i.test(String(sec.layoutMetadata?.direction || ''));
+    const rawKids = Array.isArray(sec.children) ? sec.children : [];
+    const leafKids = rawKids.filter(
+      (c) => c && !isLayoutContainerSection(c),
+    );
+    if (isHorizontalContainer && leafKids.length >= 2) {
+      for (const k of leafKids) k.parallelSiblingCount = leafKids.length;
+      logger.info(
+        `🛡️ R2 豁免标记：横向容器 ${sec.id || idx} 的 ${leafKids.length} 个并列叶子卡将跳过 R2 内部拆分`,
+      );
+    }
     const children = (sec.children || []).map((child, i) =>
       buildEffectiveSection(child, i, ctx),
     );
@@ -839,14 +1001,25 @@ function buildEffectiveSection(sec, idx, ctx) {
 
   let internalSubcomponents = [];
   if (ctx.enableInternalSplit && scoreResult.shouldSplit && !collapsed) {
-    internalSubcomponents = splitSectionInternally(sec, idx);
-    ctx.allInternalSubcomponents.push(
-      ...internalSubcomponents.map((sub) => ({
-        ...sub,
-        parentSectionId: sec.id || `section-${idx + 1}`,
-        parentSectionTitle: title,
-      })),
-    );
+    // 🛡️ 2026-09-20 R2 豁免（方案A）：同构并列卡不拆。
+    //   parallelSiblingCount 由横向容器分支标记（见 buildEffectiveSection 容器分支）。
+    //   兄弟并列卡（三张统计卡等）的富内容是卡内元素，拆成 Group1/Group2 会导致
+    //   LLM 把分组生成为平级卡片组件 → 卡槽错位（mc-1789861426638 实锤：
+    //   136:129 两组占两槽、136:127 整卡消失）。
+    if (Number(sec.parallelSiblingCount) >= 2) {
+      logger.info(
+        `🛡️ R2 豁免：section ${sec.id} 是 ${sec.parallelSiblingCount} 张同构并列卡之一，整卡作为最小组件单元（卡内富内容不拆分）`,
+      );
+    } else {
+      internalSubcomponents = splitSectionInternally(sec, idx);
+      ctx.allInternalSubcomponents.push(
+        ...internalSubcomponents.map((sub) => ({
+          ...sub,
+          parentSectionId: sec.id || `section-${idx + 1}`,
+          parentSectionTitle: title,
+        })),
+      );
+    }
   }
 
   const tabStructured = enforceTabStructure(sec);
@@ -874,12 +1047,16 @@ function buildEffectiveSection(sec, idx, ctx) {
   //   用正则抽 `\d+` 后接 column/col/item 的数字，零硬编码、兼容任意列数。
   const layoutColMatch = rawLayout.match(/(\d+)\s*[-_\s]*(?:col|column|item|grid)/);
   const layoutColumns = layoutColMatch ? Number(layoutColMatch[1]) : NaN;
+  // 缺口 1：GROUP 无 GRID 时按子节点 x 聚类补列数（已有明确值则不覆盖）
+  const clusteredColumns = inferGridColumnsFromGroupChildren(sec, ctx?.figmaIndex);
   const effectiveColumns =
     Number.isFinite(gridColumns) && gridColumns > 1
       ? gridColumns
       : Number.isFinite(layoutColumns) && layoutColumns > 1
         ? layoutColumns
-        : NaN;
+        : Number.isFinite(clusteredColumns) && clusteredColumns > 1
+          ? clusteredColumns
+          : NaN;
   const hasGridColumns = Number.isFinite(effectiveColumns) && effectiveColumns > 1;
   // 布局字符串被解析出列数时，归一为 'grid'（下游据此生成 repeat(N,1fr)）；
   // 否则保留原布局语义（horizontal/vertical/...）。
@@ -888,12 +1065,54 @@ function buildEffectiveSection(sec, idx, ctx) {
       ? 'grid'
       : rawLayout || (hasGridColumns ? 'grid' : '');
 
+  // 🛡️ P1 文本真值保留（2026-09-20 · c3c3244f tabs 消失治本）：
+  //   E1 derived 树的普通叶子（如 tabs-list 2:7889）其 item 级子节点（4 条 tab 文本）
+  //   在下方「仅透传 collapsed 子项」收口处被整体丢弃 → LLM 拿不到任何 tab 文本 →
+  //   do-not-invent 生效，tabs DOM 消失。探针已证 E1 树里 children[].text 完好。
+  //   治本：把「无 collapsed/v-for、带 text 的 item 子节点」文本确定性收进 body.items，
+  //   供 prompt 端作为文本真值消费（tabs 标签/图例文本等）。无文本子节点则不产生字段。
+  const plainTextItems = (Array.isArray(sec.children) ? sec.children : [])
+    .filter(
+      (c) =>
+        c &&
+        typeof c === 'object' &&
+        !c.collapsed &&
+        c.renderHint !== 'v-for' &&
+        typeof c.text === 'string' &&
+        c.text.trim(),
+    )
+    .map((c) => ({ text: String(c.text).trim().slice(0, 40), figmaNode: c.figmaNode || c.id || undefined }));
+
   return {
     id: sec.id || `section-${idx + 1}`,
     responsibility: effectiveResponsibility,
     elementCount,
     title: String(title).trim().slice(0, 30),
     type: effectiveType || undefined,
+    // 🛡️ F1（2026-09-20）：透传 body（vision 卡片语义：bgPlaceholder/icon 位置尺寸/
+    //   label+value 颜色字号）。E1 enrich 二段匹配回填的 body 此前在本函数重建时被丢弃
+    //   → 三卡语义（红#ff4d4f、bg-125 整卡背景等）永远到不了 prompt。
+    //   collapsed（v-for）section 的 items 由下方专职字段透传，不重复。
+    // ⚠️ 与下方「body 收敛」段互斥覆盖：那段用展开合并本 body，不再整体替换
+    //   （F1 前的历史 bug：整段重写 body 把 items/bgPlaceholder 全抹掉）。
+    // 🛡️ P1（2026-09-20）：无 body 但有 plainTextItems 时，仍要生成 body.items 承载文本真值
+    //   （tabs 标签/图例文本）。有 body 时下方「body 收敛」段会用展开合并，不在此重复。
+    ...(!collapsed && sec.body
+      ? { body: sec.body }
+      : !collapsed && plainTextItems.length > 0
+        ? { body: { items: plainTextItems } }
+        : {}),
+    // 🛡️ 2026-09-20 v-for 治本（mc-max-1789871432610 实锤）：**仅透传折叠产物子项**。
+    //   机制：collapseSectionsDeep 在 derived 树上把「图例 4 项」折成 3:74-list 并放在
+    //   父节点（287:5-left）的 children 里；本函数叶子分支重建对象时丢弃 children
+    //   → 折叠产物整体丢失（plan 里 287:5-left 无 v-for）。但无条件透传 children 又会让
+    //   卡内明细（136:127 的 bg/icon/Group）全部膨胀成 section（树爆炸）。
+    //   精确解：只透传「含 collapsed/v-for 子项」的 children——折叠产物得以保留，
+    //   普通叶子明细继续收口。
+    ...(Array.isArray(sec.children) &&
+    sec.children.some((c) => c && (c.collapsed === true || c.renderHint === 'v-for'))
+      ? { children: sec.children.filter((c) => c && (c.collapsed === true || c.renderHint === 'v-for')) }
+      : {}),
     // 🛡️ 布局事实（视觉分析原值）：'grid' | 'horizontal' | 'vertical' | ...
     ...(layoutFact ? { layout: layoutFact } : {}),
     // 🛡️ 栅格列数事实：仅当视觉分析明确给出才透传（缺失时下游保持自由发挥，不硬编码默认值）
@@ -904,11 +1123,17 @@ function buildEffectiveSection(sec, idx, ctx) {
     items: collapsed ? sec.items : undefined,
     // 🛡️ 下游消费契约：prompt-builder/constraint-reinforcement/code-structure-validator
     //   统一按 `section.body.gridColumns` 取值，故这里把脊柱字段收敛到 body。
-    ...(layoutFact || hasGridColumns
+    //   🛡️ F1（2026-09-20）：改为**合并**而非替换——原实现整段重写 body，把 F1 回填的
+    //   items/bgPlaceholder/backgroundImage 等卡片语义抹掉（三卡只剩 {layout}）。
+    ...(layoutFact || hasGridColumns || plainTextItems.length > 0
       ? {
           body: {
             ...(layoutFact ? { layout: layoutFact } : {}),
             ...(hasGridColumns ? { gridColumns: Math.round(effectiveColumns) } : {}),
+            // 保留已有 body（F1 卡片语义优先于布局收敛字段——语义更特异）
+            ...(sec.body || {}),
+            // 🛡️ P1：文本真值 items 兜底合并（无 sec.body 时承载 tabs 标签文本）
+            ...(plainTextItems.length > 0 && !sec.body ? { items: plainTextItems } : {}),
           },
         }
       : {}),
@@ -1087,11 +1312,124 @@ export class SubcomponentPlanner {
               if (sem.header) s.header = sem.header;
               // vision body 优先（叶子内容结构）
               if (sem.body) s.body = sem.body;
+              if (sem) sem._consumed = true;
             }
             if (Array.isArray(s.children)) enrich(s.children);
           }
         };
         enrich(derived.sections);
+
+        // 🛡️ F1 二段匹配（2026-09-20 · mc-1789867417147 实锤）：
+        //   vision 常对「聚合级区块」编语义 id（如统计卡片组 id=2136639043、figmaNodeId=null），
+        //   一段匹配按 figmaNodeId||id 永远对不上 E1 节点 → 卡片语义（bgPlaceholder→resourceFile、
+        //   icon 位置/尺寸、label/value 颜色字号）整体丢弃 → LLM 凭裸树自由发挥
+        //   （卡背景挂错/数值颜色错/整卡布局与 UI 不符）。
+        //   治本：文本真值匹配——收集 vision section 深层文本（label/value/unit），
+        //   在 E1 树中找「子树文本重合度最高且最深」的宿主 section：
+        //     - 宿主是叶子 → 整 body 回填；
+        //     - 宿主是容器 → body.items 按文本下钻分配到各叶子（每叶仅得自己的 item）。
+        //   阈值：vision texts ≥2 且重合 ≥0.6（单文本不匹配，防误配）。
+        //   纯确定性、可单测；不命中时零影响（fail-open 保持裸树）。
+        try {
+          const collectDeepTexts = (x, out, depth = 0) => {
+            if (!x || typeof x !== 'object' || depth > 10) return;
+            if (typeof x.text === 'string' && x.text.trim()) {
+              out.add(x.text.trim());
+            }
+            for (const k of ['children', 'items', 'elements', 'parts', 'icon', 'content', 'body', 'header']) {
+              if (Array.isArray(x[k])) {
+                for (const c of x[k]) collectDeepTexts(c, out, depth + 1);
+              } else if (x[k] && typeof x[k] === 'object') {
+                collectDeepTexts(x[k], out, depth + 1);
+              }
+            }
+          };
+          // E1 section 子树文本集（只读 children 树，不读 body——避免一段匹配结果自证）
+          const subtreeTexts = (s, out = new Set(), depth = 0) => {
+            if (!s || typeof s !== 'object' || depth > 12) return out;
+            if (typeof s.text === 'string' && s.text.trim()) out.add(s.text.trim());
+            for (const c of s.children || []) subtreeTexts(c, out, depth + 1);
+            return out;
+          };
+          // 遍历 E1 树建「候选宿主」列表（含深度，越深越特异）
+          const hosts = [];
+          const collectHosts = (secs, depth = 0) => {
+            for (const s of secs || []) {
+              if (!s || typeof s !== 'object') continue;
+              hosts.push({ s, depth, texts: subtreeTexts(s) });
+              collectHosts(s.children, depth + 1);
+            }
+          };
+          collectHosts(derived.sections);
+
+          let f1Filled = 0;
+          for (const [key, sem] of visionSemantic.entries()) {
+            if (sem._consumed) continue;
+            const semTexts = new Set();
+            collectDeepTexts(sem, semTexts);
+            if (semTexts.size < 2) continue;
+            // 找最佳宿主：文本重合率 ≥0.6，取重合率最高、同分取最深（最特异）
+            let best = null;
+            for (const h of hosts) {
+              if (h.texts.size === 0) continue;
+              let hit = 0;
+              for (const t of semTexts) if (h.texts.has(t)) hit++;
+              const overlap = hit / semTexts.size;
+              if (overlap < 0.6) continue;
+              if (
+                !best ||
+                overlap > best.overlap + 1e-9 ||
+                (Math.abs(overlap - best.overlap) < 1e-9 && h.depth > best.depth)
+              ) {
+                best = { ...h, overlap };
+              }
+            }
+            if (!best) continue;
+
+            const items = sem.body?.items;
+            if (Array.isArray(items) && items.length > 1 && Array.isArray(best.s.children) && best.s.children.length > 0) {
+              // 容器宿主：items 下钻到叶子（每叶只回填自己的 item）
+              const leaves = best.s.children;
+              const used = new Set();
+              for (const leaf of leaves) {
+                const leafTexts = subtreeTexts(leaf);
+                let bestItem = null;
+                let bestHit = 0;
+                for (const it of items) {
+                  if (used.has(it)) continue;
+                  const itTexts = new Set();
+                  collectDeepTexts(it, itTexts);
+                  if (itTexts.size === 0) continue;
+                  let hit = 0;
+                  for (const t of itTexts) if (leafTexts.has(t)) hit++;
+                  if (hit > bestHit) { bestHit = hit; bestItem = it; }
+                }
+                if (bestItem && bestHit >= 1) {
+                  used.add(bestItem);
+                  leaf.body = { ...(sem.body || {}), items: [bestItem] };
+                  f1Filled++;
+                }
+              }
+            } else {
+              // 叶子宿主（或单 item）：整 body 回填
+              best.s.body = sem.body;
+              f1Filled++;
+            }
+            logger.info('🛡️ F1 文本真值匹配：vision 语义回填', {
+              visionId: key,
+              hostId: best.s.id,
+              overlap: Math.round(best.overlap * 100) + '%',
+              mode: Array.isArray(items) && items.length > 1 ? 'items下钻' : '整body',
+            });
+          }
+          if (f1Filled > 0) {
+            logger.info(`🛡️ F1 二段匹配完成：${f1Filled} 个 E1 section 获得 vision 卡片语义（文本真值匹配）`);
+          }
+          // 清理临时标记（避免污染下游序列化）
+          for (const sem of visionSemantic.values()) delete sem._consumed;
+        } catch (f1Err) {
+          logger.warn('🛡️ F1 二段匹配异常（fail-open 跳过）', { error: f1Err?.message || String(f1Err) });
+        }
 
         sections = derived.sections;
 
@@ -1184,15 +1522,20 @@ export class SubcomponentPlanner {
     sections = mergeLegendSections(sections);
 
     // 🛡️ 2026-09-10：同构重复卡片收成 list/grid（device 12 卡 + 12 装饰 → 1 个模板）
+    // 🛡️ 2026-09-20 治本：切 collapseSectionsDeep（递归 + 几何同构签名）——
+    //   E1 后重复项都在容器 children 里，旧顶层折叠静默失效（mc-max-1789871432610
+    //   图例 8 项 / 三卡均未折叠实锤）。递归版自底向上，items 带 _vforData
+    //   （texts/textStyles/resourceFiles）供 v-for prompt 确定性注入。
     const beforeCollapse = sections.length;
-    sections = collapseRepeatedSiblingSections(sections);
-    if (sections.length !== beforeCollapse) {
-      logger.info('重复同构 section 已折叠为 list/grid', {
-        before: beforeCollapse,
-        after: sections.length,
-        collapsed: sections
-          .filter((s) => isCollapsedListSection(s))
-          .map((s) => ({ id: s.id, type: s.type, itemCount: s.itemCount })),
+    const beforeCollapseDeep = JSON.stringify(countSectionsDeep(sections));
+    sections = collapseSectionsDeep(sections);
+    const afterCollapseDeep = JSON.stringify(countSectionsDeep(sections));
+    if (afterCollapseDeep !== beforeCollapseDeep || sections.length !== beforeCollapse) {
+      logger.info('重复同构 section 已折叠为 list/grid（递归）', {
+        beforeTop: beforeCollapse,
+        afterTop: sections.length,
+        beforeDeep: beforeCollapseDeep,
+        afterDeep: afterCollapseDeep,
       });
     }
 

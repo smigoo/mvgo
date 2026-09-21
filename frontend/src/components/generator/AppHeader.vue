@@ -128,6 +128,9 @@
         </svg>
       </button>
 
+      <!-- 系统公告通知 -->
+      <AnnouncementNotification />
+
       <!-- 用户菜单 -->
       <div class="user-menu" @mouseenter="handleMenuEnter" @mouseleave="handleMenuLeave">
         <div class="user-trigger">
@@ -193,6 +196,7 @@ import { message } from 'ant-design-vue'
 import { useTheme } from '@/composables/useTheme'
 import { useFeatureFlagsStore } from '@/stores/feature-flags'
 import { useUserStore } from '@/store/modules/user'
+import AnnouncementNotification from '@/components/AnnouncementNotification.vue'
 import http from '@/core/http'
 
 const router = useRouter()

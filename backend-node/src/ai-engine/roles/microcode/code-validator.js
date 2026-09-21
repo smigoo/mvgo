@@ -1945,6 +1945,131 @@ export async function validateAndFixGeneratedFiles(
       }
     }
 
+    // 2.6.1 子组件禁止 $mcComponentBuilder 调用（2026-09-21 · c-device-monitor 实锤）
+    // 子组件错误复制了 index.vue 的代码模式，调用了 $mcComponentBuilder，
+    // 导致运行时重复初始化或错误。只有 index.vue 应该调用 $mcComponentBuilder。
+    for (const [filePath, fileContent] of Object.entries(mergedFiles)) {
+      if (!filePath.startsWith('package/components/') || !filePath.endsWith('.vue'))
+        continue;
+      if (!fileContent || typeof fileContent !== 'string') continue;
+      if (!fileContent.includes('$mcComponentBuilder')) continue;
+
+      let fixedContent = fileContent;
+      let removedCount = 0;
+
+      // 移除 $mcComponentBuilder 调用行（单行解构或多行声明）
+      // 匹配模式：const { ... } = $mcComponentBuilder() 或 const xxx = $mcComponentBuilder()
+      const builderCallRegex = /^\s*(?:const|let|var)\s+(?:\{[^}]*\}|[\w$]+)\s*=\s*\$mcComponentBuilder\(\)\s*;?\s*$/gm;
+      if (builderCallRegex.test(fixedContent)) {
+        fixedContent = fixedContent.replace(builderCallRegex, '');
+        removedCount++;
+      }
+
+      // 移除 runtimeBuilder/componentProps/businessProps/componentApi 的解构声明
+      // 这些变量通常来自 $mcComponentBuilder 的解构
+      const destructuringRegex = /^\s*(?:const|let|var)\s+\{\s*(?:runtimeBuilder|componentProps|businessProps|componentApi)[^}]*\}\s*=\s*\$mcComponentBuilder\(\)\s*;?\s*$/gm;
+      if (destructuringRegex.test(fixedContent)) {
+        fixedContent = fixedContent.replace(destructuringRegex, '');
+        removedCount++;
+      }
+
+      // 移除 runtimeBuilder.publishEvent 调用块（onMounted 中的事件发布）
+      // 匹配：onMounted(() => { ... runtimeBuilder.publishEvent ... })
+      const onMountedRegex = /\s*onMounted\s*\(\s*\(\s*\)\s*=>\s*\{[^}]*runtimeBuilder\.publishEvent[^}]*\}\s*\)\s*;?/g;
+      if (onMountedRegex.test(fixedContent)) {
+        fixedContent = fixedContent.replace(onMountedRegex, '');
+        removedCount++;
+      }
+
+      // 移除 runtimeBuilder/componentProps/businessProps/componentApi 的单独声明
+      // 如：let runtimeBuilder = null
+      const varDeclarationRegex = /^\s*(?:const|let|var)\s+(?:runtimeBuilder|componentProps|businessProps|componentApi)\s*=\s*[^;]*;?\s*$/gm;
+      if (varDeclarationRegex.test(fixedContent)) {
+        fixedContent = fixedContent.replace(varDeclarationRegex, '');
+        removedCount++;
+      }
+
+      if (fixedContent !== fileContent) {
+        fixedFiles[filePath] = fixedContent;
+        fixes.push(
+          `子组件 ${filePath} 已移除 ${removedCount} 处 $mcComponentBuilder 相关调用（只有 index.vue 应该调用）`,
+        );
+      }
+    }
+
+    // 2.6.2 子组件样式 TODO 占位填充（2026-09-21 · c-device-monitor 实锤）
+    // 子组件 <style> 中的 `/* TODO: 补充样式 */` 占位，从 Figma 节点数据读取真实样式填充。
+    // 关联路径：CSS class → 模板 div（通过 class 选择器）→ data-section-id → nodeLayoutFacts[nodeId]
+    if (nodeLayoutFacts && Object.keys(nodeLayoutFacts).length > 0) {
+      for (const [filePath, fileContent] of Object.entries(mergedFiles)) {
+        if (!filePath.startsWith('package/components/') || !filePath.endsWith('.vue'))
+          continue;
+        if (!fileContent || typeof fileContent !== 'string') continue;
+        if (!fileContent.includes('/* TODO:')) continue;
+
+        // 提取 <template> 段，构建 class → nodeId 映射
+        const templateMatch = fileContent.match(/<template[^>]*>([\s\S]*?)<\/template>/);
+        if (!templateMatch) continue;
+        const templateContent = templateMatch[1];
+        
+        // 匹配带 data-section-id 的元素，提取 class 和 nodeId
+        const classToNodeId = new Map();
+        const elementRegex = /<[^>]+class="([^"]+)"[^>]*data-section-id="([^"]+)"[^>]*>/g;
+        let elemMatch;
+        while ((elemMatch = elementRegex.exec(templateContent)) !== null) {
+          const classes = elemMatch[1].split(/\s+/);
+          const nodeId = elemMatch[2];
+          for (const cls of classes) {
+            if (cls) classToNodeId.set(cls, nodeId);
+          }
+        }
+
+        // 提取 <style> 段
+        const styleMatch = fileContent.match(/(<style[^>]*>)([\s\S]*?)(<\/style>)/);
+        if (!styleMatch) continue;
+        const styleOpenTag = styleMatch[1];
+        const styleContent = styleMatch[2];
+        const styleCloseTag = styleMatch[3];
+
+        // 查找包含 TODO 占位的 CSS 规则并替换
+        let fixedStyleContent = styleContent;
+        let filledCount = 0;
+        const todoRegex = /\.([A-Za-z][\w-]*)\s*\{[^}]*\/\*\s*TODO:[^*]*\*\/[^}]*\}/g;
+        let todoMatch;
+        
+        while ((todoMatch = todoRegex.exec(styleContent)) !== null) {
+          const className = todoMatch[0];
+          const classSelector = todoMatch[1];
+          const nodeId = classToNodeId.get(classSelector);
+          
+          if (nodeId && nodeLayoutFacts[nodeId]) {
+            const facts = nodeLayoutFacts[nodeId];
+            // 生成真实 CSS 属性
+            const cssProps = [];
+            if (facts.display) cssProps.push(`  display: ${facts.display}`);
+            if (facts.flexDirection) cssProps.push(`  flex-direction: ${facts.flexDirection}`);
+            // 可从 facts 扩展更多属性（gap/align-items 等），当前仅处理布局事实
+            
+            if (cssProps.length > 0) {
+              const newRule = `.${classSelector} {\n${cssProps.join(';\n')};\n}`;
+              fixedStyleContent = fixedStyleContent.replace(className, newRule);
+              filledCount++;
+            }
+          }
+        }
+
+        if (filledCount > 0) {
+          const newFileContent = fileContent.slice(0, styleMatch.index) +
+            styleOpenTag + fixedStyleContent + styleCloseTag +
+            fileContent.slice(styleMatch.index + styleMatch[0].length);
+          fixedFiles[filePath] = newFileContent;
+          fixes.push(
+            `子组件 ${filePath} 已填充 ${filledCount} 处样式 TODO 占位（从 Figma 节点数据读取）`,
+          );
+        }
+      }
+    }
+
     // 2.7 CODE-003 自动修复：common.less class 前缀
     // 检测 common.less 中无前缀的 class，自动加上 .c-{componentId}-
     if (mergedFiles[commonLessPath]) {

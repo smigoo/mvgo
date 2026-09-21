@@ -31,6 +31,11 @@
         更新日志
       </router-link>
 
+      <!-- 系统公告：面向全体用户公开 -->
+      <router-link to="/announcements" class="af-link" active-class="active">
+        系统公告
+      </router-link>
+
       <!-- 建议反馈：跳转公司统一反馈表单（外部地址，新窗口打开） -->
       <a
         class="af-link"
