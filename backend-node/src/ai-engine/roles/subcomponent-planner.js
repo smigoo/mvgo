@@ -32,6 +32,8 @@ import {
   deriveSectionsFromFigmaTree,
   clusterItemsByColumnX,
 } from '../utils/section-tree.js';
+// 🛡️ H DOM contract（2026-09-22）：collapsed 卡 item 级几何分组事实（文本纵/横排 + icon 实测尺寸）
+import { buildItemLevelFacts } from '../utils/figma-item-facts.js';
 // 🛡️ 刀 5a（2026-09-13）：section type 推导抽离到纯函数模块（无 import.meta 依赖，可单测）
 import { deriveSectionType } from '../utils/section-type-derive.js';
 
@@ -846,6 +848,70 @@ function collectSourceNodeIds(sec) {
   return ids;
 }
 
+/**
+ * 🛡️ H DOM contract（2026-09-22 · mc-1790048059931 实锤）：从 Figma 几何确定性推导
+ * collapsed 卡（v-for item）的卡内骨架。
+ *
+ * 病灶：卡内「icon 左 + 文本列右（label 上 value 下纵排）」由 LLM 自由发挥，文本列常写 row
+ *   → 横排（Figma 真值纵排列）。buildItemLevelFacts 已产出 item facts（挂在每个卡 GROUP 上），
+ *   此处从 section 的 sourceNodeIds 定位容器 → 其子卡 → 取首个有 textStack 的卡事实。
+ *
+ * 产出（注入 section.itemSkeleton，随 prompt 下发约束 LLM）：
+ *   { textDirection: 'column'|'row', texts: [...], gapPx, icon: {widthPx,heightPx} }
+ * 纯函数、fail-open（任一环节缺失返回 null，不阻断）。
+ *
+ * 🛡️ 2026-09-22 二段放宽（E1 路径实锤）：cons 网格（2:8437 的 12 卡）在 E1 deriveSectionsFromFigmaTree
+ *   下被当作「R2 豁免的并列 leaf」（elementCount 29），未被 collapseSectionsDeep 标 collapsed=true
+ *   ——但产物里 LLM 仍会写成 v-for 12 卡。故此处不依赖 section.collapsed，直接凭 Figma 事实判定：
+ *   容器子节点 ≥4 且子卡有 textStack 事实 → 即判定为重复卡列表，产出骨架。
+ *
+ * @param {Object} section section（含 sourceNodeIds；collapsed 与否均可）
+ * @param {Map} figmaIndex nodeId → node（indexFigmaNodes 产出）
+ * @param {Object} itemFacts buildItemLevelFacts 产出（nodeId → {textStack,siblingAssets}）
+ */
+function deriveItemSkeleton(section, figmaIndex, itemFacts) {
+  try {
+    const ids = Array.isArray(section?.sourceNodeIds) ? section.sourceNodeIds : [];
+    // 定位容器节点（sourceNodeIds 首个能命中 figmaIndex 的）
+    let container = null;
+    for (const id of ids) {
+      const rec = figmaIndex?.get?.(String(id));
+      const raw = rec?.rawNode || rec;
+      // 🛡️ ≥4 子卡：真正的重复卡列表（网格/列表）。避免误伤普通 2~3 子节点的 section
+      //   （switch 两卡、header 三 stat 等本就不该走卡内骨架约束）。
+      if (raw && Array.isArray(raw.children) && raw.children.length >= 4) {
+        container = raw;
+        break;
+      }
+    }
+    if (!container) return null;
+
+    // 子卡里第一个「有 textStack 事实」的作为骨架模板
+    for (const child of container.children) {
+      const cid = String(child?.id || '');
+      const f = itemFacts[cid];
+      if (!f || !f.textStack) continue;
+      const icon = (f.siblingAssets || []).find((a) => a.isIcon);
+      // 🛡️ icon 位置：icon x < 首个文本 x → 左，否则右（Figma 几何确定性推断）
+      const firstTextX = f.textStack.texts?.[0]?.box?.x;
+      let iconPosition = null;
+      if (icon && typeof icon.x === 'number' && typeof firstTextX === 'number') {
+        iconPosition = icon.x < firstTextX ? 'left' : 'right';
+      }
+      return {
+        textDirection: f.textStack.flexDirection, // 'column' | 'row'
+        gapPx: f.textStack.gapPx ?? 0,
+        texts: (f.textStack.texts || []).map((t) => t.characters),
+        ...(icon ? { icon: { widthPx: icon.widthPx, heightPx: icon.heightPx } } : {}),
+        ...(iconPosition ? { iconPosition } : {}),
+      };
+    }
+    return null;
+  } catch {
+    return null; // fail-open
+  }
+}
+
 // 辅助函数：根据 section name 在 Figma 树中查找匹配的节点 id
 function findFigmaNodeIdBySectionName(sec) {
   if (!sec.name) return null;
@@ -1615,6 +1681,43 @@ export class SubcomponentPlanner {
             .filter((s) => s.type !== 'header')
             .map((s) => ({ id: s.id, flexGrow: s.layoutMetadata?.flexGrow })),
         });
+      }
+
+      // 🛡️ H DOM contract（2026-09-22 · mc-1790048059931 实锤）：collapsed 卡 item 级骨架事实。
+      //   病灶：v-for 卡内「icon 左 + 文本列右（label 上 value 下纵排）」的结构由 LLM 自由发挥，
+      //   文本列常写成 row → 横排（Figma 真值纵排列）。nodeLayoutFacts 只覆盖「有 children 的
+      //   容器」，纯 TEXT 兄弟无事实。治本：从 Figma 几何确定性推导卡内骨架（textStack 方向 +
+      //   icon 实测尺寸），注入 collapsed section 的 itemSkeleton 字段，随 prompt 下发约束 LLM。
+      //   位置在 applyFigmaHeightGrow 之后（复用已建的 figmaIndex 定位卡节点）。
+      const itemFacts = buildItemLevelFacts(opts.figmaNodeData);
+      if (Object.keys(itemFacts).length > 0) {
+        // 🛡️ 解包 document 建索引（opts.figmaNodeData 是 {document,...} 包裹形态，
+        //   indexFigmaNodes 不解包会拿到空 Map → deriveItemSkeleton 定位不到卡容器）。
+        const itemFigmaIndex =
+          indexFigmaNodes(opts.figmaNodeData?.document || opts.figmaNodeData);
+        let skeletonCount = 0;
+        const walkSections = (list) => {
+          if (!Array.isArray(list)) return;
+          for (const s of list) {
+            // 🛡️ 2026-09-22 二段放宽：不要求 s.collapsed——E1 路径下 cons 网格（12 卡）被
+            //   当作 R2 豁免的并列 leaf（未标 collapsed），但 Figma 子树仍是重复卡列表。
+            //   deriveItemSkeleton 内部用「≥4 子卡 + textStack」保守判定兜底，非重复列表自然 null。
+            if (s && !s.itemSkeleton) {
+              const skel = deriveItemSkeleton(s, itemFigmaIndex, itemFacts);
+              if (skel) {
+                s.itemSkeleton = skel;
+                skeletonCount++;
+              }
+            }
+            if (Array.isArray(s?.children)) walkSections(s.children);
+          }
+        };
+        walkSections(effectiveSections);
+        if (skeletonCount > 0) {
+          logger.info('itemSkeleton 已从 Figma 几何确定性推导（H DOM contract）', {
+            count: skeletonCount,
+          });
+        }
       }
     }
 

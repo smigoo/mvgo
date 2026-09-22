@@ -295,16 +295,31 @@ export class ComponentService {
     // 任务本人可以继续访问这类“有任务、无组件记录”的产物，避免详情页无意义地报 404。
     const task = this.tasksService.getTask(sessionId);
     if (task && (!task.userId || task.userId === userId)) {
+      let componentId = task.componentId || task.sessionId;
+      // 🛡️ 时序竞态治本（2026-09-22 · mc-max-1790069141908-ae28a01e 实锤）：
+      // graph 质量节点 publish 时 publisher 已把 workspace 目录名归一（c-xxx-<尾8hex>），
+      // 但 task.componentId 的归一在 Phase2Service 收尾才做（晚于 publish 数秒）。前端收到
+      // preview-publish 事件跳转预览反查时，task.componentId 可能还是 sessionId（mc-*），
+      // 导致 workspace 源按 sessionId 拼目录永远找不到 →「未找到组件」。
+      // 治本：反查时若 componentId 仍为 sessionId，从 workspace 目录按「尾 8 hex」反查
+      // 语义化 componentId（目录名已归一，是单一事实源，不依赖 task 归一时序）。
+      if (componentId === sessionId && /^(mc|mv)-/.test(sessionId)) {
+        const resolved = await this.resolveComponentIdByTail(
+          sessionId,
+          task.target === 'vue3' ? 'vue3' : 'microcode',
+        );
+        if (resolved) componentId = resolved;
+      }
       return {
-        componentId: task.componentId || task.sessionId,
+        componentId,
         taskId: task.sessionId,
         target: task.target === 'vue3' ? 'vue3' : 'microcode',
-        name: task.componentName || task.componentId || task.sessionId,
+        name: task.componentName || componentId || task.sessionId,
         description: '',
         groupId: task.groupId as any,
         creatorId: task.userId as any,
         metadata: {
-          componentId: task.componentId || task.sessionId,
+          componentId,
           sessionId: task.sessionId,
           taskId: task.sessionId,
           target: task.target === 'vue3' ? 'vue3' : 'microcode',
@@ -314,6 +329,29 @@ export class ComponentService {
     }
 
     throw new NotFoundException('未找到该 sessionId 对应的组件记录');
+  }
+
+  /**
+   * 🛡️ 按 sessionId 尾段（8 位 hex）反查 workspace 语义化 componentId。
+   * workspace 目录名 = c-<englishId>-<尾8hex>（publisher 归一，单一事实源），
+   * sessionId = mc-<ts>-<尾8hex>，两者共享尾 8 hex。
+   */
+  private async resolveComponentIdByTail(
+    sessionId: string,
+    target: 'vue3' | 'microcode',
+  ): Promise<string | null> {
+    const tail = String(sessionId).split('-').pop();
+    if (!tail || tail.length < 6) return null;
+    const base = target === 'vue3' ? vue3ComponentsDir : customComponentsDir;
+    try {
+      const dirs = await readdir(base, { withFileTypes: true });
+      const hit = dirs.find(
+        (d) => d.isDirectory() && d.name.endsWith(`-${tail}`),
+      );
+      return hit ? hit.name : null;
+    } catch {
+      return null; // 目录读取失败不影响主流程
+    }
   }
 
   /**

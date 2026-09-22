@@ -39,6 +39,37 @@ function extractFlexProps(cssContent, className) {
 }
 
 /**
+ * 🛡️ R2 命名后缀变体匹配（2026-09-22 · c-device-monitor-be31dcf3 实锤）：
+ * buildLayoutMapping 由 Figma 节点名推断 class（如 name='tabs' → .c-device-monitor-tabs），
+ * 但 R2 规则生成的子组件根 class 带语义后缀（.c-device-monitor-tabs-section）——
+ * 精确匹配失败 → LAYOUT-FACTS-INJECT 对 tabs 容器空转 → 6 个 tab 横排挤一行。
+ * 治本：精确 class 未命中时，尝试「同前缀 + 语义后缀」变体（-section/-wrap/-list/-box/
+ * -con/-container），命中即返回该变体名（供 updateFlexProps 定位同一选择器）。
+ * 纪律：仅当变体选择器**唯一**存在时采用；多重命中放弃（宁可漏报不误杀）。
+ */
+const LAYOUT_SUFFIX_VARIANTS = ['-section', '-wrap', '-list', '-box', '-con', '-container'];
+
+function matchClassWithSuffixVariant(cssContent, className) {
+  const direct = extractFlexProps(cssContent, className)
+  if (direct) return { className, extracted: direct }
+
+  if (!className.startsWith('.')) return null
+  const base = className.slice(1)
+  const escapedBase = base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  for (const suffix of LAYOUT_SUFFIX_VARIANTS) {
+    const variant = `${base}${suffix}`
+    const variantRe = new RegExp(`\\.${escapedBase}${suffix}\\b(?![-\\w])`, 'm')
+    const found = cssContent.match(variantRe)
+    if (!found) continue
+    // 唯一性校验：变体名只能出现一种后缀形态（-con 与 -container 前缀重叠，取首个命中即可，
+    // 但同后缀多次出现仍允许——同一 class 多块本就罕见；跨后缀多命中视为歧义放弃）
+    const extracted = extractFlexProps(cssContent, `.${variant}`)
+    if (extracted) return { className: `.${variant}`, extracted }
+  }
+  return null
+}
+
+/**
  * 更新 CSS/LESS 中指定 class 的 display 和 flex-direction
  * @param {string} cssContent - CSS/LESS 内容
  * @param {string} className - class 名
@@ -73,6 +104,33 @@ function updateFlexProps(cssContent, className, display, flexDirection) {
 }
 
 /**
+ * 🛡️ 网格事实注入（2026-09-22 · mc-1790058609462 实锤）：display:grid + grid-template-columns。
+ * 与 updateFlexProps 不同：清掉 flex-direction（grid 无此概念），但**保留 gap**（网格卡间距
+ * 是 Figma 真值，绝不能清——清 gap 会让卡片紧贴，与视觉真值「保留间距」矛盾）。
+ */
+function updateGridProps(cssContent, className, gridColumns) {
+  const escapedClass = className.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const classRegex = new RegExp(`(${escapedClass}\\s*\\{)([^}]*)(\\})`, 's')
+  return cssContent.replace(classRegex, (match, prefix, blockContent, suffix) => {
+    let newBlock = blockContent
+    // 幂等：已是 grid 且列数一致 → 不动
+    const colsM = newBlock.match(/grid-template-columns\s*:\s*repeat\(\s*(\d+)/)
+    if (/display\s*:\s*grid/.test(newBlock) && colsM && Number(colsM[1]) === gridColumns) {
+      return match
+    }
+    // 清 flex 布局声明（保留 gap、padding、width 等）
+    newBlock = newBlock
+      .replace(/flex-direction\s*:\s*(row|column);?/g, '')
+      .replace(/display\s*:\s*(flex|inline-flex);?/g, '')
+      .replace(/align-items\s*:\s*[^;]+;?/g, '')
+      .replace(/justify-content\s*:\s*[^;]+;?/g, '')
+    newBlock = newBlock.replace(/\s*$/, '')
+    newBlock += `\n  display: grid;\n  grid-template-columns: repeat(${gridColumns}, 1fr);\n  grid-auto-rows: 1fr;`
+    return prefix + newBlock + suffix
+  })
+}
+
+/**
  * 根据布局事实注入 display/flex-direction
  * @param {string} cssContent - CSS/LESS 内容
  * @param {Object} layoutMapping - 布局映射表（className → {display, flexDirection}）
@@ -87,14 +145,43 @@ export function injectLayoutFacts(cssContent, layoutMapping, options = {}) {
   let content = cssContent
 
   for (const [className, fact] of Object.entries(layoutMapping)) {
-    const extracted = extractFlexProps(content, className)
-    
-    if (!extracted) {
-      // class 不存在，跳过
+    // 🛡️ R2 后缀变体匹配（2026-09-22）：.c-x-tabs 未命中时尝试 .c-x-tabs-section 等变体
+    const matched = matchClassWithSuffixVariant(content, className)
+    if (!matched) {
+      // class（含变体）不存在，跳过
+      continue
+    }
+    const effectiveClassName = matched.className
+    const extracted = matched.extracted
+
+    // 🛡️ 网格事实（2026-09-22 治本）：nodeLayoutFacts 几何聚类命中均匀网格 → 注入 grid，
+    //   而非 flex-direction（side-by-side 判据对网格系统性误判 column）。
+    if (fact.display === 'grid' && fact.gridColumns >= 2) {
+      content = updateGridProps(content, effectiveClassName.slice(1), fact.gridColumns)
+      fixes.push({
+        code: 'LAYOUT-FACTS-INJECT',
+        className: effectiveClassName,
+        detail: `display: grid; grid-template-columns: repeat(${fact.gridColumns}, 1fr)（Figma 均匀网格 ${fact.gridColumns} 列）`,
+      })
+      if (logger) {
+        logger.info(`🛡️ LAYOUT-FACTS-INJECT: ${effectiveClassName} → display:grid repeat(${fact.gridColumns},1fr)`)
+      }
       continue
     }
 
     const { display, flexDirection } = extracted
+
+    // 🛡️ grid 块保护（2026-09-22 · mc-1790042773505-32d00272 实锤）：
+    // forceOverride 会把 LLM 正确写的 display:grid 强改成 flex（grid 是更强的
+    // 布局事实——子节点已聚列成网格，flex-direction 对 grid 容器无意义）。
+    // 块内含 grid-template-* 属性时：display 保留不动；flex-direction 不注入。
+    const hasGridTemplate = /(^|[^@\w-])grid-template-(?:columns|rows|areas)\s*:/.test(
+      extracted.blockContent || '',
+    )
+    if (hasGridTemplate) {
+      continue
+    }
+
     const needsDisplay = forceOverride || !display
     const needsFlexDirection = forceOverride || !flexDirection
 
@@ -105,9 +192,9 @@ export function injectLayoutFacts(cssContent, layoutMapping, options = {}) {
     if (displayMismatch || flexDirectionMismatch) {
       const newDisplay = displayMismatch ? fact.display : display
       const newFlexDirection = flexDirectionMismatch ? fact.flexDirection : flexDirection
-      
-      content = updateFlexProps(content, className, newDisplay, newFlexDirection)
-      
+
+      content = updateFlexProps(content, effectiveClassName.slice(1), newDisplay, newFlexDirection)
+
       const fixDetail = []
       if (displayMismatch) {
         fixDetail.push(`display: ${display || '(缺失)'} → ${fact.display}`)
@@ -115,15 +202,15 @@ export function injectLayoutFacts(cssContent, layoutMapping, options = {}) {
       if (flexDirectionMismatch) {
         fixDetail.push(`flex-direction: ${flexDirection || '(缺失)'} → ${fact.flexDirection}`)
       }
-      
+
       fixes.push({
         code: 'LAYOUT-FACTS-INJECT',
-        className,
-        detail: fixDetail.join(', '),
+        className: effectiveClassName,
+        detail: fixDetail.join(', ') + (effectiveClassName !== className ? `（R2 后缀变体：${className} → ${effectiveClassName}）` : ''),
       })
-      
+
       if (logger) {
-        logger.info(`🛡️ LAYOUT-FACTS-INJECT: ${className} ${fixDetail.join(', ')}`)
+        logger.info(`🛡️ LAYOUT-FACTS-INJECT: ${effectiveClassName} ${fixDetail.join(', ')}`)
       }
     }
   }

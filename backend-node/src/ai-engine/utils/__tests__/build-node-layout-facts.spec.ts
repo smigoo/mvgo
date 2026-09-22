@@ -103,13 +103,55 @@ describe('buildNodeLayoutFacts — B\' 事实层', () => {
     })
   })
 
-  it('子节点 < 2 个 → 不发事实（单子节点无需 flex 布局）', () => {
+  it('单子节点容器 → 默认 column（2026-09-19 扩大覆盖：防 LLM 漏写 flex-direction 默认 row）', () => {
     const node = {
       id: '6:1',
       children: [child('6:2', 0, 0, 100, 40)],
     }
     const facts = buildNodeLayoutFacts(node)
-    expect(facts['6:1']).toBeUndefined()
+    expect(facts['6:1']).toMatchObject({
+      display: 'flex',
+      flexDirection: 'column',
+      source: 'single-child-default',
+      confidence: 'low',
+    })
+  })
+
+  it('🛡️ 均匀网格 3×4 → display:grid gridColumns:3（mc-1790058609462 一片蓝实锤：side-by-side 比例误判 column）', () => {
+    // 12 卡 3 列：x=0/130/260 三列，每列 4 行 → 均匀网格
+    const cons = {
+      id: '2:8437',
+      layoutMode: 'NONE',
+      children: [
+        child('c1', 0, 0, 120, 60), child('c2', 130, 0, 120, 60), child('c3', 260, 0, 120, 60),
+        child('c4', 0, 70, 120, 60), child('c5', 130, 70, 120, 60), child('c6', 260, 70, 120, 60),
+        child('c7', 0, 140, 120, 60), child('c8', 130, 140, 120, 60), child('c9', 260, 140, 120, 60),
+        child('c10', 0, 210, 120, 60), child('c11', 130, 210, 120, 60), child('c12', 260, 210, 120, 60),
+      ],
+    }
+    const facts = buildNodeLayoutFacts({ document: { id: '0:0', children: [cons] } })
+    expect(facts['2:8437']).toEqual({
+      display: 'grid',
+      gridColumns: 3,
+      source: 'geometric-grid-inference',
+      confidence: 'high',
+    })
+  })
+
+  it('单列竖排 4 卡（x 全同）→ 不误判 grid，仍 column', () => {
+    const stack = {
+      id: '2:9000',
+      layoutMode: 'NONE',
+      children: [
+        child('s1', 0, 0, 100, 60),
+        child('s2', 0, 70, 100, 60),
+        child('s3', 0, 140, 100, 60),
+        child('s4', 0, 210, 100, 60),
+      ],
+    }
+    const facts = buildNodeLayoutFacts({ document: { id: '0:0', children: [stack] } })
+    expect(facts['2:9000'].display).toBe('flex')
+    expect(facts['2:9000'].flexDirection).toBe('column')
   })
 
   it('递归遍历：嵌套节点各自产出事实', () => {

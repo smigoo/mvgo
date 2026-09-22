@@ -920,8 +920,23 @@ function formatOne(sec, indent) {
       }
     }
   }
-  
-  return `${pad}- \`${sec.id}\` — ${sec.responsibility || sec.type || '区块'}${title}${layout}${gridNote}${extra}${childInfo}${tabsNote}${score}`
+
+  // 🛡️ H DOM contract（2026-09-22 · mc-1790048059931 实锤）：collapsed 卡 item 级骨架约束。
+  //   planner 已从 Figma 几何确定性推导出卡内骨架（文本纵/横排 + icon 实测尺寸），
+  //   此处打印硬约束给 LLM——卡内结构必须按此生成，禁止自由发挥（尤其是文本列方向）。
+  //   注：判定用 itemSkeleton 存在性而非 sec.collapsed——E1 路径下 cons 网格（12 卡）被
+  //   当作 R2 豁免 leaf（未标 collapsed），planner 仍会注入 itemSkeleton（deriveItemSkeleton
+  //   用「≥4 子卡 + textStack」兜底），此处必须同步打印。
+  let itemSkeletonNote = ''
+  if (sec.itemSkeleton) {
+    const sk = sec.itemSkeleton
+    const dirText = sk.textDirection === 'column' ? '纵向堆叠（label 上 value 下，flex-direction: column）' : '横向并排（flex-direction: row）'
+    const iconText = sk.icon ? `，icon 固定 ${sk.icon.widthPx}×${sk.icon.heightPx}px` : ''
+    const texts = Array.isArray(sk.texts) && sk.texts.length > 0 ? `，文本项 [${sk.texts.slice(0, 4).join(' / ')}]` : ''
+    itemSkeletonNote = `，⚠️卡内骨架（H 契约，禁止改写）：文本列${dirText}${iconText}${texts}`
+  }
+
+  return `${pad}- \`${sec.id}\` — ${sec.responsibility || sec.type || '区块'}${title}${layout}${gridNote}${extra}${childInfo}${tabsNote}${itemSkeletonNote}${score}`
 }
 
 /**
@@ -949,6 +964,11 @@ export function formatSectionTreeForPrompt(sections, indent = 0) {
       }
     } else {
       lines.push(formatOne(sec, indent))
+      // 🛡️ H3 硬骨架 DOM 模板（2026-09-22）：有 itemSkeleton 的 section，给 LLM 完整卡内
+      //   DOM 结构模板照抄（icon + 文本列），LLM 只填变量绑定，禁止改结构/类名/方向。
+      if (sec.itemSkeleton) {
+        lines.push(formatItemSkeletonTemplate(sec, indent + 1))
+      }
       if (sec.internalSubcomponents && sec.internalSubcomponents.length > 0) {
         const pad = '  '.repeat(indent + 1)
         lines.push(
@@ -963,6 +983,58 @@ export function formatSectionTreeForPrompt(sections, indent = 0) {
     }
   }
   return lines.filter(Boolean).join('\n')
+}
+
+/**
+ * 🛡️ H3 卡内硬骨架模板（2026-09-22 · mc-1790058609462 实锤）：把 itemSkeleton 事实渲染成
+ *   「照抄即用」的卡内 DOM 模板。治「LLM 自由发挥卡内结构」（类名漂移 cons-bg/cons-info、
+ *   文本列写成 row）。LLM 只需替换 `<你的数组名>` / `<字段名>`，禁止改结构/类名/方向。
+ */
+function formatItemSkeletonTemplate(sec, indent) {
+  const sk = sec.itemSkeleton
+  if (!sk) return ''
+  const pad = '  '.repeat(indent)
+  const lines = []
+  const icon = sk.icon
+  const dir = sk.textDirection === 'column' ? 'column' : 'row'
+  const gap = sk.gapPx || 4
+
+  lines.push(`${pad}▼ 卡内骨架模板（H 契约·照抄结构，只替换变量绑定，禁止改结构/类名/方向）：`)
+  lines.push(`${pad}\`\`\``)
+  lines.push(`${pad}<template>`)
+  lines.push(`${pad}  <div v-for="item in <你的数组名>" :key="item.<id字段>" class="<卡容器类>">`)
+
+  // icon（左/右由 Figma 几何推断）
+  if (icon) {
+    if (sk.iconPosition === 'left') {
+      lines.push(`${pad}    <div class="<卡容器类>-icon">`)
+      lines.push(`${pad}      <img :src="item.icon" alt="" style="width: ${icon.widthPx}px; height: ${icon.heightPx}px;" />`)
+      lines.push(`${pad}    </div>`)
+    }
+    lines.push(`${pad}    <div class="<卡容器类>-text" style="display: flex; flex-direction: ${dir}; gap: ${gap}px;">`)
+  } else {
+    lines.push(`${pad}    <div class="<卡容器类>-text" style="display: flex; flex-direction: ${dir}; gap: ${gap}px;">`)
+  }
+  // 文本项：按 Figma 真值顺序（label/value/value2/…）
+  const fields = (sk.texts || []).map((t, i) => {
+    if (i === 0) return 'label'
+    if (i === 1) return 'value'
+    return `value${i}`
+  })
+  sk.texts?.forEach((txt, i) => {
+    lines.push(`${pad}      <span>{{ item.${fields[i]} }}</span>`)
+  })
+  lines.push(`${pad}    </div>`)
+  if (icon && sk.iconPosition === 'right') {
+    lines.push(`${pad}    <div class="<卡容器类>-icon">`)
+    lines.push(`${pad}      <img :src="item.icon" alt="" style="width: ${icon.widthPx}px; height: ${icon.heightPx}px;" />`)
+    lines.push(`${pad}    </div>`)
+  }
+  lines.push(`${pad}  </div>`)
+  lines.push(`${pad}</template>`)
+  lines.push(`${pad}\`\`\``)
+  lines.push(`${pad}（文本内容真值：${(sk.texts || []).join(' / ')}；icon ${icon ? `${icon.widthPx}×${icon.heightPx}px${sk.iconPosition ? ` 在${sk.iconPosition === 'left' ? '左' : '右'}` : ''}` : '无'}）`)
+  return lines.join('\n')
 }
 
 /**

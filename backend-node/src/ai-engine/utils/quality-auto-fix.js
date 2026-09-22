@@ -4,6 +4,7 @@
  * 针对质量评分中可自动修复的扣分项提供修复函数：
  * - CODE-008：剥离 LLM 手写的资源 import（应由 injectResourceImports 后处理注入）
  * - THEME-VAR-NAME-MISMATCH：业务样式 var() 直引转 Less 槽位引用
+ * - CODE-025-WARN：剥离孤儿资源 import（import 了 mapping 未登记的变量）
  *
  * 设计原则：
  * - 幂等：多次执行结果一致
@@ -14,7 +15,8 @@
 import { readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { healBusinessStyleVarRefs } from './theme-color-guard.js'
-import { collectGeneratedFilesFromDir } from './quality-score-v1.js'
+import { collectGeneratedFilesFromDir, findResourceDomMapping } from './quality-score-v1.js'
+import { buildResourceFacts } from './resource-facts.js'
 
 /**
  * 剥离 LLM 手写的资源 import（CODE-008）
@@ -104,6 +106,90 @@ export function healThemeVarNameMismatch(componentDir, files) {
 }
 
 /**
+ * 修复 CODE-025-WARN（剥离孤儿资源 import）
+ *
+ * 背景：LLM 有时 import 了资源变量名，但该变量不在 resource-dom-mapping 中登记
+ * → R3 orphan import（可能命名漂移或臆造变量名）。
+ *
+ * 修复策略：
+ * - 加载 resource-dom-mapping.json 构建事实源
+ * - 对每个 .vue 文件扫描 <script> 中的资源 import
+ * - 删除不在 mapping 事实源中的 import 行（孤儿 import）
+ *
+ * 注意：此函数只处理 R3（orphan import），不处理 R1/R2（引用未 import / 幽灵引用）。
+ * R1/R2 属于 BLOCK 级别，需要 AI 介入修复，不在本规则范围内。
+ *
+ * @param {string} componentDir 组件目录
+ * @param {Array} files 文件列表（{ path, content }）
+ * @returns {{ fixed: Array<{file:string, removed:number}>, files: Array }} 修复清单 + 更新后的文件列表
+ */
+export function stripOrphanResourceImports(componentDir, files) {
+  const fixed = []
+
+  // 加载 resource-dom-mapping 构建事实源
+  const mapping = findResourceDomMapping(componentDir)
+  if (!mapping || !Array.isArray(mapping) || mapping.length === 0) {
+    return { fixed, files }
+  }
+
+  const fileMap = {}
+  for (const f of files) {
+    if (f.path && typeof f.content === 'string') {
+      fileMap[f.path] = f.content
+    }
+  }
+
+  const facts = buildResourceFacts({ mapping, files: fileMap })
+  // facts.orphanImports: [{ path, varName }] — import 了但不在 mapping 中的变量
+  if (!facts.orphanImports || facts.orphanImports.length === 0) {
+    return { fixed, files }
+  }
+
+  // 按文件分组
+  const orphanByFile = {}
+  for (const o of facts.orphanImports) {
+    if (!orphanByFile[o.path]) orphanByFile[o.path] = new Set()
+    orphanByFile[o.path].add(o.varName)
+  }
+
+  // 资源 import 正则（与 resource-facts.js 保持一致）
+  const importRe = /import\s+([A-Za-z_$][\w$]*)\s+from\s+['"][^'"]*(?:images|assets)[^'"]*['"];?\s*\n?/g
+
+  const updatedFiles = files.map((file) => {
+    if (!file.path?.endsWith('.vue') || typeof file.content !== 'string') return file
+
+    const orphans = orphanByFile[file.path]
+    if (!orphans || orphans.size === 0) return file
+
+    const scriptMatch = file.content.match(/<script[^>]*>([\s\S]*?)<\/script>/i)
+    if (!scriptMatch) return file
+
+    const scriptContent = scriptMatch[1]
+    let removedCount = 0
+
+    const after = scriptContent.replace(importRe, (fullMatch, varName) => {
+      if (orphans.has(varName)) {
+        removedCount++
+        return '' // 删除孤儿 import 行
+      }
+      return fullMatch
+    })
+
+    if (removedCount > 0) {
+      const newContent = file.content.replace(scriptMatch[0], (m) => {
+        return m.replace(scriptContent, after)
+      })
+      fixed.push({ file: file.path, removed: removedCount })
+      return { ...file, content: newContent }
+    }
+
+    return file
+  })
+
+  return { fixed, files: updatedFiles }
+}
+
+/**
  * 执行所有可用的自动修复
  *
  * @param {string} componentDir 组件目录
@@ -124,6 +210,7 @@ export function runAutoFix(componentDir, issues) {
   const summary = {
     code008: 0,
     themeVarMismatch: 0,
+    code025Warn: 0,
   }
 
   // 统计需要修复的问题类型
@@ -143,6 +230,14 @@ export function runAutoFix(componentDir, issues) {
     files = result.files
     allFixed.push(...result.fixed.map((f) => ({ ...f, rule: 'THEME-VAR-NAME-MISMATCH' })))
     summary.themeVarMismatch = result.fixed.length
+  }
+
+  // 3. CODE-025-WARN 修复（2026-09-22 新增）
+  if (issueTypes.has('CODE-025-WARN')) {
+    const result = stripOrphanResourceImports(componentDir, files)
+    files = result.files
+    allFixed.push(...result.fixed.map((f) => ({ ...f, rule: 'CODE-025-WARN' })))
+    summary.code025Warn = result.fixed.length
   }
 
   return { fixed: allFixed, files, summary }

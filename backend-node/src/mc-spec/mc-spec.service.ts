@@ -535,7 +535,7 @@ export class McSpecService {
   }
 
   /**
-   * 自动修复质量评分中的可修复问题（CODE-008、THEME-VAR-NAME-MISMATCH）
+   * 自动修复质量评分中的可修复问题（CODE-008、THEME-VAR-NAME-MISMATCH、CODE-025-WARN）
    *
    * 修复后自动重新评分并写回 component-meta.json
    */
@@ -553,13 +553,13 @@ export class McSpecService {
     const issues = scoreResult.quality?.spec?.issues || [];
 
     // 2. 筛选可自动修复的问题
-    const fixableRules = new Set(['CODE-008', 'THEME-VAR-NAME-MISMATCH']);
+    const fixableRules = new Set(['CODE-008', 'THEME-VAR-NAME-MISMATCH', 'CODE-025-WARN']);
     const fixableIssues = issues.filter((i) => fixableRules.has(i.id));
     if (fixableIssues.length === 0) {
       return {
         componentId: id,
         fixed: [],
-        summary: { code008: 0, themeVarMismatch: 0 },
+        summary: { code008: 0, themeVarMismatch: 0, code025Warn: 0 },
         message: '没有可自动修复的问题',
       };
     }

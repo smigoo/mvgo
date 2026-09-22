@@ -2004,11 +2004,13 @@ export async function validateAndFixGeneratedFiles(
       for (const [filePath, fileContent] of Object.entries(mergedFiles)) {
         if (!filePath.startsWith('package/components/') || !filePath.endsWith('.vue'))
           continue;
-        if (!fileContent || typeof fileContent !== 'string') continue;
-        if (!fileContent.includes('/* TODO:')) continue;
+        // 🛡️ 2026-09-22 覆盖修复：读取基底改为 fixedFiles 优先（防前置 pass 成果被回滚）。
+        const latestContent0 = fixedFiles[filePath] ?? fileContent;
+        if (!latestContent0 || typeof latestContent0 !== 'string') continue;
+        if (!latestContent0.includes('/* TODO:')) continue;
 
         // 提取 <template> 段，构建 class → nodeId 映射
-        const templateMatch = fileContent.match(/<template[^>]*>([\s\S]*?)<\/template>/);
+        const templateMatch = latestContent0.match(/<template[^>]*>([\s\S]*?)<\/template>/);
         if (!templateMatch) continue;
         const templateContent = templateMatch[1];
         
@@ -2025,7 +2027,7 @@ export async function validateAndFixGeneratedFiles(
         }
 
         // 提取 <style> 段
-        const styleMatch = fileContent.match(/(<style[^>]*>)([\s\S]*?)(<\/style>)/);
+        const styleMatch = latestContent0.match(/(<style[^>]*>)([\s\S]*?)(<\/style>)/);
         if (!styleMatch) continue;
         const styleOpenTag = styleMatch[1];
         const styleContent = styleMatch[2];
@@ -2059,13 +2061,48 @@ export async function validateAndFixGeneratedFiles(
         }
 
         if (filledCount > 0) {
-          const newFileContent = fileContent.slice(0, styleMatch.index) +
+          const newFileContent = latestContent0.slice(0, styleMatch.index) +
             styleOpenTag + fixedStyleContent + styleCloseTag +
-            fileContent.slice(styleMatch.index + styleMatch[0].length);
+            latestContent0.slice(styleMatch.index + styleMatch[0].length);
           fixedFiles[filePath] = newFileContent;
           fixes.push(
             `子组件 ${filePath} 已填充 ${filledCount} 处样式 TODO 占位（从 Figma 节点数据读取）`,
           );
+        }
+      }
+    }
+
+    // 2.6.3 视觉序确定性装配（2026-09-22 · c-device-monitor-be31dcf3 实锤）
+    // LLM 生成的 v-for 数据数组照抄 Figma 文档序（grid 布局常为列优先），而渲染按行
+    // 优先消费 → 12 卡中 11 张错位；tabs 数组文档序 ≠ y 序 → tab 顺序错。
+    // 治本：从 Figma 真值读子节点 (y,x) 序，按文本签名匹配并重排 script 数据数组。
+    // 保守条件：元素带 data-section-id（grid）/ Figma 树恰有 1 个 name='tabs'（tabs）、
+    // 数组长度 === Figma 卡数、签名集合 100% 相等、顺序确实不同（幂等）。
+    if (nodeData) {
+      const { reorderArraysByFigmaVisualOrder } =
+        await import('../../utils/visual-order-assembler.js');
+      for (const [filePath, fileContent] of Object.entries(mergedFiles)) {
+        if (!filePath.startsWith('package/components/') || !filePath.endsWith('.vue'))
+          continue;
+        // 🛡️ 2026-09-22 覆盖修复（mc-1790046506688 实锤）：2.6.2 等前置 pass 可能已把
+        //   修复写入 fixedFiles，此处必须取「最新版」内容做重排基底，否则重排结果
+        //   会把前置 pass 的修复整体回滚（fixedFiles 同 key 后写覆盖先写）。
+        const latestContent = fixedFiles[filePath] ?? fileContent;
+        if (!latestContent || typeof latestContent !== 'string') continue;
+        const fileName = filePath.split('/').pop() || '';
+        try {
+          const result = reorderArraysByFigmaVisualOrder(latestContent, nodeData, { fileName });
+          if (result && result.content !== latestContent) {
+            fixedFiles[filePath] = result.content;
+            fixes.push(
+              `视觉序重排: ${filePath} ${result.mode} 模式已按 Figma (y,x) 序重排 [${result.reordered.join(', ')}]（${result.labels.join(' → ')}）`,
+            );
+          }
+        } catch (e) {
+          options.logger?.warn?.('视觉序重排失败（fail-open 跳过）', {
+            filePath,
+            error: String(e?.message || e),
+          });
         }
       }
     }
@@ -2128,12 +2165,14 @@ export async function validateAndFixGeneratedFiles(
 
     // 2.8 FLEX-002 自动修复：移除冗余的 flex column
     // 检测 style 块中无子属性的 flex column，自动移除
+    // 🛡️ 2026-09-22 覆盖修复：读取基底改为 fixedFiles 优先（同 2.9 段，防前置 pass 成果被回滚）。
     for (const [filePath, fileContent] of Object.entries(mergedFiles)) {
       if (!filePath.endsWith('.vue') && !filePath.endsWith('.less')) continue;
 
+      const baseContent = fixedFiles[filePath] ?? fileContent;
       const styleMatches =
-        fileContent.match(/<style[^>]*>([\s\S]*?)<\/style>/gi) || [];
-      let modifiedContent = fileContent;
+        baseContent.match(/<style[^>]*>([\s\S]*?)<\/style>/gi) || [];
+      let modifiedContent = baseContent;
 
       for (const styleTag of styleMatches) {
         const bodyMatch = styleTag.match(/>([\s\S]*?)<\/style>/i);
@@ -2155,7 +2194,7 @@ export async function validateAndFixGeneratedFiles(
         }
       }
 
-      if (modifiedContent !== fileContent) {
+      if (modifiedContent !== baseContent) {
         fixedFiles[filePath] = modifiedContent;
       }
     }
@@ -2189,11 +2228,14 @@ export async function validateAndFixGeneratedFiles(
       }
 
       // ② 各 .vue <style> 体
+      // 🛡️ 2026-09-22 覆盖修复：读取基底改为 fixedFiles 优先（2.6.2/2.6.3 等前置 pass
+      //   可能已写 fixedFiles），否则本段把 <style> 修复写回旧基底会整体回滚前置成果。
       for (const [filePath, fileContent] of Object.entries(mergedFiles)) {
         if (!filePath.endsWith('.vue')) continue;
+        const baseContent2 = fixedFiles[filePath] ?? fileContent;
         const styleMatches2 =
-          fileContent.match(/<style[^>]*>([\s\S]*?)<\/style>/gi) || [];
-        let modifiedContent2 = fileContent;
+          baseContent2.match(/<style[^>]*>([\s\S]*?)<\/style>/gi) || [];
+        let modifiedContent2 = baseContent2;
         for (const styleTag of styleMatches2) {
           const bodyMatch2 = styleTag.match(/>([\s\S]*?)<\/style>/i);
           if (!bodyMatch2) continue;
@@ -2209,7 +2251,7 @@ export async function validateAndFixGeneratedFiles(
             }
           }
         }
-        if (modifiedContent2 !== fileContent) {
+        if (modifiedContent2 !== baseContent2) {
           fixedFiles[filePath] = modifiedContent2;
         }
       }
@@ -2241,28 +2283,86 @@ export async function validateAndFixGeneratedFiles(
     // 解决：LLM 生成错误的布局方向、遗漏 display/flex-direction 等问题
     if (nodeLayoutFacts && Object.keys(nodeLayoutFacts).length > 0) {
       const { processAllStyleFiles, buildLayoutMapping } = await import('../../utils/layout-facts-injector.js');
-      
-      // 构建布局映射表（className → {display, flexDirection}）
-      const layoutMapping = buildLayoutMapping(nodeLayoutFacts, nodeData, componentName);
-      
+
+      // 🛡️ 2026-09-22 根因修复（c-device-monitor-be31dcf3 / 60d567d3 实锤）：
+      //   buildLayoutMapping 的 class 推断用 componentName——此处收到的 componentName 是
+      //   **实例 ID 全名**（如 mc-1790041042490-60d567d3）→ 产出 .c-mc-...-tabs，
+      //   而产物实际 class 是语义名 .c-device-monitor-tabs（declare.json componentId 派生）
+      //   → 映射 key 与产物 class 完全不搭 → LAYOUT-FACTS-INJECT 恒空转
+      //   → tabs 容器永远拿不到 flex-direction:column（6 个 tab 横排挤一行的根因之一）。
+      //   治本：优先用 resolveClassPrefixId（与 L0-B / CODE-003 同源的单一解析器，
+      //   declare.json componentId 优先）得到语义前缀（c-device-monitor），
+      //   再剥掉 c- 前缀传给 buildLayoutMapping（其 inferClassName 自拼 .c- 前缀，
+      //   不剥会产生 .c-c-device-monitor-tabs 双前缀）。
+      //   同时保留原 componentName 映射作兜底（两份映射都注入，命中哪个算哪个）。
+      const resolvedPrefix = resolveClassPrefixId(mergedFiles, null, { fallbackToDerive: true });
+      const semanticPrefix = resolvedPrefix
+        ? resolvedPrefix.replace(/^(c|cp|mv|page)-/, '')
+        : null;
+      const layoutMapping =
+        semanticPrefix && semanticPrefix !== componentName
+          ? {
+              ...buildLayoutMapping(nodeLayoutFacts, nodeData, componentName),
+              ...buildLayoutMapping(nodeLayoutFacts, nodeData, semanticPrefix),
+            }
+          : buildLayoutMapping(nodeLayoutFacts, nodeData, componentName);
+
       if (Object.keys(layoutMapping).length > 0) {
+        // 🛡️ 2026-09-22 覆盖修复：输入基底改为 fixedFiles 优先合并（防 2.6.x/2.8/2.9
+        //   前置 pass 成果被旧基底整体回滚）。
+        const latestFiles = { ...mergedFiles, ...fixedFiles };
         const { fixedFiles: layoutFixedFiles, fixes: layoutFixes } = processAllStyleFiles(
-          mergedFiles,
+          latestFiles,
           layoutMapping,
           { logger: options.logger }
         );
-        
+
         // 合并修复结果
         for (const [filePath, content] of Object.entries(layoutFixedFiles)) {
           fixedFiles[filePath] = content;
         }
-        
+
         // 记录修复日志
         for (const fix of layoutFixes) {
           fixes.push(
             `LAYOUT-FACTS-INJECT: ${fix.filePath} [${fix.className}] ${fix.detail}`
           );
         }
+      }
+    }
+
+    // 2.12 ITEM-FACTS-INJECT item 级几何分组事实注入（2026-09-22 · H DOM contract 第 1b 步）
+    // 病灶：collapsed 卡内 LLM 自包文本容器方向自由发挥（Figma 纵排列写成 row）、
+    //   icon 无实测尺寸。nodeLayoutFacts 只覆盖「有 children 的容器」，TEXT 兄弟无事实。
+    // 治本：buildItemLevelFacts 几何分组（x 对齐 y 递增→纵排列 / x 递增 y 对齐→横排行），
+    //   双通道锚定（静态文本 / script 数组签名双射）注入容器方向 + icon 实测尺寸。
+    // 读取基底 fixedFiles 优先（吸取覆盖链教训）。
+    if (nodeData) {
+      try {
+        const { buildItemLevelFacts } =
+          await import('../../utils/figma-item-facts.js');
+        const { injectItemLevelFacts } =
+          await import('../../utils/item-facts-injector.js');
+        const itemFacts = buildItemLevelFacts(nodeData);
+        if (Object.keys(itemFacts).length > 0) {
+          for (const [filePath, fileContent] of Object.entries(mergedFiles)) {
+            if (!filePath.startsWith('package/components/') || !filePath.endsWith('.vue'))
+              continue;
+            const latestContent = fixedFiles[filePath] ?? fileContent;
+            if (!latestContent || typeof latestContent !== 'string') continue;
+            const result = injectItemLevelFacts(latestContent, itemFacts);
+            if (result && result.content !== latestContent) {
+              fixedFiles[filePath] = result.content;
+              for (const f of result.fixes) {
+                fixes.push(`ITEM-FACTS-INJECT: ${filePath} ${f}`);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        options.logger?.warn?.('ITEM-FACTS-INJECT 失败（fail-open 跳过）', {
+          error: String(e?.message || e),
+        });
       }
     }
 

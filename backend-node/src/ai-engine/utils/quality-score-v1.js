@@ -111,6 +111,14 @@ function uniqueStrings(list) {
   return [...new Set((list || []).map((x) => String(x).trim()).filter(Boolean))]
 }
 
+/**
+ * 从产物文件中提取样式字面量（color / spacing / font / radius）。
+ *
+ * 2026-09-22 根治样式分非确定性：此前对全部文件（含 .js / .json / .vue 的
+ * <script>/<template>）用宽泛正则提取颜色，LLM 每次生成的 JS 代码中颜色字面量
+ * 略有不同（注释、字符串、变量值等）→ 提取集合不同 → 覆盖率波动 → 样式分不稳定。
+ * 修复：只扫描真正的样式上下文（.less/.css 全文 + .vue 的 <style> 块）。
+ */
 export function extractDeclaredStyleLiterals(files = []) {
   const colors = []
   const spacing = []
@@ -120,20 +128,41 @@ export function extractDeclaredStyleLiterals(files = []) {
   const spaceRe = /(?:gap|row-gap|column-gap|padding(?:-[a-z]+)?|margin(?:-[a-z]+)?)\s*:\s*([^;}{]+)/gi
   const fontRe = /font-size\s*:\s*([^;}{]+)/gi
   const radiusRe = /border-radius\s*:\s*([^;}{]+)/gi
+
   for (const f of files) {
     const content = String(f?.content || '')
+    const p = String(f?.path || '')
+    // 只扫描样式上下文：.less/.css 全文 + .vue 的 <style> 块
+    let styleContent = ''
+    if (/\.less$/i.test(p) || /\.css$/i.test(p)) {
+      styleContent = content
+    } else if (/\.vue$/i.test(p)) {
+      // 提取所有 <style> 块（含 scoped / lang="less" 等变体）
+      for (const m of content.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)) {
+        styleContent += m[1] + '\n'
+      }
+    } else {
+      continue // .js / .json / .ts 等非样式文件 → 跳过
+    }
+
+    if (!styleContent) continue
+
     let m
-    while ((m = colorRe.exec(content))) colors.push(m[0].replace(/\s+/g, ''))
-    while ((m = spaceRe.exec(content))) {
+    colorRe.lastIndex = 0
+    while ((m = colorRe.exec(styleContent))) colors.push(m[0].replace(/\s+/g, ''))
+    spaceRe.lastIndex = 0
+    while ((m = spaceRe.exec(styleContent))) {
       for (const tok of m[1].split(/\s+/)) {
         if (/px$/i.test(tok)) spacing.push(tok)
       }
     }
-    while ((m = fontRe.exec(content))) {
+    fontRe.lastIndex = 0
+    while ((m = fontRe.exec(styleContent))) {
       const px = parsePx(m[1])
       if (px != null) fonts.push(`${px}px`)
     }
-    while ((m = radiusRe.exec(content))) {
+    radiusRe.lastIndex = 0
+    while ((m = radiusRe.exec(styleContent))) {
       for (const tok of m[1].split(/\s+/)) {
         if (/px$/i.test(tok) || tok === '0') radii.push(tok)
       }
@@ -525,6 +554,29 @@ export function findFigmaNodeData(componentDir) {
   return null
 }
 
+/**
+ * ️ 加载 resource-dom-mapping（2026-09-22 · CODE-025-WARN 根治）。
+ *
+ * 根因：scoreComponentDir() 此前从未加载 resource-dom-mapping.json，
+ * 导致 CodeStructureValidator.validate() 用空 mapping 跑 CODE-025 检查 →
+ * 所有资源变量引用都被判为 R3（orphan imports）→ 全部误报。
+ *
+ * @param {string} componentDir
+ * @returns {Array|null}
+ */
+export function findResourceDomMapping(componentDir) {
+  const candidates = [
+    join(componentDir, '.mc-gen', 'resource-dom-mapping.json'),
+    join(componentDir, '.mc-gen', 'cache', 'resource-dom-mapping.json'),
+    join(componentDir, 'resource-dom-mapping.json'),
+  ]
+  for (const p of candidates) {
+    const json = loadJsonIfExists(p)
+    if (Array.isArray(json)) return json
+  }
+  return null
+}
+
 export function mergeQualityIntoMeta(prevMeta, qualityV1) {
   const prev = prevMeta && typeof prevMeta === 'object' ? prevMeta : {}
   const prevQuality = prev.quality && typeof prev.quality === 'object' ? prev.quality : {}
@@ -580,6 +632,9 @@ export async function scoreComponentDir(componentDir, opts = {}) {
   const target = opts.target || detectComponentType(componentDir, files)
   const isVue3 = target === 'vue3'
 
+  // 🛡️ 加载 resource-dom-mapping（2026-09-22 · CODE-025-WARN 根治）
+  const resourceMapping = opts.resourceMapping || findResourceDomMapping(componentDir)
+
   let l0b = { pass: true, blockCount: 0, issues: [] }
   let l0bError = null
   try {
@@ -587,12 +642,20 @@ export async function scoreComponentDir(componentDir, opts = {}) {
     l0b = CodeStructureValidator.validate(files, componentId, {
       ...(opts.l0bOptions || {}),
       target: isVue3 ? 'vue3' : undefined,
+      resourceMapping,
     })
     // Vue3 手写图片 import 是合法写法，剔除 CODE-008 假阳性（校验器未做 Vue3 分流）
     if (isVue3 && Array.isArray(l0b.issues)) {
       l0b = {
         ...l0b,
-        issues: l0b.issues.filter((i) => (i?.id || '') !== 'CODE-008'),
+        issues: l0b.issues.filter((i) => {
+          const id = i?.id || ''
+          // CODE-008：Vue3 允许手写资源 import
+          if (id === 'CODE-008') return false
+          // CODE-025-WARN：Vue3 允许手写资源 import，R3 orphan imports 不是问题
+          if (id === 'CODE-025-WARN') return false
+          return true
+        }),
       }
     }
   } catch (err) {

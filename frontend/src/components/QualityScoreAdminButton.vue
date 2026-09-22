@@ -189,6 +189,7 @@ async function runFix() {
       const parts = []
       if (r.summary.code008 > 0) parts.push(`CODE-008 ×${r.summary.code008}`)
       if (r.summary.themeVarMismatch > 0) parts.push(`THEME-VAR-MISMATCH ×${r.summary.themeVarMismatch}`)
+      if (r.summary.code025Warn > 0) parts.push(`CODE-025-WARN ×${r.summary.code025Warn}`)
       message.success(`已修复 ${r.fixed.length} 处：${parts.join('、')}`)
     }
   } catch (e: any) {

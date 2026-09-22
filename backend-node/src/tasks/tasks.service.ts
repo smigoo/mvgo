@@ -1353,6 +1353,14 @@ export class TasksService {
     return out;
   }
 
+  /**
+   * 🛡️ 2026-09-22：getAllTasks 列表项同源防护（见方法内注释）。
+   * 与 stripParentRefs 语义一致；独立命名便于列表路径区分观测。
+   */
+  private stripParentRefsDeep(value: any): any {
+    return this.stripParentRefs(value);
+  }
+
   getTaskStatus(sessionId: string, userId?: string) {
     const task = this.tasks.get(sessionId);
 
@@ -1604,7 +1612,13 @@ export class TasksService {
           }
         }
 
-        return item;
+        // 🛡️ 2026-09-22 循环引用防护（mc-1790043069379-c34210b6 实锤 · GET /api/tasks/recent 500）：
+        //   生成期 _mountPlannedResources 会给 figmaNodeData 注入 __parent 反链（microcode-engineer.js
+        //   L5293），该树若经 progress/params 等路径进入 task 对象，JSON.stringify 即抛
+        //   "Converting circular structure to JSON"（每分钟轮询 recent 恒 500）。
+        //   status/:sessionId 与 tree/:sessionId 均已 stripParentRefs 防护，本处对齐：
+        //   递归剥离 __parent 键（前端从不消费），depth>200 环截断。
+        return this.stripParentRefsDeep(item);
     });
   }
 
