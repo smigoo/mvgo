@@ -114,7 +114,36 @@ export function sanitizeCssContent(raw, options = {}) {
     cleaned = lines.filter((_, idx) => !illegalLineIdxs.includes(idx)).join('\n')
   }
 
+  // 🛡️ 全局收口：清除任何遗漏的非法 CSS 值（undefined/null/NaN）。
+  //   这些值来自 LLM 生成的哨兵串或注入器未拦截的残留，浏览器会忽略整条声明，
+  //   但遗留文本可能污染后续解析/预览。c-device-monitor-e2ad7497 实锤：
+  //   `.c-x-cons { display:grid; flex-direction: undefined }` 导致布局整段失效。
+  cleaned = stripIllegalCssValues(cleaned)
+
   return cleaned
+}
+
+/**
+ * 🛡️ 清除非法 CSS 值（undefined / null / NaN）。
+ *
+ * 这些字符串不是合法 CSS 值，但会以「属性名: 非法值;」的形式残留在 LLM 产物或
+ * 注入器输出里（典型：grid 容器被误注入 `flex-direction: undefined;`）。
+ * 浏览器会丢弃整条声明，但污染了代码且排查困难。本函数做确定性收口。
+ *
+ * 策略：匹配「声明分隔符(; { 行首 换行) + 属性名 + : + 非法值(+可选 ;)」整段删除，
+ * 保留前面的分隔符避免行拼接错乱；最后清掉被删空后残留的孤立 `;` 行。
+ *
+ * @param {string} cssContent CSS/LESS 文本
+ * @returns {string} 清洗后的内容
+ */
+export function stripIllegalCssValues(cssContent) {
+  if (!cssContent || typeof cssContent !== 'string') return cssContent
+  return cssContent
+    .replace(
+      /(^|[;{\n])[ \t]*[-a-zA-Z]+[ \t]*:[ \t]*(?:undefined|null|NaN)[ \t]*(?:;[ \t]*)?/gm,
+      '$1',
+    )
+    .replace(/^[ \t]*;[ \t]*$/gm, '')
 }
 
 /**

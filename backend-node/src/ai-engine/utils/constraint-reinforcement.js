@@ -140,6 +140,12 @@ export function buildNodeLayoutFactsReinforcement(nodeLayoutFacts, figmaNodeData
         nodeName: name,
         display: fact.display,
         flexDirection: fact.flexDirection,
+        // 🛡️ 2026-09-22 · c-device-monitor-e2ad7497 实锤根因：
+        //   figma-node-layout-facts 的 grid 节点带 gridColumns（均匀网格几何推断），
+        //   此处曾漏传 → 下游 layout-facts-injector 的 `fact.gridColumns >= 2` 恒 false
+        //   → grid 节点全部落进 flex 分支 → 写出 `display:grid; flex-direction:undefined;`
+        //   （grid-template-columns 也永远注入不了）。grid 列数是几何真值，必须随映射透传。
+        ...(fact.gridColumns ? { gridColumns: fact.gridColumns } : {}),
         source: fact.source,
         confidence: fact.confidence,
       }

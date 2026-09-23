@@ -8,6 +8,7 @@
  */
 
 import { buildNodeLayoutFactsReinforcement } from './constraint-reinforcement.js'
+import { stripIllegalCssValues } from './css-sanitizer.js'
 
 /**
  * 从 CSS/LESS 内容中提取指定 class 的 display 和 flex-direction
@@ -80,25 +81,39 @@ function matchClassWithSuffixVariant(cssContent, className) {
 function updateFlexProps(cssContent, className, display, flexDirection) {
   const escapedClass = className.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const classRegex = new RegExp(`(${escapedClass}\\s*\\{)([^}]*)(\\})`, 's')
-  
+
+  // 🛡️ 2026-09-22 · c-device-monitor-e2ad7497 实锤：
+  //   grid 容器本无 flex 方向，fact.flexDirection 为 undefined 时，旧逻辑仍注入
+  //   `flex-direction: undefined;`（非法值），浏览器丢弃整条声明且破坏布局。
+  //   治本：只有合法 flex 方向（row/column/reverse）才注入；其余一律不写，
+  //   并清掉可能存在的非法残留（undefined/null/NaN）。
+  const hasValidDirection =
+    typeof flexDirection === 'string' &&
+    /^(row|column|row-reverse|column-reverse)$/.test(flexDirection.trim())
+
   return cssContent.replace(classRegex, (match, prefix, blockContent, suffix) => {
     let newBlock = blockContent
-    
+
     // 更新或添加 display
     if (newBlock.match(/display\s*:/)) {
       newBlock = newBlock.replace(/display\s*:\s*[^;]+;/, `display: ${display};`)
     } else {
       newBlock = `  display: ${display};\n${newBlock}`
     }
-    
-    // 更新或添加 flex-direction
-    if (newBlock.match(/flex-direction\s*:/)) {
-      newBlock = newBlock.replace(/flex-direction\s*:\s*[^;]+;/, `flex-direction: ${flexDirection};`)
+
+    if (hasValidDirection) {
+      // 更新或添加 flex-direction
+      if (newBlock.match(/flex-direction\s*:/)) {
+        newBlock = newBlock.replace(/flex-direction\s*:\s*[^;]+;/, `flex-direction: ${flexDirection};`)
+      } else {
+        // 在 display 后面插入
+        newBlock = newBlock.replace(/(display\s*:\s*[^;]+;)/, `$1\n  flex-direction: ${flexDirection};`)
+      }
     } else {
-      // 在 display 后面插入
-      newBlock = newBlock.replace(/(display\s*:\s*[^;]+;)/, `$1\n  flex-direction: ${flexDirection};`)
+      // 🛡️ 无合法方向事实：绝不写 flex-direction: undefined；清掉历史/LLM 残留的非法值
+      newBlock = newBlock.replace(/[ \t]*flex-direction\s*:\s*(?:undefined|null|NaN)\s*;?/g, '')
     }
-    
+
     return prefix + newBlock + suffix
   })
 }
@@ -118,10 +133,11 @@ function updateGridProps(cssContent, className, gridColumns) {
     if (/display\s*:\s*grid/.test(newBlock) && colsM && Number(colsM[1]) === gridColumns) {
       return match
     }
-    // 清 flex 布局声明（保留 gap、padding、width 等）
+    // 清 flex 布局声明（保留 gap、padding、width 等）；同时清已有的 display:grid/display:flex，
+    // 避免原块已是 grid 时追加后出现重复的 `display: grid;`。
     newBlock = newBlock
       .replace(/flex-direction\s*:\s*(row|column);?/g, '')
-      .replace(/display\s*:\s*(flex|inline-flex);?/g, '')
+      .replace(/display\s*:\s*(flex|inline-flex|grid);?/g, '')
       .replace(/align-items\s*:\s*[^;]+;?/g, '')
       .replace(/justify-content\s*:\s*[^;]+;?/g, '')
     newBlock = newBlock.replace(/\s*$/, '')
@@ -279,7 +295,11 @@ export function processAllStyleFiles(files, layoutMapping, options = {}) {
       }
     }
 
-    if (fileFixes.length > 0) {
+    // 🛡️ 全局收口：清除任何遗漏的非法 CSS 值（undefined/null/NaN）。
+    //   注入器已按事实取值，但 LLM 产物仍可能残留哨兵串，最终产物层面兜底一次。
+    fileContent = stripIllegalCssValues(fileContent)
+
+    if (fileFixes.length > 0 || fileContent !== content) {
       fixedFiles[filePath] = fileContent
       allFixes.push(...fileFixes.map(f => ({
         ...f,

@@ -43,6 +43,34 @@ import {
   pickBestMountTarget,
 } from './resource-mounter.js';
 
+/**
+ * 🛡️ #2（2026-09-22 · c-device-monitor-9120a940 实锤）：从单个开标签的 :style 中剥离 bg* 键。
+ * 共享背景（sharedBy>1）被正确落点到 v-for item 后，需把 LLM 误挂到面板根的同一 bg 变量剔除，
+ * 否则 bg 会被 background-size:100% 拉伸铺满整个容器（逐卡背景消失）。仅删 background* 键，
+ * 保留其它业务样式；若 :style 仅含 bg* 键则连 :style 属性一起删。
+ *
+ * @param {string} tag 开标签字符串（如 <div class="x" :style="{ backgroundImage: ... }">）
+ * @param {string} varName 背景资源变量名（如 bg3）
+ * @returns {string} 剥离后的标签；无法安全处理时原样返回
+ */
+function stripBgKeysFromTag(tag, varName) {
+  if (typeof tag !== 'string' || !new RegExp(`\\b${varName}\\b`).test(tag)) return tag;
+  const styleMatch = tag.match(/:style="([^"]*)"/);
+  if (!styleMatch) return tag;
+  const inner = styleMatch[1];
+  if (!/^\{[\s\S]*\}$/.test(inner.trim())) return tag;
+  const bgKeyRe = /\s*(?:background(?:Image|Size|Position|Repeat)?)\s*:[^,}]+,?/g;
+  const stripped = inner
+    .replace(bgKeyRe, '')
+    .replace(/,\s*\}/, '}')
+    .replace(/\{\s*,/, '{')
+    .trim();
+  const body = stripped.slice(1, -1); // 去掉首尾 {}
+  const hasOther = /[a-zA-Z-]+\s*:/.test(body);
+  if (!hasOther) return tag.replace(/\s*:style="[^"]*"/, '');
+  return tag.replace(/:style="\{[\s\S]*\}"/, `:style="${stripped}"`);
+}
+
 export function buildResourceMountPlan(effectiveSections, resourceDomMapping, opts = {}) {
   const byFile = new Map();
   const byComponent = new Map();
@@ -241,7 +269,15 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
         g.kind === 'bg' &&
         mount.bgRole === 'container' &&
         (mount.mountTarget === 'active' || mount.mountTarget === 'default');
-      if (new RegExp(`\\b${varName}\\b`).test(content) && !isContainerStateBg) {
+      // 🛡️ #2（2026-09-22 · c-device-monitor-9120a940 实锤）：共享背景（sharedBy>1，如 cons 的
+      //   12 卡 bg3）若 LLM 把变量预挂到面板根，原幂等早退会跳过下方 v-for 逐卡挂载逻辑
+      //   （sharedCount>1 分支），导致 bg 拉伸铺满容器、逐卡背景缺失。共享背景必须落到 v-for
+      //   item，故此处不早退，留给下方分支做「根→item」迁徙。
+      const isSharedBg =
+        g.kind === 'bg' &&
+        Array.isArray(g.sharedBy) &&
+        g.sharedBy.length > 1;
+      if (new RegExp(`\\b${varName}\\b`).test(content) && !isContainerStateBg && !isSharedBg) {
         if (g.kind === 'icon' || g.kind === 'img') {
           const size = iconSizeFromFigmaBox(mount.figmaBox);
           if (size) {
@@ -450,8 +486,17 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
         if (sharedCount > 1) {
           const itemTag = findVForItemTag(content);
           if (itemTag) {
-            const itemUpdated = injectBgStyleBinding(content, itemTag, varName, mapping);
+            let itemUpdated = injectBgStyleBinding(content, itemTag, varName, mapping);
             if (itemUpdated) {
+              // 🛡️ #2（2026-09-22）：共享背景正确落点是 v-for item，必须从面板根移除误挂的 bg
+              //   （LLM 常把 bg 挂在容器根 → 100% 拉伸铺满），否则逐卡背景仍被根背景覆盖。
+              const rootTag = findTemplateRootTag(itemUpdated);
+              if (rootTag && new RegExp(`\\b${varName}\\b`).test(rootTag)) {
+                const strippedRoot = stripBgKeysFromTag(rootTag, varName);
+                if (strippedRoot && strippedRoot !== rootTag) {
+                  itemUpdated = itemUpdated.replace(rootTag, strippedRoot);
+                }
+              }
               const withImport = ensureResourceImportInVue(itemUpdated, varName, mapping, targetFile);
               if (withImport && writeGuarded(targetFile, withImport, content)) {
                 result = {
@@ -461,7 +506,7 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
                   bgRole: mount.bgRole || null,
                   mountTarget: 'v-for-item',
                 };
-                options.logger?.info?.(`🎯 [资源挂载] ${varName} 共享背景（${sharedCount} 卡）挂到 v-for item`, {
+                options.logger?.info?.(`🎯 [资源挂载] ${varName} 共享背景（${sharedCount} 卡）挂到 v-for item（已从面板根迁徙）`, {
                   file: targetFile,
                 });
                 continue;
