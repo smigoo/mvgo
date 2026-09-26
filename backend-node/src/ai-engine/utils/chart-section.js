@@ -106,6 +106,49 @@ function sectionCoversNode(sec, nodeId) {
 }
 
 /**
+ * 🛡️ 消重（2026-09-26 · mc-max-1790430725365-1652d1b7 / mc-max-1790420477334-6e065bd7 实锤）
+ *
+ * 病灶：`@echarts` 节点在 `effectiveSections` 中**常常已以容器形式存在** —— container-rebuild
+ * 给它包了一层容器、其唯一子被当成通用叶子。本例：
+ *   `89:41(container, column) › 2:7898(container, title=@echarts/line, child=2:7899)`
+ *   而 `2:7899`（title=`Group 2136637691`，35 个矢量元素）就是该图表的**静态实现细节**。
+ *
+ * 但本模块的既有语义是「**@echarts 节点本身就是图表容器**」（见 collectEchartsNodes 注释），
+ * 于是同一区域被**解释两次**：
+ *   · 叶子 `2:7899`  → `ContentSection.vue`（内含 echarts line 图 A）
+ *   · 合成 `chart-2:7898` → `ChartSection.vue`（echarts line 图 B）
+ * 又因注入项被 `[...effectiveSections, ...chartSections]` **追加到根**，丢掉了它在 89:41 内的位置
+ * → ① 图上出现**两个图表**；② 89:41 被根级兄弟挤成 `flex:1`，tabs 条比例（0.221）被压扁
+ *   → 「tabs 依旧错误」。
+ *
+ * 治本：注入前先看该 @echarts 节点是否**已由树中同 id 的 section 代表**——是则**就地替换**该子树
+ * （消重 + 位置与 flex 比例天然正确），否则维持旧的「根级追加」（零回归）。
+ * 保守纪律：**仅按 id 精确相等**认定宿主，不做祖先/后代猜测，避免误删多子容器内的其它内容。
+ */
+function replaceSectionByIdDeep(sections, nodeId, replacement) {
+  const walk = (list) => {
+    let replaced = false
+    const out = []
+    for (const sec of list) {
+      if (!replaced && sec && String(sec.id) === String(nodeId)) {
+        out.push(replacement)
+        replaced = true
+        continue
+      }
+      if (sec && Array.isArray(sec.children) && sec.children.length > 0) {
+        const inner = walk(sec.children)
+        out.push(inner.replaced ? { ...sec, children: inner.list } : sec)
+        if (inner.replaced) replaced = true
+      } else {
+        out.push(sec)
+      }
+    }
+    return { list: out, replaced }
+  }
+  return walk(sections)
+}
+
+/**
  * 若 Figma 节点树中有 @echarts 标记节点 / vision charts[] 有真值，但 effectiveSections
  * 尚无 chart section 覆盖，则强制注入 chart section。
  *
@@ -211,7 +254,41 @@ export function injectChartSectionIfMissing(plan, chartSignal, sources = {}) {
 
   if (chartSections.length === 0) return plan
 
-  const nextSections = [...effectiveSections, ...chartSections]
+  // 🛡️ 消重（2026-09-26）：@echarts 节点若已以「同 id 的容器 section」存在于树中，
+  //   则**就地替换**该子树（消重 + 保留其父容器内的位置与 flex 比例）；
+  //   树中确实没有该节点的才维持旧的「根级追加」。
+  let tree = effectiveSections
+  const appended = []
+  let replacedCount = 0
+  let skippedCount = 0
+  for (const cs of chartSections) {
+    const hostId = Array.isArray(cs.sourceNodeIds) && cs.sourceNodeIds.length > 0
+      ? cs.sourceNodeIds[0]
+      : null
+    // 🛡️ 守卫（2026-09-26 · 全语料审计结论固化）：只有宿主确实是**图表语义容器**才就地替换。
+    //   依据：① @echarts 分支（chart-<nodeId>）全语料 68 例撞 id，宿主 100% 是图表容器（title/type 含
+    //   echarts|chart|图表）→ 就地替换安全；② chartsTruth 分支的 sourceNodeIds[0] 是 **vision 提供的
+    //   c.section**（复用、不唯一，同一节点可承载多个不同图表，如 bc0c25aa 的 bar/pie/area 三条真值
+    //   同挂 426:807），当前语料 0 例撞既有 section id，但**无类型校验的替换一旦撞上真实非图表 section
+    //   就会连带删掉其子树**。故加语义守卫：不匹配即退回旧的「根级追加」，宁可多一个 section 也不误删。
+    const host = hostId ? findSectionById(tree, hostId) : null
+    const hostHay = host
+      ? `${host.title || ''} ${host.type || ''} ${host.responsibility || ''}`
+      : ''
+    const hostIsChartish = /echarts|chart|图表/i.test(hostHay)
+    if (host && !hostIsChartish) skippedCount++
+    const r = host && hostIsChartish
+      ? replaceSectionByIdDeep(tree, hostId, cs)
+      : { list: tree, replaced: false }
+    if (r.replaced) {
+      tree = r.list
+      replacedCount++
+    } else {
+      appended.push(cs)
+    }
+  }
+  const nextSections = appended.length > 0 ? [...tree, ...appended] : tree
+
   const leafCount = collectLeafSections(nextSections).length
   const minSectionsForced = 3
   const isForced = leafCount >= minSectionsForced
@@ -222,7 +299,7 @@ export function injectChartSectionIfMissing(plan, chartSignal, sources = {}) {
     isForced,
     minFiles: isForced ? leafCount : 0,
     reason: isForced
-      ? `叶子 sections=${leafCount} ≥ ${minSectionsForced} → 强制拆分（含强制注入的 ${chartSections.length} 个图表 section）`
-      : `叶子 sections=${leafCount} < ${minSectionsForced} → 不强制拆分（已注入 ${chartSections.length} 个图表 section）`,
+      ? `叶子 sections=${leafCount} ≥ ${minSectionsForced} → 强制拆分（含强制注入的 ${chartSections.length} 个图表 section${replacedCount > 0 ? `，其中 ${replacedCount} 个就地替换既有容器` : ''}${skippedCount > 0 ? `，${skippedCount} 个宿主非图表语义→改为根级追加` : ''}）`
+      : `叶子 sections=${leafCount} < ${minSectionsForced} → 不强制拆分（已注入 ${chartSections.length} 个图表 section${replacedCount > 0 ? `，其中 ${replacedCount} 个就地替换既有容器` : ''}${skippedCount > 0 ? `，${skippedCount} 个宿主非图表语义→改为根级追加` : ''}）`,
   }
 }

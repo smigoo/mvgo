@@ -522,3 +522,283 @@ export function buildVue3ThemeVarsLess(styleTokens = {}) {
   if (light) parts.push('', light);
   return parts.join('\n') + '\n';
 }
+
+// ══════════════════════════════════════════════════════════════
+// microcode theme-vars.less 确定性渲染（2026-09-26 治本 0.1）
+//
+// 与 vue3 的差异：microcode 槽位用 **kebab-case**（@color-text-base），vue3 用 camelCase。
+//
+// 契约（与用户决策「以设计为准；缺的主题系统补」一致）：
+//  - **§3 核心槽位**（color-text-base / color-primary* / color-bg-container / color-border …）
+//    → 值**以 styleTokens 为准**（设计主题 = Figma 提取；缺的主题 = 确定性派生）；
+//  - **组件专属槽位**（tab/ring/legend/divider/area…，规范 §3 明确允许"专色"）
+//    → **沿用 prior（LLM）原声明**（其值来自设计/视觉，本函数不臆造）；
+//  - `.common()` 非颜色令牌 → 沿用 prior。
+// 这样既消灭"核心槽位被 LLM 写错（如浅色 base=白）"，又不破坏组件专属槽位（避免编译失败）。
+// ══════════════════════════════════════════════════════════════
+
+/** camelCase → kebab-case（colorTextBase → color-text-base） */
+function mcKebabize(s) {
+  return String(s).replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+}
+
+/** §3 规范核心槽位默认值（kebab）；styleTokens 中有对应值者覆盖 */
+const MC_CANONICAL_COLOR_SLOTS = {
+  light: {
+    'color-text-base': '#333333',
+    'color-text-secondary': '#666666',
+    'color-primary': '#1890ff',
+    'color-primary-hover': '#40a9ff',
+    'color-primary-active': '#096dd9',
+    'color-primary-bg': 'rgba(24, 144, 255, 0.1)',
+    'color-primary-bg-hover': 'rgba(24, 144, 255, 0.16)',
+    'color-bg-container': '#ffffff',
+    'color-border': '#e8e8e8',
+    // 🛡️ 2026-09-26（0.3-a 收口）：框架语义色也是「免声明预设」（§4 明列 colorDanger/Warning/Success），
+    //   业务样式常写 var(--colorDanger) 等 → 必须存在同名槽位，否则 healer 无法映射、门禁必报。
+    'color-danger': '#f5222d',
+    'color-warning': '#faad14',
+    'color-success': '#52c41a',
+  },
+  dark: {
+    'color-text-base': '#ffffff',
+    'color-text-secondary': 'rgba(255, 255, 255, 0.8)',
+    'color-primary': '#44E4FF',
+    'color-primary-hover': '#78ECFF',
+    'color-primary-active': '#00BBFF',
+    'color-primary-bg': '#414141',
+    'color-primary-bg-hover': '#4B4B4B',
+    'color-bg-container': '#1f1f1f',
+    'color-border': '#4b4b4b',
+    // 语义色（与 MC_DARK_THEME_COLOR_ENUM 同源：深底提亮以保证对比度）
+    'color-danger': MC_DARK_THEME_COLOR_ENUM.colorDanger,
+    'color-warning': MC_DARK_THEME_COLOR_ENUM.colorWarning,
+    'color-success': MC_DARK_THEME_COLOR_ENUM.colorSuccess,
+  },
+};
+
+/** `.common()` 兜底（prior 缺省时） */
+const MC_COMMON_FALLBACK = {
+  fontSize: 'var(--fontSize)',
+  'font-size-base': '14px',
+  'font-size-small': '12px',
+  'font-size-large': '18px',
+  'font-size-title': '20px',
+  'font-weight-strong': '600',
+  'border-radius-base': '8px',
+  'border-radius-small': '4px',
+  'spacing-base': '16px',
+  'spacing-small': '8px',
+  'spacing-large': '24px',
+  fontWeightStrong: 'var(--fontWeightStrong)',
+};
+
+/** 解析某个 mixin 的 `@key: value;` 表 */
+function mcParseMixin(src, name) {
+  const out = {};
+  const m = String(src || '').match(
+    new RegExp(`\\.${name}\\(\\)\\s*\\{([\\s\\S]*?)\\n?\\}`, 'i'),
+  );
+  if (!m) return out;
+  for (const mm of m[1].matchAll(/@([A-Za-z][\w-]*)\s*:\s*([^;]+);/g)) {
+    out[mm[1]] = mm[2].trim();
+  }
+  return out;
+}
+
+/** 解析既有 theme-vars.less（llm 产物）的三个 mixin */
+export function parseThemeVarsLess(prior) {
+  return {
+    common: mcParseMixin(prior, 'common'),
+    dark: mcParseMixin(prior, 'theme-dark'),
+    light: mcParseMixin(prior, 'theme-light'),
+  };
+}
+
+/** tokens 的颜色对象 → kebab 槽位表（跳过空值） */
+function mcSlotsFromTokens(obj) {
+  const o = {};
+  for (const [k, v] of Object.entries(obj || {})) {
+    if (v === undefined || v === null || String(v).trim() === '') continue;
+    o[mcKebabize(k)] = String(v);
+  }
+  return o;
+}
+
+// ── 0.3-b：专属槽位的深浅派生 ────────────────────────────────────────────────
+
+/** 解析纯色（#rgb/#rrggbb/rgb()/rgba()）→ {rgb,a,hex}；渐变/其它 → null */
+function mcParseColor(v) {
+  const s = String(v || '').trim();
+  let m = s.match(/^#([0-9a-fA-F]{6})$/);
+  if (m) {
+    const n = parseInt(m[1], 16);
+    return { rgb: { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 }, a: 1, hex: s.toLowerCase() };
+  }
+  m = s.match(/^#([0-9a-fA-F]{3})$/);
+  if (m) {
+    const h = m[1];
+    return mcParseColor('#' + h[0] + h[0] + h[1] + h[1] + h[2] + h[2]);
+  }
+  m = s.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([\d.]+))?\s*\)$/);
+  if (m) {
+    const rgb = { r: +m[1], g: +m[2], b: +m[3] };
+    return { rgb, a: m[4] == null ? 1 : +m[4], hex: rgbToHex(rgb.r, rgb.g, rgb.b) };
+  }
+  return null;
+}
+
+const MC_BG_SLOT_RE = /(^|-)(bg|background|surface|card|panel|container|fill|mask|shade)(-|$)/i;
+const MC_TEXT_SLOT_RE = /(^|-)(text|label|title|value|tick|axis)(-|$)/i;
+const MC_BORDER_SLOT_RE = /(^|-)(border|line|divider|stroke|separator|ring)(-|$)/i;
+
+/**
+ * 在给定背景上把颜色调到达标对比度（确定性、有界 24 步）。
+ * 🛡️ 强制**至少偏移一步**（`i > 0` 才允许提前返回）——否则「已达标的槽位」在另一主题里会
+ * 保持原值 → 两套 mixin 仍同值 → THEME-MIXINS-IDENTICAL 依旧命中。
+ * 白/黑无余量（clamp 后不变）时**反向兜底**再试一次。
+ */
+function mcAdjustForContrast(rgb, bgRgb, target, toLight) {
+  const step = (dir) => {
+    let cur = rgb;
+    for (let i = 0; i < 24; i++) {
+      if (i > 0 && contrastRatio(cur, bgRgb) >= target) return cur;
+      const hsl = rgbToHsl(cur.r, cur.g, cur.b);
+      const nl = Math.max(0, Math.min(1, hsl.l + dir * 0.05));
+      if (nl === hsl.l) break; // 到头（纯白/纯黑）
+      cur = hslToRgb(hsl.h, hsl.s, nl);
+    }
+    return cur;
+  };
+  const key = (c) => rgbToHex(c.r, c.g, c.b);
+  const primary = step(toLight ? 1 : -1);
+  if (key(primary) !== key(rgb)) return primary;
+  return step(toLight ? -1 : 1);
+}
+
+/**
+ * 0.3-b：对「两套 mixin 同值」的**非核心（专属）**槽位做确定性深浅派生。
+ *
+ * 背景（实测 2026-09-26）：LLM 只按**设计主题**填一套值并照抄进 `.theme-light()` 与
+ * `.theme-dark()`（实测 `c-traffic-ffe52508` 两套全是深色值、`c-device-monitor-10a9a1a2`
+ * 两套全是浅色值）→ 主题开关彻底失效（语料 392/451 = 86.9% 命中）。
+ *
+ * 规则（用户决策「以设计为准；设计没覆盖的那套由系统补」）：
+ *  - **设计主题**：保留 LLM 原值（那是设计真值）；
+ *  - **另一主题**：按**该主题的背景**确定性派生——
+ *    · 背景类槽（bg/card/panel/container/fill…）→ 保留色相、把亮度推到与目标背景同侧；
+ *    · 文本类槽（text/label/title…）→ 对比度 ≥ 4.5；
+ *    · 边框/线类（border/line/ring…）→ ≥ 1.6；其余（强调色/图例/点）→ ≥ 3；
+ *  - 非纯色（渐变等）与原值不可解析者**不动**；已存在差异的槽位**不动**。
+ *
+ * @returns {{light:Object, dark:Object, changed:string[], design:string, other:string}}
+ */
+export function deriveCounterpartCustomSlots(
+  styleTokens = {},
+  lightSlots = {},
+  darkSlots = {},
+) {
+  const canonical = new Set([
+    ...Object.keys(MC_CANONICAL_COLOR_SLOTS.light),
+    ...Object.keys(MC_CANONICAL_COLOR_SLOTS.dark),
+  ]);
+  const design = styleTokens?.defaultTheme === 'light' ? 'light' : 'dark';
+  const other = design === 'light' ? 'dark' : 'light';
+  const out = { light: { ...lightSlots }, dark: { ...darkSlots } };
+  const changed = [];
+  const bgOf = (t) =>
+    mcParseColor(out[t]['color-bg-container'])?.rgb ||
+    (t === 'light' ? { r: 255, g: 255, b: 255 } : { r: 31, g: 31, b: 31 });
+
+  for (const k of Object.keys(out[design] || {})) {
+    if (!(k in out[other])) continue;
+    if (out[design][k] !== out[other][k]) continue; // 已有差异 → 不动
+    if (canonical.has(k)) continue; // 核心槽位由 tokens 负责
+    const c = mcParseColor(out[other][k]);
+    if (!c) continue; // 渐变/非纯色 → 不动
+    const bg = bgOf(other);
+    const flat = {
+      r: Math.round(c.rgb.r * c.a + bg.r * (1 - c.a)),
+      g: Math.round(c.rgb.g * c.a + bg.g * (1 - c.a)),
+      b: Math.round(c.rgb.b * c.a + bg.b * (1 - c.a)),
+    };
+    let rgb;
+    if (MC_BG_SLOT_RE.test(k)) {
+      const targetL = other === 'light' ? 0.97 : 0.12;
+      const hsl = rgbToHsl(c.rgb.r, c.rgb.g, c.rgb.b);
+      rgb = hslToRgb(hsl.h, Math.min(hsl.s, 0.35), targetL);
+    } else {
+      const target = MC_TEXT_SLOT_RE.test(k) ? 4.5 : MC_BORDER_SLOT_RE.test(k) ? 1.6 : 3;
+      const toLight = relativeLuminance(bg) < 0.5;
+      rgb = mcAdjustForContrast(flat, bg, target, toLight);
+    }
+    out[other][k] = rgbToHex(rgb.r, rgb.g, rgb.b);
+    changed.push(k);
+  }
+  return { light: out.light, dark: out.dark, changed, design, other };
+}
+
+/**
+ * 确定性渲染 microcode 的 theme-vars.less（见文件头契约）。
+ * @param {Object} styleTokens buildStyleTokens 契约
+ * @param {string} prior 既有（LLM）theme-vars.less 内容；组件专属槽位与 .common() 由此沿用
+ * @returns {string}
+ */
+export function renderMicrocodeThemeVarsLess(styleTokens = {}, prior = '') {
+  const p = parseThemeVarsLess(prior);
+  const light = {
+    ...MC_CANONICAL_COLOR_SLOTS.light,
+    ...mcSlotsFromTokens(styleTokens.light),
+  };
+  const dark = {
+    ...MC_CANONICAL_COLOR_SLOTS.dark,
+    ...mcSlotsFromTokens(styleTokens.darkWithDesign || styleTokens.dark),
+  };
+  // 组件专属槽位：沿用 prior 中「非核心」的声明（核心槽位以 tokens 为准）
+  const carryCustom = (canonical, base, priorSlot) => {
+    const out = { ...base };
+    for (const [k, v] of Object.entries(priorSlot || {})) {
+      if (k in canonical) continue;
+      if (k in out) continue;
+      out[k] = v;
+    }
+    return out;
+  };
+  const lightCarried = carryCustom(MC_CANONICAL_COLOR_SLOTS.light, light, p.light);
+  const darkCarried = carryCustom(MC_CANONICAL_COLOR_SLOTS.dark, dark, p.dark);
+  // 🛡️ 2026-09-26 治本 0.3-b：专属槽位深浅派生（「缺的主题系统补」）
+  const derived = deriveCounterpartCustomSlots(styleTokens, lightCarried, darkCarried);
+  const lightFinal = derived.light;
+  const darkFinal = derived.dark;
+  const commonKV =
+    Object.keys(p.common).length > 0 ? p.common : MC_COMMON_FALLBACK;
+
+  const emitCommon = `.common() {\n${Object.entries(commonKV)
+    .map(([k, v]) => `  @${k}: ${v};`)
+    .join('\n')}\n}`;
+  const emitMixin = (name, map) =>
+    `.${name}() {\n${Object.entries(map)
+      .map(([k, v]) => `  @${k}: ${v};`)
+      .join('\n')}\n}`;
+
+  return [
+    '// 微码组件主题变量文件（系统确定性生成；§3 核心槽位值由 buildStyleTokens 注入，勿手改）',
+    '// 结构：三个 mixin（.common() / .theme-dark() / .theme-light()）',
+    '// 约束：mixin 内仅允许 @变量 定义，禁止任何 CSS 属性；禁止 CSS 变量',
+    '',
+    emitCommon,
+    '',
+    emitMixin('theme-light', lightFinal),
+    '',
+    emitMixin('theme-dark', darkFinal),
+    '',
+    '// 写盘门禁自动补全缺失变量',
+    '@fontWeightStrong: 400;',
+    '',
+    '// 自动添加：将 .common() 中的 Less 变量暴露到全局作用域',
+    ':root {',
+    '  .common();',
+    '}',
+    '',
+  ].join('\n');
+}

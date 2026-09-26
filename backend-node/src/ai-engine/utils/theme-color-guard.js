@@ -56,6 +56,10 @@ const PRESET_VALUE_RE = new RegExp(
 // 比「少量主题不响应」更糟。超阈值仍 BLOCK（防大量抄写/覆盖）。
 const PRESET_WARN_UP_TO = 2; // 预设名字面量重声明 ≤2 处 → WARN
 const SLOT_WARN_UP_TO = 3;   // 槽位色值抄写 ≤3 处 → WARN
+// 🛡️ 2026-09-26（0.1+0.2+0.3-a 后新增）：业务样式 var(--colorX) 直引 ≤3 处 → WARN（不硬失败）。
+//   0.2 断掉「hex→var()」源、0.3-a 修好 healer 覆盖率后，语料重放残留从 80.9% 收敛到 3.1%，
+//   且残留多为「名称无对应槽位、不可映射」的 1~4 处形态；超阈值仍 BLOCK（防大面积 var() 回归）。
+const VAR_NAME_WARN_UP_TO = 3;
 
 // 🛡️ 2026-09-16：文件级槽位字面量重声明（与 collectFileLevelSlotOverrides 同源，检测器/自愈共用）
 const FILE_LEVEL_SLOT_OVERRIDE_RE = /^\s*@(color|shadow)-[A-Za-z0-9_-]+\s*:\s*(#|rgba?\(|hsla?\()/i;
@@ -632,11 +636,13 @@ export function detectThemeColorViolations(generatedFiles) {
   }
   if (identicalMixins) {
     // ⚠️ 全语料审计（2026-09-16）：247 个组件中 102 个命中（41%），属系统性形态。
-    // 设 BLOCK 会让大批任务重试耗尽（参照 mc-max-1788505197306 教训）→ 统一 WARN，
-    // 待新生成的组件收敛后再评估是否升级为 BLOCK。
+    // 🛡️ 2026-09-26 升级 WARN→BLOCK：前置已治本——
+    //   0.1 让 §3 核心槽位由 buildStyleTokens 确定性产出（设计主题=提取、缺的主题=派生），
+    //   0.3-b 对专属槽位做确定性深浅派生 → 两套 mixin 必然不同。
+    //   全语料按「整块 mixin 逐字相同」口径复测：基线 23/451=5.1% → 模拟 0.1+0.3-b 后 **0/451=0.0%**。
     issues.push({
       id: 'THEME-MIXINS-IDENTICAL',
-      severity: 'WARN',
+      severity: 'BLOCK',
       file: 'resources/styles/themes/theme-vars.less',
       message: `.theme-dark() 与 .theme-light() 的 ${identicalMixins.slotCount} 个槽位值完全相同 → 模式 B（编译期差异化）下 &.dark 与 &.light 展开出的 CSS 完全一致，主题开关彻底失效，且不像模式 A 那样还有运行期注入可补救。请分别为两套 mixin 填入深色稿 / 浅色稿的真实色值。`,
       hint: {
@@ -675,11 +681,14 @@ export function detectThemeColorViolations(generatedFiles) {
     // 后果是「主题静默失效」而非编译失败；硬 BLOCK 会让大批任务重试耗尽
     // （参照 mc-max-1788505197306 教训）。
     const nameList = [...new Set(varNameHits.map((v) => v.name))].slice(0, 6).join('、');
+    // 🛡️ 2026-09-26：由「统一 WARN」升级为**阈值 BLOCK**（>3 处 BLOCK，≤3 处 WARN）。
+    //   前置已治本：0.2 断 hex→var() 源、0.3-a 修 healer 覆盖率（80.9%→3.1%）+ 补框架语义色槽位。
+    const varNameSeverity = varNameHits.length <= VAR_NAME_WARN_UP_TO ? 'WARN' : 'BLOCK';
     issues.push({
       id: 'THEME-VAR-NAME-MISMATCH',
-      severity: 'WARN',
+      severity: varNameSeverity,
       file: varNameHits[0].file,
-      message: `业务样式（common.less / .vue <style>）里直引了 ${varNameHits.length} 处 CSS 变量（${nameList}）→ 模式 A 残留。模式 B 下颜色差异化由 .theme-dark()/.theme-light() 两套槽位在**编译期**决定，业务样式应写 @color-xxx 槽位变量；直引 var() 会退化成依赖运行期注入，而平台并不注入这些名字 → fallback 恒生效（且多为写死字面量）→ 切主题零生效。${fmt(varNameHits)}`,
+      message: `${varNameSeverity === 'WARN' ? `（≤${VAR_NAME_WARN_UP_TO} 处降级 WARN：不阻断本次生成，建议精修期清理）` : ''}业务样式（common.less / .vue <style>）里直引了 ${varNameHits.length} 处 CSS 变量（${nameList}）→ 模式 A 残留。模式 B 下颜色差异化由 .theme-dark()/.theme-light() 两套槽位在**编译期**决定，业务样式应写 @color-xxx 槽位变量；直引 var() 会退化成依赖运行期注入，而平台并不注入这些名字 → fallback 恒生效（且多为写死字面量）→ 切主题零生效。${fmt(varNameHits)}`,
       hint: {
         suggestion:
           '删除业务样式里的 var(--colorX, ...)，改为引用 theme-vars.less 中 .theme-dark()/.theme-light() 已定义的 @color-xxx 槽位变量；var() 只保留在 .common() 的透传映射里（如 @fontSize: var(--fontSize)）',
@@ -772,11 +781,19 @@ export function healBusinessStyleVarRefs(files, options = {}) {
     const isLess = path.endsWith('.less') && !/theme-vars\.less$/.test(path);
     if (!isVue && !isLess) continue;
     const updated = content.replace(
-      // 🛡️ fallback 可能含嵌套括号（rgba(230, 237, 245, 1)），专门按颜色字面量形态匹配
-      /var\(\s*--([a-zA-Z][\w-]*)\s*,\s*((?:rgba?\([^)]*\)|#[0-9a-fA-F]{3,8}|[^)]+?))\s*\)/g,
+      // 🛡️ fallback 可能含嵌套括号（rgba(230, 237, 245, 1)），专门按颜色字面量形态匹配。
+      // 🛡️ 2026-09-26 治本 0.3-a：把「, fallback」改为**可选**——此前正则强制要求 fallback，
+      //   导致 **无 fallback 的 `var(--x)` 完全不匹配**（实测残留正是 `var(--fontSize)` /
+      //   `var(--colorWhite)` / `var(--colorTextBase)` 这类形态，占残留的大头）。
+      /var\(\s*--([a-zA-Z][\w-]*)\s*(?:,\s*((?:rgba?\([^)]*\)|#[0-9a-fA-F]{3,8}|[^)]+?))\s*)?\)/g,
       (m, varName, fallback) => {
         const kebab = camelToKebab(varName);
         if (slotNames.has(kebab)) return '@' + kebab;
+        // 🛡️ 2026-09-26 治本 0.3-a：`.common()` 里的槽名是 **camelCase**（@fontSize / @fontWeightStrong），
+        // 而 camelToKebab 会得到 `font-size` → 槽名实为 `fontSize` → 旧逻辑查不到 →
+        // **退化成 fallback 字面量**（实测 `var(--fontSize, 14px)` → `14px`，丢掉宿主 font-size 响应式）。
+        // 补「原样名」查找（exact-name），命中即转 `@fontSize`（编译期值 = `var(--fontSize)`，响应式保留）。
+        if (slotNames.has(varName)) return '@' + varName;
         if (fallback !== undefined && String(fallback).trim()) return String(fallback).trim();
         return m;
       },

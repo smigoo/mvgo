@@ -2137,6 +2137,10 @@ export class MicrocodeEngineer extends BaseAgent {
           }
         }
 
+        // 🛡️ B（#719）：medium 整文件路径同样收回「装配」——LLM 只留 script，
+        //   <template> 段由 effectiveSections 确定性覆盖（否则 section 顺序/层级由模型即兴决定）。
+        this._applyDeterministicIndexTemplate(allFiles, input);
+
         // 批3: 子组件（并行）
         const subComps = this._detectSubComponents(
           allFiles['package/index.vue'] || '',
@@ -2177,6 +2181,10 @@ export class MicrocodeEngineer extends BaseAgent {
         const safeResA =
           resA && typeof resA === 'object' ? resA : { files: {}, debug: {} };
         Object.assign(allFiles, safeResA.files || {});
+
+        // 🛡️ B（#719）：simple 路径同样收回「装配」——LLM 只留 script，
+        //   <template> 段由 effectiveSections 确定性覆盖（否则 section 顺序/层级由模型即兴决定）。
+        this._applyDeterministicIndexTemplate(allFiles, input);
 
         const subComps = this._detectSubComponents(
           allFiles['package/index.vue'] || '',
@@ -3102,6 +3110,16 @@ export class MicrocodeEngineer extends BaseAgent {
             `🛡️ 内存校验自动去重 <template> 标签（${dedup.removedCount} 个）: ${p}`,
           );
         }
+        // 🛡️ 多余块闭合标签剔除（2026-09-26 · 8d304bf9 实锤：重复 </style> → Invalid end tag
+        //   → 子组件被 P1-4 隔离剔除、模板引用被摘 → 切换区少一张卡）。
+        //   与上面的 <template> 去重同族：校验前先确定性清理，而非让坏文件隔离兜底。
+        const _closers = this._stripSurplusBlockClosers(allFiles[p]);
+        if (_closers.removed.length > 0) {
+          allFiles[p] = _closers.source;
+          this.logger.warn(
+            `🛡️ 已剔除多余块闭合标签（${_closers.removed.join(', ')}）: ${p}`,
+          );
+        }
 
         const result = validateVueSfc(allFiles[p], p, { lessGlobalVars });
         if (result.errors && result.errors.length > 0) {
@@ -3560,6 +3578,43 @@ export class MicrocodeEngineer extends BaseAgent {
       scriptContent,
       input,
       options,
+    );
+  }
+
+  /**
+   * 🛡️ B（#719 主线 · 2026-09-26 · mc-max-1790420477334-6e065bd7 实锤）
+   *
+   * simple/medium 分支的 `package/index.vue` 由 LLM 整文件（`_buildChunkMiddle`）产出，
+   * **绕过** `buildDeterministicIndexTemplate` → 模板子元素顺序/层级与 planner 的
+   * `effectiveSections` 脱钩（实锤：facts 为 tabs→chart，产物写成 chart→tabs 且丢失 tabs 容器层级）。
+   *
+   * 此处把「装配」从模型手里收回：保留 LLM 的 <script>，仅用 effectiveSections 派生的骨架
+   * 覆盖 <template> 段，并把 indexTemplateFacts 透出给下游 rootLayoutFacts（与 complex 分支同源）。
+   *
+   * 失败不 fail-closed：未生效只告警（含 reason），产物仍可进预览。
+   */
+  _applyDeterministicIndexTemplate(allFiles, input) {
+    const cur = allFiles['package/index.vue'];
+    if (typeof cur !== 'string' || !cur) return;
+    const r = microcodeGenerator.applyDeterministicIndexTemplate(cur, input, {
+      logger: this.logger,
+    });
+    if (!r.applied) {
+      this.logger.warn('🛡️ 确定性模板装配未生效（simple/medium 分支，保留 LLM 模板）', {
+        componentName: input.componentName,
+        reason: r.reason,
+      });
+      return;
+    }
+    allFiles['package/index.vue'] = r.content;
+    input._indexTemplateFacts = r.facts;
+    this.logger.info(
+      '🧩 确定性模板装配（simple/medium 分支）：<template> 段已由 effectiveSections 覆盖',
+      {
+        componentName: input.componentName,
+        sectionRoots: (r.facts && r.facts.sectionRoots ? r.facts.sectionRoots.length : 0),
+        rootContainerClass: r.facts && r.facts.rootContainerClass,
+      },
     );
   }
 
@@ -4454,6 +4509,15 @@ export class MicrocodeEngineer extends BaseAgent {
    */
   _deduplicateTemplateBlocks(source = '') {
     return microcodeWriter.deduplicateTemplateBlocks(source);
+  }
+
+  /**
+   * 🛡️ 多余块闭合标签剔除（2026-09-26 · mc-max-1790430709803-8d304bf9 实锤）
+   * 与 `_deduplicateTemplateBlocks` 同族：校验前先做确定性清理，避免「机械可修」的
+   * 重复 `</style>` 触发 P1-4 坏文件隔离（整个子组件被剔除 + 模板引用被摘 → 切换卡少一张）。
+   */
+  _stripSurplusBlockClosers(source = '') {
+    return microcodeWriter.stripSurplusBlockClosers(source);
   }
 
   /**
@@ -6894,7 +6958,7 @@ export default declareInfo
           // 🎨 styleTokens 契约接入（utils/style-tokens.js，双轨制）：
           // dark 槽位 = 枚举三核心 + 设计变量轨（原 UI 深色时 Figma 深色真值自定义变量）；
           // light 槽位 = Figma 提取（浅色稿）或派生算法（深色稿）。
-          const { buildStyleTokens } =
+          const { buildStyleTokens, renderMicrocodeThemeVarsLess } =
             await import('../utils/style-tokens.js');
           const styleTokens = buildStyleTokens(
             { figmaNodeData, backgroundBrightness },
@@ -6903,6 +6967,32 @@ export default declareInfo
           // 供下游 declare.json 归一（cssVariableConfig 双向声明 / themeConfig 兜底）
           // 与 validator 事件对齐使用——单一事实源，随本次生成上下文刷新。
           this._lastStyleTokens = styleTokens;
+
+          // 🛡️ 2026-09-26 治本 0.1：theme-vars.less 的 **§3 核心槽位**改由 styleTokens 确定性产出
+          //   （设计主题 = Figma 提取；缺的主题 = 确定性派生），**组件专属槽位沿用 LLM 原声明**。
+          //   目的：消灭「浅色 @color-text-base 被 LLM 写成 #ffffff」这类核心槽位取值错误，
+          //   同时不破坏 tab/ring/legend 等专色（避免编译期变量未定义）。契约见 style-tokens.js 头部。
+          try {
+            const TV_PATH = 'resources/styles/themes/theme-vars.less';
+            const priorTv =
+              typeof allFiles[TV_PATH] === 'string' ? allFiles[TV_PATH] : '';
+            const renderedTv = renderMicrocodeThemeVarsLess(styleTokens, priorTv);
+            if (renderedTv && renderedTv !== priorTv) {
+              allFiles[TV_PATH] = renderedTv;
+              this.logger.info('🎨 theme-vars.less 核心槽位已由 styleTokens 确定性接管', {
+                lightTextBase: styleTokens?.light?.colorTextBase,
+                darkTextBase:
+                  styleTokens?.darkWithDesign?.colorTextBase ||
+                  styleTokens?.dark?.colorTextBase,
+                defaultTheme: styleTokens?.defaultTheme,
+                priorHadThemeVars: !!priorTv,
+              });
+            }
+          } catch (tvErr) {
+            this.logger.warn('🎨 theme-vars.less 确定性渲染失败（非阻断）', {
+              error: tvErr?.message || String(tvErr),
+            });
+          }
           const mcPlatformFiles = microcodeWriter.buildMcPlatformFiles({
             fontSize: '12',
             styleTokens,

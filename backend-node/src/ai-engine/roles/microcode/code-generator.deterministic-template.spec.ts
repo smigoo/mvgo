@@ -44,7 +44,7 @@ jest.mock('../../utils/provider-pool.js', () => ({
 
 jest.mock('../../utils/llm-timeout.js', () => ({ invokeWithTimeout: jest.fn() }))
 
-import { buildDeterministicIndexTemplate, stripUnplannedSubComponentImports, containChartRefInsidePanel, flexItemStyleFromWidths, flexItemStyleFromHeights, resolveSectionFlexSize } from './code-generator.js'
+import { buildDeterministicIndexTemplate, applyDeterministicIndexTemplate, stripUnplannedSubComponentImports, containChartRefInsidePanel, flexItemStyleFromWidths, flexItemStyleFromHeights, resolveSectionFlexSize } from './code-generator.js'
 import { indexFigmaNodes } from '../../utils/section-tree.js'
 import { pruneDeadSubComponentImports } from './resource-mounter.js'
 
@@ -412,5 +412,108 @@ describe('resolveSectionFlexSize / 装配回查 Figma bbox（d70a19bf）', () =>
     expect(tpl).toContain('flex:0.340;min-width:0;')
     expect(tpl).toContain('flex:0.320;min-width:0;')
     expect(tpl.match(/flex:1;min-width:0;/g) || []).toHaveLength(0)
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════
+// 🛡️ B（#719 主线 · 2026-09-26 · mc-max-1790420477334-6e065bd7 实锤）
+// applyDeterministicIndexTemplate：simple/medium 分支的 index.vue 由 LLM 整文件产出，
+// 绕过确定性装配 → 模板子元素顺序与 effectiveSections 脱钩（实锤 chart 被提到 tabs 之前）。
+// 治本契约：保留 LLM 的 <script>，仅覆盖 <template> 段。
+// ══════════════════════════════════════════════════════════════════════════
+describe('#719 B · applyDeterministicIndexTemplate（装配与填值分离）', () => {
+  // 复刻 env-monitor 真实结构：89:41 > 89:42[tab 列表] + 2:7898[图表内容]，另挂 chart 叶子
+  const envPlan = () => ({
+    isForced: true,
+    minFiles: 8,
+    effectiveSections: [
+      {
+        id: '89:41', title: 'con', type: 'container', isLayoutContainer: true,
+        layout: 'vertical', elementCount: 49,
+        children: [
+          {
+            id: '89:42', title: 'sub-t', type: 'container', isLayoutContainer: true,
+            layout: 'horizontal', elementCount: 14,
+            children: [
+              { id: '2:7889', title: 'tabs-list', type: 'tabs', elementCount: 6 },
+              { id: '89:43', title: 'tab-panel', type: 'tabs', elementCount: 20 },
+            ],
+          },
+          {
+            id: '2:7898', title: 'echarts-line', type: 'container', isLayoutContainer: true,
+            layout: 'horizontal', elementCount: 10,
+            children: [{ id: '2:7899', title: 'chart-body', type: 'content', elementCount: 8 }],
+          },
+        ],
+      },
+      { id: 'chart-2:7898', title: 'chart', type: 'chart', elementCount: 5 },
+    ],
+  })
+
+  // LLM 整文件产物：chart 写在 tabs 之前（正是实锤的顺序错位形态）
+  const llmIndexVue = () => `<template>
+  <base-panel panelKey="default-panel">
+    <div class="c-env-monitor-root">
+      <div class="c-env-monitor-slot-con">
+        <EnvMonitorChart class="c-env-monitor-chart-section" />
+        <EnvMonitorTabs class="c-env-monitor-tabs-section" />
+      </div>
+    </div>
+  </base-panel>
+</template>
+
+<script setup>
+import EnvMonitorChart from './components/EnvMonitorChart.vue'
+import EnvMonitorTabs from './components/EnvMonitorTabs.vue'
+const switchSelected = ref('active')
+</script>`
+
+  const mkInput = (p: any) => ({
+    componentName: 'env-monitor',
+    panelType: 'default-panel',
+    subComponentPlan: p,
+  })
+
+  it('有 effectiveSections → <template> 段被确定性骨架覆盖，顺序 = facts 顺序，script 原样保留', () => {
+    const r = applyDeterministicIndexTemplate(llmIndexVue(), mkInput(envPlan()), {})
+    expect(r.applied).toBe(true)
+    expect(r.facts?.source).toBe('deterministic-template')
+
+    const out = r.content
+    const tpl = out.match(/<template\b[^>]*>([\s\S]*?)<\/template>/i)?.[1] || ''
+
+    // ① 装配收回：LLM 自拟的模板标签与内容根不复存在
+    expect(tpl).not.toContain('EnvMonitorChart')
+    expect(tpl).not.toContain('c-env-monitor-root')
+    expect(tpl).toContain('c-env-monitor-slot-con')
+    expect(tpl).toContain('data-section-id="89:42"')
+
+    // ② 顺序 = effectiveSections 顺序：tabs 区必须在图表区之前
+    const tabsAt = tpl.indexOf('data-section-id="89:42"')
+    const chartAt = tpl.indexOf('data-section-id="2:7898"')
+    expect(tabsAt).toBeGreaterThanOrEqual(0)
+    expect(chartAt).toBeGreaterThan(tabsAt)
+
+    // ③ 填值保留：LLM script 内容不被改写
+    expect(out).toContain('const switchSelected = ref(')
+
+    // ④ import 与新模板对齐：模型自拟的子组件 import 变死 → 被裁剪
+    expect(out).not.toContain("import EnvMonitorChart from './components/EnvMonitorChart.vue'")
+    expect(out).not.toContain("import EnvMonitorTabs from './components/EnvMonitorTabs.vue'")
+  })
+
+  it('无 plan（effectiveSections 空）→ 原样返回 + reason，不 fail-closed', () => {
+    const src = llmIndexVue()
+    const r = applyDeterministicIndexTemplate(src, mkInput({ isForced: false, effectiveSections: [] }), {})
+    expect(r.applied).toBe(false)
+    expect(r.reason).toBe('no-plan-sections')
+    expect(r.content).toBe(src)
+  })
+
+  it('空内容 / 无 <template> 段 → 原样返回', () => {
+    expect(applyDeterministicIndexTemplate('', mkInput(envPlan()), {}).reason).toBe('empty-content')
+    const r = applyDeterministicIndexTemplate('<script setup>const a=1</script>', mkInput(envPlan()), {})
+    expect(r.applied).toBe(false)
+    expect(r.reason).toBe('no-template-block')
   })
 })

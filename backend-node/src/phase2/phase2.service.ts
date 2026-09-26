@@ -1163,6 +1163,11 @@ export class Phase2Service {
           }
         } catch { /* 忽略 checkpoint 检测失败 */ }
       }
+      // 🛡️ 2026-09-26（预览竞态治本）：完成事件延迟到「组件记录落库之后」再广播。
+      // 原实现先 sendComplete、DB 保存放其后的 fire-and-forget IIFE → 记录比完成事件晚 ~1.6s；
+      // 前端收到 complete 立即跳预览 → /api/component/by-session 查不到 → 回退 session 名拼目录
+      // → 「未找到组件：<session>（已尝试 custom-components/<session>）」。详见下方 await 与末尾 sendComplete。
+      let completePayload: any = null;
       if (terminalError) {
         // 🆕 用户极速通过：speedPassTask 已广播 complete，跳过失败广播避免覆盖完成态
         const t = this.tasksService.getTask(sessionId);
@@ -1177,7 +1182,8 @@ export class Phase2Service {
           this.progressService.sendError(sessionId, terminalError);
         }
       } else {
-        this.progressService.sendComplete(sessionId, {
+        // 🛡️ 与上方 completePayload 声明配套：先攒好载荷，等组件记录落库后再广播（见末尾 sendComplete）。
+        completePayload = {
           ...genResult,
           taskId: sessionId,
           componentId: resolvedComponentId,
@@ -1191,17 +1197,13 @@ export class Phase2Service {
               ? [...actualTextModels].join(', ')
               : (textModelUsed || ''),
           },
-        });
-        
-        // 🆕 记录成功生成：只有成功生成的组件才占用配额
-        if (params.userId && qualityPassed && !terminalError) {
-          this.quotaService.recordSuccess(params.userId, sessionId);
-        }
+        };
       }
 
-      // 🆕 异步执行 DB 保存（不阻塞终态广播，失败仅记录日志）
-      // workspace 同步已在 broadcast 前完成，此处仅剩 DB 持久化
-      ;(async () => {
+      // 🛡️ 2026-09-26 治本：组件记录必须【在 sendComplete 之前】落库（原为广播后的 fire-and-forget，
+      // 记录晚 ~1.6s → 前端跳预览时 by-session 查不到 → 回退 session 名拼目录 → 「未找到组件」）。
+      // workspace 同步已在 broadcast 前完成，此处仅剩 DB 持久化；DB 单次写入 ~1.6s，远低于前端 SSE 看门狗阈值。
+      await (async () => {
         if (terminalError || !qualityPassed) return; // 生成/质量/LESS 门禁失败时不登记为正式组件
 
         const hasEntry =
@@ -1310,6 +1312,16 @@ export class Phase2Service {
           err.stack,
         );
       });
+
+      // 🛡️ 2026-09-26：组件记录已落库，此刻才广播完成（配合上方 completePayload 声明）。
+      // 这样前端收到 complete 时 by-session 一定能反查到语义化 componentId，杜绝「未找到组件」竞态。
+      if (completePayload) {
+        this.progressService.sendComplete(sessionId, completePayload);
+        // 🆕 记录成功生成：只有成功生成的组件才占用配额
+        if (params.userId && qualityPassed) {
+          this.quotaService.recordSuccess(params.userId, sessionId);
+        }
+      }
     }
   }
 

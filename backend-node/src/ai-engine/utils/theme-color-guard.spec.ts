@@ -432,13 +432,13 @@ describe('THEME-MIXINS-IDENTICAL 两套 theme mixin 值相同（模式 B，2026-
     ).toBeNull()
   })
 
-  it('接入主流程：相同值产出 WARN（41% 命中面，暂不 BLOCK）', () => {
+  it('接入主流程：相同值产出 BLOCK（0.1+0.3-b 后语料实测 0% 命中，故升级为 BLOCK）', () => {
     const issues = detectThemeColorViolations([
       { path: 'resources/styles/themes/theme-vars.less', content: SAME },
     ])
     const hits = findBy(issues, 'THEME-MIXINS-IDENTICAL')
     expect(hits).toHaveLength(1)
-    expect(hits[0].severity).toBe('WARN')
+    expect(hits[0].severity).toBe('BLOCK')
     expect(hits[0].message).toContain('完全相同')
   })
 })
@@ -623,6 +623,30 @@ describe('healBusinessStyleVarRefs：业务样式 var() 直引自愈（模式 A�
     const fixed = healBusinessStyleVarRefs(files, { logger: { warn() {} } })
     expect(files['package/index.vue']).toContain('color: rgba(8,163,165,1);')
     expect(files['package/index.vue']).not.toContain('var(--color-success')
+  })
+
+  it('0.3-a：camelCase 槽名（@fontSize）走「原样名」查找 → @fontSize（不降级为 fallback 字面量）', () => {
+    // 🛡️ 2026-09-26 治本 0.3-a：`.common()` 的槽名是 camelCase（@fontSize），
+    // camelToKebab 会得到 font-size → 查不到 → 旧逻辑退化成 fallback（14px），**丢宿主响应式**。
+    const files = {
+      'resources/styles/themes/theme-vars.less': `.common() { @fontSize: var(--fontSize); }`,
+      'package/index.vue': `<style>.c { font-size: calc(var(--fontSize, 14px) * 0.857); }</style>`,
+    }
+    const fixed = healBusinessStyleVarRefs(files, { logger: { warn() {} } })
+    expect(fixed.length).toBe(1)
+    expect(files['package/index.vue']).toContain('calc(@fontSize * 0.857)')
+    expect(files['package/index.vue']).not.toContain('14px * 0.857')
+  })
+
+  it('0.3-a：无 fallback 的 var(--x) 也命中（此前正则强制要求 fallback → 完全不匹配，残留大头）', () => {
+    const files = {
+      'resources/styles/themes/theme-vars.less': `.theme-light() { @color-text-base: #333333; }`,
+      'package/index.vue': `<style>.d { color: var(--colorTextBase); }</style>`,
+    }
+    const fixed = healBusinessStyleVarRefs(files, { logger: { warn() {} } })
+    expect(fixed.length).toBe(1)
+    expect(files['package/index.vue']).toContain('color: @color-text-base;')
+    expect(files['package/index.vue']).not.toContain('var(--colorTextBase)')
   })
 
   it('theme-vars.less 自身透传 @x: var(--x) 不被改动', () => {

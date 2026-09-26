@@ -130,6 +130,49 @@ export function isReasoningModel(model = '') {
 }
 
 /**
+ * 生成「关闭思考/推理」的请求参数。**不同厂商参数名不同**，故按 模型/endpoint 映射。
+ *
+ * 背景（2026-09-26 实测，真实 ~45KB 视觉 prompt + 组件预览图）：
+ *  qwen3.7-plus / qwen3.8-max 默认开推理，会把 8k~13k token 烧在 reasoning 上 →
+ *  单次视觉调用 218~276s，被 150s 超时上限掐断 → 视觉分析降级 → 阻断生成。
+ *  注入关推理参数后单次降到 8~9s（快 ~30 倍），且仍返回完整 JSON。
+ *
+ * 实测结论（2026-09-26 逐厂商判别，max_tokens=400 + 真实 45KB prompt）：
+ *  | 模型                        | enable_thinking:false | thinking:{type:disabled} |
+ *  |----------------------------|-----------------------|--------------------------|
+ *  | qwen3.7-plus (dashscope)   | ✅ 8.1s 无推理         | ✅ 8.0s 无推理            |
+ *  | qwen3.8-max (microvideo中转)| ✅ 9.5s 无推理        | ❌ 120s 超时              |
+ *  | kimi-k3 (lkeap/tencent)    | ❌ 仍推理              | ✅ 12.9s 无推理           |
+ *  | GLM-5.3-Flash (lkeap)      | ❌ 仍推理              | ❌ 400 报错（关不掉）      |
+ *  → 故：qwen 系用 `enable_thinking:false`；kimi/deepseek 用 `thinking:{type:'disabled'}`；
+ *    其余（如 GLM-5.3-Flash）**关不掉**，返回 {}（不发送，避免 400）。
+ *
+ * @param {string} model
+ * @param {string} [baseURL]
+ * @returns {Record<string, any>} 需合并进请求 body 的参数（可能为空对象）
+ */
+export function buildThinkingOffParams(model = '', baseURL = '') {
+  const m = String(model || '').trim().toLowerCase()
+  const u = String(baseURL || '').trim().toLowerCase()
+  if (!m && !u) return {}
+  // qwen 系（qwen3.x / qwen-vl / 任意经 dashscope、microvideo 中转的 qwen）
+  // ⚠️ 只能用 enable_thinking：microvideo 中转对 thinking:{type:disabled} 会挂起超时。
+  if (m.includes('qwen') || u.includes('dashscope') || u.includes('microvideo')) {
+    return { enable_thinking: false }
+  }
+  // kimi 系（kimi-k3 等）：只认 thinking:{type:disabled}，enable_thinking 无效。
+  if (/^kimi/.test(m) || u.includes('lkeap') && m.includes('kimi')) {
+    return { thinking: { type: 'disabled' } }
+  }
+  // deepseek v4 系：thinking:{type:disabled}（与文本侧既有约定一致）。
+  if (m.includes('deepseek')) {
+    return { thinking: { type: 'disabled' } }
+  }
+  // 其余（GLM-5.3-Flash 等）实测关不掉（thinking:disabled → 400）→ 不发送。
+  return {}
+}
+
+/**
  * 归一化请求 temperature。
  * - 推理类模型：服务端硬性 temperature=1，强制返回 1（忽略用户配置，避免 400 invalid temperature）。
  * - 非推理模型：尊重显式配置；未配置（undefined）时保持原样，交由下层兜底默认。

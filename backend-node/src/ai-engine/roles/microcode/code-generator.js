@@ -632,8 +632,65 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
   return { template: lines.join('\n'), rootContainerClass, sectionRoots, componentFiles };
 }
 
-export async function generateIndexVue(runChunk, input, { splitDecision, allFiles }, options = {}) {
-    const scriptSplit = !!splitDecision.scriptSplit;
+/**
+ * 🛡️ B（#719 主线 · 2026-09-26 · mc-max-1790420477334-6e065bd7 实锤）
+ *
+ * 病灶：deterministic 模板装配只挂在 **complex** 分支（`generateIndexVue`）。simple/medium
+ * 分支的 `package/index.vue` 由 LLM 通过 `_buildChunkMiddle` **整文件**生成 → 完全不经过
+ * `buildDeterministicIndexTemplate` → 模板子元素顺序/层级由模型即兴决定，与 planner 的
+ * `effectiveSections` 顺序脱钩。
+ * 实锤：facts 顺序为 `tabs(89:42) → chart-section`，产物写成 `<EnvMonitorChart/> → <EnvMonitorTabs/>`
+ * （tabs 被挪到末尾、且丢失 tabs 自身容器层级），与该任务 checkpoint 离线重放出的确定性骨架
+ * （`TabsSection → ContentSection → ChartSection`）完全不一致。
+ *
+ * 治本：**「装配」与「填值」分离** —— 保留 LLM 的 `<script>`（业务逻辑仍需模型填），
+ * 仅把 `<template>` 段整体替换为 `effectiveSections` 派生的确定性骨架，与 complex 分支同源同构。
+ * 替换后按模板标签补齐子组件 import，并清掉因此变死的旧 import（ensure/prune 对称）。
+ *
+ * 纯函数（不读盘、不改入参），失败一律保留 LLM 原样并给出 reason，绝不 fail-closed。
+ *
+ * @param {string} content LLM 生成的 index.vue 全文
+ * @param {Object} input 生成上下文（含 generationInput.componentPlan / subComponentPlan）
+ * @param {Object} [options] { logger }
+ * @returns {{content: string, applied: boolean, facts: Object|null, reason?: string}}
+ */
+export function applyDeterministicIndexTemplate(content, input, options = {}) {
+  const src = typeof content === 'string' ? content : '';
+  if (!src) return { content: src, applied: false, facts: null, reason: 'empty-content' };
+
+  const templateRe = /<template\b[^>]*>[\s\S]*?<\/template>/i;
+  if (!templateRe.test(src)) {
+    return { content: src, applied: false, facts: null, reason: 'no-template-block' };
+  }
+
+  let det = null;
+  try {
+    det = buildDeterministicIndexTemplate(input, options);
+  } catch (e) {
+    options.logger?.warn?.('🛡️ 确定性模板装配异常，保留 LLM 模板', { error: e?.message });
+    return { content: src, applied: false, facts: null, reason: 'build-failed' };
+  }
+  if (!det || !det.template) {
+    return { content: src, applied: false, facts: null, reason: 'no-plan-sections' };
+  }
+
+  let out = src.replace(templateRe, det.template);
+  out = ensureSubComponentImport(out, options);
+  out = pruneDeadSubComponentImports(out, options);
+
+  return {
+    content: out,
+    applied: true,
+    facts: {
+      rootContainerClass: det.rootContainerClass,
+      sectionRoots: det.sectionRoots,
+      componentFiles: det.componentFiles || [],
+      source: 'deterministic-template',
+    },
+  };
+}
+
+export async function generateIndexVue(runChunk, input, { splitDecision, allFiles }, options = {}) {    const scriptSplit = !!splitDecision.scriptSplit;
     const declContent = allFiles['declare.json'] || '';
 
     // 🛡️ 动态 maxTokens：预算必须复用容量门禁的真实 chunk 预算。

@@ -267,11 +267,17 @@ async function ensureLatestSnapshot() {
 // 把 sessionId 反查成语义化 componentId（component/by-session 接口），使 workspace 源能命中语义化名目录。
 async function resolveWorkspaceComponentId(id: string): Promise<string> {
   if (!id || !/^(mc|mv)-/.test(id)) return id
-  try {
-    const component = await getComponentBySessionId(id)
-    if (component?.componentId) return component.componentId
-  } catch {
-    // 反查失败 → 回退原 id（保持现有容错，不阻断）
+  // 🛡️ 2026-09-26（预览竞态兜底）：后端组件记录可能比「完成」事件晚 ~1.6s 落库，
+  // 生成完成一刹那跳预览时 by-session 可能仍为空 → 旧逻辑直接回退原始 session 名
+  // → custom-components/<session> 找不到 → 「未找到组件」。这里退避重试最多 4 次（≈0.3+0.6+0.9+1.2s≈3s）。
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      const component = await getComponentBySessionId(id)
+      if (component?.componentId) return component.componentId
+    } catch {
+      // 单次失败 → 继续退避重试
+    }
+    if (attempt < 3) await new Promise((r) => setTimeout(r, 300 * (attempt + 1)))
   }
   return id
 }

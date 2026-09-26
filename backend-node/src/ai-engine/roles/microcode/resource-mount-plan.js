@@ -272,12 +272,30 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
       // 🛡️ #2（2026-09-22 · c-device-monitor-9120a940 实锤）：共享背景（sharedBy>1，如 cons 的
       //   12 卡 bg3）若 LLM 把变量预挂到面板根，原幂等早退会跳过下方 v-for 逐卡挂载逻辑
       //   （sharedCount>1 分支），导致 bg 拉伸铺满容器、逐卡背景缺失。共享背景必须落到 v-for
-      //   item，故此处不早退，留给下方分支做「根→item」迁徙。
+      //   item，故**挂错位置时**不早退，留给下方分支做「根→item」迁徙。
+      //
+      // 🛡️ 收口（2026-09-26 · resource-mount-plan.spec.ts「共享底图 3 个 mount 同 target」实锤）：
+      //   原实现是「只要是共享背景就一律不早退」→ 同一张图同 target 的多条 mount（计划①已把它们
+      //   固化成**同一个 varName**）会依次重复挂载（实测 mounted 变 2 条，且第二次仍写同一 :style）。
+      //   正确判据只看**当前位置对不对**：
+      //     · 该变量已挂在 v-for item 上 → 已是目标形态 → 照旧幂等早退（不重复挂）；
+      //     · 该变量存在但**不在** v-for item 上（挂在根/内层）→ 不早退，去迁徙；
+      //     · 文件里没有 v-for item 可迁 → 不去动（保守，避免把根背景剥掉后无处可挂）。
       const isSharedBg =
         g.kind === 'bg' &&
         Array.isArray(g.sharedBy) &&
         g.sharedBy.length > 1;
-      if (new RegExp(`\\b${varName}\\b`).test(content) && !isContainerStateBg && !isSharedBg) {
+      let sharedNeedsMigration = false;
+      if (isSharedBg && new RegExp(`\\b${varName}\\b`).test(content)) {
+        const itemTagForShared = findVForItemTag(content);
+        sharedNeedsMigration =
+          !!itemTagForShared && !new RegExp(`\\b${varName}\\b`).test(itemTagForShared);
+      }
+      if (
+        new RegExp(`\\b${varName}\\b`).test(content) &&
+        !isContainerStateBg &&
+        !sharedNeedsMigration
+      ) {
         if (g.kind === 'icon' || g.kind === 'img') {
           const size = iconSizeFromFigmaBox(mount.figmaBox);
           if (size) {

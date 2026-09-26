@@ -397,3 +397,79 @@ describe('刀 13b · 嵌套 & 形态归一（父选择器栈）', () => {
     expect(active!.modKey).toContain('--active');
   });
 });
+
+// ══════════════════════════════════════════════════════════════════════════
+// 🛡️ R5 · 状态类归一的**样式侧跟随**（2026-09-26 · mc-max-1790430709803-8d304bf9 实锤）
+// 病灶：R1/R2 把模板侧裸状态类归一为 `base--mod`，样式侧独立选择器 `.base-mod`
+// （承载**真实**选中态样式）没跟着改 → 真样式成孤儿，新名只剩 fallback 的空 TODO 块
+// → 模板零命中（tab 选中态全丢）。R5 让样式侧跟随改名。
+// ══════════════════════════════════════════════════════════════════════════
+describe('R5 · 状态类归一的样式侧跟随', () => {
+  const realShape = () => ({
+    'package/components/TabsSection.vue': `<template>
+  <div class="c-device-monitor-tabs">
+    <div class="c-device-monitor-tab" :class="{ 'c-device-monitor-tab-active': activeTab === tab.key }">
+      <span class="c-device-monitor-tab-text">监控</span>
+    </div>
+  </div>
+</template>
+<style lang="less" scoped>
+.c-device-monitor-tab-active { background: @color-primary; }
+.c-device-monitor-tab-active .c-device-monitor-tab-text { color: #ffffff; }
+</style>`,
+    'resources/styles/common.less': `/* [自动修复] 模板 class .c-device-monitor-tab--active → 未匹配到 Figma 元素（不写入猜测样式） */
+.c-device-monitor-tab-active { color: @color-primary; }
+.c-device-monitor-tab-active .c-device-monitor-tab-text { font-weight: 600; }
+.c-device-monitor-tab--active {
+  /* TODO: 补充样式 */
+}
+`,
+  })
+
+  it('模板侧归一后，样式侧旧名独立选择器跟随改名（真样式不再当孤儿）', () => {
+    const files = realShape();
+    const r = normalizeClassNameDialect(files);
+    const less = r.files['resources/styles/common.less'];
+    const vue = r.files['package/components/TabsSection.vue'];
+
+    expect(r.changes.some((c) => c.rule === 'R5' && c.from === 'c-device-monitor-tab-active')).toBe(true);
+
+    // ① 真样式已挂到新名下
+    expect(less).toMatch(/\.c-device-monitor-tab--active\s*\{[^}]*color:\s*@color-primary/);
+    expect(less).toMatch(/\.c-device-monitor-tab--active\s+\.c-device-monitor-tab-text\s*\{[^}]*font-weight/);
+    // ② 旧名作为选择器不再残留（注释里的提及不算）
+    expect(less.replace(/\/\*[\s\S]*?\*\//g, '')).not.toMatch(/\.c-device-monitor-tab-active(?![\w-])/);
+    // ③ .vue 自有 <style> 块同样跟随
+    expect(vue).toMatch(/\.c-device-monitor-tab--active\s*\{[^}]*background/);
+    // ④ 模板 :class 用的是新名
+    expect(vue).toContain("'c-device-monitor-tab--active': activeTab === tab.key");
+  })
+
+  it('样式侧已有**非空**新名 → 该文件不动（已对齐，不臆造）', () => {
+    const files = realShape();
+    files['resources/styles/common.less'] += `\n.c-device-monitor-tab--active { border-left: 2px solid @color-primary; }\n`;
+    const r = normalizeClassNameDialect(files);
+    const less = r.files['resources/styles/common.less'];
+    // 按文件断言：common.less 里 `--active` 已有真实声明 → 该文件不做 R5 跟随
+    // （.vue 自带 <style> 块不受影响，仍会跟随——那是同一个组件自己的样式，改名是对的）
+    expect(r.changes.filter((c) => c.rule === 'R5' && c.path === 'resources/styles/common.less')).toHaveLength(0);
+    expect(less).toContain('.c-device-monitor-tab-active { color: @color-primary; }');
+  })
+
+  it('幂等：再跑一次零 R5 改动', () => {
+    const once = normalizeClassNameDialect(realShape());
+    const twice = normalizeClassNameDialect(once.files);
+    expect(twice.changes.some((c) => c.rule === 'R5')).toBe(false);
+    expect(twice.files['resources/styles/common.less']).toBe(once.files['resources/styles/common.less']);
+  })
+
+  it('模板侧无改名 → 样式零改动', () => {
+    const files = {
+      'package/components/Plain.vue': `<template>\n  <div class="c-x-plain" />\n</template>\n<style>\n.c-x-plain-other { color: red; }\n</style>`,
+      'resources/styles/common.less': '.c-x-plain-other { color: red; }\n',
+    };
+    const r = normalizeClassNameDialect(files);
+    expect(r.changes.some((c) => c.rule === 'R5')).toBe(false);
+    expect(r.files['resources/styles/common.less']).toBe(files['resources/styles/common.less']);
+  })
+});

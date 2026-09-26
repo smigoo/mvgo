@@ -21,7 +21,7 @@ import {
   extractLessGlobalVars,
 } from '../../utils/sfc-syntax-validation.js';
 import { repairScopedThirdPartySelectors, ensureFlexDirectionInVueSfc, ensureFlexDirection, ensureGridDisplay, ensureGridDisplayInVueSfc, fixInvalidCssPropertiesInVue, fixInvalidCssProperties } from '../../utils/css-sanitizer.js';
-import { fixSpuriousLineBreaks, injectMissingTabUi, healVueEmbeddedStyleBraces, healThemeMixinVarRefs, healThemeMixinVarRefsInVue, healLessResourceVarInterpolation, healPresetLiteralDecls, healSlotHexToVarRefs, healVarNameCase, applyHealToVueStyleBlocks, injectThemeVarDeclsForLess } from './code-healer.js';
+import { fixSpuriousLineBreaks, injectMissingTabUi, healVueEmbeddedStyleBraces, healThemeMixinVarRefs, healThemeMixinVarRefsInVue, healLessResourceVarInterpolation, healPresetLiteralDecls, healSlotHexToVarRefs, healVarNameCase, applyHealToVueStyleBlocks, injectThemeVarDeclsForLess, healLessColorFnVarArgs } from './code-healer.js';
 import { healLessSource, healRootFixedSize } from '../../validators/less-compile-gate.js';
 import {
   isColorEvaluable,
@@ -135,6 +135,71 @@ export function sanitizeFileContent(content, filePath = '', options = {}) {
 
   // 6. 去除首尾多余空白（保留内容中的空白）
   return sanitized.trim();
+}
+
+/**
+ * 🛡️ 多余块闭合标签剔除（2026-09-26 · mc-max-1790430709803-8d304bf9 实锤）
+ *
+ * 病灶：`ContentActive.vue` 尾部出现**重复 `</style>`**：
+ *   ```
+ *   106: }
+ *   107: </style>
+ *   108: </style>     ← 多余
+ *   ```
+ * → `@vue/compiler-sfc` 报 `Invalid end tag.` → 内存校验判为坏文件 →
+ * `isolateBadVueFiles` **把它连同 index.vue 里的 `<ContentActive/>` 引用一起剔除**
+ * （P1-4 坏文件隔离）→ 切换区从「两张卡」变成「一张卡」，且模板留下一行空白。
+ * 这是「机械可修」的缺陷，绝不该走「整个子组件降级剔除」这条重路。
+ *
+ * 与 `deduplicateTemplateBlocks`（重复 `<template>` 去重）同族且互补：本项目已有
+ * 「块级标签重复 → 校验前先确定性去重」的先例，本函数补齐 `<style>` / `<script>` 两类
+ * **闭合标签**（不删块内容，只删多出来的 `</tag>`）。
+ *
+ * 纪律：
+ *   - 仅当 `闭合数 > 开始数` 时才动手，且只删「多出来的」那几个（从文件尾部往前删），
+ *     合法的多块（如 `<style>` + `<style scoped>`）计数相等 → 零改动；
+ *   - 删除时连同该行前导空白整行移除，避免在模板里留下空行；
+ *   - 不碰块内容，纯文本变换，幂等。
+ *
+ * @param {string} source Vue SFC 全文
+ * @returns {{ source: string, removed: string[] }} removed 形如 ['</style>']
+ */
+export function stripSurplusBlockClosers(source = '') {
+  const src = String(source);
+  if (!src) return { source: src, removed: [] };
+
+  const BLOCK_TAGS = ['template', 'style', 'script'];
+  let out = src;
+  const removed = [];
+
+  for (const tag of BLOCK_TAGS) {
+    const opens = (out.match(new RegExp(`<${tag}\\b`, 'gi')) || []).length;
+    const closes = (out.match(new RegExp(`</${tag}\\s*>`, 'gi')) || []).length;
+    let surplus = closes - opens;
+    if (surplus <= 0) continue;
+
+    // 收集全部闭合位置（从后往前删，保证低位下标不被前面的删除影响）
+    const positions = [];
+    const rx = new RegExp(`</${tag}\\s*>`, 'gi');
+    let m;
+    while ((m = rx.exec(out)) !== null) positions.push({ index: m.index, text: m[0] });
+
+    for (let i = positions.length - 1; i >= 0 && surplus > 0; i--, surplus--) {
+      const { index, text } = positions[i];
+      const lineStart = out.lastIndexOf('\n', index);
+      const lineHead = out.slice(lineStart + 1, index);
+      if (/^[ \t]*$/.test(lineHead)) {
+        // 该闭合标签独占一行 → 整行（含前导空白与换行）删除，不留空行
+        out = out.slice(0, lineStart + 1) + out.slice(index + text.length);
+      } else {
+        out = out.slice(0, index) + out.slice(index + text.length);
+      }
+      removed.push(`</${tag}>`);
+    }
+  }
+
+  if (removed.length === 0) return { source: src, removed: [] };
+  return { source: out, removed };
 }
 
 /**
@@ -583,6 +648,22 @@ export function writeFiles(files, outputPath, options = {}) {
         // 剥离相对 @import 连带剥掉 theme-vars 变量定义 → 合法 `@fontSize` 引用误报
         // undefined → 下方兜底会注入冗余声明（覆盖主题真值）。以文件集顶层变量 globalVars
         // 补回定义，只在「真臆造变量」时才走注入兜底。
+        // 🛡️ 写盘门禁**前置**自愈（2026-09-26 普查）：LESS 颜色函数（fade/lighten/darken…）
+        //   的参数写成运行期 `var(--x, #hex)` → LESS 编译期无法求值 → 硬报错 → 重试仍失败
+        //   → **整文件被跳过**（比坏文件隔离更隐蔽，不留 degradedFiles 痕迹）。
+        //   全日志 67 条「写盘门禁失败（已跳过）」中 37 条（55%）正是此形态。
+        //   在任何校验之前确定性改写为编译期可求值形式（无匹配时零改动）。
+        const _colorFnHeal = healLessColorFnVarArgs(sanitizedContent);
+        if (_colorFnHeal.changes.length > 0) {
+          sanitizedContent = _colorFnHeal.source;
+          if (logger) {
+            logger.info('🛡️ LESS 颜色函数 var() 参数 → 编译期可求值（写盘门禁前置自愈）', {
+              path: relativePath,
+              count: _colorFnHeal.changes.length,
+              sample: _colorFnHeal.changes.slice(0, 2),
+            });
+          }
+        }
         const lessGlobalVars = extractLessGlobalVars(files);
         const syntaxResult = validateVueSfc(sanitizedContent, relativePath, {
           lessGlobalVars,
@@ -1159,6 +1240,10 @@ export function buildCssVarsFile(options = {}) {
         ...SEMANTIC_COLORS_LIGHT,
       }
     : null;
+  // 🛡️ 2026-09-26 治本 0.6：`common`（默认槽位）必须以**设计主题**为准，与 theme-vars.less 同源。
+  //   此前硬编码 DARK 枚举 → 浅色设计下输出 `common.colorTextBase:'#ffffff'`（白字）、
+  //   `colorPrimary:'#44E4FF'`（深色主色），与 theme-vars 的设计真值打架（矛盾 #5）。
+  const commonSlots = tokens?.defaultTheme === 'light' && light ? light : dark;
   const darkBody = buildCssVarsObjectBody(dark);
   const lightBody = light ? buildCssVarsObjectBody(light) : null;
   const exportNames = `common, dark${light ? ', light' : ''}`;
@@ -1171,17 +1256,7 @@ export function buildCssVarsFile(options = {}) {
 const common = {
   fontSize: $mcCssBuilder.getCssSize(${fontSize}),
   fontWeightStrong: 600,
-  colorTextBase: '#ffffff',
-  colorPrimary: '${MC_DARK_THEME_COLOR_ENUM.colorPrimary}',
-  colorPrimaryHover: '${MC_DARK_THEME_COLOR_ENUM.colorPrimaryHover}',
-  colorPrimaryActive: '${MC_DARK_THEME_COLOR_ENUM.colorPrimaryActive}',
-  colorPrimaryBg: '${MC_DARK_THEME_COLOR_ENUM.colorPrimaryBg}',
-  colorPrimaryBgHover: '${MC_DARK_THEME_COLOR_ENUM.colorPrimaryBgHover}',
-  colorTextSecondary: '${MC_DARK_THEME_COLOR_ENUM.colorTextSecondary}',
-  colorDanger: '${MC_DARK_THEME_COLOR_ENUM.colorDanger}',
-  colorWarning: '${MC_DARK_THEME_COLOR_ENUM.colorWarning}',
-  colorSuccess: '${MC_DARK_THEME_COLOR_ENUM.colorSuccess}',
-  colorBorder: '${MC_DARK_THEME_COLOR_ENUM.colorBorder}',
+${buildCssVarsObjectBody(commonSlots)}
 };
 
 const dark = {

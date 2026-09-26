@@ -2282,7 +2282,7 @@ export async function validateAndFixGeneratedFiles(
     // 根据 nodeLayoutFacts 直接注入 display/flex-direction，覆盖 LLM 生成的值
     // 解决：LLM 生成错误的布局方向、遗漏 display/flex-direction 等问题
     if (nodeLayoutFacts && Object.keys(nodeLayoutFacts).length > 0) {
-      const { processAllStyleFiles, buildLayoutMapping } = await import('../../utils/layout-facts-injector.js');
+      const { processAllStyleFiles, buildLayoutMapping, buildLayoutMappingFromSectionIds } = await import('../../utils/layout-facts-injector.js');
 
       // 🛡️ 2026-09-22 根因修复（c-device-monitor-be31dcf3 / 60d567d3 实锤）：
       //   buildLayoutMapping 的 class 推断用 componentName——此处收到的 componentName 是
@@ -2299,13 +2299,26 @@ export async function validateAndFixGeneratedFiles(
       const semanticPrefix = resolvedPrefix
         ? resolvedPrefix.replace(/^(c|cp|mv|page)-/, '')
         : null;
-      const layoutMapping =
+      const inferredMapping =
         semanticPrefix && semanticPrefix !== componentName
           ? {
               ...buildLayoutMapping(nodeLayoutFacts, nodeData, componentName),
               ...buildLayoutMapping(nodeLayoutFacts, nodeData, semanticPrefix),
             }
           : buildLayoutMapping(nodeLayoutFacts, nodeData, componentName);
+
+      // 🛡️ #719-C（2026-09-26）：产物**自带**的 `data-section-id` 是「真实 class ↔ 节点」的
+      //   确定性桥（确定性模板在每个容器 div 上同时写了派生 class 与 data-section-id）。
+      //   优先级高于 inferredMapping —— 后者按 figma 节点名猜（`c-<语义>-<kebab(节点名)>`），
+      //   与模板派生的 `c-<语义>-<containerClassFor(sec)>-con` 不同源，只能靠
+      //   `LAYOUT_SUFFIX_VARIANTS` 事后猜后缀兜住（运气成分）。
+      //   inferredMapping **保留作兜底**：子组件内部元素的类名约定确实是
+      //   `c-<语义>-<kebab(节点名)>`（LLM 按 prompt 约定命名），无 data-section-id 可依。
+      const fromSectionIds = buildLayoutMappingFromSectionIds(
+        { ...mergedFiles, ...fixedFiles },
+        nodeLayoutFacts,
+      );
+      const layoutMapping = { ...inferredMapping, ...fromSectionIds };
 
       if (Object.keys(layoutMapping).length > 0) {
         // 🛡️ 2026-09-22 覆盖修复：输入基底改为 fixedFiles 优先合并（防 2.6.x/2.8/2.9

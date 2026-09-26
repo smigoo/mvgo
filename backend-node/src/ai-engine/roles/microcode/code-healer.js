@@ -785,8 +785,21 @@ export function quoteBareObjectKeysInVue(vueContent) {
 }
 
 /**
- * 🛡️ 确保 package/index.vue 根元素携带实例 ID 类 c-mc-max-{id}。
- * 仅对模板内首个元素注入；若已存在则跳过。
+ * 🛡️ 确保 package/index.vue **设计根容器**携带实例 ID 类 c-mc-max-{id}。
+ *
+ * 🛡️ 2026-09-26 治本（`<template class="c-mc-max-<任务号>">` 污染实锤）：
+ *  `extractSfcTemplate()` 返回的 body **以 `<template ...>` 包裹标签开头**，而旧实现直接
+ *  在 body 里 match「第一个标签」→ 命中的是 `<template>` 本身 → 实例 ID 被打到
+ *  `<template class="…">` 上。后果：
+ *   ① Vue 编译期忽略根 `<template>` 的属性 → 该 class **完全无效**（纯粹污染产物）；
+ *   ② `code-structure-validator.findRootStyleBlock()` 的正则要求**裸 `<template>`**
+ *      （`/<template>[\s\S]*?class="…"/`）→ 失配 → **根规则提取恒为空**。
+ *  另：前端/embed-panel/templates/references 全仓 **无任何 `c-mc-max-` 消费点**（无消费者）。
+ *
+ *  现改为：**跳过 `<template>` 包裹标签**，命中「模板内第一个**已带 class** 的宿主元素」
+ *  （即设计根容器，跳过 `<base-panel>` 这类无 class 的框架包裹），把实例 ID **追加**到其
+ *  class 列表**末尾**（保证语义根 class 仍居首位 → findRootStyleBlock 恢复可用）；
+ *  同时**清除 `<template>` 包裹标签上的历史残留属性**（自愈存量污染）。幂等。
  *
  * @param {string} vueContent
  * @param {string} rootClass 形如 c-mc-max-1787742124556-3c15fc26
@@ -797,26 +810,43 @@ export function ensureRootInstanceId(vueContent, rootClass) {
     return vueContent;
   const tpl = extractSfcTemplate(vueContent);
   if (!tpl) return vueContent;
-  const body = tpl;
-  const tagMatch = body.match(/<([a-zA-Z][\w-]*)((?:\s+[^>]*?)?)(\/?)>/);
-  if (!tagMatch) return vueContent;
-  const tagName = tagMatch[1];
-  let attrs = tagMatch[2];
-  const selfClose = tagMatch[3];
-  if (/\bclass\s*=/.test(attrs)) {
-    attrs = attrs.replace(
-      /(class\s*=\s*)(["'])([\s\S]*?)\2/,
-      (m, p1, q, val) => {
-        const toks = val.split(/\s+/).filter(Boolean);
-        if (toks.includes(rootClass)) return m;
-        return `${p1}${q}${val} ${rootClass}${q}`;
-      },
-    );
-  } else {
-    attrs = ` class="${rootClass}"` + (attrs || '');
+
+  let out = vueContent;
+  const openMatch = tpl.match(/^\s*<template\b([^>]*)>/i);
+  let inner = tpl;
+  if (openMatch) {
+    inner = tpl.slice(openMatch[0].length);
+    // ① 清除 `<template ...>` 包裹标签上的残留属性（历史污染：class="c-mc-max-…"）
+    if ((openMatch[1] || '').trim()) {
+      out = out.replace(openMatch[0], openMatch[0].replace(openMatch[1], ''));
+    }
   }
-  const newTag = `<${tagName}${attrs}${selfClose}>`;
-  return vueContent.replace(tagMatch[0], newTag);
+
+  // ② 命中模板内「第一个已带 class 的宿主元素」（跳过具名插槽块，避免命中插槽内元素）
+  const noSlots = inner.replace(
+    /<template\s+(?:#|v-slot:)[\s\S]*?<\/template\s*>/gi,
+    '',
+  );
+  const elRe = /<([a-zA-Z][\w-]*)((?:\s+[^>]*?)?)(\/?)>/g;
+  let m;
+  while ((m = elRe.exec(noSlots)) !== null) {
+    const tagName = m[1];
+    const attrs = m[2] || '';
+    if (!/\bclass\s*=/.test(attrs)) continue; // 无 class 的包裹标签（如 <base-panel>）跳过
+    const cm = attrs.match(/(class\s*=\s*)(["'])([\s\S]*?)\2/);
+    if (!cm) continue;
+    const toks = cm[3].split(/\s+/).filter(Boolean);
+    if (toks.includes(rootClass)) return out; // 幂等：已注入
+    const newAttrs = attrs.replace(
+      cm[0],
+      `${cm[1]}${cm[2]}${cm[3]} ${rootClass}${cm[2]}`,
+    );
+    return out.replace(
+      `<${tagName}${attrs}${m[3]}>`,
+      `<${tagName}${newAttrs}${m[3]}>`,
+    );
+  }
+  return out;
 }
 
 /**
@@ -1852,44 +1882,41 @@ export function healPresetLiteralDecls(content, filePath = '') {
  * @returns {string}
  */
 export function healSlotHexToVarRefs(content, themeVarsContent) {
+  // ⚠️ 函数名为历史名。🛡️ 2026-09-26 治本 0.2：输出由 `var(--cssVar, <原值>)` 改为
+  //   **LESS 槽位引用 `@<slot>`**（模式 B：编译期差异化）。原 var() 形态有三宗罪：
+  //   ① 与 THEME-VAR-NAME-MISMATCH（业务样式禁 var() 直引）直接冲突；
+  //   ② 平台并不注入这些名字 → var() 的 fallback（多为写死字面量）恒生效、**切主题零响应**；
+  //   ③ var() 是运行期值，`lighten()/darken()/fade()` 编译期不可求值。
+  //   `@slot` 三点全解（编译期可求值 + 深浅由 theme mixin 决定）。
+  //   安全前提已核：theme-vars 的 `.theme-light()` 与 `.theme-dark()` 键集对称（实测 3 个产物均对称）。
   if (typeof content !== 'string') return content;
   if (typeof themeVarsContent !== 'string') return content;
-  // 🛡️ 治本 D（2026-09-13）：此前只治 hex（`#[0-9a-fA-F]{3,8}`），漏掉 rgb/rgba 字面量——
-  // 而 LLM 写死的颜色绝大多数是 `rgba(25,144,255,1)` 形态（c-vehicle-monitor 22 处全是 rgba），
-  // 导致自愈漏治、M5-10 事后暴露。现扩展：hex 与 rgb/rgba 统一收录、统一替换。
+  // （治本 D 2026-09-13 能力保留：hex 与 rgb/rgba 双支持，统一归一化键。）
   const hasColor = /#|rgba?\(/.test(content);
   const tvHasColor = /#|rgba?\(/.test(themeVarsContent);
   if (!hasColor || !tvHasColor) return content;
 
-  // 1) 颜色字面量 → cssVar 映射（hex 与 rgb/rgba 统一归一化键，同值多变量 → 兜底收录第一个）
-  const colorVarCount = new Map(); // 归一化颜色值 -> Set<cssVar>
+  // 1) 颜色字面量 → LESS 槽位名（同值多槽位 → 兜底取第一个）
+  const colorToSlot = new Map(); // 归一化颜色值 -> @slot
   for (const m of themeVarsContent.matchAll(
     /@([a-z][a-z0-9-]*)\s*:\s*(#[0-9a-fA-F]{3,8}|rgba?\([^)]*\))\s*;/gi,
   )) {
-    const cssVar =
-      '--' + m[1].replace(/-([a-z0-9])/g, (_, c) => c.toUpperCase());
+    const slot = '@' + m[1];
     const color = normalizeColorToken(m[2]);
-    if (!colorVarCount.has(color)) colorVarCount.set(color, new Set());
-    colorVarCount.get(color).add(cssVar);
+    if (!colorToSlot.has(color)) colorToSlot.set(color, slot);
   }
-  const colorToVar = new Map();
-  for (const [color, vars] of colorVarCount) {
-    // 🛡️ 同色多变量时兜底收录第一个（#333333 同时是 @color-axis-label/@color-axis-unit 槽值，
-    // env 01407ff1 实锤 6 处漏治）；兜底收录后门禁检测 var(...) 即跳过。
-    colorToVar.set(color, [...vars][0]);
-  }
-  if (colorToVar.size === 0) return content;
+  if (colorToSlot.size === 0) return content;
 
-  // 2) 颜色属性 = 纯颜色字面量（hex 或 rgb/rgba）→ var(--x, <原值>)
+  // 2) 颜色属性 = 纯颜色字面量（hex 或 rgb/rgba）→ @slot
   //    仅匹配「颜色呈现属性」的直接字面量值，不碰 linear-gradient/text-shadow 等函数。
   let changed = false;
   const out = content.replace(
     /(^|[\s;{])(color|background(?:-color)?|border-(?:top|right|bottom|left)-color|outline(?:-color)?|caret-color|accent-color)\s*:\s*(#[0-9a-fA-F]{3,8}|rgba?\([^)]*\))(\s*!important)?\s*;/gm,
     (full, pre, prop, colorVal, imp) => {
-      const varName = colorToVar.get(normalizeColorToken(colorVal));
-      if (!varName) return full;
+      const slot = colorToSlot.get(normalizeColorToken(colorVal));
+      if (!slot) return full;
       changed = true;
-      return `${pre}${prop}: var(${varName}, ${colorVal})${imp || ''};`;
+      return `${pre}${prop}: ${slot}${imp || ''};`;
     },
   );
   return changed ? out : content;
@@ -2147,4 +2174,57 @@ export function stripVIfOnVFor(vueContent) {
 
   if (!changed) return vueContent;
   return vueContent.replace(tplBody, newBody);
+}
+
+/**
+ * 🛡️ LESS 颜色函数参数含 `var()` → 编译期必失败（2026-09-26 普查实锤）
+ *
+ * 普查（全日志 67 条「写盘门禁失败（已跳过）」）：**37 条（55%）** 是这一形态，
+ * 集中在 HeaderSection(20) / TabsSection(17) / ContentActive(7)。典型真机样本
+ * （`c-vehicle-monitor-9fa51529/.../HeaderSection.vue`，已用 less@4.9 真编译复现）：
+ *   `border-color: fade(var(--colorTextSecondary, #A3B5C9), 80%);`
+ *   → `Error evaluating function 'fade': Argument cannot be evaluated to a color`
+ *
+ * 根因：`fade/lighten/darken/tint/shade…` 是 **LESS 编译期函数**，参数必须编译期可求值颜色；
+ *   而 `var(--x, …)` 是**运行期** CSS 变量 → LESS 无法求值 → 硬报错 → 写盘门禁 retry 仍失败
+ *   → **跳过该文件**（比坏文件隔离更隐蔽：不留 `degradedFiles` 痕迹，磁盘保留旧版/不落盘）。
+ *   本质是「模式 A（运行期 var）与模式 B（编译期 @槽位）双轨混用」，而业务 LESS 只应写
+ *   `@slot`（见 `prompts/engineer/shared/style-theme-rules.md` §3）。
+ *
+ * 治本（确定性改写为**编译期可求值**的等价形式）：
+ *   ① slot 名 camel→kebab 后形如核心槽位（`color-`/`font-`/`radius-`/`spacing-` 前缀）
+ *      → 换成 `@kebab`（保留主题适配，与 §3 同向）；
+ *   ② 否则若有 fallback 字面量 → 直接用 fallback（保住编译，牺牲该处运行期主题）；
+ *   ③ 都没有 → 原样保留（fail-open，交给门禁/重生成）。
+ *
+ * 纯函数、幂等；只在**颜色函数内部**动 `var()`，不碰其它 `var()` 用法。
+ *
+ * @param {string} source LESS 源（或 Vue 全文——只会在 `<style>` 内命中颜色函数的写法上生效）
+ * @returns {{source: string, changes: Array<{from:string,to:string}>}}
+ */
+export function healLessColorFnVarArgs(source = '') {
+  const src = typeof source === 'string' ? source : '';
+  if (!src) return { source: src, changes: [] };
+  const FN = 'fade|fadein|fadeout|lighten|darken|saturate|desaturate|tint|shade|spin|greyscale|contrast|mix';
+  const re = new RegExp(
+    `\\b(${FN})\\(\\s*var\\(\\s*--([A-Za-z0-9_-]+)\\s*(?:,\\s*([^()]*?)\\s*)?\\)`,
+    'g',
+  );
+  const toKebab = (s) => String(s).replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+  const changes = [];
+  const out = src.replace(re, (m, fn, name, fallback) => {
+    const kebab = toKebab(name);
+    if (/^(color|font|radius|spacing)-/.test(kebab)) {
+      changes.push({ from: m, to: `${fn}(@${kebab}` });
+      return `${fn}(@${kebab}`;
+    }
+    const fb = typeof fallback === 'string' ? fallback.trim() : '';
+    if (fb) {
+      changes.push({ from: m, to: `${fn}(${fb}` });
+      return `${fn}(${fb}`;
+    }
+    return m; // fail-open：无可替换值 → 不动
+  });
+  if (changes.length === 0) return { source: src, changes: [] };
+  return { source: out, changes };
 }

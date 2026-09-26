@@ -283,14 +283,81 @@ import CardGrid from './components/CardGrid.vue'
   })
 
   it('独立 ContentActive 无 :class active 绑定 → 静态挂 bg1 到根容器', () => {
+    // 🛡️ 夹具修正（2026-09-26）：原夹具 section 带 `type:'body'` 且**只有单张卡** →
+    //   `assignSectionComponentNames` 落 `MainSection`（type 基名 + 无同 type 兄弟不做语义后缀），
+    //   而夹具只提供 ContentActive.vue → 计划期 owner 文件不存在 → 挂载时 `owner-file-missing`
+    //   直接 return，**这条"静态兜底"分支永远测不到**（测试长期红）。
+    //   真机形态（c-device-monitor-8d304bf9 实测）：switch 子卡**无 type 字段**，且 active/default
+    //   是**兄弟**（同 type 多 section → 语义后缀去重）→ 才派生 ContentActive/ContentDefault。
+    //   夹具据此对齐真机（已实测该形态派生名 = ContentActive/ContentDefault）。
     const sections: any[] = [
-      { id: '2:8787', type: 'body', responsibility: '激活卡', sourceNodeIds: ['2:8787', '2:8788'] },
+      {
+        id: '89:38', type: 'switch', title: 'switch', isLayoutContainer: true,
+        layout: 'horizontal', sourceNodeIds: ['89:38', '2:8787', '2:8806'],
+        children: [
+          { id: '2:8787', title: 'active', responsibility: '激活卡', sourceNodeIds: ['2:8787', '2:8788'] },
+          { id: '2:8806', title: 'default', responsibility: '默认卡', sourceNodeIds: ['2:8806', '2:8807'] },
+        ],
+      },
     ]
     const figma: any = { id: 'r', name: 'root', children: [
-      { id: '2:8787', name: 'active', children: [{ id: '2:8788', name: 'bg' }] },
+      { id: '89:38', name: 'switch', children: [
+        { id: '2:8787', name: 'active', children: [{ id: '2:8788', name: 'bg' }] },
+        { id: '2:8806', name: 'default', children: [{ id: '2:8807', name: 'bg' }] },
+      ] },
     ] }
     const mapping = [
       { assignedVarName: 'bg1', resourceFile: 'bg-8788.png', previewAnalysisRole: 'bg', downloadStatus: 'success', figmaNodeId: '2:8788', mountTarget: 'active', bgRole: 'container' },
+    ]
+    const files = {
+      'package/components/ContentActive.vue': `<template>
+  <div class="c-device-monitor-active">
+    <div class="c-device-monitor-active-title">隧道设备</div>
+  </div>
+</template>
+<script setup>
+</script>`,
+      'package/index.vue': indexVue,
+    }
+    const plan = buildResourceMountPlan(sections, mapping, { figmaRoot: figma })
+    const r = mountPlannedResources(files, plan)
+    expect(r.mounted).toHaveLength(1)
+    expect(r.mounted[0].file).toBe('package/components/ContentActive.vue')
+    // 🛡️ 期望更新（2026-09-26）：`bgRole:'container'` + `target∈{active,default}` 由**更早**的
+    //   专用分支 `isContainerStateBg` 处理并 continue（`container-state-root`），
+    //   能力比 2026-09-17 那条 `standalone-state-static-fallback` 更强：
+    //   额外做 P-08 根布局确定化（ensureStateRootFlexLayout）+ 跨文件误挂清洗
+    //   （removeContainerBgOffTargetRefs）。旧 reason 对本输入**被遮蔽**（不是回归）。
+    expect(r.mounted[0].reason).toBe('container-state-root')
+    const out = files['package/components/ContentActive.vue']
+    expect(out).toContain('bg1')
+    expect(out).toContain('import bg1 from')
+    expect(out).toContain('backgroundImage')
+    expect(files['package/index.vue']).toBe(indexVue)
+  })
+
+  it('（补覆盖）bgRole=sub-state + target=active → 走独立状态组件静态兜底路径', () => {
+    // 🛡️ 覆盖补位（2026-09-26）：`standalone-state-static-fallback` 对 `bgRole:'container'`
+    //   会被前面的 container 专用分支遮蔽；但 `bgRole:'sub-state'` 仍可达该分支。
+    //   补一条把这条老兜底路径的回归网留住（删减法纪律：先确认覆盖，再谈退役）。
+    const sections: any[] = [
+      {
+        id: '89:38', type: 'switch', title: 'switch', isLayoutContainer: true,
+        layout: 'horizontal', sourceNodeIds: ['89:38', '2:8787', '2:8806'],
+        children: [
+          { id: '2:8787', title: 'active', responsibility: '激活卡', sourceNodeIds: ['2:8787', '2:8788'] },
+          { id: '2:8806', title: 'default', responsibility: '默认卡', sourceNodeIds: ['2:8806', '2:8807'] },
+        ],
+      },
+    ]
+    const figma: any = { id: 'r', name: 'root', children: [
+      { id: '89:38', name: 'switch', children: [
+        { id: '2:8787', name: 'active', children: [{ id: '2:8788', name: 'bg' }] },
+        { id: '2:8806', name: 'default', children: [{ id: '2:8807', name: 'bg' }] },
+      ] },
+    ] }
+    const mapping = [
+      { assignedVarName: 'bg1', resourceFile: 'bg-8788.png', previewAnalysisRole: 'bg', downloadStatus: 'success', figmaNodeId: '2:8788', mountTarget: 'active', bgRole: 'sub-state' },
     ]
     const files = {
       'package/components/ContentActive.vue': `<template>
@@ -310,7 +377,26 @@ import CardGrid from './components/CardGrid.vue'
     const out = files['package/components/ContentActive.vue']
     expect(out).toContain('bg1')
     expect(out).toContain('import bg1 from')
-    expect(out).toContain('backgroundImage')
+    expect(files['package/index.vue']).toBe(indexVue)
+  })
+
+  it('owner 派生的组件文件不存在 → 记 owner-file-missing 诊断，不猜文件（fixture 失真形态锁死）', () => {
+    // 锁死行为：plan 派生名（如单卡无 type 兄弟 → MainSection）对应的文件不存在时，
+    // **不跨文件回退、不改挂 index.vue**，只记诊断（fail-closed）。
+    const sections: any[] = [
+      { id: '2:8787', type: 'body', responsibility: '激活卡', sourceNodeIds: ['2:8787', '2:8788'] },
+    ]
+    const figma: any = { id: 'r', name: 'root', children: [
+      { id: '2:8787', name: 'active', children: [{ id: '2:8788', name: 'bg' }] },
+    ] }
+    const mapping = [
+      { assignedVarName: 'bg1', resourceFile: 'bg-8788.png', previewAnalysisRole: 'bg', downloadStatus: 'success', figmaNodeId: '2:8788', mountTarget: 'active', bgRole: 'container' },
+    ]
+    const files = { 'package/index.vue': indexVue }
+    const plan = buildResourceMountPlan(sections, mapping, { figmaRoot: figma })
+    const r = mountPlannedResources(files, plan)
+    expect(r.mounted).toHaveLength(0)
+    expect(r.diagnostics.some((d: any) => d.reason === 'owner-file-missing')).toBe(true)
     expect(files['package/index.vue']).toBe(indexVue)
   })
 

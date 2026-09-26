@@ -220,14 +220,24 @@ function resolveProvider(config = {}, primary = null, role = 'text') {
       return pr === role || pr === 'both'
     })
     .map(withThinkingDefault)
-  // 主配置并入池：如果池中已有相同 apiKey+model 的 provider，
-  // 将其标记为 __primary__（确保 primary-first 策略能识别主模型）；
-  // 否则额外注入 primaryEntry。
+  // 主配置并入池：如果池中已有相同 apiKey+model 的 provider，将其标记为主（__primary_<role>__）。
+  // 🛡️ 2026-09-24 治本（mc-max-1790208267564 重试 401 实锤）：顶层主模型不在池中时不注入，
+  // 避免旧的文本模型（如 qwen3.7-plus）被当视觉主模型抢占首调用——它挂起/401 会阻断整次生成，
+  // 而池中真正的视觉 provider 反而没机会被选中。改为把池中真实 provider 提升为主：
+  //   优先用 binding.<role>.primaryId 指向的（若存在池中），否则用池中第一个匹配角色 provider。
+  //   仅当池完全为空（roleMatched=0）才回退顶层主配置（向后兼容单模型用法）。
   const primaryInPool = roleMatched.find((p) => p && p.apiKey && p.apiKey === primaryEntry?.apiKey && p.model === primaryEntry?.model)
   if (primaryInPool) {
     primaryInPool.id = primaryId
-  } else if (primaryEntry) {
-    list.push(primaryEntry)
+  } else {
+    const bid = config?.binding?.[role]?.primaryId
+    const boundTarget = bid ? roleMatched.find((p) => p.id === bid) : null
+    const promoted = boundTarget || roleMatched[0]
+    if (promoted) {
+      promoted.id = primaryId
+    } else if (primaryEntry) {
+      list.push(primaryEntry)
+    }
   }
   list.push(...roleMatched)
   // 主模型优先：把 '__primary__' 标记为主 provider，pick() 时主健康则直接返回主，

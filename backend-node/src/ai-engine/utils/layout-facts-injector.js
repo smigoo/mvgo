@@ -316,3 +316,55 @@ export default {
   buildLayoutMapping,
   processAllStyleFiles,
 }
+
+/**
+ * 🛡️ #719-C（2026-09-26）：用**模板自带的 `data-section-id`** 建「实际 class → 布局事实」映射。
+ *
+ * 病灶：`buildLayoutMapping` 的 class 键来自 `inferClassName(figma 节点名)`（猜名），
+ *   而确定性模板的容器类由 `c-<语义>-<containerClassFor(sec)>-con` 派生 → 两者不同源，
+ *   只能靠 `LAYOUT_SUFFIX_VARIANTS`（-con/-section/-list/…）**事后猜后缀**兜住（运气成分）。
+ *
+ * 治本：确定性模板在每个容器 div 上写了自己派生的 class **和** `data-section-id="<figma节点id>"`，
+ *   因此「产物真实类名 → 节点」在**产物自身**里就是确定的 —— 直接用它建映射，
+ *   与 2.6.2 的 TODO 填充路径（class → data-section-id → nodeLayoutFacts[nodeId]）同源同法。
+ *
+ * 纪律：
+ *   - 只在**同一标签**上同时取到 `class` 与 `data-section-id` 时才建映射；
+ *   - 该节点必须真有布局事实（`nodeLayoutFacts[nodeId]` 存在且带 display）；
+ *   - 属性顺序无关（逐标签解析，不假设 class 在 data-section-id 之前）；
+ *   - 纯函数、不改入参；返回 `{ '.<class>': {display, flexDirection, gridColumns?, source} }`。
+ *
+ * @param {Object<string,string>} files 产物文件表（path → content）
+ * @param {Object} nodeLayoutFacts { [nodeId]: {display, flexDirection, gridColumns?, source, confidence} }
+ * @returns {Object} class → fact 映射（key 带 `.` 前缀，与 buildLayoutMapping 口径一致）
+ */
+export function buildLayoutMappingFromSectionIds(files, nodeLayoutFacts) {
+  const out = {}
+  if (!files || typeof files !== 'object') return out
+  if (!nodeLayoutFacts || typeof nodeLayoutFacts !== 'object') return out
+
+  for (const [p, content] of Object.entries(files)) {
+    if (typeof content !== 'string' || !p.endsWith('.vue')) continue
+    for (const tag of content.matchAll(/<([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>])*)>/g)) {
+      const attrs = tag[2] || ''
+      const secM = attrs.match(/data-section-id\s*=\s*"([^"]+)"/)
+      if (!secM) continue
+      const classM = attrs.match(/class\s*=\s*"([^"]*)"/)
+      if (!classM) continue
+      const fact = nodeLayoutFacts[secM[1]]
+      if (!fact || !fact.display) continue
+      const entry = {
+        display: fact.display,
+        ...(fact.flexDirection ? { flexDirection: fact.flexDirection } : {}),
+        ...(fact.gridColumns ? { gridColumns: fact.gridColumns } : {}),
+        source: fact.source,
+        confidence: fact.confidence,
+      }
+      for (const cls of classM[1].split(/\s+/)) {
+        if (!cls || !/^[a-zA-Z][\w-]*$/.test(cls)) continue
+        out[`.${cls}`] = entry
+      }
+    }
+  }
+  return out
+}

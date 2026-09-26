@@ -13,6 +13,7 @@ import {
   ensureHeaderSlotRowLayout,
   collapseBackgroundShellDivs,
   injectStateSwitchInteraction,
+  resolveComponentClassPrefix,
 } from './post-process.js';
 
 const HEADER_SECTION_VUE = `<template>
@@ -489,11 +490,53 @@ import ContentDefault from './components/ContentDefault.vue'
     expect(idx).toContain("const switchSelected = ref('active')");
     expect(idx).toContain("@click=\"switchSelected = 'active'\"");
     expect(idx).toContain("@click=\"switchSelected = 'default'\"");
-    expect(idx).toContain("switchSelected === 'active' ? 'state-switch state-switch--active' : 'state-switch'");
+    // 🛡️ A1 类名契约（2026-09-26）：前缀取自模板 c-x-slot-con → 两侧同源
+    expect(idx).toContain(
+      "switchSelected === 'active' ? 'c-x-state-switch c-x-state-switch--active' : 'c-x-state-switch'",
+    );
     expect(idx).toMatch(/'display':\s*'flex'/); // 静态 style 已合并
     expect(idx).not.toMatch(/\sstyle="display:flex/); // 原静态 style 已移除
     expect(idx).toContain("--state-bg");
-    expect(f['resources/styles/common.less']).toContain('state-switch--active');
+    expect(f['resources/styles/common.less']).toContain('.c-x-state-switch--active');
+  });
+
+  it('🛡️ A1 类名契约：模板 :class 类名与样式选择器必须逐一对应（无孤儿/无失配）', () => {
+    const f = files();
+    injectStateSwitchInteraction(f, mapping);
+    const idx = f['package/index.vue'];
+    const less = f['resources/styles/common.less'];
+
+    // 模板 :class 里出现的所有**组件类** token（c-* 前缀即 A1 契约的形态；
+    // 三元表达式里的比较值 'active' 不是类名，不计入）
+    const used = new Set();
+    for (const m of idx.matchAll(/:class="([^"]*)"/g)) {
+      for (const lit of m[1].matchAll(/'([^']*)'/g)) {
+        for (const tok of lit[1].split(/\s+/)) {
+          if (/^c-[a-z0-9-]+$/.test(tok)) used.add(tok);
+        }
+      }
+    }
+    expect(used.size).toBeGreaterThan(0);
+    // 每个 token 都必须在样式里有选择器（否则该状态静默失效）
+    for (const cls of used) {
+      expect(less).toContain(`.${cls}`);
+    }
+    // 且不得残留「样式有、模板没有」的裸基类（CODE-003 autoFix 的失配源）
+    expect(less).not.toMatch(/\.state-switch\s*\{/);
+    expect(less).not.toContain(':not(.state-switch');
+  });
+
+  it('resolveComponentClassPrefix：slot-con / 最长公共前缀 / 无法确定三态', () => {
+    expect(resolveComponentClassPrefix('<div class="c-device-monitor-slot-con">')).toBe(
+      'c-device-monitor',
+    );
+    expect(
+      resolveComponentClassPrefix(
+        '<div class="c-device-monitor-a"><i class="c-device-monitor-b c-device-monitor-c"/></div>',
+      ),
+    ).toBe('c-device-monitor');
+    expect(resolveComponentClassPrefix('<div class="no-comp-class"></div>')).toBeNull();
+    expect(resolveComponentClassPrefix('')).toBeNull();
   });
 
   it('无状态对（只有 active 无 default）→ 零改动', () => {

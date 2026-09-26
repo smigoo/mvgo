@@ -1302,6 +1302,61 @@ export function collapseBackgroundShellDivs(code) {
  * @param {Array} resourceDomMapping 资源映射
  * @returns {{applied: boolean, details: Object|null}}
  */
+/**
+ * 🛡️ A1 类名契约（2026-09-26 · c-device-monitor-5b611fcd 实锤）：从模板**确定性**解析
+ * 组件 class 前缀，供 P-09 注入的模板类与样式类共用同一前缀。
+ *
+ * 病灶（P-09 自打架）：模板侧写死裸类名 `state-switch`，样式侧同样注入 `.state-switch`；
+ *  后置 CODE-003（common.less 类名缺组件前缀）把样式侧 autoFix 成 `.c-x-state-switch`，
+ *  模板未同步 → 基类规则零命中（min-height/transition/cursor 全灭），
+ *  `:not(.state-switch--active)` 也因参数未前缀而语义错位。
+ *  这是「同一事实（状态卡类名）两处各自命名」的典型，必须由**单一前缀事实源**驱动两侧。
+ *
+ * 解析优先级（全部确定性，无启发式猜测）：
+ *   ① 确定性模板保证根 slot 容器为 `class="c-<语义>-slot-con"` → 直接取其前缀；
+ *   ② 兜底：全模板 `c-*` 类名的**按 '-' 段对齐的最长公共前缀**（并剔除「本身就是某类名
+ *      末段」的尾巴），LLM 模板只要类名族一致即可命中；
+ *   ③ 都取不到 → 返回 null（**保持旧行为**，不改写类名，零回归）。
+ *
+ * @param {string} template index.vue 全文
+ * @returns {string|null} 形如 `c-device-monitor` 的前缀；无法确定时 null
+ */
+export function resolveComponentClassPrefix(template = '') {
+  const tpl = typeof template === 'string' ? template : '';
+  if (!tpl) return null;
+
+  // ① 确定性模板根 slot 容器
+  const slot = tpl.match(/class="(c-[a-z0-9-]*?)-slot-con\b/);
+  if (slot) return slot[1];
+
+  // ② 全模板 c-* 类名（静态 class + :class 字符串字面量）的最长公共前缀
+  const tokens = new Set();
+  const collect = (literal) => {
+    for (const tok of String(literal || '').split(/\s+/)) {
+      if (/^c-[a-z0-9-]+$/.test(tok)) tokens.add(tok);
+    }
+  };
+  for (const m of tpl.matchAll(/class="([^"]*)"/g)) collect(m[1]);
+  for (const m of tpl.matchAll(/'([^']*)'/g)) collect(m[1]);
+  const list = [...tokens].sort();
+  if (list.length < 2) return null;
+
+  const segLists = list.map((t) => t.split('-'));
+  const first = segLists[0];
+  let n = 0;
+  outer: for (let i = 0; i < first.length; i++) {
+    for (const segs of segLists) {
+      if (segs[i] !== first[i]) break outer;
+    }
+    n = i + 1;
+  }
+  // 剔除「落在某个类名末尾」的公共段（否则 c-x-a / c-x-b 会把尾段 a、b 之外的共享段也算进来）
+  const lastSegs = new Set(segLists.map((segs) => segs[segs.length - 1]));
+  while (n > 0 && lastSegs.has(first[n - 1])) n--;
+  if (n < 2) return null; // 至少 `c-<语义>`
+  return first.slice(0, n).join('-');
+}
+
 export function injectStateSwitchInteraction(files, resourceDomMapping = []) {
   const idxPath = Object.keys(files).find((p) => p === 'package/index.vue');
   if (!idxPath) return { applied: false, details: null };
@@ -1332,13 +1387,17 @@ export function injectStateSwitchInteraction(files, resourceDomMapping = []) {
   let patched = false;
   let out = idx;
 
+  // 🛡️ A1 类名契约（2026-09-26）：模板类与样式类共用同一前缀事实源，
+  //   否则 CODE-003 autoFix 只前缀样式侧 → 两侧失配（5b611fcd 实锤，见 resolveComponentClassPrefix 注释）。
+  const classPrefix = resolveComponentClassPrefix(idx);
+  const baseCls = classPrefix ? `${classPrefix}-state-switch` : 'state-switch';
+
   const wireTag = (tagName, existing, selfClose, target) => {
     if (/@click|:class/.test(existing)) return null; // LLM 已有交互 → 不覆盖
     // 🛡️ CODE-024 契约（42c19564 实锤）：修饰符必须 BEM 形态（基类--mod）。
-    //   状态卡标签挂的是子组件（无基类 class），用静态 class 基类 + --selected 变体：
-    //   `class="state-switch state-switch--active"` 按选中态切换。
-    const baseCls = 'state-switch';
-    const modCls = `state-switch--${target}`;
+    //   状态卡标签挂的是子组件（无基类 class），用静态 class 基类 + --target 变体：
+    //   `class="<base> <base>--active"` 按选中态切换。
+    const modCls = `${baseCls}--${target}`;
     const attrs =
       ` @click="switchSelected = '${target}'"` +
       ` :class="switchSelected === '${target}' ? '${baseCls} ${modCls}' : '${baseCls}'"`;
@@ -1417,9 +1476,9 @@ export function injectStateSwitchInteraction(files, resourceDomMapping = []) {
     files[commonPath] =
       String(files[commonPath]) +
       `\n\n/* 🛡️ P-09 状态切换交互（确定性装配） */\n` +
-      `.state-switch {\n  transition: opacity 0.2s ease;\n  cursor: pointer;\n}\n` +
-      `.state-switch--active,\n.state-switch--default {\n  opacity: 1;\n}\n` +
-      `.state-switch:not(.state-switch--active):not(.state-switch--default) {\n  opacity: 0.55;\n}\n`;
+      `.${baseCls} {\n  transition: opacity 0.2s ease;\n  cursor: pointer;\n}\n` +
+      `.${baseCls}--active,\n.${baseCls}--default {\n  opacity: 1;\n}\n` +
+      `.${baseCls}:not(.${baseCls}--active):not(.${baseCls}--default) {\n  opacity: 0.55;\n}\n`;
   }
 
   return {
@@ -1501,26 +1560,64 @@ export function injectPerCharTextSegments(files, perCharTruth = []) {
   }
   const normal = normalColor || abnormalColor;
 
-  // ── 2. 定位目标绑定：模板中形如 {{ xxx.count }} 的动态文本 ──
-  //     事实源：per-char 真值的 characters 形态 + 模板里同类语义的绑定名。
+  // ── 2. 定位目标绑定 ──
+  //  ① 形如 `{{ xxx.count }}` 的动态文本（原路径，事实源=绑定名后缀）
+  //  ② 🛡️ 数据驱动计数文本（2026-09-26 · c-device-monitor-8d304bf9 实锤）：
+  //     `v-for` 数组项里的 `{{ item.value }}`，其字面值是 `(2/484)` 这类计数文本。
+  //     原实现只认 `.count` → 本形态**匹配不到 → 整体 fail-closed（applied=false）**，
+  //     而 Figma per-char 真值、三色常量都能拿到（实测 base=rgb(25,144,255) /
+  //     abnormal=rgb(224,52,52) / normal=rgb(8,163,165)），纯属"载体形态没认"。
+  //     判据（确定性，不靠猜）：**同文件 script 里存在匹配计数形态的字符串字面量**
+  //     （如 `value: '(2/484)'`）→ 收集其属性名 → 只替换 `{{ 任意表达式.<该属性名> }}`。
   const HELPER = 'formatDeviceCountSegments';
   const changed = [];
 
   for (const [fp, code] of Object.entries(files)) {
     if (!fp.endsWith('.vue') || typeof code !== 'string') continue;
     if (code.includes(HELPER)) continue; // 幂等
-    // 只处理含计数语义绑定的文件（.count / Count 后缀）
+    // 只处理含计数语义绑定的文件
     const bindRe = /\{\{\s*([A-Za-z_$][\w$.]*)\.count\s*\}\}/;
-    const bm = code.match(bindRe);
-    if (!bm) continue;
-    const expr = bm[1] + '.count';
+    const countBind = code.match(bindRe);
+    let expr = null;
+    let targetRe = null;
+    if (countBind) {
+      // ① 原路径：{{ x.count }}
+      expr = countBind[1] + '.count';
+      targetRe = bindRe;
+    } else {
+      // ② 数据驱动：从 `prop: '(2/484)'` 形态的字面量收集「计数属性名」，
+      //    再只替换 `{{ 任意表达式.<该属性名> }}`。
+      //    🛡️ 收窄（全语料误伤审计救回一次 · 2026-09-26）：字面量必须**就是本次 per-char 真值
+      //    文本之一**，而不是"任意计数形态"—— 否则同文件里别的计数形态文本（如 `extraLabel: '1/4'`）
+      //    也会被套上**本组真值色**，属于拿错误真值染色。真值里没有的文本一律不动（fail-closed）。
+      const truthTexts = new Set(
+        perCharTruth
+          .map((i) => String((i && i.characters) || ''))
+          .filter((s) => s && COUNT_RE.test(s)),
+      );
+      if (truthTexts.size === 0) continue;
+      const countProps = new Set();
+      for (const m of code.matchAll(/([A-Za-z_$][\w$]*)\s*:\s*['"`]([^'"`\n]*)['"`]/g)) {
+        if (truthTexts.has(m[2])) countProps.add(m[1]);
+      }
+      for (const prop of countProps) {
+        const re = new RegExp(`\\{\\{\\s*([A-Za-z_$][\\w$.]*)\\.${prop}\\s*\\}\\}`);
+        const hit = code.match(re);
+        if (hit) {
+          expr = `${hit[1]}.${prop}`;
+          targetRe = re;
+          break;
+        }
+      }
+    }
+    if (!expr || !targetRe) continue;
 
     // 模板替换：{{ device.count }} → 分段 v-for 渲染
     const replacement =
       `<span v-for="(seg, segIdx) in ${HELPER}(${expr})" :key="segIdx"` +
       ` :style="{ color: seg.color, fontSize: seg.fontSize ? seg.fontSize + 'px' : undefined,` +
       ` fontWeight: seg.fontWeight || undefined }">{{ seg.text }}</span>`;
-    let out = code.replace(bindRe, replacement);
+    let out = code.replace(targetRe, replacement);
 
     // script 注入 helper（颜色真值写死自 Figma per-character）
     const helperSrc =

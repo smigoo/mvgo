@@ -391,6 +391,8 @@ import {
   injectEchartsFallback,
 } from './code-healer.js'
 
+import { healLessColorFnVarArgs } from './code-healer.js'
+
 /** 事故现场的最小复刻：LLM 产物（vue import 已有、style 缺右大括号、root div 空） */
 function makeAccidentVue() {
   return `<template>
@@ -833,7 +835,9 @@ const count = ref(0)
   })
 })
 
-describe('healSlotHexToVarRefs —— 槽位颜色字面量 → var()（治本 D：hex + rgba 双支持）', () => {
+describe('healSlotHexToVarRefs —— 槽位颜色字面量 → LESS 槽位 @slot（0.2：hex + rgba 双支持）', () => {
+  // 🛡️ 2026-09-26 治本 0.2：输出形态由 `var(--cssVar, <原值>)` 改为 **`@<slot>`**
+  //   （模式 B 编译期差异化；原 var() 与「业务样式禁 var() 直引」冲突且 fallback 恒生效）。
   const themeVars = `
 .common() {
   @color-primary: rgba(25, 144, 255, 1);
@@ -842,22 +846,24 @@ describe('healSlotHexToVarRefs —— 槽位颜色字面量 → var()（治本 D
 }
 `
 
-  it('rgba 字面量 → var(--colorPrimary, rgba(...))（治本 D 新增，此前只治 hex 漏 rgba）', () => {
+  it('rgba 字面量 → @color-primary（治本 D 能力保留：hex + rgba 双支持）', () => {
     const content = `.x {\n  color: rgba(25, 144, 255, 1);\n}`
     const out = healSlotHexToVarRefs(content, themeVars)
-    expect(out).toContain('color: var(--colorPrimary, rgba(25, 144, 255, 1));')
+    expect(out).toContain('color: @color-primary;')
+    expect(out).not.toContain('var(')
   })
 
-  it('hex 字面量 → var(--colorTextBase, #hex)（原能力保留）', () => {
+  it('hex 字面量 → @color-text-base', () => {
     const content = `.x {\n  background: #333333;\n}`
     const out = healSlotHexToVarRefs(content, themeVars)
-    expect(out).toContain('background: var(--colorTextBase, #333333);')
+    expect(out).toContain('background: @color-text-base;')
+    expect(out).not.toContain('var(')
   })
 
   it('rgba 空格差异不影响映射（归一化键）', () => {
     const content = `.x {\n  color: rgba(25,144,255,1);\n}` // 无空格
     const out = healSlotHexToVarRefs(content, themeVars)
-    expect(out).toContain('var(--colorPrimary, rgba(25,144,255,1))')
+    expect(out).toContain('color: @color-primary;')
   })
 
   it('渐变/阴影里的 rgba 不误伤（非颜色属性直写）', () => {
@@ -1141,3 +1147,44 @@ const tabs = ref([{ 'c-device-monitor-label': '实时监控', value: 'realtime' 
     expect(healClassPrefixedDataKeys(src)).toBe(src)
   })
 })
+
+// ══════════════════════════════════════════════════════════════════════════
+// 🛡️ healLessColorFnVarArgs（2026-09-26 普查：37/67 条写盘门禁跳过都是此形态）
+// LESS 编译期函数（fade/lighten…）参数写成运行期 var() → 硬报错 → 整文件被跳过。
+// 真机样本 c-vehicle-monitor-9fa51529/HeaderSection.vue，已用 less@4.9 真编译对照：
+//   原始 ❌ "Argument cannot be evaluated to a color" → heal 后 ✅ 编译通过
+// ══════════════════════════════════════════════════════════════════════════
+describe('healLessColorFnVarArgs：LESS 颜色函数的 var() 参数 → 编译期可求值', () => {
+  it('核心槽位（camel→kebab 命中 color-/font-/radius-/spacing-）→ @slot', () => {
+    const src = '  border-color: fade(var(--colorTextSecondary, #A3B5C9), 80%);\n  color: lighten(var(--colorPrimary, #1990FF), 10%);';
+    const r = healLessColorFnVarArgs(src);
+    expect(r.source).toContain('fade(@color-text-secondary, 80%)');
+    expect(r.source).toContain('lighten(@color-primary, 10%)');
+    expect(r.changes).toHaveLength(2);
+  });
+
+  it('非槽位名但有 fallback → 用 fallback 字面量（保住编译）', () => {
+    const r = healLessColorFnVarArgs('.x { color: fade(var(--someLocal, #123456), 50%); }');
+    expect(r.source).toContain('fade(#123456, 50%)');
+  });
+
+  it('无 fallback 且非槽位名 → 原样不动（fail-open）', () => {
+    const src = '.x { color: fade(var(--mystery), 50%); }';
+    const r = healLessColorFnVarArgs(src);
+    expect(r.source).toBe(src);
+    expect(r.changes).toHaveLength(0);
+  });
+
+  it('颜色函数之外的 var() 不受影响', () => {
+    const src = '.x { color: var(--colorTextBase, #333); background: linear-gradient(180deg, var(--a, #111), #fff); }';
+    expect(healLessColorFnVarArgs(src).source).toBe(src);
+  });
+
+  it('幂等 + 空输入', () => {
+    const once = healLessColorFnVarArgs('.x { color: fade(var(--colorPrimary, #1990FF), 50%); }');
+    const twice = healLessColorFnVarArgs(once.source);
+    expect(twice.changes).toHaveLength(0);
+    expect(twice.source).toBe(once.source);
+    expect(healLessColorFnVarArgs('').changes).toHaveLength(0);
+  });
+});

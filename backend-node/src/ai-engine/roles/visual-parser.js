@@ -52,7 +52,14 @@ function computeVisionDynamicTimeout(fallbackMs) {
       if (prof && prof.p90Ms > maxP90) maxP90 = prof.p90Ms
     }
     if (maxP90 > 0) {
-      return Math.min(480000, Math.max(90000, Math.round(maxP90 * 1.5)))
+      // 🛡️ 2026-09-24 治本（c-device-monitor 生成失败实锤）：原上限 480s 形成「越慢→p90 越高→
+      //   超时越长→越超时」反馈回路（qwen3.7-plus 慢样本 219982/220036ms → p90≈286s ×1.5=429137ms，
+      //   单次视觉调用挂 7 分钟）。
+      // 🛡️ 2026-09-26 更新：根因已下沉到「模型开推理」（见 model-config.buildThinkingOffParams，视觉请求
+      //   注入关推理后 276s→~110s），反馈回路不再由慢样本驱动。上限由 150s 放宽到 210s 留抖动余量
+      //   （实测 qwen3.7-plus 104s / qwen3.8-max 117s；210s 给出 ~2x 余量）。maxRetries=1 时两 attempt
+      //   最坏 ≈420s + 等待 < 节点 VISUAL_TIMEOUT_MS(600s)，仍安全。
+      return Math.min(210000, Math.max(90000, Math.round(maxP90 * 1.5)))
     }
   } catch { /* 画像不可用时回退固定值 */ }
   return fallbackMs

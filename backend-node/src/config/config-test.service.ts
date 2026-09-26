@@ -821,6 +821,14 @@ export class ConfigTestService {
 
     switch (status) {
       case 401:
+        // 🛡️ 2026-09-24 治本（code1.newcli.com 实锤）：401 不一定是「Key 无效」——
+        // 中转网关常把「额度不足/欠费/余额耗尽」也返回 401（实测 code1 返回
+        // {"error":{"message":"额度不足","type":"authentication_error"}}）。
+        // 原逻辑一律报「API Key 无效」，误导用户去改一把其实有效的 key。
+        // 现按响应体细分：命中额度/余额类关键词 → 报「额度不足」，否则才报「Key 无效」。
+        if (/额度不足|余额不足|欠费|余额|quota|insufficient|balance|credit|billing|payment|exceeded/i.test(body)) {
+          return '额度不足（账户余额/额度已用完，请充值或切换到其他 provider）';
+        }
         return 'API Key 无效';
       case 403:
         return '无权访问（检查 API Key 或账户权限）';

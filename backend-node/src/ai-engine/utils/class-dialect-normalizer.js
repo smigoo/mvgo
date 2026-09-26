@@ -509,8 +509,106 @@ export function normalizeStyleModifierDialect(css = '') {
 }
 
 /**
+ * 🛡️ R5（2026-09-26 · c-device-monitor-8d304bf9 实锤）：状态类归一的**样式侧跟随**。
+ *
+ * 病灶：R1/R2 把模板侧裸状态类 `c-x-tab-active` 归一为 BEM `c-x-tab--active`（正确），
+ * 但样式侧的**独立选择器** `.c-x-tab-active`（承载**真实**选中态样式：蓝底/白字/字重）
+ * 没有任何规则跟着改 —— R3 只覆盖 `.base.is-active` 复合形态，不覆盖 `.base-active` 独立选择器。
+ * 结果：真样式留在旧成名下变**孤儿**（`NO-NEW-RENAME-CLASS` 反向告警），
+ * 而名字正确的 `.c-x-tab--active` 只是 fallback 写的**空 TODO 块** → 模板零命中 → 选中态全丢
+ * （用户看到的就是「tab 切换的颜色/字体大小不对」）。
+ *
+ * 治本：模板侧一旦发生 `base-mod → base--mod` 改名，**样式侧同名独立选择器跟随改名**，
+ * 让「同一事实只有一个名字」在两侧同时成立（而不是靠下游门禁/兜底去对齐）。
+ *
+ * 保守纪律（宁可不动，不可改错）：
+ *   - 只处理**模板侧实际发生**的改名对，且 `to` 必须含 BEM 修饰符 `--`（不扩散到任意重命名）；
+ *   - 仅当样式源里**存在** `from` 类 token 且**不存在** `to` 类 token 时才改（已对齐/歧义一律不动）；
+ *   - 逐 token 边界替换 `.from`（点号锚定 → 不会误伤 `foo-c-x-from` 这类后缀、也不会碰声明值）；
+ *   - 纯文本变换、幂等。
+ *
+ * @param {string} text 样式源（LESS/CSS 片段）
+ * @param {Array<{from:string,to:string}>} renames 模板侧改名对
+ * @returns {{text:string, changes:Array<{from:string,to:string,rule:string}>}}
+ */
+/**
+ * R5 允许跟随的修饰符白名单（**状态 / 语义色**）。
+ *
+ * 为什么必须白名单（2026-09-26 全语料误伤抽查救回）：`base-mod` 形态与「**另一个元素的完整类名**」
+ * 在命名上**无法区分** —— 例如 `c-x-chart--prediction` 的旧式形态 `c-x-chart-prediction`，
+ * 也可能本来就是另一个真实元素 `c-x-chart-prediction`。全语料 133 条命中里就混有
+ * `--daily` / `--chart` / `--vehicle` / `--prediction` / `--first` / `--second` 这类**非状态修饰符**，
+ * 跟随改名会有把别的元素样式搬过来的风险。R5 的**目的**只是「状态类同源」，故收窄到状态/语义词。
+ */
+const R5_MODIFIER_WHITELIST = new Set([
+  'active', 'selected', 'current', 'checked', 'open', 'closed', 'expanded', 'collapsed',
+  'disabled', 'hover', 'focus', 'loading', 'empty', 'error', 'success', 'warning', 'danger',
+  'info', 'primary', 'secondary', 'normal', 'default', 'online', 'offline', 'running', 'stopped',
+]);
+
+function applyStyleRenames(text, renames) {
+  const src = typeof text === 'string' ? text : '';
+  if (!src || !Array.isArray(renames) || renames.length === 0) {
+    return { text: src, changes: [] };
+  }
+  const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // 判据一律在「去注释」的副本上做：产物里常有
+  // `/* [自动修复] 模板 class .c-x-tab--active → 未匹配到 Figma 元素（不写入猜测样式） */`
+  // 这类**标记注释**提到类名，若把注释也算作"已存在"就会让规则永不触发。
+  const stripComments = (s) =>
+    String(s).replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  let out = src;
+  const changes = [];
+  for (const r of renames) {
+    const from = String(r && r.from ? r.from : '');
+    const to = String(r && r.to ? r.to : '');
+    if (!from || !to || from === to) continue;
+    if (!to.includes('--')) continue; // 只跟随 BEM 修饰符改名，不做任意重命名
+    // 🛡️ 收窄①：`from` 必须是**组件类**（`c-*`）。裸全局别名（`is-active`/`active`）不跟随 ——
+    //   样式里一条独立选择器 `.is-active` 无法判定它属于哪个元素，改名即臆造对应关系
+    //   （全语料命中里出现过 `is-active → c-device-monitor-tab-item--active`）。
+    if (!/^c-/.test(from)) continue;
+    // 🛡️ 收窄②：只跟随**状态/语义**修饰符（见 R5_MODIFIER_WHITELIST 注释）。
+    const modMatch = /--([\w-]+)$/.exec(to);
+    if (!modMatch || !R5_MODIFIER_WHITELIST.has(modMatch[1].toLowerCase())) continue;
+    const clean = stripComments(out);
+    const fromRe = new RegExp(`\\.${esc(from)}(?![\\w-])`);
+    const toRe = new RegExp(`\\.${esc(to)}(?![\\w-])`, 'g');
+    if (!fromRe.test(clean)) continue; // 样式侧没有旧名 → 无需跟随
+    if (toRe.test(clean) && !onlyEmptyStubs(clean, to, esc)) continue; // 已有非空新名 → 已对齐/歧义
+    const next = out.replace(new RegExp(`\\.${esc(from)}(?![\\w-])`, 'g'), `.${to}`);
+    if (next !== out) {
+      out = next;
+      changes.push({ from, to, rule: 'R5' });
+    }
+  }
+  return { text: out, changes };
+}
+
+/**
+ * 判定「新名在样式里**只以空块形式**存在」——即所有 `.to { … }` 的块体除注释外为空，
+ * 且不存在其它形态的出现（如 `:not(.to)` / 逗号列表）。
+ *
+ * 真实产物正是这个形态：fallback 为模板类补了 `.c-x-tab--active { /* TODO: 补充样式 *\/ }`
+ * 空块（「未匹配到 Figma 元素」），而**真实样式**留在旧名 `.c-x-tab-active` 下。
+ * 空块本身零声明 → 视为"不存在"，让 R5 把真样式改名过来；空块留着也无副作用（幂等）。
+ */
+function onlyEmptyStubs(clean, to, esc) {
+  const blockRe = new RegExp(`\\.${esc(to)}(?![\\w-])[^{}]*\\{([^{}]*)\\}`, 'g');
+  let m;
+  let blocks = 0;
+  while ((m = blockRe.exec(clean)) !== null) {
+    blocks++;
+    if (m[1].trim() !== '') return false; // 有声明 → 视为真正的新名，不动
+  }
+  const occurrences = (clean.match(new RegExp(`\\.${esc(to)}(?![\\w-])`, 'g')) || []).length;
+  return blocks > 0 && blocks === occurrences;
+}
+
+/**
  * 主入口：规范化产物文件表（模板 + 样式）。**必须早于 classFacts 采集**。
- * R1/R2/R3 元素与文件内部对齐 + 🛡️刀 12 R4 跨侧（模板 ↔ 样式）基名对齐。
+ * R1/R2/R3 元素与文件内部对齐 + 🛡️刀 12 R4 跨侧（模板 ↔ 样式）基名对齐
+ * + 🛡️R5 状态类归一的样式侧跟随（2026-09-26）。
  * @param {Object<string,string>} files
  * @returns {{ files: Object<string,string>, changes: Array<{path:string,from:string,to:string,rule?:string}> }}
  */
@@ -520,6 +618,10 @@ export function normalizeClassNameDialect(files = {}) {
   // 🛡️ 刀 12：先建「设计意图样式源」类名索引（已剥离 [自动修复] 兜底段），
   // 供模板侧 R4 跨侧基名对齐使用。必须在改模板**之前**建索引（读的是同一份文件表）。
   const styleIndex = buildStyleClassIndex(files);
+  // 🛡️ R5：模板侧**实际使用**的类名集合（单一命名来源），供 pass 2 让样式侧跟随；
+  // 同时也记录本轮实际发生的改名对（R1/R2/R4）。
+  const templateTokens = new Set();
+  const styleRenames = new Map();
   for (const [p, c] of Object.entries(files)) {
     if (typeof c !== 'string') continue;
     if (/\.vue$/i.test(p)) {
@@ -529,6 +631,14 @@ export function normalizeClassNameDialect(files = {}) {
       const endIdx = rest.search(/<script[\s>]|<style[\s>]/i);
       const tplEnd = endIdx > 0 ? tplStart + endIdx : c.length;
       const tplRegion = c.slice(tplStart, tplEnd);
+      // 采集模板 token（与 normalizeTemplateModifierDialect 同一实现，避免口径漂移）
+      for (const m of tplRegion.matchAll(TAG_RE)) {
+        const attrs = m[2] || '';
+        if (!/class/.test(attrs)) continue;
+        const { static: statics, dynamic: dynamics } = extractClassAttrs(attrs);
+        for (const s of statics) for (const t of extractClassTokensFromBindingValue(s.value)) templateTokens.add(t);
+        for (const d of dynamics) for (const t of extractClassTokensFromBindingValue(d.value)) templateTokens.add(t);
+      }
       const tplRes = normalizeTemplateModifierDialect(tplRegion, styleIndex);
       let out = c.slice(0, tplStart) + tplRes.text + c.slice(tplEnd);
       // 样式块
@@ -537,7 +647,12 @@ export function normalizeClassNameDialect(files = {}) {
         for (const ch of st.changes) changes.push({ path: p, ...ch });
         return whole.replace(body, st.text);
       });
-      for (const ch of tplRes.changes) changes.push({ path: p, ...ch });
+      for (const ch of tplRes.changes) {
+        changes.push({ path: p, ...ch });
+        if (ch && ch.from && ch.to && ch.from !== ch.to) {
+          styleRenames.set(String(ch.from), String(ch.to));
+        }
+      }
       next[p] = out;
     } else if (/\.(less|css)$/i.test(p)) {
       const st = normalizeStyleModifierDialect(c);
@@ -545,5 +660,43 @@ export function normalizeClassNameDialect(files = {}) {
       next[p] = st.text;
     }
   }
+
+  // ── pass 2：R5 样式侧跟随 ──
+  // 判据来源有两条，合成同一张 from→to 表：
+  //   ① 本轮模板侧实际发生的改名（R1/R2/R4）；
+  //   ② **模板侧实际使用的 BEM 修饰符类**（`base--mod`）→ 其「旧式近似名」`base-mod`。
+  //      必须补 ② 的原因（真机 8d304bf9 实锤）：归一可能发生在**更早一轮**，
+  //      此时模板已经是 `--active`，R1/R2 本轮零改动 → 只靠 ① 规则永不触发，
+  //      而样式里承载真实选中态的 `.c-device-monitor-tab-active` 永远无人跟随。
+  //      纪律：`base-mod` **不得**同时被模板使用（否则两个名字都合法，不臆断）。
+  for (const t of templateTokens) {
+    const mm = /^(c-[\w-]+?)--([\w-]+)$/.exec(t);
+    if (!mm) continue;
+    const legacy = `${mm[1]}-${mm[2]}`;
+    if (templateTokens.has(legacy)) continue; // 模板两个名字都用 → 不动
+    if (!styleRenames.has(legacy)) styleRenames.set(legacy, t);
+  }
+  if (styleRenames.size > 0) {
+    const renames = [...styleRenames].map(([from, to]) => ({ from, to }));
+    for (const [p, c] of Object.entries(next)) {
+      if (typeof c !== 'string') continue;
+      if (/\.vue$/i.test(p)) {
+        const out = c.replace(/<style[^>]*>([\s\S]*?)<\/style>/gi, (whole, body) => {
+          const st = applyStyleRenames(body, renames);
+          if (st.changes.length === 0) return whole;
+          for (const ch of st.changes) changes.push({ path: p, ...ch });
+          return whole.replace(body, st.text);
+        });
+        next[p] = out;
+      } else if (/\.(less|css)$/i.test(p)) {
+        const st = applyStyleRenames(c, renames);
+        if (st.changes.length > 0) {
+          for (const ch of st.changes) changes.push({ path: p, ...ch });
+          next[p] = st.text;
+        }
+      }
+    }
+  }
+
   return { files: next, changes };
 }

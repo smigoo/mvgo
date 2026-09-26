@@ -58,8 +58,21 @@ export function collectLeafSections(sections) {
  * @param {Array} sections effectiveSections 树
  * @returns {Array} 去重后的树
  */
-export function dedupeDuplicateSections(sections) {
-  if (!Array.isArray(sections)) return sections
+/** chart 叶子判定（⑤ 豁免用；只认小写 type） */
+function isChartLeaf(sec) {
+  return String(sec?.type || '').toLowerCase() === 'chart'
+}
+
+/**
+ * 「图表签名」——用于判定两条 chart section 是否为**不同图表**（⑤ 豁免）：
+ * chartType + series 条数 + 标题。签名不同 → 不同图表（都保留）；完全相同 → 视为真重复。
+ */
+function chartSignature(sec) {
+  const series = Array.isArray(sec?.chartSeries) ? sec.chartSeries.length : 0
+  return `${String(sec?.chartType || '')}|${series}|${String(sec?.title || '')}`
+}
+
+export function dedupeDuplicateSections(sections) {  if (!Array.isArray(sections)) return sections
   const out = []
   const seen = new Map() // tabs 措辞 key -> out 下标
   const nodeOwner = new Map() // sourceNodeId -> out 下标（仅叶子）
@@ -86,6 +99,23 @@ export function dedupeDuplicateSections(sections) {
     }
     if (conflictIdx >= 0) {
       const prev = out[conflictIdx]
+      // 🛡️ ⑤（2026-09-26 · 离线复现实锤）：**两个 chart section 共享 sourceNodeIds 时不得按
+      //   elementCount 收敛**。vision 会把「同一 Figma 容器下的多个不同图表」标成同一个 section
+      //   （E1 注释已记录该形态），`injectChartSectionIfMissing` 的 chartsTruth 分支因此产出
+      //   N 条 `sourceNodeIds: [c.section]` 相同的 chart section，且 elementCount 全为 1（平局）
+      //   → 现行为**确定性只保留 1 条、丢掉 N-1 个图表**（探针实测：bar/pie/line 三条 → 只剩 bar）。
+      //   判据：两条都是 chart 且**图表签名不同**（chartType + series 条数 + 标题）→ 是不同图表，
+      //   两条都保留；签名完全相同才视为真重复（照旧按 elementCount 收敛）。
+      //   作用域刻意收窄：**只改 chart↔chart**，chart↔非 chart（如 d55641d0 的 89:42 vs 89:38）
+      //   维持原行为，避免扩大误伤面。
+      if (isChartLeaf(prev) && isChartLeaf(sec) && chartSignature(prev) !== chartSignature(sec)) {
+        if (Array.isArray(sec.children)) {
+          out.push({ ...sec, children: dedupeDuplicateSections(sec.children) })
+        } else {
+          out.push(sec)
+        }
+        continue
+      }
       const prevCount = Number(prev?.elementCount) || 0
       const curCount = Number(sec.elementCount) || 0
       // 保留内容更全的一份（elementCount 更大），丢弃重复解释

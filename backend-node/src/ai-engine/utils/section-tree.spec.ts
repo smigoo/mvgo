@@ -1461,3 +1461,39 @@ describe("reorganizeCenteredChartLayout（图表居中 + 图例分两侧）", ()
     expect(out).toHaveLength(2)
   })
 })
+
+// ══════════════════════════════════════════════════════════════════════════
+// 🛡️ ⑤ chart 多真值豁免（2026-09-26 · 离线复现实锤）
+// vision 会把「同一 Figma 容器下的多个不同图表」标成同一个 section；chartsTruth 分支
+// 因此产出 N 条 sourceNodeIds 相同的 chart section，且 elementCount 全为 1（平局）
+// → 原行为确定性只保留 1 条、丢掉 N-1 个图表（探针实测 bar/pie/line → 只剩 bar）。
+// ══════════════════════════════════════════════════════════════════════════
+describe('⑤ dedupeDuplicateSections：chart 多真值豁免', () => {
+  const mkChart = (id: string, chartType: string, series: number, title?: string) => ({
+    id, type: 'chart', chartType, elementCount: 1,
+    title: title || '图表', sourceNodeIds: ['426:807'],
+    chartSeries: Array.from({ length: series }, (_, i) => 's' + i),
+  })
+
+  it('两条 chart 共享 sourceNodeIds 但签名不同 → 都保留（不丢图表）', () => {
+    const a = mkChart('chart-truth-0', 'bar', 2, '图表1')
+    const b = mkChart('chart-truth-1', 'pie', 2, '图表2')
+    const c = mkChart('chart-truth-2', 'line', 2, '图表3')
+    const out = dedupeDuplicateSections([a, b, c])
+    expect(out.filter((s: any) => s.type === 'chart')).toHaveLength(3)
+  })
+
+  it('签名完全相同 → 视为真重复，收敛为 1 条（收敛能力不丢）', () => {
+    const a = mkChart('chart-truth-0', 'bar', 2, '图表')
+    const b = mkChart('chart-truth-1', 'bar', 2, '图表')
+    const out = dedupeDuplicateSections([a, b])
+    expect(out.filter((s: any) => s.type === 'chart')).toHaveLength(1)
+  })
+
+  it('作用域收窄：chart ↔ 非 chart 共享 id → 维持原行为（elementCount 大者胜）', () => {
+    const container = { id: '89:42', type: undefined as any, elementCount: 3, sourceNodeIds: ['89:42'] }
+    const chart = { id: '89:38', type: 'chart', chartType: 'bar', elementCount: 23, sourceNodeIds: ['89:42'] }
+    expect(dedupeDuplicateSections([container, chart])).toHaveLength(1)
+    expect(dedupeDuplicateSections([chart, container])).toHaveLength(1)
+  })
+})

@@ -16,6 +16,7 @@ import {
   coerceLLMText,
   estimateTokens,
   normalizeRequestTemperature,
+  buildThinkingOffParams,
 } from '../utils/model-config.js';
 import { VISION_DEFAULTS } from '../utils/ai-defaults.js';
 import {
@@ -330,6 +331,10 @@ export class VisionAgent {
         // 支持调用方动态覆盖 max_tokens（截断重试用更高上限）
         const maxTokens =
           Number(options.maxTokens) > 0 ? options.maxTokens : this.maxTokens;
+        // 🛡️ 2026-09-26 治本：视觉分析是「结构化 JSON 抽取」，不需要长链推理。
+        // 但 qwen3.7-plus/qwen3.8-max 等默认开推理，会把 8k~13k token 烧在 reasoning 上 →
+        // 单次调用 218~276s，被超时上限掐断 → 视觉降级阻断生成。注入关推理参数后 8~9s。
+        // 关法按厂商映射（见 buildThinkingOffParams），未命中厂商返回 {} 不发送。
         return axios.post(
           buildChatUrl(snap.baseURL),
           {
@@ -337,6 +342,7 @@ export class VisionAgent {
             messages,
             temperature,
             max_tokens: maxTokens,
+            ...buildThinkingOffParams(snap.model, snap.baseURL),
             ...(options.responseFormat
               ? { response_format: options.responseFormat }
               : {}),
