@@ -1179,7 +1179,10 @@ describe('buildSectionStyleFacts（E1 治本 · 语义化样式事实）', () =>
     }]
     const out = buildSectionStyleFacts(tree, figma3)
     expect(out).toContain('重复单元×12')
-    expect(out).toContain('横向 flex：左侧 icon')
+    expect(out).toContain('横向 flex')
+    expect(out).toContain('左侧 icon')
+    // 🛡️ 2026-09-27 强化：右侧文字列须显式要求 column（治 cons-text 漏方向横排）
+    expect(out).toContain('flex-direction:column')
     expect(out).toContain('#ffffff')
     expect(out).toContain('#333333')
     expect(out).toContain('(2/484)')
@@ -1243,6 +1246,94 @@ describe('buildSectionStyleFacts（E1 治本 · 语义化样式事实）', () =>
     expect(out).toContain('rgba(255,98,98,0.1)')
     expect(out).toContain('描边:1px #ff6262')
     expect(out).toContain('交通事故')
+  })
+
+  test('🛡️ Fix2 段首禁令：透明度归属铁律注入（防父组上提 opacity 双重透明发蓝）', () => {
+    // 实锤 mc-max-1790496527811 设备组件「整体发蓝」= 父组挂 opacity 与 PNG 自身透明叠加成双重透明。
+    // 治本：在样式真值首段注入铁律，明确透明度只作用于自身图层、严禁上提父容器。
+    const fg = {
+      document: {
+        id: 'root', name: 'cp-设备监测', type: 'FRAME',
+        children: [{
+          id: '89:39', name: 'cons', type: 'FRAME', absoluteBoundingBox: box(1475, 538, 367, 295),
+          children: [
+            { id: '2:9', name: '摄像机', type: 'TEXT', characters: '摄像机', absoluteBoundingBox: box(1475, 560, 36, 18), style: { fontSize: 12 }, fills: [{ type: 'SOLID', visible: true, color: { r: 0.2, g: 0.2, b: 0.2 } }] },
+            { id: '2:10', name: 'bg', type: 'VECTOR', absoluteBoundingBox: box(1475, 580, 27, 32), fills: [{ type: 'SOLID', visible: true, color: { r: 0.2, g: 0.2, b: 0.2 } }] },
+          ],
+        }],
+      },
+    }
+    const tree = [{ id: '89:39', type: 'container', title: 'cons', sourceNodeIds: ['89:39'] }]
+    const out = buildSectionStyleFacts(tree, fg)
+    // 首段（leafUsed===0）必须注入透明度归属铁律
+    expect(out).toContain('透明度归属铁律')
+    expect(out).toContain('严禁把子节点透明度上提到父容器')
+    expect(out).toContain('双重透明')
+  })
+
+  test('🛡️ Fix3 几何判定：纵向文本块（≥2 直接 TEXT 子节点、同 x、y 递增）→ 提示 flex-direction:column', () => {
+    // 实锤 mc-max-1790496527811 设备 cons 区：标签在上、数值在下，漏 column 被横排挤一行。
+    // 纯几何判定（同 x、y 递增），不按组件名/class。
+    const fg = {
+      document: {
+        id: 'root', name: 'cp-设备监测', type: 'FRAME',
+        children: [{
+          id: 'cons', name: 'cons', type: 'FRAME', absoluteBoundingBox: box(1475, 538, 367, 80),
+          children: [
+            { id: '2:a', name: 'label', type: 'TEXT', characters: '在线设备', absoluteBoundingBox: box(1475, 540, 60, 18), style: { fontSize: 12 }, fills: [{ type: 'SOLID', visible: true, color: { r: 0.2, g: 0.2, b: 0.2 } }] },
+            { id: '2:b', name: 'value', type: 'TEXT', characters: '128', absoluteBoundingBox: box(1476, 570, 55, 24), style: { fontSize: 20 }, fills: [{ type: 'SOLID', visible: true, color: { r: 1, g: 1, b: 1 } }] },
+          ],
+        }],
+      },
+    }
+    const tree = [{ id: 'cons', type: 'container', title: 'cons', sourceNodeIds: ['cons'] }]
+    const out = buildSectionStyleFacts(tree, fg)
+    expect(out).toContain('文本块纵向(纯文本块·同x、y递增)：标签在上数值在下 → 该容器用 flex-direction:column')
+  })
+
+  test('🛡️ Fix3 收窄反例：混合容器（含 bg/icon 兄弟 + 2 纵排 TEXT）→ 不提示 column（卡片实为 row）', () => {
+    // 全语料实证（2026-09-27）：仅凭「≥2 同x、y递增 TEXT」会把设备卡片 Group(bg+icon+2 TEXT)
+    // 与装饰图标组误判成纯文本块（占命中 96.2%）。卡片真实布局是 row（icon 左、文本列右），
+    // 由 describeRepeatedItemLayout 正确描述；此处不得再发 column 造成矛盾。
+    const fg = {
+      document: {
+        id: 'root', name: 'cp-设备监测', type: 'FRAME',
+        children: [{
+          id: 'card', name: 'Group 2136637321', type: 'GROUP', absoluteBoundingBox: box(1518, 550, 117, 64),
+          children: [
+            { id: 'bg', name: 'bg', type: 'GROUP', absoluteBoundingBox: box(1518, 550, 117, 64), children: [
+              { id: 'v', name: 'Vector', type: 'VECTOR', absoluteBoundingBox: box(1518, 550, 117, 64) },
+            ] },
+            { id: 't1', name: '摄像机', type: 'TEXT', characters: '摄像机', absoluteBoundingBox: box(1557, 563, 36, 18), style: { fontSize: 12 }, fills: [{ type: 'SOLID', visible: true, color: { r: 0.2, g: 0.2, b: 0.2 } }] },
+            { id: 't2', name: '(2/484)', type: 'TEXT', characters: '(2/484)', absoluteBoundingBox: box(1557, 585, 55, 21), style: { fontSize: 16 }, fills: [{ type: 'SOLID', visible: true, color: { r: 1, g: 1, b: 1 } }] },
+            { id: 'icon', name: 'icon', type: 'GROUP', absoluteBoundingBox: box(1524, 566, 27, 32), children: [
+              { id: 'r', name: 'Rectangle', type: 'RECTANGLE', absoluteBoundingBox: box(1524, 566, 26, 26) },
+            ] },
+          ],
+        }],
+      },
+    }
+    const tree = [{ id: 'card', type: 'container', title: 'card', sourceNodeIds: ['card'] }]
+    const out = buildSectionStyleFacts(tree, fg)
+    expect(out).not.toContain('该容器用 flex-direction:column')
+  })
+
+  test('🛡️ Fix3 反例：横向 TEXT（同 y、x 递增）→ 不提示 column（避免误改横向块）', () => {
+    const fg = {
+      document: {
+        id: 'root', name: 'cp', type: 'FRAME',
+        children: [{
+          id: 'row', name: 'row', type: 'FRAME', absoluteBoundingBox: box(100, 100, 200, 30),
+          children: [
+            { id: '2:a', name: 'label', type: 'TEXT', characters: 'label', absoluteBoundingBox: box(100, 105, 40, 18), style: { fontSize: 12 }, fills: [{ type: 'SOLID', visible: true, color: { r: 0.2, g: 0.2, b: 0.2 } }] },
+            { id: '2:b', name: 'value', type: 'TEXT', characters: '128', absoluteBoundingBox: box(150, 106, 55, 18), style: { fontSize: 12 }, fills: [{ type: 'SOLID', visible: true, color: { r: 1, g: 1, b: 1 } }] },
+          ],
+        }],
+      },
+    }
+    const tree = [{ id: 'row', type: 'container', title: 'row', sourceNodeIds: ['row'] }]
+    const out = buildSectionStyleFacts(tree, fg)
+    expect(out).not.toContain('该容器用 flex-direction:column')
   })
 })
 

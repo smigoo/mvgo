@@ -2014,7 +2014,9 @@ export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
       const iconBox = (icons[0] || inner[0])?.absoluteBoundingBox
       const sampleBox = sample.absoluteBoundingBox
       const iconLeft = iconBox && sampleBox && iconBox.x <= sampleBox.x + sampleBox.width * 0.45
-      const layout = iconLeft ? '横向 flex：左侧 icon，右侧文字列（label 上、value 下）' : '按子节点 x/y 还原，禁止一律 column+居中'
+      const layout = iconLeft
+        ? '横向 flex（容器 flex-direction:row）：左侧 icon，右侧文字列必须为纵向列 flex-direction:column（label 在上、value 在下），禁止把 label/value 横排'
+        : '按子节点 x/y 还原，禁止一律 column+居中'
       return `  - 重复单元×${similar.length}（${Math.round(w0)}×${Math.round(h0)}）内部布局 → ${layout}${textBits.length ? `；文字色 ${textBits.join('；')}` : ''}`
     }
 
@@ -2028,7 +2030,7 @@ export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
         itemCount++
       }
       // 收集该节点子树的样式条目。parentOpacity 累积：父 GROUP 的 opacity 作用于子节点背景
-      const collect = (node, depth, parentOpacity) => {
+      const collect = (node, depth, parentOpacity, parentBox) => {
         if (!node || depth > maxDepth || itemCount >= maxItemsPerSection) return
         const name = String(node.name || '')
         const typeN = String(node.type || '').toUpperCase()
@@ -2043,14 +2045,40 @@ export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
         const chars = isText ? String(node.characters || '').trim() : ''
         // 跳过无语义装饰（VECTOR/RECTANGLE 且无渐变），保留有样式价值的节点
         const hasStyle = css || strokeCss || (isText && chars) || (bbox && (bbox.width >= 20 || bbox.height >= 20))
-        if (!hasStyle) { for (const c of node.children || []) collect(c, depth + 1, effOp); return }
+        if (!hasStyle) { for (const c of node.children || []) collect(c, depth + 1, effOp, bbox); return }
         // 去前缀 name
         const clean = normalizeFigmaTextName(name) || name
         const size = bbox ? `${Math.round(bbox.width)}×${Math.round(bbox.height)}` : null
         const parts = []
         if (isText && chars) parts.push(`文字「${chars.slice(0, 12)}」`)
-        if (isText) { if (css) parts.push(`color:${css}`) }
-        else if (css) parts.push(`bg:${css}`)
+        if (isText) {
+          if (css) {
+            // 🛡️ 文字色必须是实色（2026-09-27 · bd4f69db 实锤）：Figma 文字节点偶发带**渐变** fill，
+            //   旧实现直接写 `color:linear-gradient(...)` —— 非法语义（渐变不可能作文字色），
+            //   模型只能瞎猜或照抄。此处降级为**首停靠点实色**并标注来源，保住可执行性。
+            if (/gradient\(/i.test(css)) {
+              const first = /rgba?\([^)]*\)|#[0-9a-fA-F]{3,8}/.exec(css)
+              if (first) parts.push(`color:${first[0]}⚠（原节点 fill 为渐变，文字色取首停靠点实色）`)
+            } else {
+              parts.push(`color:${css}`)
+            }
+          }
+        } else if (css) {
+          // 🛡️ 区分「装饰图元」与「元素/容器底」（2026-09-27 · bd4f69db「一片蓝」实锤）：
+          //   图元（circle/path/Vector/小装饰矩形）的 fill 是**绘制用色**，不是元素背景；旧实现一律写
+          //   `bg:` → 模型把图元渐变放大成大面积 background（产物 `.c-device-monitor-active-bg
+          //   { linear-gradient(180deg,#2b9bff 0%,#299aff 100%) }` 与真值表里 `Rectangle 346241414`
+          //   的值**逐字对应**）→ 整片蓝。
+          //   判据用**几何面积比**（不猜名字）：占父容器 ≥60% 面积 → 是真实底，仍写 `bg:`；
+          //   只占一小块 → 标「图元(非元素背景)」，明确禁止当元素背景实现。
+          const parentArea = parentBox ? parentBox.width * parentBox.height : 0
+          const ownArea = bbox ? bbox.width * bbox.height : 0
+          // 「极小」判据补位：父容器本身也很小（如 8×8 圆点的父级）时面积比会失效 →
+          //   绝对尺寸 ≤16px 的一律视为图元（小到不可能是"元素的底"，只能是图标/点/描边）。
+          const tiny = !!bbox && Math.max(bbox.width, bbox.height) <= 16
+          const coversParent = !tiny && parentArea > 0 && ownArea / parentArea >= 0.6
+          parts.push(`${coversParent ? 'bg' : '图元(非元素背景)'}:${css}`)
+        }
         if (strokeCss) {
           const w = Number.isFinite(strokeWeight) && strokeWeight > 0 ? `${strokeWeight}px` : '1px'
           parts.push(`描边:${w} ${strokeCss}`)
@@ -2059,14 +2087,50 @@ export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
         if (typeof node.style?.fontSize === 'number' && node.style.fontSize > 0) parts.push(`font:${node.style.fontSize}px`)
         if (typeof node.style?.fontWeight === 'number' && node.style.fontWeight >= 600) parts.push(`加粗`)
         if (effOp < 1) parts.push(`透明度:${Math.round(effOp * 100) / 100}`)
+
+        // 🛡️ Fix3（2026-09-27 · 零硬编码，几何判定）：纵向文本块提示。
+        //   某节点的**直接 TEXT 子节点**同 x（左对齐）且 y 递增（上下堆叠）→ 该容器是
+        //   「标签在上、数值在下」的纵向文本块，应还原为 flex-direction:column。旧实现
+        //   只给 display:flex（默认 row）会把标签/数值横排挤在一行（实锤 mc-max-1790496527811
+        //   设备 cons 区）。纯几何判定，不按组件名/class。
+        //
+        //   ⚠️ 2026-09-27 收窄（全语料 481 组件实证：2968 命中里 96.2% 是误判）：
+        //   仅凭「≥2 个同 x、y 递增的 TEXT 子节点」会把**混合容器**误判成纯文本块 ——
+        //   典型如设备卡片 Group(bg + icon + 2 TEXT)（真实布局是 **row：icon 左、文本列右**，
+        //   由 describeRepeatedItemLayout 的「横向 flex：左侧 icon，右侧文字列」正确描述）
+        //   与装饰图标组 Group 2(vector×N + 2 占位 TEXT)。给这些容器发 column 会与既有
+        //   正确提示**互相矛盾**、误导 LLM。故加「无非文本视觉兄弟」前置条件：只有**纯文本块**
+        //   （子节点里除这些文本外无具尺寸图元/底衬）才判为纵向文本列。
+        const directTextKids = (node.children || []).filter(
+          (c) => String(c.type || '').toUpperCase() === 'TEXT' && c.absoluteBoundingBox,
+        )
+        if (directTextKids.length >= 2) {
+          const xs = directTextKids.map((t) => t.absoluteBoundingBox.x)
+          const ys = directTextKids.map((t) => t.absoluteBoundingBox.y)
+          const sameX = Math.max(...xs) - Math.min(...xs) < 4
+          const sortedY = [...ys].sort((a, b) => a - b)
+          const increasing = sortedY.every((y, i) => i === 0 || y - sortedY[i - 1] > 2)
+          // 纯文本块校验：排除任何具尺寸的非文本兄弟（图元/底衬/图标）
+          const textKidSet = new Set(directTextKids)
+          const meaningfulNonText = (node.children || []).filter((c) => {
+            if (textKidSet.has(c)) return false
+            if (String(c.type || '').toUpperCase() === 'TEXT') return false
+            const b = c.absoluteBoundingBox
+            return b && Math.max(b.width || 0, b.height || 0) > 8
+          })
+          if (sameX && increasing && meaningfulNonText.length === 0) {
+            parts.push('文本块纵向(纯文本块·同x、y递增)：标签在上数值在下 → 该容器用 flex-direction:column')
+          }
+        }
+
         if (parts.length > 0) {
           secLines.push(`  - ${clean} → ${parts.join(' | ')}`)
           itemCount++
         }
         // 递归遍历子节点（collect 自身的深度控制保证了安全）
-        for (const c of node.children || []) collect(c, depth + 1, effOp)
+        for (const c of node.children || []) collect(c, depth + 1, effOp, bbox)
       }
-      collect(raw, 1, 1)
+      collect(raw, 1, 1, raw.absoluteBoundingBox)
     }
 
     if (secLines.length > 0) {
@@ -2102,6 +2166,18 @@ export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
             break
           }
         }
+      }
+      // 🛡️ 段首禁令（2026-09-27 · bd4f69db「一片蓝」实锤）：只在**首段**注入一次（控 token）。
+      //   缺这条时，模型会把「图元(非元素背景)」行也当元素底色实现 → 满屏渐变蓝。
+      if (leafUsed === 0) {
+        lines.push(
+          '> ⚠️ 逐节点样式真值：**只有 `bg:` 行是元素/容器底色**；标「图元(非元素背景)」的行是绘制用色' +
+            '（描边/渐变块/小图标），**禁止实现为大面积 background**。文字色只允许实色。' +
+            '**下表未给出的属性，该元素一律不得添加**（禁止用示例色或臆造色补齐）。' +
+            '**透明度归属铁律**：每个节点的 `透明度:X` 只作用于**该节点自身图层**（写在该节点自己的样式上）；' +
+            '**严禁把子节点透明度上提到父容器/公共祖先**（否则父组挂 opacity 会与 PNG 自身透明叠加成双重透明，' +
+            '整片发灰发蓝）。背景层若需半透明，应体现在 background 的 alpha 通道或背景子层，不得上提父级。',
+        )
       }
       lines.push(`**${label}**${bgBrightnessHint}（内部元素样式真值）：`)
       lines.push(...secLines.slice(0, maxItemsPerSection))

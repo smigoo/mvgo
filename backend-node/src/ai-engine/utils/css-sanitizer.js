@@ -883,6 +883,14 @@ const DISPLAY_PROP_RX = /\bdisplay\s*:/
 const DISPLAY_GRID_RX = /\bdisplay\s*:\s*(inline-)?grid\b/i
 
 /**
+ * 这些属性出现即可确定作者意图是 flex 弹性容器（其子属性仅在 flex 上下文生效）。
+ * 用于「漏写 display:flex 但已写 flex 子属性」的自动补齐（Fix1）。
+ * 刻意**不含** `display` 自身——是否已有 display 由下方 DISPLAY_PROP_RX 判定跳过。
+ */
+const FLEX_INTENT_PROP_RX =
+  /\b(?:align-items|justify-content|align-self|align-content|justify-items|place-items|place-content|gap|row-gap|column-gap|flex-direction|flex-wrap|flex-flow|flex-grow|flex-shrink|flex-basis|flex)\s*:/
+
+/**
  * 🛡️ grid 布局确定性补全（治「多列网格塌成一列 / 内容溢出被裁」）。
  *
  * 背景（2026-09-14 实锤，`c-device-monitor-021848cc`）：LLM 常写出
@@ -968,6 +976,73 @@ export function ensureGridDisplayInVueSfc(vueContent, logger) {
   if (!vueContent || typeof vueContent !== 'string') return vueContent
   return vueContent.replace(/<style([^>]*)>([\s\S]*?)<\/style>/gi, (fullMatch, attrs, innerContent) => {
     const repaired = ensureGridDisplay(innerContent, logger)
+    return `<style${attrs}>${repaired}</style>`
+  })
+}
+
+/**
+ * 🛡️ Fix1（2026-09-27 · 实锤 mc-max-1790496536285 环境组件 tab/icon 挤成两行）：
+ * 按「属性特征」确定性补 `display:flex`（与 ensureGridDisplay 同族，零硬编码）。
+ *
+ * 背景：LLM 给弹性布局元素只写 `align-items`/`gap`/`justify-content` 等 flex 子属性
+ * 却**漏写 `display:flex`** → 子属性在非 flex 容器下全部失效，tab 与 icon 被挤成两行。
+ * 此前的 prompt 约束对此类「CSS 合法但视觉坏」无效、逐组件硬编码不可维护。
+ *
+ * 策略（确定性兜底，按属性判定，绝不按组件名/class）：
+ * - 规则体内含 flex 子属性（align-items / justify-content / gap / flex-* / flex-direction 等）
+ *   但**无任何 display 声明** → 在规则体首部补齐 `display: flex`。
+ * - 已是 flex 容器（含 display:flex/inline-flex）或缺 display 但含 grid 意图
+ *   （grid-template-*）→ 不动（grid 由 ensureGridDisplay 负责，避免 grid 规则被改 flex）。
+ * - 含 flex 子属性但作者已显式写 display（含 block/grid）→ 尊重不覆盖。
+ * - 幂等：补完再跑，DISPLAY_PROP_RX 命中即跳过。
+ *
+ * 挂载点：microcode 写盘后处理链（.vue <style> 与 resources/*.less 均覆盖）。
+ *
+ * @param {string} cssContent CSS/LESS 文本（纯样式内容，非 Vue SFC）
+ * @param {object} [logger] 可选日志对象
+ * @returns {string} 补全后的样式内容
+ */
+export function ensureFlexDisplay(cssContent, logger) {
+  if (!cssContent || typeof cssContent !== 'string') return cssContent
+  if (!FLEX_INTENT_PROP_RX.test(cssContent)) return cssContent
+
+  const inserts = []
+  for (const b of scanLeafDeclarationBlocks(cssContent)) {
+    if (!FLEX_INTENT_PROP_RX.test(b.inner)) continue
+    if (DISPLAY_PROP_RX.test(b.inner)) continue // 已有 display → 尊重作者意图
+    if (GRID_INTENT_PROP_RX.test(b.inner)) continue // grid 意图交给 ensureGridDisplay
+    inserts.push(b.end)
+  }
+  if (inserts.length === 0) return cssContent
+
+  let result = cssContent
+  for (const pos of [...inserts].sort((a, b) => b - a)) {
+    const before = result.slice(0, pos)
+    const trimmed = before.replace(/\s+$/, '')
+    const needSemi = trimmed && !/[;{}]$/.test(trimmed) ? ';' : ''
+    result = `${trimmed}${needSemi}\n  display: flex;` + result.slice(pos)
+  }
+
+  if (inserts.length > 0) {
+    logger?.warn?.(
+      `🛡️ Fix1 已为 ${inserts.length} 个「含 flex 子属性但缺 display」的规则补全 display: flex（防弹性布局失效挤成多行）`,
+    )
+  }
+  return result
+}
+
+/**
+ * 对 Vue SFC 内容中的所有 <style> 块执行 flex 容器 display:flex 缺失补齐。
+ * 幂等，可重复执行。
+ *
+ * @param {string} vueContent 完整 Vue SFC 内容
+ * @param {object} [logger] 可选日志对象
+ * @returns {string} 补全后的 Vue SFC 内容
+ */
+export function ensureFlexDisplayInVueSfc(vueContent, logger) {
+  if (!vueContent || typeof vueContent !== 'string') return vueContent
+  return vueContent.replace(/<style([^>]*)>([\s\S]*?)<\/style>/gi, (fullMatch, attrs, innerContent) => {
+    const repaired = ensureFlexDisplay(innerContent, logger)
     return `<style${attrs}>${repaired}</style>`
   })
 }

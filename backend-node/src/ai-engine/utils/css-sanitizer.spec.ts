@@ -1,4 +1,4 @@
-import { repairScopedThirdPartySelectors, ensureFlexDirection, ensureFlexDirectionInVueSfc, ensureGridDisplay, ensureGridDisplayInVueSfc, sanitizeCssContent } from './css-sanitizer.js';
+import { repairScopedThirdPartySelectors, ensureFlexDirection, ensureFlexDirectionInVueSfc, ensureGridDisplay, ensureGridDisplayInVueSfc, ensureFlexDisplay, ensureFlexDisplayInVueSfc, sanitizeCssContent } from './css-sanitizer.js';
 
 describe('Loop 0.C sanitizeCssContent 粘合行', () => {
   it('}==== 粘合分隔符时保留右括号并换行，less 可继续解析后续规则', () => {
@@ -303,5 +303,98 @@ describe('ensureGridDisplayInVueSfc', () => {
   it('无 grid 意图时 SFC 原样返回', () => {
     const sfc = `<style scoped>\n.a { color: red; }\n</style>`;
     expect(ensureGridDisplayInVueSfc(sfc)).toBe(sfc);
+  });
+});
+
+describe('ensureFlexDisplay —— Fix1 flex 容器 display:flex 漏写补齐（零硬编码）', () => {
+  it('事故形态：只写 flex 子属性无 display → 补 display: flex', () => {
+    const css = `.c-x-tab-row {align-items: center; justify-content: space-between; gap: 8px}`;
+    const result = ensureFlexDisplay(css);
+    expect(result).toMatch(/\.c-x-tab-row \{[^}]*display: flex;/s);
+    // 首条声明缺 `;` 必须自动补上，否则两条声明会粘在一起
+    expect(result).toContain('gap: 8px;\n  display: flex;');
+  });
+
+  it('多行写法（末尾有分号）不重复加分号', () => {
+    const css = `.row {\n  align-items: center;\n  gap: 12px;\n}`;
+    const result = ensureFlexDisplay(css);
+    expect(result).toMatch(/gap: 12px;\s*display: flex;/);
+    expect(result).not.toContain(';;');
+    expect(result).toMatch(/gap: 12px;\n {2}display: flex;\}/);
+  });
+
+  it('含 flex-direction / flex-wrap / flex-grow 等子属性同样识别', () => {
+    expect(ensureFlexDisplay('.a { flex-direction: row; }')).toContain('display: flex;');
+    expect(ensureFlexDisplay('.b { flex-wrap: wrap; align-content: center; }')).toContain('display: flex;');
+    expect(ensureFlexDisplay('.c { flex-grow: 1; flex-shrink: 0; flex-basis: 50%; }')).toContain('display: flex;');
+  });
+
+  it('已有 display:flex → 不动（尊重作者意图，不重复补）', () => {
+    const css = `.a { display: flex; align-items: center; gap: 8px; }`;
+    expect(ensureFlexDisplay(css)).toBe(css);
+  });
+
+  it('含 grid 意图（grid-template-*）不误改 → 交给 ensureGridDisplay', () => {
+    const css = `.a { grid-template-columns: repeat(3, 1fr); gap: 12px; }`;
+    expect(ensureFlexDisplay(css)).toBe(css);
+  });
+
+  it('作者已显式 display:block → 不动（不覆盖作者意图）', () => {
+    const css = `.a { display: block; align-items: center; }`;
+    expect(ensureFlexDisplay(css)).toBe(css);
+  });
+
+  it('幂等：补全后再次执行不重复插入', () => {
+    const once = ensureFlexDisplay('.a { align-items: center; gap: 8px; }');
+    const twice = ensureFlexDisplay(once);
+    expect(twice).toBe(once);
+    expect(twice.match(/display: flex;/g)).toHaveLength(1);
+  });
+
+  it('嵌套 LESS：只补全叶子声明块，父块不动', () => {
+    const css = `.parent { .child { align-items: center; gap: 8px; } }`;
+    const result = ensureFlexDisplay(css);
+    expect(result).toMatch(/\.child \{[^}]*display: flex;/s);
+    expect(result.match(/display: flex;/g)).toHaveLength(1);
+    expect(result.startsWith('.parent { .child {')).toBe(true);
+  });
+
+  it('注释 / url() 里的花括号不被误判为结构', () => {
+    const css = `/* } trap { */\n.a { align-items: center; gap: 8px; }`;
+    const result = ensureFlexDisplay(css);
+    expect(result).toMatch(/\.a \{[^}]*display: flex;/s);
+    expect(result).toContain('/* } trap { */');
+  });
+
+  it('多条规则一次全部补全', () => {
+    const css = `.a { align-items: center; gap: 8px; }\n.b { color: red; }\n.c { justify-content: center; }`;
+    const result = ensureFlexDisplay(css);
+    expect(result.match(/display: flex;/g)).toHaveLength(2);
+    expect(result).toContain('.b { color: red; }');
+  });
+
+  it('无 flex 子属性 / 空输入原样返回', () => {
+    const css = `.a { color: red; }`;
+    expect(ensureFlexDisplay(css)).toBe(css);
+    expect(ensureFlexDisplay('')).toBe('');
+    expect(ensureFlexDisplay(undefined as any)).toBeUndefined();
+  });
+});
+
+describe('ensureFlexDisplayInVueSfc —— Fix1 作用于 SFC <style> 块', () => {
+  it('补全 <style> 块内漏 display 的 flex 容器，不影响 template/script', () => {
+    const sfc = `<template><div class="row"><i/></div></template>
+<script setup>const a = 1</script>
+<style lang="less" scoped>
+.c-x-env-tab-row {align-items: center; gap: 8px}
+</style>`;
+    const result = ensureFlexDisplayInVueSfc(sfc);
+    expect(result).toContain('const a = 1');
+    expect(result).toMatch(/\.c-x-env-tab-row \{[^}]*display: flex;/s);
+  });
+
+  it('无 flex 子属性时 SFC 原样返回', () => {
+    const sfc = `<style scoped>\n.a { color: red; }\n</style>`;
+    expect(ensureFlexDisplayInVueSfc(sfc)).toBe(sfc);
   });
 });

@@ -14,6 +14,7 @@ import {
   collapseBackgroundShellDivs,
   injectStateSwitchInteraction,
   resolveComponentClassPrefix,
+  convertShellToPseudoElement,
 } from './post-process.js';
 
 const HEADER_SECTION_VUE = `<template>
@@ -554,5 +555,54 @@ import ContentDefault from './components/ContentDefault.vue'
     const r2 = injectStateSwitchInteraction(f, mapping);
     expect(r2.applied).toBe(false);
     expect(f['package/index.vue']).toBe(after1);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// 🛡️ 装饰壳 → 宿主 ::before 时**必须**给宿主补 position（2026-09-27 · bd4f69db「一片蓝」实锤）
+// 伪元素补了 `top/left/right/bottom:0`（绝对定位几何），而宿主若仍 static →
+// 伪元素相对**更外层的已定位祖先**定位（实测祖先链到 .pannel-content 全 static）→ 逃逸到预览根
+// → 每个伪元素各铺满整屏 → 视觉一片蓝（设计里那只是 34×40 的小矩形）。
+// ══════════════════════════════════════════════════════════════════════════
+describe('convertShellToPseudoElement：宿主定位上下文补全', () => {
+  const mk = (hostDecls: string) => `<template>
+  <div class="c-x-tab-item">
+    <div class="c-x-tab-bg"></div>
+    <span>监控</span>
+  </div>
+</template>
+<style lang="less" scoped>
+.c-x-tab-item {${hostDecls}}
+.c-x-tab-bg {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, #85baff 0%, #bfe2ff 100%);
+  border-radius: 6px 6px 0 0;
+}
+</style>`;
+
+  it('宿主规则无 position → 迁移后补 position: relative（且 ::before 带 inset 几何）', () => {
+    const src = mk('min-height: 0; cursor: pointer');
+    const out = convertShellToPseudoElement(src, {
+      full: '<div class="c-x-tab-bg"></div>',
+      cls: 'c-x-tab-bg',
+    } as any);
+    expect(out).toBeTruthy();
+    expect(out!).not.toContain('c-x-tab-bg');
+    // ::before 已生成且带绝对定位几何
+    expect(out!).toMatch(/\.c-x-tab-item::before\s*\{[\s\S]*?(top|inset)\s*:/);
+    // 🎯 关键：宿主成为定位上下文
+    expect(out!).toMatch(/\.c-x-tab-item\s*\{[\s\S]*?position:\s*relative/);
+  });
+
+  it('宿主规则已有 position → 不重复注入（幂等）', () => {
+    const src = mk('position: relative; min-height: 0');
+    const out = convertShellToPseudoElement(src, {
+      full: '<div class="c-x-tab-bg"></div>',
+      cls: 'c-x-tab-bg',
+    } as any);
+    expect(out).toBeTruthy();
+    const hits = (out!.match(/\.c-x-tab-item\s*\{[\s\S]*?\}/)?.[0].match(/position\s*:/g) || []).length;
+    expect(hits).toBe(1);
   });
 });

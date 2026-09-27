@@ -1778,7 +1778,6 @@ function migrateOrphanBgRulesToPseudo(code) {
       changed = true;
       // 伪元素渲染前提：content + 绝对定位几何——遍历所有 .x::before 规则逐一补全。
       const hostHeadRe = new RegExp('(\\.[A-Za-z][\\w-]*(?::[^{]+)?)::before\\s*\\{', 'g');
-      const baseCls = (hostHeadRe.exec(text) || [])[1]?.match(/^\.([A-Za-z][\w-]*)/);
       text = text.replace(hostHeadRe, (full) => full); // reset lastIndex
       let hm;
       const patches = [];
@@ -1796,16 +1795,31 @@ function migrateOrphanBgRulesToPseudo(code) {
       for (const p of patches.reverse()) {
         text = text.slice(0, p.at) + p.text + text.slice(p.at);
       }
-      // 宿主基类 position:relative 缺则补（伪元素 absolute 的定位基准）
-      if (baseCls) {
-        const baseEsc = baseCls[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const baseRuleRe = new RegExp('(?:^|\\n)[ \\t]*\\.' + baseEsc + '\\s*\\{([^{}]*)\\}');
-        const baseM = text.match(baseRuleRe);
-        if (!baseM || !/position\s*:/i.test(baseM[1])) {
-          text = text.replace(baseRuleRe, (full, body) =>
-            /position\s*:/i.test(body) ? full : full.replace(/\{$/, '{\n  position: relative;'),
-          );
-        }
+      // 🛡️ 宿主 `position: relative` 补全（2026-09-27 · bd4f69db「一片蓝」实锤）：
+      //   本段给伪元素补了 `position:absolute; top/left/right/bottom:0`（几何补全），
+      //   因此**必须**保证宿主是定位上下文，否则伪元素相对**更外层的已定位祖先**定位 →
+      //   实测祖先链（tab-item → tabs → antd-tab-con → con-con → slot-con → .pannel-content）
+      //   **全是 static** → 逃逸到预览根 → 每个伪元素各铺满整屏，多个叠加即「一片蓝」
+      //   （设计里那只是 34×40 的小矩形）。
+      //   旧实现的两个缺陷（都导致静默失效）：
+      //     ① 只取**第一个** `::before` 的宿主类 → 文件里有多条（如 tab-item 与
+      //        tab-item--active）时漏补；
+      //     ② 宿主规则正则要求 `^`/`\n` **行首** → 产物常见 `}.cls {`（闭合标签后紧跟）→ 匹配不到。
+      //   治本：收集**全部** `::before` 宿主类（去重）逐个补；规则匹配允许前面是 `}`/空白；幂等。
+      const hostClsRe = /\n?[ \t.]*\.[A-Za-z][\w-]*(?::[^{]+)?::before\s*\{/g;
+      const hostClasses = new Set();
+      for (const hm2 of text.matchAll(hostClsRe)) {
+        const cls = /\.([A-Za-z][\w-]*)/.exec(hm2[0]);
+        if (cls) hostClasses.add(cls[1]);
+      }
+      for (const hc of hostClasses) {
+        const esc = hc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const ruleRe = new RegExp('(^|[}\\s])\\.' + esc + '\\s*\\{([^{}]*)\\}');
+        const mm = text.match(ruleRe);
+        if (!mm || /position\s*:/i.test(mm[2])) continue;
+        text = text.replace(ruleRe, (full) =>
+          full.replace(/\{([^{}]*)\}$/, '{position: relative;$1}'),
+        );
       }
     }
   }
@@ -1877,7 +1891,7 @@ function tryUnwrapPositionalBgWrapper(code, shell) {
  * @param {{full: string, cls: string}} shell 空壳信息
  * @returns {string|null}
  */
-function convertShellToPseudoElement(code, shell) {
+export function convertShellToPseudoElement(code, shell) {
   const shellIdx = code.indexOf(shell.full);
   if (shellIdx < 0) return null;
   const before = code.slice(0, shellIdx);
@@ -1961,6 +1975,16 @@ function convertShellToPseudoElement(code, shell) {
     end: hostCloseIdx + 1,
     text: '\n\n  .' + firstCls + '::before {\n    content: \'\';\n    ' + topDecls + '\n  }',
   });
+  // 🛡️ 宿主必须成为定位上下文（2026-09-27 · bd4f69db「一片蓝」实锤）：
+  //   本函数给伪元素补的是**绝对定位几何**（`top/left/right/bottom:0` 等），若宿主不是定位上下文
+  //   （`position: static`），伪元素会相对**更外层的已定位祖先**定位。实测该组件祖先链
+  //   （tab-item → tabs → antd-tab-con → con-con → slot-con → `.pannel-content`）**全部 static**
+  //   → 伪元素逃逸到预览根 → 每个伪元素各铺满整屏，多层叠加即视觉「一片蓝」
+  //   （设计里那只是 34×40 的小矩形，相对各自 tab 项定位）。
+  //   故这里**必须**保证宿主规则含 position —— 旧实现完全没补，是本轮"一片蓝"的确切渲染层根因。
+  if (!/position\s*:/i.test(text.slice(hostOpenIdx + 1, hostCloseIdx))) {
+    edits.push({ start: hostOpenIdx + 1, end: hostOpenIdx + 1, text: '\n  position: relative;' })
+  }
   edits.sort((a, b) => b.start - a.start);
   for (const e of edits) {
     text = text.slice(0, e.start) + e.text + text.slice(e.end);

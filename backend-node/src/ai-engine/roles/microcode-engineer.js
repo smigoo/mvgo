@@ -95,6 +95,8 @@ import {
   repairScopedThirdPartySelectors,
   ensureFlexDirection,
   ensureFlexDirectionInVueSfc,
+  ensureFlexDisplay,
+  ensureFlexDisplayInVueSfc,
 } from '../utils/css-sanitizer.js';
 import { buildRetryPrompt } from '../utils/retry-prompt.js';
 import { buildSectionContentContract } from '../utils/section-content-guard.js';
@@ -6102,11 +6104,36 @@ export class MicrocodeEngineer extends BaseAgent {
         //   fail-closed 保留）。P-07：P-06 背景上移根后的纯定位 -bg wrapper unwrap。
         for (const [fp, fc] of Object.entries(codeResult.files || {})) {
           if (!fp.endsWith('.vue') || typeof fc !== 'string') continue;
-          const collapsed = _collapseBackgroundShellDivsPure(fc);
-          if (collapsed !== fc) {
-            codeResult.files[fp] = collapsed;
+          let out = fc;
+          const collapsed = _collapseBackgroundShellDivsPure(out);
+          if (collapsed !== out) {
+            out = collapsed;
             this.logger.info(
               `🎯 [mc] 背景空壳/wrapper 已治理（P-01/P-07）：${fp}`,
+            );
+          }
+          // 🛡️ Fix1（2026-09-27 · 零硬编码）：含 flex 子属性但漏写 display:flex 的
+          //   弹性容器确定性补齐（防 tab/icon 被挤成两行）。按属性判定，不按组件名。
+          const flexed = ensureFlexDisplayInVueSfc(out, this.logger);
+          if (flexed !== out) {
+            out = flexed;
+            this.logger.info(
+              `🛡️ [mc] flex 容器 display:flex 已补齐（Fix1）：${fp}`,
+            );
+          }
+          if (out !== fc) codeResult.files[fp] = out;
+        }
+
+        // 🛡️ Fix1 同样作用于纯样式文件（resources/*.less / *.css）：漏写 display:flex
+        //   的弹性容器确定性补齐。与 .vue 同一条规则，零硬编码。
+        for (const [fp, fc] of Object.entries(codeResult.files || {})) {
+          if (!/\.(less|css)$/i.test(fp) || typeof fc !== 'string') continue;
+          if (!/align-items|justify-content|\bgap\s*:|flex-direction|flex-wrap|\bflex\s*:|flex-grow|flex-shrink|flex-basis/i.test(fc)) continue;
+          const flexed = ensureFlexDisplay(fc, this.logger);
+          if (flexed !== fc) {
+            codeResult.files[fp] = flexed;
+            this.logger.info(
+              `🛡️ [mc] flex 容器 display:flex 已补齐（Fix1 · 样式文件）：${fp}`,
             );
           }
         }

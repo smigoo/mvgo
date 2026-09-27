@@ -2014,8 +2014,7 @@ style scoped 时，**每个内部元素（tab 项/卡片/图例项）的背景�
 
 ${buildSectionStyleFacts(resolvePlanSections(input), input.figmaNodeData)}
 
-⚠️ 示例：tab-active → bg:#318aff→#70bfff + 白字，普通 tab → bg:#85baff→#bfe2ff + 蓝字，
-两者背景与文字色必须不同，禁止都用同一背景。
+⚠️ 以上表为准逐条实现。**上表未给出的属性一律省略** —— 尤其：**不得给元素添加背景，除非上表为该元素给出了背景**（禁止用示例色或臆造色补齐）。激活态与普通态若在上表中都有背景，必须分别取各自的值。
 `
   : ''}
 ${contextBlock}
@@ -2462,8 +2461,7 @@ ${buildSectionStyleFacts(resolvePlanSections(input), figmaNodeData)
 
 ${buildSectionStyleFacts(resolvePlanSections(input), figmaNodeData)}
 
-⚠️ 示例理解：若上表出现 tab-active → bg:#318aff→#70bfff 与 tab → bg:#85baff→#bfe2ff，
-说明激活 tab 用深蓝渐变背景 + 白字，普通 tab 用浅蓝渐变背景 + 蓝字，**必须分别实现，不能都用同一背景**。
+⚠️ 以上表为准逐条实现。**上表未给出的属性一律省略** —— 尤其：**不得给元素添加背景，除非上表为该元素给出了背景**（禁止用示例色或臆造色补齐）。激活态与普通态若在上表中都有背景，必须分别取各自的值（如上表出现 tab-active 与 tab 两行且各自带 bg，则分别实现，禁止统一成同一背景）。
 `
     : ''
 }
