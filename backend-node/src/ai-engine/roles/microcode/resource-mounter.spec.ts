@@ -1,4 +1,4 @@
-import { fixSectionHeightsForResource, ensureHeaderSlots, injectFailedResourceFallbacks, stripEmptyShellBindings, ensureResourceImportInVue, mountSubStateBackground, findVForItemTag, dedupeBgMultiRefs, healAbsoluteOverlayParents } from './resource-mounter.js'
+import { fixSectionHeightsForResource, ensureHeaderSlots, injectFailedResourceFallbacks, stripEmptyShellBindings, ensureResourceImportInVue, mountSubStateBackground, findVForItemTag, dedupeBgMultiRefs, healAbsoluteOverlayParents, findTagByClassKeyword } from './resource-mounter.js'
 
 /**
  * 🛡️ fix-section-heights 规则②：组件根 height:100% 不得改写（2026-09-02 实锤）。
@@ -486,7 +486,14 @@ describe('fixSectionHeightsForResource 规则④：固定 px 尺寸区块禁 fle
   const CTX = { path: 'resources/styles/common.less' }
 
   it('⭐ width:46px + flex:1 1 0 → flex: 0 0 auto（CategoryNav 实锤：186px 撑满）', () => {
+    // 🛡️ 2026-09-28 轴判定：需要**父容器方向**才能判「固定 px 是否落在主轴」——
+    //   CategoryNav 的父是 row（grow 沿宽扩 → 与定宽 46px 冲突）。故 fixture 补上父规则。
     const input = [
+      // 父类名须与子类同前缀（本仓命名惯例：父 `c-x-tab` → 子 `c-x-tab-bg`）
+      '.c-monitor-category {',
+      '  display: flex;',
+      '  flex-direction: row;',
+      '}',
       '.c-monitor-category-nav {',
       '  display: flex;',
       '  flex-direction: column;',
@@ -537,7 +544,12 @@ describe('fixSectionHeightsForResource 规则④：固定 px 尺寸区块禁 fle
   })
 
   it('height:100px + flex:1 1 0（单块内）→ flex: 0 0 auto（保留显式高）', () => {
+    // 🛡️ 2026-09-28 轴判定：定高(主轴)冲突需父容器为 column。补父规则。
     const input = [
+      '.c-monitor-stats {',
+      '  display: flex;',
+      '  flex-direction: column;',
+      '}',
       '.c-monitor-stats-header {',
       '  height: 100px;',
       '  flex: 1 1 0;',
@@ -1161,5 +1173,88 @@ describe('healAbsoluteOverlayParents：:class 动态绑定边界（2026-09-17 �
     }
     const fixed = healAbsoluteOverlayParents(files, { logger: { warn() {} } })
     expect(files['package/a.vue']).not.toMatch(/\.\[|\.\{/)
+  })
+})
+
+describe('fixSectionHeightsForResource 规则④轴判定（2026-09-28 · c-device-monitor-18de33dd 实锤）', () => {
+  const CTX = { path: 'resources/styles/common.less' }
+
+  it('父=column + 定宽(交叉轴) + flex:1 1 0 → 不改（tab-bg 必须撑高）', () => {
+    const input = [
+      '.c-x-tab { display: flex; flex-direction: column; }',
+      '.c-x-tab-bg { display: flex; flex-direction: column; width: 34px; flex: 1 1 0; min-height: 0; }',
+    ].join('\n')
+    const out = fixSectionHeightsForResource(input, CTX)
+    expect(out).toContain('flex: 1 1 0')
+    expect(out).not.toContain('flex: 0 0 auto')
+  })
+
+  it('父=row + 定宽(主轴) + flex:1 1 0 → 改写为 flex: 0 0 auto（原事故不回归）', () => {
+    const input = [
+      '.c-x-nav { display: flex; flex-direction: row; }',
+      '.c-x-nav-item { display: flex; width: 46px; flex: 1 1 0; }',
+    ].join('\n')
+    const out = fixSectionHeightsForResource(input, CTX)
+    expect(out).toContain('flex: 0 0 auto')
+  })
+
+  it('父轴向未知 → 不改（宁可少改，不可误伤）', () => {
+    const input = '.c-x-orphan { display: flex; width: 46px; flex: 1 1 0; }'
+    const out = fixSectionHeightsForResource(input, CTX)
+    expect(out).toContain('flex: 1 1 0')
+    expect(out).not.toContain('flex: 0 0 auto')
+  })
+})
+
+describe('findTagByClassKeyword 词形归一（2026-09-28 · c-env-monitor-efe76c26 实锤）', () => {
+  it('关键字复数 tabs-list 命中单数类 tab-list（防误落 S7 错挂父容器）', () => {
+    const c = '<template><div class="c-env-monitor-tab-list"><span></span></div></template>'
+    expect(findTagByClassKeyword(c, 'tabs-list')).toContain('c-env-monitor-tab-list')
+  })
+
+  it('反向：关键字单数 tab-list 命中复数列 tabs-list', () => {
+    const c = '<template><div class="c-env-monitor-tabs-list"></div></template>'
+    expect(findTagByClassKeyword(c, 'tab-list')).toContain('c-env-monitor-tabs-list')
+  })
+
+  it('无匹配 → null（不臆造挂载点）', () => {
+    expect(findTagByClassKeyword('<template><div class="c-x-icon"></div></template>', 'tabs-list')).toBeNull()
+  })
+})
+
+describe('fixSectionHeightsForResource §六 #1 收口（§七 P2 · 2026-09-28）', () => {
+  const CTX = { path: 'resources/styles/common.less' }
+  it('⭐ section 根（-con 结尾）+ 无权威比例 → 跳过（不再等分 flex:1 1 0；保留 height:100%）', () => {
+    const warns = []
+    const input = '.c-x-con-con {\n  display: flex;\n  height: 100%;\n}\n'
+    const out = fixSectionHeightsForResource(input, CTX, {
+      logger: { warn: (m) => warns.push(String(m)), info() {} },
+    })
+    expect(warns.some((w) => w.includes('§六 #1') && w.includes('c-x-con-con'))).toBe(true)
+    expect(out).toContain('height: 100%')    // 不再被改写
+    expect(out).not.toContain('flex: 1 1 0') // 不再等分抹平比例
+  })
+  it('-con 结尾但有权威比例（sectionHeights 命中）→ 仍按权威系数改写（不跳过）', () => {
+    const input = '.c-x-con-con {\n  display: flex;\n  height: 100%;\n}\n'
+    const out = fixSectionHeightsForResource(input, {
+      path: 'package/components/OverviewCards.vue',
+      sectionHeights: { 'c-x-con-con': 88 },
+    })
+    expect(out).toContain('flex: 88 1 0')
+    expect(out).not.toContain('height: 100%')
+  })
+  it('非 section 根（-item 结尾）→ 维持旧行为（flex: 1 1 0，不告警）', () => {
+    const warns = []
+    const input = '.c-x-item {\n  display: flex;\n  height: 100%;\n}\n'
+    const out = fixSectionHeightsForResource(input, CTX, {
+      logger: { warn: (m) => warns.push(String(m)), info() {} },
+    })
+    expect(warns.some((w) => w.includes('§六 #1'))).toBe(false)
+    expect(out).toContain('flex: 1 1 0')
+  })
+  it('-section 结尾（非 section 根形态）→ 维持旧行为（仍改写为 flex: 1 1 0）', () => {
+    const input = '.c-x-chart-section {\n  display: flex;\n  height: 100%;\n}\n'
+    const out = fixSectionHeightsForResource(input, CTX)
+    expect(out).toContain('flex: 1 1 0')
   })
 })

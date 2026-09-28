@@ -322,6 +322,82 @@ export function dedupeByWholeRegionShell(sections) {
  * @param {Object} [figmaRoot] figma.json 根节点（含 children/absoluteBoundingBox）
  * @returns {Map<string, {id: string, name: string, type: string, bbox: Object|null, parentId: string|null}>}
  */
+/** 取节点盒（兼容 `bbox` 与 `absoluteBoundingBox` 两种形态）。 */
+function nodeBox(n) {
+  return n?.bbox || n?.absoluteBoundingBox || null;
+}
+
+/**
+ * 🛡️ B′（2026-09-28 · 命名无关）：判定「横向并列的同构卡片单元」——命中时子项应**等分**，
+ * 而不是按各自宽度比例分配（实测 mc-max-1790583597309-cf26267d：两个"标题+数值"单元被
+ * 按文字组宽度 128/77 拉伸成 0.376/0.624，视觉完全失真）。
+ *
+ * 判据（全语料审计定稿：宽松版 289 命中里 0 个真卡片、全是图表刻度/图例 ⇒ 必须加固）：
+ *   A 排除与父容器 bbox 一致的子节点（背景层，不参与成员计算）
+ *   ① 容器不在 `@echarts` 子树内  ② 成员子树**只含 TEXT**（1~3 条）且宽 ≥ 40px
+ *   ③ 成员内部文本**上下堆叠**（y 不同）← 「卡片」与「刻度/图例」的分水岭（实测一票否决有效）
+ *   ④ 成员数 2~3  ⑤ 成员宽和 < 70% 容器宽  ⑥ 成员 y 区间重叠（同一行）
+ * 任一数据缺失 ⇒ false（fail-open，保持既有行为）。
+ * 审计：45 个真实任务命中 6 次，全部为同一目标行（2:3660），**零误伤**。
+ *
+ * @param {object} parentNode 容器 Figma 节点
+ * @param {Array<object>} memberNodes 成员 Figma 节点（已按计划序）
+ * @returns {boolean}
+ */
+export function isHorizontalCardGroup(parentNode, memberNodes) {
+  try {
+    const pb = nodeBox(parentNode);
+    const list = (memberNodes || []).filter((m) => m && nodeBox(m));
+    if (!pb || !pb.width || !pb.height || list.length < 2) return false;
+    // A：排除与父同尺寸的子节点（背景层）
+    const EARLY = 0.02;
+    const keep = list.filter((m) => {
+      const b = nodeBox(m);
+      if (!b.width || !b.height) return false;
+      return !(
+        Math.abs(b.width - pb.width) <= EARLY * pb.width + 1 &&
+        Math.abs(b.height - pb.height) <= EARLY * pb.height + 1
+      );
+    });
+    // ④ 成员数 2~3
+    if (keep.length < 2 || keep.length > 3) return false;
+    // ⑥ 同一行（与父 y 区间重叠）
+    const sameRow = keep.filter((m) => {
+      const b = nodeBox(m);
+      return b.y < pb.y + pb.height && b.y + b.height > pb.y;
+    });
+    if (sameRow.length !== keep.length) return false;
+    // ⑤ 成员宽和 < 70% 容器宽
+    const sumW = sameRow.reduce((s, m) => s + (nodeBox(m).width || 0), 0);
+    if (!(sumW < 0.7 * pb.width)) return false;
+    // ② 成员子树只含 TEXT（无图形，含 `visible:false` 也视为图形类载体不计）
+    const memberOk = (m) => {
+      const stack = [...(m.children || [])];
+      const ys = new Set();
+      let textCount = 0;
+      while (stack.length) {
+        const c = stack.pop();
+        if (!c || typeof c !== 'object') continue;
+        if (c.type === 'TEXT') {
+          textCount += 1;
+          const b = nodeBox(c);
+          if (b && typeof b.y === 'number') ys.add(Math.round(b.y));
+          continue;
+        }
+        return false; // 出现非 TEXT 后代 ⇒ 非"纯文本卡片单元"
+      }
+      // ③ 内部上下堆叠 + 文本条数 1~3
+      return textCount >= 1 && textCount <= 3 && ys.size > 1;
+    };
+    if (!sameRow.every(memberOk)) return false;
+    // ② 成员宽 ≥ 40px
+    if (!sameRow.every((m) => (nodeBox(m).width || 0) >= 40)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function indexFigmaNodes(figmaRoot) {
   const index = new Map()
   if (!figmaRoot || typeof figmaRoot !== 'object') return index
@@ -2020,6 +2096,95 @@ export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
       return `  - 重复单元×${similar.length}（${Math.round(w0)}×${Math.round(h0)}）内部布局 → ${layout}${textBits.length ? `；文字色 ${textBits.join('；')}` : ''}`
     }
 
+    /**
+     * 🛡️ Fix1（2026-09-28 · 零硬编码 · 纯几何）：非重复容器的「嵌套列分组」布局事实。
+     *
+     * 背景（device-monitor `e8c97bf8` 实锤）：switch 两态药丸（active/default）内部真实布局是
+     *   `row[ 左列(icon↓title), 右列(stat1↓stat2) ]` —— 几何：icon(1504,483)/title(1500,514)
+     *   在 x≈1502 上下堆叠；总数(1550,481)/异常数(1550,510) 在 x=1550 上下堆叠。但真值表此前
+     *   只给尺寸+文字色、**无任何方向/分组**，而 `describeRepeatedItemLayout` 仅对「重复单元」生效
+     *   → LLM 只能猜，把 4 个子节点按 DOM 序塞进 2×2 grid → 单元格错位（title 跑到右上、line1 跑到左下）。
+     *
+     * 规则（仅在 section 根、且非重复单元时调用；绝不按组件名/class）：
+     * - 取「可见内容子节点」= 有 bbox、面积 < 90% 父面积（排除整块背景层）、
+     *   **min(w,h) > 8px**（排除装饰分隔线/细条/圆点 → 必须用 min：362×6 的分隔线 max=362 会漏网）。
+     * - 按 x 聚列（容差 max(6, 父宽×4%)）；列数 < 2 → 不输出（单列交给 LLM）。
+     * - 按 y 聚行；行数 < 2 → 不输出（单行交给 LLM；也避免把 header 一行统计项误判）。
+     * - ⚠️ **仅当「DOM 子节点顺序 ≠ 视觉阅读序（行优先）」时才输出** —— 这正是 LLM
+     *   按 DOM 序填 grid 会**单元格错位**的充要条件。DOM 序已与视觉序一致的容器一律不输出
+     *   （2026-09-28 全语料实证：无此闸门时命中率 60.3%，头部/普通行都会被误判）。
+     * - 命中 → 输出「N 列 × M 行 — 第k列(x≈X，上→下): a → b」。
+     */
+    const describeContainerLayout = (parentNode) => {
+      const pb = parentNode?.absoluteBoundingBox
+      if (!pb || !pb.width || !pb.height) return null
+      const pArea = pb.width * pb.height
+      const content = (parentNode.children || []).filter((c) => {
+        const b = c && c.absoluteBoundingBox
+        if (!b) return false
+        if ((b.width * b.height) / pArea >= 0.9) return false // 整块背景层
+        if (Math.min(b.width || 0, b.height || 0) <= 8) return false // 装饰分隔线/细条/圆点
+        return true
+      })
+      if (content.length < 3) return null
+
+      const xTol = Math.max(6, pb.width * 0.04)
+      const yTol = Math.max(6, pb.height * 0.04)
+      const clusterAxis = (items, axis, tol) => {
+        const sorted = [...items].sort(
+          (a, b) => a.absoluteBoundingBox[axis] - b.absoluteBoundingBox[axis],
+        )
+        const clusters = []
+        for (const it of sorted) {
+          const v = it.absoluteBoundingBox[axis]
+          const last = clusters[clusters.length - 1]
+          if (last && v - last.max <= tol) {
+            last.items.push(it)
+            last.max = Math.max(last.max, v)
+          } else {
+            clusters.push({ min: v, max: v, items: [it] })
+          }
+        }
+        return clusters
+      }
+      const cols = clusterAxis(content, 'x', xTol)
+      const rows = clusterAxis(content, 'y', yTol)
+      if (cols.length < 2 || rows.length < 2) return null
+
+      // 视觉阅读序（行优先：先按行簇、再按 x）；与 DOM 序一致 → 不会错位 → 不输出
+      const rowIndexOf = new Map()
+      rows.forEach((r, i) => r.items.forEach((it) => rowIndexOf.set(it, i)))
+      const visual = [...content].sort((a, b) => {
+        const ra = rowIndexOf.get(a)
+        const rb = rowIndexOf.get(b)
+        if (ra !== rb) return ra - rb
+        return a.absoluteBoundingBox.x - b.absoluteBoundingBox.x
+      })
+      if (visual.every((it, i) => it === content[i])) return null
+
+      // 节点摘要：TEXT 取文字；非 TEXT 若有直接 TEXT 子节点则拼其文字；否则用 name
+      const nameOf = (n) => {
+        if (String(n.type || '').toUpperCase() === 'TEXT') {
+          return `「${String(n.characters || '').trim().slice(0, 10)}」`
+        }
+        const inner = (n.children || [])
+          .filter((c) => String(c.type || '').toUpperCase() === 'TEXT')
+          .map((c) => String(c.characters || '').trim())
+          .join('')
+        if (inner) return `「${inner.slice(0, 12)}」`
+        return String(n.name || n.type || '?').trim() || '?'
+      }
+      const colDesc = cols
+        .map((col, i) => {
+          const items = [...col.items].sort(
+            (a, b) => a.absoluteBoundingBox.y - b.absoluteBoundingBox.y,
+          )
+          return `第${i + 1}列(x≈${Math.round(col.min)}，上→下): ${items.map(nameOf).join(' → ')}`
+        })
+        .join('；')
+      return `  - 内部布局(几何 · 嵌套)：${cols.length} 列 × ${rows.length} 行 — ${colDesc}`
+    }
+
     // 对每个 sourceNode 的子树提取「直接业务子元素」样式（深度受控，累积父 opacity）
     for (const rec of startNodes) {
       const raw = rec.rawNode
@@ -2028,6 +2193,15 @@ export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
       if (repeated) {
         secLines.push(repeated)
         itemCount++
+      } else if (!/chart|echarts/.test(type)) {
+        // 非重复单元 → 尝试给出「嵌套列分组」几何事实（Fix1）。
+        // ⚠️ 图表段跳过：图表轴标签/图例的几何排布会被误读成"嵌套布局"（全语料实证 15 例），
+        //    且图表布局另有专用注入链，不应由本事实插手。
+        const containerLayout = describeContainerLayout(raw)
+        if (containerLayout) {
+          secLines.push(containerLayout)
+          itemCount++
+        }
       }
       // 收集该节点子树的样式条目。parentOpacity 累积：父 GROUP 的 opacity 作用于子节点背景
       const collect = (node, depth, parentOpacity, parentBox) => {

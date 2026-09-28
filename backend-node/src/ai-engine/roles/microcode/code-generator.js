@@ -30,7 +30,7 @@ import {
   extractResourceVarNames,
   resolveResourceDomMapping,
 } from '../../utils/resource-import-guard.js';
-import { collectLeafSections, assignSectionComponentNames, isLayoutContainerSection, indexFigmaNodes, figmaSectionBox } from '../../utils/section-tree.js';
+import { collectLeafSections, assignSectionComponentNames, isLayoutContainerSection, indexFigmaNodes, figmaSectionBox, isHorizontalCardGroup } from '../../utils/section-tree.js';
 import { detectContentRootClass } from '../../utils/root-container-normalizer.js';
 import { sanitizeComponentId, tailHexOf } from '../../utils/component-naming.js';
 
@@ -433,6 +433,9 @@ export function resolveSectionFlexSize(sec, figmaIndex, axis = 'width') {
 export function buildDeterministicIndexTemplate(input, options = {}) {
   const treeSections = resolvePlanSections(input);
   const leaves = collectLeafSections(treeSections);
+  // 🛡️ P0 生效自检计数（2026-09-28）：B′ 判据的评估/命中数，供函数收尾统一落日志。
+  let __eqEvaluated = 0;
+  let __eqHits = 0;
   if (!leaves.length) return null;
 
   const nameOf = assignSectionComponentNames(treeSections);
@@ -593,13 +596,42 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
           ? (sec.children || []).map((c) => resolveSectionFlexSize(c, figmaIndex, 'height'))
           : [];
         
+        // 🛡️ B′（2026-09-28 · 命名无关）：命中「横向并列的同构卡片单元」判据时**等分**，
+        //   而不是按各成员宽度比例分配。事故 mc-max-1790583597309-cf26267d：两个「标题+数值」
+        //   单元被按文字组宽度 128/77 拉伸成 0.376/0.624 ⇒ 视觉完全失真（用户期望"两边各一张卡"）。
+        //   判据见 section-tree#isHorizontalCardGroup（全语料审计：宽松版 289 命中里 0 真卡片；
+        //   加固后 6/45 命中且全是同一目标行、零误伤）。任何数据缺失 ⇒ false（保持既有行为）。
+        let equalizeMembers = false;
+        if (isHorizontal && sec.id && figmaIndex) {
+          try {
+            const parentNode = figmaIndex.get(String(sec.id));
+            const memberNodes = (sec.children || [])
+              .map((c) =>
+                figmaIndex.get(String(c?.id || c?.figmaNode || c?.figmaNodeId || '')),
+              )
+              .filter(Boolean);
+            equalizeMembers = isHorizontalCardGroup(parentNode, memberNodes);
+            __eqEvaluated += 1;
+            if (equalizeMembers) __eqHits += 1;
+          } catch {
+            equalizeMembers = false;
+          }
+          if (equalizeMembers) {
+            options?.logger?.info?.('🛡️ B′ 横向同构卡片单元 → 等分 flex', {
+              sectionId: sec.id,
+              children: (sec.children || []).length,
+            });
+          }
+        }
         for (let i = 0; i < (sec.children || []).length; i++) {
           const child = sec.children[i];
           // 🛡️ P0/P2/P3（2026-09-17）：子项按 Figma 宽度/高度比例分配 flex-grow，
           //   解决「统一 flex:1 均分失真」与「无约束 collapse 到 0」。
           //   🛡️ P6 合并：比例不再包 wrapper，直接传给子节点内联到其自身标签。
           if (isHorizontal) {
-            const flexStyle = flexItemStyleFromWidths(childWidths, i);
+            const flexStyle = equalizeMembers
+              ? 'flex:1;min-width:0;'
+              : flexItemStyleFromWidths(childWidths, i);
             renderBodyNode(child, indent + 1, flexStyle);
           } else {
             const flexStyle = flexItemStyleFromHeights(childHeights, i);
@@ -616,6 +648,14 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
         lines.push(`${pad}<${tagFor(sec, 'ContentSection')} style="${leafStyle}" />`);
       }
     };
+    // 🛡️ 顶层 section 高度比例（2026-09-28 · c-traffic-monitor-afd08494 实锤）：
+    //   此前 `renderBodyNode(root, 0)` **不传 parentFlexStyle** → 顶层节点一律走
+    //   `ownFlex = 'flex:1;...'` 兜底 → **多个顶层 section 被等分**。实测 slot-当日总流量/
+    //   slot-车型分布/slot-流量预测 设计高 556/142/174（≈0.636/0.163/0.199），产物三个都 flex:1。
+    //   与容器内子项**同口径**：按 Figma 高度（几何事实，非硬编码）归一化分配 flex-grow。
+    //   ⚠️ 安全性：`flexItemStyleFromHeights` 在「取不到高度」时返回 `flex:1`（与旧行为逐字相同），
+    //   故无几何事实的组件零变化；仅当高度可解析时才产生比例。
+    const topBodyRoots = [];
     for (const root of treeSections) {
       // 只渲染 body 侧顶层节点（header 叶子已进 header 插槽，这里跳过）
       if (root?.type === 'header') continue;
@@ -623,12 +663,28 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
       const rootIds = Array.isArray(root?.sourceNodeIds) ? root.sourceNodeIds.map(String) : [];
       const isHeaderNode = rootIds.some((id) => headerSlotNodeIds.has(id));
       if (isHeaderNode) continue;
-      renderBodyNode(root, 0);
+      topBodyRoots.push(root);
+    }
+    if (topBodyRoots.length > 1) {
+      const topHeights = topBodyRoots.map((s) => resolveSectionFlexSize(s, figmaIndex, 'height'));
+      for (let i = 0; i < topBodyRoots.length; i++) {
+        renderBodyNode(topBodyRoots[i], 0, flexItemStyleFromHeights(topHeights, i));
+      }
+    } else {
+      for (const root of topBodyRoots) renderBodyNode(root, 0);
     }
     lines.push(`    </div>`);
   }
   lines.push(`  </base-panel>`);
   lines.push(`</template>`);
+  // 🛡️ P0 生效自检（2026-09-28）：B′ 此前只在命中时落日志 ⇒ 0 命中时无法区分「没跑/跑了没命中」。
+  //   这里在确定性装配收尾统一落一行「已评估」（计数：横向容器数 + 命中等分数）。
+  if (options?.logger?.info) {
+    options.logger.info('🛡️ B′ 横向同构卡片单元·已评估', {
+      horizontalContainers: __eqEvaluated,
+      equalized: __eqHits,
+    });
+  }
   return { template: lines.join('\n'), rootContainerClass, sectionRoots, componentFiles };
 }
 

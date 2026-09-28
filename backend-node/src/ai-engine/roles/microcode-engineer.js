@@ -86,6 +86,7 @@ import {
   injectStateSwitchInteraction as _injectStateSwitchInteractionPure,
   extractPerCharTextTruth as _extractPerCharTextTruthPure,
   injectPerCharTextSegments as _injectPerCharTextSegmentsPure,
+  stripRedundantInnerBgWhenHostHasBg as _stripRedundantInnerBgPure,
 } from '../utils/post-process.js';
 import {
   validateVueSfc,
@@ -231,6 +232,10 @@ import {
   inferBackgroundStyle,
   isCoveringBackground,
 } from '../utils/background-size-inference.js';
+import {
+  fillTruthTextSlots,
+  isLeafTextAssemblyEnabled,
+} from '../utils/section-leaf-assembler.js';
 
 /**
  * 🎨 主题包装文件固定模板（单一事实源）
@@ -1947,6 +1952,10 @@ export class MicrocodeEngineer extends BaseAgent {
       for (let i = 0; i < Math.min(CONCURRENCY, chunks.length); i++)
         workers.push(worker());
       await Promise.all(workers);
+      // 🛡️ S3 第一片（2026-09-28 · (b) 切片三 · **命名无关版**）：section 真值文案**原地填槽**。
+      //   只改文字、不动结构/class/属性（保住 LLM 的样式锚点）；命名无关（characters + 视觉序 + DOM 序）。
+      //   灰度开关：`MC_LEAF_TEXT_ASSEMBLY=1` 或 `input.leafTextAssembly=true`；默认**关**。
+      this._fillTruthTextSlots(allFiles, input);
       this.logger.info(
         `⚡ 子组件并行生成完成: ${subComps.length} 个（并发 ${Math.min(CONCURRENCY, subComps.length)}）`,
       );
@@ -2070,6 +2079,34 @@ export class MicrocodeEngineer extends BaseAgent {
         _unionTemplateTagSubComponents(subComps, allFiles['package/index.vue'] || '');
         // 📊 方案 4：更新总 chunk 数（子组件检测完成后）
         _perfMonitor.totalChunks += subComps.length;
+        // 🛡️ 2026-09-28（S1/S3 生效前提）：本分支的 index 模板由 LLM 写（`indexVue`），
+        //   **未走确定性装配** ⇒ `input._indexTemplateFacts` 从未被赋值 ⇒ 下游
+        //   S1（给子组件补 `data-section-id` 锚点）与 S3（真值填槽）**双双 fail-open 静默跳过**
+        //   （实测 mc-max-1790583585496-9331b2e8 / 1790583597309-cf26267d 命中均为 0 次）。
+        //   这里只取**同一事实源**（`buildDeterministicIndexTemplate`，与 simple/medium 同源）的
+        //   `sectionRoots`（section ↔ 子组件映射），**不覆盖 LLM 的模板**。
+        if (!input._indexTemplateFacts) {
+          try {
+            const _facts = microcodeGenerator.buildDeterministicIndexTemplate(input, {
+              logger: this.logger,
+            });
+            if (_facts?.sectionRoots?.length) {
+              input._indexTemplateFacts = {
+                sectionRoots: _facts.sectionRoots,
+                rootContainerClass: _facts.rootContainerClass || null,
+                source: 'facts-only(complex)',
+              };
+              this._lastIndexTemplateFacts = input._indexTemplateFacts;
+              this.logger.info('🧩 complex 分支补齐 indexTemplateFacts（仅取 sectionRoots）', {
+                sectionRoots: _facts.sectionRoots.length,
+              });
+            }
+          } catch (e) {
+            this.logger.warn('🧩 complex 分支取 sectionRoots 失败（非阻断）', {
+              error: e?.message || String(e),
+            });
+          }
+        }
         await genSubComponents(subComps, 5);
         const idx = 5 + subComps.length;
 
@@ -3595,6 +3632,38 @@ export class MicrocodeEngineer extends BaseAgent {
    *
    * 失败不 fail-closed：未生效只告警（含 reason），产物仍可进预览。
    */
+  /**
+   * 🛡️ S3 第一片（2026-09-28 · (b) 切片三 · **命名无关版**）：真值文案**原地填槽**。
+   *
+   * 事实源：`input._indexTemplateFacts.sectionRoots`（section ↔ 子组件映射）+ `input.figmaNodeData`（characters 真值）。
+   * **只改文字**：不动 `<template>` 结构、不动 class/属性 ⇒ LLM 的样式锚点（`-label`/`-value` 等）完全保留。
+   * 灰度开关与前置条件见 `utils/section-leaf-assembler.js`（默认关，fail-open）。
+   */
+  _fillTruthTextSlots(allFiles, input) {
+    try {
+      const r = fillTruthTextSlots(allFiles, input || {}, input?.figmaNodeData || null, {
+        logger: this.logger,
+      });
+      if (r.filled.length > 0) Object.assign(allFiles, r.files);
+      // 🛡️「已评估」日志（2026-09-28）：无论命中与否都落一行，用于区分
+      //   「没跑（无 sectionRoots/开关关）」与「跑了但前置不满足」——此前只有命中才落日志，0 命中无法归因。
+      this.logger.info('🛡️ S3 真值填槽·已评估', {
+        enabled: isLeafTextAssemblyEnabled(input || {}),
+        sectionRoots: Array.isArray(input?._indexTemplateFacts?.sectionRoots)
+          ? input._indexTemplateFacts.sectionRoots.length
+          : 0,
+        filled: r.filled.length,
+        samples: r.filled.slice(0, 3),
+      });
+      return r.filled;
+    } catch (e) {
+      this.logger.warn('🛡️ S3 真值填槽异常（非阻断）', {
+        error: e?.message || String(e),
+      });
+      return [];
+    }
+  }
+
   _applyDeterministicIndexTemplate(allFiles, input) {
     const cur = allFiles['package/index.vue'];
     if (typeof cur !== 'string' || !cur) return;
@@ -3610,6 +3679,11 @@ export class MicrocodeEngineer extends BaseAgent {
     }
     allFiles['package/index.vue'] = r.content;
     input._indexTemplateFacts = r.facts;
+    // 🛡️ P1（2026-09-28）：CodeFixPipeline 传给 registerBuiltinFixRules 的是**全新 input**
+    //   （`{ subComponentPlan, generationInput }`），不含 `_indexTemplateFacts` ⇒ S1 规则读到
+    //   roots:0（而 S3 在生成时读真 input 看到 sectionRoots:N）。把事实也存到实例上，
+    //   供 fix 规则经 `engineer._lastIndexTemplateFacts` 兜底（单一事实源、避免各读各的）。
+    this._lastIndexTemplateFacts = r.facts;
     this.logger.info(
       '🧩 确定性模板装配（simple/medium 分支）：<template> 段已由 effectiveSections 覆盖',
       {
@@ -6112,6 +6186,13 @@ export class MicrocodeEngineer extends BaseAgent {
               `🎯 [mc] 背景空壳/wrapper 已治理（P-01/P-07）：${fp}`,
             );
           }
+          // 🛡️ #3（2026-09-28 · device-monitor 实锤）：宿主已挂资源背景图时，抑制其内层
+          //   `-bg` 元素的 background（治「同一视觉两层背景」）。按 `<宿主类>-bg` 精确匹配。
+          const dedupBg = _stripRedundantInnerBgPure(out);
+          if (dedupBg !== out) {
+            out = dedupBg;
+            this.logger.info(`🛡️ [mc] 宿主已挂资源背景图 → 已抑制内层 -bg 的 background（#3）：${fp}`);
+          }
           // 🛡️ Fix1（2026-09-27 · 零硬编码）：含 flex 子属性但漏写 display:flex 的
           //   弹性容器确定性补齐（防 tab/icon 被挤成两行）。按属性判定，不按组件名。
           const flexed = ensureFlexDisplayInVueSfc(out, this.logger);
@@ -6835,6 +6916,7 @@ export default declareInfo
         registerBuiltinFixRules(cleanPipeline, this, {
           componentName,
           outputPath,
+          _indexTemplateFacts: this._lastIndexTemplateFacts || null,
           resourceDomMapping: resolveResourceDomMapping(
             resourceDomMapping,
             outputPath,
@@ -6905,6 +6987,7 @@ export default declareInfo
         registerBuiltinFixRules(fixPipeline, this, {
           componentName,
           outputPath,
+          _indexTemplateFacts: this._lastIndexTemplateFacts || null,
           resourceDomMapping: resolveResourceDomMapping(
             resourceDomMapping,
             outputPath,

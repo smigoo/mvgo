@@ -119,6 +119,31 @@ export function buildResourceMountPlan(effectiveSections, resourceDomMapping, op
     return null; // 不猜：归 index 根由调用方决策
   };
 
+  // 🛡️ 事实优先级表 §六 #4（2026-09-28）：**section 锚点 id**（数据事实链）。
+  //   产物里 section 容器带 `data-section-id="<figmaNodeId>"` → 只要给出「资源节点最近祖先里
+  //   那个**确实是 section 的 id**」，挂载就能用 `data-section-id` **精确锁定元素**，
+  //   不必依赖名字/关键字（中文语义名 vs 英文类名不同源必然失配）。
+  //   实锤 `c-traffic-monitor-c302ccd1`：`88:34(bg1)` owner 解析失败 → 落 index → 丢；
+  //   而其祖先容器 `2:3660` 在产物里有 `data-section-id="2:3660"` → 本可精确命中。
+  const allSectionIds = new Set();
+  const collectIds = (sec) => {
+    const id = sec?.id != null ? String(sec.id) : '';
+    if (id) allSectionIds.add(id);
+    for (const c of sec?.children || []) collectIds(c);
+  };
+  for (const s of sections) collectIds(s);
+  const resolveSectionAnchor = (entry) => {
+    const nid = entry.figmaNodeId != null ? String(entry.figmaNodeId) : '';
+    if (!nid) return null;
+    if (allSectionIds.has(nid)) return nid;
+    let cur = parentOf.get(nid) || null;
+    while (cur) {
+      if (allSectionIds.has(cur)) return cur;
+      cur = parentOf.get(cur) || null;
+    }
+    return null;
+  };
+
   // ③ 计划固化：同 resourceFile 单变量 + sharedBy；owner 分组
   for (const m of resourceDomMapping) {
     if (!m || typeof m !== 'object') continue;
@@ -149,6 +174,7 @@ export function buildResourceMountPlan(effectiveSections, resourceDomMapping, op
     g.mounts.push({
       figmaNodeId: nid,
       owner,
+      sectionAnchorId: resolveSectionAnchor(m), // §六 #4：数据事实链锚点（section id）
       mountTarget: m.mountTarget || null,
       bgRole: m.bgRole || null,
       kind,
@@ -242,6 +268,36 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
         mount.bgRole === 'container' &&
         (mount.mountTarget === 'active' || mount.mountTarget === 'default');
       if (typeof content !== 'string' && compFile !== 'package/index.vue') {
+        // 🛡️ 事实优先级表 §六 #4（2026-09-28）：owner 文件缺失时，先按「名称同族」对齐**实际**
+        //   子组件文件 —— 计划 owner 名由 `assignSectionComponentNames` 推导，可能与产物真实
+        //   分解**不同源**（实测 env：owner `TabsList`/`TabsIcon`，实际只有一个 `TabsSection.vue`）
+        //   → 直接回落 index.vue 会错挂父容器。同族要求：公共前缀 ≥4 且 ≥ want 一半（防乱配）。
+        const want = String(mount.owner || '');
+        if (want) {
+          let best = null;
+          let bestN = 0;
+          for (const p of Object.keys(allFiles)) {
+            if (!/^package\/components\/[^/]+\.vue$/.test(p)) continue;
+            if (typeof allFiles[p] !== 'string') continue;
+            const base = p.replace(/^package\/components\//, '').replace(/\.vue$/, '');
+            let i = 0;
+            while (i < base.length && i < want.length && base[i] === want[i]) i++;
+            if (i > bestN) {
+              bestN = i;
+              best = p;
+            }
+          }
+          if (best && bestN >= 4 && bestN >= Math.ceil(want.length / 2)) {
+            content = allFiles[best];
+            targetFile = best;
+            options.logger?.info?.(
+              `🎯 [资源挂载] owner ${want} 文件缺失 → 按名称同族对齐实际组件 ${best}（§六 #4）`,
+              { var: varName },
+            );
+          }
+        }
+      }
+      if (typeof content !== 'string' && compFile !== 'package/index.vue' && !ownerFileMissing) {
         if (isContainerStateBgMount) {
           // container 状态背景：不回落到 index.vue，直接标记 owner 文件缺失
           ownerFileMissing = true;
@@ -328,6 +384,50 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
         parentBox: mount.parentBox || null,
       };
       let result = null;
+
+      // 🛡️ 事实优先级表 §六 #4（2026-09-28）：**数据事实链优先** —— 资源节点最近祖先里那个
+      //   「确实是 section」的 id（`mount.sectionAnchorId`）→ 在**实际产物**里找
+      //   `data-section-id="<anchor>"` 的元素 → 命中即精确挂载（零名字猜测）。
+      //   这优先于「owner 名推导 + 关键字匹配」——后者在中文语义名 vs 英文类名、命名漂移时
+      //   必然失配（`bg1/bg3/bg4` 因此丢或错挂）。
+      if (g.kind === 'bg' && mount.sectionAnchorId) {
+        const anchor = String(mount.sectionAnchorId);
+        const tagRe = new RegExp(
+          `<([a-zA-Z][\\w-]*)((?:"[^"]*"|'[^']*'|[^>])*?\\bdata-section-id="${anchor}"(?:"[^"]*"|'[^']*'|[^>])*)>`,
+        );
+        for (const [fp, fc] of Object.entries(allFiles)) {
+          if (typeof fc !== 'string' || !fc.includes(`data-section-id="${anchor}"`)) continue;
+          const tm = fc.match(tagRe);
+          if (!tm) continue;
+          const tag = tm[0];
+          if (/\bbackgroundImage\b/.test(tag)) {
+            doneKeys.add(key);
+            result = null;
+            break; // 该元素已挂过背景 → 幂等
+          }
+          const injected = injectBgStyleBinding(fc, tag, varName, mapping);
+          if (!injected) continue;
+          const withImport = ensureResourceImportInVue(injected, varName, mapping, fp);
+          if (withImport && writeGuarded(fp, withImport, fc)) {
+            result = {
+              var: varName,
+              file: fp,
+              keyword: `data-section-id=${anchor}`,
+              bgRole: mount.bgRole || null,
+              mountTarget: mount.mountTarget || null,
+              reason: 'section-anchor-fact-chain',
+            };
+            mounted.push(result);
+            doneKeys.add(key);
+            options.logger?.info?.(
+              `🎯 [资源挂载] ${varName} 经事实链 data-section-id=${anchor} 精确挂载（免关键字猜测）`,
+              { file: fp },
+            );
+            break;
+          }
+        }
+        if (result || doneKeys.has(key)) continue;
+      }
 
       // 🛡️ P-06 核心一刀（2026-09-17 · 1c98bab9 实锤）：container 状态背景
       //   （bgRole=container + target=active/default）对应「独立状态子组件」（ContentActive/ContentDefault）。

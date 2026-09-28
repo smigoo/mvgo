@@ -7,7 +7,7 @@
  * 且 index.less @import common.less，一个污染点连锁成「几乎所有文件都报 LESS-COMPILE-001」。
  * 治本：sanitizeFileContent 是全文件写盘统一收口，样式文件里 SFC 标签永远不合法 → 剥离。
  */
-import { sanitizeFileContent } from './file-writer.js';
+import { sanitizeFileContent, safeLessVarValue, buildCssVarsFile } from './file-writer.js';
 
 describe('sanitizeFileContent · 样式文件 SFC 标签剥离（2026-09-14 治本）', () => {
   const pollutedLess = [
@@ -56,5 +56,54 @@ describe('sanitizeFileContent · 样式文件 SFC 标签剥离（2026-09-14 治�
     // .vue 里 </style> 是合法结构，且其后文本截断逻辑依赖它存在 —— 不得剥离
     expect(out).toContain('</style>');
     expect(out).toContain('</template>');
+  });
+});
+
+/**
+ * 🛡️ 2026-09-28（c-device-monitor-aa799337 实锤）：告警语义槽位兜底色。
+ * 设计真值 `d-3`/`d-5`（异常数）fills 顶层 SOLID = #E03434（红），但 LLM 写的
+ * `@color-alert` 此前**不在语义表**里 → 含 "color" 落到通用 text/color 分支 → 灰 #333333。
+ */
+describe('safeLessVarValue · alert/notice 归入 danger 族（2026-09-28）', () => {
+  it('@color-alert / @colorAlert / @noticeColor → danger 红（不再兜底成 #333333）', () => {
+    expect(safeLessVarValue('@color-alert')).toBe('#f5222d');
+    expect(safeLessVarValue('@colorAlert')).toBe('#f5222d');
+    expect(safeLessVarValue('@noticeColor')).toBe('#f5222d');
+  });
+
+  it('既有语义不回归：error/danger/fail 仍为红；warning/success/primary 不变', () => {
+    expect(safeLessVarValue('@color-danger')).toBe('#f5222d');
+    expect(safeLessVarValue('@color-error')).toBe('#f5222d');
+    expect(safeLessVarValue('@color-warning')).toBe('#faad14');
+    expect(safeLessVarValue('@color-success')).toBe('#52c41a');
+    expect(safeLessVarValue('@color-primary')).toBe('#409EFF');
+  });
+
+  it('数值型分支优先：@alertZIndex 不被误判成颜色', () => {
+    expect(safeLessVarValue('@alertZIndex')).toBe('1');
+    expect(safeLessVarValue('@alertGap')).toBe('0px');
+  });
+
+  it('@color-alert-bg 仍走 bg 分支（bg 是更强的信号）', () => {
+    expect(safeLessVarValue('@color-alert-bg')).toBe('#ffffff');
+  });
+});
+
+/**
+ * 🛡️ 2026-09-28（c-device-monitor-aa799337 实锤 · 删硬编码）：
+ * `buildCssVarsFile` 曾用 `options.fontSize || '12'` → 463/463 组件 `--fontSize` 都算成 12/16rem，
+ * 而设计基准是 14（`@font-size-base: 14px` 命中 421/422）→ 全组件字号系统性 0.857×。
+ * 现在缺省留空 → 输出无参 `getCssSize()`（框架 baseFontSize）。
+ */
+describe('buildCssVarsFile · fontSize 不再有魔法数 12（2026-09-28）', () => {
+  it('未传 fontSize → 输出无参 getCssSize()（框架 baseFontSize 决定）', () => {
+    const out = buildCssVarsFile({});
+    expect(out).toContain('fontSize: $mcCssBuilder.getCssSize()');
+    expect(out).not.toContain('getCssSize(12)');
+  });
+
+  it('显式传 fontSize → 原样使用（保留设计基准通道）', () => {
+    expect(buildCssVarsFile({ fontSize: '14' })).toContain('fontSize: $mcCssBuilder.getCssSize(14)');
+    expect(buildCssVarsFile({ fontSize: 16 })).toContain('fontSize: $mcCssBuilder.getCssSize(16)');
   });
 });

@@ -186,11 +186,31 @@ export interface QualityScoreV1 {
   specScore: number | null
   styleScore: number | null
   spec?: { score: number; blockCount: number; warnCount: number; issues?: Array<{ id: string; severity: string; message: string }> }
-  style?: { score: number | null; reason: string; coverage: number; diffs?: Array<{ dimension: string; expected: string; actual: string }> }
+  style?: { 
+    score: number | null; 
+    reason: string; 
+    coverage: number; 
+    diffs?: Array<{ dimension: string; expected: string; actual: string }>;
+    dimensions?: Record<string, { 
+      scored: boolean; 
+      score: number | null; 
+      expected: number; 
+      matched: number; 
+      missed: string[];
+      fuzzyMatches?: Array<{ expected: string; matchedTo: string | null; distance: number; unit: string }>;
+      variableAdapted?: boolean;
+    }>;
+  }
   scoredAt?: string
   fileCount?: number
   excluded?: Record<string, string>
   l0bError?: string
+  varResolutionInfo?: {
+    enabled: boolean
+    varCount: number
+    themeVarsPath?: string | null
+    error?: string
+  }
 }
 
 export interface QualityScoreV1Result {
@@ -230,13 +250,41 @@ export async function readQualityV1(componentId: string): Promise<QualityScoreV1
 }
 
 /** 自动修复质量评分中的可修复问题（**仅管理员**） */
-export async function fixQualityIssues(componentId: string): Promise<{
+export async function fixQualityIssues(
+  componentId: string,
+  options?: { dimensions?: string[] }
+): Promise<{
   componentId: string
-  fixed: Array<{ file: string; rule: string; removed?: number }>
-  summary: { code008: number; themeVarMismatch: number }
+  fixed: Array<{ 
+    file: string
+    rule: string
+    removed?: number
+    dimension?: string
+    expected?: string
+    actual?: string
+    replaced?: number
+    locations?: Array<{ line: number; column: number; context: string }>
+  }>
+  unfixable?: Array<{
+    dimension: string
+    expected: string
+    reason: string
+    reasonCode: string
+    rule?: string
+  }>
+  summary: { 
+    code008: number; 
+    themeVarMismatch: number; 
+    code025Warn: number;
+    styleColor: number;
+    styleNumeric: number;
+  }
   newQuality: QualityScoreV1
 }> {
-  const res: any = await http.post('/api/mc-spec/quality-fix', { componentId })
+  const res: any = await http.post('/api/mc-spec/quality-fix', { 
+    componentId,
+    dimensions: options?.dimensions 
+  })
   const data = unwrap(res) ?? res
   if (data && data.success === false) {
     const err: any = new Error(data.message || '自动修复失败')

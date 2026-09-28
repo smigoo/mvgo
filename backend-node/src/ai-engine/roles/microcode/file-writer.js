@@ -382,7 +382,14 @@ function guessLessVarValueByName(n = '') {
   if (/(primary|accent)/.test(n)) return '#409EFF';
   if (/(success|ok)/.test(n)) return '#52c41a';
   if (/(warning|warn)/.test(n)) return '#faad14';
-  if (/(error|danger|fail)/.test(n)) return '#f5222d';
+  // 🛡️ 2026-09-28（c-device-monitor-aa799337 实锤）：`alert`/`notice` 属**告警语义**，
+  //   此前**不在语义表里** → `@color-alert` 含 "color" 一路落到下面的通用
+  //   `/(text|color|...)/` → 被兜底成 `#333333`（灰）→ 设计的红色告警数字渲染成灰
+  //   （真值 `d-3`/`d-5` fills 顶层 SOLID = #E03434 红）。
+  //   归入 danger 族（与 `error|danger|fail` 同值），**必须先于**通用 text/color 分支命中。
+  //   ⚠️ 归位安全性：数值型分支（zindex/weight/size…）都排在本行之前，故 `@alertZIndex`
+  //   之类仍由数值分支接管，不会被误判成颜色。
+  if (/(error|danger|fail|alert|notice)/.test(n)) return '#f5222d';
   if (/(text|color|colour|font|fg|ink)/.test(n)) return '#333333';
   // 兜底：CSS 全局关键字，对几乎所有属性合法，保证编译通过（渲染为中性默认）
   return 'unset';
@@ -1195,7 +1202,10 @@ import { MC_DARK_THEME_COLOR_ENUM, MC_DARK_THEME_COLOR_ENUM_CORE } from '../../u
  *    通过 options.extraDarkVars 按需注入——注入即可选变量必须同步进 cssVariableConfig，
  *    否则 M3-4c（自定义变量声明）会判失败。
  * @param {Object} [options]
- * @param {string} [options.fontSize] 字体基准（px 数值字符串，默认 12）
+ * @param {string} [options.fontSize] 字体基准（px 数值字符串）。**缺省时输出 `getCssSize()`（无参）**，
+ *   由框架 `defaultCssVars.baseFontSize`（= 14，`frontend/src/config/theme-config.js`）决定——
+ *   这是规范文档的写法（`references/patterns/css-variable-pattern.md`），且与 theme-vars.less 的
+ *   `@font-size-base: 14px` 同源。⚠️ 不要在此写魔法数（历史遗留 `'12'` 使全组件字号系统性 0.857×）。
  * @param {boolean} [options.includeLight] 是否生成 light 主题对象（默认 true）
  * @param {Object} [options.extraDarkVars] 额外 dark 变量（键值对，值须符合枚举）
  * @param {Object} [options.styleTokens] styleTokens 契约（utils/style-tokens.js buildStyleTokens 产出）：
@@ -1203,7 +1213,13 @@ import { MC_DARK_THEME_COLOR_ENUM, MC_DARK_THEME_COLOR_ENUM_CORE } from '../../u
  * @returns {string} css-vars.js 完整内容
  */
 export function buildCssVarsFile(options = {}) {
-  const fontSize = options.fontSize || '12';
+  // 🛡️ 2026-09-28（c-device-monitor-aa799337 实锤 · 删硬编码）：**不再有 `|| '12'` 魔法数**。
+  //   原 `'12'` 使 463/463 组件的 `--fontSize` 都算成 `12/16rem`，而设计基准是 **14**
+  //   （`@font-size-base: 14px` 命中 421/422 组件；prompt-builder 也要求 `@fontSize: 14px`）
+  //   → 全组件基于 `@fontSize` 的字号/间距**系统性偏小 0.857×**。
+  //   缺省留空 → 模板渲染 `$mcCssBuilder.getCssSize()`（无参）→ 框架 baseFontSize(14)，
+  //   与 `@font-size-base` 同源、且是规范文档写法（M4-7 正则 `getCssSize\(\s*\d*\s*\)` 允许无参）。
+  const fontSize = options.fontSize ? String(options.fontSize) : '';
   const includeLight = options.includeLight !== false;
   const extraDark = options.extraDarkVars && typeof options.extraDarkVars === 'object' ? options.extraDarkVars : {};
   const tokens = options.styleTokens && typeof options.styleTokens === 'object' ? options.styleTokens : null;

@@ -42,6 +42,7 @@
         <QualityScoreAdminButton
           v-if="showQualityScoreAdmin"
           :component-id="task.componentId || sessionId"
+          @preview-refresh-needed="handlePreviewRefreshNeeded"
         />
         <button
           v-if="!pageTaskFlag && canPushGit && task && (task.status === 'completed' || (task.fileCount && task.fileCount > 0))"
@@ -3980,6 +3981,19 @@ async function refreshPreviewSnapshot() {
   await nextTick()
   previewReloadKey.value++
   queuePreviewSnapshot({ ...snapshot })
+}
+
+/** 样式修复后刷新预览：重新加载代码快照并刷新预览 */
+async function handlePreviewRefreshNeeded() {
+  try {
+    // 重新加载代码快照（从 workspace 读取最新产物）
+    await loadCodeSnapshot(selectedSnapshotPath.value)
+    // 刷新预览
+    await refreshPreviewSnapshot()
+    message.success('预览已刷新')
+  } catch (error: any) {
+    message.warning('预览刷新失败，请手动刷新页面')
+  }
 }
 
 /**

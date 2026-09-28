@@ -159,14 +159,19 @@ ${rootClass ? `.${rootClass} {\n  width: 100%;\n  height: 100%;\n  box-sizing: b
  * @param {string} [options.componentName]
  * @param {string} [options.rootClass] 内容根类名（可选，仅用于 common.less 骨架）
  * @param {object} [options.styleTokens] style-tokens 输出（light / darkWithDesign）
- * @param {string} [options.fontSize] css-vars 字体基准（默认 '12'）
+ * @param {string} [options.fontSize] css-vars 字体基准（px 数值字符串）。缺省取
+ *   `options.styleTokens.fontSize`（设计基准）；都没有则留空 → 输出 `$mcCssBuilder.getCssSize()`
+ *   （框架 `baseFontSize`）。**禁止写死数值**（历史 `'12'` 使字号系统性 0.857×）。
  * @param {object} [options.extraDarkVars]
  * @returns {Object<string,string>} path → content
  */
 export function buildMcSkeleton(options = {}) {
   const files = {
     'resources/config/css-vars.js': buildCssVarsFile({
-      fontSize: options.fontSize || '12',
+      // 🛡️ 2026-09-28：删掉 `|| '12'` 魔法数（全组件字号系统性 0.857× 的根因）。
+      //   显式传入优先；否则取 styleTokens 的设计基准（与 theme-vars.less `@font-size-base` 同源）；
+      //   都没有则留空 → buildCssVarsFile 输出 `getCssSize()`（框架 baseFontSize）。
+      fontSize: options.fontSize || options.styleTokens?.fontSize,
       styleTokens: options.styleTokens || null,
       extraDarkVars: options.extraDarkVars || null,
       includeLight: options.includeLight !== false,

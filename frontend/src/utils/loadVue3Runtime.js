@@ -330,10 +330,18 @@ export async function loadVue3FromWorkspace(
   // 没有 default —— 旧写法 `common.default || common` 会把整个 module namespace 对象赋给全局，
   // 组件调用 `$mcComponentBuilder()` 即抛 "$mcComponentBuilder is not a function"。
   // 正确做法：遍历 namespace，把所有 $ 前缀的具名函数逐一注入全局（幂等，不覆盖已有）。
+  // 🛡️ 1.2 修法 A（2026-09-28 · c-device-monitor-aa799337 实锤）：**对象型** `$` 导出同样要注入。
+  //   `$mcCssBuilder` 是对象（`{getCssSize, getCssEm, getConfig}`），旧条件 `typeof === 'function'`
+  //   把它排除 → 预览页导入组件**自己声明的** `resources/config/css-vars.js`（顶层就调用
+  //   `$mcCssBuilder.getCssSize(12)`）会抛 `$mcCssBuilder is not defined` → 组件声明的 CSS 变量
+  //   在独立预览里永远拿不到 → `theme-vars.less` 的 `@fontSize: var(--fontSize)`（M5-6 要求不可带
+  //   fallback）解析失败 → 全产物 `font-size`/`calc()` 回落 inherit（label 与 value 同号）。
+  //   注入对象与注入函数同属「把 $ 前缀具名导出暴露到全局」的既有意图；幂等且不覆盖已存在键。
   for (const [key, value] of Object.entries(common)) {
-    if (key.startsWith('$') && typeof value === 'function' && !(key in globalThis)) {
-      globalThis[key] = value
-    }
+    if (!key.startsWith('$')) continue
+    if (key in globalThis) continue
+    const t = typeof value
+    if (t === 'function' || (t === 'object' && value)) globalThis[key] = value
   }
   // 兜底：确保 $mcComponentBuilder 一定存在（即便上述遍历未命中，也赋 namespace 中同名导出）
   if (typeof globalThis.$mcComponentBuilder !== 'function' && typeof common.$mcComponentBuilder === 'function') {

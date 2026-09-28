@@ -659,7 +659,21 @@ async function renderViaPreviewPage({
       const switcher = document.querySelector('.mc-panel-switcher')
       if (switcher) switcher.setAttribute('style', 'display: none !important')
     })
-    await new Promise(resolve => setTimeout(resolve, 500))
+    // 🛡️ 2026-09-28：截图前**必须等所有 `<img>` 加载完成**。
+    //   事故 mc-max-1790583585496-9331b2e8（设备监测）：`data-preview-status=ready` 只表示
+    //   运行时挂载完成，**不代表 PNG 已解码** ⇒ 截图早于图片渲染 ⇒ **图标/背景在截图里缺失**，
+    //   而实时打开同一预览却完全正常（headless 探针实测 15/15 图加载成功、无 4xx）。
+    //   判据：`document.images` 全部 `complete`；**有界超时 5s**（不阻塞正常收尾，超时仅告警继续）。
+    try {
+      await page.waitForFunction(
+        () => Array.from(document.images).every((img) => img.complete),
+        { timeout: 5000 },
+      )
+    } catch (e) {
+      logger.warn('截图前等待图片加载超时（继续截图）', { error: e?.message || String(e) })
+    }
+    // 面板切换器隐藏后留一点重排时间
+    await new Promise(resolve => setTimeout(resolve, 300))
 
     const stageElement = await page.$('.mc-preview-stage')
     if (stageElement) {

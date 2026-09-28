@@ -75,7 +75,115 @@
         <p class="qs-plain">
           原因 {{ quality.style.reason }} · 覆盖率 {{ pct(quality.style.coverage) }}
         </p>
-        <div v-if="quality.style.diffs?.length" class="qs-issues">
+        
+        <!-- 修复结果展示 -->
+        <div v-if="lastFixResult" class="qs-fix-result">
+          <!-- 已修复项 -->
+          <div v-if="lastFixResult.fixed.length > 0" class="qs-fix-success">
+            <div class="qs-fix-title">
+              <span class="qs-fix-icon">✓</span>
+              已修复 {{ lastFixResult.fixed.length }} 处
+            </div>
+            <div class="qs-fix-list">
+              <div v-for="(item, idx) in lastFixResult.fixed.slice(0, 10)" :key="idx" class="qs-fix-item">
+                <div class="qs-fix-file">{{ item.file }}</div>
+                <div class="qs-fix-detail">
+                  <span class="qs-fix-expected">{{ item.expected }}</span>
+                  <span class="qs-fix-arrow">←</span>
+                  <span class="qs-fix-actual">{{ item.actual }}</span>
+                  <span v-if="item.locations?.length" class="qs-fix-location">
+                    @{{ item.locations[0].line }}:{{ item.locations[0].column }}
+                  </span>
+                </div>
+                <div v-if="item.locations?.[0]?.context" class="qs-fix-context">
+                  {{ item.locations[0].context }}
+                </div>
+              </div>
+              <div v-if="lastFixResult.fixed.length > 10" class="qs-fix-more">
+                还有 {{ lastFixResult.fixed.length - 10 }} 处修复...
+              </div>
+            </div>
+          </div>
+          
+          <!-- 无法修复项 -->
+          <div v-if="lastFixResult.unfixable && lastFixResult.unfixable.length > 0" class="qs-fix-failed">
+            <div class="qs-fix-title">
+              <span class="qs-fix-icon-fail">✗</span>
+              无法修复 {{ lastFixResult.unfixable.length }} 项
+            </div>
+            <div class="qs-fix-list">
+              <div v-for="(item, idx) in lastFixResult.unfixable.slice(0, 10)" :key="idx" class="qs-fix-item-fail">
+                <div class="qs-fix-dimension">{{ item.dimension }} 维度</div>
+                <div class="qs-fix-expected-value">期望值: {{ item.expected }}</div>
+                <div class="qs-fix-reason">{{ item.reason }}</div>
+              </div>
+              <div v-if="lastFixResult.unfixable.length > 10" class="qs-fix-more">
+                还有 {{ lastFixResult.unfixable.length - 10 }} 项...
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 变量解析信息 -->
+        <div v-if="quality.varResolutionInfo" class="qs-var-info">
+          <span class="qs-var-label">变量解析：</span>
+          <span v-if="quality.varResolutionInfo.enabled" class="qs-var-enabled">
+            已启用 · {{ quality.varResolutionInfo.varCount }} 个变量
+            <span v-if="quality.varResolutionInfo.themeVarsPath" class="qs-var-path">
+              ({{ quality.varResolutionInfo.themeVarsPath.split('/').pop() }})
+            </span>
+          </span>
+          <span v-else class="qs-var-disabled">
+            未启用
+            <span v-if="quality.varResolutionInfo.error" class="qs-var-error">
+              ({{ quality.varResolutionInfo.error }})
+            </span>
+          </span>
+        </div>
+        
+        <!-- 维度详情（含模糊匹配） -->
+        <div v-if="quality.style.dimensions" class="qs-dimensions">
+          <div v-for="(dim, dimName) in quality.style.dimensions" :key="dimName" class="qs-dimension">
+            <div class="qs-dim-header">
+              <span class="qs-dim-name">{{ dimName }}</span>
+              <span class="qs-dim-score">{{ dim.score != null ? Math.round(dim.score) : '—' }}</span>
+              <span class="qs-dim-coverage">{{ dim.matched }}/{{ dim.expected }}</span>
+              <span v-if="dim.variableAdapted" class="qs-dim-adapted">✓ 变量化</span>
+              <button 
+                v-else-if="canFixDimension(dimName, dim)" 
+                class="qs-dim-fix-btn"
+                :disabled="fixingDimension === dimName"
+                @click="fixDimension(dimName)"
+              >
+                {{ fixingDimension === dimName ? '修复中…' : '修复' }}
+              </button>
+            </div>
+            
+            <!-- 模糊匹配命中 -->
+            <div v-if="dim.fuzzyMatches?.length" class="qs-fuzzy-matches">
+              <div v-for="(fm, fi) in dim.fuzzyMatches" :key="fi" class="qs-fuzzy-item">
+                <span class="qs-fuzzy-expected">{{ fm.expected }}</span>
+                <span class="qs-fuzzy-arrow">→</span>
+                <span class="qs-fuzzy-matched">{{ fm.matchedTo || '(null)' }}</span>
+                <span class="qs-fuzzy-distance">Δ{{ fm.distance }}{{ fm.unit }}</span>
+              </div>
+            </div>
+            
+            <!-- 未匹配项 -->
+            <div v-if="dim.missed?.length" class="qs-missed">
+              <div v-for="(m, mi) in dim.missed.slice(0, 5)" :key="mi" class="qs-missed-item">
+                <span class="qs-missed-label">未匹配：</span>
+                <span class="qs-missed-value">{{ m }}</span>
+              </div>
+              <div v-if="dim.missed.length > 5" class="qs-missed-more">
+                还有 {{ dim.missed.length - 5 }} 项...
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 兼容旧的 diffs 显示 -->
+        <div v-else-if="quality.style.diffs?.length" class="qs-issues">
           <div v-for="(d, i) in quality.style.diffs" :key="i" class="qs-issue">
             <span class="qs-issue-id">{{ d.dimension }}</span>
             <span class="qs-issue-msg">期望 {{ d.expected }} / {{ d.actual }}</span>
@@ -101,13 +209,36 @@ const props = withDefaults(
   { disabled: false },
 )
 
+const emit = defineEmits<{
+  (e: 'preview-refresh-needed'): void
+}>()
+
 defineOptions({ inheritAttrs: false })
 
 const drawerOpen = ref(false)
 const scoring = ref(false)
 const fixing = ref(false)
+const fixingDimension = ref<string | null>(null)
 const error = ref('')
 const quality = ref<QualityScoreV1 | null>(null)
+const lastFixResult = ref<{
+  fixed: Array<{
+    file: string
+    rule: string
+    dimension?: string
+    expected?: string
+    actual?: string
+    replaced?: number
+    locations?: Array<{ line: number; column: number; context: string }>
+  }>
+  unfixable?: Array<{
+    dimension: string
+    expected: string
+    reason: string
+    reasonCode: string
+    rule?: string
+  }>
+} | null>(null)
 
 const buttonLabel = computed(() => {
   const s = quality.value?.specScore
@@ -182,20 +313,89 @@ async function runFix() {
   error.value = ''
   try {
     const r = await fixQualityIssues(props.componentId)
-    if (r.fixed.length === 0) {
+    if (r.fixed.length === 0 && (!r.unfixable || r.unfixable.length === 0)) {
       message.info('没有可自动修复的问题')
     } else {
       quality.value = r.newQuality || null
+      
+      // 保存修复结果用于展示
+      lastFixResult.value = {
+        fixed: r.fixed,
+        unfixable: r.unfixable
+      }
+      
       const parts = []
       if (r.summary.code008 > 0) parts.push(`CODE-008 ×${r.summary.code008}`)
       if (r.summary.themeVarMismatch > 0) parts.push(`THEME-VAR-MISMATCH ×${r.summary.themeVarMismatch}`)
       if (r.summary.code025Warn > 0) parts.push(`CODE-025-WARN ×${r.summary.code025Warn}`)
-      message.success(`已修复 ${r.fixed.length} 处：${parts.join('、')}`)
+      if (r.summary.styleColor > 0) parts.push(`颜色修复 ×${r.summary.styleColor}`)
+      if (r.summary.styleNumeric > 0) parts.push(`数值修复 ×${r.summary.styleNumeric}`)
+      
+      if (r.fixed.length > 0) {
+        message.success(`已修复 ${r.fixed.length} 处：${parts.join('、')}`)
+      }
+      if (r.unfixable && r.unfixable.length > 0) {
+        message.warning(`${r.unfixable.length} 项无法自动修复，详见下方说明`)
+      }
+      
+      // 修复成功后通知父组件刷新预览
+      if (r.fixed.some((f) => f.rule?.startsWith('STYLE-'))) {
+        emit('preview-refresh-needed')
+      }
     }
   } catch (e: any) {
     error.value = e?.data?.message || e?.message || String(e)
   } finally {
     fixing.value = false
+  }
+}
+
+/**
+ * 判断某个维度是否可以修复
+ */
+function canFixDimension(dimName: string, dim: any): boolean {
+  if (!dim.scored || dimName === 'structure') return false
+  if (dim.score === 100) return false // 满分不需要修
+  if (dim.fuzzyMatches?.length > 0 || dim.missed?.length > 0) return true
+  return false
+}
+
+/**
+ * 按维度修复样式问题
+ */
+async function fixDimension(dimName: string) {
+  if (!props.componentId) {
+    message.warning('缺少组件 ID')
+    return
+  }
+  fixingDimension.value = dimName
+  error.value = ''
+  try {
+    const r = await fixQualityIssues(props.componentId, { dimensions: [dimName] })
+    if (r.fixed.length === 0 && (!r.unfixable || r.unfixable.length === 0)) {
+      message.info(`${dimName} 维度没有可修复的问题`)
+    } else {
+      quality.value = r.newQuality || null
+      
+      // 保存修复结果用于展示
+      lastFixResult.value = {
+        fixed: r.fixed,
+        unfixable: r.unfixable
+      }
+      
+      if (r.fixed.length > 0) {
+        message.success(`${dimName} 维度已修复 ${r.fixed.length} 处`)
+      }
+      if (r.unfixable && r.unfixable.length > 0) {
+        message.warning(`${dimName} 维度有 ${r.unfixable.length} 项无法自动修复`)
+      }
+      
+      emit('preview-refresh-needed')
+    }
+  } catch (e: any) {
+    error.value = e?.data?.message || e?.message || String(e)
+  } finally {
+    fixingDimension.value = null
   }
 }
 </script>
@@ -368,5 +568,284 @@ async function runFix() {
 }
 .qs-issue-msg {
   color: #9fb3c8;
+}
+
+/* 变量解析信息 */
+.qs-var-info {
+  margin-top: 10px;
+  padding: 8px 10px;
+  background: #1a2836;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #9fb3c8;
+}
+.qs-var-label {
+  color: #7f93a8;
+}
+.qs-var-enabled {
+  color: #4ec9a0;
+}
+.qs-var-disabled {
+  color: #e8c547;
+}
+.qs-var-path {
+  color: #7fb4d8;
+  font-size: 11px;
+}
+.qs-var-error {
+  color: #ef6b6b;
+}
+
+/* 维度详情 */
+.qs-dimensions {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.qs-dimension {
+  background: #1a2836;
+  border-radius: 8px;
+  padding: 10px;
+}
+.qs-dim-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.qs-dim-name {
+  color: #e8f1fa;
+  font-size: 13px;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+.qs-dim-score {
+  color: #4ec9a0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.qs-dim-coverage {
+  color: #7f93a8;
+  font-size: 11px;
+}
+
+/* 模糊匹配命中 */
+.qs-fuzzy-matches {
+  margin-top: 6px;
+  padding-left: 8px;
+  border-left: 2px solid #3d7ea8;
+}
+.qs-fuzzy-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #cfe3f5;
+  margin-bottom: 4px;
+}
+.qs-fuzzy-expected {
+  color: #e8c547;
+  font-family: monospace;
+}
+.qs-fuzzy-arrow {
+  color: #7f93a8;
+}
+.qs-fuzzy-matched {
+  color: #4ec9a0;
+  font-family: monospace;
+}
+.qs-fuzzy-distance {
+  color: #7fb4d8;
+  font-size: 10px;
+  margin-left: auto;
+}
+
+/* 未匹配项 */
+.qs-missed {
+  margin-top: 6px;
+  padding-left: 8px;
+  border-left: 2px solid #ef6b6b;
+}
+.qs-missed-item {
+  font-size: 11px;
+  color: #cfe3f5;
+  margin-bottom: 3px;
+}
+.qs-missed-label {
+  color: #ef6b6b;
+}
+.qs-missed-value {
+  color: #9fb3c8;
+  font-family: monospace;
+}
+.qs-missed-more {
+  font-size: 10px;
+  color: #7f93a8;
+  font-style: italic;
+}
+
+/* 维度修复按钮 */
+.qs-dim-fix-btn {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid #3d7ea8;
+  background: #1a3a28;
+  color: #4ec9a0;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.qs-dim-fix-btn:hover:not(:disabled) {
+  background: #1d4a30;
+  border-color: #3d8a5a;
+  color: #ffffff;
+}
+.qs-dim-fix-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* 变量化标记 */
+.qs-dim-adapted {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #1a2836;
+  color: #4ec9a0;
+  font-size: 10px;
+  font-weight: 500;
+}
+/* 修复结果展示 */
+.qs-fix-result {
+  margin-top: 12px;
+  padding: 12px;
+  background: #0f1722;
+  border-radius: 6px;
+  border: 1px solid #2a3a4d;
+}
+
+.qs-fix-success {
+  margin-bottom: 12px;
+}
+
+.qs-fix-failed {
+  margin-top: 12px;
+}
+
+.qs-fix-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #cfe3f5;
+  margin-bottom: 8px;
+}
+
+.qs-fix-icon {
+  color: #4ec9a0;
+  font-size: 14px;
+}
+
+.qs-fix-icon-fail {
+  color: #ef6b6b;
+  font-size: 14px;
+}
+
+.qs-fix-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.qs-fix-item {
+  padding: 8px;
+  background: #1a2836;
+  border-radius: 4px;
+  border-left: 3px solid #4ec9a0;
+}
+
+.qs-fix-item-fail {
+  padding: 8px;
+  background: #1a2836;
+  border-radius: 4px;
+  border-left: 3px solid #ef6b6b;
+}
+
+.qs-fix-file {
+  font-size: 11px;
+  color: #7fb4d8;
+  font-family: monospace;
+  margin-bottom: 4px;
+}
+
+.qs-fix-detail {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.qs-fix-expected {
+  color: #4ec9a0;
+  font-family: monospace;
+}
+
+.qs-fix-arrow {
+  color: #7f93a8;
+}
+
+.qs-fix-actual {
+  color: #ef6b6b;
+  font-family: monospace;
+  text-decoration: line-through;
+}
+
+.qs-fix-location {
+  color: #7fb4d8;
+  font-size: 11px;
+  margin-left: auto;
+}
+
+.qs-fix-context {
+  font-size: 11px;
+  color: #9fb3c8;
+  font-family: monospace;
+  padding: 4px 6px;
+  background: #0f1722;
+  border-radius: 3px;
+  margin-top: 4px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.qs-fix-dimension {
+  font-size: 12px;
+  color: #e8c547;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.qs-fix-expected-value {
+  font-size: 11px;
+  color: #cfe3f5;
+  font-family: monospace;
+  margin-bottom: 4px;
+}
+
+.qs-fix-reason {
+  font-size: 11px;
+  color: #ef6b6b;
+  line-height: 1.4;
+}
+
+.qs-fix-more {
+  font-size: 11px;
+  color: #7f93a8;
+  font-style: italic;
+  padding: 4px 8px;
 }
 </style>

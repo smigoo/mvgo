@@ -1335,6 +1335,75 @@ describe('buildSectionStyleFacts（E1 治本 · 语义化样式事实）', () =>
     const out = buildSectionStyleFacts(tree, fg)
     expect(out).not.toContain('该容器用 flex-direction:column')
   })
+
+  test('🛡️ Fix1 嵌套布局：DOM 序 ≠ 视觉序的容器（switch 药丸 row[col,col]）→ 输出列分组事实', () => {
+    // 实锤 device-monitor e8c97bf8：active 药丸真实 row[ 左列(icon↓title), 右列(stat1↓stat2) ]，
+    // 但 DOM 序为 icon→title→line1→line2（与视觉行优先序不同）→ LLM 按 DOM 序填 2×2 grid 会错位。
+    const fg = {
+      document: {
+        id: 'root', name: 'cp', type: 'FRAME',
+        children: [{
+          id: 'active', name: 'active', type: 'GROUP', absoluteBoundingBox: box(1486, 475, 193, 65),
+          children: [
+            { id: 'bg', name: 'bg', type: 'GROUP', absoluteBoundingBox: box(1486, 475, 193, 65) }, // 满尺寸背景 → 排除
+            { id: 't', name: 't-隧道设备', type: 'TEXT', characters: '隧道设备', absoluteBoundingBox: box(1500, 514, 45, 16), style: { fontSize: 12 }, fills: [{ type: 'SOLID', visible: true, color: { r: 1, g: 1, b: 1 } }] },
+            { id: 'l1', name: 'line1', type: 'FRAME', absoluteBoundingBox: box(1550, 481, 105, 23), children: [
+              { id: 'l1a', name: 't-总数:', type: 'TEXT', characters: '总数:', absoluteBoundingBox: box(1550, 482, 46, 21), style: { fontSize: 14 }, fills: [{ type: 'SOLID', visible: true, color: { r: 1, g: 1, b: 1 } }] },
+              { id: 'l1b', name: 'd-56302', type: 'TEXT', characters: '56302', absoluteBoundingBox: box(1597, 481, 58, 23), style: { fontSize: 20 }, fills: [{ type: 'SOLID', visible: true, color: { r: 1, g: 1, b: 1 } }] },
+            ] },
+            { id: 'l2', name: 'line2', type: 'FRAME', absoluteBoundingBox: box(1550, 510, 59, 23), children: [
+              { id: 'l2a', name: 't-异常数:', type: 'TEXT', characters: '异常数:', absoluteBoundingBox: box(1550, 511, 46, 21), style: { fontSize: 14 }, fills: [{ type: 'SOLID', visible: true, color: { r: 1, g: 1, b: 1 } }] },
+              { id: 'l2b', name: 'd-5', type: 'TEXT', characters: '5', absoluteBoundingBox: box(1597, 510, 12, 23), style: { fontSize: 20 }, fills: [{ type: 'SOLID', visible: true, color: { r: 1, g: 1, b: 1 } }] },
+            ] },
+            { id: 'ic', name: 'icon', type: 'GROUP', absoluteBoundingBox: box(1504, 483, 35, 28) },
+          ],
+        }],
+      },
+    }
+    const tree = [{ id: 'active', type: 'active', title: 'active', sourceNodeIds: ['active'] }]
+    const out = buildSectionStyleFacts(tree, fg)
+    expect(out).toContain('内部布局(几何 · 嵌套)：2 列 × 2 行')
+    expect(out).toContain('第1列(x≈1500，上→下): icon → 「隧道设备」')
+    expect(out).toContain('第2列(x≈1550，上→下): 「总数:56302」 → 「异常数:5」')
+  })
+
+  test('🛡️ Fix1 反例：DOM 序 == 视觉阅读序 → 不输出（LLM 不会错位）', () => {
+    const fg = {
+      document: {
+        id: 'root', name: 'cp', type: 'FRAME',
+        children: [{
+          id: 'g2', name: 'g2', type: 'FRAME', absoluteBoundingBox: box(100, 100, 300, 80),
+          children: [
+            { id: 'a', name: 'a', type: 'TEXT', characters: 'a', absoluteBoundingBox: box(100, 100, 60, 20), style: { fontSize: 12 }, fills: [{ type: 'SOLID', visible: true, color: { r: 0, g: 0, b: 0 } }] },
+            { id: 'b', name: 'b', type: 'TEXT', characters: 'b', absoluteBoundingBox: box(220, 100, 60, 20), style: { fontSize: 12 }, fills: [{ type: 'SOLID', visible: true, color: { r: 0, g: 0, b: 0 } }] },
+            { id: 'c', name: 'c', type: 'TEXT', characters: 'c', absoluteBoundingBox: box(100, 150, 60, 20), style: { fontSize: 12 }, fills: [{ type: 'SOLID', visible: true, color: { r: 0, g: 0, b: 0 } }] },
+            { id: 'd', name: 'd', type: 'TEXT', characters: 'd', absoluteBoundingBox: box(220, 150, 60, 20), style: { fontSize: 12 }, fills: [{ type: 'SOLID', visible: true, color: { r: 0, g: 0, b: 0 } }] },
+          ],
+        }],
+      },
+    }
+    const tree = [{ id: 'g2', type: 'container', title: 'g2', sourceNodeIds: ['g2'] }]
+    expect(buildSectionStyleFacts(tree, fg)).not.toContain('内部布局(几何 · 嵌套)')
+  })
+
+  test('🛡️ Fix1 反例：图表段不输出嵌套布局（轴标签/图例会被误读）', () => {
+    const fg = {
+      document: {
+        id: 'root', name: 'cp', type: 'FRAME',
+        children: [{
+          id: 'chart', name: 'chart', type: 'FRAME', absoluteBoundingBox: box(0, 0, 300, 200),
+          children: [
+            { id: 'x1', name: 'label', type: 'TEXT', characters: '4000', absoluteBoundingBox: box(34, 180, 40, 16), style: { fontSize: 10 }, fills: [{ type: 'SOLID', visible: true, color: { r: 0, g: 0, b: 0 } }] },
+            { id: 'x2', name: 'label2', type: 'TEXT', characters: '3000', absoluteBoundingBox: box(120, 180, 40, 16), style: { fontSize: 10 }, fills: [{ type: 'SOLID', visible: true, color: { r: 0, g: 0, b: 0 } }] },
+            { id: 'y1', name: 'bar', type: 'RECTANGLE', absoluteBoundingBox: box(34, 100, 40, 60), fills: [{ type: 'SOLID', visible: true, color: { r: 0.2, g: 0.6, b: 1 } }] },
+            { id: 'y2', name: 'bar2', type: 'RECTANGLE', absoluteBoundingBox: box(120, 80, 40, 80), fills: [{ type: 'SOLID', visible: true, color: { r: 0.2, g: 0.6, b: 1 } }] },
+          ],
+        }],
+      },
+    }
+    const tree = [{ id: 'chart', type: 'chart', title: 'chart', sourceNodeIds: ['chart'] }]
+    expect(buildSectionStyleFacts(tree, fg)).not.toContain('内部布局(几何 · 嵌套)')
+  })
 })
 
 

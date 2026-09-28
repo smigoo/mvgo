@@ -8,6 +8,13 @@
  */
 import { existsSync, readdirSync, readFileSync, writeFileSync, statSync } from 'fs'
 import { join, relative, extname } from 'path'
+import { 
+  resolveStyleVariables, 
+  substituteVariables,
+  colorFuzzyMatch,
+  numericFuzzyMatch,
+  parseNumericValue 
+} from './style-var-resolver.js'
 
 export const QUALITY_SCORE_V1_VERSION = 'v1'
 export const SPEC_BLOCK_PENALTY = 8
@@ -128,6 +135,10 @@ export function extractDeclaredStyleLiterals(files = []) {
   const spaceRe = /(?:gap|row-gap|column-gap|padding(?:-[a-z]+)?|margin(?:-[a-z]+)?)\s*:\s*([^;}{]+)/gi
   const fontRe = /font-size\s*:\s*([^;}{]+)/gi
   const radiusRe = /border-radius\s*:\s*([^;}{]+)/gi
+  
+  // 检测是否使用变量化字体（@fontSize / var(--fontSize) 等）
+  let fontUsesVariable = false
+  const fontVarRe = /font-size\s*:\s*(?:@fontSize|var\(--fontSize|calc\(@fontSize|calc\(var\(--fontSize)/gi
 
   for (const f of files) {
     const content = String(f?.content || '')
@@ -167,12 +178,19 @@ export function extractDeclaredStyleLiterals(files = []) {
         if (/px$/i.test(tok) || tok === '0') radii.push(tok)
       }
     }
+    
+    // 检测变量化字体
+    fontVarRe.lastIndex = 0
+    if (fontVarRe.test(styleContent)) {
+      fontUsesVariable = true
+    }
   }
   return {
     color: uniqueStrings(colors),
     spacing: uniqueStrings(spacing),
     font: uniqueStrings(fonts),
     radius: uniqueStrings(radii),
+    fontUsesVariable,
   }
 }
 
@@ -373,6 +391,107 @@ export function extractActualStructure(files = []) {
 }
 
 /**
+ * 从产物 Vue 文件中提取实际挂载的资源 data-section-id（2026-09-28 · resourceMount 维度）
+ *
+ * 根因：resource-dom-mapping.json 定义了每个背景图应挂载的 figmaNodeId，
+ * 但 LLM 生成代码时可能把背景图挂到错误的元素上（data-section-id 不匹配）。
+ * 此前质量评分只检查颜色/间距/字体/圆角/结构，完全无法识别这种挂载错误。
+ *
+ * @param {Array} files - collectGeneratedFilesFromDir 返回的文件列表
+ * @returns {Set<string>} - 所有 data-section-id 值的集合
+ */
+export function extractActualResourceMounts(files = []) {
+  const sectionIds = new Set()
+  const sectionIdRe = /data-section-id\s*=\s*["']([^"']+)["']/gi
+
+  for (const f of files) {
+    const content = String(f?.content || '')
+    const p = String(f?.path || '')
+    // 只扫描 .vue 文件的 <template> 块
+    if (!/\.vue$/i.test(p)) continue
+
+    let templateContent = ''
+    for (const m of content.matchAll(/<template[^>]*>([\s\S]*?)<\/template>/gi)) {
+      templateContent += m[1] + '\n'
+    }
+    if (!templateContent) continue
+
+    sectionIdRe.lastIndex = 0
+    let m
+    while ((m = sectionIdRe.exec(templateContent))) {
+      sectionIds.add(m[1])
+    }
+  }
+
+  return sectionIds
+}
+
+/**
+ * 资源挂载维度评分（2026-09-28 · resourceMount 维度）
+ *
+ * 对比 resource-dom-mapping.json 中期望的 figmaNodeId 与产物中实际的 data-section-id。
+ * 只对 bgRole 或 backgroundImage 类型的资源进行检查。
+ *
+ * @param {Array|null} resourceMapping - resource-dom-mapping.json 内容
+ * @param {Set<string>} actualSectionIds - extractActualResourceMounts 返回的集合
+ * @returns {{ scored: boolean, score: number|null, expected: number, matched: number, missed: Array }}
+ */
+export function scoreResourceMount(resourceMapping, actualSectionIds) {
+  if (!Array.isArray(resourceMapping) || resourceMapping.length === 0) {
+    return { scored: false, score: null, expected: 0, matched: 0, missed: [] }
+  }
+
+  // 过滤出需要检查的背景图挂载条目
+  const expectedMounts = resourceMapping.filter((entry) => {
+    if (!entry || typeof entry !== 'object') return false
+    // 跳过 skipMount 为 true 的条目（如大型容器背景，故意不挂载）
+    if (entry.skipMount === true) return false
+    // 跳过下载失败的条目（missing），这些本来就无法挂载
+    if (entry.downloadStatus === 'missing') return false
+    // 只检查有 bgRole 或 usage 含 backgroundImage 的条目
+    const hasBgRole = typeof entry.bgRole === 'string' && entry.bgRole.length > 0
+    const hasBgImageUsage = typeof entry.usage === 'string' && entry.usage.includes('backgroundImage')
+    return hasBgRole || hasBgImageUsage
+  })
+
+  if (expectedMounts.length === 0) {
+    return { scored: false, score: null, expected: 0, matched: 0, missed: [] }
+  }
+
+  let matched = 0
+  const missed = []
+
+  for (const entry of expectedMounts) {
+    const figmaNodeId = entry.figmaNodeId
+    if (!figmaNodeId) continue
+
+    // 检查该 figmaNodeId 是否存在于实际的 data-section-id 中
+    if (actualSectionIds.has(figmaNodeId)) {
+      matched++
+    } else {
+      // 未匹配：记录详细信息
+      missed.push({
+        figmaNodeId,
+        targetDomSelector: entry.targetDomSelector || '(unknown)',
+        name: entry.name || '(unnamed)',
+        reason: `背景图 "${entry.name || figmaNodeId}" 应挂载到 data-section-id="${figmaNodeId}"，但产物中未找到该 ID`,
+      })
+    }
+  }
+
+  const ratio = expectedMounts.length > 0 ? matched / expectedMounts.length : 0
+  const score = clampScore(ratio * 100)
+
+  return {
+    scored: true,
+    score,
+    expected: expectedMounts.length,
+    matched,
+    missed: missed.slice(0, 12),
+  }
+}
+
+/**
  * 结构维度评分：比较布局类型、对齐方式、层级深度、节点数量比例
  */
 function scoreStructure(expected, actual) {
@@ -434,40 +553,103 @@ function scoreDimension(expected, actual, kind) {
   const exp = uniqueStrings(expected)
   const act = uniqueStrings(actual)
   if (exp.length === 0) {
-    return { scored: false, score: null, expected: 0, matched: 0, missed: [] }
+    return { scored: false, score: null, expected: 0, matched: 0, missed: [], fuzzyMatches: [] }
   }
   const missed = []
+  const fuzzyMatches = []
   let matched = 0
   for (const e of exp) {
-    const ok = kind === 'color' ? colorsMatch(e, act) : pxMatch(e, act)
-    if (ok) matched += 1
-    else missed.push(e)
+    // 先精确匹配
+    const exactOk = kind === 'color' ? colorsMatch(e, act) : pxMatch(e, act)
+    if (exactOk) {
+      matched += 1
+      continue
+    }
+    
+    // P2 集成：精确匹配失败后 fallback 到模糊匹配
+    let fuzzyOk = false
+    if (kind === 'color') {
+      // 颜色模糊匹配：支持透明度误差 + 更大的颜色容差
+      fuzzyOk = colorFuzzyMatch(e, act, { maxDelta: 32, alphaTolerance: 0.15 })
+      if (fuzzyOk) {
+        // 找到最近的实际颜色，记录距离
+        let bestDist = Infinity
+        let bestActual = null
+        for (const a of act) {
+          const d = colorDistance(e, a)
+          if (d < bestDist) {
+            bestDist = d
+            bestActual = a
+          }
+        }
+        fuzzyMatches.push({ expected: e, matchedTo: bestActual, distance: Math.round(bestDist * 10) / 10, unit: 'rgb' })
+      }
+    } else {
+      // 数值模糊匹配：支持浮点精度 + 单位转换
+      fuzzyOk = numericFuzzyMatch(e, act, { tolerance: 3, relativeTolerance: 0.15 })
+      if (fuzzyOk) {
+        // 找到最近的实际数值，记录差值
+        const expVal = parseNumericValue(e)
+        let bestDiff = Infinity
+        let bestActual = null
+        for (const a of act) {
+          const actVal = parseNumericValue(a)
+          if (actVal != null && expVal != null) {
+            const diff = Math.abs(expVal - actVal)
+            if (diff < bestDiff) {
+              bestDiff = diff
+              bestActual = a
+            }
+          }
+        }
+        fuzzyMatches.push({ expected: e, matchedTo: bestActual, distance: Math.round(bestDiff * 10) / 10, unit: 'px' })
+      }
+    }
+    
+    if (fuzzyOk) {
+      matched += 1
+    } else {
+      missed.push(e)
+    }
   }
   const ratio = matched / exp.length
   let score = clampScore(ratio * 100)
   const coverage = exp.length ? matched / exp.length : 0
   if (coverage < STYLE_COVERAGE_THRESHOLD) score = Math.min(score, STYLE_COVERAGE_CAP)
-  return { scored: true, score, expected: exp.length, matched, missed: missed.slice(0, 12) }
+  return { scored: true, score, expected: exp.length, matched, missed: missed.slice(0, 12), fuzzyMatches: fuzzyMatches.slice(0, 20) }
 }
 
 /**
- * 五维等权：color / spacing / font / radius / structure。
+ * 六维等权：color / spacing / font / radius / structure / resourceMount。
  * 无任何期望 → null（不是 0，也不是 100）。
  * 某维无期望 → unscored，不进平均。
+ *
+ * resourceMount 维度（2026-09-28）：检查背景图是否挂载到正确的 data-section-id 元素。
+ * 通过 opts.resourceMountResult 传入（由 scoreComponentDir 预先计算）。
  */
-export function computeStyleScore(expected, actual) {
+export function computeStyleScore(expected, actual, opts = {}) {
   if (!expected || typeof expected !== 'object') {
     return { score: null, reason: 'no-expected', coverage: 0, dimensions: {}, diffs: [] }
   }
+  
+  // 检测产物是否使用变量化字体
+  const fontUsesVariable = actual?.fontUsesVariable === true
+  
   const dims = {
     color: scoreDimension(expected.color, actual?.color, 'color'),
     spacing: scoreDimension(expected.spacing, actual?.spacing, 'px'),
-    font: scoreDimension(expected.font, actual?.font, 'px'),
+    font: fontUsesVariable 
+      ? { scored: true, score: 100, expected: expected.font?.length || 0, matched: expected.font?.length || 0, missed: [], fuzzyMatches: [], variableAdapted: true }
+      : scoreDimension(expected.font, actual?.font, 'px'),
     radius: scoreDimension(expected.radius, actual?.radius, 'px'),
   }
   // 结构维度单独处理（需要结构提取结果）
   if (expected.structure || actual?.structure) {
     dims.structure = scoreStructure(expected.structure, actual?.structure)
+  }
+  // 资源挂载维度（2026-09-28）：由 scoreComponentDir 预先计算后传入
+  if (opts?.resourceMountResult) {
+    dims.resourceMount = opts.resourceMountResult
   }
   const scored = Object.values(dims).filter((d) => d.scored)
   if (scored.length === 0) {
@@ -483,7 +665,12 @@ export function computeStyleScore(expected, actual) {
   for (const [name, d] of Object.entries(dims)) {
     if (!d.scored) continue
     for (const miss of d.missed || []) {
-      diffs.push({ dimension: name, expected: miss, actual: '(unmatched)' })
+      if (name === 'resourceMount') {
+        // resourceMount 的 missed 是对象，直接展开
+        diffs.push({ dimension: name, expected: miss.figmaNodeId, actual: miss.reason || '(unmatched)' })
+      } else {
+        diffs.push({ dimension: name, expected: miss, actual: '(unmatched)' })
+      }
     }
   }
   return { score, reason: 'ok', coverage, dimensions: dims, diffs: diffs.slice(0, 40) }
@@ -613,6 +800,23 @@ export function detectComponentType(componentDir, files) {
 }
 
 /**
+ * 查找组件目录中的 theme-vars.less（2026-09-28 P2 集成）
+ * 
+ * 优先级：resources/styles/themes/theme-vars.less > resources/theme-vars.less
+ */
+export function findThemeVarsPath(componentDir) {
+  const candidates = [
+    join(componentDir, 'resources', 'styles', 'themes', 'theme-vars.less'),
+    join(componentDir, 'resources', 'theme-vars.less'),
+    join(componentDir, 'theme-vars.less'),
+  ]
+  for (const p of candidates) {
+    if (existsSync(p)) return p
+  }
+  return null
+}
+
+/**
  * 对已落盘组件做 v1 离线评分（不调 LLM、不截图）。
  * styleScore 无 Figma 期望时为 null。
  *
@@ -671,12 +875,54 @@ export async function scoreComponentDir(componentDir, opts = {}) {
   const figma = opts.figmaNodeData || findFigmaNodeData(componentDir)
   const expectedStyle = extractExpectedStyleLiterals(figma)
   const expectedStructure = extractExpectedStructure(figma)
-  const actualStyle = extractDeclaredStyleLiterals(files)
+
+  // P2 集成（2026-09-28）：先解析 Less 变量再提取样式字面量
+  // 根因：产物用 @color-primary 等变量，Figma 期望 #559eff 字面量，评分只做字面量比较
+  // 解法：从 theme-vars.less + common.less 解析变量链，替换后再提取
+  let actualStyle
+  let varResolutionInfo = null
+  try {
+    const themeVarsPath = findThemeVarsPath(componentDir)
+    const varMap = resolveStyleVariables(files, themeVarsPath)
+    if (varMap.size > 0) {
+      // 把变量替换到文件内容中
+      const resolvedFiles = files.map((f) => ({
+        ...f,
+        content: substituteVariables(f.content, varMap),
+      }))
+      actualStyle = extractDeclaredStyleLiterals(resolvedFiles)
+      varResolutionInfo = {
+        enabled: true,
+        varCount: varMap.size,
+        themeVarsPath: themeVarsPath || null,
+      }
+    } else {
+      // 没有变量，走原路径
+      actualStyle = extractDeclaredStyleLiterals(files)
+      varResolutionInfo = { enabled: false, varCount: 0 }
+    }
+  } catch (err) {
+    // 变量解析失败时降级到原路径（fail-open）
+    console.warn('[quality-score-v1] 变量解析失败，降级到字面量提取:', err.message)
+    actualStyle = extractDeclaredStyleLiterals(files)
+    varResolutionInfo = { enabled: false, varCount: 0, error: err.message }
+  }
+
   const actualStructure = extractActualStructure(files)
+
+  // resourceMount 维度（2026-09-28）：检查背景图是否挂载到正确的 data-section-id
+  let resourceMountResult = null
+  try {
+    const actualSectionIds = extractActualResourceMounts(files)
+    resourceMountResult = scoreResourceMount(resourceMapping, actualSectionIds)
+  } catch (err) {
+    console.warn('[quality-score-v1] resourceMount 评分失败:', err.message)
+  }
+
   // 合并样式和结构到 expected/actual 对象
   const expected = { ...expectedStyle, structure: expectedStructure }
   const actual = { ...actualStyle, structure: actualStructure }
-  const style = computeStyleScore(expected, actual)
+  const style = computeStyleScore(expected, actual, { resourceMountResult })
 
   const quality = {
     version: QUALITY_SCORE_V1_VERSION,
@@ -692,6 +938,7 @@ export async function scoreComponentDir(componentDir, opts = {}) {
       visual002: '直方图，不进 v1 总分',
     },
     ...(l0bError ? { l0bError } : {}),
+    ...(varResolutionInfo ? { varResolutionInfo } : {}),
   }
 
   if (opts.persist !== false) persistQualityScore(componentDir, quality)

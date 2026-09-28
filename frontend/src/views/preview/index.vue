@@ -214,6 +214,26 @@ async function ensureLatestSnapshot() {
   // path 段是 componentId 可能是 componentId 或 sessionId（看入口），query.sessionId 优先；都没有就用 componentId
   const sessionId = String(route.query.sessionId || componentId || '')
   if (!sessionId) return
+  // 🛡️ 2026-09-28 治本（"生成完成后组件加载失败：未找到组件 mc-max-*，刷新就好"）：
+  //   快照与组件记录都比「完成」事件晚落库 —— 实测同一任务 lastGood 创建于 06:39:24.301、
+  //   组件记录 createdAt 06:39:27.878（**相差 ~3.6s**）。而本函数原**零重试**、单次探测：
+  //   首开时 latest 查不到 → latestSnapshotSource 留 null → 退到 workspace 源并按 sessionId 拼目录
+  //   → 必然 404「未找到组件」。resolveWorkspaceComponentId 的 3s 退避也刚好差 ~0.4s 追不上记录落库，
+  //   所以「刷新一下就好」（那时两者都在）。
+  //   治本：**有界退避重试**（与记录反查同构），命中即停 → 不拖慢正常路径（正常 1 次即返回）。
+  //   ⚠️ 仅对「sessionId 形态」重试：URL 带 sessionId query、或 path 段本身就是 mc-*/mv-*。
+  //   若入口只给了语义 componentId（latest 按 sessionId 建索引，必然 404）→ 不重试，避免白等 6s。
+  const retryable = !!route.query.sessionId || /^(mc|mv)-/.test(sessionId)
+  const maxAttempt = retryable ? 5 : 1
+  for (let attempt = 0; attempt < maxAttempt; attempt++) {
+    await attemptFetchLatestSnapshot(sessionId)
+    if (latestSnapshotSource.value) return
+    if (attempt < maxAttempt - 1) await new Promise((r) => setTimeout(r, 400 * (attempt + 1)))
+  }
+}
+
+/** 单次拉取 latest 快照（含 componentId→sessionId 反查兜底）。成功时写 latestSnapshotSource。 */
+async function attemptFetchLatestSnapshot(sessionId: string) {
   try {
     // latest 接口返回 { candidate, lastGood, partial }；优先级 lastGood > candidate > partial。
     // 🛡️ 2026-09-13 治本（"找不到文件 package/components/XxxSection.vue，刷新后消失"）：
@@ -267,17 +287,19 @@ async function ensureLatestSnapshot() {
 // 把 sessionId 反查成语义化 componentId（component/by-session 接口），使 workspace 源能命中语义化名目录。
 async function resolveWorkspaceComponentId(id: string): Promise<string> {
   if (!id || !/^(mc|mv)-/.test(id)) return id
-  // 🛡️ 2026-09-26（预览竞态兜底）：后端组件记录可能比「完成」事件晚 ~1.6s 落库，
+  // 🛡️ 2026-09-26（预览竞态兜底）：后端组件记录可能比「完成」事件晚落库，
   // 生成完成一刹那跳预览时 by-session 可能仍为空 → 旧逻辑直接回退原始 session 名
-  // → custom-components/<session> 找不到 → 「未找到组件」。这里退避重试最多 4 次（≈0.3+0.6+0.9+1.2s≈3s）。
-  for (let attempt = 0; attempt < 4; attempt++) {
+  // → custom-components/<session> 找不到 → 「未找到组件」。
+  // 🛡️ 2026-09-28 加长：实测记录 createdAt 比 lastGood 快照晚 **~3.6s**（06:39:27.878 vs 06:39:24.301），
+  //   原 4 次≈3s 刚好差 ~0.4s 追不上。改为 6 次（≈0.4+0.8+1.2+1.6+2.0s≈6s），与 ensureLatestSnapshot 同预算。
+  for (let attempt = 0; attempt < 6; attempt++) {
     try {
       const component = await getComponentBySessionId(id)
       if (component?.componentId) return component.componentId
     } catch {
       // 单次失败 → 继续退避重试
     }
-    if (attempt < 3) await new Promise((r) => setTimeout(r, 300 * (attempt + 1)))
+    if (attempt < 5) await new Promise((r) => setTimeout(r, 400 * (attempt + 1)))
   }
   return id
 }
@@ -666,6 +688,122 @@ async function loadMicrocodeDeclare() {
     microcodeDeclare.value = null
   }
   return microcodeDeclare.value
+}
+
+/**
+ * 🛡️ 1.2 修法 A（2026-09-28 · c-device-monitor-aa799337 / c-traffic-monitor-afd08494 实锤）
+ *
+ * 现象：`label` 与 `value` 字号应当不同（设计 14/20，比值 1.4286 已正确写进
+ *   `calc(@fontSize * 1.429)`），独立预览里却**完全同号**（实测两段 ink 高都 ≈17px）。
+ *
+ * 根因：微码产物的 `theme-vars.less` 里 `@fontSize: var(--fontSize)` 是 **mc-check M5-6 的
+ *   精确形态要求（不能带 fallback）**，`--fontSize` 的**注入方是「组件容器」**——
+ *   `core.js#setComponentProps` 把 `getCssVarsConfig()` 的结果塞进 `componentProps.style`，
+ *   由容器内联到组件根元素。而独立预览（`?componentId=` 直开，含**质量预览截图**
+ *   `screenshot-renderer.js` 的 `page.goto(previewUrl)`）**没有这个容器**：
+ *   `--fontSize` 全仓静态定义 0 处，只有 `demo/index.vue` 会用 postMessage 推。
+ *   → 产物里 108 处 `var(--fontSize)` 全部 invalid at computed-value time
+ *   → `font-size` 回落 `inherit` → 所有基于 @fontSize 的字号/间距一起塌成父级字号。
+ *
+ * 修法：预览页按**组件自己声明的** `resources/config/css-vars.js`（唯一事实源，零硬编码）
+ *   把 `{...common, ...[theme]}` 写到 `documentElement` 上作为**默认值**。
+ *   · 只补**尚未设置**的键（`getPropertyValue` 已存在则跳过）→ 父层 demo 页推送的
+ *     自定义值优先；宿主/门户注入的是组件根上的**内联**值，优先级高于 `:root` → 生产不受影响。
+ *   · 任一步失败（取不到 / 解析失败 / 运行时未就绪）**一律跳过**（fail-open）→ 最差等于今天的行为。
+ *   · `cleanupPreviewInjectedStyles()` 已有 `documentElement.removeAttribute('style')`，
+ *     组件卸载/重载不会把变量串给下一个组件。
+ */
+function applyPreviewCssVars(cssVars, theme) {
+  if (!cssVars || typeof cssVars !== 'object') return 0
+  const merged = { ...(cssVars.common || {}), ...(cssVars[theme] || {}) }
+  const root = document.documentElement
+  let applied = 0
+  for (const [key, value] of Object.entries(merged)) {
+    if (value === undefined || value === null || typeof value === 'object') continue
+    let already = ''
+    try {
+      already = root.style.getPropertyValue(`--${key}`)
+    } catch {
+      already = ''
+    }
+    if (already) continue // 已被父层推送/用户自定义 → 作为「默认值」不得覆盖
+    root.style.setProperty(`--${key}`, String(remToPx(value)))
+    applied += 1
+  }
+  return applied
+}
+
+/**
+ * 🛡️ A2（2026-09-28）：预览把 rem 值**按设计基准折算成 px** 后再注入。
+ *
+ * 为什么必须折算：微码产物尺寸一律 `calc(var(--fontSize) * N)`，而
+ * `--fontSize = $mcCssBuilder.getCssSize(<设计px>) = <设计px>/pxtorem.baseSize rem`。
+ * 生产门户在 ~1920 宽屏时 `rem.js` 把 html font-size 调到 ≈baseSize → 组件 1:1；
+ * 但预览窗口被全局 `reset.less` 的 `html { font-size: 12px }` 兜住（实测 420/900/1440/1920 四视口恒 12）
+ * → 组件只有 12/16 = **0.75×**（label 9px / value 12.86px，设计 14/20）。
+ *
+ * 预览的唯一目标是与设计稿 1:1，故把「纯 `Nrem` / `N.Nrem`」形态换算成 `N*baseSize px`：
+ * 折算后 `0.875rem → 14px`、`calc(var(--fontSize)*1.429) → 20px` = 设计值精确一致。
+ * 只影响**组件自身声明的变量**（不动 html font-size / 全局 CSS / rem.js）⇒ 生产零影响；
+ * 非 rem 形态（px / 颜色 / 数字）原样透传，不做任何猜测。
+ *
+ * @param {string|number} value 组件声明的变量值
+ * @returns {string|number} 折算后的值
+ */
+function remToPx(value) {
+  const m = /^\s*(-?\d*\.?\d+)rem\s*$/.exec(String(value))
+  if (!m) return value
+  // 与 rem.js 同源（同一个 @/config 全局配置），不新增事实源
+  const base = Number(appConfig?.pxtorem?.baseSize) || 16
+  return `${Number((Number(m[1]) * base).toFixed(4))}px`
+}
+
+/** 把 ESM 源码文本当模块求值（Blob 模块，避开 eval/new Function）。仅用于 prod/快照源。 */
+async function importModuleFromText(text) {
+  const blob = new Blob([String(text)], { type: 'text/javascript' })
+  const url = URL.createObjectURL(blob)
+  try {
+    return await import(/* @vite-ignore */ url)
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+}
+
+/** 取组件声明的 cssVars 并注入根默认值；微码专用，失败静默跳过。 */
+async function loadMicrocodeCssVars() {
+  if (isVue3) return
+  const rel = 'resources/config/css-vars.js'
+  try {
+    const resolvedId = snapshotSource.value ? componentId : await resolveWorkspaceComponentId(componentId)
+    let mod = null
+    if (snapshotSource.value) {
+      // A · 快照源
+      const res = await http.raw(snapshotFileUrl(rel))
+      if (!res?.ok) return
+      mod = await importModuleFromText(await res.text())
+    } else if (import.meta.env.DEV) {
+      // B · dev 静态 import（与 declare.json 同款「先 ?exists=1 探测再 import」）
+      const probe = await fetch(`/__raw/workspace/custom-components/${resolvedId}/${rel}?exists=1`)
+      if (!probe.ok) return
+      const probeData = await probe.json().catch(() => ({ exists: false }))
+      if (!probeData?.exists) return
+      mod = await import(/* @vite-ignore */ `../../../workspace/custom-components/${resolvedId}/${rel}`)
+    } else {
+      // C · prod 静态拉取
+      const res = await http.raw(`/api/preview/${groupId}/${resolvedId}/${rel}`)
+      if (!res?.ok) return
+      mod = await importModuleFromText(await res.text())
+    }
+    const cssVars = mod?.default || mod
+    const theme =
+      playgroundTheme.value || microcodeDeclare.value?.themeConfig?.default || 'light'
+    const applied = applyPreviewCssVars(cssVars, theme)
+    if (applied > 0) {
+      console.log(`🎨 [Preview] 已注入组件声明 cssVars ${applied} 项（theme=${theme}）`)
+    }
+  } catch (e) {
+    console.warn('[预览] 组件 cssVars 注入失败（跳过，不影响渲染）:', e?.message || e)
+  }
 }
 
 async function loadDev() {
@@ -1156,6 +1294,10 @@ async function reloadComponent(options = {}) {
   try {
     if (!componentId) throw new Error('缺少组件 ID')
     rtComponent.value = import.meta.env.DEV ? await loadDev() : await loadProd()
+    // 🛡️ 1.2 修法 A（2026-09-28）：独立预览无宿主容器注入 cssVars → 补根默认值。
+    //   必须在组件加载**之后**（loadVue3Runtime 已把 $mcCssBuilder 等注册到 globalThis，
+    //   组件自己声明的 css-vars.js 才能被求值）；失败静默跳过；已设置的键不覆盖。
+    await loadMicrocodeCssVars()
     // 🛡️ P2（2026-09-03）：CSS 在 loadModule 编译期注入，早于组件 DOM 挂载，
     // 故在渲染完成后（nextTick）补做作用域化：剥离失效的 [data-v-*] + 加预览容器前缀。
     await nextTick()
@@ -1256,6 +1398,10 @@ async function loadPreviewComponent() {
   try {
     if (!componentId) throw new Error('缺少组件 ID')
     rtComponent.value = import.meta.env.DEV ? await loadDev() : await loadProd()
+    // 🛡️ 1.2 修法 A（2026-09-28）：独立预览无宿主容器注入 cssVars → 补根默认值。
+    //   必须在组件加载**之后**（loadVue3Runtime 已把 $mcCssBuilder 等注册到 globalThis，
+    //   组件自己声明的 css-vars.js 才能被求值）；失败静默跳过；已设置的键不覆盖。
+    await loadMicrocodeCssVars()
     // 🛡️ P2（2026-09-03）：CSS 在 loadModule 编译期注入，早于组件 DOM 挂载，
     // 故在渲染完成后（nextTick）补做作用域化：剥离失效的 [data-v-*] + 加预览容器前缀。
     await nextTick()

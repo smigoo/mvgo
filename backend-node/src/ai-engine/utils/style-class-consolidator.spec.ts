@@ -56,6 +56,38 @@ describe('consolidateSubComponentClasses', () => {
     expect(css.match(/\.c-demo-icon-btn\s*\{/g)?.length).toBe(1)
   })
 
+  it('🛡️ 批0（2026-09-28）同名类合并保留 common.less 独有声明（不再「删除后覆盖」丢 display/flex-direction）', () => {
+    const files = {
+      // common.less 的「丰富版」：含结构性声明
+      'resources/styles/common.less': '.c-demo-stat-item {\n  display: flex;\n  flex-direction: row;\n  gap: 8px;\n}\n',
+      // 子组件的「薄弱版」：只有尺寸类声明（旧实现会整体覆盖 → display/flex-direction 净丢失）
+      'package/components/StatCard.vue': child('.c-demo-stat-item', '  flex: 1 1 0;\n  min-height: 0;'),
+    }
+    const out = consolidateSubComponentClasses(files, { logger })
+    const css = out['resources/styles/common.less']
+    // 现有独有声明必须被保留（子组件未提供的属性）
+    expect(css).toContain('display: flex;')
+    expect(css).toContain('flex-direction: row;')
+    expect(css).toContain('gap: 8px;')
+    // 子组件声明仍然生效
+    expect(css).toContain('flex: 1 1 0;')
+    expect(css).toContain('min-height: 0;')
+    // 仍只有一份定义
+    expect(css.match(/\.c-demo-stat-item\s*\{/g)?.length).toBe(1)
+  })
+
+  it('🛡️ 批0：同名属性仍以子组件为准（仅补回子组件缺失的声明）', () => {
+    const files = {
+      'resources/styles/common.less': '.c-demo-x {\n  display: flex;\n  gap: 8px;\n}\n',
+      'package/components/XCard.vue': child('.c-demo-x', '  display: block;\n  gap: 4px;'),
+    }
+    const out = consolidateSubComponentClasses(files, { logger })
+    const css = out['resources/styles/common.less']
+    expect(css).toContain('display: block;') // 子组件覆盖同名属性
+    expect(css).toContain('gap: 4px;')
+    expect(css).not.toContain('gap: 8px;')
+  })
+
   // 🗑️ P4（2026-09-19）已删除 4 条补偿器测试：
   //   - 布局声明缺则保留（injectMissingLayoutDecls，89f28cb）
   //   - flex 信号补 display / flex 信号幂等 / 无 flex 信号不注入（injectDisplayFromFlexSignals，8404de1）

@@ -413,6 +413,46 @@ describe('resolveSectionFlexSize / 装配回查 Figma bbox（d70a19bf）', () =>
     expect(tpl).toContain('flex:0.320;min-width:0;')
     expect(tpl.match(/flex:1;min-width:0;/g) || []).toHaveLength(0)
   })
+
+  test('⭐ 多个「顶层」section 也按 Figma 高度分配比例，不再一律 flex:1（2026-09-28 afd08494 实锤）', () => {
+    // 复刻 traffic 结构：slot-con 下三个顶层 section，设计高 556 / 142 / 174。
+    // 旧实现 renderBodyNode(root, 0) 不传比例 → 顶层全走 flex:1 兜底 → 1/3 等分。
+    const sections = [
+      { id: '88:33', type: 'container', isLayoutContainer: true, layout: 'vertical',
+        children: [{ id: '88:34', type: 'content', title: '当日总流量' }] },
+      { id: '2:3438', type: 'container', isLayoutContainer: true, layout: 'horizontal',
+        children: [{ id: '2:3439', type: 'content', title: '车型分布' }] },
+      { id: '83:30', type: 'container', isLayoutContainer: true, layout: 'vertical',
+        children: [{ id: '83:31', type: 'content', title: '流量预测' }] },
+    ]
+    const input = makeInput(sections, 'traffic-monitor')
+    ;(input as any).figmaNodeData = {
+      document: {
+        id: 'root', name: 'cp', type: 'FRAME',
+        children: [
+          { id: '88:33', name: 'slot-当日总流量', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 0, width: 425, height: 556 } },
+          { id: '2:3438', name: 'slot-车型分布', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 556, width: 387, height: 142 } },
+          { id: '83:30', name: 'slot-流量预测', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 698, width: 378, height: 174 } },
+        ],
+      },
+    }
+    const tpl = buildDeterministicIndexTemplate(input)!.template
+    // 556:142:174 → 0.638 / 0.163 / 0.200（归一化 flex-grow）
+    expect(tpl).toContain('flex:0.638;min-height:0;')
+    expect(tpl).toContain('flex:0.163;min-height:0;')
+    expect(tpl).toContain('flex:0.200;min-height:0;')
+  })
+
+  test('无高度事实时顶层多 section 行为不变（回落 flex:1，零回归）', () => {
+    const sections = [
+      { id: 'a', type: 'container', isLayoutContainer: true, layout: 'vertical',
+        children: [{ id: 'a1', type: 'content', title: '甲' }] },
+      { id: 'b', type: 'container', isLayoutContainer: true, layout: 'vertical',
+        children: [{ id: 'b1', type: 'content', title: '乙' }] },
+    ]
+    const tpl = buildDeterministicIndexTemplate(makeInput(sections, 'no-height'))!.template
+    expect(tpl).toContain('flex:1;min-height:0;')
+  })
 })
 
 // ══════════════════════════════════════════════════════════════════════════

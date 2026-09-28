@@ -137,18 +137,33 @@ export function extractMountKeywords(mapping) {
 /** 在 vue 文件中找第一个 class 含关键词的开标签，返回完整开标签字符串 */
 export function findTagByClassKeyword(content, kw) {
   if (!content || typeof content !== 'string') return null;
+  const kwNorm = String(kw || '').toLowerCase();
+  if (!kwNorm) return null;
+  // 🛡️ 2026-09-28 词形归一（c-env-monitor-efe76c26 实锤）：mountTarget="tabs-list"（复数）与
+  //   模板类 `.c-env-monitor-tab-list`（单数）只差单复数 → 旧 `includes` 精确子串匹配 miss →
+  //   走 S7 候选池兜底 → **错挂父容器**（bg1 落到 `.c-env-monitor-sub-t-con`）。
+  //   此处：先精确匹配；未命中再对「每段去尾 s」后比（仅当去尾后仍 ≥3 字符，防 bus→bu 类误配）。
+  const dePlural = (s) =>
+    String(s)
+      .toLowerCase()
+      .split('-')
+      .map((seg) => (seg.length >= 4 && /s$/.test(seg) ? seg.slice(0, -1) : seg))
+      .join('-');
+  const kwDe = dePlural(kwNorm);
+  const tags = [];
   const tagRe = /<([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>/])*)>/g;
   let m;
   while ((m = tagRe.exec(content)) !== null) {
+    if (/^script$/i.test(m[1]) || /^style$/i.test(m[1])) continue;
     const attrs = m[2] || '';
     const classMatch =
       attrs.match(/class="([^"]*)"/) || attrs.match(/class='([^']*')/);
-    if (classMatch && classMatch[1].toLowerCase().includes(kw)) {
-      if (/^script$/i.test(m[1]) || /^style$/i.test(m[1])) continue;
-      return m[0];
-    }
+    if (classMatch) tags.push({ raw: m[0], cls: classMatch[1].toLowerCase() });
   }
-  return null;
+  const exact = tags.find((t) => t.cls.includes(kwNorm));
+  if (exact) return exact.raw;
+  const fuzzy = tags.find((t) => dePlural(t.cls).includes(kwDe));
+  return fuzzy ? fuzzy.raw : null;
 }
 
 /**
@@ -1077,8 +1092,10 @@ export function resolveCssSubstituteRefs(allFiles, resourceDomMapping) {
 
 /**
  * 从失败资源映射提取背景 fallback CSS 值。
- * 优先级：visualMeta.fillsSummary > cssValue > 默认渐变。
+ * 优先级：visualMeta.fillsSummary > cssValue > 默认渐变（LAST-RESORT）。
  */
+/** ⚠️ LAST-RESORT 兜底渐变（§七 B15 · 2026-09-28）：真值全缺时的唯一退化值，非设计臆造。 */
+const LAST_RESORT_BG_GRADIENT = 'linear-gradient(180deg, #edf4fb, #d6e8f5)';
 function extractBgFallbackValue(mapping) {
   const fills = mapping.visualMeta?.fillsSummary;
   if (fills && typeof fills === 'string' && fills.trim()) {
@@ -1091,7 +1108,9 @@ function extractBgFallbackValue(mapping) {
     if (/^#[0-9a-fA-F]{3,8}$/.test(firstHex)) return firstHex;
   }
   if (mapping.cssValue) return mapping.cssValue;
-  return 'linear-gradient(180deg, #edf4fb, #d6e8f5)';
+  // ⚠️ LAST-RESORT（§七 B15 · 2026-09-28）：真值**全缺**（无 fillsSummary、无 cssValue）时的
+  //   唯一退化值 —— 「无事实可依」的兜底，非设计臆造；任何有真值的路径都不会走到这里。
+  return LAST_RESORT_BG_GRADIENT;
 }
 
 /**
@@ -2266,6 +2285,11 @@ export function fixSectionHeightsForResource(content, ctx, options = {}) {
   // 是 `c-{semantic}-slot-con`（code-generator.js buildDeterministicIndexTemplate 硬编码），
   // 同样直连宿主 block 容器 .pannel-content——只豁免 -root 时 slot-con 的 height:100% 仍被
   // 改写成 flex:1 1 0 → 塌陷复发（flex:1 1 0 在非 flex 父容器下完全失效）。
+  // 🛡️ 事实优先级表（docs/确定性收回清单-2026-09-16.md §六 #1）：**section 根的 flex 由高度
+  //   比例事实唯一决定**，规则②/④ 不得改写。⚠️ 本豁免**只认 `-root` / `-slot-con`**，
+  //   而全语料 section 根尾段还有 `-con`(742) / `-section`(548) / `-wrapper`(396) /
+  //   `-container`(324) / `-card`(302) **均未覆盖** → 它们的 grow 会被规则②/④ 抹平
+  //   （实锤 `.c-…-chart-con` / `.c-…-switch-con`）。扩展豁免前先按 §六 加 WARN 观测。
   const ROOT_SELECTOR_RE = /\.[\w-]*-(root|slot-con)\b/;
   // 🆕 A4 加权（2026-09-04，实锤 mc-max-1788454423557-25e40782；2026-09-09 修订从 px 改系数）：
   // section 根类命中 ctx.sectionHeights（{根class: flexGrow系数}，由 engineer
@@ -2282,10 +2306,33 @@ export function fixSectionHeightsForResource(content, ctx, options = {}) {
     }
     return 0;
   };
+  // 🛡️ 事实优先级表 §六 #1（2026-09-28）：section 根的 flex 权威 = **高度比例事实**。
+  //   历史：豁免 `ROOT_SELECTOR_RE` 只认 `-root|slot-con`，而确定性容器的 section 根尾段是
+  //   `-con`（如 `.c-x-con-con`）→ 全语料 **19 处漏网**（规则② 把 `height:100%` 改成
+  //   `flex:1 1 0` = 等分，抹平高度比例）。先经 WARN 观测确认命中面，**已于 §七 P2 收口**
+  //   （见下方 `_isSectionRootHead` 精确跳过守卫）。
+  const SECTION_ROOT_HINT_RE = /-(?:con|root|slot-con)$/;
+  // 🛡️ §六 #1 收口（2026-09-28 · §七 P2 落地）：section 根**且无权威比例**时，规则② 原会把
+  //   `height:100%` → `flex: 1 1 0`（等分）→ 抹平高度比例（全语料 `-con` 尾段 19 处）。
+  //   口径**精确**（不盲目扩 `ROOT_SELECTOR_RE`，否则会连带跳过 px>0 处的「权威系数纠偏」）：
+  //   仅当 ① 尾段命中 section 根形态（`-con/-root/-slot-con`）**且** ② px===0（不在 sectionHeights）
+  //   **且** ③ 原将被写成等分（body 含 `height:100%`）→ 跳过。px>0 时仍按权威系数改写（写的就是
+  //   比例事实本身，非臆造），不影响既有正确纠偏。
+  const _isSectionRootHead = (head) =>
+    SECTION_ROOT_HINT_RE.test(head.replace(/\s*\{$/, '').trim());
+
   const out2 = out1.replace(RULE_BLOCK_RE, (whole, head, body) => {
     if (!/display:\s*flex/i.test(body)) return whole;
     if (ROOT_SELECTOR_RE.test(head)) return whole;
     const px = lookupSectionPx(head);
+    // 🛡️ §六 #1 收口（§七 P2 · 2026-09-28）：section 根 + 无权威比例 + 原将被写成等分 → 跳过。
+    if (px <= 0 && /height:\s*100%\s*;?/i.test(body) && _isSectionRootHead(head)) {
+      logger?.warn?.(
+        `🛡️ §六 #1：section 根 ${head.replace(/\s*\{$/, '').trim()} 无权威比例 → 规则② 跳过（不再等分 flex:1 1 0）`,
+        { file: ctx?.path },
+      );
+      return whole;
+    }
     // 升级分支：无 height:100% 但残留盲注 flex: 1 1 0 → 命中映射时改写为真值 flexGrow 系数
     // 🎯 2026-09-14 治本（c-traffic-monitor-3147d679 真机实锤）：
     // 原分支只认**字面量** `flex: 1 1 0`——LLM 若直接写了错误系数（如 vision 猜的
@@ -2340,12 +2387,42 @@ export function fixSectionHeightsForResource(content, ctx, options = {}) {
   // 全仓仅此 1 处；图表 section 是 `min-height:<px> + flex:<px> 1 0`（合法组合，不触碰）；
   // `width: 100% + grow` 行父下等价、列父下无法静态判定（→ 不触碰）。
   // 规则② 输出的 section 根（height:100%→flex:1 1 0）无 px 尺寸 → 不落入本规则。
+  // 🛡️ 2026-09-28 轴判定（c-device-monitor-18de33dd 实锤 · tab-bg 高度不撑）：
+  //   `flex-grow` 只沿**父容器主轴**扩展 —— 仅当「固定 px 落在父容器主轴」才与 grow 冲突。
+  //   旧判据 `(width|height):<px>` **不区分轴** → 把 column 容器里「定宽(交叉轴) + flex:1 1 0
+  //   (主轴=高)」的 `tab-bg` 误改成 `flex: 0 0 auto` → 高度不撑（全语料另有 tab-item 同病）。
+  //   父轴向证据 = 同一 content 内「类名最长真前缀」那条规则的 `flex-direction`；
+  //   **找不到证据一律不改**（宁可少改，不可误伤）。
+  const DIR_BY_CLS = new Map();
+  for (const m of content.matchAll(RULE_BLOCK_RE)) {
+    const dm = m[2].match(/flex-direction\s*:\s*(row|column)\b/i);
+    if (!dm) continue;
+    for (const cm of m[1].matchAll(/\.([A-Za-z][\w-]*)/g)) {
+      if (!DIR_BY_CLS.has(cm[1])) DIR_BY_CLS.set(cm[1], dm[1].toLowerCase());
+    }
+  }
+  const parentDirOf = (cls) => {
+    for (let i = cls.lastIndexOf('-'); i > 0; i = cls.lastIndexOf('-', i - 1)) {
+      const cand = cls.slice(0, i);
+      if (DIR_BY_CLS.has(cand)) return DIR_BY_CLS.get(cand);
+    }
+    return null;
+  };
+  const FIXED_W_PX_RE = /(?:^|[^-\w])width\s*:\s*\d+(?:\.\d+)?px/;
+  const FIXED_H_PX_RE = /(?:^|[^-\w])height\s*:\s*\d+(?:\.\d+)?px/;
   const FIXED_PX_RE = /(?:^|[^-\w])(?:width|height)\s*:\s*\d+(?:\.\d+)?px/;
   const FLEX_GROW_TRIPLE_RE = /flex\s*:\s*[1-9]\d*\s+[01]\s+(?:0|auto)\b/;
   const out4 = out2.replace(RULE_BLOCK_RE, (whole, head, body) => {
     if (!FIXED_PX_RE.test(body)) return whole;
     const gm = body.match(FLEX_GROW_TRIPLE_RE);
     if (!gm) return whole;
+    // §六 #1：规则④ 对 section 根（`-con` 尾段）实测 **0 处**命中（全语料）→ 无需类似规则② 的跳过守卫。
+    // 轴判定：grow 沿父容器主轴扩展；只有「固定 px 在主轴上」才与 grow 冲突
+    const cls = (head.match(/\.([A-Za-z][\w-]*)/) || [])[1] || '';
+    const dir = cls ? parentDirOf(cls) : null;
+    if (!dir) return whole; // 父轴向未知 → 不动（fail-open，宁可少改）
+    const mainAxisFixed = dir === 'row' ? FIXED_W_PX_RE.test(body) : FIXED_H_PX_RE.test(body);
+    if (!mainAxisFixed) return whole; // 固定 px 在交叉轴 → 与 grow 不冲突 → 不动
     const newBody = body.replace(gm[0], 'flex: 0 0 auto');
     if (newBody !== body) changed = true;
     return head + newBody + '}';

@@ -122,6 +122,8 @@ export class McSpecController {
   /**
    * 管理员预览：自动修复质量评分中的可修复问题（CODE-008、THEME-VAR-NAME-MISMATCH）
    * 修复后自动重新评分并写回 component-meta.json
+   * 
+   * 支持按维度修复：传入 dimensions 参数（如 ['spacing', 'font']）只修复指定维度
    */
   @Post('quality-fix')
   async fixQuality(
@@ -133,7 +135,8 @@ export class McSpecController {
     if (!componentId) {
       throw new HttpException('缺少 componentId', HttpStatus.BAD_REQUEST);
     }
-    const result = await this.svc.fixQualityIssues(componentId);
+    const dimensions = Array.isArray(body?.dimensions) ? body.dimensions : undefined;
+    const result = await this.svc.fixQualityIssues(componentId, { dimensions });
     return { success: true, result };
   }
 

@@ -26,7 +26,6 @@ import {
   extractPerCharTextTruth,
   injectPerCharTextSegments,
   validateDynamicClassStyles,
-  ensureFlexLayoutForSiblings,
   validateResourceBindingLevel,
   extractNodeLevelColorTruth,
   injectNodeLevelColorTruth,
@@ -776,6 +775,245 @@ export function stripBakedDecorationFromFiles(files, resourceDomMapping) {
  * @param {Object} context   { componentName, outputPath, resourceDomMapping, input }
  * @returns {import('./code-fix-pipeline.js').CodeFixPipeline}
  */
+/**
+ * 🛡️ S1（2026-09-28 · (b) 切片一）：把每个 section 的 Figma 节点 id 作为 `data-section-id`
+ * 注入其**子组件模板根元素**。
+ *
+ * 事实源：`input._indexTemplateFacts.sectionRoots`（确定性 index 装配透出，`[{id, component, type}]`）。
+ * 仅在根元素**缺少**该属性时注入；无事实 / 解析失败 → 原样返回（fail-open，绝不破坏产物）。
+ * 纯函数（不修改入参）；只加属性，**零视觉影响**，幂等（已有锚点则跳过）。
+ *
+ * @param {Object<string,string>} files path → content
+ * @param {Object} input 生成上下文（读 `_indexTemplateFacts.sectionRoots`）
+ * @returns {{files: Object<string,string>, injected: string[]}}
+ */
+export function injectSectionAnchorsIntoSubComponents(files, input = {}) {
+  const result = { files, injected: [], evaluated: null };
+  if (!files || typeof files !== 'object') return result;
+  const roots = input?._indexTemplateFacts?.sectionRoots;
+  if (!Array.isArray(roots) || roots.length === 0) {
+    result.evaluated = { roots: 0, reason: 'no-sectionRoots' };
+    return result;
+  }
+  // 🛡️ 2026-09-28 名字兜底：**complex 分支的 index 模板由 LLM 写**，其标签名（如 `ContentSection9`）
+  //   与确定性 `sectionRoots[i].component`（如 `ContentSection`）**可能不一致** ⇒ 精确路径找不到文件
+  //   ⇒ 整条规则静默跳过（实测两任务命中 0）。
+  //   兜底顺序（确定性、不猜）：①精确路径 ②**唯一前缀匹配**（`ContentSection9.vue` ← `ContentSection`）
+  //   ③**按序配对**（子组件文件数 == roots 数时按出现序对齐）。多义/数量不符 ⇒ 跳过并记录原因（fail-open）。
+  const compFiles = Object.keys(files).filter((p) =>
+    /^package\/components\/[^/]+\.vue$/.test(p),
+  );
+  const used = new Set();
+  const resolvePath = (comp) => {
+    const exact = `package/components/${comp}.vue`;
+    if (typeof files[exact] === 'string' && files[exact]) return { path: exact, how: 'exact' };
+    const pre = compFiles.filter(
+      (p) => !used.has(p) && p.split('/').pop().replace(/\.vue$/, '').startsWith(comp),
+    );
+    if (pre.length === 1) return { path: pre[0], how: 'prefix-unique' };
+    return null;
+  };
+  const orderFallback =
+    compFiles.length === roots.length
+      ? compFiles
+      : null; /** 数量一致才允许按序兜底 */
+  const next = { ...files };
+  let matchedExact = 0;
+  let matchedPrefix = 0;
+  let matchedOrder = 0;
+  const unmatched = [];
+  for (let ri = 0; ri < roots.length; ri++) {
+    const r = roots[ri];
+    const comp = String(r?.component || '').trim();
+    const id = String(r?.id || '').trim();
+    if (!comp || !id) continue;
+    let hit = resolvePath(comp);
+    if (hit) {
+      if (hit.how === 'exact') matchedExact += 1;
+      else matchedPrefix += 1;
+    } else if (orderFallback && typeof files[orderFallback[ri]] === 'string') {
+      hit = { path: orderFallback[ri], how: 'order' };
+      matchedOrder += 1;
+    }
+    if (!hit) {
+      unmatched.push(comp);
+      continue;
+    }
+    used.add(hit.path);
+    const p = hit.path;
+    const src = files[p];
+    if (typeof src !== 'string' || !src) continue;
+    // 只动 <template> 起始处的根元素（其后 4000 字符足够覆盖开标签）
+    const tplIdx = src.indexOf('<template>');
+    if (tplIdx < 0) continue;
+    const winLen = 4000;
+    const head = src.slice(tplIdx, tplIdx + winLen);
+    const m = /<template>\s*<([A-Za-z][\w.-]*)((?:"[^"]*"|'[^']*'|[^>])*)>/s.exec(head);
+    if (!m) continue;
+    const openTag = m[0];
+    if (/\bdata-section-id\s*=/.test(m[2] || '')) continue; // 幂等：已有锚点
+    const nameEsc = m[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const injectedTag = openTag.replace(
+      new RegExp(`^(<template>\\s*<${nameEsc})`),
+      `$1 data-section-id="${id}"`,
+    );
+    if (injectedTag === openTag) continue;
+    next[p] =
+      src.slice(0, tplIdx) + head.replace(openTag, injectedTag) + src.slice(tplIdx + winLen);
+    result.injected.push(`${p} ← ${id}`);
+  }
+  result.files = next;
+  // 🛡️「已评估」统计（2026-09-28）：用于区分「规则没跑」与「跑了但没命中」——
+  //   此前只有注入>0 才落日志，导致 0 命中时无法判断（实测两任务命中 0，靠推测）。
+  result.evaluated = {
+    roots: roots.length,
+    compFiles: compFiles.length,
+    matchedExact,
+    matchedPrefix,
+    matchedOrder,
+    unmatched: unmatched.slice(0, 6),
+    injected: result.injected.length,
+  };
+  return result;
+}
+
+/** S2 兜底块标记（幂等判据；同时便于事后审计这些产物是"被兜底救回的"）。 */
+export const DEGENERATE_FALLBACK_CLASS = 'mc-truth-fallback';
+
+/** 解析 declare.json → 已声明的业务键集合（与 PROP-BIND 门禁同口径，单一事实源）。 */
+function declaredBusinessKeys(files) {
+  const entry = Object.entries(files || {}).find(([p]) =>
+    /(^|\/)declare\.json$/.test(String(p)),
+  );
+  if (!entry) return null; // 无 declare → 无法判定"未声明" → 整条规则 fail-open
+  try {
+    const dec = typeof entry[1] === 'string' ? JSON.parse(entry[1]) : entry[1];
+    return new Set([
+      ...Object.keys(dec?.businessConfig || {}),
+      ...Object.keys(dec?.businessStatuses || {}),
+      ...Object.keys(dec?.businessEvents || {}),
+    ]);
+  } catch {
+    return null;
+  }
+}
+
+/** 该 section 的 Figma 子树真值文案（视觉序：先 y 后 x；跳过 visible:false；去重）。 */
+export function collectSectionTruthTexts(figmaNodeData, sectionId) {
+  const root = figmaNodeData?.document || figmaNodeData;
+  if (!root || !sectionId) return [];
+  let target = null;
+  const stack = [root];
+  let seen = 0;
+  while (stack.length && seen < 6000 && !target) {
+    const n = stack.pop();
+    seen += 1;
+    if (!n || typeof n !== 'object') continue;
+    if (String(n.id || '') === String(sectionId)) {
+      target = n;
+      break;
+    }
+    if (Array.isArray(n.children)) for (const c of n.children) if (c) stack.push(c);
+  }
+  if (!target) return [];
+  const texts = [];
+  const walk = (n) => {
+    if (!n || typeof n !== 'object') return;
+    if (n.type === 'TEXT' && n.visible !== false && typeof n.characters === 'string') {
+      const t = n.characters.replace(/\s+/g, ' ').trim();
+      if (t) texts.push({ t, y: Number(n.absoluteBoundingBox?.y ?? 0), x: Number(n.absoluteBoundingBox?.x ?? 0) });
+    }
+    if (Array.isArray(n.children)) for (const c of n.children) walk(c);
+  };
+  walk(target);
+  texts.sort((a, b) => (a.y - b.y) || (a.x - b.x));
+  const out = [];
+  for (const { t } of texts) if (!out.includes(t)) out.push(t);
+  return out;
+}
+
+/**
+ * 找根元素的闭合位置（返回 `</rootTag>` 的起始下标；-1 = 解析失败）。
+ * 用**根标签同名深度计数**扫描（自闭合标签不计深度）；同名嵌套（如 div 套 div）可正确处理。
+ */
+function findRootCloseIndex(src, templateIdx, rootTag) {
+  const seg = src.slice(templateIdx);
+  const firstGt = seg.indexOf('>');
+  if (firstGt < 0) return -1;
+  const tagRe = /<\/?([A-Za-z][\w.-]*)((?:"[^"]*"|'[^']*'|[^>])*)>/g;
+  // 从 <template> 的 `>` 之后开始扫 → 根元素的**开标签尚未计入**，故 depth 从 0 起算：
+  //   根开标签 → 1，根闭标签 → 0（同名嵌套 div 套 div 亦正确）。
+  tagRe.lastIndex = firstGt + 1;
+  let depth = 0;
+  let t;
+  while ((t = tagRe.exec(seg))) {
+    const isClose = t[0].startsWith('</');
+    const selfClose = /\/\s*$/.test(t[2] || '');
+    if (t[1] !== rootTag) continue;
+    if (isClose) {
+      depth -= 1;
+      if (depth === 0) return templateIdx + t.index;
+    } else if (!selfClose) {
+      depth += 1;
+    }
+  }
+  return -1;
+}
+
+/**
+ * 🛡️ S2（2026-09-28 · (b) 切片二 · **窄触发**）：退化子组件模板的**确定性兜底**。
+ *
+ * 触发（必须同时满足，故正常产物**永不触发**）：
+ *   ① 该子组件模板绑定了 `declare.json` **未声明**的 `businessProps.<key>`
+ *      （＝运行期必然取不到值、该区块渲染为空；与 PROP-BIND 门禁同一确定性证据）；
+ *   ② 其根元素带有 `data-section-id`（S1 注入）且该 section 的 Figma 子树**有真值文案**。
+ * 动作：在根元素**末尾追加**一个无样式的真值文案块（`<span>` 序列，视觉序），
+ *   **不改动 LLM 已写的任何 markup**（只追加），幂等（按 `DEGENERATE_FALLBACK_CLASS` 判据）。
+ * 为什么不替换：子组件模板承载业务逻辑，替换 markup 有打坏正常部分的风险；
+ *   而"空盒"场景下追加真值文案即可恢复可读内容，且样式沿用 section 继承（**不引入任何硬编码**）。
+ * fail-open：无 declare / 无锚点 / 无真值 / 解析失败 → 一律原样返回。
+ *
+ * @returns {{files: Object<string,string>, healed: string[]}}
+ */
+export function healDegenerateSubComponentContent(files, figmaNodeData) {
+  const out = { files, healed: [], scanned: 0, deadBindingCandidates: 0 };
+  if (!files || typeof files !== 'object' || !figmaNodeData) return out;
+  const declared = declaredBusinessKeys(files);
+  if (!declared) return out;
+  const next = { ...files };
+  for (const [p, src] of Object.entries(files)) {
+    if (!/^package\/components\/[^/]+\.vue$/.test(p) || typeof src !== 'string') continue;
+    out.scanned += 1;
+    if (src.includes(DEGENERATE_FALLBACK_CLASS)) continue; // 幂等
+    let hasDeadBinding = false;
+    for (const m of src.matchAll(/businessProps\.([A-Za-z_$][\w$]*)/g)) {
+      if (!declared.has(m[1])) {
+        hasDeadBinding = true;
+        break;
+      }
+    }
+    if (!hasDeadBinding) continue;
+    out.deadBindingCandidates += 1;
+    const secId = /data-section-id="([^"]+)"/.exec(src)?.[1];
+    if (!secId) continue;
+    const texts = collectSectionTruthTexts(figmaNodeData, secId);
+    if (texts.length === 0) continue;
+    const tplIdx = src.indexOf('<template>');
+    if (tplIdx < 0) continue;
+    const rootTag = /<template>\s*<([A-Za-z][\w.-]*)/.exec(src.slice(tplIdx, tplIdx + 4000))?.[1];
+    if (!rootTag) continue;
+    const closeIdx = findRootCloseIndex(src, tplIdx, rootTag);
+    if (closeIdx < 0) continue;
+    const block = `\n      <div class="${DEGENERATE_FALLBACK_CLASS}" data-section-id="${secId}">${texts
+      .map((t) => `<span>${t}</span>`)
+      .join('')}</div>\n    `;
+    next[p] = src.slice(0, closeIdx) + block + src.slice(closeIdx);
+    out.healed.push(`${p} ← ${secId}（${texts.length} 条真值）`);
+  }
+  out.files = next;
+  return out;
+}
+
 export function registerBuiltinFixRules(pipeline, engineer, context = {}) {
   if (!pipeline || !engineer) return pipeline;
   const {
@@ -785,6 +1023,16 @@ export function registerBuiltinFixRules(pipeline, engineer, context = {}) {
     figmaNodeData = null,
     input = {},
   } = context;
+  // 🛡️ P1（2026-09-28）：统一事实上下文。CodeFixPipeline 传入的 `input` 是
+  //   `{ subComponentPlan, generationInput }`（不含 `_indexTemplateFacts`）⇒ 各规则若各读各的
+  //   input 就会得到「roots:0」而生成时的 S3 却看到「sectionRoots:N」的**矛盾**。
+  //   单一事实源兜底顺序：显式 context → input → generationInput → engineer 实例上存的最后一份。
+  const _indexTemplateFacts =
+    context?._indexTemplateFacts ||
+    input?._indexTemplateFacts ||
+    input?.generationInput?._indexTemplateFacts ||
+    engineer?._lastIndexTemplateFacts ||
+    null;
   // 🛡️ COMP-001 前置自愈（ensure-section-assembly）所需的子组件规划。
   // 来源优先级：显式 context.componentPlan > input.subComponentPlan（graph 直传）> generationInput.componentPlan（裁决事实）。
   const componentPlan =
@@ -938,15 +1186,28 @@ export function registerBuiltinFixRules(pipeline, engineer, context = {}) {
           ...input,
           figmaNodeData: figmaNodeData || input?.figmaNodeData || null,
         });
-        return r.mounted;
+        // 🛡️ 2026-09-28 契约修复：原为 `return r.mounted` —— 返回的是「挂载记录数组」，
+        //   而 CodeFixPipeline 的 fixFiles 契约要求返回 `Object<string,string>` 文件集
+        //   （code-fix-pipeline.js:162 契约守卫）⇒ **本规则的全部修复被静默丢弃**：
+        //   实测日志 `[CodeFixPipeline] 文件集规则返回了数组，契约要求 Object<string,string>（本次修复被丢弃）: planned-resource-mount`
+        //   ⇒ 计划驱动的资源挂载（背景/图标）从未真正生效 —— 这是「背景/资源丢失」一族的重要成因。
+        //   helper 返回 `{ files, mounted, ... }`，故应取 `.files`；异常兜底返回原文件集（不破坏产物）。
+        return r && r.files ? r.files : files;
       },
     });
     pipeline.register({
       id: 'normalize-style-less-vars',
       name: '样式 Less 变量归一化',
       phase: FIX_PHASE.RESOURCE,
-      fixFiles: (files) =>
-        engineer._normalizeStyleLessVars(files, resourceDomMapping),
+      // 🛡️ 2026-09-28 契约修复（同 planned-resource-mount）：helper 返回 `{ files, changes, ... }`，
+      //   直接 return 整个对象 ⇒ 契约守卫判非文件集 ⇒ 修复被静默丢弃
+      //   （实测日志：`文件集规则返回了数组，契约要求 Object<string,string>（本次修复被丢弃）: normalize-style-less-vars`
+      //    —— 该 helper 内部在无变更时可能返回数组，故这里统一取 `.files` 并兜底回原文件集）。
+      fixFiles: (files) => {
+        const r = engineer._normalizeStyleLessVars(files, resourceDomMapping);
+        if (r && r.files && typeof r.files === 'object') return r.files;
+        return files;
+      },
     });
     pipeline.register({
       id: 'strip-baked-decoration',
@@ -1248,13 +1509,64 @@ export function registerBuiltinFixRules(pipeline, engineer, context = {}) {
       phase: FIX_PHASE.POLISH,
       fixFiles: (files) => engineer._fixTextSiblingOrder(files, figmaNodeData),
     });
+    // 🛡️ S1（2026-09-28 · (b) 切片一）：子组件模板根节点注入 `data-section-id`。
+    // 背景：子组件模板由 LLM 整文件即兴写（无任何确定性装配），**根节点普遍没有 section 锚点** ——
+    //   全语料审计 1084/1200（90%）缺失。缺锚点导致两件事都做不了：
+    //     ① 逐 section 的真值/事实校验（如 TEXT-COVERAGE 的 section 级档、以及后续任何 section 级下发）；
+    //     ② `resource-mounter` 按 `[data-section-id="…"]` 精确命中 DOM —— 叶子资源的挂载会落空
+    //        （该理由与当初给「容器 div」补 data-section-id 完全一致）。
+    // 事实源：确定性 index 装配透出的 `sectionRoots = [{id, component, type}]`（唯一事实源，来自 effectiveSections）。
+    // 安全性：只在**缺失**时补；解析/事实不可得一律跳过（fail-open）；纯属性注入，**零视觉影响**。
+    pipeline.register({
+      id: 'inject-section-anchors',
+      name: '子组件模板注入 data-section-id 锚点（S1）',
+      phase: FIX_PHASE.POLISH,
+      // ⚠️ 契约（code-fix-pipeline.js:162）：fixFiles **必须返回 Object<string,string> 文件集**，
+      //    故这里取 `.files`；注入明细在本闭包里落日志（返回非 map 会被契约守卫判为无效规则）。
+      fixFiles: (files) => {
+        const r = injectSectionAnchorsIntoSubComponents(files, { ...input, _indexTemplateFacts });
+        // 🛡️「已评估」日志（2026-09-28）：无论注入多少都落一行，明确区分
+        //   「规则没跑 / 跑了但没命中 / 命中了多少」，避免再靠推测排查。
+        if (r.evaluated && engineer?.logger?.info) {
+          engineer.logger.info('🛡️ S1 锚点注入·已评估', {
+            ...r.evaluated,
+            factsSource: _indexTemplateFacts?.source || 'none',
+          });
+        }
+        return r.files;
+      },
+    });
+    // 🛡️ S2（2026-09-28 · (b) 切片二 · **窄触发**）：退化子组件模板的确定性兜底。
+    // 与 PROP-BIND 门禁同一确定性证据（绑定未声明的 businessProps ⇒ 必然空渲染），
+    // 把「BLOCK + 让 LLM 重试」降级为「确定性自愈一次」；**正常产物永不触发**。
+    // ⚠️ 顺序必须在 S1 之后（依赖其注入的 data-section-id 定位 section 真值）。
+    pipeline.register({
+      id: 'heal-degenerate-subcomponent-content',
+      name: '退化子组件模板真值文案兜底（S2 窄触发）',
+      phase: FIX_PHASE.POLISH,
+      fixFiles: (files) => {
+        const r = healDegenerateSubComponentContent(files, figmaNodeData);
+        if (engineer?.logger?.info) {
+          engineer.logger.info('🛡️ S2 退化子组件兜底·已评估', {
+            scanned: r.scanned,
+            deadBindingCandidates: r.deadBindingCandidates,
+            healed: r.healed.length,
+            samples: r.healed.slice(0, 3),
+          });
+        }
+        return r.files;
+      },
+    });
     // 🛡️ P-12 防御性治理规则（2026-09-18）
     // 背景：c-env-monitor-a27a33f7 TabSwitcher 布局错乱 + c-device-monitor-7de62721 颜色错误
     // 根因：LLM 产出结构性错误（动态 class 无样式、容器缺 flex、资源绑定层级错误、颜色真值提取失败）
     // 规则：
     //   P-12a validate-dynamic-class-styles：扫描模板中所有 class 名，与 style 选择器交叉比对，缺失的补空规则
-    //   P-12b ensure-flex-layout-for-siblings：检测父容器下有多个直接子元素且无 flex，注入 display: flex + align-items + gap
     //   P-12c validate-resource-binding-level：检测 backgroundImage 绑定位置，与 Figma 节点树对比，层级不匹配时警告
+    //   ⚠️ P-12b `ensure-flex-layout-for-siblings` 已于 2026-09-28 删除（§七 B16/C4）：
+    //      与 `css-sanitizer#ensureFlexDisplay`（Fix1，零硬编码）+ `resource-mounter` 规则⑤
+    //      （按 Figma `selectorChildCounts`）职责重复；其判据是「相邻标签即父子」错误启发式，
+    //      且注入硬编码 `align-items:center` + `gap:4px`（污染真实间距）→ 按删减法收敛。
     //   P-12d extract-node-level-color-truth：提取每个 TEXT 节点的颜色真值（默认 fill + per-char 覆盖色）
     pipeline.register({
       id: 'validate-dynamic-class-styles',
@@ -1270,24 +1582,10 @@ export function registerBuiltinFixRules(pipeline, engineer, context = {}) {
         }
       },
     });
-    pipeline.register({
-      id: 'ensure-flex-layout-for-siblings',
-      name: 'Flex 布局自动注入（P-12b）',
-      phase: FIX_PHASE.POLISH,
-      fix: (content, ctx) => {
-        if (!ctx || !/\.vue$/i.test(ctx.path || '')) return content;
-        try {
-          return ensureFlexLayoutForSiblings(content);
-        } catch (e) {
-          pipeline.logger?.warn?.('P-12b Flex 布局自动注入失败（非阻断）', { error: e?.message, file: ctx.path });
-          return content;
-        }
-      },
-    });
     // 🛡️ 缺口 2（2026-09-21 · c-device-monitor-4bc13256/c22ff970 实锤）：
-    //   P-12b 会往「已有 grid-template-* 的规则」灌 display:flex → grid 属性被
-    //   浏览器忽略，12 卡挤成一行。冲突时以 grid 为准。必须挂在 P-12b 之后
-    //   （同阶段按注册序执行），把灌进去的 flex 改回 grid。
+    //   曾有规则会往「已有 grid-template-* 的规则」灌 display:flex → grid 属性被浏览器忽略，
+    //   12 卡挤成一行。冲突时以 grid 为准。P-12b 已于 2026-09-28 删除（§七 B16），本规则
+    //   保留为**兜底守卫**（防 Fix1 `ensureFlexDisplay` 在极少数「grid + flex 子属性」并存时灌 flex）。
     pipeline.register({
       id: 'ensure-grid-display-prefer-grid',
       name: '冲突 CSS 以 grid 为准（缺口 2）',
@@ -1450,7 +1748,6 @@ export const BUILTIN_RULE_IDS = [
   'collapse-background-shell-divs',
   'inject-state-switch-interaction',
   'validate-dynamic-class-styles',
-  'ensure-flex-layout-for-siblings',
   'validate-resource-binding-level',
   'extract-node-level-color-truth',
   'remove-subcomponent-width-override',

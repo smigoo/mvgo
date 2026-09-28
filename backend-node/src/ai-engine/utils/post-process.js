@@ -311,7 +311,9 @@ export function ensureBackgroundStyleComplete(content) {
     if (close < 0) continue;
     // ④ 检查「整个对象」内是否已有 size/repeat/position（不是只到 backgroundImage 值的逗号）
     const objSlice = content.slice(open, close);
-    // 🛡️ 使用默认推断值（资源映射表暂未实现）
+    // 🛡️ §七 B7（2026-09-28）：此处补的是**缺失属性**（size/repeat/position），用的是
+    //   `inferBackgroundStyle({})` 的**中性默认**（'100% 100%' / 'no-repeat' / '0px 0px'），
+    //   而非按组件臆造的**值** —— 属「属性补全」而非「值臆造」（与已删的 §七 B3 合成几何区分）。
     const inferred = inferBackgroundStyle({});
     const patches = [];
     if (!/backgroundSize\s*:/.test(objSlice)) patches.push(`backgroundSize: '${inferred.size}'`);
@@ -1187,6 +1189,33 @@ export function collapseBackgroundShellDivs(code) {
     //   DOM 零空壳、视觉 1:1（绝对定位几何不变）、嵌套变体（.item--active）天然可覆盖。
     const topDecls = collectTopLevelShellDecls(styleSeg ? styleSeg[1] : '', shell.cls);
     if (/\bposition\s*:\s*(absolute|fixed)\b/i.test(topDecls)) {
+      // 🛡️ §七 C2（2026-09-28）：宿主已有**资源背景图**（`hostHasBackground`）→ 该装饰层是其
+      //   近似表示，直接删壳（资源图为唯一背景），**不得**转 `::before`——否则资源图 + `::before`
+      //   渐变 = 两层背景（正是 #3/§六#2 要治的病）。与下方「父有资源图则删壳」分支同义。
+      //   ✅ 同时消解 §七 C3：B5 `stripRedundantInnerBgWhenHostHasBg` 只认 `.H-bg` 规则名，
+      //   抓不到转成 `.H::before` 的形态；故守卫必须落在**转换之前**（B5 无需扩匹配面）。
+      const shellIdx0 = out.indexOf(shell.full);
+      // 🛡️ 2026-09-28：**先剥 HTML 注释**再找宿主开标签。此前直接用
+      //   `before0.match(/<div\b[^>]*>(?=[^<]*$)/)`：lookahead 要求「开标签之后到壳之前不含 `<`」，
+      //   而 LLM 常在内层壳前写注释（实测 mc-max-1790583585496-9331b2e8/ContentActive.vue：
+      //   宿主与 `-bg` 壳之间是 `<!-- 背景层：渐变底（Figma: Rectangle …）-->`）⇒ 注释里的 `<`
+      //   令匹配失败 ⇒ parentOpen 为 null ⇒ `hostHasResBg=false` ⇒ **不删壳** ⇒
+      //   宿主资源背景图被内层 absolute 渐变壳盖住（浅底 + 白字 ⇒ 文字隐形）。
+      const before0 = (shellIdx0 >= 0 ? out.slice(0, shellIdx0) : '').replace(
+        /<!--[\s\S]*?-->/g,
+        '',
+      );
+      const parentOpen0M = before0.match(/<div\b[^>]*>(?=[^<]*$)/);
+      const parentCls0 = parentOpen0M ? extractFirstClassName(parentOpen0M[0]) : '';
+      const hostHasResBg =
+        !!parentOpen0M &&
+        hostHasBackground(parentOpen0M[0], parentCls0 || '', styleSeg ? styleSeg[1] : '');
+      if (hostHasResBg) {
+        out = out.replace(shell.full, '');
+        out = removeTopLevelShellRule(out, shell.cls);
+        collapsed += 1;
+        continue;
+      }
       const pseudo = convertShellToPseudoElement(out, shell);
       if (pseudo !== null) {
         out = pseudo;
@@ -1219,7 +1248,9 @@ export function collapseBackgroundShellDivs(code) {
     // ── 3) 定位父开标签（空壳之前最近的未闭合 div 开标签）──
     const shellIdx = out.indexOf(shell.full);
     if (shellIdx === -1) continue;
-    const before = out.slice(0, shellIdx);
+    // 🛡️ 2026-09-28：与上方 C2 同因同修 —— 先剥 HTML 注释，否则壳前注释里的 `<` 会让
+    //   「宿主开标签」查找失败 ⇒ 宿主判为空 ⇒ 背景图/合并判据整条失活。
+    const before = out.slice(0, shellIdx).replace(/<!--[\s\S]*?-->/g, '');
     const parentOpenM = before.match(/<div\b[^>]*>(?=[^<]*$)/);
     if (!parentOpenM) continue;
     const parentOpen = parentOpenM[0];
@@ -1227,7 +1258,15 @@ export function collapseBackgroundShellDivs(code) {
     //   `:class="['c-x-item', { 'c-x-item--active': on }]"`——静态提取只拿到垃圾 token。
     //   修：先试静态 class，再试动态数组首个字符串字面量。
     const firstCls = extractFirstClassName(parentOpen);
-    const parentHasInlineBg = /background(?:Image|-image)?\s*[=:]/i.test(parentOpen);
+    // 🛡️ §七 C1（2026-09-28）：与 #3 `stripRedundantInnerBgWhenHostHasBg` 共用**同一判据函数**
+    //   `hostHasBackground`（① 标签内联 backgroundImage 或 ② 宿主 CSS 规则里的资源图 url()）。
+    //   原实现只认父标签内联（`background(?:Image|-image)?\s*[=:]`）→ 同一宿主「有没有背景」
+    //   两套口径（§七 C1：B1 认内联、B5 认 CSS url），此处收口为单一口径。
+    const parentHasInlineBg = hostHasBackground(
+      parentOpen,
+      firstCls || '',
+      styleSeg ? styleSeg[1] : '',
+    );
 
     // ── 4) 合并声明到父 class 规则（父已有同名属性 → 空壳声明丢弃）──
     let merged = false;
@@ -1476,9 +1515,15 @@ export function injectStateSwitchInteraction(files, resourceDomMapping = []) {
     files[commonPath] =
       String(files[commonPath]) +
       `\n\n/* 🛡️ P-09 状态切换交互（确定性装配） */\n` +
-      `.${baseCls} {\n  transition: opacity 0.2s ease;\n  cursor: pointer;\n}\n` +
-      `.${baseCls}--active,\n.${baseCls}--default {\n  opacity: 1;\n}\n` +
-      `.${baseCls}:not(.${baseCls}--active):not(.${baseCls}--default) {\n  opacity: 0.55;\n}\n`;
+      // 🛡️ 批5（2026-09-28 · device-monitor 实锤）：**删除「整项 opacity」状态暗示**。
+      //   设计稿里「未选中态」是**背景更淡**（由各状态自带的背景资源/渐变表达），
+      //   文字与图标**不透明**；旧实现注入
+      //   `.state-switch:not(--active):not(--default){opacity:0.55}` 会把**整个未选中项**
+      //   （含文字/图标）一并淡化 → 用户反馈「默认项整体被加了透明度（设计上没有）」。
+      //   确定性装配器不得臆造设计里不存在的视觉。改为：保留 `--active/--default` 规则
+      //   （CODE-024 C3 要求模板用到的修饰符类在样式源有对应规则）但只写**无害声明**。
+      `.${baseCls} {\n  cursor: pointer;\n}\n` +
+      `.${baseCls}--active,\n.${baseCls}--default {\n  opacity: 1;\n}\n`;
   }
 
   return {
@@ -1737,6 +1782,75 @@ export function extractPerCharTextTruth(figmaNodeData) {
 }
 
 /**
+ * 🛡️ 2026-09-28（c-device-monitor-18de33dd 实锤）：**宿主已挂资源背景图 → 抑制其内层 `-bg`
+ * 元素的 background**（同一视觉两层背景：宿主 PNG + 内层真值渐变）。
+ *
+ * 判据（精确、幂等）：模板里某元素带内联 `backgroundImage` 绑定且类为 `H`（如
+ * `c-device-monitor-default`），而样式里存在规则 `.H-bg { … background: … }` → 从该规则
+ * 移除 `background` / `background-image` 声明（保留 border-radius / grid 等其余声明）。
+ * 资源图（精确像素）是权威表示，真值渐变只是其近似 → 二选一，保留资源图。
+ *
+ * @param {string} code .vue 全文
+ * @returns {string} 处理后的 code（无改动则原样返回）
+ */
+/**
+ * 🛡️ 事实优先级表（docs/确定性收回清单-2026-09-16.md §六 #2）**单一判据**：
+ *   宿主「已有背景」= ① 标签上内联绑定 `backgroundImage`，或 ② 宿主自身 CSS 规则里声明了
+ *   **资源图 `url(...)`**。
+ *   ⚠️ 只认 `url(...)`（资源图）—— 优先级是「**资源图**（精确像素）> 真值渐变（近似）」，
+ *   普通 CSS 渐变/纯色不算「权威背景」，不得据此抑制内层（防误伤独有背景）。
+ */
+export function hostHasBackground(tagAttrs, hostClass, styleText) {
+  if (/(?::style|style)\s*=\s*"[^"]*backgroundImage[^"]*"/i.test(String(tagAttrs || ''))) return true;
+  if (!hostClass || !styleText) return false;
+  const esc = String(hostClass).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`\\.${esc}\\s*\\{([^{}]*)\\}`, 'g');
+  let m;
+  while ((m = re.exec(String(styleText))) !== null) {
+    const bm = m[1].match(/(?:^|[^-\w])background(?:-image)?\s*:\s*([^;}]+)/i);
+    if (bm && /url\(/i.test(bm[1])) return true;
+  }
+  return false;
+}
+
+export function stripRedundantInnerBgWhenHostHasBg(code) {
+  if (typeof code !== 'string' || !code) return code;
+  const tplSeg = code.match(/<template[^>]*>([\s\S]*?)<\/template>/);
+  if (!tplSeg) return code;
+  const styleSeg = code.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
+  const styleText = styleSeg ? styleSeg[1] : '';
+  const hostCls = new Set();
+  const tagRe = /<([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>])*)>/g;
+  let m;
+  while ((m = tagRe.exec(tplSeg[1])) !== null) {
+    const attrs = m[2] || '';
+    const cm = attrs.match(/class="([^"]*)"/);
+    if (!cm) continue;
+    for (const c of cm[1].split(/\s+/)) {
+      if (!/^c-[A-Za-z][\w-]*$/.test(c)) continue;
+      if (hostHasBackground(attrs, c, styleText)) hostCls.add(c);
+    }
+  }
+  if (!hostCls.size) return code;
+  let out = code;
+  let changed = false;
+  for (const h of hostCls) {
+    const esc = `${h}-bg`.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`(\\.${esc}\\s*\\{)([^{}]*)(\\})`, 'g');
+    out = out.replace(re, (full, head, body, tail) => {
+      if (!/(?:^|[^-\w])background(?:-image)?\s*:/.test(body)) return full;
+      const nb = body
+        .replace(/\s*background-image\s*:[^;}]*;?/gi, '')
+        .replace(/\s*background\s*:[^;}]*;?/gi, '');
+      if (nb === body) return full;
+      changed = true;
+      return head + nb + tail;
+    });
+  }
+  return changed ? out : code;
+}
+
+/**
  * 🛡️ P-10 死规则迁移（b58918b5 实锤）：模板无 -bg 壳 + 样式有 .x-bg 渐变规则。
  * LLM 组合选择器形态（`.item:not(.active) .x-bg { 渐变 }`）里的 .x-bg 段在模板
  * 剥壳后成死选择器 → 渐变丢失。改写：模板全无该 class 的 DOM 元素时，组合选择器
@@ -1789,7 +1903,13 @@ function migrateOrphanBgRulesToPseudo(code) {
         const body = text.slice(ruleOpen, bodyEnd);
         const adds = [];
         if (!/content\s*:/.test(body)) adds.push(`content: ''`);
-        if (!/position\s*:/.test(body)) adds.push(`position: absolute; top: 0; left: 6px; width: 34px; height: 100%`);
+        // 🛡️ 零硬编码（2026-09-28 · §七 B3/C5）：原为合成几何常量
+        //   `top:0; left:6px; width:34px; height:100%`（源自某具体组件的实测值）→ 换组件必错位。
+        //   死规则迁移时 post-process **不持 Figma 几何** → 不臆造常量，改用**宿主盒子**
+        //   （`inset:0` 形态 = 铺满宿主）——宿主是此处唯一可依据的几何事实，且宿主
+        //   `position:relative` 同段已补全。语义：背景层铺满其宿主（`.x` 内的 `-bg` 层
+        //   本就是宿主全尺寸背景层的近似表示）。
+        if (!/position\s*:/.test(body)) adds.push(`position: absolute; top: 0; left: 0; right: 0; bottom: 0`);
         if (adds.length > 0) patches.push({ at: ruleOpen, text: '\n  ' + adds.join(';\n  ') + ';\n' });
       }
       for (const p of patches.reverse()) {
@@ -1894,7 +2014,8 @@ function tryUnwrapPositionalBgWrapper(code, shell) {
 export function convertShellToPseudoElement(code, shell) {
   const shellIdx = code.indexOf(shell.full);
   if (shellIdx < 0) return null;
-  const before = code.slice(0, shellIdx);
+  // 🛡️ 2026-09-28：同上（先剥 HTML 注释，避免壳前注释里的 `<` 破坏宿主开标签匹配）。
+  const before = code.slice(0, shellIdx).replace(/<!--[\s\S]*?-->/g, '');
   const parentOpenM = before.match(/<div\b[^>]*>(?=[^<]*$)/);
   if (!parentOpenM) return null;
   const firstCls = extractFirstClassName(parentOpenM[0]);
@@ -2185,94 +2306,6 @@ export function validateDynamicClassStyles(code) {
 
   return code.slice(0, styleMatch.index) +
     styleOpenTag + newStyle + '</style>' +
-    code.slice(styleMatch.index + styleMatch[0].length);
-}
-
-/**
- * 🛡️ P-12b Flex 布局自动注入
- * 问题：容器有多个兄弟元素但缺 display: flex，导致子元素垂直堆叠而非水平排列
- * 形态：`.tabs-list` 下有多个 `.tab-item` 但无 flex 布局
- * 动作：检测父容器下有多个直接子元素且无 flex，注入 display: flex + align-items + gap
- * @param {string} code Vue SFC 代码
- * @returns {string} 修复后的代码（幂等）
- */
-export function ensureFlexLayoutForSiblings(code) {
-  if (!code || typeof code !== 'string') return code;
-
-  const templateMatch = code.match(/<template[^>]*>([\s\S]*?)<\/template>/);
-  if (!templateMatch) return code;
-  const template = templateMatch[1];
-
-  const styleMatch = code.match(/(<style[^>]*>)([\s\S]*?)(<\/style>)/);
-  if (!styleMatch) return code;
-  const styleOpenTag = styleMatch[1];
-  let styleContent = styleMatch[2];
-
-  // 提取所有带 class 的标签及其层级
-  const tagRe = /<([a-zA-Z-]+)[^>]*class="([^"]*)"[^>]*>/g;
-  const tags = [];
-  let m;
-  while ((m = tagRe.exec(template)) !== null) {
-    tags.push({ tag: m[1], classes: m[2].split(/\s+/), index: m.index });
-  }
-
-  // 检测每个 class 的选择器在 style 中的声明
-  // 缺口 2：已有 grid-template-* 的规则是 grid 意图，P-12b 不得再灌 flex
-  const GRID_TEMPLATE_RX =
-    /\b(?:grid-template-columns|grid-template-rows|grid-template-areas|grid-auto-flow|grid-auto-columns|grid-auto-rows)\s*:/i;
-  const classDecls = new Map(); // className -> { hasDisplay, hasAlignItems, hasGap, hasGridTemplate }
-  const declRe = /\.([A-Za-z_][\w-]*)\s*\{([^{}]*)\}/g;
-  while ((m = declRe.exec(styleContent)) !== null) {
-    const cls = m[1];
-    const decls = m[2];
-    classDecls.set(cls, {
-      hasDisplay: /display\s*:\s*flex/i.test(decls),
-      hasAlignItems: /align-items/i.test(decls),
-      hasGap: /gap/i.test(decls),
-      hasGridTemplate: GRID_TEMPLATE_RX.test(decls),
-    });
-  }
-
-  // 检测需要 flex 的容器：有多个直接子元素
-  const needsFlex = new Set();
-  for (let i = 0; i < tags.length - 1; i++) {
-    const parent = tags[i];
-    const child = tags[i + 1];
-    // 简单启发式：相邻标签视为父子关系（实际应解析 DOM 树，此处简化）
-    const parentClasses = parent.classes;
-    for (const cls of parentClasses) {
-      const decl = classDecls.get(cls);
-      if (decl && !decl.hasDisplay && !decl.hasGridTemplate) {
-        needsFlex.add(cls);
-      }
-    }
-  }
-
-  if (needsFlex.size === 0) return code;
-
-  // 注入 flex 布局到缺失的 class
-  let changed = false;
-  for (const cls of needsFlex) {
-    const clsEsc = cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const ruleRe = new RegExp('(\\.' + clsEsc + '\\s*\\{)([^{}]*)(\\})');
-    const ruleMatch = styleContent.match(ruleRe);
-    if (ruleMatch) {
-      const decls = ruleMatch[2];
-      const additions = [];
-      if (!/display\s*:/i.test(decls)) additions.push('display: flex');
-      if (!/align-items\s*:/i.test(decls)) additions.push('align-items: center');
-      if (!/gap\s*:/i.test(decls)) additions.push('gap: 4px');
-      if (additions.length > 0) {
-        const newDecls = decls.trim() + (decls.trim() ? '\n  ' : '') + additions.join(';\n  ') + ';';
-        styleContent = styleContent.replace(ruleMatch[0], ruleMatch[1] + '\n  ' + newDecls + '\n' + ruleMatch[3]);
-        changed = true;
-      }
-    }
-  }
-
-  if (!changed) return code;
-  return code.slice(0, styleMatch.index) +
-    styleOpenTag + styleContent + '</style>' +
     code.slice(styleMatch.index + styleMatch[0].length);
 }
 

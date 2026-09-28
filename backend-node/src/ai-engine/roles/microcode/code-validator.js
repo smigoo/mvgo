@@ -2110,8 +2110,23 @@ export async function validateAndFixGeneratedFiles(
     // 2.7 CODE-003 自动修复：common.less class 前缀
     // 检测 common.less 中无前缀的 class，自动加上 .c-{componentId}-
     if (mergedFiles[commonLessPath]) {
-      const { autoFixPrefixViolations, resolveClassPrefixId } =
+      const { autoFixPrefixViolations, resolveClassPrefixId, findNonAsciiClassNames } =
         await import('../../validators/code-structure-validator.js');
+      // 🛡️ 事实优先级表 §六 #3（2026-09-28）：**非 ASCII 类名**独立判据（不 BLOCK，先可见化）。
+      //   必须独立于前缀判据 —— 批3 的 `^\.c-[a-z0-9]{2,}-` 豁免会把 `.c-x-文字` 判为「已带前缀」。
+      {
+        const bad = [
+          ...findNonAsciiClassNames(mergedFiles[commonLessPath]),
+          ...Object.entries(mergedFiles)
+            .filter(([p]) => p.endsWith('.vue'))
+            .flatMap(([, c]) => findNonAsciiClassNames(c)),
+        ];
+        if (bad.length) {
+          options.logger?.warn?.(
+            `🛡️ §六 #3 非 ASCII 类名（违反命名契约 c-<semantic>-<kebab-en>，当前仅告警）：${[...new Set(bad)].slice(0, 5).join(', ')}${new Set(bad).size > 5 ? ' …' : ''}`,
+          );
+        }
+      }
       const vueFilesForFix = Object.entries(mergedFiles)
         .filter(([p]) => p.endsWith('.vue'))
         .map(([p, c]) => ({ path: p, content: c }));

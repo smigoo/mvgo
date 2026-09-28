@@ -576,3 +576,50 @@ import ChartSection from './components/ChartSection.vue'
     expect(files['package/components/ChartSection.vue']).toContain('bg1')
   })
 })
+
+describe('buildResourceMountPlan §六 #4 · sectionAnchorId（数据事实链）', () => {
+  it('bg 节点不在 section.src，但最近祖先 section 命中 → 给出锚点 id', () => {
+    const mapping = [
+      bgEntry({ assignedVarName: 'bg7', resourceFile: 'bg-x.png', figmaNodeId: '2:8442', mountTarget: 'device-card', bgRole: 'container' }),
+    ]
+    const plan = buildResourceMountPlan(deviceSections, mapping, { figmaRoot: deviceFigma })
+    // 2:8442 祖先链：2:8441(device-card) → 2:8440(device-grid=section) → 锚点 = 2:8440
+    expect(plan.byFile.get('bg-x.png').mounts[0].sectionAnchorId).toBe('2:8440')
+  })
+  it('节点本身就是 section id → 锚点 = 自身', () => {
+    const mapping = [
+      bgEntry({ assignedVarName: 'bg8', resourceFile: 'bg-y.png', figmaNodeId: '2:8440', mountTarget: 'device-grid', bgRole: 'container' }),
+    ]
+    const plan = buildResourceMountPlan(deviceSections, mapping, { figmaRoot: deviceFigma })
+    expect(plan.byFile.get('bg-y.png').mounts[0].sectionAnchorId).toBe('2:8440')
+  })
+})
+
+describe('mountPlannedResources §六 #4 · owner 同族对齐（治 owner 名与实际分解不同源）', () => {
+  it('owner 推导名在产物里不存在（TabsList）→ 对齐实际组件（TabsSection）并挂进它，而非回落 index.vue', () => {
+    // 直接构造 plan（聚焦测「owner 同族对齐」）：owner 推导名 TabsList 在产物里不存在，
+    // 实际只分解出 TabsSection.vue（两者公共前缀 Tabs=4 → 应判定同族并挂进 TabsSection）
+    const plan: any = {
+      byFile: new Map([
+        ['bg-7890.png', {
+          varName: 'bg1', kind: 'bg', sharedBy: [],
+          mounts: [{
+            figmaNodeId: '2:7890', owner: 'TabsList', sectionAnchorId: null,
+            mountTarget: 'tabs-list', bgRole: 'container', kind: 'bg',
+          }],
+        }],
+      ]),
+      byComponent: new Map(),
+      skipped: [],
+    }
+    const allFiles: any = {
+      'package/index.vue':
+        '<template><div class="c-x-slot-con"><div class="c-x-sub-con" data-section-id="sub"></div></div></template>',
+      'package/components/TabsSection.vue':
+        '<template><div class="c-x-tab"><div class="c-x-tab-list"></div></div></template>\n<style scoped>.c-x-tab-list { background: red; }</style>',
+    }
+    mountPlannedResources(allFiles, plan, { logger: { warn() {}, info() {} } })
+    expect(allFiles['package/components/TabsSection.vue']).toContain('bg1')
+    expect(allFiles['package/index.vue']).not.toContain('bg1')
+  })
+})

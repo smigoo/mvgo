@@ -25,6 +25,41 @@ import { extractSfcTemplate } from './sfc-template-extractor.js';
  * @param {object} figmaNodeData Figma 节点树（pruneRedundantFields 后）
  * @returns {Set<string>} 去重后的非空 characters 真值
  */
+/**
+ * 🛡️ TEXT-COVERAGE 口径（2026-09-28）：收集 Figma 的**中文串真值集合**（≥2 字，去空白）。
+ *
+ * 与 `collectFigmaTextTruth` 的差别（口径必须显式，避免"两处各自命名 → 判据漂移"）：
+ *   ① 只取「连续中文 ≥2 字」的**片段**（而非整条 characters）——与产物侧比较口径一致；
+ *   ② **跳过 `visible === false` 的节点**（隐藏层不应要求产物渲染，否则误伤）；
+ *   ③ 比较前剔除空白（与 TEXT-TRUTH 的 2026-09-03 空格归一化同款）。
+ * 影响面审计（36 个真实任务抽样）即以此函数口径统计：覆盖率最低 66.7%，无一低于 50%。
+ *
+ * @param {object} figmaNodeData Figma 节点树（含 .document 或裸节点）
+ * @returns {Set<string>} 中文串真值（去空白）
+ */
+export function collectFigmaTextRuns(figmaNodeData) {
+  const root = figmaNodeData?.document || figmaNodeData;
+  const out = new Set();
+  if (!root || typeof root !== 'object') return out;
+  const stack = [root];
+  let seen = 0;
+  while (stack.length && seen < 4000) {
+    const node = stack.pop();
+    seen += 1;
+    if (!node || typeof node !== 'object') continue;
+    if (node.type === 'TEXT' && node.visible !== false && typeof node.characters === 'string') {
+      for (const r of node.characters.match(CHINESE_RUN_RE) || []) {
+        const n = r.replace(/\s+/g, '');
+        if (n) out.add(n);
+      }
+    }
+    if (Array.isArray(node.children)) {
+      for (const c of node.children) if (c && typeof c === 'object') stack.push(c);
+    }
+  }
+  return out;
+}
+
 export function collectFigmaTextTruth(figmaNodeData) {
   const truth = new Set();
   const walk = (node) => {

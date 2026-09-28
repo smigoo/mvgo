@@ -15,6 +15,7 @@ import {
   injectStateSwitchInteraction,
   resolveComponentClassPrefix,
   convertShellToPseudoElement,
+  stripRedundantInnerBgWhenHostHasBg,
 } from './post-process.js';
 
 const HEADER_SECTION_VUE = `<template>
@@ -525,6 +526,19 @@ import ContentDefault from './components/ContentDefault.vue'
     // 且不得残留「样式有、模板没有」的裸基类（CODE-003 autoFix 的失配源）
     expect(less).not.toMatch(/\.state-switch\s*\{/);
     expect(less).not.toContain(':not(.state-switch');
+  })
+
+  it('🛡️ 批5（2026-09-28）：不得注入「整项 opacity」状态暗示（设计未选中态是背景更淡、文字/图标不透）', () => {
+    const f = files();
+    injectStateSwitchInteraction(f, mapping);
+    const less = f['resources/styles/common.less'];
+    // 未选中态整项淡化必须去掉（用户反馈「默认项整体被加透明度，设计上没有」）
+    expect(less).not.toContain('opacity: 0.55');
+    expect(less).not.toMatch(/:not\(\.c-x-state-switch--active\):not\(/);
+    // 但 CODE-024 C3 需要的修饰符规则仍在（模板用到 --active/--default）
+    expect(less).toContain('.c-x-state-switch--active');
+    expect(less).toContain('.c-x-state-switch--default');
+    expect(less).toContain('cursor: pointer');
   });
 
   it('resolveComponentClassPrefix：slot-con / 最长公共前缀 / 无法确定三态', () => {
@@ -604,5 +618,162 @@ describe('convertShellToPseudoElement：宿主定位上下文补全', () => {
     expect(out).toBeTruthy();
     const hits = (out!.match(/\.c-x-tab-item\s*\{[\s\S]*?\}/)?.[0].match(/position\s*:/g) || []).length;
     expect(hits).toBe(1);
+  });
+});
+
+describe('stripRedundantInnerBgWhenHostHasBg（#3 · 2026-09-28 · device-monitor 双背景）', () => {
+  it('宿主内联 bg 图 + 子 -bg 规则带 background → 移除子规则 background（保留其余声明）', () => {
+    const sfc = `<template>
+  <div class="c-x-default" :style="{ backgroundImage: 'url(' + bg1 + ')', backgroundSize: '100% 100%' }">
+    <div class="c-x-default-bg"><span></span></div>
+  </div>
+</template>
+<style scoped>
+.c-x-default-bg { min-height: 0; background: linear-gradient(180deg, rgba(1,2,3,0.8) 0%, rgba(1,2,3,0.8) 100%); border-radius: 6px; display: grid; }
+</style>`
+    const out = stripRedundantInnerBgWhenHostHasBg(sfc)
+    expect(out).not.toContain('linear-gradient')
+    expect(out).toContain('border-radius: 6px')
+    expect(out).toContain('display: grid')
+    expect(out).toContain('backgroundImage') // 宿主绑定保留
+  })
+
+  it('宿主无背景图 → 原样返回（不误伤）', () => {
+    const sfc = `<template><div class="c-x"><div class="c-x-bg"></div></div></template>
+<style>.c-x-bg { background: red; }</style>`
+    expect(stripRedundantInnerBgWhenHostHasBg(sfc)).toBe(sfc)
+  })
+
+  it('幂等：二次执行零改动', () => {
+    const sfc = `<template><div class="c-x" :style="{ backgroundImage: 'url(a)' }"><div class="c-x-bg"></div></div></template>
+<style>.c-x-bg { background: red; border-radius: 2px; }</style>`
+    const once = stripRedundantInnerBgWhenHostHasBg(sfc)
+    expect(stripRedundantInnerBgWhenHostHasBg(once)).toBe(once)
+    expect(once).toContain('border-radius: 2px;')
+    expect(once).not.toContain('background: red')
+  })
+
+  it('🛡️ §六 #2 判据统一：宿主背景来自 CSS 规则里的资源图 url() → 同样抑制内层 -bg', () => {
+    const sfc = `<template><div class="c-x-card"><div class="c-x-card-bg"></div></div></template>
+<style>
+.c-x-card { background: url(./bg.png) no-repeat; }
+.c-x-card-bg { background: linear-gradient(180deg, rgba(1,2,3,0.8) 0%, rgba(1,2,3,0.8) 100%); border-radius: 6px; }
+</style>`
+    const out = stripRedundantInnerBgWhenHostHasBg(sfc)
+    expect(out).not.toContain('linear-gradient')
+    expect(out).toContain('background: url(./bg.png)') // 宿主资源图保留
+    expect(out).toContain('border-radius: 6px;')
+  })
+
+  it('🛡️ 宿主仅普通 CSS 渐变（非资源图 url）→ 不抑制（防误伤独有背景）', () => {
+    const sfc = `<template><div class="c-x-card"><div class="c-x-card-bg"></div></div></template>
+<style>
+.c-x-card { background: linear-gradient(90deg, #111111, #222222); }
+.c-x-card-bg { background: linear-gradient(180deg, #333333, #444444); }
+</style>`
+    expect(stripRedundantInnerBgWhenHostHasBg(sfc)).toBe(sfc)
+  })
+})
+
+// 🛡️ §七 P0 收口（2026-09-28）：背景处理点一致性（C1/C2）+ 零硬编码（B3）
+describe('§七 P0 · C2：宿主已有资源图 → 装饰壳直接删，不转 ::before（防两层背景）', () => {
+  it('⭐ 宿主 CSS 规则含资源图 url() + 绝对定位 -bg 壳 → 删壳且不建 ::before', () => {
+    const src = `<template>
+  <div class="c-x-card">
+    <div class="c-x-card-bg"></div>
+    <div class="c-x-card-content"><span>摄像机</span></div>
+  </div>
+</template>
+<style lang="less" scoped>
+.c-x-card { background-image: url('./bg.png'); }
+.c-x-card-bg { position: absolute; top: 0; left: 6px; width: 34px; height: 100%; background: linear-gradient(180deg, #85baff 0%, #bfe2ff 100%); border-radius: 4px; }
+</style>`;
+    const out = collapseBackgroundShellDivs(src);
+    // 资源图为唯一背景 → 装饰壳删除，且**不得**生成 ::before（否则资源图 + ::before 渐变 = 两层）
+    expect(out).not.toContain('c-x-card-bg');
+    expect(out).not.toMatch(/::before/);
+    expect(out).toContain("url('./bg.png')");
+  });
+
+  it('对照：宿主无资源图 → 绝对定位装饰壳照常转 ::before（1:1 几何保留）', () => {
+    const src = `<template>
+  <div class="c-x-card">
+    <div class="c-x-card-bg"></div>
+    <span>内容</span>
+  </div>
+</template>
+<style lang="less" scoped>
+.c-x-card { display: flex; }
+.c-x-card-bg { position: absolute; top: 0; left: 50%; width: 34px; height: 100%; background: linear-gradient(180deg, #85baff 0%, #bfe2ff 100%); }
+</style>`;
+    const out = collapseBackgroundShellDivs(src);
+    expect(out).not.toContain('c-x-card-bg');
+    expect(out).toMatch(/\.c-x-card::before/);
+    expect(out).toMatch(/linear-gradient\(180deg, #85baff/);
+  });
+});
+
+describe('§七 P0 · B3：孤儿死规则 → ::before 用「宿主盒子」（零硬编码几何）', () => {
+  it('⭐ 死规则缺 position → 补 inset:0 宿主盒子，不再臆造 6px/34px 常量', () => {
+    const src = `<template>
+  <div class="c-x-card">
+    <div class="c-x-card-bg"></div>
+    <div class="c-x-item"><span>x</span></div>
+  </div>
+</template>
+<style lang="less" scoped>
+.c-x-card { display: flex; }
+.c-x-card-bg { background: #ffffff; border-radius: 4px; }
+.c-x-item:not(.active) .c-x-item-bg { background: linear-gradient(90deg, #111111 0%, #222222 100%); }
+</style>`;
+    const out = collapseBackgroundShellDivs(src);
+    expect(out).toMatch(/::before/);
+    expect(out).toMatch(/content:\s*''/);
+    // 宿主盒子（inset 形态）—— 四边归零
+    expect(out).toMatch(/top:\s*0/);
+    expect(out).toMatch(/bottom:\s*0/);
+    // 旧合成常量不得出现
+    expect(out).not.toContain('left: 6px');
+    expect(out).not.toContain('width: 34px');
+  });
+});
+
+/**
+ * 🛡️ C2 修复回归（2026-09-28 实锤 mc-max-1790583585496-9331b2e8 / ContentActive.vue）：
+ * 宿主已有内联资源背景图，内层 `-bg` 是 absolute + inset:0 的**不透明渐变壳** ⇒ 盖住背景图
+ * （浅底 + 白字 ⇒ 文字隐形，用户报「背景消失/图标没显示」）。
+ * 此前 C2 的宿主查找用 `/<div\b[^>]*>(?=[^<]*$)/`，而 LLM 在壳前写了 HTML 注释
+ * （注释里的 `<` 使 lookahead 失败）⇒ parentOpen 为 null ⇒ 不删壳。修法：匹配前先剥注释。
+ */
+describe('C2 · 壳前存在 HTML 注释时仍能识别宿主并删壳', () => {
+  const SRC = `<template>
+  <div class="c-test-active" :style="{ backgroundImage: 'url(' + bg1 + ')' }" v-bind="$attrs">
+    <!-- 背景层：渐变底（Figma: Rectangle 346241415） -->
+    <div class="c-test-active-bg"></div>
+    <!-- 内容层 -->
+    <div class="c-test-active-body">
+      <span class="c-test-active-title">隧道设备</span>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import bg1 from '../../resources/images/bg-8788.png'
+</script>
+
+<style lang="less" scoped>
+.c-test-active-bg {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, #a 0%, #b 100%);
+}
+.c-test-active-body { position: relative; z-index: 1; }
+</style>`;
+
+  it('宿主有内联资源背景图 + 壳前有注释 → 内层 -bg 壳与其规则都被删除，宿主背景图保留', () => {
+    const out = collapseBackgroundShellDivs(SRC);
+    expect(out).not.toContain('<div class="c-test-active-bg">');
+    expect(out).not.toMatch(/\.c-test-active-bg\s*\{/);
+    expect(out).toMatch(/backgroundImage:\s*'url\('\s*\+\s*bg1/);
   });
 });

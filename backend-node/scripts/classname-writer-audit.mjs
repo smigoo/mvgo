@@ -29,6 +29,7 @@ const SRC = resolve(__dirname, '..', 'src', 'ai-engine');
 const ALLOWLIST = {
   'utils/component-naming.js': 'producer：实例前缀唯一产出方（classPrefixOf / buildComponentId）',
   'roles/microcode/code-generator.js': 'producer：确定性模板装配，产出结构类名 + section 根类',
+  'utils/section-leaf-assembler.js': 'producer：S3 纯文本叶子 section 确定性装配（复用 LLM 根类，仅产出文案子类 {根类}-{语义}）',
   'utils/class-facts.js': 'producer：DOM 类事实采集（事实源）',
   'utils/class-dialect-normalizer.js': 'normalizer：布尔方言/修饰符形态归一（事实源之前）',
   'utils/style-class-consolidator.js': 'consumer：scoped 短类 → DOM 形态重写（读 facts）',
@@ -55,6 +56,11 @@ const ALLOWLIST = {
   'utils/resource-manifest.js': 'producer：资源归属清单/契约（事实源组装）',
   'utils/resource-mapping-formatter.js': 'formatter：资源映射分组/过滤（只读，供 prompt）',
   'validators/resource-attribution-validator.js': 'checker：资源归属校验 + 跨 section 绑定剥离',
+  // ——— 2026-09-28 补登记（此前被「资源信号」命中但未登记；核实均不写 class 名）———
+  'roles/microcode/resource-mount-plan.js':
+    'producer：资源挂载计划单一事实源（buildResourceMountPlan 定 owner/单变量/sharedBy；mountPlannedResources 委托 ensureResourceImportInVue 挂载，不各自造写者）',
+  'utils/tab-resource-guard.js':
+    'checker/healer：tab 资源引用幻觉校验+纠正（读 resourceDomMapping/figmaData；摘幻觉 resourceFile、写 CSS 渐变，不改 class 名）',
 };
 
 /**

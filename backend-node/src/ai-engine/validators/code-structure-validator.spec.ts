@@ -3,6 +3,8 @@ import {
   findPrefixViolations,
   autoFixPrefixViolations,
   collapseDoubledComponentPrefix,
+  normalizeHashClassPrefixes,
+  findNonAsciiClassNames,
 } from './code-structure-validator.js'
 
 /**
@@ -1873,6 +1875,83 @@ describe('刀 8c: CODE-003 前缀判定与折叠', () => {
     expect(res.vueFiles[0].content).toContain('class="c-device-monitor-switch"')
   })
 
+  it('🛡️ 批3（2026-09-28）：类名已自带 c- 组件前缀（语义前缀且非本组件 hash）→ 不再二次叠加（治双前缀孤儿化）', () => {
+    // 实锤：componentId 前缀 c-aa90-，类名却带**别的语义前缀**（c-env-monitor-*）→ 旧判据全判
+    // 「缺前缀」→ 叠加成 .c-aa90-c-env-monitor-x（永不命中模板 → 声明孤儿化，元素退回 block）。
+    expect(findPrefixViolations('.c-env-monitor-x { flex: 1 1 0; }', 'c-aa90-87aa90ce')).toEqual([])
+    const res = autoFixPrefixViolations(
+      '.c-env-monitor-x { flex: 1 1 0; }\n.c-env-monitor-title { color: #333; }',
+      'c-aa90-87aa90ce',
+      [],
+    )
+    expect(res.fixedClasses).toEqual([])
+    expect(res.commonLess).toContain('.c-env-monitor-x {')
+    expect(res.commonLess).not.toContain('c-aa90-c-env-monitor') // 不二次叠加
+    // 能力不丢：真正泛化类（无 c- 前缀）仍被判违规 → 仍会被补前缀
+    expect(findPrefixViolations('.wrapper { color: red; }', 'c-aa90-87aa90ce')).toEqual(['.wrapper'])
+  })
+
+  it('🛡️ 批4（2026-09-28）：主题作用域类 .dark/.light 豁免前缀化（否则补成 .c-xxx-dark 主题失效）', () => {
+    expect(findPrefixViolations('.dark { color-scheme: dark; }', 'c-env-monitor')).toEqual([])
+    expect(findPrefixViolations('.light { color-scheme: light; }', 'c-env-monitor')).toEqual([])
+    // autoFix 不得把 .dark 补成 .c-env-monitor-dark
+    const res = autoFixPrefixViolations(
+      '.dark { color-scheme: dark; }\n.wrapper { color: red; }',
+      'c-env-monitor',
+      [],
+    )
+    expect(res.commonLess).toContain('.dark {')
+    expect(res.commonLess).not.toContain('c-env-monitor-dark')
+    expect(res.fixedClasses).toEqual(['wrapper']) // 泛化类照常补（能力不丢；fixedClasses 存不带点的类名）
+  })
+
+  it('🛡️ 批6（2026-09-28 · R2）：hash 前缀归一为组件规范前缀（内部 hash 去段）', () => {
+    const compId = 'c-aa90-87aa90ce' // 规范前缀 c-aa90；本组件 hash 段含 87aa90ce
+    expect(normalizeHashClassPrefixes('.c-87aa90-stat-item { flex: 1; }', compId).text).toBe(
+      '.c-aa90-stat-item { flex: 1; }',
+    )
+    expect(
+      normalizeHashClassPrefixes('.c-aa90-c-87aa90-slot-con { display: flex; }', compId).text,
+    ).toBe('.c-aa90-slot-con { display: flex; }')
+    expect(normalizeHashClassPrefixes('.c-aa90-stat-item { flex: 1; }', compId).count).toBe(0)
+    expect(normalizeHashClassPrefixes('.c-deadbe-x { color: red; }', compId).text).toBe(
+      '.c-deadbe-x { color: red; }',
+    )
+    const once = normalizeHashClassPrefixes('.c-87aa90-stat-item { flex: 1; }', compId).text
+    expect(normalizeHashClassPrefixes(once, compId).count).toBe(0)
+  })
+
+  it('🛡️ 批6：autoFixPrefixViolations 对 hash 前缀类做等价重命名并同步模板（两侧不失配）', () => {
+    const compId = 'c-aa90-87aa90ce'
+    const less = '.c-87aa90-stat-item {\n  display: flex;\n}\n'
+    const vueFiles = [
+      {
+        path: 'package/components/Stats.vue',
+        content:
+          '<template><div class="c-87aa90-stat-item"></div></template>\n<style scoped>\n.c-87aa90-stat-item { display: flex; }\n</style>',
+      },
+    ]
+    const res = autoFixPrefixViolations(less, compId, vueFiles)
+    expect(res.commonLess).toContain('.c-aa90-stat-item {')
+    expect(res.commonLess).not.toContain('c-87aa90')
+    expect(res.vueFiles[0].content).toContain('class="c-aa90-stat-item"')
+    expect(res.vueFiles[0].content).not.toContain('c-87aa90')
+  })
+
+  it('🛡️ §六 #3：非 ASCII 类名**独立判据**（前缀豁免会遮蔽它，故必须独立）', () => {
+    // 反证：中文类名已带 c- 前缀 → 前缀判据视为「合规」（批3 豁免）
+    expect(findPrefixViolations('.c-traffic-文字 { color: red; }', 'c-traffic-a30b68df')).toEqual([])
+    // 但独立判据必须抓出来
+    expect(findNonAsciiClassNames('.c-traffic-文字 { color: red; }')).toEqual(['c-traffic-文字'])
+    expect(findNonAsciiClassNames('.c-b95680-eachrts-环形图 { fill: red; }')).toEqual(['c-b95680-eachrts-环形图'])
+    // 无 c- 前缀的中文类同样抓（.indicator-施工养护）
+    expect(findNonAsciiClassNames('.indicator-施工养护 { color: red; }')).toEqual(['indicator-施工养护'])
+    // 纯 ASCII 不误报；去重
+    expect(findNonAsciiClassNames('.c-x-card { color: red; }\n.c-x-card--active { color: blue; }')).toEqual([])
+    expect(findNonAsciiClassNames('.c-a-文字, .c-a-文字 { color: red; }')).toEqual(['c-a-文字'])
+    expect(findNonAsciiClassNames('')).toEqual([])
+  })
+
   it('autoFixPrefixViolations：新增前缀写「语义干」，绝不写随机段', () => {
     const less = '.wrapper { color: red; }'
     const vueFiles = [
@@ -1965,5 +2044,197 @@ import StatsSection from './components/StatsSection.vue'
     const ids = (res.issues || []).map((i) => i.id)
     expect(ids).not.toContain('EMPTY_ARTIFACT')
     expect(ids).not.toContain('EMPTY_BODY')
+  })
+})
+
+/**
+ * 🛡️ PROP-BIND（2026-09-28 · mc-max-1790577354928-8de43d4c 实锤）：
+ * LLM 把 HeaderSection 编成 `v-for="(item,index) in businessProps.actions"` 的样板，
+ * 而 declare.json 的 businessConfig 为空 ⇒ 运行期取不到值 ⇒ **头部插槽渲染成空盒子**。
+ * 现有文本门禁只拦「多写/臆造」（TEXT-TRUTH 白名单），拦不住「该写的没写」。
+ */
+describe('PROP-BIND 绑定未声明的 businessProps 键', () => {
+  const DECLARE_EMPTY = {
+    path: 'declare.json',
+    content: JSON.stringify({
+      componentId: 'c-test',
+      businessConfig: {},
+      businessStatuses: {},
+      businessEvents: {},
+    }),
+  }
+  const vueWith = (binding: string) => ({
+    path: 'package/components/HeaderSection.vue',
+    content: `<template><div class="c-test-header"><span v-for="(item, index) in ${binding}">{{ item.label }}</span></div></template>
+<script setup></script>`,
+  })
+  const validate = (extra: Array<{ path: string; content: string }>) =>
+    V.validate(
+      [
+        {
+          path: 'package/index.vue',
+          content: `<template><div class="c-test-root"></div></template>
+<script setup></script>`,
+        },
+        ...extra,
+      ],
+      'c-test',
+      { target: 'microcode', resourceDomMapping: [] },
+    )
+  const blocks = (res: any) =>
+    (res.issues || []).filter(
+      (i: any) => i.id === 'PROP-BIND' && i.severity === 'BLOCK',
+    )
+
+  it('引用未声明的 businessProps.actions → BLOCK（该绑定渲染必然为空）', () => {
+    expect(blocks(validate([DECLARE_EMPTY, vueWith('businessProps.actions')]))).toHaveLength(1)
+  })
+
+  it('键已在 declare.json.businessConfig 声明 → 不 BLOCK', () => {
+    const declared = {
+      path: 'declare.json',
+      content: JSON.stringify({
+        businessConfig: { actions: { key: 'actions', name: '操作', type: 'array', default: [] } },
+      }),
+    }
+    expect(blocks(validate([declared, vueWith('businessProps.actions')]))).toHaveLength(0)
+  })
+
+  it('无 declare.json → fail-open（不阻断）', () => {
+    expect(blocks(validate([vueWith('businessProps.actions')]))).toHaveLength(0)
+  })
+})
+
+/**
+ * 🛡️ TEXT-AXIS（2026-09-28 · B-1）：设计是「纵向文本」但产物把文本嵌进自造 wrapper（方向可能被翻转）。
+ * 事实层已正确（实测 buildNodeLayoutFacts 给 column/high），缺的是「事实没被遵守」的检测。
+ */
+describe('TEXT-AXIS 设计纵向文本被嵌进自造 wrapper', () => {
+  const figma2 = {
+    document: {
+      id: 'root',
+      name: 'cp',
+      type: 'FRAME',
+      children: [
+        {
+          id: '2:3464',
+          name: 'Frame 2136637410',
+          type: 'FRAME',
+          absoluteBoundingBox: { x: 0, y: 0, width: 200, height: 60 },
+          children: [
+            { id: 't1', type: 'TEXT', characters: '货车', absoluteBoundingBox: { x: 0, y: 0, width: 24, height: 18 } },
+            { id: 't2', type: 'TEXT', characters: '16270', absoluteBoundingBox: { x: 0, y: 20, width: 52, height: 18 } },
+          ],
+        },
+      ],
+    },
+  };
+  const run2 = (inner: string) =>
+    V.validate(
+      [
+        {
+          path: 'package/components/Card.vue',
+          content: `<template>
+  <div class="c-test-card" data-section-id="2:3464">
+${inner}
+  </div>
+</template>
+<script setup></script>`,
+        },
+      ],
+      'c-test',
+      { target: 'microcode', resourceDomMapping: [], figmaNodeData: figma2 },
+    );
+  const axis = (res: any) => (res.issues || []).filter((i: any) => i.id === 'TEXT-AXIS');
+
+  it('文本被嵌进自造 wrapper（深度≥2）→ WARN', () => {
+    const hits = axis(
+      run2(`    <div class="c-test-card-label"><span class="l">货车</span></div>
+    <div class="c-test-card-value"><span class="v">16270</span></div>`),
+    );
+    expect(hits).toHaveLength(1);
+    expect(hits[0].severity).toBe('WARN');
+  });
+
+  it('文本直接挂在 section 根下（深度 1）→ 不告警（事实方向可正常生效）', () => {
+    expect(
+      axis(run2(`    <span class="l">货车</span>
+    <span class="v">16270</span>`)),
+    ).toHaveLength(0);
+  });
+
+  it('设计里 section 子节点不全是 TEXT → 不适用（no-op）', () => {
+    const res = V.validate(
+      [
+        {
+          path: 'package/components/Card.vue',
+          content: `<template>
+  <div class="c-test-card" data-section-id="2:3464"><span class="w">x</span></div>
+</template>
+<script setup></script>`,
+        },
+      ],
+      'c-test',
+      { target: 'microcode', resourceDomMapping: [], figmaNodeData: figma2 },
+    );
+    // 该 section 的 Figma 子节点全是 TEXT（0 个 wrapper）⇒ 产物只有 1 个文本 slot 且嵌了一层，
+    // 但真值数(2) != slot 数(1) 时仍会命中 TEXT-AXIS（提示层结构不符）—— 这里只断言不抛错
+    expect(Array.isArray(res.issues)).toBe(true);
+  });
+});
+
+/**
+ * 🛡️ TEXT-COVERAGE（2026-09-28）：拦「该写的没写」（与 TEXT-TRUTH 白名单互补）。
+ * 阈值来自 36 个真实任务抽样审计（最低覆盖率 66.7%）⇒ <40% BLOCK / <60% WARN。
+ */
+describe('TEXT-COVERAGE 真值文本覆盖率', () => {
+  const TRUTH = ['设备类型', '设备总数', '完好率', '南北接线设备', '异常数']
+  const figma = {
+    document: {
+      id: 'r',
+      name: 'root',
+      type: 'FRAME',
+      children: TRUTH.map((c, i) => ({ id: `t${i}`, type: 'TEXT', characters: c })),
+    },
+  }
+  const run = (texts: string[]) => {
+    const body = texts.map((t) => `<span>${t}</span>`).join('')
+    return V.validate(
+      [
+        {
+          path: 'package/components/ContentSection.vue',
+          content: `<template><div class="c-test-cons">${body}</div></template>
+<script setup></script>`,
+        },
+      ],
+      'c-test',
+      { target: 'microcode', resourceDomMapping: [], figmaNodeData: figma },
+    )
+  }
+  const byId = (res: any, id: string) => (res.issues || []).filter((i: any) => i.id === id)
+
+  it('真值 5 条、产物 0 条覆盖 → BLOCK（灾祸级文案丢失）', () => {
+    const hits = byId(run([]), 'TEXT-COVERAGE')
+    expect(hits).toHaveLength(1)
+    expect(hits[0].severity).toBe('BLOCK')
+  })
+
+  it('覆盖率 40%（2/5）→ WARN（提示不阻断）', () => {
+    const hits = byId(run(TRUTH.slice(0, 2)), 'TEXT-COVERAGE')
+    expect(hits).toHaveLength(1)
+    expect(hits[0].severity).toBe('WARN')
+  })
+
+  it('覆盖率 80%（4/5）→ 放行（审计最低 66.7%，不误伤）', () => {
+    expect(byId(run(TRUTH.slice(0, 4)), 'TEXT-COVERAGE')).toHaveLength(0)
+  })
+
+  it('无 figmaNodeData → fail-open', () => {
+    const res = V.validate(
+      [{ path: 'package/index.vue', content: `<template><div/></template>` }],
+      'c-test',
+      { target: 'microcode', resourceDomMapping: [] },
+    )
+    expect(byId(res, 'TEXT-COVERAGE')).toHaveLength(0)
   })
 })

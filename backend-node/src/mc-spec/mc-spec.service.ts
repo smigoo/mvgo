@@ -535,11 +535,16 @@ export class McSpecService {
   }
 
   /**
-   * 自动修复质量评分中的可修复问题（CODE-008、THEME-VAR-NAME-MISMATCH、CODE-025-WARN）
+   * 自动修复质量评分中的可修复问题
+   *
+   * 规范修复：CODE-008、THEME-VAR-NAME-MISMATCH、CODE-025-WARN
+   * 样式修复：颜色偏差（模糊匹配）、数值偏差（间距/字号/圆角）
    *
    * 修复后自动重新评分并写回 component-meta.json
+   * 
+   * @param dimensions 可选，指定要修复的样式维度（如 ['spacing', 'font']），不传则修复全部
    */
-  async fixQualityIssues(componentId: string) {
+  async fixQualityIssues(componentId: string, options?: { dimensions?: string[] }) {
     const id = String(componentId || '').trim();
     if (!id) throw new BadRequestException('缺少 componentId');
     const componentDir = await resolveComponentDirStrict(id);
@@ -547,42 +552,90 @@ export class McSpecService {
       throw new NotFoundException(`未找到该组件的产物目录: ${id}`);
     }
 
-    // 1. 先评分，获取当前 issues
+    const targetDimensions = options?.dimensions;
+
+    // 1. 先评分，获取当前 issues 和样式维度信息
     const { scoreComponentDir } = await import('../ai-engine/utils/quality-score-v1.js');
     const scoreResult = await scoreComponentDir(componentDir, { componentId: id, persist: false });
-    const issues = scoreResult.quality?.spec?.issues || [];
+    const quality = scoreResult.quality;
+    const issues = quality?.spec?.issues || [];
 
-    // 2. 筛选可自动修复的问题
+    // 2. 筛选可自动修复的规范问题（只有不指定维度时才修复规范问题）
     const fixableRules = new Set(['CODE-008', 'THEME-VAR-NAME-MISMATCH', 'CODE-025-WARN']);
-    const fixableIssues = issues.filter((i) => fixableRules.has(i.id));
-    if (fixableIssues.length === 0) {
+    const fixableIssues = !targetDimensions ? issues.filter((i) => fixableRules.has(i.id)) : [];
+
+    // 3. 检查是否有可修复的样式问题
+    const hasStyleFixable = this.hasStyleFixable(quality, targetDimensions);
+
+    if (fixableIssues.length === 0 && !hasStyleFixable) {
       return {
         componentId: id,
         fixed: [],
-        summary: { code008: 0, themeVarMismatch: 0, code025Warn: 0 },
+        summary: { code008: 0, themeVarMismatch: 0, code025Warn: 0, styleColor: 0, styleNumeric: 0 },
         message: '没有可自动修复的问题',
       };
     }
 
-    // 3. 执行自动修复
-    const { runAutoFix, writeFixedFiles } = await import('../ai-engine/utils/quality-auto-fix.js');
-    const { fixed, files, summary } = runAutoFix(componentDir, fixableIssues);
+    // 4. 执行规范自动修复
+    let allFixed: any[] = [];
+    let summary: any = { code008: 0, themeVarMismatch: 0, code025Warn: 0, styleColor: 0, styleNumeric: 0 };
+    let files: any[] = [];
 
-    // 4. 写回磁盘
+    if (fixableIssues.length > 0) {
+      const { runAutoFix } = await import('../ai-engine/utils/quality-auto-fix.js');
+      const specResult = runAutoFix(componentDir, fixableIssues);
+      files = specResult.files;
+      allFixed.push(...specResult.fixed.map((f: any) => ({ ...f, rule: f.rule || 'CODE-008' })));
+      summary.code008 = specResult.summary.code008 || 0;
+      summary.themeVarMismatch = specResult.summary.themeVarMismatch || 0;
+      summary.code025Warn = specResult.summary.code025Warn || 0;
+    }
+
+    // 5. 执行样式自动修复（基于评分中的 fuzzyMatches 和 missed）
+    let allUnfixable: any[] = [];
+    if (hasStyleFixable && quality) {
+      const { runStyleAutoFix } = await import('../ai-engine/utils/style-auto-fix.js');
+      // 如果规范修复已修改文件，用修改后的文件列表；否则让样式修复自己读文件
+      const styleResult = files.length > 0
+        ? runStyleAutoFix(componentDir, quality, { fixFuzzy: true, fixMissed: true, inputFiles: files, targetDimensions })
+        : runStyleAutoFix(componentDir, quality, { fixFuzzy: true, fixMissed: true, targetDimensions });
+      files = styleResult.files;
+      allFixed.push(...styleResult.fixed.map((f: any) => ({ ...f, rule: `STYLE-${f.dimension?.toUpperCase()}` })));
+      allUnfixable.push(...(styleResult.unfixable || []).map((u: any) => ({ ...u, rule: `STYLE-${u.dimension?.toUpperCase()}` })));
+      summary.styleColor = styleResult.summary.color || 0;
+      summary.styleNumeric = (styleResult.summary.spacing || 0) + (styleResult.summary.font || 0) + (styleResult.summary.radius || 0);
+    }
+
+    // 6. 写回磁盘
+    const { writeFixedFiles } = await import('../ai-engine/utils/quality-auto-fix.js');
     const { written } = writeFixedFiles(componentDir, files);
-    this.logger.log(`[quality-fix] ${id}: 修复 ${fixed.length} 处，写入 ${written} 文件`);
+    this.logger.log(`[quality-fix] ${id}: 修复 ${allFixed.length} 处（规范 ${fixableIssues.length} + 样式），写入 ${written} 文件`);
 
-    // 5. 重新评分并写回 component-meta.json
+    // 7. 重新评分并写回 component-meta.json
     const newResult = await scoreComponentDir(componentDir, { componentId: id, persist: true });
 
-    // 6. 同步到所有副本
+    // 8. 同步到所有副本
     await this.persistQualityToReplicas(id, newResult.quality);
 
     return {
       componentId: id,
-      fixed,
+      fixed: allFixed,
+      unfixable: allUnfixable,
       summary,
       newQuality: newResult.quality,
     };
+  }
+
+  /**
+   * 检查质量评分中是否有可自动修复的样式问题
+   */
+  private hasStyleFixable(quality: any, targetDimensions?: string[]): boolean {
+    if (!quality?.style?.dimensions) return false;
+    for (const [name, dim] of Object.entries<any>(quality.style.dimensions)) {
+      if (!dim.scored || name === 'structure') continue;
+      if (targetDimensions && !targetDimensions.includes(name)) continue;
+      if (dim.fuzzyMatches?.length > 0 || dim.missed?.length > 0) return true;
+    }
+    return false;
   }
 }

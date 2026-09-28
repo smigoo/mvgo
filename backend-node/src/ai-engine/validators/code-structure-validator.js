@@ -63,7 +63,8 @@ import { detectMissingSections, detectUnmaterializedSections, detectDanglingComp
 import { collectLeafSections } from '../utils/section-tree.js';
 // 🛡️ TEXT-TRUTH（2026-09-02）：文字真值白名单 —— 事实源在 text-truth-guard.js
 // （产物文字必须落在 Figma characters 真值内，否则是 vision OCR 误读/臆造）
-import { detectUnknownText, resolveTextTruthSeverity } from '../utils/text-truth-guard.js';
+import { detectUnknownText, resolveTextTruthSeverity, collectFigmaTextRuns } from '../utils/text-truth-guard.js';
+import { extractTextSlots } from '../utils/section-leaf-assembler.js';
 // 🛡️ THEME-COLOR（2026-09-04）：样式主题变量化门禁 —— 事实源在 theme-color-guard.js
 // （槽位色值抄写/预设名本地重声明 → BLOCK；设计专色 → WARN。mc-max-1788485095835 实锤）
 import { detectThemeColorViolations, healFileLevelSlotOverrides } from '../utils/theme-color-guard.js';
@@ -315,6 +316,35 @@ export function hasScopedLessStyle(content = '') {
  * @param {string} [prefixId] - 组件前缀（如 c-env-monitor 或 env-monitor）；为空时放宽为「只要有 .c- 前缀即通过」
  * @returns {string[]} 违规 class 列表（不含 . 前缀，如 ['wrapper', 'item']）
  */
+/**
+ * 🛡️ 批4（2026-09-28）：**主题作用域类** —— `.dark` / `.light` 挂在主题根（深浅色切换）上，
+ * 不是组件作用域 class，禁止被 CODE-003 补前缀（补成 `.c-xxx-dark` 会让主题作用域选择器失效）。
+ */
+export const THEME_SCOPE_CLASSES = new Set(['dark', 'light']);
+
+/**
+ * 🛡️ 事实优先级表 §六 #3（2026-09-28）：**非 ASCII 类名**判据（**独立于**前缀判据）。
+ *
+ * 为什么必须独立：批3 的前缀豁免 `^\.c-[a-z0-9]{2,}-` 会把 `.c-traffic-文字` 判为
+ * 「已带组件前缀」→ 若把「中文类名」检查挂在前缀判据上**永不触发**
+ * （实测 `findPrefixViolations('.c-traffic-文字 {…}') === []`）。
+ *
+ * 契约：类名段必须是 ASCII kebab（`c-<semantic>-<kebab-en>`）；中文/全角一律违规。
+ * 全语料实测：14/441 组件、15 个类名（如 `.c-b95680-eachrts-环形图`、`.indicator-施工养护`）。
+ *
+ * @param {string} content 样式（或模板）文本
+ * @returns {string[]} 违规类名（不含 `.`，去重）
+ */
+export function findNonAsciiClassNames(content) {
+  const s = typeof content === 'string' ? content : '';
+  if (!s) return [];
+  const out = new Set();
+  for (const m of s.matchAll(/\.([A-Za-z][\w\u4e00-\u9fa5-]*)/g)) {
+    if (/[^\x00-\x7F]/.test(m[1])) out.add(m[1]);
+  }
+  return [...out];
+}
+
 export function findPrefixViolations(content = '', prefixId = '') {
   // 负向后瞻 (?<!&) 排除 LESS 父引用写法（&.active / &:hover:not(.active)）——
   // 这类 class 继承父选择器前缀，不是独立全局 class，不应被判「缺前缀」。
@@ -323,6 +353,11 @@ export function findPrefixViolations(content = '', prefixId = '') {
   const classes = content.match(/(?<!&)\.[a-zA-Z][\w-]+(?=\s*\{)/g) || [];
   return classes.filter((c) => {
     if (/^&|^:root|^@keyframes/.test(c)) return false;
+    // 🛡️ 批4（2026-09-28）：主题作用域类（.dark / .light）豁免前缀化 —— 它们挂在**主题根**
+    //   （深浅色切换）上，不是组件作用域 class；补前缀会变成 `.c-xxx-dark`，使 `.dark ...`
+    //   这类主题作用域选择器全部失效。全语料实测：修复前 268 组件 / 1246 个类被误报，
+    //   其中绝大多数正是 `.dark` / `.light`（以及 `.error` / `.normal` 等状态作用域类）。
+    if (THEME_SCOPE_CLASSES.has(c.slice(1).toLowerCase())) return false;
     // 豁免实例 ID 根类（.c-mc-max-{id}）：它仅作根容器作用域标记，不受组件语义前缀约束；
     // 否则会被 CODE-003 误报为「缺前缀」并触发 autoFix 二次叠加前缀。
     if (/^\.c-mc-max-/i.test(c)) return false;
@@ -342,6 +377,14 @@ export function findPrefixViolations(content = '', prefixId = '') {
       if (!p) continue;
       if (c.startsWith(`.${p}-`) || c.startsWith(`.${p}`)) return false;
     }
+    // 🛡️ 批3（2026-09-28 · 幂等收口）：类名**已自带 c- 组件前缀**时不得再叠加。
+    //   背景：LLM 自然命名的前缀（如 `.c-87aa90-stat-item`）常与 componentId 派生的前缀
+    //   （`.c-aa90-`）**不一致** → 旧判据把「已具组件作用域前缀」的类判为「缺前缀」并叠加 →
+    //   产出 `.<stem>-c-87aa90-stat-item` 这种**永不命中模板**的死规则，原声明被孤儿化、
+    //   元素退回 block/默认布局（全语料实测：14/436 组件、330 个选择器被双前缀孤儿化）。
+    //   判据：`^\.c-[a-z0-9]{2,}-` 视为「已有组件作用域前缀」→ 放行。仍保留真正泛化类
+    //   （`.wrapper`/`.item` 等无 c- 前缀者）的补前缀能力。
+    if (/^\.c-[a-z0-9]{2,}-/i.test(c)) return false;
     return true;
   });
 }
@@ -2367,6 +2410,246 @@ export class CodeStructureValidator {
       }
     }
 
+    // ========== 🛡️ TEXT-AXIS: 设计纵向文本却被嵌进自造 wrapper（2026-09-28 建立 · B-1）==========
+    // 事故 mc-max-1790577363045-e2967edf / ContentSection9（section `2:3464`）：
+    //   设计：`2:3464` 的直接子节点就是 2 条 TEXT（`货车` y=658 在上、`16270` y=676 在下 ⇒ **纵向**），
+    //     且方向**事实本来就是对的**（实测 `buildNodeLayoutFacts` 给 `{display:flex, flexDirection:column,
+    //     source:figma-layoutMode, confidence:high}`）。
+    //   产物：LLM **自造两层 wrapper**（`frame-207` / `frame-1283`，设计里不存在）各包一条文本，
+    //     并把它们排成 **row** ⇒ 视觉成"标题和内容在一行" ✗。
+    // ⇒ 缺的不是"事实"（事实已对），而是"**事实没被遵守**"的检测。本门禁做**纯静态、确定性**比对：
+    //   ① 该 section 的 Figma 直接子节点**全是 TEXT**（≥2 条）且**纵向堆叠**（y 区间有序不重叠）
+    //   ② 产物里这些文本落在 **section 根的直接子层**（深度 1）还是**被嵌进 wrapper**（深度 ≥2）
+    //   ③ 深度 ≥2 ⇒ **WARN**（提示自造 wrapper 可能翻转方向；不给 BLOCK，避免误伤"设计本身就分层"的稿）
+    // 命名无关（只看 `type`/`characters`/`absoluteBoundingBox` 与 DOM 结构）；任何数据缺失 ⇒ no-op。
+    if (options?.figmaNodeData) {
+      try {
+        const fileListA = Array.isArray(files)
+          ? files
+          : Object.entries(files || {}).map(([path, content]) => ({ path, content }));
+        const figRoot = options.figmaNodeData.document || options.figmaNodeData;
+        const findNode = (rootNode, targetId) => {
+          const stack = [rootNode];
+          let seen = 0;
+          while (stack.length && seen < 8000) {
+            const n = stack.pop();
+            seen += 1;
+            if (!n || typeof n !== 'object') continue;
+            if (String(n.id || '') === String(targetId)) return n;
+            if (Array.isArray(n.children)) for (const c of n.children) if (c) stack.push(c);
+          }
+          return null;
+        };
+        for (const f of fileListA) {
+          if (!String(f?.path || '').endsWith('.vue') || typeof f?.content !== 'string') continue;
+          const src = f.content;
+          const secId = /\bdata-section-id="([^"]+)"/.exec(src)?.[1];
+          if (!secId) continue;
+          const node = findNode(figRoot, secId);
+          if (!node) continue;
+          const kids = (node.children || []).filter(Boolean);
+          const texts = kids.filter((c) => c.type === 'TEXT' && c.visible !== false);
+          // ① 直接子节点全是 TEXT 且 ≥2 条
+          if (texts.length < 2 || texts.length !== kids.length) continue;
+          const ys = texts
+            .map((c) => Number(c.absoluteBoundingBox?.y ?? NaN))
+            .filter((y) => Number.isFinite(y))
+            .sort((a, b) => a - b);
+          if (ys.length !== texts.length) continue;
+          // 纵向：y 有序且相邻不重叠（同一 y 视为横向排列，跳过）
+          let vertical = true;
+          for (let i = 1; i < ys.length; i++) if (ys[i] <= ys[i - 1]) vertical = false;
+          if (!vertical) continue;
+          // ② 产物里这些文本的嵌套深度（以 section 根为基准）：depth 1 = 直接子层
+          const tplOpen = src.indexOf('<template>');
+          const tplClose = src.lastIndexOf('</template>');
+          if (tplOpen < 0 || tplClose < tplOpen) continue;
+          const { slots } = extractTextSlots(src.slice(tplOpen + 10, tplClose));
+          if (!slots || slots.length === 0) continue;
+          const rootTag = /<template>\s*<([A-Za-z][\w.-]*)/.exec(src.slice(tplOpen, tplOpen + 2000))?.[1];
+          if (!rootTag) continue;
+          // 深度计算：slots 是由 extractTextSlots 展平的叶子清单（含 parent 链）
+          const depthOf = (s) => {
+            let d = 0;
+            let cur = s?.parent;
+            while (cur) {
+              d += 1;
+              cur = cur.parent;
+            }
+            return d; // 根元素自身 depth=0，其直接子元素 depth=1
+          };
+          const nested = slots.filter((s) => depthOf(s) >= 2);
+          if (nested.length === 0) continue; // 文本直接落在 section 根子层 ⇒ 事实方向可正常生效 ✅
+          issues.push({
+            id: 'TEXT-AXIS',
+            severity: 'WARN',
+            file: f.path,
+            message:
+              `section ${secId} 的设计是「${texts.length} 条文本纵向堆叠」，但产物把这 ${nested.length}/${slots.length} 条文本` +
+              `嵌进了自造 wrapper（嵌套深度 ≥2）⇒ 该层方向由模型自定，可能被排成一行（视觉与设计不符）。` +
+              `建议：这些文本直接作为 section 根（带 data-section-id="${secId}"）的子节点，方向交由事实 column 生效。`,
+            hint: { suggestion: '去掉仅用于包裹单条文本的 wrapper，让文本直接挂在 section 根下' },
+          });
+        }
+      } catch (err) {
+        issues.push({
+          id: 'TEXT-AXIS-ERROR',
+          severity: 'WARN',
+          file: '(text-axis)',
+          message: `TEXT-AXIS 检测异常（非阻断）：${err?.message || String(err)}`,
+        });
+      }
+    }
+
+    // ========== 🛡️ TEXT-COVERAGE: 真值文本覆盖率（2026-09-28 建立）==========
+    // 与 TEXT-TRUTH（白名单＝拦「多写 / OCR 误读 / 臆造」）**互补**：本条拦「该写的没写」。
+    // 事故形态：子组件被编成占位样板、或整块内容丢失（含「逐文件写盘门禁跳过」那条不留痕的
+    //   下策路径）→ 产物里设计文案大量缺失，而既有门禁全部放行（它们只查"多写"）。
+    //
+    // 判据（阈值来自全语料审计，口径 = text-truth-guard#collectFigmaTextRuns）：
+    //   覆盖率 = |真值中文串(≥2字) 被产物覆盖| / |真值中文串总数|
+    //   覆盖判定与 TEXT-TRUTH 同口径：去空白 + 子串双向匹配（吸收截断/空格差异）。
+    //   审计（36 个真实任务抽样）覆盖率最低 **66.7%**，无一低于 50% ⇒ 下列阈值样本零误伤：
+    //     · coverage < 0.40 → BLOCK（灾祸级丢失）
+    //     · 0.40 ≤ coverage < 0.60 → WARN（提示，不阻断，避免误伤）
+    //     · ≥ 0.60 → 放行
+    //   ⚠️ **逐 section 覆盖率**（才能真正抓「某个小标题消失」）需先解决「标题豁免」：
+    //      面板标题（如「设备监测」）由 base-panel 渲染、被 T1' 有意从组件剥离，
+    //      naive 逐 section 判定会稳定误伤 → 待独立审计后再上（见 MEMORY 2026-09-28）。
+    //   真值取不到 / 数量为 0 → fail-open。
+    if (options?.figmaNodeData) {
+      try {
+        const truthRuns = collectFigmaTextRuns(options.figmaNodeData);
+        if (truthRuns.size > 0) {
+          const covFileList = Array.isArray(files)
+            ? files
+            : Object.entries(files || {}).map(([path, content]) => ({ path, content }));
+          const prodRuns = new Set();
+          for (const f of covFileList) {
+            if (!String(f?.path || '').endsWith('.vue') || typeof f?.content !== 'string') continue;
+            for (const m of f.content.matchAll(/[\u4e00-\u9fa5]{2,}/g)) {
+              const n = m[0].replace(/\s+/g, '');
+              if (n) prodRuns.add(n);
+            }
+          }
+          let covered = 0;
+          for (const t of truthRuns) {
+            if (!t) continue;
+            let hit = prodRuns.has(t);
+            if (!hit) {
+              for (const p of prodRuns) {
+                if (p && (t.includes(p) || p.includes(t))) {
+                  hit = true;
+                  break;
+                }
+              }
+            }
+            if (hit) covered += 1;
+          }
+          const coverage = covered / truthRuns.size;
+          if (coverage < 0.6) {
+            const missing = [...truthRuns]
+              .filter((t) => {
+                if (prodRuns.has(t)) return false;
+                for (const p of prodRuns) if (p && (t.includes(p) || p.includes(t))) return false;
+                return true;
+              })
+              .slice(0, 8);
+            issues.push({
+              id: 'TEXT-COVERAGE',
+              severity: coverage < 0.4 ? 'BLOCK' : 'WARN',
+              file: '(产物文字 vs Figma 真值)',
+              message:
+                `Figma 设计真值中文串共 ${truthRuns.size} 条，产物只覆盖 ${covered} 条（${Math.round(coverage * 100)}%）` +
+                `${coverage < 0.4 ? '，属灾祸级文案丢失' : '，请核对是否漏渲染'}。` +
+                `未出现的真值（前 ${missing.length} 条）：${missing.join('、')}。` +
+                `请把设计文案**原样照抄**进对应区块的模板（含被编成占位样板的情况：不得用 businessProps 占位绑定替代真值文字）。`,
+              hint: {
+                suggestion:
+                  '按列出的 Figma 真值文案逐条补进对应区块模板；若整块内容缺失，重建该 section 的静态文本',
+              },
+            });
+          }
+        }
+      } catch (err) {
+        issues.push({
+          id: 'TEXT-COVERAGE-ERROR',
+          severity: 'WARN',
+          file: '(text-coverage)',
+          message: `真值文本覆盖率检测异常（非阻断）：${err?.message || String(err)}`,
+        });
+      }
+    }
+
+    // ========== 🛡️ PROP-BIND: 绑定未声明的 businessProps 键（2026-09-28 建立，fail-closed）==========
+    // 事故 mc-max-1790577354928-8de43d4c（设备监测，与 718b79d6/e7da161c/e875f162 同族复发）：
+    //   HeaderSection.vue 被 LLM 编成通用样板 ——
+    //     `<div ...__title>{{ componentProps.title }}</div>`
+    //     `<span v-for="(item,index) in businessProps.actions">{{ item.label }}</span>`
+    //   而该组件 declare.json 的 businessConfig 为空 ⇒ 运行期 businessProps.actions 不存在
+    //   ⇒ v-for 零次迭代 ⇒ **头部插槽渲染成空盒子**（用户报「头部插槽消失了」）。
+    //
+    // 为什么 TEXT-TRUTH 抓不到：产物**一个字都没写**，不是写错 —— 现有文本门禁只有
+    //   TEXT-001（兄弟顺序）与 TEXT-TRUTH（白名单＝拦「多写/臆造」），**缺「该写的没写」**。
+    //   本条从「绑定必然取不到值」这个**确定性**角度补上：未声明的键在运行期一定为空。
+    //
+    // 判据（零猜测、零白名单常量）：模板/脚本里 `businessProps.<key>` 的 key 必须出现在
+    //   该组件 **declare.json 自身** 的 businessConfig / businessStatuses / businessEvents 中
+    //   （＝运行期真正 provide 的键，与 declare.js 同源）。未声明 ⇒ 该绑定永远为空 ⇒ BLOCK。
+    // 影响面已全语料审计：仅 4/197（2.0%）组件命中，且全为同一 device-monitor 族，无误伤迹象。
+    // 取不到 declare.json / 解析失败 → fail-open（不阻断），与 TEXT-TRUTH 同款容错。
+    try {
+      // ⚠️ `files` 在本校验器里是**数组** `[{ path, content }]`（见 validate 开头），
+      //    这里归一成数组，兼容 map 形态（增量校验/直接调用方可能传 map）。
+      const fileList = Array.isArray(files)
+        ? files
+        : Object.entries(files || {}).map(([path, content]) => ({ path, content }));
+      const declareEntry = fileList.find((f) =>
+        /(^|\/)declare\.json$/.test(String(f?.path || '')),
+      );
+      const rawDeclare = declareEntry ? declareEntry.content : null;
+      if (rawDeclare) {
+        const dec =
+          typeof rawDeclare === 'string' ? JSON.parse(rawDeclare) : rawDeclare;
+        const declared = new Set([
+          ...Object.keys(dec?.businessConfig || {}),
+          ...Object.keys(dec?.businessStatuses || {}),
+          ...Object.keys(dec?.businessEvents || {}),
+        ]);
+        const offenders = [];
+        for (const f of fileList) {
+          const p = String(f?.path || '');
+          if (!p.endsWith('.vue') || typeof f?.content !== 'string') continue;
+          for (const m of f.content.matchAll(/businessProps\.([A-Za-z_$][\w$]*)/g)) {
+            if (!declared.has(m[1])) offenders.push(`${p} → businessProps.${m[1]}`);
+          }
+        }
+        if (offenders.length > 0) {
+          issues.push({
+            id: 'PROP-BIND',
+            severity: 'BLOCK',
+            file: offenders[0].split(' → ')[0],
+            message:
+              `绑定了 declare.json **未声明**的 businessProps 键，运行期必然取不到值、该区块渲染为空：` +
+              `${offenders.slice(0, 6).join('；')}${offenders.length > 6 ? ' 等' : ''}。` +
+              `请二选一：①该区块改用 Figma TEXT 真值**静态渲染**（设计里的文字必须原样照抄，不得用占位绑定 + v-for）；` +
+              `②确需该业务字段，先在 declare.json 的 businessConfig 里声明它（key/name/type/default）。`,
+            hint: {
+              suggestion:
+                '删除对未声明 businessProps 键的绑定（连同其 v-for），改用 Figma 真值静态渲染；确需业务字段则补进 declare.json.businessConfig',
+            },
+          });
+        }
+      }
+    } catch (err) {
+      issues.push({
+        id: 'PROP-BIND-ERROR',
+        severity: 'WARN',
+        file: '(prop-bind)',
+        message: `businessProps 声明一致性检测异常（非阻断）：${err?.message || String(err)}`,
+      });
+    }
+
     // ========== 🛡️ THEME-COLOR: 样式主题变量化门禁（两者通用，2026-09-04）==========
     // 事故 mc-max-1788485095835-e1432017：81 处 #hex 抄写槽位色值 + 子组件局部
     // @colorTextBase:#333 覆盖 → 切主题/调颜色变量零生效。检测确定性高（只查样式
@@ -3501,6 +3784,56 @@ export function collapseDoubledComponentPrefix(text, prefixId = '') {
  * @param {string[]} vueFiles - 需要联动修复的 .vue 文件内容数组 [{ path, content }]
  * @returns {{ commonLess: string, vueFiles: Array<{path, content}>, fixedClasses: string[], collapsed: number }}
  */
+/**
+ * 🛡️ 批6（2026-09-28 · R2「内部 hash 去段」）：把类名里的 **hash 前缀段**归一为组件规范前缀。
+ *
+ * 背景：早期命名血统里类名前缀是 hash（`.c-87aa90-stat-item`），或与规范前缀叠成
+ *   双前缀（`.c-aa90-c-87aa90-slot-con`）。需求：内部 hash 段一律去除。
+ *
+ * 规则（token 级、锚定本组件自身 hash；幂等）：
+ *   ① 去内层 hash 层：`<canonical>-c-<hex5+>-` → `<canonical>-`
+ *   ② 前缀归一：`c-<hex5+>-` → `<canonical>-`（**仅当该 hash 段是本组件自身 id 的 hash 段/前缀**）
+ *
+ * 安全约束（宁可少改，不可误改）：
+ *   - 只处理「纯 hex 且长度 ≥5」的段 —— 语义段（`stat` / `tab` / `header`）一律不动；
+ *   - ② 必须命中「本组件 id 的 hash 段或其前缀」才改 —— 防止误改共享文件里**别的组件**的类；
+ *   - 不新增/删除 class，只做等价重命名（调用方负责同步模板类名，保证两侧不失配）。
+ *
+ * @returns {{text:string, count:number}}
+ */
+export function normalizeHashClassPrefixes(content, componentId = '') {
+  const s = typeof content === 'string' ? content : '';
+  if (!s) return { text: s, count: 0 };
+  const canonical = classPrefixOf(componentId);
+  if (!canonical) return { text: s, count: 0 };
+  const suffix = canonical.replace(/^c-/, '');
+  if (!suffix) return { text: s, count: 0 };
+
+  // 本组件 id 的 hash 段集合（用于 ② 的归属闸门）
+  const ownHashSegs = String(componentId || '')
+    .toLowerCase()
+    .split('-')
+    .filter((seg) => /^[0-9a-f]{5,}$/.test(seg));
+
+  let count = 0;
+  // ① 去内层 hash 层：<canonical>-c-<hex5+>- → <canonical>-
+  const innerRe = new RegExp(`${escapeRegExp(canonical)}-c-[0-9a-f]{5,}-`, 'gi');
+  let out = s.replace(innerRe, () => {
+    count += 1;
+    return `${canonical}-`;
+  });
+  // ② 前缀归一（仅当 hash 段属于本组件）
+  const leadRe = /\bc-([0-9a-f]{5,})-/gi;
+  out = out.replace(leadRe, (full, seg) => {
+    const g = String(seg).toLowerCase();
+    if (g === suffix.toLowerCase()) return full; // 已是规范前缀
+    if (!ownHashSegs.some((own) => own === g || own.startsWith(g))) return full; // 非本组件 hash → 不动
+    count += 1;
+    return `${canonical}-`;
+  });
+  return { text: out, count };
+}
+
 export function autoFixPrefixViolations(
   commonLessContent,
   componentId,
@@ -3521,19 +3854,23 @@ export function autoFixPrefixViolations(
   // 之后则纯折叠场景（无新增违规）永远不会被写回。
   // 形态：`<stem>-<slug8>-<stem>-x` → `<stem>-x`（slug 必须是装饰性随机段）。
   // 例：.c-device-monitor-00g6b7vh-c-device-monitor-tab-item--active → .c-device-monitor-tab-item--active
-  const collapseLess = collapseDoubledComponentPrefix(commonLessContent, barePrefix);
-  let collapsed = collapseLess.count;
+  // 🛡️ 批6（2026-09-28 · R2「内部 hash 去段」）：先做 hash 前缀归一（① 去内层 hash 层 +
+  //   ② hash 前缀→规范前缀，仅限本组件自身 hash），再做既有的双前缀折叠。幂等。
+  const hashNormCommon = normalizeHashClassPrefixes(commonLessContent, componentId);
+  const collapseLess = collapseDoubledComponentPrefix(hashNormCommon.text, barePrefix);
+  let collapsed = hashNormCommon.count + collapseLess.count;
   let fixedContent = collapseLess.text;
   for (const vueFile of vueFiles) {
     if (typeof vueFile?.content !== 'string') continue;
-    const r = collapseDoubledComponentPrefix(vueFile.content, barePrefix);
-    if (r.count > 0) {
+    const hn = normalizeHashClassPrefixes(vueFile.content, componentId);
+    const r = collapseDoubledComponentPrefix(hn.text, barePrefix);
+    if (hn.count + r.count > 0) {
       vueFile.content = r.text;
-      collapsed += r.count;
+      collapsed += hn.count + r.count;
     }
   }
 
-  const violations = findPrefixViolations(commonLessContent, componentId);
+  const violations = findPrefixViolations(fixedContent, componentId);
   if (violations.length === 0) {
     // 纯折叠场景：内容已变，交由调用方按 collapsed>0 写回
     return { commonLess: fixedContent, vueFiles, fixedClasses: [], collapsed };

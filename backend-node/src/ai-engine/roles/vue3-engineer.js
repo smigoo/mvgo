@@ -55,6 +55,8 @@ import { stripLlmTailGarbage } from '../utils/llm-tail-garbage.js';
 import { buildSectionStyleFacts, semanticClassKeywords } from '../utils/section-tree.js';
 // 🛡️ 阶段4（2026-09-17）：v-for 重复单元识别（共享背景精确挂到 item，与微码同源）
 import { findVForItemTag, healAbsoluteOverlayParents } from './microcode/resource-mounter.js';
+// 🛡️ §七 B17（2026-09-28）：背景四件套几何口径统一（与微码 injectBgStyleBinding 同源，消除 mc/vue3 双实现分叉）
+import { inferBackgroundStyle, inferBackgroundSize } from '../utils/background-size-inference.js';
 // 🛡️ 阶段4（2026-09-17）：业务样式 var() 直引自愈（模式 A → B）
 import { healBusinessStyleVarRefs } from '../utils/theme-color-guard.js';
 // 🛡️ 方案 E（2026-09-16）：双链路共用落盘前自愈链（资源终验/运行库/CODE-022/.value/FLEX-003/FLEX-005）
@@ -1660,9 +1662,10 @@ export class Vue3Engineer extends MicrocodeEngineer {
                     );
                     if (!itemTag || itemTag.includes('backgroundImage')) continue;
                     // 注入 :style 到 v-for item（背景四件套与下方统一口径一致）
-                    const svFw = Math.round(bg.figmaBox?.width || bg.visualMeta?.width || 0);
-                    const svFh = Math.round(bg.figmaBox?.height || bg.visualMeta?.height || 0);
-                    const svSize = svFw > 0 && svFh > 0 ? `${svFw}px ${svFh}px` : '100% 100%';
+                    // 🛡️ §七 B17（2026-09-28）：size 口径统一到 `inferBackgroundSize`（与微码
+                    //   `inferBackgroundStyle` 同源），不再本地重算 fw/fh + `'100% 100%'` 兜底字面量。
+                    //   position 恒 `'0px 0px'` 是**语义**（每张卡各自的 item 局部原点），非硬编码常量。
+                    const svSize = inferBackgroundSize(bg).size;
                     const svBgCss =
                       `backgroundImage: \`url(\${${svName}})\`, backgroundSize: '${svSize}', backgroundPosition: '0px 0px', backgroundRepeat: 'no-repeat'`;
                     const newItemTag = itemTag.replace(/\/?>$/, (t) =>
@@ -1701,43 +1704,23 @@ export class Vue3Engineer extends MicrocodeEngineer {
                 (bg.visualMeta && bg.visualMeta.fillsSummary) || '',
               ).trim();
               if (!hasImage && !fills) continue;
-              // 🎯 背景完整四件套（2026-08-25）：size 用 figmaBox 实际尺寸、position 用相对父容器偏移、repeat 按面积比
-              const fw = Math.round(
-                bg.figmaBox?.width || bg.visualMeta?.width || 0,
-              );
-              const fh = Math.round(
-                bg.figmaBox?.height || bg.visualMeta?.height || 0,
-              );
-              let posX = 0,
-                posY = 0;
-              if (
-                bg.parentBox &&
-                bg.figmaBox &&
-                (bg.parentBox.width || bg.parentBox.height)
-              ) {
-                posX = Math.round((bg.figmaBox.x || 0) - (bg.parentBox.x || 0));
-                posY = Math.round((bg.figmaBox.y || 0) - (bg.parentBox.y || 0));
-              }
-              let repeatMode = 'no-repeat';
-              if (bg.parentBox && fw > 0 && fh > 0) {
-                const pa =
-                  (bg.parentBox.width || 0) * (bg.parentBox.height || 0);
-                if (pa > 0 && fw * fh < pa * 0.5) repeatMode = 'repeat';
-              }
-              const sizeStr =
-                fw > 0 && fh > 0 ? fw + 'px ' + fh + 'px' : '100% 100%';
+              // 🛡️ §七 B17（2026-09-28）：四件套口径统一到 `inferBackgroundStyle`（与微码
+              //   `injectBgStyleBinding` 同源）。原 vue3 本地重算有三处与微码不一致：
+              //   ① size **无 cover 判定** → 铺满父容器的背景被写成 `Wpx Hpx`（而非 `100% 100%`）；
+              //   ② position **无 cover 归零** → `100% 100%` 后再带偏移会露白边；
+              //   ③ repeat 用**单阈值**（面积 <50%）而非双重约束（两维远小 **且** 面积够小）。
+              //   全部收敛为唯一实现（`utils/background-size-inference.js`）。
+              const bgStyle = inferBackgroundStyle(bg);
               // 背景值：有图用图（import 变量已注入），无图用 Figma 渐变/纯色
               const bgCss = hasImage
                 ? 'backgroundImage: `url(\${' +
                   varName +
                   "})`, backgroundSize: '" +
-                  sizeStr +
+                  bgStyle.size +
                   "', backgroundPosition: '" +
-                  posX +
-                  'px ' +
-                  posY +
-                  "px', backgroundRepeat: '" +
-                  repeatMode +
+                  bgStyle.position +
+                  "', backgroundRepeat: '" +
+                  bgStyle.repeat +
                   "'"
                 : "background: '" + fills.replace(/'/g, "\\'") + "'";
               // 在所有 .vue 产物中收集候选元素：class 词集与 mountTarget 词集求交集，取最高分且无背景者

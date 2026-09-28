@@ -162,6 +162,46 @@ function splitTopLevelClassBlocks(less = '') {
  * @param {string[]} selectors 待删除的类选择器（如 ['.c-x-icon-btn']）
  * @returns {string}
  */
+/**
+ * 🛡️ 批0（2026-09-28）：提取 common.less 中指定选择器的规则块原文（与 removeClassBlocks
+ * 同解析口径：按行 + 花括号深度 + 选择器 token 命中）。用于「同名类合并」时保留现有声明，
+ * 避免 remove+append 造成声明净丢失。
+ */
+function extractClassBlocks(less = '', selectors = []) {
+  if (!selectors.length) return [];
+  const out = [];
+  const lines = String(less).split('\n');
+  let depth = 0;
+  let buf = null;
+  const countBraces = (text) => {
+    let open = 0, close = 0;
+    for (const ch of text) {
+      if (ch === '{') open += 1;
+      else if (ch === '}') close += 1;
+    }
+    return { open, close };
+  };
+  for (const line of lines) {
+    if (depth <= 0) {
+      if (!line.includes('{')) continue;
+      const selPart = line.slice(0, line.indexOf('{')).trim();
+      const tokens = selPart.split(/\s+/).filter(Boolean);
+      const hit = selectors.some((s) => tokens.includes(s));
+      if (!hit) continue;
+      buf = [line];
+      const { open, close } = countBraces(line);
+      depth = open - close;
+      if (depth <= 0) { out.push(buf.join('\n')); buf = null; depth = 0; }
+    } else if (buf) {
+      buf.push(line);
+      const { open, close } = countBraces(line);
+      depth += open - close;
+      if (depth <= 0) { out.push(buf.join('\n')); buf = null; depth = 0; }
+    }
+  }
+  return out;
+}
+
 function removeClassBlocks(less = '', selectors = []) {
   if (!selectors.length) return less;
   const lines = String(less).split('\n');
@@ -282,6 +322,22 @@ function mergeIntoCommonLess(commonLess = '', blocks = []) {
       selectorGroups.set(b.selector, []);
     }
     selectorGroups.get(b.selector).push(b.text);
+  }
+
+  // 🛡️ 批0（2026-09-28 · 声明保真）：把 common.less 中**同名规则的现有块也纳入合并（并集）**。
+  //   旧行为：`removeClassBlocks` 先删 common.less 的同名规则、再追加子组件版本 →
+  //   当两个来源同名但内容不同时，common.less 的**丰富版**（含 display/flex-direction）
+  //   被自组件的**薄弱版**整体覆盖 → 声明净丢失（全语料实测：2764/13989 结构声明丢失、
+  //   68% 组件受影响，是「内部小布局没被识别」的主因）。
+  //   修复：现有块**排在最前**参与 mergeCssBlocks → 同名属性仍由子组件版本覆盖（语义不变），
+  //   但 common.less 独有的声明被**保留**下来。幂等；无同名则不改变行为。
+  const existingSameNameBlocks = extractClassBlocks(commonLess, mergedBlocks.map((b) => b.selector));
+  for (const t of existingSameNameBlocks) {
+    const sel = (/^\s*([^{]+)\{/.exec(t) || [])[1];
+    if (!sel) continue;
+    const key = sel.trim();
+    if (!selectorGroups.has(key)) selectorGroups.set(key, []);
+    selectorGroups.get(key).unshift(t); // 放最前 → 优先级最低，子组件可覆盖同名属性
   }
 
   // 合并同名类的所有属性

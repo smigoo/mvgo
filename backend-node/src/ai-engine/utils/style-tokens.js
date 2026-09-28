@@ -198,6 +198,37 @@ function saturationOf(hex) {
   return rgbToHsl(rgb.r, rgb.g, rgb.b).s;
 }
 
+/** 明度（0-1） */
+function lightnessOf(hex) {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return 0;
+  return rgbToHsl(rgb.r, rgb.g, rgb.b).l;
+}
+
+/** 绝对彩度 = (max-min)/255（0-1）—— 比 HSL 饱和度可靠：近白/近黑的 HSL-S 会虚高 */
+function chromaOf(hex) {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return 0;
+  return (Math.max(rgb.r, rgb.g, rgb.b) - Math.min(rgb.r, rgb.g, rgb.b)) / 255;
+}
+
+/**
+ * 是否为「鲜艳可用主色」：饱和度 + 明度带 + 绝对彩度三重判定。
+ *
+ * 🛡️ 2026-09-28（device-monitor e8c97bf8 实锤）：单用 HSL 饱和度会把**近白色**当主色 ——
+ *   `#f0f5ff`（近白浅蓝）的 HSL-S = **1.0**（因分母 2-max-min 极小），轻松骗过 `>=0.15`，
+ *   于是当选 light 主题 `@color-primary`；而业务把该槽当"蓝色"用（如 header 数值 #1990ff
+ *   → var(--color-primary)）→ 实际渲染成近白 → 浅底上文字不可见。
+ *   故叠加：明度带（排除近白 L>0.90 / 近黑 L<0.12）+ 绝对彩度 `(max-min)/255 >= 0.15`。
+ *   对照：`#1990ff` L=0.55 彩度=0.90 ✅；`#f0f5ff` L=0.97 彩度=0.06 ❌。
+ */
+function isVividColor(hex) {
+  if (saturationOf(hex) < 0.15) return false;
+  const l = lightnessOf(hex);
+  if (l > 0.9 || l < 0.12) return false;
+  return chromaOf(hex) >= 0.15;
+}
+
 /**
  * 提取 Figma 设计色板。
  * @param {Object} figmaNodeData Figma 节点树（含 children/fills/strokes/absoluteBoundingBox）
@@ -250,7 +281,7 @@ export function extractFigmaColorPalette(figmaNodeData) {
 
   // 主色：排除 topText/topBg/近中性色（饱和度 < 0.15）后最高频 fill 色
   const saturated = fillColors.filter(
-    (f) => f.hex !== topText && f.hex !== topBg && saturationOf(f.hex) >= 0.15,
+    (f) => f.hex !== topText && f.hex !== topBg && isVividColor(f.hex),
   );
   const topPrimary = saturated[0]?.hex || null;
   // 强调色：与主色色相差异 ≥ 30° 的次高频饱和色（可选）
