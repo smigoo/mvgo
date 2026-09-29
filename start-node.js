@@ -46,6 +46,11 @@ function latestSrcMtime(dir, extRe, acc = { latest: 0, file: null }) {
     const p = path.join(dir, e.name);
     if (e.isDirectory()) { latestSrcMtime(p, extRe, acc); continue; }
     if (!extRe.test(e.name)) continue;
+    // 🛡️ 2026-09-29（假阳性实锤）：测试文件不参与运行时产出（jest `testRegex: ".*\.spec\.ts$"`，
+    //   `*.test.js` 在本仓永不被执行）⇒ 把它们算进「src 最新改动」会让护栏误报 STALE：
+    //   改了 spec 就提示「dist 落后于源码 / 运行的是旧代码，请重新 build」，逼出无意义重构建，
+    //   并让人怀疑修复是否真的装载（本次排查「背景图消失」时就先被这条噪音误导了一轮）。
+    if (/\.(spec|test)\.[cm]?[jt]sx?$/i.test(e.name)) continue;
     try {
       const m = fs.statSync(p).mtimeMs;
       if (m > acc.latest) { acc.latest = m; acc.file = p; }
