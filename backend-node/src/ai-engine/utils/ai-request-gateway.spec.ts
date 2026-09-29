@@ -7,6 +7,20 @@ jest.mock('../logger/index.js', () => ({
   }),
 }));
 
+// backend-root.js 用 import.meta.url（ESM），jest CJS 下无法加载 → 与既有 spec 同款 mock
+jest.mock('../../config/backend-root.js', () => ({
+  backendRoot: '/Users/smigoo/工作/mvgo/backend-node',
+  projectRoot: '/Users/smigoo/工作/mvgo',
+  workspaceRoot: '/Users/smigoo/工作/mvgo/backend-node/workspace',
+  dataDir: '/Users/smigoo/工作/mvgo/backend-node/data',
+  customComponentsDir: '/Users/smigoo/工作/mvgo/backend-node/workspace/custom-components',
+  vue3ComponentsDir: '/Users/smigoo/工作/mvgo/backend-node/workspace/vue3-components',
+  tempComponentsDir: '/Users/smigoo/工作/mvgo/temp-components',
+  resolveFrontendWorkspacePath: () => '/Users/smigoo/工作/mvgo/frontend/workspace',
+  frontendCustomComponentsDir: () => '/Users/smigoo/工作/mvgo/frontend/workspace/custom-components',
+  frontendVue3ComponentsDir: () => '/Users/smigoo/工作/mvgo/frontend/workspace/vue3-components',
+}));
+
 const gateway = require('./ai-request-gateway.js');
 
 describe('ai-request-gateway', () => {
@@ -129,5 +143,85 @@ describe('ai-request-gateway', () => {
     expect(gateway.getModelRequestStats().queuedCount).toBe(0);
 
     firstGrant.release();
+  });
+
+  it('B层自愈：推理烧光输出预算（finish_reason=length+reasoning）时，后续 attempt 强制关推理重试', async () => {
+    // 第 1 次返回空内容（推理烧光预算），第 2 次（关推理后）返回正文
+    const emptyResponse = {
+      content: '',
+      response_metadata: { finish_reason: 'length' },
+      usage_metadata: { output_tokens: 2000, output_token_details: { reasoning: 1800 } },
+    }
+    const okResponse = {
+      content: 'real component code',
+      response_metadata: { finish_reason: 'stop' },
+      usage_metadata: { output_tokens: 100 },
+    }
+    let invokeCount = 0
+    const baseInvoke = jest.fn(async () => {
+      invokeCount += 1
+      return invokeCount === 1 ? emptyResponse : okResponse
+    })
+    const llm = { invoke: baseInvoke, modelName: 'reasoning-model' }
+    const createLLM = jest.fn((snap) => ({ invoke: baseInvoke, modelName: snap.model || 'reasoning-model' }))
+    const refreshProvider = jest.fn((opts = {}) => ({
+      providerId: 'prov-1',
+      apiKey: 'k',
+      baseURL: '',
+      model: 'reasoning-model',
+      providerType: 'openai-compatible',
+      // 🛡️ B 层：forceThinkingDisabled 时透传 'disabled'
+      thinkingType: opts.forceThinkingDisabled ? 'disabled' : '',
+    }))
+
+    gateway.attachUnifiedInvoke(llm, {
+      context: 'self-heal',
+      model: 'reasoning-model',
+      refreshProvider,
+      createLLM,
+      treatEmptyAsFailure: true,
+    })
+
+    const result = await llm.invoke('生成组件', {
+      __mvgoRequestOptions: { treatEmptyAsFailure: true, requestMaxRetries: 1, requestTimeoutMs: 5000 },
+    })
+
+    // 关推理重试后拿到正文 → 任务不 FAILED
+    expect(result.content).toBe('real component code')
+    // 重建 LLM 时被要求关推理（thinkingType:'disabled'）
+    const disabledRebuild = createLLM.mock.calls.find((c) => c[0]?.thinkingType === 'disabled')
+    expect(disabledRebuild).toBeTruthy()
+    // refreshProvider 确实收到 forceThinkingDisabled（复用同 provider 而非换 provider）
+    expect(refreshProvider.mock.calls.some((c) => c[0]?.forceThinkingDisabled === true)).toBe(true)
+  });
+
+  it('慢归因：执行开始即上报带模型名的 model-start 进度（含「模型自身问题」安抚）', async () => {
+    const events = []
+    const baseInvoke = jest.fn(async () => ({ content: 'ok', usage_metadata: { output_tokens: 1 } }))
+    const llm = { invoke: baseInvoke, modelName: 'deepseek-v4.1-flash' }
+    const createLLM = jest.fn((s) => ({ invoke: baseInvoke, modelName: s.model || 'm' }))
+    const refreshProvider = jest.fn(() => ({
+      providerId: 'p1', apiKey: 'k', baseURL: '', model: 'deepseek-v4.1-flash',
+      providerType: 'openai-compatible', thinkingType: '',
+    }))
+
+    gateway.attachUnifiedInvoke(llm, {
+      context: 'attrib', model: 'deepseek-v4.1-flash', refreshProvider, createLLM,
+      treatEmptyAsFailure: true,
+      onProgress: (e) => events.push(e),
+    })
+
+    const res = await llm.invoke('hi', { __mvgoRequestOptions: { requestMaxRetries: 0, requestTimeoutMs: 3000 } })
+
+    expect(res.content).toBe('ok')
+    // 立即（首推）带模型名的 model-start，且明确「模型自身问题」
+    const start = events.find((e) => e.kind === 'model-start')
+    expect(start).toBeTruthy()
+    expect(start.kind).toBe('model-start')
+    expect(start.message).toContain('deepseek-v4.1-flash')
+    expect(start.message).toContain('模型自身问题')
+    // 网关心跳类进度事件均带 kind 分类字段（model-start / model-slow / platform-queue / retry）
+    const heartbeatKinds = events.filter((e) => e.context === 'attrib').map((e) => e.kind)
+    expect(heartbeatKinds.every((k) => typeof k === 'string')).toBe(true)
   });
 });

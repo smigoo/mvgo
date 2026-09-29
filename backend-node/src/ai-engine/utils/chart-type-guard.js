@@ -469,6 +469,17 @@ function hasPieFeatureKeys(elemText) {
 }
 
 /**
+ * 仪表盘（gauge）特征键 —— radius/center/startAngle 同为 gauge 所用，是「饼图特征」唯一的
+ * 潜在歧义来源。**仅供诊断/审计量化误伤面使用，不参与类型裁决**。
+ *
+ * @param {string} elemText - 单个 series 元素文本
+ * @returns {boolean}
+ */
+function hasGaugeFeatureKeys(elemText) {
+  return /\b(axisLine|splitNumber|pointer|progress|anchor)\s*:/.test(elemText)
+}
+
+/**
  * 只改 series 数组**元素对象第一层**的 `type` 键。
  * 深层（lineStyle.type / areaStyle.color.type / markLine…）一律不碰。
  *
@@ -481,8 +492,10 @@ function hasPieFeatureKeys(elemText) {
  * @param {Object} [block] - 真值块（{ chartType, chartTypeSet? }）
  * @param {boolean} [multiChart] - 是否启用真值集模式（调用点传了 chartTypeSet）
  * @param {Set<string>|null} [truthSet] - 真值集（charts[] 归一后的注册名集合，如 {bar,line}）
+ * @param {Array} [collector] - 诊断出口（可选）：逐 series 元素 push 一个口径样本，
+ *   供审计器**复用同一口径**统计影响面/误伤面。传入即不产生任何行为副作用。
  */
-function rewriteSeriesElementTypes(arrText, block, multiChart, truthSet) {
+function rewriteSeriesElementTypes(arrText, block, multiChart, truthSet, collector) {
   const truth = resolveEchartsType(block && block.chartType)
   let out = ''
   let i = 0
@@ -532,12 +545,34 @@ function rewriteSeriesElementTypes(arrText, block, multiChart, truthSet) {
         // 绝不传整个 series 数组——否则同数组内「饼图 + 柱/线图」混排时，柱图会被误归一成 pie。
         const elemSpan = elemStart >= 0 ? findBalancedSpan(arrText, elemStart, '{', '}') : null
         const elemText = elemSpan ? arrText.slice(elemSpan.start, elemSpan.end) : arrText
+        if (collector) {
+          collector.push({
+            raw,
+            resolved,
+            hasPieFeatures: hasPieFeatureKeys(elemText),
+            hasGaugeFeatures: hasGaugeFeatureKeys(elemText),
+          })
+        }
         let chosen
-        // 🛡️ 形状错配归一（RUNTIME-004 治本）：饼图特征优先于一切类型归一。
-        // series 元素带 radius/center/startAngle 等饼图特征，却被标成 cartesian（bar/line）→
-        // 归一成 pie（echarts doughnut = pie + radius），否则 bar 找不到 xAxis 崩 `xAxis "0" not found`。
-        // 例外：已（归一为）pie 的原样保留；完全不可识别也不臆造成饼图（走下面 fail-closed）。
-        if (hasPieFeatureKeys(elemText) && resolved && resolved !== 'pie') {
+        // 🛡️ 形状错配归一（RUNTIME-004 治本）：饼图特征**优先于一切类型归一**，含真值集。
+        // series 元素带 radius/center/startAngle 等饼图特征 → 恒为 pie（echarts doughnut = pie + radius）。
+        //
+        // 🔴 2026-09-29 治本（RUNTIME-004 第 3 次复发 · mc-max-1790666499312-afc4b0f2 实锤）：
+        //    旧条件 `hasPieFeatureKeys(elemText) && resolved && resolved !== 'pie'` 把
+        //    「raw 已是 pie」**排除在保护之外** —— 而 raw==='pie' 时不会命中下面任何分支的
+        //    「保留」条件（`truthSet.has('pie')` 为假），只会被 fail-closed 到真值集首元素，
+        //    于是守卫**主动把 LLM 写对的 pie 改写成 bar** ⇒ bar 是 cartesian ⇒
+        //    找不到 xAxis ⇒ `xAxis "0" not found` ⇒ mounted 崩溃（RUNTIME-004 + VISUAL-002 硬 BLOCK）。
+        //    触发前提很常见：vision 只识别出 N 张笛卡尔图、**漏掉环形图** ⇒
+        //    `buildChartTypeTruthSet` 得 {bar,line}（不含 pie），而该文件恰有一张环形图。
+        //    实测（同仓 .tmp-pie2bar.mjs）：真值集 {bar,line} ⇒ changed=1、终态 bar=1/pie=0；
+        //    真值集含 pie 或为空集 ⇒ changed=0、终态 pie 保留。即**真值集把正确的饼图拉走了**。
+        //    修法：饼图特征键是**不可辩驳的几何事实**，不做 raw/resolved 前置判定 ——
+        //    恒 `chosen='pie'`（raw 已是 pie 时 chosen===raw ⇒ changed=0，等价「原样保留」，
+        //    同时挡住真值集/单图真值/文件内自动判定三条把 pie 拉走的路径）。
+        // 全语料审计（49480 .vue / 9537 含 series / 14860 series 元素 / 2910 带饼图特征）：
+        //    raw=pie 2803（本次修复面）、bar 85、分组柱状图 22（本分支原有目标）；同时带 gauge 特征键 = 0 ⇒ 误伤 0。
+        if (hasPieFeatureKeys(elemText)) {
           chosen = 'pie'
         } else if (multiChart && truthSet) {
           // 🛡️ 真值集模式（2026-09-14 · 流量监测 T-01 治本，§15b.4）：
@@ -654,7 +689,7 @@ export function isMultiChartSource(src) {
   return types.size >= 2
 }
 
-export function normalizeSeriesInSource(src, block) {
+export function normalizeSeriesInSource(src, block, collector) {
   if (typeof src !== 'string' || !src) return { text: src, changed: 0 }
   const spans = findSeriesArraySpans(src)
   if (!spans.length) return { text: src, changed: 0 }
@@ -675,6 +710,7 @@ export function normalizeSeriesInSource(src, block) {
       block,
       multiChart,
       useSetMode ? truthSet : null,
+      collector,
     )
     const r2 = repairNestedTypeKeys(r1.text)
     changed += r1.changed + r2.changed
@@ -683,6 +719,25 @@ export function normalizeSeriesInSource(src, block) {
   }
   out += src.slice(cursor)
   return { text: out, changed }
+}
+
+/**
+ * 🛡️ 诊断/审计入口（2026-09-29 立）：列出源码里每个 series 元素的「类型口径样本」。
+ *
+ * 与 `normalizeSeriesInSource` **逐字同源**（同一 `findSeriesArraySpans` / 同一元素切分 /
+ * 同一 `hasPieFeatureKeys` / 同一 `resolveEchartsType`），因此可用于回答：
+ *  - 全语料里「带饼图特征键」的 series 元素有多少、raw type 分布如何；
+ *  - 其中有多少同时带 gauge 特征键（`radius/center` 的唯一潜在歧义来源）⇒ 误伤面上界。
+ *
+ * @param {string} src - .vue 源码
+ * @returns {Array<{raw:string,resolved:string|null,hasPieFeatures:boolean,hasGaugeFeatures:boolean}>}
+ */
+export function collectSeriesTypeSamples(src) {
+  if (typeof src !== 'string' || !src) return []
+  const collector = []
+  // 只借用扫描轨；传入空真值块，避免诊断本身改变裁决路径。
+  normalizeSeriesInSource(src, {}, collector)
+  return collector
 }
 
 // ───────────────────────── 坐标轴格式守卫（Loop 2.1.F）────────────────────────
@@ -930,11 +985,190 @@ function normalizeLessVarInJs(src) {
 }
 
 /**
+ * 🛡️ 2026-09-29 治本（RUNTIME-004 第 2 次复发：`mc-max-1790666499312-afc4b0f2`
+ *   与 `mc-max-1790667846995-b91b3c60` 同签名）：
+ *   为「含笛卡尔 series 却缺 xAxis/yAxis 的 setOption 对象」补默认轴。
+ *
+ * 背景：`hasAxisDeclared` 守卫（2026-09-14）已正确地**不再**给缺轴 option 注入
+ *   `xAxisIndex/yAxisIndex`（那是无效补丁），但它**也不补轴本身** ⇒ `type:'bar'` +
+ *   无轴的 option 一路放行到运行期 → ECharts 抛 `xAxis "0" not found` → mounted 崩溃 →
+ *   整页只剩错误页 → `RUNTIME-004 render-error` + `VISUAL-002 score≈0.12` → 硬 BLOCK。
+ *   真机实锤：`afc4b0f2` 的 `CardGrid.vue` 写的是
+ *   `chart.setOption({ tooltip:{…}, series:[{ type:'bar', … }] })`，
+ *   全文 `xAxis` 出现 **0** 次（**LLM 原始缓存段也是 0 次** ⇒ 不是后处理删的）。
+ *
+ * 判据（保守，只在**同一个 option 对象字面量内**判定，避免误伤自定义/变量形态的轴）：
+ *   ① 该 `setOption(` 的**第一个实参是对象字面量**（`{` 开头）；
+ *   ② 对象**顶层**缺 `xAxis` / `yAxis`；
+ *   ③ 对象顶层有 `series`，且 series 文本里出现**笛卡尔类型**（bar/line/… ）。
+ *   ⇒ 在对象开头补 `xAxis: [{ type:'category', data: [] }]`（缺哪个补哪个）。
+ *   ⚠️ 注入**数组形态**（不是对象形态）：与 ① `normalizeAxisObjectToArray` 的归一目标一致，
+ *      否则本次注入的对象会在下一次调用时被 ① 再改一遍 ⇒ 幂等性被破坏（实测 changed 不为 0）。
+ *
+ * 不注入 `grid`：崩因是缺**轴**而非缺 grid，ECharts 有默认 grid ⇒ 保持最小改动。
+ * 幂等：补过后顶层即存在对应键，二次调用零改动。
+ * 已知未覆盖（有意保守）：`const option = {…}; chart.setOption(option)` 这类**变量实参**
+ *   形态不处理 —— 盲扫全文件找「像 option 的对象」误伤面太大。
+ *
+ * @param {string} src - .vue 源码
+ * @returns {{text:string, changed:number, injected:number}}
+ */
+function injectMissingCartesianAxes(src) {
+  if (typeof src !== 'string' || !src) return { text: src, changed: 0, injected: 0 }
+
+  const re = /\bsetOption\s*\(/g
+  const edits = []
+  let m
+  while ((m = re.exec(src))) {
+    let i = m.index + m[0].length
+    while (i < src.length && /\s/.test(src[i])) i += 1
+    if (src[i] !== '{') continue
+
+    const objStart = i
+    let depth = 0
+    let j = i
+    let closed = false
+    while (j < src.length) {
+      const skipped = skipNonCode(src, j)
+      if (skipped !== j) {
+        j = skipped
+        continue
+      }
+      const c = src[j]
+      if (c === '{') depth += 1
+      else if (c === '}') {
+        depth -= 1
+        if (depth === 0) {
+          j += 1
+          closed = true
+          break
+        }
+      }
+      j += 1
+    }
+    if (!closed) continue
+
+    const info = scanOptionTopLevelKeys(src.slice(objStart, j))
+    if (!info.hasSeries || !info.seriesHasCartesian) continue
+
+    const inject = []
+    if (!info.hasXAxis) inject.push("xAxis: [{ type: 'category', data: [] }]")
+    if (!info.hasYAxis) inject.push("yAxis: [{ type: 'value' }]")
+    if (!inject.length) continue
+
+    edits.push({ at: objStart + 1, text: inject.join(', ') + ', ' })
+  }
+
+  if (!edits.length) return { text: src, changed: 0, injected: 0 }
+
+  // 从后往前插入，避免前面的插入使后面的下标位移
+  let out = src
+  for (let k = edits.length - 1; k >= 0; k -= 1) {
+    out = out.slice(0, edits[k].at) + edits[k].text + out.slice(edits[k].at)
+  }
+  return { text: out, changed: edits.length, injected: edits.length }
+}
+
+/**
+ * 扫描 option 对象字面量文本，判定**顶层**是否声明 xAxis / yAxis / series，
+ * 以及 series 里是否含笛卡尔类型。用 brace/bracket 深度追踪：只有 depth===1
+ * 才是 option 的顶层键，嵌套对象（`tooltip: {…}`）与嵌套数组（`data: […]`）不误判。
+ *
+ * @param {string} objText - 形如 `{…}` 的 option 对象文本（首字符 '{'）
+ * @returns {{hasXAxis:boolean, hasYAxis:boolean, hasSeries:boolean, seriesHasCartesian:boolean}}
+ */
+function scanOptionTopLevelKeys(objText) {
+  const res = {
+    hasXAxis: false,
+    hasYAxis: false,
+    hasSeries: false,
+    seriesHasCartesian: false,
+  }
+  let i = 0
+  let depth = 0
+  while (i < objText.length) {
+    const skipped = skipNonCode(objText, i)
+    if (skipped !== i) {
+      i = skipped
+      continue
+    }
+    const c = objText[i]
+    if (c === '{' || c === '[') {
+      depth += 1
+      i += 1
+      continue
+    }
+    if (c === '}' || c === ']') {
+      depth -= 1
+      i += 1
+      continue
+    }
+
+    if (depth === 1) {
+      const rest = objText.slice(i, i + 16)
+      if (/^xAxis\s*:/.test(rest)) res.hasXAxis = true
+      else if (/^yAxis\s*:/.test(rest)) res.hasYAxis = true
+      else if (/^series\s*:/.test(rest)) {
+        res.hasSeries = true
+        // 定位 series 的值，若为数组则取出其文本判定类型
+        let p = i + 'series'.length
+        while (p < objText.length && /\s/.test(objText[p])) p += 1
+        if (objText[p] === ':') {
+          p += 1
+          while (p < objText.length && /\s/.test(objText[p])) p += 1
+          if (objText[p] === '[') {
+            let d2 = 0
+            let q = p
+            while (q < objText.length) {
+              const sk = skipNonCode(objText, q)
+              if (sk !== q) {
+                q = sk
+                continue
+              }
+              if (objText[q] === '[') d2 += 1
+              else if (objText[q] === ']') {
+                d2 -= 1
+                if (d2 === 0) {
+                  q += 1
+                  break
+                }
+              }
+              q += 1
+            }
+            res.seriesHasCartesian = seriesHasCartesianType(objText.slice(p, q))
+          }
+        }
+      }
+    }
+    i += 1
+  }
+  return res
+}
+
+/**
+ * series 数组文本里是否出现笛卡尔类型（bar/line/scatter/… ）。
+ * 只认**字符串字面量** type；`type: someVar` 一律不算（无法静态判定，宁漏不误伤）。
+ * `lineStyle: { type: 'solid' }` 这类嵌套 type 因 'solid' 不在集合内天然不命中。
+ *
+ * @param {string} arrText - series 数组文本（形如 `[{…},{…}]`）
+ * @returns {boolean}
+ */
+function seriesHasCartesianType(arrText) {
+  if (typeof arrText !== 'string' || !arrText) return false
+  const re = /type\s*:\s*['"]([^'"]+)['"]/g
+  let m
+  while ((m = re.exec(arrText))) {
+    if (CARTESIAN_SERIES_TYPES.has(resolveEchartsType(m[1]))) return true
+  }
+  return false
+}
+
+/**
  * 坐标轴格式守卫治本入口（供 mc / vue3 两条产线共用，与 Loop 2.1.E 并列）。
  * 幂等：对已合规源码二次调用 changed = 0。
  *
  * @param {string} src - .vue 源码
- * @returns {{text:string, changed:number}}
+ * @returns {{text:string, changed:number, injectedAxisOptions:number}}
  */
 export function normalizeChartAxesInSource(src) {
   if (typeof src !== 'string' || !src) return { text: src, changed: 0 }
@@ -943,6 +1177,12 @@ export function normalizeChartAxesInSource(src) {
   const a = normalizeAxisObjectToArray(src)
   let text = a.text
   let changed = a.changed
+
+  // ①-b 🛡️ 补齐缺失的笛卡尔默认轴（2026-09-29，RUNTIME-004 第 2 次复发）
+  //   必须排在 ②③ 之前：补完轴后 `hasAxisDeclared` 才为 true，随后的轴索引注入才有意义。
+  const ax = injectMissingCartesianAxes(text)
+  changed += ax.changed
+  text = ax.text
 
   // ②③ series 轴索引修正（无轴 option 不注入索引 → 消除无效补丁）
   const hasAxis = hasAxisDeclared(text)
@@ -966,5 +1206,5 @@ export function normalizeChartAxesInSource(src) {
   changed += l.changed
   text = l.text
 
-  return { text, changed }
+  return { text, changed, injectedAxisOptions: ax.injected }
 }

@@ -42,6 +42,129 @@ import { enforceCardVisualTruth } from './card-visual-truth-rewriter.js';
  * @param {object} [deps.logger] 日志器
  * @returns {{ files: Record<string,string>, summary: object }} 自愈后的文件集 + 计数摘要
  */
+/**
+ * 🛡️ A2（2026-09-29）：同一资源 var 在同一 .vue 内被多处 backgroundImage 引用（卡根 cover + 内层 bg-m 100%）。
+ * 确定性收口：保留「内层」那处（bg-[m] 语义背景层），剥离「section 根（带 data-section-id）」上的那处。
+ * 命名无关：判据只用 data-section-id 存在性 + 同一 var 是否在模板更深处重复引用。
+ * 保守：仅当根元素带 data-section-id 且其 backgroundImage 引用的 var 在更深处也有 backgroundImage 时，才剥离根处。
+ */
+export function stripDuplicateSectionRootBg(content) {
+  if (typeof content !== 'string' || !content) return content;
+  const tpl = content.match(/<template>([\s\S]*?)<\/template>/i);
+  if (!tpl) return content;
+  const tplBody = tpl[1];
+  const rootRe = /<([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>])*?data-section-id="[^"]+"(?:"[^"]*"|'[^']*'|[^>])*)>/;
+  const rm = tplBody.match(rootRe);
+  if (!rm) return content;
+  const rootTag = rm[0];
+  const afterRoot = tplBody.slice(rm.index + rootTag.length);
+  // 根元素上「url(' + v + ')」拼接形态的 bg 变量
+  const vars = [...rootTag.matchAll(/url\(\s*['"]\s*\+\s*(\w+)\s*\+\s*['"]\s*\)/g)].map((m) => m[1]);
+  if (vars.length === 0) return content;
+  let newRoot = rootTag;
+  let changed = false;
+  for (const v of vars) {
+    // 该 var 在模板更深处（内层 bg 层）也出现 → 剥离根上这一处
+    if (!new RegExp(`url\\([\\s\\S]{0,20}${v}`).test(afterRoot)) continue;
+    const clause = new RegExp(
+      `backgroundImage\\s*:\\s*['"\`]url\\(['"\`]\\s*\\+\\s*${v}\\s*\\+\\s*['"\`]\\)['"\`]\\s*,?\\s*`,
+      'g',
+    );
+    const next = newRoot.replace(clause, '');
+    if (next !== newRoot) {
+      newRoot = next;
+      changed = true;
+    }
+  }
+  if (!changed) return content;
+  return content.replace(rootTag, newRoot);
+}
+
+/**
+ * 🛡️ 2026-09-29 治本（mc-max-1790678096786-f5cac254 实锤）：
+ * 把「自闭合斜杠 ` /` 之后仍跟属性」的**畸形开始标签**还原为规范写法。
+ *
+ * 病灶（N3「bg→父容器强制挂载」对**自闭合**元素拼接 `:style` 时，把属性写到了 `/` 的后面）：
+ *   `<ContentDefault :class="…" / :style="{ … }">`   ← 畸形：`/` 与 `>` 之间夹着 `:style`
+ * 规范：
+ *   `<ContentDefault :class="…" :style="{ … }" />`
+ *
+ * 后果链：`@vue/compiler-sfc` 报 `Illegal '/' in tags.` + `Element is missing end tag.`
+ *   → 写盘门禁 `validateVueSfc` 判死 → **整文件被跳过**（进 `component-meta.json#gateSkippedFiles`）
+ *   → 产物缺失（磁盘/workspace 均无 `package/index.vue`）→ 前端「组件资源加载失败 / 找不到文件」。
+ *   全语料 68 个任务带 `gateSkippedFiles`，其中 **21 个**跳过的正是 `package/index.vue`
+ *   （含 `f5cac254` / `428bda42` / `cf90ebda` / `8c815194` / `6e065bd7` / `b37db550` …）⇒ 复发型 P0。
+ *
+ * 判据（命名无关、纯局部语法、零产物结构假设）：
+ *   ① 只处理**开始标签**（`<` 后紧跟字母），天然跳过 `</x>` / `<!-- -->` / `<!doctype` / `<?xml`；
+ *   ② 标签内**引号之外**（`"` `'` `` ` `` 三种引号均不可穿透）存在「属性位斜杠」：
+ *      斜杠之后（跳过空白）仍跟着一个属性 token（`@` / `:` / `v-` / 字母开头，且该 token 以 `=` 收尾
+ *      或直接到标签尾）—— 即「`/` 后面还有属性」，这在语法上只可能是错位；
+ *      `href=/foo`（斜杠后**无**空白）与 `http://…`（引号内）**天然不命中**；
+ *   ③ 命中即：删掉该斜杠，并统一在标签收尾 `>` 之前补一个 ` /`。
+ *
+ * 幂等：修复后属性位不再存在「后跟属性」的斜杠 ⇒ 二次调用零改动（已实测）。
+ * 保守：`<br/>`、`<X a="1" />`、属性值内的 `/`（URL / 正则 / 模板字符串）一律不动；
+ *       解析不出结束 `>` 的标签（未闭合引号等）整段跳过，交给下游门禁兜底（fail-open）。
+ *
+ * @param {string} source SFC / 模板全文
+ * @returns {string} 修复后的全文（无命中时**原样返回**，引用相等）
+ */
+export function repairSelfClosingSlashInsideTag(source) {
+  if (typeof source !== 'string' || source.length === 0) return source;
+  if (source.indexOf('/') < 0) return source;
+  return source.replace(
+    /<([a-zA-Z][\w.:-]*)((?:"[^"]*"|'[^']*'|`[^`]*`|[^>"'`])*)>/g,
+    (full) => repairTagSlash(full),
+  );
+}
+
+/**
+ * 单个开始标签的斜杠错位修复。抽成独立函数以便复用与单测。
+ * @param {string} tag 形如 `<X a="1" / b="2">` 的完整开始标签（含 `<` 与 `>`）
+ * @returns {string} 修复后标签（无命中时原样返回）
+ */
+function repairTagSlash(tag) {
+  const inner = tag.slice(1, -1);
+  // ① 标记「引号之外」的字符位置：`"` / `'` / 反引号包裹的内容一律视为不可穿透，
+  //    这样 URL（`http://`）、模板串（`` `url(${bg2})` ``）、含 `/` 的正则都不会误判。
+  const outside = [];
+  let quote = null;
+  for (let i = 0; i < inner.length; i++) {
+    const ch = inner[i];
+    if (quote) {
+      if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') {
+      quote = ch;
+      continue;
+    }
+    outside.push(i);
+  }
+  // ② 找「斜杠之后仍跟属性」的属性位斜杠（` / :style=` 的 `/`，而非收尾的 ` />` 的 `/`）。
+  const hits = [];
+  for (const i of outside) {
+    if (inner[i] !== '/') continue;
+    const after = inner.slice(i + 1);
+    if (
+      !/^\s+[@:a-zA-Z][\w.:-]*\s*=/.test(after) &&
+      !/^\s+[@:a-zA-Z][\w.:-]*\s*$/.test(after)
+    ) {
+      continue;
+    }
+    hits.push(i);
+  }
+  if (hits.length === 0) return tag;
+  // ③ 从后往前删斜杠（避免下标漂移），再统一在标签尾补 ` /`。
+  let out = inner;
+  for (let k = hits.length - 1; k >= 0; k--) {
+    const i = hits[k];
+    out = out.slice(0, i) + out.slice(i + 1);
+  }
+  return '<' + out.replace(/\s+$/, '') + ' />';
+}
+
 export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
   const { resourceDomMapping, outputPath, injectFn, effectiveSections } = ctx;
   const { logger } = deps;
@@ -86,6 +209,18 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
   }
 
   // ③ CODE-022 修复器（未挂载的资源 import 确定性删除）。
+  //
+  // 🗑️ 已删除（2026-09-29，删减法）：此前的「③-a CODE-022 图标自愈」（mountUnusedResourceIcons）
+  //   与 ③ 是**方向相反而候选域不等**的一对：
+  //   - 门禁 findUnmountedResourceVars 的候选域 = 本文件 `<script>` 里 import 了的资源；
+  //   - 该自愈器的候选域 = **整个 mapping 的 icon**（`for (const [varName] of varToMapping)`）。
+  //   二者只共用 isResourceVarMounted 谓词、不共用候选集 ⇒ 差值全是「映射里有、本文件没 import」
+  //   ⇒ 挂上去就是**悬空引用**，必然被「覆写后语义校验」判死。实测：触发 121 次 → 回退 121 次
+  //   （1:1 全废），且回退是**按文件整批**的，连带把 S6 背景补全 / CODE-028 等合法修复一起作废。
+  //   本函数上线前，同名自愈器 autoMountUnusedIcons 已被 81e9a08「删减法批次2-loop1」明令删除
+  //   （资源挂载改为 owner 驱动计划化：buildResourceMountPlan + mountPlannedResources）。
+  //   复活版同时违背当时确立的三条（owner 驱动 / fail-closed / 候选域正确），故本次彻底移除。
+  //   图标若要挂载，唯一正道 = mapping.ownerSectionId ⨯ 产物 data-section-id 的确定性计划。
   if (Array.isArray(mapping) && mapping.length > 0) {
     for (const [fp, fc] of Object.entries(result)) {
       if (!fp.endsWith('.vue') || typeof fc !== 'string') continue;
@@ -131,6 +266,18 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
       result[fp] = stripped;
       summary.writebackFixed = (summary.writebackFixed || 0) + 1;
       logger?.warn?.('🛡️ CODE-028 修复：删除对静态资源只读绑定的写回（避免 "is read-only"）', { file: fp });
+    }
+  }
+
+  // ④-c A2（2026-09-29）：同一资源 var 在同一 .vue 内被多处 backgroundImage 引用（卡根 cover + 内层 bg-m 100%）。
+  // 确定性收口：保留「内层」那处（bg-[m] 语义背景层），剥离「section 根（带 data-section-id）」上的那处。
+  for (const [fp, fc] of Object.entries(result)) {
+    if (!fp.endsWith('.vue') || typeof fc !== 'string') continue;
+    const deduped = stripDuplicateSectionRootBg(fc);
+    if (deduped !== fc) {
+      result[fp] = deduped;
+      summary.a2Dedup = (summary.a2Dedup || 0) + 1;
+      logger?.warn?.('🛡️ A2 修复：剥离 section 根上重复的背景引用（保留内层 bg 层）', { file: fp });
     }
   }
 

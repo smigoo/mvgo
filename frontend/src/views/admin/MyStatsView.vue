@@ -167,22 +167,22 @@ onMounted(() => {
 }
 
 .kpi-card {
-  background: #fff;
-  border: 1px solid #e8e8e8;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
   border-radius: 8px;
   padding: 16px 20px;
 }
 
 .kpi-label {
   font-size: 13px;
-  color: rgba(0, 0, 0, 0.45);
+  color: var(--text-secondary);
   margin-bottom: 8px;
 }
 
 .kpi-value {
   font-size: 24px;
   font-weight: 600;
-  color: rgba(0, 0, 0, 0.85);
+  color: var(--text-primary);
 }
 
 .kpi-value.success {
@@ -194,8 +194,8 @@ onMounted(() => {
 }
 
 .section {
-  background: #fff;
-  border: 1px solid #e8e8e8;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
   border-radius: 8px;
   padding: 20px;
   margin-bottom: 24px;
@@ -209,7 +209,7 @@ onMounted(() => {
 
 .window-label {
   text-align: center;
-  color: rgba(0, 0, 0, 0.45);
+  color: var(--text-secondary);
   font-size: 13px;
   margin-top: 16px;
 }

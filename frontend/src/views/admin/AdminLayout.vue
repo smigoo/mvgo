@@ -73,13 +73,13 @@ const handleMenuClick = ({ key }) => {
   height: calc(100vh - 105px);
   width: 100%;
   overflow: hidden;
-  background: var(--bg-color, #f0f2f5);
+  background: var(--bg-page);
 }
 
 .admin-sidebar {
   width: 240px;
-  background: var(--bg-card, #fff);
-  border-right: 1px solid var(--border-light, #e8e8e8);
+  background: var(--bg-card);
+  border-right: 1px solid var(--border-light);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;

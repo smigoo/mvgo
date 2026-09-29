@@ -53,7 +53,7 @@ import {
 } from '../utils/component-naming.js';
 // 🛡️ CODE-018（2026-08-31）：子组件资源依赖声明检查 —— 复用方案 3 落地的共享纯函数
 // （单一事实源在 resource-import-guard.js，microcode-engineer 编译前置校验与 L0-B 门禁共用）
-import { validateSubcomponentResourceDeps, filterAvailableResources, buildResourceUsageCorpus, isResourceUsedInCorpus } from '../utils/resource-import-guard.js';
+import { validateSubcomponentResourceDeps, filterAvailableResources, buildResourceUsageCorpus, isResourceUsedInCorpus, isResourceVarMounted } from '../utils/resource-import-guard.js';
 // 🛡️ TEXT-001（2026-09-01）：文本兄弟顺序漂移 —— 事实源在 text-order-guard.js
 // （code-fix-rules 自愈与 L0-B 门禁三处消费同一实现，不新增并行判定）
 import { detectTextOrderDrift } from '../utils/text-order-guard.js';
@@ -61,6 +61,9 @@ import { detectTextOrderDrift } from '../utils/text-order-guard.js';
 // （规划的 section 必须全部组装进 index.vue，否则预览整块缺失）
 import { detectMissingSections, detectUnmaterializedSections, detectDanglingComponentRefs } from '../utils/section-coverage-guard.js';
 import { collectLeafSections } from '../utils/section-tree.js';
+// 🛡️ COMP-002（2026-09-29）：section 真值文案覆盖 —— 事实源在 section-content-guard.js
+// （组件骨架挂对了 section，却把自己的真值文案一个都没渲染、整段搬了邻居 → BLOCK + 重试）
+import { checkSectionTruthCoverage } from '../utils/section-content-guard.js';
 // 🛡️ TEXT-TRUTH（2026-09-02）：文字真值白名单 —— 事实源在 text-truth-guard.js
 // （产物文字必须落在 Figma characters 真值内，否则是 vision OCR 误读/臆造）
 import { detectUnknownText, resolveTextTruthSeverity, collectFigmaTextRuns } from '../utils/text-truth-guard.js';
@@ -554,21 +557,15 @@ export function findUnmountedResourceVars(content = '') {
   const unmounted = [];
   const importRe =
     /import\s+([A-Za-z_$][\w$]*)\s+from\s*['"][^'"]*(?:bg|icon|img)[\w-]*\.(?:png|jpe?g|svg|gif|webp)['"]/gi;
-  // 计数前剔除注释（// 行注释 + /* 块注释），避免「// bg1, bg2, bg3 … 等变量已自动注入」这类
-  // 注释里的变量名被误判为「已引用」→ 资源真未挂载却漏报（P0-6 实锤：注释把 bg1/bg2 判成已引用）。
-  const stripComments = (s) =>
-    s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  // 🛡️ 2026-09-29 单一口径：判定逻辑抽到 `resource-import-guard#isResourceVarMounted`，
+  //   与落盘前的 CODE-022 修复器（pruneUnmountedResourceImports）**共用同一实现**。
+  //   此前两侧各写一份、口径不同（本函数剥注释、修复器不剥）⇒ 门禁 BLOCK 而修复器不删
+  //   ⇒ 自愈永不生效 ⇒ 重试耗尽（mc-max-1790666332846-2e5fc9e7 实锤，当天 5 个任务死于此）。
+  //   本函数的可观测行为保持不变（原实现本就剥注释 + 剔 import 行）。
   let m;
   while ((m = importRe.exec(scriptBody))) {
     const name = m[1];
-    // 除 import 语句外，变量名以「词边界」出现次数（避免 bg1 误匹配 bg10）
-    const bodyWithoutImport = stripComments(content).replace(
-      new RegExp(`import\\s+${name}\\s+from[^\\n]*`),
-      '',
-    );
-    const refRe = new RegExp(`\\b${name}\\b`, 'g');
-    const refCount = (bodyWithoutImport.match(refRe) || []).length;
-    if (refCount === 0) unmounted.push(name);
+    if (!isResourceVarMounted(content, name)) unmounted.push(name);
   }
   return unmounted;
 }
@@ -2342,6 +2339,71 @@ export class CodeStructureValidator {
       }
     }
 
+    // ========== 🛡️ COMP-002: section 真值文案覆盖（仅微码，BLOCK，2026-09-29）==========
+    // 用户质问「同一结果多处输出却不同，布局与样式本应固定，不该由 LLM 自由发挥」的落点之一：
+    // 组件骨架（index.vue 的 data-section-id + flex 配比）是确定性装配的，**内容却无绑定**——
+    // LLM 可以把某个 section 的内容整段搬成邻居的，骨架照样对得上、COMP-001 照样通过。
+    //
+    // 事故 mc-max-1790657317082-67u1cdxz（流量监测）实锤：
+    //   `HeaderSection.vue` 骨架挂 section `2:3550`（真值 `流量监测`/`*数据实时更新`），
+    //   渲染的却是 `88:32` 的 `当日总流量`/`24小时`（与 `HeaderSub.vue` 重复渲染一遍）。
+    //   自己的真值文案 0 个命中 + 外来文案 2 个 → 用户在预览里看到「标题重复出现在插槽」。
+    //
+    // 此处 fail-closed：BLOCK 触发 L0-B 重试，让模型按 prompt 里 C 贴进的「本节真值文案」重写内容。
+    // 判据与「借邻居内容」守卫（section-content-guard#checkSectionTruthCoverage）同源，不另算口径；
+    // 必须同时满足「自己的 0 命中」+「装了别人的」才阻断 —— 单纯内容不全交给 COMP-001/TEXT-TRUTH，
+    // 不把重试预算烧在重叠条件上。
+    //
+    // ⚠️ 与 TEXT-COVERAGE（:2565）的关系：**互补，不是重复，勿合并**。
+    //   TEXT-COVERAGE 是**全产物聚合**粒度：把 Figma 全部真值串与「任意组件里出现的串」比对，
+    //   算总覆盖率。真值「散落在错误组件里」它照样算命中 ⇒ 对本次缺陷结构性失明
+    //   （真机 c-traffic-monitor：聚合覆盖率很高，但 3 个组件的内容整段错装）。
+    //   本规则是 **per-section 粒度**：把真值与「该组件所绑定 section 的子树」对齐，才看得见错装。
+    //   两者的输入集也不同（聚合用全量 CJK 串；本节用子树 TEXT 节点 + 组件名绑定），故不可互相替代。
+    if (!isVue3 && options?.componentPlan && options?.figmaNodeData) {
+      try {
+        // 输入集：productFiles ∪ files 去重（增量校验时 productFiles 可能被裁窄、
+        //   files 只含变更文件，任一侧都可能缺子组件 → 合并才保证 13 个子组件都在场）。
+        const compFiles = new Map();
+        for (const f of [...productFiles, ...files]) {
+          if (
+            f &&
+            typeof f.path === 'string' &&
+            /package\/components\/[^/]+\.vue$/.test(f.path) &&
+            typeof f.content === 'string'
+          ) {
+            compFiles.set(f.path, f); // 后者（=files，变更集）内容覆盖前者
+          }
+        }
+        const coverageIssues = checkSectionTruthCoverage({
+          files: [...compFiles.values()],
+          plan: options.componentPlan,
+          figmaRoot: options.figmaNodeData,
+        });
+        for (const ci of coverageIssues) {
+          const truth = ci.truthTexts.slice(0, 6).join('、');
+          const foreign = ci.foreignTexts.slice(0, 6).join('、');
+          issues.push({
+            id: 'COMP-002',
+            severity: 'BLOCK',
+            file: ci.file,
+            message: `内容归属错装：组件「${ci.file}」的骨架绑定 section ${ci.sectionId}，但该 section 的真值文案（${truth}）一个都没有渲染，反而渲染了只属于其它 section 的文案（${foreign}）——这些内容本应渲染在别的模块里，导致本模块空白 + 别的模块内容重复。请严格按该 section 的真值文案重写本组件的内容，不要复用邻居 section 的标题/标签/数值`,
+            hint: {
+              suggestion: `本节真值文案只有：${truth}。删除不属于本节的文本（${foreign}）并补齐本节真值文案`,
+            },
+          });
+        }
+      } catch (err) {
+        // 检测器异常不阻断（fail-open）：避免检测 bug 误杀全部生成
+        issues.push({
+          id: 'COMP-002-ERROR',
+          severity: 'WARN',
+          file: '(section-content-guard)',
+          message: `section 真值覆盖检测器执行异常（非阻断）：${err?.message || String(err)}`,
+        });
+      }
+    }
+
     // ========== 🛡️ TEXT-TRUTH: 文字真值白名单（两者通用，2026-09-02 建立 / 09-03 升级 / 09-04 放宽）==========
     // 事故 mc-max-1788306653919-a57e4409（设备监测）：vision 把「监控」OCR 成「挖掘机」、
     // 「烟道机器人」成「烟雾机器人」、「交通诱导」成「交通设施」、臆造「控制」。do-not-invent
@@ -3966,46 +4028,6 @@ function quoteObjectKeyIfNeeded(key) {
   const k = String(key ?? '');
   if (!k) return k;
   return JS_IDENTIFIER_RE.test(k) ? k : `'${k.replace(/'/g, "\\'")}'`;
-}
-
-/**
- * 🛡️ L0-B 自动修复: 移除冗余的 column-flex（FLEX-002）
- * 当 flex column 容器无任何 flex 子属性时，移除 display:flex + flex-direction:column
- *
- * @param {string} styleContent - <style> 块内容
- * @returns {{ content: string, fixed: number }}
- */
-export function autoFixRedundantFlex(styleContent) {
-  if (!styleContent || typeof styleContent !== 'string')
-    return { content: styleContent || '', fixed: 0 };
-  const issues = checkFlexUsage(styleContent);
-  const redundant = issues.filter(
-    (i) => i.id === 'FLEX-002' && !i.autoFix && i.selector && i.body,
-  );
-  if (redundant.length === 0) return { content: styleContent, fixed: 0 };
-
-  let content = styleContent;
-  let fixed = 0;
-  for (const issue of redundant) {
-    const selectorEsc = issue.selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const fullRule = new RegExp(
-      `(${selectorEsc}\\s*\\{)([\\s\\S]*?)(\\})`,
-      'i',
-    );
-    const before = content;
-    content = content.replace(fullRule, (whole, open, body, close) => {
-      // 移除 display: flex 和 flex-direction: column
-      let newBody = body
-        .replace(/\s*display\s*:\s*flex\s*;?/gi, '')
-        .replace(/\s*flex-direction\s*:\s*column\s*;?/gi, '');
-      // 清理多余空行
-      newBody = newBody.replace(/\n\s*\n\s*\n/g, '\n');
-      fixed++;
-      return `${open}${newBody}${close}`;
-    });
-    if (content === before) continue;
-  }
-  return { content, fixed };
 }
 
 function escapeRegExp(str) {

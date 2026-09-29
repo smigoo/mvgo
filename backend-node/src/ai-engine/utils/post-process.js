@@ -51,6 +51,30 @@ export function isChartMinHeightProtected(body) {
   return !CHART_MH_UNPROTECTED_VALUES.has(v);
 }
 
+/**
+ * 🛡️ B-1（2026-09-29 治本）：块内**显式绝对高度** = 已知真值 ⇒ 不需要兜底 min-height。
+ *
+ * 根因（`c-traffic-monitor-447d01cc` 实锤）：装配器已按 Figma 真值写好
+ *   `.c-traffic-monitor-chart { height: 52px; flex-shrink: 0; }`
+ * 而旧判据只看 `min-height` 是否存在非零值 → 追加 `min-height: 160px`。
+ * CSS 中 **min-height 优先于 height** ⇒ 实际渲染 160px（真值 3.07 倍）→ 该 section
+ * 内容超高 → 溢出压住下一段（「流量预测」被盖）。真值取证：Figma 节点
+ * `246:30 @echarts` = w 52.06 / h 52.55。
+ *
+ * ⚠️ 相对高度（`height: 100%` / `auto`）**不算真值** —— 父容器塌陷时仍需 min-height 保护，
+ * 故只认绝对长度单位（px/rem/em/vh/vw/pt）。
+ */
+export function hasChartTruthHeight(body) {
+  if (!body || typeof body !== 'string') return false;
+  // 用「取值后数值比较」而非纯正则存在性：`height: 0` 同样是塌陷值，不算真值
+  const m = /(?:^|[;{])\s*height\s*:\s*([\d.]+)\s*(px|rem|em|vh|vw|pt)\s*(?:!important)?\s*(?:;|$)/i.exec(
+    body,
+  );
+  if (!m) return false;
+  const n = parseFloat(m[1]);
+  return Number.isFinite(n) && n > 0;
+}
+
 // ⚠️ 交替顺序必须长值优先（0px 先于 0），否则 `min-height: 0px` 只吃掉 `0` 残留 `px`
 export const CHART_MH_ZERO_DECL_RE =
   /(^|;)\s*min-height\s*:\s*(?:0px|0|auto|initial|unset|none)\s*;?/i;
@@ -76,6 +100,7 @@ export function stripZeroMinHeightForClass(content, chartCls) {
 /**
  * 给指定 class 的**全部**样式块注入分级 min-height（缺失或值为 0 时）。
  * - 已有非零 min-height → 原样保留（尊重 Figma 真实尺寸）
+ * - 已有**显式绝对 height** → 不注入（B-1：min-height 会压过 height，覆盖真值）
  * - 值为 0/0px/auto → 视为未保护，剥掉 0 再补兜底值
  * - global 扫描：同一 class 出现多个块时全部收口，避免后置块反杀
  * @returns {{ code: string, injectedCount: number }}
@@ -89,6 +114,8 @@ export function injectChartMinHeightIntoClass(code, chartCls, minHeight) {
     new RegExp(`(\\.${chartCls}\\s*\\{)([^}]*)`, 'g'),
     (m, head, body) => {
       if (isChartMinHeightProtected(body)) return m;
+      // 🛡️ B-1：显式绝对高度 = 已按 Figma 真值定高，注入 min-height 只会压过真值
+      if (hasChartTruthHeight(body)) return m;
       injectedCount += 1;
       const nb = body.replace(CHART_MH_ZERO_DECL_RE, (mm, sep) =>
         sep === ';' ? ';' : '',
@@ -106,9 +133,19 @@ export function injectChartMinHeightIntoClass(code, chartCls, minHeight) {
 /**
  * class 规则块完全缺失时，在 <style> 段 @import 之后创建规则块并注入 min-height。
  * （实锤环境监测 ChartSection：.chart-container 在 style 段无任何规则 → 容器塌陷）
+ *
+ * 🛡️ B-1b（2026-09-29 治本）：本函数原名承诺「若缺失才建」，但旧实现**从未检查是否缺失**。
+ * `caller` 用 `injectedCount === 0` 当作「块不存在」的代理条件，而该条件在
+ * 「**块已存在且已受保护**」时同样成立 ⇒ 对每个已定高的图表容器重复注入一个兜底块。
+ * 实锤 `c-traffic-monitor-447d01cc`：`.c-traffic-monitor-chart-container` 被定义**两次**
+ * （L131 `min-height: 160px` ← 兜底块；L202 `min-height: 52px` + `height: 100%` ← 真块）。
+ * 同特异性下 CSS 胜负只取决于**源序**，兜底值随时可能反杀真值。
+ * 现补上真正的「缺失检查」：已有该 class 的规则块 → 原样返回，不新建。
  */
 export function createChartClassBlockIfAbsent(code, chartCls, minHeight) {
   if (!code || typeof code !== 'string' || !chartCls) return code;
+  const esc = String(chartCls).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (new RegExp(`\\.${esc}\\s*\\{`).test(code)) return code; // B-1b：块已存在 → 不新建
   return code.replace(
     /(<style[^>]*>[\s\S]*?)(@import[^;]+;)/,
     (m2, pre, imp) =>
@@ -214,39 +251,32 @@ export function deduplicateBackgroundImages(code) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// T05: bg-size 修正（治标 Pass 1）
-// 把代码里硬编码的 backgroundSize 'Xpx Ypx' 统一改为 'cover'。
-// 根因：模型常从 Figma 节点 BBox（可能经过 transform/DPR 缩放/裁剪）取尺寸，
-// 导致 backgroundSize 与图片真实像素或容器渲染尺寸不匹配（如 bg-7890.png 实际
-// 590×54 被写成 295×27，显示为细线而非完整渐变背景）。
-// 治本策略：装饰/容器型背景图语义上应"铺满容器"，'cover' 是最稳健的尺寸表达。
-// 已经使用 cover/contain/百分比/auto 的不会被匹配，安全。
+// 🗑️ T05: bg-size 修正 —— **已删除**（2026-09-29 删减法）
+//
+// 原实现：正则 `/background-?[Ss]ize:\s*['"]?(\d+)px\s+(\d+)px['"]?/g` **无条件**把
+// `.vue` inline 与 `.less` 里的 `backgroundSize: 'Xpx Ypx'` 全改成 `'cover'`。
+//
+// 删除理由（全语料取证，2026-09-29）：
+//   1. **方向相反**。`inferBackgroundStyle`（utils/background-size-inference.js）**设计上**就给
+//      「局部背景层」（`bgRole: sub-state`，如卡片内标题背景条、卡片下半背景）输出
+//      `${fw}px ${fh}px` + 相对 parentBox 的偏移；T05 在链尾把这些 px 真值改成 `cover`
+//      ⇒ 局部背景被撑满整个宿主元素。**两个子系统互逆，链尾者必胜**。
+//   2. **命中面 14/14 全是真值**。扫 506 个组件 / 2768 个 `.vue|.less`，T05 命中 **14 处**，
+//      其中 `191px 80px`（卡片 `bg-[m]`）、`130px 9px`（卡片标题背景条）**全部等于**
+//      `inferBackgroundStyle` 对 `resource-dom-mapping.json` 的推断值，**B 类（无真值来源）为 0**
+//      ⇒ 当前语料下 T05 **100% 有害、0% 收益**。
+//   3. **实证指纹**：`mc-max-1790688321049-447d01cc` 的 `CardGrid.vue` 卡片根
+//      离线跑 `injectBgStyleBinding` 得 `backgroundSize: '130px 9px'`、产物却是 `'cover'`，
+//      且 `backgroundPosition: '0px 16px'` 一字不差 ⇒ 唯一差异就是 T05。
+//      视觉后果：Figma 里 `129.5×9` 的标题背景条被 `cover` 撑满整卡 + 偏移叠加 ⇒ 压住标题行。
+//   4. **该事实已有确定性所有者**：资源背景的四件套由 `injectBgStyleBinding` /
+//      `inferBackgroundStyle` 装配（唯一答案）；LLM 自写的 px 无真值，把它猜成 `cover`
+//      属于「无条件改写无真值来源的值」，与 `autoFixRedundantFlex` 同族的越权纠偏器。
+//
+// ⇒ 与「每接管一个事实就删/收缩对应 fallback 与纠偏器」一致：**整体删除，不收缩**。
+//    若日后出现「无真值的 px 需要纠正」的场景，正确做法是让确定性写入口接管该事实，
+//    而不是再引入一个全文无条件改写器。
 // ─────────────────────────────────────────────────────────────────────────────
-export function fixBackgroundImageSize(code) {
-  if (!code || typeof code !== 'string') return code;
-
-  // 匹配两种语法：
-  // 1. inline style 驼峰 backgroundSize: 'Xpx Ypx'（Vue :style 绑定）
-  // 2. CSS/LESS 连字符 background-size: Xpx Ypx（common.less 等样式文件）
-  // 修复后统一为 'cover'（背景铺满容器，不再依赖硬编码 px 尺寸）。
-  const bgSizeRegex = /background-?[Ss]ize:\s*['"]?(\d+)px\s+(\d+)px['"]?/g;
-  let fixedCount = 0;
-
-  code = code.replace(bgSizeRegex, (match) => {
-    fixedCount++;
-    // 保留原语法风格：驼峰或连字符（Vue inline style 用驼峰，CSS 用连字符）
-    const isCamel = /backgroundSize/.test(match);
-    return isCamel ? `backgroundSize: 'cover'` : `background-size: cover`;
-  });
-
-  if (fixedCount > 0) {
-    console.info(
-      `[T05 bg-size 修正] 已将 ${fixedCount} 处硬编码 px 尺寸替换为 'cover'`,
-    );
-  }
-
-  return code;
-}
 
 /**
  * 🛡️ S6（2026-09-16 · c-env-monitor-5ed7a5f8 实锤）：背景 `:style` 补全自愈。
@@ -256,8 +286,9 @@ export function fixBackgroundImageSize(code) {
  * 对照：系统注入的背景 `:style` 是完整的（`backgroundSize: '100% 100%', backgroundPosition: '0px 0px',
  * backgroundRepeat: 'no-repeat'`）。
  *
- * `fixBackgroundImageSize`（上方）只管「已是 `Xpx Ypx` → `cover`」，**完全不管「缺失」**——本函数补这个缺口。
- * 只对「同一对象字面量内缺 size/repeat/position」的 backgroundImage 补默认值，绝不覆盖已有；幂等。
+ * ⚠️ 与已删除的 T05 的分工（2026-09-29）：T05 曾把**已有**的 `Xpx Ypx` 无条件改成 `cover`
+ * （已删，见上方墓碑）；本函数只补**缺失**的 size/repeat/position，**绝不覆盖已有值** ——
+ * 因此它不会破坏 `inferBackgroundStyle` 输出的局部背景几何真值。
  * 逐字符扫描跳过字符串/模板字符串（`` `url(${bg1})` `` 里的 `${}` 不误判为对象边界）。
  *
  * @param {string} content .vue 文件内容
@@ -1777,7 +1808,12 @@ export function extractPerCharTextTruth(figmaNodeData) {
     for (const c of n.children || []) walk(c);
   };
 
-  walk(figmaNodeData);
+  // 🛡️ 输入契约兼容（2026-09-29，D 步）：调用方可能传节点树本体（`document`），也可能传
+  //   带元信息的 wrapper（`{ fileKey, nodeId, tokenHash, cachedAt, document }`）。
+  //   wrapper 顶层没有 `type` / `children` ⇒ 原实现 `walk(figmaNodeData)` 直接得到 **0 条**
+  //   且无任何日志 ⇒ 静默失效（P-11 主路径因此长期空转，只有 CodeFixPipeline 兜底路径生效）。
+  //   与 `extractNodeLevelColorTruth`（A①）/ `extractPerCharTextTruth` 调用点统一口径。
+  walk(figmaNodeData.document || figmaNodeData);
   return out;
 }
 
@@ -2423,7 +2459,19 @@ export function extractNodeLevelColorTruth(figmaNodeData) {
 
     // 检测 TEXT 节点
     if (node.type === 'TEXT' && node.characters) {
-      const defaultColor = node.style?.fills?.[0]?.color;
+      // 🛡️ 2026-09-29 真值取值位置修正（c-traffic-monitor-209472ff 实锤）：
+      //   Figma REST `/v1/files/:key/nodes` 的填充在**节点顶层** `node.fills`；
+      //   `node.style` 只承载字体/排版字段（fontFamily / fontSize / lineHeight /
+      //   letterSpacing / textAlign…），**从无 `fills`**。
+      //   原实现读 `node.style?.fills?.[0]?.color` ⇒ 恒 undefined ⇒ 用 dist 实测
+      //   本函数 105/105 条真值的 defaultColor 全部丢失 ⇒「单色 TEXT 节点颜色」
+      //   这条事实源等于不存在 ⇒ 下游只能整段跳过 ⇒ LLM 改套主题槽位调色板。
+      //   保留 `node.style.fills` 作为回落，兼容非 REST 形态的输入（历史缓存等）。
+      const nodeFills = Array.isArray(node.fills) ? node.fills : [];
+      const solidFill = nodeFills.find(
+        (f) => f && f.visible !== false && f.type === 'SOLID' && f.color,
+      );
+      const defaultColor = solidFill?.color || node.style?.fills?.[0]?.color;
       const perCharOverrides = node.characterStyleOverrides || [];
       const styleTable = node.styleOverrideTable || {};
 
@@ -2455,7 +2503,11 @@ export function extractNodeLevelColorTruth(figmaNodeData) {
     }
   }
 
-  traverse(figmaNodeData);
+  // 🛡️ 输入契约兼容（2026-09-29）：调用方可能传节点树本体（`document`），也可能传
+  //   带元信息的 wrapper（`{ fileKey, nodeId, tokenHash, cachedAt, document }`）。
+  //   wrapper 顶层没有 `type` / `children` ⇒ 原实现直接 traverse 得到 **0 条**，
+  //   且无任何日志 ⇒ 静默失效（与 `_extractPerCharTextTruthPure` 同一坑）。
+  traverse(figmaNodeData.document || figmaNodeData);
   return results;
 }
 

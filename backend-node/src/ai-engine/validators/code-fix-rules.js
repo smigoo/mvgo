@@ -20,6 +20,7 @@ import { stripLlmTailGarbage } from '../utils/llm-tail-garbage.js';
 import { ensureSectionAssembly } from '../utils/section-coverage-guard.js';
 import { detectUnknownText } from '../utils/text-truth-guard.js';
 import { pruneDuplicateStyleDecls } from '../utils/style-dedup-guard.js';
+import { deconflictSharedClassDecls } from '../utils/shared-class-deconflict.js';
 import {
   collapseBackgroundShellDivs,
   injectStateSwitchInteraction,
@@ -30,6 +31,7 @@ import {
   extractNodeLevelColorTruth,
   injectNodeLevelColorTruth,
 } from '../utils/post-process.js';
+import { normalizeCssVarNames } from '../utils/css-var-contract.js';
 import { extractSfcTemplateRegion } from '../utils/sfc-template-extractor.js';
 import {
   ensureGridDisplay,
@@ -1033,6 +1035,18 @@ export function registerBuiltinFixRules(pipeline, engineer, context = {}) {
     input?.generationInput?._indexTemplateFacts ||
     engineer?._lastIndexTemplateFacts ||
     null;
+  // 🛡️ 2026-09-29 哑火自检：S1 实测 roots:0 / factsSource:none，但生成时 S3 看到 sectionRoots:11 ⇒
+  //   兜底链全空。这里落一行「哪条链命中 / 各来源是否存在」，把断点从「推测」变「直接读出」。
+  if (engineer?.logger?.info) {
+    engineer.logger.info('🧩 [facts] S1 事实兜底解析自检', {
+      fromContext: !!(context?._indexTemplateFacts && context._indexTemplateFacts.sectionRoots?.length),
+      fromInput: !!(input?._indexTemplateFacts?.sectionRoots?.length),
+      fromGenerationInput: !!(input?.generationInput?._indexTemplateFacts?.sectionRoots?.length),
+      fromEngineerInstance: !!(engineer?._lastIndexTemplateFacts?.sectionRoots?.length),
+      resolvedRoots: _indexTemplateFacts?.sectionRoots?.length || 0,
+      resolvedSource: _indexTemplateFacts?.source || 'none',
+    });
+  }
   // 🛡️ COMP-001 前置自愈（ensure-section-assembly）所需的子组件规划。
   // 来源优先级：显式 context.componentPlan > input.subComponentPlan（graph 直传）> generationInput.componentPlan（裁决事实）。
   const componentPlan =
@@ -1246,13 +1260,11 @@ export function registerBuiltinFixRules(pipeline, engineer, context = {}) {
     //    相对路径是 100% 可推导的机械事实，不该交给模型猜，写盘前确定性重写。
     fix: (content, ctx) => normalizeStyleResourceUrls(content, ctx?.path || '', context.resourceDomMapping),
   });
-  pipeline.register({
-    id: 'fix-background-image-size',
-    name: '背景图尺寸修正',
-    phase: FIX_PHASE.STYLE,
-    applyTo: /\.(vue|less|css)$/i,
-    fix: (content) => engineer._fixBackgroundImageSize(content),
-  });
+  // 🗑️ 'fix-background-image-size' 规则 —— 已删除（2026-09-29 删减法）。
+  //   它无条件把 `backgroundSize/background-size: 'Xpx Ypx'` 改成 `cover`，与
+  //   `inferBackgroundStyle` 给局部背景层输出的「px 尺寸 + 相对 parentBox 偏移」真值方向相反；
+  //   全语料审计 2768 个 .vue|.less 中命中 14 处，**14/14 全是几何真值**（B 类 0 例）。
+  //   详见 ai-engine/utils/post-process.js 顶部墓碑注释。
   pipeline.register({
     id: 'clamp-oversize-min-height',
     name: 'min-height 超根容器高截断',
@@ -1405,6 +1417,37 @@ export function registerBuiltinFixRules(pipeline, engineer, context = {}) {
           // 自愈失败不阻断（保留给 L0-B 门禁按重试路径处理）
           pipeline.logger?.warn?.('文字真值自愈失败（非阻断）', { error: e?.message });
           return content;
+        }
+      },
+    });
+    // 🔴 共享表「同名类语义冲突」去冗余（2026-09-29，mc-max-1790655877133-02ab668d 实锤）：
+    //   必须排在 prune-duplicate-style-decls **之前**。
+    //   prune-duplicate-style-decls 的哲学是「共享表 = 唯一真值，剥掉子组件的重复声明」，
+    //   但当**共享表本身是错的一方**时它只会把错值锁死：实测 `.c-traffic-monitor-chart`
+    //   在 4 个子组件里语义不同（CardGrid/CardGrid13/ContentSection6 是 52×52 环形图容器，
+    //   ChartChart 是占满宽度的柱状图容器 width:100%），共享表取了 52px；prune 先跑会把
+    //   ChartChart 的 width:100% 剥掉，剩 `min-width:0;min-height:127px` → width 恒为 52px
+    //   （柱状图只占 52px：真机 puppeteer 实测 52×150，对照图 411×150）。
+    //   本规则先跑：把共享表里「所有使用方都自带、且互相冲突」的属性删掉，让各子组件
+    //   以自己的 scoped 声明为准（各归各位）；此后 prune 的共享表已无该属性 → 不再误剥。
+    //   实测（全语料 505 个组件）：命中 59 个、共 137 条删除，其余逐条打印「已评估·未处理」。
+    //   细节见 utils/shared-class-deconflict.js。
+    pipeline.register({
+      id: 'deconflict-shared-class-decls',
+      name: '共享样式表同名类语义冲突去冗余',
+      phase: FIX_PHASE.POLISH,
+      fixFiles: (files) => {
+        try {
+          const r = deconflictSharedClassDecls(files);
+          if (r.changes.length && pipeline.logger) {
+            pipeline.logger.info(
+              `🎯 [mc] 共享表同名类冲突去冗余: ${r.changes.length} 处 → ${r.changes.join('；')}`,
+            );
+          }
+          return r.files;
+        } catch (e) {
+          pipeline.logger?.warn?.('共享表同名类冲突去冗余失败（非阻断）', { error: e?.message });
+          return files;
         }
       },
     });
@@ -1639,6 +1682,40 @@ export function registerBuiltinFixRules(pipeline, engineer, context = {}) {
         }
       },
     });
+    // 🛡️ A②-1 CSS 变量名契约归一（2026-09-29 · c-traffic-monitor-209472ff 实锤）
+    //   契约唯一出处 = frontend/src/core/microcode/utils.js#getCssVarsConfig：
+    //     注入名 = '--' + css-vars 键名【原样拼接，不做 kebab 转换】
+    //   ⇒ `var(--colorPrimary)` 命中；`var(--color-primary)` **永不命中**、静默回落
+    //   LLM 自己写的 fallback ⇒ 表现为「颜色/字重不对，且不随主题切换」。
+    //   全语料 467 产物离线审计（367 目录 / 29,497 条 `var()` 引用）：
+    //     名合法 25,679（87.1%）· kebab 可确定归一 464（1.6%）· 归一后仍无定义 3,354（11.4%）
+    //   kebab TOP 全是框架预设键的 kebab 写法（--color-primary / --color-text-base /
+    //   --color-success / --color-danger / --font-weight-strong）。
+    //   本任务 `var(--color-primary, #00cccc)` 即此形态：激活 tab 真值 #ffffff、
+    //   链接真值 #1990ff，实际全渲染为 fallback #00cccc（青）。
+    //   fail-closed（仅当归一后名字确实存在于该产物 css-vars 键集合时才替换）；
+    //   排在 POLISH 末位，使前面各规则新产生的样式也一并归一。幂等。
+    pipeline.register({
+      id: 'normalize-css-var-names',
+      name: 'CSS 变量名契约归一（kebab→camel）',
+      phase: FIX_PHASE.POLISH,
+      fixFiles: (files) => {
+        try {
+          const r = normalizeCssVarNames(files);
+          if (r.applied) {
+            pipeline.logger?.info?.(
+              `🎯 [mc] CSS 变量名契约已归一（kebab→camel）：${(r.details.files || []).join(', ')} ` +
+                `| ${(r.details.renamed || []).map((x) => `${x.from}→${x.to}×${x.count}`).join('；')}`,
+            );
+          }
+          return r.applied ? { ...files } : files;
+        } catch (e) {
+          pipeline.logger?.warn?.('CSS 变量名契约归一失败（非阻断）', { error: e?.message });
+          return files;
+        }
+      },
+    });
+
     // 🛡️ 防止子组件 width:100% 覆盖父级 flex 比例（2026-09-21）
     // 背景：c-device-monitor-70b93a3d tabs 宽度异常，父组件用 flex: 0.3/0.7 控制宽度，
     // 但子组件根元素设置 width: 100% 覆盖了 flex 比例。
@@ -1730,7 +1807,6 @@ export const BUILTIN_RULE_IDS = [
   'auto-mount-backgrounds',
   'auto-mount-icons',
   'normalize-style-less-vars',
-  'fix-background-image-size',
   'ensure-index-vue-style-import',
   'ensure-sub-component-style-import',
   'ensure-header-slots',

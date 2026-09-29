@@ -158,6 +158,59 @@ export function tailHexOf(sessionId = '') {
 }
 
 /**
+ * 🛡️ 2026-09-29 治本（mc-1790667029984-86d05609 实锤）：
+ * 判定「该字符串其实是**任务号/sessionId**，不是组件语义名」。
+ *
+ * 事故：AI WorkSpace 对话里 LLM 调 `generate_from_figma` 时，把**上一个任务的
+ * sessionId**（`mc-max-1790666569567-ddbcf714`）当成 `componentName` 传了进来。
+ * 后果有两处，均源于本判据的缺失：
+ *   ① `phase2.service.ts` 用它拼 temp 目录名 ⇒
+ *      `mc-1790667029984-86d05609-mc-max-1790666569567-ddbcf714`
+ *      （新任务被**嵌套**进旧任务目录），污染断点恢复 / 资源归属 / 预览 URL；
+ *   ② 该脏名进 prompt 后，LLM 在容器上写了一个多出来的 class
+ *      `c-mc-max-1790666569567-ddbcf714`（虽无对应 CSS 规则，但属脏产物）。
+ *
+ * 判据与 `semanticTokenFrom` **完全同源**（同一处 `/\d{13}/` 检查）：
+ * 任务号必含 13 位毫秒时间戳，而**语义段不可能含 13 位连续数字**。
+ * ⚠️ 刻意不写第二套更"精确"的正则 —— 同一事实两处各自命名必然失配（本仓血泪）。
+ *
+ * @param {string} name 待判定的名字（componentName / displayName / 目录名等）
+ * @returns {boolean} true = 任务号污染，调用方应回退到 sessionId 或忽略该名
+ */
+export function isTaskIdLikeName(name = '') {
+  const s = String(name || '').trim();
+  if (!s) return false;
+  return /\d{13}/.test(s);
+}
+
+/**
+ * 🛡️ 2026-09-29 治本（mc-1790667029984-86d05609 实锤）：temp 产物目录名的**单一事实源**。
+ *
+ * 契约：`{sessionId}` 或 `{sessionId}-{componentName}`（后者仅在 componentName 是
+ * 干净的语义名、且不等于 sessionId 时拼上，纯为可读性）。
+ * temp 目录**必须**以任务 sessionId 开头 —— 断点恢复依赖该前缀精确关联任务产物。
+ *
+ * 历史缺陷：`phase2.service.ts` 直接拿 dto 的 `componentName` 拼目录名，而该字段来自
+ * LLM 工具调用参数（不可信）⇒ LLM 传入上一个任务的 sessionId 时，目录名被拼成
+ * `mc-1790667029984-86d05609-mc-max-1790666569567-ddbcf714` ⇒ **新任务被嵌套进旧任务
+ * 目录**，破坏断点恢复 / 资源归属 / 预览 URL。
+ *
+ * @param {string} sessionId 本任务 sessionId（形如 mc-max-<ts>-<hex>）
+ * @param {string} [componentName] 上游传入的组件名（可能被任务号污染）
+ * @returns {string} 安全的目录名（恒以 sessionId 开头）
+ */
+export function resolveTaskFolderName(sessionId = '', componentName = '') {
+  const sid = String(sessionId || '').trim();
+  if (!sid) return '';
+  // 任务号污染 ⇒ 视为「未提供组件名」，目录名退化为纯 sessionId
+  const raw = isTaskIdLikeName(componentName)
+    ? ''
+    : String(componentName || '').trim();
+  if (!raw || raw === sid) return sid;
+  return `${sid}-${raw}`;
+}
+
+/**
  * 构建确定性唯一 componentId：`c-<semantic>-<sessionId 尾 8 hex>`（如 c-monitor-43e7fe45）。
  * - semantic：语义 token（不含 c- 前缀），内部再清洗，超长截断保证总长 ≤ 50（M1-1）
  * - 无 tail 时退化为 c-<semantic>（保持旧行为兼容）；语义空时用 'component' 保底

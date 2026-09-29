@@ -55,6 +55,26 @@
         </p>
       </section>
 
+      <!-- 设计图对比 -->
+      <section class="qs-card qs-compare">
+        <div class="qs-card-head"><h4>设计图对比</h4></div>
+        <div class="qs-compare-grid">
+          <div class="qs-compare-item">
+            <div class="qs-compare-label">设计图（Figma）</div>
+            <div class="qs-compare-img-wrap">
+              <img :src="getFigmaPreviewUrl()" alt="Figma 设计图" class="qs-compare-img" />
+            </div>
+          </div>
+          <div class="qs-compare-item">
+            <div class="qs-compare-label">产物预览</div>
+            <div class="qs-compare-img-wrap">
+              <img v-if="productPreviewUrl" :src="productPreviewUrl" alt="产物预览" class="qs-compare-img" />
+              <span v-else class="qs-compare-empty">暂无产物截图</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section class="qs-card" v-if="quality.spec">
         <div class="qs-card-head"><h4>规范分明细</h4></div>
         <p class="qs-plain">
@@ -88,9 +108,9 @@
               <div v-for="(item, idx) in lastFixResult.fixed.slice(0, 10)" :key="idx" class="qs-fix-item">
                 <div class="qs-fix-file">{{ item.file }}</div>
                 <div class="qs-fix-detail">
-                  <span class="qs-fix-expected">{{ item.expected }}</span>
-                  <span class="qs-fix-arrow">←</span>
                   <span class="qs-fix-actual">{{ item.actual }}</span>
+                  <span class="qs-fix-arrow">→</span>
+                  <span class="qs-fix-expected">{{ item.expected }}</span>
                   <span v-if="item.locations?.length" class="qs-fix-location">
                     @{{ item.locations[0].line }}:{{ item.locations[0].column }}
                   </span>
@@ -143,7 +163,43 @@
         
         <!-- 维度详情（含模糊匹配） -->
         <div v-if="quality.style.dimensions" class="qs-dimensions">
-          <div v-for="(dim, dimName) in quality.style.dimensions" :key="dimName" class="qs-dimension">
+          <!-- resourceMount 维度专属展示 -->
+          <div v-if="quality.style.dimensions.resourceMount?.scored" class="qs-dimension qs-dim-resource">
+            <div class="qs-dim-header">
+              <span class="qs-dim-name">资源挂载</span>
+              <span class="qs-dim-score" :class="dimTone(quality.style.dimensions.resourceMount.score)">
+                {{ Math.round(quality.style.dimensions.resourceMount.score) }}
+              </span>
+              <span class="qs-dim-coverage">
+                {{ quality.style.dimensions.resourceMount.matched }}/{{ quality.style.dimensions.resourceMount.expected }}
+              </span>
+            </div>
+            <p class="qs-dim-desc">背景图是否挂载到正确的 data-section-id 元素</p>
+            
+            <!-- 挂载成功 -->
+            <div v-if="quality.style.dimensions.resourceMount.matched > 0" class="qs-rm-ok">
+              <span class="qs-rm-ok-icon">✓</span>
+              {{ quality.style.dimensions.resourceMount.matched }} 个背景图已正确挂载
+            </div>
+            
+            <!-- 未挂载的背景图 -->
+            <div v-if="quality.style.dimensions.resourceMount.missed?.length" class="qs-rm-missed">
+              <div v-for="(m, mi) in quality.style.dimensions.resourceMount.missed" :key="mi" class="qs-rm-missed-item">
+                <div class="qs-rm-missed-head">
+                  <span class="qs-rm-missed-icon">✗</span>
+                  <span class="qs-rm-missed-name">{{ m.name || '(unnamed)' }}</span>
+                  <span class="qs-rm-missed-target">→ {{ m.targetDomSelector }}</span>
+                </div>
+                <div class="qs-rm-missed-detail">
+                  期望 <code>data-section-id="{{ m.figmaNodeId }}"</code>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 其他维度通用展示 -->
+          <div v-for="(dim, dimName) in quality.style.dimensions" :key="dimName" class="qs-dimension"
+               v-show="dimName !== 'resourceMount'">
             <div class="qs-dim-header">
               <span class="qs-dim-name">{{ dimName }}</span>
               <span class="qs-dim-score">{{ dim.score != null ? Math.round(dim.score) : '—' }}</span>
@@ -263,6 +319,13 @@ function tone(n: number | null | undefined) {
   return 'bad'
 }
 
+function dimTone(n: number | null | undefined) {
+  if (n == null) return 'dim-muted'
+  if (n >= 80) return 'dim-ok'
+  if (n >= 60) return 'dim-warn'
+  return 'dim-bad'
+}
+
 function formatTime(iso?: string) {
   if (!iso) return '-'
   const d = new Date(iso)
@@ -270,6 +333,22 @@ function formatTime(iso?: string) {
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
+
+function getScreenshotUrl(path: string) {
+  return `/api/component/${props.componentId}/file?path=${encodeURIComponent(path)}&raw=1`
+}
+
+function getFigmaPreviewUrl() {
+  // 使用 mc-preview.png（Figma 真值图）作为设计图
+  return `/api/component/${props.componentId}/file?path=resources/images/mc-preview.png&raw=1`
+}
+
+// 「产物预览」= 生成产物的渲染截图（.mc-gen/screenshots/*-rendered.png）
+const productPreviewUrl = computed(() => {
+  const shots = quality.value?.screenshots
+  if (shots && shots.length > 0) return getScreenshotUrl(shots[0].path)
+  return ''
+})
 
 async function loadCached() {
   if (!props.componentId) return
@@ -453,7 +532,7 @@ async function fixDimension(dimName: string) {
 .qs-plain,
 .qs-hint,
 .qs-meta {
-  color: #9fb3c8;
+  color: #c5d5e5;
   font-size: 12px;
 }
 .qs-fix,
@@ -501,7 +580,7 @@ async function fixDimension(dimName: string) {
   gap: 4px;
 }
 .qs-metric span {
-  color: #7f93a8;
+  color: #a3b8cb;
   font-size: 12px;
 }
 .qs-metric strong {
@@ -518,7 +597,7 @@ async function fixDimension(dimName: string) {
   color: #ef6b6b;
 }
 .qs-metric strong.muted {
-  color: #7f93a8;
+  color: #a3b8cb;
 }
 .qs-hint {
   margin: 12px 0 0;
@@ -567,7 +646,7 @@ async function fixDimension(dimName: string) {
   flex: 0 0 auto;
 }
 .qs-issue-msg {
-  color: #9fb3c8;
+  color: #c5d5e5;
 }
 
 /* 变量解析信息 */
@@ -577,10 +656,10 @@ async function fixDimension(dimName: string) {
   background: #1a2836;
   border-radius: 6px;
   font-size: 12px;
-  color: #9fb3c8;
+  color: #c5d5e5;
 }
 .qs-var-label {
-  color: #7f93a8;
+  color: #a3b8cb;
 }
 .qs-var-enabled {
   color: #4ec9a0;
@@ -626,7 +705,7 @@ async function fixDimension(dimName: string) {
   font-weight: 600;
 }
 .qs-dim-coverage {
-  color: #7f93a8;
+  color: #a3b8cb;
   font-size: 11px;
 }
 
@@ -649,7 +728,7 @@ async function fixDimension(dimName: string) {
   font-family: monospace;
 }
 .qs-fuzzy-arrow {
-  color: #7f93a8;
+  color: #a3b8cb;
 }
 .qs-fuzzy-matched {
   color: #4ec9a0;
@@ -676,12 +755,12 @@ async function fixDimension(dimName: string) {
   color: #ef6b6b;
 }
 .qs-missed-value {
-  color: #9fb3c8;
+  color: #c5d5e5;
   font-family: monospace;
 }
 .qs-missed-more {
   font-size: 10px;
-  color: #7f93a8;
+  color: #a3b8cb;
   font-style: italic;
 }
 
@@ -795,7 +874,7 @@ async function fixDimension(dimName: string) {
 }
 
 .qs-fix-arrow {
-  color: #7f93a8;
+  color: #a3b8cb;
 }
 
 .qs-fix-actual {
@@ -812,7 +891,7 @@ async function fixDimension(dimName: string) {
 
 .qs-fix-context {
   font-size: 11px;
-  color: #9fb3c8;
+  color: #c5d5e5;
   font-family: monospace;
   padding: 4px 6px;
   background: #0f1722;
@@ -844,8 +923,122 @@ async function fixDimension(dimName: string) {
 
 .qs-fix-more {
   font-size: 11px;
-  color: #7f93a8;
+  color: #a3b8cb;
   font-style: italic;
   padding: 4px 8px;
+}
+
+/* 资源挂载维度专属样式 */
+.qs-dim-resource {
+  border-left: 3px solid #3d7ea8;
+}
+.qs-dim-desc {
+  margin: 4px 0 8px;
+  font-size: 11px;
+  color: #a3b8cb;
+}
+.qs-rm-ok {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #4ec9a0;
+  margin-bottom: 8px;
+}
+.qs-rm-ok-icon {
+  font-weight: bold;
+}
+.qs-rm-missed {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.qs-rm-missed-item {
+  background: #0f1722;
+  border-radius: 6px;
+  padding: 8px 10px;
+  border-left: 2px solid #ef6b6b;
+}
+.qs-rm-missed-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.qs-rm-missed-icon {
+  color: #ef6b6b;
+  font-size: 12px;
+}
+.qs-rm-missed-name {
+  color: #e8f1fa;
+  font-size: 12px;
+  font-weight: 500;
+}
+.qs-rm-missed-target {
+  color: #7fb4d8;
+  font-size: 11px;
+  font-family: monospace;
+  margin-left: auto;
+}
+.qs-rm-missed-detail {
+  font-size: 11px;
+  color: #c5d5e5;
+  padding-left: 18px;
+}
+.qs-rm-missed-detail code {
+  color: #e8c547;
+  background: #1a2836;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-family: monospace;
+}
+
+/* 维度分数颜色 */
+.dim-ok { color: #4ec9a0; }
+.dim-warn { color: #e8c547; }
+.dim-bad { color: #ef6b6b; }
+.dim-muted { color: #7f93a8; }
+
+/* 设计图对比 */
+.qs-compare-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.qs-compare-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.qs-compare-label {
+  font-size: 13px;
+  color: #dbe8f5;
+  font-weight: 600;
+}
+
+.qs-compare-img-wrap {
+  background: #0f1722;
+  border: 1px solid #2a3a4d;
+  border-radius: 6px;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+}
+
+.qs-compare-img {
+  max-width: 100%;
+  max-height: 200px;
+  border-radius: 4px;
+  object-fit: contain;
+}
+
+.qs-compare-empty {
+  font-size: 12px;
+  color: #93a6b8;
 }
 </style>

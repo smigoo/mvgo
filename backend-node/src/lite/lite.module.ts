@@ -36,6 +36,6 @@ import { Phase2Module } from '../phase2/phase2.module';
   ],
   controllers: [LiteController, BatchController],
   providers: [LiteService, HtmlSplitService, BatchService],
-  exports: [BatchService, HtmlSplitService],
+  exports: [BatchService, HtmlSplitService, LiteService],
 })
 export class LiteModule {}

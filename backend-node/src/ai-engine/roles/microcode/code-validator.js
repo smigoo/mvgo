@@ -2178,41 +2178,18 @@ export async function validateAndFixGeneratedFiles(
       }
     }
 
-    // 2.8 FLEX-002 自动修复：移除冗余的 flex column
-    // 检测 style 块中无子属性的 flex column，自动移除
-    // 🛡️ 2026-09-22 覆盖修复：读取基底改为 fixedFiles 优先（同 2.9 段，防前置 pass 成果被回滚）。
-    for (const [filePath, fileContent] of Object.entries(mergedFiles)) {
-      if (!filePath.endsWith('.vue') && !filePath.endsWith('.less')) continue;
-
-      const baseContent = fixedFiles[filePath] ?? fileContent;
-      const styleMatches =
-        baseContent.match(/<style[^>]*>([\s\S]*?)<\/style>/gi) || [];
-      let modifiedContent = baseContent;
-
-      for (const styleTag of styleMatches) {
-        const bodyMatch = styleTag.match(/>([\s\S]*?)<\/style>/i);
-        if (!bodyMatch) continue;
-        const styleBody = bodyMatch[1];
-
-        const { autoFixRedundantFlex } =
-          await import('../../validators/code-structure-validator.js');
-        const flexFixResult = autoFixRedundantFlex(styleBody);
-
-        if (flexFixResult.fixed > 0) {
-          modifiedContent = modifiedContent.replace(
-            styleTag,
-            styleTag.replace(styleBody, flexFixResult.content),
-          );
-          fixes.push(
-            `FLEX-002: ${filePath} 移除 ${flexFixResult.fixed} 处冗余 flex column（无子属性）`,
-          );
-        }
-      }
-
-      if (modifiedContent !== baseContent) {
-        fixedFiles[filePath] = modifiedContent;
-      }
-    }
+    // 🗑️ 2.8 FLEX-002 自动修复（移除冗余 flex column）——已于 2026-09-29 整体删除。
+    //   删除理由（两条独立证据）：
+    //   ① **代码内自相矛盾**：FLEX-002 的 issue 自身声明 `autoFix: false`、severity=WARN
+    //      （code-structure-validator.js#checkFlexUsage），而 is 函数只挑 `!i.autoFix` 的项去改
+    //      ⇒ 检测器说「不可自动修复」，另一个函数却“专门修它”。
+    //   ② **违反「门禁只报不删」**：WARN 级判定不得静默改写布局属性。FLEX-002 的判据是
+    //      「column 容器无 align/justify/gap/flex:1」，但 `display:flex` 可能来自 **A 类布局事实**
+    //      （layout-facts-injector 2.11 依 Figma 几何注入）⇒ 此处删除 = 用启发式覆盖确定性事实，
+    //      且与 2.11 形成「一边注入、一边删除」的振荡对；产物上表现为「属性忽隐忽现」。
+    //   保留：FLEX-002 判定本身（WARN，仍计入 issues 供 prompt 反馈与取证），只删「自动删除器」。
+    //   注：2026-09-01「R0-7」曾把修复归口到此处（phase2 侧删除重复器）；本次进一步确认
+    //       WARN 不该有任何修复器，故连此处一并移除 —— FLEX-002 现为**纯报告项**。
 
     // 2.9 VERT-001/002/003 竖排布局反截断 autoFix（治本 2026-09-04）
     // 竖排侧栏按钮「只显示单字 / 断列 / 长标签只显示首行」兜底：

@@ -1,4 +1,5 @@
-import { fixSectionHeightsForResource, ensureHeaderSlots, injectFailedResourceFallbacks, stripEmptyShellBindings, ensureResourceImportInVue, mountSubStateBackground, findVForItemTag, dedupeBgMultiRefs, healAbsoluteOverlayParents, findTagByClassKeyword } from './resource-mounter.js'
+import { fixSectionHeightsForResource, ensureHeaderSlots, injectFailedResourceFallbacks, stripEmptyShellBindings, ensureResourceImportInVue, mountSubStateBackground, findVForItemTag, dedupeBgMultiRefs, healAbsoluteOverlayParents, findTagByClassKeyword, collectMountCandidates, pickBestMountTarget } from './resource-mounter.js'
+import { inferComponentPrefix, DETERMINISTIC_ANCHOR_SCORE } from '../../utils/mount-target-scoring.js'
 
 /**
  * 🛡️ fix-section-heights 规则②：组件根 height:100% 不得改写（2026-09-02 实锤）。
@@ -753,9 +754,14 @@ describe('injectFailedResourceFallbacks: B2 下载失败背景 CSS 兜底', () =
   })
 
   it('④ 兜底 CSS 类注入（template 引用已被 heal 剥离）', () => {
+    // 🛡️ ①（2026-09-29）：夹具原先写 `class="trafficroot"`（无连字符拼接），与本组 ①②③ 的
+    //   `class="traffic-root"` 不一致。`findTagByClassKeyword` 改为 **class 片段边界**匹配后，
+    //   关键词 `traffic`/`root` 都不再对 `trafficroot` 成立（这正是词边界要挡的「前缀粘连」形态）。
+    //   本仓约定是 `c-<prefix>-<role>`（连字符），故夹具统一为 `traffic-root`，
+    //   功能覆盖不变；劫持防护另见下方 `findTagByClassKeyword：class 片段边界` 用例组。
     const allFiles = {
       'package/index.vue': `<template>
-  <div class="trafficroot"></div>
+  <div class="traffic-root"></div>
 </template>
 <style></style>
 <script>const bg1 = 'xxx';</script>`,
@@ -1095,6 +1101,113 @@ describe('dedupeBgMultiRefs：共享背景保留 v-for item（阶段3）', () =>
   })
 })
 
+/**
+ * 🛡️ 2026-09-29 治本（c-traffic-monitor-f0c05ecc 实锤「当日总流量背景图消失」）
+ *
+ * 事故形态（server.log 同一任务内相隔 42ms 两条日志）：
+ *   🎯 [资源挂载] bg3 经事实链 data-section-id=2:8023 精确挂载       ← 先精确挂到正确父容器
+ *   🛡️ P2-3 已去重：kept=c-vehicle-monitor-slot-con (2.5)            ← 再被名字相似度删掉
+ *                   removed=c-vehicle-monitor-group-2136639043-con
+ * 根因：去重器的 refs 曾用**自有 tag 正则 + 窄对象**构造，`isHostShell` / `dataSectionId`
+ * 全部缺失 ⇒ 确定性锚短路读不到锚、宿主外壳禁用也失效 ⇒ 评分制得以推翻确定性事实。
+ */
+describe('dedupeBgMultiRefs：确定性锚优先于语义评分（2026-09-29 治本）', () => {
+  /** 事故原形：LLM 把 bg 写在无语义的「整槽容器」上；真父容器带 data-section-id（426×91） */
+  const ACCIDENT_FILES = {
+    'package/index.vue': `<template>
+  <div class="c-traffic-monitor-slot-con" :style="{ backgroundImage: 'url(' + bg1 + ')', backgroundSize: '100% 100%', backgroundPosition: '0px 0px', backgroundRepeat: 'no-repeat' }">
+    <div class="c-traffic-monitor-group-2136636802-con" data-section-id="2:3660" :style="{ backgroundImage: 'url(' + bg1 + ')', backgroundSize: '100% 100%', backgroundPosition: '0px 0px', backgroundRepeat: 'no-repeat' }">
+      <span>当日总流量</span>
+    </div>
+  </div>
+</template>`,
+  }
+  const ACCIDENT_RDM = [
+    {
+      assignedVarName: 'bg1',
+      previewAnalysisRole: 'bg',
+      bgRole: 'container',
+      resourceFile: '../resources/images/bg-_m-34.png',
+      // ⚠️ 被 figma-connector 的 E1 回退成语义祖先名 → 语义评分反而偏向整槽容器
+      mountTarget: 'slot-当日总流量',
+      figmaNodeId: '88:34',
+      ownerSectionId: '2:3660',
+      figmaBox: { width: 426, height: 91 },
+      parentBox: { width: 426, height: 91 },
+    },
+  ]
+
+  it('⭐ 真父容器（带 data-section-id）必须胜出，整槽容器上的引用被移除', () => {
+    const out = dedupeBgMultiRefs(
+      { ...ACCIDENT_FILES },
+      ACCIDENT_RDM as any,
+      { logger: { warn() {}, info() {} } },
+    )
+    const c = out['package/index.vue']
+    // 整槽容器不再持有 bg1（防 420×807 被 100% 100% 拉满 → 视觉上背景消失）
+    expect(c).not.toMatch(/c-traffic-monitor-slot-con[^>]*bg1/)
+    // 真父容器保留 bg1
+    expect(c).toMatch(/c-traffic-monitor-group-2136636802-con[^>]*bg1/)
+  })
+
+  it('边界：ownerSectionId 缺失 ⇒ 不触发短路，保留者 = 纯语义评分最优者', () => {
+    const rdm = [{ ...ACCIDENT_RDM[0], ownerSectionId: undefined }]
+    const out = dedupeBgMultiRefs({ ...ACCIDENT_FILES }, rdm as any, {
+      logger: { warn() {}, info() {} },
+    })
+    const c = out['package/index.vue']
+    // 仍然去重为 1 个引用（不崩、不放大）
+    expect((c.match(/bg1/g) || []).length).toBe(1)
+    // 用**同一口径**算出「无锚时的语义最优」，断言保留的就是它 —— 证明短路未参与
+    const prefix = inferComponentPrefix({ ...ACCIDENT_FILES })
+    const pool = collectMountCandidates({ 'package/index.vue': ACCIDENT_FILES['package/index.vue'] })
+    const best = pickBestMountTarget(rdm[0] as any, pool, { componentPrefix: prefix })
+    expect(best).not.toBeNull()
+    expect(best!.score).toBeLessThan(DETERMINISTIC_ANCHOR_SCORE)
+    expect(c).toContain(best!.tag)
+  })
+
+  it('幂等：已去重产物再跑一次不再变化', () => {
+    const once = dedupeBgMultiRefs({ ...ACCIDENT_FILES }, ACCIDENT_RDM as any, {
+      logger: { warn() {}, info() {} },
+    })
+    const twice = dedupeBgMultiRefs({ ...once }, ACCIDENT_RDM as any, {
+      logger: { warn() {}, info() {} },
+    })
+    expect(twice['package/index.vue']).toBe(once['package/index.vue'])
+  })
+})
+
+/**
+ * 🛡️ 2026-09-29：`collectMountCandidates` 模板区提取改走单一事实源 `extractSfcTemplate`。
+ * 旧 lazy 正则 `/<template>([\s\S]*?)<\/template>/i` 撞上根 template 内嵌的**具名插槽**
+ * （`<template #header-right>`）会提前闭合 —— 实测 index.vue 76 行只匹配到 5 行 ⇒
+ * 全部锚点/容器不进候选池 ⇒ 去重与兜底双双丧失纠错能力。
+ */
+describe('collectMountCandidates：具名插槽不得截断候选池', () => {
+  it('⭐ 内嵌 <template #header-right> 之后的数据锚点/容器仍被收集', () => {
+    const files = {
+      'package/index.vue': `<template>
+  <base-panel panelKey="default-panel">
+    <template #header-right>
+      <HeaderSection />
+    </template>
+    <div class="c-traffic-monitor-slot-con">
+      <div class="c-traffic-monitor-group-2136636802-con" data-section-id="2:3660"></div>
+      <div class="c-traffic-monitor-container" data-section-id="88:33"></div>
+    </div>
+  </base-panel>
+</template>`,
+    }
+    const pool = collectMountCandidates(files)
+    const anchors = pool.map((c) => c.dataSectionId).filter(Boolean)
+    expect(anchors).toContain('2:3660')
+    expect(anchors).toContain('88:33')
+    // 插槽内的组件标签同样是合法候选（刻意不剥具名插槽）
+    expect(pool.some((c) => c.tagName === 'HeaderSection')).toBe(true)
+  })
+})
+
 describe('healAbsoluteOverlayParents：absolute 遮罩层父容器补 relative（阶段4）', () => {
   it('card-bg absolute + 父容器 device-card 无 position → 补 relative（一片蓝根治）', () => {
     const files = {
@@ -1256,5 +1369,66 @@ describe('fixSectionHeightsForResource §六 #1 收口（§七 P2 · 2026-09-28�
     const input = '.c-x-chart-section {\n  display: flex;\n  height: 100%;\n}\n'
     const out = fixSectionHeightsForResource(input, CTX)
     expect(out).toContain('flex: 1 1 0')
+  })
+})
+
+/**
+ * 🛡️ ①（2026-09-29 治本）：`findTagByClassKeyword` 必须按 **class 片段边界** 匹配。
+ *
+ * 旧实现用 `cls.includes(kw)` 裸子串 ⇒ 两族劫持（全语料差分审计：2095 条资源条目里
+ * 2095 → 命中相同 917 / 换宿主 1086 / 变为 null 18（全是劫持被纠正）/ 恢复命中 74）：
+ *   1. 单字符 mountTarget：Figma 卡片内标题行图层名就叫 `t` ⇒ `"c-traffic-monitor-card".includes('t')`
+ *      ⇒ 标题背景 `2:3475`(bg2) 被挂到**卡片根**，与卡片自身背景 `88:36`(bg4) 抢同一 `:style`。
+ *   2. 去复数后再裸子串：`mountTarget='cons'` → `dePlural` → `'con'` ⇒
+ *      `"c-device-monitor-active-icon".includes('con')`（i**con**）⇒ 背景挂到图标上。
+ */
+describe('findTagByClassKeyword：class 片段边界（① 词边界）', () => {
+  const CARD = `<template>
+  <div class="c-traffic-monitor-card" data-section-id="2:3446">
+    <div class="c-traffic-monitor-card-title"><span>车型分布</span></div>
+  </div>
+</template>`
+
+  it('⛔ 单字符 mountTarget "t" 不得劫持 c-traffic-monitor-card（旧劫持）', () => {
+    expect(findTagByClassKeyword(CARD, 't')).toBeNull()
+  })
+
+  it('✅ 单字符 mountTarget "t" 仍匹配真正的片段：class="t" / c-x-t-y', () => {
+    expect(findTagByClassKeyword('<template><div class="t"></div></template>', 't')).toContain('class="t"')
+    expect(findTagByClassKeyword('<template><div class="c-x-t-y"></div></template>', 't')).toContain('c-x-t-y')
+  })
+
+  it('⛔ "cons" 不得命中 c-device-monitor-active-icon（旧 dePlural→con ⊂ icon 劫持）', () => {
+    const tpl = '<template><div class="c-device-monitor-active-icon"></div></template>'
+    expect(findTagByClassKeyword(tpl, 'cons')).toBeNull()
+  })
+
+  it('✅ "cons" 命中真正的片段 c-device-monitor-cons-grid', () => {
+    const tpl = '<template><div class="c-device-monitor-cons-grid"></div></template>'
+    expect(findTagByClassKeyword(tpl, 'cons')).toContain('c-device-monitor-cons-grid')
+  })
+
+  it('✅ "card" 命中 c-traffic-monitor-card（正常片段匹配不受影响）', () => {
+    expect(findTagByClassKeyword(CARD, 'card')).toContain('class="c-traffic-monitor-card"')
+  })
+
+  it('✅ 动态 :class 里的激活态类名仍可命中（…--active）', () => {
+    const tpl = `<template><div :class="['c-device-monitor-switch-item', item.active ? 'c-device-monitor-switch-item--active' : 'c-device-monitor-switch-item--default']"></div></template>`
+    expect(findTagByClassKeyword(tpl, 'active')).not.toBeNull()
+  })
+
+  it('✅ 中文 mountTarget（图层次层名）仍可命中（点背景 / 默认 / 激活）', () => {
+    const tpl = '<template><div class="c-377b6f-点背景"></div></template>'
+    expect(findTagByClassKeyword(tpl, '点背景')).toContain('c-377b6f-点背景')
+  })
+
+  it('✅ 复数归一仍生效：tabs-list → c-x-tab-list', () => {
+    const tpl = '<template><div class="c-env-monitor-tab-list"></div></template>'
+    expect(findTagByClassKeyword(tpl, 'tabs-list')).toContain('c-env-monitor-tab-list')
+  })
+
+  it('⛔ 前缀粘连不匹配：root 不得命中 trafficroot（词边界）', () => {
+    expect(findTagByClassKeyword('<template><div class="trafficroot"></div></template>', 'root')).toBeNull()
+    expect(findTagByClassKeyword('<template><div class="traffic-root"></div></template>', 'root')).not.toBeNull()
   })
 })

@@ -205,6 +205,10 @@ export interface QualityScoreV1 {
   fileCount?: number
   excluded?: Record<string, string>
   l0bError?: string
+  /** 产物渲染截图（用于「产物预览」框），来自 .mc-gen/screenshots/ */
+  screenshots?: Array<{ path: string; name: string }>
+  /** Figma 真值设计图（用于「设计图（Figma）」框），即 resources/images/mc-preview.png */
+  designImages?: Array<{ path: string; name: string }>
   varResolutionInfo?: {
     enabled: boolean
     varCount: number

@@ -469,6 +469,7 @@
           :connection-line-style="{ stroke: 'var(--brand)', strokeWidth: 2 }"
           :snap-to-grid="true"
           :snap-grid="[20, 20]"
+          :connection-mode="ConnectionMode.Loose"
           fit-view-on-init
           @connect="onConnect"
           @edge-click="onEdgeClick"
@@ -819,7 +820,7 @@
 <script setup lang="ts">
 import { ref, onMounted, markRaw, computed } from 'vue'
 import AgentNode from '@/components/workflow/AgentNode.vue'
-import { VueFlow, Handle } from '@vue-flow/core'
+import { VueFlow, Handle, useVueFlow, MarkerType, ConnectionMode } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
@@ -855,6 +856,7 @@ import {
 
 // Vue Flow 实例
 const vueFlowRef = ref()
+const { addEdges } = useVueFlow()
 let nodeIdCounter = 0
 
 // ── Agent Builder（新建节点）状态 ──
@@ -2091,9 +2093,9 @@ function onConnect(connection: any) {
       stroke: contract.warn ? 'var(--danger, #E24B4A)' : 'var(--brand)',
       strokeWidth: 2,
     },
-    markerEnd: { type: 'arrowclosed' as const, color: contract.warn ? 'var(--danger, #E24B4A)' : 'var(--brand)' }
+    markerEnd: { type: MarkerType.ArrowClosed, color: contract.warn ? 'var(--danger, #E24B4A)' : 'var(--brand)' }
   }
-  elements.value.push(newEdge)
+  addEdges(newEdge)
 }
 
 // 点击事件
@@ -3488,7 +3490,9 @@ onMounted(async () => {
   border-radius: var(--radius-lg);
   min-width: 160px;
   box-shadow: var(--shadow-sm);
-  overflow: hidden;
+  /* 关键：不能为 hidden，否则会裁掉位于节点左/右边缘的 <Handle>
+     连接点，导致拖线落下时目标 handle 收不到指针事件、连线松手即消失 */
+  overflow: visible;
   transition: box-shadow 0.2s;
 }
 
@@ -3519,6 +3523,9 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 6px;
+  /* 节点改为 overflow:visible 后，这里单独裁切以保留顶部的圆角贴合 */
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  overflow: hidden;
 }
 
 .editor-page :deep(.flow-node-body) {

@@ -35,6 +35,57 @@ const SKIP_DIR_NAMES = new Set([
 
 const TEXT_EXTS = new Set(['.vue', '.less', '.css', '.js', '.json', '.ts'])
 
+/**
+ * 查找组件目录下的「产物渲染截图」（用于设计图对比的右侧「产物预览」）。
+ * 截图存储在 .mc-gen/screenshots/ 目录下，文件名形如 <taskId>-rendered.png。
+ *
+ * 2026-09-29 校正：本函数返回的是**生成产物**的渲染截图（对应前端「产物预览」框），
+ * 不是 Figma 设计图；Figma 真值图请用 findDesignImage()。
+ *
+ * @param {string} componentDir - 组件目录路径
+ * @returns {Array<{path: string, name: string}>} - 截图文件列表（相对路径）
+ */
+export function findScreenshotFiles(componentDir) {
+  const screenshotsDir = join(componentDir, '.mc-gen', 'screenshots')
+  if (!existsSync(screenshotsDir)) return []
+
+  try {
+    const files = readdirSync(screenshotsDir)
+      .filter(f => /\.(png|jpg|jpeg|webp)$/i.test(f))
+      .sort()
+    return files.map(f => ({
+      path: `.mc-gen/screenshots/${f}`,
+      name: f,
+    }))
+  } catch (err) {
+    console.warn('[quality-score-v1] 读取截图目录失败:', err.message)
+    return []
+  }
+}
+
+/**
+ * 查找组件目录下的 Figma 真值设计图（用于设计图对比的左侧「设计图（Figma）」）。
+ *
+ * 2026-09-29 新增：此前「设计图」框误用 .mc-gen/screenshots/（产物渲染截图），
+ * 导致用户看到的「设计图」其实是生成效果。Figma 真值图固定为 resources/images/mc-preview.png。
+ *
+ * @param {string} componentDir - 组件目录路径
+ * @returns {Array<{path: string, name: string}>} - 设计图文件列表（相对路径）
+ */
+export function findDesignImage(componentDir) {
+  const candidates = [
+    join(componentDir, 'resources', 'images', 'mc-preview.png'),
+    join(componentDir, 'package', 'resources', 'images', 'mc-preview.png'),
+  ]
+  for (const abs of candidates) {
+    if (existsSync(abs)) {
+      const rel = relative(componentDir, abs).replace(/\\/g, '/')
+      return [{ path: rel, name: 'mc-preview.png' }]
+    }
+  }
+  return []
+}
+
 export function clampScore(n) {
   const x = Number(n)
   if (!Number.isFinite(x)) return 0
@@ -253,10 +304,15 @@ export function extractExpectedStyleLiterals(figmaNodeData) {
       if (typeof node[key] === 'number' && node[key] > 0) spacing.push(`${node[key]}px`)
     }
     if (typeof node.style?.fontSize === 'number') fonts.push(`${node.style.fontSize}px`)
+    // 2026-09-29 修复：过滤掉圆形/椭圆节点的 cornerRadius（不是 CSS border-radius）
+    // 圆形节点的 cornerRadius 等于其半径（如 75px），但产物不会用 border-radius: 75px
     if (typeof node.cornerRadius === 'number' && node.cornerRadius > 0) {
-      // 四舍五入到整数，避免浮点精度问题（如 1.7600001096725464 → 2）
-      const rounded = Math.round(node.cornerRadius)
-      if (rounded > 0) radii.push(`${rounded}px`)
+      // 跳过 ELLIPSE 类型节点（圆形/椭圆装饰）
+      if (node.type !== 'ELLIPSE') {
+        // 四舍五入到整数，避免浮点精度问题（如 1.7600001096725464 → 2）
+        const rounded = Math.round(node.cornerRadius)
+        if (rounded > 0) radii.push(`${rounded}px`)
+      }
     }
     if (Array.isArray(kids)) {
       for (const child of kids.slice(0, 80)) walk(child, depth + 1, childMaskCtx)
@@ -924,6 +980,12 @@ export async function scoreComponentDir(componentDir, opts = {}) {
   const actual = { ...actualStyle, structure: actualStructure }
   const style = computeStyleScore(expected, actual, { resourceMountResult })
 
+  // 查找截图文件（用于设计图对比）
+  //  - screenshots：产物渲染截图（前端「产物预览」框）
+  //  - designImages：Figma 真值图 mc-preview.png（前端「设计图（Figma）」框）
+  const screenshots = findScreenshotFiles(componentDir)
+  const designImages = findDesignImage(componentDir)
+
   const quality = {
     version: QUALITY_SCORE_V1_VERSION,
     specScore: spec.score,
@@ -939,6 +1001,8 @@ export async function scoreComponentDir(componentDir, opts = {}) {
     },
     ...(l0bError ? { l0bError } : {}),
     ...(varResolutionInfo ? { varResolutionInfo } : {}),
+    ...(screenshots.length > 0 ? { screenshots } : {}),
+    ...(designImages.length > 0 ? { designImages } : {}),
   }
 
   if (opts.persist !== false) persistQualityScore(componentDir, quality)

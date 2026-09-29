@@ -12,7 +12,7 @@ export class ConfigGeneratorAgent extends BaseAgent {
     super({
       name: 'config-generator',
       description: '基于文档分析结果生成四个配置章节（businessEvents、businessStatuses、businessConfig、cssVariableConfig）',
-      model: config.model || process.env.ANTHROPIC_MODEL || '',
+      model: config.model || '', // 🔒 2026-09-29 env 兜底已拔除（每用户模型独有）
       temperature: 0.2,
       maxTokens: 4096,
       promptTemplate: '../../../prompts/config-generator-prompt.md',

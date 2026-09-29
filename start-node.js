@@ -17,6 +17,24 @@ const NODE_BIN = process.execPath;
 const BE_DIR = '/Users/smigoo/工作/mvgo/backend-node';
 const LOG = path.join(BE_DIR, 'server.log');
 
+// 🛡️ V8 正则回溯熔断（2026-09-29 实锤 · mc-max-1790654134322-bc91bb18 卡死事件）：
+//   现象：进程存活 / 13030 仍 LISTEN / TCP 可连，但 **HTTP 全部无响应**（curl 000）、日志静默 6.5 分钟。
+//   `sample <pid> 3` 采 2530 样本全部落同一条栈：
+//     uv__io_poll → TLSWrap::ClearOut（收到 HTTPS 响应）→ MicrotaskQueue → PromiseFulfillReactionJob
+//       → AsyncFunctionAwaitResolveClosure → StringPrototypeMatch → RegExpMatchFast → [回溯循环]
+//   ⇒ 主线程被 `String.prototype.match()` 的**灾难性回溯**占满，事件循环无法推进。
+//   （具体是哪个正则尚未唯一确定；已压测排除 code-validator.js:57 引号剥离 / /\{[\s\S]*\}/ / 代码围栏 / 分隔符检测。）
+//
+//   对策：V8 在回溯次数超过 `--regexp-backtracks-before-fallback` 时，
+//   回退到**实验性非回溯引擎**（线性时间，语义等价），从而把「无限卡死」变成「正常返回」。
+//   对比实验（/^(a+)+$/ 匹配 'a'×32+'b'）：不带 flag → 8 秒未返回（卡死复现）；带 flag → 1ms 返回 false。
+//   ⚠️ 下方第 ~70 行会删除 NODE_OPTIONS（规避 WorkBuddy 的 node-language-shim），
+//      所以 flag **必须**走 spawn 的 argv，而不能靠环境变量注入。
+const V8_SAFETY_FLAGS = [
+  '--enable-experimental-regexp-engine-on-excessive-backtracks',
+  '--regexp-backtracks-before-fallback=50000',
+];
+
 // 🛡️ R3-B（2026-09-11）版本一致性护栏：启动时比对 dist 构建时间 vs src 最新 mtime，
 // 不一致打 WARN —— 杜绝「旧 dist 生成的产物被当成新代码效果」的误判（cfb53488 即此类）。
 // 同时打印 git HEAD 短 hash，供任务 meta 记录代码版本。
@@ -28,6 +46,11 @@ function latestSrcMtime(dir, extRe, acc = { latest: 0, file: null }) {
     const p = path.join(dir, e.name);
     if (e.isDirectory()) { latestSrcMtime(p, extRe, acc); continue; }
     if (!extRe.test(e.name)) continue;
+    // 🛡️ 2026-09-29（假阳性实锤）：测试文件不参与运行时产出（jest `testRegex: ".*\.spec\.ts$"`，
+    //   `*.test.js` 在本仓永不被执行）⇒ 把它们算进「src 最新改动」会让护栏误报 STALE：
+    //   改了 spec 就提示「dist 落后于源码 / 运行的是旧代码，请重新 build」，逼出无意义重构建，
+    //   并让人怀疑修复是否真的装载（本次排查「背景图消失」时就先被这条噪音误导了一轮）。
+    if (/\.(spec|test)\.[cm]?[jt]sx?$/i.test(e.name)) continue;
     try {
       const m = fs.statSync(p).mtimeMs;
       if (m > acc.latest) { acc.latest = m; acc.file = p; }
@@ -105,7 +128,7 @@ if (hasActive) {
   process.exit(1);
 }
 
-const child = spawn(NODE_BIN, ['dist/main.js'], {
+const child = spawn(NODE_BIN, [...V8_SAFETY_FLAGS, 'dist/main.js'], {
   cwd: BE_DIR,
   detached: true,          // Unix 下 -> 新 session/process group（等同 setsid）
   env,

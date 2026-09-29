@@ -271,10 +271,29 @@ export function collectIdenticalThemeMixins(files) {
   const src = String(themeFile.content || '');
 
   // 抓取某个 mixin 块的正文（mixin 内无嵌套花括号，深度计数即可，勿用跨块正则）
+  //
+  // 🛡️ 2026-09-29 治本（mc-max-1790666332846-2e5fc9e7 实锤，误报率 93.4%）：
+  //   原实现用 `src.indexOf(name)` 抓「第一次出现」——**这是错的**。系统确定性生成的
+  //   theme-vars.less（style-tokens.js 模板）头部第 2 行就并列列出了三个 mixin 名：
+  //     `// 结构：三个 mixin（.common() / .theme-dark() / .theme-light()）`
+  //   于是 `indexOf('.theme-dark()')` 与 `indexOf('.theme-light()')` **双双命中这一行注释**，
+  //   紧随其后的 `indexOf('{', i)` 又都落到 **`.common()` 块的 `{`** ⇒ 两次 grab 返回
+  //   **同一个 `.common()` 正文** ⇒ `norm(dark) === norm(light)` 恒真 ⇒
+  //   **任何带该模板头的组件都被判「两套 mixin 完全相同」**，slotCount 报的其实是
+  //   `.common()` 的变量个数（真机 9，与日志 `9 个槽位值完全相同` 逐字吻合）。
+  //   代价：本门禁是 BLOCK ⇒ 重试空转 ⇒ 重试耗尽 ⇒ fail-closed。真机统计（2026-09-29）：
+  //     全语料 453 个含 theme-vars.less 的组件，命中 257 个（56.7%），其中
+  //     **239 个是上述注释碰撞误报** + 17 个真阳性 + 1 个其它误报 ⇒ **误报占比 93.4%**；
+  //     当天因此重试耗尽而失败的任务 **25 个**（失败签名恒为
+  //     `THEME-MIXINS-IDENTICAL, THEME-VAR-NAME-MISMATCH, CODE-022`）。
+  //   修法：只认「**行首**（允许缩进）的 mixin 定义 `^[ \t]*name[ \t]*{`」。注释行以 `//`
+  //   开头，天然不匹配；`&.dark { .theme-dark(); }` 这类**调用**也不匹配（后面是 `;` 不是 `{`）。
+  //   全语料复测：误报 239 → **0**，真阳性 17 → **17**（零漏报）。
   const grab = (name) => {
-    const i = src.indexOf(name);
-    if (i < 0) return null;
-    const s = src.indexOf('{', i);
+    const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const m = new RegExp(`^[ \\t]*${esc}[ \\t]*\\{`, 'm').exec(src);
+    if (!m) return null;
+    const s = src.indexOf('{', m.index);
     if (s < 0) return null;
     let depth = 0;
     for (let j = s; j < src.length; j++) {
@@ -286,7 +305,14 @@ export function collectIdenticalThemeMixins(files) {
     }
     return null;
   };
-  const norm = (s) => (s || '').replace(/\s+/g, ' ').trim();
+  // 归一：collapse 空白 + 去掉「行首」或「分号后」的 `//` 注释（注释不产出 CSS，
+  // 不应影响「两套 mixin 编译结果是否相同」的判定；限定 `^` / `;` 前缀是为了不误伤
+  // `url(http://x)` 这类值内 `//`）。
+  const norm = (s) =>
+    (s || '')
+      .replace(/(^|[;{])[ \t]*\/\/[^\n]*/gm, '$1')
+      .replace(/\s+/g, ' ')
+      .trim();
 
   const dark = grab('.theme-dark()');
   const light = grab('.theme-light()');
@@ -390,31 +416,56 @@ export function healFileLevelSlotOverrides(files) {
 
 /** 逐行扫描样式文本，删文件级（depth 0）槽位字面量重声明；.vue 仅样式段内生效。 */
 function healStyleContent(content, isVue) {
-  const lines = String(content).split(/\r?\n/);
+  // 🛡️ A-①b（2026-09-29 同源修复）：原实现按**整文件**逐行判 `/<style\b[^>]*>/`，
+  // 一进入 `<style>` 行就 `continue`（既不入 out 检查也不计深度）→ 与 `<style>` 标签
+  // **共行**的 depth-0 槽位声明被完整漏删。而 `injectThemeVarDeclsForLess` 正是把声明
+  // 紧贴标签注入（`<style lang="less" scoped>@color-text-base: #333333;`），
+  // 于是「探测器报 3 处、同源自愈器 removed=0」→ 门禁 BLOCK 无人能消（实测
+  // c-device-monitor-2469e3a0 / c-traffic-monitor-447d01cc）。全语料 491 份真产物的
+  // 290 条文件级重声明里，自愈器修前只能删 239 条，残留 51 条**全部**是这一形态。
+  // 治本：改为与 `extractStyleText`（探测器口径）**同源** —— 先按同一正则取出各
+  // `<style>` 内文本，在**样式文本内**做 depth-0 删除，再原样回填。检测器报什么，
+  // 自愈器就删什么（同一口径函数，不再各自解释「哪些行算样式」）。
+  const src = String(content);
+  if (!isVue) return healPlainStyleText(src);
+
+  let changed = false;
+  let removed = 0;
+  const out = src.replace(
+    /<style\b([^>]*)>([\s\S]*?)<\/style>/gi,
+    (full, attrs, css) => {
+      const r = healPlainStyleText(css);
+      if (!r.changed) return full;
+      changed = true;
+      removed += r.removed;
+      return `<style${attrs}>${r.content}</style>`;
+    },
+  );
+  return { content: out, changed, removed };
+}
+
+/**
+ * 样式文本（不含 `<style>` 标签）内的文件级槽位字面量删除。
+ * depth 0 且匹配 `FILE_LEVEL_SLOT_OVERRIDE_RE` 的整行删除；块内（depth>0）一律保留。
+ * @param {string} styleText
+ * @returns {{content:string, changed:boolean, removed:number}}
+ */
+function healPlainStyleText(styleText) {
+  const lines = String(styleText).split(/\r?\n/);
   let depth = 0;
-  let inStyle = !isVue;
   let changed = false;
   let removed = 0;
   const out = [];
   for (const line of lines) {
-    if (isVue) {
-      const enter = /<style\b[^>]*>/i.test(line) && !/<\/style>/i.test(line);
-      const exit = /<\/style>/i.test(line) && !/<style\b[^>]*>/i.test(line);
-      if (enter) { inStyle = true; out.push(line); continue; }
-      if (exit) { inStyle = false; depth = 0; out.push(line); continue; }
-    }
-    const isTop = inStyle && depth === 0;
-    if (isTop && FILE_LEVEL_SLOT_OVERRIDE_RE.test(stripComments(line))) {
+    if (depth === 0 && FILE_LEVEL_SLOT_OVERRIDE_RE.test(stripComments(line))) {
       changed = true;
       removed += 1; // 删除该行
       continue;
     }
     out.push(line);
-    if (inStyle) {
-      for (const ch of line) {
-        if (ch === '{') depth++;
-        else if (ch === '}') depth = Math.max(0, depth - 1);
-      }
+    for (const ch of line) {
+      if (ch === '{') depth++;
+      else if (ch === '}') depth = Math.max(0, depth - 1);
     }
   }
   return { content: out.join('\n'), changed, removed };
@@ -761,16 +812,60 @@ function camelToKebab(s) {
  * @param {Object} [options] { logger }
  * @returns {Array<{file:string}>} 修复清单
  */
+/**
+ * 收集 theme-vars.less 里已定义的槽位名（@xxx → xxx）。
+ * 供 healBusinessStyleVarRefs / healBusinessStyleVarsInCss 复用。
+ * @param {string} themeVars theme-vars.less 文本
+ * @returns {Set<string>} 槽位名集合
+ */
+export function collectThemeSlotNames(themeVars) {
+  const slotNames = new Set();
+  if (typeof themeVars !== 'string') return slotNames;
+  for (const m of themeVars.matchAll(/@([a-zA-Z][\w-]*)\s*:/g)) slotNames.add(m[1]);
+  return slotNames;
+}
+
+/**
+ * 单段 CSS 文本内的业务样式 var() 直引自愈（模式 A → 模式 B）。
+ * 把 `var(--colorXxx[, fallback])` 确定性转成 Less 槽位 `@color-xxx`。
+ * 仅作用于传入的 CSS 字符串——调用方自行决定范围（整文件 / 仅 SFC <style> 块）。
+ * @param {string} css CSS 文本
+ * @param {Set<string>} slotNames theme-vars.less 已定义槽位名集合
+ * @returns {string} 自愈后 CSS
+ */
+export function healBusinessStyleVarsInCss(css, slotNames) {
+  if (typeof css !== 'string' || !slotNames || slotNames.size === 0) return css;
+  return css.replace(
+    // 🛡️ fallback 可能含嵌套括号（rgba(230, 237, 245, 1)），专门按颜色字面量形态匹配。
+    // 🛡️ 2026-09-26 治本 0.3-a：把「, fallback」改为**可选**——此前正则强制要求 fallback，
+    //   导致 **无 fallback 的 `var(--x)` 完全不匹配**（实测残留正是 `var(--fontSize)` /
+    //   `var(--colorWhite)` / `var(--colorTextBase)` 这类形态，占残留的大头）。
+    /var\(\s*--([a-zA-Z][\w-]*)\s*(?:,\s*((?:rgba?\([^)]*\)|#[0-9a-fA-F]{3,8}|[^)]+?))\s*)?\)/g,
+    (m, varName, fallback) => {
+      const kebab = camelToKebab(varName);
+      if (slotNames.has(kebab)) return '@' + kebab;
+      // 🛡️ 2026-09-26 治本 0.3-a：`.common()` 里的槽名是 **camelCase**（@fontSize / @fontWeightStrong），
+      // 而 camelToKebab 会得到 `font-size` → 槽名实为 `fontSize` → 旧逻辑查不到 →
+      // **退化成 fallback 字面量**（实测 `var(--fontSize, 14px)` → `14px`，丢掉宿主 font-size 响应式）。
+      // 补「原样名」查找（exact-name），命中即转 `@fontSize`（编译期值 = `var(--fontSize)`，响应式保留）。
+      if (slotNames.has(varName)) return '@' + varName;
+      if (fallback !== undefined && String(fallback).trim()) return String(fallback).trim();
+      return m;
+    },
+  );
+}
+
 export function healBusinessStyleVarRefs(files, options = {}) {
   const logger = options.logger || { warn() {} };
   const fixed = [];
   if (!files || typeof files !== 'object') return fixed;
 
   // 1. 收集 theme-vars.less 里已定义的槽位名（@xxx）
-  const slotNames = new Set();
+  let slotNames = new Set();
   for (const [p, c] of Object.entries(files)) {
     if (typeof c !== 'string' || !/theme-vars\.less$/.test(p)) continue;
-    for (const m of c.matchAll(/@([a-zA-Z][\w-]*)\s*:/g)) slotNames.add(m[1]);
+    slotNames = collectThemeSlotNames(c);
+    break;
   }
   if (slotNames.size === 0) return fixed;
 
@@ -780,24 +875,7 @@ export function healBusinessStyleVarRefs(files, options = {}) {
     const isVue = path.endsWith('.vue');
     const isLess = path.endsWith('.less') && !/theme-vars\.less$/.test(path);
     if (!isVue && !isLess) continue;
-    const updated = content.replace(
-      // 🛡️ fallback 可能含嵌套括号（rgba(230, 237, 245, 1)），专门按颜色字面量形态匹配。
-      // 🛡️ 2026-09-26 治本 0.3-a：把「, fallback」改为**可选**——此前正则强制要求 fallback，
-      //   导致 **无 fallback 的 `var(--x)` 完全不匹配**（实测残留正是 `var(--fontSize)` /
-      //   `var(--colorWhite)` / `var(--colorTextBase)` 这类形态，占残留的大头）。
-      /var\(\s*--([a-zA-Z][\w-]*)\s*(?:,\s*((?:rgba?\([^)]*\)|#[0-9a-fA-F]{3,8}|[^)]+?))\s*)?\)/g,
-      (m, varName, fallback) => {
-        const kebab = camelToKebab(varName);
-        if (slotNames.has(kebab)) return '@' + kebab;
-        // 🛡️ 2026-09-26 治本 0.3-a：`.common()` 里的槽名是 **camelCase**（@fontSize / @fontWeightStrong），
-        // 而 camelToKebab 会得到 `font-size` → 槽名实为 `fontSize` → 旧逻辑查不到 →
-        // **退化成 fallback 字面量**（实测 `var(--fontSize, 14px)` → `14px`，丢掉宿主 font-size 响应式）。
-        // 补「原样名」查找（exact-name），命中即转 `@fontSize`（编译期值 = `var(--fontSize)`，响应式保留）。
-        if (slotNames.has(varName)) return '@' + varName;
-        if (fallback !== undefined && String(fallback).trim()) return String(fallback).trim();
-        return m;
-      },
-    );
+    const updated = healBusinessStyleVarsInCss(content, slotNames);
     if (updated !== content) {
       files[path] = updated;
       fixed.push({ file: path });

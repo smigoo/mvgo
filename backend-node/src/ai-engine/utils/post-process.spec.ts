@@ -16,6 +16,10 @@ import {
   resolveComponentClassPrefix,
   convertShellToPseudoElement,
   stripRedundantInnerBgWhenHostHasBg,
+  hasChartTruthHeight,
+  injectChartMinHeight,
+  injectChartMinHeightIntoClass,
+  createChartClassBlockIfAbsent,
 } from './post-process.js';
 
 const HEADER_SECTION_VUE = `<template>
@@ -775,5 +779,81 @@ import bg1 from '../../resources/images/bg-8788.png'
     expect(out).not.toContain('<div class="c-test-active-bg">');
     expect(out).not.toMatch(/\.c-test-active-bg\s*\{/);
     expect(out).toMatch(/backgroundImage:\s*'url\('\s*\+\s*bg1/);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * B-1 / B-1b（2026-09-29）：echarts 防挤压 min-height 注入不得压过 Figma 真值高度。
+ *
+ * 实锤 `c-traffic-monitor-447d01cc`：装配器已按真值写 `.c-traffic-monitor-chart { height: 52px }`
+ * （Figma 节点 246:30 @echarts = w52.06 / h52.55），注入器又追加 `min-height: 160px`
+ * → CSS 中 min-height 优先于 height ⇒ 实渲 160px（3.08×）→ 内容超高溢出压住下一段。
+ * 全语料审计：558 个注入块中 45 个块内已有显式 px 高度，其中 34 个 min-height > height。
+ */
+describe('B-1: 显式绝对高度 = 真值 → 不注入兜底 min-height', () => {
+  const wrap = (css) =>
+    `<template>\n  <div class="c-x-chart"><div ref="r" class="c-x-chart-container"></div></div>\n</template>\n` +
+    `<style lang="less" scoped>\n@import '../../resources/styles/index.less';\n${css}\n</style>\n`;
+
+  it('hasChartTruthHeight：只认「非零 + 绝对长度单位」', () => {
+    expect(hasChartTruthHeight('height: 52px; flex-shrink: 0;')).toBe(true);
+    expect(hasChartTruthHeight('height: 52px')).toBe(true);
+    expect(hasChartTruthHeight('height: 52px !important;')).toBe(true);
+    // 相对高度 = 未定高（父容器塌陷时仍需保护）
+    expect(hasChartTruthHeight('height: 100%;')).toBe(false);
+    expect(hasChartTruthHeight('height: auto;')).toBe(false);
+    // 0 是塌陷值，不是真值
+    expect(hasChartTruthHeight('height: 0;')).toBe(false);
+    expect(hasChartTruthHeight('height: 0px;')).toBe(false);
+    // 不得被 min-height 冒充
+    expect(hasChartTruthHeight('min-height: 160px;')).toBe(false);
+    expect(hasChartTruthHeight('line-height: 1.2;')).toBe(false);
+  });
+
+  it('事故形态：height:52px + min-height:160px 缺失 → 不再注入（真值不被压过）', () => {
+    const out = injectChartMinHeight(wrap('.c-x-chart {\n  height: 52px;\n  flex-shrink: 0;\n}'));
+    const block = out.match(/\.c-x-chart\s*\{([^}]*)\}/)[1];
+    expect(block).not.toContain('min-height');
+    expect(block).toContain('height: 52px');
+  });
+
+  it('零回归：仅有相对高度 height:100% → 兜底保护照旧注入', () => {
+    const out = injectChartMinHeight(wrap('.c-x-chart {\n  height: 100%;\n}'));
+    const block = out.match(/\.c-x-chart\s*\{([^}]*)\}/)[1];
+    expect(block).toContain('min-height: 160px');
+  });
+
+  it('零回归：无 height 的塌陷容器 → 兜底保护照旧注入', () => {
+    const out = injectChartMinHeight(wrap('.c-x-chart {\n  width: 100%;\n}'));
+    const block = out.match(/\.c-x-chart\s*\{([^}]*)\}/)[1];
+    expect(block).toContain('min-height: 160px');
+  });
+
+  it('零回归：已有非零 min-height → 原样保留（不叠加、不改值）', () => {
+    const out = injectChartMinHeight(wrap('.c-x-chart {\n  min-height: 88px;\n}'));
+    const block = out.match(/\.c-x-chart\s*\{([^}]*)\}/)[1];
+    expect(block).toContain('min-height: 88px');
+    expect(block).not.toContain('160px');
+  });
+});
+
+describe('B-1b: createChartClassBlockIfAbsent 真的检查「缺失」', () => {
+  const wrap = (css) =>
+    `<template>\n  <div class="c-x-chart-container"></div>\n</template>\n` +
+    `<style lang="less" scoped>\n@import '../../resources/styles/index.less';\n${css}\n</style>\n`;
+
+  it('块已存在（且已受保护）→ 不新建重复块', () => {
+    // caller 用 `injectedCount === 0` 当「块不存在」的代理；该条件在「已受保护」时同样成立
+    const src = wrap('.c-x-chart-container {\n  height: 100%;\n  min-height: 52px;\n}');
+    expect(injectChartMinHeightIntoClass(src, 'c-x-chart-container', 160).injectedCount).toBe(0);
+    const out = createChartClassBlockIfAbsent(src, 'c-x-chart-container', 160);
+    expect((out.match(/\.c-x-chart-container\s*\{/g) || []).length).toBe(1);
+  });
+
+  it('块真缺失 → 仍新建（原能力保留）', () => {
+    const out = createChartClassBlockIfAbsent(wrap('.c-other { color: red; }'), 'c-x-chart-container', 160);
+    expect((out.match(/\.c-x-chart-container\s*\{/g) || []).length).toBe(1);
+    expect(out).toContain('min-height: 160px');
   });
 });

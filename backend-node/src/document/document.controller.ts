@@ -1,5 +1,4 @@
-import {
-  Controller,
+import {Controller,
   Get,
   Post,
   Body,
@@ -7,11 +6,12 @@ import {
   Query,
   Session,
   HttpException,
-  HttpStatus,
-} from '@nestjs/common';
+  HttpStatus, UseGuards } from '@nestjs/common';
+import { SessionGuard } from '../auth/session.guard';
 import { DocumentService } from './document.service';
 import { CreateDocumentDto, UpdateDocumentDto } from './dto/document.dto';
 
+@UseGuards(SessionGuard)
 @Controller('documents')
 export class DocumentController {
   constructor(private readonly documentService: DocumentService) {}

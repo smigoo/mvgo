@@ -2698,6 +2698,7 @@ export function createPhase2Graph(config = {}) {
       const {
         checkSectionContent,
         healDuplicateTextIssues,
+        checkSectionExclusiveEvidence,
       } = await import('../utils/section-content-guard.js');
       const { validateVueSfc } = await import('../utils/sfc-syntax-validation.js');
       const { readdirSync: _rds, readFileSync: _rfs, writeFileSync: _wfs2 } = await import('fs');
@@ -2756,9 +2757,19 @@ export function createPhase2Graph(config = {}) {
           });
         }
       }
+
+      const exclusiveCheck = checkSectionExclusiveEvidence({
+        files,
+        plan: state.subComponentPlan,
+        figmaRoot: figmaRootForGuard,
+        resourceDomMapping:
+          state.resourceDomMapping || state._uiCache?.resourceDomMapping,
+      });
       const hasContentIssues =
         contentCheck.memberOrderIssues.length > 0 ||
-        contentCheck.duplicateTextIssues.length > 0;
+        contentCheck.duplicateTextIssues.length > 0 ||
+        exclusiveCheck.borrowedTextIssues.length > 0 ||
+        exclusiveCheck.borrowedAssetIssues.length > 0;
       if (hasContentIssues) {
         const metaPath = pathJoin(state.outputPath, 'component-meta.json');
         let prev = {};
@@ -2778,6 +2789,8 @@ export function createPhase2Graph(config = {}) {
               contentMappingIssues: {
                 memberOrderIssues: contentCheck.memberOrderIssues,
                 duplicateTextIssues: contentCheck.duplicateTextIssues,
+                borrowedTextIssues: exclusiveCheck.borrowedTextIssues,
+                borrowedAssetIssues: exclusiveCheck.borrowedAssetIssues,
                 checkedAt: Date.now(),
               },
             },
@@ -2786,13 +2799,15 @@ export function createPhase2Graph(config = {}) {
           ),
           'utf-8',
         );
-        logger.warn('🩹 内容映射守卫发现问题（左右序/内容错装，已留痕）', {
+        logger.warn('🩹 内容映射守卫发现问题（左右序/内容错装/借用邻居证据，已留痕）', {
           memberOrderIssues: contentCheck.memberOrderIssues.length,
           duplicateTextIssues: contentCheck.duplicateTextIssues.length,
+          borrowedTextIssues: exclusiveCheck.borrowedTextIssues.length,
+          borrowedAssetIssues: exclusiveCheck.borrowedAssetIssues.length,
         });
         state.onProgress?.({
           stage: '内容映射校验',
-          message: `⚠️ 内容映射守卫：${contentCheck.memberOrderIssues.length} 处左右序异常、${contentCheck.duplicateTextIssues.length} 处文本重复/错装（详见 component-meta.json）`,
+          message: `⚠️ 内容映射守卫：${contentCheck.memberOrderIssues.length} 处左右序异常、${contentCheck.duplicateTextIssues.length} 处文本重复/错装、${exclusiveCheck.borrowedTextIssues.length} 处借用文本、${exclusiveCheck.borrowedAssetIssues.length} 处借用资源（详见 component-meta.json）`,
           status: 'warning',
         });
       }
@@ -3934,10 +3949,10 @@ export function createPhase2Graph(config = {}) {
         );
       }
 
-      // 🛡️ R0-7（2026-09-01）：FLEX-002（冗余 flex column）在 L0-B 只判不修。
-      // 修复唯一归口在生成期 code-validator.validateAndFixGeneratedFiles（autoFixRedundantFlex）；
-      // 此处删除重复修复器（同一问题两处修 = 双写盘分叉点，且与生成期修复口径可能漂移）。
-      // 判定仍由上方 checkFlexUsage（FLEX-002，WARN）负责并计入 result.issues。
+      // 🛡️ R0-7（2026-09-01）→ 2026-09-29 收敛：FLEX-002（冗余 flex column）**全链路只判不修**。
+      // 判定由上方 checkFlexUsage（FLEX-002，WARN）负责并计入 result.issues；
+      // 修复器 autoFixRedundantFlex 已从本处 / code-validator / vue3-graph 三处全部删除 ——
+      // WARN 级判定不得静默改写布局属性（display:flex 可能来自 A 类布局事实注入，删它即振荡）。
     } catch (flexErr) {
       logger.warn('P0-4 flex 检查异常（非阻断）', { error: flexErr.message });
     }

@@ -13,7 +13,7 @@ import path from 'path'
 import componentResolver from '../utils/component-resolver.js'
 import snapshotManager from './snapshot-manager.js'
 import { createLogger } from '../logger/index.js'
-import { validateVueSfc } from '../utils/sfc-syntax-validation.js'
+import { validateVueSfc, normalizeResourceRelativePaths } from '../utils/sfc-syntax-validation.js'
 import { buildComponentId, semanticTokenFrom, sanitizeComponentId } from '../utils/component-naming.js'
 
 const { resolveComponentDirStrict, resolveWritableComponentDirs, isEncodedComponentName } =
@@ -137,17 +137,23 @@ export async function writeComponentFile({ componentId, filePath, content, creat
     }
 
     const normalizedPath = normalizeVue3Entry(componentDir, filePath)
+    // 🛡️ 写盘防腐：.vue 先归一化 resources/ 相对路径，再用**绝对路径**校验（目录门禁）。
+    // 绝对路径使 canResolveLocalStyleImports=true，完整编译真实 @import 依赖链，
+    // 从而正确解析出 theme-vars.less 注入的 @fontSize 等变量——避免「相对路径剥 @import 后
+    // variable @fontSize is undefined」误杀（mc-c-component-mumhci0o 实锤）。
+    let effectiveContent = content
     if (normalizedPath.endsWith('.vue')) {
-      const syntaxResult = validateVueSfc(content, normalizedPath)
+      effectiveContent = normalizeResourceRelativePaths(content, normalizedPath)
+      const syntaxResult = validateVueSfc(effectiveContent, path.join(componentDir, normalizedPath))
       if (!syntaxResult.valid) {
         throw new Error(`拒绝写入不可编译 Vue SFC ${normalizedPath}: ${syntaxResult.errors.join('; ')}`)
       }
     }
     // 🛡️ S3：declare.json 写盘前归一到规范 ID（命中任务号形态则收敛 + WARN，禁止持久化坏值）
-    const effectiveContent =
+    effectiveContent =
       path.basename(normalizedPath) === 'declare.json'
-        ? normalizeDeclareComponentId(content, componentId, normalizedPath)
-        : content
+        ? normalizeDeclareComponentId(effectiveContent, componentId, normalizedPath)
+        : effectiveContent
     const primaryDir = writableDirs.includes(componentDir) ? componentDir : writableDirs[0]
     const primaryPath = resolveSafeFilePath(primaryDir, normalizedPath)
     const originalFileExists = fs.existsSync(primaryPath)

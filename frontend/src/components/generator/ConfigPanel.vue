@@ -147,10 +147,20 @@
                   不确定模型能力？点击右上角「自动识别能力」按钮进行检测。
                 </p>
                 <div v-if="detectResults[m.id]" class="detect-results">
-                  <span class="detect-tag" :class="detectResults[m.id].vision?.success ? 'ok' : 'fail'">视觉 {{ detectResults[m.id].vision?.success ? '✓' : '✗' }}</span>
-                  <span class="detect-tag" :class="detectResults[m.id].text?.success ? 'ok' : 'fail'">文本 {{ detectResults[m.id].text?.success ? '✓' : '✗' }}</span>
-                  <span class="detect-tag" :class="detectResults[m.id].reasoning?.success ? 'ok' : 'fail'">推理 {{ detectResults[m.id].reasoning?.success ? '✓' : '✗' }}</span>
-                  <span v-if="detectResults[m.id].reasoning?.success" class="detect-hint">推理模型</span>
+                  <div class="detect-row">
+                    <span class="detect-tag" :class="detectResults[m.id].vision?.success ? 'ok' : 'fail'">视觉 {{ detectResults[m.id].vision?.success ? '✓' : '✗' }}</span>
+                    <span v-if="detectResults[m.id].vision?.latency" class="detect-hint">⚡{{ (detectResults[m.id].vision.latency / 1000).toFixed(1) }}s · {{ detectResults[m.id].vision.latency > 5000 ? '慢' : detectResults[m.id].vision.latency > 2000 ? '中' : '快' }}</span>
+                    <span v-if="detectResults[m.id].vision?.expectedDigits" class="detect-hint">测试图数字: {{ detectResults[m.id].vision.expectedDigits }}</span>
+                  </div>
+                  <div class="detect-row">
+                    <span class="detect-tag" :class="detectResults[m.id].text?.success ? 'ok' : 'fail'">文本 {{ detectResults[m.id].text?.success ? '✓' : '✗' }}</span>
+                    <span v-if="detectResults[m.id].text?.latency" class="detect-hint">⚡{{ (detectResults[m.id].text.latency / 1000).toFixed(1) }}s</span>
+                  </div>
+                  <div class="detect-row">
+                    <span class="detect-tag" :class="detectResults[m.id].reasoning?.success ? 'ok' : 'fail'">推理 {{ detectResults[m.id].reasoning?.success ? '✓' : '✗' }}</span>
+                    <span v-if="detectResults[m.id].reasoning?.latency" class="detect-hint">⚡{{ (detectResults[m.id].reasoning.latency / 1000).toFixed(1) }}s</span>
+                    <span v-if="detectResults[m.id].reasoning?.success" class="detect-hint">推理模型</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -363,7 +373,7 @@
                 name="mcFigmaAccessToken"
                 v-model="formData.figmaToken"
                 placeholder="figd_..."
-                autocomplete="off"
+                autocomplete="new-password"
                 autocapitalize="off"
                 spellcheck="false"
                 data-lpignore="true"
@@ -421,7 +431,7 @@
                 name="mcApifoxAccessToken"
                 v-model="formData.apifoxToken"
                 placeholder="Apifox 个人访问令牌"
-                autocomplete="off"
+                autocomplete="new-password"
                 autocapitalize="off"
                 spellcheck="false"
                 data-lpignore="true"
@@ -479,7 +489,7 @@
                 name="mcGitlabAccessToken"
                 v-model="formData.gitlabToken"
                 placeholder="glpat-xxxxxxxxxxxx"
-                autocomplete="off"
+                autocomplete="new-password"
                 autocapitalize="off"
                 spellcheck="false"
                 data-lpignore="true"
@@ -866,20 +876,35 @@ function migrateLegacyToModelsLocal(cfg: any): { models: ModelEntry[]; binding: 
     ...(p.weight != null ? { weight: Number(p.weight) } : {}),
   })
 
+  // 🐛 治本：仅当用户真实填过对应 legacy 字段（apiKey / model / baseURL 任一非空）才迁移创建模型条目。
+  // 否则全新 / 无配置用户会被无条件塞入「文本模型」「视觉模型」两张空卡片（即用户报的"两空模型"）。
+  const hasLegacy = (prefix: string) =>
+    !!(cfg[`${prefix}ApiKey`] || cfg[`${prefix}Model`] || cfg[`${prefix}BaseURL`])
+
   if (cfg.modelMode === 'unified') {
-    const primary = toEntry('unified', 'both', '主模型')
-    models.push(primary)
+    let primary: ModelEntry | null = null
+    if (hasLegacy('unified')) {
+      primary = toEntry('unified', 'both', '主模型')
+      models.push(primary)
+    }
     const poolIds: string[] = []
     for (const p of providers) {
       const e = providerToEntry(p)
       models.push(e)
       poolIds.push(e.id)
     }
-    binding.unified = { primaryId: primary.id, poolIds }
+    binding.unified = { primaryId: primary?.id || '', poolIds }
   } else {
-    const textPrimary = toEntry('text', 'text', '文本模型')
-    const visionPrimary = toEntry('vision', 'vision', '视觉模型')
-    models.push(textPrimary, visionPrimary)
+    let textPrimary: ModelEntry | null = null
+    let visionPrimary: ModelEntry | null = null
+    if (hasLegacy('text')) {
+      textPrimary = toEntry('text', 'text', '文本模型')
+      models.push(textPrimary)
+    }
+    if (hasLegacy('vision')) {
+      visionPrimary = toEntry('vision', 'vision', '视觉模型')
+      models.push(visionPrimary)
+    }
     const textPool: string[] = []
     const visionPool: string[] = []
     for (const p of providers) {
@@ -890,8 +915,8 @@ function migrateLegacyToModelsLocal(cfg: any): { models: ModelEntry[]; binding: 
       else if (role === 'text') textPool.push(e.id)
       else { textPool.push(e.id); visionPool.push(e.id) }
     }
-    binding.text = { primaryId: textPrimary.id, poolIds: textPool }
-    binding.vision = { primaryId: visionPrimary.id, poolIds: visionPool }
+    binding.text = { primaryId: textPrimary?.id || '', poolIds: textPool }
+    binding.vision = { primaryId: visionPrimary?.id || '', poolIds: visionPool }
   }
   return { models, binding }
 }
@@ -3038,10 +3063,16 @@ function clearConfig() {
 
 .detect-results {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.detect-row {
+  display: flex;
   align-items: center;
   gap: 6px;
-  margin-top: 8px;
+  flex-wrap: wrap;
 }
 
 .capability-display {

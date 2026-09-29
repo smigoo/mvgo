@@ -25,6 +25,8 @@ import { resolvePrivateGroupId } from '../common/group-resolver';
 import { packageEntryFilter } from '../common/utils/package-filter';
 import { validateVueSfcDirectory } from '../ai-engine/utils/sfc-syntax-validation.js';
 import { resolveComponentDirStrict } from '../ai-engine/utils/component-resolver.js';
+// 🛡️ 2026-09-29：任务号污染判定单一事实源（componentName 来自 LLM，可能被填成上一个任务的 sessionId）
+import { isTaskIdLikeName, resolveTaskFolderName } from '../ai-engine/utils/component-naming.js';
 // 🛡️ 2026-09-13 治本（首次预览走快照报 "variable @x is undefined"，刷新走 workspace 才好）：
 // onFilesReady 在 graph complete 节点 LessVariableChecker 补齐变量【之前】触发，快照定格时
 // theme-vars.less 仍缺被 SFC 使用的变量。发布前补跑一次，使快照与最终 workspace 一致、均可编译。
@@ -204,17 +206,32 @@ export class Phase2Service {
       );
     }
 
-    // 如果没有提供componentName，使用sessionId作为组件名称
-    const finalComponentName = componentName || sessionId;
+    // 🛡️ 2026-09-29 治本（mc-1790667029984-86d05609 实锤）：`componentName` 是**不可信输入**
+    //   —— workbench 侧它直接来自 LLM 工具调用参数（generate_from_figma），LLM 会把
+    //   「上一个任务的 sessionId」（如 `mc-max-1790666569567-ddbcf714`）误当组件名传进来。
+    //   若原样使用，会同时污染两处：
+    //     ① temp 目录名被拼成 `<本任务 sessionId>-<上一个任务 sessionId>`
+    //        （`mc-1790667029984-86d05609-mc-max-1790666569567-ddbcf714`）⇒ 新任务被**嵌套**
+    //        进旧任务目录，破坏断点恢复、资源归属与预览 URL 的精确关联；
+    //     ② 脏名进 prompt ⇒ LLM 在根容器上多写一个 `c-mc-max-<ts>-<hex>` 脏 class。
+    //   判据复用 `component-naming#isTaskIdLikeName`（与 semanticTokenFrom 的 /\d{13}/ 同源），
+    //   不在此另立一套正则 —— 同一事实两处各自命名必然失配（本仓血泪）。
+    const componentNameIsTaskId = isTaskIdLikeName(componentName);
+    if (componentNameIsTaskId) {
+      this.logger.warn(
+        `[Phase2] componentName 疑似任务号污染，已忽略并回退为 sessionId: ${componentName}`,
+      );
+    }
+    const safeComponentName = componentNameIsTaskId
+      ? ''
+      : String(componentName || '').trim();
 
-    // 生成输出路径：temp-components/{groupId}/{componentId或sessionId}-{componentName}/
-    // 如果componentName就是sessionId，则不添加后缀，避免重复
-    // temp 目录必须以业务组件号 sessionId 开头，重启恢复才能精确关联任务产物。
-    // DTO componentId 仅作为上游兼容字段，不再决定最终组件目录号。
-    const folderName =
-      componentName && componentName !== sessionId
-        ? `${sessionId}-${finalComponentName}`
-        : sessionId;
+    // 如果没有提供 componentName（或它被判定为任务号污染），使用 sessionId 作为组件名称
+    const finalComponentName = safeComponentName || sessionId;
+
+    // 生成输出路径：temp-components/{groupId}/{sessionId}[-{componentName}]/
+    // 目录名统一走 component-naming#resolveTaskFolderName 这一**单一事实源**（可单测）
+    const folderName = resolveTaskFolderName(sessionId, componentName);
     const tempRoot = join(
       tempComponentsDir,
       groupId,
@@ -675,9 +692,9 @@ export class Phase2Service {
         textAIConfig: textCfg,
         aiConfig: {
           // 向后兼容
-          apiKey: config.aiApiKey || process.env.ANTHROPIC_API_KEY,
-          baseURL: config.aiBaseURL || process.env.ANTHROPIC_BASE_URL,
-          model: config.aiModel || process.env.ANTHROPIC_MODEL,
+          apiKey: config.aiApiKey,
+          baseURL: config.aiBaseURL,
+          model: config.aiModel,
         },
         sessionId, // 🆕 传递 sessionId 用于 Token 追踪关联
         groupId: params.groupId,
@@ -832,7 +849,7 @@ export class Phase2Service {
           this.tokenTrackerService.recordUsage({
             ...data,
             userId: params.userId,
-            baseURL: config.aiBaseURL || process.env.ANTHROPIC_BASE_URL,
+            baseURL: config.aiBaseURL,
           });
         },
         // 🆕 暂停检查回调：每个分块生成前由管线调用，返回当前任务状态
@@ -1513,9 +1530,9 @@ export class Phase2Service {
     if (params.refineType === 'layout' || params.refineType === 'both') {
       const { LayoutRefiner } = await import('../ai-engine/roles/layout-refiner.js');
       const refiner = new LayoutRefiner({
-        apiKey: textCfg.apiKey || process.env.TEXT_API_KEY,
-        model: textCfg.model || process.env.TEXT_MODEL,
-        baseURL: textCfg.baseURL || process.env.TEXT_BASE_URL,
+        apiKey: textCfg.apiKey,
+        model: textCfg.model,
+        baseURL: textCfg.baseURL,
       });
       const result = await refiner.execute({
         figmaNodeData: params.figmaNodeData,
@@ -1539,9 +1556,9 @@ export class Phase2Service {
     if (params.refineType === 'style' || params.refineType === 'both') {
       const { StyleRefiner } = await import('../ai-engine/roles/style-refiner.js');
       const refiner = new StyleRefiner({
-        apiKey: textCfg.apiKey || process.env.TEXT_API_KEY,
-        model: textCfg.model || process.env.TEXT_MODEL,
-        baseURL: textCfg.baseURL || process.env.TEXT_BASE_URL,
+        apiKey: textCfg.apiKey,
+        model: textCfg.model,
+        baseURL: textCfg.baseURL,
       });
       const result = await refiner.execute({
         figmaNodeData: params.figmaNodeData,

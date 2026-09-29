@@ -11,6 +11,7 @@
  */
 import {
   buildLayoutConstraintReinforcement,
+  buildNodeLayoutFactsReinforcement,
 } from './constraint-reinforcement.js'
 
 describe('buildLayoutConstraintReinforcement 3b 布局接管声明', () => {
@@ -54,5 +55,61 @@ describe('buildLayoutConstraintReinforcement 3b 布局接管声明', () => {
     })
     expect(out).toContain('布局形态：竖向堆叠（column）')
     expect(out).toContain('勿手写')
+  })
+})
+
+/**
+ * 🛡️ 2026-09-29 治本（mc-max-1790669176199-94b3bc69 实锤）：`inferClassName` 的**双 c- 前缀**。
+ *
+ * `componentName` 常为 `normalizeComponentId` 产出的 `c-vehicle-monitor`（**自带 c-**），
+ * 原实现恒拼 `.c-${componentName}-…` ⇒ 输出 `.c-c-vehicle-monitor-group-2136639043`
+ * ⇒ 与产物 class（`.c-vehicle-monitor-list-item`）对不上，且违反 prompt 的「🚫 禁止双 c- 前缀」
+ * ⇒ A 类逐节点布局事实的 class 契约**整段作废**。
+ */
+describe('buildNodeLayoutFactsReinforcement — class 契约前缀归一', () => {
+  const figmaNodeData = {
+    document: {
+      id: 'root',
+      name: 'cp',
+      type: 'FRAME',
+      children: [
+        {
+          id: '2:8023',
+          name: 'Group 2136639043',
+          type: 'GROUP',
+          absoluteBoundingBox: { x: 37, y: 984, width: 378, height: 74 },
+          children: [],
+        },
+      ],
+    },
+  }
+  const facts = {
+    '2:8023': {
+      display: 'flex',
+      flexDirection: 'row',
+      source: 'geometric-inference',
+      confidence: 'high',
+    },
+  }
+
+  it('componentName 自带 c- 前缀 ⇒ 不得再叠一层（禁止 c-c-）', () => {
+    const out = String(
+      buildNodeLayoutFactsReinforcement(facts, figmaNodeData, 'c-vehicle-monitor'),
+    )
+    expect(out).toContain('.c-vehicle-monitor-group-2136639043')
+    expect(out).not.toContain('c-c-vehicle-monitor')
+  })
+
+  it('componentName 无 c- 前缀 ⇒ 补一层（保持原语义）', () => {
+    const out = String(
+      buildNodeLayoutFactsReinforcement(facts, figmaNodeData, 'vehicle-monitor'),
+    )
+    expect(out).toContain('.c-vehicle-monitor-group-2136639043')
+  })
+
+  it('两种写法产出完全一致的 class 契约（同一事实源）', () => {
+    expect(
+      buildNodeLayoutFactsReinforcement(facts, figmaNodeData, 'c-vehicle-monitor'),
+    ).toBe(buildNodeLayoutFactsReinforcement(facts, figmaNodeData, 'vehicle-monitor'))
   })
 })

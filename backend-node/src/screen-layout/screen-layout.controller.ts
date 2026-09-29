@@ -1,9 +1,11 @@
-import { Controller, Post, Body, Get, Param, Res, Req, Logger } from '@nestjs/common';
+import {Controller, Post, Body, Get, Param, Res, Req, Logger, UseGuards } from '@nestjs/common';
+import { SessionGuard } from '../auth/session.guard';
 import type { Response, Request } from 'express';
 import { randomBytes } from 'crypto';
 import { ScreenLayoutService } from './screen-layout.service';
 import { ProgressService } from '../progress/progress.service';
 
+@UseGuards(SessionGuard)
 @Controller('screen-layout')
 export class ScreenLayoutController {
   private readonly logger = new Logger(ScreenLayoutController.name);

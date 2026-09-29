@@ -36,6 +36,7 @@ import {
 import { buildItemLevelFacts } from '../utils/figma-item-facts.js';
 // 🛡️ 刀 5a（2026-09-13）：section type 推导抽离到纯函数模块（无 import.meta 依赖，可单测）
 import { deriveSectionType } from '../utils/section-type-derive.js';
+import { applyHeaderGeometryFallback } from '../utils/header-geometry-fallback.js';
 
 export { isLayoutContainerSection, collectLeafSections };
 
@@ -387,6 +388,11 @@ function isPanelHeader(sec) {
   if (!patternHit) return false;
   return countElements(sec) < 4;
 }
+
+/**
+ * 🛡️ header 几何兜底已抽至 utils/header-geometry-fallback.js（2026-09-29 · b6e018d6）：
+ *   纯函数零依赖（logger 由调用方打），详见该文件注释。
+ */
 
 /**
  * P2': 识别图例 section（色块+短文本组合，无交互元素）。
@@ -1137,17 +1143,49 @@ function buildEffectiveSection(sec, idx, ctx) {
   //   do-not-invent 生效，tabs DOM 消失。探针已证 E1 树里 children[].text 完好。
   //   治本：把「无 collapsed/v-for、带 text 的 item 子节点」文本确定性收进 body.items，
   //   供 prompt 端作为文本真值消费（tabs 标签/图例文本等）。无文本子节点则不产生字段。
-  const plainTextItems = (Array.isArray(sec.children) ? sec.children : [])
-    .filter(
-      (c) =>
-        c &&
-        typeof c === 'object' &&
-        !c.collapsed &&
-        c.renderHint !== 'v-for' &&
-        typeof c.text === 'string' &&
-        c.text.trim(),
-    )
-    .map((c) => ({ text: String(c.text).trim().slice(0, 40), figmaNode: c.figmaNode || c.id || undefined }));
+  //
+  // 🛡️ 递归化 + 视觉序（2026-09-29 · mc-max-1790650861294-f57e0d3e 实锤）：
+  //   原实现只取 sec.children **直接子**的 text；但 E1 树里 header/tabs 的文本在更深层
+  //   （2:3565 › 2:3566「@antd/tab」› btn › TEXT「江阴靖江长江隧道」/「江阴大桥」），
+  //   且下方 body 合并段只在「无 sec.body」时才注入 items ⇒ 有 vision body 的 section
+  //   （所有 header）拿不到确定性文本，只能退回 vision 的**合并名**
+  //   「江阴靖江长江隧道江阴大桥」（tab 整条消失的根因）。
+  //   治本：递归收集（≤3 层）、按 bbox.y 升序还原视觉阅读序、去重、上限 12 项。
+  const plainTextItems = (() => {
+    const hits = []
+    const collect = (node, depth) => {
+      if (!node || typeof node !== 'object' || depth > 3) return
+      if (
+        typeof node.text === 'string' &&
+        node.text.trim() &&
+        !node.collapsed &&
+        node.renderHint !== 'v-for'
+      ) {
+        hits.push({
+          t: node.text.trim(),
+          y: node.absoluteBoundingBox?.y,
+          x: node.absoluteBoundingBox?.x,
+          figmaNode: node.figmaNode || node.id || undefined,
+        })
+      }
+      for (const c of node.children || []) collect(c, depth + 1)
+    }
+    for (const c of Array.isArray(sec.children) ? sec.children : []) collect(c, 0)
+    // 🛡️ 图表 section 不注入：其内部文本是 echarts option 的一部分（图例/轴标签），
+    //   注入后会被下游 prompt 渲染成图表容器外的游离 DOM。
+    if (String(rawType || '').toLowerCase() === 'chart') return []
+    const seen = new Set()
+    return hits
+      // 视觉阅读序：先 y（自上而下）后 x（同行自左向右）
+      .sort((a, b) => (a.y ?? Infinity) - (b.y ?? Infinity) || (a.x ?? Infinity) - (b.x ?? Infinity))
+      .filter((h) => {
+        if (seen.has(h.t)) return false
+        seen.add(h.t)
+        return true
+      })
+      .slice(0, 12)
+      .map((h) => ({ text: h.t.slice(0, 40), figmaNode: h.figmaNode }))
+  })()
 
   return {
     id: sec.id || `section-${idx + 1}`,
@@ -1196,10 +1234,19 @@ function buildEffectiveSection(sec, idx, ctx) {
           body: {
             ...(layoutFact ? { layout: layoutFact } : {}),
             ...(hasGridColumns ? { gridColumns: Math.round(effectiveColumns) } : {}),
-            // 保留已有 body（F1 卡片语义优先于布局收敛字段——语义更特异）
+            // ① 先铺已有 body（vision / F1 的卡片语义）：layout / children / bgPlaceholder …
+            //    ⚠️ `children` 必须保留 —— 它含 `styles.flexGrow` 等**布局事实**，
+            //    与下方 `items` 是**互补双轨**（items=扁平文本清单；children=结构化子项），
+            //    不是同一事实的重复表达。
             ...(sec.body || {}),
-            // 🛡️ P1：文本真值 items 兜底合并（无 sec.body 时承载 tabs 标签文本）
-            ...(plainTextItems.length > 0 && !sec.body ? { items: plainTextItems } : {}),
+            // ② 再覆盖 `items`：**确定性文本真值**无条件覆盖 vision 的 items。
+            //    理由：vision 常把一整组文本命名成拼接串（如把 `@antd/tab` 的两项合成
+            //    「江阴靖江长江隧道江阴大桥」），而递归 TEXT 真值已把它们拆开 ⇒ 确定性胜出。
+            //    下游 `microcode-engineer` 的「必还原文本清单」正是读 `body.items[].text`。
+            //    ⚠️ 只覆盖 `items` 一个键，**不动** body 的其它字段（故与 ① 不冲突）。
+            //    历史：此前条件是 `plainTextItems.length > 0 && !sec.body` ⇒ 有 vision body 的
+            //    section（所有 header，如 tab 所在的 sub-header）永远拿不到确定性文本。
+            ...(plainTextItems.length > 0 ? { items: plainTextItems } : {}),
           },
         }
       : {}),
@@ -1561,6 +1608,14 @@ export class SubcomponentPlanner {
           total: sections.length,
         });
       }
+    }
+
+    // 🛡️ header 几何兜底（2026-09-29 · b6e018d6 拍板方案，命名无关）：
+    //   E1 / vision / chrome 剥离全部走完后仍无 header 事实 ⇒ 按 Figma 几何
+    //   （顶层顶部 15% 薄条）强制标记 type='header'。详见函数注释。
+    const headerGeomHit = applyHeaderGeometryFallback(sections);
+    if (headerGeomHit) {
+      logger.warn('🛡️ header 几何兜底生效：顶层顶部薄条已标记 header（无任何 header 类型事实）', headerGeomHit);
     }
 
     if (!Array.isArray(sections) || sections.length === 0) {

@@ -187,4 +187,100 @@ describe('buildNodeLayoutFacts — B\' 事实层', () => {
     expect(buildNodeLayoutFacts(undefined)).toEqual({})
     expect(buildNodeLayoutFacts('not-a-tree')).toEqual({})
   })
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🛡️ 2026-09-29 背景层剔除（mc-max-1790667854851-5f5bce3a 实锤）
+  //    事故：列表项「icon 左 / 文字右」被判成 grid-2 ⇒ LLM 写不出 flex ⇒ 竖排堆叠、数值被裁。
+  //    根因：整块背景层 `bg`(面积占父 100%) 与 icon 按 x 差 4px 归进同一列 ⇒ 凑出「2 列 × 2 项」假网格。
+  //    全语料审计：753 产物 / 59279 节点 / 判定变化 188 条，**全部为 `grid-2 → flex-row`**，
+  //    被剔节点 188/188 均为「面积 100% 的 FRAME:bg」⇒ TP 100%、零 FP、零事实丢失。
+  // ─────────────────────────────────────────────────────────────────────────
+  it('⭐ 背景层不得凑假网格：bg + icon + 文字组 + 数值组 → flex-row（真实 136:129 结构）', () => {
+    const item = {
+      id: '136:129',
+      name: '1',
+      layoutMode: 'NONE',
+      absoluteBoundingBox: box(37, 984, 140, 74),
+      children: [
+        child('136:129-bg', 37, 984, 140, 74, { name: 'bg' }), // 整块背景层：100% 父面积
+        child('136:129-icon', 41, 995, 48, 48, { name: 'icon' }),
+        child('136:129-label', 89, 1000, 55, 18, { name: 'Group 2136638345' }),
+        child('136:129-value', 90, 1022, 39, 23, { name: 'Group 2136638342' }),
+      ],
+    }
+    const facts = buildNodeLayoutFacts({ document: { id: '0:0', children: [item] } })
+    // 旧行为：bg(x=37,140 宽) 与 icon(x=41) 同列、文字组(x=89) 与数值组(x=90) 同列 ⇒ grid-2 ❌
+    // 剔 bg 后 3 个：icon↔label、icon↔value 为 side-by-side（2/3 ⇒ ratio 0.667 → 档位 low），
+    // label↔value 水平重叠 39px > 0.15×23 ⇒ 非 side-by-side。方向 row（low 档按定调默认 row）。
+    // confidence 仅作元信息透传（全仓无按 confidence 过滤/降权的判据），row 即为正确下发值。
+    expect(facts['136:129']).toEqual({
+      display: 'flex',
+      flexDirection: 'row',
+      source: 'geometric-inference',
+      confidence: 'low',
+    })
+  })
+
+  it('🛡️ TEXT 永不视为背景层（内容 TEXT 占 94.5% 父面积不得被剔 ⇒ 仍参与方向判定）', () => {
+    // 父 100×60。TEXT 96×58 = 92.8% ≥ 0.9，若按面积无脑剔则只剩 2 个 FRAME（ratio=1 ⇒ high row）。
+    // TEXT 保留 ⇒ 与两个 FRAME 均水平大量重叠（非 side-by-side）⇒ ratio=1/3 ⇒ confidence='low'。
+    // 故 confidence 是「TEXT 是否被误剔」的可观测判据。
+    const node = {
+      id: '10:1',
+      layoutMode: 'NONE',
+      absoluteBoundingBox: box(0, 0, 100, 60),
+      children: [
+        { id: '10:1-t', type: 'TEXT', name: '危化品车', absoluteBoundingBox: box(2, 1, 96, 58) },
+        child('10:1-a', 10, 20, 20, 20),
+        child('10:1-b', 60, 20, 20, 20),
+      ],
+    }
+    const facts = buildNodeLayoutFacts({ document: { id: '0:0', children: [node] } })
+    expect(facts['10:1']).toMatchObject({
+      display: 'flex',
+      flexDirection: 'row',
+      source: 'geometric-inference',
+      confidence: 'low', // ← 若 TEXT 被当背景层剔掉，此处会是 'high'（2 个 FRAME 完全并排）
+    })
+  })
+
+  it('🛡️ 过滤后不足 2 个 ⇒ 回退全集（不返回 null）：1 背景层 + 1 内容 仍有事实', () => {
+    // 「无事实 ⇒ LLM 只能猜 ⇒ 竖排堆叠」是本仓最坏结果，故宁可带背景层判定也不丢事实。
+    const node = {
+      id: '11:1',
+      layoutMode: 'NONE',
+      absoluteBoundingBox: box(0, 0, 100, 100),
+      children: [
+        child('11:1-bg', 0, 0, 100, 100, { name: 'bg' }), // 100% ⇒ 会被剔除
+        child('11:1-c', 10, 10, 30, 30), // 剔完只剩 1 个 ⇒ 触发回退
+      ],
+    }
+    const facts = buildNodeLayoutFacts({ document: { id: '0:0', children: [node] } })
+    expect(facts['11:1']).toBeDefined()
+    expect(facts['11:1']).toMatchObject({ display: 'flex', source: 'geometric-inference' })
+  })
+
+  it('🛡️ 真 2×2 网格不被误伤：带背景层的 4 卡网格 → 仍 grid-2（且比旧行为更准）', () => {
+    // 旧行为：bg(x=0) 与 A/C(x=0) 同列 ⇒ 5 个挤成 1 列 ⇒ 非网格 ⇒ 误判 flex。
+    // 新行为：剔 bg ⇒ A,B,C,D 成 2×2 ⇒ 正确 grid-2。
+    const grid = {
+      id: '12:1',
+      layoutMode: 'NONE',
+      absoluteBoundingBox: box(0, 0, 100, 100),
+      children: [
+        child('12:1-bg', 0, 0, 100, 100, { name: 'bg' }),
+        child('12:1-a', 0, 0, 40, 40),
+        child('12:1-b', 50, 0, 40, 40),
+        child('12:1-c', 0, 50, 40, 40),
+        child('12:1-d', 50, 50, 40, 40),
+      ],
+    }
+    const facts = buildNodeLayoutFacts({ document: { id: '0:0', children: [grid] } })
+    expect(facts['12:1']).toEqual({
+      display: 'grid',
+      gridColumns: 2,
+      source: 'geometric-grid-inference',
+      confidence: 'high',
+    })
+  })
 })

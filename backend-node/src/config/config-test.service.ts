@@ -1,12 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
+import sharp from 'sharp';
 import { buildChatUrl } from '../ai-engine/utils/chat-url.js';
-import { normalizeRequestTemperature, markModelCapabilityIdentified } from '../ai-engine/utils/model-config.js';
+import { normalizeRequestTemperature, markModelCapabilityIdentified, buildThinkingOffParams } from '../ai-engine/utils/model-config.js';
 
 export interface TestResult {
   success: boolean;
   error?: string;
   detail?: string;
   latency?: number;
+  /** 🆕 视觉检测：本次测试图中随机生成的数字（供前端展示，便于人工核对模型返回） */
+  expectedDigits?: string;
 }
 
 interface LLMTestOptions {
@@ -260,7 +263,11 @@ export class ConfigTestService {
     const start = Date.now();
     // 推理类模型（kimi-k2.6/k3/deepseek-reasoner 等）服务端硬性 temperature=1，
     // 与生成链路保持一致，避免 400 invalid temperature。
-    const effectiveTemp = normalizeRequestTemperature(model, temperature);
+    // 🛡️ 视觉探测是确定性 yes/no 判定（能否识别图），必须 temperature=0 才稳定。
+    // 直接忽略前端传入的 temperature（设置里 unifiedTemperature 等非 0 会让同图每次结果不同，
+    // 即「自动检测模型」一次可以一次不可以、每一次都变的根因），恒用 0；
+    // 推理模型经 normalizeRequestTemperature 归一化为 1，符合服务端硬性要求，不报错。
+    const effectiveTemp = normalizeRequestTemperature(model, 0);
     try {
       // Anthropic 协议走独立分支
       if (providerType === 'anthropic') {
@@ -269,9 +276,22 @@ export class ConfigTestService {
 
       const url = buildChatUrl(baseURL);
 
-      // 使用一张 20x20 红色 PNG 作为测试图（dashscope 等部分 API 要求宽或高 >= 10px）
-      const testImageData =
-        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAIAAAAC64paAAAAG0lEQVR4nGP4z8BANiJf56jmUc2jmkc1U0UzADHNjoAymaoJAAAAAElFTkSuQmCC';
+      // 🛡️ 2026-09-29 治本（增强）：测试图用「每次随机生成的 3 位数字（100-999）+ 白底黑字」。
+      // 纯色图 + 「Describe this image in one word」无法区分「真视觉」与「纯文本基模忽略图像
+      // 瞎回颜色词」——deepseek-v4-flash 这类推理基模会瞎回 "Red"（非空、无英文否定词），
+      // 被误判为支持视觉（实锤：同模型两次检测一次 content 空判 false、一次 "Red" 判 true）。
+      // 改用「含唯一可读数字的图 + 回答图中数字 + 返回必须答对该随机数字」判定：
+      // 非视觉基模忽略图像瞎回任何无关词，恰好命中本次随机 3 位数概率仅 1/900，几乎不可能蒙中；
+      // 即便前端用户反复点「自动检测」，每次随机数不同，也不会因固定答案被缓存/特化而误判。
+      // 图与期望答案同源生成（random → expectedDigits → svg 数字），prompt 不泄露答案。
+      const expectedDigits = String(100 + Math.floor(Math.random() * 900));
+      const testSvg =
+        `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="120">` +
+        `<rect width="100%" height="100%" fill="white"/>` +
+        `<text x="50%" y="50%" font-family="Arial, sans-serif" font-size="72" font-weight="bold" fill="black" text-anchor="middle" dominant-baseline="central">${expectedDigits}</text>` +
+        `</svg>`;
+      const testPng = await sharp(Buffer.from(testSvg)).png().toBuffer();
+      const testImageData = 'data:image/png;base64,' + testPng.toString('base64');
 
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -286,7 +306,7 @@ export class ConfigTestService {
             content: [
               {
                 type: 'text',
-                text: 'Describe this image in one word.',
+                text: 'What number is displayed in the image? Answer with only the digits, nothing else.',
               },
               {
                 type: 'image_url',
@@ -297,7 +317,18 @@ export class ConfigTestService {
             ],
           },
         ],
-        max_tokens: 64,
+        // 🛡️ 2026-09-29 治本二：max_tokens 64 → 2048。
+        // 推理模型（deepseek-v4-flash/kimi-k3 等）的思考（reasoning_content）同样消耗输出预算：
+        // 64 上限时「思考短 → content 有数字 → 判视觉✓；思考长 → 64 token 被 thinking 吃光 →
+        // content 为空 → 判视觉✗」，这正是「带思考的模型一次可以一次不可以」的机制
+        // （实测：官方 deepseek-v4-flash 能答对随机 3 位数字 202 ⇒ 真有视觉，✗ 是被思考截断）。
+        // 放宽到 2048 让 content 稳定产出最终答案，检测结果不再随思考长度抖动。
+        max_tokens: 2048,
+        // 🛡️ 2026-09-29 治本三：检测端点同步关推理（与生成侧 vision-agent 一致）。
+        // 推理模型（deepseek-v4*/kimi/hy4 等）默认开 thinking，不关则思考吃掉 max_tokens
+        // 预算 → content 空 → 误判不支持视觉（hy4-preview 即此症）。buildThinkingOffParams
+        // 按厂商返回正确关推理参数形态，未命中返回 {} 不发送，不会给不支持的网关注入未知参数。
+        ...buildThinkingOffParams(model, baseURL),
         ...(effectiveTemp !== undefined ? { temperature: effectiveTemp } : {}),
         ...(thinkingType ? { thinking: { type: thinkingType } } : {}),
       });
@@ -383,14 +414,65 @@ export class ConfigTestService {
       // 纯文本模型（如 deepseek-v4-pro）收到 image_url 时不报错，而是静默忽略图片、
       // 把推理过程放在 reasoning_content 里返回。真正的视觉分析结果在 content 中。
       const vmsg = data?.choices?.[0]?.message || {};
-      const content = (vmsg.content || '').trim();
+      let content = (vmsg.content || '').trim();
+
+      // 🛡️ 2026-09-29 模型无关自愈（治本四）：用户可能配置任意未知推理模型（新出/别名/
+      // 中转包装），不在 buildThinkingOffParams 白名单 → 第一次未关推理 → 思考吃掉 max_tokens
+      // 预算 → content 空。不依赖模型名白名单，靠「思考烧光预算」信号触发强制关推理重试。
+      // 触发信号：content 为空 且（reasoning_content 非空 或 usage.reasoning_tokens>0
+      // 或 finish_reason==='length'）。重试对两种关推理形态都试（thinking:{type:'disabled'}
+      // 与 enable_thinking:false），覆盖任意厂商网关，任一成功即采用。
+      if (!content) {
+        const finishReason = data?.choices?.[0]?.finish_reason;
+        const reasoningTokens =
+          data?.usage?.completion_tokens_details?.reasoning_tokens ??
+          data?.usage?.reasoning_tokens ?? 0;
+        const reasoningContent = vmsg.reasoning_content;
+        const burnedByReasoning =
+          !!(reasoningContent && String(reasoningContent).trim()) ||
+          (typeof reasoningTokens === 'number' && reasoningTokens > 0) ||
+          finishReason === 'length';
+        if (burnedByReasoning) {
+          const offVariants = [
+            { thinking: { type: 'disabled' } },
+            { enable_thinking: false },
+          ];
+          for (const off of offVariants) {
+            try {
+              const rres = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+                body: JSON.stringify({
+                  model,
+                  messages: buildVisionBody().messages,
+                  max_tokens: 2048,
+                  ...(effectiveTemp !== undefined ? { temperature: effectiveTemp } : {}),
+                  ...off,
+                }),
+                signal: controller.signal,
+              });
+              if (rres.ok) {
+                const rdata = await rres.json();
+                const rcontent = (rdata?.choices?.[0]?.message?.content || '').trim();
+                if (rcontent) {
+                  content = rcontent;
+                  break;
+                }
+              }
+            } catch {
+              // 该关推理形态不适用（如 400），试下一种
+            }
+          }
+        }
+      }
 
       if (!content) {
         return {
           success: false,
           latency,
+          expectedDigits,
           error: '该模型不支持图像输入（视觉能力）',
-          detail: `模型 "${model}" 未返回视觉分析结果（content 为空），可能是纯文本模型。\n\n建议方案：\n1. 切换到分别模式，为视觉任务单独配置 qwen-vl-max 或 gpt-4o\n2. 统一模式下选择多模态模型（如 claude-3-opus、gpt-4-vision）\n3. 如果只需要代码生成，可以忽略此警告`,
+          detail: `模型 "${model}" 未返回视觉分析结果（content 为空），可能是纯文本模型，也可能是推理模型思考耗尽输出预算。\n\n建议方案：\n1. 切换到分别模式，为视觉任务单独配置 qwen-vl-max 或 gpt-4o\n2. 统一模式下选择多模态模型（如 claude-3-opus、gpt-4-vision）\n3. 如果只需要代码生成，可以忽略此警告`,
         };
       }
 
@@ -418,14 +500,34 @@ export class ConfigTestService {
         return {
           success: false,
           latency,
+          expectedDigits,
           error: '该模型不支持图像输入（视觉能力）',
           detail: `模型 "${model}" 是纯文本模型，无法处理截图分析（API 未报错但回复表明未看到图片）。\n\n建议方案：\n1. 切换到分别模式，为视觉任务单独配置 qwen-vl-max 或 gpt-4o\n2. 统一模式下选择多模态模型（如 claude-3-opus、gpt-4-vision）\n3. 如果只需要代码生成，可以忽略此警告`,
+        };
+      }
+
+      // 🛡️ 2026-09-29 治本判定（增强）：测试图是白底黑字的随机 3 位数字，真视觉模型回答必含该数字。
+      // 纯文本基模（deepseek-v4-flash 等）忽略图像走文本通道，返回任何无关内容
+      // （如瞎回 "Red"）都不含本次随机数字 → 判不支持视觉。只验证「返回了内容」不够，
+      // 必须验证「答对了图里的内容」——这是唯一能区分「真视觉」与「瞎回」的判据
+      // （实锤：deepseek-v4-flash 同请求两次检测，一次 content 空判 false、
+      // 一次瞎回 "Red" 被误判 true 并落盘 vision:true，导致生成时被当视觉模型用）。
+      // 随机数每次检测独立生成，命中概率 1/900，即使反复检测也不会因固定答案被缓存而误判。
+      const digits = String(content).replace(/[^0-9]/g, '');
+      if (!digits.includes(expectedDigits)) {
+        return {
+          success: false,
+          latency,
+          expectedDigits,
+          error: '该模型不支持图像输入（视觉能力）',
+          detail: `模型 "${model}" 未识别出测试图中的数字（期望包含 "${expectedDigits}"，实际返回 "${content.slice(0, 50)}"）——极可能是纯文本模型忽略图像后的瞎回，不是真正的视觉理解。\n\n建议方案：\n1. 切换到分别模式，为视觉任务单独配置 qwen-vl-max 或 gpt-4o\n2. 统一模式下选择多模态模型（如 claude-3-opus、gpt-4-vision）\n3. 若确要使用 DeepSeek，视觉模型名为 deepseek-v4-flash-vision-exp（experimental）`,
         };
       }
 
       return {
         success: true,
         latency,
+        expectedDigits,
         detail: `视觉响应: "${content.slice(0, 50)}"`,
       };
     } catch (err: any) {

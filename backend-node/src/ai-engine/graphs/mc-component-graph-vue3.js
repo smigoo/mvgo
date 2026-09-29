@@ -1653,6 +1653,7 @@ export function createPhase2Graph(config = {}) {
       const {
         checkSectionContent,
         healDuplicateTextIssues,
+        checkSectionExclusiveEvidence,
       } = await import('../utils/section-content-guard.js');
       const { validateVueSfc } = await import('../utils/sfc-syntax-validation.js');
       const { readdirSync: _rds, readFileSync: _rfs, existsSync: _ex, writeFileSync: _wfs3 } = await import('fs');
@@ -1695,22 +1696,33 @@ export function createPhase2Graph(config = {}) {
           });
         }
       }
+
+      const exclusiveCheck = checkSectionExclusiveEvidence({
+        files,
+        plan: state.subComponentPlan,
+        figmaRoot: figmaRootForGuard,
+        resourceDomMapping: state.resourceDomMapping || state._uiCache?.resourceDomMapping,
+      });
       if (
         contentCheck.memberOrderIssues.length > 0 ||
-        contentCheck.duplicateTextIssues.length > 0
+        contentCheck.duplicateTextIssues.length > 0 ||
+        exclusiveCheck.borrowedTextIssues.length > 0 ||
+        exclusiveCheck.borrowedAssetIssues.length > 0
       ) {
         const metaPath = _j(state.outputPath, 'component-meta.json');
         let prev = {};
         try { prev = _ex(metaPath) ? JSON.parse(_rfs(metaPath, 'utf-8')) : {}; } catch (_) {}
         const { writeFileSync: _wfs } = await import('fs');
-        _wfs(metaPath, JSON.stringify({ ...prev, contentMappingIssues: { memberOrderIssues: contentCheck.memberOrderIssues, duplicateTextIssues: contentCheck.duplicateTextIssues, checkedAt: Date.now() } }, null, 2), 'utf-8');
-        logger.warn('🩹 内容映射守卫发现问题（左右序/内容错装，已留痕）', {
+        _wfs(metaPath, JSON.stringify({ ...prev, contentMappingIssues: { memberOrderIssues: contentCheck.memberOrderIssues, duplicateTextIssues: contentCheck.duplicateTextIssues, borrowedTextIssues: exclusiveCheck.borrowedTextIssues, borrowedAssetIssues: exclusiveCheck.borrowedAssetIssues, checkedAt: Date.now() } }, null, 2), 'utf-8');
+        logger.warn('🩹 内容映射守卫发现问题（左右序/内容错装/借用邻居证据，已留痕）', {
           memberOrderIssues: contentCheck.memberOrderIssues.length,
           duplicateTextIssues: contentCheck.duplicateTextIssues.length,
+          borrowedTextIssues: exclusiveCheck.borrowedTextIssues.length,
+          borrowedAssetIssues: exclusiveCheck.borrowedAssetIssues.length,
         });
         state.onProgress?.({
           stage: '内容映射校验',
-          message: `⚠️ 内容映射守卫：${contentCheck.memberOrderIssues.length} 处左右序异常、${contentCheck.duplicateTextIssues.length} 处文本重复/错装`,
+          message: `⚠️ 内容映射守卫：${contentCheck.memberOrderIssues.length} 处左右序异常、${contentCheck.duplicateTextIssues.length} 处文本重复/错装、${exclusiveCheck.borrowedTextIssues.length} 处借用文本、${exclusiveCheck.borrowedAssetIssues.length} 处借用资源`,
           status: 'warning',
         });
       }
@@ -2692,47 +2704,11 @@ export function createPhase2Graph(config = {}) {
         );
       }
 
-      // 🛡️ L0-B 自动修复: FLEX-002（冗余 flex column）
-      let flex002FixCount = 0;
-      const { autoFixRedundantFlex } =
-        await import('../validators/code-structure-validator.js');
-      for (const file of flexTargets) {
-        if (!/\.(vue|less)$/.test(file.path)) continue;
-        const styleMatches =
-          file.content.match(/<style[^>]*>([\s\S]*?)<\/style>/gi) || [];
-        for (const styleTag of styleMatches) {
-          const bodyMatch = styleTag.match(/>([\s\S]*?)<\/style>/i);
-          const styleBody = bodyMatch ? bodyMatch[1] : '';
-          if (!styleBody) continue;
-          const { content: fixedContent, fixed } =
-            autoFixRedundantFlex(styleBody);
-          if (fixed > 0) {
-            flex002FixCount += fixed;
-            const fsWrite = await import('fs');
-            const pathModWrite = await import('path');
-            const fullPath = pathModWrite.join(state.outputPath, file.path);
-            try {
-              const original = fsWrite.readFileSync(fullPath, 'utf-8');
-              const fixedFile = original.replace(
-                styleTag,
-                styleTag.replace(styleBody, fixedContent),
-              );
-              fsWrite.writeFileSync(fullPath, fixedFile, 'utf-8');
-              file.content = fixedFile;
-            } catch (e) {
-              logger.warn('FLEX-002 自动修复写盘失败（非阻断）', {
-                file: file.path,
-                error: e.message,
-              });
-            }
-          }
-        }
-      }
-      if (flex002FixCount > 0) {
-        logger.warn(
-          `✅ FLEX-002 自动修复: ${flex002FixCount} 处冗余 flex column 已移除`,
-        );
-      }
+      // 🗑️ FLEX-002 自动修复（冗余 flex column）已于 2026-09-29 删除：
+      //   本处是 vue3 链路里**第二个**修复归口，且**直接 fs.writeFileSync 写盘** —— 正是
+      //   2026-09-01「R0-7」注释自己反对的「双写盘分叉点」；它还绕过落盘前自愈链与写保护，
+      //   且与 2.11 布局事实注入（依 Figma 几何注入 display:flex）方向相反 ⇒ 属性忽隐忽现。
+      //   FLEX-002 现为**纯 WARN 报告项**（无任何修复器），判定仍由 checkFlexUsage 负责。
     } catch (flexErr) {
       logger.warn('P0-4 flex 检查异常（非阻断）', { error: flexErr.message });
     }
@@ -3452,18 +3428,10 @@ export function createPhase2Graph(config = {}) {
     try {
       const textCfg = state.textAIConfig || state.aiConfig || {};
       const refiner = new LayoutRefiner({
-        apiKey:
-          textCfg.apiKey ||
-          process.env.TEXT_API_KEY ||
-          process.env.ANTHROPIC_API_KEY,
-        model:
-          textCfg.model ||
-          process.env.TEXT_MODEL ||
-          process.env.ANTHROPIC_MODEL,
-        baseURL:
-          textCfg.baseURL ||
-          process.env.TEXT_BASE_URL ||
-          process.env.ANTHROPIC_BASE_URL,
+        // 🔒 2026-09-29 env 兜底已拔除（每用户模型独有）
+        apiKey: textCfg.apiKey,
+        model: textCfg.model,
+        baseURL: textCfg.baseURL,
         onTokenUsage: state.onTokenUsage,
       });
 

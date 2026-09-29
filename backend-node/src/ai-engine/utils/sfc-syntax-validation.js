@@ -63,6 +63,33 @@ function stripDeferredLocalStyleImports(source = '') {
 }
 
 /**
+ * 归一化 SFC 内 `resources/` 相对路径（与前端 `loadVue3Runtime#fixResourcePaths`、
+ * `vite.config#workspace-css-guard` **同口径**，避免三处各写一份正则漂移）。
+ *
+ * 背景：管线生成的 `package/index.vue`（位于 `package/` 子目录）引用 `./resources/`
+ * （错误，应为 `../resources/`），`package/components/X.vue` 应为 `../../resources/`。
+ * 前端在预览/构建期已各自修正，但写盘目录门禁此前**不修正** → 绝对路径校验时
+ * `@import './resources/styles/index.less'` 解析到不存在的 `package/resources/...`，
+ * 报 `SyntaxError: undefined`（或连带 `variable @fontSize is undefined`）而误杀。
+ *
+ * 按 `relPath` 相对组件根的层级计算正确前缀（0 层=`./resources/`，1 层=`../resources/`，…），
+ * 仅改写 `resources/` 前缀引用，其余路径原样保留。
+ *
+ * @param {string} source SFC 全文
+ * @param {string} relPath 相对组件根的路径（如 `package/index.vue`）
+ * @returns {string}
+ */
+export function normalizeResourceRelativePaths(source = '', relPath = '') {
+  if (!source || !relPath || !String(relPath).endsWith('.vue')) return source
+  const depth = Math.max(0, String(relPath).split('/').length - 1)
+  const expectedPrefix = depth === 0 ? './resources/' : `${'../'.repeat(depth)}resources/`
+  return String(source).replace(
+    /['"](?:\.\.\/)+resources\/|['"]\.\/resources\//g,
+    (matched) => `${matched.charAt(0)}${expectedPrefix}`,
+  )
+}
+
+/**
  * 🛡️ 从文件集提取根作用域可见的 LESS 变量声明（@name: value;）→ globalVars 映射。
  *
  * 根因（mc-max-1788258252381-9168ed08 实锤，2026-09-01）：内存生成阶段
@@ -247,6 +274,91 @@ export function validateVueSfc(source = '', filePath = '', options = {}) {
     validateVueSfcDescriptor(descriptor, sourceText, filePath, errors, options)
   }
   return { valid: errors.length === 0, errors }
+}
+
+/**
+ * 🛡️ 2026-09-29 新增 · 检出 SFC 模板里的**重名插槽定义**（同一父元素下同名 slot 出现 2+ 次）。
+ *
+ * 为什么单独抽出：宿主面板契约（`base-panel` 的 4 个固定槽名，每槽只有一个 `<slot name>`）
+ * 决定「一个槽名只能出现一次」。装配器一旦对同一槽名产出多个 `<template #xxx>`，会触发
+ * 一条**全静默**的失效链（a349ce83 实锤）：
+ *   资源注入器自检看到重名 → `writeGuarded` 回滚 → 资源未挂 → slot 级回退糊满整槽；
+ *   而写盘门禁内的模板去重纠偏器又"恰好"把它删成合法 ⇒ 门禁通过、任务"成功"。
+ * 故需要一个**可单独调用**的判据，插到纠偏器**之前**把缺陷显式判死。
+ *
+ * 口径（单一事实源，禁止另立正则）：`errors` 直接取自 `@vue/compiler-sfc#compileTemplate`
+ * 本体，并逐字复用 `formatCompilerError`（输出 `文件:行:列 template: <message>`），
+ * 保证与 `validateVueSfc` 报出的同一缺陷**字符串完全一致**。
+ * `duplicates` 仅为可行动补充（槽名 + 定义次数 + 行号），非判定依据。
+ *
+ * @param {string} source .vue 全文
+ * @param {string} [filePath] 用于错误串前缀的文件路径
+ * @returns {{errors: string[], duplicates: Array<{name: string, count: number, lines: number[]}>}}
+ */
+export function findDuplicateSlotNames(source = '', filePath = '') {
+  const empty = { errors: [], duplicates: [] }
+  const sourceText = String(source || '')
+  let descriptor
+  try {
+    descriptor = parseSfc(sourceText, { filename: filePath || 'component.vue' }).descriptor
+  } catch {
+    // 解析层错误由 validateVueSfc 负责报，这里不重复、不误杀
+    return empty
+  }
+  if (!descriptor || !descriptor.template) return empty
+
+  // ① 判定：复用 Vue 编译器自身的重名插槽检出口径
+  const errors = []
+  try {
+    const id = `data-v-${Buffer.from(String(filePath || 'component.vue')).toString('hex').slice(0, 8)}`
+    const result = compileTemplate({
+      source: descriptor.template.content,
+      filename: filePath || 'component.vue',
+      id
+    })
+    for (const error of result.errors || []) {
+      if (/Duplicate slot names/i.test(error?.message || '')) {
+        errors.push(formatCompilerError(error, filePath, 'template'))
+      }
+    }
+  } catch {
+    // 同上：异常不在此处升级
+  }
+  if (errors.length === 0) return empty
+
+  // ② 细节：按「同一父元素的直接子元素」口径统计槽名（与 Vue 对「组件自身 slot」的语义一致）
+  const counter = new Map()
+  const walk = (element) => {
+    const children = Array.isArray(element?.children) ? element.children : []
+    const localNames = new Map()
+    for (const child of children) {
+      if (!child || child.type !== 1) continue
+      const props = Array.isArray(child.props) ? child.props : []
+      const slotProp = props.find((p) => p && p.type === 7 && p.name === 'slot')
+      if (slotProp) {
+        const name =
+          slotProp.arg && typeof slotProp.arg.content === 'string'
+            ? slotProp.arg.content
+            : 'default'
+        if (!localNames.has(name)) localNames.set(name, [])
+        localNames.get(name).push(child.loc?.start?.line || 0)
+      }
+      walk(child)
+    }
+    for (const [name, lines] of localNames) {
+      if (lines.length <= 1) continue
+      if (!counter.has(name)) counter.set(name, [])
+      counter.get(name).push(...lines)
+    }
+  }
+  walk(descriptor.template.ast)
+
+  return {
+    errors,
+    duplicates: [...counter.entries()]
+      .map(([name, lines]) => ({ name, count: lines.length, lines: lines.slice().sort((a, b) => a - b) }))
+      .sort((a, b) => b.count - a.count)
+  }
 }
 
 export function validateVueSfcDirectory(packageDir = '') {

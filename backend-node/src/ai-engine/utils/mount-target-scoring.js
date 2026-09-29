@@ -22,6 +22,14 @@
 
 import { extractSfcTemplateRegion } from './sfc-template-extractor.js';
 
+/**
+ * 确定性锚命中时的评分哨兵值。
+ * 正常评分上界 ≈ 3（语义名）+ 2（mountTarget）+ 1（figmaPath 上下文）+ 0.3×6（深度）
+ * ≈ 7.8 —— 取 1000 保证「几何锚定」永远压过任何语义组合，又保持有限值
+ * （`pickBestMountTarget` 用 `Number.isFinite` 过滤，不能返回 Infinity）。
+ */
+export const DETERMINISTIC_ANCHOR_SCORE = 1000;
+
 /** 剥离 class 上的实例 ID 前缀（`c-mc-max-<ts>-<hex>-` / `c-mv-max-...`） */
 export function stripInstanceClsPrefix(s) {
   return String(s || '')
@@ -111,7 +119,7 @@ export function inferComponentPrefix(files) {
  * 统一挂载点评分（唯一真相源）。
  *
  * @param {Object} mapping - resourceDomMapping 条目
- * @param {{cls?:string, depth?:number, isHostShell?:boolean}} cand - 挂载候选
+ * @param {{cls?:string, depth?:number, isHostShell?:boolean, dataSectionId?:string|null}} cand - 挂载候选
  * @param {{componentPrefix?:string}} [opts]
  * @returns {number} 分数（越大越优）；`-Infinity` = 不可挂载
  */
@@ -119,6 +127,28 @@ export function scoreMountTarget(mapping, cand, opts = {}) {
   if (!mapping || !cand) return Number.NEGATIVE_INFINITY;
   // 宿主外壳（base-panel / mc-panel）禁止挂业务背景：会被 100% 100% 拉伸成整面板大背景
   if (cand.isHostShell) return Number.NEGATIVE_INFINITY;
+
+  // ── 🛡️ 确定性锚短路（2026-09-29 治本 · mc-max-1790671706919-f0c05ecc 实锤）──
+  //  `mapping.ownerSectionId` = bg 节点的**直接父节点 figma id**（figma-connector 已固化，
+  //  与 `targetDomSelector = [data-section-id="<父节点id>"]` 同源）；确定性装配骨架把
+  //  section id 写在容器上 ⇒ 候选项 `data-section-id` 命中即「几何上就是 bg 的父容器」。
+  //
+  //  为什么必须短路而不能靠语义评分：`mountTarget` 在「直接父段无语义」时会被
+  //  figma-connector 的 E1 回退到**语义祖先**（如 `Group 2136636802` → `slot-当日总流量`），
+  //  于是按语义 token 评分时，**外层 slot 容器**（class 含 `slot`）反而比真正的父容器
+  //  （class 是 `group-2136636802-con`，与 'slot-当日总流量' token 覆盖率为 0）得分高
+  //  ⇒ 426×91 的卡片背景被挂到 420×807 的整块容器上、再被 `background-size:100% 100%`
+  //  拉满 ⇒ 视觉上等于「背景图消失」。
+  //
+  //  这是**不可辩驳的结构事实**（父节点 id 相等），优先级高于一切语义评分；
+  //  二者任一为空则不生效 ⇒ 老产物（无 ownerSectionId）行为完全不变。
+  if (
+    mapping.ownerSectionId &&
+    cand.dataSectionId &&
+    String(cand.dataSectionId) === String(mapping.ownerSectionId)
+  ) {
+    return DETERMINISTIC_ANCHOR_SCORE;
+  }
 
   const prefix = opts.componentPrefix || '';
   const clsTokens = mountClsTokens(stripMountClsPrefix(cand.cls || '', prefix));
@@ -172,4 +202,5 @@ export default {
   inferComponentPrefix,
   scoreMountTarget,
   isSemanticMountTarget,
+  DETERMINISTIC_ANCHOR_SCORE,
 };

@@ -26,8 +26,9 @@ const RATE_LIMIT_JITTER_RATIO = 0.2            // ±20% 随机抖动
 
 const CONFIG_FILE = join(dataDir, 'ai-config.json')
 const POLICY_CACHE_TTL = 5000
-const HEARTBEAT_INTERVAL_MS = 30000
-const HEARTBEAT_PROGRESS_INTERVAL_MS = 60000
+// 🔧 2026-09-29 慢归因：首推阈值从 60s 降到 15s，让用户尽早看到「模型处理中」而非怀疑平台卡死
+const HEARTBEAT_INTERVAL_MS = 15000
+const HEARTBEAT_PROGRESS_INTERVAL_MS = 15000
 
 let policyCache = {
   at: 0,
@@ -442,9 +443,31 @@ function createManagedSignal(parentSignal, timeoutMs, context) {
   }
 }
 
-function startHeartbeat({ context, timeoutMs, onProgress }) {
+function startHeartbeat({ context, timeoutMs, onProgress, model, providerId, provider }) {
   const startAt = Date.now()
   let lastProgressPush = 0
+  const modelLabel = model ? `${model}` : '模型'
+
+  // 🔧 统一进度推送（2026-09-29 慢归因）：带 kind 分类 + 模型名，前端据此渲染差异徽标
+  const pushProgress = (kind, message) => {
+    if (!onProgress) return
+    onProgress({
+      level: 'log',
+      logLevel: 'info',
+      stage: context,
+      context,
+      status: 'running',
+      kind, // model-start / model-slow / platform-queue / provider-degraded / retry
+      model,
+      providerId,
+      provider,
+      elapsedSec: ((Date.now() - startAt) / 1000).toFixed(1),
+      message,
+    })
+  }
+
+  // 🆕 执行开始即上报（带模型名 + 安抚语），消除「无日志」错觉，并明确是模型在处理而非平台
+  pushProgress('model-start', `⏳ ${modelLabel} 开始生成...（若长时间无输出，多为模型响应慢）`)
 
   const timer = setInterval(() => {
     const elapsedMs = Date.now() - startAt
@@ -460,15 +483,8 @@ function startHeartbeat({ context, timeoutMs, onProgress }) {
       // 🔧 只发日志，不生成独立 stage：网关的子调用上下文（如 vision-agent.analyzeImage）
       // 不是用户级阶段，交由 sendProgress 内的 level:'log' 路由到日志通道，
       // 避免前端 timeline 出现僵尸 running 步骤与步骤膨胀。
-      onProgress({
-        level: 'log',
-        logLevel: 'info',
-        stage: context,
-        context,
-        status: 'running',
-        elapsedSec,
-        message: `⏳ 模型处理中...（已等待 ${elapsedSec}s）`,
-      })
+      // 🔧 2026-09-29 慢归因：带模型名 + 安抚，让用户 15s 内分清模型慢 vs 平台慢
+      pushProgress('model-slow', `⏳ ${modelLabel} 响应较慢（已等待 ${elapsedSec}s）· 可切换更快模型或稍候`)
     }
   }, HEARTBEAT_INTERVAL_MS)
 
@@ -525,6 +541,10 @@ export async function executeModelRequest(options = {}) {
   // 上一次 attempt 实际使用的 providerId（供 resolveAttempt 排除刚失败的 provider）
   let previousProviderId = null
 
+  // 🛡️ 自愈（B 层·2026-09-29）：检测到「推理烧光输出预算」(finish_reason=length + reasoning_tokens>0)
+  // 后置位。后续 attempt 通过 resolveAttempt 复用同一 provider 但强制关推理重试，模型无关。
+  let forceReasoningOff = false
+
   // 🔀 解析本次 attempt 的 provider 上下文（含熔断/令牌桶对应的 providerEntry）。
   // 熔断记账、令牌桶控速、日志全部绑定「本次 attempt 实际使用的 provider」，
   // 不再绑定 Agent 构造时的初始 providerId（避免 provider 切换后记账错位到 __primary__）。
@@ -535,7 +555,7 @@ export async function executeModelRequest(options = {}) {
     if (typeof resolveAttempt === 'function') {
       // 🔧 修复：传入 context 给 resolveAttempt，避免闭包内的 defaults.context 继承式泄露
       // （子类 vue3-engineer 继承父类 llm 时，defaults.context 仍是 'microcode-engineer'）
-      const resolved = await resolveAttempt({ attempt, previousProviderId, context })
+      const resolved = await resolveAttempt({ attempt, previousProviderId, context, forceThinkingDisabled: forceReasoningOff })
       if (resolved) {
         pid = resolved.providerId ?? providerId
         mdl = resolved.model || model
@@ -549,11 +569,39 @@ export async function executeModelRequest(options = {}) {
   }
 
   try {
-    const grant = await requestScheduler.acquire(
-      policy.requestConcurrency,
-      { context, provider, model },
-      { signal, queueTimeoutMs: policy.requestQueueTimeoutMs },
-    )
+    // 🆕 平台排队可见性（2026-09-29 慢归因）：抢并发槽期间上报「平台排队中」，
+    // 与「模型推理慢」区分，避免平台并发占满时被误判为平台卡死。
+    const queueWaitStart = Date.now()
+    let queueHeartbeat = null
+    if (onProgress) {
+      queueHeartbeat = setInterval(() => {
+        const qs = ((Date.now() - queueWaitStart) / 1000).toFixed(1)
+        onProgress({
+          level: 'log',
+          logLevel: 'info',
+          stage: context,
+          context,
+          status: 'running',
+          kind: 'platform-queue',
+          model,
+          providerId,
+          provider,
+          elapsedSec: qs,
+          message: `⏳ 平台排队中（并发槽占用，已等 ${qs}s）· 模型尚未开始，请稍候`,
+        })
+      }, HEARTBEAT_PROGRESS_INTERVAL_MS)
+    }
+
+    let grant
+    try {
+      grant = await requestScheduler.acquire(
+        policy.requestConcurrency,
+        { context, provider, model },
+        { signal, queueTimeoutMs: policy.requestQueueTimeoutMs },
+      )
+    } finally {
+      if (queueHeartbeat) clearInterval(queueHeartbeat)
+    }
     queueWaitMs = grant.queueWaitMs
     release = grant.release
     activeRelease = grant.release
@@ -571,6 +619,23 @@ export async function executeModelRequest(options = {}) {
       const ctx = await resolveProviderContext(attempt)
       const providerEntry = ctx.entry
 
+      // 🆕 provider-degraded：provider 熔断打开（模型暂不可用）时上报，前端红徽标区分
+      // 「模型不可用」vs「模型慢」vs「平台排队」，且明确属模型自身问题。
+      if (providerEntry && providerEntry.breaker?.state === 'open' && onProgress) {
+        onProgress({
+          level: 'log',
+          logLevel: 'warn',
+          stage: context,
+          context,
+          status: 'warning',
+          kind: 'provider-degraded',
+          model: ctx.model,
+          providerId: ctx.providerId,
+          provider: ctx.provider,
+          message: `⛔ 模型 ${ctx.model || '未知'} 暂时不可用（已熔断），等待冷却并切换备用 · 模型自身问题`,
+        })
+      }
+
       // 主动控速：熔断检查 + 令牌桶（绑定当次实际 provider）。
       // 熔断(beforeCall)会等待 cooldown；切换 provider 后此处自然落到新 provider 的桶/熔断器。
       if (providerEntry) {
@@ -583,6 +648,9 @@ export async function executeModelRequest(options = {}) {
         context,
         timeoutMs: policy.requestTimeoutMs,
         onProgress,
+        model: ctx.model,
+        providerId: ctx.providerId,
+        provider: ctx.provider,
       })
       const managedSignal = createManagedSignal(signal, policy.requestTimeoutMs, context)
       const startedAt = Date.now()
@@ -641,6 +709,19 @@ export async function executeModelRequest(options = {}) {
             if (budgetExhausted && providerEntry) {
               providerEntry.breaker.recordFailure()
             }
+            // 🛡️ 自愈（B 层）：推理烧光预算 → 后续 attempt 复用同 provider 但强制关推理重试，
+            // 不再依赖模型名启发式（ai-defaults）。强制关推理若仍失败（provider 不支持该参数 → 400），
+            // catch 侧会 recordFailure 并切换备用 provider，与原兜底一致。
+            if (budgetExhausted) {
+              forceReasoningOff = true
+              logger.warn('🛡️ [自愈] 检测到推理烧光输出预算，后续 attempt 将复用同 provider 并强制关推理重试', {
+                context,
+                providerId: ctx.providerId,
+                model: ctx.model,
+                finishReason: finishReason || 'unknown',
+                reasoningTokens,
+              })
+            }
             // 判读三分支（2026-09-04 按实测遥测修正）：
             //  ① length + reasoningTokens>0：推理烧预算（deepseek 系 → thinkingType:disabled）
             //  ② length + reasoningTokens=0/null 但 outputTokens 大：minimax 系推理占 output
@@ -649,7 +730,7 @@ export async function executeModelRequest(options = {}) {
             //  ③ 其他：服务端故障/限流静默
             const hint = budgetExhausted
               ? (reasoningTokens ?? 0) > 0
-                ? '推理烧光输出预算：deepseek 系请配 thinkingType:disabled；已立即熔断该 provider'
+                ? '推理烧光输出预算：已立即熔断该 provider，并在后续 attempt 复用同 provider 强制关推理重试（模型无关，无需手动配置 thinkingType）'
                 : '输出预算耗尽但 reasoning 未上报：minimax 系推理占 output 预算（thinking 参数不兼容，靠熔断换 provider），或内容落 reasoning_content 字段'
               : '空内容根因未知：若为 deepseek 系请检查 thinkingType 配置'
             logger.warn('🔀 网关层检测到空内容，按失败处理（熔断+换provider重试）', {
@@ -824,13 +905,19 @@ export async function executeModelRequest(options = {}) {
         }
 
         // 🔧 子调用级瞬时通知（重试预警）：走日志通道，不生成独立 timeline 步骤
+        // 🔧 2026-09-29 慢归因：带 kind + 模型名，前端可区分「模型/provider 故障」与「平台」并安抚
         onProgress?.({
           level: 'log',
           logLevel: 'warn',
           stage: context,
           context,
           status: 'warning',
-          message: `⚠️ ${context} 请求失败，${waitSec}s 后进行第 ${attempt + 2} 次重试`,
+          kind: 'retry',
+          model: ctx.model,
+          providerId: ctx.providerId,
+          provider: ctx.provider,
+          elapsedSec: waitSec,
+          message: `⚠️ 模型 ${ctx.model || '未知'} 请求失败，${waitSec}s 后进行第 ${attempt + 2} 次重试（模型自身问题）`,
         })
 
         // Phase 7 #213：通知上层（更新 Task 状态为 retry_scheduled）
@@ -961,18 +1048,22 @@ export function attachUnifiedInvoke(llm, defaults = {}) {
   //   同一请求超时后，第二次尝试会切到备用大模型，而不是再等同一个 provider 180 秒。
   // 🔧 修复日志前缀继承式泄露：resolveAttempt 接受 context 参数，优先使用调用方传入的 context，
   //   避免子类（如 vue3-engineer）继承父类 llm 实例时日志误显示父类名 [microcode-engineer]。
-  const resolveAttempt = async ({ previousProviderId, context: currentContext } = {}) => {
+  const resolveAttempt = async ({ previousProviderId, context: currentContext, forceThinkingDisabled = false } = {}) => {
     if (typeof defaults.refreshProvider !== 'function' || typeof defaults.createLLM !== 'function') {
       return null // 未启用动态切换（向后兼容）
     }
-    const fresh = defaults.refreshProvider(
-      previousProviderId ? { excludeIds: [previousProviderId] } : {},
-    )
+    const fresh = defaults.refreshProvider({
+      // 🛡️ 自愈（B 层）：透传 forceThinkingDisabled，让 base-agent 复用同一 provider 但强制关推理
+      excludeIds: previousProviderId ? [previousProviderId] : [],
+      previousProviderId: previousProviderId || null,
+      forceThinkingDisabled,
+    })
     if (!fresh || !fresh.apiKey) return null
 
-    // provider 未变化时复用已绑定的 rawInvoke，避免无谓重建
+    // 🛡️ 自愈（B 层）：forceThinkingDisabled 时必须重建 LLM，否则同 provider 复用旧 rawInvoke
+    // 仍带 reasoning 参数 → 关推理不生效。其它情况保留 sameProvider 复用优化。
     const sameProvider = boundSnapshot && boundSnapshot.providerId === fresh.providerId
-    if (!sameProvider) {
+    if (forceThinkingDisabled || !sameProvider) {
       const rebuilt = defaults.createLLM(fresh)
       if (!rebuilt || typeof rebuilt.invoke !== 'function') return null
       boundSnapshot = { providerId: fresh.providerId, baseURL: fresh.baseURL, model: fresh.model }

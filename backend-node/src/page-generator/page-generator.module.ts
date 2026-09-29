@@ -6,9 +6,10 @@ import { AdminPageGeneratorService } from './admin-page-generator.service';
 import { TasksModule } from '../tasks/tasks.module';
 import { ProgressModule } from '../progress/progress.module';
 import { ComponentModule } from '../component/component.module';
+import { AiConfigModule } from '../config/config.module';
 
 @Module({
-  imports: [TasksModule, ProgressModule, ComponentModule],
+  imports: [TasksModule, ProgressModule, ComponentModule, AiConfigModule],
   controllers: [PageGeneratorController, AdminPageGeneratorController],
   providers: [PageGeneratorService, AdminPageGeneratorService],
 })

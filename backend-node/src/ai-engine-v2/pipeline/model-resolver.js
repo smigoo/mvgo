@@ -8,9 +8,9 @@
  *   1. 请求级   config.modelOverrides[nodeId]     —— 配置页逐节点下拉选择
  *   2. 档位级   tierProfile.defaultModels[nodeId] —— 如 lite 档统一降级
  *   3. 规范级   spec.defaultModels[nodeId]        —— 如微码 code-engineer 需强模型
- *   4. 通道级   env TEXT_MODEL / VISION_MODEL     —— 沿用旧管线全局配置
- *   ⚠️ 无第五层系统兜底：用户必须显式配置至少一条有效路径，
- *      resolveNodeModel 在全部 4 级皆空时会抛出清晰错误。
+ *   4. 通道级   aiConfig.textAIConfig/visionAIConfig —— 用户级配置（getMergedAiConfig）
+ *   ⚠️ 无第五层系统兜底（🔒 2026-09-29 env 兜底已拔除，每用户模型独有）：
+ *      resolveNodeModel 在全部层级皆空时抛出清晰错误。
  *
  * 凭证（apiKey/baseURL）只按通道解析，不做节点级覆盖 —— 密钥属于部署配置，
  * 不应由前端请求携带（P1 迁 Java 后由服务端托管下发）。
@@ -26,8 +26,8 @@ export function getChannel(nodeId) {
 }
 
 /**
- * 解析通道凭证，完全对齐旧管线的 env 回退链
- * （见 mc-component-graph-phase2.js:60-62 / :437-439）
+ * 解析通道凭证 —— 🔒 2026-09-29 env 回退链已拔除（每用户模型独有），
+ * 只认用户级配置（aiConfig.textAIConfig / visionAIConfig，来自 getMergedAiConfig）。
  */
 export function resolveChannelCredentials(channel, aiConfig = {}) {
   const cfg =
@@ -35,17 +35,10 @@ export function resolveChannelCredentials(channel, aiConfig = {}) {
     aiConfig.aiConfig ||
     {}
 
-  if (channel === 'vision') {
-    return {
-      apiKey: cfg.apiKey || process.env.VISION_API_KEY || process.env.ANTHROPIC_API_KEY,
-      baseURL: cfg.baseURL || process.env.VISION_BASE_URL || process.env.ANTHROPIC_BASE_URL,
-      envModel: cfg.model || process.env.VISION_MODEL || process.env.ANTHROPIC_MODEL
-    }
-  }
   return {
-    apiKey: cfg.apiKey || process.env.TEXT_API_KEY || process.env.ANTHROPIC_API_KEY,
-    baseURL: cfg.baseURL || process.env.TEXT_BASE_URL || process.env.ANTHROPIC_BASE_URL,
-    envModel: cfg.model || process.env.TEXT_MODEL || process.env.ANTHROPIC_MODEL
+    apiKey: cfg.apiKey || '',
+    baseURL: cfg.baseURL || '',
+    envModel: cfg.model || ''
   }
 }
 
@@ -75,8 +68,7 @@ export function resolveNodeModel(nodeId, { spec, tierProfile, modelOverrides, ai
   } else {
     throw new Error(
       `[model-resolver] 节点 "${nodeId}"（通道: ${channel}）未配置模型。` +
-      `请在 配置面板 > AI 配置 中设置 ${channel === 'vision' ? '视觉' : '文本'}模型。` +
-      `支持通过环境变量 ${channel === 'vision' ? 'VISION_MODEL' : 'TEXT_MODEL'} 或 ANTHROPIC_MODEL 配置。`
+      `请到「设置 - 模型配置」中设置${channel === 'vision' ? '视觉' : '文本'}模型并保存。`
     )
   }
 }
@@ -123,10 +115,10 @@ export function auditCredentials(modelTable) {
       missing.push({
         channel: entry.channel,
         field: 'apiKey',
-        hint:
-          entry.channel === 'vision'
-            ? '设置 VISION_API_KEY 或 ANTHROPIC_API_KEY'
-            : '设置 TEXT_API_KEY 或 ANTHROPIC_API_KEY'
+      hint:
+        entry.channel === 'vision'
+          ? '到「设置 - 模型配置」中设置视觉模型并保存'
+          : '到「设置 - 模型配置」中设置文本模型并保存'
       })
     }
   }

@@ -1,9 +1,11 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, Res } from '@nestjs/common';
+import {Controller, Post, Body, HttpCode, HttpStatus, Res, UseGuards } from '@nestjs/common';
+import { SessionGuard } from '../auth/session.guard';
 import type { Response } from 'express';
 const { ZipArchive } = require('archiver');
 import { AdminPageGeneratorService } from './admin-page-generator.service';
 import { AdminPageConfigDto } from './dto/admin-page.dto';
 
+@UseGuards(SessionGuard)
 @Controller('admin')
 export class AdminPageGeneratorController {
   constructor(private readonly adminPageGeneratorService: AdminPageGeneratorService) {}

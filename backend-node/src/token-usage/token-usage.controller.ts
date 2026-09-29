@@ -1,11 +1,10 @@
-import {
-  Controller,
+import {Controller,
   Get,
   Param,
   Query,
   HttpException,
-  HttpStatus,
-} from '@nestjs/common';
+  HttpStatus, UseGuards } from '@nestjs/common';
+import { SessionGuard } from '../auth/session.guard';
 import { TokenTrackerService } from './token-tracker.service';
 import {
   TaskUsageResponse,
@@ -15,6 +14,7 @@ import {
   StatsQuery,
 } from './dto/token-usage.dto';
 
+@UseGuards(SessionGuard)
 @Controller('token-usage')
 export class TokenUsageController {
   constructor(private readonly tokenTrackerService: TokenTrackerService) {}

@@ -30,6 +30,7 @@ import {
   extractLessGlobalVars,
 } from '../../utils/sfc-syntax-validation.js';
 import {
+  bgBindingOwnership,
   collectMountCandidates,
   ensureReferencedIconSize,
   ensureResourceImportInVue,
@@ -69,6 +70,49 @@ function stripBgKeysFromTag(tag, varName) {
   const hasOther = /[a-zA-Z-]+\s*:/.test(body);
   if (!hasOther) return tag.replace(/\s*:style="[^"]*"/, '');
   return tag.replace(/:style="\{[\s\S]*\}"/, `:style="${stripped}"`);
+}
+
+/**
+ * 🛡️ 2026-09-29：按 `data-section-id="<anchor>"` 取回**开标签全文**（含属性）。
+ *
+ * 原实现用正则
+ * `<([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>])*?\bdata-section-id="…"(?:"[^"]*"|'[^']*'|[^>])*)>`
+ * —— 该模式含**嵌套量词** `(?:A|B|C)*?`，属典型 **ReDoS**：全语料离线遍历时直接被 OOM/Kill
+ * （2026-09-29 审计进程 SIGTERM 实锤）。改为**线性扫描**（先定位 needle，再向两侧找 `<` / `>`，
+ * 向后扫描时跳过引号内的 `>`），复杂度 O(n) 且行为与正则一致（取文件中**第一个**该锚点开标签）。
+ *
+ * 导出以便审计脚本与实现**严格同源**（不各自复刻判据）。
+ *
+ * @param {string} content .vue 文件内容
+ * @param {string} anchor section id（如 `2:3446`）
+ * @returns {string|null} 开标签全文（如 `<div class="x" data-section-id="2:3446" :style="…">`）
+ */
+export function findTagBySectionAnchor(content, anchor) {
+  if (typeof content !== 'string' || !content || anchor == null) return null;
+  const a = String(anchor);
+  let idx = content.indexOf(`data-section-id="${a}"`);
+  let nlen = `data-section-id="${a}"`.length;
+  if (idx < 0) {
+    idx = content.indexOf(`data-section-id='${a}'`);
+    nlen = `data-section-id='${a}'`.length;
+  }
+  if (idx < 0) return null;
+  const lt = content.lastIndexOf('<', idx);
+  if (lt < 0) return null;
+  // 该 `<` 必须是开标签起始（后面紧跟标签名），且 `<` 与锚点之间不能再有 `>`（否则跨标签）
+  if (!/^[a-zA-Z][\w-]*/.test(content.slice(lt + 1, lt + 40))) return null;
+  if (content.lastIndexOf('>', idx) > lt) return null;
+  let inStr = null;
+  for (let i = idx + nlen; i < content.length; i++) {
+    const ch = content[i];
+    if (inStr) {
+      if (ch === inStr && content[i - 1] !== '\\') inStr = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') { inStr = ch; continue; }
+    if (ch === '>') return content.slice(lt, i + 1);
+  }
+  return null;
 }
 
 export function buildResourceMountPlan(effectiveSections, resourceDomMapping, opts = {}) {
@@ -132,7 +176,27 @@ export function buildResourceMountPlan(effectiveSections, resourceDomMapping, op
     for (const c of sec?.children || []) collectIds(c);
   };
   for (const s of sections) collectIds(s);
+  // 🛡️ 2026-09-29 治本（本轮实锤：c-traffic-monitor-f0c05ecc「当日总流量」背景图整块丢失）
+  //   **直接父节点优先**。`ownerSectionId` = figma-connector 固化的「bg 节点的直接父节点 id」，
+  //   与 `targetDomSelector = [data-section-id="<父节点id>"]` **同源**，是 figma 树里可直接读出的
+  //   父子关系 ⇒ 它就是唯一答案，不需要任何推断、更不需要上溯。
+  //
+  //   旧实现只认 `sections`（section-tree 输出）里的 id ⇒ 直接父节点若是普通 GROUP/FRAME
+  //   （不是 section，如 `Group 2136636802` 426×91）就会被**上溯到 section 级**
+  //   （`slot-当日总流量` 420×807）⇒ 下方 L403 事实链把 426×91 的卡片背景精确挂到
+  //   420×807 的整槽容器上、再被 `background-size:100% 100%` 拉满 ⇒ 视觉上「背景图消失」。
+  //   实测：`88:34` 上溯链 `88:34 → 2:3660 → 88:33 → 2:9778`，旧实现取到根 `2:9778`
+  //   （产物里不存在该锚点 ⇒ 事实链失配 ⇒ 回退 `findTagByClassKeyword('slot-当日总流量')`
+  //   命中 `.c-traffic-monitor-slot-con` = 整槽容器）。
+  //
+  //   ⚠️ 刻意**不做** `allSectionIds` 过滤：产物里是否有 `data-section-id="<父节点id>"` 由
+  //   下游 L403 事实链**自行验证**（找不到即 `continue` 走后续分支）⇒ 锚点不存在时行为
+  //   不劣于旧实现，只是「更精确的锚点先试一次」。
   const resolveSectionAnchor = (entry) => {
+    const owner =
+      entry.ownerSectionId != null ? String(entry.ownerSectionId) : '';
+    if (owner) return owner;
+    // 兜底（老产物无 ownerSectionId）：上溯到最近的 section 祖先——合法但更粗的锚点，非猜测。
     const nid = entry.figmaNodeId != null ? String(entry.figmaNodeId) : '';
     if (!nid) return null;
     if (allSectionIds.has(nid)) return nid;
@@ -350,7 +414,17 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
       if (
         new RegExp(`\\b${varName}\\b`).test(content) &&
         !isContainerStateBg &&
-        !sharedNeedsMigration
+        !sharedNeedsMigration &&
+        // 🛡️ 2026-09-29（用户实锤「bg 挂到非父级 + 几乎同一背景」）：
+        //   bg 且有 sectionAnchorId（事实链锚点）时不早退 —— 让下方「数据事实链优先」分支
+        //   按 `data-section-id` 精确挂载/迁徙。旧逻辑：var 已被 LLM 在别处（错误位置）引用
+        //   ⇒ 幂等早退 ⇒ 逐卡的正确锚点挂载被全部跳过 ⇒ 一张背景被复用/错挂。
+        // 🛡️ 2026-09-29 修正（同一判据的语义矛盾）：原写作 `!mount.sectionAnchorId`，而
+        //   `!null === true` ⇒ 判据退化为「**bg 一律不早退**」⇒ 已引用的 bg 被重复注入
+        //   （同一 `:style` 里 backgroundImage 键写两次，违反单一赋值）+ 破坏幂等
+        //   （resource-mount-plan.spec 两条幂等用例因此变红）。显式布尔化，恢复原意：
+        //   **仅当确实拿到了锚点**（非 null）才去走下方数据事实链迁徙。
+        !(g.kind === 'bg' && mount.sectionAnchorId != null)
       ) {
         if (g.kind === 'icon' || g.kind === 'img') {
           const size = iconSizeFromFigmaBox(mount.figmaBox);
@@ -392,20 +466,39 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
       //   必然失配（`bg1/bg3/bg4` 因此丢或错挂）。
       if (g.kind === 'bg' && mount.sectionAnchorId) {
         const anchor = String(mount.sectionAnchorId);
-        const tagRe = new RegExp(
-          `<([a-zA-Z][\\w-]*)((?:"[^"]*"|'[^']*'|[^>])*?\\bdata-section-id="${anchor}"(?:"[^"]*"|'[^']*'|[^>])*)>`,
-        );
         for (const [fp, fc] of Object.entries(allFiles)) {
           if (typeof fc !== 'string' || !fc.includes(`data-section-id="${anchor}"`)) continue;
-          const tm = fc.match(tagRe);
-          if (!tm) continue;
-          const tag = tm[0];
-          if (/\bbackgroundImage\b/.test(tag)) {
+          const tag = findTagBySectionAnchor(fc, anchor);
+          if (!tag) continue;
+          // 🛡️ ② 归属判据（2026-09-29 治本 · mc-max-1790688321049-447d01cc 实锤）：
+          //   原判据 `/\bbackgroundImage\b/.test(tag)` 与 varName **无关** ⇒ 任何外来背景
+          //   都会把本资源判成「已挂过 ⇒ 幂等」而**永久挡住**正确资源的挂载
+          //   （实测：`2:3475` 标题背景的宿主 `2:3474` 缺失后退化到卡片根，把卡片自身
+          //   背景 `88:36`(bg4) 挤掉）。现按「这张背景图是不是本资源的」判：
+          const own = bgBindingOwnership(tag, varName);
+          if (own === 'self') {
             doneKeys.add(key);
             result = null;
-            break; // 该元素已挂过背景 → 幂等
+            break; // 已绑定本资源 → 幂等
           }
-          const injected = injectBgStyleBinding(fc, tag, varName, mapping);
+          if (own !== 'none') {
+            // fail-closed：锚点元素已被**外来**背景占用 → 不覆写、不落其他分支
+            diagnostics.push({
+              reason: 'bg-anchor-occupied-by-other-resource',
+              file: fp,
+              var: varName,
+              anchor,
+              occupiedBy: own,
+            });
+            options.logger?.warn?.(
+              `🛡️ [资源挂载] ${varName} 的锚点元素 data-section-id=${anchor} 已被外来背景占用（${own}），放弃挂载（fail-closed）`,
+              { file: fp },
+            );
+            doneKeys.add(key);
+            result = null;
+            break;
+          }
+          const injected = injectBgStyleBinding(fc, tag, varName, mapping, diagnostics);
           if (!injected) continue;
           const withImport = ensureResourceImportInVue(injected, varName, mapping, fp);
           if (withImport && writeGuarded(fp, withImport, fc)) {
@@ -470,7 +563,7 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
             // 正确判据：根标签本身是否含该 var。根没有 → 必须注入根；根已有 → 才是 already-at-root。
             const rootHasVar = new RegExp(`\\b${varName}\\b`).test(rootTag);
             if (!rootHasVar) {
-              let upd = injectBgStyleBinding(tgt, rootTag, varName, mapping);
+              let upd = injectBgStyleBinding(tgt, rootTag, varName, mapping, diagnostics);
               if (upd)
                 upd = ensureResourceImportInVue(upd, varName, mapping, tgtFile);
               if (upd && writeGuarded(tgtFile, upd, tgt)) {
@@ -547,12 +640,12 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
           //   回退：静态挂到 owner 文件根/关键词命中节点（独立组件本身就是该状态）。
           let tag = mount.mountTarget ? findTagByClassKeyword(content, String(mount.mountTarget).toLowerCase()) : null;
           if (!tag) {
-            const candidates = collectMountCandidates({ [targetFile]: content });
+            const candidates = collectMountCandidates({ [targetFile]: content }, { varName });
             const best = pickBestMountTarget(mapping, candidates, { skipBound: true });
             if (best) tag = best.tag;
           }
           if (tag) {
-            let updated = injectBgStyleBinding(content, tag, varName, mapping);
+            let updated = injectBgStyleBinding(content, tag, varName, mapping, diagnostics);
             if (updated) {
               updated = ensureResourceImportInVue(updated, varName, mapping, targetFile);
               if (updated && writeGuarded(targetFile, updated, content)) {
@@ -604,7 +697,7 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
         if (sharedCount > 1) {
           const itemTag = findVForItemTag(content);
           if (itemTag) {
-            let itemUpdated = injectBgStyleBinding(content, itemTag, varName, mapping);
+            let itemUpdated = injectBgStyleBinding(content, itemTag, varName, mapping, diagnostics);
             if (itemUpdated) {
               // 🛡️ #2（2026-09-22）：共享背景正确落点是 v-for item，必须从面板根移除误挂的 bg
               //   （LLM 常把 bg 挂在容器根 → 100% 拉伸铺满），否则逐卡背景仍被根背景覆盖。
@@ -653,7 +746,7 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
             });
           } else {
             // 兜底：从当前文件的候选池中找最优挂载点
-            const candidates = collectMountCandidates({ [targetFile]: content });
+            const candidates = collectMountCandidates({ [targetFile]: content }, { varName });
             const best = pickBestMountTarget(mapping, candidates, {
               skipBound: true, // 优先选没有 bg 绑定的标签
             });
@@ -668,7 +761,7 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
           }
         }
         if (tag) {
-          let updated = injectBgStyleBinding(content, tag, varName, mapping);
+          let updated = injectBgStyleBinding(content, tag, varName, mapping, diagnostics);
           if (updated) {
             updated = ensureResourceImportInVue(updated, varName, mapping, targetFile);
             if (updated && writeGuarded(targetFile, updated, content)) {
@@ -700,7 +793,7 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
             });
           } else {
             // 兜底：从当前文件的候选池中找最优挂载点
-            const candidates = collectMountCandidates({ [targetFile]: content });
+            const candidates = collectMountCandidates({ [targetFile]: content }, { varName });
             const best = pickBestMountTarget(mapping, candidates, {
               skipBound: false,
             });

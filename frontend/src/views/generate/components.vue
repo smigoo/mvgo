@@ -786,7 +786,7 @@
           </div>
         </div>
 
-        <!-- 技术栈 + 规格 + CTA -->
+        <!-- 技术栈 + 规格 + 演示主题 + CTA 全部一行 -->
         <div class="action-row">
           <div class="tech-chips">
             <CodeTypeToggle v-model="compType" :disabled="busy" />
@@ -794,9 +794,19 @@
           <div class="seg-wrap">
             <TierToggle v-model="genTier" :disabled="busy" :disabled-values="tierDisabledValues" />
           </div>
+          <div v-if="compType === 'microcode'" class="seg-wrap theme-toggle-wrap">
+            <PanelThemeToggle
+              v-model="panelType"
+              :options="[
+                { value: 'default-panel', label: '浅色' },
+                { value: 'aio-panel', label: '深色' },
+              ]"
+              :disabled="busy"
+            />
+          </div>
           <RippleButton
             class="cta"
-            :class="{ busy }"
+            :class="[`cta-theme-${panelType === 'aio-panel' ? 'dark' : 'light'}`, { busy }]"
             :disabled="ctaDisabled"
             :ripple-color="busy ? '#ef4444' : 'rgba(59,130,246,0.5)'"
             :duration="650"
@@ -805,6 +815,15 @@
             <span v-if="busy || submitting" class="spinner"></span>
             {{ busy ? '终止生成' : submitting ? '校验配置...' : generateButtonText }}
           </RippleButton>
+        </div>
+        <!-- 提示文字放最下面 -->
+        <div v-if="compType === 'microcode'" class="theme-hint-row">
+          <span
+            class="theme-hint"
+            :class="panelType === 'aio-panel' ? 'dark' : 'light'"
+          >
+            当前为 <strong>演示面板</strong>（{{ panelType === 'aio-panel' ? '深色' : '浅色' }}），实际项目可在面板配置中切换
+          </span>
         </div>
 
         <div v-if="!busy" class="quota-bar" v-show="quotaInfo">
@@ -921,6 +940,7 @@ import { generateLite, batchGenerate, cancelTask } from '@/api/lite'
 import { fetchFigmaPreview } from '@/api/generator'
 import TierToggle from '@/components/common/TierToggle.vue'
 import CodeTypeToggle from '@/components/common/CodeTypeToggle.vue'
+import PanelThemeToggle from '@/components/common/PanelThemeToggle.vue'
 import RippleButton from '@/components/inspira-ui/RippleButton.vue'
 import http from '@/core/http'
 
@@ -1017,6 +1037,8 @@ let manualCompCounter = 0 // 手动框选组件计数器
 const compType = ref('vue3')
 const genTier = ref('lite')
 const panelType = ref('default-panel')
+// 面板类型直接由用户切换决定（default-panel / aio-panel），
+// 与「浅色/深色」内部配色解耦——内部配色始终按设计走，不再有 panelTheme 这一层中间变量。
 const compName = ref('')
 const requirementDoc = ref('')
 const docAnalysis = ref(null)
@@ -2467,7 +2489,9 @@ async function goSingle(aiConfig) {
     groupId,
     config: aiConfig
   }
-  if (compType.value === 'microcode') p.panelType = panelType.value
+  if (compType.value === 'microcode') {
+    p.panelType = panelType.value
+  }
   if (requirementDoc.value.trim().length >= 20) {
     p.requirementDoc = requirementDoc.value
     if (docAnalysis.value) p.docAnalysis = docAnalysis.value
@@ -2512,7 +2536,9 @@ async function goBatch(aiConfig) {
       generationTier: genTier.value,
       config: aiConfig
     }
-    if (compType.value === 'microcode') item.panelType = panelType.value
+    if (compType.value === 'microcode') {
+      item.panelType = panelType.value
+    }
     if (requirementDoc.value.trim().length >= 20) {
       item.requirementDoc = requirementDoc.value
       if (docAnalysis.value) item.docAnalysis = docAnalysis.value
@@ -2726,7 +2752,7 @@ function checkpointCacheLabel(status?: string) {
 
 // ═══ Figma URL 历史记录 ═══
 const URL_HISTORY_KEY = 'mvgo_figma_url_history'
-const MAX_URL_HISTORY = 5
+const MAX_URL_HISTORY = 10
 
 function loadUrlHistory() {
   try {
@@ -4269,29 +4295,99 @@ html[data-theme='dark'] .spinner--lg {
 .action-row {
   display: flex;
   align-items: center;
-  gap: var(--s3);
-  flex-wrap: wrap;
-  margin-bottom: var(--s3);
+  gap: 10px;
+  flex-wrap: nowrap;
+  margin-bottom: 4px;
 }
 .tech-chips {
   display: flex;
-  gap: var(--s2);
-  min-width: 33%;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.tech-chips :deep(.codetype-toggle) {
+  width: 160px;
+  height: 48px;
+}
+.tech-chips :deep(.codetype-toggle__opt) {
+  font-size: 16px;
+  font-weight: 500;
+  padding: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .seg-wrap {
   display: flex;
-  min-width: 33%;
+  flex-shrink: 0;
 }
-/* ══ CTA 按钮（:deep 穿透到 RippleButton 子组件） ══ */
+.seg-wrap :deep(.tier-toggle) {
+  width: 140px;
+  height: 48px;
+}
+.seg-wrap :deep(.tier-toggle__opt) {
+  font-size: 16px;
+  font-weight: 500;
+  padding: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.seg-wrap.theme-toggle-wrap {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+}
+.seg-wrap.theme-toggle-wrap :deep(.panel-theme-toggle) {
+  height: 48px;
+}
+.seg-wrap.theme-toggle-wrap :deep(.panel-theme-toggle__opt) {
+  font-size: 15px;
+  font-weight: 500;
+  padding: 0 18px;
+  height: 100%;
+}
+.seg-wrap.theme-toggle-wrap :deep(.panel-theme-toggle__opt svg) {
+  width: 18px;
+  height: 18px;
+}
+.theme-hint-row {
+  margin-bottom: var(--s3);
+  padding-left: 2px;
+}
+.theme-hint {
+  /* 简洁提示文字：13px 加粗深灰，「面板」加粗强调，去掉花哨装饰 */
+  font-size: 13px;
+  line-height: 1.6;
+  font-weight: 500;
+  color: #374151;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+/* 深色面板主题 → 文字更深一档 */
+.theme-hint.dark {
+  color: #1f2937;
+}
+/* 浅色面板主题 → 标准中深灰 */
+.theme-hint.light {
+  color: #374151;
+}
+.theme-hint strong {
+  font-weight: 700;
+  color: inherit;
+}
+/* ══ CTA 按钮（:deep 穿透到 RippleButton 子组件）  */
 :deep(.cta) {
-  flex: 1;
-  min-width: 200px;
-  height: 46px;
-  border-radius: var(--r-md);
-  background: linear-gradient(135deg, var(--c-cta) 0%, var(--c-cta-hover) 100%);
+  flex: 1 1 auto;
+  min-width: 220px;
+  height: 48px;
+  border-radius: var(--radius-full, 9999px);
+  /* 调成低饱和的青蓝绿，比翠绿 #059669→#34d399 更柔和不刺眼 */
+  background: linear-gradient(135deg, #0d9488 0%, #5eead4 100%);
   color: #fff;
-  font-size: var(--fs-lg);
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 500;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -4300,14 +4396,14 @@ html[data-theme='dark'] .spinner--lg {
   letter-spacing: 0.01em;
   border: none;
   box-shadow:
-    0 4px 14px rgba(5, 150, 105, 0.22),
-    0 1px 3px rgba(5, 150, 105, 0.16);
+    0 2px 8px rgba(13, 148, 136, 0.18),
+    0 1px 2px rgba(13, 148, 136, 0.12);
 }
 :deep(.cta:hover) {
-  transform: translateY(-2px);
+  transform: translateY(-1px);
   box-shadow:
-    0 6px 20px rgba(5, 150, 105, 0.3),
-    0 2px 6px rgba(5, 150, 105, 0.2);
+    0 4px 14px rgba(13, 148, 136, 0.24),
+    0 2px 4px rgba(13, 148, 136, 0.16);
 }
 :deep(.cta:active) {
   transform: translateY(0);
@@ -4319,8 +4415,8 @@ html[data-theme='dark'] .spinner--lg {
   box-shadow: none;
 }
 :deep(.cta.busy) {
-  background: linear-gradient(135deg, var(--c-danger) 0%, #f87171 100%);
-  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.28);
+  background: linear-gradient(135deg, #b91c1c 0%, #f87171 100%);
+  box-shadow: 0 2px 8px rgba(185, 28, 28, 0.22);
 }
 .spinner {
   width: 16px;
@@ -4785,6 +4881,9 @@ html[data-theme='dark'] .unified-generate.gen-v4 .figma-empty-icon {
   .tech-chips,
   .seg-wrap {
     width: 100%;
+  }
+  .theme-hint-row {
+    text-align: center;
   }
   :deep(.cta) {
     width: 100%;

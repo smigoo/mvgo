@@ -9,6 +9,7 @@ import mcGeneratorRoutes from './mc-generator-routes'
 import workspaceRoutes from './workspace-routes'
 import generateRoute from './generate-route'
 import { helpRoutes } from './help-routes'
+import { workbenchRoutes } from './workbench-routes'
 
 // 修正 @microcode/designer 的 mcRoutes：根路径重定向到项目实际首页
 const fixedMcRoutes = mcRoutes.map(route => {
@@ -28,7 +29,8 @@ const routes = [
   ...mcGeneratorRoutes,
   ...workspaceRoutes,
   ...generateRoute,
-  ...helpRoutes
+  ...helpRoutes,
+  ...workbenchRoutes
 ]
 
 export const router = createRouter({

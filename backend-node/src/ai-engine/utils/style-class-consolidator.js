@@ -301,6 +301,14 @@ function hasPixelSizeInCommon(commonLess, selector) {
 function mergeIntoCommonLess(commonLess = '', blocks = []) {
   // 过滤掉会覆盖像素值的百分比块
   const protectedBlocks = blocks.filter((b) => {
+    // 🛡️ 图表组件豁免（2026-09-29 · c-traffic-monitor-4d6135d1 / bda1b2fd 双实锤）：
+    //   源文件含 echarts 的子组件，其**所有类**的百分比块不得被本保护丢弃——
+    //   图表根类/canvas 类必须以 width/height:100% 撑满装配空间；若 common.less 里有
+    //   LLM 误写的真值像素（如 52×52），正确方向是**子组件百分比覆盖它**，否则：
+    //   canvas 52×52 ⇒ 柱图不可见；根类 52px ⇒ 宽度塌陷（「还是一点点宽」）。
+    //   「真值集非最高权威」铁律同样适用：可绘制/可布局的结构特征优先于误置真值。
+    //   非图表类不受影响（真值像素仍被保护，见 spec 回归用例）。
+    if (b.isChartComponent) return true;
     if (hasPercentageSize(b.text) && hasPixelSizeInCommon(commonLess, b.selector)) {
       // 子组件是百分比，common.less 是像素 → 保留 common.less 版本
       return false;
@@ -1105,7 +1113,15 @@ export function consolidateSubComponentClasses(files = {}, options = {}) {
         // 变体去重（多候选双向写时同块可能重复），selector 取重写后的首选择器
         const headSel = (/^\s*([^{]+)\{/.exec(v) || [])[1];
         const selector = headSel ? headSel.trim().slice(0, 200) : b.selector;
-        blocks.push({ selector, sourceSelector: b.selector, text: v });
+        // 🛡️ 图表组件标记（2026-09-29 · c-traffic-monitor-4d6135d1 / bda1b2fd 双实锤）：
+        //   源文件含 echarts 的子组件，其布局职责 = 撑满装配器分配的空间
+        //   （flex 比例 + min-height 兜底 ⇒ 根类与 canvas 类的 width/height:100% 是唯一正确形态）。
+        //   LLM 会把设计稿上某框架的 Figma 真值像素（如 52×52）误写到图表根类/canvas 类上，
+        //   「百分比保护」会让该错误像素恒胜 ⇒ 4d6135d1 canvas 52×52 柱图不可见、
+        //   bda1b2fd 根类 52px 宽度塌陷（「还是一点点宽」）。
+        //   该标记供 mergeIntoCommonLess 的「百分比保护」豁免整个图表组件的类。
+        const isChartComponent = /echarts/.test(sfc);
+        blocks.push({ selector, sourceSelector: b.selector, text: v, isChartComponent });
       }
     }
   }

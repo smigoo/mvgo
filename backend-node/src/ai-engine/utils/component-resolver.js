@@ -59,12 +59,72 @@ export function namingRank(name) {
   return 1
 }
 
-/** 按规范度稳定排序：同权重保持传入顺序（= roots 顺序），保证解析结果确定 */
-export function rankDirsByNaming(dirs) {
+/**
+ * 按规范度稳定排序：同权重保持传入顺序（= roots 顺序），保证解析结果确定。
+ *
+ * 🛡️ 2026-09-29 治本（`c-traffic-monitor` 缩略图变成「环境监测」实锤）：
+ * 增加 **精确同名优先** 维度。原实现只按 namingRank（是否 c- 前缀）排序，
+ * 而 `c-traffic-monitor` / `c-env-monitor` / `c-monitor` 三者 namingRank **全为 0**
+ * ⇒ 排序退化为 roots 顺序 ⇒ 命中 `c-env-monitor`（环境监测，md5 b09b111c…），
+ * 而正确目录是 `c-traffic-monitor`（流量监测，md5 1b1ee716…）。
+ * 现排序键：① 目录名 === 传入 componentId（精确同名）② namingRank ③ 传入顺序。
+ *
+ * @param {string[]} dirs 候选目录绝对路径
+ * @param {string} [preferredName] 传入的 componentId（用于精确同名优先）
+ */
+export function rankDirsByNaming(dirs, preferredName) {
+  const want = String(preferredName ?? '').trim().toLowerCase()
   return dirs
-    .map((dir, index) => ({ dir, index, rank: namingRank(basename(dir)) }))
-    .sort((a, b) => a.rank - b.rank || a.index - b.index)
+    .map((dir, index) => {
+      const name = basename(dir)
+      // 0 = 精确同名（最优），1 = 非精确
+      const exact = want && name.toLowerCase() === want ? 0 : 1
+      return { dir, index, exact, rank: namingRank(name) }
+    })
+    .sort((a, b) => a.exact - b.exact || a.rank - b.rank || a.index - b.index)
     .map((x) => x.dir)
+}
+
+/** 目录名是否精确等于 componentId（大小写不敏感） */
+export function isExactComponentDirName(dir, componentId) {
+  const want = String(componentId ?? '').trim().toLowerCase()
+  return !!want && basename(dir).toLowerCase() === want
+}
+
+/**
+ * 在所有搜索根内查找**目录名精确等于** componentId 且含产物的目录。
+ * 一层结构 root/<id>（custom-components）与两层结构 root/<group>/<id>（vue3-components）都查。
+ * 搜索根顺序即优先级（后端 workspace 优先于前端副本）。
+ *
+ * @param {string} componentId
+ * @param {(dir: string) => boolean} hasArtifact 产物存在判定
+ * @returns {string|null}
+ */
+function findExactComponentDir(componentId, hasArtifact) {
+  const want = String(componentId || '').trim().toLowerCase()
+  if (!want) return null
+  for (const root of componentSearchRoots()) {
+    try {
+      for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+        if (!entry.isDirectory()) continue
+        const d = join(root, entry.name)
+        if (entry.name.toLowerCase() === want && hasArtifact(d)) return d
+        // 两层结构：root/<group>/<id>
+        try {
+          for (const sub of fs.readdirSync(d)) {
+            if (String(sub).toLowerCase() !== want) continue
+            const sd = join(d, sub)
+            if (fs.statSync(sd).isDirectory() && hasArtifact(sd)) return sd
+          }
+        } catch {
+          /* 子目录不可读 → 跳过 */
+        }
+      }
+    } catch {
+      /* 根目录不存在时跳过 */
+    }
+  }
+  return null
 }
 
 /**
@@ -141,7 +201,8 @@ export async function resolveComponentBaseDirs(componentId) {
  *   - AI 修复写文件到快照目录，而检查读的是 workspace 目录 → 修完重查仍失败。
  *
  * 解析顺序（与 mc-spec.service / playground-tools 共用，避免两套解析漂移）：
- *   1. 尾缀匹配正式 workspace（一层 root/<id> 与两层 root/<group>/<id> 都扫）
+ *   0. **精确同名命中**（目录名 === componentId，含两层 root/<group>/<id>）—— 2026-09-29 新增
+ *   1. 尾缀匹配正式 workspace（仅当 componentId 带任务号前缀或尾缀为 hex；一层 root/<id> 与两层 root/<group>/<id> 都扫）
  *   2. 常规候选目录，命中 temp 快照根时下钻到最新 revision
  *   3. 都没有含产物的目录时，回退旧 resolveComponentDir（保持历史行为）
  *
@@ -176,9 +237,31 @@ export async function resolveComponentDirStrict(componentId) {
     }
   }
 
+  // 0) 🛡️ 2026-09-29 治本：**精确同名目录优先**（尾缀模糊匹配之前）。
+  //    事故现场（任务 mc-max-1790657317082-67u1cdxz /「流量监测」）：
+  //      componentId = 'c-traffic-monitor' 的「尾缀」被 -([a-z0-9]{6,12})$ 取成普通单词 'monitor'，
+  //      于是 c-env-monitor / c-monitor / c-traffic-monitor **全部**命中；
+  //      三者 namingRank 全为 0 → 稳定排序取 roots 顺序第一个 → 返回 `c-env-monitor`。
+  //    后果（同一条解析被多处复用）：
+  //      - 组件缩略图取到「环境监测」的 mc-preview.png（用户：「应该是我流量组件，结果是其他组件截图」）；
+  //      - /api/preview 也读错组件、mc-spec 规范检查跑在别人目录上。
+  //    只要 componentId 本身就是 workspace 里存在的规范目录名，就必须精确命中，
+  //    不允许被「同尾缀兄弟目录」抢走。
+  const exactHit = findExactComponentDir(componentId, hasArtifact)
+  if (exactHit) return exactHit
+
   // 1) 尾缀匹配：mc-lite-1789035969084-c298235f → c-environment-monitor-c298235f
   const tailMatch = String(componentId).match(/-([a-z0-9]{6,12})$/i)
-  if (tailMatch) {
+  // 🛡️ 2026-09-29 治本（同上）：尾缀匹配仅对「真·共享尾缀」开放 ——
+  //   传入名带任务号前缀（mc-/mv-/cp-/page-，即「任务号 → 规范名」的既有用途），
+  //   或尾缀本身是 hex 片段（c-xxx-a1b2c3d4，规范名自带的共享尾缀）。
+  //   否则规范名里的普通英文单词尾（monitor / section / card / header …）会被误当共享尾缀，
+  //   把 c-env-monitor / c-monitor 这类**语义无关的兄弟目录**卷进候选（本事故的直接来源）。
+  //   ⚠️ 判据不能用 isEncodedSessionId：它要求尾段为 [a-f0-9]+，而真实任务号尾段可能是
+  //      `67u1cdxz` 这类含非 hex 字符的随机串（实测本任务即如此），会被漏判。
+  const looksLikeTaskId = /^(mc|mv|cp|page)-/i.test(String(componentId).trim())
+  const tailIsHex = !!tailMatch && /^[0-9a-f]{6,12}$/i.test(tailMatch[1])
+  if (tailMatch && (looksLikeTaskId || tailIsHex)) {
     const tail = tailMatch[1].toLowerCase()
     const hits = []
     for (const root of componentSearchRoots()) {
@@ -204,11 +287,11 @@ export async function resolveComponentDirStrict(componentId) {
     // 「任务号命名目录」（mc-lite-…-c298235f），导致：
     //   - 用任务号查 → 命中残留目录（预期内）；
     //   - 用**规范 ID** 查 → 尾缀匹配忽略传入名、只看尾 8hex，**同样命中残留目录**（意外，最严重）。
-    // 现改为：规范名（c-*）优先，任务号名垫底，同类保持 roots 顺序（稳定）。
+    // 现改为：精确同名 > 规范名（c-*）> 任务号名，同类保持 roots 顺序（稳定）。
     if (hits.length) {
-      const ranked = rankDirsByNaming(hits)
+      const ranked = rankDirsByNaming(hits, componentId)
       if (ranked.length > 1) {
-        logger.warn('组件目录尾缀多命中，规范名优先', {
+        logger.warn('组件目录尾缀多命中，精确同名优先', {
           componentId,
           tail: tailMatch[1],
           picked: ranked[0],

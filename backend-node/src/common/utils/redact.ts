@@ -77,3 +77,43 @@ export function redactSecrets(value: any, replacement = '***REDACTED***'): any {
 
   return result;
 }
+
+/**
+ * 循环安全 JSON 序列化：仅把「祖先回指」替换为 `'[Circular]'` 占位，保证**永不抛错**。
+ *
+ * 🛡️ 治本（2026-09-29 · SSE 重连分支整条事件丢失实锤）：
+ *   `ProgressService#sendEvent` 等**出口**若直接 `JSON.stringify(data)`，一旦载荷含循环引用
+ *   （生成期 `microcode-engineer.js:5578` 注入的 `__parent` 反链 × `children`）就抛
+ *   `Converting circular structure to JSON` ⇒ 该次推送**整条丢失**、只剩一行 WARN。
+ *   实测 **18 次**、跨三代进程，且 `stripParentRefs`（REST 详情/列表）与
+ *   `sendComplete#redactSecrets` 已各修一轮，仍**漏掉 SSE 重连分支**
+ *   ⇒ 与其在每个调用点各自剥离（出口有 6 类：REST 列表/详情 + SSE 首连/重连 + 落库 + 日志），
+ *   不如在**序列化这一单点**兜底，任何调用路径都不会再因循环丢事件。
+ *
+ * 与 `redactSecrets` 的分工（**循环判定口径同源**：只判祖先回指，兄弟共享同一引用不误伤）：
+ *   - `redactSecrets` = 深拷贝 + 密钥脱敏（Date/RegExp 因无自有可枚举键会退化为 `{}`）；
+ *   - 本函数 = **replacer 原地遍历**，保留 Date/RegExp/数字/布尔的原生序列化语义，只处理循环。
+ *
+ * @param value 任意待序列化值
+ * @param space 同 `JSON.stringify` 的缩进参数
+ */
+export function safeJsonStringify(value: any, space?: string | number): string {
+  // 路径栈：只保留「根 → 当前节点」的祖先链，离开该分支即弹出
+  const ancestors: any[] = [];
+  return (
+    JSON.stringify(
+      value,
+      function (this: any, _key: string, val: any) {
+        if (typeof val !== 'object' || val === null) return val;
+        // replacer 的 `this` = 直接持有 val 的容器 ⇒ 用它把栈回退到当前路径
+        while (ancestors.length > 0 && ancestors[ancestors.length - 1] !== this) {
+          ancestors.pop();
+        }
+        if (ancestors.includes(val)) return CIRCULAR;
+        ancestors.push(val);
+        return val;
+      },
+      space,
+    ) ?? ''
+  );
+}

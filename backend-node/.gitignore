@@ -72,3 +72,10 @@ test-mongo-remote.js
 check-user-configs.cjs
 debug-*.mjs
 probe-*.mjs
+.tmp-*.mjs
+.tmp-*.cjs
+.tmp-*.sh
+__replay-*.js
+
+# mc-spec 规范检查报告（本地产物）
+data/mc-spec-reports/

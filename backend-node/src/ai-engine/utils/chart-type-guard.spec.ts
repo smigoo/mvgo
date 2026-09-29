@@ -15,6 +15,7 @@ import {
   findSeriesArraySpans,
   isMultiChartSource,
   buildChartTypeTruthSet,
+  collectSeriesTypeSamples,
 } from './chart-type-guard.js'
 
 describe('Loop 2.1.E chartType 冻结 + 非法 series.type 拒收', () => {
@@ -411,6 +412,75 @@ describe('🔴 形状错配归一：饼图特征 + cartesian type → pie（RUNT
     expect(lineCount).toBe(1) // 第 3 个折线保留
     expect(changed).toBe(1) // 只改了 1 处
   })
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // 🔴 2026-09-29 治本（RUNTIME-004 第 3 次复发 · mc-max-1790666499312-afc4b0f2 实锤）
+  //
+  // 上面「真值本身是 pie 时保持 pie」的用例用的是**含 pie 的真值集**，恰好绕过了缺陷：
+  // `raw === 'pie'` 时旧条件 `resolved && resolved !== 'pie'` 为假 → 跳过保护 →
+  // 落入真值集分支；只有当真值集**不含 pie** 时才会被 fail-closed 拉走。
+  // 真机触发前提：vision 只识别出 N 张笛卡尔图、**漏掉环形图** ⇒ 真值集 = {bar,line}。
+  // 实测（.tmp-pie2bar.mjs）：真值集 {bar,line} ⇒ 旧逻辑 changed=1 ⇒ 终态 bar=1/pie=0 ⇒ 崩。
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe('🛡️ raw=pie + 真值集不含 pie（vision 漏识别环形图）→ 不得被改成 bar', () => {
+    // 真机 afc4b0f2 · CardGrid.vue 原始 LLM 段（LLM 写对了 pie，是后处理把它改坏的）
+    const LLM_DONUT = `chart.setOption({
+  tooltip: { trigger: 'item' },
+  series: [
+    {
+      type: 'pie',
+      radius: ['55%', '75%'],
+      center: ['50%', '50%'],
+      avoidLabelOverlap: false,
+      label: { show: false },
+      labelLine: { show: false },
+      data: [{ value: 22350, name: '客车' }, { value: 16270, name: '货车' }]
+    }
+  ]
+}, true)`
+
+    test('⭐ 真值集 {bar,line} 不得把 pie 拉走（真机 afc4b0f2 形态）', () => {
+      const ts = buildChartTypeTruthSet([{ type: 'bar' }, { type: 'bar' }, { type: 'area' }])
+      expect([...ts].sort()).toEqual(['bar', 'line']) // 真值集确实不含 pie
+      const { text, changed } = normalizeSeriesInSource(LLM_DONUT, { chartType: 'bar', chartTypeSet: ts })
+      expect(changed).toBe(0) // LLM 写对了 ⇒ 守卫必须保持沉默（不是「收敛 1 处」）
+      expect(text).toContain("type: 'pie'")
+      expect(text).not.toContain("type: 'bar'")
+      expect(text).toContain("radius: ['55%', '75%']")
+    })
+
+    test('⭐ 真值集 {bar} 同样不得拉走 pie', () => {
+      const { text, changed } = normalizeSeriesInSource(LLM_DONUT, {
+        chartType: 'bar',
+        chartTypeSet: buildChartTypeTruthSet([{ type: 'bar' }]),
+      })
+      expect(changed).toBe(0)
+      expect(text).toContain("type: 'pie'")
+    })
+
+    test('⭐ 单图真值 bar（无真值集）同样不得拉走 pie', () => {
+      const { text, changed } = normalizeSeriesInSource(LLM_DONUT, { chartType: 'bar' })
+      expect(changed).toBe(0)
+      expect(text).toContain("type: 'pie'")
+    })
+
+    test('🔴 回归防线：饼图特征元素恒为 pie（与真值集内容无关）', () => {
+      for (const set of [
+        [],
+        ['bar'],
+        ['bar', 'line'],
+        ['line'],
+        ['gauge'], // 真值集为 gauge 也不得把带 radius/center 的元素拉成 gauge
+      ]) {
+        const { text } = normalizeSeriesInSource(LLM_DONUT, {
+          chartType: set[0],
+          chartTypeSet: new Set(set),
+        })
+        expect(text).toContain("type: 'pie'")
+        expect(text).not.toContain("type: 'bar'")
+      }
+    })
+  })
 })
 
 describe('findSeriesArraySpans：括号配平', () => {
@@ -425,6 +495,32 @@ describe('findSeriesArraySpans：括号配平', () => {
 
   test('无 series 时返回空数组', () => {
     expect(findSeriesArraySpans('const a = 1')).toEqual([])
+  })
+})
+
+describe('collectSeriesTypeSamples：诊断出口与裁决口径同源', () => {
+  test('逐元素给出 raw/resolved/饼图特征/gauge 特征', () => {
+    const src = `const o = { series: [
+      { type: 'pie', radius: ['55%','75%'], center: ['50%','50%'], data: [] },
+      { type: 'bar', barWidth: 4, data: [1,2] },
+      { type: '分组柱状图', data: [1] }
+    ] }`
+    const s = collectSeriesTypeSamples(src)
+    expect(s).toHaveLength(3)
+    expect(s[0]).toMatchObject({ raw: 'pie', resolved: 'pie', hasPieFeatures: true, hasGaugeFeatures: false })
+    expect(s[1]).toMatchObject({ raw: 'bar', resolved: 'bar', hasPieFeatures: false })
+    expect(s[2]).toMatchObject({ raw: '分组柱状图', resolved: 'bar', hasPieFeatures: false })
+  })
+
+  test('gauge 特征键被识别（radius/center 的唯一歧义来源，审计用）', () => {
+    const src = `const o = { series: [{ type: 'gauge', radius: '80%', center: ['50%','50%'], axisLine: { show: true }, data: [] }] }`
+    const s = collectSeriesTypeSamples(src)
+    expect(s[0]).toMatchObject({ hasPieFeatures: true, hasGaugeFeatures: true })
+  })
+
+  test('非字符串/空输入返回空数组，不抛', () => {
+    expect(collectSeriesTypeSamples('')).toEqual([])
+    expect(collectSeriesTypeSamples(null as unknown as string)).toEqual([])
   })
 })
 
@@ -539,5 +635,72 @@ const o = { xAxis: [{ type: 'category' }], series: [{ type: 'line', xAxisIndex: 
     expect(text).toContain('yAxisIndex: 0')
     // 注入后 `data: [1, 2], xAxisIndex: 0, yAxisIndex: 0` 恰好一次逗号分隔
     expect(text).toContain('data: [1, 2], xAxisIndex: 0, yAxisIndex: 0')
+  })
+})
+
+/**
+ * 🛡️ 2026-09-29 治本（RUNTIME-004 第 2 次复发：`mc-max-1790666499312-afc4b0f2`
+ * 与 `mc-max-1790667846995-b91b3c60` 同签名）。
+ *
+ * 原守卫只做了「不再给缺轴 option 注入索引」（正确），但**不补轴本身** ⇒ `type:'bar'` +
+ * 无轴 option 一路放行到运行期 → ECharts 抛 `xAxis "0" not found` → mounted 崩溃 →
+ * 整页只剩错误页 → `RUNTIME-004` + `VISUAL-002 score≈0.12` → 硬 BLOCK。
+ * 本次在 `normalizeChartAxesInSource` 里新增 ①-b：为缺轴的笛卡尔 option 补默认轴。
+ */
+describe('RUNTIME-004 兜底轴：setOption 缺 xAxis/yAxis 时补默认轴', () => {
+  const noAxisBar =
+    "chart.setOption({ tooltip: { trigger: 'item' }, series: [{ type: 'bar', data: [12, 34, 56] }] })"
+
+  test('缺轴 bar → 补齐 xAxis/yAxis；再次调用幂等（changed=0）', () => {
+    const r = normalizeChartAxesInSource(noAxisBar)
+    expect(r.injectedAxisOptions).toBe(1)
+    expect(r.text).toContain("xAxis: [{ type: 'category', data: [] }]")
+    expect(r.text).toContain("yAxis: [{ type: 'value' }]")
+    // 轴必须落在 option 对象内部（注入点紧跟 '{'）
+    expect(r.text).toMatch(/setOption\(\{\s*xAxis:/)
+
+    const r2 = normalizeChartAxesInSource(r.text)
+    expect(r2.injectedAxisOptions).toBe(0)
+    expect(r2.changed).toBe(0)
+  })
+
+  test('已有完整 xAxis/yAxis 的 bar → 不补轴（仅既有的索引注入生效）', () => {
+    const src =
+      "chart.setOption({ xAxis: [{ type: 'category', data: ['a'] }], yAxis: [{ type: 'value' }], series: [{ type: 'bar', data: [1] }] })"
+    const r = normalizeChartAxesInSource(src)
+    expect(r.injectedAxisOptions).toBe(0)
+    // 不新增轴对象；原有轴的 data 原样保留
+    expect(r.text).not.toContain("xAxis: [{ type: 'category', data: [] }]")
+    expect(r.text).toContain("data: ['a']")
+  })
+
+  test('pie（无笛卡尔 series）→ 绝不补轴', () => {
+    const src = "chart.setOption({ tooltip: {}, series: [{ type: 'pie', data: [{ value: 1, name: 'a' }] }] })"
+    const r = normalizeChartAxesInSource(src)
+    expect(r.injectedAxisOptions).toBe(0)
+    expect(r.text).not.toContain('xAxis')
+  })
+
+  test('只缺 yAxis → 只补 yAxis，不动已有 xAxis', () => {
+    const src = "chart.setOption({ xAxis: [{ type: 'category', data: ['a'] }], series: [{ type: 'bar', data: [1] }] })"
+    const r = normalizeChartAxesInSource(src)
+    expect(r.injectedAxisOptions).toBe(1)
+    expect(r.text).toContain("yAxis: [{ type: 'value' }]")
+    // 原有 xAxis 的 data 必须原样保留
+    expect(r.text).toContain("data: ['a']")
+  })
+
+  test('嵌套对象的 type 不被误判为笛卡尔 series（lineStyle.type）', () => {
+    const src =
+      "chart.setOption({ series: [{ type: 'pie', data: [1], lineStyle: { type: 'solid' } }] })"
+    const r = normalizeChartAxesInSource(src)
+    expect(r.injectedAxisOptions).toBe(0)
+  })
+
+  test('已知边界：变量实参 setOption(option) 不处理（不盲扫全文件，宁漏不误伤）', () => {
+    const src = "const option = { series: [{ type: 'bar', data: [1] }] }\nchart.setOption(option)"
+    const r = normalizeChartAxesInSource(src)
+    expect(r.injectedAxisOptions).toBe(0)
+    expect(r.text).toBe(src)
   })
 })

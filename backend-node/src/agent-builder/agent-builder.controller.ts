@@ -1,9 +1,11 @@
-import { Controller, Post, Get, Delete, Body, Param, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
+import {Controller, Post, Get, Delete, Body, Param, Query, UploadedFile, UseInterceptors, UseGuards } from '@nestjs/common';
+import { SessionGuard } from '../auth/session.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AgentBuilderService } from './agent-builder.service';
 import { TOOL_TEMPLATES } from './templates/tool-templates.js';
 import { LLM_TEMPLATES } from './templates/llm-templates.js';
 
+@UseGuards(SessionGuard)
 @Controller('agent-builder')
 export class AgentBuilderController {
   constructor(private readonly agentBuilderService: AgentBuilderService) {}

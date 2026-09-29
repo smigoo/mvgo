@@ -495,6 +495,70 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
     bodyLeavesFinal = leaves.filter((s) => !headerSet.has(s));
   }
 
+  // 🛡️ 2026-09-29 治本 · header 槽唯一化（mc-max-1790678105345-66ccbed9 实锤，server.log 18:37:42）
+  //
+  // 病灶：宿主契约（`base-panel/index.vue` 的 4 个固定槽名 title-left / title-right /
+  // header-right / close，每个在面板模板里只有**一个** `<slot name>`）决定「一个槽名
+  // 只能出现一次」。而上面 `headerLeaves` 用的是**扁平全量** `leaves.filter(type==='header')`
+  // —— 会把容器内的 sub-header 叶一并算进来（traffic-monitor 实锤：3 个 header 叶）
+  // ⇒ 下方 `for (const h of headerLeavesFinal)` 对每个叶各产一个 `<template #header-right>`
+  // ⇒ 3 个重名插槽。
+  //
+  // 后果不是"报错"，而是**一路静默**：
+  //   ① 资源注入器自检（跑在写盘门禁**之前**）读 `validateVueSfc` 看到重名
+  //      → `writeGuarded` 回滚（"拒绝把合格产物改坏"）→ 资源未挂 → slot 级回退糊满整槽；
+  //   ② 写盘门禁内的 `_deduplicateTemplateBlocks` 又"恰好"把重名块删成合法（它的正则
+  //      `<template\b[^>]*>([\s\S]*?)<\/template>` 会误匹配子级 slot `<template>`），
+  //      只留一行「已去重 <template> 标签（3 个）」的静默修复 ⇒ 门禁通过、任务"成功"，
+  //      缺陷被埋进产物（残留空行即其删除痕迹）。
+  //
+  // 判据与下方 `topBodyRoots` 收集处（`if (root?.type === 'header') continue`）**收敛到同一口径**：
+  // header 槽只承载**顶层** `type==='header'` 叶（面板标题行，外壳语义），容器内 sub-header 叶
+  // 归属 body。已核实 `renderBodyNode` 是**树驱动**（`topBodyRoots` 仅用于分配比例），容器内叶
+  // 本来就在 body 里渲染 ⇒ 收缩 header 槽**既不丢内容、也不产生双渲染**。
+  //
+  // 保留优先级：① 顶层 header 叶 → ② 无顶层 header 叶时退而取首个（确定性，不依赖命名/几何）。
+  // 只做「>1 才收缩」⇒ 单 header 叶（绝大多数组件）产物**逐字不变**（零回归）。
+  if (headerLeavesFinal.length > 1) {
+    const topLevelHeaderIds = new Set(
+      treeSections
+        .filter((s) => s?.type === 'header')
+        .map((s) => String(s?.id)),
+    );
+    const topOnly = headerLeavesFinal.filter((s) =>
+      topLevelHeaderIds.has(String(s?.id)),
+    );
+    const kept = (topOnly.length > 0 ? topOnly : headerLeavesFinal)[0];
+    const dropped = headerLeavesFinal.filter((s) => s !== kept);
+    headerLeavesFinal = [kept];
+    // header 集合变了 ⇒ 按**上面两分支各自的原口径**同步重算 body 侧（只影响
+    // slot-con 是否创建，不影响渲染；`renderBodyNode` 走的是 topBodyRoots）。
+    if (headerSlotNodeIds.size > 0) {
+      const headerSetFinal = new Set(headerLeavesFinal);
+      bodyLeavesFinal = leaves.filter((s) => !headerSetFinal.has(s));
+    } else {
+      bodyLeavesFinal = bodyLeaves;
+    }
+    if (options?.logger?.warn) {
+      options.logger.warn(
+        '🛡️ header 槽唯一化：多个 header 叶只保留 1 个进 #header-right（其余归属 body）',
+        {
+          kept: String(kept?.id),
+          keptBy: topOnly.length > 0 ? 'top-level-header' : 'first-leaf-fallback',
+          dropped: dropped.map((s) => String(s?.id)),
+        },
+      );
+    }
+  }
+  // 🛡️ 生效自检（与 B′·已评估 同族）：0 收缩时也落一行，区分「没跑 / 跑了没命中」。
+  if (options?.logger?.info) {
+    options.logger.info('🛡️ header 槽唯一化·已评估', {
+      headerLeavesBefore: headerLeaves.length,
+      headerSlotsEmitted: headerLeavesFinal.length,
+      contracted: headerLeaves.length > 1 ? 1 : 0,
+    });
+  }
+
   const tagFor = (sec, fallback) => nameOf.get(String(sec.id)) || fallback;
 
   const rootContainerClass = bodyLeavesFinal.length > 0 ? `c-${semantic}-slot-con` : null;
@@ -613,6 +677,15 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
             equalizeMembers = isHorizontalCardGroup(parentNode, memberNodes);
             __eqEvaluated += 1;
             if (equalizeMembers) __eqHits += 1;
+            // 🛡️ 2026-09-29 哑火自检：B′ 实测 equalized:0，需看出「节点解析/判据」断点。
+            options?.logger?.info?.('🧩 [B′] 横向卡片等分自检', {
+              sectionId: sec.id,
+              childrenPlan: (sec.children || []).length,
+              memberResolved: memberNodes.length,
+              parentResolved: !!parentNode,
+              memberWidths: memberNodes.map((m) => Math.round(m?.bbox?.width || m?.absoluteBoundingBox?.width || 0)),
+              equalize: equalizeMembers,
+            });
           } catch {
             equalizeMembers = false;
           }

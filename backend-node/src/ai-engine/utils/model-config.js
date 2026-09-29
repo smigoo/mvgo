@@ -161,7 +161,12 @@ export function buildThinkingOffParams(model = '', baseURL = '') {
     return { enable_thinking: false }
   }
   // kimi 系（kimi-k3 等）：只认 thinking:{type:disabled}，enable_thinking 无效。
-  if (/^kimi/.test(m) || u.includes('lkeap') && m.includes('kimi')) {
+  if (/^kimi/.test(m) || (u.includes('lkeap') && m.includes('kimi'))) {
+    return { thinking: { type: 'disabled' } }
+  }
+  // hy4 系（腾讯混元 hy4-preview 等，经 lkeap 网关，与 kimi 同网关同形态）：
+  // thinking:{type:disabled} 关推理，避免思考吃掉输出预算导致视觉检测 content 为空被误判。
+  if (m.includes('hy4')) {
     return { thinking: { type: 'disabled' } }
   }
   // deepseek v4 系：thinking:{type:disabled}（与文本侧既有约定一致）。

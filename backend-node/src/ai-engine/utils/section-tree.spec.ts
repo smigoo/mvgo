@@ -1009,6 +1009,54 @@ describe('deriveSectionsFromFigmaTree（E1 治本 · Figma 节点树确定性推
     expect(deriveSectionsFromFigmaTree({})).toBeNull()
     expect(deriveSectionsFromFigmaTree({ document: { type: 'TEXT', name: 'x' } })).toBeNull()
   })
+
+  // 🛡️ 治本（2026-09-29 · mc-max-1790693732608-b6e018d6 实锤）：
+  //   findRootFrame 旧口径「深度优先第一个有 children 的 FRAME」在
+  //   「GROUP 业务根 + FRAME header 子」树形下会把头部条当根 ⇒ 顶层 sections
+  //   变成 header 条内部结构、header 事实丢失、slot-con 图表区被踢出树。
+  //   新口径：doc 自身是容器且有 children ⇒ doc 即根（GROUP 也算）。
+  it('GROUP 业务根 + FRAME header 子：根不选错，header/slot-con 两段齐全（b6e018d6 树形）', () => {
+    const groupRoot = {
+      document: {
+        id: '1:2077', name: 'cp-环保减污', type: 'GROUP',
+        absoluteBoundingBox: box(1440, 840, 460, 225),
+        children: [
+          { id: '17:57', name: 'bg', type: 'RECTANGLE', absoluteBoundingBox: box(1440, 840, 460, 225) },
+          {
+            id: '1:2078', name: 'header', type: 'FRAME',
+            absoluteBoundingBox: box(1440, 840, 460, 34),
+            children: [
+              {
+                id: '1:2100', name: 'slot-tabs', type: 'GROUP',
+                absoluteBoundingBox: box(1794, 846, 91, 21),
+                children: [
+                  { id: '1:2102', name: '激活', type: 'GROUP', absoluteBoundingBox: box(1794, 846, 46, 21), children: [] },
+                  { id: '1:2105', name: '默认', type: 'GROUP', absoluteBoundingBox: box(1839, 846, 46, 21), children: [] },
+                ],
+              },
+            ],
+          },
+          {
+            id: '17:59', name: 'slot-con', type: 'FRAME',
+            absoluteBoundingBox: box(1452, 885, 436, 165),
+            children: [
+              { id: '1:2112', name: '@echarts/bars+lines', type: 'GROUP', absoluteBoundingBox: box(1452, 885, 436, 165), children: [] },
+            ],
+          },
+        ],
+      },
+    }
+    const r = deriveSectionsFromFigmaTree(groupRoot)
+    expect(r).not.toBeNull()
+    // 顶层两段：header + con（bg 归 backgrounds），不是 header 条的内部结构
+    expect(r.sections.map((s) => s.id)).toEqual(['1:2078', '17:59'])
+    expect(r.sections[0].type).toBe('header')
+    expect(r.sections[0].chromeOnly).toBe(false)
+    // 上月/本年 tabs 在 header children（item 化），不再丢进 body
+    const tabs = r.sections[0].children.find((s) => s.id === '1:2100')
+    expect(tabs).toBeTruthy()
+    expect(r.backgrounds.map((b) => b.id)).toEqual(['17:57'])
+  })
 })
 
 describe('deriveSectionsFromFigmaTree · @echarts 图表语义（收尾）', () => {
@@ -1271,9 +1319,9 @@ describe('buildSectionStyleFacts（E1 治本 · 语义化样式事实）', () =>
     expect(out).toContain('双重透明')
   })
 
-  test('🛡️ Fix3 几何判定：纵向文本块（≥2 直接 TEXT 子节点、同 x、y 递增）→ 提示 flex-direction:column', () => {
+  test('🛡️ Fix3 几何判定：纵向文本块（≥2 直接 TEXT 子节点、同左/同右对齐、y 递增）→ 提示 flex-direction:column', () => {
     // 实锤 mc-max-1790496527811 设备 cons 区：标签在上、数值在下，漏 column 被横排挤一行。
-    // 纯几何判定（同 x、y 递增），不按组件名/class。
+    // 纯几何判定（同左或同右对齐、y 递增），不按组件名/class。
     const fg = {
       document: {
         id: 'root', name: 'cp-设备监测', type: 'FRAME',
@@ -1288,7 +1336,162 @@ describe('buildSectionStyleFacts（E1 治本 · 语义化样式事实）', () =>
     }
     const tree = [{ id: 'cons', type: 'container', title: 'cons', sourceNodeIds: ['cons'] }]
     const out = buildSectionStyleFacts(tree, fg)
-    expect(out).toContain('文本块纵向(纯文本块·同x、y递增)：标签在上数值在下 → 该容器用 flex-direction:column')
+    expect(out).toContain('文本块纵向(纯文本块·同左或同右对齐、y递增)：标签在上数值在下 → 该容器用 flex-direction:column')
+  })
+
+  test('🛡️ T1（2026-09-29）：右对齐纵向文本块（左边缘不齐但右边缘对齐）→ 仍提示 column', () => {
+    // 实锤 mc-max-1790650861294 任务 2:3683（当日总流量数字卡）：
+    //   「34,620」(x=94,w=77,右=171) 与「江阴靖江长江隧道」(x=43,w=128,右=171)
+    //   左边缘差 51px ⇒ 原「同 x」判据判不齐 ⇒ 纵向事实缺失 ⇒ 数字卡顺序无约束。
+    const fg = {
+      document: {
+        id: 'root', name: 'cp-交通监测', type: 'FRAME',
+        children: [{
+          id: 'grp', name: 'Group 1321318553', type: 'GROUP', absoluteBoundingBox: box(43, 212, 128, 52),
+          children: [
+            { id: '3:a', name: 'd', type: 'TEXT', characters: '34,620', absoluteBoundingBox: box(94, 236, 77, 28), style: { fontSize: 24 }, fills: [{ type: 'SOLID', visible: true, color: { r: 0, g: 0.4, b: 0.9 } }] },
+            { id: '3:b', name: 't', type: 'TEXT', characters: '江阴靖江长江隧道', absoluteBoundingBox: box(43, 212, 128, 24), style: { fontSize: 16 }, fills: [{ type: 'SOLID', visible: true, color: { r: 0.2, g: 0.2, b: 0.2 } }] },
+          ],
+        }],
+      },
+    }
+    const tree = [{ id: 'grp', type: 'container', title: 'grp', sourceNodeIds: ['grp'] }]
+    const out = buildSectionStyleFacts(tree, fg)
+    expect(out).toContain('文本块纵向(纯文本块·同左或同右对齐、y递增)：标签在上数值在下 → 该容器用 flex-direction:column')
+  })
+
+  test('🛡️ 布局事实独立轨（2026-09-29）：布局事实与样式事实**分段**输出，且布局段自带结构强指令', () => {
+    // 背景：四类布局事实（重复单元 / 内部布局嵌套 / 横向顺序 / 文本块纵向）原与 `bg:` `color:` `尺寸:`
+    //   同属 secLines、同格式逐条输出，「文本块纵向」更被 parts.join(' | ') 拼进样式行 ⇒
+    //   下游 LLM 把它当**样式属性**而非**结构指令** ⇒ 事实下发却未被遵循
+    //   （实锤 mc-max-1790654134322-bc91bb18：`con` 子序仍环形最左、数字卡仍数值在上）。
+    const fg = {
+      document: {
+        id: 'root', name: 'cp-x', type: 'FRAME',
+        children: [{
+          id: 'grp', name: 'Group 1321318553', type: 'GROUP', absoluteBoundingBox: box(43, 212, 128, 52),
+          children: [
+            { id: '3:a', name: 'd', type: 'TEXT', characters: '34,620', absoluteBoundingBox: box(94, 236, 77, 28), style: { fontSize: 24 }, fills: [{ type: 'SOLID', visible: true, color: { r: 0, g: 0.4, b: 0.9 } }] },
+            { id: '3:b', name: 't', type: 'TEXT', characters: '江阴靖江长江隧道', absoluteBoundingBox: box(43, 212, 128, 24), style: { fontSize: 16 }, fills: [{ type: 'SOLID', visible: true, color: { r: 0.2, g: 0.2, b: 0.2 } }] },
+          ],
+        }],
+      },
+    }
+    const tree = [{ id: 'grp', type: 'container', title: 'grp', sourceNodeIds: ['grp'] }]
+    const out = buildSectionStyleFacts(tree, fg)
+
+    // ① 布局段存在，且带结构强指令（不是样式建议）
+    expect(out).toContain('布局与顺序真值')
+    expect(out).toContain('（布局与顺序真值 · 模板必须照此写）')
+    expect(out).toContain('违反上述顺序属于**结构缺陷**')
+    // ② 布局段**先于**样式段
+    expect(out.indexOf('（布局与顺序真值 · 模板必须照此写）')).toBeLessThan(
+      out.indexOf('（内部元素样式真值）'),
+    )
+    // ③ 样式段仍然存在（分段不是替换）
+    expect(out).toContain('（内部元素样式真值）')
+    // ④ 回归防线：布局事实**不得**再被拼进样式行（原形态 `尺寸:131×52 | 文本块纵向(...)`）
+    expect(out).not.toMatch(/尺寸:\d+×\d+ \| 文本块纵向/)
+  })
+
+  test('🛡️ T1 增强（2026-09-29）：DOM 序 ≠ 视觉 y 序 → 必须指名「从上到下」的具体元素顺序', () => {
+    // 审计（全语料 40 样本）：命中「纵向文本块」容器 76 个，其中 **19 个（25%）DOM 序与视觉序相反**
+    //   （实锤 2:3683 跨 8+ 轮任务稳定复现：DOM `[34,620, 江阴靖江长江隧道]`，
+    //     视觉 `[江阴靖江长江隧道, 34,620]`）⇒ 只给方向提示不够，LLM 照 DOM 序写即「数值在上」。
+    const fg = {
+      document: {
+        id: 'root', name: 'cp-x', type: 'FRAME',
+        children: [{
+          id: 'grp', name: 'Group 1321318553', type: 'GROUP', absoluteBoundingBox: box(43, 212, 128, 52),
+          children: [
+            { id: '3:a', name: 'd', type: 'TEXT', characters: '34,620', absoluteBoundingBox: box(94, 236, 77, 28), style: { fontSize: 24 }, fills: [{ type: 'SOLID', visible: true, color: { r: 0, g: 0.4, b: 0.9 } }] },
+            { id: '3:b', name: 't', type: 'TEXT', characters: '江阴靖江长江隧道', absoluteBoundingBox: box(43, 212, 128, 24), style: { fontSize: 16 }, fills: [{ type: 'SOLID', visible: true, color: { r: 0.2, g: 0.2, b: 0.2 } }] },
+          ],
+        }],
+      },
+    }
+    const tree = [{ id: 'grp', type: 'container', title: 'grp', sourceNodeIds: ['grp'] }]
+    const out = buildSectionStyleFacts(tree, fg)
+    expect(out).toContain('（⚠️ DOM 序与视觉序不符：从上到下应为 「江阴靖江长江隧道」 → 「34,620」）')
+  })
+
+  test('🛡️ T1 反例（2026-09-29）：DOM 序 == 视觉 y 序 → 不追加顺序提示（避免噪声）', () => {
+    // 审计：76 个纵向文本块中 57 个（75%）DOM 序与视觉序一致 ⇒ 这些**不该**收到冗余提示。
+    const fg = {
+      document: {
+        id: 'root', name: 'cp-x', type: 'FRAME',
+        children: [{
+          id: 'grp', name: 'Group 1321318553', type: 'GROUP', absoluteBoundingBox: box(43, 212, 128, 52),
+          children: [
+            { id: '4:a', name: 't', type: 'TEXT', characters: '江阴大桥', absoluteBoundingBox: box(43, 212, 128, 24), style: { fontSize: 16 }, fills: [{ type: 'SOLID', visible: true, color: { r: 0.2, g: 0.2, b: 0.2 } }] },
+            { id: '4:b', name: 'd', type: 'TEXT', characters: '82,379', absoluteBoundingBox: box(43, 240, 128, 28), style: { fontSize: 24 }, fills: [{ type: 'SOLID', visible: true, color: { r: 0, g: 0.4, b: 0.9 } }] },
+          ],
+        }],
+      },
+    }
+    const tree = [{ id: 'grp', type: 'container', title: 'grp', sourceNodeIds: ['grp'] }]
+    const out = buildSectionStyleFacts(tree, fg)
+    // 方向事实仍在（标签在上数值在下）
+    expect(out).toContain('文本块纵向(纯文本块·同左或同右对齐、y递增)：标签在上数值在下 → 该容器用 flex-direction:column')
+    // 但**不**追加「DOM 序与视觉序不符」
+    expect(out).not.toContain('DOM 序与视觉序不符')
+  })
+
+  test('🛡️ C1（2026-09-29 · 根源判据）：面积 <3% 但承载成词文本的窄条 → 仍提升为 section', () => {
+    // 实锤 mc-max-1790650861294：图表小标题 Frame 2136639396（118x21）占父容器（426x556）
+    //   仅 1.05%，被 3% 相对面积阈值当「装饰性小元素」过滤 ⇒ 从未进 section 计划
+    //   ⇒ 产物永远没有图表小标题。
+    // 判据（**不含与设计稿耦合的绝对尺寸**）：直接子有成词 TEXT（≥2 字符）且其宽 ≥ 容器宽 50%。
+    // ⚠️ 用例必须放在**第二层**：顶层 section（root 直接子）只过滤 BG_TYPES/bg-*，无条件提升，
+    //    不走 shouldPromoteToSection（放顶层会让本测试变成假阳性）。
+    const fg = {
+      document: {
+        id: 'root', name: 'cp-x', type: 'FRAME', absoluteBoundingBox: box(0, 0, 426, 556),
+        children: [{
+          id: 'slot', name: 'slot-当日总流量', type: 'FRAME', absoluteBoundingBox: box(0, 0, 426, 556),
+          children: [{
+            id: 'title', name: 'Frame 2136639396', type: 'FRAME', absoluteBoundingBox: box(0, 0, 118, 21),
+            children: [
+              { id: 'ico', name: 'icon', type: 'VECTOR', absoluteBoundingBox: box(0, 4, 3, 12) },
+              { id: 'txt', name: 't', type: 'TEXT', characters: '江阴靖江长江隧道', absoluteBoundingBox: box(4, 0, 112, 21), style: { fontSize: 14 }, fills: [{ type: 'SOLID', visible: true, color: { r: 0.2, g: 0.2, b: 0.2 } }] },
+            ],
+          }],
+        }],
+      },
+    }
+    const d = deriveSectionsFromFigmaTree(fg)
+    const slot = (d?.sections || []).find((s) => String(s.id) === 'slot')
+    expect(slot).toBeTruthy()
+    // ⚠️ 必须断言 `isNestedSection === true`（真被提升），不能只断言"存在于 children"：
+    //    `deriveNestedSections` 在**无任何**子节点被提升时会 fail-open 回退成 item 列表，
+    //    那种情况下节点也在 children 里，但**不是** section（该断言原版是假阳性）。
+    const title = (slot.children || []).find((c) => String(c.id) === 'title')
+    expect(title?.isNestedSection).toBe(true)
+  })
+
+  test('🛡️ C1 反例：微型徽章（14x14 含单字符「6」）→ 仍被 3% 面积阈值过滤（不提升）', () => {
+    // 全语料 40 样本实证：`num`(14x14, 内容「6」) 是唯一被「文本宽 ≥50%」判据误纳的形态
+    //   ⇒ 加「成词（≥2 字符）」闸门后排除，结果与旧绝对尺寸判据逐条一致。
+    const fg = {
+      document: {
+        id: 'root', name: 'cp-x', type: 'FRAME', absoluteBoundingBox: box(0, 0, 400, 300),
+        children: [{
+          id: 'slot', name: 'slot-x', type: 'FRAME', absoluteBoundingBox: box(0, 0, 400, 300),
+          children: [{
+            id: 'num', name: 'num', type: 'FRAME', absoluteBoundingBox: box(0, 0, 14, 14),
+            children: [
+              { id: 'n', name: 'n', type: 'TEXT', characters: '6', absoluteBoundingBox: box(3, 2, 8, 10), style: { fontSize: 10 }, fills: [{ type: 'SOLID', visible: true, color: { r: 1, g: 1, b: 1 } }] },
+            ],
+          }],
+        }],
+      },
+    }
+    const d = deriveSectionsFromFigmaTree(fg)
+    const slot = (d?.sections || []).find((s) => String(s.id) === 'slot')
+    expect(slot).toBeTruthy()
+    const num = (slot.children || []).find((c) => String(c.id) === 'num')
+    // 未被提升为嵌套 section（仍可能作为 item 保留 —— fail-open 回退，见上）
+    expect(num?.isNestedSection).not.toBe(true)
   })
 
   test('🛡️ Fix3 收窄反例：混合容器（含 bg/icon 兄弟 + 2 纵排 TEXT）→ 不提示 column（卡片实为 row）', () => {
@@ -1655,5 +1858,185 @@ describe('⑤ dedupeDuplicateSections：chart 多真值豁免', () => {
     const chart = { id: '89:38', type: 'chart', chartType: 'bar', elementCount: 23, sourceNodeIds: ['89:42'] }
     expect(dedupeDuplicateSections([container, chart])).toHaveLength(1)
     expect(dedupeDuplicateSections([chart, container])).toHaveLength(1)
+  })
+})
+
+/**
+ * 2026-09-29 判据修正：`describeRepeatedItemLayout` 的「重复单元」识别。
+ * 事故（mc-max-1790667854851-5f5bce3a）：3 项列表项（icon 左 / 文字右）宽度随内容变化
+ *   （141/120/140），旧判据「宽高各差 <8px」⇒ similar 只剩 2 ⇒ 无事实 ⇒ 产物竖排堆叠、数值被裁。
+ * 修正：similar = 同高(<8px) + 宽度相近（相对差 ≤20%，或绝对差 <8px）。
+ * 全语料审计：现状生效 1591 → 新增 94 例，父名 100% 为 Group 2136639043，零噪声。
+ */
+describe('buildSectionStyleFacts — 重复单元识别（2026-09-29 判据修正）', () => {
+  const box = (x, y, w, h) => ({ x, y, width: w, height: h })
+  const asText = (out) => (typeof out === 'string' ? out : JSON.stringify(out))
+
+  // 单个列表项：bg(整块背景) + icon(左) + 文字组(右上) + 数值组(右下)
+  const listItem = (id, name, x, w) => ({
+    id, name, type: 'GROUP', absoluteBoundingBox: box(x, 984, w, 74),
+    children: [
+      { id: id + '-bg', name: 'bg', type: 'FRAME', absoluteBoundingBox: box(x, 984, w, 74) },
+      { id: id + '-icon', name: 'icon', type: 'GROUP', absoluteBoundingBox: box(x + 4, 995, 48, 52) },
+      {
+        id: id + '-label', name: 'Group 2136638345', type: 'GROUP', absoluteBoundingBox: box(x + 52, 1000, 50, 18),
+        children: [{ id: id + '-t1', name: 'label', type: 'TEXT', characters: '危化品车', absoluteBoundingBox: box(x + 52, 1000, 50, 18), style: { fontSize: 12 }, fills: [{ type: 'SOLID', visible: true, color: { r: 1, g: 1, b: 1 } }] }],
+      },
+      {
+        id: id + '-value', name: 'Group 2136638342', type: 'GROUP', absoluteBoundingBox: box(x + 53, 1022, 39, 23),
+        children: [{ id: id + '-t2', name: 'value', type: 'TEXT', characters: '51', absoluteBoundingBox: box(x + 53, 1022, 39, 23), style: { fontSize: 16 }, fills: [{ type: 'SOLID', visible: true, color: { r: 1, g: 1, b: 1 } }] }],
+      },
+    ],
+  })
+
+  const listFg = (kids) => ({
+    document: {
+      id: 'root', name: 'cp', type: 'FRAME',
+      children: [{
+        id: '2:8023', name: 'Group 2136639043', type: 'GROUP', absoluteBoundingBox: box(37, 984, 378, 74),
+        children: kids,
+      }],
+    },
+  })
+
+  it('⭐ 3 项列表、宽度随内容变化（141/120/140）→ 输出「重复单元×3 + 横向 flex + icon 左」', () => {
+    const fg = listFg([
+      listItem('136:127', '3', 274, 141),
+      listItem('136:128', '2', 166, 120),
+      listItem('136:129', '1', 37, 140),
+    ])
+    const txt = asText(buildSectionStyleFacts([{ id: 'list-section', figmaNodeId: '2:8023', name: 'list' }], fg))
+    // 旧行为：宽差 21px > 8 ⇒ similar=2 ⇒ 完全无此事实 ❌
+    expect(txt).toContain('重复单元×3')
+    expect(txt).toContain('横向 flex')
+    expect(txt).toContain('左侧 icon')
+  })
+
+  it('🛡️ 反例：sub-header（标题 204 + 按钮 86 + 按钮 67，同高同行但宽差 3 倍）→ 不输出重复单元事实', () => {
+    // 「只判高度」的方案会在此新增 132 例误报；加「宽度相近」后全部排除。
+    const mk = (id, name, x, w, h) => ({
+      id, name, type: 'FRAME', absoluteBoundingBox: box(x, 733, w, h),
+      children: [{ id: id + '-t', name: 't', type: 'TEXT', characters: 'x', absoluteBoundingBox: box(x, 733, w, h), style: { fontSize: 12 }, fills: [{ type: 'SOLID', visible: true, color: { r: 1, g: 1, b: 1 } }] }],
+    })
+    const fg = {
+      document: {
+        id: 'root', name: 'cp', type: 'FRAME',
+        children: [{
+          id: '2:3565', name: 'sub-header', type: 'FRAME', absoluteBoundingBox: box(36, 730, 378, 24),
+          children: [mk('h1', 'title', 128, 204, 18), mk('h2', 'btn-active', 36, 86, 24), mk('h3', 'btn', 347, 67, 18)],
+        }],
+      },
+    }
+    const txt = asText(buildSectionStyleFacts([{ id: 'hdr', figmaNodeId: '2:3565', name: 'header' }], fg))
+    expect(txt).not.toContain('重复单元×3（')
+  })
+
+  it('回归保护：4 个同尺寸子项（旧判据同样生效）→ 仍输出重复单元×4（新判据严格包含旧判据）', () => {
+    // 数证：新宽判据 max(8, w0*0.2) ≥ 8 恒成立 ⇒ 旧判据命中的容器新判据必然命中，零回归。
+    const fg = listFg([
+      listItem('a', '1', 0, 120),
+      listItem('b', '2', 120, 120),
+      listItem('c', '3', 240, 120),
+      listItem('d', '4', 360, 120),
+    ])
+    const txt = asText(buildSectionStyleFacts([{ id: 'list-section', figmaNodeId: '2:8023', name: 'list' }], fg))
+    expect(txt).toContain('重复单元×4')
+  })
+})
+
+/**
+ * 2026-09-29 治本：**祖先「布局容器」的重复单元事实**。
+ *
+ * 事故（mc-max-1790669176199-94b3bc69）：planner 把重复单元容器 `2:8023` 标成
+ *   `layoutSource='container-rebuild'`（`isLayoutContainerSection` 为真），`walkLeaves`
+ *   对容器**穿透跳过** ⇒ `describeRepeatedItemLayout(2:8023)` 从不执行 ⇒ **零「重复单元」事实**；
+ *   穿透后落地的 leaf 是**重复项原型**（`136:127-list`，itemCount=3），在单张卡身上
+ *   `describeRepeatedItemLayout` 必然 null ⇒ LLM 只能按 DOM 序把 icon/label/value 竖排堆叠
+ *   （产物 `.list-item{flex-direction:column}`，Figma 真值是 row）。
+ *
+ * 治本：给 leaf 的**祖先容器 section 根节点**补一次 `describeRepeatedItemLayout`（只跑这一条轨）。
+ * 全语料审计（388 产物 / 同一口径）：新增 `重复单元×3` ×82 行、`重复单元×8` ×16 行，
+ *   **删除布局事实 0、删除样式真值行 0**（纯增量）。
+ */
+describe('buildSectionStyleFacts — 祖先布局容器的重复单元事实（2026-09-29 治本）', () => {
+  const box = (x, y, w, h) => ({ x, y, width: w, height: h })
+
+  // 单个列表项：bg(整块背景) + icon(左) + 文字组(右上) + 数值组(右下)
+  const listItem = (id, name, x, w, h = 74, y = 984) => ({
+    id, name, type: 'GROUP', absoluteBoundingBox: box(x, y, w, h),
+    children: [
+      { id: id + '-bg', name: 'bg', type: 'FRAME', absoluteBoundingBox: box(x, y, w, h) },
+      { id: id + '-icon', name: 'icon', type: 'GROUP', absoluteBoundingBox: box(x + 4, y + 11, 48, 52) },
+      {
+        id: id + '-label', name: 'Group 2136638345', type: 'GROUP', absoluteBoundingBox: box(x + 52, y + 16, 50, 18),
+        children: [{ id: id + '-t1', name: 'label', type: 'TEXT', characters: '危化品车', absoluteBoundingBox: box(x + 52, y + 16, 50, 18), style: { fontSize: 12 }, fills: [{ type: 'SOLID', visible: true, color: { r: 1, g: 1, b: 1 } }] }],
+      },
+      {
+        id: id + '-value', name: 'Group 2136638342', type: 'GROUP', absoluteBoundingBox: box(x + 53, y + 38, 39, 23),
+        children: [{ id: id + '-t2', name: 'value', type: 'TEXT', characters: '51', absoluteBoundingBox: box(x + 53, y + 38, 39, 23), style: { fontSize: 16 }, fills: [{ type: 'SOLID', visible: true, color: { r: 1, g: 1, b: 1 } }] }],
+      },
+    ],
+  })
+
+  // figma 树：136:121(slot) → 2:8023(Group) → N 个同尺寸子项
+  const nestedFg = (items) => ({
+    document: {
+      id: 'root', name: 'cp', type: 'FRAME',
+      children: [{
+        id: '136:121', name: 'slot', type: 'FRAME', absoluteBoundingBox: box(37, 963, 377, 86),
+        children: [{
+          id: '2:8023', name: 'Group 2136639043', type: 'GROUP', absoluteBoundingBox: box(37, 984, 378, 74),
+          children: items,
+        }],
+      }],
+    },
+  })
+
+  // section 树（复刻真机形态）：容器(136:121) → 容器(2:8023) → leaf(136:127-list，重复项原型)
+  const nestedSections = () => ([{
+    id: '136:121', title: 'slot', type: 'container', isLayoutContainer: true, layoutSource: 'container-rebuild',
+    children: [{
+      id: '2:8023', title: 'Group 2136639043', type: 'container', isLayoutContainer: true, layoutSource: 'container-rebuild',
+      children: [{ id: '136:127-list', title: '3', type: 'list', itemCount: 3, sourceNodeIds: ['136:127'] }],
+    }],
+  }])
+
+  it('⭐ 重复单元容器被标为 container：仍产出「重复单元×3 + 单元之间横向并排」（真机 94b3bc69 形态）', () => {
+    const fg = nestedFg([
+      listItem('136:127', '3', 274, 141),
+      listItem('136:128', '2', 166, 120),
+      listItem('136:129', '1', 37, 140),
+    ])
+    const txt = String(buildSectionStyleFacts(nestedSections(), fg))
+    // 修复前：walkLeaves 穿透容器 ⇒ 完全无「重复单元」事实 ⇒ LLM 把 icon/label/value 竖排堆叠
+    expect(txt).toContain('重复单元×3')
+    expect(txt).toContain('横向并排')
+    expect(txt).toContain('横向 flex')
+    expect(txt).toContain('左侧 icon')
+  })
+
+  it('🛡️ 纵向堆叠的 8 项统计表：必须判「纵向堆叠」而非「横向并排」', () => {
+    const items = Array.from({ length: 8 }, (_, i) => listItem(`s${i}`, String(i), 100, 220, 32, 100 + i * 34))
+    const fg = nestedFg(items)
+    const sections = [{
+      id: '136:121', title: 'slot', type: 'container', isLayoutContainer: true, layoutSource: 'container-rebuild',
+      children: [{
+        id: '2:8023', title: '统计数据', type: 'container', isLayoutContainer: true, layoutSource: 'container-rebuild',
+        children: [{ id: 's0-list', title: '统计', type: 'list', itemCount: 8, sourceNodeIds: ['s0'] }],
+      }],
+    }]
+    const txt = String(buildSectionStyleFacts(sections, fg))
+    expect(txt).toContain('重复单元×8')
+    expect(txt).toContain('纵向堆叠')
+    expect(txt).not.toContain('重复单元×8（220×32）：8 个单元之间 **横向并排**')
+  })
+
+  it('🛡️ 容器祖先不是重复单元（只有 2 个子项）→ 不产出重复单元事实', () => {
+    const fg = nestedFg([
+      listItem('c1', 'A', 37, 180),
+      listItem('c2', 'B', 220, 180),
+    ])
+    const txt = String(buildSectionStyleFacts(nestedSections(), fg))
+    expect(txt).not.toContain('重复单元×')
   })
 })

@@ -13,6 +13,49 @@ import * as microcodePrompt from './microcode/prompt-builder.js';
 import * as microcodeValidator from './microcode/code-validator.js';
 import * as microcodeGenerator from './microcode/code-generator.js';
 import * as microcodeResources from './microcode/resource-mounter.js';
+
+// 🛡️ 2026-09-30 治本：用户在前端「面板」切换器选的 panelType 必须如实落到产物里。
+// 历史病灶：lite.service.ts 的 prompt 模板里两处硬编码 `panelKey="default-panel"`，LLM 直接照抄不替换。
+// 即使 prompt 已治本（panelKeyValue 真值注入），LLM 仍可能不遵守 → 产物落盘兜底必备。
+// 规则：
+//   - 仅对 .vue 文件生效
+//   - 仅替换 `<base-panel ... panelKey="default-panel" ...>` → `panelKey="<用户选择>"`
+//   - 当 panelType === 'default-panel'（或缺失）→ 不动文件（保持现状，避免误伤）
+//   - 不替换 base-panel 的 `packageKey`/`slotProps`/其他属性
+//   - 不改写已有正确值的 panelKey（若 LLM 自己写对了不覆盖）
+//   - 返回 { files, replaced: [{ path, from, to }] }，方便日志审计
+function enforcePanelKeyInFiles(files, panelType) {
+  if (!files || typeof files !== 'object') return { files, replaced: [] };
+  const target = String(panelType || '').trim();
+  if (!target || target === 'default-panel') {
+    // 浅色/未指定 → 不动产物（默认行为），避免替换零值出错
+    return { files, replaced: [] };
+  }
+  // 只匹配 `panelKey="default-panel"` 字面量，避免误改用户自定义的 panelKey（如第三方面板）
+  // 不区分大小写、不匹配带前缀缩写（panel-key 等）。Vue 模板里 `<base-panel>` 标签上的属性。
+  const re = /(<base-panel\b[^>]*?\bpanelKey\s*=\s*["'])default-panel(["'])/gi;
+  const replaced = [];
+  const next = { ...files };
+  for (const [rel, content] of Object.entries(files)) {
+    if (!rel || typeof content !== 'string') continue;
+    if (!rel.endsWith('.vue')) continue;
+    if (!re.test(content)) {
+      re.lastIndex = 0; // 注意：global 正则的 lastIndex 必须重置，否则跨文件会漏匹配
+      continue;
+    }
+    re.lastIndex = 0;
+    let count = 0;
+    const updated = content.replace(re, (_m, prefix, suffix) => {
+      count += 1;
+      return `${prefix}${target}${suffix}`;
+    });
+    if (count > 0) {
+      next[rel] = updated;
+      replaced.push({ path: rel, from: 'default-panel', to: target, count });
+    }
+  }
+  return { files: next, replaced };
+}
 import * as resourceMountPlan from './microcode/resource-mount-plan.js';
 // 🛡️ 阶段4（2026-09-17）：业务样式 var() 直引自愈（模式 A → B，文字颜色白字黑底根治）
 import { healBusinessStyleVarRefs } from '../utils/theme-color-guard.js';
@@ -45,6 +88,9 @@ import {
   dedupeDuplicateSections,
   assignSectionComponentNames,
   semanticClassKeywords,
+  indexFigmaNodes,
+  buildChildrenMap,
+  collectSubtreeTexts,
 } from '../utils/section-tree.js';
 import {
   buildAllConstraintReinforcements,
@@ -72,7 +118,6 @@ import {
 import {
   injectChartMinHeight as _injectChartMinHeightPure,
   deduplicateBackgroundImages as _deduplicateBackgroundImagesPure,
-  fixBackgroundImageSize as _fixBackgroundImageSizePure,
   validateContainerSize as _validateContainerSizePure,
   validateResourceUsage as _validateResourceUsagePure,
   autoFixSubComponentSize as _autoFixSubComponentSizePure,
@@ -88,8 +133,14 @@ import {
   injectPerCharTextSegments as _injectPerCharTextSegmentsPure,
   stripRedundantInnerBgWhenHostHasBg as _stripRedundantInnerBgPure,
 } from '../utils/post-process.js';
+// 🎯 2026-09-29 图表容器双刀（刀1 剥 index.vue inline min-height:0 / 刀2 内层 wrapper 承载 echarts）
+import {
+  stripChartInlineMinHeight as _stripChartInlineMinHeight,
+  wrapChartRootAsInnerWrapper as _wrapChartRootAsInnerWrapper,
+} from '../utils/chart-container-guard.js';
 import {
   validateVueSfc,
+  findDuplicateSlotNames,
   extractLessGlobalVars,
 } from '../utils/sfc-syntax-validation.js';
 import {
@@ -793,6 +844,13 @@ export class MicrocodeEngineer extends BaseAgent {
       //   但模型完全不知道 → 全部 section 堆进 index.vue（90k tokens + 无子组件产物）。
       //   改为 code/vue 均注入（template/script 段是生成 index.vue 的主体，必须看到拆分要求）。
       // 🎯 Phase 2 方案1: 集成内部子组件拆分
+      // 🎯 2026-09-29 治本·C：本节真值上下文（文本 + 资源），只构建一次，供下面各分支共用。
+      //   事实源与 section-content-guard#checkSectionExclusiveEvidence 同一套（避免口径漂移）。
+      const truthCtx = this._buildSectionTruthCtx(
+        input.figmaNodeData,
+        resolveResourceDomMapping(input.resourceDomMapping, input.outputPath),
+      );
+
       if (
         leafSections.length > 0 &&
         (fileType === 'code' || fileType === 'vue')
@@ -825,6 +883,7 @@ export class MicrocodeEngineer extends BaseAgent {
             }
 
             p += `\n`;
+            p += this._sectionTruthLines(sec, truthCtx);
 
             const listLike =
               sec.collapsed === true ||
@@ -1075,6 +1134,8 @@ export class MicrocodeEngineer extends BaseAgent {
               p += `（1 个模板 + v-for，禁止拆成 N 个文件）`;
             }
             p += `\n`;
+            // 🎯 2026-09-29 治本·C：非强制分支同样贴真值（避免同类缺陷按分支复发）
+            p += this._sectionTruthLines(sec, truthCtx);
           });
         }
 
@@ -2985,21 +3046,17 @@ export class MicrocodeEngineer extends BaseAgent {
       // 微码组件的真实样式（width/height/background-size/url）主要写在 resources/styles/common.less，
       // 而 _postProcessIndexVue 只处理 package/index.vue，导致 T06 容器尺寸校验漏掉
       // common.less 里的「子容器尺寸 == 根容器」BBox fallback（如 title-deco 420×186，实锤
-      // mc-max-1787717625475）。此处对 .less/.css 统一补跑 T05（bg-size→cover）/T06（容器尺寸）/T07（资源引用）。
+      // mc-max-1787717625475）。此处对 .less/.css 统一补跑 T06（容器尺寸）/T07（资源引用）。
       const _rootBoxForStyle = input.figmaNodeData?.absoluteBoundingBox;
       for (const [p, c] of Object.entries(allFiles)) {
         if (typeof c !== 'string') continue;
         if (!p.endsWith('.less') && !p.endsWith('.css')) continue;
 
-        // T05: 硬编码 background-size px → cover（连字符语法）
-        let styleContent = _fixBackgroundImageSizePure(c);
-        if (styleContent !== c) {
-          allFiles[p] = styleContent;
-          this.logger.info(
-            '🔧 T05: 样式文件 bg-size 修正（硬编码 px → cover）',
-            { file: p },
-          );
-        }
+        // 🗑️ T05: bg-size 修正 —— 已删除（2026-09-29 删减法）。
+        //   它无条件把 `background-size: Xpx Ypx` 改成 `cover`，与 `inferBackgroundStyle`
+        //   给局部背景层输出的「px 尺寸 + 偏移」真值方向相反；全语料 14/14 命中全是真值。
+        //   详见 utils/post-process.js 顶部墓碑注释。
+        let styleContent = c;
 
         // T06: 容器尺寸校验 + 确定性自动修正（BBox fallback → auto，回写修正结果）
         if (_rootBoxForStyle?.width && _rootBoxForStyle?.height) {
@@ -3140,6 +3197,43 @@ export class MicrocodeEngineer extends BaseAgent {
         if (collapsedVue !== c) {
           allFiles[p] = collapsedVue;
           this.logger.warn(`🛡️ 已修复孤儿 JSDoc 注释行 / 双 c- 前缀: ${p}`);
+        }
+        // 🛡️ 2026-09-29 治本 · 重名插槽 fail-fast（必须在下面的 `<template>` 去重纠偏器**之前**）
+        //
+        // 根因（a349ce83 实锤，server.log 18:37:42）：宿主面板契约（base-panel 的 4 个固定槽名，
+        // 每槽只有一个 `<slot name>`）决定「一个槽名只能出现一次」，而确定性装配器
+        // `buildDeterministicIndexTemplate` 曾对**每个** header 叶各产一个
+        // `<template #header-right>`（3 个 header 叶 ⇒ 3 个重名插槽）。
+        //
+        // 危害是**全静默**的，不是"报错"：
+        //   ① 资源注入器自检跑在本门禁**之前**，读到重名 ⇒ `writeGuarded` 回滚
+        //      （"拒绝把合格产物改坏"）⇒ 资源未挂 ⇒ slot 级回退糊满整槽（bg1 实锤）；
+        //   ② 本循环里的 `_deduplicateTemplateBlocks` 又"恰好"把重名块删成合法
+        //      （其正则 `<template\b[^>]*>([\s\S]*?)<\/template>` 会误匹配子级 slot
+        //      `<template>`，保留"根 + 第一个 slot"、丢掉其余），只留一行
+        //      「已去重 <template> 标签（3 个）」的静默修复 ⇒ `validateVueSfc` 通过、
+        //      任务"成功"，缺陷被埋进产物（残留空行即其删除痕迹）。
+        //
+        // 故此处用**独立判据**（`findDuplicateSlotNames`，口径直接复用 compileTemplate +
+        // formatCompilerError，与下方 validateVueSfc 的报错串逐字同源）在纠偏器之前显式判死：
+        // 报出 `文件:行:列`，不再让纠偏器掩盖装配器缺陷。供给端已同步收缩（每槽名至多 1 个），
+        // 故命中即代表装配器回归。`package/index.vue` 不可降级 ⇒ 走既有 fail-closed 路径。
+        const _dupSlots = findDuplicateSlotNames(allFiles[p], p);
+        if (_dupSlots.errors.length > 0) {
+          syntaxIssues.push(..._dupSlots.errors);
+          badVueFiles.push({ path: p, errors: _dupSlots.errors });
+          this.logger.error('🚨 检测到重名插槽定义（装配器缺陷，非模型幻觉）', {
+            file: p,
+            duplicates: _dupSlots.duplicates,
+            errors: _dupSlots.errors,
+          });
+          input.onProgress?.({
+            stage: '语法校验',
+            message: `🚨 ${p} 存在重名插槽定义（同一槽名出现多次）：${_dupSlots.errors[0]}`,
+            status: 'error',
+            details: _dupSlots.duplicates,
+          });
+          continue;
         }
         // 🛡️ 重复 <template> 去重（避免门禁硬阻断整个任务）
         const dedup = this._deduplicateTemplateBlocks(allFiles[p]);
@@ -3661,6 +3755,100 @@ export class MicrocodeEngineer extends BaseAgent {
         error: e?.message || String(e),
       });
       return [];
+    }
+  }
+
+  /**
+   * 🎯 2026-09-29 治本·C（用户质问：不该由 LLM 自由发挥）：把「本节真值」贴到每个 section 行下。
+   *
+   * 背景（真机实锤 c-traffic-monitor / mc-max-1790657317082-67u1cdxz）：
+   *   13 个叶子 section 中有 4 个（`2:3680` / `2:3683` / `2:7794` / `2:7625`）的
+   *   `responsibility` 是占位符 —— `Group 1321318553（请按功能拆分）`，模型逐行读到的只有
+   *   Figma 分组名；它们的真值（`2:3680` = 江阴大桥 / 82,379）只存在于 figma-node-data.json，
+   *   而该文件被 `contextManifest.excluded` 排除 ⇒ 模型无从得知，只能猜 →
+   *   把隔壁 `2:3438` 的「车型分布」卡（含 `客车/22350` 与 `88:36` 背景图）整套搬了进来。
+   *
+   * 做法：在**每个 section 自己的行下**贴两行真值（文本 + 资源），位置比 prompt 末尾那段
+   *   「内容归属契约」更贴近模型的注意力（逐 section 必读）。
+   *   事实源与 `section-content-guard#checkSectionExclusiveEvidence` **完全同一套**
+   *   （indexFigmaNodes / buildChildrenMap / collectSubtreeTexts + resourceDomMapping.figmaNodeId），
+   *   避免两处各自计算导致口径漂移。
+   */
+  _buildSectionTruthCtx(figmaRoot, resourceDomMapping) {
+    try {
+      if (!figmaRoot) return null;
+      const root = figmaRoot.document || figmaRoot;
+      const index = indexFigmaNodes(root);
+      if (index.size === 0) return null;
+      return { index, childrenOf: buildChildrenMap(index), resourceDomMapping };
+    } catch (e) {
+      this.logger.warn('🎯 section 真值上下文构建失败（非阻断）', {
+        error: e?.message || String(e),
+      });
+      return null;
+    }
+  }
+
+  /** 取某 section 子树内的节点 id 集合（与守卫同口径）。 */
+  _collectSubtreeIds(sec, ctx) {
+    const ids = new Set();
+    const walk = (id) => {
+      const key = String(id);
+      if (ids.has(key) || !ctx.index.has(key)) return;
+      ids.add(key);
+      for (const c of ctx.childrenOf.get(key) || []) walk(c);
+    };
+    for (const id of Array.isArray(sec?.sourceNodeIds) ? sec.sourceNodeIds : []) walk(id);
+    return ids;
+  }
+
+  /** 生成某个叶子 section 的「真值文案 + 真值资源」两行提示；ctx 为 null 时返回空串。 */
+  _sectionTruthLines(sec, ctx) {
+    if (!sec || !ctx) return '';
+    try {
+      const nodeIds = this._collectSubtreeIds(sec, ctx);
+      const texts = [];
+      const seen = new Set();
+      for (const id of nodeIds) {
+        for (const it of collectSubtreeTexts(id, ctx.index, ctx.childrenOf)) {
+          if (seen.has(it.text)) continue;
+          seen.add(it.text);
+          texts.push(it);
+        }
+      }
+      const files = new Set();
+      for (const m of Array.isArray(ctx.resourceDomMapping) ? ctx.resourceDomMapping : []) {
+        const nodeId = m?.figmaNodeId || m?.nodeId;
+        const file = m?.resourceFile || m?.fileName || m?.filename;
+        if (!nodeId || !file) continue;
+        if (!nodeIds.has(String(nodeId))) continue;
+        files.add(String(file).split('/').pop());
+      }
+
+      let out = '';
+      if (texts.length > 0) {
+        const list = texts
+          .sort((a, b) => (a.x ?? 0) - (b.x ?? 0))
+          .map(
+            (t) =>
+              `${t.text}${typeof t.x === 'number' ? `(x≈${Math.round(t.x)})` : ''}`,
+          )
+          .join('、');
+        out += `   🎯 本节真值文案（**只允许出现这些**，禁止借用其它 section 的文本）：${list}\n`;
+      } else {
+        out += `   🎯 本节真值文案：**无**（本节子树无文本节点，禁止自造文案）\n`;
+      }
+      if (files.size > 0) {
+        out += `   🖼 本节真值资源（**只允许引用这些**）：${[...files].join('、')}\n`;
+      } else {
+        out += `   🖼 本节真值资源：**无**（本节子树无图片/背景节点，禁止引用任何图片或背景）\n`;
+      }
+      return out;
+    } catch (e) {
+      this.logger.warn('🎯 section 真值贴行失败（非阻断）', {
+        error: e?.message || String(e),
+      });
+      return '';
     }
   }
 
@@ -4500,13 +4688,39 @@ export class MicrocodeEngineer extends BaseAgent {
   }
 
   writeFiles(files, outputPath) {
+    // 🛡️ 2026-09-30 治本：用户选的 panelType 必须如实落到产物里。
+    //   病灶：lite.service.ts prompt 里硬编码 panelKey="default-panel"，LLM 照抄；
+    //   即使 prompt 已治本，LLM 仍可能不遵守。在落盘前确定性兜底替换。
+    //   覆盖所有 writeFiles 调用点（首批 / 修复批 / 最终统一批），避免中间环节读错。
+    let _panelTypeForced = files;
+    if (this._panelType && this._panelType !== 'default-panel') {
+      try {
+        const _enforced = enforcePanelKeyInFiles(files, this._panelType);
+        if (_enforced.replaced.length > 0) {
+          _panelTypeForced = _enforced.files;
+          this.logger.info('🛡️ panelKey 兜底替换（用户面板选择 → 产物统一）', {
+            target: this._panelType,
+            replaced: _enforced.replaced,
+            count: _enforced.replaced.reduce((s, r) => s + r.count, 0),
+          });
+        }
+      } catch (_peErr) {
+        // 兜底器自身异常 → 不阻断主流程，沿用原 files
+        if (this.logger) {
+          this.logger.warn('🛡️ panelKey 兜底替换跳过（非致命）', {
+            error: _peErr?.message || String(_peErr),
+          });
+        }
+        _panelTypeForced = files;
+      }
+    }
     // 🛡️ 2026-09-03（管线 A 方案）：子组件类样式收敛进 common.less。
     // 挂在写盘统一出口，覆盖主产物 / 修复产物 / 最终真值三路 files。
     // 目的：预览加载器（vue3-sfc-loader 0.9.5）scoped scopeId 失配 → 子组件
     // <style scoped> 在预览页全失效（icon 按 PNG 原始尺寸、chart 容器 0 高）。
     // common.less 会被 precompileCss 编进 index.css（无 scoped）并由预览页全局注入。
     // 纯函数 + 失败/括号不平衡自动回退，不阻断主流程。
-    let targetFiles = files;
+    let targetFiles = _panelTypeForced;
     try {
       // 🛡️ P1.5（2026-09-11）类名单一写入者：**先归一，后采集**。
       // 顺序至关重要：归一（布尔方言 is-active → `${元素基类}--active`、修饰符形态对齐）
@@ -5646,20 +5860,9 @@ export class MicrocodeEngineer extends BaseAgent {
     });
   }
 
-  /**
-   * T05: bg-size 修正
-   * 委托给 utils/post-process.js 的纯函数
-   * 策略：把硬编码的 backgroundSize 'Xpx Ypx' 替换为 'cover'（背景图铺满容器）
-   */
-  _fixBackgroundImageSize(code) {
-    const result = _fixBackgroundImageSizePure(code);
-    if (result !== code) {
-      this.logger.info(
-        '🔧 Phase 2 T05: bg-size 修正（硬编码 px 尺寸替换为 cover）',
-      );
-    }
-    return result;
-  }
+  // 🗑️ T05 `_fixBackgroundImageSize` —— 已删除（2026-09-29 删减法）。
+  //   理由见 utils/post-process.js 顶部墓碑注释（无条件把 px 真值改成 cover，
+  //   与 inferBackgroundStyle 的局部背景几何真值方向相反，全语料 14/14 命中全是真值）。
 
   /**
    * T06: 容器尺寸校验 + 确定性自动修正（BBox fallback → auto）
@@ -5782,6 +5985,9 @@ export class MicrocodeEngineer extends BaseAgent {
       techStackHints, //技术栈提示
       _selfOptimization, // 🧠 自优化：历史模式驱动的 Prompt 增强
       panelType = 'default-panel', //面板类型
+      // 🛡️ 2026-09-30 治本：存到 this，供 writeFiles 统一兜底替换 panelKey。
+      //   即使 LLM 没遵守 prompt 的 panelKeyValue 注入，落盘时仍会强制对齐用户选择。
+      //   mc-max-1790692481760-8afc00c5 实锤：选了 aio-panel 产物仍是 default-panel。
       headerSlots = null, //面板头部插槽信息
       elementStyleMap = null, //  per-element 样式映射（来自 Style Mapper）
       backgroundBrightness = 'dark', //面板明暗主题
@@ -5811,6 +6017,10 @@ export class MicrocodeEngineer extends BaseAgent {
     // 能读到 graph 的 state.onProgress，agent-model 事件透传到 phase2 收集 actualTextModels，
     // 详情页才能显示实际命中的 deepseek/qwen 等模型（此前恒空回退配置值）。
     if (onProgress) this.onProgress = onProgress;
+
+    // 🛡️ 2026-09-30 治本：把 panelType 存到 this，writeFiles 入口统一兜底替换 panelKey。
+    //   与 prompt 真值注入形成双保险。详见 enforcePanelKeyInFiles 注释。
+    this._panelType = panelType;
 
     if (
       _visualDegraded ||
@@ -6015,6 +6225,13 @@ export class MicrocodeEngineer extends BaseAgent {
       // 优先取确定性模板 facts（buildDeterministicIndexTemplate），缺失时从 index.vue 落盘内容
       // 兜底提取一次（词尾猜测固化于此，下游归一器/规则②改读 facts、退役命名枚举）。
       let rootLayoutFacts = null;
+      // 🛡️ 确定性模板 facts 的**唯一出处**：generateCode 内 applyDeterministicIndexTemplate 写
+      //   `input._indexTemplateFacts`，再由 `codeResult.indexTemplateFacts` 带出本方法作用域。
+      //   下方 S1（子组件补 `data-section-id`）与 S2（退化子组件真值兜底）两处注册**只引用本变量**，
+      //   不得各自再取一次（2026-09-29 曾写成 `input?._indexTemplateFacts`，而 `input` 是
+      //   generateCode 的形参、在本方法（execute(params)）作用域不存在 → ReferenceError 被下方
+      //   两条 catch 静默吞掉 → CLEAN/STRUCTURE/NAMING/RESOURCE/STYLE/POLISH 全部规则从未执行，
+      //   实证 server.log「input is not defined」每任务一条）。
       const _indexTemplateFacts = codeResult.indexTemplateFacts || null;
       if (_indexTemplateFacts?.rootContainerClass) {
         rootLayoutFacts = {
@@ -6043,6 +6260,23 @@ export class MicrocodeEngineer extends BaseAgent {
           source: rootLayoutFacts.source,
         });
       }
+
+      // 🛡️ P0 修复（2026-09-29 · mc-max-1790663203915-209472ff 实锤）：跨作用域裸引用二期。
+      //   `effectiveMapping` 定义在 **generateCode 主干**（L1652，注释 L1645-1651 明确要求它
+      //   必须在 genSubComponents 之外），而下方「确定性后处理」块位于 **execute(params)** 作用域
+      //   ⇒ 下方第一处引用（P-09 双状态卡切换，本次 P-11 之前的 L6347）即抛
+      //   `ReferenceError: effectiveMapping is not defined`，被该块 catch 静默吞掉 ⇒
+      //   **该引用点之后的全部主路径确定性修复无一执行**（P-09 双状态切换、P-11 per-char 分段着色、
+      //   T2 echarts min-height、T1/T3/N1/N2… 直至块尾），且只在 server.log 留一条
+      //   `mc 确定性后处理失败（非阻断）{"error":"effectiveMapping is not defined"}`——
+      //   每任务必现、无任何门禁报警，属「静默吞异常按 P0」范畴。
+      //   与 L6125-6131（`input is not defined`）**同一根因、同一修法**：改从本作用域可得的
+      //   唯一事实源取，而不是引用 generateCode 的局部绑定。
+      //   事实源 = 与 generateCode L1652 同源：resolveResourceDomMapping（in-memory 优先，磁盘兜底）。
+      const effectiveMapping = resolveResourceDomMapping(
+        resourceDomMapping,
+        outputPath,
+      );
 
       // 🎯 确定性后处理（治本，不依赖 LLM 遵守 prompt）：
       //   T1 面板标题剥离：base-panel 外壳已渲染标题，组件内 PanelHeader 重复（mc-max-1787577949692 实锤）
@@ -6246,7 +6480,13 @@ export class MicrocodeEngineer extends BaseAgent {
         //   此处做确定性装配：提取真值 → 注入 helper + 模板 v-for 分段渲染。
         //   fail-closed：无真值/结构不匹配 → 零改动。
         {
-          const truth = _extractPerCharTextTruthPure(input.figmaNodeData);
+          // 🛡️ P0 修复（2026-09-29）：原为 `input.figmaNodeData`——`input` 是 **generateCode
+          //   的形参**，本方法（execute(params)）作用域内不存在 ⇒ ReferenceError，被本块 catch
+          //   静默吞掉（与 L6125-6131 `input is not defined`、L1652 `effectiveMapping` 同族）。
+          //   本方法作用域的正确来源 = execute 解构出来的 `figmaNodeData`（L5884），
+          //   与上方 `rootNode2`（`figmaNodeData?.document || figmaNodeData`）同源。
+          //   （前置的 `effectiveMapping` 引用已同批修正，否则本行仍不可达。）
+          const truth = _extractPerCharTextTruthPure(figmaNodeData);
           if (truth.length > 0) {
             const pc = _injectPerCharTextSegmentsPure(codeResult.files || {}, truth);
             if (pc.applied) {
@@ -6259,18 +6499,34 @@ export class MicrocodeEngineer extends BaseAgent {
         }
 
         // T2 echarts 容器 min-height 注入
-        for (const [fp, fc] of Object.entries(codeResult.files || {})) {
+        // 🎯 2026-09-29 图表容器双刀（单一事实源 utils/chart-container-guard.js）：
+        //   刀 2 —— echarts 挂载容器 == 组件根元素时插入内层 wrapper。**必须在 elMatch 之前**：
+        //          改写后 chartCls 解析到内层 canvas class，T2 的 min-height 才会落在内层容器上。
+        //   刀 1 —— 本循环收尾后，把 index.vue 里图表组件标签的 inline `min-height:0` 剥掉。
+        const _chartTagNames = [];
+        for (const [fp, fc0] of Object.entries(codeResult.files || {})) {
           if (
             !fp.endsWith('.vue') ||
-            typeof fc !== 'string' ||
-            !fc.includes('echarts.init(')
+            typeof fc0 !== 'string' ||
+            !fc0.includes('echarts.init(')
           )
             continue;
-          const refMatch = fc.match(
+          _chartTagNames.push(fp.slice(fp.lastIndexOf('/') + 1, -'.vue'.length));
+          const refMatch0 = fc0.match(
             /echarts\.init\(\s*([A-Za-z_$][\w$]*)\.value/,
           );
-          if (!refMatch) continue;
-          const refName = refMatch[1];
+          if (!refMatch0) continue;
+          const refName = refMatch0[1];
+          // 🛡️ 刀 2：容器==根元素 → 内层 wrapper（fail-closed：非空根 / 已有外层结构一律不动）
+          let fc = fc0;
+          const _wrapped = _wrapChartRootAsInnerWrapper(fc0, refName);
+          if (_wrapped.applied) {
+            fc = _wrapped.code;
+            codeResult.files[fp] = fc;
+            this.logger.info(
+              `🎯 [mc] 图表根元素已加内层 wrapper（刀 2）: ${fp} → .${_wrapped.detail.canvasClass}`,
+            );
+          }
           const elMatch =
             fc.match(
               new RegExp(`<div[^>]*ref="${refName}"[^>]*class="([\\w -]+)"`),
@@ -6313,6 +6569,24 @@ export class MicrocodeEngineer extends BaseAgent {
               codeResult.files[lf] = cleaned;
               this.logger.info(
                 `🎯 [mc] 共享表 min-height:0 反杀已剥除: ${lf} → .${chartCls}`,
+              );
+            }
+          }
+        }
+        // 🎯 刀 1（2026-09-29）：装配产物 index.vue 里，图表组件标签上的 inline
+        //   `min-height: 0/0px/auto/...` 一律剥除（保留 flex 比例）。
+        //   与 T2-D 的 stripZeroMinHeightForClass（.vue style 块 / .less 共享表）**同一 0 值口径**，
+        //   只是补上「index.vue inline style」这第三个载体 —— 此前正是这处缺口让
+        //   装配器的 min-height:0 经 $attrs 落到图表根元素、反杀组件内的非零 min-height。
+        {
+          const _idxPath = 'package/index.vue';
+          const _idxContent = codeResult.files[_idxPath];
+          if (typeof _idxContent === 'string' && _chartTagNames.length > 0) {
+            const _stripped = _stripChartInlineMinHeight(_idxContent, _chartTagNames);
+            if (_stripped.stripped.length > 0) {
+              codeResult.files[_idxPath] = _stripped.code;
+              this.logger.info(
+                `🎯 [mc] 图表组件标签 inline min-height:0 已剥除（刀 1）：${_stripped.stripped.length} 处 → ${[...new Set(_stripped.stripped.map((x) => x.tag))].join(', ')}`,
               );
             }
           }
@@ -6688,6 +6962,17 @@ export class MicrocodeEngineer extends BaseAgent {
               } else if (/ :style=/.test(best.full)) {
                 continue; // 非对象字面量 :style，跳过防破坏
               } else {
+                // 🛡️ 2026-09-29 治本（mc-max-1790678096786-f5cac254 实锤）：`best.after` 对
+                //   **自闭合**元素（`<X … class="…" />`）末尾带 ` /`。旧实现把 ` :style=` 拼在
+                //   `best.after` **之后** ⇒ 产出 `<X … class="…" / :style="{ … }">`（斜杠与 `>`
+                //   之间夹属性）⇒ compiler-sfc 报 `Illegal '/' in tags.` + `Element is missing
+                //   end tag.` ⇒ 写盘门禁判死**整文件**（进 gateSkippedFiles）⇒ 产物缺失 ⇒
+                //   前端「组件资源加载失败 / 找不到文件」。此处按是否自闭合分别产出正确形态。
+                //   兜底：file-writer 写盘门禁前置自愈（repairSelfClosingSlashInsideTag）。
+                const _selfClosing = /\s\/\s*$/.test(best.after);
+                const _afterAttrs = _selfClosing
+                  ? best.after.replace(/\/\s*$/, '')
+                  : best.after;
                 replacement =
                   '<' +
                   best.tag +
@@ -6695,10 +6980,12 @@ export class MicrocodeEngineer extends BaseAgent {
                   'class="' +
                   best.cls +
                   '"' +
-                  best.after +
+                  _afterAttrs +
                   ' :style="{ ' +
                   bgCss +
-                  ' }">';
+                  ' }"' +
+                  (_selfClosing ? ' /' : '') +
+                  '>';
               }
               const src = codeResult.files[best.fpath];
               codeResult.files[best.fpath] =
@@ -6916,7 +7203,9 @@ export default declareInfo
         registerBuiltinFixRules(cleanPipeline, this, {
           componentName,
           outputPath,
-          _indexTemplateFacts: this._lastIndexTemplateFacts || null,
+          // 事实源见上文 `_indexTemplateFacts`（唯一出处）。刻意不回落 this._lastIndexTemplateFacts：
+          //   那是**上一轮**的陈旧 facts，串用会把锚点补到错误 section（比不补更糟）。
+          _indexTemplateFacts,
           resourceDomMapping: resolveResourceDomMapping(
             resourceDomMapping,
             outputPath,
@@ -6987,7 +7276,9 @@ export default declareInfo
         registerBuiltinFixRules(fixPipeline, this, {
           componentName,
           outputPath,
-          _indexTemplateFacts: this._lastIndexTemplateFacts || null,
+          // 事实源见上文 `_indexTemplateFacts`（唯一出处）。刻意不回落 this._lastIndexTemplateFacts：
+          //   那是**上一轮**的陈旧 facts，串用会把锚点补到错误 section（比不补更糟）。
+          _indexTemplateFacts,
           resourceDomMapping: resolveResourceDomMapping(
             resourceDomMapping,
             outputPath,
@@ -7343,6 +7634,31 @@ export default declareInfo
         this.logger.warn(
           '⚠️ 覆写后重校验：回退 ' + _revertedSemanticFiles + ' 个坏文件',
         );
+      }
+      // 🛡️ A3 / B-2 时序治理（2026-09-29 · 全语料 27/495 组件终态实锤）：
+      //   absolute 遮罩层宿主补 position:relative 的修复原在 generateCode 内执行
+      //   （见本文件 absolute 遮罩层修复段），但其后 execute 后段多处重写样式
+      //   （ensureFlexDisplayInVueSfc / fixedFiles 合并 / finalTruthFiles 回退 /
+      //   覆写后语义校验回退到 allFiles）会把补丁冲掉 → 终态产物仍处于
+      //   「absolute 层宿主无 position」坏状态（背景层相对更外层定位 → 拉伸横跨整行）。
+      //   healAbsoluteOverlayParents 幂等（宿主已有 position 则跳过、原地改 map、
+      //   返回修复清单），在语义回退之后、Loop4 门禁之前补跑一次——保证
+      //   「门禁审计的内容 = 实际落盘的内容」，补丁不再被任何后段 pass 冲掉。
+      try {
+        const _absFinal = microcodeResources.healAbsoluteOverlayParents(
+          finalTruthFiles,
+          { logger: this.logger },
+        );
+        if (_absFinal.length > 0) {
+          this.logger.warn(
+            '🛡️ 落盘前终验：absolute 遮罩层宿主补 position:relative（后段重写冲掉补丁的确定性兜底）',
+            { count: _absFinal.length, fixed: _absFinal.slice(0, 20) },
+          );
+        }
+      } catch (_absFinalErr) {
+        this.logger.warn('⚠️ 落盘前 absolute 遮罩层修复失败（非阻断）', {
+          error: _absFinalErr?.message || String(_absFinalErr),
+        });
       }
       // 🛡️ 修复 2.1（锁定终态）：会话已锁定 → 跳过统一终态落盘，保留已发布版本。
       // 跳过仍保持 finalTruthWritten/Skipped 有值，后续 component-meta 留痕不报错。

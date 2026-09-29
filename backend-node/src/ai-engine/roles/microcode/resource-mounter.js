@@ -18,7 +18,6 @@
 import {
   injectChartMinHeight,
   deduplicateBackgroundImages,
-  fixBackgroundImageSize,
   validateContainerSize,
   validateResourceUsage,
 } from '../../utils/post-process.js';
@@ -150,19 +149,65 @@ export function findTagByClassKeyword(content, kw) {
       .map((seg) => (seg.length >= 4 && /s$/.test(seg) ? seg.slice(0, -1) : seg))
       .join('-');
   const kwDe = dePlural(kwNorm);
+  // 🛡️ ①（2026-09-29 治本 · mc-max-1790688321049-447d01cc 实锤）：**class 片段（token）**匹配。
+  //
+  // ## 旧实现的两种误配（全语料差分审计：2095 条资源条目里 1156 条命中结果变化）
+  // 1. **单字符 / 短 mountTarget 劫持无关元素**：Figma 卡片内标题行的图层名就叫 `t`，
+  //    `mountTarget = 't'` ⇒ `"c-traffic-monitor-card".includes('t')` = true ⇒
+  //    标题背景 `bg2`(2:3475) 被挂到**卡片根**，与卡片自身背景 `88:36`(bg4) 抢同一 `:style`
+  //    （JS 对象字面量后键胜出 ⇒ 互相覆写）。实测 `findTagByClassKeyword(CardGrid.vue,'t')`
+  //    返的就是 `class="c-traffic-monitor-card"` 那个标签。
+  // 2. **去复数后再裸子串**：`mountTarget = 'cons'` ⇒ `dePlural('cons')` = `'con'` ⇒
+  //    `…active-icon`.includes('con') = **true**（“i**con**”里含 con）⇒ 背景挂到图标上。
+  //
+  // ## 正确语义
+  // 把 `class` / `:class` 属性值切成**片段**（`-` 与引号/空格/括号等非 `[a-z0-9-]` 都是分隔符），
+  // 要求 kw 与某个片段「片段边界对齐」：`tok === kw` / `tok.startsWith(kw+'-')` /
+  // `tok.endsWith('-'+kw)` / `tok.includes('-'+kw+'-')`。
+  //   `t`         → 只匹配 `class="t"` 或 `c-x-t-y`；不再匹配 `c-traffic-monitor-card`
+  //   `card`      → 匹配 `c-traffic-monitor-card` ✅
+  //   `cons`      → 匹配 `c-device-monitor-cons-grid` ✅，不再匹配 `…active-icon` ✅
+  //   `active`    → 匹配 `…switch-item--active` / `…tab-item--active`（动态 `:class` 里的形态）✅
+  //   `tabs-list` → 经去复数匹配 `c-env-monitor-tab-list` ✅
+  // 与既有铁律「按标签名/类名匹配必须带词边界」同源。
+  //
+  // ⚠️ 必须同时解析 `:class`（不只是静态 `class`）：激活态背景的宿主体现在
+  // `:class="{ 'x--active': cond }"` / `:class="['x', cond ? 'x--active' : 'x-default']"` 里。
+  const clsValRe = /(?:^|[\s]):?class\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
+  const tokensOf = (attrs) => {
+    const out = [];
+    clsValRe.lastIndex = 0;
+    let cm;
+    while ((cm = clsValRe.exec(attrs)) !== null) {
+      const val = cm[1] != null ? cm[1] : cm[2];
+      // ⚠️ 片段化必须**保留中文**（`\u4e00-\u9fa5`）：图层次层名常有 `点背景`/`默认`/`激活`，
+      //    产物 class 是 `c-377b6f-点背景`。若把中文当分隔符，整段会被丢掉 ⇒ mountTarget 永远 miss
+      //    （全语料差分审计实测 9 例误伤）。与 `wordsOf` 的既有口径一致。
+      for (const tok of String(val || '').toLowerCase().split(/[^a-z0-9\u4e00-\u9fa5-]+/)) {
+        if (tok) out.push(tok);
+      }
+    }
+    return out;
+  };
+  const segOk = (tok, kw) =>
+    tok === kw ||
+    tok.startsWith(`${kw}-`) ||
+    tok.endsWith(`-${kw}`) ||
+    tok.includes(`-${kw}-`);
   const tags = [];
   const tagRe = /<([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>/])*)>/g;
   let m;
   while ((m = tagRe.exec(content)) !== null) {
     if (/^script$/i.test(m[1]) || /^style$/i.test(m[1])) continue;
     const attrs = m[2] || '';
-    const classMatch =
-      attrs.match(/class="([^"]*)"/) || attrs.match(/class='([^']*')/);
-    if (classMatch) tags.push({ raw: m[0], cls: classMatch[1].toLowerCase() });
+    const tokens = tokensOf(attrs);
+    if (tokens.length > 0) tags.push({ raw: m[0], tokens });
   }
-  const exact = tags.find((t) => t.cls.includes(kwNorm));
+  const exact = tags.find((t) => t.tokens.some((tok) => segOk(tok, kwNorm)));
   if (exact) return exact.raw;
-  const fuzzy = tags.find((t) => dePlural(t.cls).includes(kwDe));
+  const fuzzy = tags.find((t) =>
+    t.tokens.some((tok) => segOk(dePlural(tok), kwDe)),
+  );
   return fuzzy ? fuzzy.raw : null;
 }
 
@@ -329,9 +374,11 @@ export function pickNextRegionContainer(content, usedSet) {
 
 /**
  * 收集模板里全部可作为挂载点的元素（跨 .vue，index.vue 优先）。
- * @returns {Array<{file:string, tag:string, tagName:string, cls:string, depth:number, isHostShell:boolean, hasBgBinding:boolean}>}
+ * @param {Object} files 文件映射
+ * @param {{varName?:string}} [opts] 传 `varName` 时附带该资源的背景归属判据 `bgOwner`
+ * @returns {Array<{file:string, tag:string, tagName:string, cls:string, depth:number, isHostShell:boolean, hasBgBinding:boolean, bgOwner:'none'|'self'|'other'|'literal'|null, dataSectionId:string|null}>}
  */
-export function collectMountCandidates(files) {
+export function collectMountCandidates(files, opts = {}) {
   const out = [];
   const entries = Object.entries(files || {})
     .filter(
@@ -343,8 +390,16 @@ export function collectMountCandidates(files) {
     );
   const VOID_TAGS = /^(img|br|hr|input|meta|link|source|path|circle|rect)$/i;
   for (const [file, content] of entries) {
-    const tpl = content.match(/<template>([\s\S]*?)<\/template>/i);
-    const body = tpl ? tpl[1] : content;
+    // 🛡️ 2026-09-29 治本（本轮实锤：c-traffic-monitor-f0c05ecc 的「当日总流量」背景图整块丢失）
+    //   旧实现 `content.match(/<template>([\s\S]*?)<\/template>/i)` 是 **lazy** 正则：
+    //   根 `<template>` 内嵌具名插槽（`<template #header-right>…</template>`）时会**提前闭合**。
+    //   实测 index.vue 76 行、只匹配到 5 行 ⇒ **index.vue 的全部锚点/容器都没进候选池**
+    //   （含 `data-section-id="2:3660"` 这个正确挂载点）⇒ 后处理**丧失纠错能力**，
+    //   只能任由 LLM 按被降级的 `mountTarget` 去挂 ⇒ 426×91 的卡片背景被挂到 420×807 的整槽容器。
+    //   改用**单一事实源** `extractSfcTemplate`（见 sfc-template-extractor.js 头注：本 lazy 正则是
+    //   「同族四例」家族缺陷，前 3 例已各自治本，本处是第 4 例）。
+    //   ⚠️ 刻意不剥具名插槽：插槽内组件标签/容器同样是合法挂载候选。
+    const body = extractSfcTemplate(content) ?? content;
     const tagRe =
       /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>/])*)(\/?)>/g;
     let depth = 0;
@@ -358,6 +413,9 @@ export function collectMountCandidates(files) {
       if (/^(script|style|template)$/i.test(tagName)) continue;
       const clsM = attrs.match(/\bclass\s*=\s*["']([^"']*)["']/);
       const cls = clsM ? clsM[1].trim().split(/[\s,]+/)[0] : '';
+      // 🛡️ 2026-09-29：带上确定性锚（确定性装配骨架把 section id 写在容器上）。
+      //   供 scoreMountTarget 做「几何父容器」短路（防语义祖先回退把 bg 挂错层级）。
+      const dsM = attrs.match(/\bdata-section-id\s*=\s*["']([^"']*)["']/);
       out.push({
         file,
         tag: m[0],
@@ -366,6 +424,12 @@ export function collectMountCandidates(files) {
         depth,
         isHostShell: HOST_SHELL_TAG_RE.test(tagName),
         hasBgBinding: /background/i.test(attrs || ''),
+        // 🛡️ ②（2026-09-29）：带**资源归属**的背景判据（`none`/`self`/`other`/`literal`）。
+        //   旧的 `hasBgBinding` 既宽（`/background/i` 连类名都会命中）又与 varName 无关 ⇒
+        //   「优先选没有 bg 绑定的标签」会把**属于别的资源的**元素当成空闲点。
+        //   仅在调用方传入 `opts.varName` 时计算，保持向后兼容。
+        bgOwner: opts.varName ? bgBindingOwnership(attrs, opts.varName) : null,
+        dataSectionId: dsM ? dsM[1] : null,
       });
       if (!selfClose && !VOID_TAGS.test(tagName)) depth++;
     }
@@ -387,7 +451,12 @@ export function pickBestMountTarget(mapping, pool, opts = {}) {
     (c) => c && c.tag && !c.isHostShell && !usedTags.has(c.tag),
   );
   if (opts.skipBound) {
-    const noBg = usable.filter((c) => !c.hasBgBinding);
+    // 🛡️ ②（2026-09-29）：有资源归属判据时优先按「**本资源未占用**」筛（`bgOwner === 'none'`），
+    //   而不是旧的「这个标签有没有 background 字样」——后者会把**别的资源**的宿主当空闲点，
+    //   导致 `injectBgStyleBinding` 追加第二套四件套互相覆写。
+    const isFree = (c) =>
+      c.bgOwner != null ? c.bgOwner === 'none' : !c.hasBgBinding;
+    const noBg = usable.filter(isFree);
     if (noBg.length > 0) usable = noBg;
   }
   const ranked = usable
@@ -481,20 +550,164 @@ export function ensureReferencedIconSize(content, varName, size) {
  * 向开标签注入/合并 :style 背景绑定。
  * @param {Object} [mapping] - resourceDomMapping 条目；有 figmaBox 时用实际尺寸
  */
-export function injectBgStyleBinding(content, tag, varName, mapping = null) {
+/**
+ * 🛡️ ②（2026-09-29 治本）：从 `backgroundImage` 的值表达式里抽出「被引用的标识符 / 字面量路径」。
+ *
+ * 覆盖产物里出现过的全部形态：
+ *   `backgroundImage: url(bg3)`                     → var bg3
+ *   `backgroundImage: 'url(' + bg3 + ')'`           → var bg3
+ *   ``backgroundImage: `url(${bg3})` ``             → var bg3
+ *   `backgroundImage: 'url(../resources/images/x.png)'` → literal ../resources/images/x.png
+ *   `background-image: url(...)`（原生 style 属性）  → 同上
+ *
+ * @returns {{kind:'var'|'literal'|'none', name:string|null}}
+ */
+function extractBgImageRef(fragment) {
+  const f = String(fragment || '');
+  if (!f) return { kind: 'none', name: null };
+  // ① 模板字面量内插值：`url(${bg3})`
+  const tpl = /\$\{\s*([A-Za-z_$][\w$]*)\s*\}/.exec(f);
+  if (tpl) return { kind: 'var', name: tpl[1] };
+  // ② 字符串拼接：'url(' + bg3 + ')'
+  const cat = /\+\s*([A-Za-z_$][\w$]*)\s*\+/.exec(f);
+  if (cat) return { kind: 'var', name: cat[1] };
+  // ③ 直接绑定：url(bg3) / url('./x.png')
+  const urlM = /url\(\s*([^)]*?)\s*\)/.exec(f);
+  if (urlM) {
+    const inner = urlM[1].trim().replace(/^['"]|['"]$/g, '');
+    if (/^[A-Za-z_$][\w$]*$/.test(inner)) return { kind: 'var', name: inner };
+    return { kind: 'literal', name: inner };
+  }
+  return { kind: 'none', name: null };
+}
+
+/**
+ * 取 `backgroundImage` 键的值片段（从值起始到「同层的 `,` 或 `}`」为止，跳过引号/模板字符串）。
+ * @returns {string|null} 找不到该键时返回 null
+ */
+function extractBgImageFragment(text) {
+  const s = String(text || '');
+  const m = /background-?[Ii]mage\b\s*:\s*/.exec(s);
+  if (!m) return null;
+  const start = m.index + m[0].length;
+  let depth = 0;
+  let inStr = null;
+  for (let i = start; i < s.length; i++) {
+    const ch = s[i];
+    if (inStr) {
+      if (ch === inStr && s[i - 1] !== '\\') inStr = null;
+      continue;
+    }
+    if (ch === "'" || ch === '"' || ch === '`') { inStr = ch; continue; }
+    if (ch === '(' || ch === '[' || ch === '{') { depth++; continue; }
+    if (ch === ')' || ch === ']') { depth--; continue; }
+    if (ch === '}') {
+      if (depth === 0) return s.slice(start, i);
+      depth--;
+      continue;
+    }
+    if (ch === ',' && depth === 0) return s.slice(start, i);
+  }
+  return s.slice(start);
+}
+
+/**
+ * 🛡️ ②（2026-09-29 治本）：判定某个标签（或 `:style` 表达式）上已存在的背景图**归属**。
+ *
+ * ## 为什么需要它（实证 `mc-max-1790688321049-447d01cc`）
+ * 旧判据 `backgroundBoundToVar(inner, varName)` **只按本 varName 判**（且只需 `inner` 里出现该
+ * 名字即可），而 `resource-mount-plan.js:433` 的「标签已有 `backgroundImage` ⇒ 幂等跳过」又
+ * **与 varName 无关**。两者合起来导致**谁先谁后都错**：
+ *   - 先挂 A 资源 → 挂 B 资源时旧判据不拦 ⇒ `injectBgStyleBinding` **追加第二套完整四件套**，
+ *     JS 对象字面量**后键胜出** ⇒ B 的图与几何把 A 顶掉（实测卡片根同时含
+ *     `88:36` 的 `backgroundPosition: '1px 31px'` 与 `2:3475` 的 `url(bg2)` + `'0px 16px'`）；
+ *   - 先挂外来背景 → 正确资源被「已有 backgroundImage」**永久挡住**（`2:3475` 的宿主缺失后
+ *     退化到卡片根，正是这条把我方资源挤掉）。
+ *
+ * ⇒ 唯一正确口径 = **判「这张背景图是不是本资源的」**，而不是「有没有背景图」/「有没有这个名字」。
+ *
+ * @param {string} text 开标签字符串 或 `:style` 表达式 / 原生 style 内容
+ * @param {string} varName 本资源的变量名
+ * @returns {'none'|'self'|'other'|'literal'}
+ *   - `none`    该处没有背景图绑定 → 可以挂
+ *   - `self`    已绑定**本资源** → 幂等，零改动
+ *   - `other`   已绑定**别的资源变量** → 宿主被占，禁挂（fail-closed）
+ *   - `literal` 已绑定**字面量路径**（非变量）→ 宿主被占，禁挂（fail-closed）
+ */
+export function bgBindingOwnership(text, varName) {
+  if (!text || !varName) return 'none';
+  const frag = extractBgImageFragment(text);
+  if (frag === null) return 'none';
+  const ref = extractBgImageRef(frag);
+  if (ref.kind === 'none') return 'none';
+  if (ref.kind === 'literal') return 'literal';
+  return ref.name === String(varName) ? 'self' : 'other';
+}
+
+/**
+ * 向开标签注入/合并 :style 背景绑定。
+ * @param {Object} [mapping] - resourceDomMapping 条目；有 figmaBox 时用实际尺寸
+ * @param {Array} [diagnostics] - 可选出参收集器；宿主被外来背景占用时推入诊断（不静默）
+ *
+ * 🛡️ 幂等（2026-09-29 · c-device-monitor-fd242661 实锤）：
+ *   该资源在映射表里可能有多条 owner（每个重复单元一个），当它们的
+ *   `[data-section-id="…"]` 在产物中都不存在时，会**逐个退化到同一条关键字回退路径**、
+ *   命中**同一个** DOM 节点，于是本函数被连续调用 N 次，`:style` 被叠加成
+ *   `{ ...{ ...{ ...{ backgroundImage: url(bg3) } } } }` —— 实测 N=12，
+ *   同一 `backgroundImage` 在同一个 `:style` 里声明 **12 次**（前后矛盾 + 重复声明）。
+ *   原因：叠加分支的 `{ ...${inner}, … }` **不检查 inner 是否已含同一绑定**。
+ *   修复：进入叠加前先判「已绑定到同一 varName」⇒ 直接返回 null（零改动、幂等）。
+ *   放在本函数内（而非各调用点）——5 个调用点共享同一事实，避免各修各的。
+ *
+ * 🛡️ ② 归属判据（2026-09-29 治本 · mc-max-1790688321049-447d01cc 实锤）：
+ *   旧判据只按本 varName 判 ⇒ **换一个 varName 就再追加一整套四件套**（后键胜出 → 互相覆写）；
+ *   且标签上若已有**外来**背景（别的 var / 字面量路径），同样会被当成「可挂」而叠加。
+ *   现改为 `bgBindingOwnership`：
+ *     - `self`    → 返回 null（幂等）
+ *     - `other` / `literal` → **返回 null 且不追加**（fail-closed），并把诊断交给 `diagnostics`
+ *       ⇒ 宿主被外来背景占用时**绝不静默覆写**，交由上游据诊断决定（通常是宿主锚点缺失问题）。
+ */
+export function injectBgStyleBinding(content, tag, varName, mapping = null, diagnostics = null) {
   if (!content || !tag) return null;
   const bg = inferBackgroundStyle(mapping);
   const styleExpr = `{ backgroundImage: 'url(' + ${varName} + ')', backgroundSize: '${bg.size}', backgroundPosition: '${bg.position}', backgroundRepeat: '${bg.repeat}' }`;
+  const pushConflict = (own, where) => {
+    if (Array.isArray(diagnostics)) {
+      diagnostics.push({
+        reason: 'bg-binding-conflict',
+        var: varName,
+        occupiedBy: own,
+        where,
+      });
+    }
+  };
   let newTag;
   const styleRe = /:style="([^"]*)"/;
   if (styleRe.test(tag)) {
     const inner = (tag.match(styleRe)[1] || '').trim();
     if (!/^\{[\s\S]*\}$/.test(inner)) return null;
+    const own = bgBindingOwnership(inner, varName);
+    if (own === 'self') return null; // 幂等：已绑定本资源
+    if (own !== 'none') {
+      pushConflict(own, ':style');
+      return null; // fail-closed：宿主已被外来背景占用
+    }
     newTag = tag.replace(
       styleRe,
       `:style="{ ...${inner}, backgroundImage: 'url(' + ${varName} + ')', backgroundSize: '${bg.size}', backgroundPosition: '${bg.position}', backgroundRepeat: '${bg.repeat}' }"`,
     );
   } else {
+    // 无 `:style`：原生 `style="…"` 上也可能已有背景（含字面量路径）→ 同源判据先查一遍
+    const rawRe = /\bstyle="([^"]*)"/;
+    const rawM = tag.match(rawRe);
+    if (rawM) {
+      const own = bgBindingOwnership(rawM[1], varName);
+      if (own === 'self') return null;
+      if (own !== 'none') {
+        pushConflict(own, 'style');
+        return null;
+      }
+    }
     newTag = tag.replace(/\/?>$/, (tail) => ` :style="${styleExpr}"${tail}`);
   }
   if (!newTag || newTag === tag) return null;
@@ -728,52 +941,107 @@ export function dedupeBgMultiRefs(files, resourceDomMapping, options = {}) {
   if (bgContainers.length === 0) return files;
   const out = { ...files };
   const componentPrefix = inferComponentPrefix(out);
+  // 🛡️ 2026-09-29 治本（本轮实锤：c-traffic-monitor-f0c05ecc「当日总流量」背景图整块丢失）：
+  //   此前 refs 是**内联构造**的窄对象 `{file, tag, cls, keyword, depth}`，只有 `depth` 取自
+  //   `collectMountCandidates` ⇒ 候选的 `isHostShell` / `dataSectionId` **全部缺失**
+  //   ⇒ `pickBestMountTarget` 的「宿主外壳禁用」与 `scoreMountTarget` 的「确定性锚短路」
+  //   在这条**去重**路径上双双失效（判据永远读到 undefined，形同不存在）。
+  //   实锤（server.log 同一任务内相隔 42ms）：
+  //     🎯 [资源挂载] bg3 经事实链 data-section-id=2:8023 精确挂载      ← 先精确挂到正确父容器
+  //     🛡️ P2-3 已去重：kept=c-vehicle-monitor-slot-con(2.5)            ← 再被名字相似度删掉
+  //                     removed=c-vehicle-monitor-group-2136639043-con
+  //   —— 「先猜对、再被评分推翻」比单纯猜错更坏：确定性事实被评分制否决。
+  //   治本：refs **完全复用** `collectMountCandidates` 的口径（同一模板区提取 / 同一标签正则 /
+  //   同一字段集）。此前它自己另扫一遍 `/<([a-zA-Z]...)((?:"..."|'...'|[^>/])*)>/g`，实测会
+  //   产出**错边界**的 tag（`package/index.vue` 上把 2883 字符的片段当成一个标签，而同源候选
+  //   只有 211 字符）⇒ (a) 与候选池的 tag 无法比对（查表必 MISS）；(b) tag 边界错 ⇒
+  //   `indexOf(tag)` 定位/删除都可能落空。
+  //   ⚠️ `cls` 刻意沿用原口径（整个 class 串小写）而非 collectMountCandidates 的「首个类」，
+  //   以免扰动既有评分结果 —— 本次只补缺失字段，不改变已有评分语义。
   const allCands = collectMountCandidates(out);
-  const depthOf = new Map(allCands.map((c) => [c.tag, c.depth]));
+  // 🛡️ 2026-09-29 治本②（b07a2ee4 12 卡背景全丢实锤）：循环粒度由「mapping 条目」改为
+  //   「varName 分组」。背景：plan 阶段会把共享背景固化成 N 条同 varName 条目（12 个卡节点
+  //   各记一条 bg3，仅第 1 条 sharedBy=12、其余 sharedBy=0）⇒ 逐条循环时：第 1 条正确保留
+  //   v-for item，第 2..N 条各自 pickBestMountTarget 选出 cons-label(3.233) 之类，把「上一条
+  //   刚保留的 v-for item」当重复移除 ⇒ 互相拆台，最终 CODE-022 顺势删掉 import ⇒ 12 卡背景
+  //   全丢（产物里 bg3 出现 0 次）。同一份资源的固化条目，语义单位是 varName ⇒ 聚合后只做
+  //   一次 keep 决策，拆台在结构上不可能再发生。
+  const entriesByVar = new Map();
   for (const bg of bgContainers) {
-    const varName = bg.assignedVarName;
-    const refs = [];
-    for (const [p, c] of Object.entries(out)) {
-      if (typeof c !== 'string' || !p.endsWith('.vue')) continue;
-      const tagRe = /<([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>/])*)>/g;
-      let m;
-      while ((m = tagRe.exec(c)) !== null) {
-        const tag = m[0];
-        if (!tag.includes(varName) || !/:style\s*=/.test(tag)) continue;
+    const v = bg.assignedVarName;
+    if (!entriesByVar.has(v)) entriesByVar.set(v, []);
+    entriesByVar.get(v).push(bg);
+  }
+  for (const [varName, entries] of entriesByVar) {
+    const refs = allCands
+      .filter((c) => c.tag.includes(varName) && /:style\s*=/.test(c.tag))
+      .map((c) => {
         const classMatch =
-          tag.match(/class="([^"]*)"/) || tag.match(/class='([^']*')/);
+          c.tag.match(/class="([^"]*)"/) || c.tag.match(/class='([^']*')/);
         const cls = classMatch ? classMatch[1].toLowerCase() : '';
-        refs.push({
-          file: p,
-          tag,
+        return {
+          file: c.file,
+          tag: c.tag,
           cls,
           keyword: cls,
-          depth: depthOf.get(tag) ?? 0,
-        });
-      }
-    }
+          depth: c.depth,
+          isHostShell: c.isHostShell,
+          hasBgBinding: c.hasBgBinding,
+          dataSectionId: c.dataSectionId,
+        };
+      });
     if (refs.length <= 1) continue;
     // 🛡️ 阶段3（2026-09-17）：共享背景（sharedBy>1，如 12 卡共享 bg3）的 v-for item 引用
     //   是正确挂载点（每个卡片各获得背景），而容器引用是「整块拉伸」的错误挂载。此前
     //   pickBestMountTarget 按 mountTarget 语义评分保留了容器（score 更高），把 v-for item
     //   当「重复引用」移除 → 背景回到整块拉伸。这里优先保留 v-for item 引用。
-    const sharedCount = Array.isArray(bg.sharedBy) ? bg.sharedBy.length : 0;
+    // 🛡️ 2026-09-29：sharedCount 取**组内最大值** —— 同 varName 的 N 条固化条目里只要有一条
+    //   声明共享（>1），整组就该按共享背景对待（否则其余条目 sharedBy=0 会绕过该分支）。
+    const sharedCount = Math.max(
+      0,
+      ...entries.map((e) => (Array.isArray(e.sharedBy) ? e.sharedBy.length : 0)),
+    );
     let keep = null;
     let best = null;
+    let keepReason = 'score';
     if (sharedCount > 1) {
       const vForRef = refs.find((r) => /\bv-for\b/.test(r.tag));
-      if (vForRef) keep = vForRef;
+      if (vForRef) {
+        keep = vForRef;
+        keepReason = 'v-for-item';
+      }
     }
     if (!keep) {
-      best = pickBestMountTarget(bg, refs, { componentPrefix });
-      if (!best) {
-        logger.warn('🛡️ P2-3 去重跳过：无候选能给出正分挂载评分', {
-          var: varName,
-          refs: refs.map((r) => r.cls),
-        });
-        continue;
+      // 🛡️ 2026-09-29 治本③（配套·确定性锚优先）：评分之前先找「锚点命中的 ref」——
+      //   r.dataSectionId === 条目的 ownerSectionId ⇒ 与 mount-target-scoring.js 的
+      //   DETERMINISTIC_ANCHOR_SCORE 同语义：事实链挂对过的引用，评分永远无权推翻
+      //   （否则会复现「先挂对、再被评分推翻」的 D 类形态，如 kept=cons-label(3.233)）。
+      const ownerIds = new Set(
+        entries
+          .map((e) => (e.ownerSectionId != null ? String(e.ownerSectionId) : null))
+          .filter(Boolean),
+      );
+      const anchorRef = ownerIds.size
+        ? refs.find(
+            (r) => r.dataSectionId && ownerIds.has(String(r.dataSectionId)),
+          )
+        : null;
+      if (anchorRef) {
+        keep = anchorRef;
+        keepReason = 'anchor';
+      } else {
+        // 组内取「信息最全」的一条作为评分依据（优先带 ownerSectionId 的）
+        const primary = entries.find((e) => e.ownerSectionId) || entries[0];
+        best = pickBestMountTarget(primary, refs, { componentPrefix });
+        if (!best) {
+          logger.warn('🛡️ P2-3 去重跳过：无候选能给出正分挂载评分', {
+            var: varName,
+            refs: refs.map((r) => r.cls),
+          });
+          continue;
+        }
+        keep = refs.find((r) => r.tag === best.tag) || refs[0];
       }
-      keep = refs.find((r) => r.tag === best.tag) || refs[0];
     }
     const removeList = refs.filter((r) => r.tag !== keep.tag);
     for (const ref of removeList) {
@@ -798,7 +1066,7 @@ export function dedupeBgMultiRefs(files, resourceDomMapping, options = {}) {
       logger.warn('🛡️ P2-3 已去重 bg 多引用（统一挂载点评分最高者保留）', {
         var: varName,
         kept: keep.cls,
-        keptScore: best ? Number(best.score.toFixed(3)) : 'v-for-item',
+        keptScore: best ? Number(best.score.toFixed(3)) : keepReason,
         removed: ref.cls,
         file: ref.file,
       });
@@ -975,7 +1243,24 @@ export function mountSubStateBackground(allFiles, varName, m, options = {}) {
       ` :style="${styleCondition} ? { backgroundImage: 'url(' + ${varName} + ')',` +
       ` backgroundSize: '${bgStyle.size}', backgroundPosition: '${bgStyle.position}',` +
       ` backgroundRepeat: '${bgStyle.repeat}' } : null"`;
-    let updated = c.slice(0, tagClose) + styleAttr + c.slice(tagClose);
+    // 🛡️ 2026-09-29 治本（mc-max-1790678096786-f5cac254 实锤）：`tagClose` 取的是
+    //   `indexOf('>')` —— 对**自闭合**元素（`<X … :class="…" />`）它落在 `/>` 的 `>` 上，
+    //   于是 `between` = ` /`，旧实现把 `:style` 插到 ` /` 与 `>` **之间** ⇒ 产出
+    //   `<X … / :style="…">`（斜杠与 `>` 之间夹属性）⇒ compiler-sfc 报
+    //   `Illegal '/' in tags.` + `Element is missing end tag.` ⇒ 写盘门禁判死整文件、
+    //   产物缺失 ⇒ 前端「组件资源加载失败 / 找不到文件」。
+    //   修复：识别自闭合形态，把 `:style` 插在 `/` **之前**，保留 ` />` 收尾。
+    //   兜底：file-writer 写盘门禁前置自愈（repairSelfClosingSlashInsideTag）。
+    const selfClosing = /\/\s*$/.test(between);
+    let updated;
+    if (selfClosing) {
+      // 去掉 `between` 收尾的 `/`，保留属性分隔空白，再把 :style 追加在最后
+      const _attrsTail = between.replace(/\/\s*$/, '').replace(/\s+$/, ' ');
+      updated =
+        c.slice(0, attrEnd) + _attrsTail + styleAttr + ' /' + c.slice(tagClose);
+    } else {
+      updated = c.slice(0, tagClose) + styleAttr + c.slice(tagClose);
+    }
     updated = ensureResourceImportInVue(updated, varName, m, p);
     if (!updated || updated === c) continue;
     allFiles[p] = updated;
@@ -1723,8 +2008,9 @@ export function postProcessIndexVue(code, input, options = {}) {
   // T04: 背景图去重（如果子组件也引用了主组件的背景图）
   result = deduplicateBackgroundImages(result);
 
-  // T05: bg-size 修正（治标 Pass 1）—— 硬编码 px 尺寸替换为 cover（背景铺满容器）
-  result = fixBackgroundImageSize(result);
+  // 🗑️ T05: bg-size 修正 —— 已删除（2026-09-29 删减法）。
+  //   它无条件把 `backgroundSize: 'Xpx Ypx'` 改成 `'cover'`，与 `inferBackgroundStyle`
+  //   给局部背景层输出的「px 尺寸 + 偏移」真值方向相反。详见 utils/post-process.js 顶部墓碑注释。
 
   // T06: 容器尺寸校验 + 确定性自动修正（治标 Pass 2）—— BBox fallback → auto，回写修正结果
   const rootBox = input?.figmaNodeData?.absoluteBoundingBox;

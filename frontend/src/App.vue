@@ -2,6 +2,9 @@
   <!-- 预览页：完全独立，不使用任何公共布局 -->
   <router-view v-if="isPreviewPage" />
 
+  <!-- 工作台模式：独立全屏布局，与传统模式互斥 -->
+  <router-view v-else-if="isWorkbenchPage" />
+
   <!-- 其他页面：使用公共布局 -->
   <div v-else class="app-layout">
     <StyleProvider :transformers="[px2rem]" v-if="$config.pxtorem.open">
@@ -80,6 +83,8 @@ const isDemoPage = computed(
 const isPreviewPage = computed(
   () => route.path.startsWith('/preview') || route.path.startsWith('/mc-component')
 )
+// 工作台模式：独立全屏布局，与传统模式互斥
+const isWorkbenchPage = computed(() => route.path.startsWith('/workbench'))
 const hideFooter = computed(() => isDemoPage.value || route.path.startsWith('/demo'))
 // 全局接口对接向导（跨 iframe 消息桥）
 const { bindingWizardOpen, bindingComponentId, bindingGroupId, bindingComponentName, emitRefresh } =

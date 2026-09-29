@@ -209,9 +209,9 @@ export class Vue3Service {
         textAIConfig: resolvedTextCfg,
         aiConfig: {
           // 向后兼容
-          apiKey: config.aiApiKey || process.env.ANTHROPIC_API_KEY,
-          baseURL: config.aiBaseURL || process.env.ANTHROPIC_BASE_URL,
-          model: config.aiModel || process.env.ANTHROPIC_MODEL,
+          apiKey: config.aiApiKey,
+          baseURL: config.aiBaseURL,
+          model: config.aiModel,
         },
         sessionId,
         groupId: params.groupId,
@@ -226,7 +226,7 @@ export class Vue3Service {
           this.tokenTrackerService.recordUsage({
             ...data,
             userId: params.userId,
-            baseURL: config.aiBaseURL || process.env.ANTHROPIC_BASE_URL,
+            baseURL: config.aiBaseURL,
           });
         },
         pauseChecker: async () => {

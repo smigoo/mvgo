@@ -1,14 +1,14 @@
-import {
-  Controller,
+import {Controller,
   Get,
   Post,
   Body,
   Param,
   Query,
-  Req,
-} from '@nestjs/common';
+  Req, UseGuards } from '@nestjs/common';
+import { SessionGuard } from '../auth/session.guard';
 import { WorkflowService } from './workflow.service';
 
+@UseGuards(SessionGuard)
 @Controller('workflows')
 export class WorkflowController {
   constructor(private readonly workflowService: WorkflowService) {}

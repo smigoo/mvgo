@@ -1,6 +1,8 @@
-import { Controller, Get, Post, Delete, Body, Param, Query } from '@nestjs/common';
+import {Controller, Get, Post, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { SessionGuard } from '../auth/session.guard';
 import { RecipesService } from './recipes.service';
 
+@UseGuards(SessionGuard)
 @Controller('recipes')
 export class RecipesController {
   constructor(private readonly recipesService: RecipesService) {}

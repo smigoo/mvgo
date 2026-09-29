@@ -69,6 +69,12 @@ async function instantiateRole(handlerName, state) {
     apiKey: cfg.apiKey,
     baseURL: cfg.baseURL,
     model: cfg.model || '', // cfg.model 来自 state.textAIConfig.model，空则下游抛错
+    // 🛡️ 2026-09-29 修复（mc-max-1790692008530 生产实锤）：必须透传 thinkingType，
+    // 否则 BaseAgent 构造 this.thinkingType='' → 初始 LLM 不注入关推理参数
+    // → deepseek-v4-pro 等默认开推理的模型每个分块都先推理再输出（单块 40~190s），
+    // 且推理烧满 max_tokens 时空内容失败（180s 白等）。resolve* 顶层已带该字段
+    // （ai-defaults.js:270 注释明说供 base-agent 构造兜底），此处丢失即整条管线推理全开。
+    thinkingType: cfg.thinkingType,
     sessionId: state.sessionId || null, // 📊 透传给 agent，统一 invoke 出口登记「会话→模型」供日志渲染
     ...(state.workflowConfig?.[handlerName] || {}), // 节点级配置覆盖
   };

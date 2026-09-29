@@ -13,6 +13,7 @@ import { TEXT_DEFAULTS } from '../utils/ai-defaults.js';
 import {
   coerceLLMUsage,
   normalizeRequestTemperature,
+  buildThinkingOffParams,
 } from '../utils/model-config.js';
 import { attachUnifiedInvoke } from '../utils/ai-request-gateway.js';
 import { getProviderPool } from '../utils/provider-pool.js';
@@ -118,8 +119,15 @@ export class BaseAgent {
         onProgress: (data) => this.onProgress?.(data),
         // 🔀 主 provider 熔断后自动切换备用：每次 attempt 重新 pick 供应商池并重建 llm。
         // excludeIds：排除上一次 attempt 刚失败的 provider，实现「超时 → 切换大模型」故障转移。
-        refreshProvider: ({ excludeIds = [] } = {}) => {
-          const p = getProviderPool().pick('text', { excludeIds });
+        refreshProvider: ({ excludeIds = [], previousProviderId = null, forceThinkingDisabled = false } = {}) => {
+          // 🛡️ 自愈（2026-09-29 B 层·模型无关）：网关检测到「推理烧光输出预算」
+          // （finish_reason=length + reasoning_tokens>0）后，会让后续 attempt 复用同一个
+          // 刚失败的 provider，但强制 thinkingType:'disabled' 重建重试 —— 而非换 provider。
+          // 这样任何推理模型（含未知/新模型、被别名/中转包装的模型）都能自愈，
+          // 不再依赖 ai-defaults 的模型名启发式（A 层）。
+          const p = forceThinkingDisabled && previousProviderId
+            ? getProviderPool().get(previousProviderId)
+            : getProviderPool().pick('text', { excludeIds });
           if (!p || !p.apiKey) return null;
           return {
             providerId: p.id,
@@ -127,7 +135,8 @@ export class BaseAgent {
             baseURL: p.baseURL || '',
             model: p.model || this.model || '', // 🛡️ provider 无 model 时回退到实例 model，空则下游抛错
             providerType: p.providerType || 'auto',
-            thinkingType: p.thinkingType || '', // 🔧 per-provider 思考开关透传（deepseek disabled 等）
+            // 🔧 per-provider 思考开关透传（deepseek disabled 等）；自愈时强制关推理
+            thinkingType: forceThinkingDisabled ? 'disabled' : (p.thinkingType || ''),
           };
         },
         createLLM: (snap) => this._buildLLM(snap),
@@ -180,12 +189,19 @@ export class BaseAgent {
           baseURL: baseURL,
         },
       };
-      // 🔧 per-provider 思考开关（2026-09-02）：配置声明 thinkingType 时注入 thinking 参数。
+      // 🔧 per-provider 思考开关（2026-09-02）：配置声明 thinkingType 时注入「关推理」参数。
       // 仅 deepseek 系（实测支持 {type:"disabled"} 关推理 → 解决「推理烧光输出预算→空内容」）；
       // lkeap(kimi/hy4/minimax)/glm官方 实测不接受该参数，必须保持 unset 否则 400，故只在配置显式声明时透传。
+      // 🛡️ 2026-09-29 G2 修复：强制关推理（含 B 层自愈 forceThinkingDisabled）改为按厂商选正确参数形态，
+      // 不再写死 thinking:{type:'disabled'} —— qwen 经 microvideo 中转时该写法会 120s 超时，
+      // 必须用 enable_thinking:false（model-config.buildThinkingOffParams 实测结论）。
+      // 未命中厂商（返回 {}）时回退原 hardcode thinking:{type:'disabled'}，保持旧行为不退化；
+      // thinkingType==='skip'（推理模型保留开推理，本就不该注入）直接跳过。
       const thinkingType = snapshot.thinkingType || this.thinkingType || '';
-      if (thinkingType) {
-        llmOptions.modelKwargs = { thinking: { type: thinkingType } };
+      if (thinkingType && thinkingType !== 'skip') {
+        const off = buildThinkingOffParams(model, rawBaseURL);
+        const kwargs = Object.keys(off).length ? off : { thinking: { type: 'disabled' } };
+        llmOptions.modelKwargs = { ...(llmOptions.modelKwargs || {}), ...kwargs };
       }
       return new ChatOpenAI(llmOptions);
     }

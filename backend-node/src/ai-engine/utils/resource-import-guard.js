@@ -366,17 +366,21 @@ export function injectResourceImports(code, resourceDomMapping, resourceRelBase 
 
   // ── 扫描代码中出现的所有已注册变量名 ──
   const usedVars = new Set()
-  // 🎯 契约模式（forceAll）：主组件需全量 import 所有 success 资源，作为子组件透传的唯一来源。
-  //   - 正常模式：只注入模板/脚本里「已使用」的资源变量（避免主组件凭空 import 一堆没用到的图）。
-  //   - forceAll 模式：把 mapping 中全部 success 资源都 import 进主组件 script，供子组件
-  //     `:prop="prop"` 透传时引用。这是「资源归主组件 import，子组件只 defineProps 接收」契约的
-  //     落地前提——父不 import 则透传无源，自动接线（autoWire）也无从连线。
-  const forceAll = !!(options && options.forceAll)
+  // 🗑️ 已删除死分支 forceAll（2026-09-29，删减法 · 取证见下）：
+  //   旧行为 = `options.forceAll` 为真时把 mapping 中**全部 success 资源**都 import 进主组件 script，
+  //   供子组件 `:prop` 透传。但全仓取证：`forceAll` **从未被任何调用者传入**
+  //   （4 个 injectResourceImports 调用点分别传 null / 省略 / 仅 contractMapping），
+  //   所有 `forceAll` 字面命中都是注释或本函数内部读取 ⇒ 该分支自 2026-09-11「层②反转」后即为死代码。
+  //   它同时是**唯一**「无挂载计划也补 import」的路径：一旦被重新启用，注入的 import 大概率在本文件
+  //   零引用 → 立刻被 pruneUnmountedResourceImports 删除（补了又删的空转），或被 L0-B CODE-022 硬闸判死。
+  //   故直接移除，使本函数的注入口径**只剩一种**：只注入「代码里真实出现的资源变量」＝与
+  //   isResourceVarMounted / 门禁 findUnmountedResourceVars 同源，结构上排除空转。
   const contractMapping = options && Array.isArray(options.contractMapping) ? options.contractMapping : null
 
   // 🎯 Loop 1：契约模式（contractMapping）。主组件只 import 契约允许的资源变量
-  // （∪ 全部子合同 parentMustPass ∪ panel success），不再 forceAll 全量。
-  // 空契约时回退 forceAll（Loop 0 临时桥），禁止在 Loop 1 后继续扩 forceAll。
+  // （∪ 全部子合同 parentMustPass ∪ panel success）。
+  // ⚠️ 现存唯一调用者 props-wiring-guard#ensureParentImport 自身也已无调用者（见 §8.4 取证），
+  //    本分支生产不可达；其 spec 仍在运行，故暂留待决策，不随 forceAll 一并删除。
   const allowedNames = new Set()
   if (contractMapping && contractMapping.length > 0) {
     for (const c of contractMapping) {
@@ -389,11 +393,6 @@ export function injectResourceImports(code, resourceDomMapping, resourceRelBase 
     for (const m of available) {
       const v = m.assignedVarName || m.semanticVarName
       if (v && allowedNames.has(v)) usedVars.add(v)
-    }
-  } else if (forceAll) {
-    for (const m of available) {
-      const v = m.assignedVarName || m.semanticVarName
-      if (v) usedVars.add(v)
     }
   } else {
     // 🛡️ 刀 7e（2026-09-13）：扫描前先剥离注释——否则注释里枚举的变量名
@@ -1152,6 +1151,58 @@ export default {
 }
 
 /**
+ * 🛡️ 剔除 JS/Vue 源码中的注释（`/* … *␘/` 块注释 + `//` 行注释）。
+ *
+ * ⚠️ 口径冻结：**必须与 L0-B 门禁口径逐字一致**（见下方 isResourceVarMounted 的说明）。
+ * 本实现即 `code-structure-validator#findUnmountedResourceVars` 原有的局部实现，原样提取，
+ * 不做任何"改进"——否则会重新制造两侧分叉。
+ *
+ * 已知边界：朴素 `//` 剔除会连带吃掉同一行里 `https://` 之后的内容。作为"引用计数"用途，
+ * 该边界只会**少计引用**（→ 宁可视为未挂载），与门禁既有行为完全一致，故不在此处单独改。
+ *
+ * @param {string} src
+ * @returns {string}
+ */
+export function stripJsComments(src) {
+  if (typeof src !== 'string' || !src) return '';
+  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+}
+
+/**
+ * 🛡️ 单一事实源（2026-09-29，mc-max-1790666332846-2e5fc9e7 实锤）：
+ * 「某资源变量在本文件里是否真正被挂载」——**门禁与修复器必须共用本函数**。
+ *
+ * 背景（P0 死锁）：同一事实此前在两处各自实现，口径不同：
+ *   - 门禁 `code-structure-validator#findUnmountedResourceVars`：**先剥注释**再计数 ⇒ 正确；
+ *   - 修复器 `pruneUnmountedResourceImports`（本文件）：**未剥注释**，直接对含注释全文做
+ *     `\b<name>\b` ⇒ 注释里的变量名被当成"已引用"。
+ * 而 LLM 会在 import 行下面写自解释注释（实锤产物 `HeaderSub.vue`）：
+ *   `import icon2 from '../../resources/images/icon-8070.png'`
+ *   `// 资源变量由系统自动注入（icon2 = icon-8070.png）`
+ * ⇒ 门禁判「未挂载」→ `CODE-022` **硬闸 BLOCK**（`hardBlocks:["CODE-022"]`，fail-closed）；
+ *   修复器判「已挂载」→ **不删** ⇒ 自愈永不生效 ⇒ 3 轮重试全部同错复现 ⇒ 重试耗尽 ⇒ 任务失败。
+ *   当天 5 个任务死于此（13:53/14:16/14:58/15:13/15:20）。
+ *
+ * 规则（与门禁逐字同口径）：
+ *   ① 剔除全部注释；② 剔除该变量的 import 语句本身；③ 余下正文里出现 `\b<name>\b` 即视为已挂载。
+ *   「已挂载」包含任何形式的引用（模板 `:src`/`:style`、script 里使用、别名转发
+ *   `const alias = primary`），只排除「仅 import + 仅注释提及」。
+ *
+ * @param {string} content .vue 全文（或任意待查文本）
+ * @param {string} varName 资源变量名（resourceDomMapping 的 assignedVarName）
+ * @returns {boolean} true = 已挂载（门禁不应报 CODE-022）
+ */
+export function isResourceVarMounted(content, varName) {
+  if (typeof content !== 'string' || !content || !varName) return false;
+  const esc = String(varName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const body = stripJsComments(content).replace(
+    new RegExp(`import\\s+${esc}\\s+from[^\\n]*`, 'g'),
+    '',
+  );
+  return new RegExp(`\\b${esc}\\b`).test(body);
+}
+
+/**
  * 🛡️ CODE-022 修复器（2026-09-11 根治方案 R3-2）：资源 import 未挂载 → 确定性删除。
  *
  * 根因：LLM 偶发「import bg1 后模板/脚本 0 处引用」→ CODE-022 BLOCK → 全量重试 →
@@ -1186,16 +1237,31 @@ export function pruneUnmountedResourceImports(content, resourceDomMapping, optio
       'm',
     );
     if (!importRe.test(script)) continue;
-    const scriptWithout = script.replace(importRe, '');
-    const rest = content.replace(scriptMatch[1], scriptWithout);
-    const usageRe = new RegExp(`\\b${esc}\\b`);
-    if (usageRe.test(rest)) continue;
-    script = scriptWithout;
+    // 🛡️ 2026-09-29 治本（死锁修复）：引用判定改用**与 L0-B 门禁同源**的 isResourceVarMounted
+    //   （剥注释 + 剔 import 行）。原实现是 `content.replace(scriptMatch[1], scriptWithout)`
+    //   后直接测 `\b<name>\b`，**未剥注释** ⇒ LLM 写在 import 下方的自解释注释
+    //   `// 资源变量由系统自动注入（icon2 = icon-8070.png）` 被当成「已引用」⇒ 修复器不删，
+    //   而门禁（剥注释口径）判「未挂载」⇒ BLOCK ⇒ 两侧判据相反、自愈永不生效 ⇒ 重试耗尽。
+    //   详见 isResourceVarMounted 的 JSDoc。
+    if (isResourceVarMounted(content, varName)) continue;
+    script = script.replace(importRe, '');
     result.pruned.push(varName);
   }
 
   if (result.pruned.length === 0) return result;
-  const cleaned = script.replace(/\n{3,}/g, '\n\n');
+  let cleaned = script.replace(/\n{3,}/g, '\n\n');
+  // 🧹 顺带清理「因 import 被删而失真的纯注释行」（2026-09-29）：
+  //   LLM 惯于在 import 行下方写自解释注释，如
+  //     `// 资源变量由系统自动注入（icon2 = icon-8070.png）`
+  //   import 已删 ⇒ 该注释成了**与产物不符的假陈述**，且会被其它按文本扫变量名的审计器
+  //   （如 manifest-auditor）误当成「该资源仍在使用」。
+  //   只删「整行都是注释、且提到刚被删变量」的行 —— 纯注释行无任何运行期语义，删除零风险；
+  //   绝不触碰含代码的行（避免误删 `:src="x" // icon2` 这类同行注释所在的有效代码）。
+  for (const v of result.pruned) {
+    const esc = String(v).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    cleaned = cleaned.replace(new RegExp(`^[ \\t]*//[^\\n]*\\b${esc}\\b[^\\n]*\\n?`, 'gm'), '');
+  }
+  cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
   const newContent = content.replace(scriptMatch[1], cleaned);
   result.content = newContent;
   result.changed = newContent !== content;

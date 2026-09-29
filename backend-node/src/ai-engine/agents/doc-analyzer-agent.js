@@ -12,7 +12,7 @@ export class DocAnalyzerAgent extends BaseAgent {
     super({
       name: 'doc-analyzer',
       description: '分析微码组件需求文档，提取页面元素、交互设计、接口配置等信息',
-      model: config.model || process.env.ANTHROPIC_MODEL || '',
+      model: config.model || '', // 🔒 2026-09-29 env 兜底已拔除（每用户模型独有）
       temperature: 0.2,
       maxTokens: 4096,
       promptTemplate: '../../../prompts/doc-analyzer-prompt.md',

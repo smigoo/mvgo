@@ -590,12 +590,12 @@ onMounted(() => {
   font-size: 24px;
   font-weight: 600;
   margin: 0 0 8px 0;
-  color: rgba(0, 0, 0, 0.85);
+  color: var(--text-primary);
 }
 
 .mg-sub {
   font-size: 14px;
-  color: rgba(0, 0, 0, 0.45);
+  color: var(--text-secondary);
   margin: 0;
 }
 
@@ -608,7 +608,7 @@ onMounted(() => {
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  background: #fafafa;
+  background: var(--bg-alt);
   border-radius: 6px;
   margin-bottom: 24px;
 }
@@ -616,7 +616,7 @@ onMounted(() => {
 .ts-window-label {
   font-size: 14px;
   font-weight: 500;
-  color: rgba(0, 0, 0, 0.85);
+  color: var(--text-primary);
 }
 
 .ts-window-select {
@@ -625,7 +625,7 @@ onMounted(() => {
 
 .ts-window-info {
   font-size: 13px;
-  color: rgba(0, 0, 0, 0.45);
+  color: var(--text-secondary);
   margin-left: auto;
 }
 
@@ -637,8 +637,8 @@ onMounted(() => {
 }
 
 .dashboard-kpi-card {
-  background: #fff;
-  border: 1px solid #e8e8e8;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
   border-radius: 8px;
   padding: 20px;
   transition: box-shadow 0.2s;
@@ -650,21 +650,21 @@ onMounted(() => {
 
 .dashboard-kpi-label {
   font-size: 14px;
-  color: rgba(0, 0, 0, 0.45);
+  color: var(--text-secondary);
   margin-bottom: 8px;
 }
 
 .dashboard-kpi-value {
   font-size: 32px;
   font-weight: 600;
-  color: rgba(0, 0, 0, 0.85);
+  color: var(--text-primary);
   margin-bottom: 8px;
   line-height: 1;
 }
 
 .dashboard-kpi-sub {
   font-size: 13px;
-  color: rgba(0, 0, 0, 0.45);
+  color: var(--text-secondary);
 }
 
 .dashboard-two-col {
@@ -675,8 +675,8 @@ onMounted(() => {
 }
 
 .dashboard-card {
-  background: #fff;
-  border: 1px solid #e8e8e8;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
   border-radius: 8px;
   padding: 20px;
   margin-bottom: 16px;
@@ -686,14 +686,14 @@ onMounted(() => {
   font-size: 16px;
   font-weight: 600;
   margin: 0 0 16px 0;
-  color: rgba(0, 0, 0, 0.85);
+  color: var(--text-primary);
 }
 
 .dashboard-loading,
 .dashboard-empty {
   text-align: center;
   padding: 40px;
-  color: rgba(0, 0, 0, 0.45);
+  color: var(--text-secondary);
   font-size: 14px;
 }
 
@@ -713,7 +713,7 @@ onMounted(() => {
 }
 
 .dashboard-model-row:hover {
-  background: #fafafa;
+  background: var(--bg-hover);
 }
 
 .dashboard-model-rank {
@@ -722,11 +722,11 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f0f0f0;
+  background: var(--bg-alt);
   border-radius: 50%;
   font-size: 14px;
   font-weight: 600;
-  color: rgba(0, 0, 0, 0.65);
+  color: var(--text-secondary);
 }
 
 .dashboard-model-info {
@@ -737,7 +737,7 @@ onMounted(() => {
 .dashboard-model-name {
   font-size: 14px;
   font-weight: 500;
-  color: rgba(0, 0, 0, 0.85);
+  color: var(--text-primary);
   margin-bottom: 4px;
   display: flex;
   align-items: center;
@@ -749,12 +749,12 @@ onMounted(() => {
 
 .dashboard-model-meta {
   font-size: 12px;
-  color: rgba(0, 0, 0, 0.45);
+  color: var(--text-secondary);
 }
 
 .dashboard-model-tasks {
   font-size: 13px;
-  color: rgba(0, 0, 0, 0.65);
+  color: var(--text-secondary);
   white-space: nowrap;
 }
 
@@ -769,7 +769,7 @@ onMounted(() => {
   height: 32px;
   border-radius: 6px;
   overflow: hidden;
-  background: #f5f5f5;
+  background: var(--bg-alt);
 }
 
 .dashboard-fail-segment {
@@ -805,7 +805,7 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: rgba(0, 0, 0, 0.65);
+  color: var(--text-secondary);
 }
 
 .dashboard-fail-dot {
@@ -829,12 +829,12 @@ onMounted(() => {
 .dashboard-fail-count {
   margin-left: auto;
   font-weight: 500;
-  color: rgba(0, 0, 0, 0.85);
+  color: var(--text-primary);
 }
 
 .dashboard-fail-total {
   font-size: 13px;
-  color: rgba(0, 0, 0, 0.45);
+  color: var(--text-secondary);
   text-align: right;
   margin-top: 8px;
 }

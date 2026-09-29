@@ -107,8 +107,91 @@ describe('consolidateSubComponentClasses', () => {
     expect(css).not.toContain('flex-direction: row')
   })
 
-  it('不迁移 @import 与变量声明', () => {
+  it('🛡️ echarts 容器（*-canvas）百分比尺寸不被「百分比保护」丢弃（c-traffic-monitor-4d6135d1 实锤）', () => {
+    // 场景：LLM 把某真值像素（52×52）误写到 canvas 类进 common.less；
+    // 子组件 .vue 的 canvas 规则是 width/height:100%（echarts 挂载点唯一正确形态）。
+    // 百分比保护若不豁免 echarts 容器 ⇒ 子组件块被丢弃 ⇒ 52px 恒胜 ⇒ 柱图不可见。
+    const chartChild = `<template>
+  <div class="c-demo-chart" v-bind="$attrs"><div ref="chartRef" class="c-demo-chart-canvas"></div></div>
+</template>
+
+<script setup>
+import * as echarts from 'echarts'
+</script>
+
+<style lang="less" scoped>
+.c-demo-chart-canvas {
+  width: 100%;
+  height: 100%;
+  min-height: 127px;
+}
+</style>
+`
     const files = {
+      'resources/styles/common.less': '.c-demo-chart-canvas {\n  width: 52px;\n  height: 52px;\n  min-height: 52px;\n}\n',
+      'package/components/ChartChart.vue': chartChild,
+    }
+    const out = consolidateSubComponentClasses(files, { logger })
+    const css = out['resources/styles/common.less']
+    // 子组件百分比必须覆盖 common.less 的误置像素
+    expect(css).toContain('width: 100%')
+    expect(css).toContain('min-height: 127px')
+    expect(css).not.toContain('width: 52px')
+  })
+
+  it('非图表类的「子组件百分比 vs common 像素」保护行为不变（回归防线）', () => {
+    const files = {
+      'resources/styles/common.less': '.c-demo-frame {\n  width: 200px;\n  height: 52px;\n}\n',
+      'package/components/Frame.vue': `<template>
+  <div class="c-demo-frame"></div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+</script>
+
+<style lang="less" scoped>
+.c-demo-frame {
+  width: 100%;
+  height: 100%;
+}
+</style>
+`,
+    }
+    const out = consolidateSubComponentClasses(files, { logger })
+    const css = out['resources/styles/common.less']
+    // 非 echarts 容器：common.less 像素仍应保留（真值不被百分比冲掉）
+    expect(css).toContain('height: 52px')
+  })
+
+  it('🛡️ 图表组件根类百分比同样豁免（bda1b2fd 宽度塌陷实锤：common 52px 根类 ⇒ 「还是一点点宽」）', () => {
+    const chartChild = `<template>
+  <div class="c-demo-chart" v-bind="$attrs"><div ref="chartRef" class="c-demo-chart-canvas"></div></div>
+</template>
+
+<script setup>
+import * as echarts from 'echarts'
+</script>
+
+<style lang="less" scoped>
+.c-demo-chart {
+  width: 100%;
+  height: 100%;
+  min-height: 160px;
+}
+</style>
+`
+    const files = {
+      'resources/styles/common.less': '.c-demo-chart {\n  width: 52px;\n  height: 52px;\n}\n',
+      'package/components/ChartChart.vue': chartChild,
+    }
+    const out = consolidateSubComponentClasses(files, { logger })
+    const css = out['resources/styles/common.less']
+    expect(css).toContain('width: 100%')
+    expect(css).not.toContain('width: 52px')
+  })
+
+  it('不迁移 @import 与变量声明', () => {    const files = {
       'resources/styles/common.less': '.c-demo-root {\n  width: 100%;\n}\n',
       'package/components/IconBar.vue': child('.c-demo-icon-btn', '  width: 24px;'),
     }

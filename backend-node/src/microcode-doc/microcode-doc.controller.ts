@@ -1,7 +1,9 @@
-import { Controller, Post, Body, Logger } from '@nestjs/common';
+import {Controller, Post, Body, Logger, UseGuards } from '@nestjs/common';
+import { SessionGuard } from '../auth/session.guard';
 import { MicrocodeDocService } from './microcode-doc.service';
 import { GenerateDocConfigsDto } from './dto/generate-doc-configs.dto';
 
+@UseGuards(SessionGuard)
 @Controller('microcode/doc')
 export class MicrocodeDocController {
   private readonly logger = new Logger(MicrocodeDocController.name);

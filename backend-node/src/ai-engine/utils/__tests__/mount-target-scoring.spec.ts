@@ -16,6 +16,7 @@ import {
   stripMountClsPrefix,
   stripInstanceClsPrefix,
   isSemanticMountTarget,
+  DETERMINISTIC_ANCHOR_SCORE,
 } from '../mount-target-scoring.js'
 
 const LONG = 'c-mc-max-1788065970150-62e42150-c-env-monitor-'
@@ -94,6 +95,120 @@ describe('scoreMountTarget（P1-3 统一评分）', () => {
     expect(scoreMountTarget(BG_7890, c, { componentPrefix: PREFIX })).toBe(
       scoreMountTarget(BG_7890, c, { componentPrefix: PREFIX }),
     )
+  })
+})
+
+/**
+ * 🛡️ 确定性锚短路（2026-09-29 · c-traffic-monitor-f0c05ecc 实锤「当日总流量背景图消失」）
+ *
+ * 事故链：`mountTarget` 在「直接父段无语义」时被 figma-connector 的 E1 回退到**语义祖先**
+ * （`Group 2136636802` 426×91 → `slot-当日总流量` 420×807）⇒ 按语义 token 评分时，
+ * **外层 slot 容器**（class 含 `slot`）反而比真正的父容器（class `group-2136636802-con`，
+ * 与 'slot-当日总流量' token 覆盖率 0）得分高 ⇒ 426×91 的卡片背景被挂到 420×807 的整槽容器、
+ * 再被 `background-size:100% 100%` 拉满 ⇒ 视觉上「背景图消失」。
+ *
+ * 正解：`ownerSectionId` 是 figma 树里可直接读出的**父子关系**（与 targetDomSelector 同源），
+ * 是不可辩驳的结构事实 ⇒ 候选的 `data-section-id` 命中即恒取，**不进入语义评分**。
+ */
+describe('scoreMountTarget 确定性锚短路（ownerSectionId ⨯ dataSectionId）', () => {
+  /** 事故原形：bg 的直接父节点是 Unnamed Group（426×91），mountTarget 被回退成 slot 语义名 */
+  const BG_ANCHOR = {
+    name: 'bg-[m]',
+    mountTarget: 'slot-当日总流量',
+    figmaPath: 'cp-流量监测/slot-当日总流量/Group 2136636802/bg-[m]',
+    figmaBox: { x: 0, y: 196, width: 426, height: 91 },
+    parentBox: { x: 0, y: 196, width: 426, height: 91 },
+    bgRole: 'container',
+    assignedVarName: 'bg1',
+    ownerSectionId: '2:3660',
+  }
+  const P = 'c-traffic-monitor-'
+
+  it('⭐ 外层 slot 容器语义得分高，但确定性锚候选必须胜出（事故不回归）', () => {
+    const outerSlot = scoreMountTarget(
+      BG_ANCHOR,
+      { cls: `${P}slot-con`, depth: 0, dataSectionId: null },
+      { componentPrefix: P },
+    )
+    const trueParent = scoreMountTarget(
+      BG_ANCHOR,
+      { cls: `${P}group-2136636802-con`, depth: 2, dataSectionId: '2:3660' },
+      { componentPrefix: P },
+    )
+    // 事故形态：无语义 class 对语义 mountTarget 覆盖率 0 ⇒ 语义分为 0；外层 slot 反而有分
+    expect(outerSlot).toBeGreaterThan(0)
+    expect(trueParent).toBe(DETERMINISTIC_ANCHOR_SCORE)
+    expect(trueParent).toBeGreaterThan(outerSlot)
+  })
+
+  it('锚点分值必须是「有限值」（pickBestMountTarget 用 Number.isFinite 过滤，Infinity 会被丢弃）', () => {
+    const s = scoreMountTarget(
+      BG_ANCHOR,
+      { cls: `${P}group-2136636802-con`, depth: 2, dataSectionId: '2:3660' },
+      { componentPrefix: P },
+    )
+    expect(Number.isFinite(s)).toBe(true)
+    expect(s).toBe(1000)
+  })
+
+  it('命中短路时不依赖 class（class 完全无语义也照挂）', () => {
+    expect(
+      scoreMountTarget(
+        BG_ANCHOR,
+        { cls: `${P}x`, depth: 3, dataSectionId: '2:3660' },
+        { componentPrefix: P },
+      ),
+    ).toBe(DETERMINISTIC_ANCHOR_SCORE)
+    // 极端：cls 为空（旧逻辑直接 -Infinity）—— 有确定性锚就不再需要 class 线索
+    expect(
+      scoreMountTarget(BG_ANCHOR, { cls: '', depth: 3, dataSectionId: '2:3660' }, { componentPrefix: P }),
+    ).toBe(DETERMINISTIC_ANCHOR_SCORE)
+  })
+
+  it('边界：ownerSectionId 缺失 / 候选无锚 / 锚不等 ⇒ 短路不生效（老产物行为完全不变）', () => {
+    const cand = { cls: `${P}group-2136636802-con`, depth: 2, dataSectionId: '2:3660' }
+    // 三种「不构成确定性事实」的形态必须得到**同一个**语义分（短路完全没参与）
+    const base = scoreMountTarget(
+      { ...BG_ANCHOR, ownerSectionId: undefined },
+      { cls: cand.cls, depth: cand.depth },
+      { componentPrefix: P },
+    )
+    const noOwner = scoreMountTarget({ ...BG_ANCHOR, ownerSectionId: undefined }, cand, { componentPrefix: P })
+    const noAnchor = scoreMountTarget(
+      BG_ANCHOR,
+      { cls: cand.cls, depth: cand.depth },
+      { componentPrefix: P },
+    )
+    const mismatch = scoreMountTarget(
+      BG_ANCHOR,
+      { cls: cand.cls, depth: cand.depth, dataSectionId: '2:9999' },
+      { componentPrefix: P },
+    )
+    expect(noOwner).toBe(base)
+    expect(noAnchor).toBe(base)
+    expect(mismatch).toBe(base)
+    // 且三者都没有跳到哨兵分（短路未被误触发）
+    expect(base).toBeLessThan(DETERMINISTIC_ANCHOR_SCORE)
+  })
+
+  it('数字 / 字符串混型锚仍判等（figma id 可能一侧是 number）', () => {
+    expect(
+      scoreMountTarget(
+        { ...BG_ANCHOR, ownerSectionId: 23660 },
+        { cls: `${P}grp`, depth: 1, dataSectionId: 23660 as any },
+        { componentPrefix: P },
+      ),
+    ).toBe(DETERMINISTIC_ANCHOR_SCORE)
+  })
+
+  it('宿主外壳优先于确定性锚（base-panel 严禁挂业务背景）', () => {
+    expect(
+      scoreMountTarget(
+        BG_ANCHOR,
+        { cls: 'base-panel', depth: 0, isHostShell: true, dataSectionId: '2:3660' },
+        { componentPrefix: P },
+      ),
+    ).toBe(-Infinity)
   })
 })
 

@@ -120,4 +120,14 @@ export class GenerateLiteDto {
   @IsString()
   @IsIn(['default-panel', 'model-panels', 'aio-panel', 'empty'])
   panelType?: 'default-panel' | 'model-panels' | 'aio-panel' | 'empty';
+
+  /**
+   * 演示面板背景明暗（仅当 componentType 为 microcode 时生效）
+   * 'light' → 浅色主题，'dark' → 深色主题
+   * 前端工作台演示主题切换时传入，决定生成组件的默认主题
+   */
+  @IsOptional()
+  @IsString()
+  @IsIn(['light', 'dark'])
+  backgroundBrightness?: 'light' | 'dark';
 }

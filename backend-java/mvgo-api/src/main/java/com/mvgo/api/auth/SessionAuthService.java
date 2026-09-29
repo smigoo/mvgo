@@ -21,10 +21,12 @@ import org.springframework.web.client.RestTemplate;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Date;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 会话鉴权服务 —— 等价 Node {@code SessionGuard} 的「Token header 兜底」逻辑.
@@ -70,6 +72,20 @@ public class SessionAuthService {
     @Value("${DEV_AUTO_LOGIN:false}")
     private boolean devAutoLogin;
 
+    // 🛡️ 2026-09-29 门户校验结果短 TTL 缓存：
+    // 此前每个请求都实时 HTTP 调门户 getTokenUser —— 门户 token 有效期短，
+    // token 到期/门户抖动瞬间 Java 全线 401（Node 侧有 session 不受影响，
+    // 表现为「一半功能突然要登录」），且每请求一次门户调用，性能与门户压力双输。
+    // 现将「token 摘要 → 门户用户」缓存 5 分钟；到期后自然回落实时校验，
+    // fail-closed 语义不变：仅缓存校验成功的结果，失败绝不缓存。
+    private static final long PORTAL_CACHE_TTL_MS = 5 * 60 * 1000L;
+    private static final int PORTAL_CACHE_MAX_ENTRIES = 1024;
+
+    /** 缓存条目：门户用户 + 过期时间戳 */
+    private record CachedPortalUser(PortalUser user, long expireAtMs) {}
+
+    private final ConcurrentHashMap<String, CachedPortalUser> portalCache = new ConcurrentHashMap<>();
+
     @Autowired
     public SessionAuthService(RestTemplate restTemplate, Environment environment,
                               MongoTemplate mongoTemplate, GroupService groupService) {
@@ -87,9 +103,17 @@ public class SessionAuthService {
      */
     public Optional<PortalUser> authenticate(String token) {
         if (token != null && !token.isBlank()) {
+            // 1. 短 TTL 缓存命中（key=token 摘要，不落明文）直接放行，免门户调用
+            PortalUser cached = getCachedPortalUser(token);
+            if (cached != null) {
+                return Optional.of(cached);
+            }
+            // 2. 未命中 → 实时校验门户，成功后写缓存
             Map<String, Object> portalData = verifyViaPortal(token);
             if (portalData != null) {
-                return Optional.of(upsertPortalUser(portalData));
+                PortalUser user = upsertPortalUser(portalData);
+                putCachedPortalUser(token, user);
+                return Optional.of(user);
             }
         }
         // 开发态自动登录：DEV_AUTO_LOGIN=true 且非 prod 时，无 token / 门户校验失败均兜底 dev-local
@@ -101,6 +125,50 @@ public class SessionAuthService {
 
     private boolean isProdProfile() {
         return environment.acceptsProfiles(org.springframework.core.env.Profiles.of("prod"));
+    }
+
+    /** 取缓存（过期惰性剔除） */
+    private PortalUser getCachedPortalUser(String token) {
+        String key = tokenDigestKey(token);
+        CachedPortalUser entry = portalCache.get(key);
+        if (entry == null) {
+            return null;
+        }
+        if (System.currentTimeMillis() > entry.expireAtMs()) {
+            portalCache.remove(key);
+            return null;
+        }
+        return entry.user();
+    }
+
+    /** 写缓存（带简单容量保护：超限时惰性清理过期项；异常不影响鉴权主流程） */
+    private void putCachedPortalUser(String token, PortalUser user) {
+        try {
+            if (portalCache.size() >= PORTAL_CACHE_MAX_ENTRIES) {
+                long now = System.currentTimeMillis();
+                portalCache.entrySet().removeIf(e -> now > e.getValue().expireAtMs());
+            }
+            portalCache.put(tokenDigestKey(token),
+                    new CachedPortalUser(user, System.currentTimeMillis() + PORTAL_CACHE_TTL_MS));
+        } catch (Exception e) {
+            logger.warn("门户校验缓存写入失败（不影响鉴权）: {}", e.getMessage());
+        }
+    }
+
+    /** token 摘要（SHA-256）作缓存 key，避免明文 token 驻留内存 */
+    private String tokenDigestKey(String token) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] digest = md.digest(token.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder(digest.length * 2);
+            for (byte b : digest) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            // 摘要不可用时退化为直接以 token 为 key（功能不变）
+            return token;
+        }
     }
 
     /**

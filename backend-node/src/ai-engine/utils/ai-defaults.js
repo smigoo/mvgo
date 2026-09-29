@@ -51,45 +51,25 @@ function resolveSavedSlot(role = 'text') {
 
 
 // 视觉任务默认配置（Preview 阶段 - 图像分析/VisualParser）
-// 使用通义千问视觉模型
-// ⚠️ A4 安全整改：apiKey 不再明文硬编码，改为运行时从 .env / 环境变量注入
-//    （MC_GEN_AI_API_KEY / VISION_API_KEY / ANTHROPIC_API_KEY）。此处仅留非密钥兜底默认。
+// 🔒 2026-09-29 彻底拔掉部署级 env 兜底（用户红线：每用户模型独有，不允许任何全局兜底）：
+//    此前从 MC_GEN_AI_API_KEY / VISION_API_KEY / ANTHROPIC_API_KEY 等 env 回退，
+//    会让未配置模型的新用户静默使用部署共享凭证。现恒为空——模型/密钥只能来自
+//    用户级配置（getMergedAiConfig(userId)），未配置即在 resolve* 处直接报错引导。
 const _savedVision = resolveSavedSlot('vision')
 export const VISION_DEFAULTS = {
-  apiKey:
-    process.env.MC_GEN_AI_API_KEY ||
-    process.env.VISION_API_KEY ||
-    process.env.ANTHROPIC_API_KEY ||
-    _savedVision.apiKey ||
-    '',
+  apiKey: _savedVision.apiKey || '',
   baseURL: _savedVision.baseURL || '',
   model: _savedVision.model || '',
 }
 
 // 文本任务默认配置（Figma/req 阶段 - 代码生成/审查/布局分析）
-// 使用 Claude Opus 最强模型
-// ⚠️ A4 安全整改：apiKey 不再明文硬编码，改为运行时从 .env / 环境变量注入
-//    （MC_GEN_TEXT_API_KEY / TEXT_API_KEY / ANTHROPIC_API_KEY）。此处仅留非密钥兜底默认。
+// 🔒 2026-09-29 同上：env 回退链（MC_GEN_TEXT_* / TEXT_* / ANTHROPIC_*）已全部拔除，
+//    保留导出仅为兼容旧引用（base-agent 等），值恒为空。
 const _savedText = resolveSavedSlot('text')
 export const TEXT_DEFAULTS = {
-  apiKey:
-    process.env.MC_GEN_TEXT_API_KEY ||
-    process.env.TEXT_API_KEY ||
-    process.env.ANTHROPIC_API_KEY ||
-    _savedText.apiKey ||
-    '',
-  baseURL:
-    process.env.MC_GEN_TEXT_ENDPOINT ||
-    process.env.TEXT_BASE_URL ||
-    process.env.ANTHROPIC_BASE_URL ||
-    _savedText.baseURL ||
-    '',
-  model:
-    process.env.MC_GEN_TEXT_MODEL ||
-    process.env.TEXT_MODEL ||
-    process.env.ANTHROPIC_MODEL ||
-    _savedText.model ||
-    '',
+  apiKey: _savedText.apiKey || '',
+  baseURL: _savedText.baseURL || '',
+  model: _savedText.model || '',
 }
 
 /**
@@ -143,6 +123,11 @@ function resolveProvider(config = {}, primary = null, role = 'text') {
     const m = String(model || '').trim().toLowerCase()
     if (!m) return undefined
     if (/^deepseek-v4/.test(m)) return 'disabled'
+    // 🛡️ 2026-09-29 G1 修复：qwen3.7-plus/qwen3.8-max 等默认开推理（model-config 实测烧 8k~13k token，
+    // 单视觉调用 218~276s），但既非 deepseek-v4* 也非 isReasoningModel → 原返回 undefined 不处理
+    // → 文本路径 base-agent 不注入关思考参数 → 仍在思考。纳入后返回 'disabled'，
+    // 由 base-agent 经 buildThinkingOffParams 映射为 enable_thinking:false（qwen 正确形态，避免 120s 超时）。
+    if (m.includes('qwen')) return 'disabled'
     if (isReasoningModel(m)) return 'skip'
     return undefined
   }
@@ -168,10 +153,10 @@ function resolveProvider(config = {}, primary = null, role = 'text') {
       const logKey = `${p.model}|${p.id}`
       if (!_loggedThinkingDisabled.has(logKey)) {
         _loggedThinkingDisabled.add(logKey)
-        logger.warn('🔧 deepseek v4 系默认关推理（thinking disabled），避免烧光输出预算', {
-          model: p.model,
-          providerId: p.id,
-        })
+      logger.warn('🔧 模型默认开推理，已注入 disabled 关推理（避免烧光输出预算）', {
+        model: p.model,
+        providerId: p.id,
+      })
       }
       return { ...p, thinkingType: 'disabled' }
     }
@@ -281,30 +266,18 @@ export function resolveVisionConfig(config = {}) {
   const prefix = merged.modelMode === 'unified' ? 'unified' : 'vision'
   const primary = {
     apiKey: pick(
-      config[`${prefix}ApiKey`],
-      process.env.MC_GEN_AI_API_KEY,
-      process.env.VISION_API_KEY,
-      process.env.ANTHROPIC_API_KEY,
-      VISION_DEFAULTS.apiKey
+      config[`${prefix}ApiKey`]
+      // 🔒 2026-09-29：env 兜底链已拔除（每用户模型独有），未配置直接报错引导
     ),
     baseURL: pick(
-      config[`${prefix}BaseURL`],
-      process.env.MC_GEN_AI_ENDPOINT,
-      process.env.VISION_BASE_URL,
-      process.env.ANTHROPIC_BASE_URL,
-      VISION_DEFAULTS.baseURL
+      config[`${prefix}BaseURL`]
     ),
     model: pick(
-      config[`${prefix}Model`],
-      process.env.MC_GEN_VISION_MODEL,
-      process.env.VISION_MODEL,
-      process.env.ANTHROPIC_MODEL,
-      VISION_DEFAULTS.model
+      config[`${prefix}Model`]
     ),
     //显式 provider 类型：优先用用户选择，否则自动识别
     providerType: pick(
       config[`${prefix}ProviderType`],
-      process.env.VISION_PROVIDER_TYPE,
       'auto'
     )
   }
@@ -343,7 +316,8 @@ export function resolveVisionConfig(config = {}) {
 
 /**
  * 解析文本任务配置
- * 优先级：前端传入 → MC_GEN_TEXT_* 环境变量 → TEXT_* 环境变量 → ANTHROPIC_* 兼容环境变量 → 已保存配置
+ * 优先级（🔒 2026-09-29 env 兜底已拔除）：前端传入（用户级 getMergedAiConfig）→ 无则报错引导配置。
+ * 不再有任何部署级/全局级模型回退——每用户模型独有。
  * @param {object} config - 前端请求传入的配置
  * @returns {{apiKey:string, baseURL:string, model:string}}
  */
@@ -359,30 +333,18 @@ export function resolveTextConfig(config = {}) {
   const prefix = merged.modelMode === 'unified' ? 'unified' : 'text'
   const primary = {
     apiKey: pick(
-      config[`${prefix}ApiKey`],
-      process.env.MC_GEN_TEXT_API_KEY,
-      process.env.TEXT_API_KEY,
-      process.env.ANTHROPIC_API_KEY,
-      TEXT_DEFAULTS.apiKey
+      config[`${prefix}ApiKey`]
+      // 🔒 2026-09-29：env 兜底链已拔除（每用户模型独有），未配置直接报错引导
     ),
     baseURL: pick(
-      config[`${prefix}BaseURL`],
-      process.env.MC_GEN_TEXT_ENDPOINT,
-      process.env.TEXT_BASE_URL,
-      process.env.ANTHROPIC_BASE_URL,
-      TEXT_DEFAULTS.baseURL
+      config[`${prefix}BaseURL`]
     ),
     model: pick(
-      config[`${prefix}Model`],
-      process.env.MC_GEN_TEXT_MODEL,
-      process.env.TEXT_MODEL,
-      process.env.ANTHROPIC_MODEL,
-      TEXT_DEFAULTS.model
+      config[`${prefix}Model`]
     ),
-    //透传显式 provider 类型：前端 textProviderType > 环境变量 > 默认 auto
+    //透传显式 provider 类型：前端 textProviderType > 默认 auto
     providerType: pick(
       config[`${prefix}ProviderType`],
-      process.env.TEXT_PROVIDER_TYPE,
       'auto'
     )
   }

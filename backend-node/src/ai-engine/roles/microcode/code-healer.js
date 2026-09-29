@@ -37,6 +37,7 @@ import {
   isUsedByLessColorFn,
   isColorEvaluable,
   NEUTRAL_LESS_COLOR,
+  collectColorFnVars,
 } from '../../utils/less-color-funcs.js';
 
 function isIndexVuePath(path) {
@@ -1411,6 +1412,21 @@ export function healThemeMixinVarRefs(content, themeVarsContent) {
   const localDeclared = new Set();
   for (const m of content.matchAll(/^\s*@([\w-]+)\s*:/gm)) localDeclared.add(m[1]);
 
+  // 🛡️ A-②（2026-09-29 治本）：被 LESS **颜色函数**当实参引用的槽位一律不改写。
+  //
+  // 根因：颜色函数（lighten/darken/fade…）必须在**编译期**求值，而 `var()` 是运行期值 →
+  // 改写后报 `Error evaluating function \`lighten\`: Argument cannot be evaluated to a color`
+  // → 整个 `<style>` 块编译失败 → P1-4 隔离降级 → 子组件整块消失（刀 15/16b 同源事故）。
+  //
+  // 历史：此前的防护是「injectThemeVarDeclsForLess 先注入同名声明 → localDeclared 命中 →
+  // 本函数跳过改写」。但那条路会在业务样式顶层产 `@color-*: <light 字面量>`
+  // → 同时命中门禁 THEME-SLOT-LOCAL-OVERRIDE（BLOCK）且与「mixin 变量首定义者胜出」抢定义。
+  // 现在改为**直接豁免**：不改写 → 保留 `@color-primary` → 由主题作用域在编译期提供真值
+  // （比原先注入中立灰 `#333333` 更准 —— 颜色函数也能吃主题真色）。
+  //
+  // 单一事实源：复用 `collectColorFnVars`（与 `healPresetLiteralDecls` 的豁免同源）。
+  const colorFnVars = collectColorFnVars(content);
+
   let changed = false;
   const out = content
     .split('\n')
@@ -1428,6 +1444,7 @@ export function healThemeMixinVarRefs(content, themeVarsContent) {
       let outLine = line;
       for (const [name, def] of mixinVars) {
         if (localDeclared.has(name)) continue;
+        if (colorFnVars.has(name)) continue; // 🛡️ A-②：颜色函数实参 → 保留 Less 槽位引用
         // 值位置引用：@name 后非冒号（排除声明）、非 { （排除 @{} 插值）
         // 🛡️ 治本（2026-09-16 · c-vehicle-monitor-71dd6494 实锤）：原 `@${name}\b` 的 \b 把
         // `-` 当词边界 → `@color-bg` 误匹配 `@color-bg-card` 的前缀 → 产出
@@ -1461,8 +1478,9 @@ export function healThemeMixinVarRefs(content, themeVarsContent) {
  * （合规）；同时 LESS 编译不再报 variable undefined（原自愈的初衷照旧满足）。
  * 编译产物 CSS 与替换方案**完全等价**，不改变运行时行为（已用三样例 + less 4.9.0 验证）。
  *
- * ⚠️ 唯一例外（刀 16b）：被 LESS 颜色函数当实参引用的变量，且 theme 原值为不可求值形态
- * （`var()`）→ 注入中立真颜色，否则编译失败（见下方内联注释）。
+ * ⚠️ 边界（A-① 2026-09-29）：**只注入 .common() 里的跨主题共享令牌**（字号/字重/圆角/间距）。
+ * 凡声明在 `.theme-light()` / `.theme-dark()` 内的槽位（值随主题变化）一律不注入 —— 见
+ * 下方 A-① 注释，作用域由 import 链提供。
  *
  * @param {string} lessContent 业务样式源（common.less 等，不含 themes/）
  * @param {string} themeVarsContent theme-vars.less 内容
@@ -1472,6 +1490,8 @@ export function injectThemeVarDeclsForLess(lessContent, themeVarsContent) {
   const source = String(lessContent || '');
   const decls = extractThemeVarDecls(themeVarsContent);
   if (!decls.size) return source;
+  // 🛡️ A-①：主题作用域槽位（值随主题变化者）不注入 —— 见下方循环内注释。
+  const themeScoped = extractThemeScopedNames(themeVarsContent);
 
   // 业务文件顶层已声明的变量不再注入（避免重复声明）
   const local = new Set();
@@ -1487,25 +1507,57 @@ export function injectThemeVarDeclsForLess(lessContent, themeVarsContent) {
   const missing = [];
   for (const name of refs) {
     if (local.has(name) || !decls.has(name)) continue;
+    // 🛡️ A-①（2026-09-29 削源）：**主题作用域槽位**（在 .theme-light()/.theme-dark() 内
+    // 声明的，即值随主题变化者）一律不在业务文件顶层重声明。
+    //   两宗罪：① 命中门禁 THEME-SLOT-LOCAL-OVERRIDE（BLOCK，重试耗尽风险）；
+    //           ② 与「mixin 变量首定义者胜出」叠加时与主题 mixin 抢定义。
+    //   作用域由 import 链天然提供（index.less 先 `.common(); .theme-light();` 再
+    //   `@import common.less`；themes/dark.less 在 `&.dark { .theme-dark(); … }` 内 import）。
+    //   全语料取证（491 份真产物）：业务样式文件 **0 例**缺主题作用域
+    //   （唯一 5 例是 theme-vars.less 自身，已被门禁排除）→ 不会引入 variable undefined。
+    if (themeScoped.has(name)) continue;
     missing.push(name);
   }
   if (!missing.length) return source;
 
-  const decl = missing
-    .map((n) => {
-      const value = decls.get(n);
-      // 🛡️ 刀 16b（2026-09-13）：注入的是 theme-vars 的**原样值**，它可能是 `var(--x)`
-      // （如 `@fontSize: var(--fontSize)`，M5-6 要求，必须保留）。但若本文件把该变量当
-      // LESS **颜色函数实参**用（`lighten(@n, 10%)`），原样注入会在编译期不可求值 →
-      // `Argument cannot be evaluated to a color` → 整个块失败 → P1-4 剔除子组件。
-      // 此时换中立真颜色（宁可颜色保守，不可编译失败）；非颜色函数引用者一律原样注入。
-      if (!isColorEvaluable(value) && isUsedByLessColorFn(source, n)) {
-        return `@${n}: ${NEUTRAL_LESS_COLOR};`;
-      }
-      return `@${n}: ${value};`;
-    })
-    .join('\n');
+  // 🗑️ 刀 16b 已删除（2026-09-29 删减法）。原逻辑："被 LESS 颜色函数当实参引用 + 主题值不可
+  // 求值 → 注入中立真颜色 #333333"，防 `Argument cannot be evaluated to a color`。
+  // 该 fallback 现由 `healThemeMixinVarRefs` 的 **A-② 豁免**接管（颜色函数实参一律不改写 →
+  // 保留 `@color-primary` → 由主题作用域编译期提供真值）。既然实参不再被改写成 var()，
+  // 就不需要「注入可求值假色」这条兜底；而它注入的真颜色恰恰是 THEME-SLOT-LOCAL-OVERRIDE
+  // 的 BLOCK 源之一。=> 事实已被接管，对应 fallback 删除（门禁总量只降不升）。
+  const decl = missing.map((n) => `@${n}: ${decls.get(n)};`).join('\n');
   return `${decl}\n${source}`;
+}
+
+/**
+ * 提取 theme-vars.less 中声明在 `.theme-light()` / `.theme-dark()` 闭包内的槽位名。
+ * 这些槽位的值**随主题变化** ⇒ 禁止在业务文件顶层重声明（见 A-①）。
+ * 只扫 theme 两个 mixin：`.common()` 里的是跨主题共享令牌（字号/圆角/间距），可安全注入。
+ *
+ * @param {string} themeVarsContent theme-vars.less 内容
+ * @returns {Set<string>} 不含 @ 的槽位名
+ */
+function extractThemeScopedNames(themeVarsContent) {
+  const names = new Set();
+  let inTheme = false;
+  let depth = 0;
+  for (const raw of String(themeVarsContent || '').split('\n')) {
+    const t = raw.trim();
+    if (!inTheme) {
+      if (/^\.(theme-dark|theme-light)\s*\(\s*\)\s*\{/.test(t)) {
+        inTheme = true;
+        depth = 1;
+      }
+      continue;
+    }
+    depth += (t.match(/\{/g) || []).length - (t.match(/\}/g) || []).length;
+    // 剥行尾 // 注释再取值（与 extractThemeVarDecls 同口径，避免注释污染）
+    const m = t.replace(/\/\/.*$/, '').trim().match(/^@([\w-]+)\s*:/);
+    if (m) names.add(m[1]);
+    if (depth <= 0) inTheme = false;
+  }
+  return names;
 }
 
 /** LESS at-rule 关键字：出现在 `@xxx` 位置但不是变量引用，注入时必须排除 */
@@ -1940,7 +1992,19 @@ export function healVarNameCase(content) {
   if (typeof content !== 'string' || !content.includes('var(--')) return content;
   let changed = false;
   const out = content.replace(
-    /var\((--color-[a-z0-9]*-[a-z0-9-]*)/g,
+    // 🛡️ 2026-09-29 正则修正（mc-max-1790663205915 系列 / c-traffic-monitor-58ac1084 实锤）：
+    //   原 `/var\((--color-[a-z0-9]*-[a-z0-9-]*)/g` 要求 `--color-` 之后**至少两个**连字符段，
+    //   于是**单段名全部漏过**——恰是最高频的 `--color-primary` / `--color-success` /
+    //   `--color-error` / `--color-warning` / `--color-border`；只有 `--color-text-base`
+    //   这类多段名被归一。真机实测：产物里 `color: var(--color-primary, #1990ff)` 原样留下，
+    //   而 css-vars.js 注入的是 `--colorPrimary` ⇒ 变量永不命中、恒定回落字面量、主题切换失效
+    //   （用户报「header-tab 颜色样式错误」的直接成因之一）。
+    //   改为 `[a-z0-9-]+` 单段通吃；`-([a-z0-9])` → 大写 的转换逻辑本身已能正确处理单段
+    //   （`color-primary` → `colorPrimary`），无需改动。
+    //   误伤面评估：契约规定业务样式**不得**自定义 `--color-*`（css-vars.js 的 key 全为
+    //   camelCase，全仓 `--fontSize` 静态定义为 0 处），故 kebab 引用按定义即错误写法，
+    //   归一方向唯一正确；本地定义 `--color-x:` 不受影响（本函数只改 `var(...)` 引用侧）。
+    /var\((--color-[a-z0-9-]+)/g,
     (full, varName) => {
       // varName 形如 --color-text-base；去掉前导 --，kebab→camel，再补回 --
       const camel =

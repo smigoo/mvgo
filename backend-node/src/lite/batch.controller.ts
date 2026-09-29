@@ -1,5 +1,4 @@
-import {
-  Controller,
+import {Controller,
   Post,
   Get,
   Body,
@@ -9,8 +8,8 @@ import {
   HttpStatus,
   Logger,
   Optional,
-  Inject,
-} from '@nestjs/common';
+  Inject, UseGuards } from '@nestjs/common';
+import { SessionGuard } from '../auth/session.guard';
 import { randomBytes } from 'crypto';
 import { BatchService } from './batch.service';
 import { TasksService, RateLimitReason } from '../tasks/tasks.service';
@@ -59,6 +58,7 @@ interface BatchGenerateDto {
  * - POST /lite/batch/:batchId/resume：恢复批次
  * - GET /lite/batch/recoverable：获取待恢复的批次列表
  */
+@UseGuards(SessionGuard)
 @Controller('lite/batch')
 export class BatchController {
   private readonly logger = new Logger(BatchController.name);

@@ -73,10 +73,51 @@ function detectGridColumns(children) {
  * 复用 section-tree 的 areBoxesSideBySide（唯一事实源：absoluteBoundingBox）。
  * @returns {{display:'grid'|'flex', gridColumns?:number, flexDirection?:'row'|'column', confidence:'high'|'low', ratio?:number}|null}
  */
+/**
+ * 🛡️ 2026-09-29 新增（mc-max-1790667854851-5f5bce3a 实锤）：剔除「整块背景层」子节点。
+ *
+ * 判据与 `section-tree#describeContainerLayout` **完全一致**（面积 ≥90% 父面积 = 背景层），
+ * 避免同一事实两处各自定义「什么是背景层」。
+ */
+function excludeBackgroundLayers(boxes, parentBox) {
+  if (!parentBox || !parentBox.width || !parentBox.height) return boxes
+  const pArea = parentBox.width * parentBox.height
+  return boxes.filter((c) => {
+    const b = c.absoluteBoundingBox || c.bbox
+    if (!b || !b.width || !b.height) return false
+    // 🛡️ TEXT 永不视为背景层：父容器常按文字尺寸贴合（真机 `2:8041` 55×18 里就装着
+    //    52×18 的 TEXT `危化品车`，面积占比 94.5% ≥ 0.9）⇒ 若按面积判会把**内容**剔掉，
+    //    该容器随即因剩余子节点 <2 而彻底丢失布局事实（实测 children=2 的覆盖 15 → 9，
+    //    6 个容器的事实凭空消失）。背景层语义是「块状色块/位图铺底」，文字天然不是。
+    //    注：`section-tree#describeContainerLayout` 无此例外 —— 它只做「列聚类」用途，
+    //    TEXT 被剔不影响其「N 列 × M 行」结论；此处用于**方向判定**，剔错会直接丢事实。
+    if (String(c.type || '').toUpperCase() === 'TEXT') return true
+    return (b.width * b.height) / pArea < 0.9
+  })
+}
+
 function decideGeometricLayout(children, opts = {}) {
-  const boxes = (children || []).filter(
+  const all = (children || []).filter(
     (c) => c && (c.absoluteBoundingBox || c.bbox),
   )
+  if (all.length < 2) return null
+
+  // 🛡️ 2026-09-29 治本（mc-max-1790667854851-5f5bce3a 实锤）：**先剔除整块背景层**再判方向。
+  //   真机列表项 `136:129` 的 4 个 children = bg(140×74, x=37) / icon(48×52, x=41) /
+  //   组1(50×18, x=89) / 组2(39×23, x=90)。`detectGridColumns` 会把 **bg 与 icon 按
+  //   x 差 4px 归进同一列**（判据 `bx - prevX > avgW*0.5`，140 的一半=70 > 4）⇒ 凑出
+  //   「2 列 × 每列 2 项」的**假均匀网格** ⇒ 下发 `display:grid; repeat(2, …)`，
+  //   而真实布局是 **flex row（icon 左 / 文字列右）**。LLM 拿了错的 grid 事实 ⇒
+  //   产物 `.list-item` 既没有 grid 也没有 flex ⇒ 三个 div 退化成 block 竖排堆叠
+  //   （截图实锤：icon 在上、文字在下、数值被裁）。
+  //   剔除背景层后剩 3 个（< 4，不判网格）⇒ 走 side-by-side 判定 ⇒ 正确得出 row。
+  const filtered = excludeBackgroundLayers(all, opts.parentBox)
+  // 🛡️ 过滤后不足 2 个（典型：1 背景层 + 1 内容）⇒ **回退用全集**，不返回 null。
+  //   理由：本仓已实锤「**无事实 ⇒ LLM 只能猜 ⇒ 竖排堆叠/布局错乱**」是最坏结果
+  //   （见文件头与本次事故）。含背景层的判定至多让 side-by-side 比例偏 column，
+  //   属**既有行为**；而返回 null 会凭空抹掉事实、引入新回归（实测 children=2 的
+  //   覆盖会从 15 掉到 10）。
+  const boxes = filtered.length >= 2 ? filtered : all
   if (boxes.length < 2) return null
 
   // 🛡️ 均匀网格优先（side-by-side 比例对网格系统性误判 column）
@@ -149,7 +190,12 @@ export function buildNodeLayoutFacts(figmaNodeData, opts = {}) {
         }
       } else if (children.length >= 2) {
         // 非 Auto-Layout / 绝对定位文件 → 几何推断（默认 flex，不还原 absolute）
-        const decide = decideGeometricLayout(children, opts)
+        // 🛡️ 把父容器 bbox 传下去，供剔除「整块背景层」（否则背景层会与内容层
+        //    凑成假网格，见 decideGeometricLayout 的注释）。不原地改 opts（外部引用）。
+        const decide = decideGeometricLayout(children, {
+          ...opts,
+          parentBox: node.absoluteBoundingBox || node.bbox,
+        })
         if (decide) {
           fact = {
             ...(decide.display === 'grid'

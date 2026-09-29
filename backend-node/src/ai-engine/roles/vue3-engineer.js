@@ -44,6 +44,11 @@ import {
   createChartClassBlockIfAbsent,
   stripZeroMinHeightForClass,
 } from '../utils/post-process.js';
+// 🎯 2026-09-29 图表容器双刀（刀1 剥 index.vue inline min-height:0 / 刀2 内层 wrapper 承载 echarts）
+import {
+  stripChartInlineMinHeight,
+  wrapChartRootAsInnerWrapper,
+} from '../utils/chart-container-guard.js';
 import { assessNumericLiteralRewrite } from '../utils/numeric-literal-guard.js';
 import { resolveEchartsType, normalizeSeriesInSource, normalizeChartAxesInSource, buildChartTypeTruthSet } from '../utils/chart-type-guard.js';
 // 🛡️ A4→CSS 高度比例落表（2026-09-15）：Vue3 链路此前未接入 buildSectionLayoutFacts
@@ -988,7 +993,7 @@ export class Vue3Engineer extends MicrocodeEngineer {
         });
       }
 
-      // 🛡️ 样式文件后处理兜底（T05/T06/T07 覆盖 .less/.css）：
+      // 🛡️ 样式文件后处理兜底（T06/T07 覆盖 .less/.css）：
       // vue3 组件的真实样式主要写在 resources/styles/common.less，而 _assembleVue3IndexVue
       // 只处理 package/index.vue，导致 T06 容器尺寸校验漏掉 common.less 里的
       // 「子容器尺寸 == 根容器」BBox fallback（与微码同源问题）。此处对 .less/.css 统一补跑。
@@ -997,15 +1002,11 @@ export class Vue3Engineer extends MicrocodeEngineer {
         if (typeof c !== 'string') continue;
         if (!p.endsWith('.less') && !p.endsWith('.css')) continue;
 
-        // T05: 硬编码 background-size px → cover
-        let vue3Style = this._fixBackgroundImageSize(c);
-        if (vue3Style !== c) {
-          allFiles[p] = vue3Style;
-          this.logger.info(
-            '🔧 T05: Vue3 样式文件 bg-size 修正（硬编码 px → cover）',
-            { file: p },
-          );
-        }
+        // 🗑️ T05: bg-size 修正 —— 已删除（2026-09-29 删减法）。
+        //   它无条件把 `background-size: Xpx Ypx` 改成 `cover`，与 `inferBackgroundStyle`
+        //   给局部背景层输出的「px 尺寸 + 偏移」真值方向相反；全语料 14/14 命中全是真值。
+        //   详见 utils/post-process.js 顶部墓碑注释。
+        let vue3Style = c;
 
         // T06: 容器尺寸校验 + 确定性自动修正（BBox fallback → auto，回写修正结果）
         if (_vue3RootBox?.width && _vue3RootBox?.height) {
@@ -1313,18 +1314,34 @@ export class Vue3Engineer extends MicrocodeEngineer {
         // 故 vue3 不剥标题，保留 LLM 生成的 header 标题元素。
 
         // T2：echarts 挂载容器最小高度注入
-        for (const [fp, fc] of Object.entries(codeResult.files)) {
+        // 🎯 2026-09-29 图表容器双刀（单一事实源 utils/chart-container-guard.js）：
+        //   刀 2 —— echarts 挂载容器 == 组件根元素时插入内层 wrapper。**必须在 elMatch 之前**：
+        //          改写后 chartCls 解析到内层 canvas class，T2 的 min-height 才会落在内层容器上。
+        //   刀 1 —— 本循环收尾后，把 index.vue 里图表组件标签的 inline `min-height:0` 剥掉。
+        const _chartTagNames = [];
+        for (const [fp, fc0] of Object.entries(codeResult.files)) {
           if (
             !fp.endsWith('.vue') ||
-            typeof fc !== 'string' ||
-            !fc.includes('echarts.init(')
+            typeof fc0 !== 'string' ||
+            !fc0.includes('echarts.init(')
           )
             continue;
-          const refMatch = fc.match(
+          _chartTagNames.push(fp.slice(fp.lastIndexOf('/') + 1, -'.vue'.length));
+          const refMatch = fc0.match(
             /echarts\.init\(\s*([A-Za-z_$][\w$]*)\.value/,
           );
           if (!refMatch) continue;
           const refName = refMatch[1];
+          // 🛡️ 刀 2：容器==根元素 → 内层 wrapper（fail-closed：非空根 / 已有外层结构一律不动）
+          let fc = fc0;
+          const _wrapped = wrapChartRootAsInnerWrapper(fc0, refName);
+          if (_wrapped.applied) {
+            fc = _wrapped.code;
+            codeResult.files[fp] = fc;
+            this.logger.info(
+              `🎯 图表根元素已加内层 wrapper（刀 2）: ${fp} → .${_wrapped.detail.canvasClass}`,
+            );
+          }
           // template 中 ref="xxx" 的元素 class（class 与 ref 顺序两种形态）
           const elMatch =
             fc.match(
@@ -1369,6 +1386,24 @@ export class Vue3Engineer extends MicrocodeEngineer {
               codeResult.files[lf] = cleaned;
               this.logger.info(
                 `🎯 共享表 min-height:0 反杀已剥除: ${lf} → .${chartCls}`,
+              );
+            }
+          }
+        }
+        // 🎯 刀 1（2026-09-29）：装配产物 index.vue 里，图表组件标签上的 inline
+        //   `min-height: 0/0px/auto/...` 一律剥除（保留 flex 比例）。
+        //   与 T2-D 的 stripZeroMinHeightForClass（.vue style 块 / .less 共享表）**同一 0 值口径**，
+        //   只是补上「index.vue inline style」这第三个载体 —— 此前正是这处缺口让装配器的
+        //   min-height:0 经 $attrs 落到图表根元素、反杀组件内的非零 min-height。
+        {
+          const _idxPath = 'package/index.vue';
+          const _idxContent = codeResult.files[_idxPath];
+          if (typeof _idxContent === 'string' && _chartTagNames.length > 0) {
+            const _stripped = stripChartInlineMinHeight(_idxContent, _chartTagNames);
+            if (_stripped.stripped.length > 0) {
+              codeResult.files[_idxPath] = _stripped.code;
+              this.logger.info(
+                `🎯 图表组件标签 inline min-height:0 已剥除（刀 1）：${_stripped.stripped.length} 处 → ${[...new Set(_stripped.stripped.map((x) => x.tag))].join(', ')}`,
               );
             }
           }
@@ -1765,6 +1800,17 @@ export class Vue3Engineer extends MicrocodeEngineer {
               } else if (/ :style=/.test(best.full)) {
                 continue; // 非对象字面量 :style，跳过防破坏
               } else {
+                // 🛡️ 2026-09-29 治本（与 microcode-engineer 同源，mc-max-1790678096786-f5cac254 实锤）：
+                //   `best.after` 对**自闭合**元素（`<X … class="…" />`）末尾带 ` /`。旧实现把
+                //   ` :style=` 拼在 `best.after` **之后** ⇒ 产出 `<X … class="…" / :style="{ … }">`
+                //   （斜杠与 `>` 之间夹属性）⇒ compiler-sfc 报 `Illegal '/' in tags.` +
+                //   `Element is missing end tag.` ⇒ 写盘门禁判死**整文件** ⇒ 产物缺失 ⇒
+                //   前端「组件资源加载失败 / 找不到文件」。此处按是否自闭合分别产出正确形态。
+                //   兜底：file-writer 写盘门禁前置自愈（repairSelfClosingSlashInsideTag）。
+                const _selfClosing = /\s\/\s*$/.test(best.after);
+                const _afterAttrs = _selfClosing
+                  ? best.after.replace(/\/\s*$/, '')
+                  : best.after;
                 replacement =
                   '<' +
                   best.tag +
@@ -1772,10 +1818,12 @@ export class Vue3Engineer extends MicrocodeEngineer {
                   'class="' +
                   best.cls +
                   '"' +
-                  best.after +
+                  _afterAttrs +
                   ' :style="{ ' +
                   bgCss +
-                  ' }">';
+                  ' }"' +
+                  (_selfClosing ? ' /' : '') +
+                  '>';
               }
               const src = codeResult.files[best.fpath];
               codeResult.files[best.fpath] =

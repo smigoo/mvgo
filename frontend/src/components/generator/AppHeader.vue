@@ -62,6 +62,31 @@
         </template>
       </nav>
 
+      <!-- 工作台模式切换按钮 -->
+      <button
+        v-feature="'workbench'"
+        class="workbench-toggle-btn icon-tooltip tooltip-below"
+        @click="router.push('/workbench')"
+        data-tooltip="工作台"
+        aria-label="切换到工作台模式"
+      >
+        <!-- 对话/聊天图标 -->
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+        </svg>
+        <!-- 测试标识 -->
+        <span class="workbench-test-badge">TEST</span>
+      </button>
+
       <button class="config-btn" @click="$emit('openConfig')">
         <svg
           width="16"
@@ -134,7 +159,12 @@
       <!-- 用户菜单 -->
       <div class="user-menu" @mouseenter="handleMenuEnter" @mouseleave="handleMenuLeave">
         <div class="user-trigger">
-          <span class="user-avatar">{{ currentUser.charAt(0).toUpperCase() }}</span>
+          <span class="user-avatar">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+          </span>
           <span class="user-name">{{ currentUser }}</span>
         </div>
         <div
@@ -725,6 +755,59 @@ onUnmounted(() => {
   background: var(--brand-bg-hover);
 }
 
+/* 工作台模式切换按钮 */
+.workbench-toggle-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  background: #4f46e5;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  color: #fff;
+  box-shadow: 0 2px 10px rgba(79, 70, 229, 0.35);
+  transition:
+    border-color 0.2s ease,
+    color 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.workbench-toggle-btn:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.45);
+  transform: translateY(-1px);
+}
+
+/* 工作台测试标识 */
+.workbench-test-badge {
+  position: absolute;
+  top: -8px;
+  right: -12px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 9999px;
+  color: #4a2c08;
+  letter-spacing: 0.5px;
+  pointer-events: none;
+  background: linear-gradient(90deg, #ffcb52, #ff9f43, #ffcb52);
+  background-size: 200% 100%;
+  box-shadow: 0 2px 8px rgba(255, 159, 67, 0.35);
+  animation: test-badge-shimmer 2.5s linear infinite;
+}
+
+@keyframes test-badge-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 /* ===== 用户菜单 ===== */
 .user-menu {
   position: relative;
@@ -734,39 +817,42 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 12px 5px 5px;
+  padding: 4px 14px 4px 4px;
   background: var(--brand-bg-hover);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-full);
   cursor: pointer;
   transition:
     background 0.2s ease,
-    border-color 0.2s ease;
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
   white-space: nowrap;
   border: 1px solid transparent;
 }
 
 .user-trigger:hover {
   background: var(--brand-bg-active);
-  border-color: var(--brand-border);
+  border-color: color-mix(in srgb, var(--brand) 18%, transparent);
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--brand) 10%, transparent);
 }
 
 .user-avatar {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border-radius: var(--radius-full);
-  background: var(--brand);
-  color: var(--text-on-brand);
-  font-size: 12px;
-  font-weight: 600;
+  background: linear-gradient(135deg, var(--brand), color-mix(in srgb, var(--brand) 80%, #fff));
+  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--brand) 30%, transparent);
 }
 
 .user-name {
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-primary);
+  letter-spacing: 0.2px;
 }
 
 .user-dropdown {

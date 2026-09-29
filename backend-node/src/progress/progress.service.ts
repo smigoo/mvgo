@@ -2,7 +2,7 @@ import { Injectable, Logger, Inject, Optional, forwardRef } from '@nestjs/common
 import { Response } from 'express';
 import { TasksService } from '../tasks/tasks.service';
 import { TaskQueueService } from '../queue/task-queue.service';
-import { redactSecrets } from '../common/utils/redact';
+import { redactSecrets, safeJsonStringify } from '../common/utils/redact';
 import { getSessionModel } from '../ai-engine/utils/session-model.js';
 
 @Injectable()
@@ -97,9 +97,14 @@ export class ProgressService {
 
       // 任务已是终态：主动推送终态事件给重连客户端
       if (existingTask.status === 'completed' && existingTask.result) {
+        // 🛡️ 2026-09-29：本分支（SSE 重连）原先**直传 `existingTask.result`** —— 既未脱敏，
+        //   又带着生成期注入的 `__parent` 反链（与 `children` 成环）⇒ sendEvent 内
+        //   `JSON.stringify` 抛 "Converting circular structure to JSON"、被吞成一行 WARN，
+        //   **该重连连接拿不到 complete 事件**（实测 18 次、跨三代进程）。
+        //   ⇒ 改走与 sendComplete 同一个净化单点，不再各自为政。
         this.sendEvent(res, {
           type: 'complete',
-          ...existingTask.result,
+          ...this.sanitizeResultForBroadcast(existingTask.result, sessionId),
           timestamp: Date.now(),
         });
         res.end();
@@ -195,12 +200,46 @@ export class ProgressService {
   }
 
   /**
+   * 🛡️ 对外广播 `task.result` 的统一净化（**单点**）。
+   *
+   * 背景（2026-09-29 实锤）：同一净化曾散落在各出口、只覆盖了部分 ——
+   * `TasksService#stripParentRefs` 管 REST 详情/列表，`sendComplete#redactSecrets` 管 SSE 首连，
+   * **唯独漏了 SSE 重连分支**（`{type:'complete', ...existingTask.result}`）⇒ 带 `__parent`
+   * 循环的载荷让 `JSON.stringify` 抛错、事件整条丢失（实测 18 次 / 跨三代进程）⇒ 收敛到本方法。
+   *
+   * 语义（保持 2026-09-18 既有契约，不收紧也不放宽）：
+   *   - 正常：`redactSecrets` 深拷贝 + 密钥脱敏 + 循环转 `'[Circular]'`；
+   *   - 异常：降级为**最小安全载荷**，绝不外抛、**绝不回退到未脱敏原文**（避免密钥泄露）。
+   *
+   * ⚠️ 新增出口（任何把 `task.result` 推给客户端的地方）必须走这里，别再各自实现。
+   */
+  private sanitizeResultForBroadcast(result: any, sessionId: string): any {
+    try {
+      return redactSecrets(result);
+    } catch (err: any) {
+      this.logger.warn(
+        `完成消息脱敏失败，降级为最小载荷广播（不回退原文）: ${err?.message || String(err)}`,
+        { sessionId },
+      );
+      return {
+        sessionId,
+        redacted: true,
+        degraded: { reason: 'redact-failed', message: err?.message || String(err) },
+      };
+    }
+  }
+
+  /**
    * 发送事件到客户端
+   *
+   * 🛡️ 2026-09-29：序列化改用 `safeJsonStringify`（循环安全，**单点兜底**）——
+   *   原先裸 `JSON.stringify` 时，任何**未走净化**的出口（实测即 SSE 重连分支）
+   *   只要载荷含循环就抛错、被下方 catch 吞成一行 WARN，**该次事件整条丢失**。
    */
   private sendEvent(res: Response, data: any, seq?: number): void {
     try {
       const eventId = seq ?? data?.seq;
-      const message = `${eventId !== undefined ? `id: ${eventId}\n` : ''}data: ${JSON.stringify(data)}\n\n`;
+      const message = `${eventId !== undefined ? `id: ${eventId}\n` : ''}data: ${safeJsonStringify(data)}\n\n`;
       // 防御性检查：确保 res 是有效的 Response 对象
       if (typeof res.write !== 'function') {
         this.logger.error(`[sendEvent] res.write 不是函数！res 类型: ${typeof res}, constructor: ${res?.constructor?.name}, data.type: ${data.type}`);
@@ -382,20 +421,9 @@ export class ProgressService {
     //   引用栈溢出即此）。redactSecrets 已改为迭代+循环安全，此处再加一层 fail-safe：
     //   即使脱敏/序列化意外失败，也降级为最小安全载荷广播，绝不向外抛异常、绝不回退
     //   到未脱敏原文（避免密钥泄露）。
-    let safeResult: any;
-    try {
-      safeResult = redactSecrets(result);
-    } catch (err: any) {
-      this.logger.warn(
-        `完成消息脱敏失败，降级为最小载荷广播（不回退原文）: ${err?.message || String(err)}`,
-        { sessionId },
-      );
-      safeResult = {
-        sessionId,
-        redacted: true,
-        degraded: { reason: 'redact-failed', message: err?.message || String(err) },
-      };
-    }
+    // 🛡️ 2026-09-29：抽成 `sanitizeResultForBroadcast` **单点**，供「SSE 首连(sendComplete)」
+    //   与「SSE 重连」两条出口共用（后者原先漏了本净化 ⇒ 循环载荷打爆序列化）。
+    const safeResult = this.sanitizeResultForBroadcast(result, sessionId);
 
     // 2. 向所有连接广播完成消息并关闭
     const conns = this.sessions.get(sessionId);

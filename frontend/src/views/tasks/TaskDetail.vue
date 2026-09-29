@@ -752,6 +752,7 @@
                       <div v-for="(log, li) in filteredLogs" :key="li" class="log-line">
                         <span class="log-ts">[{{ log.time }}]</span>
                         <span v-if="log.model" class="log-model" :title="'本次调用模型: ' + log.model">[{{ log.model }}]</span>
+                        <span v-if="log.kind" :class="['log-kind', 'log-kind-' + log.kind]">{{ kindLabel(log.kind) }}</span>
                         <span :class="'log-lv-' + log.level">{{ log.label }}</span>
                         <span class="log-msg">{{ log.message }}</span>
                         <span v-if="log.count > 1" class="log-count">×{{ log.count }}</span>
@@ -3312,6 +3313,9 @@ type TaskLogEntry = {
   type: 'log' | 'progress'
   detail?: string
   count: number
+  // 🆕 2026-09-29 慢归因：进度事件分类（model-start/model-slow/platform-queue/retry/provider-degraded）
+  kind?: string
+  providerId?: string
 }
 
 const LOG_FOLD_WINDOW_MS = 2000
@@ -3320,6 +3324,18 @@ function formatLogTime(timestamp?: number) {
   return timestamp
     ? new Date(timestamp).toLocaleTimeString('en-US', { hour12: false })
     : '--:--:--'
+}
+
+// 🆕 2026-09-29 慢归因：进度分类 → 用户可读徽标文案
+function kindLabel(kind?: string) {
+  switch (kind) {
+    case 'model-start': return '模型启动'
+    case 'model-slow': return '模型响应慢'
+    case 'platform-queue': return '平台排队'
+    case 'provider-degraded': return '模型不可用'
+    case 'retry': return '重试中'
+    default: return kind || ''
+  }
 }
 
 function buildReplayKey(item: any) {
@@ -3404,7 +3420,7 @@ function createTaskLogEntry(item: any, isLog: boolean): TaskLogEntry {
     ? (item.level || 'info')
     : (item.status === 'completed' ? 'success' : item.status === 'running' ? 'info' : 'warn')
 
-  const model = item?.meta?.model || item?.meta?.agentModel || undefined
+  const model = item?.meta?.model || item?.meta?.agentModel || item?.model || undefined
 
   return {
     time: formatLogTime(timestamp),
@@ -3419,6 +3435,9 @@ function createTaskLogEntry(item: any, isLog: boolean): TaskLogEntry {
     message: isLog ? item.message : `[${item.stage || '?'}] ${item.message}`,
     type: isLog ? 'log' : 'progress',
     detail: item.stage || undefined,
+    // 🆕 慢归因：透传分类字段，前端据此渲染差异徽标
+    kind: item?.kind || undefined,
+    providerId: item?.providerId || undefined,
     count: 1,
   }
 }
@@ -6538,6 +6557,22 @@ watch(bindingWizardOpen, (open) => {
   font-weight: 600;
   user-select: none;
 }
+
+/* 🆕 2026-09-29 慢归因：进度分类差异徽标（模型慢 vs 平台排队 一眼区分） */
+.log-kind {
+  flex-shrink: 0;
+  border-radius: 3px;
+  padding: 0 5px;
+  font-size: 10.5px;
+  font-weight: 600;
+  user-select: none;
+  border: 1px solid transparent;
+}
+.log-kind-model-start { color: #4ec9b0; background: rgba(78,201,176,.12); border-color: rgba(78,201,176,.3); }
+.log-kind-model-slow { color: #e2a23b; background: rgba(226,162,59,.14); border-color: rgba(226,162,59,.35); }
+.log-kind-platform-queue { color: #3794ff; background: rgba(55,148,255,.12); border-color: rgba(55,148,255,.3); }
+.log-kind-provider-degraded { color: #f14c4c; background: rgba(241,76,76,.12); border-color: rgba(241,76,76,.35); }
+.log-kind-retry { color: #cca700; background: rgba(204,167,0,.12); border-color: rgba(204,167,0,.3); }
 
 /* 语法高亮色 — VS Code 风格 */
 .log-lv-info {

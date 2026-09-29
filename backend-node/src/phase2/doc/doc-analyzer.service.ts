@@ -85,24 +85,13 @@ export class DocAnalyzerService {
 
   /**
    * 组装 LLM 调用器（沿用 doc-analyzer.service.ts 同款双协议：OpenAI 兼容 / Anthropic）
-   * 配置优先级：DTO aiConfig > 环境变量
+   * 配置优先级：🔒 仅 DTO aiConfig（用户级），env 兜底已拔除
    */
   private buildInvokeLLM(aiConfig?: AnalyzeDocDto['aiConfig']) {
-    const apiKey =
-      aiConfig?.textApiKey ||
-      process.env.MC_GEN_TEXT_API_KEY ||
-      process.env.TEXT_API_KEY ||
-      process.env.ANTHROPIC_API_KEY;
-    const baseURL =
-      aiConfig?.textBaseURL ||
-      process.env.MC_GEN_TEXT_ENDPOINT ||
-      process.env.TEXT_BASE_URL ||
-      process.env.ANTHROPIC_BASE_URL;
-    const model =
-      aiConfig?.textModel ||
-      process.env.MC_GEN_TEXT_MODEL ||
-      process.env.TEXT_MODEL ||
-      process.env.ANTHROPIC_MODEL;
+    // 🔒 2026-09-29 env 兜底已拔除（每用户模型独有）：只认 DTO 传入的用户级配置
+    const apiKey = aiConfig?.textApiKey || '';
+    const baseURL = aiConfig?.textBaseURL || '';
+    const model = aiConfig?.textModel || '';
 
     if (!apiKey || !baseURL) return undefined;
 

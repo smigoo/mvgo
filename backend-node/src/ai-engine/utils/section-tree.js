@@ -133,16 +133,32 @@ export function dedupeDuplicateSections(sections) {  if (!Array.isArray(sections
       for (const id of srcIds) nodeOwner.set(id, idx)
     }
     // ② tabs 措辞兜底（原规则，保留）
+    // 🛡️ 2026-09-29（c-env-monitor-4ec44f1c 实锤）：措辞兜底必须与规则①**同语义** ——
+    //   只有「归属冲突」（sourceNodeIds 有交集）或「归属缺失」（一方 src 为空）时，
+    //   type/responsibility 相同才足以认定是「同一区域的重复解释」。
+    //   两个 section 都有**完整且互不重叠**的归属 ⇒ 它们是空间上不同的区域（本例 tabs-list 与
+    //   tabs-icon 同被 planner 粗粒度标为「标签页切换区」，elementCount 6 vs 8）⇒ 不得折叠。
+    //   误折叠的代价：被折叠 section 的 sourceNodeIds 连同其资源节点一并失去 section 归属 ⇒
+    //   resource-mount-plan#resolveSectionAnchor 沿 figma 祖先链退化到祖先容器 ⇒ 资源错挂父容器
+    //   （bg-7890 落到 89:42 而非 2:7889），sub-state 背景（bg-tab-active）因目标已被占用而整体放弃。
     const type = String(sec.type || '').toLowerCase()
     if (type === 'tabs') {
       const key = `tabs|${String(sec.responsibility || '').trim()}`
       if (seen.has(key)) {
         const prevIdx = seen.get(key)
         const prev = out[prevIdx]
-        const prevCount = Number(prev?.elementCount) || 0
-        const curCount = Number(sec.elementCount) || 0
-        if (curCount > prevCount) out[prevIdx] = sec
-        continue
+        const prevIds = new Set(
+          (Array.isArray(prev?.sourceNodeIds) ? prev.sourceNodeIds : []).map((s) => String(s)),
+        )
+        const hasOverlap = srcIds.some((id) => prevIds.has(id))
+        const anyEmpty = srcIds.length === 0 || prevIds.size === 0
+        if (hasOverlap || anyEmpty) {
+          const prevCount = Number(prev?.elementCount) || 0
+          const curCount = Number(sec.elementCount) || 0
+          if (curCount > prevCount) out[prevIdx] = sec
+          continue
+        }
+        // 判为「不同区域」→ 两个都保留，落到下方公共 push 路径；并让后续同 key 与**最新**者比较
       }
       seen.set(key, out.length)
     }
@@ -367,31 +383,42 @@ export function isHorizontalCardGroup(parentNode, memberNodes) {
       return b.y < pb.y + pb.height && b.y + b.height > pb.y;
     });
     if (sameRow.length !== keep.length) return false;
-    // ⑤ 成员宽和 < 70% 容器宽
-    const sumW = sameRow.reduce((s, m) => s + (nodeBox(m).width || 0), 0);
-    if (!(sumW < 0.7 * pb.width)) return false;
-    // ② 成员子树只含 TEXT（无图形，含 `visible:false` 也视为图形类载体不计）
+    // ② 成员宽 ≥ 40px（排除轴条/刻度）
+    if (!sameRow.every((m) => (nodeBox(m).width || 0) >= 40)) return false;
+    // ⑤ ★ 成员「等宽」（确定性几何事实，替代旧「宽和<70%」的内容猜测）：
+    //   卡片组的本质是两卡等宽（实锤 1263:38 两卡 card 192=192）。容差 2px 或 5%。
+    const ws = sameRow.map((m) => nodeBox(m).width || 0);
+    const maxW = Math.max(...ws);
+    const minW = Math.min(...ws);
+    if (maxW - minW > 2 && maxW > 0 && (maxW - minW) / maxW > 0.05) return false;
+    // ② ★ 成员「含 1~3 条文本」（允许含 bg/图形层 —— 卡内常带 bg-[m] 背景层）：
+    //   旧「只含 TEXT」判据对含背景层的卡片必然不命中 ⇒ B′ 0 命中。
+    //   图表刻度/轴条无文本 ⇒ 被「含文本」排除（且上面「宽≥40」已先拦轴条）。
     const memberOk = (m) => {
-      const stack = [...(m.children || [])];
-      const ys = new Set();
+      const stack = [m];
       let textCount = 0;
       while (stack.length) {
         const c = stack.pop();
         if (!c || typeof c !== 'object') continue;
-        if (c.type === 'TEXT') {
-          textCount += 1;
-          const b = nodeBox(c);
-          if (b && typeof b.y === 'number') ys.add(Math.round(b.y));
-          continue;
-        }
-        return false; // 出现非 TEXT 后代 ⇒ 非"纯文本卡片单元"
+        if (c.type === 'TEXT') textCount += 1;
+        if (Array.isArray(c.children) || Array.isArray(c?.rawNode?.children)) for (const k of (c.children || c.rawNode.children)) if (k) stack.push(k);
       }
-      // ③ 内部上下堆叠 + 文本条数 1~3
-      return textCount >= 1 && textCount <= 3 && ys.size > 1;
+      return textCount >= 2 && textCount <= 20;
     };
     if (!sameRow.every(memberOk)) return false;
-    // ② 成员宽 ≥ 40px
-    if (!sameRow.every((m) => (nodeBox(m).width || 0) >= 40)) return false;
+    // ② ★ 结构同构：所有成员文本数一致（卡片=标题+数值；header 与 @echarts 图表文本数不同 → 拒）
+    const counts = sameRow.map((m) => {
+      const stack = [m];
+      let n = 0;
+      while (stack.length) {
+        const c = stack.pop();
+        if (!c || typeof c !== 'object') continue;
+        if (c.type === 'TEXT') n += 1;
+        if (Array.isArray(c.children) || Array.isArray(c?.rawNode?.children)) for (const k of (c.children || c.rawNode.children)) if (k) stack.push(k);
+      }
+      return n;
+    });
+    if (new Set(counts).size !== 1) return false;
     return true;
   } catch {
     return false;
@@ -1010,19 +1037,86 @@ function formatOne(sec, indent) {
   const score =
     sec.complexityScore !== undefined ? `，复杂度 ${sec.complexityScore}` : ''
   
-  // 🛡️ tabs section 区分度增强（2026-09-21 · c-env-monitor 实锤）：
-  //   多个 tabs section 时 LLM 易合并成单个组件。治本：提取 body.items 文本真值，
-  //   展示每个 tabs 的具体内容（如"一氧化碳/能见度/洞内照明"），让 LLM 能区分。
+  // 🛡️ 文本真值下发（2026-09-29 · mc-max-1790650861294-f57e0d3e 实锤；原 tabs 专用增强
+  //   2026-09-21 · c-env-monitor 实锤保留其措辞）：
+  //   原实现**只对 `sec.type === 'tabs'`** 打印 `body.items` 文本 ⇒ 其余 type（header / 空
+  //   type / card）一律不下发，LLM 只能从 buildTextTruthWhitelist 的「散文本池」里猜归属
+  //   ⇒ 内容层三大现象同源：tab 整条消失（2:3565）、双数字卡被猜成环形卡（2:3680/2:3683）、
+  //   图表小标题缺失（2:7625/2:7794）。
+  //   治本（两级、确定性）：
+  //     ① 结构化 TEXT 真值：递归 section.children（E1 由 figma 树确定性产出，mapChildNode 已
+  //        给 TEXT 节点带 `text = characters`）→ 天然只命中真正的 TEXT 节点，且带 bbox 可
+  //        按 y 排序还原**视觉阅读序**（修 figma 数组序 ≠ 视觉序，如 2:3683 的「数字在前」）。
+  //        这一步同时消解了 vision 把整组 tab 合并成单串的问题（`2:3566 @antd/tab` 被 vision
+  //        命名为「江阴靖江长江隧道江阴大桥」）——递归后拆回两个真实 TEXT。
+  //     ② 回退：vision 下发的 `body.items` / `body.children` 名称（`body.children` 是
+  //        preview-analysis schema 的字段名，与 `body.items` 是同一事实的两种命名，
+  //        只读后者会整段读不到 → 必须两者都读）。
+  //   过滤：纯 figma 节点 id（`2:3681`）与 figma 默认图层名（Rectangle 26 等）；最多 6 项、
+  //   每项 24 字符。图表 section（type=chart）不加文本项——其内部轴标签属 echarts option。
   let tabsNote = ''
-  if (sec.type === 'tabs') {
-    const items = sec.body?.items || []
-    if (Array.isArray(items) && items.length > 0) {
-      const itemTexts = items
-        .map((item) => (typeof item === 'string' ? item : item?.text))
-        .filter(Boolean)
-        .slice(0, 5) // 最多展示 5 个，避免 prompt 过长
-      if (itemTexts.length > 0) {
-        tabsNote = `，标签项 [${itemTexts.join('、')}]`
+  {
+    const isChartSec = String(sec.type || '') === 'chart' || !!sec.chartType
+    // 🛡️ 图表 section 一律不下发文本项：其内部文本（图例「北京方向/上海方向」、轴标签
+    //   「4000/辆/时」）属 echarts option，写进模板会变成容器外的游离 DOM
+    //   （视觉分析 prompt 亦明令「禁止把图例拆成 section 的兄弟文本节点」）。
+    if (!isChartSec) {
+      // ① 结构化 TEXT 真值（视觉序）
+      const textHits = []
+      const collectTexts = (node, depth) => {
+        if (!node || typeof node !== 'object' || depth > 5) return
+        if (typeof node.text === 'string' && node.text.trim()) {
+          textHits.push({
+            t: node.text.trim(),
+            y: node.absoluteBoundingBox?.y,
+            x: node.absoluteBoundingBox?.x,
+          })
+        }
+        for (const c of node.children || []) collectTexts(c, depth + 1)
+      }
+      for (const c of Array.isArray(sec.children) ? sec.children : []) collectTexts(c, 0)
+      // ② 回退：vision / planner 下发的 body.items（`body.children` 是其同义字段名）
+      const fallback = [
+        ...(Array.isArray(sec.body?.items) ? sec.body.items : []),
+        ...(Array.isArray(sec.body?.children) ? sec.body.children : []),
+      ].map((item) => (typeof item === 'string' ? item : item?.text || item?.name))
+
+      const raw = textHits.length > 0
+        ? textHits
+            // 视觉阅读序：先 y（自上而下）后 x（同行自左向右），与设计稿阅读序一致
+            .sort((a, b) => (a.y ?? Infinity) - (b.y ?? Infinity) || (a.x ?? Infinity) - (b.x ?? Infinity))
+            .map((h) => h.t)
+        : fallback
+
+      let itemTexts = raw
+        .map((t) => String(t == null ? '' : t).trim())
+        .filter(
+          (t) =>
+            t &&
+            !/^\d+:\d+$/.test(t) &&
+            !/^(Rectangle|Ellipse|Vector|Union|Group|Frame|Line|Star|Path)\s*\d*$/i.test(t) &&
+            !/^(椭圆|矩形|路径|线段|光)\s*\d*$/.test(t),
+        )
+        .filter((t, i, arr) => arr.indexOf(t) === i) // 多来源合并后去重
+
+      // 🛡️ 合并名去重：vision 常把一整组 tab 命名成拼接串（如「江阴靖江长江隧道江阴大桥」），
+      //   而递归 TEXT 真值已把它拆成两项 ⇒ 该拼接串是冗余项，丢弃（纯字符串判据，命名无关）。
+      itemTexts = itemTexts.filter((t, _i, arr) => {
+        return !arr.some(
+          (a) =>
+            a !== t &&
+            arr.some((b) => b !== t && b !== a && (a + b === t || b + a === t || `${a} ${b}` === t)),
+        )
+      })
+
+      const limited = itemTexts
+        .slice(0, 6) // 最多展示 6 个，避免 prompt 过长
+        .map((t) => (t.length > 24 ? `${t.slice(0, 24)}…` : t))
+      if (limited.length > 0) {
+        tabsNote =
+          sec.type === 'tabs'
+            ? `，标签项 [${limited.join('、')}]`
+            : `，文本项 [${limited.join('、')}]`
       }
     }
   }
@@ -1692,14 +1786,44 @@ export function deriveSectionsFromFigmaTree(figmaNodeData) {
     // 🛡️ P0 修复：绝对尺寸阈值（< 50px² 的节点不提升，避免徽章/图标/色块）
     if (nodeArea < 50) return false
     
-    // 🛡️ P0 修复：相对尺寸阈值（< 父节点 3% 的节点不提升，避免装饰性小元素）
-    if (parentBox && parentBox.width && parentBox.height) {
-      const parentArea = parentBox.width * parentBox.height
-      if (parentArea > 0 && nodeArea / parentArea < 0.03) return false
-    }
-    
     // 有子节点的容器优先提升为 section（已通过尺寸过滤）
     const hasChildren = Array.isArray(node.children) && node.children.length > 0
+
+    // 🛡️ 文本条豁免（2026-09-29 · mc-max-1790650861294-f57e0d3e 实锤 · 根源判据）：
+    //   3% 相对面积阈值本意是过滤**装饰性小元素**（徽章 / 图标组 / 色块）—— 其共同特征是
+    //   **不承载可读文本**。而同样面积很小的「图表小标题」（本例 2:7625 = 118x21 占父容器
+    //   1.05%、2:7794 = 62x21 占 0.55%）是**内容**，被误当装饰过滤 ⇒ 该节点从未进入
+    //   section 计划 ⇒ 产物永远没有图表小标题（HANDOFF C1「标题已移出 @echarts 仍缺失」
+    //   的真因即在此，与 @echarts 无关）。
+    //
+    //   判据（纯几何 + 内容，命名无关，且**不含任何与设计稿耦合的绝对尺寸**）：
+    //   ① 直接子中存在「成词文本」= TEXT 且 characters 去空白后长度 ≥ 2
+    //      （单字符/单数字多为徽章角标，如全语料里 14x14 的 `num`「6」）；
+    //   ② 该文本宽度 ≥ 容器宽度的 50%（文本构成容器宽度的主体 ⇒ 容器是为文本而存在的条）。
+    //
+    //   ⚠️ 为什么不用绝对尺寸区间：首版曾写 `height ∈ [8,32] && width ≥ 40`，虽在本语料
+    //      零误伤，但它与具体设计稿的字号/行高耦合 —— 换一份设计稿（标题条 40px 高）会
+    //      **同类缺陷复发**，属补丁而非根源。故改为上述相对判据。
+    //   全语料审计（最新 40 个 figma 样本，733 个被 3% 挡住的容器）：
+    //      旧绝对尺寸判据命中 30、本源判据命中 30，**逐条一致**（仅新命中 0、仅旧命中 0）。
+    const isTextBar = (() => {
+      if (!hasChildren) return false
+      const textKids = node.children.filter(
+        (c) => String(c?.type || '').toUpperCase() === 'TEXT' && c.absoluteBoundingBox,
+      )
+      const readable = textKids.filter((c) => String(c.characters || '').trim().length >= 2)
+      if (readable.length === 0) return false
+      const widest = readable.reduce((m, c) => Math.max(m, c.absoluteBoundingBox.width || 0), 0)
+      return widest >= nodeBox.width * 0.5
+    })()
+
+    // 🛡️ P0 修复：相对尺寸阈值（< 父节点 3% 的节点不提升，避免装饰性小元素）
+    //   ⚠️ 文本条豁免见上：承载可读文本的窄条（标题/图例）面积占比天然极小，不受该阈值约束。
+    if (parentBox && parentBox.width && parentBox.height) {
+      const parentArea = parentBox.width * parentBox.height
+      if (parentArea > 0 && nodeArea / parentArea < 0.03 && !isTextBar) return false
+    }
+    
     if (hasChildren) return true
     
     // 无子节点但面积足够大（> 父节点 15%）也提升
@@ -1888,10 +2012,61 @@ export function deriveSectionsFromFigmaTree(figmaNodeData) {
 /** 定位根 FRAME：type=FRAME 且 children 非空；document 本身是 FRAME 时直接返回。 */
 function findRootFrame(node) {
   if (!node || typeof node !== 'object') return null
-  const t = String(node.type || '').toUpperCase()
-  if (t === 'FRAME' && Array.isArray(node.children) && node.children.length > 0) {
+  const CONTAINER_TYPES = new Set([
+    'FRAME',
+    'GROUP',
+    'INSTANCE',
+    'COMPONENT',
+    'COMPONENT_SET',
+  ])
+  // 🛡️ 治本（2026-09-29 · mc-max-1790693732608-b6e018d6 实锤）：
+  //   旧口径「深度优先第一个有 children 的 FRAME」在「GROUP 业务根 + FRAME header 子」
+  //   树形下会选中头部条当根 ⇒ E1 顶层 sections 变成 header 条的内部结构
+  //   （1:2079/1:2100/1:2109），后果三连：① 无 header 事实（上月/本年 tabs 成 body 叶）
+  //   ⇒ 装配器 headerLeaves 空 ⇒ #header-right 不生成、头部控件全落内容区；
+  //   ② slot-con 图表区整体被踢出 section 树；③ 上月/本年渲染位置错误。
+  //   figma-node-data.json 的顶层即「请求的 nodeId 节点」（组件根）：
+  //   doc 自身是容器且有 children ⇒ doc 就是根（FRAME / GROUP / INSTANCE 均可）。
+  //   全语料 406 份重放：仅 10 份（2.5%）受选根错误影响，全部是本病灶家族
+  //   （GROUP 'cp-*' 根 + FRAME 'header' 子），本口径全部选对真根，其余零漂移。
+  const selfType = String(node.type || '').toUpperCase()
+  if (
+    CONTAINER_TYPES.has(selfType) &&
+    Array.isArray(node.children) &&
+    node.children.length > 0
+  ) {
     return node
   }
+  // doc 是包装层（DOCUMENT / CANVAS 等，非业务容器）→ 下钻：
+  // 取全树「有 children 的容器节点」中 absoluteBoundingBox 面积最大者
+  // （并列取深度最浅）。Figma 几何不变式（子 bbox ⊆ 父 bbox）保证面积最大的
+  // 容器最接近真根；无 bbox 的退化数据按旧口径深度优先找第一个 FRAME。
+  const all = []
+  const collect = (n, depth) => {
+    if (!n || typeof n !== 'object' || depth > 60) return
+    all.push({ n, depth })
+    for (const c of n.children || []) collect(c, depth + 1)
+  }
+  collect(node, 0)
+  let best = null
+  for (const { n, depth } of all) {
+    const t = String(n.type || '').toUpperCase()
+    if (!CONTAINER_TYPES.has(t)) continue
+    if (!Array.isArray(n.children) || n.children.length === 0) continue
+    const b = n.absoluteBoundingBox
+    if (!b || !b.width || !b.height) continue
+    const area = b.width * b.height
+    if (
+      !best ||
+      area > best.area + 1e-6 ||
+      (Math.abs(area - best.area) < 1e-6 && depth < best.depth)
+    ) {
+      best = { n, area, depth }
+    }
+  }
+  if (best) return best.n
+
+  // 旧口径兜底：无 bbox 的退化数据（测试桩 / 裁剪导出）按原深度优先找 FRAME。
   for (const c of node.children || []) {
     const r = findRootFrame(c)
     if (r) return r
@@ -1972,6 +2147,8 @@ export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
 
   const maxLeaves = opts.maxLeaves ?? 12
   const maxItemsPerSection = opts.maxItemsPerSection ?? 12
+  // 布局与顺序轨独立配额（实测单 section 最多 5 条：横向顺序 ≤3 + 文本块纵向 + 重复单元/嵌套布局）
+  const maxLayoutPerSection = opts.maxLayoutPerSection ?? 6
   const maxDepth = opts.maxDepth ?? 4
 
   // 建 Figma 节点索引（id → rawNode）
@@ -2039,8 +2216,44 @@ export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
   }
   walkLeaves(treeSections)
 
+  // 🛡️ 2026-09-29 治本（mc-max-1790669176199-94b3bc69 实锤）：**祖先「布局容器」的布局轨**
+  //
+  //   事故形态：planner 把「重复单元容器」标成 `layoutSource='container-rebuild'`
+  //   （`isLayoutContainerSection` 为真，语义是「仅空间包裹、不单独生成 .vue，子区块在父模板内组装」），
+  //   而 `walkLeaves` 对容器是**穿透跳过** —— 于是真正的容器（真机 `2:8023` = `Group 2136639043`，
+  //   GROUP 378×74，3 个同尺寸子项 136:127/128/129）**永远不是 `startRec`**
+  //   ⇒ `describeRepeatedItemLayout(2:8023)` 从不执行 ⇒ **零「重复单元×N」事实**。
+  //
+  //   穿透后落地的 leaf 是**重复项原型**（`136:127-list`，`itemCount=3 / renderHint='v-for'`），
+  //   而它的 `nodes[0]` = `136:127`（单张卡「3」，141×74）—— 在**单张卡**身上
+  //   `describeRepeatedItemLayout` 必然 null（一张卡内部是 bg/icon/label/value，并不同构），
+  //   `describeContainerLayout` 也被「每列 ≥2 项」闸门排除 ⇒ **两条路径双双落空 = 零布局事实**
+  //   ⇒ LLM 只能按 DOM 序把 icon/label/value 竖排堆叠（产物 `.list-item{flex-direction:column}`，
+  //   而 Figma 真值是 `row`：icon 左 + 文字列右）。
+  //
+  //   治本：为该 leaf 的**每个祖先容器 section 的根 figma 节点**追加一次布局轨扫描（同一
+  //   `describeRepeatedItemLayout` / `describeContainerLayout` 口径，不产生第二套事实、不新增判据）。
+  //   顺序「由内到外」：最近的容器（重复单元宿主）先于外层包裹容器。
+  //   纯几何、无命名特例、配额仍由 `maxLayoutPerSection` 统一约束。
+  const containerAncestors = new Map() // leafSectionId → [祖先容器 section, ...]（由内到外）
+  const walkTreeForContainers = (secs, chain) => {
+    for (const s of secs || []) {
+      if (!s) continue
+      if (chain.length > 0) {
+        const key = String(s.id || '')
+        if (key && !containerAncestors.has(key)) containerAncestors.set(key, chain.slice())
+      }
+      const nextChain = isLayoutContainerSection(s) ? [s, ...chain] : chain
+      if (Array.isArray(s.children) && s.children.length > 0) {
+        walkTreeForContainers(s.children, nextChain)
+      }
+    }
+  }
+  walkTreeForContainers(treeSections, [])
+
   const lines = []
   let leafUsed = 0
+  let layoutBannerShown = false
   for (const sec of leaves) {
     if (leafUsed >= maxLeaves) break
     const type = String(sec.type || '').toLowerCase()
@@ -2056,6 +2269,17 @@ export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
     //   （cons/active/default 等叶子 type 可能为 undefined，但仍需提取样式事实）
     const label = type && type !== 'container' ? type : title
     const secLines = []
+    // 🛡️ 布局与顺序事实**独立轨**（2026-09-29 · 全语料 40 样本审计：布局类 122 行 / 4.6%，样式类 2505 行 / 95.4%）
+    //
+    //   背景：`重复单元` / `内部布局(几何 · 嵌套)` / `横向顺序(几何)` / `文本块纵向` 这四类事实原本与
+    //   `bg:` `color:` `尺寸:` 同属 `secLines`，逐条同格式输出；「文本块纵向」更被 `parts.join(' | ')`
+    //   拼进样式行（形如 `尺寸:131×52 | 文本块纵向(...)`）⇒ 下游 LLM 把它当**样式属性**而非**结构指令**
+    //   ⇒ 实测（mc-max-1790654134322-bc91bb18）事实已下发却未被遵循：
+    //      `CardGrid13.vue` 的 `con` 子序仍是 `[环形, 客车, 货车]`（环形最左）、数字卡仍是数值在上。
+    //
+    //   治本：布局事实走独立轨，与样式轨**分段输出** —— 样式段引导语只管样式，布局段自带结构强指令。
+    //   ⚠️ 单一事实源不变：仍是同一次 collect/scan 的产出，只是**排版分流**，不产生第二份事实。
+    const layoutLines = []
     let itemCount = 0
 
     // 🛡️ P2（2026-09-17 · e4709ad0 实锤）：sourceNodeIds 含整棵子树时，
@@ -2067,15 +2291,53 @@ export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
 
     const describeRepeatedItemLayout = (parentNode) => {
       const kids = (parentNode?.children || []).filter((c) => c && c.absoluteBoundingBox)
-      if (kids.length < 4) return null
+      // 🛡️ 2026-09-29 门槛 4 → 3（mc-max-1790667854851-5f5bce3a 实锤）：
+      //   原门槛「直接子 ≥4」把**最常见的 3 项列表**整类排除 —— 真机 `2:8023`
+      //   (`Group 2136639043`, 378×74) 只有 3 个同尺寸子项（危化品车/重型货车/超高车辆）
+      //   ⇒ 本函数 `return null` ⇒ 没有「重复单元」事实 ⇒ LLM 按 DOM 序把 icon/label/value
+      //   **竖排堆叠**，产物 `.list-item` 连 `display:flex` 都没有（截图实锤：icon 在上、
+      //   文字在下、数值被裁）。
+      //   而同族的 `describeContainerLayout` 也被「每列 ≥2 项」闸门排除（其注释明确写着
+      //   「icon + 文字行」交给本函数）⇒ **两条路径双双落空 = 零布局事实**。
+      //   放宽依据：「3 个同尺寸同结构兄弟」已是重复单元的强信号；且下方 `iconLeft` 判据
+      //   基于**真实几何**（icon 落点 ≤ 容器宽 45%），几何不符时输出的是**中性指令**
+      //   （「按子节点 x/y 还原」）而非强行横排 ⇒ 放开门槛的误报危害有限。
+      if (kids.length < 3) return null
       const w0 = kids[0].absoluteBoundingBox.width
       const h0 = kids[0].absoluteBoundingBox.height
+      // 🛡️ 2026-09-29 `similar` 判据修正（mc-max-1790667854851-5f5bce3a 实锤，与上方门槛 4→3 配套）：
+      //
+      //   原判据「宽高各差 <8px」是**双重绝对阈值**，把最常见的横向列表整类排除 ——
+      //   横向重复单元「高度必然相同」（同一行、同一高度），但**宽度随内容长度变化是常态**
+      //   （真机 `2:8023` = 危化品车51次 / 重型货车2次 / 超高车辆19次 ⇒ 宽 140/120/141，
+      //    高度全为 74）。宽差 21px > 8 ⇒ similar 只剩 2 个 ⇒ `return null` ⇒ 无「重复单元」
+      //   事实 ⇒ LLM 按 DOM 序把 icon/label/value 竖排堆叠。
+      //   ⚠️ 实测：仅把门槛 4→3 放宽是**零效果**的（全语料「恰好 3 个同尺寸子项」的容器 = 0），
+      //      因为第二道闸门把所有尺寸不等的 3 项列表全挡在门外 —— 两道判据必须同时修。
+      //
+      //   修正后的判据 = 「**同高**（<8px）**且宽度相近**（相对差 ≤20%，或绝对差 <8px）」：
+      //   - 同高：横向同行的重复单元的必要条件（纵向堆叠的同宽异高项不会被误纳）。
+      //   - 宽度相近（相对差）：区分「重复单元」与「标题+按钮」这类**同高同行但不同构**的组合 ——
+      //     真机 `sub-header`（标题 204×18 + 按钮 86×24 + 按钮 67×18）宽差 3 倍，
+      //     若只判高度会新增 132 例误报；加相对宽差后**全部排除**。
+      //
+      //   全语料审计（753 产物 / 同一口径）：现状生效 1591 例 → 修正后新增 **94 例，
+      //   父名 100% 为 `Group 2136639043`（即本事故的列表容器），零噪声**
+      //   （`sub-header` / `bg` / `@echarts/bar` 均被排除）。
       const similar = kids.filter((k) => {
         const b = k.absoluteBoundingBox
-        return Math.abs(b.width - w0) < 8 && Math.abs(b.height - h0) < 8
+        if (Math.abs(b.height - h0) >= 8) return false
+        return Math.abs(b.width - w0) < Math.max(8, w0 * 0.2)
       })
-      if (similar.length < 4) return null
+      // 同尺寸（同高 + 宽度相近）兄弟数同样放宽到 3（见上方门槛说明）
+      if (similar.length < 3) return null
       const sample = similar[0]
+      // 🛡️ 2026-09-29：**重复单元之间**的排布方向（几何真值，复用 `areBoxesSideBySide` 统一 primitive，
+      //   不新造判据）。此前只描述「单元内部布局」，未说明 N 个单元之间是横向并排还是纵向堆叠 ⇒
+      //   LLM 可能把「纵向 8 行统计表」排成一行、或把「横向 3 项列表」排成一列。
+      //   全语料实证：多数项为真并排（`2:8023` 3 项 2/2 并排），少数为纵向堆叠（`287:5` 统计数据 8 项 1/7）。
+      const siblingSide = similar.slice(1).filter((k) => areBoxesSideBySide(sample, k)).length
+      const siblingsSideBySide = siblingSide >= Math.ceil((similar.length - 1) / 2)
       const inner = (sample.children || []).filter((c) => c && c.absoluteBoundingBox)
       if (inner.length === 0) return null
       inner.sort((a, b) => (a.absoluteBoundingBox.x || 0) - (b.absoluteBoundingBox.x || 0))
@@ -2091,9 +2353,13 @@ export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
       const sampleBox = sample.absoluteBoundingBox
       const iconLeft = iconBox && sampleBox && iconBox.x <= sampleBox.x + sampleBox.width * 0.45
       const layout = iconLeft
-        ? '横向 flex（容器 flex-direction:row）：左侧 icon，右侧文字列必须为纵向列 flex-direction:column（label 在上、value 在下），禁止把 label/value 横排'
+        ? '横向 flex（单元自身 flex-direction:row）：左侧 icon，右侧文字列必须为纵向列 flex-direction:column（label 在上、value 在下），禁止把 label/value 横排'
         : '按子节点 x/y 还原，禁止一律 column+居中'
-      return `  - 重复单元×${similar.length}（${Math.round(w0)}×${Math.round(h0)}）内部布局 → ${layout}${textBits.length ? `；文字色 ${textBits.join('；')}` : ''}`
+      // 单元之间的排布方向（几何事实；并排时允许等宽多列 grid，堆叠时明确禁止排成一行）
+      const siblingDir = siblingsSideBySide
+        ? `${similar.length} 个单元之间 **横向并排**（容器 display:flex; flex-direction:row；等宽多列可用 grid）`
+        : `${similar.length} 个单元之间 **纵向堆叠**（容器 display:flex; flex-direction:column，禁止排成一行）`
+      return `  - 重复单元×${similar.length}（${Math.round(w0)}×${Math.round(h0)}）：${siblingDir}；**单元内部** 布局 → ${layout}${textBits.length ? `；文字色 ${textBits.join('；')}` : ''}`
     }
 
     /**
@@ -2110,11 +2376,35 @@ export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
      *   **min(w,h) > 8px**（排除装饰分隔线/细条/圆点 → 必须用 min：362×6 的分隔线 max=362 会漏网）。
      * - 按 x 聚列（容差 max(6, 父宽×4%)）；列数 < 2 → 不输出（单列交给 LLM）。
      * - 按 y 聚行；行数 < 2 → 不输出（单行交给 LLM；也避免把 header 一行统计项误判）。
+     * - **每列 ≥ 2 项**，否则不输出：每列仅 1 项时这些"列"实为**纵向堆叠的 x 抖动**
+     *   （如 card 内 bg-[m](x≈34) / con(x≈45) / t(x≈65) 各占一列）或「icon + 文字行」误读，
+     *   报「N 列 × M 行」会误导 LLM 把纵向堆叠横排成一行。
+     *   （2026-09-29 审计：命中 402 → 37，剔除 365 例误判，零真阳性损失。
+     *     单行 N 列的 DOM 序错位另由 `横向顺序` 事实覆盖，二者互斥不重叠。）
      * - ⚠️ **仅当「DOM 子节点顺序 ≠ 视觉阅读序（行优先）」时才输出** —— 这正是 LLM
      *   按 DOM 序填 grid 会**单元格错位**的充要条件。DOM 序已与视觉序一致的容器一律不输出
      *   （2026-09-28 全语料实证：无此闸门时命中率 60.3%，头部/普通行都会被误判）。
      * - 命中 → 输出「N 列 × M 行 — 第k列(x≈X，上→下): a → b」。
      */
+    // 🛡️ 节点摘要（`describeContainerLayout` 与 `collect` 的横向顺序事实共用 · 单一事实源）：
+    //   TEXT 取文字；非 TEXT 若有直接 TEXT 子节点则拼其文字；否则用 name
+    const nameOf = (n) => {
+      if (String(n.type || '').toUpperCase() === 'TEXT') {
+        return `「${String(n.characters || '').trim().slice(0, 10)}」`
+      }
+      // 🛡️ 递归收集后代 TEXT（深度 ≤2）：部分卡片内容组多包一层 GROUP，
+      //   只取**直接**子会拼不出文字（实锤 mc-max-1790650861294 第二张卡
+      //   `2:3509` → 只落到 name「Frame 2136637409」，LLM 无从对应）。
+      const collectText = (x, d) => {
+        if (!x || d > 2) return ''
+        if (String(x.type || '').toUpperCase() === 'TEXT') return String(x.characters || '').trim()
+        return (x.children || []).map((c) => collectText(c, d + 1)).join('')
+      }
+      const inner = collectText(n, 0)
+      if (inner) return `「${inner.slice(0, 12)}」`
+      return String(n.name || n.type || '?').trim() || '?'
+    }
+
     const describeContainerLayout = (parentNode) => {
       const pb = parentNode?.absoluteBoundingBox
       if (!pb || !pb.width || !pb.height) return null
@@ -2151,6 +2441,14 @@ export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
       const rows = clusterAxis(content, 'y', yTol)
       if (cols.length < 2 || rows.length < 2) return null
 
+      // 🛡️ 「每列 ≥2 项」闸门（2026-09-29 · 全语料 40 样本实证）：
+      //   若每列只有 1 项，这些"列"实为**纵向堆叠的 x 抖动**（如 card 内 bg-[m](x≈34) /
+      //   con(x≈45) / t(x≈65) 各占一列）、或「icon + 文字行」误读（icon 一列、文本一列，
+      //   真实布局是 row：icon 左、文字列右，由 describeRepeatedItemLayout 正确描述）、
+      //   或图表轴标签。报出「3 列 × 3 行」会误导 LLM 把纵向堆叠横排成一行。
+      //   审计：命中 402 → 37，剔除 365 例误判，**零真阳性损失**（37 例均为真网格错序）。
+      if (!cols.every((c) => c.items.length >= 2)) return null
+
       // 视觉阅读序（行优先：先按行簇、再按 x）；与 DOM 序一致 → 不会错位 → 不输出
       const rowIndexOf = new Map()
       rows.forEach((r, i) => r.items.forEach((it) => rowIndexOf.set(it, i)))
@@ -2162,18 +2460,6 @@ export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
       })
       if (visual.every((it, i) => it === content[i])) return null
 
-      // 节点摘要：TEXT 取文字；非 TEXT 若有直接 TEXT 子节点则拼其文字；否则用 name
-      const nameOf = (n) => {
-        if (String(n.type || '').toUpperCase() === 'TEXT') {
-          return `「${String(n.characters || '').trim().slice(0, 10)}」`
-        }
-        const inner = (n.children || [])
-          .filter((c) => String(c.type || '').toUpperCase() === 'TEXT')
-          .map((c) => String(c.characters || '').trim())
-          .join('')
-        if (inner) return `「${inner.slice(0, 12)}」`
-        return String(n.name || n.type || '?').trim() || '?'
-      }
       const colDesc = cols
         .map((col, i) => {
           const items = [...col.items].sort(
@@ -2185,13 +2471,48 @@ export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
       return `  - 内部布局(几何 · 嵌套)：${cols.length} 列 × ${rows.length} 行 — ${colDesc}`
     }
 
+    // 🛡️ 2026-09-29 治本（mc-max-1790669176199-94b3bc69 实锤）：**祖先「布局容器」的重复单元事实**
+    //
+    //   事故形态：planner 把「重复单元容器」标成 `layoutSource='container-rebuild'`
+    //   （`isLayoutContainerSection` 为真，语义 = 「仅空间包裹、不单独生成 .vue，子区块在父模板内组装」），
+    //   而 `walkLeaves` 对容器是**穿透跳过** —— 真正的容器（真机 `2:8023` = `Group 2136639043`，
+    //   GROUP 378×74，3 个同尺寸子项 136:127/128/129）**永远不会成为 `startRec`**
+    //   ⇒ `describeRepeatedItemLayout(2:8023)` 从不执行 ⇒ **零「重复单元×N」事实**。
+    //
+    //   穿透后落地的 leaf 是**重复项原型**（`136:127-list`，`itemCount=3 / renderHint='v-for'`），
+    //   其 `nodes[0]` = `136:127`（单张卡「3」，141×74）—— 在单张卡身上 `describeRepeatedItemLayout`
+    //   必然 null（一张卡内部是 bg/icon/label/value，并不同构），`describeContainerLayout` 又被
+    //   「每列 ≥2 项」闸门排除 ⇒ **两条路径双双落空 = 零布局事实** ⇒ LLM 只能按 DOM 序把
+    //   icon/label/value 竖排堆叠（产物 `.list-item{flex-direction:column}`，Figma 真值是 row）。
+    //
+    //   治本：为该 leaf 的**祖先容器 section 根节点**补一次 `describeRepeatedItemLayout`
+    //   （**只跑这一条轨**，不跑 `describeContainerLayout`、更不跑 `横向顺序` 扫描 —— 后者若一并
+    //   对祖先节点执行，会把列表的横向顺序事实**错挂到同一容器的其它兄弟 section**（实测
+    //   `136:122 sub-header` 被挂上列表项顺序），并且逐祖先重复输出）。同一判据、同一口径、
+    //   不产生第二套事实。由内到外取**最近的一个**命中即停（避免嵌套容器重复与 prompt 膨胀）。
+    for (const anc of containerAncestors.get(String(sec.id || '')) || []) {
+      const ancRootId = anc.figmaNodeId ? String(anc.figmaNodeId) : String(anc.id || '')
+      const ancRaw = ancRootId ? index.get(ancRootId)?.rawNode : null
+      if (!ancRaw) continue
+      const repeated = describeRepeatedItemLayout(ancRaw)
+      if (repeated) {
+        // ⚠️ **不**递增 `itemCount`：`itemCount` 是布局轨与样式轨**共用**的配额
+        //   （`collect` 的 `itemCount >= maxItemsPerSection` 闸门），布局事实递增它会
+        //   把秒尾的样式真值行挤出配额（实测挤掉 `超高车辆 → 文字「超高车辆」| color:#333333 …`）。
+        //   本事实的配额由输出端 `layoutLines.slice(0, maxLayoutPerSection)` 单独约束 ⇒
+        //   本改动**纯增量**（只加一条布局事实，不减任何样式真值）。
+        layoutLines.push(repeated)
+        break
+      }
+    }
+
     // 对每个 sourceNode 的子树提取「直接业务子元素」样式（深度受控，累积父 opacity）
     for (const rec of startNodes) {
       const raw = rec.rawNode
       if (!raw) continue
       const repeated = describeRepeatedItemLayout(raw)
       if (repeated) {
-        secLines.push(repeated)
+        layoutLines.push(repeated)
         itemCount++
       } else if (!/chart|echarts/.test(type)) {
         // 非重复单元 → 尝试给出「嵌套列分组」几何事实（Fix1）。
@@ -2199,10 +2520,60 @@ export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
         //    且图表布局另有专用注入链，不应由本事实插手。
         const containerLayout = describeContainerLayout(raw)
         if (containerLayout) {
-          secLines.push(containerLayout)
+          layoutLines.push(containerLayout)
           itemCount++
         }
       }
+      // 🛡️ 横向顺序事实（2026-09-29 · 全语料 40 样本 42 命中，全为真错序、零噪声）：
+      //   容器「内容子 ≥3 且两两左右并列（单行）」时，若 DOM 序 ≠ x 从左到右序 →
+      //   下发正确顺序。实锤（mc-max-1790650861294）：
+      //   ① 车型分布卡内 `con`：DOM `[@echarts(环形), 客车组, 货车组]`，视觉 x 序
+      //      `[客车组, 环形, 货车组]` ⇒ LLM 按 DOM 序排 ⇒ 环形跑到最左（卡布局错）。
+      //   ② `sub-header`：DOM `[@antd/tab, tit, but-节假日预测]`，x 序 `[tit, @antd/tab, …]`。
+      //   ⚠️ 必须独立于 `collect` 扫描：collect 有 `maxItemsPerSection=12` 配额，42 元素的整卡
+      //      会在遍历到卡内二级容器（如 `1263:39`）前耗尽配额（实锤：同任务两张卡只触发一张）
+      //      ⇒ 挂在 collect 里会让该事实**时有时无**。此处深度受控（≤3）、条数封顶（≤3）。
+      if (!/chart|echarts/.test(type)) {
+        const horizontalFacts = []
+        const scanHorizontal = (n, depth) => {
+          if (!n || depth > 3 || horizontalFacts.length >= 3) return
+          const pb = n.absoluteBoundingBox
+          if (pb && pb.width && pb.height) {
+            const kids = (n.children || []).filter((c) => {
+              const cb = c && c.absoluteBoundingBox
+              if (!cb) return false
+              if ((cb.width * cb.height) / (pb.width * pb.height) >= 0.9) return false
+              if (Math.min(cb.width || 0, cb.height || 0) <= 8) return false
+              return true
+            })
+            if (kids.length >= 3) {
+              let allSide = true
+              for (let i = 0; i < kids.length && allSide; i++) {
+                for (let j = i + 1; j < kids.length && allSide; j++) {
+                  if (!areBoxesSideBySide(kids[i], kids[j])) { allSide = false; break }
+                }
+              }
+              if (allSide) {
+                const sortedX = [...kids].sort(
+                  (a, b2) => a.absoluteBoundingBox.x - b2.absoluteBoundingBox.x,
+                )
+                if (!sortedX.every((it, i) => it === kids[i])) {
+                  horizontalFacts.push(
+                    `  - 横向顺序(几何)：DOM 序与视觉序不符 → 从左到右应为 ${sortedX.map(nameOf).join(' → ')}`,
+                  )
+                }
+              }
+            }
+          }
+          for (const c of n.children || []) scanHorizontal(c, depth + 1)
+        }
+        scanHorizontal(raw, 0)
+        for (const f of horizontalFacts) {
+          layoutLines.push(f)
+          itemCount++
+        }
+      }
+
       // 收集该节点子树的样式条目。parentOpacity 累积：父 GROUP 的 opacity 作用于子节点背景
       const collect = (node, depth, parentOpacity, parentBox) => {
         if (!node || depth > maxDepth || itemCount >= maxItemsPerSection) return
@@ -2280,8 +2651,17 @@ export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
         )
         if (directTextKids.length >= 2) {
           const xs = directTextKids.map((t) => t.absoluteBoundingBox.x)
+          const rights = directTextKids.map((t) => t.absoluteBoundingBox.x + t.absoluteBoundingBox.width)
           const ys = directTextKids.map((t) => t.absoluteBoundingBox.y)
-          const sameX = Math.max(...xs) - Math.min(...xs) < 4
+          // 🛡️ 对齐判据放宽（2026-09-29 · T1 · 全语料 40 样本实证）：
+          //   原仅认「左边缘对齐（同 x）」，**漏掉右边缘对齐**的纵向文本块。
+          //   实锤 2:3683（当日总流量数字卡）：「34,620」(x=94,w=77) 与「江阴靖江长江隧道」
+          //   (x=43,w=128) 左边缘差 51px ⇒ 原判据判不齐 ⇒ 纵向事实缺失 ⇒ 数字卡顺序无约束
+          //   （对照 2:3680 左对齐 ⇒ 有事实 ⇒ 正确）。
+          //   审计：仅左对齐 36、仅右对齐 36（全为真纵向文本块）⇒ 命中翻倍、零误伤。
+          const sameLeft = Math.max(...xs) - Math.min(...xs) < 4
+          const sameRight = Math.max(...rights) - Math.min(...rights) < 4
+          const sameX = sameLeft || sameRight
           const sortedY = [...ys].sort((a, b) => a - b)
           const increasing = sortedY.every((y, i) => i === 0 || y - sortedY[i - 1] > 2)
           // 纯文本块校验：排除任何具尺寸的非文本兄弟（图元/底衬/图标）
@@ -2293,7 +2673,22 @@ export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
             return b && Math.max(b.width || 0, b.height || 0) > 8
           })
           if (sameX && increasing && meaningfulNonText.length === 0) {
-            parts.push('文本块纵向(纯文本块·同x、y递增)：标签在上数值在下 → 该容器用 flex-direction:column')
+            // 🛡️ T1 增强（2026-09-29）：DOM 序 ≠ 视觉 y 序时**必须指名具体元素顺序**。
+            //   审计（全语料 40 样本）：命中「纵向文本块」容器 76 个，其中 **19 个（25%）DOM 序与视觉序相反**
+            //   （实锤 2:3683 跨 8+ 轮任务稳定复现：DOM `[34,620, 江阴靖江长江隧道]`，
+            //     视觉 `[江阴靖江长江隧道, 34,620]`）⇒ 只给「标签在上数值在下」的方向提示不够，
+            //     LLM 照 DOM 序写就变成「数值在上」。
+            //   ⚠️ 固定前缀保持不变（既有测试与审计口径依赖 `文本块纵向(...)` 子串），顺序信息以全角括号追加。
+            const byY = [...directTextKids].sort(
+              (a, b) => a.absoluteBoundingBox.y - b.absoluteBoundingBox.y,
+            )
+            const domSameAsVisual = byY.every((t, i) => t === directTextKids[i])
+            layoutLines.push(
+              '  - 文本块纵向(纯文本块·同左或同右对齐、y递增)：标签在上数值在下 → 该容器用 flex-direction:column' +
+                (domSameAsVisual
+                  ? ''
+                  : `（⚠️ DOM 序与视觉序不符：从上到下应为 ${byY.map(nameOf).join(' → ')}）`),
+            )
           }
         }
 
@@ -2307,7 +2702,7 @@ export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
       collect(raw, 1, 1, raw.absoluteBoundingBox)
     }
 
-    if (secLines.length > 0) {
+    if (secLines.length > 0 || layoutLines.length > 0) {
       // 🛡️ P1 修复（2026-09-17）：计算 section 背景亮度，指导 LLM 选择正确的文字颜色槽位。
       //   问题：section 切分更细后，某些浅色背景的 section 被独立出来，LLM 用全局 @color-text-base
       //   （dark=#ffffff）写文字颜色，导致浅色背景上白字看不清。
@@ -2341,20 +2736,40 @@ export function buildSectionStyleFacts(treeSections, figmaNodeData, opts = {}) {
           }
         }
       }
-      // 🛡️ 段首禁令（2026-09-27 · bd4f69db「一片蓝」实锤）：只在**首段**注入一次（控 token）。
-      //   缺这条时，模型会把「图元(非元素背景)」行也当元素底色实现 → 满屏渐变蓝。
-      if (leafUsed === 0) {
-        lines.push(
-          '> ⚠️ 逐节点样式真值：**只有 `bg:` 行是元素/容器底色**；标「图元(非元素背景)」的行是绘制用色' +
-            '（描边/渐变块/小图标），**禁止实现为大面积 background**。文字色只允许实色。' +
-            '**下表未给出的属性，该元素一律不得添加**（禁止用示例色或臆造色补齐）。' +
-            '**透明度归属铁律**：每个节点的 `透明度:X` 只作用于**该节点自身图层**（写在该节点自己的样式上）；' +
-            '**严禁把子节点透明度上提到父容器/公共祖先**（否则父组挂 opacity 会与 PNG 自身透明叠加成双重透明，' +
-            '整片发灰发蓝）。背景层若需半透明，应体现在 background 的 alpha 通道或背景子层，不得上提父级。',
-        )
+      // 🛡️ 布局与顺序段（2026-09-29 · 治「事实下发了但未被遵循」）：**先于**样式段输出，自带结构强指令。
+      //   这四类事实（重复单元 / 内部布局嵌套 / 横向顺序 / 文本块纵向）原与 `bg:` `color:` 同段同格式，
+      //   被 LLM 当作样式条目忽略（实测产物 `con` 子序仍环形最左、数字卡仍数值在上）。
+      if (layoutLines.length > 0) {
+        if (!layoutBannerShown) {
+          layoutBannerShown = true
+          lines.push(
+            '> 🧭 布局与顺序真值：以下描述的是**模板子元素的书写顺序与排列方向**，属**结构要求**（不是样式建议）。\n' +
+              '> · 「从左到右应为 A → B → C」⇒ 模板里三个子元素必须按 A、B、C **先后出现**，容器 `display:flex; flex-direction:row`；\n' +
+              '> · 「从上到下应为 A → B」⇒ 容器 `flex-direction:column`，A 必须写在 B **之前**；\n' +
+              '> · 「N 列 × M 行」⇒ 用 `display:grid` + `grid-template-columns: repeat(N, …)`；\n' +
+              '> · 「重复单元×K」⇒ 用 `v-for` 渲染 K 个同构子项，骨架与方向按描述照抄。\n' +
+              '> ⚠️ 违反上述顺序属于**结构缺陷**（不是样式偏差），会被结构门禁判失败。',
+          )
+        }
+        lines.push(`**${label}**（布局与顺序真值 · 模板必须照此写）：`)
+        lines.push(...layoutLines.slice(0, maxLayoutPerSection))
       }
-      lines.push(`**${label}**${bgBrightnessHint}（内部元素样式真值）：`)
-      lines.push(...secLines.slice(0, maxItemsPerSection))
+      if (secLines.length > 0) {
+        // 🛡️ 段首禁令（2026-09-27 · bd4f69db「一片蓝」实锤）：只在**首段**注入一次（控 token）。
+        //   缺这条时，模型会把「图元(非元素背景)」行也当元素底色实现 → 满屏渐变蓝。
+        if (leafUsed === 0) {
+          lines.push(
+            '> ⚠️ 逐节点样式真值：**只有 `bg:` 行是元素/容器底色**；标「图元(非元素背景)」的行是绘制用色' +
+              '（描边/渐变块/小图标），**禁止实现为大面积 background**。文字色只允许实色。' +
+              '**下表未给出的属性，该元素一律不得添加**（禁止用示例色或臆造色补齐）。' +
+              '**透明度归属铁律**：每个节点的 `透明度:X` 只作用于**该节点自身图层**（写在该节点自己的样式上）；' +
+              '**严禁把子节点透明度上提到父容器/公共祖先**（否则父组挂 opacity 会与 PNG 自身透明叠加成双重透明，' +
+              '整片发灰发蓝）。背景层若需半透明，应体现在 background 的 alpha 通道或背景子层，不得上提父级。',
+          )
+        }
+        lines.push(`**${label}**${bgBrightnessHint}（内部元素样式真值）：`)
+        lines.push(...secLines.slice(0, maxItemsPerSection))
+      }
       leafUsed++
     }
   }

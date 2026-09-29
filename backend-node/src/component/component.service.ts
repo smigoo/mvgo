@@ -833,10 +833,9 @@ export class ComponentService {
         ? `${basePath}/${entry.name}`
         : entry.name;
 
-      // 跳过隐藏文件和 node_modules
-      if (entry.name.startsWith('.') || entry.name === 'node_modules') {
-        continue;
-      }
+      // 跳过隐藏文件和 node_modules，但放行 .mc-gen（截图/设计图等）
+      if (entry.name === 'node_modules') continue;
+      if (entry.name.startsWith('.') && entry.name !== '.mc-gen') continue;
 
       if (entry.isDirectory()) {
         await this.traverseDirectory(fullPath, relativePath, files);

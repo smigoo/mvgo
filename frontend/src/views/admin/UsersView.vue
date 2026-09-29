@@ -745,7 +745,7 @@ onMounted(() => {
   cursor: pointer;
 }
 .mg-table-clickable :deep(.ant-table-tbody > tr:hover > td) {
-  background: #f5f8fc;
+  background: var(--bg-hover);
 }
 
 .mg-action-btn {
@@ -773,8 +773,8 @@ onMounted(() => {
   align-items: center;
   gap: 2px;
   padding: 10px 4px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--bg-alt);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
 }
 
@@ -882,8 +882,8 @@ onMounted(() => {
 
 .ud-provider-card {
   padding: 10px 12px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--bg-alt);
+  border: 1px solid var(--border-default);
   border-radius: 6px;
 }
 
@@ -925,8 +925,8 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 6px 10px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--bg-alt);
+  border: 1px solid var(--border-default);
   border-radius: 4px;
   font-size: 13px;
 }

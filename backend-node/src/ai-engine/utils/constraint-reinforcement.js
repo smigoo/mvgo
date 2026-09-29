@@ -123,7 +123,13 @@ export function buildNodeLayoutFactsReinforcement(nodeLayoutFacts, figmaNodeData
       .toLowerCase()
       .replace(/[^a-z0-9-]/g, '')
     if (!kebab) return null
-    return `.c-${componentName}-${kebab}`
+    // 🛡️ 2026-09-29 治本（mc-max-1790669176199-94b3bc69 实锤）：componentName 本身可能
+    //   已带 `c-` 前缀（`normalizeComponentId` 产出 `c-vehicle-monitor`），原实现恒拼
+    //   `.c-${componentName}-…` ⇒ 输出 `.c-c-vehicle-monitor-group-2136639043`（**双 c- 前缀**），
+    //   而 prompt 规则明写「🚫 禁止双 c- 前缀」⇒ 该 class 契约**既不可用（与产物 class 对不上）
+    //   又诱导 LLM 违规**。前缀归一：已含 `c-` 直接用，否则补 `c-`。
+    const prefix = /^c-/.test(String(componentName)) ? String(componentName) : `c-${componentName}`
+    return `.${prefix}-${kebab}`
   }
 
   // 🛡️ 构建结构化映射表（用于后处理）

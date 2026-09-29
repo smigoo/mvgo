@@ -23,7 +23,7 @@ import {
   restoreBackup,
 } from '../tools/playground-tools.js'
 import { resolveTextConfig } from '../utils/ai-defaults.js'
-import { normalizeRequestTemperature } from '../utils/model-config.js'
+import { normalizeRequestTemperature, buildThinkingOffParams } from '../utils/model-config.js'
 import { createLogger } from '../logger/index.js'
 import { attachUnifiedInvoke } from '../utils/ai-request-gateway.js'
 import { isOpenAICompatibleBaseURL } from '../utils/provider-utils.js'
@@ -82,7 +82,7 @@ function createLLM(overrides = {}) {
 
   if (!apiKey) {
     throw new Error(
-      'API Key 未配置，请设置环境变量 MC_GEN_TEXT_API_KEY / TEXT_API_KEY / ANTHROPIC_API_KEY，或在「AI 设置」中配置文本模型',
+      'API Key 未配置，请到「设置 - 模型配置」中添加文本模型并保存（🔒 部署级 env 兜底已移除，模型完全由用户级配置提供）',
     )
   }
 
@@ -106,12 +106,18 @@ function createLLM(overrides = {}) {
   if (isOpenAICompatible) {
     // LangChain ChatOpenAI 会自动拼接 /chat/completions，需要去掉 baseURL 中已有的路径后缀
     const langChainBaseURL = extractBaseURLPrefix(baseURL)
-    logger.info('使用 OpenAI 兼容 API', { model, baseURL, langChainBaseURL, temperature })
+    // 🛡️ 2026-09-29：与 base-agent._buildLLM 对齐——配置声明 thinkingType 时注入「关推理」参数，
+    // 否则 deepseek-v4-pro 等默认开推理的模型在 Playground 同样烧输出预算（推理关不掉）。
+    const _thinkingType = config.thinkingType || ''
+    const _offParams =
+      _thinkingType && _thinkingType !== 'skip' ? buildThinkingOffParams(model, baseURL) : null
+    logger.info('使用 OpenAI 兼容 API', { model, baseURL, langChainBaseURL, temperature, thinkingOff: !!(_offParams && Object.keys(_offParams).length) })
     return attachUnifiedInvoke(
       new ChatOpenAI({
         modelName: model,
         ...(temperature !== undefined ? { temperature } : {}),
         apiKey,
+        ...(_offParams && Object.keys(_offParams).length ? { modelKwargs: _offParams } : {}),
         configuration: { baseURL: langChainBaseURL },
       }),
       {

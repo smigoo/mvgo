@@ -937,17 +937,34 @@ describe('healPresetLiteralDecls —— 预设字面量 var 透传 + 🛡️ Les
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('injectThemeVarDeclsForLess —— 刀 16b：颜色函数实参的注入值保障', () => {
+/**
+ * A-①（2026-09-29 削源）：业务文件顶层**只注入 `.common()` 的跨主题共享令牌**。
+ * 声明在 `.theme-light()` / `.theme-dark()` 内的槽位（值随主题变化）一律不注入 ——
+ * 它们是门禁 `THEME-SLOT-LOCAL-OVERRIDE`（BLOCK）的命中源，且与「mixin 变量首定义者胜出」
+ * 抢定义；作用域由 import 链天然提供（index.less 的 `.theme-light()` / themes/dark.less 的
+ * `.theme-dark()`），全语料 491 份真产物实测 0 例缺作用域。
+ *
+ * 历史「刀 16b」（颜色函数实参 → 注入中立灰 #333333 防编译失败）已删除：
+ * 该 fallback 由 `healThemeMixinVarRefs` 的 A-② 豁免接管（颜色函数实参不再被改写成 var()）。
+ */
+describe('injectThemeVarDeclsForLess —— A-① 只注入 .common() 令牌，不注入主题作用域槽位', () => {
   const themeVars = [
     '.common() {',
     '  @fontSize: var(--fontSize);',
+    '  @border-radius-base: 8px;',
+    '}',
+    '.theme-light() {',
+    '  @color-text-base: #333333;',
     '  @color-primary: #409EFF;',
-    '  @color-slot: var(--colorSlot);',
+    '}',
+    '.theme-dark() {',
+    '  @color-text-base: #ffffff;',
+    '  @color-primary: #44E4FF;',
     '}',
     '.common();',
   ].join('\n')
 
-  it('基线：值原样注入（var() 形态的 @fontSize 不变，保 M5-6）', () => {
+  it('基线：.common() 令牌原样注入（var() 形态的 @fontSize 不变，保 M5-6）', () => {
     const out = injectThemeVarDeclsForLess(
       '.c-root { font-size: @fontSize; }',
       themeVars,
@@ -955,30 +972,46 @@ describe('injectThemeVarDeclsForLess —— 刀 16b：颜色函数实参的注�
     expect(out).toContain('@fontSize: var(--fontSize);')
   })
 
-  it('被 lighten() 引用的变量、theme 原值为 var() → 注入中立真颜色（否则编译失败）', () => {
+  it('A-①：引用主题作用域槽位 → 一行都不注入（不再产出门禁 BLOCK 的字面量重声明）', () => {
     const out = injectThemeVarDeclsForLess(
-      '.c-root { color: lighten(@color-slot, 10%); }',
+      '.c-root { color: @color-text-base; background: @color-primary; }',
       themeVars,
     )
-    expect(out).toContain('@color-slot: #333333;')
-    expect(out).not.toContain('var(--colorSlot)')
+    // 注入的前缀部分不应出现任何 @color-*
+    const prefix = out.slice(0, out.indexOf('.c-root'))
+    expect(prefix).not.toMatch(/@(?:color|shadow)-/)
+    expect(prefix).not.toContain('#333333')
+    expect(prefix).not.toContain('#ffffff')
+    // 引用本身原样保留（由主题作用域在编译期提供真值）
+    expect(out).toContain('color: @color-text-base;')
   })
 
-  it('theme 原值是真颜色 → 即使被颜色函数引用也原样注入（不做无谓改写）', () => {
+  it('A-①：颜色函数实参同样不注入（刀 16b 中立灰已由 A-② 豁免取代）', () => {
     const out = injectThemeVarDeclsForLess(
-      '.c-root { color: darken(@color-primary, 10%); }',
+      '.c-root { color: lighten(@color-primary, 10%); }',
       themeVars,
     )
-    expect(out).toContain('@color-primary: #409EFF;')
+    const prefix = out.slice(0, out.indexOf('.c-root'))
+    expect(prefix).not.toContain('#333333') // 不再注入中立灰
+    expect(prefix).not.toContain('@color-primary')
+    expect(out).toContain('lighten(@color-primary, 10%)')
   })
 
-  it('未被颜色函数引用 → var() 形态照旧注入（@fontSize 场景零回归）', () => {
+  it('A-①：.common() 令牌仍照旧注入（@fontSize 场景零回归）', () => {
     const out = injectThemeVarDeclsForLess(
       '.c-root { font-size: @fontSize; line-height: @fontSize; }',
       themeVars,
     )
     expect(out).toContain('@fontSize: var(--fontSize);')
     expect(out).not.toContain('#333333')
+  })
+
+  it('A-② 配套：被颜色函数引用的槽位不被改写成 var()（编译期可求值）', () => {
+    const src = '.c-root {\n  color: lighten(@color-primary, 10%);\n  background: @color-text-base;\n}'
+    const healed = healThemeMixinVarRefs(src, themeVars)
+    expect(healed).toContain('lighten(@color-primary, 10%)') // 实参豁免
+    expect(healed).not.toContain('lighten(var(')
+    expect(healed).toContain('var(--color-text-base, #333333)') // 非颜色函数引用仍走 var() 兜底
   })
 })
 

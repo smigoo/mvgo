@@ -1,8 +1,10 @@
-import { Controller, Post, Body, HttpStatus, HttpException, Req, Logger, Param } from '@nestjs/common';
+import {Controller, Post, Body, HttpStatus, HttpException, Req, Logger, Param, UseGuards } from '@nestjs/common';
+import { SessionGuard } from '../auth/session.guard';
 import { randomBytes } from 'crypto';
 import { PageGeneratorService } from './page-generator.service';
 import { GeneratePageDto } from './dto/generate-page.dto';
 
+@UseGuards(SessionGuard)
 @Controller('page-generator')
 export class PageGeneratorController {
   private readonly logger = new Logger(PageGeneratorController.name);

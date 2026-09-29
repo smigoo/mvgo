@@ -22,6 +22,7 @@ import {
 } from '../../utils/sfc-syntax-validation.js';
 import { repairScopedThirdPartySelectors, ensureFlexDirectionInVueSfc, ensureFlexDirection, ensureGridDisplay, ensureGridDisplayInVueSfc, fixInvalidCssPropertiesInVue, fixInvalidCssProperties } from '../../utils/css-sanitizer.js';
 import { fixSpuriousLineBreaks, injectMissingTabUi, healVueEmbeddedStyleBraces, healThemeMixinVarRefs, healThemeMixinVarRefsInVue, healLessResourceVarInterpolation, healPresetLiteralDecls, healSlotHexToVarRefs, healVarNameCase, applyHealToVueStyleBlocks, injectThemeVarDeclsForLess, healLessColorFnVarArgs } from './code-healer.js';
+import { collectThemeSlotNames, healBusinessStyleVarsInCss } from '../../utils/theme-color-guard.js';
 import { healLessSource, healRootFixedSize } from '../../validators/less-compile-gate.js';
 import {
   isColorEvaluable,
@@ -29,6 +30,8 @@ import {
   NEUTRAL_LESS_COLOR,
 } from '../../utils/less-color-funcs.js';
 import { safeLogger } from '../../logger/safe-logger.js';
+// 🛡️ 2026-09-29 治本：写盘门禁前置自愈——自闭合标签「` /` 后夹属性」畸形还原（单点实现，双链路共用）
+import { repairSelfClosingSlashInsideTag } from '../../utils/pre-write-self-healing.js';
 
 /**
  * 验证文件路径是否合法
@@ -588,6 +591,22 @@ export function writeFiles(files, outputPath, options = {}) {
         try {
           const themeVars = files?.['resources/styles/themes/theme-vars.less'];
           if (typeof themeVars === 'string') {
+            // 🛡️ 同步 M5-6（2026-09-10）：SFC 内嵌 style 也先注入同名 Less 声明，
+            // 让下方 healThemeMixinVarRefs 因 localDeclared 命中而跳过 `@color-*`
+            // → `var(--colorXxx)` 改写，避免产出 `var(--colorTextBase, #333333)`
+            // 被 THEME-VAR-NAME-MISMATCH 拦（P0-C 实锤 mc-max-1790672828887-57d80179）。
+            // 与独立 .less 分支 injectThemeVarDeclsForLess 同源。
+            const declInjected = applyHealToVueStyleBlocks(sanitizedContent, (css) =>
+              injectThemeVarDeclsForLess(css, themeVars),
+            );
+            if (declInjected !== sanitizedContent) {
+              sanitizedContent = declInjected;
+              if (logger) {
+                logger.warn(
+                  `🧩 SFC theme 变量声明注入(同步 M5-6): ${relativePath}（@color-* → 同名 Less 声明，避免改写 var()）`,
+                );
+              }
+            }
             const healedRefs = healThemeMixinVarRefsInVue(sanitizedContent, themeVars);
             if (healedRefs !== sanitizedContent) {
               sanitizedContent = healedRefs;
@@ -610,8 +629,14 @@ export function writeFiles(files, outputPath, options = {}) {
         try {
           const themeVarsForVue = files?.['resources/styles/themes/theme-vars.less'];
           if (typeof themeVarsForVue === 'string') {
+            // 🛡️ 2026-09-29 P0-C 治本：写盘阶段即把 SFC <style> 内 `var(--colorXxx[, fallback])`
+            // 确定性转成 @color-xxx Less 槽位引用（与 healBusinessStyleVarRefs 同源，但限定 <style> 块，
+            // 避免误伤 <template>/<script>），根治 L0-B THEME-VAR-NAME-MISMATCH（var() 运行期不被注入
+            // → fallback 恒生效、切主题零响应）。此前该转换只在 quality-auto-fix 事后阶段，L0-B 已先 block。
+            const slotNames = collectThemeSlotNames(themeVarsForVue);
             const themedVue = applyHealToVueStyleBlocks(sanitizedContent, (css) => {
-              const slotHealed = healSlotHexToVarRefs(css, themeVarsForVue);
+              const varToLess = healBusinessStyleVarsInCss(css, slotNames); // <style> 内 var() → @color-x
+              const slotHealed = healSlotHexToVarRefs(varToLess, themeVarsForVue);
               const presetHealed = healPresetLiteralDecls(slotHealed, relativePath);
               return healVarNameCase(presetHealed);
             });
@@ -619,7 +644,7 @@ export function writeFiles(files, outputPath, options = {}) {
               sanitizedContent = themedVue;
               if (logger) {
                 logger.warn(
-                  `🧩 主题变量化自愈: ${relativePath}（槽位 hex → var() 引用 / 预设字面量 → var 透传）`,
+                  `🧩 主题变量化自愈 + SFC <style> var()→Less 槽位: ${relativePath}（var(--colorXxx) → @color-xxx，避免 THEME-VAR-NAME-MISMATCH）`,
                 );
               }
             }
@@ -672,6 +697,31 @@ export function writeFiles(files, outputPath, options = {}) {
           }
         }
         const lessGlobalVars = extractLessGlobalVars(files);
+        // 🛡️ 写盘门禁**前置**自愈（2026-09-29 · mc-max-1790678096786-f5cac254 实锤）：
+        //   N3「bg→父容器强制挂载」对**自闭合**元素拼接 :style 时把属性写到了 `/` 之后
+        //   ⇒ `<X … class="…" / :style="{ … }">` ⇒ compiler-sfc 报
+        //   `Illegal '/' in tags.` + `Element is missing end tag.` ⇒ 本门禁判死 → **整文件跳过**
+        //   （进 component-meta.json#gateSkippedFiles）→ 产物缺失 → 前端「组件资源加载失败」。
+        //   全语料 68 个任务带 gateSkippedFiles，21 个跳过的正是 package/index.vue（复发型 P0）。
+        //   在任何校验之前确定性还原语法（无匹配时零改动、幂等），与上方 healLessColorFnVarArgs 同款。
+        //   实现单点在 utils/pre-write-self-healing.js（双链路共用），此处只做调用。
+        try {
+          const _slashHealed = repairSelfClosingSlashInsideTag(sanitizedContent);
+          if (_slashHealed !== sanitizedContent) {
+            sanitizedContent = _slashHealed;
+            if (logger) {
+              logger.warn(
+                `🛡️ 自闭合标签斜杠错位修复（写盘门禁前置自愈）: ${relativePath}（\` / :style=\` → \`:style= … />\`）`,
+              );
+            }
+          }
+        } catch (slashErr) {
+          if (logger) {
+            logger.warn(
+              `🛡️ 自闭合标签斜杠错位修复跳过: ${relativePath}（${slashErr?.message || slashErr}）`,
+            );
+          }
+        }
         const syntaxResult = validateVueSfc(sanitizedContent, relativePath, {
           lessGlobalVars,
         });

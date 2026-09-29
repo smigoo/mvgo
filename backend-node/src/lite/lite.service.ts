@@ -300,6 +300,14 @@ export class LiteService {
         } else if (typeof brief?.theme === 'string') {
           brief._themeSource = 'model';
         }
+
+        // 🛡️ 2026-09-30 治本（工作台演示主题面板）：用户显式选择的背景明暗优先级高于一切自动推断
+        //（模型 vision / 像素采样）。前端通过 pendingToolCall.arguments.backgroundBrightness 传入。
+        if (dto.backgroundBrightness === 'light' || dto.backgroundBrightness === 'dark') {
+          brief.theme = dto.backgroundBrightness;
+          brief._themeSource = 'user-selected';
+        }
+
         // 🔧 边缘底色真值（2026-09-01）：模型对浅蓝白渐变底色反复误读成中灰（#A8B5C0），
         // theme=light 锚点只保明暗不保色相，产物仍渲染成灰蓝。figma 源（exportImage 纯净
         // 节点、无 OS 截图边框）用最外 3% 环带像素中位数覆盖 brief.colors.background。
@@ -1185,8 +1193,8 @@ ${mappingSummary}`;
 
       // 调用文本 LLM
       const aiConfig = await this.aiConfigService.getMergedAiConfig(userId);
-      const apiKey = aiConfig.textApiKey || aiConfig.apiKey || process.env.TEXT_API_KEY;
-      const baseURL = aiConfig.textBaseURL || aiConfig.baseURL || process.env.TEXT_BASE_URL;
+      const apiKey = aiConfig.textApiKey || aiConfig.apiKey;
+      const baseURL = aiConfig.textBaseURL || aiConfig.baseURL;
 
       if (!apiKey || !baseURL) {
         this.logger.warn('AI 配置不完整，跳过素材位置分析');
@@ -1318,8 +1326,8 @@ ${mappingSummary}`;
     // 🔧 每用户隔离（2026-09-xx）：改走 getMergedAiConfig(userId)，binding 用户级优先，
     // 避免全局 ai-config.json 被他人保存覆盖后，素材应用仍沿用别人的文本模型。
     const aiConfig = (await this.aiConfigService.getMergedAiConfig(userId)) || {};
-    const apiKey = aiConfig.textApiKey || aiConfig.apiKey || process.env.TEXT_API_KEY;
-    const baseURL = aiConfig.textBaseURL || aiConfig.baseURL || process.env.TEXT_BASE_URL;
+    const apiKey = aiConfig.textApiKey || aiConfig.apiKey;
+    const baseURL = aiConfig.textBaseURL || aiConfig.baseURL;
     if (!apiKey || !baseURL) {
       return skippedResult('AI 文本模型配置不完整');
     }
@@ -2202,10 +2210,20 @@ ${extra ? `【布局补充】\n${extra}\n` : ''}
   ): string {
     const briefJson = JSON.stringify(brief || {}, null, 2);
     const classPrefix = `c-${componentName}-`;
+    // 🛡️ 2026-09-30 治本：工作台演示主题面板（深色/浅色）→ 用户显式选择的主题必须覆盖 vision 推断
+    const themeOverride = dto.backgroundBrightness
+      ? `\n**演示面板主题（用户显式指定，P0 覆盖）**：当前使用${dto.backgroundBrightness === 'dark' ? '深色' : '浅色'}演示面板。组件根容器必须使用${dto.backgroundBrightness === 'dark' ? '深色底（如 #1a1a2e / #2d2d3f）+ 浅色正文' : '浅色底（如 #FFFFFF / #F5F8FC）+ 深色正文'}。此设置优先于【结构化拆解】中的 theme 字段与截图背景推断。`
+      : '';
+    // 🛡️ 2026-09-30 治本：用户在前端「面板」切换器选的 panelType 必须如实落到产物里
+    // 之前 prompt 里两处硬编码 `panelKey="default-panel"`，LLM 直接照抄不替换，
+    // 导致选了 aio-panel 的组件产物仍是 default-panel（mc-max-1790692481760-8afc00c5 实锤）。
+    // 治本：把真值直接注入模板示例，并加全局规则反复强调——LLM 不遵守则由产物后处理兜底替换。
+    const panelKeyValue = dto.panelType || 'default-panel';
+    const panelKeyRule = `\n【面板 key（用户显式指定，P0 铁律，禁止降级到 default-panel）】本次生成必须使用 panelKey="${panelKeyValue}"。**禁止**降级或回退到 "${'default-panel'}"，即使你认为其他面板更适合——这是用户在前端面板切换器里明确选的，整组组件（base-panel 实例）都必须与该值保持一致。`;
     return `你是一名微码组件工程师。请基于截图和结构化拆解，生成一个遵循微码组件规范的 Vue3 微码组件。
 
 【组件名】${componentName}
-【CSS 类名前缀】${classPrefix}（所有自定义 class 必须以此为前缀）
+【CSS 类名前缀】${classPrefix}（所有自定义 class 必须以此为前缀）${themeOverride}${panelKeyRule}
 ${designWidth && designHeight ? `【设计画布逻辑尺寸】${designWidth} × ${designHeight} CSS px
 参考截图可能是 2 倍导出像素，只用于视觉识别，不得把图片像素作为组件 CSS 尺寸。
 微码面板（base-panel）自带头部标题栏约占 36px，内容区可用高度按 ${designHeight - 36}px 预算——所有区块必须在此高度内完整放下，不得溢出。
@@ -2225,13 +2243,14 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
 微码硬性规则：
 0. 根容器必须使用微码面板组件：
    \`\`\`html
-   <base-panel panelKey="default-panel">
+   <base-panel panelKey="${panelKeyValue}">
      <!-- 主体内容放默认插槽 -->
      <div class="${classPrefix}content">
        <!-- 业务内容 -->
      </div>
    </base-panel>
    \`\`\`
+   **重要**：所有 \`<base-panel>\` 实例的 panelKey 都必须是 "${panelKeyValue}"，与上方规则 P0 铁律保持一致。
 1. 使用 \`<style scoped>\` 隔离样式。
 2. 所有自定义 class 必须加前缀 \`${classPrefix}\`（如 \`${classPrefix}header\`、\`${classPrefix}title\`）。
 3. 还原截图中可见的 DOM 层级、尺寸比例、间距、对齐、配色、字体、边框、圆角和阴影。
@@ -2273,7 +2292,7 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
 输出格式：
 \`\`\`vue
 <template>
-  <base-panel panelKey="default-panel">
+  <base-panel panelKey="${panelKeyValue}">
     <div class="${classPrefix}content">
       <!-- 组件业务内容 -->
     </div>

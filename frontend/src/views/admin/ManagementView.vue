@@ -390,8 +390,8 @@ onMounted(() => {
   display: flex;
   gap: 24px;
   padding: 16px 20px;
-  background: linear-gradient(135deg, #fff5f5 0%, #fff 100%);
-  border: 1px solid #ffccc7;
+  background: linear-gradient(135deg, var(--error-bg) 0%, var(--bg-card) 100%);
+  border: 1px solid var(--error-border);
   border-radius: 8px;
   margin: 0 16px 16px;
 }

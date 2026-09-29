@@ -23,6 +23,15 @@
         <option value="empty">无面板</option>
       </select>
     </div>
+    <!-- 主题提示条 -->
+    <div v-if="!isVue3 && !isEmbedded" class="mc-theme-hint" :class="resolvedThemeClass">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="16" x2="12" y2="12"/>
+        <line x1="12" y1="8" x2="12.01" y2="8"/>
+      </svg>
+      当前为演示主题面板（{{ resolvedThemeClass === 'dark' ? '深色' : '浅色' }}），实际项目中可在面板配置中切换主题
+    </div>
     <div
       class="mc-preview-stage"
       :class="[
@@ -96,12 +105,25 @@
               </svg>
             </div>
             <div class="mc-preview-error-title">组件加载失败</div>
+            <!-- 🛡️ 2026-09-29 治本：错误卡正文随「失败性质」切换。
+                 原来写死「这是组件自身的问题（如文件缺失…）」，会把
+                 「前端资源版本问题」「取源服务 5xx」也一并栽给组件产物，
+                 与下方具体提示（如“与组件产物无关”）自相矛盾。 -->
             <div class="mc-preview-error-desc">
-              这是
-              <strong>组件自身的问题</strong>
-              （如文件缺失、样式编译错误或引用了不支持的资源），
-              <strong>不会影响系统其他功能</strong>
-              。可重新加载，或检查该组件的源码。
+              <template v-if="loadErrorScope === 'environment'">
+                这是
+                <strong>预览环境的临时问题</strong>
+                （前端资源或取源服务），
+                <strong>组件产物本身未被判定为有错</strong>
+                。请按下方具体提示刷新或稍后重试。
+              </template>
+              <template v-else>
+                这是
+                <strong>组件自身的问题</strong>
+                （如文件缺失、样式编译错误或引用了不支持的资源），
+                <strong>不会影响系统其他功能</strong>
+                。可重新加载，或检查该组件的源码。
+              </template>
             </div>
             <pre class="mc-preview-error-detail">{{ loadError }}</pre>
             <div v-if="loadDiagnostic" class="mc-preview-error-location">
@@ -162,6 +184,7 @@ import {
   injectVueAutoImports,
   applyScopeToPreviewStyles,
   precompileVueLess,
+  PREVIEW_FAIL_KIND,
 } from '@/utils/loadVue3Runtime'
 import { BINARY_EXTS as BINARY_EXTS_SHARED, extOf } from '@/utils/sfc-loader-binary'
 import { buildSnapshotFileUrl, resolvePreviewDescriptor } from '@/utils/preview-resolver'
@@ -332,6 +355,10 @@ const microcodeDeclare = shallowRef(null)
 // 加载阶段（import/编译）的错误信息；渲染期错误由 ErrorBoundary 内部捕获
 const loadError = shallowRef('')
 const loadDiagnostic = shallowRef(null)
+// 失败性质：'artifact' = 组件产物自身问题（默认，保持既有文案）；
+//          'environment' = 前端资源 / 取源服务等预览环境问题（不归咎组件产物）。
+// 由 handleLoadError 按加载器标注的 previewFailKind 判定（常量单一事实源见 @/utils/loadVue3Runtime）。
+const loadErrorScope = shallowRef('artifact')
 const structurePreviewMode = ref(false)
 const errorBoundaryRef = ref(null)
 const aiFixing = ref(false)
@@ -1021,8 +1048,37 @@ async function loadProd() {
 }
 
 // 把原始错误归类成用户能看懂的提示（区分：文件缺失 / LESS 编译失败 / 不支持的图片资源 / 网络404）
+//
+// 🛡️ 2026-09-29 治本：原来只按 `e.message` 字符串分流，导致三类**性质完全不同**的失败
+//   （① 前端加载器 chunk 取不到 ② 取源请求传输层失败 ③ 服务端 5xx）
+//   连同真正的「产物缺失（HTTP 404）」一起被压成同一句「组件资源加载失败（网络错误 / 404）」，
+//   用户看到的提示与真实修复动作完全脱节（实测：前端资源版本问题被误当成组件坏了）。
+//   现改为**先按加载器标注的 `previewFailKind` 分流**（常量单一事实源见
+//   `@/utils/loadVue3Runtime#PREVIEW_FAIL_KIND`），未标注的旧路径仍走下面的字符串兜底。
 function classifyLoadError(e) {
   const msg = (e?.message || String(e)) + ''
+  const kind = e?.previewFailKind || ''
+  if (kind === PREVIEW_FAIL_KIND.LOADER_CHUNK) {
+    return (
+      '预览加载器依赖未就绪（前端资源已更新或被中断，与组件产物无关）。\n' +
+      '请强制刷新页面（Ctrl/Cmd + Shift + R）后重试。\n\n原始错误：' +
+      msg
+    )
+  }
+  if (kind === PREVIEW_FAIL_KIND.SOURCE_NETWORK) {
+    return (
+      '取源请求失败（网络中断 / 服务重启窗口，已自动重试仍失败）。\n' +
+      '请稍后重试或刷新；若持续出现请检查后端与网关是否可达。\n\n原始错误：' +
+      msg
+    )
+  }
+  if (kind === PREVIEW_FAIL_KIND.SOURCE_SERVER) {
+    return (
+      `取源服务异常（HTTP ${e?.status || '5xx'}，非组件产物问题）。\n` +
+      '请检查后端 / 网关路由是否正常。\n\n原始错误：' +
+      msg
+    )
+  }
   if (/\.(png|jpe?g|gif|webp|svg)/i.test(msg) || msg.includes('Unable to handle')) {
     return (
       '组件引用了不支持的本地图片资源（.png/.jpg 等）。请改为在线 URL 或 base64 内联。\n\n原始错误：' +
@@ -1081,6 +1137,9 @@ function notifyParentFixed(payload) {
 function handleLoadError(e) {
   const friendly = classifyLoadError(e)
   const diagnostic = e?.lessCompileGate?.diagnostics?.[0] || null
+  // 只有加载器**明确标注**了 previewFailKind 时才归为「预览环境问题」；
+  // 其余（含既有的产物类错误）一律保持 'artifact'，不改既有语义。
+  loadErrorScope.value = e?.previewFailKind ? 'environment' : 'artifact'
   loadError.value = friendly
   loadDiagnostic.value = diagnostic
   rtComponent.value = null
@@ -1727,6 +1786,34 @@ html:root .mc-preview-stage-shell.is-standalone .mc-preview-stage {
 .mc-panel-switcher label {
   font-weight: 500;
   white-space: nowrap;
+}
+
+.mc-theme-hint {
+  position: fixed;
+  top: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+  pointer-events: none;
+}
+.mc-theme-hint.dark {
+  background: rgba(30, 30, 40, 0.9);
+  color: #e5e7eb;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.mc-theme-hint.light {
+  background: rgba(255, 255, 255, 0.95);
+  color: #374151;
+  border: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .mc-panel-select {

@@ -17,9 +17,10 @@ const logger = createLogger({ name: 'code-reviewer-agent' })
  */
 export class CodeReviewerAgent {
   constructor(options = {}) {
-    this.apiKey = options.apiKey || process.env.TEXT_API_KEY || process.env.ANTHROPIC_API_KEY || TEXT_DEFAULTS.apiKey
-    this.baseURL = options.baseURL || process.env.TEXT_BASE_URL || process.env.ANTHROPIC_BASE_URL || TEXT_DEFAULTS.baseURL
-    this.model = options.model || process.env.TEXT_MODEL || process.env.ANTHROPIC_MODEL || TEXT_DEFAULTS.model
+    // 🔒 2026-09-29 env 兜底已拔除（每用户模型独有）：只认调用方传入的用户级配置
+    this.apiKey = options.apiKey || TEXT_DEFAULTS.apiKey
+    this.baseURL = options.baseURL || TEXT_DEFAULTS.baseURL
+    this.model = options.model || TEXT_DEFAULTS.model
   }
 
   /**

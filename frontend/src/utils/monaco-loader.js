@@ -11,6 +11,8 @@
  *   4. preloadMonaco()：路由进入 Playground 前可后台触发。
  */
 const CDN_LIST = [
+  // 本地静态资源（public/monaco/vs），彻底离线可用，优先于所有 CDN
+  { name: 'local', base: '/monaco/vs' },
   { name: 'staticfile', base: 'https://cdn.staticfile.org/monaco-editor/0.45.0/min/vs' },
   { name: 'bootcdn', base: 'https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.45.0/min/vs' },
   { name: 'jsdelivr', base: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' }
@@ -70,9 +72,15 @@ export function loadMonaco() {
   monacoLoadPromise = (async () => {
     let warmCdn = ''
     try { warmCdn = sessionStorage.getItem(WARM_CACHE_KEY) || '' } catch {}
-    const ordered = warmCdn
-      ? [...CDN_LIST.filter((c) => c.base === warmCdn), ...CDN_LIST.filter((c) => c.base !== warmCdn)]
-      : CDN_LIST
+    // 本地静态资源永远优先（最快、离线可用）；warmCdn 仅决定「其余 CDN」的先后顺序。
+    const local = CDN_LIST.filter((c) => c.name === 'local')
+    const rest = CDN_LIST.filter((c) => c.name !== 'local')
+    const ordered = [
+      ...local,
+      ...(warmCdn
+        ? [...rest.filter((c) => c.base === warmCdn), ...rest.filter((c) => c.base !== warmCdn)]
+        : rest)
+    ]
 
     let lastErr = null
     for (const cdn of ordered) {

@@ -390,7 +390,8 @@ export class ComponentController {
         };
         res.setHeader('Content-Type', mimeMap[ext] || 'application/octet-stream');
         res.setHeader('Cache-Control', 'private, max-age=60');
-        return res.sendFile(fullPath);
+        // 允许访问隐藏目录（如 .mc-gen/screenshots/）下的截图文件
+        return res.sendFile(fullPath, { dotfiles: 'allow' });
       }
 
       const content = await this.componentService.getFileContent(

@@ -4,6 +4,8 @@ import {
   collectFileLevelSlotOverrides,
   healFileLevelSlotOverrides,
   healBusinessStyleVarRefs,
+  collectThemeSlotNames,
+  healBusinessStyleVarsInCss,
 } from './theme-color-guard.js'
 
 /**
@@ -441,6 +443,76 @@ describe('THEME-MIXINS-IDENTICAL 两套 theme mixin 值相同（模式 B，2026-
     expect(hits[0].severity).toBe('BLOCK')
     expect(hits[0].message).toContain('完全相同')
   })
+
+  // 🛡️ 2026-09-29 回归（mc-max-1790666332846-2e5fc9e7 实锤，误报率 93.4%）：
+  //   系统确定性生成的 theme-vars.less 头部第 2 行注释并列列出了三个 mixin 名。
+  //   原 grab 用 indexOf 抓「第一次出现」⇒ 两次都命中注释行 ⇒ 都落到 `.common()` 块 ⇒
+  //   恒判「两套 mixin 相同」。真机 453 个组件命中 257 个，其中 239 个是本误报，
+  //   当天导致 25 个任务重试耗尽失败（门禁是 BLOCK）。
+  const HEADER = (body: string) =>
+    [
+      '// 微码组件主题变量文件（系统确定性生成；§3 核心槽位值由 buildStyleTokens 注入，勿手改）',
+      '// 结构：三个 mixin（.common() / .theme-dark() / .theme-light()）',
+      '// 约束：mixin 内仅允许 @变量 定义，禁止任何 CSS 属性；禁止 CSS 变量',
+      '',
+      '',
+      body,
+    ].join('\n')
+
+  it('回归：模板头注释含 mixin 名 + 两套值实际不同 → 必须不命中（原实现误报）', () => {
+    const content = HEADER(
+      tv(
+        '  @color-text-base: #ffffff;\n  @color-primary: #44E4FF;',
+        '  @color-text-base: #333333;\n  @color-primary: #1990ff;',
+      ),
+    )
+    expect(
+      collectIdenticalThemeMixins([
+        { path: 'resources/styles/themes/theme-vars.less', content },
+      ]),
+    ).toBeNull()
+  })
+
+  it('回归：模板头注释存在但两套值真相同 → 仍命中，且 slotCount 取 mixin 自身而非 .common()', () => {
+    const content = HEADER(
+      [
+        '.common() {',
+        '  @font-size-base: 14px;',
+        '  @font-size-lg: 20px;',
+        '  @font-size-xl: 28px;',
+        '}',
+        '',
+        tv(
+          '  @color-text-base: #ffffff;\n  @color-primary: #5478ff;',
+          '  @color-text-base: #ffffff;\n  @color-primary: #5478ff;',
+        ),
+      ].join('\n'),
+    )
+    const r = collectIdenticalThemeMixins([
+      { path: 'resources/styles/themes/theme-vars.less', content },
+    ])
+    expect(r).not.toBeNull()
+    // 必须是 mixin 自身的 2 个槽位，而不是 .common() 的 3 个
+    expect(r!.slotCount).toBe(2)
+  })
+
+  it('回归：mixin 定义可带缩进；`&.dark { .theme-dark(); }` 调用形态不被误当定义', () => {
+    const content = [
+      '.theme-dark() {',
+      '  @a: #000;',
+      '}',
+      '.theme-light() {',
+      '  @a: #fff;',
+      '}',
+      '&.dark { .theme-dark(); }',
+      '&.light { .theme-light(); }',
+    ].join('\n')
+    expect(
+      collectIdenticalThemeMixins([
+        { path: 'resources/styles/themes/theme-vars.less', content },
+      ]),
+    ).toBeNull()
+  })
 })
 
 describe('THEME-SLOT-LOCAL-OVERRIDE 文件级槽位字面量重声明（2026-09-16）', () => {
@@ -657,4 +729,42 @@ describe('healBusinessStyleVarRefs：业务样式 var() 直引自愈（模式 A�
     expect(fixed.length).toBe(0)
     expect(files['resources/styles/themes/theme-vars.less']).toContain('@fontSize: var(--fontSize)')
   })
+})
+
+describe('collectThemeSlotNames / healBusinessStyleVarsInCss（2026-09-29 P0-C 抽出的 CSS 级变体）', () => {
+  const tv = `.theme-light() { @color-text-base: #000000; @color-primary: #1890ff; }
+.common() { @fontSize: var(--fontSize); }`;
+
+  it('collectThemeSlotNames 提取 theme-vars 槽位名集合', () => {
+    const names = collectThemeSlotNames(tv);
+    expect(names.has('color-text-base')).toBe(true);
+    expect(names.has('color-primary')).toBe(true);
+    expect(names.has('fontSize')).toBe(true);
+  });
+
+  it('healBusinessStyleVarsInCss 仅作用于传入 CSS，var(--colorXxx) → @color-x', () => {
+    const css = '.a { color: var(--colorTextBase, #333); }';
+    const out = healBusinessStyleVarsInCss(css, collectThemeSlotNames(tv));
+    expect(out).toContain('color: @color-text-base;');
+    expect(out).not.toContain('var(--colorTextBase');
+  });
+
+  it('healBusinessStyleVarsInCss 不误伤 camelCase 槽名 var(--fontSize) → @fontSize（exact-name）', () => {
+    const css = '.c { font-size: calc(var(--fontSize, 14px) * 0.857); }';
+    const out = healBusinessStyleVarsInCss(css, collectThemeSlotNames(tv));
+    expect(out).toContain('calc(@fontSize * 0.857)');
+  });
+
+  it('healBusinessStyleVarsInCss 槽位不存在的 var → 回退 fallback 字面量', () => {
+    const css = '.b { color: var(--color-success, rgba(8,163,165,1)); }';
+    const out = healBusinessStyleVarsInCss(css, collectThemeSlotNames(tv));
+    expect(out).toContain('color: rgba(8,163,165,1);');
+  });
+
+  it('healBusinessStyleVarsInCss 非 theme 槽位的 var（如局部 mixin 参数）回退 fallback 字面量', () => {
+    const css = '.d { padding: var(--gap, 8px); }';
+    const out = healBusinessStyleVarsInCss(css, collectThemeSlotNames(tv));
+    expect(out).toContain('padding: 8px;');
+    expect(out).not.toContain('var(--gap');
+  });
 })

@@ -335,6 +335,12 @@ export class LiteController {
       phase2Dto.target = componentType;
       phase2Dto.requirementDoc = dto.requirementDoc;
       phase2Dto.previewToken = dto.previewToken;
+      // 🛡️ 2026-09-30 治本：把 dto.panelType 传给 phase2Dto，否则 phase2.service 默认 'default-panel'
+      // → 微码工程师的 this._panelType = 'default-panel' → 写盘兜底判定为不需要替换
+      // → 选了 aio-panel 的组件产物仍是 <base-panel panelKey="default-panel">
+      // （mc-max-1790693261187-3426d7c3 实锤：任务元数据 panelKey=aio-panel，
+      //  但 phase2 链路 panelType 一直是 default-panel）
+      phase2Dto.panelType = dto.panelType;
       phase2Dto.config = dto.config as GeneratePhase2Dto['config'];
 
       // Phase 7：队列门控 —— Max 也要经过并发检查

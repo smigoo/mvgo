@@ -188,6 +188,49 @@ export function checkSectionContent({ files, plan, figmaRoot }) {
 }
 
 /**
+ * 取「错误签名」集合：剥离 `path:line:col ` 前缀后的错误消息集合。
+ *
+ * 🛡️ 2026-09-29 治本（流量监测 mc-max-1790657317082-67u1cdxz 实锤）：
+ * `validateVueSfc` 校验的是 SFC `<style>` 的**孤立文本**，**不解析 `@import`**，
+ * 因此凡直接用主题槽位变量的文件（`border: 1px solid @color-border-light`）一律被报
+ * `variable @color-border-light is undefined` → `valid:false`，尽管该槽位在
+ * `resources/styles/themes/theme-vars.less`（:28/:36/:48/:56/:68）里有定义。
+ * 旧判据「valid 才通过」于是把这类文件**所有**待删文本一并否决 →
+ * 本任务 5 条重复文本只自愈 3 条，漏掉用户最直观看到的「当日总流量」「24小时」。
+ * 实测铁证：删除前后错误集**完全一致**（见 __replay-validate.js）⇒ 是文件**预先存在**的问题。
+ * 传 `validateSfc` 判 true 时集合为空。
+ */
+function errorSignatures(validateSfc, content, filePath) {
+  try {
+    const r = validateSfc(content, filePath)
+    if (!r || r.valid) return new Set()
+    return new Set(
+      (r.errors || []).map((e) =>
+        String(e)
+          // 去掉 `path:line:col ` 前缀：删除会改变行号，直接比对会把既有错误误判为新增
+          .replace(/^\S*?:\d+:\d+\s*/, '')
+          .trim(),
+      ),
+    )
+  } catch {
+    return new Set(['__validate_threw__'])
+  }
+}
+
+/**
+ * 差分判据：删除是否**引入新错误**。
+ * 只把「本次删除新增的错误」视为改坏 —— 既拦住真改坏（原本 valid → 变 invalid 时为新增），
+ * 又不再被文件**预先存在**的（含 validateVueSfc 对 @import 不感知造成的误报）问题误伤。
+ */
+function introducesNewErrors(validateSfc, before, after, filePath) {
+  const b = errorSignatures(validateSfc, before, filePath)
+  for (const sig of errorSignatures(validateSfc, after, filePath)) {
+    if (!b.has(sig)) return true
+  }
+  return false
+}
+
+/**
  * 🛡️ 阶段 C（2026-09-15 · 序 5）：内容守卫分级——高置信自愈。
  *
  * 从 checkSectionContent 的 duplicateTextIssues 里挑「高置信」条目做确定性自愈：
@@ -200,13 +243,15 @@ export function checkSectionContent({ files, plan, figmaRoot }) {
  *   - 只在「模板里找到该文本的**独立静态文本节点**」时删除（`>…text…<` 且无其它语义文本），
  *     绝不裸 split/join 字符串（会误删 script 数据字段、chart 配置、注释）。
  *   - owner 组件不在 renderedIn 里（无法确定谁是错装）→ 跳过，不猜。
- *   - 删除后校验 SFC 语法，非法则回退（fail-closed，宁可漏删不可删坏）。
+ *   - 🛡️ 2026-09-29 修订：SFC 校验改为**差分判据**（只拦「删除引入的新错误」）。
+ *     旧判据是整体 `valid`，会被文件预先存在的问题（尤其 validateVueSfc 对 `@import`
+ *     不感知造成的 `@color-* is undefined` 误报）整体否决 ⇒ 自愈静默失效。
  *
  * @param {object} params
  * @param {Array<{path:string, content:string}>} params.files 产物文件（package/components/*.vue）
  * @param {object} params.plan subComponentPlan（含 effectiveSections）
  * @param {object} params.figmaRoot figmaNodeData（document 树）
- * @param {Function} [params.validateSfc] 可选 SFC 语法校验（content, path）=> {valid}
+ * @param {Function} [params.validateSfc] 可选 SFC 语法校验（content, path）=> {valid, errors}
  * @returns {{files:Array, healed:Array<{text:string, removedFrom:Array<string>}>}}
  */
 export function healDuplicateTextIssues({ files, plan, figmaRoot, validateSfc }) {
@@ -243,9 +288,8 @@ export function healDuplicateTextIssues({ files, plan, figmaRoot, validateSfc })
       const text = String(issue.text);
       const cleaned = removeStaticTextNode(rec.content, text);
       if (cleaned === null) continue; // 未找到可安全删除的静态文本节点
-      if (validateSfc) {
-        const r = validateSfc(cleaned, wrongPath);
-        if (!r?.valid) continue; // 删坏 → 回退
+      if (validateSfc && introducesNewErrors(validateSfc, rec.content, cleaned, wrongPath)) {
+        continue; // 删除**引入新错误** → 回退（预先存在的问题不再否决）
       }
       rec.content = cleaned;
       removedFrom.push(wrongPath);
@@ -287,6 +331,354 @@ function removeStaticTextNode(content, text) {
     out = out.slice(0, m.index) + '><' + out.slice(m.index + m[0].length);
   }
   return out === content ? null : out;
+}
+
+/**
+ * 收集 section 子树内的全部 figma 节点 id（含 sourceNodeIds 自身）。
+ * 与 collectSubtreeTexts 同源遍历（同一 childrenOf / index），保证口径一致。
+ */
+function collectSubtreeNodeIds(section, index, childrenOf) {
+  const out = new Set();
+  const walk = (id) => {
+    const key = String(id);
+    if (out.has(key)) return;
+    if (!index.has(key)) return;
+    out.add(key);
+    for (const c of childrenOf?.get(key) || []) walk(c);
+  };
+  for (const id of Array.isArray(section?.sourceNodeIds) ? section.sourceNodeIds : []) {
+    walk(id);
+  }
+  return out;
+}
+
+function intersects(a, b) {
+  if (!a || !b || a.size === 0 || b.size === 0) return false;
+  const [small, large] = a.size <= b.size ? [a, b] : [b, a];
+  for (const v of small) if (large.has(v)) return true;
+  return false;
+}
+
+/** small 是否为 large 的真子集（用于甄别「容器归属 ⊃ 叶子归属」）。 */
+function isProperSubset(small, large) {
+  if (!small || !large) return false;
+  if (small.size >= large.size) return false;
+  for (const v of small) if (!large.has(v)) return false;
+  return true;
+}
+
+/** 仅取 `package/components/*.vue` 产物文件（守卫/真值覆盖/自愈共用同一过滤口径）。 */
+function vueComponentFiles(files) {
+  if (!Array.isArray(files)) return [];
+  return files.filter(
+    (f) =>
+      typeof f?.path === 'string' &&
+      /package\/components\/[^/]+\.vue$/.test(f.path) &&
+      typeof f.content === 'string',
+  );
+}
+
+/**
+ * 剥离注释后的全文语料（供真值覆盖判定使用）。
+ *
+ * ⚠️ 为什么不用 `extractRenderedText`：它只收「模板静态文本 + script 里 `label|name|text|title:`
+ * 对象字段」，**不收 `data: [...]` 数组元素**。真机实锤（c-traffic-monitor-141b6689 的
+ * `ChartCharts.vue`）：图表自己的轴标签写在 `xAxis.data: ['2小时前', …]`（收不到 → 判「真值 0 命中」），
+ * 而 `series.name: '实际流量'`（收得到）恰好属邻居 section → 被判「装了别人的」⇒ 假 BLOCK。
+ *
+ * 因此本函数按「**真值命中放宽、外来取证收紧**」的不对称口径：
+ *   · 真值命中：用全文（剥注释）——尽量承认「内容确实在文件里」，避免误阻断；
+ *   · 外来证据：仍用 `extractRenderedText`（会渲染到界面者）——避免注释里的邻居名字造成误阻断。
+ * 两侧都朝「少阻断」方向偏，宁可漏判也不误杀。
+ */
+function stripCommentCorpus(content) {
+  return String(content || '')
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/^[ \t]*\/\/[^\n]*/gm, ' ');
+}
+
+/**
+ * 🎯 2026-09-29 治本·单一事实源：section 证据上下文。
+ *
+ * 供 `checkSectionExclusiveEvidence` / `checkSectionTruthCoverage`
+ * 两处共用。本仓已知缺陷模式「同一事实两处各自计算 → 后置门禁只修一侧必失配」，故只算一次。
+ *
+ * @returns {null | {
+ *   index: Map, childrenOf: Map, sections: Array,
+ *   subIds: Map<string, Set<string>>,          // sectionId → 子树节点 id 集合
+ *   subTexts: Map<string, Set<string>>,        // sectionId → 子树文本集合
+ *   textOwner: Map<string, string>,            // 文本 → 唯一归属 sectionId（**最小**归属）
+ *   sectionByComponent: Map<string, string>,   // 组件名 → sectionId
+ * }}
+ */
+function buildSectionEvidenceCtx({ plan, figmaRoot }) {
+  if (!plan || !Array.isArray(plan.effectiveSections)) return null;
+  const index = indexFigmaNodes(figmaRoot);
+  if (index.size === 0) return null;
+  const childrenOf = buildChildrenMap(index);
+  const sections = collectSections(plan.effectiveSections);
+
+  // section id → 子树节点 id 集合 / 子树文本集合（单次遍历，供各规则共用）
+  // ⚠️ 借用判据用 MIN_SIG_LEN（=2）而非 MIN_DUP_LEN（=4）：「客车」这类 2 字标签正是
+  //    真机被搬走的证据，4 字门限会漏。误伤由「唯一归属 + 子树无交叠」两道约束压制。
+  const subIds = new Map();
+  const subTexts = new Map();
+  for (const sec of sections) {
+    const sid = String(sec.id);
+    subIds.set(sid, collectSubtreeNodeIds(sec, index, childrenOf));
+    const texts = new Set();
+    for (const id of Array.isArray(sec.sourceNodeIds) ? sec.sourceNodeIds : []) {
+      for (const item of collectSubtreeTexts(String(id), index, childrenOf)) {
+        if (item.text.length >= MIN_SIG_LEN) texts.add(item.text);
+      }
+    }
+    subTexts.set(sid, texts);
+  }
+
+  // 文本 → 唯一归属 section。
+  // ⚠️ 必须取**最小归属**：容器 section 的子树天然包含其叶子 section 的子树，同一文本会同时
+  //    出现在容器与叶子的 subTexts 里。若按「>1 即歧义」处理，几乎所有业务文本都会被误判为
+  //    共有而漏报（真机实锤：`客车` 同时属 2:3438 容器与 2:3444 叶子 → 旧逻辑直接丢弃）。
+  //    正解：丢弃「子树真包含另一个归属」的容器，只留最小者；仍有 ≥2 个极小归属才是真共有（图例类）。
+  const ownersByText = new Map(); // text -> Set<sid>
+  for (const sec of sections) {
+    const sid = String(sec.id);
+    for (const t of subTexts.get(sid)) {
+      if (!ownersByText.has(t)) ownersByText.set(t, new Set());
+      ownersByText.get(t).add(sid);
+    }
+  }
+  const textOwner = new Map();
+  for (const [t, owners] of ownersByText) {
+    if (owners.size === 1) {
+      textOwner.set(t, [...owners][0]);
+      continue;
+    }
+    const arr = [...owners];
+    const minimal = arr.filter(
+      (a) => !arr.some((b) => b !== a && isProperSubset(subIds.get(b), subIds.get(a))),
+    );
+    if (minimal.length === 1) textOwner.set(t, minimal[0]);
+  }
+
+  // 组件名 → section（assignSectionComponentNames 只给叶子 section 命名）
+  let nameOf;
+  try {
+    nameOf = assignSectionComponentNames(plan.effectiveSections);
+  } catch {
+    return null;
+  }
+  const sectionByComponent = new Map();
+  for (const [sid, name] of nameOf) {
+    if (name) sectionByComponent.set(String(name), String(sid));
+  }
+  if (sectionByComponent.size === 0) return null;
+
+  return { index, childrenOf, sections, subIds, subTexts, textOwner, sectionByComponent };
+}
+
+/**
+ * 某文本是否可作为「真值文案」参与覆盖判定。
+ *
+ * 排除 Figma 图层名泄漏产生的纯 ASCII 单字母噪声（真机实锤：section `2:3446` 的真值集合是
+ * `t、d、江阴靖江长江隧道`，其中 `t`/`d` 是图层名不是文案）。必须排除：否则 `t` 会命中
+ * 产物里任意 `text`/`title` 字样 → 让「本该阻断」的组件误判为「已有真值文案」。
+ * 判据：含中文，或含数字（`82,379` / `24小时`）。
+ */
+function isMeaningfulTruthText(text) {
+  const t = String(text ?? '').trim();
+  if (!t) return false;
+  return /[\u4e00-\u9fa5]/.test(t) || /[0-9]/.test(t);
+}
+
+/**
+ * 🎯 2026-09-29 治本·阶段 D：section 证据独占性守卫 —— 「借邻居内容」的完整形态。
+ *
+ * 背景（用户质问：同一结果多处输出却不一致、布局与样式本应固定、不该由 LLM 自由发挥）：
+ * 已有 checkSectionContent 的 ② 只能抓「唯一归属文本被渲染在 ≥2 个组件」的**复制**形态；
+ * **搬迁**形态（只出现 1 次，但搬进了不属于它的组件）完全隐形 —— 而这正是真机最刺眼的缺陷。
+ *
+ * 真机实锤（c-traffic-monitor / mc-max-1790657317082-67u1cdxz）：
+ *   `2:3660` 是横向行，两个成员 `2:3680`（江阴大桥 / 82,379）、`2:3683`（34,620 /
+ *   江阴靖江长江隧道）在 Figma 里是**纯数字块**；但产物 `ContentSection.vue` 渲染了
+ *   `2:3438` 的车型分布卡 —— 背景图 `bg-_m-36.png`（其 figmaNodeId 属 2:3438 子树）、
+ *   `客车/22350`、echarts 环形图，**没有一项是 2:3680 子树的证据**。
+ *
+ * 判据（保守：只报「独占取证」的借用，宁漏不误伤）：
+ *   · 文本：文本 T 在**全部 section 子树**里只属于某一个 section O，O 与当前组件所属
+ *     section S 的子树**无交叠**（排除祖孙/兄弟重叠导致的合法共用），而 S 的组件却渲染了 T。
+ *   · 资源：组件 import 的 `resources/images/*` 能在 resourceDomMapping 解析到 figmaNodeId，
+ *     且该节点不在 S 子树内。
+ *
+ * 不判（无法确定性取证，判必误伤）：echarts 幻影图表 —— 本任务 visualAnalysis.charts 为空，
+ * 缺 per-section 图表证据；样式与布局由各自的独立轨负责。
+ *
+ * @param {object} params
+ * @param {Array<{path:string, content:string}>} params.files 产物文件（只分析 package/components/*.vue）
+ * @param {object} params.plan subComponentPlan（含 effectiveSections）
+ * @param {object} params.figmaRoot figmaNodeData（document 树）
+ * @param {Array} [params.resourceDomMapping] 资源-DOM 映射（含 figmaNodeId / resourceFile）
+ * @returns {{borrowedTextIssues: Array, borrowedAssetIssues: Array}}
+ */
+export function checkSectionExclusiveEvidence({ files, plan, figmaRoot, resourceDomMapping }) {
+  const result = { borrowedTextIssues: [], borrowedAssetIssues: [] };
+  if (!Array.isArray(files) || files.length === 0) return result;
+  if (!plan || !Array.isArray(plan.effectiveSections)) return result;
+
+  const index = indexFigmaNodes(figmaRoot);
+  if (index.size === 0) return result;
+
+  const vueFiles = vueComponentFiles(files);
+  if (vueFiles.length === 0) return result;
+
+  const ctx = buildSectionEvidenceCtx({ plan, figmaRoot });
+  if (!ctx) return result;
+  const { subIds, subTexts, textOwner, sectionByComponent } = ctx;
+
+  // 资源文件名 → figmaNodeId 集合
+  // ⚠️ 必须收**多节点**：去重复用（deduplicatedFrom）会让同一个图片文件同时挂在多个 Figma
+  //    节点上（真机实锤：`icon-3561.png` 同时是 2:3561 与 2:3441 的图标）。若首命中定归属，
+  //    属于 2:3441 的组件会被误判为借用 2:3561。判定改为「任一归属节点在 S 子树内即合法」。
+  const assetNodesByName = new Map();
+  for (const m of Array.isArray(resourceDomMapping) ? resourceDomMapping : []) {
+    const file = m?.resourceFile || m?.fileName || m?.filename;
+    const nodeId = m?.figmaNodeId || m?.nodeId;
+    if (!file || !nodeId) continue;
+    const base = String(file).split('/').pop();
+    if (!base) continue;
+    if (!assetNodesByName.has(base)) assetNodesByName.set(base, new Set());
+    assetNodesByName.get(base).add(String(nodeId));
+  }
+
+  for (const f of vueFiles) {
+    const name = f.path.slice(f.path.lastIndexOf('/') + 1, -'.vue'.length);
+    const sid = sectionByComponent.get(name);
+    if (!sid) continue;
+    const own = subIds.get(sid);
+    if (!own) continue;
+    const ownTexts = subTexts.get(sid) || new Set();
+    const renderedText = extractRenderedText(f.content);
+
+    // ── ① 借用文本 ──
+    for (const [text, ownerId] of textOwner) {
+      if (ownerId === sid) continue;
+      if (ownTexts.has(text)) continue; // S 子树自己也有 → 合法
+      if (!renderedText.includes(text)) continue;
+      const ownerSub = subIds.get(ownerId);
+      if (intersects(own, ownerSub)) continue; // 祖孙/兄弟重叠 → 合法共用
+      result.borrowedTextIssues.push({
+        file: f.path,
+        sectionId: sid,
+        text,
+        ownerSection: ownerId,
+        hint: `文本「${text}」只归属 section ${ownerId}（Figma 子树真值），却被 ${sid} 的组件渲染`,
+      });
+    }
+
+    // ── ② 借用资源 ──
+    const refs = new Set();
+    const rx = /resources\/images\/([^'"\s)]+)/g;
+    let m;
+    while ((m = rx.exec(f.content)) !== null) refs.add(m[1]);
+    for (const base of refs) {
+      const nodeIds = assetNodesByName.get(base);
+      if (!nodeIds || nodeIds.size === 0) continue; // 不可解析归属 → 不判
+      const nodeList = [...nodeIds];
+      if (nodeList.some((id) => own.has(id))) continue; // 任一归属节点在本 section 子树 → 合法
+      result.borrowedAssetIssues.push({
+        file: f.path,
+        sectionId: sid,
+        resource: base,
+        resourceNodeId: nodeList[0],
+        ownerNodeIds: nodeList,
+        hint: `资源「${base}」（Figma 节点 ${nodeList.join(' / ')}）不属于 section ${sid} 的子树，属借用`,
+      });
+    }
+  }
+
+  return result;
+}
+
+/**
+ * 🎯 2026-09-29 治本·A：section 真值文案覆盖守卫（缺失即阻断）。
+ *
+ * 与 `checkSectionExclusiveEvidence`（管「多渲染了别人的」）互补，本函数管
+ * **「自己的一个都没渲染」**——真机最刺眼的形态是「组件骨架挂对了 section，内容却整段搬了邻居」，
+ * B-1 把邻居的内容删干净之后，这个组件就彻底空了；此时**必须阻断**，否则发布出去是个空白模块。
+ *
+ * 真机实锤（c-traffic-monitor / mc-max-1790657317082-67u1cdxz）：
+ *   `HeaderSection.vue` 骨架挂在 section `2:3550`（真值 = `流量监测`、`*数据实时更新`），
+ *   实际渲染的却是 `88:32` 的 `当日总流量`、`24小时`（与 `HeaderSub.vue` 重复）——
+ *   自己 section 的真值文案 **0 个命中**，外来文案 2 个。
+ *
+ * 判据（三道全中才报，宁漏不误伤）：
+ *   ① 组件名经 `assignSectionComponentNames` 确定性绑定到 section S；
+ *   ② S 的**有意义**真值文案集合非空（见 isMeaningfulTruthText），且在产物**全文**（剥注释）中
+ *      **无一**出现 —— 真值命中放宽到全文，是为了承认图表把轴标签写在 `data: [...]` 里；
+ *   ③ 该组件同时渲染了 ≥1 个**只属于别的 section** 的文案（按「会渲染到界面」的 `extractRenderedText`
+ *      取证，不看注释）——即「装错了」而非「内容不全」。
+ *
+ * 为什么必须加条件③：不加就变成「内容不完整就阻断」——与本函数要治的缺陷不是一件事，
+ * 且会与既有覆盖类门禁（COMP-001 / TEXT-TRUTH）重叠、把重试预算烧在不可达成的条件上。
+ *
+ * 修复方式（不做自动补齐，危险）：交由调用方 BLOCK + 重试，让模型按 C 贴进 prompt 的
+ *   「本节真值文案」重写内容。缺失内容**绝不由本模块猜测落点硬插**。
+ *
+ * @returns {Array<{
+ *   file:string, sectionId:string, truthTexts:string[], foreignTexts:string[]
+ * }>}
+ */
+export function checkSectionTruthCoverage({ files, plan, figmaRoot }) {
+  const issues = [];
+  if (!Array.isArray(files) || files.length === 0) return issues;
+  if (!plan || !Array.isArray(plan.effectiveSections)) return issues;
+
+  const ctx = buildSectionEvidenceCtx({ plan, figmaRoot });
+  if (!ctx) return issues;
+  const { subIds, subTexts, textOwner, sectionByComponent } = ctx;
+
+  for (const f of vueComponentFiles(files)) {
+    const name = f.path.slice(f.path.lastIndexOf('/') + 1, -'.vue'.length);
+    const sid = sectionByComponent.get(name);
+    if (!sid) continue;
+    const own = subIds.get(sid);
+    if (!own) continue;
+
+    const truthTexts = [...(subTexts.get(sid) || new Set())].filter(isMeaningfulTruthText);
+    if (truthTexts.length === 0) continue; // 该 section 本就无文案真值 → 不判
+
+    // 真值命中：放宽到「剥注释后的全文」（含 script 的 data 数组），避免图表类假 BLOCK
+    const truthCorpus = stripCommentCorpus(f.content);
+    if (truthTexts.some((t) => truthCorpus.includes(t))) continue; // 自己的内容在
+
+    // 外来证据：收紧到「会渲染到界面的文本」（模板静态文本 + script 对象字段值），
+    // 且**按渲染片段精确相等**匹配（不用 includes）——
+    // 真机实锤的两类子串假阳性：`设备监控` 命中邻居的 `监控`（实为 TEXT-TRUTH 的 OCR 错字问题）、
+    // `34,620` 命中邻居的 `20`（数值子串）。都不是「装错内容」，不该由本规则阻断。
+    const renderedSegments = new Set(
+      extractRenderedText(f.content).split(/\s+/).filter(Boolean),
+    );
+    const ownTexts = subTexts.get(sid) || new Set();
+    const foreignTexts = [];
+    for (const [text, ownerId] of textOwner) {
+      if (ownerId === sid) continue;
+      if (ownTexts.has(text)) continue;
+      if (!renderedSegments.has(text)) continue;
+      if (intersects(own, subIds.get(ownerId))) continue;
+      foreignTexts.push(text);
+    }
+    if (foreignTexts.length === 0) continue; // 只是内容不全 → 交给覆盖类门禁，不在此阻断
+
+    issues.push({
+      file: f.path,
+      sectionId: sid,
+      truthTexts,
+      foreignTexts,
+    });
+  }
+
+  return issues;
 }
 
 /**

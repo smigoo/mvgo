@@ -710,7 +710,13 @@ export class FigmaConnector {
           if (result.status === 'fulfilled') {
             assets.push(result.value);
             // 记录下载结果供去重复用
-            if (signature) {
+            // 🛡️ 2026-09-29 治本（mc-1790667029984-86d05609 实锤）：**只有下载成功**的结果
+            //   才能作为去重锚点。原实现无条件 set，而 `_downloadImageFromUrl` 失败时也是
+            //   resolve（status 仍为 fulfilled）⇒ 失败项被当成可用锚点 ⇒ 下游拿到
+            //   `localPath: null` 却记成 `deduplicated`（真机 11 个 bg 全部
+            //   `deduplicatedFrom: 2:8439`，而 2:8439 本身即 missing）⇒ **1 个失败被放大成 12 个**。
+            //   这里与下方 `!sourceResult.downloaded` 构成双保险。
+            if (signature && result.value?.downloaded) {
               downloadResults.set(signature, result.value);
             }
           } else {
@@ -725,7 +731,10 @@ export class FigmaConnector {
       for (const [sig, group] of sigGroups) {
         if (group.duplicates.length === 0) continue;
         const sourceResult = downloadResults.get(sig);
-        if (!sourceResult) continue; // 首个下载也失败了，跳过
+        // 🛡️ 2026-09-29：锚点必须存在**且下载成功**（原判据只看存在性，而失败项也曾被写进
+        //   `downloadResults` ⇒ 判据失效）。锚点失败时直接跳过，不再生成 `localPath` 为 null
+        //   的 `deduplicated` 条目 —— 那不解决问题，只会让下游误判「该资源有归属、只是复用了」。
+        if (!sourceResult || !sourceResult.downloaded) continue;
 
         for (const dupNode of group.duplicates) {
           cssAssets.push({
@@ -1351,98 +1360,157 @@ export class FigmaConnector {
     options = {},
   ) {
     const { format = 'png' } = options;
-    const controller = new AbortController();
-    const timeoutMs = 120000;
-    const timeoutHandle = setTimeout(() => {
-      logger.warn('下载图片超时，强制中断', { nodeId, nodeName, timeoutMs });
-      controller.abort();
-    }, timeoutMs);
 
-    try {
-      logger.debug('开始下载图片', { nodeName, nodeId });
+    // 🛡️ 2026-09-29 治本（mc-1790667029984-86d05609 实锤）：
+    //   Figma 图片 CDN（S3 签名 URL）在 10 路并发下会**重置连接**（`read ECONNRESET`，
+    //   真机集中在开始下载后 1.5~3.5s 内爆发 13 条）。原实现有两处叠加缺陷：
+    //     ① 本函数**完全没有重试** —— 网络抖动一次即永久放弃；
+    //     ② `isNetworkError` 白名单**漏掉 ECONNRESET**（只有 ECONNREFUSED / ETIMEDOUT /
+    //        ENOTFOUND / timeout）⇒ ECONNRESET 落入 else 分支，只记一条 ERROR 就返回
+    //        `downloaded:false` ⇒ `downloadStatus:"missing"` ⇒ 下游按 fallbackHint
+    //        改用 CSS 纯色 ⇒ 图标全部退化成蓝圆（本次丢 13 个，其中 `2:8439` 还是
+    //        11 个 bg 的去重锚点 ⇒ 级联 12 个位置同时无资源）。
+    //   修法：瞬时网络错误（含 ECONNRESET / EPIPE / EAI_AGAIN 等）**指数退避重试**；
+    //   永久错误（4xx 等）不重试；**超时语义保持不变**（超时即中断、不重试，
+    //   避免把 120s × N 的等待叠加进整体预算）。
+    const TRANSIENT_ERROR_CODES = new Set([
+      'ECONNRESET',
+      'ECONNREFUSED',
+      'ETIMEDOUT',
+      'ENOTFOUND',
+      'EAI_AGAIN',
+      'EPIPE',
+      'ECONNABORTED',
+      'ERR_NETWORK',
+      'ERR_SOCKET_CONNECTION_TIMEOUT',
+    ]);
+    const isTransientError = (err) => {
+      if (!err) return false;
+      if (TRANSIENT_ERROR_CODES.has(err.code)) return true;
+      const msg = String(err.message || '');
+      return (
+        msg.includes('socket hang up') ||
+        msg.includes('ECONNRESET') ||
+        msg.includes('数据为空')
+      );
+    };
+    const MAX_ATTEMPTS = 3;
+    let isNetworkError = false;
+    let lastErrorMessage = '';
 
-      const imageResponse = await axios.get(imageUrl, {
-        responseType: 'arraybuffer',
-        timeout: timeoutMs,
-        maxContentLength: Infinity,
-        maxBodyLength: Infinity,
-        signal: controller.signal,
-        ...(this.proxyAgent && { httpsAgent: this.proxyAgent }),
-      });
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const controller = new AbortController();
+      const timeoutMs = 120000;
+      const timeoutHandle = setTimeout(() => {
+        logger.warn('下载图片超时，强制中断', { nodeId, nodeName, timeoutMs });
+        controller.abort();
+      }, timeoutMs);
 
-      if (!imageResponse.data || imageResponse.data.byteLength === 0) {
-        throw new Error('下载的图片数据为空');
-      }
+      try {
+        logger.debug('开始下载图片', { nodeName, nodeId, attempt });
 
-      // 生成安全的文件名
-      const safeName =
-        this.sanitizeFilename(nodeName) || `asset_${nodeId.replace(/:/g, '_')}`;
-      const apiNodeId = nodeId.replace(/-/g, ':');
-      const nodeIdSuffix = apiNodeId.split(':')[1] || apiNodeId;
-      const fileName = `${safeName}-${nodeIdSuffix}.${format}`;
-      const localPath = join(outputDir, fileName);
-
-      // 确保目录存在
-      const dir = dirname(localPath);
-      if (!existsSync(dir)) {
-        mkdirSync(dir, { recursive: true });
-      }
-
-      // 保存文件
-      writeFileSync(localPath, imageResponse.data);
-
-      logger.info('✅ 图片下载成功', {
-        nodeName,
-        fileName,
-        size: `${(imageResponse.data.byteLength / 1024).toFixed(1)}KB`,
-      });
-
-      return {
-        name: nodeName,
-        ref: nodeId,
-        localPath,
-        fileName,
-        format,
-        size: imageResponse.data.byteLength,
-        downloaded: true,
-      };
-    } catch (error) {
-      if (error.name === 'CanceledError' || error.code === 'ABORTED') {
-        logger.error('下载图片超时被强制中断', { nodeId, nodeName, timeoutMs });
-        throw new Error(`下载图片超时（${timeoutMs}ms）`);
-      }
-
-      const isNetworkError =
-        error.code === 'ECONNREFUSED' ||
-        error.code === 'ETIMEDOUT' ||
-        error.code === 'ENOTFOUND' ||
-        error.message?.includes('timeout');
-
-      if (isNetworkError) {
-        logger.warn('图片下载网络错误（将跳过此资源）', {
-          nodeName,
-          nodeId,
-          error: error.message,
+        const imageResponse = await axios.get(imageUrl, {
+          responseType: 'arraybuffer',
+          timeout: timeoutMs,
+          maxContentLength: Infinity,
+          maxBodyLength: Infinity,
+          signal: controller.signal,
+          ...(this.proxyAgent && { httpsAgent: this.proxyAgent }),
         });
-      } else {
-        logger.error('图片下载失败', {
-          nodeName,
-          nodeId,
-          error: error.message,
-        });
-      }
 
-      return {
-        name: nodeName,
-        ref: nodeId,
-        localPath: null,
-        downloaded: false,
-        error: error.message,
-        isNetworkError,
-      };
-    } finally {
-      clearTimeout(timeoutHandle);
+        if (!imageResponse.data || imageResponse.data.byteLength === 0) {
+          throw new Error('下载的图片数据为空');
+        }
+
+        // 生成安全的文件名
+        const safeName =
+          this.sanitizeFilename(nodeName) || `asset_${nodeId.replace(/:/g, '_')}`;
+        const apiNodeId = nodeId.replace(/-/g, ':');
+        const nodeIdSuffix = apiNodeId.split(':')[1] || apiNodeId;
+        const fileName = `${safeName}-${nodeIdSuffix}.${format}`;
+        const localPath = join(outputDir, fileName);
+
+        // 确保目录存在
+        const dir = dirname(localPath);
+        if (!existsSync(dir)) {
+          mkdirSync(dir, { recursive: true });
+        }
+
+        // 保存文件
+        writeFileSync(localPath, imageResponse.data);
+
+        logger.info('✅ 图片下载成功', {
+          nodeName,
+          fileName,
+          size: `${(imageResponse.data.byteLength / 1024).toFixed(1)}KB`,
+          ...(attempt > 1 && { attempt }),
+        });
+
+        return {
+          name: nodeName,
+          ref: nodeId,
+          localPath,
+          fileName,
+          format,
+          size: imageResponse.data.byteLength,
+          downloaded: true,
+        };
+      } catch (error) {
+        lastErrorMessage = error?.message || String(error);
+
+        const aborted =
+          error.name === 'CanceledError' ||
+          error.code === 'ABORTED' ||
+          error.code === 'ERR_CANCELED';
+        if (aborted) {
+          logger.error('下载图片超时被强制中断', { nodeId, nodeName, timeoutMs });
+          throw new Error(`下载图片超时（${timeoutMs}ms）`);
+        }
+
+        isNetworkError = isTransientError(error);
+        if (isNetworkError && attempt < MAX_ATTEMPTS) {
+          const backoffMs = 400 * 2 ** (attempt - 1) + Math.floor(Math.random() * 200);
+          logger.warn('图片下载瞬时错误，退避后重试', {
+            nodeName,
+            nodeId,
+            attempt,
+            maxAttempts: MAX_ATTEMPTS,
+            backoffMs,
+            error: lastErrorMessage,
+          });
+          await new Promise((resolve) => setTimeout(resolve, backoffMs));
+          continue;
+        }
+
+        if (isNetworkError) {
+          logger.warn('图片下载网络错误（重试已用尽，跳过此资源）', {
+            nodeName,
+            nodeId,
+            attempts: attempt,
+            error: lastErrorMessage,
+          });
+        } else {
+          logger.error('图片下载失败', {
+            nodeName,
+            nodeId,
+            attempt,
+            error: lastErrorMessage,
+          });
+        }
+        break;
+      } finally {
+        clearTimeout(timeoutHandle);
+      }
     }
+
+    return {
+      name: nodeName,
+      ref: nodeId,
+      localPath: null,
+      downloaded: false,
+      error: lastErrorMessage,
+      isNetworkError,
+    };
   }
 
   /**
@@ -1810,13 +1878,23 @@ export class FigmaConnector {
       return { reproducible: false, css: null, reason: 'no-fills' };
     }
 
+    const isBg = this._identifyNodeType(node.name, node) === 'bg';
     const visibleFills = node.fills.filter((f) => f.visible !== false);
-    if (visibleFills.length === 0) {
+    // 🛡️ 2026-09-29（用户规则：bg 背景节点「不管样式」整体输出）：
+    //   设计稿常见 bg-[m] 是 BOOLEAN_OPERATION + fill 全 `visible:false`（视觉本应可见，整理时
+    //   可见性被误关）⇒ 旧逻辑判 no-visible-fills ⇒ 落 downloadStatus:missing ⇒ 主背景整块丢失
+    //   （实锤 mc-max-1790596804657-0cd050ce 的 bg-[m] `2:3436`：4 个 fill 全 visible:false）。
+    //   修法：bg 节点在「无可见 fill」时，回退用**全部非 IMAGE fill**（忽略 visible）生成 CSS 兜底。
+    const fillsToUse =
+      visibleFills.length === 0 && isBg
+        ? node.fills.filter((f) => f.type !== 'IMAGE')
+        : visibleFills;
+    if (fillsToUse.length === 0) {
       return { reproducible: false, css: null, reason: 'no-visible-fills' };
     }
 
     // 如果有 IMAGE fill，必须下载图片
-    if (visibleFills.some((f) => f.type === 'IMAGE')) {
+    if (fillsToUse.some((f) => f.type === 'IMAGE')) {
       return { reproducible: false, css: null, reason: 'has-image-fill' };
     }
 
@@ -1832,7 +1910,7 @@ export class FigmaConnector {
 
     // 只处理 SOLID 和 GRADIENT 类型
     const cssParts = [];
-    for (const fill of visibleFills) {
+    for (const fill of fillsToUse) {
       if (fill.type === 'SOLID' && fill.color) {
         const hex = this._rgbaToHex(fill.color, fill.opacity ?? 1);
         cssParts.push(hex);
@@ -2238,7 +2316,7 @@ export class FigmaConnector {
   _buildResourceDomMapping(nodeData, downloadedImages) {
     const mappings = [];
 
-    const traverse = (node, path = [], parentBox = null) => {
+    const traverse = (node, path = [], parentBox = null, parentId = null) => {
       if (!node) return;
 
       // 🛡️ 技术栈标记子树跳过（与 extractResourceNodes 下载阶段保持一致）：
@@ -2252,7 +2330,7 @@ export class FigmaConnector {
         const kids = Array.isArray(node.children) ? node.children : [];
         for (const k of kids) {
           if (this._isStackControlPart(k)) continue;
-          traverse(k, [...path, node.name], node.absoluteBoundingBox);
+          traverse(k, [...path, node.name], node.absoluteBoundingBox, node.id);
         }
         return;
       }
@@ -2341,13 +2419,25 @@ export class FigmaConnector {
         const mapping = {
           resourceFile: null,
           figmaNodeId: node.id,
+          // 🛡️ 2026-09-29 治本：资源归属 section 的**确定性锚** = 父节点 id（最近的 section 祖先）。
+          //   供 resource-manifest#annotateResourceOwnership 按 node id（而非 slot-* 名字）分派，
+          //   杜绝「LLM 在全量资源里按名字串用 → 跨 section 错绑」。
+          ownerSectionId: parentId || null,
           figmaPath: [...path, node.name].join('/'),
           name: node.name,
           figmaBox: node.absoluteBoundingBox,
           // 🎯 父容器 box（2026-08-25 背景精确还原）：用于计算背景相对偏移 + 判断是否平铺
           parentBox,
           usage: usageHint,
-          targetDomSelector: this._inferDomSelector(node),
+          targetDomSelector:
+            // 🛡️ 2026-09-29（用户规则：bg 归属 = 父元素，**确定性的**、不需要模型分析）：
+            //   bg 的挂载锚直接取「父节点的 data-section-id」（确定性模板已把 section id 写在容器
+            //   上），不再依赖 vision 猜的 .m-container/.bg-container。实锤 mc-max-1790613808872-24f163ab：
+            //   88:34(当日总流量蓝框) 的父 = Group 2136636802(2:3660)，产物容器带 data-section-id="2:3660"，
+            //   而旧 targetDomSelector=.m-container 对不上 ⇒ 背景没挂 ⇒ 蓝框丢失。
+            nodeType === 'bg' && parentId
+              ? `[data-section-id="${parentId}"]`
+              : this._inferDomSelector(node),
           targetDomHint: this._inferDomHint(node, path),
           previewAnalysisRole: nodeType,
           hint: `${this._semanticAncestor(path) || node.name} → ${this._inferDomHint(node, path)}`,
@@ -2393,7 +2483,7 @@ export class FigmaConnector {
 
       if (node.children) {
         node.children.forEach((child) =>
-          traverse(child, [...path, node.name], node.absoluteBoundingBox),
+          traverse(child, [...path, node.name], node.absoluteBoundingBox, node.id),
         );
       }
     };

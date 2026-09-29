@@ -334,7 +334,7 @@ export class AgentBuilderService {
       const { DynamicAgent } = await this.importDynamic(name);
       const inst = new DynamicAgent({
         model: def.model || undefined,
-        // 工具节点 skipLLM 无碍；LLM 节点走 BaseAgent 环境回退（TEXT_API_KEY 等）
+        // 工具节点 skipLLM 无碍；LLM 节点必须自带模型配置（🔒 env 兜底已拔除，每用户模型独有）
       });
       const out = await inst.execute({ ...(input || {}), onProgress: () => {} });
       return { ok: true, data: out };

@@ -222,7 +222,55 @@ function chromaOf(hex) {
  *   故叠加：明度带（排除近白 L>0.90 / 近黑 L<0.12）+ 绝对彩度 `(max-min)/255 >= 0.15`。
  *   对照：`#1990ff` L=0.55 彩度=0.90 ✅；`#f0f5ff` L=0.97 彩度=0.06 ❌。
  */
-function isVividColor(hex) {
+/**
+ * 交互语义节点名（用于主色候选的语义加权）。
+ * 只做「节点名」层面的确定性匹配，不依赖模型分析。
+ */
+const INTERACTIVE_NODE_RE =
+  /(btn|button|tab|link|active|select|switch|toggle|checkbox|radio|input|dropdown|menu|tag|chip|badge|按钮|选项卡|链接|切换|选中|激活)/i;
+
+/** 纯矢量图形类型：装饰性，不承载语义（零权重） */
+const DECOR_VECTOR_TYPES = new Set([
+  'VECTOR',
+  'ELLIPSE',
+  'LINE',
+  'STAR',
+  'POLYGON',
+  'BOOLEAN_OPERATION',
+]);
+
+/**
+ * 交互承载阈值：填充色承载分达到此值 ⇒ 视为「设计稿里明确的交互品牌色」。
+ * 与 `fillSemanticWeight` 的交互权重**同源**（单一出处，不得各写一份）。
+ */
+export const INTERACTIVE_SEMANTIC_THRESHOLD = 5;
+
+/**
+ * 填充色的「语义承载分」。
+ *
+ * 🛡️ 2026-09-29（c-traffic-monitor-209472ff 实锤）：主色此前**只按面积**选取，
+ *   导致大面积**装饰矢量**压过小面积**品牌/交互色**：
+ *     `#00cccc` 8 处全是装饰（VECTOR 325×50 / Ellipse 6×6 / 14×2 细线）→ 面积 16405
+ *     `#1990ff` 5 处全是语义（btn-active 背景 / 链接文字 / 标题图标底）→ 面积 3404
+ *   面积法选中 `#00cccc` ⇒ css-vars `colorPrimary` 是装饰青，而设计稿的按钮/链接
+ *   实为 `#1990ff` ⇒ 产物里所有 `var(--colorPrimary)` 引用（tab 激活态、链接）
+ *   一律渲染成装饰色。色值是可算的，不该让装饰矢量参与「品牌色」判定。
+ *
+ * 权重：**交互承载 = 5** · 结构容器填充 = 1 · 矢量装饰 = 0
+ *
+ * ⚠️ 刻意**不**把「文字出现频次」计入权重：实测图表 series 数字文本
+ *   （如 `825`/`831` 的 `#1588f8`）频次很高，会把**数据可视化色**抬成主色。
+ *   语义只认「交互控件」这一件事，其余退回面积次序。
+ */
+function fillSemanticWeight(node) {
+  if (!node) return 0;
+  const t = String(node.type || '').toUpperCase();
+  if (DECOR_VECTOR_TYPES.has(t)) return 0;
+  if (INTERACTIVE_NODE_RE.test(String(node.name || ''))) return INTERACTIVE_SEMANTIC_THRESHOLD;
+  return 1;
+}
+
+export function isVividColor(hex) {
   if (saturationOf(hex) < 0.15) return false;
   const l = lightnessOf(hex);
   if (l > 0.9 || l < 0.12) return false;
@@ -259,9 +307,10 @@ export function extractFigmaColorPalette(figmaNodeData) {
       if (isText) {
         textFreq.set(hex, (textFreq.get(hex) || 0) + 1);
       } else {
-        const cur = fillFreq.get(hex) || { count: 0, area: 0 };
+        const cur = fillFreq.get(hex) || { count: 0, area: 0, semantic: 0 };
         cur.count += 1;
         cur.area += area;
+        cur.semantic += fillSemanticWeight(node);
         fillFreq.set(hex, cur);
       }
     }
@@ -272,18 +321,36 @@ export function extractFigmaColorPalette(figmaNodeData) {
   const textColors = [...textFreq.entries()]
     .map(([hex, count]) => ({ hex, count }))
     .sort((a, b) => b.count - a.count);
+  // fillColors 保持**面积降序**（topBg = fillColors[0] 依赖「面积最大 = 背景」这一事实）
   const fillColors = [...fillFreq.entries()]
-    .map(([hex, v]) => ({ hex, count: v.count, area: v.area }))
+    .map(([hex, v]) => ({ hex, count: v.count, area: v.area, semantic: v.semantic || 0 }))
     .sort((a, b) => b.area - a.area);
 
   const topText = textColors[0]?.hex || null;
   const topBg = fillColors[0]?.hex || null;
 
-  // 主色：排除 topText/topBg/近中性色（饱和度 < 0.15）后最高频 fill 色
+  // 主色候选：排除 topText/topBg/近中性色（饱和度 < 0.15）
   const saturated = fillColors.filter(
     (f) => f.hex !== topText && f.hex !== topBg && isVividColor(f.hex),
   );
-  const topPrimary = saturated[0]?.hex || null;
+  // 🛡️ 主色选取 = **两级判定**（2026-09-29 · c-traffic-monitor-209472ff 实锤）
+  //
+  //   级别①「交互承载池」：存在承载分 ≥ 交互阈值的色（即确实有节点名匹配
+  //     btn/tab/link/active… 的元素被这个色填充）⇒ 只在池内按**面积**选。
+  //     例：#1990ff 同时填充 btn-active 背景 / 链接 / 标题图标底 ⇒ sem=8，胜出。
+  //   级别②「面积回退」：一个交互承载色都没有 ⇒ **完全沿用原面积法**（零回归）。
+  //
+  //   为什么不用「语义分直接排序」：实测 sem 只差 1 分（结构容器数之差）就会翻主色
+  //   （c-env-monitor / c-device-monitor 会把浅蓝装饰色 #a1ceff、#258dc8 选成主色）。
+  //   语义只用来**判定「设计稿里到底有没有明确的交互品牌色」**这一个布尔事实，
+  //   一旦有，池内仍以面积定序 —— 避免语义分噪声放大成主色抖动。
+  const interactivePool = saturated.filter(
+    (f) => (f.semantic || 0) >= INTERACTIVE_SEMANTIC_THRESHOLD,
+  );
+  const primaryPool = [...(interactivePool.length > 0 ? interactivePool : saturated)].sort(
+    (a, b) => b.area - a.area,
+  );
+  const topPrimary = primaryPool[0]?.hex || null;
   // 强调色：与主色色相差异 ≥ 30° 的次高频饱和色（可选）
   const primaryHsl = topPrimary ? rgbToHsl(...Object.values(hexToRgb(topPrimary))) : null;
   const topAccent =

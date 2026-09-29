@@ -254,27 +254,10 @@ ${catalog}
    * 调用 LLM（支持 OpenAI 兼容端点和 Anthropic）
    */
   private async callLLM(prompt: string, aiConfig?: any): Promise<string> {
-    const apiKey = (
-      aiConfig?.textApiKey ||
-      process.env.MC_GEN_TEXT_API_KEY ||
-      process.env.TEXT_API_KEY ||
-      process.env.ANTHROPIC_API_KEY ||
-      ''
-    ).trim();
-    const baseURL = (
-      aiConfig?.textBaseURL ||
-      process.env.MC_GEN_TEXT_ENDPOINT ||
-      process.env.TEXT_BASE_URL ||
-      process.env.ANTHROPIC_BASE_URL ||
-      ''
-    ).trim();
-    const model = (
-      aiConfig?.textModel ||
-      process.env.MC_GEN_TEXT_MODEL ||
-      process.env.TEXT_MODEL ||
-      process.env.ANTHROPIC_MODEL ||
-      ''
-    ).trim();
+    // 🔒 2026-09-29 env 兜底已拔除（每用户模型独有）：只认 DTO 传入的用户级配置
+    const apiKey = (aiConfig?.textApiKey || '').trim();
+    const baseURL = (aiConfig?.textBaseURL || '').trim();
+    const model = (aiConfig?.textModel || '').trim();
 
     if (!apiKey || !baseURL) {
       throw new BadRequestException(

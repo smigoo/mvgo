@@ -26,6 +26,86 @@ import { buildSnapshotFileUrl } from './preview-resolver'
 import http from '@/core/http'
 
 /**
+ * 预览「取源 / 加载器」失败的结构化标记 —— **单一事实源**。
+ *
+ * 为什么需要它（2026-09-29 实锤）：
+ *   预览页 `preview/index.vue#classifyLoadError` 原来只按 `e.message` 字符串分流，
+ *   而「传输层失败（fetch reject）」「加载器 chunk 取不到」「产物确实缺失（HTTP 404）」
+ *   三类**各自出错原因与修复动作完全不同**，却会被同一句
+ *   「组件资源加载失败（网络错误 / 404）」吞掉，用户与日志都拿不到线索。
+ *   这里把「失败性质」作为字段挂在 Error 上，由加载器（唯一的抛出方）标注、
+ *   由预览页（唯一的展示方）消费；**两侧都引用本常量，不各写一份字符串**。
+ */
+export const PREVIEW_FAIL_KIND = {
+  /** 取源请求传输层失败（连接被拒 / 被中断 / CORS）——可重试，属「网络」不属「产物」 */
+  SOURCE_NETWORK: 'source-network',
+  /** 取源服务返回 5xx（网关 / 后端重启窗口）——可重试，属「服务」不属「产物」 */
+  SOURCE_SERVER: 'source-server',
+  /** 加载器自身依赖 chunk 取不到（`Failed to fetch dynamically imported module`）——前端资源版本问题 */
+  LOADER_CHUNK: 'loader-chunk',
+}
+
+/** 给 Error 打上可判别标记（只附加字段，不改写 message 语义）。 */
+export function tagPreviewError(err, kind, extra = {}) {
+  if (err && typeof err === 'object') {
+    err.previewFailKind = kind
+    Object.assign(err, extra)
+  }
+  return err
+}
+
+/** 取源请求重试预算：1 次原始 + 2 次重试（幂等 GET，故可安全重试）。 */
+const SOURCE_FETCH_ATTEMPTS = 3
+/** 退避间隔（ms），与尝试序一一对应；超出则用最后一项。 */
+const SOURCE_FETCH_BACKOFF_MS = [200, 600]
+
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+/**
+ * 带「有限重试」的取源请求。
+ *
+ * 🛡️ 2026-09-29 治本（实测 `server.log` 17:11–18:11 主服务 `===== [start-node] =====` 重启 8+ 次；
+ *   重启窗口内同端点实测 500，稳定后 200）：
+ *   - 原来这里是一次裸 `http.raw` ⇒ **无重试**，后端重启 / 网络抖动一次即整页报错卡；
+ *   - 且抛出的错误**不带 URL** ⇒ 用户与日志都不知道是「哪个文件、哪个来源」失败（排查黑洞）。
+ *
+ * 判据分层（不做过度重试）：
+ *   - `fetch` reject（传输层）→ 重试；
+ *   - HTTP 5xx（网关 / 后端重启窗口）→ 重试，重试耗尽后**原样返回响应**由调用方判性质；
+ *   - HTTP 4xx（含 404）→ **确定性结论，不重试**，直接返回（保持既有「找不到文件」语义不变）。
+ *
+ * @param {string} url 已拼好的完整取源 URL（调用方负责 snapshot / workspace 分支）
+ * @returns {Promise<Response>} 成功响应，或重试耗尽后的最后一次 5xx 响应
+ * @throws {Error} 传输层重试耗尽时抛出，带 `previewFailKind = SOURCE_NETWORK` 与 `url`
+ */
+async function fetchSourceWithRetry(url) {
+  let lastError = null
+  let lastStatus = 0
+  for (let i = 0; i < SOURCE_FETCH_ATTEMPTS; i++) {
+    const isLast = i === SOURCE_FETCH_ATTEMPTS - 1
+    try {
+      const res = await http.raw(url)
+      if (res.ok || res.status < 500 || isLast) return res
+      lastStatus = res.status
+    } catch (e) {
+      lastError = e
+      if (isLast) break
+    }
+    // 退避：第 i 次失败后等待；越界则复用最后一项（最后一次尝试不会走到这里）
+    await delay(SOURCE_FETCH_BACKOFF_MS[Math.min(i, SOURCE_FETCH_BACKOFF_MS.length - 1)])
+  }
+  throw tagPreviewError(
+    new Error(
+      `取源请求失败（已重试 ${SOURCE_FETCH_ATTEMPTS} 次）：${url}｜原始错误：${
+        lastError?.message || lastError || `HTTP ${lastStatus}`
+      }`,
+    ),
+    PREVIEW_FAIL_KIND.SOURCE_NETWORK,
+    { url, attempts: SOURCE_FETCH_ATTEMPTS, lastStatus },
+  )
+}
+
+/**
  * 收集可能的 groupId 候选（不依赖 import.meta.glob 静态扫描）
  * @param {string} componentId
  * @param {string|null} explicitGroupId  路由/query 显式传入的 groupId（prod 用）
@@ -311,16 +391,33 @@ export async function loadVue3FromWorkspace(
     snapshotSource = null,
   } = {},
 ) {
-  const [{ loadModule }, Vue, echarts, requestRuntime, common, BasePanel, lessMod, antDesignVue] = await Promise.all([
-    import('vue3-sfc-loader'),
-    import('vue'),
-    import('echarts'),
-    import('microvideo-request'),
-    import('@/utils/auto-import/common.js'),
-    import('@/components/base-components/base-panel/index.vue'),
-    import('less'),
-    import('ant-design-vue'),
-  ])
+  // 🛡️ 2026-09-29 治本：这 8 个 `import()` 在**任何 try/catch 之前**，且 dev/prod 都走。
+  // 任一个 chunk 取不到（前端重新部署后浏览器仍持旧 index.html / Vite 依赖重优化 / 请求被中断）
+  // 会抛 `Failed to fetch dynamically imported module: <chunk url>`，被预览页统一归类成
+  // 「组件资源加载失败（网络错误 / 404）」——**与本次生成的组件完好与否毫无关系**，属前端资源版本问题。
+  // 这里显式标注为 LOADER_CHUNK，由预览页给出「强制刷新」文案，不再与「产物有问题」混用一句。
+  let loaderDeps
+  try {
+    loaderDeps = await Promise.all([
+      import('vue3-sfc-loader'),
+      import('vue'),
+      import('echarts'),
+      import('microvideo-request'),
+      import('@/utils/auto-import/common.js'),
+      import('@/components/base-components/base-panel/index.vue'),
+      import('less'),
+      import('ant-design-vue'),
+    ])
+  } catch (e) {
+    throw tagPreviewError(
+      new Error(
+        `预览加载器依赖加载失败（前端资源可能已更新或被中断，与组件产物无关）：${e?.message || e}`,
+      ),
+      PREVIEW_FAIL_KIND.LOADER_CHUNK,
+      { cause: e?.message || String(e) },
+    )
+  }
+  const [{ loadModule }, Vue, echarts, requestRuntime, common, BasePanel, lessMod, antDesignVue] = loaderDeps
   // 内置 less 编译器：用于把组件 <style lang="less"> 预编译成纯 CSS，
   // 避免 vue3-sfc-loader 走 getFile('less') 去拉 less 编译器（dev/prod 都没有该资源，会 404）。
   const less = lessMod.default || lessMod
@@ -526,8 +623,24 @@ export async function loadVue3FromWorkspace(
       const ext = extOf(rel)
       if (BINARY_EXTS.has(ext)) return ''
       // snapshot 通过固定 revision 文件接口读取；workspace 仍走原有来源。
-      const res = await http.raw(snapshotSource ? snapshotFileUrl(rel) : withCacheKey(`${base}/${rel}`))
-      if (!res.ok) throw new Error(`找不到文件: ${rel}`)
+      const sourceUrl = snapshotSource ? snapshotFileUrl(rel) : withCacheKey(`${base}/${rel}`)
+      // 🛡️ 2026-09-29 治本：走带「有限重试」的取源（传输层 reject / 5xx 重试，4xx 不重试），
+      // 并把失败 URL 带进错误信息。原实现为裸 http.raw，无重试且丢 URL。
+      const res = await fetchSourceWithRetry(sourceUrl)
+      if (!res.ok) {
+        // 5xx 是「服务/网关」问题，不是「文件不存在」——原来一律抛「找不到文件」会把
+        // 502（如 Nginx 把 /api/tasks/* 误转给 Java、或后端重启窗口）误报成
+        // 「组件文件缺失或路径不正确（groupId / componentId 不匹配）」，是既有误诊陷阱。
+        if (res.status >= 500) {
+          throw tagPreviewError(
+            new Error(`取源服务异常（HTTP ${res.status}）：${sourceUrl}`),
+            PREVIEW_FAIL_KIND.SOURCE_SERVER,
+            { url: sourceUrl, status: res.status },
+          )
+        }
+        // 4xx：确定性结论，保持既有「找不到文件: <rel>」原子串不变（classifyLoadError 依赖它）
+        throw new Error(`找不到文件: ${rel}`)
+      }
       let src = await res.text()
       // ── 修复 vue3-sfc-loader 不支持 import.meta 的根因 ──
       // vue3-sfc-loader 在「类 CommonJS」作用域中求值模块，组件源码里的

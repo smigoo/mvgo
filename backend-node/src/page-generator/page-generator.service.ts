@@ -8,6 +8,7 @@ import { existsSync, readFileSync } from 'fs';
 import { resolveFrontendWorkspace } from '../config/workspace.config';
 import { tempComponentsDir, customComponentsDir, vue3ComponentsDir, projectRoot } from '../config/backend-root';
 import { validateVueSfcDirectory } from '../ai-engine/utils/sfc-syntax-validation.js';
+import { AiConfigService } from '../config/config.service';
 
 @Injectable()
 export class PageGeneratorService {
@@ -17,6 +18,7 @@ export class PageGeneratorService {
     private readonly tasksService: TasksService,
     private readonly progressService: ProgressService,
     private readonly componentService: ComponentService,
+    private readonly aiConfigService: AiConfigService,
   ) {}
 
   /**
@@ -340,6 +342,21 @@ export class PageGeneratorService {
         userId,
       });
 
+      // 🛡️ 2026-09-29 重试链路接入用户模型池：与首次生成链路（phase2/lite/vue3）同构——
+      // getMergedAiConfig(userId) 取用户级配置，请求显式入参（config.apiKey/endpoint/model）优先覆盖。
+      // 此前只读部署级 env（FIGMA_ACCESS_TOKEN / ANTHROPIC_*），用户在「设置-模型配置」保存的
+      // 模型与 Figma token 在断点续跑时完全不生效。
+      const mergedAiConfig = userId
+        ? ((await this.aiConfigService.getMergedAiConfig(userId)) as Record<string, any>)
+        : {};
+      const visionCfg = resolveVisionConfig({ ...mergedAiConfig });
+      const textCfg = resolveTextConfig({
+        ...mergedAiConfig,
+        textApiKey: config?.apiKey || mergedAiConfig.textApiKey,
+        textBaseURL: config?.endpoint || mergedAiConfig.textBaseURL,
+        textModel: config?.model || mergedAiConfig.textModel,
+      });
+
       // 执行管线（传入 checkpoint 数据）
       const result = await runGeneration({
         componentName,
@@ -348,13 +365,13 @@ export class PageGeneratorService {
         outputPath: detectedOutputPath || join(tempComponentsDir, `retry-${retrySessionId}`, componentName),
         panelType: panelKey || 'aio-panel',
         target,
-        figmaToken: process.env.FIGMA_ACCESS_TOKEN,
-        visionAIConfig: resolveVisionConfig({}),
-        textAIConfig: resolveTextConfig({ textApiKey: config?.apiKey, textBaseURL: config?.endpoint, textModel: config?.model }),
+        figmaToken: mergedAiConfig.figmaToken || process.env.FIGMA_ACCESS_TOKEN,
+        visionAIConfig: visionCfg,
+        textAIConfig: textCfg,
         aiConfig: {
-          apiKey: config?.apiKey || process.env.ANTHROPIC_API_KEY,
-          baseURL: config?.endpoint || process.env.ANTHROPIC_BASE_URL,
-          model: config?.model || process.env.ANTHROPIC_MODEL,
+          apiKey: textCfg.apiKey,
+          baseURL: textCfg.baseURL,
+          model: textCfg.model,
         },
         sessionId: retrySessionId,
         // 🆕 断点续跑数据
@@ -475,9 +492,9 @@ export class PageGeneratorService {
         visionAIConfig: resolveVisionConfig(config),
         textAIConfig: resolveTextConfig(config),
         aiConfig: {
-          apiKey: config.aiApiKey || process.env.ANTHROPIC_API_KEY,
-          baseURL: config.aiBaseURL || process.env.ANTHROPIC_BASE_URL,
-          model: config.aiModel || process.env.ANTHROPIC_MODEL,
+          apiKey: config.aiApiKey,
+          baseURL: config.aiBaseURL,
+          model: config.aiModel,
         },
         onProgress: (data: any) => {
           // 推送组件级进度到子 session

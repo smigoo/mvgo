@@ -39,11 +39,13 @@ const VISION_TRUNCATION_RETRY_MAX_TOKENS = 32000;
 export class VisionAgent {
   constructor(config = {}) {
     this.model = config.model || VISION_DEFAULTS.model;
-    // temperature 归一化：推理类模型（kimi-k3/kimi-thinking/deepseek-reasoner/qwq/o1/o3 等）
-    // 服务端硬性 temperature=1，强制为 1；非推理模型尊重显式配置，未配置时保持原样。
+    // 🛡️ 视觉是结构化 JSON 抽取，必须确定性输出：未显式配置 temperature 时强制为 0。
+    // 否则 axios 不发送该字段 → 服务端用模型默认温度（qwen 系视觉默认 ~0.8）→ 同一张图
+    // 每次识别结果都不同（现象「每一次都变」）。推理模型被 normalizeRequestTemperature
+    // 强制为 1，但视觉角色不应使用推理模型（provider 池已过滤 thinkingType='skip'），故无副作用。
     this.temperature = normalizeRequestTemperature(
       this.model,
-      config.temperature,
+      config.temperature ?? 0,
     );
     this.maxTokens = getMaxTokens(
       this.model,

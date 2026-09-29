@@ -13,6 +13,7 @@ import {
 import { ProgressService } from '../progress/progress.service';
 import { TasksService } from '../tasks/tasks.service';
 import { Phase2Service } from '../phase2/phase2.service';
+import { AiConfigService } from '../config/config.service';
 
 @Injectable()
 export class WorkflowService {
@@ -25,6 +26,7 @@ export class WorkflowService {
     private readonly progressService: ProgressService,
     private readonly tasksService: TasksService,
     private readonly phase2Service: Phase2Service,
+    private readonly aiConfigService: AiConfigService,
   ) {
     // config/workflows目录
     this.workflowsDir = join(configDir, 'workflows');
@@ -404,6 +406,26 @@ export class WorkflowService {
       sourceType: 'figma',
     });
 
+    // 🛡️ 2026-09-29 自定义管链接入用户模型池：与 phase2/lite 同构——
+    // getMergedAiConfig(userId) 用户级优先，请求 config 显式字段覆盖；
+    // 并在此处 resolve 出完整 vision/text 配置对象（executeWorkflow 只认
+    // config.visionAIConfig / config.textAIConfig / config.aiConfig 嵌套对象字段）。
+    // 此前 config 原样透传且无任何 resolve/兜底，用户在「设置-模型配置」保存的
+    // 模型与 Figma token 在工作流链路完全不生效。
+    const userMerged = userId
+      ? ((await this.aiConfigService.getMergedAiConfig(userId)) as Record<string, any>)
+      : {};
+    const mergedConfig: Record<string, any> = { ...userMerged, ...config };
+    const aiDefaultsModule = await import('../ai-engine/utils/ai-defaults.js');
+    const { resolveVisionConfig, resolveTextConfig } = aiDefaultsModule;
+    mergedConfig.visionAIConfig = resolveVisionConfig(mergedConfig);
+    mergedConfig.textAIConfig = resolveTextConfig(mergedConfig);
+    mergedConfig.aiConfig = {
+      apiKey: mergedConfig.textAIConfig.apiKey,
+      baseURL: mergedConfig.textAIConfig.baseURL,
+      model: mergedConfig.textAIConfig.model,
+    };
+
     // 异步执行
     this.executeWorkflow(sessionId, workflow, {
       componentName: finalComponentName,
@@ -412,7 +434,7 @@ export class WorkflowService {
       inputs,
       outputPath,
       target: wfTarget,
-      config,
+      config: mergedConfig,
     }).catch((error) => {
       this.logger.error(`工作流执行失败: ${error.message}`, error.stack);
       this.progressService.sendError(sessionId, {

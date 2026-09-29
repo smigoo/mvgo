@@ -116,6 +116,11 @@ export function annotateResourceOwnership(mappings, options = {}) {
   const sectionPrefix = options.sectionPrefix || 'slot-'
   const re = new RegExp('^' + escapeRegex(sectionPrefix), 'i')
   return (Array.isArray(mappings) ? mappings : []).map((m) => {
+    // 🛡️ 2026-09-29 治本：优先用「父节点 id（ownerSectionId，确定性）」作归属锚，
+    //   不再依赖 figmaPath 的 slot-* 名字段（名字漂移 → 跨 section 串用资源）。
+    if (m && m.ownerSectionId) {
+      return withResourceOwner(m, 'section', String(m.ownerSectionId))
+    }
     const fp = m && m.figmaPath
     if (!fp) return withResourceOwner(m, 'unassigned', null)
     const sec = sectionKeyOf(fp, re)
@@ -341,7 +346,11 @@ export function scopedResourceDomMapping(resourceDomMapping, matchedSection) {
     return undefined
   }
   const manifest = buildResourceManifest(resourceDomMapping)
-  const sectionRes = resourcesForSection(manifest, matchedSection.title || matchedSection.id)
+  // 🛡️ 2026-09-29 治本：优先用 node id（确定性的 ownerSectionId 锚）匹配，name 仅作兜底。
+  const sectionRes = resourcesForSection(
+    manifest,
+    matchedSection.id || matchedSection.sourceNodeIds?.[0] || matchedSection.title,
+  )
   if (sectionRes.length > 0 && sectionRes.length < resourceDomMapping.length) {
     return sectionRes
   }
