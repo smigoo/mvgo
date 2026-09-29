@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>9/29 部署同步公告</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 780px;
+    background: #f0f2f5;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    color: #1a1a2e;
+  }
+  .card {
+    background: #fff;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 2px 20px rgba(0,0,0,0.08);
+  }
+
+  /* Header */
+  .header {
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #a855f7 100%);
+    padding: 32px 36px 28px;
+    color: #fff;
+    position: relative;
+    overflow: hidden;
+  }
+  .header::after {
+    content: '';
+    position: absolute;
+    top: -40px; right: -40px;
+    width: 160px; height: 160px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 50%;
+  }
+  .header-tag {
+    display: inline-block;
+    background: rgba(255,255,255,0.2);
+    backdrop-filter: blur(8px);
+    padding: 4px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    margin-bottom: 14px;
+  }
+  .header h1 {
+    font-size: 26px;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .header .subtitle {
+    font-size: 14px;
+    opacity: 0.85;
+  }
+
+  /* Sections */
+  .section {
+    padding: 24px 36px;
+    border-bottom: 1px solid #f0f0f0;
+  }
+  .section:last-child { border-bottom: none; }
+  .section-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 16px;
+    font-weight: 700;
+    color: #1a1a2e;
+    margin-bottom: 14px;
+  }
+  .section-title .icon {
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px;
+    flex-shrink: 0;
+  }
+  .icon-red { background: #fef2f2; color: #ef4444; }
+  .icon-green { background: #f0fdf4; color: #22c55e; }
+  .icon-blue { background: #eff6ff; color: #3b82f6; }
+  .icon-amber { background: #fffbeb; color: #f59e0b; }
+
+  .section p, .section li {
+    font-size: 14px;
+    line-height: 1.7;
+    color: #4a4a5a;
+  }
+  .section ul {
+    padding-left: 0;
+    list-style: none;
+  }
+  .section li {
+    position: relative;
+    padding-left: 18px;
+    margin-bottom: 6px;
+  }
+  .section li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 9px;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #c7d2fe;
+  }
+  .section li strong {
+    color: #1a1a2e;
+    font-weight: 600;
+  }
+  .arrow-text {
+    color: #6366f1;
+    font-weight: 600;
+  }
+
+  /* Screenshots */
+  .screenshots {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    padding: 20px 36px 24px;
+  }
+  .screenshot-item {
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #e5e7eb;
+    background: #fafafa;
+  }
+  .screenshot-item img {
+    width: 100%;
+    display: block;
+  }
+  .screenshot-label {
+    padding: 8px 12px;
+    font-size: 12px;
+    color: #6b7280;
+    font-weight: 500;
+    text-align: center;
+    background: #f9fafb;
+    border-top: 1px solid #f0f0f0;
+  }
+  .screenshots-wide {
+    grid-template-columns: 1fr;
+  }
+
+  /* Tips box */
+  .tips-box {
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    border-radius: 12px;
+    padding: 18px 22px;
+    margin: 0 36px 24px;
+  }
+  .tips-box .tips-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #92400e;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .tips-box li {
+    font-size: 13px;
+    color: #78350f;
+    line-height: 1.7;
+    list-style: none;
+    position: relative;
+    padding-left: 16px;
+    margin-bottom: 4px;
+  }
+  .tips-box li::before {
+    content: '•';
+    position: absolute;
+    left: 0;
+    color: #d97706;
+    font-weight: 700;
+  }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    padding: 20px 36px 28px;
+    font-size: 13px;
+    color: #9ca3af;
+  }
+  .footer .brand {
+    font-weight: 700;
+    color: #6366f1;
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <!-- Header -->
+  <div class="header">
+    <div class="header-tag">🚀 DEPLOYMENT SYNC</div>
+    <h1>9/29 部署同步</h1>
+    <div class="subtitle">本次部署时间超出预期，源于部署中复测发现的视觉识别缺陷，相关问题现已全部闭环</div>
+  </div>
+
+  <!-- Section 1 -->
+  <div class="section">
+    <div class="section-title">
+      <span class="icon icon-red">!</span>
+      一、此前生成失败的原因
+    </div>
+    <ul>
+      <li><strong>模型"思考模式"</strong>：深推理冗长，易超时 / 返回空内容</li>
+      <li><strong>视觉能力误判</strong>：非视觉模型被当作"支持视觉"，导致识别失败</li>
+    </ul>
+  </div>
+
+  <!-- Section 2 -->
+  <div class="section">
+    <div class="section-title">
+      <span class="icon icon-green">✓</span>
+      二、部署中新发现并修复的问题
+    </div>
+    <ul>
+      <li><strong>视觉识别检测逻辑</strong>：非视觉模型被误判为"支持视觉"<br><span class="arrow-text">→ 已修正</span>，用随机数字图验证模型是否真能看图识别，并补充能力白名单</li>
+      <li><strong>视觉识别稳定性</strong>：识别失败 / 降级无兜底<br><span class="arrow-text">→ 已补充</span>自动重试与降级提示</li>
+    </ul>
+  </div>
+
+  <!-- Screenshot: capability detection -->
+  <div class="screenshots" style="padding-top: 0;">
+    <div class="screenshot-item">
+      <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" alt="视觉能力检测" style="background: #f0f4ff; padding: 20px;">
+      <div class="screenshot-label">🔍 模型能力检测 — 视觉 / 文本 / 推理逐项验证</div>
+    </div>
+    <div class="screenshot-item">
+      <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" alt="深浅色面板" style="background: #f0f4ff; padding: 20px;">
+      <div class="screenshot-label"> 深浅色主题切换 — 实时预览两种模式</div>
+    </div>
+  </div>
+
+  <!-- Section 3 -->
+  <div class="section">
+    <div class="section-title">
+      <span class="icon icon-blue">✦</span>
+      三、新增工作台模式（对话式）测试入口
+    </div>
+    <ul>
+      <li>当前支持 <strong>Figma 链接</strong> 与 <strong>截图粘贴</strong> 两种方式生成组件</li>
+      <li>对话式交互，实时查看生成进度与代码产出</li>
+      <li>支持 Vue3 / 微码、Lite / Max 多种规格选择</li>
+    </ul>
+  </div>
+
+  <!-- Screenshot: workbench interface -->
+  <div class="screenshots screenshots-wide">
+    <div class="screenshot-item">
+      <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" alt="工作台界面" style="background: #f0f4ff; padding: 20px;">
+      <div class="screenshot-label">💬 工作台界面 — 对话式组件生成，左侧对话 + 右侧代码实时预览</div>
+    </div>
+  </div>
+
+  <!-- Section 4 -->
+  <div class="section">
+    <div class="section-title">
+      <span class="icon icon-amber"></span>
+      四、测试注意事项
+    </div>
+    <ul>
+      <li>请使用<strong>支持视觉的模型</strong>；非视觉模型仍可能无法识别图片</li>
+      <li>建议改用<strong>更快的模型</strong>，慢模型易超时失败</li>
+      <li>此前因思考模式 / 识别失败而失败的组件，建议<strong>重新测试</strong>后使用</li>
+    </ul>
+  </div>
+
+  <!-- Tips -->
+  <div class="tips-box">
+    <div class="tips-title">💡 快速上手</div>
+    <ul>
+      <li>进入工作台 → 新建对话 → 粘贴 Figma 链接或拖拽截图 → 选择规格 → 点击生成</li>
+      <li>生成过程中可在右侧实时查看代码产出，支持暂停与取消</li>
+      <li>生成完成后可一键进入 Playground 预览与编辑</li>
+    </ul>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    如有问题请随时沟通 · <span class="brand">晓界工坊</span>
+  </div>
+</div>
+</body>
+</html>
