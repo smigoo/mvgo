@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>晓界工坊 · 工作台模式 — 界面原型</title>
+<style>
+  :root {
+    --bg: #f7f8fa;
+    --surface: #ffffff;
+    --surface-alt: #f2f3f5;
+    --border: #e5e7eb;
+    --border-light: #f0f0f0;
+    --text: #1a1a2e;
+    --text-secondary: #6b7280;
+    --text-muted: #9ca3af;
+    --primary: #4f46e5;
+    --primary-light: #eef2ff;
+    --primary-bg: #f5f3ff;
+    --success: #10b981;
+    --success-bg: #ecfdf5;
+    --warning: #f59e0b;
+    --warning-bg: #fffbeb;
+    --danger: #ef4444;
+    --danger-bg: #fef2f2;
+    --info: #3b82f6;
+    --info-bg: #eff6ff;
+    --radius: 10px;
+    --radius-sm: 6px;
+    --radius-lg: 14px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06);
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: var(--font); background: var(--bg); color: var(--text); font-size: 13px; line-height: 1.5; height: 100vh; overflow: hidden; }
+
+  /* ===== Layout ===== */
+  .app { display: flex; height: 100vh; }
+
+  /* ===== Sidebar ===== */
+  .sidebar {
+    width: 280px; min-width: 280px; background: var(--surface); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+  }
+  .sidebar-header {
+    padding: 16px 16px 12px; border-bottom: 1px solid var(--border-light);
+  }
+  .sidebar-header h2 { font-size: 15px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .sidebar-header h2 .badge { font-size: 10px; background: var(--primary); color: #fff; padding: 1px 6px; border-radius: 10px; font-weight: 500; }
+  .new-chat-btn {
+    width: 100%; padding: 8px 12px; background: var(--primary); color: #fff; border: none;
+    border-radius: var(--radius-sm); font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px;
+    justify-content: center; font-weight: 500; transition: opacity 0.15s;
+  }
+  .new-chat-btn:hover { opacity: 0.88; }
+  .search-box {
+    margin: 10px 16px 6px; padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+    font-size: 12px; background: var(--surface-alt); outline: none; width: calc(100% - 32px);
+  }
+  .search-box:focus { border-color: var(--primary); background: #fff; }
+
+  .conv-list { flex: 1; overflow-y: auto; padding: 6px 8px; }
+  .conv-item {
+    padding: 10px 12px; border-radius: var(--radius-sm); cursor: pointer; margin-bottom: 2px;
+    transition: background 0.12s;
+  }
+  .conv-item:hover { background: var(--surface-alt); }
+  .conv-item.active { background: var(--primary-light); }
+  .conv-item .conv-title { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .conv-item .conv-preview { font-size: 11px; color: var(--text-muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .conv-item .conv-time { font-size: 10px; color: var(--text-muted); margin-top: 3px; }
+  .conv-item.active .conv-title { color: var(--primary); }
+
+  /* ===== Main Chat Area ===== */
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .chat-header {
+    padding: 12px 20px; border-bottom: 1px solid var(--border); background: var(--surface);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .chat-header .title { font-size: 14px; font-weight: 600; }
+  .chat-header .subtitle { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .chat-header .actions { display: flex; gap: 8px; }
+  .chat-header .actions button {
+    padding: 5px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: var(--surface); font-size: 12px; cursor: pointer; color: var(--text-secondary);
+  }
+  .chat-header .actions button:hover { border-color: var(--primary); color: var(--primary); }
+
+  .chat-body { flex: 1; overflow-y: auto; padding: 20px; }
+
+  /* ===== Messages ===== */
+  .msg { max-width: 720px; margin: 0 auto 20px; }
+  .msg.user { display: flex; justify-content: flex-end; }
+  .msg.user .bubble {
+    background: var(--primary); color: #fff; padding: 10px 14px; border-radius: var(--radius) var(--radius) 2px var(--radius);
+    max-width: 480px; font-size: 13px;
+  }
+  .msg.assistant { display: flex; flex-direction: column; gap: 10px; }
+  .msg.assistant .text-bubble {
+    background: var(--surface); border: 1px solid var(--border); padding: 12px 16px;
+    border-radius: var(--radius); font-size: 13px; line-height: 1.65; max-width: 640px;
+  }
+
+  /* ===== Rich Cards ===== */
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px; max-width: 640px;
+  }
+  .card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .card-header .icon { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+  .card-header .label { font-size: 12px; font-weight: 600; }
+  .card-header .status { margin-left: auto; font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+
+  /* Progress card */
+  .card.progress .icon { background: var(--info-bg); }
+  .card.progress .status { background: var(--info-bg); color: var(--info); }
+  .progress-bar { height: 6px; background: var(--surface-alt); border-radius: 3px; overflow: hidden; margin: 8px 0; }
+  .progress-bar .fill { height: 100%; background: var(--primary); border-radius: 3px; transition: width 0.3s; }
+  .progress-steps { display: flex; gap: 4px; margin-top: 10px; }
+  .progress-steps .step {
+    flex: 1; text-align: center; font-size: 10px; padding: 4px 2px;
+    border-radius: 4px; color: var(--text-muted); background: var(--surface-alt);
+  }
+  .progress-steps .step.done { background: var(--success-bg); color: var(--success); }
+  .progress-steps .step.active { background: var(--primary-light); color: var(--primary); font-weight: 600; }
+
+  /* Preview card */
+  .card.preview { padding: 0; overflow: hidden; }
+  .card.preview .preview-img {
+    width: 100%; height: 180px; background: linear-gradient(135deg, #667eea22 0%, #764ba222 100%);
+    display: flex; align-items: center; justify-content: center; position: relative;
+  }
+  .card.preview .preview-img .mock-component {
+    width: 85%; height: 85%; background: #fff; border-radius: 8px; border: 1px solid var(--border);
+    padding: 12px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .mock-component .mock-row { display: flex; gap: 8px; align-items: center; }
+  .mock-component .mock-block { border-radius: 4px; }
+  .card.preview .preview-footer {
+    padding: 10px 16px; display: flex; align-items: center; justify-content: space-between;
+    border-top: 1px solid var(--border-light);
+  }
+  .card.preview .preview-footer .meta { font-size: 11px; color: var(--text-muted); }
+  .card.preview .preview-footer .btns { display: flex; gap: 6px; }
+  .card.preview .preview-footer .btns button {
+    padding: 5px 12px; border-radius: var(--radius-sm); font-size: 11px; cursor: pointer; border: 1px solid var(--border); background: var(--surface);
+  }
+  .card.preview .preview-footer .btns button.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+  /* Confirm card */
+  .card.confirm .icon { background: var(--warning-bg); }
+  .param-table { width: 100%; font-size: 12px; border-collapse: collapse; }
+  .param-table th { text-align: left; padding: 6px 8px; background: var(--surface-alt); font-weight: 500; color: var(--text-secondary); border-radius: 4px; }
+  .param-table td { padding: 6px 8px; border-bottom: 1px solid var(--border-light); }
+  .param-table td.val { color: var(--primary); font-weight: 500; }
+  .confirm-actions { display: flex; gap: 8px; margin-top: 14px; }
+  .confirm-actions button {
+    padding: 7px 18px; border-radius: var(--radius-sm); font-size: 12px; cursor: pointer; font-weight: 500;
+  }
+  .confirm-actions .btn-cancel { border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary); }
+  .confirm-actions .btn-ok { background: var(--primary); color: #fff; border: none; }
+
+  /* Diff card */
+  .card.diff .icon { background: var(--success-bg); }
+  .diff-block { font-family: "SF Mono", "Fira Code", monospace; font-size: 11px; line-height: 1.7; border: 1px solid var(--border-light); border-radius: var(--radius-sm); overflow: hidden; }
+  .diff-line { padding: 1px 10px; white-space: pre; }
+  .diff-line.add { background: #dcfce7; color: #166534; }
+  .diff-line.del { background: #fef2f2; color: #991b1b; }
+  .diff-line.ctx { background: var(--surface); color: var(--text-secondary); }
+  .diff-summary { font-size: 11px; color: var(--text-muted); margin-top: 8px; display: flex; gap: 12px; }
+  .diff-summary span.add { color: var(--success); }
+  .diff-summary span.del { color: var(--danger); }
+
+  /* Stats card */
+  .card.stats .icon { background: var(--primary-light); }
+  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .stat-item { text-align: center; padding: 10px 6px; background: var(--surface-alt); border-radius: var(--radius-sm); }
+  .stat-item .num { font-size: 20px; font-weight: 700; color: var(--primary); }
+  .stat-item .label { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+
+  /* List card */
+  .card.list .icon { background: var(--info-bg); }
+  .list-items { display: flex; flex-direction: column; gap: 6px; }
+  .list-item {
+    display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+    border: 1px solid var(--border-light); border-radius: var(--radius-sm); cursor: pointer;
+  }
+  .list-item:hover { border-color: var(--primary); background: var(--primary-light); }
+  .list-item .thumb { width: 36px; height: 36px; border-radius: 4px; background: var(--surface-alt); display: flex; align-items: center; justify-content: center; font-size: 16px; }
+  .list-item .info { flex: 1; min-width: 0; }
+  .list-item .info .name { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .list-item .info .desc { font-size: 10px; color: var(--text-muted); }
+
+  /* Action card */
+  .card.action .icon { background: var(--success-bg); }
+  .action-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .action-btns button {
+    padding: 8px 16px; border-radius: 20px; font-size: 12px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; gap: 5px;
+  }
+  .action-btns button:hover { border-color: var(--primary); color: var(--primary); }
+  .action-btns button.highlight { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+  /* ===== Input Area ===== */
+  .chat-input-area {
+    padding: 14px 20px; border-top: 1px solid var(--border); background: var(--surface);
+  }
+  .input-wrapper {
+    max-width: 720px; margin: 0 auto; display: flex; gap: 10px; align-items: flex-end;
+  }
+  .input-box {
+    flex: 1; border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px;
+    font-size: 13px; resize: none; min-height: 40px; max-height: 120px; outline: none;
+    font-family: var(--font); line-height: 1.5; background: var(--surface);
+  }
+  .input-box:focus { border-color: var(--primary); }
+  .input-box::placeholder { color: var(--text-muted); }
+  .send-btn {
+    width: 40px; height: 40px; border-radius: var(--radius-sm); background: var(--primary);
+    border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 16px; flex-shrink: 0;
+  }
+  .input-hints {
+    max-width: 720px; margin: 6px auto 0; display: flex; gap: 12px; font-size: 10px; color: var(--text-muted);
+  }
+  .input-hints span { display: flex; align-items: center; gap: 3px; }
+
+  /* ===== Quick Actions (floating) ===== */
+  .quick-actions {
+    position: absolute; bottom: 100px; right: 24px; display: flex; flex-direction: column; gap: 6px;
+  }
+  .quick-action-btn {
+    width: 40px; height: 40px; border-radius: 50%; background: var(--surface); border: 1px solid var(--border);
+    cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px;
+    box-shadow: var(--shadow); transition: all 0.15s;
+  }
+  .quick-action-btn:hover { border-color: var(--primary); transform: scale(1.08); }
+
+  /* ===== Typing indicator ===== */
+  .typing { display: flex; gap: 4px; padding: 8px 0; }
+  .typing .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-muted); animation: bounce 1.2s infinite; }
+  .typing .dot:nth-child(2) { animation-delay: 0.2s; }
+  .typing .dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce { 0%, 80%, 100% { transform: translateY(0); } 40% { transform: translateY(-6px); } }
+
+  /* ===== Scrollbar ===== */
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
+  /* ===== Annotation ===== */
+  .annotation {
+    position: absolute; background: #fef3c7; border: 1px dashed #f59e0b; border-radius: 4px;
+    padding: 3px 8px; font-size: 10px; color: #92400e; pointer-events: none; white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- ===== Left Sidebar ===== -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h2>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        工作台 <span class="badge">NEW</span>
+      </h2>
+      <button class="new-chat-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        新建对话
+      </button>
+    </div>
+    <input class="search-box" type="text" placeholder="搜索对话记录..." />
+
+    <div class="conv-list">
+      <div class="conv-item active">
+        <div class="conv-title">生成隧道监控大屏组件</div>
+        <div class="conv-preview">✅ 组件已生成并通过质量门禁</div>
+        <div class="conv-time">今天 14:32</div>
+      </div>
+      <div class="conv-item">
+        <div class="conv-title">修改 c-tunnel 颜色主题</div>
+        <div class="conv-preview">已将主色从 #1890ff 改为 #4f46e5</div>
+        <div class="conv-time">今天 11:20</div>
+      </div>
+      <div class="conv-item">
+        <div class="conv-title">从截图生成车流量统计组件</div>
+        <div class="conv-preview">组件已生成，等待确认参数</div>
+        <div class="conv-time">昨天 16:45</div>
+      </div>
+      <div class="conv-item">
+        <div class="conv-title">绑定设备监控 API</div>
+        <div class="conv-preview">已绑定 GET /operation/device/monitor</div>
+        <div class="conv-time">昨天 10:12</div>
+      </div>
+      <div class="conv-item">
+        <div class="conv-title">推送到 GitLab 仓库</div>
+        <div class="conv-preview">已推送 3 个组件到 feature/theme 分支</div>
+        <div class="conv-time">09-27</div>
+      </div>
+      <div class="conv-item">
+        <div class="conv-title">批量生成 12 个监测组件</div>
+        <div class="conv-preview">完成 10/12，2 个需要手动调整</div>
+        <div class="conv-time">09-26</div>
+      </div>
+      <div class="conv-item">
+        <div class="conv-title">查看本周生成统计</div>
+        <div class="conv-preview">本周共生成 47 个组件...</div>
+        <div class="conv-time">09-25</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Main Chat ===== -->
+  <div class="main" style="position: relative;">
+    <div class="chat-header">
+      <div>
+        <div class="title">生成隧道监控大屏组件</div>
+        <div class="subtitle">会话 ID: mc-max-1788500607191 · 关联 3 个组件</div>
+      </div>
+      <div class="actions">
+        <button>📋 复制摘要</button>
+        <button>📤 导出</button>
+        <button>⚙️ 设置</button>
+      </div>
+    </div>
+
+    <div class="chat-body">
+      <!-- User message 1 -->
+      <div class="msg user">
+        <div class="bubble">帮我从这张截图生成一个隧道车流量监控组件，要支持实时数据刷新</div>
+      </div>
+
+      <!-- Assistant: Confirm card -->
+      <div class="msg assistant">
+        <div class="text-bubble">收到！我已识别截图内容，请确认以下生成参数：</div>
+        <div class="card confirm">
+          <div class="card-header">
+            <div class="icon">📋</div>
+            <div class="label">生成参数确认</div>
+          </div>
+          <table class="param-table">
+            <tr><th>参数</th><th>识别值</th><th>操作</th></tr>
+            <tr><td>组件类型</td><td class="val">微码组件 (mc-max)</td><td><a href="#" style="color:var(--primary);font-size:11px;">修改</a></td></tr>
+            <tr><td>组件名称</td><td class="val">c-tunnel-traffic-monitor</td><td><a href="#" style="color:var(--primary);font-size:11px;">修改</a></td></tr>
+            <tr><td>设计基准</td><td class="val">1920 × 1080</td><td><a href="#" style="color:var(--primary);font-size:11px;">修改</a></td></tr>
+            <tr><td>数据刷新</td><td class="val">每 5 秒轮询</td><td><a href="#" style="color:var(--primary);font-size:11px;">修改</a></td></tr>
+            <tr><td>主题</td><td class="val">深色 (dark)</td><td><a href="#" style="color:var(--primary);font-size:11px;">修改</a></td></tr>
+            <tr><td>图表类型</td><td class="val">折线图 + 数字卡片</td><td><a href="#" style="color:var(--primary);font-size:11px;">修改</a></td></tr>
+          </table>
+          <div class="confirm-actions">
+            <button class="btn-cancel">取消</button>
+            <button class="btn-ok">✅ 确认生成</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- User confirms -->
+      <div class="msg user">
+        <div class="bubble">确认，开始生成</div>
+      </div>
+
+      <!-- Assistant: Progress card -->
+      <div class="msg assistant">
+        <div class="text-bubble">好的，正在为你生成组件，预计需要 2~3 分钟。</div>
+        <div class="card progress">
+          <div class="card-header">
+            <div class="icon">⚡</div>
+            <div class="label">生成进度</div>
+            <div class="status">进行中 68%</div>
+          </div>
+          <div class="progress-bar"><div class="fill" style="width: 68%;"></div></div>
+          <div class="progress-steps">
+            <div class="step done">✅ 视觉分析</div>
+            <div class="step done">✅ 布局解析</div>
+            <div class="step active">🔄 代码生成</div>
+            <div class="step">⏳ 质量校验</div>
+            <div class="step">⏳ 快照保存</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Assistant: Preview card -->
+      <div class="msg assistant">
+        <div class="text-bubble">组件已生成完成！以下是预览效果：</div>
+        <div class="card preview">
+          <div class="preview-img">
+            <div class="mock-component">
+              <div class="mock-row">
+                <div class="mock-block" style="width:60px;height:14px;background:#4f46e5;border-radius:3px;"></div>
+                <div class="mock-block" style="flex:1;height:14px;background:#f0f0f0;border-radius:3px;"></div>
+              </div>
+              <div style="display:flex;gap:8px;flex:1;">
+                <div style="flex:1;background:#f8f9fa;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;">
+                  <div style="font-size:18px;font-weight:700;color:#4f46e5;">2,847</div>
+                  <div style="font-size:9px;color:#9ca3af;">今日车流</div>
+                </div>
+                <div style="flex:1;background:#f8f9fa;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;">
+                  <div style="font-size:18px;font-weight:700;color:#10b981;">98.2%</div>
+                  <div style="font-size:9px;color:#9ca3af;">通行率</div>
+                </div>
+                <div style="flex:1;background:#f8f9fa;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;">
+                  <div style="font-size:18px;font-weight:700;color:#f59e0b;">3</div>
+                  <div style="font-size:9px;color:#9ca3af;">异常事件</div>
+                </div>
+              </div>
+              <div style="flex:1;background:#f8f9fa;border-radius:6px;position:relative;overflow:hidden;">
+                <svg viewBox="0 0 300 60" style="width:100%;height:100%;" preserveAspectRatio="none">
+                  <polyline points="0,50 30,40 60,45 90,30 120,35 150,20 180,25 210,15 240,18 270,10 300,12" fill="none" stroke="#4f46e5" stroke-width="2"/>
+                  <polyline points="0,50 30,40 60,45 90,30 120,35 150,20 180,25 210,15 240,18 270,10 300,12" fill="url(#grad)" stroke="none"/>
+                  <defs><linearGradient id="grad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#4f46e5" stop-opacity="0.15"/><stop offset="100%" stop-color="#4f46e5" stop-opacity="0"/></linearGradient></defs>
+                </svg>
+              </div>
+            </div>
+          </div>
+          <div class="preview-footer">
+            <div class="meta">c-tunnel-traffic-monitor · 1.2 KB · 生成于 14:35</div>
+            <div class="btns">
+              <button>🔄 重新生成</button>
+              <button>✏️ 修改</button>
+              <button class="primary">✅ 采纳</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- User: request modification -->
+      <div class="msg user">
+        <div class="bubble">把折线图改成面积图，数字卡片加个环比上升的箭头</div>
+      </div>
+
+      <!-- Assistant: Diff card -->
+      <div class="msg assistant">
+        <div class="text-bubble">已修改完成，以下是变更对比：</div>
+        <div class="card diff">
+          <div class="card-header">
+            <div class="icon">📝</div>
+            <div class="label">代码变更</div>
+            <div class="status" style="background:var(--success-bg);color:var(--success);">+12 / -5</div>
+          </div>
+          <div class="diff-block">
+            <div class="diff-line ctx">  &lt;div class="chart-container"&gt;</div>
+            <div class="diff-line del">-   &lt;LineChart :data="trafficData" /&gt;</div>
+            <div class="diff-line add">+   &lt;AreaChart :data="trafficData" :opacity="0.3" /&gt;</div>
+            <div class="diff-line ctx">  &lt;/div&gt;</div>
+            <div class="diff-line ctx"> </div>
+            <div class="diff-line ctx">  &lt;div class="stat-card"&gt;</div>
+            <div class="diff-line del">-   &lt;span class="value"&gt;{{ todayCount }}&lt;/span&gt;</div>
+            <div class="diff-line add">+   &lt;span class="value"&gt;{{ todayCount }}&lt;/span&gt;</div>
+            <div class="diff-line add">+   &lt;span class="trend up"&gt;↑ 12.5%&lt;/span&gt;</div>
+            <div class="diff-line ctx">  &lt;/div&gt;</div>
+          </div>
+          <div class="diff-summary">
+            <span class="add">+ 12 行新增</span>
+            <span class="del">- 5 行删除</span>
+            <span>修改 2 处</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Assistant: Action card -->
+      <div class="msg assistant">
+        <div class="text-bubble">修改已应用。你还可以继续操作：</div>
+        <div class="card action">
+          <div class="card-header">
+            <div class="icon">🚀</div>
+            <div class="label">后续操作</div>
+          </div>
+          <div class="action-btns">
+            <button>📖 绑定 API 数据源</button>
+            <button>🎨 切换主题</button>
+            <button class="highlight">📤 推送到 GitLab</button>
+            <button>📊 查看质量报告</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- User: stats query -->
+      <div class="msg user">
+        <div class="bubble">这周我一共生成了多少组件？</div>
+      </div>
+
+      <!-- Assistant: Stats card -->
+      <div class="msg assistant">
+        <div class="card stats">
+          <div class="card-header">
+            <div class="icon">📊</div>
+            <div class="label">本周生成统计</div>
+            <div class="status" style="background:var(--primary-light);color:var(--primary);">09-22 ~ 09-28</div>
+          </div>
+          <div class="stats-grid">
+            <div class="stat-item">
+              <div class="num">47</div>
+              <div class="label">总生成数</div>
+            </div>
+            <div class="stat-item">
+              <div class="num">42</div>
+              <div class="label">通过门禁</div>
+            </div>
+            <div class="stat-item">
+              <div class="num">89%</div>
+              <div class="label">通过率</div>
+            </div>
+            <div class="stat-item">
+              <div class="num">3.2<span style="font-size:12px;font-weight:400;">min</span></div>
+              <div class="label">平均耗时</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- User: list components -->
+      <div class="msg user">
+        <div class="bubble">列出今天生成的所有组件</div>
+      </div>
+
+      <!-- Assistant: List card -->
+      <div class="msg assistant">
+        <div class="text-bubble">今天共生成了 5 个组件：</div>
+        <div class="card list">
+          <div class="card-header">
+            <div class="icon">📦</div>
+            <div class="label">今日生成组件</div>
+            <div class="status" style="background:var(--info-bg);color:var(--info);">共 5 个</div>
+          </div>
+          <div class="list-items">
+            <div class="list-item">
+              <div class="thumb">📊</div>
+              <div class="info">
+                <div class="name">c-tunnel-traffic-monitor</div>
+                <div class="desc">隧道车流量监控 · 14:35 · ✅ 已采纳</div>
+              </div>
+            </div>
+            <div class="list-item">
+              <div class="thumb">🌡️</div>
+              <div class="info">
+                <div class="name">c-tunnel-env-sensor</div>
+                <div class="desc">环境传感器面板 · 13:10 · ✅ 已采纳</div>
+              </div>
+            </div>
+            <div class="list-item">
+              <div class="thumb">🚨</div>
+              <div class="info">
+                <div class="name">c-tunnel-alarm-panel</div>
+                <div class="desc">告警面板 · 11:48 · ✅ 已采纳</div>
+              </div>
+            </div>
+            <div class="list-item">
+              <div class="thumb">📹</div>
+              <div class="info">
+                <div class="name">c-tunnel-video-wall</div>
+                <div class="desc">视频拼接墙 · 10:22 · 🔄 修改中</div>
+              </div>
+            </div>
+            <div class="list-item">
+              <div class="thumb">🔋</div>
+              <div class="info">
+                <div class="name">c-tunnel-power-status</div>
+                <div class="desc">供电状态面板 · 09:15 · ✅ 已采纳</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Typing indicator -->
+      <div class="msg assistant">
+        <div class="typing">
+          <div class="dot"></div>
+          <div class="dot"></div>
+          <div class="dot"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick action buttons -->
+    <div class="quick-actions">
+      <div class="quick-action-btn" title="上传截图">📷</div>
+      <div class="quick-action-btn" title="粘贴 Figma 链接">🎨</div>
+      <div class="quick-action-btn" title="选择已有组件">📦</div>
+    </div>
+
+    <!-- Input area -->
+    <div class="chat-input-area">
+      <div class="input-wrapper">
+        <textarea class="input-box" rows="1" placeholder="输入你的需求… 支持拖拽截图、粘贴 Figma 链接"></textarea>
+        <button class="send-btn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+      <div class="input-hints">
+        <span>📎 拖拽文件</span>
+        <span>📋 粘贴截图</span>
+        <span>🔗 Figma 链接</span>
+        <span>⏎ 发送 / Shift+⏎ 换行</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Interactive: click conversation items
+  document.querySelectorAll('.conv-item').forEach(item => {
+    item.addEventListener('click', () => {
+      document.querySelectorAll('.conv-item').forEach(i => i.classList.remove('active'));
+      item.classList.add('active');
+    });
+  });
+
+  // Interactive: confirm card buttons
+  document.querySelectorAll('.confirm-actions button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      btn.style.transform = 'scale(0.95)';
+      setTimeout(() => btn.style.transform = '', 150);
+    });
+  });
+
+  // Interactive: preview card buttons
+  document.querySelectorAll('.preview-footer .btns button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      btn.style.transform = 'scale(0.95)';
+      setTimeout(() => btn.style.transform = '', 150);
+    });
+  });
+
+  // Interactive: list items
+  document.querySelectorAll('.list-item').forEach(item => {
+    item.addEventListener('click', () => {
+      item.style.borderColor = 'var(--primary)';
+      item.style.background = 'var(--primary-light)';
+      setTimeout(() => {
+        item.style.borderColor = '';
+        item.style.background = '';
+      }, 800);
+    });
+  });
+
+  // Interactive: progress animation
+  const fill = document.querySelector('.progress-bar .fill');
+  if (fill) {
+    let width = 68;
+    setInterval(() => {
+      width = width >= 100 ? 68 : width + 1;
+      fill.style.width = width + '%';
+    }, 200);
+  }
+
+  // Interactive: textarea auto-resize
+  const textarea = document.querySelector('.input-box');
+  if (textarea) {
+    textarea.addEventListener('input', () => {
+      textarea.style.height = 'auto';
+      textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+    });
+  }
+</script>
+</body>
+</html>
