@@ -17,6 +17,24 @@ const NODE_BIN = process.execPath;
 const BE_DIR = '/Users/smigoo/工作/mvgo/backend-node';
 const LOG = path.join(BE_DIR, 'server.log');
 
+// 🛡️ V8 正则回溯熔断（2026-09-29 实锤 · mc-max-1790654134322-bc91bb18 卡死事件）：
+//   现象：进程存活 / 13030 仍 LISTEN / TCP 可连，但 **HTTP 全部无响应**（curl 000）、日志静默 6.5 分钟。
+//   `sample <pid> 3` 采 2530 样本全部落同一条栈：
+//     uv__io_poll → TLSWrap::ClearOut（收到 HTTPS 响应）→ MicrotaskQueue → PromiseFulfillReactionJob
+//       → AsyncFunctionAwaitResolveClosure → StringPrototypeMatch → RegExpMatchFast → [回溯循环]
+//   ⇒ 主线程被 `String.prototype.match()` 的**灾难性回溯**占满，事件循环无法推进。
+//   （具体是哪个正则尚未唯一确定；已压测排除 code-validator.js:57 引号剥离 / /\{[\s\S]*\}/ / 代码围栏 / 分隔符检测。）
+//
+//   对策：V8 在回溯次数超过 `--regexp-backtracks-before-fallback` 时，
+//   回退到**实验性非回溯引擎**（线性时间，语义等价），从而把「无限卡死」变成「正常返回」。
+//   对比实验（/^(a+)+$/ 匹配 'a'×32+'b'）：不带 flag → 8 秒未返回（卡死复现）；带 flag → 1ms 返回 false。
+//   ⚠️ 下方第 ~70 行会删除 NODE_OPTIONS（规避 WorkBuddy 的 node-language-shim），
+//      所以 flag **必须**走 spawn 的 argv，而不能靠环境变量注入。
+const V8_SAFETY_FLAGS = [
+  '--enable-experimental-regexp-engine-on-excessive-backtracks',
+  '--regexp-backtracks-before-fallback=50000',
+];
+
 // 🛡️ R3-B（2026-09-11）版本一致性护栏：启动时比对 dist 构建时间 vs src 最新 mtime，
 // 不一致打 WARN —— 杜绝「旧 dist 生成的产物被当成新代码效果」的误判（cfb53488 即此类）。
 // 同时打印 git HEAD 短 hash，供任务 meta 记录代码版本。
@@ -105,7 +123,7 @@ if (hasActive) {
   process.exit(1);
 }
 
-const child = spawn(NODE_BIN, ['dist/main.js'], {
+const child = spawn(NODE_BIN, [...V8_SAFETY_FLAGS, 'dist/main.js'], {
   cwd: BE_DIR,
   detached: true,          // Unix 下 -> 新 session/process group（等同 setsid）
   env,
