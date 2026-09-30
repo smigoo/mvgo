@@ -8,7 +8,12 @@
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const fetch = require('node-fetch');
+// 🗑️ 墓碑（2026-09-30 删除）：此处原为 `const fetch = require('node-fetch');`
+//    为什么删：node-fetch v3 是 ESM-only，CJS require 拿到的是 namespace 对象
+//      （keys = AbortError/Blob/FetchError/File…），不是函数 ⇒ 调用必抛
+//      "fetch is not a function"，被下方 catch 静默吞掉。
+//    收敛到哪：Node 22 内置 globalThis.fetch（已实测 typeof === 'function'）。
+const fetch = globalThis.fetch;
 
 async function main() {
 
@@ -99,25 +104,57 @@ env.MONGODB_URI = 'mongodb://localhost:27017/langgraph-server';
 env.DEV_AUTO_LOGIN = 'true';
 
 // 重启前检查活动任务（P1-3 graceful drain）
+//
+// 🔴 2026-09-30 修复：这段护栏此前**从未生效过一次**，三处缺陷叠加，
+//    每一处都独立地把执行路径逼向 catch → return false（= 无条件放行）：
+//    ① `require('node-fetch')` 拿到 namespace 对象而非函数 ⇒ fetch is not a function；
+//    ② 鉴权头写错：`Authorization: Bearer dev` 恒 401 —— session.guard.ts:31 只认
+//       `headers['token']` 或 `query.token`，正确的头是 `token: dev`；
+//    ③ 响应形状误判：`/api/tasks` 返回 `{success,code,data:{tasks:[],count}}`，
+//       数组在 `data.tasks` 而非顶层 ⇒ `tasks.filter is not a function`。
+//    ⇒ 修完后必须留**阳性留痕**（下方 ✅ 那行日志）：只有「护栏跑了且通过」打了日志，
+//      才能把「通过」与「压根没跑」区分开 —— 否则下次仍然查不出它是否活着。
 async function checkActiveTasks() {
   if (process.env.FORCE_KILL) return false;
-  
+
+  let res;
   try {
-    // 用 dev token 访问任务列表
-    const res = await fetch('http://localhost:13030/api/tasks', {
-      headers: { 'Authorization': 'Bearer dev' }
+    res = await fetch('http://localhost:13030/api/tasks', {
+      headers: { token: 'dev' },     // 注意：不是 Authorization: Bearer
+      signal: AbortSignal.timeout(5000),
     });
-    const tasks = await res.json();
-    
-    const active = tasks.filter(t => ['running', 'queued', 'rate_limited'].includes(t.status));
+  } catch (e) {
+    // 连接失败 = 服务本来就没在跑（首次启动的必经路径）⇒ 正常放行，不是异常。
+    console.log('[start-node] 未探测到在跑的服务（属首次启动的正常情况），直接拉起');
+    return false;
+  }
+
+  try {
+    if (!res.ok) {
+      console.warn(`[start-node] ⚠️ 活动任务探测返回 HTTP ${res.status}，**无法判定**是否有任务在跑。`);
+      console.warn('   按「无活动任务」放行；若此刻确有生成在进行，重启会把它打断。');
+      return false;
+    }
+
+    const json = await res.json();
+    // 契约：{ success, code, message, data: { tasks: TaskItem[], count } }
+    const tasks = json?.data?.tasks ?? (Array.isArray(json?.data) ? json.data : null);
+    if (!Array.isArray(tasks)) {
+      console.warn('[start-node] ⚠️ 活动任务探测响应结构非预期，**无法判定**是否有任务在跑，按无活动任务放行。');
+      return false;
+    }
+
+    const active = tasks.filter((t) => ['running', 'queued', 'rate_limited'].includes(t.status));
     if (active.length > 0) {
-      console.error(`⚠️ ${active.length} 个生成任务进行中（${active.map(t => t.sessionId).join(',')}）`);
+      console.error(`⚠️ ${active.length} 个生成任务进行中（${active.map((t) => t.sessionId).join(',')}）`);
       console.error('   等待完成或 FORCE_KILL=1 node start-node.js 强制重启');
       return true; // 有活动任务，阻止重启
     }
+
+    // 🔑 阳性留痕：证明护栏这次真的执行到了，而不是被静默吞掉
+    console.log(`[start-node] ✅ 活动任务检查通过（历史 ${tasks.length} 条，进行中 0 条），可以安全重启`);
   } catch (e) {
-    // 如果 API 不可用（如服务未启动），继续重启
-    console.warn('[start-node] 无法检查活动任务:', e.message);
+    console.warn('[start-node] ⚠️ 活动任务探测结果解析失败，**无法判定**是否有任务在跑：', e.message);
   }
   return false;
 }
