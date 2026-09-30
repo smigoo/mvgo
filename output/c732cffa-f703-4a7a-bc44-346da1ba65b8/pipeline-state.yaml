@@ -1,0 +1,104 @@
+schema_version: 1
+request_id: c732cffa-f703-4a7a-bc44-346da1ba65b8
+created_at: 2026-09-30T10:56:00+08:00
+updated_at: 2026-09-30T13:34:00+08:00
+
+entry_type: full_pipeline
+stage_chain: [1, 2, 3]
+
+output_docx_path: /Users/smigoo/工作/mvgo/output/c732cffa-f703-4a7a-bc44-346da1ba65b8/stage3/晓界工坊月度总结-2026-09.docx
+output_docx_user_specified: false
+
+current_stage: 3
+
+stages:
+  stage_0:
+    status: completed
+    completed_at: 2026-09-30T10:56:00+08:00
+    decision: full_pipeline
+
+  stage_1:
+    status: completed
+    started_at: 2026-09-30T10:56:00+08:00
+    completed_at: 2026-09-30T11:12:00+08:00
+    output_path: "stage1/final_draft.md"
+    genre: "work-report"
+    expert_used: "work-report-expert"
+    route_tag: "expert_work_report"
+    critic_decision: "PASS"
+    critic_report_path: "working/critic-report.md"
+    critic_final_score: 91
+
+  stage_2:
+    status: completed
+    started_at: 2026-09-30T11:12:00+08:00
+    completed_at: 2026-09-30T11:22:00+08:00
+    route: html
+    html_sub: template
+    genre: "business-report"
+    template_used: "business-report"
+    theme_used: "business-modern"
+    output_path: "stage2/formatted-business-report.html"
+    output_format: html
+    skills_invoked: ["design-token", "doc-typeset", "html-review"]
+    design_tokens_path: "stage2/design_tokens.json"
+    html_review_attempts: 1
+    html_review_score: 100
+    fallback: false
+    fallback_reason: null
+
+  stage_3:
+    status: completed
+    started_at: 2026-09-30T11:25:00+08:00
+    completed_at: 2026-09-30T11:28:00+08:00
+    executor: "doc-converter"
+    input_format: html
+    output_path: "/Users/smigoo/工作/mvgo/output/c732cffa-f703-4a7a-bc44-346da1ba65b8/stage3/晓界工坊月度总结-2026-09.docx"
+    skill_used: ["html-to-docx"]
+    present_files_opened: true
+    fallback: false
+    fallback_reason: null
+    warnings: []
+
+consistency_check:
+  output_files_exist: true
+  stage_chain_complete: true
+  last_checked_at: 2026-09-30T13:34:00+08:00
+  revisions:
+    - "补入图 1~4（工作台入口 / 工作台界面 / 识别能力增强 / 面板选择）"
+    - "补入图 5 质量评分（标注暂仅内测、未对外开放）"
+    - "补入图 6 管理后台任务统计（失败归因 + 模型效率）"
+    - "补入图 7 部门使用情况"
+    - "新增第三节 发现的问题（3.1~3.4）、第四节 遗留问题、第五节 专项说明：为什么关闭思考模式"
+    - "补入图 8~10（工作台对话模式 / 产物文件与调试 / 快搭反馈），增补 1.5、2.3 条目（问题总数 10 类→11 类，功能项 12 项→14 项）"
+    - "全文评审落地：1.2 补关键指标对比表、遗留问题按 4.x 编号、封面日期统一；修 P0 数据口径 4 处 + P1 措辞 12 处 + P2 打磨 13 处"
+    - "去 AI 化与语言精简：重写 lead×7 / issue×16 / solution×19 / li×18 + 执行摘要 + 图注 6 处 + 表格文案；删对举与排比、拆长句、去空泛收口"
+    - "目录与正文同步：第五节补 5.1~5.4 目录项（24 项与正文标题逐条一致），统一第五 / 六节标题写法"
+    - "1.5 节顺序调整：图 2（快搭反馈截图）从节末移到「核查」与「解决」之间 ⇒ 问题 → 核查 → 图 2 → 解决"
+    - "第一节整体重排：快搭节提到最前为 1.1，其余顺延（1.1→1.2、1.2→1.3、1.3→1.4、1.4→1.5）；连带同步目录、锚点 id、导语列举顺序、交叉引用（1.2→1.3 ×2）"
+    - "图号按出现顺序重排：快搭反馈图 2→图 1、识别能力增强图 1→图 2，正文引用同步；图 3~10 不变"
+    - "1.1 由「归因成两类」改为逐条对应：核查段逐条归因（①②→稳定性 / ②④→链路与管线质量），解决段逐条给处置与结果，4 条反馈各有归宿"
+    - "【用户在腾讯文档编辑器中改版后回并】用户在编辑器里删改并保存了 docx（mtime 13:18、体积 +140KB、内部多出 customXml/thumbnail 等编辑器痕迹）。已从备份提取其改动并逐条合并回 HTML 源：①删目录（含 doc-toc 样式）②删封面 meta 两行 ③删第三节「发现的问题」与第四节「遗留问题」整节 ④删除图 3（工作台入口）与图 7（产物文件与调试）⑤删 1.3 的 500/404 与 401 两组、1.4 的模型配置组 ⑥1.5 首组由「问题+解决」合并为一条「优化：」⑦2.1 删主题系统条、工作台模式条去尾句 ⑧2.4 删重试链路条并改写慢模型文案 ⑨1.1 解决段拆 3 段、结尾改「治理后待继续观察。」⑩1.2 新增「增加模型速度检测。」⑪3.3 删导语、3.4 去「（详见 1.3）」"
+    - "【重编号与一致性整理】章节重排后：三、专项说明（3.1~3.4）、四、与其他工具配合；图号按出现顺序重排为 1~8（删图后 8→6、9→7、10→8，4→3、6→4）；数字同步 11 类→8 类、14 项→12 项（执行摘要 / metrics 表 / 两节导语四处）；执行摘要删去已不存在章节的引用与两项已删改动；「三项治理的实测数据」→「关键指标实测数据」"
+  checks:
+    docx_size_bytes: 1710219
+    docx_sections: 2
+    docx_paragraphs: 139
+    docx_tables: 5
+    docx_images: 8
+    heading_1: 1
+    heading_2: 7
+    heading_3: 17
+    list_bullet: 18
+    toc_hyperlinks: 4
+    bookmarks: 4
+    cover_footer_has_page_field: false
+    body_footer_has_page_field: true
+    html_review_score: 100
+    figure_captions_sequential: true
+    section1_order: "1.1 快搭 → 1.2 视觉 → 1.3 性能 → 1.4 安全 → 1.5 门禁"
+    chapters: "一、解决的问题 / 二、迭代的新功能 / 三、专项说明（关思考模式）/ 四、与其他工具配合"
+    first_page_is_cover: true
+    toc_matches_headings: false   # 目录已按用户要求删除
+    ai_trace_words: 3
+  errors: []

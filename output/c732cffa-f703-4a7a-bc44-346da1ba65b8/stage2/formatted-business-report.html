@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="docx-page-size" content="A4">
+  <title>晓界工坊月度总结（2026-08-27 ~ 2026-09-30）</title>
+  <style>
+  /* ---------- CSS @page 页面模型：正文页脚居中页码，封面无家具 ---------- */
+  @page { @bottom-center { content: counter(page); } }
+  @page cover { @bottom-center { content: none; } }
+  section[role="cover"] { page: cover; }
+
+  /* ---------- design tokens（business-modern，来自 design-token/compiled/business-report.json） ---------- */
+  :root {
+    --typography-fontFamily-heading: "微软雅黑", "Microsoft YaHei", "PingFang SC", sans-serif;
+    --typography-fontFamily-body: "微软雅黑", "Microsoft YaHei", "PingFang SC", sans-serif;
+    --typography-fontSize-title: 28pt;
+    --typography-fontSize-subtitle: 18pt;
+    --typography-fontSize-h1: 20pt;
+    --typography-fontSize-coverTitle: 22pt;
+    --typography-fontSize-coverCategory: 12pt;
+    --typography-fontSize-h2: 14pt;
+    --typography-fontSize-h3: 11.5pt;
+    --typography-fontSize-body: 10.5pt;
+    --typography-fontSize-small: 9pt;
+    --typography-lineHeight-body: 1.6;
+    --typography-fontWeight-bold: 700;
+    --color-primary: #1565C0;
+    --color-accent: #00897B;
+    --color-text: #212121;
+    --color-muted: #616161;
+    --color-heading: #1A237E;
+    --color-border: #D6DDE6;
+    --color-bg: #FFFFFF;
+    --color-surface: #F5F7FA;
+    --color-emphasis: #C62828;
+
+    /* 间距尺度（DT-03 合规：所有间距必须经 var() 引用，禁止裸值） */
+    --spacing-hair: 0.15em;
+    --spacing-xs: 0.25em;
+    --spacing-sm: 0.4em;
+    --spacing-paragraph: 0.5em;
+    --spacing-md: 0.7em;
+    --spacing-block: 0.9em;
+    --spacing-tight: 1.1em;
+    --spacing-lg: 1.1em;
+    --spacing-xl: 1.4em;
+    --spacing-section: 1.6em;
+    --spacing-2xl: 1.6em;
+    --spacing-3xl: 2.6em;
+    --spacing-cover-top: 3.2cm;
+
+    --fs-h1: var(--typography-fontSize-h1);
+    --fs-h2: var(--typography-fontSize-h2);
+    --fs-h3: var(--typography-fontSize-h3);
+    --fs-body: var(--typography-fontSize-body);
+    --fs-small: var(--typography-fontSize-small);
+    --ff-heading: var(--typography-fontFamily-heading);
+    --ff-body: var(--typography-fontFamily-body);
+    --fw-bold: var(--typography-fontWeight-bold);
+    --page-content-width: 15.6cm;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--ff-body);
+    font-size: var(--fs-body);
+    line-height: var(--typography-lineHeight-body);
+    color: var(--color-text);
+    background: var(--color-bg);
+    max-width: var(--page-content-width);
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* ---------- 封面（每个块级元素自写 text-align，转换器不做继承） ---------- */
+  .cover-category {
+    font-family: var(--ff-heading); font-size: var(--typography-fontSize-coverCategory);
+    font-weight: var(--fw-bold); color: var(--color-accent);
+    letter-spacing: 0.18em; text-align: left;
+    margin-top: var(--spacing-cover-top); margin-bottom: var(--spacing-block);
+  }
+  .cover-title {
+    font-family: var(--ff-heading); font-size: var(--typography-fontSize-coverTitle);
+    font-weight: var(--fw-bold); color: var(--color-heading);
+    line-height: 1.3; text-align: left; margin-bottom: var(--spacing-paragraph);
+  }
+  .cover-subtitle {
+    font-family: var(--ff-heading); font-size: var(--fs-h2);
+    font-weight: var(--fw-bold); color: var(--color-primary);
+    text-align: left; margin-bottom: var(--spacing-3xl);
+  }
+  /* ---------- 执行摘要（多段落底纹卡片 = 裸单列 table） ---------- */
+  .executive-summary { width: 100%; border-collapse: collapse; margin-bottom: var(--spacing-lg); }
+  .executive-summary th {
+    background: var(--color-surface); border-left: 4px solid var(--color-primary);
+    padding: var(--spacing-block) var(--spacing-tight) var(--spacing-xs) var(--spacing-tight);
+    font-family: var(--ff-heading); font-size: var(--fs-h3); font-weight: var(--fw-bold);
+    color: var(--color-heading); text-align: left;
+  }
+  .executive-summary td {
+    background: var(--color-surface); border-left: 4px solid var(--color-primary);
+    padding: var(--spacing-xs) var(--spacing-tight) var(--spacing-block) var(--spacing-tight);
+  }
+  .executive-summary p { font-size: var(--fs-body); color: var(--color-text); margin-bottom: var(--spacing-sm); }
+  .executive-summary p.last { margin-bottom: 0; }
+
+  /* ---------- 表格 ---------- */
+  .metrics { width: 100%; border-collapse: collapse; margin-bottom: var(--spacing-xl); }
+  .metrics th, .metrics td {
+    border: 1px solid var(--color-border); padding: var(--spacing-sm) var(--spacing-paragraph);
+    text-align: center; font-size: var(--fs-small);
+  }
+  .metrics th {
+    background: var(--color-surface); color: var(--color-muted);
+    font-family: var(--ff-heading); font-weight: var(--fw-bold);
+  }
+  .metrics td { font-family: var(--ff-heading); font-weight: var(--fw-bold); color: var(--color-primary); }
+  .metrics td.row-head {
+    font-family: var(--ff-heading); font-weight: var(--fw-bold);
+    color: var(--color-text); text-align: left;
+  }
+  .metrics td.note-cell { font-family: var(--ff-body); font-weight: 400; color: var(--color-muted); text-align: left; }
+
+  /* ---------- 正文标题 ---------- */
+  h2 {
+    font-family: var(--ff-heading); font-size: var(--fs-h2); font-weight: var(--fw-bold);
+    color: var(--color-heading); text-align: left;
+    margin-top: var(--spacing-2xl); margin-bottom: var(--spacing-paragraph);
+    border-left: 4px solid var(--color-primary); padding-left: var(--spacing-paragraph);
+  }
+  h3 {
+    font-family: var(--ff-heading); font-size: var(--fs-h3); font-weight: var(--fw-bold);
+    color: var(--color-primary); text-align: left;
+    margin-top: var(--spacing-lg); margin-bottom: var(--spacing-sm);
+  }
+
+  /* ---------- 章节导语 ---------- */
+  p.lead { font-size: var(--fs-body); color: var(--color-muted); text-align: left; margin-bottom: var(--spacing-md); }
+
+  /* ---------- 问题 / 解决 ---------- */
+  p.issue {
+    font-size: var(--fs-body); color: var(--color-text); text-align: left;
+    border-left: 3px solid var(--color-primary); background: var(--color-surface);
+    padding: var(--spacing-sm) var(--spacing-md); margin-bottom: var(--spacing-sm);
+  }
+  p.solution {
+    font-size: var(--fs-body); color: var(--color-text); text-align: left;
+    padding-left: var(--spacing-hair); margin-bottom: var(--spacing-block);
+  }
+  .data-emphasis { color: var(--color-emphasis); font-weight: var(--fw-bold); }
+
+  /* ---------- 列表 ---------- */
+  ul.feature-list { list-style: disc; padding-left: var(--spacing-xl); margin-bottom: var(--spacing-block); }
+  ul.feature-list li {
+    font-size: var(--fs-body); color: var(--color-text); text-align: left;
+    margin-bottom: var(--spacing-sm); line-height: var(--typography-lineHeight-body);
+  }
+
+  /* ---------- 插图 ---------- */
+  div.fig { text-align: center; margin-top: var(--spacing-md); margin-bottom: var(--spacing-xs); }
+  div.fig img { max-width: 100%; }
+  p.fig-caption {
+    font-size: var(--fs-small); color: var(--color-muted); text-align: center;
+    margin-top: 0; margin-bottom: var(--spacing-lg);
+  }
+
+  /* ---------- 结尾提示 ---------- */
+  p.note {
+    font-size: var(--fs-small); color: var(--color-muted); text-align: left;
+    border-left: 3px solid var(--color-border); padding-left: var(--spacing-md); margin-top: var(--spacing-xl);
+  }
+  p.tail { font-size: var(--fs-small); color: var(--color-muted); text-align: right; margin-top: var(--spacing-section); }
+  </style>
+</head>
+<body>
+
+  <!-- ======================= 封面节 ======================= -->
+  <section role="cover">
+    <p class="cover-category">月 度 汇 报</p>
+    <h1 class="cover-title">晓界工坊月度总结</h1>
+    <p class="cover-subtitle">统计区间：2026-08-27 ~ 2026-09-30</p>
+  </section>
+
+  <!-- ======================= 正文节（页码从 1 重起） ======================= -->
+  <section role="body" data-page-restart="1">
+
+    <h2 id="sec-summary">执行摘要</h2>
+
+    <table class="executive-summary">
+      <thead>
+        <tr><th class="summary-title">本月概览</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>
+          <p>本月修复疑难问题 <span class="data-emphasis">8 类</span>，上线功能 <span class="data-emphasis">12 项</span>，工作重心是生成质量、运行稳定性、使用体验与数据安全。</p>
+          <p>影响最大的一项改动是关掉模型的思考模式：代码生成单块耗时从 40 ~ 190 秒降下来，空结果重试基本消失。</p>
+          <p class="last">正文按「解决的问题」「迭代的新功能」两部分展开，另有一节单独说明关闭思考模式的原因与取舍。</p>
+        </td></tr>
+      </tbody>
+    </table>
+
+    <table class="metrics">
+      <thead>
+        <tr>
+          <th>Git Commit</th>
+          <th>发布部署</th>
+          <th>修复疑难问题</th>
+          <th>新增功能能力</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>793 次</td>
+          <td>5 次</td>
+          <td>8 类</td>
+          <td>12 项</td>
+        </tr>
+        <tr>
+          <td colspan="4" class="note-cell">Commit 拆分：backend-node 450 / frontend 110 / docs 107 / 主仓 126（2026-08-27 ~ 2026-09-30，非 merge 提交）；发布部署次数为主仓上线记录</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- ======================= 一、解决的问题 ======================= -->
+    <h2 id="sec-solved">一、解决的问题</h2>
+    <p class="lead">本月修复 8 类问题，分布在用户反馈、视觉与布局、生成性能、安全鉴权、质量门禁五处。</p>
+
+    <h3 id="s11">1.1 快搭平台用户反馈的生成报错治理</h3>
+
+    <p class="issue"><strong>问题：</strong>快搭平台本月 4 条审批反馈全部指向生成失败，均来自基础研发部：figma 生成微码组件流程失败、生成组件报错、生成过程中失败、用预览图生成组件失败（见图 1）。</p>
+    <p class="solution"><strong>核查：</strong>逐条归因，4 条落在两处——figma 精修生成失败和生成过程失败是生成稳定性问题，生成组件报错和用预览图生成失败出在生成链路与管线质量。</p>
+
+    <div class="fig" id="fig-feedback">
+      <img src="images/fig-feedback.png" alt="快搭平台用户反馈：4 条生成失败类审批" width="590">
+    </div>
+    <p class="fig-caption">图 1　快搭平台用户反馈：4 条生成失败类审批</p>
+
+    <p class="solution"><strong>解决：</strong>生成稳定性是同一个根因——推理模式没真正关闭，思考把输出预算烧光后返回空结果、超时。已在 1.3 根治，并加了截断自愈，重试时自动关思考。</p>
+    <p class="solution">另外两条出在不同地方：生成组件报错是产物写盘校验被跳过、资源挂载与命名有偏差；用预览图生成组件失败是截图到生成管线的通道没打通，工作台的截图真值没传给生成链路。两处都已修掉，剩下的误拒靠失败归因看板（见图 7）逐条定位。</p>
+    <p class="solution">治理后待继续观察。</p>
+
+    <h3 id="s12">1.2 视觉保真、布局还原与识别性能</h3>
+
+    <p class="issue"><strong>问题：</strong>70% 的组件主题切换失效。用户切到深色或浅色后，画面没有任何变化。</p>
+    <p class="solution"><strong>解决：</strong>原因是 LESS mixin 变量覆盖不到同名变量，运行期样式注入链也不可靠。两处都改掉后，主题切换恢复。</p>
+
+    <p class="issue"><strong>问题：</strong>五类布局塌陷肉眼可见，质量门禁却全部放行。比例失调、内容被截断、网格塌成一列都在其中，问题直接交到用户手里。</p>
+    <p class="solution"><strong>解决：</strong>逐类补判据，改成生成时就拦下，不再等人工事后发现。</p>
+
+    <p class="issue"><strong>问题：</strong>视觉分析太慢。主力模型单次调用 218 秒，逼近超时线，多次降级。</p>
+    <p class="solution"><strong>解决：</strong>调好推理模式和参数形态后降到 104 秒，少了 52%。识别改成视觉 / 文本 / 推理三路并行（见图 2），单路亚秒级，用 247 张测试图跑过回归。</p>
+    <p class="solution">增加模型速度检测。</p>
+
+    <div class="fig" id="fig-recognition">
+      <img src="images/fig-recognition.png" alt="识别能力增强：视觉 / 文本 / 推理三路并行识别耗时" width="340">
+    </div>
+    <p class="fig-caption">图 2　识别能力增强：视觉 / 文本 / 推理三路并行，单路耗时亚秒级（测试图数字 247）</p>
+
+    <h3 id="s13">1.3 生成性能与稳定性</h3>
+
+    <p class="issue"><strong>问题：</strong>推理模式名义上关了，实际没关。配置里写了关闭，运行时的透传断点把参数弄丢了，模型根本没收到。代码生成每块耗时 40 ~ 190 秒；思考内容吃掉输出预算，返回空结果，一次失败白等 3 ~ 7 分钟再重试。</p>
+    <p class="solution"><strong>解决：</strong>补上透传断点，推理真正关闭。分块耗时降下来，空结果重试基本没有了。</p>
+
+    <p class="lead">关键指标实测数据：</p>
+    <table class="metrics">
+      <thead>
+        <tr>
+          <th>关键指标</th>
+          <th>优化前</th>
+          <th>优化后</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="row-head">视觉模型单次分析耗时</td>
+          <td class="note-cell">218 秒（接近超时上限，多次降级）</td>
+          <td class="note-cell">104 秒（降幅约 52%）</td>
+        </tr>
+        <tr>
+          <td class="row-head">代码生成单块耗时</td>
+          <td class="note-cell">40 ~ 190 秒</td>
+          <td class="note-cell">已脱离该区间，不再出现分钟级分块</td>
+        </tr>
+        <tr>
+          <td class="row-head">推理导致的空内容重试</td>
+          <td class="note-cell">单次白等 3 ~ 7 分钟</td>
+          <td class="note-cell">基本消失</td>
+        </tr>
+        <tr>
+          <td class="row-head">识别链路</td>
+          <td class="note-cell">—</td>
+          <td class="note-cell">视觉 / 文本 / 推理三路并行，单路 0.1 ~ 0.2 秒</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3 id="s14">1.4 安全与鉴权加固</h3>
+
+    <p class="issue"><strong>问题：</strong>部分控制器一直没有鉴权。未登录也能直接调到业务逻辑，存在越权风险。</p>
+    <p class="solution"><strong>解决：</strong>Node 与 Java 两侧接口统一挂上会话鉴权，未登录一律 401。门户校验加了 5 分钟短缓存（SHA-256 摘要），安全性不变，重复校验的开销省掉了。</p>
+
+    <h3 id="s15">1.5 质量门禁与内容盲区</h3>
+
+    <p class="solution"><strong>优化：</strong>加一条文本覆盖率门禁，按设计稿中文串的覆盖比例分档处理。</p>
+
+    <p class="issue"><strong>问题：</strong>微码规范升级后，存量产物和新规范对不上。人工逐条比对慢，而且容易漏。</p>
+    <p class="solution"><strong>解决：</strong>管线对齐最新规范：生成时按新规范产出，生成后自动检查，查出的问题由 AI 自动修，存量偏差逐步收敛。</p>
+
+
+    <!-- ======================= 二、迭代的新功能 ======================= -->
+    <h2 id="sec-features">二、迭代的新功能</h2>
+    <p class="lead">本月上线 12 项功能，分布在工作台、质量协作、管理后台、模型治理四处。</p>
+
+    <h3 id="s21">2.1 工作台模式与面板选择</h3>
+    <ul class="feature-list">
+      <li><strong>工作台模式上线：</strong>任务全生命周期的管理工作台，带实时监控面板。</li>
+      <li><strong>右侧面板能力：</strong>实时预览、快捷键、AI 对话改组件（见<a href="#fig-chat">图 4</a>），查看、调整、迭代在一个界面里完成。</li>
+      <li><strong>面板选择：</strong>生成时可选浅色 / 深色，选哪个产物就是哪个，不再被模板默认值覆盖。</li>
+    </ul>
+
+    <div class="fig" id="fig-ui">
+      <img src="images/fig-workbench-ui.jpg" alt="晓界工坊工作台界面：会话分组、生成进度与右侧代码面板" width="590">
+    </div>
+    <p class="fig-caption">图 3　晓界工坊工作台界面：会话分组、生成进度与右侧代码面板</p>
+
+    <div class="fig" id="fig-chat">
+      <img src="images/fig-chat-mode.png" alt="工作台对话模式：对话内完成生成参数确认与生成进度跟踪" width="450">
+    </div>
+    <p class="fig-caption">图 4　工作台对话模式：对话内确认生成参数（组件类型 / 规格 / 来源）并跟踪进度（视觉分析 → 布局解析 → 代码生成 → 质量校验 → 快照保存），可暂停或取消</p>
+
+    <div class="fig" id="fig-panel">
+      <img src="images/fig-panel-switch.png" alt="生成面板选择：Vue3 / 微码、Lite / Max、浅色 / 深色面板" width="590">
+    </div>
+    <p class="fig-caption">图 5　生成面板选择：Vue3 / 微码、Lite / Max、浅色 / 深色面板，所选面板如实落到组件产物</p>
+
+    <h3 id="s22">2.2 质量与协作能力</h3>
+    <ul class="feature-list">
+      <li><strong>质量评分体系（暂仅内测，未对外开放）：</strong>组件生成后自动打分，管理员能看评分详情（见<a href="#fig-score">图 6</a>）。</li>
+      <li><strong>公共组件池：</strong>跨项目共享，带权限管控，减少重复建设。</li>
+      <li><strong>mc-check 自动检查 + AI 修复：</strong>生成即按最新规范，检查出问题自动修。</li>
+    </ul>
+
+    <div class="fig" id="fig-score">
+      <img src="images/fig-quality-score.png" alt="质量评分 v1（管理员预览）：规范分 / 样式分、设计稿对比与评分明细" width="242">
+    </div>
+    <p class="fig-caption">图 6　质量评分 v1（管理员预览，暂仅内测、未对外开放）：规范分 / 样式分、设计稿对比、分解明细与修复建议</p>
+
+    <h3 id="s23">2.3 管理功能</h3>
+    <ul class="feature-list">
+      <li><strong>管理后台三页面上线：</strong>用户管理、数据分析、系统日志。</li>
+      <li><strong>任务统计（见<a href="#fig-admin">图 7</a>）：</strong>看失败情况（质量失败 / 环境失败 / 其他，附错误话单）和模型效率（各模型成功率、耗时、Token 排行与近 30 天趋势），用来定位弱模型和失败根因。</li>
+      <li><strong>部门使用情况（见<a href="#fig-dept">图 8</a>）：</strong>按部门看用户数、任务数、成功率、耗时 P50，判断各部门用得深不深、生成质量差在哪。</li>
+      <li><strong>公告管理：</strong>可发布和展示公告。</li>
+      <li><strong>使用统计导出：</strong>用量数据可导出，方便核算成本。</li>
+    </ul>
+
+    <div class="fig" id="fig-admin">
+      <img src="images/fig-admin-stats.jpg" alt="管理后台任务统计：平台概览、模型效率排行、失败归因分布与效率趋势" width="590">
+    </div>
+    <p class="fig-caption">图 7　管理后台任务统计：平台概览、模型效率排行、失败归因分布与近 30 天趋势</p>
+
+    <div class="fig" id="fig-dept">
+      <img src="images/fig-dept-usage.png" alt="部门使用情况：各部门用户数、任务数、成功率与耗时 P50" width="590">
+    </div>
+    <p class="fig-caption">图 8　部门使用情况：各部门用户数 / 任务数 / 成功率 / 耗时 P50</p>
+
+    <h3 id="s24">2.4 模型治理</h3>
+    <ul class="feature-list">
+      <li>慢模型提示改口径：明确平台问题和模型问题，方便问题治理。</li>
+    </ul>
+
+    <!-- ======================= 三、专项说明 ======================= -->
+    <h2 id="sec-thinking">三、专项说明：为什么关闭思考模式</h2>
+    <p class="lead">本月生成提速的核心动作是关掉模型的思考模式。这涉及模型行为取舍，单独说明。</p>
+
+    <h3 id="s31">3.1 问题现象</h3>
+    <p class="issue"><strong>现象：</strong>配置层写了关闭思考模式，运行时参数没送到模型，生成很慢。</p>
+    <p class="solution"><strong>后果：</strong>代码生成每块耗时 40 ~ 190 秒。思考过程占输出预算，预算吃光后返回空结果，一次失败白等 3 ~ 7 分钟再重试。用户感受就是生成慢、偶尔卡住重来。</p>
+
+    <h3 id="s32">3.2 为什么关</h3>
+    <ul class="feature-list">
+      <li><strong>任务性质：</strong>组件生成是结构化任务，布局方向、尺寸、颜色、资源挂载位置都有确定性事实可依，不需要模型长时间推演。</li>
+      <li><strong>治理方向：</strong>平台在把确定性事实逐步收归管线，只让模型做它擅长的表达。长期靠模型想很久想对，会掩盖事实缺失，收归工作也就没了动力。</li>
+      <li><strong>成本与稳定：</strong>共享池高峰期会限流。思考模式让单次调用耗时成倍增长、失败率上升，用户侧就是变慢。</li>
+      <li><strong>输出预算：</strong>部分模型把思考内容计入输出 token，想得太久会挤掉正文，出现跑了却没结果。空结果重试的直接原因就是这个。</li>
+    </ul>
+
+    <h3 id="s33">3.3 具体策略（三档处置）</h3>
+    <table class="metrics">
+      <thead>
+        <tr>
+          <th>模型类型</th>
+          <th>处置方式</th>
+          <th>说明</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>支持显式开关的通用模型</td>
+          <td class="note-cell">注入「关闭思考」参数</td>
+          <td class="note-cell">直接把思考模式关掉，成本与耗时同时下降</td>
+        </tr>
+        <tr>
+          <td>天生推理型模型</td>
+          <td class="note-cell">从生成候选池排除</td>
+          <td class="note-cell">该类模型无法真正关闭思考，不用于代码生成</td>
+        </tr>
+        <tr>
+          <td>默认不推理的主流模型</td>
+          <td class="note-cell">不传参，保持默认</td>
+          <td class="note-cell">本身无思考开销，无需干预</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3 id="s34">3.4 兜底与效果</h3>
+    <p class="solution"><strong>兜底：</strong>运行时同时看「输出被截断」和「存在思考 token」两个特征，命中就重建模型连接，后续重试强制关闭思考。</p>
+    <p class="solution"><strong>效果：</strong>分块耗时下降，空结果重试基本消失。</p>
+
+    <!-- ======================= 四、与其他工具配合 ======================= -->
+    <h2 id="sec-tools">四、与其他工具配合</h2>
+    <p class="lead">本月与外部工具的能力对接：</p>
+
+    <table class="metrics">
+      <thead>
+        <tr>
+          <th>工具</th>
+          <th>新增能力</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="row-head">Figma</td>
+          <td class="note-cell">命名规范检查插件 v2，管线整理规范文档</td>
+        </tr>
+        <tr>
+          <td class="row-head">词元管家</td>
+          <td class="note-cell">维持既有管控，无新增</td>
+        </tr>
+        <tr>
+          <td class="row-head">微码组件管理平台</td>
+          <td class="note-cell">质量评分、mc-check 自动检查修复、公共组件池跨项目共享</td>
+        </tr>
+        <tr>
+          <td class="row-head">Apifox</td>
+          <td class="note-cell">API 接口生成页，数据 slot 绑定增强</td>
+        </tr>
+      </tbody>
+    </table>
+
+
+  </section>
+
+</body>
+</html>

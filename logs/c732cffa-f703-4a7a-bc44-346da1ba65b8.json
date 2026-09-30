@@ -1,0 +1,18 @@
+{
+  "request_id": "c732cffa-f703-4a7a-bc44-346da1ba65b8",
+  "stage": 2,
+  "route": "html",
+  "html_sub": "template",
+  "genre": "business-report",
+  "template_used": "business-report",
+  "theme_used": "business-modern",
+  "skills_invoked": ["design-token", "doc-typeset", "html-review"],
+  "html_review_attempts": 1,
+  "html_review_before": { "score": 55, "passed": false },
+  "html_review_after": { "score": 100, "passed": true },
+  "output_path": "stage2/formatted-business-report.html",
+  "design_tokens_path": "stage2/design_tokens.json",
+  "fallback": false,
+  "fallback_reason": null,
+  "timestamp": "2026-09-30T11:20:00+08:00"
+}
