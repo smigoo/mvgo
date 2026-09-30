@@ -47,6 +47,16 @@
             <button type="button" class="add-model-inline-btn" @click="addModel">+ 添加</button>
           </div>
 
+          <!-- 🛡️ 思考模式说明：告知哪些模型默认思考、系统如何关闭、不知名厂商风险 -->
+          <div class="thinking-mode-hint">
+            <span class="thinking-mode-hint-title">💡 思考模式说明</span>
+            <span class="thinking-mode-hint-text">
+              <strong>deepseek-v4 / qwen / glm / 混元 / 豆包</strong> 默认开思考，平台会<strong>自动关闭</strong>（卡片标「思考已关闭」）；
+              <strong>kimi-k* / o1 / o3 / reasoner</strong> 等推理模型<strong>无法关闭</strong>，已弃用；
+              ⚠️ 其他<strong>不知名厂商</strong>的模型，系统无法确定其思考开关，若生成明显变慢请手动确认。
+            </span>
+          </div>
+
           <div v-if="(formData.models?.length || 0) > 10" class="model-search">
             <input type="text" v-model="modelSearch" placeholder="按名称筛选模型" autocomplete="off" spellcheck="false" />
           </div>
@@ -64,6 +74,7 @@
                     模型 #{{ idx + 1 }}<span v-if="m.name || m.model"> · {{ m.name || m.model }}</span>
                   </span>
                   <span class="capability-badge capability-badge--mini" :class="(m.verified && m.capability) ? m.capability : 'unknown'">{{ modelStatusLabel(m) }}</span>
+                  <span v-if="thinkingStatus(m)" class="thinking-badge" :class="'thinking-badge--' + thinkingStatus(m)" :title="thinkingStatus(m) === 'disabled' ? '该模型默认开推理，平台已自动关闭思考（只读）' : '推理模型，生产管线不支持，provider 池已过滤弃用'">{{ thinkingStatus(m) === 'disabled' ? '思考已关闭' : '推理模型 · 已弃用' }}</span>
                   <span v-if="isModelInUse(m.id)" class="used-dot" title="已被槽位引用">●</span>
                 </span>
               </button>
@@ -1262,6 +1273,31 @@ function modelStatusLabel(m: ModelEntry): string {
   if (m.capability === 'text') return '文本'
   if (m.capability === 'both') return '文本 + 视觉'
   return '无能力' // 已检测但未能识别出任何能力
+}
+
+// 🛡️ 思考状态（只读徽标）。口径必须与后端 ai-defaults#resolveThinkingType 一致：
+//   推理模型（kimi-k*/thinking/reasoner/qwq/o1/o3/reasoning）→ skip（池过滤弃用）
+//   默认思考但可关（deepseek-v4*/qwen*/glm*/混元 hunyuan-hy4/豆包 doubao）→ disabled（平台自动关闭）
+//   其余（gpt 普通/claude 等默认不思考）→ null（无需徽标）
+// 返回 'disabled'（已关闭）/ 'skip'（推理模型弃用）/ null（默认不思考）。
+function thinkingStatus(m: ModelEntry): 'disabled' | 'skip' | null {
+  const model = String(m.model || '').trim().toLowerCase()
+  if (!model) return null
+  if (
+    /^kimi-k\d/.test(model) ||
+    /thinking/.test(model) ||
+    /reasoner/.test(model) ||
+    /^qwq/.test(model) ||
+    /^o1/.test(model) ||
+    /^o3/.test(model) ||
+    /reasoning/.test(model)
+  ) return 'skip'
+  if (/^deepseek-v4/.test(model)) return 'disabled'
+  if (model.includes('qwen')) return 'disabled'
+  if (model.includes('glm')) return 'disabled'
+  if (model.includes('hunyuan') || model.includes('hy4')) return 'disabled'
+  if (model.includes('doubao')) return 'disabled'
+  return null
 }
 
 // 能力标签（capability → 图标胶囊）
@@ -3136,6 +3172,51 @@ function clearConfig() {
   border-radius: 999px;
   white-space: nowrap;
   min-width: 44px;
+}
+
+/* 🛡️ 思考状态只读徽标：disabled=已关闭（绿，安全）/ skip=推理模型弃用（琥珀，警示） */
+.thinking-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  font-size: 11px;
+  line-height: 1.5;
+  border-radius: 999px;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.thinking-badge--disabled {
+  background: #e8f7ee;
+  color: #1a7f37;
+  border-color: #b7e6c8;
+}
+.thinking-badge--skip {
+  background: #fff4e5;
+  color: #b45309;
+  border-color: #fcd9a8;
+}
+
+/* 🛡️ 思考模式说明条（告知哪些模型默认思考、系统如何关闭、不知名厂商风险） */
+.thinking-mode-hint {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: baseline;
+  margin: 2px 0 10px;
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #5b6b7b;
+  background: #f4f7fb;
+  border: 1px solid #e3e9f2;
+  border-radius: 8px;
+}
+.thinking-mode-hint-title {
+  font-weight: 600;
+  color: #33475b;
+}
+.thinking-mode-hint-text strong {
+  color: #33475b;
 }
 
 .capability-hint {

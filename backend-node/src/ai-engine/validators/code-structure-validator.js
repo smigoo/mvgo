@@ -85,6 +85,8 @@ import { collectClassFacts } from '../utils/class-facts.js';
 import { checkClassNameContract } from '../utils/classname-contract.js';
 import { buildResourceFacts, checkResourceContract } from '../utils/resource-facts.js';
 import { checkSkeletonCompleteness } from '../utils/mc-skeleton.js';
+// 🛡️ LAYOUT-001（2026-09-30 §8.10 换证据源）：布局方向守卫 —— 事实源在 layout-direction-guard.js
+import { detectLayoutDirectionMismatch } from '../utils/layout-direction-guard.js';
 
 function normalizeCssLiteral(value = '') {
   return String(value || '')
@@ -751,6 +753,8 @@ export class CodeStructureValidator {
         ? options.productFiles
         : files;
     const issues = [];
+    // 📐 LAYOUT-001 运行统计（可达性留痕：旧实现在全语料恒不可达却无任何痕迹）
+    let layoutDirectionStats = null;
 
     // 🛡️ R5: L0-B 空集不得 pass=true（此前空产物恒 pass，绿灯直达发布阶段，
     // 直到 workspace-preview-publisher 才回滚「缺少 package/index.vue」）
@@ -1695,83 +1699,35 @@ export class CodeStructureValidator {
       }
     }
 
-    // ========== 🎯 方案6: LAYOUT-001 布局方向校验（两者通用，BLOCK）==========
-    // 验证生成的 template 中每个 section 的布局方向是否与 layoutStructure 标注一致
-    if (options?.layoutStructure?.sections) {
-      const sections = options.layoutStructure.sections || [];
-      const indexVueFile = generatedFiles.find((f) =>
-        (f.path || '').endsWith('index.vue'),
+    // ========== 🎯 LAYOUT-001 布局方向校验（两者通用，WARN · 2026-09-30 §8.10 换证据源重写）==========
+    // 旧实现三缺陷（全部实证，详见 utils/layout-direction-guard.js 头注释）：
+    //   ① 守卫读 `options.layoutStructure.sections`，而 `state.layoutStructure` 的真实形态是
+    //      `{ layout: { sections: [...] } }` ⇒ 全语料 443/443 份 `.checkpoint/visual.json` 实测
+    //      **恒不可达**（门禁日志 0 次，真正的死代码）；
+    //   ② 证据源错位：拿 `package/index.vue` 的 `<template>` 文本做**全局正则**，与具体 section 无关
+    //      ⇒ 任一 section 的 column 会点亮**所有** horizontal section 的判定；
+    //   ③ `horizontal` 分支判据是「模板里有 column 且没有 row」，与「本 section 是否横向」无关
+    //      （docs §8.10 实测 24 例中 6 例由此误判）。
+    //
+    // 新证据源 = 该 section **宿主子组件 `.vue` 的根元素**（`data-section-id="<sec.id>"` 定位）上
+    //   **实际生效**的方向，按 CSS 层叠取值：
+    //     inline `style` > `:style` 绑定 > class 规则（同文件 `<style>` + `common.less` + 其它样式文件）。
+    //
+    // 三态 + fail-open（**不猜**）：真值方向为空（`layout` 缺失 / `relative` / `absolute` / …）/
+    //   `grid`（方向真值同为 null，网格事实由 `gridColumns` 通道承载）/ 宿主未物化（交 COMP-001）/
+    //   根元素未显式声明方向 / 多 class 命中互相冲突 ⇒ **一律不判**。
+    // ⚠️ 传 `productFiles`（全量产物）：增量校验时 `files` 被裁成「变更文件 ∪ {common.less, declare.json}」
+    //   子集 ⇒ 宿主子组件缺席 ⇒ 门禁空转（与 CODE-024/025/026 同一个坑）。
+    //
+    // ⚠️ 严重级：本轮按点单**先降为 WARN**（旧为 BLOCK）—— 换证据源后判据面完全变了，
+    //   需真机 A/B 观察误报率再决定是否恢复 BLOCK。
+    if (options?.layoutStructure) {
+      const layoutDir = detectLayoutDirectionMismatch(
+        productFiles,
+        options.layoutStructure,
       );
-
-      if (indexVueFile && sections.length > 0) {
-        const content = indexVueFile.content || '';
-        // 🛡️ 共享边界法（lazy </template> 会被具名插槽提前截断——0ca84358 家族缺陷）
-        const templateContent = extractSfcTemplate(content);
-        if (templateContent) {
-
-          for (let i = 0; i < sections.length; i++) {
-            const section = sections[i];
-            const expectedLayout =
-              section.layout ||
-              (section.body && section.body.layout) ||
-              'vertical';
-            const gridCols = section.body && section.body.gridColumns;
-
-            // 简化检测：根据 section 名称或序号查找对应的 DOM 节点区域
-            // 检查是否包含正确的布局方向 CSS
-            let layoutMismatch = false;
-            let expectedCss = '';
-            let issue = '';
-
-            if (expectedLayout === 'horizontal') {
-              expectedCss = 'flex-direction: row 或 display: flex（横向）';
-              // 检测是否误用了竖向布局（flex-direction: column）
-              if (
-                /flex-direction:\s*column/i.test(templateContent) &&
-                !/flex-direction:\s*row/i.test(templateContent)
-              ) {
-                layoutMismatch = true;
-                issue = `Section ${i + 1} (${section.name || 'unnamed'}) 标注为横向布局（horizontal），但模板中使用了 flex-direction: column（竖向）`;
-              }
-            } else if (expectedLayout === 'vertical') {
-              expectedCss = 'flex-direction: column 或默认竖向堆叠';
-              // 竖向布局较为宽松，只要不是明确的横向或网格即可
-            } else if (expectedLayout === 'grid' && gridCols) {
-              expectedCss = `display: grid; grid-template-columns: repeat(${gridCols}, 1fr)`;
-              // 检测是否使用了 grid 布局且列数正确
-              const gridColsRegex = new RegExp(
-                `grid-template-columns:\\s*repeat\\(\\s*${gridCols}\\s*,`,
-                'i',
-              );
-              if (
-                /display:\s*grid/i.test(templateContent) &&
-                !gridColsRegex.test(templateContent)
-              ) {
-                layoutMismatch = true;
-                issue = `Section ${i + 1} (${section.name || 'unnamed'}) 标注为 ${gridCols} 列网格布局，但模板中网格列数不匹配`;
-              } else if (!/display:\s*grid/i.test(templateContent)) {
-                layoutMismatch = true;
-                issue = `Section ${i + 1} (${section.name || 'unnamed'}) 标注为网格布局（grid），但模板中使用了非网格布局`;
-              }
-            } else if (/2-?col/i.test(expectedLayout)) {
-              expectedCss = 'flex-direction: row（两列并排）';
-              if (!/flex-direction:\s*row/i.test(templateContent)) {
-                layoutMismatch = true;
-                issue = `Section ${i + 1} (${section.name || 'unnamed'}) 标注为两列布局（2-col），但模板中未使用 flex-direction: row`;
-              }
-            }
-
-            if (layoutMismatch && issue) {
-              issues.push({
-                id: 'LAYOUT-001',
-                severity: 'BLOCK',
-                file: indexVueFile.path,
-                message: `${issue}。期望：${expectedCss}`,
-              });
-            }
-          }
-        }
-      }
+      for (const it of layoutDir.issues) issues.push(it);
+      layoutDirectionStats = layoutDir.stats;
     }
 
     // ========== 🎯 方案6: STYLE-001 common.less 外层选择器包裹检测（微码，BLOCK）==========
@@ -3188,6 +3144,9 @@ export class CodeStructureValidator {
       pass: !issues.some((i) => i.severity === 'BLOCK'),
       blockCount: issues.filter((i) => i.severity === 'BLOCK').length,
       issues,
+      // 📐 LAYOUT-001 统计（truthFact/judged/mismatches…）——让「门禁跑了但没命中」
+      //   与「门禁根本没跑」可区分（旧实现死代码却零痕迹，这才是它藏了这么久的原因）
+      layoutDirectionStats,
     };
   }
 

@@ -1,5 +1,15 @@
 <template>
   <div class="message-bubble" :class="[message.role]">
+    <!-- R22：用户消息「编辑重发」入口（hover 出现） -->
+    <button
+      v-if="message.role === 'user' && message.content"
+      class="msg-edit-btn"
+      title="编辑重发"
+      @click="emit('edit', message)"
+    >
+      ✎ 编辑
+    </button>
+
     <div class="bubble-content">
       <!-- 用户粘贴/拖拽的图片 -->
       <div v-if="imageAttachments.length" class="message-images">
@@ -22,6 +32,7 @@
           :card="card"
           @confirm="emit('confirm', { message, card, data: $event })"
           @cancel="emit('cancel', { message, card, data: $event })"
+          @action="emit('action', { message, card, data: $event })"
         />
       </div>
     </div>
@@ -47,7 +58,7 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(['confirm', 'cancel']);
+const emit = defineEmits(['confirm', 'cancel', 'action', 'edit']);
 
 /**
  * 从消息 metadata 中取出图片附件。
@@ -92,6 +103,8 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown));
   &.user {
     display: flex;
     justify-content: flex-end;
+    align-items: center;
+    gap: 8px;
 
     .bubble-content {
       background: var(--wb-primary, #4f46e5);
@@ -101,6 +114,30 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown));
       max-width: 480px;
       font-size: 13px;
     }
+  }
+
+  /* R22：编辑重发按钮（用户消息 hover 出现，不占位） */
+  .msg-edit-btn {
+    flex-shrink: 0;
+    order: -1;
+    padding: 3px 8px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--wb-text-muted, #9ca3af);
+    font-size: 12px;
+    cursor: pointer;
+    opacity: 0;
+    transition: all 0.15s;
+
+    &:hover {
+      color: var(--wb-primary, #4f46e5);
+      background: var(--wb-primary-light, #eef2ff);
+    }
+  }
+
+  &.user:hover .msg-edit-btn {
+    opacity: 1;
   }
 
   &.assistant {

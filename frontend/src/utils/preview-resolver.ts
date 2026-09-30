@@ -116,7 +116,11 @@ export function buildPreviewUrl(
   if (options.snapshot !== undefined) params.set('snapshot', String(options.snapshot))
   const token = getAuthToken()
   if (token) params.set('token', token)
-  return `/preview/${encodeURIComponent(descriptor.componentId)}?${params.toString()}`
+  // 🔧 生产 base 前缀（2026-09-30）：BASE_URL 在生产 = /mvgo/（history 路由挂载根），dev = /。
+  // 缺前缀时 iframe 加载 /preview/xxx，nginx 虽回退 index.html，但 vue-router base 不匹配 → 预览空白。
+  // 与 api/component.ts 的 withAppBase / getRouteUrl 同口径（base 已含尾斜杠）。
+  const base = import.meta.env.BASE_URL || '/'
+  return `${base}preview/${encodeURIComponent(descriptor.componentId)}?${params.toString()}`
 }
 
 /**

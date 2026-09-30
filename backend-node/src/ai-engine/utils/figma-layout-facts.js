@@ -149,45 +149,7 @@ export function buildFigmaPreciseLayout(figmaNodeData, cssSelectorToFigmaNodeMap
   return result;
 }
 
-/**
- * 合并视觉分析 + Figma 数据，生成完整的布局事实。
- * 
- * 用途（2026-09-21 · c-device-monitor-bd796f8b 实锤）：
- *   - 视觉分析负责布局方向识别（vertical/horizontal/grid/flex）
- *   - Figma 负责精确尺寸/间距（width/height/gap）
- *   - 两者合并后传给 CSS 生成，确保布局方向正确 + 尺寸精确
- * 
- * @param {Object} visionLayout 视觉分析输出的 layout 结构（vision JSON 的 layout 字段）
- * @param {Object} figmaPreciseLayout Figma 提取的精确尺寸/间距（buildFigmaPreciseLayout 产出）
- * @returns {Record<string, {direction: string, width: number, height: number, gap: number|null}>}
- *   { className: { direction, width, height, gap } } 合并后的布局事实
- */
-export function mergeVisionAndFigmaLayout(visionLayout, figmaPreciseLayout) {
-  if (!visionLayout || !figmaPreciseLayout) return {};
-  
-  const result = {};
-  const visionSections = visionLayout.sections || [];
-  
-  for (const section of visionSections) {
-    const sectionId = section.id;
-    const direction = section.layout || 'vertical'; // 视觉提供方向
-    
-    // 从 Figma 精确布局中查找对应的尺寸/间距
-    const figmaLayout = figmaPreciseLayout[sectionId] || {};
-    
-    result[sectionId] = {
-      direction, // 视觉提供
-      width: figmaLayout.width || 0, // Figma 提供
-      height: figmaLayout.height || 0, // Figma 提供
-      gap: figmaLayout.gap ?? null, // Figma 提供
-    };
-  }
-  
-  return result;
-}
-
 export default {
   buildSelectorChildCounts,
   buildFigmaPreciseLayout,
-  mergeVisionAndFigmaLayout,
 };

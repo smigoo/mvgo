@@ -83,12 +83,19 @@
 | ✅ 内边距 | `padding` | `padding` | |
 | ⚡ 边框 | `border` | `border` | |
 
-#### 🚫 tab 项资源引用硬约束（CRITICAL，禁止张冠李戴）
+#### 🚫 跨区块资源引用硬约束（CRITICAL，禁止张冠李戴）
 
-- ❌ **tab 项（type=tab）禁止填写 `resourceFile` 指向其他区块的资源**：如把 switch 的 `bg-8788.png` 挂到 tab 项上——这会生成错误背景。tab 项的 `resourceFile` 只能引用「tabs 容器子树内」的真实资源。
-- ✅ **tab 背景优先用 CSS**：tab 项背景通常是纯色或渐变（Figma fills 的 SOLID / GRADIENT_LINEAR），应写 `backgroundColor` 或 `background: linear-gradient(...)`，**不要**强行找一张 png 当背景。
-- ✅ **找不到属于 tab 的资源时**：不填 `resourceFile`，让下游用 CSS 色值/渐变渲染；绝不借用其他 section 的背景图/图标。
-- ✅ **tab 图标**：仅当 tabs 容器子树内确有独立图标节点时才填 `icon.resourceFile`；否则留空。
+**适用范围 = 所有 `resourceFile` 字段**（`bg` / `icon` / `image`），**不限 `type=tab`**。
+
+- 🔒 **唯一合法落点**：「🎨 已下载资源清单」每条资源尾部都标注了 `⚠️仅此落点 data-section-id="X"` —— 该资源**只能**挂在产物中 `data-section-id="X"` 的那个元素上；**禁止**改挂到同名的兄弟容器、父级大容器、单个 tab/icon 元素上。
+  （三案实锤：tablist 整体背景被挂到单个 icon tab、A 卡的背景被挂到 B 卡、给 Figma 里 `fills: []` 本无背景的节点凭空加背景。）
+- 🎯 **按 `figmaPath` + 尺寸区分同父名资源**：同一父名下**经常有多条资源、标签逐字相同**，必须用清单里的 `[figmaPath]` 全路径与 `${宽}×${高}` 尺寸来分辨。例：
+  - `[…/tabs-list/bg] 295×27` = **tablist 整体**背景；`[…/tabs-list/bg-tab-active] 78×21` = **单个 tab 的激活态**背景（二者 `ownerSectionId` 同为 `2:7889`，**尺寸是唯一判别**）。
+  - `[cp-流量监测/slot-车型分布/con/card/bg-[m]] 191×80`（落点 `2:3446`）与 `191×81`（落点 `2:3496`）是**两张不同卡**的背景，不可互换。
+- ❌ **禁止借用其他 section 的资源**：某区域在本清单里**没有**对应资源 ⇒ **该处不要背景/图标**，让下游用 CSS 色值/渐变渲染；**绝不**从别的区域借一张来凑。
+- ✅ **背景优先用 CSS**：Figma fills 为 SOLID / GRADIENT_LINEAR 时，直接写 `backgroundColor` 或 `background: linear-gradient(...)`，**不要**强行找一张 png 当背景（清单里标了 `⚡ CSS: background: ...` 的就是这种，直接抄该值）。
+- ✅ **tab 项（`type=tab`）补充**：单个 tab 的背景通常是纯色或渐变；其 `resourceFile` 只能引用「tabs 容器子树内」的资源，且必须满足上面的唯一落点约束。
+- ✅ **图标**：仅当目标元素所在 section 子树内确有独立图标节点时才填 `icon.resourceFile`；否则留空。
 
 ### 7. 图表类（chart, chart-container）
 

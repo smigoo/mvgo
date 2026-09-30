@@ -2,11 +2,9 @@ import {
   Controller,
   Get,
   Post,
-  Delete,
   Param,
   Body,
   Query,
-  Patch,
   UseGuards,
   HttpException,
   HttpStatus,
@@ -136,6 +134,8 @@ export class WorkbenchController {
             title: result.conversation.title,
             messageCount: result.conversation.messageCount,
             lastActiveAt: result.conversation.lastActiveAt,
+            // R7 锚点：生成类工具成功后回写的「当前组件 id」，前端据此渲染锚点 chip
+            currentComponentId: result.conversation.currentComponentId,
           },
         },
       };
@@ -150,9 +150,9 @@ export class WorkbenchController {
 
   /**
    * 删除对话
-   * DELETE /api/workbench/conversations/:conversationId
+   * POST /api/workbench/conversations/:conversationId/delete
    */
-  @Delete('conversations/:conversationId')
+  @Post('conversations/:conversationId/delete')
   async deleteConversation(
     @Param('conversationId') conversationId: string,
     @CurrentUser() userId: string,
@@ -441,9 +441,9 @@ export class WorkbenchController {
 
   /**
    * 重命名分组
-   * PATCH /api/workbench/groups/:name
+   * POST /api/workbench/groups/:name/rename
    */
-  @Patch('groups/:name')
+  @Post('groups/:name/rename')
   async renameGroup(
     @CurrentUser() userId: string,
     @Param('name') name: string,
@@ -473,9 +473,9 @@ export class WorkbenchController {
 
   /**
    * 删除分组（组内有对话时拒绝）
-   * DELETE /api/workbench/groups/:name
+   * POST /api/workbench/groups/:name/delete
    */
-  @Delete('groups/:name')
+  @Post('groups/:name/delete')
   async deleteGroup(
     @CurrentUser() userId: string,
     @Param('name') name: string,
@@ -570,5 +570,59 @@ export class WorkbenchController {
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
+  }
+
+  /**
+   * R23 结果反馈（数据飞轮）
+   * POST /api/workbench/feedback  body: { sessionId, componentName, rating: 'up'|'down', comment? }
+   */
+  @Post('feedback')
+  async submitFeedback(
+    @CurrentUser() userId: string,
+    @Body() body: { sessionId?: string; componentName?: string; rating?: 'up' | 'down'; comment?: string },
+  ) {
+    const result = await this.workbenchService.submitFeedback(body, userId);
+    if (!result.success) {
+      throw new HttpException(
+        { success: false, error: result.error },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    return { success: true, data: result.data, message: '感谢反馈' };
+  }
+
+  /**
+   * R7 锚点可视化：清除当前组件的锚定（用户点 chip 的 ×）。
+   * POST /api/workbench/conversations/:conversationId/clear-component
+   */
+  @Post('conversations/:conversationId/clear-component')
+  async clearComponentAnchor(
+    @Param('conversationId') conversationId: string,
+    @CurrentUser() userId: string,
+  ) {
+    const conversation = await this.workbenchService.clearComponentAnchor(conversationId, userId);
+    if (!conversation) {
+      throw new HttpException(
+        { success: false, error: '对话不存在或无权访问' },
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    return { success: true, message: '已清除当前组件锚点' };
+  }
+
+  /**
+   * R23 反馈闭环：聚合当月 👍/👎 统计。
+   * GET /api/workbench/feedback/stats?months=1
+   */
+  @Get('feedback/stats')
+  async getFeedbackStats(
+    @CurrentUser() userId: string,
+    @Query('months') months?: string,
+  ) {
+    const stats = await this.workbenchService.getFeedbackStats(
+      userId,
+      months ? parseInt(months, 10) : 1,
+    );
+    return { success: true, data: stats };
   }
 }

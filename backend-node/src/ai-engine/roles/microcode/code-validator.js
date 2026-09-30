@@ -12,6 +12,7 @@ import {
 } from '../../utils/post-process.js';
 import { resolveClassPrefixId } from '../../validators/code-structure-validator.js';
 import { detectRootContainerClass } from '../../validators/code-fix-rules.js';
+import { THEME_WRAPPER_TEMPLATES } from '../../utils/mc-skeleton.js';
 
 export function detectFileTruncation(files) {
     const issues = [];
@@ -439,6 +440,141 @@ export function generateFallbackCssRule(className, styles) {
       return `.${className} {\n  /* TODO: 请根据设计稿补充样式 */\n}`;
     }
     return `.${className} {\n${props.join(';\n')};\n}`;
+  }
+
+/**
+ * 🛡️ 2026-09-30 复审 P0-2：清扫「**零声明** TODO 占位规则」（削源彻底化的后置闸门）。
+ *
+ * 背景（复审实锤）：
+ *   `generateFallbackCssRule` 在「模板 class 未在 common.less 定义」时会写出
+ *   `.cls` 的「仅含 `TODO: 请根据设计稿补充样式` 注释」的空规则，追加进 `resources/styles/common.less`
+ *   （`microcode-engineer` fallback 段）。这个空壳**不是终态**，而是两道后置注入的事实锚点：
+ *     ① `fixSectionHeightsForResource`（resource-mounter:2540）规则②/⑤ —— **只 `replace` 已存在的块，
+ *        不新建规则** ⇒ 空壳正是它补 `display / flex-direction / flexGrow / grid` 的落点。
+ *   ⇒ 因此**不能在生产端直接删**（删了会丢布局注入锚点）；正解是**注入之后再清残留**。
+ *
+ * 语料证实两半都存在（frontend+backend workspace，文案口径「请根据设计稿补充样式」共 2560 条）：
+ *   - 1472 条**已被填上真实声明** ⇒ 必须保留规则本体，仅去掉 TODO 注释；
+ *   - 1088 条**仍为零声明**    ⇒ 证明该 class 始终无事实可填，整条删除信息无损（可观测性由
+ *     `mismatches` 的 `CLASS-MUST-EXIST` 门禁 + logger 承担，不靠产物里的注释）。
+ *
+ * 口径（与「只面向 `.vue <style>` 的旧实现」的区别 —— 后者 2026-09-30 已删，由 `stripEmptyTodoRulesInSfc` 接管）：
+ *   本函数面向**任意 CSS/LESS 文本**（含 `common.less`），按**花括号平衡**取「最内层块」，
+ *   因此：① 多选择器 `.a, .b { }` / `::v-deep .a { }` 会**整条规则**一起删（不会留悬挂逗号）；
+ *   ② 中文类名不再漏清（不依赖类名字符集）；③ 误伤面收窄（**不依赖**注释正文）。
+ *
+ * 判据保守化（复审 P1-3 建议）：只认两种已知占位文案（`补充样式` / `请根据设计稿补充样式`），
+ * 业务性 TODO 注释（如「待产品确认」）不会被当作占位，更不会被删除。
+ *
+ * @param {string} cssText CSS / LESS 文本
+ * @returns {{code: string, removedRules: number, strippedComments: number}} 幂等；无命中时原样返回
+ */
+export function stripEmptyTodoRules(cssText) {
+    const NOOP = { code: cssText, removedRules: 0, strippedComments: 0 };
+    if (typeof cssText !== 'string' || cssText.indexOf('TODO:') === -1) return NOOP;
+
+    const PLACEHOLDER_RE =
+      /\/\*\s*TODO:\s*(?:补充样式|请根据设计稿补充样式)\s*\*\//g;
+    const COMMENT_RE = /\/\*[\s\S]*?\*\//g;
+
+    let text = cssText;
+    let removedRules = 0;
+
+    // ── 阶段 1：删除「零声明」空壳规则（逐轮取最内层块，从右向左替换避免下标漂移）──
+    for (let round = 0; round < 8; round++) {
+      const dels = [];
+      const stack = [];
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (ch === '{') {
+          stack.push(i);
+        } else if (ch === '}') {
+          const openIdx = stack.pop();
+          if (openIdx === undefined) continue;
+          const body = text.slice(openIdx + 1, i);
+          if (body.indexOf('{') !== -1) continue; // 非最内层（含子块）→ 本阶段不动，留给注释阶段
+          if (!PLACEHOLDER_RE.test(body)) {
+            PLACEHOLDER_RE.lastIndex = 0;
+            continue;
+          }
+          PLACEHOLDER_RE.lastIndex = 0;
+          if (body.replace(COMMENT_RE, '').trim() !== '') continue; // 有真实声明 → 保留规则本体
+          // 零声明空壳 → 连同**完整选择器段**一起删：head 从上一个 `}`/`;`/`{` 之后起算，
+          // 因此多选择器 `.a, .b {}` / `::v-deep .a {}` 都整条删除，不会留下悬挂逗号/组合符。
+          let hs = openIdx;
+          while (hs > 0 && !'{};'.includes(text[hs - 1])) hs--;
+          while (hs < openIdx && /\s/.test(text[hs])) hs++;
+          dels.push({ start: hs, end: i + 1 });
+        }
+      }
+      if (dels.length === 0) break;
+      for (let k = dels.length - 1; k >= 0; k--) {
+        text = text.slice(0, dels[k].start) + text.slice(dels[k].end);
+        removedRules++;
+      }
+    }
+
+    // ── 阶段 2：删除后仍残留的占位注释（属于「有声明」或「含子块」的规则）──
+    //    放在删除收敛之后做全局替换，彻底规避嵌套区间互相重叠导致的下标错乱。
+    let strippedComments = 0;
+    text = text.replace(PLACEHOLDER_RE, () => {
+      strippedComments++;
+      return '';
+    });
+    text = text.replace(/\n[ \t]*\n[ \t]*\n+/g, '\n\n');
+
+    if (removedRules === 0 && strippedComments === 0) return NOOP;
+    return { code: text, removedRules, strippedComments };
+  }
+
+/**
+ * 🛡️ 2026-09-30 P1-1：`stripEmptyTodoRules` 的 SFC 适配器（取代旧实现，后者已于同日删除）。
+ *
+ * 旧实现的四个缺陷（复审 §3 P1-1/P1-3，已在本适配器口径下消除）：
+ *   ① 只取**第一个** `<style>` 块（`content.match(/(<style…>)([\s\S]*?)(<\/style>)/)` 非全局）
+ *      ⇒ 第二块（如 `scoped` + `lang="less"` 分块）里的占位永远清不掉；本适配器**遍历全部** `<style>` 块
+ *      （与 2.11 `processAllStyleFiles` 的 `match(...gi)` 口径一致）。
+ *   ② 只认 `.class{}` 单形态 ⇒ 多选择器 `.a, .b{}` / `::v-deep .a{}` 会被删出**悬挂逗号/组合符**（语义污染），
+ *      元素选择器 `div{}`、嵌套块后的外层占位、**中文类名**一律漏清。
+ *   ③ `[^*]*` 遇含 `*` 的注释正文 ⇒ 不删但 `kept++` ⇒ **非幂等 + 计数虚增**。
+ *   ④ 无文案护栏 ⇒ 任何 `/* TODO: …` 都被当成占位（业务 TODO 的注释会被误删）。
+ * 以上四点均由 `stripEmptyTodoRules`（花括号平衡 + 最内层块 + 文案护栏 + 两阶段）接管。
+ *
+ * @param {string} content .vue 全文
+ * @returns {{code: string, removedRules: number, strippedComments: number}} 无 `<style>` / 无命中时原样返回
+ */
+export function stripEmptyTodoRulesInSfc(content) {
+    const NOOP = { code: content, removedRules: 0, strippedComments: 0 };
+    if (typeof content !== 'string' || content.indexOf('TODO:') === -1) return NOOP;
+
+    const STYLE_BLOCK_RE = /<style\b[^>]*>[\s\S]*?<\/style>/gi;
+    let out = '';
+    let last = 0;
+    let removedRules = 0;
+    let strippedComments = 0;
+    let match;
+    while ((match = STYLE_BLOCK_RE.exec(content)) !== null) {
+      const block = match[0];
+      const openEnd = block.indexOf('>') + 1;
+      const closeIdx = block.toLowerCase().lastIndexOf('</style>');
+      if (openEnd <= 0 || closeIdx < openEnd) continue;
+      const body = block.slice(openEnd, closeIdx);
+      const r = stripEmptyTodoRules(body);
+      // 模板 / script / `<style>` 标签本身**逐字保留**，只替换样式体
+      out +=
+        content.slice(last, match.index) +
+        block.slice(0, openEnd) +
+        r.code +
+        block.slice(closeIdx);
+      last = match.index + block.length;
+      removedRules += r.removedRules;
+      strippedComments += r.strippedComments;
+    }
+    if (last === 0) return NOOP;
+    out += content.slice(last);
+
+    if (removedRules === 0 && strippedComments === 0) return NOOP;
+    return { code: out, removedRules, strippedComments };
   }
 
 /**
@@ -1470,9 +1606,15 @@ export async function validateAndFixGeneratedFiles(
     }
     // ==================== End v3.6 ====================
     // 1. 检查并修复主题文件
+    // 🛡️ 2026-09-30：模板来源兜底。正常由 `microcode-engineer` 经
+    //   `helpers.themeWrapperTemplates` 透传（值即单一事实源，见 utils/mc-skeleton.js）；
+    //   但原先直接 `options.themeWrapperTemplates.dark` 解引用 ⇒ 未来任何新调用方忘记传参
+    //   都会 TypeError。此处兜底到同一单一事实源（当前唯一调用点恒传参，兜底不触发）。
+    const themeWrapperTemplates =
+      options.themeWrapperTemplates || THEME_WRAPPER_TEMPLATES;
     const themeFiles = {
-      'resources/styles/themes/dark.less': options.themeWrapperTemplates.dark,
-      'resources/styles/themes/light.less': options.themeWrapperTemplates.light,
+      'resources/styles/themes/dark.less': themeWrapperTemplates.dark,
+      'resources/styles/themes/light.less': themeWrapperTemplates.light,
       'resources/styles/themes/theme-vars.less': `// 主题变量和 mixins（自动生成兜底）
 .common() {
   // 跨主题共享变量
@@ -1997,78 +2139,33 @@ export async function validateAndFixGeneratedFiles(
       }
     }
 
-    // 2.6.2 子组件样式 TODO 占位填充（2026-09-21 · c-device-monitor 实锤）
-    // 子组件 <style> 中的 `/* TODO: 补充样式 */` 占位，从 Figma 节点数据读取真实样式填充。
-    // 关联路径：CSS class → 模板 div（通过 class 选择器）→ data-section-id → nodeLayoutFacts[nodeId]
-    if (nodeLayoutFacts && Object.keys(nodeLayoutFacts).length > 0) {
+    // 2.6.2 子组件样式 TODO 占位**清扫**（2026-09-21 引入填充 → 2026-09-30 收缩为「只清占位」）
+    // 背景：`/* TODO: 补充样式 */` 占位的唯一生产者是 P-12a（`post-process#validateDynamicClassStyles`），
+    //       已于 2026-09-30 按删减法删除（削源）。此处把旧职责「从 nodeLayoutFacts 填充样式」收缩为
+    //       **只清扫残留占位**：填充读的 nodeLayoutFacts（A 类布局事实）与 2.11 LAYOUT-FACTS-INJECT
+    //       **同一事实源、同一输出** ⇒ 布局注入统一归 2.11，此处不再重复注入。
+    // 清扫口径（幂等，命名无关）：
+    //   ① `{ display:flex; flex-direction:column; /* TODO: 补充样式 */ }` → 去注释、**保留**已有声明；
+    //   ② `{ /* TODO: 补充样式 */ }`（纯空壳）→ **整条规则删除**。
+    // 2026-09-30 P1-1：旧实现 `stripStyleTodoPlaceholders` 已删除，统一改用
+    //   `stripEmptyTodoRulesInSfc`（遍历**全部** `<style>` 块；花括号平衡取最内层块 ⇒ 多选择器 /
+    //   `::v-deep` / 中文类名 / 元素选择器都不再漏清，且不再产出悬挂逗号；文案护栏收窄为两种占位文案，
+    //   业务性 TODO 注释不误伤；计数口径 kept/dropped → removedRules/strippedComments）。
+    // 范围：`package/**.vue`（原实现只覆盖 `package/components/`，**窄于**生产者「所有 .vue」的覆盖
+    //       ⇒ 顺带修掉「`package/index.vue` 的残留占位永不被清」的口径缺口）。
+    {
       for (const [filePath, fileContent] of Object.entries(mergedFiles)) {
-        if (!filePath.startsWith('package/components/') || !filePath.endsWith('.vue'))
-          continue;
+        if (!filePath.startsWith('package/') || !filePath.endsWith('.vue')) continue;
         // 🛡️ 2026-09-22 覆盖修复：读取基底改为 fixedFiles 优先（防前置 pass 成果被回滚）。
         const latestContent0 = fixedFiles[filePath] ?? fileContent;
         if (!latestContent0 || typeof latestContent0 !== 'string') continue;
-        if (!latestContent0.includes('/* TODO:')) continue;
 
-        // 提取 <template> 段，构建 class → nodeId 映射
-        const templateMatch = latestContent0.match(/<template[^>]*>([\s\S]*?)<\/template>/);
-        if (!templateMatch) continue;
-        const templateContent = templateMatch[1];
-        
-        // 匹配带 data-section-id 的元素，提取 class 和 nodeId
-        const classToNodeId = new Map();
-        const elementRegex = /<[^>]+class="([^"]+)"[^>]*data-section-id="([^"]+)"[^>]*>/g;
-        let elemMatch;
-        while ((elemMatch = elementRegex.exec(templateContent)) !== null) {
-          const classes = elemMatch[1].split(/\s+/);
-          const nodeId = elemMatch[2];
-          for (const cls of classes) {
-            if (cls) classToNodeId.set(cls, nodeId);
-          }
-        }
-
-        // 提取 <style> 段
-        const styleMatch = latestContent0.match(/(<style[^>]*>)([\s\S]*?)(<\/style>)/);
-        if (!styleMatch) continue;
-        const styleOpenTag = styleMatch[1];
-        const styleContent = styleMatch[2];
-        const styleCloseTag = styleMatch[3];
-
-        // 查找包含 TODO 占位的 CSS 规则并替换
-        let fixedStyleContent = styleContent;
-        let filledCount = 0;
-        const todoRegex = /\.([A-Za-z][\w-]*)\s*\{[^}]*\/\*\s*TODO:[^*]*\*\/[^}]*\}/g;
-        let todoMatch;
-        
-        while ((todoMatch = todoRegex.exec(styleContent)) !== null) {
-          const className = todoMatch[0];
-          const classSelector = todoMatch[1];
-          const nodeId = classToNodeId.get(classSelector);
-          
-          if (nodeId && nodeLayoutFacts[nodeId]) {
-            const facts = nodeLayoutFacts[nodeId];
-            // 生成真实 CSS 属性
-            const cssProps = [];
-            if (facts.display) cssProps.push(`  display: ${facts.display}`);
-            if (facts.flexDirection) cssProps.push(`  flex-direction: ${facts.flexDirection}`);
-            // 可从 facts 扩展更多属性（gap/align-items 等），当前仅处理布局事实
-            
-            if (cssProps.length > 0) {
-              const newRule = `.${classSelector} {\n${cssProps.join(';\n')};\n}`;
-              fixedStyleContent = fixedStyleContent.replace(className, newRule);
-              filledCount++;
-            }
-          }
-        }
-
-        if (filledCount > 0) {
-          const newFileContent = latestContent0.slice(0, styleMatch.index) +
-            styleOpenTag + fixedStyleContent + styleCloseTag +
-            latestContent0.slice(styleMatch.index + styleMatch[0].length);
-          fixedFiles[filePath] = newFileContent;
-          fixes.push(
-            `子组件 ${filePath} 已填充 ${filledCount} 处样式 TODO 占位（从 Figma 节点数据读取）`,
-          );
-        }
+        const swept = stripEmptyTodoRulesInSfc(latestContent0);
+        if (swept.removedRules + swept.strippedComments === 0) continue;
+        fixedFiles[filePath] = swept.code;
+        fixes.push(
+          `子组件 ${filePath} 已清扫 ${swept.removedRules + swept.strippedComments} 处样式 TODO 占位（删空壳 ${swept.removedRules} / 去注释 ${swept.strippedComments}）`,
+        );
       }
     }
 
@@ -2112,18 +2209,48 @@ export async function validateAndFixGeneratedFiles(
     if (mergedFiles[commonLessPath]) {
       const { autoFixPrefixViolations, resolveClassPrefixId, findNonAsciiClassNames } =
         await import('../../validators/code-structure-validator.js');
-      // 🛡️ 事实优先级表 §六 #3（2026-09-28）：**非 ASCII 类名**独立判据（不 BLOCK，先可见化）。
+      // 🛡️ 事实优先级表 §六 #3（2026-09-28）：**非 ASCII 类名**独立判据（不 BLOCK）。
       //   必须独立于前缀判据 —— 批3 的 `^\.c-[a-z0-9]{2,}-` 豁免会把 `.c-x-文字` 判为「已带前缀」。
+      //   2026-09-30（f8116aa6「class 出现了中文」用户质询）：从「仅告警」升级为
+      //   **确定性净化出口** —— 中文段 → 语义英文映射（component-naming 词表），
+      //   模板 class/:class + style 选择器 + common.less 全内容一致重命名；余量才告警。
       {
+        const { autoFixNonAsciiClassNames } =
+          await import('../../utils/component-naming.js');
+        const relevantPaths = Object.keys(mergedFiles).filter(
+          (p) => p.endsWith('.vue') || p === commonLessPath,
+        );
+        const filesSubset = {};
+        for (const p of relevantPaths) {
+          const c = fixedFiles[p] ?? mergedFiles[p];
+          if (typeof c === 'string') filesSubset[p] = c;
+        }
+        const ncFix = autoFixNonAsciiClassNames(filesSubset, { logger: options.logger });
+        if (ncFix.renamed.length > 0) {
+          for (const [p, c] of Object.entries(ncFix.files)) {
+            fixedFiles[p] = c;
+          }
+          const uniq = new Map();
+          for (const r of ncFix.renamed) uniq.set(r.from, r.to);
+          const samples = [...uniq.entries()]
+            .slice(0, 5)
+            .map(([f, t]) => `${f}→${t}`)
+            .join(', ');
+          fixes.push(
+            `§六 #3 类名净化: ${uniq.size} 个非 ASCII 类名已重命名为语义英文（${samples}${uniq.size > 5 ? ' …' : ''}）`,
+          );
+        }
         const bad = [
-          ...findNonAsciiClassNames(mergedFiles[commonLessPath]),
+          ...findNonAsciiClassNames(fixedFiles[commonLessPath] ?? mergedFiles[commonLessPath] ?? ''),
           ...Object.entries(mergedFiles)
             .filter(([p]) => p.endsWith('.vue'))
-            .flatMap(([, c]) => findNonAsciiClassNames(c)),
+            .flatMap(([p]) =>
+              findNonAsciiClassNames(fixedFiles[p] ?? mergedFiles[p] ?? ''),
+            ),
         ];
         if (bad.length) {
           options.logger?.warn?.(
-            `🛡️ §六 #3 非 ASCII 类名（违反命名契约 c-<semantic>-<kebab-en>，当前仅告警）：${[...new Set(bad)].slice(0, 5).join(', ')}${new Set(bad).size > 5 ? ' …' : ''}`,
+            `🛡️ §六 #3 非 ASCII 类名（净化后仍有余量，违反命名契约 c-<semantic>-<kebab-en>）：${[...new Set(bad)].slice(0, 5).join(', ')}${new Set(bad).size > 5 ? ' …' : ''}`,
           );
         }
       }

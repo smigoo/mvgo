@@ -192,10 +192,15 @@ describe('层① 确定性 index.vue 模板装配', () => {
       {
         id: '89:40', type: 'container', name: 'con', isLayoutContainer: true,
         responsibility: '纵向布局容器',
+        // 🛡️ 2026-09-30 P0-1：容器**必须携带显式 layout**（真实管线里 E1 恒从 A 类事实写入；
+        //   字段缺失 = 「无事实」⇒ 写产物层按四分支**不内联方向**）。此处显式声明 vertical，
+        //   保持本用例原意（验证 P6 wrapper 合并 + 容器 div 吃父比例）。
+        layout: 'vertical',
         children: [
           {
             id: '89:38', type: 'container', name: 'switch', isLayoutContainer: true,
             responsibility: '纵向布局容器',
+            layout: 'vertical',
             children: [
               { id: '2:8787', type: 'content', name: 'active', responsibility: 'active' },
               { id: '2:8806', type: 'content', name: 'default', responsibility: 'default' },
@@ -204,6 +209,7 @@ describe('层① 确定性 index.vue 模板装配', () => {
           {
             id: '89:37', type: 'container', name: '@antd/tab', isLayoutContainer: true,
             responsibility: '纵向布局容器',
+            layout: 'vertical',
             children: [
               { id: '89:39', type: 'tabs', responsibility: '标签页切换区' },
               { id: '2:8437', type: 'content', name: 'cons', responsibility: 'cons' },
@@ -230,7 +236,7 @@ describe('层① 确定性 index.vue 模板装配', () => {
     expect(switchIdx).toBeLessThan(tabIdx)
     expect(tabIdx).toBeLessThan(tabsIdx)
     // 🛡️ P6 wrapper 容器化合并：容器 div 直接吃父比例（本例 con-con 无父分配 → flex:1;min-height:0）
-    //   + 对子方向（本例两个容器 layout 未显式声明 → 默认 vertical/column）；
+    //   + 对子方向（本例两个容器显式 layout='vertical' → column）；
     //   无任何纯比例空壳 wrapper。
     expect(tpl).toContain('c-device-monitor-switch-con" data-section-id="89:38" style="flex:1;min-height:0;display:flex;flex-direction:column;"')
     expect(tpl).toContain('c-device-monitor-antd-tab-con" data-section-id="89:37" style="flex:1;min-height:0;display:flex;flex-direction:column;"')
@@ -238,6 +244,74 @@ describe('层① 确定性 index.vue 模板装配', () => {
     expect(tpl).not.toContain('<div style="flex:')
     // switch 容器的闭合 div 必须在 antd-tab 容器开始之后（两个容器互不嵌套、平级包裹各自叶子）
     expect(tpl.indexOf('</div>', switchIdx)).toBeLessThan(tabIdx)
+  })
+
+  /**
+   * 🛡️ 2026-09-30 复审 P0-1：`section.layout` 取值域扩到 {horizontal, vertical, grid, null} 后，
+   *   容器写产物层（`code-generator.js:649`）必须是**四分支**，不能再是二值三元
+   *   （旧口径把 `grid`/`null` 一律内联成 `flex-direction:column`，内联优先级压过 class 规则）。
+   */
+  describe('P0-1 容器四分支（grid / null 不再退化成 column）', () => {
+    const containerWith = (layout: unknown, extra: Record<string, unknown> = {}) => [
+      {
+        id: 'c1',
+        type: 'container',
+        name: 'wrap',
+        isLayoutContainer: true,
+        responsibility: '容器',
+        layout,
+        ...extra,
+        children: [{ id: 'k1', type: 'content', name: 'main', responsibility: 'main' }],
+      },
+    ]
+    // ⚠️ 断言必须精确到**容器 div 自身的 style 属性**：模板里 `slot-con` 本身恒含
+    //    `display:flex;flex-direction:column`，用全局 not.toContain 会误判。
+    const wrapStyle = (layout: unknown, extra?: Record<string, unknown>) => {
+      const tpl = buildDeterministicIndexTemplate(makeInput(containerWith(layout, extra)))!.template
+      const m = tpl.match(/c-device-monitor-wrap-con" data-section-id="c1" style="([^"]*)"/)
+      expect(m).not.toBeNull()
+      return m![1]
+    }
+
+    test('horizontal → display:flex;flex-direction:row + align-items:stretch', () => {
+      const s = wrapStyle('horizontal')
+      expect(s).toContain('display:flex;flex-direction:row;')
+      expect(s).toContain('align-items:stretch;')
+    })
+
+    test('vertical → display:flex;flex-direction:column（无 align-items）', () => {
+      const s = wrapStyle('vertical')
+      expect(s).toContain('display:flex;flex-direction:column;')
+      expect(s).not.toContain('align-items:stretch')
+    })
+
+    test('⭐ grid + gridColumns → display:grid + repeat(N,1fr)（旧口径会写成 column）', () => {
+      const s = wrapStyle('grid', { gridColumns: 3 })
+      expect(s).toContain('display:grid;grid-template-columns:repeat(3,1fr);')
+      expect(s).not.toContain('flex-direction')
+    })
+
+    test('grid 无列数 → 只写 display:grid，不臆造列数', () => {
+      const s = wrapStyle('grid')
+      expect(s).toContain('display:grid;')
+      expect(s).not.toContain('grid-template-columns')
+      expect(s).not.toContain('flex-direction')
+    })
+
+    test('⭐ layout = null（无事实）→ 不内联 display / 方向（交 common.less 与 2.11）', () => {
+      const s = wrapStyle(null)
+      expect(s).not.toContain('display:flex')
+      expect(s).not.toContain('display:grid')
+      expect(s).not.toContain('flex-direction')
+      // flex 比例仍保留（它是父容器的 flex item，与自身 display 无关）
+      expect(s).toContain('flex:1;min-height:0;')
+    })
+
+    test('布局取值未知（拼写错误串）→ 同样不臆造（等同无事实）', () => {
+      const s = wrapStyle('HORIZONTAL ')
+      expect(s).not.toContain('flex-direction')
+      expect(s).not.toContain('display:')
+    })
   })
 
   test('E1 治本：headerSlots 编造 id 匹配不到 → 回退 type=header 二分（header 不丢）', () => {

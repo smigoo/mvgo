@@ -37,6 +37,11 @@ import { buildItemLevelFacts } from '../utils/figma-item-facts.js';
 // 🛡️ 刀 5a（2026-09-13）：section type 推导抽离到纯函数模块（无 import.meta 依赖，可单测）
 import { deriveSectionType } from '../utils/section-type-derive.js';
 import { applyHeaderGeometryFallback } from '../utils/header-geometry-fallback.js';
+// 🛡️ 2026-09-30（评审 §8.4 步骤 3 · Bug4-①）：A 类布局事实（容器级布局方向的**单一事实源**）。
+//   本模块是 `deriveSectionsFromFigmaTree` 的**唯一调用方**；依赖方向为
+//   `figma-node-layout-facts` → `section-tree`（用 `areBoxesSideBySide`），反向 import 会**成环**
+//   ⇒ 由本模块算好并作为第 2 参传入（见 `plan()` 内 layoutFacts）。
+import { buildNodeLayoutFacts } from '../utils/figma-node-layout-facts.js';
 
 export { isLayoutContainerSection, collectLeafSections };
 
@@ -531,22 +536,51 @@ function mergeLegendSections(sections) {
 
 /**
  * 🎯 Phase 2 方案1: 从 Figma Auto Layout 提取布局元数据
+ *
+ * 🛡️ 2026-09-30 复审 §8.8 ③-b（合并轮）：`direction` 改为**真值通道 + 三态**。
+ *   旧实现只认**对象键**（`layout.layoutMode || layout.direction`），而本仓真实语料的布局事实是
+ *   **字符串**（`layout: 'horizontal' | 'vertical' | 'grid' | null`；6630 个 section 实测
+ *   `layout`/`body.layout` 对象 **0 例**）⇒ 对象键命中 0 ⇒ `direction` 在生产语料上
+ *   **恒为 'column'**（横向 section 亦然）：live 口径实测 容器 864 + 叶子 1774 **100% 失真**。
+ *   现在：
+ *     · **字符串形态**（真实语料）：`horizontal`/`row` → `'row'`；`vertical`/`column` → `'column'`；
+ *     · **对象形态**（既有测试与旧数据）：仍读 `layoutMode`/`direction` 键（`'HORIZONTAL'`/`'VERTICAL'`），**行为逐字不变**；
+ *     · **无事实 / `grid` / 未知取值 → `null`**（「无事实不臆造」）。`grid` 的方向事实由
+ *       `gridColumns` 通道承载，**不得**写成 `flex-direction: grid`（非法 CSS）。
+ *
+ *   ⚠️ 本次**同批**已同步的下游口径（缺一即造出 `flex-direction: null` 文案）：
+ *     · `microcode-engineer.js` 的「布局协调提示」已加 `if (meta.direction)` 三态护栏
+ *       （该行原为**无条件强指令**，覆盖 1774/1774 叶子、其中 1116 条与真实 layout 相反）；
+ *     · `generation-context-assembler.js:25` 本就 `|| null`；
+ *     · `section-content-guard.js:775` 的 `||` 兜底从此**真正可达**（该字段不参与门禁判定）；
+ *     · `subcomponent-planner.js:1030`（R2 豁免）OR 前项已覆盖 `horizontal|grid|row` ⇒ 冗余无害。
+ *   验证口径见 docs 复审 §8.8.7（两态差分对跑 + prompt 快照 diff：预期 1116 行 column→row、225 行消失）。
  */
 function extractLayoutMetadata(section) {
-  const layout = section?.layout || section?.body?.layout || {};
-
-  // Figma layoutMode: HORIZONTAL | VERTICAL | NONE
+  // 保持与旧实现一致的「假值回退」语义：`section.layout` 为空串时仍回退 body.layout
+  const rawLayout = section?.layout || section?.body?.layout;
+  // 对象形态取键；字符串形态直接取值（本仓真实语料）。
   const layoutMode = String(
-    layout.layoutMode || layout.direction || '',
+    (rawLayout && typeof rawLayout === 'object'
+      ? rawLayout.layoutMode || rawLayout.direction
+      : rawLayout) || '',
   ).toUpperCase();
+  // 三态：'row' | 'column' | null（无事实不臆造）。
+  //   ⚠️ 用**前缀**匹配而非全等：真实语料里还有 `horizontal-2-columns` / `horizontal-3-items`
+  //   （live 口径 5 例），而本仓既有口径都是「含 horizontal 即横向」——
+  //   `subcomponent-planner.js:1029` 的 `/horizontal|grid|row/i`、`prompt-builder.js:1717` 的
+  //   `/2-?col/i` 皆然。此处对齐，避免同一份 `layout` 在两处判出不同方向。
+  const direction =
+    layoutMode === 'ROW' || layoutMode.startsWith('HORIZONTAL')
+      ? 'row'
+      : layoutMode === 'COLUMN' || layoutMode.startsWith('VERTICAL')
+        ? 'column'
+        : null;
+  // 非对象形态（字符串/缺失）时按空对象处理 —— 与原实现「取不到属性即走默认」等价
+  const layout = rawLayout && typeof rawLayout === 'object' ? rawLayout : {};
 
   return {
-    direction:
-      layoutMode === 'HORIZONTAL'
-        ? 'row'
-        : layoutMode === 'VERTICAL'
-          ? 'column'
-          : 'column',
+    direction,
     alignItems:
       layout.primaryAxisAlignItems || layout.alignItems || 'flex-start',
     justifyContent:
@@ -1029,15 +1063,31 @@ function buildEffectiveSection(sec, idx, ctx) {
       buildEffectiveSection(child, i, ctx),
     );
     const title = sec.header?.title || sec.title || sec.name || '';
+    // 🛡️ 2026-09-30 复审 P0-1：原为 `sec.layout || 'vertical'` ⇒ 把「无事实（null）」臆造成
+    //   `vertical` 下传，再被 `code-generator` 写成 `display:flex;flex-direction:column` 内联样式
+    //   （内联优先级压过 class 规则）⇒「无事实不臆造」在写产物层被抵消。
+    //   改为**原样透传**（null 即 null），由写产物层按四分支决定「不内联方向」。
+    //   离线定量（复审 §6-1）：真实语料容器侧 `null = 0` ⇒ 本次改动**当前零行为变化**。
+    const containerLayout = sec.layout == null ? null : sec.layout;
+    // A 类事实的网格列数（仅由 `section-tree#deriveChildGridColumns` 对**容器**下发，见其注释）
+    const containerGridColumns = Number(sec.gridColumns) > 1 ? Number(sec.gridColumns) : null;
     return {
       id: sec.id || `container-${idx + 1}`,
+      // 🛡️ 2026-09-30 复审 §8.8 #14：删掉文案里的**方向复述**（原为「纵向布局容器…」）。
+      //   「方向」只能有一个事实源：真实 `sec.layout`（→ `layoutMetadata.direction` / 容器
+      //   写产物的四分支 / `formatSectionTreeForPrompt` 的 dirText）。而该文案对
+      //   **495/864（57%）的横向容器语义写反**，并被 `constraint-reinforcement.js:57`
+      //   （`s.name || s.title || s.responsibility`）当作 section 名复用。
+      //   实测该 prompt 出口**当前 0 触发**（864/864 容器 title 非空），故本次改动实际只
+      //   影响 context-shadow / 分析视图；改文案仍属「删减法」（删掉与事实无关的断言）。
       responsibility:
-        '纵向布局容器（仅空间包裹，不单独生成 .vue 文件；子区块必须按 children 树在父模板内组装）',
+        '布局容器（仅空间包裹，不单独生成 .vue 文件；子区块必须按 children 树在父模板内组装）',
       elementCount: children.reduce((n, c) => n + (Number(c.elementCount) || 0), 0),
       title: String(title).trim().slice(0, 30),
       type: 'container',
       isLayoutContainer: true,
-      layout: sec.layout || 'vertical',
+      layout: containerLayout,
+      ...(containerGridColumns != null ? { gridColumns: containerGridColumns } : {}),
       layoutSource: 'container-rebuild',
       children,
       collapsed: false,
@@ -1048,10 +1098,22 @@ function buildEffectiveSection(sec, idx, ctx) {
         interactions: 0,
         maxDepth: 0,
       },
-      layoutMetadata: extractLayoutMetadata({
-        ...sec,
-        layout: { direction: 'VERTICAL', layoutMode: 'VERTICAL' },
-      }),
+      // 🛡️ 2026-09-30 复审 §8.6 ③-a：删掉硬编码 `layout: { direction:'VERTICAL', layoutMode:'VERTICAL' }`。
+      //   实测那一层覆盖是**纯 no-op**：`extractLayoutMetadata` 读的是**对象键**
+      //   （`layout.layoutMode || layout.direction`），而真实语料 6630 个 section 的
+      //   `layout` / `body.layout` **100% 是字符串或 None（对象 0 例）** ⇒ 覆盖与否都落
+      //   `: 'column'` 兜底，输出逐字相同。但它会向下游**断言「VERTICAL」**（配合
+      //   `subcomponent-planner.js:1047` 的「纵向布局容器」文案），把「无事实」伪装成事实。
+      //   改为**从容器真实 layout 派生**（`extractLayoutMetadata(sec)`），不再向下游断言方向。
+      //   **差分探针实测**（临时 spec 跑「改动前 / 改动后」两态对跑，容器 6 种 layout 输入）：
+      //     · `'horizontal' | 'vertical' | 'grid' | null | undefined`（= 真实语料 100%，6630 section
+      //       实测对象 0 例）⇒ 输出**逐字完全一致**；
+      //     · 唯一差异是**对象形态** `layout:{layoutMode:'HORIZONTAL',itemSpacing:12,paddingLeft:8}`
+      //       （语料 0 例）：旧代码把真实的 HORIZONTAL/间距/内边距**压成** `column/gap:0/padding:0`，
+      //       新代码如实透传 `row/gap:12/left:8` —— 正是「不再臆造」的预期方向。
+      //   ⚠️ 仍未治本：`extractLayoutMetadata` 的 `: 'column'` 兜底本身会说谎（无事实 ≠ column），
+      //   治本（字符串感知 + 无事实返回 null + 同步 section-content-guard 口径）是 ③-b，须单独一轮 + A/B。
+      layoutMetadata: extractLayoutMetadata(sec),
       internalSubcomponents: [],
       shouldSplitInternally: false,
     };
@@ -1384,7 +1446,12 @@ export class SubcomponentPlanner {
 
     if (opts.figmaNodeData && typeof opts.figmaNodeData === 'object') {
       // 🛡️ 先尝试确定性递归推导（结构事实源）
-      const derived = deriveSectionsFromFigmaTree(opts.figmaNodeData);
+      // 🛡️ 2026-09-30（评审 §8.4 步骤 3 · Bug4-①）：`sections[].layout` 改为**只认 A 类布局事实**
+      //   （`figma-node-layout-facts#buildNodeLayoutFacts`）——旧 B 类 `xSpread > ySpread` 近似已删。
+      //   外部若已算过（`opts.nodeLayoutFacts`）直接复用，避免重复遍历全树。
+      const layoutFacts =
+        opts.nodeLayoutFacts || buildNodeLayoutFacts(opts.figmaNodeData);
+      const derived = deriveSectionsFromFigmaTree(opts.figmaNodeData, layoutFacts);
       if (derived && Array.isArray(derived.sections) && derived.sections.length > 0) {
         // 收集 vision 语义（完整字段），按 figmaNodeId 建索引
         const visionSemantic = new Map();

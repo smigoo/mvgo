@@ -275,6 +275,29 @@ export async function validateTaskCodeSnapshot(
   return envelope?.data || envelope
 }
 
+/** 版本历史：列出任务的全部代码快照版本（含状态/时间/文件数），及当前 candidate/lastGood/partial 指针。 */
+export async function fetchTaskCodeSnapshotRevisions(sessionId: string): Promise<{
+  success: boolean
+  revisions: TaskCodeSnapshotManifest[]
+  current: { candidate: string | null; lastGood: string | null; partial: string | null }
+}> {
+  const response = await generatorRequest.get(`/tasks/${sessionId}/code-snapshots/revisions`)
+  const envelope = response.data
+  return envelope?.data || envelope
+}
+
+/** 一键回滚：把 last-good 指针重定向到指定历史版本。 */
+export async function rollbackTaskCodeSnapshot(
+  sessionId: string,
+  revision: string,
+): Promise<{ success: boolean; manifest?: TaskCodeSnapshotManifest; message?: string }> {
+  const response = await generatorRequest.post(
+    `/tasks/${sessionId}/code-snapshots/${revision}/rollback`,
+  )
+  const envelope = response.data
+  return envelope?.data || envelope
+}
+
 /** 按 revision 读取单个生成中文件，避免与其他 workspace 版本混读。 */
 export async function fetchTaskCodeSnapshotFile(
   sessionId: string,

@@ -1,8 +1,11 @@
 /**
  * 🎯 阶段 B（2026-09-15）：高置信统计型 inline-row 的确定性成员装配。
  *
- * 正例：2:3660 统计行（每个成员「1 标题 + 1 数值」，x 可解析、唯一、严格递增）→ high。
- * 负例：88:32 sub-header（成员无数值配对）、标题/数值重复、x 缺失/重叠、带图片资源、非横向。
+ * 正例：2:3660 统计行（每个成员 2 个文本、角色可由**样式/几何**确定，x 可解析、唯一、严格递增）→ high。
+ * 负例：88:32 sub-header（成员文本数 ≠ 2）、标题/数值重复、x 缺失/重叠、带图片资源、非横向。
+ *
+ * 🔴 2026-09-30 命名无关：角色不再看图层名（`t-`/`d-`），改由 `splitTitleValueByStyle`
+ *   按 字号（大=数值）→ 几何 y（靠下=数值）判定；两样都分不出时 fallback（不臆造）。
  */
 import {
   assessStatRowConfidence,
@@ -23,6 +26,10 @@ function node(id, name, type, x, y, children = [], extra = {}) {
 }
 function text(id, name, x, y) {
   return node(id, name, 'TEXT', x, y);
+}
+/** 带字号真值的文本节点（用于验证「按样式判角色」） */
+function textFs(id, name, x, y, fontSize) {
+  return node(id, name, 'TEXT', x, y, [], { style: { fontSize } });
 }
 
 /** 2:3660 真实形态：两个统计卡片，各「1 标题 + 1 数值」 */
@@ -83,6 +90,50 @@ describe('assessStatRowConfidence · 高置信统计行判定与确定性装配'
     expect(assessStatRowConfidence(sec, fig.document).verdict).toBe('high');
   });
 
+  test('🔴 命名无关：图层名全带 `t-`，但字号可分 → 仍判 high（样式接管角色）', () => {
+    const fig = {
+      document: {
+        id: 'root',
+        name: 'root',
+        type: 'FRAME',
+        absoluteBoundingBox: { x: 0, y: 0, width: 400, height: 400 },
+        children: [
+          node('s1', 's1', 'FRAME', 0, 0, [
+            node('g1', 'g1', 'GROUP', 40, 0, [textFs('a', 't-江阴大桥', 40, 0, 12), textFs('b', 't-34,620', 40, 20, 24)]),
+            node('g2', 'g2', 'GROUP', 260, 0, [textFs('c', 't-隧道', 260, 0, 12), textFs('d', 't-82,379', 260, 20, 24)]),
+          ]),
+        ],
+      },
+    };
+    const r = assessStatRowConfidence(horizSection('s1', ['s1', 'g1', 'g2']), fig.document);
+    expect(r.verdict).toBe('high');
+    expect(r.members.map((m) => [m.title, m.value])).toEqual([
+      ['江阴大桥', '34,620'],
+      ['隧道', '82,379'],
+    ]);
+  });
+
+  test('负例：恰 2 个文本但样式/几何都分不出角色 → fallback(member-shape-mismatch)，不臆造', () => {
+    const fig = {
+      document: {
+        id: 'root',
+        name: 'root',
+        type: 'FRAME',
+        absoluteBoundingBox: { x: 0, y: 0, width: 400, height: 400 },
+        children: [
+          node('s1', 's1', 'FRAME', 0, 0, [
+            // 同字号、同 y、同 x ⇒ 无任何真值可判角色
+            node('g1', 'g1', 'GROUP', 40, 0, [text('a', 't-a', 40, 0), text('b', 'd-1', 40, 0)]),
+            node('g2', 'g2', 'GROUP', 260, 0, [text('c', 't-b', 260, 0), text('d', 'd-2', 260, 0)]),
+          ]),
+        ],
+      },
+    };
+    const r = assessStatRowConfidence(horizSection('s1', ['s1', 'g1', 'g2']), fig.document);
+    expect(r.verdict).toBe('fallback');
+    expect(r.reason).toMatch(/member-shape-mismatch/);
+  });
+
   test('负例 88:32：sub-header 成员无数值配对 → fallback(member-shape-mismatch)', () => {
     const fig = {
       document: {
@@ -115,8 +166,8 @@ describe('assessStatRowConfidence · 高置信统计行判定与确定性装配'
         absoluteBoundingBox: { x: 0, y: 0, width: 10, height: 10 },
         children: [
           node('s1', 's1', 'FRAME', 0, 0, [
-            node('g1', 'g1', 'GROUP', 40, 0, [text('a', 't-隧道', 40, 0), text('b', 'd-1', 40, 0)]),
-            node('g2', 'g2', 'GROUP', 260, 0, [text('c', 't-隧道', 260, 0), text('d', 'd-2', 260, 0)]),
+            node('g1', 'g1', 'GROUP', 40, 0, [textFs('a', 't-隧道', 40, 0, 12), textFs('b', 'd-1', 40, 20, 24)]),
+            node('g2', 'g2', 'GROUP', 260, 0, [textFs('c', 't-隧道', 260, 0, 12), textFs('d', 'd-2', 260, 20, 24)]),
           ]),
         ],
       },
@@ -161,8 +212,8 @@ describe('assessStatRowConfidence · 高置信统计行判定与确定性装配'
         absoluteBoundingBox: { x: 0, y: 0, width: 10, height: 10 },
         children: [
           node('s1', 's1', 'FRAME', 0, 0, [
-            node('g1', 'g1', 'GROUP', 100, 0, [text('a', 't-a', 100, 0), text('b', 'd-1', 100, 0)]),
-            node('g2', 'g2', 'GROUP', 100, 0, [text('c', 't-b', 100, 0), text('d', 'd-2', 100, 0)]),
+            node('g1', 'g1', 'GROUP', 100, 0, [textFs('a', 't-a', 100, 0, 12), textFs('b', 'd-1', 100, 20, 24)]),
+            node('g2', 'g2', 'GROUP', 100, 0, [textFs('c', 't-b', 100, 0, 12), textFs('d', 'd-2', 100, 20, 24)]),
           ]),
         ],
       },

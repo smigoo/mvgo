@@ -616,8 +616,7 @@ export function createPhase2Graph(config = {}) {
       state._visualTrustVerdict = visualTrust.verdict;
       if (
         visualTrust.verdict === 'conflict' ||
-        visualTrust.verdict === 'blocked' ||
-        visualTrust.verdict === 'low-coverage'
+        visualTrust.verdict === 'blocked'
       ) {
         logger.warn('⚠️ 视觉分析可信度异常，标记降级', {
           verdict: visualTrust.verdict,
@@ -627,6 +626,35 @@ export function createPhase2Graph(config = {}) {
         state._visualDegradeReason =
           state._visualDegradeReason ||
           `视觉分析${visualTrust.verdict}: ${visualTrust.reason}`;
+      } else if (visualTrust.verdict === 'low-coverage') {
+        // 🛡️ 2026-09-30 口径对齐（与 mc-component-graph-phase2.js 完全同口径）：
+        // 'low-coverage' 的语义是「视觉模型没看全」，**不是**「分析不可信」——
+        // context-conflict-resolver 已将其映射为 TRUST_LEVELS.RESTRICTED（受限生成）。
+        // 此处不再置 _visualDegraded（否则 engineer 直接 throw ⇒ 弱视觉模型用户永远生成不了），
+        // 改为放行 + 归因提示（明确指向「视觉模型分析能力」，与设计稿无关）。
+        const qualityWarning = {
+          rate: visualTrust.coverageRate,
+          attribution: visualTrust.attribution || 'vision-recall',
+          missingTexts: visualTrust.missingTexts || [],
+          missingTextCount: visualTrust.missingTextCount || 0,
+        };
+        state._visualQualityWarning = qualityWarning;
+        logger.warn('⚠️ 视觉覆盖率不足 → 降级放行（归因：视觉模型召回能力，非设计稿问题）', qualityWarning);
+        const sample = qualityWarning.missingTexts.slice(0, 5);
+        state.onProgress?.({
+          stage: '视觉分析',
+          message:
+            `⚠️ 视觉模型识别能力不足：本次仅识别到 ${qualityWarning.rate}% 的设计稿内容` +
+            (sample.length
+              ? `，图中明确存在但未被识别的文字如「${sample.join('」「')}」` +
+                (qualityWarning.missingTextCount > sample.length
+                  ? ` 等 ${qualityWarning.missingTextCount} 项`
+                  : '')
+              : '') +
+            `。这与设计稿无关，是当前视觉模型的分析能力所致；系统将按已识别内容继续生成（内容可能不完整），` +
+            `建议更换识别能力更强的视觉模型后重新生成。`,
+          status: 'completed',
+        });
       } else if (visualTrust.verdict === 'warning') {
         logger.warn('⚠️ 视觉分析覆盖率不足，保留降级提示', {
           reason: visualTrust.reason,
@@ -669,7 +697,11 @@ export function createPhase2Graph(config = {}) {
         _visualTrustVerdict:
           visualTrust?.verdict || state._visualTrustVerdict || null,
         //  P0-3: 视觉分析降级标志透传（视觉超时→Figma 兜底 或 完全降级）
-        _visualDegraded: result.degraded === true,
+        // 🛡️ 2026-09-30 口径对齐（与 mc-component-graph-phase2.js:1146 同一处修复，本文件此前漏改）：
+        // 原写法只透传 result.degraded（=「分析抛异常→兜底」），会把上方 conflict/blocked 分支
+        // 写入的 state._visualDegraded=true 覆盖回 false ⇒ engineer 不 throw ⇒ 幻觉 vision 继续生成。
+        // 改为 OR 保留两者（phase2.js 已于 2026-09-02 修复，vue3 分支漏同步）。
+        _visualDegraded: result.degraded === true || state._visualDegraded === true,
         _visualLayoutSource:
           result.layoutSource ||
           (result.layoutStructure && result.layoutStructure.layoutSource) ||
@@ -677,7 +709,11 @@ export function createPhase2Graph(config = {}) {
         _visualDegradeReason:
           result.degradeReason ||
           (result.layoutStructure && result.layoutStructure.degradeReason) ||
+          state._visualDegradeReason ||
           null,
+        // 🛡️ 2026-09-30：低覆盖率「降级放行」时透传质量提示（供任务记录/UI 展示
+        // 「内容可能不完整」，并说明成因是视觉模型召回不足），与 phase2 同口径。
+        _visualQualityWarning: state._visualQualityWarning || null,
       };
     } catch (error) {
       logger.error('视觉分析失败', { error: error.message });
@@ -1653,9 +1689,13 @@ export function createPhase2Graph(config = {}) {
       const {
         checkSectionContent,
         healDuplicateTextIssues,
+        healBorrowedEvidence,
         checkSectionExclusiveEvidence,
       } = await import('../utils/section-content-guard.js');
       const { validateVueSfc } = await import('../utils/sfc-syntax-validation.js');
+      const { pruneUnmountedResourceImports } = await import(
+        '../utils/resource-import-guard.js'
+      );
       const { readdirSync: _rds, readFileSync: _rfs, existsSync: _ex, writeFileSync: _wfs3 } = await import('fs');
       const { join: _j } = await import('path');
       const compDir = _j(state.outputPath, 'package', 'components');
@@ -1695,6 +1735,39 @@ export function createPhase2Graph(config = {}) {
             healed: healResult.healed.map((h) => ({ text: h.text, removedFrom: h.removedFrom })),
           });
         }
+      }
+
+      // 🎯 2026-09-30 治本③：借用证据（文本/资源）确定性处置（与 phase2 图同款，见其注释）。
+      const borrowedHeal = healBorrowedEvidence({
+        files,
+        plan: state.subComponentPlan,
+        figmaRoot: figmaRootForGuard,
+        resourceDomMapping: state.resourceDomMapping || state._uiCache?.resourceDomMapping,
+        validateSfc: (c, p) => validateVueSfc(c, p),
+        pruneUnmounted: (c, mapping) => pruneUnmountedResourceImports(c, mapping),
+      });
+      const borrowedChanged = [
+        ...new Set([
+          ...borrowedHeal.healed.text.map((h) => h.removedFrom),
+          ...borrowedHeal.healed.asset.map((h) => h.removedFrom),
+        ]),
+      ];
+      if (borrowedChanged.length > 0) {
+        for (const wp of borrowedChanged) {
+          const rec = borrowedHeal.files.find((f) => f.path === wp);
+          if (rec && typeof rec.content === 'string') {
+            try { _wfs3(_j(state.outputPath, wp), rec.content, 'utf-8'); } catch (_) {}
+          }
+        }
+        logger.warn('🩹 内容映射守卫：借用证据已确定性处置（删非归属引用 + 剪未挂载 import）', {
+          borrowedText: borrowedHeal.healed.text,
+          borrowedAsset: borrowedHeal.healed.asset,
+        });
+        state.onProgress?.({
+          stage: '内容映射校验',
+          message: `🩹 已自愈 ${borrowedHeal.healed.text.length} 处借用文本、${borrowedHeal.healed.asset.length} 处借用资源（从非归属组件删除）`,
+          status: 'warning',
+        });
       }
 
       const exclusiveCheck = checkSectionExclusiveEvidence({

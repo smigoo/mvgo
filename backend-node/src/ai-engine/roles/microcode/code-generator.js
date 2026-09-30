@@ -634,8 +634,32 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
         // 🛡️ 布局方向事实（2026-09-16 治本）：容器 flex 方向由 planner 的 layout 确定性给出
         //   （switch=horizontal 两 tab 一行、tabs=vertical 竖排）。直接内联到容器 div，
         //   不依赖 LLM 给容器类写样式（此前 switch-con 在 common.less 里 0 定义 → 方向丢失）。
-        const flexDir = String(sec.layout || 'vertical').toLowerCase() === 'horizontal' ? 'row' : 'column';
-        const isHorizontal = flexDir === 'row';
+        //
+        // 🛡️ 2026-09-30 复审 P0-1：`section.layout` 取值域已扩到 **{horizontal, vertical, grid, null}**
+        //   （`section-tree.js#deriveChildLayout` 只认 A 类布局事实），而这里原来是**二值三元**
+        //   ⇒ `grid` 与 `null` 一律被写成 `column`。内联样式优先级高于 class 规则 ⇒ 即便
+        //   `resource-mounter` 为同一 class 写了 `display:grid`，也会被内联 `display:flex;flex-direction:column`
+        //   压过（「无事实不臆造」在写产物层被抵消）。
+        //   四分支：horizontal→row；vertical→column；**grid→display:grid（有列数才写 repeat(N,1fr)）**；
+        //           **null/未知→不内联 display 与方向**（交给 common.less / 2.11 LAYOUT-FACTS-INJECT）。
+        //   ⚠️ 本分支只在**容器**（`isLayoutContainerSection`）路径生效 —— 叶子分支（见 `renderBodyNode`
+        //      末尾）只输出子组件标签、不写方向，故本改动对叶子零影响。离线定量（§6-1）：真实语料
+        //      容器侧 `grid=0 / null=0` ⇒ 本改动**当前零行为变化**，属堵未来。
+        const rawLayout = String(sec.layout ?? '').toLowerCase();
+        const layoutKind =
+          rawLayout === 'horizontal' || rawLayout === 'vertical' || rawLayout === 'grid'
+            ? rawLayout
+            : null; // 无事实 / 未知取值 ⇒ 断言「无事实」，不臆造方向
+        const isHorizontal = layoutKind === 'horizontal';
+        // 列数来自 A 类事实（`section-tree#deriveChildGridColumns` 只对容器下发，见其注释）
+        const gridCols = Number(sec.gridColumns);
+        const displayStyle =
+          layoutKind === 'grid'
+            ? `display:grid;${Number.isFinite(gridCols) && gridCols > 1 ? `grid-template-columns:repeat(${gridCols},1fr);` : ''}`
+            : layoutKind
+              ? `display:flex;flex-direction:${isHorizontal ? 'row' : 'column'};`
+              : '';
+        const alignStyle = isHorizontal ? 'align-items:stretch;' : '';
         // 🛡️ P1 修复（2026-09-17）：容器 div 添加 data-section-id，让 resource-mounter 能精确匹配
         //   到递归渲染后的 DOM 层级（此前无此属性 → targetDomSelector 匹配失败 → 资源挂载丢失）。
         const sectionIdAttr = sec.id ? ` data-section-id="${sec.id}"` : '';
@@ -646,7 +670,7 @@ export function buildDeterministicIndexTemplate(input, options = {}) {
         //   align-items:stretch 保留（水平容器交叉轴撑满高度）。
         const parentIsHorizontal = parentFlexStyle.includes('min-width:0');
         const ownFlex = parentFlexStyle || `flex:1;${parentIsHorizontal ? 'min-width:0' : 'min-height:0'};`;
-        lines.push(`${pad}<div class="${cls}"${sectionIdAttr} style="${ownFlex}display:flex;flex-direction:${flexDir};${isHorizontal ? 'align-items:stretch;' : ''}">`);
+        lines.push(`${pad}<div class="${cls}"${sectionIdAttr} style="${ownFlex}${displayStyle}${alignStyle}">`);
         // 🛡️ P2 修复（2026-09-17）：水平 flex 子项按 Figma 实际宽度比例分配 flex-grow，
         //   替代旧版统一 flex:1 均分（此前 tabs 46px 和 cons 367px 被 50:50 均分，严重失真）。
         //   计算逻辑：收集所有子节点宽度 → 求和 → 每个子项 flex-grow = width / totalWidth。
@@ -1085,14 +1109,30 @@ export function mergeScriptParts(...parts) {
       // 🛡️ 先剥 markdown 代码围栏（模型可能用 ```vue ... ``` 包裹输出；尾围栏不是空白，
       // 会让下面的 /<\/script>\s*$/ 剥不掉 </script>，进而把 ``` 包进 <script setup> 内部 → SFC Invalid end tag）
       x = x.replace(/^\s*```[a-zA-Z]*\s*\n?/, '').replace(/\n?\s*```\s*$/, '');
-      // 🛡️ 截断 </script> 之后的尾部内容（LLM 常在 script 闭合后输出自检清单/markdown，
+      // 🛡️ 截断 </script> 之后的一切（LLM 常在 script 闭合后输出自检清单/markdown，
       // 导致 replace(/<\/script>\s*$/i) 匹配不到末尾 </script>，进而把 markdown 包进 script → SFC Invalid end tag）
+      //
+      // 🔴 2026-09-30 治本（c-bb771-8bb771e4 实锤）：`lastIndexOf` 会把**段内多余的闭合标签**留下。
+      //   scriptSplit 的每段各自带一次 `<script setup>…</script>` 包裹；某段实测为
+      //   `<script setup>\n…\n</script>\n</script>`（**双闭合**），旧实现截到最后一个 `</script>`
+      //   就把中间那个留了下来，而紧随其后的清理只剥「末尾」一个 ⇒ **中间那个泄漏**。
+      //   多段合并（state/lifecycle/charts）后，泄漏的 `</script>` 把后续段**切到 <script> 块之外**
+      //   （实测：chunk4 lifecycle + chunk5 import 共 469 字符落在 `</script>` 与 `<style>` 之间）
+      //   ⇒ SFC 只解析第一个 script 块 ⇒ `onMounted` 落在块外 ⇒ **onload 事件永不发布**。
+      //
+      //   ⚠️ 正确口径是「**删标签、保内容**」，不能改写成「截断到第一个 `</script>`」——
+      //   同一段里可能存在**多对**包裹（多脚本块），截断会把后面的脚本整块丢掉
+      //   （实测 480 个真机分段里有段落下 784 字符）。故：只截掉最后一个闭合**之后**的
+      //   markdown 尾巴，再把所有包裹标签**删除**（内容逐字保留）。
       const _scIdx = x.lastIndexOf('</script>');
-      if (_scIdx >= 0) x = x.slice(0, _scIdx + '</script>'.length);
-      // 🛡️ 剥 <script setup> 开标签和 </script> 闭标签
-      x = x
-        .replace(/^\s*<script\s+setup>\s*/i, '')
-        .replace(/\s*<\/script>\s*$/i, '');
+      if (_scIdx >= 0) x = x.slice(0, _scIdx);
+      // 独占一行的包裹标签（模型输出的段首/段尾包裹总是独占行）
+      x = x.replace(/^[ \t]*<\/script\s*>[ \t]*\r?\n?/gm, '');
+      x = x.replace(/^[ \t]*<script\b[^>]*>[ \t]*\r?\n?/gm, '');
+      // 兜底：行内残留的闭合标签 / 字符串开头的开标签
+      x = x.replace(/<\/script\s*>/gi, '');
+      x = x.replace(/^\s*<script\b[^>]*>\s*/i, '');
+      x = x.trim();
       // 🛡️ 只剥混入的 <template>/<style> 块（注意：不用 stripNonScriptBlocks，
       // 它会把完整 <script> 块也剥掉——那是清理 template 用的，这里是清理 script 内容）
       x = x.replace(/<template\b[^>]*>[\s\S]*?<\/template\s*>/gi, '');
@@ -1109,8 +1149,25 @@ export function mergeScriptParts(...parts) {
       return acc;
     }, []);
     if (nonEmptyIdx.length === 0) return '';
-    // 仅一段有内容：原样返回该段（保留模型输出，不强制包裹重复标签）
-    if (nonEmptyIdx.length === 1) return (parts[nonEmptyIdx[0]] || '').trim();
+    // 🔴 2026-09-30 治本（同族第二处 · c-max-1789499487971-12bc3750 实锤）：
+    //   旧实现 `return (parts[nonEmptyIdx[0]] || '').trim()` 直接回吐**原始 part**，
+    //   单段里的**双 `</script>`** 无人清理 ⇒ assembleIndexVue 只解析第一个 script 块 ⇒
+    //   后半段落到顶层成为游离文本（onMounted 不执行）。
+    //   ⚠️ 这里刻意**只在检测到残留闭合标签时才清理**：正常单段（只有一个 `</script>`）
+    //   必须**逐字不变** —— 否则会顺带剥掉模型正文里作为片段的 <template>/<style>，
+    //   实测 480 个真机分段里有 243 个内容变短（最大差 3k 字符）⇒ 判定误伤，禁止。
+    if (nonEmptyIdx.length === 1) {
+      const only = (parts[nonEmptyIdx[0]] || '').trim();
+      // ⚠️ 只在检测到残留闭合标签时才动它：正常单段必须**逐字不变**
+      // （走完整 clean 会顺带剥掉正文里作为片段的 <template>/<style>，改变既有行为）
+      if (!/<\/script\s*>/i.test(only)) return only;
+      let y = only
+        .replace(/^[ \t]*<\/script\s*>[ \t]*\r?\n?/gm, '')
+        .replace(/^[ \t]*<script\b[^>]*>[ \t]*\r?\n?/gm, '')
+        .replace(/<\/script\s*>/gi, '')
+        .replace(/^\s*<script\b[^>]*>\s*/i, '');
+      return `<script setup>\n${y.trim()}\n</script>`;
+    }
     // 🛡️ 多段各自可能都带 import（模型常见重复），确定性去重防编译崩
     let merged = dedupeLifecycleHooks(
       dedupeMcComponentBuilder(

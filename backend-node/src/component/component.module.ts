@@ -24,6 +24,6 @@ import { AiConfigModule } from '../config/config.module';
   ],
   controllers: [ComponentController],
   providers: [ComponentService, ComponentAnalysisService, GitlabPushService],
-  exports: [ComponentService],
+  exports: [ComponentService, ComponentAnalysisService, GitlabPushService],
 })
 export class ComponentModule {}

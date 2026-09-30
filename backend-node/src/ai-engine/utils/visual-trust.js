@@ -77,13 +77,28 @@ export function evaluateVisualTrustVerdict(parsed) {
   // 旧逻辑 <60% 一律 warning 静默放行，18% 覆盖率也照样进入生成 → 视觉还原严重失真。
   // 2026-09-04 调整：40% → 35%，避免复杂设计稿（如 56 元素设备监测 38%）被误拦。
   if (coverageRate < 35) {
+    // 🛡️ 2026-09-30：把「低覆盖率」细分为两种**成因**，供下游差异化处理
+    // （此前一视同仁硬阻断，导致弱视觉模型的用户永远生成不了）：
+    //   vision-recall  —— missing 里存在「有真实文字」的节点 ⇒ **当前视觉模型召回不足**：
+    //                     内容在 Figma 里明明存在（characters 有值），模型没提取出来。
+    //                     这是**模型分析能力**问题，不是设计稿问题 ⇒ 应降级放行而非卡死。
+    //   truthset-noise —— missing 全是无 characters 的容器/装饰 ⇒ 真值集噪音为主。
+    // 判据来自 coverageReport.missing[].characters（同日补齐）。
+    const missing = coverageReport.missing || []
+    const missingTexts = missing
+      .map((m) => String(m.characters || '').trim())
+      .filter((t) => t.length > 0)
     return {
       verdict: VISUAL_VERDICTS.LOW_COVERAGE,
       reason: `覆盖率严重不足 (${coverageRate}%)，需定向重分析`,
       coverageRate,
       recognizedSections,
-      missing: coverageReport.missing || [],
+      missing,
       missingCount: coverageReport.missingCount || 0,
+      // 未识别的**真实文字**清单（给用户看的「模型漏了什么」证据，非图层名）
+      missingTexts: missingTexts.slice(0, 8),
+      missingTextCount: missingTexts.length,
+      attribution: missingTexts.length >= 3 ? 'vision-recall' : 'truthset-noise',
     }
   }
 

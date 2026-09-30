@@ -55,9 +55,94 @@
               <div class="result-name">{{ progressData.componentName || '组件' }}</div>
               <div class="result-meta">已生成完毕</div>
             </div>
-            <a :href="`/tasks/${progressData.sessionId}`" target="_blank" class="result-link">
+            <button @click="router.push(`/tasks/${progressData.sessionId}`)" class="result-link">
               查看产物 →
-            </a>
+            </button>
+          </div>
+
+          <!-- R12：结果可续做 -->
+          <div v-if="progressData.status === 'completed'" class="continue-actions">
+            <button class="action-btn" @click="emitAction('modify')">改样式</button>
+            <button class="action-btn" @click="emitAction('bind')">绑 API</button>
+            <button class="action-btn" @click="emitAction('deliver')">交付</button>
+            <button class="action-btn" @click="emitAction('versions')">版本</button>
+            <button class="action-btn" @click="emitAction('again')">再来一个</button>
+          </div>
+
+          <!-- R23：结果反馈（数据飞轮） -->
+          <div v-if="progressData.status === 'completed'" class="feedback-row">
+            <span class="fb-label">这个结果怎么样？</span>
+            <button
+              class="fb-btn"
+              :class="{ active: feedback === 'up' }"
+              :disabled="feedbackLoading"
+              title="满意"
+              @click="submitFeedback('up')"
+            >👍</button>
+            <button
+              class="fb-btn"
+              :class="{ active: feedback === 'down' }"
+              :disabled="feedbackLoading"
+              title="不满意"
+              @click="submitFeedback('down')"
+            >👎</button>
+            <span v-if="feedbackDone" class="fb-thanks">已收到反馈，谢谢！</span>
+          </div>
+
+          <!-- R19：体检（门禁 + 视觉相似度） -->
+          <div v-if="progressData.status === 'completed'" class="healthcheck">
+            <button
+              class="action-btn healthcheck-btn"
+              :disabled="healthStatus === 'loading'"
+              @click="runHealthcheck"
+            >
+              {{ healthStatus === 'loading' ? '体检中…' : '体检' }}
+            </button>
+
+            <div v-if="healthStatus === 'done' && healthReport" class="health-report">
+              <!-- 门禁徽章 -->
+              <div class="hc-row">
+                <span class="hc-label">质量门禁</span>
+                <span
+                  v-if="healthReport.gate && !healthReport.gate.error"
+                  class="hc-badge"
+                  :class="healthReport.gate.pass ? 'ok' : 'fail'"
+                >
+                  {{ healthReport.gate.pass ? '通过' : '未通过' }}
+                  <template v-if="!healthReport.gate.pass">（{{ healthReport.gate.blockCount || 0 }} 阻断）</template>
+                </span>
+                <span v-else class="hc-badge muted">{{ healthReport.gate?.error || '不可用' }}</span>
+              </div>
+
+              <!-- 视觉相似度 -->
+              <div class="hc-row" v-if="healthReport.visual">
+                <span class="hc-label">视觉相似度</span>
+                <span v-if="!healthReport.visual.error && healthReport.visual.visual?.available" class="hc-badge" :class="healthReport.visual.visual.pass ? 'ok' : 'fail'">
+                  {{ healthReport.visual.visual.overallSimilarity }}%
+                </span>
+                <span v-else class="hc-badge muted">
+                  {{ healthReport.visual.error || (healthReport.visual.visual?.summary || '不可用') }}
+                </span>
+              </div>
+
+              <!-- 可展开 issues -->
+              <div v-if="gateIssues.length" class="hc-issues">
+                <button class="hc-toggle" @click="healthIssuesOpen = !healthIssuesOpen">
+                  {{ healthIssuesOpen ? '收起' : '展开' }} 问题明细（{{ gateIssues.length }}）
+                </button>
+                <div v-if="healthIssuesOpen" class="hc-issue-list">
+                  <div v-for="(iss, i) in gateIssues" :key="i" class="hc-issue">
+                    <span class="hc-sev" :class="'sev-' + (iss.severity || 'info').toLowerCase()">{{ iss.severity || 'INFO' }}</span>
+                    <span class="hc-file">{{ iss.file }}:{{ iss.line }}</span>
+                    <span class="hc-msg">{{ iss.message }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="healthStatus === 'error'" class="health-report">
+              <span class="hc-badge fail">{{ healthError || '体检失败' }}</span>
+            </div>
           </div>
 
           <div v-else-if="progressData.status === 'failed'" class="progress-result failed">
@@ -66,9 +151,14 @@
               <div class="result-name">生成失败</div>
               <div class="result-meta">{{ progressData.currentMessage || '请查看任务详情了解原因' }}</div>
             </div>
-            <a :href="`/tasks/${progressData.sessionId}`" target="_blank" class="result-link">
+            <button @click="router.push(`/tasks/${progressData.sessionId}`)" class="result-link">
               查看详情 →
-            </a>
+            </button>
+          </div>
+
+          <!-- R11：失败可重试 -->
+          <div v-if="progressData.status === 'failed'" class="continue-actions">
+            <button class="action-btn primary" @click="emitAction('retry')">重试生成</button>
           </div>
 
           <div class="progress-footer" v-if="progressData.sessionId">
@@ -83,9 +173,9 @@
                 取消生成
               </button>
             </div>
-            <a :href="`/tasks/${progressData.sessionId}`" target="_blank" class="detail-link">
+            <button @click="router.push(`/tasks/${progressData.sessionId}`)" class="detail-link">
               查看任务详情 →
-            </a>
+            </button>
           </div>
         </div>
 
@@ -106,12 +196,8 @@
         <img v-if="card.data.imageUrl" :src="card.data.imageUrl" :alt="card.data.componentName" />
         <div v-else class="preview-placeholder">预览图加载中...</div>
       </div>
-      <div class="preview-footer">
+      <div v-if="card.data.componentName" class="preview-footer">
         <span class="component-name">{{ card.data.componentName }}</span>
-        <div class="preview-actions">
-          <button class="action-btn">查看详情</button>
-          <button class="action-btn primary">采纳</button>
-        </div>
       </div>
     </template>
 
@@ -212,6 +298,7 @@
             :key="idx"
             class="action-btn"
             :class="{ primary: action.primary }"
+            @click="onCardAction(action)"
           >
             {{ action.label }}
           </button>
@@ -241,7 +328,10 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import http from '@/core/http'
+
+const router = useRouter()
 
 const props = defineProps({
   card: {
@@ -250,7 +340,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['confirm', 'cancel'])
+const emit = defineEmits(['confirm', 'cancel', 'action'])
 
 // 进度卡片轮询逻辑
 const progressData = ref({ ...props.card.data })
@@ -578,6 +668,116 @@ function onConfirm() {
 function onCancel() {
   emit('cancel', props.card.data)
 }
+
+/**
+ * R11/R12 续做/重试动作：把动作类型 + 组件信息冒泡给父组件处理。
+ */
+function emitAction(type) {
+  emit('action', {
+    type,
+    sessionId: progressData.value.sessionId,
+    componentName: progressData.value.componentName || progressData.value.sessionId,
+  })
+}
+
+/**
+ * R13：操作卡（action 卡）按钮点击。
+ * action 约定：{ label, primary?, url?, prompt? }
+ * - url  → 新窗口打开
+ * - prompt → 冒泡给父组件发送
+ */
+function onCardAction(action) {
+  if (!action) return
+  if (action.url) {
+    window.open(action.url, '_blank')
+    return
+  }
+  if (action.prompt) {
+    emit('action', { type: 'card-action', action })
+  }
+}
+
+// ========== R23：结果反馈（数据飞轮） ==========
+const feedback = ref(''); // '' | 'up' | 'down'
+const feedbackLoading = ref(false);
+const feedbackDone = ref(false);
+
+async function submitFeedback(rating) {
+  const sessionId = progressData.value.sessionId;
+  if (!sessionId || feedbackLoading.value || feedbackDone.value) return;
+  feedbackLoading.value = true;
+  try {
+    await http.post('/api/workbench/feedback', {
+      sessionId,
+      componentName: progressData.value.componentName || sessionId,
+      rating,
+    });
+    feedback.value = rating;
+    feedbackDone.value = true;
+  } catch (err) {
+    console.warn('反馈提交失败（忽略）:', err);
+  } finally {
+    feedbackLoading.value = false;
+  }
+}
+
+// ========== R19：体检（质量门禁 + 视觉相似度） ==========
+const healthStatus = ref('idle') // idle | loading | done | error
+const healthReport = ref(null)
+const healthError = ref('')
+const healthIssuesOpen = ref(false)
+
+/** 门禁 issues 列表（供展开明细） */
+const gateIssues = computed(() => {
+  const gate = healthReport.value?.gate
+  if (!gate || gate.error || !Array.isArray(gate.issues)) return []
+  return gate.issues
+})
+
+/**
+ * 体检：复用后端已有能力，零后端改动。
+ * 1. 门禁：取 latest 快照 revision → validate（blockCount + issues，无 vision 依赖）
+ * 2. 视觉：analyze-visual（overallSimilarity，需视觉模型配置，缺则降级提示）
+ */
+async function runHealthcheck() {
+  const sessionId = progressData.value.sessionId
+  if (!sessionId || healthStatus.value === 'loading') return
+  healthStatus.value = 'loading'
+  healthError.value = ''
+  healthReport.value = null
+  healthIssuesOpen.value = false
+
+  const report = { gate: null, visual: null }
+
+  // 1. 门禁体检
+  try {
+    const snap = await http.get(`/api/tasks/${sessionId}/code-snapshots/latest`)
+    const env = snap?.data
+    const manifest = env?.data?.candidate || env?.candidate || env?.data?.lastGood || env?.lastGood
+    const revision = manifest?.revision
+    if (!revision) {
+      report.gate = { error: '暂无快照版本' }
+    } else {
+      const val = await http.post(`/api/tasks/${sessionId}/code-snapshots/${revision}/validate`)
+      const vEnv = val?.data
+      report.gate = vEnv?.data || vEnv
+    }
+  } catch (e) {
+    report.gate = { error: e?.message || '门禁体检失败' }
+  }
+
+  // 2. 视觉体检
+  try {
+    const vis = await http.post(`/api/component/${sessionId}/analyze-visual`, {})
+    const visEnv = vis?.data
+    report.visual = visEnv?.data || visEnv
+  } catch (e) {
+    report.visual = { error: e?.response?.data?.message || e?.message || '视觉对比失败' }
+  }
+
+  healthReport.value = report
+  healthStatus.value = 'done'
+}
 </script>
 
 <style scoped lang="less">
@@ -850,6 +1050,191 @@ function onCancel() {
 
   &.failed {
     background: rgba(255, 77, 79, 0.08);
+  }
+}
+
+/* R11/R12 续做动作按钮行 */
+.continue-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+
+  .action-btn {
+    padding: 6px 14px;
+  }
+}
+
+/* R23 结果反馈 */
+.feedback-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+
+  .fb-label {
+    font-size: 12px;
+    color: var(--rc-text-muted, #8c8c8c);
+  }
+
+  .fb-btn {
+    width: 30px;
+    height: 30px;
+    border: 1px solid var(--rc-border, #e8e8e8);
+    border-radius: 50%;
+    background: var(--rc-surface, #fff);
+    cursor: pointer;
+    font-size: 15px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    filter: grayscale(0.4);
+
+    &:hover:not(:disabled) {
+      filter: none;
+      border-color: var(--rc-accent, #1890ff);
+      transform: scale(1.08);
+    }
+
+    &.active {
+      filter: none;
+      border-color: var(--rc-accent, #1890ff);
+      background: var(--rc-info-bg, #e6f7ff);
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+  }
+
+  .fb-thanks {
+    font-size: 12px;
+    color: var(--rc-bar, #52c41a);
+  }
+}
+
+/* R19 体检徽章 */
+.healthcheck {
+  margin-top: 10px;
+
+  .healthcheck-btn {
+    padding: 6px 14px;
+  }
+
+  .health-report {
+    margin-top: 10px;
+    padding: 12px;
+    border-radius: 8px;
+    background: var(--rc-surface);
+    border: 1px solid var(--rc-border);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .hc-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+
+    .hc-label {
+      color: var(--rc-text-muted);
+      flex-shrink: 0;
+      width: 72px;
+    }
+  }
+
+  .hc-badge {
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.6;
+
+    &.ok {
+      background: var(--rc-success-bg);
+      color: #52c41a;
+    }
+
+    &.fail {
+      background: rgba(255, 77, 79, 0.08);
+      color: var(--rc-danger);
+    }
+
+    &.muted {
+      background: var(--rc-track);
+      color: var(--rc-text-muted);
+      font-weight: 400;
+    }
+  }
+
+  .hc-issues {
+    .hc-toggle {
+      font-size: 12px;
+      color: var(--rc-accent);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
+
+    .hc-issue-list {
+      margin-top: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .hc-issue {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      font-size: 11px;
+      line-height: 1.5;
+
+      .hc-sev {
+        flex-shrink: 0;
+        padding: 1px 6px;
+        border-radius: 4px;
+        font-weight: 600;
+        font-size: 10px;
+
+        &.sev-block,
+        &.sev-error {
+          background: rgba(255, 77, 79, 0.12);
+          color: var(--rc-danger);
+        }
+        &.sev-warn {
+          background: rgba(250, 173, 20, 0.12);
+          color: #d48806;
+        }
+        &.sev-info {
+          background: var(--rc-track);
+          color: var(--rc-text-muted);
+        }
+      }
+
+      .hc-file {
+        flex-shrink: 0;
+        color: var(--rc-accent);
+        font-family: 'Courier New', monospace;
+      }
+
+      .hc-msg {
+        color: var(--rc-text-muted);
+        word-break: break-word;
+      }
+    }
   }
 }
 

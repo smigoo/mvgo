@@ -5,6 +5,8 @@ import { coerceLLMUsage, estimateTokens } from './model-config.js'
 import { getProviderPool } from './provider-pool.js'
 import { dataDir } from '../../config/backend-root.js'
 import { setSessionModel } from './session-model.js'
+import { resolveThinkingType } from './ai-defaults.js'
+import { assessBurnoutEscalation, buildBreakerExhaustedMessage } from './thinking-escalation.js'
 
 const logger = createLogger({ name: 'ai-request-gateway' })
 
@@ -443,10 +445,24 @@ function createManagedSignal(parentSignal, timeoutMs, context) {
   }
 }
 
+// 🛡️ 慢归因阈值按场景区分（2026-09-30）：不同场景「正常耗时」天差地别，统一 15s 会误报。
+// - 视觉分析（vision-agent / visual-parser / 图对比）：prompt 小、输出短，实测 0.8~3.8s，>15s 即偏慢
+// - 代码生成（microcode-engineer / vue3-engineer / code-* / chunk / component）：吐完整 Vue 组件，
+//   单次 30~90s 属正常（日志实测 37s/8.2s/7.9s），>60s 才算慢
+// - 其余（样式映射 / 布局审查 / 评分 / 对话等中等输出）：>30s 提示
+function slowThresholdMsForContext(context = '') {
+  const c = String(context || '').toLowerCase()
+  if (!c) return 30000
+  if (/vision|visual|analyze|compare|image/.test(c)) return 15000
+  if (/engineer|generat|code|chunk|component|microcode|vue3|writer/.test(c)) return 60000
+  return 30000
+}
+
 function startHeartbeat({ context, timeoutMs, onProgress, model, providerId, provider }) {
   const startAt = Date.now()
   let lastProgressPush = 0
   const modelLabel = model ? `${model}` : '模型'
+  const slowThresholdMs = slowThresholdMsForContext(context)
 
   // 🔧 统一进度推送（2026-09-29 慢归因）：带 kind 分类 + 模型名，前端据此渲染差异徽标
   const pushProgress = (kind, message) => {
@@ -478,12 +494,14 @@ function startHeartbeat({ context, timeoutMs, onProgress, model, providerId, pro
       scheduler: requestScheduler.snapshot(),
     })
 
-    if (onProgress && Date.now() - lastProgressPush >= HEARTBEAT_PROGRESS_INTERVAL_MS) {
+    // 🛡️ 2026-09-30 慢归因阈值按场景区分：代码生成类大输出正常就要 30~90s，
+    // 统一 15s 报「响应较慢」几乎每次生成都误报；改为场景阈值（见 slowThresholdMsForContext）。
+    if (onProgress && elapsedMs >= slowThresholdMs && Date.now() - lastProgressPush >= HEARTBEAT_PROGRESS_INTERVAL_MS) {
       lastProgressPush = Date.now()
       // 🔧 只发日志，不生成独立 stage：网关的子调用上下文（如 vision-agent.analyzeImage）
       // 不是用户级阶段，交由 sendProgress 内的 level:'log' 路由到日志通道，
       // 避免前端 timeline 出现僵尸 running 步骤与步骤膨胀。
-      // 🔧 2026-09-29 慢归因：带模型名 + 安抚，让用户 15s 内分清模型慢 vs 平台慢
+      // 🔧 2026-09-29 慢归因：带模型名 + 安抚，让用户分清模型慢 vs 平台慢
       pushProgress('model-slow', `⏳ ${modelLabel} 响应较慢（已等待 ${elapsedSec}s）· 可切换更快模型或稍候`)
     }
   }, HEARTBEAT_INTERVAL_MS)
@@ -506,6 +524,15 @@ function normalizeError(error, { context, timeoutMs, managedSignal }) {
   }
 
   return error instanceof Error ? error : new Error(String(error || '未知模型请求错误'))
+}
+
+// 🧠 思考模式提示去重（2026-09-30 第一批）：同任务(sessionId)同模型只报一次，
+// 避免逐 chunk 刷屏；Set/Map 有规模护栏防进程级泄漏。
+const _thinkingExpectedSeen = new Set()
+const _burnoutReportCount = new Map()
+function _guardNoticeMaps() {
+  if (_thinkingExpectedSeen.size > 500) _thinkingExpectedSeen.clear()
+  if (_burnoutReportCount.size > 500) _burnoutReportCount.clear()
 }
 
 export async function executeModelRequest(options = {}) {
@@ -544,6 +571,11 @@ export async function executeModelRequest(options = {}) {
   // 🛡️ 自愈（B 层·2026-09-29）：检测到「推理烧光输出预算」(finish_reason=length + reasoning_tokens>0)
   // 后置位。后续 attempt 通过 resolveAttempt 复用同一 provider 但强制关推理重试，模型无关。
   let forceReasoningOff = false
+
+  // 🧠 思考模式可观测（2026-09-30 第一批）：
+  //   breakerCooldownWaits = 本次调用内「因熔断打开而等待冷却」的次数；>1 次说明换路失败
+  //   （池内无可用备用），继续等只会复刻「9.2 分钟任务 8 分钟无效等待」→ fail-fast。
+  let breakerCooldownWaits = 0
 
   // 🔀 解析本次 attempt 的 provider 上下文（含熔断/令牌桶对应的 providerEntry）。
   // 熔断记账、令牌桶控速、日志全部绑定「本次 attempt 实际使用的 provider」，
@@ -615,6 +647,27 @@ export async function executeModelRequest(options = {}) {
 
     let lastError = null
 
+    // 🧠 提示①（发起前·预期管理，2026-09-30）：思考模型 ⇒ 告知「将尝试自动关闭，首见可能较慢，
+    // 急迫可换非思考模型」。同任务同模型只报一次（Set 去重），不逐 chunk 刷屏。
+    if (onProgress && options.sessionId) {
+      _guardNoticeMaps()
+      const seenKey = `${options.sessionId}|${model}`
+      if (resolveThinkingType(model) === 'disabled' && !_thinkingExpectedSeen.has(seenKey)) {
+        _thinkingExpectedSeen.add(seenKey)
+        onProgress({
+          level: 'log',
+          logLevel: 'warn',
+          stage: context,
+          context,
+          status: 'warning',
+          kind: 'thinking-mode-expected',
+          model,
+          providerId,
+          message: `🧠 模型 ${model} 默认开启思考，本次将自动尝试关闭思考（首次使用该模型可能较慢；急迫可切换非思考模型）`,
+        })
+      }
+    }
+
     for (let attempt = 0; attempt <= policy.requestMaxRetries; attempt += 1) {
       const ctx = await resolveProviderContext(attempt)
       const providerEntry = ctx.entry
@@ -639,6 +692,50 @@ export async function executeModelRequest(options = {}) {
       // 主动控速：熔断检查 + 令牌桶（绑定当次实际 provider）。
       // 熔断(beforeCall)会等待 cooldown；切换 provider 后此处自然落到新 provider 的桶/熔断器。
       if (providerEntry) {
+        // 🧠 熔断升级（2026-09-30 第一批）：本次调用已等待过一次冷却仍撞到熔断打开 ⇒
+        // 换路失败（池内无可用备用），再等 120s 只会复刻「8 分钟无效等待」⇒ fail-fast。
+        // 注：池内有健康备用时 resolveAttempt 会解析到别的 provider（其熔断器闭合），不会进此分支。
+        if (providerEntry.breaker.state === 'open') {
+          breakerCooldownWaits += 1
+          if (breakerCooldownWaits > 1) {
+            const suggestions = getProviderPool()
+              .snapshot()
+              .filter(
+                (r) =>
+                  r.role === 'text' &&
+                  r.id !== ctx.providerId &&
+                  r.breaker?.state !== 'open' &&
+                  !r.recentlyTimedOut,
+              )
+              .map((r) => r.model || r.name)
+              .slice(0, 3)
+            const msg = buildBreakerExhaustedMessage({
+              model: ctx.model || '未知',
+              cooldownWaits: breakerCooldownWaits - 1,
+              suggestions,
+            })
+            logger.error(`⛔ [${context}] ${msg}`, {
+              providerId: ctx.providerId,
+              model: ctx.model,
+              cooldownWaits: breakerCooldownWaits,
+            })
+            onProgress?.({
+              level: 'log',
+              logLevel: 'error',
+              stage: context,
+              context,
+              status: 'warning',
+              kind: 'thinking-off-failed',
+              model: ctx.model,
+              providerId: ctx.providerId,
+              message: `⛔ ${msg}`,
+            })
+            requestScheduler.stats.totalFailed += 1
+            const exhaustErr = new Error(msg)
+            exhaustErr.code = 'MODEL_BREAKER_EXHAUSTED'
+            throw exhaustErr
+          }
+        }
         await providerEntry.breaker.beforeCall({ signal })
         await providerEntry.rpmBucket.acquire(1, { signal })
         await providerEntry.tpmBucket.acquire(tokenEstimate, { signal })
@@ -730,7 +827,7 @@ export async function executeModelRequest(options = {}) {
             //  ③ 其他：服务端故障/限流静默
             const hint = budgetExhausted
               ? (reasoningTokens ?? 0) > 0
-                ? '推理烧光输出预算：已立即熔断该 provider，并在后续 attempt 复用同 provider 强制关推理重试（模型无关，无需手动配置 thinkingType）'
+                ? '推理烧光输出预算：已立即熔断该 provider，并在后续 attempt 复用同 provider 强制关推理重试，且自动顺延下一候选关思考方言（2026-09-30 方言自愈）'
                 : '输出预算耗尽但 reasoning 未上报：minimax 系推理占 output 预算（thinking 参数不兼容，靠熔断换 provider），或内容落 reasoning_content 字段'
               : '空内容根因未知：若为 deepseek 系请检查 thinkingType 配置'
             logger.warn('🔀 网关层检测到空内容，按失败处理（熔断+换provider重试）', {
@@ -744,6 +841,29 @@ export async function executeModelRequest(options = {}) {
               budgetExhausted,
               hint,
             })
+            // 🧠 提示②③（烧光归因，2026-09-30 第一批）：第 1 次烧光 ⇒ 归因「已尝试关思考但网关未生效，
+            // 建议换非思考模型」；第 2 次起升级为「建议立即换模型」。同任务同模型去重计数。
+            if (onProgress && options.sessionId && budgetExhausted && (reasoningTokens ?? 0) > 0) {
+              _guardNoticeMaps()
+              const bKey = `${options.sessionId}|${ctx.model}`
+              const burnoutN = (_burnoutReportCount.get(bKey) || 0) + 1
+              _burnoutReportCount.set(bKey, burnoutN)
+              const verdict = assessBurnoutEscalation(burnoutN)
+              onProgress({
+                level: 'log',
+                logLevel: verdict === 'escalate' ? 'error' : 'warn',
+                stage: context,
+                context,
+                status: 'warning',
+                kind: 'thinking-off-failed',
+                model: ctx.model,
+                providerId: ctx.providerId,
+                message:
+                  verdict === 'escalate'
+                    ? `⛔ 模型 ${ctx.model} 思考关闭失败已累计 ${burnoutN} 次（推理烧光输出预算），继续等待预计仍会失败 —— 建议立即切换非思考模型重跑`
+                    : `🔁 检测到模型 ${ctx.model} 进入思考模式：本次消耗 ${reasoningTokens ?? '未知'} 推理 tokens。已自动尝试关闭思考但当前网关未生效，下一次重试将换用备选关思考方言 —— 若持续失败建议切换非思考模型`,
+              })
+            }
             throw emptyErr
           }
         }

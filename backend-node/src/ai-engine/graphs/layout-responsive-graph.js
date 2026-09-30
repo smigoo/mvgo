@@ -15,6 +15,12 @@ import { LayoutSpatialAnalyzer } from '../utils/layout-spatial-analyzer.js'
 import { LayoutResponsiveAgent } from '../agents/layout-responsive-agent.js'
 import { sanitizeVueStyleBlock } from '../utils/css-sanitizer.js'
 import { extractSfcTemplate } from '../utils/sfc-template-extractor.js'
+import {
+  readFitMode,
+  describeFitMode,
+  buildPreviewAppCss,
+  checkFitHonored,
+} from '../utils/layout-fit-strategy.js'
 
 const logger = createLogger({ name: 'graph:layout-responsive' })
 
@@ -41,6 +47,15 @@ export async function runLayoutResponsiveGeneration(options = {}) {
   logger.info('启动布局响应式生成工作流', {
     name: layoutData.name,
     zones: layoutData.body?.zones?.length || 0,
+    fitMode: readFitMode(layoutData),
+  })
+
+  // 自适应策略由前端指定，全流程都跟着它走（生成约束 / 预览缩放 / 一致性校验）
+  const fitMode = readFitMode(layoutData)
+  onProgress({
+    stage: 'init',
+    message: `自适应策略：${describeFitMode(layoutData)}`,
+    data: { fitMode },
   })
 
   const graph = new Graph({ name: 'layout-responsive-generation' })
@@ -150,15 +165,21 @@ export async function runLayoutResponsiveGeneration(options = {}) {
       // 仅当空间分析显示无重叠时才检查 absolute 定位
       noAbsolute: hasOverlaps ? true : !/position:\s*absolute/.test(cleanedCode),
       noPixelCoord: !/(left|top):\s*\d+px/.test(cleanedCode), // 不应出现像素坐标
+      // 产物是否真的遵守了用户在界面上选的自适应策略
+      fitModeHonored: checkFitHonored(fitMode, cleanedCode),
     }
 
     const passedChecks = Object.entries(checks).filter(([_, v]) => v).length
     const totalChecks = Object.keys(checks).length
 
+    if (!checks.fitModeHonored) {
+      logger.warn('生成结果与所选自适应策略不一致', { fitMode })
+    }
+
     onProgress({
       stage: 'post-process',
-      message: `代码校验：${passedChecks}/${totalChecks} 通过`,
-      data: { checks, passedChecks, totalChecks },
+      message: `代码校验：${passedChecks}/${totalChecks} 通过（自适应策略 ${fitMode}${checks.fitModeHonored ? ' 已遵守' : ' 未遵守'}）`,
+      data: { checks, passedChecks, totalChecks, fitMode },
     })
 
     return {
@@ -189,6 +210,8 @@ export async function runLayoutResponsiveGeneration(options = {}) {
       codeLength: s.cleanedCode?.length || 0,
       breakpoints: Object.keys(s.previews || {}),
       zoneCount: s.layoutData?.body?.zones?.length || 0,
+      fitMode,
+      fitModeHonored: s.qualityChecks?.fitModeHonored !== false,
       qualityScore: s.qualityChecks
         ? Object.values(s.qualityChecks).filter(Boolean).length / Object.keys(s.qualityChecks).length
         : 0,
@@ -196,6 +219,7 @@ export async function runLayoutResponsiveGeneration(options = {}) {
         ? {
             rootLayout: s.analysisResult.layoutStrategy.rootLayout,
             approach: s.analysisResult.responsiveStrategy?.approach,
+            fitModeDeclared: s.analysisResult.layoutStrategy.fitMode ?? null,
           }
         : null,
     }
@@ -270,6 +294,11 @@ function wrapAsPreviewHtml(vueCode, layoutData, breakpoint) {
   // 静态化模板：移除/替换 Vue 动态绑定，生成纯静态 HTML
   template = staticizeTemplate(template)
 
+  const fitMode = readFitMode(layoutData)
+  // 🔑 预览的缩放方式必须跟随用户在界面上选的自适应策略，
+  //    否则「预览看到的」和「策略所说的」是两回事，用户会被误导。
+  const appCss = buildPreviewAppCss(layoutData, breakpoint)
+
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -285,19 +314,8 @@ function wrapAsPreviewHtml(vueCode, layoutData, breakpoint) {
       background: #0a1628;
       color: #e0e6ed;
     }
-    #app {
-      width: ${breakpoint.width}px;
-      height: ${breakpoint.height}px;
-      transform-origin: top left;
-      position: relative;
-    }
-    /* 缩放到视口 */
-    @media (max-width: ${breakpoint.width}px) {
-      #app { transform: scale(calc(100vw / ${breakpoint.width})); }
-    }
-    @media (max-height: ${breakpoint.height}px) {
-      #app { transform: scale(min(calc(100vw / ${breakpoint.width}), calc(100vh / ${breakpoint.height}))); }
-    }
+    /* 自适应策略: ${fitMode} — ${describeFitMode(layoutData)} */
+    ${appCss}
     /* 组件占位卡片 */
     .preview-placeholder {
       display: flex; align-items: center; justify-content: center;

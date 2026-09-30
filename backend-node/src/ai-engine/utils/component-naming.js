@@ -407,3 +407,157 @@ export function isEncodedSessionId(s = '') {
     String(s || '').trim(),
   ) || /^(mc|mv|cp|page)-\d{13}-[a-f0-9]+$/i.test(String(s || '').trim());
 }
+
+/**
+ * 🛡️ §六 #3 类名净化（2026-09-30 · f8116aa6「class 出现了中文」实锤，用户质询）：
+ *
+ * 全语料实测 ~46 组件 / 92 文件中文类名（`.c-f8116a-小标题` / `.c-bf3612-默认-text` /
+ * `.c-component-eachrts-环形图`…）。来源 = LLM 把 Figma 中文层名直接写进 class（prompt
+ * 无禁令）+ containerClassFor 兜底清洗只删不译。契约：类名段必须 ASCII kebab。
+ *
+ * 本净化器为**确定性出口**：中文段 → 语义英文词表映射（长词优先贪心替换）；
+ * 未命中段按原文首现序 `zh<N>` 兜底（同一中文原文全产物一致，跨文件可对齐）。
+ * 重命名以「完整 class token」为单位全内容替换（模板 class/:class + style 选择器 +
+ * common.less + JS 字符串引用一次覆盖）；文本内容中的裸中文（如 <span>场区污水</span>）
+ * 不是 token、不在收集范围，绝不误伤。
+ */
+
+/** 类名段专用中文 → 英文词表（独立于 ZH_SEMANTIC_RULES，避免扰动 componentId 语义段命名）。 */
+const ZH_CLASS_TOKEN_RULES = [
+  // —— 业务/图表 ——
+  ['环形图', 'donut-chart'],
+  ['折线图', 'line-chart'],
+  ['柱状图', 'bar-chart'],
+  ['饼图', 'pie-chart'],
+  ['仪表盘', 'gauge'],
+  ['点背景', 'dot-bg'],
+  ['文字', 'text'],
+  ['背景', 'bg'],
+  ['分割线', 'divider'],
+  ['小标题', 'subtitle'],
+  ['标题', 'title'],
+  ['激活', 'active'],
+  ['默认', 'default'],
+  ['悬浮', 'hover'],
+  ['选中', 'selected'],
+  ['禁用', 'disabled'],
+  ['图例', 'legend'],
+  ['标签', 'tag'],
+  ['按钮', 'btn'],
+  ['图标', 'icon'],
+  ['箭头', 'arrow'],
+  ['总数', 'total'],
+  ['异常', 'abnormal'],
+  ['正常', 'normal'],
+  ['数量', 'count'],
+  ['百分比', 'percent'],
+  ['滚动', 'scroll'],
+  ['弹窗', 'modal'],
+  ['卡片', 'card'],
+  ['容器', 'container'],
+  ['内容', 'content'],
+  // —— Figma 图层机名（矩形备份4 / 位图 / 编组…）——
+  ['矩形', 'rect'],
+  ['椭圆', 'ellipse'],
+  ['直线', 'line'],
+  ['位图', 'img'],
+  ['编组', 'group'],
+  ['蒙版', 'mask'],
+  ['备份', '-copy'], // 中缀词带前导 -：'矩形备份4'→'rect-copy-4'；独立出现时 toKebab 去首 - → 'copy'
+  ['形状', 'shape'],
+];
+
+/** 按关键词长度降序（贪心最长匹配），模块加载时排一次 */
+const ZH_CLASS_TOKEN_RULES_SORTED = [...ZH_CLASS_TOKEN_RULES].sort(
+  (a, b) => b[0].length - a[0].length,
+);
+
+/** 收集某文件内容中「class 语境」的中文 class token（模板属性 + style 选择器） */
+function collectClassContextTokens(content) {
+  const out = new Set();
+  const pushToken = (t) => {
+    const tok = String(t || '').trim();
+    if (tok && /[\u4e00-\u9fa5]/.test(tok) && /^[A-Za-z\u4e00-\u9fa5][\w\u4e00-\u9fa5-]*$/.test(tok)) {
+      out.add(tok);
+    }
+  };
+  // ① 静态 class="a b c"（含单引号变体）
+  for (const m of content.matchAll(/\bclass\s*=\s*(?:"([^"]*)"|'([^']*)')/g)) {
+    const raw = m[1] ?? m[2] ?? '';
+    for (const t of raw.split(/\s+/)) pushToken(t);
+  }
+  // ② 动态 :class="{ 'x--active': cond }" / :class="[ 'a', 'b' ]" 中的引号串
+  for (const m of content.matchAll(/[:\s]class\s*=\s*"([^"]*)"/g)) {
+    for (const q of m[1].matchAll(/['"]([^'"]+)['"]/g)) pushToken(q[1]);
+  }
+  // ③ style 选择器 .token（<style> 块与 common.less 同一形态）
+  for (const m of content.matchAll(/\.([A-Za-z][\w\u4e00-\u9fa5-]*)/g)) pushToken(m[1]);
+  return [...out];
+}
+
+/** 单个中文连续段 → 英文（贪心最长匹配；残留中文视为未命中返回 null） */
+function mapChineseRun(run, fallbackCounter) {
+  let out = run;
+  for (const [kw, en] of ZH_CLASS_TOKEN_RULES_SORTED) {
+    if (out.includes(kw)) out = out.split(kw).join(en);
+  }
+  if (/[\u4e00-\u9fa5]/.test(out)) {
+    // 未命中兜底：同一中文原文 → 同一编号（首现序，确定性）
+    if (!fallbackCounter.has(run)) fallbackCounter.set(run, fallbackCounter.size + 1);
+    return `zh${fallbackCounter.get(run)}`;
+  }
+  return toKebab(out) || null;
+}
+
+/**
+ * 非 ASCII 类名净化（§六 #3 治本出口）。
+ *
+ * @param {Record<string,string>} files 路径 → 内容（.vue 与 common.less）
+ * @param {object} [options]
+ * @returns {{ files: Record<string,string>, renamed: Array<{from:string,to:string,file:string}>, remaining: string[] }}
+ */
+export function autoFixNonAsciiClassNames(files, options = {}) {
+  const paths = Object.keys(files || {}).filter((p) => {
+    const c = files[p];
+    return typeof c === 'string' && c;
+  });
+  // ① 跨文件收集坏 token（同一 token 多文件出现必须同步改名，否则模板/CSS 失配）
+  const badTokens = new Set();
+  for (const p of paths) {
+    for (const t of collectClassContextTokens(files[p])) badTokens.add(t);
+  }
+  if (badTokens.size === 0) return { files: {}, renamed: [], remaining: [] };
+
+  // ② 构建 token → 新名映射（中文连续段逐段映射；长 token 先建，防止子串双重应用）
+  const fallbackCounter = new Map(); // 中文原文 → zh<N>
+  const renameMap = new Map(); // 坏 token → 新名
+  for (const tok of [...badTokens].sort((a, b) => b.length - a.length)) {
+    const mapped = tok.replace(/[\u4e00-\u9fa5]+/g, (run) => mapChineseRun(run, fallbackCounter));
+    if (mapped && mapped !== tok) renameMap.set(tok, mapped);
+  }
+
+  // ③ 应用：长 token 优先整串替换（c-x-默认-text 先于 c-x-默认，避免残段）
+  const changed = {};
+  const renamed = [];
+  for (const p of paths) {
+    let content = files[p];
+    for (const [from, to] of [...renameMap.entries()].sort(
+      (a, b) => b[0].length - a[0].length,
+    )) {
+      if (!content.includes(from)) continue;
+      content = content.split(from).join(to);
+      renamed.push({ from, to, file: p });
+    }
+    if (content !== files[p]) changed[p] = content;
+  }
+
+  // ④ 余量复核（理论上应为空；留作告警与防御）
+  const remaining = new Set();
+  for (const p of Object.keys(changed)) {
+    for (const t of collectClassContextTokens(changed[p])) remaining.add(t);
+  }
+  if (options.logger?.warn && remaining.size) {
+    options.logger.warn(`§六 #3 类名净化后仍有非 ASCII 类名: ${[...remaining].join(', ')}`);
+  }
+  return { files: changed, renamed, remaining: [...remaining] };
+}

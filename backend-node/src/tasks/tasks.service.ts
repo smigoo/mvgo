@@ -151,6 +151,17 @@ export interface Task {
   visualLayoutSource?: string | null;
   /** P0-3: 降级原因（如 "LLM invoke timeout after 90000ms"） */
   visualDegradeReason?: string | null;
+  /**
+   * 🛡️ 2026-09-30: 视觉覆盖率不足但**降级放行**时的质量提示（非阻断）。
+   * 语义 = 「视觉模型没看全」⇒ 产物内容可能不完整，成因归因到**视觉模型分析能力**（非设计稿问题）。
+   * shape: { rate, attribution: 'vision-recall'|'truthset-noise', missingTexts: string[], missingTextCount: number }
+   */
+  visualQualityWarning?: {
+    rate?: number;
+    attribution?: string;
+    missingTexts?: string[];
+    missingTextCount?: number;
+  } | null;
   /** 实际完成使用的模型（vision/text 各实际用了哪个，换模型重试后为最终兜底模型） */
   completionModels?: { visionModel?: string; textModel?: string } | null;
   /** 是否已具备可预览、可编辑的正式组件骨架 */
@@ -1832,6 +1843,10 @@ export class TasksService {
     task.visualDegraded = result?._visualDegraded === true;
     task.visualLayoutSource = result?._visualLayoutSource || null;
     task.visualDegradeReason = result?._visualDegradeReason || null;
+    // 🛡️ 2026-09-30: 低覆盖率「降级放行」的质量提示持久化（非阻断场景，visualDegraded=false 时仍可能有值）。
+    // 供任务详情/最近生成卡片提示「内容可能不完整」并说明成因是视觉模型召回不足，避免用户误以为是设计稿问题。
+    // 若 graph 未透传该字段（旧任务），降级为 null，不报错。
+    task.visualQualityWarning = result?._visualQualityWarning || null;
     //  实际完成模型（vision/text 各实际用了哪个）持久化，供任务详情页展示
     task.completionModels = result?._completionModels || null;
     // 🛡️ 脚本子段降级清单（lifecycle/charts 段生成失败但已降级兜底）持久化，供「不完整，可二次生成」标签

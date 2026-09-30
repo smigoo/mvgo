@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import sharp from 'sharp';
 import { buildChatUrl } from '../ai-engine/utils/chat-url.js';
-import { normalizeRequestTemperature, markModelCapabilityIdentified, buildThinkingOffParams } from '../ai-engine/utils/model-config.js';
+import { normalizeRequestTemperature, markModelCapabilityIdentified, markThinkingDialectVerified, buildThinkingOffParams } from '../ai-engine/utils/model-config.js';
 
 export interface TestResult {
   success: boolean;
@@ -298,6 +298,9 @@ export class ConfigTestService {
 
       // 🔒 思考模式参数（2026-09-11）：优先用户配置，否则先尝试关闭思考
       // 如果模型不支持关闭思考（如 GLM 5.3-flash），自动降级到 'low'
+      // 🧠 2026-09-30（方言缓存）：routedOff = 静态路由的关思考方言；实测成功后持久化，
+      //   生成链路 buildThinkingOffParams 将优先采用（跳过静态路由的试错）。
+      const routedOff = buildThinkingOffParams(model, baseURL);
       const buildVisionBody = (thinkingType?: string) => ({
         model,
         messages: [
@@ -328,7 +331,7 @@ export class ConfigTestService {
         // 推理模型（deepseek-v4*/kimi/hy4 等）默认开 thinking，不关则思考吃掉 max_tokens
         // 预算 → content 空 → 误判不支持视觉（hy4-preview 即此症）。buildThinkingOffParams
         // 按厂商返回正确关推理参数形态，未命中返回 {} 不发送，不会给不支持的网关注入未知参数。
-        ...buildThinkingOffParams(model, baseURL),
+        ...routedOff,
         ...(effectiveTemp !== undefined ? { temperature: effectiveTemp } : {}),
         ...(thinkingType ? { thinking: { type: thinkingType } } : {}),
       });
@@ -456,6 +459,8 @@ export class ConfigTestService {
                 const rcontent = (rdata?.choices?.[0]?.message?.content || '').trim();
                 if (rcontent) {
                   content = rcontent;
+                  // 🧠 2026-09-30（方言缓存）：自愈成功的关思考方言持久化（权威实测结论）
+                  try { markThinkingDialectVerified(model, baseURL, off, 'vision-test-selfheal'); } catch { /* 非阻断 */ }
                   break;
                 }
               }
@@ -524,6 +529,11 @@ export class ConfigTestService {
         };
       }
 
+      // 🧠 2026-09-30（方言缓存）：视觉实测通过 ⇒ 静态路由方言有效，持久化供生成链路优先采用。
+      //   用户显式配了 thinkingType 时实际生效的是用户方言，不在此标记（避免毒化缓存）。
+      if (!thinkingType && routedOff && Object.keys(routedOff).length) {
+        try { markThinkingDialectVerified(model, baseURL, routedOff, 'vision-test'); } catch { /* 非阻断 */ }
+      }
       return {
         success: true,
         latency,

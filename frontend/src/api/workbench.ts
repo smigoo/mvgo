@@ -42,7 +42,7 @@ export async function sendMessage(conversationId: string, content: string, attac
  * 删除对话
  */
 export async function deleteConversation(conversationId: string) {
-  const res = await http.delete(`${BASE}/conversations/${conversationId}`);
+  const res = await http.post(`${BASE}/conversations/${conversationId}/delete`);
   return res.data;
 }
 
@@ -114,8 +114,8 @@ export async function createGroup(name: string) {
  * 重命名分组
  */
 export async function renameGroup(name: string, newName: string) {
-  const res = await http.patch(
-    `${BASE}/groups/${encodeURIComponent(name)}`,
+  const res = await http.post(
+    `${BASE}/groups/${encodeURIComponent(name)}/rename`,
     { newName },
   );
   return res.data;
@@ -125,8 +125,8 @@ export async function renameGroup(name: string, newName: string) {
  * 删除分组（组内有对话时后端会拒绝）
  */
 export async function deleteGroup(name: string, force = false) {
-  const res = await http.delete(
-    `${BASE}/groups/${encodeURIComponent(name)}${force ? '?force=true' : ''}`,
+  const res = await http.post(
+    `${BASE}/groups/${encodeURIComponent(name)}/delete${force ? '?force=true' : ''}`,
   );
   return res.data;
 }
@@ -152,5 +152,21 @@ export async function updateToolCredentials(
   },
 ) {
   const res = await http.post(`${BASE}/conversations/${conversationId}/credentials`, credentials);
+  return res.data;
+}
+
+/**
+ * 清除当前组件锚点（用户点 chip 的 ×）
+ */
+export async function clearComponentAnchor(conversationId: string) {
+  const res = await http.post(`${BASE}/conversations/${conversationId}/clear-component`);
+  return res.data;
+}
+
+/**
+ * 获取组件反馈统计（👍/👎 聚合，默认当月）
+ */
+export async function getFeedbackStats(months = 1) {
+  const res = await http.get(`${BASE}/feedback/stats?months=${months}`);
   return res.data;
 }

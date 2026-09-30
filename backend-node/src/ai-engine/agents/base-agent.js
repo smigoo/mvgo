@@ -9,11 +9,12 @@ import { readFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { createLogger } from '../logger/index.js';
-import { TEXT_DEFAULTS } from '../utils/ai-defaults.js';
+import { TEXT_DEFAULTS, resolveThinkingType } from '../utils/ai-defaults.js';
 import {
   coerceLLMUsage,
   normalizeRequestTemperature,
   buildThinkingOffParams,
+  markThinkingDialectRouteFailed,
 } from '../utils/model-config.js';
 import { attachUnifiedInvoke } from '../utils/ai-request-gateway.js';
 import { getProviderPool } from '../utils/provider-pool.js';
@@ -128,6 +129,15 @@ export class BaseAgent {
           const p = forceThinkingDisabled && previousProviderId
             ? getProviderPool().get(previousProviderId)
             : getProviderPool().pick('text', { excludeIds });
+          // 🧠 2026-09-30 第二批（方言自愈）：forceThinkingDisabled ⇒ 上一次 attempt 已
+          // 「推理烧光预算」（或强关后仍失败）。把当前生效方言标记失效，
+          // _buildLLM → buildThinkingOffParams 会自动顺延到下一候选方言重试
+          // （实测例：microvideo 中转 deepseek 认 thinking:disabled，误发 enable_thinking 被忽略）。
+          if (forceThinkingDisabled && p) {
+            try {
+              markThinkingDialectRouteFailed(p.model || this.model, p.baseURL || this.baseURL);
+            } catch { /* 自愈标记失败不影响重试主流程 */ }
+          }
           if (!p || !p.apiKey) return null;
           return {
             providerId: p.id,
@@ -198,10 +208,23 @@ export class BaseAgent {
       // 未命中厂商（返回 {}）时回退原 hardcode thinking:{type:'disabled'}，保持旧行为不退化；
       // thinkingType==='skip'（推理模型保留开推理，本就不该注入）直接跳过。
       const thinkingType = snapshot.thinkingType || this.thinkingType || '';
-      if (thinkingType && thinkingType !== 'skip') {
+      // 🛡️ 2026-09-30 发起前兜底（最后一道防线）：前三层（resolveTextConfig → agent 构造 → 透传）
+      // 若漏了 thinkingType，这里按模型名自动判定（单一事实源 resolveThinkingType），
+      // 避免「思考没关 → 烧光预算 → 空内容失败」。只自动补、不拒绝，并给出明确提醒。
+      const finalTT = thinkingType || resolveThinkingType(model);
+      if (finalTT && finalTT !== 'skip') {
         const off = buildThinkingOffParams(model, rawBaseURL);
-        const kwargs = Object.keys(off).length ? off : { thinking: { type: 'disabled' } };
-        llmOptions.modelKwargs = { ...(llmOptions.modelKwargs || {}), ...kwargs };
+        if (Object.keys(off).length) {
+          llmOptions.modelKwargs = { ...(llmOptions.modelKwargs || {}), ...off };
+          if (!thinkingType) {
+            this.logger.warn(`🛡️ [关思考兜底] 模型 ${model} 默认开思考但 thinkingType 未透传，已发起前自动注入关推理参数`, { baseURL: rawBaseURL });
+          }
+        } else {
+          // 明确提醒：关思考失败（未知厂商，无法确定参数形态）——不注入、不拒绝，按默认思考运行
+          this.logger.warn(`⚠️ [关思考失败] 模型 ${model} 默认开思考，但无法确定关推理参数（未知厂商），将按默认思考运行（可能慢/烧预算）`, { baseURL: rawBaseURL });
+        }
+      } else if (finalTT === 'skip') {
+        this.logger.warn(`⚠️ [无法关闭思考] 模型 ${model} 是推理模型，思考不可关闭（应已被 provider 池过滤）`, { baseURL: rawBaseURL });
       }
       return new ChatOpenAI(llmOptions);
     }

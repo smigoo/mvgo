@@ -2,8 +2,6 @@ import {
   Controller,
   Get,
   Post,
-  Put,
-  Delete,
   Body,
   Param,
   Query,
@@ -86,7 +84,7 @@ export class AnnouncementController {
   /**
    * 更新公告（登录用户）
    */
-  @Put(':id')
+  @Post(':id/update')
   @UseGuards(SessionGuard)
   async update(
     @Param('id') id: string,
@@ -114,9 +112,9 @@ export class AnnouncementController {
   /**
    * 删除公告（登录用户）
    */
-  @Delete(':id')
+  @Post(':id/delete')
   @UseGuards(SessionGuard)
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @HttpCode(HttpStatus.OK)
   async delete(@Param('id') id: string) {
     return this.announcementService.delete(id);
   }
@@ -124,7 +122,7 @@ export class AnnouncementController {
   /**
    * 切换公告状态（登录用户）
    */
-  @Put(':id/toggle')
+  @Post(':id/toggle')
   @UseGuards(SessionGuard)
   async toggleActive(@Param('id') id: string) {
     return this.announcementService.toggleActive(id);

@@ -12,7 +12,10 @@ interface CanvasConfig {
   height: number;
   aspectRatioLocked: boolean;
   aspectRatio: number;
-  outputScaleMode: 'contain' | 'fillWidth' | 'fillHeight' | 'none';
+  // 自适应策略 —— 取值域与前端 types/screen-layout.ts#OutputScaleMode、
+  // 以及运行时单一事实源 ai-engine/utils/layout-fit-strategy.js#FIT_MODES 保持一致。
+  // ⚠️ 这里只是声明（本文件不消费该字段）；真正的消费在 layout-responsive-agent / -graph 里。
+  outputScaleMode: 'fluid' | 'hybrid' | 'contain' | 'fillWidth' | 'fillHeight' | 'none';
   backgroundColor: string;
   backgroundImage?: string;
   showGrid: boolean;
@@ -694,7 +697,10 @@ export class ScreenLayoutService {
       // 发送完成事件
       this.progressService.sendComplete(sessionId, {
         summary: result.summary,
-        codePreview: result.vueCode?.substring(0, 500), // 前 500 字符预览
+        // 预览片段：给足长度让用户能直接复制到有用内容。
+        // 原来截 500 字符，前端「复制代码」复制到的永远是半截代码 —— 不如不给。
+        // 完整代码仍以「下载 ZIP」为准（这里只是传输优化，不是事实源）。
+        codePreview: result.vueCode?.substring(0, 20000),
         previewBreakpoints: result.previewBreakpoints || Object.keys(result.previews || {}),
         hasAnalysisResult: !!result.analysisResult,
       });

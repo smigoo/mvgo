@@ -7,6 +7,12 @@ import { Logger } from '@nestjs/common';
 import { TasksService } from '../tasks/tasks.service';
 import { ComponentService } from '../component/component.service';
 import { TaskStatsService } from '../task-stats/task-stats.service';
+import { DemoService } from '../demo/demo.service';
+import { ApiBindingService } from '../vue3/api-binding.service';
+import { SlotAnalyzerService } from '../vue3/slot-analyzer.service';
+import { ApifoxService } from '../apifox/apifox.service';
+import { WorkflowService } from '../workflow/workflow.service';
+import { GitlabPushService } from '../component/gitlab-push.service';
 import { Phase2Service } from '../phase2/phase2.service';
 import { LiteService } from '../lite/lite.service';
 import { TaskQueueService } from '../queue/task-queue.service';
@@ -17,8 +23,105 @@ import { isTaskIdLikeName } from '../ai-engine/utils/component-naming.js';
 import { GeneratePhase2Dto } from '../phase2/dto/generate-phase2.dto';
 import { tempComponentsDir } from '../config/backend-root';
 import { join } from 'path';
+import { ymdShanghai } from '../admin/usage-export';
+import { ComponentAnalysisService } from '../component/component-analysis.service';
+import { TaskCodeSnapshotService } from '../tasks/task-code-snapshot.service';
 
 const logger = new Logger('WorkbenchTools');
+
+/**
+ * 平均耗时 ms → 可读文本
+ */
+function formatAvgDuration(ms: number): string {
+  if (!ms || ms <= 0) return '—';
+  if (ms < 1000) return `${ms}ms`;
+  const sec = ms / 1000;
+  if (sec < 60) return `${sec.toFixed(1)}s`;
+  const min = sec / 60;
+  if (min < 60) return `${min.toFixed(1)}min`;
+  return `${(min / 60).toFixed(1)}h`;
+}
+
+/**
+ * token 数量 → 可读文本
+ */
+function formatTokens(n: number): string {
+  if (!n || n <= 0) return '0';
+  if (n < 1000) return `${n}`;
+  if (n < 1_000_000) return `${(n / 1000).toFixed(1)}k`;
+  return `${(n / 1_000_000).toFixed(1)}M`;
+}
+
+/**
+ * ─── API 绑定自动匹配（与前端 ApiBindingWizard.findBestMatch 同源） ───
+ * 说明：工作台对话里无法让用户逐个选 slot→function，故内联前端向导的启发式
+ * 匹配逻辑（关键词 + slotType + refName 相似度），行为与向导「自动推荐」一致。
+ */
+
+const SKIP_AUTO_BIND_ROLES = ['filter.tabs', 'component.config', 'table.columns', 'chart.legend', 'chart.threshold'];
+
+function shouldSkipAutoBinding(slot: any): boolean {
+  if (slot.bindable === false) return true;
+  return SKIP_AUTO_BIND_ROLES.includes(slot.role);
+}
+
+function hasAnyKeyword(text: string, keywords: string[]): boolean {
+  return keywords.some((k) => text.includes(k));
+}
+
+function functionText(fn: any): string {
+  return [fn.name, fn.summary, fn.path, fn.responsePreview].filter(Boolean).join(' ').toLowerCase();
+}
+
+function findBestMatch(slot: any, catalog: any): { moduleName: string; functionName: string } | null {
+  if (!catalog?.modules || shouldSkipAutoBinding(slot)) return null;
+
+  const chartKeywords = ['统计', '趋势', '分析', '曲线', '图表', 'chart', 'trend', 'statistics', 'analysis'];
+  const tableKeywords = ['列表', '分页', '明细', '记录', 'list', 'page', 'table', 'records'];
+  const selectKeywords = ['选项', '下拉', '字典', '枚举', 'options', 'select', 'dict', 'enum'];
+  const statKeywords = ['统计', '概览', '总量', '指标', 'summary', 'overview', 'total', 'metric'];
+
+  for (const mod of catalog.modules) {
+    for (const fn of mod.functions) {
+      if (fn.method !== 'GET') continue;
+      const text = functionText(fn);
+      const preview = fn.responsePreview || '';
+
+      if ((slot.slotType === 'table' || slot.slotType === 'list') &&
+          (preview.includes('[{') || preview.includes('array') || hasAnyKeyword(text, tableKeywords))) {
+        return { moduleName: mod.moduleName, functionName: fn.name };
+      }
+      if (slot.slotType === 'chart' && hasAnyKeyword(text, chartKeywords)) {
+        return { moduleName: mod.moduleName, functionName: fn.name };
+      }
+      if (slot.slotType === 'select' && hasAnyKeyword(text, selectKeywords)) {
+        return { moduleName: mod.moduleName, functionName: fn.name };
+      }
+      if (slot.slotType === 'stat' && hasAnyKeyword(text, statKeywords)) {
+        return { moduleName: mod.moduleName, functionName: fn.name };
+      }
+    }
+  }
+
+  const refName = String(slot.refName || '').toLowerCase();
+  if (!refName || slot.role === 'chart.composite') return null;
+  for (const mod of catalog.modules) {
+    for (const fn of mod.functions) {
+      const fnName = fn.name.toLowerCase();
+      if (fnName.includes(refName) || refName.includes(fnName)) {
+        return { moduleName: mod.moduleName, functionName: fn.name };
+      }
+    }
+  }
+  return null;
+}
+
+/** 解析 "GET /operation/device/monitor" → { method, path } */
+function parseApiPath(apiPath: string): { method: string; path: string } | null {
+  const m = String(apiPath || '').trim().match(/^(GET|POST|PUT|DELETE)\s+(\/[^\s]*)/i);
+  if (!m) return null;
+  return { method: m[1].toUpperCase(), path: m[2] };
+}
 
 /**
  * Tool 定义（OpenAI Function Calling 格式）
@@ -189,6 +292,63 @@ export const WORKBENCH_TOOLS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'analyze_component',
+      description: '对组件做体检：真实预览运行时门禁 + 视觉相似度对比。用户要求"体检/检查/分析组件质量"时调用。',
+      parameters: {
+        type: 'object',
+        properties: {
+          componentId: { type: 'string', description: '组件 ID（sessionId 或 componentId）' },
+        },
+        required: ['componentId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_revisions',
+      description: '列出组件的代码快照版本历史。用户要求"查看版本/历史版本/有哪些版本"时调用。',
+      parameters: {
+        type: 'object',
+        properties: {
+          componentId: { type: 'string', description: '组件 ID（sessionId）' },
+        },
+        required: ['componentId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'rollback_component',
+      description: '把组件回滚到指定历史版本。用户要求"回滚/回退/恢复到上一版/回到某版本"时调用。',
+      parameters: {
+        type: 'object',
+        properties: {
+          componentId: { type: 'string', description: '组件 ID（sessionId）' },
+          revision: { type: 'string', description: '目标版本 revision（r-开头的 UUID）' },
+        },
+        required: ['componentId', 'revision'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'publish_component',
+      description: '把组件发布到公共组件池（visibility=public）。用户要求"发布/交付/共享组件"时调用。',
+      parameters: {
+        type: 'object',
+        properties: {
+          componentId: { type: 'string', description: '组件 ID（sessionId 或 componentId）' },
+        },
+        required: ['componentId'],
+      },
+    },
+  },
 ];
 
 /**
@@ -199,10 +359,23 @@ export interface ToolContext {
   tasksService: TasksService;
   componentService: ComponentService;
   taskStatsService: TaskStatsService;
+  demoService: DemoService;
+  apiBindingService: ApiBindingService;
+  slotAnalyzer: SlotAnalyzerService;
+  apifoxService: ApifoxService;
+  workflowService: WorkflowService;
+  gitlabPushService: GitlabPushService;
   phase2Service: Phase2Service;
   liteService: LiteService;
   queueService: TaskQueueService;
   progressService: ProgressService;
+  /** 组件视觉/运行时体检（R19 analyze-visual 的 service） */
+  componentAnalysisService: ComponentAnalysisService;
+  /** 代码快照版本历史 + 一键回滚（R20 listRevisions/rollbackToRevision） */
+  taskCodeSnapshotService: TaskCodeSnapshotService;
+  /** 对话级/用户级 GitLab 凭据（真实值，供 push_to_gitlab 使用） */
+  gitlabToken?: string;
+  gitlabProjectUrl?: string;
 }
 
 /**
@@ -535,26 +708,43 @@ export const TOOL_EXECUTORS: Record<string, (args: any, ctx: ToolContext) => Pro
   },
 
   /**
-   * 修改组件
+   * 修改组件（桥接 DemoService.aiChat，Playground 自然语言修改器）
    */
   modify_component: async (args, ctx) => {
     try {
       const { componentId, modification } = args;
-      
-      // TODO: 桥接到 Playground AI 修改服务
-      // const result = await ctx.demoService.modify(componentId, modification);
-      
+
+      if (!componentId || !modification) {
+        return { success: false, error: '缺少 componentId 或 modification 参数' };
+      }
+
+      // 调 Playground 修改器：真读文件、真改代码、真写快照（可撤销）
+      const result = await ctx.demoService.aiChat({
+        message: modification,
+        componentId,
+      });
+
+      const files = result.modifiedFiles || [];
+      const toolErrors = result.toolErrors || [];
+
       return {
-        success: true,
-        data: { componentId, modification },
+        success: result.success,
+        data: {
+          componentId,
+          content: result.content,
+          modifiedFiles: files,
+          iterations: result.iterations,
+          toolErrors,
+        },
         card: {
           type: 'diff',
           data: {
             componentId,
-            changes: [
-              { file: 'index.vue', additions: 5, deletions: 2, diff: '...' },
-            ],
-            summary: { additions: 5, deletions: 2 },
+            summary: {
+              additions: files.length,
+              deletions: 0,
+            },
+            changes: files.map((f: string) => ({ file: f, diff: '' })),
           },
         },
       };
@@ -601,27 +791,132 @@ export const TOOL_EXECUTORS: Record<string, (args: any, ctx: ToolContext) => Pro
   },
 
   /**
-   * 绑定 API 到组件
+   * 绑定 API 到组件（桥接 SlotAnalyzerService + ApiBindingService，自动匹配 slot→接口）
    */
   bind_api_to_component: async (args, ctx) => {
     try {
       const { componentId, apiPath, slotName } = args;
-      
-      // TODO: 桥接到实际的 API 绑定服务
-      // const result = await ctx.apifoxService.bindApi(componentId, apiPath, slotName);
-      
+      if (!componentId) {
+        return { success: false, error: '缺少 componentId 参数' };
+      }
+
+      // 1. 反查 groupId（vue3 组件 sessionId === componentId，见 api-binding.service 注释）
+      const task = ctx.tasksService.getTask(componentId);
+      const groupId = task?.groupId;
+      if (!groupId) {
+        return {
+          success: false,
+          error: '无法定位组件的群组信息，请到任务详情页的「接口对接」向导完成绑定',
+        };
+      }
+
+      // 2. 找最近的 API 目录（按 ownerId 隔离，杜绝越权用别人的目录）
+      const catalogs = ctx.apifoxService.listCatalogs(ctx.userId);
+      if (!catalogs || catalogs.length === 0) {
+        return {
+          success: false,
+          error: '暂无可用 API 目录，请先在「接口生成」页从 Apifox 生成一份接口目录',
+        };
+      }
+      const catalogId = catalogs[0].catalogId;
+      const catalog = ctx.apifoxService.getCatalog(catalogId);
+
+      // 3. 分析组件数据槽
+      const { slots } = await ctx.slotAnalyzer.analyzeSlots(componentId, groupId);
+      if (!slots || slots.length === 0) {
+        return {
+          success: false,
+          error: '组件没有可绑定的数据槽，请确认组件含表格/图表/下拉等数据区域',
+        };
+      }
+
+      // 4. 精确匹配用户指定接口（apiPath "GET /operation/device/monitor" → module.function）
+      let exactFn: { moduleName: string; functionName: string } | null = null;
+      const parsed = parseApiPath(apiPath);
+      if (parsed) {
+        outer: for (const mod of catalog.modules) {
+          for (const fn of mod.functions) {
+            if (String(fn.method || '').toUpperCase() === parsed.method && fn.path === parsed.path) {
+              exactFn = { moduleName: mod.moduleName, functionName: fn.name };
+              break outer;
+            }
+          }
+        }
+      }
+
+      // 5. 构造 bindings（自动匹配；用户指定的接口优先绑到第一个可绑 slot）
+      const bindings: any[] = [];
+      let boundCount = 0;
+      let usedExact = false;
+      for (const slot of slots) {
+        const base = {
+          slotId: slot.slotId,
+          slotType: slot.slotType,
+          refName: slot.refName,
+          label: slot.label,
+          role: slot.role,
+          bindable: slot.bindable,
+          children: slot.children,
+        };
+        if (shouldSkipAutoBinding(slot)) {
+          bindings.push({ ...base, status: 'skipped', skipReason: '筛选/配置子项不作为主接口绑定' });
+          continue;
+        }
+        if (exactFn && !usedExact) {
+          bindings.push({ ...base, ...exactFn, status: 'bound' });
+          boundCount++;
+          usedExact = true;
+          continue;
+        }
+        const rec = findBestMatch(slot, catalog);
+        if (rec) {
+          bindings.push({ ...base, ...rec, status: 'bound' });
+          boundCount++;
+        } else {
+          bindings.push({ ...base, status: 'stub', stubReason: '未找到匹配接口' });
+        }
+      }
+
+      // 6. 无任何成功绑定 → 不落盘，友好提示
+      if (boundCount === 0) {
+        return {
+          success: false,
+          error: `未在 API 目录中找到可匹配的接口（${apiPath || '未指定'}）。请在「接口对接」向导中手动选择数据槽对应的接口。`,
+        };
+      }
+
+      // 7. 执行绑定（含真实运行时预检，失败自动回滚）
+      const result = await ctx.apiBindingService.bindApi({
+        catalogId,
+        componentId,
+        groupId,
+        componentName: task?.componentName || componentId,
+        bindings,
+      });
+
       return {
         success: true,
-        data: { componentId, apiPath, slotName },
+        data: {
+          ...result,
+          groupId,
+          catalogId,
+          boundSlots: bindings.filter((b) => b.status === 'bound').length,
+          stubSlots: bindings.filter((b) => b.status === 'stub').length,
+          skippedSlots: bindings.filter((b) => b.status === 'skipped').length,
+        },
         card: {
-          type: 'action',
+          type: 'list',
           data: {
-            title: 'API 绑定完成',
-            message: `已将 ${apiPath} 绑定到组件 ${componentId}`,
-            actions: [
-              { label: '预览效果', action: 'preview', componentId },
-              { label: '修改绑定', action: 'rebind' },
-            ],
+            title: `API 绑定完成（${bindings.filter((b) => b.status === 'bound').length} 绑定 / ${bindings.filter((b) => b.status === 'stub').length} 占位）`,
+            items: bindings.map((b: any) => ({
+              id: b.slotId,
+              name: `${b.slotType} · ${b.label || b.refName || b.slotId}`,
+              meta: b.status === 'bound'
+                ? `已绑定 ${b.moduleName}.${b.functionName}`
+                : b.status === 'stub'
+                  ? '占位（无匹配接口）'
+                  : '跳过（配置项）',
+            })),
           },
         },
       };
@@ -632,27 +927,49 @@ export const TOOL_EXECUTORS: Record<string, (args: any, ctx: ToolContext) => Pro
   },
 
   /**
-   * 推送到 GitLab
+   * 推送到 GitLab（桥接 GitlabPushService.pushComponent，凭据从对话配置读取）
    */
   push_to_gitlab: async (args, ctx) => {
     try {
       const { componentIds, branch = 'main', commitMessage } = args;
-      
-      // TODO: 桥接到实际的 GitLab 推送服务
-      // const result = await ctx.gitlabService.push(componentIds, branch, commitMessage);
-      
+      if (!componentIds || componentIds.length === 0) {
+        return { success: false, error: '缺少 componentIds 参数' };
+      }
+
+      // 凭据从「工作台对话凭据」（对话级 > 用户级）读取，不硬编码、不绕过鉴权
+      if (!ctx.gitlabToken || !ctx.gitlabProjectUrl) {
+        return {
+          success: false,
+          error: '未配置 GitLab 凭据，请点击对话右上角「工具凭据」配置 GitLab Token 和仓库地址',
+        };
+      }
+
+      // 逐个推送（复用授权 + 产物定位 + GitLab API 提交）
+      const results: any[] = [];
+      for (const id of componentIds) {
+        const r = await ctx.gitlabPushService.pushComponent({
+          identifier: id,
+          userId: ctx.userId,
+          repoUrl: ctx.gitlabProjectUrl,
+          branch,
+          accessToken: ctx.gitlabToken,
+          commitMessage,
+        });
+        results.push(r);
+      }
+
       return {
         success: true,
-        data: { componentIds, branch, mrUrl: 'https://gitlab.com/xxx/mr/123' },
+        data: { results },
         card: {
-          type: 'action',
+          type: 'list',
           data: {
-            title: '推送成功',
-            message: `已将 ${componentIds.length} 个组件推送到 ${branch} 分支`,
-            actions: [
-              { label: '查看 MR', action: 'open', url: 'https://gitlab.com/xxx/mr/123' },
-              { label: '继续操作', action: 'continue' },
-            ],
+            title: `GitLab 推送完成（${results.length} 个组件）`,
+            items: results.map((r: any) => ({
+              id: r.data?.componentId || '',
+              name: r.data?.componentId || '',
+              meta: `${r.data?.branch || branch} · ${r.data?.files || 0} 个文件 · ${r.data?.commitId || ''}`,
+            })),
           },
         },
       };
@@ -695,36 +1012,60 @@ export const TOOL_EXECUTORS: Record<string, (args: any, ctx: ToolContext) => Pro
   },
 
   /**
-   * 获取生成统计
+   * 获取生成统计（桥接 TaskStatsService.myDashboard，用户视角真实统计）
    */
   get_generation_stats: async (args, ctx) => {
     try {
       const { timeRange = 'week' } = args;
-      
-      // TODO: 桥接到实际的统计服务
-      // const stats = await ctx.taskStatsService.getUserStats(ctx.userId, timeRange);
-      
-      const mockStats = {
-        total: 47,
-        completed: 42,
-        failed: 3,
-        cancelled: 2,
-        successRate: 89,
-        avgDuration: '3.2min',
-      };
-      
+
+      // timeRange → TaskStatsFilter（与 task-stats 的 resolveWindow 口径对齐）
+      // 合法 preset：week / d30 / d60 / custom；「today/all」需用 custom + from/to 表达
+      const today = ymdShanghai(Date.now());
+      const filter: Record<string, any> = {
+        today: { preset: 'custom', from: today, to: today },
+        week: { preset: 'week' },
+        month: { preset: 'd30' },
+        all: { preset: 'custom', from: '1970-01-01', to: today },
+      }[timeRange] || { preset: 'week' };
+
+      const { overview, windowLabel } = await ctx.taskStatsService.myDashboard(ctx.userId, filter);
+
+      const successRatePct = overview.successRate == null
+        ? null
+        : Math.round(overview.successRate * 100);
+
+      const rangeTitle = {
+        today: '今日统计',
+        week: '本周统计',
+        month: '近30天统计',
+        all: '全部统计',
+      }[timeRange] || '本周统计';
+
       return {
         success: true,
-        data: mockStats,
+        data: {
+          timeRange,
+          windowLabel,
+          total: overview.totalTasks,
+          completed: overview.completedTasks,
+          failed: overview.failedTasks,
+          successRate: successRatePct,
+          avgDurationMs: overview.avgDurationMs,
+          totalTokens: overview.totalTokens,
+          totalCost: overview.totalCost,
+        },
         card: {
           type: 'stats',
           data: {
-            title: timeRange === 'today' ? '今日统计' : timeRange === 'week' ? '本周统计' : '本月统计',
+            title: `${rangeTitle} · ${windowLabel}`,
             metrics: [
-              { label: '总生成数', value: mockStats.total },
-              { label: '成功数', value: mockStats.completed },
-              { label: '成功率', value: `${mockStats.successRate}%` },
-              { label: '平均耗时', value: mockStats.avgDuration },
+              { label: '总生成数', value: overview.totalTasks },
+              { label: '成功数', value: overview.completedTasks },
+              { label: '失败数', value: overview.failedTasks },
+              { label: '成功率', value: successRatePct == null ? '—' : `${successRatePct}%` },
+              { label: '平均耗时', value: formatAvgDuration(overview.avgDurationMs) },
+              { label: 'Token 消耗', value: formatTokens(overview.totalTokens) },
+              { label: '总成本', value: `¥${overview.totalCost.toFixed(2)}` },
             ],
           },
         },
@@ -736,29 +1077,71 @@ export const TOOL_EXECUTORS: Record<string, (args: any, ctx: ToolContext) => Pro
   },
 
   /**
-   * 批量生成
+   * 批量生成（R6）
+   * 循环复用真实生成执行器：Figma 链接 → create_component_from_figma，
+   * 截图 → create_component_from_screenshot。每个 item 独立创建真实任务、排队，
+   * 返回 batchId + 各 item 的 sessionId（进度可通过 query_tasks 按 sessionId 查询）。
    */
   batch_generate: async (args, ctx) => {
     try {
       const { items, target = 'microcode' } = args;
-      
-      // TODO: 桥接到实际的批量生成服务
-      const sessionIds = items.map((item, i) => ({
-        sessionId: `mc-max-${Date.now()}-${i}`,
-        name: item.name,
-        status: 'queued',
-      }));
-      
+      if (!Array.isArray(items) || items.length === 0) {
+        return { success: false, error: '缺少 items 参数（至少一个生成项）' };
+      }
+
+      const batchId = `batch-${Date.now()}`;
+      const created: any[] = [];
+
+      // 逐个复用真实生成执行器（fire-and-forget：内部建任务 + 启动生成 + 排队）
+      for (const item of items) {
+        const source = String(item?.source || '').trim();
+        const name = String(item?.name || '').trim();
+        if (!source) {
+          created.push({ source: '', name, type: 'unknown', success: false, sessionId: null, error: '缺少 source' });
+          continue;
+        }
+
+        // 判断来源：含 figma → Figma 生成；否则按截图生成
+        const isFigma = /figma/i.test(source);
+        const execName = isFigma ? 'create_component_from_figma' : 'create_component_from_screenshot';
+        const exec = TOOL_EXECUTORS[execName];
+
+        let r: ToolResult;
+        try {
+          if (isFigma) {
+            r = await exec({ figmaUrl: source, componentName: name, target, tier: 'max' }, ctx);
+          } else {
+            r = await exec({ imageUrl: source, componentName: name, target }, ctx);
+          }
+        } catch (err) {
+          r = { success: false, error: err?.message || '生成执行异常' };
+        }
+
+        created.push({
+          source,
+          name,
+          type: isFigma ? 'figma' : 'screenshot',
+          success: r.success,
+          sessionId: r.data?.sessionId || null,
+          error: r.error || null,
+        });
+      }
+
+      const okCount = created.filter((c) => c.success).length;
+      const sessionIds = created.filter((c) => c.success && c.sessionId).map((c) => c.sessionId);
+
       return {
         success: true,
-        data: sessionIds,
+        data: { batchId, items: created, sessionIds },
         card: {
-          type: 'progress',
+          type: 'list',
           data: {
-            batchId: `batch-${Date.now()}`,
-            total: items.length,
-            completed: 0,
-            items: sessionIds,
+            title: `批量生成已提交（${okCount}/${created.length} 成功入队）`,
+            items: created.map((c) => ({
+              id: c.sessionId || c.source || '',
+              name: c.name || c.sessionId || (c.source ? c.source.slice(0, 30) : '未知'),
+              meta: c.success ? `${c.type === 'figma' ? 'Figma' : '截图'} · 排队中` : `失败：${c.error || '未知'}`,
+            })),
           },
         },
       };
@@ -769,30 +1152,239 @@ export const TOOL_EXECUTORS: Record<string, (args: any, ctx: ToolContext) => Pro
   },
 
   /**
-   * 执行工作流
+   * 执行工作流（桥接 WorkflowService.run：受保护管线委托生产引擎，自定义管线走 dynamic 引擎）
    */
   execute_workflow: async (args, ctx) => {
     try {
       const { workflowId, params = {} } = args;
-      
-      // TODO: 桥接到实际的工作流执行服务
-      // const result = await ctx.workflowService.execute(workflowId, params);
-      
+      if (!workflowId) {
+        return { success: false, error: '缺少 workflowId 参数' };
+      }
+
+      // 桥接真实工作流执行服务（参数不完整时 run 会返回友好 error）
+      const result = await ctx.workflowService.run(workflowId, params || {}, ctx.userId);
+
+      if (!result.success) {
+        return { success: false, error: result.error || '工作流执行失败' };
+      }
+
       return {
         success: true,
-        data: { workflowId, status: 'running' },
+        data: result,
         card: {
           type: 'progress',
           data: {
+            sessionId: result.sessionId,
             workflowId,
             status: 'running',
             progress: 0,
+            currentMessage: result.message || '工作流已启动',
           },
         },
       };
     } catch (err) {
       logger.error('execute_workflow failed', err);
       return { success: false, error: err.message };
+    }
+  },
+
+  /**
+   * 组件体检（R19 analyze-visual）：真实预览运行时门禁 + 视觉相似度对比。
+   * 桥接 ComponentAnalysisService.analyzeComponent；不传视觉模型配置时，
+   * 运行时门禁 PASS 才要求视觉模型（缺则返回降级提示），运行时 FAIL 则直接给运行时问题。
+   */
+  analyze_component: async (args, ctx) => {
+    try {
+      const { componentId } = args;
+      if (!componentId) {
+        return { success: false, error: '缺少 componentId 参数' };
+      }
+
+      const report = await ctx.componentAnalysisService.analyzeComponent(componentId, ctx.userId);
+      const runtime = report?.runtime || {};
+      const visual = report?.visual || {};
+
+      // 文本总结：运行时门禁 + 视觉相似度，缺视觉模型时给出降级说明
+      const lines: string[] = [];
+      lines.push(`运行时门禁：${runtime.status === 'PASS' ? '通过' : '未通过'}${runtime.summary ? ' —— ' + runtime.summary : ''}`);
+      if (visual?.available) {
+        const sim = typeof visual.overallSimilarity === 'number'
+          ? `${Math.round(visual.overallSimilarity * 100)}%`
+          : 'N/A';
+        lines.push(`视觉相似度：${sim}${visual.summary ? ' —— ' + visual.summary : ''}`);
+      } else if (visual?.summary) {
+        lines.push(visual.summary);
+      }
+
+      const runtimePassText = runtime.status === 'PASS' ? '通过' : (runtime.status || '未执行');
+      const simText = typeof visual?.overallSimilarity === 'number'
+        ? `${Math.round(visual.overallSimilarity * 100)}%`
+        : (visual?.available ? 'N/A' : '未执行');
+
+      return {
+        success: report?.success !== false,
+        data: {
+          componentId,
+          content: lines.join('\n'),
+          runtime: { status: runtime.status, pass: !!runtime.pass, summary: runtime.summary || '' },
+          visual: {
+            available: !!visual?.available,
+            overallSimilarity: visual?.overallSimilarity ?? null,
+            summary: visual?.summary || '',
+          },
+        },
+        card: {
+          type: 'stats',
+          data: {
+            title: '组件体检报告',
+            metrics: [
+              { label: '运行时门禁', value: runtimePassText },
+              { label: '视觉相似度', value: simText },
+            ],
+          },
+        },
+      };
+    } catch (err) {
+      logger.error('analyze_component failed', err);
+      return { success: false, error: err?.message || '体检失败' };
+    }
+  },
+
+  /**
+   * 列出组件代码快照版本历史（R20 listRevisions）。
+   * 桥接 TaskCodeSnapshotService.listRevisions，只读磁盘 revisions，不触碰任何指针。
+   */
+  list_revisions: async (args, ctx) => {
+    try {
+      const { componentId } = args;
+      if (!componentId) {
+        return { success: false, error: '缺少 componentId 参数' };
+      }
+
+      const revisions = ctx.taskCodeSnapshotService.listRevisions(componentId);
+      if (!revisions || revisions.length === 0) {
+        return { success: false, error: '该组件没有可用的版本快照（可能未经完整生成链路）' };
+      }
+      const lastGood = ctx.taskCodeSnapshotService.getLastGoodManifest(componentId)?.revision || null;
+
+      return {
+        success: true,
+        data: { componentId, revisions, current: lastGood },
+        card: {
+          type: 'list',
+          data: {
+            title: `版本历史（${revisions.length} 个版本）`,
+            items: revisions.map((r) => ({
+              id: r.revision,
+              name: `${r.revision}${r.revision === lastGood ? ' · 当前' : ''}`,
+              meta: `${r.status} · ${new Date(r.createdAt).toLocaleString('zh-CN')}`,
+            })),
+          },
+        },
+      };
+    } catch (err) {
+      logger.error('list_revisions failed', err);
+      return { success: false, error: err?.message || '列版本失败' };
+    }
+  },
+
+  /**
+   * 一键回滚（R20 rollbackToRevision）：把 last-good 指针重定向到目标历史版本。
+   * 未显式指定 revision 时，自动选「最新的、非当前 last-good、且可回滚」的历史版本
+   * （即"回滚到上一版"的语义），使对话自然语言"回滚"即可用。
+   */
+  rollback_component: async (args, ctx) => {
+    try {
+      const { componentId, revision: requestedRevision } = args;
+      if (!componentId) {
+        return { success: false, error: '缺少 componentId 参数' };
+      }
+
+      let target = String(requestedRevision || '').trim();
+      if (!target) {
+        const all = ctx.taskCodeSnapshotService.listRevisions(componentId);
+        const lastGood = ctx.taskCodeSnapshotService.getLastGoodManifest(componentId)?.revision;
+        const rollable = all.find((r) =>
+          r.revision !== lastGood &&
+          ['candidate', 'validating', 'last-good', 'partial'].includes(r.status),
+        );
+        if (!rollable) {
+          return { success: false, error: '没有可回滚的历史版本（可能只有一个版本，或历史版本均已拒绝）' };
+        }
+        target = rollable.revision;
+      }
+
+      const manifest = ctx.taskCodeSnapshotService.rollbackToRevision(componentId, target);
+      return {
+        success: true,
+        data: {
+          componentId,
+          revision: manifest.revision,
+          content: `已回滚到版本 ${manifest.revision}（${manifest.status}，${manifest.files?.length || 0} 个文件）`,
+        },
+        card: {
+          type: 'list',
+          data: {
+            title: '回滚完成',
+            items: [{
+              id: manifest.revision,
+              name: manifest.revision,
+              meta: `${new Date(manifest.createdAt).toLocaleString('zh-CN')} · ${manifest.files?.length || 0} 个文件`,
+            }],
+          },
+        },
+      };
+    } catch (err) {
+      logger.error('rollback_component failed', err);
+      return { success: false, error: err?.message || '回滚失败' };
+    }
+  },
+
+  /**
+   * 发布到公共组件池（R21 publishComponent）：visibility → public。
+   * 发布接口严格要求 Mongo _id，先经 authorizeWorkspaceComponent 从 sessionId/componentId
+   * 反查组件记录拿 _id；尚未入库的生成中组件给出友好提示（与前端交付弹窗行为一致）。
+   */
+  publish_component: async (args, ctx) => {
+    try {
+      const { componentId } = args;
+      if (!componentId) {
+        return { success: false, error: '缺少 componentId 参数' };
+      }
+
+      const authorized = await ctx.componentService.authorizeWorkspaceComponent(componentId, ctx.userId, 'read');
+      const comp: any = (authorized as any)?.component;
+      const mongoId = comp?._id?.toString?.() || comp?._id;
+      if (!mongoId) {
+        return { success: false, error: '组件尚未入库，无法发布到公共组件池（请先完成一次生成并保存）' };
+      }
+
+      const component = await ctx.componentService.publishComponent(String(mongoId), ctx.userId);
+      const outId = (component as any)?.componentId || componentId;
+      const visibility = (component as any)?.visibility;
+
+      return {
+        success: true,
+        data: {
+          componentId: outId,
+          visibility,
+          sharedAt: (component as any)?.sharedAt,
+          content: `已发布到公共组件池（visibility=${visibility}）`,
+        },
+        card: {
+          type: 'stats',
+          data: {
+            title: '发布完成',
+            metrics: [
+              { label: '组件', value: outId },
+              { label: '可见性', value: visibility === 'public' ? '公共' : String(visibility) },
+            ],
+          },
+        },
+      };
+    } catch (err) {
+      logger.error('publish_component failed', err);
+      return { success: false, error: err?.message || '发布失败' };
     }
   },
 };

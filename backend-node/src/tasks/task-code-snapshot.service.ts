@@ -4,6 +4,7 @@ import {
   lstatSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   renameSync,
   rmSync,
   writeFileSync,
@@ -783,6 +784,61 @@ export class TaskCodeSnapshotService {
     if (!pointer) return null;
     const manifest = this.getManifest(sessionId, pointer.revision);
     return manifest.status === 'partial' ? manifest : null;
+  }
+
+  /**
+   * 列出某任务的全部快照版本（含 last-good / candidate / partial / rejected），按时间倒序。
+   * 用于「版本历史 + 一键回滚」：前端据此渲染版本列表，选定后调 rollbackToRevision。
+   *
+   * 设计约束：
+   *  1. 只读磁盘 revisions 目录，不触碰任何指针与 manifest。
+   *  2. 单条损坏（manifest 非法 / 目录缺失）静默跳过，不让历史列表被一条坏数据拖垮。
+   */
+  listRevisions(sessionId: string): TaskCodeSnapshotManifest[] {
+    this.assertSafeId(sessionId, 'sessionId');
+    const revisionsDir = resolve(this.getSessionDir(sessionId), 'revisions');
+    if (!existsSync(revisionsDir)) return [];
+    const entries = readdirSync(revisionsDir, { withFileTypes: true });
+    const manifests: TaskCodeSnapshotManifest[] = [];
+    for (const entry of entries) {
+      if (!entry.isDirectory() || !SAFE_REVISION.test(entry.name)) continue;
+      try {
+        manifests.push(this.getManifest(sessionId, entry.name));
+      } catch {
+        // 非法/损坏的 revision 目录直接跳过
+      }
+    }
+    manifests.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+    return manifests;
+  }
+
+  /**
+   * 一键回滚：把 last-good 指针重定向到目标历史 revision，使其成为新的预览/发布源。
+   *
+   * 语义（单一事实源）：last-good 指针即「当前版本」。重定向后，预览读取
+   * （resolvePreviewRevision 回退）与发布源解析（resolvePublishSourceDir）都自然指向
+   * 回滚目标，无需再复制产物。同时清掉 candidate/partial 指针，避免回退到未回滚的
+   * 候选或半成品版本。
+   *
+   * 只允许回滚到「可预览状态」且「渲染完整」的版本（与 readPreviewFile 的放行口径一致）：
+   * candidate / validating / last-good / partial；rejected 是「校验未通过、不可预览」终态，拒绝。
+   */
+  rollbackToRevision(sessionId: string, revision: string): TaskCodeSnapshotManifest {
+    const manifest = this.getManifest(sessionId, revision);
+    if (!['candidate', 'validating', 'last-good', 'partial'].includes(manifest.status)) {
+      throw new Error('该版本已拒绝或不可预览，无法回滚');
+    }
+    if (!this.isRenderableRevision(sessionId, revision)) {
+      throw new Error('该版本产物不完整（缺 index.vue 或子组件 import 悬空），无法回滚');
+    }
+    this.writePointer(sessionId, 'last-good', revision);
+    this.clearPointer(sessionId, 'candidate');
+    this.clearPointer(sessionId, 'partial');
+    return this.updateManifest(sessionId, revision, {
+      status: 'last-good',
+      lastGoodRevision: revision,
+      rejectionReason: undefined,
+    });
   }
 
   /**

@@ -8,6 +8,7 @@
 
 import { Logger } from '@nestjs/common';
 import { WORKBENCH_TOOLS, executeTool, ToolContext, ToolResult } from './workbench-tools';
+import { runWorkbenchLLM } from './workbench-llm';
 
 const logger = new Logger('WorkbenchAgent');
 
@@ -24,6 +25,8 @@ export interface WorkbenchAgentState {
   maxIterations: number;
   finalResponse?: string;
   finalCards?: any[];
+  /** 用户级文本模型配置（P0 ② 真 LLM 用；缺 apiKey 时回退正则 callLLM） */
+  llmConfig?: Record<string, any>;
 }
 
 export interface AgentMessage {
@@ -76,6 +79,34 @@ function extractImageDataUrl(messages: AgentMessage[]): string | null {
   return null;
 }
 
+/**
+ * 提取当前「未被消费」用户消息里全部图片 dataURL（R6 批量生成用）。
+ * 与 extractImageDataUrl 同源的有界回溯：遇到带卡片的 assistant 消息即停止，
+ * 只收集最近一段（最近一条用户消息及其 attachments），避免老图被重复批量生成。
+ */
+function extractAllImageDataUrls(messages: AgentMessage[]): string[] {
+  const urls: string[] = [];
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.role === 'assistant' && Array.isArray(m.cards) && m.cards.length > 0) {
+      break;
+    }
+    if (m.role !== 'user') continue;
+    const atts = m.metadata?.attachments;
+    if (!Array.isArray(atts)) continue;
+    for (const a of atts) {
+      if (typeof a?.dataUrl === 'string' && a.dataUrl.startsWith('data:image/')) {
+        urls.push(a.dataUrl);
+      } else if (typeof a?.imageBase64 === 'string') {
+        urls.push(a.imageBase64.startsWith('data:')
+          ? a.imageBase64
+          : `data:image/png;base64,${a.imageBase64}`);
+      }
+    }
+  }
+  return urls;
+}
+
 export interface ToolCall {
   id: string;
   name: string;
@@ -93,6 +124,9 @@ const SYSTEM_PROMPT = `你是感智晓界（mvgo）的工作台助手。你帮�
 - 查询任务状态和生成统计
 - 为组件绑定 API 数据源
 - 推送组件到 GitLab
+- 发布组件到公共组件池
+- 组件体检（运行时门禁 + 视觉相似度）
+- 查看版本历史、一键回滚
 - 批量生成组件
 - 执行预定义工作流/配方
 
@@ -163,6 +197,37 @@ async function callLLM(
   if (/确认|开始生成|就这样/.test(content) && !/^好的$/.test(content.trim())) {
     const handled = handleConfirmIntent(messages);
     if (handled) return handled;
+  }
+
+  // 批量生成意图（R6）：必须**先于**截图/Figma 单组件分支——
+  // 否则「批量生成这几个 Figma/截图」会被单组件分支抢先，只生成第一个。
+  if (/批量|一批|batch/i.test(content)) {
+    const figmaUrls = content.match(/https?:\/\/[^\s]+figma[^\s]+/g) || [];
+    const images = extractAllImageDataUrls(messages);
+    const items = [
+      ...figmaUrls.map((u) => ({ source: u, name: '' })),
+      ...images.map((d) => ({ source: d, name: '' })),
+    ];
+
+    if (items.length === 0) {
+      return {
+        role: 'assistant',
+        content: '好的，你想批量生成组件。请提供素材：\n\n- 多个 **Figma 链接**（一条消息里贴多个，需含 node-id）\n- 或一次粘贴/拖拽 **多张截图**\n\n收到后我会逐个排队生成。',
+      };
+    }
+
+    return {
+      role: 'assistant',
+      content: `收到！我来批量生成 ${items.length} 个组件（${figmaUrls.length} 个 Figma + ${images.length} 张截图）。`,
+      toolCalls: [{
+        id: `call_${Date.now()}`,
+        name: 'batch_generate',
+        arguments: {
+          items,
+          target: extractTarget(content),
+        },
+      }],
+    };
   }
 
   // 简易意图匹配（开发阶段用，后续替换为 LLM Function Calling）
@@ -315,6 +380,86 @@ async function callLLM(
     };
   }
 
+  // 组件体检（R19）：运行时门禁 + 视觉相似度对比
+  if (/体检|健康检查|检查.*质量|质量.*检查/.test(content)) {
+    if (!state.currentComponentId) {
+      return {
+        role: 'assistant',
+        content: '请先指定要体检的组件。你可以先完成一次生成，再对我说「体检」。',
+      };
+    }
+    return {
+      role: 'assistant',
+      content: '好的，我来给当前组件做体检。',
+      toolCalls: [{
+        id: `call_${Date.now()}`,
+        name: 'analyze_component',
+        arguments: { componentId: state.currentComponentId },
+      }],
+    };
+  }
+
+  // 回滚（R20）：支持显式 revision（r-…）或自动「回滚到上一版」
+  if (/回滚|回退|还原到|rollback|回到上一版|恢复上一版/i.test(content)) {
+    if (!state.currentComponentId) {
+      return {
+        role: 'assistant',
+        content: '请先指定要回滚的组件。你可以先完成一次生成，再说「回滚到上一版」。',
+      };
+    }
+    const revision = content.match(/r-[a-f0-9-]{36}/i)?.[0];
+    return {
+      role: 'assistant',
+      content: revision
+        ? `好的，我来把当前组件回滚到版本 ${revision}。`
+        : '好的，我来把当前组件回滚到上一个可用版本。',
+      toolCalls: [{
+        id: `call_${Date.now()}`,
+        name: 'rollback_component',
+        arguments: { componentId: state.currentComponentId, ...(revision ? { revision } : {}) },
+      }],
+    };
+  }
+
+  // 版本历史（R20）：列出当前组件的快照版本
+  if (/版本历史|历史版本|有哪些版本|版本列表|查看版本|revisions/i.test(content)) {
+    if (!state.currentComponentId) {
+      return {
+        role: 'assistant',
+        content: '请先指定要查看版本的组件。你可以先完成一次生成，再说「查看版本历史」。',
+      };
+    }
+    return {
+      role: 'assistant',
+      content: '好的，我来列出当前组件的版本历史。',
+      toolCalls: [{
+        id: `call_${Date.now()}`,
+        name: 'list_revisions',
+        arguments: { componentId: state.currentComponentId },
+      }],
+    };
+  }
+
+  // 发布到公共组件池（R21）：区别于下方「推送到 GitLab」（推送/gitlab）分支，
+  // 用更明确的词触发，且必须在 push 分支之前，否则「发布」会被 GitLab 分支抢先。
+  if (/发布到(?:公共)?组件池|共享组件|分享组件|交付组件/.test(content)) {
+    if (!state.currentComponentId) {
+      return {
+        role: 'assistant',
+        content: '请先指定要发布的组件。你可以先完成一次生成，再说「发布到公共组件池」。',
+      };
+    }
+    return {
+      role: 'assistant',
+      content: '好的，我来把当前组件发布到公共组件池。',
+      toolCalls: [{
+        id: `call_${Date.now()}`,
+        name: 'publish_component',
+        arguments: { componentId: state.currentComponentId },
+      }],
+    };
+  }
+
   if (/推送|发布|gitlab|GitLab/.test(content)) {
     return {
       role: 'assistant',
@@ -331,6 +476,37 @@ async function callLLM(
     };
   }
 
+  if (/工作流|配方|workflow|recipe/i.test(content)) {
+    const figmaUrl = content.match(/https?:\/\/[^\s]+figma[^\s]+/)?.[0] || '';
+    const componentName = extractComponentName(content);
+    // 提取工作流名：original-phase2 / original-vue3，未识别时默认 phase2
+    const wfMatch = content.match(/original-(phase2|vue3)/i);
+    const workflowId = wfMatch ? wfMatch[0].toLowerCase() : 'original-phase2';
+    return {
+      role: 'assistant',
+      content: `好的，我来执行工作流「${workflowId}」。`,
+      toolCalls: [{
+        id: `call_${Date.now()}`,
+        name: 'execute_workflow',
+        arguments: {
+          workflowId,
+          params: {
+            componentName,
+            ...(figmaUrl ? { figmaUrl } : {}),
+          },
+        },
+      }],
+    };
+  }
+
+  // R9 上下文感知：用户提到「刚才的组件/当前组件」时，告知当前锚定组件及可继续的操作
+  if (/刚才的组件|上一个组件|当前组件|刚才那个|上次那个/.test(content) && state.currentComponentId) {
+    return {
+      role: 'assistant',
+      content: `当前组件：**${state.currentComponentId}**\n\n你可以直接说：\n- ✏️ 「改样式」修改它\n- 🔗 「绑定 API」对接数据源\n- 📤 「推送到 GitLab」交付代码`,
+    };
+  }
+
   // 无意图匹配 → 直接回复
   // 用户明确了规格（lite/max 等）却没给素材：直接说缺什么，别笼统列能力清单。
   // 否则用户说「lite」会被回一长串「支持以下操作…请提供截图」，
@@ -343,9 +519,14 @@ async function callLLM(
     };
   }
 
+  // 兜底回复附带当前组件锚点（R9），让用户知道「刚才的组件」可直接续做
+  const ctxLine = state.currentComponentId
+    ? `\n\n当前组件：**${state.currentComponentId}**（可直接说「改样式 / 绑定 API / 推送到 GitLab」继续操作它）`
+    : '';
+
   return {
     role: 'assistant',
-    content: `我理解你的需求："${content}"。目前我支持以下操作：\n\n- 📷 从截图生成组件\n- 🎨 从 Figma 链接生成组件\n- ✏️ 修改已有组件\n- 📋 查询任务状态\n- 📊 查看生成统计\n- 📦 列出组件\n- 🔗 绑定 API 数据源\n- 📤 推送到 GitLab\n\n请告诉我你想做什么？`,
+    content: `我理解你的需求："${content}"。目前我支持以下操作：\n\n- 📷 从截图生成组件\n- 🎨 从 Figma 链接生成组件\n- ✏️ 修改已有组件\n- 📋 查询任务状态\n- 📊 查看生成统计\n- 📦 列出组件\n- 🔗 绑定 API 数据源\n- 📤 推送到 GitLab\n- 🌐 发布到公共组件池\n- 🩺 组件体检\n- 🔁 版本历史 / 回滚\n- 🧩 批量生成组件\n- ⚙️ 执行工作流\n\n请告诉我你想做什么？${ctxLine}`,
   };
 }
 
@@ -495,11 +676,25 @@ function findLastToolCallMessage(messages: AgentMessage[]): AgentMessage | null 
 }
 
 /**
+ * 从工具结果提取「当前组件 id」用于回写（R7）。
+ * 生成类工具（截图/Figma/批量/工作流）成功后返回 sessionId，
+ * 回写到会话上下文，后续「改/绑/推」无需显式传 id 即可命中。
+ * 批量返回多个 sessionId 时取第一个（批量场景锚定最近一次批量首个组件）。
+ */
+function extractCurrentComponentId(r: ToolResult): string | undefined {
+  const d = r.data as any;
+  if (!d) return undefined;
+  if (typeof d.sessionId === 'string' && d.sessionId) return d.sessionId;
+  if (Array.isArray(d.sessionIds) && d.sessionIds.length > 0) return d.sessionIds[0];
+  return undefined;
+}
+
+/**
  * 运行 Agent 状态机
  */
 export async function runWorkbenchAgent(
   initialState: Partial<WorkbenchAgentState>,
-): Promise<{ response: string; cards: any[] }> {
+): Promise<{ response: string; cards: any[]; currentComponentId?: string }> {
   const state: WorkbenchAgentState = {
     conversationId: initialState.conversationId || '',
     userId: initialState.userId || '',
@@ -509,6 +704,32 @@ export async function runWorkbenchAgent(
     iteration: 0,
     maxIterations: 5,
   };
+
+  // ─── P0 ②：真 LLM Function Calling 主路径 ─────────────────────────────
+  // 用户已配置文本模型（apiKey 存在）时，优先走真 LLM 意图识别 + 工具调度；
+  // 未配置 / 调用失败 / 返回空 → 回退下方既有正则状态机，保证零回归。
+  const llmConfig = initialState.llmConfig;
+  const hasLLM = !!(
+    llmConfig &&
+    (llmConfig.apiKey || llmConfig.textApiKey || llmConfig.unifiedApiKey)
+  );
+  if (hasLLM) {
+    try {
+      const llmResult = await runWorkbenchLLM({
+        messages: state.messages,
+        currentComponentId: state.currentComponentId,
+        toolContext: state.toolContext,
+        llmConfig,
+      });
+      logger.log(`[Agent] 真 LLM 路径完成，conversation=${state.conversationId}`);
+      return llmResult;
+    } catch (err: any) {
+      logger.warn(
+        `[Agent] 真 LLM 意图识别失败，回退正则匹配: ${err?.message || err}`,
+      );
+      // 落到下方正则状态机（行为与未配置 LLM 完全一致）
+    }
+  }
 
   logger.log(`[Agent] Starting conversation=${state.conversationId}, iteration=0`);
 
@@ -524,6 +745,7 @@ export async function runWorkbenchAgent(
       return {
         response: llmResponse.content,
         cards: llmResponse.cards || [],
+        currentComponentId: state.currentComponentId,
       };
     }
 
@@ -536,6 +758,13 @@ export async function runWorkbenchAgent(
 
       const result = await executeTool(toolCall.name, toolCall.arguments, state.toolContext);
       toolResults.push(result);
+
+      // R7：生成类工具成功后把 sessionId 回写到当前组件 id（供后续 modify/bind/push 锚定）
+      const cid = extractCurrentComponentId(result);
+      if (cid) {
+        state.currentComponentId = cid;
+        logger.log(`[Agent] currentComponentId updated to ${cid} (via ${toolCall.name})`);
+      }
 
       // 将 Tool 结果加入消息历史
       toolMessages.push({
@@ -551,6 +780,16 @@ export async function runWorkbenchAgent(
     const failCount = toolResults.filter(r => !r.success).length;
 
     let summaryContent = llmResponse.content;
+
+    // 工具若带文本总结（data.content，如 modify_component 的 AI 修改总结），回传给用户。
+    // 前端 message-text 有 white-space: pre-wrap，\n 会正常换行展示。
+    const toolSummaries = toolResults
+      .filter(r => r.data && typeof r.data.content === 'string' && r.data.content.trim())
+      .map(r => r.data.content.trim());
+    if (toolSummaries.length > 0) {
+      summaryContent += '\n\n' + toolSummaries.join('\n\n');
+    }
+
     if (failCount > 0) {
       summaryContent += `\n\n⚠️ ${failCount} 个操作执行失败，请检查参数后重试。`;
     }
@@ -559,6 +798,7 @@ export async function runWorkbenchAgent(
     return {
       response: summaryContent,
       cards,
+      currentComponentId: state.currentComponentId,
     };
   }
 

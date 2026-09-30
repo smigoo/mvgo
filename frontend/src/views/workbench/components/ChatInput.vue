@@ -15,13 +15,28 @@
     </div>
 
     <div class="input-wrapper">
+      <!-- 斜杠命令弹层（R14） -->
+      <div v-if="slashOpen" class="slash-menu">
+        <button
+          v-for="(cmd, idx) in filteredSlashCommands"
+          :key="cmd.cmd"
+          class="slash-item"
+          :class="{ active: idx === slashIndex }"
+          @mousedown.prevent="applySlash(cmd)"
+          @mouseenter="slashIndex = idx"
+        >
+          <span class="slash-cmd">{{ cmd.cmd }}</span>
+          <span class="slash-desc">{{ cmd.desc }}</span>
+        </button>
+      </div>
+
       <textarea
         ref="textareaRef"
         v-model="inputText"
         :disabled="disabled"
-        :placeholder="attachments.length ? '补充描述（可选），按 Enter 发送' : '输入消息，按 Enter 发送，Shift+Enter 换行...'"
+        :placeholder="attachments.length ? '补充描述（可选），按 Enter 发送' : (placeholderOverride || '输入消息，按 Enter 发送，Shift+Enter 换行...')"
         @keydown="handleKeydown"
-        @input="autoResize"
+        @input="onInput"
         @paste="handlePaste"
         rows="1"
       ></textarea>
@@ -41,7 +56,7 @@
 </template>
 
 <script setup>
-import { ref, nextTick } from 'vue';
+import { ref, nextTick, computed } from 'vue';
 
 const props = defineProps({
   disabled: {
@@ -56,6 +71,9 @@ const inputText = ref('');
 const textareaRef = ref(null);
 const attachments = ref([]);
 const isDragOver = ref(false);
+
+/** R8 快捷入口覆盖的 placeholder（用户开始输入即清除） */
+const placeholderOverride = ref('');
 
 /** 单张大小上限（后端走 JSON body，过大易超时） */
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
@@ -114,6 +132,31 @@ function removeAttachment(idx) {
 }
 
 function handleKeydown(e) {
+  // 斜杠命令弹层打开时：上下键导航、Enter 确认、Esc 关闭
+  if (slashOpen.value) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      slashIndex.value = (slashIndex.value + 1) % filteredSlashCommands.value.length;
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      slashIndex.value =
+        (slashIndex.value - 1 + filteredSlashCommands.value.length) % filteredSlashCommands.value.length;
+      return;
+    }
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      const cmd = filteredSlashCommands.value[slashIndex.value];
+      if (cmd) applySlash(cmd);
+      return;
+    }
+    if (e.key === 'Escape') {
+      slashOpen.value = false;
+      return;
+    }
+  }
+
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     handleSend();
@@ -150,6 +193,85 @@ function autoResize() {
   textarea.style.height = 'auto';
   textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
 }
+
+function onInput() {
+  // 用户开始输入即清除快捷入口覆盖的 placeholder
+  placeholderOverride.value = '';
+  autoResize();
+  detectSlash();
+}
+
+// ========== 斜杠命令（R14） ==========
+const slashCommands = [
+  { cmd: '/生成', desc: '从截图或 Figma 生成组件', fill: '生成组件：' },
+  { cmd: '/统计', desc: '查看生成统计', fill: '查看生成统计' },
+  { cmd: '/绑定', desc: '为组件绑定 API', fill: '绑定 API：' },
+  { cmd: '/推送', desc: '推送到 GitLab', fill: '推送到 GitLab' },
+  { cmd: '/工作流', desc: '执行工作流/配方', fill: '执行工作流：' },
+  { cmd: '/批量', desc: '批量生成组件', fill: '批量生成：' },
+];
+
+const slashOpen = ref(false);
+const slashIndex = ref(0);
+const slashQuery = ref('');
+
+const filteredSlashCommands = computed(() => {
+  const q = slashQuery.value.trim().toLowerCase();
+  if (!q) return slashCommands;
+  return slashCommands.filter(
+    (c) => c.cmd.toLowerCase().includes(q) || c.desc.toLowerCase().includes(q)
+  );
+});
+
+/** 检测输入末尾是否在敲斜杠命令（形如 /gen 或 中文/生成） */
+function detectSlash() {
+  const text = inputText.value;
+  const m = text.match(/(?:^|\s)\/([\u4e00-\u9fa5a-zA-Z]*)$/);
+  if (m) {
+    slashQuery.value = m[1] || '';
+    slashOpen.value = true;
+    slashIndex.value = 0;
+  } else {
+    slashOpen.value = false;
+  }
+}
+
+/** 选中斜杠命令：把末尾的 /xxx 替换为预设意图短语 */
+function applySlash(cmd) {
+  inputText.value = inputText.value.replace(/(?:^|\s)\/[\u4e00-\u9fa5a-zA-Z]*$/, (m) => {
+    const lead = m.startsWith(' ') ? ' ' : '';
+    return lead + cmd.fill + ' ';
+  });
+  slashOpen.value = false;
+  nextTick(() => {
+    textareaRef.value?.focus();
+    autoResize();
+  });
+}
+
+/**
+ * R8 快捷入口调用：聚焦输入框并临时覆盖 placeholder，引导用户提供素材。
+ */
+function focusWithPlaceholder(placeholder) {
+  placeholderOverride.value = placeholder || '';
+  nextTick(() => {
+    textareaRef.value?.focus();
+  });
+}
+
+/**
+ * R22 编辑重发：把用户旧消息文本回填输入框并聚焦，用户改完直接 Enter 重发。
+ */
+function focusWithText(text) {
+  inputText.value = text || '';
+  placeholderOverride.value = '';
+  nextTick(() => {
+    textareaRef.value?.focus();
+    autoResize();
+  });
+}
+
+defineExpose({ focusWithPlaceholder, focusWithText });
 </script>
 
 <style scoped lang="less">
@@ -216,6 +338,53 @@ function autoResize() {
     display: flex;
     gap: 10px;
     align-items: flex-end;
+    position: relative;
+
+    /* 斜杠命令弹层（R14） */
+    .slash-menu {
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 0;
+      width: 100%;
+      max-width: 360px;
+      background: var(--wb-surface, #ffffff);
+      border: 1px solid var(--wb-border, #e5e7eb);
+      border-radius: var(--wb-radius, 10px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+      overflow: hidden;
+      z-index: 30;
+
+      .slash-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        padding: 10px 14px;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        text-align: left;
+        font-family: inherit;
+        transition: background 0.12s;
+
+        &:hover,
+        &.active {
+          background: var(--wb-primary-light, #eef2ff);
+        }
+
+        .slash-cmd {
+          font-size: 13px;
+          font-weight: 600;
+          color: var(--wb-primary, #4f46e5);
+          flex-shrink: 0;
+        }
+
+        .slash-desc {
+          font-size: 12px;
+          color: var(--wb-text-muted, #9ca3af);
+        }
+      }
+    }
 
     textarea {
       flex: 1;

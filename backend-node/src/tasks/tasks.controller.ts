@@ -139,7 +139,20 @@ export class TasksController {
     const sessionId = this.resolveSnapshotSessionId(rawId, userId);
     const access = this.tasksService.getTaskStatus(sessionId, userId);
     if (!access.success) {
-      throw new HttpException(access.error || '任务不存在或无权访问', HttpStatus.NOT_FOUND);
+      // 🛡️ 与 assertSnapshotAccessible 共用同一口径：任务不存在（后端重启内存丢失 /
+      //    从未注册）但磁盘快照已落盘 → 降级放行，而非直接 404。
+      //    否则工作台刷新 / 后端重启后，进度卡 sessionId 对应的内存 task 已丢，
+      //    前端 fetchLatestTaskCodeSnapshot 拿到 404 → loadConversationArtifacts
+      //    拿不到任何产物（「工作台看不到 chanwu」根因二）。
+      if (access.error === '无权访问此任务') {
+        throw new HttpException(access.error, HttpStatus.FORBIDDEN);
+      }
+      const diskSnapshot =
+        this.taskCodeSnapshotService.getLatestManifest(sessionId) ||
+        this.taskCodeSnapshotService.getPartialManifest(sessionId);
+      if (!diskSnapshot) {
+        throw new HttpException(access.error || '任务不存在或无权访问', HttpStatus.NOT_FOUND);
+      }
     }
     return {
       success: true,
@@ -250,6 +263,7 @@ export class TasksController {
    * 将单文件修改写回为新的 candidate revision。仅任务本人可操作。
    */
   @Post(':sessionId/code-snapshots/:revision/edit')
+  @UseGuards(SessionGuard)
   editCodeSnapshotFile(
     @Param('sessionId') sessionId: string,
     @Param('revision') revision: string,
@@ -299,6 +313,7 @@ export class TasksController {
    *  - task.result.codeValidationResult / lessCompileGate（驱动详情页错误面板）
    */
   @Post(':sessionId/code-snapshots/:revision/validate')
+  @UseGuards(SessionGuard)
   async validateCodeSnapshot(
     @Param('sessionId') sessionId: string,
     @Param('revision') revision: string,
@@ -320,6 +335,75 @@ export class TasksController {
       const status = /不存在|格式非法|不匹配/.test(message)
         ? HttpStatus.NOT_FOUND
         : HttpStatus.BAD_REQUEST;
+      throw new HttpException(message, status);
+    }
+  }
+
+  /**
+   * GET /api/tasks/:sessionId/code-snapshots/revisions
+   * 列出任务的全部代码快照版本（含状态/时间/文件数），供「版本历史」列表使用。
+   *
+   * 🆓 与 latest 一致：预览页独立打开时无 token 也放行（只读，不暴露敏感数据）。
+   */
+  @Get(':sessionId/code-snapshots/revisions')
+  listCodeSnapshotRevisions(
+    @Param('sessionId') rawId: string,
+    @OptionalUser() userId: string | undefined,
+  ) {
+    const sessionId = this.resolveSnapshotSessionId(rawId, userId);
+    const access = this.tasksService.getTaskStatus(sessionId, userId);
+    if (!access.success) {
+      if (access.error === '无权访问此任务') {
+        throw new HttpException(access.error, HttpStatus.FORBIDDEN);
+      }
+      const diskSnapshot =
+        this.taskCodeSnapshotService.getLatestManifest(sessionId) ||
+        this.taskCodeSnapshotService.getPartialManifest(sessionId);
+      if (!diskSnapshot) {
+        throw new HttpException(access.error || '任务不存在或无权访问', HttpStatus.NOT_FOUND);
+      }
+    }
+    return {
+      success: true,
+      revisions: this.taskCodeSnapshotService.listRevisions(sessionId),
+      current: {
+        candidate: this.taskCodeSnapshotService.getCandidateManifest(sessionId)?.revision || null,
+        lastGood: this.taskCodeSnapshotService.getLastGoodManifest(sessionId)?.revision || null,
+        partial: this.taskCodeSnapshotService.getPartialManifest(sessionId)?.revision || null,
+      },
+    };
+  }
+
+  /**
+   * POST /api/tasks/:sessionId/code-snapshots/:revision/rollback
+   * 一键回滚：把 last-good 指针重定向到指定历史版本，使其成为新的预览/发布源。
+   * 仅任务本人可操作。
+   */
+  @Post(':sessionId/code-snapshots/:revision/rollback')
+  @UseGuards(SessionGuard)
+  rollbackCodeSnapshot(
+    @Param('sessionId') sessionId: string,
+    @Param('revision') revision: string,
+    @CurrentUser() userId: string,
+  ) {
+    const task = this.tasksService.getTask(sessionId);
+    if (task && task.userId && task.userId !== userId) {
+      throw new HttpException('无权回滚此任务快照', HttpStatus.FORBIDDEN);
+    }
+    // 任务可能已不在内存（重启丢失）但磁盘快照仍在：与 validate 一致，降级放行，仅要求 manifest 真实存在。
+    if (!task && !this.taskCodeSnapshotService.hasManifest(sessionId, revision)) {
+      throw new HttpException('任务或代码快照不存在', HttpStatus.NOT_FOUND);
+    }
+    try {
+      const manifest = this.taskCodeSnapshotService.rollbackToRevision(sessionId, revision);
+      return { success: true, manifest };
+    } catch (error: any) {
+      const message = String(error?.message || '回滚失败');
+      const status = /不存在|格式非法|不匹配/.test(message)
+        ? HttpStatus.NOT_FOUND
+        : /不可回滚|不完整|已拒绝/.test(message)
+          ? HttpStatus.CONFLICT
+          : HttpStatus.BAD_REQUEST;
       throw new HttpException(message, status);
     }
   }
@@ -356,6 +440,7 @@ export class TasksController {
    * 获取任务树（父任务 + 子任务列表）
    */
   @Get('tree/:sessionId')
+  @UseGuards(SessionGuard)
   getTaskTree(@Param('sessionId') sessionId: string, @CurrentUser() userId: string) {
     const tree = this.tasksService.getTaskTree(sessionId, userId);
     if (!tree) {
@@ -369,6 +454,7 @@ export class TasksController {
    * 获取当前等待队列快照
    */
   @Get('queue')
+  @UseGuards(SessionGuard)
   getQueueSnapshot(@CurrentUser() userId: string) {
     return {
       success: true,
@@ -408,6 +494,7 @@ export class TasksController {
    * 取消排队中的任务
    */
   @Post('queue/cancel/:sessionId')
+  @UseGuards(SessionGuard)
   async cancelQueuedTask(
     @Param('sessionId') sessionId: string,
     @CurrentUser() userId: string,
@@ -426,6 +513,7 @@ export class TasksController {
    * 手动启动排队中的任务
    */
   @Post('queue/start/:sessionId')
+  @UseGuards(SessionGuard)
   async startQueuedTask(
     @Param('sessionId') sessionId: string,
     @CurrentUser() userId: string,
@@ -439,6 +527,7 @@ export class TasksController {
    * 用于解除「运行数为 0 但任务仍卡在 queued」的不一致状态（如入队时未注册 executeFn）。
    */
   @Post('queue/dispatch')
+  @UseGuards(SessionGuard)
   async dispatchQueue(@CurrentUser() userId: string) {
     const result = await this.queueService.scheduleNextWaiting();
     return {
@@ -454,6 +543,7 @@ export class TasksController {
    * 批量删除指定任务（级联删除组件产出物）
    */
   @Post('batch-delete')
+  @UseGuards(SessionGuard)
   async removeTasksBatch(
     @Body('sessionIds') sessionIds: string[],
     @CurrentUser() userId: string,
@@ -480,6 +570,7 @@ export class TasksController {
    * 删除指定任务
    */
   @Post(':sessionId/delete')
+  @UseGuards(SessionGuard)
   async removeTask(@Param('sessionId') sessionId: string, @CurrentUser() userId: string) {
     const deleted = await this.tasksService.removeTask(sessionId, userId);
 
@@ -497,6 +588,7 @@ export class TasksController {
   }
 
   @Post('cleanup-orphans')
+  @UseGuards(SessionGuard)
   async cleanupOrphans(@CurrentUser() userId: string) {
     const result = await this.tasksService.cleanupOrphans(userId);
     return {
@@ -511,6 +603,7 @@ export class TasksController {
    * 终止正在运行的任务
    */
   @Post('cancel/:sessionId')
+  @UseGuards(SessionGuard)
   async cancelTask(@Param('sessionId') sessionId: string, @CurrentUser() userId: string) {
     return await this.tasksService.cancelTask(sessionId, userId);
   }
@@ -520,6 +613,7 @@ export class TasksController {
    * 暂停正在运行的任务
    */
   @Post('pause/:sessionId')
+  @UseGuards(SessionGuard)
   async pauseTask(@Param('sessionId') sessionId: string, @CurrentUser() userId: string) {
     return await this.tasksService.pauseTask(sessionId, userId);
   }
@@ -529,6 +623,7 @@ export class TasksController {
    * 恢复暂停的任务
    */
   @Post('resume/:sessionId')
+  @UseGuards(SessionGuard)
   resumeTask(@Param('sessionId') sessionId: string, @CurrentUser() userId: string) {
     return this.tasksService.resumeTask(sessionId, userId);
   }
@@ -538,6 +633,7 @@ export class TasksController {
    * 批量清理当前用户的过期任务（completed/failed）
    */
   @Post('delete')
+  @UseGuards(SessionGuard)
   removeExpiredTasks(@CurrentUser() userId: string) {
     const { removed, remaining } = this.tasksService.removeExpiredTasks(userId);
 
@@ -554,6 +650,7 @@ export class TasksController {
    * 获取失败任务的可重试元数据（供前端「重新配置并重试」弹窗使用）
    */
   @Get('retry-meta/:sessionId')
+  @UseGuards(SessionGuard)
   getRetryMetadata(@Param('sessionId') sessionId: string, @CurrentUser() userId: string) {
     const meta = this.tasksService.getRetryMetadata(sessionId, userId);
     if (!meta) {
@@ -571,6 +668,7 @@ export class TasksController {
    * Body: { config?: { model?, endpoint?, apiKey? } }
    */
   @Post('retry/:sessionId')
+  @UseGuards(SessionGuard)
   async retryTask(
     @Param('sessionId') sessionId: string,
     @Body() body: { config?: { model?: string; endpoint?: string; apiKey?: string } },
@@ -586,6 +684,7 @@ export class TasksController {
    * 下载失败/取消任务已生成的代码，便于离线检查，不修改任务状态。
    */
   @Get(':sessionId/code-download')
+  @UseGuards(SessionGuard)
   async downloadTaskCode(
     @Param('sessionId') sessionId: string,
     @CurrentUser() userId: string,
@@ -607,6 +706,7 @@ export class TasksController {
    * 尝试恢复被服务重启中断的任务（从 temp-components 中间产物补完 workspace 同步）
    */
   @Post(':sessionId/recover')
+  @UseGuards(SessionGuard)
   async recoverTask(@Param('sessionId') sessionId: string, @CurrentUser() userId: string) {
     return this.tasksService.recoverTask(sessionId, userId);
   }
@@ -616,6 +716,7 @@ export class TasksController {
    * 手动将失败/取消任务的现有代码发布到 workspace（供 Playground 预览），不改变任务状态
    */
   @Post(':sessionId/publish-to-workspace')
+  @UseGuards(SessionGuard)
   async publishToWorkspace(@Param('sessionId') sessionId: string, @CurrentUser() userId: string) {
     return this.tasksService.publishToWorkspace(sessionId, userId);
   }
@@ -626,6 +727,7 @@ export class TasksController {
    * 仅在「代码生成」阶段完成后由前端「跳过剩余阶段」按钮触发
    */
   @Post(':sessionId/speed-pass')
+  @UseGuards(SessionGuard)
   async speedPassTask(@Param('sessionId') sessionId: string, @CurrentUser() userId: string) {
     return this.tasksService.speedPassTask(sessionId, userId);
   }
@@ -637,6 +739,7 @@ export class TasksController {
    * Body: { revision?: string } 前端当前预览的 revision（仅记录，发布取 latest candidate 快照）
    */
   @Post(':sessionId/lock')
+  @UseGuards(SessionGuard)
   async lockTask(
     @Param('sessionId') sessionId: string,
     @Body() body: { revision?: string },
@@ -651,6 +754,7 @@ export class TasksController {
    * Body: { overrideStatus: 'passed' | 'warned', reviewerName?: string, comment?: string }
    */
   @Post(':sessionId/human-review')
+  @UseGuards(SessionGuard)
   submitHumanReview(
     @Param('sessionId') sessionId: string,
     @Body() body: { overrideStatus?: 'passed' | 'warned'; reviewerName?: string; comment?: string },
@@ -674,6 +778,7 @@ export class TasksController {
    * 撤回人工审核（还原 failed 状态）
    */
   @Post(':sessionId/human-review/delete')
+  @UseGuards(SessionGuard)
   revokeHumanReview(
     @Param('sessionId') sessionId: string,
     @Body() body: { reviewerName?: string },
@@ -687,6 +792,7 @@ export class TasksController {
    * 列出当前用户可审核的失败任务（Vue3 + 微码）
    */
   @Get('reviewable')
+  @UseGuards(SessionGuard)
   getReviewableTasks(@CurrentUser() userId: string) {
     const tasks = this.tasksService.getReviewableTasks(userId);
     return { success: true, tasks, count: tasks.length };

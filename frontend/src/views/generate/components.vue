@@ -913,6 +913,8 @@
                 <span class="task-duration" v-if="t.duration">{{ formatRecentDuration(t.duration) }}</span>
               </div>
               <div class="task-degraded" v-if="t.visualDegraded && t.status !== 'running'">⚠ 视觉分析降级，布局可能偏离设计稿</div>
+              <!-- 🛡️ 2026-09-30: 低覆盖率「降级放行」（非阻断，与 visualDegraded 互斥）→ 内容完整性提示，归因到视觉模型本身 -->
+              <div class="task-degraded" v-if="t.visualQualityWarning && t.status !== 'running'" :title="visualQualityWarningTitle(t.visualQualityWarning)">⚠ 内容可能不完整（{{ visualQualityWarningLabel(t.visualQualityWarning) }}），属模型识别能力问题，可换更强的视觉模型重试</div>
               <div class="task-degraded" v-if="t.degradedScriptParts && t.degradedScriptParts.length && t.status !== 'running'">⚠ 生成不完整（{{ degradedScriptPartsLabel(t.degradedScriptParts) }}），可二次生成</div>
               <div class="task-degraded" v-if="t.missingFiles && t.missingFiles.length && t.status !== 'running'">⚠ 缺失关键文件（{{ t.missingFiles.join('、') }}），可进入编辑器补全</div>
               <div class="task-degraded task-degraded--retry" v-if="t.status === 'failed' && t.checkpointStatus && t.checkpointStatus !== 'none'">已缓存{{ checkpointCacheLabel(t.checkpointStatus) }}，换模型重试可秒续</div>
@@ -2750,6 +2752,27 @@ function checkpointCacheLabel(status?: string) {
   return (status && map[status]) || '缓存'
 }
 
+// 🛡️ 2026-09-30: 视觉覆盖率不足但「降级放行」（非阻断）→ 内容完整性提示。
+// ⚠️ 与 visualDegraded 语义不同：这里是「能生成、但内容可能不完整」，成因归因到**视觉模型召回能力**（非设计稿）。
+function visualQualityWarningLabel(w: any) {
+  const pct = Number(w?.rate)
+  const n = Number(w?.missingTextCount) || 0
+  const base = Number.isFinite(pct) && pct > 0 ? `视觉模型仅识别 ${pct}%` : '视觉模型未识别全部内容'
+  return n > 0 ? `${base}（${n} 项未识别）` : base
+}
+
+// hover 明细：列出图中「明确存在却没被识别」的真实文字，用于证明这是模型问题而非设计稿问题
+function visualQualityWarningTitle(w: any) {
+  const pct = Number(w?.rate)
+  const texts: string[] = Array.isArray(w?.missingTexts) ? w.missingTexts : []
+  const head = Number.isFinite(pct) && pct > 0 ? `视觉模型仅识别 ${pct}% 的设计稿内容。` : '视觉模型未能识别全部设计稿内容。'
+  const attribution = w?.attribution === 'vision-recall'
+    ? '属视觉模型召回能力不足，与设计稿无关。'
+    : '多为图层结构噪音，与设计稿无关。'
+  const detail = texts.length ? `图中明确存在但未被识别的文字：${texts.join('、')}` : ''
+  return [head, attribution, detail].filter(Boolean).join('')
+}
+
 // ═══ Figma URL 历史记录 ═══
 const URL_HISTORY_KEY = 'mvgo_figma_url_history'
 const MAX_URL_HISTORY = 10
@@ -2808,6 +2831,8 @@ async function fetchRecent() {
       visualDegraded: t.visualDegraded === true || !!t.result?._visualDegraded,
       visualLayoutSource: t.visualLayoutSource || t.result?._visualLayoutSource || null,
       visualDegradeReason: t.visualDegradeReason || t.result?._visualDegradeReason || '',
+      // 🛡️ 2026-09-30: 低覆盖率「降级放行」质量提示（非阻断）→ 「内容可能不完整 + 归因到视觉模型」提示条
+      visualQualityWarning: t.visualQualityWarning || t.result?._visualQualityWarning || null,
       // 🛡️ 脚本子段降级清单（lifecycle/charts 段失败但已降级兜底）→ 「不完整，可二次生成」标签
       degradedScriptParts: Array.isArray(t.degradedScriptParts) ? t.degradedScriptParts : (Array.isArray(t.result?.degradedScriptParts) ? t.result.degradedScriptParts : []),
       // 🛡️ #10 静默失败降级：合并 gateSkippedFiles（写盘门禁跳过）+degradedFiles（子组件编译剔除）→ 缺失关键文件提示

@@ -6,6 +6,7 @@
  */
 
 import { BaseAgent } from './base-agent.js'
+import { buildFitConstraint, describeFitMode } from '../utils/layout-fit-strategy.js'
 
 export class LayoutResponsiveAgent extends BaseAgent {
   constructor(config = {}) {
@@ -47,6 +48,14 @@ export class LayoutResponsiveAgent extends BaseAgent {
       ? JSON.stringify(input.layoutData, null, 2)
       : '{}'
     prompt = prompt.replace('{{layoutData}}', layoutDataStr)
+
+    // 注入「自适应策略」强约束（用户在界面上选的 outputScaleMode）
+    // 不做这一步的话，用户在 UI 上选什么都不会影响最终产物 —— 死选项。
+    prompt = prompt.replace('{{fitStrategy}}', buildFitConstraint(input.layoutData))
+    this.logger.info('注入自适应策略约束', {
+      fitMode: describeFitMode(input.layoutData),
+      declared: input.layoutData?.canvas?.outputScaleMode ?? null,
+    })
 
     // 注入上下文
     const contextStr = input.context

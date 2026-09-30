@@ -11,12 +11,42 @@ import { buildNodeLayoutFactsReinforcement } from './constraint-reinforcement.js
 import { stripIllegalCssValues } from './css-sanitizer.js'
 
 /**
+ * 🛡️ 模板标签扫描（2026-09-30 §8.10 提为共享导出）
+ *
+ * 口径 = 逐标签扫描，**不假设属性顺序**（`class` 可写在 `data-section-id` 之后）。
+ * 属性段 `(?:"[^"]*"|'[^']*'|[^>])*` 让**引号内的 `>`** 不提前截断标签
+ * （`CardGrid.vue` 的 `:style="{ ... }"` 里就可能出现 `>`）。
+ *
+ * 同一口径同时服务两处（此前是两处独立正则，易漂移）：
+ *   ① `buildLayoutMappingFromSectionIds`（建 class → 布局事实映射）
+ *   ② `layout-direction-guard#detectLayoutDirectionMismatch`（LAYOUT-001 定位宿主根元素）
+ *
+ * @param {string} content - 产物源码（.vue / .html）
+ * @returns {Array<{name: string, attrs: string, full: string, index: number}>}
+ */
+export function matchTemplateTags(content) {
+  const out = []
+  if (typeof content !== 'string' || !content) return out
+  const re = /<([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>])*)>/g
+  let m
+  while ((m = re.exec(content))) {
+    out.push({ name: m[1], attrs: m[2] || '', full: m[0], index: m.index })
+  }
+  return out
+}
+
+/**
  * 从 CSS/LESS 内容中提取指定 class 的 display 和 flex-direction
+ *
+ * ⚠️ 2026-09-30 §8.10：改为 `export`（原为模块私有）。LAYOUT-001 换证据源后仍需
+ *   「类名 → 该选择器块」的同一条定位口径，重复实现第四份正则会引入漂移风险。
+ *   返回值额外带 `blockContent` ⇒ 调用方可自行读它未返回的属性（如 `grid-template-columns`）。
+ *
  * @param {string} cssContent - CSS/LESS 内容
  * @param {string} className - class 名（如 .c-device-monitor-tabs）
- * @returns {{display: string|null, flexDirection: string|null, blockStart: number, blockEnd: number}|null}
+ * @returns {{display: string|null, flexDirection: string|null, blockStart: number, blockEnd: number, blockContent: string}|null}
  */
-function extractFlexProps(cssContent, className) {
+export function extractFlexProps(cssContent, className) {
   // 转义 class 名中的特殊字符
   const escapedClass = className.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const classRegex = new RegExp(`${escapedClass}\\s*\\{([^}]*)\\}`, 's')
@@ -345,8 +375,8 @@ export function buildLayoutMappingFromSectionIds(files, nodeLayoutFacts) {
 
   for (const [p, content] of Object.entries(files)) {
     if (typeof content !== 'string' || !p.endsWith('.vue')) continue
-    for (const tag of content.matchAll(/<([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>])*)>/g)) {
-      const attrs = tag[2] || ''
+    for (const tag of matchTemplateTags(content)) {
+      const attrs = tag.attrs || ''
       const secM = attrs.match(/data-section-id\s*=\s*"([^"]+)"/)
       if (!secM) continue
       const classM = attrs.match(/class\s*=\s*"([^"]*)"/)

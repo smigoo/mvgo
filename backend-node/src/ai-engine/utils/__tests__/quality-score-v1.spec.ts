@@ -81,6 +81,19 @@ describe('computeStyleScore', () => {
     const actual = { color: ['#ff0000'] };
     expect(computeStyleScore(expected, actual).score).toBe(50);
   });
+
+  // 🔴 回归锁（2026-09-30 复审）：容差不得放宽。曾有一版把 tolerance 3→5 / relativeTolerance 0.15→0.2，
+  //   理由是「期望 18↔16、11↔12、16↔14 被误杀」—— 实测旧档本来就匹配，属错误理由，
+  //   且放宽后差 4px 会被判匹配 ⇒ 破坏「不匹配应判 50」契约、用户侧质量分虚高。
+  it('spacing 容差边界：差 3px 判匹配、差 4px 判不匹配（tolerance 不得放宽）', () => {
+    const scoreWith = (actualSpacing: string) =>
+      computeStyleScore(
+        { color: ['#ff0000'], spacing: ['8px'] },
+        { color: ['#ff0000'], spacing: [actualSpacing] },
+      ).score;
+    expect(scoreWith('11px')).toBe(100); // 差 3 ⇒ 匹配
+    expect(scoreWith('12px')).toBe(50); // 差 4 ⇒ 不匹配（放宽容差即在此失守）
+  });
 });
 
 describe('extractDeclaredStyleLiterals', () => {
@@ -110,6 +123,25 @@ describe('extractExpectedStyleLiterals', () => {
   it('无节点树返回空期望', () => {
     expect(extractExpectedStyleLiterals(null).color).toEqual([]);
     expect(extractExpectedStyleLiterals({ url: 'https://figma.com' }).color).toEqual([]);
+  });
+
+  // 🔴 回归锁（2026-09-30 复审）：Math.round **只去浮点噪声**，不得改变纳入集合。
+  //   曾有一版对 itemSpacing 加 `> 0` 过滤，连 0 与负值一起丢弃 ⇒ 期望分母变小 ⇒ 分数虚高
+  //   （负 itemSpacing 是真实叠加排布事实，不是噪声）。
+  it('spacing 去浮点噪声但不改变纳入集合（0 与负值仍纳入）', () => {
+    const exp = extractExpectedStyleLiterals({
+      document: {
+        children: [
+          { itemSpacing: 17.600000381469727, paddingLeft: 11.199999809265137 },
+          { itemSpacing: 0 },
+          { itemSpacing: -8 },
+        ],
+      },
+    });
+    expect(exp.spacing).toContain('18px'); // 去噪：17.600000381469727 → 18
+    expect(exp.spacing).toContain('11px'); // 去噪：11.199999809265137 → 11
+    expect(exp.spacing).toContain('0px'); // 0 仍纳入
+    expect(exp.spacing).toContain('-8px'); // 负值仍纳入
   });
 });
 

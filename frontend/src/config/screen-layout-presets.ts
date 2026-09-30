@@ -3,6 +3,10 @@
 // ============================================================
 // 所有模板定义在此文件，方便统一维护和版本管理
 // 新增模板只需追加一个 preset 对象即可
+//
+// ⚠️ outputScaleMode 一律用 'fluid'（骨架弹性伸缩、内容不变形），与「一句话生成」
+//    的默认保持一致 —— 不要再写回 'contain'/'none'。这两个值只是「等比缩放派」的
+//    历史遗留，选它们会与产物实际使用的流式布局（fr + minmax）哲学脱节。
 // ============================================================
 
 import type {
@@ -85,7 +89,7 @@ const b1: ScreenLayout = {
   canvas: {
     width: 1920, height: 1080,
     aspectRatioLocked: true, aspectRatio: 1.778,
-    outputScaleMode: 'contain',
+    outputScaleMode: 'fluid',
     backgroundColor: '#ffffff',
     showGrid: true, gridSize: 20, snapToGrid: false,
     editorZoom: 1,
@@ -118,7 +122,7 @@ const b2: ScreenLayout = {
   canvas: {
     width: 1920, height: 1080,
     aspectRatioLocked: true, aspectRatio: 1.778,
-    outputScaleMode: 'contain',
+    outputScaleMode: 'fluid',
     backgroundColor: '#ffffff',
     showGrid: true, gridSize: 20, snapToGrid: false,
     editorZoom: 1,
@@ -151,7 +155,7 @@ const b3: ScreenLayout = {
   canvas: {
     width: 3840, height: 2160,
     aspectRatioLocked: true, aspectRatio: 1.778,
-    outputScaleMode: 'contain',
+    outputScaleMode: 'fluid',
     backgroundColor: '#0a1628',
     showGrid: true, gridSize: 40, snapToGrid: false,
     editorZoom: 1,
@@ -188,7 +192,7 @@ const b4: ScreenLayout = {
   canvas: {
     width: 5760, height: 1080,
     aspectRatioLocked: true, aspectRatio: 5.333,
-    outputScaleMode: 'contain',
+    outputScaleMode: 'fluid',
     backgroundColor: '#ffffff',
     showGrid: true, gridSize: 40, snapToGrid: false,
     editorZoom: 1,
@@ -221,7 +225,7 @@ const a1: ScreenLayout = {
   canvas: {
     width: 1920, height: 1080,
     aspectRatioLocked: true, aspectRatio: 1.778,
-    outputScaleMode: 'contain',
+    outputScaleMode: 'fluid',
     backgroundColor: '#f5f7fa',
     showGrid: false, gridSize: 8, snapToGrid: true,
     editorZoom: 1,
@@ -254,7 +258,7 @@ const a2: ScreenLayout = {
   canvas: {
     width: 1920, height: 1080,
     aspectRatioLocked: true, aspectRatio: 1.778,
-    outputScaleMode: 'contain',
+    outputScaleMode: 'fluid',
     backgroundColor: '#ffffff',
     showGrid: false, gridSize: 8, snapToGrid: true,
     editorZoom: 1,
@@ -285,7 +289,7 @@ const a3: ScreenLayout = {
   canvas: {
     width: 1440, height: 900,
     aspectRatioLocked: true, aspectRatio: 1.6,
-    outputScaleMode: 'contain',
+    outputScaleMode: 'fluid',
     backgroundColor: '#f0f2f5',
     showGrid: false, gridSize: 8, snapToGrid: true,
     editorZoom: 1,
@@ -314,7 +318,7 @@ const a4: ScreenLayout = {
   canvas: {
     width: 1920, height: 1080,
     aspectRatioLocked: true, aspectRatio: 1.778,
-    outputScaleMode: 'contain',
+    outputScaleMode: 'fluid',
     backgroundColor: '#ffffff',
     showGrid: false, gridSize: 8, snapToGrid: true,
     editorZoom: 1,

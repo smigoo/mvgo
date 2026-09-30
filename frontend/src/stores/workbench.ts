@@ -130,6 +130,11 @@ export const useWorkbenchStore = defineStore('workbench', () => {
           currentConversation.value.messageCount = conversation.messageCount;
           currentConversation.value.title = conversation.title;
           currentConversation.value.lastActiveAt = conversation.lastActiveAt;
+          // R7 锚点：生成类工具成功后后端回写 currentComponentId，这里同步到本地，
+          // 供 ChatHeader 渲染「当前组件」chip。
+          if ('currentComponentId' in conversation) {
+            currentConversation.value.currentComponentId = conversation.currentComponentId;
+          }
         }
       }
 
@@ -277,6 +282,18 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
   }
 
+  // R7 锚点：清除当前组件锚点（同步后端 + 本地）
+  async function clearComponentAnchor(conversationId: string) {
+    await workbenchApi.clearComponentAnchor(conversationId);
+    if (currentConversation.value?.conversationId === conversationId) {
+      currentConversation.value.currentComponentId = undefined;
+    }
+    const conv = conversations.value.find(c => c.conversationId === conversationId);
+    if (conv) {
+      conv.currentComponentId = undefined;
+    }
+  }
+
   // ========== 右侧面板状态 ==========
   const rightPanelVisible = ref(false);
 
@@ -350,6 +367,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     deleteGroup,
     fetchToolCredentials,
     saveToolCredentials,
+    clearComponentAnchor,
     setRightPanelVisible,
     setArtifacts,
     selectArtifact,

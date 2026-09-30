@@ -361,6 +361,253 @@ export function findDuplicateSlotNames(source = '', filePath = '') {
   }
 }
 
+/**
+ * 🛡️ 2026-09-30 新增 · 检出 SFC「脚本块泄漏」（scriptSplit 多段拼接畸形）。
+ *
+ * 背景（`mc-max-1790770973695-8bb771e4` 实锤）：`package/index.vue` 的 `<script setup>` 由
+ * `chunk-meta.json` 的 `state / lifecycle / charts` **多段**拼成，每段自带包裹标签。
+ * 上游 `mergeScriptParts` 只剥「末尾」一个闭合标签，段间多出的 `</script>` 会残留 ⇒
+ * 第 2/3 段（生命周期 `onMounted`/`onUnmounted`）被切到 script 块**之外**。
+ *
+ * 为什么必须独立成判据：`@vue/compiler-sfc#parse` **不报错**（顶层游离文本被容忍），
+ * `validateVueSfc` 全绿、任务「成功」，而 `onMounted` 永不执行 ⇒
+ * 「组件加载完成（onload）」业务事件静默失效。危害是全静默的，与重名插槽同族。
+ *
+ * 口径：对每个 `</script>` 取其到**下一个顶层块开标签**（`<template|<script|<style`）或
+ * 文件结尾之间的内容；剥掉 HTML 注释后仍有非空白字符 ⇒ 判泄漏。
+ * 正常的 `<template>/<script>/<style>` 三块结构里，该区段恒为空白。
+ *
+ * @param {string} source .vue 全文
+ * @param {string} [filePath] 错误串前缀
+ * @returns {{leaks: Array<{line: number, chars: number, preview: string}>, errors: string[]}}
+ */
+export function detectScriptBlockLeakage(source = '', filePath = '') {
+  const sourceText = String(source || '')
+  const leaks = []
+  const errors = []
+  const rx = /<\/script\s*>/gi
+  let m
+  while ((m = rx.exec(sourceText)) !== null) {
+    const closeEnd = m.index + m[0].length
+    const nextBlockStart = _nextTopLevelBlockStart(sourceText, closeEnd)
+    const gap = sourceText.slice(closeEnd, nextBlockStart)
+    const bare = gap.replace(/<!--[\s\S]*?-->/g, '').trim()
+    if (bare === '') continue
+    const line = lineAtOffset(sourceText, closeEnd) + 1
+    leaks.push({
+      line,
+      chars: bare.length,
+      preview: bare.split('\n')[0].slice(0, 80)
+    })
+    errors.push(
+      `${filePath || 'Vue SFC'}:${line}:1 script: 脚本块泄漏 —— </script> 与下一个顶层块之间有 ${bare.length} 字符裸 JS（该段永不执行）: ${bare.split('\n')[0].slice(0, 60)}`
+    )
+  }
+  return { leaks, errors }
+}
+
+/** 取 offset 之后第一个顶层块开标签的位置（无则返回全文长度）。 */
+function _nextTopLevelBlockStart(sourceText, from) {
+  const rx = /<(?:template|script|style)\b/gi
+  rx.lastIndex = from
+  const nx = rx.exec(sourceText)
+  return nx ? nx.index : sourceText.length
+}
+
+/**
+ * 确定性自愈：消解「脚本块泄漏」区段。**分两种形态，按「能否 parse 成 JS 模块」分流**
+ * （实测两形态都真实存在，一刀切必错）：
+ *
+ *   - **形态 A · 泄漏内容是 JS**（scriptSplit 残留的生命周期段）⇒ **把 `</script>` 后移到区段之后**
+ *     （内容重新归入 script 块）。实锤：`c-traffic-monitor-598d88fc` 等 9 例。
+ *   - **形态 B · 泄漏内容是说明文字/markdown**（LLM 说明落到 `</script>` 与 `<style>` 之间）
+ *     ⇒ **整段删除**。实锤：`c-max-…-12bc3750`（1077 字符 `## 📋 脚本生成说明…`）。
+ *     形态 B 若走后移会把 markdown 塞进 script 块 → 必语法错。
+ *   - **混合形态**（JS 前缀 + markdown 尾巴）⇒ 从**尾部**逐行回退，取「最长可 parse 前缀」留在
+ *     script 块内、其余删除。
+ *
+ * 纪律（与 `stripSurplusBlockClosers` 同族：纯文本变换、幂等）：
+ *   - **删标签、保内容**：绝不 `slice` 截断 JS（会把同段后续脚本整块丢掉）；
+ *   - **自愈候选不得引入新的 script 语法错**（`validateVueScriptSyntax` 前后比对）：泄漏段常与
+ *     块内已有声明重复（`state` 段与 `lifecycle` 段都写 `emitLoadEvent`）⇒ 直接后移会触发
+ *     `Identifier 'x' has already been declared`；此时退化为「删除」候选，两者都失败才记 `unfixable`；
+ *   - 只处理「第一个泄漏点」，循环至收敛（上限 20 轮防空转）；
+ *   - **不猜**：既 parse 不过、又不属说明文字形态 ⇒ 记入 `unfixable` **原样不动**，
+ *     由调用方走 fail-fast（宁可重试，也不静默丢代码）。
+ *
+ * @param {string} source .vue 全文
+ * @returns {{source: string, fixed: boolean,
+ *   actions: Array<{kind: 'moved'|'dropped', line: number, chars: number, preview: string}>,
+ *   unfixable: Array<{line: number, chars: number, preview: string}>}}
+ */
+export function healScriptBlockLeakage(source = '') {
+  const src = String(source || '')
+  if (!/<\/script\s*>/i.test(src)) {
+    return { source: src, fixed: false, actions: [], unfixable: [] }
+  }
+  const actions = []
+  const unfixable = []
+  let out = src
+  for (let guard = 0; guard < 20; guard++) {
+    const target = _firstLeakTarget(out)
+    if (!target) break
+    const gap = out.slice(target.closeEnd, target.nextBlockStart)
+    const trimmed = gap.trim()
+    const line = lineAtOffset(out, target.closeEnd) + 1
+    const preview = trimmed.split('\n')[0].slice(0, 80)
+
+    // 分流：整段能否 parse 成 JS 模块
+    let jsPart = ''
+    let droppedPart = ''
+    if (_parsesAsJsModule(trimmed)) {
+      jsPart = trimmed
+    } else {
+      const split = _splitJsPrefix(trimmed)
+      if (split.js.trim() !== '') {
+        jsPart = split.js.trim()
+        droppedPart = split.rest.trim()
+      } else if (_looksLikeNarration(trimmed)) {
+        droppedPart = trimmed
+      } else {
+        // 不猜：原样保留，交 fail-fast
+        unfixable.push({ line, chars: trimmed.length, preview })
+        break
+      }
+    }
+
+    const head = out.slice(0, target.closeStart).replace(/\s*$/, '')
+    const tail = out.slice(target.nextBlockStart)
+    const tailSep = tail.startsWith('\n') ? '' : '\n'
+
+    // 🔑 关键判据（8bb771e4 实锤）：自愈候选**不得引入新的 script 语法错**。
+    // 泄漏段常见「与块内已有声明重复」（`state` 段与 `lifecycle` 段都写了 `emitLoadEvent`）——
+    // 这正是上游 `mergeScriptParts` 去重链的职责，而泄漏段**绕过了**合并 ⇒ 直接后移会
+    // 触发 `Identifier 'emitLoadEvent' has already been declared`。故：
+    //   ① 后移候选无错 ⇒ 采用「后移」（保留生命周期，如 onUnmounted 清理）；
+    //   ② 后移引入错 ⇒ 退化为「删除」候选（泄漏段本为块内已有声明的冗余副本）；
+    //   ③ 两者都引入错 ⇒ 不猜，记 unfixable 交 fail-fast。
+    const baselineErrs = validateVueScriptSyntax(out, '').errors.length
+    const candMove =
+      jsPart === '' ? null : `${head}\n${jsPart}\n</script>${tailSep}${tail}`
+    const candDrop = `${head}\n</script>${tailSep}${tail}`
+    const pick = (cand, kind, text) =>
+      validateVueScriptSyntax(cand, '').errors.length <= baselineErrs
+        ? {
+            src: cand,
+            kind,
+            chars: text.length,
+            preview: text.split('\n')[0].slice(0, 80),
+          }
+        : null
+
+    const chosen =
+      (candMove && pick(candMove, 'moved', jsPart)) ||
+      pick(candDrop, 'dropped', jsPart || droppedPart)
+
+    if (!chosen) {
+      // 不猜：原样保留，交 fail-fast
+      unfixable.push({ line, chars: trimmed.length, preview })
+      break
+    }
+    out = chosen.src
+    actions.push({ kind: chosen.kind, line, chars: chosen.chars, preview: chosen.preview })
+  }
+  return { source: out, fixed: actions.length > 0, actions, unfixable }
+}
+
+/** 取「第一个泄漏点」的位置信息（无则 null）。 */
+function _firstLeakTarget(sourceText) {
+  const rx = /<\/script\s*>/gi
+  let m
+  while ((m = rx.exec(sourceText)) !== null) {
+    const closeEnd = m.index + m[0].length
+    const nextBlockStart = _nextTopLevelBlockStart(sourceText, closeEnd)
+    const naked = sourceText.slice(closeEnd, nextBlockStart).replace(/<!--[\s\S]*?-->/g, '').trim()
+    if (naked !== '') return { closeStart: m.index, closeEnd, nextBlockStart }
+  }
+  return null
+}
+
+/** 该文本能否作为 JS 模块解析（空串视为可解析）。 */
+function _parsesAsJsModule(text) {
+  const t = String(text || '').trim()
+  if (t === '') return true
+  try {
+    parseJavaScript(t, {
+      sourceType: 'module',
+      errorRecovery: false,
+      plugins: ['typescript', 'jsx', 'topLevelAwait', 'importMeta']
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 从尾部逐行回退，取「最长可 parse 前缀」。用于「JS 前缀 + 垃圾尾巴」混合形态。
+ * @returns {{js: string, rest: string}}
+ */
+function _splitJsPrefix(text) {
+  const lines = String(text || '').split('\n')
+  for (let end = lines.length; end >= 1; end--) {
+    const candidate = lines.slice(0, end).join('\n')
+    if (_parsesAsJsModule(candidate)) {
+      return { js: candidate, rest: lines.slice(end).join('\n') }
+    }
+  }
+  return { js: '', rest: text }
+}
+
+/** 说明文字/markdown 形态判据：首个非空行是标题/围栏/注释/列表标记。 */
+function _looksLikeNarration(gap) {
+  const first = String(gap || '')
+    .split('\n')
+    .map((s) => s.trim())
+    .find((s) => s !== '') || ''
+  return /^(#{1,6}\s|```|<!--|<[a-zA-Z/!]|\*\s|>\s|-{3,}|={3,})/.test(first)
+}
+
+/**
+ * 🛡️ 2026-09-30 新增 · 宿主保留组件名 —— 产物 `package/components/<name>.vue` 禁止同名。
+ *
+ * 名单来源（单一事实源：前端**全局注册**点，两处对称）：
+ *   - `frontend/src/utils/loadVue3Runtime.js:450`  `app.component('base-panel', …)`
+ *   - `frontend/src/views/preview/index.vue:954`   `app.component('base-panel', …)`
+ * 新增条目前必须先确认存在全局注册点，否则不得入列（避免把普通子组件名误判为保留名）。
+ *
+ * 危害（`mc-max-1790770973695-8bb771e4` 实锤「两个头部插槽」）：LLM 把宿主外壳当成普通子组件
+ * 生成 → `package/components/base-panel.vue` 模板里再套一层 `<base-panel>`（自引用宿主外壳），
+ * 且自带 `<template #header-right>`（与 `index.vue:3` 的同名插槽重复）⇒ 面板外壳套两层。
+ */
+export const HOST_RESERVED_COMPONENT_NAMES = Object.freeze(['base-panel'])
+
+/**
+ * 检出产物里与宿主保留名同名的子组件文件。
+ *
+ * @param {Object<string,string>} files 相对路径 → 内容（相对产物根，如 `package/components/base-panel.vue`）
+ * @param {string} [filePath] 错误串前缀（一般为 `package/index.vue`）
+ * @returns {{collisions: Array<{name: string, file: string}>, errors: string[]}}
+ */
+export function findHostReservedComponentCollisions(files = {}, filePath = '') {
+  const collisions = []
+  const errors = []
+  const reserved = new Set(HOST_RESERVED_COMPONENT_NAMES)
+  for (const rel of Object.keys(files || {})) {
+    const norm = String(rel).replace(/\\/g, '/')
+    // 只认产物子组件目录，避免误伤 resources/ 下的同名资源或宿主自身的注册文件
+    if (!/(^|\/)package\/components\//.test(norm)) continue
+    if (!/\.vue$/i.test(norm)) continue
+    const base = norm.slice(norm.lastIndexOf('/') + 1).replace(/\.vue$/i, '')
+    if (!reserved.has(base.toLowerCase())) continue
+    collisions.push({ name: base, file: norm })
+    errors.push(
+      `${filePath || 'Vue SFC'}:1:1 script: 产物子组件名与宿主保留组件同名（'${base}'）—— ${norm} 会与宿主全局注册的 <${base}> 争用同名外壳（渲染即套两层外壳 / 重复插槽）`
+    )
+  }
+  return { collisions, errors }
+}
+
 export function validateVueSfcDirectory(packageDir = '') {
   const errors = []
   if (!existsSync(packageDir)) return [`产物目录不存在: ${packageDir}`]

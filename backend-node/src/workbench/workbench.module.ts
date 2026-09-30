@@ -7,6 +7,10 @@ import { WorkbenchGroup, WorkbenchGroupSchema } from './group.schema';
 import { TasksModule } from '../tasks/tasks.module';
 import { ComponentModule } from '../component/component.module';
 import { TaskStatsModule } from '../task-stats/task-stats.module';
+import { DemoModule } from '../demo/demo.module';
+import { Vue3Module } from '../vue3/vue3.module';
+import { ApifoxModule } from '../apifox/apifox.module';
+import { WorkflowModule } from '../workflow/workflow.module';
 import { AiConfigModule } from '../config/config.module';
 import { Phase2Module } from '../phase2/phase2.module';
 import { LiteModule } from '../lite/lite.module';
@@ -22,6 +26,10 @@ import { ProgressModule } from '../progress/progress.module';
     TasksModule,
     ComponentModule,
     TaskStatsModule,
+    DemoModule,
+    Vue3Module,
+    ApifoxModule,
+    WorkflowModule,
     AiConfigModule,
     Phase2Module,
     LiteModule,

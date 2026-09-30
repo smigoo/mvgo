@@ -17,7 +17,8 @@
  * 高置信条件（全部满足才 high）：
  *   ① 横向 section（body.layout/layout === 'horizontal'，或 layoutSource === 'inline-row'）；
  *   ② 能解析出 ≥2 个成员节点（sourceNodeIds 排除自身，或 children[].figmaNode/figmaNodeId）；
- *   ③ 每个成员子树恰好「1 个标题 + 1 个数值」（collectSubtreeTexts 的 isTitle 判定）；
+ *   ③ 每个成员子树恰好 2 个文本，且可**按样式确定**分出「标题 / 数值」
+ *      （`splitTitleValueByStyle` —— 字号大者=数值；**命名无关**，不再看 `t-`/`d-` 图层名）；
  *   ④ 每个成员的 bbox.x 可解析，且成员按 x 严格递增、互不相同（可确定性排序）；
  *   ⑤ 标题文本跨成员唯一、数值文本跨成员唯一（无重复归属）；
  *   ⑥ 成员子树内无图片资源（统计行是纯文本，带背景图/插图的成员回退 LLM 兜底）。
@@ -32,6 +33,7 @@ import {
   indexFigmaNodes,
   buildChildrenMap,
   collectSubtreeTexts,
+  splitTitleValueByStyle,
   getFigmaBox,
 } from './section-tree.js'
 
@@ -128,15 +130,13 @@ export function assessStatRowConfidence(section, figmaRoot, opts = {}) {
     }
 
     const items = collectSubtreeTexts(id, index, childrenOf)
-    const titles = items.filter((i) => i.isTitle).map((i) => i.text)
-    const values = items.filter((i) => !i.isTitle).map((i) => i.text)
-    // 恰好 1 标题 + 1 数值，才满足「统计卡片」形态；多/少都不可靠
-    if (titles.length !== 1 || values.length !== 1) {
-      return fallback(
-        `member-shape-mismatch(${id}:title=${titles.length},value=${values.length})`,
-      )
+    // 🔴 命名无关（2026-09-30）：角色由**样式真值**判定，不看图层名。
+    const roles = splitTitleValueByStyle(items)
+    // 恰好 2 个文本且样式可分辨，才满足「统计卡片」形态；多/少/不可分辨都不可靠
+    if (!roles) {
+      return fallback(`member-shape-mismatch(${id}:texts=${items.length})`)
     }
-    parsed.push({ figmaNodeId: String(id), title: titles[0], value: values[0], x })
+    parsed.push({ figmaNodeId: String(id), title: roles.title, value: roles.value, x })
   }
 
   // 标题/数值跨成员唯一（无重复归属 → 左右配对不歧义）

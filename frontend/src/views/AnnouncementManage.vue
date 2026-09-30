@@ -291,7 +291,7 @@ async function handleSubmit() {
     }
 
     if (isEdit.value) {
-      await http.put(`/api/announcements/${editingId.value}`, data)
+      await http.post(`/api/announcements/${editingId.value}/update`, data)
       message.success('更新成功')
     } else {
       await http.post('/api/announcements', data)
@@ -309,7 +309,7 @@ async function handleSubmit() {
 
 async function toggleActive(record) {
   try {
-    await http.put(`/api/announcements/${record._id}/toggle`)
+    await http.post(`/api/announcements/${record._id}/toggle`)
     message.success(record.active ? '已禁用' : '已启用')
     loadAnnouncements()
   } catch (error) {
@@ -319,7 +319,7 @@ async function toggleActive(record) {
 
 async function deleteAnnouncement(id) {
   try {
-    await http.delete(`/api/announcements/${id}`)
+    await http.post(`/api/announcements/${id}/delete`)
     message.success('删除成功')
     loadAnnouncements()
   } catch (error) {

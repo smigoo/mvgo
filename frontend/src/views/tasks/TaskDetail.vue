@@ -3333,6 +3333,8 @@ function kindLabel(kind?: string) {
     case 'model-slow': return '模型响应慢'
     case 'platform-queue': return '平台排队'
     case 'provider-degraded': return '模型不可用'
+    case 'thinking-mode-expected': return '思考模式'
+    case 'thinking-off-failed': return '关思考失败'
     case 'retry': return '重试中'
     default: return kind || ''
   }
@@ -6572,6 +6574,8 @@ watch(bindingWizardOpen, (open) => {
 .log-kind-model-slow { color: #e2a23b; background: rgba(226,162,59,.14); border-color: rgba(226,162,59,.35); }
 .log-kind-platform-queue { color: #3794ff; background: rgba(55,148,255,.12); border-color: rgba(55,148,255,.3); }
 .log-kind-provider-degraded { color: #f14c4c; background: rgba(241,76,76,.12); border-color: rgba(241,76,76,.35); }
+.log-kind-thinking-mode-expected { color: #e2a23b; background: rgba(226,162,59,.14); border-color: rgba(226,162,59,.35); }
+.log-kind-thinking-off-failed { color: #f14c4c; background: rgba(241,76,76,.14); border-color: rgba(241,76,76,.4); }
 .log-kind-retry { color: #cca700; background: rgba(204,167,0,.12); border-color: rgba(204,167,0,.3); }
 
 /* 语法高亮色 — VS Code 风格 */

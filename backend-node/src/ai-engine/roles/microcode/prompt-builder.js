@@ -271,10 +271,12 @@ ${
         figmaRulesContent:
           constraints['references/prompts/figma.md'] || '',
         figmaStyleTree:
-          chunkSpec?.segmentType === 'template' ? null : figmaStyleTree,
+          chunkSpec?.segmentType === 'template' || chunkSpec?.segmentType === 'component'
+            ? null
+            : figmaStyleTree,
         figmaNodeData,
         formatFigmaStyleData:
-          chunkSpec?.segmentType === 'template'
+          chunkSpec?.segmentType === 'template' || chunkSpec?.segmentType === 'component'
             ? formatFigmaStructureOnly
             : formatFigmaStyleData,
         styleMappings,
@@ -303,15 +305,15 @@ ${trimConstraintsForContext(
   },
 )}
 
-${constraints['references/patterns/code-patterns.md'] || ''}
+${chunkSpec?.segmentType === 'style' || chunkSpec?.segmentType === 'declare' ? '' : constraints['references/patterns/code-patterns.md'] || ''}
 
-${componentType === 'vue3' ? '' : constraints['references/specs/declare-json.md'] || ''}
+${componentType === 'vue3' || chunkSpec?.segmentType !== 'declare' ? '' : constraints['references/specs/declare-json.md'] || ''}
 
 #Vue 样式标准（v3.0 Phase 1 - 强制 scoped + less + 前缀）
 
 ${constraints['references/standards/vue-style-standard.md'] || ''}
 
-${constraints['references/standards/less-naming-convention.md'] || ''}
+${chunkSpec?.segmentType === 'style' ? constraints['references/standards/less-naming-convention.md'] || '' : ''}
 ${buildConcerns({
   hasInteractions: interactions && interactions.length > 0,
   hasCharts: charts && charts.length > 0,
@@ -754,7 +756,7 @@ export function buildChecklistByType(fileType, input, options = {}) {
   - ✅ 正确：\`<img :src="icon1">\` 或 \`<div :style="{ backgroundImage: 'url(' + bg1 + ')' }">\`
   - ❌ 错误：在 \`<style>\` 块内写 \`url(\${bg1})\` / \`url(@bg1)\` / \`url(\$bg1)\` —— LESS 会把它们当变量解析，未声明即编译崩溃
   - ❌ 错误：手写 \`import bg1 from '...'\` —— 资源 import 由系统后处理注入
-- [ ] **bg/icon DOM 语义铁律（违反即门禁重试）**：\`bg*\` 资源（背景图）是**父元素的 CSS 背景**，**禁止**为它单独创建 DOM 节点；\`icon*\`/\`img*\` 资源（图标/图片）才是独立 DOM。正确做法是把 bg 直接绑定到**已有业务容器**的 \`:style\` 上（如 \`:style="{ backgroundImage: 'url(' + bg3 + ')' }"\` 挂在卡片容器上），**禁止**再包一层 \`<div class="xxx-bg"><div class="xxx-deco"></div></div>\` 空壳节点
+- [ ] **bg/icon DOM 语义铁律（违反即门禁重试）**：\`bg*\` 资源（背景图）是**父元素的 CSS 背景**，**禁止**为它单独创建 DOM 节点；\`icon*\`/\`img*\` 资源（图标/图片）才是独立 DOM。正确做法是把 bg 直接绑定到**已有业务容器**的 \`:style\` 上（如 \`:style="{ backgroundImage: 'url(' + bg3 + ')' }"\` 挂在卡片容器上），**禁止**再包一层 \`<div class="xxx-bg"><div class="xxx-deco"></div></div>\` 空壳节点。**半透明背景例外（唯一允许独立 DOM 的情况）**：当 Figma 中 bg 层自身 opacity<1（半透明底图）时，背景无法内联进容器（背景图无法单独设透明度），必须独立成层：容器 \`position:relative\`，首子元素 \`<div class="xxx-bg">\` 挂 \`:style\` 背景四件套 + CSS \`position:absolute; inset:0; opacity:<真值>; pointer-events:none\`，其余内容子元素 \`position:relative\`（防半透明层盖住内容）；**🚫 严禁**把 opacity 写到容器本身——那会把图标/文字一并变透明（透明度只属于 bg 层）
 - [ ] **L4-003**: common.less 中所有 class 都使用了 \`.c-\` 前缀（如 \`.c-vehicle-card\`，没有 .item、.box、.wrapper 等通用名）
 - [ ] **index.less**: 不要输出 resources/styles/index.less（由生成器按「根作用域默认主题 + @import common.less」固定模板生成）
 - [ ] **common.less 作用域**: common.less 内所有业务 class 写在文件根层，**禁止**用 \`.dark {}\` / \`.light {}\` / 任何外层选择器包裹（宿主不会给组件根加主题类，包裹后编译成 \`.dark .c-xxx\`，真实 DOM 0 命中 → 样式全部失效）
@@ -833,7 +835,7 @@ export function buildChecklistByType(fileType, input, options = {}) {
 ## 🔍 资源使用规范（必须遵守，违反会导致生成失败）
 
 - [ ] **禁止用 CSS gradient 替代已下载的 bg 资源**：如果 resource-dom-mapping 里有 bg 资源（如 bg2、bg3），必须用 :style="{ backgroundImage: \`url(\${bgX})\` }" 绑定，禁止在 CSS 里写 background: linear-gradient(...)
-- [ ] **bg 是父元素背景、禁止独立 DOM**：\`bg*\` 资源直接绑定到**已有业务容器**（卡片/区块根元素）的 \`:style\` 上，**禁止**为 bg 单独创建 \`<div class="xxx-bg">\` 或 \`<div class="xxx-deco">\` 等空壳节点；只有 \`icon*\`/\`img*\` 才生成独立 DOM（\`<img :src="...">\`）
+- [ ] **bg 是父元素背景、禁止独立 DOM**：\`bg*\` 资源直接绑定到**已有业务容器**（卡片/区块根元素）的 \`:style\` 上，**禁止**为 bg 单独创建 \`<div class="xxx-bg">\` 或 \`<div class="xxx-deco">\` 等空壳节点；只有 \`icon*\`/\`img*\` 才生成独立 DOM（\`<img :src="...">\`）。**半透明背景例外**：Figma 中 bg 层自身 opacity<1 时必须独立成层（容器 relative + bg 层 absolute/inset:0/opacity 真值/pointer-events:none + 内容子元素 relative），**严禁**把该 opacity 写到容器本身（图标/文字会一并变透明）
 - [ ] **禁止在 scoped CSS 里用 url(varName)**：scoped CSS 中的 url(bg3) 不会解析为 import 的变量，必须改用 inline :style 绑定（如 :style="{ backgroundImage: \`url(\${bg3})\` }"）
 - [ ] **图表区域使用 echarts 内置能力**：如果组件包含图表，必须使用 echarts 的 legend/markLine/markPoint 等内置能力，不要拆成独立 DOM（如 chart-header、chart-badge）。整个图表区域应是一个 echarts 实例
 - [ ] **阈值线/平均线必须用 markLine**：如果设计稿中有阈值线、平均线、预警线等参考线，必须使用 echarts 的 markLine 或 markArea 实现，**禁止创建伪造的 series**（如 name: '阈值', type: 'line', data: [100, 100, 100]）。正确做法：在真实数据 series 中添加 markLine: { data: [{ yAxis: 100, name: '阈值' }] }
@@ -1969,7 +1971,7 @@ export function buildChunkMiddle(chunk, input) {
     );
     const availVarsBlock =
       _availVars && _availVars.length > 0
-        ? `本次**仅以下资源变量可用**，禁止使用清单之外的任何变量名（如 icon3/icon4/bg5 若不在清单中则不存在）：\n  - \`${_availVars.join('`、`')}\`\n  **用法铁律**：这些变量只能以模板插值使用（\`<img :src="icon1">\` / \`:style="{ backgroundImage: 'url(' + bg1 + ')' }"\`），**禁止**写进 \`<style>\` 块（\`url(\${bg1})\`/\`url(@bg1)\`/\`url(\$bg1)\` 会令 LESS 编译崩溃），**禁止**手写 import（系统注入）\n  **🚫 变量名只能是编号**：变量名必须是清单里的 \`bg1\`/\`icon1\` 等编号，**禁止**用资源语义名（如 \`bg环形图背景\`/\`bg-环形图背景\`）当变量名——语义名只是用途描述，实际 import 的变量永远是编号名，写语义名会导致 undefined 变量、背景/图标加载失败\n  **bg/icon DOM 语义**：\`bg*\` 是父元素 CSS 背景，直接挂到已有业务容器的 \`:style\` 上，**禁止**为 bg 单独创建 \`<div class="xxx-bg">\` 空壳节点；只有 \`icon*\`/\`img*\` 才生成独立 DOM（\`<img :src="...">\`）`
+        ? `本次**仅以下资源变量可用**，禁止使用清单之外的任何变量名（如 icon3/icon4/bg5 若不在清单中则不存在）：\n  - \`${_availVars.join('`、`')}\`\n  **用法铁律**：这些变量只能以模板插值使用（\`<img :src="icon1">\` / \`:style="{ backgroundImage: 'url(' + bg1 + ')' }"\`），**禁止**写进 \`<style>\` 块（\`url(\${bg1})\`/\`url(@bg1)\`/\`url(\$bg1)\` 会令 LESS 编译崩溃），**禁止**手写 import（系统注入）\n  **🚫 变量名只能是编号**：变量名必须是清单里的 \`bg1\`/\`icon1\` 等编号，**禁止**用资源语义名（如 \`bg环形图背景\`/\`bg-环形图背景\`）当变量名——语义名只是用途描述，实际 import 的变量永远是编号名，写语义名会导致 undefined 变量、背景/图标加载失败\n  **bg/icon DOM 语义**：\`bg*\` 是父元素 CSS 背景，直接挂到已有业务容器的 \`:style\` 上，**禁止**为 bg 单独创建 \`<div class="xxx-bg">\` 空壳节点；只有 \`icon*\`/\`img*\` 才生成独立 DOM（\`<img :src="...">\`）。**半透明背景例外**：Figma 中 bg 层自身 opacity<1 时必须独立成层（容器 relative + bg 层 absolute/inset:0/opacity 真值/pointer-events:none + 内容子元素 relative），**严禁**把该 opacity 写到容器本身（图标/文字会一并变透明）`
         : '（无已下载资源变量，模板不得引用 iconN/bgN/imgN 等资源变量）';
     let contextBlock = '';
     if (chunk.contextFiles && chunk.contextFiles.length > 0) {
@@ -2002,6 +2004,10 @@ ${fileList}
   - ❌ 错误示例：\`c-f0abee-container\`、\`c-mc-max-<时间戳>-root\`、\`c-36f0218a-header\`
   - ✅ 正确示例：\`c-env-monitor-root\`（根容器）、\`c-env-monitor-header\`（标题栏）、\`c-env-monitor-chart\`（图表区）
   - **必须基于功能/语义命名**，class 名反映元素用途而非组件标识。
+- **🚫 禁止中文/非 ASCII class 名（强制）**：Figma 中文图层名（小标题/点背景/分割线/激活/默认/环形图…）**严禁**直接作为 class 名，LESS 编译与命名契约均不允许。中文语义一律译为 kebab-case 英文：
+  - ❌ 错误示例：\`c-monitor-小标题\`、\`c-monitor-默认--active\`、\`value-施工养护\`
+  - ✅ 正确示例：\`c-monitor-subtitle\`、\`c-monitor-default--active\`、\`c-monitor-tab-item\`
+  - 中文数据值（如「施工养护」）不得进 class，用语义修饰符（\`--maintenance\`）或索引替代。
   - 🆔 根容器的实例 id 类 \`c-mc-max-{INSTANCE_ID}\`（INSTANCE_ID 为运行时随机标识）由**系统自动注入**，你无需也无法手写它；只需给根元素一个语义 class（如 \`c-env-monitor-root\`），系统会另行追加实例 id 类。内部 class 切勿手写 \`c-mc-max-...\` 长前缀（会被后处理剥离并导致 .vue/.less 错配）。
 - **资源变量白名单**：${availVarsBlock}
 ${buildSectionStyleFacts(resolvePlanSections(input), input.figmaNodeData)
@@ -2805,7 +2811,7 @@ ${layoutSkeleton}
     );
     const availVarsBlock =
       _availVars && _availVars.length > 0
-        ? `本次**仅以下资源变量可用**，禁止使用清单之外的任何变量名（如 icon3/icon4/bg5 若不在清单中则不存在）：\n- \`${_availVars.join('`、`')}\`\n  **用法铁律**：只能模板插值（\`<img :src="icon1">\` / \`:style="{ backgroundImage: 'url(' + bg1 + ')' }"\`），**禁止**写进 \`<style>\` 块（\`url(\${bg1})\`/\`url(@bg1)\`/\`url(\$bg1)\` 会令 LESS 编译崩溃），**禁止**手写 import（系统注入）\n  **🚫 变量名只能是编号**：变量名必须是清单里的 \`bg1\`/\`icon1\` 等编号，**禁止**用资源语义名（如 \`bg环形图背景\`）当变量名——语义名只是用途描述，实际 import 的变量永远是编号名\n  **bg/icon DOM 语义**：\`bg*\` 是父元素 CSS 背景，直接挂到已有业务容器的 \`:style\` 上，**禁止**为 bg 单独创建 \`<div class="xxx-bg">\` 空壳节点；只有 \`icon*\`/\`img*\` 才生成独立 DOM（\`<img :src="...">\`）`
+        ? `本次**仅以下资源变量可用**，禁止使用清单之外的任何变量名（如 icon3/icon4/bg5 若不在清单中则不存在）：\n- \`${_availVars.join('`、`')}\`\n  **用法铁律**：只能模板插值（\`<img :src="icon1">\` / \`:style="{ backgroundImage: 'url(' + bg1 + ')' }"\`），**禁止**写进 \`<style>\` 块（\`url(\${bg1})\`/\`url(@bg1)\`/\`url(\$bg1)\` 会令 LESS 编译崩溃），**禁止**手写 import（系统注入）\n  **🚫 变量名只能是编号**：变量名必须是清单里的 \`bg1\`/\`icon1\` 等编号，**禁止**用资源语义名（如 \`bg环形图背景\`）当变量名——语义名只是用途描述，实际 import 的变量永远是编号名\n  **bg/icon DOM 语义**：\`bg*\` 是父元素 CSS 背景，直接挂到已有业务容器的 \`:style\` 上，**禁止**为 bg 单独创建 \`<div class="xxx-bg">\` 空壳节点；只有 \`icon*\`/\`img*\` 才生成独立 DOM（\`<img :src="...">\`）。**半透明背景例外**：Figma 中 bg 层自身 opacity<1 时必须独立成层（容器 relative + bg 层 absolute/inset:0/opacity 真值/pointer-events:none + 内容子元素 relative），**严禁**把该 opacity 写到容器本身（图标/文字会一并变透明）`
         : '（无已下载资源变量，模板不得引用 iconN/bgN/imgN 等资源变量）';
     return `
 # 任务要求（分块生成 · 第 ${chunk.index || 1}/${chunk.total || 1} 批：${chunk.title || ''}）

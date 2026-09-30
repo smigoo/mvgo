@@ -62,6 +62,13 @@ import { buildSectionStyleFacts, semanticClassKeywords } from '../utils/section-
 import { findVForItemTag, healAbsoluteOverlayParents } from './microcode/resource-mounter.js';
 // 🛡️ §七 B17（2026-09-28）：背景四件套几何口径统一（与微码 injectBgStyleBinding 同源，消除 mc/vue3 双实现分叉）
 import { inferBackgroundStyle, inferBackgroundSize } from '../utils/background-size-inference.js';
+// 🎯 ④ N3 锚点优先（2026-09-30 治本）：与微码 N3 共用同一「确定性锚」选择器
+//   （ownerSectionId ⨯ data-section-id，与 resource-mounter 的 DETERMINISTIC_ANCHOR_SCORE 同源）
+//   ① N3 fallback 护栏（2026-09-30）：`isResourceRendered` 与选择器内部同判据，覆盖锚点缺失路径
+import {
+  selectAnchorMountCandidate,
+  isResourceRendered,
+} from '../utils/mount-target-scoring.js';
 // 🛡️ 阶段4（2026-09-17）：业务样式 var() 直引自愈（模式 A → B）
 import { healBusinessStyleVarRefs } from '../utils/theme-color-guard.js';
 // 🛡️ 方案 E（2026-09-16）：双链路共用落盘前自愈链（资源终验/运行库/CODE-022/.value/FLEX-003/FLEX-005）
@@ -1759,34 +1766,53 @@ export class Vue3Engineer extends MicrocodeEngineer {
                   "'"
                 : "background: '" + fills.replace(/'/g, "\\'") + "'";
               // 在所有 .vue 产物中收集候选元素：class 词集与 mountTarget 词集求交集，取最高分且无背景者
+              //
+              // 🎯 ④ N3 锚点优先（2026-09-30 治本，与 microcode-engineer 的 N3 逐字同构）：
+              //   旧实现是**锚点盲区**的私有词重叠评分（score = wordsOf(cls) ∩ targetWords），
+              //   既不看 `data-section-id` 也不看 `ownerSectionId` ⇒ 正确锚点元素（class 与
+              //   mountTarget token 覆盖率恒 0）必然输给语义祖先容器 ⇒ 整块背景被 100% 100%
+              //   拉满（视觉上「背景图整块丢失」）。现与 `scoreMountTarget` 的
+              //   `DETERMINISTIC_ANCHOR_SCORE` 短路共用同一真相源。三态语义见该函数 docblock。
               let best = null;
-              for (const [fpath, fcontent] of Object.entries(
-                codeResult.files || {},
-              )) {
-                if (typeof fcontent !== 'string' || !fpath.endsWith('.vue'))
-                  continue;
-                const tagRe =
-                  /<([a-zA-Z][a-zA-Z0-9-]*)((?:(?!>).)*?)class="([^"]*)"((?:(?!>).)*?)>/g;
-                let mt;
-                while ((mt = tagRe.exec(fcontent)) !== null) {
-                  const cls = mt[3];
-                  const score = wordsOf(cls).filter((w) =>
-                    targetWords.has(w),
-                  ).length;
-                  if (score === 0) continue;
-                  const attrs = mt[2] + 'class="' + cls + '"' + mt[4];
-                  if (/background/i.test(attrs)) continue; // 已有背景，不重复挂
-                  const cand = {
-                    fpath,
-                    index: mt.index,
-                    full: mt[0],
-                    tag: mt[1],
-                    before: mt[2],
-                    cls,
-                    after: mt[4],
-                    score,
-                  };
-                  if (!best || score > best.score) best = cand;
+              // 🛡️ ① N3 fallback 护栏（2026-09-30，与 microcode-engineer 的 N3 逐字同构）：
+              //   资源已在任意元素上以 background 被引用 ⇒ 不再注入（修锚点缺失路径的双挂）。
+              if (isResourceRendered(codeResult.files, varName)) continue;
+              const anchorPick = selectAnchorMountCandidate(codeResult.files, bg, {
+                varName,
+              });
+              if (anchorPick) {
+                if (anchorPick.skip) continue; // 已挂载 / 宿主外壳 / 变量已被引用 ⇒ 幂等跳过
+                best = anchorPick.cand;
+              }
+              if (!best) {
+                for (const [fpath, fcontent] of Object.entries(
+                  codeResult.files || {},
+                )) {
+                  if (typeof fcontent !== 'string' || !fpath.endsWith('.vue'))
+                    continue;
+                  const tagRe =
+                    /<([a-zA-Z][a-zA-Z0-9-]*)((?:(?!>).)*?)class="([^"]*)"((?:(?!>).)*?)>/g;
+                  let mt;
+                  while ((mt = tagRe.exec(fcontent)) !== null) {
+                    const cls = mt[3];
+                    const score = wordsOf(cls).filter((w) =>
+                      targetWords.has(w),
+                    ).length;
+                    if (score === 0) continue;
+                    const attrs = mt[2] + 'class="' + cls + '"' + mt[4];
+                    if (/background/i.test(attrs)) continue; // 已有背景，不重复挂
+                    const cand = {
+                      fpath,
+                      index: mt.index,
+                      full: mt[0],
+                      tag: mt[1],
+                      before: mt[2],
+                      cls,
+                      after: mt[4],
+                      score,
+                    };
+                    if (!best || score > best.score) best = cand;
+                  }
                 }
               }
               if (!best) continue;

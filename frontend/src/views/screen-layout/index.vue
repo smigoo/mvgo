@@ -1,5 +1,9 @@
 <template>
-  <div class="screen-layout-editor">
+  <div class="screen-layout-page">
+    <!-- ========== 顶部：一句话生成布局 ========== -->
+    <PromptQuickGen :current="layoutData" @apply="handleQuickApply" @preview="handlePreviewCandidate" />
+
+    <div class="screen-layout-editor">
     <!-- ========== 左面板：配置区 ========== -->
     <aside class="editor-left-panel" :style="{ width: leftPanelWidth + 'px', minWidth: leftPanelWidth + 'px' }">
       <div class="panel-header panel-tabs">
@@ -105,7 +109,9 @@
             <a-form layout="vertical" :model="layoutData.canvas" size="small">
               <a-form-item label="自适应模式">
                 <a-select v-model:value="layoutData.canvas.outputScaleMode" size="small">
-                  <a-select-option value="contain">等比缩放 (contain)</a-select-option>
+                  <a-select-option value="fluid">铺满不变形 (fluid) · 推荐</a-select-option>
+                  <a-select-option value="hybrid">等比 + 弹性 (hybrid)</a-select-option>
+                  <a-select-option value="contain">等比缩放留边 (contain)</a-select-option>
                   <a-select-option value="fillWidth">填充宽度 (fillWidth)</a-select-option>
                   <a-select-option value="fillHeight">填充高度 (fillHeight)</a-select-option>
                   <a-select-option value="none">无缩放 (none)</a-select-option>
@@ -331,6 +337,12 @@
           </a-tooltip>
           <a-button size="small" @click="handleSaveJson">导出 JSON</a-button>
           <a-button size="small" @click="handleLoadJsonClick">导入 JSON</a-button>
+          <a-tooltip title="把当前布局编码进链接，发给别人可直接复现同一张图">
+            <a-button size="small" @click="handleShareLink">复制分享链接</a-button>
+          </a-tooltip>
+          <a-tooltip title="导出零依赖的单文件 HTML，双击即开、按适配策略跟随窗口">
+            <a-button size="small" @click="handleExportHtml">导出 HTML</a-button>
+          </a-tooltip>
           <a-tooltip title="图层显示：正常 / 半透明 / 仅轮廓">
             <a-button
               size="small"
@@ -339,6 +351,9 @@
             >
               {{ opacityModeLabel }}
             </a-button>
+          </a-tooltip>
+          <a-tooltip title="拖动视口比例，验证六种自适应策略的差异">
+            <a-button size="small" @click="handlePreviewAdaptive(layoutData)">自适应预览</a-button>
           </a-tooltip>
           <a-button size="small" @click="handleAnalyze" :loading="analyzing || analyzingResponsive">
             AI 生成响应式
@@ -508,6 +523,7 @@
     <!-- ========== 响应式 AI 生成进度弹窗 ========== -->
     <ResponsiveProgressModal
       v-model:visible="showResponsiveModal"
+      :layout="layoutData"
       :analyzing="analyzingResponsive"
       :current-stage="responsiveStage"
       :stages="responsiveStages"
@@ -516,12 +532,21 @@
       @download="handleResponsiveDownload"
       @retry="handleAnalyze"
     />
+    </div>
+
+    <!-- ========== 自适应效果预览（可拖视口，验证六种适配策略） ========== -->
+    <AdaptivePreviewModal
+      v-model:visible="showAdaptivePreview"
+      :layout="previewLayout"
+      :fit-writable="previewSource === 'editor'"
+      @update:fit="handlePreviewFitChange"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, provide, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import type { ScreenLayout, ColumnConfig, ZoneConfig, HeaderFooterConfig } from '@/types/screen-layout'
+import type { ScreenLayout, ColumnConfig, ZoneConfig, HeaderFooterConfig, OutputScaleMode } from '@/types/screen-layout'
 import { PRESETS, PRESETS_BIG_SCREEN, PRESETS_ADMIN, PRESET_LABELS } from '@/config/screen-layout-presets'
 import { downloadScreenLayout, analyzeSpatialLayout } from '@/api/screen-layout'
 import type { SpatialReport } from '@/api/screen-layout'
@@ -533,6 +558,12 @@ import ZonePropertyPanel from './components/ZonePropertyPanel.vue'
 import ZoneRenderer from './components/ZoneRenderer.vue'
 import AnalysisPanel from './components/AnalysisPanel.vue'
 import ResponsiveProgressModal from './components/ResponsiveProgressModal.vue'
+import PromptQuickGen from './components/PromptQuickGen.vue'
+import AdaptivePreviewModal from './components/AdaptivePreviewModal.vue'
+import { useLayoutPersistence } from './composables/useLayoutPersistence'
+import { FIT_LABELS } from './utils/nl-layout-parser'
+import { downloadStandaloneHtml } from './utils/export-standalone-html'
+import { copyText } from './utils/clipboard'
 
 // ============================================================
 // 状态
@@ -819,6 +850,9 @@ function zoomReset() {
 // 撤销/重做
 const { canUndo, canRedo, undo, redo, resetHistory } = useHistory(layoutData)
 
+/** 自动存档 + 可分享链接（URL 参数优先于本地存档） */
+const { restore: restoreLayout, buildShareUrl } = useLayoutPersistence(layoutData)
+
 const activeKeys = ref(['presets', 'canvas', 'hf', 'columns'])
 
 // Zone 操作
@@ -994,10 +1028,87 @@ async function handleResponsiveDownload() {
 }
 
 // ============================================================
+// 一句话生成布局 —— 应用 / 预览
+// ============================================================
+
+/** 自适应预览：把候选布局灌进浮层（不改动当前编辑器内容） */
+const showAdaptivePreview = ref(false)
+const previewLayout = ref<ScreenLayout>(structuredClone(PRESETS[4]))
+/** 预览来源：editor = 预览编辑器当前布局；candidate = 预览「一句话生成」的候选（尚未应用） */
+const previewSource = ref<'editor' | 'candidate'>('editor')
+
+function handlePreviewAdaptive(layout: ScreenLayout, source: 'editor' | 'candidate' = 'editor') {
+  previewLayout.value = structuredClone(layout)
+  previewSource.value = source
+  showAdaptivePreview.value = true
+}
+
+/** 供「一句话生成」面板用：预览的是尚未应用进编辑器的候选布局 */
+function handlePreviewCandidate(layout: ScreenLayout) {
+  handlePreviewAdaptive(layout, 'candidate')
+}
+
+/**
+ * 浮层里切换适配策略 → 回写到编辑器。
+ * 只有「预览编辑器当前布局」时才回写；预览候选布局时编辑器还没被替换，
+ * 回写会串味，所以只提示而不写。回写后无需刷新：编辑器下拉框与产物链路共用同一个字段。
+ */
+function handlePreviewFitChange(v: OutputScaleMode) {
+  if (previewSource.value !== 'editor') {
+    ;(window as any).$message?.info('这是「一句话生成」的候选布局 —— 先点「应用到编辑器」，再在这里切换才会写回')
+    return
+  }
+  layoutData.value.canvas.outputScaleMode = v
+  ;(window as any).$message?.success(`自适应模式已切换为「${FIT_LABELS[v] || v}」，AI 生成响应式时会按它生成`)
+}
+
+/**
+ * 应用解析出的候选布局到编辑器。
+ * 走与「切换预设」完全相同的路径（重置撤销栈 + 自动适应窗口），
+ * 保证用户可以用 Ctrl+Z 回退，不会出现"应用后回不去"的死路。
+ */
+function handleQuickApply(layout: ScreenLayout, kind: 'create' | 'refine' = 'create') {
+  if (kind === 'refine') {
+    // 增量修改走「普通赋值」路径：useHistory 的 deep watch 会自动入撤销栈，
+    // 用户 Ctrl+Z 就能退回修改前 —— 比 resetHistory（切换预设那套）更适合连续微调。
+    layoutData.value = structuredClone(layout)
+    selectedPresetId.value = ''
+    ;(window as any).$message?.success('已应用修改')
+    return
+  }
+  applyPresetObj(layout)
+  ;(window as any).$message?.success(`已应用布局：${layout.name}`)
+}
+
+// ============================================================
 // 保存/加载 JSON 配置
 // ============================================================
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
+
+/** 复制分享链接 —— 太长时明确告知，绝不静默给半截链接 */
+async function handleShareLink() {
+  const { url, tooLong } = buildShareUrl()
+  if (tooLong) {
+    ;(window as any).$message?.warning(
+      '布局太大，塞不进链接（拖入大量组件时常见）。请改用「导出 JSON」发文件。',
+    )
+    return
+  }
+  const ok = await copyText(url)
+  if (ok) (window as any).$message?.success('分享链接已复制')
+  else (window as any).$message?.error('复制失败，请手动复制地址栏')
+}
+
+/** 导出单文件 HTML（零依赖，双击即开） */
+function handleExportHtml() {
+  try {
+    downloadStandaloneHtml(layoutData.value)
+    ;(window as any).$message?.success('单文件 HTML 已导出，双击即可打开')
+  } catch (e: any) {
+    ;(window as any).$message?.error(e?.message || '导出失败')
+  }
+}
 
 /** 导出当前布局为 JSON 文件 */
 function handleSaveJson() {
@@ -1324,6 +1435,14 @@ function handleKeydown(e: KeyboardEvent) {
 onMounted(() => {
   window.addEventListener('keydown', handleKeydown)
   document.addEventListener('click', closeContextMenu)
+  // 恢复现场：分享链接优先，其次上次编辑的本地存档
+  const source = restoreLayout()
+  if (source) {
+    // 恢复出来的布局不是任何内置预设，清掉高亮，避免左侧卡片"指错"
+    selectedPresetId.value = ''
+    if (source === 'url') (window as any).$message?.success('已从分享链接载入布局')
+    else (window as any).$message?.info('已恢复上次编辑的布局')
+  }
   // 初始加载自动适应窗口，避免大画布看不到 header/footer
   nextTick(() => zoomToFit())
 })
@@ -1334,9 +1453,18 @@ onUnmounted(() => {
 </script>
 
 <style scoped lang="less">
-.screen-layout-editor {
+.screen-layout-page {
   display: flex;
+  flex-direction: column;
   height: calc(100vh - 284px);
+  overflow: hidden;
+  background: #0f1419;
+}
+
+.screen-layout-editor {
+  flex: 1;
+  min-height: 0;
+  display: flex;
   overflow: hidden;
   background: #0f1419;
 }

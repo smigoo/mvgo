@@ -208,6 +208,16 @@ export function injectChartSectionIfMissing(plan, chartSignal, sources = {}) {
         interactions: 0,
         maxDepth: 1,
       },
+      // 🛡️ 2026-09-30 复审 §8.8.4「P3/P4 决策」**结案：保留 `direction:'column'`，不改 null**。
+      //   ① 本 section 是**合成**的（id = `chart-<nodeId>`，Figma 树里不存在该节点），
+      //      其 `layoutMetadata` 属**构造者声明**，不是「Figma 派生事实」
+      //      ⇒ `subcomponent-planner#extractLayoutMetadata` 的「无事实 → null」三态**不适用本路径**。
+      //   ② 真机实测（§8.8.10）：`chart-2:7898` 的 direction 会经 `microcode-engineer.js`
+      //      的「布局协调提示」**进入 prompt**（该处直接读 `sec.layoutMetadata`、不重算；
+      //      `extractLayoutMetadata` 全仓仅在 planner 内两处调用）⇒ 改 null 会改动 prompt 与产物。
+      //   ③ 对「单个填满容器的 echarts div」而言方向是空值（vacuous）但**无害**：
+      //      A/B 实测 `common.less` 的 `.c-env-monitor-chart{flex-direction:column}` 未触发任何门禁。
+      //      ⇒ 收益 0、风险非零（需再跑真机）⇒ 保留。`height` 是真实 bbox 事实，必须保留。
       layoutMetadata: {
         direction: 'column',
         alignItems: 'center',
@@ -239,6 +249,10 @@ export function injectChartSectionIfMissing(plan, chartSignal, sources = {}) {
         interactions: 0,
         maxDepth: 1,
       },
+      // 🛡️ 2026-09-30 复审 §8.8.4「P3/P4 决策」**结案：保留 `direction:'column'`，不改 null**。
+      //   同上一分支（`chart-<nodeId>`）：本 section 由**视觉真值**合成（id = `chart-truth-<idx>`），
+      //   同样绕过 `extractLayoutMetadata` ⇒ 不适用「Figma 派生事实无值 → null」。
+      //   `height: 0` 表示此处**无几何事实**（下文由下游按真值回填）；`direction` 保留构造者声明。
       layoutMetadata: {
         direction: 'column',
         alignItems: 'center',

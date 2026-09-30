@@ -26,6 +26,7 @@ import {
   headerIsChromeOnly,
   clusterItemsByColumnX,
   reorganizeCenteredChartLayout,
+  splitTitleValueByStyle,
 } from './section-tree.js'
 
 describe('底层 Figma 事实索引', () => {
@@ -34,8 +35,16 @@ describe('底层 Figma 事实索引', () => {
       id: 'root', name: 'root', type: 'FRAME', children: [
         {
           id: 'section', name: 'section', type: 'FRAME', children: [
-            { id: 'title', name: 't-设备监测', type: 'TEXT', absoluteBoundingBox: { x: 10, y: 20, width: 40, height: 12 } },
-            { id: 'value', name: 'd-28', type: 'TEXT', absoluteBoundingBox: { x: 60, y: 20, width: 20, height: 12 } },
+            {
+              id: 'title', name: 't-设备监测', type: 'TEXT', characters: '设备监测',
+              style: { fontSize: 12, fontWeight: 400 },
+              absoluteBoundingBox: { x: 10, y: 20, width: 40, height: 12 },
+            },
+            {
+              id: 'value', name: 'd-28', type: 'TEXT', characters: '28',
+              style: { fontSize: 24, fontWeight: 700 },
+              absoluteBoundingBox: { x: 60, y: 20, width: 20, height: 12 },
+            },
           ],
         },
       ],
@@ -44,10 +53,15 @@ describe('底层 Figma 事实索引', () => {
     expect(index.get('section')?.rawNode).toBe(root.children[0])
     expect(buildChildrenMap(index).get('section')).toEqual(['title', 'value'])
     expect(normalizeFigmaTextName('t-设备监测')).toBe('设备监测')
+    // 🔴 命名无关：只产出 文案 + 样式 + 几何 三类真值，**无 isTitle**
     expect(collectSubtreeTexts('section', index)).toEqual([
-      { text: '设备监测', isTitle: true, x: 10 },
-      { text: '28', isTitle: false, x: 60 },
+      { text: '设备监测', x: 10, y: 20, fontSize: 12, fontWeight: 400 },
+      { text: '28', x: 60, y: 20, fontSize: 24, fontWeight: 700 },
     ])
+    const items = collectSubtreeTexts('section', index)
+    expect(items.every((i: any) => !('isTitle' in i))).toBe(true)
+    // 角色由**样式**判定（字号大者 = 数值），与图层名无关
+    expect(splitTitleValueByStyle(items)).toEqual({ title: '设备监测', value: '28', by: 'style' })
   })
 
   test('无效索引或节点 id 时 fail-open 返回空事实', () => {
@@ -2038,5 +2052,125 @@ describe('buildSectionStyleFacts — 祖先布局容器的重复单元事实（2
     ])
     const txt = String(buildSectionStyleFacts(nestedSections(), fg))
     expect(txt).not.toContain('重复单元×')
+  })
+})
+
+/**
+ * 🎯 2026-09-30 治本：文案真值 = Figma TEXT 的 `characters`，不是图层名 `name`。
+ *
+ * 真机实锤 `c-traffic-monitor-6d7082a1`：section `2:3446`（当日总流量卡）子树的
+ * 「客车」「货车」TEXT 节点**图层名是单字母 `t`**，真文案在 `characters`；而邻居
+ * section `2:3496`（车型分布卡）的图层名**恰好就是文本本身**。旧实现只读 `name` ⇒
+ * §2:3446 真值文本全丢 ⇒ 独占性守卫误判「§2:3446 借用了 §2:3496 的客车/货车」⇒
+ * 自愈器把**本属于 §2:3446** 的文本从它自己的组件里删掉。
+ */
+describe('collectSubtreeTexts · 文案真值取 characters（2026-09-30 治本）', () => {
+  const mk = (children: any[]) =>
+    indexFigmaNodes({ id: 'root', name: 'root', type: 'FRAME', children })
+
+  test('图层名是单字母 t/d，真文案在 characters → 取 characters', () => {
+    const index = mk([
+      { id: 's', name: 'card', type: 'FRAME', children: [
+        { id: 'a', name: 't', type: 'TEXT', characters: '客车', absoluteBoundingBox: { x: 10, y: 0, width: 20, height: 10 } },
+        { id: 'b', name: 'd', type: 'TEXT', characters: '22350', absoluteBoundingBox: { x: 40, y: 0, width: 30, height: 10 } },
+      ] },
+    ])
+    expect(collectSubtreeTexts('s', index)).toEqual([
+      { text: '客车', x: 10, y: 0, fontSize: null, fontWeight: null },
+      { text: '22350', x: 40, y: 0, fontSize: null, fontWeight: null },
+    ])
+  })
+
+  test('图层名带语义前缀、characters 才是真文案 → characters 优先', () => {
+    const index = mk([
+      { id: 's', name: 's', type: 'FRAME', children: [
+        { id: 'a', name: 'but-节假日预测[m]', type: 'TEXT', characters: '节假日预测' },
+      ] },
+    ])
+    expect(collectSubtreeTexts('s', index)).toEqual([
+      { text: '节假日预测', x: null, y: null, fontSize: null, fontWeight: null },
+    ])
+  })
+
+  test('无 characters（旧语料/非 TEXT）→ 回退图层名归一化，行为不变', () => {
+    const index = mk([
+      { id: 's', name: 's', type: 'FRAME', children: [
+        { id: 'a', name: 't-设备监测', type: 'TEXT' },
+        { id: 'b', name: 'd-28', type: 'TEXT' },
+      ] },
+    ])
+    expect(collectSubtreeTexts('s', index)).toEqual([
+      { text: '设备监测', x: null, y: null, fontSize: null, fontWeight: null },
+      { text: '28', x: null, y: null, fontSize: null, fontWeight: null },
+    ])
+  })
+
+  test('characters 为纯空白 → 回退图层名（不被空白顶掉）', () => {
+    const index = mk([
+      { id: 's', name: 's', type: 'FRAME', children: [
+        { id: 'a', name: 't-标题', type: 'TEXT', characters: '   ' },
+      ] },
+    ])
+    expect(collectSubtreeTexts('s', index)).toEqual([
+      { text: '标题', x: null, y: null, fontSize: null, fontWeight: null },
+    ])
+  })
+
+  test('🔴 命名无关：t-/d-/裸 t 图层名一律不参与角色判定（isTitle 已删除）', () => {
+    const index = mk([
+      { id: 's', name: 's', type: 'FRAME', children: [
+        { id: 'a', name: 't-标题', type: 'TEXT', characters: '标题', style: { fontSize: 12 }, absoluteBoundingBox: { x: 0, y: 0, width: 10, height: 10 } },
+        { id: 'b', name: 't', type: 'TEXT', characters: '客车', style: { fontSize: 24 }, absoluteBoundingBox: { x: 0, y: 20, width: 10, height: 10 } },
+      ] },
+    ])
+    const r = collectSubtreeTexts('s', index)
+    expect(r.every((i: any) => !('isTitle' in i))).toBe(true)
+    // 两个都带 `t` 字样，角色仍按字号判定：大字号 = 数值
+    expect(splitTitleValueByStyle(r)).toEqual({ title: '标题', value: '客车', by: 'style' })
+  })
+
+  test('splitTitleValueByStyle：字号并列 ⇒ 几何兜底（靠下=数值）；也分不出 ⇒ null（不臆造）', () => {
+    const sameBoth = [
+      { text: 'A', x: 0, y: 0, fontSize: 12, fontWeight: null },
+      { text: 'B', x: 0, y: 30, fontSize: 12, fontWeight: null },
+    ]
+    expect(splitTitleValueByStyle(sameBoth)).toEqual({ title: 'A', value: 'B', by: 'geometry' })
+    // 字号并列 + y 也相同 ⇒ 不可确定
+    expect(
+      splitTitleValueByStyle([
+        { text: 'A', x: 0, y: 0, fontSize: 12, fontWeight: null },
+        { text: 'B', x: 0, y: 0, fontSize: 12, fontWeight: null },
+      ]),
+    ).toBeNull()
+    // 非「恰好 2 个文本」的形态一律 null
+    expect(splitTitleValueByStyle([])).toBeNull()
+    expect(splitTitleValueByStyle([sameBoth[0]])).toBeNull()
+    expect(splitTitleValueByStyle([...sameBoth, { text: 'C', x: 0, y: 40, fontSize: 10, fontWeight: null }])).toBeNull()
+  })
+
+  test('两 section 的子树都含同一真文案（一靠 characters、一靠图层名）→ 双归属', () => {
+    const index = mk([
+      {
+        id: 'a', name: 'card', type: 'FRAME', children: [
+          { id: 'a1', name: 't', type: 'TEXT', characters: '客车' },
+        ],
+      },
+      {
+        id: 'b', name: 'card', type: 'FRAME', children: [
+          { id: 'b1', name: '客车', type: 'TEXT', characters: '客车' },
+        ],
+      },
+    ])
+    expect(collectSubtreeTexts('a', index).map((i) => i.text)).toEqual(['客车'])
+    expect(collectSubtreeTexts('b', index).map((i) => i.text)).toEqual(['客车'])
+  })
+
+  test('characters 为多行（含换行）→ 原样保留（仅去首尾空白）', () => {
+    const index = mk([
+      { id: 's', name: 's', type: 'FRAME', children: [
+        { id: 'a', name: 't-x', type: 'TEXT', characters: ' 南北接线\n设备 ' },
+      ] },
+    ])
+    expect(collectSubtreeTexts('s', index)[0].text).toBe('南北接线\n设备')
   })
 })

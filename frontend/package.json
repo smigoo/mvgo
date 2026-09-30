@@ -12,6 +12,9 @@
     "build:safe": "vite build --mode production --emptyOutDir false",
     "build:test": "vite build --mode test",
     "mc-check": "node aidocs/skills/frontend-mc-check/scripts/mc-check.cjs",
+    "check:nl-parser": "node scripts/check-nl-parser.mjs",
+    "check:export": "node scripts/check-standalone-export.mjs",
+    "check:screen": "node scripts/check-nl-parser.mjs && node scripts/check-standalone-export.mjs",
     "preview": "vite preview",
     "lint:fix": "eslint --fix src/",
     "lint:prettier": "prettier --write './**/*.{js,jsx,ts,tsx,json,css,vue,less}'"

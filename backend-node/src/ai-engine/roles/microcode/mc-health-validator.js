@@ -19,6 +19,13 @@ const OK = 'ok';
  * @param {Object} declare declare.json 解析对象（可选，缺省从 files 读取）
  * @param {Object} [options]
  * @param {string} [options.componentType] 'business' | 'utility' | 'service'（默认 business）
+ * @param {(relPath: string) => boolean} [options.fileExists]
+ *        🛡️ 磁盘存在性探针（**二进制资源必需**）。`files` 是**文本产物 map**
+ *        （`{...allFiles, ...fixedFiles}`），而 `resources/images/*.png` 等二进制资源
+ *        由 figma-connector 直接写盘，**从不进入该 map** ⇒ 只查 `files` 会 100% 误报
+ *        「缺少 mc-preview.png」（2026-09-30 实测：本节日报 18 次 / 前一日 230 次，
+ *        同一份组件里 M2-1/2-3/2-4/2-6 全过、唯 M2-2 恒失败）。
+ *        缺省不传 = 退化为「只查 files」（保持旧行为，纯函数调用方不受影响）。
  * @returns {{ passed: Array, failed: Array, warnings: Array, summary: Object }}
  */
 export function checkMcComponent(files = {}, declare = null, options = {}) {
@@ -28,6 +35,11 @@ export function checkMcComponent(files = {}, declare = null, options = {}) {
   const decl = declare || parseDeclare(files['declare.json']);
   const compType = options.componentType || decl?.componentType || 'business';
   const isBusiness = compType === 'business';
+
+  // 存在性判据：文本 map ∪ 磁盘探针（见 options.fileExists 说明）
+  const fileExists = typeof options.fileExists === 'function' ? options.fileExists : null;
+  const present = (rel) =>
+    Boolean(files[rel]) || (fileExists ? Boolean(fileExists(rel)) : false);
 
   // ── M1 命名规范（3 项，始终检查）────────────────────────────
   run('M1-1', 'componentId 规范（c- 开头/kebab-case/≤50）', () => {
@@ -54,7 +66,10 @@ export function checkMcComponent(files = {}, declare = null, options = {}) {
     return OK;
   });
   run('M2-2', 'mc-preview.png 存在', () => {
-    if (!files['resources/images/mc-preview.png']) return fail('缺少 resources/images/mc-preview.png');
+    // 判据来源 = 文本 map ∪ 磁盘探针：png 是**二进制资源**，由 figma-connector 直接写盘，
+    // 不在 `files` 里 ⇒ 只查 files 恒误报（见 options.fileExists）。
+    if (!present('resources/images/mc-preview.png'))
+      return fail('缺少 resources/images/mc-preview.png');
     return OK;
   });
   run('M2-3', 'css-vars.js 存在', () => {

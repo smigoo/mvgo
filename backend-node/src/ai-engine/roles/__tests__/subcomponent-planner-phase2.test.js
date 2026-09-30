@@ -353,7 +353,7 @@ describe('Phase 2 方案1: 增强子组件拆分', () => {
       expect(plan.effectiveSections[0].layoutMetadata.gap).toBe(8)
     })
 
-    test('默认布局元数据（无 layout 字段）', () => {
+    test('默认布局元数据（无 layout 字段）→ direction 为 null（无事实不臆造）', () => {
       const layoutStructure = {
         sections: [
           {
@@ -365,7 +365,11 @@ describe('Phase 2 方案1: 增强子组件拆分', () => {
 
       const plan = planner.plan(layoutStructure)
 
-      expect(plan.effectiveSections[0].layoutMetadata.direction).toBe('column')
+      // 🛡️ 2026-09-30 复审 §8.8 ③-b：旧断言为 'column' —— 那是「把无事实伪装成事实」。
+      //   `extractLayoutMetadata` 改「字符串感知 + 三态（row/column/null）」后，无 layout ⇒ null。
+      //   ⚠️ 本文件是 `*.test.js`，`package.json#jest.testRegex`（`.*\.spec\.ts$`）**不会跑到它**；
+      //   本次同步改断言是为了「将来放宽 testRegex 时不立刻红灯」。
+      expect(plan.effectiveSections[0].layoutMetadata.direction).toBe(null)
       expect(plan.effectiveSections[0].layoutMetadata.gap).toBe(0)
     })
   })
@@ -546,7 +550,7 @@ describe('Phase 2 方案1: 增强子组件拆分', () => {
     })
   })
 
-  describe('P2': 图例误识别为独立 section', () => {
+  describe('P2: 图例误识别为独立 section', () => {
     test('图例 section（色块+短文本，无交互）应合并到相邻图表 section', () => {
       const layoutStructure = {
         sections: [

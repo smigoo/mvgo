@@ -67,7 +67,10 @@
 
         <!-- 代码预览 -->
         <div class="code-preview" v-if="result.codePreview">
-          <div class="preview-header">代码预览</div>
+          <div class="preview-header">
+            代码预览
+            <span class="preview-note">{{ previewNote }}</span>
+          </div>
           <pre class="preview-content"><code>{{ result.codePreview }}</code></pre>
         </div>
 
@@ -76,7 +79,12 @@
           <a-button type="primary" @click="handleDownload" :loading="downloading">
             <DownloadOutlined /> 下载响应式 ZIP
           </a-button>
+          <a-button @click="handleCopyCode" :disabled="!result.codePreview">复制代码</a-button>
+          <a-button @click="handleExportHtml" :disabled="!layout">导出单文件 HTML</a-button>
           <a-button @click="handleClose">关闭</a-button>
+        </div>
+        <div class="result-tip">
+          「导出单文件 HTML」导出的是<b>当前编辑器布局</b>的响应式骨架 —— 零依赖、双击即开、按所选适配策略跟随窗口，适合先验证结构再拿代码。
         </div>
       </div>
 
@@ -102,10 +110,15 @@ import {
   DownloadOutlined,
 } from '@ant-design/icons-vue'
 import type { StageInfo } from '../composables/useResponsiveAnalysis'
+import type { ScreenLayout } from '@/types/screen-layout'
+import { downloadStandaloneHtml } from '../utils/export-standalone-html'
+import { copyText } from '../utils/clipboard'
 
 const props = defineProps<{
   visible: boolean
   analyzing: boolean
+  /** 编辑器当前布局 —— 「导出单文件 HTML」的数据源 */
+  layout?: ScreenLayout | null
   currentStage: { stage: string; message: string } | null
   stages: StageInfo[]
   result: {
@@ -155,6 +168,15 @@ const statusTitle = computed(() => {
   return '准备中...'
 })
 
+/** 代码预览是不是被截断了 —— 别让用户以为「就这么点代码」 */
+const previewNote = computed(() => {
+  const r = props.result
+  if (!r) return ''
+  return r.summary.codeLength > r.codePreview.length
+    ? `预览片段 · 完整 ${formatLength(r.summary.codeLength)} 见 ZIP`
+    : '完整代码'
+})
+
 // --- 方法 ---
 
 function handleClose() {
@@ -175,6 +197,26 @@ async function handleDownload() {
 function formatLength(length: number): string {
   if (length > 1024) return `${(length / 1024).toFixed(1)} KB`
   return `${length} B`
+}
+
+/** 复制生成的代码 —— 失败时明确告知，不静默吞掉 */
+async function handleCopyCode() {
+  const code = props.result?.codePreview
+  if (!code) return
+  const ok = await copyText(code)
+  const msg = (window as any).$message
+  ok ? msg?.success('代码已复制到剪贴板') : msg?.error('复制失败，请手动选中复制')
+}
+
+/** 导出单文件 HTML：零依赖、双击即开、按适配策略响应窗口 */
+function handleExportHtml() {
+  if (!props.layout) return
+  try {
+    downloadStandaloneHtml(props.layout)
+    ;(window as any).$message?.success('单文件 HTML 已导出，双击即可打开')
+  } catch (e: any) {
+    ;(window as any).$message?.error(e?.message || '导出失败')
+  }
 }
 </script>
 
@@ -324,11 +366,19 @@ function formatLength(length: number): string {
   overflow: hidden;
 
   .preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
     padding: 6px 12px;
     font-size: 11px;
     color: rgba(255,255,255,0.45);
     background: rgba(255,255,255,0.05);
     border-bottom: 1px solid rgba(255,255,255,0.08);
+
+    .preview-note {
+      color: rgba(255,255,255,0.3);
+    }
   }
   .preview-content {
     padding: 12px;
@@ -349,6 +399,17 @@ function formatLength(length: number): string {
   justify-content: flex-end;
   gap: 8px;
   padding-top: 4px;
+  flex-wrap: wrap;
+}
+
+.result-tip {
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--text-color-secondary, rgba(0,0,0,0.45));
+
+  b {
+    color: var(--text-color, rgba(0,0,0,0.75));
+  }
 }
 
 .rpm-error {

@@ -449,12 +449,55 @@ ${this.styleGuides['references/patterns/css-variable-pattern.md'] || ''}
       backgroundRepeat: 'background-repeat',
     }
 
-    // layout 字段 → CSS flex 属性映射
-    const layoutToCss = {
-      horizontal: { display: 'flex', 'flex-direction': 'row' },
-      vertical: { display: 'flex', 'flex-direction': 'column' },
-      row: { display: 'flex', 'flex-direction': 'row' },
-      column: { display: 'flex', 'flex-direction': 'column' },
+    // layout 字段 → CSS flex/grid 属性映射
+    //
+    // 🛡️ 2026-09-30 复审 §8.9 #9（决策 D：前缀匹配 + 非方向语义显式断言）
+    //   原实现是**全等索引** `layoutToCss[el.layout]`、只有 4 键
+    //   `{horizontal, vertical, row, column}`。实测（423 份 `.checkpoint/visual.json` 全语料）：
+    //   `el.layout` 是**视觉自由字段**（不承载 Figma section 级 layout），取值域 **33 种 / 5284 处**，
+    //   其中大量是**前缀式变体**：`grid`(108) / `horizontal-2-columns`(41) / `horizontal-3-columns`(22) /
+    //   `horizontal-3-items`(13) / `horizontal-2-items`(10) / `grid-3-columns`(8) / `grid-3x4`(4) /
+    //   `vertical-6-items`(3) … ⇒ 全等匹配**静默 no-op 279 处（5.3%）**，其中 **237 处本应是 row/column/grid**。
+    //   根因与 §8.8 #7/#8 **同一个病（全等 vs 变体）** ⇒ 改**前缀匹配**，对齐本仓既有口径
+    //   （`subcomponent-planner.js:1029` 的 `/horizontal|grid|row/i`、`prompt-builder.js:1717` 的 `/2-?col/i`）。
+    //
+    //   ⚠️ 余下 42 处（`relative` 31 / `mixed` 3 / `chart-container` 3 / `center` 2 / `absolute` 1 /
+    //   `single` 1 / `none` 1）是**定位或结构语义、本就不该映射成 flex 方向** ⇒ 显式列入
+    //   `NON_DIRECTIONAL_LAYOUTS` 作**断言**（而非默默落到 default）⇒ 防后人把它们当「漏键」补进映射表。
+    //
+    //   ⚠️ grid 若不带列数，`display:grid` 会退化成单列（比 no-op 更差）⇒ 元素带 `gridColumns` 时
+    //   （语料 120 个 grid 元素里 103 个带）一并给出 `grid-template-columns: repeat(N, 1fr)`，
+    //   与 `constraint-reinforcement.js:60-70`「内层栅格铁律」要求 LLM 手写的形态保持一致。
+    //
+    //   ⚠️ 已知未覆盖（本轮**刻意不做**，避免加入未验证行为）：`horizontal-space-between`（语料 3 处）
+    //   除 row 外还可给出 `justify-content: space-between`；`single` 语义待定。
+    const NON_DIRECTIONAL_LAYOUTS = new Set([
+      'relative',
+      'absolute',
+      'center',
+      'single',
+      'none',
+      'mixed',
+      'chart-container',
+    ])
+
+    /** `el.layout` → CSS 属性；无方向语义 / 未知取值返回 `null`（保持 no-op，fail-open 不猜） */
+    const resolveLayoutCss = (el) => {
+      const raw = typeof el.layout === 'string' ? el.layout.trim().toLowerCase() : ''
+      if (!raw || NON_DIRECTIONAL_LAYOUTS.has(raw)) return null
+      if (raw === 'row' || raw.startsWith('horizontal')) {
+        return { display: 'flex', 'flex-direction': 'row' }
+      }
+      if (raw === 'column' || raw.startsWith('vertical')) {
+        return { display: 'flex', 'flex-direction': 'column' }
+      }
+      if (raw.startsWith('grid')) {
+        const cols = Number(el.gridColumns)
+        return Number.isFinite(cols) && cols > 0
+          ? { display: 'grid', 'grid-template-columns': `repeat(${cols}, 1fr)` }
+          : { display: 'grid' }
+      }
+      return null
     }
 
     // alignItems / justifyContent 直接映射
@@ -486,9 +529,10 @@ ${this.styleGuides['references/patterns/css-variable-pattern.md'] || ''}
         }
       }
 
-      // 2. 转换 layout 字段 → flex 属性
-      if (el.layout && layoutToCss[el.layout]) {
-        for (const [k, v] of Object.entries(layoutToCss[el.layout])) {
+      // 2. 转换 layout 字段 → flex/grid 属性（§8.9 #9：前缀匹配；无方向语义保持 no-op）
+      const layoutCss = resolveLayoutCss(el)
+      if (layoutCss) {
+        for (const [k, v] of Object.entries(layoutCss)) {
           cssProps[k] = v
         }
       }

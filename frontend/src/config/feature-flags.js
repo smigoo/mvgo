@@ -31,7 +31,7 @@ export default {
     'generator.api': { enabled: true, label: '接口生成' },
     'generator.pageSkeleton': { enabled: true, label: '页面开发' },
     tasks: { enabled: true, label: '任务中心' },
-    screen: { enabled: false, label: '大屏布局' },
+    screen: { enabled: true, label: '大屏布局' },
     'generator.workflow': { enabled: true, label: '工作流编排' }
   },
 

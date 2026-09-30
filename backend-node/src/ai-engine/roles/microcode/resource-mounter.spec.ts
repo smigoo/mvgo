@@ -1,4 +1,4 @@
-import { fixSectionHeightsForResource, ensureHeaderSlots, injectFailedResourceFallbacks, stripEmptyShellBindings, ensureResourceImportInVue, mountSubStateBackground, findVForItemTag, dedupeBgMultiRefs, healAbsoluteOverlayParents, findTagByClassKeyword, collectMountCandidates, pickBestMountTarget } from './resource-mounter.js'
+import { fixSectionHeightsForResource, ensureHeaderSlots, injectFailedResourceFallbacks, stripEmptyShellBindings, ensureResourceImportInVue, mountSubStateBackground, findVForItemTag, dedupeBgMultiRefs, healAbsoluteOverlayParents, healStandaloneBgLayers, findTagByClassKeyword, collectMountCandidates, pickBestMountTarget, fixMisplacedContainerOpacity } from './resource-mounter.js'
 import { inferComponentPrefix, DETERMINISTIC_ANCHOR_SCORE } from '../../utils/mount-target-scoring.js'
 
 /**
@@ -1430,5 +1430,421 @@ describe('findTagByClassKeyword：class 片段边界（① 词边界）', () => 
   it('⛔ 前缀粘连不匹配：root 不得命中 trafficroot（词边界）', () => {
     expect(findTagByClassKeyword('<template><div class="trafficroot"></div></template>', 'root')).toBeNull()
     expect(findTagByClassKeyword('<template><div class="traffic-root"></div></template>', 'root')).not.toBeNull()
+  })
+})
+
+/**
+ * 🛡️ healStandaloneBgLayers（2026-09-30 · a6d2e5e1 车型分布撕裂实锤，用户确认契约）：
+ *   方案 A：空壳 bg div（无子内容）→ 背景键值迁移到直接父元素 + 删 div；
+ *   方案 B：有内容 bg 层缺 absolute → 补 position:absolute + inset:0（宿主 relative 由
+ *   healAbsoluteOverlayParents 在其后接管）。
+ *   撕裂实锤形态：容器 :style 挂精确四件套（figmaBox 真值），内层 bg-m div 单独挂
+ *   backgroundImage 且 100% 100%，且无 absolute 占文档流 → 标题挤下移、内容区塌高。
+ */
+describe('healStandaloneBgLayers 背景形态契约', () => {
+  it('⭐ 方案A：空壳 bg div → 背景四件套原文迁移到父元素，div 删除', () => {
+    const input = `<template>
+  <div class="card">
+    <div class="bg-m" :style="{ backgroundImage: 'url(' + bg4 + ')', backgroundSize: '100% 100%', backgroundPosition: '0px 0px', backgroundRepeat: 'no-repeat' }"></div>
+    <span class="title">车型分布</span>
+  </div>
+</template>
+<style scoped>
+.card { display: flex; }
+</style>`
+    const files = { 'package/components/X.vue': input }
+    const report = healStandaloneBgLayers(files, {})
+    expect(report.collapsed).toHaveLength(1)
+    expect(report.collapsed[0]).toMatchObject({ varName: 'bg4', mode: 'drop' })
+    const out = files['package/components/X.vue']
+    expect(out).not.toContain('bg-m')
+    expect(out).toContain("backgroundImage: 'url(' + bg4 + ')'")
+    expect(out).toContain("backgroundSize: '100% 100%'")
+    // 迁移挂到父元素（card 的 :style）
+    expect(out).toMatch(/class="card" :style=/)
+  })
+
+  it('⭐ 方案A-self：父已绑定同资源（撕裂形态）→ 直接删空壳 div，父零改动', () => {
+    const input = `<template>
+  <div class="card" :style="{ backgroundImage: 'url(' + bg4 + ')', backgroundSize: '191px 80px', backgroundPosition: '1px 31px' }">
+    <div class="bg-m" :style="{ backgroundImage: 'url(' + bg4 + ')', backgroundSize: '100% 100%' }"></div>
+    <span class="title">车型分布</span>
+  </div>
+</template>
+<style scoped>
+.card { display: flex; }
+</style>`
+    const files = { 'package/components/X.vue': input }
+    const report = healStandaloneBgLayers(files, {})
+    expect(report.collapsed).toHaveLength(1)
+    expect(report.collapsed[0]).toMatchObject({ varName: 'bg4', mode: 'drop' })
+    const out = files['package/components/X.vue']
+    expect(out).not.toContain('bg-m')
+    // 父的四件套真值不被覆盖
+    expect(out).toContain("backgroundSize: '191px 80px'")
+    expect(out).not.toContain("backgroundSize: '100% 100%'")
+  })
+
+  it('方案A-fail-closed：父被外来背景占用 → 不迁移不删，空壳退化方案 B 补 absolute', () => {
+    // 收紧后（f8116aa6）：父须有精确 px size 真值才认定撕裂（父无 size/% 兜底 → fail-open 不动）
+    const input = `<template>
+  <div class="card" :style="{ backgroundImage: 'url(' + bg2 + ')', backgroundSize: '191px 80px' }">
+    <div class="bg-m" :style="{ backgroundImage: 'url(' + bg4 + ')' }"></div>
+  </div>
+</template>
+<style scoped>
+.card { display: flex; }
+.bg-m { width: 103px; height: 80px; }
+</style>`
+    const files = { 'package/components/X.vue': input }
+    const report = healStandaloneBgLayers(files, {})
+    expect(report.collapsed).toHaveLength(0)
+    expect(report.absoluteFixed).toHaveLength(1)
+    const out = files['package/components/X.vue']
+    expect(out).toContain('bg-m')
+    expect(out).toMatch(/\.bg-m\s*\{[^}]*position:\s*absolute/)
+    expect(out).toMatch(/\.bg-m\s*\{[^}]*inset:\s*0/)
+  })
+
+  it('方案B：有子内容的 bg 层缺 absolute → 补 position:absolute + inset:0', () => {
+    // 收紧后（f8116aa6）：父须有精确 px size 真值才认定撕裂
+    const input = `<template>
+  <div class="card" :style="{ backgroundImage: 'url(' + bg2 + ')', backgroundSize: '300px 120px' }">
+    <div class="bg-deco" :style="{ backgroundImage: 'url(' + bg3 + ')' }">
+      <span class="badge">HOT</span>
+    </div>
+    <span class="title">总流量</span>
+  </div>
+</template>
+<style scoped>
+.bg-deco { width: 100%; height: 40px; }
+</style>`
+    const files = { 'package/components/X.vue': input }
+    const report = healStandaloneBgLayers(files, {})
+    expect(report.collapsed).toHaveLength(0)
+    expect(report.absoluteFixed).toEqual([{ file: 'package/components/X.vue', cls: 'bg-deco' }])
+    const out = files['package/components/X.vue']
+    expect(out).toMatch(/\.bg-deco\s*\{[^}]*position:\s*absolute/)
+    expect(out).toMatch(/\.bg-deco\s*\{[^}]*inset:\s*0/)
+  })
+
+  it('防误伤：父无背景绑定的独立 bg 内容块（正常文档流布局）不补 absolute', () => {
+    const input = `<template>
+  <div class="card">
+    <div class="bg-deco" :style="{ backgroundImage: 'url(' + bg3 + ')' }">
+      <span class="badge">HOT</span>
+    </div>
+  </div>
+</template>
+<style scoped>
+.bg-deco { width: 100%; height: 40px; }
+</style>`
+    const files = { 'package/components/X.vue': input }
+    const before = files['package/components/X.vue']
+    const report = healStandaloneBgLayers(files, {})
+    expect(report.absoluteFixed).toHaveLength(0)
+    expect(files['package/components/X.vue']).toBe(before)
+  })
+
+  it('收紧（f8116aa6 误伤）：父 size 也是 % 兜底 → 层叠标签设计不补 absolute', () => {
+    // 实锤：slot-tag-text（bg1 文字层）叠 slot-tag（bg2 标签底图），父子 size 均 100%
+    // —— 合法层叠设计，误补 absolute+inset:0 会把文字层撑满整行压住面板标题
+    const input = `<template>
+  <div class="tag" :style="{ backgroundImage: 'url(' + bg2 + ')', backgroundSize: '100% 100%' }">
+    <span class="tag-text" :style="{ backgroundImage: \`url(\${bg1})\`, backgroundSize: '100% 100%' }">场区污水</span>
+  </div>
+</template>
+<style scoped>
+.tag-text { width: 100%; font-weight: 700; }
+</style>`
+    const files = { 'package/components/X.vue': input }
+    const before = files['package/components/X.vue']
+    const report = healStandaloneBgLayers(files, {})
+    expect(report.absoluteFixed).toHaveLength(0)
+    expect(files['package/components/X.vue']).toBe(before)
+  })
+
+  it('对照：父 size 精确像素 + 子 % 兜底 → 撕裂仍补 absolute（a6d2e5e1 判据不回归）', () => {
+    const input = `<template>
+  <div class="tag" :style="{ backgroundImage: 'url(' + bg2 + ')', backgroundSize: '191px 80px' }">
+    <span class="tag-text" :style="{ backgroundImage: 'url(' + bg1 + ')', backgroundSize: '100% 100%' }">场区污水</span>
+  </div>
+</template>
+<style scoped>
+.tag-text { width: 100%; }
+</style>`
+    const files = { 'package/components/X.vue': input }
+    const report = healStandaloneBgLayers(files, {})
+    expect(report.absoluteFixed).toEqual([{ file: 'package/components/X.vue', cls: 'tag-text' }])
+  })
+
+  it('幂等：已有 absolute 的 bg 层不动；无 bg 绑定的普通 div 不受影响', () => {
+    const input = `<template>
+  <div class="card">
+    <div class="bg-deco" :style="{ backgroundImage: 'url(' + bg3 + ')' }">
+      <span>deco</span>
+    </div>
+    <div class="plain"></div>
+  </div>
+</template>
+<style scoped>
+.bg-deco { position: absolute; inset: 0; }
+.plain { margin: 0; }
+</style>`
+    const files = { 'package/components/X.vue': input }
+    const before = files['package/components/X.vue']
+    const report = healStandaloneBgLayers(files, {})
+    expect(report.collapsed).toHaveLength(0)
+    expect(report.absoluteFixed).toHaveLength(0)
+    expect(files['package/components/X.vue']).toBe(before)
+  })
+
+  it('宿主 relative 成对契约：healStandaloneBgLayers 后跑 healAbsoluteOverlayParents，宿主补 relative', () => {
+    const input = `<template>
+  <div class="card" :style="{ backgroundImage: 'url(' + bg2 + ')', backgroundSize: '300px 120px' }">
+    <div class="bg-deco" :style="{ backgroundImage: 'url(' + bg3 + ')' }">
+      <span>deco</span>
+    </div>
+  </div>
+</template>
+<style scoped>
+.card { display: flex; }
+.bg-deco { width: 100%; }
+</style>`
+    const files = { 'package/components/X.vue': input }
+    healStandaloneBgLayers(files, {})
+    healAbsoluteOverlayParents(files, {})
+    const out = files['package/components/X.vue']
+    expect(out).toMatch(/\.bg-deco\s*\{[^}]*position:\s*absolute/)
+    expect(out).toMatch(/\.card\s*\{[^}]*position:\s*relative/)
+  })
+})
+
+/**
+ * 🛡️ 透明度归属契约（2026-09-30 · mc-max-1790723575234-d368e7d8 实锤，用户质询
+ * 「cons 的透明度是不是挂错了」）：Figma 中 bg 子层 GROUP opacity=0.5、卡片容器
+ * opacity=1；产物链路把 0.5 提升到容器 class → 图标/文字一并半透明。
+ * 治本：① healStandaloneBgLayers 方案A守门（空壳层含非背景声明禁删）；
+ *      ② fixMisplacedContainerOpacity 真值驱动修正（容器 opacity → 独立半透明背景层）。
+ */
+describe('透明度归属契约（d368e7d8）', () => {
+  const NODE_DATA = {
+    children: [{
+      name: '卡片', type: 'GROUP', opacity: 1,
+      children: [{ name: 'bg', type: 'GROUP', opacity: 0.5 }],
+    }],
+  };
+
+  it('守门：空壳 bg 层 :style 含 opacity → 方案A不删（删层会丢透明度语义）', () => {
+    const input = `<template>
+  <div class="card">
+    <div class="card-bg" :style="{ backgroundImage: 'url(' + bg2 + ')', backgroundSize: '100% 100%', opacity: 0.5 }"></div>
+    <span class="title">标题</span>
+  </div>
+</template>
+<style scoped>
+.card { position: relative; }
+.card-bg { position: absolute; inset: 0; opacity: 0.5; }
+</style>`
+    const files = { 'package/components/X.vue': input }
+    const report = healStandaloneBgLayers(files, {})
+    // opacity 不是背景键：合并会静默丢语义 → 该层不得被折叠删除
+    expect(files['package/components/X.vue']).toContain('card-bg')
+    expect(report.collapsed).toHaveLength(0)
+  })
+
+  it('⭐ 修正器：容器挂了 bg 层透明度 → 独立层 + inline 定位/透明度（d368e7d8 主形态）', () => {
+    const input = `<template>
+  <div>
+    <div class="c-x-group-1" :style="{ backgroundImage: 'url(' + bg3 + ')', backgroundSize: '100% 100%', backgroundPosition: '0px 0px', backgroundRepeat: 'no-repeat' }">
+      <div class="c-x-icon"><img :src="icon1" /></div>
+      <div class="c-x-text"><span>标签</span></div>
+    </div>
+  </div>
+</template>
+<style scoped>
+.c-x-group-1 {
+  position: relative;
+  display: flex;
+  opacity: 0.5;
+}
+.c-x-icon { display: flex; }
+</style>`
+    const files = {
+      'package/components/X.vue': input,
+      'resources/styles/common.less': '.c-x-group-1 {\n  opacity: 0.5;\n}',
+    }
+    const report = fixMisplacedContainerOpacity(files, NODE_DATA, {})
+    expect(report.fixed).toHaveLength(1)
+    const out = files['package/components/X.vue']
+    // 容器不再带透明度（scoped + common.less 同名块都清）
+    expect(out).not.toMatch(/\.c-x-group-1\s*\{[^}]*opacity/)
+    expect(files['resources/styles/common.less']).not.toMatch(/\.c-x-group-1\s*\{[^}]*opacity/)
+    // 独立层：背景四件套迁入 + **inline** 定位/透明度（不依赖任何 CSS 注入链）
+    expect(out).toMatch(/class="c-x-group-1-bg"/)
+    expect(out).toMatch(/c-x-group-1-bg"[^>]*:style="\{[^"]*backgroundImage/)
+    expect(out).toMatch(/c-x-group-1-bg"[^>]*:style="\{[^"]*position:\s*'absolute'/)
+    expect(out).toMatch(/c-x-group-1-bg"[^>]*:style="\{[^"]*opacity:\s*0\.5/)
+    // 容器 inline relative（absolute 层的定位参照）
+    expect(out).toMatch(/class="c-x-group-1" style="position: relative;"/)
+    // 内容子元素补 relative（防半透明层盖住内容）
+    expect(out).toMatch(/style="position: relative;" class="c-x-icon"/)
+    // 容器 :style 背景四件套已移除（迁到独立层，不再冗余）
+    expect(out).not.toMatch(/c-x-group-1"[^>]*:style=/)
+  })
+
+  it('fail-open：真值无低透明度节点 → 容器透明度可能是合法设计，不动', () => {
+    const input = `<template>
+  <div class="c-x-card disabled" :style="{ backgroundImage: 'url(' + bg1 + ')', backgroundSize: '100% 100%' }">
+    <span>禁用卡</span>
+  </div>
+</template>
+<style scoped>
+.c-x-card { opacity: 0.5; }
+</style>`
+    const files = { 'package/components/X.vue': input }
+    const report = fixMisplacedContainerOpacity(files, { children: [{ name: 'root', type: 'FRAME' }] }, {})
+    expect(report.fixed).toHaveLength(0)
+    expect(files['package/components/X.vue']).toContain('opacity: 0.5')
+  })
+
+  it('fail-open：容器 opacity 值与真值不符（0.3 vs 真值 0.5）→ 可能是有意设计，不动', () => {
+    const input = `<template>
+  <div class="c-x-card" :style="{ backgroundImage: 'url(' + bg1 + ')', backgroundSize: '100% 100%' }">
+    <span>x</span>
+  </div>
+</template>
+<style scoped>
+.c-x-card { opacity: 0.3; }
+</style>`
+    const files = { 'package/components/X.vue': input }
+    const report = fixMisplacedContainerOpacity(files, NODE_DATA, {})
+    expect(report.fixed).toHaveLength(0)
+  })
+
+  it('幂等：已有 -bg 层且其 :style 带 inline position → 跳过', () => {
+    const input = `<template>
+  <div class="c-x-group-1" :style="{ backgroundImage: 'url(' + bg3 + ')', backgroundSize: '100% 100%' }">
+    <div class="c-x-group-1-bg" :style="{ backgroundImage: 'url(' + bg3 + ')', position: 'absolute', inset: 0, opacity: 0.5, pointerEvents: 'none' }"></div>
+    <span class="title">x</span>
+  </div>
+</template>
+<style scoped>
+.c-x-group-1 { position: relative; }
+</style>`
+    const files = { 'package/components/X.vue': input }
+    const before = input
+    const report = fixMisplacedContainerOpacity(files, NODE_DATA, {})
+    expect(report.fixed).toHaveLength(0)
+    expect(files['package/components/X.vue']).toBe(before)
+  })
+
+  it('已有 -bg 层但容器仍挂 opacity（挂错残留）→ 清容器 opacity + 层补 inline，不重复插元素', () => {
+    const input = `<template>
+  <div class="c-x-group-1" :style="{ backgroundImage: 'url(' + bg3 + ')', backgroundSize: '100% 100%' }">
+    <div class="c-x-group-1-bg" :style="{ backgroundImage: 'url(' + bg3 + ')' }"></div>
+    <span class="title">x</span>
+  </div>
+</template>
+<style scoped>
+.c-x-group-1 { position: relative; opacity: 0.5; }
+</style>`
+    const files = { 'package/components/X.vue': input }
+    const report = fixMisplacedContainerOpacity(files, NODE_DATA, {})
+    expect(report.fixed).toHaveLength(1)
+    const out = files['package/components/X.vue']
+    // 容器 opacity 清除
+    expect(out).not.toMatch(/\.c-x-group-1\s*\{[^}]*opacity/)
+    // 层补 inline 定位/透明度
+    expect(out).toMatch(/c-x-group-1-bg"[^>]*:style="\{[^"]*position:\s*'absolute'/)
+    expect(out).toMatch(/c-x-group-1-bg"[^>]*:style="\{[^"]*opacity:\s*0\.5/)
+    // 不重复插 -bg 元素
+    expect((out.match(/class="c-x-group-1-bg"/g) || []).length).toBe(1)
+  })
+
+  it('⭐ 容器规则只在 common.less（scoped 无）→ 仍能修（inline 不依赖 CSS 落点）', () => {
+    // d368e7d8 实锤：容器规则常在 common.less、scoped 里没有；把层规则写进任何
+    // CSS 文件都可能落空（预览 static/opacity:1）→ 定位/透明度必须 inline
+    const input = `<template>
+  <div>
+    <div class="c-x-group-2" :style="{ backgroundImage: 'url(' + bg3 + ')', backgroundSize: '100% 100%' }">
+      <div class="c-x-icon"><img :src="icon1" /></div>
+    </div>
+  </div>
+</template>
+<style scoped>
+.c-x-icon { display: flex; }
+</style>`
+    const files = {
+      'package/components/X.vue': input,
+      'resources/styles/common.less': '.c-x-group-2 {\n  display: flex;\n  opacity: 0.5;\n}',
+    }
+    const report = fixMisplacedContainerOpacity(files, NODE_DATA, {})
+    expect(report.fixed).toHaveLength(1)
+    const outVue = files['package/components/X.vue']
+    expect(outVue).toMatch(/class="c-x-group-2-bg"/)
+    expect(outVue).toMatch(/c-x-group-2-bg"[^>]*:style="\{[^"]*position:\s*'absolute'/)
+    expect(outVue).toMatch(/c-x-group-2-bg"[^>]*:style="\{[^"]*opacity:\s*0\.5/)
+    // 容器 inline relative
+    expect(outVue).toMatch(/class="c-x-group-2" style="position: relative;"/)
+    // 容器 CSS opacity 已清（在 common.less）
+    expect(files['resources/styles/common.less']).not.toMatch(/\.c-x-group-2\s*\{[^}]*opacity/)
+  })
+
+  it('⭐ 半修正态自愈：模板已有 -bg 元素但缺 inline 定位、容器 opacity 已清 → 补 inline，不重复插元素', () => {
+    // r-992fa002 实锤：历史只插了元素、无任何 CSS 命中（bgLayerPos:static/opacity:1）
+    // → 容器 opacity 已被清，无值可查 → 退化用真值低透明度唯一值（0.5）
+    const input = `<template>
+  <div>
+    <div class="c-x-group-3">
+      <div class="c-x-group-3-bg" :style="{ backgroundImage: 'url(' + bg3 + ')' }"></div>
+      <div class="c-x-icon"><img :src="icon1" /></div>
+    </div>
+  </div>
+</template>
+<style scoped>
+.c-x-icon { display: flex; }
+</style>`
+    const files = {
+      'package/components/X.vue': input,
+      'resources/styles/common.less': '.c-x-group-3 {\n  display: flex;\n}',
+    }
+    const report = fixMisplacedContainerOpacity(files, NODE_DATA, {})
+    expect(report.fixed).toHaveLength(1)
+    expect(report.fixed[0].inlineOnly).toBe(true)
+    const outVue = files['package/components/X.vue']
+    expect(outVue).toMatch(/c-x-group-3-bg"[^>]*:style="\{[^"]*position:\s*'absolute'/)
+    expect(outVue).toMatch(/c-x-group-3-bg"[^>]*:style="\{[^"]*opacity:\s*0\.5/)
+    // 容器 inline relative
+    expect(outVue).toMatch(/class="c-x-group-3" style="position: relative;"/)
+    // 模板不重复插入 -bg 元素（仍只 1 处）
+    expect((outVue.match(/class="c-x-group-3-bg"/g) || []).length).toBe(1)
+  })
+
+  it('fail-open：半修正态但真值低透明度不唯一 → 不动（避免臆造透明度）', () => {
+    const input = `<template>
+  <div>
+    <div class="c-x-group-4">
+      <div class="c-x-group-4-bg" :style="{ backgroundImage: 'url(' + bg4 + ')' }"></div>
+      <span>x</span>
+    </div>
+  </div>
+</template>
+<style scoped>
+.x { color: #fff; }
+</style>`
+    const files = {
+      'package/components/X.vue': input,
+      'resources/styles/common.less': '.c-x-group-4 {\n  display: flex;\n}',
+    }
+    const MULTI = {
+      children: [
+        { name: 'a', type: 'GROUP', opacity: 0.5 },
+        { name: 'b', type: 'GROUP', opacity: 0.8 },
+      ],
+    }
+    const report = fixMisplacedContainerOpacity(files, MULTI, {})
+    expect(report.fixed).toHaveLength(0)
+    expect(files['resources/styles/common.less']).not.toContain('c-x-group-4-bg')
   })
 })

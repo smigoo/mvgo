@@ -3,13 +3,34 @@
 // 与 .workbuddy/design/screen-layout-builder.md 保持一致
 // ============================================================
 
+/**
+ * 输出适配策略
+ *
+ * - contain    整体等比缩放，宽高比不一致时留黑边（内容绝不裁切）
+ * - fillWidth  宽度铺满，高度按比例推出（可能纵向滚动）
+ * - fillHeight 高度铺满，宽度按比例推出（可能横向滚动）
+ * - none       按设计稿 1:1 渲染，容器不一致时出现滚动条
+ * - fluid      骨架弹性伸缩铺满，元素尺寸与文字比例保持 —— 推荐默认
+ * - hybrid     整体等比缩放到接近目标，再由骨架弹性吸收差额
+ *
+ * ⚠️ 后端 `screen-layout.service.ts` 仅做类型声明、未消费该字段，
+ *    因此新增取值不会影响「下载 ZIP」链路。
+ */
+export type OutputScaleMode =
+  | 'contain'
+  | 'fillWidth'
+  | 'fillHeight'
+  | 'none'
+  | 'fluid'
+  | 'hybrid'
+
 /** 画布配置 */
 export interface CanvasConfig {
   width: number                      // 设计稿宽 1920 | 3840
   height: number                     // 设计稿高 1080
   aspectRatioLocked: boolean         // 锁定宽高比
   aspectRatio: number                // 宽高比 (width/height)
-  outputScaleMode: 'contain' | 'fillWidth' | 'fillHeight' | 'none'
+  outputScaleMode: OutputScaleMode
   backgroundColor: string            // 画布背景色
   backgroundImage?: string           // 背景图 URL
   showGrid: boolean                  // 显示网格

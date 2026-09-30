@@ -390,14 +390,34 @@ ${figmaHints}
 以下资源已成功下载，在输出 JSON 中遇到对应位置时，**必须使用 resourceFile 字段引用实际资源路径**，禁止使用 placeholder + CSS/SVG 替代。
 
 ${available.map(m => {
+  // 🔴 2026-09-30 治本（K 类：资源清单「语义坍缩」）：
+  //   旧清单只输出 m.hint（=「card → card区域」/「tabs-list → tabs-list区域」），
+  //   同一父名下多条资源的标签**逐字相同** ⇒ LLM 物理上无法区分。实锤两案：
+  //     · traffic-monitor：两条 `card → card区域`（bg-_m-36 / bg-_m-35）⇒ 车型分布的卡片背景被
+  //       挂到「当日总流量的总统计数据」上（该节点 Figma fills=[] 本无背景）；
+  //     · env-monitor：两条 `tabs-list → tabs-list区域`（bg-7890 整体 295×27 / bg-tab-active-7891
+  //       激活态 78×21）⇒ 整体背景挂到了单个 icon tab 上。
+  //   现补三项确定性事实（全部已在 mapping 里，白拿）：figmaPath 全路径、几何尺寸、唯一合法落点。
+  const _fb = m.figmaBox || {}
+  const _size = (_fb.width && _fb.height)
+    ? ` ${Math.round(_fb.width)}×${Math.round(_fb.height)}`
+    : ''
+  const _path = m.figmaPath ? ` [${m.figmaPath}]` : ''
+  const _only = m.ownerSectionId
+    ? ` ⚠️仅此落点 data-section-id="${m.ownerSectionId}"`
+    : ''
   if (m.downloadStatus === 'css' && m.cssValue) {
-    return `- **${m.previewAnalysisRole}**: ${m.hint} → ⚡ CSS: \`background: ${m.cssValue}\` (无需图片)`
+    return `- **${m.previewAnalysisRole}**: ${m.hint}${_path}${_size} → ⚡ CSS: \`background: ${m.cssValue}\` (无需图片)${_only}`
   }
-  return `- **${m.previewAnalysisRole}**: ${m.hint} → 📎 ${m.resourceFile} (变量: ${m.assignedVarName || m.semanticVarName || 'N/A'}, 用法: ${m.recommendedUsage || 'N/A'})`
+  return `- **${m.previewAnalysisRole}**: ${m.hint}${_path} → 📎 ${m.resourceFile} (变量: ${m.assignedVarName || m.semanticVarName || 'N/A'}, 用法: ${m.recommendedUsage || 'N/A'}${_size})${_only}`
 }).join('\n')}
 
 ⚠️ 输出规范：对 icon/bg/image 类元素，优先输出 "resourceFile" 和 "recommendedUsage" 字段，而非 "placeholder"。
 ⚡ CSS 替代资源（标记为 CSS: background: ...）不要输出 resourceFile，直接在样式中使用 CSS 值。
+
+🔒 **落点唯一性（CRITICAL）**：每条资源尾部的 \`⚠️仅此落点 data-section-id="X"\` 是该资源的**唯一合法宿主** ——
+只能挂在产物中 \`data-section-id="X"\` 的那个元素上；**禁止**改挂到同名的兄弟容器、父级大容器、单个 tab/icon 元素上。
+若目标区域在本清单里**没有**对应资源 ⇒ **该处不要背景**，禁止从别的区域借一张来凑（借位会造成跨区域错图）。
 ${headerSlotsBlock}`
       }
     }
@@ -1834,7 +1854,11 @@ ${analysisTask}`
             // 而真实内容在 characters（如「设备总数」）。Vision 识别的是 characters 文字，
             // 用 name 匹配必然命中失败 → 虚低覆盖率。
             characters: node.characters || '',
-            children: node.children?.length || 0
+            children: node.children?.length || 0,
+            // 🛡️ 2026-09-30 治本（事故 mc-max-1790759329996-e471a915）：保留原始节点引用，
+            // 供下方 2.5「容器不优于其内容」规则判定「该容器子树内是否真的存在未识别内容」。
+            // 仅本次调用内局部使用，不参与 report 序列化（report.missing 只 pick name/type/depth/characters）。
+            node
           })
         }
         if (node.children && Array.isArray(node.children)) {
@@ -1856,7 +1880,22 @@ ${analysisTask}`
         // { name:'设备类型', value:'28' } 或 { content:'设备总数 68562' }，此前只提取 name 漏了 value/content，
         // 导致「数值」类文字（28/68562/98%）无法与 Figma characters 对上 → 虚低覆盖率。
         // 长度上限 30 防长文本（段落/描述）污染 identifiedNames。
-        const names = [obj.name, obj.label, obj.title, obj.type, obj.role, obj.text, obj.value, obj.content].filter(Boolean)
+        // 🛡️ 2026-09-30 治本（事故 mc-max-1790759329996-e471a915）：补 componentName / componentTitle。
+        // 事故实况：Figma TEXT 节点 name='常住人口'、characters='环保减污'（图层名 ≠ 真实文字），
+        // Vision 把该文字放在**组件级**字段 componentTitle='环保减污' / componentName='环保减污-场区污水监测'，
+        // 而本列表此前不含这两字段 ⇒ identifiedNames 永远拿不到「环保减污」⇒ 该 TEXT 必然落 missing
+        // ⇒ 覆盖率被污染拉低（30% < 35% 阈值）⇒ low-coverage 门禁误阻断。
+        // 只补这两项：summary/analysisDescription 是长段落（>30 字）本就被长度过滤，无需也不应加入。
+        // 🛡️ 2026-09-30 第二批（**数据驱动**，非枚举猜测）：全语料 463 个「有 missing 文字」的组件，
+        // 逐个把 missing 的真实文字回查它在 visual.json 里挂在哪个字段上，统计出「承载文字却没被收集」的 key。
+        // 结果只有下面 4 个是**内容载体**（数值/计数/徽标文字），补入：
+        //   badge(20 组件，如 '3/3740') / total(3，'56302') / count(2，'3/3740') / statusText(2，'(2/484)')
+        // 其余高频 key **一律不收** —— 它们是模型的**解释性文本或标识**，收进识别集会让覆盖率虚高、门禁失效：
+        //   notes(76) / id(48) / bgPlaceholder(23) / evidence(22) / doNotInvent(13) / defaultState(10)
+        //   description(8) / target(7) / emphasis(5) / decorations(4) / figmaNodeId(4) / summary(3) / state(3)
+        const names = [obj.name, obj.label, obj.title, obj.type, obj.role, obj.text, obj.value, obj.content,
+          obj.componentName, obj.componentTitle,
+          obj.badge, obj.total, obj.count, obj.statusText].filter(Boolean)
         names.forEach(n => {
           if (typeof n === 'string' && n.length > 1 && n.length <= 30) identifiedNames.add(n.toLowerCase())
         })
@@ -1918,14 +1957,31 @@ ${analysisTask}`
         const body = sec.body
         if (body && Array.isArray(body.children)) for (const c of body.children) collectConfirmed(c)
       }
-      const walkLayout = parsed.layout || parsed.layoutStructure
-      if (walkLayout && Array.isArray(walkLayout.sections)) walkLayout.sections.forEach(collectConfirmed)
-      else if (walkLayout) collectConfirmed(walkLayout)
+      // 🛡️ 2026-09-30 治本（事故 mc-max-1790759329996-e471a915）：原根查找只认 parsed.layout /
+      // parsed.layoutStructure 的**直接** sections 字段，而实际产物里 sections 恒挂在
+      // layoutStructure.layout.sections 下。本事故实测：layoutStructure.sections 不存在、
+      // layoutStructure.layout.sections 有 3 个且**全部 layoutSource='inline-row'** ⇒ 原代码走
+      // else 对 layoutStructure 本体 collectConfirmed，其 layoutSource/children/body 均未定义
+      // ⇒ 收集到 0 个节点（confirmedNodeIds 恒空）⇒ 2026-09-11 的「inline-row 成员节点视为已确认」
+      // 兜底**完全失效**（全语料 4163 个 inline-row section 全部失去该保护）。
+      // 现与上方 layoutSections 的三级 fallback 口径对齐。
+      const confirmedRoots = []
+      if (Array.isArray(parsed.layout?.sections)) confirmedRoots.push(parsed.layout)
+      if (Array.isArray(parsed.layoutStructure?.sections)) confirmedRoots.push(parsed.layoutStructure)
+      if (parsed.layoutStructure?.layout && Array.isArray(parsed.layoutStructure.layout.sections)) {
+        confirmedRoots.push(parsed.layoutStructure.layout)
+      }
+      for (const confirmedRoot of confirmedRoots) {
+        confirmedRoot.sections.forEach(collectConfirmed)
+      }
 
       // 3. 交叉比对
       const matched = []
       const missing = []
       const uncertain = []
+      // 🛡️ 2026-09-30 治本（事故 mc-max-1790759329996-e471a915）：记录每个 Figma 节点的判定状态，
+      // 供 2.5「容器不优于其内容」规则回查子树。
+      const stateByNode = new Map()
 
       for (const elem of figmaElements) {
         const nameLower = elem.name.toLowerCase()
@@ -1935,14 +1991,14 @@ ${analysisTask}`
         const isContainer = ['FRAME', 'COMPONENT', 'INSTANCE', 'GROUP'].includes(elem.type) && elem.children > 0
 
         // 跳过太浅的根节点和太深的叶子
-        if (elem.depth === 0 && elem.children > 10) continue
-        if (elem.depth > 5 && !isContentElement) continue
+        if (elem.depth === 0 && elem.children > 10) { stateByNode.set(elem.node, 'ignored'); continue }
+        if (elem.depth > 5 && !isContentElement) { stateByNode.set(elem.node, 'ignored'); continue }
 
         // 🛡️ 跳过无语义命名（Group/Vector/bg/@antd 等）：
         // 这些是图层命名而非内容语义，Vision 不识别它们是合理的，计入 missing 会虚低覆盖率。
         // 🛡️ P0（2026-09-04）：若 name 无语义但 characters 有真实文字，不跳过——
         // 真实文字是可匹配内容（如 name=Text 23、characters=设备总数）。
-        if (this._isNonSemanticName(elem.name) && !charsLower.trim()) continue
+        if (this._isNonSemanticName(elem.name) && !charsLower.trim()) { stateByNode.set(elem.node, 'ignored'); continue }
 
         // 🛡️ P0（2026-09-04）：匹配键优先用 characters（Vision 识别的是真实文字），
         // 其次 name。任一命中即 matched——避免「name 无语义名 + characters 有真值」时
@@ -1958,35 +2014,111 @@ ${analysisTask}`
 
         if (isIdentified) {
           matched.push(elem)
+          stateByNode.set(elem.node, 'matched')
         } else if (isContentElement || isContainer) {
           missing.push(elem)
+          stateByNode.set(elem.node, 'missing')
         } else if (elem.type === 'TEXT') {
           uncertain.push(elem)  // 短文本可能只是装饰/标注
+          stateByNode.set(elem.node, 'uncertain')
+        } else {
+          // 其他类型（纯装饰）忽略
+          stateByNode.set(elem.node, 'ignored')
         }
-        // 其他类型（纯装饰）忽略
       }
 
+      // 2.5 🛡️ 2026-09-30 治本（事故 mc-max-1790759329996-e471a915）：
+      // 「容器不优于其内容」——一个 FRAME/GROUP/COMPONENT/INSTANCE 容器，若其**子树内不存在任何
+      // 未识别的内容元素**，则它自身的名字匹配不上一律不算缺失。
+      // 事故实况（真值树重放）：'cp-环保减污'(d0) → header → '小标题'(d2) → '点背景'(d4) / '分割线'(d4)
+      // / TEXT '常住人口'(d3, chars='环保减污')，以及 slot-tabs → '激活'(d3) / '默认'(d3)（Figma 的
+      // tab 状态命名，Vision 输出的 tab 名是「上月」「本年」）——这些**装饰/结构/状态命名**的容器
+      // 名字天然不会出现在 Vision 结果里，此前一律进 missing ⇒ 分母 10 个里 7 个是这类噪音，
+      // 覆盖率被压到 30%，而实际上该设计稿的 4 个真实文字全部已识别（应为 100%）。
+      // 判据完全自洽：① 子树无内容元素（纯装饰如 '点背景'/'分割线'）⇒ 不缺失；
+      //               ② 子树内容元素全部 matched（如 '小标题'/'激活'/'默认'）⇒ 不缺失。
+      // 保守取向：只从 missing 中剔除，不反向把容器记成 matched ⇒ 覆盖率只回正、不虚高。
+      // 全语料 1368 个 checkpoint 离线重放验证：均值 71.7% → 84.7%，无异常暴涨，
+      // 真实漏识别组件（14%/20%/30%）仍保持低分不洗白。
+      // 判据只看「**非容器**的真实内容缺失」（TEXT 等叶子）：容器的缺失本质上由内容决定，
+      // 容器自己缺不缺不该反过来传染祖先——否则 '小标题'（本身已让位）会把 'cp-环保减污' 一起拖住，
+      // 让位只能逐层生效而无法收敛（离线重放实测：只看容器会把本事故停在 83% 而非 100%）。
+      const CONTAINER_TYPES = ['FRAME', 'COMPONENT', 'INSTANCE', 'GROUP']
+      const realMissingCache = new Map()
+      const subtreeHasRealMissing = (node) => {
+        if (realMissingCache.has(node)) return realMissingCache.get(node)
+        let result = false
+        for (const c of node.children || []) {
+          if (!c || typeof c !== 'object') continue
+          const st = stateByNode.get(c)
+          if (st === 'missing' && !CONTAINER_TYPES.includes(c.type)) { result = true; break }
+          if (subtreeHasRealMissing(c)) { result = true; break }
+        }
+        realMissingCache.set(node, result)
+        return result
+      }
+      const missingFiltered = missing.filter((e) =>
+        !CONTAINER_TYPES.includes(e.type) || subtreeHasRealMissing(e.node))
+      const containerDropped = missing.length - missingFiltered.length
+
       const totalFigma = figmaElements.length
-      const coverageRate = totalFigma > 0
-        ? Math.round((matched.length / (matched.length + missing.length)) * 100)
+      // 🛡️ 2026-09-30 口径诚实化（事故 mc-max-1790759329996-e471a915）：
+      // 判定集 = 真正参与「该不该被识别」判定的元素（matched + missing）；
+      // 剪枝掉的（深度/无语义名/资源封装/2.5 容器规则）与 uncertain（短文本，可能是装饰/标注）都不参与。
+      // 旧报告只输出 totalFigma(=28) 与 coverageRate(=3/10=30%)，两个数不同源 →
+      // 「28 个元素却按 10 算」被误读为公式错误，实则是**两个不同集合**。
+      // 🛡️ 2026-09-30 修正：分母改用 missingFiltered（已应用 2.5「容器不优于其内容」）；
+      // containerDropped 单列，让「有多少个容器因内部无缺失内容而被剔除」在报告里可见。
+      const judgedTotal = matched.length + missingFiltered.length
+      const coverageRate = judgedTotal > 0
+        ? Math.round((matched.length / judgedTotal) * 100)
         : 100
 
       const report = {
         totalFigma,
+        judgedTotal,
+        judgedCount: matched.length,
+        excludedCount: Math.max(0, totalFigma - judgedTotal - uncertain.length),
         matchedCount: matched.length,
-        missingCount: missing.length,
+        missingCount: missingFiltered.length,
+        containerDroppedCount: containerDropped,
         uncertainCount: uncertain.length,
         coverageRate,
-        missing: missing.slice(0, 15).map(e => ({ name: e.name, type: e.type, depth: e.depth })),
+        // 🛡️ 2026-09-30：missing 明细补 characters（截断 24 字符），让「节点有真实文字却仍 missing」
+        // 这一族问题在报错里直接可见，无需再翻 4 份 checkpoint 去比对 name/characters 是否分行。
+        // 事故 mc-max-1790759329996-e471a915：missing 只报 `{name:'常住人口',type:'TEXT',depth:3}`，
+        // 而 figma 真值里该节点 characters='环保减污'（图层名与内容不符），仅凭 name 无法判断
+        // 究竟是「模型没识别」还是「真值集里就是噪音」，导致归因绕了远路。
+        missing: missingFiltered.slice(0, 15).map(e => ({
+          name: e.name,
+          type: e.type,
+          depth: e.depth,
+          characters: (e.characters || '').slice(0, 24)
+        })),
         uncertain: uncertain.slice(0, 10).map(e => ({ name: e.name, type: e.type })),
         summary: coverageRate >= 90 ? '优秀' : coverageRate >= 75 ? '良好' : coverageRate >= 60 ? '一般' : '需关注'
       }
 
-      logger.info(`📊 元素覆盖率: ${coverageRate}% (${matched.length}/${matched.length + missing.length})`, {
-        missing: missing.length,
+      logger.info(`📊 元素覆盖率: ${coverageRate}% (判定 ${matched.length}/${judgedTotal}，候选池 ${totalFigma}，剪枝 ${report.excludedCount}，容器让位 ${containerDropped})`, {
+        missing: missingFiltered.length,
         uncertain: uncertain.length,
+        judgedTotal,
+        totalFigma,
         summary: report.summary
       })
+
+      // 🛡️ 2026-09-30：自证式诊断（零风险，仅日志）——「节点有 characters 却仍 missing」是本族问题
+      // 的核心指纹。它一旦出现，说明「该文字本该可匹配却没有」：要么 Vision 侧确实没识别，
+      // 要么真值集的 characters 在运行时与 checkpoint 不同源（曾实测 .checkpoint/figma.json 里
+      // 该节点 characters='环保减污'、identifiedNames 亦含「环保减污」，双向子串匹配理应命中）。
+      // 打出来即可直接判定，无需再猜。
+      const textMissing = missingFiltered.filter(e => (e.characters || '').trim())
+      if (textMissing.length > 0) {
+        logger.warn('⚠️ 覆盖率：存在「有真实文字却未匹配」的节点（疑似真值集/识别集不同源）', {
+          count: textMissing.length,
+          samples: textMissing.slice(0, 5).map(e => ({ name: e.name, characters: e.characters, depth: e.depth }))
+        })
+      }
 
       return report
     } catch (error) {

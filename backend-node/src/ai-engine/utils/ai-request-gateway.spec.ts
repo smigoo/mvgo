@@ -195,7 +195,7 @@ describe('ai-request-gateway', () => {
     expect(refreshProvider.mock.calls.some((c) => c[0]?.forceThinkingDisabled === true)).toBe(true)
   });
 
-  it('慢归因：执行开始即上报带模型名的 model-start 进度（含「模型自身问题」安抚）', async () => {
+  it('慢归因：执行开始即上报带模型名的 model-start 进度（含「模型响应慢」安抚）', async () => {
     const events = []
     const baseInvoke = jest.fn(async () => ({ content: 'ok', usage_metadata: { output_tokens: 1 } }))
     const llm = { invoke: baseInvoke, modelName: 'deepseek-v4.1-flash' }
@@ -214,12 +214,12 @@ describe('ai-request-gateway', () => {
     const res = await llm.invoke('hi', { __mvgoRequestOptions: { requestMaxRetries: 0, requestTimeoutMs: 3000 } })
 
     expect(res.content).toBe('ok')
-    // 立即（首推）带模型名的 model-start，且明确「模型自身问题」
+    // 立即（首推）带模型名的 model-start，且明确「模型响应慢」
     const start = events.find((e) => e.kind === 'model-start')
     expect(start).toBeTruthy()
     expect(start.kind).toBe('model-start')
     expect(start.message).toContain('deepseek-v4.1-flash')
-    expect(start.message).toContain('模型自身问题')
+    expect(start.message).toContain('多为模型响应慢')
     // 网关心跳类进度事件均带 kind 分类字段（model-start / model-slow / platform-queue / retry）
     const heartbeatKinds = events.filter((e) => e.context === 'attrib').map((e) => e.kind)
     expect(heartbeatKinds.every((k) => typeof k === 'string')).toBe(true)

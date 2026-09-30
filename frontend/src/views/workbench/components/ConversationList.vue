@@ -55,15 +55,28 @@
       </div>
     </div>
 
-    <!-- 分组筛选（下拉）+ 新建分组 -->
-    <div v-if="!selectionMode" class="group-filter">
-      <select v-model="currentGroup" class="group-select" title="按分组筛选">
-        <option :value="null">全部分组</option>
-        <option v-for="group in groups" :key="group.name" :value="group.name">
-          {{ group.name }} ({{ group.count }})
-        </option>
-      </select>
-      <button class="filter-btn add-group" @click="openCreateGroupDialog" title="新建分组">
+    <!-- 分组筛选：横向 pills 行（全部 / 各分组 / ＋ 分组），溢出横向滚动 -->
+    <div v-if="!selectionMode" class="group-pills">
+      <button
+        class="pill"
+        :class="{ active: currentGroup === null }"
+        @click="currentGroup = null"
+        title="显示全部对话"
+      >
+        全部
+      </button>
+      <button
+        v-for="group in groups"
+        :key="group.name"
+        class="pill"
+        :class="{ active: currentGroup === group.name }"
+        @click="currentGroup = group.name"
+        :title="`仅显示「${group.name}」分组（${group.count} 个对话）`"
+      >
+        <span class="pill-name">{{ group.name }}</span>
+        <span class="pill-count">{{ group.count }}</span>
+      </button>
+      <button class="pill add-pill" @click="openCreateGroupDialog" title="新建分组">
         ＋ 分组
       </button>
     </div>
@@ -78,9 +91,50 @@
             @click="toggleGroupCollapse(groupName)"
             @contextmenu.prevent="showGroupMenu($event, groupName, groupConvs.length)"
           >
+            <span class="group-toggle" :class="{ collapsed: collapsedGroups[groupName] }">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </span>
             <span class="group-name">{{ groupName || '未分组' }}</span>
             <span class="group-count">{{ groupConvs.length }}</span>
-            <span class="group-toggle">{{ collapsedGroups[groupName] ? '▶' : '▼' }}</span>
+            <!-- hover 显示的管理按钮（未分组是系统兜底，不支持重命名/删除，只暴露新增） -->
+            <span class="group-actions" v-if="groupName">
+              <button
+                class="group-action-btn"
+                title="重命名分组"
+                @click.stop="openRenameDialogByName(groupName, groupConvs.length)"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 20h9"/>
+                  <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                </svg>
+              </button>
+              <button
+                class="group-action-btn danger"
+                title="删除分组"
+                @click.stop="openDeleteGroupDialogByName(groupName, groupConvs.length)"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="3 6 5 6 21 6"/>
+                  <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                  <path d="M10 11v6M14 11v6"/>
+                  <path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/>
+                </svg>
+              </button>
+            </span>
+            <span class="group-actions" v-else>
+              <button
+                class="group-action-btn"
+                title="新建分组"
+                @click.stop="openCreateGroupDialog"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <line x1="12" y1="5" x2="12" y2="19"/>
+                  <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+              </button>
+            </span>
           </div>
           <div v-if="!collapsedGroups[groupName]" class="group-items">
             <div
@@ -106,15 +160,33 @@
           </div>
         </div>
 
-        <!-- 空分组区块：新建后立即可见，支持右键管理（重命名/删除） -->
+        <!-- 空分组区块：新建后立即可见，hover 显示删除按钮 -->
         <div v-for="gName in emptyGroupNames" :key="'empty-' + gName" class="group-section is-empty">
           <div
             class="group-header is-empty-group"
             @contextmenu.prevent="showGroupMenu($event, gName, 0)"
           >
+            <span class="group-toggle">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </span>
             <span class="group-name">{{ gName }}</span>
             <span class="group-count">0</span>
-            <span class="group-empty-hint">空分组 · 右键管理，移动对话时可选</span>
+            <span class="group-actions">
+              <button
+                class="group-action-btn danger"
+                title="删除空分组"
+                @click.stop="openDeleteGroupDialogByName(gName, 0)"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="3 6 5 6 21 6"/>
+                  <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                  <path d="M10 11v6M14 11v6"/>
+                  <path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/>
+                </svg>
+              </button>
+            </span>
           </div>
         </div>
       </template>
@@ -198,12 +270,8 @@
           <span>重命名分组</span>
         </div>
         <div class="menu-divider"></div>
-        <div
-          class="menu-item danger"
-          :class="{ disabled: groupMenu.count > 0 }"
-          :title="groupMenu.count > 0 ? `分组内有 ${groupMenu.count} 个对话，请先把对话移出分组` : ''"
-          @click="openDeleteGroupDialog"
-        >
+        <!-- 删除入口：不再硬阻断，组内有对话时弹 dialog 让用户选 move/force -->
+        <div class="menu-item danger" @click="openDeleteGroupDialog">
           <span class="menu-icon">🗑️</span>
           <span>删除分组</span>
         </div>
@@ -267,24 +335,54 @@
       </div>
     </div>
 
-    <!-- 删除分组确认对话框 -->
+    <!-- 删除分组确认对话框：组内有对话时提供三种处置（移到未分组后删 / 强删 / 取消） -->
     <div v-if="deleteGroupDialog.visible" class="dialog-overlay" @click="closeDeleteGroupDialog">
       <div class="dialog confirm-dialog" @click.stop>
-        <h3>{{ deleteGroupDialog.blocked ? '无法删除分组' : '删除分组' }}</h3>
-        <p class="dialog-hint" v-if="deleteGroupDialog.blocked">
-          分组「{{ deleteGroupDialog.name }}」内还有
+        <h3>删除分组</h3>
+        <p class="dialog-hint" v-if="deleteGroupDialog.count > 0">
+          分组「<strong>{{ deleteGroupDialog.name }}</strong>」内还有
           <strong>{{ deleteGroupDialog.count }}</strong> 个对话。<br />
-          请先把这些对话移到其他分组或「未分组」，再删除该分组。
+          请选择如何处置：
         </p>
         <p class="dialog-hint" v-else>
-          确定要删除空分组「{{ deleteGroupDialog.name }}」吗？此操作不可撤销。
+          确定要删除空分组「<strong>{{ deleteGroupDialog.name }}</strong>」吗？此操作不可撤销。
         </p>
+        <div v-if="deleteGroupDialog.count > 0" class="delete-group-options">
+          <label class="delete-group-option">
+            <input
+              type="radio"
+              v-model="deleteGroupDialog.mode"
+              value="move"
+            />
+            <div class="option-content">
+              <div class="option-title">移到「未分组」后删除</div>
+              <div class="option-desc">保留对话，分组移除。推荐。</div>
+            </div>
+          </label>
+          <label class="delete-group-option danger">
+            <input
+              type="radio"
+              v-model="deleteGroupDialog.mode"
+              value="force"
+            />
+            <div class="option-content">
+              <div class="option-title">连同对话一起删除</div>
+              <div class="option-desc">不可撤销，请确认无重要对话。</div>
+            </div>
+          </label>
+        </div>
         <div class="dialog-actions">
-          <button class="btn-cancel" @click="closeDeleteGroupDialog">
-            {{ deleteGroupDialog.blocked ? '我知道了' : '取消' }}
+          <button class="btn-cancel" @click="closeDeleteGroupDialog">取消</button>
+          <button
+            v-if="deleteGroupDialog.count > 0"
+            class="btn-confirm"
+            :disabled="deleteGroupDialog.mode === null"
+            @click="confirmDeleteGroup"
+          >
+            确认删除
           </button>
           <button
-            v-if="!deleteGroupDialog.blocked"
+            v-else
             class="btn-danger"
             @click="confirmDeleteGroup"
           >
@@ -428,7 +526,7 @@ const renameGroupDialog = ref({ visible: false, oldName: '', newName: '', count:
 const renameGroupInput = ref(null);
 
 // 删除分组确认对话框
-const deleteGroupDialog = ref({ visible: false, name: '', count: 0, blocked: false });
+const deleteGroupDialog = ref({ visible: false, name: '', count: 0, mode: null }); // mode: null | 'move' | 'force'
 
 // 删除对话确认对话框
 const deleteConvDialog = ref({
@@ -586,15 +684,10 @@ async function confirmCreateGroup() {
   }
 }
 
-// 重命名分组
+// 重命名分组（从右键菜单进入，保留旧签名）
 function openRenameGroupDialog() {
   const { name, count } = groupMenu.value;
-  hideGroupMenu();
-  renameGroupDialog.value = { visible: true, oldName: name, newName: name, count };
-  nextTick(() => {
-    renameGroupInput.value?.focus();
-    renameGroupInput.value?.select();
-  });
+  openRenameDialogByName(name, count);
 }
 
 function closeRenameGroupDialog() {
@@ -617,32 +710,62 @@ async function confirmRenameGroup() {
   }
 }
 
-// 删除分组（组内有对话则只提示、不可删）
+// 删除分组（hover 删除按钮 / 右键菜单共用入口；非空时让用户选 move/force）
+function openDeleteGroupDialogByName(name, count) {
+  hideGroupMenu();
+  deleteGroupDialog.value = {
+    visible: true,
+    name: name || '',
+    count: count || 0,
+    // 非空分组默认推荐「移到未分组后删」（安全），让用户主动选「强制删除」
+    mode: count > 0 ? 'move' : null,
+  };
+}
+
+// 右键菜单入口（保持向后兼容）
 function openDeleteGroupDialog() {
   const { name, count } = groupMenu.value;
-  hideGroupMenu();
-  if (count > 0) {
-    deleteGroupDialog.value = { visible: true, name, count, blocked: true };
-    return;
-  }
-  deleteGroupDialog.value = { visible: true, name, count, blocked: false };
+  openDeleteGroupDialogByName(name, count);
 }
 
 function closeDeleteGroupDialog() {
   deleteGroupDialog.value.visible = false;
+  deleteGroupDialog.value.mode = null;
 }
 
 async function confirmDeleteGroup() {
-  const { name, count } = deleteGroupDialog.value;
-  if (count > 0) return; // 双保险：非空分组永不删除
+  const { name, count, mode } = deleteGroupDialog.value;
+  if (count > 0 && !mode) return; // 没选模式 → 不放行
   try {
-    await store.deleteGroup(name);
+    if (count > 0 && mode === 'move') {
+      // 先把对话全移到「未分组」（group: null），再删分组
+      const convsInGroup = props.conversations.filter(c => c && c.group === name);
+      if (convsInGroup.length > 0) {
+        await store.moveToGroup(convsInGroup.map(c => c.conversationId), null);
+      }
+    }
+    // count === 0 或 mode === 'force'：直接调用 deleteGroup；非空时 force=true
+    await store.deleteGroup(name, count > 0);
     closeDeleteGroupDialog();
     await loadGroups();
+    // 若删的是当前筛选分组，回到「全部」
+    if (currentGroup.value === name) currentGroup.value = null;
   } catch (err) {
     alert(err?.response?.data?.error || err?.message || '删除分组失败');
   }
 }
+
+// 重命名（hover 铅笔 / 右键菜单共用入口）
+function openRenameDialogByName(name, count) {
+  hideGroupMenu();
+  renameGroupDialog.value = { visible: true, oldName: name, newName: name, count };
+  nextTick(() => {
+    renameGroupInput.value?.focus();
+    renameGroupInput.value?.select();
+  });
+}
+
+// 右键菜单入口（保持向后兼容）— 已被上面覆写为 openRenameDialogByName 包装
 
 // 重命名
 function handleRename() {
@@ -962,64 +1085,88 @@ function handleBatchMove() {
   }
 }
 
-// 分组筛选（下拉 + 新建）
-.group-filter {
+// 分组筛选：横向 pills（全部 / 各分组 / ＋ 分组），溢出横向滚动
+.group-pills {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--wb-border, #e5e7eb);
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--wb-border-light, #f0f0f0);
   background: var(--wb-surface-alt, #f2f3f5);
+  overflow-x: auto;
+  scrollbar-width: thin;
 
-  .group-select {
-    flex: 1;
-    min-width: 0;
-    padding: 5px 8px;
-    border: 1px solid var(--wb-border, #e5e7eb);
-    border-radius: 6px;
-    background: var(--wb-surface, #ffffff);
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--wb-text, #1a1a2e);
-    cursor: pointer;
-    outline: none;
-    transition: border-color 0.15s;
-
-    &:hover,
-    &:focus {
-      border-color: var(--wb-primary, #4f46e5);
-    }
+  // 隐藏滚动条但保留滚动能力（webkit）
+  &::-webkit-scrollbar {
+    height: 0;
   }
 
-  .filter-btn {
-    padding: 5px 12px;
-    border: 1px solid transparent;
-    border-radius: 6px;
+  .pill {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border: 1px solid var(--wb-border, #e5e7eb);
+    border-radius: 999px; // pill 圆角
     background: var(--wb-surface, #ffffff);
+    color: var(--wb-text-secondary, #6b7280);
     font-size: 12px;
     font-weight: 500;
-    color: var(--wb-text-secondary, #6b7280);
+    line-height: 1.2;
     cursor: pointer;
-    white-space: nowrap;
     transition: all 0.15s;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    white-space: nowrap;
 
-    &:hover {
-      border-color: var(--wb-primary, #4f46e5);
-      color: var(--wb-primary, #4f46e5);
-      background: var(--wb-primary-light, #eef2ff);
+    .pill-name {
+      max-width: 80px;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
-    // 「＋ 分组」新建入口
-    &.add-group {
+    .pill-count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 18px;
+      height: 16px;
+      padding: 0 5px;
+      border-radius: 8px;
+      background: var(--wb-surface-alt, #f2f3f5);
+      color: var(--wb-text-muted, #9ca3af);
+      font-size: 10px;
+      font-weight: 600;
+    }
+
+    &:hover:not(.active):not(.add-pill) {
+      border-color: var(--wb-primary, #4f46e5);
       color: var(--wb-primary, #4f46e5);
-      border: 1px dashed var(--wb-primary, #4f46e5);
-      background: transparent;
-      box-shadow: none;
-      flex-shrink: 0;
+
+      .pill-count {
+        background: var(--wb-primary-light, #eef2ff);
+        color: var(--wb-primary, #4f46e5);
+      }
+    }
+
+    &.active {
+      background: var(--wb-primary, #4f46e5);
+      border-color: var(--wb-primary, #4f46e5);
+      color: #fff;
+      box-shadow: 0 1px 2px rgba(79, 70, 229, 0.25);
+
+      .pill-count {
+        background: rgba(255, 255, 255, 0.22);
+        color: #fff;
+      }
+    }
+
+    // 「＋ 分组」pill：用 dashed 边框区分语义
+    &.add-pill {
+      color: var(--wb-primary, #4f46e5);
+      border-style: dashed;
 
       &:hover {
-        border-color: var(--wb-primary, #4f46e5);
+        border-style: solid;
         background: var(--wb-primary-light, #eef2ff);
       }
     }
@@ -1034,57 +1181,60 @@ function handleBatchMove() {
 
 // 分组区域
 .group-section {
-  margin-bottom: 10px;
+  margin-bottom: 4px;
 
   .group-header {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 10px;
+    gap: 6px;
+    padding: 7px 10px;
     cursor: pointer;
     user-select: none;
     border-radius: 8px;
     transition: background 0.15s;
     position: relative;
 
-    // 左侧色条标识
-    &::before {
-      content: '';
-      position: absolute;
-      left: 0;
-      top: 50%;
-      transform: translateY(-50%);
-      width: 3px;
-      height: 60%;
-      border-radius: 2px;
-      background: var(--wb-primary, #4f46e5);
-      opacity: 0.6;
-      transition: opacity 0.15s;
-    }
-
     &:hover {
       background: var(--wb-surface-alt, #f2f3f5);
 
-      &::before {
+      // hover 时显式露出管理按钮
+      .group-actions {
         opacity: 1;
+        pointer-events: auto;
       }
     }
 
     // 「未分组」为系统兜底区：不支持重命名/删除，但可右键新建分组
     &.is-ungrouped {
       cursor: default;
+    }
 
-      &::before {
-        background: var(--wb-text-muted, #9ca3af);
+    // 折叠箭头：始终可见，未折叠朝下、折叠朝右
+    .group-toggle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 14px;
+      height: 14px;
+      color: var(--wb-text-muted, #9ca3af);
+      transition: transform 0.18s ease;
+      flex-shrink: 0;
+
+      &.collapsed {
+        transform: rotate(-90deg);
       }
     }
 
     .group-name {
-      font-size: 12px;
-      font-weight: 700;
+      font-size: 13px;
+      font-weight: 600;
       color: var(--wb-text, #1a1a2e);
-      letter-spacing: 0.3px;
-      padding-left: 6px;
+      letter-spacing: 0.2px;
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .group-count {
@@ -1092,17 +1242,46 @@ function handleBatchMove() {
       font-weight: 600;
       color: var(--wb-primary, #4f46e5);
       background: var(--wb-primary-light, #eef2ff);
-      padding: 2px 7px;
+      padding: 1px 7px;
       border-radius: 10px;
-      min-width: 20px;
+      min-width: 18px;
       text-align: center;
+      flex-shrink: 0;
     }
 
-    .group-toggle {
-      margin-left: auto;
-      font-size: 9px;
+    // hover 才显形的管理按钮组（避免平时视觉嘈杂）
+    .group-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s;
+      flex-shrink: 0;
+    }
+
+    .group-action-btn {
+      width: 22px;
+      height: 22px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      background: transparent;
       color: var(--wb-text-muted, #9ca3af);
-      transition: transform 0.15s;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.15s;
+
+      &:hover {
+        background: var(--wb-primary-light, #eef2ff);
+        color: var(--wb-primary, #4f46e5);
+      }
+
+      &.danger:hover {
+        background: var(--wb-danger-bg, #fef2f2);
+        color: var(--wb-danger, #ef4444);
+      }
     }
   }
 
@@ -1110,34 +1289,19 @@ function handleBatchMove() {
     padding-left: 6px;
   }
 
-  // 空分组区块：淡显 + 提示文案，可右键管理
+  // 空分组区块：淡显 + hover 显示删除按钮
   &.is-empty {
     .group-header.is-empty-group {
       cursor: default;
-
-      &::before {
-        background: var(--wb-text-muted, #9ca3af);
-        opacity: 0.35;
-      }
-
-      &:hover {
-        background: var(--wb-surface-alt, #f2f3f5);
-
-        &::before {
-          opacity: 0.7;
-        }
-      }
 
       .group-count {
         color: var(--wb-text-muted, #9ca3af);
         background: var(--wb-surface-alt, #f2f3f5);
       }
 
-      .group-empty-hint {
-        margin-left: auto;
-        font-size: 11px;
-        color: var(--wb-text-muted, #9ca3af);
-        white-space: nowrap;
+      &:hover .group-actions {
+        opacity: 1;
+        pointer-events: auto;
       }
     }
   }
@@ -1457,6 +1621,64 @@ function handleBatchMove() {
         &:disabled {
           opacity: 0.5;
           cursor: not-allowed;
+        }
+      }
+    }
+  }
+
+  // 删除分组对话框的处置方式单选列表
+  .delete-group-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 14px;
+
+    .delete-group-option {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 12px 14px;
+      border: 1px solid var(--wb-border, #e5e7eb);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.15s;
+
+      &:hover {
+        border-color: var(--wb-primary, #4f46e5);
+        background: var(--wb-primary-light, #eef2ff);
+      }
+
+      input[type="radio"] {
+        margin-top: 2px;
+        cursor: pointer;
+        accent-color: var(--wb-primary, #4f46e5);
+      }
+
+      .option-content {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .option-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--wb-text, #1a1a2e);
+        margin-bottom: 2px;
+      }
+
+      .option-desc {
+        font-size: 12px;
+        color: var(--wb-text-secondary, #6b7280);
+        line-height: 1.5;
+      }
+
+      // 强删选项用红色标识危险
+      &.danger:has(input:checked) {
+        border-color: var(--wb-danger, #ef4444);
+        background: var(--wb-danger-bg, #fef2f2);
+
+        .option-title {
+          color: var(--wb-danger, #ef4444);
         }
       }
     }

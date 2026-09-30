@@ -745,18 +745,40 @@ export function mountPlannedResources(allFiles, plan, options = {}) {
               owner: mount.owner || '(index)',
             });
           } else {
-            // 兜底：从当前文件的候选池中找最优挂载点
-            const candidates = collectMountCandidates({ [targetFile]: content }, { varName });
-            const best = pickBestMountTarget(mapping, candidates, {
-              skipBound: true, // 优先选没有 bg 绑定的标签
-            });
-            if (best) {
-              tag = best.tag;
-              options.logger?.warn?.('🛡️ S7：资源 mountTarget 不在模板类名，已回退最优挂载点', {
-                varName,
-                mountTarget: mount.mountTarget || '(null)',
-                file: targetFile,
+            // 🛡️ R1'（2026-09-30 · mc-max-1790698932396-a6d2e5e1 实锤）：锚点复验优先于猜测。
+            //   §六 #4 事实链精确挂载跑于装配早期，index.vue 的锚点元素可能尚未生成而
+            //   静默 continue；走到本兜底时 content 已是装配后的文件 ⇒ 先按
+            //   sectionAnchorId 复验一次，命中即精确挂载（零猜测）。否则 pickBestMountTarget
+            //   会按 mountTarget 名评分猜宿主——bg1（owner=2:3660 横幅）被猜到根 slot-con，
+            //   横幅背景整块丢失 + 一张 425×91 小图被拉伸成整页背景。
+            //   复验 miss（锚点真不存在）→ 行为不劣于旧实现，继续走原兜底。
+            if (mount.sectionAnchorId) {
+              const anchorTag = findTagBySectionAnchor(content, String(mount.sectionAnchorId));
+              if (anchorTag) {
+                const ownAnchor = bgBindingOwnership(anchorTag, varName);
+                if (ownAnchor === 'none') {
+                  tag = anchorTag;
+                  options.logger?.info?.(
+                    `🎯 [资源挂载] ${varName} 锚点复验命中 data-section-id=${mount.sectionAnchorId}（S7 兜底前精确挂载，免名猜）`,
+                    { file: targetFile },
+                  );
+                }
+              }
+            }
+            if (!tag) {
+              // 兜底：从当前文件的候选池中找最优挂载点
+              const candidates = collectMountCandidates({ [targetFile]: content }, { varName });
+              const best = pickBestMountTarget(mapping, candidates, {
+                skipBound: true, // 优先选没有 bg 绑定的标签
               });
+              if (best) {
+                tag = best.tag;
+                options.logger?.warn?.('🛡️ S7：资源 mountTarget 不在模板类名，已回退最优挂载点', {
+                  varName,
+                  mountTarget: mount.mountTarget || '(null)',
+                  file: targetFile,
+                });
+              }
             }
           }
         }

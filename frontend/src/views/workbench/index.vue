@@ -15,6 +15,86 @@
       </div>
     </div>
 
+    <!-- R21：交付弹层（发布到公共池 / 推 GitLab） -->
+    <div v-if="deliverTarget" class="wb-confirm-overlay" @click.self="closeDeliverDialog">
+      <div class="wb-confirm-dialog deliver-dialog">
+        <h3>交付组件</h3>
+        <p class="deliver-sub">「<strong>{{ deliverTarget.componentName }}</strong>」交付到：</p>
+
+        <!-- 交付结果 -->
+        <div v-if="deliverResult" class="deliver-result" :class="deliverResult.success ? 'ok' : 'fail'">
+          {{ deliverResult.message }}
+        </div>
+
+        <div v-else class="deliver-options">
+          <button class="deliver-option" :disabled="deliverLoading" @click="doPublish">
+            <span class="do-icon">🌐</span>
+            <span class="do-text">
+              <span class="do-label">{{ deliverLoading ? '发布中…' : '发布到公共组件池' }}</span>
+              <span class="do-desc">团队可浏览、可复用</span>
+            </span>
+          </button>
+          <button class="deliver-option" :disabled="deliverLoading" @click="doPushGitlab">
+            <span class="do-icon">🐙</span>
+            <span class="do-text">
+              <span class="do-label">推送到 GitLab</span>
+              <span class="do-desc">生成代码提交到仓库</span>
+            </span>
+          </button>
+        </div>
+
+        <div class="wb-confirm-actions">
+          <button class="btn-cancel" @click="closeDeliverDialog">关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- R20：版本历史弹层（列版本 + 一键回滚） -->
+    <div v-if="versionTarget" class="wb-confirm-overlay" @click.self="closeVersionDialog">
+      <div class="wb-confirm-dialog version-dialog">
+        <h3>版本历史</h3>
+        <p class="deliver-sub">「<strong>{{ versionTarget.componentName }}</strong>」的历史版本</p>
+
+        <div v-if="versionResult" class="deliver-result" :class="versionResult.success ? 'ok' : 'fail'">
+          {{ versionResult.message }}
+        </div>
+
+        <div v-if="versionLoading" class="version-empty">加载中…</div>
+        <div v-else-if="!versionList.length && !versionResult" class="version-empty">暂无版本记录</div>
+
+        <div v-else class="version-list">
+          <div
+            v-for="rev in versionList"
+            :key="rev.revision"
+            class="version-item"
+            :class="{ current: rev.revision === versionCurrent.lastGood }"
+          >
+            <div class="vi-meta">
+              <span class="vi-status" :class="'st-' + rev.status">{{ versionStatusLabel(rev.status) }}</span>
+              <span v-if="rev.revision === versionCurrent.lastGood" class="vi-current-tag">当前</span>
+              <span v-else-if="rev.revision === versionCurrent.candidate" class="vi-cand-tag">候选</span>
+              <span class="vi-time">{{ formatTime(rev.createdAt) }}</span>
+            </div>
+            <div class="vi-sub">
+              {{ rev.files?.length || 0 }} 个文件<span v-if="rev.stage"> · {{ rev.stage }}</span>
+              <span v-if="rev.rejectionReason" class="vi-reason">{{ rev.rejectionReason }}</span>
+            </div>
+            <button
+              class="vi-rollback"
+              :disabled="versionRolling === rev.revision || rev.revision === versionCurrent.lastGood"
+              @click="doRollback(rev.revision)"
+            >
+              {{ versionRolling === rev.revision ? '回滚中…' : (rev.revision === versionCurrent.lastGood ? '当前版本' : '回滚到此版本') }}
+            </button>
+          </div>
+        </div>
+
+        <div class="wb-confirm-actions">
+          <button class="btn-cancel" @click="closeVersionDialog">关闭</button>
+        </div>
+      </div>
+    </div>
+
     <!-- 左侧对话列表 -->
     <ConversationList
       :conversations="store.sortedConversations"
@@ -54,6 +134,10 @@
         :sending="store.sending"
         @confirm="handleCardConfirm"
         @cancel="handleCardCancel"
+        @quick-send="handleQuickSend"
+        @quick-focus="handleQuickFocus"
+        @action="handleCardAction"
+        @edit="handleEditMessage"
       />
 
       <!-- 空状态 -->
@@ -69,6 +153,7 @@
       <!-- 输入区域 -->
       <ChatInput
         v-if="store.currentConversation"
+        ref="chatInputRef"
         :disabled="store.sending"
         @send="handleSend"
       />
@@ -98,8 +183,8 @@ import { onMounted, ref, watch, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useWorkbenchStore } from '@/stores/workbench';
 import { useTheme } from '@/composables/useTheme';
-import { getComponentFiles } from '@/api/component';
-import { fetchLatestTaskCodeSnapshot, fetchTaskCodeSnapshotFile } from '@/api/generator/generator';
+import { getComponentFiles, getComponentBySessionId, publishComponent } from '@/api/component';
+import { fetchLatestTaskCodeSnapshot, fetchTaskCodeSnapshotFile, fetchTaskCodeSnapshotRevisions, rollbackTaskCodeSnapshot } from '@/api/generator/generator';
 import http from '@/core/http';
 import ConfigPanel from '@/components/generator/ConfigPanel.vue';
 import ConversationList from './components/ConversationList.vue';
@@ -123,6 +208,22 @@ const showConfig = ref(false);
 
 // 取消生成的二次确认目标（由进度卡传入）
 const cancelTarget = ref(null);
+
+// R21：交付弹层（发布到公共池 / 推 GitLab）
+const deliverTarget = ref(null);
+const deliverLoading = ref(false);
+const deliverResult = ref(null);
+
+// R20：版本历史弹层（列版本 + 一键回滚）
+const versionTarget = ref(null); // { sessionId, componentName }
+const versionList = ref([]);
+const versionCurrent = ref({ candidate: null, lastGood: null, partial: null });
+const versionLoading = ref(false);
+const versionRolling = ref(''); // 正在回滚的 revision
+const versionResult = ref(null); // { success, message }
+
+// 输入框引用（R8 快捷入口「从截图/Figma 生成」点击后聚焦输入框）
+const chatInputRef = ref(null);
 
 /**
  * 从消息历史中提取所有进度卡（一个对话可能有多个组件生成）
@@ -281,6 +382,48 @@ watch(
   { immediate: true }
 );
 
+// ========== R22：完成通知（浏览器 Notification） ==========
+// 只通知一次：按 sessionId 去重，避免消息流每次刷新都重复弹。
+const notifiedSessions = new Set();
+
+function notifyCompleted(sessionId, componentName) {
+  if (!sessionId || notifiedSessions.has(sessionId)) return;
+  notifiedSessions.add(sessionId);
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  try {
+    new Notification('组件生成完成', {
+      body: `「${componentName || '组件'}」已生成完毕，可查看、体检与交付`,
+      tag: `mvgo-${sessionId}`,
+    });
+  } catch (err) {
+    console.warn('完成通知失败（忽略）:', err);
+  }
+}
+
+// 组件挂载后尽力请求通知权限（部分浏览器要求用户手势，失败静默降级为无通知）
+onMounted(() => {
+  if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+    Notification.requestPermission?.().catch(() => {});
+  }
+});
+
+// 扫描消息流：进度卡从 running → completed 时触发通知
+watch(
+  () => store.currentMessages,
+  (msgs) => {
+    if (!Array.isArray(msgs)) return;
+    for (const msg of msgs) {
+      if (msg?.role !== 'assistant' || !Array.isArray(msg.cards)) continue;
+      for (const card of msg.cards) {
+        if (card?.type === 'progress' && card?.data?.status === 'completed' && card?.data?.sessionId) {
+          notifyCompleted(card.data.sessionId, card.data.componentName || '组件');
+        }
+      }
+    }
+  },
+  { deep: true }
+);
+
 async function handleSelectConversation(conversationId) {
   await store.loadConversation(conversationId);
   router.push(`/workbench/${conversationId}`);
@@ -330,6 +473,72 @@ async function handleSend(payload, attachmentsArg) {
   }
 }
 
+/**
+ * R8 首屏快捷入口：直接发一条预设意图消息（查组件/查任务）
+ */
+function handleQuickSend(prompt) {
+  if (!prompt) return;
+  handleSend(prompt);
+}
+
+/**
+ * R8 首屏快捷入口：需要素材的工具（截图/Figma），聚焦输入框并提示
+ */
+function handleQuickFocus(placeholder) {
+  if (chatInputRef.value && typeof chatInputRef.value.focusWithPlaceholder === 'function') {
+    chatInputRef.value.focusWithPlaceholder(placeholder);
+  }
+}
+
+/**
+ * R22 编辑重发：把用户旧消息回填输入框，用户改完 Enter 重发
+ */
+function handleEditMessage(message) {
+  const text = message?.content || '';
+  if (!text) return;
+  if (chatInputRef.value && typeof chatInputRef.value.focusWithText === 'function') {
+    chatInputRef.value.focusWithText(text);
+  }
+}
+
+/**
+ * R11/R12 续做/重试动作分发。
+ * - modify/bind/push 依赖 R7 已回写的 currentComponentId（后端 agent 分支读取）
+ * - again/retry 需要重新提供素材，聚焦输入框引导
+ */
+function handleCardAction(payload) {
+  const data = payload?.data || payload;
+  const type = data?.type;
+  const componentName = data?.componentName || '这个组件';
+
+  switch (type) {
+    case 'modify':
+      handleQuickFocus(`想怎么改「${componentName}」？例如：把标题改成蓝色、加圆角`);
+      break;
+    case 'bind':
+      handleSend('绑定 API');
+      break;
+    case 'deliver':
+      openDeliverDialog(data);
+      break;
+    case 'versions':
+      openVersionDialog(data);
+      break;
+    case 'again':
+      handleQuickFocus('再来一个：粘贴新截图或 Figma 链接…');
+      break;
+    case 'retry':
+      handleQuickFocus(`重新生成「${componentName}」：请重新粘贴截图或 Figma 链接…`);
+      break;
+    case 'card-action':
+      // R13：操作卡按钮带 prompt 时直接发送
+      if (data?.action?.prompt) handleSend(data.action.prompt);
+      break;
+    default:
+      break;
+  }
+}
+
 function handleCardConfirm({ data }) {
   // 用户点击确认卡片，发送确认消息触发实际生成
   const sessionId = data?.sessionId;
@@ -360,6 +569,135 @@ function confirmCancelTask() {
   const fn = cancelTarget.value?.onConfirmed;
   cancelTarget.value = null;
   if (typeof fn === 'function') fn();
+}
+
+// ========== R21：交付（发布到公共池 / 推 GitLab） ==========
+function openDeliverDialog(data) {
+  deliverTarget.value = {
+    sessionId: data?.sessionId,
+    componentName: data?.componentName || data?.sessionId,
+  };
+  deliverLoading.value = false;
+  deliverResult.value = null;
+}
+
+function closeDeliverDialog() {
+  deliverTarget.value = null;
+  deliverLoading.value = false;
+  deliverResult.value = null;
+}
+
+async function doPublish() {
+  const sid = deliverTarget.value?.sessionId;
+  if (!sid || deliverLoading.value) return;
+  deliverLoading.value = true;
+  deliverResult.value = null;
+  try {
+    // sessionId → 组件记录（拿 Mongo _id）。发布接口严格要求组件 id（ObjectId）
+    const record = await getComponentBySessionId(sid);
+    if (!record?._id) {
+      deliverResult.value = {
+        success: false,
+        message: '组件尚未入库，无法发布到公共组件池',
+      };
+      return;
+    }
+    const res = await publishComponent(String(record._id));
+    deliverResult.value = {
+      success: !!res?.success,
+      message: res?.message || '已发布到公共组件池',
+      visibility: res?.data?.visibility,
+      sharedAt: res?.data?.sharedAt,
+    };
+  } catch (err) {
+    deliverResult.value = {
+      success: false,
+      message: err?.response?.data?.message || err?.message || '发布失败',
+    };
+  } finally {
+    deliverLoading.value = false;
+  }
+}
+
+function doPushGitlab() {
+  const name = deliverTarget.value?.componentName || '';
+  closeDeliverDialog();
+  handleSend('推送到 GitLab');
+}
+
+// ========== R20：版本历史 + 一键回滚 ==========
+async function openVersionDialog(data) {
+  const sid = data?.sessionId;
+  if (!sid) return;
+  versionTarget.value = {
+    sessionId: sid,
+    componentName: data?.componentName || sid,
+  };
+  versionLoading.value = true;
+  versionResult.value = null;
+  versionRolling.value = '';
+  versionList.value = [];
+  try {
+    const res = await fetchTaskCodeSnapshotRevisions(sid);
+    versionList.value = res?.revisions || [];
+    versionCurrent.value = res?.current || { candidate: null, lastGood: null, partial: null };
+  } catch (err) {
+    versionResult.value = {
+      success: false,
+      message: err?.response?.data?.message || err?.message || '加载版本历史失败',
+    };
+  } finally {
+    versionLoading.value = false;
+  }
+}
+
+function closeVersionDialog() {
+  versionTarget.value = null;
+  versionList.value = [];
+  versionCurrent.value = { candidate: null, lastGood: null, partial: null };
+  versionRolling.value = '';
+  versionResult.value = null;
+}
+
+async function doRollback(revision) {
+  const sid = versionTarget.value?.sessionId;
+  if (!sid || !revision || versionRolling.value) return;
+  versionRolling.value = revision;
+  versionResult.value = null;
+  try {
+    await rollbackTaskCodeSnapshot(sid, revision);
+    // 刷新版本列表（current 指针已变）与右侧产物面板
+    await openVersionDialog({ sessionId: sid, componentName: versionTarget.value?.componentName });
+    versionResult.value = { success: true, message: '已回滚到该版本' };
+    loadConversationArtifacts();
+  } catch (err) {
+    versionResult.value = {
+      success: false,
+      message: err?.response?.data?.message || err?.message || '回滚失败',
+    };
+  } finally {
+    versionRolling.value = '';
+  }
+}
+
+// 版本状态 → 中文标签（与后端 TaskCodeSnapshotStatus 对齐）
+function versionStatusLabel(status) {
+  return {
+    'last-good': '当前可用',
+    candidate: '候选',
+    validating: '校验中',
+    partial: '半成品',
+    rejected: '已拒绝',
+  }[status] || status;
+}
+
+// ISO 时间 → 短格式（YYYY-MM-DD HH:mm）
+function formatTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 </script>
 
@@ -568,6 +906,217 @@ function confirmCancelTask() {
         &:hover {
           opacity: 0.88;
         }
+      }
+    }
+  }
+}
+
+/* R21：交付弹层（发布到公共池 / 推 GitLab） */
+.deliver-dialog {
+  .deliver-sub {
+    margin-bottom: 4px;
+  }
+
+  .deliver-options {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+
+  .deliver-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 1px solid var(--wb-border, #e5e7eb);
+    border-radius: 10px;
+    background: var(--wb-surface, #fff);
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.15s;
+
+    &:hover:not(:disabled) {
+      border-color: var(--wb-primary, #4f46e5);
+      background: var(--wb-primary-bg, #f5f3ff);
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+
+    .do-icon {
+      font-size: 22px;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+
+    .do-text {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+
+      .do-label {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--wb-text, #1a1a2e);
+      }
+
+      .do-desc {
+        font-size: 12px;
+        color: var(--wb-text-muted, #9ca3af);
+      }
+    }
+  }
+
+  .deliver-result {
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.6;
+    margin-bottom: 18px;
+
+    &.ok {
+      background: var(--wb-success-bg, #ecfdf5);
+      color: var(--wb-success, #10b981);
+      border: 1px solid var(--wb-success, #10b981);
+    }
+
+    &.fail {
+      background: var(--wb-danger-bg, #fef2f2);
+      color: var(--wb-danger, #ef4444);
+      border: 1px solid var(--wb-danger, #ef4444);
+    }
+  }
+}
+
+/* R20：版本历史弹层 */
+.version-dialog {
+  max-width: 520px;
+  width: 90vw;
+
+  .version-empty {
+    padding: 24px 0;
+    text-align: center;
+    font-size: 13px;
+    color: var(--wb-text-muted, #9ca3af);
+    margin-bottom: 12px;
+  }
+
+  .version-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 340px;
+    overflow-y: auto;
+    margin-bottom: 18px;
+  }
+
+  .version-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--wb-border, #e5e7eb);
+    border-radius: 8px;
+    background: var(--wb-surface, #fff);
+    transition: all 0.15s;
+
+    &.current {
+      border-color: var(--wb-success, #10b981);
+      background: var(--wb-success-bg, #ecfdf5);
+    }
+
+    .vi-meta {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .vi-status {
+      font-size: 11px;
+      padding: 1px 7px;
+      border-radius: 999px;
+      background: var(--wb-surface-alt, #f2f3f5);
+      color: var(--wb-text-secondary, #6b7280);
+      flex-shrink: 0;
+
+      &.st-last-good {
+        background: var(--wb-success-bg, #ecfdf5);
+        color: var(--wb-success, #10b981);
+      }
+      &.st-candidate {
+        background: var(--wb-info-bg, #eff6ff);
+        color: var(--wb-info, #3b82f6);
+      }
+      &.st-validating {
+        background: var(--wb-warning-bg, #fffbeb);
+        color: var(--wb-warning, #f59e0b);
+      }
+      &.st-partial {
+        background: var(--wb-warning-bg, #fffbeb);
+        color: var(--wb-warning, #f59e0b);
+      }
+      &.st-rejected {
+        background: var(--wb-danger-bg, #fef2f2);
+        color: var(--wb-danger, #ef4444);
+      }
+    }
+
+    .vi-current-tag {
+      font-size: 11px;
+      color: var(--wb-success, #10b981);
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .vi-cand-tag {
+      font-size: 11px;
+      color: var(--wb-info, #3b82f6);
+      flex-shrink: 0;
+    }
+
+    .vi-time {
+      font-size: 12px;
+      color: var(--wb-text-muted, #9ca3af);
+      flex-shrink: 0;
+    }
+
+    .vi-sub {
+      flex: 1;
+      min-width: 0;
+      font-size: 12px;
+      color: var(--wb-text-secondary, #6b7280);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+
+      .vi-reason {
+        margin-left: 6px;
+        color: var(--wb-danger, #ef4444);
+      }
+    }
+
+    .vi-rollback {
+      flex-shrink: 0;
+      padding: 5px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--wb-border, #e5e7eb);
+      background: var(--wb-surface, #fff);
+      color: var(--wb-primary, #4f46e5);
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+
+      &:hover:not(:disabled) {
+        border-color: var(--wb-primary, #4f46e5);
+        background: var(--wb-primary-bg, #f5f3ff);
+      }
+
+      &:disabled {
+        cursor: not-allowed;
+        opacity: 0.5;
       }
     }
   }

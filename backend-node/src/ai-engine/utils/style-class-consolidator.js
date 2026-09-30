@@ -282,6 +282,47 @@ function hasPixelSizeInCommon(commonLess, selector) {
  */
 
 /**
+ * 🛡️ R2 治本（2026-09-30 · c-traffic-monitor-a6d2e5e1 实锤）：图表组件块的固定像素尺寸剥离。
+ *
+ * 背景：豁免（isChartComponent → protectedBlocks 保留）只解决了「百分比块不被丢弃」，
+ * 但没拦「LLM 误置真值像素随块进 common.less」。52px（Figma 徽章/图标真值）一旦进
+ * common，会被**每个子组件 SFC 的 scoped `@import index.less` 复制 N 份**（各自带不同
+ * data-v），其中一份与图表 DOM 的 data-v 匹配且 style 标签文档序靠后 ⇒ 同特异性下
+ * 52px 胜过 SFC 本体的 width:100% ⇒ 柱图宽度塌陷（computed width=52px 渲染实锤）。
+ * scoped 级联顺序不可控 ⇒ 唯一治本 = 图表类**任何写死像素尺寸不进 common**。
+ *
+ * 剥离范围：width/height/min-width/min-height/max-width/max-height 的 px 字面量声明
+ * （图表子组件布局职责 = 撑满装配空间，百分比/flex 全保留）。剥后块内无声明则整块丢弃。
+ *
+ * @param {string} blockText 块体文本（不含选择器与外层花括号）
+ * @returns {string|null} 剥离后的块体；null = 已无声明（整块丢弃）
+ */
+function stripFixedPxSizesForChartBlock(blockText) {
+  // 🛡️ 声明级切除（2026-09-30 · bc33c27d 二次实锤）：旧版整行 filter 只能剥
+  //   「声明独占行」形态；LLM 紧凑格式 `{width: 52px;`（与选择器同行）/
+  //   `min-height: 52px}`（与闭括号同行）整行不匹配 → 漏剥 → 52px 经合并回流。
+  //   改为声明级替换：左定界（行首/{/;/空格）防误伤 border-width 等复合属性。
+  const stripped = String(blockText || '')
+    .replace(/(^|[{;\n])(\s*)(?:min-|max-)?(?:width|height)\s*:\s*\d+(?:\.\d+)?px\s*;?/gi, '$1$2')
+    .replace(/;(\s*);/g, ';$1'); // 清理剥除后可能产生的空声明
+  // 剥后判定：块体内（首个 '{' 之后）去掉注释与空白后是否还有声明。
+  // 注意 b.text 是**完整规则文本**（含选择器行与花括号），只看「非空」会误判选择器行为声明。
+  const bodyStart = stripped.indexOf('{');
+  if (bodyStart === -1) {
+    // 无花括号（纯块体形态）：去注释后非空即有声明
+    const meaningful = stripped.replace(/\/\*[\s\S]*?\*\//g, '').trim();
+    return meaningful ? stripped : null;
+  }
+  const body = stripped
+    .slice(bodyStart + 1)
+    .replace(/\}[\s\S]*$/, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .trim();
+  if (!body) return null;
+  return stripped;
+}
+
+/**
  * 把类规则块合并进 common.less：
  * ① 先删除 common.less 中所有同名块（含嵌套）→ 消除双源与优先级陷阱；
  * ② 再追加子组件版定义 → 子组件定义为唯一事实源。
@@ -299,8 +340,16 @@ function hasPixelSizeInCommon(commonLess, selector) {
  * @returns {{content: string, replaced: string[], added: string[]}}
  */
 function mergeIntoCommonLess(commonLess = '', blocks = []) {
+  // 🛡️ R2（2026-09-30 · a6d2e5e1）：图表组件块先剥固定 px 尺寸（详见 stripFixedPxSizesForChartBlock）
+  const normalizedBlocks = blocks.map((b) => {
+    if (!b || !b.isChartComponent || typeof b.text !== 'string') return b;
+    const stripped = stripFixedPxSizesForChartBlock(b.text);
+    if (stripped === null) return null; // 剥后无声明 → 整块丢弃
+    return stripped === b.text ? b : { ...b, text: stripped };
+  }).filter(Boolean);
+
   // 过滤掉会覆盖像素值的百分比块
-  const protectedBlocks = blocks.filter((b) => {
+  const protectedBlocks = normalizedBlocks.filter((b) => {
     // 🛡️ 图表组件豁免（2026-09-29 · c-traffic-monitor-4d6135d1 / bda1b2fd 双实锤）：
     //   源文件含 echarts 的子组件，其**所有类**的百分比块不得被本保护丢弃——
     //   图表根类/canvas 类必须以 width/height:100% 撑满装配空间；若 common.less 里有
@@ -340,12 +389,25 @@ function mergeIntoCommonLess(commonLess = '', blocks = []) {
   //   修复：现有块**排在最前**参与 mergeCssBlocks → 同名属性仍由子组件版本覆盖（语义不变），
   //   但 common.less 独有的声明被**保留**下来。幂等；无同名则不改变行为。
   const existingSameNameBlocks = extractClassBlocks(commonLess, mergedBlocks.map((b) => b.selector));
+  // 🛡️ R2 补口（2026-09-30 · mc-max-1790701114594-bc33c27d 实锤）：同名 existing 块
+  //   同样过图表 px 剥离——批0 并集会把旧 common.less 的 52px 原文回灌（新块剥了、
+  //   旧块又并回来 = 白剥；实测柱状图 canvas 仍 52×160）。判定口径与上面 strip 一致：
+  //   该 selector 有任一 isChartComponent 来源 ⇒ existing 块同样剥。
+  const chartSelectors = new Set(
+    mergedBlocks.filter((b) => b.isChartComponent).map((b) => b.selector),
+  );
   for (const t of existingSameNameBlocks) {
     const sel = (/^\s*([^{]+)\{/.exec(t) || [])[1];
     if (!sel) continue;
     const key = sel.trim();
     if (!selectorGroups.has(key)) selectorGroups.set(key, []);
-    selectorGroups.get(key).unshift(t); // 放最前 → 优先级最低，子组件可覆盖同名属性
+    let blockText = t;
+    if (chartSelectors.has(key)) {
+      const stripped = stripFixedPxSizesForChartBlock(t);
+      if (stripped === null) continue; // 剥后无声明 → 旧块整体丢弃
+      blockText = stripped;
+    }
+    selectorGroups.get(key).unshift(blockText); // 放最前 → 优先级最低，子组件可覆盖同名属性
   }
 
   // 合并同名类的所有属性

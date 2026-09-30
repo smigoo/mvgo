@@ -132,6 +132,13 @@ export function injectNavSectionIfMissing(plan, navSignal, sources = {}) {
       interactions: 0,
       maxDepth: 1,
     },
+    // 🛡️ 2026-09-30 复审 §8.8.4「P3/P4 决策」**结案：保留 `direction:'column'`，不改 null**。
+    //   理由：`id='nav'` 是**合成** section（Figma 树无此节点），`direction:'column'` 与本节
+    //   自身语义（`responsibility:'竖向导航区（分类/菜单切换）'`、`title:'导航'`）**一致**
+    //   ⇒ 是**真值而非臆造**，不属于「无事实 → null」要治理的那一类。
+    //   且 nav 是**叶子**（`isLayoutContainerSection` 只认 `isLayoutContainer===true` 或
+    //   `container-rebuild`+children）⇒ `section-tree#formatOne` 会打印其 `responsibility`，
+    //   竖向信号另有出口；改 null 只会**白白丢掉一条正确指令**。
     layoutMetadata: {
       direction: 'column',
       alignItems: 'flex-start',

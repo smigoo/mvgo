@@ -225,11 +225,37 @@
               </div>
             </div>
             
-            <!-- 未匹配项 -->
+            <!-- 未匹配项（🛡️ 2026-09-30 第一层可观测性：带 Figma 节点定位 + 产物 file:line 定位） -->
             <div v-if="dim.missed?.length" class="qs-missed">
               <div v-for="(m, mi) in dim.missed.slice(0, 5)" :key="mi" class="qs-missed-item">
-                <span class="qs-missed-label">未匹配：</span>
-                <span class="qs-missed-value">{{ m }}</span>
+                <div class="qs-missed-head">
+                  <span class="qs-missed-label">未匹配：</span>
+                  <span class="qs-missed-value">{{ m.value }}</span>
+                  <span v-if="m.diff != null" class="qs-missed-diff">
+                    差 {{ m.diff }}{{ m.unit === 'rgb' ? '色距' : 'px' }}
+                  </span>
+                </div>
+                <!-- Figma 源定位 -->
+                <div v-if="m.expectedSource?.figmaPath" class="qs-missed-source figma">
+                  <span class="qs-source-tag">Figma</span>
+                  <span class="qs-source-path">{{ m.expectedSource.figmaPath }}</span>
+                  <span v-if="m.expectedSource.figmaNodeId" class="qs-source-id">
+                    ({{ m.expectedSource.figmaNodeType || '?' }} · id={{ m.expectedSource.figmaNodeId }})
+                  </span>
+                  <span v-if="m.expectedSource.field" class="qs-source-field">
+                    [{{ m.expectedSource.field }}]
+                  </span>
+                </div>
+                <!-- 产物最贴近位置：差值 → tooltip。 -->
+                <div v-if="m.closestActualSource?.file" class="qs-missed-source actual">
+                  <span class="qs-source-tag">产物</span>
+                  <span class="qs-source-path">
+                    {{ m.closestActualValue }}
+                    <span v-if="m.closestActualSource.line"> @ line {{ m.closestActualSource.line }}</span>
+                    <span v-if="m.closestActualSource.className"> · .{{ m.closestActualSource.className }}</span>
+                  </span>
+                  <span class="qs-source-file">{{ m.closestActualSource.file }}</span>
+                </div>
               </div>
               <div v-if="dim.missed.length > 5" class="qs-missed-more">
                 还有 {{ dim.missed.length - 5 }} 项...
@@ -749,7 +775,14 @@ async function fixDimension(dimName: string) {
 .qs-missed-item {
   font-size: 11px;
   color: #cfe3f5;
-  margin-bottom: 3px;
+  margin-bottom: 8px;
+  line-height: 1.6;
+}
+.qs-missed-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 .qs-missed-label {
   color: #ef6b6b;
@@ -757,6 +790,70 @@ async function fixDimension(dimName: string) {
 .qs-missed-value {
   color: #c5d5e5;
   font-family: monospace;
+  font-weight: 600;
+}
+.qs-missed-diff {
+  color: #d4a373;
+  font-family: monospace;
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(212, 163, 115, 0.15);
+}
+
+/* 🛡️ 2026-09-30 第一层可观测性：未匹配项的双向定位样式 */
+.qs-missed-source {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 3px;
+  padding-left: 6px;
+  font-size: 10px;
+
+  &.figma {
+    color: #9bb5d4;
+  }
+  &.actual {
+    color: #b8c5d4;
+  }
+}
+.qs-source-tag {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  text-transform: uppercase;
+
+  .figma & {
+    background: rgba(155, 181, 212, 0.18);
+    color: #9bb5d4;
+  }
+  .actual & {
+    background: rgba(184, 197, 212, 0.18);
+    color: #b8c5d4;
+  }
+}
+.qs-source-path {
+  font-family: monospace;
+  font-size: 10px;
+  word-break: break-all;
+}
+.qs-source-id {
+  font-size: 9px;
+  color: #7a8da3;
+  font-family: monospace;
+}
+.qs-source-field {
+  font-size: 9px;
+  color: #d4a373;
+  font-family: monospace;
+}
+.qs-source-file {
+  font-size: 9px;
+  color: #7a8da3;
+  font-family: monospace;
+  margin-left: auto;
 }
 .qs-missed-more {
   font-size: 10px;

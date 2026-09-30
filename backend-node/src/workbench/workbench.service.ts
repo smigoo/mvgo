@@ -1,4 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { existsSync, mkdirSync } from 'fs';
+import { readFile, writeFile } from 'fs/promises';
+import { join } from 'path';
+import { configDir } from '../config/backend-root';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Conversation, ConversationDocument, Message } from './conversation.schema';
@@ -7,11 +11,19 @@ import { ToolContext } from './workbench-tools';
 import { TasksService } from '../tasks/tasks.service';
 import { ComponentService } from '../component/component.service';
 import { TaskStatsService } from '../task-stats/task-stats.service';
+import { DemoService } from '../demo/demo.service';
+import { ApiBindingService } from '../vue3/api-binding.service';
+import { SlotAnalyzerService } from '../vue3/slot-analyzer.service';
+import { ApifoxService } from '../apifox/apifox.service';
+import { WorkflowService } from '../workflow/workflow.service';
+import { GitlabPushService } from '../component/gitlab-push.service';
 import { UserAiConfigService } from '../config/user-ai-config.service';
 import { Phase2Service } from '../phase2/phase2.service';
 import { LiteService } from '../lite/lite.service';
 import { TaskQueueService } from '../queue/task-queue.service';
 import { ProgressService } from '../progress/progress.service';
+import { ComponentAnalysisService } from '../component/component-analysis.service';
+import { TaskCodeSnapshotService } from '../tasks/task-code-snapshot.service';
 
 @Injectable()
 export class WorkbenchService {
@@ -25,11 +37,19 @@ export class WorkbenchService {
     private readonly tasksService: TasksService,
     private readonly componentService: ComponentService,
     private readonly taskStatsService: TaskStatsService,
+    private readonly demoService: DemoService,
+    private readonly apiBindingService: ApiBindingService,
+    private readonly slotAnalyzer: SlotAnalyzerService,
+    private readonly apifoxService: ApifoxService,
+    private readonly workflowService: WorkflowService,
+    private readonly gitlabPushService: GitlabPushService,
     private readonly userAiConfigService: UserAiConfigService,
     private readonly phase2Service: Phase2Service,
     private readonly liteService: LiteService,
     private readonly queueService: TaskQueueService,
     private readonly progressService: ProgressService,
+    private readonly componentAnalysisService: ComponentAnalysisService,
+    private readonly taskCodeSnapshotService: TaskCodeSnapshotService,
   ) {}
 
   /**
@@ -126,16 +146,42 @@ export class WorkbenchService {
     conversation.messageCount++;
     conversation.lastActiveAt = new Date();
 
+    // 读取用户级 AI 配置（对话级 toolCredentials > 用户级配置），
+    // 供 push_to_gitlab 取 GitLab 凭据、真 LLM Function Calling 取文本模型。
+    let gitlabToken: string | undefined;
+    let gitlabProjectUrl: string | undefined;
+    let userAiConfig: Record<string, any> = {};
+    try {
+      const creds = conversation.toolCredentials || {};
+      const userConfig = await this.userAiConfigService.getUserConfig(userId);
+      userAiConfig = userConfig || {};
+      const userCfg = userAiConfig;
+      gitlabToken = creds.gitlabToken || userCfg.gitlabToken;
+      gitlabProjectUrl = creds.gitlabProjectUrl || userCfg.gitlabProjectUrl;
+    } catch (err: any) {
+      this.logger.warn(`读取用户 AI 配置失败（降级为未配置）: ${err?.message}`);
+    }
+
     // 3. 构建 Tool 上下文
     const toolContext: ToolContext = {
       userId,
       tasksService: this.tasksService,
       componentService: this.componentService,
       taskStatsService: this.taskStatsService,
+      demoService: this.demoService,
+      apiBindingService: this.apiBindingService,
+      slotAnalyzer: this.slotAnalyzer,
+      apifoxService: this.apifoxService,
+      workflowService: this.workflowService,
+      gitlabPushService: this.gitlabPushService,
       phase2Service: this.phase2Service,
       liteService: this.liteService,
       queueService: this.queueService,
       progressService: this.progressService,
+      componentAnalysisService: this.componentAnalysisService,
+      taskCodeSnapshotService: this.taskCodeSnapshotService,
+      gitlabToken: gitlabToken || undefined,
+      gitlabProjectUrl: gitlabProjectUrl || undefined,
     };
 
     // 4. 运行 Agent
@@ -156,7 +202,16 @@ export class WorkbenchService {
       messages: agentMessages,
       currentComponentId: conversation.currentComponentId,
       toolContext,
+      // P0 ②：透传用户级文本模型配置，供真 LLM Function Calling 主路径使用；
+      // 无 apiKey 时 runWorkbenchAgent 自动回退正则匹配。
+      llmConfig: userAiConfig,
     });
+
+    // R7：生成类工具成功后回写「当前组件 id」到会话上下文，
+    // 后续 modify/bind/push 无需显式传 id 即可命中（切换组件后锚点跟随更新）。
+    if (agentResult.currentComponentId) {
+      conversation.currentComponentId = agentResult.currentComponentId;
+    }
 
     // 5. 创建助手消息
     const assistantMessage: Message = {
@@ -570,6 +625,115 @@ export class WorkbenchService {
       apifoxToken: !!updated.apifoxToken,
       gitlabToken: !!updated.gitlabToken,
       gitlabProjectUrl: !!updated.gitlabProjectUrl,
+    };
+  }
+
+  /**
+   * R23 结果反馈（数据飞轮）：用户对生成结果点 👍/👎，可选备注。
+   * 按月聚合落到 config/component-feedback/feedback-YYYY-MM.json，供后续「生成质量选型 /
+   * 模型路由 / prompt 优化」离线分析。轻量 JSON 落盘（与 agent-builder 能力缺口反馈同款模式），
+   * 不新增 MongoDB 集合，避免引入无谓的 schema + DI 接线。
+   */
+  async submitFeedback(
+    body: {
+      sessionId?: string;
+      componentName?: string;
+      rating?: 'up' | 'down';
+      comment?: string;
+    },
+    userId?: string,
+  ): Promise<{ success: boolean; data?: any; error?: string }> {
+    const rating = body?.rating;
+    if (rating !== 'up' && rating !== 'down') {
+      return { success: false, error: '无效的反馈类型' };
+    }
+    const feedbackDir = join(configDir, 'component-feedback');
+    if (!existsSync(feedbackDir)) mkdirSync(feedbackDir, { recursive: true });
+    const now = new Date();
+    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const filePath = join(feedbackDir, `feedback-${monthKey}.json`);
+    let list: any[] = [];
+    try {
+      list = JSON.parse(await readFile(filePath, 'utf-8'));
+      if (!Array.isArray(list)) list = [];
+    } catch {
+      // 首条：文件不存在或损坏，从空列表开始
+    }
+    list.push({
+      sessionId: String(body?.sessionId || '').slice(0, 200),
+      componentName: String(body?.componentName || '').slice(0, 200),
+      rating,
+      comment: String(body?.comment || '').slice(0, 500),
+      author: userId || 'anonymous',
+      ts: Date.now(),
+    });
+    await writeFile(filePath, JSON.stringify(list, null, 2), 'utf-8');
+    this.logger.log(
+      `📊 结果反馈 ${rating === 'up' ? '👍' : '👎'} #${list.length}: ${body?.componentName || body?.sessionId || '(匿名)'}`,
+    );
+    return { success: true, data: { total: list.length } };
+  }
+
+  /**
+   * R7 锚点可视化：清除当前组件锚点（用户点 chip 的 ×）。
+   * Mongoose 会把 $set 里的 undefined 自动转为 $unset，删除 currentComponentId 字段。
+   */
+  async clearComponentAnchor(conversationId: string, userId: string): Promise<Conversation | null> {
+    return this.conversationModel
+      .findOneAndUpdate(
+        {
+          conversationId,
+          userId: new Types.ObjectId(userId),
+        },
+        {
+          $set: {
+            currentComponentId: undefined,
+            lastActiveAt: new Date(),
+          },
+        },
+        { new: true },
+      )
+      .lean();
+  }
+
+  /**
+   * R23 反馈闭环：聚合最近 N 个月的 👍/👎 统计。
+   * 数据源 = submitFeedback 落盘的 config/component-feedback/feedback-YYYY-MM.json。
+   * userId 预留（当前按全量统计，后续可加 author 过滤做用户级质量画像）。
+   */
+  async getFeedbackStats(
+    userId: string,
+    months = 1,
+  ): Promise<{
+    total: number;
+    up: number;
+    down: number;
+    upRate: number;
+    months: number;
+  }> {
+    const feedbackDir = join(configDir, 'component-feedback');
+    const list: any[] = [];
+    const now = new Date();
+    for (let i = 0; i < Math.max(1, Math.min(months, 12)); i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const filePath = join(feedbackDir, `feedback-${monthKey}.json`);
+      try {
+        const parsed = JSON.parse(await readFile(filePath, 'utf-8'));
+        if (Array.isArray(parsed)) list.push(...parsed);
+      } catch {
+        // 该月无反馈文件或损坏：跳过
+      }
+    }
+    const total = list.length;
+    const up = list.filter((f) => f.rating === 'up').length;
+    const down = list.filter((f) => f.rating === 'down').length;
+    return {
+      total,
+      up,
+      down,
+      upRate: total > 0 ? Math.round((up / total) * 100) : 0,
+      months,
     };
   }
 }

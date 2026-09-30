@@ -55,11 +55,18 @@ function isCssLikeLine(line) {
 
 /**
  * 自动补全「只开不闭」的块注释。
- * 规则：遍历每一行，若某行以斜杠星号开头但不含星号斜杠结束符，且下一行是 CSS 代码行，
- * 则在该行末尾补上块注释结束符，使其成为合法的单行块注释。
- * 说明：LESS 块注释为 C 风格（不嵌套），未闭合的斜杠星号会一直吞到下一个星号斜杠才被迫闭合，
- * 从而把后续本应生效的 CSS 规则暴露为顶层裸 token —— 这正是本组件报错的根因。
- * 该修复对正常的多行块注释（续行不是 CSS）无副作用。
+ * 规则：遍历每一行，若某行以斜杠星号开头但不含星号斜杠结束符，则向后做小窗口扫描：
+ * - 途中遇到星号斜杠闭合符 → 注释实际已闭合，不干预；
+ * - 途中遇到第一个「CSS 代码行」→ 注释从未闭合（横幅正文吞掉了后续规则），
+ *   在该 CSS 行前插入独立闭合行；
+ * - 窗口（8 行）内无 CSS 行 → 不动（边界不可确认，保守留给门禁 BLOCK）。
+ * 说明：LESS 块注释为 C 风格（不嵌套），未闭合的斜杠星号会一直吞到下一个闭合符才被迫闭合，
+ * 从而把后续本应生效的 CSS 规则暴露为顶层裸 token —— 这正是 LESS-COMPILE-001
+ * 「Unrecognised input. Possibly missing opening '{'」的常见根因。
+ * 🛡️ 治本扩展（2026-09-29 · mc-max-1790696917698-bf3612dc 实锤）：
+ *   旧版只看「下一行」是否为 CSS 行，对「横幅正文 1-N 行 + 空行 + 首个规则」形态
+ *   （横幅杠线 / 中文标题 / 空行 / `.c-xxx {`）恒不命中 ⇒ 自愈恒空转 ⇒ 门禁阻断无人能消。
+ *   窗口扫描对正常多行块注释（续行非 CSS）零影响；正文行里出现闭合符即认定闭合。
  */
 function healUnclosedLessComments(styleSource = '') {
   const lines = String(styleSource || '').split('\n')
@@ -68,10 +75,19 @@ function healUnclosedLessComments(styleSource = '') {
     const line = lines[i]
     if (!line.includes('/*')) continue
     if (line.includes('*/')) continue
-    const next = lines[i + 1] || ''
-    if (isCssLikeLine(next)) {
-      lines[i] = line.replace(/\s*$/, '') + ' */'
-      changed = true
+    // 小窗口向后扫描：找第一个 CSS 行（注释未闭合证据）或闭合符（已闭合）。
+    // 插入后无需额外下标修正：插入行 ' */' 不含 '/*'，外层 i++ 顺序经过时自然跳过，
+    // 后续未闭合注释照常被处理（⚠️ 禁止用「已处理下标集合」跳过——splice 使其后
+    // 全部行号偏移，会把未处理的注释行误判为已处理，第一处插入后其余全部漏修，
+    // bf3612dc 实锤：只修了文件头横幅、图表区横幅漏修）。
+    for (let j = i + 1; j < Math.min(i + 9, lines.length); j++) {
+      if (lines[j].includes('*/')) break // 已闭合（多行注释），不干预
+      if (isCssLikeLine(lines[j])) {
+        // 未闭合：在该 CSS 行前插入独立闭合行（不动正文行，最干净）
+        lines.splice(j, 0, ' */')
+        changed = true
+        break
+      }
     }
   }
   return { source: lines.join('\n'), changed }
@@ -775,9 +791,18 @@ export class LessCompileGate {
         const hasOwnThemeImport = /@import\s+['"][^'"]*theme-vars\.less['"]/.test(content)
         let selectedThemePath = null
         if (!THEME_FILE_RE.test(lessFile)) {
+          // 🛡️ 2026-09-30 修复（事故 mc-max-1790759302006-e22f2263）：候选顺序改为「themes/ 子目录优先」，
+          // 与 index.less 的实际 `@import './themes/theme-vars.less'` 对齐（单一事实源 = 真实 import 指向）。
+          // 事故成因：产物普遍并存两份 theme-vars.less（workspace 8/8 组件实测）——
+          //   resources/styles/themes/theme-vars.less ← index.less 真正引用，含系统注入的 §3 核心槽位
+          //                                              （@color-bg-container 等），是唯一被 @import 的那份；
+          //   resources/styles/theme-vars.less        ← LLM 生成的孤儿（全仓 0 处 @import），缺核心槽位。
+          // 旧顺序「同目录优先」⇒ wrapper 拿孤儿版当主题源 ⇒ `.theme-light()` 里找不到 @color-bg-container
+          // ⇒ 假阳性 BLOCK `common.less:91:10 variable @color-bg-container is undefined`
+          // （实测：同一产物 index.less 完整链路编译成功、index.css 已正确产出 color:#ffffff、预览正常）。
           const themeCandidates = [
-            join(dirname(fullPath), 'theme-vars.less'),
-            join(dirname(fullPath), 'themes', 'theme-vars.less')
+            join(dirname(fullPath), 'themes', 'theme-vars.less'),
+            join(dirname(fullPath), 'theme-vars.less')
           ]
           selectedThemePath = themeCandidates.find(candidate => existsSync(candidate)) || null
           if (!hasOwnThemeImport && selectedThemePath) {

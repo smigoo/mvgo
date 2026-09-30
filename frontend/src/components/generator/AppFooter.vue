@@ -19,6 +19,13 @@
       </template>
       <span v-else class="af-link af-link-disabled" @click="showDisabledHint('页面开发')"> 页面开发 </span>
 
+      <template v-if="screenEnabled">
+        <router-link to="/screen" class="af-link" active-class="active">
+          大屏布局
+        </router-link>
+      </template>
+      <span v-else class="af-link af-link-disabled" @click="showDisabledHint('大屏布局')"> 大屏布局 </span>
+
       <template v-if="workflowEnabled">
         <router-link to="/generator/workflow" class="af-link" active-class="active">
           工作流编排
@@ -58,6 +65,7 @@ const featureStore = useFeatureFlagsStore()
 const introEnabled = computed(() => featureStore.isEnabled('generator.intro'))
 const pageSkeletonEnabled = computed(() => featureStore.isEnabled('generator.pageSkeleton'))
 const workflowEnabled = computed(() => featureStore.isEnabled('generator.workflow'))
+const screenEnabled = computed(() => featureStore.isEnabled('screen'))
 
 function showDisabledHint(label: string) {
   message.warning(`「${label}」暂不开放`)

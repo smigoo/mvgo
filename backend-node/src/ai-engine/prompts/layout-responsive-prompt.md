@@ -13,12 +13,14 @@
    - `responsiveHints`: 自动生成的响应式建议（`detectedGridPattern`, `complexityScore`, `breakpointSuggestions`）
 
 2. **原始布局数据** (`{{layoutData}}`)：用户设计的完整 ScreenLayout JSON，包含：
-   - `canvas`: 画布尺寸、网格设置
+   - `canvas`: 画布尺寸、网格设置、**`canvas.outputScaleMode`（用户在界面上选的自适应策略）**
    - `header`/`footer`: 头部/底部配置（enabled, height, components）
    - `body.columns`: 列定义（width: '3fr' 等）
    - `body.zones[]`: 各 Zone 的完整配置，含 gridConfig.components（绝对坐标 x/y/w/h + zIndex）
 
 3. **上下文数据** (`{{context}}`)：附加信息（如目标组件名称等）
+
+{{fitStrategy}}
 
 # 输出要求
 你必须输出**两个独立块**，顺序严格：
@@ -38,7 +40,9 @@
       {"width": 1920, "description": "标准桌面"},
       {"width": 1440, "description": "笔记本"},
       {"width": 1024, "description": "平板横屏"}
-    ]
+    ],
+    "fitMode": "fluid",            // 必须逐字回填上文注入的自适应策略标识，不得改写
+    "fitModeNote": ""              // 若判断该策略在当前布局下有问题，把原因写这里 —— 仍然照做，不要改策略
   },
   "zoneDecisions": [
     {
@@ -91,6 +95,11 @@
 ```
 
 # 核心生成规则
+
+## 0. 自适应策略优先于一切（最高优先级）
+上文「自适应策略（前端指定 · 强约束）」给出的实现要求，**优先级高于本节的任何推荐项与禁止项**。
+当两者冲突时（例如策略为 `none` 时要求固定 px，而本节禁止硬编码 px），以策略章节为准，
+并且只在 `layoutStrategy.fitModeNote` 里写明冲突，**不要擅自更换策略**。
 
 ## 1. 禁止项（绝对禁止）
 - ❌ **禁止 `position: absolute`**：除非用于有意重叠（overlapAnalysis.type === 'intentional_overlay'），否则不得出现

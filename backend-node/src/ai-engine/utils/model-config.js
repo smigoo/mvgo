@@ -151,12 +151,143 @@ export function isReasoningModel(model = '') {
  * @param {string} [baseURL]
  * @returns {Record<string, any>} 需合并进请求 body 的参数（可能为空对象）
  */
+/**
+ * 🧠 2026-09-30 第二批：关思考方言「自愈顺延 + 实测缓存」。
+ *
+ * 背景（遥测定案，token.microvideo.cn 双端实测）：
+ *  - deepseek/deepseek-v4.1-flash 认 thinking:{type:disabled}（reasoning_tokens 27→null），
+ *    enable_thinking:false 被忽略 —— 旧路由误发后者 ⇒ 生产烧光 ×3；
+ *  - z-ai/glm-5.3-flash 经该中转 thinking:{type:disabled} 间歇挂起、enable_thinking:false 关不掉；
+ *  - 同一模型过不同网关需要不同方言，静态表永远可能漏 ⇒ 需要运行期自愈 + 实测结论缓存。
+ *
+ * 三层取值序：① 实测验证缓存（markThinkingDialectVerified 持久化，host 一致 + 7 天 TTL）
+ *           ② 静态路由（_staticThinkingOffRoute）③ 自愈顺延（跳过已标记失败的方言）。
+ */
+const _thinkingDialectFailed = new Set() // `${bareModel}|${host}|${JSON.stringify(params)}`，进程内存（单任务重试链内有效）
+const THINKING_DIALECT_TTL_MS = 7 * 24 * 60 * 60 * 1000
+
+function _hostOf(baseURL) {
+  try {
+    return new URL(String(baseURL || '')).host.toLowerCase()
+  } catch {
+    return ''
+  }
+}
+
+function _loadVerifiedThinkingDialect(bare, host) {
+  if (!bare || !host) return null
+  try {
+    const entry = _loadCapabilityCache()[bare]?.thinkingDialect
+    if (!entry || !entry.params || !Object.keys(entry.params).length) return null
+    if (String(entry.host || '').toLowerCase() !== host) return null
+    if (!Number.isFinite(entry.at) || Date.now() - entry.at > THINKING_DIALECT_TTL_MS) return null
+    return entry.params
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 标记「当前生效方言已实测失效」（推理烧光 / 400 / 挂起后由调用方触发）。
+ * 下一次 buildThinkingOffParams 自动顺延到下一候选；全部失效时返回 {}。
+ * 仅进程内存：跨重启失效标记不作持久化（网络抖动单次失败不应当永久毒化静态路由）。
+ */
+export function markThinkingDialectRouteFailed(model, baseURL) {
+  const m = String(model || '').trim().toLowerCase()
+  const u = String(baseURL || '').trim().toLowerCase()
+  if (!m && !u) return
+  const current = buildThinkingOffParams(m, u)
+  if (!current || !Object.keys(current).length) return // 已全部失效，无需再标
+  const key = `${_stripProviderPrefix(m)}|${_hostOf(u)}|${JSON.stringify(current)}`
+  if (_thinkingDialectFailed.has(key)) return
+  _thinkingDialectFailed.add(key)
+  logger.warn('🔁 [方言自愈] 关思考方言标记失效，后续调用将顺延下一候选', {
+    model,
+    baseURL: u,
+    failedDialect: current,
+    nextDialect: buildThinkingOffParams(m, u),
+  })
+}
+
+/**
+ * 持久化「实测有效的关思考方言」（config-test 实测通过 / 遥测确认后调用）。
+ * 落 model-capability-cache.json（按裸模型名建键，host 必须一致才命中，7 天 TTL）。
+ */
+export function markThinkingDialectVerified(model, baseURL, params, source = 'probe') {
+  const bare = _stripProviderPrefix(String(model || '').trim().toLowerCase())
+  const host = _hostOf(baseURL)
+  if (!bare || !host || !params || typeof params !== 'object' || !Object.keys(params).length) return
+  const cache = _loadCapabilityCache()
+  cache[bare] = {
+    ...(cache[bare] || {}),
+    thinkingDialect: { host, params, at: Date.now(), source },
+  }
+  _persistCapabilityCache(cache)
+}
+
+/** 仅供单测：清空进程内失效标记与能力缓存（不影响磁盘文件）。 */
+export function _resetThinkingDialectStateForTest() {
+  _thinkingDialectFailed.clear()
+  _capabilityCache = null
+}
+
+/** 有序候选（内部）：静态路由首位 + 三个兜底方言，按 JSON 串去重。 */
+function _thinkingOffCandidateList(m, u) {
+  const seen = new Set()
+  const out = []
+  const push = (c) => {
+    const key = JSON.stringify(c)
+    if (seen.has(key)) return
+    seen.add(key)
+    out.push(c)
+  }
+  push(_staticThinkingOffRoute(m, u))
+  push({ reasoning: { enabled: false } }) // OpenRouter 系标准
+  push({ enable_thinking: false }) // qwen / dashscope / microvideo / GLM 方言
+  push({ thinking: { type: 'disabled' } }) // kimi / deepseek 官方 / 豆包 方言
+  return out
+}
+
 export function buildThinkingOffParams(model = '', baseURL = '') {
   const m = String(model || '').trim().toLowerCase()
   const u = String(baseURL || '').trim().toLowerCase()
   if (!m && !u) return {}
+  const bare = _stripProviderPrefix(m)
+  const host = _hostOf(u)
+  // ① 实测验证缓存（权威）：config-test 实测通过 / 自愈成功后持久化的方言优先，
+  //    7 天 TTL 且 host 必须一致（同模型过不同网关方言可能不同）。
+  //    ⚠️ 已被 markThinkingDialectRouteFailed 标记失效的方言不再采用——
+  //    否则「已验证 + 已失效」会死循环同一方言（jest 全量跑实测抓到）。
+  const verified = _loadVerifiedThinkingDialect(bare, host)
+  if (
+    verified &&
+    !_thinkingDialectFailed.has(`${bare}|${host}|${JSON.stringify(verified)}`)
+  ) {
+    return verified
+  }
+  // ② 静态路由 + ③ 自愈顺延：被 markThinkingDialectRouteFailed 标记失败的方言跳过，
+  //    取下一候选；全部失效时返回 {}（不发送，由上层提示换模型）。
+  for (const c of _thinkingOffCandidateList(m, u)) {
+    if (!_thinkingDialectFailed.has(`${bare}|${host}|${JSON.stringify(c)}`)) return c
+  }
+  return {}
+}
+
+/** 静态路由（纯函数）：模型族分支恒优先于网关子句（2026-09-30 遥测定案）。 */
+function _staticThinkingOffRoute(m, u) {
+  // deepseek v4 系：thinking:{type:disabled}（与文本侧既有约定一致）。
+  // 🔴 2026-09-30 必须先于 qwen/microvideo 子句判定：token.microvideo.cn 中转实测
+  //   （sk 直测 + 生产用户配置渠道双验证）deepseek/deepseek-v4.1-flash 认
+  //   thinking:{type:disabled}（reasoning_tokens 27→null），而 enable_thinking:false 被忽略；
+  //   旧顺序里 u.includes('microvideo') 先命中 ⇒ deepseek 也被发 enable_thinking ⇒ 思考关不掉
+  //   ⇒ 生产 mc-max 任务烧光 ×3 实锤。模型族分支恒优先于网关子句。
+  if (m.includes('deepseek')) {
+    return { thinking: { type: 'disabled' } }
+  }
   // qwen 系（qwen3.x / qwen-vl / 任意经 dashscope、microvideo 中转的 qwen）
   // ⚠️ 只能用 enable_thinking：microvideo 中转对 thinking:{type:disabled} 会挂起超时。
+  // （2026-09-30 复测：该挂起为间歇性——qwen 首测 90s 超时、glm 同款现象；但 deepseek 无此问题，
+  //   故 deepseek 已上移。此子句现仅兜底「无模型族匹配却经 microvideo/dashscope」的场景。）
   if (m.includes('qwen') || u.includes('dashscope') || u.includes('microvideo')) {
     return { enable_thinking: false }
   }
@@ -164,17 +295,69 @@ export function buildThinkingOffParams(model = '', baseURL = '') {
   if (/^kimi/.test(m) || (u.includes('lkeap') && m.includes('kimi'))) {
     return { thinking: { type: 'disabled' } }
   }
-  // hy4 系（腾讯混元 hy4-preview 等，经 lkeap 网关，与 kimi 同网关同形态）：
-  // thinking:{type:disabled} 关推理，避免思考吃掉输出预算导致视觉检测 content 为空被误判。
-  if (m.includes('hy4')) {
+  // 腾讯混元（hunyuan / hy4 系）：默认慢思考（CoT），用 enable_thinking:false 关
+  // （开源 Hunyuan-7B/A13B-Instruct 实测认 enable_thinking=False，另有 /no_think 前缀指令）。
+  if (m.includes('hunyuan') || m.includes('hy4')) {
+    return { enable_thinking: false }
+  }
+  // 🛡️ 2026-09-30 补齐：Google Gemini（3.x flash 等默认思考 medium）关思考用 thinking:{level:'off'}
+  // （Gemini thinking 取 low/medium/high，off 关闭；minimal 不支持会报错）。
+  if (m.includes('gemini') || u.includes('generativelanguage') || u.includes('googleapis')) {
+    return { thinking: { level: 'off' } }
+  }
+  // 🛡️ 2026-09-30 补齐：智谱 GLM（4.5+ 思考模型默认开）用 enable_thinking:false——
+  // 实测 thinking:{type:disabled} 在部分 GLM（5.3-Flash）→ 400；enable_thinking 不报错、
+  // 思考模型能关、非思考模型（glm-*-flash/plus）无害忽略。
+  if (m.includes('glm') || u.includes('bigmodel') || u.includes('zhipu')) {
+    return { enable_thinking: false }
+  }
+  // 🛡️ 豆包（doubao-seed 混合思考模型）：thinking:{type:'disabled'}（enabled/disabled/auto 三值）。
+  if (m.includes('doubao') || u.includes('volces')) {
     return { thinking: { type: 'disabled' } }
   }
-  // deepseek v4 系：thinking:{type:disabled}（与文本侧既有约定一致）。
-  if (m.includes('deepseek')) {
-    return { thinking: { type: 'disabled' } }
+  // 🛡️ vLLM / Featherless / OpenRouter 等 OpenAI 兼容网关：统一 chat_template_kwargs 兜底
+  // （enable_thinking / thinking / do_reasoning 同义，false 优先）。
+  if (u.includes('vllm') || u.includes('featherless') || u.includes('openrouter')) {
+    return { chat_template_kwargs: { enable_thinking: false } }
   }
   // 其余（GLM-5.3-Flash 等）实测关不掉（thinking:disabled → 400）→ 不发送。
   return {}
+}
+
+/**
+ * 🛡️ 关思考参数「有序候选列表」（2026-09-30 · 第一批骨架）。
+ *
+ * 背景：`buildThinkingOffParams` 只返回单一形态，而**同一模型名过不同网关需要不同方言**
+ * （deepseek 官方认 thinking:{type:disabled}；OpenRouter 系中转认 reasoning:{enabled:false}；
+ * qwen/microvideo 只认 enable_thinking:false —— 2026-09-26 实测表）。
+ * 单一形态被网关静默忽略时（deepseek-v4.1-flash 经中转烧光预算 ×3 实锤），没有后备可换。
+ *
+ * 本函数返回**有序去重**的候选：首位 = 现有单一事实源的结果（行为兼容），
+ * 其后按「OpenRouter 方言 → enable_thinking 方言 → thinking 方言」追加兜底，
+ * 供第二批「换方言自愈」按序尝试并缓存生效者。第一批仅骨架（不接线重试）。
+ *
+ * @param {string} model
+ * @param {string} [baseURL]
+ * @returns {Array<Record<string, any>>} 至少含一个候选（primary 可能为 {}，此时仍给全部兜底）
+ */
+export function buildThinkingOffParamCandidates(model = '', baseURL = '') {
+  const primary = buildThinkingOffParams(model, baseURL)
+  const fallbacks = [
+    { reasoning: { enabled: false } }, // OpenRouter 系标准
+    { enable_thinking: false }, // qwen / dashscope / microvideo / GLM 方言
+    { thinking: { type: 'disabled' } }, // kimi / deepseek 官方 / 豆包 方言
+  ]
+  const seen = new Set()
+  const out = []
+  const push = (c) => {
+    const key = JSON.stringify(c)
+    if (seen.has(key)) return
+    seen.add(key)
+    out.push(c)
+  }
+  if (Object.keys(primary).length) push(primary)
+  fallbacks.forEach(push)
+  return out
 }
 
 /**

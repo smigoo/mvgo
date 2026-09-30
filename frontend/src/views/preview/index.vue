@@ -53,7 +53,7 @@
         ref="errorBoundaryRef"
         :onRetry="reloadComponent"
         :onAiFix="handleAiFixRenderError"
-        :timeout="10000"
+        :timeout="30000"
         @error="handleRenderError"
         @recovered="markLoading"
       >
@@ -190,7 +190,7 @@ import { BINARY_EXTS as BINARY_EXTS_SHARED, extOf } from '@/utils/sfc-loader-bin
 import { buildSnapshotFileUrl, resolvePreviewDescriptor } from '@/utils/preview-resolver'
 import http from '@/core/http'
 import appConfig from '@/config'
-import { getComponentBySessionId } from '@/api/component'
+import { getComponentBySessionId, getRouteUrl } from '@/api/component'
 
 const route = useRoute()
 const router = useRouter()
@@ -1173,7 +1173,7 @@ function openSource(locate = false) {
     query.set('line', String(diagnostic.line || 1))
     query.set('column', String(diagnostic.column || 1))
   }
-  window.open(`/demo/${componentId}?${query.toString()}`, '_blank')
+  window.open(getRouteUrl(`/demo/${componentId}?${query.toString()}`), '_blank')
 }
 
 async function enableStructurePreview() {
@@ -1453,6 +1453,9 @@ watch(
 async function loadPreviewComponent() {
   cleanupPreviewInjectedStyles()
   markLoading()
+  // 🛡️ 加载期不受渲染超时影响：组件加载（sfc 编译 + 资源下载）本身可能 >10s，
+  // 首次加载必须在开始前停止 ErrorBoundary 的超时计时器，否则大组件/慢网络会被误判「加载超时」。
+  errorBoundaryRef.value?.markLoaded()
   await loadAspectRatio()
   try {
     if (!componentId) throw new Error('缺少组件 ID')

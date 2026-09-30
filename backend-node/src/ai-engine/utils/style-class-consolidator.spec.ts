@@ -134,8 +134,10 @@ import * as echarts from 'echarts'
     const out = consolidateSubComponentClasses(files, { logger })
     const css = out['resources/styles/common.less']
     // 子组件百分比必须覆盖 common.less 的误置像素
+    // 🛡️ R2 收紧（2026-09-30 · a6d2e5e1）：127px 同属固定像素尺寸，图表类一律不进 common
+    //   （scoped @import 复制 N 份后文档序失控，52px 家族的第二形态）。
     expect(css).toContain('width: 100%')
-    expect(css).toContain('min-height: 127px')
+    expect(css).not.toContain('127px')
     expect(css).not.toContain('width: 52px')
   })
 
@@ -622,5 +624,121 @@ describe('consolidateSubComponentClasses · 装饰元素保护（P0-1）', () =>
     expect(css).toContain('width: 200px')
     expect(css).not.toContain('width: 100%')
   })
+
+  // 🛡️ R2 治本（2026-09-30 · c-traffic-monitor-a6d2e5e1 实锤）：
+  //   图表组件块的固定 px 尺寸不得进 common.less——scoped @import 会把 common 规则
+  //   复制 N 份（各自 data-v），文档序靠后的一份胜过 SFC 本体 width:100% ⇒ 柱图塌陷
+  //   （渲染实锤 computed width=52px）。
+  it('图表组件（echarts）：固定 px 尺寸不进 common.less，百分比/flex 保留', () => {
+    const files = {
+      'resources/styles/common.less': `.c-traffic-monitor-chart {
+  display: flex;
+  flex-direction: column;
+}
+`,
+      'package/components/ChartChart.vue': `<template>
+  <div class="c-traffic-monitor-chart"><div class="c-traffic-monitor-chart-canvas"></div></div>
+</template>
+<script setup>
+import * as echarts from 'echarts'
+</script>
+<style lang="less" scoped>
+.c-traffic-monitor-chart {
+  width: 52px;
+  height: 52px;
+  min-height: 52px;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+.c-traffic-monitor-chart-canvas {
+  width: 100%;
+  min-height: 127px;
+}
+</style>
+`,
+    }
+    const out = consolidateSubComponentClasses(files, { logger })
+    const css = out['resources/styles/common.less']
+    // 任何 52px / 127px 都不得进 common.less
+    expect(css).not.toContain('52px')
+    expect(css).not.toContain('127px')
+    // 百分比与 flex 语义保留；canvas 的 127px 同属固定像素，同样被剥
+    expect(css).toMatch(/\.c-traffic-monitor-chart\s*\{[^}]*width:\s*100%/s)
+    expect(css).not.toMatch(/\.c-traffic-monitor-chart-canvas\s*\{[^}]*min-height:\s*127px/s)
+    expect(css).toMatch(/\.c-traffic-monitor-chart\s*\{[^}]*display:\s*flex/s)
+  })
+
+  it('图表组件块剥后无声明 → 整块不进 common.less', () => {
+    const files = {
+      'resources/styles/common.less': '',
+      'package/components/Only.vue': `<template>
+  <div class="c-x-chart"></div>
+</template>
+<script setup>
+import * as echarts from 'echarts'
+</script>
+<style lang="less" scoped>
+.c-x-chart {
+  width: 52px;
+  height: 52px;
+}
+</style>
+`,
+    }
+    const out = consolidateSubComponentClasses(files, { logger })
+    const css = out['resources/styles/common.less']
+    expect(css).not.toContain('.c-x-chart')
+  })
 })
 
+
+/**
+ * 🛡️ R2 补口（2026-09-30 · mc-max-1790701114594-bc33c27d 实锤）：
+ *   批0 并集会把旧 common.less 的同名块**原文**回灌——新块剥了 52px、旧块又并回来
+ *   （子组件剥后无 width 声明 → 旧值保留）⇒ 柱状图 canvas 仍 52×160。
+ *   补口：existing 同名块在该 selector 有 isChartComponent 来源时同样剥。
+ */
+describe('consolidateSubComponentClasses · R2 补口：批0 existing 块同剥（bc33c27d）', () => {
+  const chartChild = (cls, body) => `<template>
+  <div class="${cls.slice(1)}"></div>
+</template>
+
+<script setup>
+import * as echarts from 'echarts'
+</script>
+
+<style lang="less" scoped>
+@import '../../resources/styles/index.less';
+
+${cls} {
+${body}
+}
+</style>
+`
+
+  it('⭐ 旧 common 同名块的 52px 在合并时被剥离（不再回灌）', () => {
+    const files = {
+      // 旧 common.less：含 LLM 误写的 52px（style chunk 阶段写入）
+      'resources/styles/common.less': '.c-demo-chart {\n  display: flex;\n  flex-direction: column;\n  width: 52px;\n  min-height: 52px;\n}\n',
+      // 图表子组件：百分比块（剥后 52px 行消失）
+      'package/components/ChartChart.vue': chartChild('.c-demo-chart', '  width: 100%;\n  height: 100%;'),
+    }
+    const out = consolidateSubComponentClasses(files, { logger })
+    const css = out['resources/styles/common.less']
+    expect(css).toContain('width: 100%') // 子组件百分比保留
+    expect(css).not.toContain('52px') // 旧块 52px 不回灌
+    expect(css).toContain('display: flex') // 批0 结构声明保留不受影响
+  })
+
+  it('非图表组件的 existing 块像素不受影响（真值保护不回归）', () => {
+    const files = {
+      'resources/styles/common.less': '.c-demo-icon {\n  width: 52px;\n  min-height: 52px;\n}\n',
+      'package/components/IconBar.vue': child('.c-demo-icon', '  display: flex;'),
+    }
+    const out = consolidateSubComponentClasses(files, { logger })
+    const css = out['resources/styles/common.less']
+    expect(css).toContain('52px') // 非图表真值像素仍受保护
+  })
+})

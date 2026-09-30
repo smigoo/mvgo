@@ -173,6 +173,7 @@ import {
   type PageSkeletonCreated,
   type PageSkeletonDetail,
 } from '@/api/page-skeleton'
+import { getRouteUrl } from '@/api/component'
 
 const source = ref<'screenshot' | 'figma'>('screenshot')
 // Figma 真实管线已接入：后端 renderFigmaImage 通过 FigmaConnector 取图（需配置 Figma Token）
@@ -322,7 +323,7 @@ function preview(item: PageSkeletonItem) {
 
 async function openSource(item: PageSkeletonItem) {
   // 源码进入 Playground 全功能编辑（文件树 / 读写 / 重命名 / 删除 / 实时预览）
-  window.open(`/demo/${item.id}?type=page&groupId=${encodeURIComponent(item.groupId)}`, '_blank')
+  window.open(getRouteUrl(`/demo/${item.id}?type=page&groupId=${encodeURIComponent(item.groupId)}`), '_blank')
 }
 
 async function download(item: PageSkeletonItem) {

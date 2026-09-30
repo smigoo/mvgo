@@ -300,7 +300,7 @@ export async function fixQualityIssues(
 
 /** 卸载自定义 skill（**仅管理员**，内置不可删） */
 export async function removeMcSpecSkill(skillId: string): Promise<void> {
-  const res: any = await http.delete(`/api/mc-spec/skills/${encodeURIComponent(skillId)}`)
+  const res: any = await http.post(`/api/mc-spec/skills/${encodeURIComponent(skillId)}/delete`)
   const data = unwrap(res) ?? res
   if (data && data.success === false) {
     const err: any = new Error(data.message || '卸载失败')

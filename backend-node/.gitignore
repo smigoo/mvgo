@@ -72,9 +72,8 @@ test-mongo-remote.js
 check-user-configs.cjs
 debug-*.mjs
 probe-*.mjs
-.tmp-*.mjs
-.tmp-*.cjs
-.tmp-*.sh
+# 诊断/调试脚本与产物：不限扩展名（.js/.json/.png/.vue 等一律不入库）
+.tmp-*
 __replay-*.js
 
 # mc-spec 规范检查报告（本地产物）

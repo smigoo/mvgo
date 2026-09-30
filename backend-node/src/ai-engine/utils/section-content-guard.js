@@ -18,6 +18,7 @@
 import {
   buildChildrenMap,
   collectSubtreeTexts,
+  splitTitleValueByStyle,
   indexFigmaNodes,
   assignSectionComponentNames,
 } from './section-tree.js';
@@ -31,7 +32,9 @@ const MIN_DUP_LEN = 4; // 重复检测文本最小长度（排除「24小时」�
 /**
  * 取成员视觉签名：优先「最独特」文本 —— 在组件文件中出现次数最少者（避免标题类文本
  * 跨 tabs/车型分布/预测多处重复导致的宿主文件歧义，如「江阴大桥」同现于 4 个组件）。
- * 同频时优先标题（t- 前缀），再取更长者。
+ * 同频时取更长者（**命名无关**：2026-09-30 起删除原「标题优先（t- 前缀）」排序键，
+ * 该键依赖图层名判文本角色，违反「文本处理命名无关」契约；
+ * 全语料 A/B：4871 个候选里仅 50 个（1.0%）签名因此变化）。
  */
 function signatureText(nodeId, index, childrenOf, vueFiles) {
   const items = collectSubtreeTexts(nodeId, index, childrenOf).filter(
@@ -48,7 +51,6 @@ function signatureText(nodeId, index, childrenOf, vueFiles) {
   scored.sort(
     (a, b) =>
       a.hostCount - b.hostCount || // 独特者优先
-      (b.isTitle ? 1 : 0) - (a.isTitle ? 1 : 0) || // 标题优先
       b.text.length - a.text.length, // 更长者优先
   );
   return scored[0].text;
@@ -277,6 +279,27 @@ export function healDuplicateTextIssues({ files, plan, figmaRoot, validateSfc })
     if (!ownerName) continue; // 无法确定 owner 组件 → 不猜
     const ownerFile = `package/components/${ownerName}.vue`;
     const renderedIn = Array.isArray(issue.renderedIn) ? issue.renderedIn : [];
+    // 🛡️ 2026-09-30 落地本函数 docblock 已写明、但代码从未实现的规则：
+    //   「owner 组件不在 renderedIn 里（无法确定谁是错装）→ 跳过，不猜」。
+    //
+    // 为什么必须补：`assignSectionComponentNames` 是**确定性命名**，而 LLM 实际写盘的文件名
+    // 常与之不同 ⇒ `ownerFile` 可能根本不存在。旧代码只做 `filter(p => p !== ownerFile)`，
+    // 此时**一个都过滤不掉** ⇒ `wrongFiles` 退化为「全部 renderedIn」⇒ 对**合法归属**的组件
+    // 也照删。真机实锤（`c-traffic-monitor-5nxelujp-1a29a03f` / `-71jd0k1q-dc6aaa0d` /
+    // `-yb6mcxbx-3df87ac9` / `-zpikb3zg-d1a940f2`，四个变体）：
+    //   · `当日总流量` owner=§88:32→`HeaderSub`（**无此文件**），renderedIn =
+    //     [DailyTotalStats, HeaderSection, SubHeaderDaily] ⇒ 三个全删，其中前/后者很可能正是
+    //     该卡片的真实宿主；
+    //   · `22350`/`16270`/`66109` owner=§2:3438→`ContentVehicleDist`（**无此文件**），renderedIn =
+    //     [VehicleTypeDistribution, VehicleTypeSlot] ⇒ 两个全删 —— 而 `VehicleTypeDistribution`
+    //     按语义就是车型分布卡本体。
+    //
+    // 判据（两条同时成立才处置，宁漏不误伤）：
+    //   ① owner 组件文件**确实产出**（否则「非 owner」无从定义）；
+    //   ② owner 组件**确实渲染该文本**（否则删掉其余位置 = 该文本彻底消失，属**另一种**未经验证的
+    //      「补写」，不是本函数的职责；且这正是 `checkSectionContent` 用 renderedIn 的语义前提）。
+    if (!byPath.has(ownerFile)) continue;
+    if (!renderedIn.includes(ownerFile)) continue;
     // 错装文件 = renderedIn 里除 owner 组件外的其余文件
     const wrongFiles = renderedIn.filter((p) => p !== ownerFile);
     if (wrongFiles.length === 0) continue;
@@ -300,6 +323,256 @@ export function healDuplicateTextIssues({ files, plan, figmaRoot, validateSfc })
   }
 
   return { files: [...byPath.values()], healed };
+}
+
+/**
+ * 🎯 2026-09-30 治本：借用证据的**确定性处置**（`borrowedTextIssues` / `borrowedAssetIssues`）。
+ *
+ * 为什么必须做：这两个 issue 自 2026-09-14 起就**算得出、只写 meta、零处置**
+ * （全语料 `borrowedText` 48 + `borrowedAsset` 26 = 74 个组件，占 14.4%）。
+ * 真机最刺眼的两个视觉缺陷正出自此处：
+ *   · `c-e1f141-e1f141a5`：「交通事故/车辆故障/施工养护」owner = `287:5-left`，却被
+ *     `ChartSection.vue` + `StatsLeft.vue` 双渲染 ⇒ 两侧列表错。
+ *   · `c-traffic-monitor-6d7082a1`：`ContentSection.vue`（section `2:3680`，Figma 真值
+ *     `fills: []` 本无背景）却 `:style` 里挂了 `bg-_m-35.png`（node `88:35`，owner `2:3496`
+ *     = 车型分布卡）⇒ 「当日总流量的总统计数据出现车型分布的背景图」。
+ *
+ * 处置口径（**与 `healDuplicateTextIssues` 同族：保守删 + `validateSfc` 回退 + 不猜**）：
+ *   · 借用文本 ⇒ 从**非归属组件**删掉该静态文本节点（复用 `removeStaticTextNode`，只认
+ *     「标签之间纯文本」形态，子串/复合节点一律不删）；
+ *   · 借用资源 ⇒ 删**非归属组件**里引用该资源变量的绑定（`:style` 对象里的顶层属性 /
+ *     `:attr="var"` 整属性），随后**立即**对该文件跑 `pruneUnmounted`（同一实现
+ *     `pruneUnmountedResourceImports`）剪掉因此未挂载的 import。
+ *
+ * ⚠️ **次序铁律**：删引用与剪 import 必须在**同一处**完成。若只删引用不剪 import，会留下
+ *    「已 import 但零引用」⇒ 撞 CODE-022 硬闸（fail-closed）⇒ 重试耗尽。故本函数把
+ *    `pruneUnmounted` 作为参数**内置调用**，而不是依赖别处的前置剪枝。
+ *
+ * 不判/不猜：
+ *   · 拿不到资源变量名（mapping 里无 `assignedVarName`/`semanticVarName`）⇒ 跳过；
+ *   · 引用形态不认识（非对象字面量 `:style`、非「表达式恰为变量」的直接绑定）⇒ 跳过；
+ *   · 删除会**引入新错误** ⇒ 回退（预先存在的问题不否决）。
+ *
+ * @param {object} params
+ * @param {Array<{path:string, content:string}>} params.files 产物文件（**会被原地改写**）
+ * @param {object} params.plan subComponentPlan（含 effectiveSections）
+ * @param {object} params.figmaRoot figmaNodeData（document 树）
+ * @param {Array} [params.resourceDomMapping] 资源-DOM 映射
+ * @param {Function} [params.validateSfc] (content, path) => { valid, errors }
+ * @param {Function} [params.pruneUnmounted] (content, mapping) => { content, changed, pruned }
+ * @returns {{files: Array, healed: {text: Array, asset: Array}}}
+ */
+export function healBorrowedEvidence({
+  files,
+  plan,
+  figmaRoot,
+  resourceDomMapping,
+  validateSfc,
+  pruneUnmounted,
+} = {}) {
+  const none = { files, healed: { text: [], asset: [] } };
+  if (!Array.isArray(files) || files.length === 0) return none;
+  if (!plan || !Array.isArray(plan.effectiveSections)) return none;
+
+  const check = checkSectionExclusiveEvidence({ files, plan, figmaRoot, resourceDomMapping });
+  if (
+    check.borrowedTextIssues.length === 0 &&
+    check.borrowedAssetIssues.length === 0
+  ) {
+    return none;
+  }
+
+  // byPath 持有**同一批对象引用** ⇒ 原地改 content，调用方拿到的 files 已同步
+  const byPath = new Map(files.map((f) => [f.path, f]));
+  const healedText = [];
+  const healedAsset = [];
+
+  // 资源 basename → 资源变量名（二者在 mapping 里是同一行的事实）
+  const varByName = new Map();
+  for (const m of Array.isArray(resourceDomMapping) ? resourceDomMapping : []) {
+    const file = m?.resourceFile || m?.fileName || m?.filename;
+    const v = m?.assignedVarName || m?.semanticVarName;
+    if (!file || !v) continue;
+    const base = String(file).split('/').pop();
+    if (base && !varByName.has(base)) varByName.set(base, String(v));
+  }
+
+  // ── ① 借用文本：从非归属组件删除该静态文本节点 ──
+  for (const issue of check.borrowedTextIssues) {
+    const rec = byPath.get(issue.file);
+    if (!rec || typeof rec.content !== 'string') continue;
+    const cleaned = removeStaticTextNode(rec.content, String(issue.text));
+    if (cleaned === null) continue; // 找不到可安全删除的静态节点 → 不猜
+    if (validateSfc && introducesNewErrors(validateSfc, rec.content, cleaned, issue.file)) {
+      continue;
+    }
+    rec.content = cleaned;
+    healedText.push({
+      text: issue.text,
+      removedFrom: issue.file,
+      ownerSection: issue.ownerSection,
+    });
+  }
+
+  // ── ② 借用资源：删非归属组件的引用 + 就地剪掉未挂载 import ──
+  const touched = new Set();
+  for (const issue of check.borrowedAssetIssues) {
+    const rec = byPath.get(issue.file);
+    if (!rec || typeof rec.content !== 'string') continue;
+    const varName = varByName.get(String(issue.resource));
+    if (!varName) continue; // 拿不到变量名 → 不猜
+    const cleaned = removeResourceRefs(rec.content, varName);
+    if (cleaned === null) continue; // 引用形态不认识 → 不猜
+    if (validateSfc && introducesNewErrors(validateSfc, rec.content, cleaned, issue.file)) {
+      continue;
+    }
+    rec.content = cleaned;
+    touched.add(issue.file);
+    healedAsset.push({
+      resource: issue.resource,
+      var: varName,
+      removedFrom: issue.file,
+      ownerNodeIds: issue.ownerNodeIds,
+    });
+  }
+  if (typeof pruneUnmounted === 'function') {
+    for (const p of touched) {
+      const rec = byPath.get(p);
+      if (!rec || typeof rec.content !== 'string') continue;
+      try {
+        const pr = pruneUnmounted(rec.content, resourceDomMapping);
+        if (pr && pr.changed) rec.content = pr.content;
+      } catch {
+        /* 剪枝失败不阻断：引用已删，import 残留仅是噪声 */
+      }
+    }
+  }
+
+  return { files: [...byPath.values()], healed: { text: healedText, asset: healedAsset } };
+}
+
+/**
+ * 删除「引用某资源变量的绑定」，返回新内容；认不出形态返回 null（不猜）。
+ *
+ * 只处理两种**可确定性定位**的形态：
+ *   ① `:style="{ … backgroundImage: 'url(' + bg3 + ')' … }"` —— 对象字面量里的**顶层属性**
+ *      （值的表达式引用该变量）⇒ 删该属性（含相邻逗号），保留其余属性原格式；
+ *   ② `:attr="bg3"` —— 绑定表达式**恰为该变量本身** ⇒ 删整个属性。
+ */
+function removeResourceRefs(content, varName) {
+  if (typeof content !== 'string' || !content || !varName) return null;
+  const esc = String(varName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const refRe = new RegExp(`\\b${esc}\\b`);
+  let out = removeStylePropsReferencing(content, refRe);
+  out = removeExactBindings(out, varName);
+  return out === content ? null : out;
+}
+
+/** ① 删 `:style` 对象字面量里引用 refRe 的顶层属性；`:style` 因此变空则删整个属性。 */
+function removeStylePropsReferencing(content, refRe) {
+  const rx = /(:style|v-bind:style)\s*=\s*(["'])([\s\S]*?)\2/g;
+  const edits = [];
+  let m;
+  while ((m = rx.exec(content)) !== null) {
+    const raw = m[3];
+    const braceStart = raw.indexOf('{');
+    const braceEnd = raw.lastIndexOf('}');
+    if (braceStart < 0 || braceEnd <= braceStart) continue; // 非对象字面量 → 不动
+    const body = raw.slice(braceStart + 1, braceEnd);
+    const parts = splitTopLevelObjectProps(body);
+    if (parts.length === 0) continue;
+    const removed = parts.map((p) => refRe.test(p.text));
+    if (!removed.some(Boolean)) continue;
+
+    // 计算删除区段（按 body 坐标；末段连前导逗号一起删，避免留悬挂逗号）
+    const delRanges = [];
+    let i = 0;
+    while (i < parts.length) {
+      if (!removed[i]) {
+        i++;
+        continue;
+      }
+      let j = i;
+      while (j + 1 < parts.length && removed[j + 1]) j++;
+      let s = parts[i].start;
+      let e;
+      if (j + 1 < parts.length) {
+        e = parts[j + 1].start; // 含尾随逗号
+      } else {
+        e = body.length;
+        if (i > 0) s = parts[i - 1].end; // 末段：连前导逗号
+      }
+      delRanges.push([s, e]);
+      i = j + 1;
+    }
+    let newBody = body;
+    for (let k = delRanges.length - 1; k >= 0; k--) {
+      newBody = newBody.slice(0, delRanges[k][0]) + newBody.slice(delRanges[k][1]);
+    }
+    const newRaw = raw.slice(0, braceStart + 1) + newBody + raw.slice(braceEnd);
+    if (newBody.trim() === '') {
+      // `:style` 空了 → 整个属性删掉（含其前导空白）
+      edits.push({ start: m.index, end: m.index + m[0].length, text: '' });
+    } else {
+      edits.push({ start: m.index, end: m.index + m[0].length, text: `${m[1]}=${m[2]}${newRaw}${m[2]}` });
+    }
+  }
+  return applyEdits(content, edits);
+}
+
+/** ② 删绑定表达式恰为 `varName` 的属性（`:src="bg3"` / `:icon='bg3'`）。 */
+function removeExactBindings(content, varName) {
+  const esc = String(varName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const rx = new RegExp(
+    `[ \\t]+:([a-zA-Z][\\w:-]*)\\s*=\\s*(["'])\\s*${esc}\\s*\\2`,
+    'g',
+  );
+  const edits = [];
+  let m;
+  while ((m = rx.exec(content)) !== null) {
+    edits.push({ start: m.index, end: m.index + m[0].length, text: '' });
+  }
+  return applyEdits(content, edits);
+}
+
+/** 取 `{…}` 体内**顶层**属性切分（跳过引号与括号嵌套），返回 body 坐标下的区间。 */
+function splitTopLevelObjectProps(body) {
+  const ranges = [];
+  let depth = 0;
+  let quote = null;
+  let start = 0;
+  for (let i = 0; i < body.length; i++) {
+    const ch = body[i];
+    if (quote) {
+      if (ch === '\\') i++;
+      else if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') {
+      quote = ch;
+      continue;
+    }
+    if (ch === '(' || ch === '[' || ch === '{') depth++;
+    else if (ch === ')' || ch === ']' || ch === '}') depth--;
+    else if (ch === ',' && depth === 0) {
+      ranges.push([start, i]);
+      start = i + 1;
+    }
+  }
+  ranges.push([start, body.length]);
+  return ranges
+    .map(([s, e]) => ({ start: s, end: e, text: body.slice(s, e) }))
+    .filter((p) => p.text.trim() !== '');
+}
+
+/** 从后往前应用区间编辑（避免 offset 漂移）。 */
+function applyEdits(content, edits) {
+  if (edits.length === 0) return content;
+  let out = content;
+  for (let i = edits.length - 1; i >= 0; i--) {
+    out = out.slice(0, edits[i].start) + edits[i].text + out.slice(edits[i].end);
+  }
+  return out;
 }
 
 /**
@@ -557,6 +830,15 @@ export function checkSectionExclusiveEvidence({ files, plan, figmaRoot, resource
     if (!sid) continue;
     const own = subIds.get(sid);
     if (!own) continue;
+    // 🛡️ 2026-09-30 兜底：**未被 Figma 锚定的 section 一律不判借用**。
+    //   真机实锤（`c-traffic-monitor-65bedc2d`）：`section-vehicle-type` 这类合成 section 的
+    //   `sourceNodeIds = []`（占位，无真实 Figma 节点）⇒ 子树节点集合为空 ⇒
+    //   ① `ownTexts` 恒空（「自己也有」的豁免永远不成立）；
+    //   ② `intersects(∅, ownerSub)` 因 `a.size === 0` 恒为 false（祖孙重叠豁免永远不成立）。
+    //   两道豁免同时失效 ⇒ 该组件渲染的**任何**「他处唯一归属」文本、以及**任何**资源，
+    //   都会被判成借用 → 群体误删。归属判定的前提是「S 的子树已知」，未知即不可判 ⇒ 跳过。
+    //   口径与模块铁律一致：宁漏不误伤、不猜。
+    if (own.size === 0) continue;
     const ownTexts = subTexts.get(sid) || new Set();
     const renderedText = extractRenderedText(f.content);
 
@@ -684,15 +966,18 @@ export function checkSectionTruthCoverage({ files, plan, figmaRoot }) {
 /**
  * 🎯 2026-09-14 治本·阶段1：构建 per-section 内容归属契约（prompt 预防层）。
  *
- * 事实源 = Figma 子树文本 + bbox.x。给每个 section 列出「只属于它自己的文本 + 左右坐标」，
- * 注入 prompt 后从源头防两类 LLM 段错误：
+ * 事实源 = Figma 子树文本 + bbox（geometry）+ 文本样式（fontSize/fontWeight）——
+ * **零图层名参与**（2026-09-30 起，见 `collectSubtreeTexts` 的命名无关契约）。
+ * 给每个 section 列出「只属于它自己的文本 + 坐标」，注入 prompt 后从源头防两类 LLM 段错误：
  *   ① 左右镜像（横向 section 内成员按 x 排序的事实直接给到）；
  *   ② 借邻居内容（每个 section 只渲染自己子树内的文本）。
  * 与 checkSectionContent 共用同一套 normalize/collectSubtreeTexts 事实源（单点）。
  *
  * @param {object} plan subComponentPlan（含 effectiveSections）
  * @param {object} figmaRoot figmaNodeData（document 树）
- * @returns {Array<{id:string, title:string, direction:string, texts:Array<{text:string,x:number|null,isTitle:boolean}>}>}
+ * @returns {Array<{id:string, title:string, direction:string,
+ *   texts?:Array<{text:string,x:number|null}>,
+ *   members?:Array<{title:string|null,value:string|null,texts?:string[]|null,x:number|null}>}>}
  */
 export function buildSectionContentContract(plan, figmaRoot) {
   const contract = [];
@@ -710,7 +995,7 @@ export function buildSectionContentContract(plan, figmaRoot) {
       if (isHorizontal) {
         // 🎯 阶段 B（2026-09-15）：先尝试「高置信确定性装配」。
         // 铁律：仅当 assessStatRowConfidence 判 high（成员唯一、x 可解析且严格递增、
-        //       「1标题+1数值」配对完整、无重复归属、无资源冲突）才确定性配对；
+        //       每成员恰好 2 个文本且**样式**可分出标题/数值、无重复归属、无资源冲突）才确定性配对；
         //       否则整节回退既有 LLM 路径（成员级配对，非确定性），不产生半确定性混合。
         const assembly = assessStatRowConfidence(sec, figmaRoot);
         if (assembly.verdict === 'high') {
@@ -730,20 +1015,27 @@ export function buildSectionContentContract(plan, figmaRoot) {
           // 回退 LLM：输出「成员级配对」——每个成员的标题↔数值成对 + 按 x 从左到右。
           // 实锤（2:3660 统计行）：LLM 不仅左右反，还把卡片 2 内部的标题/数值也写反；
           // 扁平文本列表治不了「配对错乱」，必须按成员配对给到（仍作预防，非确定性）。
+          // 🔴 命名无关（2026-09-30）：角色只能由**样式真值**判定（`splitTitleValueByStyle`）。
+          //   样式分不出角色时**不臆造** —— 只给该成员的文本（按视觉序），由 LLM 按
+          //   prompt 铁律「标题=位置小字、数值=大字」自行判断。
+          //   （旧实现按 `t-` 图层名判角色：全语料 93% 的成员拿不到 title ⇒ prompt 里
+          //    出现 `标题「」数值「设备类型」` 这类**把标题当数值**的错误真值。）
           const memberIds = ids.filter((id) => String(id) !== String(sec.id));
           const members = memberIds
             .map((id) => {
               const items = collectSubtreeTexts(String(id), index, childrenOf);
-              const title = items.find((i) => i.isTitle)?.text || null;
-              const value = items.find((i) => !i.isTitle)?.text || null;
+              const roles = splitTitleValueByStyle(items);
               const bbox = index.get(String(id))?.bbox;
-              return {
-                title,
-                value,
-                x: typeof bbox?.x === 'number' ? Math.round(bbox.x) : null,
-              };
+              const x = typeof bbox?.x === 'number' ? Math.round(bbox.x) : null;
+              if (roles) {
+                return { title: roles.title, value: roles.value, texts: null, x };
+              }
+              const texts = [...items]
+                .sort((a, b) => (a.y ?? 0) - (b.y ?? 0) || (a.x ?? 0) - (b.x ?? 0))
+                .map((i) => i.text);
+              return { title: null, value: null, texts, x };
             })
-            .filter((m) => m.title || m.value)
+            .filter((m) => m.title != null || (m.texts && m.texts.length > 0))
             .sort((a, b) => (a.x ?? 0) - (b.x ?? 0));
           if (members.length > 0) {
             contract.push({
@@ -763,7 +1055,6 @@ export function buildSectionContentContract(plan, figmaRoot) {
             merged.set(item.text, {
               text: item.text,
               x: item.x,
-              isTitle: item.isTitle,
             });
           }
         }

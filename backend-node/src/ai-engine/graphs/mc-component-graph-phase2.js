@@ -972,16 +972,30 @@ export function createPhase2Graph(config = {}) {
         let retryGuidance;
         
         // 三级触发条件判断
+        // 🛡️ 2026-09-30 治本（事故 mc-max-1790759329996-e471a915 / mc-max-1788917080373-58de1010）：
+        // 两处缺陷叠加，导致重分析**必然无效**（用户实测重试后覆盖率仍 30%）：
+        //   ① 名单此前只用 `m.name`（Figma **图层名**），而图层名与图内真实文字常常不符——
+        //      实测 't-隧道设备' 的真实文字是「隧道设备」、'd-56302' 是「56302」、'line1' 没有文字。
+        //      vision 拿着图层名去图里找，找不到 ⇒ 补分析无的放矢。改为优先回传 `characters`（真实文字）。
+        //      （`coverageReport.missing[].characters` 已于同日补齐，visual-trust 原样透传。）
+        //   ② `<35%` 分支此前**完全不给名单**，只丢一句"补充识别遗漏的区块、文字、图表与元素"——
+        //      而低覆盖恰恰是最需要定向指引的场景（本次 30% 正走这条分支）。现一并附上名单。
+        const formatMissing = (list) => (list || []).slice(0, 12).map((m) => {
+          const text = (m.characters || '').trim();
+          return text ? `${m.type}「${text}」` : `${m.type} ${m.name || ''}`.trim();
+        }).filter(Boolean).join('、');
+
         if (visualTrust.coverageRate < 35) {
-          // 现状：全量重分析
-          retryGuidance = `首次视觉分析覆盖率仅 ${visualTrust.coverageRate}%（<35%）。请对照 Figma 节点真值，` +
-            `补充识别上一轮遗漏的区块、文字、图表与元素，尽量将覆盖率提升到 35% 以上；` +
-            `严禁臆造 Figma 中不存在的元素。`;
+          // 现状：全量重分析（补：附上遗漏元素名单，避免盲目重识别）
+          const names35 = formatMissing(visualTrust.missing);
+          retryGuidance = `首次视觉分析覆盖率仅 ${visualTrust.coverageRate}%（<35%）。` +
+            (names35 ? `上一轮遗漏元素（括号内为其图内真实文字）：${names35}。` : '') +
+            `请对照 Figma 节点真值，优先补充识别上述遗漏元素及其所属区块的文字、图表与数据，` +
+            `尽量将覆盖率提升到 35% 以上；严禁臆造 Figma 中不存在的元素。`;
         } else if (visualTrust.coverageRate < 75 && visualTrust.missingCount >= 5) {
           // 新：35-75% 且 missing ≥5 → 定向补分析
-          const missingList = visualTrust.missing || [];
-          const missingNames = missingList.map(m => `${m.type} ${m.name || ''}`).filter(Boolean).join('、');
-          retryGuidance = `首次视觉分析覆盖率 ${visualTrust.coverageRate}%（35-75% 区间）。上一轮遗漏元素：${missingNames}。` +
+          const missingNames = formatMissing(visualTrust.missing);
+          retryGuidance = `首次视觉分析覆盖率 ${visualTrust.coverageRate}%（35-75% 区间）。上一轮遗漏元素（括号内为其图内真实文字）：${missingNames}。` +
             `请只补充这些特定元素的归属 section 与样式，严禁改动已识别部分，禁止臆造 Figma 中不存在的元素。`;
         } else {
           // 3. missing 全部命中噪音白名单 → 视为达标，不重试
@@ -1048,8 +1062,7 @@ export function createPhase2Graph(config = {}) {
 
       if (
         visualTrust.verdict === VISUAL_VERDICTS.CONFLICT ||
-        visualTrust.verdict === VISUAL_VERDICTS.BLOCKED ||
-        visualTrust.verdict === VISUAL_VERDICTS.LOW_COVERAGE
+        visualTrust.verdict === VISUAL_VERDICTS.BLOCKED
       ) {
         // 矛盾/不可用 → 标记降级，下游 engineer 兜底拒绝盲写、运行时门禁兜底拦截
         logger.warn('⚠️ 视觉分析可信度异常，标记降级', {
@@ -1060,6 +1073,42 @@ export function createPhase2Graph(config = {}) {
         state._visualDegradeReason =
           state._visualDegradeReason ||
           `视觉分析${visualTrust.verdict}: ${visualTrust.reason}`;
+      } else if (visualTrust.verdict === VISUAL_VERDICTS.LOW_COVERAGE) {
+        // 🛡️ 2026-09-30 口径对齐（诉求：用弱视觉模型的用户必须有通过路径 + 归因到模型本身）：
+        // LOW_COVERAGE 此前与 CONFLICT/BLOCKED 一并置 _visualDegraded ⇒ 下游 microcode-engineer.js
+        // / prompt-builder.js 直接 throw ⇒ 用户**永远生成不了**（换不换模型都卡在同一步）。
+        // 但 low-coverage 的语义是「**模型没看全**」，不是「分析不可信」——
+        // context-conflict-resolver.js 早已把 LOW_COVERAGE 映射为 TRUST_LEVELS.RESTRICTED
+        // （受限生成：restrictions 经 vue3-prompt.js 注入 no-unsupported-decoration /
+        //  no-style-fallback / resolve-legend-owner 三条约束），是 phase2 提前掐死了这条
+        // **本就存在**的降级路径（两处口径不一致）。现对齐：
+        //   只有 BLOCKED / CONFLICT（分析为空 / 自相矛盾 / 整体降级）才硬阻断；
+        //   LOW_COVERAGE ⇒ 放行 + 受限约束 + 明确归因提示。
+        // 安全边界：产物严格按 layoutStructure 生成（engineer prompt 约束「只生成已识别内容、
+        // 严禁臆造」）⇒ 降级结果是「内容不完整的组件」，而非「错误的组件」。
+        const qualityWarning = {
+          rate: visualTrust.coverageRate,
+          attribution: visualTrust.attribution || 'vision-recall',
+          missingTexts: visualTrust.missingTexts || [],
+          missingTextCount: visualTrust.missingTextCount || 0,
+        };
+        state._visualQualityWarning = qualityWarning;
+        logger.warn('⚠️ 视觉覆盖率不足 → 降级放行（归因：视觉模型召回能力，非设计稿问题）', qualityWarning);
+        const sample = qualityWarning.missingTexts.slice(0, 5);
+        state.onProgress?.({
+          stage: '视觉分析',
+          message:
+            `⚠️ 视觉模型识别能力不足：本次仅识别到 ${qualityWarning.rate}% 的设计稿内容` +
+            (sample.length
+              ? `，图中明确存在但未被识别的文字如「${sample.join('」「')}」` +
+                (qualityWarning.missingTextCount > sample.length
+                  ? ` 等 ${qualityWarning.missingTextCount} 项`
+                  : '')
+              : '') +
+            `。这与设计稿无关，是当前视觉模型的分析能力所致；系统将按已识别内容继续生成（内容可能不完整），` +
+            `建议更换识别能力更强的视觉模型后重新生成。`,
+          status: 'completed',
+        });
       } else if (visualTrust.verdict === VISUAL_VERDICTS.WARNING) {
         logger.warn('⚠️ 视觉分析覆盖率不足，保留降级提示', {
           reason: visualTrust.reason,
@@ -1108,6 +1157,10 @@ export function createPhase2Graph(config = {}) {
           result.degradeReason ||
           (result.layoutStructure && result.layoutStructure.degradeReason) ||
           null,
+        // 🛡️ 2026-09-30：低覆盖率「降级放行」时透传质量提示（供任务记录/UI 展示
+        // 「内容可能不完整」+ 成因归因 vision-recall / truthset-noise）。
+        // 不透传则 state._visualQualityWarning 只写不读（死状态），用户刷新后即丢失提示。
+        _visualQualityWarning: state._visualQualityWarning || null,
       };
     } catch (error) {
       logger.error('视觉分析失败', { error: error.message });
@@ -1173,6 +1226,7 @@ export function createPhase2Graph(config = {}) {
         apiKey: textCfg.apiKey,
         model: textCfg.model,
         baseURL: textCfg.baseURL,
+        thinkingType: textCfg.thinkingType,
         onTokenUsage: state.onTokenUsage,
         providerId: textCfg.providerId || null,
       });
@@ -1462,6 +1516,7 @@ export function createPhase2Graph(config = {}) {
         apiKey: textCfg.apiKey,
         model: textCfg.model,
         baseURL: textCfg.baseURL,
+        thinkingType: textCfg.thinkingType,
         onTokenUsage: state.onTokenUsage,
         providerId: textCfg.providerId || null,
       });
@@ -1581,6 +1636,7 @@ export function createPhase2Graph(config = {}) {
         apiKey: textCfg.apiKey,
         model: textCfg.model,
         baseURL: textCfg.baseURL,
+        thinkingType: textCfg.thinkingType,
         onTokenUsage: state.onTokenUsage,
         onProgress: state.onProgress,
         providerId: textCfg.providerId || null,
@@ -2698,9 +2754,13 @@ export function createPhase2Graph(config = {}) {
       const {
         checkSectionContent,
         healDuplicateTextIssues,
+        healBorrowedEvidence,
         checkSectionExclusiveEvidence,
       } = await import('../utils/section-content-guard.js');
       const { validateVueSfc } = await import('../utils/sfc-syntax-validation.js');
+      const { pruneUnmountedResourceImports } = await import(
+        '../utils/resource-import-guard.js'
+      );
       const { readdirSync: _rds, readFileSync: _rfs, writeFileSync: _wfs2 } = await import('fs');
       const { join: pathJoin } = await import('path');
       const compDir = pathJoin(state.outputPath, 'package', 'components');
@@ -2756,6 +2816,48 @@ export function createPhase2Graph(config = {}) {
             status: 'warning',
           });
         }
+      }
+
+      // 🎯 2026-09-30 治本③：借用证据（文本/资源）**确定性处置**。
+      //   此前 `borrowedTextIssues`/`borrowedAssetIssues` 自 09-14 起「算得出、只写 meta、零处置」，
+      //   真机两案（e1f141a5 两侧列表错、6d7082a1 总统计出车型分布背景）正出自此处。
+      //   次序铁律：删引用与剪 import 必须同处完成 —— 故把 `pruneUnmountedResourceImports`
+      //   **内置**在 healer 里（只删引用不剪 import ⇒ 撞 CODE-022 硬闸 ⇒ 重试耗尽）。
+      const borrowedHeal = healBorrowedEvidence({
+        files,
+        plan: state.subComponentPlan,
+        figmaRoot: figmaRootForGuard,
+        resourceDomMapping:
+          state.resourceDomMapping || state._uiCache?.resourceDomMapping,
+        validateSfc: (c, p) => validateVueSfc(c, p),
+        pruneUnmounted: (c, mapping) => pruneUnmountedResourceImports(c, mapping),
+      });
+      const borrowedChanged = [
+        ...new Set([
+          ...borrowedHeal.healed.text.map((h) => h.removedFrom),
+          ...borrowedHeal.healed.asset.map((h) => h.removedFrom),
+        ]),
+      ];
+      if (borrowedChanged.length > 0) {
+        for (const wp of borrowedChanged) {
+          const rec = borrowedHeal.files.find((f) => f.path === wp);
+          if (rec && typeof rec.content === 'string') {
+            try {
+              _wfs2(pathJoin(state.outputPath, wp), rec.content, 'utf-8');
+            } catch (_) {
+              /* 写回失败不阻断 */
+            }
+          }
+        }
+        logger.warn('🩹 内容映射守卫：借用证据已确定性处置（删非归属引用 + 剪未挂载 import）', {
+          borrowedText: borrowedHeal.healed.text,
+          borrowedAsset: borrowedHeal.healed.asset,
+        });
+        state.onProgress?.({
+          stage: '内容映射校验',
+          message: `🩹 已自愈 ${borrowedHeal.healed.text.length} 处借用文本、${borrowedHeal.healed.asset.length} 处借用资源（从非归属组件删除）`,
+          status: 'warning',
+        });
       }
 
       const exclusiveCheck = checkSectionExclusiveEvidence({
@@ -3119,6 +3221,7 @@ export function createPhase2Graph(config = {}) {
         apiKey: textCfg.apiKey,
         model: textCfg.model,
         baseURL: textCfg.baseURL,
+        thinkingType: textCfg.thinkingType,
         onTokenUsage: state.onTokenUsage,
         providerId: textCfg.providerId || null,
         sessionId: state.sessionId || null, // 📊 透传给 agent，供日志登记当前模型
@@ -3471,6 +3574,7 @@ export function createPhase2Graph(config = {}) {
         apiKey: textCfg.apiKey,
         model: textCfg.model,
         baseURL: textCfg.baseURL,
+        thinkingType: textCfg.thinkingType,
         onTokenUsage: state.onTokenUsage,
         providerId: textCfg.providerId || null,
         sessionId: state.sessionId || null, // 📊 透传给 agent，供日志登记当前模型
@@ -4672,6 +4776,7 @@ export function createPhase2Graph(config = {}) {
         apiKey: textCfg.apiKey,
         model: textCfg.model,
         baseURL: textCfg.baseURL,
+        thinkingType: textCfg.thinkingType,
         onTokenUsage: state.onTokenUsage,
         providerId: textCfg.providerId || null,
       });
@@ -4705,6 +4810,7 @@ export function createPhase2Graph(config = {}) {
         apiKey: textCfg.apiKey,
         model: textCfg.model,
         baseURL: textCfg.baseURL,
+        thinkingType: textCfg.thinkingType,
         onTokenUsage: state.onTokenUsage,
         providerId: textCfg.providerId || null,
       });

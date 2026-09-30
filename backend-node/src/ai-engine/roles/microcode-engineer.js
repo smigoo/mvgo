@@ -142,6 +142,9 @@ import {
   validateVueSfc,
   findDuplicateSlotNames,
   extractLessGlobalVars,
+  detectScriptBlockLeakage,
+  healScriptBlockLeakage,
+  findHostReservedComponentCollisions,
 } from '../utils/sfc-syntax-validation.js';
 import {
   repairScopedThirdPartySelectors,
@@ -268,6 +271,8 @@ import {
 import {
   scoreMountTarget,
   inferComponentPrefix,
+  selectAnchorMountCandidate,
+  isResourceRendered,
 } from '../utils/mount-target-scoring.js';
 // 🛡️ P1-5（2026-08-30）：chunk-meta.files 多段映射（读写两侧共用，杜绝 R10 后写覆盖前写）
 import {
@@ -287,35 +292,16 @@ import {
   fillTruthTextSlots,
   isLeafTextAssemblyEnabled,
 } from '../utils/section-leaf-assembler.js';
+import { THEME_WRAPPER_TEMPLATES } from '../utils/mc-skeleton.js';
 
-/**
- * 🎨 主题包装文件固定模板（单一事实源）
- *
- * ⚠️ 关键背景（2026-08-26 治本修复）：
- * 旧架构由 index.less 只 @import dark.less / light.less，两者又用 `&.dark { @import '../common.less' }`
- * 把 common.less 的全部规则包进 `.dark` / `.light` 作用域。但宿主 base-panel 与前端预览
- * **从不给组件根注入 .dark / .light 类**，编译产物 `.dark .c-xxx` 在真实 DOM 上 0 命中
- * → 所有微码组件样式（背景/边框/圆角/图标尺寸/内部布局）100% 失效，表现为「布局在但全白/裸奔」。
- *
- * 新架构：index.less 在**根作用域**先调用默认主题 mixin 再导入 common.less（保证无主题类时样式生效），
- * dark.less / light.less 保留为「宿主未来注入主题类时的高特异性覆盖层」，由 index.less 决定是否引入。
- */
-const THEME_WRAPPER_TEMPLATES = {
-  dark: `// 主题覆盖层：仅当宿主给组件根注入 .dark 类时生效（特异性高于根作用域默认主题）
-&.dark {
-  .common();
-  .theme-dark();
-  @import (multiple) '../common.less';
-}
-`,
-  light: `// 主题覆盖层：仅当宿主给组件根注入 .light 类时生效（特异性高于根作用域默认主题）
-&.light {
-  .common();
-  .theme-light();
-  @import (multiple) '../common.less';
-}
-`,
-};
+// 🗑️ 2026-09-30（删减法）：此处原有 `const THEME_WRAPPER_TEMPLATES = { dark: …, light: … }`
+//   及其架构 docblock（2026-08-26 治本修复：宿主/预览从不注入 .dark/.light 类 ⇒
+//   旧的全量作用域包装会导致样式 100% 失效）。
+//   该常量与 `utils/mc-skeleton.js` 的同名导出是**同一事实的两份定义**——当初「抽出」时
+//   只复制未删除（mc-skeleton 注释自称「成为单一来源」，但本文件从未 import 它、且本地副本
+//   仍被 4 处使用）⇒ 现改为 import 单一事实源 `utils/mc-skeleton.js#THEME_WRAPPER_TEMPLATES`
+//   （架构背景 docblock 已一并移入该处）。
+//   本文件使用点（:4810/:4811/:5501/:7331/:7332）名称不变、无需改动。
 
 /**
  * 是否在 index.less 中额外引入 .dark/.light 覆盖层。
@@ -327,23 +313,12 @@ const THEME_WRAPPER_TEMPLATES = {
  */
 const EMIT_THEME_OVERRIDES = process.env.MC_EMIT_THEME_OVERRIDES !== '0';
 
-/**
- * 🛡️ P0-5（2026-08-29）：宿主外壳标签黑名单 —— 兜底背景/图标挂载的**禁区**。
- *
- * 背景（mc-max-1788056145870-6e65dc88 实锤）：微码组件的模板根是宿主提供的外壳
- * <base-panel>（header 固定 38px、自带背景 #edf4fb，见
- * frontend/src/components/@mv-business-panels/default-panel/index.vue）。
- * 当「关键词匹配」与「区域容器兜底」双双落空时，旧的根容器兜底会把资源挂到这个外壳上：
- * 295×27 的 tabs 条背景（bg-7890）被 backgroundSize:'100% 100%' 拉满整个面板（含 header），
- * 产出 Figma 与 UI 设计上根本不存在的大背景。
- *
- * 根因：外壳不是组件自己的根容器，它是宿主提供的装饰框架——往它上面挂业务背景，
- * 等于在别人的相框里贴自己的照片；且一旦挂上去就是 100% 100% 拉伸，尺寸必然错。
- *
- * 策略：命中即**放弃挂载**（返回 null，调用方跳过并打 WARN），把资源留在「未使用」状态
- * 交给 RES-UNUSED 门禁明确报错 + 重试指导。宁可明确失败，也不静默产出肉眼可见的错误背景。
- */
-const HOST_SHELL_TAG_RE = /^(base-panel|mc-panel)(-[a-z0-9]+)*$/i;
+// 🗑️ 2026-09-30（删减法）：此处原有 `const HOST_SHELL_TAG_RE = /^(base-panel|mc-panel)(-[a-z0-9]+)*$/i`
+//   及其 docblock（P0-5「兜底背景/图标挂载的禁区」，事故 mc-max-1788056145870-6e65dc88，
+//   295×27 tabs 背景被拉满整面板）——该常量在**本文件从未被引用**（死代码），
+//   而真实实现已迁至 `resource-mounter#collectMountCandidates` 的 `isHostShell`。
+//   本轮把三份副本收敛为**唯一事实源** `utils/mount-target-scoring.js#HOST_SHELL_TAG_RE`
+//   （策略说明 + 事故实证一并移入该处 docblock），故删除本副本。
 
 // 🛡️ P0（2026-09-08）：跨重试轮次的 componentId 检查点。
 // 每次 normalizeDeclareJson 首次归一化后持久化，后续重试轮次优先从检查点恢复，
@@ -1105,19 +1080,28 @@ export class MicrocodeEngineer extends BaseAgent {
             sectionsWithLayout.forEach((sec) => {
               if (sec.layoutMetadata) {
                 const meta = sec.layoutMetadata;
-                p += `- \`${sec.id}\` 使用 flex-direction: ${meta.direction}`;
-                if (meta.gap > 0) p += `，gap: ${meta.gap}px`;
+                // 🛡️ 2026-09-30 复审 §8.8 #7-d：本条原为**无条件强指令**（`使用 flex-direction: X`，
+                //   live 口径覆盖 1774/1774 叶子），而 `direction` 在旧实现下恒为 `'column'`
+                //   ⇒ 其中 **1116 条与真实 layout 相反**（section 实为横排，prompt 却要求 column），
+                //   且与同一份 prompt 内 `constraint-reinforcement.js`「布局方向由系统注入，
+                //   LLM 勿写勿改」**自相矛盾**。现在：**有方向事实才下发**；`direction === null`
+                //   （无事实 / grid）时不下发方向，避免打印 `flex-direction: null`
+                //   （同族历史症状：`flex-direction: undefined`）。
+                //   拼装改用 parts.join('，')，保证「有事实」时输出与本条原文本**逐字相同**。
+                const parts = [];
+                if (meta.direction) parts.push(`使用 flex-direction: ${meta.direction}`);
+                if (meta.gap > 0) parts.push(`gap: ${meta.gap}px`);
                 if (meta.height > 0) {
                   // 🚨 2026-09-07（0907 审计 L1）：统一 flex 事实源——内容区块 grow 用
                   // 归一化系数（meta.flexGrow，平均值=1，比例=设计稿高度比），
                   // 禁止把像素高度写进 grow（如 flex: 220 1 0 是量纲混淆）。
                   if (meta.flexGrow > 0) {
-                    p += `，区块高度约 ${meta.height}px（务必用 \`flex: ${meta.flexGrow} 1 0; min-height: 0\`，其中 ${meta.flexGrow} 是按 Figma 高度归一化的 flex-grow 弹性系数，**禁止**把像素高度写进 grow 如 \`flex: ${meta.height} 1 0\`）`;
+                    parts.push(`区块高度约 ${meta.height}px（务必用 \`flex: ${meta.flexGrow} 1 0; min-height: 0\`，其中 ${meta.flexGrow} 是按 Figma 高度归一化的 flex-grow 弹性系数，**禁止**把像素高度写进 grow 如 \`flex: ${meta.height} 1 0\`）`);
                   } else {
-                    p += `，区块高度约 ${meta.height}px（务必用 \`flex: 1 0 ${meta.height}px; min-height: 0\`，其中 1 是 flex-grow 弹性系数、${meta.height}px 是 flex-basis 基准高度，**禁止**把像素高度写成 flex-grow 如 \`flex: ${meta.height} 1 0\`）`;
+                    parts.push(`区块高度约 ${meta.height}px（务必用 \`flex: 1 0 ${meta.height}px; min-height: 0\`，其中 1 是 flex-grow 弹性系数、${meta.height}px 是 flex-basis 基准高度，**禁止**把像素高度写成 flex-grow 如 \`flex: ${meta.height} 1 0\`）`);
                   }
                 }
-                p += `\n`;
+                if (parts.length > 0) p += `- \`${sec.id}\` ${parts.join('，')}\n`;
               }
             });
           }
@@ -1151,10 +1135,15 @@ export class MicrocodeEngineer extends BaseAgent {
           for (const c of contentContract) {
             if (c.members) {
               // 横向 section：成员级配对，按 x 从左到右（标题↔数值成对，杜绝配对错乱）
-              const memberLines = c.members.map(
-                (m, i) =>
-                  `   ${i + 1}. 标题「${m.title ?? ''}」 数值「${m.value ?? ''}」${m.x != null ? ` (x≈${m.x})` : ''}`,
-              );
+              // 🔴 命名无关（2026-09-30）：角色只在**样式可分辨**时给出；否则只给该成员的
+              //   文本（视觉序），由下方铁律「标题=位置小字、数值=大字」自行判断 —— 不臆造角色。
+              const memberLines = c.members.map((m, i) => {
+                const at = m.x != null ? ` (x≈${m.x})` : '';
+                if (m.title != null || m.value != null) {
+                  return `   ${i + 1}. 标题「${m.title ?? ''}」 数值「${m.value ?? ''}」${at}`;
+                }
+                return `   ${i + 1}. 文本「${(m.texts || []).join('」、「')}」${at}`;
+              });
               if (c.deterministic) {
                 // 🎯 阶段 B：高置信确定性配对（系统已配好，禁止重排/互换）
                 p += `- \`${c.id}\`（横向 row，**成员配对已由系统确定性确定，禁止互换标题/数值、禁止左右调换、严格按此顺序渲染**）：\n${memberLines.join('\n')}\n`;
@@ -1171,7 +1160,7 @@ export class MicrocodeEngineer extends BaseAgent {
               p += `- \`${c.id}\`（${c.title || c.direction}）：${items}\n`;
             }
           }
-          p += `\n**铁律**：文本必须出现在归属它的 section 对应组件内；横向（row）section 按成员序号从左到右排列，且每个成员的「标题」「数值」必须成对放对（标题=位置小字、数值=大字，禁止互换）；禁止把某个 section 的文本写到另一个 section 的组件里。\n`;
+          p += `\n**铁律**：文本必须出现在归属它的 section 对应组件内；横向（row）section 按成员序号从左到右排列，且每个成员的「标题」「数值」必须成对放对（标题=位置小字、数值=大字，禁止互换）；形如 \`文本「A」「B」\`（未标注标题/数值）的成员，请按同一规则自行判断 —— 字号小的作标题、字号大的作数值；禁止把某个 section 的文本写到另一个 section 的组件里。\n`;
         }
 
         // 🆕 V2（2026-09-01）：section 尺寸比例强制规则（无条件生效，无论是否强制拆分）
@@ -2574,6 +2563,30 @@ export class MicrocodeEngineer extends BaseAgent {
         }
       }
 
+      //  🛡️ 2026-09-30 复审 P0-2：TODO 占位空壳的**后置清扫**（削源彻底化）。
+      //    顺序铁律：**必须在 rule⑤（fixSectionHeightsForResource）注入之后** ——
+      //    因为 `generateFallbackCssRule` 写出的 `.cls { /* TODO: … */ }` 空壳是 rule⑤
+      //    「只 replace 已存在块、不新建规则」的唯一注入锚点，提前删会丢掉 display/flex-direction 注入。
+      //    语料实证（common.less 口径共 2560 条）：1472 条已被填上真实声明（保留规则、只去注释）；
+      //    1088 条仍零声明（该 class 始终无事实可填 ⇒ 整条删除信息无损，可观测性由
+      //    `CLASS-MUST-EXIST` 门禁 + 上方 logger 承担）。
+      //    判据保守：只认两种已知占位文案，业务性 TODO 注释不动。
+      {
+        const _stubPath = 'resources/styles/common.less';
+        const _stubCur = allFiles[_stubPath];
+        if (typeof _stubCur === 'string') {
+          const _stubSwept = microcodeValidator.stripEmptyTodoRules(_stubCur);
+          if (_stubSwept.removedRules > 0 || _stubSwept.strippedComments > 0) {
+            allFiles[_stubPath] = _stubSwept.code;
+            this.logger.info('🧹 TODO 占位空壳后置清扫（注入之后）', {
+              file: _stubPath,
+              removedRules: _stubSwept.removedRules,
+              strippedComments: _stubSwept.strippedComments,
+            });
+          }
+        }
+      }
+
       //  跨文件一致性校验（template ↔ script 变量名/事件名/数据源）
       const templateBindings = this._extractTemplateBindings(allFiles);
       const consistencyResult = this._validateCrossFileConsistency(
@@ -3114,6 +3127,44 @@ export class MicrocodeEngineer extends BaseAgent {
 
       // 🛡️ 阶段4（2026-09-17）：absolute 遮罩层父容器补 position:relative。
       //   「一片蓝」根治——card-bg 的 absolute 遮罩铺满全屏（父容器缺 relative）。
+      // 🛡️ 2026-09-30（a6d2e5e1）：先跑背景形态契约 heal（空壳 bg div 拆层迁移 /
+      //   有内容层补 absolute），宿主 relative 由下方 healAbsoluteOverlayParents 接管——
+      //   顺序不可颠倒（先有 absolute 层，宿主 relative 才有挂靠对象）。
+      try {
+        const _bgFormHealed = microcodeResources.healStandaloneBgLayers(
+          allFiles,
+          { logger: this.logger },
+        );
+        if (_bgFormHealed.collapsed.length + _bgFormHealed.absoluteFixed.length > 0) {
+          input.onProgress?.({
+            stage: '背景形态修复',
+            message: `🛡️ 背景形态契约：折叠 ${_bgFormHealed.collapsed.length} 个空壳 bg 独立层、补 ${_bgFormHealed.absoluteFixed.length} 个 overlay 层 absolute`,
+            status: 'warning',
+            details: [..._bgFormHealed.collapsed, ..._bgFormHealed.absoluteFixed],
+          });
+        }
+        // 🛡️ 透明度归属修正（2026-09-30 · d368e7d8 实锤）：bg 子层透明度被提升到
+        //   容器（图标/文字一并变透明）→ 真值驱动还原为独立半透明背景层。
+        if (typeof microcodeResources.fixMisplacedContainerOpacity === 'function') {
+          const _opacityFixed = microcodeResources.fixMisplacedContainerOpacity(
+            allFiles,
+            input.figmaNodeData,
+            { logger: this.logger },
+          );
+          if (_opacityFixed.fixed.length > 0) {
+            input.onProgress?.({
+              stage: '透明度归属修正',
+              message: `🛡️ 已修正 ${_opacityFixed.fixed.length} 处容器透明度挂错（还原为独立半透明背景层）`,
+              status: 'warning',
+              details: _opacityFixed.fixed,
+            });
+          }
+        }
+      } catch (e) {
+        this.logger.warn('⚠️ 背景形态契约修复失败（非阻断）', {
+          error: e.message,
+        });
+      }
       try {
         const _absHealed = microcodeResources.healAbsoluteOverlayParents(
           allFiles,
@@ -3164,6 +3215,38 @@ export class MicrocodeEngineer extends BaseAgent {
       // → STYLE_SYNTAX → P1-4 误杀 4/5 个健康子组件。以文件集 .less 顶层变量注入 globalVars
       // 补回定义（与 import 链等价），产物零改写。
       const lessGlobalVars = extractLessGlobalVars(allFiles);
+      // 🛡️ 2026-09-30 治本 · 产物禁与宿主保留组件同名（写盘门禁 fail-fast）
+      //
+      // 根因（mc-max-1790770973695-8bb771e4 实锤「两个头部插槽」）：LLM 把宿主面板外壳
+      // `base-panel` 当成普通子组件生成 → 产出 `package/components/base-panel.vue`，
+      // 其模板里又套一层 `<base-panel>`（自引用宿主外壳），且自带 `<template #header-right>`
+      // （与 `index.vue:3` 的同名插槽重复）⇒ 面板外壳套两层、头部插槽出现两次。
+      //
+      // 该文件属 `package/components/*.vue`（可降级），故走既有 P1-4 隔离通道：
+      // 剔除该文件 + 复用 `pruneDanglingSubComponentImports` 摘掉悬空 import，
+      // 模板里的 `<base-panel>` 随即回落到宿主全局注册组件（= 正确外壳）。
+      const _hostCollide = findHostReservedComponentCollisions(allFiles, 'package/index.vue');
+      if (_hostCollide.collisions.length > 0) {
+        syntaxIssues.push(..._hostCollide.errors);
+        for (const _hc of _hostCollide.collisions) {
+          badVueFiles.push({
+            path: _hc.file,
+            errors: [
+              `${_hc.file}:1:1 script: 产物子组件名与宿主保留组件同名（'${_hc.name}'）`,
+            ],
+          });
+        }
+        this.logger.error(
+          '🚨 产物子组件与宿主保留组件同名（LLM 把宿主外壳当普通子组件生成）',
+          { collisions: _hostCollide.collisions },
+        );
+        input.onProgress?.({
+          stage: '语法校验',
+          message: `🚨 产物子组件与宿主保留组件同名：${_hostCollide.collisions.map((c) => c.file).join('、')}`,
+          status: 'error',
+          details: _hostCollide.collisions,
+        });
+      }
       for (const [p, c] of Object.entries(allFiles)) {
         if (!p.endsWith('.vue') || typeof c !== 'string') continue;
         // 🛡️ #3 门禁前最后防线（mc-max-1787920512973 实锤，2026-08-28）：LLM 尾部
@@ -3252,6 +3335,52 @@ export class MicrocodeEngineer extends BaseAgent {
           this.logger.warn(
             `🛡️ 已剔除多余块闭合标签（${_closers.removed.join(', ')}）: ${p}`,
           );
+        }
+        // 🛡️ 2026-09-30 治本 · 脚本块泄漏门禁（`</script>` 与下一个顶层块之间有裸 JS）
+        //
+        // 根因见 `utils/sfc-syntax-validation.js#detectScriptBlockLeakage`（scriptSplit 多段
+        // 拼接畸形：`mergeScriptParts` 只剥末尾一个闭合标签，段间多出的 `</script>` 残留）。
+        // 危害**全静默**：`@vue/compiler-sfc#parse` 容忍顶层游离文本 ⇒ `validateVueSfc` 全绿、
+        // 任务「成功」，而第 2/3 段生命周期被切到 script 块之外 ⇒ `onMounted` 永不执行 ⇒
+        // 「组件加载完成（onload）」业务事件静默失效（与重名插槽同族）。
+        //
+        // 处置分两步（都是确定性的，不消耗重试）：
+        //   ① 先自愈 —— 区段是 JS 则把过早的 `</script>` **后移**（内容归块）；
+        //      区段是说明文字则**删除**（12bc3750 实锤：1077 字符 markdown 落在 `</script>` 与
+        //      `<style>` 之间，走后移会把 markdown 塞进 script 块 → 必语法错）。
+        //   ② 既 parse 不过、又非说明形态（半截坏 JS）⇒ **不猜**，判死交 fail-fast
+        //      （宁可重试，也不静默丢代码）。
+        const _leakHeal = healScriptBlockLeakage(allFiles[p]);
+        if (_leakHeal.fixed) {
+          allFiles[p] = _leakHeal.source;
+          for (const _a of _leakHeal.actions) {
+            chunkFixes.push(
+              `SCRIPT-LEAK-001: ${p} 脚本块泄漏已自愈（${_a.kind === 'moved' ? `后移 </script>，保留 ${_a.chars} 字符脚本` : `删除 ${_a.chars} 字符说明文字`}）`,
+            );
+          }
+          this.logger.error(
+            '🚨 检测到脚本块泄漏（</script> 与下一个顶层块之间有裸内容，scriptSplit 拼接畸形）',
+            { file: p, actions: _leakHeal.actions },
+          );
+          input.onProgress?.({
+            stage: '语法校验',
+            message: `🚨 ${p} 脚本块泄漏已自愈（${_leakHeal.actions.map((a) => a.kind).join('/')}）：${_leakHeal.actions[0].preview}`,
+            status: 'warning',
+            details: _leakHeal.actions,
+          });
+        }
+        if (_leakHeal.unfixable.length > 0) {
+          const _leakErrs = _leakHeal.unfixable.map(
+            (u) =>
+              `${p}:${u.line}:1 script: 脚本块泄漏且无法确定性消解（${u.chars} 字符，既非合法 JS 也非说明文字）: ${u.preview}`,
+          );
+          syntaxIssues.push(..._leakErrs);
+          badVueFiles.push({ path: p, errors: _leakErrs });
+          this.logger.error('🚨 脚本块泄漏无法自愈（拒绝静默丢代码，交 fail-fast）', {
+            file: p,
+            unfixable: _leakHeal.unfixable,
+          });
+          continue;
         }
 
         const result = validateVueSfc(allFiles[p], p, { lessGlobalVars });
@@ -6218,6 +6347,21 @@ export class MicrocodeEngineer extends BaseAgent {
             from: ROOT_THEME_VARS,
             to: THEMES_THEME_VARS,
           });
+        } else if (rootTV && hasVarDef(themesTV)) {
+          // 🛡️ 2026-09-30 治本（事故 mc-max-1790759302006-e22f2263）：
+          // 上面的纠偏只在「themes 版缺失/无变量」时迁移，覆盖不到「两份并存且 themes 版已有变量」这一形态。
+          // 而 index.less 是确定性模板、**恒定** `@import './themes/theme-vars.less'`（workspace 7/7 组件实测），
+          // 根目录版**永远不会被任何文件 @import**（全仓 grep 命中 0）⇒ 纯孤儿。
+          // 危害不是「多一个文件」，而是**下游按「同目录优先」推断事实源时会被它骗**：
+          // less-compile-gate 的 wrapper 曾据此把孤儿版当主题源，导致
+          // `common.less:N variable @color-bg-container is undefined` 假阳性 BLOCK，
+          // 而同一产物的 index.less 完整链路编译正常、index.css 已正确产出、预览可用（用户看「能预览」）。
+          // 根目录版的变量在 index.less 作用域内本就不可见、从未被引用 ⇒ 删除零影响。
+          delete codeResult.files[ROOT_THEME_VARS];
+          this.logger.info('🧹 删除孤儿 theme-vars.less（themes/ 版已存在，根目录版无人引用）', {
+            removed: ROOT_THEME_VARS,
+            kept: THEMES_THEME_VARS,
+          });
         }
       }
 
@@ -6921,34 +7065,60 @@ export class MicrocodeEngineer extends BaseAgent {
                   "'" +
                   fillBgSuffix;
               // 在所有 .vue 产物中收集候选元素：class 词集与 mountTarget 词集求交集，取最高分且无背景者
-              let best = null; // { fpath, index, length, insertStyle }
-              for (const [fpath, fcontent] of Object.entries(
-                codeResult.files || {},
-              )) {
-                if (typeof fcontent !== 'string' || !fpath.endsWith('.vue'))
-                  continue;
-                const tagRe =
-                  /<([a-zA-Z][a-zA-Z0-9-]*)((?:(?!>).)*?)class="([^"]*)"((?:(?!>).)*?)>/g;
-                let mt;
-                while ((mt = tagRe.exec(fcontent)) !== null) {
-                  const cls = mt[3];
-                  const score = wordsOf(cls).filter((w) =>
-                    targetWords.has(w),
-                  ).length;
-                  if (score === 0) continue;
-                  const attrs = mt[2] + 'class="' + cls + '"' + mt[4];
-                  if (/background/i.test(attrs)) continue; // 已有背景，不重复挂
-                  const cand = {
-                    fpath,
-                    index: mt.index,
-                    full: mt[0],
-                    tag: mt[1],
-                    before: mt[2],
-                    cls,
-                    after: mt[4],
-                    score,
-                  };
-                  if (!best || score > best.score) best = cand;
+              //
+              // 🎯 ④ N3 锚点优先（2026-09-30 治本）。旧实现是**锚点盲区**的私有词重叠评分：
+              //   `score = wordsOf(cls) ∩ targetWords`，既不看 `data-section-id` 也不看
+              //   `ownerSectionId`。而正确锚点元素的 class（c-traffic-monitor-group-2136636802-con）
+              //   与 mountTarget（slot-当日总流量）token 覆盖率**恒为 0** ⇒ 必然输给语义祖先容器
+              //   （class 含 slot）⇒ 426×91 卡片背景挂到 420×807 整块容器 ⇒ `100% 100%` 拉满 ⇒
+              //   视觉上「背景图整块丢失」。缺口是「同一事实两处各自计算，只修一侧必失配」：
+              //   `scoreMountTarget` 的 `DETERMINISTIC_ANCHOR_SCORE` 短路早已存在并被
+              //   resource-mounter 使用，唯独 N3 没用 ⇒ 现改为**共用**同一真相源。
+              //   三态语义（锚点已定性则禁止退化到语义评分，否则双挂）见该函数 docblock。
+              let best = null;
+              // 🛡️ ① N3 fallback 护栏（2026-09-30 治本）：资源已在任意元素上以 background 被引用
+              //   ⇒ 不再注入。`selectAnchorMountCandidate` 内的同类护栏**只在锚点元素命中时才会
+              //   被评估**（函数内 `if (!anchorCand) return null` 提前返回）⇒ 锚点缺失 /
+              //   无 ownerSectionId 的 fallback 路径完全没有护栏（实测 post-0929 语料：
+              //   noAnchorEl=644、varRendered=412、**varRendered 且 legacy 仍会另挂 = 354**）
+              //   ⇒ 同一背景挂两处。故此处**无条件先拦**（与选择器共用同一判据 isResourceRendered）。
+              if (isResourceRendered(codeResult.files, varName)) continue;
+              const anchorPick = selectAnchorMountCandidate(codeResult.files, bg, {
+                varName,
+              });
+              if (anchorPick) {
+                if (anchorPick.skip) continue; // 已挂载 / 宿主外壳 / 变量已被引用 ⇒ 幂等跳过
+                best = anchorPick.cand;
+              }
+              if (!best) {
+                for (const [fpath, fcontent] of Object.entries(
+                  codeResult.files || {},
+                )) {
+                  if (typeof fcontent !== 'string' || !fpath.endsWith('.vue'))
+                    continue;
+                  const tagRe =
+                    /<([a-zA-Z][a-zA-Z0-9-]*)((?:(?!>).)*?)class="([^"]*)"((?:(?!>).)*?)>/g;
+                  let mt;
+                  while ((mt = tagRe.exec(fcontent)) !== null) {
+                    const cls = mt[3];
+                    const score = wordsOf(cls).filter((w) =>
+                      targetWords.has(w),
+                    ).length;
+                    if (score === 0) continue;
+                    const attrs = mt[2] + 'class="' + cls + '"' + mt[4];
+                    if (/background/i.test(attrs)) continue; // 已有背景，不重复挂
+                    const cand = {
+                      fpath,
+                      index: mt.index,
+                      full: mt[0],
+                      tag: mt[1],
+                      before: mt[2],
+                      cls,
+                      after: mt[4],
+                      score,
+                    };
+                    if (!best || score > best.score) best = cand;
+                  }
                 }
               }
               if (!best) continue;
@@ -7645,6 +7815,40 @@ export default declareInfo
       //   返回修复清单），在语义回退之后、Loop4 门禁之前补跑一次——保证
       //   「门禁审计的内容 = 实际落盘的内容」，补丁不再被任何后段 pass 冲掉。
       try {
+        // 🛡️ 2026-09-30（a6d2e5e1）：后段重写同样会冲掉背景形态补丁 →
+        //   终验处与 absolute 遮罩修复成对补跑（先拆层/补 absolute，后补宿主 relative）。
+        const _bgFormFinal = microcodeResources.healStandaloneBgLayers(
+          finalTruthFiles,
+          { logger: this.logger },
+        );
+        if (_bgFormFinal.collapsed.length + _bgFormFinal.absoluteFixed.length > 0) {
+          this.logger.warn(
+            '🛡️ 落盘前终验：背景形态契约修复（空壳 bg 层折叠 / overlay 层 absolute）',
+            {
+              collapsed: _bgFormFinal.collapsed.length,
+              absoluteFixed: _bgFormFinal.absoluteFixed.length,
+            },
+          );
+        }
+        // 🛡️ 终验成对补跑：透明度归属修正（d368e7d8 实锤，后段重写可能回灌容器 opacity）
+        if (typeof microcodeResources.fixMisplacedContainerOpacity === 'function') {
+          const _opacityFinal = microcodeResources.fixMisplacedContainerOpacity(
+            finalTruthFiles,
+            input.figmaNodeData,
+            { logger: this.logger },
+          );
+          if (_opacityFinal.fixed.length > 0) {
+            this.logger.warn('🛡️ 落盘前终验：透明度归属修正', {
+              fixed: _opacityFinal.fixed,
+            });
+          }
+        }
+      } catch (_bgFormFinalErr) {
+        this.logger.warn('⚠️ 落盘前背景形态修复失败（非阻断）', {
+          error: _bgFormFinalErr?.message || String(_bgFormFinalErr),
+        });
+      }
+      try {
         const _absFinal = microcodeResources.healAbsoluteOverlayParents(
           finalTruthFiles,
           { logger: this.logger },
@@ -7896,6 +8100,10 @@ export default component
               (snapshotFiles['declare.json']
                 ? JSON.parse(snapshotFiles['declare.json']).componentType
                 : null) || 'business',
+            // 🛡️ 2026-09-30：二进制资源（resources/images/*.png）由 figma-connector 直接写盘，
+            //   **不在 snapshotFiles（文本产物 map）里** ⇒ 必须补磁盘探针，
+            //   否则 M2-2「mc-preview.png 存在」每次必误报（日报 18 次 / 前一日 230 次）。
+            fileExists: (rel) => existsSync(join(outputPath, rel)),
           });
           if (health.failed.length > 0) {
             this.logger.warn(

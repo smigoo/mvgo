@@ -15,6 +15,13 @@ function node(id, name, type, x, y, children = []) {
 function text(id, name, x, y) {
   return node(id, name, 'TEXT', x, y);
 }
+/**
+ * 带**字号真值**的文本节点。
+ * 🔴 2026-09-30 命名无关：角色（标题/数值）只能由样式判定 ⇒ 需要样式的用例必须给 fontSize。
+ */
+function textS(id, name, x, y, fontSize) {
+  return { ...node(id, name, 'TEXT', x, y), style: { fontSize } };
+}
 /** 构造 horizontal section plan */
 function horizSection(id, ids) {
   return { id, title: id, body: { layout: 'horizontal' }, sourceNodeIds: ids, children: [] };
@@ -162,8 +169,14 @@ describe('buildSectionContentContract · per-section 内容归属契约（prompt
         id: 'root', name: 'r', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 0, width: 10, height: 10 },
         children: [
           node('s1', 's1', 'FRAME', 0, 0, [
-            node('g1', 'g1', 'GROUP', 40, 0, [text('t1', 't-隧道', 40, 0), text('d1', 'd-34,620', 40, 0)]),
-            node('g2', 'g2', 'GROUP', 260, 0, [text('t2', 't-大桥', 260, 0), text('d2', 'd-82,379', 260, 0)]),
+            node('g1', 'g1', 'GROUP', 40, 0, [
+              textS('t1', 't-隧道', 40, 0, 12),
+              textS('d1', 'd-34,620', 40, 20, 24),
+            ]),
+            node('g2', 'g2', 'GROUP', 260, 0, [
+              textS('t2', 't-大桥', 260, 0, 12),
+              textS('d2', 'd-82,379', 260, 20, 24),
+            ]),
           ]),
         ],
       },
@@ -175,13 +188,44 @@ describe('buildSectionContentContract · per-section 内容归属契约（prompt
     expect(c).toHaveLength(1);
     expect(c[0].direction).toBe('row');
     expect(c[0].deterministic).toBe(true);
+    // 角色由**字号**确定（大=数值），与 `t-`/`d-` 图层名无关
     expect(c[0].members).toEqual([
       { title: '隧道', value: '34,620', x: 40, figmaNodeId: 'g1' },
       { title: '大桥', value: '82,379', x: 260, figmaNodeId: 'g2' },
     ]);
   });
 
-  it('横向 section 无数值配对（88:32 sub-header）→ deterministic:false 回退 LLM', () => {
+  it('🔴 命名无关：图层名全带 `t-` 但字号可分 → 仍能确定性配对（旧口径会 title=N,value=0 直接失败）', () => {
+    const fig = {
+      document: {
+        id: 'root', name: 'r', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 0, width: 10, height: 10 },
+        children: [
+          node('s1', 's1', 'FRAME', 0, 0, [
+            node('g1', 'g1', 'GROUP', 40, 0, [
+              textS('t1', 't-江阴大桥', 40, 0, 12),
+              textS('d1', 't-34,620', 40, 20, 24),
+            ]),
+            node('g2', 'g2', 'GROUP', 260, 0, [
+              textS('t2', 't-隧道', 260, 0, 12),
+              textS('d2', 't-82,379', 260, 20, 24),
+            ]),
+          ]),
+        ],
+      },
+    };
+    const c = buildSectionContentContract(
+      { effectiveSections: [{ id: 's1', title: 'row', body: { layout: 'horizontal' }, sourceNodeIds: ['s1', 'g1', 'g2'] }] },
+      fig.document,
+    );
+    expect(c).toHaveLength(1);
+    expect(c[0].deterministic).toBe(true);
+    expect(c[0].members.map((m: any) => [m.title, m.value])).toEqual([
+      ['江阴大桥', '34,620'],
+      ['隧道', '82,379'],
+    ]);
+  });
+
+  it('横向 section 无数值配对（88:32 sub-header）→ deterministic:false 回退 LLM（成员不臆造角色）', () => {
     const fig = {
       document: {
         id: 'root', name: 'r', type: 'FRAME', absoluteBoundingBox: { x: 0, y: 0, width: 10, height: 10 },
@@ -199,10 +243,10 @@ describe('buildSectionContentContract · per-section 内容归属契约（prompt
     );
     expect(c).toHaveLength(1);
     expect(c[0].deterministic).toBe(false);
-    // 回退 LLM 的成员级配对仍保留 title/value/x（不带 figmaNodeId）
+    // 回退 LLM：单个文本无法判角色 ⇒ 只给文本（视觉序），**不臆造** title/value
     expect(c[0].members).toEqual([
-      { title: '24小时', value: null, x: 40 },
-      { title: '当日总流量', value: null, x: 260 },
+      { title: null, value: null, texts: ['24小时'], x: 40 },
+      { title: null, value: null, texts: ['当日总流量'], x: 260 },
     ]);
   });
 
@@ -352,9 +396,14 @@ describe('healDuplicateTextIssues · SFC 校验改为「差分判据」（2026-0
   const plan = {
     effectiveSections: [{ id: '88:32', title: 'sub-header', sourceNodeIds: ['88:32', '88:321'] }],
   };
-  // 同一文本被两个组件渲染（owner=HeaderSub，错装=HeaderSection）
+  // 同一文本被两个组件渲染（owner=ContentSection，错装=HeaderSection）
+  // ⚠️ 2026-09-30：owner 文件名必须用 `assignSectionComponentNames` 的**确定性产物**。
+  //   本 fixture 原写作 `HeaderSub.vue`，与命名事实源不一致（该单 section plan 的确定性名
+  //   实测 = `ContentSection`）⇒ 触发 heal 新增的「owner 组件缺失即跳过」兜底（healed=0）。
+  //   修正 fixture 而非放宽兜底：兜底本身是为拦截「ownerFile 不存在 ⇒ wrongFiles 退化为全部
+  //   renderedIn ⇒ 对合法归属组件照删」的真机越权（见 section-content-guard.js 注释）。
   const makeFiles = () => [
-    { path: 'package/components/HeaderSub.vue', content: '<template><div><span>当日总流量</span></div></template>' },
+    { path: 'package/components/ContentSection.vue', content: '<template><div><span>当日总流量</span></div></template>' },
     { path: 'package/components/HeaderSection.vue', content: '<template><div><span>当日总流量</span></div></template>' },
   ];
 
@@ -650,5 +699,132 @@ describe('checkSectionTruthCoverage · 真值文案覆盖（2026-09-29 治本·A
     expect(checkSectionTruthCoverage({ files: [], plan: makePlan(), figmaRoot })).toEqual([]);
     expect(checkSectionTruthCoverage({ files: [{ path: 'package/components/A.vue', content: 'x' }], plan: null })).toEqual([]);
     expect(checkSectionTruthCoverage({ files: [{ path: 'package/components/A.vue', content: 'x' }], plan: makePlan(), figmaRoot: null })).toEqual([]);
+  });
+});
+
+/**
+ * 🛡️ 2026-09-30 兜底：**未被 Figma 锚定的 section 一律不判借用**。
+ *
+ * 真机实锤（`c-traffic-monitor-65bedc2d` 等 29 个组件的 189 条误报）：`section-vehicle-type`
+ * 这类合成 section 的 `sourceNodeIds = []` ⟹ 子树节点集合为空 ⟹
+ *   ① `ownTexts` 恒空（「自己也有」豁免永不成立）；
+ *   ② `intersects(∅, ownerSub)` 因 `a.size === 0` 恒 false（祖孙重叠豁免永不成立）。
+ * 两道豁免同时失效 ⇒ 该组件渲染的**任何**他处唯一归属文本、**任何**资源都被判借用 ⇒ 群体误删。
+ */
+describe('checkSectionExclusiveEvidence · 未锚定 section 不判借用（2026-09-30 兜底）', () => {
+  const figmaRoot: any = {
+    id: 'root', name: 'root', type: 'FRAME',
+    children: [
+      {
+        id: '2:3496', name: 'card', type: 'FRAME',
+        children: [
+          { id: '2:3511', name: '客车', type: 'TEXT', characters: '客车', absoluteBoundingBox: { x: 0, y: 0, width: 20, height: 10 } },
+        ],
+      },
+      { id: '2:9000', name: 'other', type: 'FRAME', children: [] },
+    ],
+  };
+  const synSec = (srcIds: string[]) => ({
+    id: 'section-synthetic', title: 'chart', type: 'chart', sourceNodeIds: srcIds,
+  });
+  const mapping = [{ resourceFile: 'bg-1.png', figmaNodeId: '2:3496', assignedVarName: 'bg1' }];
+
+  /** 合成 section 的确定性组件名（唯一事实源 = assignSectionComponentNames） */
+  function filesFor(srcIds: string[]) {
+    const plan = {
+      effectiveSections: [
+        { id: '2:3496', title: 'card', sourceNodeIds: ['2:3496'] },
+        synSec(srcIds),
+      ],
+    };
+    const name = assignSectionComponentNames(plan.effectiveSections).get('section-synthetic');
+    return {
+      plan,
+      files: [
+        { path: 'package/components/_probe.vue', content: '<template><div>客车</div></template>' },
+        {
+          path: `package/components/${name}.vue`,
+          content:
+            '<template><div>客车</div></template>\n<script setup>\nimport bg1 from "../../resources/images/bg-1.png"\n</script>',
+        },
+      ],
+      name,
+    };
+  }
+
+  it('sourceNodeIds 在 figma 树里解析不到（子树为空）→ 文本与资源都不判', () => {
+    const { plan, files, name } = filesFor(['9999:1']);
+    const r = checkSectionExclusiveEvidence({ files, plan, figmaRoot, resourceDomMapping: mapping });
+    expect(name).toBeTruthy();
+    expect(r.borrowedTextIssues).toEqual([]);
+    expect(r.borrowedAssetIssues).toEqual([]);
+  });
+
+  it('对照：同一组件换成「真实但互不相交」的锚点 → 两条借用都报（兜底不掩盖真问题）', () => {
+    const { plan, files } = filesFor(['2:9000']);
+    const r = checkSectionExclusiveEvidence({ files, plan, figmaRoot, resourceDomMapping: mapping });
+    expect(r.borrowedTextIssues.map((i) => i.text)).toEqual(['客车']);
+    expect(r.borrowedAssetIssues.map((i) => i.resource)).toEqual(['bg-1.png']);
+  });
+});
+
+/**
+ * 🛡️ 2026-09-30：`healDuplicateTextIssues` 的 owner 组件缺失兜底
+ * （落地本函数 docblock 已写明、代码从未实现的规则：「owner 组件不在 renderedIn 里 → 跳过，不猜」）。
+ *
+ * 旧代码只做 `renderedIn.filter(p => p !== ownerFile)`；当 `ownerFile` 根本不存在时**一个都过滤不掉**
+ * ⟹ 对**合法归属**的组件也照删。真机实锤（`c-traffic-monitor-5nxelujp-1a29a03f` 等四变体）：
+ * `assignSectionComponentNames` 产出 `ContentVehicleDist`/`HeaderSub`/`ContentForecast`，
+ * 而 LLM 实际写盘的是 `VehicleTypeDistribution`/`SubHeaderDaily`/`TrafficForecast`。
+ */
+describe('healDuplicateTextIssues · owner 组件缺失不越权删（2026-09-30 兜底）', () => {
+  const figmaRoot: any = {
+    id: 'root', name: 'cp-流量监测', type: 'FRAME',
+    children: [
+      {
+        id: '88:32', name: 'sub-header', type: 'FRAME',
+        children: [
+          { id: '88:321', name: 't-当日总流量', type: 'TEXT', characters: '当日总流量', absoluteBoundingBox: { x: 50, y: 100, width: 80, height: 20 } },
+        ],
+      },
+    ],
+  };
+  const plan = {
+    effectiveSections: [{ id: '88:32', title: 'sub-header', sourceNodeIds: ['88:32', '88:321'] }],
+  };
+  const T = '<template><div><span>当日总流量</span></div></template>';
+
+  it('owner 组件（ContentSection.vue）未产出、但有 2 个其它组件渲染该文本 → 一个都不删', () => {
+    const files = [
+      { path: 'package/components/ContentSection2.vue', content: T },
+      { path: 'package/components/ContentSection3.vue', content: T },
+    ];
+    // 前提校验：owner 的确定性组件名确实是 ContentSection（不存在于 files 中）
+    expect(assignSectionComponentNames(plan.effectiveSections).get('88:32')).toBe('ContentSection');
+    const r = healDuplicateTextIssues({ files, plan, figmaRoot });
+    expect(r.healed).toEqual([]);
+    expect(r.files.find((f) => f.path === 'package/components/ContentSection2.vue')!.content).toBe(T);
+    expect(r.files.find((f) => f.path === 'package/components/ContentSection3.vue')!.content).toBe(T);
+  });
+
+  it('对照：owner 组件在场并渲染该文本 → 从其余文件删除（兜底不掩盖真问题）', () => {
+    const files = [
+      { path: 'package/components/ContentSection.vue', content: T },
+      { path: 'package/components/ContentSection2.vue', content: T },
+    ];
+    const r = healDuplicateTextIssues({ files, plan, figmaRoot });
+    expect(r.healed).toHaveLength(1);
+    expect(r.healed[0].removedFrom).toEqual(['package/components/ContentSection2.vue']);
+    expect(r.files.find((f) => f.path === 'package/components/ContentSection.vue')!.content).toBe(T);
+  });
+
+  it('owner 组件在场但不渲染该文本（该文本会彻底消失）→ 跳过，不删', () => {
+    const files = [
+      { path: 'package/components/ContentSection.vue', content: '<template><div>别的内容</div></template>' },
+      { path: 'package/components/ContentSection2.vue', content: T },
+      { path: 'package/components/ContentSection3.vue', content: T },
+    ];
+    const r = healDuplicateTextIssues({ files, plan, figmaRoot });
+    expect(r.healed).toEqual([]);
   });
 });

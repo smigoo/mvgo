@@ -505,11 +505,31 @@ export function normalizeFigmaTextName(name) {
 }
 
 /**
- * 收集节点子树内的文本事实。返回项保留文本类别和文本节点自身 bbox.x。
+ * 收集节点子树内的文本事实（**命名无关**，唯一事实源）。
+ *
+ * 🔴 设计契约（2026-09-30，用户明确纠正）：**文本处理必须命名无关**。
+ *   判据只能是「节点 type 是否 TEXT / CHARACTER」，**禁止**用图层名（`t-` / `d-` / 裸 `t`）
+ *   判文本的类别或角色；命名**只允许**用于 ① 资源类型（`bg` / `icon` / `img`）
+ *   ② `@` 技术栈标记（如 `@antd/tab`）。
+ *   原话：「是文字就输出拿到样式输出文字，不用依赖命名」。
+ *   ⇒ 本函数**不再产出 `isTitle`**（旧实现 `/^[tT]-/.test(raw)` 已删）；
+ *     文本角色（标题/数值）改由消费端用 `splitTitleValueByStyle` 按**样式真值**判定。
+ *
+ * 三类真值，各取各的源头（都在 Figma TEXT 节点自身）：
+ *   · 文案真值 = `characters`（trim 后非空）→ 回退 `normalizeFigmaTextName(name)`。
+ *     为什么必须优先 characters：实锤 `c-traffic-monitor-6d7082a1` §2:3446（当日总流量卡）
+ *     的「客车」「货车」TEXT 图层名是单字母 `t`，真文案在 `characters`；邻居 §2:3496
+ *     （车型分布卡）的图层名**恰好就是文本本身**。只读 `name` ⇒ §2:3446 真值文本全丢
+ *     ⇒ 独占性守卫误判「借用了 §2:3496 的客车/货车」⇒ 自愈器把**本属于自己的**文本删掉。
+ *   · 样式真值 = `style.fontSize` / `style.fontWeight`（figma-connector 白名单保留，实测覆盖率 100%）。
+ *   · 几何真值 = TEXT 节点自身 `bbox.x` / `bbox.y`。
+ *
+ * 去重键 = 文本本身（旧的 `${isTitle?'t':'d'}:${text}` 随 isTitle 一并删除；
+ *   全语料 A/B 实测此变化对产物影响 = 0 —— 不存在「同文本一 t- 一 d-」的子树）。
  */
 export function collectSubtreeTexts(nodeId, index, childrenOf = buildChildrenMap(index)) {
   const out = []
-  const seenKeys = new Set()
+  const seenTexts = new Set()
   const seen = new Set()
   const walk = (id) => {
     const keyId = String(id)
@@ -519,15 +539,19 @@ export function collectSubtreeTexts(nodeId, index, childrenOf = buildChildrenMap
     if (!node) return
     if (node.type === 'TEXT' || node.type === 'CHARACTER') {
       const raw = String(node.name || '')
-      const isTitle = /^[tT]-/.test(raw)
-      const text = normalizeFigmaTextName(raw)
-      const key = `${isTitle ? 't' : 'd'}:${text}`
-      if (text && !seenKeys.has(key)) {
-        seenKeys.add(key)
+      const chars = typeof node.rawNode?.characters === 'string' ? node.rawNode.characters.trim() : ''
+      const text = chars || normalizeFigmaTextName(raw)
+      if (text && !seenTexts.has(text)) {
+        seenTexts.add(text)
+        const style = node.rawNode?.style || {}
+        const fontSize = Number(style.fontSize)
+        const fontWeight = Number(style.fontWeight)
         out.push({
           text,
-          isTitle,
           x: typeof node.bbox?.x === 'number' ? node.bbox.x : null,
+          y: typeof node.bbox?.y === 'number' ? node.bbox.y : null,
+          fontSize: Number.isFinite(fontSize) && fontSize > 0 ? fontSize : null,
+          fontWeight: Number.isFinite(fontWeight) && fontWeight > 0 ? fontWeight : null,
         })
       }
     }
@@ -535,6 +559,35 @@ export function collectSubtreeTexts(nodeId, index, childrenOf = buildChildrenMap
   }
   walk(nodeId)
   return out
+}
+
+/**
+ * 成员子树「标题 / 数值」的**命名无关**判定（唯一事实源）。
+ *
+ * 依据（全部来自 `collectSubtreeTexts` 的三类真值，**零图层名参与**）：
+ *   ① 样式真值：字号大者 = 数值 —— 与 prompt 既有铁律「标题=位置小字、数值=大字」同口径；
+ *   ② 几何兜底：字号并列/缺失时，纵向堆叠（y 不同）靠下者 = 数值；
+ *   ③ ①② 都不可分辨 ⇒ 返回 `null`（**不臆造**，调用方按「无角色」处理）。
+ *
+ * 只处理**恰好 2 个文本**的子树（统计卡片的真值形态）；其余形态返回 `null`。
+ *
+ * @param {Array<{text:string,fontSize:number|null,y:number|null}>} items collectSubtreeTexts 结果
+ * @returns {{title:string,value:string,by:'style'|'geometry'}|null}
+ */
+export function splitTitleValueByStyle(items) {
+  if (!Array.isArray(items) || items.length !== 2) return null
+  const [a, b] = items
+  if (a.fontSize != null && b.fontSize != null && a.fontSize !== b.fontSize) {
+    const value = a.fontSize > b.fontSize ? a : b
+    const title = value === a ? b : a
+    return { title: title.text, value: value.text, by: 'style' }
+  }
+  if (a.y != null && b.y != null && a.y !== b.y) {
+    const value = a.y > b.y ? a : b
+    const title = value === a ? b : a
+    return { title: title.text, value: value.text, by: 'geometry' }
+  }
+  return null
 }
 
 /**
@@ -1153,11 +1206,42 @@ export function formatSectionTreeForPrompt(sections, indent = 0) {
       // 🛡️ 布局方向事实（2026-09-16 治本）：容器 layout 由 Figma 几何确定性推导，
       //   switch=horizontal（两个 tab 一行）、tabs=vertical（竖排）。此前硬编码「纵向」，
       //   导致 LLM 把 switch 渲染成上下堆叠（用户指正「两个 tab 应该在一行」）。
-      const layoutDir = String(sec.layout || 'vertical').toLowerCase()
-      const isHorizontal = layoutDir === 'horizontal'
-      const dirText = isHorizontal ? '横向（flex-direction: row）' : '纵向（flex-direction: column）'
+      //
+      // 🛡️ 2026-09-30 复审 §8.8 #8：判据改**三态**，对齐写产物层 `code-generator.js:648-661`
+      //   的既有范式（那处已是 `layoutKind ∈ {horizontal,vertical,grid}` 否则 **null 且不内联方向**）。
+      //   旧实现是二值三元（`sec.layout || 'vertical'` + `=== 'horizontal'`）⇒ `grid` / 未知取值 /
+      //   无事实一律被说成「纵向（flex-direction: column）」，与写产物层**口径不一致**。
+      //   现：row / column / grid / **null（不断言方向）**。
+      //   ⚠️ 容器取值域今天只有 {horizontal, vertical}（live 口径 864 个：h 495 / v 369）
+      //   ⇒ `|| 'vertical'` 与 grid/null 分支**当前 0 命中** ⇒ 本次改动**零行为变化**（堵未来）。
+      const rawDir = String(sec.layout ?? '').toLowerCase()
+      // 与 `subcomponent-planner.js#extractLayoutMetadata` 同一口径：**前缀**匹配
+      // （真实语料存在 `horizontal-2-columns` / `horizontal-3-items` 这类变体）
+      const layoutKind = rawDir.startsWith('horizontal')
+        ? 'row'
+        : rawDir === 'row'
+          ? 'row'
+          : rawDir.startsWith('vertical')
+            ? 'column'
+            : rawDir === 'column'
+              ? 'column'
+              : rawDir.startsWith('grid')
+                ? 'grid'
+                : null
+      const dirText =
+        layoutKind === 'row'
+          ? '横向（flex-direction: row）'
+          : layoutKind === 'column'
+            ? '纵向（flex-direction: column）'
+            : layoutKind === 'grid'
+              ? '网格（display: grid，列数由系统注入）'
+              : '方向未知（按子区块顺序自然排布）'
+      const wrapNote =
+        layoutKind === 'row' || layoutKind === 'column'
+          ? `父模板必须按 ${layoutKind} 包住下列子组件`
+          : '父模板按子区块顺序自然包裹即可（方向由系统按布局事实注入）'
       lines.push(
-        `${pad}- 容器 \`${sec.id}\`（${title}）：${dirText} flex 包裹，不单独生成 .vue。子区块顺序 [${childIds}]。父模板必须按 ${isHorizontal ? 'row' : 'column'} 包住下列子组件，禁止打平。`,
+        `${pad}- 容器 \`${sec.id}\`（${title}）：${dirText} flex 包裹，不单独生成 .vue。子区块顺序 [${childIds}]。${wrapNote}，禁止打平。`,
       )
       if (Array.isArray(sec.children)) {
         lines.push(formatSectionTreeForPrompt(sec.children, indent + 1))
@@ -1734,7 +1818,25 @@ export function reorganizeCenteredChartLayout(sections) {
   return merged
 }
 
-export function deriveSectionsFromFigmaTree(figmaNodeData) {
+/**
+ * 🛡️ 2026-09-30 治本（评审 §8.4 步骤 3 · Bug4-①）：`sections[].layout` 改为**只认 A 类布局事实**。
+ *
+ * 旧口径（B 类几何近似）`xSpread > ySpread` 被「子元素宽度差 / 水平偏移」污染
+ * （实锤 `598d88fc` 的 `2:3683`：数值文本宽 77 vs 标题宽 128、右移 51px ⇒ xSpread=51 > ySpread=24
+ * ⇒ 误判 horizontal，真值是垂直堆叠），全语料 **A/B 打架 7443/21981 = 33.9%**。
+ *
+ * 现改为查 A 类单一事实源 `figma-node-layout-facts#buildNodeLayoutFacts` 的结果：
+ *   - 该模块自述是「容器级布局方向的**单一事实源**，禁止下游再加 grid 对冲层」，其内部已含
+ *     网格优先（`detectGridColumns`）、背景层剔除、side-by-side 比例、模糊默认 row、单子节点 column；
+ *   - ⚠️ 依赖方向：`figma-node-layout-facts` → `section-tree`（用 `areBoxesSideBySide`），
+ *     反向 import 会**成环** ⇒ **由调用方算好传入**（唯一调用方 = `subcomponent-planner#plan`）。
+ *
+ * @param {Object} figmaNodeData figma-node-data.json 内容（{ document } 或直接是节点树）
+ * @param {Record<string,Object>|null} [layoutFacts] A 类布局事实（`buildNodeLayoutFacts` 的结果）。
+ *        缺省 null ⇒ 所有 `layout` 为 null（**无事实则显式化，不臆造默认值**）。
+ * @returns {{sections:Array, backgrounds:Array, rootName:string, rootId:string}|null}
+ */
+export function deriveSectionsFromFigmaTree(figmaNodeData, layoutFacts = null) {
   const doc = figmaNodeData?.document ?? figmaNodeData
   if (!doc || typeof doc !== 'object') return null
   const root = findRootFrame(doc)
@@ -1892,6 +1994,10 @@ export function deriveSectionsFromFigmaTree(figmaNodeData) {
         ? { sections: childKids.map((c) => mapChildNode(c)), hasNested: false }
         : deriveNestedSections(child, depth + 1)
       
+      // 🛡️ 2026-09-30 P0-1：容器才下发 gridColumns（叶子暂不下发；理由见 deriveChildGridColumns 注释——
+      //   不是「会触发 LAYOUT-001 误 BLOCK」，那个门禁今天压根不可达，而是「手写路径未撤 + 门禁未换证据源」）
+      const childGridColumns = sub.hasNested ? deriveChildGridColumns(child, layoutFacts) : null
+
       const nestedSection = {
         id,
         name: cleanName || name,
@@ -1900,7 +2006,8 @@ export function deriveSectionsFromFigmaTree(figmaNodeData) {
         // 🛡️ P1 修复（2026-09-17）：sourceNodeIds 收集子树所有节点 id，供资源挂载系统匹配 owner
         sourceNodeIds: collectSubtreeNodeIds(child),
         ...(box ? { absoluteBoundingBox: box } : {}),
-        layout: deriveChildLayout(child),
+        layout: deriveChildLayout(child, layoutFacts),
+        ...(childGridColumns != null ? { gridColumns: childGridColumns } : {}),
         ...(isHeader ? { header: { title: cleanName || name } } : {}),
         // 🛡️ 纯 chrome 标题栏标记（2026-09-17）：供 planner 在微码流程剥离，
         //   Vue3 流程自行渲染外壳、保留。
@@ -1970,6 +2077,10 @@ export function deriveSectionsFromFigmaTree(figmaNodeData) {
       ? { sections: directKids.map((c) => mapChildNode(c)), hasNested: false }
       : deriveNestedSections(child, 1)
     
+    // 🛡️ 2026-09-30 P0-1：容器才下发 gridColumns（叶子暂不下发；理由见 deriveChildGridColumns 注释——
+    //   不是「会触发 LAYOUT-001 误 BLOCK」，那个门禁今天压根不可达，而是「手写路径未撤 + 门禁未换证据源」）
+    const childGridColumns = sub.hasNested ? deriveChildGridColumns(child, layoutFacts) : null
+
     sections.push({
       id,
       name: cleanName || name,
@@ -1979,7 +2090,8 @@ export function deriveSectionsFromFigmaTree(figmaNodeData) {
       sourceNodeIds: collectSubtreeNodeIds(child),
       // 🛡️ 关键：absoluteBoundingBox 确定性透传 —— extractLayoutMetadata 的 height 事实源
       ...(box ? { absoluteBoundingBox: box } : {}),
-      layout: deriveChildLayout(child),
+      layout: deriveChildLayout(child, layoutFacts),
+      ...(childGridColumns != null ? { gridColumns: childGridColumns } : {}),
       ...(isHeader ? { header: { title: cleanName || name } } : {}),
       // 🛡️ 纯 chrome 标题栏标记（2026-09-17）：供 planner 在微码流程剥离。
       ...(isHeader ? { chromeOnly: headerIsChromeOnly(child) } : {}),
@@ -2074,24 +2186,73 @@ function findRootFrame(node) {
   return null
 }
 
-/** 从 Figma layoutMode 推导 section 布局方向（vision 的 layout 字段语义）。 */
-function deriveChildLayout(node) {
-  const mode = String(node?.layoutMode || '').toUpperCase()
-  if (mode === 'HORIZONTAL') return 'horizontal'
-  if (mode === 'VERTICAL') return 'vertical'
-  // 无 layoutMode：按子节点几何粗略推断（y 相近 → 横向排，x 相近 → 纵向排）
-  const kids = (node?.children || []).filter(
-    (c) => c && c.absoluteBoundingBox,
-  )
-  if (kids.length >= 2) {
-    const ys = kids.map((c) => c.absoluteBoundingBox.y)
-    const xs = kids.map((c) => c.absoluteBoundingBox.x)
-    const ySpread = Math.max(...ys) - Math.min(...ys)
-    const xSpread = Math.max(...xs) - Math.min(...xs)
-    if (xSpread > ySpread) return 'horizontal'
-    return 'vertical'
-  }
-  return 'vertical'
+/**
+ * section 布局方向（vision 的 `layout` 字段语义）—— **只认 A 类布局事实**。
+ *
+ * 🛡️ 2026-09-30 治本（评审 §8.4 步骤 3 · Bug4-①）：旧实现读 `node.layoutMode` 后回退
+ * 「`xSpread > ySpread`」几何近似，该近似被**子元素宽度差 / 水平偏移**污染（A/B 打架
+ * 7443/21981 = 33.9%，其中 6551 条 B=horizontal 而 A=vertical）⇒ **整段删除**，改为查
+ * `figma-node-layout-facts#buildNodeLayoutFacts` 产出的 A 类事实（其内部已含网格聚类、
+ * 背景层剔除、side-by-side 比例、模糊默认 row、单子节点 column，`layoutMode` 分支亦同源）。
+ *
+ * 映射：
+ *   - `display:'grid'`          → `'grid'`        （**新增分支**：旧 B 类完全无 grid 概念）
+ *   - `flexDirection:'row'`     → `'horizontal'`
+ *   - `flexDirection:'column'`  → `'vertical'`
+ *   - A 类无该节点事实          → `null`          （**取消原「无事实默认 vertical」**：
+ *     落实「无事实是最坏结果」的显式化；消费方 `generation-context-assembler` 已按
+ *     `layout || null` 容忍，`inline-row-assembler#isHorizontalSection` 只认严格相等 ⇒ 不受影响）
+ *
+ * @param {Object} node Figma 节点
+ * @param {Record<string,Object>|null} layoutFacts A 类布局事实（`buildNodeLayoutFacts` 结果）
+ * @returns {'horizontal'|'vertical'|'grid'|null}
+ */
+function deriveChildLayout(node, layoutFacts = null) {
+  const id = node && node.id != null ? String(node.id) : ''
+  const fact = (id && layoutFacts && layoutFacts[id]) || null
+  if (!fact) return null
+  if (fact.display === 'grid') return 'grid'
+  if (fact.flexDirection === 'row') return 'horizontal'
+  if (fact.flexDirection === 'column') return 'vertical'
+  return null
+}
+
+/**
+ * 🛡️ 2026-09-30 复审 P0-1：把 A 类事实里的 `gridColumns` 一起带出来（此前只取了 `display` ⇒ **列数被丢弃**）。
+ *
+ * 为什么要带：`buildNodeLayoutFacts` 对几何聚类出的均匀网格会给
+ * `{ display:'grid', gridColumns:N }`，而 `deriveChildLayout` 只返回 `'grid'` ⇒
+ * `sections[].gridColumns` 恒缺 ⇒ 下游「网格列数」事实链断在源头（离线审计：1744 个 grid section
+ * 里 **1342（77%）** 今天拿不到任何列数；另有 402 个靠 planner 的二次几何聚类侥幸补回，且与 A 类**零冲突**）。
+ *
+ * ⚠️ 只对**容器**（`isLayoutContainerSection === true`，即 sub.hasNested）下发，**叶子仍不下发** ——
+ *   但**理由已更正（2026-09-30 复审 §8.6，本节 8.5 的归因是错的）**：
+ *     · 原写「叶子下发会触发 `LAYOUT-001` 误 BLOCK」。**归因错误**：`LAYOUT-001`（`validators/
+ *       code-structure-validator.js:1699-1771`）读的是 **vision 的 `state.layoutStructure`**
+ *       （由 `mc-component-graph-phase2.js:3840` / `mc-component-graph-vue3.js:2601` 传参），
+ *       与本文件的 sections 是**两条互不相通的数据链** ⇒ 本节新增的 `gridColumns` **流不到**该门禁。
+ *     · 且该门禁**今天是死代码**：守卫是 `if (options?.layoutStructure?.sections)`，而真实结构为
+ *       `layoutStructure.layout.sections`（**嵌套**）⇒ 顶层 `sections` 恒 undefined，**411/411 产物不可达**、
+ *       近 7 天日志 **0 留痕**（L0-B 会逐条打印 issue id，故负证据有效）。
+ *   真实理由（两条，都属「等前置就绪再开」）：
+ *     ① **写产物侧今天仍走手写路径**：`constraint-reinforcement.js:60-70`「内层栅格铁律」明令 LLM
+ *        手写 `display:grid; grid-template-columns:repeat(N,1fr)`（自注「事实表是 section 级单层」）。
+ *        叶子列数若现在就进事实注入链 ⇒ **双写**（注入 vs 手写互相覆盖，即 3b 记录过的布局错乱源）；
+ *        须先删该铁律与对应 prompt 文案（复审 §8.6 方案2 之 **2c**）才谈得上开叶子。
+ *     ② **该门禁是潜伏雷**：一旦有人放开守卫或改成递归遍历，叶子列数就会引爆 —— 离线全语料模拟实测
+ *        **24 条 BLOCK**（子组件有 grid 误判 **15** + 仅 `common.less` 误判 **2** + 待确认 **1** +
+ *        `horizontal` 分支 **6**，该分支拿整份模板做全局正则、无 section 归属）。故须先按
+ *        「证据源 = **真实产物**（该 section 的宿主子组件 `.vue` + `common.less`）」改造该门禁
+ *        （方案2 之 **2b**），届时容器/叶子一视同仁地开。
+ *
+ * @returns {number|null} 仅当 A 类事实声明 grid 且列数 ≥2 时返回列数，否则 null
+ */
+function deriveChildGridColumns(node, layoutFacts = null) {
+  const id = node && node.id != null ? String(node.id) : ''
+  const fact = (id && layoutFacts && layoutFacts[id]) || null
+  if (!fact || fact.display !== 'grid') return null
+  const n = Number(fact.gridColumns)
+  return Number.isFinite(n) && n >= 2 ? n : null
 }
 
 /** 子节点 → vision body.children 格式（递归保留嵌套结构，供下游 deriveSectionType/countElements 识别 tab/list/chart）。 */

@@ -26,7 +26,6 @@ import {
   injectStateSwitchInteraction,
   extractPerCharTextTruth,
   injectPerCharTextSegments,
-  validateDynamicClassStyles,
   validateResourceBindingLevel,
   extractNodeLevelColorTruth,
   injectNodeLevelColorTruth,
@@ -1604,27 +1603,15 @@ export function registerBuiltinFixRules(pipeline, engineer, context = {}) {
     // 背景：c-env-monitor-a27a33f7 TabSwitcher 布局错乱 + c-device-monitor-7de62721 颜色错误
     // 根因：LLM 产出结构性错误（动态 class 无样式、容器缺 flex、资源绑定层级错误、颜色真值提取失败）
     // 规则：
-    //   P-12a validate-dynamic-class-styles：扫描模板中所有 class 名，与 style 选择器交叉比对，缺失的补空规则
+    //   ⚠️ P-12a `validate-dynamic-class-styles` 已于 2026-09-30 删除（§七 Bug1 / 评审 §8.2 削源）：
+    //      它是 `/* TODO: 补充样式 */` 占位的**唯一生产者**（全语料制造 1464 条永久债）；空规则零声明、
+    //      其填充端读 `nodeLayoutFacts` 与 2.11 LAYOUT-FACTS-INJECT 同源重叠 ⇒ 布局注入统一归 2.11。
     //   P-12c validate-resource-binding-level：检测 backgroundImage 绑定位置，与 Figma 节点树对比，层级不匹配时警告
     //   ⚠️ P-12b `ensure-flex-layout-for-siblings` 已于 2026-09-28 删除（§七 B16/C4）：
     //      与 `css-sanitizer#ensureFlexDisplay`（Fix1，零硬编码）+ `resource-mounter` 规则⑤
     //      （按 Figma `selectorChildCounts`）职责重复；其判据是「相邻标签即父子」错误启发式，
     //      且注入硬编码 `align-items:center` + `gap:4px`（污染真实间距）→ 按删减法收敛。
     //   P-12d extract-node-level-color-truth：提取每个 TEXT 节点的颜色真值（默认 fill + per-char 覆盖色）
-    pipeline.register({
-      id: 'validate-dynamic-class-styles',
-      name: '动态 class 样式校验（P-12a）',
-      phase: FIX_PHASE.POLISH,
-      fix: (content, ctx) => {
-        if (!ctx || !/\.vue$/i.test(ctx.path || '')) return content;
-        try {
-          return validateDynamicClassStyles(content);
-        } catch (e) {
-          pipeline.logger?.warn?.('P-12a 动态 class 样式校验失败（非阻断）', { error: e?.message, file: ctx.path });
-          return content;
-        }
-      },
-    });
     // 🛡️ 缺口 2（2026-09-21 · c-device-monitor-4bc13256/c22ff970 实锤）：
     //   曾有规则会往「已有 grid-template-* 的规则」灌 display:flex → grid 属性被浏览器忽略，
     //   12 卡挤成一行。冲突时以 grid 为准。P-12b 已于 2026-09-28 删除（§七 B16），本规则
@@ -1823,7 +1810,6 @@ export const BUILTIN_RULE_IDS = [
   'anchor-root-container',
   'collapse-background-shell-divs',
   'inject-state-switch-interaction',
-  'validate-dynamic-class-styles',
   'validate-resource-binding-level',
   'extract-node-level-color-truth',
   'remove-subcomponent-width-override',

@@ -2,7 +2,6 @@ import {
   Controller,
   Post,
   Get,
-  Delete,
   Body,
   Param,
   Res,
@@ -26,7 +25,7 @@ import { CurrentUser } from '../auth/current-user.decorator';
  * - GET  /api/mc-spec/skills    可用 skill 列表
  * - GET  /api/mc-spec/report/:componentId/:stamp  检查报告 HTML（自包含，可直接预览）
  * - POST /api/mc-spec/skills    上传 zip 注册自定义 skill（**仅管理员**）
- * - DELETE /api/mc-spec/skills/:skillId  卸载自定义 skill（**仅管理员**，内置不可删）
+ * - POST /api/mc-spec/skills/:skillId/delete  卸载自定义 skill（**仅管理员**，内置不可删）
  */
 @Controller('mc-spec')
 @UseGuards(SessionGuard)
@@ -84,7 +83,7 @@ export class McSpecController {
   }
 
   /** 卸载自定义 skill（仅管理员） */
-  @Delete('skills/:skillId')
+  @Post('skills/:skillId/delete')
   async removeSkill(@Param('skillId') skillId: string, @CurrentUser() userId: string) {
     await this.adminService.assertAdmin(userId);
     return { success: true, ...this.svc.removeSkill(skillId) };

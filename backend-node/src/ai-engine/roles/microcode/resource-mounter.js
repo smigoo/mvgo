@@ -25,6 +25,7 @@ import { inferBackgroundStyle } from '../../utils/background-size-inference.js';
 import {
   scoreMountTarget,
   inferComponentPrefix,
+  HOST_SHELL_TAG_RE,
 } from '../../utils/mount-target-scoring.js';
 import {
   collectDeclaredBindings,
@@ -50,49 +51,19 @@ import {
 import { join } from 'node:path';
 import { removeOverlappingSlotDom } from '../../utils/slot-dom-deduper.js';
 
-/**
- * 宿主外壳标签正则：base-panel / mc-panel（含变体后缀）。
- * 禁止往宿主外壳挂载业务背景——外壳不是组件自有根容器，
- * 挂上去会被 100% 100% 拉伸成整面板大背景（Figma/UI 上不存在）。
- */
-const HOST_SHELL_TAG_RE = /^(base-panel|mc-panel)(-[a-z0-9]+)*$/i;
+// 🗑️ 2026-09-30（删减法）：此处原有 `const HOST_SHELL_TAG_RE = /^(base-panel|mc-panel)(-[a-z0-9]+)*$/i`。
+//   该常量与 `microcode-engineer.js` 的死代码副本、`utils/mount-target-scoring.js` 的私有副本
+//   共三份并存 ⇒ 本轮收敛为**唯一事实源** `utils/mount-target-scoring.js#HOST_SHELL_TAG_RE`
+//   （策略说明 + 事故实证见该处 docblock；禁止往宿主外壳挂业务背景，否则 100% 100% 拉满整面板）。
+//   本文件消费点（`findTemplateRootTag` 的 allowHostShell、`collectMountCandidates` 的 isHostShell）
+//   已改为 import 该常量。
 
-/**
- * 🛡️ 修复（2026-09-08）：查找资源变量在文件表中的现有绑定位置
- * 用于防止同一资源被多个组件重复挂载
- * @param {Object} allFiles 文件表（path → content）
- * @param {string} varName 资源变量名（如 bg1, icon2）
- * @returns {{file: string, tag: string}|null} 已绑定的文件和标签，或 null
- */
-export function findExistingResourceBinding(allFiles, varName) {
-  if (!allFiles || typeof varName !== 'string') return null;
-  // 按文件路径排序，确保确定性（index.vue 优先）
-  const sortedPaths = Object.keys(allFiles).sort((a, b) => {
-    if (a === 'package/index.vue') return -1;
-    if (b === 'package/index.vue') return 1;
-    return a.localeCompare(b);
-  });
-  for (const filePath of sortedPaths) {
-    const content = allFiles[filePath];
-    if (typeof content !== 'string') continue;
-    // 检查是否包含该变量的 import 或 :style 绑定
-    if (
-      content.includes(`import ${varName} from`) ||
-      (content.includes(`:style="`) && content.includes(varName))
-    ) {
-      // 提取包含该变量的标签
-      const tagRe = /<([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>/])*)>/g;
-      let m;
-      while ((m = tagRe.exec(content)) !== null) {
-        const fullTag = m[0];
-        if (fullTag.includes(varName) && (fullTag.includes(':style=') || fullTag.includes(':src='))) {
-          return { file: filePath, tag: fullTag };
-        }
-      }
-    }
-  }
-  return null;
-}
+// 🗑️ 2026-09-30（删减法）：此处原有 `export function findExistingResourceBinding(allFiles, varName)`
+//   （2026-09-08 加入，防同一资源被多组件重复挂载）。**全仓零调用点 = 死代码**，且判据比
+//   `utils/mount-target-scoring.js#isResourceRendered` 更宽（`import <var>` 或 `:style="` 含变量名
+//   即算 ⇒ 会误判「仅 import 未渲染」与「非背景引用如 `:src`」）⇒ 职责收敛到 `isResourceRendered`
+//   这一唯一事实源（两个 engineer 的 N3 兜底已改用它做**无条件**护栏，覆盖锚点缺失路径）。
+//   如需「找已绑定位置」的能力，请直接调 `isResourceRendered(files, varName)`。
 
 // ══════════════════════════════════════════════════════════════
 //  Section 1: 挂载点发现工具
@@ -2839,7 +2810,18 @@ export function fixSectionHeightsForResource(content, ctx, options = {}) {
           newBody += `\n  grid-template-columns: repeat(${facts.gridColumns}, 1fr);`;
         }
       } else if (!/display\s*:\s*flex/i.test(newBody)) {
-        newBody = `\n  display: flex;\n  flex-direction: ${facts.flexDirection || 'column'};${newBody}`;
+        // 🛡️ 2026-09-30 复审 §8.8 #13（同族最后一个伪装兜底，A 类）：
+        //   无方向事实时旧写法写 `flex-direction: column`（把「无事实」伪装成事实）；
+        //   而**直接删掉** `|| 'column'` 又会打印 `flex-direction: undefined`
+        //   （同族历史症状：09-22/09-23 实测 5 组件 20 文件，且**全部落在 `display:grid` 类上**）。
+        //   正确修法 = **三态**，对齐 `utils/layout-facts-injector.js:90-115` 的既有护栏：
+        //     有方向事实 → 写明方向；无方向事实 → **不写该行**（仅保留 display:flex），
+        //     交后处理按事实表「缺则补」（规则⑤）。
+        //   触发面 **0**（live 口径 505/505 flex 事实都有方向）⇒ 本次改动零行为变化。
+        const dir = facts.flexDirection;
+        newBody = dir
+          ? `\n  display: flex;\n  flex-direction: ${dir};${newBody}`
+          : `\n  display: flex;${newBody}`;
       }
       // flexGrow：内容根（-root/-slot-con）不写（父级是 block，flex 失效）。
       // 已有任何 flex: 声明（含 flex: 0 0 Npx / 已有正确 grow）不覆盖，交给规则②改错值。
@@ -3229,4 +3211,763 @@ export function healAbsoluteOverlayParents(files, options = {}) {
     });
   }
   return fixed;
+}
+
+/**
+ * 从 `:style` 对象内层文本中提取全部背景相关键值对的**原文片段**（不 eval、不重组值）。
+ * @param {string} styleInner 形如 `{ backgroundImage: 'url(' + bg4 + ')', backgroundSize: '100% 100%' }` 的内层
+ * @returns {Array<{raw:string, key:string}>} raw=键值对原文；key=归一键名（小写无连字符，如 backgroundimage）
+ */
+function extractBgStyleEntries(styleInner) {
+  const s = String(styleInner || '').trim().replace(/^\{/, '').replace(/\}$/, '');
+  const entries = [];
+  let depth = 0;
+  let inStr = null;
+  let start = 0;
+  const push = (raw) => {
+    const km = /^([A-Za-z-]+)\s*:/.exec(raw);
+    if (km && /^background(image|size|position|repeat)?$/i.test(km[1].replace(/-/g, ''))) {
+      entries.push({ raw, key: km[1].replace(/-/g, '').toLowerCase() });
+    }
+  };
+  for (let i = 0; i <= s.length; i++) {
+    const ch = s[i];
+    if (inStr) {
+      if (ch === inStr && s[i - 1] !== '\\') inStr = null;
+      continue;
+    }
+    if (i === s.length) {
+      const raw = s.slice(start, i).trim();
+      if (raw) push(raw);
+      break;
+    }
+    if (ch === "'" || ch === '"' || ch === '`') { inStr = ch; continue; }
+    if (ch === '(' || ch === '[' || ch === '{') { depth++; continue; }
+    if (ch === ')') { depth--; continue; }
+    if (ch === ']' || ch === '}') { continue; }
+    if (ch === ',' && depth === 0) {
+      const raw = s.slice(start, i).trim();
+      start = i + 1;
+      if (raw) push(raw);
+    }
+  }
+  return entries;
+}
+
+const BG_KEY_DETECT_RES = [
+  ['backgroundimage', /background-?[Ii]mage\s*:/],
+  ['backgroundsize', /background-?[Ss]ize\s*:/],
+  ['backgroundposition', /background-?[Pp]osition\s*:/],
+  ['backgroundrepeat', /background-?[Rr]epeat\s*:/],
+];
+
+/** 判开标签文本上是否已声明某背景键（camel/kebab 都认） */
+function tagHasBgKey(tagText, key) {
+  const hit = BG_KEY_DETECT_RES.find(([k]) => k === key);
+  return hit ? hit[1].test(tagText) : false;
+}
+
+/** 判开标签文本上是否声明了任意背景键 */
+function tagHasAnyBgKey(tagText) {
+  return BG_KEY_DETECT_RES.some(([, re]) => re.test(tagText));
+}
+
+/**
+ * 兜底 backdrop 判定（形态学，命名无关）：backgroundSize 缺失或值含 % ⇒ 该层是
+ * 「只挂图、几何靠百分比兜底」的撕裂层（a6d2e5e1 bg-m：size 100% 100%）；
+ * size 为精确像素 ⇒ 自洽背景容器（a6d2e5e1 标题条 t：size 130px 9px）⇒ 不动。
+ */
+function isBackdropBgLayer(entries) {
+  const size = entries.find((e) => e.key === 'backgroundsize');
+  return !size || /%/.test(size.raw);
+}
+
+/**
+ * 🛡️ 判 :style 顶层是否存在**非背景声明**（2026-09-30 · d368e7d8 半透明背景实锤）。
+ * 与 extractBgStyleEntries 同一扫描口径；任一条目的 key 不属于背景四键即视为有
+ * （典型：opacity——删层会静默丢视觉语义）。
+ */
+function hasNonBgStyleDeclarations(styleInner, bgEntries) {
+  const s = String(styleInner || '').trim().replace(/^\{/, '').replace(/\}$/, '');
+  if (!s) return false;
+  const bgKeys = new Set((bgEntries || []).map((e) => e.key));
+  let hit = false;
+  let depth = 0;
+  let inStr = null;
+  let start = 0;
+  const check = (raw) => {
+    const km = /^([A-Za-z-]+)\s*:/.exec(String(raw || '').trim());
+    if (!km) return;
+    const key = km[1].replace(/-/g, '').toLowerCase();
+    if (!bgKeys.has(key)) hit = true;
+  };
+  for (let i = 0; i <= s.length; i++) {
+    const ch = s[i];
+    if (inStr) {
+      if (ch === inStr && s[i - 1] !== '\\') inStr = null;
+      continue;
+    }
+    if (i === s.length) { check(s.slice(start, i)); break; }
+    if (ch === "'" || ch === '"' || ch === '`') { inStr = ch; continue; }
+    if (ch === '(' || ch === '[' || ch === '{') { depth++; continue; }
+    if (ch === ')') { depth--; continue; }
+    if (ch === ']' || ch === '}') { continue; }
+    if (ch === ',' && depth === 0) { check(s.slice(start, i)); start = i + 1; }
+  }
+  return hit;
+}
+
+/**
+ * 从开标签的 `:style` 中剥除背景键条目，保留其余条目（非背景键原文不动）。
+ * @returns {string} 新开标签；全剥空时连 ` :style="{...}"` 属性一起移除
+ */
+function stripBgEntriesFromTag(tagText, styleInner, bgEntries) {
+  const pos = tagText.indexOf(styleInner);
+  if (pos < 0) return tagText;
+  const bgKeys = new Set(bgEntries.map((e) => e.key));
+  // 顶层切分（与 extractBgStyleEntries 同一扫描口径），保留非背景条目
+  const s = styleInner.trim().replace(/^\{/, '').replace(/\}$/, '');
+  const kept = [];
+  let depth = 0;
+  let inStr = null;
+  let start = 0;
+  const tryPush = (raw) => {
+    if (!raw) return;
+    const km = /^([A-Za-z-]+)\s*:/.exec(raw);
+    if (km && bgKeys.has(km[1].replace(/-/g, '').toLowerCase())) return;
+    kept.push(raw);
+  };
+  for (let i = 0; i <= s.length; i++) {
+    const ch = s[i];
+    if (inStr) {
+      if (ch === inStr && s[i - 1] !== '\\') inStr = null;
+      continue;
+    }
+    if (i === s.length) { tryPush(s.slice(start, i).trim()); break; }
+    if (ch === "'" || ch === '"' || ch === '`') { inStr = ch; continue; }
+    if (ch === '(' || ch === '[' || ch === '{') { depth++; continue; }
+    if (ch === ')') { depth--; continue; }
+    if (ch === ']' || ch === '}') { continue; }
+    if (ch === ',' && depth === 0) { tryPush(s.slice(start, i).trim()); start = i + 1; }
+  }
+  if (kept.length === 0) {
+    // 全剥空：连 ` :style="{...}"` 属性一起移除（styleInner 捕获自 ":style=..."，
+    // 其后紧跟属性闭合引号，一并吃掉）
+    const attrStart = tagText.lastIndexOf(':style', pos);
+    if (attrStart < 0) return tagText;
+    let cutStart = attrStart;
+    while (cutStart > 0 && /\s/.test(tagText[cutStart - 1])) cutStart--;
+    let cutEnd = pos + styleInner.length;
+    if (tagText[cutEnd] === '"') cutEnd += 1;
+    return tagText.slice(0, cutStart) + tagText.slice(cutEnd);
+  }
+  return tagText.slice(0, pos) + kept.join(', ') + tagText.slice(pos + styleInner.length);
+}
+
+/**
+ * 把背景键值对注入一个开标签的 `:style`（调用方保证 ownership === 'none'）。
+ * @returns {string|null} 新开标签；无法安全注入时 null
+ */
+function injectBgEntriesIntoTag(tag, entriesText) {
+  const styleRe = /:style="([^"]*)"/;
+  if (styleRe.test(tag)) {
+    const inner = (tag.match(styleRe)[1] || '').trim();
+    if (!/^\{[\s\S]*\}$/.test(inner)) return null;
+    return tag.replace(styleRe, `:style="{ ...${inner}, ${entriesText} }"`);
+  }
+  return tag.replace(/\/?>$/, (tail) => ` :style="{ ${entriesText} }"${tail}`);
+}
+
+/**
+ * 🛡️ 背景形态契约落地（2026-09-30 · mc-max-1790698932396-a6d2e5e1 实锤，用户确认方案）：
+ *
+ * 契约（方案 A 主路径 / 方案 B 兜底）：
+ *   - 方案 A：bg 资源 = 宿主容器的 CSS 背景，**不生成独立 DOM**。空壳 bg div
+ *     （无子标签、无有效文本）⇒ 把其 `:style` 里的背景键值**原文迁移**到直接父元素，
+ *     然后删除该 div。
+ *   - 方案 B：背景层上有可叠加内容（装饰子元素/文本）⇒ 保留独立 div，但强制
+ *     `position:absolute; inset:0`（宿主 relative 由既有 healAbsoluteOverlayParents
+ *     在本函数之后补——挂接顺序必须「先拆层/补 absolute，后补宿主 relative」）。
+ *
+ * 实锤形态（a6d2e5e1 车型分布）：同一张卡背景被拆两个元素——容器 :style 挂精确
+ * 四件套（figmaBox 真值），内层 bg-m div 却单独挂 backgroundImage 且 100% 100%，
+ * 且 bg-m 无 absolute 占 103px 文档流 ⇒ 标题被挤下移、内容区塌高。
+ * prompt 铁律（bg 禁止独立 DOM）拦不住 LLM 违规 ⇒ 确定性后处理兜底。
+ *
+ * 迁移归属判定（复用 bgBindingOwnership，fail-closed）+ 键级合并（a6d2e5e1 真实产物驱动）：
+ *   - 父 none   → 迁移背景键值（**父已有键=真值优先不覆盖**，如容器已挂 figmaBox
+ *     精确 size/position 时只迁 backgroundImage）+ 空壳删 div / 非空壳剥背景键保留内容
+ *   - 父 self   → 不迁移（父已含同资源完整绑定）+ 空壳删 div / 非空壳剥背景键
+ *   - 父 other / literal → 宿主被外来背景占用 → 不迁移不剥（fail-closed），退化方案 B
+ *
+ * 方案 B 判据（保守，防误伤）：**仅「父元素也已绑定背景」的子 bg 层**（撕裂家族）
+ * 才补 absolute——父无背景的独立 bg 内容块可能是正常文档流布局，盲目 absolute 化
+ * 会破坏渲染（fail-open 原则优先于契约完备性；待新实锤再扩展）。
+ *
+ * 幂等：迁移后子层 :style 无背景键 → 再次扫描 hasBg=false 跳过；补过 absolute 的
+ * class 再次扫描命中 hasPosition 跳过。
+ *
+ * @param {Object<string,string>} files 产物文件表（原地修改）
+ * @param {Object} [options] { logger }
+ * @returns {{collapsed: Array<{file:string, varName:string, mode:'merge'|'drop'}>, absoluteFixed: Array<{file:string, cls:string}>}}
+ */
+export function healStandaloneBgLayers(files, options = {}) {
+  const logger = safeLogger(options.logger);
+  const report = { collapsed: [], absoluteFixed: [] };
+  if (!files || typeof files !== 'object') return report;
+
+  const tagRe = /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>/])*)(\/?)>/g;
+  const VOID = /^(img|br|hr|input|meta|link|source|path|circle|rect|ellipse|line|polyline|polygon|use|stop)$/i;
+
+  for (const [path, content] of Object.entries(files)) {
+    if (typeof content !== 'string' || !path.endsWith('.vue')) continue;
+    const tplM = content.match(/<template[^>]*>([\s\S]*?)<\/template>/i);
+    const styleM = content.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
+    if (!tplM) continue;
+    const tpl = tplM[1];
+    const styleBlock = styleM ? styleM[1] : '';
+
+    const edits = []; // { start, end, text }（tpl 内偏移）
+    const stylePatches = []; // { cls, ensureAbsolute: true }
+    // 同一父被多个撕裂子层命中 → 记账，扫描结束后每父合并为一次注入 edit
+    // （多 edit 同区间倒序应用会互相撕裂——CardGrid13 实锤）
+    const parentInjections = new Map(); // parentOpenStart -> { parent, parentTag, texts, keys, elEdits }
+    const stack = [];
+    let m;
+    tagRe.lastIndex = 0;
+    while ((m = tagRe.exec(tpl)) !== null) {
+      const [full, slash, tag, attrs, selfClose] = m;
+      if (slash) {
+        const el = stack.pop();
+        if (!el || !el.hasBg) continue;
+        const closeStart = m.index;
+        const inner = tpl
+          .slice(el.openEnd, closeStart)
+          .replace(/<!--[\s\S]*?-->/g, '');
+        const hasChild = /<[A-Za-z]/.test(inner) || inner.trim() !== '';
+        const parent = stack[stack.length - 1] || null;
+        if (!parent) continue;
+        const parentTag = tpl.slice(parent.openStart, parent.openEnd);
+        const elOpenTag = tpl.slice(el.openStart, el.openEnd);
+        const entries = extractBgStyleEntries(el.styleInner);
+        if (entries.length === 0) continue;
+        if (hasChild) {
+          // 非空壳保守边界：
+          //   ① 父完全无背景键 → 疑似合法 overlay 设计 → 不动（fail-open）
+          //   ② 子层 size 精确像素 → 自洽背景容器（标题条 t 形态）→ 不动
+          //   ③ 子层 size % 兜底 + 父有背景键 → 撕裂家族（bg-m 形态）→ 迁移
+          const parentHasKey = tagHasAnyBgKey(parentTag);
+          if (!parentHasKey) continue;
+          if (!isBackdropBgLayer(entries)) continue;
+        }
+        const own = bgBindingOwnership(parentTag, el.bgVar || '__probe__');
+        if (own === 'other' || own === 'literal') {
+          // fail-closed：宿主被外来背景占用 → 不迁移不剥。
+          // 补 absolute 仅限「父 size 为精确像素」的撕裂实锤（a6d2e5e1：父 191px 80px 真值
+          // + 子 100% 兜底）。🛡️ f8116aa6 误伤收紧：父 size 也是 %（父子双兜底）无法认定
+          // 几何真值在父——那是合法层叠标签设计（slot-tag-text 叠 slot-tag），补了
+          // absolute+inset:0 会把标签文字层撑满整行压住面板标题 → 不动（fail-open）。
+          // ⚠️ 值允许带引号（Vue :style 对象写法 backgroundSize: '191px 80px'）；
+          // 扫描止于 ; , } —— 防止 '100% 100%' 后扫到对象里下一个属性（width: '191px'）误判
+          const parentPx = /background-?[Ss]ize\s*:[^;,}]*\d+(?:\.\d+)?px/.test(parentTag);
+          if (parentPx && el.cls && !/^\s*$/.test(el.cls)) {
+            const firstCls = el.cls.split(/\s+/)[0];
+            const esc = firstCls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const ruleM = styleBlock.match(new RegExp('\\.' + esc + '\\s*\\{([^{}]*)\\}'));
+            const hasAbs = ruleM && /position\s*:\s*absolute/i.test(ruleM[1]);
+            if (!hasAbs) stylePatches.push({ cls: firstCls, ensureAbsolute: true });
+          }
+          continue;
+        }
+        // own === 'none' | 'self'：键级合并迁移（父已有键=真值优先，不覆盖）
+        let acc = parentInjections.get(parent.openStart);
+        if (!acc) {
+          acc = { parent, parentTag, texts: [], keys: new Set(), elEdits: [] };
+          parentInjections.set(parent.openStart, acc);
+        }
+        const migratable = own === 'self'
+          ? []
+          : entries.filter((e) => {
+              if (tagHasBgKey(parentTag, e.key)) return false; // 父已有=真值优先
+              if (acc.keys.has(e.key)) return false; // 本轮已计划迁入，不重复
+              return true;
+            });
+        const entriesText = migratable.map((e) => e.raw).join(', ');
+        for (const e of migratable) acc.keys.add(e.key);
+        // 子层剥背景键：非空壳保留 div 与内容；空壳整个 div 删除
+        const newElTag = stripBgEntriesFromTag(elOpenTag, el.styleInner, entries);
+        if (entriesText) acc.texts.push(entriesText);
+        if (hasChild) {
+          if (newElTag !== elOpenTag) {
+            acc.elEdits.push({ start: el.openStart, end: el.openEnd, text: newElTag });
+            report.collapsed.push({ file: path, varName: el.bgVar, mode: 'merge' });
+          }
+        } else if (hasNonBgStyleDeclarations(el.styleInner, entries)) {
+          // 🛡️ 守门（2026-09-30 · mc-max-1790723575234-d368e7d8 实锤）：空壳 bg 层的
+          // :style 含**非背景声明**（opacity/filter/mix-blend-mode 等视觉语义）时
+          // 禁止删 div——这些声明无法内联进容器（半透明背景内联 = 透明度语义丢失或
+          // 被错误提升到容器殃及兄弟内容）→ 保留原状（fail-open，宁缺勿错）。
+          logger.warn?.('bg 空壳层含非背景声明，跳过合并（透明度等语义无法内联）', {
+            file: path, cls: el.cls, varName: el.bgVar,
+          });
+        } else {
+          acc.elEdits.push({ start: el.openStart, end: m.index + full.length, text: '' });
+          report.collapsed.push({ file: path, varName: el.bgVar, mode: 'drop' });
+        }
+        continue;
+      }
+      const openStart = m.index;
+      const openEnd = openStart + full.length;
+      const clsM = attrs.match(/(?:^|\s)class="([^"]*)"/);
+      const cls = clsM ? clsM[1] : '';
+      const styleAttrM = attrs.match(/:style="([^"]*)"/);
+      let bgVar = null;
+      let styleInner = null;
+      let hasBg = false;
+      if (styleAttrM) {
+        styleInner = (styleAttrM[1] || '').trim();
+        if (/^\{[\s\S]*\}$/.test(styleInner)) {
+          const frag = extractBgImageFragment(styleInner);
+          if (frag !== null) {
+            hasBg = true;
+            const ref = extractBgImageRef(frag);
+            if (ref.kind === 'var') bgVar = ref.name;
+          }
+        }
+      }
+      if (!selfClose && !VOID.test(tag)) {
+        stack.push({ tag, cls, openStart, openEnd, bgVar, styleInner, hasBg });
+      }
+    }
+
+    // 统一应用父注入：合并 texts 一次注入；注入失败则该父的子层改动一并放弃
+    // （宁少改不半改）
+    for (const acc of parentInjections.values()) {
+      if (acc.texts.length === 0) {
+        edits.push(...acc.elEdits); // 只剥不迁（self 场景）
+        continue;
+      }
+      const newParentTag = injectBgEntriesIntoTag(acc.parentTag, acc.texts.join(', '));
+      if (!newParentTag) continue;
+      edits.push({ start: acc.parent.openStart, end: acc.parent.openEnd, text: newParentTag });
+      edits.push(...acc.elEdits);
+    }
+
+    if (edits.length === 0 && stylePatches.length === 0) continue;
+
+    // 应用模板 edits（倒序，防偏移）
+    let newTpl = tpl;
+    edits.sort((a, b) => b.start - a.start);
+    for (const e of edits) {
+      newTpl = newTpl.slice(0, e.start) + e.text + newTpl.slice(e.end);
+    }
+
+    // 应用 style 补丁：按完整 style 标签文本定位替换（模板 edits 改变了长度，
+    // 禁止用扫描期的绝对偏移切片——否则样式替换落点漂移）
+    let newContent = content.replace(tpl, () => newTpl);
+    if (stylePatches.length > 0 && styleM) {
+      let newStyleBlock = styleBlock;
+      const applied = [];
+      for (const p of stylePatches) {
+        const esc = p.cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const ruleRe = new RegExp('(\\.' + esc + '\\s*\\{)', 'g');
+        if (ruleRe.test(newStyleBlock)) {
+          ruleRe.lastIndex = 0;
+          // 已有规则：仅当无任何 position 声明才补（幂等）
+          const bodyM = newStyleBlock.match(new RegExp('\\.' + esc + '\\s*\\{([^{}]*)\\}'));
+          if (bodyM && !/position\s*:/i.test(bodyM[1])) {
+            newStyleBlock = newStyleBlock.replace(ruleRe, '$1\n  position: absolute;\n  inset: 0;');
+            applied.push(p.cls);
+          }
+        } else {
+          newStyleBlock += `\n.${p.cls} {\n  position: absolute;\n  inset: 0;\n}\n`;
+          applied.push(p.cls);
+        }
+      }
+      if (applied.length > 0) {
+        const oldStyleTag = styleM[0];
+        const newStyleTag = oldStyleTag.replace(styleBlock, () => newStyleBlock);
+        newContent = newContent.replace(oldStyleTag, () => newStyleTag);
+        for (const cls of applied) {
+          report.absoluteFixed.push({ file: path, cls });
+        }
+      }
+    }
+
+    if (newContent !== content) files[path] = newContent;
+  }
+
+  if (report.collapsed.length > 0) {
+    logger.warn('🛡️ 空壳 bg 独立层已按契约折叠（方案 A：背景回归宿主容器 CSS）', {
+      count: report.collapsed.length,
+      detail: report.collapsed.slice(0, 20),
+    });
+  }
+  if (report.absoluteFixed.length > 0) {
+    logger.warn('🛡️ 有内容 bg 层缺 absolute，已补 position:absolute + inset:0（方案 B）', {
+      count: report.absoluteFixed.length,
+      detail: report.absoluteFixed.slice(0, 20),
+    });
+  }
+  return report;
+}
+
+/**
+ * 🛡️ 透明度归属修正（2026-09-30 · mc-max-1790723575234-d368e7d8 实锤，用户质询
+ * 「cons 的透明度是不是挂错了」——确系挂错，治本于管线而非产物）：
+ *
+ * 【根源链】Figma 真值：卡片 GROUP 容器 opacity=1，其 bg 子层 GROUP opacity=0.5
+ * （半透明底图）。产物链路两处偏离：
+ *   ① prompt 铁律「bg=容器 CSS 背景、禁止独立 DOM」**没有 bg 层自带透明度的例外**
+ *      —— 半透明背景内联进容器在 CSS 上结构性无法表达（背景图无法单独设 opacity）；
+ *   ② LLM/refine 轮为补透明度把 `opacity:0.5` 挂到**容器** class ⇒ 图标/文字一并
+ *      变透明（用户可见缺陷）。
+ *
+ * 【修正】真值驱动（不认 class 名，杜绝硬编码）：当容器 E 同时满足
+ *   a) E 带内联背景四件套（bg 绑定）；
+ *   b) E 的 class 在 CSS（scoped/common.less）声明 opacity: v（0<v<1）；
+ *   c) 真值实锤「搬运」而非设计：nodeData 中存在某节点其 opacity ≈ v（±0.02）
+ *      且该节点为 GROUP（bg 语义层），而 E 的对应资源映射 ownerSection 真值容器
+ *      opacity 缺失或 ≥1 —— 即「子层透明度被提升到容器」；
+ * 则重构为保真形态：
+ *   - 容器 CSS 删 opacity、补 position:relative（若无）；
+ *   - 容器 :style 的背景四件套移到**新插入的首子背景层**（class = <首class>-bg），
+ *     层 CSS：position:absolute; inset:0; opacity:<真值>; pointer-events:none；
+ *   - 容器既有**静态**子元素补 inline `style="position: relative"`（保内容画在
+ *     半透明层之上——与 LLM 正确形态一致）。
+ *
+ * 幂等：容器无 opacity 或已存在 <首class>-bg 层 → 跳过。
+ *
+ * @param {Object<string,string>} files 产物文件表（原地修改）
+ * @param {Object|null} nodeData Figma 全量节点真值
+ * @param {Object} [options] { logger }
+ * @returns {{fixed: Array<{file:string, containerCls:string, opacity:number}>}}
+ */
+export function fixMisplacedContainerOpacity(files, nodeData, options = {}) {
+  const logger = safeLogger(options.logger);
+  const report = { fixed: [] };
+  if (!files || typeof files !== 'object') return report;
+
+  // 真值侧：收集所有 opacity<1 的节点值集合（命名无关；GROUP/其它类型均可）
+  const lowOpacityVals = [];
+  const collect = (n) => {
+    if (!n || typeof n !== 'object') return;
+    const op = n.opacity;
+    if (typeof op === 'number' && op > 0 && op < 0.999) lowOpacityVals.push(op);
+    for (const v of Object.values(n)) {
+      if (v && typeof v === 'object') collect(v);
+      else if (Array.isArray(v)) v.forEach(collect);
+    }
+  };
+  if (nodeData && typeof nodeData === 'object') collect(nodeData);
+  if (lowOpacityVals.length === 0) return report; // 真值无低透明度节点 → 无从「搬运」，fail-open
+
+  const tagRe = /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>/])*)(\/?)>/g;
+  const VOID = /^(img|br|hr|input|meta|link|source|path|circle|rect|ellipse|line|polyline|polygon|use|stop)$/i;
+  const OPACITY_CSS_RE = /opacity\s*:\s*(0?\.\d+|0|1(?:\.0+)?|\d+%)/i;
+
+  const parseOpacity = (raw) => {
+    const m = /opacity\s*:\s*(0?\.\d+|0|1(?:\.0+)?|\d+%)/i.exec(raw || '');
+    if (!m) return null;
+    const v = /%$/.test(m[1]) ? parseFloat(m[1]) / 100 : parseFloat(m[1]);
+    return Number.isFinite(v) ? v : null;
+  };
+  const near = (a, b) => Math.abs(a - b) <= 0.02;
+  /**
+   * 在单个文件内容中删除 class 的 opacity 声明（容器无 position 则补 relative），返回新内容。
+   * 🛡️ 补 relative 不再限定「容器规则在 .vue」——d368e7d8 实锤容器规则常只在
+   *    common.less（scoped 里没有），而独立背景层是 absolute，宿主必须
+   *    relative 才能成为其定位参照（否则层相对更外层祖先定位 → 铺满整槽位）。
+   */
+  const stripContainerOpacityCss = (content, esc) => {
+    let out = content;
+    let removed = false;
+    const bodyRe = new RegExp('\\.' + esc + '\\s*\\{([^{}]*)\\}', 'g');
+    let bm;
+    while ((bm = bodyRe.exec(out)) !== null) {
+      const v = parseOpacity(bm[1]);
+      if (v === null || v >= 0.999) continue;
+      let block = bm[0].replace(/[ \t]*opacity\s*:[^;\n}]*;?[ \t]*\n?/i, '');
+      if (!/position\s*:/i.test(block.replace(/^[^{]*\{/, ''))) {
+        block = block.replace(/(\{)/, '$1\n  position: relative;');
+      }
+      out = out.slice(0, bm.index) + block + out.slice(bm.index + bm[0].length);
+      bodyRe.lastIndex = bm.index + block.length;
+      removed = true;
+    }
+    return { content: out, removed };
+  };
+
+  for (const [path, content] of Object.entries(files)) {
+    if (typeof content !== 'string' || !path.endsWith('.vue')) continue;
+    const tplM = content.match(/<template[^>]*>([\s\S]*?)<\/template>/i);
+    if (!tplM) continue;
+    const tpl = tplM[1];
+
+    const escCls = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    /**
+     * 在模板文本里找某 class 的元素开标签（bg 层 / 容器）。
+     * 🛡️ d368e7d8 实锤（2026-09-30）：预览的样式注入链不可靠 —— 微码预览实际是
+     *    vue3-sfc-loader 运行时编译 .vue，样式来自 `<style lang=less>`（含
+     *    `@import index.less`）与后端 index.css；**把层规则写进 .vue scoped 或
+     *    common.less 都可能落空**（r-992fa002 实锤：元素在、任何 CSS 都没命中 →
+     *    预览 bgLayerPos:static / bgLayerOpacity:1）。因此定位/透明度**直接 inline**
+     *    写进层元素的 `:style` —— 与管线既有的「bg 内联绑定」一致，不依赖任何注入链。
+     */
+    const findTagByClsIn = (text, cls) => {
+      const re = new RegExp(
+        '<(?:[a-zA-Z][\\w-]*)[^>]*\\bclass="(?:[^"]*[\\s])?' + escCls(cls) + '(?=[\\s"])[^>]*>',
+      );
+      const mm = re.exec(text);
+      return mm ? mm[0] : null;
+    };
+    /** 开标签的 :style 对象里是否已带 position（inline 保真判据） */
+    const tagHasInlinePos = (tag) => !!tag && /:style="\{[^"]*position\s*:/.test(tag);
+    /** 往 :style 对象尾部追加 inline 声明（幂等：已有 position 则原样返回） */
+    const appendInlineToStyle = (tag, decl) =>
+      tag.replace(/(:style="\{)([^"]*?)(\}")/, (mm, a, b, c2) =>
+        /(?:^|,)\s*position\s*:/.test(b) ? mm : a + b + decl + c2,
+      );
+    /** 容器补 inline `style="position: relative;"`（absolute 层的定位参照） */
+    const ensureContainerInlinePos = (tag) => {
+      if (!tag) return tag;
+      if (/\bstyle="/.test(tag)) return tag; // 已有静态 style，交给它
+      if (tagHasInlinePos(tag)) return tag; // :style 已含 position
+      return tag.replace(/(class="[^"]*")/, '$1 style="position: relative;"');
+    };
+
+    // 扫描候选容器：带内联背景绑定且非自闭合的元素
+    tagRe.lastIndex = 0;
+    const candidates = []; // { openStart, openEnd, full, attrs, cls, styleInner }
+    let m;
+    while ((m = tagRe.exec(tpl)) !== null) {
+      const [full, slash, tag, attrs, selfClose] = m;
+      if (slash || selfClose || VOID.test(tag)) continue;
+      if (!/:style="/.test(attrs)) continue;
+      const inner = (attrs.match(/:style="([^"]*)"/) || [])[1] || '';
+      const hasBg = /backgroundImage/i.test(inner);
+      if (!hasBg) continue;
+      const cls = (attrs.match(/class="([^"]*)"/) || [])[1] || '';
+      if (!cls) continue;
+      candidates.push({ openStart: m.index, openEnd: m.index + full.length, full, attrs, cls, styleInner: inner, tag });
+    }
+
+    for (const cand of candidates) {
+      const firstCls = cand.cls.split(/\s+/)[0];
+      // 🛡️ 背景层自身不当候选容器（本管线层命名约定 firstCls+'-bg'）——否则会对
+      // 已保真的 -bg 层二次套娃 -bg-bg（d368e7d8 重放实锤）
+      if (/-bg$/.test(firstCls)) continue;
+      const bgLayerCls = `${firstCls}-bg`;
+      const layerTag = findTagByClsIn(tpl, bgLayerCls);
+      // 幂等：模板已有层元素 **且** 其 :style 已带 inline position → 已保真。
+      // （inline 是本管线唯一可靠的生效通道，无需再看任何 CSS 规则是否存在）
+      if (layerTag && tagHasInlinePos(layerTag)) continue;
+
+      // 真值实锤：容器 CSS opacity 值必须与真值某低透明度节点吻合
+      // 🛡️ 检测范围 = 全部文件（scoped 在 .vue、同名块可能在 common.less）
+      const esc = escCls(firstCls);
+      let cssOpacity = null;
+      for (const scope of Object.values(files)) {
+        const m2 = new RegExp('\\.' + esc + '\\s*\\{([^{}]*)\\}').exec(scope);
+        if (m2) {
+          const v = parseOpacity(m2[1]);
+          if (v !== null && v < 0.999 && lowOpacityVals.some((t) => near(t, v))) {
+            cssOpacity = v;
+            break;
+          }
+        }
+      }
+      const halfFixed = !!layerTag; // 层元素已在、inline 缺 → 半修正态
+      if (cssOpacity === null && halfFixed) {
+        // 半修正态：容器 opacity 已被上一轮清除 → 退化用「真值低透明度唯一值」
+        // （去重后必须唯一，否则 fail-open，避免臆造透明度）
+        const uniq = Array.from(new Set(lowOpacityVals.map((v) => Math.round(v * 1000) / 1000)));
+        if (uniq.length === 1) cssOpacity = uniq[0];
+      }
+      if (cssOpacity === null) continue; // 容器无低透明度声明或值与真值不符 → fail-open
+
+      // 1) 清容器 CSS opacity 声明（scoped + common.less 同名块都要清；
+      //    容器自身规则无 position 则补 relative —— 兜底旧渲染链）
+      for (const fp of Object.keys(files)) {
+        if (typeof files[fp] !== 'string' || !/\.(vue|less|css)$/.test(fp)) continue;
+        const r = stripContainerOpacityCss(files[fp], esc);
+        if (r.removed) files[fp] = r.content;
+      }
+      let cur = files[path];
+      const LAYER_INLINE = `, position: 'absolute', inset: 0, opacity: ${cssOpacity}, pointerEvents: 'none'`;
+      // 2) 半修正态自愈：层元素已在 → 仅补 inline，**不重复插元素**
+      if (halfFixed) {
+        const newLayer = appendInlineToStyle(layerTag, LAYER_INLINE);
+        const cTag = findTagByClsIn(cur, firstCls);
+        const newCTag = ensureContainerInlinePos(cTag);
+        let next = cur;
+        if (newLayer !== layerTag) next = next.replace(layerTag, () => newLayer);
+        if (newCTag && newCTag !== cTag) next = next.replace(cTag, () => newCTag);
+        files[path] = next;
+        report.fixed.push({ file: path, containerCls: firstCls, opacity: cssOpacity, inlineOnly: true });
+        logger.warn('🛡️ 透明度归属修正：背景层补 inline 定位/透明度（不依赖 CSS 注入链）', {
+          file: path, containerCls: firstCls, opacity: cssOpacity, layerCls: bgLayerCls,
+        });
+        continue;
+      }
+      // 3) 模板：容器 :style 的背景四件套移到新首子层；容器 :style 全为背景键时整体移除
+      const bgEntries = extractBgStyleEntries(cand.styleInner);
+      if (bgEntries.length === 0) continue; // 无可迁移背景键 → 不动
+      const entriesText = bgEntries.map((e) => e.raw).join(', ');
+      const bgEntriesSet = new Set(bgEntries.map((e) => e.key));
+      const keptRaw = (() => {
+        const s = cand.styleInner.trim().replace(/^\{/, '').replace(/\}$/, '');
+        const kept = [];
+        let depth = 0;
+        let inStr = null;
+        let start = 0;
+        const tryPush = (raw) => {
+          const t = String(raw || '').trim();
+          if (!t) return;
+          // 🛡️ 必须 trim 后再匹配（首条目带前导空格时 ^[A-Za-z-]+ 不命中 → 误判保留）
+          const km = /^([A-Za-z-]+)\s*:/.exec(t);
+          if (km && bgEntriesSet.has(km[1].replace(/-/g, '').toLowerCase())) return;
+          kept.push(t);
+        };
+        for (let i = 0; i <= s.length; i++) {
+          const ch = s[i];
+          if (inStr) {
+            if (ch === inStr && s[i - 1] !== '\\') inStr = null;
+            continue;
+          }
+          if (i === s.length) { tryPush(s.slice(start, i)); break; }
+          if (ch === "'" || ch === '"' || ch === '`') { inStr = ch; continue; }
+          if (ch === '(' || ch === '[' || ch === '{') { depth++; continue; }
+          if (ch === ')') { depth--; continue; }
+          if (ch === ']' || ch === '}') { continue; }
+          if (ch === ',' && depth === 0) { tryPush(s.slice(start, i)); start = i + 1; }
+        }
+        return kept.join(', ');
+      })();
+      const newAttrs = keptRaw
+        // 保留非背景条目（罕见）：把 position 追加进容器 :style 对象
+        ? cand.attrs.replace(
+            /:style="\{([^"]*)\}"/,
+            () => `:style="{ ${keptRaw}, position: 'relative' }"`,
+          )
+        : cand.attrs.replace(/\s*:style="[^"]*"/, '');
+      // 容器补 inline relative（absolute 层的定位参照）；已有静态 style / :style position 则不动
+      const containerAttrs =
+        /(^|\s)style="/.test(newAttrs) || tagHasInlinePos(newAttrs)
+          ? newAttrs
+          : newAttrs.replace(/(class="[^"]*")/, '$1 style="position: relative;"');
+      // 层元素：背景四件套（迁自容器）+ inline 定位/透明度（不依赖任何 CSS 注入链）
+      const newOpenTag =
+        `<${cand.tag}${containerAttrs}>` +
+        `\n      <div class="${bgLayerCls}" :style="{ ${entriesText}${LAYER_INLINE} }"></div>`;
+      let newTpl = cur.match(/<template[^>]*>([\s\S]*?)<\/template>/i)[1];
+      newTpl = newTpl.replace(cand.full, () => newOpenTag);
+
+      // 4) 既有静态子元素补 relative（inline style 属性；已有 style/:style 的跳过——
+      //    Vue 允许共存，但保守起见只补「完全无 style」的子元素，其余交给 LLM/refine 自愈）
+      //    实现：在容器开标签之后、各直接子开标签前插入的层已居首；对容器内既有
+      //    `class="..."` 且无 style 属性的子开标签补 style="position: relative"
+      //    —— 仅限容器开标签到其配对闭标签之间的顶层子元素（简化：容器区间内所有
+      //    无 style 的元素开标签，img 等 VOID 除外）。
+      cur = cur.replace(tpl, () => newTpl);
+      // 容器区间内的子元素 relative 补丁（基于新模板文本做区间定位）
+      const tpl2 = cur.match(/<template[^>]*>([\s\S]*?)<\/template>/i)[1];
+      const openIdx = tpl2.indexOf(newOpenTag);
+      if (openIdx >= 0) {
+        // 找容器配对闭标签（同 tag 计数）
+        let depth2 = 1;
+        const tagTokenRe = new RegExp(`<(\\/?)${cand.tag}(?=[\\s/>])((?:"[^"]*"|'[^']*'|[^>])*)>`, 'g');
+        tagTokenRe.lastIndex = openIdx + newOpenTag.length;
+        let closeIdx = -1;
+        let t;
+        while ((t = tagTokenRe.exec(tpl2)) !== null) {
+          depth2 += t[1] ? -1 : 1;
+          if (depth2 === 0) { closeIdx = t.index; break; }
+        }
+        if (closeIdx > openIdx) {
+          const seg = tpl2.slice(openIdx + newOpenTag.length, closeIdx);
+          const segPatched = seg.replace(
+            /<([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>/])*)(\/?)>/g,
+            (full2, tag2, attrs2, selfClose2) => {
+              if (VOID.test(tag2) || selfClose2) return full2;
+              if (/\bstyle=/.test(attrs2) || /:style=/.test(attrs2)) return full2;
+              if (/class="/.test(attrs2)) {
+                return `<${tag2} style="position: relative;"${attrs2}${selfClose2}>`;
+              }
+              return full2;
+            },
+          );
+          if (segPatched !== seg) {
+            cur = cur.replace(seg, () => segPatched);
+          }
+        }
+      }
+
+      files[path] = cur;
+      report.fixed.push({ file: path, containerCls: firstCls, opacity: cssOpacity });
+      logger.warn('🛡️ 透明度归属修正：容器 opacity 还原为独立半透明背景层（inline 定位/透明度）', {
+        file: path, containerCls: firstCls, opacity: cssOpacity, layerCls: bgLayerCls,
+      });
+    }
+
+    // 🔁 半修正态自愈（第二路）：以模板中的 <base>-bg 独立层为锚反推容器。
+    //    该形态下容器 :style 背景绑定已被上一轮迁到层上（容器无 :style）→ 不进
+    //    candidates 扫描；层元素在但 inline 缺（r-992fa002 实锤：元素在、任何 CSS
+    //    规则都没命中 → 预览 bgLayerPos:static / bgLayerOpacity:1）→ 补 inline。
+    {
+      const seen = new Set();
+      const snapshot = files[path];
+      for (const cm of snapshot.matchAll(/class="([^"]*)"/g)) {
+        for (const c of cm[1].split(/\s+/)) {
+          if (!/-bg$/.test(c)) continue;
+          const base = c.slice(0, -3);
+          if (!base || /-bg$/.test(base) || seen.has(base)) continue;
+          seen.add(base);
+          const cur0 = files[path];
+          const layerTag = findTagByClsIn(cur0, c);
+          if (!layerTag || tagHasInlinePos(layerTag)) continue; // 已保真（幂等）
+          if (!findTagByClsIn(cur0, base)) continue; // 容器不存在 → 不处理
+
+          // 透明度：容器 CSS 残余（与真值吻合）优先；否则用真值低透明度唯一值
+          let op = null;
+          for (const scope of Object.values(files)) {
+            const m2 = new RegExp('\\.' + escCls(base) + '\\s*\\{([^{}]*)\\}').exec(scope);
+            if (m2) {
+              const v = parseOpacity(m2[1]);
+              if (v !== null && v < 0.999 && lowOpacityVals.some((t) => near(t, v))) {
+                op = v;
+                break;
+              }
+            }
+          }
+          if (op === null) {
+            const uniq = Array.from(new Set(lowOpacityVals.map((v) => Math.round(v * 1000) / 1000)));
+            if (uniq.length !== 1) continue; // 真值不唯一 → fail-open，避免臆造透明度
+            op = uniq[0];
+          }
+          // 清容器残留 opacity（跨文件；无 position 补 relative 兜底旧渲染链）
+          for (const fp of Object.keys(files)) {
+            if (typeof files[fp] !== 'string' || !/\.(vue|less|css)$/.test(fp)) continue;
+            const r = stripContainerOpacityCss(files[fp], escCls(base));
+            if (r.removed) files[fp] = r.content;
+          }
+          const cur1 = files[path];
+          const inline = `, position: 'absolute', inset: 0, opacity: ${op}, pointerEvents: 'none'`;
+          const newLayer = appendInlineToStyle(layerTag, inline);
+          const cTag = findTagByClsIn(cur1, base);
+          const newCTag = ensureContainerInlinePos(cTag);
+          let next = cur1;
+          if (newLayer !== layerTag) next = next.replace(layerTag, () => newLayer);
+          if (newCTag && newCTag !== cTag) next = next.replace(cTag, () => newCTag);
+          if (next === cur1) continue;
+          files[path] = next;
+          report.fixed.push({ file: path, containerCls: base, opacity: op, inlineOnly: true });
+          logger.warn('🛡️ 透明度归属修正：背景层补 inline 定位/透明度（半修正态自愈）', {
+            file: path, containerCls: base, opacity: op, layerCls: c,
+          });
+        }
+      }
+    }
+  }
+  return report;
 }

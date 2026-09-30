@@ -2276,74 +2276,16 @@ function hoistNestedShellDecls(code, cls, VISUAL_RE) {
 // 根因：LLM 产出结构性错误（动态 class 无样式、容器缺 flex、资源绑定层级错误、颜色真值提取失败）
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/**
- * 🛡️ P-12a 动态 class 样式校验
- * 问题：LLM 删除组件但保留 :class 绑定，或生成动态 class 但无对应样式定义
- * 形态：`:class="{ 'state-switch': isSwitched }"` 但 style 中无 `.state-switch`
- * 动作：扫描模板中所有 class 名，与 style 选择器交叉比对，缺失的 class 补空规则
- * @param {string} code Vue SFC 代码
- * @returns {string} 修复后的代码（幂等）
- */
-export function validateDynamicClassStyles(code) {
-  if (!code || typeof code !== 'string') return code;
-
-  // 提取模板段
-  const templateMatch = code.match(/<template[^>]*>([\s\S]*?)<\/template>/);
-  if (!templateMatch) return code;
-  const template = templateMatch[1];
-
-  // 提取 style 段（保留原始标签属性如 lang="less" scoped）
-  const styleMatch = code.match(/(<style[^>]*>)([\s\S]*?)(<\/style>)/);
-  if (!styleMatch) return code;
-  const styleOpenTag = styleMatch[1];
-  const styleContent = styleMatch[2];
-
-  // 1. 收集模板中所有 class 名（静态 + 动态）
-  const usedClasses = new Set();
-
-  // 静态 class="a b c"
-  const staticClassRe = /(?:^|\s)class="([^"]*)"/g;
-  let m;
-  while ((m = staticClassRe.exec(template)) !== null) {
-    m[1].split(/\s+/).forEach((c) => c && usedClasses.add(c));
-  }
-
-  // 动态 :class="{ 'active': cond }" / :class="['a', 'b']"
-  const dynClassRe = /:class="([^"]*)"/g;
-  while ((m = dynClassRe.exec(template)) !== null) {
-    const expr = m[1];
-    // 对象语法：{ 'class-name': condition }
-    const objRe = /['"]([^'"]+)['"]\s*:/g;
-    let om;
-    while ((om = objRe.exec(expr)) !== null) {
-      usedClasses.add(om[1]);
-    }
-    // 数组语法：['class-a', 'class-b']
-    const arrRe = /['"]([^'"]+)['"]/g;
-    while ((om = arrRe.exec(expr)) !== null) {
-      usedClasses.add(om[1]);
-    }
-  }
-
-  // 2. 收集 style 中已定义的选择器
-  const definedClasses = new Set();
-  const selectorRe = /\.([A-Za-z_][\w-]*)\s*[{,:\[]/g;
-  while ((m = selectorRe.exec(styleContent)) !== null) {
-    definedClasses.add(m[1]);
-  }
-
-  // 3. 找出缺失的 class
-  const missingClasses = [...usedClasses].filter((c) => !definedClasses.has(c));
-  if (missingClasses.length === 0) return code;
-
-  // 4. 补空规则到 style 末尾
-  const emptyRules = missingClasses.map((c) => `.${c} {\n  /* TODO: 补充样式 */\n}`).join('\n\n');
-  const newStyle = styleContent + '\n\n' + emptyRules;
-
-  return code.slice(0, styleMatch.index) +
-    styleOpenTag + newStyle + '</style>' +
-    code.slice(styleMatch.index + styleMatch[0].length);
-}
+// ⚠️ P-12a `validateDynamicClassStyles` 已于 2026-09-30 **删除**（评审 §8.2 削源 / 确定性收回清单 §七 Bug1 收口）
+//   它是 `/* TODO: 补充样式 */` 占位规则的**唯一生产者**，全语料制造 **1464** 条永远填不满的债
+//   （113 在带 data-section-id 的 section 根 / **1351 在内层**，内层 92.3% 结构上不可填）。
+//   删除理由（删减法三连）：
+//     ① 产出的空规则**零声明、对渲染零影响**（scoped 下「无规则」与「空规则」等价）；
+//     ② 其消费端 `code-validator` 2.6.2 读 `nodeLayoutFacts`（A 类布局事实），与 2.11
+//        LAYOUT-FACTS-INJECT **同一事实源、同一输出** ⇒ 布局注入本应统一归 2.11，此处属功能重叠；
+//     ③ 空块还会给 `class-dialect-normalizer#onlyEmptyStubs` 制造「新名已存在（空块）」的歧义分支。
+//   现状：布局注入统一归 2.11；存量/缓存产物的残留占位由 `code-validator` 2.6.2（已收缩为「只清 TODO 占位」）清扫。
+//   先例：P-12b `ensureFlexLayoutForSiblings` 于 2026-09-28 同法删除（§七 B16/C4）。
 
 /**
  * 🛡️ P-12c 资源绑定层级校验

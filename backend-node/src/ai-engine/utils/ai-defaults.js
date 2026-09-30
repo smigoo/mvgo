@@ -97,6 +97,33 @@ function pick(...vals) {
  * @param {'text'|'vision'} [role] 目标角色槽（文本 / 视觉），决定入哪个槽、按 provider.role 过滤
  * @returns {{apiKey:string, baseURL:string, model:string, providerType:string, providerId:string}|null}
  */
+/**
+ * 🛡️ 模型默认思考开关判定（单一事实源，2026-09-30 提取）。
+ * - 推理模型（kimi-k 系列、qwq、o1、o3、thinking、reasoner、reasoning 关键词）→ 'skip'（关不掉，provider 池过滤弃用）
+ * - 默认思考但可关（deepseek-v4* / qwen* / glm* / 混元 hunyuan/hy4 / 豆包 doubao）→ 'disabled'（平台自动注入关推理参数）
+ * - 其余（gpt 普通 / claude 等默认不思考）→ undefined（无需处理）
+ * 供 resolveProvider（池内 provider）+ resolveTextConfig/resolveVisionConfig（单模型 primary）+ base-agent 发起前兜底共用，
+ * 避免「有池关推理、无池漏关」的口径漂移（生产慢根因：单模型 primary 漏关推理）。
+ */
+export function resolveThinkingType(model = '') {
+  let m = String(model || '').trim().toLowerCase()
+  if (!m) return undefined
+  // 推理模型优先（doubao-seed-*-thinking 等含 thinking 的变体应归 skip，而非 disabled）
+  if (isReasoningModel(m)) return 'skip'
+  // 🛡️ 厂商前缀归一（2026-09-30 · mc-max TabsSection 烧光实锤）：中转/OpenRouter 形态 id
+  //   带 `vendor/` 前缀（如 deepseek/deepseek-v4.1-flash），原 `/^deepseek-v4/` 锚定
+  //   **匹配不到** ⇒ thinkingType 整个漏发 ⇒ 推理烧光输出预算 → 空内容熔断 ×3。
+  //   取最后一个 `/` 之后的模型名做族匹配（与 buildThinkingOffParams 的 includes 口径对齐）。
+  const bare = m.includes('/') ? m.slice(m.lastIndexOf('/') + 1) : m
+  if (/^deepseek-v4/.test(bare)) return 'disabled'
+  if (bare.includes('qwen')) return 'disabled'
+  if (bare.includes('glm')) return 'disabled'
+  if (bare.includes('hunyuan') || bare.includes('hy4')) return 'disabled'
+  if (bare.includes('doubao')) return 'disabled'
+  if (bare.includes('gemini')) return 'disabled'
+  return undefined
+}
+
 function resolveProvider(config = {}, primary = null, role = 'text') {
   const providers = config.providers
   const pool = getProviderPool()
@@ -119,18 +146,8 @@ function resolveProvider(config = {}, primary = null, role = 'text') {
   // finishReason=length）→ 空内容熔断，每次失败浪费 126~192s。
   // deepseek v4 系支持 thinking:{type:'disabled'} 关闭 → 注入 'disabled' 保留使用；
   // 其它推理模型（kimi-k*/qwq/o1/o3/deepseek-reasoner）无法关闭 → 'skip'（pool 过滤弃用）。
-  const thinkingDefaultFor = (model) => {
-    const m = String(model || '').trim().toLowerCase()
-    if (!m) return undefined
-    if (/^deepseek-v4/.test(m)) return 'disabled'
-    // 🛡️ 2026-09-29 G1 修复：qwen3.7-plus/qwen3.8-max 等默认开推理（model-config 实测烧 8k~13k token，
-    // 单视觉调用 218~276s），但既非 deepseek-v4* 也非 isReasoningModel → 原返回 undefined 不处理
-    // → 文本路径 base-agent 不注入关思考参数 → 仍在思考。纳入后返回 'disabled'，
-    // 由 base-agent 经 buildThinkingOffParams 映射为 enable_thinking:false（qwen 正确形态，避免 120s 超时）。
-    if (m.includes('qwen')) return 'disabled'
-    if (isReasoningModel(m)) return 'skip'
-    return undefined
-  }
+  // 🛡️ 2026-09-30 委托模块级 resolveThinkingType（单一事实源，与单模型 primary 同口径）
+  const thinkingDefaultFor = resolveThinkingType
 
   const withThinkingDefault = (p) => {
     if (!p || typeof p !== 'object') return p
@@ -289,6 +306,12 @@ export function resolveVisionConfig(config = {}) {
     primary.temperature = Number(temperature)
   }
   if (saved.thinkingType) primary.thinkingType = saved.thinkingType
+  // 🛡️ 2026-09-30 修复（生产慢根因）：单模型（无池）时 primary 也必须关推理。
+  // resolveProvider 的 withThinkingDefault 只对「池内 provider」生效；无池时 resolveProvider
+  // 返回 null 走裸 primary，而 primary 原本无 thinkingType → 关推理参数未下发 → deepseek-v4*/qwen
+  // 开推理烧预算 → 慢。这里对 primary 补 thinkingType（口径与 resolveThinkingType 一致）。
+  const _tt = merged.disableReasoning !== false ? resolveThinkingType(primary.model) : undefined
+  if (!primary.thinkingType && _tt) primary.thinkingType = _tt
 
   // 供应商池：主配置并入池后择优 pick（向下兼容，主配置不失效）
   // 🔒 用户配置隔离（2026-09-16 强化）：merged.providers 非数组时不再回退 saved.providers
@@ -356,6 +379,12 @@ export function resolveTextConfig(config = {}) {
     primary.temperature = Number(temperature)
   }
   if (saved.thinkingType) primary.thinkingType = saved.thinkingType
+  // 🛡️ 2026-09-30 修复（生产慢根因）：单模型（无池）时 primary 也必须关推理。
+  // resolveProvider 的 withThinkingDefault 只对「池内 provider」生效；无池时 resolveProvider
+  // 返回 null 走裸 primary，而 primary 原本无 thinkingType → 关推理参数未下发 → deepseek-v4*/qwen
+  // 开推理烧预算 → 慢。这里对 primary 补 thinkingType（口径与 resolveThinkingType 一致）。
+  const _tt = merged.disableReasoning !== false ? resolveThinkingType(primary.model) : undefined
+  if (!primary.thinkingType && _tt) primary.thinkingType = _tt
 
   // 供应商池：主配置并入池后择优 pick（向下兼容，主配置不失效）
   // 🔒 用户配置隔离（2026-09-16 强化）：merged.providers 非数组时不再回退 saved.providers

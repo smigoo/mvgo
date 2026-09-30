@@ -1,0 +1,152 @@
+# mvgo 管线详细判据集（PIPELINE-DETAIL）
+
+> 🔴 本文件是 `MEMORY.md` 的**详细展开版**（按需查阅，不随每次会话注入）。`MEMORY.md` 只留最高频不变式 + 指向本文件的指针；两文件职责不同，本文件存 K/L/M/N 类完整分支、门禁两个坑、布局方向 A/B 数字、取证链与行号。
+> 逐日取证见 `.workbuddy/memory/YYYY-MM-DD.md`；管线排障优先用 `mvgo-*-triage` 系列 Skill。
+
+## 环境 / 运维
+- 🔴 **硬约束：任何改动不得自行部署**。可改码/跑测试/本地 commit/写文档；重启 `:13030`/`:2610`、同步生产、生产发布、`git push` → 停下等指令。交付须显式说「已改完，未部署」。
+- 根 `/Users/smigoo/工作/mvgo`：`backend-node`(NestJS :13030)、`frontend`(Vite :2610)、`docs`；Java :8080。
+- 跑 node/npm 必须 `env -i PATH="/Users/smigoo/.workbuddy/binaries/node/versions/22.22.2-3/bin:/usr/local/bin:/usr/bin:/bin" HOME="/Users/smigoo" ...`（避 NODE_OPTIONS shim/代理卡死）。前端构建用 `build:safe`。jest/npx 必须 cwd=backend-node。
+- 后端重启：`lsof -ti:13030 -sTCP:LISTEN`→kill→确认释放→根 `start-node.js`→`pgrep -f "node.*dist/main.js"`=1 + `curl :13030/api/tasks` 401=存活。重启前确认无进行中任务。
+- `start-node.js` R3-B 护栏只比 `dist/main.js` mtime ⇒ 只改 .js 必报 STALE（假警报）；判生效 = grep `dist/` 目标符号。**不设** `FIELD_ENCRYPTION_KEY`；AI 凭证 `backend-node/data/ai-config.json`。
+- 🔴 **`nest build` 的类型错会中止 tsc emit**（dist 整体不更新）——并行会话 WIP 改了 `src/workbench/*` 时必报 `workbench.service.ts TS2739/TS2741`（`ToolContext` 缺属性）⇒ **我的 dist 会停在上一版**。**暴露手法**：grep dist 本次新增的**独有符号**为 0。**绕法**：`nest` 对 `.js` 的 emit = **原样拷贝**（用未改动文件的 `git show HEAD:<f>` vs `dist/<f>` 逐字相同可实证）⇒ **单文件 `cp src→dist` 与重建等价**，且不把并行 WIP emit 进去。事后 `diff src dist` 必须 IDENTICAL。
+- 生产 Nginx：`/api` 默认转 Java 8080，属 13030 的路由须写在 `/api` 之前。🔴 **生产网关仅 GET/POST**（其余 405）⇒ 新接口一律 GET/POST + 语义后缀。
+- 前端生产 `base='/mvgo/'` + `routerMode:'history'` ⇒ history 路由 URL 必带 `/mvgo/` 前缀（用 `withAppBase`/`getRouteUrl`）；API 走 `/api/*` 无需 base。工作台 `/workbench/*` 走 `App.vue` 独立分支，不渲染全局 `<WorkflowMonitor>`，需页内自挂。
+
+## 不变式（治本，非产物直改）
+- 确定性事实单一事实源；视觉确定内容由 facts/assembler 装配，**不能直改生成产物**。删减法：每接管一个事实就删掉对应 fallback 与纠偏器，门禁总量只降不升。
+- 「真值集」非最高权威：不可辩驳的几何/结构特征优先。
+- 预览事实源优先级 `last-good > candidate > partial > workspace`（直改 workspace 对预览无效）。预览样式 = `/api/preview/{groupId}/{componentId}/resources/styles/index.css` 全量注入 + sfc-loader 编译 `.vue` `<style>`；快照根 = `<仓库根>/temp-components/.task-code-snapshots/<sessionId>/`。
+- 产物三处同步：backend/frontend workspace + 快照，须 diff；**同步面必须含 `resources/styles/index.css`**（less 编译产物），改 .less 后须 `index-css-recompiler.js#recompileIndexCss(outputPath)` 重编。
+- 资源挂载唯一答案 = `mapping.ownerSectionId` ⨯ `data-section-id`，有命中恒取、不进语义评分。宿主插槽：一个槽名只出现一次，不可加编号/hash。中文 class 出口 `component-naming.js#autoFixNonAsciiClassNames`（只认 class 语境）。
+- 🔴 **K 类「资源清单语义坍缩」**（`visual-parser.js` 清单渲染）：清单只渲染 `m.hint`（=`card → card区域`）⇒ 同父名下多条标签**逐字相同** ⇒ LLM 物理上不可区分 ⇒ 必然张冠李戴。**判据：清单里两条标签逐字相同而变量名不同**。治本 = 补 `figmaPath` + `figmaBox` 尺寸 + `⚠️仅此落点 data-section-id`（mapping 里本就有，白拿）。全语料 **1454 → 61 不可区分行**（残留皆良性同资源重复）；**「有不可区分行的组件 = 38.5%」与 `contentMappingIssues` 的 38.5% 完全吻合** ⇒ K 类即那批内容映射问题的根因。
+- 🔴 **L 类「scriptSplit 拼接畸形」+ 两条写盘门禁**（`utils/sfc-syntax-validation.js`，接线 `microcode-engineer.js` 内存校验段 `_stripSurplusBlockClosers` 之后 / `validateVueSfc` 之前）：
+  · `detectScriptBlockLeakage` —— 每个 `</script>` 到**下一个顶层块开标签**或 EOF 之间剥注释后仍有非空白 ⇒ 泄漏。**必须独立判据**（`@vue/compiler-sfc#parse` 容忍顶层游离文本 ⇒ `validateVueSfc` 全绿而 `onMounted` 永不执行）。
+  · `healScriptBlockLeakage` —— 按「能否 parse 成 JS 模块」两形态分流：JS ⇒ `</script>` **后移**；markdown 说明 ⇒ **整段删除**（后移会把 markdown 塞进 script 块）。**🔑 自愈候选不得引入新 script 语法错**（`validateVueScriptSyntax` 前后比对）：泄漏段常与块内已有声明重复 ⇒ 后移触发 `already been declared` ⇒ 退化删除；两者都失败才 `unfixable` 交 fail-fast。**「删标签、保内容」是铁律，禁 `slice` 截断**（实测最长丢 784 字符）。
+  · `findHostReservedComponentCollisions` + `HOST_RESERVED_COMPONENT_NAMES`=`['base-panel']` —— 产物 `package/components/<name>.vue` 与宿主**全局注册**组件同名 ⇒ 命中（`base-panel.vue` 自引用宿主外壳 + 自带 `#header-right` = 两个头部插槽）。**名单单一事实源 = 前端全局注册点**（`loadVue3Runtime.js:450` / `preview/index.vue:954`），新增须先确认注册点。
+  · 命中都走既有 `syntaxIssues` + `badVueFiles` ⇒ `package/components/*.vue` 由 P1-4 隔离（`isDegradableVuePath` 正则恰好匹配）+ `pruneDanglingSubComponentImports`；`package/index.vue` 不可降级 ⇒ fail-closed 重试。
+- 🔴 **M 类「内容归属判据的文案真值」+ 三条越权兜底**（`utils/section-tree.js#collectSubtreeTexts` + `utils/section-content-guard.js`）：
+  · **文案真值 = Figma TEXT 的 `characters`，不是图层名 `name`** —— 图层名极不可靠（`t`/`d`/`but-xxx[m]`/`Frame 2136637410`）。真机 `6d7082a1`：§2:3446 的「客车」节点 `name="t"`、`characters="客车"`，邻居 §2:3496 的 `name` 恰是文本本身 ⇒ 只读 `name` 使真值文本全丢 ⇒ 独占性守卫误判「借用」⇒ 自愈器把**它自己的** `客车`/`货车` 从 `CardGrid.vue` 删掉。**认证手段 = 用 `section.sourceNodeIds` 做祖先链取证**（§2:3446 的 sourceNodeIds 本就含 `2:3461`）。`isTitle` 仍按 `t-` 前缀判（翻它=改变 `inline-row-assembler` 确定性装配，须独立一轮）。同源证据：`section-leaf-assembler.js` 文件头已自认该缺陷。
+  · 兜底① `checkSectionExclusiveEvidence`：section 子树 `size===0`（`sourceNodeIds=[]` 或指向不存在节点 = **未锚定合成 section**，如 `section-vehicle-type`）⇒ **不判借用**。否则 `ownTexts` 恒空 + `intersects(∅,…)` 恒 false ⇒ 两道豁免同时失效 ⇒ 群体误删。全语料消除 **189 条 / 29 组件**资源误报，新增 0。
+  · 兜底② `healDuplicateTextIssues`：`ownerFile` **不在 files 里**或**不在 `renderedIn` 里** ⇒ 跳过（落实该函数 docblock 早已写明、代码从未实现的规则）。🔑 **`assignSectionComponentNames` 的确定性名 ≠ LLM 写盘的文件名**（真机 4 变体全不匹配）⇒ 旧 `filter(p=>p!==ownerFile)` **一个都过滤不掉** ⇒ 对**合法归属**组件照删。
+  · 兜底③ `healBorrowedEvidence`（接线 phase2/vue3 两图）：删引用与剪 import **必须同处完成**（`pruneUnmounted` 内置，只删引用不剪 import ⇒ 撞 CODE-022 ⇒ 重试耗尽）；文本侧复用 `removeStaticTextNode`（只认 `>text<`，JS 字符串里的文案保守不删）；`validateSfc` 差分判据任一失败即回退。
+  · 全语料 A/B（431 例）：`borrowedText` 误报 **−381**、`borrowedAsset` **−189**、自愈删除 **−269 / +23**（新增仅 2 文本 × 21 变体，逐条已证指向非归属组件）、`COMP-002`（BLOCK）**89→75**（无新阻断类别）、prompt 真值契约 227 组件 / 536 section 由 `t`/`d` 伪文本变真 `characters`、`memberOrder` +12 但**只写 meta + WARN**（无 healer）⇒ 零风险。
+  · ⏳ 未做（已定位、有证据）：`isTitle` 不认裸 `t`/`d` ⇒ `member-shape-mismatch` ⇒ 统计行确定性装配从不触发；双归属文本不再触发 `COMP-002` ⇒ 净少 14 条 BLOCK，补它属**放宽 BLOCK 面**、须单独评估。
+- 🔴 **N 类「N3 锚点优先」**：N3（bg→父容器强制挂载，`microcode-engineer.js` / `vue3-engineer.js` 的 `let best` 段）此前**自算私有词重叠评分**（`wordsOf(cls) ∩ targetWords`），不看 `data-section-id`/`ownerSectionId` ⇒ 锚点元素 class 与 mountTarget token 覆盖率恒 0 ⇒ **必输给语义祖先** ⇒ 426×91 卡片背景挂到 420×807 整槽再被 `100% 100%` 拉满 = 「背景图整块丢失」。现与 `scoreMountTarget` 的 `DETERMINISTIC_ANCHOR_SCORE=1000` 短路**共用同一函数** `mount-target-scoring.js#selectAnchorMountCandidate`（三态：`null`=无锚点⇒走既有 fallback 逐字不变 / `{skip:true,reason}`=锚点已定性禁注入且**禁退化到语义评分** / `{skip:false,cand}`=锚点干净且资源未渲染）。
+  · 🔑 **安全底线 = `var-already-referenced`（该 bg 变量已在任意元素上以 background 形式被引用 ⇒ 不再注入）**：实测 `anchorClean` 里约 1/4 是「bg 挂在锚点**子树内**的 `-bg` 独立层」（透明度归属契约产物）；N3（`microcode-engineer.js:7021`）**早于** `fixPipeline.apply`（`:7473`）的 `dedupe-bg-multi-refs`，而后者 keep 规则**同为锚点优先** ⇒ N3 硬挂锚点会被后续去重判为「层的重复」并剥掉层的 `:style` ⇒ 透明度层语义丢失。**凡「下游有锚点优先的去重器」的上游注入器，必须先自证「已渲染不重复注入」**。
+  · 全语料 A/B（1031 产物目录 / 4008 条合格 bg，**按引擎真实可达集计**——锚点分支前还有 `targetWords.size===0` 与 `!hasImage && !fills` 两道 `continue`，裸跑选择器会多算收益）：`null` 3760；skip 桶 193（**其中旧实现会另挂一处 = 159 ⇒ 拦下 159 处重复挂载**）；新动手 25（纯新增 4 / 旧=同点 9 / **旧=不同点 12 = 真收益**）；注入畸形 0。
+  · 🔑 **vue3 产物 0 个 `data-section-id`**（全语料 0 命中；只有 `microcode/code-generator.js:665` 容器 + S1 子组件补锚在写）⇒ vue3 侧该改动是**同构前瞻**（恒返回 null，零风险）；**推论：`resource-mounter` 的确定性锚短路在 vue3 路径同样是死代码**（能力缺口，未修）。
+- 🔴 **动「共用事实源」（`collectSubtreeTexts`/`indexFigmaNodes`/`buildChildrenMap`/`getFigmaBox`）前必做两遍全语料快照 A/B**：同一 spec 跑前后两次（label 走 env）落 JSON → 按「**字段 × 方向**」聚合（新增 = 风险面，须逐条证伪；消失 = 收益面，按文本聚合看规模）。**「净减少」不是验收依据**。三个必踩坑：① healer **原地改 `content`** ⇒ 每次调用必须传深拷贝；② `figmaRoot` 必须用 `.checkpoint/figma.json`（document 本体），用 `figma-node-data.json` wrapper ⇒ 全 0 结果、会误判「没生效」；③ 报「全语料」数字**必须写分母**（551 组件中 443 有 figma.json、431 可跑全链）。规模感：431 例 / 176MB / `--max-old-space-size=3072` **4~6 秒**。
+- 加自愈器/新函数前先 `git log -S '<fnName>' -- src` 查是否被删过。清扫类自愈器必须排在注入器**之后**（注入器只改写已存在规则，前置删空壳会让事实无锚点）。
+- WARN 门禁**只报不删**；修复器 filter 出现 `!i.autoFix` = 越权。凡「门禁 BLOCK + 自愈器 0 删除」并存，先查两者是否同源口径。
+- 加「出口净化器」必须枚举全部出口（REST/SSE 首连+重连/落库/日志）。按标签/类名匹配必须词边界；裸 `includes` 有劫持族。
+- **消费面审计通式**：扩字段取值域必须四类归档 —— 严格相等 / `|| 默认` / 二值三元收缩 / 显式新值分支；只查 `=== 'x'` 必漏破坏点。
+- **「占位债」族**（`/* TODO: 补充样式 */`）复活即复发。已收口：`code-validator#stripEmptyTodoRules(cssText)` + `stripEmptyTodoRulesInSfc`（.vue 全部 `<style>` 块），接线 `code-validator.js:2143-2156`。判「空块是死债还是注入锚点」= 对同文案块做「已有声明 vs 仍零声明」两分统计，两半并存 ⇒ 是锚点（只后置清扫，禁提前删）。
+- ⚠️ 「P1」同仓两份清单，引用须指明文档：`确定性收回清单-2026-09-16 §7.5`（B15/B7，已做）≠ `评审-四bug-根因与影响面-2026-09-29 §5.1`（Bug1 TODO 填充器）。
+- 🔴 **门禁「不可达」的两种成因（必查，两者都零留痕）**：① **守卫字段路径 ≠ 真实数据形态** —— 例 `if (options?.layoutStructure?.sections)` 而真实形态是 `layout.sections`（**443/443** 全语料实锤）⇒ 恒 false、日志 0 次。**判据：任何读嵌套结构的守卫，必须与全仓既有口径对齐**（本仓通式 `layoutStructure?.layout?.sections || layoutStructure?.sections`，见 `subcomponent-planner.js:1434`），并把运行统计挂进返回值，让「跑了没命中」≠「根本没跑」。② **证据源用「整份文件全局正则」** —— 判据只依赖整份文本、**不含循环变量** ⇒ 对同一产物是**全局谓词** ⇒ 要么全报要么全不报（`LAYOUT-001` 的 `horizontal` 分支即此）。**正解：证据源必须按「条目 → 宿主文件/元素」定位**（本仓范式 `data-section-id` 锚）。
+- 🔑 **跨文件 CSS 层叠解析口径**（`layout-direction-guard.js`，可复用）：方向取值 = inline `style` > `:style` 绑定（**窄解析 JS 对象字面量**，解析不出即放弃）> class 规则（同文件 `<style>` 块 + **`common.less`** + 其它 `less/css`）。⚠️ **方向常写在 `common.less` 而非组件自身 `<style>`** ⇒ 只查同文件必漏。歧义（多 class 冲突）⇒ **不判**。类名→选择器块复用 `layout-facts-injector#extractFlexProps`（已 export），标签扫描复用其 `matchTemplateTags`（已 export，属性顺序无关、引号内 `>` 不截断）。
+
+## 布局方向（09-30 专项，已大部分闭环）
+- 单一来源：`sections[].layout` 只认 `figma-node-layout-facts#buildNodeLayoutFacts`。⚠️ 依赖成环 ⇒ 由 `subcomponent-planner#plan` 算好传入。
+- **三态范式（照抄）**：判据 ← `code-generator.js:648-661`（`layoutKind ∈ {horizontal,vertical,grid}`，否则 **null 且不内联 display/方向**）；护栏 ← `layout-facts-injector.js:90-115`（无有效方向不写 + 清残留 `undefined|null|NaN`）。
+- ✅ 已修：`280cdf4`（写产物层四分支 h/v/grid/null + `deriveChildGridColumns` 仅容器）；`a5de83e`（容器分支去硬编码）；`6ca660b`（`extractLayoutMetadata` 字符串感知 + 三态，**`horizontal*` 必须前缀匹配**——语料有 `horizontal-2-columns`，全等会误落 null；`microcode-engineer` 1108 已加 `if (meta.direction)` 护栏，否则打印 `flex-direction: null`）。
+- ① ✅ **已收口（换证据源 + 先 WARN）**：旧 `LAYOUT-001` 是**死代码**——守卫读顶层 `layoutStructure.sections`，而真实形态是 `layout.sections`（443/443 实锤，顶层命中 0）⇒ 可达面 0、日志 0 次。**新证据源 = 该 section 宿主 `.vue` 的根元素（`data-section-id` 定位）上「实际生效」的方向，按 CSS 层叠取值**（同文件 `<style>` + `common.less` + 其它 less/css，**必须跨文件**——实测 `.c-traffic-monitor-card` 方向写在 `common.less`）。检测器独立成 `utils/layout-direction-guard.js`（+28 例 spec），severity 先 **WARN**，fail-open 六种情形一律不判（真值空 / grid / 宿主未物化 / **根元素未显式声明方向** / 多 class 冲突 / 内部异常）。真值口径与 `extractLayoutMetadata` **逐字同源**（`grid*` 的方向真值**也是 null**，网格事实走 `gridColumns` 通道 ⇒ 另设「网格被排成 flex」「列数不符」两项检查）。**`gridColumns` 读取统一为 `sec.gridColumns ?? sec.body?.gridColumns`**（旧门禁只读 body 命中 **23** / 统一后 **71**）。全语料 443 份：`judged` **466** / `mismatches` **0**；**阳性对照证明「0 命中」非盲**。⚠️ 校验须传 **`productFiles`（全量）**，传增量 `files` 会裁掉宿主 ⇒ 门禁空转。🔴 **覆盖率诚实边界**：section id 两形态 —— A Figma 纯 id（`2:3683`，可锚）/ B 语义合成 id（`header-section` 等，**天然无锚**）⇒ truth 2390 中可锚 1510、**实际找到宿主 481（20.1%）**；差额是「未独立物化成带锚组件」而非漏判，**补它只能靠名字模糊匹配＝猜 ⇒ 刻意不做**。⚠️ 锚按代际：最近 1–2 天产物 **100%** 带锚，无锚全是 09-27 前老产物。详见 `docs §8.10`。
+- ② **叶子栅格靠 LLM 手写**：`constraint-reinforcement.js:60-70` 明令 LLM 手写 `display:grid;grid-template-columns:repeat(N,1fr)` ⇒ 改确定性注入须同批删这条铁律与 prompt 文案（漏删 = 双写错乱）。
+- ③ `resource-mounter.js:2842` 的 `facts.flexDirection || 'column'` 是**既有有意设计**，改它属写产物层行为变更，须先量化影响面。
+- ④ ✅ **已结案（保留 `column`，不改 null）**：`chart-section.js` / `nav-section.js` 合成的 section（id `chart-*` / `nav` 在 Figma 树**不存在**）**自带** `layoutMetadata` ⇒ **完全绕过** `extractLayoutMetadata`（全仓**仅** `subcomponent-planner.js:1116` 容器 / `:1134` 叶子两处调用）、**不受「无事实→null」三态约束**；且 `microcode-engineer.js:1108` **直读** `sec.layoutMetadata` **不重算** ⇒ 其 `direction` **会进 prompt**（改 null 是真改产物，非 no-op）。对 `nav` 是与自身 semantics 一致的真值、对 `chart` 是 vacuous 但无害 ⇒ 保留（源码注释 + `docs §8.8.11`）。
+- ⚠️ `elementStyleMap` 相关：`isLayoutContainerSection` 判定偏差 ⇒ 后果是「**提示缺失**」非「写错值」（无门禁、无报错，故长期静默）。⚠️ **`elementStyleMap` 不只有 prompt 消费者**：还被 `adversarial-checker.js` 的 `_checkStyleCoverage`/`_checkMixedLayout` 消费（high ⇒ `needs_revision`）⇒ 任何「让它多写属性」的改动必须先 `grep -rnE "elementStyleMap" src/` 枚举全部消费者。详见 `docs §8.9`/`§8.9.7`。
+
+## 管线要点 / 复发模式
+- E1 选根 `section-tree#findRootFrame`：doc 自身是容器且有 children ⇒ doc 即根（GROUP 也算）。
+- header 三道防线：节点名 `/header/i` → vision type 回填 → 几何兜底 `utils/header-geometry-fallback.js`；装配 `code-generator.js:459` 只认 leaf `type==='header'`。
+- 图表子组件样式豁免：`style-class-consolidator` 以 `/echarts/.test(sfc)` 标 `isChartComponent`。**52px 三层通道全堵**（bc33c27d）。
+- LessCompileGate：heal 在 createFileManager **之前**；`healUnclosedLessComments` 8 行窗口扫描（splice 后**禁用**「已处理下标集合」跳过，偏移会漏修）。
+- `componentId` = `c-<语义段>-<尾8hex>`（`sanitizeComponentId` 单点）；任务号污染判据 `/\d{13}/`。⚠️ class 级污染 `c-mc-max-<13位>-<8hex>` 不在旧判据覆盖内（旧式 `\bc-(mc|mv)-[0-9]{13}` 恒空 ⇒ 假通过），正解 = 查 `class="…[0-9]{13}…"` 并与基线同形对比。
+- 静默吞异常=P0；「自愈 N 处」≠ 生效（自愈 vs 回退 1:1 即全废）。「属性消失」= 多 pass 写入口拉锯 + 整批覆写回退 ⇒ 写入口收敛 + 删越权修复器 + 回退粒度细化。
+- 背景：bg = 宿主容器 CSS 背景；`healStandaloneBgLayers` 迁移须先于 `healAbsoluteOverlayParents`；同父多子层注入必须 Map 记账合并。absolute 背景层宿主须 `position:relative`，补丁在**后生成阶段**补跑。
+- **透明度契约**（d368e7d8）：透明度只属 bg 层（容器 relative + `<firstCls>-bg` 层），严禁挂容器 class；定位/透明度一律 inline 写 `:style`，**禁写 CSS 规则**（预览注入链不可靠）；幂等 = 层 `:style` 已含 `position`；真值不唯一 → fail-open。
+- 锚点标签正则禁嵌套量词 ⇒ `findTagBySectionAnchor` 线性扫描。`ownerSectionId` 不总是真 section ⇒ 禁「锚点缺失即 fail-closed」。循环结构导出前必须净化 `__parent` 反链。
+
+## 诊断手法
+- 🔑 **判某门禁「活不活」三查**（缺一必误）：① 守卫形状全语料量化；② 日志 id 留痕（L0-B 逐条打印 issue id ⇒ 「查不到」是有效负证据）；③ 离线探针三态（真实形状 / 假定形状 / 合成触发）。工具在 skill `mvgo-deterministic-replay-triage/scripts/`。
+- 🔑 **门禁「改完 0 命中」必须配阳性对照**（否则「健康」与「仍然瞎」不可区分）：把真实产物里**证据源那一层**故意改错 ⇒ 断言 `mismatches 0 → 1` 且**文件/section 定位正确**；再补合成用例覆盖每类判据 + 每类 fail-open。⚠️ 变异必须打在**真正生效的那一层**（`LAYOUT-001` 首轮变异打在 class 规则上、门禁没开火，反而是「层叠顺序实现正确」的反证）。
+- 🔑 **门禁「判定域 ≠ 事实落点」必查**：门禁读 A 域、事实写在 B 域 ⇒ 一放开就成群误杀。定量法 = 全语料模拟判定，按「A 无 B 有」分类误判数。
+- 🔑 **两态差分对跑**（证「零行为变化」最强证据）：临时 spec 把函数输出写 `/tmp/x.json` → 跑「改动后」→ `git checkout -- <单文件>` 回 HEAD 再跑 → `diff` → `cp` 备份恢复。比 `git stash` 安全（不碰并行 WIP）。⚠️ **旧逻辑要在探针里内联逐字副本**，别去改他人文件。
+- 🔴 **模拟 prompt 旁路必须逐字照抄该行的取值路径**（读谁 / 是否重算）：曾把 `microcode-engineer.js:1108` 代理成「按 `extractLayoutMetadata` 重算」，而生产是「**直读** `sec.layoutMetadata`」⇒ 造出**实际不存在**的改善项（已在 docs §8.8.11-B 作废）。凡代理某行，先抄它的取值表达式。
+- 🔑 **混合工作区提交隔离**：`git diff` 按 hunk 切分（保留 `diff --git`/`index`/`---`/`+++` 头，只留自己的 hunk）→ `git apply --cached /tmp/mine.patch`。**严禁**对他人在改的文件用 `git checkout --`。
+- 🔑 **量化口径纪律**：`forEachLeafSection` 递归排除容器 = 生产语义；统计前按 `generatedAt` 剔除历史快照（assembler 透传 `layoutMetadata` 修复日 = **2026-09-16** ⇒ live 口径 = generatedAt ≥ 该日）。同一问题不同口径曾差 64 倍。**「全语料审计」前先数不同输入**（1069 个组件目录只来自 7 个 Figma 设计）。
+- 🔑 **真机 A/B 的可归因面只有计划层**：两轮之间最大变量是模型侧 ⇒ 产物级 diff 一律不可归因，真机只答「有没有退化」；要主张因果 ⇒ 比 `.checkpoint/analysis.json` 的确定性派生。**归因前必看 `chunk-meta.json`**（`segmentType`/`index` 是否跳号，决定 `<template>` 是模型直出还是装配器合成）；判「真 A/B」用 `component-meta.json#codeVersion.gitHash`，不靠时间戳。
+- jest 只跑 `.spec.ts` ⇒ `*.test.js`/`*.spec.js` 永不运行，别当回归证据。ESM 源 spec 撞 `import.meta`（`logger.js`→`config/backend-root.js`）会让整套件加载失败 ⇒ import 前 `jest.mock('../../logger/index.js', ...)`。命令：`cd backend-node` + `NODE_OPTIONS="--max-old-space-size=1536" npx jest <spec> --runInBand --forceExit`。⚠️ tsc/jest 基线有时效，判「我有没有引入问题」必须用路径级回退后**现跑**的基线。
+- `server.log` 取段按**行号窗口**（挂 `wc -l` 基线 → 触发 → 新窗口）；`promptChars`/BLOCK 行不含 sessionId，按 sid 过滤会漏 95%。`GET /api/tasks/status/<sid>` 字段在 `data.task.*`。真机 lite/max 实测 83–90s（视觉缓存命中）。`Duplicate slot names found.` N 条 ⇒ N+1 个同名槽。tsc 既有错全在 `*.spec.ts`。
+- 🔴 整段函数体逐字提取**不能用朴素花括号计数**（正则 `\{([^}]*)\}` 会让 `[^}]` 计成 -1）⇒ 用 JS 感知扫描器（跳过注释/字符串/正则字面量）。
+- ⚠️ **「改判据修 X」前必须先跑纯函数 A/B 证伪**（反面教材，2026-09-30）：`isTitle` 认裸 `t`/`d`
+  曾被当作「统计行确定性装配**从不执行**」的根因。全语料 898 产物 / 2702 section 对
+  `assessStatRowConfidence` 跑 A/B（改前 `/^[tT]-/` vs 改后 `+ /^[tT]$/`）⇒ **零影响**
+  （`beforeHigh === afterHigh === 20`，双向 flip 均 0）。裸 `t`/`d` 各 **346**（成对 ⇒ 设计稿约定）
+  但**不在被评估的横向 section 成员子树内**。**真瓶颈 = `member-shape-mismatch` 的「成员子树文本数 ≠ 2」**
+  （成员粒度 / 文本收集），reason 分布：`not-horizontal`(1754) > `title=0,value=0`(子树无文本)
+  > `title=0,value=1`(仅 1 个文本)。另：`beforeHigh=20>0` ⇒ 「从不执行」的说法本身不准确。
+  **配方（最小可复用）**：复刻目标纯函数的**全链**（私有依赖 `isHorizontalSection`/`collectMemberIds`/
+  `subtreeHasImageResource` 一并复刻）+ **参数化被改判据** + 全语料跑 before/after 分布；
+  数据源 = `<组件>/.checkpoint/analysis.json#subComponentPlan.effectiveSections` + `figma.json`（即 figmaRoot）。
+  结论已固化到 `section-tree.js#collectSubtreeTexts`（🔬 段）与 `section-leaf-assembler.js` 文件头。
+- 📋 **未立项缺口**：统计行装配的「**成员子树文本数 ≠ 2**」（真瓶颈，`member-shape-mismatch`）。
+- 📋 **vue3 零锚点（修正表述）**：vue3 产物**无 `resource-dom-mapping.json` 落盘**（398×2 全 0；微码 551 中 514 有），
+  且产物由 **LLM 生成**（`Vue3Engineer`）**无确定性容器模板** ⇒ 无 `data-section-id` 注入点。
+  （`ownerSectionId` 唯一生产方 `figma-connector.js:2425`；落盘 `:1650-1653` 与路径无关 ⇒ 生成期内存里有。）
+  要修需新增「section ↔ DOM 映射」推导 ⇒ **新能力建设，立项**。
+
+## 本机 shell 陷阱
+- BSD `grep`：多模式用 `-E`（`\|` 静默空）；**`\b` 同样不支持**（用 `[^A-Za-z]`）；`sed -i ''`；heredoc `${}` 会展开 ⇒ 用 Write 写脚本。
+- 🔴 `git commit -m` 禁写 `$(...)`（zsh 先替换会写坏消息），改完 `git log --oneline -1` 复核。子仓指针提交必须 `git add <submodule>`。`.gitignore` 只有行首 `#` 是注释。
+
+## 质量评分面板 / 图片取源
+- 「设计图」= `resources/images/mc-preview.png`；「产物预览」= `.mc-gen/screenshots/<taskId>-rendered.png`。
+- 取图走 `/api/component/:id/file?path=<rel>&raw=1`（允许 dotfiles）；`/api/component/:id/preview` 不存在。评分抽屉深色固定主题 `#0f1722`（次要文字 `#a3b8cb`/`#c5d5e5`）。
+
+## 大屏布局（`/screen`）
+- 前端 `frontend/src/views/screen-layout/`（绝对定位编辑器 + 8 预设 + wireframe 雏形 `index.vue:80-97`）；后端 `backend-node/src/screen-layout/`（service/controller）+ `ai-engine/agents/layout-responsive-agent.js` + `graphs/layout-responsive-graph.js`。
+- 接口仅 `download` / `analyze-spatial` / `analyze-responsive` / `progress/:sid` / `download-responsive/:sid` ⇒ **后端仍然没有自然语言入口**（一句话生成 / 增量修改是纯前端规则解析，见下）；后端输入仍是「已摆好坐标的 ScreenLayout」。
+- 🔴 `types/screen-layout.ts` 的 `outputScaleMode` 已扩为 `contain|fillWidth|fillHeight|none|fluid|hybrid`（2026-09-30 起 `fluid` 为默认，双轴自适应走 `fluid`/`hybrid`）；历史上曾与 `ai-engine/prompts/layout-responsive-prompt.md`（流式派：`fr`+`clamp()`+`minmax(0,1fr)`+断点）**哲学互不相通**（UI 选择器 ≠ 产出代码）。
+- 规则引擎 `ai-engine/utils/layout-spatial-analyzer.js`：Y 聚类行 / X 聚类列 / 重叠四分类（major/intentional/minor/edge_touch）/ Zone 树 / 断点建议 / 复杂度评分。
+- 🔑 「XY 都自适应」正解 = `fluid`/`hybrid`（骨架弹性、内容不变形），**不是 `stretch`**（`scaleX≠scaleY` ⇒ 圆变椭圆、字变扁）。六类参数契约中**只有「适配策略」与「兜底」值得反问用户**。歧义（如「左边两栏右边两栏」）**不弹窗追问**，改为「先按最可能理解渲染 + 一键切换其他理解」。详见 `docs/大屏布局快速生成-体验方案-2026-09-30.md` + 原型 `outputs/screen-layout-ux-prototype.html`。
+- 前端模块清单（2026-09-30 全部落地）：`utils/nl-layout-parser.ts`（`parseLayoutPrompt` 从零生成 + 原子助手 `scanWeights`/`scanGrid`/`scanHFHeight`/`scanSide`/`fitWeights`/`createMiddleZone`）、`utils/nl-layout-refine.ts`（`parseRefine(current, cmd)` 增量修改）、`utils/export-standalone-html.ts`（单文件 HTML 导出）、`utils/clipboard.ts`（带降级路径的复制）、`composables/useLayoutPersistence.ts`（本地存档 + URL 分享）、`components/{PromptQuickGen,LayoutWireframe,AdaptivePreviewModal}.vue`（PromptQuickGen 的 create/refine 两态复用同一输入框）。
+- 回归入口：`cd frontend && npm run check:screen`（解析器 **144** + 导出器 **52** 断言；用 `ts.transpileModule` 跑**真 TS 源**，不是另写 JS 副本）。跨文件依赖靠自建 `Module` + 覆写 `m.require` 注入 —— `Module.prototype._compile` 内部走 `mod.require(path)`，所以实例上覆写有效。
+- 有兜底的解析函数**不能无条件调用**：`parseFitMode` 恒返回一个值 ⇒ refine 里必须先过意图守卫（`FIT_CUE`），否则任何命令都会被判成「要改适配策略」。`parseSize` 则用 `clue === null` 自证未命中，可直接调。**改解析器前先跑 `check:screen`。**
+- refine 走**普通赋值**而非 `resetHistory`：`useHistory` 的 deep watch 会自动把新状态入撤销栈 ⇒ Ctrl+Z 能退回修改前。`applyPresetObj` 那套（`resetHistory`）只适合「从零换一套预设」，用于连续微调会让用户回不去。
+- 先剥头尾词再做区域增删：`rest = cmd.replace(HEADER_WORD|FOOTER_WORD, ' ')`，否则「加个底栏」的「个」会被区域正则当成单位。区域单位表**刻意不含「个」**。列数变化时被裁列的 zone **迁到最后一列**，不静默丢组件。
+- **hybrid 的纯 CSS 表达**：`clamp(var(--kmin), var(--kmax), calc(var(--kmin) * 1.1364))` —— clamp 天然是条件分支（val&lt;min 取 min、val&gt;max 取 max），正好表达「比例差 ≤12% 时吃掉留边，否则等比内接」。导出器全程只做等比缩放，**绝不做非等比拉伸**；导出内容必须 HTML 转义（文件会被直接双击打开，是真实攻击面）。
+- **`navigator.clipboard` 只在安全上下文存在**（内网 http 下是 undefined）⇒ 复制功能必须留 `execCommand` 降级，否则在真实部署环境静默失效。
+- **`codePreview` 截断会让「复制代码」变成复制半截代码**：`screen-layout.service.ts` 原 `substring(0, 500)` → 已提到 20000（**需重启才生效**）。**前端加「复制」类按钮前先确认拿到的内容有没有被截断。**
+- 持久化/分享口径：恢复优先级 **URL 参数 > localStorage > 内置预设**；URL 读完立即 `replaceState` 抹参数（否则继续改布局后刷新会「穿越」回旧快照）；base64 必须走 `TextEncoder`（`btoa` 只吃 latin1，中文布局名会抛异常）；链接超 8000 字符**拒绝**而不是给半截链接。
+- 🔴 **导出物的骨架装饰色必须随画布明暗自适应，不能写死深色主题**：设计稿画布默认白色，写死浅蓝描边 + 浅色文字 ⇒ 白底浅字、虚线看不见。用相对亮度（`0.2126R+0.7152G+0.0722B)/255 > 0.6`）判定明暗。⚠️ 这与编辑器 `LayoutWireframe` 的做法**方向相反但都对**：线框是结构预览（不表达真实配色）⇒ 固定蓝图深色；导出物要**忠实画布背景** ⇒ 配色自适应。**判据是「这东西要不要忠实用户配色」。**
+- ⚠️ **断言全绿 ≠ 产物没问题**：上面那个白底 bug 是在 52 条断言全绿时，靠「拿真实预设跑出文件肉眼看」才发现的。**视觉类缺陷必须真产物目视，断言只保行为。**
+- 🟡 `screen-layout-presets.ts` 里 8 个预设的 `outputScaleMode` 仍是历史值 `contain`，而解析器生成的布局是 `fluid`（推荐默认）⇒「推荐 fluid」目前只是一句下拉框文案。**未改**（会改变既有预设行为，且 ZIP 链路需重启），待决策。
+- 入口：页脚 `AppFooter.vue` 的「大屏布局」。头部 `AppHeader.vue` 的 `/screen` 入口**评估后保持注释**（注释写明「页面开发 / 工作流编排已移至页脚」，是有意的信息架构决定，不是缺口）。
+- ⏳ 下一步：后端「取完整生成代码」接口（现在只给 20000 字符片段，ZIP 才是完整产物）、refine 精确定位（「第 N 块」/「中间那列的第二个」）、refine 的 AI 版（当前是规则版）。
+
+## K/L/M/N 四类高频缺陷（**完整判据 / 行号 / A/B 数字 / 取证脚本**见 skill `mvgo-resource-mount-layer-triage`）
+
+> ⚠️ 本条原指「见 PIPELINE-DETAIL.md」，但 K/L/M/N 完整判据实际落在上述 **skill** 里（429 K 类 / 474 L 类 / 529 M 类 / 621 N 类），本文件只留指针（2026-09-30 修正）。
+
+- **K 资源清单语义坍缩**：清单只写「第 N 张图」⇒ LLM 无从区分同父名资源。
+- **L scriptSplit 拼接畸形**：多段 `<script>` 合并把标签保留进内容 ⇒ 语法坏；产物宿主同名组件须门禁。
+- **M 内容归属「文案真值」**：判归属应比 Figma `characters`，不比节点 `name`。
+- **N 锚点优先（N3）**：确定性挂载点唯一答案 = `mapping.ownerSectionId` ⨯ `data-section-id`；
+  已落地 `utils/mount-target-scoring.js#selectAnchorMountCandidate`（三态）+ 两处 N3 插桩；
+  `HOST_SHELL_TAG_RE` **唯一事实源**在同文件（**改外壳名单只改这一处**）。
+- **vue3 产物 0 个 `data-section-id`** ⇒ 该路径锚点机制（含 `DETERMINISTIC_ANCHOR_SCORE` 短路）是死代码（能力缺口）。
+- **N 锚点优先（已闭环，2026-09-30 四轮）**：
+  ① **锚点选择** = `selectAnchorMountCandidate`（三态，与 `scoreMountTarget` 的 `DETERMINISTIC_ANCHOR_SCORE` 同源）；
+  ② **fallback 幂等护栏** = `isResourceRendered(files, varName)`（「已渲染」**唯一判据**；用宽正则
+  `ANY_TAG_RE` **不要求 class**，与找候选的 `N3_TAG_RE` 刻意不同；两处 N3 在锚点选择**之前无条件**先拦）
+  —— 修「同一 bg 重复注入」**723 条 / 314 唯一产品**（全语料 4008 eligible 口径）；
+  ③ **重复 sid 归属** = `anchorOwnerRank`（`package/index.vue` > 其它 `index.vue` > 其它，同文件取最外层）
+  —— 修 96 个 sid 跨文件重复（`sameFile` 仅 2）的漂移；当前语料改道 **0**（纯确定性预防）；
+  ④ 死代码 `findExistingResourceBinding`（`resource-mounter.js:67`）**已删除**，职责收敛到 `isResourceRendered`。
+- ⚠️ **明确「不做」的项也要留档**：`fallback 拦跨 section 宿主容器`（判据 = legacy 选中元素子树含其它
+  `data-section-id`，实测 20 条）**评估后不做** —— 嵌套 section 容器子树含子 sid 属正常形态 ⇒ 判据
+  不可辩驳性不足、误伤风险 > 收益；且 ② 已覆盖真实事故形态。与 `resource-mount-plan.js:184-194` L403
+  的宽松度差异是**计划层 vs 兜底层**的层级设计，不是缺陷。
+- **立项项**：vue3 产物 0 个 `data-section-id` ⇒ 该路径锚点机制（含 `DETERMINISTIC_ANCHOR_SCORE` 短路）
+  是死代码（vue3 无锚点写入方）。

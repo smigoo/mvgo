@@ -4,9 +4,36 @@
       <h3>{{ conversation.title }}</h3>
       <div class="header-meta">
         <span class="message-count">{{ conversation.messageCount }} 条消息</span>
-        
+
+        <!-- R7 锚点：当前组件 chip（生成/切换组件后显示，可点击 × 清除） -->
+        <div
+          v-if="conversation.currentComponentId"
+          class="anchor-chip"
+          :title="`当前组件：${conversation.currentComponentId}（后续「修改/绑定/推送/体检/回滚」默认对它操作）`"
+        >
+          <span class="anchor-dot"></span>
+          <span class="anchor-label">{{ conversation.currentComponentId }}</span>
+          <button
+            class="anchor-clear"
+            @click.stop="$emit('clear-component')"
+            title="清除当前组件锚点"
+            aria-label="清除当前组件锚点"
+          >×</button>
+        </div>
+
         <!-- 工具栏按钮 -->
         <div class="header-toolbar">
+          <!-- R16-R18 功能跳转入口 -->
+          <button
+            v-for="link in jumpLinks"
+            :key="link.key"
+            class="toolbar-btn jump-btn"
+            :title="link.title"
+            :aria-label="link.title"
+            @click="jumpTo(link.path)"
+          >
+            {{ link.label }}
+          </button>
           <!-- 全局配置按钮（模型 + 外部服务） -->
           <button
             class="toolbar-btn"
@@ -50,6 +77,10 @@
 </template>
 
 <script setup>
+import { useRouter } from 'vue-router';
+
+const router = useRouter();
+
 const props = defineProps({
   conversation: {
     type: Object,
@@ -61,7 +92,18 @@ const props = defineProps({
   },
 });
 
-defineEmits(['open-config', 'toggle-theme']);
+defineEmits(['open-config', 'toggle-theme', 'clear-component']);
+
+// R16-R18：功能跳转入口（组件库 / 任务中心 / 接口生成）
+const jumpLinks = [
+  { key: 'components', title: '组件库', path: '/components', label: '组件库' },
+  { key: 'tasks', title: '任务中心', path: '/tasks', label: '任务' },
+  { key: 'api', title: '接口生成', path: '/generator/api', label: '接口' },
+];
+
+function jumpTo(path) {
+  router.push(path);
+}
 </script>
 
 <style scoped lang="less">
@@ -120,6 +162,15 @@ defineEmits(['open-config', 'toggle-theme']);
           border-color: var(--wb-primary, #4f46e5);
           color: var(--wb-primary, #4f46e5);
           background: var(--wb-primary-bg, #f5f3ff);
+        }
+
+        /* R16-R18 跳转按钮：文字型，宽度自适应 */
+        &.jump-btn {
+          width: auto;
+          padding: 0 12px;
+          font-size: 12px;
+          font-weight: 500;
+          white-space: nowrap;
         }
       }
     }

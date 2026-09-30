@@ -21,7 +21,28 @@ import {
   buildComponentJsFile,
 } from '../roles/microcode/file-writer.js';
 
-/** 主题覆盖层模板（自 microcode-engineer 迁入，成为单一来源） */
+/**
+ * 🎨 主题覆盖层模板 —— **唯一事实源**（2026-09-30 迁移补全）。
+ *
+ * 消费方（三处，同一常量）：
+ *   ① 本模块 `buildMcSkeleton`（骨架生成，lite / max 统一入口）；
+ *   ② `roles/microcode-engineer.js`（max/Figma 路径的骨架构建，经 import 取用）；
+ *   ③ `roles/microcode/code-validator.js`（补写缺失的 themes/*.less，值由 engineer 经
+ *      `helpers.themeWrapperTemplates` 透传 ⇒ 与 ② 同源）。
+ *
+ * ⚠️ 迁移史：本常量原在 `microcode-engineer.js` 内定义；抽出时**只复制未删除**，
+ *   导致 engineer 侧长期保留一份可用副本（4 处使用点）+ 本处一份（校验器用）
+ *   ⇒ 「同一事实两处定义」的复发温床（两份内容逐字相同，故一直未暴露，但改一处不同步另一处
+ *   时，**生成端与校验端口径必然分叉**）。2026-09-30 收敛：engineer 改为 import、删本地副本。
+ *
+ * ⚠️ 关键背景（2026-08-26 治本修复）：旧架构由 index.less 只 @import dark.less / light.less，
+ * 两者又用 `&.dark { @import '../common.less' }` 把 common.less 的全部规则包进 `.dark`/`.light`
+ * 作用域。但宿主 base-panel 与前端预览**从不给组件根注入 .dark / .light 类**，编译产物
+ * `.dark .c-xxx` 在真实 DOM 上 0 命中 → 所有微码组件样式（背景/边框/圆角/图标尺寸/内部布局）
+ * 100% 失效，表现为「布局在但全白/裸奔」。新架构：index.less 在**根作用域**先调用默认主题
+ * mixin 再导入 common.less（保证无主题类时样式生效），dark.less / light.less 保留为
+ * 「宿主未来注入主题类时的高特异性覆盖层」，由 index.less 决定是否引入。
+ */
 export const THEME_WRAPPER_TEMPLATES = {
   dark: `// 主题覆盖层：仅当宿主给组件根注入 .dark 类时生效（特异性高于根作用域默认主题）
 &.dark {
