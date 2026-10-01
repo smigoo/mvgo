@@ -1,6 +1,7 @@
 /**
  * Loop 2.0.D：内容区 @antd/tab 不得被编成 header-right。
- * header-/title- 前缀行仍可抽出业务 controls（0908 P1-2 保持绿）。
+ * 🔴 2026-09-30（用户契约「文本处理命名无关」）：`header-` / `title-` 图层名前缀兜底**已删** ——
+ *   它属于「按图层名判归属并把行名当 UI 文案输出」，且在真实语料里产出的 content 就是 `header-` 原文。
  */
 import { inferHeaderSlotsFromInlineRows } from './inline-header-slot-inferrer.js'
 
@@ -23,7 +24,7 @@ describe('Loop 2.0.D inferHeaderSlotsFromInlineRows 内容 tab 不进 header', (
     expect(slots).toEqual([])
   })
 
-  test('header- 前缀行仍可抽出 stat-item（不误伤标题栏）', () => {
+  test('🔴 header- 前缀行不再是事实 → 0 个 slot（按名兜底已删，不以行名作文案）', () => {
     const slots = inferHeaderSlotsFromInlineRows({
       inlineCompositeRows: [
         {
@@ -34,8 +35,6 @@ describe('Loop 2.0.D inferHeaderSlotsFromInlineRows 内容 tab 不进 header', (
         },
       ],
     })
-    expect(slots).toHaveLength(1)
-    expect(slots[0].figmaNodeId).toBe('c1')
-    expect(slots[0].elementType).toBe('statistic')
+    expect(slots).toEqual([])
   })
 })

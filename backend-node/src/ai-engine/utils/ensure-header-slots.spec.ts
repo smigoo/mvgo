@@ -137,11 +137,24 @@ describe('E2/R3(B): inferHeaderSlotsFromInlineRows 删除行名启发式后的�
     expect(r).toEqual([])
   })
 
-  it('结构性前缀行（header-/title-）在无几何信息时仍产出 slot（0908 P1-2 受保护兜底）', () => {
+  it('🔴 命名无关：结构性前缀行（header-/title-）不再是事实 ⇒ 无几何事实时 0 slot（按名兜底已删）', () => {
+    // 2026-09-30：原「0908 P1-2 受保护兜底」按图层名前缀产出 slot —— 已删。
+    // 依据用户契约「文本处理命名无关：是文字就输出文字 + 样式；命名只用于 bg/icon/img 与 @ 技术栈」，
+    // 且该分支在真实语料里产出的 content **就是图层名原文 `header-`**（假 UI 文案）。
     const r = inferHeaderSlotsFromInlineRows({
       inlineCompositeRows: [
         { id: 'row-1', name: 'header-controls', layout: 'horizontal', children: [{ id: 'c1', type: 'stat-item', name: '设备类型 28' }] },
       ],
+    } as any)
+    expect(r).toEqual([])
+  })
+
+  it('靠几何（顶部区）+ 类型化子节点产出 slot，不再依赖 header-/title- 前缀', () => {
+    const r = inferHeaderSlotsFromInlineRows({
+      inlineCompositeRows: [
+        topRow('tab-x', { children: [{ id: 'c1', type: 'stat-item', name: '设备类型 28' }] }),
+      ],
+      ...root,
     } as any)
     expect(r).toHaveLength(1)
     expect(r[0]).toMatchObject({ slotType: 'header-right', elementType: 'statistic', figmaNodeId: 'c1' })

@@ -24,6 +24,13 @@
 
 import * as fs from 'fs'
 import * as path from 'path'
+// 🛡️ 2026-09-30 修「假绿」：本模块是纯函数（无 import.meta / 无 fs），可直接静态 import。
+// 原来走 tryRequire → jest 下 `require(ESM)` 失败、`await import()` 也失败 → 返回 null →
+// `expect(undefined).not.toBeNull()` **恒过** + `if (!fn) return` 早退 ⇒ P1-2/P1-3/P1-4 从不执行断言。
+import {
+  inferHeaderSlotsFromInlineRows,
+  mergeHeaderSlots,
+} from './utils/inline-header-slot-inferrer.js'
 
 const AI_ENGINE_DIR = __dirname
 const FIXTURE_DIR = path.resolve(__dirname, '../fixtures/0907')
@@ -73,18 +80,15 @@ describe('P1 headerSlots figmaNodeId 传播（C-1 过滤前置）', () => {
     expect(withId.length).toBeGreaterThanOrEqual(envSlots.length - 1) // 至少绝大多数带 id
   })
 
-  test('P1-2: inline 行 LLM 路径（有 children）→ slot 携带子节点 figmaNodeId', async () => {
-    const { inferHeaderSlotsFromInlineRows } = (await tryRequire<any>(
-      './utils/inline-header-slot-inferrer.js',
-      'inferHeaderSlotsFromInlineRows',
-    )) || {}
-    expect(inferHeaderSlotsFromInlineRows).not.toBeNull()
-    if (!inferHeaderSlotsFromInlineRows) return
+  test('P1-2: inline 行 LLM 路径（有 children）→ slot 携带子节点 figmaNodeId', () => {
+    // 🔴 2026-09-30：行的**准入**不再看 `header-` 图层名前缀，改由几何（顶部区）+ 行名 tab 语义；
+    //   子节点分类仍是**类型**（type），与命名无关。
     const rows = [
       {
         id: 'row-1',
-        name: 'header-controls',
+        name: 'tab-header',
         layout: 'horizontal',
+        absoluteBoundingBox: { y: 10, height: 20, width: 300 },
         children: [
           { id: 'c1', type: 'stat-item', name: '设备类型 28' },
           { id: 'c2', type: 'tab-switch', name: '监控' },
@@ -92,7 +96,10 @@ describe('P1 headerSlots figmaNodeId 传播（C-1 过滤前置）', () => {
         ],
       },
     ]
-    const slots = inferHeaderSlotsFromInlineRows({ inlineCompositeRows: rows })
+    const slots = inferHeaderSlotsFromInlineRows({
+      inlineCompositeRows: rows,
+      layoutStructure: { absoluteBoundingBox: { height: 400 } },
+    } as any)
     expect(slots.length).toBe(3)
     // 每个 slot 都有 figmaNodeId，且直接来自子节点 id（供 C-1 定位）
     for (const s of slots) {
@@ -104,42 +111,36 @@ describe('P1 headerSlots figmaNodeId 传播（C-1 过滤前置）', () => {
     expect(slots[2].elementType).toBe('icon')
   })
 
-  test('P1-3: inline 行 bbox 路径（无 children）→ 以行名+行 id 兜底（死路径修复）', async () => {
-    const { inferHeaderSlotsFromInlineRows } = (await tryRequire<any>(
-      './utils/inline-header-slot-inferrer.js',
-      'inferHeaderSlotsFromInlineRows',
-    )) || {}
-    expect(inferHeaderSlotsFromInlineRows).not.toBeNull()
-    if (!inferHeaderSlotsFromInlineRows) return
-    // bbox 重建路径：inlineCompositeRows 只有 {id,name,layout,members}，无 children
+  test('P1-3: bbox 路径不再以行名兜底产出 slot（按名启发式已删：行名不是 UI 文案）', () => {
+    // 依据用户契约「文本处理命名无关」+ 全语料审计：
+    //   bbox 重建路径的行恒为 `{id,name,layout,members}`（无 bbox、无 children），
+    //   旧实现走 else 分支把 `row.name` 原样当 content ⇒ 真实语料产出 77 个 content='header-' 的假文案 slot。
+    //   删掉按名分支后本路径**不再产出**（且几何分支因无 bbox 输入而结构性不触发）。
     const rows = [
       { id: 'row-2', name: 'header-right', layout: 'horizontal', members: ['m1', 'm2'] },
       { id: 'row-3', name: 'title-left', layout: 'horizontal', members: ['m3'] },
       { id: 'row-4', name: 'chart-area', layout: 'vertical', members: ['m4'] },
     ]
-    const slots = inferHeaderSlotsFromInlineRows({ inlineCompositeRows: rows })
-    // 前两个是 header-/title- 前缀 → 走行名启发式（死路径修复前 → 0 个）
-    expect(slots.length).toBe(2)
-    expect(slots[0].figmaNodeId).toBe('row-2')
-    expect(slots[1].figmaNodeId).toBe('row-3')
-    // chart-area 不算 header 行 → 不产生 slot
-    expect(slots.every((s: any) => s.figmaNodeId)).toBe(true)
+    const slots = inferHeaderSlotsFromInlineRows({ inlineCompositeRows: rows } as any)
+    expect(slots).toEqual([])
   })
 
-  test('P1-4: inline 兜底「合并+去重」不覆盖已有 section-inferred slot', async () => {
-    const { inferHeaderSlotsFromInlineRows, mergeHeaderSlots } = (await tryRequire<any>(
-      './utils/inline-header-slot-inferrer.js',
-      'mergeHeaderSlots',
-    )) || {}
-    expect(inferHeaderSlotsFromInlineRows).not.toBeNull()
-    expect(mergeHeaderSlots).not.toBeNull()
-    if (!inferHeaderSlotsFromInlineRows || !mergeHeaderSlots) return
+  test('P1-4: inline 兜底「合并+去重」不覆盖已有 section-inferred slot', () => {
     // 复刻 visual-parser 3190-3206 段的合并语义：
     const vision = loadJson('env/vision.json')
     const existingSlots = Array.isArray(vision.headerSlots) ? vision.headerSlots : []
     const inlineSlots = inferHeaderSlotsFromInlineRows({
-      inlineCompositeRows: [{ id: 'r-9', name: 'header-right', children: [{ id: 'x-1', type: 'icon-button', name: '全新面板' }] }],
-    })
+      inlineCompositeRows: [
+        {
+          id: 'r-9',
+          name: 'tab-panel',
+          layout: 'horizontal',
+          absoluteBoundingBox: { y: 5, height: 20, width: 200 },
+          children: [{ id: 'x-1', type: 'icon-button', name: '全新面板' }],
+        },
+      ],
+      layoutStructure: { absoluteBoundingBox: { height: 400 } },
+    } as any)
     const merged = mergeHeaderSlots(existingSlots, inlineSlots)
     const oldContents = new Set(existingSlots.map((s: any) => s.content).filter(Boolean))
     const added = merged.filter((s: any) => !oldContents.has(s.content))
@@ -262,12 +263,14 @@ describe('P5 DOM 级重复插槽清理（T09 双保险）', () => {
   }
 
   test('P5-1: 与子组件文本重叠的 <template #header-right> 被整段移除', async () => {
-    const { ensureHeaderSlots } = (await tryRequire<any>(
+    // 🛡️ 2026-09-30 修「假绿」：tryRequire 返回的是**导出本身**（不是命名空间），
+    //   原写法 `const { ensureHeaderSlots } = (...) || {}` 恒得 undefined，
+    //   而 `expect(undefined).not.toBeNull()` 为真（undefined !== null）⇒ 用例从未断言过。
+    const ensureHeaderSlots: any = await tryRequire<any>(
       './roles/microcode/resource-mounter.js',
       'ensureHeaderSlots',
-    )) || {}
-    expect(ensureHeaderSlots).not.toBeNull()
-    if (!ensureHeaderSlots) return
+    )
+    expect(typeof ensureHeaderSlots).toBe('function')
     const result = ensureHeaderSlots(files['package/index.vue'], input, { files, componentType: 'microcode' })
     expect(result).not.toContain('当日总流量 22350')
     expect(result).not.toContain('<template #header-right>')
@@ -276,12 +279,14 @@ describe('P5 DOM 级重复插槽清理（T09 双保险）', () => {
   })
 
   test('P5-2: 与子组件无重叠的插槽模板保留（不误删）', async () => {
-    const { ensureHeaderSlots } = (await tryRequire<any>(
+    // 🛡️ 2026-09-30 修「假绿」：tryRequire 返回的是**导出本身**（不是命名空间），
+    //   原写法 `const { ensureHeaderSlots } = (...) || {}` 恒得 undefined，
+    //   而 `expect(undefined).not.toBeNull()` 为真（undefined !== null）⇒ 用例从未断言过。
+    const ensureHeaderSlots: any = await tryRequire<any>(
       './roles/microcode/resource-mounter.js',
       'ensureHeaderSlots',
-    )) || {}
-    expect(ensureHeaderSlots).not.toBeNull()
-    if (!ensureHeaderSlots) return
+    )
+    expect(typeof ensureHeaderSlots).toBe('function')
     const code = `<base-panel title="流量监测">
       <template #header-right>
         <span>自定义按钮</span>
@@ -294,12 +299,14 @@ describe('P5 DOM 级重复插槽清理（T09 双保险）', () => {
   })
 
   test('P5-3: 空/仅注释插槽保留（P5 只清重叠内容）', async () => {
-    const { ensureHeaderSlots } = (await tryRequire<any>(
+    // 🛡️ 2026-09-30 修「假绿」：tryRequire 返回的是**导出本身**（不是命名空间），
+    //   原写法 `const { ensureHeaderSlots } = (...) || {}` 恒得 undefined，
+    //   而 `expect(undefined).not.toBeNull()` 为真（undefined !== null）⇒ 用例从未断言过。
+    const ensureHeaderSlots: any = await tryRequire<any>(
       './roles/microcode/resource-mounter.js',
       'ensureHeaderSlots',
-    )) || {}
-    expect(ensureHeaderSlots).not.toBeNull()
-    if (!ensureHeaderSlots) return
+    )
+    expect(typeof ensureHeaderSlots).toBe('function')
     const code = `<base-panel title="流量监测">
       <template #header-right>
         <!-- 模型占位 -->
@@ -312,12 +319,14 @@ describe('P5 DOM 级重复插槽清理（T09 双保险）', () => {
   })
 
   test('P5-4: vue3 组件类型跳过（无 base-panel 宿主）', async () => {
-    const { ensureHeaderSlots } = (await tryRequire<any>(
+    // 🛡️ 2026-09-30 修「假绿」：tryRequire 返回的是**导出本身**（不是命名空间），
+    //   原写法 `const { ensureHeaderSlots } = (...) || {}` 恒得 undefined，
+    //   而 `expect(undefined).not.toBeNull()` 为真（undefined !== null）⇒ 用例从未断言过。
+    const ensureHeaderSlots: any = await tryRequire<any>(
       './roles/microcode/resource-mounter.js',
       'ensureHeaderSlots',
-    )) || {}
-    expect(ensureHeaderSlots).not.toBeNull()
-    if (!ensureHeaderSlots) return
+    )
+    expect(typeof ensureHeaderSlots).toBe('function')
     const code = `<template>
       <div class="c-root">主体</div>
     </template>`

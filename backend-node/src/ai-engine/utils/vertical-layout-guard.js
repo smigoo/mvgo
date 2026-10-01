@@ -202,8 +202,18 @@ export function fixVerticalBody(body, selector) {
   // 因父容器高度计算异常导致尺寸为 0，echarts ResizeObserver 永不初始化
   if (FLEX_DIRECTION_COLUMN_RX.test(body) && !MIN_HEIGHT_RX.test(body)) {
     // 在块体末尾追加 min-height: 0
+    // 🛡️ P2-11（2026-10-01 · c-be6-869be6fe 实锤）：追加前先做**形态自洽** ——
+    //   本函数的输入是 extractLeafBlocks 切出的**任意** LESS body，不保证末条声明已 `;` 终止。
+    //   旧实现直接 `trimEnd + '\n  min-height: 0;'` ⇒ 若末条是裸值（如生产者产出
+    //   `flex-direction: column`），LESS 会把 `flex-direction: column\n  min-height: 0`
+    //   当成**一条声明的值** ⇒ `Unrecognised input` ⇒ 整次生成被 LESS 门禁阻断。
+    //   生产者侧已规范化（P2-11），此处是**输出合法性**的最后一层自洽，不替代生产者修复。
     const trimmedEnd = newBody.replace(/\s+$/, '');
-    newBody = trimmedEnd + '\n  min-height: 0; /* VERT-004: 防 column flex 容器高度计算异常 */\n';
+    const needsTerminator = trimmedEnd && !/[;}]$/.test(trimmedEnd);
+    newBody =
+      trimmedEnd +
+      (needsTerminator ? ';' : '') +
+      '\n  min-height: 0; /* VERT-004: 防 column flex 容器高度计算异常 */\n';
     fixes.push({
       code: VERTICAL_RULES.VERT_004,
       detail: 'flex-direction: column 容器缺 min-height:0，已补（防图表容器高度为 0，equipment-monitoring 环形图消失实锤）',

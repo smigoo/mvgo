@@ -1,14 +1,21 @@
 /**
  * inline-header-slot-inferrer.js — 从 inlineCompositeRows 推断 headerSlots（纯函数）
  *
- * 背景（0907 审计，P1 修复）：
- * - inlineCompositeRows 是 Figma 结构中的同行复合节点。当 section 中的 header 被
- *   chrome-filter 剥离后，此处作为兜底提取 header-/title- 前缀节点作为 headerSlots。
- * - 死路径修复：bbox 重建的 inlineCompositeRows 只有 {id,name,layout,members}，不含
- *   children；旧实现只走 `row.children`（恒空）→ 兜底推断永远返回空列表。
- *   双通道：LLM 路径（有 children）走子节点提取；bbox 路径走行名启发式。
- * - 所有 slot 均携带 figmaNodeId（子节点 id 或行 id），供下游 T09 C-1 越界几何过滤
- *   在 Figma 节点树中定位候选 bbox，避免内容区元素被误判为 header 插槽。
+ * 🔴 现状（2026-09-30 审计后）：本模块在当前输入下**恒返回 `[]`**。
+ *   原因见 `inferHeaderSlotsFromInlineRows` 内的 🗑️ 段：唯一会触发的「按图层名」分支
+ *   （`header-` / `title-` 前缀）已按用户契约「文本处理命名无关」删除；剩下的几何分支
+ *   因 inline-row-rebuilder 构造的行**无 bbox**（实测 14329/14329 行无 bbox、
+ *   387/387 文件无 rootBBox）而**结构性永不触发**。
+ *   ⇒ header 归属的权威来源就是事实源两条：① 视觉真值 headerRelation / slotCandidate
+ *     → `ensureHeaderSlots`；② Figma header 容器 → `deriveHeaderSlotsFromFigma`。
+ *   本模块仅作为「行携带几何后」的未来兜底位保留（待办见函数内注释）。
+ *
+ * 背景（0907 审计，P1 修复）：inlineCompositeRows 是 Figma 结构中的同行复合节点。
+ * 死路径修复：bbox 重建的 inlineCompositeRows 只有 {id,name,layout,members}，不含
+ * children；旧实现只走 `row.children`（恒空）→ 兜底推断永远返回空列表。
+ * 双通道：LLM 路径（有 children）走子节点提取；bbox 路径走行名启发式（**已删**）。
+ * 所有 slot 均携带 figmaNodeId（子节点 id 或行 id），供下游 T09 C-1 越界几何过滤
+ * 在 Figma 节点树中定位候选 bbox，避免内容区元素被误判为 header 插槽。
  *
  * 本模块为纯函数（无 import.meta / 无 fs），jest 可直接 require——与
  * utils/inline-row-rebuilder.js（L2）同模式。
@@ -58,21 +65,28 @@ export function inferHeaderSlotsFromInlineRows(analysisResult) {
   for (const row of rows) {
     if (!row || typeof row !== 'object') continue;
     const rowName = String(row.componentName || row.name || row.id || '').toLowerCase();
-    // 🎯 E2 / R3(B)（2026-09-16）：**收缩行名启发式**（删减法「或收缩」）。
-    // 旧实现 isTitleBarRow = startsWith('header-'|'title-') **∨ 含 header/title-bar/title 字样**，
-    // 后者（松散子串正则 /\bheader\b|\btitle-bar\b|\btitle\b/）是「小标题/tabs 该进 header 却进
-    // 内容区」无唯一事实源的根因 → 本次删除该子串分支。
-    // 保留 startsWith('header-'|'title-')：这是**结构性命名约定**（非猜测），且是 0908 P1-2
-    // 在无几何/无事实的 bbox 路径下的受保护兜底（spec 锁定），待 bbox 路径接入事实源后再删。
-    // header 归属的权威来源已是 ①headerRelation/slotCandidate → ensureHeaderSlots ②Figma header
-    // 容器 → deriveHeaderSlotsFromFigma；几何信号（顶部 15% tab/导航行）作为无事实时的补充。
-    // ⚠️ 内容区 @antd/tab 仍不得编成 header-right。
-    const isTitleBarRow =
-      rowName.startsWith('header-') || rowName.startsWith('title-');
+    // 🗑️ 已删（2026-09-30，用户契约「文本处理命名无关」）：
+    //   `isTitleBarRow = rowName.startsWith('header-') || rowName.startsWith('title-')`
+    //   这是**按图层名判归属并把它当 UI 文本输出**，违反契约（命名只允许用于资源类型
+    //   bg/icon/img 与 @ 技术栈）。全语料审计（387 个含 inlineCompositeRows 的产物 / 14329 行）：
+    //     · 按名分支命中 77 行 ⇒ 产出 77 个 slot，而 `content` **全部是图层名原文 `header-`**
+    //       （行由 inline-row-rebuilder 构造，形如 `{id,name:'header-',layout,members}`，
+    //        走 else 分支 ⇒ content = row.name）⇒ 往 headerSlots 注入的是**假 UI 文案**，
+    //        并会被 visual-parser 注册进「identifyText 已识别文本集」，污染文本真值。
+    //     · 几何分支（isTopTabRow）命中 **0** 行 —— **结构性死支**：该模块的行由
+    //       `rebuildSectionsPreservingInlineRows` 构造，只含 `{id,name,layout,members}`，
+    //       **无 bbox**（实测 14329/14329 行无 bbox、387/387 文件无 rootBBox）
+    //       ⇒ `isInTopRegion` 恒 false。
+    //   ⇒ 删掉按名分支后，本模块在当前输入下**恒返回 []**，header 归属完全由事实源接管：
+    //     ① ensureHeaderSlots（视觉真值 headerRelation / slotCandidate）
+    //     ② deriveHeaderSlotsFromFigma（Figma header 容器）
+    //   ⚠️ 待办（需授权）：`isTopTabRow` 的命名项 `/tab|标签页|导航|标签/` 同属按名判据，
+    //      应按同一契约替换为**几何事实源**（要求 inline-row-rebuilder 的行携带 bbox /
+    //      行内成员的相对几何），随后本模块与其调用点可整体删除（当前恒 [] ⇒ 删调用点零行为变化）。
     const isTopTabRow =
       /tab|标签页|导航|标签/.test(rowName) &&
       isInTopRegion(row, rootBBox);
-    if (!isTitleBarRow && !isTopTabRow) {
+    if (!isTopTabRow) {
       continue;
     }
 

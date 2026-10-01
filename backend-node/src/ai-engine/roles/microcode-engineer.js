@@ -184,6 +184,9 @@ import {
   stripResourcePropsFromDefineProps,
 } from '../utils/props-wiring-guard.js';
 import { assessNumericLiteralRewrite } from '../utils/numeric-literal-guard.js';
+// 🛡️ P2-12（2026-10-01）：面板标题带几何判据（与 subcomponent-planner 的 header 几何兜底
+//   共用同一阈值单点，见 utils/header-geometry-fallback.js）
+import { isTopThinHeaderBand } from '../utils/header-geometry-fallback.js';
 import {
   injectResourceImports,
   resolveResourceDomMapping,
@@ -1267,18 +1270,43 @@ export class MicrocodeEngineer extends BaseAgent {
         p += '- **不要**还原内部文字样式（由组件库控制）\n';
         p += '- **不要**使用装饰性图片资源（如下拉箭头、选项图标）\n\n';
 
-        p += '### 🚫 不要使用 deep 样式穿透\n\n';
+        // ⚠️ 2026-10-01 消解提示词**硬矛盾**（c-a812-07a812f7 取证）：
+        //   本块原文「### 🚫 不要使用 deep 样式穿透 …… **不要使用 `:deep()`**」与**同一分支**
+        //   上方约 40 行的 ✅ 示例（`/* ✅ 正确 */ :deep(.ant-input) { … } :deep(.ant-table-thead) { … }`）
+        //   以及 `microcodePrompt.antdDeepIntro()`（「antd 样式覆盖**必须**使用 `:deep()`」）
+        //   三者互斥。引入时间线：🚫 块 2026-08-28（c1b770d）→ antdDeepIntro 2026-08-30（15ea74f）
+        //   直接叠加、未回改 ⇒ 属「加新规则没删旧规则」家族。
+        //   危害实证：✅ 示例把 `:deep(.ant-table-thead)` 标为正确写法，等于在教模型
+        //   「先手写假表格、再用 deep 改它」；c-a812-07a812f7 实测整个表格被拆成 3 个手写
+        //   div 列子组件、`<a-table>` 出现 0 次。
+        //   本次把被混为一谈的**两件事**拆开：
+        //     ① 要不要「还原」组件内部构造/内部样式 ⇒ 绝不还原（本块真意，保留并加强）；
+        //     ② 确有必要对齐设计稿观感时怎么写 ⇒ **必须用 `:deep()`**（scoped 下否则不生效，
+        //        antdDeepIntro 真意），且最小化、只写设计稿确有差异的项。
+        p += '### 🚫 不要「还原」组件库的内部构造与内部样式\n\n';
         p +=
-          '对于以下技术栈，**不要使用 `:deep()` / `/deep/` / `::v-deep`**：\n\n';
+          '标注了 `@技术栈` 的节点，其**内部构造**（表格的表头/单元格/列宽、下拉的选项、输入框的内边距、hover 态）由组件库在运行时渲染，**不是设计稿里待还原的结构**：\n\n';
         p +=
-          '- **UI 组件库**：`@ant` / `@antd` / `@element` / `@el` / `@vant` / `@naive` / `@arco`\n';
-        p += '- **图表库**：`@echarts` / `@chart` / `@g2` / `@highcharts`\n';
-        p += '- **地图库**：`@amap` / `@bmap` / `@mapbox` / `@leaflet`\n\n';
+          '- **不要**用 `<div>` 手写一层「假表头 / 假单元格 / 假列」来冒充组件（如手写三列 `<div>` 冒充表格）\n';
+        p += '- **不要**深入子节点还原样式（组件内部由库控制）\n';
+        p += '- **不要**还原内部布局（flex、gap 等由组件库控制）\n';
+        p += '- **不要**还原内部文字样式（由组件库控制）\n';
+        p += '- **不要**使用装饰性图片资源（如下拉箭头、选项图标）\n\n';
 
-        p += '**原因**：\n';
-        p += '1. 这些组件库自带完整样式系统\n';
-        p += '2. 自定义组件已有 `scoped` 隔离\n';
-        p += '3. 使用 `deep` 可能破坏组件库的样式逻辑\n\n';
+        p += '### ⚠️ 确有必要覆盖库内部样式时，必须用 `:deep()`\n\n';
+        p +=
+          '`@技术栈` 节点内部 DOM（`.ant-xxx`）不携带 `data-v-xxx`，**直接写 `.ant-xxx` 在 `scoped` 下不生效，必须用 `:deep()`**：\n\n';
+        p += '```less\n';
+        p += '/* ✅ 设计稿表头底色与库默认不同 → 用 deep 最小化覆盖 */\n';
+        p += ':deep(.ant-table-thead > tr > th) { background: rgba(0, 0, 0, 0.3); }\n';
+        p += ':deep(.ant-btn) { border-radius: 4px; }\n\n';
+        p += '/* ❌ scoped 下不生效 */\n';
+        p += '.ant-table-thead > tr > th { background: rgba(0, 0, 0, 0.3); }\n';
+        p += '```\n\n';
+        p += '约束：① **最小化** —— 只写设计稿确有差异的那几条，不要成片覆盖；';
+        p +=
+          '② **不得**用 `:deep()` 去补组件本该自带的内部结构样式（出现这种需求说明你该用组件本身，而不是手写 div 再用 deep 装饰）；';
+        p += '③ `@echarts` / `@chart` 等图表库内部由 canvas 渲染，`:deep()` 命中不到，不要尝试。\n\n';
 
         p += '### 代码生成示例\n\n';
         p += '**✅ 正确示例**（容器样式 + 不使用 deep）：\n\n';
@@ -6467,12 +6495,38 @@ export class MicrocodeEngineer extends BaseAgent {
         //   导致 section 内部的标题被误判为面板标题而剥离。
         //   治本：判断 header 节点是否是根容器的直接子节点（面板标题），
         //   还是在 section 内部（组件内部标题）。只有根容器的直接子节点才剥离。
+        //
+        // 🛡️ P2-12（2026-10-01）：再补**几何约束**。上面两条判据是「名字 + 层级」——
+        //   名字是设计稿自由命名 ⇒ 内容区里叫 header 的块（数据表表头行、某 section 的
+        //   内部标题条）同样满足，其标题文本会被程序化剥离 ⇒ 真值丢失（根因族 E：按名判据）。
+        //   几何事实不可辩驳：面板标题栏一定是根容器**顶部薄条**
+        //   （顶部 15% 带内 且 高 ≤ 根容器 30%；与 utils/header-geometry-fallback 同款阈值）。
+        //   bbox 不可判（缺失/非法）⇒ 保持既有判据，不据此翻案（fail-open，零回归）。
         let isPanelTitle = false;
         if (headerNode2 && rootNode2?.children) {
           // 检查 headerNode2 是否是根容器的直接子节点
           isPanelTitle = rootNode2.children.some(
             (child) => child === headerNode2 || child.id === headerNode2.id
           );
+          if (isPanelTitle) {
+            const band = isTopThinHeaderBand(
+              headerNode2,
+              rootNode2.absoluteBoundingBox,
+            );
+            if (band === false) {
+              const hb = headerNode2.absoluteBoundingBox || {};
+              const rb = rootNode2.absoluteBoundingBox || {};
+              this.logger.info(
+                `🎯 [mc] header 节点非根容器顶部薄条 → 不按面板标题剥离: ${headerNode2.name}`,
+                {
+                  relY: Math.round((hb.y ?? 0) - (rb.y ?? 0)),
+                  h: hb.height,
+                  rootH: rb.height,
+                },
+              );
+              isPanelTitle = false;
+            }
+          }
         }
         
         if (headerNode2 && isPanelTitle) {
@@ -7832,9 +7886,13 @@ export default declareInfo
         }
         // 🛡️ 终验成对补跑：透明度归属修正（d368e7d8 实锤，后段重写可能回灌容器 opacity）
         if (typeof microcodeResources.fixMisplacedContainerOpacity === 'function') {
+          // 🛡️ P0 修复（2026-10-01）：原为 `input.figmaNodeData`——本方法（execute(params)）
+          //   作用域内不存在 `input`（它是 generateCode 的形参）⇒ ReferenceError 被本块
+          //   catch 静默吞掉，日志指纹 `⚠️ 落盘前背景形态修复失败（非阻断）{"error":"input is not defined"}`。
+          //   同作用域 :7771（normalizeRootContainerLayout）用的正是 `figmaNodeData`，同源修正。
           const _opacityFinal = microcodeResources.fixMisplacedContainerOpacity(
             finalTruthFiles,
-            input.figmaNodeData,
+            figmaNodeData,
             { logger: this.logger },
           );
           if (_opacityFinal.fixed.length > 0) {

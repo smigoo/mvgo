@@ -21,6 +21,7 @@ import {
   splitTitleValueByStyle,
   indexFigmaNodes,
   assignSectionComponentNames,
+  isLayoutContainerSection,
 } from './section-tree.js';
 import { assessStatRowConfidence } from './inline-row-assembler.js';
 import { extractRenderedText } from './text-truth-guard.js';
@@ -155,9 +156,19 @@ export function checkSectionContent({ files, plan, figmaRoot }) {
   }
 
   // ── ② 唯一归属文本跨组件重复校验（Figma 子树 = 归属真值）──
+  // 🛡️ P2-10 对齐（2026-10-01）：容器 section（isLayoutContainer）是**空间包裹**，不单独
+  //   生成 .vue，不可能是「内容 owner」。此前容器恒 `sourceNodeIds=[]`（planner 容器分支
+  //   漏字段）⇒ 天然不进本表；P2-10 补齐后若不跳过，容器会经 collectSubtreeTexts 认领
+  //   整棵子树文本 ⇒ 每个叶子文本多出一个祖先 owner ⇒ `owners.size !== 1` 一律跳过
+  //   ⇒ 本规则整段失明（假阴性）。与下方借用判定的「最小归属 isProperSubset」同语义：
+  //   容器永不是最小归属。
   const textOwners = new Map(); // text -> Set(sectionId)
   const sectionTexts = new Map(); // sectionId -> Set(text)
   for (const sec of sections) {
+    if (isLayoutContainerSection(sec)) {
+      sectionTexts.set(String(sec.id), new Set());
+      continue;
+    }
     const ids = Array.isArray(sec.sourceNodeIds) ? sec.sourceNodeIds : [];
     const own = new Set();
     for (const id of ids) {

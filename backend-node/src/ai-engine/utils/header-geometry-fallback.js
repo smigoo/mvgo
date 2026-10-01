@@ -57,7 +57,7 @@ export function applyHeaderGeometryFallback(sections) {
   const b = top.absoluteBoundingBox;
   const relY = b.y - minY;
   const h = b.height;
-  if (relY < rootH * 0.15 && h <= rootH * 0.3) {
+  if (relY < rootH * HEADER_BAND_REL_Y_RATIO && h <= rootH * HEADER_BAND_MAX_HEIGHT_RATIO) {
     top.type = 'header';
     if (!top.header) top.header = { title: top.name || '' };
     return {
@@ -68,4 +68,50 @@ export function applyHeaderGeometryFallback(sections) {
     };
   }
   return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🛡️ P2-12（2026-10-01）：面板标题带（header band）判据 —— 阈值单点，多处共用。
+//
+//   此前 `microcode-engineer#T1 面板标题剥离` 的 `isPanelTitle` 只有两条判据：
+//   ① 节点名命中 /^(header|panel-header|title-bar)[- ]?/i；② 是根容器的直接子节点。
+//   ① 是设计稿自由命名 ⇒ 内容区里叫 `header` 的块（如数据表表头行、某个 section 的
+//   内部标题条）同样被判成「面板标题」，其标题文本被程序化剥离 ⇒ 真值丢失。
+//   几何事实不可辩驳：面板标题栏一定是根容器**顶部薄条**。
+//   本条把「顶部 15% 带内 + 高度 ≤ 根容器 30%」抽成单点判据（与上方
+//   applyHeaderGeometryFallback 同款阈值，避免两处各写一套数字）。
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** 顶部带：相对 y 偏移必须小于根容器高度的该比例 */
+export const HEADER_BAND_REL_Y_RATIO = 0.15;
+
+/** 薄条：自身高度必须 ≤ 根容器高度的该比例（防「整块上卡」被误标为标题栏） */
+export const HEADER_BAND_MAX_HEIGHT_RATIO = 0.3;
+
+/**
+ * 纯几何判据：`node` 是否为 `rootBox` 的顶部薄条（面板标题栏）。
+ *
+ * 三态返回，便于调用方做 fail-open 决策：
+ *  - `true`  = 是顶部薄条；
+ *  - `false` = 几何确定「不是」（偏下，或过高）；
+ *  - `null`  = 几何不可判（任一 bbox 缺失 / 非法）——调用方应保持既有判据，不要据此翻案。
+ *
+ * @param {{absoluteBoundingBox?: object}} node 待判节点（Figma 节点，读 absoluteBoundingBox）
+ * @param {{y?: number, height?: number}} rootBox 根容器 bbox
+ * @param {{relYRatio?: number, maxHeightRatio?: number}} [opts]
+ * @returns {boolean|null}
+ */
+export function isTopThinHeaderBand(node, rootBox, opts = {}) {
+  const relYRatio = Number.isFinite(opts.relYRatio) ? opts.relYRatio : HEADER_BAND_REL_Y_RATIO;
+  const maxHRatio = Number.isFinite(opts.maxHeightRatio)
+    ? opts.maxHeightRatio
+    : HEADER_BAND_MAX_HEIGHT_RATIO;
+  const usable = (o) =>
+    o && Number.isFinite(o.y) && Number.isFinite(o.height) && o.height > 0;
+  const b = node?.absoluteBoundingBox;
+  if (!usable(b) || !usable(rootBox)) return null;
+  // 比根容器还高（异常几何）视为贴顶，只由高度判据裁决
+  const relY = Math.max(0, b.y - rootBox.y);
+  if (relY >= rootBox.height * relYRatio) return false;
+  return b.height <= rootBox.height * maxHRatio;
 }

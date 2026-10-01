@@ -103,6 +103,38 @@ export function collectPropNames(body) {
 }
 
 /**
+ * 🛡️ P2-11（2026-10-01 · c-be6-869be6fe 实锤）：声明体「规范多行」输出 —— 声明体口径单一事实源。
+ *
+ * ── 事故链（真机取证，产物 `c-be6-869be6fe/resources/styles/common.less:163`） ──
+ *   ```less
+ *   .c-869be6-icon {flex-direction: column        ← 单行、末条无 `;`
+ *     min-height: 0; /* VERT-004: … *\/;
+ *   }
+ *   ```
+ *   LESS 把 `flex-direction: column\n  min-height: 0` 当成**一条声明的值**
+ *   ⇒ `Unrecognised input` ⇒ 最终 LESS 编译门禁阻断、整次生成失败。
+ *
+ *   生产者 = `pruneConflictingDecls`（本文件）与 `shared-class-deconflict#removePropsFromBody`：
+ *   两者都返回 `kept.join(';').trim()` —— **元素之间插 `;`、末尾不补**，
+ *   `.trim()` 又吃掉首条的换行缩进 ⇒ 拼进块时产出单行 `{flex-direction: column}`（无尾 `;`）。
+ *   下游 VERT-004（`vertical-layout-guard#fixVerticalBody`）按「末条声明已有 `;`」的**假定**
+ *   做字符串追加（`body.replace(/\s+$/,'') + '\n  min-height: 0; …'`）⇒ 粘连成非法 LESS。
+ *
+ *   治本：所有「重建声明体」的生产者统一走本函数 —— 输出规范多行，**每条声明都以 `;` 收尾**。
+ *   这样任何下游按「声明已终止」做的追加/拼接都天然成立（不依赖下游再打补丁）。
+ *
+ * @param {string[]} decls 声明片段数组（每项可含任意前后空白；末尾有无 `;` 均可）
+ * @returns {string} 规范多行声明体（两空格缩进、逐条 `;` 收尾）；无有效声明返回 `''`
+ */
+export function formatDeclarationList(decls) {
+  const items = (Array.isArray(decls) ? decls : [decls])
+    .map((d) => String(d == null ? '' : d).trim().replace(/;+$/, '').trim())
+    .filter(Boolean);
+  if (items.length === 0) return '';
+  return items.map((d) => `  ${d};`).join('\n');
+}
+
+/**
  * 剥离声明体中「属性名命中 sharedProps 且属 LAYOUT_PROPS」的声明。
  * @param {string} body 子组件里的声明体
  * @param {Set<string>} sharedProps 共享表里同名 class 已声明的属性名
@@ -122,7 +154,8 @@ export function pruneConflictingDecls(body, sharedProps) {
     }
     kept.push(decl);
   }
-  return { body: kept.join(';').trim(), removed };
+  // 🛡️ P2-11：规范多行 + 逐条 `;` 收尾（旧实现 `kept.join(';').trim()` 产出单行、末条无 `;`）
+  return { body: formatDeclarationList(kept), removed };
 }
 
 function escapeRe(s) {
@@ -161,7 +194,8 @@ export function pruneVueStyleAgainstShared(content, sharedClasses) {
       changes.push(`.${cls}: 剥离 ${r.removed} 条与共享表冲突的布局声明`);
       // 全剥空 → 整块删除，不留空壳规则
       if (!r.body.replace(/[\s;]/g, '')) return '';
-      return `${lead}${sel} {${r.body}}`;
+      // 🛡️ P2-11：拼装也走规范多行（旧实现 `${sel} {${body}}` 产出 `{flex-direction: column}` 单行形态）
+      return `${lead}${sel} {\n${r.body}\n}`;
     });
   }
 

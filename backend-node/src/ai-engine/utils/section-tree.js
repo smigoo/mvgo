@@ -1243,6 +1243,10 @@ export function formatSectionTreeForPrompt(sections, indent = 0) {
       lines.push(
         `${pad}- 容器 \`${sec.id}\`（${title}）：${dirText} flex 包裹，不单独生成 .vue。子区块顺序 [${childIds}]。${wrapNote}，禁止打平。`,
       )
+      // 🛡️ #78 S2：容器也可能带 techStack 标注（祖先链/直接命中未吸收形态），同步提示
+      if (sec.techStack) {
+        lines.push(formatTechStackContract(sec, indent + 1))
+      }
       if (Array.isArray(sec.children)) {
         lines.push(formatSectionTreeForPrompt(sec.children, indent + 1))
       }
@@ -1252,6 +1256,11 @@ export function formatSectionTreeForPrompt(sections, indent = 0) {
       //   DOM 结构模板照抄（icon + 文本列），LLM 只填变量绑定，禁止改结构/类名/方向。
       if (sec.itemSkeleton) {
         lines.push(formatItemSkeletonTemplate(sec, indent + 1))
+      }
+      // 🛡️ #78 技术栈接管（S2+S3）：数据驱动标记（@antd/table 等）命中 section，
+      //   下发确定性 columns/dataSource/rowSelection 契约，禁止手写还原内部结构。
+      if (sec.techStack) {
+        lines.push(formatTechStackContract(sec, indent + 1))
       }
       if (sec.internalSubcomponents && sec.internalSubcomponents.length > 0) {
         const pad = '  '.repeat(indent + 1)
@@ -1265,6 +1274,133 @@ export function formatSectionTreeForPrompt(sections, indent = 0) {
         })
       }
     }
+  }
+  return lines.filter(Boolean).join('\n')
+}
+
+/**
+ * 🛡️ #78 技术栈接管契约（S2+S3，2026-10-01 · mc-max-1790830432735-07a812f7 实锤）：
+ *   把 techstack-section-contract 挂到 sec.techStack 的事实渲染成 prompt 契约。
+ *   - direct + table 契约：完整 columns/dataSource/rowSelection（照 itemSkeleton 的
+ *     「确定性契约注入」样板，LLM 禁止改写结构）；
+ *   - direct（非表格）：组件标签提示（select/input 等数据驱动组件）；
+ *   - ancestor-chain：轻量警示（本区块位于某数据驱动组件区域内部，勿手写内部网格）。
+ */
+function formatTechStackContract(sec, indent) {
+  const ts = sec?.techStack
+  if (!ts) return ''
+  const pad = '  '.repeat(indent)
+  const lines = []
+  const markerText = `\`@${ts.library}/${ts.component}\`（节点 \`${ts.nodeId ?? '未知'}\`）`
+
+  // ── 控件契约（button/control，P3-15b 孤儿重建）──
+  if ((ts.via === 'orphan-rebuild' || ts.via === 'direct') && ts.contract && ts.contract.kind !== 'table') {
+    const c = ts.contract
+    const tag = ts.tag || '组件'
+    const s = c.style || {}
+    const styleParts = []
+    if (s.width && s.height) styleParts.push(`尺寸 ${s.width}×${s.height}px`)
+    if (s.background) styleParts.push(`底色 ${s.background}`)
+    if (s.borderRadius) styleParts.push(`圆角 ${s.borderRadius}px`)
+    if (s.textColor) styleParts.push(`文字色 ${s.textColor}`)
+    if (s.fontSize) styleParts.push(`字号 ${s.fontSize}px`)
+    if (s.fontWeight) styleParts.push(`字重 ${s.fontWeight}`)
+    lines.push(`${pad}▼ 控件契约（确定性事实，禁止改写）：`)
+    lines.push(
+      `${pad}本区块对应 Figma ${markerText} ⇒ 用 \`<${tag}>\` 渲染${c.text ? `，文案「${c.text}」必须作为 <${tag}> 的**直接内容**（<${tag}>…>${c.text}</${tag}>），禁止留空标签/空 span 占位` : ''}。`,
+    )
+    if (styleParts.length > 0) {
+      lines.push(
+        `${pad}外观真值：${styleParts.join('、')} —— 全部用 wrapper class / inline style 承载（颜色用确切 hex，不得近似），禁止 :deep 穿透控件内部，禁止手画图标/圆圈。`,
+      )
+    }
+    // 🛡️ P3-15d：位置事实（防 LLM 自由摆放——按钮跑到右下角实锤）。偏差值随设计稿动态计算。
+    //   🛡️ P3-15e（2026-10-01 · 用户截图实锤「footer 包装层不居中」）：位置约束必须覆盖包装层。
+    if (s.align === 'center') {
+      lines.push(
+        `${pad}位置真值：该控件在父容器内**水平居中**（实测中心偏差 ${s.alignDevPx ?? 0}px）⇒ 控件及其**任何包装 div** 都必须水平居中（align-self:center 或 margin:0 auto），禁止 float/绝对定位靠边。`,
+      )
+    } else if (s.align === 'right') {
+      lines.push(
+        `${pad}位置真值：该控件在父容器内**靠右**（实测中心偏差 ${s.alignDevPx ?? '?'}px）⇒ 控件及其包装 div 用 align-self:flex-end。`,
+      )
+    } else if (s.align === 'left') {
+      lines.push(
+        `${pad}位置真值：该控件在父容器内**靠左**（实测中心偏差 ${s.alignDevPx ?? '?'}px）⇒ 控件及其包装 div 用 align-self:flex-start。`,
+      )
+    }
+    if (s.marginTop) {
+      lines.push(`${pad}位置真值：与上方区块的垂直间距 ${s.marginTop}px（margin-top）。`)
+    }
+    return lines.filter(Boolean).join('\n')
+  }
+
+  // ── 表格契约（direct + table）──
+  if (ts.via === 'direct' && ts.contract && ts.contract.kind === 'table') {
+    const c = ts.contract
+    const tag = ts.tag || '表格组件'
+    const s = c.style || {}
+    lines.push(`${pad}▼ 技术栈接管契约（确定性事实，禁止改写）：`)
+    lines.push(
+      `${pad}本区块对应 Figma ${markerText} ⇒ 必须用 \`<${tag}>\` 渲染整个表格；禁止用 <div> 手写表格内部结构（列等分 / 单元格框 / 表头背景）。`,
+    )
+    lines.push(`${pad}columns（${c.columnCount} 列，宽度为 Figma 实测 px，列序不可换）：`)
+    for (const col of c.columns) {
+      lines.push(`${pad}  - { title: '${col.title}', dataIndex: '${col.dataIndex}', width: ${col.width} }`)
+    }
+    // 🛡️ P3-15e（2026-10-01 · 用户截图实锤「表格上方臆造出 3 个张斌 tab 按钮」）：
+    //   dataSource 是**行数据**，禁止被诠释成 tab/切换器/按钮组等设计中不存在的交互元素。
+    lines.push(
+      `${pad}本区块**只渲染表格本身**：dataSource 仅用于表格行渲染，禁止在表格上方/下方添加设计中不存在的 tab 切换、按钮组、分段控制器等任何交互元素。`,
+    )
+    lines.push(`${pad}dataSource（${c.rowCount - 1} 行真值文本；字段名可改语义命名，但列绑定必须一一对应）：`)
+    lines.push(`${pad}\`\`\``)
+    lines.push(`${pad}const dataSource = ${JSON.stringify(c.dataSource)}`)
+    lines.push(`${pad}\`\`\``)
+    if (c.rowSelection) {
+      // 🛡️ P3-15d（用户截图实锤）：设计形态是 radio 与第一列文本**同格**，antd 的
+      //   rowSelection prop 必然把选择列独立出来（多出空表头列）⇒ 明确禁用 prop，
+      //   改用第一列 #bodyCell 自定义渲染。
+      lines.push(
+        `${pad}行选择：radio 与第一列文本**同格**（同一单元格）⇒ **不用 rowSelection prop**（它会把选择列独立出来、多出空表头列，与设计不符）；在第一列（dataIndex: '${c.columns[0]?.dataIndex || 'field1'}'，即「${c.columns[0]?.title || ''}」列）的 #bodyCell 里渲染 <a-radio> + 文本，选中态用响应式变量。`,
+      )
+    }
+    // 🛡️ P3-15d：宽度事实（防表格靠左/固定窄宽）
+    if (s.fullWidth) {
+      lines.push(
+        `${pad}宽度真值：表格**撑满父容器**（真值 ${s.width || '100%'}px = 父宽 100%）⇒ wrapper 用 width:100%，禁止 width:fit-content / 固定窄宽。`,
+      )
+    } else if (s.width) {
+      lines.push(`${pad}宽度真值：表格固定 ${s.width}px（Figma 实测）。`)
+    }
+    // 🛡️ P3-15 表格样式契约（2026-10-01 · 用户截图实锤斑马纹/表头底色/单元格背景丢失）：
+    //   色值全部来自 node fills/strokes 真值（非视觉猜测）；出口 = 公开 API + 唯一 :deep 白名单
+    const styleLines = []
+    if (s.rowHeight) styleLines.push(`数据行高 ${s.rowHeight}px（用 rowClassName + wrapper class 控制，禁止 :deep 改行高）`)
+    if (s.align === 'center') styleLines.push('单元格与表头内容居中（#headerCell/#bodyCell slot 或 class）')
+    if (s.headerBg) styleLines.push(`表头底色 ${s.headerBg}${s.headerFontWeight ? `（字重 ${s.headerFontWeight}）` : ''} —— 唯一允许的 :deep 白名单：.ant-table-thead > tr > th 的 background，仅此一处`)
+    if (s.zebraBg) {
+      const rows = Array.isArray(s.zebraRows) && s.zebraRows.length > 0 ? s.zebraRows.join('、') : null
+      styleLines.push(
+        `斑马纹方向 = 横向（按数据**行**交替，整行同色），禁止纵向/按列斑马：数据第 ${rows || '偶数'} 行底色 ${s.zebraBg}，其余行 ${s.cellBg || '白色'}（用 :row-class-name 公开 API 按行 index 判定 + wrapper class，禁止 :deep）`,
+      )
+    } else if (s.cellBg) {
+      styleLines.push(`数据行底色 ${s.cellBg}（wrapper class）`)
+    }
+    if (s.borderColor) styleLines.push(`表格线为极淡 hairline（真值色 ${s.borderColor}，1px）⇒ 以横向行分隔线为主，竖向列线（如有）同色同粗，禁止粗重/深色边框`)
+    if (s.textColor) styleLines.push(`正文文字色 ${s.textColor}`)
+    if (styleLines.length > 0) {
+      lines.push(`${pad}表格样式契约（Figma 真值色值，逐条还原）：`)
+      for (const l of styleLines) lines.push(`${pad}  - ${l}`)
+    }
+  } else if (ts.via === 'direct') {
+    lines.push(
+      `${pad}⚠️ 本区块对应 Figma ${markerText} ⇒ 用 <${ts.tag || '对应组件'}> 渲染，禁止手写还原其内部构造与内部样式。`,
+    )
+  } else if (ts.via === 'ancestor-chain') {
+    lines.push(
+      `${pad}⚠️ 本区块位于 Figma ${markerText} 区域内部：该组件的内部网格/列等分/单元格结构由组件库渲染，禁止在本区块手写还原${ts.tag ? `（语义上属于 <${ts.tag}> 区域）` : ''}。`,
+    )
   }
   return lines.filter(Boolean).join('\n')
 }

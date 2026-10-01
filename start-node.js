@@ -68,19 +68,48 @@ function gitHeadShort(cwd) {
     return require('child_process').execSync('git rev-parse --short HEAD', { cwd, encoding: 'utf8' }).trim();
   } catch { return 'unknown'; }
 }
+// 🛡️ 2026-09-30（假警报实锤，改动判据本身）：原判据只看 `dist/main.js` 的 mtime，
+//   而 `nest build` 是**增量编译**——只重写本次真正变更的文件，`main.js` 常常原封不动。
+//   实测：main.js 停在 21:32，同期布局改动已 emit 到 dist/ai-engine/**（mtime 23:53），
+//   于是每次启动都报「dist 落后于源码」= 狼来了；真落后时反而没人信。
+//   改为读「构建时间证据」（取最新者）：
+//     ① `dist/.build-stamp`       —— build 脚本成功结尾写入（scripts/write-build-stamp.mjs），最可靠
+//     ② `tsconfig.build.tsbuildinfo` —— 直接跑 `nest build`（不走 npm script）时也会刷新
+//     ③ `dist/main.js` mtime      —— 兜底，兼容历史语义
 const DIST_MAIN = path.join(BE_DIR, 'dist', 'main.js');
-const _distTime = fs.existsSync(DIST_MAIN) ? fs.statSync(DIST_MAIN).mtimeMs : 0;
+const BUILD_STAMP = path.join(BE_DIR, 'dist', '.build-stamp');
+const TS_BUILDINFO = path.join(BE_DIR, 'tsconfig.build.tsbuildinfo');
+const _evidence = [BUILD_STAMP, TS_BUILDINFO, DIST_MAIN]
+  .map((f) => {
+    try {
+      const st = fs.statSync(f);
+      return st.isFile() ? { name: path.relative(BE_DIR, f), t: st.mtimeMs } : null;
+    } catch { return null; }
+  })
+  .filter(Boolean);
+const _distTime = _evidence.length ? Math.max(..._evidence.map((e) => e.t)) : 0;
+const _distBasis = _evidence.length
+  ? _evidence.filter((e) => e.t === _distTime).map((e) => e.name).join(' | ')
+  : '无构建产物';
 const _srcScan = latestSrcMtime(path.join(BE_DIR, 'src'), /\.(ts|js)$/);
 const _gitHash = gitHeadShort(BE_DIR);
 const STALE = _distTime > 0 && _srcScan.latest > _distTime;
+const R3B_STATUS =
+  `[start-node] dist 构建时间=${new Date(_distTime).toISOString()} 基准=${_distBasis} git=${_gitHash}` +
+  (STALE ? '  ⚠️ STALE' : '  ✅ 与源码一致');
+// 🔑 阳性留痕：健康时也要吭声 —— 否则「护栏通过」与「护栏压根没跑」无法区分。
+//   且判定要**落盘**（见下方 server.log 分隔线处）：本文件的 console 走 stdout，
+//   而 detached / 无终端启动时 stdout 会被丢弃 ⇒ 判定永久丢失，又回到「分不清」。
+let R3B_REPORT = R3B_STATUS;
 if (STALE) {
-  console.warn(
-    `[start-node] ⚠️ R3-B 版本护栏：dist 构建时间(${new Date(_distTime).toISOString()}) ` +
+  const _r3bWarn =
+    `[start-node] ⚠️ R3-B 版本护栏：dist 构建时间(${new Date(_distTime).toISOString()}, 基准=${_distBasis}) ` +
     `早于 src 最新改动(${new Date(_srcScan.latest).toISOString()}, ${path.relative(BE_DIR, _srcScan.file || '')})。` +
-    `当前 dist 落后于源码，运行的是旧代码，请重新 build 后再启动。`,
-  );
+    `当前 dist 落后于源码，运行的是旧代码，请重新 build 后再启动。`;
+  R3B_REPORT = _r3bWarn + '\n' + R3B_STATUS;
+  console.warn(_r3bWarn);
 }
-console.log(`[start-node] dist 构建时间=${new Date(_distTime).toISOString()}  git=${_gitHash}${STALE ? '  ⚠️ STALE' : ''}`);
+console.log(R3B_STATUS);
 
 
 // 追加模式保留历史日志（排障需要回溯上一次运行的生成过程，2026-08-25 教训：
@@ -91,6 +120,9 @@ try {
     try { fs.renameSync(LOG, LOG + '.1'); } catch (_) {}
   }
   fs.appendFileSync(LOG, `\n\n===== [start-node] ===== ${new Date().toISOString()} =====\n`);
+  // R3-B 判定落盘：stdout 在 detached/无终端启动时会丢失，只有落盘才能事后审计
+  // 「护栏到底跑没跑、当时判成什么」——这正是它失效很久没人发现的原因。
+  fs.appendFileSync(LOG, R3B_REPORT + '\n');
 } catch (_) {}
 
 // 构造干净环境：去掉代理变量（避免内网/本地连接被代理劫持），显式指定本地 MongoDB

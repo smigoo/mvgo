@@ -126,6 +126,7 @@
         :is-dark="isDark"
         @open-config="showConfig = true"
         @toggle-theme="toggleTheme"
+        @clear-component="handleClearComponentAnchor"
       />
       
       <ChatArea
@@ -444,6 +445,21 @@ async function handleDeleteConversation(conversationId) {
   await store.removeConversation(conversationId);
   if (store.currentConversation?.conversationId === conversationId) {
     router.push('/workbench');
+  }
+}
+
+/**
+ * R7 锚点清除：用户点击「当前组件」chip 的 ×，同步后端 + 本地
+ */
+async function handleClearComponentAnchor() {
+  const conv = store.currentConversation;
+  if (!conv?.conversationId) return;
+  try {
+    await store.clearComponentAnchor(conv.conversationId);
+    // 锚点清除后刷新产物列表（不再按 currentComponentId 拉已注册组件文件）
+    loadConversationArtifacts();
+  } catch (err) {
+    console.error('清除组件锚点失败:', err);
   }
 }
 

@@ -15,6 +15,22 @@
  * Phase 3 L8（2026-09-07）：左右并列判定逻辑复用 `inferFlexDirection` 的 sideBySide 算法，
  * 阈值集中一处，避免多处重复定义。
  *
+ * 🛡️ P2-9（2026-10-01 · c-a812-07a812f7 实锤）：**技术栈切分**。几何判据对「数据驱动组件」
+ * 会产生系统性误判——`@antd/table` 的直接子是 3 个**列容器**（真值 210:45642/210:45676/210:45699，
+ * x=86282/86351/86604 同 y 起、x 不重叠），命中 `areBoxesSideBySide` ⇒ 整张表被降维成一个
+ * `horizontal` section，下游把它当成「3 个左右并列的普通块」拆成 3 个等分列子组件，表格语义
+ * （表头/表体/列字段）整体消失（用户实报「没有使用 ant 的 table」）。
+ * 这类组件的内部构造由库在**运行时**生成，设计稿里的几何只是「画出来的样子」，不构成待还原的结构。
+ *
+ * 分流（与 `figma-connector#_isStackControlPart` 同族思路，但判据独立、只看节点名标记）：
+ *  - **数据驱动组件**（`@antd/table` / `select` / `input` / `date-picker` / `modal` / `form`）：
+ *    抑制**该节点自身**的聚类（不再产出行内行 section），**但仍递归子树**——表内真实的左右并列
+ *    （如真值 210:45646 = `@antd/radio` + 文本「张斌」）必须保留。
+ *  - **自绘内容容器**（`@antd/tab` / `tabs` / `collapse`）：业务内容塞在其子节点（`figma-connector.js`
+ *    的下钻口径），行内并排关系照常重建，不抑制。
+ *  - **其它 / 未知标记**（`@antd/button`、`@antd/radio`、未知库…）：fail-open，维持原行为
+ *    （`@antd/radio` 一组 3 个单选项本身就是真实的行内并列）。
+ *
  * @param {object} doc Figma 节点树根（含 `children` 的 document 节点）
  * @param {object} [opts]
  * @param {number} [opts.yOverlapRatio=0.5] y 重叠高度占较小高度的最小比例（低于则非同行）
@@ -24,12 +40,52 @@
  */
 import { getFigmaBox, areBoxesSideBySide } from './section-tree.js'
 
+/** `@lib/component` 标记提取（与 `figma-connector#extractTechStackHints` 同源正则） */
+const TECHSTACK_MARKER_RX = /@([A-Za-z0-9_-]+)\/([A-Za-z0-9_-]+)/
+
+/**
+ * 数据驱动组件：内部构造（表头/表体/选项/输入框/弹窗骨架）由库运行时生成，
+ * 设计稿里的几何只是渲染结果，不该被当作「行内左右并列」重建。
+ * 归一化后比较（`date-Picker` / `date_picker` / `DatePicker` 同一族）。
+ */
+const DATA_DRIVEN_TECHSTACK_COMPONENTS = new Set([
+  'table', 'select', 'input', 'datepicker', 'modal', 'form',
+])
+
+/** 自绘内容容器：业务内容塞在其子节点里，行内并排关系必须保留（不抑制）。 */
+const SELF_DRAWN_TECHSTACK_CONTAINERS = new Set(['tab', 'tabs', 'collapse'])
+
+/** 组件名归一化：小写 + 去掉 `-`/`_`/空白，`date-picker` ≡ `datepicker`。 */
+function normalizeTechStackComponent(raw) {
+  return String(raw || '')
+    .toLowerCase()
+    .replace(/[-_\s]/g, '')
+}
+
+/**
+ * 该节点是否为「数据驱动技术栈组件」——是则抑制其自身的行内行聚类。
+ * fail-open：无标记 / 自绘容器 / 未知组件名一律返回 false（维持原行为）。
+ *
+ * @param {object} node Figma 节点
+ * @returns {boolean}
+ */
+export function isDataDrivenTechStackNode(node) {
+  const m = String(node?.name || '').match(TECHSTACK_MARKER_RX)
+  if (!m) return false
+  const comp = normalizeTechStackComponent(m[2])
+  if (!comp) return false
+  if (SELF_DRAWN_TECHSTACK_CONTAINERS.has(comp)) return false
+  return DATA_DRIVEN_TECHSTACK_COMPONENTS.has(comp)
+}
+
 export function rebuildSectionsPreservingInlineRows(doc, opts = {}) {
   const sections = []
 
   const walk = (node) => {
     const kids = (node.children || []).filter((c) => getFigmaBox(c))
-    if (kids.length >= 2) {
+    // 🛡️ P2-9：数据驱动组件自身的子节点不是「行内并列的块」，抑制聚类但继续递归子树
+    //   （子树内真实的 inline 行，如表格单元格里的 radio + 文本，必须保留）。
+    if (kids.length >= 2 && !isDataDrivenTechStackNode(node)) {
       // 行聚类：按 y 升序后，将满足左右并列的兄弟归入同一连通分量（行内复合结构）
       const rows = kids.map((k, i) => ({ ...getFigmaBox(k), idx: i, node: k }))
       rows.sort((a, b) => a.y - b.y)

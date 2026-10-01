@@ -11,13 +11,18 @@
 - 后端重启：`lsof -ti:13030 -sTCP:LISTEN`→kill→确认释放→根 `start-node.js`→`pgrep -f "node.*dist/main.js"`=1 + `curl :13030/api/tasks` 401=存活。重启前确认无进行中任务。
 - 🔑 **后端接口鉴权契约**：走 **`token` 请求头**（`session.guard.ts:31` 只读 `headers['token']` / `query.token`）—— **不是** `Authorization: Bearer`（恒 401）。`GET /api/tasks` → `{success,code,data:{tasks:[],count}}`（数组在 `data.tasks`，**非顶层**）。
 - ✅ **`start-node.js` 的 graceful-drain 护栏已修**（2026-09-30，此前**三处缺陷叠加 ⇒ 从未生效过一次**）：① `require('node-fetch')` 拿到 namespace 对象而非函数；② 鉴权头写成 `Authorization: Bearer dev`（恒 401）；③ 顶层 `tasks.filter` 而数组实际在 `data.tasks`。三者任一都让它恒走 catch 无条件放行。修法 = `globalThis.fetch` + `token: dev` + `data.tasks` + `AbortSignal.timeout`，并补**阳性留痕** `✅ 活动任务检查通过（历史 N 条，进行中 0 条）` —— **没这行就无法区分「护栏通过」与「护栏压根没跑」**（原代码只有失败路径吭声，还伪装成环境小问题）。
-- `start-node.js` R3-B 护栏只比 `dist/main.js` mtime ⇒ **`nest build` 增量编译不刷新它**，故每次启动都刷 STALE 横幅（含并行会话 WIP 的 src 也会触发）= **假警报**；判生效 = grep `dist/` 目标符号。**不设** `FIELD_ENCRYPTION_KEY`；AI 凭证 `backend-node/data/ai-config.json`。
+- ✅ **R3-B 假警报已治本（2026-09-30）**：原判据只比 `dist/main.js` mtime，而 `nest build` 增量编译不刷新它 ⇒ 每次启动必刷 STALE 横幅。现改为读**构建时间证据**取最新者：`dist/.build-stamp`（`npm run build` 经 `scripts/write-build-stamp.mjs` 写入）> `tsconfig.build.tsbuildinfo`（直接 `nest build` 也会刷）> `dist/main.js` mtime（兜底）。健康时打印 `✅ 与源码一致`（阳性留痕）。回归：根仓 `npm run check:r3b`（`scripts/check-r3b-guard.mjs`，5 断言含阳性对照，**逐字提取 start-node.js 真实代码**）；`--real` 可直接看真实判定。判 dist 生效仍以 grep 目标符号为准。**不设** `FIELD_ENCRYPTION_KEY`；AI 凭证 `backend-node/data/ai-config.json`。
 - 🔴 **`nest build` 类型错会中止 tsc emit**（dist 整体不更新，并行会话 WIP 改 `src/workbench/*` 常触发）。判我 dist 停哪版 = grep 本次新增独有符号；绕法 = `.js` emit 是原样拷贝 ⇒ 单文件 `cp src→dist`，不把并行 WIP emit 进去；事后 `diff src dist` IDENTICAL。
 - 生产 Nginx：`/api` 默认转 Java 8080，属 13030 的路由须写在 `/api` 前。🔴 **生产网关仅 GET/POST**（其余 405）⇒ 新接口一律 GET/POST + 语义后缀。
 - 前端生产 `base='/mvgo/'` + `routerMode:'history'` ⇒ history 路由 URL 必带 `/mvgo/` 前缀（`withAppBase`/`getRouteUrl`）；`/workbench/*` 走 `App.vue` 独立分支，不渲染全局 `<WorkflowMonitor>`。
 
 ## 不变式（治本，非产物直改）
 - 确定性事实单一事实源；视觉确定内容由 facts/assembler 装配，**不能直改生成产物**。删减法：每接管一个事实就删对应 fallback/纠偏器，门禁总量只降不升。
+- 🔴 **文本处理命名无关（用户契约，2026-09-30 起）**：判据只能是「节点 type 是否 TEXT/CHARACTER」；**严禁**用图层名（`t-`/`d-`/裸 `t`）判文本类别或角色。命名**只允许**用于 ① 资源类型 `bg`/`icon`/`img` ② `@` 技术栈（如 `@antd/tab`）。原话「是文字就输出拿到样式输出文字，不用依赖命名」。
+  - 事实源：`section-tree.js#collectSubtreeTexts` **只产出三类真值** → 文案 `characters`（回退 `normalizeFigmaTextName(name)`）/ 样式 `fontSize,fontWeight` / 几何 `x,y`；**不再有 `isTitle` 字段**。
+  - 角色（标题/数值）唯一判据 = `section-tree.js#splitTitleValueByStyle(items)`：恰好 2 文本 → ① 字号大者=数值 ② 字号并列时 `y` 靠下者=数值 ③ 都不可辨 ⇒ **返回 null（不臆造）**。消费方：`assessStatRowConfidence` ③、`buildSectionContentContract` 回退分支（null 时只给 `texts[]` 视觉序，prompt 由铁律「字号小=标题」自判）。
+  - 已删的按名判据留档：`collectSubtreeTexts#isTitle`（3 类 5 处消费）、`inline-header-slot-inferrer#isTitleBarRow`（`header-`/`title-` 前缀，**真实语料里唯一会触发的分支，产出 77 个 content=`header-` 的假 UI 文案**；其 `isTopTabRow` 几何支结构性死 —— `inline-row-rebuilder` 的行恒无 bbox）⇒ 该模块当前**恒返回 []**。
+  - 待办（未授权）：`isTopTabRow` 的命名项 `/tab|标签页|导航|标签/` 同属按名判据，应按同契约换几何事实源，随后模块与调用点可整体删（删调用点零行为变化）。
 - 预览事实源优先级 `last-good > candidate > partial > workspace`；快照根 = `<仓库根>/temp-components/.task-code-snapshots/<sessionId>/`。
 - 产物三处同步：backend/frontend workspace + 快照，须 diff；**同步面必须含 `resources/styles/index.css`**（less 产物），改 .less 后 `index-css-recompiler.js#recompileIndexCss` 重编。
 - 资源挂载唯一答案 = `mapping.ownerSectionId` ⨯ `data-section-id`，有命中恒取、不进语义评分；**幂等护栏 = `isResourceRendered(files,var)`（「已渲染」唯一判据，宽正则不要求 class，N3 两处**无条件**先拦）**；重复 sid 归属 = `anchorOwnerRank`（`package/index.vue` > 其它 `index.vue` > 其它，同文件取最外层）；宿主插槽一个槽名只出现一次；中文 class 出口 `component-naming.js#autoFixNonAsciiClassNames`。
@@ -41,6 +46,7 @@
 - **透明度契约**（d368e7d8）：透明度只属 bg 层（容器 relative + `<firstCls>-bg`），严禁挂容器 class；定位/透明度一律 inline `:style`，禁写 CSS 规则；幂等 = 层 `:style` 已含 `position`。
 - 锚点标签正则禁嵌套量词 ⇒ `findTagBySectionAnchor` 线性扫描；`ownerSectionId` 不总是真 section ⇒ 禁「锚点缺失即 fail-closed」；循环结构导出前净化 `__parent` 反链。
 - LessCompileGate：heal 在 createFileManager **前**；`healUnclosedLessComments` 8 行窗口（splice 后禁用「已处理下标」跳过）。图表样式豁免：`style-class-consolidator` 以 `/echarts/.test(sfc)` 标 `isChartComponent`。
+- **技术栈接管**（#78，2026-10-01）：`@lib/comp` 标记节点在 planner 内由 `techstack-section-contract.js` 收编 —— 数据驱动组件（table/select/input/datepicker/modal/form）直接命中即**吸收 children 为单一 techstack 叶子** + `extractTableContract` 确定性契约（columns/dataSource/rowSelection）随 prompt 下发；自绘容器（tab/tabs/collapse）照常下钻重建。三道防线：deep-first 最小归属认领（E1 容器 sourceNodeIds 是子树全集会抢内层命中）、sourceNodeIds 候选几何最小归属、祖先链标注走 Phase 2（几何门+跳过已认领）。**table 吸收只在契约抽取成功时执行**（契约 null ⇒ fail-open 维持现状，绝不产出空 `<a-table/>`）。
 
 ## 诊断手法
 - 🔑 **门禁「活不活」三查**：① 守卫形状全语料量化；② 日志 id 留痕（「查不到」是有效负证据）；③ 离线探针三态。工具在 `mvgo-deterministic-replay-triage/scripts/`。
@@ -51,9 +57,11 @@
 - 🔑 **量化口径纪律**：`forEachLeafSection` 递归排除容器 = 生产语义；统计前按 `generatedAt` 剔除历史快照（live ≥ 2026-09-16）；「全语料审计」前先数不同输入（1069 目录只来自 7 个 Figma 设计）。
 - 🔑 **真机 A/B 可归因面只有计划层**（两轮最大变量是模型侧）：产物级 diff 不可归因，只答「有没有退化」；判「真 A/B」用 `component-meta.json#codeVersion.gitHash`。
 - jest 只跑 `.spec.ts`；ESM spec 撞 `import.meta` 拖垮整套件 ⇒ import 前 `jest.mock('../../logger/index.js', ...)`；命令 `cd backend-node` + `NODE_OPTIONS="--max-old-space-size=1536" npx jest <spec> --runInBand --forceExit`。
+- 🔴 **「假绿」形态（2026-10-01 实锤，7 个用例从未断言）**：`tryRequire` 返回**导出本身**，spec 却按命名空间解构 ⇒ `const { fn } = (await tryRequire(rel,'fn')) || {}` 恒 `undefined`，而 `expect(undefined).not.toBeNull()` **为真** + `if (!fn) return` 早退 ⇒ 恒绿。**判定法**：`git checkout HEAD -- <spec>` 拿旧 spec 跑**改后的 src**，逻辑上必败的断言仍全绿 ⇒ 假绿。**正解**：静态 import（本仓 ts-jest 会编译 src `.js`）或直接赋值 + `expect(typeof fn).toBe('function')`。全仓 grep `const \{[^}]*\} = \(await tryRequire` 已归零，新增 spec 禁用该形态。
+- 🔑 **基线对比在「多会话并行 WIP」下的正确手法**：`git stash` 会连别人的改动一起 stash ⇒ 改用**显式路径 checkout**：`files=(仅我改的) && git checkout <改前commit> -- $files` → 跑 jest → `git checkout HEAD -- $files` → `git diff --name-only` 只剩他人文件自证未越界。⚠️ zsh **不对未加引号变量分词**，必须用数组。
 - `server.log` 取段按行号窗口；`promptChars`/BLOCK 行不含 sessionId（按 sid 过滤漏 95%）；`GET /api/tasks/status/<sid>` 字段在 `data.task.*`；真机 lite/max 实测 83–90s。
 - 🔴 整段函数体逐字提取不能用朴素花括号计数 ⇒ 用 JS 感知扫描器。
-- ⚠️ **「改判据修 X」前必须先跑纯函数 A/B 证伪**（反面教材留档）：`isTitle` 认裸 `t`/`d` 曾被当作「统计行装配从不执行」的根因，全语料 898 产物 / 2702 section A/B 实测 **零影响**（`beforeHigh===afterHigh===20`，双向 flip=0；裸 `t`/`d` 各 346 但不在被评估的横向 section 成员子树内）⇒ 真瓶颈是 `member-shape-mismatch` 的「**成员子树文本数 ≠ 2**」（成员粒度）。**且「从不执行」的描述本身就不准确**（实测 20 条 high）⇒ 流传的「根因」要实测复核，别顺着注释改判据。配方：复刻目标纯函数全链（私有依赖一并复刻）+ 参数化被改判据 + 全语料跑 before/after 分布。
+- ⚠️ **「改判据修 X」前必须先跑纯函数 A/B**（配方：复刻目标纯函数全链 + 参数化被改判据 + 全语料跑 before/after 分布）。案例 `isTitle`：① 先证伪「扩判据认裸 `t`/`d` 有用」（零影响，`beforeHigh===afterHigh===20`，双向 flip=0）——**但方向本身就被用户否掉**：该判据**根本不该存在**（文本命名无关），② 于是**整体删除**。教训：A/B 只能回答「这么改有没有用」，**回答不了「该不该判」**；判据的正当性要先对齐契约再看数字。真瓶颈仍是 `member-shape-mismatch` 的「**成员子树文本数 ≠ 2**」（成员粒度，立项）。
 
 ## 本机 shell 陷阱
 - BSD `grep`：多模式用 `-E`（`\|` 静默空）；**`\b` 不支持**（用 `[^A-Za-z]`）；`sed -i ''`；heredoc `${}` 会展开 ⇒ 用 Write 写脚本。
@@ -73,7 +81,7 @@
 - 🔑 **枚举扩语义时不要用已有枚举承载语义相反的场景**：实例 = 解析器曾把「拉伸（会变形）」映射成 `hybrid`（语义为"等比+弹性，不变形"）⇒ 同一枚举两套含义，下游按 `hybrid` 理解必被误导。正解 = 按最接近的合法值生成（`fluid`）+ 告知差异，**不引入该语义**。
 - 🔴 线框/缩略图底色**必须与 `canvas.backgroundColor` 解耦**（设计稿默认 `#ffffff`）⇒ 浅蓝标签+虚线边框直接失去对比度，结构反而看不清。固定蓝图深色 `#0b1219`。
 - 🔑 **8 个预设的 `outputScaleMode` 已统一为 `fluid`**（2026-09-30，原为历史值 `contain`）⇒ 预设与一句话生成的默认终于一致，之前「fluid · 推荐」只是下拉框里的一句话。`screen-layout-presets.ts` 文件头已写约定注释：**新预设一律 `fluid`**，别再漂回 `contain`/`none`（那是与产物实际用的 fr+minmax 流式布局哲学脱节的「等比缩放派」遗留）。
-- 一句话生成（纯前端、零模型）：解析器 `utils/nl-layout-parser.ts`（`parseLayoutPrompt`；增量修改见 `utils/nl-layout-refine.ts#parseRefine`，两者由 `npm run check:screen` 回归 —— 解析器 144 + 导出器 56 断言，跑**真 TS 源**，**改解析器前必跑**）；组件 `PromptQuickGen.vue` / `LayoutWireframe.vue` / `AdaptivePreviewModal.vue`（策略切换经 `update:fit` 回写编辑器，`fitWritable=false` 时只提示不写）。入口：页脚 `AppFooter.vue` 的「大屏布局」（受 `screen` 开关控制，dev base `/` ⇒ `:2610/screen`，生产 base `/mvgo/`）。
+- 一句话生成（纯前端、零模型）：解析器 `utils/nl-layout-parser.ts`（`parseLayoutPrompt`；增量修改见 `utils/nl-layout-refine.ts#parseRefine`，两者由 `npm run check:screen` 回归 —— 解析器 144 + 导出器 56 断言，跑**真 TS 源**，**改解析器前必跑**）；组件 `PromptQuickGen.vue` / `LayoutWireframe.vue` / `AdaptivePreviewModal.vue`（策略切换经 `update:fit` 回写编辑器，`fitWritable=false` 时只提示不写）。入口：**头部主导航** `AppHeader.vue#mainTabsConfig` 的「大屏布局」（受 `screen` 开关控制；dev base `/` ⇒ `:2610/screen`，生产 base `/mvgo/`）。
 - 🔑 **有兜底的解析函数不能无条件调**：`parseFitMode` 恒返回一个值 ⇒ refine 里必须先过意图守卫（`FIT_CUE`），否则任何命令都被判成「要改适配策略」。refine 用**普通赋值**（复用 `useHistory` deep watch 撤销栈，可控 Z）而非 `resetHistory`。
 - 🔑 **`navigator.clipboard` 只在安全上下文存在**（内网 http 下 undefined）⇒ 复制功能必须留 `execCommand` 降级。**前端加「复制」类按钮前先确认内容有没有被截断**（`codePreview` 曾只给 500 字符 ⇒ 复制到半截代码）。
 - ⏳ 大屏布局**原缺口已全部做完**（2026-09-30 一次做完：refine / 持久化+分享 / 结果闭环单文件 HTML / 覆盖面 / 测试落仓）。下一步 = 后端「取完整生成代码」接口（现在只给 20000 字符片段）、refine 精确定位、refine 的 AI 版。详见 `PIPELINE-DETAIL.md` 的大屏布局章节 + `2026-09-30.md`。

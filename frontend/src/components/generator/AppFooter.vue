@@ -3,7 +3,8 @@
     <span class="af-copy">© 2026 感智晓界工坊 · 感动科技 | 智能体工作室</span>
 
     <!-- 低频入口放页脚：架构介绍（原在头部次导航）、页面开发、工作流编排（原在头部主导航）
-         均受各自功能开关控制，关闭时置灰并给出提示。 -->
+         均受各自功能开关控制，关闭时置灰并给出提示。
+         注：「大屏布局」曾在页脚，2026-09-30 已移回头部主导航（生产级生成页，属主入口）。 -->
     <nav class="af-links">
       <template v-if="introEnabled">
         <router-link to="/generator/intro" class="af-link" active-class="active">
@@ -18,13 +19,6 @@
         </router-link>
       </template>
       <span v-else class="af-link af-link-disabled" @click="showDisabledHint('页面开发')"> 页面开发 </span>
-
-      <template v-if="screenEnabled">
-        <router-link to="/screen" class="af-link" active-class="active">
-          大屏布局
-        </router-link>
-      </template>
-      <span v-else class="af-link af-link-disabled" @click="showDisabledHint('大屏布局')"> 大屏布局 </span>
 
       <template v-if="workflowEnabled">
         <router-link to="/generator/workflow" class="af-link" active-class="active">
@@ -65,7 +59,7 @@ const featureStore = useFeatureFlagsStore()
 const introEnabled = computed(() => featureStore.isEnabled('generator.intro'))
 const pageSkeletonEnabled = computed(() => featureStore.isEnabled('generator.pageSkeleton'))
 const workflowEnabled = computed(() => featureStore.isEnabled('generator.workflow'))
-const screenEnabled = computed(() => featureStore.isEnabled('screen'))
+// 「大屏布局」已于 2026-09-30 移入头部主导航 AppHeader，不再在页脚重复出现
 
 function showDisabledHint(label: string) {
   message.warning(`「${label}」暂不开放`)

@@ -37,6 +37,11 @@ import { buildItemLevelFacts } from '../utils/figma-item-facts.js';
 // 🛡️ 刀 5a（2026-09-13）：section type 推导抽离到纯函数模块（无 import.meta 依赖，可单测）
 import { deriveSectionType } from '../utils/section-type-derive.js';
 import { applyHeaderGeometryFallback } from '../utils/header-geometry-fallback.js';
+// 🛡️ #78 技术栈接管（2026-10-01 · mc-max-1790830432735-07a812f7 实锤）：S2 语义收编 + S3 表格契约。
+//   `@antd/table` 等数据驱动标记区域此前仍被拆成列容器叶子 ⇒ LLM 手写假表格（a-table 0 次）。
+//   治本：直接命中的数据驱动容器吸收 children 为单一 techstack 叶子 + 确定性 columns/
+//   dataSource/rowSelection 契约随 prompt 下发。
+import { enrichSectionsWithTechStack } from '../utils/techstack-section-contract.js';
 // 🛡️ 2026-09-30（评审 §8.4 步骤 3 · Bug4-①）：A 类布局事实（容器级布局方向的**单一事实源**）。
 //   本模块是 `deriveSectionsFromFigmaTree` 的**唯一调用方**；依赖方向为
 //   `figma-node-layout-facts` → `section-tree`（用 `areBoxesSideBySide`），反向 import 会**成环**
@@ -1091,6 +1096,17 @@ function buildEffectiveSection(sec, idx, ctx) {
       layoutSource: 'container-rebuild',
       children,
       collapsed: false,
+      // 🛡️ P2-10（2026-10-01 · c-device-monitor-27021b77 实锤）：容器 section 此前**不带**
+      //   sourceNodeIds（本函数 container 分支漏了该字段，R1-1 的 collectSourceNodeIds 只在
+      //   叶子分支调用）⇒ 即便 id 是真实 Figma 节点（`89:40` con / `89:38` switch /
+      //   `89:37` @antd/tab）也是 src=[] ⇒ 装配/资源归属/布局事实无法按真值展开容器子树，
+      //   只能依赖 vision 锚点（而 vision 的 id 幻觉率 18/25，见 vision-anchor-validator）。
+      //   消费面已审计：section-content-guard 的借用判定本就按「最小归属 isProperSubset」
+      //   丢弃容器（容器子树 ⊃ 叶子子树）；code-generator#resolveSectionFlexSize 走
+      //   figmaNodeId → id → sourceNodeIds 回查链；resource-mount-plan 用它解析 owner ——
+      //   均为「容器只补自身 id + 直接子 id」即可满足，不做子树全集（避免把容器当成
+      //   内容 owner）。
+      sourceNodeIds: collectSourceNodeIds(sec),
       complexityScore: 0,
       complexityReasons: {
         elementCount: 0,
@@ -1751,6 +1767,21 @@ export class SubcomponentPlanner {
     //   下游判别力去重双输（真图表被当碎片杀、假壳被判超集留）。在裁决前先用 figma
     //   节点树（事实源）把壳锚定回真实节点；无 figmaNodeData 时零影响。
     if (opts.figmaNodeData && typeof opts.figmaNodeData === 'object') {
+      // 🛡️ #78 技术栈接管（S2+S3，2026-10-01）：必须在 stripFabricatedSourceIds 之前 ——
+      //   本步骤按「sec.id / sourceNodeIds ↔ 真值标记节点」匹配（标记 id 都是真实 Figma id，
+      //   不受假 id 污染影响）；deep-first 最小归属认领 + table 契约抽取成功才吸收
+      //   （fail-open：契约抽不出来就维持拆列现状，绝不产出空 <a-table />）。
+      try {
+        const tsStats = enrichSectionsWithTechStack(effectiveSections, opts.figmaNodeData);
+        if (tsStats.enriched > 0) {
+          logger.info('🛡️ 技术栈接管完成（S2 语义收编 + S3 内容抽取）', tsStats);
+        }
+      } catch (tsErr) {
+        logger.warn('🛡️ 技术栈接管异常（fail-open 跳过，维持现状）', {
+          error: tsErr?.message || String(tsErr),
+        });
+      }
+
       // 🛡️ 治本（2026-09-15 · 228b63d5）：先清洗「编造 id 空间」污染的 sourceNodeIds，
       //   让假 grid/tabs 壳回到「无归属壳」状态，anchor 才能锚定真 chart、dedupe 才能剔假壳。
       //   位置必须在 anchorPhantomSections **之前**（假 id 不清，isShell 判据恒 false）。

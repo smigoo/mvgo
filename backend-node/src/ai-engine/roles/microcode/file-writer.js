@@ -23,7 +23,7 @@ import {
 import { repairScopedThirdPartySelectors, ensureFlexDirectionInVueSfc, ensureFlexDirection, ensureGridDisplay, ensureGridDisplayInVueSfc, fixInvalidCssPropertiesInVue, fixInvalidCssProperties } from '../../utils/css-sanitizer.js';
 import { fixSpuriousLineBreaks, injectMissingTabUi, healVueEmbeddedStyleBraces, healThemeMixinVarRefs, healThemeMixinVarRefsInVue, healLessResourceVarInterpolation, healPresetLiteralDecls, healSlotHexToVarRefs, healVarNameCase, applyHealToVueStyleBlocks, injectThemeVarDeclsForLess, healLessColorFnVarArgs } from './code-healer.js';
 import { collectThemeSlotNames, healBusinessStyleVarsInCss } from '../../utils/theme-color-guard.js';
-import { healLessSource, healRootFixedSize } from '../../validators/less-compile-gate.js';
+import { healRootFixedSize, gateStandaloneLessWrite } from '../../validators/less-compile-gate.js';
 import {
   isColorEvaluable,
   isColorFnConsumer,
@@ -811,18 +811,31 @@ export function writeFiles(files, outputPath, options = {}) {
         // 🛡️ 无效 CSS 属性名修正（LLM 幻觉属性如 line-min-height → min-height）
         sanitizedContent = fixInvalidCssProperties(sanitizedContent, logger);
 
-        // 🛡️ 确定性自愈：补全 LLM 漏写的右大括号 / 未闭合块注释。
-        // 写盘即修复，避免把必然编译失败的 LESS 送到下游门禁（历史上表现为
-        // LESS-COMPILE-001 ×N → L0-B BLOCK → 重试耗尽 → 任务失败且预览不可用）。
+        // 🛡️ P1-5（2026-10-01 · 869be6fe 实锤）：独立 .less 的**写盘前等价门禁**。
+        //   旧实现只跑 healLessSource 且**不校验结果** ⇒ common.less 这条旁路无门禁：
+        //   style-class-consolidator#mergeIntoCommonLess 把已被判死的坏文本原样搬进共享样式表
+        //   直接落盘 → 最终 LESS 门禁 BLOCK → L0-B 重试耗尽 → 任务失败且预览不可用。
+        //   现在：能修先修（围栏/未闭合注释/漏分号/漏右大括号），修不掉则**跳过写盘**
+        //   （保住磁盘 last-good 版本）。为何不做真编译见 gateStandaloneLessWrite 头注。
         try {
-          const healed = healLessSource(sanitizedContent, { sourceType: 'style' });
-          if (healed.changed) {
+          const _lessGate = gateStandaloneLessWrite(sanitizedContent, relativePath);
+          if (_lessGate.fixes.length > 0) {
+            sanitizedContent = _lessGate.content;
             if (logger) {
               logger.warn(
-                `🧩 LESS 写盘自愈: ${relativePath}（补全 ${healed.addedBraces || 0} 个右大括号/块注释）`,
+                `🧩 LESS 写盘自愈: ${relativePath}（${_lessGate.fixes.join(', ')}）`,
               );
             }
-            sanitizedContent = healed.source;
+          }
+          if (!_lessGate.ok) {
+            if (logger) {
+              logger.warn(
+                `🛡️ LESS 写盘门禁失败（已跳过，保留磁盘 last-good）: ${relativePath}`,
+                { defects: _lessGate.defects },
+              );
+            }
+            skippedFiles.push(relativePath);
+            continue;
           }
         } catch (healErr) {
           if (logger) {

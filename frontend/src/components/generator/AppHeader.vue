@@ -253,8 +253,10 @@ const mainTabsConfig = [
   { path: '/components', label: '组件库', feature: 'component.library' },
   // { path: '/generator/page',      label: '页面',    feature: 'generator.page' },
   { path: '/generator/api', label: '接口开发', feature: 'generator.api' },
-  { path: '/tasks', label: '任务中心', feature: 'tasks' }
-  // { path: '/screen', label: '大屏布局', feature: 'screen' },
+  { path: '/tasks', label: '任务中心', feature: 'tasks' },
+  // 大屏布局：2026-09-30 从页脚**移入头部主导航**（它是生成页，属主入口；
+  // 页脚的定位是「低频入口」，见 AppFooter.vue 顶部注释）
+  { path: '/screen', label: '大屏布局', feature: 'screen' }
   // 「页面开发」「工作流编排」已移至页脚 AppFooter
 ]
 

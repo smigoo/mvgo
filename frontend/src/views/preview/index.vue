@@ -187,7 +187,7 @@ import {
   PREVIEW_FAIL_KIND,
 } from '@/utils/loadVue3Runtime'
 import { BINARY_EXTS as BINARY_EXTS_SHARED, extOf } from '@/utils/sfc-loader-binary'
-import { buildSnapshotFileUrl, resolvePreviewDescriptor } from '@/utils/preview-resolver'
+import { buildSnapshotFileUrl, hasPreviewEntry, resolvePreviewDescriptor } from '@/utils/preview-resolver'
 import http from '@/core/http'
 import appConfig from '@/config'
 import { getComponentBySessionId, getRouteUrl } from '@/api/component'
@@ -269,7 +269,13 @@ async function attemptFetchLatestSnapshot(sessionId: string) {
     const candidate = d?.candidate
     const partial = d?.partial
     const lastGood = d?.lastGood
-    const snap = lastGood || candidate || partial
+    // 🛡️ 2026-10-01 治本（"每次生成结束跳预览报 未找到组件 mc-max-*，刷新就好"）：
+    //   candidate/partial 可能是 chunk 级中间态（实测缺 package/index.vue 入口）。
+    //   旧逻辑 snap = lastGood || candidate || partial 来者不拒 —— 完成跳转的一刹那
+    //   若只查到无入口的 candidate，快照分支直接抛「未找到组件」且不再退 workspace。
+    //   治本：只接受**含入口文件**的快照（lastGood > candidate > partial，逐级探 manifest），
+    //   没有就保持 null → 交给重试循环继续等 lastGood / 最终走 workspace 源。
+    const snap = [lastGood, candidate, partial].find((s) => s?.revision && hasPreviewEntry(s))
     if (snap?.revision) {
       latestSnapshotSource.value = {
         sessionId,
@@ -287,7 +293,8 @@ async function attemptFetchLatestSnapshot(sessionId: string) {
         if (rd0?.success && rd0.sessionId) {
           const retry = await http.get(`/api/tasks/${encodeURIComponent(rd0.sessionId)}/code-snapshots/latest`, undefined, { silent401: true })
           const rd = retry?.data ?? retry
-          const snap = rd?.lastGood || rd?.candidate || rd?.partial
+          // 🛡️ 同上：只接受含入口文件的快照（lastGood > candidate > partial）
+          const snap = [rd?.lastGood, rd?.candidate, rd?.partial].find((s) => s?.revision && hasPreviewEntry(s))
           if (snap?.revision) {
             latestSnapshotSource.value = {
               sessionId: rd0.sessionId,
@@ -841,18 +848,30 @@ async function loadDev() {
   await ensureLatestSnapshot()
   // 🛡️ 2026-09-13 治本：workspace 源按语义化 componentId 定位，而跳转 URL 带的是 sessionId。
   // 快照源按 sessionId 命中（快照按 sessionId 存），workspace 源必须反查语义化名，否则「未找到组件」。
-  const resolvedId = snapshotSource.value ? componentId : await resolveWorkspaceComponentId(componentId)
+  // 🛡️ 2026-10-01：let —— 快照源失败退 workspace 时需按原始 id 重新反查语义名。
+  let resolvedId = snapshotSource.value ? componentId : await resolveWorkspaceComponentId(componentId)
   if (snapshotSource.value) {
-    if (!isVue3) await loadMicrocodeDeclare()
-    return await loadVue3FromWorkspace(componentId, {
-      isProd: false,
-      explicitGroupId: groupId,
-      instance,
-      styleScopeId: previewStyleScopeId,
-      ignoreStyles: structurePreviewMode.value,
-      workspacePath: isVue3 ? 'vue3-components' : 'custom-components',
-      snapshotSource: snapshotSource.value
-    })
+    try {
+      if (!isVue3) await loadMicrocodeDeclare()
+      return await loadVue3FromWorkspace(componentId, {
+        isProd: false,
+        explicitGroupId: groupId,
+        instance,
+        styleScopeId: previewStyleScopeId,
+        ignoreStyles: structurePreviewMode.value,
+        workspacePath: isVue3 ? 'vue3-components' : 'custom-components',
+        snapshotSource: snapshotSource.value
+      })
+    } catch (e) {
+      // 🛡️ 2026-10-01 治本（"生成结束跳预览报 未找到组件，刷新就好"）：
+      //   快照源（尤其 candidate 中间态）缺入口/文件不齐时，旧逻辑直接把错误卡抛给用户。
+      //   治本：自动退回 workspace 源（语义化 componentId 已发布）重试一次 ——
+      //   与「用户手动刷新」等效，但无需用户操作。显式指定快照源（sessionId+revision）时不退。
+      if (hasExplicitSource || forceWorkspaceSource) throw e
+      console.warn('[预览] 快照源加载失败，自动退回 workspace 源重试:', e?.message || e)
+      latestSnapshotSource.value = null
+      resolvedId = await resolveWorkspaceComponentId(componentId)
+    }
   }
 
   if (isPage) {
@@ -895,18 +914,27 @@ async function loadProd() {
   // 🛡️ F3-全：URL 缺带 revision 时先 await latest API 拿快照 revision。
   await ensureLatestSnapshot()
   // 🛡️ 2026-09-13 治本：workspace 源按语义化 componentId 定位，sessionId 反查（同 loadDev）。
-  const resolvedId = snapshotSource.value ? componentId : await resolveWorkspaceComponentId(componentId)
+  // 🛡️ 2026-10-01：let —— 快照源失败退 workspace 时需按原始 id 重新反查语义名。
+  let resolvedId = snapshotSource.value ? componentId : await resolveWorkspaceComponentId(componentId)
   if (snapshotSource.value) {
-    if (!isVue3) await loadMicrocodeDeclare()
-    return await loadVue3FromWorkspace(componentId, {
-      isProd: true,
-      explicitGroupId: groupId,
-      instance,
-      styleScopeId: previewStyleScopeId,
-      ignoreStyles: structurePreviewMode.value,
-      workspacePath: isVue3 ? 'vue3-components' : 'custom-components',
-      snapshotSource: snapshotSource.value
-    })
+    try {
+      if (!isVue3) await loadMicrocodeDeclare()
+      return await loadVue3FromWorkspace(componentId, {
+        isProd: true,
+        explicitGroupId: groupId,
+        instance,
+        styleScopeId: previewStyleScopeId,
+        ignoreStyles: structurePreviewMode.value,
+        workspacePath: isVue3 ? 'vue3-components' : 'custom-components',
+        snapshotSource: snapshotSource.value
+      })
+    } catch (e) {
+      // 🛡️ 2026-10-01 治本：同 loadDev —— 快照源失败自动退 workspace 源重试（prod 同链路）。
+      if (hasExplicitSource || forceWorkspaceSource) throw e
+      console.warn('[预览] 快照源加载失败，自动退回 workspace 源重试:', e?.message || e)
+      latestSnapshotSource.value = null
+      resolvedId = await resolveWorkspaceComponentId(componentId)
+    }
   }
 
   // 页面骨架：走 vue3-pages 运行时编译

@@ -5,6 +5,16 @@
       <div class="header-meta">
         <span class="message-count">{{ conversation.messageCount }} 条消息</span>
 
+        <!-- P1⑤ 反馈闭环观察窗：本月 👍/👎 聚合统计（只读，hover 看说明） -->
+        <span
+          v-if="feedbackStats"
+          class="feedback-stats"
+          :title="`本月组件生成反馈：👍 ${feedbackStats.up} · 👎 ${feedbackStats.down}（共 ${feedbackStats.total} 条，好评率 ${feedbackStats.upRate}%）`"
+        >
+          <span class="fb-item up">👍 {{ feedbackStats.up }}</span>
+          <span class="fb-item down">👎 {{ feedbackStats.down }}</span>
+        </span>
+
         <!-- R7 锚点：当前组件 chip（生成/切换组件后显示，可点击 × 清除） -->
         <div
           v-if="conversation.currentComponentId"
@@ -77,9 +87,26 @@
 </template>
 
 <script setup>
+import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
+import { getFeedbackStats } from '@/api/workbench';
 
 const router = useRouter();
+
+// P1⑤ 反馈闭环观察窗：本月 👍/👎 聚合统计（只读展示）
+const feedbackStats = ref(null);
+onMounted(async () => {
+  try {
+    const stats = await getFeedbackStats(1);
+    // 后端返回形如 { total, up, down, upRate }，total>0 才展示
+    if (stats && typeof stats.total === 'number' && stats.total > 0) {
+      feedbackStats.value = stats;
+    }
+  } catch (err) {
+    // 统计拉取失败静默降级（不阻塞工作台，反馈提交本身不受影响）
+    console.warn('反馈统计拉取失败（忽略）:', err);
+  }
+});
 
 const props = defineProps({
   conversation: {
@@ -132,6 +159,83 @@ function jumpTo(path) {
       .message-count {
         font-size: 11px;
         color: var(--wb-text-muted, #9ca3af);
+      }
+
+      /* P1⑤ 反馈统计 chip */
+      .feedback-stats {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 8px;
+        border: 1px solid var(--wb-border, #e5e7eb);
+        border-radius: 999px;
+        font-size: 11px;
+        cursor: default;
+        flex-shrink: 0;
+
+        .fb-item {
+          font-weight: 500;
+
+          &.up {
+            color: #16a34a;
+          }
+
+          &.down {
+            color: #dc2626;
+          }
+        }
+      }
+
+      /* R7 锚点 chip */
+      .anchor-chip {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 4px 3px 8px;
+        border: 1px solid var(--wb-primary, #4f46e5);
+        border-radius: 999px;
+        background: var(--wb-primary-bg, #f5f3ff);
+        max-width: 260px;
+        flex-shrink: 0;
+
+        .anchor-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: var(--wb-primary, #4f46e5);
+          flex-shrink: 0;
+        }
+
+        .anchor-label {
+          font-size: 11px;
+          font-weight: 500;
+          color: var(--wb-primary, #4f46e5);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .anchor-clear {
+          width: 16px;
+          height: 16px;
+          border: none;
+          border-radius: 50%;
+          background: transparent;
+          color: var(--wb-primary, #4f46e5);
+          font-size: 13px;
+          line-height: 1;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          transition: background 0.2s ease;
+
+          &:hover {
+            background: var(--wb-primary, #4f46e5);
+            color: #fff;
+          }
+        }
       }
 
       .header-toolbar {

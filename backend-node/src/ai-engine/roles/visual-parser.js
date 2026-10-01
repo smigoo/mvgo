@@ -89,6 +89,8 @@ import { rebuildSectionsPreservingInlineRows } from '../utils/inline-row-rebuild
 export { rebuildSectionsPreservingInlineRows }
 import { mergeInlineRowsIntoSections } from '../utils/inline-row-merger.js'
 export { mergeInlineRowsIntoSections }
+// 🛡️ P1-7（2026-10-01 · c-a812-07a812f7 实锤）：vision 锚点真值校验（幻觉 id 零报警 → 显式诊断）
+import { validateVisionAnchors } from '../utils/vision-anchor-validator.js'
 // 🛡️ A′（2026-09-10）：纵向容器层级重建（纯函数，无 import.meta，jest 可 require）。
 // 修 Vision 拆散 + merger 只提升「左右并列」子节点导致 slot-con 等纵向容器层级丢失。
 import { rebuildSlotConContainers, collectContainerHints } from '../utils/container-rebuilder.js'
@@ -1982,6 +1984,11 @@ ${analysisTask}`
       // 🛡️ 2026-09-30 治本（事故 mc-max-1790759329996-e471a915）：记录每个 Figma 节点的判定状态，
       // 供 2.5「容器不优于其内容」规则回查子树。
       const stateByNode = new Map()
+      // 🛡️ P1-6（2026-10-01）：UI 控件库标记（`@antd/*` 等）的判定记账。
+      //   techMarkerNodes：未落地的标记（它们**不参与覆盖率分母**，理由见下方判据注释）；
+      //   techStackMatched：已落地的标记（计入 matched，与旧口径一致不影响分母）。
+      const techMarkerNodes = new Set()
+      const techStackMatched = []
 
       for (const elem of figmaElements) {
         const nameLower = elem.name.toLowerCase()
@@ -1998,7 +2005,40 @@ ${analysisTask}`
         // 这些是图层命名而非内容语义，Vision 不识别它们是合理的，计入 missing 会虚低覆盖率。
         // 🛡️ P0（2026-09-04）：若 name 无语义但 characters 有真实文字，不跳过——
         // 真实文字是可匹配内容（如 name=Text 23、characters=设备总数）。
-        if (this._isNonSemanticName(elem.name) && !charsLower.trim()) { stateByNode.set(elem.node, 'ignored'); continue }
+        // 🛡️ P1-6（2026-10-01 · mc-max-1790830432735-07a812f7 实锤）：`@技术栈` 中**非图表库**
+        //   （即 UI 控件库标记，如 `@antd/table` / `@antd/button`）不再一律 `ignored`。
+        //   旧口径把它们一并 ignored ⇒ 既留在 totalFigma 分母里、又永不计入 matched/missing
+        //   （落进 excludedCount）⇒ **丢失零报警 + 覆盖率虚高**（07a812f7 报 45/15/13/2 = 87%
+        //   「良好」，而设计稿的保存按钮整块消失、表格未按标注用 a-table）。
+        //   新口径：UI 控件库标记按**自身判据**参与判定——Vision 输出里出现了该组件名
+        //   （`identifiedNames` 已含 `role`/`type`，如 `"role":"table"` / `"role":"button"`）⇒ matched；
+        //   否则 ⇒ missing（诚实暴露「Vision 侧也漏了」，正是「用弱模型也要说清问题出在分析本身」所需）。
+        //   图表库（@echarts 等）与资源封装（bg/icon/img）仍 ignored：其内部结构本就不还原
+        //   （判据与 `_isResourceWrapperName` 同源，避免另立一套口径）。
+        const techMarker = elem.name.trim().match(/^@([A-Za-z0-9_-]+)\/([A-Za-z0-9_-]+)/)
+        if (this._isNonSemanticName(elem.name) && !charsLower.trim()) {
+          const isUITechMarker = !!techMarker && !this._isResourceWrapperName(elem.name)
+          if (!isUITechMarker) { stateByNode.set(elem.node, 'ignored'); continue }
+          const libToken = techMarker[1].toLowerCase()
+          const compToken = techMarker[2].toLowerCase()
+          // 宽松匹配：全等 / 库+组件 / 首词（date-picker → date），避免措辞差异造成假 missing
+          const compWords = compToken.split(/[-_]+/).filter((w) => w.length >= 3)
+          const techMatched = Array.from(identifiedNames).some((id) => {
+            const s = String(id).toLowerCase()
+            if (s === compToken || s.includes(`${libToken}/${compToken}`) || s.includes(`@${compToken}`)) return true
+            return compWords.length > 0 && compWords.every((w) => s.includes(w))
+          })
+          if (techMatched) {
+            matched.push(elem)
+            stateByNode.set(elem.node, 'matched')
+            techStackMatched.push(elem)
+          } else {
+            missing.push(elem)
+            stateByNode.set(elem.node, 'missing')
+            techMarkerNodes.add(elem.node)
+          }
+          continue
+        }
 
         // 🛡️ P0（2026-09-04）：匹配键优先用 characters（Vision 识别的是真实文字），
         // 其次 name。任一命中即 matched——避免「name 无语义名 + characters 有真值」时
@@ -2051,14 +2091,19 @@ ${analysisTask}`
         for (const c of node.children || []) {
           if (!c || typeof c !== 'object') continue
           const st = stateByNode.get(c)
-          if (st === 'missing' && !CONTAINER_TYPES.includes(c.type)) { result = true; break }
+          if (st === 'missing' && (!CONTAINER_TYPES.includes(c.type) || techMarkerNodes.has(c.node))) { result = true; break }
           if (subtreeHasRealMissing(c)) { result = true; break }
         }
         realMissingCache.set(node, result)
         return result
       }
+      // 🛡️ P1-6：UI 控件库标记是**独立判定单元**——它「缺不缺」由自身判据（Vision 有没有给出
+      // 该组件名）决定，不该被 2.5「容器不优于其内容」让位掉（否则它子树里的文字都 matched 时，
+      // 标记本身会再次消失，回到「零报警」）。
       const missingFiltered = missing.filter((e) =>
-        !CONTAINER_TYPES.includes(e.type) || subtreeHasRealMissing(e.node))
+        techMarkerNodes.has(e.node) ||
+        !CONTAINER_TYPES.includes(e.type) ||
+        subtreeHasRealMissing(e.node))
       const containerDropped = missing.length - missingFiltered.length
 
       const totalFigma = figmaElements.length
@@ -2070,8 +2115,22 @@ ${analysisTask}`
       // 🛡️ 2026-09-30 修正：分母改用 missingFiltered（已应用 2.5「容器不优于其内容」）；
       // containerDropped 单列，让「有多少个容器因内部无缺失内容而被剔除」在报告里可见。
       const judgedTotal = matched.length + missingFiltered.length
-      const coverageRate = judgedTotal > 0
-        ? Math.round((matched.length / judgedTotal) * 100)
+      // 🛡️ P1-6（2026-10-01）：覆盖率分母**不含 UI 控件库标记**（技术栈切片单列）。
+      //   为什么不能混用一个分母 —— 两个指标的判据不同源：
+      //     · 覆盖率度量「Vision 有没有看懂设计稿」（<35% 会中止以免盲写）；
+      //     · UI 控件库标记未落地度量「产物有没有按标注用对应库组件」（由 P1-8 的
+      //       element-coverage-validator 按真值节点名把关）。
+      //   把后者塞进前者 ⇒ 弱视觉模型（Vision 没输出 role）会让覆盖率被**非视觉因素**压低
+      //   → 触发 35% 误中止。这正是本仓反复复发的「口径混用」家族，故刻意分账：
+      //     · 标记照常纳入 `missing` / `missingCount` / `judgedTotal` ⇒ 消灭「零报警」；
+      //     · `coverageRate` 仍按**非标记核**计算 ⇒ 与旧版逐字可比、零回归风险。
+      //   两个数在报告里各自带 basis 单列，读者不会再误判为「公式错误」。
+      const techStackMissingElems = missingFiltered.filter((e) => techMarkerNodes.has(e.node))
+      const coreMatched = matched.length - techStackMatched.length
+      const coreMissing = missingFiltered.length - techStackMissingElems.length
+      const coverageBasisJudged = coreMatched + coreMissing
+      const coverageRate = coverageBasisJudged > 0
+        ? Math.round((coreMatched / coverageBasisJudged) * 100)
         : 100
 
       const report = {
@@ -2084,6 +2143,19 @@ ${analysisTask}`
         containerDroppedCount: containerDropped,
         uncertainCount: uncertain.length,
         coverageRate,
+        // 覆盖率口径自证（P1-6）：与 coverageRate 同源的那对数字，避免再被误读为公式错误
+        coverageBasis: { matched: coreMatched, judged: coverageBasisJudged },
+        // 技术栈切片（P1-6）：`@antd/*` 等 UI 控件库标记的落地情况
+        techStack: {
+          matched: techStackMatched.length,
+          missing: techStackMissingElems.length,
+          judged: techStackMatched.length + techStackMissingElems.length,
+          missingDetail: techStackMissingElems.slice(0, 15).map((e) => ({
+            name: e.name,
+            type: e.type,
+            depth: e.depth,
+          })),
+        },
         // 🛡️ 2026-09-30：missing 明细补 characters（截断 24 字符），让「节点有真实文字却仍 missing」
         // 这一族问题在报错里直接可见，无需再翻 4 份 checkpoint 去比对 name/characters 是否分行。
         // 事故 mc-max-1790759329996-e471a915：missing 只报 `{name:'常住人口',type:'TEXT',depth:3}`，
@@ -2099,13 +2171,22 @@ ${analysisTask}`
         summary: coverageRate >= 90 ? '优秀' : coverageRate >= 75 ? '良好' : coverageRate >= 60 ? '一般' : '需关注'
       }
 
-      logger.info(`📊 元素覆盖率: ${coverageRate}% (判定 ${matched.length}/${judgedTotal}，候选池 ${totalFigma}，剪枝 ${report.excludedCount}，容器让位 ${containerDropped})`, {
+      logger.info(`📊 元素覆盖率: ${coverageRate}% (判定核 ${coreMatched}/${coverageBasisJudged}，候选池 ${totalFigma}，剪枝 ${report.excludedCount}，容器让位 ${containerDropped}，技术栈 ${report.techStack.matched}/${report.techStack.judged})`, {
         missing: missingFiltered.length,
         uncertain: uncertain.length,
         judgedTotal,
         totalFigma,
         summary: report.summary
       })
+
+      // 🛡️ P1-6（2026-10-01）：技术栈标记未落地必须**有声**（旧口径全静默 ⇒ 按钮整块消失也报「良好」）。
+      // 只告警不阻断：落地与否由产出门禁（element-coverage-validator）按真值节点名把关。
+      if (report.techStack.missing > 0) {
+        logger.warn('⚠️ 覆盖率：设计稿标注了 @技术栈 组件但 Vision 未给出对应识别（该节点未落地）', {
+          count: report.techStack.missing,
+          samples: report.techStack.missingDetail.slice(0, 5).map((e) => e.name),
+        })
+      }
 
       // 🛡️ 2026-09-30：自证式诊断（零风险，仅日志）——「节点有 characters 却仍 missing」是本族问题
       // 的核心指纹。它一旦出现，说明「该文字本该可匹配却没有」：要么 Vision 侧确实没识别，
@@ -3522,6 +3603,47 @@ ${analysisTask}`
     }
 
     if (figmaData) {
+      // 🛡️ P1-7（2026-10-01 · c-a812-07a812f7 实锤）：vision 锚点真值校验。
+      //   vision 返回的节点 id 半真半假（真实 / 幻觉如 `210:45649+1` / 错位如把「张斌」
+      //   标成表头）。此前不存在的 id 被下游当锚点用 ⇒ 真值无法驱动装配 ⇒ 退化成
+      //   vision-only 盲写，且零报警（该任务的 role:table 语义因此被丢弃）。
+      //   这里只做「校验 + 原地标注 anchorValid:false + 诊断」，不改结构（回填归 #78 S2）。
+      //   放在 textTruth / coverage 之前，让下游读到的对象已带 anchorValid 标注。
+      try {
+        const anchorReport = validateVisionAnchors(parsed, figmaData)
+        parsed.anchorValidation = anchorReport
+        appliedKeys.add('anchorValidation')
+        if (anchorReport.checked > 0) {
+          if (anchorReport.invalid > 0) {
+            logger.warn('🛡️ vision 锚点真值校验：存在幻觉/错位锚点', {
+              checked: anchorReport.checked,
+              valid: anchorReport.valid,
+              invalid: anchorReport.invalid,
+              validRatio: anchorReport.validRatio,
+              byArea: anchorReport.byArea,
+              samples: anchorReport.invalidDetail.slice(0, 8),
+            })
+            pushDiagnostic(
+              'vision-anchor',
+              `vision 返回 ${anchorReport.invalid}/${anchorReport.checked} 个节点 id 在 Figma 真值树中不存在（幻觉/错位锚点），下游不应将其当作可装配锚点`,
+              {
+                checked: anchorReport.checked,
+                invalid: anchorReport.invalid,
+                validRatio: anchorReport.validRatio,
+                byArea: anchorReport.byArea,
+                samples: anchorReport.invalidDetail.slice(0, 10),
+              },
+            )
+          } else {
+            logger.info('🛡️ vision 锚点真值校验：全部命中真值树', {
+              checked: anchorReport.checked,
+            })
+          }
+        }
+      } catch (e) {
+        logger.warn('vision 锚点真值校验失败（非阻断）', { error: e?.message })
+      }
+
       const textTruth = parsed.textTruthValidation || this._validateVisionTextAgainstFigma(parsed, figmaData)
       if (textTruth && typeof textTruth === 'object') {
         parsed.textTruthValidation = textTruth

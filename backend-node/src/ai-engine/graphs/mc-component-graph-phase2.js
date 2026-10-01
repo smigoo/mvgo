@@ -77,7 +77,7 @@ import {
   buildArtifactIntegrityError,
 } from '../utils/artifact-integrity.js';
 //S11: 文档页面元素覆盖率校验器（L0-B 扩展）
-import { ElementCoverageValidator } from '../validators/element-coverage-validator.js';
+import { ElementCoverageValidator, collectTechStackMarkers } from '../validators/element-coverage-validator.js';
 import { computeGateScore, hasHardPublishBlock } from '../utils/gate-score.js';
 import { formatFigmaStyleData } from '../utils/figma-format.js';
 import { GenerationContext } from '../types/generation-context.js';
@@ -4070,21 +4070,34 @@ export function createPhase2Graph(config = {}) {
     //S11: 文档页面元素覆盖率校验（有 docAnalysis.uiElements 才执行，确定性零 LLM）
     let elementCoverage = null;
     const uiElements = state.docAnalysis?.uiElements || [];
-    if (uiElements.length > 0) {
+    const filesRecord = Object.fromEntries(
+      (filesForCheck || []).map((f) => [f.path, f.content]),
+    );
+    // 🛡️ P1-8（2026-10-01 · mc-max-1790830432735-07a812f7 实锤）：`@技术栈` 标记的**落地校验**。
+    //   设计稿把节点标注为 `@antd/table` / `@antd/button`（契约：该区域由对应库组件渲染），
+    //   但此前**没有任何门禁核对产物是否真的用了该组件** ⇒ 07a812f7 里「保存按钮整块消失、
+    //   表格被手写 div 取代」全程零报警、任务判「成功」。
+    //   这里从**实时 Figma 真值**（state.figmaNodeData）扫出标记，按真值节点名确定性判定
+    //   （库→标签前缀：antd→a- / element→el- …，不枚举组件）。
+    let techStackMarkers = [];
+    try {
+      techStackMarkers = collectTechStackMarkers(state.figmaNodeData);
+    } catch (tsErr) {
+      logger.warn('P1-8 技术栈标记提取异常（非阻断）', { error: tsErr.message });
+    }
+    if (uiElements.length > 0 || techStackMarkers.length > 0) {
       const coverageValidator = new ElementCoverageValidator();
-      const filesRecord = Object.fromEntries(
-        (filesForCheck || []).map((f) => [f.path, f.content]),
-      );
       elementCoverage = coverageValidator.validate({
         uiElements,
         files: filesRecord,
+        techStackMarkers,
       });
 
       if (!elementCoverage.pass) {
         // 缺失元素 → WARN 级 issue（不硬阻塞），汇入 L0-B issues 并供 L2 精准路由
         const coverageIssues = [
           ...elementCoverage.missing.map((m) => ({
-            id: 'DOC_ELEMENT_MISSING',
+            id: m.techStack ? 'TECHSTACK-NOT-RENDERED' : 'DOC_ELEMENT_MISSING',
             severity: 'WARN',
             message: m.hint,
             file: 'package/index.vue',

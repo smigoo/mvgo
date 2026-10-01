@@ -6,7 +6,7 @@
  * ⇒ #header-right 不生成、上月/本年等头部控件全落内容区。
  * 几何兜底：顶层顶部 15% 薄条（高 ≤ 内容域 30%）+ 全树无 header 事实 ⇒ 强制标记。
  */
-import { applyHeaderGeometryFallback } from './header-geometry-fallback.js';
+import { applyHeaderGeometryFallback, isTopThinHeaderBand } from './header-geometry-fallback.js';
 
 const box = (x, y, w, h) => ({ x, y, width: w, height: h });
 
@@ -68,5 +68,51 @@ describe('applyHeaderGeometryFallback（header 几何兜底 · 命名无关）',
     ];
     expect(applyHeaderGeometryFallback(noBox)).toBeNull();
     expect(noBox[0].type).toBeUndefined();
+  });
+});
+
+/**
+ * 🛡️ P2-12（2026-10-01）：面板标题带几何判据（`microcode-engineer#T1 面板标题剥离` 复用）。
+ * 真值抽样来自 `workspace/custom-components/<组件名>/.checkpoint/figma.json`（461 个组件全量审计：
+ * 顶部 `header` 条 relY 0~14 / h 24~67 / rootH 225~389 ⇒ 全部 true，零翻转）。
+ */
+describe('isTopThinHeaderBand（面板标题带 · 顶部薄条）', () => {
+  const ROOT = box(0, 0, 460, 340); // 真值量级：rootH 330~389
+
+  it('真值顶部 header 条（relY=14 h=24 / rootH=330）→ true', () => {
+    expect(isTopThinHeaderBand({ absoluteBoundingBox: box(0, 14, 460, 24) }, ROOT)).toBe(true);
+  });
+
+  it('真值顶部 header 条（relY=0 h=67 / rootH=389 同量级）→ true', () => {
+    expect(isTopThinHeaderBand({ absoluteBoundingBox: box(0, 0, 460, 67) }, ROOT)).toBe(true);
+  });
+
+  it('内容区里叫 header 的块：偏下（relY ≥ 15% 根高）→ false', () => {
+    // relY=60 ≥ 340*0.15=51
+    expect(isTopThinHeaderBand({ absoluteBoundingBox: box(0, 60, 460, 30) }, ROOT)).toBe(false);
+  });
+
+  it('内容区里叫 header 的块：贴顶但整块上卡（h > 30% 根高）→ false', () => {
+    expect(isTopThinHeaderBand({ absoluteBoundingBox: box(0, 0, 460, 120) }, ROOT)).toBe(false);
+  });
+
+  it('边界：relY 恰为 15% 根高 → false（判据为严格小于）', () => {
+    expect(isTopThinHeaderBand({ absoluteBoundingBox: box(0, 51, 460, 20) }, ROOT)).toBe(false);
+  });
+
+  it('边界：h 恰为 30% 根高 → true；超 1px → false', () => {
+    expect(isTopThinHeaderBand({ absoluteBoundingBox: box(0, 0, 460, 102) }, ROOT)).toBe(true);
+    expect(isTopThinHeaderBand({ absoluteBoundingBox: box(0, 0, 460, 103) }, ROOT)).toBe(false);
+  });
+
+  it('几何不可判（任一 bbox 缺失/非法）→ null（调用方保持既有判据，不翻案）', () => {
+    expect(isTopThinHeaderBand({}, ROOT)).toBeNull();
+    expect(isTopThinHeaderBand({ absoluteBoundingBox: box(0, 0, 460, 0) }, ROOT)).toBeNull();
+    expect(isTopThinHeaderBand({ absoluteBoundingBox: box(0, 0, 460, 20) }, null)).toBeNull();
+    expect(isTopThinHeaderBand({ absoluteBoundingBox: box(0, 0, 460, 20) }, box(0, 0, 460, 0))).toBeNull();
+  });
+
+  it('阈值可覆盖（保持与调用方同一口径时可显式传参）', () => {
+    expect(isTopThinHeaderBand({ absoluteBoundingBox: box(0, 60, 460, 30) }, ROOT, { relYRatio: 0.5 })).toBe(true);
   });
 });

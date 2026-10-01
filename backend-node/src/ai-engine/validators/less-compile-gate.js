@@ -235,6 +235,35 @@ function fixGluedDeclarationsOnLine(line = '') {
   return out
 }
 
+/**
+ * 取第 i 行之后「首个有意义行」的 trim 结果（跳过空行与注释）。
+ * 供 `healMissingSemicolons` 判断「当前声明行是否必须补尾分号」。
+ */
+function nextSignificantLine(lines, i) {
+  let j = i + 1
+  while (j < lines.length) {
+    const nt = lines[j].trim()
+    if (nt === '' || nt.startsWith('//') || nt.startsWith('/*') || nt.startsWith('*')) { j++; continue }
+    break
+  }
+  return j < lines.length ? lines[j].trim() : ''
+}
+
+/**
+ * 判断「下一有意义行」是否要求上一行声明必须以 `;` 收尾。
+ * 四种形态：① 新声明 `prop:` ② 「选择器{首声明」（P0-2 新增，与本函数同源自指）
+ * ③ 块结束 `}` / 嵌套 `&` ④ @规则。
+ * ⚠️ 刻意**不**把 `.#[>` 开头的行判为「需要收尾」——`.5em` / `#fff` 等可能是跨行值续行，
+ *    误补 `;` 会把合法多行值切断（fail-safe 优先，宁可漏修不误伤）。
+ */
+function requiresTrailingSemicolon(next) {
+  return (
+    /^[\w-][\w-]*\s*:/.test(next) ||
+    /^.*\{\s*[A-Za-z-][\w-]*\s*:\s*[^;{}\s]/.test(next) ||
+    next.startsWith('}') || next.startsWith('&') || next.startsWith('@')
+  )
+}
+
 export function healMissingSemicolons(source = '', { sourceType = 'auto' } = {}) {
   const lines = String(source || '').split('\n')
   let changed = false
@@ -264,6 +293,24 @@ export function healMissingSemicolons(source = '', { sourceType = 'auto' } = {})
     }
 
     const t = raw.trim()
+    // 🛡️ P0-2（2026-10-01 · 869be6fe 实锤）：选择器（或裸 `{`）与「首个声明」同行且该声明缺尾分号。
+    //   形态：`.c-x {flex-direction: column`（真实产物 common.less:163）。来源链：
+    //     pruneVueStyleAgainstShared 输出 `${sel} {${body}}`（body 无尾分号）
+    //     → vertical-layout-guard VERT-004 追加 `\n  min-height: 0; /* ... */` ⇒ 粘连
+    //     → LESS `Unrecognised input`（报错列号指向 `column`）。
+    //   原实现两处盲区：① `t.startsWith('{')` 直接 continue（裸 `{` 形态被吃掉）
+    //   ② `decl` 正则 `^[\w-][\w-]*\s*:` 要求行首即属性名（选择器前缀形态被吃掉）⇒ 恒漏修。
+    //   本分支置于 skip 之前，命中后同样 continue，不改动其余分支语义。
+    const joint = t.match(/^(.*\{)\s*([A-Za-z-][\w-]*\s*:\s*[^;{}\s][^;{}]*)$/)
+    if (joint) {
+      if (requiresTrailingSemicolon(nextSignificantLine(lines, i))) {
+        lines[i] = raw.replace(/\s*$/, '') + ';'
+        changed = true
+      }
+      if (close) inStyle = false
+      continue
+    }
+
     // 跳过：空行 / 注释 / 块边界 / 选择器（以 { } & > @ * 开头）/ @规则
     if (
       t === '' || t.startsWith('//') || t.startsWith('/*') || t.startsWith('*') ||
@@ -275,15 +322,7 @@ export function healMissingSemicolons(source = '', { sourceType = 'auto' } = {})
     // 声明行：prop: value（值非空，允许值内含空格如 background-size: 100% 100%），且不以 ; { } 结尾
     const decl = t.match(/^[\w-][\w-]*\s*:\s*\S.*$/)
     if (decl && !/[,;{}]\s*$/.test(t)) {
-      let j = i + 1
-      while (j < lines.length) {
-        const nt = lines[j].trim()
-        if (nt === '' || nt.startsWith('//') || nt.startsWith('/*') || nt.startsWith('*')) { j++; continue }
-        break
-      }
-      const next = j < lines.length ? lines[j].trim() : ''
-      const nextIsDecl = /^[\w-][\w-]*\s*:/.test(next) || next.startsWith('}') || next.startsWith('&') || next.startsWith('@')
-      if (nextIsDecl) {
+      if (requiresTrailingSemicolon(nextSignificantLine(lines, i))) {
         lines[i] = raw.replace(/\s*$/, '') + ';'
         changed = true
       }
@@ -400,6 +439,102 @@ function stripMarkdownFence(source = '') {
   // 去除结尾围栏（单独成行的 ```）
   s = s.replace(/\n?\s*```\s*$/g, '')
   return s
+}
+
+/** 剥离注释与字符串字面量（供结构扫描做「括号/分号计数」时避免误伤 `content: "{"` 之类） */
+function stripCommentsAndStrings(source = '') {
+  return String(source || '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|\s)\/\/[^\n]*$/gm, '$1')
+    .replace(/"(?:[^"\\]|\\.)*"/g, '""')
+    .replace(/'(?:[^'\\]|\\.)*'/g, "''")
+}
+
+/**
+ * 🛡️ P1-5（2026-10-01）：独立 `.less` 的**残留缺陷扫描**（结构级，不依赖 less 编译器）。
+ *
+ * ⚠️ 注意本注释内不得出现块注释的闭合符号字面量（会提前终结本注释）——用「开闭标记数量」表述。
+ * 只扫「`healLessSource` 修不好 ⇒ 必然编译失败」的三族：
+ *   ① 括号不平衡（`{` ≠ `}`）—— less `Unrecognised input` / `missing }`
+ *   ② 块注释开闭标记数量不配对 —— less `Unrecognised input`
+ *   ③ 「选择器/裸 `{` + 首声明」同行后缺分隔导致声明粘连（`{flex-direction: column` 家族）
+ * 返回 `[{ id, line, message }]`；空数组 = 通过。
+ */
+export function scanStandaloneLessDefects(source = '') {
+  const defects = []
+  const text = String(source || '')
+  const cleaned = stripCommentsAndStrings(text)
+
+  const opens = (cleaned.match(/\{/g) || []).length
+  const closes = (cleaned.match(/\}/g) || []).length
+  if (opens !== closes) {
+    defects.push({
+      id: 'LESS-WRITE-001',
+      line: 1,
+      message: `括号不平衡：{ ×${opens} vs } ×${closes}（heal 未能补全，写盘必然编译失败）`,
+    })
+  }
+
+  const cOpens = (text.match(/\/\*/g) || []).length
+  const cCloses = (text.match(/\*\//g) || []).length
+  if (cOpens !== cCloses) {
+    defects.push({
+      id: 'LESS-WRITE-002',
+      line: 1,
+      message: `块注释未闭合：/* ×${cOpens} vs */ ×${cCloses}`,
+    })
+  }
+
+  // ③ 声明粘连残留：与 healMissingSemicolons 的 joint 判据同源，heal 后仍有 ⇒ 判坏
+  const jointRe = /(.*\{)\s*([A-Za-z-][\w-]*\s*:\s*[^;{}\s][^;{}]*)$/
+  text.split('\n').forEach((line, index) => {
+    if (!jointRe.test(line.trim())) return
+    defects.push({
+      id: 'LESS-WRITE-003',
+      line: index + 1,
+      message: `声明粘连未修复（选择器/裸 { 与首声明同行且缺尾分号）：${line.trim().slice(0, 80)}`,
+    })
+  })
+
+  return defects
+}
+
+/**
+ * 🛡️ P1-5（2026-10-01）：独立 `.less` 的**写盘前等价门禁**。
+ *
+ * 背景（mc-max-1790828667794-869be6fe 实锤）：`.vue` 有 `validateVueSfc` 写盘门禁（失败即跳过该文件），
+ * 但 `common.less` 走 `healLessSource` 且**无等价门禁** —— `style-class-consolidator#mergeIntoCommonLess`
+ * 把已被判死的坏文本原样搬进共享样式表直接落盘 ⇒ 最终 LESS 门禁 BLOCK ⇒ L0-B 重试耗尽 ⇒ 任务失败。
+ *
+ * ⚠️ 为什么不做真编译：`writeFiles` 是**同步**函数，而 less 4.x 只有 `less.render`（异步）。
+ * 强行改异步会波及 7 处调用点（含未 await 的调用）→ 排序风险大于收益。
+ * 故此处 = 「结构性自愈 + 残留缺陷扫描」：
+ *   · 能修的一律修（Markdown 围栏 / 未闭合注释 / 漏分号 / 漏右大括号）；
+ *   · 修不掉 ⇒ `ok:false`，调用方**跳过写盘**（保住磁盘上的 last-good 版本，预览不至于全黑）。
+ * 真正「绝对」的编译校验仍由落盘后的 `LessCompileGate`（异步 + 内存 FileManager 完整 import 链）承担。
+ *
+ * @param {string} source 待写盘的 .less 源码
+ * @param {string} filePath 相对路径（仅用于日志）
+ * @returns {{content: string, fixes: string[], defects: Array, ok: boolean}}
+ */
+export function gateStandaloneLessWrite(source = '', filePath = '') {
+  let content = String(source || '')
+  const fixes = []
+
+  const unfenced = stripMarkdownFence(content)
+  if (unfenced !== content) {
+    content = unfenced
+    fixes.push('markdown-fence')
+  }
+
+  const healed = healLessSource(content, { sourceType: 'style' })
+  if (healed.changed) {
+    content = healed.source
+    fixes.push(`heal(braces:${healed.addedBraces || 0})`)
+  }
+
+  const defects = scanStandaloneLessDefects(content)
+  return { content, fixes, defects, ok: defects.length === 0, filePath }
 }
 
 function readSnippet(source, line, radius = 2) {

@@ -9,7 +9,7 @@
  *
  * bbox 数值全部取自 .mc-gen/cache/figma-node-data.json 真值（节点 2:9778 子树）。
  */
-import { rebuildSectionsPreservingInlineRows } from './inline-row-rebuilder.js'
+import { rebuildSectionsPreservingInlineRows, isDataDrivenTechStackNode } from './inline-row-rebuilder.js'
 import { mergeInlineRowsIntoSections } from './inline-row-merger.js'
 
 /** 把成员挂到一个水平行节点下；根节点自身无需 bbox */
@@ -80,5 +80,108 @@ describe('rebuildSectionsPreservingInlineRows：members 按 Figma x 升序（视
     const row = merged.sections.find((s: any) => s.id === '2:3660')
     expect(row.children.map((c: any) => c.figmaNode)).toEqual(['2:3683', '2:3680'])
     expect(row.body.children.map((c: any) => c.figmaNode)).toEqual(['2:3683', '2:3680'])
+  })
+})
+
+/**
+ * 🛡️ P2-9（2026-10-01 · c-a812-07a812f7 实锤）：技术栈切分。
+ * bbox 数值全部取自 `workspace/custom-components/c-a812-07a812f7/.checkpoint/figma.json` 真值。
+ */
+describe('rebuildSectionsPreservingInlineRows：技术栈切分（数据驱动组件不还原内部构造）', () => {
+  const box = (x: number, y: number, width: number, height: number) => ({
+    x, y, width, height,
+  })
+
+  /** 真值 210:45641 = @antd/table，3 个列容器（y 同起、x 不重叠） */
+  const tableNode = () => ({
+    id: '210:45641',
+    name: '@antd/table',
+    type: 'FRAME',
+    absoluteBoundingBox: box(86282, -19574, 575, 173),
+    children: [
+      { id: '210:45642', name: 'Frame 2136636198', type: 'FRAME', absoluteBoundingBox: box(86282, -19574, 70, 173), children: [] },
+      { id: '210:45676', name: 'Frame 2136637794', type: 'FRAME', absoluteBoundingBox: box(86351, -19574, 254, 173), children: [] },
+      { id: '210:45699', name: 'Frame 2136637801', type: 'FRAME', absoluteBoundingBox: box(86604, -19574, 254, 173), children: [] },
+    ],
+  })
+
+  test('@antd/table 的 3 个列容器不再被降维成 horizontal 行（表格语义保留）', () => {
+    const doc = { id: 'root', children: [tableNode()] }
+    const rows = rebuildSectionsPreservingInlineRows(doc)
+    // 旧口径会产出 { id:'210:45641', members:['210:45642','210:45676','210:45699'] }
+    expect(rows.find((r) => r.id === '210:45641')).toBeUndefined()
+  })
+
+  test('抑制仅限该节点自身：表内真实行内行（radio + 文本）仍重建', () => {
+    const t = tableNode()
+    // 真值 210:45646：@antd/radio 210:45918(x=86292) + 文本 张斌 210:45648(x=86308)
+    ;(t.children[0] as any).children = [
+      {
+        id: '210:45646',
+        name: 'Frame 2136636180',
+        type: 'FRAME',
+        absoluteBoundingBox: box(86282, -19531, 70, 44),
+        children: [
+          { id: '210:45918', name: '@antd/radio', type: 'GROUP', absoluteBoundingBox: box(86292, -19515, 12, 12), children: [] },
+          { id: '210:45648', name: '张斌', type: 'TEXT', absoluteBoundingBox: box(86308, -19519, 28, 21), children: [] },
+        ],
+      },
+    ]
+    const rows = rebuildSectionsPreservingInlineRows({ id: 'root', children: [t] })
+    expect(rows.find((r) => r.id === '210:45641')).toBeUndefined()
+    expect(rows.find((r) => r.id === '210:45646')?.members).toEqual(['210:45918', '210:45648'])
+  })
+
+  test('自绘内容容器 @antd/tab 照常重建行内行（业务内容塞在子节点）', () => {
+    const doc = {
+      id: 'root',
+      children: [
+        {
+          id: '2:7890',
+          name: '@antd/tab',
+          type: 'FRAME',
+          absoluteBoundingBox: box(0, 0, 400, 100),
+          children: [
+            { id: '2:7891', name: 'tabs-list', type: 'FRAME', absoluteBoundingBox: box(0, 0, 120, 100), children: [] },
+            { id: '2:7892', name: 'cons', type: 'FRAME', absoluteBoundingBox: box(130, 0, 270, 100), children: [] },
+          ],
+        },
+      ],
+    }
+    const rows = rebuildSectionsPreservingInlineRows(doc)
+    expect(rows.find((r) => r.id === '2:7890')?.members).toEqual(['2:7891', '2:7892'])
+  })
+
+  test('非数据驱动标记 fail-open：@antd/radio 组 / @antd/button 仍按几何重建', () => {
+    const mk = (id: string, name: string, x: number) => ({
+      id, name, type: 'GROUP', absoluteBoundingBox: box(x, 0, 80, 40), children: [],
+    })
+    const doc = {
+      id: 'root',
+      children: [
+        {
+          id: 'r1', name: '@antd/radio', type: 'GROUP', absoluteBoundingBox: box(0, 0, 260, 40),
+          children: [mk('r1a', 'radio-1', 0), mk('r1b', 'radio-2', 90), mk('r1c', 'radio-3', 180)],
+        },
+      ],
+    }
+    const rows = rebuildSectionsPreservingInlineRows(doc)
+    expect(rows.find((r) => r.id === 'r1')?.members).toEqual(['r1a', 'r1b', 'r1c'])
+  })
+
+  test('isDataDrivenTechStackNode：归一化比较 + 未知库 fail-open', () => {
+    expect(isDataDrivenTechStackNode({ name: '@antd/table' })).toBe(true)
+    expect(isDataDrivenTechStackNode({ name: '@antd/Date-Picker' })).toBe(true)
+    expect(isDataDrivenTechStackNode({ name: '@antd/datepicker' })).toBe(true)
+    expect(isDataDrivenTechStackNode({ name: '@antd/form' })).toBe(true)
+    // 自绘容器 / 其它控件 / 未知库 / 无标记 ⇒ 一律 false
+    expect(isDataDrivenTechStackNode({ name: '@antd/tab' })).toBe(false)
+    expect(isDataDrivenTechStackNode({ name: '@antd/tabs' })).toBe(false)
+    expect(isDataDrivenTechStackNode({ name: '@antd/collapse' })).toBe(false)
+    expect(isDataDrivenTechStackNode({ name: '@antd/button' })).toBe(false)
+    expect(isDataDrivenTechStackNode({ name: '@antd/radio' })).toBe(false)
+    expect(isDataDrivenTechStackNode({ name: '@foo/bar' })).toBe(false)
+    expect(isDataDrivenTechStackNode({ name: '普通容器' })).toBe(false)
+    expect(isDataDrivenTechStackNode({})).toBe(false)
   })
 })

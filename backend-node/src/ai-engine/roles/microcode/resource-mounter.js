@@ -382,7 +382,12 @@ export function collectMountCandidates(files, opts = {}) {
         continue;
       }
       if (/^(script|style|template)$/i.test(tagName)) continue;
-      const clsM = attrs.match(/\bclass\s*=\s*["']([^"']*)["']/);
+      // 🛡️ P0-3（2026-10-01）：原为 `/\bclass\s*=\s*["']…/`——`\b` 在 `:class=` 处**成立**
+      //   （`:` 非词字符、`c` 词字符 ⇒ 有词边界）⇒ 把 `:class="row.selected ? 'a' : 'b'"`
+      //   当作静态 class 捕获，`cls` 变成 JS 表达式文本。该 cls 直接喂给
+      //   `scoreMountTarget → mountClsTokens(cand.cls)` ⇒ 评分 token 全污染（背景挂载点选错）。
+      //   改为 `(?:^|\s)` 前导断言，与同文件 `:212` 的静态 class 口径一致（仅 `class=`，排除 `:class=`）。
+      const clsM = attrs.match(/(?:^|\s)class\s*=\s*["']([^"']*)["']/);
       const cls = clsM ? clsM[1].trim().split(/[\s,]+/)[0] : '';
       // 🛡️ 2026-09-29：带上确定性锚（确定性装配骨架把 section id 写在容器上）。
       //   供 scoreMountTarget 做「几何父容器」短路（防语义祖先回退把 bg 挂错层级）。
@@ -947,8 +952,14 @@ export function dedupeBgMultiRefs(files, resourceDomMapping, options = {}) {
     const refs = allCands
       .filter((c) => c.tag.includes(varName) && /:style\s*=/.test(c.tag))
       .map((c) => {
+        // 🛡️ P0-3（2026-10-01）：原为 `c.tag.match(/class="([^"]*)"/)`——该正则会在
+        //   `:class="…"` / `v-bind:class="…"` 的 `class="` 处命中（子串匹配），把 JS 绑定
+        //   表达式当作 class 串。`cls` 既进日志也进 `pickBestMountTarget` 的评分依据
+        //   （`scoreMountTarget` 用 `cand.cls` 做 token 重叠）⇒ 污染挂载点选择。
+        //   改为 `(?:^|\s)` 前导断言 + 单双引号统一，仅取静态 `class=`（与 `collectMountCandidates`
+        //   同口径）；顺带修正原第二分支 `'([^']*')` 把收尾引号也吃进捕获组的笔误。
         const classMatch =
-          c.tag.match(/class="([^"]*)"/) || c.tag.match(/class='([^']*')/);
+          c.tag.match(/(?:^|\s)class\s*=\s*["']([^"']*)["']/);
         const cls = classMatch ? classMatch[1].toLowerCase() : '';
         return {
           file: c.file,
@@ -2031,6 +2042,11 @@ export function postProcessIndexVue(code, input, options = {}) {
  * 判定：模板里 `url(${bgN})` / `:src="iconN"` 引用的资源变量，在 <script> 中既无 import
  * 也无本地声明 → 该引用必然是臆造，删除对应的内联 background-image / 整个 :style 绑定。
  * 保留 class 提供的视觉（common.less 通常已有对应背景规则）。
+ *
+ * ⚠️ P0-4（2026-10-01）：② 删除 `:src` 会留下**无源 `<img>`**（破图 + alt 文本）——「保留 class
+ * 提供的视觉」这一假定在 class 只有尺寸、没有 background 时并不成立（07a812f7 灰块实锤）。
+ * 故收尾追加 `foldSourcelessImgs`：有 class → 降级 `<span>`；无 class → 整元素删除；
+ * 处于 v-if/v-else 链上时强制降级（删除会使 v-else 悬空）。
  */
 export function stripUndefinedResourceRefs(code, options = {}) {
   const logger = safeLogger(options.logger);
@@ -2083,12 +2099,86 @@ export function stripUndefinedResourceRefs(code, options = {}) {
   // ③ 清理因上一步变空的 :style="{ }" 绑定
   result = result.replace(/\s*:style="\{\s*\}"/g, '');
 
+  // 🛡️ P0-4（2026-10-01 · mc-max-1790830432735-07a812f7 实锤）：剥掉 `:src` 后**已无图片源**的
+  //   `<img>` 不再留「破图 + alt 文本」。
+  //   现象（真实产物 ContentSection.vue）：LLM 写 `<img v-if="row.selected" :src="icon1" …alt="已选中">`
+  //   （cross-section 误用 icon1，本文件未 import）→ 上方 ② 只删 `:src` ⇒ 预览里是灰块 + 「已选中」。
+  //   处置（与「删除法」同源的收敛动作，不臆造视觉）：
+  //     · 有静态 class → 降级为同名 class 的 `<span></span>`（保留 CSS 尺寸/背景钩子，消除破图与 alt）
+  //     · 无 class     → 整元素删除
+  //   唯一例外：该 `<img>` 带 v-if/v-else-if 且后继元素带 v-else ⇒ **必须降级不能删除**
+  //   （删除会让 v-else 悬空 → Vue 编译期直接报错，比破图更严重）。
+  result = foldSourcelessImgs(result, logger);
+
   if (logger) {
     logger.warn('🔧 T08 已剥离未定义的资源变量引用（防臆造资源致渲染失败）', {
       undefinedVars,
     });
   }
   return result;
+}
+
+/**
+ * 🛡️ P0-4 辅助：净化「已无任何图片源」的 `<img>`（`stripUndefinedResourceRefs` 收尾调用）。
+ *
+ * 判据：标签不含 `src=` / `:src=` / `v-bind:src` 中任一 ⇒ 浏览器必然渲染为破图（有 alt 时渲染 alt 文本）。
+ * 处置见调用处注释；删除时连带吃掉同行缩进与尾随换行，避免留下纯空白行。
+ *
+ * @param {string} code SFC 内容
+ * @param {Object} [logger]
+ * @returns {string}
+ */
+function foldSourcelessImgs(code, logger) {
+  // 属性值里可能含裸 `>`/引号，按「引号串优先」切片，与同文件既有标签正则口径一致
+  const re = /<img\b(?:"[^"]*"|'[^']*'|[^>"'])*\/?>/gi;
+  const actions = [];
+  let out = '';
+  let last = 0;
+  let m;
+  while ((m = re.exec(code)) !== null) {
+    const tag = m[0];
+    // 仍有图片源（静态或绑定）⇒ 不是幽灵，原样保留
+    if (/:src\s*=|\ssrc\s*=|\bv-bind:src\b/i.test(tag)) continue;
+    const clsM = tag.match(/(?:^|\s)class\s*=\s*["']([^"']*)["']/);
+    const cls = clsM ? clsM[1].trim() : '';
+    const nextEl = code.slice(re.lastIndex).match(/^\s*<[a-zA-Z][^>]*>/);
+    const orphanRisk =
+      /\bv-if\s*=|\bv-else-if\s*=/.test(tag) &&
+      !!nextEl &&
+      /\bv-else(?:-if)?\b/.test(nextEl[0]);
+
+    let head = code.slice(last, m.index);
+    let tailStart = re.lastIndex;
+    let replacement;
+    if (cls || orphanRisk) {
+      // 降级为 <span>：保留 class / v-if / :class 等全部其余属性，仅去掉 img 语义与 alt
+      const span = tag
+        .replace(/^<img\b/i, '<span')
+        .replace(/\s+alt\s*=\s*(?:"[^"]*"|'[^']*')/i, '')
+        .replace(/\/?>\s*$/, '')
+        .replace(/\s+$/, '');
+      replacement = `${span}></span>`;
+      actions.push({
+        action: 'img→span',
+        cls,
+        reason: orphanRisk ? 'v-if/v-else 链上（删除会致 v-else 悬空）' : '有静态 class（保留 CSS 钩子）',
+      });
+    } else {
+      // 整元素删除：吃掉同行前导缩进 + 尾随空白换行，不留空白行
+      head = head.replace(/[ \t]*$/, '');
+      const tw = code.slice(tailStart).match(/^[ \t]*\n?/);
+      if (tw) tailStart += tw[0].length;
+      replacement = '';
+      actions.push({ action: 'deleted', cls });
+    }
+    out += head + replacement;
+    last = tailStart;
+  }
+  out += code.slice(last);
+  if (actions.length > 0 && logger) {
+    logger.warn('🛡️ P0-4 已净化「无源 <img>」（幽灵引用剥离后不再留破图）', { actions });
+  }
+  return out;
 }
 
 /**

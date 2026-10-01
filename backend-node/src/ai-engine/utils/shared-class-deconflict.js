@@ -43,6 +43,8 @@
 import { extractStyleBlocks } from './flex-sibling-guard.js'
 import { toFileArray, mergeFileArray } from './file-collection.js'
 import { extractSfcTemplateRegion } from './sfc-template-extractor.js'
+// 🛡️ P2-11（2026-10-01）：声明体「规范多行」输出 —— 与 style-dedup-guard 同一口径（单一事实源）
+import { formatDeclarationList } from './style-dedup-guard.js'
 
 /**
  * 参与判定的属性白名单。
@@ -136,7 +138,7 @@ export function classesUsedInTemplate(vueContent, knownClasses) {
   return out
 }
 
-/** 从声明体中删掉指定属性，返回新体；全空返回 ''。 */
+/** 从声明体中删掉指定属性，返回规范多行体（逐条 `;` 收尾）；全空返回 ''。 */
 function removePropsFromBody(body, props) {
   const kept = []
   for (const decl of String(body || '').split(';')) {
@@ -146,7 +148,12 @@ function removePropsFromBody(body, props) {
     if (m && props.has(normProp(m[1]))) continue
     kept.push(decl)
   }
-  return kept.join(';').trim()
+  // 🛡️ P2-11：规范多行 + 逐条 `;` 收尾。
+  //   旧实现 `kept.join(';').trim()` 产出单行、末条无 `;`，拼进块得到
+  //   `.c-x {flex-direction: column}`；下游 VERT-004 按「末条已 `;`」追加 min-height
+  //   ⇒ `.c-x {flex-direction: column\n  min-height: 0; …}` ⇒ LESS `Unrecognised input`
+  //   ⇒ 最终 LESS 编译门禁阻断（c-be6-869be6fe 实锤）。
+  return formatDeclarationList(kept)
 }
 
 /**
@@ -254,7 +261,8 @@ export function deconflictSharedClassDecls(files = []) {
       nextShared = nextShared.replace(rx, (full, lead, s, body) => {
         const kept = removePropsFromBody(body, props)
         if (!kept.replace(/[\s;]/g, '')) return ''
-        return `${lead}${s}{${kept}}`
+        // 🛡️ P2-11：规范多行（旧实现 `${s}{${kept}}` 产出单行 `{flex-direction: column`）
+        return `${lead}${s}{\n${kept}\n}`
       })
     }
   }
