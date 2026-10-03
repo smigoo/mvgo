@@ -166,6 +166,8 @@ function validateVueSfcDescriptor(descriptor, source, filePath, errors, options 
   for (const block of scriptBlocks) {
     validateScriptBlock(block, source, filePath, errors)
   }
+  // 🛡️ 2026-10-03：子组件 import 入口 index.vue → vue3-sfc-loader 模块悬挂（mc-max-...-fbb7781f 实锤，见函数 docblock）
+  errors.push(...findEntrypointCircularImports(source, filePath).errors)
 
   if (descriptor.scriptSetup) {
     try {
@@ -581,6 +583,55 @@ function _looksLikeNarration(gap) {
  * 且自带 `<template #header-right>`（与 `index.vue:3` 的同名插槽重复）⇒ 面板外壳套两层。
  */
 export const HOST_RESERVED_COMPONENT_NAMES = Object.freeze(['base-panel'])
+
+/**
+ * 🛡️ 2026-10-03 新增 · 检出**子组件对组件入口 index.vue 的 import**（mc-max-1790946087204-fbb7781f 实锤）。
+ *
+ * 全静默失效链（该任务预览「正在加载组件...」永卡，本函数为治本门禁）：
+ *   HeaderSection2.vue 写了 `import { runtimeBuilder } from '../index.vue'`：
+ *   ① 入口 package/index.vue 是 `<script setup>`，不存在 `runtimeBuilder` 具名导出（局部解构 const 不导出）；
+ *   ② 子组件 → 入口 → 子组件构成**循环依赖**；
+ *   ③ vue3-sfc-loader 解析该模块时 promise **悬挂不 throw** ⇒ 预览永卡 loading、console 零报错、
+ *      运行时门禁只记 RUNTIME-003/004（未 ready 未 error），且加载器「快照源失败退 workspace 源」
+ *      的重试逻辑因错误不是 throw 而完全不触发。
+ *   正确写法：子组件自行 `const { runtimeBuilder } = $mcComponentBuilder()`（每个 SFC 模块各调一次），
+ *   与 c-device-monitor 系列、c-b-83885ba4 等健康产物一致。
+ *
+ * 判据（目标导向，与来源文件无关）：script 块内任一 `import ... from '<spec>'` / 裸 `import '<spec>'`，
+ * 其 spec 形如「一或多段 `./`/`../` 前缀 + 恰好 `index.vue`」⇒ 命中。
+ * 不判具名导出名——入口是 `<script setup>` 时任何具名导入都必然失败；裸 import 同样构成循环依赖。
+ * 不误伤：`./components/index.vue` 等子目录 barrel（前缀后不是直接 index.vue）不命中。
+ *
+ * @param {string} source .vue 全文
+ * @param {string} [filePath] 错误串前缀
+ * @returns {{hits: Array<{spec: string, line: number}>, errors: string[]}}
+ */
+export function findEntrypointCircularImports(source = '', filePath = '') {
+  const hits = []
+  const errors = []
+  const sourceText = String(source || '')
+  // 「一或多段 ./ 或 ../ 前缀后恰好 index.vue」——即任何解析到组件入口的相对引用
+  const ENTRY_SPEC_RE = /^\.?\.\/(?:\.?\.\/)*index\.vue$/
+  const IMPORT_FROM_RE = /\bimport\b[^'"();]*?from\s*['"]([^'"]+)['"]/g
+  const BARE_IMPORT_RE = /\bimport\s*['"]([^'"]+)['"]/g
+  for (const block of extractScriptBlocks(sourceText)) {
+    for (const re of [IMPORT_FROM_RE, BARE_IMPORT_RE]) {
+      re.lastIndex = 0
+      let m
+      while ((m = re.exec(block.content)) !== null) {
+        const spec = m[1]
+        if (!spec || !ENTRY_SPEC_RE.test(spec)) continue
+        const line = lineAtOffset(sourceText, block.offset + m.index) + 1
+        if (hits.some((h) => h.line === line && h.spec === spec)) continue
+        hits.push({ spec, line })
+        errors.push(
+          `${filePath || 'Vue SFC'}:${line}:1 script: 禁止 import 组件入口 index.vue（'${spec}'）—— 入口为 <script setup> 无具名导出，且形成循环依赖，vue3-sfc-loader 会模块悬挂导致预览永久卡「正在加载组件」。需要发布事件时在子组件内调用 $mcComponentBuilder() 解构 runtimeBuilder（每个模块一次）`
+        )
+      }
+    }
+  }
+  return { hits, errors }
+}
 
 /**
  * 检出产物里与宿主保留名同名的子组件文件。

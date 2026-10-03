@@ -5,6 +5,7 @@ import {
   validateVueSfc,
   validateVueSfcDirectory,
   extractLessGlobalVars,
+  findEntrypointCircularImports,
 } from './sfc-syntax-validation.js';
 
 describe('SFC validation gate', () => {
@@ -186,5 +187,72 @@ describe('SFC validation gate', () => {
     } finally {
       await rm(root, { recursive: true, force: true });
     }
+  });
+});
+
+// 🛡️ 2026-10-03：子组件 import 入口 index.vue（mc-max-1790946087204-fbb7781f 实锤，
+// 预览「正在加载组件...」永卡 + console 零报错，vue3-sfc-loader 模块悬挂不 throw）。
+describe('findEntrypointCircularImports', () => {
+  const BAD_SFC = [
+    '<template>',
+    '  <a-button @click="handleSave">保存</a-button>',
+    '</template>',
+    '',
+    '<script setup>',
+    "import { runtimeBuilder } from '../index.vue'",
+    '',
+    'const handleSave = () => {};',
+    '</script>',
+  ].join('\n');
+
+  it('rejects the fbb7781f circular-entrypoint regression (named import)', () => {
+    const result = validateVueSfc(BAD_SFC, 'package/components/HeaderSection2.vue');
+
+    expect(result.valid).toBe(false);
+    const hit = result.errors.find((e) => e.includes('禁止 import 组件入口'));
+    expect(hit).toBeDefined();
+    expect(hit).toContain("'../index.vue'");
+    expect(hit).toContain(':6:1');
+  });
+
+  it('reports the hit with line number via the standalone probe', () => {
+    const probe = findEntrypointCircularImports(BAD_SFC, 'package/components/HeaderSection2.vue');
+
+    expect(probe.hits).toEqual([{ spec: '../index.vue', line: 6 }]);
+    expect(probe.errors).toHaveLength(1);
+    expect(probe.errors[0]).toContain('$mcComponentBuilder()');
+  });
+
+  it('rejects bare and deep-relative entrypoint imports', () => {
+    const bare = `<script setup>\nimport '../index.vue'\n</script>\n<template><div /></template>`;
+    const deep = `<script setup>\nimport x from '../../index.vue'\n</script>\n<template><div /></template>`;
+
+    expect(findEntrypointCircularImports(bare, 'A.vue').hits).toEqual([
+      { spec: '../index.vue', line: 2 },
+    ]);
+    expect(findEntrypointCircularImports(deep, 'A.vue').hits).toEqual([
+      { spec: '../../index.vue', line: 2 },
+    ]);
+  });
+
+  it('accepts the healthy $mcComponentBuilder pattern (c-b-83885ba4 style)', () => {
+    const healthy = `<script setup>
+const { runtimeBuilder } = $mcComponentBuilder();
+const handleSave = () => {};
+</script>
+<template><div /></template>`;
+    const probe = findEntrypointCircularImports(healthy, 'package/components/HeaderSection2.vue');
+    const result = validateVueSfc(healthy, 'package/components/HeaderSection2.vue');
+
+    expect(probe.hits).toEqual([]);
+    expect(result.valid).toBe(true);
+  });
+
+  it('does not flag subdirectory barrels or normal relative imports', () => {
+    const barrel = `<script setup>\nimport { x } from './components/index.vue'\n</script>\n<template><div /></template>`;
+    const normal = `<script setup>\nimport X from '../components/X.vue'\nimport { ref } from 'vue'\n</script>\n<template><div /></template>`;
+
+    expect(findEntrypointCircularImports(barrel, 'A.vue').hits).toEqual([]);
+    expect(findEntrypointCircularImports(normal, 'A.vue').hits).toEqual([]);
   });
 });

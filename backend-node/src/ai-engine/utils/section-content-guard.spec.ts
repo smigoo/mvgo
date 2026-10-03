@@ -5,8 +5,29 @@
  *   memberOrderIssues 抓到 88:32（当日总流量/24小时反）与 2:3660（34,620/82,379 反）；
  *   duplicateTextIssues 抓到「24小时/当日总流量/流量预测」跨组件重复。
  */
-import { checkSectionContent, buildSectionContentContract, healDuplicateTextIssues, checkSectionExclusiveEvidence, checkSectionTruthCoverage } from './section-content-guard.js';
+import { checkSectionContent, buildSectionContentContract, healDuplicateTextIssues, checkSectionExclusiveEvidence, checkSectionTruthCoverage, checkTechStackContractTags } from './section-content-guard.js';
 import { assignSectionComponentNames } from './section-tree.js';
+
+// 🚨 checkTechStackContractTags 引入 element-coverage-validator → logger → config/backend-root.js
+//    （用 import.meta.url，jest CJS 下报 `Identifier '__filename' has already been declared`）
+//    ⇒ 与 element-coverage-validator.techstack.spec.ts 同款 virtual mock。
+jest.mock('../../config/backend-root.js', () => ({
+  backendRoot: process.cwd(),
+  projectRoot: process.cwd(),
+  workspaceRoot: process.cwd() + '/workspace',
+  customComponentsDir: process.cwd() + '/workspace/custom-components',
+  vue3ComponentsDir: process.cwd() + '/workspace/vue3-components',
+  tempComponentsDir: process.cwd() + '/temp-components',
+  dataDir: process.cwd() + '/data',
+  logsDir: process.cwd() + '/logs',
+  configDir: process.cwd() + '/config',
+  chatAttachmentsDir: process.cwd() + '/temp-chat-attachments',
+  apifoxZipsDir: process.cwd() + '/data/apifox-zips',
+  apiCatalogsDir: process.cwd() + '/data/api-catalogs',
+  resolveFrontendWorkspacePath: () => process.cwd(),
+  frontendCustomComponentsDir: () => process.cwd(),
+  frontendVue3ComponentsDir: () => process.cwd(),
+}), { virtual: true });
 
 /** 构造最小 figma 树节点 */
 function node(id, name, type, x, y, children = []) {
@@ -826,5 +847,143 @@ describe('healDuplicateTextIssues · owner 组件缺失不越权删（2026-09-30
     ];
     const r = healDuplicateTextIssues({ files, plan, figmaRoot });
     expect(r.healed).toEqual([]);
+  });
+});
+
+/**
+ * 🎯 2026-10-03 治本回归：techstack 契约-产物一致性（per-section）。
+ * 真机实锤 mc-max-1791035072047-65808cdd：210:45499 保存按钮契约（a-button 60×40
+ * #3965ff 白字，离线重放证明规划层/渲染层均正确产出）被 LLM 执行层用
+ * `<img alt="关闭">` 静态资源顶替，且 corpus 级 ElementCoverageValidator 零接线、
+ * 粒度也定位不了 per-section 落点 ⇒ 全漏。
+ */
+describe('checkTechStackContractTags · techstack 契约-产物一致性（65808cdd 治本）', () => {
+  /** 65808cdd 真实契约形态：孤儿重建保存按钮 */
+  const saveBtnSection = {
+    id: '210:45499',
+    title: '保存',
+    type: 'techstack',
+    isLayoutContainer: false,
+    children: [],
+    techStack: {
+      library: 'antd',
+      component: 'button',
+      nodeName: '@antd/button',
+      nodeId: '210:45499',
+      tag: 'a-button',
+      via: 'orphan-rebuild',
+      contract: {
+        kind: 'button',
+        tag: 'a-button',
+        text: '保存',
+        style: { background: '#3965ff', borderRadius: 4, width: 60, height: 40, fontSize: 14, fontWeight: 400, textColor: '#ffffff', align: 'center', alignDevPx: 1, marginTop: 57 },
+      },
+    },
+  };
+  const plan = planWith([saveBtnSection]);
+
+  it('阳性（65808cdd 逐字形态）：img 顶替 a-button → wrong-tag', () => {
+    const files = [
+      {
+        path: 'package/components/HeaderSection.vue',
+        content: `<template><div class="c-65808c-header" data-section-id="210:45499"><img class="c-65808c-header-icon" alt="关闭" /><span>关闭</span></div></template>`,
+      },
+    ];
+    const r = checkTechStackContractTags({ files, plan });
+    expect(r.checked).toBe(1);
+    expect(r.violations).toHaveLength(1);
+    expect(r.violations[0]).toMatchObject({
+      kind: 'wrong-tag',
+      sectionId: '210:45499',
+      tag: 'a-button',
+      text: '保存',
+    });
+    expect(r.violations[0].file).toContain('HeaderSection.vue');
+    expect(r.violations[0].hint).toContain('img');
+  });
+
+  it('阴性（fbb7781f 形态）：a-button 按契约落地 → 0 违规', () => {
+    const files = [
+      {
+        path: 'package/components/FooterSection.vue',
+        content: `<template><div class="c-65808c-footer" data-section-id="210:45499"><a-button class="c-65808c-save-btn" type="primary" :style="{width:'60px',height:'40px',background:'#3965ff'}">保存</a-button></div></template>`,
+      },
+    ];
+    const r = checkTechStackContractTags({ files, plan });
+    expect(r.checked).toBe(1);
+    expect(r.violations).toEqual([]);
+  });
+
+  it('阴性：带前缀 Pascal `<AButton>` 同样算落地', () => {
+    const files = [
+      {
+        path: 'package/components/FooterSection.vue',
+        content: `<template><div data-section-id="210:45499"><AButton>保存</AButton></div></template>`,
+      },
+    ];
+    expect(checkTechStackContractTags({ files, plan }).violations).toEqual([]);
+  });
+
+  it('阳性：原生 `<button>`（小写，无 i 标志）不算契约落地', () => {
+    const files = [
+      {
+        path: 'package/components/FooterSection.vue',
+        content: `<template><div data-section-id="210:45499"><button class="save">保存</button></div></template>`,
+      },
+    ];
+    const r = checkTechStackContractTags({ files, plan });
+    expect(r.violations).toHaveLength(1);
+    expect(r.violations[0].kind).toBe('wrong-tag');
+  });
+
+  it('missing 形态：契约 section 无任何 data-section-id 落点', () => {
+    const files = [
+      {
+        path: 'package/components/OtherSection.vue',
+        content: `<template><div data-section-id="88:32">别的</div></template>`,
+      },
+    ];
+    const r = checkTechStackContractTags({ files, plan });
+    expect(r.violations).toHaveLength(1);
+    expect(r.violations[0]).toMatchObject({ kind: 'missing', sectionId: '210:45499' });
+  });
+
+  it('fail-open：产物整体 0 个 data-section-id（锚点机制未启用）→ 不判', () => {
+    const files = [
+      { path: 'package/components/HeaderSection.vue', content: '<template><div><img alt="关闭" /></div></template>' },
+    ];
+    const r = checkTechStackContractTags({ files, plan });
+    expect(r.checked).toBe(0);
+    expect(r.violations).toEqual([]);
+  });
+
+  it('fail-open：techStack.tag 为空（图表库/契约未成功）不参与判定', () => {
+    const chartPlan = planWith([
+      { id: '2:100', type: 'techstack', children: [], techStack: { library: 'echarts', component: 'bar', tag: null } },
+      saveBtnSection,
+    ]);
+    const files = [
+      { path: 'package/components/FooterSection.vue', content: '<template><div data-section-id="210:45499"><a-button>保存</a-button></div></template>' },
+    ];
+    const r = checkTechStackContractTags({ files, plan: chartPlan });
+    expect(r.checked).toBe(1); // 只有 saveBtnSection 参与判定
+    expect(r.violations).toEqual([]);
+  });
+
+  it('注释里的 sid/标签不算落地（剥 HTML 注释后再判）', () => {
+    const files = [
+      {
+        path: 'package/components/HeaderSection.vue',
+        content: `<template><div><!-- data-section-id="210:45499" <a-button> 保存 --><span data-section-id="210:45499"><img alt="关闭" /></span></div></template>`,
+      },
+    ];
+    const r = checkTechStackContractTags({ files, plan });
+    expect(r.violations).toHaveLength(1);
+    expect(r.violations[0].kind).toBe('wrong-tag');
+  });
+
+  it('入参防御：空 files / 无 plan → 空结果', () => {
+    expect(checkTechStackContractTags({ files: [], plan })).toEqual({ checked: 0, violations: [] });
+    expect(checkTechStackContractTags({ files: [{ path: 'a.vue', content: '<template/>' }], plan: null })).toEqual({ checked: 0, violations: [] });
   });
 });

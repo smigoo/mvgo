@@ -1361,8 +1361,10 @@ function formatTechStackContract(sec, indent) {
       // 🛡️ P3-15d（用户截图实锤）：设计形态是 radio 与第一列文本**同格**，antd 的
       //   rowSelection prop 必然把选择列独立出来（多出空表头列）⇒ 明确禁用 prop，
       //   改用第一列 #bodyCell 自定义渲染。
+      // 🛡️ 2026-10-03（39dce24a 实锤）：LLM 用 <img> 画选择控件且选中态分支无 src（破图）⇒
+      //   明确只允许真实组件，禁止 img/手绘圆圈顶替。
       lines.push(
-        `${pad}行选择：radio 与第一列文本**同格**（同一单元格）⇒ **不用 rowSelection prop**（它会把选择列独立出来、多出空表头列，与设计不符）；在第一列（dataIndex: '${c.columns[0]?.dataIndex || 'field1'}'，即「${c.columns[0]?.title || ''}」列）的 #bodyCell 里渲染 <a-radio> + 文本，选中态用响应式变量。`,
+        `${pad}行选择：radio 与第一列文本**同格**（同一单元格）⇒ **不用 rowSelection prop**（它会把选择列独立出来、多出空表头列，与设计不符）；在第一列（dataIndex: '${c.columns[0]?.dataIndex || 'field1'}'，即「${c.columns[0]?.title || ''}」列）的 #bodyCell 里渲染**真实组件** \`<a-radio :checked="<行选中字段>"/>\`（多选形态用 \`<a-checkbox>\`）+ 文本，选中态用响应式变量。❌ **绝对禁止**用 <img>/图标/手绘圆圈（Ellipse/边框圆点）顶替选择控件，禁止产出无 src 的 <img>。`,
       )
     }
     // 🛡️ P3-15d：宽度事实（防表格靠左/固定窄宽）

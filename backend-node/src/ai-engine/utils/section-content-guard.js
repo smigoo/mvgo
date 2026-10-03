@@ -23,6 +23,7 @@ import {
   assignSectionComponentNames,
   isLayoutContainerSection,
 } from './section-tree.js';
+import { techStackRequiredPatterns } from '../validators/element-coverage-validator.js';
 import { assessStatRowConfidence } from './inline-row-assembler.js';
 import { extractRenderedText } from './text-truth-guard.js';
 
@@ -1085,6 +1086,103 @@ export function buildSectionContentContract(plan, figmaRoot) {
   };
   walk(plan.effectiveSections);
   return contract;
+}
+
+/**
+ * 🎯 2026-10-03 治本：techstack 契约-产物一致性检测（per-section 粒度）。
+ *
+ * 真机实锤（mc-max-1791035072047-65808cdd）：210:45499 保存按钮契约
+ * （a-button 60×40 #3965ff 白字，离线重放证明规划层/渲染层均正确产出）
+ * 被 LLM 执行层用 `<img alt="关闭">` 静态资源顶替。既有防线为何全漏：
+ *   ① corpus 级 `ElementCoverageValidator`（「全产物任何地方出现过 <a-button」即 covered）
+ *      在管线中**零接线**（死代码）；② 即使接线，corpus 粒度也定位不了
+ *      「哪个 section 的契约没落地」——别处出现一次 a-button 就能掩盖本 section 的 img 顶替。
+ *
+ * 本函数按 plan.effectiveSections 的 techStack 契约逐 section 断言：
+ *   - 收集 techStack.tag 非空的叶子（tag 非空 = 契约抽取成功，fail-open 口径，
+ *     图表库/未知库/契约失败本就不挂 tag ⇒ 不判）；
+ *   - 按 `data-section-id="<id>"` 定位宿主产物文件（先剥 HTML 注释，注释里的 sid 不算落地）；
+ *   - 宿主文件内必须出现契约标签 —— 判据**单一来源**复用
+ *     element-coverage-validator#techStackRequiredPatterns（kebab `<a-button` /
+ *     前缀 Pascal `<AButton` / 裸 Pascal `<Button` 三态，刻意不加 `i`）。
+ *
+ * 两种违规形态：
+ *   - kind=missing：无任何产物文件挂 `data-section-id="<id>"`；
+ *   - kind=wrong-tag：宿主文件存在但无契约标签（img/图标顶替形态，65808cdd 实锤）。
+ *
+ * 🛡️ 防群体误杀：若产物**整体**连一个 data-section-id 都没有（锚点机制未启用，
+ *    已知 vue3 产物线立项项），判定域为空 ⇒ 整体 fail-open 直接返回。
+ *
+ * @returns {{checked:number, violations:Array<{kind:'missing'|'wrong-tag', sectionId:string, tag:string, text:string, file?:string, hint:string}>}}
+ */
+export function checkTechStackContractTags({ files, plan }) {
+  const result = { checked: 0, violations: [] };
+  if (!Array.isArray(files) || files.length === 0) return result;
+  if (!plan || !Array.isArray(plan.effectiveSections)) return result;
+
+  const sections = collectSections(plan.effectiveSections).filter(
+    (s) => s?.techStack?.tag,
+  );
+  if (sections.length === 0) return result;
+
+  const vueFiles = files.filter(
+    (f) =>
+      typeof f?.path === 'string' &&
+      /^package\/(components\/[^/]+\.vue|index\.vue)$/.test(f.path) &&
+      typeof f.content === 'string',
+  );
+  if (vueFiles.length === 0) return result;
+
+  // 剥 HTML 注释后再做 sid 定位与标签断言（注释里出现 sid/<a-button 不算落地）
+  const locating = vueFiles.map((f) => ({
+    path: f.path,
+    content: f.content.replace(/<!--[\s\S]*?-->/g, ''),
+  }));
+
+  // 🛡️ 锚点机制未启用（全产物 0 个 data-section-id）⇒ 判定域为空，fail-open
+  const anchorRx = /data-section-id=["'][^"']+["']/;
+  if (!locating.some((f) => anchorRx.test(f.content))) return result;
+
+  const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  for (const sec of sections) {
+    const ts = sec.techStack;
+    result.checked += 1;
+    const sid = String(sec.id);
+    const sidRe = new RegExp(`data-section-id=["']${escapeRe(sid)}["']`);
+    const hosts = locating.filter((f) => sidRe.test(f.content));
+    const text = ts.contract?.text || ts.nodeName || '';
+    if (hosts.length === 0) {
+      result.violations.push({
+        kind: 'missing',
+        sectionId: sid,
+        tag: ts.tag,
+        text,
+        hint: `techstack 契约 section ${sid}（${ts.library}/${ts.component} → <${ts.tag}>）在产物中无 data-section-id 落点`,
+      });
+      continue;
+    }
+    // 判据单一来源：techStackRequiredPatterns 三态正则（未知库返回 null ⇒ fail-open）
+    const patterns = techStackRequiredPatterns({
+      library: ts.library,
+      component: ts.component,
+    });
+    if (!patterns) continue;
+    const landed = hosts.some((f) => patterns.some((re) => re.test(f.content)));
+    if (!landed) {
+      result.violations.push({
+        kind: 'wrong-tag',
+        sectionId: sid,
+        tag: ts.tag,
+        text,
+        file: hosts.map((f) => f.path).join(', '),
+        hint: `section ${sid} 的 techstack 契约要求 <${ts.tag}>（文案「${text}」必须作为直接内容），宿主 ${hosts
+          .map((f) => f.path)
+          .join(', ')} 未出现契约标签（疑似被 img/图标/手绘元素顶替）`,
+      });
+    }
+  }
+  return result;
 }
 
 export default checkSectionContent;

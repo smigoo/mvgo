@@ -8051,7 +8051,22 @@ export default declareInfo
             /* 旧 meta 损坏则重建 */
           }
           const { gitHash, distBuildAt } = getBuildVersion();
-          const nextMeta = {
+          // 🛡️ B3（2026-10-03 · mc-max-1790946087204-fbb7781f 实锤）：gateSkippedFiles 只保留
+      // 「最终仍未落盘」的文件 —— 以磁盘为最终事实源。首批被门禁跳过后，写盘前修复器/
+      // 后续补丁可能已把文件写入（该任务两子组件首批跳过、修复写盘成功，但 meta 仍留
+      // 「文件未落盘」残留，把根因诊断引向「文件未经门禁落盘」的错误方向）。
+      const gateSkippedFinal =
+        outputPath && gateSkippedFiles.length > 0
+          ? gateSkippedFiles.filter((rel) => !existsSync(join(outputPath, rel)))
+          : gateSkippedFiles;
+      if (gateSkippedFinal.length > 0 && outputPath) {
+        this.logger.warn('🛡️ D+ 门禁跳过清单按磁盘终态过滤', {
+          raw: gateSkippedFiles.length,
+          final: gateSkippedFinal.length,
+          recoveredOnDisk: gateSkippedFiles.filter((rel) => !gateSkippedFinal.includes(rel)),
+        });
+      }
+      const nextMeta = {
             ...prevMeta,
             codeVersion: {
               gitHash,
@@ -8065,20 +8080,29 @@ export default declareInfo
                   reason: 'SFC 编译失败，已隔离降级（可二次生成）',
                 }
               : {}),
-            ...(gateSkippedFiles.length > 0
+            ...(gateSkippedFinal.length > 0
               ? {
-                  gateSkippedFiles,
+                  gateSkippedFiles: gateSkippedFinal,
                   gateSkippedAt: Date.now(),
                   gateSkipReason:
                     'Vue SFC 写盘门禁失败（validateVueSfc），文件未落盘',
                 }
-              : {}),
+              : {
+                  // 本轮无「最终未落盘」文件 ⇒ 显式清除历史残留（prevMeta 里可能带着
+                  // 旧轮次的 gateSkipped* 字段，不清除会永远误导「最终产物缺文件」），
+                  // 同时兼容旧 meta 里字段不存在的情况（delete 不存在键是 no-op）。
+                  ...Object.fromEntries(
+                    ['gateSkippedFiles', 'gateSkippedAt', 'gateSkipReason']
+                      .filter((k) => k in prevMeta)
+                      .map((k) => [k, undefined]),
+                  ),
+                }),
           };
           writeFileSync(metaPath, JSON.stringify(nextMeta, null, 2), 'utf-8');
-          if (degradedFiles.length > 0 || gateSkippedFiles.length > 0) {
+          if (degradedFiles.length > 0 || gateSkippedFinal.length > 0) {
             this.logger.warn('🩹 P1-4/D+ 降级与门禁跳过留痕已写入 component-meta.json', {
               degradedFiles: degradedFiles.length,
-              gateSkippedFiles: gateSkippedFiles.length,
+              gateSkippedFiles: gateSkippedFinal.length,
               codeVersion: { gitHash, distBuildAt },
             });
           }

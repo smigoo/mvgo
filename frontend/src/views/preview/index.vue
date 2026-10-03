@@ -1477,34 +1477,104 @@ watch(
   }
 )
 
+// 重试等待期间页面已卸载/替换 → 放弃重试（防止卸载后仍发请求）
+let previewLoadDisposed = false
+
 // 提取组件加载逻辑为独立函数，供 onMounted 和 watch 复用
 async function loadPreviewComponent() {
+  // 🛡️ 2026-10-03 治本（"生成完成跳预览报 未找到组件，刷新就好"）：
+  //   第一起（83885ba4）是快照竞态（candidate 中间态缺入口）——已由 hasPreviewEntry 门禁 + workspace 降级修复；
+  //   第二起（f7e57ac6）与第三起（65808cdd）根因相同：**并行会话重启后端与任务完成撞车**——
+  //   跳转瞬间后端整个不可达，前端所有请求失败 → 报「未找到组件」（tried 是裸 sessionId，
+  //   连 componentId 反查都没成功）。
+  //   实测该重启模式空窗可达**分钟级**（杀进程后隔数分钟才拉起；20:13 那次失败重启后间隔 ~8min），
+  //   首版固定退避表（3s+6s，预算 ~19s）在第三起被实测击穿。
+  //   治本：**探活驱动的整体重试**——失败且疑似临时性时进入探活循环（每 3s 探一次），
+  //   后端一恢复立即整体重跑（等效替用户刷新一次），总预算 120s。
+  //   探活判据：/api/tasks 收到任意 status<500 的响应（401/404 也是 Nest 发的）= 后端已恢复；
+  //   >=500（vite proxy/nginx 在 upstream 挂时返回）= 仍未恢复。
+  //   真正的组件缺陷（语法错/资源缺失）不带临时性特征 → 立即报错误卡片，不受预算影响。
+  let lastErr: unknown = null
+  const deadline = Date.now() + LOAD_RETRY_BUDGET_MS
+  let attempt = 0
+  for (;;) {
+    try {
+      await runLoadPreviewOnce()
+      return
+    } catch (e) {
+      lastErr = e
+      attempt++
+      if (!isTransientLoadError(e)) break
+      if (Date.now() >= deadline || previewLoadDisposed) break
+      console.warn(
+        `[预览] 加载失败（疑似后端暂时不可达），等待后端恢复后整体重试（已试 ${attempt} 次）:`,
+        (lastErr as any)?.message || lastErr,
+      )
+    }
+    // 探活等待：后端一恢复立即重跑；预算耗尽/页面卸载 → 放弃
+    const ready = await waitBackendReady(deadline)
+    if (!ready || previewLoadDisposed) break
+  }
+  if (previewLoadDisposed) return
+  handleLoadError(lastErr)
+}
+
+const LOAD_RETRY_BUDGET_MS = 120000
+const LOAD_RETRY_PROBE_INTERVAL_MS = 3000
+
+/** 探活：后端恢复（收到 status<500 响应，401/404 亦算）返回 true；预算耗尽或持续 5xx 返回 false。 */
+async function waitBackendReady(deadline: number): Promise<boolean> {
+  while (Date.now() < deadline) {
+    if (previewLoadDisposed) return false
+    try {
+      const resp = await fetch('/api/tasks', { headers: { token: String(route.query.token || 'dev') } })
+      if (resp.status < 500) return true
+    } catch {
+      /* 网络错误 → 未恢复，继续探 */
+    }
+    await new Promise((r) => setTimeout(r, LOAD_RETRY_PROBE_INTERVAL_MS))
+  }
+  return false
+}
+
+/** 疑似「后端暂时不可达 / 数据短暂未就绪」的临时性错误特征。组件自身缺陷不在此列。 */
+function isTransientLoadError(e: unknown): boolean {
+  const msg = String((e as any)?.message ?? e ?? '')
+  return (
+    msg.includes('未找到组件') ||
+    msg.includes('Failed to fetch') ||
+    msg.includes('NetworkError') ||
+    msg.includes('Network Error') ||
+    msg.includes('ECONNREFUSED') ||
+    msg.includes('socket hang up') ||
+    /\b50[0-4]\b/.test(msg) // 500/502/503/504（vite proxy/nginx 在 upstream 不可达时的返回）
+  )
+}
+
+async function runLoadPreviewOnce() {
   cleanupPreviewInjectedStyles()
   markLoading()
   // 🛡️ 加载期不受渲染超时影响：组件加载（sfc 编译 + 资源下载）本身可能 >10s，
   // 首次加载必须在开始前停止 ErrorBoundary 的超时计时器，否则大组件/慢网络会被误判「加载超时」。
   errorBoundaryRef.value?.markLoaded()
   await loadAspectRatio()
-  try {
-    if (!componentId) throw new Error('缺少组件 ID')
-    rtComponent.value = import.meta.env.DEV ? await loadDev() : await loadProd()
-    // 🛡️ 1.2 修法 A（2026-09-28）：独立预览无宿主容器注入 cssVars → 补根默认值。
-    //   必须在组件加载**之后**（loadVue3Runtime 已把 $mcCssBuilder 等注册到 globalThis，
-    //   组件自己声明的 css-vars.js 才能被求值）；失败静默跳过；已设置的键不覆盖。
-    await loadMicrocodeCssVars()
-    // 🛡️ P2（2026-09-03）：CSS 在 loadModule 编译期注入，早于组件 DOM 挂载，
-    // 故在渲染完成后（nextTick）补做作用域化：剥离失效的 [data-v-*] + 加预览容器前缀。
-    await nextTick()
-    applyScopeToPreviewStyles(previewStyleScopeId)
-    await markReadyAfterRender()
-    // 组件加载成功，停止超时计时器
-    errorBoundaryRef.value?.markLoaded()
-  } catch (e) {
-    handleLoadError(e)
-  }
+  if (!componentId) throw new Error('缺少组件 ID')
+  rtComponent.value = import.meta.env.DEV ? await loadDev() : await loadProd()
+  // 🛡️ 1.2 修法 A（2026-09-28）：独立预览无宿主容器注入 cssVars → 补根默认值。
+  //   必须在组件加载**之后**（loadVue3Runtime 已把 $mcCssBuilder 等注册到 globalThis，
+  //   组件自己声明的 css-vars.js 才能被求值）；失败静默跳过；已设置的键不覆盖。
+  await loadMicrocodeCssVars()
+  // 🛡️ P2（2026-09-03）：CSS 在 loadModule 编译期注入，早于组件 DOM 挂载，
+  // 故在渲染完成后（nextTick）补做作用域化：剥离失效的 [data-v-*] + 加预览容器前缀。
+  await nextTick()
+  applyScopeToPreviewStyles(previewStyleScopeId)
+  await markReadyAfterRender()
+  // 组件加载成功，停止超时计时器
+  errorBoundaryRef.value?.markLoaded()
 }
 
 onUnmounted(() => {
+  previewLoadDisposed = true
   window.removeEventListener('message', onPreviewMessage)
   cleanupPreviewInjectedStyles()
 })

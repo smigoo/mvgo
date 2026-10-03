@@ -2756,6 +2756,7 @@ export function createPhase2Graph(config = {}) {
         healDuplicateTextIssues,
         healBorrowedEvidence,
         checkSectionExclusiveEvidence,
+        checkTechStackContractTags,
       } = await import('../utils/section-content-guard.js');
       const { validateVueSfc } = await import('../utils/sfc-syntax-validation.js');
       const { pruneUnmountedResourceImports } = await import(
@@ -2867,11 +2868,20 @@ export function createPhase2Graph(config = {}) {
         resourceDomMapping:
           state.resourceDomMapping || state._uiCache?.resourceDomMapping,
       });
+      // 🎯 2026-10-03 治本：techstack 契约-产物一致性（per-section，65808cdd 实锤——
+      //   210:45499 保存按钮契约 a-button 被 LLM 用 <img alt="关闭"> 顶替且无任何防线拦截）。
+      //   检测类，只留痕不阻断（与借用证据处置同级）：violations 进 meta.contentMappingIssues。
+      const contractTagCheck = checkTechStackContractTags({
+        files,
+        plan: state.subComponentPlan,
+      });
+      const techStackTagViolations = contractTagCheck.violations || [];
       const hasContentIssues =
         contentCheck.memberOrderIssues.length > 0 ||
         contentCheck.duplicateTextIssues.length > 0 ||
         exclusiveCheck.borrowedTextIssues.length > 0 ||
-        exclusiveCheck.borrowedAssetIssues.length > 0;
+        exclusiveCheck.borrowedAssetIssues.length > 0 ||
+        techStackTagViolations.length > 0;
       if (hasContentIssues) {
         const metaPath = pathJoin(state.outputPath, 'component-meta.json');
         let prev = {};
@@ -2893,6 +2903,7 @@ export function createPhase2Graph(config = {}) {
                 duplicateTextIssues: contentCheck.duplicateTextIssues,
                 borrowedTextIssues: exclusiveCheck.borrowedTextIssues,
                 borrowedAssetIssues: exclusiveCheck.borrowedAssetIssues,
+                techStackTagViolations,
                 checkedAt: Date.now(),
               },
             },
@@ -2901,15 +2912,16 @@ export function createPhase2Graph(config = {}) {
           ),
           'utf-8',
         );
-        logger.warn('🩹 内容映射守卫发现问题（左右序/内容错装/借用邻居证据，已留痕）', {
+        logger.warn('🩹 内容映射守卫发现问题（左右序/内容错装/借用邻居证据/契约标签顶替，已留痕）', {
           memberOrderIssues: contentCheck.memberOrderIssues.length,
           duplicateTextIssues: contentCheck.duplicateTextIssues.length,
           borrowedTextIssues: exclusiveCheck.borrowedTextIssues.length,
           borrowedAssetIssues: exclusiveCheck.borrowedAssetIssues.length,
+          techStackTagViolations: techStackTagViolations.length,
         });
         state.onProgress?.({
           stage: '内容映射校验',
-          message: `⚠️ 内容映射守卫：${contentCheck.memberOrderIssues.length} 处左右序异常、${contentCheck.duplicateTextIssues.length} 处文本重复/错装、${exclusiveCheck.borrowedTextIssues.length} 处借用文本、${exclusiveCheck.borrowedAssetIssues.length} 处借用资源（详见 component-meta.json）`,
+          message: `⚠️ 内容映射守卫：${contentCheck.memberOrderIssues.length} 处左右序异常、${contentCheck.duplicateTextIssues.length} 处文本重复/错装、${exclusiveCheck.borrowedTextIssues.length} 处借用文本、${exclusiveCheck.borrowedAssetIssues.length} 处借用资源、${techStackTagViolations.length} 处技术栈契约标签未落地（详见 component-meta.json）`,
           status: 'warning',
         });
       }

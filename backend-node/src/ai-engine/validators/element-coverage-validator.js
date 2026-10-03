@@ -133,9 +133,11 @@ export function techStackTagHint(marker) {
 
 /**
  * 单个标记 → 产物中必须出现的标签/调用正则。
+ * 🛡️ 2026-10-03 起导出为**判据单一来源**：section-content-guard#checkTechStackContractTags
+ * （per-section 契约-产物一致性检测）复用本函数，严禁另写第二份 kebab/Pascal 正则副本。
  * @returns {RegExp[]|null} null = 未知库（**不判定**，fail-open，避免假阳性阻断）
  */
-function techStackRequiredPatterns(marker) {
+export function techStackRequiredPatterns(marker) {
   const library = String(marker?.library || '').toLowerCase()
   const component = String(marker?.component || '').toLowerCase()
   if (!library || !component) return null

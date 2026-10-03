@@ -27,6 +27,7 @@ import {
 } from './flex-sibling-guard.js';
 // 🛡️ S6（2026-09-16）：背景 :style 补全自愈（backgroundImage 缺 size/repeat/position → 补默认值）
 import { ensureBackgroundStyleComplete } from './post-process.js';
+import { scanProductStyleIssues } from './style-conflict-detector.js';
 // 🛡️ D1（2026-09-20）：per-card 样式确定性改写（bg 图/数值色/icon 按 vision 真值）
 import { enforceCardVisualTruth } from './card-visual-truth-rewriter.js';
 
@@ -383,6 +384,29 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
         { files: issue.files },
       );
     }
+  }
+
+  // ⑩ 样式冲突检测（2026-10-03 · f7e57ac6 实锤，只报不改）：① 控件尺寸字号乘数换算
+  //    （calc(字号×小数) 定 width/height）；② 同名 class 在 common.less 与 SFC scoped
+  //    双定义布局属性（@import 后到静默覆盖）。防线主力是 mc-builder.md 生成铁律（预防），
+  //    此处保证复发可见。必须排在全部注入/修复之后 —— 检测的是最终落盘形态。
+  try {
+    const styleScan = scanProductStyleIssues(result);
+    summary.styleFontSizeSizing = styleScan.fontSizeSizing;
+    summary.styleClassConflicts = styleScan.classConflicts;
+    for (const w of styleScan.warnings) {
+      logger?.warn?.(`🛡️ STYLE-CONFLICT：${w}`);
+    }
+    if (styleScan.warnings.length > 0) {
+      logger?.warn?.('🛡️ 样式冲突扫描完成（只报不改，修复靠生成铁律+重试）', {
+        fontSizeSizing: styleScan.fontSizeSizing,
+        classConflicts: styleScan.classConflicts,
+      });
+    }
+  } catch (err) {
+    logger?.warn?.('🛡️ 样式冲突扫描异常（非阻断）', {
+      error: err?.message || String(err),
+    });
   }
 
   return { files: result, summary };

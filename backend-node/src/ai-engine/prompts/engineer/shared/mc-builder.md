@@ -37,6 +37,7 @@ onMounted(() => {
 - ❌ 用 `typeof $mcComponentBuilder === 'function' ? $mcComponentBuilder().runtimeBuilder : null` 的属性访问链（直接解构即可，`$mcComponentBuilder` 在微码/预览环境均已全局注入）
 - ❌ 多次调用 `$mcComponentBuilder()`（只能调用一次）
 - ❌ 缺少 onload 事件触发
+- ❌ **子组件 import 入口文件**：`import { runtimeBuilder } from '../index.vue'`（或任何 `./index.vue`/`../../index.vue` 形态）—— 入口 `<script setup>` 无任何具名导出，且构成循环依赖，vue3-sfc-loader 会**模块悬挂**导致预览永久卡「正在加载组件」。**子组件需要发事件时，在本组件内自行调用一次 `const { runtimeBuilder } = $mcComponentBuilder()`**（每个 SFC 模块各一次，不与入口互斥）。写盘门禁会拒绝此类 import。
 
 ## 4️⃣ 样式文件结构（index.less 必须完整）
 
@@ -84,6 +85,27 @@ resources/styles/
    —— 缺 min-height 时被兄弟元素挤压到 ~10px，折线图视觉变形
 4. **横向分区**（如 Tab 区 + 右侧图标区）：Tab 区 `flex: 1; min-width: 0`，图标区 `flex-shrink: 0`
 5. Tab 项宽度按内容均分：`flex: 1` + `text-align: center`（每项等宽，不逐项设固定 px）
+
+## 3.3️⃣ 图标资源分档（禁止臆造 SVG，但 vector 节点允许手绘）
+
+## 3.2b️⃣ 控件尺寸与样式归属铁律（2026-10-03 · f7e57ac6 实锤）
+
+1. **控件（按钮/输入框/单选等）宽高必须直写 Figma 真值 px**（控件契约已下发 width/height）。
+   ❌ **绝对禁止** `calc(字号 × 小数)` 换算尺寸（如 `width: calc(var(--fontSize, 14px) * 4.29)`）——
+   小数乘数是「px 真值 ÷ 字号」的反推残留，宿主主题注入的 `--fontSize` 与设计稿不一致时
+   尺寸必然失真（该任务 60×40 设计稿被渲染成 51×34）。
+2. **同一 class 的布局/外观属性只允许一处定义**：容器规则写 SFC scoped；组件库本体样式
+   写 SFC 内 `:deep(.ant-btn)`。❌ **绝对禁止**把同一 class（如 `.c-xxx-antd-button`）的
+   width/height/background 等同时在 `resources/styles/common.less` 与 SFC scoped 里定义 ——
+   同特异性下 `@import` 后到的规则会**静默覆盖**前者（该任务 common.less 把按钮本体样式
+   错写到容器 class 上，覆盖 `width:100%`，容器收缩成按钮大小、按钮掉出白色面板）。
+3. **techstack 契约区块必须用契约组件标签渲染**（2026-10-03 · 65808cdd 实锤）。prompt 下发的
+   控件契约（如「⇒ 用 `<a-button>` 渲染，文案「保存」必须作为直接内容」）是确定性指令：
+   ❌ **绝对禁止**用 `<img>`/图标/手绘元素顶替契约组件（该任务保存按钮 a-button 60×40 #3965ff
+   被画成 `<img alt="关闭">` 静态资源，按钮彻底不可点）；❌ **绝对禁止**改写契约文案
+   （契约「保存」不得渲染成「关闭」或「提交」）。契约标签+契约文案+契约样式三者必须逐字落地。
+   **表格行选择控件同理**（39dce24a 实锤）：必须 `<a-radio :checked="…"/>`/`<a-checkbox>` 真实组件
+   受控行选中字段，禁止 img/手绘圆圈顶替，禁止产出无 src 的 `<img>`（破图）。
 
 ## 3.3️⃣ 图标资源分档（禁止臆造 SVG，但 vector 节点允许手绘）
 
