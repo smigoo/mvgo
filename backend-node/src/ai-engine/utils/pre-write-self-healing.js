@@ -30,6 +30,8 @@ import { ensureBackgroundStyleComplete } from './post-process.js';
 import { scanProductStyleIssues } from './style-conflict-detector.js';
 // 🛡️ D1（2026-09-20）：per-card 样式确定性改写（bg 图/数值色/icon 按 vision 真值）
 import { enforceCardVisualTruth } from './card-visual-truth-rewriter.js';
+// 🛡️ H1（2026-10-04）：百分比高度拉伸检测（真值定值区块被 height:100%/比例 flex 撑满）。
+import { resolvePercentHeightStretch } from './percent-height-resolver.js';
 
 /**
  * @param {Record<string,string>} files 产物文件集（path → content）
@@ -39,6 +41,10 @@ import { enforceCardVisualTruth } from './card-visual-truth-rewriter.js';
  * @param {Function} [ctx.injectFn] 资源 import 注入函数
  *   （microcode 传 injectResourceImports，vue3 传 injectVue3ResourceUrls；签名均为 (content, mapping, relBase)）
  * @param {Array} [ctx.effectiveSections] planner section 树（D1 per-card 真值源，含 F1 回填的 body.items）
+ * @param {Array} [ctx.percentHeightTruth] planner section 树（⑪ H1 专用真值源）。用于「只想让 H1 生效、
+ *   不想连带激活 D1」的链路（如 vue3-engineer：其调用点历史上未传 effectiveSections，若直接补传会
+ *   首次激活 D1 的 per-card 改写——属未验证行为变化）。未提供时回退 effectiveSections。
+ * @param {object} [ctx.figmaRoot] figma.json 根（⑪ H1 更权威真值源，可选）
  * @param {object} [deps]
  * @param {object} [deps.logger] 日志器
  * @returns {{ files: Record<string,string>, summary: object }} 自愈后的文件集 + 计数摘要
@@ -407,6 +413,49 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
     logger?.warn?.('🛡️ 样式冲突扫描异常（非阻断）', {
       error: err?.message || String(err),
     });
+  }
+
+  // ⑪ H1 百分比高度拉伸检测（2026-10-04 · fb505213 / a803f7 实锤，只报不改）：
+  //    真值定值的内容区块（如 antd-table-con Figma 高 173px、父 con 高 270px）在产物里被写成
+  //    `height:100%` 或比例 flex（`flex:0.764`）⇒ 区块撑满父容器，把同容器内后续区块
+  //    （保存按钮）推出可视区、甚至被裁切。判据 v2（离线 552 产物实测，误伤 -95%）：
+  //      判定域 = 内容区块类名且**非填充容器**（`*-slot-con`/`*-con-con`/`*-container`/`*-root`
+  //        填满壳 body 属合法，排除）；信号 = `height:100%`（须 T子≠T父）或比例 flex
+  //        （须 |flex − T子/T父| > 0.06）；**无真值 fail-open 不判**。真值来自 ctx.effectiveSections
+  //        的 layoutMetadata.height（figmaRoot 可选，更权威）。
+  //    只报不改：确定性事实只够判「这里不对」，不够判「该改成多少」（定值 vs 流式取决于区块语义）；
+  //    修复主线仍是生成铁律 + 重试，此处只保证复发可见。必须排在全部改动之后（判的是最终落盘形态）。
+  //    真值源：`ctx.percentHeightTruth`（H1 专用）→ 回退 `ctx.effectiveSections`（microcode 链，与 D1 同源）。
+  //    分开的理由：vue3 链需要一个「只给 H1、不惊动 D1」的入口（见 ctx 注释）。
+  const percentHeightTruth = Array.isArray(ctx.percentHeightTruth)
+    ? ctx.percentHeightTruth
+    : effectiveSections;
+  if (Array.isArray(percentHeightTruth) && percentHeightTruth.length > 0) {
+    try {
+      const h1 = resolvePercentHeightStretch(result, {
+        effectiveSections: percentHeightTruth,
+        figmaRoot: ctx.figmaRoot,
+        maxIssues: 50,
+      });
+      summary.percentHeightStretch = h1.issues;
+      summary.percentHeightStats = h1.stats;
+      for (const it of h1.issues) {
+        logger?.warn?.(
+          `🛡️ PERCENT-HEIGHT：[${it.file}] ${it.blockClass} 疑似撑满父容器 — ${it.detail}`,
+          { sid: it.sid, parentSid: it.parentSid, signal: it.signal },
+        );
+      }
+      if (h1.issues.length > 0) {
+        logger?.warn?.('🛡️ 百分比高度拉伸检测完成（只报不改，修复靠生成铁律+重试）', {
+          hits: h1.stats.hits,
+          files: h1.stats.hitFiles,
+        });
+      }
+    } catch (err) {
+      logger?.warn?.('🛡️ H1 百分比高度检测异常（非阻断）', {
+        error: err?.message || String(err),
+      });
+    }
   }
 
   return { files: result, summary };

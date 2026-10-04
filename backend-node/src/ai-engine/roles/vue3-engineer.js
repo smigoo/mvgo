@@ -1925,7 +1925,18 @@ export class Vue3Engineer extends MicrocodeEngineer {
       {
         const _healed = runPreWriteSelfHealing(
           codeResult.files,
-          { resourceDomMapping, outputPath, injectFn: injectVue3ResourceUrls },
+          {
+            resourceDomMapping,
+            outputPath,
+            injectFn: injectVue3ResourceUrls,
+            // 🛡️ H1（2026-10-04）：把 planner section 树喂给「百分比高度拉伸检测」（⑪），使其在 vue3 链生效。
+            //   刻意走 **percentHeightTruth**（H1 专用）而非 effectiveSections：后者会连带首次激活
+            //   D1 per-card 改写（该链历史上从未传过 effectiveSections ⇒ D1 一直 no-op），
+            //   属未验证行为变化，不夹带。D1 是否在 vue3 链启用需单独一轮 A/B 后决定。
+            percentHeightTruth: (subPlan && subPlan.effectiveSections) || [],
+            // figma 原始树（更权威真值源；口径与 indexFigmaNodes 一致）。
+            figmaRoot: input.figmaNodeData || null,
+          },
           { logger: this.logger },
         );
         codeResult.files = _healed.files;

@@ -7761,7 +7761,17 @@ export default declareInfo
       {
         const _healed = runPreWriteSelfHealing(
           finalTruthFiles,
-          { resourceDomMapping, outputPath, injectFn: injectResourceImports, effectiveSections },
+          {
+            resourceDomMapping,
+            outputPath,
+            injectFn: injectResourceImports,
+            effectiveSections,
+            // 🛡️ H1（2026-10-04）：figma 原始树作为「百分比高度拉伸检测」（⑪）的更权威真值源。
+            //   effectiveSections 只含 section 级高度；figmaNodeData 含全部节点 ⇒ 区块级 T父 可解析，
+            //   覆盖率显著提升（离线 552 产物实测即以此路径跑出 H1 全量命中面）。
+            //   口径与 indexFigmaNodes 一致（兼容 {document:…} 与裸根两种形态）。
+            figmaRoot: figmaNodeData,
+          },
           { logger: this.logger },
         );
         finalTruthFiles = _healed.files;

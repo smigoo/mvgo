@@ -99,4 +99,68 @@ const s = { bgImage: bg1.value }
     expect(summary.bgStyleComplete).toBe(0);
     expect(out['package/index.vue']).toBe(files['package/index.vue']);
   });
+
+  it('⑪ H1 接线：有 effectiveSections 时真值定值区块撑满 → 汇入 summary.percentHeightStretch（只报不改）', () => {
+    const files = {
+      'package/index.vue': `<template>
+  <div class="c-x-con-con" data-section-id="272:2">
+    <div class="c-x-antd-table-con" data-section-id="210:45641" style="height:100%"></div>
+  </div>
+</template>`,
+    };
+    const effectiveSections = [
+      {
+        id: '272:2',
+        layoutMetadata: { height: 270 },
+        children: [{ id: '210:45641', layoutMetadata: { height: 173 } }],
+      },
+    ];
+    const { files: out, summary } = runPreWriteSelfHealing(
+      files,
+      { effectiveSections },
+      { logger: noopLogger },
+    );
+    expect(summary.percentHeightStretch).toHaveLength(1);
+    expect(summary.percentHeightStretch[0].blockClass).toBe('c-x-antd-table-con');
+    expect(summary.percentHeightStats.hits).toBe(1);
+    // 只报不改：产物内容逐字不变
+    expect(out['package/index.vue']).toBe(files['package/index.vue']);
+  });
+
+  it('⑪ H1 接线：未传真值源 → 该步骤安全跳过（summary 无该字段）', () => {
+    const files = { 'package/index.vue': '<template><div class="c-x-antd-table-con" data-section-id="1" style="height:100%"></div></template>' };
+    const { summary } = runPreWriteSelfHealing(files, {}, { logger: noopLogger });
+    expect(summary.percentHeightStretch).toBeUndefined();
+  });
+
+  it('⑪ H1 接线：仅传 percentHeightTruth（vue3 链）→ H1 生效，而 D1 不激活（不夹带）', () => {
+    const files = {
+      'package/index.vue': `<template>
+  <div class="c-x-con-con" data-section-id="272:2">
+    <div class="c-x-antd-table-con" data-section-id="210:45641" style="height:100%"></div>
+  </div>
+</template>`,
+    };
+    const percentHeightTruth = [
+      {
+        id: '272:2',
+        layoutMetadata: { height: 270 },
+        // 带 body.items 的卡片语义：若 effectiveSections 被传入，D1 会尝试改写它
+        body: { items: [{ text: '1,234', color: '#ff4d4f' }] },
+        children: [{ id: '210:45641', layoutMetadata: { height: 173 } }],
+      },
+    ];
+    const { files: out, summary } = runPreWriteSelfHealing(
+      files,
+      { percentHeightTruth },
+      { logger: noopLogger },
+    );
+    // H1 生效
+    expect(summary.percentHeightStretch).toHaveLength(1);
+    expect(summary.percentHeightStretch[0].blockClass).toBe('c-x-antd-table-con');
+    // D1 未被激活（summary 无 D1 字段）
+    expect(summary.d1BgFixed).toBeUndefined();
+    expect(summary.d1ColorFixed).toBeUndefined();
+    expect(out['package/index.vue']).toBe(files['package/index.vue']);
+  });
 });
