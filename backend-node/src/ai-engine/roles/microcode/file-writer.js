@@ -97,6 +97,20 @@ export function sanitizeFileContent(content, filePath = '', options = {}) {
   // 此前微码链路只有 prompt 层"请别写"约束（lite/page-skeleton 等其他管线才有剥离逻辑）→ 必然复发。
   if (/\.(less|css|scss)$/i.test(filePath)) {
     sanitized = sanitized.replace(/<\/?(style|template|script)\b[^>]*>/gi, '');
+
+    // 4L-b. 🎯 2026-10-05 治本（mc-max-1791132079721-6b655282 真机实锤）：
+    // 4L 只覆盖 style/template/script 三个**固定标签名**，模型换一个标签名即穿透。
+    // 事故现场：common.less 尾部同时残 `</style>`（4L 剥掉）+ `</a-table>`（漏网，非 SFC 名）
+    // → LESS `Unrecognised input`（真实坐标 common.less:91）→ index.less 在**根作用域**
+    //   `@import (multiple) './common.less'` ⇒ 4 个 .vue + index.less + common.less
+    //   共 **6 个文件全部 LESS-COMPILE-001** ⇒ L0-B 重试耗尽 ⇒ 任务失败。
+    // 故泛化为「整行裸标签」：样式文件里**不可能合法存在**只由标签构成的一行 ⇒ 直接剥离。
+    // 刻意用行级匹配（^…$）：行内形态 `url('data:image/svg+xml;utf8,<svg …</svg>')` 是合法数据 URI，
+    // 必须豁免（否则会剥掉 SVG 图标内容）。
+    // 误伤审计（2026-10-05）：frontend/workspace/custom-components 全量 572 组件 / 2799 个 .less
+    // → 命中 **1 处 = 本事故文件**；`</svg>` 2 处（c-device-monitor-54038a3a:332、a0167230:323）
+    //   均在 url() 内同行 ⇒ 天然豁免。合取「阳性 1 / 误伤 0」。
+    sanitized = sanitized.replace(/^[ \t]*<\/?[A-Za-z][\w-]*(?:\s[^>]*)?>[ \t]*(?:\r?\n|$)/gm, '');
   }
 
   // 4. 对 .vue 文件：去除 </style> / </script> / </template> 之后的说明性文本/markdown残留

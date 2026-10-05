@@ -57,6 +57,60 @@ describe('sanitizeFileContent · 样式文件 SFC 标签剥离（2026-09-14 治�
     expect(out).toContain('</style>');
     expect(out).toContain('</template>');
   });
+
+  /**
+   * 🎯 2026-10-05 治本（mc-max-1791132079721-6b655282 真机实锤）：
+   * 4L 只认 style/template/script 三个固定标签名 —— 模型换成 `</a-table>` 即穿透。
+   * 事故：common.less:91 残留 `</a-table>` → LESS Unrecognised input
+   *   → index.less 根作用域 @import 连锁 6 文件全部 LESS-COMPILE-001 → 任务失败。
+   * 治本：泛化为「整行裸标签」剥离（行级匹配，豁免 url(data:...<svg>) 行内数据 URI）。
+   */
+  it('⭐ .less 中整行裸组件标签 `</a-table>`（6b655282 实锤形态）被剥离', () => {
+    const polluted = [
+      '.c-component-table-wrap {',
+      '  padding: 16px;',
+      '}',
+      '</a-table>',
+      '',
+      '.c-6b6552-header-bg {',
+      '  inset: 0;',
+      '}',
+    ].join('\n');
+    const out = sanitizeFileContent(polluted, 'resources/styles/common.less');
+    expect(out).not.toContain('</a-table>');
+    // 关键：只删标签那一行，前后规则必须完整保留（此处标签在文件中部）
+    expect(out).toContain('.c-component-table-wrap');
+    expect(out).toContain('padding: 16px');
+    expect(out).toContain('.c-6b6552-header-bg');
+    expect(out).toContain('inset: 0');
+  });
+
+  it('整行裸开标签（带属性）同样剥离：`<a-table :columns="c" bordered>`', () => {
+    const out = sanitizeFileContent('<a-table :columns="c" bordered>\n.a{color:red}\n', 'x.less');
+    expect(out).not.toContain('<a-table');
+    expect(out).toContain('color:red');
+  });
+
+  it('⭐ 阴性对照：url() 内联 data-uri SVG 不得被误伤（锁死误伤率 0）', () => {
+    const svgLine =
+      "  mask: url('data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M8 2L2 8z\"/></svg>') no-repeat center;";
+    const src = ['.c-x {', svgLine, '}'].join('\n');
+    const out = sanitizeFileContent(src, 'resources/styles/common.less');
+    // 行内数据 URI 必须原样保留（若被剥掉，SVG 图标内容会永久丢失）
+    expect(out).toContain('</svg>');
+    expect(out).toContain('<svg');
+    expect(out).toBe(src);
+  });
+
+  it('a-table 剥离后幂等，且与 </style> 混合污染可一次清净', () => {
+    const mixed = '.a{color:red}\n</style>\n</a-table>\n.b{color:blue}\n';
+    const once = sanitizeFileContent(mixed, 'common.less');
+    expect(once).not.toContain('</style>');
+    expect(once).not.toContain('</a-table>');
+    expect(once).toContain('.a{color:red}');
+    expect(once).toContain('.b{color:blue}');
+    expect(sanitizeFileContent(once, 'common.less')).toBe(once);
+  });
 });
 
 /**

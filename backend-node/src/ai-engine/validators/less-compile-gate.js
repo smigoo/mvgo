@@ -593,7 +593,7 @@ function resolveImportLine(source, message) {
   return null
 }
 
-function toDiagnostic({ error, file, source, sourceType, styleIndex = null, lineOffset = 0 }) {
+function toDiagnostic({ error, file, source, sourceType, styleIndex = null, lineOffset = 0, importedFrom = null }) {
   // 仅当 LESS 自身没给出行号时（File 类错误）才用依赖路径反查，避免覆盖真实行号
   const rawLine = Number(error?.line) || resolveImportLine(source, error?.message) || 1
   const line = rawLine + lineOffset
@@ -613,6 +613,9 @@ function toDiagnostic({ error, file, source, sourceType, styleIndex = null, line
       : [],
     snippet: readSnippet(source, rawLine),
     styleIndex,
+    // 🎯 2026-10-05：报错来自 @import 链上的**另一个文件**时，记录引入方（调用方文件），
+    // 便于下游（重试提示 / 详情面板）说明「该错误由谁引入」，而 file/line 始终指向真实病灶。
+    importedFrom,
     hint: mixinHint,
     originalError: {
       type: error?.type || 'Parse',
@@ -844,13 +847,51 @@ export class LessCompileGate {
       }
     }
 
+    // 🎯 2026-10-05 报错归属修正（mc-max-1791132079721-6b655282 真机实锤）：
+    // less 对「@import 进来的文件内」的语法错误，给出的是**被导入文件**的 filename/line；
+    // 但旧实现无条件套用调用方的 `lineOffset`（.vue 的 <style> 起始行偏移）并把 file 写成调用方，
+    // ⇒ 同一处病灶（common.less:91）被每个 .vue 平移成 107 / 154 / 166 等**互不相同的假行号**，
+    //    顶层报错消息与 L0-B 修复提示（buildFixGuidance）随之指错文件，
+    //    下游按 issue.file 计算的 `_reviseFiles` 还会把 **4 个无辜 .vue** 列为重写目标（有改坏好代码的风险）。
+    // 修正：仅当 error.filename ≠ 当前编译文件、且该路径**确实存在**（内存 files map / 磁盘）时，
+    // 才认定「导入文件内报错」→ file 取相对 outputPath 的路径、行号以该文件为基准、lineOffset 归零。
+    // ⚠️ File 型错误（createFileManager 抛的「无法加载 LESS 依赖」）指向的是**找不到**的路径，
+    //    存在性检查会把它挡在外面 ⇒ 继续走「在当前源里反查 @import 行」的旧逻辑，语义不变
+    //    （snapshot-quality.service#collapseMissingImportDuplicates 依赖该语义，勿破）。
+    const resolveErrorOrigin = (error, file) => {
+      const compiledAbs = normalizePath(join(outputPath || '', file))
+      const errFile = error?.filename ? normalizePath(error.filename) : ''
+      if (!errFile || errFile === compiledAbs) return null
+      const rel = outputPath ? normalizePath(relative(outputPath, errFile)) : errFile
+      const memHit = files && typeof files === 'object' ? files[rel] : null
+      if (typeof memHit === 'string') return { file: rel, source: memHit }
+      try {
+        if (!existsSync(errFile)) return null
+        return { file: rel, source: readFileSync(errFile, 'utf-8') }
+      } catch {
+        return null
+      }
+    }
+
     const compile = async ({ file, source, sourceType, styleIndex = null, lineOffset = 0 }) => {
       const absoluteFilename = join(outputPath, file)
       const cleaned = stripMarkdownFence(source)
       const error = await renderSource(cleaned, absoluteFilename)
-      if (error) {
-        diagnostics.push(toDiagnostic({ error, file, source: cleaned, sourceType, styleIndex, lineOffset }))
+      if (!error) return
+      const origin = resolveErrorOrigin(error, file)
+      if (origin) {
+        diagnostics.push(toDiagnostic({
+          error,
+          file: origin.file,
+          source: origin.source,
+          sourceType,
+          styleIndex: null,
+          lineOffset: 0,
+          importedFrom: normalizePath(file),
+        }))
+        return
       }
+      diagnostics.push(toDiagnostic({ error, file, source: cleaned, sourceType, styleIndex, lineOffset }))
     }
 
     // 对单个 .vue 的 style 内容做「未闭合块注释」自动修复，并仅在修复后能干净编译时才写回磁盘。
@@ -992,11 +1033,32 @@ export class LessCompileGate {
   static buildFixGuidance(result) {
     const diagnostics = result?.diagnostics || []
     if (!diagnostics.length) return ''
+    // 🎯 2026-10-05：归属修正后，同一个真实病灶会由多个 @import 方各报一条（本次事故 6 条 → 同一
+    // `common.less:91`）。修复提示按 `file:line:column` 去重，并把各引入方合并到同一条，
+    // 避免模型看到 6 条近乎相同的指令而误判成「6 个文件都要改」。
+    const merged = new Map()
+    for (const item of diagnostics) {
+      const key = `${item.file}:${item.line}:${item.column}`
+      const hit = merged.get(key)
+      if (hit) {
+        if (item.importedFrom && !hit.importers.includes(item.importedFrom)) {
+          hit.importers.push(item.importedFrom)
+        }
+        continue
+      }
+      merged.set(key, {
+        ...item,
+        importers: item.importedFrom ? [item.importedFrom] : [],
+      })
+    }
     const lines = ['\n\n🔴 上次产物未通过 LESS 真实编译门禁。只修改下列文件并修复语法，不要改动布局与业务逻辑：']
-    diagnostics.forEach((item, index) => {
+    Array.from(merged.values()).forEach((item, index) => {
       lines.push(`${index + 1}. ${item.file}:${item.line}:${item.column} ${item.message}`)
       const current = item.snippet?.find(row => row.current)
       if (current) lines.push(`   错误代码：${current.code.trim()}`)
+      if (item.importers.length > 0) {
+        lines.push(`   引入方：${item.importers.join('、')} 通过 @import 引用了该文件 —— 请只修此文件，不要改引入方`)
+      }
       if (item.hint?.suggestion) lines.push(`   诊断建议：${item.hint.suggestion}`)
       // 变量未定义：不是语法错误，自动修复需明确给出补 import 的指引
       const varMatch = String(item.message || '').match(/variable @([\w-]+) is undefined/)

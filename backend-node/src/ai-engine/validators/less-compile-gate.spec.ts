@@ -117,4 +117,93 @@ describe('LessCompileGate.validateDirectory', () => {
     expect(healed).toContain('.c-x-title {')
     expect(healed).toContain('.c-x-chart {')
   })
+
+  // 🎯 2026-10-05 报错归属修正（mc-max-1791132079721-6b655282 真机实锤）：
+  //   common.less:5 残留 `</a-table>`（SFC 模板闭合标签泄漏进 .less）→ LESS Unrecognised input。
+  //   旧实现把 `error.line` 无条件加上调用方 .vue 的 <style> 行偏移 → 同一病灶被平移成
+  //   107 / 154 / 166 等互不相同的**假行号**，且归错文件，下游 `_reviseFiles` 还会把无辜 .vue
+  //   列为重写目标。修正后：file/line 一律指向真实病灶，引入方记在 `importedFrom`。
+  it('⭐ 归属修正：@import 链内报错归到真实文件与真实行号，不再平移成 .vue 假行号', async () => {
+    await writeFile(
+      join(root, 'package', 'index.vue'),
+      `<template><div class="root" /></template>\n<style lang="less" scoped>@import '../resources/styles/index.less';</style>`,
+      'utf-8',
+    )
+    await writeFile(
+      join(root, 'resources', 'styles', 'index.less'),
+      [
+        "@import './themes/theme-vars.less';",
+        '.common();',
+        '.theme-dark();',
+        "@import (multiple) './common.less';",
+        '',
+      ].join('\n'),
+      'utf-8',
+    )
+    await writeFile(
+      join(root, 'resources', 'styles', 'themes', 'theme-vars.less'),
+      `.common() { @font-cn: Arial; }\n.theme-dark() { @text: #fff; }\n`,
+      'utf-8',
+    )
+    await writeFile(
+      join(root, 'resources', 'styles', 'common.less'),
+      [
+        '.root {',
+        '  color: @text;',
+        '  font-family: @font-cn;',
+        '}',
+        '</a-table>',
+        '',
+      ].join('\n'),
+      'utf-8',
+    )
+
+    const result = await LessCompileGate.validateDirectory(root)
+    const blocks = result.diagnostics.filter(d => d.severity === 'BLOCK')
+
+    expect(result.pass).toBe(false)
+    expect(blocks.length).toBeGreaterThan(0)
+    // ① 全部 BLOCK 都指向真实病灶文件，不再归到任何 .vue
+    expect(blocks.every(b => b.file === 'resources/styles/common.less')).toBe(true)
+    expect(blocks.some(b => String(b.file).endsWith('.vue'))).toBe(false)
+    // ② 行号是真值（第 5 行），没有被 .vue 的 <style> 偏移放大
+    expect(blocks.every(b => b.line === 5)).toBe(true)
+    // ③ 引入方被记录（谁 @import 了它）
+    expect(blocks.some(b => b.importedFrom === 'package/index.vue')).toBe(true)
+    expect(blocks.some(b => b.importedFrom === 'resources/styles/index.less')).toBe(true)
+
+    // ④ 修复提示：按定位去重（同一病灶只出现一条编号项）+ 说明引入方 + 不再出现 .vue 假定位
+    const guidance = LessCompileGate.buildFixGuidance(result)
+    expect(guidance).toContain('resources/styles/common.less:5:1')
+    expect(guidance).toContain('引入方')
+    expect(guidance).not.toMatch(/index\.vue:\d+/)
+    expect(guidance.match(/resources\/styles\/common\.less:5:1/g)?.length).toBe(1)
+  })
+
+  it('不越界：.vue 自身 <style> 的语法错误仍归属该 .vue，且保留 <style> 行偏移', async () => {
+    await writeFile(
+      join(root, 'package', 'index.vue'),
+      [
+        '<template><div class="root" /></template>',
+        '<style lang="less" scoped>',
+        '.a {',
+        '  color: red;',
+        '}',
+        '</a-table>',
+        '</style>',
+        '',
+      ].join('\n'),
+      'utf-8',
+    )
+
+    const result = await LessCompileGate.validateDirectory(root)
+    const blocks = result.diagnostics.filter(d => d.severity === 'BLOCK')
+
+    expect(result.pass).toBe(false)
+    expect(blocks).toHaveLength(1)
+    // 文件第 6 行 = `</a-table>`（offset = <style> 起始行 - 1 = 1）
+    expect(blocks[0].file).toBe('package/index.vue')
+    expect(blocks[0].line).toBe(6)
+    expect(blocks[0].importedFrom).toBeNull()
+  })
 })
