@@ -66,14 +66,19 @@ export function extractAndPrepareLiteMicrocodeStyles(vueCode, componentName = 'c
 
   // 4. 构建最终的 index.vue：非 scoped 的 @import + 业务样式
   // 关键：不使用 scoped，让主题变量能传播到子组件
+  // 🛡️ 2026-10-08 路径修复（实锤 mc-lite-1791444257203-34be6be9 / c-add-product-34be6be9）：
+  //   index.vue 落在 package/ 下，@import 以**文件自身位置**解析——写 './resources/...'
+  //   会被解析成 package/resources/styles/index.less（不存在）→ 预览 LESS 编译 404。
+  //   标准布局 styles 在组件根 resources/styles/，必须上跳一级 '../resources/...'
+  //   （与 max 路径产物、lite.service.ts:3282 修复分支同款；M4-8 检查按子串匹配不受影响）。
   const styleBlock = processedStyles
     ? `<style lang="less">
-@import './resources/styles/index.less';
+@import '../resources/styles/index.less';
 
 ${processedStyles}
 </style>`
     : `<style lang="less">
-@import './resources/styles/index.less';
+@import '../resources/styles/index.less';
 </style>`;
 
   stats.importInjected = true;

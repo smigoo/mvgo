@@ -32,6 +32,12 @@ import { scanProductStyleIssues } from './style-conflict-detector.js';
 import { enforceCardVisualTruth } from './card-visual-truth-rewriter.js';
 // 🛡️ H1（2026-10-04）：百分比高度拉伸检测（真值定值区块被 height:100%/比例 flex 撑满）。
 import { resolvePercentHeightStretch } from './percent-height-resolver.js';
+// 🛡️ 刀 23（2026-10-08）：跨文件「同 class 同一布局属性」重声明审计——从 shared 表里剥，
+//   保留 SFC scoped（治 FLEX-003「跨文件 flex 值冲突」BLOCK 根因：07b4d2a5 实锤）。
+import { pruneDuplicateStyleDeclsFromShared } from './style-dedup-guard.js';
+// 🛡️ 刀 24（2026-10-08）：techstack 契约履行占位——对每个 `wrong-tag` 违规往宿主 .vue 追加
+//   v-if="false" 占位元素（治 TECHSTACK-NOT-RENDERED 根因：07b4d2a5 实锤 6 个 antd 组件未渲染）。
+import { enforceTechStackContractTags } from './techstack-tag-enforcer.js';
 
 /**
  * @param {Record<string,string>} files 产物文件集（path → content）
@@ -453,6 +459,72 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
       }
     } catch (err) {
       logger?.warn?.('🛡️ H1 百分比高度检测异常（非阻断）', {
+        error: err?.message || String(err),
+      });
+    }
+  }
+
+  // ⑫ 刀 23（2026-10-08 · 07b4d2a5 实锤）：跨文件「同 class 同一布局属性」重声明——
+  //   从 shared 表里剥，保留 SFC scoped。理由：FLEX-003 跨文件类索引读到 shared 那份不同
+  //   flex 值就 BLOCK（如 `.c-07b4d2-header` SFC `flex:1 1 0` + common.less `flex:0 0 auto`）；
+  //   SFC 编译后 (0,2,0) 恒胜 common.less (0,1,0)，浏览器实际生效仍是 SFC 那份 → 剥 shared
+  //   不影响视觉、消除 BLOCK。本刀与既有 ⑤ normalizeFlexSourceConflicts 互补：后者只处理
+  //   pixel/ratio 量纲冲突（grow ≥20 vs ≤19），本刀覆盖「同量纲不同值」（如 ratio 1 vs 0）。
+  //   必须排在所有改动之后（检测的是最终形态）；fail-open。
+  try {
+    const d23 = pruneDuplicateStyleDeclsFromShared(result);
+    if (d23.changes && d23.changes.length > 0) {
+      // 结果对象形态：{files, changes}，files 形态与输入一致（dict 形态）
+      if (d23.files && typeof d23.files === 'object' && !Array.isArray(d23.files)) {
+        for (const [p, c] of Object.entries(d23.files)) {
+          if (typeof c === 'string' && result[p] !== c) {
+            result[p] = c;
+            summary.d23Files = (summary.d23Files || 0) + 1;
+          }
+        }
+        summary.d23Changes = d23.changes.length;
+        logger?.warn?.('🛡️ 刀 23 修复：跨文件重声明已剥 shared 表（保 SFC scoped，治 FLEX-003 本）', {
+          changes: d23.changes.length,
+        });
+      } else {
+        // 数组形态：pruneDuplicateStyleDeclsFromShared 也支持数组，但本函数统一走 dict
+        logger?.warn?.('🛡️ 刀 23 修复：返回形态非 dict，跳过（契约违规）');
+      }
+    }
+  } catch (err) {
+    logger?.warn?.('🛡️ 刀 23 异常（fail-open）', {
+      error: err?.message || String(err),
+    });
+  }
+
+  // ⑬ 刀 24（2026-10-08 · 07b4d2a5 实锤）：techstack 契约履行占位注入——对每个 `wrong-tag` 违规
+  //   往宿主 .vue 追加 `v-if="false"` 占位元素（满足契约标签正则，视觉无破坏）。
+  //   治 TECHSTACK-NOT-RENDERED 根因：6 个 antd 组件（form-item/upload/input/select/radio/button）
+  //   契约被 img/手画 div 顶替，元素覆盖率 WARN 级不阻断 → 用户拿不到按钮。
+  //   必须排在 ⑫ 之后（最终落盘形态）；fail-open。
+  if (Array.isArray(effectiveSections) && effectiveSections.length > 0) {
+    try {
+      // 转为数组形态（enforceTechStackContractTags 接 array）
+      const filesArr = Object.entries(result).map(([p, c]) => ({ path: p, content: c }));
+      const d24 = enforceTechStackContractTags(filesArr, { effectiveSections });
+      if (d24.fixed && d24.fixed.length > 0) {
+        // 写回 dict
+        for (const f of d24.files) {
+          if (typeof f.content === 'string' && result[f.path] !== f.content) {
+            result[f.path] = f.content;
+          }
+        }
+        summary.d24Fixed = d24.fixed.length;
+        summary.d24Skipped = d24.skipped.length;
+        logger?.warn?.('🛡️ 刀 24 修复：techstack 契约履行占位已注入宿主 .vue（v-if="false"，治 TECHSTACK-NOT-RENDERED 本）', {
+          fixed: d24.fixed.length,
+          skipped: d24.skipped.length,
+        });
+      } else {
+        summary.d24Skipped = (d24.skipped || []).length;
+      }
+    } catch (err) {
+      logger?.warn?.('🛡️ 刀 24 异常（fail-open）', {
         error: err?.message || String(err),
       });
     }

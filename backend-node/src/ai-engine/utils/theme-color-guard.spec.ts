@@ -767,4 +767,36 @@ describe('collectThemeSlotNames / healBusinessStyleVarsInCss（2026-09-29 P0-C �
     expect(out).toContain('padding: 8px;');
     expect(out).not.toContain('var(--gap');
   });
+
+  // 🛡️ 2026-10-08 治本（实锤 c-a54c97-a54c975f）：桥接声明行 `@x: var(--x)` 若被替换
+  // 会变成 `@x: @x` → LESS「Recursive variable definition」→ 整组件编译失败。
+  it('桥接声明行 @x: var(--x) 原样保留（不产生递归定义，实锤 c-a54c97 common.less:1）', () => {
+    const css = '@fontSize: var(--fontSize);\n.a { font-size: @fontSize; }';
+    const out = healBusinessStyleVarsInCss(css, collectThemeSlotNames(tv));
+    expect(out).toContain('@fontSize: var(--fontSize);');
+    expect(out).not.toContain('@fontSize: @fontSize');
+    expect(out).toContain('.a { font-size: @fontSize; }');
+  });
+
+  it('声明行引用**其它**槽位仍照常替换（@titleSize: var(--fontSize) → @titleSize: @fontSize）', () => {
+    const css = '@titleSize: var(--fontSize);\n@colorTextBase: var(--colorTextBase);';
+    const out = healBusinessStyleVarsInCss(css, collectThemeSlotNames(tv));
+    expect(out).toContain('@titleSize: @fontSize;');
+    // tv 里 colorTextBase 的槽名是 kebab（color-text-base）≠ 声明名 colorTextBase → 照常替换，无递归
+    expect(out).toContain('@colorTextBase: @color-text-base;');
+  });
+
+  it('多行文本逐行处理：桥接行保留、普通行替换互不干扰', () => {
+    const css = [
+      '@fontSize: var(--fontSize);',
+      '.card {',
+      '  color: var(--colorTextBase);',
+      '  font-size: var(--fontSize);',
+      '}',
+    ].join('\n');
+    const out = healBusinessStyleVarsInCss(css, collectThemeSlotNames(tv));
+    expect(out.split('\n')[0]).toBe('@fontSize: var(--fontSize);');
+    expect(out).toContain('color: @color-text-base;');
+    expect(out).toContain('font-size: @fontSize;');
+  });
 })

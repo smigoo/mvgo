@@ -26,6 +26,8 @@
 9. **坐标轴刻度/标签必须还原（axisLabel）**：`xAxis`/`yAxis` 的 `axisLabel.show` 必须为 `true` 且渲染**真实刻度**——Y 轴数值（如 `40/30/20/10/0`）、X 轴时间/类目（如 `2/4/.../24`）；`axisTick.show` 必须为 `true`；`data` 必须取自 Figma 节点树的真实文本，**禁止 `data: []` 空数组**；需单位时用 `name`（如 `name: '时'`）。坐标轴标签缺失（空轴/无刻度数字）即判定不合格。
 10. **坐标轴必须用数组格式（xAxis/yAxis 数组）**：`xAxis`/`yAxis` 一律写 `xAxis: [{ ... }]` 数组格式，**禁止对象格式 `xAxis: { ... }`**（部分 ECharts 版本会报 `xAxis "0" not found`）；`series` 中 cartesian 系列（bar/line/scatter 等）**必须显式写 `xAxisIndex: 0, yAxisIndex: 0`**，且索引为数字**禁止字符串 `'0'`**。
 11. **禁止 LESS 变量泄漏进 JS formatter**：`tooltip.formatter` / `axisLabel.formatter` 等 JS 回调返回的内联 HTML `style` 中，**禁止出现 `@fontSize` 等 LESS 变量**（浏览器无法解析 `calc(@fontSize * ...)` 会静默丢字号）；需要用字体大小时写 `calc(var(--fontSize, 14px) * N)` 或直接硬编码 px。
+12. **per-series 类型契约（seriesTypes）**：charts[] 的 `seriesTypes` 数组与 series 顺序一一对应——**折线系列必须写 `type:'line'`，禁止写成 `type:'bar'`**（实锤 5edb480b：治理率/回用率折线被写成 bar，折线视觉完全消失）。`smooth`/`symbol`/`lineStyle.width` 等折线属性只允许出现在 line 系列。
+13. **echarts 文字色必须走主题槽位变量**：`legend.textStyle.color`、`axisLabel.color`、`tooltip.textStyle.color` 等一切**文字颜色**禁止硬编码色值（实锤 feb1f87a：`#EDF4FB` 暗色文字在浅色底对比度≈0），一律引用 theme-vars.less 中 `.theme-dark()`/`.theme-light()` 已定义的 **Less 槽位变量**（kebab-case，如 `@color-text-primary` / `@color-text-secondary`；槽位不存在时先在两套主题 mixin 里各补一个真值再引用）。**禁止写 `var(--colorXxx, fallback)` 直引 CSS 变量**（实锤 c-122f11：平台不注入这些名字 → fallback 恒生效 → 切主题零响应，THEME-VAR-NAME-MISMATCH 直接 BLOCK）；轴线/分割线颜色（axisLine/splitLine）以 charts[].axisStyle 为准，不属于文字色。
 
 参考示例：
 ```vue

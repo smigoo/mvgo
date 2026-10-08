@@ -440,6 +440,189 @@ async function detectFrontendUrl() {
 }
 
 /**
+ * WP3 渲染探针（2026-10-08，治 RC4 门禁盲区）——页内只读 DOM 事实探测。
+ *
+ * 设计约束：
+ * - 【自包含函数】本函数体由 Puppeteer page.evaluate 序列化到浏览器执行，
+ *   内部不得引用任何外部作用域标识符（helper 全部内联定义）。
+ * - 【只输出事实】五项探测全部只读、不判定对错：输出 DOM 事实（选择器短描 + 数值），
+ *   供人工/后续管线评审，绝不 addBlock、不进 runtimeGate.issues。
+ * - 【与盘读版正交】graph 钩子 scanOrphanResources 判源码引用层（import 了但未引用）；
+ *   本探针判运行时 DOM 层（引用了但没渲染出来）。HTTP 加载失败已由 RUNTIME-007/008 覆盖，
+ *   本探针不做源码引用判定、不做网络判定——避免同一属性双源双判。
+ *
+ * 五项探测（对应方案文档 WP3）：
+ *   1. emptyImg      img[src=""] 空源占位（治 feb1f87a 图标消失）
+ *   2. lowContrast   文字对有效背景对比度 < 阈值（治 7106503f，阈值走 config）
+ *   3. clipped       内容溢出且被 overflow hidden/auto/scroll 祖先裁切（治 11afe1c9 tab 裁切）
+ *   4. collapsedText 有文本但可见尺寸 < 4px 的塌缩槽（治 header-right 8px 类问题）
+ *   5. chartNoEcharts 图表命名容器有占位面积但无 canvas/svg/echarts 实例（治 N2 兜底面）
+ *
+ * @param {{contrastMin:number}} options
+ * @returns {object} 探测结果（各项数组，含上限控制，总输出 < ~8KB）
+ */
+function collectRenderProbesInPage(options) {
+  const contrastMin = (options && options.contrastMin) || 3.0
+  const out = {
+    probedAt: Date.now(),
+    stageRect: null,
+    emptyImg: [],
+    lowContrast: [],
+    clipped: [],
+    collapsedText: [],
+    chartNoEcharts: [],
+  }
+  // stage 必须在函数内部查询（page.evaluate 序列化后无外部作用域）
+  const stageEl = document.querySelector('.mc-preview-stage')
+  if (!stageEl) return { skipped: 'no-stage' }
+  try {
+    const sRect = stageEl.getBoundingClientRect()
+    out.stageRect = { w: Math.round(sRect.width), h: Math.round(sRect.height) }
+  } catch (_) { /* 事实缺失不阻断 */ }
+
+  const desc = (el) => {
+    let cls = ''
+    try { cls = (typeof el.className === 'string' ? el.className : '').trim() } catch (_) {}
+    return (el.tagName || '').toLowerCase() + (cls ? '.' + cls.split(/\s+/).slice(0, 3).join('.') : '')
+  }
+  const hasDirectText = (el) => {
+    for (const node of el.childNodes) {
+      if (node.nodeType === 3 && node.textContent && node.textContent.trim()) return true
+    }
+    return false
+  }
+  const parseRgb = (s) => {
+    if (!s) return null
+    const m = s.match(/rgba?\(([^)]+)\)/)
+    if (!m) return null
+    const parts = m[1].split(',').map((v) => parseFloat(v))
+    if (parts.length < 3 || parts.some((v) => Number.isNaN(v))) return null
+    return { r: parts[0], g: parts[1], b: parts[2], a: parts.length > 3 ? parts[3] : 1 }
+  }
+  const chan = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4) }
+  const lum = (c) => 0.2126 * chan(c.r) + 0.7152 * chan(c.g) + 0.0722 * chan(c.b)
+  const ratioOf = (c1, c2) => {
+    const l1 = lum(c1); const l2 = lum(c2)
+    return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05)
+  }
+
+  // 1. img 空源（DOM 属性事实，与加载成败无关；加载失败走 RUNTIME-007/008）
+  for (const img of stageEl.querySelectorAll('img')) {
+    if (out.emptyImg.length >= 20) break
+    const src = (img.getAttribute('src') || '').trim()
+    if (!src || src === '#') {
+      out.emptyImg.push({ el: desc(img), alt: img.getAttribute('alt') || '' })
+    }
+  }
+
+  let scanned = 0
+  const SCAN_CAP = 800
+  const all = stageEl.querySelectorAll('*')
+
+  // 2. 文字对比度：只算完全不透明文字 vs 最近不透明纯色背景；
+  //    任一祖先（含自身）背景为图片/渐变（background-image 非 none）则跳过（无法可靠判定）。
+  for (const el of all) {
+    if (++scanned > SCAN_CAP || out.lowContrast.length >= 20) break
+    if (!hasDirectText(el)) continue
+    let cs
+    try { cs = getComputedStyle(el) } catch (_) { continue }
+    if (cs.display === 'none' || cs.visibility === 'hidden' || Number(cs.opacity) < 0.1) continue
+    const fg = parseRgb(cs.color)
+    if (!fg || fg.a < 0.9) continue
+    let bg = null
+    let node = el
+    let bgUncertain = false
+    while (node && node !== stageEl.parentElement) {
+      let ncs
+      try { ncs = getComputedStyle(node) } catch (_) { node = node.parentElement; continue }
+      if (ncs.backgroundImage && ncs.backgroundImage !== 'none') { bgUncertain = true; break }
+      const bc = parseRgb(ncs.backgroundColor)
+      if (bc && bc.a >= 0.9) { bg = bc; break }
+      node = node.parentElement
+    }
+    if (bgUncertain || !bg) continue
+    const ratio = ratioOf(fg, bg)
+    if (ratio < contrastMin) {
+      out.lowContrast.push({
+        el: desc(el),
+        text: (el.textContent || '').trim().slice(0, 24),
+        ratio: Math.round(ratio * 100) / 100,
+        fg: cs.color,
+        bg: 'rgb(' + bg.r + ',' + bg.g + ',' + bg.b + ')',
+      })
+    }
+  }
+
+  // 3. 溢出被裁：scroll > client + 2px 且存在 overflow hidden/clip/auto/scroll 祖先；
+  //    若元素自身就是裁切容器（如 tab 横排溢出容器），by 记自身——否则会漏记最常见场景。
+  scanned = 0
+  for (const el of all) {
+    if (++scanned > SCAN_CAP || out.clipped.length >= 20) break
+    if (el === stageEl) continue
+    let cs
+    try { cs = getComputedStyle(el) } catch (_) { continue }
+    if (cs.display === 'none' || cs.visibility === 'hidden') continue
+    const sw = el.scrollWidth; const cw = el.clientWidth
+    const sh = el.scrollHeight; const ch = el.clientHeight
+    if (sw <= cw + 2 && sh <= ch + 2) continue
+    const OV_RX = /(^|\s)(hidden|clip|auto|scroll)(\s|$)/
+    let by = null
+    const selfOv = String(cs.overflow) + ' ' + String(cs.overflowX) + ' ' + String(cs.overflowY)
+    if (OV_RX.test(selfOv)) {
+      by = desc(el) + '(self)'
+    } else {
+      let anc = el.parentElement
+      while (anc && anc !== stageEl.parentElement) {
+        let acs
+        try { acs = getComputedStyle(anc) } catch (_) { anc = anc.parentElement; continue }
+        const ov = String(acs.overflow) + ' ' + String(acs.overflowX) + ' ' + String(acs.overflowY)
+        if (OV_RX.test(ov)) { by = desc(anc); break }
+        anc = anc.parentElement
+      }
+    }
+    if (!by) continue
+    out.clipped.push({
+      el: desc(el),
+      by,
+      sw, cw, sh, ch,
+      text: (el.textContent || '').trim().slice(0, 24),
+    })
+  }
+
+  // 4. 塌缩文本槽：有直接文本但可见宽或高 < 4px（只记直接文本元素，避免父子重复）
+  scanned = 0
+  for (const el of all) {
+    if (++scanned > SCAN_CAP || out.collapsedText.length >= 20) break
+    if (el === stageEl) continue
+    if (!hasDirectText(el)) continue
+    let cs
+    try { cs = getComputedStyle(el) } catch (_) { continue }
+    if (cs.display === 'none' || cs.visibility === 'hidden' || Number(cs.opacity) < 0.1) continue
+    const rect = el.getBoundingClientRect()
+    if (rect.width >= 4 && rect.height >= 4) continue
+    out.collapsedText.push({
+      el: desc(el),
+      w: Math.round(rect.width * 10) / 10,
+      h: Math.round(rect.height * 10) / 10,
+      text: (el.textContent || '').trim().slice(0, 24),
+    })
+  }
+
+  // 5. 图表占位无 echarts：chart 命名容器有面积但无 canvas/svg/实例属性
+  for (const el of stageEl.querySelectorAll('[class*="chart"], [id*="chart"], [class*="echart"]')) {
+    if (out.chartNoEcharts.length >= 10) break
+    let rect
+    try { rect = el.getBoundingClientRect() } catch (_) { continue }
+    if (rect.width * rect.height < 1000) continue
+    if (el.querySelector('canvas, svg')) continue
+    if (el.hasAttribute('_echarts_instance_')) continue
+    out.chartNoEcharts.push({ el: desc(el), w: Math.round(rect.width), h: Math.round(rect.height) })
+  }
+
+  return out
+}
+
+/**
  * 通过前端预览页渲染截图（真实 Vue 运行时）
  * @returns {Promise<string|null>} 截图路径
  */
@@ -461,7 +644,7 @@ async function renderViaPreviewPage({
   const frontendUrl = await detectFrontendUrl()
   if (!frontendUrl) {
     addBlock('RUNTIME-001', 'navigation', '真实预览页不可达', { candidates: getFrontendCandidates() })
-    return { renderedImage: null, runtimeGate: { status: 'BLOCK', issues, isStaticFallback: false } }
+    return { renderedImage: null, runtimeGate: { status: 'BLOCK', issues, isStaticFallback: false }, renderProbes: null }
   }
 
   // 保留基准 URL 的子路径（如 /mvgo）：用相对路径拼接，避免绝对路径覆盖掉子路径导致 404
@@ -675,6 +858,20 @@ async function renderViaPreviewPage({
     // 面板切换器隐藏后留一点重排时间
     await new Promise(resolve => setTimeout(resolve, 300))
 
+    // ── WP3 渲染探针（2026-10-08）：只读 DOM 事实探测，只留痕不阻断 ──
+    // 放在图片等待/重排之后，保证布局事实已定；环境开关 RENDER_PROBES_ENABLED=false 可整体关闭，
+    // 阈值 RENDER_PROBE_CONTRAST_MIN（默认 3.0）。探针失败绝不影响截图与门禁流程。
+    let renderProbes = null
+    if (process.env.RENDER_PROBES_ENABLED !== 'false') {
+      try {
+        const contrastMin = Number(process.env.RENDER_PROBE_CONTRAST_MIN || '3.0')
+        renderProbes = await page.evaluate(collectRenderProbesInPage, { contrastMin })
+      } catch (probeError) {
+        logger.warn('渲染探针执行失败（非阻断）', { error: probeError?.message || String(probeError) })
+        renderProbes = { error: probeError?.message || String(probeError) }
+      }
+    }
+
     const stageElement = await page.$('.mc-preview-stage')
     if (stageElement) {
       await stageElement.screenshot({ path: screenshotPath, omitBackground: false })
@@ -691,6 +888,7 @@ async function renderViaPreviewPage({
         isStaticFallback: false,
         previewUrl: previewUrl.href,
       },
+      renderProbes,
     }
   } catch (error) {
     addBlock('RUNTIME-011', 'renderer', `真实预览截图失败: ${error.message}`, { stack: error.stack || '' })
@@ -1144,6 +1342,7 @@ export async function renderScreenshot(params) {
         renderedImage: previewResult.renderedImage,
         isStaticFallback: false,
         runtimeGate: previewResult.runtimeGate,
+        renderProbes: previewResult.renderProbes || null,
       }
     }
 
@@ -1152,6 +1351,7 @@ export async function renderScreenshot(params) {
         renderedImage: null,
         isStaticFallback: false,
         runtimeGate: previewResult.runtimeGate,
+        renderProbes: previewResult.renderProbes || null,
       }
     }
 

@@ -962,13 +962,19 @@ async function loadProd() {
 
   await loadMicrocodeDeclare()
 
-  const [{ loadModule }, Vue, echarts, { $mcComponentBuilder }, BasePanel, lessMod] = await Promise.all([
+  const [{ loadModule }, Vue, echarts, { $mcComponentBuilder }, BasePanel, lessMod, antDesignVue] = await Promise.all([
     import('vue3-sfc-loader'),
     import('vue'),
     import('echarts'),
     import('@/utils/auto-import/common.js'),
     import('@/components/base-components/base-panel/index.vue'),
-    import('less')
+    import('less'),
+    // 🛡️ 2026-10-08 治本：预览白名单补注 ant-design-vue——Lite 线生成规范明确教表单类组件
+    // `import { Table as ATable } from 'ant-design-vue'`（lite.service.ts 生成规范），且
+    // loadVue3Runtime（Vue3 运行时）moduleCache 已注入该模块；本预览页漏注入 →
+    // 「找不到文件: ant-design-vue」→ 白名单报错（实锤 c-operation-logs-a7c6c270）。
+    // ant-design-vue v4 为 CSS-in-JS：组件样式随模块运行时注入 document.head，无需额外引 CSS。
+    import('ant-design-vue')
   ])
   // 🛡️ 2026-09-16：app 内置 less 编译器——微码子组件带 <style lang="less">，不预编译会触发
   // vue3-sfc-loader 的 getFile('less')（dev/prod 都无该资源 → 404 →「找不到文件: less」→ 组件加载失败）。
@@ -991,10 +997,15 @@ async function loadProd() {
     : `/${resolvedId}/package/index.vue`
 
   // 注入后端预编译好的 CSS（仅微码组件需要，Vue3 SFC 的 <style scoped> 由 vue3-sfc-loader 处理）
+  // 🛡️ 2026-10-08：记录 index.css 是否真的取到——Lite 线历史产物没有 index.css
+  // （P1.10 之后才有），此时不能剥 index.vue 的 <style>（precompileVueLess 已把它
+  // 编译成纯 CSS），否则样式全丢（实锤 mc-lite-1791457057133-19acf57d 整页无样式）。
+  let precompiledCssOk = false
   if (!isVue3) {
     try {
       const cssRes = await http.raw(`${base}/resources/styles/index.css`)
       if (cssRes.ok) {
+        precompiledCssOk = true
         const css = await cssRes.text()
         const style = document.createElement('style')
         style.setAttribute('data-preview-css', resolvedId)
@@ -1016,7 +1027,7 @@ async function loadProd() {
   }
 
   const options = {
-    moduleCache: { vue: Vue, echarts },
+    moduleCache: { vue: Vue, echarts, 'ant-design-vue': antDesignVue },
     async getFile(pathArg) {
       const p = String(pathArg)
       const rel = resolveRelPath(p)
@@ -1044,7 +1055,9 @@ async function loadProd() {
       src = await precompileVueLess(src, less, `${base}/${rel}`)
       // 微码组件：剥掉入口 .vue 的 <style> 块（CSS 已预编译注入 index.css）
       // Vue3 组件：保留 <style scoped>，由 vue3-sfc-loader 编译
-      if (!isVue3 && rel.endsWith('index.vue')) {
+      // 🛡️ 仅当 index.css 确实取到才剥——Lite 历史产物无 index.css，保留 style
+      // 块由 precompileVueLess 编译内联，避免「内容在但样式全丢」。
+      if (!isVue3 && rel.endsWith('index.vue') && precompiledCssOk) {
         src = src.replace(/<style[\s\S]*?<\/style>/gi, '')
       }
       return src

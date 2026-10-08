@@ -835,13 +835,10 @@ export function collectThemeSlotNames(themeVars) {
  */
 export function healBusinessStyleVarsInCss(css, slotNames) {
   if (typeof css !== 'string' || !slotNames || slotNames.size === 0) return css;
-  return css.replace(
-    // 🛡️ fallback 可能含嵌套括号（rgba(230, 237, 245, 1)），专门按颜色字面量形态匹配。
-    // 🛡️ 2026-09-26 治本 0.3-a：把「, fallback」改为**可选**——此前正则强制要求 fallback，
-    //   导致 **无 fallback 的 `var(--x)` 完全不匹配**（实测残留正是 `var(--fontSize)` /
-    //   `var(--colorWhite)` / `var(--colorTextBase)` 这类形态，占残留的大头）。
-    /var\(\s*--([a-zA-Z][\w-]*)\s*(?:,\s*((?:rgba?\([^)]*\)|#[0-9a-fA-F]{3,8}|[^)]+?))\s*)?\)/g,
-    (m, varName, fallback) => {
+  const VAR_RE = /var\(\s*--([a-zA-Z][\w-]*)\s*(?:,\s*((?:rgba?\([^)]*\)|#[0-9a-fA-F]{3,8}|[^)]+?))\s*)?\)/g;
+  // 原替换逻辑（kebab → exact-name → fallback），抽出来供声明行/普通行复用
+  const replaceIn = (text) =>
+    text.replace(VAR_RE, (m, varName, fallback) => {
       const kebab = camelToKebab(varName);
       if (slotNames.has(kebab)) return '@' + kebab;
       // 🛡️ 2026-09-26 治本 0.3-a：`.common()` 里的槽名是 **camelCase**（@fontSize / @fontWeightStrong），
@@ -851,8 +848,27 @@ export function healBusinessStyleVarsInCss(css, slotNames) {
       if (slotNames.has(varName)) return '@' + varName;
       if (fallback !== undefined && String(fallback).trim()) return String(fallback).trim();
       return m;
-    },
-  );
+    });
+  // 🛡️ 2026-10-08 治本（实锤 c-a54c97-a54c975f）：Less 变量**声明行**的值若恰为同名 var() 桥
+  // （`@fontSize: var(--fontSize)`——theme-vars 槽位的标准桥接形态，common.less 首行同类），
+  // 逐行处理时必须原样保留，否则替换后变成 `@fontSize: @fontSize` → LESS「Recursive variable
+  // definition」→ 刷新后整组件编译失败（桥接行本就是模式 B 的正确终态）。
+  // 非声明行行为完全不变；声明行中解析为**其它**槽位的 var() 照常替换（如 `@titleSize: var(--fontSize)`）。
+  return css
+    .split('\n')
+    .map((line) => {
+      const decl = line.match(/^\s*@([a-zA-Z][\w-]*)\s*:/);
+      if (!decl) return replaceIn(line);
+      return line.replace(VAR_RE, (m, varName, fallback) => {
+        const kebab = camelToKebab(varName);
+        const slotName = slotNames.has(kebab) ? kebab : slotNames.has(varName) ? varName : null;
+        if (slotName !== null && slotName === decl[1]) return m; // 🛡️ 同名桥接，保留原样
+        if (slotName !== null) return '@' + slotName;
+        if (fallback !== undefined && String(fallback).trim()) return String(fallback).trim();
+        return m;
+      });
+    })
+    .join('\n');
 }
 
 export function healBusinessStyleVarRefs(files, options = {}) {

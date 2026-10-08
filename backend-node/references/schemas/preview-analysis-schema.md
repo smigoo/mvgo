@@ -425,12 +425,23 @@
   "section": "示例隧道项目小时流量",
   "type": "双系列分组柱状图",
   "series": ["北京方向", "上海方向"],
+  "seriesTypes": ["bar", "bar"],
   "legend": ["北京方向", "上海方向"],
   "legendPosition": "top-right",
   "seriesColors": ["#1890ff", "#52c41a"],
   "legendType": "horizontal",
   "axes": "X轴为小时，Y轴为车辆数",
   "tooltip": "截图中显示 16 时的瞬态提示框",
+  "gradient": { "direction": "vertical", "fromOpacity": 0.9, "toOpacity": 0.1 },
+  "barStyle": { "widthRatio": 0.5, "gapRatio": 0.4, "roundCorner": 3 },
+  "lineStyle": { "width": 2, "smooth": true, "showSymbol": true, "areaOpacity": 0.25 },
+  "pieStyle": { "innerRadiusRatio": 0.55 },
+  "axisStyle": {
+    "x": { "show": true, "lineColor": "#3a4a5a", "lineWidth": 1, "splitLine": { "show": false } },
+    "y": { "show": true, "lineColor": "#3a4a5a", "lineWidth": 1, "splitLine": { "show": true, "color": "#2a3a4a", "type": "dashed" } }
+  },
+  "legendStyle": { "icon": "roundRect", "sizeRatio": 0.8 },
+  "styleHints": { "pseudo3d": false, "hasBackground": "none", "shadow": false },
   "markLine": [
     {
       "axis": "y",
@@ -438,6 +449,7 @@
       "label": "预警线",
       "color": "#ff5555",
       "lineStyle": "dashed",
+      "width": 1,
       "labelPosition": "right"
     }
   ],
@@ -452,14 +464,35 @@
 | `section` | string | ✅ | 所属section的id | `"tunnel-flow"` |
 | `type` | string | ✅ | 图表类型 | `"bar"` / `"line"` / `"pie"` / `"area"` |
 | `series` | array | ✅ | 系列名称数组 | `["北京方向", "上海方向"]` |
+| `seriesTypes` | array | 🔴 | **逐系列类型数组（与 series 顺序一一对应）**：bar/line/pie/scatter/effectScatter。多系列图必填——折线被写成柱的根因防线 | `["bar", "bar", "line", "line"]` |
 | `legend` | array | ✅ | 图例文本数组（可为空，见下方一致性规则） | `["北京方向", "上海方向"]` |
 | `legendPosition` | string | 🔴 | **图例位置（有图例时必填）** | `"top-right"` / `"bottom-center"` / `"right"` |
 | `seriesColors` | array | 🔴 | **系列颜色数组（有系列时必填）** | `["#1890ff", "#52c41a"]` |
 | `legendType` | string | 🔴 | **图例布局类型（有图例时必填）** | `"horizontal"` / `"vertical"` |
+| `gradient` | object | ⚪ | 渐变预估（柱/面积/环）：direction（vertical/horizontal）+ fromOpacity/toOpacity（0-1） | 见上 |
+| `barStyle` | object | ⚪ | 柱形态预估：widthRatio（柱宽/类目槽 0-1）、gapRatio（组内间距比）、roundCorner（px 预估） | 见上 |
+| `lineStyle` | object | ⚪ | 折线/面积形态预估：width(px)、smooth、showSymbol、areaOpacity(0-1) | 见上 |
+| `pieStyle` | object | ⚪ | 饼/环形态预估：innerRadiusRatio（内半径比，环厚度关键事实） | 见上 |
+| `axisStyle` | object | ⚪ | 轴样式预估（xy 显隐、轴线颜色粗细、分割线显隐/颜色/线型）。**只允许轴线/分割线颜色，禁止任何文字颜色** | 见上 |
+| `legendStyle` | object | ⚪ | 图例形态预估：icon（circle/roundRect/line）、sizeRatio(0-1 相对大小)。**禁止文字颜色** | 见上 |
+| `styleHints` | object | ⚪ | 风格预估：pseudo3d（伪3D/立体感，只做风格描述）、hasBackground（none/solid/image）、shadow | 见上 |
 | `axes` | string | ⚠️ | 坐标轴说明（坐标系图表必填） | `"X轴为小时，Y轴为车辆数"` |
 | `tooltip` | string | ✅ | tooltip说明 | `"显示时间点、流量"` |
 | `markLine` | array | ⚠️ | **阈值/预警线（画布内横线竖线必填）** | 见下方 `markLine` 结构 |
 | `notes` | array | ✅ | 其他备注（**不作为结构事实源**） | `["有橙色虚线"]` |
+
+#### 🔴 chartSpec 像素字段红线（2026-10-08 新增）
+
+1. **全部字段可选、不可辨则省略**：预估尽量还原，但**禁止凭空捏造**（宁缺勿造；缺省时下游按默认渲染）。
+2. **禁止数值/文本数据字段**：刻度值、系列数值、data 数组、labels 等一律**不得**出现在 charts[]（数据归 Figma TEXT / chartDataHints 单源）。下游会对混入数据字段留痕。
+3. **禁止文字颜色**：legend 文字、轴标签、任何文字的颜色一律走主题 CSS 变量，chartSpec（含 axisStyle/legendStyle）**不允许出现 labelColor/textColor**。实锤 feb1f87a：legend.textStyle 硬编码 #EDF4FB 在浅色底上对比度≈0。
+4. **seriesTypes 与 series 顺序严格一一对应**；无法逐系列辨清时宁可不填（留痕），禁止猜测补齐。
+5. **同组件多图通常共享色板**：seriesColors 跨图两两无同色相时下游会留痕提示，发现同色系请保持一致。
+
+#### ⚠️ 瞬态 tooltip vs 静态数据卡（2026-10-08 判据补全，RC8）
+
+`tooltip` 字段只描述**悬浮瞬态提示**（半透明、跟随鼠标、带三角指针、无独立边框标题的浮层）。
+设计稿中**刻意排版的静态信息卡**（有实体边框/投影/固定位置/常驻显示的数据卡，如实锤 5edb480b 的「收费站 468吨/436吨/治理率10%/回用率5%」卡片）**不是 tooltip**——必须作为 section 的 body.children 独立元素逐项输出（label+value），禁止丢弃或写进 tooltip 字段。
 
 ### `markLine` 结构（画布内阈值线）
 
@@ -473,6 +506,7 @@
 | `label` | string | ⚠️ | 线旁标注文字（设计稿有则必填，无则省略） | `"预警线"` |
 | `color` | string | ✅ | 线颜色（取设计稿实测色） | `"#ff5555"` |
 | `lineStyle` | string | ⚠️ | 线型 | `"solid"` / `"dashed"` / `"dotted"` |
+| `width` | number | ⚪ | 线宽 px 预估（视觉可辨粗细差异时填写） | `2` |
 | `labelPosition` | string | ⚠️ | 标注方位（设计稿可见时填） | `"right"` / `"start"` / `"end"` / `"top"` |
 
 识别规则：

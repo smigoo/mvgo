@@ -353,7 +353,10 @@ async function fixItem(it: McSpecItem) {
 
 function openReport() {
   const url = result.value?.reportUrl
-  if (url) window.open(url, '_blank', 'noopener')
+  if (!url) return
+  // 报告是纯 HTML 静态文件，加 raw=1 跳过 SessionGuard（与预览图片同理）
+  const separator = url.includes('?') ? '&' : '?'
+  window.open(`${url}${separator}raw=1`, '_blank', 'noopener')
 }
 
 /** 打开 skill 管理弹窗（仅管理员入口） */

@@ -1,3 +1,24 @@
+// 🚨 本模块经新增 ⑬ techstack-tag-enforcer → element-coverage-validator → logger → config/backend-root.js
+//    链（用 import.meta.url，jest CJS 报 `Identifier '__filename' has already been declared`）⇒
+//    virtual mock 掉路径解析。与 element-coverage-validator.techstack.spec.ts 同口径。
+jest.mock('../../config/backend-root.js', () => ({
+  backendRoot: process.cwd(),
+  projectRoot: process.cwd(),
+  workspaceRoot: process.cwd() + '/workspace',
+  customComponentsDir: process.cwd() + '/workspace/custom-components',
+  vue3ComponentsDir: process.cwd() + '/workspace/vue3-components',
+  tempComponentsDir: process.cwd() + '/temp-components',
+  dataDir: process.cwd() + '/data',
+  logsDir: process.cwd() + '/logs',
+  configDir: process.cwd() + '/config',
+  chatAttachmentsDir: process.cwd() + '/temp-chat-attachments',
+  apifoxZipsDir: process.cwd() + '/data/apifox-zips',
+  apiCatalogsDir: process.cwd() + '/data/api-catalogs',
+  resolveFrontendWorkspacePath: () => process.cwd(),
+  frontendCustomComponentsDir: () => process.cwd(),
+  frontendVue3ComponentsDir: () => process.cwd(),
+}), { virtual: true })
+
 import { runPreWriteSelfHealing } from './pre-write-self-healing.js';
 import { injectResourceImports } from './resource-import-guard.js';
 

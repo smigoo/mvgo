@@ -130,10 +130,10 @@ export class FigmaConnector {
    */
   async _figmaApiGet(url, options = {}) {
     const {
-      timeoutMs = 90000,
+      timeoutMs = 120000,
       responseType,
       tag = 'figma-api',
-      maxRetries = 2,
+      maxRetries = 3,
       rateLimiter = this._rateLimiter,
     } = options;
 
@@ -237,7 +237,7 @@ export class FigmaConnector {
   async _figmaRequestWithRetry(url, options = {}) {
     const {
       maxRetries = 3,
-      timeoutMs = 90000,
+      timeoutMs = 120000,
       responseType,
       tag = 'figma-api',
     } = options;
@@ -311,13 +311,13 @@ export class FigmaConnector {
    * @param {number} maxRetries - 最大重试次数，默认 2（429 重试受全局冷却保护，1 次重试即够）
    * @returns {Promise<Object>} 节点 document 数据
    */
-  async fetchNodeData(fileKey, nodeId, maxRetries = 2) {
+  async fetchNodeData(fileKey, nodeId, maxRetries = 3) {
     logger.info('获取Figma节点数据', { fileKey, nodeId });
 
     // 转换nodeId格式：2-8417 -> 2:8417
     const apiNodeId = nodeId.replace(/-/g, ':');
     const url = `https://api.figma.com/v1/files/${fileKey}/nodes?ids=${apiNodeId}`;
-    const timeoutMs = 90000; // 90 秒超时（大组件节点树数据量大）
+    const timeoutMs = 120000; // 120 秒超时（大组件节点树数据量大，代理环境需更长）
 
     try {
       //走统一限流出站方法（含 429 全局冷却 + 长退避重试）

@@ -12,6 +12,10 @@
 
 import { formatFigmaStyleData } from '../../utils/figma-format.js';
 import { formatResourceMapping } from '../../utils/resource-mapping-formatter.js';
+// 📊 WP1（2026-10-08）：chartSpec 像素事实消费规则（两线共用单一来源）
+import { buildChartSpecPromptRules } from '../../utils/chart-spec.js';
+// 🧩 WP2（2026-10-08）：资源绑定契约（RC1/RC3/RC5/RC7，两线共用单一来源）
+import { buildResourceBindingPromptBlock } from '../../utils/resource-item-contract.js';
 import {
   collectLeafSections,
   formatSectionTreeForPrompt,
@@ -499,7 +503,11 @@ ${JSON.stringify(sm, null, 1)}
 
     if (charts && charts.length > 0) {
       prompt += `\n## 图表配置\n\`\`\`json\n${JSON.stringify(charts, null, 1)}\n\`\`\`\n`;
+      // 📊 WP1：chartSpec 像素事实消费规则（配色/per-series 类型/渐变/环厚/轴样式以 charts[] 为准）
+      prompt += buildChartSpecPromptRules({ chartCount: charts.length });
     }
+    // 🧩 WP2：资源绑定契约（卡片项 bg/icon 逐卡绑定 + 视觉序方向断言；不可辨返回空串零开销）
+    prompt += buildResourceBindingPromptBlock(resourceDomMapping);
     if (interactions && interactions.length > 0) {
       prompt += `\n## 交互配置\n\`\`\`json\n${JSON.stringify(interactions, null, 1)}\n\`\`\`\n`;
     }

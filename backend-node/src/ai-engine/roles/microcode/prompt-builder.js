@@ -40,6 +40,10 @@ import {
   extractResourceVarNames,
 } from '../../utils/resource-import-guard.js';
 import { buildRetryPrompt as buildRetryPromptBase } from '../../utils/retry-prompt.js';
+// 📊 WP1（2026-10-08）：chartSpec 像素事实消费规则（两线共用单一来源）
+import { buildChartSpecPromptRules } from '../../utils/chart-spec.js';
+// 🧩 WP2（2026-10-08）：资源绑定契约（RC1/RC3/RC5/RC7，两线共用单一来源）
+import { buildResourceBindingPromptBlock } from '../../utils/resource-item-contract.js';
 import { safeLogger } from '../../logger/safe-logger.js';
 // 🛡️ P0（2026-09-04）：注入 Figma 文字真值白名单，防止 LLM 臆造/OCR 误读文字
 import { collectFigmaTextTruth } from '../../utils/text-truth-guard.js';
@@ -216,9 +220,11 @@ ${
 \`\`\`json
 ${JSON.stringify(charts)}
 \`\`\`
+${buildChartSpecPromptRules({ chartCount: charts.length })}
 `
     : ''
 }
+${buildResourceBindingPromptBlock(resourceDomMapping)}
 ${
   input.chartDataHints && input.chartDataHints.length > 0
     ? `

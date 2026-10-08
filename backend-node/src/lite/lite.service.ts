@@ -22,6 +22,7 @@ import { join, dirname, relative, sep } from 'path';
 import { writeFile, mkdir, rm } from 'fs/promises';
 import { existsSync, lstatSync, readFileSync, readdirSync } from 'fs';
 import { validateVueSfcDirectory } from '../ai-engine/utils/sfc-syntax-validation.js';
+import { recompileIndexCss } from '../ai-engine/utils/index-css-recompiler.js';
 import { repairScopedThirdPartySelectors } from '../ai-engine/utils/css-sanitizer.js';
 import { dedupeScriptDeclarations, findDuplicateImports, findDuplicateScriptDeclarations } from '../ai-engine/utils/sfc-semantics.js';
 // 🆕 2026-09-04（方案 A/C）：组件语义命名工具——中文→语义映射 / 确定性唯一 componentId
@@ -514,7 +515,7 @@ export class LiteService {
         
         // 如果有业务样式，用它们覆盖空的 common.less 骨架
         if (businessStyles && businessStyles.trim().length > 0) {
-          skeleton['resources/styles/common.less'] = 
+          skeleton['resources/styles/common.less'] =
             `@import './themes/theme-vars.less';
 
 .common();
@@ -525,7 +526,54 @@ export class LiteService {
 ${businessStyles}
 `;
         }
-        
+
+        // 🛡️ P1.9（2026-10-08）：Lite 管线补齐 max 路径同款**写盘自愈**。
+        // 实锤 c-122f11（截图→微码 Lite，生产）：LLM 在 common.less 直引
+        // var(--colorPrimaryBg, ...) 等 15 处（模式 A 残留）→ THEME-VAR-NAME-MISMATCH
+        // >3 处 BLOCK → 三轮重试不收敛；FLEX-003 同名 class flex 双源冲突
+        // （scoped flex:1 vs common.less 0 0 auto）同场爆发。
+        // max 路径有 microcode-engineer 阶段4 自愈 + CodeFixPipeline 兜底，
+        // Lite 从未接入 → 门禁只报不修。此处与 max 同源：
+        //   ① healBusinessStyleVarRefs：var(--colorXxx[, fallback]) → @color-xxx 槽位
+        //     （覆盖 common.less 与 .vue，模式 A→B；槽位缺失时退化 fallback 字面量）
+        //   ② pruneDuplicateStyleDeclsFromShared（刀 23）：保留 SFC scoped 声明（浏览器
+        //     实际生效方），从 shared 表剥掉同名 class 的重复布局声明 → FLEX-003 跨文件
+        //     索引只剩一份值，不再 BLOCK（注意方向与 pruneDuplicateStyleDecls 相反）
+        try {
+          const { healBusinessStyleVarRefs } = await import(
+            '../ai-engine/utils/theme-color-guard.js'
+          );
+          const { pruneDuplicateStyleDeclsFromShared } = await import(
+            '../ai-engine/utils/style-dedup-guard.js'
+          );
+          const varFixed = healBusinessStyleVarRefs(skeleton, {
+            logger: this.logger,
+          });
+          const dedup = pruneDuplicateStyleDeclsFromShared(skeleton);
+          if (varFixed.length > 0 || dedup.changes.length > 0) {
+            this.logger.log(
+              `🛡️ P1.9 Lite 写盘自愈：var() 直引→槽位 ${varFixed.length} 个文件；` +
+                `FLEX-003 同名类布局冲突剥离 ${dedup.changes.length} 处`,
+            );
+          }
+        } catch (healErr) {
+          this.logger.warn('⚠️ P1.9 Lite 写盘自愈失败（非阻断）', {
+            error: healErr?.message || String(healErr),
+          });
+        }
+
+        // 🛡️ P1.9-③ @import 路径兜底归一（实锤 mc-lite-1791453941896-2a3e7584：extractor
+        //   修复上线前的旧 dist 仍产出 './resources/...' → 预览 LESS 编译 404）。
+        //   package/index.vue 落在 package/ 目录，styles 引用必须上跳一级（../resources/）。
+        //   放在写盘前对 skeleton 统一归一，不依赖 extractor 单点——任何生成分支写错都会被纠。
+        const idxKey = 'package/index.vue';
+        if (typeof skeleton[idxKey] === 'string' && skeleton[idxKey].includes("@import './resources/")) {
+          skeleton[idxKey] = skeleton[idxKey]
+            .split("@import './resources/")
+            .join("@import '../resources/");
+          this.logger.log('🛡️ P1.9-③ package/index.vue @import 路径兜底归一（./resources → ../resources）');
+        }
+
         for (const [rel, content] of Object.entries(skeleton) as [string, string][]) {
           const abs = join(outputPath, rel);
           await mkdir(dirname(abs), { recursive: true });
@@ -574,6 +622,22 @@ ${businessStyles}
         }, null, 2),
         'utf-8',
       );
+
+      // 🛡️ P1.10（2026-10-08）：Lite 微码产物补编译 resources/styles/index.css。
+      // 预览页对微码类型会剥掉 SFC <style> 并改为注入预编译 index.css（preview/index.vue）；
+      // mc-gen 线由 refiner 环节 recompileIndexCss 产出该文件，Lite 线此前从不编译 →
+      // 预览端样式全丢（实锤 mc-lite-1791457057133-19acf57d / c-add-product-2d52f7ea
+      // 「组件内容在但无任何样式」）。@import 路径已被 P1.9-③ 归一为 ../resources，可直编。
+      if (isMicrocode) {
+        try {
+          const cssOk = await recompileIndexCss(outputPath, this.logger as any);
+          if (cssOk) {
+            this.logger.log('🛡️ P1.10 Lite index.css 已编译产出（微码预览样式链路补齐）');
+          }
+        } catch (e) {
+          this.logger.warn('⚠️ P1.10 Lite index.css 编译失败（非阻断，前端预览有免剥兜底）', e as any);
+        }
+      }
 
       // Lite 完整文件组进入与 Max 一致的 revision 状态链。候选先发布到可回滚的
       // workspace 事务中供预览，只有本地 SFC/结构门禁明确通过才晋级 last-good。
@@ -2146,7 +2210,11 @@ ${extra ? `【布局补充】\n${extra}\n` : ''}
     - 内容必须完整可见（卡片/图标列表）：\`grid-template-rows: repeat(N, min-content)\` + 容器 \`overflow-y: auto\` + \`align-content: start\`，由容器内部滚动容纳全部内容；
     - 内容按画布剩余空间均分（图表/纯色块）：\`grid-template-rows: repeat(N, minmax(0, 1fr))\`。
     同时：grid/flex 中任何内容可能超过可用高度的容器（列表、网格、侧边栏导航）都必须成对写 \`min-height: 0\` + \`overflow-y: auto\`，**禁止内容把外层画布（height:100% 的根容器）撑出滚动/被裁切**。判定标准：根容器自身 scrollHeight 不得大于其 clientHeight。
-13. 必须完整输出 </template>、</script>、</style>，不要包含说明文字。
+13. **主题颜色规范（强制，防 THEME-VAR-NAME-MISMATCH / FLEX-003）**：
+    - 一切颜色（文字/背景/边框/阴影）**禁止写 \`var(--colorXxx, fallback)\` 直引 CSS 变量**——平台不注入这些名字，fallback 恒生效 → 切主题零响应，质量门禁直接 BLOCK（实锤 c-122f11：15 处 var() 直引三轮重试全部被拦）。
+    - 颜色一律引用主题槽位 Less 变量（theme-vars.less 的 \`.theme-dark()\`/\`.theme-light()\` 已定义）：\`@colorTextBase\`（正文文字）、\`@colorTextInverse\`（反色文字）、\`@colorBgPanel\`（面板背景）、\`@colorPrimary\`（主色）、\`@colorSecondary\`、\`@colorDanger\`、\`@colorBorder\`，写法如 \`color: @colorTextBase;\`。需要新颜色槽位时直接引用新名字（如 \`@colorBgCard\`），平台检查器会把缺失槽位补齐到两套主题。
+    - **同名 class 的布局属性（flex/width/height/min-*）只能写在一处**：要么 \`common.less\`（共享表）要么组件 \`<style>\`，两处都写且值不同会触发 FLEX-003 BLOCK（scoped 优先级恒高，共享表成死样式）。图标/固定件写 \`flex: 0 0 auto\`，需要撑满的区块写 \`flex: 1\` 并成对 \`min-height: 0\`。
+14. 必须完整输出 </template>、</script>、</style>，不要包含说明文字。
 
 只输出一个 \`\`\`vue 代码块，里面是完整组件代码。`;
   }

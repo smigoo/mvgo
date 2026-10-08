@@ -1,6 +1,6 @@
 # mvgo 生产部署注意事项
 
-> 最后更新：2026-09-30 02:12  
+> 最后更新：2026-10-08 09:40  
 > 适用环境：阿里云 ECS `47.98.216.206:65522`
 
 ---
@@ -19,8 +19,14 @@
 
 | 容器 | 端口映射 | 用途 |
 |------|----------|------|
-| **nginx** | 80→80, 8888→8888 | 反向代理 + 静态文件服务 |
-| component-pc-portlet | 39680 | CAS 认证门户（iframe 包裹 mvgo） |
+| **nginx** | 80→80, 8282→8282, 8888→8888 | 反向代理 + 静态文件服务 |
+| **component-pc-portlet** | 39680 | CAS 认证门户（iframe 包裹 mvgo） |
+| **micro-cas** | 8666→8666 | CAS 认证服务 |
+| **nacos** | 8848→8848, 9848-9849→9848-9849 | 服务注册与配置中心 |
+| **rustfs** | 9000-9001→9000-9001 | 文件存储服务 |
+| **component-gateway-token** | - | 网关 token 服务 |
+
+**⚠️ 容器名注意**：Nginx 容器名是 `nginx`，不是 `mvgt-nginx`。
 
 ### 1.3 Nginx Volume 映射（关键）
 
@@ -34,6 +40,19 @@
 
 **⚠️ 重要**：前端构建产物必须部署到 `/home/mvbt/nginx/www/mvgo/`，**不是** `/home/mvbt/mvgo/frontend/dist/`。
 
+### 1.4 Nginx 配置结构
+
+```
+/etc/nginx/nginx.conf          # 主配置，include vhost/*.conf
+/etc/nginx/conf.d/default.conf # 默认静态文件服务（无 /api 转发）
+/etc/nginx/vhost/gzxj.conf     # ⭐ 实际路由配置（go.microvideo.cn 完整规则，20KB）
+```
+
+**查看路由配置**：
+```bash
+docker exec nginx cat /etc/nginx/vhost/gzxj.conf | grep -A 5 "location /api"
+```
+
 ---
 
 ## 二、部署流程
@@ -41,9 +60,9 @@
 ### 2.1 前端部署
 
 ```bash
-# 1. 本地构建
+# 1. 本地构建（Node 版本已更新为 22.22.2-5）
 cd /Users/smigoo/工作/mvgo/frontend
-env -i PATH="/Users/smigoo/.workbuddy/binaries/node/versions/22.22.2-3/bin:/usr/local/bin:/usr/bin:/bin" HOME="/Users/smigoo" \
+env -i PATH="/Users/smigoo/.workbuddy/binaries/node/versions/22.22.2-5/bin:/usr/local/bin:/usr/bin:/bin" HOME="/Users/smigoo" \
   npx vite build --mode production
 
 # 2. 打包
@@ -67,9 +86,9 @@ stat /home/mvbt/nginx/www/mvgo/index.html  # 检查修改时间
 ### 2.2 Node 后端部署
 
 ```bash
-# 1. 本地构建
+# 1. 本地构建（Node 版本已更新为 22.22.2-5）
 cd /Users/smigoo/工作/mvgo/backend-node
-env -i PATH="/Users/smigoo/.workbuddy/binaries/node/versions/22.22.2-3/bin:/usr/local/bin:/usr/bin:/bin" HOME="/Users/smigoo" \
+env -i PATH="/Users/smigoo/.workbuddy/binaries/node/versions/22.22.2-5/bin:/usr/local/bin:/usr/bin:/bin" HOME="/Users/smigoo" \
   npm run build
 
 # 2. 打包
@@ -125,26 +144,65 @@ location ~ ^/workbench(/.*)?$ { return 301 /mvgo/workbench$1; }
 # ... 其他路由
 ```
 
-### 3.2 API 路由转发
+### 3.2 API 路由转发（2026-10-08 确认）
 
-**Node 13030**（必须在 `/api` 之前定义）：
-```nginx
-location /api/tasks { proxy_pass http://192.168.112.1:13030; }
-location /api/progress { proxy_pass http://192.168.112.1:13030; }
-location /api/component { proxy_pass http://192.168.112.1:13030; }
-location /api/lite { proxy_pass http://192.168.112.1:13030; }
-location /api/workbench { proxy_pass http://192.168.112.1:13030; }
-# ... 其他 Node 路由
-```
+**配置文件**：`/etc/nginx/vhost/gzxj.conf`（宿主机 `/home/mvbt/nginx/vhost/gzxj.conf`，20KB）
 
-**Java 8080**（默认 `/api` 转发）：
+**路由优先级**：Nginx 按 location 块定义顺序匹配，精确路径优先于前缀匹配。
+
+#### Java 8080 路由
+
 ```nginx
-location /api {
+location /api/auth { 
+    proxy_pass http://192.168.112.1:8080/api/auth;
+    # 包含：/api/auth/current, /api/auth/register 等
+}
+
+location /api { 
     proxy_pass http://192.168.112.1:8080/api;
+    # 默认兜底：所有未明确指定的 /api/* 路由
 }
 ```
 
-**⚠️ 顺序很重要**：Node 路由必须写在 `location /api` 之前，否则会被 Java 拦截。
+#### Node 13030 路由（26 个）
+
+**⚠️ 必须在 `location /api` 之前定义，否则会被 Java 拦截**
+
+| 路由 | 备注 |
+|------|------|
+| `/api/phase2` | 组件生成主接口（含 figma-preview） |
+| `/api/tasks` | 任务管理 |
+| `/api/progress` | SSE 进度推送 |
+| `/api/component` | 组件 CRUD |
+| `/api/lite` | Lite 快速生成 |
+| `/api/workbench` | 工作台 |
+| `/api/chat` | AI 对话 |
+| `/api/workflows` | 工作流 |
+| `/api/page-generator` | 页面生成 |
+| `/api/recipes` | 配方 |
+| `/api/screen-layout` | 大屏布局 |
+| `/api/vue3` | Vue3 生成 |
+| `/api/preview` | 预览 |
+| `/api/apifox` | Apifox 集成 |
+| `/api/config` | 配置 |
+| `/api/agent-builder` | Agent 构建器 |
+| `/api/announcements` | 公告 |
+| `/api/token-usage` | Token 用量 |
+| `/api/page-skeleton` | 页面骨架 |
+| `/api/demo` | 演示 |
+| `/api/admin` | 管理 |
+| `/api/mc-spec` | 微码规格 |
+| `/api/microcode/doc` | 微码文档 |
+| `/api/user/git-credential` | Git 凭证 |
+| `/api/v2/pipeline` | 管线 v2 |
+| `/api/task-stats` | 任务统计 |
+
+**⚠️ 新增 Node 路由时**：必须在 `gzxj.conf` 中 `location /api` 之前添加对应的 `location` 块，否则请求会被 Java 8080 处理（返回 404）。
+
+**修改后重载 Nginx**：
+```bash
+docker exec nginx nginx -s reload
+```
 
 ### 3.3 静态文件服务
 
@@ -188,15 +246,18 @@ lsof -ti:13030 | xargs kill -9
 ### 4.4 日志查看
 
 ```bash
-# Node 日志
-tail -f /tmp/node.log
+# Node 日志（实际位置）
+tail -f /home/mvbt/mvgo/backend-node/logs/app-$(date +%Y-%m-%d).log
 
 # Java 日志
 tail -f /tmp/java.log
 
 # Nginx 日志
 docker exec nginx tail -f /etc/nginx/logs/proxy-access.log
+docker exec nginx tail -f /etc/nginx/logs/proxy-error.log
 ```
+
+**⚠️ 注意**：Node 日志不在 `/tmp/node.log` 也不在 `/home/mvbt/logs/`，而是在 `backend-node/logs/` 目录下。
 
 ### 4.5 前端路由跳转
 
@@ -223,6 +284,27 @@ getTaskStatus(@CurrentUser() userId: string, ...) {
 ```
 
 否则 `request.session` 为空，`userId` 抛 401。
+
+### 4.7 AuthController 已迁移到 Java（2026-10-08 确认）
+
+**Node 端**：`auth.module.ts` 中 `controllers: [/* AuthController -- 已迁 Java */]`，AuthController 已注释。
+
+**Nginx 配置**：
+```nginx
+location /api/auth { 
+    proxy_pass http://192.168.112.1:8080/api/auth;
+}
+```
+
+**影响**：
+- `/api/auth/current`、`/api/auth/register` 等路由由 **Java 后端（8080）** 处理
+- 直连 Node 13030 测试这些路由会返回 **404**（正常，不是 bug）
+- Nginx 通过 `location /api/auth` 明确转发到 Java 8080
+
+**排查 `/api/auth/current` 返回 401**：
+- 401 是 SessionGuard 正常行为（无有效 session）
+- 如果返回 404，检查 Nginx 是否正确转发到 Java（`docker exec nginx cat /etc/nginx/vhost/gzxj.conf | grep -A 5 "location /api/auth"`）
+- 测试命令：`curl -s http://127.0.0.1:8080/api/auth/current`（直连 Java）
 
 ---
 
@@ -295,9 +377,9 @@ tail -50 /tmp/node.log
 
 set -e
 
-echo "=== 构建前端 ==="
+echo "=== 构建前端（Node 22.22.2-5）==="
 cd /Users/smigoo/工作/mvgo/frontend
-env -i PATH="/Users/smigoo/.workbuddy/binaries/node/versions/22.22.2-3/bin:/usr/local/bin:/usr/bin:/bin" HOME="/Users/smigoo" \
+env -i PATH="/Users/smigoo/.workbuddy/binaries/node/versions/22.22.2-5/bin:/usr/local/bin:/usr/bin:/bin" HOME="/Users/smigoo" \
   npx vite build --mode production
 
 echo "=== 打包 ==="
@@ -324,9 +406,9 @@ EOF
 
 set -e
 
-echo "=== 构建 Node ==="
+echo "=== 构建 Node（Node 22.22.2-5）==="
 cd /Users/smigoo/工作/mvgo/backend-node
-env -i PATH="/Users/smigoo/.workbuddy/binaries/node/versions/22.22.2-3/bin:/usr/local/bin:/usr/bin:/bin" HOME="/Users/smigoo" \
+env -i PATH="/Users/smigoo/.workbuddy/binaries/node/versions/22.22.2-5/bin:/usr/local/bin:/usr/bin:/bin" HOME="/Users/smigoo" \
   npm run build
 
 echo "=== 打包 ==="

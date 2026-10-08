@@ -68,6 +68,12 @@ import { LessCompileGate } from '../validators/less-compile-gate.js';
 import { HeaderRelationValidator } from '../validators/header-relation-validator.js';
 import { HeaderSlotValidator } from '../validators/header-slot-validator.js';
 import { applyHeaderSlotContractRewrite } from '../utils/header-slot-contract.js';
+// 📊 WP1（2026-10-08）：chartSpec 红线留痕（与 phase2 图同款，独立字段只留痕不阻断）
+import { scanChartTextColors, validateChartSpec } from '../utils/chart-spec.js';
+// 🧩 WP2（2026-10-08）：绑定契约留痕（孤儿资源/主题变体值一致性），独立字段只留痕不阻断
+import { scanOrphanResources, scanThemeVariantParity } from '../utils/style-parity-guard.js';
+// 📐 WP4（2026-10-08）：收缩守卫留痕（百分比尺寸落在无保护 flex 子项/space-between 子项 floor 解除）
+import { scanFlexShrinkRisk } from '../utils/flex-shrink-guard.js';
 import { resolveNodeExclusivity } from '../utils/node-exclusivity.js';
 import { validateDoNotInvent } from '../validators/do-not-invent-validator.js';
 //  P0-2: 结构顺序门禁（零 LLM，防区块颠倒）
@@ -1150,7 +1156,7 @@ export function createPhase2Graph(config = {}) {
 
       //检查是否有预启动的截图任务
       const screenshotPromise = state._screenshotPromise;
-      let renderedImage, isStaticFallback, runtimeGate, visualFidelity;
+      let renderedImage, isStaticFallback, runtimeGate, visualFidelity, renderProbes;
 
       if (screenshotPromise) {
         logger.info('⏳ 等待预启动的截图任务完成...');
@@ -1165,6 +1171,7 @@ export function createPhase2Graph(config = {}) {
         isStaticFallback = result.isStaticFallback;
         runtimeGate = result.runtimeGate;
         visualFidelity = result.visualFidelity;
+        renderProbes = result.renderProbes || null;
       } else {
         logger.info('📷 无预启动任务,同步执行截图...');
         state.onProgress?.({
@@ -1195,6 +1202,7 @@ export function createPhase2Graph(config = {}) {
         isStaticFallback = result.isStaticFallback;
         runtimeGate = result.runtimeGate;
         visualFidelity = result.visualFidelity;
+        renderProbes = result.renderProbes || null;
       }
 
       let visualComparisonReport = null;
@@ -1262,6 +1270,8 @@ export function createPhase2Graph(config = {}) {
         runtimeGate,
         visualComparisonReport,
         visualFidelity,
+        // WP3 渲染探针（只读 DOM 事实，只留痕不阻断）
+        renderProbes,
       };
     } catch (error) {
       const runtimeGate = {
@@ -1659,6 +1669,9 @@ export function createPhase2Graph(config = {}) {
           runtimeVerified,
           // 7-A: visualFidelity — 用 ?? 防止 parallel-quality-check 的 undefined 覆盖 visual-comparator 的有效值
           ...(state.visualFidelity != null ? { visualFidelity: state.visualFidelity } : {}),
+          // WP3 渲染探针（2026-10-08）：只读 DOM 事实（img 空源/对比度/溢出裁切/塌缩槽/图表占位），
+          // 只留痕不阻断；探针 null（未跑/降级）则不写字段，避免覆盖旧值
+          ...(state.renderProbes ? { renderProbes: state.renderProbes } : {}),
           ...(runtimeVerified
             ? {}
             : {
@@ -1802,6 +1815,96 @@ export function createPhase2Graph(config = {}) {
     } catch (contentGuardErr) {
       logger.warn('⚠️ 内容映射守卫执行失败（非阻断）', {
         error: contentGuardErr?.message || String(contentGuardErr),
+      });
+    }
+
+    // 📊 WP1（2026-10-08）：chartSpec 红线留痕（与 phase2 图同款，检测类只留痕不阻断）
+    try {
+      // 判定域与守卫一致：从盘读 package/components/*.vue + package/index.vue
+      // （files 在上方守卫 try 块内 const 声明，此处不可见，禁止引用）
+      const { readFileSync: _rfsCs, existsSync: _exCs, writeFileSync: _wfsCs, readdirSync: _rdsCs } = await import('fs');
+      const { join: _jCs } = await import('path');
+      const csFiles = [];
+      try {
+        const compDir = _jCs(state.outputPath, 'package', 'components');
+        for (const name of _rdsCs(compDir)) {
+          if (/\.vue$/.test(name)) {
+            csFiles.push({ path: `package/components/${name}`, content: _rfsCs(_jCs(compDir, name), 'utf-8') });
+          }
+        }
+        const idxPath = _jCs(state.outputPath, 'package', 'index.vue');
+        if (_exCs(idxPath)) csFiles.push({ path: 'package/index.vue', content: _rfsCs(idxPath, 'utf-8') });
+        // WP2：主题变体一致性扫描需要编译产物 CSS。布局兼容两种形态：
+        //   组件根 resources/styles/（d9a0ab7d 实证的标准布局）优先，package/resources/styles 兜底
+        for (const stylesDir of [
+          _jCs(state.outputPath, 'resources', 'styles'),
+          _jCs(state.outputPath, 'package', 'resources', 'styles'),
+        ]) {
+          if (_exCs(stylesDir)) {
+            for (const name of _rdsCs(stylesDir)) {
+              if (/\.css$/.test(name)) {
+                csFiles.push({ path: `resources/styles/${name}`, content: _rfsCs(_jCs(stylesDir, name), 'utf-8') });
+              }
+            }
+          }
+        }
+      } catch (_) {
+        /* 盘读失败按空处理（fail-open） */
+      }
+      const textColors = scanChartTextColors(csFiles);
+      const specCheck = validateChartSpec(Array.isArray(state.charts) ? state.charts : []);
+      // 🧩 WP2：绑定契约留痕（孤儿资源 + 主题变体值一致性）
+      const _mapping = state.resourceDomMapping || state._uiCache?.resourceDomMapping;
+      const orphanCheck = scanOrphanResources(Array.isArray(_mapping) ? _mapping : [], csFiles);
+      const parityCheck = scanThemeVariantParity(csFiles);
+      const bindingContractIssues = {
+        orphanResources: orphanCheck.orphans,
+        themeVariantParity: parityCheck.violations,
+        checkedAt: Date.now(),
+      };
+      // 📐 WP4（2026-10-08）：收缩守卫留痕（RC2：百分比尺寸落在无保护 flex 子项 / space-between 子项 floor 解除）
+      let shrinkCheck = { issues: [] };
+      try {
+        shrinkCheck = scanFlexShrinkRisk(csFiles);
+      } catch (shrinkErr) {
+        logger.warn('⚠️ 收缩守卫扫描失败（非阻断，fail-open）', { error: shrinkErr?.message || String(shrinkErr) });
+      }
+      const flexShrinkIssues = {
+        issues: shrinkCheck.issues,
+        checkedAt: Date.now(),
+      };
+      const chartSpecIssues = {
+        textColors: textColors.violations,
+        specIssues: specCheck.issues,
+        checkedAt: Date.now(),
+      };
+      if (
+        chartSpecIssues.textColors.length > 0 ||
+        chartSpecIssues.specIssues.length > 0 ||
+        bindingContractIssues.orphanResources.length > 0 ||
+        bindingContractIssues.themeVariantParity.length > 0 ||
+        flexShrinkIssues.issues.length > 0
+      ) {
+        const metaPath = _jCs(state.outputPath, 'component-meta.json');
+        let prev = {};
+        try { prev = _exCs(metaPath) ? JSON.parse(_rfsCs(metaPath, 'utf-8')) : {}; } catch (_) {}
+        _wfsCs(metaPath, JSON.stringify({ ...prev, chartSpecIssues, bindingContractIssues, flexShrinkIssues }, null, 2), 'utf-8');
+        logger.warn('📊 chartSpec/绑定契约/收缩守卫红线留痕（详见 component-meta.json）', {
+          textColors: chartSpecIssues.textColors.length,
+          specIssues: chartSpecIssues.specIssues.length,
+          orphanResources: bindingContractIssues.orphanResources.length,
+          themeVariantParity: bindingContractIssues.themeVariantParity.length,
+          flexShrink: flexShrinkIssues.issues.length,
+        });
+        state.onProgress?.({
+          stage: '产物校验',
+          message: `⚠️ 图表契约留痕：${chartSpecIssues.textColors.length} 处文字色硬编码、${chartSpecIssues.specIssues.length} 处 chartSpec 违规、${bindingContractIssues.orphanResources.length} 个孤儿资源、${bindingContractIssues.themeVariantParity.length} 处主题变体同值、${flexShrinkIssues.issues.length} 处 flex 收缩风险（详见 component-meta.json）`,
+          status: 'warning',
+        });
+      }
+    } catch (chartSpecErr) {
+      logger.warn('⚠️ chartSpec 红线留痕执行失败（非阻断）', {
+        error: chartSpecErr?.message || String(chartSpecErr),
       });
     }
 
