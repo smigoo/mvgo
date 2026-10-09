@@ -54,7 +54,10 @@ describe('LessVariableChecker', () => {
     await writeFile(
       join(root, 'resources', 'styles', 'themes', 'theme-vars.less'),
       [
-        `.common() { @c-test-text: #333; }`,
+        // ⚠️ .common() 里刻意只放**非颜色**令牌：本用例的命题是「主题 mixin 已定义的变量
+        //    不要被复制进 .common()」。若放 `@c-test-text: #333`（值含色值字面量），
+        //    会先被 2026-10-09 的「.common() 颜色迁出」规则命中而改变 fixed 结果，混淆命题。
+        `.common() { @c-test-size: 16px; }`,
         `.theme-light() { @c-test-bg: #edf4fb; @c-test-primary: #1990ff; }`,
         `.theme-dark() { @c-test-bg: #1a2332; @c-test-primary: #44e4ff; }`,
         `.theme-light();`,
@@ -79,7 +82,7 @@ describe('LessVariableChecker', () => {
     expect(commonBlock[1]).not.toContain('@c-test-bg')
     expect(commonBlock[1]).not.toContain('@c-test-primary')
     // 原有变量保持不变
-    expect(content).toContain('@c-test-text: #333;')
+    expect(content).toContain('@c-test-size: 16px;')
   })
 
   it('任何 mixin 都未定义的颜色变量 → 补进两个主题 mixin（不进 .common()）', async () => {
@@ -244,8 +247,10 @@ describe('LessVariableChecker', () => {
     expect(content).toContain('@radius-x: 8px;')
   })
 
-  it('确定性自愈：清除 .common() 中被两个主题 mixin 定义的颜色变量（几何/字号令牌保留）', async () => {
-    // 场景：checker 历史行为把 theme mixin 的颜色变量复制进 .common() → 挡住主题覆盖
+  it('确定性自愈：.common() 颜色变量**迁出**到主题 mixin（双侧已定义直删，单侧缺失先补写）', async () => {
+    // 场景：checker 历史行为把 theme mixin 的颜色变量复制进 .common() → 挡住主题覆盖。
+    // 2026-10-09 放宽前置条件：不再只在「两个主题都已定义」时删，而是**先补写再删**——
+    // 颜色回到「主题 mixin 定义」的正确归属，且不产生未定义变量（可编译、外观不变）。
     await writeFile(
       join(root, 'package', 'index.vue'),
       `<template><div class="root"></div></template>\n<style lang="less" scoped>.root { color: @color-text-primary; }</style>`,
@@ -268,8 +273,12 @@ describe('LessVariableChecker', () => {
 
     const result = await LessVariableChecker.check(root)
 
-    // 只有「两个主题 mixin 都已定义」的颜色变量被移除
-    expect(result.healedCommonColorVars).toEqual(['color-text-primary'])
+    // 两个颜色变量都迁出：前者双侧已定义（直删），后者仅 light 定义（补进 dark 再删）
+    expect(result.healedCommonColorVars!.sort()).toEqual([
+      'color-only-light',
+      'color-text-primary',
+    ])
+    expect(result.injectedCommonColorVars).toContain('@color-only-light→.theme-dark()')
 
     const content = readFileSync(
       join(root, 'resources', 'styles', 'themes', 'theme-vars.less'),
@@ -278,13 +287,73 @@ describe('LessVariableChecker', () => {
     const commonBlock = content.match(/\.common\s*\(\s*\)\s*\{([^}]*)\}/)
     expect(commonBlock).not.toBeNull()
     expect(commonBlock![1]).not.toContain('@color-text-primary')
-    // 仅 light 定义 → 删掉会让 dark 缺值 → 保留
-    expect(commonBlock![1]).toContain('@color-only-light')
-    // 非颜色令牌保留
+    expect(commonBlock![1]).not.toContain('@color-only-light')
+    // 非颜色令牌保留（几何 / var() 透传）
     expect(commonBlock![1]).toContain('@fontSize')
     expect(commonBlock![1]).toContain('@border-radius-base')
-    // 两个主题 mixin 的定义不受影响
-    expect(content).toContain('.theme-dark() { @color-text-primary: #f2f2f2; }')
+    // 缺失侧被补写（值取自 .common() 原值 → 外观逐字不变）
+    const darkBlock = content.match(/\.theme-dark\s*\(\s*\)\s*\{([^}]*)\}/)
+    expect(darkBlock).not.toBeNull()
+    expect(darkBlock![1]).toMatch(/@color-only-light\s*:\s*#ffffff/)
+    // 原本就有的主题定义不受影响
+    expect(darkBlock![1]).toMatch(/@color-text-primary\s*:\s*#f2f2f2/)
+  })
+
+  it('确定性自愈（阴性对照）：.common() 只有尺寸令牌与 var() 透传 → 一处都不动', async () => {
+    await writeFile(
+      join(root, 'package', 'index.vue'),
+      `<template><div class="root"></div></template>\n<style lang="less" scoped>.root { color: var(--colorTextBase, @color-text-primary); }</style>`,
+      'utf-8',
+    )
+    await writeFile(
+      join(root, 'resources', 'styles', 'themes', 'theme-vars.less'),
+      [
+        '.common() {',
+        '  @fontSize: var(--fontSize);',
+        '  @border-radius-base: 4px;',
+        '  @colorTextBase: var(--colorTextBase);',
+        '}',
+        '.theme-light() { @color-text-primary: #333333; }',
+        '.theme-dark() { @color-text-primary: #f2f2f2; }',
+      ].join('\n'),
+      'utf-8',
+    )
+
+    const result = await LessVariableChecker.check(root)
+    expect(result.healedCommonColorVars).toEqual([])
+
+    const content = readFileSync(
+      join(root, 'resources', 'styles', 'themes', 'theme-vars.less'),
+      'utf-8',
+    )
+    const commonBlock = content.match(/\.common\s*\(\s*\)\s*\{([^}]*)\}/)
+    expect(commonBlock![1]).toContain('@fontSize')
+    expect(commonBlock![1]).toContain('@border-radius-base')
+    // var() 透传是「接入主题变量」形态 → 必须留在 .common()，搬走会断掉平台注入通道
+    expect(commonBlock![1]).toContain('@colorTextBase: var(--colorTextBase)')
+  })
+
+  it('确定性自愈（fail-open）：两个主题 mixin 都不存在 → 不动 .common()（不制造未定义变量）', async () => {
+    await writeFile(
+      join(root, 'package', 'index.vue'),
+      `<template><div class="root"></div></template>`,
+      'utf-8',
+    )
+    await writeFile(
+      join(root, 'resources', 'styles', 'themes', 'theme-vars.less'),
+      ['.common() {', '  @color-error: #ff4d4f;', '}'].join('\n'),
+      'utf-8',
+    )
+
+    const result = await LessVariableChecker.check(root)
+    expect(result.healedCommonColorVars).toEqual([])
+
+    const content = readFileSync(
+      join(root, 'resources', 'styles', 'themes', 'theme-vars.less'),
+      'utf-8',
+    )
+    // 没有可补写的目标 mixin → 保守保留（否则业务样式引用 @color-error 时编译失败）
+    expect(content.match(/\.common\s*\(\s*\)\s*\{([^}]*)\}/)![1]).toContain('@color-error')
   })
 
   it('框架预设名缺失 → 补进 .common() 为 var() 透传映射（不落真值）', async () => {

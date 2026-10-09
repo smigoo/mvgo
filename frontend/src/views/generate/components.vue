@@ -690,6 +690,40 @@
 
                 <!-- 预览 / 标注视图 -->
                 <div v-else class="html-preview-frame html-preview-frame--169">
+                  <!-- 响应式测试工具栏：模式切换 + 实时尺寸 + 档位 -->
+                  <div class="rz-toolbar">
+                    <div class="rz-seg" role="group" aria-label="预览模式">
+                      <button
+                        class="rz-seg-btn"
+                        :class="{ 'is-on': !responsiveTestMode }"
+                        @click="exitResponsiveMode"
+                      >保真</button>
+                      <button
+                        class="rz-seg-btn"
+                        :class="{ 'is-on': responsiveTestMode }"
+                        @click="responsiveTestMode = true"
+                      >响应式</button>
+                    </div>
+                    <template v-if="responsiveTestMode">
+                      <span class="rz-size" aria-live="polite">{{ frameResize.sizeLabel.value }}</span>
+                      <span class="rz-preset">{{ frameResize.presetName.value }}</span>
+                      <button
+                        class="rz-btn"
+                        v-for="vp in viewportPresets"
+                        :key="vp.key"
+                        :class="{ 'is-on': frameResize.presetName.value === vp.key }"
+                        :title="vp.label + '（锁定宽度）'"
+                        @click="frameResize.applyPreset(vp.key, vp.width, vp.height)"
+                      >{{ vp.short }}</button>
+                      <button
+                        v-if="frameResize.isWidthLocked.value"
+                        class="rz-btn"
+                        title="解锁宽度后可自由拖动"
+                        @click="frameResize.unlockWidth()"
+                      >解锁宽</button>
+                      <button class="rz-btn" title="恢复默认尺寸" @click="frameResize.resetSize()">重置</button>
+                    </template>
+                  </div>
                   <!-- 组件标签叠加层 -->
                   <div
                     v-if="splitComponents.length > 0"
@@ -710,13 +744,52 @@
                     </span>
                   </div>
                   <!-- 预览 iframe：分析后用标注 HTML（后端或前端生成），分析前用原始 HTML -->
-                  <iframe
-                    ref="previewIframeRef"
-                    :src="effectivePreviewUrl"
-                    class="html-preview-iframe"
-                    :key="previewUrlKey"
-                    @load="onPreviewIframeLoad"
-                  ></iframe>
+                  <div
+                    class="rz-canvas"
+                    :class="{ 'is-resizing': frameResize.isResizing.value }"
+                    :style="frameResize.bodyStyle.value"
+                  >
+                    <iframe
+                      ref="previewIframeRef"
+                      :src="effectivePreviewUrl"
+                      class="html-preview-iframe"
+                      :key="previewUrlKey"
+                      :style="previewFrameStyle"
+                      @load="onPreviewIframeLoad"
+                    ></iframe>
+                    <!-- 三向拖拽手柄：只增不减，避免与父级栅格布局打架 -->
+                    <template v-if="responsiveTestMode">
+                      <span class="rz-size-bubble" v-if="frameResize.showSizeBubble.value">
+                        {{ frameResize.sizeLabel.value }}
+                      </span>
+                      <!-- FR-6 越界提示：响应式测试的核心价值就是发现溢出，
+                           工具自己把溢出藏起来等于废掉价值（保真模式不显示）。 -->
+                      <span class="rz-overflow" v-if="frameResize.overflowPx.value > 0">
+                        内容超出视口 {{ frameResize.overflowPx.value }}px
+                      </span>
+                      <span
+                        class="rz-h rz-h--r" tabindex="0" role="separator"
+                        aria-label="调整预览宽度"
+                        @mousedown="frameResize.startResize($event, 'right')"
+                        @keydown="frameResize.onHandleKeydown($event, 'right')"
+                        @focus="frameResize.onHandleFocus"
+                      ></span>
+                      <span
+                        class="rz-h rz-h--b" tabindex="0" role="separator"
+                        aria-label="调整预览高度"
+                        @mousedown="frameResize.startResize($event, 'bottom')"
+                        @keydown="frameResize.onHandleKeydown($event, 'bottom')"
+                        @focus="frameResize.onHandleFocus"
+                      ></span>
+                      <span
+                        class="rz-h rz-h--c" tabindex="0" role="separator"
+                        aria-label="同时调整预览宽高"
+                        @mousedown="frameResize.startResize($event, 'corner')"
+                        @keydown="frameResize.onHandleKeydown($event, 'corner')"
+                        @focus="frameResize.onHandleFocus"
+                      ></span>
+                    </template>
+                  </div>
                 </div>
               </div>
 
@@ -816,6 +889,75 @@
             {{ busy ? '终止生成' : submitting ? '校验配置...' : generateButtonText }}
           </RippleButton>
         </div>
+
+        <!-- 高级选项折叠条：组件 ID / 补充提示词 / 需求文档 -->
+        <div class="adv-options" :class="{ open: advOpen, dark: panelType === 'aio-panel' }">
+          <button class="adv-toggle" type="button" :disabled="busy" @click="advOpen = !advOpen">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+            <span>高级选项</span>
+            <span v-for="chip in advSummaryChips" :key="chip" class="adv-chip">{{ chip }}</span>
+            <svg class="adv-caret" :class="{ up: advOpen }" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </button>
+          <div v-show="advOpen" class="adv-body">
+            <div class="adv-field">
+              <div class="adv-label-row">
+                <label>组件 ID</label>
+                <span class="adv-opt-tag">选填 · 不填自动生成</span>
+              </div>
+              <div class="adv-id-row">
+                <input
+                  v-model="advUserId"
+                  class="adv-id-input"
+                  type="text"
+                  maxlength="64"
+                  placeholder="如 c-sales-dashboard（小写字母/数字/短横线，以 c- 开头）"
+                  :disabled="busy"
+                />
+              </div>
+            </div>
+            <div class="adv-field">
+              <div class="adv-label-row">
+                <label>补充提示词</label>
+                <span class="adv-opt-tag">选填 · {{ advExtraPrompt.length }}/4000</span>
+              </div>
+              <textarea
+                v-model="advExtraPrompt"
+                class="adv-prompt-input"
+                rows="3"
+                maxlength="4000"
+                placeholder="对生成结果的额外要求，如：标题固定为「××」、图表用 ECharts。优先级低于 Figma 设计稿。"
+                :disabled="busy"
+              ></textarea>
+            </div>
+            <div class="adv-field">
+              <div class="adv-label-row">
+                <label>需求文档</label>
+                <span class="adv-opt-tag">选填 · .md / .txt / .html · ≤1MB</span>
+              </div>
+              <input
+                ref="advDocInput"
+                type="file"
+                accept=".md,.txt,.html"
+                style="display: none"
+                @change="onAdvDocPick"
+              />
+              <div v-if="advDocName" class="adv-doc-chip">
+                <span class="adv-doc-icon">📄</span>
+                <span class="adv-doc-name" :title="advDocName">{{ advDocName }}</span>
+                <button class="adv-doc-remove" type="button" @click="clearAdvDoc">✕</button>
+              </div>
+              <button v-else class="adv-doc-btn" type="button" :disabled="busy" @click="advDocInput?.click()">
+                + 上传需求文档
+              </button>
+            </div>
+          </div>
+        </div>
+
         <!-- 提示文字放最下面 -->
         <div v-if="compType === 'microcode'" class="theme-hint-row">
           <span
@@ -944,6 +1086,8 @@ import TierToggle from '@/components/common/TierToggle.vue'
 import CodeTypeToggle from '@/components/common/CodeTypeToggle.vue'
 import PanelThemeToggle from '@/components/common/PanelThemeToggle.vue'
 import RippleButton from '@/components/inspira-ui/RippleButton.vue'
+import { useResizableFrame } from '@/composables/useResizableFrame'
+import { PREVIEW_VIEWPORT_PRESETS } from '@/constants/previewViewports'
 import http from '@/core/http'
 
 // ═══ 状态 ═══
@@ -1003,6 +1147,38 @@ const cachedInlineHtml = ref('') // 缓存 buildInlineHtml 的输出（已内联
 const htmlError = ref('')
 const previewIframeRef = ref(null)
 const hoveredSplitIdx = ref(null)
+
+// ═══ 预览容器响应式调尺（响应式测试模式）═══
+// 本页的 doc-height 上报会写 iframe.style.height，与用户拖拽互相覆盖（R5）。
+// 解决：previewHeightLocked 为真时，上报不再改高度，高度由 useResizableFrame 独占。
+const previewHeightLocked = ref(false)
+const responsiveTestMode = ref(false)
+const viewportPresets = PREVIEW_VIEWPORT_PRESETS
+const frameResize = useResizableFrame({
+  componentId: '',
+  defaultWidth: 1280,
+  defaultHeight: 720,
+})
+// 用户一旦手动调尺（拖拽或选档位）→ 置锁定 + 进响应式模式，此后上报不再抢高度
+watch([frameResize.isResizing, frameResize.presetName], () => {
+  if (frameResize.isResizing.value || frameResize.presetName.value === 'custom') {
+    previewHeightLocked.value = true
+    responsiveTestMode.value = true
+  }
+})
+
+/** 预览画布样式：响应式模式用真实尺寸，否则交给 CSS 的 100% */
+const previewFrameStyle = computed(() => {
+  if (!responsiveTestMode.value) return undefined
+  return frameResize.frameStyle.value
+})
+
+/** 关闭响应式模式 → 交还高度控制权给 doc-height 上报 */
+function exitResponsiveMode() {
+  responsiveTestMode.value = false
+  previewHeightLocked.value = false
+  frameResize.resetSize()
+}
 // 拆分相关状态
 const htmlContentCache = ref('') // 缓存读取的 HTML 内容
 const splitPreviewHtml = ref('') // 带标注的预览 HTML
@@ -1044,6 +1220,43 @@ const panelType = ref('default-panel')
 const compName = ref('')
 const requirementDoc = ref('')
 const docAnalysis = ref(null)
+// ─── 高级选项（折叠条：组件 ID / 补充提示词 / 需求文档） ───
+const advOpen = ref(false)
+const advUserId = ref('')
+const advExtraPrompt = ref('')
+const advDocName = ref('')
+const advDocText = ref('')
+const advDocInput = ref<HTMLInputElement | null>(null)
+// 折叠条收起时的已填摘要
+const advSummaryChips = computed(() => {
+  const chips: string[] = []
+  if (advUserId.value.trim()) chips.push('ID')
+  if (advExtraPrompt.value.trim()) chips.push('提示词')
+  if (advDocText.value) chips.push('文档')
+  return chips
+})
+function onAdvDocPick(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input?.files?.[0]
+  if (!file) return
+  if (file.size > 1024 * 1024) {
+    htmlError.value = '需求文档超过 1MB，请精简后再上传'
+    input.value = ''
+    return
+  }
+  const reader = new FileReader()
+  reader.onload = () => {
+    advDocName.value = file.name
+    advDocText.value = String(reader.result || '')
+  }
+  reader.readAsText(file)
+  input.value = ''
+}
+function clearAdvDoc() {
+  advDocName.value = ''
+  advDocText.value = ''
+  if (advDocInput.value) advDocInput.value.value = ''
+}
 const busy = ref(false)
 const submitting = ref(false)
 const genMsg = ref('')
@@ -2146,7 +2359,14 @@ function setupIframeListener() {
     const { type, idx, height, cssSelector, htmlContent } = event.data || {}
 
     // iframe 文档高度上报 → 自适应高度
+    //
+    // 🔴 用户手动锁定高度后必须停止自动上报（否则「拖完弹回」）：
+    // 拖拽把高度定在 600px，iframe 随即上报 doc-height=900 又被拉回 900。
+    // 锁定后由 useResizableFrame 独占高度控制权。
     if (type === 'doc-height' && typeof height === 'number') {
+      // 顺手喂给 composable：响应式模式下用于「内容超出视口 Npx」提示（FR-6）
+      frameResize.setOverflowSource(height)
+      if (previewHeightLocked.value) return
       const iframe = previewIframeRef.value
       if (iframe) {
         iframe.style.height = Math.max(400, height) + 'px'
@@ -2493,6 +2713,10 @@ async function goSingle(aiConfig) {
   }
   if (compType.value === 'microcode') {
     p.panelType = panelType.value
+    // 高级选项三字段（仅微码生效）
+    if (advUserId.value.trim()) p.userComponentId = advUserId.value.trim()
+    if (advExtraPrompt.value.trim()) p.extraPrompt = advExtraPrompt.value.trim()
+    if (advDocText.value.trim()) p.requirementDocText = advDocText.value
   }
   if (requirementDoc.value.trim().length >= 20) {
     p.requirementDoc = requirementDoc.value
@@ -3784,6 +4008,141 @@ html[data-theme='dark'] .comp-label--hover {
   border: none;
   display: block;
 }
+
+/* ===================================================================
+ * 预览容器响应式调尺（响应式测试模式）
+ * 拖拽逻辑全部来自 composables/useResizableFrame（全仓唯一实现），
+ * 本处只负责手柄与工具栏的外观。
+ * =================================================================== */
+.rz-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 10px;
+  border-bottom: 0.5px solid var(--border-color, #e5e6eb);
+  background: var(--bg-secondary, #f7f8fa);
+  font-size: 12px;
+}
+.rz-seg {
+  display: inline-flex;
+  border: 0.5px solid var(--border-color, #d9dbe0);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.rz-seg-btn {
+  border: none;
+  background: #fff;
+  padding: 3px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--text-secondary, #5f5f6b);
+}
+.rz-seg-btn.is-on {
+  background: #185fa5;
+  color: #fff;
+}
+.rz-size {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.06);
+}
+.rz-preset {
+  color: var(--text-tertiary, #8a8a96);
+}
+.rz-btn {
+  border: 0.5px solid var(--border-color, #d9dbe0);
+  background: #fff;
+  border-radius: 6px;
+  padding: 2px 9px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--text-primary, #2c2c34);
+}
+.rz-btn:hover {
+  border-color: #185fa5;
+  color: #185fa5;
+}
+.rz-btn.is-on {
+  background: #faeeda;
+  border-color: #ba7517;
+  color: #633806;
+}
+/* 画布：响应式模式下撑开真实尺寸并横向滚动；保真模式维持原 16:9 布局 */
+.rz-canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+.rz-canvas.is-resizing {
+  /* 拖拽中禁止 iframe 内的鼠标事件抢占，保证 move 连续 */
+  pointer-events: none;
+}
+.rz-h {
+  position: absolute;
+  background: #185fa5;
+  border-radius: 2px;
+  opacity: 0.85;
+  z-index: 5;
+}
+.rz-h:hover,
+.rz-h:focus-visible {
+  opacity: 1;
+  outline: 2px solid rgba(24, 95, 165, 0.35);
+  outline-offset: 1px;
+}
+.rz-h--r {
+  right: -3px;
+  top: 50%;
+  width: 6px;
+  height: 34px;
+  transform: translateY(-50%);
+  cursor: ew-resize;
+}
+.rz-h--b {
+  bottom: -3px;
+  left: 50%;
+  width: 34px;
+  height: 6px;
+  transform: translateX(-50%);
+  cursor: ns-resize;
+}
+.rz-h--c {
+  right: -4px;
+  bottom: -4px;
+  width: 10px;
+  height: 10px;
+  cursor: nwse-resize;
+}
+.rz-size-bubble {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 6;
+  background: #185fa5;
+  color: #fff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  pointer-events: none;
+}
+/* 越界提示：内容高于视口时出现，让「溢出」这个被测对象显式可见 */
+.rz-overflow {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  z-index: 6;
+  background: #faeeda;
+  border: 1px solid #ef9f27;
+  color: #633806;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  pointer-events: none;
+}
 .docx-file-info {
   display: flex;
   align-items: center;
@@ -4402,6 +4761,196 @@ html[data-theme='dark'] .spinner--lg {
   font-weight: 700;
   color: inherit;
 }
+
+/* ══ 高级选项折叠条（组件 ID / 补充提示词 / 需求文档） ══ */
+.adv-options {
+  margin-bottom: var(--s3);
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #f9fafb;
+  overflow: hidden;
+  transition: border-color 0.15s ease;
+}
+.adv-options.open {
+  border-color: #d1d5db;
+}
+.adv-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  transition: color 0.15s ease;
+}
+.adv-toggle:hover:not(:disabled) {
+  color: #374151;
+}
+.adv-toggle:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.adv-caret {
+  margin-left: auto;
+  transition: transform 0.18s ease;
+}
+.adv-caret.up {
+  transform: rotate(180deg);
+}
+.adv-chip {
+  padding: 1px 8px;
+  border-radius: 9999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+.adv-body {
+  padding: 4px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.adv-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.adv-label-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.adv-label-row label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+}
+.adv-opt-tag {
+  font-size: 10px;
+  color: #9ca3af;
+}
+.adv-id-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.adv-id-input {
+  flex: 1;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 9999px;
+  background: #fff;
+  font-size: 12px;
+  color: #1f2937;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.adv-id-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+.adv-id-input::placeholder {
+  color: #c0c6d0;
+}
+.adv-prompt-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #1f2937;
+  outline: none;
+  resize: vertical;
+  min-height: 64px;
+  box-sizing: border-box;
+  font-family: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.adv-prompt-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+.adv-prompt-input::placeholder {
+  color: #c0c6d0;
+}
+.adv-doc-btn {
+  align-self: flex-start;
+  padding: 6px 14px;
+  border: 1px dashed #d1d5db;
+  border-radius: 9999px;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.adv-doc-btn:hover:not(:disabled) {
+  border-color: #3b82f6;
+  color: #2563eb;
+}
+.adv-doc-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.adv-doc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+}
+.adv-doc-icon {
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.adv-doc-name {
+  font-size: 12px;
+  color: #1d4ed8;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.adv-doc-remove {
+  border: none;
+  background: transparent;
+  color: #93c5fd;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.adv-doc-remove:hover {
+  color: #dc2626;
+}
+
+/* 深色面板主题（aio-panel）下折叠条配色 */
+.adv-options.dark {
+  border-color: #374151;
+  background: #f3f4f6;
+}
+.adv-options.dark .adv-toggle {
+  color: #4b5563;
+}
+.adv-options.dark .adv-label-row label {
+  color: #1f2937;
+}
+
 /* ══ CTA 按钮（:deep 穿透到 RippleButton 子组件）  */
 :deep(.cta) {
   flex: 1 1 auto;

@@ -27,7 +27,7 @@ import { repairScopedThirdPartySelectors } from '../ai-engine/utils/css-sanitize
 import { dedupeScriptDeclarations, findDuplicateImports, findDuplicateScriptDeclarations } from '../ai-engine/utils/sfc-semantics.js';
 // 🆕 2026-09-04（方案 A/C）：组件语义命名工具——中文→语义映射 / 确定性唯一 componentId
 // c-<语义>-<sessionId 尾 8hex>（与 max 管线同一契约）
-import { zhToSemanticEn, buildComponentId } from '../ai-engine/utils/component-naming.js';
+import { zhToSemanticEn, buildComponentId, normalizeUserComponentId } from '../ai-engine/utils/component-naming.js';
 // 🛡️ 2026-09-11 治本（LESS 编译竞态）：发布前对 outputPath 跑 Less 变量完整性检查器，
 // 把"被使用但未定义"的变量补进 theme-vars.less 的 .common()，保证候选快照自带可编译 LESS。
 import { LessVariableChecker } from '../ai-engine/validators/less-variable-checker.js';
@@ -440,7 +440,12 @@ export class LiteService {
         // c-<语义段>-<sessionId 尾 8hex>（如 c-equipment-monitor-43e7fe45，M1-1 合规），
         // 与 max 管线同一契约；语义段与 codegen prompt 的 class 前缀（c-${finalComponentName}-）
         // 同源，避免 id=编码 sessionId 时 class 前缀与 componentId 失配。
-        const uniqueComponentId = buildComponentId(
+        // 🆕 高级选项 P0：用户指定组件 ID 优先（normalizeUserComponentId 已保证
+        // c-<kebab> 无随机段；declare/目录/前缀全链路恒定，重生成不漂移）。
+        const userComponentIdNormalized = normalizeUserComponentId(
+          (dto as any).userComponentId,
+        );
+        const uniqueComponentId = userComponentIdNormalized || buildComponentId(
           finalComponentName || 'component',
           sessionId,
         );
@@ -669,7 +674,8 @@ ${businessStyles}
       // 与 declare 同源重建，保证「目录名 = declare = 组件记录 = 任务结果」四者一致。
       // ⚠️ vue3 分支目录本就是 sessionId（vue3-components/<gid>/<sessionId>），保持原样。
       const resultComponentId = isMicrocode
-        ? buildComponentId(finalComponentName || 'component', sessionId)
+        ? normalizeUserComponentId((dto as any).userComponentId) ||
+          buildComponentId(finalComponentName || 'component', sessionId)
         : sessionId;
       const workspacePath = isMicrocode
         ? join(resolveFrontendWorkspace(), 'custom-components', resultComponentId)
@@ -714,6 +720,7 @@ ${businessStyles}
         componentType,
         sourceType,
         generationTier,
+        (dto as any).userComponentId,
       ).catch((e) =>
         this.logger.warn(`组件记录保存失败(非阻塞): ${e.message}`),
       );
@@ -2163,6 +2170,12 @@ ${scaleNote}${textTruthNote}
     const extra = [dto.requirementDoc, dto.notes]
       .filter(Boolean)
       .join('\n');
+    // 🆕 高级选项 P0（2026-10-09）：用户补充提示词 + 需求文档文本（可选，防御截断）
+    const epUser = String((dto as any).extraPrompt || '').trim().slice(0, 4000);
+    const rdtUser = String((dto as any).requirementDocText || '').trim().slice(0, 20000);
+    const userAddendum = epUser || rdtUser
+      ? `\n【用户补充需求（用户显式输入，必须遵守；与设计稿视觉冲突时以设计稿为准，用户显式要求优先于平台默认规范）】\n${epUser ? `补充提示词：\n${epUser}\n` : ''}${rdtUser ? `需求文档要点：\n${rdtUser}\n` : ''}\n`
+      : '';
     return `你是一名 Vue3 布局还原工程师。请基于截图和结构化拆解，生成一个只负责静态布局还原的单文件组件。
 
 【组件名】${componentName}
@@ -2173,7 +2186,7 @@ ${designWidth && designHeight ? `【设计画布逻辑尺寸】${designWidth} ×
 ` : ''}【结构化拆解】
 ${briefJson}
 ${extra ? `【布局补充】\n${extra}\n` : ''}
-
+${userAddendum}
 硬性边界：
 0. **主题锚点铁律（P0-4）**：组件整体明暗风格由【结构化拆解】中的 theme 字段决定，不凭截图局部观感自行切换：
    - theme="light"：根容器背景必须用浅色（白/浅灰/浅蓝系，如 #FFFFFF / #F5F8FC），正文文字用深色（#1F2329 / #333333 系），禁止把根容器渲染成深色底。
@@ -2214,7 +2227,12 @@ ${extra ? `【布局补充】\n${extra}\n` : ''}
     - 一切颜色（文字/背景/边框/阴影）**禁止写 \`var(--colorXxx, fallback)\` 直引 CSS 变量**——平台不注入这些名字，fallback 恒生效 → 切主题零响应，质量门禁直接 BLOCK（实锤 c-122f11：15 处 var() 直引三轮重试全部被拦）。
     - 颜色一律引用主题槽位 Less 变量（theme-vars.less 的 \`.theme-dark()\`/\`.theme-light()\` 已定义）：\`@colorTextBase\`（正文文字）、\`@colorTextInverse\`（反色文字）、\`@colorBgPanel\`（面板背景）、\`@colorPrimary\`（主色）、\`@colorSecondary\`、\`@colorDanger\`、\`@colorBorder\`，写法如 \`color: @colorTextBase;\`。需要新颜色槽位时直接引用新名字（如 \`@colorBgCard\`），平台检查器会把缺失槽位补齐到两套主题。
     - **同名 class 的布局属性（flex/width/height/min-*）只能写在一处**：要么 \`common.less\`（共享表）要么组件 \`<style>\`，两处都写且值不同会触发 FLEX-003 BLOCK（scoped 优先级恒高，共享表成死样式）。图标/固定件写 \`flex: 0 0 auto\`，需要撑满的区块写 \`flex: 1\` 并成对 \`min-height: 0\`。
-14. 必须完整输出 </template>、</script>、</style>，不要包含说明文字。
+14. **常见 UI 控件 → antd 默认实现（U1 · 2026-10-09，实锤 c-c19746-c1974689 半真半假）**：截图中出现下述控件形态时**必须**用对应 Ant Design Vue 组件实现，**禁止手写 div/span 模仿组件 DOM 结构**（指纹：class 名中出现 \`antd-xxx\` / \`ant-design-vue-xxx\` 即不合格）：
+    - 表单成组（标签+必填星号+输入控件）→ \`<a-form>\` + \`<a-form-item>\`；输入框 → \`<a-input>\`、多行 → \`<a-textarea>\`、下拉 → \`<a-select>\`
+    - 上传区（虚线框+加号/「点击上传」）→ \`<a-upload>\`（拖拽形态用 a-upload-drag）；下载/导出按钮 → \`<a-button>\` + download 图标
+    - 分页器 → \`<a-pagination>\`；标签页 → \`<a-tabs>\`/\`<a-tab-pane>\`；搜索框 → \`<a-input-search>\`；开关 → \`<a-switch>\`；日期 → \`<a-date-picker>\`
+    - 已用 a-input/a-table 等真组件的其余部分不算达标——「半真半假」的结构模仿必须整体替换为真组件；覆盖内部 \`.ant-*\` 节点用 \`:deep(...)\`（同第 7 条）
+15. 必须完整输出 </template>、</script>、</style>，不要包含说明文字。
 
 只输出一个 \`\`\`vue 代码块，里面是完整组件代码。`;
   }
@@ -2890,6 +2908,7 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
     componentType: string = 'vue3',
     sourceType: LiteSourceType = 'screenshot',
     generationTier: LiteGenerationTier = LITE_SCREENSHOT_TIER,
+    userComponentId?: string, // 🆕 高级选项 P0：用户指定组件 ID（microcode 生效）
   ): Promise<void> {
     let resolvedCreatorId = userId;
     let resolvedGroupId = groupId;
@@ -2933,7 +2952,8 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
         // ⚠️ vue3 分支目录本就是 sessionId，保持原样。
         componentId:
           componentType === 'microcode'
-            ? buildComponentId(componentName || 'component', sessionId)
+            ? normalizeUserComponentId(userComponentId) ||
+              buildComponentId(componentName || 'component', sessionId)
             : sessionId,
         sessionId,
         sourceType,

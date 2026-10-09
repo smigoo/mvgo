@@ -10,6 +10,22 @@ import * as microcodeParser from './microcode/code-parser.js';
 import * as microcodeHealer from './microcode/code-healer.js';
 import * as microcodeWriter from './microcode/file-writer.js';
 import * as microcodePrompt from './microcode/prompt-builder.js';
+
+/**
+ * 🆕 高级选项 P0（2026-10-09）：用户补充需求 prompt 段。
+ * 两项都可选；超长防御截断（extraPrompt ≤4000 字 / 文档文本 ≤20000 字——DTO 层已限，
+ * 此处兜底防历史调用方绕过）。空内容返回空串（零开销）。
+ */
+function buildUserAddendumSection(extraPrompt, requirementDocText) {
+  const ep = String(extraPrompt || '').trim().slice(0, 4000);
+  const rd = String(requirementDocText || '').trim().slice(0, 20000);
+  if (!ep && !rd) return '';
+  let block = '\n\n# 📎 用户补充需求（高级选项，用户显式输入，必须遵守）\n\n';
+  block += '> 优先级：Figma @技术栈 锚点契约 > 本段 > 平台默认规范；与设计稿视觉冲突时以设计稿为准。\n\n';
+  if (ep) block += `## 补充提示词\n\n${ep}\n\n`;
+  if (rd) block += `## 需求文档（用户上传，要点必须落实）\n\n${rd}\n\n`;
+  return block;
+}
 import * as microcodeValidator from './microcode/code-validator.js';
 import * as microcodeGenerator from './microcode/code-generator.js';
 import * as microcodeResources from './microcode/resource-mounter.js';
@@ -811,6 +827,19 @@ export class MicrocodeEngineer extends BaseAgent {
       if (_trustGuidance) p += _trustGuidance;
       if (docDesignBlock) p += docDesignBlock; //S8: 文档设计注入（位于重试/技术栈之前，权威依据优先展示）
       if (_l0CodeRetryGuidance) p += _l0CodeRetryGuidance;
+      // 🆕 高级选项 P0（2026-10-09）：用户补充需求段（提示词 + 需求文档文本）——
+      // 紧跟裁决/文档权威段之后、默认规范之前，每个分块 prompt 都携带。
+      // 优先级契约：Figma @techstack 锚点 > 本段 > 默认规范；视觉保真是底线
+      //（与设计稿冲突时以设计稿为准，但用户显式要求优先于平台默认行为）。
+      // 🔧 修复：本箭头函数定义在 generateCode(input) 内，extraPrompt 走 input 透传
+      //  （execute 已组装进 input），裸标识符会 ReferenceError（真机实锤）。
+      {
+        const _userExtra = buildUserAddendumSection(
+          input.extraPrompt,
+          input.requirementDocText,
+        );
+        if (_userExtra) p += _userExtra;
+      }
       // 🛡️ 资源归属指导（方案5）：上一轮漏用背景时，本轮注入权威归属，避免背景漏用/挂错 section。
       if (input._attributionGuidance) p += input._attributionGuidance;
 
@@ -6159,6 +6188,9 @@ export class MicrocodeEngineer extends BaseAgent {
       generationInput = null, // 🆕 Context Assembler 裁决事实
       subComponentPlan = null, // 🛡️ 子组件规划（phase2 直传，execute 曾漏解构 → 下游 input is not defined）
       _attributionGuidance = null, // 🛡️ 资源归属指导（方案5，上一轮漏用背景的重试指导）
+      userComponentId = null, // 🆕 高级选项 P0：用户指定组件 ID（declare/前缀恒定）
+      extraPrompt = null, // 🆕 高级选项 P0：用户补充提示词
+      requirementDocText = null, // 🆕 高级选项 P0：需求文档文本
     } = params;
 
     // 🆕 2026-09-04：暂存 sessionId 供 normalizeDeclareJson 唯一化 componentId 使用
@@ -6312,6 +6344,10 @@ export class MicrocodeEngineer extends BaseAgent {
         _l0CodeRetryGuidance,
         // 🛡️ D 步：runChunk 读 input._reviseFiles，但字段一路叫 targetFiles——补映射对齐命名。
         _reviseFiles: targetFiles,
+        // 🆕 高级选项 P0：用户指定组件 ID / 补充需求（resolveDeclareComponentId 与 appendGlobalGuidance 消费）
+        userComponentId,
+        extraPrompt,
+        requirementDocText,
       });
 
       // 🛡️ 统一产物契约（mc-max-1787934982316 实锤，2026-08-29）：generateCode 三种返回形态：

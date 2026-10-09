@@ -255,6 +255,7 @@ import DocComparePanel from '@/components/doc-binding/DocComparePanel.vue'
 import MonacoEditor from '@/components/MonacoEditor.vue'
 import PreviewErrorBanner from '@/components/PreviewErrorBanner.vue'
 import { usePreviewErrorBridge } from '@/composables/usePreviewErrorBridge'
+import { findViewportPreset } from '@/constants/previewViewports'
 import { API_BINDING_REFRESH_EVENT } from '@/composables/useApiBindingBridge'
 import http from '@/core/http'
 
@@ -434,12 +435,28 @@ async function onDocOverwritten() {
   refreshPreview()
 }
 
-// 视口配置
+// 本页视口切换用的尺寸（取自单一数据源，CSS 里不再写死 375/768）
+const VIEWPORT_MOBILE = findViewportPreset('mobile-375')!
+const VIEWPORT_TABLET = findViewportPreset('tablet-768')!
+
+// 视口配置 —— 尺寸统一取自 constants/previewViewports（全仓唯一数据源），
+// 本页只做「档位 → 展示形态」的映射，不再自带一份字面量（R4）。
 const viewports = [
   { name: 'desktop', label: '桌面', icon: '', title: '桌面视图 (100%)' },
-  { name: 'tablet', label: '平板', icon: '', title: '平板视图 (768px)' },
-  { name: 'mobile', label: '手机', icon: '', title: '手机视图 (375px)' },
+  { name: 'tablet', label: '平板', icon: '', title: `平板视图 (${VIEWPORT_TABLET.width}px)` },
+  { name: 'mobile', label: '手机', icon: '', title: `手机视图 (${VIEWPORT_MOBILE.width}px)` },
 ]
+
+/** 档位尺寸样式：宽度/高度来自单一数据源，与拖拽调尺用同一套档位 */
+const viewportFrameStyle = computed(() => {
+  if (viewport.value === 'tablet') {
+    return { width: `${VIEWPORT_TABLET.width}px`, height: `${VIEWPORT_TABLET.height}px` }
+  }
+  if (viewport.value === 'mobile') {
+    return { width: `${VIEWPORT_MOBILE.width}px`, height: `${VIEWPORT_MOBILE.height}px` }
+  }
+  return undefined
+})
 
 // 预览URL（根据组件类型选择路由，带缓存破坏参数）
 const previewUrl = computed(() => {
@@ -470,8 +487,31 @@ const previewUrl = computed(() => {
 
 // 桌面视图下预览 iframe 按 Figma 原始尺寸 1:1 展示（原始多大就多大），保持比例
 // maxWidth:100% + aspect-ratio：容器窄于原始宽度时 iframe 自动等比收缩，绝不超出容器
+//
+// 平板/手机档位的宽高来自 constants/previewViewports（单一数据源），
+// 不再在 CSS 里写死 375/768/667 —— 否则新增档位必然漏改（R4）。
 const previewIframeStyle = computed(() => {
-  if (viewport.value !== 'desktop' || !figmaDimensions.value) return {}
+  if (viewport.value === 'tablet') {
+    return {
+      width: `${VIEWPORT_TABLET.width}px`,
+      height: `${VIEWPORT_TABLET.height}px`,
+      maxWidth: '100%',
+      border: '1px solid var(--border-strong)',
+      borderRadius: 'var(--radius-lg)',
+      boxShadow: '0 4px 16px var(--shadow-md)',
+    }
+  }
+  if (viewport.value === 'mobile') {
+    return {
+      width: `${VIEWPORT_MOBILE.width}px`,
+      height: `${VIEWPORT_MOBILE.height}px`,
+      maxWidth: '100%',
+      border: '1px solid var(--border-strong)',
+      borderRadius: 'var(--radius-xl)',
+      boxShadow: '0 4px 16px var(--shadow-md)',
+    }
+  }
+  if (!figmaDimensions.value) return {}
   const displayW = figmaDimensions.value.width
   const displayH = figmaDimensions.value.height
   return {
@@ -1114,23 +1154,8 @@ onUnmounted(() => {
   padding: 0;
 }
 
-.preview-frame-container.viewport-tablet .preview-iframe {
-  width: 768px;
-  max-width: 100%;
-  height: calc(100vh - 200px);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 4px 16px var(--shadow-md);
-}
-
-.preview-frame-container.viewport-mobile .preview-iframe {
-  width: 375px;
-  max-width: 100%;
-  height: 667px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-xl);
-  box-shadow: 0 4px 16px var(--shadow-md);
-}
+/* 平板/手机档位的宽高已由 previewIframeStyle 内联绑定（取自 constants/previewViewports），
+ * 尺寸不再在 CSS 里写死 —— 见 §viewports 注释。 */
 
 .preview-iframe {
   width: 100%;

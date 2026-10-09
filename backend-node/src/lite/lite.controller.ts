@@ -341,6 +341,10 @@ export class LiteController {
       // （mc-max-1790693261187-3426d7c3 实锤：任务元数据 panelKey=aio-panel，
       //  但 phase2 链路 panelType 一直是 default-panel）
       phase2Dto.panelType = dto.panelType;
+      // 🆕 高级选项 P0：用户指定组件 ID / 补充提示词 / 需求文档文本（可选）
+      phase2Dto.userComponentId = dto.userComponentId;
+      phase2Dto.extraPrompt = dto.extraPrompt;
+      phase2Dto.requirementDocText = dto.requirementDocText;
       phase2Dto.config = dto.config as GeneratePhase2Dto['config'];
 
       // Phase 7：队列门控 —— Max 也要经过并发检查

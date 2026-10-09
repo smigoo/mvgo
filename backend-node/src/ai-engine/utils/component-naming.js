@@ -225,6 +225,36 @@ export function buildComponentId(semanticToken = '', sessionId = '') {
 }
 
 /**
+ * 🆕 用户指定组件 ID 规范化（2026-10-09 · 高级选项 P0）。
+ *
+ * 设计（与刀 9 可剥离契约的关系）：
+ *   用户指定 id 形态 = `c-<kebab>`（**无 8hex 尾段**）。classPrefixOf 对无尾段 id
+ *   原样返回整 id ⇒ class 前缀 = 完整 id，天然「可剥离」（prefix = whole），
+ *   不触发 CODE-003 双前缀问题；且无随机段 → 同名重生成 id 恒定（本需求核心）。
+ *
+ * 规则：小写 kebab-case；自动补 `c-` 前缀；非法字符转 `-`；总长 ≤64；
+ *       保留字拒收；空串返回 ''（= 未指定，走自动生成）。
+ *
+ * @param {string} raw 用户原始输入
+ * @returns {string} 规范化后的 id（空串 = 无效/未指定）
+ */
+const USER_ID_RESERVED = new Set(['component', 'unknown-component', 'test', 'temp']);
+
+export function normalizeUserComponentId(raw = '') {
+  let s = String(raw || '').trim().toLowerCase();
+  if (!s) return '';
+  s = s.replace(/[^a-z0-9-]+/g, '-').replace(/-{2,}/g, '-').replace(/^-+|-+$/g, '');
+  if (!s) return '';
+  if (!/^c-/.test(s)) s = `c-${s}`;
+  s = s.slice(0, 64).replace(/-+$/g, '');
+  if (s.length < 4) return ''; // c-xx 至少 2 个语义字符
+  const seg = s.slice(2);
+  if (USER_ID_RESERVED.has(seg)) return '';
+  if (/^[0-9a-f]{8}$/.test(seg)) return ''; // 纯 8hex 会撞 classPrefixOf 剥离规则，拒收
+  return s;
+}
+
+/**
  * 🛡️ 刀 9（2026-09-13）：componentId **可剥离闸门**——任何入口产出的 id 在落盘前
  * 强制收敛为契约形态 `c-<语义段>-<8hex尾>`，杜绝不可剥离的随机段污染 class 前缀契约。
  *

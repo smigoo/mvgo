@@ -27,6 +27,23 @@ export class GeneratePhase2Dto {
   @IsOptional()
   componentId?: string;
 
+  // 🆕 高级选项 P0（2026-10-09）：用户指定组件 ID（可选）——规范形态 c-<kebab>，
+  // declare.json/workspace 目录/class 前缀全链路恒定，重生成不漂移。
+  // 服务端经 normalizeUserComponentId 双保险校验，非法值静默回退自动生成。
+  @IsString()
+  @IsOptional()
+  userComponentId?: string;
+
+  // 🆕 高级选项 P0：用户补充提示词（可选）——进 codegen prompt「用户补充需求」段
+  @IsString()
+  @IsOptional()
+  extraPrompt?: string;
+
+  // 🆕 高级选项 P0：需求文档文本（可选）——前端读文件后传纯文本，进同一 prompt 段
+  @IsString()
+  @IsOptional()
+  requirementDocText?: string;
+
   // 🆕 预览图复用：前端确认预览后获得的 token，用于跳过后续截图门禁
   @IsString()
   @IsOptional()

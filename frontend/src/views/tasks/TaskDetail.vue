@@ -1198,7 +1198,45 @@
                       </button>
                     </div>
                     <div ref="previewViewportRef" class="bf-body bf-body-real">
-                      <div class="preview-scale-stage" :style="previewStageStyle">
+                      <!-- 响应式测试工具栏：模式切换 + 实时尺寸 + 档位预设 -->
+                      <div class="rz-toolbar">
+                        <div class="rz-seg" role="group" aria-label="预览模式">
+                          <button
+                            class="rz-seg-btn"
+                            :class="{ 'is-on': !responsiveTestMode }"
+                            @click="setResponsiveMode(false)"
+                          >保真</button>
+                          <button
+                            class="rz-seg-btn"
+                            :class="{ 'is-on': responsiveTestMode }"
+                            @click="setResponsiveMode(true)"
+                          >响应式</button>
+                        </div>
+                        <template v-if="responsiveTestMode">
+                          <span class="rz-size" aria-live="polite">{{ frameResize.sizeLabel.value }}</span>
+                          <span class="rz-preset">{{ frameResize.presetName.value }}</span>
+                          <button
+                            class="rz-btn"
+                            v-for="vp in viewportPresets"
+                            :key="vp.key"
+                            :class="{ 'is-on': frameResize.presetName.value === vp.key }"
+                            :title="vp.label + '（锁定宽度）'"
+                            @click="frameResize.applyPreset(vp.key, vp.width, vp.height)"
+                          >{{ vp.short }}</button>
+                          <button
+                            v-if="frameResize.isWidthLocked.value"
+                            class="rz-btn"
+                            title="解锁宽度后可自由拖动"
+                            @click="frameResize.unlockWidth()"
+                          >解锁宽</button>
+                          <button class="rz-btn" title="恢复默认尺寸" @click="frameResize.resetSize()">重置</button>
+                        </template>
+                      </div>
+                      <div
+                        class="preview-scale-stage"
+                        :class="{ 'rz-stage--responsive': responsiveTestMode }"
+                        :style="[previewStageStyle, frameResize.bodyStyle.value]"
+                      >
                         <iframe
                           v-if="activePreviewSlot < 0 && shouldShowPreview"
                           :key="previewKey"
@@ -1222,6 +1260,30 @@
                           :aria-label="slot === activePreviewSlot ? '当前 revision 预览' : '候选 revision 预览加载中'"
                           sandbox="allow-scripts allow-same-origin allow-popups"
                         ></iframe>
+                        <!-- 三向拖拽手柄：只增不减，避免与父级栅格布局打架 -->
+                        <template v-if="responsiveTestMode">
+                          <span class="rz-size-bubble" v-if="frameResize.showSizeBubble.value">
+                            {{ frameResize.sizeLabel.value }}
+                          </span>
+                          <span
+                            class="rz-h rz-h--r" tabindex="0" role="separator" aria-label="调整预览宽度"
+                            @mousedown="frameResize.startResize($event, 'right')"
+                            @keydown="frameResize.onHandleKeydown($event, 'right')"
+                            @focus="frameResize.onHandleFocus"
+                          ></span>
+                          <span
+                            class="rz-h rz-h--b" tabindex="0" role="separator" aria-label="调整预览高度"
+                            @mousedown="frameResize.startResize($event, 'bottom')"
+                            @keydown="frameResize.onHandleKeydown($event, 'bottom')"
+                            @focus="frameResize.onHandleFocus"
+                          ></span>
+                          <span
+                            class="rz-h rz-h--c" tabindex="0" role="separator" aria-label="同时调整预览宽高"
+                            @mousedown="frameResize.startResize($event, 'corner')"
+                            @keydown="frameResize.onHandleKeydown($event, 'corner')"
+                            @focus="frameResize.onHandleFocus"
+                          ></span>
+                        </template>
                       </div>
                       <PreviewErrorBanner :message="previewError" @dismiss="clearPreviewError" />
                     </div>
@@ -1602,6 +1664,8 @@ import { useUserStore } from '@/store'
 import PublishToPoolModal from '@/components/PublishToPoolModal.vue'
 import { publishToPublicPool } from '@/utils/component-pool'
 import { downloadByUrl } from '@/utils/download-file'
+import { useResizableFrame } from '@/composables/useResizableFrame'
+import { PREVIEW_VIEWPORT_PRESETS } from '@/constants/previewViewports'
 import ComponentAnalysisDrawer from '@/components/ComponentAnalysisDrawer.vue'
 import McSpecCheckButton from '@/components/McSpecCheckButton.vue'
 import QualityScoreAdminButton from '@/components/QualityScoreAdminButton.vue'
@@ -2323,6 +2387,13 @@ const previewScale = computed(() => {
 })
 
 const previewStageStyle = computed(() => {
+  // 响应式模式：stage 跟随真实视口尺寸（与 iframe 尺寸一致），不做等比缩放
+  if (responsiveTestMode.value) {
+    return {
+      width: `${frameResize.width.value}px`,
+      height: `${frameResize.height.value}px`
+    }
+  }
   const dimensions = figmaDimensions.value
   if (!dimensions) return { width: '100%', height: '500px' }
   return {
@@ -2331,7 +2402,77 @@ const previewStageStyle = computed(() => {
   }
 })
 
+// ═══ 响应式测试模式 ═══
+// 本页预览 iframe 用transform: scale() 做保真缩放 —— **scale 不等于视口变化，
+// @media 不会重新匹配**（组件内部媒体查询仍按 iframe 原始像素宽判定）。
+// 所以响应式模式下必须：① 下发真实视口尺寸给 iframe 内的预览页；② 本页去掉 scale。
+// 保真模式的 scale 路径保持原样不动。
+const responsiveTestMode = ref(false)
+const viewportPresets = PREVIEW_VIEWPORT_PRESETS
+const frameResize = useResizableFrame({
+  componentId: computed(() => task.value?.componentId || task.value?.sessionId || ''),
+  defaultWidth: 1280,
+  defaultHeight: 720,
+})
+
+function pushViewportToFrames() {
+  if (!responsiveTestMode.value) return
+  const host = previewViewportRef.value
+  if (!host) return
+  host.querySelectorAll('iframe.preview-iframe').forEach((el) => {
+    const frame = el as HTMLIFrameElement
+    try {
+      frame.contentWindow?.postMessage(
+        {
+          type: 'set-preview-viewport',
+          mode: 'responsive',
+          width: frameResize.width.value,
+          height: frameResize.height.value
+        },
+        window.location.origin
+      )
+    } catch {
+      /* iframe 已卸载或不可访问：忽略 */
+    }
+  })
+}
+
+function setResponsiveMode(on: boolean) {
+  responsiveTestMode.value = on
+  if (on) {
+    // 恢复该组件上次用过的视口（FR-4）；无记录则用默认值
+    frameResize.restore()
+  } else {
+    frameResize.resetSize()
+  }
+}
+
+// 尺寸变化 → 下发给 iframe 内预览页（watch 覆盖拖拽/档位/键盘三种入口）
+watch(
+  () => [responsiveTestMode.value, frameResize.width.value, frameResize.height.value],
+  () => {
+    if (responsiveTestMode.value) {
+      // 等 iframe 内预览页挂载监听后再发，否则首帧会丢
+      nextTick(() => pushViewportToFrames())
+    }
+  }
+)
+
+// 预览重载后补发一次（iframe 是新文档，监听器需重新注册）
+watch(previewKey, () => {
+  if (responsiveTestMode.value) nextTick(() => pushViewportToFrames())
+})
+
 const previewIframeStyle = computed(() => {
+  // 响应式模式：真实尺寸 + 不做 scale，让 @media / vw 按真实视口生效
+  if (responsiveTestMode.value) {
+    return {
+      width: `${frameResize.width.value}px`,
+      height: `${frameResize.height.value}px`,
+      display: 'block',
+      maxWidth: 'none'
+    }
+  }
   const dimensions = figmaDimensions.value
   if (!dimensions) return { width: '100%', height: '500px', display: 'block' }
   return {
@@ -7782,6 +7923,121 @@ watch(bindingWizardOpen, (open) => {
   inset: 0;
   z-index: 0;
   visibility: hidden;
+  pointer-events: none;
+}
+
+/* ===================================================================
+ * 预览容器响应式调尺（响应式测试模式）
+ * 拖拽逻辑全部来自 composables/useResizableFrame（全仓唯一实现），此处只做外观。
+ * =================================================================== */
+.rz-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 10px;
+  background: var(--bg-secondary, #f7f8fa);
+  border-bottom: 0.5px solid var(--border-color, #e5e6eb);
+  font-size: 12px;
+}
+.rz-seg {
+  display: inline-flex;
+  border: 0.5px solid var(--border-color, #d9dbe0);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.rz-seg-btn {
+  border: none;
+  background: var(--bg-primary, #fff);
+  padding: 3px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--text-secondary, #5f5f6b);
+}
+.rz-seg-btn.is-on {
+  background: #185fa5;
+  color: #fff;
+}
+.rz-size {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.06);
+}
+.rz-preset {
+  color: var(--text-tertiary, #8a8a96);
+}
+.rz-btn {
+  border: 0.5px solid var(--border-color, #d9dbe0);
+  background: var(--bg-primary, #fff);
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--text-primary, #2c2c34);
+}
+.rz-btn:hover {
+  border-color: #185fa5;
+  color: #185fa5;
+}
+.rz-btn.is-on {
+  background: #faeeda;
+  border-color: #ba7517;
+  color: #633806;
+}
+/* 响应式模式：stage 放开 overflow:hidden（否则手柄被裁掉），宽度超出由 bf-body 滚动 */
+.rz-stage--responsive {
+  overflow: visible;
+  max-width: none;
+}
+.rz-h {
+  position: absolute;
+  background: #185fa5;
+  border-radius: 2px;
+  opacity: 0.85;
+  z-index: 6;
+}
+.rz-h:hover,
+.rz-h:focus-visible {
+  opacity: 1;
+  outline: 2px solid rgba(24, 95, 165, 0.35);
+  outline-offset: 1px;
+}
+.rz-h--r {
+  right: -3px;
+  top: 50%;
+  width: 6px;
+  height: 34px;
+  transform: translateY(-50%);
+  cursor: ew-resize;
+}
+.rz-h--b {
+  bottom: -3px;
+  left: 50%;
+  width: 34px;
+  height: 6px;
+  transform: translateX(-50%);
+  cursor: ns-resize;
+}
+.rz-h--c {
+  right: -4px;
+  bottom: -4px;
+  width: 10px;
+  height: 10px;
+  cursor: nwse-resize;
+}
+.rz-size-bubble {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 7;
+  background: #185fa5;
+  color: #fff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 4px;
   pointer-events: none;
 }
 

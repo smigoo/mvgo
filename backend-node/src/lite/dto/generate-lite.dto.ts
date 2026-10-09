@@ -130,4 +130,24 @@ export class GenerateLiteDto {
   @IsString()
   @IsIn(['light', 'dark'])
   backgroundBrightness?: 'light' | 'dark';
+
+  /**
+   * 🆕 高级选项 P0（2026-10-09）：用户指定组件 ID（可选）
+   * 规范形态 c-<kebab>（无随机尾段），declare.json/workspace 目录/class 前缀全链路恒定。
+   * 非法/保留字由服务端 normalizeUserComponentId 静默回退自动生成（不报错）。
+   * 前置唯一性校验走 GET /api/component/check-id。
+   */
+  @IsOptional()
+  @IsString()
+  userComponentId?: string;
+
+  /** 🆕 高级选项 P0：用户补充提示词（可选，≤4000 字，超出截断） */
+  @IsOptional()
+  @IsString()
+  extraPrompt?: string;
+
+  /** 🆕 高级选项 P0：需求文档文本（可选，前端读文件后传纯文本，≤20000 字） */
+  @IsOptional()
+  @IsString()
+  requirementDocText?: string;
 }

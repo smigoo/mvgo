@@ -11,7 +11,11 @@ import { join, extname } from 'path'
 import { createLogger } from '../logger/index.js'
 import { safeLessVarValue } from '../roles/microcode/file-writer.js'
 import { collectColorFnVars } from '../utils/less-color-funcs.js'
-import { isColorVarName, FRAMEWORK_PRESET_NAMES, healFileLevelSlotOverrides } from '../utils/theme-color-guard.js'
+import {
+  isCommonColorConflictVar,
+  FRAMEWORK_PRESET_NAMES,
+  healFileLevelSlotOverrides,
+} from '../utils/theme-color-guard.js'
 
 const logger = createLogger({ name: 'less-variable-checker' })
 
@@ -89,16 +93,18 @@ export class LessVariableChecker {
         logger.info('已自动在 theme-vars.less 顶层添加 .common() 调用')
       }
 
-      // 6. 🛡️ 2026-09-15 确定性自愈：清除 .common() 中「两个主题 mixin 都已定义」的颜色变量。
+      // 6. 🛡️ 2026-09-15 确定性自愈；🛡️ 2026-10-09 放宽前置条件（单侧/双侧缺失都先补写再删）。
       //    否则 LESS mixin 变量不覆盖 caller 同名变量 → .theme-dark() 被静默忽略 → 切主题零生效。
       if (existsSync(themeVarsPath)) {
         const healed = this.healCommonColorVars(themeVarsPath)
         if (healed.removed > 0) {
           result.fixed = true
           result.healedCommonColorVars = healed.names
-          logger.info('已从 .common() 移除被主题 mixin 覆盖不到的颜色变量', {
-            count: healed.removed,
+          result.injectedCommonColorVars = healed.injected
+          logger.info('已把 .common() 里的颜色变量迁入主题 mixin', {
+            removed: healed.removed,
             variables: healed.names,
+            injected: healed.injected,
           })
         }
       }
@@ -430,55 +436,103 @@ export class LessVariableChecker {
   }
 
   /**
-   * 🛡️ 2026-09-15 确定性自愈：清除 .common() 中「两个主题 mixin 都已定义」的颜色变量。
+   * 🛡️ 2026-09-15 确定性自愈；🛡️ 2026-10-09 **放宽前置条件**（覆盖「单侧/双侧缺失」形态）。
    *
    * 根因：LESS 的 mixin 变量**不覆盖** caller 作用域已存在的同名变量。
    * index.less / dark.less / light.less 都是 `.common(); .theme-X();` 顺序调用，
    * 故 `.common()` 里的 @colorX 会让随后 `.theme-light()`/`.theme-dark()` 的同名定义
    * 被静默忽略 → `.dark`/`.light` 编译结果完全相同 → 切主题零生效。
    *
-   * 安全性：只删「light 与 dark **都**已定义」的颜色类变量 —— 删除后仍可编译，
-   * 且恢复主题覆盖语义；几何/字号令牌（@border-radius-base 等）与非颜色变量一律保留。
+   * 旧版只在「light 与 dark **都**已定义」时才删（怕删出未定义变量导致编译失败）→
+   * 「颜色只写在 .common()、主题 mixin 里根本没有」的形态永远清不掉
+   * （实锤 c-traffic-monitor-140cbd45 的 @color-error / @color-predict-line / @color-truck-value），
+   * 门禁常年 WARN、切主题零生效却无人修。
+   *
+   * 现版改为 **先补写再删**：该颜色在某主题 mixin 里缺失时，先按 `.common()` 的原值补进去，
+   * 再从 `.common()` 移除。既保证不产生未定义变量（可编译、颜色外观逐字不变），
+   * 又让颜色回到「主题 mixin 定义」的正确归属 —— 后续精修 / 深浅派生才有作用点。
+   *
+   * 判据复用 `isCommonColorConflictVar`（与门禁 THEME-COMMON-COLOR-VAR、生成器
+   * style-tokens#renderMicrocodeThemeVarsLess **同源**，不写正则副本）；
+   * 几何/字号令牌（@border-radius-base 等）与 `var()` 透传令牌一律保留。
    *
    * @param {string} themeVarsPath
-   * @returns {{removed:number, names:string[]}}
+   * @returns {{removed:number, names:string[], injected:string[]}}
    */
   static healCommonColorVars(themeVarsPath) {
+    const EMPTY = { removed: 0, names: [], injected: [] }
     let content
     try {
       content = readFileSync(themeVarsPath, 'utf-8')
     } catch (e) {
-      return { removed: 0, names: [] }
+      return EMPTY
     }
     // ⚠️ [^}]* 而非 [\s\S]*?\n\s*\}：后者在 .common() 为单行时跨块误匹配（见 mixinVarNames 注释）
     const commonM = content.match(/\.common\s*\(\s*\)\s*\{([^}]*)\}/)
-    if (!commonM) return { removed: 0, names: [] }
+    if (!commonM) return EMPTY
 
     const lightVars = this.mixinVarNames(content, 'theme-light')
     const darkVars = this.mixinVarNames(content, 'theme-dark')
-    if (lightVars.size === 0 || darkVars.size === 0) return { removed: 0, names: [] }
+    // 两个主题 mixin 都不存在 → 无从补写，保守不动（fail-open，不制造未定义变量）
+    if (lightVars.size === 0 && darkVars.size === 0) return EMPTY
 
     const kept = []
     const names = []
+    const toInject = { 'theme-light': [], 'theme-dark': [] }
     for (const line of commonM[1].split('\n')) {
       const m = line.match(/@([a-zA-Z0-9_-]+)\s*:\s*([^;]+);/)
-      if (m && isColorVarName(m[1]) && lightVars.has(m[1]) && darkVars.has(m[1])) {
+      if (m && isCommonColorConflictVar(m[1], m[2])) {
         names.push(m[1])
+        const pair = { name: m[1], value: m[2].trim() }
+        if (!lightVars.has(m[1])) toInject['theme-light'].push(pair)
+        if (!darkVars.has(m[1])) toInject['theme-dark'].push(pair)
         continue
       }
       kept.push(line)
     }
-    if (names.length === 0) return { removed: 0, names: [] }
+    if (names.length === 0) return EMPTY
 
     const inner = kept.join('\n').replace(/\n{3,}/g, '\n\n').replace(/\s+$/, '')
-    const next = content.replace(commonM[0], `.common() {${inner}\n}`)
+    let next = content.replace(commonM[0], `.common() {${inner}\n}`)
+
+    // 先把缺失的颜色补进对应主题 mixin（闭括号前插入），再一次性落盘 —— 不留中间态
+    const injected = []
+    for (const mixinName of ['theme-light', 'theme-dark']) {
+      const list = toInject[mixinName]
+      if (!list.length) continue
+      next = this.appendVarsToMixin(next, mixinName, list)
+      injected.push(...list.map((v) => `@${v.name}→.${mixinName}()`))
+    }
+
     try {
       writeFileSync(themeVarsPath, next, 'utf-8')
     } catch (e) {
       logger.error('清除 .common() 颜色变量失败', { themeVarsPath, error: e.message })
-      return { removed: 0, names: [] }
+      return EMPTY
     }
-    return { removed: names.length, names }
+    return { removed: names.length, names, injected }
+  }
+
+  /**
+   * 在指定 mixin 的闭括号前追加 `@name: value;` 行（找不到该 mixin 时原样返回）。
+   *
+   * ⚠️ 同 `mixinVarNames`：用 `[^}]*` 匹配块体，避免单行 mixin 时跨块误伤。
+   * ⚠️ 只匹配**定义形态**（`.theme-x() {`）—— 调用形态 `.theme-x();` 后面没有 `{`，不会命中。
+   *
+   * @param {string} content
+   * @param {string} mixinName 不含点号，如 'theme-light'
+   * @param {Array<{name:string, value:string}>} pairs
+   * @returns {string}
+   */
+  static appendVarsToMixin(content, mixinName, pairs) {
+    const re = new RegExp(`(\\.${mixinName}\\s*\\(\\s*\\)\\s*\\{)([^}]*)(\\})`)
+    return String(content).replace(re, (all, head, body, tail) => {
+      const trimmed = body.replace(/\s+$/, '')
+      const add = pairs
+        .map((p) => `\n  @${p.name}: ${p.value}; // 自愈：从 .common() 迁出`)
+        .join('')
+      return `${head}${trimmed}${add}\n${tail}`
+    })
   }
 
   /**

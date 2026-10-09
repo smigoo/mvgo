@@ -7,7 +7,7 @@
 
 ## 环境
 - 根 `/Users/smigoo/工作/mvgo`：backend-node(:13030) / frontend(:2610, `build:safe`)。
-- 🔴 node 用 `versions/22.22.2-5`（-3 已删）；执行用 `bash -c 'cd <abs> || exit 9; export PATH=".../22.22.2-5/bin:/usr/local/bin:/usr/bin:/bin" HOME=/Users/smigoo; cmd'`（Bash 沙箱 NODE_OPTIONS shim 卡死；cwd 每条漂回仓库根）。jest：`NODE_OPTIONS="--max-old-space-size=1536" npx jest <spec> --runInBand --forceExit`。
+- 🔴 node 版本号会变（-3→-5→**-6**），先 `ls ~/.workbuddy/binaries/node/versions/` 再拼路径；执行用 `bash -c 'cd <abs> || exit 9; export PATH=".../22.22.2-6/bin:/usr/local/bin:/usr/bin:/bin" HOME=/Users/smigoo; cmd'`（Bash 沙箱 NODE_OPTIONS shim 卡死；cwd 每条漂回仓库根）。**长跑脚本（扫全量产物）用 `env -i PATH=... HOME=... NODE_OPTIONS="--max-old-space-size=2048" node x.mjs`，否则 Exit 137 SIGTERM**。jest：`NODE_OPTIONS="--max-old-space-size=1536" npx jest <spec> --runInBand --forceExit`。
 - 鉴权 `token` 头（非 Bearer）；`/api/tasks` 在 `data.tasks`；不设 FIELD_ENCRYPTION_KEY；AI 凭证 `backend-node/data/ai-config.json`。
 - 生产网关仅 GET/POST；前端 base `/mvgo/` + history。`nest build` 类型错中止整个 emit；判 dist = grep 新符号。
 
@@ -16,13 +16,21 @@
 - 产物三处同步（workspace×2 + 快照）须 diff，含 `resources/styles/index.css`。
 - 资源挂载：`ownerSectionId`⨯`data-section-id` 恒取；幂等护栏 `isResourceRendered`；重复 sid `anchorOwnerRank`。K/L/M/N 详判据 → skill `mvgo-resource-mount-layer-triage`。
 - 副本纪律：同判据 ≥2 份=事故温床；`techStackRequiredPatterns` 单一来源（element-coverage-validator，已导出）。
+- 🔴 **改 prompt/规范文档前必须做「加载链三查」**（09 日踩坑：改了 12.6KB 的 `src/ai-engine/prompts/references/css-variable-pattern.md`，那是死文件）：① `grep -rn "loadMd(" src/` 看调用前缀；② 看 `referenceFiles`/`microcode.json` 清单里写的 ref 字符串；③ `ls dist/**` 确认构建是否拷贝。生效规范根 = `backend-node/references/**`（`BUILTIN_REFERENCES_ROOT`，构建整份拷进 `dist/references/`），引用串一律 `references/xxx`。`prompts/agents/**` 与 `prompts/references/**` 全目录**无加载点**（先例存根：`prompts/references/preview-analysis-schema.md`，commit 68f3443 教训）。
+- 模式 B 主题规范生效版：`references/patterns/css-variable-pattern.md`（style-mapper.js + microcode.json 加载）与 `references/specs/style-guide.md`（microcode-engineer/style-mapper/adversarial-checker/microcode.json 加载）。门禁 `theme-color-guard.js`：`.common()` 禁「语义颜色槽位名或字面量色值」（`isColorVarName(name)||COLOR_LITERAL_RE.test(value)`，**value 以 `var(` 开头豁免**）；业务样式禁 `var()`。生成器缺口：`style-tokens.js#renderMicrocodeThemeVarsLess` L871 的 `.common()` **原样沿用 LLM prior 未过滤**；自愈器 `less-variable-checker#healCommonColorVars` L465 只清「light+dark 都定义」的颜色。
 - 技术栈接管 #78：`techstack-section-contract.js`；table 契约成功才吸收（fail-open）。
 - 10-03 治本三件：① 循环 import 门禁 `findEntrypointCircularImports`（子组件禁 import 父 index.vue，正解 `$mcComponentBuilder()`）；② `style-conflict-detector.js`（字号乘数 calc + 跨文件同名 class）挂 pre-write-self-healing 只报不改；③ `section-content-guard.js#checkTechStackContractTags`（techstack 契约 per-section 断言；全产物 0 个 data-section-id ⇒ fail-open；**corpus 级 ElementCoverageValidator 是死代码勿依赖**；违规进 meta.contentMappingIssues.techStackTagViolations 只留痕）。
 
 ## 诊断手法
 - 门禁三查（形状量化/日志留痕/离线探针）；0 命中必配阳性对照；判定域≠事实落点必查；改判据先纯函数 A/B（只答有没有用不答该不该判）。
+- 🔴 **主题色审计一条命令**：`npm run verify:theme-color`（全量按规则聚合）/ `verify:theme-color:recent`（新鲜度+近 N 天收口率；根仓 `npm run check:theme-color`）。脚本 `backend-node/scripts/audit-theme-color.mjs`，判据直接 import 门禁、不写副本；筛单规则 `--rule ID`，机器可读 `--json`，CI 用 `--strict`。
+- 🔴 **`.common()` 颜色迁出离线验证**：`npm run verify:theme-migrate`（根仓 `npm run check:theme-migrate`）。脚本 `backend-node/scripts/verify-theme-common-migrate.mjs` —— A 拿真产物 theme-vars.less 当 prior 重放生成器、B 在 tmp 副本上演练自愈器 `healCommonColorVars`；判据同上门禁；结尾断言真产物 SHA1 未变（变了 exit 2）。`--limit/--all/--dir/--theme`。
+- 🔴 **既有 flaky suite 清单**（别误算作自己引入）：`thinking-escalation.spec.ts` 同命令会 2↔3 failed 交替 —— 与另外 4 个 spec 共用 `/tmp/mvgo-test-data/model-capability-cache.json`，且 `model-config.js` 的 `_capPersistTimer` 去抖异步落盘会晚于 spec 的 `beforeEach unlinkSync`；**新增任何 spec 文件都会改 jest 排序从而翻动骰子**。归因方法：把本轮改的逻辑文件显式路径 stash 后单跑对比。
 - spec 禁 tryRequire 解构假绿；引 validator/logger 链 ⇒ `jest.mock('../../config/backend-root.js', ..., {virtual:true})`；并行 WIP 用显式路径 checkout 不用 stash。
+- 🔴 **判「生产 dist == 本地 dist」最强判据 = 逐文件 md5 清单 diff**（胜过「端口 LISTEN」「main.js mtime」）：远端 `find dist -type f | LC_ALL=C sort | xargs md5sum | LC_ALL=C sort -k2 | tr -s ' ' > /tmp/prod-dist-md5.txt` → scp 回本地与同口径清单 `diff`。**必须 `tr -s ' '` 归一化空格**——`md5sum` 输出双空格、macOS `md5 -r` 单空格，不归一化会让最终哈希对不上而误判「部署没生效」（实测踩过：`23a3ed01…` vs `35def421…`，归一化后两边都是 `35def421…`，1151 文件零差异）。
+- 🔴 **进程数判僵尸别用 `ps | grep -c`**：`grep` 会把自身命令行算进去（实测返回 2，实为 1 真进程 + grep 自身）。一律 `ps -eo pid,cmd | grep -E 'node .*dist/main.js' | grep -v grep | wc -l`。
 
 ## 陷阱
 - BSD grep `-E` 无 `\b`；`sed -i ''`；`git commit -m` 禁 `$(...)`；子仓指针 `git add <submodule>`；heredoc 展开 ⇒ 用 Write。
+- 🔴 **生产 Node 部署三件套**（详 mvgo-deploy / mvgo-backend-build-restart skill）：① 打包 `COPYFILE_DISABLE=1 tar --no-xattrs -czf /tmp/dist-node.tar.gz dist`（`--no-xattrs` 必须放选项位）；② 上传/回滚锚命名 `dist.bak.<HEAD短sha>-<时间戳>`，**回滚要用内部 `.build-stamp` 里 git 等于部署前版本的那个锚**（重复部署会产生多个同名锚，按内部 stamp 认、不按目录名认）；③ 验收 = 新 pm2 PID + 启动时间晚于 dist mtime + 符号 grep + `api=200`/`tasks=401` + 无僵尸 + EADDRINUSE 零新增。expect 脚本里 Tcl 的 `[...]` 是命令替换（`puts "[1/2]"` 会报 `invalid command name "1/2"`），`$var` 在双引号内也会被插值 ⇒ 远端 shell 变量一律用 `{...}` 大括号包住、`\r` 留在括号外。
 - 取图：设计图 `resources/images/mc-preview.png`；预览 `.mc-gen/screenshots/<taskId>-rendered.png`；`/api/component/:id/file?path=<rel>&raw=1`。

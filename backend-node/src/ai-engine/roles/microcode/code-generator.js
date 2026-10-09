@@ -32,7 +32,7 @@ import {
 } from '../../utils/resource-import-guard.js';
 import { collectLeafSections, assignSectionComponentNames, isLayoutContainerSection, indexFigmaNodes, figmaSectionBox, isHorizontalCardGroup } from '../../utils/section-tree.js';
 import { detectContentRootClass } from '../../utils/root-container-normalizer.js';
-import { sanitizeComponentId, tailHexOf } from '../../utils/component-naming.js';
+import { sanitizeComponentId, tailHexOf, normalizeUserComponentId } from '../../utils/component-naming.js';
 
 export function assembleIndexVue(templateContent, scriptContent, input, options = {}) {
     let tpl = (templateContent || '').trim();
@@ -1216,6 +1216,14 @@ export function resolveDeclareComponentId(input = {}, options = {}) {
   const sessionId = String(
     input?.sessionId || input?.ctx?.sessionId || options.sessionId || '',
   ).trim();
+  // 🆕 高级选项 P0（2026-10-09）：用户指定组件 ID 优先——normalizeUserComponentId
+  // 已保证 `c-<kebab>` 无随机段形态（可剥离契约：prefix = whole），直接采用，
+  // 不追加 sessionId 尾 8hex ⇒ 同名重生成 id 恒定（迭代不漂移的核心）。
+  // 前置校验（check-id 接口 + DTO）已拦截非法/保留字，此处双保险兜底。
+  const userComponentId = normalizeUserComponentId(input?.userComponentId);
+  if (userComponentId) {
+    return { componentId: userComponentId, baseComponentId: userComponentId, sessionIdSuffix: '' };
+  }
   // 🛡️ S4（2026-09-16）· componentId 收敛到单一事实源 sanitizeComponentId：
   // 旧实现用 defaultNormalizeComponentId（仅剥 mc- 前缀 + kebab），对四段脏 id
   // （c-max-<ts>-<hex>-<hex>）不收敛 → 随机中段滞留 → classPrefixOf 剥离失败 →
@@ -1237,6 +1245,11 @@ export async function safeGenerateDeclareJson(runChunk, input, chunkD, options =
     // 不同任务可能生成相同组件名（如"设备监测"→c-monitor），导致截图 URL 冲突
     // 🛡️ 刀 8a（2026-09-13）：装配逻辑抽为纯函数 resolveDeclareComponentId，见其 JSDoc。
     const { componentId } = resolveDeclareComponentId(input, options);
+    // 🆕 高级选项 P0 留痕：用户指定 ID 是否随 input 到达本函数（真机排障依赖）
+    options.logger?.info?.(`🆔 declare componentId 定稿: ${componentId}`, {
+      userComponentId: input?.userComponentId || null,
+      componentName: input?.componentName || null,
+    });
 
 
     // 1. 生成完整骨架（结构字段由模板保证）

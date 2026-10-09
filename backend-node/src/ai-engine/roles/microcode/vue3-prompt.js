@@ -197,6 +197,31 @@ export function buildVue3CodePrompt(input, chunkSpec, options = {}) {
 4. **渐变背景与统计卡还原**：Figma 填充是 \`linear-gradient\` 必须生成 \`background: linear-gradient(...)\`（禁止降级纯灰）；统计卡（设备总数/完好率等）标签+数值从 Figma 提取并真实绑定，禁止整块缺失。
 5. **图标/实景图/关闭X 不得丢弃**：资源映射提供的 icon 必须用 \`<img :src>\` 渲染；关闭按钮/实景照片/Figma 存在且资源已提供的元素必须真实呈现，禁止当噪声丢弃或挪用其他图标。
 
+# 🧱 常见 UI 控件 → antd 默认实现（U1 · 2026-10-09，强制）
+
+设计稿中出现下述**控件形态**时（与第 2 条「禁止臆造交互控件」的边界：第 2 条禁的是设计稿里没有的控件；设计稿里**确实出现**的控件必须用 antd 实现），**必须**用 Ant Design Vue 真组件实现，**禁止手写 div/span 模仿组件 DOM 结构**：
+
+| 设计稿形态 | 必须用 |
+|---|---|
+| 表格（多行多列数据网格、表头行） | \`Table\` |
+| 表单（label+输入控件成行出现 ≥2 行） | \`Form\` + \`FormItem\`（label 用 label 属性或 #label 插槽；**ant-design-vue 没有 label 组件**） |
+| 文本输入框 | \`Input\` / \`Textarea\` |
+| 下拉选择 | \`Select\` + \`SelectOption\` |
+| 单选/多选 | \`Radio\`/\`RadioGroup\` / \`Checkbox\` |
+| 开关 | \`Switch\` |
+| 日期/时间选择 | \`DatePicker\` |
+| 上传（虚线框/点击上传区域） | \`Upload\`（\`:show-upload-list="false"\` + \`:before-upload="() => false"\` 占位） |
+| 分页器 | \`Pagination\` |
+| 页签 | \`Tabs\` + \`TabPane\` |
+| 按钮 | \`Button\` |
+| 步骤条/树 | \`Steps\` / \`Tree\` |
+
+**实现规则**：
+- \`<script setup>\` 顶部显式引入：\`import { Form, FormItem, Input, Select, RadioGroup, Upload, Button } from 'ant-design-vue'\`，模板直接用引入名作标签。运行时已注入 \`ant-design-vue\`，该 import 合法且被支持。
+- **techstack 锚点契约（更高优先级）**：子组件规划里 \`techStack.tag\` 非空的 section（来源：Figma 图层名 \`@antd/xxx\` 等用户显式标注），**必须**用 \`\${tag}\` 对应的真组件渲染该 section 内容——违反将在 L0-B 门禁按 TECHSTACK-CONTRACT-VIOLATION 阻断重试。
+- **指纹红线**：class 名中出现 \`antd-xxx\` / \`ant-design-vue-xxx\`（模仿 antd 内部类名的手写 DOM）即不合格。
+- **覆盖 antd 内部样式必须抬权重**：antd v4 用 CSS-in-JS 运行时注入（晚于静态 less），同权重选择器会被反压。改内部结构用复合选择器（如 \`.my-form-item.ant-form-item { margin-bottom: 0 }\`、\`.my-input.ant-input { width: 320px }\`），并中和内部栅格（\`.ant-form-item-row\` / \`.ant-form-item-label\`）后再套设计稿布局。
+
 # 📊 图表布局与 echarts 初始化强制规范（违反则质量门禁阻断）
 
 生成含 echarts 图表的组件必须遵守以下三条铁律，否则 CODE-011/CODE-012 会阻断：

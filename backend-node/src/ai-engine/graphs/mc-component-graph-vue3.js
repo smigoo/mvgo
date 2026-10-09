@@ -74,6 +74,8 @@ import { scanChartTextColors, validateChartSpec } from '../utils/chart-spec.js';
 import { scanOrphanResources, scanThemeVariantParity } from '../utils/style-parity-guard.js';
 // 📐 WP4（2026-10-08）：收缩守卫留痕（百分比尺寸落在无保护 flex 子项/space-between 子项 floor 解除）
 import { scanFlexShrinkRisk } from '../utils/flex-shrink-guard.js';
+// 🛡️ U1（2026-10-09）：antd 手写模仿指纹留痕（表单/上传手写 div 模仿，实锤 c-c19746-c1974689）
+import { scanAntdMimicry } from '../utils/antd-mimicry-guard.js';
 import { resolveNodeExclusivity } from '../utils/node-exclusivity.js';
 import { validateDoNotInvent } from '../validators/do-not-invent-validator.js';
 //  P0-2: 结构顺序门禁（零 LLM，防区块颠倒）
@@ -1873,6 +1875,18 @@ export function createPhase2Graph(config = {}) {
         issues: shrinkCheck.issues,
         checkedAt: Date.now(),
       };
+      // 🛡️ U1（2026-10-09）：antd 手写模仿指纹留痕（实锤 c-c19746-c1974689：表单组件半真半假，
+      // form-item/upload 手写 div 模仿，class 名出现 antd-xxx / ant-design-vue-xxx）
+      let mimicryCheck = { issues: [] };
+      try {
+        mimicryCheck = scanAntdMimicry(csFiles);
+      } catch (mimicryErr) {
+        logger.warn('⚠️ antd 模仿指纹扫描失败（非阻断，fail-open）', { error: mimicryErr?.message || String(mimicryErr) });
+      }
+      const antdMimicryIssues = {
+        issues: mimicryCheck.issues,
+        checkedAt: Date.now(),
+      };
       const chartSpecIssues = {
         textColors: textColors.violations,
         specIssues: specCheck.issues,
@@ -1883,22 +1897,24 @@ export function createPhase2Graph(config = {}) {
         chartSpecIssues.specIssues.length > 0 ||
         bindingContractIssues.orphanResources.length > 0 ||
         bindingContractIssues.themeVariantParity.length > 0 ||
-        flexShrinkIssues.issues.length > 0
+        flexShrinkIssues.issues.length > 0 ||
+        antdMimicryIssues.issues.length > 0
       ) {
         const metaPath = _jCs(state.outputPath, 'component-meta.json');
         let prev = {};
         try { prev = _exCs(metaPath) ? JSON.parse(_rfsCs(metaPath, 'utf-8')) : {}; } catch (_) {}
-        _wfsCs(metaPath, JSON.stringify({ ...prev, chartSpecIssues, bindingContractIssues, flexShrinkIssues }, null, 2), 'utf-8');
-        logger.warn('📊 chartSpec/绑定契约/收缩守卫红线留痕（详见 component-meta.json）', {
+        _wfsCs(metaPath, JSON.stringify({ ...prev, chartSpecIssues, bindingContractIssues, flexShrinkIssues, antdMimicryIssues }, null, 2), 'utf-8');
+        logger.warn('📊 chartSpec/绑定契约/收缩守卫/antd 模仿指纹红线留痕（详见 component-meta.json）', {
           textColors: chartSpecIssues.textColors.length,
           specIssues: chartSpecIssues.specIssues.length,
           orphanResources: bindingContractIssues.orphanResources.length,
           themeVariantParity: bindingContractIssues.themeVariantParity.length,
           flexShrink: flexShrinkIssues.issues.length,
+          antdMimicry: antdMimicryIssues.issues.length,
         });
         state.onProgress?.({
           stage: '产物校验',
-          message: `⚠️ 图表契约留痕：${chartSpecIssues.textColors.length} 处文字色硬编码、${chartSpecIssues.specIssues.length} 处 chartSpec 违规、${bindingContractIssues.orphanResources.length} 个孤儿资源、${bindingContractIssues.themeVariantParity.length} 处主题变体同值、${flexShrinkIssues.issues.length} 处 flex 收缩风险（详见 component-meta.json）`,
+          message: `⚠️ 图表契约留痕：${chartSpecIssues.textColors.length} 处文字色硬编码、${chartSpecIssues.specIssues.length} 处 chartSpec 违规、${bindingContractIssues.orphanResources.length} 个孤儿资源、${bindingContractIssues.themeVariantParity.length} 处主题变体同值、${flexShrinkIssues.issues.length} 处 flex 收缩风险、${antdMimicryIssues.issues.length} 处 antd 手写模仿指纹（详见 component-meta.json）`,
           status: 'warning',
         });
       }
@@ -2887,6 +2903,49 @@ export function createPhase2Graph(config = {}) {
       //   FLEX-002 现为**纯 WARN 报告项**（无任何修复器），判定仍由 checkFlexUsage 负责。
     } catch (flexErr) {
       logger.warn('P0-4 flex 检查异常（非阻断）', { error: flexErr.message });
+    }
+
+    // 🛡️ U1-F3（2026-10-09，与 phase2 同款）：techstack 契约标签未落地 → L0-B BLOCK。
+    //   Figma 图层 @antd/* 显式标注 = 用户契约，产物必须用对应真组件渲染；
+    //   违规走 L0-B 重试（修复指导随 issue.message 进 chunk revise），
+    //   l0BypassAfterFailures 兜底。判据单一来源 checkTechStackContractTags
+    //   （fail-open：无锚点产物零违规，不误伤）。
+    try {
+      const { checkTechStackContractTags: _checkTsContractV3 } = await import(
+        '../utils/section-content-guard.js'
+      );
+      const contractTagCheckV3 = _checkTsContractV3({
+        files: filesForCheck,
+        plan: state.subComponentPlan,
+      });
+      const contractViolationsV3 = contractTagCheckV3?.violations || [];
+      if (contractViolationsV3.length > 0) {
+        result.issues = [
+          ...(result.issues || []),
+          ...contractViolationsV3.map((v) => ({
+            id: 'TECHSTACK-CONTRACT-VIOLATION',
+            severity: 'BLOCK',
+            message: `[U1 契约] ${v.hint || `契约标签 <${v.tag}> 未落地`}——该 section 必须用 <${v.tag}> 真组件实现（Figma 图层 @技术栈 显式标注），禁止手写 div/span 模仿组件 DOM`,
+            file: v.file || 'package/index.vue',
+            sectionId: v.sectionId,
+            tag: v.tag,
+          })),
+        ];
+        result.blockCount = (result.blockCount || 0) + contractViolationsV3.length;
+        result.pass = false;
+        logger.warn(`🛡️ U1-F3 techstack 契约标签未落地（L0-B BLOCK）: ${contractViolationsV3.length} 处`, {
+          samples: contractViolationsV3.slice(0, 3).map((v) => `${v.sectionId}:${v.tag}`),
+        });
+        state.onProgress?.({
+          stage: 'L0-B校验',
+          message: `⚠️ techstack 契约标签未落地 ${contractViolationsV3.length} 处（阻断重试，详见修复指导）`,
+          status: 'warning',
+        });
+      }
+    } catch (tsContractErr) {
+      logger.warn('U1-F3 techstack 契约 L0-B 检查异常（非阻断）', {
+        error: tsContractErr?.message || String(tsContractErr),
+      });
     }
 
     //  🛡️ P0-5: CODE-001/CODE-002 自动修复（零 LLM）

@@ -402,12 +402,75 @@
               </button>
             </div>
           </div>
+          <!-- 响应式测试模式：画布容器承载 iframe + 三向手柄（拖拽逻辑来自 useResizableFrame 单一实现） -->
+          <div
+            v-if="responsiveTestMode"
+            class="rz-canvas"
+            :class="{ 'is-resizing': frameResize.isResizing.value }"
+            :style="frameResize.bodyStyle.value"
+          >
+            <iframe
+              :src="previewUrl"
+              class="preview-iframe"
+              :style="frameResize.frameStyle.value"
+              frameborder="0"
+              sandbox="allow-scripts"
+            ></iframe>
+            <span class="rz-size-bubble" v-if="frameResize.showSizeBubble.value">
+              {{ frameResize.sizeLabel.value }}
+            </span>
+            <span
+              class="rz-h rz-h--r" tabindex="0" role="separator" aria-label="调整预览宽度"
+              @mousedown="frameResize.startResize($event, 'right')"
+              @keydown="frameResize.onHandleKeydown($event, 'right')"
+              @focus="frameResize.onHandleFocus"
+            ></span>
+            <span
+              class="rz-h rz-h--b" tabindex="0" role="separator" aria-label="调整预览高度"
+              @mousedown="frameResize.startResize($event, 'bottom')"
+              @keydown="frameResize.onHandleKeydown($event, 'bottom')"
+              @focus="frameResize.onHandleFocus"
+            ></span>
+            <span
+              class="rz-h rz-h--c" tabindex="0" role="separator" aria-label="同时调整预览宽高"
+              @mousedown="frameResize.startResize($event, 'corner')"
+              @keydown="frameResize.onHandleKeydown($event, 'corner')"
+              @focus="frameResize.onHandleFocus"
+            ></span>
+          </div>
           <iframe
+            v-else
             :src="previewUrl"
             class="preview-iframe"
             frameborder="0"
             sandbox="allow-scripts"
           ></iframe>
+          <div class="rz-toolbar">
+            <template v-if="responsiveTestMode">
+              <span class="rz-size" aria-live="polite">{{ frameResize.sizeLabel.value }}</span>
+              <span class="rz-preset">{{ frameResize.presetName.value }}</span>
+              <button
+                class="rz-btn"
+                v-for="vp in viewportPresets"
+                :key="vp.key"
+                :class="{ 'is-on': frameResize.presetName.value === vp.key }"
+                :title="vp.label + '（锁定宽度）'"
+                @click="frameResize.applyPreset(vp.key, vp.width, vp.height)"
+              >{{ vp.short }}</button>
+              <button
+                v-if="frameResize.isWidthLocked.value"
+                class="rz-btn"
+                title="解锁宽度后可自由拖动"
+                @click="frameResize.unlockWidth()"
+              >解锁宽</button>
+              <button class="rz-btn" title="恢复默认尺寸" @click="frameResize.resetSize()">重置</button>
+            </template>
+            <button
+              class="rz-btn"
+              :title="responsiveTestMode ? '退出响应式测试，恢复固定高度' : '进入响应式测试模式，可拖拽改变预览容器尺寸'"
+              @click="responsiveTestMode = !responsiveTestMode"
+            >{{ responsiveTestMode ? '退出响应式测试' : '响应式测试' }}</button>
+          </div>
         </div>
 
         <!-- 日志 -->
@@ -476,6 +539,8 @@ import {
 } from '@/api/generator'
 import { getVue3PreviewUrl, getMcPreviewUrl } from '@/api/component'
 import { downloadByUrl } from '@/utils/download-file'
+import { useResizableFrame } from '@/composables/useResizableFrame'
+import { PREVIEW_VIEWPORT_PRESETS } from '@/constants/previewViewports'
 import ApiBindingWizard from '@/views/workspace/ApiBindingWizard.vue'
 import DocUploadPanel from '@/components/generate/DocUploadPanel.vue'
 import CodeTypeToggle from '@/components/common/CodeTypeToggle.vue'
@@ -642,6 +707,17 @@ function resetTaskViewState() {
 // ── 预览 ──
 const previewUrl = ref('')
 const showPreview = ref(false)
+
+// ═══ 响应式测试模式 ═══
+// 本页预览 iframe 原为 CSS 写死 height:480px，无法测试响应式。
+// 进入响应式模式后改由 useResizableFrame 接管真实尺寸，媒体查询才会重新匹配。
+const responsiveTestMode = ref(false)
+const viewportPresets = PREVIEW_VIEWPORT_PRESETS
+const frameResize = useResizableFrame({
+  componentId: '',
+  defaultWidth: 1280,
+  defaultHeight: 720,
+})
 
 function resolveItemGroupId(sessionId: string, fallback?: string): string {
   // 🛡️ 2026-09-03 修复：组件落盘在「生成那一刻」的 group 下；若用户之后切了组
@@ -2627,6 +2703,111 @@ onUnmounted(() => {
   border: none;
   display: block;
   background: var(--bg-page);
+}
+
+/* ===================================================================
+ * 预览容器响应式调尺（响应式测试模式）
+ * 拖拽逻辑全部来自 composables/useResizableFrame（全仓唯一实现），此处只做外观。
+ * =================================================================== */
+.preview-section {
+  position: relative;
+}
+.rz-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 0 8px;
+  font-size: 12px;
+}
+.rz-size {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--bg-tertiary, rgba(0, 0, 0, 0.06));
+}
+.rz-preset {
+  color: var(--text-tertiary, #8a8a96);
+}
+.rz-btn {
+  border: 0.5px solid var(--border-color, #d9dbe0);
+  background: var(--bg-primary, #fff);
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--text-primary, #2c2c34);
+}
+.rz-btn:hover {
+  border-color: #185fa5;
+  color: #185fa5;
+}
+.rz-btn.is-on {
+  background: #faeeda;
+  border-color: #ba7517;
+  color: #633806;
+}
+/* 画布：真实尺寸容器，宽度超出父级时横向滚动 */
+.rz-canvas {
+  position: relative;
+  display: inline-block;
+  min-width: 0;
+}
+.rz-canvas.is-resizing {
+  pointer-events: none;
+}
+.rz-canvas .preview-iframe {
+  height: 100%;
+}
+.rz-h {
+  position: absolute;
+  background: #185fa5;
+  border-radius: 2px;
+  opacity: 0.85;
+  z-index: 5;
+}
+.rz-h:hover,
+.rz-h:focus-visible {
+  opacity: 1;
+  outline: 2px solid rgba(24, 95, 165, 0.35);
+  outline-offset: 1px;
+}
+.rz-h--r {
+  right: -3px;
+  top: 50%;
+  width: 6px;
+  height: 34px;
+  transform: translateY(-50%);
+  cursor: ew-resize;
+}
+.rz-h--b {
+  bottom: -3px;
+  left: 50%;
+  width: 34px;
+  height: 6px;
+  transform: translateX(-50%);
+  cursor: ns-resize;
+}
+.rz-h--c {
+  right: -4px;
+  bottom: -4px;
+  width: 10px;
+  height: 10px;
+  cursor: nwse-resize;
+}
+.rz-size-bubble {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 6;
+  background: #185fa5;
+  color: #fff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  pointer-events: none;
 }
 
 /* ── 响应式：窄屏降级为单栏 ── */

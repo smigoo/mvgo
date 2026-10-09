@@ -246,8 +246,9 @@ const chartColors = ['#1990FF', '#52C41A', '#FF7A00']
     expect(findBy(issues, 'THEME-SPECIAL-COLOR').length).toBeGreaterThanOrEqual(1)
   })
 
-  it('.common() 定义颜色变量 → THEME-COMMON-COLOR-VAR（会静默挡住主题覆盖）', () => {
-    // 全语料审计：70% 存量组件命中 → 统一 WARN（不阻断），配合确定性自愈收敛
+  it('.common() 定义颜色变量（>2 处）→ THEME-COMMON-COLOR-VAR 为 BLOCK（2026-10-09 阈值化）', () => {
+    // 2026-09-15 全语料审计 70% 命中时曾统一 WARN；2026-10-09 三件治本落地后升级为阈值 BLOCK
+    // （生成器移出 .common() 颜色 + 自愈器先补写再删 + 判据单一来源），>2 处说明系统性回潮，需重试修复。
     const issues = detectThemeColorViolations([
       {
         path: 'resources/styles/themes/theme-vars.less',
@@ -266,8 +267,47 @@ const chartColors = ['#1990FF', '#52C41A', '#FF7A00']
     ])
     const hit = findBy(issues, 'THEME-COMMON-COLOR-VAR')
     expect(hit).toHaveLength(1)
-    expect(hit[0].severity).toBe('WARN')
+    expect(hit[0].severity).toBe('BLOCK')
     expect(hit[0].message).toContain('4 个颜色变量')
+  })
+
+  it('阳性对照：.common() 仅 1 处颜色变量 → 降级 WARN（≤COMMON_COLOR_WARN_UP_TO，不阻断）', () => {
+    const issues = detectThemeColorViolations([
+      {
+        path: 'resources/styles/themes/theme-vars.less',
+        content: [
+          '.common() {',
+          '  @fontSize: var(--fontSize);',
+          '  @color-error: #ff4d4f;',
+          '}',
+          '.theme-light() { @colorTextBase: #333333; }',
+          '.theme-dark() { @colorTextBase: #f2f2f2; }',
+        ].join('\n'),
+      },
+    ])
+    const hit = findBy(issues, 'THEME-COMMON-COLOR-VAR')
+    expect(hit).toHaveLength(1)
+    expect(hit[0].severity).toBe('WARN')
+    expect(hit[0].message).toContain('≤2 处降级 WARN')
+  })
+
+  it('交界：恰好 2 处颜色变量 → 仍为 WARN（阈值含端点）', () => {
+    const issues = detectThemeColorViolations([
+      {
+        path: 'resources/styles/themes/theme-vars.less',
+        content: [
+          '.common() {',
+          '  @color-error: #ff4d4f;',
+          '  @color-predict-line: #52c41a;',
+          '}',
+          '.theme-light() { @colorTextBase: #333333; }',
+          '.theme-dark() { @colorTextBase: #f2f2f2; }',
+        ].join('\n'),
+      },
+    ])
+    const hit = findBy(issues, 'THEME-COMMON-COLOR-VAR')
+    expect(hit).toHaveLength(1)
+    expect(hit[0].severity).toBe('WARN')
   })
 
   it('.common() 仅含 var() 透传令牌（@fontSize）→ 不触发 THEME-COMMON-COLOR-VAR', () => {

@@ -616,8 +616,31 @@ ${outputFormatWarnings(true)}
     // 🧭 把子组件规划诊断前移进 prompt，让模型直接看到 coverage / truth / chrome / resource 事实
     const plannerDiagnosticsBlock = normalizePlannerDiagnostics(input);
 
+    // 🛡️ U1（2026-10-09 · c-c19746-c1974689 实锤）：常见 UI 控件 → antd 默认实现。
+    // preview-analysis schema 已教视觉分析对 table/form/upload/download 等标注 `control` 字段；
+    // layoutStructure 原样进 prompt，此处教代码生成端消费该标注：命中映射必须用 antd 组件实现，
+    // 禁止手写 div/span 模仿组件 DOM（指纹：class 名含 antd-xxx / ant-design-vue-xxx，
+    // 正是该实锤任务的产物形态 c-c19746-antd-form-item / c-c19746-ant-design-vue-upload）。
+    const uiControlCore = `
+### 常见 UI 控件 → antd 默认实现（U1 · 2026-10-09，无条件强制）
+
+设计稿中出现下述**控件形态**即触发（⚠️ 无论视觉分析有没有标 \`control\` 字段都必须遵守——control 标注只是加强信号，不是触发前提）：
+
+- \`control=table\` 或表格形态（多行多列数据网格+表头）→ \`<a-table>\`（:columns + :data-source 承载数据，禁止手写行列 DOM）
+- \`control=form\`/\`form-item\` 或表单形态（label+输入控件成行 ≥2 行）→ \`<a-form>\` + \`<a-form-item>\`（label 与必填星号由组件属性承载；**ant-design-vue 没有 label 组件**）
+- \`control=upload\` 或上传形态（虚线框/点击上传区）→ \`<a-upload>\`
+- \`control=download\` → \`<a-button>\` + download 图标
+- \`control=pagination\` → \`<a-pagination>\`；\`tabs\` → \`<a-tabs>\`/\`<a-tab-pane>\`；\`search\` → \`<a-input-search>\`
+- \`switch\`/\`checkbox\`/\`radio\`/\`date-picker\`/\`select\`/\`textarea\`/\`steps\`/\`tree\` → 对应 a-* 组件
+- 输入框形态（圆角矩形+占位文字）→ \`<a-input>\`，**禁止** \`<div class="...-input"><span>占位文字</span></div>\` 这类假输入框
+
+**techstack 锚点契约（更高优先级）**：子组件规划里 \`techStack.tag\` 非空的 section（来源：Figma 图层名 \`@antd/xxx\` 等用户显式标注），**必须**用 \`\${tag}\` 对应的真组件渲染该 section 内容——这是用户在 Figma 里逐节点指定的，违反将在 L0-B 门禁按 TECHSTACK-CONTRACT-VIOLATION 阻断重试。
+
+**指纹红线**：产物 class 名中出现 \`antd-xxx\` / \`ant-design-vue-xxx\`（手写模仿 antd 结构）即不合格（实锤 c-c19746-c1974689、mc-max-1791528133746-17b69623）。已用 a-input/a-select 等真组件的其余部分不算达标——「半真半假」的结构模仿必须整体替换为真组件。视觉稿与标注冲突时以视觉稿为准，但实现载体仍必须是 antd 组件。
+`
+
     const coreAndChecklist =
-      coreBase + chartCore + textTruthWhitelist + plannerDiagnosticsBlock + checklist;
+      coreBase + chartCore + uiControlCore + textTruthWhitelist + plannerDiagnosticsBlock + checklist;
 
     // 🏢 一体化平台约束（mc-only，vue3 不要求；M5-6/M5-7/M6-3a/M6-3b/M3-4c）
     const platformBlock =

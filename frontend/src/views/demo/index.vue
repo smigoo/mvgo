@@ -212,7 +212,7 @@
                   <span class="control-label">容器尺寸:</span>
                   <span class="control-value">{{ previewContainerWidth }} × {{ previewContainerHeight }}</span>
                   <button
-                    v-if="customPreviewWidth > 0 || customPreviewHeight > 0"
+                    v-if="hasCustomPreviewSize"
                     class="fit-btn"
                     @click="resetPreviewSize"
                     title="恢复 Figma 原始尺寸"
@@ -790,6 +790,7 @@ import { getThemeConfig, getCssVarsConfig } from '@/core/microcode/utils'
 import { useConfigStore } from '@/stores/config'
 import { useFeatureFlag } from '@/composables/useFeatureFlag'
 import { useDragResize } from './composables/useDragResize.js'
+import { useResizableFrame } from '@/composables/useResizableFrame'
 import { useSnapshots } from './composables/useSnapshots.js'
 import PreviewErrorBanner from '@/components/PreviewErrorBanner.vue'
 import McSpecCheckButton from '@/components/McSpecCheckButton.vue'
@@ -2382,41 +2383,34 @@ const previewScale = ref(100) // 缩放比例（默认 100%，不压缩）
 const figmaWidth = ref(0)
 const figmaHeight = ref(0)
 
-// 动态分辨率选项列表（含 Figma 原始尺寸）
-const resolutionOptions = ref([
-  { value: '1920x1080', label: '1920 x 1080 (FHD)' },
-  { value: '1366x768', label: '1366 x 768 (HD)' },
-  { value: '1440x900', label: '1440 x 900' },
-  { value: '1280x720', label: '1280 x 720 (HD)' },
-  { value: '375x667', label: '375 x 667 (iPhone SE)' },
-  { value: '414x896', label: '414 x 896 (iPhone XR)' },
-  { value: '768x1024', label: '768 x 1024 (iPad)' },
-])
+// 档位数据统一取自 @/constants/previewViewports（全仓唯一数据源）。
+// 此前本页自带一份 resolutionOptions 字面量清单，且定义了却零引用（死变量）——
+// 新增档位时必然漏改（R4），故随M3 一并移除。
 
-// 预览容器尺寸（可拖拽调整）
+// ═══ 预览容器尺寸（可拖拽调整）═══
 // 优先级：用户拖拽自定义 > Figma 原始尺寸 > 默认 420x300
-const customPreviewWidth = ref(0)
-const customPreviewHeight = ref(0)
-
-// 预览容器实际尺寸（计算属性）
-const previewContainerWidth = computed(() => {
-  if (customPreviewWidth.value > 0) return customPreviewWidth.value
-  if (figmaWidth.value > 0) return figmaWidth.value
-  return 420 // 兜底默认宽度
+//
+// 🔴 拖拽逻辑收敛到 composables/useResizableFrame（全仓唯一实现，副本即事故温床）。
+// 本页保留 customPreviewWidth/Height 与 previewContainerWidth/Height 这两个名字，
+// 但它们现在是 composable 的派生值，不再是各自为政的第二套实现。
+// composable 的默认尺寸用 getter 传入「Figma 原始尺寸，缺失回 420x300」。
+const previewFrameResize = useResizableFrame({
+  // demo 页不持久化（组件演示页，每次进来用设计稿原始尺寸更符合预期）
+  componentId: '',
+  minWidth: 100,
+  minHeight: 100,
+  defaultWidth: () => (figmaWidth.value > 0 ? figmaWidth.value : 420),
+  defaultHeight: () => (figmaHeight.value > 0 ? figmaHeight.value : 300),
 })
 
-const previewContainerHeight = computed(() => {
-  if (customPreviewHeight.value > 0) return customPreviewHeight.value
-  if (figmaHeight.value > 0) return figmaHeight.value
-  return 300 // 兜底默认高度
-})
-
-// 拖拽调整状态
-const isResizingPreview = ref(false)
-let resizeStartX = 0
-let resizeStartY = 0
-let resizeStartWidth = 0
-let resizeStartHeight = 0
+// 保留旧名字（模板与多处 computed 仍在引用），值统一来自 composable
+const previewContainerWidth = previewFrameResize.width
+const previewContainerHeight = previewFrameResize.height
+const isResizingPreview = previewFrameResize.isResizing
+// 「是否被用户改过」——用于决定是否显示「重置」按钮
+const hasCustomPreviewSize = computed(
+  () => previewFrameResize.presetName.value === 'custom' || previewFrameResize.presetName.value === 'default'
+)
 
 // 可调整的面板宽度/高度
 const leftPanelWidth = ref(250) // 左侧文件列表宽度
@@ -2747,47 +2741,13 @@ const fileTree = computed(() => {
   return tree
 })
 
-// 拖拽调整预览容器尺寸
-function startPreviewResize(event, direction) {
-  event.preventDefault()
-  isResizingPreview.value = true
-  resizeStartX = event.clientX
-  resizeStartY = event.clientY
-  resizeStartWidth = previewContainerWidth.value
-  resizeStartHeight = previewContainerHeight.value
-  
-  const onMouseMove = (e) => {
-    if (!isResizingPreview.value) return
-    
-    const deltaX = e.clientX - resizeStartX
-    const deltaY = e.clientY - resizeStartY
-    
-    if (direction === 'right' || direction === 'corner') {
-      customPreviewWidth.value = Math.max(100, resizeStartWidth + deltaX)
-    }
-    if (direction === 'bottom' || direction === 'corner') {
-      customPreviewHeight.value = Math.max(100, resizeStartHeight + deltaY)
-    }
-  }
-  
-  const onMouseUp = () => {
-    isResizingPreview.value = false
-    document.removeEventListener('mousemove', onMouseMove)
-    document.removeEventListener('mouseup', onMouseUp)
-    document.body.style.cursor = ''
-    document.body.style.userSelect = ''
-  }
-  
-  document.addEventListener('mousemove', onMouseMove)
-  document.addEventListener('mouseup', onMouseUp)
-  document.body.style.cursor = direction === 'right' ? 'ew-resize' : direction === 'bottom' ? 'ns-resize' : 'nwse-resize'
-  document.body.style.userSelect = 'none'
-}
+// 拖拽调整预览容器尺寸 —— 实现已收敛到 composables/useResizableFrame
+// （此前此处是独立副本：无 rAF 节流、阈值 100 与其他页不一致，是「副本即事故温床」的实例）
+const startPreviewResize = previewFrameResize.startResize
 
 // 重置为 Figma 原始尺寸
 function resetPreviewSize() {
-  customPreviewWidth.value = 0
-  customPreviewHeight.value = 0
+  previewFrameResize.resetSize()
 }
 
 /** 自适应缩放：根据容器可用空间自动计算最佳 fit scale */

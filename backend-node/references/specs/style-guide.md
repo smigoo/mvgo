@@ -55,20 +55,28 @@ CSS 变量配置详见 `../patterns/css-variable-pattern.md`
    - ✅ `--colorTextBase`（正确）
    - ❌ `--color-text-base`（错误）
 
-2. **theme-vars.less 必须映射 CSS 变量到 Less 变量**：
+2. **theme-vars.less 的 `.common()` 只映射「尺寸/字重」类框架预设**（值写成 `var(--xxx)` 透传）：
    ```less
    .common() {
-     @colorTextBase: var(--colorTextBase);
      @fontSize: var(--fontSize);
-     // ... 所有 cssVariableConfig 的 key
+     @fontWeightStrong: var(--fontWeightStrong);
+     @font-size-base: 14px;
+     @border-radius-base: 8px;
+     // ... 仅 尺寸/圆角/字重/间距
+     // ❌ 禁止 @color-error / @color-xxx: #333333;  —— 语义颜色槽位与字面量色值一律不放这里
    }
    .common();
    ```
+   > 🔴 **颜色值一律写进 `.theme-light()` / `.theme-dark()`**（两侧都要有、且**值必须不同**）。
+   > `.common()` 里一旦出现 `@colorX`，LESS「首个定义者胜出」会让主题 mixin 的同名定义被静默忽略
+   > → 浅/深渲染完全相同（门禁 `THEME-COMMON-COLOR-VAR`）。
 
-3. **样式使用 var()**：
+3. **业务样式写 Less 变量，不写 `var()`**：
    ```less
    .c-component {
-     color: var(--colorTextBase, @color-text-primary);
+     color: @color-text-primary;   // ✅ 值由 .theme-dark()/.theme-light() 编译期决定
+     font-size: @fontSize;         // ✅ .common() 映射好的尺寸变量
+     // color: var(--colorTextBase, @color-text-primary);  ❌ 模式 A 残留，已作废
    }
    ```
 
@@ -187,7 +195,7 @@ export default { common, dark, light }
 | 文件 | 职责 | 关键规则 |
 |------|------|----------|
 | `index.less` | 入口，按固定顺序导入 | ①theme-vars ②(multiple)common ③dark ④light |
-| `themes/theme-vars.less` | 定义 3 个 mixin + 全局调用 `.theme-light()` | **禁止使用 `var(--xxx)`** |
+| `themes/theme-vars.less` | 定义 3 个 mixin + 全局调用 `.theme-light()` | `.theme-*` mixin 内**禁止** `var()`；仅 `.common()` 允许尺寸/字重 `var()` 透传，**禁止颜色** |
 | `themes/dark.less` | `&.dark {}` 作用域：注入深色变量 + 导入 common | 必须以 `&.dark {` 开头 |
 | `themes/light.less` | `&.light {}` 作用域：注入浅色变量 + 导入 common | 必须以 `&.light {` 开头 |
 | `common.less` | 所有业务样式和布局 | 使用 `@color-xxx` 变量，**不引入 variables.less** |
@@ -270,12 +278,13 @@ const panelKey = computed(() => (theme.value === 'dark' ? 'dark-panel' : 'defaul
 - 必须使用 `<style scoped>` 或 CSS Modules
 - 禁止全局样式污染
 
-**CSS 变量使用**：
-```css
+**CSS 变量使用**（模式 B：业务样式只写 Less 变量）：
+```less
 .component {
-  font-size: var(--fontSize);
-  color: var(--colorTextBase);
-  background: var(--colorPrimaryBg);
+  font-size: @fontSize;           // ✅ 尺寸走 .common() 映射
+  color: @color-text-base;        // ✅ 颜色走主题槽位
+  background: @color-bg-container;
+  // ❌ 禁止：font-size: var(--fontSize); color: var(--colorTextBase);
 }
 ```
 
@@ -313,8 +322,8 @@ defineProps({ componentProps: { type: Object, required: true } })
 
 <style scoped>
 .layout-one {
-  font-size: var(--fontSize);
-  color: var(--colorTextBase);
+  font-size: @fontSize;        /* ✅ .common() 映射 */
+  color: @color-text-base;     /* ✅ 主题槽位（根作用域 .theme-light()/.theme-dark() 提供） */
 }
 </style>
 ```

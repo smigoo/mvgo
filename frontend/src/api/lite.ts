@@ -35,6 +35,12 @@ export interface GenerateLiteParams {
   panelType?: string
   requirementDoc?: string
   docAnalysis?: any
+  /** 用户自定义组件 ID（高级选项，仅 microcode 生效） */
+  userComponentId?: string
+  /** 用户补充提示词（高级选项） */
+  extraPrompt?: string
+  /** 用户上传需求文档文本（高级选项） */
+  requirementDocText?: string
 }
 
 export interface GenerateLiteResponse {

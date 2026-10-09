@@ -9,7 +9,10 @@
  -->
 <template>
   <!-- 全屏居中容器：预览舞台默认水平+垂直居中；已知尺寸时舞台内部再按视口等比缩放 -->
-  <div class="mc-preview-stage-shell" :class="{ 'is-standalone': !isEmbedded }">
+  <div
+    class="mc-preview-stage-shell"
+    :class="{ 'is-standalone': !isEmbedded, 'is-responsive': previewMode === 'responsive' }"
+  >
     <!-- 🎨 面板类型切换器（仅微码组件）
          嵌入父页面（TaskDetail）时，由父页面预览区右上角的「面板类型」下拉统一控制，
          这里不再重复渲染，避免浮层压在组件内容上。仅独立窗口打开时才显示。 -->
@@ -471,8 +474,35 @@ const figmaAspectRatio = ref(null) // null = 未知，number = W/H 比值
 const figmaOriginalWidth = ref(null) // 原始宽度
 const figmaOriginalHeight = ref(null) // 原始高度
 
+// ===================================================================
+// 预览模式：fidelity（保真，默认）| responsive（响应式测试）
+// -------------------------------------------------------------------
+// 为什么必须拆成两种互斥语义：
+//   保真模式下 stage 写死 Figma 原始像素宽高（1:1 还原，供视觉比对/截图）。
+//   此时若只把外层 iframe 拖窄，stage 宽度不变 → 布局视口可用宽度没变 →
+//   @media 命不中、vw 单位不变，用户只会看到「裁切 + 横向滚动」，响应式无从验证。
+//   所以「拖拽调尺」必须同时切到 responsive 分支放开这道尺寸锁。
+//
+//   保真分支的代码路径保持原样不动（视觉保真是已验证的核心价值，不可退化）。
+// ===================================================================
+type PreviewMode = 'fidelity' | 'responsive'
+const previewMode = ref<PreviewMode>('fidelity')
+
+/** 响应式模式下的视口尺寸（由父页面经 postMessage 下发，或本页 URL query 初始化） */
+const responsiveWidth = ref(0)
+const responsiveHeight = ref(0)
+
+function isResponsiveMode() {
+  return previewMode.value === 'responsive' && responsiveWidth.value > 0
+}
+
 const componentRootStyle = computed(() => {
-  if (!figmaOriginalWidth.value || !figmaOriginalHeight.value) return undefined
+  // 关键约束在 stageStyle（stage 才是被写死像素的那一层）：
+  //   stage 放开 → 组件根的 100% 才有可流动的宽度。
+  // 保真期无 figma 尺寸时不写内联样式（保持原行为，避免影响既有自适应布局）。
+  if (!isResponsiveMode() && (!figmaOriginalWidth.value || !figmaOriginalHeight.value)) {
+    return undefined
+  }
   return {
     width: '100%',
     height: '100%',
@@ -486,6 +516,21 @@ const componentRootStyle = computed(() => {
 })
 
 const stageStyle = computed(() => {
+  // ── 响应式测试模式：stage 跟随视口真实尺寸，不写死设计稿像素 ──
+  // iframe 元素尺寸变化 → 本页 window.innerWidth 变化 → @media / vw 自动重匹配
+  // （浏览器原生行为，无需向内层发消息）。
+  if (isResponsiveMode()) {
+    return {
+      width: `${responsiveWidth.value}px`,
+      height: `${responsiveHeight.value}px`,
+      flex: '0 0 auto',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'flex-start',
+      overflow: 'visible'
+    }
+  }
+
   // 已知原始尺寸：舞台始终使用设计稿的真实像素宽高。
   // 外层 iframe / shell 负责滚动，不在预览页内改写布局宽高或放大缩小组件。
   if (figmaOriginalWidth.value && figmaOriginalHeight.value) {
@@ -1458,6 +1503,29 @@ function onPreviewMessage(event) {
     return
   }
 
+  // 响应式测试模式下发：父页面拖拽/切档位后把真实视口尺寸送进来。
+  // 只改 stage 的尺寸锁，不重载组件、不改 iframe src（避免拖拽过程频繁重编译）。
+  if (data.type === 'set-preview-viewport') {
+    const w = Number(data.width)
+    const h = Number(data.height)
+    if (!(w > 0) || !(h > 0)) return
+    const mode: PreviewMode = data.mode === 'responsive' ? 'responsive' : 'fidelity'
+    const changed = mode !== previewMode.value || w !== responsiveWidth.value || h !== responsiveHeight.value
+    previewMode.value = mode
+    responsiveWidth.value = w
+    responsiveHeight.value = h
+    // 切回保真时清掉尺寸，让 stageStyle 重新走 figma 分支
+    if (mode === 'fidelity') {
+      responsiveWidth.value = 0
+      responsiveHeight.value = 0
+    }
+    if (changed) {
+      document.documentElement.setAttribute('data-preview-mode', mode)
+      console.log('📐 [Preview] 视口下发:', mode, `${w}×${h}`)
+    }
+    return
+  }
+
   if (data.type !== 'apply-css-vars') return
   const cssVars = data.cssVars || {}
   const root = document.documentElement
@@ -1475,6 +1543,19 @@ onMounted(async () => {
   if (!isEmbedded.value) {
     const pt = String(route.query.panelType || '')
     if (pt) globalPanelType.value = pt
+  }
+
+  // 响应式测试模式初始化（新窗口打开场景）：
+  // 父页面 iframe 无法用时（如独立窗口/预览链接），允许 URL 直接指定视口。
+  // ?previewMode=responsive&w=375&h=667
+  const urlMode = String(route.query.previewMode || '')
+  const urlW = Number(route.query.w)
+  const urlH = Number(route.query.h)
+  if (urlMode === 'responsive' && urlW > 0 && urlH > 0) {
+    previewMode.value = 'responsive'
+    responsiveWidth.value = Math.round(urlW)
+    responsiveHeight.value = Math.round(urlH)
+    document.documentElement.setAttribute('data-preview-mode', 'responsive')
   }
 
   await loadPreviewComponent()
@@ -1618,6 +1699,17 @@ html:root .mc-preview-stage-shell.is-standalone .mc-preview-stage {
   overflow: hidden;
   /* 纯白背景：确保 iframe 内部与外层淡蓝页面形成鲜明对比 */
   background: #ffffff;
+}
+
+/* 响应式测试模式：视口即真实设备宽度，禁止居中留白与等比缩放。
+ * 内容按视口顶部对齐，超出部分由 shell 滚动 —— 溢出本身就是被测对象。 */
+.mc-preview-stage-shell.is-responsive {
+  justify-content: flex-start;
+  align-items: flex-start;
+  background: #ffffff;
+}
+.mc-preview-stage-shell.is-responsive .mc-preview-stage {
+  overflow: visible;
 }
 
 /* ===================================================================

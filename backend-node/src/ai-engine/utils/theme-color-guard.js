@@ -60,6 +60,10 @@ const SLOT_WARN_UP_TO = 3;   // 槽位色值抄写 ≤3 处 → WARN
 //   0.2 断掉「hex→var()」源、0.3-a 修好 healer 覆盖率后，语料重放残留从 80.9% 收敛到 3.1%，
 //   且残留多为「名称无对应槽位、不可映射」的 1~4 处形态；超阈值仍 BLOCK（防大面积 var() 回归）。
 const VAR_NAME_WARN_UP_TO = 3;
+// 🛡️ 2026-10-09：`.common()` 内颜色变量（THEME-COMMON-COLOR-VAR）由固定 WARN 改阈值判据。
+//   取值 2：实测命中的「单侧缺失、自愈器前置条件挡不住」形态多为 1~2 处；
+//   >2 处说明 LLM 大面积把颜色塞进 .common()，属需要重试修复的形态。
+const COMMON_COLOR_WARN_UP_TO = 2;
 
 // 🛡️ 2026-09-16：文件级槽位字面量重声明（与 collectFileLevelSlotOverrides 同源，检测器/自愈共用）
 const FILE_LEVEL_SLOT_OVERRIDE_RE = /^\s*@(color|shadow)-[A-Za-z0-9_-]+\s*:\s*(#|rgba?\(|hsla?\()/i;
@@ -203,6 +207,29 @@ export function isColorVarName(name) {
 }
 
 /**
+ * 🛡️ 2026-10-09 治本：判定 `.common()` 内的一条 `@name: value;` 是否构成
+ * 「主题覆盖被静默忽略」的颜色变量冲突形态。
+ *
+ * **三处共用此单一判据**（此前生成器、自愈器、门禁各写一份口径，已出现过漂移）：
+ *   - 门禁 `collectCommonMixinColorVars`（→ THEME-COMMON-COLOR-VAR）
+ *   - 生成器 `style-tokens#renderMicrocodeThemeVarsLess`（把颜色移出 `.common()`）
+ *   - 自愈器 `less-variable-checker#healCommonColorVars`（存量产物写盘时清理）
+ *
+ * 判定：① 值以 `var(` 开头 → **不算冲突**（那是「接入主题变量」的透传映射，
+ * 如 `@fontSize: var(--fontSize)` / `@colorTextBase: var(--colorTextBase)`）；
+ * ② 变量名是颜色语义（`isColorVarName`）→ 冲突；③ 值含颜色字面量 → 冲突。
+ *
+ * @param {string} name  变量名（不含 `@`）
+ * @param {string} value 变量值原文
+ * @returns {boolean}
+ */
+export function isCommonColorConflictVar(name, value) {
+  const v = String(value ?? '').trim();
+  if (/^var\(/i.test(v)) return false;
+  return isColorVarName(name) || COLOR_LITERAL_RE.test(v);
+}
+
+/**
  * 🛡️ 2026-09-15 治本：检测 theme-vars.less 的 `.common()` 块内是否定义了颜色变量。
  *
  * 根因：LESS 的 mixin 变量**不覆盖** caller 作用域已存在的同名变量。
@@ -228,9 +255,8 @@ function collectCommonMixinColorVars(files) {
   while ((m = re.exec(block[1])) !== null) {
     const name = m[1];
     const value = m[2].trim();
-    // var() 透传是「接入主题变量」形态（如 @fontSize: var(--fontSize)）→ 不算违规
-    if (/^var\(/i.test(value)) continue;
-    if (isColorVarName(name) || COLOR_LITERAL_RE.test(value)) {
+    // 判据与生成器 / 自愈器同源（isCommonColorConflictVar）——不在此处各写一份正则
+    if (isCommonColorConflictVar(name, value)) {
       hits.push({ name: `@${name}`, value: value.slice(0, 40) });
     }
   }
@@ -654,15 +680,22 @@ export function detectThemeColorViolations(generatedFiles) {
 
   if (commonColorVars.length > 0) {
     // ⚠️ 2026-09-15 全语料审计：244 个存量组件中 172 个命中（70%），属**系统性**形态，
-    // 且后果是「主题静默失效」而非「编译失败」。若设 BLOCK 会让大批任务重试耗尽
-    // （参照 mc-max-1788505197306 教训）→ 统一 WARN，配合 less-variable-checker 的
-    // 确定性自愈（变量已在两个主题 mixin 定义时从 .common() 移除）渐进收敛。
+    // 且后果是「主题静默失效」而非「编译失败」。若**直接**设 BLOCK 会让大批任务重试耗尽
+    // （参照 mc-max-1788505197306 教训）。
+    // 🛡️ 2026-10-09 由「固定 WARN」升级为**阈值 BLOCK**（与 PRESET / VAR-NAME / SLOT 同款）。
+    //   前置已同批治本三件：① 生成器 style-tokens#renderMicrocodeThemeVarsLess 把 .common()
+    //   的颜色移出并注入两套主题（源头不再产出）；② 自愈器 less-variable-checker#
+    //   healCommonColorVars 放宽前置条件（单侧/双侧缺失都先补写再删，存量写盘即收敛）；
+    //   ③ 判据收敛到 isCommonColorConflictVar 单一来源（生成器/自愈器/门禁同口径）。
+    //   保留 ≤N 处 WARN 缓冲，防精修路径偶发残留硬失败。
+    const commonColorSeverity =
+      commonColorVars.length <= COMMON_COLOR_WARN_UP_TO ? 'WARN' : 'BLOCK';
     const varList = commonColorVars.map((v) => `${v.name}: ${v.value}`).join('、');
     issues.push({
       id: 'THEME-COMMON-COLOR-VAR',
-      severity: 'WARN',
+      severity: commonColorSeverity,
       file: 'resources/styles/themes/theme-vars.less',
-      message: `.common() 内定义了 ${commonColorVars.length} 个颜色变量（${varList}）→ LESS 的 mixin 变量不覆盖 caller 已有同名变量，.common() 抢先定义后 .theme-light()/.theme-dark() 被静默忽略 → .dark/.light 编译结果完全相同、切主题零生效。请把这些颜色变量移入 .theme-light() 与 .theme-dark() 各自定义，.common() 只保留字号/圆角等跨主题共享令牌。`,
+      message: `${commonColorSeverity === 'WARN' ? `（≤${COMMON_COLOR_WARN_UP_TO} 处降级 WARN：不阻断本次生成，建议精修期清理）` : ''}.common() 内定义了 ${commonColorVars.length} 个颜色变量（${varList}）→ LESS 的 mixin 变量不覆盖 caller 已有同名变量，.common() 抢先定义后 .theme-light()/.theme-dark() 被静默忽略 → .dark/.light 编译结果完全相同、切主题零生效。请把这些颜色变量移入 .theme-light() 与 .theme-dark() 各自定义，.common() 只保留字号/圆角等跨主题共享令牌。`,
       hint: {
         suggestion:
           '删除 .common() 内的 @colorX 定义，分别写进 .theme-light() / .theme-dark()（两处都要有，避免其中一个主题缺值编译失败）',

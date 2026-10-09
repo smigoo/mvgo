@@ -187,6 +187,9 @@ export class Phase2Service {
       fileKey,
       nodeId,
       componentId,
+      userComponentId, // 🆕 高级选项 P0：用户指定组件 ID（规范形态 c-<kebab>，declare/目录/前缀全链路恒定）
+      extraPrompt, // 🆕 高级选项 P0：用户补充提示词（≤4000 字，进 codegen prompt）
+      requirementDocText, // 🆕 高级选项 P0：需求文档文本（≤1MB 截断后 ≤20000 字，进 codegen prompt）
       config = {},
       panelType,
       target = 'microcode',  // 🆕 C3: 管线目标类型
@@ -325,6 +328,9 @@ export class Phase2Service {
         target,  // 🆕 C3: 管线目标类型
         requirementDoc,  // 🆕 S9: 需求文档透传
         docAnalysis,     // 🆕 S9: 预分析产物透传
+        userComponentId, // 🆕 高级选项 P0：用户指定组件 ID
+        extraPrompt,     // 🆕 高级选项 P0：补充提示词
+        requirementDocText, // 🆕 高级选项 P0：需求文档文本
         uiCache: sharedUiCache,  // 🆕 S3: 全局缓存短路（figma/visual）
       }).catch((error) => {
         this.logger.error(
@@ -501,6 +507,9 @@ export class Phase2Service {
       target?: string;
       requirementDoc?: string;   // 🆕 S9
       docAnalysis?: Record<string, any>;  // 🆕 S9
+      userComponentId?: string;  // 🆕 高级选项 P0：用户指定组件 ID
+      extraPrompt?: string;      // 🆕 高级选项 P0：补充提示词
+      requirementDocText?: string; // 🆕 高级选项 P0：需求文档文本
       uiCache?: Record<string, any>;      // 🆕 S15: UI 缓存（路径B 短路 figma/visual）
       resumeData?: Record<string, any>;   // 🆕 断点续跑数据（跳过已完成分析阶段）
       failureGuidance?: string;           // 🛡️ P1-3：任务级重试注入的上轮失败指导
@@ -541,6 +550,9 @@ export class Phase2Service {
         target,
         requirementDoc,   // 🆕 S9
         docAnalysis,      // 🆕 S9
+        userComponentId,  // 🆕 高级选项 P0：用户指定组件 ID
+        extraPrompt,      // 🆕 高级选项 P0：补充提示词
+        requirementDocText, // 🆕 高级选项 P0：需求文档文本
         uiCache,          // 🆕 S15
         resumeData,       // 🆕 断点续跑数据
       } = params;
@@ -697,6 +709,9 @@ export class Phase2Service {
           model: config.aiModel,
         },
         sessionId, // 🆕 传递 sessionId 用于 Token 追踪关联
+        userComponentId, // 🆕 高级选项 P0：用户指定组件 ID → declare/workspace/class 前缀
+        extraPrompt, // 🆕 高级选项 P0：补充提示词 → engineer prompt
+        requirementDocText, // 🆕 高级选项 P0：需求文档文本 → engineer prompt
         groupId: params.groupId,
         signal: controller.signal,
         skipNodes: Array.isArray(config.skipNodes) ? config.skipNodes : undefined, // 🆕 变体管线：跳过节点

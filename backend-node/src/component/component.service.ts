@@ -251,6 +251,7 @@ export class ComponentService {
   }
 
   // 获取组件详情（验证所有权：仅创建者或管理员可查看）
+
   async getComponentById(
     componentId: string,
     userId?: string,

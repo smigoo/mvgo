@@ -109,6 +109,36 @@
 }
 ```
 
+### 常见 UI 控件识别与 `control` 标注（2026-10-09 新增 · 表单/上传/表格 手写 div 模仿实锤 `c-c19746-c1974689`）
+
+**目的**：视觉分析阶段主动识别常见 UI 控件并标注 `control` 字段，下游代码生成据此**默认用组件库（antd）实现**——不依赖用户在 Figma 图层里手工标 `@技术栈`。
+
+**`control` 字段**：`section` / `header.controls[]` / `children[]` / `items[]` 节点均可携带。与 `role` 的区别：`role` 是内容语义角色（常驻 / stat-card / dropdown…），`control` 是 **UI 控件类型**（决定代码层用什么组件实现），二者可并存。
+
+**值域枚举（形态判据 → control 取值）**：
+
+| 视觉形态判据 | control 取值 | 代码生成默认实现 |
+|---|---|---|
+| 行列网格（表头+数据行，或明显行列对齐的数据区） | `table` | `<a-table>` |
+| 标签（含必填星号）+ 输入控件的成组结构 | `form` / `form-item` | `<a-form>` + `<a-form-item>` |
+| 虚线框 + 加号 / 「点击上传」/ 上传图标成组 | `upload` | `<a-upload>`（拖拽区用 upload-drag） |
+| 下载图标 / 「下载」「导出」文案按钮 | `download` | `<a-button>` + download 图标 |
+| 分页器（页码 + 上一页/下一页） | `pagination` | `<a-pagination>` |
+| 标签页切换（Tab 头 + 内容区） | `tabs` | `<a-tabs>` + `<a-tab-pane>` |
+| 搜索框 + 放大镜/搜索按钮成组 | `search` | `<a-input-search>` |
+| 开关滑块 | `switch` | `<a-switch>` |
+| 复选框 / 单选框（含成组） | `checkbox` / `radio` | `<a-checkbox>` / `<a-radio-group>` |
+| 日期选择器（日历图标 + 日期文本） | `date-picker` | `<a-date-picker>` |
+| 下拉选择（收起态含下拉箭头） | `select` | `<a-select>` |
+| 多行文本输入 | `textarea` | `<a-textarea>` |
+| 步骤条 | `steps` | `<a-steps>` |
+| 树形结构 | `tree` | `<a-tree>` |
+
+**标注铁律**：
+1. 识别到上表形态**必须**在对应节点标注 `control`，不许只给几何+文案（代码生成端凭此选择组件，缺标 = 手写 div 模仿组件 DOM，是已知质量事故来源）
+2. 不确定时宁缺勿滥：只标有把握的控件，禁止把普通卡片/装饰区标成控件
+3. 瞬态元素（tooltip/popover/hover 态）按既有瞬态规则处理，不标 `control`
+
 ### 详细元素级结构示例（v2.0新增）
 
 **用于需要精确Figma节点映射的场景**：

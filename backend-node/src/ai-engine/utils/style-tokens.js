@@ -15,6 +15,10 @@
  *   4. fontSize 双管线统一 calc(var(--fontSize) * N)；微码 css-vars.js 必须 getCssSize()
  */
 
+// 🛡️ 2026-10-09：`.common()` 颜色变量判据与门禁 / 自愈器**同源**（单一来源，不写正则副本）。
+//   theme-color-guard.js 自身零 import → 不构成循环依赖。
+import { isCommonColorConflictVar } from './theme-color-guard.js';
+
 // ══════════════════════════════════════════════════════════════
 // dark 主题色值枚举事实源（mc-check v1.0.20 darkThemeColorRules）
 // file-writer.js 从此处 re-export（兼容 mc-health-validator 既有 import）。
@@ -713,6 +717,35 @@ export function parseThemeVarsLess(prior) {
   };
 }
 
+/**
+ * 🛡️ 2026-10-09 治本：把 `.common()` 里的**颜色变量**切分出来。
+ *
+ * 根因：LESS 的 mixin 变量「首个定义者胜出」。产物 `index.less` / `themes/dark.less` /
+ * `themes/light.less` 均为 `.common(); .theme-X();` 顺序调用，故 `.common()` 里一旦定义
+ * `@colorX`，随后 `.theme-light()` / `.theme-dark()` 的同名定义被**静默忽略**
+ * → `.dark` 与 `.light` 展开出的 CSS 完全相同，主题开关零生效。
+ * （实测：c-traffic-monitor-140cbd45、c-cb2cdd-cb2cdd82；全语料近 7 天 8/23 命中。）
+ *
+ * 判据**复用门禁同一函数**（`isCommonColorConflictVar`），不在此处另写一份正则：
+ *   - 值以 `var(` 开头 → **不算颜色冲突**。`@fontSize: var(--fontSize)` /
+ *     `@colorTextBase: var(--colorTextBase)` 是「接入主题变量」的透传映射，
+ *     必须留在 `.common()`（移走反而断掉平台运行期注入通道）；
+ *   - 变量名是颜色语义（`@color-error` / `@color-predict-line` / `@color-tab-bg`…）→ 颜色；
+ *   - 值含颜色字面量（`#hex` / `rgb()` / `hsl()`）→ 颜色。
+ *
+ * @param {Object} common 解析出的 `.common()` `@key: value` 表
+ * @returns {{kept: Object, moved: Object}} kept 留在 `.common()`；moved 注入两套主题 mixin
+ */
+export function splitCommonColorVars(common = {}) {
+  const kept = {};
+  const moved = {};
+  for (const [k, v] of Object.entries(common || {})) {
+    if (isCommonColorConflictVar(k, v)) moved[k] = v;
+    else kept[k] = v;
+  }
+  return { kept, moved };
+}
+
 /** tokens 的颜色对象 → kebab 槽位表（跳过空值） */
 function mcSlotsFromTokens(obj) {
   const o = {};
@@ -844,6 +877,8 @@ export function deriveCounterpartCustomSlots(
  */
 export function renderMicrocodeThemeVarsLess(styleTokens = {}, prior = '') {
   const p = parseThemeVarsLess(prior);
+  // 🛡️ 2026-10-09 治本：`.common()` 只留「尺寸/字重/var() 透传」，颜色变量移到主题 mixin
+  const { kept: commonKept, moved: commonMovedColors } = splitCommonColorVars(p.common);
   const light = {
     ...MC_CANONICAL_COLOR_SLOTS.light,
     ...mcSlotsFromTokens(styleTokens.light),
@@ -864,12 +899,27 @@ export function renderMicrocodeThemeVarsLess(styleTokens = {}, prior = '') {
   };
   const lightCarried = carryCustom(MC_CANONICAL_COLOR_SLOTS.light, light, p.light);
   const darkCarried = carryCustom(MC_CANONICAL_COLOR_SLOTS.dark, dark, p.dark);
+  // 🛡️ 2026-10-09 治本：`.common()` 里的颜色变量**移出**，改注入两套主题 mixin。
+  //   （根因见 splitCommonColorVars 注释；此处只做「仅缺失时补写」，主题已给真值则保留真值。）
+  //   补写进两侧后，下面的 deriveCounterpartCustomSlots 才能看到「两套同值」并做确定性深浅派生，
+  //   从而既不再抢定义、又不丢变量（业务样式引用它仍可编译）。
+  const injectMovedCommonColors = (target) => {
+    const out = { ...target };
+    for (const [k, v] of Object.entries(commonMovedColors)) {
+      if (k in out) continue;
+      out[k] = v;
+    }
+    return out;
+  };
   // 🛡️ 2026-09-26 治本 0.3-b：专属槽位深浅派生（「缺的主题系统补」）
-  const derived = deriveCounterpartCustomSlots(styleTokens, lightCarried, darkCarried);
+  const derived = deriveCounterpartCustomSlots(
+    styleTokens,
+    injectMovedCommonColors(lightCarried),
+    injectMovedCommonColors(darkCarried),
+  );
   const lightFinal = derived.light;
   const darkFinal = derived.dark;
-  const commonKV =
-    Object.keys(p.common).length > 0 ? p.common : MC_COMMON_FALLBACK;
+  const commonKV = Object.keys(commonKept).length > 0 ? commonKept : MC_COMMON_FALLBACK;
 
   const emitCommon = `.common() {\n${Object.entries(commonKV)
     .map(([k, v]) => `  @${k}: ${v};`)
