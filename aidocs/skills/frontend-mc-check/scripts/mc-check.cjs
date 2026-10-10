@@ -794,8 +794,32 @@ function checkM4(dir, declare, isBusiness) {
       if (missingCoreVars.length === 0) {
         const darkVarValues = extractObjectKeyValues(cssVarsContent, 'dark')
         const colorRules = CFG.enums.darkThemeColorRules || {}
+        // 🛡️ 双真值模式（D8 · 2026-10-10）：用户分别提供浅色 + 深色两份 Figma 稿时，
+        //   两侧色值均为设计稿真值，三核心**必然不在枚举白名单内**（设计稿主色千变万化）。
+        //   原判据会把这类产物一律判 error ⇒ 门禁与生成器互相打脸。
+        //
+        //   为什么用「产物内标记」而不是读 meta / 任务上下文：本判据是**纯文件判定**
+        //   （只读 css-vars.js，无任何任务上下文），无法「按模式分叉」。故由生成器
+        //   buildCssVarsFile 在 css-vars.js 头部确定性写入标记，判据据此分叉：
+        //     - 有标记 ⇒ 仅对 relaxedCoreVars 内的键跳过枚举比对；
+        //     - 无标记 ⇒ 铁律 1 原样生效（单稿产物零影响）。
+        //
+        //   ⚠️ 收窄范围：只放宽三核心。darkThemeColorRules 其余键
+        //   （colorTextSecondary / Hover / Active / BgHover）与 darkThemeOptionalVars
+        //   （M4-11 滚动条）**一律照旧判定**，不因本模式连带失效。
+        const dualCfg = CFG.enums._M4_10_DUAL_TRUTH || {}
+        const dualMarker = dualCfg.marker || ''
+        const isDualTruth = !!(
+          dualMarker &&
+          typeof cssVarsContent === 'string' &&
+          cssVarsContent.includes(dualMarker)
+        )
+        const relaxedCoreVars = new Set(
+          isDualTruth ? dualCfg.relaxedCoreVars || [] : []
+        )
         const colorErrors = []
         coreVars.forEach((varName) => {
+          if (relaxedCoreVars.has(varName)) return
           const allowedValues = colorRules[varName]
           if (!allowedValues || allowedValues.length === 0) return
           const actualValue = (darkVarValues[varName] || '').toUpperCase()
@@ -814,7 +838,9 @@ function checkM4(dir, declare, isBusiness) {
             colorErrors.length
               ? colorErrors.slice(0, 3).join('；') +
                   (colorErrors.length > 3 ? `…等${colorErrors.length}处` : '')
-              : '通过'
+              : isDualTruth
+                ? '通过（双真值模式：三核心取 Figma 设计真值，按 D8 豁免枚举）'
+                : '通过'
           )
         )
       }

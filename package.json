@@ -3,7 +3,8 @@
     "check:r3b": "node scripts/check-r3b-guard.mjs",
     "check:theme-color": "npm --prefix backend-node run verify:theme-color",
     "check:theme-color:recent": "npm --prefix backend-node run verify:theme-color:recent",
-    "check:theme-migrate": "npm --prefix backend-node run verify:theme-migrate"
+    "check:theme-migrate": "npm --prefix backend-node run verify:theme-migrate",
+    "check:dual-truth": "npm --prefix backend-node run verify:dual-truth"
   },
   "dependencies": {
     "@types/bcrypt": "^6.0.0",
