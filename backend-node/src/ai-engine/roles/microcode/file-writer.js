@@ -1340,9 +1340,18 @@ export function buildCssVarsFile(options = {}) {
   const darkBody = buildCssVarsObjectBody(dark);
   const lightBody = light ? buildCssVarsObjectBody(light) : null;
   const exportNames = `common, dark${light ? ', light' : ''}`;
+  // 🛡️ 双真值标记（D8 · 2026-10-10）：双真值模式下三核心取 Figma 设计真值，
+  //   必然不在规范枚举白名单内（M4-10）。mc-check 是**纯文件判定**、无任务上下文，
+  //   无法按模式分叉 ⇒ 在产物内写确定性标记，判据据此对三核心豁免枚举比对。
+  //   ⚠️ 必须由本函数（确定性生成器）写入，**不接受 LLM 写入** —— css-vars.js 整体由
+  //   buildCssVarsFile 覆盖生成，LLM 不参与，故标记不可被臆造。
+  //   单稿路径不写此行 ⇒ 铁律 1 与 M4-10 原样生效（零回归）。
+  const dualTruthMarker = tokens?.dualTruth?.enabled
+    ? `// dualTruth: figma-derived（双真值：两侧色值均为 Figma 设计真值；M4-10 三核心按 D8 豁免枚举）\n`
+    : '';
   // ⚠️ common 色值必须引用完整枚举 MC_DARK_THEME_COLOR_ENUM（含 Hover/Active/BgHover）——
   //    此前引用 dark 对象（仅 3 核心变量）会输出 'undefined'（既有 bug，2026-09-03 顺带修复）。
-  return `// 组件 CSS 变量默认值（系统生成，勿手改）
+  return `${dualTruthMarker}// 组件 CSS 变量默认值（系统生成，勿手改）
 // 规范：M4-4 导出 common + 每个主题对象；M4-4b 字体变量使用 $mcCssBuilder.getCssSize()
 // 导出形态：命名导出（declare.js import cssVars 用）+ default 导出（mc-check M4-8 正则
 //   /export\\s+default\\s*\\{[\\s\\S]*dark[\\s\\S]*\\}/ 只认 default 导出对象，2026-09-03 实锤）

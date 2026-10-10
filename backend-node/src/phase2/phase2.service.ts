@@ -41,6 +41,36 @@ import {
 } from '../schemas/group-member.schema';
 import { Types } from 'mongoose';
 
+/**
+ * 🆕 2026-10-10 双主题（R11）：从已落盘的 declare.json 读双真值元数据。
+ *
+ * 为什么从 declare.json 读、而不是从 generateCode 的内存态拿：
+ *   ① declare.json 是**已落盘的事实源**（断点续跑 / 进程重启后内存态已丢失）；
+ *   ② 与预览页 R12 徽标**同一数据源** ⇒ 列表/详情与预览显示不会打架。
+ *
+ * fail-open：文件不存在 / 解析失败 / 非双真值 → 返回 {}（不阻断组件入库）。
+ * 单稿产物返回 {} ⇒ metadata 结构与改动前完全一致（零回归）。
+ */
+async function readDualTruthMeta(outputPath?: string): Promise<Record<string, any>> {
+  if (!outputPath) return {};
+  try {
+    const { readFile } = await import('fs/promises');
+    const { join } = await import('path');
+    const raw = await readFile(join(outputPath, 'declare.json'), 'utf-8');
+    const declare = JSON.parse(raw);
+    const theme = declare?.themeConfig;
+    if (!theme || theme.dualTruth !== true) return {};
+    return {
+      dualTruth: true,
+      primaryBrightness: theme.primaryBrightness || null,
+      secondaryBrightness: theme.secondaryBrightness || null,
+    };
+  } catch {
+    // fail-open：无 declare.json / 非法 JSON 一律不阻断组件入库
+    return {};
+  }
+}
+
 @Injectable()
 export class Phase2Service {
   private readonly logger = new Logger(Phase2Service.name);
@@ -197,6 +227,8 @@ export class Phase2Service {
       docAnalysis,           // 🆕 S9: 预分析文档产物（可选）
       previewToken,          // 🆕 预览图复用 token
       reuseCache,            // 🆕 续跑复用缓存（true 才复用全局缓存，false=全新重新生成）
+      secondaryNode,         // 🆕 2026-10-10 双主题：副稿 Figma 节点（深浅两份设计真值）
+      primaryRole,           // 🆕 2026-10-10 双主题：主副角色（'first' 默认 / 'second'）
     } = dto;
 
     // 🐛 防御：phase2 是 Figma 完整生成管线，必须携带有效 fileKey/nodeId。
@@ -332,6 +364,9 @@ export class Phase2Service {
         extraPrompt,     // 🆕 高级选项 P0：补充提示词
         requirementDocText, // 🆕 高级选项 P0：需求文档文本
         uiCache: sharedUiCache,  // 🆕 S3: 全局缓存短路（figma/visual）
+        // 🆕 2026-10-10 双主题 Figma 输入：深浅两份设计真值（不传 = 单稿，零回归）
+        secondaryNode,
+        primaryRole,
       }).catch((error) => {
         this.logger.error(
           `Phase 1 generation failed: ${error.message}`,
@@ -513,6 +548,8 @@ export class Phase2Service {
       uiCache?: Record<string, any>;      // 🆕 S15: UI 缓存（路径B 短路 figma/visual）
       resumeData?: Record<string, any>;   // 🆕 断点续跑数据（跳过已完成分析阶段）
       failureGuidance?: string;           // 🛡️ P1-3：任务级重试注入的上轮失败指导
+      secondaryNode?: { fileKey: string; nodeId: string }; // 🆕 2026-10-10 双主题：副稿节点
+      primaryRole?: 'first' | 'second';    // 🆕 2026-10-10 双主题：主副角色
     },
   ) {
     // 声明变量以便在finally块中使用
@@ -720,6 +757,10 @@ export class Phase2Service {
         uiCache: effectiveUiCache,          // 🆕 S15: UI 缓存 → figma/visual 节点短路（路径B + 自动断点复用）
         _resumeData: effectiveResumeData || null,   // 🆕 断点续跑：跳过已完成的分析阶段
         failureGuidance: params.failureGuidance,    // 🛡️ P1-3：上轮失败指导 → 工程师首轮 prompt
+        // 🆕 2026-10-10 双主题 Figma 输入：副稿节点 → graph 的 fetchSecondaryFigmaNode
+        //   （只 getNode 取色板；失败 fail-closed 阻断）。单稿不传 ⇒ 零回归。
+        secondaryNode: params.secondaryNode,
+        primaryRole: params.primaryRole,
         onProgress: (data) => {
           // 生成链以 `{ fileLifecycle: {...} }` 标记文件级生命周期事件，
           // 走独立的瞬态广播通道（不持久化、不进入 progress 历史）。
@@ -1325,10 +1366,26 @@ export class Phase2Service {
               sessionId,
               figmaFileKey: params.fileKey,
               figmaNodeId: params.nodeId,
+              // 🆕 2026-10-10 双主题（R11）：双真值元数据落库，供组件详情页/任务列表
+              //   渲染「双真值」徽标与两份来源。**只读产物 declare.json 的 themeConfig**，
+              //   不从 generateCode 内存态取 —— 断点续跑/进程重启后内存态已丢失，
+              //   而 declare.json 是已落盘的事实源。
+              ...(await readDualTruthMeta(outputPath)),
               ...(figmaWidth ? { figmaWidth } : {}),
               ...(figmaHeight ? { figmaHeight } : {}),
             },
           );
+          // 🆕 2026-10-10 双主题（R11）：任务侧也写一份双真值标记，供任务列表渲染徽标。
+          //   与组件 metadata 同源（同一份 declare.json）⇒ 列表与详情不会打架。
+          //   单稿不写 ⇒ 任务对象结构与改动前一致（零回归）。
+          const dualMeta = await readDualTruthMeta(outputPath);
+          if (dualMeta.dualTruth) {
+            this.tasksService.updateTask(sessionId, {
+              dualTruth: true,
+              primaryBrightness: dualMeta.primaryBrightness,
+              secondaryBrightness: dualMeta.secondaryBrightness,
+            } as any);
+          }
           this.logger.log(
             `Component record saved to database: ${componentName} (sessionId: ${sessionId})`,
           );

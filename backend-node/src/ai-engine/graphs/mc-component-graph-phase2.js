@@ -51,6 +51,16 @@ import {
 // ESM 判定（Node 语法检测）下抛 "require is not defined"。publisher 已 module.exports named export，
 // cjs-module-lexer 可识别，改 ESM import 兼容 CJS/ESM 双加载。
 import { publishQualityPreview } from '../utils/workspace-preview-publisher.js';
+// 🆕 2026-10-10 双主题 Figma 输入：主副稿解析 / 副稿错误归类 / 明暗校验（纯函数，便于离线验证）
+import {
+  resolvePrimarySecondary,
+  validatePrimarySecondary,
+  validateSecondaryBrightness,
+  classifySecondaryFigmaError,
+  buildSecondaryFigmaError,
+  assembleDualTruthNodes,
+  SECONDARY_ERROR_CODES,
+} from '../utils/dual-truth-figma.js';
 import { VisualComparator } from '../roles/visual-comparator.js';
 import { join } from 'path';
 import { existsSync } from 'fs';
@@ -243,6 +253,140 @@ function buildVisualAnalysisBlockError(result = {}) {
   return new Error(
     `视觉分析失败或降级，已阻断代码生成，避免大模型盲生成/臆造内容。原因：${reason}；layoutSource=${layoutSource}`,
   );
+}
+
+/**
+ * 🆕 2026-10-10 双主题 Figma 输入：拉取副稿节点（fail-closed，D3）
+ *
+ * 副稿**只贡献色板**，因此：
+ *  - 只调 `fetchNodeData`（getNode），**不调** `downloadPreviewImage` / `exportImage`
+ *    / `downloadAssets` —— 既省时间也省 Figma 限流额度（现有限流槽 maxConcurrency=1、
+ *    429 冷却 30s 封顶 120s，见 R1 风险项）；
+ *  - 不进 Vision、不参与结构分析（结构只由主稿决定）。
+ *
+ * 失败一律 **throw**（阻断），绝不降级为算法派生 —— 悄悄降级会让用户以为拿到的是
+ * 双真值产物，实际其中一个主题仍是「算出来的」。
+ *
+ * @param {Object} state graph state（需含 secondaryNode / figmaToken / onProgress）
+ * @param {{primaryNodeData:Object, logger:Object}} ctx
+ * @returns {Promise<Object>} dualTruth 产物
+ */
+async function fetchSecondaryFigmaNode(state, ctx) {
+  const { primaryNodeData, logger: log } = ctx;
+  const sec = state.secondaryNode;
+  const onProgress = state.onProgress;
+
+  onProgress?.({
+    stage: 'Figma数据获取',
+    message: '🎨 正在获取深色设计稿（双主题模式）...',
+    status: 'running',
+  });
+
+  // 主副角色解析（D1：显式选择，默认预选第一个）
+  const { primary, secondary, primaryRole } = resolvePrimarySecondary(
+    { fileKey: state.fileKey, nodeId: state.nodeId },
+    { fileKey: sec.fileKey, nodeId: sec.nodeId },
+    state.primaryRole || 'first',
+  );
+
+  // 合法性：不得同一节点（两稿同源 ⇒ 双真值无意义，等于白跑一次 Figma）
+  const valid = validatePrimarySecondary(primary, secondary);
+  if (!valid.ok) {
+    log?.warn?.('❌ 双真值输入校验失败', valid);
+    throw buildSecondaryFigmaError(valid.code, valid.detail);
+  }
+
+  const connector = new FigmaConnector({ figmaToken: state.figmaToken });
+  let secondaryNodeData;
+  try {
+    secondaryNodeData = await connector.fetchNodeData(secondary.fileKey, secondary.nodeId);
+  } catch (err) {
+    // 归类 → 换成指明「副稿 + 原因 + 处置」的错误再抛（D3）
+    const { code, title, hint } = classifySecondaryFigmaError(err);
+    log?.error?.('❌ 深色设计稿拉取失败（已阻断，不降级）', {
+      code,
+      fileKey: secondary.fileKey,
+      nodeId: secondary.nodeId,
+      raw: err?.message,
+    });
+    const blocked = buildSecondaryFigmaError(code, secondary.fileKey);
+    blocked.originalMessage = err?.message;
+    blocked.rawStatus = err?.figStatus;
+    onProgress?.({
+      stage: 'Figma数据获取',
+      message: `❌ ${title}`,
+      status: 'failed',
+    });
+    throw blocked;
+  }
+
+  if (!secondaryNodeData || typeof secondaryNodeData !== 'object') {
+    throw buildSecondaryFigmaError(
+      SECONDARY_ERROR_CODES.NODE_NOT_FOUND,
+      '返回内容为空',
+    );
+  }
+
+  // 明暗矛盾拦截：用户可能把浅色稿误填进「深色设计稿」框。
+  // 不拦的话双真值会让两个槽位拿到**同侧**色板 —— 看起来"生成成功"但切主题无效，
+  // 是最隐蔽的失败模式。
+  const { resolveBackgroundBrightness } = await import('../utils/style-tokens.js');
+  const primaryBrightness = resolveBackgroundBrightness(primaryNodeData, 'dark');
+  // 副稿期望明暗 = 与主稿相反（双主题的前提就是一深一浅）
+  const secondaryExpect =
+    primaryBrightness === 'dark' ? 'light' : 'dark';
+  const secondaryMeasured = resolveBackgroundBrightness(
+    secondaryNodeData,
+    secondaryExpect,
+  );
+  const brightOk = validateSecondaryBrightness(secondaryMeasured, secondaryExpect);
+  if (!brightOk.ok) {
+    log?.warn?.('❌ 深浅设计稿明暗矛盾（已阻断）', {
+      ...brightOk,
+      primaryBrightness,
+      secondaryMeasured,
+    });
+    onProgress?.({
+      stage: 'Figma数据获取',
+      message: `❌ ${buildSecondaryFigmaError(brightOk.code, brightOk.detail).title}`,
+      status: 'failed',
+    });
+    throw buildSecondaryFigmaError(brightOk.code, brightOk.detail);
+  }
+
+  // 按**实测明暗**归位，而不是按「主稿/副稿」硬绑 light/dark：
+  // 双真值要的是「light 槽位拿浅色稿」，不是「light 槽位拿副稿」。
+  const assembled = assembleDualTruthNodes(
+    primaryNodeData,
+    secondaryNodeData,
+    primaryBrightness,
+    secondaryMeasured,
+    resolveBackgroundBrightness,
+  );
+
+  log?.info?.('✅ 深色设计稿获取成功（双真值）', {
+    primaryRole,
+    primaryBrightness: assembled.primaryBrightness,
+    secondaryBrightness: assembled.secondaryBrightness,
+    secondaryFileKey: secondary.fileKey,
+    secondaryNodeId: secondary.nodeId,
+  });
+  onProgress?.({
+    stage: 'Figma数据获取',
+    message: '✅ 深浅两份设计稿就绪（双真值模式）',
+    status: 'completed',
+  });
+
+  return {
+    enabled: true,
+    lightNodeData: assembled.lightNodeData,
+    darkNodeData: assembled.darkNodeData,
+    primaryBrightness: assembled.primaryBrightness,
+    secondaryBrightness: assembled.secondaryBrightness,
+    primaryRole,
+    primarySource: { fileKey: primary.fileKey, nodeId: primary.nodeId },
+    secondarySource: { fileKey: secondary.fileKey, nodeId: secondary.nodeId },
+  };
 }
 
 /**
@@ -611,6 +755,19 @@ export function createPhase2Graph(config = {}) {
       //保存 checkpoint
       state._saveCheckpoint?.('figma', optimizedFigmaData);
 
+      // 🆕 2026-10-10 双主题 Figma 输入：拉取副稿节点（只 getNode，不 exportImage）。
+      //   - 副稿**只贡献色板**：不做结构分析、不进 Vision、不下载资源（省限流额度）；
+      //   - 失败**直接阻断**（D3 fail-closed），不降级为派生 —— 悄悄降级会让用户
+      //     误以为拿到的是双真值产物；
+      //   - 单稿路径（无 secondaryNode）完全不进本分支 ⇒ 零回归。
+      let dualTruth = null;
+      if (state.secondaryNode?.fileKey && state.secondaryNode?.nodeId) {
+        dualTruth = await fetchSecondaryFigmaNode(state, {
+          primaryNodeData: optimizedFigmaData,
+          logger,
+        });
+      }
+
       return {
         figmaStyleTree: figmaStyleTree,
         previewImage: result.previewImage,
@@ -620,6 +777,8 @@ export function createPhase2Graph(config = {}) {
         techStackHints: techStackHints,
         //S10: 汇合后的文档分析产物
         docAnalysis,
+        //🆕 双真值副稿产物（单稿恒为 null）
+        dualTruth,
       };
     } catch (error) {
       logger.error('Figma数据获取失败', { error: error.message });
@@ -1339,6 +1498,8 @@ export function createPhase2Graph(config = {}) {
             state.layoutStructure?.styles?.backgroundBrightness ||
             'dark',
         ),
+        //🆕 2026-10-10 双主题：深浅两份设计真值（单稿恒为 null ⇒ 零回归）
+        dualTruth: state.dualTruth || null,
         //视觉降级防线：engineer 内部也会兜底拒绝，避免未来改边绕过 visual-parser 闸门
         _visualDegraded: state._visualDegraded,
         _visualDegradeReason: state._visualDegradeReason,
@@ -2015,7 +2176,138 @@ export function createPhase2Graph(config = {}) {
         degraded: false,
       });
 
-      return { visualComparisonReport: report };
+      // ══════════════════════════════════════════════════════════════
+      // 🆕 2026-10-10 双主题评测（R10 · D4）
+      //
+      // 单稿：直接返回原报告（**与改动前逐字节一致**）。
+      // 双真值：**额外渲染另一主题并与对应稿件比对**，再聚合出平均分 + 分主题明细。
+      //
+      // 为什么主侧比对照旧：主侧已渲好（state.renderedImage），复用即可；
+      // 只补渲「另一主题」那一侧 ⇒ 截图开销仅 +1 次（不是 +2 倍）。
+      // ══════════════════════════════════════════════════════════════
+      if (!state.dualTruth?.enabled) {
+        return { visualComparisonReport: report };
+      }
+
+      try {
+        const primaryBrightness = state.dualTruth.primaryBrightness || 'light';
+        const otherBrightness = primaryBrightness === 'dark' ? 'light' : 'dark';
+        // 主侧主题：state.renderedImage 是按 declare 默认主题渲的，
+        // 但双真值产物 themeConfig.default = 主稿明暗，故主侧 = primaryBrightness。
+        const primaryReport = report;
+        const primaryTheme = primaryBrightness;
+        const otherTheme = otherBrightness;
+
+        state.onProgress?.({
+          stage: '视觉比对',
+          message: `🎨 双主题评测：正在渲染${otherTheme === 'dark' ? '深色' : '浅色'}主题...`,
+          status: 'running',
+        });
+
+        // 副稿（另一主题）的 Figma 原图：graph 未存图，此处按 fileKey+nodeId 取
+        const secondarySource = state.dualTruth.secondarySource;
+        const primarySource = state.dualTruth.primarySource;
+        const otherSource =
+          otherTheme === primaryTheme ? secondarySource : primarySource;
+
+        const { renderScreenshot } = await import('../roles/screenshot-renderer.js');
+        const otherRender = await renderScreenshot({
+          outputPath: state.outputPath,
+          sessionId: state.sessionId,
+          componentName: state.componentName || state.sessionId,
+          target: 'microcode',
+          groupId: state.groupId,
+          previewImage: figmaImage, // 沿用主稿预览图取 viewport 尺寸（两稿同组件，尺寸一致）
+          theme: otherTheme, // 🆕 关键：本次渲染指定主题
+          hardGate: false,
+          allowMissingAssetSelfHeal: false,
+        });
+
+        let otherReport = null;
+        if (otherRender?.renderedImage && otherSource?.fileKey) {
+          // 副稿（另一主题）的 Figma 原图：按 fileKey+nodeId 走既有出图接口。
+          // ⚠️ 走限流槽（getImageUrl 内部 acquire），**不绕过**限流（R1 风险项）。
+          let otherFigmaImage = null;
+          try {
+            const connector = new FigmaConnector({ figmaToken: state.figmaToken });
+            const url = await connector.getImageUrl(otherSource.fileKey, otherSource.nodeId);
+            if (url) {
+              // 图片是 Figma 返回的远端 URL（可能是 S3 签名地址），
+              // 直接 https 下载落盘，交给视觉比对。
+              const { writeFile: wf } = await import('fs/promises');
+              const { join: j } = await import('path');
+              const dir = j(state.outputPath, '.mc-gen');
+              otherFigmaImage = j(dir, `figma-other-${otherTheme}.png`);
+              const mod = url.startsWith('https:') ? await import('https') : await import('http');
+              const buf = await new Promise((resolve, reject) => {
+                const chunks = [];
+                mod
+                  .get(url, (res) => {
+                    if (res.statusCode !== 200) {
+                      reject(new Error(`HTTP ${res.statusCode}`));
+                      res.destroy();
+                      return;
+                    }
+                    res.on('data', (c) => chunks.push(Buffer.from(c)));
+                    res.on('end', () => resolve(Buffer.concat(chunks)));
+                  })
+                  .on('error', reject);
+              });
+              await wf(otherFigmaImage, buf);
+            }
+          } catch (e) {
+            // 🔴 副稿原图取不到 ⇒ 只报主侧结果（降级但不阻断，任务仍可完成）
+            logger.warn('副稿 Figma 原图获取失败，双主题评测降级为单侧', {
+              error: e?.message,
+            });
+          }
+
+          if (otherFigmaImage) {
+            otherReport = await comparator.compare(otherFigmaImage, otherRender.renderedImage, {
+              signal: state.signal || state.__abortSignal || null,
+              onProgress: state.onProgress,
+              requestConcurrency: state.requestConcurrency,
+              requestQueueTimeoutMs: state.requestQueueTimeoutMs,
+              requestTimeoutMs: state.requestTimeoutMs,
+              requestMaxRetries: state.requestMaxRetries,
+            });
+          }
+        }
+
+        const { aggregateDualThemeScores, attachDualThemeScores } = await import(
+          '../utils/dual-truth-score.js'
+        );
+        const dualScore = aggregateDualThemeScores({
+          lightReport: primaryTheme === 'light' ? primaryReport : otherReport,
+          darkReport: primaryTheme === 'dark' ? primaryReport : otherReport,
+          primaryBrightness,
+        });
+
+        logger.info('🎨 双主题视觉评测完成', {
+          overallScore: dualScore.overallScore,
+          minScore: dualScore.minScore,
+          needsReview: dualScore.needsReview,
+          perTheme: dualScore.perTheme.map((p) => ({ theme: p.theme, score: p.score, issues: p.issues.length })),
+        });
+
+        state.onProgress?.({
+          stage: '视觉比对',
+          message: `双主题评测完成（平均 ${dualScore.overallScore ?? '—'}${
+            dualScore.needsReview ? '，有主题需复查' : ''
+          }）`,
+          status: dualScore.needsReview ? 'warning' : 'completed',
+        });
+
+        // 保持既有单主题字段不变（下游 revision-decision 照旧消费），
+        // 双主题结果挂在 dualThemeScore 上供前端展示。
+        return {
+          visualComparisonReport: attachDualThemeScores(primaryReport, dualScore),
+        };
+      } catch (dualErr) {
+        // 🔴 双主题评测失败**不回退主结果**（主侧报告仍然有效）
+        logger.warn('双主题评测失败（保留主侧结果，非阻断）', { error: dualErr?.message });
+        return { visualComparisonReport: report };
+      }
     } catch (error) {
       logger.error('视觉比对节点失败（非阻塞）', { error: error.message });
       state.onProgress?.({
@@ -5095,6 +5387,8 @@ export async function runPhase2Generation(options) {
     requirementDocText, //🆕 高级选项 P0：需求文档文本（可选）
     skipNodes, //🆕 变体管线：要跳过的节点名数组（如 ['parallel-analysis','adversarial-checker']）
     failureGuidance, //🛡️ P1-3：任务级重试注入的上轮失败指导（首轮 engineer prompt 即生效）
+    secondaryNode, //🆕 2026-10-10 双主题：副稿 Figma 节点（深浅两份设计真值）
+    primaryRole, //🆕 2026-10-10 双主题：主副角色（'first' 默认 / 'second'）
   } = options;
 
   //断点续跑：检查点保存辅助函数
@@ -5256,6 +5550,12 @@ export async function runPhase2Generation(options) {
     userComponentId: userComponentId || null,
     extraPrompt: extraPrompt || null,
     requirementDocText: requirementDocText || null,
+    //🆕 2026-10-10 双主题：副稿节点 + 主副角色（figma-connector 的
+    //   fetchSecondaryFigmaNode 消费；单稿不传 ⇒ 零回归）。
+    //   ⚠️ 本函数用**显式解构白名单**构造 initialState —— 漏在这里字段会被静默丢弃
+    //   （2026-10-10 实测踩过：service 已透传但 state 里没有，副稿永远不拉取）。
+    secondaryNode: secondaryNode || null,
+    primaryRole: primaryRole || 'first',
     //🛡️ P1-3 深化：语义门禁失败带指导重试标记（_semanticRetried 置位且未消费 → 条件边回退 engineer 一次）
     _semanticRetried: false,
     _semanticRetryConsumed: false,

@@ -28,6 +28,19 @@
               {{ isVue3Component ? 'Vue3组件' : '微码组件' }}
             </span>
             <span v-if="isPublicComponent" class="public-badge">公共</span>
+            <!-- 🆕 2026-10-10 双主题（R11）：双真值徽标
+                 数据源：component.metadata.dualTruth（后端 phase2 从 declare.json 读）。
+                 与预览页 R12 徽标同源 ⇒ 列表/详情与预览显示一致。 -->
+            <span
+              v-if="isDualTruth"
+              class="dual-truth-badge"
+              title="两侧主题色值均取自 Figma 设计稿（浅色 + 深色两份设计稿），无算法派生"
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true">
+                <path d="M20 6L9 17l-5-5" />
+              </svg>
+              双真值生成
+            </span>
           </h1>
           <p class="component-meta">
             创建者: {{ component.creatorId?.username || '未知' }} ·
@@ -110,9 +123,23 @@
       </header>
 
       <!-- Figma 源链接 -->
-      <div v-if="figmaUrl" class="figma-source-bar">
+      <div v-if="figmaUrl || isDualTruth" class="figma-source-bar">
         <span class="figma-source-label">Figma 源:</span>
-        <a :href="figmaUrl" target="_blank" rel="noopener" class="figma-source-link" :title="figmaUrl">
+        <!-- 双真值：两份设计稿（主稿决定结构，副稿只贡献色板） -->
+        <template v-if="isDualTruth">
+          <span class="dual-source">
+            <span class="src-dot" :style="{ background: primaryBrightness === 'dark' ? '#071f3d' : '#a6ceff' }"></span>
+            <span class="src-role">{{ primaryBrightness === 'dark' ? '深色稿（主稿）' : '浅色稿（主稿）' }}</span>
+            <span class="src-note">决定结构 · 几何 · 文案</span>
+          </span>
+          <span class="dual-sep" aria-hidden="true">+</span>
+          <span class="dual-source">
+            <span class="src-dot" :style="{ background: secondaryBrightness === 'dark' ? '#071f3d' : '#a6ceff' }"></span>
+            <span class="src-role">{{ secondaryBrightness === 'dark' ? '深色稿' : '浅色稿' }}</span>
+            <span class="src-note">只贡献色板</span>
+          </span>
+        </template>
+        <a v-if="figmaUrl" :href="figmaUrl" target="_blank" rel="noopener" class="figma-source-link" :title="figmaUrl">
           {{ figmaUrl }}
         </a>
       </div>
@@ -523,6 +550,17 @@ const previewIframeStyle = computed(() => {
   }
 })
 
+// 🆕 2026-10-10 双主题（R11）：双真值标记 + 两稿明暗
+//   数据源：component.metadata.dualTruth / .primaryBrightness / .secondaryBrightness
+//   （后端 phase2.service 从**已落盘的 declare.json** 读，断点续跑/重启后依然可用）
+const isDualTruth = computed(() => component.value?.metadata?.dualTruth === true)
+const primaryBrightness = computed(
+  () => component.value?.metadata?.primaryBrightness || 'light',
+)
+const secondaryBrightness = computed(
+  () => component.value?.metadata?.secondaryBrightness || 'dark',
+)
+
 // Figma 源链接（从 metadata 构建）
 const figmaUrl = computed(() => {
   if (!component.value?.metadata) return ''
@@ -928,6 +966,22 @@ onUnmounted(() => {
   color: #ffffff;
 }
 
+/* 🆕 双真值徽标（R12 预览页徽标的同源展示）：绿＝已验证达标态 */
+.component-title .dual-truth-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  vertical-align: middle;
+  margin-left: 8px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(34, 197, 94, 0.14);
+  color: #15803d;
+  cursor: help;
+}
+
 .publish-btn {
   background: #f59e0b;
   border-color: #d97706;
@@ -1064,6 +1118,37 @@ onUnmounted(() => {
 .figma-source-link:hover {
   color: var(--brand-light);
   text-decoration: underline;
+}
+
+/* 🆕 双真值：两份设计稿的角色说明（R11） */
+.figma-source-bar .dual-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(34, 197, 94, 0.1);
+  white-space: nowrap;
+}
+.figma-source-bar .src-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.figma-source-bar .src-role {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.figma-source-bar .src-note {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+.figma-source-bar .dual-sep {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  user-select: none;
 }
 
 /* 预览区域 */

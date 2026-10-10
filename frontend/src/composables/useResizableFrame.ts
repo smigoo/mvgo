@@ -227,6 +227,14 @@ export function useResizableFrame(options: UseResizableFrameOptions = {}) {
   let startH = 0
   let rafId = 0
   let pendingEvent: MouseEvent | null = null
+  /**
+   * Pointer Capture 的手柄元素。
+   * 🔧 根因修复（用户反馈「松开后尺寸依旧会变」）：拖拽路径经过预览 iframe 时，
+   * mousemove/mouseup 会派发给 iframe 内部文档，宿主 document 收不到 mouseup
+   * → 监听器残留、isResizing 卡在 true，松开后鼠标一动尺寸继续变。
+   * 手柄 setPointerCapture 后 pointermove/pointerup 恒派发给手柄，iframe 吞不掉。
+   */
+  let captureEl: HTMLElement | null = null
 
   function applyDrag(e: MouseEvent) {
     const deltaX = e.clientX - startX
@@ -244,7 +252,7 @@ export function useResizableFrame(options: UseResizableFrameOptions = {}) {
     }
   }
 
-  function onMouseMove(e: MouseEvent) {
+  function onDragMove(e: MouseEvent) {
     if (!isResizing.value) return
     pendingEvent = e
     if (rafId) return
@@ -255,7 +263,7 @@ export function useResizableFrame(options: UseResizableFrameOptions = {}) {
     })
   }
 
-  function onMouseUp() {
+  function finishResize() {
     if (rafId) {
       window.cancelAnimationFrame(rafId)
       rafId = 0
@@ -264,8 +272,15 @@ export function useResizableFrame(options: UseResizableFrameOptions = {}) {
     isResizing.value = false
     activeHandle.value = ''
     showSizeBubble.value = false
-    document.removeEventListener('mousemove', onMouseMove)
-    document.removeEventListener('mouseup', onMouseUp)
+    if (captureEl) {
+      captureEl.removeEventListener('pointermove', onDragMove)
+      captureEl.removeEventListener('pointerup', finishResize)
+      captureEl.removeEventListener('pointercancel', finishResize)
+      captureEl = null
+    }
+    document.removeEventListener('mousemove', onDragMove)
+    document.removeEventListener('mouseup', finishResize)
+    window.removeEventListener('blur', finishResize)
     // 尺寸落定 → 归档为 custom 并持久化
     presetName.value = 'custom'
     persist()
@@ -279,7 +294,7 @@ export function useResizableFrame(options: UseResizableFrameOptions = {}) {
     event.stopPropagation()
 
     // 正在拖拽时再次按下：先收尾上一次，避免监听器泄漏
-    if (isResizing.value) onMouseUp()
+    if (isResizing.value) finishResize()
 
     isResizing.value = true
     activeHandle.value = direction
@@ -292,8 +307,26 @@ export function useResizableFrame(options: UseResizableFrameOptions = {}) {
     customWidth.value = startW
     customHeight.value = startH
 
-    document.addEventListener('mousemove', onMouseMove)
-    document.addEventListener('mouseup', onMouseUp)
+    window.addEventListener('blur', finishResize)
+
+    // 优先 Pointer Capture：拖拽经过 iframe 也不丢事件（见 captureEl 注释）
+    const el = event.currentTarget as HTMLElement | null
+    const pointerId = (event as PointerEvent).pointerId
+    if (el && typeof el.setPointerCapture === 'function' && typeof pointerId === 'number') {
+      try {
+        el.setPointerCapture(pointerId)
+        captureEl = el
+        el.addEventListener('pointermove', onDragMove)
+        el.addEventListener('pointerup', finishResize)
+        el.addEventListener('pointercancel', finishResize)
+        return
+      } catch {
+        captureEl = null
+      }
+    }
+    // 兜底：不支持 Pointer Capture 的环境退回 document 监听
+    document.addEventListener('mousemove', onDragMove)
+    document.addEventListener('mouseup', finishResize)
   }
 
   // ── 键盘无障碍（FR-5）────────────────────────────────────────
@@ -390,14 +423,7 @@ export function useResizableFrame(options: UseResizableFrameOptions = {}) {
   }
 
   onBeforeUnmount(() => {
-    if (rafId) {
-      window.cancelAnimationFrame(rafId)
-      rafId = 0
-    }
-    pendingEvent = null
-    isResizing.value = false
-    document.removeEventListener('mousemove', onMouseMove)
-    document.removeEventListener('mouseup', onMouseUp)
+    finishResize()
   })
 
   return {

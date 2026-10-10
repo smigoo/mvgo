@@ -4,7 +4,24 @@ import {
   IsOptional,
   IsObject,
   IsIn,
+  ValidateIf,
 } from 'class-validator';
+
+/**
+ * 🆕 副稿节点（2026-10-10 双主题 Figma 输入）
+ *
+ * 用途：与主稿（fileKey + nodeId）配对，构成「浅色稿 + 深色稿」两份设计真值。
+ * 仅微码 + Max 档生效；缺省时全链路行为与改动前一致（零回归）。
+ */
+export class SecondaryNodeDto {
+  @IsString()
+  @IsNotEmpty()
+  fileKey: string;
+
+  @IsString()
+  @IsNotEmpty()
+  nodeId: string;
+}
 
 export class GeneratePhase2Dto {
   @IsString()
@@ -18,6 +35,25 @@ export class GeneratePhase2Dto {
   @IsString()
   @IsNotEmpty()
   nodeId: string;
+
+  /**
+   * 🆕 副稿 Figma 节点（2026-10-10）：深浅双主题的第二份设计真值。
+   * 不传 = 单稿模式，另一套主题继续走算法派生（保持既有行为）。
+   */
+  @IsOptional()
+  @ValidateIf((o: GeneratePhase2Dto) => !!o.secondaryNode)
+  @IsObject()
+  secondaryNode?: SecondaryNodeDto;
+
+  /**
+   * 🆕 主副角色标注（2026-10-10）：'first' 表示 fileKey+nodeId 是主稿（默认，
+   * 前端显式选择、默认预选第一个）；'second' 表示副稿是主稿、fileKey+nodeId 反转为副稿。
+   * 主稿决定结构/几何/文案，副稿只贡献色板。
+   */
+  @IsOptional()
+  @IsString()
+  @IsIn(['first', 'second'])
+  primaryRole?: 'first' | 'second' = 'first';
 
   @IsString()
   @IsNotEmpty()

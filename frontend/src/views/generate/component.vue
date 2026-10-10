@@ -100,7 +100,34 @@
 
             <!-- Figma URL 输入（带历史记录） -->
             <div v-if="inputSource === 'figma'" class="form-group figma-url-group" v-feature="'figma.integration'">
-              <label>Figma 文件或节点链接</label>
+              <div class="label-row">
+                <label>{{ dualThemeEnabled ? '浅色设计稿链接' : 'Figma 文件或节点链接' }}</label>
+                <!-- 🆕 R1：渐进展开入口 —— 仅微码 + Max 档可用（契约收窄） -->
+                <button
+                  v-if="dualThemeSupported && !dualThemeEnabled && !isGenerating"
+                  type="button"
+                  class="dual-toggle-btn"
+                  title="已有深色设计稿？点这里同时生成双主题（两侧色值都取自设计稿）"
+                  @click="dualThemeEnabled = true"
+                >
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  深色稿
+                </button>
+                <button
+                  v-else-if="dualThemeEnabled && !isGenerating"
+                  type="button"
+                  class="dual-toggle-btn is-on"
+                  title="关闭双主题模式"
+                  @click="disableDualTheme"
+                >
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                  </svg>
+                  取消
+                </button>
+              </div>
               <div class="form-input-wrapper" ref="inputWrapperRef">
                 <input
                   id="figmaDesignUrl"
@@ -186,6 +213,101 @@
                     </button>
                   </div>
                 </template>
+              </div>
+
+              <!-- ══════════════════════════════════════════════
+                   🆕 R1/R2 双主题：副稿输入 + 主副选择 + 副稿预览确认
+                   ══════════════════════════════════════════════ -->
+              <div v-if="dualThemeEnabled" class="dual-theme-block">
+                <div class="dual-theme-banner">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 16v-4M12 8h.01" />
+                  </svg>
+                  <span>双主题模式 · 两侧色值均取自设计稿，不再由算法派生</span>
+                </div>
+
+                <!-- 主副选择（D1：显式，默认预选第一个） -->
+                <div class="dual-role-picker">
+                  <span class="dual-role-label">哪一份是主稿？<em>（主稿决定结构、几何与文案）</em></span>
+                  <div class="dual-role-options">
+                    <label class="dual-role-option" :class="{ active: primaryRole === 'first' }">
+                      <input type="radio" :value="'first'" v-model="primaryRole" :disabled="isGenerating" />
+                      <span>浅色稿为主</span>
+                    </label>
+                    <label class="dual-role-option" :class="{ active: primaryRole === 'second' }">
+                      <input type="radio" :value="'second'" v-model="primaryRole" :disabled="isGenerating" />
+                      <span>深色稿为主</span>
+                    </label>
+                  </div>
+                </div>
+
+                <!-- 深色设计稿链接 -->
+                <div class="form-group secondary-url-group">
+                  <label>深色设计稿链接</label>
+                  <div class="form-input-wrapper">
+                    <input
+                      id="figmaSecondaryUrl"
+                      v-model="secondaryFigmaUrl"
+                      type="text"
+                      name="figmaSecondaryUrl"
+                      class="form-input"
+                      placeholder="粘贴深色主题的 figma.com 节点链接"
+                      :disabled="isGenerating"
+                      inputmode="url"
+                      autocomplete="off"
+                      autocapitalize="off"
+                      spellcheck="false"
+                      data-lpignore="true"
+                      data-1p-ignore="true"
+                      data-bwignore="true"
+                      @input="onSecondaryUrlInput"
+                    />
+                    <button
+                      v-if="secondaryFigmaUrl && !isGenerating"
+                      class="input-clear-btn"
+                      @click="clearSecondaryUrl"
+                      title="清除"
+                    >
+                      <CloseOutlined />
+                    </button>
+                  </div>
+                  <div v-if="secondaryUrlInfo" class="url-info" :class="secondaryUrlInfo.type">
+                    <span v-html="secondaryUrlInfo.message"></span>
+                  </div>
+                  <!-- 同节点拦截：两稿同源则双真值无意义 -->
+                  <div v-if="secondarySameAsPrimary" class="dual-warn">
+                    <ExclamationCircleOutlined />
+                    <span>主稿与副稿是同一个 Figma 节点，请提供真正深浅两份设计稿</span>
+                  </div>
+                  <!-- 副稿预览确认（fail-closed 的一道前置拦截） -->
+                  <div v-else-if="secondaryPreviewError" class="dual-error">
+                    <ExclamationCircleOutlined />
+                    <div>
+                      <div class="dual-error-title">{{ secondaryPreviewError }}</div>
+                      <button type="button" class="dual-error-action" @click="disableDualTheme">
+                        改用单稿模式
+                      </button>
+                    </div>
+                  </div>
+                  <div v-else-if="secondaryPreviewLoading" class="figma-preview-card loading">
+                    <div class="preview-spinner"></div>
+                    <span>正在获取深色稿预览...</span>
+                  </div>
+                  <div v-else-if="secondaryPreviewImage" class="figma-preview-card">
+                    <div class="preview-image-wrapper">
+                      <img :src="secondaryPreviewImage" :alt="secondaryPreviewName" class="preview-image" />
+                    </div>
+                    <div class="preview-info">
+                      <div class="preview-name">{{ secondaryPreviewName }}</div>
+                      <div class="preview-size">{{ secondaryPreviewWidth }} × {{ secondaryPreviewHeight }}</div>
+                      <button class="btn-confirm-preview" @click="confirmSecondaryPreview" :disabled="secondaryPreviewConfirmed">
+                        <CheckOutlined />
+                        {{ secondaryPreviewConfirmed ? '已确认' : '确认深色稿' }}
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -867,6 +989,72 @@ const figmaPreview = ref<{
 const isLoadingPreview = ref(false)
 const previewConfirmed = ref(false)
 
+// ══════════════════════════════════════════════════════════════
+// 🆕 2026-10-10 双主题 Figma 输入（R1/R2）
+//
+// 设计：**渐进式** —— 默认只显示一个链接框（存量用户零变化），
+// 点「深色稿」才展开第二框 + 显式主副单选。
+//
+// 三条硬约束（与后端契约一一对应）：
+//  1. 副稿只在**非空且合法**时才随请求下发（后端 fail-closed，失败=整任务失败）；
+//  2. 副稿的「实测明暗」由后端算，前端只能**展示**不能臆造（不自己算亮度）；
+//  3. 双主题仅微码 + Max 档可用（契约收窄，见 D8/D9）。
+// ══════════════════════════════════════════════════════════════
+const secondaryFigmaUrl = ref('')
+const dualThemeEnabled = ref(false)          // 是否展开/启用第二输入框
+const primaryRole = ref<'first' | 'second'>('first') // 主稿是第一个还是第二个
+const secondaryPreviewConfirmed = ref(false)  // 副稿预览已确认
+const secondaryPreviewError = ref('')// 副稿拉取失败文案（fail-closed 提示）
+const secondaryPreviewLoading = ref(false)
+// 副稿预览图（拆成独立 ref：副稿确认与主稿确认互不影响）
+const secondaryPreviewImage = ref('')
+const secondaryPreviewName = ref('')
+const secondaryPreviewWidth = ref<number | null>(null)
+const secondaryPreviewHeight = ref<number | null>(null)
+
+/** 双主题是否可用：仅微码 + Max（契约收窄） */
+const dualThemeSupported = computed(
+  () => componentType.value === 'microcode' && generationTier.value === 'max',
+)
+
+// 副稿 URL 解析（与主稿同口径，独立函数避免两处正则漂移）
+const secondaryUrlInfo = computed(() => {
+  if (!secondaryFigmaUrl.value) return null
+  try {
+    const urlObj = new URL(secondaryFigmaUrl.value)
+    const pathMatch = urlObj.pathname.match(/\/(file|design)\/([^/]+)/)
+    const nodeId = urlObj.searchParams.get('node-id')
+    if (pathMatch && nodeId) {
+      return {
+        type: 'success' as const,
+        message: `File Key: <code>${pathMatch[2]}</code> &nbsp; Node ID: <code>${nodeId}</code>`,
+        fileKey: pathMatch[2],
+        nodeId,
+      }
+    }
+    return { type: 'warning' as const, message: '副稿链接需要包含 node-id 参数', fileKey: '', nodeId: '' }
+  } catch {
+    return { type: 'error' as const, message: '副稿链接无效', fileKey: '', nodeId: '' }
+  }
+})
+
+/** 副稿是否已就绪（解析成功 + 预览已确认） */
+const secondaryReady = computed(
+  () =>
+    dualThemeEnabled.value &&
+    secondaryUrlInfo.value?.type === 'success' &&
+    secondaryPreviewConfirmed.value,
+)
+
+/** 副稿与主稿是同一节点 ⇒ 必须拦（两稿同源则双真值无意义，等于白跑一次 Figma） */
+const secondarySameAsPrimary = computed(() => {
+  if (urlInfo.value?.type !== 'success' || secondaryUrlInfo.value?.type !== 'success') return false
+  return (
+    urlInfo.value.fileKey === secondaryUrlInfo.value.fileKey &&
+    String(urlInfo.value.nodeId) === String(secondaryUrlInfo.value.nodeId)
+  )
+})
+
 // 需求文档（可选，驱动四配置/数据字段一次写对）
 const requirementDoc = ref('')
 const docAnalysis = ref<any>(null)
@@ -1052,11 +1240,18 @@ const urlInfo = computed(() => {
   }
 })
 
-const canGenerate = computed(() => 
-  inputSource.value === 'figma' && 
-  urlInfo.value?.type === 'success' && 
-  previewConfirmed.value
-)
+const canGenerate = computed(() => {
+  const base =
+    inputSource.value === 'figma' &&
+    urlInfo.value?.type === 'success' &&
+    previewConfirmed.value
+  if (!base) return false
+  // 双主题模式：副稿必须就绪且**不能与主稿同节点**
+  if (dualThemeEnabled.value) {
+    return secondaryReady.value && !secondarySameAsPrimary.value
+  }
+  return true
+})
 
 function isLikelyDesignUrl(value: string) {
   const trimmed = value.trim()
@@ -1135,6 +1330,79 @@ async function loadFigmaPreview() {
 // 确认预览后开始生成
 function confirmPreview() {
   previewConfirmed.value = true
+}
+
+// ══════════════════════════════════════════════════════════════
+// 🆕 R1/R2 副稿逻辑
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * 副稿输入变化 → 重置确认态并（防抖后）拉预览。
+ *
+ * ⚠️ 去抖 600ms：用户粘贴链接后往往还会微调，逐字符打接口会撞 Figma 限流
+ *   （现有限流槽 maxConcurrency=1，见 R1 风险项）。
+ */
+let secondaryPreviewTimer: ReturnType<typeof setTimeout> | null = null
+function onSecondaryUrlInput() {
+  secondaryPreviewConfirmed.value = false
+  secondaryPreviewError.value = ''
+  secondaryPreviewImage.value = ''
+  secondaryPreviewName.value = ''
+  if (secondaryPreviewTimer) window.clearTimeout(secondaryPreviewTimer)
+  secondaryPreviewTimer = setTimeout(loadSecondaryPreview, 600)
+}
+
+/** 拉取副稿预览图（与主稿同接口；失败文案直接来自后端的归类结果） */
+async function loadSecondaryPreview() {
+  const info = secondaryUrlInfo.value
+  if (!info || info.type !== 'success') return
+  // 同节点无需请求
+  if (secondarySameAsPrimary.value) return
+
+  secondaryPreviewLoading.value = true
+  secondaryPreviewError.value = ''
+  try {
+    const rawCfg = (configStore.config as any)?.value !== undefined
+      ? (configStore.config as any).value
+      : configStore.config
+    const result = await fetchFigmaPreview({
+      figmaUrl: secondaryFigmaUrl.value,
+      figmaToken: rawCfg?.figmaToken,
+      config: rawCfg,
+    })
+    if (result.success) {
+      secondaryPreviewImage.value = result.imageUrl
+      secondaryPreviewName.value = result.nodeName
+      secondaryPreviewWidth.value = result.width
+      secondaryPreviewHeight.value = result.height
+    } else {
+      secondaryPreviewError.value = result.error || '深色稿预览获取失败'
+    }
+  } catch (err: any) {
+    secondaryPreviewError.value = err?.message || '深色稿预览获取失败'
+  } finally {
+    secondaryPreviewLoading.value = false
+  }
+}
+
+function confirmSecondaryPreview() {
+  secondaryPreviewConfirmed.value = true
+}
+
+function clearSecondaryUrl() {
+  secondaryFigmaUrl.value = ''
+  onSecondaryUrlInput()
+}
+
+/** 关闭双主题：清空副稿全部状态，回到单稿（不丢主稿已填内容） */
+function disableDualTheme() {
+  dualThemeEnabled.value = false
+  secondaryFigmaUrl.value = ''
+  secondaryPreviewConfirmed.value = false
+  secondaryPreviewError.value = ''
+  secondaryPreviewImage.value = ''
+  secondaryPreviewName.value = ''
+  if (secondaryPreviewTimer) window.clearTimeout(secondaryPreviewTimer)
 }
 
 // ── 工具函数 ──
@@ -1283,6 +1551,27 @@ async function handleComponentGenerate() {
   // 微码组件传面板类型
   if (componentType.value === 'microcode') {
     requestData.panelType = selectedPanelType.value
+  }
+
+  // 🆕 2026-10-10 双主题（R1/R2）：下发副稿节点 + 主副角色。
+  //   三条硬约束在此收口：
+  //   1. 仅双主题模式**且**副稿已就绪才下发（否则退化为单稿，请求体与改动前一致）；
+  //   2. 仅微码 + Max（契约收窄，后端 lite/vue3 DTO 无此字段，发了会被静默忽略）；
+  //   3. primaryRole 原样透传，后端据此决定「谁决定结构」。
+  //
+  //   🔴 关键：`secondaryNode` **恒放深色稿**（用户填的第二个框），
+  //   `primaryRole` 单独表达谁是主稿。
+  //   后端 `resolvePrimarySecondary(firstInput=fileKey/nodeId, secondInput=secondaryNode)`
+  //   里 firstInput 恒为第一个框 —— 若在 primaryRole='second' 时把浅色稿塞进
+  //   secondaryNode，会导致**两稿都是浅色稿**、双真值静默失效，
+  //   且后端明暗校验只会报「深色稿实际是浅色」，用户完全看不懂根因。
+  if (dualThemeEnabled.value && secondaryReady.value && dualThemeSupported.value) {
+    requestData.secondaryNode = {
+      fileKey: secondaryUrlInfo.value!.fileKey,
+      nodeId: secondaryUrlInfo.value!.nodeId,
+    }
+    requestData.primaryRole = primaryRole.value
+    addLog('info', `🎨 双主题模式：主稿=${primaryRole.value === 'first' ? '浅色稿' : '深色稿'}`)
   }
 
   if (configStore.isConfigured) {
@@ -1450,6 +1739,131 @@ onUnmounted(() => {
 
 <style scoped>
 /* ── Figma 预览卡片 ── */
+/* ══════════════════════════════════════════════════════════════
+   🆕 双主题输入区（R1/R2 · 2026-10-10）
+   渐进式：默认单框，按需展开。展开区用左侧色条与主稿区视觉区分。
+   ══════════════════════════════════════════════════════════════ */
+.label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.dual-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border: 1px solid var(--brand-border, #dcdfe6);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--brand, #409eff);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s;
+  white-space: nowrap;
+}
+.dual-toggle-btn:hover {
+  background: var(--brand-bg, #ecf5ff);
+}
+.dual-toggle-btn.is-on {
+  color: var(--text-tertiary, #909399);
+  border-color: var(--border-color, #dcdfe6);
+}
+
+.dual-theme-block {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--brand-border, #dcdfe6);
+  border-radius: 8px;
+  background: var(--brand-bg, #f7fafd);
+}
+.dual-theme-banner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: var(--brand, #409eff);
+}
+.dual-role-picker {
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--brand-border, #dcdfe6);
+}
+.dual-role-label {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary, #303133);
+}
+.dual-role-label em {
+  font-style: normal;
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--text-tertiary, #909399);
+}
+.dual-role-options {
+  display: flex;
+  gap: 8px;
+}
+.dual-role-option {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border: 1px solid var(--border-color, #dcdfe6);
+  border-radius: 6px;
+  background: var(--bg-primary, #fff);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.18s, background 0.18s;
+}
+.dual-role-option.active {
+  border-color: var(--brand, #409eff);
+  background: var(--brand-bg, #ecf5ff);
+}
+.secondary-url-group {
+  margin-bottom: 0;
+}
+.dual-warn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+  font-size: 12px;
+}
+.dual-error {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 9px 11px;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 6px;
+  background: rgba(239, 68, 68, 0.06);
+  color: var(--error, #f56c6c);
+  font-size: 12px;
+}
+.dual-error-title {
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+.dual-error-action {
+  padding: 3px 9px;
+  border: 1px solid var(--border-color, #dcdfe6);
+  border-radius: 999px;
+  background: var(--bg-primary, #fff);
+  color: var(--text-secondary, #606266);
+  font-size: 12px;
+  cursor: pointer;
+}
+
 .figma-preview-card {
   margin-top: 12px;
   padding: 16px;

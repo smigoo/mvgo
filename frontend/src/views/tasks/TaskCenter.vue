@@ -189,6 +189,14 @@
             <span class="task-name" :title="`${componentTitle(task)}（任务号：${task.sessionId}）`">{{ componentTitle(task) }}</span>
             <span class="task-type-badge" :class="task.target">{{ typeLabel(task.target) }}</span>
             <span v-if="getTaskTier(task)" class="task-tier-badge" :class="getTaskTier(task)">{{ tierLabel(getTaskTier(task)) }}</span>
+            <!-- 🆕 2026-10-10 双主题（R11）：双真值徽标
+                 数据源：task.dualTruth（后端 phase2 完成时从 declare.json 读出写入）。
+                 **单稿任务不显示** —— 避免用户把「有徽标」误读成「质量更好」。 -->
+            <span
+              v-if="task.dualTruth === true"
+              class="task-dual-badge"
+              title="双真值生成：浅色 + 深色两份设计稿，主题色值均取自设计稿"
+            >双主题</span>
             <span v-if="getTaskSource(task)" class="task-source-box">
               {{ sourceLabel(getTaskSource(task)) }}
             </span>
@@ -1666,6 +1674,20 @@ onUnmounted(() => {
 .task-type-badge.vue3 {
   background: var(--component-vue3);
   color: var(--component-vue3-contrast);
+}
+
+/* 🆕 双真值徽标（R11）：绿＝已验证达标态，与组件详情/预览页同语义 */
+.task-dual-badge {
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 500;
+  flex-shrink: 0;
+  letter-spacing: 0.2px;
+  background: rgba(34, 197, 94, 0.16);
+  color: #15803d;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  cursor: help;
 }
 .task-type-badge.page {
   background: var(--bg-alt);

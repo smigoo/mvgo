@@ -380,23 +380,21 @@ export class LiteService {
       let vueCode: string;
       let declareJson: any = null;
       try {
-        const genText = await agent.analyzeImage(
+        // 🛡️ U1-lite：生成 + 裸写表单控件守卫闭环（命中→修正重试→择优）
+        const guarded = await this.callCodegenWithControlGuard(
+          agent,
           uploadPath,
           isMicrocode
             ? this.buildMicrocodeCodegenPrompt(brief, finalComponentName, dto, width, height)
             : this.buildCodegenPrompt(brief, finalComponentName, dto, width, height),
+          isMicrocode,
+          sessionId,
           // 🔧 视觉调用显式超时覆盖全局 120s 兜底（codegen 要输出完整 SFC，慢模型易超时）
           // 🔧 视觉子调用心跳转发到 UI 日志通道，对齐 Figma 频率
           { signal: controller.signal, requestTimeoutMs: 300000, onProgress: this.visionOnProgress(sessionId) },
         );
-
-        if (isMicrocode) {
-          const parsed = this.extractMicrocodeOutput(genText);
-          vueCode = parsed.vueCode;
-          declareJson = parsed.declareJson;
-        } else {
-          vueCode = this.extractVueCode(genText);
-        }
+        vueCode = guarded.vueCode;
+        declareJson = guarded.declareJson ?? null;
       } catch (err: any) {
         this.progressService.sendProgress(sessionId, {
           type: 'progress',
@@ -2158,6 +2156,84 @@ ${scaleNote}${textTruthNote}
 不要推断接口、数据源、业务规则或截图中不可见的业务逻辑。字段缺失时给空字符串或空数组。`;
   }
 
+  /**
+   * 🛡️ U1-lite（2026-10-10）：代码生成 + 裸写表单控件守卫闭环。
+   * 判据 bare-form-control-guard（确定性零 LLM）：裸 <input>/<select>/<textarea>。
+   * 命中 → 带修正指令单轮重试 → 对比两轮命中数择优（改善才采纳）。
+   * 背景（实锤 c-add-product-3f734e7a）：微码 prompt 此前缺 U1 条款，12 处裸 input 直落产物；
+   * antd-mimicry-guard 的库名指纹判据对语义命名（c-add-product-input）盲扫。
+   */
+  private async callCodegenWithControlGuard(
+    agent: any,
+    imagePath: string,
+    basePrompt: string,
+    isMicrocode: boolean,
+    sessionId: string,
+    callOpts: any,
+  ): Promise<{ genText: string; vueCode: string; declareJson: any }> {
+    const { scanBareFormControls, summarizeBareFormControls } = await import(
+      '../ai-engine/utils/bare-form-control-guard.js',
+    );
+    const call = (p: string) =>
+      agent.analyzeImage(imagePath, p, callOpts);
+    const parse = (t: string) =>
+      isMicrocode
+        ? this.extractMicrocodeOutput(t)
+        : { vueCode: this.extractVueCode(t), declareJson: null as any };
+
+    const genText = await call(basePrompt);
+    const first = parse(genText);
+    if (!first.vueCode || first.vueCode.trim().length < 30) {
+      return { genText, ...first };
+    }
+    const firstHits = scanBareFormControls(first.vueCode);
+    if (firstHits.length === 0) {
+      return { genText, ...first };
+    }
+
+    this.logger.warn(
+      `[control-guard] 首轮产物裸写表单控件 ${summarizeBareFormControls(firstHits)}，触发修正重试`,
+      { sessionId },
+    );
+    this.progressService.sendProgress(sessionId, {
+      type: 'progress',
+      stage: 'generating',
+      status: 'running',
+      message: `检测到手写表单控件 ${firstHits.length} 处，正在修正...`,
+    });
+
+    const fixPrompt = `${basePrompt}
+
+【⚠️ 修正指令（上一轮产物不合格，必须遵守）】
+上一轮产物中存在 ${firstHits.length} 处裸写的原生标签（${summarizeBareFormControls(firstHits)}），违反硬性边界第 ${isMicrocode ? '7' : '14'} 条。必须整体修正：
+- 裸 <input>/<select>/<textarea> → 替换为 Ant Design Vue 真组件（a-input / a-textarea / a-select / a-input-number / a-radio-group / a-checkbox-group / a-switch / a-upload / a-button 等）；
+- 裸 <label> → 表单行结构整体改为 \`<a-form>\` 包裹 + 每行 \`<a-form-item>\`，标签文本放 a-form-item 的 \`label\` 属性或 \`#label\` 插槽（必填星号写在插槽内），禁止任何裸 <label> 标签。
+重新输出完整组件代码${isMicrocode ? '与 declare.json' : ''}。`;
+    try {
+      const retryText = await call(fixPrompt);
+      const retry = parse(retryText);
+      if (retry.vueCode && retry.vueCode.trim().length >= 30) {
+        const retryHits = scanBareFormControls(retry.vueCode);
+        if (retryHits.length < firstHits.length) {
+          this.logger.warn(
+            `[control-guard] 修正后裸控件 ${retryHits.length} 处（首轮 ${firstHits.length}），采用重试产物`,
+            { sessionId },
+          );
+          return { genText: retryText, ...retry };
+        }
+        this.logger.warn(
+          `[control-guard] 修正未改善（${retryHits.length} >= ${firstHits.length}），保留首轮产物`,
+          { sessionId },
+        );
+      } else {
+        this.logger.warn('[control-guard] 重试产物无效，保留首轮产物', { sessionId });
+      }
+    } catch (e: any) {
+      this.logger.warn(`[control-guard] 修正重试失败，保留首轮产物: ${e?.message}`, { sessionId });
+    }
+    return { genText, ...first };
+  }
+
   /** 阶段 3 prompt：基于截图 + 简报生成单文件 Vue3 组件 */
   private buildCodegenPrompt(
     brief: any,
@@ -2228,7 +2304,7 @@ ${userAddendum}
     - 颜色一律引用主题槽位 Less 变量（theme-vars.less 的 \`.theme-dark()\`/\`.theme-light()\` 已定义）：\`@colorTextBase\`（正文文字）、\`@colorTextInverse\`（反色文字）、\`@colorBgPanel\`（面板背景）、\`@colorPrimary\`（主色）、\`@colorSecondary\`、\`@colorDanger\`、\`@colorBorder\`，写法如 \`color: @colorTextBase;\`。需要新颜色槽位时直接引用新名字（如 \`@colorBgCard\`），平台检查器会把缺失槽位补齐到两套主题。
     - **同名 class 的布局属性（flex/width/height/min-*）只能写在一处**：要么 \`common.less\`（共享表）要么组件 \`<style>\`，两处都写且值不同会触发 FLEX-003 BLOCK（scoped 优先级恒高，共享表成死样式）。图标/固定件写 \`flex: 0 0 auto\`，需要撑满的区块写 \`flex: 1\` 并成对 \`min-height: 0\`。
 14. **常见 UI 控件 → antd 默认实现（U1 · 2026-10-09，实锤 c-c19746-c1974689 半真半假）**：截图中出现下述控件形态时**必须**用对应 Ant Design Vue 组件实现，**禁止手写 div/span 模仿组件 DOM 结构**（指纹：class 名中出现 \`antd-xxx\` / \`ant-design-vue-xxx\` 即不合格）：
-    - 表单成组（标签+必填星号+输入控件）→ \`<a-form>\` + \`<a-form-item>\`；输入框 → \`<a-input>\`、多行 → \`<a-textarea>\`、下拉 → \`<a-select>\`
+    - 表单成组（标签+必填星号+输入控件）→ \`<a-form>\` + \`<a-form-item>\`；**每行标签必须由 \`<a-form-item>\` 的 \`label\` 属性或 \`#label\` 插槽承载（必填星号写在插槽内），禁止裸 \`<label>\` 标签**（实锤 mv-lite-1791600614695-397d13ce：控件全换 antd 但 10 处裸 label 行结构残留）；输入框 → \`<a-input>\`、多行 → \`<a-textarea>\`、下拉 → \`<a-select>\`
     - 上传区（虚线框+加号/「点击上传」）→ \`<a-upload>\`（拖拽形态用 a-upload-drag）；下载/导出按钮 → \`<a-button>\` + download 图标
     - 分页器 → \`<a-pagination>\`；标签页 → \`<a-tabs>\`/\`<a-tab-pane>\`；搜索框 → \`<a-input-search>\`；开关 → \`<a-switch>\`；日期 → \`<a-date-picker>\`
     - 已用 a-input/a-table 等真组件的其余部分不算达标——「半真半假」的结构模仿必须整体替换为真组件；覆盖内部 \`.ant-*\` 节点用 \`:deep(...)\`（同第 7 条）
@@ -2355,10 +2431,16 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
    - **resize 监听（强制）**：实例创建后挂 ResizeObserver 监听 \`chartRef.value\`，回调中调 \`chart.resize()\`；onUnmounted 中 disconnect + dispose
    - 在 \`onUnmounted\` 中销毁：\`resizeObserver.disconnect(); chart.dispose();\`
    - **数据驱动（强制）**：用截图中的 mock 数据定义成响应式变量（如 \`const chartData = ref([5, 7, 6, 4])\`），\`series.data\` 绑定该变量（\`data: chartData.value\`）。**严禁**在 \`setOption({...})\` 里硬编码数字字面量 \`data: [5, 7, 6]\`。
-7. **表格自动映射**：如果截图中包含表格/列表，使用 Ant Design Vue 的 \`a-table\` 组件：
-   - 引入：\`import { Table as ATable } from 'ant-design-vue'\`
-   - 在 \`<script setup>\` 中定义 \`columns\` 和 \`dataSource\`（使用截图中的 mock 数据）
-   - 在 \`<template>\` 中使用 \`<a-table :columns="columns" :data-source="data" :pagination="false" />\`
+7. **表格与常见 UI 控件 → Ant Design Vue 自动映射（U1 · 强制）**：
+   - 表格/列表 → \`a-table\` 组件：
+     - 引入：\`import { Table as ATable } from 'ant-design-vue'\`
+     - 在 \`<script setup>\` 中定义 \`columns\` 和 \`dataSource\`（使用截图中的 mock 数据）
+     - 在 \`<template>\` 中使用 \`<a-table :columns="columns" :data-source="data" :pagination="false" />\`
+   - **常见 UI 控件必须用对应 antd 真组件**（截图中出现下述形态时，禁止手写 div/span/原生标签模仿）：
+     - 表单成组（标签+必填星号+输入控件）→ \`<a-form>\` + \`<a-form-item>\`；**每行标签必须由 \`<a-form-item>\` 的 \`label\` 属性或 \`#label\` 插槽承载（必填星号写在插槽内），禁止裸 \`<label>\` 标签**（实锤 mv-lite-1791600614695-397d13ce：控件全换 antd 但 10 处裸 label 行结构残留）；输入框 → \`<a-input>\`、多行 → \`<a-textarea>\`、下拉 → \`<a-select>\`、数字 → \`<a-input-number>\`、单选 → \`<a-radio-group>\`、多选 → \`<a-checkbox-group>\`、开关 → \`<a-switch>\`、日期 → \`<a-date-picker>\`
+     - 上传区（虚线框+加号/「点击上传」）→ \`<a-upload>\`；搜索框 → \`<a-input-search>\`；主操作/下载/导出按钮 → \`<a-button>\`
+     - **禁止裸写 \`<input>\`/\`<select>\`/\`<textarea>\`/\`<label>\` 原生标签**——平台会对产物扫描裸控件并触发修正重试（实锤 c-add-product-3f734e7a：12 处裸 input 全部被判不合格）
+     - 已用 a-table 等真组件的其余部分不算达标——「半真半假」必须整体替换
    - \`<style scoped>\` 中覆盖 Ant Design Vue 内部 \`.ant-*\` 节点时，选择器必须使用 \`:deep(...)\`；禁止直接写裸的 \`.ant-table-*\`
 8. **简单交互**：如果截图中包含可交互元素（Tab 切换、按钮、展开/收起等），实现基础交互逻辑：
    - Tab 切换：使用 \`ref\` 存储当前激活 tab，通过 \`@click\` 切换
@@ -3095,23 +3177,21 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
         visionModelUsed = agent?.model || null;
         const screenshotPath = this.findScreenshotPath(outputPath);
 
-        const genText = await agent.analyzeImage(
+        // 🛡️ U1-lite：生成 + 裸写表单控件守卫闭环（与主路径同款）
+        const guarded = await this.callCodegenWithControlGuard(
+          agent,
           screenshotPath,
           isMicrocode
             ? this.buildMicrocodeCodegenPrompt(brief, finalComponentName, dto, width, height)
             : this.buildCodegenPrompt(brief, finalComponentName, dto, width, height),
+          isMicrocode,
+          sessionId,
           // 🔧 视觉调用显式超时覆盖全局 120s 兜底（codegen 要输出完整 SFC，慢模型易超时）
           // 🔧 视觉子调用心跳转发到 UI 日志通道，对齐 Figma 频率
           { signal: controller.signal, requestTimeoutMs: 300000, onProgress: this.visionOnProgress(sessionId) },
         );
-
-        if (isMicrocode) {
-          const parsed = this.extractMicrocodeOutput(genText);
-          vueCode = parsed.vueCode;
-          declareJson = parsed.declareJson;
-        } else {
-          vueCode = this.extractVueCode(genText);
-        }
+        vueCode = guarded.vueCode;
+        declareJson = guarded.declareJson ?? null;
 
         if (!vueCode || vueCode.trim().length < 30) {
           throw new Error('生成的组件代码为空或无效');

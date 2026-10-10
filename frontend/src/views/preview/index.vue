@@ -26,7 +26,60 @@
         <option value="empty">无面板</option>
       </select>
     </div>
-    <!-- 主题提示条 -->
+    <!-- 🎨 主题切换控件（R12 · 2026-10-10 双主题）
+     替换原「只能看不能切」的主题提示条：
+     - 双真值组件：显式「浅色 | 深色」分段可点 + 绿色「双真值」徽标（两侧色值均来自设计稿）
+     - 单稿组件   ：另一侧标注「派生值」，避免用户误以为两侧都是真值（D5/R12 反误读设计）
+     徽标数据源：declare.json 的 themeConfig.dualTruth（后端 normalizeDeclareJson 写入），
+     预览页本就已在读 declare.json ⇒ 本控件零新增请求。 -->
+    <div v-if="!isVue3 && !isEmbedded" class="mc-theme-switcher" :class="resolvedThemeClass">
+      <div class="mc-theme-seg" role="radiogroup" aria-label="主题切换">
+        <button
+          type="button"
+          class="mc-theme-seg-btn"
+          :class="{ active: resolvedThemeClass === 'light' }"
+          role="radio"
+          :aria-checked="resolvedThemeClass === 'light'"
+          title="浅色主题"
+          @click="switchPreviewTheme('light')"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="5" />
+            <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+          </svg>
+          <span>浅色</span>
+        </button>
+        <button
+          type="button"
+          class="mc-theme-seg-btn"
+          :class="{ active: resolvedThemeClass === 'dark' }"
+          role="radio"
+          :aria-checked="resolvedThemeClass === 'dark'"
+          title="深色主题"
+          @click="switchPreviewTheme('dark')"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+          </svg>
+          <span>深色</span>
+        </button>
+      </div>
+      <!-- 双真值徽标：仅双真值组件显示 -->
+      <span v-if="isDualTruth" class="mc-theme-badge" title="两侧主题色值均取自 Figma 设计稿，无算法派生">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true">
+          <path d="M20 6L9 17l-5-5" />
+        </svg>
+        双真值
+      </span>
+      <!-- 单稿组件：明示另一侧是派生值，避免误读（R12 反误读设计） -->
+      <span v-else-if="resolvedThemeClass === 'dark'" class="mc-theme-derived">
+        浅色侧为派生值
+      </span>
+      <span v-else class="mc-theme-derived">
+        深色侧为派生值
+      </span>
+    </div>
+    <!-- 主题提示条（保留原信息：演示面板说明） -->
     <div v-if="!isVue3 && !isEmbedded" class="mc-theme-hint" :class="resolvedThemeClass">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="12" cy="12" r="10"/>
@@ -392,10 +445,16 @@ const previewStyleScopeId = `preview-${groupId}-${componentId}`
 
 // 预览环境注入主题 class（微码组件样式挂在 .dark/.light 父选择器下）
 // 不注入则所有样式规则匹配失败，导致样式完全失效
-// 优先级：URL query > Playground postMessage > declare.json themeConfig.default > 'dark' 兜底
+// 优先级：手动切换 > URL query > Playground postMessage > declare.json themeConfig.default > 'dark' 兜底
 const playgroundTheme = ref(null) // 从 Playground 下发的主题（postMessage 实时联动）
+// 🆕 R12（2026-10-10）：用户在本页手动切换的主题。
+//   放最高优先级 —— 手动点击是用户的即时意图，应压过 URL query 与 Playground 下发；
+//   但 Playground 切换时需让位（见下方 watcher），否则外部联动会「抢不回」控制权。
+const manualTheme = ref(null)
 const resolvedThemeClass = computed(() => {
-  // 1. URL query 强制指定（最高优先级）
+  // 0. 手动切换（R12，最高优先级）
+  if (manualTheme.value === 'light' || manualTheme.value === 'dark') return manualTheme.value
+  // 1. URL query 强制指定
   const themeQuery = route.query.theme
   if (themeQuery === 'light' || themeQuery === 'dark') return themeQuery
   // 2. Playground 实时下发（postMessage 联动）
@@ -408,6 +467,41 @@ const resolvedThemeClass = computed(() => {
   // 4. 兜底 dark
   return 'dark'
 })
+
+// 🆕 R12：主题切换（双真值组件让用户当场验证两套配色）
+//   - 同步写回 URL query，使预览可分享/刷新保持（与既有 ?theme= 机制同源）
+//   - 样式 class 由 resolvedThemeClass 派生，CSS 变量注入已监听该值（applyPreviewCssVars）
+const switchPreviewTheme = (theme) => {
+  if (theme !== 'light' && theme !== 'dark') return
+  manualTheme.value = theme
+  // Playground 通过 postMessage 下发主题时会抢回控制权，这里主动清掉，让手动切换生效
+  if (playgroundTheme.value) playgroundTheme.value = null
+  try {
+    const q = { ...route.query, theme }
+    router.replace({ query: q })
+  } catch {
+    // router 不可用（嵌入宿主 iframe 等）时静默降级：主题已切换，仅 URL 不同步
+  }
+}
+
+// 🆕 R12：双真值徽标（declare.json themeConfig.dualTruth，由后端 normalizeDeclareJson 写入）
+const isDualTruth = computed(() => microcodeDeclare.value?.themeConfig?.dualTruth === true)
+
+// 🆕 R12：已加载的组件 cssVars 源对象（模块级，不随组件重载丢）。
+//   主题切换时据此重注入 —— 只有 class 变而 CSS 变量不变的话，
+//   双真值组件的 var(--colorPrimary) / var(--colorTextBase) 会停留在旧主题（实测语义）。
+let previewCssVars = null
+
+// 主题变化 → 重新注入 CSS 变量（R12）
+// 放在模块级而非组件内，确保 playground 下发主题（postMessage）也走同一条路径。
+watch(
+  () => resolvedThemeClass.value,
+  (theme) => {
+    if (!previewCssVars) return
+    const applied = applyPreviewCssVars(previewCssVars, theme)
+    console.log(`🎨 [Preview] 主题切换，重新注入 cssVars ${applied} 项（theme=${theme}）`)
+  }
+)
 
 // 🎯 组件 Props：微码需要传 componentId 和 groupId；Vue3 组件按需传递（避免硬编码）
 const componentProps = computed(() => {
@@ -874,9 +968,13 @@ async function loadMicrocodeCssVars() {
       mod = await importModuleFromText(await res.text())
     }
     const cssVars = mod?.default || mod
-    const theme =
-      playgroundTheme.value || microcodeDeclare.value?.themeConfig?.default || 'light'
-    const applied = applyPreviewCssVars(cssVars, theme)
+    // 🆕 R12：缓存 cssVars 源对象，供主题切换时重新注入（否则手动切换只改 class、
+    //   CSS 变量仍是旧主题的值 ⇒ 双真值组件 var(--colorPrimary) 不变）。
+    previewCssVars = cssVars && typeof cssVars === 'object' ? cssVars : null
+    // 主题取值统一走 resolvedThemeClass（含手动切换优先级），
+    // 不再直接读 playgroundTheme —— 否则手动切换后注入的是旧主题变量。
+    const theme = resolvedThemeClass.value
+    const applied = applyPreviewCssVars(previewCssVars, theme)
     if (applied > 0) {
       console.log(`🎨 [Preview] 已注入组件声明 cssVars ${applied} 项（theme=${theme}）`)
     }
@@ -1497,6 +1595,9 @@ function onPreviewMessage(event) {
   if (data.type === 'set-theme') {
     const theme = data.theme
     if (theme === 'light' || theme === 'dark') {
+      // 🆕 R12：父页面显式下发 ⇒ 清掉本页手动选择，让 Playground 的控制权生效。
+      //   否则用户在本页点过切换后，父页面下拉会「失效」（手动值恒压过 postMessage）。
+      manualTheme.value = null
       playgroundTheme.value = theme
       console.log('🎨 [Preview] 父页面下发主题:', theme)
     }
@@ -1508,8 +1609,10 @@ function onPreviewMessage(event) {
   if (data.type === 'set-preview-viewport') {
     const w = Number(data.width)
     const h = Number(data.height)
-    if (!(w > 0) || !(h > 0)) return
     const mode: PreviewMode = data.mode === 'responsive' ? 'responsive' : 'fidelity'
+    // 🛡️ 修复：fidelity 消息不带尺寸（TaskDetail 切回保真时下发，清残留状态）——
+    // 此前 w>0 校验在 mode 判定之前，fidelity(w=0) 直接被拒 → 响应式状态永久残留
+    if (mode === 'responsive' && (!(w > 0) || !(h > 0))) return
     const changed = mode !== previewMode.value || w !== responsiveWidth.value || h !== responsiveHeight.value
     previewMode.value = mode
     responsiveWidth.value = w
@@ -1992,6 +2095,117 @@ html:root .mc-preview-stage-shell.is-standalone .mc-preview-stage {
 .mc-panel-switcher label {
   font-weight: 500;
   white-space: nowrap;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   🆕 主题切换控件（R12 · 2026-10-10 双主题）
+   位置：提示条上方一排（提示条 top:70px ⇒ 本控件 top:16px），居中对齐。
+   交互：分段按钮可点，切换即时生效（resolvedThemeClass 派生样式 class）。
+   ══════════════════════════════════════════════════════════════ */
+.mc-theme-switcher {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 10px 5px 5px;
+  border-radius: 999px;
+  font-size: 13px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+}
+.mc-theme-switcher.dark {
+  background: rgba(30, 30, 40, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #e5e7eb;
+}
+.mc-theme-switcher.light {
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  color: #374151;
+}
+
+/* 分段控件本体 */
+.mc-theme-seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+}
+.mc-theme-switcher.dark .mc-theme-seg {
+  background: rgba(255, 255, 255, 0.08);
+}
+.mc-theme-switcher.light .mc-theme-seg {
+  background: rgba(0, 0, 0, 0.04);
+}
+.mc-theme-seg-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 13px;
+  border: 0;
+  border-radius: 999px;
+  font-size: 13px;
+  font-family: inherit;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+}
+.mc-theme-switcher.dark .mc-theme-seg-btn {
+  color: #9ca3af;
+}
+.mc-theme-switcher.dark .mc-theme-seg-btn.active {
+  background: rgba(255, 255, 255, 0.16);
+  color: #f3f4f6;
+}
+.mc-theme-switcher.light .mc-theme-seg-btn {
+  color: #6b7280;
+}
+.mc-theme-switcher.light .mc-theme-seg-btn.active {
+  background: #ffffff;
+  color: #111827;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+.mc-theme-seg-btn:hover {
+  color: inherit;
+}
+.mc-theme-switcher.dark .mc-theme-seg-btn.active:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+.mc-theme-switcher.light .mc-theme-seg-btn.active:hover {
+  background: #ffffff;
+}
+
+/* 双真值徽标（绿＝已验证达标态，与旁边评分同语义组） */
+.mc-theme-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  background: rgba(34, 197, 94, 0.16);
+  color: #4ade80;
+  white-space: nowrap;
+}
+/* 单稿：明示另一侧为派生值，防止用户误以为两侧都是真值 */
+.mc-theme-derived {
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.mc-theme-switcher.dark .mc-theme-derived {
+  color: #9ca3af;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.mc-theme-switcher.light .mc-theme-derived {
+  color: #6b7280;
+  border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 .mc-theme-hint {

@@ -152,7 +152,13 @@ export class ComponentController {
     return this.gitlabPushService.proxyGitLabGet(body.accessToken, body.endpoint);
   }
 
+  // 🛡️ 2026-10-10 治本（生产「保存报未登录或无权限」）：以下 file 级写接口原先只挂
+  //   @CurrentUser（仅读 session.userId，无 SessionGuard 的「header token→建 session」兜底）。
+  //   生产门户 iframe 场景 session cookie（sameSite:lax）带不上 → session 恒空 →
+  //   即使请求带有效 Token header 也 401。补 SessionGuard 后与同控制器其余写接口一致：
+  //   Token header 先建 session，@CurrentUser 同请求内即可取到。
   @Post('push-to-gitlab')
+  @UseGuards(SessionGuard)
   async pushComponentToGitLab(
     @Body()
     body: {
@@ -348,6 +354,7 @@ export class ComponentController {
   }
 
   @Post(':componentId/analyze-visual')
+  @UseGuards(SessionGuard)
   async analyzeComponentVisual(
     @Param('componentId') componentId: string,
     @CurrentUser() userId: string,
@@ -412,6 +419,7 @@ export class ComponentController {
   }
 
   @Post(':componentId/file')
+  @UseGuards(SessionGuard)
   async saveFileContent(
     @Param('componentId') componentId: string,
     @Query('path') filePath: string,
@@ -437,6 +445,7 @@ export class ComponentController {
   }
 
   @Post(':componentId/file/delete')
+  @UseGuards(SessionGuard)
   async deleteComponentFile(
     @Param('componentId') componentId: string,
     @Query('path') filePath: string,
@@ -451,6 +460,7 @@ export class ComponentController {
   }
 
   @Post(':componentId/rename')
+  @UseGuards(SessionGuard)
   async renameComponentFile(
     @Param('componentId') componentId: string,
     @Body('oldPath') oldPath: string,
@@ -466,6 +476,7 @@ export class ComponentController {
   }
 
   @Post(':componentId/folder')
+  @UseGuards(SessionGuard)
   async createComponentFolder(
     @Param('componentId') componentId: string,
     @Body('path') folderPath: string,

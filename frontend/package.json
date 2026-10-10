@@ -17,7 +17,9 @@
     "check:screen": "node scripts/check-nl-parser.mjs && node scripts/check-standalone-export.mjs",
     "preview": "vite preview",
     "lint:fix": "eslint --fix src/",
-    "lint:prettier": "prettier --write './**/*.{js,jsx,ts,tsx,json,css,vue,less}'"
+    "lint:prettier": "prettier --write './**/*.{js,jsx,ts,tsx,json,css,vue,less}'",
+    "verify:chart-resize": "node --max-old-space-size=2048 scripts/audit-chart-resize.mjs",
+    "verify:chart-resize:strict": "node --max-old-space-size=2048 scripts/audit-chart-resize.mjs --strict"
   },
   "dependencies": {
     "@ant-design/icons-vue": "~7.0.1",

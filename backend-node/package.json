@@ -14,6 +14,7 @@
     "verify:theme-color:recent": "node scripts/audit-theme-color.mjs --recent",
     "verify:theme-migrate": "NODE_OPTIONS=\"--max-old-space-size=2048\" node scripts/verify-theme-common-migrate.mjs",
     "verify:theme-migrate:all": "NODE_OPTIONS=\"--max-old-space-size=2048\" node scripts/verify-theme-common-migrate.mjs --all",
+    "verify:dual-truth": "node scripts/verify-dual-truth-style-tokens.mjs && node scripts/verify-m4-10-dual-truth.mjs && node scripts/verify-dual-truth-secondary.mjs && node scripts/verify-dual-truth-score.mjs",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "node dist/main.js",
     "start:dev": "nest start --watch",

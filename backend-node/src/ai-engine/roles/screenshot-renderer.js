@@ -636,6 +636,11 @@ async function renderViaPreviewPage({
   viewportHeight,
   onProgress,
   requestMocks = [],
+  // 🆕 2026-10-10 双主题（R10）：预览主题（'light' | 'dark'）。
+  //   预览页已支持 ?theme= 并据其切换 .dark/.light 父选择器 + 重注入 CSS 变量
+  //   （见 frontend/src/views/preview/index.vue R12），故截图侧只需带参数。
+  //   缺省不传 ⇒ 走预览页 declare.json 默认主题（**与改动前完全一致，零回归**）。
+  theme,
 }) {
   const issues = []
   const addBlock = (id, category, message, evidence = {}) => {
@@ -654,6 +659,8 @@ async function renderViaPreviewPage({
   if (sessionId) previewUrl.searchParams.set('sessionId', sessionId)
   if (target === 'vue3') previewUrl.searchParams.set('type', 'vue3')
   if (groupId) previewUrl.searchParams.set('groupId', groupId)
+  // 🆕 R10：显式指定预览主题（双主题评测时渲染两次，各带 light/dark）
+  if (theme === 'light' || theme === 'dark') previewUrl.searchParams.set('theme', theme)
 
   logger.info(`通过预览页渲染截图: ${previewUrl.href}`)
   onProgress?.({
@@ -1180,6 +1187,12 @@ export async function renderScreenshot(params) {
     hardGate = false,
     allowMissingAssetSelfHeal = false,
     requestMocks = [],
+    // 🆕 2026-10-10 双主题（R10）：本次渲染使用的主题（'light' | 'dark'）。
+    //   双主题评测会对同一组件渲染两次，各传一个主题 —— **截图文件名按主题分文件**
+    //   （`<sessionId>-rendered-light.png` / `-dark.png`），否则第二次会覆盖第一次，
+    //   导致两个主题拿到同一张图、比对结果虚高。
+    //   不传 ⇒ 文件名保持 `<sessionId>-rendered.png`（**与改动前完全一致，零回归**）。
+    theme,
   } = params
 
   // M1-1：workspace 目录名以 declare.json componentId 为准，截图预览也必须用同一 ID，
@@ -1205,7 +1218,13 @@ export async function renderScreenshot(params) {
   // 截图目录：sessionId 隔离（保持原 sessionId 命名，仅预览 ID 用 resolvedComponentId）
   const screenshotDir = join(outputPath, '.mc-gen', 'screenshots')
   const htmlPath = join(screenshotDir, `${sessionId}-preview.html`)
-  const screenshotPath = join(screenshotDir, `${sessionId}-rendered.png`)
+  // 🆕 R10：双主题按主题分文件名（见 params.theme 注释）；单主题仍是 `-rendered.png`
+  const screenshotPath = join(
+    screenshotDir,
+    theme === 'light' || theme === 'dark'
+      ? `${sessionId}-rendered-${theme}.png`
+      : `${sessionId}-rendered.png`
+  )
 
   try {
     // 创建截图目录
@@ -1236,6 +1255,7 @@ export async function renderScreenshot(params) {
     viewportHeight,
     onProgress,
     requestMocks,
+    theme, // 🆕 R10：双主题各渲一次
   })
 
     const finalizePreviewResult = async (result) => {
@@ -1311,6 +1331,7 @@ export async function renderScreenshot(params) {
             viewportWidth,
             viewportHeight,
             onProgress,
+            theme, // 🆕 R10：自愈重试须保持同一主题，否则重试渲的是另一个主题
           })
         }
 

@@ -229,6 +229,36 @@
       <div class="pdp-vc-bar-track">
         <div class="pdp-vc-bar-fill" :style="{ width: visualComparison.similarity + '%', background: visualComparison.scoreColor }"></div>
       </div>
+      <!-- 🆕 2026-10-10 双主题评分（R10 · D4）：平均分 + 分主题问题清单。
+     平均分会掩盖单侧灾难 ⇒ needsReview 时整块用警示色，且两个主题分数始终并列可见。 -->
+      <div v-if="dualThemeScore" class="pdp-vc-dual" :class="{ 'needs-review': dualThemeScore.needsReview }">
+        <div class="pdp-vc-dual-head">
+          <span class="pdp-vc-dual-label">双主题评分</span>
+          <span class="pdp-vc-dual-avg">
+            平均
+            <b :style="{ color: dualThemeScore.needsReview ? 'var(--error)' : 'var(--success)' }">{{ dualThemeScore.overallScore ?? '—' }}</b>
+          </span>
+          <span v-if="dualThemeScore.needsReview" class="pdp-vc-dual-flag">有主题需复查</span>
+        </div>
+        <div class="pdp-vc-dual-themes">
+          <div v-for="t in dualThemeScore.themes" :key="t.theme" class="pdp-vc-dual-theme">
+            <div class="pdp-vc-dual-theme-head">
+              <span class="pdp-vc-dual-dot" :style="{ background: t.color }"></span>
+              <span class="pdp-vc-dual-name">{{ t.label }}</span>
+              <span v-if="t.isPrimary" class="pdp-vc-dual-primary">主稿</span>
+              <span class="pdp-vc-dual-score" :style="{ color: t.color }">{{ t.score ?? '—' }}</span>
+            </div>
+            <div v-if="t.issues.length" class="pdp-vc-dual-issues">
+              <div v-for="(iss, ii) in t.issues" :key="ii" class="pdp-vc-dual-issue">
+                <span class="pdp-vc-dual-sev" :class="iss.severity">{{ iss.severity === 'high' ? '严重' : iss.severity === 'medium' ? '中等' : '轻微' }}</span>
+                <span class="pdp-vc-dual-issue-text">{{ iss.comment || iss.message || '未命名问题' }}</span>
+              </div>
+            </div>
+            <div v-else class="pdp-vc-dual-noissue">无问题</div>
+          </div>
+        </div>
+      </div>
+
       <div v-if="visualComparison.totalIssues > 0" class="pdp-vc-issues">
         <div class="pdp-vc-issues-header" @click="showVisualIssues = !showVisualIssues">
           <span class="pdp-vc-issues-title">
@@ -857,6 +887,39 @@ const visualComparison = computed(() => {
     mediumIssues,
     lowIssues,
     totalIssues: (report.issues || []).length,
+    // 🆕 2026-10-10 双主题（R10）：平均分 + 分主题问题清单。
+    //   字段由后端 aggregateDualThemeScores 挂在 report.dualThemeScore 上；
+    //   单稿产物无此字段 ⇒ 返回 null，模板走原有单主题分支（零回归）。
+    dualTheme: report.dualThemeScore || null,
+  }
+})
+
+/**
+ * 🆕 R10：双主题评分的可展示形态。
+ * 平均分会掩盖单侧灾难 ⇒ `needsReview` 为真时用 error 色而非平均分档，
+ * 并且**两个主题的分数与问题清单都返回**（由模板并列展示，不只给一个平均分）。
+ */
+const dualThemeScore = computed(() => {
+  const d = visualComparison.value?.dualTheme
+  if (!d || !Array.isArray(d.perTheme)) return null
+  const colorOf = (score: number | null) => {
+    if (score == null) return 'var(--text-tertiary)'
+    if (score < 50) return 'var(--error)'
+    if (score < 80) return 'var(--warning)'
+    return 'var(--success)'
+  }
+  return {
+    overallScore: d.overallScore,
+    minScore: d.minScore,
+    needsReview: d.needsReview === true,
+    themes: d.perTheme.map((t: any) => ({
+      theme: t.theme,
+      label: t.label,
+      score: t.score,
+      color: colorOf(t.score),
+      isPrimary: t.isPrimary === true,
+      issues: Array.isArray(t.issues) ? t.issues : [],
+    })),
   }
 })
 
@@ -1834,6 +1897,123 @@ onUnmounted(() => {
 }
 
 /* 相似度进度条 */
+/* ══════════════════════════════════════════════════════════════
+   🆕 双主题评分区块（R10）
+   平均分与两个主题分数**始终并列可见** —— 平均分会掩盖单侧灾难。
+   ══════════════════════════════════════════════════════════════ */
+.pdp-vc-dual {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
+  border-radius: 8px;
+  background: var(--bg-alt, rgba(0, 0, 0, 0.02));
+}
+.pdp-vc-dual.needs-review {
+  border-color: var(--error);
+}
+.pdp-vc-dual-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.pdp-vc-dual-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+.pdp-vc-dual-avg {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+.pdp-vc-dual-avg b {
+  font-size: 14px;
+  font-weight: 600;
+}
+.pdp-vc-dual-flag {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--error);
+}
+.pdp-vc-dual-themes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+}
+.pdp-vc-dual-theme {
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--bg-primary, #fff);
+  border: 0.5px solid var(--border-color, rgba(0, 0, 0, 0.06));
+}
+.pdp-vc-dual-theme-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.pdp-vc-dual-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.pdp-vc-dual-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.pdp-vc-dual-primary {
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  background: rgba(34, 197, 94, 0.14);
+  color: #15803d;
+}
+.pdp-vc-dual-score {
+  margin-left: auto;
+  font-size: 14px;
+  font-weight: 600;
+}
+.pdp-vc-dual-issues {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pdp-vc-dual-issue {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.pdp-vc-dual-sev {
+  flex-shrink: 0;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  background: var(--bg-alt, rgba(0, 0, 0, 0.05));
+}
+.pdp-vc-dual-sev.high {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--error);
+}
+.pdp-vc-dual-sev.medium {
+  background: rgba(245, 158, 11, 0.14);
+  color: #b45309;
+}
+.pdp-vc-dual-issue-text {
+  color: var(--text-secondary);
+  word-break: break-word;
+}
+.pdp-vc-dual-noissue {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
 .pdp-vc-bar-track {
   height: 6px;
   background: var(--bg-alt);

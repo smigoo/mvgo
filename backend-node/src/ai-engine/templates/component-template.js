@@ -91,9 +91,10 @@ onMounted(() => {
  * @param {string} options.componentId - 组件 ID
  * @param {string} options.componentName - 组件中文名称
  * @param {string} options.nodeData - Figma 节点数据
+ * @param {Object} [options.dualTruth] 🆕 2026-10-10 双真值（浅色+深色两份设计稿）
  * @returns {Object} declare.json 对象
  */
-export function generateDeclareJson({ componentId, componentName, nodeData, backgroundBrightness }) {
+export function generateDeclareJson({ componentId, componentName, nodeData, backgroundBrightness, dualTruth }) {
   // 从Figma节点数据中提取真实宽高比例
   let aspectRatio = [16, 9] // 默认值
   let size = null // 原始尺寸（供预览页按实际宽高渲染，避免 aspectRatio 丢失精度导致变形）
@@ -178,7 +179,22 @@ export function generateDeclareJson({ componentId, componentName, nodeData, back
           name: '深色主题',
           key: 'dark'
         }
-      ]
+      ],
+      // 🆕 2026-10-10 双主题（双真值）：两侧色值均取自 Figma 设计稿、无算法派生。
+      //   前端预览页据 `dualTruth` 渲染「浅色 | 深色」切换控件与「双真值」徽标；
+      //   **缺省即 false** ⇒ 单稿产物结构与改动前逐字节一致（零回归）。
+      //   source 保留两稿出处，便于组件详情页展示「哪份是主稿/哪份只贡献色板」。
+      dualTruth: !!(dualTruth && dualTruth.enabled),
+      ...(dualTruth && dualTruth.enabled
+        ? {
+            primaryBrightness: dualTruth.primaryBrightness || null,
+            secondaryBrightness: dualTruth.secondaryBrightness || null,
+            dualTruthSource: {
+              primary: dualTruth.primarySource || null,
+              secondary: dualTruth.secondarySource || null
+            }
+          }
+        : {})
     },
     cssVariableConfig: []
   }

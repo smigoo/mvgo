@@ -11,6 +11,12 @@
  *   I4 根容器形态锚定  —— 内容根须有 aspect-ratio，或 width+height 双全（缺一即形态失锁）
  *   I5 类名对齐（warn）—— index.vue 模板引用的组件前缀类必须在任一样式源声明过
  *   I6 资源挂载对齐    —— .vue import 的图片/样式 url() 引用的文件必须存在于产物
+ *   I7 类名契约（2026-09-11）—— 委托 utils/class-facts#checkClassNameContract，与 CODE-024 同判据
+ *   I8 资源契约（2026-09-11）—— 委托 utils/resource-facts#checkResourceContract，与 CODE-025 同判据
+ *   I9 图表 resize 自适应（2026-10-10）—— 创建了 chart 实例就必须挂 resize 监听并调用 resize()，
+ *      否则容器尺寸变化时图表不重绘。判据复用 CODE-012 的 checkEchartsResizeListener。
+ *      定位差异：CODE-012 在 L0-B 生成期跑，I9 在落盘后必跑——后者覆盖
+ *      「L0-B 重试耗尽后带病落盘」的历史存量与绕过 L0-B 的旁路（补写/合并/回流）。
  *
  * 输入：{ [relativePath]: content } 产物文件 map（与 engineer snapshotFiles 同构）。
  * 输出：{ violations: [{id, severity, file, message}], passed, summary }。
@@ -18,6 +24,8 @@
  */
 
 import { detectContentRootClass } from './root-container-normalizer.js';
+// I9 图表 resize 不变量复用门禁 CODE-012 的 AST 判据（同一实现，避免双源漂移）
+import { checkEchartsResizeListener } from './echarts-init-guard.js';
 import {
   collectFileClassFact,
   splitModifier,
@@ -321,7 +329,65 @@ function checkResourceMount(files, violations) {
 }
 
 /**
- * 主入口：跑全部七条不变量。
+ * I9：图表容器 resize 自适应不变量（2026-10-10 新增）
+ *
+ * 事故：产物 `6a7599af6eb9eebf9fba56cd`（mc-max-1787623728679-f7fed228）里
+ *   `echarts.init()` 在 onMounted 内 nextTick 调用，`onUnmounted` 只 dispose，
+ *   **全程无任何 resize 监听**。后果：容器尺寸变化（预览端拖拽调尺 / 真实窗口缩放 /
+ *   栅格换行）时图表不重绘，画布尺寸冻结在 init 那一刻 → 用户看到「图表不跟随」，
+ *   且这类缺陷在设计稿 1:1 保真预览下完全不可见（视口不变 ⇒ 永远看不出来）。
+ *
+ * 为什么需要这一条（CODE-012 明明已经存在）：
+ *   CODE-012 在 **L0-B 生成期**跑，判据正确（实测该产物 `CODE-012 BLOCK / pass:false`）。
+ *   它没拦住的原因是**时序**：该产物是 L0-B 重试耗尽后带病落盘的历史存量，
+ *   以及后续任何绕过 L0-B 的落盘路径（补写/合并/回流）。
+ *   不变量层的定位正是「落盘后必跑」，覆盖生成期门禁管不到的存量与旁路。
+ *
+ * 判据单一来源：直接复用 utils/echarts-init-guard#checkEchartsResizeListener
+ *   （与 CODE-012 完全同一判据），**不另立正则**，避免双源漂移
+ *   —— I7/I8 已是这个范式（委托 checkClassNameContract / checkResourceContract）。
+ *
+ * 严重度：error。
+ *   依据：产物一旦交付，图表不跟随是不可自动恢复的功能缺陷，且无任何降级表现
+ *   （不像 I5 类名缺失那样还能靠父级样式兜住）。
+ */
+function checkChartResizeAdaptability(files, violations) {
+  for (const [p, c] of Object.entries(files)) {
+    if (typeof c !== 'string') continue;
+    if (!/\.vue$/i.test(p)) continue;
+    // 🔑 分母判据必须是「脚本里真的调用了 echarts.init(...)」。
+    //
+    // ⚠️ 刻意**不把 vue-echarts / <VChart> 组件形态计入分母**：
+    //   ① CODE-012 的 AST 判据只认 4 类信号（.resize() / ResizeObserver /
+    //      addEventListener('resize') / .onresize），不认组件形态 ⇒ 若 I9 把
+    //      组件形态纳入分母，会与门禁判据口径不一致，放大 CODE-012 既有的误伤面
+    //      （组件形态由 vue-echarts 内部自行处理，不要求产物写监听）。
+    //   ② 同样不能用「import 了 echarts」或「有 initCharts 函数名」当判据——
+    //      产物骨架常见 `function initCharts(){ /* 无图表 */ }` 空实现伪图表，
+    //      计入分母会造成长期误报；告警一旦成噪声就会被忽略。
+    if (!/echarts\s*\.\s*init\s*\(/.test(c)) continue;
+
+    const scriptMatch = c.match(/<script[^>]*>([\s\S]*?)<\/script>/i);
+    if (!scriptMatch) continue;
+    const scriptContent = scriptMatch[1];
+
+    // 复用门禁判据（解析失败时 guard 内部 fail-open 返回「有监听」，不误杀）
+    const resizeCheck = checkEchartsResizeListener(scriptContent);
+    if (resizeCheck.hasResizeListener) continue;
+
+    violations.push({
+      id: 'I9',
+      severity: 'error',
+      file: p,
+      message:
+        'echarts 实例创建后未挂 ResizeObserver / window.resize 监听：容器尺寸变化时图表不会重绘' +
+        '（预览端拖拽调尺、窗口缩放、栅格换行均会暴露）。修复：挂 ResizeObserver 或 addEventListener("resize") 并在回调中调用 chart.resize()',
+    });
+  }
+}
+
+/**
+ * 主入口：跑全部不变量。
  * @param {Object<string,string>} files 产物 map
  * @param {{classFacts?: Object}} [options] 类事实（engineer 生成期注入；缺省内部自采集）
  * @returns {{ violations: Array, passed: boolean, summary: string }}
@@ -375,6 +441,9 @@ export function runArtifactInvariants(files = {}, options = {}) {
       });
     }
   }, 'I8');
+
+  // I9 图表 resize 自适应（判据复用 CODE-012 的 checkEchartsResizeListener，单一来源）
+  safe(checkChartResizeAdaptability, 'I9');
 
   const errors = violations.filter((v) => v.severity === 'error');
   const warns = violations.filter((v) => v.severity === 'warn');

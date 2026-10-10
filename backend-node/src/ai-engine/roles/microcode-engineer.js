@@ -5342,6 +5342,20 @@ export class MicrocodeEngineer extends BaseAgent {
       d.cssVariableConfig = [];
       changed = true;
     }
+    // 🆕 2026-10-10 双主题（双真值）：把双真值元数据写进 declare.json 的 themeConfig，
+    //   供前端预览页渲染「浅色 | 深色」切换控件 +「双真值」徽标（D6/R12）。
+    //   为什么放 themeConfig：预览页**已经在读 declare.json**（microcodeDeclare），
+    //   放这里 ⇒ 前端零新增请求、零新增接口。
+    //
+    //   ⚠️ 只在双真值成立时写入 —— 单稿产物 themeConfig 结构与改动前**逐字节一致**。
+    //   注意 CSS 变量注入在下方（cssVars），本段只管 declare.json 自身的元数据。
+    const _dual = opts.styleTokens?.dualTruth;
+    if (_dual?.enabled) {
+      d.themeConfig.dualTruth = true;
+      d.themeConfig.primaryBrightness = _dual.primaryBrightness || null;
+      d.themeConfig.secondaryBrightness = _dual.secondaryBrightness || null;
+      changed = true;
+    }
     // 🎨 cssVariableConfig 与设计变量轨双向声明（M3-7/M3-8，2026-09-03 契约接入）：
     // styleTokens.designVars（原 UI 深色时 Figma 深色真值自定义变量，已渲染进 css-vars.js
     // dark 槽位）必须同步在此声明（数组格式 [{name,key,type}]，mc-check M3-6），缺一即 error。
@@ -6177,6 +6191,7 @@ export class MicrocodeEngineer extends BaseAgent {
       headerSlots = null, //面板头部插槽信息
       elementStyleMap = null, //  per-element 样式映射（来自 Style Mapper）
       backgroundBrightness = 'dark', //面板明暗主题
+      dualTruth = null, //🆕 2026-10-10 双主题：深浅两份设计真值（单稿恒为 null）
       displayName = null, //  组件中文显示名称（用于 declare.json 后校验）
       docAnalysis = null, //S8: 需求文档分析产物（doc-analysis.json 六维）
       onProgress = null, //  SSE 进度回调（LLM 心跳推送）
@@ -7621,13 +7636,41 @@ export default declareInfo
           // light 槽位 = Figma 提取（浅色稿）或派生算法（深色稿）。
           const { buildStyleTokens, renderMicrocodeThemeVarsLess } =
             await import('../utils/style-tokens.js');
+          // 🆕 2026-10-10 双主题：dualTruth 就绪时两侧槽位均取 Figma 真值、
+          //   派生算法**完全不执行**（graph 的 fetchSecondaryFigmaNode 已 fail-closed
+          //   保证副稿必就绪）。单稿路径 dualTruth 为 null ⇒ 完全走原有分支。
+          //
+          // ⚠️ 本方法（execute）已把 params 解构成局部变量（figmaNodeData:6166 /
+          //   backgroundBrightness:6179），故此处**必须用裸变量**；写成 `input.xxx`
+          //   会抛 ReferenceError（2026-10-10 实测：被外层 catch 非阻断吞掉，
+          //   表现为「一体化平台文件生成失败 input is not defined」+ css-vars.js 从不落盘）。
+          const _dualTruth = dualTruth?.enabled ? dualTruth : null;
           const styleTokens = buildStyleTokens(
-            { figmaNodeData, backgroundBrightness },
+            {
+              figmaNodeData,
+              backgroundBrightness,
+              ...(_dualTruth
+                ? {
+                    dualTruth: {
+                      lightNodeData: _dualTruth.lightNodeData,
+                      darkNodeData: _dualTruth.darkNodeData,
+                    },
+                  }
+                : {}),
+            },
             { logger: this.logger },
           );
           // 供下游 declare.json 归一（cssVariableConfig 双向声明 / themeConfig 兜底）
           // 与 validator 事件对齐使用——单一事实源，随本次生成上下文刷新。
           this._lastStyleTokens = styleTokens;
+          if (styleTokens?.dualTruth) {
+            this.logger.info('🎨 双真值主题令牌已注入', {
+              enabled: !!styleTokens.dualTruth.enabled,
+              lightSource: styleTokens.dualTruth.lightSource,
+              darkSource: styleTokens.dualTruth.darkSource,
+              missingSlots: styleTokens.dualTruth.missingSlots,
+            });
+          }
 
           // 🛡️ 2026-09-26 治本 0.1：theme-vars.less 的 **§3 核心槽位**改由 styleTokens 确定性产出
           //   （设计主题 = Figma 提取；缺的主题 = 确定性派生），**组件专属槽位沿用 LLM 原声明**。

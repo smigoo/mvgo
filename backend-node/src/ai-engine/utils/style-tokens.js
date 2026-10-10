@@ -8,6 +8,9 @@
  *
  * 铁律（《微码管线改造方案-2026-09-03》5.3 定稿）：
  *   1. dark 核心三变量永远来自规范枚举（M4-10 硬约束），禁 LLM 生成、禁 Figma 提取——无论原 UI 明暗
+ *      ⚠️ **2026-10-10 显式豁免（D8）**：仅当 `input.dualTruth` 双真值模式成立（浅色+深色
+ *      两份 Figma 节点树均就绪且色板完整）时，三核心可取**设计稿真值**。单稿路径铁律 1 依旧生效，
+ *      且真值必须同时写入 `theme-vars.less#dark` 与 `css-vars.js#dark`（M4-10 只查后者）。
  *   2. 原 UI 深色：defaultTheme=dark 且呈现以设计稿为准——Figma 深色真值作为自定义设计变量
  *      额外定义进 dark 槽位（命名避开框架预设 8 变量），须同步 cssVariableConfig 声明
  *   3. light 色值分源：原 UI 浅色 → Figma 确定性提取；原 UI 深色 → 确定性派生算法
@@ -475,6 +478,64 @@ function buildDesignVars(palette) {
   return vars;
 }
 
+/**
+ * 双真值槽位构建（2026-10-10 · 双主题 Figma 输入 D2/D8）。
+ *
+ * 背景：单稿模式下另一套主题靠 `deriveLightFromDarkPalette` 派生（主色沿用 +
+ * 中性色反转 + WCAG 兜底），不是设计稿真值 → 「切主题像没切」。用户改为分别提供
+ * 浅色/深色两份 Figma 节点链接后，**两侧都应是真值，派生算法完全不执行**。
+ *
+ * D8 裁定：真值**可占三核心槽位名**（`colorTextBase` / `colorPrimary` /
+ * `colorPrimaryBg`），不再只走 designVars 附加轨。
+ *
+ * @param {Object} lightPalette 浅色稿 extractFigmaColorPalette 结果
+ * @param {Object} darkPalette  深色稿 extractFigmaColorPalette 结果
+ * @param {'light'|'dark'} designTheme 主稿明暗（决定 defaultTheme）
+ * @returns {{light:Object, dark:Object}} light/dark 槽位（camelCase，与 tokens 同构）
+ */
+function buildDualTruthSlots(lightPalette, darkPalette, designTheme) {
+  // 浅色槽位：浅色稿真值。缺失项**不猜**——留空由调用方回退既有分支，
+  // 避免「一半真值一半猜」的混合态（那比全派生更难排查）。
+  const lp = lightPalette || {};
+  const dp = darkPalette || {};
+  const lightPrimary = lp.topPrimary || '';
+  const darkPrimary = dp.topPrimary || '';
+
+  const light = {
+    colorTextBase: lp.topText || '',
+    colorPrimary: lightPrimary,
+    colorPrimaryBg: lightPrimary ? hexToRgba(lightPrimary, 0.12) : '',
+    colorPrimaryHover: lightPrimary ? shiftLightness(lightPrimary, 0.1) : '',
+    colorPrimaryActive: lightPrimary ? shiftLightness(lightPrimary, -0.1) : '',
+    colorPrimaryBgHover: lightPrimary ? hexToRgba(lightPrimary, 0.16) : '',
+  };
+
+  // 深色槽位：三核心 = 深色稿真值（D8）。hover/active/bg 同样由真值主色派生，
+  // 保证同源（不用枚举色，避免真值主色与枚举 hover 不搭）。
+  const dark = {
+    colorTextBase: dp.topText || '',
+    colorPrimary: darkPrimary,
+    colorPrimaryBg: dp.topBg || '',
+    colorPrimaryHover: darkPrimary ? shiftLightness(darkPrimary, 0.1) : '',
+    colorPrimaryActive: darkPrimary ? shiftLightness(darkPrimary, -0.1) : '',
+    colorPrimaryBgHover: darkPrimary ? hexToRgba(darkPrimary, 0.16) : '',
+  };
+
+  // 抹掉空值：mcSlotsFromTokens 会跳过空串，但 tokens 对象本身会被 buildCssVarsFile
+  // 直接消费，留空串会输出 `colorPrimary: ''` 到 css-vars.js ⇒ 变量 fallback 失效。
+  const prune = (o) => {
+    const out = {};
+    for (const [k, v] of Object.entries(o)) {
+      if (v === undefined || v === null || String(v).trim() === '') continue;
+      out[k] = v;
+    }
+    return out;
+  };
+  const outLight = prune(light);
+  const outDark = prune(dark);
+  return { light: outLight, dark: outDark, designTheme };
+}
+
 // ══════════════════════════════════════════════════════════════
 // 主入口
 // ══════════════════════════════════════════════════════════════
@@ -486,6 +547,9 @@ function buildDesignVars(palette) {
  * @param {('dark'|'light')} [input.backgroundBrightness='dark'] Vision 明暗判定（决定 defaultTheme）
  * @param {('business'|'service')} [input.componentCategory='business'] service 组件可豁免 dark
  * @param {string} [input.fontSize='14'] 基准字号（px 数值字符串）
+ * @param {Object} [input.dualTruth] 🆕 双真值输入（2026-10-10 双主题 Figma 输入）
+ * @param {Object|null} [input.dualTruth.lightNodeData] 浅色稿 Figma 节点树
+ * @param {Object|null} [input.dualTruth.darkNodeData]  深色稿 Figma 节点树
  * @param {Object} [options]
  * @param {Object} [options.logger] 安全日志（缺省 no-op）
  * @returns {{
@@ -493,10 +557,15 @@ function buildDesignVars(palette) {
  *   defaultTheme: ('dark'|'light'),
  *   themes: string[],
  *   light: Object,
- *   dark: Object,            // 标准变量轨（枚举三核心）
+ *   dark: Object,            // 标准变量轨（枚举三核心 / 双真值时为设计真值）
  *   designVars: Array<{key:string,name:string,type:string,value:string}>, // 设计变量轨
  *   darkWithDesign: Object,  // dark + 设计变量（css-vars.js dark 槽位渲染用）
- *   palette: Object          // 色板（诊断/调试用）
+ *   palette: Object,         // 色板（诊断/调试用）
+ *   dualTruth: null|{        // 🆕 双真值诊断信息（单稿恒为 null）
+ *     enabled: boolean, lightSource: string, darkSource: string,
+ *     primaryBrightness: string, secondaryBrightness: string,
+ *     lightCore: Object, darkCore: Object, missingSlots: string[]
+ *   }
  * }}
  */
 export function buildStyleTokens(input = {}, options = {}) {
@@ -506,6 +575,7 @@ export function buildStyleTokens(input = {}, options = {}) {
     backgroundBrightness = 'dark',
     componentCategory = 'business',
     fontSize = '14',
+    dualTruth = null,
   } = input;
 
   const isLight = backgroundBrightness === 'light';
@@ -520,6 +590,107 @@ export function buildStyleTokens(input = {}, options = {}) {
   const palette = figmaNodeData
     ? extractFigmaColorPalette(figmaNodeData)
     : { textColors: [], fillColors: [], topText: null, topBg: null, topPrimary: null, topAccent: null };
+
+  // 🆕 双真值分支（2026-10-10）：两侧色板都来自 Figma，派生算法**完全不执行**。
+  //   成立条件：两稿节点树都在，且各自能提取出主色（否则退现有分支，
+  //   避免「一半真值一半猜」的混合态）。
+  const dualLightNode = dualTruth?.lightNodeData || null;
+  const dualDarkNode = dualTruth?.darkNodeData || null;
+  const dualReady = !!(dualLightNode && dualDarkNode);
+  let dualInfo = null;
+
+  if (dualReady) {
+    const lightPalette = extractFigmaColorPalette(dualLightNode);
+    const darkPalette = extractFigmaColorPalette(dualDarkNode);
+    const slots = buildDualTruthSlots(lightPalette, darkPalette, defaultTheme);
+    // 缺主色/文字色 → 不进入双真值（退现有分支，由日志留痕）
+    const missingSlots = [];
+    if (!slots.light.colorPrimary) missingSlots.push('light.colorPrimary');
+    if (!slots.light.colorTextBase) missingSlots.push('light.colorTextBase');
+    if (!slots.dark.colorPrimary) missingSlots.push('dark.colorPrimary');
+    if (!slots.dark.colorTextBase) missingSlots.push('dark.colorTextBase');
+
+    if (missingSlots.length === 0) {
+      // D8：真值可占三核心槽位名。
+      //
+      // 🔴 设计变量轨必须**按主题分开**（2026-10-10 修正）：设计变量名是 camelCase 的
+      // `colorBgDesign` / `colorPrimaryDesign` 等，同名槽位在 css-vars.js 里**只有一个值**，
+      // 若把浅色稿与深色稿的 designVars 合并进同一个 dark 对象，深色主题会读到浅色稿的
+      // 设计色（如 colorBgDesign=#F5F7FA）⇒ 深色模式出现浅色底。
+      //
+      // 契约：`lightDesign` 挂 light 槽位、`darkDesign` 挂 dark 槽位；`designVars` 是
+      // 两者并集，仅供 declare.json 的 cssVariableConfig 双向声明使用（逐项列出、
+      // 单值，不参与主题渲染）。
+      //
+      // 🔴 buildDesignVars 返回的是**描述符数组** `{key,name,type,value}`，不能直接
+      //   展开进槽位对象（那会把键写成 `key`/`value`/`name`）。必须经 kvOf 转成
+      //   `key → value` 映射后再合并 —— 否则设计变量永远进不了产物（本次断言实锤）。
+      const kvOf = (list) => {
+        const o = {};
+        for (const v of list || []) {
+          if (v && v.key && v.value) o[v.key] = v.value;
+        }
+        return o;
+      };
+      const lightDesignVars = buildDesignVars(lightPalette);
+      const darkDesignVars = buildDesignVars(darkPalette);
+      const lightDesignKv = kvOf(lightDesignVars);
+      const darkDesignKv = kvOf(darkDesignVars);
+      const designVars = [
+        ...lightDesignVars,
+        ...darkDesignVars.filter(
+          (v) => !lightDesignVars.some((x) => x.key === v.key),
+        ),
+      ];
+      const darkWithDesign = { ...slots.dark, ...darkDesignKv };
+      dualInfo = {
+        enabled: true,
+        lightSource: 'figma-extract',
+        darkSource: 'figma-extract',
+        primaryBrightness: defaultTheme,
+        secondaryBrightness: defaultTheme === 'light' ? 'dark' : 'light',
+        lightCore: { ...slots.light },
+        darkCore: { ...slots.dark },
+        missingSlots: [],
+      };
+      logger.info('🎨 styleTokens 双真值契约已构建（派生算法未执行）', {
+        defaultTheme,
+        lightPrimary: slots.light.colorPrimary,
+        darkPrimary: slots.dark.colorPrimary,
+        lightText: slots.light.colorTextBase,
+        darkText: slots.dark.colorTextBase,
+        lightDesignVarCount: lightDesignVars.length,
+        darkDesignVarCount: darkDesignVars.length,
+      });
+      return {
+        fontSize: String(fontSize),
+        defaultTheme,
+        themes,
+        light: { ...slots.light, ...lightDesignKv },
+        dark: slots.dark,
+        lightDesign: lightDesignVars,
+        darkDesign: darkDesignVars,
+        designVars,
+        darkWithDesign,
+        palette,
+        dualTruth: dualInfo,
+      };
+    }
+
+    logger.warn('🎨 双真值色板不完整，退回单稿分支（避免真值/派生混合态）', {
+      missingSlots,
+    });
+    dualInfo = {
+      enabled: false,
+      lightSource: 'unavailable',
+      darkSource: 'unavailable',
+      primaryBrightness: defaultTheme,
+      secondaryBrightness: defaultTheme === 'light' ? 'dark' : 'light',
+      lightCore: {},
+      darkCore: {},
+      missingSlots,
+    };
+  }
 
   // light 槽位分源（铁律 3）
   const light = isLight
@@ -546,9 +717,13 @@ export function buildStyleTokens(input = {}, options = {}) {
     themes,
     light,
     dark,
+    // 设计变量轨按主题分开（单稿模式只有一侧有，与双真值契约同形，下游无需分支）
+    lightDesign: isLight ? designVars : [],
+    darkDesign: isLight ? [] : designVars,
     designVars,
     darkWithDesign,
     palette,
+    dualTruth: dualInfo,
   };
 }
 
