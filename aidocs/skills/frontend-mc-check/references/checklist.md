@@ -96,7 +96,7 @@
 | M4-7 | css-vars.js 字体变量格式 | 字体大小变量必须使用 `$mcCssBuilder.getCssSize()` 或 `$mcCssBuilder.getCssSize(数字)` | all | `css-vars.js` 有字体变量 | error |
 | M4-8 | css-vars.js 导出 dark | `resources/config/css-vars.js` 必须导出 `dark` 对象 | business | 存在 dark 主题（M3-13） | error |
 | M4-9 | dark 核心变量完整性 | 必须包含 `colorTextBase`、`colorPrimary`、`colorPrimaryBg` | business | 已导出 dark（M4-8） | error |
-| M4-10 | dark 核心变量色值枚举 | 3 个核心变量（`colorTextBase`/`colorPrimary`/`colorPrimaryBg`）的值必须在允许枚举内（不区分大小写）。**双真值例外**：`css-vars.js` 含 `dualTruth: figma-derived` 标记时（双主题 Figma 输入，浅色+深色两份设计稿），这 3 个核心变量取 Figma 设计真值，豁免枚举比对；其余变量与 M4-11 仍照旧判定 | business | 已导出 dark 且核心变量完整（M4-9） | error |
+| M4-10 | dark 核心变量色值枚举 | 3 个核心变量（`colorTextBase`/`colorPrimary`/`colorPrimaryBg`）的值必须在允许枚举内（不区分大小写） | business | 已导出 dark 且核心变量完整（M4-9） | error |
 | M4-11 | dark 可选变量色值 | 如配置 `scrollbarTrackBg`/`scrollbarThumbBg`，值须为固定值 `#424242`/`#646464` | business | dark 对象配置了滚动条变量 | error |
 
 ---
