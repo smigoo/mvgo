@@ -7,7 +7,57 @@ import {
   IsNumber,
   Min,
   ValidateIf,
+  IsArray,
+  ArrayMaxSize,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+
+/**
+ * 🆕🆕 2026-10-12 N 主题：一个主题对应一份设计稿（Lite 管线）。
+ *
+ * 与 phase2 的 `ThemeNodeDto` 同构（同一份 `multi-theme.js` 规范化逻辑）。
+ * ⚠️ Lite 的主题机制与 phase2 **不同**（2026-10-12 摸底结论）：
+ *   - phase2：`style-tokens.js` 确定性注入三核心（css-vars.js + theme-vars.less）；
+ *   - Lite：LLM 按**固定槽位名**产出 `.theme-light()/.theme-dark()`，平台只补缺失变量。
+ *   ⇒ N 主题在 Lite 的实现是「**槽位名不变、套数从 2 扩到 N**」，
+ *     色值从各稿 Figma 真值确定性注入（不再由 LLM 决定）。
+ */
+export class ThemeNodeDto {
+  @IsString()
+  @IsNotEmpty()
+  fileKey: string;
+
+  @IsString()
+  @IsNotEmpty()
+  nodeId: string;
+
+  /** 主题显示名（用户自填，如「黄昏模式」）；省略则由服务端补默认名 */
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  /**
+   * 🔴 2026-10-12 该主题的**预览图 URL**（方案 A：传 URL 而非 base64）。
+   *
+   * 来源与语义：
+   * - 前端在「填 Figma URL」阶段就**强制预览并要求用户确认**（见
+   *   `component.vue` 的 `confirmThemeRow`），确认后才允许生成。
+   * - 用户确认过的那张图**直接复用为最终产物的主题预览图**，
+   *   因此生成阶段**不需要再调 Figma exportImage**（省限流，见
+   *   `mc-component-graph-phase2.js:378`「只 getNode，不 exportImage」）。
+   *
+   * ⚠️ 与主稿的关系：主稿走 `confirmPreview`（`figma-connector.js:362`）+ tokenhash 缓存，
+   *   本字段是同一条链路的副主题版本。
+   * ⚠️ `dark` 系统占位主题**没有**此字段 —— 它复用主稿的 `mc-preview.png`。
+   *
+   * 缺省时的行为：该项目不导图，主题预览图留空（**不阻断**，因为色板真值才是关键）；
+   *   但前端已保证「未确认 ⇒ 不允许生成」，所以正常路径下不会有缺省。
+   */
+  @IsOptional()
+  @IsString()
+  previewImageUrl?: string;
+}
 
 /**
  * 轻量生成请求体（Phase 4：截图 / Figma → 组件）
@@ -130,6 +180,21 @@ export class GenerateLiteDto {
   @IsString()
   @IsIn(['light', 'dark'])
   backgroundBrightness?: 'light' | 'dark';
+
+  /**
+   * 🆕🆕 2026-10-12 N 主题设计稿列表（Lite 管线）。
+   *
+   * - 不传 / 空数组 = 单稿模式（themeConfig 仍是硬编码的亮/深两主题，**零回归**）
+   * - 传 N 项 = 每项一套主题，色值取自该项 Figma 稿的**确定性真值**（不采信 LLM）
+   * - 第 1 项即主稿（决定结构/几何/文案），与前端「第一行即主稿」一致
+   * - 上限 8（`MAX_THEMES`）：每主题一套 Less mixin，再多会拖垮编译
+   */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(8, { message: 'themeNodes 最多 8 项（每主题一套 mixin）' })
+  @ValidateNested({ each: true })
+  @Type(() => ThemeNodeDto)
+  themeNodes?: ThemeNodeDto[];
 
   /**
    * 🆕 高级选项 P0（2026-10-09）：用户指定组件 ID（可选）

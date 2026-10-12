@@ -7,6 +7,8 @@ import { AiConfigService } from '../config/config.service';
 import { QuotaService } from '../quota/quota.service';
 import { TaskCodeSnapshotService } from '../tasks/task-code-snapshot.service';
 import { GenerateLiteDto } from './dto/generate-lite.dto';
+// 🆕 2026-10-12 N 主题：Lite 侧的主题装配（槽位名与规范一致，只扩套数）
+import type { LiteThemeEntry } from '../lite/utils/lite-multi-theme';
 import { repairJson as repairJsonUtil } from './repair-json.util';
 import {
   LiteErrorCode,
@@ -649,6 +651,7 @@ ${businessStyles}
         sessionId,
         groupId,
         isMicrocode ? 'microcode' : 'vue3',
+        dto, // 🔴 2026-10-12：传 dto 才能启用 N 主题真值注入（无 themeNodes 时是 no-op）
       );
 
       this.progressService.sendProgress(sessionId, {
@@ -2765,7 +2768,14 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
     sessionId: string,
     groupId: string,
     target: 'microcode' | 'vue3',
+    dto?: GenerateLiteDto,
   ): Promise<void> {
+    // 🔴 预发布顺序（2026-10-12 N 主题）：**先注入真值，再补缺失变量**。
+    //   反过来会让 LessVariableChecker 用 LLM 的假主题色先补一遍，
+    //   再被真值覆盖 —— 白做一轮，且门禁日志里留下误导性的「补齐 colorPrimary」。
+    //   两者都幂等，重复调用安全。
+    if (dto) await this.injectNThemeTruth(dto, outputPath, target);
+
     // 🛡️ 2026-09-11 治本（首次预览走快照报 "variable @x is undefined"，刷新走 workspace 才成功）：
     // createCandidate 会把 outputPath 定格为候选快照。若此时 theme-vars.less 仍缺变量
     // （修复器在后续迭代才补齐），快照即"不可编译"，首次预览编译失败。此处发布前先跑
@@ -2846,6 +2856,141 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
         lastGoodRevision: rejected.lastGoodRevision,
       });
       throw error;
+    }
+  }
+
+  /**
+   * 🆕🆕 2026-10-12 N 主题真值注入（Lite 管线）。
+   *
+   * Lite 的主题色平时由 **LLM 产出**（`.theme-light()/.theme-dark()`）。
+   * 本方法在**发布前**按用户配置的 `themeNodes` 逐份拉取 Figma 节点、提取色板，
+   * 把 theme-vars.less 扩成 N 套 mixin 并**用真值覆盖** LLM 的值 ——
+   * 槽位名完全不变（业务 `<style>` 不受影响），只是套数与色值变了。
+   *
+   * 三条设计约束：
+   *  - **仅微码**：Vue3 产物的主题机制不同（SFC + `:root` CSS 变量），不在此处理；
+   *  - **逐个 fail-closed**：任一份稿拉取失败即抛出（不静默降级 ——
+   *    悄悄降级会让用户以为拿到全真值产物）；
+   *  - **单稿零回归**：无 `themeNodes` 时本方法**不做任何事**（themeConfig 与
+   *    theme-vars.less 逐字节保持改动前的样子）。
+   */
+  private async injectNThemeTruth(
+    dto: GenerateLiteDto,
+    outputPath: string,
+    target: 'microcode' | 'vue3',
+  ): Promise<void> {
+    // 单稿路径：直接返回，不碰任何文件（零回归的第一道闸）
+    if (target !== 'microcode') return;
+    const nodes = Array.isArray(dto.themeNodes) ? dto.themeNodes : [];
+    if (nodes.length === 0) return;
+
+    try {
+      // 1) 规范化（默认名 / 去重 / key slug / 数量上限）—— 与 phase2 同一实现
+      const { normalizeThemeInputs } = await import('../ai-engine/utils/multi-theme.js');
+      const { themes, errors } = normalizeThemeInputs(nodes);
+      if (errors.length > 0) {
+        throw new Error(`N 主题输入校验失败：${errors.map((e: any) => e.detail).join('；')}`);
+      }
+      if (themes.length === 0) return;
+
+      // 2) 逐份拉取节点（只 getNode，不 exportImage —— 省 Figma 限流额度）
+      //    ⚠️ 用 lite 已导入的 `FigmaClient.getNode`（phase2 用的是 FigmaConnector，
+      //    但那在 ai-engine/roles/ 下、lite 没导入；getNode 语义一致）。
+      const { extractFigmaColorPalette, resolveBackgroundBrightness } =
+        await import('../ai-engine/utils/style-tokens.js');
+      const connector = new FigmaClient(this.resolveFigmaToken(dto));
+
+      const entries: LiteThemeEntry[] = [];
+      for (let i = 0; i < themes.length; i++) {
+        const t: any = themes[i];
+        let nodeData: any = null;
+        try {
+          nodeData = await connector.fetchNodeData(t.fileKey, t.nodeId);
+        } catch (err: any) {
+          // 🔴 fail-closed：报明「哪个主题 + 为什么」，别让用户对着
+          //    「主题配置有误」这种无信息量的文案猜。
+          throw new Error(
+            `主题「${t.name}」设计稿拉取失败：${err?.message || '未知原因'}`,
+          );
+        }
+        if (!nodeData || typeof nodeData !== 'object') {
+          throw new Error(`主题「${t.name}」设计稿拉取失败：返回内容为空`);
+        }
+        entries.push({
+          key: t.key,
+          name: t.name,
+          brightness: resolveBackgroundBrightness(nodeData, i === 0 ? 'dark' : 'light'),
+          palette: extractFigmaColorPalette(nodeData) as any,
+        });
+      }
+
+      // 3) 装配槽位 + 扩展 theme-vars.less
+      const { assembleLiteThemes, expandThemeVarsLess } =
+        await import('../lite/utils/lite-multi-theme.js');
+      const asm = assembleLiteThemes(entries);
+
+      const themeVarsPath = join(outputPath, 'resources', 'styles', 'themes', 'theme-vars.less');
+      if (existsSync(themeVarsPath)) {
+        const prev = readFileSync(themeVarsPath, 'utf8');
+        const next = expandThemeVarsLess(prev, asm.slots, asm.list);
+        if (next !== prev) {
+          await writeFile(themeVarsPath, next, 'utf8');
+        }
+      } else {
+        this.logger?.warn?.(
+          `[lite] N 主题注入跳过：未找到 theme-vars.less（outputPath=${outputPath}）`,
+        );
+        return;
+      }
+
+      // 4) 回写 themeConfig.list（N 段切换控件的数据源），并把降级信息落 meta
+      const declarePath = join(outputPath, 'declare.json');
+      if (existsSync(declarePath)) {
+        try {
+          const declare = JSON.parse(readFileSync(declarePath, 'utf8'));
+          const tc = declare.themeConfig && typeof declare.themeConfig === 'object' ? declare.themeConfig : {};
+          tc.default = asm.list[0]?.key || tc.default;
+          tc.list = asm.list.map((t) => ({
+            name: t.legacyName || t.name,
+            key: t.key,
+            brightness: t.brightness,
+          }));
+          tc.multiTheme = asm.list.length > 2;
+          tc.themeCount = asm.list.length;
+          tc.dualTruth = asm.list.length > 1;
+          declare.themeConfig = tc;
+          if (asm.degraded.length > 0) {
+            tc.degradedThemes = asm.degraded;
+          }
+          await writeFile(declarePath, JSON.stringify(declare, null, 2), 'utf8');
+        } catch (err: any) {
+          this.logger?.warn?.(`[lite] N 主题 themeConfig 回写失败（非阻断）：${err?.message}`);
+        }
+      }
+
+      this.logger?.log?.(
+        `[lite] N 主题真值注入完成：${asm.list.length} 个主题` +
+          (asm.degraded.length ? `（${asm.degraded.length} 个色板不合格已退兜底）` : ''),
+      );
+    } catch (err: any) {
+      // 🔴 与 phase2 一致：N 主题配错就阻断，不悄悄退回 LLM 单主题 ——
+      //    否则用户以为拿到的是 N 套设计稿真值，实际一半是 LLM 编的。
+      this.logger?.error?.(`[lite] N 主题真值注入失败（阻断发布）：${err?.message}`);
+      throw err;
+    }
+  }
+
+  /** 取 Figma token：dto.config 优先，回落全局配置 */
+  private resolveFigmaToken(dto: GenerateLiteDto): string | undefined {
+    const fromDto = (dto.config as any)?.figmaToken;
+    if (fromDto) return fromDto;
+    try {
+      const cfg = JSON.parse(
+        readFileSync(join(process.cwd(), 'data', 'ai-config.json'), 'utf8'),
+      );
+      return cfg?.figma?.token || cfg?.figmaToken;
+    } catch {
+      return undefined;
     }
   }
 
@@ -3250,6 +3395,7 @@ ${dto.notes ? `【布局补充】\n${dto.notes}\n` : ''}
         sessionId,
         resumeGroupId,
         isMicrocode ? 'microcode' : 'vue3',
+        dto, // 🔴 2026-10-12：断点续跑同样走 N 主题注入
       );
 
       // 构造任务结果

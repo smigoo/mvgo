@@ -92,9 +92,10 @@ export function healChartResizeListener(content = '') {
   // ⚠️ observe 必须延后到 DOM 挂载之后（onMounted 内nextTick）：
   //    setup 顶层同步执行时 chartRef.value 仍是 null，观察不到任何尺寸变化。
   //    onUnmounted 作为锚点只为拿到「dispose 成对」的语义保证（图表必有 dispose）。
+  // ⚠️ 只在**末尾**留一个空行作与锚点的分隔；开头不留 ——
+  //    锚点（onUnmounted）前原文通常已有一个空行，若开头再补会产生连续双空行（diff 脏）。
   const injectedBlock = refName
     ? [
-        '',
         '// 🩹 图表 resize 自适应：容器尺寸变化时重绘（I9 不变量修复）',
         `const ${observerVar} = new ResizeObserver(() => { ${chartVar} && ${chartVar}.resize() })`,
         `onMounted(() => nextTick(() => { if (${observeTarget}) ${observerVar}.observe(${observeTarget}) }))`,
@@ -102,7 +103,6 @@ export function healChartResizeListener(content = '') {
         '',
       ].join('\n')
     : [
-        '',
         '// 🩹 图表 resize 自适应：容器尺寸变化时重绘（I9 不变量修复）',
         `const ${observerVar} = new ResizeObserver(() => { ${chartVar} && ${chartVar}.resize() })`,
         `onUnmounted(() => ${observerVar}.disconnect())`,
@@ -113,13 +113,14 @@ export function healChartResizeListener(content = '') {
   const anchorLineStart = scriptContent.lastIndexOf('\n', anchorIndex) + 1;
   const indentMatch = scriptContent.slice(anchorLineStart, anchorIndex).match(/^[ \t]*/);
   const indent = indentMatch ? indentMatch[0] : '';
+  // injectedBlock 首尾已各含一个空串（作为与上下文的分隔），
+  // 此处**只做缩进对齐**，不再额外补空行 —— 否则会产出连续双空行（diff 脏）。
   const indented = injectedBlock
     .split('\n')
     .map((l) => (l.trim() ? indent + l : l))
     .join('\n');
 
-  const nextScript =
-    scriptContent.slice(0, anchorIndex) + indented + '\n' + scriptContent.slice(anchorIndex);
+  const nextScript = scriptContent.slice(0, anchorIndex) + indented + '\n' + scriptContent.slice(anchorIndex);
 
   return {
     content: content.replace(scriptContent, nextScript),

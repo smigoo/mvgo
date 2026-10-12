@@ -317,6 +317,126 @@
                 </div>
               </template>
 
+              <!-- 🆕🆕 2026-10-12 N 主题输入（仅微码 + Max） -->
+              <div class="n-theme-bar">
+                <button
+                  v-if="!nThemeEnabled"
+                  type="button"
+                  class="n-theme-toggle"
+                  :disabled="!nThemeSupported || busy"
+                  :title="
+                    nThemeSupported
+                      ? '同时提供浅色 + 深色两份设计稿，色值取自各稿真值'
+                      : '深浅双色仅支持「微码 + Max」档'
+                  "
+                  @click="toggleNTheme"
+                >
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  深浅双色
+                  <span v-if="!nThemeSupported" class="n-theme-hint">（需微码 + Max）</span>
+                </button>
+
+                <template v-else>
+                  <div class="n-theme-rows">
+                    <div
+                      v-for="(row, idx) in nThemeRows"
+                      :key="idx"
+                      class="n-theme-row"
+                      :class="{ 'is-primary': idx === 0 }"
+                    >
+                      <div class="n-theme-row-head">
+                        <span class="n-theme-badge">{{ idx === 0 ? '浅色主稿' : '深色稿' }}</span>
+                        <input
+                          v-model="row.name"
+                          type="text"
+                          class="n-theme-name"
+                          placeholder="主题名，如 黄昏模式"
+                          :disabled="busy"
+                          maxlength="20"
+                          @focus="selectNThemeName"
+                          @click="selectNThemeName"
+                        />
+                        <div v-if="N_THEME_ADD_ENABLED" class="n-theme-row-actions">
+                          <button type="button" :disabled="busy || idx === 0" @click="moveNThemeRow(idx, -1)" title="上移（设为主稿）">
+                            <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
+                          </button>
+                          <button type="button" :disabled="busy || idx === nThemeRows.length - 1" @click="moveNThemeRow(idx, 1)" title="下移">
+                            <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M19 12l-7 7-7-7" /></svg>
+                          </button>
+                          <button type="button" :disabled="busy || nThemeRows.length <= 1" @click="removeNThemeRow(idx)" title="删除">
+                            <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+                          </button>
+                        </div>
+                      </div>
+
+                      <!-- 第 0 行复用主框链接（主稿已在主输入框填过） -->
+                      <div v-if="idx === 0" class="n-theme-note">
+                        <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                          <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
+                          <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
+                        </svg>
+                        主稿链接使用上方已确认的 Figma 来源（决定组件结构与文案）
+                      </div>
+                      <input
+                        v-else
+                        v-model="row.url"
+                        type="text"
+                        class="form-input n-theme-url"
+                        :placeholder="`在此粘贴「${row.name || '该主题'}」的 figma.com 节点链接`"
+                        :disabled="busy"
+                        autocomplete="off"
+                        spellcheck="false"
+                      />
+                      <!-- 副主题预览：行内展开，确认这份稿选对了节点 -->
+                      <div v-if="idx > 0" class="n-theme-preview">
+                        <button
+                          type="button"
+                          class="n-theme-preview-btn"
+                          :disabled="!canPreviewNTheme(idx) || nThemePreviewLoading(idx)"
+                          :title="row.url.trim() ? '预览该主题的设计稿' : '先填写该主题的 Figma 链接'"
+                          @click="toggleNThemePreview(idx)"
+                        >
+                          <svg v-if="nThemePreviewLoading(idx)" class="is-spin" viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 12a9 9 0 11-6.22-8.56" /></svg>
+                          <svg v-else-if="row.preview" viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6" /></svg>
+                          <svg v-else viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
+                          {{ nThemePreviewLoading(idx) ? '获取中…' : row.preview ? '收起预览' : '预览此主题' }}
+                        </button>
+
+                        <div v-if="row.preview?.status === 'error'" class="n-theme-preview-err">
+                          {{ row.preview.error }}
+                        </div>
+                        <div v-else-if="nThemePreviewReady(idx)" class="n-theme-preview-box">
+                          <img :src="row.preview!.imageUrl" :alt="row.preview!.nodeName || row.name" />
+                          <div class="n-theme-preview-meta">
+                            <span v-if="row.preview!.nodeName" class="n-theme-preview-name">{{ row.preview!.nodeName }}</span>
+                            <span v-if="row.preview!.width && row.preview!.height" class="n-theme-preview-size">
+                              {{ row.preview!.width }} × {{ row.preview!.height }}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div v-if="nThemeDuplicateNode" class="n-theme-warn">
+                    多个主题指向同一个 Figma 节点，请提供各自独立的设计稿
+                  </div>
+                  <div v-else-if="nThemeDuplicateName" class="n-theme-warn">
+                    主题名称重复，请改成不同的名字
+                  </div>
+
+                  <div class="n-theme-foot">
+                    <button v-if="canAddNTheme" type="button" class="n-theme-add" :disabled="busy" @click="addNThemeRow">
+                      <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14" /></svg>
+                      添加主题（还可加 {{ N_THEME_MAX - nThemeRows.length }} 个）
+                    </button>
+                    <button type="button" class="n-theme-close" :disabled="busy" @click="toggleNTheme">取消</button>
+                  </div>
+                </template>
+              </div>
+
               <!-- 画布区域：显式状态机，避免空档期误显示失败 -->
               <div class="figma-canvas" :data-preview-status="previewStatus">
                 <div v-if="previewStatus === 'idle'" class="figma-empty-guide">
@@ -770,21 +890,21 @@
                       <span
                         class="rz-h rz-h--r" tabindex="0" role="separator"
                         aria-label="调整预览宽度"
-                        @mousedown="frameResize.startResize($event, 'right')"
+                        @pointerdown="frameResize.startResize($event, 'right')"
                         @keydown="frameResize.onHandleKeydown($event, 'right')"
                         @focus="frameResize.onHandleFocus"
                       ></span>
                       <span
                         class="rz-h rz-h--b" tabindex="0" role="separator"
                         aria-label="调整预览高度"
-                        @mousedown="frameResize.startResize($event, 'bottom')"
+                        @pointerdown="frameResize.startResize($event, 'bottom')"
                         @keydown="frameResize.onHandleKeydown($event, 'bottom')"
                         @focus="frameResize.onHandleFocus"
                       ></span>
                       <span
                         class="rz-h rz-h--c" tabindex="0" role="separator"
                         aria-label="同时调整预览宽高"
-                        @mousedown="frameResize.startResize($event, 'corner')"
+                        @pointerdown="frameResize.startResize($event, 'corner')"
                         @keydown="frameResize.onHandleKeydown($event, 'corner')"
                         @focus="frameResize.onHandleFocus"
                       ></span>
@@ -868,13 +988,22 @@
             <TierToggle v-model="genTier" :disabled="busy" :disabled-values="tierDisabledValues" />
           </div>
           <div v-if="compType === 'microcode'" class="seg-wrap theme-toggle-wrap">
+            <!-- 🔴 2026-10-12 修正命名混淆：这个切换的 v-model 是 **panelType**
+                 （default-panel / aio-panel），决定组件**接入哪种面板**，
+                 与配色/主题**毫无关系**。此前它被标成「浅色/深色」，
+                 导致与上方新增的「多主题（浅色/深色/…）」字面撞车，
+                 用户完全无法分辨这两个控件各自管什么。
+                 ⇒ 改为按真实语义命名，并配 title 说明。
+                 （另注：CTA 的 cta-theme-* 只是按钮配色，与 panelType 同步，
+                   不是另一个主题开关。） -->
             <PanelThemeToggle
               v-model="panelType"
               :options="[
-                { value: 'default-panel', label: '浅色' },
-                { value: 'aio-panel', label: '深色' },
+                { value: 'default-panel', label: '默认面板' },
+                { value: 'aio-panel', label: '一体化面板' },
               ]"
               :disabled="busy"
+              title="组件要接入的面板类型（与配色无关）"
             />
           </div>
           <RippleButton
@@ -964,7 +1093,10 @@
             class="theme-hint"
             :class="panelType === 'aio-panel' ? 'dark' : 'light'"
           >
-            当前为 <strong>演示面板</strong>（{{ panelType === 'aio-panel' ? '深色' : '浅色' }}），实际项目可在面板配置中切换
+            <!-- 🔴 2026-10-12 随上方命名一并修正：原文案「演示面板（浅色/深色）」
+             既用了配色词、又与 N 主题区撞车。此处改为只说面板类型，
+             并显式点明「与配色无关」，避免用户再把它当主题开关。 -->
+            当前接入面板：<strong>{{ panelType === 'aio-panel' ? '一体化面板' : '默认面板' }}</strong>（面板类型，与配色无关）
           </span>
         </div>
 
@@ -1081,6 +1213,8 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useConfigStore } from '@/stores/config'
 import { generateLite, batchGenerate, cancelTask } from '@/api/lite'
+// 🆕 2026-12 N 主题：显式参数类型（themeNodes 等可选字段需要它才不报 TS2339）
+import type { GenerateLiteParams } from '@/api/lite'
 import { fetchFigmaPreview } from '@/api/generator'
 import TierToggle from '@/components/common/TierToggle.vue'
 import CodeTypeToggle from '@/components/common/CodeTypeToggle.vue'
@@ -1214,6 +1348,198 @@ const activeHtmlBatchId = ref('') // HTML 拆分批次号
 let manualCompCounter = 0 // 手动框选组件计数器
 const compType = ref('vue3')
 const genTier = ref('lite')
+// 🆕🆕 2026-10-12 N 主题：是否启用多主题输入（渐进展开，默认关 → 存量用户零变化）
+const nThemeEnabled = ref(false)
+// N 主题上限：与后端 DTO 的 ArrayMaxSize(8) 一致（每主题一套 Less mixin）
+const N_THEME_MAX = 8
+// 🔴 2026-10-12 用户决策：**暂时只开放「浅色 / 深色」两主题**，
+//   「+ 添加主题」入口隐藏（行内上移/下移/删除一并隐藏 —— 它们只在 >2 行时才有意义）。
+//   后端能力仍是 N 主题（DTO 上限 8、多套 mixin、部分降级均已实现并离线验证过），
+//   这里只是**前端入口收窄**，后续放开只需把这一处改回可配置。
+const N_THEME_ADD_ENABLED = false
+
+interface NThemeRow {
+  name: string
+  url: string
+  /** 副主题的预览状态（主稿复用页面顶部的主预览，不在此列） */
+  preview?: {
+    status: 'idle' | 'loading' | 'ready' | 'error'
+    imageUrl?: string
+    nodeName?: string
+    width?: number
+    height?: number
+    error?: string
+  }
+}
+
+function newNThemeRow(name: string): NThemeRow {
+  return { name, url: '' }
+}
+
+/** 主题行：索引 0 恒为主稿（决定结构/几何/文案），用户用「上移」表达主副 */
+const nThemeRows = ref<NThemeRow[]>([newNThemeRow('浅色'), newNThemeRow('深色')])
+
+// N 主题是否可用：仅微码 + Max 档（Lite 管线的 N 主题注入只覆盖微码，
+// 且 Lite 档位本就不做主题槽位扩展）
+const nThemeSupported = computed(
+  () => compType.value === 'microcode' && genTier.value === 'max',
+)
+
+/** 切到非支持组合时自动收起（避免残留上次的输入被误提交） */
+watch(nThemeSupported, (ok) => {
+  if (!ok && nThemeEnabled.value) nThemeEnabled.value = false
+})
+
+function toggleNTheme() {
+  nThemeEnabled.value = !nThemeEnabled.value
+  if (!nThemeEnabled.value) {
+    // 固定两主题（浅色/深色）；预览状态一并丢弃，避免下次展开时挂着上次的图
+    nThemeRows.value = [newNThemeRow('浅色'), newNThemeRow('深色')]
+  }
+}
+
+const canAddNTheme = computed(
+  () => N_THEME_ADD_ENABLED && nThemeEnabled.value && nThemeRows.value.length < N_THEME_MAX,
+)
+
+function addNThemeRow() {
+  if (!canAddNTheme.value) return
+  nThemeRows.value.push(newNThemeRow(`主题 ${nThemeRows.value.length + 1}`))
+}
+
+function removeNThemeRow(index: number) {
+  if (nThemeRows.value.length <= 1) return
+  nThemeRows.value.splice(index, 1)
+}
+
+/** 上移/下移 —— 第一行即主稿 */
+function moveNThemeRow(index: number, delta: -1 | 1) {
+  const next = index + delta
+  const arr = nThemeRows.value
+  if (next < 0 || next >= arr.length) return
+  const tmp = arr[index]
+  arr[index] = arr[next]
+  arr[next] = tmp
+}
+
+/** 聚焦时全选 —— 名字是预填的，用户意图几乎总是「替换」而非「追加」 */
+function selectNThemeName(event: FocusEvent | MouseEvent) {
+  const el = event.target as HTMLInputElement | null
+  if (el) el.select()
+}
+
+/** 解析单个 Figma 链接 → {fileKey, nodeId} | null */
+function parseFigmaUrlLite(raw: string): { fileKey: string; nodeId: string } | null {
+  if (!raw) return null
+  try {
+    const u = new URL(raw)
+    const m = u.pathname.match(/\/(file|design)\/([^/]+)/)
+    const nodeId = u.searchParams.get('node-id')
+    if (m && nodeId) return { fileKey: m[2], nodeId }
+  } catch {
+    /* 无效 URL ⇒ null */
+  }
+  return null
+}
+
+/** 已填链接的主题行（第 0 行复用主框已填的 figmaUrl） */
+const nThemeFilled = computed(() => {
+  const main = parseFigmaUrlLite(figmaUrl.value)
+  return nThemeRows.value
+    .map((r, i) => ({
+      row: r,
+      parsed: i === 0 ? main : parseFigmaUrlLite(r.url),
+    }))
+    .filter((x) => x.parsed !== null)
+})
+
+/** 多个主题指向同一节点 ⇒ 阻断（那一侧不是独立真值） */
+const nThemeDuplicateNode = computed(() => {
+  const keys = nThemeFilled.value.map((x) => `${x.parsed!.fileKey}::${x.parsed!.nodeId}`)
+  return new Set(keys).size !== keys.length
+})
+
+/** 主题名重复（切换控件无法区分） */
+const nThemeDuplicateName = computed(() => {
+  const names = nThemeRows.value.filter((r) => r.url.trim()).map((r) => r.name.trim())
+  return new Set(names).size !== names.length
+})
+
+/** 可以下发：所有已填主题都有链接，且无重复节点/重名 */
+const nThemeReady = computed(
+  () =>
+    nThemeEnabled.value &&
+    nThemeSupported.value &&
+    nThemeFilled.value.length > 0 &&
+    !nThemeDuplicateNode.value &&
+    !nThemeDuplicateName.value,
+)
+
+// ── 副主题预览（2026-10-12）────────────────────────────────
+// 此前副主题填完链接直接盲发，用户无法确认那一份稿是否选对节点。
+// 现在每行可单独「预览」：行内展开缩略图 + 节点名 + 尺寸，可再次收起。
+//
+// ⚠️ 只对**副**主题做（索引 ≥1）：主稿的预览/确认是提交硬门槛
+//   （`previewConfirmed` + `previewToken`），走页面顶部那条状态机，
+//   这里重复一套会造成两个真相源。
+const canPreviewNTheme = (idx: number) =>
+  idx > 0 && !!nThemeRows.value[idx]?.url.trim() && !busy.value
+
+const nThemePreviewLoading = (idx: number) =>
+  nThemeRows.value[idx]?.preview?.status === 'loading'
+
+const nThemePreviewReady = (idx: number) =>
+  nThemeRows.value[idx]?.preview?.status === 'ready'
+
+async function previewNThemeRow(index: number) {
+  const row = nThemeRows.value[index]
+  if (!row || !canPreviewNTheme(index)) return
+  const url = row.url.trim()
+  if (!parseFigmaUrlLite(url)) {
+    row.preview = { status: 'error', error: '链接格式无效（需 figma.com 的文件或节点链接）' }
+    return
+  }
+  row.preview = { status: 'loading' }
+  try {
+    const r = await fetchFigmaPreview({ figmaUrl: url })
+    const d = r?.data ?? r
+    if (!d?.imageUrl) {
+      row.preview = { status: 'error', error: d?.message || '未取到预览图（请检查节点是否存在 / 是否有访问权限）' }
+      return
+    }
+    row.preview = {
+      status: 'ready',
+      imageUrl: d.imageUrl,
+      nodeName: d.nodeName || '',
+      width: d.width,
+      height: d.height,
+    }
+  } catch (err: any) {
+    row.preview = { status: 'error', error: err?.message || '预览请求失败' }
+  }
+}
+
+/** 收起预览（再次点击同一个按钮） */
+function toggleNThemePreview(index: number) {
+  const row = nThemeRows.value[index]
+  if (!row) return
+  if (row.preview?.status === 'loading') return
+  if (row.preview) {
+    row.preview = undefined
+    return
+  }
+  void previewNThemeRow(index)
+}
+
+/** 链接改了 ⇒ 旧预览立即作废（否则会拿着 A 稿的预览提交 B 稿的链接） */
+watch(
+  () => nThemeRows.value.map((r) => r.url).join('|'),
+  () => {
+    for (const r of nThemeRows.value) {
+      if (r.preview && r.preview.status !== 'loading') r.preview = undefined
+    }
+  },
+)
 const panelType = ref('default-panel')
 // 面板类型直接由用户切换决定（default-panel / aio-panel），
 // 与「浅色/深色」内部配色解耦——内部配色始终按设计走，不再有 panelTheme 这一层中间变量。
@@ -2704,9 +3030,11 @@ async function goSingle(aiConfig) {
   stages.value.forEach((s) => (s.status = 'pending'))
   const isFigma = sourceMode.value === 'figma'
   const groupId = localStorage.getItem('currentGroupId') || 'default-group'
-  const p = {
-    componentType: compType.value,
-    generationTier: genTier.value,
+  // ⚠️ 必须显式标注 `GenerateLiteParams`：字面量推断出的类型不含
+  //   `themeNodes` 等可选字段，后续 `p.xxx = ...` 会报 TS2339。
+  const p: GenerateLiteParams = {
+    componentType: compType.value as 'vue3' | 'microcode',
+    generationTier: genTier.value as 'lite' | 'max',
     componentName: compName.value || undefined,
     groupId,
     config: aiConfig
@@ -2738,6 +3066,23 @@ async function goSingle(aiConfig) {
     p.previewWidth = figmaPreview.value.width
     p.previewHeight = figmaPreview.value.height
     saveToUrlHistory(currentUrl)
+
+    // 🆕🆕 2026-10-12 N 主题：下发多套主题设计稿。
+    //   关键：**顺序即语义** —— themeNodes[0] 恒为主稿（决定结构/几何/文案），
+    //   所以「上移某行」等价于「把它设为主稿」，前端不另传 primaryRole。
+    //   主稿（第 0 行）复用主框已解析的 fileKey/nodeId，避免用户重复粘贴。
+    //   不满足条件时**不下发**（退化单稿，与改动前请求体一致）。
+    if (nThemeReady.value && !nThemeDuplicateNode.value && !nThemeDuplicateName.value) {
+      p.themeNodes = nThemeFilled.value.map((x, i) => ({
+        fileKey: x.parsed!.fileKey,
+        nodeId: x.parsed!.nodeId,
+        name: x.row.name.trim() || `主题 ${i + 1}`,
+      }))
+      logs.value.push({
+        time: nowTime(),
+        text: `🎨 多主题模式：${p.themeNodes.length} 套主题，主稿「${p.themeNodes[0].name}」`,
+      })
+    }
   } else if (sourceMode.value === 'html') {
     p.htmlContent = htmlFile.value.content
     p.htmlFileName = htmlFile.value.name
@@ -3123,6 +3468,286 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* ══════════════════════════════════════════════════════════════
+   🆕🆕 2026-10-12 N 主题输入区（仅微码 + Max）
+   颜色一律用组件根已有的 --c-* 变量（该页变量体系与 component.vue 不同，
+   不要照抄那边的 --brand/--border-color，scoped 下会取不到值 → 透明）。
+   ══════════════════════════════════════════════════════════════ */
+.n-theme-bar {
+  margin-top: 8px;
+}
+.n-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px dashed var(--c-border, #dcdfe6);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--c-primary, #2563eb);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.n-theme-toggle:hover:not(:disabled) {
+  border-color: var(--c-primary, #2563eb);
+  background: var(--c-primary-soft, #eff6ff);
+}
+.n-theme-toggle:disabled {
+  color: #909399;
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+.n-theme-hint {
+  color: #909399;
+  font-size: 11px;
+}
+.n-theme-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.n-theme-row {
+  padding: 9px 10px;
+  border: 1px solid var(--c-border, #dcdfe6);
+  border-radius: 8px;
+  background: var(--c-bg, #fff);
+}
+.n-theme-row.is-primary {
+  border-color: var(--c-primary, #2563eb);
+  background: var(--c-primary-soft, #eff6ff);
+}
+.n-theme-row-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.n-theme-badge {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #f0f2f5;
+  color: #606266;
+  font-size: 11px;
+}
+.n-theme-row.is-primary .n-theme-badge {
+  background: var(--c-primary, #2563eb);
+  color: #fff;
+}
+.n-theme-name {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.03);
+  font-size: 13px;
+  color: inherit;
+}
+.n-theme-name:focus {
+  outline: none;
+  border-color: var(--c-primary, #2563eb);
+  background: #fff;
+}
+.n-theme-row-actions {
+  display: flex;
+  gap: 3px;
+  flex-shrink: 0;
+}
+.n-theme-row-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--c-border, #dcdfe6);
+  border-radius: 4px;
+  background: #fff;
+  color: #606266;
+  cursor: pointer;
+}
+.n-theme-row-actions button:hover:not(:disabled) {
+  color: var(--c-primary, #2563eb);
+  border-color: var(--c-primary, #2563eb);
+}
+.n-theme-row-actions button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.n-theme-note {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 7px;
+  padding: 6px 9px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.03);
+  font-size: 11px;
+  color: #909399;
+}
+.n-theme-note svg {
+  flex-shrink: 0;
+}
+/* 🔴 必须给**完整**输入框样式：本页 `.form-input` 没有定义（它属于主输入框的
+   另一套样式上下文），只靠 `.n-theme-url` 的两行会被压成 104×14 的文本行 ——
+   实测「完全看不出是个可输入框」，用户找不到第二个主题在哪填。
+   宽度用 100% + box-sizing，避免被 flex 容器压窄。 */
+.n-theme-url {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 7px;
+  padding: 6px 10px;
+  border: 1px solid var(--c-border, #dcdfe6);
+  border-radius: 6px;
+  background: #fff;
+  font-size: 12px;
+  line-height: 1.5;
+  color: inherit;
+  transition: border-color 0.15s;
+}
+.n-theme-url::placeholder {
+  color: #a8abb2;
+}
+.n-theme-url:hover:not(:disabled) {
+  border-color: #c0c4cc;
+}
+.n-theme-url:focus {
+  outline: none;
+  border-color: var(--c-primary, #2563eb);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+.n-theme-url:disabled {
+  background: #f5f7fa;
+  cursor: not-allowed;
+}
+
+/* 副主题行内预览（2026-10-12）：确认这份稿选对了节点 */
+.n-theme-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+  margin-top: 7px;
+}
+.n-theme-preview-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border: 1px solid var(--c-border, #dcdfe6);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--c-primary, #2563eb);
+  font-size: 11px;
+  cursor: pointer;
+}
+.n-theme-preview-btn:hover:not(:disabled) {
+  border-color: var(--c-primary, #2563eb);
+  background: var(--c-primary-soft, #eff6ff);
+}
+.n-theme-preview-btn:disabled {
+  color: #a8abb2;
+  cursor: not-allowed;
+}
+.n-theme-preview-btn .is-spin {
+  animation: n-theme-spin 0.9s linear infinite;
+}
+@keyframes n-theme-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.n-theme-preview-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px;
+  border: 1px solid var(--c-border, #dcdfe6);
+  border-radius: 6px;
+  background: #fafbfc;
+}
+.n-theme-preview-box img {
+  width: 96px;
+  max-height: 96px;
+  object-fit: contain;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  background: #fff;
+  flex-shrink: 0;
+}
+.n-theme-preview-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding-top: 2px;
+  font-size: 11px;
+}
+.n-theme-preview-name {
+  color: #303133;
+  word-break: break-all;
+}
+.n-theme-preview-size {
+  color: #909399;
+}
+.n-theme-preview-err {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 9px;
+  border-radius: 5px;
+  background: #fef0f0;
+  color: #f56c6c;
+  font-size: 11px;
+  word-break: break-all;
+}
+.n-theme-warn {
+  margin-top: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: #fef0f0;
+  color: #f56c6c;
+  font-size: 12px;
+}
+.n-theme-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.n-theme-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px dashed var(--c-border, #dcdfe6);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--c-primary, #2563eb);
+  font-size: 12px;
+  cursor: pointer;
+}
+.n-theme-add:hover:not(:disabled) {
+  border-color: var(--c-primary, #2563eb);
+  background: var(--c-primary-soft, #eff6ff);
+}
+.n-theme-close {
+  padding: 4px 10px;
+  border: 1px solid var(--c-border, #dcdfe6);
+  border-radius: 999px;
+  background: #fff;
+  color: #606266;
+  font-size: 12px;
+  cursor: pointer;
+}
+.n-theme-close:hover:not(:disabled) {
+  color: var(--c-primary, #2563eb);
+  border-color: var(--c-primary, #2563eb);
+}
+
 /* 变量挂在组件根元素上（scoped 下 :root 不会匹配） */
 .unified-generate.gen-v4 {
   --c-primary: #2563eb;
@@ -4086,6 +4711,9 @@ html[data-theme='dark'] .comp-label--hover {
   border-radius: 2px;
   opacity: 0.85;
   z-index: 5;
+  /* Pointer Events 必需：否则拖拽被浏览器手势截走，pointermove 收不到 */
+  touch-action: none;
+  user-select: none;
 }
 .rz-h:hover,
 .rz-h:focus-visible {

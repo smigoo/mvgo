@@ -38,6 +38,10 @@ import { pruneDuplicateStyleDeclsFromShared } from './style-dedup-guard.js';
 // 🛡️ 刀 24（2026-10-08）：techstack 契约履行占位——对每个 `wrong-tag` 违规往宿主 .vue 追加
 //   v-if="false" 占位元素（治 TECHSTACK-NOT-RENDERED 根因：07b4d2a5 实锤 6 个 antd 组件未渲染）。
 import { enforceTechStackContractTags } from './techstack-tag-enforcer.js';
+// 🛡️ 刀 25/26（2026-10-12）：LLM「压缩残片」格式损坏自愈——LESS 连续相同 `声明;}` 残片归一
+//   （治 .c-cba840-form 被提前闭合获得 display:flex → 表单横向排列）+ script 独行逗号删除
+//   （治 [vue/compiler-sfc] Unexpected token：mc-max-1791779417789-cba8407d 实锤）。
+import { healStyleFragments, normalizeVForRowListDirection } from './style-fragment-healer.js';
 
 /**
  * @param {Record<string,string>} files 产物文件集（path → content）
@@ -292,6 +296,59 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
       summary.a2Dedup = (summary.a2Dedup || 0) + 1;
       logger?.warn?.('🛡️ A2 修复：剥离 section 根上重复的背景引用（保留内层 bg 层）', { file: fp });
     }
+  }
+
+  // ④-d 刀 25/26（2026-10-12 · mc-max-1791779417789-cba8407d 实锤）：LLM「压缩残片」格式损坏自愈。
+  //   ① 刀 25：LESS/CSS 中**连续两行逐字相同**的 `声明;}` 残片 → 声明归最内层块 + 双层闭合
+  //      （治「外层规则被提前闭合并误得 display:flex」→ 容器 row-flex 横向排列；LESS 语法合法
+  //      故编译门禁放行，只能确定性修复）；
+  //   ② 刀 26：script 区段「整行只有 ,」残片删除（治 vue/compiler-sfc Unexpected token）。
+  //   判据均为命名无关的局部语法形态；幂等；fail-open（异常不阻断）。
+  //   位置：必须在 FLEX 归一（⑤⑥）与 ⑩⑪「最终形态检测」之前。
+  for (const [fp, fc] of Object.entries(result)) {
+    if (typeof fc !== 'string' || fc.length === 0) continue;
+    try {
+      const healed = healStyleFragments(fp, fc);
+      if (healed.lessFixed) {
+        result[fp] = healed.content;
+        summary.styleFragmentFixed = (summary.styleFragmentFixed || 0) + 1;
+        logger?.warn?.('🛡️ 刀 25 修复：LESS 压缩残片重复闭块已归一（声明归最内层，防容器误得 display:flex）', { file: fp });
+      }
+      if (healed.commaFixed) {
+        result[fp] = healed.content;
+        summary.loneCommaFixed = (summary.loneCommaFixed || 0) + 1;
+        logger?.warn?.('🛡️ 刀 26 修复：script 独行逗号残片已删除（防 vue/compiler-sfc Unexpected token）', { file: fp });
+      }
+    } catch (err) {
+      logger?.warn?.('🛡️ 刀 25/26 残片修复器异常（fail-open）', {
+        file: fp,
+        error: err?.message || String(err),
+      });
+    }
+  }
+
+  // ④-e 刀 27（2026-10-12 · mc-1791783806265-5831962c 实锤）：v-for 列表容器横向纠偏。
+  //   判据：v-for 元素类规则含 display:flex + 显式 flex-direction:row + 循环体首子节点类规则
+  //   width≥90% ⇒ row 与子项满宽自相矛盾（必然横向溢出/裁切）→ 改 column，
+  //   同块 space-between → flex-start、align-items:center → stretch。命名无关、幂等、fail-open。
+  try {
+    const d27 = normalizeVForRowListDirection(result);
+    for (const [p, c] of Object.entries(d27.files)) {
+      if (typeof c === 'string' && result[p] !== c) result[p] = c;
+    }
+    if (d27.changes.length > 0) {
+      summary.vForListDirectionFixed = d27.changes.length;
+      for (const ch of d27.changes) {
+        logger?.warn?.('🛡️ 刀 27 修复：v-for 列表容器 row→column（治横向溢出裁切）', {
+          file: ch.file,
+          class: ch.cls,
+        });
+      }
+    }
+  } catch (err) {
+    logger?.warn?.('🛡️ 刀 27 v-for 方向纠偏异常（fail-open）', {
+      error: err?.message || String(err),
+    });
   }
 
   // ⑤ FLEX-003 量纲归一（同 class 跨文件 flex grow 量纲冲突 → 像素量级）。

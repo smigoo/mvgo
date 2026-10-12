@@ -227,7 +227,8 @@ export class Phase2Service {
       docAnalysis,           // 🆕 S9: 预分析文档产物（可选）
       previewToken,          // 🆕 预览图复用 token
       reuseCache,            // 🆕 续跑复用缓存（true 才复用全局缓存，false=全新重新生成）
-      secondaryNode,         // 🆕 2026-10-10 双主题：副稿 Figma 节点（深浅两份设计真值）
+      secondaryNode,         // 🆕 2026-10-10 双主题：副稿 Figma 节点（已被 themeNodes 取代，保留兼容）
+      themeNodes,            // 🆕🆕 2026-10-12 N 主题：主题设计稿数组（themeNodes[0] 即主稿）
       primaryRole,           // 🆕 2026-10-10 双主题：主副角色（'first' 默认 / 'second'）
     } = dto;
 
@@ -367,6 +368,8 @@ export class Phase2Service {
         // 🆕 2026-10-10 双主题 Figma 输入：深浅两份设计真值（不传 = 单稿，零回归）
         secondaryNode,
         primaryRole,
+        // 🆕🆕 2026-10-12 N 主题设计稿数组（存在时优先于 secondaryNode）
+        themeNodes,
       }).catch((error) => {
         this.logger.error(
           `Phase 1 generation failed: ${error.message}`,
@@ -548,7 +551,8 @@ export class Phase2Service {
       uiCache?: Record<string, any>;      // 🆕 S15: UI 缓存（路径B 短路 figma/visual）
       resumeData?: Record<string, any>;   // 🆕 断点续跑数据（跳过已完成分析阶段）
       failureGuidance?: string;           // 🛡️ P1-3：任务级重试注入的上轮失败指导
-      secondaryNode?: { fileKey: string; nodeId: string }; // 🆕 2026-10-10 双主题：副稿节点
+      secondaryNode?: { fileKey: string; nodeId: string }; // 🆕 2026-10-10 双主题：副稿节点（兼容）
+      themeNodes?: Array<{ fileKey: string; nodeId: string; name?: string }>; // 🆕🆕 2026-10-12 N 主题
       primaryRole?: 'first' | 'second';    // 🆕 2026-10-10 双主题：主副角色
     },
   ) {
@@ -761,6 +765,8 @@ export class Phase2Service {
         //   （只 getNode 取色板；失败 fail-closed 阻断）。单稿不传 ⇒ 零回归。
         secondaryNode: params.secondaryNode,
         primaryRole: params.primaryRole,
+        // 🆕🆕 2026-10-12 N 主题 → graph 的 fetchThemeNodes（逐份 getNode，fail-closed）
+        themeNodes: params.themeNodes,
         onProgress: (data) => {
           // 生成链以 `{ fileLifecycle: {...} }` 标记文件级生命周期事件，
           // 走独立的瞬态广播通道（不持久化、不进入 progress 历史）。

@@ -3,15 +3,20 @@ import {
   IsNotEmpty,
   IsOptional,
   IsObject,
+  IsArray,
+  ArrayMaxSize,
+  ValidateNested,
   IsIn,
   ValidateIf,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 /**
- * 🆕 副稿节点（2026-10-10 双主题 Figma 输入）
+ * 🆕 副稿 Figma 节点（2026-10-10）：深浅双主题的第二份设计真值。
+ * 不传 = 单稿模式，另一套主题继续走算法派生（保持既有行为）。
  *
- * 用途：与主稿（fileKey + nodeId）配对，构成「浅色稿 + 深色稿」两份设计真值。
- * 仅微码 + Max 档生效；缺省时全链路行为与改动前一致（零回归）。
+ * ⚠️ 2026-10-12 起**已被 themeNodes 取代**（N 主题），保留仅为兼容存量前端。
+ *   新前端请用 themeNodes（可传任意数量 + 自定义主题名）。
  */
 export class SecondaryNodeDto {
   @IsString()
@@ -21,6 +26,27 @@ export class SecondaryNodeDto {
   @IsString()
   @IsNotEmpty()
   nodeId: string;
+}
+
+/**
+ * 🆕🆕 2026-10-12 N 主题：一个主题对应一份设计稿。
+ *
+ * 与 `SecondaryNodeDto` 的差异：**带主题显示名**（用户自填，如「黄昏模式」），
+ * 且 `name` 可选（省略时由 `normalizeThemeInputs` 按序补默认名「浅色/深色/主题N」）。
+ */
+export class ThemeNodeDto {
+  @IsString()
+  @IsNotEmpty()
+  fileKey: string;
+
+  @IsString()
+  @IsNotEmpty()
+  nodeId: string;
+
+  /** 主题显示名（用户自填）。省略则用默认名。 */
+  @IsOptional()
+  @IsString()
+  name?: string;
 }
 
 export class GeneratePhase2Dto {
@@ -37,8 +63,26 @@ export class GeneratePhase2Dto {
   nodeId: string;
 
   /**
-   * 🆕 副稿 Figma 节点（2026-10-10）：深浅双主题的第二份设计真值。
-   * 不传 = 单稿模式，另一套主题继续走算法派生（保持既有行为）。
+   * 🆕🆕 N 主题设计稿列表（2026-10-12）：第 1 项即主稿（决定结构/几何/文案），
+   * 其余每项贡献一套主题色板。
+   *
+   * - 不传 / 空数组 = 单稿模式（行为与改动前完全一致，零回归）
+   * - 只传 1 项 = 等价单稿（其余主题走派生）
+   * - 上限 8（`MAX_THEMES`）：每主题一套 Less mixin，再多会拖垮编译
+   *
+   * ⚠️ 与 `secondaryNode` 同时存在时，**themeNodes 优先**（新前端只用前者）。
+   */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(8, { message: 'themeNodes 最多 8 项（每主题一套 mixin）' })
+  @ValidateIf((o: GeneratePhase2Dto) => Array.isArray(o.themeNodes))
+  @ValidateNested({ each: true })
+  @Type(() => ThemeNodeDto)
+  themeNodes?: ThemeNodeDto[];
+
+  /**
+   * 副稿 Figma 节点（2026-10-10，**已弃用**，保留兼容存量前端）：
+   * 深浅双主题的第二份设计真值。themeNodes 存在时本字段被忽略。
    */
   @IsOptional()
   @ValidateIf((o: GeneratePhase2Dto) => !!o.secondaryNode)
@@ -46,9 +90,11 @@ export class GeneratePhase2Dto {
   secondaryNode?: SecondaryNodeDto;
 
   /**
-   * 🆕 主副角色标注（2026-10-10）：'first' 表示 fileKey+nodeId 是主稿（默认，
+   * 主副角色标注（2026-10-10）：'first' 表示 fileKey+nodeId 是主稿（默认，
    * 前端显式选择、默认预选第一个）；'second' 表示副稿是主稿、fileKey+nodeId 反转为副稿。
    * 主稿决定结构/几何/文案，副稿只贡献色板。
+   *
+   * ⚠️ 在 `themeNodes` 模式下**不生效** —— themeNodes[0] 恒为主稿。
    */
   @IsOptional()
   @IsString()

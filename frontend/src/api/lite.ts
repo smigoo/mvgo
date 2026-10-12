@@ -31,6 +31,20 @@ export interface GenerateLiteParams {
   groupId?: string
   generationTier?: 'lite' | 'max'
   figmaUrl?: string
+  /**
+   * 🆕🆕 2026-10-12 N 主题设计稿列表（仅微码 + Max 档生效）。
+   *
+   * - 不传 = 单稿模式（请求体与改动前一致，**零回归**）
+   * - 传 N 项 = 每项一套主题，色值取自该项 Figma 稿的确定性真值（不采信 LLM）
+   * - **顺序即语义**：`themeNodes[0]` 恒为主稿（决定结构/几何/文案）
+   * - 上限 8（与服务端 DTO 的 `ArrayMaxSize(8)` 一致，每主题一套 Less mixin）
+   */
+  themeNodes?: Array<{
+    fileKey: string
+    nodeId: string
+    /** 主题显示名（用户自填）；省略则由服务端补默认名 */
+    name?: string
+  }>
   config?: Record<string, any>
   panelType?: string
   requirementDoc?: string

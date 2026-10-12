@@ -1,15 +1,15 @@
 # ADR（Architecture Decision Records）— 组件生成管线契约
 
-> 目的：把「资源归属 / props 接线 / 命名规范」等**反转类契约**的当前结论与理由固化为可检索记录。
+> 目的：把「资源归属 / props 接线 / 命名规范」等**反转类契约**的当前结论与理由固化为可检索记录。  
 > 任何反转类变更（改变既有契约语义）动手前，必须先产出「影响面清单」（见文末模板），否则视为未完成设计。
 
 ## 索引
 
-| # | 主题 | 状态 | 记录 |
-|---|---|---|---|
-| 0001 | 资源归属与 import 白名单 | Accepted | [0001-resource-attribution.md](./0001-resource-attribution.md) |
-| 0002 | props 接线与 declare.json 契约 | Accepted | [0002-props-wiring.md](./0002-props-wiring.md) |
-| 0003 | 组件命名规范（c-* / v-*） | Accepted | [0003-component-naming.md](./0003-component-naming.md) |
+| #    | 主题                        | 状态       | 记录                                                             |
+| ---- | ------------------------- | -------- | -------------------------------------------------------------- |
+| 0001 | 资源归属与 import 白名单          | Accepted | [0001-resource-attribution.md](./0001-resource-attribution.md) |
+| 0002 | props 接线与 declare.json 契约 | Accepted | [0002-props-wiring.md](./0002-props-wiring.md)                 |
+| 0003 | 组件命名规范（c-* / v-\*）        | Accepted | [0003-component-naming.md](./0003-component-naming.md)         |
 
 ## ADR 模板
 

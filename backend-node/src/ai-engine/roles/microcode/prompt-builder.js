@@ -1069,6 +1069,8 @@ export function buildMcPlatformConstraints(input = {}, options = {}) {
 
 - **M5-6 字体变量**：样式中的 \`font-size\` 必须引用 \`@fontSize\` 变量（或 \`calc(@fontSize * N)\`），禁止在 \`.c-xxx\` 规则中直接写 \`font-size: 16px\` 这类固定值。
 - **M5-7 禁硬编码字体**：\`font-size\` 不得使用 >5px 的固定 \`px\` 值；需换算时用 \`calc(@fontSize * 系数)\`。
+- 🔴 **禁裸乘法（编译阻断级，2026-10-12 实测补）**：字号换算**必须**写 \`calc(@fontSize * 系数)\`，**禁止**写裸的 \`@fontSize * 系数\`。原因：\`@fontSize\` 在 \`theme-vars.less\` 里是 \`var(--fontSize)\` 透传形式（mc-check M5-6 **强制要求**这个形式，判据 \`mc-check.cjs:1122-1134\`），而 Less 变量一旦是 \`var()\` 就**无法参与算术**——裸乘法会抛 \`Operation on an invalid type\` 直接编译失败。\`calc()\` 整段不参与 Less 求值、原样透传给浏览器，故两种写法都能编译。同理适用于 \`@lineHeight\`/\`@spacing\` 等其它 Less 变量参与算术的场景。
+- ✅ **推荐的字号写法**（与官方 demo 一致）：\`& { font-size: @fontSize; }\` 直接使用、不做运算；确需倍数时才用 \`calc(@fontSize * N)\`。
 - **M6-3a base-panel 禁内联背景**：\`<base-panel>\` 标签上**禁止**设置 \`style="background:..."\` 或任何内联背景样式（背景由框架统一管理）。
 - **M6-3b 首子元素禁内联背景**：\`<base-panel>\` 的**第一个子元素**同样禁止设置内联背景色。
 - **M3-4c 自定义变量声明**：若组件引入了非框架预设的 CSS 变量，必须在 \`declare.json\` 的 \`cssVariableConfig\` 中逐一声明（框架预设 8 个变量 \`fontSize\`/\`fontWeightStrong\`/\`colorTextBase\`/\`colorPrimary\`/\`colorPrimaryHover\`/\`colorPrimaryActive\`/\`colorPrimaryBg\`/\`colorPrimaryBgHover\` 无需声明）。

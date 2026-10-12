@@ -1258,17 +1258,17 @@
                           <span
                             class="rz-h rz-h--r" tabindex="0" role="separator"
                             aria-label="调整视口宽度" title="拖拽调整视口宽度"
-                            @mousedown="frameResize.startResize($event, 'right')"
+                            @pointerdown="frameResize.startResize($event, 'right')"
                           ></span>
                           <span
                             class="rz-h rz-h--b" tabindex="0" role="separator"
                             aria-label="调整视口高度" title="拖拽调整视口高度"
-                            @mousedown="frameResize.startResize($event, 'bottom')"
+                            @pointerdown="frameResize.startResize($event, 'bottom')"
                           ></span>
                           <span
                             class="rz-h rz-h--c" tabindex="0" role="separator"
                             aria-label="调整视口宽高" title="拖拽调整视口宽高"
-                            @mousedown="frameResize.startResize($event, 'corner')"
+                            @pointerdown="frameResize.startResize($event, 'corner')"
                           ></span>
                         </div>
                       </div>
@@ -2379,26 +2379,62 @@ const previewStageStyle = computed(() => {
 //    不改视口；「自适应/Fit」按容器可用空间自动计算 Math.min(scaleX, scaleY, 1)。
 // 注意：scale 不等于视口变化，@media 不会重新匹配 —— 所以视口尺寸必须真实改 iframe
 // 的 width/height（浏览器原生行为），并 postMessage 通知 iframe 内预览页切换布局。
-const zoomScaleChoice = ref<number | 'fit'>(100)
-const autoFitScale = ref(1)
+// 🔴 默认 'fit'（自适应）而非 100：视口初始 1280 宽常大于可用空间，
+// zoom=1 会让内容溢出被裁 ⇒ 视觉「两边空白」；用户拖拽后 zoom 仍 1 又「盛满」，
+// 同一次交互前后表现不一致。默认 fit 后内容按可用空间完整可见，且与拖拽后一致。
+const zoomScaleChoice = ref<number | 'fit'>('fit')
+const autoFitScale = ref(0.5)
 let stageResizeObserver: ResizeObserver | null = null
 
-/** 自适应缩放：按预览容器可用空间计算最佳 fit（与 demo 页 updateAutoFitScale 同判据） */
+/**
+ * 自适应缩放：按预览容器可用空间计算最佳 fit（与 demo 页 updateAutoFitScale 同判据）
+ * 🔴 返回成功标志：尺寸未就绪（Tabs/布局未完成时 clientWidth=0）必须 return false
+ *   让调用方重试，否则早退后「再也不算」，初始就停在错误的缩放上。
+ */
 function updateAutoFitScale() {
   const el = previewViewportRef.value
-  if (!el) return
+  if (!el) return false
   const cw = el.clientWidth
   const ch = el.clientHeight
-  if (cw <= 0 || ch <= 0) return
+  if (cw <= 0 || ch <= 0) return false
   // 预留 stage 内边距，避免 fit 后贴边
   const pad = 24
   const availW = cw - pad
   const availH = ch - pad
-  if (availW <= 0 || availH <= 0) return
+  if (availW <= 0 || availH <= 0) return false
   const scaleX = availW / frameResize.width.value
   const scaleY = availH / frameResize.height.value
   // 取较小值确保完整可见，上限 1（不放大）
   autoFitScale.value = Math.min(scaleX, scaleY, 1)
+  return true
+}
+
+/**
+ * 建立 fit 缩放观察。
+ * 🔴 根因（用户反馈「默认打开两边空白，手动拖拽一次才盛满」）：
+ *   ① `zoomScaleChoice` 初值曾是 100 ⇒ 显示缩放恒为 1，而视口 1280 宽超出
+ *      可用空间 ⇒ 内容被裁、两侧空白；ResizeObserver 只在尺寸「变化」时回调，
+ *      初始值恰好没被纠正 ⇒ 一直错到用户手动拖拽才重算。
+ *   ② updateAutoFitScale 在尺寸未就绪时静默 return，之后若无尺寸变化就不再触发。
+ *   ⇒ 与 demo 页（ed0bcbb/e60f2c6）同型修法：初值取保守估计 + rAF 连续试探
+ *      + ResizeObserver 兜底。
+ */
+function setupStageFitScaleObserver() {
+  if (stageResizeObserver && previewViewportRef.value) {
+    stageResizeObserver.observe(previewViewportRef.value)
+    return
+  }
+  if (!previewViewportRef.value) return
+  let tries = 0
+  const probe = () => {
+    if (updateAutoFitScale()) return
+    if (++tries < 30) window.requestAnimationFrame(probe)
+  }
+  window.requestAnimationFrame(probe)
+  stageResizeObserver = new ResizeObserver(() => {
+    updateAutoFitScale()
+  })
+  stageResizeObserver.observe(previewViewportRef.value)
 }
 
 /** 当前实际生效的显示缩放（'fit' 用自动计算的，否则用档位） */
@@ -2422,11 +2458,15 @@ const zoomBubbleLabel = computed(() => {
   return `显示 ${dispW} × ${dispH}px${ratio}`
 })
 
+// 🔴 统一走 setupStageFitScaleObserver（内含 rAF 连续试探 + RO 兜底）。
+//   原实现有两个问题：① onMounted 时 previewViewportRef 可能为 null（预览面板
+//   未挂载）⇒ observe 根本没建立；② 这里新建的 RO 会覆盖别处已建的实例。
 onMounted(() => {
-  stageResizeObserver = new ResizeObserver(() => {
-    if (zoomScaleChoice.value === 'fit') updateAutoFitScale()
+  nextTick(setupStageFitScaleObserver)
+  // 预览面板可能稍后才挂载（数据到达后才渲染），ref 从 null 变有值时补建
+  watch(previewViewportRef, (el) => {
+    if (el) nextTick(setupStageFitScaleObserver)
   })
-  if (previewViewportRef.value) stageResizeObserver.observe(previewViewportRef.value)
 })
 onUnmounted(() => {
   stageResizeObserver?.disconnect()
@@ -2435,11 +2475,40 @@ onUnmounted(() => {
 
 const frameResize = useResizableFrame({
   componentId: computed(() => task.value?.componentId || task.value?.sessionId || ''),
-  // 🛡️ 修复（用户反馈「响应式要有手柄」实锤）：原默认 1280×720 一进响应式就
-  // 横向溢出容器 → 右缘/右下手柄全部落在可视区外，用户看不到手柄也无法拖拽。
-  // 改为「容器可视宽起步（上限 1280）+ 667 高」，进入即完整可见、手柄可拖。
-  defaultWidth: () => Math.min(previewViewportRef.value?.clientWidth || 1280, 1280),
-  defaultHeight: 667,
+  /**
+   * 🔴 传给 composable 用于「持久化快照过期判定」。
+   * 见 useResizableFrame#designSize 注释：老用户浏览器里存着旧逻辑推出的
+   * 错尺寸时，只有这个字段才能让修复对他们立即生效（否则 customWidth>0
+   * 会永久屏蔽 defaultWidth/Height）。
+   */
+  designSize: () => figmaDimensions.value,
+  /**
+   * 🛡️ 默认尺寸必须**跟随设计稿比例**，不能写死 667 高。
+   *
+   * 事故（用户反馈「默认打开两边空白、拖拽一次才盛满」·mc-1791783806265-5831962c）：
+   *   该组件 declare.json 的 aspectRatio 是 [510, 665]（**竖版**），
+   *   而原实现 defaultHeight 硬编码 667 ⇒ 用 1280×667 的**横版**视口去装
+   *   竖版内容 ⇒ 组件按竖版宽度（510）渲染在 1280 宽视口里，
+   *   左右各空 (1280-510)/2 ≈ 385px —— 这就是「两边空白」。
+   *   用户手动拖一次后视口变成接近 510 宽才「盛满」，于是误以为是缩放 bug。
+   *
+   * 修法：按 figmaDimensions 的宽高比推算初始视口，宽不超过容器可视宽，
+   *   高按比例得出（并夹在合理区间内），保证一进页面就是「贴合内容」的视口。
+   */
+  defaultWidth: () => {
+    const hostW = previewViewportRef.value?.clientWidth || 1280
+    // 上限 1280：一进页面就完整可见，手柄不会落在可视区外
+    return Math.min(hostW, 1280)
+  },
+  defaultHeight: () => {
+    const d = figmaDimensions.value
+    const hostW = previewViewportRef.value?.clientWidth || 1280
+    const maxW = Math.min(hostW, 1280)
+    if (!d || d.width <= 0 || d.height <= 0) return 667
+    const h = Math.round((maxW * d.height) / d.width)
+    // 竖版组件按比例会很高，夹在 [480, 1080] 内保证可看
+    return Math.min(Math.max(h, 480), 1080)
+  },
 })
 
 function pushViewportToFrames() {
@@ -2485,6 +2554,13 @@ watch(
     })
   }
 )
+
+// 🔴 切到「自适应」档位 / 切换档位时需立即重算 fit：
+//   autoFitScale 只在视口或容器尺寸变化时被重算，用户手动选档位时若不重算，
+//   从 50% 切回「自适应」会沿用旧的 autoFitScale 值，显示不对。
+watch(zoomScaleChoice, () => {
+  nextTick(setupStageFitScaleObserver)
+})
 
 // 预览重载后补发一次（iframe 是新文档，监听器需重新注册）
 watch(previewKey, () => {
@@ -8011,6 +8087,9 @@ watch(bindingWizardOpen, (open) => {
   position: absolute;
   z-index: 6;
   transition: background-color 0.2s;
+  /* Pointer Events 必需：否则拖拽被浏览器手势截走，pointermove 收不到 */
+  touch-action: none;
+  user-select: none;
 }
 .rz-h:hover {
   background-color: var(--primary-color, #1890ff);
@@ -8057,7 +8136,10 @@ watch(bindingWizardOpen, (open) => {
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  overflow: hidden;
+  /* 🔴 不再 hidden：默认 fit 时内容缩放到可用空间内完整可见；
+     用户显式选 100%/125% 等超出空间时必须能滚动查看，
+     否则溢出部分被凭空裁掉（表现为「两边空白 + 组件缺一块」）。 */
+  overflow: auto;
 }
 
 .bf-body-empty {

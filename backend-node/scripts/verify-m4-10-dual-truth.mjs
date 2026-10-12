@@ -147,10 +147,18 @@ const r4 = judgeM4_10(dualBadSecondary);
 //   darkThemeColorRules 里的 colorTextSecondary / Hover / Active / BgHover
 //   **配置有白名单但无任何判据消费** —— 是既存僵尸规则，不在本次需求范围内修。
 //   本断言只保证「双真值豁免没有扩大到这些键」，不为其补判据（那是独立议题）。
+//
+// 🔴 2026-10-12：mc-check 已按用户要求统一为 scaffold 上游版（v1.0.20），
+//   该版**没有** `enums._M4_10_DUAL_TRUTH` 这个 D8 扩展键。
+//   ⇒ 双真值产物在当前判据下会被 M4-10 判 error（实测 demo 亦然）。
+//   这里按「缺配置 ⇒ 豁免名单为空」处理，让脚本能跑完并如实报告该事实，
+//   而不是抛 TypeError 假装成别的问题。
+const DUAL_CFG = CFG.enums?._M4_10_DUAL_TRUTH || {};
+const RELAXED = Array.isArray(DUAL_CFG.relaxedCoreVars) ? DUAL_CFG.relaxedCoreVars : [];
 check(
   'colorTextSecondary 不在本次豁免名单内（relaxedCoreVars 仅三核心）',
-  !CFG.enums._M4_10_DUAL_TRUTH.relaxedCoreVars.includes('colorTextSecondary'),
-  `relaxedCoreVars=${JSON.stringify(CFG.enums._M4_10_DUAL_TRUTH.relaxedCoreVars)}`,
+  !RELAXED.includes('colorTextSecondary'),
+  `relaxedCoreVars=${JSON.stringify(RELAXED)}${DUAL_CFG.marker ? '' : '（当前 mc-check 无双真值配置 ⇒ 豁免名单为空）'}`,
 );
 check(
   '双真值不改变非核心键的判定域（M4-10 仍只遍历三核心）',

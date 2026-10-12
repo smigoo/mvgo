@@ -47,12 +47,6 @@
       "colorPrimaryBg": ["#414141", "#454545", "#474747"],
       "colorPrimaryBgHover": ["#4B4B4B", "#4F4F4F", "#525252"]
     },
-    "_M4_10_DUAL_TRUTH": {
-      "_comment": "双真值模式（D8，2026-10-10）：用户分别提供浅色+深色两份 Figma 稿时，两侧色值均为设计稿真值，M4-10 三核心枚举白名单对双真值产物不再适用。判据是纯文件判定、无任务上下文，故以 css-vars.js 内的确定性标记为准（由 buildCssVarsFile 写入，LLM 无法伪造）。单稿产物无此标记 ⇒ 铁律 1 原样生效。",
-      "marker": "dualTruth: figma-derived",
-      "relaxedCoreVars": ["colorTextBase", "colorPrimary", "colorPrimaryBg"],
-      "_scope": "仅放宽上述三核心；darkThemeColorRules 其余键与 darkThemeOptionalVars（M4-11 滚动条）一律不放开"
-    },
     "darkThemeOptionalVars": {
       "scrollbarTrackBg": ["#424242"],
       "scrollbarThumbBg": ["#646464"]

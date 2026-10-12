@@ -224,90 +224,134 @@
                     <circle cx="12" cy="12" r="10" />
                     <path d="M12 16v-4M12 8h.01" />
                   </svg>
-                  <span>双主题模式 · 两侧色值均取自设计稿，不再由算法派生</span>
+                  <span>多主题模式 · 每套主题的色值都取自对应设计稿，不再由算法派生</span>
                 </div>
 
-                <!-- 主副选择（D1：显式，默认预选第一个） -->
-                <div class="dual-role-picker">
-                  <span class="dual-role-label">哪一份是主稿？<em>（主稿决定结构、几何与文案）</em></span>
-                  <div class="dual-role-options">
-                    <label class="dual-role-option" :class="{ active: primaryRole === 'first' }">
-                      <input type="radio" :value="'first'" v-model="primaryRole" :disabled="isGenerating" />
-                      <span>浅色稿为主</span>
-                    </label>
-                    <label class="dual-role-option" :class="{ active: primaryRole === 'second' }">
-                      <input type="radio" :value="'second'" v-model="primaryRole" :disabled="isGenerating" />
-                      <span>深色稿为主</span>
-                    </label>
+                <!-- 🆕🆕 2026-10-12 主题行列表：可增删、可改名、可上下移；第一行即主稿 -->
+                <div class="theme-rows">
+                  <div
+                    v-for="(row, idx) in themeRows"
+                    :key="idx"
+                    class="theme-row"
+                    :class="{ 'is-primary': idx === 0 }"
+                  >
+                    <div class="theme-row-head">
+                      <span class="theme-role-badge">{{ idx === 0 ? '主稿' : `主题 ${idx + 1}` }}</span>
+                      <input
+                        v-model="row.name"
+                        type="text"
+                        class="theme-name-input"
+                        placeholder="主题名，如 黄昏模式"
+                        :disabled="isGenerating"
+                        maxlength="20"
+                        @focus="selectThemeNameOnFocus"
+                        @click="selectThemeNameOnFocus"
+                      />
+                      <div class="theme-row-actions">
+                        <button
+                          type="button"
+                          :disabled="isGenerating || idx === 0"
+                          @click="moveThemeRow(idx, -1)"
+                          title="上移（设为���稿）"
+                        >
+                          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+                        </button>
+                        <button
+                          type="button"
+                          :disabled="isGenerating || idx === themeRows.length - 1"
+                          @click="moveThemeRow(idx, 1)"
+                          title="下移"
+                        >
+                          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
+                        </button>
+                        <button
+                          type="button"
+                          :disabled="isGenerating || themeRows.length <= 1"
+                          @click="removeThemeRow(idx)"
+                          title="删除该主题"
+                        >
+                          <CloseOutlined />
+                        </button>
+                      </div>
+                    </div>
+
+                    <!-- 第 0 行复用主框的链接（主稿已在主输入框填过） -->
+                    <div v-if="idx === 0" class="theme-row-note">
+                      链接使用上方「{{ themeRows[0]?.name || '浅色' }}」输入框（主稿 = 结构基准）
+                    </div>
+                    <template v-else>
+                      <div class="form-input-wrapper">
+                        <input
+                          v-model="row.url"
+                          type="text"
+                          class="form-input"
+                          :placeholder="`粘贴「${row.name || '该主题'}」的 figma.com 节点链接`"
+                          :disabled="isGenerating"
+                          inputmode="url"
+                          autocomplete="off"
+                          spellcheck="false"
+                          data-lpignore="true"
+                          data-1p-ignore="true"
+                          data-bwignore="true"
+                          @input="onThemeRowInput(idx)"
+                        />
+                        <button
+                          v-if="row.url && !isGenerating"
+                          class="input-clear-btn"
+                          @click="row.url = ''; onThemeRowInput(idx)"
+                          title="清除"
+                        >
+                          <CloseOutlined />
+                        </button>
+                      </div>
+                      <div v-if="row.error" class="dual-error">
+                        <ExclamationCircleOutlined />
+                        <div>
+                          <div class="dual-error-title">{{ row.error }}</div>
+                        </div>
+                      </div>
+                      <div v-else-if="row.loading" class="figma-preview-card loading">
+                        <div class="preview-spinner"></div>
+                        <span>正在获取预览...</span>
+                      </div>
+                      <div v-else-if="row.previewImage" class="figma-preview-card">
+                        <div class="preview-image-wrapper">
+                          <img :src="row.previewImage" :alt="row.previewName" class="preview-image" />
+                        </div>
+                        <div class="preview-info">
+                          <div class="preview-name">{{ row.previewName }}</div>
+                          <div class="preview-size">{{ row.previewWidth }} × {{ row.previewHeight }}</div>
+                          <button class="btn-confirm-preview" @click="confirmThemeRow(idx)" :disabled="row.confirmed">
+                            <CheckOutlined />
+                            {{ row.confirmed ? '已确认' : '确认该主题' }}
+                          </button>
+                        </div>
+                      </div>
+                    </template>
                   </div>
                 </div>
 
-                <!-- 深色设计稿链接 -->
-                <div class="form-group secondary-url-group">
-                  <label>深色设计稿链接</label>
-                  <div class="form-input-wrapper">
-                    <input
-                      id="figmaSecondaryUrl"
-                      v-model="secondaryFigmaUrl"
-                      type="text"
-                      name="figmaSecondaryUrl"
-                      class="form-input"
-                      placeholder="粘贴深色主题的 figma.com 节点链接"
-                      :disabled="isGenerating"
-                      inputmode="url"
-                      autocomplete="off"
-                      autocapitalize="off"
-                      spellcheck="false"
-                      data-lpignore="true"
-                      data-1p-ignore="true"
-                      data-bwignore="true"
-                      @input="onSecondaryUrlInput"
-                    />
-                    <button
-                      v-if="secondaryFigmaUrl && !isGenerating"
-                      class="input-clear-btn"
-                      @click="clearSecondaryUrl"
-                      title="清除"
-                    >
-                      <CloseOutlined />
-                    </button>
-                  </div>
-                  <div v-if="secondaryUrlInfo" class="url-info" :class="secondaryUrlInfo.type">
-                    <span v-html="secondaryUrlInfo.message"></span>
-                  </div>
-                  <!-- 同节点拦截：两稿同源则双真值无意义 -->
-                  <div v-if="secondarySameAsPrimary" class="dual-warn">
-                    <ExclamationCircleOutlined />
-                    <span>主稿与副稿是同一个 Figma 节点，请提供真正深浅两份设计稿</span>
-                  </div>
-                  <!-- 副稿预览确认（fail-closed 的一道前置拦截） -->
-                  <div v-else-if="secondaryPreviewError" class="dual-error">
-                    <ExclamationCircleOutlined />
-                    <div>
-                      <div class="dual-error-title">{{ secondaryPreviewError }}</div>
-                      <button type="button" class="dual-error-action" @click="disableDualTheme">
-                        改用单稿模式
-                      </button>
-                    </div>
-                  </div>
-                  <div v-else-if="secondaryPreviewLoading" class="figma-preview-card loading">
-                    <div class="preview-spinner"></div>
-                    <span>正在获取深色稿预览...</span>
-                  </div>
-                  <div v-else-if="secondaryPreviewImage" class="figma-preview-card">
-                    <div class="preview-image-wrapper">
-                      <img :src="secondaryPreviewImage" :alt="secondaryPreviewName" class="preview-image" />
-                    </div>
-                    <div class="preview-info">
-                      <div class="preview-name">{{ secondaryPreviewName }}</div>
-                      <div class="preview-size">{{ secondaryPreviewWidth }} × {{ secondaryPreviewHeight }}</div>
-                      <button class="btn-confirm-preview" @click="confirmSecondaryPreview" :disabled="secondaryPreviewConfirmed">
-                        <CheckOutlined />
-                        {{ secondaryPreviewConfirmed ? '已确认' : '确认深色稿' }}
-                      </button>
-                    </div>
-                  </div>
+                <!-- 校验提示 -->
+                <div v-if="hasDuplicateThemeNode" class="dual-warn">
+                  <ExclamationCircleOutlined />
+                  <span>多个主题指向同一个 Figma 节点，请提供各自独立的设计稿</span>
                 </div>
+                <div v-else-if="hasDuplicateThemeName" class="dual-warn">
+                  <ExclamationCircleOutlined />
+                  <span>主题名称重复，请改成不同的名字</span>
+                </div>
+
+                <button
+                  v-if="canAddTheme"
+                  type="button"
+                  class="add-theme-btn"
+                  @click="addThemeRow"
+                >
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  添加主题（还可加 {{ MAX_THEMES - themeRows.length }} 个）
+                </button>
               </div>
             </div>
 
@@ -543,19 +587,19 @@
             </span>
             <span
               class="rz-h rz-h--r" tabindex="0" role="separator" aria-label="调整预览宽度"
-              @mousedown="frameResize.startResize($event, 'right')"
+              @pointerdown="frameResize.startResize($event, 'right')"
               @keydown="frameResize.onHandleKeydown($event, 'right')"
               @focus="frameResize.onHandleFocus"
             ></span>
             <span
               class="rz-h rz-h--b" tabindex="0" role="separator" aria-label="调整预览高度"
-              @mousedown="frameResize.startResize($event, 'bottom')"
+              @pointerdown="frameResize.startResize($event, 'bottom')"
               @keydown="frameResize.onHandleKeydown($event, 'bottom')"
               @focus="frameResize.onHandleFocus"
             ></span>
             <span
               class="rz-h rz-h--c" tabindex="0" role="separator" aria-label="同时调整预览宽高"
-              @mousedown="frameResize.startResize($event, 'corner')"
+              @pointerdown="frameResize.startResize($event, 'corner')"
               @keydown="frameResize.onHandleKeydown($event, 'corner')"
               @focus="frameResize.onHandleFocus"
             ></span>
@@ -1012,6 +1056,58 @@ const secondaryPreviewName = ref('')
 const secondaryPreviewWidth = ref<number | null>(null)
 const secondaryPreviewHeight = ref<number | null>(null)
 
+// ══════════════════════════════════════════════════════════════
+// 🆕🆕 2026-10-12 N 主题：主题行数组（替代单副稿）
+//
+// 每个主题 = 一份设计稿 + 一个用户自填的名字。主稿恒为 themes[0]
+// （后端 themeNodes[0] 决定结构/几何/文案），前端不给「主副单选」——
+// 用户用「上下移动」表达顺序，第一行即主稿。
+// ══════════════════════════════════════════════════════════════
+const MAX_THEMES = 8
+
+interface ThemeRow {
+  name: string
+  url: string
+  confirmed: boolean
+  previewImage: string
+  previewName: string
+  previewWidth: number | null
+  previewHeight: number | null
+  error: string
+  loading: boolean
+}
+
+function newThemeRow(name: string): ThemeRow {
+  return {
+    name,
+    url: '',
+    confirmed: false,
+    previewImage: '',
+    previewName: '',
+    previewWidth: null,
+    previewHeight: null,
+    error: '',
+    loading: false,
+  }
+}
+
+/** 主题行：索引 0 是主稿（浅色），1 是深色，2+ 由用户命名 */
+const themeRows = ref<ThemeRow[]>([newThemeRow('浅色'), newThemeRow('深色')])
+
+/** 切换双主题模式时重建行（关闭则清空，避免残留上次的输入） */
+watch(dualThemeEnabled, (on) => {
+  if (on && themeRows.value.length < 2) {
+    themeRows.value = [newThemeRow('浅色'), newThemeRow('深色')]
+  }
+  if (!on) {
+    themeRows.value = [newThemeRow('浅色'), newThemeRow('深色')]
+  }
+})
+
+// 兼容旧的单副稿字段（存量逻辑与模板仍在用）
+const secondaryFigmaUrlRef = secondaryFigmaUrl
+void secondaryFigmaUrlRef
+
 /** 双主题是否可用：仅微码 + Max（契约收窄） */
 const dualThemeSupported = computed(
   () => componentType.value === 'microcode' && generationTier.value === 'max',
@@ -1246,9 +1342,14 @@ const canGenerate = computed(() => {
     urlInfo.value?.type === 'success' &&
     previewConfirmed.value
   if (!base) return false
-  // 双主题模式：副稿必须就绪且**不能与主稿同节点**
+  // 双主题模式：所有已填主题都要确认预览，且不能有重复节点/重名
   if (dualThemeEnabled.value) {
-    return secondaryReady.value && !secondarySameAsPrimary.value
+    return (
+      filledThemeRows.value.length > 0 &&
+      allThemesConfirmed.value &&
+      !hasDuplicateThemeNode.value &&
+      !hasDuplicateThemeName.value
+    )
   }
   return true
 })
@@ -1405,6 +1506,193 @@ function disableDualTheme() {
   if (secondaryPreviewTimer) window.clearTimeout(secondaryPreviewTimer)
 }
 
+// ══════════════════════════════════════════════════════════════
+// 🆕🆕 N 主题：行增删 / 解析 / 校验 / 下发
+// ══════════════════════════════════════════════════════════════
+
+/** 解析单个 Figma 链接 → {fileKey, nodeId} | null（与主稿 urlInfo 同口径） */
+function parseFigmaUrl(raw: string): { fileKey: string; nodeId: string } | null {
+  if (!raw) return null
+  try {
+    const u = new URL(raw)
+    const m = u.pathname.match(/\/(file|design)\/([^/]+)/)
+    const nodeId = u.searchParams.get('node-id')
+    if (m && nodeId) return { fileKey: m[2], nodeId }
+  } catch {
+    /* 无效 URL ⇒ null */
+  }
+  return null
+}
+
+/** 各行解析结果 */
+const themeRowParsed = computed(() =>
+  themeRows.value.map((r) => ({ row: r, parsed: parseFigmaUrl(r.url) })),
+)
+
+/** 已填写链接的行（即需要提交的主题），索引 0 恒为主稿 */
+const filledThemeRows = computed(() =>
+  themeRowParsed.value.filter((x) => x.parsed !== null),
+)
+
+/** 所有已填写的行都已确认预览 */
+const allThemesConfirmed = computed(
+  () =>
+    filledThemeRows.value.length > 0 &&
+    filledThemeRows.value.every((x) => x.row.confirmed),
+)
+
+/** 有多个主题指向同一节点 ⇒ 阻断（那一侧不是独立真值） */
+const hasDuplicateThemeNode = computed(() => {
+  const keys = filledThemeRows.value.map(
+    (x) => `${x.parsed!.fileKey}::${x.parsed!.nodeId}`,
+  )
+  return new Set(keys).size !== keys.length
+})
+
+/** 主题名重复（展示无法区分） */
+const hasDuplicateThemeName = computed(() => {
+  const names = themeRows.value
+    .filter((r) => r.url.trim())
+    .map((r) => r.name.trim())
+    .filter(Boolean)
+  return new Set(names).size !== names.length
+})
+
+/** 能否再加一行 */
+const canAddTheme = computed(
+  () => dualThemeEnabled.value && themeRows.value.length < MAX_THEMES,
+)
+
+/** 新增一行：默认名用「主题 N」，留空让用户自己起 */
+function addThemeRow() {
+  if (!canAddTheme.value) return
+  themeRows.value.push(newThemeRow(`主题 ${themeRows.value.length + 1}`))
+}
+
+/** 删除一行（至少保留 1 行） */
+function removeThemeRow(index: number) {
+  if (themeRows.value.length <= 1) return
+  themeRows.value.splice(index, 1)
+  if (secondaryPreviewTimer) window.clearTimeout(secondaryPreviewTimer)
+}
+
+/** 上移/下移 —— 第一行即主稿，故「上移」等价于「设为主稿」 */
+function moveThemeRow(index: number, delta: -1 | 1) {
+  const next = index + delta
+  if (next < 0 || next >= themeRows.value.length) return
+  const arr = themeRows.value
+  ;[arr[index], arr[next]] = [arr[next], arr[index]]
+}
+
+/** 行输入变化 → 重置该行确认态并防抖拉预览 */
+let themeRowTimers: Array<ReturnType<typeof setTimeout> | null> = []
+function onThemeRowInput(index: number) {
+  const row = themeRows.value[index]
+  if (!row) return
+  row.confirmed = false
+  row.error = ''
+  row.previewImage = ''
+  row.previewName = ''
+  if (themeRowTimers[index]) clearTimeout(themeRowTimers[index])
+  themeRowTimers[index] = setTimeout(() => loadThemeRowPreview(index), 600)
+}
+
+/** 拉取某一行主题的预览图（index 0 复用主稿已渲好的 figmaPreview） */
+async function loadThemeRowPreview(index: number) {
+  const x = themeRowParsed.value[index]
+  const row = themeRows.value[index]
+  if (!row || !x?.parsed) return
+  // 第 0 行就是主稿，主稿预览已在 figma-connector 阶段渲好，直接复用
+  if (index === 0 && figmaPreview.value?.imageUrl) {
+    row.previewImage = figmaPreview.value.imageUrl
+    row.previewName = figmaPreview.value.nodeName || ''
+    row.previewWidth = figmaPreview.value.width ?? null
+    row.previewHeight = figmaPreview.value.height ?? null
+    return
+  }
+  row.loading = true
+  row.error = ''
+  try {
+    const rawCfg = (configStore.config as any)?.value !== undefined
+      ? (configStore.config as any).value
+      : configStore.config
+    const result = await fetchFigmaPreview({
+      figmaUrl: row.url,
+      figmaToken: rawCfg?.figmaToken,
+      config: rawCfg,
+    })
+    if (result.success) {
+      row.previewImage = result.imageUrl
+      row.previewName = result.nodeName || ''
+      row.previewWidth = result.width ?? null
+      row.previewHeight = result.height ?? null
+    } else {
+      row.error = result.error || '预览获取失败'
+    }
+  } catch (err: any) {
+    row.error = err?.message || '预览获取失败'
+  } finally {
+    row.loading = false
+  }
+}
+
+/**
+ * 确认某一行主题的预览（2026-10-12 强化）。
+ *
+ * 🔴 改前是 `if (row) row.confirmed = true` —— **零校验**，用户没看到图也能确认。
+ * 改后规则（用户决策：「填 url 时候需要强制预览，确认后才允许生成」）：
+ * 1. 必须已填 URL；
+ * 2. 必须**预览成功**（`row.previewImage` 非空、无 error）——
+ *    未成功时**主动重新拉一次**再判定，仍失败则拒绝确认并给出原因；
+ * 3. 通过后才置 `confirmed = true`。
+ *
+ * 为什么值得加：预览失败却放行 ⇒ 后端落盘拿不到主题图（`previewImageUrl` 为空），
+ * 产物该主题的预览图永久缺失，而用户**毫不知情**（生成成功、门禁全绿）。
+ *
+ * ⚠️ 第0 行是主稿：它的图复用 `figmaPreview`（已在 figma-connector 阶段渲好），
+ *   不能因为 `row.previewImage` 为空就判失败—— 需先 `loadThemeRowPreview(0)`。
+ */
+async function confirmThemeRow(index: number) {
+  const row = themeRows.value[index]
+  if (!row) return
+  if (!row.url?.trim()) {
+    row.error = '请先填写 Figma 链接'
+    row.confirmed = false
+    return
+  }
+  // 预览还没成功（可能还在 loading，或上拉失败）⇒ 先补拉一次再判定
+  if (!row.previewImage || row.error) {
+    await loadThemeRowPreview(index)
+  }
+  if (!row.previewImage) {
+    row.confirmed = false
+    row.error = row.error || '预览未成功，无法确认（请检查链接与token 权限）'
+    return
+  }
+  row.error = ''
+  row.confirmed = true
+}
+
+/**
+ * 主题名输入框聚焦时全选。
+ *
+ * 为什么需要：名字是**预填**的（「浅色」/「深色」/「主题 N」），
+ *   用户的意图几乎总是「**替换**」而非「追加」。
+ *   实测（2026-10-12 真机）：不加全选时，点进「深色」框直接打字
+ *   会得到 `深色夜模式` —— 预填值成了误用的前缀。
+ *
+ * 只在该框被点击时全选 —— 用户已自定义过的名字若再次聚焦
+ *   被清空反而是二次误伤。
+ * ⚠️ 必须同时挂 focus + click：用户改过一次后光标仍在框内，
+ *   此时再点不会重新触发 focus ⇒ 只挂 focus 的话第二次改名又会变追加
+ *   （实测 `dusk-mode` → `dusk-mode黄昏模式`）。
+ */
+function selectThemeNameOnFocus(event: FocusEvent | MouseEvent) {
+  const el = event.target as HTMLInputElement | null
+  if (!el) return
+  el.select()
+}
+
 // ── 工具函数 ──
 function cardIcon(status: string) {
   return (
@@ -1553,25 +1841,43 @@ async function handleComponentGenerate() {
     requestData.panelType = selectedPanelType.value
   }
 
-  // 🆕 2026-10-10 双主题（R1/R2）：下发副稿节点 + 主副角色。
-  //   三条硬约束在此收口：
-  //   1. 仅双主题模式**且**副稿已就绪才下发（否则退化为单稿，请求体与改动前一致）；
-  //   2. 仅微码 + Max（契约收窄，后端 lite/vue3 DTO 无此字段，发了会被静默忽略）；
-  //   3. primaryRole 原样透传，后端据此决定「谁决定结构」。
+  // 🆕🆕 2026-10-12 N 主题（R1/R2）：下发主题设计稿数组。
+  //   关键：**顺序即语义** —— themeNodes[0] 恒为主稿（决定结构/几何/文案），
+  //   所以用户「上移某行」等于「把它设为主稿」，前端不另传 primaryRole。
   //
-  //   🔴 关键：`secondaryNode` **恒放深色稿**（用户填的第二个框），
-  //   `primaryRole` 单独表达谁是主稿。
-  //   后端 `resolvePrimarySecondary(firstInput=fileKey/nodeId, secondInput=secondaryNode)`
-  //   里 firstInput 恒为第一个框 —— 若在 primaryRole='second' 时把浅色稿塞进
-  //   secondaryNode，会导致**两稿都是浅色稿**、双真值静默失效，
-  //   且后端明暗校验只会报「深色稿实际是浅色」，用户完全看不懂根因。
-  if (dualThemeEnabled.value && secondaryReady.value && dualThemeSupported.value) {
-    requestData.secondaryNode = {
-      fileKey: secondaryUrlInfo.value!.fileKey,
-      nodeId: secondaryUrlInfo.value!.nodeId,
-    }
-    requestData.primaryRole = primaryRole.value
-    addLog('info', `🎨 双主题模式：主稿=${primaryRole.value === 'first' ? '浅色稿' : '深色稿'}`)
+  //   三条硬约束在此收口：
+  //   1. 仅双主题模式**且**所有已填主题都确认过预览才下发（否则退化为单稿）；
+  //   2. 仅微码 + Max（契约收窄；lite/vue3 DTO 无此字段，发了会被静默忽略）；
+  //   3. 主稿（第 0 行）用主框已解析的 fileKey/nodeId，避免重复粘贴。
+  if (dualThemeEnabled.value && dualThemeSupported.value && allThemesConfirmed.value) {
+    requestData.themeNodes = filledThemeRows.value.map((x, i) =>
+      i === 0
+        ? {
+            fileKey: urlInfo.value!.fileKey,
+            nodeId: urlInfo.value!.nodeId,
+            name: x.row.name.trim() || '浅色',
+            // 🔴 2026-10-12：主稿预览图 URL（**方案 A：传 URL 不是 base64**）。
+            //   主稿的图由 `confirmPreview` 渲好并被 `loadThemeRowPreview(0)` 复用，
+            //   传下去让后端**零额外Figma 调用**即可落盘为最终 `mc-preview.png`。
+            previewImageUrl: x.row.previewImage || undefined,
+          }
+        : {
+            fileKey: x.parsed!.fileKey,
+            nodeId: x.parsed!.nodeId,
+            name: x.row.name.trim() || `主题 ${i + 1}`,
+            // 🔴 2026-10-12：副主题预览图 URL —— 用户在「填 URL 阶段」已强制预览
+            //   并确认过（`confirmThemeRow` 现在会校验预览成功才放行），
+            //   这张图**直接复用为该主题的最终预览图**（后端落盘 `mc-preview-<key>.png`），
+            //   生成阶段**无需再调 Figma exportImage**（省限流，见
+            //   `mc-component-graph-phase2.js:378`「只 getNode，不 exportImage」）。
+            //   ⚠️ 后端落盘失败只 warn 不阻断（色板真值才是关键），故此处缺失不拦生成。
+            previewImageUrl: x.row.previewImage || undefined,
+          },
+    )
+    addLog(
+      'info',
+      `🎨 多主题模式：${requestData.themeNodes.length} 套主题，主稿「${requestData.themeNodes[0].name}」`,
+    )
   }
 
   if (configStore.isConfigured) {
@@ -1827,6 +2133,109 @@ onUnmounted(() => {
 }
 .secondary-url-group {
   margin-bottom: 0;
+}
+
+/* 🆕🆕 N 主题行列表 */
+.theme-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.theme-row {
+  padding: 10px;
+  border: 1px solid var(--border-color, #dcdfe6);
+  border-radius: 8px;
+  background: var(--bg-primary, #fff);
+}
+.theme-row.is-primary {
+  border-color: var(--brand, #409eff);
+  background: var(--brand-bg, #f7fafd);
+}
+.theme-row-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.theme-role-badge {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: var(--bg-alt, #f0f2f5);
+  color: var(--text-secondary, #606266);
+}
+.theme-row.is-primary .theme-role-badge {
+  background: var(--brand, #409eff);
+  color: #fff;
+}
+.theme-name-input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: var(--bg-alt, #f5f7fa);
+  font-size: 13px;
+  color: var(--text-primary, #303133);
+}
+.theme-name-input:focus {
+  outline: none;
+  border-color: var(--brand, #409eff);
+  background: var(--bg-primary, #fff);
+}
+.theme-row-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.theme-row-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border-color, #dcdfe6);
+  border-radius: 4px;
+  background: var(--bg-primary, #fff);
+  color: var(--text-secondary, #606266);
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+}
+.theme-row-actions button:hover:not(:disabled) {
+  background: var(--brand-bg, #ecf5ff);
+  color: var(--brand, #409eff);
+}
+.theme-row-actions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.theme-row-note {
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: var(--bg-alt, #f5f7fa);
+  font-size: 12px;
+  color: var(--text-tertiary, #909399);
+}
+.add-theme-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  padding: 7px;
+  border: 1px dashed var(--border-color, #dcdfe6);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary, #606266);
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.18s, color 0.18s;
+}
+.add-theme-btn:hover {
+  border-color: var(--brand, #409eff);
+  color: var(--brand, #409eff);
 }
 .dual-warn {
   display: flex;
@@ -3180,6 +3589,9 @@ onUnmounted(() => {
   border-radius: 2px;
   opacity: 0.85;
   z-index: 5;
+  /* Pointer Events 必需：否则拖拽被浏览器手势截走，pointermove 收不到 */
+  touch-action: none;
+  user-select: none;
 }
 .rz-h:hover,
 .rz-h:focus-visible {

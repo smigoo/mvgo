@@ -62,6 +62,12 @@ import {
   SECONDARY_ERROR_CODES,
 } from '../utils/dual-truth-figma.js';
 import { VisualComparator } from '../roles/visual-comparator.js';
+// 🆕🆕 2026-12 N 主题：主题规范化（默认名/去重/slug/上限）与错误码
+import {
+  normalizeThemeInputs,
+  MULTI_THEME_ERROR_CODES,
+  MAX_THEMES,
+} from '../utils/multi-theme.js';
 import { join } from 'path';
 import { existsSync } from 'fs';
 //  引入 validators
@@ -256,7 +262,163 @@ function buildVisualAnalysisBlockError(result = {}) {
 }
 
 /**
- * 🆕 2026-10-10 双主题 Figma 输入：拉取副稿节点（fail-closed，D3）
+ * 🆕🆕 2026-12 N 主题：拉取 N 份设计稿并装配 dualTruth（fail-closed）。
+ *
+ * 与 `fetchSecondaryFigmaNode`（双主题，已被 themeNodes 取代但保留兼容）的关系：
+ *   本函数是**泛化版** —— 逐个 fetchNodeData、逐个归类错误、逐个明暗校验。
+ * 关键设计：
+ *  - **逐个 fail-closed**：任一份稿失败即整任务失败（不静默降级为派生 ——
+ *    悄悄降级会让用户以为拿到的是全真值产物，实际有一半是「算出来的」）；
+ *  - **主稿恒为 themeNodes[0]**（用户已在前端明确排序），不引入 primaryRole 概念；
+ *  - 每份稿仍只 `fetchNodeData`（不 exportImage / 不进 Vision），省 Figma 限流额度。
+ *
+ * @param {Object} state graph state（需含 themeNodes / figmaToken / onProgress）
+ * @param {{primaryNodeData:Object, logger:Object}} ctx
+ * @returns {Promise<Object>} dualTruth 产物（themes[] 数组）
+ */
+async function fetchThemeNodes(state, ctx) {
+  const { primaryNodeData, logger: log } = ctx;
+  const inputs = Array.isArray(state.themeNodes) ? state.themeNodes : [];
+  const onProgress = state.onProgress;
+  const { resolveBackgroundBrightness } = await import('../utils/style-tokens.js');
+
+  // 规范化（默认名 / 去重 / slug / 数量上限 / 错误收集）
+  const { themes: normThemes, errors } = normalizeThemeInputs(inputs);
+  if (errors.length > 0) {
+    const fatal = errors.find((e) => e.code !== MULTI_THEME_ERROR_CODES.DUPLICATE_NODE);
+    log?.warn?.('❌ N 主题输入校验失败', errors);
+    onProgress?.({
+      stage: 'Figma数据获取',
+      message: '❌ 主题设计稿配置有误',
+      status: 'failed',
+    });
+    throw buildSecondaryFigmaError(
+      (fatal || errors[0]).code,
+      (fatal || errors[0]).detail,
+    );
+  }
+  if (normThemes.length === 0) return null;
+
+  // 第 1 项即主稿（themeNodes[0]），其余为副主题
+  const connector = new FigmaConnector({ figmaToken: state.figmaToken });
+  const themes = [];
+  for (let i = 0; i < normThemes.length; i++) {
+    const t = normThemes[i];
+    // 主稿节点已在 figma-connector 阶段取过，直接复用（省一次 API）
+    const isPrimary = i === 0;
+    const nodeData = isPrimary
+      ? primaryNodeData
+      : await (async () => {
+          try {
+            const nd = await connector.fetchNodeData(t.fileKey, t.nodeId);
+            if (!nd || typeof nd !== 'object') {
+              throw buildSecondaryFigmaError(
+                MULTI_THEME_ERROR_CODES.NODE_NOT_FOUND,
+                '返回内容为空',
+              );
+            }
+            return nd;
+          } catch (err) {
+            if (err?.isSecondaryFigmaError) throw err;
+            // 归类 → 换成指明「哪个主题 + 原因 + 处置」的错误再抛
+            const { code, title, hint } = classifySecondaryFigmaError(err);
+            log?.error?.(`❌ 主题「${t.name}」设计稿拉取失败（已阻断，不降级）`, {
+              code,
+              fileKey: t.fileKey,
+              nodeId: t.nodeId,
+              raw: err?.message,
+            });
+            const blocked = buildSecondaryFigmaError(code, t.name);
+            blocked.originalMessage = err?.message;
+            blocked.rawStatus = err?.figStatus;
+            onProgress?.({
+              stage: 'Figma数据获取',
+              message: `❌ 主题「${t.name}」${title}`,
+              status: 'failed',
+            });
+            throw blocked;
+          }
+        })();
+
+    const brightness = resolveBackgroundBrightness(nodeData, isPrimary ? 'dark' : 'light');
+    // 🔴 2026-10-12：把**前端已确认的主题预览图**落盘为 `mc-preview-<key>.png`。
+    //   设计（用户决策）：
+    //   - 预览发生在「填 Figma URL」阶段，前端强制预览 + 用户确认后才允许生成；
+    //     这张图**直接复用为最终产物**⇒ 生成阶段不调 Figma exportImage（省限流）。
+    //   - 副主题**导图失败不阻断**（色板真值才是关键，预览图只是 UI 展示），
+    //     降级为「该主题无预览图」，并在 `dualTruth` 里留痕。
+    //   - 主稿（isPrimary）的图走 `confirmPreview` 那条链路（含 tokenhash 缓存），此处**不重复下载**。
+    let previewImageName = null;
+    if (!isPrimary && t.previewImageUrl) {
+      try {
+        const { writeFileSync, mkdirSync } = await import('node:fs');
+        const imagesDir = state.outputPath ? join(state.outputPath, 'resources/images') : null;
+        if (imagesDir) {
+          mkdirSync(imagesDir, { recursive: true });
+          const fileName = `mc-preview-${key}.png`;
+          // 方案 A：传的是 URL（用户已确认的那张图的地址），不是 base64。
+          // ① data URL → 直接解码落盘（前端若已拿到字节，走这条零额外网络）
+          const m = /^data:image\/(png|jpeg|jpg);base64,(.+)$/i.exec(String(t.previewImageUrl));
+          let buf = null;
+          if (m) {
+            buf = Buffer.from(m[2], 'base64');
+          } else if (/^https?:\/\//i.test(String(t.previewImageUrl))) {
+            const res = await fetch(t.previewImageUrl);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            buf = Buffer.from(await res.arrayBuffer());
+          } else {
+            throw new Error('既非 data URL 也非 http(s) URL');
+          }
+          if (!buf || buf.length < 1024) throw new Error('图片过小，疑似空/损坏');
+          writeFileSync(join(imagesDir, fileName), buf);
+          previewImageName = fileName;
+        }
+      } catch (imgErr) {
+        // ⚠️ 不阻断：预览图缺失只影响 UI 展示，色板真值已就位
+        log?.warn?.(`⚠️ 主题「${t.name}」预览图落盘失败（已降级：该主题无预览图）`, {
+          key,
+          url: String(t.previewImageUrl).slice(0, 120),
+          error: imgErr?.message || imgErr,
+        });
+      }
+    }
+    themes.push({
+      key: t.key,
+      name: t.name,
+      brightness,
+      nodeData,
+      isPrimary,
+      fileKey: t.fileKey,
+      nodeId: t.nodeId,
+      // 🔴 2026-10-12：前端在「填URL 阶段强制预览并让用户确认」（confirmThemeRow），
+      //   该图**直接复用为最终产物的主题预览图** ⇒ 生成阶段无需再调 Figma exportImage。
+      //   缺省（老前端 / 未确认 / 落盘失败）时为 null，下游 declare.json 留空且**不阻断**。
+      previewImageUrl: t.previewImageUrl || null,
+      previewImageName,
+    });
+  }
+
+  log?.info?.(`✅ N 份主题设计稿就绪（${themes.length} 个主题）`, {
+    themes: themes.map((t) => ({ key: t.key, name: t.name, brightness: t.brightness, primary: t.isPrimary })),
+  });
+  onProgress?.({
+    stage: 'Figma数据获取',
+    message: `✅ ${themes.length} 套主题设计稿就绪`,
+    status: 'completed',
+  });
+
+  return {
+    enabled: true,
+    themes,
+    primaryTheme: themes[0],
+    lightSource: 'figma-extract',
+    darkSource: 'figma-extract',
+  };
+}
+
+/**
+ * 🆕 2026-10-10 双主题：拉取副稿节点（fail-closed，D3）
+ * ⚠️ 已被 `fetchThemeNodes` 取代，保留仅为兼容存量 `secondaryNode` 入参。
  *
  * 副稿**只贡献色板**，因此：
  *  - 只调 `fetchNodeData`（getNode），**不调** `downloadPreviewImage` / `exportImage`
@@ -755,13 +917,21 @@ export function createPhase2Graph(config = {}) {
       //保存 checkpoint
       state._saveCheckpoint?.('figma', optimizedFigmaData);
 
-      // 🆕 2026-10-10 双主题 Figma 输入：拉取副稿节点（只 getNode，不 exportImage）。
-      //   - 副稿**只贡献色板**：不做结构分析、不进 Vision、不下载资源（省限流额度）；
+      // 🆕🆕 2026-12 N 主题：拉取主题设计稿（只 getNode，不 exportImage）。
+      //   - 每份稿**只贡献色板**：不做结构分析、不进 Vision、不下载资源（省限流额度）；
       //   - 失败**直接阻断**（D3 fail-closed），不降级为派生 —— 悄悄降级会让用户
-      //     误以为拿到的是双真值产物；
-      //   - 单稿路径（无 secondaryNode）完全不进本分支 ⇒ 零回归。
+      //     误以为拿到的是全真值产物；
+      //   - 主稿恒为 themeNodes[0]（前端已排序），复用已取好的主稿节点省一次 API；
+      //   - 单稿路径（无 themeNodes 且无 secondaryNode）完全不进本分支 ⇒ 零回归。
+      //
+      //   优先级：themeNodes（新，N 主题）> secondaryNode（旧，双主题存量前端）。
       let dualTruth = null;
-      if (state.secondaryNode?.fileKey && state.secondaryNode?.nodeId) {
+      if (Array.isArray(state.themeNodes) && state.themeNodes.length > 0) {
+        dualTruth = await fetchThemeNodes(state, {
+          primaryNodeData: optimizedFigmaData,
+          logger,
+        });
+      } else if (state.secondaryNode?.fileKey && state.secondaryNode?.nodeId) {
         dualTruth = await fetchSecondaryFigmaNode(state, {
           primaryNodeData: optimizedFigmaData,
           logger,
@@ -5387,8 +5557,9 @@ export async function runPhase2Generation(options) {
     requirementDocText, //🆕 高级选项 P0：需求文档文本（可选）
     skipNodes, //🆕 变体管线：要跳过的节点名数组（如 ['parallel-analysis','adversarial-checker']）
     failureGuidance, //🛡️ P1-3：任务级重试注入的上轮失败指导（首轮 engineer prompt 即生效）
-    secondaryNode, //🆕 2026-10-10 双主题：副稿 Figma 节点（深浅两份设计真值）
-    primaryRole, //🆕 2026-10-10 双主题：主副角色（'first' 默认 / 'second'）
+    secondaryNode, //🆕 2026-10-10 双主题：副稿 Figma 节点（已被 themeNodes 取代，兼容存量前端）
+    primaryRole, //🆕 2026-10-10 双主题：主副角色（themeNodes 模式下不生效）
+    themeNodes, //🆕🆕 2026-10-12 N 主题：主题设计稿数组（[0] 即主稿）
   } = options;
 
   //断点续跑：检查点保存辅助函数
@@ -5556,6 +5727,8 @@ export async function runPhase2Generation(options) {
     //   （2026-10-10 实测踩过：service 已透传但 state 里没有，副稿永远不拉取）。
     secondaryNode: secondaryNode || null,
     primaryRole: primaryRole || 'first',
+    //🆕🆕 2026-10-12 N 主题设计稿数组（figma-connector 的 fetchThemeNodes 消费）
+    themeNodes: Array.isArray(themeNodes) ? themeNodes : null,
     //🛡️ P1-3 深化：语义门禁失败带指导重试标记（_semanticRetried 置位且未消费 → 条件边回退 engineer 一次）
     _semanticRetried: false,
     _semanticRetryConsumed: false,

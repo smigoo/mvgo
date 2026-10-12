@@ -6,6 +6,10 @@
  */
 
 import { BaseAgent } from '../agents/base-agent.js';
+// 🔴 2026-10-12 A8-3：静态导入 dark 三核心枚举（`normalizeDeclareJson` 是**同步**函数，
+//   不能用 await 动态 import；该常量是纯数据，静态导入安全且无循环依赖 ——
+//   style-tokens.js 不import roles/*）。
+import { MC_DARK_THEME_COLOR_ENUM_CORE } from '../utils/style-tokens.js';
 import * as microcodeParser from './microcode/code-parser.js';
 import * as microcodeHealer from './microcode/code-healer.js';
 import * as microcodeWriter from './microcode/file-writer.js';
@@ -499,8 +503,38 @@ export class MicrocodeEngineer extends BaseAgent {
         const idxLessPath = join(input.outputPath, 'resources/styles/index.less');
         if (!existsSync(idxLessPath)) {
           const brightness = input.backgroundBrightness || 'dark';
-          await this.writeFiles(this._buildBootstrapStyleFiles(brightness, input), input.outputPath);
-          this.logger.info('🩹 预置最小可编译样式骨架（方案A·中断容错）', { brightness });
+          // 🔴 2026-10-12：多主题覆盖层需按 `themeConfig.list[].key` 生成（mc-check M2-4/M4-5），
+          //   但 `styleTokens` 要到 :7737 才构建 —— 本处在它之前，拿不到。
+          //   故此处**自行构建一次** styleTokens 取得 themeMeta（纯计算、无副作用，
+          //   只取 themeMeta 字段；重复 build 不会重复写盘）。
+          //   单稿路径 themeMeta 为空数组 ⇒ `_collectNThemeKeys` 返回 [] ⇒ 零回归。
+          let themeMeta = null;
+          try {
+            const { buildStyleTokens: _bst } = await import('../utils/style-tokens.js');
+            themeMeta = _bst({
+              dualTruth: input.secondaryNode
+                ? {
+                    enabled: true,
+                    lightSource: 'figma',
+                    darkSource: 'figma',
+                    secondaryNode: input.secondaryNode,
+                  }
+                : undefined,
+              ...(input.dualTruth || {}),
+            })?.themeMeta || null;
+          } catch (bstErr) {
+            this.logger.warn?.(
+              `🩹 骨架阶段构建 styleTokens 失败（退回单/双主题骨架）：${bstErr?.message || bstErr}`,
+            );
+          }
+          await this.writeFiles(
+            this._buildBootstrapStyleFiles(brightness, { ...input, themeMeta }),
+            input.outputPath,
+          );
+          this.logger.info('🩹 预置最小可编译样式骨架（方案A·中断容错）', {
+            brightness,
+            themeCount: Array.isArray(themeMeta) ? themeMeta.length : 0,
+          });
         }
       } catch (bootstrapErr) {
         this.logger.warn('⚠️ 预置样式骨架失败（非阻断）', {
@@ -4791,10 +4825,11 @@ export class MicrocodeEngineer extends BaseAgent {
    *   3. @import (multiple) './common.less' —— 业务 class 输出到**根作用域**（真实 DOM 可命中）
    *   4. （可选）dark.less / light.less 覆盖层，仅在 MC_EMIT_THEME_OVERRIDES=1 时引入
    */
-  _buildIndexLessTemplate(backgroundBrightness = 'dark') {
+  _buildIndexLessTemplate(backgroundBrightness = 'dark', themeMeta = null) {
     return microcodeHealer.buildIndexLessTemplate(
       backgroundBrightness,
       EMIT_THEME_OVERRIDES,
+      this._collectNThemeKeys(themeMeta),
     );
   }
 
@@ -4849,13 +4884,84 @@ export class MicrocodeEngineer extends BaseAgent {
   flex-direction: column;
 }
 `;
-    return {
-      'resources/styles/index.less': this._buildIndexLessTemplate(brightness),
+    // 🔴 2026-10-12 修正：此前直接引用**未声明**的 `themeMeta` → ReferenceError 被
+    //   外层 catch 吞成 warn ⇒ N 主题覆盖层静默不生成、零报错（违反 mc-check M2-4/M4-5）。
+    //
+    //   ⚠️ 取值链的坑（本轮实测确认，勿再改错）：
+    //   `styleTokens` 是 generateCode 内部在 :7737 才 `buildStyleTokens(...)` 构建的，
+    //   而本函数在 :502 被调用（generateCode 开头）—— **那时 styleTokens 还不存在**，
+    //   `input.styleTokens` 恒 undefined。因此主题清单必须由**调用方显式传入**。
+    //   单稿路径传 null ⇒ `_collectNThemeKeys` 返回空数组 ⇒ 行为与改动前逐字节一致。
+    const themeMeta =
+      input?.themeMeta ||
+      input?.styleTokens?.themeMeta ||
+      input?.opts?.styleTokens?.themeMeta ||
+      null;
+
+    // 🔴 2026-10-12 契约对齐（M2-4 / M4-5）：覆盖层 `.less` 必须**按
+    //   `themeConfig.list[].key` 一一对应**，N 主题就要 N 个文件。
+    //   此前硬编码只产 light/dark ⇒ 第 3 个及以后的主题**没有自己的覆盖层**，
+    //   预览页切到该主题时 class 变了但样式层没东西可挂（M4-5 也会判不合规）。
+    //   `light`/`dark` 沿用既有模板（它们可能被其它检查按名字引用），
+    //   自定义 key 生成同构模板（`&.<key> { .common(); .theme-<key>(); … }`）。
+    const themeWrappers = {
       'resources/styles/themes/dark.less': THEME_WRAPPER_TEMPLATES.dark,
       'resources/styles/themes/light.less': THEME_WRAPPER_TEMPLATES.light,
+    };
+    for (const key of this._collectNThemeKeys(themeMeta)) {
+      if (key === 'light' || key === 'dark') continue; // 上面已放
+      themeWrappers[`resources/styles/themes/${key}.less`] =
+        this._buildThemeWrapperLess(key);
+    }
+
+    return {
+      'resources/styles/index.less': this._buildIndexLessTemplate(brightness, themeMeta),
+      ...themeWrappers,
       'resources/styles/themes/theme-vars.less': themeVars,
       'resources/styles/common.less': commonLess,
     };
+  }
+
+  /**
+   * 🔴 2026-10-12：收集需要生成覆盖层的主题 key（取自 dualTruth.themeMeta，
+   * 单稿路径返回空数组 ⇒ 行为与改动前逐字节一致）。
+   *
+   * 🔴🔴 A8-1 同口径：**必须补 `dark` 系统占位**。
+   *   `declare.json` 的 `themeConfig.list` 会由 `normalizeDeclareJson`（A8-1）补一条
+   *   `key="dark"`；mc-check M4-5（`mc-check.cjs:745-756`）按 `themeConfig.list[].key`
+   *   逐个要求 `index.less` 含 `<key>.less` ⇒ 若这里只吐 themeMeta 的 key，
+   *   `dark` 有覆盖层文件却**没被 import** ⇒ M4-5 判死。
+   *   （实测复现：4 份 `.less` 齐备但 index.less 少 `dark.less` 导入。）
+   *
+   *   去重保序：`light`/`dark` 不在 themeMeta 里时补到**末尾**（dark 排最后，
+   *   与 A8-1 在 themeConfig.list 里的位置一致）。
+   */
+  _collectNThemeKeys(themeMeta) {
+    const keys = (Array.isArray(themeMeta) ? themeMeta : [])
+      .map((t) => String(t?.key || '').trim())
+      .filter(Boolean);
+    // 🔴 dark 是 mc-check 强制要求的系统占位（A8-1）：不重复加、始终存在。
+    if (!keys.includes('dark')) keys.push('dark');
+    // 单稿路径（themeMeta 为空）⇒ 还原为改动前的 ['light','dark']，零回归
+    if (!Array.isArray(themeMeta) || themeMeta.length === 0) {
+      return ['light', 'dark'];
+    }
+    if (!keys.includes('light')) keys.unshift('light');
+    return [...new Set(keys)];
+  }
+
+  /**
+   * 🔴 2026-10-12：单个主题的覆盖层 `.less`（与 light/dark 同构）。
+   * 结构照抄 `THEME_WRAPPER_TEMPLATES`，只把 mixin 名换成该主题自己的。
+   */
+  _buildThemeWrapperLess(key) {
+    const safeKey = String(key).replace(/[^a-zA-Z0-9_-]/g, '');
+    return `// 主题覆盖层：仅当宿主给组件根注入 .${safeKey} 类时生效（特异性高于根作用域默认主题）
+&.${safeKey} {
+  .common();
+  .theme-${safeKey}();
+  @import (multiple) '../common.less';
+}`;
   }
 
   /**
@@ -5331,6 +5437,9 @@ export class MicrocodeEngineer extends BaseAgent {
         !Array.isArray(d.themeConfig.list) ||
         d.themeConfig.list.length === 0
       ) {
+        // 🔴 2026-10-12 A8-1/A8-3：dark 的 readonly/notice/coreColors 由下方
+        //   「统一标记块」补齐（避免两处维护）。⚠️ 三处 dark 声明（:5404/:5422/N 主题补位）
+        //   **必须同口径**。
         d.themeConfig.list = [
           { name: '浅色主题', key: 'light' },
           { name: '深色主题', key: 'dark' },
@@ -5355,24 +5464,162 @@ export class MicrocodeEngineer extends BaseAgent {
       d.themeConfig.primaryBrightness = _dual.primaryBrightness || null;
       d.themeConfig.secondaryBrightness = _dual.secondaryBrightness || null;
       changed = true;
+
+      // 🆕🆕 2026-12 N 主题：把逐主题清单写进 themeConfig.list，
+      //   前端预览页据此**动态渲染**切换控件（不再硬编码「浅色 | 深色」两段）。
+      //   形状与既有 list 同构（{key, name}），额外带 brightness 供前端标注底色明暗。
+      const _themeMeta = Array.isArray(opts.styleTokens?.themeMeta)
+        ? opts.styleTokens.themeMeta
+        : [];
+      if (_themeMeta.length > 0) {
+        d.themeConfig.list = _themeMeta.map((t) => ({
+          name: t.name || t.key,
+          key: t.key,
+          ...(t.brightness ? { brightness: t.brightness } : {}),
+          // 🔴 2026-10-12：主题预览图（前端「填URL 阶段强制预览」的图，已落盘为
+          //   `mc-preview-<key>.png`，见 graph 的 fetchThemeNodes）。
+          //   ⚠️ check **不要求** themeConfig 有 previewName（M2-6 只管 layoutConfig），
+          //   这纯粹是给前端的展示数据 ⇒ 缺失不阻断。
+          ...(t.previewImageName ? { previewName: t.previewImageName } : {}),
+        }));
+
+        // 🔴🔴 2026-10-12 A8-1：补`dark` 系统占位主题（mc-check M3-13 硬要求
+        //   `themeConfig.list` 必须含 `key="dark"`，见 mc-check.cjs:620-632；
+        //   它**只读 declare.json**，不关心管线内部是否已生成 dark 的mixin/对象）。
+        //
+        //   背景：N 主题时 list 全部是用户自定义 key（theme_1/theme_2…），
+        //   实测产物 c-aiot-dpjh-bsjd-80092f38 因缺 dark 被 M3-13 判死。
+        //
+        //   为什么必须加：底层四层其实**早已齐备**（实测该产物 css-vars.js 有
+        //   `const dark = {...}`、theme-vars.less 有 `.theme-dark()`、themes/dark.less 存在），
+        //   唯独 declare.json 没声明 ⇒ 只补声明即可，不必重造任何产物。
+        //
+        //   readonly/notice/coreColors 由下方「统一标记块」补齐（避免两处维护）。
+        if (!d.themeConfig.list.some((t) => t && t.key === 'dark')) {
+          d.themeConfig.list.push({ name: '深色', key: 'dark' });
+        }
+
+        d.themeConfig.multiTheme = true;
+        d.themeConfig.themeCount = _themeMeta.length;
+        // 默认主题 = 主稿（themeMeta[0]，graph 保证 themeNodes[0] 即主稿）
+        d.themeConfig.default = _themeMeta[0].key;
+        changed = true;
+      }
+
+      // 🆕 2026-10-12 部分降级留痕：色板不合格的主题（缺主色/文字色）已退回派生值，
+      //   在 declare.json 标明 ⇒ 预览页可提示用户「该主题不是设计真值」。
+      const _degraded = Array.isArray(opts.styleTokens?.dualTruth?.degradedThemes)
+        ? opts.styleTokens.dualTruth.degradedThemes
+        : [];
+      if (_degraded.length > 0) {
+        // ⚠️ 本文件是 **.js**（非 TS）—— 不要写 `(t: any)` 这类 TS 类型标注，
+        //   Node ESM 解析到 `(` 后的 `:` 会抛 `SyntaxError: Unexpected token ':'`，
+        //   且只在**动态 import 该模块时**才炸（node --check 抓不到，因为 .js 走 CJS 分支）。
+        //   2026-10-12 真机验证实测踩到。
+        d.themeConfig.degradedThemes = _degraded.map((t) => ({
+          key: t.key,
+          name: t.name,
+          missing: t.missing || [],
+        }));
+        changed = true;
+      }
     }
-    // 🎨 cssVariableConfig 与设计变量轨双向声明（M3-7/M3-8，2026-09-03 契约接入）：
-    // styleTokens.designVars（原 UI 深色时 Figma 深色真值自定义变量，已渲染进 css-vars.js
-    // dark 槽位）必须同步在此声明（数组格式 [{name,key,type}]，mc-check M3-6），缺一即 error。
-    const designVars = Array.isArray(opts.styleTokens?.designVars)
-      ? opts.styleTokens.designVars
-      : [];
-    if (designVars.length > 0) {
-      const declaredKeys = new Set(
-        d.cssVariableConfig.map((it) => it && it.key),
-      );
-      for (const v of designVars) {
-        if (!v || !v.key || declaredKeys.has(v.key)) continue;
-        d.cssVariableConfig.push({
-          name: v.name || v.key,
-          key: v.key,
-          type: v.type || 'color',
-        });
+
+    // 🔴🔴 2026-10-12 A8-3：系统占位 `dark` 的统一标记（**所有路径**都适用：
+    // 双主题兜底 / 用户自带 dark / N 主题补位）。放在 dualTruth 分支**之外**，
+    // 否则单/双主题产物拿不到标记（实测踩到：list=[] 走 :5422 兜底时拿不到 notice）。
+    //
+    //   三个字段的用途（前端契约）：
+    //   - `readonly: true` → 切换控件里**可见但禁止改名/改色**（用户决策）
+    //   - `notice: 'builtin-dark-enum'` → 渲染提示条「深色为内置预设色，可上传深色稿替换」
+    //   - `coreColors` → 展示当前预设三核心的实际值
+    //
+    //   为什么必须有 notice（查证结论）：
+    //   - **主题维度没有预览图概念**：官方 demo 的 `themeConfig.list` 无 `previewName`，
+    //     mc-check 也无任何主题预览图判据（只有 M2-6/M2-5b 管 `layoutConfig`）⇒
+    //     **dark 的主题预览图可以缺省**，用户要的正是这个行为。
+    //   - `dark` 三核心是 M4-10 硬枚举值（A8-2）⇒ **必然不是用户设计稿真值**，
+    //     所以要明确告诉用户「这是预设色，可替换」。
+    if (Array.isArray(d.themeConfig?.list)) {
+      const _builtinDark = d.themeConfig.list.find((t) => t && t.key === 'dark');
+      if (_builtinDark) {
+        _builtinDark.readonly = true;
+        _builtinDark.builtin = true;
+        _builtinDark.notice = 'builtin-dark-enum';
+        _builtinDark.coreColors = { ...MC_DARK_THEME_COLOR_ENUM_CORE };
+        changed = true;
+      }
+    }
+    // 🎨 cssVariableConfig 双向声明（M3-7/M3-8）：
+    //   declare.json 的 `cssVariableConfig` 与 css-vars.js 的实际变量必须**双向一致**：
+    //   - M3-7：声明的 key 必须在 css-vars.js 出现（多声明 ⇒ error）
+    //   - M3-8：css-vars.js 的非框架预设变量必须在 cssVariableConfig 声明（少声明 ⇒ error）
+    //
+    // 🔴🔴 2026-10-12 修漏：原实现只读 `styleTokens.designVars`（Figma 设计变量轨），
+    //   但 css-vars.js 里的**语义色等额外注入变量**（colorDanger/colorWarning/colorSuccess/
+    //   colorBorder/colorTextSecondary…）来自 `file-writer.js` 的 `SEMANTIC_COLORS_*`，
+    //   **不在 designVars 里** ⇒ 漏声明 ⇒ M3-8 判死（护栏实测 ×4）。
+    //
+    //   修法：把两个来源**合并**后统一声明（并集天然满足双向一致）：
+    //   ① styleTokens.designVars（有 name/type，优先）
+    //   ② styleTokens.themeSlots / dark / light 里的全部键（补 name，type 暂按 color）
+    const _frameworkKeys = new Set([
+      'fontSize', 'fontWeightStrong', 'colorTextBase', 'colorPrimary',
+      'colorPrimaryHover', 'colorPrimaryActive', 'colorPrimaryBg', 'colorPrimaryBgHover',
+    ]);
+    const _extraVarDefs = [];
+    // ① designVars 轨
+    for (const v of (Array.isArray(opts.styleTokens?.designVars) ? opts.styleTokens.designVars : [])) {
+      if (v && v.key && !_frameworkKeys.has(v.key)) {
+        _extraVarDefs.push({ key: v.key, name: v.name || v.key, type: v.type || 'color' });
+      }
+    }
+    // ② 各主题槽位里的全部自定义键（含 SEMANTIC_COLORS_*）
+    const _slotSources = [
+      opts.styleTokens?.dark, opts.styleTokens?.darkWithDesign, opts.styleTokens?.light,
+      ...Object.values(opts.styleTokens?.themeSlots || {}),
+    ];
+    for (const slot of _slotSources) {
+      if (!slot || typeof slot !== 'object') continue;
+      for (const k of Object.keys(slot)) {
+        if (!k || _frameworkKeys.has(k)) continue;
+        if (_extraVarDefs.some((x) => x.key === k)) continue;
+        _extraVarDefs.push({ key: k, name: k, type: 'color' });
+      }
+    }
+    // ③ 🔴 语义色（colorDanger/colorWarning/colorSuccess/colorBorder/colorTextSecondary…）：
+    //   这些由 `file-writer.js#buildCssVarsFile` 的**函数内局部变量**
+    //   `SEMANTIC_COLORS_DARK/LIGHT`（:1322/:1329）注入，**不在 styleTokens 里**
+    //   ⇒ 上面 ①② 取不到它们 ⇒ M3-8 判死（实测 `cssVariableConfig` 只 3 条）。
+    //
+    //   正解：**直接复用 file-writer 的公共导出**（同一份事实源，绝不两处维护）。
+    //   若该导出不存在（旧版本），退化为按已知的语义色键名兜底声明。
+    try {
+      const _fw = microcodeWriter;
+      const semantic =
+        typeof _fw.getSemanticCssVarKeys === 'function'
+          ? _fw.getSemanticCssVarKeys()
+          : null;
+      for (const k of semantic || [
+        'colorTextSecondary', 'colorDanger', 'colorWarning', 'colorSuccess', 'colorBorder',
+      ]) {
+        if (_frameworkKeys.has(k) || _extraVarDefs.some((x) => x.key === k)) continue;
+        _extraVarDefs.push({ key: k, name: k, type: 'color' });
+      }
+    } catch {
+      // 兜底：file-writer 未提供导出（旧版本）⇒ 按已知语义色键名补声明
+      for (const k of [
+        'colorTextSecondary', 'colorDanger', 'colorWarning', 'colorSuccess', 'colorBorder',
+      ]) {
+        if (_frameworkKeys.has(k) || _extraVarDefs.some((x) => x.key === k)) continue;
+        _extraVarDefs.push({ key: k, name: k, type: 'color' });
+      }
+    }
+    if (_extraVarDefs.length > 0) {
+      const declaredKeys = new Set(d.cssVariableConfig.map((it) => it && it.key));
+      for (const v of _extraVarDefs) {
+        if (!v.key || declaredKeys.has(v.key)) continue;
+        d.cssVariableConfig.push({ name: v.name || v.key, key: v.key, type: v.type || 'color' });
         changed = true;
       }
     }
@@ -7420,15 +7667,61 @@ export class MicrocodeEngineer extends BaseAgent {
       });
 
       // 3. 补充标准文件：component.js、declare.js、index.less、主题包装文件（固定模板，不需要AI生成）
+      //
+      // 🔴🔴 2026-10-12 A1：N 主题覆盖层必须**逐 key 生成**。
+      //   mc-check M2-4（mc-check.cjs:238-249）要求 `themes/` 下对**每个**
+      //   `themeConfig.list[].key` 都有同名 `<key>.less`；M4-5（:745-756）要求
+      //   `index.less` 全文含 `<key>.less`。旧实现硬编码只写 light/dark 两个
+      //   ⇒ N 主题产物必然两项皆红（实测 c-aiot-dpjh-bsjd-80092f38 判死）。
+      //
+      //   ⚠️ 本函数是 `execute(params)`，作用域内**只有 `params`**（无 `opts`）；
+      //   故一律从 `params.styleTokens` 取，勿写裸 `opts`（会被外层 catch 非阻断吞掉，
+      //   症状是「覆盖层不生成但零报错」—— 2026-10-12 实测踩过同类坑两次）。
+      //
+      // 🔴 时序坑（实测）：`buildStyleTokens` 在下方 :7862 才跑（并缓存到
+      //   `this._lastStyleTokens`）—— **比本行晚** ⇒ 此处读不到。
+      //   故就地再构建一次（`buildStyleTokens` 是**纯计算**：只吃入参、无写盘/无副作用），
+      //   两处独立调用互不干扰。下方那次保持不变（它是主路径）。
+      //
+      //   ⚠️ 入参形状必须与 :7862 那次一致：`{figmaNodeData, backgroundBrightness, dualTruth}`。
+      //   ⚠️ execute 已把 params 解构成局部变量，此处**能用裸变量就用裸变量**
+      //   （与 :7857-7872 保持同一口径；`input.xxx` 会抛 ReferenceError 并被非阻断吞掉）。
+      let _themeMeta = params?.styleTokens?.themeMeta;
+      if (!_themeMeta?.length && figmaNodeData) {
+        try {
+          const { buildStyleTokens: _bst } = await import('../utils/style-tokens.js');
+          _themeMeta = _bst(
+            {
+              figmaNodeData,
+              backgroundBrightness,
+              ...(dualTruth?.enabled ? { dualTruth } : {}),
+            },
+            { logger: this.logger },
+          )?.themeMeta;
+        } catch (_stErr) {
+          this.logger.warn?.(
+            `⚠️ 覆盖层阶段构建 styleTokens 失败（退回 light/dark 双主题）：${_stErr?.message || _stErr}`,
+          );
+        }
+      }
+      const _themeMetaKeys = this._collectNThemeKeys(_themeMeta);
       const standardFiles = {
         'component.js': `import component from './package/index.vue'
 import './resources/styles/index.css'
 export default component
 `,
         'resources/styles/index.less':
-          this._buildIndexLessTemplate(backgroundBrightness),
-        'resources/styles/themes/dark.less': THEME_WRAPPER_TEMPLATES.dark,
-        'resources/styles/themes/light.less': THEME_WRAPPER_TEMPLATES.light,
+          this._buildIndexLessTemplate(backgroundBrightness, _themeMeta),
+        // light/dark 是固定模板；其余 key 用同一个覆盖层模板按 key 生成
+        ...(Object.fromEntries([
+          ...(_themeMeta?.length
+            ? _themeMetaKeys
+                .filter((k) => k !== 'light' && k !== 'dark')
+                .map((k) => [`resources/styles/themes/${k}.less`, this._buildThemeWrapperLess(k)])
+            : []),
+          ['resources/styles/themes/dark.less', THEME_WRAPPER_TEMPLATES.dark],
+          ['resources/styles/themes/light.less', THEME_WRAPPER_TEMPLATES.light],
+        ])),
         'declare.js': `import declareConfig from './declare.json'
 // 设置微码组件信息
 let declareInfo = $createMcDeclare({
@@ -7649,14 +7942,12 @@ export default declareInfo
             {
               figmaNodeData,
               backgroundBrightness,
-              ...(_dualTruth
-                ? {
-                    dualTruth: {
-                      lightNodeData: _dualTruth.lightNodeData,
-                      darkNodeData: _dualTruth.darkNodeData,
-                    },
-                  }
-                : {}),
+              // 🔴🆕 2026-10-12 N 主题：**必须原样透传 `dualTruth`**，不能在这里
+              //   拆成 `{lightNodeData, darkNodeData}` —— 那样 N 主题数组会被丢掉、
+              //   styleTokens 收到空对象走单稿分支（表现为「日志说 3 主题就绪，
+              //   产物却只有 light/dark」，2026-10-12 真机实测）。
+              //   buildStyleTokens 经 themesFromLegacyDualTruth 同时吃新旧两种形状。
+              ...(_dualTruth ? { dualTruth: _dualTruth } : {}),
             },
             { logger: this.logger },
           );

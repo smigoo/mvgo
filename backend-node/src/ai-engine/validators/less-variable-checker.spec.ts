@@ -79,8 +79,9 @@ describe('LessVariableChecker', () => {
     // .common() 中不得出现这两个颜色变量（出现即挡主题覆盖）
     const commonBlock = content.match(/\.common\s*\(\s*\)\s*\{([^}]*)\}/)
     expect(commonBlock).not.toBeNull()
-    expect(commonBlock[1]).not.toContain('@c-test-bg')
-    expect(commonBlock[1]).not.toContain('@c-test-primary')
+    const commonBody = commonBlock![1]
+    expect(commonBody).not.toContain('@c-test-bg')
+    expect(commonBody).not.toContain('@c-test-primary')
     // 原有变量保持不变
     expect(content).toContain('@c-test-size: 16px;')
   })
@@ -110,7 +111,8 @@ describe('LessVariableChecker', () => {
     )
     // 颜色变量落进两个主题 mixin，而不是 .common()
     const commonBlock = content.match(/\.common\s*\(\s*\)\s*\{([^}]*)\}/)
-    expect(commonBlock[1]).not.toContain('@c-brand-color')
+    expect(commonBlock).not.toBeNull()
+    expect(commonBlock![1]).not.toContain('@c-brand-color')
     const lightBlock = content.match(/\.theme-light\s*\(\s*\)\s*\{([^}]*)\}/)
     const darkBlock = content.match(/\.theme-dark\s*\(\s*\)\s*\{([^}]*)\}/)
     expect(lightBlock[1]).toContain('@c-brand-color')
@@ -286,6 +288,7 @@ describe('LessVariableChecker', () => {
     )
     const commonBlock = content.match(/\.common\s*\(\s*\)\s*\{([^}]*)\}/)
     expect(commonBlock).not.toBeNull()
+    const commonBody = commonBlock![1]
     expect(commonBlock![1]).not.toContain('@color-text-primary')
     expect(commonBlock![1]).not.toContain('@color-only-light')
     // 非颜色令牌保留（几何 / var() 透传）
@@ -382,6 +385,7 @@ describe('LessVariableChecker', () => {
     )
     const commonBlock = content.match(/\.common\s*\(\s*\)\s*\{([^}]*)\}/)
     expect(commonBlock).not.toBeNull()
+    const commonBody = commonBlock![1]
     // 透传映射形态
     expect(commonBlock![1]).toContain('@colorTextBase: var(--colorTextBase)')
     expect(commonBlock![1]).toContain('@colorPrimary: var(--colorPrimary)')

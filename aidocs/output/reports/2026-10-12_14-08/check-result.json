@@ -1,0 +1,10 @@
+{
+  "specVersion": "v1.0.20",
+  "checkedAt": "2026-10-12T06:08:56.373Z",
+  "components": [
+    {
+      "dirName": "c-mc-css-demo-event",
+      "error": "目录不存在：/Users/smigoo/工作/mvgo/src/workspace/custom-components/c-mc-css-demo-event"
+    }
+  ]
+}

@@ -235,9 +235,12 @@
               </a-space>
             </div>
 
-            <!-- 预览容器 -->
+            <!-- 预览画布：固定 1920×1080 设计画布，整体按比例缩放以适应窗口；
+                 组件容器在画布内部拉伸（手柄在容器上，不在画布上）。 -->
             <div class="preview-wrapper" ref="previewWrapperRef">
-              <div class="preview-box" :style="previewStyle">
+              <div class="preview-canvas" :style="canvasStyle">
+                <!-- 组件容器：在 1920×1080 画布坐标系内定位与拉伸 -->
+                <div class="preview-box" :style="previewStyle">
                 <!-- P0: 预览失败时显示友好错误卡片（替代空白iframe） -->
                 <div v-if="previewError && !previewErrorDismissed" class="preview-error-card">
                   <!-- P1: AI修复进行中覆盖层 -->
@@ -345,24 +348,32 @@
                 <!-- 保留底部提示条（兼容旧逻辑） -->
                 <PreviewErrorBanner :message="previewErrorBannerMessage" @dismiss="clearPreviewError" />
                 
-                <!-- 拖拽调整手柄 -->
-                <div 
+                <!-- 拖拽调整手柄（拉伸组件容器，非画布）。
+                     🔴 必须用 @pointerdown：mousedown 没有 pointerId，
+                     setPointerCapture 永远进不去，拖拽经过 iframe 时mouseup
+                     被吞 ⇒ 监听器残留 ⇒ 松开后尺寸继续变。 -->
+                <div
                   class="resize-handle resize-handle-right"
-                  @mousedown="startPreviewResize($event, 'right')"
+                  @pointerdown="startPreviewResize($event, 'right')"
                   title="拖拽调整宽度"
                 ></div>
-                <div 
+                <div
                   class="resize-handle resize-handle-bottom"
-                  @mousedown="startPreviewResize($event, 'bottom')"
+                  @pointerdown="startPreviewResize($event, 'bottom')"
                   title="拖拽调整高度"
                 ></div>
-                <div 
+                <div
                   class="resize-handle resize-handle-corner"
-                  @mousedown="startPreviewResize($event, 'corner')"
+                  @pointerdown="startPreviewResize($event, 'corner')"
                   title="拖拽调整宽高"
                 ></div>
-              </div>
-            </div>
+                </div><!-- /.preview-box -->
+                <!-- 画布尺寸标注（1920×1080 设计尺寸 + 当前显示缩放比） -->
+                <div class="canvas-badge">
+                画布 1920 × 1080<span v-if="canvasScale !== 1"> · 显示 {{ Math.round(canvasScale * 100) }}%</span>
+                </div>
+              </div><!-- /.preview-canvas -->
+            </div><!-- /.preview-wrapper -->
           </a-tab-pane>
           <!-- 动态文件Tab -->
           <a-tab-pane
@@ -2377,7 +2388,11 @@ async function resolveImageUrl(componentId, filePath) {
 
 // 预览控制
 const previewResolution = ref('1920x1080') // 预览分辨率（兜底值，Figma 尺寸加载后会被覆盖）
-const previewScale = ref(100) // 缩放比例（默认 100%，不压缩）
+// 🔴 默认 'fit'（自适应）而非 100：容器原始尺寸常大于可用空间，
+// scale=1 会溢出被 overflow:hidden 裁掉 → 视觉「有空白」，
+// 而用户拖窄后scale 仍为 1 又「贴满」，同一次交互前后表现不一致。
+// 默认 fit 后：内容按可用空间完整可见，默认与拖拽后表现一致。
+const previewScale = ref('fit') // 缩放比例：'fit' | 50 | 75 | 100 | 125 | 150
 
 // Figma 原始尺寸（从 _figma-size.json 读取）
 const figmaWidth = ref(0)
@@ -2399,18 +2414,22 @@ const previewFrameResize = useResizableFrame({
   componentId: '',
   minWidth: 100,
   minHeight: 100,
-  defaultWidth: () => (figmaWidth.value > 0 ? figmaWidth.value : 420),
-  defaultHeight: () => (figmaHeight.value > 0 ? figmaHeight.value : 300),
+  // 🖼️ 默认容器：在 1920×1080 画布内居中，占约 2/3 宽（常见大屏比例）
+  defaultWidth: () => (figmaWidth.value > 0 ? Math.min(figmaWidth.value, 1280) : 1280),
+  defaultHeight: () => (figmaHeight.value > 0 ? Math.min(figmaHeight.value, 720) : 720),
+  // 🔴 画布被整体缩放后，鼠标位移是屏幕像素，需换算回画布坐标
+  scaleFactor: () => canvasScale.value,
 })
 
 // 保留旧名字（模板与多处 computed 仍在引用），值统一来自 composable
 const previewContainerWidth = previewFrameResize.width
 const previewContainerHeight = previewFrameResize.height
 const isResizingPreview = previewFrameResize.isResizing
-// 「是否被用户改过」——用于决定是否显示「重置」按钮
-const hasCustomPreviewSize = computed(
-  () => previewFrameResize.presetName.value === 'custom' || previewFrameResize.presetName.value === 'default'
-)
+// 「是否被用户改过」——用于决定是否显示「重置」按钮。
+// ⚠️ presetName 初值就是 'default'，只有用户真正拖拽/选档后才变'custom'。
+//    早期判据写成 `=== 'custom' || === 'default'` ⇒ 恒为 true，
+//    「重置」按钮一进页面就显示（用户反馈的另一个现象）。
+const hasCustomPreviewSize = computed(() => previewFrameResize.presetName.value === 'custom')
 
 // 可调整的面板宽度/高度
 const leftPanelWidth = ref(250) // 左侧文件列表宽度
@@ -2750,43 +2769,123 @@ function resetPreviewSize() {
   previewFrameResize.resetSize()
 }
 
-/** 自适应缩放：根据容器可用空间自动计算最佳 fit scale */
-const autoFitScale = ref(1)
+/**
+ * 🖼️ 固定设计画布 1920×1080。
+ * 画布本身**不随窗口变化**，而是整体等比缩小以适应可视区域；
+ * 组件容器在画布坐标系内独立定位与拉伸（手柄在容器上）。
+ * 这解决了两件事：
+ *   ①「默认留空 / 一改就满」——缩放只作用于画布层，容器尺寸变化不再影响
+ *      画布的显示比例，交互前后表现一致；
+ *   ② 拖拽跟手——composable 通过 scaleFactor 把屏幕位移换算回画布坐标。
+ */
+const CANVAS_W = 1920
+const CANVAS_H = 1080
+
+/**
+ * 画布显示缩放比：按可用空间等比缩小，上限 1（不放大）。
+ * 「缩放」下拉仍可强制覆盖（如 50% / 100%），fit 时用这个自动值。
+ */
+const autoFitScale = ref(0.5)
 let resizeObserver = null
 
 function updateAutoFitScale() {
   const el = previewWrapperRef.value
-  if (!el) return
+  if (!el) return false
   const { clientWidth: cw, clientHeight: ch } = el
-  if (cw <= 0 || ch <= 0) return
-  // 预留 padding（preview-wrapper 的 padding）
+  // 🔴 Tabs 面板未布局完成时 clientWidth/Height 会是 0。
+  //   此时必须返回 false 让调用方稍后重试，不能静默 return 后「再也不算」。
+  if (cw <= 0 || ch <= 0) return false
   const pad = 24 * 2
   const availW = cw - pad
   const availH = ch - pad
-  if (availW <= 0 || availH <= 0) return
-  const scaleX = availW / previewContainerWidth.value
-  const scaleY = availH / previewContainerHeight.value
-  // 取较小值确保完整可见，上限 1（不放大）
-  autoFitScale.value = Math.min(scaleX, scaleY, 1)
+  if (availW <= 0 || availH <= 0) return false
+  // 画布固定 1920×1080 ⇒ 缩放比直接由画布尺寸与可用空间决定
+  const next = Math.min(availW / CANVAS_W, availH / CANVAS_H, 1)
+  autoFitScale.value = next
+  return true
 }
 
-/** 当前实际生效的缩放值（'fit' 时用自动计算的，否则用用户选择的） */
+/**
+ * 建立 fit 缩放观察。
+ * 🔴 根因（用户反馈「初始状态不对，点了右下角才对」）：
+ *   ① `autoFitScale` 初值曾为 1 —— 画布 1920 宽不缩放 ⇒ 内容挤在中间，
+ *      而ResizeObserver **只在尺寸变化时**才回调，初始值恰好没被纠正。
+ *   ② Tabs 面板首次布局未完成时 clientWidth 为 0 ⇒ updateAutoFitScale 早退，
+ *      之后若无尺寸变化就再也不会被触发。
+ *   ⇒ 现在做三件事：初值取保守估计（让画布立刻可见）、用 rAF 连续试探直到
+ *      拿到有效尺寸、ResizeObserver 兜底后续变化。
+ */
+function setupFitScaleObserver() {
+  if (resizeObserver && previewWrapperRef.value) {
+    resizeObserver.observe(previewWrapperRef.value)
+    return
+  }
+  if (!previewWrapperRef.value) return
+  // rAF 连续试探：最多 ~30 帧，覆盖 Tabs 展开/字体加载/数据到达等异步布局
+  let tries = 0
+  const probe = () => {
+    if (updateAutoFitScale()) return
+    if (++tries < 30) window.requestAnimationFrame(probe)
+  }
+  window.requestAnimationFrame(probe)
+  resizeObserver = new ResizeObserver(() => {
+    updateAutoFitScale()
+  })
+  resizeObserver.observe(previewWrapperRef.value)
+}
+
+/** 当前实际生效缩放：'fit' 用自动值，否则用用户选择 */
 const effectiveScale = computed(() => {
   return previewScale.value === 'fit' ? autoFitScale.value : previewScale.value / 100
 })
+const canvasScale = computed(() => effectiveScale.value)
 
-// 预览盒子样式：宽度、高度、可选缩放
-const previewStyle = computed(() => {
+/** 画布层样式：固定 1920×1080 + 整体缩放 + 缩放后占据的实际空间（负 margin 抵消） */
+const canvasStyle = computed(() => {
+  const s = canvasScale.value
+  // ⚠️ 本页是纯 JS（<script setup> 无 lang="ts"），不能用 TS 类型注解
   const style = {
-    width: `${previewContainerWidth.value}px`,
-    height: `${previewContainerHeight.value}px`,
+    width: `${CANVAS_W}px`,
+    height: `${CANVAS_H}px`,
   }
-  // 只有非 100% 缩放时才应用 transform（用于模拟不同设备分辨率查看效果）
-  if (effectiveScale.value !== 1) {
-    style.transform = `scale(${effectiveScale.value})`
+  if (s !== 1) {
+    style.transform = `scale(${s})`
     style.transformOrigin = 'top left'
+    // scale 不改变布局盒子：右下补负 margin，让 wrapper 的居中/排布
+    // 按缩放后的视觉尺寸计算，否则会多出一大块空白。
+    style.marginRight = `${CANVAS_W * (1 - s)}px`
+    style.marginBottom = `${CANVAS_H * (1 - s)}px`
   }
   return style
+})
+
+/**
+ * 组件容器样式：在 1920×1080 画布坐标系内水平居中 + 用户拉伸尺寸。
+ * 注意：**这里绝不加transform: scale** —— 容器尺寸就是真实设备像素尺寸，
+ * 组件内部 @media / vw / % 全部按该尺寸生效（响应式测试的语义基础）。
+ */
+const previewStyle = computed(() => {
+  return {
+    width: `${previewContainerWidth.value}px`,
+    height: `${previewContainerHeight.value}px`,
+    left: `${Math.max(0, (CANVAS_W - previewContainerWidth.value) / 2)}px`,
+    top: `${Math.max(0, (CANVAS_H - previewContainerHeight.value) / 2)}px`,
+  }
+})
+
+// 🔴 拖拽过程中容器尺寸连续变化 ⇒ fit 下的画布缩放需同步重算
+watch(
+  () => [previewContainerWidth.value, previewContainerHeight.value, effectiveScale.value],
+  () => {
+    if (previewScale.value === 'fit') updateAutoFitScale()
+  }
+)
+
+// 🔴 切 Tab 时「预览」面板才真正挂载 ⇒ previewWrapperRef 从 null 变有值，
+//   onMounted 那次若 ref 尚为空则观察根本没建立。此处补建，
+//   否则初始进入预览 Tab 时 fit 缩放永远算不对（用户反馈的「初始状态不对」）。
+watch(activeCanvasTab, () => {
+  nextTick(setupFitScaleObserver)
 })
 
 /**
@@ -2864,13 +2963,7 @@ onMounted(async () => {
   window.addEventListener('keydown', handleKeyDown, true)
 
   // 自适应缩放：监听容器尺寸变化自动重算 fit scale
-  nextTick(() => updateAutoFitScale())
-  if (previewWrapperRef.value) {
-    resizeObserver = new ResizeObserver(() => {
-      updateAutoFitScale()
-    })
-    resizeObserver.observe(previewWrapperRef.value)
-  }
+  nextTick(setupFitScaleObserver)
   window.addEventListener('resize', updateAutoFitScale)
 })
 
@@ -4729,7 +4822,9 @@ watch(
       /* 预览容器 —— 默认居中，留 padding 给"画框"视觉 */
       .preview-wrapper {
         flex: 1;
-        overflow: hidden; /* 去掉滚动条，画布通过 scale 自适应 */
+        /* 不再裁切：画布已固定 1920×1080 并整体缩放，
+           万一用户选 100%/125% 超出空间时需可滚动查看 */
+        overflow: auto;
         background: var(--bg-alt);
         display: flex;
         align-items: center;
@@ -4737,16 +4832,42 @@ watch(
         padding: 24px;
       }
 
+      /* 🖼️ 固定设计画布：1920×1080，整体等比缩放显示 */
+      .preview-canvas {
+        position: relative;
+        flex: 0 0 auto;
+        background: #ffffff;
+        /* 画布底色与网格感，便于识别「这是一块固定大小的画布」 */
+        box-shadow: 0 2px 12px var(--shadow-sm);
+      }
+
       .preview-box {
         background: var(--bg-card);
         border: 1px solid var(--border-default);
         border-radius: var(--radius-md);
         box-shadow: 0 2px 8px var(--shadow-sm);
-        /* 去掉 overflow 避免双滚动条（wrapper 已负责滚动） */
+        /*去掉 overflow 避免双滚动条（wrapper 已负责滚动） */
         /* 去掉 min-height 避免强制撑高破坏 Figma 原始比例 */
-        position: relative;
+        position: absolute;
+        /* left/top 由 previewStyle 按 1920×1080 画布坐标系计算并居中 */
 
         > div { max-width: 100%; }
+      }
+
+      /* 画布尺寸标注：显示固定画布规格与当前缩放比 */
+      .canvas-badge {
+        position: absolute;
+        right: 8px;
+        bottom: 8px;
+        z-index: 11;
+        font-size: 12px;
+        line-height: 1;
+        padding: 5px 8px;
+        border-radius: 4px;
+        background: rgba(0, 0, 0, 0.45);
+        color: #fff;
+        pointer-events: none;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
       }
 
       /* 拖拽调整手柄 */

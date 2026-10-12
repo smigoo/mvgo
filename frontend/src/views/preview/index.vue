@@ -26,57 +26,50 @@
         <option value="empty">无面板</option>
       </select>
     </div>
-    <!-- 🎨 主题切换控件（R12 · 2026-10-10 双主题）
-     替换原「只能看不能切」的主题提示条：
-     - 双真值组件：显式「浅色 | 深色」分段可点 + 绿色「双真值」徽标（两侧色值均来自设计稿）
-     - 单稿组件   ：另一侧标注「派生值」，避免用户误以为两侧都是真值（D5/R12 反误读设计）
+    <!-- 🎨 主题切换控件（R12 · 2026-10-10 双主题 / 🆕🆕 2026-10-12 N 主题）
+     - N 主题：按 declare.json 的 themeConfig.list **动态渲染**（不再硬编码两段）
+     - 单主题：只渲染 list 里那一个
      徽标数据源：declare.json 的 themeConfig.dualTruth（后端 normalizeDeclareJson 写入），
      预览页本就已在读 declare.json ⇒ 本控件零新增请求。 -->
     <div v-if="!isVue3 && !isEmbedded" class="mc-theme-switcher" :class="resolvedThemeClass">
       <div class="mc-theme-seg" role="radiogroup" aria-label="主题切换">
         <button
+          v-for="t in selectableThemes"
+          :key="t.key"
           type="button"
           class="mc-theme-seg-btn"
-          :class="{ active: resolvedThemeClass === 'light' }"
+          :class="{ active: resolvedThemeClass === t.key, builtin: t.readonly }"
           role="radio"
-          :aria-checked="resolvedThemeClass === 'light'"
-          title="浅色主题"
-          @click="switchPreviewTheme('light')"
+          :aria-checked="resolvedThemeClass === t.key"
+          :title="t.readonly && t.coreColors
+            ? `切换到「${t.name}」主题（内置预设色：主色 ${t.coreColors.colorPrimary}，不含设计稿真值）`
+            : `切换到「${t.name}」主题`"
+          @click="switchPreviewTheme(t.key)"
         >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <svg v-if="t.brightness !== 'dark'" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
             <circle cx="12" cy="12" r="5" />
             <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
           </svg>
-          <span>浅色</span>
-        </button>
-        <button
-          type="button"
-          class="mc-theme-seg-btn"
-          :class="{ active: resolvedThemeClass === 'dark' }"
-          role="radio"
-          :aria-checked="resolvedThemeClass === 'dark'"
-          title="深色主题"
-          @click="switchPreviewTheme('dark')"
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <svg v-else width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
             <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
           </svg>
-          <span>深色</span>
+          <span>{{ t.name }}</span>
         </button>
       </div>
-      <!-- 双真值徽标：仅双真值组件显示 -->
-      <span v-if="isDualTruth" class="mc-theme-badge" title="两侧主题色值均取自 Figma 设计稿，无算法派生">
+      <!-- 全真值徽标：多主题且全为设计真值时显示 -->
+      <span
+        v-if="isDualTruth"
+        class="mc-theme-badge"
+        :title="`共 ${selectableThemes.length} 套主题，色值均取自设计稿`"
+      >
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true">
           <path d="M20 6L9 17l-5-5" />
         </svg>
-        双真值
+        {{ selectableThemes.length > 2 ? `${selectableThemes.length} 主题` : '双真值' }}
       </span>
       <!-- 单稿组件：明示另一侧是派生值，避免误读（R12 反误读设计） -->
-      <span v-else-if="resolvedThemeClass === 'dark'" class="mc-theme-derived">
-        浅色侧为派生值
-      </span>
       <span v-else class="mc-theme-derived">
-        深色侧为派生值
+        {{ resolvedThemeClass === 'dark' ? '浅色侧为派生值' : '深色侧为派生值' }}
       </span>
     </div>
     <!-- 主题提示条（保留原信息：演示面板说明） -->
@@ -451,28 +444,40 @@ const playgroundTheme = ref(null) // 从 Playground 下发的主题（postMessag
 //   放最高优先级 —— 手动点击是用户的即时意图，应压过 URL query 与 Playground 下发；
 //   但 Playground 切换时需让位（见下方 watcher），否则外部联动会「抢不回」控制权。
 const manualTheme = ref(null)
+
+/**
+ * 🆕🆕 2026-10-12 N 主题：key 合法性判定。
+ *
+ * key 集合来自 declare.json 的 themeConfig.list（用户自填名 slug 化后的结果）。
+ * ⚠️ 必须白名单校验：URL query 是外部可控输入，直接当 class 用等于
+ *   `class="mc-preview-stage <任意串>"`，会引入不可预期类名。
+ * computed 是惰性的 —— 下面才声明的 selectableThemes 在此处访问是安全的。
+ */
+const isValidThemeKey = (key) =>
+  !!key && typeof key === 'string' && selectableThemes.value.some((t) => t.key === key)
+
 const resolvedThemeClass = computed(() => {
   // 0. 手动切换（R12，最高优先级）
-  if (manualTheme.value === 'light' || manualTheme.value === 'dark') return manualTheme.value
+  if (manualTheme.value && isValidThemeKey(manualTheme.value)) return manualTheme.value
   // 1. URL query 强制指定
   const themeQuery = route.query.theme
-  if (themeQuery === 'light' || themeQuery === 'dark') return themeQuery
+  if (isValidThemeKey(themeQuery)) return themeQuery
   // 2. Playground 实时下发（postMessage 联动）
-  if (playgroundTheme.value === 'light' || playgroundTheme.value === 'dark') {
-    return playgroundTheme.value
-  }
-  // 3. 从 declare.json 读取默认主题
+  if (isValidThemeKey(playgroundTheme.value)) return playgroundTheme.value
+  // 3. 从 declare.json 读取默认主题（key 可能是用户自填名）
   const declareDefault = microcodeDeclare.value?.themeConfig?.default
-  if (declareDefault === 'light' || declareDefault === 'dark') return declareDefault
+  if (isValidThemeKey(declareDefault)) return declareDefault
   // 4. 兜底 dark
   return 'dark'
 })
 
-// 🆕 R12：主题切换（双真值组件让用户当场验证两套配色）
+// 🆕 R12：主题切换（多真值组件让用户当场验证各套配色）
 //   - 同步写回 URL query，使预览可分享/刷新保持（与既有 ?theme= 机制同源）
 //   - 样式 class 由 resolvedThemeClass 派生，CSS 变量注入已监听该值（applyPreviewCssVars）
+//   ⚠️ key 不再限定 light/dark：N 主题下 key 是用户自填名经 slug 化的结果（如「黄昏模式」）。
+//      合法集合以 selectableThemes 为准，避免 URL 里塞任意字符串污染 class。
 const switchPreviewTheme = (theme) => {
-  if (theme !== 'light' && theme !== 'dark') return
+  if (!selectableThemes.value.some((t) => t.key === theme)) return
   manualTheme.value = theme
   // Playground 通过 postMessage 下发主题时会抢回控制权，这里主动清掉，让手动切换生效
   if (playgroundTheme.value) playgroundTheme.value = null
@@ -486,6 +491,71 @@ const switchPreviewTheme = (theme) => {
 
 // 🆕 R12：双真值徽标（declare.json themeConfig.dualTruth，由后端 normalizeDeclareJson 写入）
 const isDualTruth = computed(() => microcodeDeclare.value?.themeConfig?.dualTruth === true)
+
+/**
+ * 🔴 2026-10-12：安全解析主题预览图 URL。
+ *
+ * 为什么不能直接拼字符串：declare.json 里的 `previewName` 来自生成管线
+ *   （理论上受 check M2-6 约束必须是 `mc-preview*.png`，但**主题维度 check 不管**），
+ *   且本页的 declare 来自 HTTP 快照/静态 import —— 一旦名字异常，
+ *   直接拼 URL 只会得到一个坏<img>，**不能让整个主题切换控件崩掉**。
+ *
+ * 因此：白名单校验（前缀 + 不含路径穿越）→ 通过才拼 URL，否则返回 null
+ *   （模板里对 null 渲染占位，不显示坏图）。
+ */
+const safePreviewUrl = (name) => {
+  const n = String(name || '').trim()
+  // 只允许 `mc-preview` 开头的纯文件名（禁 / 与..，防目录穿越）
+  if (!n.startsWith('mc-preview') || !/\.png$/i.test(n) || n.includes('/') || n.includes('..')) {
+    return null
+  }
+  // ⚠️ 本页**不走 `createMcDeclare`**（直接读 declare.json 原始 JSON），
+  //   所以 `core.js` 补的 `themeConfig[].previewUrl` 到不了这里；
+  //   `attribute.imgUrl` 在 raw declare 里是 `null`，也不能当基址。
+  // ⇒ 复用本页**现成**的文件读取入口 `snapshotFileUrl(path)`（:397），
+  //   它已处理「快照源 /工作区源」两种模式，避免重复实现 base 路径推导。
+  return snapshotFileUrl(`resources/images/${n}`)
+}
+
+/**
+ * 🆕🆕 2026-10-12 N 主题：可切换主题清单。
+ *
+ * 数据源 declare.json 的 `themeConfig.list`（后端在多真值分支逐主题写入
+ * `{key, name, brightness}`）。单稿产物 list 是既有的 `[{浅色主题},{深色主题}]`，
+ * 形状同构 ⇒ 这里统一读它，存量前端读取代码不必分叉。
+ *
+ * ⚠️ 兜底：读不到 list 时给 `light`/`dark` 两项，保证控件永远有内容可渲染
+ *   （否则 N 主题组件在 declare 读取失败时会退化成空白控件）。
+ */
+const selectableThemes = computed(() => {
+  const list = microcodeDeclare.value?.themeConfig?.list
+  if (Array.isArray(list) && list.length > 0) {
+    return list
+      .filter((t: any) => t && t.key)
+      .map((t: any) => ({
+        key: String(t.key),
+        name: String(t.name || t.key),
+        brightness: t.brightness === 'dark' ? 'dark' : 'light',
+        // 🔴 2026-10-12：这三个字段**必须显式透传** ——
+        //   上面的 map 是白名单式构造（不 spread 原对象），漏了会被静默丢弃。
+        //   作用：给系统占位 `dark` 打「内置预设色」标记（readonly/builtin/coreColors）。
+        readonly: t.readonly === true,
+        builtin: t.builtin === true,
+        coreColors: t.coreColors || null,
+        // 主题预览图（管线已产出 `mc-preview-<key>.png`）。
+        // ⚠️ 本页**直接读 declare.json 原始 JSON**（不走 `createMcDeclare`），
+        //   所以 `core.js` 里补的 previewUrl 到不了这里 ⇒ 必须**本页本地解析**。
+        //   无 `previewName` 的（如系统占位 dark）⇒ 回退主图（用户决策：dark 使用主图）。
+        previewUrl: t.previewName
+          ? safePreviewUrl(String(t.previewName))
+          : safePreviewUrl('mc-preview.png'),
+      }))
+  }
+  return [
+    { key: 'light', name: '浅色', brightness: 'light', readonly: false, builtin: false, coreColors: null, previewUrl: safePreviewUrl('mc-preview.png') },
+    { key: 'dark', name: '深色', brightness: 'dark', readonly: false, builtin: false, coreColors: null, previewUrl: safePreviewUrl('mc-preview.png') },
+  ]
+})
 
 // 🆕 R12：已加载的组件 cssVars 源对象（模块级，不随组件重载丢）。
 //   主题切换时据此重注入 —— 只有 class 变而 CSS 变量不变的话，
@@ -552,6 +622,12 @@ function handleRenderError(payload) {
   previewErrorType.value = payload?.info === 'timeout' ? 'timeout' : 'vue-render'
 }
 
+// 🔴 N 主题（2026-10-12）：本函数注入过的 CSS 变量键集合。
+//   用于区分「自己写的」与「父层/宿主推送的」—— 只有前者才允许在换主题时被覆盖。
+//   ⚠️ 必须在模块顶层声明（cleanupPreviewInjectedStyles 也用它），
+//     放在 applyPreviewCssVars 之前会造成 TDZ 风险。
+const injectedKeys = new Set()
+
 function cleanupPreviewInjectedStyles() {
   document
     .querySelectorAll(`style[data-preview-style-scope="${previewStyleScopeId}"]`)
@@ -561,6 +637,10 @@ function cleanupPreviewInjectedStyles() {
     .forEach((node) => node.remove())
   // 预览页只接收父层注入的 cssVars，组件卸载/重载后必须清掉，避免前一个组件的主题变量串到下一个组件
   document.documentElement.removeAttribute('style')
+  // 🔴 同步清空「本函数注入过哪些键」的记账（2026-10-12 N 主题）：
+  //   否则下次加载组件时，上一批的键会被误判为「自己注入的」而被覆盖，
+  //   破坏「父层推送值优先」的原约定。
+  injectedKeys.clear()
 }
 
 // 📐 Figma 实际尺寸约束（1:1 原始尺寸展示，超出容器时等比缩小）
@@ -810,6 +890,57 @@ watch(globalPanelType, (val) => {
   router.replace({ query }).catch(() => {})
 })
 
+/**
+ * 🔴 2026-10-12 治本 A：切到**深色**主题时自动切到「一体化/深色面板」
+ *（`aio-panel`，底色 `#424242`），其余主题用「默认/浅色面板」（`default-panel`）。
+ *
+ * 背景（用户决策）：深色主题的验收**要结合一体化面板预览** ——
+ *   官方的一体化深色预览方式不是「让组件自己实现两套配色」，而是
+ *   「换一个深色底的面板容器」（`aio-panel` vs `aio-light-panel` 是两个独立面板组件，
+ *   `grep dark` 零命中：它们都**不注入** `dark` class，只靠自身底色区分深浅）。
+ *
+ * 为什么要联动：组件的语义槽位在 deep 主题下是**推断值**（治本 B），
+ *   未必与真实深色底协调；而深色底 + 浅色组件 = 立刻能看出对比度问题。
+ *
+ * ⚠️ 只在「用户没手动选过面板」时自动跟随（`userPickedPanel=false`），
+ *   否则会覆盖用户显式选择（例如组件声明要 `model-panels` 弹窗面板）。
+ */
+const AUTO_LIGHT_PANEL = 'default-panel'
+const AUTO_DARK_PANEL = 'aio-panel'
+const userPickedPanel = ref(false)
+/**
+ * 🔴 只在**外部/用户**改动面板时置位，`autoApplyingPanel` 期间不算。
+ *
+ * 踩坑记录（2026-10-12）：原先写成 `watch(globalPanelType, () => userPickedPanel = true)`，
+ * 会被下面联动 watch **自己的赋值**触发（Vue watch 回调异步排队，下一 tick 必触发）
+ * ⇒ 首次 `immediate` 联动后 `userPickedPanel` 就变true ⇒ **联动只生效一次**，
+ *   之后用户切主题面板不再跟随。
+ */
+const autoApplyingPanel = ref(false)
+watch(globalPanelType, () => {
+  if (autoApplyingPanel.value) return
+  userPickedPanel.value = true
+})
+
+watch(resolvedThemeClass, (themeKey) => {
+  if (userPickedPanel.value) return
+  const want = isDarkThemeKey(themeKey) ? AUTO_DARK_PANEL : AUTO_LIGHT_PANEL
+  if (globalPanelType.value !== want) {
+    // 🔴 必须置守卫位：否则本次赋值会被上面那个 watch 当成「用户手动选」⇒ 联动只生效一次。
+    autoApplyingPanel.value = true
+    globalPanelType.value = want
+    // 下一 tick 复位（watch 回调已排队执行完）
+    nextTick(() => { autoApplyingPanel.value = false })
+  }
+}, { immediate: true })
+
+/** 主题 key 是否属「深色」范畴 —— 按 themeConfig.list[].brightness 判定，缺省回退 key 名。 */
+function isDarkThemeKey(themeKey) {
+  const item = (selectableThemes.value || []).find((t) => t.key === themeKey)
+  if (item) return item.brightness === 'dark'
+  return /dark|深色|夜|night/i.test(String(themeKey || ''))
+}
+
 // ============ 开发环境：运行时编译（iframe 沙箱隔离） ============
 // Vue3 组件：通过 vue3-sfc-loader 在浏览器内运行时编译，源码来自 Vite /__raw 端点
 //           （绕过 Vite transform 管线，Vite 不会对 .vue 做 SFC/LESS 编译，
@@ -885,6 +1016,13 @@ async function loadMicrocodeDeclare() {
  *   · 任一步失败（取不到 / 解析失败 / 运行时未就绪）**一律跳过**（fail-open）→ 最差等于今天的行为。
  *   · `cleanupPreviewInjectedStyles()` 已有 `documentElement.removeAttribute('style')`，
  *     组件卸载/重载不会把变量串给下一个组件。
+ *
+ * 🔴🔴 N 主题修正（2026-10-12 真机实测）：原实现「`already` 非空就跳过」在**多主题下是错的**
+ *   —— 首次注入 theme_1 后，`root.style` 上已有本函数自己写进去的值；切到 theme_2 时
+ *   这些值会被误判成「父层推送的默认值」而跳过 ⇒ **切主题只换 class、CSS 变量不变**
+ *     （实测三套主题 `--colorPrimary` 全是 `#a6ceff`）。
+ *   修法：用 `injectedKeys` 记住**自己**写过的键，只跳过「不是自己写的」那些
+ *   （那才是父层/宿主推送的，需保留优先级）。
  */
 function applyPreviewCssVars(cssVars, theme) {
   if (!cssVars || typeof cssVars !== 'object') return 0
@@ -893,14 +1031,18 @@ function applyPreviewCssVars(cssVars, theme) {
   let applied = 0
   for (const [key, value] of Object.entries(merged)) {
     if (value === undefined || value === null || typeof value === 'object') continue
+    const prop = `--${key}`
     let already = ''
     try {
-      already = root.style.getPropertyValue(`--${key}`)
+      already = root.style.getPropertyValue(prop)
     } catch {
       already = ''
     }
-    if (already) continue // 已被父层推送/用户自定义 → 作为「默认值」不得覆盖
-    root.style.setProperty(`--${key}`, String(remToPx(value)))
+    // 🔴 已被**自己**注入过 ⇒ 必须覆盖（换主题）；否则才认为是父层/宿主推送的默认值，跳过
+    const injectedBySelf = injectedKeys.has(prop)
+    if (already && !injectedBySelf) continue
+    root.style.setProperty(prop, String(remToPx(value)))
+    injectedKeys.add(prop) // 🔴 记账：下次换主题时这些键允许被覆盖
     applied += 1
   }
   return applied
@@ -1600,6 +1742,11 @@ function onPreviewMessage(event) {
       manualTheme.value = null
       playgroundTheme.value = theme
       console.log('🎨 [Preview] 父页面下发主题:', theme)
+    } else if (isValidThemeKey(theme)) {
+      // 🆕🆕 N 主题：父页面可下发自定义 key（如「黄昏模式」）
+      manualTheme.value = null
+      playgroundTheme.value = theme
+      console.log('🎨 [Preview] 父页面下发主题:', theme)
     }
     return
   }
@@ -2178,6 +2325,25 @@ html:root .mc-preview-stage-shell.is-standalone .mc-preview-stage {
 .mc-theme-switcher.light .mc-theme-seg-btn.active:hover {
   background: #ffffff;
 }
+
+/* 🔴 2026-10-12：系统占位主题（`dark`）的「内置预设」标记。
+   目标：让用户一眼看出这个主题是内置色（mc-check M4-10 硬枚举）、
+     **不含设计稿真值**，而非用户自己定义的主题。
+   做法：右上角一个小圆点，零布局影响（absolute，不占位）。
+   不改 active 态的底色/阴影 —— 避免与既有视觉回归冲突。 */
+.mc-theme-seg-btn.builtin::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.45;
+}
+.mc-theme-seg-btn.builtin { position: relative; }
+.mc-theme-seg-btn.builtin:hover::after { opacity: 0.85; }
 
 /* 双真值徽标（绿＝已验证达标态，与旁边评分同语义组） */
 .mc-theme-badge {

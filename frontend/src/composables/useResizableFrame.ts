@@ -61,6 +61,30 @@ export type UseResizableFrameOptions = {
   defaultLockWidth?: boolean
   /** localStorage 前缀，便于多环境隔离 */
   storagePrefix?: string
+  /**
+   * 当前产物的**设计稿尺寸**（异步可得）。
+   *
+   * 🔴 为什么需要（事故 mc-1791783806265-5831962c）：
+   *   用户拖过的尺寸会被持久化，而 `width` computed 是
+   *   `customWidth > 0 ? customWidth : defaultWidth` ⇒ **一旦存过就永远走不到 default**。
+   *   于是「默认视口跟随设计稿比例」这类修复对老用户完全无效——
+   *   他们浏览器里存着旧版写死 1280×667 推出的 1310×680 错值，
+   *   且没有任何手段察觉。这也是同一症状反复出现的隐性原因。
+   *
+   * 机制：存尺寸时一并记下当时的比例；恢复时若比例已变（组件重新生成、
+   *   设计稿改了），判定为**过期快照**并丢弃，回落到 default。
+   *   这样「改了默认逻辑 ⇒ 老用户也能立刻受益」，无需手动清缓存。
+   */
+  designSize?: MaybeRefOrGetter<{ width: number; height: number } | null>
+  /**
+   * 🔴 宿主对被拖拽元素的 CSS `transform: scale()` 值（可传 ref/getter）。
+   *
+   * 为什么需要：画布被整体缩放后，鼠标位移（clientX）单位是**屏幕像素**，
+   * 而尺寸是**画布坐标**。不换算就会「拖 10px 画布只动 10×scale px」，
+   * 手柄明显跟不上鼠标（缩得越偏越严重）。
+   * 例：画布 1920 宽被缩到 0.5 显示，鼠标移动 100 屏幕 px 实际是200 画布 px。
+   */
+  scaleFactor?: MaybeRefOrGetter<number>
 }
 
 type PersistedSize = {
@@ -68,6 +92,11 @@ type PersistedSize = {
   height?: number
   preset?: string
   locked?: boolean
+  /**
+   * 写入时的设计稿宽高比（如 '0.767' 表示 510:665）。
+   * 恢复时若与当前比例不符即视为过期快照并丢弃。
+   */
+  designRatio?: string
 }
 
 const DEFAULT_MIN_WIDTH = 320
@@ -89,6 +118,8 @@ export function useResizableFrame(options: UseResizableFrameOptions = {}) {
     defaultHeight = DEFAULT_HEIGHT,
     defaultLockWidth = false,
     storagePrefix = 'mvgo:preview-size:',
+    scaleFactor = 1,
+    designSize,
   } = options
 
   // ── 状态 ─────────────────────────────────────────────────────
@@ -158,6 +189,14 @@ export function useResizableFrame(options: UseResizableFrameOptions = {}) {
   }
   const storageKey = computed(() => currentStorageKey())
 
+  /** 当前设计稿宽高比（如510:665）。不可得时返回 null（不做失效判定）。 */
+  function currentDesignRatio(): string | null {
+    const d = toValue(designSize)
+    if (!d || !(d.width > 0) || !(d.height > 0)) return null
+    // 用约分后的比值字符串，避免浮点误差；保留 3 位小数精度足够
+    return `${(d.width / d.height).toFixed(3)}`
+  }
+
   function persist() {
     const key = currentStorageKey()
     if (!key) return
@@ -167,6 +206,8 @@ export function useResizableFrame(options: UseResizableFrameOptions = {}) {
         height: height.value,
         preset: presetName.value,
         locked: isWidthLocked.value,
+        // 🆕 记录当时的比例：设计稿变了就能识别出这份快照已过期
+        designRatio: currentDesignRatio() ?? undefined,
       }
       window.localStorage.setItem(key, JSON.stringify(payload))
     } catch {
@@ -191,6 +232,26 @@ export function useResizableFrame(options: UseResizableFrameOptions = {}) {
     try {
       const data = JSON.parse(raw) as PersistedSize
       if (!data || typeof data !== 'object') return
+
+      // 🔴 过期判定：存的快照与当前设计稿比例不符 ⇒ 丢弃，回落到 default。
+      //   事故 mc-1791783806265-5831962c：用户在旧版（defaultHeight 写死 667）拖过一次，
+      //   存下1310×680；后来default 改成「跟随设计稿比例」，但 `customWidth>0` 会
+      //   让 default 永远不生效 ⇒ 用户看到的仍是一片空白，且没有任何自愈路径。
+      //   注意：**旧快照没有 designRatio 字段**（undefined），也一律作废 ——
+      //   它们来自旧逻辑，无法证明与新默认一致。
+      const curRatio = currentDesignRatio()
+      if (curRatio && data.designRatio !== curRatio) {
+        try {
+          window.localStorage.removeItem(key)
+        } catch {
+          /* 静默 */
+        }
+        customWidth.value = 0
+        customHeight.value = 0
+        presetName.value = 'default'
+        return
+      }
+
       const w = readNumber(data.width)
       const h = readNumber(data.height)
       // 宽高必须都达到下限才认为合法，否则视为损坏数据（保持默认）
@@ -229,16 +290,30 @@ export function useResizableFrame(options: UseResizableFrameOptions = {}) {
   let pendingEvent: MouseEvent | null = null
   /**
    * Pointer Capture 的手柄元素。
-   * 🔧 根因修复（用户反馈「松开后尺寸依旧会变」）：拖拽路径经过预览 iframe 时，
-   * mousemove/mouseup 会派发给 iframe 内部文档，宿主 document 收不到 mouseup
-   * → 监听器残留、isResizing 卡在 true，松开后鼠标一动尺寸继续变。
-   * 手柄 setPointerCapture 后 pointermove/pointerup 恒派发给手柄，iframe 吞不掉。
+   *
+   * 🔧 根因（用户两次反馈「松开左键后尺寸还在变」）：
+   *   预览区是 iframe。拖拽路径一旦经过 iframe，mousemove/mouseup 会派发给
+   *   **iframe 内部文档**，宿主 document 收不到 mouseup ⇒ 监听器残留、
+   *   isResizing 卡在 true，松开后鼠标一动尺寸继续变。
+   *
+   *   ⚠️ 此前的实现无效：`@mousedown` 拿到的是 MouseEvent，**没有 pointerId**
+   *   （实测 `pointerId === undefined`），所以 `setPointerCapture` 分支永远进不去，
+   *   每次都落到 document 兜底 —— 而兜底恰恰是被 iframe 吞掉的那条路。
+   *   现在改为 @pointerdown（自带 pointerId）+ setPointerCapture，iframe 吞不掉。
    */
   let captureEl: HTMLElement | null = null
+  /** 捕获阶段的 pointerId，释放 capture 时需要 */
+  let capturePointerId = -1
 
   function applyDrag(e: MouseEvent) {
-    const deltaX = e.clientX - startX
-    const deltaY = e.clientY - startY
+    // 🔴 缩放换算：宿主若对被拖元素施加了 transform: scale()，
+    //   clientX 位移是**屏幕像素**，而 width/height 是**画布坐标**。
+    //   不除以 scale 会导致「鼠标走 100px、画布只动 100×scale px」，
+    //   手柄明显跟不上鼠标（缩得越小偏差越大）。
+    const s = toValue(scaleFactor)
+    const k = Number.isFinite(s) && s > 0 ? s : 1
+    const deltaX = (e.clientX - startX) / k
+    const deltaY = (e.clientY - startY) / k
     const dir = activeHandle.value
     if (!dir) return
 
@@ -252,13 +327,18 @@ export function useResizableFrame(options: UseResizableFrameOptions = {}) {
     }
   }
 
+  /** 拖拽移动：同时兼容 PointerEvent / MouseEvent，并做 rAF 节流 */
   function onDragMove(e: MouseEvent) {
+    // 🛡️ 硬保险：已收尾则一律忽略。即便有监听器漏摘（iframe 吞事件、
+    //    pointer capture 异常等），isResizing 为 false 时也不会再改尺寸 ——
+    //    这条是「松开后还在变」的最后一道防线，不依赖事件是否送达。
     if (!isResizing.value) return
     pendingEvent = e
     if (rafId) return
     rafId = window.requestAnimationFrame(() => {
       rafId = 0
-      if (pendingEvent) applyDrag(pendingEvent)
+      // rAF 回调执行时可能已经松手（isResizing 变false），此时丢弃这次更新
+      if (pendingEvent && isResizing.value) applyDrag(pendingEvent)
       pendingEvent = null
     })
   }
@@ -272,12 +352,27 @@ export function useResizableFrame(options: UseResizableFrameOptions = {}) {
     isResizing.value = false
     activeHandle.value = ''
     showSizeBubble.value = false
-    if (captureEl) {
-      captureEl.removeEventListener('pointermove', onDragMove)
-      captureEl.removeEventListener('pointerup', finishResize)
-      captureEl.removeEventListener('pointercancel', finishResize)
-      captureEl = null
+    // 先摘 Pointer Capture（release 会触发 lostpointercapture → finishResize 递归，
+    // 故用 captureEl 置 null 提前断开，避免重复收尾）
+    const el = captureEl
+    captureEl = null
+    if (el) {
+      el.removeEventListener('pointermove', onDragMove)
+      el.removeEventListener('pointerup', finishResize)
+      el.removeEventListener('pointercancel', finishResize)
+      el.removeEventListener('lostpointercapture', finishResize)
+      try {
+        if (typeof capturePointerId === 'number' && el.hasPointerCapture?.(capturePointerId)) {
+          el.releasePointerCapture(capturePointerId)
+        }
+      } catch {
+        /* 已释放 */
+      }
     }
+    // document 上的所有可能监听路径都要摘干净（任一残留都会导致「松开后还在变」）
+    document.removeEventListener('pointermove', onDragMove)
+    document.removeEventListener('pointerup', finishResize)
+    document.removeEventListener('pointercancel', finishResize)
     document.removeEventListener('mousemove', onDragMove)
     document.removeEventListener('mouseup', finishResize)
     window.removeEventListener('blur', finishResize)
@@ -286,8 +381,13 @@ export function useResizableFrame(options: UseResizableFrameOptions = {}) {
     persist()
   }
 
-  /** 开始拖拽。绑定到手柄的 @mousedown。 */
-  function startResize(event: MouseEvent, direction: ResizeDirection) {
+  /**
+   * 开始拖拽。
+   * 🔧 绑到手柄的 **@pointerdown**（不是 @mousedown）：
+   *   只有 pointerdown 事件才带 pointerId，setPointerCapture 依赖它。
+   *   用 mousedown 时 pointerId 为 undefined，capture 分支永远走不到。
+   */
+  function startResize(event: MouseEvent | PointerEvent, direction: ResizeDirection) {
     // 只处理主键，避免右键/中键误触
     if (event.button !== 0) return
     event.preventDefault()
@@ -307,25 +407,36 @@ export function useResizableFrame(options: UseResizableFrameOptions = {}) {
     customWidth.value = startW
     customHeight.value = startH
 
+    // 窗口失焦兜底：拖到 iframe/浏览器外松手时至少能收尾
     window.addEventListener('blur', finishResize)
 
-    // 优先 Pointer Capture：拖拽经过 iframe 也不丢事件（见 captureEl 注释）
     const el = event.currentTarget as HTMLElement | null
     const pointerId = (event as PointerEvent).pointerId
+
+    // 主路径：Pointer Capture —— pointermove/pointerup 恒派发给手柄，iframe 吞不掉
     if (el && typeof el.setPointerCapture === 'function' && typeof pointerId === 'number') {
       try {
         el.setPointerCapture(pointerId)
         captureEl = el
+        capturePointerId = pointerId
         el.addEventListener('pointermove', onDragMove)
         el.addEventListener('pointerup', finishResize)
         el.addEventListener('pointercancel', finishResize)
+        el.addEventListener('lostpointercapture', finishResize)
+        // 同时兜底 document（pointerup 若因任何原因没到手柄，document 还能接住）
+        document.addEventListener('pointerup', finishResize)
         return
       } catch {
         captureEl = null
       }
     }
-    // 兜底：不支持 Pointer Capture 的环境退回 document 监听
-    document.addEventListener('mousemove', onDragMove)
+
+    // 兜底：退化到 Pointer 事件绑 document（比 mousedown 可靠：pointerup 在
+    // iframe 上也会冒泡回宿主的 document，与mousemove 不同）
+    document.addEventListener('pointermove', onDragMove)
+    document.addEventListener('pointerup', finishResize)
+    document.addEventListener('pointercancel', finishResize)
+    // 极端兜底：mousedown 触发时若环境无 Pointer Events，仍需 mouseup 收尾
     document.addEventListener('mouseup', finishResize)
   }
 

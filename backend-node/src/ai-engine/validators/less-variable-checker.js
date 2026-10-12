@@ -22,6 +22,36 @@ const logger = createLogger({ name: 'less-variable-checker' })
 /** 框架预设变量名集合（cssVariableConfig 的 key 同源；这类变量必须「透传映射」而非落真值） */
 const PRESET_VAR_NAMES = new Set(FRAMEWORK_PRESET_NAMES)
 
+/**
+ * 🔴🔴 2026-10-12（真机实锤）：**参与 Less 算术运算的预设变量** → 必须落字面量。
+ *
+ * 背景：`PRESET_VAR_NAMES` 里的变量默认按「透传映射」写成 `@k: var(--k)`，
+ *   这对**颜色**是对的（保住运行期 CSS 变量响应，且颜色槽位不参与 Less 运算）；
+ *   但对**尺寸**是错的 —— Less 变量只要值是 `var()`，就**无法参与算术运算**，
+ *   业务样式写 `@fontSize * 1.5` 时编译报 `Operation on an invalid type`
+ *   （真机 `common.less:312`，session mc-max-1791782604925-13f19781）。
+ *
+ * ⚠️ 本表是**第二道闸**：渲染期 `style-tokens.js#deVarMathLessVars` 已做同样处理，
+ *   但本 checker 在其**之后**运行（写盘 → checker 补齐），会把字面量**写回 var()**。
+ *   真机日志顺序已证实：`microcode-engineer 文件已写入` → `less-variable-checker 已更新`×2。
+ *   两处**字面量必须一致**，否则互相覆盖。
+ *   值与 `style-tokens.js#MC_SIZE_LITERAL_DEFAULTS` 保持同源。
+ *
+ * 🔴🔴 2026-10-12：**`fontSize` 已从本表移除**（与 `style-tokens.js#deVarMathLessVars`
+ *   的 `exempt` 同步）。
+ *   原因：mc-check M5-6（`mc-check.cjs:1122-1134`）**硬性要求**
+ *   `theme-vars.less` 里存在 `@fontSize: var(--fontSize)` 映射声明，正则不接受替代写法。
+ *   实测：把官方全绿 demo（`38/0`）的 `@fontSize` 改成 `12px` 立刻掉到 `37/1`：
+ *     [M5-6] theme-vars.less 缺少 @fontSize: var(--fontSize) 映射声明
+ *   字号倍数运算的正确解法是业务侧写 `calc(@fontSize * N)`（Less 不求值 calc），
+ *   而非把变量从 `var()` 改成字面量。
+ */
+const MATH_OPERAND_VARS = new Map([
+  ['lineHeight', '1.5'],
+  ['borderRadius', '4px'],
+  ['spacing', '4px'],
+])
+
 export class LessVariableChecker {
   /**
    * 检查并修复 Less 变量
@@ -276,20 +306,42 @@ export class LessVariableChecker {
    * 从 theme-vars.less 的所有 mixin 块中提取已定义的变量值。
    * 覆盖 .common() /.theme-light() /.theme-dark() 等所有 .xxx() { } 块。
    * 优先级：首次出现（即 .common() 优先于 light/dark）
+   *
+   * 🔴 2026-10-12 治本 B：新增 `brightness` 参数做**明暗分池**。
+   *   不传时行为与旧版一致（单池、按出现顺序取第一个）；
+   *   传 `'light'` / `'dark'` 时，**只收该明暗的 mixin**（`.common()` 两池都算），
+   *   避免「light 排最前 → 其它 mixin 复制到 light 值」导致三套主题同色。
+   *
    * @param {string} content theme-vars.less 文件内容
+   * @param {'light'|'dark'} [brightness] 明暗池；省略 = 不分池（旧行为）
    * @returns {Map<string, string>} variableName → value
    */
-  static extractAllMixinVars(content) {
+  static extractAllMixinVars(content, brightness = null) {
     const vars = new Map();
-    const mixinBlockRe = /\.[a-zA-Z0-9_-]+\(\)\s*\{([^}]*)\}/g;
+    const mixinBlockRe = /\.([a-zA-Z0-9_-]+)\(\)\s*\{([^}]*)\}/g;
     let match;
     while ((match = mixinBlockRe.exec(content)) !== null) {
-      const blockContent = match[1];
-      const varRe = /@([a-zA-Z0-9_-]+)\s*:\s*([^;]+);/g;
+      const mixinName = match[1];
+      // 🔴 明暗过滤：`.common()` 两池共享；其余按 mixin 名判明暗
+      if (brightness && mixinName !== 'common') {
+        const isDarkMixin = /dark|深色|夜|night/i.test(mixinName);
+        if (isDarkMixin !== (brightness === 'dark')) continue;
+      }
+      const blockContent = match[2];
+      // 🔴🔴 2026-10-12 治本 B（关键）：**跳过「推断值」**。
+      //   带「自动添加」注释的行是**语义推断**产物（不是 Figma 真值）。
+      //   若把它们纳入「已有真值」池，则 light/dark 两池会命中**同一个推断值**
+      //   （旧版把 `#ffffff` 同时写进两个 mixin）⇒ 优先级 1「复制」永远复制到
+      //   那个错值 ⇒ 明暗分流完全失效（真机实锤：产物 c-aiot-dpjh-bsjd-def7310d
+      //   三主题切出来全同色）。
+      const varRe = /^([ \t]*)@([a-zA-Z0-9_-]+)\s*:\s*([^;]+);([^\n]*)$/gm;
       let vmatch;
       while ((vmatch = varRe.exec(blockContent)) !== null) {
-        const name = vmatch[1];
-        const value = vmatch[2].trim();
+        const name = vmatch[2];
+        const value = vmatch[3].trim();
+        const trailing = vmatch[4] || '';
+        // 推断值不入池（让优先级 2 按明暗重新推断）
+        if (/自动添加/.test(trailing)) continue;
         if (!vars.has(name)) {
           vars.set(name, value);
         }
@@ -322,6 +374,15 @@ export class LessVariableChecker {
 
     // 提取当前 theme-vars.less 中已有的变量值（包括 light/dark mixin 中的）
     const existingVars = this.extractAllMixinVars(content)
+    // 🔴🔴 2026-10-12 治本 B：**按明暗分池**。
+    //   原实现只有一个 Map + `if (!vars.has(name))` ⇒取「文件里第一个」的值
+    //   ⇒ `.theme-light()` 排在最前，后面所有 mixin（`.theme-dark()` /
+    //   `.theme-theme_2()`）都复制到 **light 的值** ⇒ 三套主题永远同色
+    //   （真机实锤：产物 c-aiot-dpjh-bsjd-def7310d 三主题切换无变化）。
+    const existingByBrightness = {
+      light: this.extractAllMixinVars(content, 'light'),
+      dark: this.extractAllMixinVars(content, 'dark'),
+    }
 
     const commonPattern = /\.common\s*\(\s*\)\s*\{([^}]*)\}/
     // 🛡️ 2026-09-15 治本：颜色类变量**禁止**补进 .common()。
@@ -331,16 +392,25 @@ export class LessVariableChecker {
     //    故：颜色类 → 补进两个主题 mixin；非颜色类（字号/圆角）→ 才进 .common()。
     const isColourVar = (name) => /color|bg|background|border|fill|stroke/i.test(name)
 
-    const renderVarLine = (v) => {
-      // 优先级 1：从同文件的 sibling mixin（theme-light/theme-dark）复制真值
-      if (existingVars.has(v)) {
-        const value = existingVars.get(v)
+    const renderVarLine = (v, brightness = 'light') => {
+      // 🔴 2026-10-12 治本 B：颜色槽位按**明暗分别推断**（旧实现两主题共用同一个值
+      //   ⇒ 切主题零变化。真机实锤见 themeVarLinesByMixin 处注释）。
+      const isDark = brightness === 'dark'
+      // 优先级 1：从**同明暗**的 mixin 复制真值
+      // 🔴 2026-10-12：必须用明暗分池的 existingVars，否则会复制到另一明暗的值
+      //   （`.theme-light()` 排最前 → 复制到 light 值 ⇒ 三套同色）。
+      const pool = isDark ? existingByBrightness.dark : existingByBrightness.light
+      if (pool.has(v)) {
+        const value = pool.get(v)
         // 颜色变量必须用真实颜色（#/rgba），否则 lighten()/darken()/fade() 无法求值。
         return `  @${v}: ${value}; // 自动添加（从 theme mixin 复制）`
       }
-      // 优先级 2：按变量名语义猜测
+      // 优先级 2：按变量名语义猜测（**带明暗上下文**，让推断表能反相）
       const usesColorFn = colorFnVariables.has(v)
-      const guess = safeLessVarValue(`@${v}`, { usedByColorFn: usesColorFn })
+      const guess = safeLessVarValue(`@${v}`, {
+        usedByColorFn: usesColorFn,
+        ...(isDark ? { background: 'dark' } : {}),
+      })
       if (guess !== 'unset') {
         if (usesColorFn) {
           warnings.push(v)
@@ -362,13 +432,82 @@ export class LessVariableChecker {
     const colourVarNames = missingVariables.filter((v) => !isPresetVar(v) && isColourVar(v))
     const otherVarNames = missingVariables.filter((v) => !isPresetVar(v) && !isColourVar(v))
 
-    const presetLines = presetVarNames
+    // 🔴🔴 2026-10-12 治本（真机实锤）：**尺寸类预设**不能写 `@k: var(--k)`。
+    //   Less 变量只要是 `var()` 形式就**不能参与算术运算** —— 业务样式写
+    //   `@fontSize * 1.5` 时 Less 报 `Operation on an invalid type`（真机
+    //   `common.less:312`，session mc-max-1791782604925-13f19781）。
+    //   ⚠️ 这里必须区别对待，否则**只会把渲染期已做好的字面量化又写回var()**：
+    //     `renderMicrocodeThemeVarsLess` 的 `deVarMathLessVars` 先把 `@fontSize`
+    //     降成 `12px`，本 checker 随后又按「预设透传」写回 `var(--fontSize)`
+    //     —— 真机实测产物 theme-vars.less:6 确实仍是 `@fontSize: var(--fontSize);`
+    //     （日志顺序：`microcode-engineer 文件已写入` → `less-variable-checker 已更新`×2，
+    //       后者覆盖前者）。
+    //   颜色类预设**保持 `var()` 透传不变**（保住运行期 CSS 变量响应，
+    //   且颜色槽位不参与 Less 算术运算，不会有本问题）。
+    const isMathOperandVar = (name) => MATH_OPERAND_VARS.has(name)
+    const presetVarNamesVar = presetVarNames.filter((v) => !isMathOperandVar(v))
+    const presetVarNamesLiteral = presetVarNames.filter(isMathOperandVar)
+
+    const presetLines = presetVarNamesVar
       .map((v) => `  @${v}: var(--${v}); // 自动添加（框架预设透传映射，规范形态）`)
       .join('\n')
-    const newVariables = [presetLines, otherVarNames.map(renderVarLine).join('\n')]
+    // 尺寸类：写字面量（保证 `@fontSize * N` 可编译），并在注释里说明为何破例
+    const presetLinesLiteral = presetVarNamesLiteral
+      .map(
+        (v) =>
+          `  @${v}: ${MATH_OPERAND_VARS.get(v)}; // 自动添加（尺寸类落字面量：var() 形式无法参与 Less 运算）`,
+      )
+      .join('\n')
+    const newVariables = [
+      presetLines,
+      presetLinesLiteral,
+      otherVarNames.map(renderVarLine).join('\n'),
+    ]
       .filter(Boolean)
       .join('\n')
-    const themeVarLines = colourVarNames.map(renderVarLine).join('\n')
+    // 🔴🔴 2026-10-12 治本 B（真机实锤：Playground 切 dark 无变化）：
+    //   旧实现把**同一份** `themeVarLines` 同时写进 theme-light 与 theme-dark
+    //   （见下方写入循环）⇒ 两个主题的语义槽位**必然同值** ⇒ 切主题零变化。
+    //
+    //   实锤（产物 c-aiot-dpjh-bsjd-def7310d 的 theme-vars.less）：
+    //     .theme-light() { @color-bg-card: #ffffff; }  // 自动添加（语义推断）
+    //     .theme-dark()  { @color-bg-card: #ffffff; }  // 自动添加（语义推断）← 同色
+    //   连带 @color-node-name / @color-text-address / @color-online / @color-offline 等
+    //   全部两套同值。
+    //
+    //   修法：按 mixin 的明暗分别推断，dark 走**深色底推断表**。
+    //   ⚠️ 不改的三核心（colorTextBase/colorPrimary/colorPrimaryBg）：
+    //   它们是**框架预设名**（走 presetVarNames 的 `var()` 透传分支），
+    //   其真实值由 css-vars.js 的 dark 对象提供（后者强制 M4-10 枚举值，A8-2），
+    //   本函数不碰 ⇒ 不会破坏门禁。
+    //
+    // 🔴🔴 2026-10-12 补漏（真机实锤：N 主题三套切出来全同色）：
+    //   第一版只写 `theme-light` / `theme-dark` 两套 ⇒ **N 主题的自定义 key
+    //   （如 `.theme-theme_2()`）完全没被写入推断槽位**。
+    //   实锤（产物 c-aiot-dpjh-bsjd-def7310d）：
+    //     .theme-light()   { … @color-bg-card: #ffffff; @color-node-name: #333333; … }  ← 有
+    //     .theme-theme_2() { …只有三核心 + Design 变量，无这些推断槽位… }            ← 缺
+    //   ⇒ 编译时 `.theme_2` 的规则回落到浅色槽位值 ⇒ **三套主题看起来完全一样**。
+    //
+    //   正解：从 theme-vars.less 里**扫出全部 `.theme-<key>()`**（含 N 主题自定义 key），
+    //   逐个按其明暗补齐槽位。明暗判据：① mixin 名含 dark/深色 ⇒ dark；
+    //   ② 否则查同文件 `.common()`/相邻 mixin 线索；③ 兜底按 light。
+    const allThemeMixins = this._collectThemeMixins(content)
+    const themeVarLinesByMixin = {}
+    for (const { name: mixinName, brightness } of allThemeMixins) {
+      themeVarLinesByMixin[mixinName] = colourVarNames
+        .map((v) => renderVarLine(v, brightness))
+        .join('\n')
+    }
+    //兜底：至少产出 light/dark（theme-vars.less 异常时也不静默失效）
+    if (!allThemeMixins.includes('theme-light')) {
+      themeVarLinesByMixin['theme-light'] = colourVarNames
+        .map((v) => renderVarLine(v, 'light')).join('\n')
+    }
+    if (!allThemeMixins.includes('theme-dark')) {
+      themeVarLinesByMixin['theme-dark'] = colourVarNames
+        .map((v) => renderVarLine(v, 'dark')).join('\n')
+    }
 
     try {
       // ── 非颜色变量 → .common()（字号/圆角等跨主题共享令牌）──
@@ -383,12 +522,23 @@ export class LessVariableChecker {
         }
       }
 
-      // ── 颜色变量 → 两个主题 mixin（禁止进 .common()，否则挡住主题覆盖）──
-      if (themeVarLines) {
-        for (const mixinName of ['theme-light', 'theme-dark']) {
-          content = this.appendToMixin(content, mixinName, themeVarLines)
-        }
+      // ── 颜色变量 → 全部主题 mixin（禁止进 .common()，否则挡住主题覆盖）──
+      // 🔴 2026-10-12 治本 B：遍历**全部** `.theme-<key>()`（含 N 主题自定义 key），
+      //   按各 mixin 明暗分别写入（第一版只写 light/dark ⇒ N 主题缺槽位 ⇒ 三套同色）。
+      const mixinNames = Object.keys(themeVarLinesByMixin).filter(
+        (n) => themeVarLinesByMixin[n],
+      )
+      for (const mixinName of mixinNames) {
+        content = this.appendToMixin(content, mixinName, themeVarLinesByMixin[mixinName])
       }
+
+      // 🔴🔴 2026-10-12 治本 B 补最后一块：**重写历史遗留的同值推断**。
+      //   真机实锤：旧版 checker 会把同一个值写进 light 与 dark
+      //   （产物里 `@color-bg-card: #ffffff; // 自动添加（语义推断）` 两处同值），
+      //   而 `addMissingVariables` **只补缺失的** ⇒ 修完也不会变 ⇒ 三套仍同色。
+      //   正解：对**带「自动添加」标记（= 推断值，非真值）**的颜色变量，
+      //   若其值与该 mixin 明暗应有的推断值不同 ⇒ 改写。
+      content = this._rewriteStaleInferredColors(content, themeVarLinesByMixin)
 
       writeFileSync(themeVarsPath, content, 'utf-8')
       logger.info('已更新 theme-vars.less')
@@ -397,6 +547,91 @@ export class LessVariableChecker {
       logger.error('添加变量失败', { themeVarsPath, error: error.message })
       throw error
     }
+  }
+
+  /**
+   * 🔴 2026-10-12 治本 B：扫出 theme-vars.less 里**全部** `.theme-<key>()` mixin 名**及其明暗**。
+   *
+   * 为何需要：N 主题（N > 2）时管线会生成 `.theme-theme_2()` 这类**自定义 key**的
+   * mixin（key 由 `multi-theme.js#resolveThemeKey` 分配，名字里**不含** light/dark）。
+   * 只写 `theme-light`/`theme-dark` ⇒ 这些 mixin 缺颜色槽位 ⇒ **三套主题渲染一样**。
+   *
+   * 明暗从哪来（关键）：**mixin 上方的注释行已标明** ——
+   * `renderMicrocodeThemeVarsLess` 写的是 `// <主题名>（深色|浅色）`
+   * （`style-tokens.js:1382-1385`）。所以按「紧邻 mixin 上一行的注释」解析，
+   * 解析不到再回退「mixin 名含 dark/深色」。
+   *
+   * @param {string} content theme-vars.less 全文
+   * @returns {Array<{name:string, brightness:'light'|'dark'}>}
+   */
+  static _collectThemeMixins(content) {
+    const out = []
+    // 连同注释一起扫描（注释可能独占一行或在同行）
+    const re = /(\/\/[^\n]*)?\s*\.([a-zA-Z_][a-zA-Z0-9_-]*)\s*\(\s*\)\s*\{/g
+    let m
+    while ((m = re.exec(content))) {
+      const comment = m[1] || ''
+      const name = m[2]
+      if (name === 'theme-vars' || !/^theme-/.test(name)) continue
+      // ① 注释里显式标了（深色）/（浅色）—— 权威来源
+      let brightness = null
+      if (/深色|dark/i.test(comment)) brightness = 'dark'
+      else if (/浅色|light/i.test(comment)) brightness = 'light'
+      // ② 回退：mixin 名自带 light/dark
+      if (!brightness) brightness = /dark|深色|夜|night/i.test(name) ? 'dark' : 'light'
+      out.push({ name, brightness })
+    }
+    // 同名去重（保留首次）
+    const seen = new Set()
+    return out.filter((x) => (seen.has(x.name) ? false : (seen.add(x.name), true)))
+  }
+
+  /** 兼容旧调用点：只要名字 */
+  static _collectThemeMixinNames(content) {
+    return this._collectThemeMixins(content).map((x) => x.name)
+  }
+
+  /**
+   * 🔴 2026-10-12 治本 B：**重写历史遗留的同值推断色**。
+   *
+   * 为什么要这一步（真机实锤）：旧版 checker 把**同一个推断值**写进 light 与 dark
+   * （`@color-bg-card: #ffffff; // 自动添加（语义推断）` 两处同值）。
+   * 而 `addMissingVariables` 的语义是**只补缺失变量** ⇒ 这些已存在的错误值
+   * **永远不会被修正** ⇒ 修完明暗分流后三套仍同色。
+   *
+   * 判据（只改「推断值」，绝不碰真值）：
+   *   - 该行注释含「自动添加」⇒ 它是**推断值**（真值来自 Figma，无此标记）
+   *   - 且其值 ≠ 该 mixin 明暗对应的推断值 ⇒ 改写
+   * 传入 `themeVarLinesByMixin`（mixinName → 已算好的推断行）作为期望值来源。
+   */
+  static _rewriteStaleInferredColors(content, themeVarLinesByMixin) {
+    let out = content
+    for (const [mixinName, lines] of Object.entries(themeVarLinesByMixin || {})) {
+      if (!lines) continue
+      // 期望值：从该 mixin 的推断行里解析 name → value
+      const expected = new Map()
+      for (const line of String(lines).split('\n')) {
+        const m = /@([a-zA-Z0-9_-]+)\s*:\s*([^;]+);/.exec(line)
+        if (m) expected.set(m[1], m[2].trim())
+      }
+      if (!expected.size) continue
+
+      // 定位该 mixin 的块并逐行改写
+      const re = new RegExp(`(\\.${mixinName}\\s*\\(\\s*\\)\\s*\\{)([\\s\\S]*?)(\\n\\})`)
+      out = out.replace(re, (full, head, body, tail) => {
+        let fixed = body
+        for (const [name, want] of expected) {
+          // 只改「带自动添加标记的推断行」
+          const lineRe = new RegExp(`(^[ \\t]*@${name}\\s*:\\s*)([^;]+)(;[^\\n]*//[^\\n]*自动添加[^\\n]*)$`, 'm')
+          fixed = fixed.replace(lineRe, (lm, pre, val, comment) => {
+            if (val.trim() === want) return lm
+            return `${pre}${want}${comment}`
+          })
+        }
+        return `${head}${fixed}${tail}`
+      })
+    }
+    return out
   }
 
   /**

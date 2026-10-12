@@ -15,6 +15,7 @@
       role="radio"
       :aria-checked="modelValue === opt.value"
       :disabled="disabled"
+      :title="props.title || undefined"
       @click="select(opt.value)"
     >
       <svg v-if="opt.icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -40,6 +41,10 @@ const props = defineProps({
     ],
   },
   ariaLabel: { type: String, default: '面板切换' },
+  // 🆕 2026-10-12：容器级 title —— 用于说明「这个控件到底管什么」，
+  //   避免与同名/近名控件（如 N 主题的「浅色/深色」）产生语义混淆。
+  //   原生 title 会透传给内部 button（未显式设置时）。
+  title: { type: String, default: '' },
 })
 const emit = defineEmits(['update:modelValue', 'change'])
 

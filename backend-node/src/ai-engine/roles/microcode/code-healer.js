@@ -1038,25 +1038,55 @@ export function fixSpuriousLineBreaks(content, options = {}) {
  *   3. @import (multiple) './common.less' —— 业务 class 输出到**根作用域**（真实 DOM 可命中）
  *   4. （可选）dark.less / light.less 覆盖层，仅在 MC_EMIT_THEME_OVERRIDES=1 时引入
  */
-export function buildIndexLessTemplate(backgroundBrightness = 'dark', emitThemeOverrides = false) {
+export function buildIndexLessTemplate(
+  backgroundBrightness = 'dark',
+  emitThemeOverrides = false,
+  themeKeys = null,
+) {
   const defaultTheme = backgroundBrightness === 'light' ? 'light' : 'dark';
+  // 🔴 2026-10-12 契约对齐（M2-4 / M4-5）：覆盖层 import 必须**覆盖全部
+  //   `themeConfig.list[].key`**，N 主题要有 N 行。旧实现硬编码 light/dark 两行
+  //   ⇒ 第 3 个及以后的主题生成了 `<key>.less` 却没被 import，等于死文件。
+  //   `themeKeys` 为空/非数组时回退 light+dark（**单稿路径逐字节不变**）。
+  const keys =
+    Array.isArray(themeKeys) && themeKeys.length
+      ? [...new Set(themeKeys.filter(Boolean))]
+      : ['light', 'dark'];
   const overrides = emitThemeOverrides
     ? `
-// 主题覆盖层（宿主注入 .dark/.light 类时生效）
-@import './themes/dark.less';
-@import './themes/light.less';
+${keys.map((k) => `@import './themes/${k}.less';`).join('\n')}
 `
     : `
-// 说明：宿主当前不给组件根注入 .dark/.light 类，故不引入 themes/dark.less、themes/light.less
+// 说明：宿主当前不给组件根注入主题类，故不引入 themes/*.less
 //（引入只会产出 .dark .c-xxx 这类永不命中的死规则）。宿主支持主题切换后，
 //   设置环境变量 MC_EMIT_THEME_OVERRIDES=1 即可自动恢复覆盖层导入。
 `;
+  // 🔴🔴 2026-10-12 修真机编译阻断（session mc-max-1791797620173-72f86d28）：
+  //   `common.less` 在**根作用域**引用 `@color-text-secondary` 等**只定义在主题 mixin 内**的变量
+  //   ⇒「variable @color-text-secondary is undefined」⇒ LESS 编译门禁阻断。
+  //
+  //   机制：Less 的 mixin **不泄漏变量到调用者作用域** —— `.theme-light()` 在根作用域
+  //   被调用时，其内部 `@color-xxx` 只在该次调用内可见；`@import (multiple) './common.less'`
+  //   紧随其后，拿到的**只有 `.common()` 定义的变量**。
+  //   ⇒ 只在根调`.theme-<default>()` 是不够的：**其余主题 mixin 里的变量也得在根可见**。
+  //
+  //   正解：根作用域依次调用**全部**主题 mixin，使它们的变量对 common.less 可见。
+  //   顺序要求：`dark` 放**最后**（它是 M4-10 枚举兜底，不能盖掉默认主题的设计真值）。
+  const _otherThemeCalls = [
+    ...keys.filter((k) => k !== defaultTheme && k !== 'dark').map((k) => `.theme-${k}();`),
+    ...(keys.includes('dark') ? ['.theme-dark();'] : []),
+  ]
+  const _rootScopeFallbacks = _otherThemeCalls.length
+    ? `\n// 其余主题：仅为让其变量在根作用域可见（Less mixin 不泄漏变量），供common.less 引用\n${_otherThemeCalls.join('\n')}\n`
+    : ''
+
   return `// 样式入口（系统自动生成，勿手改）
 @import './themes/theme-vars.less';
 
-// 默认主题：必须在**根作用域**生效，否则组件在无 .dark/.light 祖先的真实 DOM 上样式全部失效
+// 默认主题：必须在**根作用域**生效，否则组件在无主题类祖先的真实 DOM 上样式全部失效
 .common();
 .theme-${defaultTheme}();
+${_rootScopeFallbacks}
 @import (multiple) './common.less';
 ${overrides}`;
 }

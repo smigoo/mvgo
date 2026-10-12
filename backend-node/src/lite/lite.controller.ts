@@ -347,6 +347,22 @@ export class LiteController {
       phase2Dto.requirementDocText = dto.requirementDocText;
       phase2Dto.config = dto.config as GeneratePhase2Dto['config'];
 
+      // 🔴🔴 2026-10-12 修真机缺口：Max 档的 `phase2Dto` 是**逐字段手工赋值**的
+      //   （上:329-348），漏了 `themeNodes` ⇒ 前端传的 N 主题被静默丢弃，
+      //   日志表现为「styleTokens 契约已构建 {"themes":["light","dark"]}」、
+      //   产物只有 light/dark 两套 mixin（实测 session mc-max-1791793079518-cd15616f）。
+      //
+      //   为何漏：`GeneratePhase2Dto` **有** `themeNodes` 字段（generate-phase2.dto.ts:77），
+      //   `phase2.service.ts:769` 也**有**往图 state 传、图侧 :5731 显式解构也写了、
+      //   `fetchThemeNodes`(:281) 也读了 —— 唯独**这一层没赋值**。
+      //   ⚠️ 与 2026-10-10 `secondaryNode` 丢失是同一类坑（白名单式逐字段构造漏一层）。
+      //
+      //   注：`secondaryNode` **不予补**——`GenerateLiteDto`（前端入参）里根本没有这个字段
+      //   （tsc 已确认），旧双主题入口不经过这里。
+      if (Array.isArray(dto.themeNodes) && dto.themeNodes.length > 0) {
+        phase2Dto.themeNodes = dto.themeNodes;
+      }
+
       // Phase 7：队列门控 —— Max 也要经过并发检查
       this.tasksService.createTask(
         sessionId,

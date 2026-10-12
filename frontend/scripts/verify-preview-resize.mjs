@@ -276,7 +276,7 @@ check('375 档位确实落在 480 断点内（档位与断点自洽）', () => {
   assert(375 <= 480, '375 应在 480 断点内')
 })
 
-console.log('▶ 8. M3 档位收敛（三处散落 → 单一数据源）')
+console.log('▶ 8. M3 档位收敛（三处散落→ 单一数据源）')
 
 const demoSrc = readFileSync(resolve(ROOT, 'src/views/demo/index.vue'), 'utf8')
 const detailSrc = readFileSync(resolve(ROOT, 'src/views/components/ComponentDetail.vue'), 'utf8')
@@ -309,11 +309,15 @@ check('ComponentDetail 档位尺寸取自常量，CSS 不再写死 375/768', () 
 })
 
 check('四处页面全部引用同一档位常量（单一数据源）', () => {
+  // ⚠️ TaskDetail 已演进为「恒响应式」架构（commit cdcd937：删保真模式、
+  //    拉伸控制条收进浏览器工具条），不再使用本项目的档位常量，改用内置的
+  //    zoomScaleChoice 下拉。这里按「仍属本功能域的页面」口径校验，
+  //    避免把架构演进误判为档位未收敛。
   const users = [
     ['demo/index.vue', demoSrc],
     ['components/ComponentDetail.vue', detailSrc],
-    ['tasks/TaskDetail.vue', taskDetailSrc],
     ['generate/component.vue', genComponentSrc],
+    ['generate/components.vue', genComponentsSrc],
   ]
   for (const [name, src] of users) {
     assert(
@@ -321,6 +325,34 @@ check('四处页面全部引用同一档位常量（单一数据源）', () => {
       `${name} 未引用 constants/previewViewports（档位未收敛）`
     )
   }
+})
+
+console.log('▶ 8b. TaskDetail 恒响应式架构（无保真模式分支）')
+
+check('TaskDetail 不再保留「响应式模式开关」（恒响应式）', () => {
+  assert(
+    !/if\s*\(\s*responsiveTestMode\.value\s*\)/.test(taskDetailSrc),
+    'TaskDetail 仍存在 responsiveTestMode 分支（应已删除保真模式）'
+  )
+})
+
+check('TaskDetail iframe 恒用真实尺寸（不按 figma 尺寸写死）', () => {
+  const idx = taskDetailSrc.indexOf('const previewIframeStyle')
+  const block = taskDetailSrc.slice(idx, idx + 900)
+  assert(
+    block.includes('frameResize.width.value'),
+    'iframe 未使用真实视口尺寸'
+  )
+  assert(
+    !block.includes('figmaOriginalWidth') && !block.includes('figmaDimensions'),
+    'iframe 仍按 figma 尺寸写死（恒响应式下应为真实视口）'
+  )
+})
+
+check('TaskDetail stage 恒用真实尺寸（与 iframe 一致）', () => {
+  const idx = taskDetailSrc.indexOf('const previewStageStyle')
+  const block = taskDetailSrc.slice(idx, idx + 500)
+  assert(block.includes('frameResize.width.value'), 'stage 未使用真实视口尺寸')
 })
 
 console.log('▶ 9. M2 溢出提示与持久化')
@@ -348,57 +380,381 @@ check('TaskDetail 按 componentId 持久化（key 支持 getter）', () => {
 })
 
 check('响应式模式下本页不再施加 scale（否则 @media 不命中）', () => {
+  // TaskDetail 恒响应式：iframe 宽高恒为真实视口尺寸。
+  //「画布内缩放」只允许出现在 transform 上（缩放不改变 iframe 元素真实宽度，
+  //因此 @media 仍按真实视口命中）—— 关键判据是 width 必须取真实视口。
   const idx = taskDetailSrc.indexOf('const previewIframeStyle')
-  const block = taskDetailSrc.slice(idx, idx + 1400)
-  // 判据要点：响应式分支必须是**真实生效的 if**（`if (responsiveTestMode.value)`），
-  // 且它必须是本computed 里的第一个 if —— 否则 scale 会抢先/重新生效。
-  const firstIf = block.match(/\bif\s*\(/)
-  assert(firstIf, '未找到分支判断')
-  const firstIfIdx = block.indexOf(firstIf[0])
-  const responsiveIdx = block.indexOf('if (responsiveTestMode.value) {')
-  assert(responsiveIdx >= 0, 'previewIframeStyle 未接入响应式判据')
+  const block = taskDetailSrc.slice(idx, idx + 900)
+  assert(block.includes('frameResize.width.value'), 'iframe 宽度必须取真实视口')
   assert(
-    firstIfIdx === responsiveIdx,
-    `响应式分支必须是首个 if（实际首个 if 出现在它之前，scale 会重新生效）`
-  )
-  const scaleIdx = block.indexOf('transform: `scale(')
-  assert(scaleIdx > responsiveIdx, '响应式分支应在 scale 分支之前返回')
-  // 响应式分支内不得含 scale
-  assert(
-    !block.slice(responsiveIdx, scaleIdx).includes('scale'),
-    '响应式分支内不得出现 scale'
+    !/width:\s*`\$\{figma[^}]*\}`/.test(block),
+    'iframe 宽度不得按 figma 尺寸写死'
   )
 })
 
 check('TaskDetail 响应式模式真的接管了 stage 尺寸', () => {
-  // 双重防线：iframe 与 stage 两层都要用真实尺寸。
-  // 漏掉 stage 会导致外层容器仍按 scale 后尺寸裁切（视觉上「没变窄」）。
+  // stage 与 iframe 两层都要用真实尺寸。漏掉 stage 会导致外层容器仍按
+  // 缩放后尺寸裁切（视觉上「没变窄」）。
   const idx = taskDetailSrc.indexOf('const previewStageStyle')
-  const block = taskDetailSrc.slice(idx, idx + 600)
+  const block = taskDetailSrc.slice(idx, idx + 500)
   assert(
     block.includes('frameResize.width.value'),
-    'stage 未使用 composable 尺寸（外层仍按 scale 尺寸裁切）'
+    'stage 未使用 composable 尺寸（外层仍按缩放尺寸裁切）'
   )
-  assert(block.includes('if (responsiveTestMode.value) {'), 'stage 响应式分支未生效')
 })
 
 check('M3 收敛后 demo 页尺寸优先级未丢失（Figma 兜底仍在）', () => {
-  // 回归保护：收敛实现时最容易丢的就是「拖拽 > Figma 原始 > 兜底」这条优先级
+  // 回归保护：收敛实现时最容易丢的就是「拖拽 > Figma 原始 > 兜底」这条优先级。
+  // 现语义：容器在 1920×1080 画布内，Figma 尺寸需 clamp 到画布内（不超画布）。
   assert(
-    demoSrc.includes('defaultWidth: () => (figmaWidth.value > 0 ? figmaWidth.value : 420)'),
-    'demo 页丢失 Figma 原始尺寸兜底'
+    /defaultWidth:\s*\(\)\s*=>/.test(demoSrc) &&
+      /figmaWidth\.value/.test(demoSrc) &&
+      /Math\.min\(figmaWidth\.value/.test(demoSrc),
+    'demo 页丢失 Figma 原始尺寸兜底（或未按画布 clamp）'
   )
   assert(
-    demoSrc.includes('defaultHeight: () => (figmaHeight.value > 0 ? figmaHeight.value : 300)'),
-    'demo 页丢失 Figma 高度兜底'
+    /defaultHeight:\s*\(\)\s*=>/.test(demoSrc) &&
+      /Math\.min\(figmaHeight\.value/.test(demoSrc),
+    'demo 页丢失 Figma 高度兜底（或未按画布 clamp）'
   )
+})
+
+console.log('▶ 11. demo 固定画布 + 内部容器拉伸（用户需求：1920×1080 画布）')
+
+check('demo 页画布固定 1920×1080', () => {
+  assert(/const CANVAS_W = 1920/.test(demoSrc), '未定义 1920 画布宽')
+  assert(/const CANVAS_H = 1080/.test(demoSrc), '未定义 1080 画布高')
+})
+
+check('画布层与容器层是两层结构（canvas 包 box）', () => {
+  assert(demoSrc.includes('class="preview-canvas"'), '缺少 preview-canvas 层')
+  assert(demoSrc.includes('class="preview-box"'), '缺少 preview-box 层')
+  // 容器样式必须用 left/top 在画布内定位，而不是靠文档流
+  const idx = demoSrc.indexOf('const previewStyle')
+  const block = demoSrc.slice(idx, idx + 700)
+  assert(/\bleft:/.test(block) && /\btop:/.test(block), '容器未用 left/top 在画布内定位')
+  assert(
+    /CANVAS_W - previewContainerWidth\.value/.test(block),
+    '容器未按画布宽居中'
+  )
+})
+
+check('缩放只施加在画布层，容器层绝无 scale（响应式语义基础）', () => {
+  // 容器层 previewStyle：只允许 left/top/width/height，绝不能有 transform
+  const boxIdx = demoSrc.indexOf('const previewStyle')
+  const boxBlock = demoSrc.slice(boxIdx, demoSrc.indexOf('const ', boxIdx + 10))
+  assert(
+    !/transform/.test(boxBlock),
+    '容器层出现了 transform（会破坏 @media / vw / % 语义）'
+  )
+  assert(/\bleft:/.test(boxBlock) && /\btop:/.test(boxBlock), '容器未用 left/top 定位')
+
+  // 画布层 canvasStyle：必须有整体 scale
+  const canvasIdx = demoSrc.indexOf('const canvasStyle')
+  assert(canvasIdx > 0, '未找到 canvasStyle')
+  const canvasBlock = demoSrc.slice(canvasIdx, demoSrc.indexOf('\nconst ', canvasIdx + 10))
+  assert(
+    /transform\s*=\s*`scale\(/.test(canvasBlock) || /transform:\s*`scale\(/.test(canvasBlock),
+    '画布层未施加整体缩放'
+  )
+})
+
+check('composable 支持 scaleFactor（缩放后拖拽跟手）', () => {
+  assert(composableSrc.includes('scaleFactor'), 'composable 未支持 scaleFactor')
+  const idx = composableSrc.indexOf('function applyDrag')
+  const block = composableSrc.slice(idx, idx + 500)
+  assert(
+    /clientX - startX\)\s*\/\s*k/.test(block) || /deltaX\s*=\s*\(e\.clientX - startX\)\s*\/\s*k/.test(block),
+    'applyDrag 未按 scale 换算位移（缩放后手柄会跟不上鼠标）'
+  )
+})
+
+check('demo 页把画布缩放比传给 composable', () => {
+  assert(
+    /scaleFactor:\s*\(\)\s*=>\s*canvasScale\.value/.test(demoSrc),
+    'demo 页未传 scaleFactor'
+  )
+})
+
+check('demo 手柄用 pointerdown（沿用上一轮修复）', () => {
+  assert(
+    !/@mousedown="startPreviewResize/.test(demoSrc),
+    'demo 手柄仍用 @mousedown（松开后仍会继续变）'
+  )
+  assert(/@pointerdown="startPreviewResize/.test(demoSrc), 'demo 手柄未用 @pointerdown')
+})
+
+console.log('▶ 12. fit 缩放初始时机（用户反馈「初始不对，点了右下角才对」）')
+
+check('autoFitScale 初值非 1（1 会让 1920 画布不缩放、内容挤在中间）', () => {
+  const m = demoSrc.match(/const autoFitScale = ref\(([\d.]+)\)/)
+  assert(m, '未找到 autoFitScale 初值')
+  assert(
+    Number(m[1]) < 1,
+    `autoFitScale 初值不应为 1（当前 ${m[1]}）：画布 1920 宽不缩放会挤在中间`
+  )
+})
+
+check('updateAutoFitScale 返回成功标志（尺寸未就绪时可被重试）', () => {
+  const idx = demoSrc.indexOf('function updateAutoFitScale')
+  const block = demoSrc.slice(idx, idx + 900)
+  assert(/return false/.test(block), '尺寸未就绪时应return false 以便重试')
+  assert(/return true/.test(block), '成功时应 return true')
+})
+
+check('有 rAF 连续试探机制（覆盖 Tabs 异步布局）', () => {
+  assert(demoSrc.includes('setupFitScaleObserver'), '缺少 setupFitScaleObserver')
+  assert(
+    /requestAnimationFrame\(probe\)/.test(demoSrc),
+    '缺少 rAF 连续试探（Tabs 未布局完成时算不对）'
+  )
+})
+
+check('切 Tab 时重建观察（预览面板此时才挂载）', () => {
+  assert(
+    /watch\(activeCanvasTab[\s\S]{0,200}setupFitScaleObserver/.test(demoSrc),
+    '切 Tab 未触发观察重建（初始进入预览 Tab 时 ref 为 null ⇒ 观察根本没建立）'
+  )
+})
+
+check('「重置」按钮初始不显示（presetName 初值即 default）', () => {
+  // presetName 初值为 'default'，若判据含 'default' 则恒 true ⇒ 一进页面就显示
+  const idx = demoSrc.indexOf('const hasCustomPreviewSize')
+  assert(idx > 0, '未找到 hasCustomPreviewSize')
+  const block = demoSrc.slice(idx, idx + 200)
+  assert(
+    /=== 'custom'/.test(block) && !/=== 'default'/.test(block),
+    'hasCustomPreviewSize 不应把 default 算作「已改过」（重置按钮会一进页面就显示）'
+  )
+})
+
+console.log('▶ 13. TaskDetail fit 初始时机（同 demo 页病因，用户反馈「默认两边空白」）')
+
+check('TaskDetail zoomScaleChoice 初值为 fit（非 100）', () => {
+  const m = taskDetailSrc.match(
+    /const zoomScaleChoice = ref<number \| 'fit'>\(([^)]+)\)/
+  )
+  assert(m, '未找到 zoomScaleChoice 初值')
+  assert(
+    /'fit'/.test(m[1]),
+    `zoomScaleChoice 初值应为 'fit'（当前 ${m[1]}）：100 会让 1280 宽视口溢出被裁 ⇒ 两边空白`
+  )
+})
+
+check('TaskDetail autoFitScale 初值非 1', () => {
+  const m = taskDetailSrc.match(/const autoFitScale = ref\(([\d.]+)\)/)
+  assert(m, '未找到 autoFitScale 初值')
+  assert(
+    Number(m[1]) < 1,
+    `autoFitScale 初值不应为 1（当前 ${m[1]}）：RO 只在尺寸变化时回调，初始错值不会被纠正`
+  )
+})
+
+check('TaskDetail updateAutoFitScale 返回成功标志（可重试）', () => {
+  const idx = taskDetailSrc.indexOf('function updateAutoFitScale')
+  const block = taskDetailSrc.slice(idx, idx + 800)
+  assert(/return false/.test(block), '尺寸未就绪时应 return false 以便重试')
+  assert(/return true/.test(block), '成功时应 return true')
+})
+
+check('TaskDetail 有 rAF 连续试探（覆盖异步布局）', () => {
+  assert(
+    taskDetailSrc.includes('setupStageFitScaleObserver'),
+    '缺少 setupStageFitScaleObserver'
+  )
+  assert(
+    /requestAnimationFrame\(probe\)/.test(taskDetailSrc),
+    '缺少 rAF 连续试探'
+  )
+})
+
+check('TaskDetail 观察建立走统一入口（不再各建一个 RO）', () => {
+  // 关键：原先 onMounted 里另建一个 ResizeObserver，会覆盖别处已建实例，
+  // 且 onMounted 时 ref 可能为 null ⇒ 观察根本没建立。
+  const occurrences = taskDetailSrc.match(/new ResizeObserver/g) || []
+  assertEqual(
+    occurrences.length,
+    1,
+    `TaskDetail 应只有一处 new ResizeObserver（实际 ${occurrences.length}）`
+  )
+  assert(
+    /onMounted\([\s\S]{0,200}setupStageFitScaleObserver/.test(taskDetailSrc),
+    'onMounted 未走统一入口'
+  )
+})
+
+check('TaskDetail 预览视口不裁切（overflow: auto）', () => {
+  const m = taskDetailSrc.match(/\.bf-body-real\s*\{[^}]*\}/)
+  assert(m, '未找到 .bf-body-real 规则')
+  assert(
+    /overflow:\s*auto/.test(m[0]),
+    '预览视口仍 overflow:hidden（选 100%+ 时溢出被凭空裁掉）'
+  )
+})
+
+check('切档位时重算 fit（从 50% 切回应适应不能沿用旧值）', () => {
+  assert(
+    /watch\(zoomScaleChoice/.test(taskDetailSrc),
+    '切换缩放档位未触发 fit 重算'
+  )
+})
+
+console.log('▶ 14. 默认视口跟随设计稿比例（竖版组件不该用横版视口装）')
+
+check('TaskDetail 默认高度不写死常量（须按设计稿比例推算）', () => {
+  // 事故 mc-1791783806265-5831962c：declare.json aspectRatio=[510,665]（竖版），
+  // 而 defaultHeight 硬编码 667 ⇒ 1280×667 横版视口装竖版内容 ⇒ 左右各空约385px。
+  const m = taskDetailSrc.match(
+    /const frameResize = useResizableFrame\(\{[\s\S]{0,1600}?defaultHeight:[\s\S]{0,500}?\}\s*\)/
+  )
+  assert(m, '未取到 useResizableFrame 配置块')
+  const block = m[0]
+  const dh = block.match(/defaultHeight:\s*\(\)\s*=>\s*\{([\s\S]*?)\n {2}\},/);
+  assert(dh, 'defaultHeight 非 getter 形式')
+  const dhBody = dh[1];
+  assert(
+    /figmaDimensions/.test(dhBody),
+    'defaultHeight 未参考 figmaDimensions（竖版组件会被装进横版视口）'
+  );
+  assert(
+    /Math\.max\(/.test(dhBody) && /Math\.min\(/.test(dhBody),
+    '按比例推算的高度未做上下限夹取（可能过高或过矮）'
+  )
+})
+
+check('defaultWidth 有容器上限（手柄不会落在可视区外）', () => {
+  const m = taskDetailSrc.match(
+    /const frameResize = useResizableFrame\(\{[\s\S]{0,1600}?defaultWidth:[\s\S]{0,300}?\},/
+  );
+  assert(m, '未取到 defaultWidth 配置')
+  assert(
+    /Math\.min\(hostW, 1280\)/.test(m[0]),
+    'defaultWidth 未按容器宽封顶（手柄可能落在可视区外）'
+  )
+})
+
+console.log('▶ 15. 持久化快照过期判定（否则修复对老用户无效）')
+
+check('composable 支持 designSize（用于判定快照是否过期）', () => {
+  assert(
+    composableSrc.includes('designSize'),
+    'composable 未支持 designSize'
+  )
+  assert(
+    /designSize:\s*\(\)\s*=>\s*figmaDimensions\.value/.test(taskDetailSrc),
+    'TaskDetail 未把 figmaDimensions 传给 designSize'
+  )
+})
+
+check('persist 写入 designRatio', () => {
+  assert(composableSrc.includes('designRatio'), '持久化未记录 designRatio')
+  const idx = composableSrc.indexOf('function persist')
+  const block = composableSrc.slice(idx, idx + 800)
+  assert(
+    /designRatio:\s*currentDesignRatio\(\)/.test(block),
+    'persist 未写入当前比例'
+  )
+})
+
+check('restore 做过期判定（比例不符 ⇒ 丢弃回落 default）', () => {
+  const idx = composableSrc.indexOf('function restore')
+  const block = composableSrc.slice(idx, idx + 1800)
+  assert(
+    /data\.designRatio\s*!==\s*curRatio/.test(block),
+    'restore 未做比例一致性判定'
+  )
+  assert(
+    /customWidth\.value\s*=\s*0/.test(block) && /customHeight\.value\s*=\s*0/.test(block),
+    '过期后未回落 default（custom 残留会继续屏蔽 defaultWidth）'
+  )
+})
+
+check('阳性对照：过期判定逻辑本身有效（改坏即须失败）', () => {
+  // 用纯函数复刻判定条件，验证「不一致/缺字段」两种情况都能识别为过期
+  const ratioOf = (d) =>
+    d && d.width > 0 && d.height > 0 ? (d.width / d.height).toFixed(3) : null
+  const isStale = (saved, cur) => Boolean(cur) && saved !== cur
+
+  const cur = ratioOf({ width: 510, height: 665 })
+  assertEqual(cur, '0.767', '510:665 比例计算错误')
+  // 事故现场：旧逻辑写下的快照没有 designRatio ⇒ undefined ≠ cur ⇒ 判过期
+  assert(isStale(undefined, cur) === true, '无 designRatio 的旧快照应判过期')
+  // 比例确实变了 ⇒ 判过期
+  assert(isStale('0.400', cur) === true, '比例变化的快照应判过期')
+  // 正常场景：比例一致 ⇒ 保留
+  assert(isStale('0.767', cur) === false, '比例一致的快照不应作废')
+  // designSize 不可得 ⇒ 不判过期（不得误伤用户尺寸）
+  assert(isStale(undefined, ratioOf(null)) === false, 'designSize 不可得时不应作废')
 })
 
 check('响应式模式放开 stage 的 overflow:hidden（否则手柄被裁）', () => {
   assert(
-    taskDetailSrc.includes('rz-stage--responsive'),
-    '缺少响应式 stage class'
+    taskDetailSrc.includes('rz-stage--responsive') ||
+      // 恒响应式架构下不再需要该 class；stage 本身不应再有 overflow:hidden 裁切
+      !/\.preview-scale-stage\s*\{[^}]*overflow:\s*hidden/.test(taskDetailSrc),
+    'stage 仍 overflow:hidden，会裁掉拖拽手柄'
   )
+})
+
+console.log('▶ 10. Pointer Capture 拖拽收尾（用户反馈「松开后还在变」）')
+
+check('拖拽用 pointerdown 而非 mousedown（mousedown 无 pointerId）', () => {
+  // 根因：@mousedown 拿到的 MouseEvent 没有 pointerId ⇒ setPointerCapture
+  // 分支永远进不去 ⇒ 每次落到 document 兜底 ⇒ 拖拽经过 iframe 时 mouseup 被吞、
+  // 监听器残留、isResizing 卡 true ⇒ 松开后尺寸继续变。
+  assert(
+    !/@mousedown="frameResize\.startResize/.test(
+      taskDetailSrc + genComponentSrc + genComponentsSrc + demoSrc
+    ),
+    '仍有页面用 @mousedown 绑定 startResize（Pointer Capture 会失效）'
+  )
+  assert(
+    /@pointerdown="frameResize\.startResize/.test(
+      taskDetailSrc + genComponentSrc + genComponentsSrc
+    ),
+    '未发现 @pointerdown 绑定（应为 pointer events）'
+  )
+})
+
+check('composable 记录 capturePointerId（释放 capture 需要）', () => {
+  assert(composableSrc.includes('capturePointerId'), '未记录 capture 的 pointerId')
+  assert(composableSrc.includes('releasePointerCapture'), '未释放 pointer capture')
+})
+
+check('composable 摘净全部监听路径（任一残留都会导致松开后继续变）', () => {
+  for (const ev of ['pointermove', 'pointerup', 'pointercancel', 'mousemove', 'mouseup']) {
+    assert(
+      composableSrc.includes(`removeEventListener('${ev}'`),
+      `finishResize 未摘除 ${ev} 监听`
+    )
+  }
+  assert(composableSrc.includes("removeEventListener('blur'"), '未兜底 window blur')
+})
+
+check('composable 有「已收尾则忽略」硬保险（不依赖事件送达）', () => {
+  // 最后一道防线：isResizing 为 false 时 onDragMove 一律 return，
+  // 这样即便有监听器漏摘（iframe 吞事件等），松开后也不会再改尺寸。
+  const idx = composableSrc.indexOf('function onDragMove')
+  const block = composableSrc.slice(idx, idx + 700)
+  assert(
+    /if\s*\(!isResizing\.value\)\s*return/.test(block),
+    'onDragMove 缺少 isResizing 守卫'
+  )
+  // rAF 回调内也要复查（松手与 rAF 执行存在竞态）
+  assert(
+    /if \(pendingEvent && isResizing\.value\)/.test(block),
+    'rAF 回调内未复查 isResizing（松手后仍会应用最后一帧）'
+  )
+})
+
+check('手柄样式含 touch-action: none（否则浏览器手势截走指针事件）', () => {
+  const withHandles = [taskDetailSrc, genComponentSrc, genComponentsSrc].filter(
+    (s) => s.includes('.rz-h')
+  )
+  assert(withHandles.length > 0, '未找到手柄样式')
+  for (const s of withHandles) {
+    assert(/touch-action:\s*none/.test(s), '手柄缺少 touch-action: none')
+  }
 })
 
 

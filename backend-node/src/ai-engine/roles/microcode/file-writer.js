@@ -21,6 +21,10 @@ import {
   extractLessGlobalVars,
 } from '../../utils/sfc-syntax-validation.js';
 import { repairScopedThirdPartySelectors, ensureFlexDirectionInVueSfc, ensureFlexDirection, ensureGridDisplay, ensureGridDisplayInVueSfc, fixInvalidCssPropertiesInVue, fixInvalidCssProperties } from '../../utils/css-sanitizer.js';
+// 🔴 2026-10-12：接上 M5-7 字号归一（此前 `lite.service.ts#prepareMicrocodeVueContent`
+//   实现了它但**全文无调用点** ⇒ 死代码 ⇒ 归一从未生效，硬编码 px 字号直接过检失败）。
+//   顶层静态导入（`writeFiles` 是同步函数，不能动态 import）。
+import { normalizeFontSizeLiterals } from '../../utils/font-size-normalizer.js';
 import { fixSpuriousLineBreaks, injectMissingTabUi, healVueEmbeddedStyleBraces, healThemeMixinVarRefs, healThemeMixinVarRefsInVue, healLessResourceVarInterpolation, healPresetLiteralDecls, healSlotHexToVarRefs, healVarNameCase, applyHealToVueStyleBlocks, injectThemeVarDeclsForLess, healLessColorFnVarArgs } from './code-healer.js';
 import { collectThemeSlotNames, healBusinessStyleVarsInCss } from '../../utils/theme-color-guard.js';
 import { healRootFixedSize, gateStandaloneLessWrite } from '../../validators/less-compile-gate.js';
@@ -375,7 +379,11 @@ export function extractUndefinedLessMixins(errors = []) {
  * @param {string} n 已去 @、已小写的变量名
  * @returns {string}
  */
-function guessLessVarValueByName(n = '') {
+function guessLessVarValueByName(n = '', ctx = {}) {
+  // 🔴 2026-10-12 治本 B：深色底下面**反相**背景/边框/文字三类槽位。
+  //   旧实现对 light/dark 返回同一个值 ⇒ 两个主题 mixin 同色 ⇒ 切主题零变化
+  //   （真机实锤：产物 c-aiot-dpjh-bsjd-def7310d 的 `@color-bg-card` 两套都是 #ffffff）。
+  const isDarkBg = ctx.background === 'dark';
   // 数值型：给真实数值，确保算术（如 @gap + 4px）也能编译通过
   if (/radius/.test(n)) return '8px';
   // 🛡️ 顺序修复（2026-09-02）：font-size 必须排在 size 之前——否则 `fontsize` 含子串 `size`，
@@ -394,8 +402,11 @@ function guessLessVarValueByName(n = '') {
   if (/(duration|delay|speed)/.test(n)) return '0.2s';
   // 颜色型：必须返回真实颜色（#/rgba），否则 lighten()/darken()/fade() 等 LESS 颜色函数无法求值。
   // 主题切换由 .theme-light()/.theme-dark() mixin 提供不同真实颜色，无需 CSS 运行时 var()。
-  if (/border/.test(n)) return '#e8e8e8';
-  if (/(bg|background)/.test(n)) return '#ffffff';
+  //
+  // 🔴 2026-10-12 治本 B：深色底下背景/边框/文字必须给**深色系**值，
+  //   否则深色主题渲染出白卡片/黑字 ⇒ 切主题看起来毫无变化（真机实锤）。
+  if (/border/.test(n)) return isDarkBg ? '#4b4b4b' : '#e8e8e8';
+  if (/(bg|background)/.test(n)) return isDarkBg ? '#2b2b2b' : '#ffffff';
   if (/(primary|accent)/.test(n)) return '#409EFF';
   if (/(success|ok)/.test(n)) return '#52c41a';
   if (/(warning|warn)/.test(n)) return '#faad14';
@@ -407,7 +418,7 @@ function guessLessVarValueByName(n = '') {
   //   ⚠️ 归位安全性：数值型分支（zindex/weight/size…）都排在本行之前，故 `@alertZIndex`
   //   之类仍由数值分支接管，不会被误判成颜色。
   if (/(error|danger|fail|alert|notice)/.test(n)) return '#f5222d';
-  if (/(text|color|colour|font|fg|ink)/.test(n)) return '#333333';
+  if (/(text|color|colour|font|fg|ink)/.test(n)) return isDarkBg ? '#e6e6e6' : '#333333';
   // 兜底：CSS 全局关键字，对几乎所有属性合法，保证编译通过（渲染为中性默认）
   return 'unset';
 }
@@ -422,7 +433,9 @@ function guessLessVarValueByName(n = '') {
  */
 export function safeLessVarValue(name = '', ctx = {}) {
   const n = String(name).replace(/^@/, '').toLowerCase();
-  const guess = guessLessVarValueByName(n);
+  // 🔴 2026-10-12 治本 B：把 `ctx`（含 `background: 'dark'`）**透传**给名字推断，
+  //   让深色主题的背景/边框/文字槽位取深色系值（否则两主题同值 ⇒ 切主题零变化）。
+  const guess = guessLessVarValueByName(n, ctx);
   // 🛡️ 刀 16b（2026-09-13）：**消费端事实优先于名字猜测**。
   // 名字分支可能给出非颜色（`@line-alpha` → '1'、`@radius-x` → '8px'）或兜底 'unset'；
   // 若该变量在样式里被 `lighten()/darken()/fade()` 等当**实参**引用，这些值在 LESS
@@ -527,6 +540,43 @@ export function writeFiles(files, outputPath, options = {}) {
       // ✅ 清理文件内容（去除markdown标记），并修复 scoped 第三方组件样式穿透
       currentStep = 'sanitizing';
       let sanitizedContent = sanitizeFileContent(content, relativePath, { logger });
+
+      // 🔴🔴 2026-10-12 接上死代码，修 M5-7（硬编码字体大小，mc-check 判 error）。
+      //
+      //   背景：`lite.service.ts` 里的 `prepareMicrocodeVueContent` 实现了字号归一，
+      //   但**全文无任何调用点** ⇒ 死代码 ⇒ 归一能力从未生效。
+      //   实测：产物 `c-aiot-dpjh-bsjd-fca166e8` 的 common.less 有 4 处
+      //   `font-size: 18px/14px` ⇒ M5-7 error（`通过:34 失败:1`）。
+      //
+      //   为什么放这里：`writeFiles` 是**所有产物文件的统一写盘入口**，
+      //   一次接入即覆盖 `.less` / `.css` / `.vue`（SFC 的 <style> 块），
+      //   不依赖调用方记得调（这正是原死代码的根因）。
+      //
+      //   归一规则（`font-size-normalizer.js`，已离线验证 4 处 → 0 处）：
+      //     font-size: 14px → @fontSize                （等于基准）
+      //     font-size: 18px → calc(@fontSize * 1.2857) （倍数）
+      //   ⚠️ 与 A7 同口径：倍数一律用 `calc()` —— Less 的 `var()` 变量不能参与算术，
+      //     而 `@fontSize` 是 Less 槽位，裸乘法可行但 `calc()` 兼容性更好。
+      //   ⚠️ 只动 `>5px`（`MIN_FONT_PX`）的字号，图标类小字号（≤5px）保持原样。
+      if (/\.(less|css|vue)$/i.test(relativePath)) {
+        try {
+          // ⚠️ `writeFiles` 是**同步函数**（:496）⇒ 不能用动态 import（await 会语法错），
+          //   故用顶层静态导入（见文件头 import）。
+          const normalized = normalizeFontSizeLiterals(sanitizedContent);
+          if (normalized.changes.length > 0) {
+            sanitizedContent = normalized.text;
+            if (logger) {
+              logger.warn(
+                `🛡️ M5-7 字号归一（硬编码 px → @fontSize / calc(@fontSize * N)）: ${relativePath}`,
+                { changes: normalized.changes.length, sample: normalized.changes.slice(0, 3) },
+              );
+            }
+          }
+        } catch (fsnErr) {
+          // 归一失败**不阻断**写盘（它只是兜底优化，门禁该拦就拦）
+          logger?.warn?.(`字号归一跳过（${relativePath}）: ${fsnErr?.message || fsnErr}`);
+        }
+      }
       if (relativePath.endsWith('.vue')) {
         sanitizedContent = repairScopedThirdPartySelectors(
           sanitizedContent,
@@ -961,14 +1011,24 @@ export function writeFiles(files, outputPath, options = {}) {
             typeof themeVarsForLess === 'string' &&
             relativePath !== 'resources/styles/themes/theme-vars.less'
           ) {
-            const slotHealedLess = healSlotHexToVarRefs(sanitizedContent, themeVarsForLess);
+            // 🔴 2026-10-12 治本（真机实锤）：独立 .less 此前**只做反向**转换
+            //   （槽位 hex → var()），缺了 SFC 侧那条**正向**的
+            //   `var(--colorXxx[, fallback]) → @color-xxx`。
+            //   ⇒ common.less 里的 10 处 `color: var(--colorPrimary, #a6ceff)`
+            //     原样落盘 ⇒ L0-B THEME-VAR-NAME-MISMATCH 重试耗尽、
+            //     组件禁止发布（真机 session mc-1791783220397-9f7bad18）。
+            //   顺序与 SFC 侧完全一致（先 var→槽位，再做 hex/预设/大小写），
+            //   保证两条链路的产物同形。
+            const slotNames = collectThemeSlotNames(themeVarsForLess);
+            const varToLess = healBusinessStyleVarsInCss(sanitizedContent, slotNames);
+            const slotHealedLess = healSlotHexToVarRefs(varToLess, themeVarsForLess);
             const presetHealedLess = healPresetLiteralDecls(slotHealedLess, relativePath);
             const varCaseHealedLess = healVarNameCase(presetHealedLess);
             if (varCaseHealedLess !== sanitizedContent) {
               sanitizedContent = varCaseHealedLess;
               if (logger) {
                 logger.warn(
-                  `🧩 主题变量化自愈: ${relativePath}（槽位 hex → var() 引用 / 预设字面量 → var 透传 / 变量名 camelCase 归一）`,
+                  `🧩 主题变量化自愈: ${relativePath}（var(--colorXxx) → @color-xxx 槽位 / 槽位 hex → var() 引用 / 预设字面量 → var 透传 / 变量名 camelCase 归一）`,
                 );
               }
             }
@@ -1272,6 +1332,39 @@ export {
 import { MC_DARK_THEME_COLOR_ENUM, MC_DARK_THEME_COLOR_ENUM_CORE } from '../../utils/style-tokens.js';
 
 /**
+ * M4-10 受约束的三核心 key（**从 MC_DARK_THEME_COLOR_ENUM_CORE 派生，不重复维护**）。
+ * 🔴 2026-10-12 A8-2：这 3 个键在 `dark` 里必须落枚举值；其余槽位可写设计稿真值。
+ */
+const MC_DARK_THEME_COLOR_ENUM_CORE_KEYS = Object.keys(MC_DARK_THEME_COLOR_ENUM_CORE);
+
+// 🔴 2026-10-12：通用语义色提升为**模块级常量并导出**（原为 buildCssVarsFile 内局部变量）。
+//
+// 为什么必须导出：mc-check M3-8（`mc-check.cjs:437-451`）要求 css-vars.js 里的**每个**
+// 非框架预设变量都在 declare.json 的 `cssVariableConfig` 声明；而写 declare.json 的
+// `normalizeDeclareJson` 拿不到函数内局部变量 ⇒ 漏声明 ⇒ M3-8 判死
+//（实测：产物 `cssVariableConfig` 只有 3 条 designVars，缺 5 个语义色）。
+// 导出后由调用方复用**同一份事实源**（避免「两处维护、必然漂移」——本仓既有教训）。
+export const SEMANTIC_COLORS_DARK = {
+  colorTextSecondary: MC_DARK_THEME_COLOR_ENUM.colorTextSecondary,
+  colorDanger: MC_DARK_THEME_COLOR_ENUM.colorDanger,
+  colorWarning: MC_DARK_THEME_COLOR_ENUM.colorWarning,
+  colorSuccess: MC_DARK_THEME_COLOR_ENUM.colorSuccess,
+  colorBorder: MC_DARK_THEME_COLOR_ENUM.colorBorder,
+};
+export const SEMANTIC_COLORS_LIGHT = {
+  colorTextSecondary: '#666666',
+  colorDanger: '#f5222d',
+  colorWarning: '#faad14',
+  colorSuccess: '#52c41a',
+  colorBorder: '#e8e8e8',
+};
+
+/** 语义色键名（去重）—— 供 declare.json 的 `cssVariableConfig` 声明复用（M3-8）。 */
+export function getSemanticCssVarKeys() {
+  return [...new Set([...Object.keys(SEMANTIC_COLORS_DARK), ...Object.keys(SEMANTIC_COLORS_LIGHT)])];
+}
+
+/**
  * M2-3/M4-4/M6-2b/M6-2c：生成 resources/config/css-vars.js（确定性模板）。
  * 导出 common + 主题对象（dark/light）；字体变量走 $mcCssBuilder.getCssSize()（M4-4b）。
  * ⚠️ dark 默认只含 3 个核心变量（M4-9 最低要求）+ 设计变量轨（options.styleTokens.darkWithDesign，
@@ -1303,22 +1396,43 @@ export function buildCssVarsFile(options = {}) {
   // 🛡️ 治本 E1（2026-09-13）：通用语义色兜底——danger/warning/success/border/secondary 是
   // 跨组件一致的通用语义色（非 Figma 提取），故固定注入，让组件 var(--colorDanger) 等引用
   // 真正命中宿主注入的 CSS 变量（此前契约只含 primary/textBase，语义色缺失 → 引用 fallback 兜底、主题不响应）。
-  const SEMANTIC_COLORS_DARK = {
-    colorTextSecondary: MC_DARK_THEME_COLOR_ENUM.colorTextSecondary,
-    colorDanger: MC_DARK_THEME_COLOR_ENUM.colorDanger,
-    colorWarning: MC_DARK_THEME_COLOR_ENUM.colorWarning,
-    colorSuccess: MC_DARK_THEME_COLOR_ENUM.colorSuccess,
-    colorBorder: MC_DARK_THEME_COLOR_ENUM.colorBorder,
-  };
-  const SEMANTIC_COLORS_LIGHT = {
-    colorTextSecondary: '#666666',
-    colorDanger: '#f5222d',
-    colorWarning: '#faad14',
-    colorSuccess: '#52c41a',
-    colorBorder: '#e8e8e8',
-  };
+  //
+  // 🔴 2026-10-12：改用**模块级**常量（见文件上方 SEMANTIC_COLORS_* 与 getSemanticCssVarKeys）。
+  //   原因：mc-check M3-8 要求 css-vars.js 的每个非框架变量都在 declare.json 的
+  //   `cssVariableConfig` 声明，而调用方（normalizeDeclareJson）**拿不到函数内局部变量**
+  //   ⇒ 漏声明 ⇒ M3-8 判死（实测产物 cssVariableConfig 只有 3 条 designVars）。
+  //   提升为模块级并导出后，调用方复用同一份事实源，杜绝两处维护。
+  //   （下方 :1357 / :1371 直接引用同名的模块级常量，无需局部别名。）
+  const _semanticKeys = getSemanticCssVarKeys();
   // dark 槽位：契约 darkWithDesign（= 枚举三核心 + 设计变量轨）或回退纯枚举三核心；再叠加语义色 + 额外注入
-  const dark = { ...(tokens?.darkWithDesign || MC_DARK_THEME_COLOR_ENUM_CORE), ...SEMANTIC_COLORS_DARK, ...extraDark };
+  //
+  // 🔴🔴 2026-10-12 A8-2：`dark` 的**三核心必须是 M4-10 硬枚举值**，不得写设计稿真值。
+  //
+  //   mc-check M4-10（mc-check.cjs:794-820）把 `dark` 的 colorTextBase/colorPrimary/
+  //   colorPrimaryBg 锁死在 5 个色值上（`#44E4FF` / `#414141,#454545,#474747` / `#ffffff,#F0F0F0`），
+  //   而它是**纯文件字符串判定、无任务上下文** ⇒ 任何「按设计稿取真值」的策略都会翻车。
+  //   实锤：产物 c-aiot-dpjh-bsjd-80092f38 的 `const dark` 写的是真值
+  //   （colorPrimary '#071f3d'、colorTextBase '#98c2f6'）⇒ M4-10 必判error。
+  //
+  //   官方新版 c-mc-demo 的做法完全一致：把 demo 原本的 `#333`→`#44E4FF`、
+  //   `#090b22`→`#414141`（即**让 demo 迁就枚举**）。
+  //
+  //   **用户深色稿的真值怎么办**：按用户决策，`dark` 是过检占位，真实深色色值
+  //   落在用户自定义 key 上（theme_2 / 黄昏模式 等），那些 key 不在 M4-10 的
+  //   三个核心名里 ⇒ 不受枚举约束（实测 `通过:35 失败:0`）。
+  const darkCoreFromTruth = tokens?.darkWithDesign || {};
+  const dark = {
+    // 三核心：强制枚举值（覆盖 darkWithDesign 里可能存在的真值）
+    ...MC_DARK_THEME_COLOR_ENUM_CORE,
+    // 设计变量轨的非核心槽位仍取真值（colorBgContainer/colorBorder/语义色等不受 M4-10 约束）
+    ...Object.fromEntries(
+      Object.entries(darkCoreFromTruth).filter(
+        ([k]) => !MC_DARK_THEME_COLOR_ENUM_CORE_KEYS.includes(k),
+      ),
+    ),
+    ...SEMANTIC_COLORS_DARK,
+    ...extraDark,
+  };
   // light 槽位：契约值（Figma 提取/派生算法）或回退通用浅色模板；再叠加语义色
   const light = includeLight
     ? {
@@ -1339,7 +1453,51 @@ export function buildCssVarsFile(options = {}) {
   const commonSlots = tokens?.defaultTheme === 'light' && light ? light : dark;
   const darkBody = buildCssVarsObjectBody(dark);
   const lightBody = light ? buildCssVarsObjectBody(light) : null;
-  const exportNames = `common, dark${light ? ', light' : ''}`;
+
+  // 🆕🆕 2026-10-12 N 主题：导出**全部** themeSlots 键（自定义 key，如「黄昏模式」）。
+  //
+  //   为什么必须：前端预览页 `applyPreviewCssVars` 按 `cssVars[themeKey]` 查表注入
+  //   CSS 变量。若只导出 light/dark，切到第 3+ 个主题时查表得到 undefined
+  //   ⇒ **class 变了但 CSS 变量没变**，看起来「切了没反应」。
+  //
+  //   键名安全：themeSlots 的 key 已过 slugifyThemeName（剔除空格/特殊符号，中文保留），
+  //   故 `const 浅色 = {...}` / `export { 浅色 }` 均为合法 JS。
+  //   ⚠️ 单稿/旧双主题（无 themeSlots 或键名为 light/dark）⇒ 完全不追加，输出逐字节一致。
+  const _themeSlots = tokens?.themeSlots;
+  const _extraThemeKeys = [];
+  const _extraThemeBodies = [];
+  if (_themeSlots && typeof _themeSlots === 'object') {
+    // 🔴🔴 2026-10-12 治本 B 延伸（真机实锤：切到 theme_2 先深色后变浅）：
+    //   `light` / `dark` 各自叠加了 `SEMANTIC_COLORS_LIGHT/DARK`（:1406 / :1392），
+    //   但**自定义主题（themeSlots 的键）只写裸 slots** ⇒ 缺语义色。
+    //   而 iframe 的 `applyPreviewCssVars` 用 `{...cssVars.common, ...cssVars[theme]}`
+    //   ⇒ theme_2 查不到语义色 ⇒ **回落到 common 的浅色值**（`colorTextSecondary:'#666666'`）
+    //   ⇒ 运行期把编译期的深色值**覆盖回浅色** ⇒ 「先变深、几秒后变浅」。
+    //
+    //   正解：按该主题的明暗（`themeMeta[].brightness`）叠加对应语义色，与 light/dark 同口径。
+    const _themeMetaByKey = new Map(
+      (Array.isArray(tokens?.themeMeta) ? tokens.themeMeta : []).map((t) => [t.key, t]),
+    );
+    for (const [k, slots] of Object.entries(_themeSlots)) {
+      // light/dark 已单独输出（body 里用的是兼容字段），跳过避免重复声明
+      if (k === 'light' || k === 'dark') continue;
+      // 🔴 明暗判据：优先 themeMeta 的 brightness；缺省回退 key 名
+      const meta = _themeMetaByKey.get(k);
+      const isDark =
+        meta?.brightness === 'dark' ??
+        (meta?.brightness === 'light' ? false : /dark|深色|夜|night/i.test(k));
+      const body = buildCssVarsObjectBody({
+        ...(slots || {}),
+        ...(isDark ? SEMANTIC_COLORS_DARK : SEMANTIC_COLORS_LIGHT),
+      });
+      if (!body) continue;
+      _extraThemeKeys.push(k);
+      _extraThemeBodies.push(`const ${k} = {\n${body}\n};\n`);
+    }
+  }
+  const exportNames = `common, dark${light ? ', light' : ''}${
+    _extraThemeKeys.length ? `, ${_extraThemeKeys.join(', ')}` : ''
+  }`;
   // 🛡️ 双真值标记（D8 · 2026-10-10）：双真值模式下三核心取 Figma 设计真值，
   //   必然不在规范枚举白名单内（M4-10）。mc-check 是**纯文件判定**、无任务上下文，
   //   无法按模式分叉 ⇒ 在产物内写确定性标记，判据据此对三核心豁免枚举比对。
@@ -1366,7 +1524,7 @@ ${darkBody}
 };
 
 ${lightBody ? `const light = {\n${lightBody}\n};\n` : ''}
-export { ${exportNames} };
+${_extraThemeBodies.join('\n')}${_extraThemeBodies.length ? '\n' : ''}export { ${exportNames} };
 export default { ${exportNames} };
 `;
 }

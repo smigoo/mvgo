@@ -21,6 +21,9 @@
 // 🛡️ 2026-10-09：`.common()` 颜色变量判据与门禁 / 自愈器**同源**（单一来源，不写正则副本）。
 //   theme-color-guard.js 自身零 import → 不构成循环依赖。
 import { isCommonColorConflictVar } from './theme-color-guard.js';
+// 🆕 2026-10-12 N 主题：旧双真值结构 → 新 themes 数组的迁移函数。
+//   让本模块能同时吃新旧两种入参，避免一次性改穿 5 个调用方。
+import { themesFromLegacyDualTruth } from './multi-theme.js';
 
 // ══════════════════════════════════════════════════════════════
 // dark 主题色值枚举事实源（mc-check v1.0.20 darkThemeColorRules）
@@ -501,39 +504,50 @@ function buildDualTruthSlots(lightPalette, darkPalette, designTheme) {
   const lightPrimary = lp.topPrimary || '';
   const darkPrimary = dp.topPrimary || '';
 
-  const light = {
-    colorTextBase: lp.topText || '',
-    colorPrimary: lightPrimary,
-    colorPrimaryBg: lightPrimary ? hexToRgba(lightPrimary, 0.12) : '',
-    colorPrimaryHover: lightPrimary ? shiftLightness(lightPrimary, 0.1) : '',
-    colorPrimaryActive: lightPrimary ? shiftLightness(lightPrimary, -0.1) : '',
-    colorPrimaryBgHover: lightPrimary ? hexToRgba(lightPrimary, 0.16) : '',
-  };
+  const light = buildThemeSlotsFromPalette(lp);
+  const dark = buildThemeSlotsFromPalette(dp, { preferTopBg: true });
 
-  // 深色槽位：三核心 = 深色稿真值（D8）。hover/active/bg 同样由真值主色派生，
-  // 保证同源（不用枚举色，避免真值主色与枚举 hover 不搭）。
-  const dark = {
-    colorTextBase: dp.topText || '',
-    colorPrimary: darkPrimary,
-    colorPrimaryBg: dp.topBg || '',
-    colorPrimaryHover: darkPrimary ? shiftLightness(darkPrimary, 0.1) : '',
-    colorPrimaryActive: darkPrimary ? shiftLightness(darkPrimary, -0.1) : '',
-    colorPrimaryBgHover: darkPrimary ? hexToRgba(darkPrimary, 0.16) : '',
-  };
+  return { light, dark, designTheme };
+}
 
+/**
+ * 🆕 2026-10-12 N 主题：单份设计稿色板 → 一套槽位。
+ *
+ * 从原 `buildDualTruthSlots` 抽出（那份是「两份一起算」的包装，本函数是单份内核）。
+ * 差别只在 `colorPrimaryBg`：
+ *  - 浅色侧用主色 12% 透明（浅色稿的 topBg 是页面底色，不是卡片底）；
+ *  - 深色侧用 topBg（深色稿的背景本身就是卡片底色）。
+ *
+ * ⚠️ 明暗是**每个主题独立判定**的（N 主题里「黄昏模式」也可能是深色底），
+ *   所以 opts.preferTopBg 必须由调用方按该主题实测明暗传入，不能靠位置硬编码。
+ *
+ * @param {Object} p extractFigmaColorPalette 结果
+ * @param {{preferTopBg?:boolean}} [opts]
+ * @returns {Object} 槽位对象（已剔除空值）
+ */
+function buildThemeSlotsFromPalette(p = {}, opts = {}) {
+  const primary = p.topPrimary || '';
+  const preferTopBg = opts.preferTopBg === true;
+  const slots = {
+    colorTextBase: p.topText || '',
+    colorPrimary: primary,
+    colorPrimaryBg: preferTopBg
+      ? p.topBg || ''
+      : primary
+        ? hexToRgba(primary, 0.12)
+        : '',
+    colorPrimaryHover: primary ? shiftLightness(primary, 0.1) : '',
+    colorPrimaryActive: primary ? shiftLightness(primary, -0.1) : '',
+    colorPrimaryBgHover: primary ? hexToRgba(primary, 0.16) : '',
+  };
   // 抹掉空值：mcSlotsFromTokens 会跳过空串，但 tokens 对象本身会被 buildCssVarsFile
   // 直接消费，留空串会输出 `colorPrimary: ''` 到 css-vars.js ⇒ 变量 fallback 失效。
-  const prune = (o) => {
-    const out = {};
-    for (const [k, v] of Object.entries(o)) {
-      if (v === undefined || v === null || String(v).trim() === '') continue;
-      out[k] = v;
-    }
-    return out;
-  };
-  const outLight = prune(light);
-  const outDark = prune(dark);
-  return { light: outLight, dark: outDark, designTheme };
+  const out = {};
+  for (const [k, v] of Object.entries(slots)) {
+    if (v === undefined || v === null || String(v).trim() === '') continue;
+    out[k] = v;
+  }
+  return out;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -591,40 +605,70 @@ export function buildStyleTokens(input = {}, options = {}) {
     ? extractFigmaColorPalette(figmaNodeData)
     : { textColors: [], fillColors: [], topText: null, topBg: null, topPrimary: null, topAccent: null };
 
-  // 🆕 双真值分支（2026-10-10）：两侧色板都来自 Figma，派生算法**完全不执行**。
-  //   成立条件：两稿节点树都在，且各自能提取出主色（否则退现有分支，
+  // 🆕 多真值分支（2026-10-12，从双真值泛化）：N 份稿都来自 Figma，派生算法**完全不执行**。
+  //   兼容两种入参：
+  //   - 新结构 `themes: [{key, name, brightness, nodeData}]`（N 主题）
+  //   - 旧结构 `{lightNodeData, darkNodeData}`（存量双主题，由 themesFromLegacyDualTruth 迁移）
+  //   成立条件：至少一份稿节点树在，且每份能提取出主色（否则退现有分支，
   //   避免「一半真值一半猜」的混合态）。
-  const dualLightNode = dualTruth?.lightNodeData || null;
-  const dualDarkNode = dualTruth?.darkNodeData || null;
-  const dualReady = !!(dualLightNode && dualDarkNode);
+  const _multi = themesFromLegacyDualTruth(dualTruth);
+  const themeEntries = Array.isArray(_multi) ? _multi : [];
+  const dualReady = themeEntries.length >= 2 && themeEntries.every((t) => t.nodeData);
   let dualInfo = null;
 
   if (dualReady) {
-    const lightPalette = extractFigmaColorPalette(dualLightNode);
-    const darkPalette = extractFigmaColorPalette(dualDarkNode);
-    const slots = buildDualTruthSlots(lightPalette, darkPalette, defaultTheme);
-    // 缺主色/文字色 → 不进入双真值（退现有分支，由日志留痕）
-    const missingSlots = [];
-    if (!slots.light.colorPrimary) missingSlots.push('light.colorPrimary');
-    if (!slots.light.colorTextBase) missingSlots.push('light.colorTextBase');
-    if (!slots.dark.colorPrimary) missingSlots.push('dark.colorPrimary');
-    if (!slots.dark.colorTextBase) missingSlots.push('dark.colorTextBase');
+    // 每份稿独立提色板 → 独立算槽位（N 份就是 N 套）
+    const perTheme = themeEntries.map((t) => {
+      const p = extractFigmaColorPalette(t.nodeData);
+      // 🔴 明暗按**该主题实测值**决定用哪套底色逻辑，不能硬编码 light/dark
+      //   （N 主题里「黄昏模式」也可能是深色底）。
+      const brightness = t.brightness || resolveBackgroundBrightness(t.nodeData, defaultTheme);
+      const slots = buildThemeSlotsFromPalette(p, { preferTopBg: brightness === 'dark' });
+      return {
+        key: t.key,
+        name: t.name || t.key,
+        brightness,
+        palette: p,
+        slots,
+        designVars: buildDesignVars(p),
+        // 🔴 2026-10-12：透传该主题的预览图文件名（前端「填URL 阶段强制预览」的图，
+        //   已由 graph 的 fetchThemeNodes 落盘为 `mc-preview-<key>.png`）。
+        //   ⚠️ 必须显式透传 —— perTheme 是白名单式构造，不spread 原始 themeEntry。
+        previewImageName: t.previewImageName || null,
+      };
+    });
 
-    if (missingSlots.length === 0) {
+    // 逐主题判定色板是否合格（缺主色或文字色 ⇒ 该主题不可作真值）。
+    //
+    // 🔴 2026-10-12 策略修订（真机实测暴露）：原策略是「全部 or 全无」——
+    //   任一主题不合格就让**所有**主题退回派生。在 N 主题下不合理：用户配了 3 个
+    //   主题，第 3 个误选了纯色矩形，前两个真值会被一起丢掉。
+    //   改为**部分真值 + 显式标注**：合格主题走设计真值，不合格主题按其明暗
+    //   从 `figmaNodeData` 的派生算法补齐，并在 dualInfo.degradedThemes 留痕、
+    //   由 normalizeDeclareJson 写进 declare.json 供前端提示。
+    const perThemeStatus = perTheme.map((t) => {
+      const missing = [];
+      if (!t.slots.colorPrimary) missing.push('colorPrimary');
+      if (!t.slots.colorTextBase) missing.push('colorTextBase');
+      return { ...t, missing, ok: missing.length === 0 };
+    });
+    const degradedThemes = perThemeStatus.filter((t) => !t.ok);
+    const missingSlots = perThemeStatus.flatMap((t) =>
+      t.missing.map((m) => `${t.key}.${m}`),
+    );
+
+    // 至少要有 1 个合格主题才值得走多真值分支（全部不合格 ⇒ 与退现有分支等价）
+    if (perThemeStatus.some((t) => t.ok)) {
       // D8：真值可占三核心槽位名。
       //
       // 🔴 设计变量轨必须**按主题分开**（2026-10-10 修正）：设计变量名是 camelCase 的
-      // `colorBgDesign` / `colorPrimaryDesign` 等，同名槽位在 css-vars.js 里**只有一个值**，
-      // 若把浅色稿与深色稿的 designVars 合并进同一个 dark 对象，深色主题会读到浅色稿的
-      // 设计色（如 colorBgDesign=#F5F7FA）⇒ 深色模式出现浅色底。
-      //
-      // 契约：`lightDesign` 挂 light 槽位、`darkDesign` 挂 dark 槽位；`designVars` 是
-      // 两者并集，仅供 declare.json 的 cssVariableConfig 双向声明使用（逐项列出、
-      // 单值，不参与主题渲染）。
+      //   `colorBgDesign` / `colorPrimaryDesign` 等，同名槽位在 css-vars.js 里**只有一个值**，
+      //   若把多稿 designVars 合并进同一个对象，某主题会读到别稿的设计色
+      //   （如深色主题读到浅色稿的 colorBgDesign=#F5F7FA）⇒ 深色模式出现浅色底。
       //
       // 🔴 buildDesignVars 返回的是**描述符数组** `{key,name,type,value}`，不能直接
       //   展开进槽位对象（那会把键写成 `key`/`value`/`name`）。必须经 kvOf 转成
-      //   `key → value` 映射后再合并 —— 否则设计变量永远进不了产物（本次断言实锤）。
+      //   `key → value` 映射后再合并 —— 否则设计变量永远进不了产物。
       const kvOf = (list) => {
         const o = {};
         for (const v of list || []) {
@@ -632,46 +676,134 @@ export function buildStyleTokens(input = {}, options = {}) {
         }
         return o;
       };
-      const lightDesignVars = buildDesignVars(lightPalette);
-      const darkDesignVars = buildDesignVars(darkPalette);
-      const lightDesignKv = kvOf(lightDesignVars);
-      const darkDesignKv = kvOf(darkDesignVars);
-      const designVars = [
-        ...lightDesignVars,
-        ...darkDesignVars.filter(
-          (v) => !lightDesignVars.some((x) => x.key === v.key),
-        ),
-      ];
-      const darkWithDesign = { ...slots.dark, ...darkDesignKv };
+      // themeSlots: key → { 槽位, designVars 合并后 }（渲染与 css-vars.js 都读它）
+      //
+      // 🔴 不合格主题（色板提不出主色/文字色）在这里用**派生算法**补槽：
+      //   浅色侧走 buildLightFromPalette(主稿色板)，深色侧走枚举三核心 ——
+      //   即该主题退化为「派生值」，但在 declare.json / themeConfig 里显式标注，
+      //   不再让一个废稿把其余真值主题一起拖下水。
+      const deriveFallbackSlots = (brightness) =>
+        brightness === 'light'
+          ? buildLightFromPalette(palette)
+          : { ...MC_DARK_THEME_COLOR_ENUM_CORE };
+
+      const themeSlots = {};
+      const designVarUnion = [];
+      const seenDesignKey = new Set();
+      for (const t of perThemeStatus) {
+        const kv = kvOf(t.designVars);
+        const base = t.ok ? t.slots : deriveFallbackSlots(t.brightness);
+        themeSlots[t.key] = { ...base, ...kv };
+        if (!t.ok) {
+          logger.warn(
+            `🎨 主题「${t.name}」色板不合格（缺 ${t.missing.join('、')}），该主题退回派生值`,
+          );
+        }
+        for (const v of t.designVars) {
+          if (seenDesignKey.has(v.key)) continue;
+          seenDesignKey.add(v.key);
+          designVarUnion.push(v);
+        }
+      }
+      const designVars = designVarUnion;
+
+      const lightEntries = perThemeStatus.filter((t) => t.brightness === 'light');
+      const darkEntries = perThemeStatus.filter((t) => t.brightness === 'dark');
+
+      // 兼容字段（存量消费方：buildCssVarsFile / renderMicrocodeThemeVarsLess /
+      //   declare.json 归一 / 门禁）：
+      //   light            = 浅色三核心 **+ 浅色该主题的 designVars**
+      //   dark             = 深色三核心（纯，不含 designVars —— 原契约）
+      //   darkWithDesign   = 深色三核心 **+ 深色该主题的 designVars**
+      // ⚠️ 这三个字段的「不对称」是**既有契约**（2026-10-10 定），断言
+      //   verify-dual-truth-style-tokens.mjs §3b 正在守护它：
+      //   浅色侧必须带自己的 designVars，深色侧必须只带深色的 —— 否则会串色。
+      const lightKey = lightEntries[0]?.key || perThemeStatus[0]?.key;
+      const darkKey =
+        darkEntries[0]?.key || perThemeStatus[perThemeStatus.length - 1]?.key;
+      // 🔴 三核心从 `perThemeStatus[i].slots` 取（**不含 designVars**）——
+      //   ① 满足「dark 只含三核心、designVars 在 darkWithDesign」的原契约；
+      //   ② 降级主题的 slots 为空，需回退到 deriveFallbackSlots，否则 dark 会是空对象。
+      const pickCoreSlots = (t) =>
+        (t && t.ok ? t.slots : deriveFallbackSlots(t?.brightness || 'dark')) || {};
+      const lightEntry = lightEntries[0] || perThemeStatus[0];
+      const darkEntry = darkEntries[0] || perThemeStatus[perThemeStatus.length - 1];
+      // light 带自己的 designVars（既有不对称契约，§3b 守护）
+      const light = {
+        ...pickCoreSlots(lightEntry),
+        ...kvOf(lightEntry?.designVars || []),
+      };
+      const dark = pickCoreSlots(darkEntry);
+
       dualInfo = {
         enabled: true,
         lightSource: 'figma-extract',
         darkSource: 'figma-extract',
         primaryBrightness: defaultTheme,
         secondaryBrightness: defaultTheme === 'light' ? 'dark' : 'light',
-        lightCore: { ...slots.light },
-        darkCore: { ...slots.dark },
+        lightCore: { ...light },
+        darkCore: { ...dark },
+        // ⚠️ 仅**全部**主题不合格时才非空（那种情况已在下方退现有分支）。
+        //   N 主题下允许部分降级：degradedThemes 列出哪些主题用了派生值。
         missingSlots: [],
+        degradedThemes: degradedThemes.map((t) => ({
+          key: t.key,
+          name: t.name,
+          missing: t.missing,
+        })),
+        // 🆕 N 主题：逐主题诊断（key / 显示名 / 明暗 / 主色 / 文字色 / 是否真值）
+        themeMeta: perThemeStatus.map((t) => ({
+          key: t.key,
+          name: t.name,
+          brightness: t.brightness,
+          primary: t.slots.colorPrimary || null,
+          textBase: t.slots.colorTextBase || null,
+          isTruth: t.ok,
+          // 🔴 2026-10-12：主题预览图文件名（下游 declare.json themeConfig[].previewName）
+          previewImageName: t.previewImageName || null,
+        })),
       };
-      logger.info('🎨 styleTokens 双真值契约已构建（派生算法未执行）', {
-        defaultTheme,
-        lightPrimary: slots.light.colorPrimary,
-        darkPrimary: slots.dark.colorPrimary,
-        lightText: slots.light.colorTextBase,
-        darkText: slots.dark.colorTextBase,
-        lightDesignVarCount: lightDesignVars.length,
-        darkDesignVarCount: darkDesignVars.length,
-      });
+      logger.info(
+        `🎨 styleTokens 多真值契约已构建（派生算法未执行，${perThemeStatus.length} 个主题）`,
+        {
+          defaultTheme,
+          themeCount: perThemeStatus.length,
+          degradedCount: degradedThemes.length,
+          themes: perThemeStatus.map((t) => ({
+            key: t.key,
+            name: t.name,
+            brightness: t.brightness,
+            primary: t.slots.colorPrimary || '(派生)',
+            truth: t.ok,
+          })),
+        },
+      );
       return {
         fontSize: String(fontSize),
         defaultTheme,
-        themes,
-        light: { ...slots.light, ...lightDesignKv },
-        dark: slots.dark,
-        lightDesign: lightDesignVars,
-        darkDesign: darkDesignVars,
+        // 🆕 themes 改为**逐主题 key 列表**（原来只有 light/dark 两个）
+        themes: perThemeStatus.map((t) => t.key),
+// 兼容字段（存量消费方：buildCssVarsFile / renderMicrocodeThemeVarsLess /
+      //   declare.json 归一 / 门禁）——语义是「浅色/深色组的第一个主题」
+      //   ⚠️ light/dark 保持**只含三核心**（原契约），设计变量留在 themeSlots /
+      //   darkWithDesign 里，避免下游读到语义不纯的对象。
+      light,
+      dark,
+      darkWithDesign: themeSlots[darkKey] || dark,
+        // 🆕 新字段：key → 完整槽位（含该主题的设计变量），渲染 N 套 mixin 读它
+        themeSlots,
+        themeMeta: perThemeStatus.map((t) => ({
+          key: t.key,
+          name: t.name,
+          brightness: t.brightness,
+          isTruth: t.ok,
+          // 🔴 2026-10-12：主题预览图文件名（下游 declare.json themeConfig[].previewName）
+          previewImageName: t.previewImageName || null,
+        })),
+        // 设计变量轨按主题分开 + 全局并集（declare.json 双向声明用）
+        lightDesign: perThemeStatus.filter((t) => t.brightness === 'light').flatMap((t) => t.designVars),
+        darkDesign: perThemeStatus.filter((t) => t.brightness === 'dark').flatMap((t) => t.designVars),
         designVars,
-        darkWithDesign,
         palette,
         dualTruth: dualInfo,
       };
@@ -921,6 +1053,100 @@ export function splitCommonColorVars(common = {}) {
   return { kept, moved };
 }
 
+/**
+ * 🔴🔴 2026-10-12 治本：`.common()` 里的 **`var()` 尺寸变量**降级为字面量。
+ *
+ * 现象：生成后 LESS 门禁报 `resources/styles/common.less:NNN:3 Operation on an invalid type`，
+ *   定位到业务写的 `@fontSize * 1.5`。
+ * 根因：`@fontSize: var(--fontSize)` —— **Less 变量一旦是 `var()` 形式就不能参与算术运算**。
+ *   实测（2026-10-12，`less.render` 三组对照）：
+ *     `@fontSize: var(--fontSize)`        → `@fontSize * 1.5` **FAIL: invalid type**
+ *     `@fontSize: var(--fontSize, 12px)`  → `@fontSize * 1.5` **同样 FAIL**（fallback 不参与 Less 求值）
+ *     `@fontSize: 12px`                   → `@fontSize * 1.5` OK（18px）
+ *   而平台自己的规范就是让业务写 `calc(var(--fontSize) * N)` / `@fontSize * N`（style-tokens.js:18），
+ *   与「.common() 用 var() 透传」**内在矛盾**。文件头还写着「禁止 CSS 变量」，自相矛盾。
+ *
+ * 修法：把尺寸类变量的 `var()` 换成 **fallback 字面量**（有 fallback 就用fallback；
+ *   没有则按变量名推断一个设计基准值）。
+ *   ⚠️ 只处理**尺寸/字重**类（fontSize/spacing/radius/lineHeight…）—— 颜色槽位由
+ *   `splitCommonColorVars` 移到主题 mixin，不走这里。
+ *   ⚠️ 不动 `@fontWeightStrong: var(--fontWeightStrong, 600)` 这种**不参与运算**的
+ *   （Less 允许它透传），改动它反而会破坏「框架预设透传」契约。
+ */
+const MC_SIZE_LITERAL_DEFAULTS = {
+  fontSize: '12px',
+  fontWeightStrong: '600',
+  lineHeight: '1.5',
+  borderRadius: '4px',
+  borderRadiusBase: '8px',
+  borderRadiusSmall: '4px',
+  spacing: '4px',
+  spacingXs: '4px',
+  spacingSm: '8px',
+  spacingMd: '12px',
+  spacingLg: '16px',
+  spacingXl: '24px',
+};
+
+/** 变量名 → 规范化匹配（大小写/连字符不敏感，`@font-size` 与 `@fontSize` 同名） */
+function matchSizeVarName(name) {
+  const norm = String(name || '')
+    .replace(/^@/, '')
+    .replace(/[-_]/g, '')
+    .toLowerCase();
+  for (const key of Object.keys(MC_SIZE_LITERAL_DEFAULTS)) {
+    if (key.toLowerCase() === norm) return key;
+  }
+  return null;
+}
+
+/** 参与算术运算的 Less 变量：若值是 `var()` 且不在豁免名单，返回字面量 */
+export function deVarMathLessVars(common = {}) {
+  const out = {};
+  const rewritten = [];
+  // ⚠️ 豁免：不参与运算的框架预设透传（改了会破坏既有契约，见函数注释）
+  //
+  // 🔴🔴 2026-10-12：`fontSize` **必须豁免** —— 加进来时我漏了它，导致
+  //   mc-check M5-6 直接判死（实测：官方全绿 demo `38/0`，只把 `@fontSize: var(--fontSize)`
+  //   改成 `12px` 就掉到 `37/1`）：
+  //     [M5-6] theme-vars.less 缺少 @fontSize: var(--fontSize) 映射声明
+  //   （判据位置 `mc-check.cjs:1122-1134`，正则**硬性要求** var() 形式，不接受替代写法。）
+  //
+  //   Less 算术问题（`@fontSize * 1.5` 报invalid type）的**正确解法不是改变量形态**，
+  //   而是要求业务样式写 `calc(@fontSize * N)` —— Less 不求值 calc，整段透传给浏览器，
+  //   此时 `@fontSize` 保持 `var()` 也能编译（已实测：两种定义形式 + calc 都能编译）。
+  //   官方 demo 的做法也是在 common.less 写 `& { font-size: @fontSize; }`（直接用，不做运算）。
+  const exempt = new Set(['fontWeightStrong', 'fontSize']);
+  for (const [k, v] of Object.entries(common || {})) {
+    const s = typeof v === 'string' ? v.trim() : v;
+    if (typeof s !== 'string' || !s.startsWith('var(')) {
+      out[k] = v;
+      continue;
+    }
+    if (exempt.has(k)) {
+      out[k] = v;
+      continue;
+    }
+    // 优先取 CSS var() 自带的 fallback（`var(--x, 12px)`）
+    const fb = /,\s*([^,()]+(?:\([^()]*\))?[^,()]*)\)\s*$/.exec(s);
+    const fallback = fb ? fb[1].trim() : '';
+    const canonical = matchSizeVarName(k);
+    const literal = /^-?[\d.]+(px|rem|em|%|vh|vw|s|ms)$/.test(fallback)
+      ? fallback
+      : canonical
+        ? MC_SIZE_LITERAL_DEFAULTS[canonical]
+        : '';
+    if (!literal) {
+      // 非尺寸类且无字面量 fallback ⇒ 保持原样（不猜，避免猜错改坏视觉）
+      out[k] = v;
+      continue;
+    }
+    out[k] = literal;
+    rewritten.push(`${k}: ${s} → ${literal}`);
+  }
+  return { vars: out, rewritten };
+}
+
 /** tokens 的颜色对象 → kebab 槽位表（跳过空值） */
 function mcSlotsFromTokens(obj) {
   const o = {};
@@ -1054,6 +1280,11 @@ export function renderMicrocodeThemeVarsLess(styleTokens = {}, prior = '') {
   const p = parseThemeVarsLess(prior);
   // 🛡️ 2026-10-09 治本：`.common()` 只留「尺寸/字重/var() 透传」，颜色变量移到主题 mixin
   const { kept: commonKept, moved: commonMovedColors } = splitCommonColorVars(p.common);
+  // 🔴 2026-10-12 治本：尺寸类 `var()` 变量降级为字面量 ——
+  //   Less 变量只要是 `var()` 就**不能参与算术运算**（`@fontSize * 1.5` 会报
+  //   `Operation on an invalid type`），而平台规范恰恰要求业务这么写。
+  //   详见 deVarMathLessVars 的注释与三组 less.render 对照实测。
+  const { vars: commonDeVarred, rewritten: deVarRewrites } = deVarMathLessVars(commonKept);
   const light = {
     ...MC_CANONICAL_COLOR_SLOTS.light,
     ...mcSlotsFromTokens(styleTokens.light),
@@ -1093,8 +1324,28 @@ export function renderMicrocodeThemeVarsLess(styleTokens = {}, prior = '') {
     injectMovedCommonColors(darkCarried),
   );
   const lightFinal = derived.light;
-  const darkFinal = derived.dark;
-  const commonKV = Object.keys(commonKept).length > 0 ? commonKept : MC_COMMON_FALLBACK;
+  // 🔴🔴 2026-10-12 A8-2：`.theme-dark()` 的**三核心强制落 M4-10 枚举值**。
+  //
+  //   mc-check M4-10（mc-check.cjs:794-820）锁死 dark 三核心色值，且是**纯文件判定**；
+  //   官方新版 c-mc-demo 的做法与此完全一致（`#333`→`#44E4FF`、`#090b22`→`#414141`，
+  //   即让 demo 迁就枚举）。
+  //   ⚠️ 必须与 `file-writer.js#buildCssVarsFile` 的 A8-2 **同口径**，
+  //   否则 `theme-vars.less` 与 `css-vars.js` 的 dark 会不一致（M4-9 只查 css-vars.js，
+  //   但视觉上会出现「切到 dark 时主色跳变」）。
+  //   用户深色稿的真值落在用户自定义 key（theme_2 等）上，不受此约束。
+  const darkFinal = {
+    ...(derived.dark || {}),
+    ...MC_DARK_THEME_COLOR_ENUM_CORE,
+  };
+  // 🔴 2026-10-12：用去 var() 后的集合（`var()` 尺寸变量会破坏 Less 算术运算）
+  const commonKV =
+    Object.keys(commonDeVarred).length > 0 ? commonDeVarred : MC_COMMON_FALLBACK;
+  if (deVarRewrites.length > 0) {
+    // ⚠️ 本模块没有 logger 句柄（历史上都是静默产出），用 console 而非 logger
+    console.warn('[style-tokens] .common() 尺寸变量 var() → 字面量（Less 运算兼容）', {
+      rewrites: deVarRewrites,
+    });
+  }
 
   const emitCommon = `.common() {\n${Object.entries(commonKV)
     .map(([k, v]) => `  @${k}: ${v};`)
@@ -1104,24 +1355,115 @@ export function renderMicrocodeThemeVarsLess(styleTokens = {}, prior = '') {
       .map(([k, v]) => `  @${k}: ${v};`)
       .join('\n')}\n}`;
 
+  // ══════════════════════════════════════════════════════════════
+  // 🆕 2026-10-12 N 主题：按 styleTokens.themeSlots 循环 emit 全部主题 mixin。
+  //
+  // 为什么不能只 emit light/dark：第 3+ 个主题（如「黄昏模式」）有独立三核心真值，
+  //   不落成 mixin 就等于该主题在产物里不存在。
+  //
+  // 兼容：无 themeSlots（单稿路径）⇒ 行为与改动前逐字节一致（只 emit 两个）。
+  // ══════════════════════════════════════════════════════════════
+  const themeSlots = styleTokens.themeSlots;
+  const themeMeta = Array.isArray(styleTokens.themeMeta) ? styleTokens.themeMeta : [];
+  let themeMixins = '';
+  if (themeSlots && typeof themeSlots === 'object') {
+    const metaByKey = new Map(themeMeta.map((m) => [m.key, m]));
+    themeMixins = themeMeta
+      .map((m) => {
+        const slots = themeSlots[m.key];
+        if (!slots) return '';
+        // 每个主题都从 common() 的迁出变量补齐（否则引用它们的业务样式编译不过）
+        // 🔴 2026-10-12 A8-2：用户自定义的深色 key（theme_2「黄昏模式」等）**真值照常写** ——
+        //   M4-10 只查 css-vars.js 里名为 `dark` 的那个对象，不查自定义 key。
+        //   用户深色色值正是靠这些自定义 key 保留（见 file-writer.js A8-2 注释）。
+        const merged = injectMovedCommonColors({
+          ...mcSlotsFromTokens(slots),
+        });
+        const brightnessLabel = m.brightness === 'dark' ? '深色' : '浅色';
+        return [
+          `// ${m.name || m.key}（${brightnessLabel}）`,
+          emitMixin(`theme-${m.key}`, merged),
+        ].join('\n');
+      })
+      .filter(Boolean)
+      .join('\n\n');
+
+    // 🔴🔴 2026-10-12 补真机回归：N 主题分支曾**整体替换** themeMixins，
+    //   只产出 themeMeta 里的 key ⇒ **丢掉了 `theme-light` / `theme-dark`**。
+    //   而 A8-1 会在 themeConfig.list 补系统占位 `dark` ⇒ `themes/dark.less`
+    //   引用 `.theme-dark()` ⇒ LESS 编译门禁阻断：
+    //     「最终 LESS 编译门禁阻断: resources/styles/themes/dark.less:4:3
+    //       .theme-dark is undefined」（真机 session mc-max-1791797093585-3b06a019 实锤）
+    //
+    //   正解：本分支产出**全部** themeMeta 的 mixin，**再补齐 light/dark 两个系统占位**。
+    //   - `theme-light`：取 themeMeta 里 brightness==='light' 的第一个（无则用 lightFinal）
+    //   - `theme-dark`：用 darkFinal（**A8-2 已把三核心强制为 M4-10 枚举值**，过检需要）
+    const hasMixin = (name) => new RegExp(`\\.${name}\\s*\\(\\s*\\)\\s*\\{`).test(themeMixins);
+    if (!hasMixin('theme-light')) {
+      themeMixins += `${themeMixins ? '\n\n' : ''}// 内置浅色占位（宿主注入 .light 时生效）\n${emitMixin('theme-light', lightFinal)}`;
+    }
+    if (!hasMixin('theme-dark')) {
+      // 🔴 dark 必须用 darkFinal（三核心 = M4-10 枚举值），否则 M4-10 判死
+      themeMixins += `\n\n// 内置深色占位（宿主注入 .dark 时生效；三核心为 M4-10 枚举值）\n${emitMixin('theme-dark', darkFinal)}`;
+    }
+  }
+  // 单稿兜底：沿用既有两套（含 deriveCounterpartCustomSlots 的结果）
+  const fallbackMixins = [
+    emitMixin('theme-light', lightFinal),
+    emitMixin('theme-dark', darkFinal),
+  ].join('\n\n');
+
+  const body = themeMixins || fallbackMixins;
+  const mixinCount = themeMixins
+    ? themeMeta.filter((m) => themeSlots[m.key]).length
+    : 2;
+
   return [
     '// 微码组件主题变量文件（系统确定性生成；§3 核心槽位值由 buildStyleTokens 注入，勿手改）',
-    '// 结构：三个 mixin（.common() / .theme-dark() / .theme-light()）',
+    `// 结构：${mixinCount + 1} 个 mixin（.common() + ${mixinCount} 个主题）`,
     '// 约束：mixin 内仅允许 @变量 定义，禁止任何 CSS 属性；禁止 CSS 变量',
     '',
     emitCommon,
     '',
-    emitMixin('theme-light', lightFinal),
-    '',
-    emitMixin('theme-dark', darkFinal),
+    body,
     '',
     '// 写盘门禁自动补全缺失变量',
     '@fontWeightStrong: 400;',
     '',
-    '// 自动添加：将 .common() 中的 Less 变量暴露到全局作用域',
+    '// 自动添加：将各 mixin 中的 Less 变量暴露到全局作用域',
     ':root {',
     '  .common();',
+    // 🔴🔴 2026-10-12 修真机回归（session mc-max-1791797316689-bc707da1 编译阻断）：
+    //   暴露段**只调`.common()`** ⇒ 颜色变量拿不到全局值。
+    //   而`less-variable-checker.addMissingVariables` 按规范把**颜色变量放进主题 mixin**
+    //   （`:361-364` 明确：颜色类禁止进 .common()，否则会挡住主题覆盖）⇒ 两处自相矛盾
+    //   ⇒ `common.less` 在根作用域引用 `@color-bg-container`（只定义在 .theme-dark() 内）
+    //   ⇒「variable @color-bg-container is undefined」编译阻断。
+    //
+    //   正解：暴露段依次调用**全部**主题 mixin（common 优先，主题者覆盖它）。
+    //   这与覆盖层的优先级一致（`&.<key> { .common(); .theme-<key>(); }`）。
+    ..._allThemeMixinNamesForExposure(body),
     '}',
     '',
   ].join('\n');
+}
+
+/**
+ * 🔴 2026-10-12：从 body 里取出全部 `.theme-<key>()` mixin 名（供 `:root` 暴露段调用）。
+ * @param {string} body theme-vars.less 的 mixin 区
+ * @returns {string[]}形如 ['  .theme-light();', '  .theme-dark();']
+ */
+function _allThemeMixinNamesForExposure(body) {
+  const names = new Set();
+  const re = /\.([a-zA-Z_][a-zA-Z0-9_-]*)\s*\(\s*\)\s*\{/g;
+  let m;
+  while ((m = re.exec(body))) {
+    const n = m[1];
+    if (n === 'theme-vars' || !/^theme-/.test(n)) continue;
+    names.add(n);
+  }
+  // 常见名优先（保证输出稳定）；缺失的按字母序追加
+  const ordered = ['theme-light', 'theme-dark'].filter((n) => names.has(n));
+  const rest = [...names].filter((n) => !ordered.includes(n)).sort();
+  return [...ordered, ...rest].map((n) => `  .${n}();`);
 }

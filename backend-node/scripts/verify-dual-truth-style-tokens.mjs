@@ -189,10 +189,31 @@ const fallback = buildStyleTokens({
   backgroundBrightness: 'dark',
   dualTruth: { lightNodeData: lightNode, darkNodeData: noText },
 });
-check('退回后 dualTruth.enabled === false', fallback.dualTruth?.enabled === false);
-check('退回后 missingSlots 非空', (fallback.dualTruth?.missingSlots || []).length > 0, `got ${JSON.stringify(fallback.dualTruth?.missingSlots)}`);
+// ⚠️ 策略已于 2026-10-12 修订：N 主题下**允许部分降级**（合格主题走真值，
+//    不合格主题退回派生并留痕），不再「一个不合格就全员退回」。
+//    本用例是「2 主题里只有 1 个不合格」⇒ enabled 应为 **true**，
+//    但不合格那一侧（dark）应是派生值（枚举色），合格那一侧（light）是真值。
 check(
-  '退回后 dark 三核心 === 枚举（未被污染）',
+  '部分降级：enabled 仍为 true（不因单个主题不合格而全员退回）',
+  fallback.dualTruth?.enabled === true,
+  `enabled=${fallback.dualTruth?.enabled}`,
+);
+check(
+  'degradedThemes 列出不合格主题（dark）',
+  (fallback.dualTruth?.degradedThemes || []).some((t) => t.key === 'dark'),
+  `got ${JSON.stringify(fallback.dualTruth?.degradedThemes)}`,
+);
+check(
+  'degraded 主题带明缺失字段',
+  (fallback.dualTruth?.degradedThemes || []).find((t) => t.key === 'dark')?.missing?.length > 0,
+);
+check(
+  '合格主题（light）仍取设计真值',
+  fallback.light.colorPrimary?.toLowerCase() === '#2f6bff',
+  `got ${fallback.light.colorPrimary}`,
+);
+check(
+  '降级主题（dark）退回枚举三核心（未被污染）',
   fallback.dark.colorPrimary === MC_DARK_THEME_COLOR_ENUM_CORE.colorPrimary,
   `got ${fallback.dark.colorPrimary}`,
 );

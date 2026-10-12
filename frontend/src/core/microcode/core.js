@@ -317,6 +317,28 @@ export const createMcDeclare = ({ declareConfig, metaUrl, cssVars }) => {
       return item
     })
   }
+
+  // 🔴 2026-10-12 主题配置扩展：逐主题预览图。
+  //
+  // 背景（管线侧已落地）：后端把「前端在填 URL 阶段强制预览并确认过的那张图」
+  //   落盘为 `mc-preview-<key>.png`，并写进 `themeConfig.list[].previewName`。
+  //   ⚠️ check **不要求**这个字段（M2-6 只管 `layoutConfig`），纯粹是展示数据。
+  //
+  // 三条约定：
+  // 1. 有 `previewName` ⇒ 用该主题自己的图（`mc-preview-<key>.png`）；
+  // 2. **无 `previewName`** ⇒ 回退主图（`mc-preview.png`）——
+  //    这正是系统占位 `dark` 的情况（用户决策：dark 使用主图）；
+  // 3. `readonly` 主题（dark 占位）额外带 `builtin/notice/coreColors`，
+  //    供 UI 提示「深色为内置预设色，可上传深色稿替换」，**禁止改名/改色**。
+  if (declareInfo.themeConfig && declareInfo.themeConfig.list?.length) {
+    const mainPreviewName = `${defaultMcPreviewPrefix}.png`
+    declareInfo.themeConfig.list = declareInfo.themeConfig.list.map((item) => {
+      // ② 无图 ⇒ 用主图（dark 占位走这条）
+      const fileName = item.previewName || mainPreviewName
+      item.previewUrl = getComponentImagePath(fileName, declareInfo)
+      return item
+    })
+  }
   return declareInfo
 }
 
