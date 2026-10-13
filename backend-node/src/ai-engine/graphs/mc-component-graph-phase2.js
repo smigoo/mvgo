@@ -100,6 +100,8 @@ import { GenerationContext } from '../types/generation-context.js';
 import { runGenerationContextShadow } from '../context/generation-context-shadow.js';
 import { OrphanComponentDetector } from '../validators/orphan-component-detector.js';
 import { LessVariableChecker } from '../validators/less-variable-checker.js';
+// 🔴 2026-10-13 批次二：业务样式颜色 → 槽位变量（确定性后处理，映射规则 v2）
+import { buildColorSlotMapping, applyColorSlotMapping } from '../utils/color-slot-mapper.js';
 import { HeaderRelationValidator } from '../validators/header-relation-validator.js';
 import { HeaderSlotValidator } from '../validators/header-slot-validator.js';
 import { applyHeaderSlotContractRewrite } from '../utils/header-slot-contract.js';
@@ -355,7 +357,11 @@ async function fetchThemeNodes(state, ctx) {
         const imagesDir = state.outputPath ? join(state.outputPath, 'resources/images') : null;
         if (imagesDir) {
           mkdirSync(imagesDir, { recursive: true });
-          const fileName = `mc-preview-${key}.png`;
+          // 🔴 2026-10-13：原写 `${key}` —— 作用域里没有 key 变量（循环变量是 t），
+          //   前端真传了 previewImageUrl 时必抛 ReferenceError ⇒ 被下方 catch 吞掉
+          //   （catch 里又引用 key 二次抛）⇒ 副主题预览图**永远**落盘失败
+          //   （真机 fca166e8：theme_2 无预览图，产物 previewName=null）。
+          const fileName = `mc-preview-${t.key}.png`;
           // 方案 A：传的是 URL（用户已确认的那张图的地址），不是 base64。
           // ① data URL → 直接解码落盘（前端若已拿到字节，走这条零额外网络）
           const m = /^data:image\/(png|jpeg|jpg);base64,(.+)$/i.exec(String(t.previewImageUrl));
@@ -376,7 +382,7 @@ async function fetchThemeNodes(state, ctx) {
       } catch (imgErr) {
         // ⚠️ 不阻断：预览图缺失只影响 UI 展示，色板真值已就位
         log?.warn?.(`⚠️ 主题「${t.name}」预览图落盘失败（已降级：该主题无预览图）`, {
-          key,
+          key: t.key,
           url: String(t.previewImageUrl).slice(0, 120),
           error: imgErr?.message || imgErr,
         });
@@ -3597,6 +3603,62 @@ export function createPhase2Graph(config = {}) {
       message: '🔍 检查 Less 变量完整性...',
       status: 'running',
     });
+
+    // 🔴 2026-10-13 批次二：业务样式颜色 → 槽位变量（映射规则 v2，纯确定性）。
+    //   双稿同源 frame 按树路径对齐 ⇒ 色值对 ⇒ 主稿 hex 命中既有槽位（精确匹配）
+    //   或生成 color-custom-N 自定义槽位 ⇒ common.less 字面量替换为 less 变量
+    //   ⇒ N 主题覆盖层重新展开时颜色真正跟随主题（此前 theme_2 切了没视觉变化）。
+    //   必须在 LessVariableChecker / 最终 LESS 编译门禁之前。
+    // ⚠️ 数据源说明（2026-10-13 实测修正）：styleTokens 是 engineer 实例属性
+    //   （this._lastStyleTokens），graph 层拿不到 ⇒ state.styleTokens 恒 undefined
+    //   （又一个「字段静默丢失」）。改从**产物 theme-vars.less 解析**各主题槽位
+    //   （与 less-variable-checker#mixinVarNames 同款解析，值即编译真值）。
+    if (Array.isArray(state.themeNodes) && state.themeNodes.length >= 2 && state.outputPath) {
+      try {
+        const { readFileSync: _rf, existsSync: _ex } = await import('node:fs');
+        const { join: _join } = await import('node:path');
+        const _tvPath = _join(state.outputPath, 'resources', 'styles', 'themes', 'theme-vars.less');
+        const themeSlotsFromArtifact = {};
+        const themeKeyOrder = [];
+        if (_ex(_tvPath)) {
+          const tvContent = _rf(_tvPath, 'utf-8');
+          const mixinRe = /\.([a-zA-Z0-9_-]+)\s*\(\s*\)\s*\{([^}]*)\}/g;
+          let mm;
+          while ((mm = mixinRe.exec(tvContent)) !== null) {
+            const mixinName = mm[1];
+            if (!mixinName.startsWith('theme-') || mixinName === 'theme-vars') continue;
+            const key = mixinName.slice('theme-'.length);
+            const slots = {};
+            const vr = /@([a-zA-Z0-9_-]+)\s*:\s*([^;]+);/g;
+            let vm;
+            while ((vm = vr.exec(mm[2])) !== null) slots[vm[1]] = vm[2].trim();
+            themeSlotsFromArtifact[key] = slots;
+            themeKeyOrder.push(key);
+          }
+        }
+        const mapping = buildColorSlotMapping({
+          themeEntries: state.themeNodes,
+          themeSlots: themeSlotsFromArtifact,
+          primaryKey: themeKeyOrder[0],
+        });
+        const applied = applyColorSlotMapping({
+          outputPath: state.outputPath,
+          mapping,
+          fsMod: await import('node:fs'),
+          pathMod: await import('node:path'),
+        });
+        logger.info('已应用业务样式颜色→槽位映射', {
+          stats: mapping.stats,
+          customSlotsInjected: applied.customSlotsInjected,
+          replacedCount: applied.replacedCount,
+        });
+      } catch (e) {
+        // 映射失败不阻断生成（色值字面量兜底仍在），但要留痕排查
+        logger.warn('⚠️ 业务样式颜色→槽位映射失败（已降级：保留字面量）', {
+          error: e?.message || e,
+        });
+      }
+    }
 
     const lessVariableResult = await LessVariableChecker.check(
       state.outputPath,

@@ -344,10 +344,24 @@
                       v-for="(row, idx) in nThemeRows"
                       :key="idx"
                       class="n-theme-row"
-                      :class="{ 'is-primary': idx === 0 }"
+                      :class="{ 'is-primary': idx === 0, 'is-active': activeNThemeIdx === idx }"
+                      :title="activeNThemeIdx === idx ? '当前在大框预览此主题' : '点击在大框预览此主题'"
+                      @click="activeNThemeIdx = idx"
                     >
                       <div class="n-theme-row-head">
-                        <span class="n-theme-badge">{{ idx === 0 ? '浅色主稿' : '深色稿' }}</span>
+                        <!-- 🔴 2026-10-13：深浅配色自选（与主题解耦）——点 chip 在 浅/深 间切换 -->
+                        <button
+                          type="button"
+                          class="n-theme-badge is-tone-toggle"
+                          :class="row.tone === 'dark' ? 'is-dark' : 'is-light'"
+                          :disabled="busy"
+                          :title="row.tone === 'dark' ? '当前深色配色（一体化面板）· 点击切换为浅色' : '当前浅色配色（默认面板）· 点击切换为深色'"
+                          @click.stop="row.tone = row.tone === 'dark' ? 'light' : 'dark'"
+                        >
+                          <svg v-if="row.tone === 'dark'" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z" /></svg>
+                          <svg v-else viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg>
+                          {{ row.tone === 'dark' ? '深色' : '浅色' }}{{ idx === 0 ? '主稿' : '' }}
+                        </button>
                         <input
                           v-model="row.name"
                           type="text"
@@ -389,34 +403,7 @@
                         autocomplete="off"
                         spellcheck="false"
                       />
-                      <!-- 副主题预览：行内展开，确认这份稿选对了节点 -->
-                      <div v-if="idx > 0" class="n-theme-preview">
-                        <button
-                          type="button"
-                          class="n-theme-preview-btn"
-                          :disabled="!canPreviewNTheme(idx) || nThemePreviewLoading(idx)"
-                          :title="row.url.trim() ? '预览该主题的设计稿' : '先填写该主题的 Figma 链接'"
-                          @click="toggleNThemePreview(idx)"
-                        >
-                          <svg v-if="nThemePreviewLoading(idx)" class="is-spin" viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 12a9 9 0 11-6.22-8.56" /></svg>
-                          <svg v-else-if="row.preview" viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6" /></svg>
-                          <svg v-else viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
-                          {{ nThemePreviewLoading(idx) ? '获取中…' : row.preview ? '收起预览' : '预览此主题' }}
-                        </button>
 
-                        <div v-if="row.preview?.status === 'error'" class="n-theme-preview-err">
-                          {{ row.preview.error }}
-                        </div>
-                        <div v-else-if="nThemePreviewReady(idx)" class="n-theme-preview-box">
-                          <img :src="row.preview!.imageUrl" :alt="row.preview!.nodeName || row.name" />
-                          <div class="n-theme-preview-meta">
-                            <span v-if="row.preview!.nodeName" class="n-theme-preview-name">{{ row.preview!.nodeName }}</span>
-                            <span v-if="row.preview!.width && row.preview!.height" class="n-theme-preview-size">
-                              {{ row.preview!.width }} × {{ row.preview!.height }}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
                     </div>
                   </div>
 
@@ -524,7 +511,7 @@
 
                 <div
                   v-else-if="
-                    (previewStatus === 'ready' || previewStatus === 'confirmed') && figmaPreview
+                    (previewStatus === 'ready' || previewStatus === 'confirmed') && figmaPreview && activeNThemeIdx === 0
                   "
                   class="figma-preview-card"
                 >
@@ -536,6 +523,37 @@
                     <span class="preview-size">
                       {{ figmaPreview.width }} × {{ figmaPreview.height }}
                     </span>
+                  </div>
+                </div>
+
+                <!-- 🔴 2026-10-13：激活了多主题行 ⇒ 大框显示该主题的预览（点击主题行切换） -->
+                <div
+                  v-else-if="
+                    nThemeEnabled &&
+                    activeNThemeIdx > 0 &&
+                    (previewStatus === 'ready' || previewStatus === 'confirmed')
+                  "
+                  class="figma-preview-card"
+                >
+                  <template v-if="nThemeRows[activeNThemeIdx]?.preview?.status === 'ready' && nThemeRows[activeNThemeIdx]?.preview?.imageUrl">
+                    <div class="preview-thumb">
+                      <img :src="nThemeRows[activeNThemeIdx]!.preview!.imageUrl" :alt="nThemeRows[activeNThemeIdx]!.preview!.nodeName || nThemeRows[activeNThemeIdx]!.name" />
+                    </div>
+                    <div class="preview-meta">
+                      <span class="preview-name">
+                        {{ nThemeRows[activeNThemeIdx]!.name }}
+                        <span class="n-theme-badge" :class="nThemeRows[activeNThemeIdx]!.tone === 'dark' ? 'is-dark' : 'is-light'">
+                          {{ nThemeRows[activeNThemeIdx]!.tone === 'dark' ? '深色' : '浅色' }}
+                        </span>
+                      </span>
+                      <span v-if="nThemeRows[activeNThemeIdx]!.preview!.width" class="preview-size">
+                        {{ nThemeRows[activeNThemeIdx]!.preview!.width }} × {{ nThemeRows[activeNThemeIdx]!.preview!.height }}
+                      </span>
+                    </div>
+                  </template>
+                  <div v-else class="figma-empty-guide">
+                    <strong>主题「{{ nThemeRows[activeNThemeIdx]?.name }}」</strong>
+                    <p>{{ nThemeRows[activeNThemeIdx]?.preview?.status === 'loading' ? '正在获取该主题预览…' : '该行还没有有效的 Figma 链接' }}</p>
                   </div>
                 </div>
 
@@ -1356,11 +1374,19 @@ const N_THEME_MAX = 8
 //   「+ 添加主题」入口隐藏（行内上移/下移/删除一并隐藏 —— 它们只在 >2 行时才有意义）。
 //   后端能力仍是 N 主题（DTO 上限 8、多套 mixin、部分降级均已实现并离线验证过），
 //   这里只是**前端入口收窄**，后续放开只需把这一处改回可配置。
-const N_THEME_ADD_ENABLED = false
+// 🔴 2026-10-13 放开：用户需求「可以直接增加多主题」（每主题自选深浅配色 +
+//   主题名自定义；dark 恒由系统生成占位，浅色主题占用 light 保留位——后端已有）。
+const N_THEME_ADD_ENABLED = true
 
 interface NThemeRow {
   name: string
   url: string
+  /**
+   * 🔴 2026-10-13：用户自选的深浅配色（与稿子自动判定解耦）。
+   *   深色 ⇒ 生成产物用一体化面板（aio-panel）；浅色 ⇒ 默认面板（default-panel）。
+   *   浅色主题在 key 分配时占用 light 保留位（resolveThemeKey 既有规则）。
+   */
+  tone: 'light' | 'dark'
   /** 副主题的预览状态（主稿复用页面顶部的主预览，不在此列） */
   preview?: {
     status: 'idle' | 'loading' | 'ready' | 'error'
@@ -1372,12 +1398,15 @@ interface NThemeRow {
   }
 }
 
-function newNThemeRow(name: string): NThemeRow {
-  return { name, url: '' }
+function newNThemeRow(name: string, tone: 'light' | 'dark' = 'dark'): NThemeRow {
+  return { name, url: '', tone }
 }
 
 /** 主题行：索引 0 恒为主稿（决定结构/几何/文案），用户用「上移」表达主副 */
-const nThemeRows = ref<NThemeRow[]>([newNThemeRow('浅色'), newNThemeRow('深色')])
+const nThemeRows = ref<NThemeRow[]>([newNThemeRow('浅色', 'light'), newNThemeRow('深色', 'dark')])
+
+/** 🔴 2026-10-13：点击激活的主题行 ⇒ 大框预览联动显示该行设计稿 */
+const activeNThemeIdx = ref(0)
 
 // N 主题是否可用：仅微码 + Max 档（Lite 管线的 N 主题注入只覆盖微码，
 // 且 Lite 档位本就不做主题槽位扩展）
@@ -1394,7 +1423,8 @@ function toggleNTheme() {
   nThemeEnabled.value = !nThemeEnabled.value
   if (!nThemeEnabled.value) {
     // 固定两主题（浅色/深色）；预览状态一并丢弃，避免下次展开时挂着上次的图
-    nThemeRows.value = [newNThemeRow('浅色'), newNThemeRow('深色')]
+    nThemeRows.value = [newNThemeRow('浅色', 'light'), newNThemeRow('深色', 'dark')]
+    activeNThemeIdx.value = 0
   }
 }
 
@@ -1404,7 +1434,7 @@ const canAddNTheme = computed(
 
 function addNThemeRow() {
   if (!canAddNTheme.value) return
-  nThemeRows.value.push(newNThemeRow(`主题 ${nThemeRows.value.length + 1}`))
+  nThemeRows.value.push(newNThemeRow(`主题 ${nThemeRows.value.length + 1}`, 'dark'))
 }
 
 function removeNThemeRow(index: number) {
@@ -1531,6 +1561,20 @@ function toggleNThemePreview(index: number) {
   void previewNThemeRow(index)
 }
 
+/**
+ * 🔴 2026-10-13：激活主题行变化 ⇒ 自动获取该行预览（大框联动）。
+ *   行内「预览此主题」按钮已按用户要求移除（「只需要展示最大的」）——
+ *   预览获取改由「点击行激活」驱动：填了链接的行被激活时自动拉预览。
+ */
+watch(activeNThemeIdx, (idx) => {
+  if (idx <= 0) return // 主稿预览复用主框流程
+  const row = nThemeRows.value[idx]
+  if (!row) return
+  if (!row.url.trim()) return
+  if (row.preview?.status === 'loading' || row.preview?.status === 'ready') return
+  void previewNThemeRow(idx)
+})
+
 /** 链接改了 ⇒ 旧预览立即作废（否则会拿着 A 稿的预览提交 B 稿的链接） */
 watch(
   () => nThemeRows.value.map((r) => r.url).join('|'),
@@ -1538,6 +1582,9 @@ watch(
     for (const r of nThemeRows.value) {
       if (r.preview && r.preview.status !== 'loading') r.preview = undefined
     }
+    // 🔴 2026-10-13：激活行的 URL 填写/修改完成后自动重新获取预览（大框即时联动）
+    const idx = activeNThemeIdx.value
+    if (idx > 0 && nThemeRows.value[idx]?.url.trim()) void previewNThemeRow(idx)
   },
 )
 const panelType = ref('default-panel')
@@ -3077,6 +3124,9 @@ async function goSingle(aiConfig) {
         fileKey: x.parsed!.fileKey,
         nodeId: x.parsed!.nodeId,
         name: x.row.name.trim() || `主题 ${i + 1}`,
+        // 🔴 2026-10-13：用户自选深浅配色透传（浅色占 light 保留位、深色走深色系 key；
+        //   dark 恒由系统生成占位）。DTO/normalizeThemeInputs 均已支持。
+        brightness: x.row.tone,
       }))
       logs.value.push({
         time: nowTime(),
@@ -3533,6 +3583,41 @@ onUnmounted(() => {
 .n-theme-row.is-primary .n-theme-badge {
   background: var(--c-primary, #2563eb);
   color: #fff;
+}
+
+/* 🔴 2026-10-13：深浅配色切换 chip（与主题解耦——用户自选深浅） */
+.n-theme-badge.is-tone-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.n-theme-badge.is-tone-toggle.is-light {
+  background: #eaf2ff;
+  color: #2563eb;
+  border-color: #c7dbff;
+}
+.n-theme-badge.is-tone-toggle.is-dark {
+  background: #1c2128;
+  color: #e6e6e6;
+  border-color: #3a4149;
+}
+.n-theme-badge.is-tone-toggle:hover {
+  filter: brightness(0.96);
+}
+
+/* 行激活态：当前在大框预览的主题行 */
+.n-theme-row.is-active {
+  border-color: var(--c-primary, #2563eb);
+  box-shadow: 0 0 0 1px var(--c-primary, #2563eb) inset;
+}
+.n-theme-row {
+  cursor: pointer;
+}
+.n-theme-row.is-active .n-theme-name {
+  font-weight: 600;
 }
 .n-theme-name {
   flex: 1;

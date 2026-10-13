@@ -628,6 +628,11 @@ export function buildStyleTokens(input = {}, options = {}) {
         key: t.key,
         name: t.name || t.key,
         brightness,
+        // 🔴 2026-10-13：透传 Figma 源（任务详情页「多稿缩略图」/「跳转设计稿」的数据前提；
+        //   ⚠️ perTheme/themeMeta 都是白名单式构造，不显式透传就静默丢弃——
+        //   与 2026-10-10 secondaryNode 丢失、2026-10-12 previewImageUrl 丢失同类坑）
+        fileKey: t.fileKey || null,
+        nodeId: t.nodeId || null,
         palette: p,
         slots,
         designVars: buildDesignVars(p),
@@ -756,6 +761,8 @@ export function buildStyleTokens(input = {}, options = {}) {
           key: t.key,
           name: t.name,
           brightness: t.brightness,
+          fileKey: t.fileKey || null,
+          nodeId: t.nodeId || null,
           primary: t.slots.colorPrimary || null,
           textBase: t.slots.colorTextBase || null,
           isTruth: t.ok,
@@ -796,6 +803,8 @@ export function buildStyleTokens(input = {}, options = {}) {
           key: t.key,
           name: t.name,
           brightness: t.brightness,
+          fileKey: t.fileKey || null,
+          nodeId: t.nodeId || null,
           isTruth: t.ok,
           // 🔴 2026-10-12：主题预览图文件名（下游 declare.json themeConfig[].previewName）
           previewImageName: t.previewImageName || null,
@@ -1376,9 +1385,20 @@ export function renderMicrocodeThemeVarsLess(styleTokens = {}, prior = '') {
         // 🔴 2026-10-12 A8-2：用户自定义的深色 key（theme_2「黄昏模式」等）**真值照常写** ——
         //   M4-10 只查 css-vars.js 里名为 `dark` 的那个对象，不查自定义 key。
         //   用户深色色值正是靠这些自定义 key 保留（见 file-writer.js A8-2 注释）。
-        const merged = injectMovedCommonColors({
+        let merged = injectMovedCommonColors({
           ...mcSlotsFromTokens(slots),
         });
+        // 🔴🔴 2026-10-13（真机实锤 c-aiot-dpjh-bsjd-fca166e8）：系统占位 `dark`
+        //   槽位必须落 M4-10 枚举三核心（与下方 darkFinal 同口径）。
+        //   A8-1 会在 themeConfig.list 补系统占位 dark ⇒ themeMeta 循环里
+        //   `themeSlots.dark` 也会 emit `.theme-dark()` —— 若其真值是深色稿的
+        //   自定义值（如 theme_2 的 #071f3d），hasMixin('theme-dark') 随即为 true
+        //   ⇒ 下方「补 darkFinal」被跳过 ⇒ theme-vars.less 的 dark 三核心
+        //   ≠ css-vars.js 的 dark（M4-10 只查后者，漏网）
+        //   ⇒ 用户视觉「dark 和主题2 一样」（dark 编译值被 theme_2 顶掉）。
+        if (m.key === 'dark') {
+          merged = { ...merged, ...MC_DARK_THEME_COLOR_ENUM_CORE };
+        }
         const brightnessLabel = m.brightness === 'dark' ? '深色' : '浅色';
         return [
           `// ${m.name || m.key}（${brightnessLabel}）`,

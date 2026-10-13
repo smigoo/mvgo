@@ -449,13 +449,67 @@ check('缩放只施加在画布层，容器层绝无 scale（响应式语义基�
   )
   assert(/\bleft:/.test(boxBlock) && /\btop:/.test(boxBlock), '容器未用 left/top 定位')
 
-  // 画布层 canvasStyle：必须有整体 scale
+  // 画布层 canvasStyle：必须有整体缩放
   const canvasIdx = demoSrc.indexOf('const canvasStyle')
   assert(canvasIdx > 0, '未找到 canvasStyle')
   const canvasBlock = demoSrc.slice(canvasIdx, demoSrc.indexOf('\nconst ', canvasIdx + 10))
   assert(
-    /transform\s*=\s*`scale\(/.test(canvasBlock) || /transform:\s*`scale\(/.test(canvasBlock),
+    /style\.zoom\s*=\s*String\(s\)/.test(canvasBlock) || /transform\s*=\s*`scale\(/.test(canvasBlock),
     '画布层未施加整体缩放'
+  )
+})
+
+check('🔴 画布缩放用 zoom 而非 transform+负margin（2026-10-13 事故）', () => {
+  // 事故：transform scale 不改布局，靠右/下负 margin 让 flex 居中按视觉尺寸排布。
+  // overflow:auto + flex 居中 + 负 margin 组合下画布被压成 ~25px 窄条，
+  // 组件完全不可见；选 100%（s=1，无 transform）才恢复 —— 精确指向该组合。
+  const canvasIdx = demoSrc.indexOf('const canvasStyle')
+  const canvasBlock = demoSrc.slice(canvasIdx, demoSrc.indexOf('\nconst ', canvasIdx + 10))
+  assert(
+    !/marginRight/.test(canvasBlock),
+    'canvasStyle 仍有负 margin hack（transform 布局不同步的脆弱组合，换 zoom）'
+  )
+  assert(
+    /style\.zoom/.test(canvasBlock),
+    'canvasStyle 未使用 zoom（布局尺寸真实变化，flex 居中天然正确）'
+  )
+})
+
+console.log('▶ 16. zoom 反馈循环防护（「由大到小的动画最后看不到组件」）')
+
+check('demo 页 wrapper 有 min-height:0（flex 子项默认 auto 会被内容撑破）', () => {
+  // zoom 让 canvas 布局尺寸真实变化后，wrapper（flex column 子项）若无
+  // min-height:0，内容高（1080×zoom）会撑破 flex 分配 ⇒ zoom 越小 wrapper
+  // 越矮 → fit 更小 → 循环到 0。
+  const m = demoSrc.match(/\.preview-wrapper\s*\{[^}]*\}/)
+  assert(m, '未找到 .preview-wrapper 规则')
+  assert(
+    /min-height:\s*0/.test(m[0]),
+    'preview-wrapper 缺 min-height:0（zoom 反馈循环：由大到小直到消失）'
+  )
+})
+
+check('demo 主链 tabpane 锁高（否则 wrapper 的 flex:1 无基准）', () => {
+  // 主链 .ant-tabs-content(height:100%) 里 tabpane 若无 flex/height 规则，
+  // pane 高 = 内容高（canvas）⇒ 同样构成反馈回路。
+  // 定位：主链 content 块（含 height:100% 注释链）内的 tabpane 规则。
+  const holderIdx = demoSrc.indexOf('.ant-tabs-content-holder {\n          flex: 1;')
+  assert(holderIdx > 0, '未找到主链 content-holder 规则')
+  const chain = demoSrc.slice(holderIdx, holderIdx + 800)
+  assert(
+    /\.ant-tabs-tabpane\s*\{[^}]*flex:\s*1/.test(chain),
+    '主链缺 tabpane flex:1（pane 高=内容高，zoom 循环仍在）'
+  )
+  assert(
+    /height:\s*0/.test(chain),
+    '主链 tabpane 缺 height:0（flex:1 在嵌套 flex 中正确收缩的关键）'
+  )
+  // 🔴 2026-10-13 puppeteer 实测：漏 display:flex 时 pane 是 block，
+  //    wrapper 的 flex:1 在 block 父级里无效 ⇒ 高度塌回内容高（46px），
+  //    zoom 棘轮已收敛到 1% 且永久冻结（availH<0 时 updateAutoFitScale 放弃）。
+  assert(
+    /\.ant-tabs-tabpane\s*\{[^}]*display:\s*flex/.test(chain),
+    '主链 tabpane 缺 display:flex（block 下 wrapper flex:1 无效，高度塌回内容高）'
   )
 })
 

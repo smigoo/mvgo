@@ -96,6 +96,19 @@ export function buildPreviewUrl(
      * Playground / 编辑态用：代码与 AI 修复都写 workspace，走快照会看到旧内容。
      */
     snapshot?: string | number
+    /**
+     * 🆕 宿主主题透传（light/dark）。
+     *
+     * 为什么必须（事故 2026-10-13「选了 dark 预览还是浅色」）：
+     *   宿主应用有全局暗色模式（useTheme → localStorage['app-theme']），但
+     *   预览 iframe 是独立文档、**读不到宿主的 data-theme**；且 TaskDetail
+     *   从不发 set-theme postMessage（全仓只有 demo/Playground 会发）。
+     *   ⇒ iframe 内 preview 页只能落到 declare.json 的 default（多为 light），
+     *   宿主切了暗色预览却始终浅色。
+     *   preview 页已支持 `?theme=`（resolvedThemeClass 优先级链的第 2 级），
+     *   URL 透传是成本最低、刷新/重载都不丢的通道。
+     */
+    theme?: string
   } = {},
 ): string {
   const params = new URLSearchParams({
@@ -114,6 +127,12 @@ export function buildPreviewUrl(
   if (options.height && options.height > 0) params.set('h', String(options.height))
   if (options.cacheKey !== undefined) params.set('_t', String(options.cacheKey))
   if (options.snapshot !== undefined) params.set('snapshot', String(options.snapshot))
+  // 主题透传：任意非空 key（preview 页 resolvedThemeClass 用 isValidThemeKey
+  // 按 declare.json themeConfig.list 白名单校验，非法 key 不会成为 class，
+  // 安全性由消费端兜底 —— N 主题下 key 是 slug 化的任意合法标识，不止 light/dark）
+  if (options.theme) {
+    params.set('theme', String(options.theme))
+  }
   const token = getAuthToken()
   if (token) params.set('token', token)
   // 🔧 生产 base 前缀（2026-09-30）：BASE_URL 在生产 = /mvgo/（history 路由挂载根），dev = /。

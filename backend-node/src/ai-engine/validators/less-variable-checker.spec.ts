@@ -394,3 +394,186 @@ describe('LessVariableChecker', () => {
     expect(commonBlock![1]).not.toMatch(/@colorPrimary\s*:\s*[#rgba]/i)
   })
 })
+
+/**
+ * 🔴 2026-10-13 回归（真机 fca166e8）：N 主题下 theme-vars.less 的
+ * `.theme-dark()` 三核心被 theme_2 值顶掉（生成器已修），存量产物
+ * 经写盘自愈链路应收敛为 M4-10 枚举值（与 css-vars.js 同口径）。
+ */
+describe('healThemeVarsDarkCore — theme-vars dark 三核心校正', () => {
+  const coreLines = (themeVars: string) => {
+    const m = themeVars.match(/\.theme-dark\(\)\s*\{([^}]*)\}/)
+    expect(m).toBeTruthy()
+    const pick = (name: string) =>
+      m![1].match(new RegExp(`@${name}\\s*:\\s*([^;]+);`))?.[1]?.trim()
+    return {
+      'color-text-base': pick('color-text-base'),
+      'color-primary': pick('color-primary'),
+      'color-primary-bg': pick('color-primary-bg'),
+    }
+  }
+
+  it('theme_2 值顶掉 dark 三核心时 → 校正为 M4-10 枚举值', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'tvd-'))
+    const p = join(dir, 'theme-vars.less')
+    await writeFile(
+      p,
+      [
+        '.common() {',
+        '  @fontSize: 14px;',
+        '}',
+        '',
+        '.theme-light() {',
+        '  @color-primary: #a6ceff;',
+        '}',
+        '',
+        // 事故形态：theme-dark 三核心 = theme_2 的值
+        '.theme-dark() {',
+        '  @color-text-base: #98c2f6;',
+        '  @color-primary: #071f3d;',
+        '  @color-primary-bg: #123259;',
+        '}',
+      ].join('\n'),
+    )
+    const r = LessVariableChecker.healThemeVarsDarkCore(p)
+    expect(r.fixed).toBe(true)
+    expect(r.changed.map((c) => c.name).sort()).toEqual([
+      '@color-primary',
+      '@color-primary-bg',
+      '@color-text-base',
+    ])
+    const core = coreLines(readFileSync(p, 'utf-8'))
+    expect(core['color-primary']).toBe('#44E4FF')
+    expect(core['color-primary-bg']).toBe('#414141')
+    expect(core['color-text-base']).toBe('#ffffff')
+    await rm(dir, { recursive: true, force: true })
+  })
+
+  it('已符合枚举值 → 幂等（不写盘）', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'tvd-'))
+    const p = join(dir, 'theme-vars.less')
+    const content = [
+      '.theme-dark() {',
+      '  @color-text-base: #ffffff;',
+      '  @color-primary: #44E4FF;',
+      '  @color-primary-bg: #414141;',
+      '}',
+    ].join('\n')
+    await writeFile(p, content)
+    const r = LessVariableChecker.healThemeVarsDarkCore(p)
+    expect(r.fixed).toBe(false)
+    expect(readFileSync(p, 'utf-8')).toBe(content)
+    await rm(dir, { recursive: true, force: true })
+  })
+
+  it('无 .theme-dark() 块 → 静默跳过（不抛错）', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'tvd-'))
+    const p = join(dir, 'theme-vars.less')
+    await writeFile(p, '.common() { @fontSize: 14px; }')
+    expect(LessVariableChecker.healThemeVarsDarkCore(p).fixed).toBe(false)
+    await rm(dir, { recursive: true, force: true })
+  })
+})
+
+/**
+ * 🔴🔴 2026-10-13 回归（真机 mc-max-1791884047075-49102507）：
+ * common.less 引用 `@color-card-bg`（仅 .theme-dark() 定义），根作用域
+ * （index.less 只有 .common()+.theme-light()）编译
+ * `variable @color-card-bg is undefined` ⇒ 整个生成失败。
+ * 旧「自动补全」判据 isLessVarDeclared 是文件级（dark 里有就算有）⇒ 漏补。
+ */
+describe('healRootScopeMissingSlots — 根作用域缺槽位补齐', () => {
+  const write = async (dir: string, themeVars: string, commonLess: string) => {
+    await mkdir(join(dir, 'resources/styles/themes'), { recursive: true })
+    await writeFile(join(dir, 'resources/styles/themes/theme-vars.less'), themeVars)
+    await writeFile(join(dir, 'resources/styles/common.less'), commonLess)
+  }
+
+  it('仅 dark 定义的槽位被 light 引用 → light 补浅色值、dark 不动', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'rss-'))
+    await write(
+      dir,
+      [
+        '.common() { @font-size-base: 14px; }',
+        '',
+        '.theme-light() {',
+        '  @color-primary: #a6ceff;',
+        '}',
+        '',
+        '.theme-dark() {',
+        '  @color-primary: #44E4FF;',
+        '  @color-card-bg: rgba(20, 32, 52, 1);',
+        '  @color-card-border: #141d29;',
+        '}',
+      ].join('\n'),
+      [
+        '.card {',
+        '  background: @color-card-bg;',
+        '  border: 1px solid @color-card-border;',
+        '}',
+      ].join('\n'),
+    )
+    const commonText = readFileSync(join(dir, 'resources/styles/common.less'), 'utf-8')
+    console.log('DBG commonText:', JSON.stringify(commonText))
+    const tvText = readFileSync(join(dir, 'resources/styles/themes/theme-vars.less'), 'utf-8')
+    console.log('DBG tvText:', JSON.stringify(tvText.slice(0, 200)))
+    const r = LessVariableChecker.healRootScopeMissingSlots(
+      join(dir, 'resources/styles/themes/theme-vars.less'),
+      join(dir, 'resources/styles/common.less'),
+    )
+    console.log('DBG r:', JSON.stringify(r))
+    expect(r.fixed).toBe(true)
+    // light 补了两个缺槽位；dark 本就有 → 不补
+    expect(r.injected.filter((i) => i.includes('theme-light')).length).toBe(2)
+    expect(r.injected.filter((i) => i.includes('theme-dark')).length).toBe(0)
+    const tv = readFileSync(join(dir, 'resources/styles/themes/theme-vars.less'), 'utf-8')
+    const lightBlock = tv.match(/\.theme-light\(\)\s*\{([^}]*)\}/)![1]
+    // card-bg 按名猜值：light → 白系（可编译 + 浅色视觉正确）
+    expect(lightBlock).toMatch(/@color-card-bg:\s*#ffffff/)
+    await rm(dir, { recursive: true, force: true })
+  })
+
+  it('自定义深色 key（theme_N）缺失槽位按其主色亮度补深色值', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'rss-'))
+    await write(
+      dir,
+      [
+        '.common() { @font-size-base: 14px; }',
+        '',
+        '.theme-light() { @color-primary: #a6ceff; }',
+        '',
+        // 深蓝主色 ⇒ 自定义 key 应推断为 dark 明暗
+        '.theme-theme_2() { @color-primary: #071f3d; }',
+      ].join('\n'),
+      '.card { border: 1px solid @color-card-border; }',
+    )
+    const r = LessVariableChecker.healRootScopeMissingSlots(
+      join(dir, 'resources/styles/themes/theme-vars.less'),
+      join(dir, 'resources/styles/common.less'),
+    )
+    expect(r.fixed).toBe(true)
+    const tv = readFileSync(join(dir, 'resources/styles/themes/theme-vars.less'), 'utf-8')
+    const t2Block = tv.match(/\.theme-theme_2\(\)\s*\{([^}]*)\}/)![1]
+    // border 按名猜值 + dark 明暗 → 深灰系
+    expect(t2Block).toMatch(/@color-card-border:\s*#4b4b4b/)
+    await rm(dir, { recursive: true, force: true })
+  })
+
+  it('全部主题槽位齐备 → 幂等不写盘', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'rss-'))
+    const themeVars = [
+      '.common() {}',
+      '.theme-light() { @color-card-bg: #fff; }',
+      '.theme-dark() { @color-card-bg: #222; }',
+    ].join('\n')
+    await write(dir, themeVars, '.card { background: @color-card-bg; }')
+    const r = LessVariableChecker.healRootScopeMissingSlots(
+      join(dir, 'resources/styles/themes/theme-vars.less'),
+      join(dir, 'resources/styles/common.less'),
+    )
+    expect(r.fixed).toBe(false)
+    expect(readFileSync(join(dir, 'resources/styles/themes/theme-vars.less'), 'utf-8')).toBe(themeVars)
+    await rm(dir, { recursive: true, force: true })
+  })
+})
+

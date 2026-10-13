@@ -31,7 +31,11 @@
      - 单主题：只渲染 list 里那一个
      徽标数据源：declare.json 的 themeConfig.dualTruth（后端 normalizeDeclareJson 写入），
      预览页本就已在读 declare.json ⇒ 本控件零新增请求。 -->
-    <div v-if="!isVue3 && !isEmbedded" class="mc-theme-switcher" :class="resolvedThemeClass">
+    <!-- 🔴 2026-10-13：放开嵌入态（isEmbedded）——预览内直接可选多主题；
+         切换走 switchPreviewTheme 同一状态（手动档 + localStorage 持久化）。
+         嵌入态用紧凑样式（mc-theme-switcher--embedded）。isVue3 保持隐藏
+         （Vue3 组件主题机制不同，走 CSS 变量注入链路）。 -->
+    <div v-if="!isVue3" class="mc-theme-switcher" :class="[resolvedThemeClass, { 'mc-theme-switcher--embedded': isEmbedded }]">
       <div class="mc-theme-seg" role="radiogroup" aria-label="主题切换">
         <button
           v-for="t in selectableThemes"
@@ -438,12 +442,34 @@ const previewStyleScopeId = `preview-${groupId}-${componentId}`
 
 // 预览环境注入主题 class（微码组件样式挂在 .dark/.light 父选择器下）
 // 不注入则所有样式规则匹配失败，导致样式完全失效
-// 优先级：手动切换 > URL query > Playground postMessage > declare.json themeConfig.default > 'dark' 兜底
+// 优先级：手动切换 > 手动持久化 > URL query > Playground postMessage > declare.json themeConfig.default > 'dark' 兜底
 const playgroundTheme = ref(null) // 从 Playground 下发的主题（postMessage 实时联动）
 // 🆕 R12（2026-10-10）：用户在本页手动切换的主题。
 //   放最高优先级 —— 手动点击是用户的即时意图，应压过 URL query 与 Playground 下发；
 //   但 Playground 切换时需让位（见下方 watcher），否则外部联动会「抢不回」控制权。
 const manualTheme = ref(null)
+
+/**
+ * 🔴 手动选择持久化（事故 2026-10-13「选了 dark 刷新后又变浅色」）：
+ *
+ *   用户在 iframe 内的 mc-theme-switcher 点「深色」→ manualTheme='dark' 只存在内存。
+ *   iframe 一旦重载（整页刷新 / 刷新预览按钮 / 快照切换），TaskDetail 会用
+ *   buildPreviewUrl **重建 iframe src** —— 无论带不带 theme 参数，新文档的
+ *   manualTheme 都是 null ⇒ 用户选择丢失、回到 declare default（多为 light）。
+ *   且 2026-10-13 起 URL 会塞宿主主题（c134c8f），iframe 重载后 URL=light
+ *   **主动覆盖**用户此前选的 dark —— 比不塞更糟。
+ *
+ *   修法：手动切换时同步写 localStorage（key 含 componentId，同源跨重载可读），
+ *   恢复时作为「手动持久化」插在 URL 之前 —— 用户明确选过的 > 宿主透传的。
+ */
+const MANUAL_THEME_KEY = `mvgo:preview-theme-manual:${componentId}`
+const storedManualTheme = ref((() => {
+  try {
+    return window.localStorage.getItem(MANUAL_THEME_KEY) || null
+  } catch {
+    return null
+  }
+})())
 
 /**
  * 🆕🆕 2026-10-12 N 主题：key 合法性判定。
@@ -457,8 +483,14 @@ const isValidThemeKey = (key) =>
   !!key && typeof key === 'string' && selectableThemes.value.some((t) => t.key === key)
 
 const resolvedThemeClass = computed(() => {
-  // 0. 手动切换（R12，最高优先级）
+  // 0. 手动切换（R12，最高优先级 —— 本次会话内的即时意图）
   if (manualTheme.value && isValidThemeKey(manualTheme.value)) return manualTheme.value
+  // 0.5 手动持久化（🔴 2026-10-13）：跨 iframe 重载记住用户选过的主题。
+  //   必须压过 URL —— 否则 TaskDetail 重建 src 时塞的宿主主题（c134c8f）
+  //   会覆盖用户明确选过的 dark（事故实测：手动 dark → 刷新 → light）。
+  if (storedManualTheme.value && isValidThemeKey(storedManualTheme.value)) {
+    return storedManualTheme.value
+  }
   // 1. URL query 强制指定
   const themeQuery = route.query.theme
   if (isValidThemeKey(themeQuery)) return themeQuery
@@ -479,6 +511,13 @@ const resolvedThemeClass = computed(() => {
 const switchPreviewTheme = (theme) => {
   if (!selectableThemes.value.some((t) => t.key === theme)) return
   manualTheme.value = theme
+  // 🔴 持久化手动选择：iframe 重载后经 storedManualTheme 恢复（见其定义处注释）
+  try {
+    window.localStorage.setItem(MANUAL_THEME_KEY, theme)
+    storedManualTheme.value = theme
+  } catch {
+    /* 隐私模式等：静默，仅本次会话内生效 */
+  }
   // Playground 通过 postMessage 下发主题时会抢回控制权，这里主动清掉，让手动切换生效
   if (playgroundTheme.value) playgroundTheme.value = null
   try {
@@ -626,7 +665,7 @@ function handleRenderError(payload) {
 //   用于区分「自己写的」与「父层/宿主推送的」—— 只有前者才允许在换主题时被覆盖。
 //   ⚠️ 必须在模块顶层声明（cleanupPreviewInjectedStyles 也用它），
 //     放在 applyPreviewCssVars 之前会造成 TDZ 风险。
-const injectedKeys = new Set()
+const injectedKeys = new Set<string>()
 
 function cleanupPreviewInjectedStyles() {
   document
@@ -923,6 +962,19 @@ watch(globalPanelType, () => {
 })
 
 watch(resolvedThemeClass, (themeKey) => {
+  // 🔴 换主题必须**重新注入 CSS 变量**（事故：用户选 dark 但画面仍是浅色）。
+  //   症状：`已注入组件声明 cssVars 17 项（theme=light）` 只在加载时打一次，
+  //   切主题后 class 变了但 `documentElement` 上的 `--colorPrimary` 等仍是 light 的值
+  //   ⇒ 深色 class 叠浅色变量，看起来「没切」。
+  //   `previewCssVars` 是 loadMicrocodeCssVars 缓存的源对象（见其 :1115 注释），
+  //   applyPreviewCssVars 内部已用 injectedKeys 记账，换主题时会覆盖自己注入过的键。
+  if (previewCssVars) {
+    const applied = applyPreviewCssVars(previewCssVars, themeKey)
+    if (applied > 0) {
+      console.log(`🎨 [Preview] 主题切换后重新注入 cssVars ${applied} 项（theme=${themeKey}）`)
+    }
+  }
+
   if (userPickedPanel.value) return
   const want = isDarkThemeKey(themeKey) ? AUTO_DARK_PANEL : AUTO_LIGHT_PANEL
   if (globalPanelType.value !== want) {
@@ -1028,6 +1080,19 @@ function applyPreviewCssVars(cssVars, theme) {
   if (!cssVars || typeof cssVars !== 'object') return 0
   const merged = { ...(cssVars.common || {}), ...(cssVars[theme] || {}) }
   const root = document.documentElement
+  // 🔴 换主题前先清除**本函数上一轮注入过、但本主题表里没有**的键。
+  //   为什么必须：各主题表项数不等（实测本组件 common 13 / light 11 / dark 8），
+  //   切到 dark 时 light 独有的那几项若不清掉，残留的浅色值会与深色变量混用
+  //   ⇒ 深色主题下仍有浅色元素（局部不跟随主题）。
+  for (const prop of injectedKeys) {
+    if (prop in merged) continue
+    try {
+      root.style.removeProperty(prop)
+    } catch {
+      /* 忽略 */
+    }
+    injectedKeys.delete(prop)
+  }
   let applied = 0
   for (const [key, value] of Object.entries(merged)) {
     if (value === undefined || value === null || typeof value === 'object') continue
@@ -1736,17 +1801,42 @@ function onPreviewMessage(event) {
   // 2026-09-15：主题切换下发：Playground 内容主题下拉 → iframe 内实时生效
   if (data.type === 'set-theme') {
     const theme = data.theme
+    /**
+     * 🔴 persist 语义（2026-10-13，修「防抖重载后主题丢回 light」）：
+     *   demo 页「内容主题」下拉是**用户显式选择** ⇒ persist:true，
+     *   写入 localStorage 手动档（storedManualTheme）⇒ formState 深度 watch
+     *   触发的 1s 防抖重载后能从 localStorage 恢复（postMessage 的
+     *   playgroundTheme 只存内存，重载即丢——实测主题跳回 light）。
+     *   不带 persist（外部程序化联动）⇒ 维持旧行为：清手动档、只管当次。
+     */
+    const persist = data.persist === true
+    const applyTheme = (t) => {
+      manualTheme.value = null
+      if (persist) {
+        storedManualTheme.value = t
+        try {
+          window.localStorage.setItem(MANUAL_THEME_KEY, t)
+        } catch {
+          /* 静默 */
+        }
+      } else {
+        storedManualTheme.value = null
+        try {
+          window.localStorage.removeItem(MANUAL_THEME_KEY)
+        } catch {
+          /* 静默 */
+        }
+      }
+      playgroundTheme.value = t
+      console.log('🎨 [Preview] 父页面下发主题:', t, persist ? '(持久化)' : '')
+    }
     if (theme === 'light' || theme === 'dark') {
       // 🆕 R12：父页面显式下发 ⇒ 清掉本页手动选择，让 Playground 的控制权生效。
       //   否则用户在本页点过切换后，父页面下拉会「失效」（手动值恒压过 postMessage）。
-      manualTheme.value = null
-      playgroundTheme.value = theme
-      console.log('🎨 [Preview] 父页面下发主题:', theme)
+      applyTheme(theme)
     } else if (isValidThemeKey(theme)) {
       // 🆕🆕 N 主题：父页面可下发自定义 key（如「黄昏模式」）
-      manualTheme.value = null
-      playgroundTheme.value = theme
-      console.log('🎨 [Preview] 父页面下发主题:', theme)
+      applyTheme(theme)
     }
     return
   }
@@ -2263,6 +2353,19 @@ html:root .mc-preview-stage-shell.is-standalone .mc-preview-stage {
   font-size: 13px;
   backdrop-filter: blur(10px);
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+}
+
+/* 🔴 2026-10-13：嵌入态紧凑变体——iframe 高度有限，缩小并半透明悬停恢复 */
+.mc-theme-switcher--embedded {
+  top: 6px;
+  gap: 6px;
+  padding: 3px 8px 3px 3px;
+  font-size: 11px;
+  opacity: 0.55;
+  transition: opacity 0.15s;
+}
+.mc-theme-switcher--embedded:hover {
+  opacity: 1;
 }
 .mc-theme-switcher.dark {
   background: rgba(30, 30, 40, 0.92);

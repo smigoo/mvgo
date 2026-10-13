@@ -47,6 +47,18 @@ export class ThemeNodeDto {
   @IsOptional()
   @IsString()
   name?: string;
+
+  /**
+   * 🔴 2026-10-13：用户为该主题**自选的深浅配色**（与稿子自动判定解耦——
+   *   用户拍的颜色方案说了算）。浅色 ⇒ resolveThemeKey 占用 light 保留位；
+   *   深色 ⇒ 深色系 key；dark 恒为系统占位（A8-1）。省略则按稿子自动判定。
+   *   ⚠️ normalizeThemeInputs 已消费 raw.brightness（declaredBrightness），
+   *   但本 DTO 是白名单式校验类 —— 不加此字段会被 ValidationPipe 静默剥离
+   *   （与 secondaryNode/previewImageUrl 丢失同型坑）。
+   */
+  @IsOptional()
+  @IsIn(['light', 'dark'])
+  brightness?: 'light' | 'dark';
 }
 
 export class GeneratePhase2Dto {

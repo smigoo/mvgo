@@ -5475,6 +5475,9 @@ export class MicrocodeEngineer extends BaseAgent {
         d.themeConfig.list = _themeMeta.map((t) => ({
           name: t.name || t.key,
           key: t.key,
+          // 🔴 2026-10-13：记录每主题的 Figma 源（任务详情页「多稿缩略图/跳转设计稿」
+          //   的数据前提；实测此前三主题该字段全 null）。缺省 null 不阻断。
+          ...(t.nodeId ? { figmaNodeId: t.nodeId, figmaFileKey: t.fileKey } : {}),
           ...(t.brightness ? { brightness: t.brightness } : {}),
           // 🔴 2026-10-12：主题预览图（前端「填URL 阶段强制预览」的图，已落盘为
           //   `mc-preview-<key>.png`，见 graph 的 fetchThemeNodes）。

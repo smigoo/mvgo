@@ -16,6 +16,9 @@ import {
   FRAMEWORK_PRESET_NAMES,
   healFileLevelSlotOverrides,
 } from '../utils/theme-color-guard.js'
+// 🔴 2026-10-13：dark 三核心枚举从生成器同源 import（不写字面量副本 ——
+//   「判据直接 import 源头」既有纪律；M4-10 锁的值与生成器共用这一张表）
+import { MC_DARK_THEME_COLOR_ENUM_CORE } from '../utils/style-tokens.js'
 
 const logger = createLogger({ name: 'less-variable-checker' })
 
@@ -135,6 +138,35 @@ export class LessVariableChecker {
             removed: healed.removed,
             variables: healed.names,
             injected: healed.injected,
+          })
+        }
+      }
+
+      // 7. 🔴 2026-10-13 确定性自愈：theme-vars.less 的 .theme-dark() 三核心
+      //    必须为 M4-10 枚举值（与 css-vars.js 同口径）。存量产物写盘即收敛。
+      if (existsSync(themeVarsPath)) {
+        const darkCore = this.healThemeVarsDarkCore(themeVarsPath)
+        if (darkCore.fixed) {
+          result.fixed = true
+          result.healedThemeVarsDarkCore = darkCore.changed
+          logger.info('已把 theme-vars.less 的 .theme-dark() 三核心校正为 M4-10 枚举值', {
+            changed: darkCore.changed,
+          })
+        }
+      }
+
+      // 8. 🔴🔴 2026-10-13 确定性自愈：根作用域缺槽位补齐（生成失败级——
+      //    common.less 引用了仅 dark 定义的槽位 ⇒ 根作用域编译断）。
+      if (existsSync(themeVarsPath) && existsSync(join(themeVarsPath, '..', '..', 'common.less'))) {
+        const rootSlots = this.healRootScopeMissingSlots(
+          themeVarsPath,
+          join(themeVarsPath, '..', '..', 'common.less'),
+        )
+        if (rootSlots.fixed) {
+          result.fixed = true
+          result.healedRootScopeMissingSlots = rootSlots.injected
+          logger.info('已补齐根作用域缺失槽位（common.less 引用但部分主题未定义）', {
+            injected: rootSlots.injected,
           })
         }
       }
@@ -694,6 +726,156 @@ export class LessVariableChecker {
    * @param {string} themeVarsPath
    * @returns {{removed:number, names:string[], injected:string[]}}
    */
+  /**
+   * 🔴🔴 2026-10-13 确定性自愈（真机 mc-max-1791884047075-49102507 实锤）：
+   * 「根作用域缺槽位」——common.less 引用了 `@color-card-bg` 等槽位，但只有
+   * `.theme-dark()` 定义了它们（深色稿色板提取出的语义槽位），根默认
+   * `.theme-light()` 没有 ⇒ index.less 根作用域（只有 .common()+.theme-light()）
+   * 编译 `variable @color-card-bg is undefined` ⇒ **整个生成失败**。
+   *
+   * 为什么「写盘门禁自动补全」漏了它：isLessVarDeclared 是**文件级**判据
+   * （.theme-dark() 里定义过就算已声明），不区分「根作用域可不可见」。
+   *
+   * 修法：对 common.less 引用的每个 @slot：
+   *   - .common() 已定义 ⇒ 跳过（根作用域可见）
+   *   - 每个主题 mixin 里缺失 ⇒ safeLessVarValue 按名+明暗猜值补进该 mixin
+   *     （light 补浅色系、dark 补深色系；自定义 key 按其首个色值亮度推断明暗）
+   *
+   * @param {string} themeVarsPath
+   * @param {string} commonLessPath
+   * @returns {{fixed:boolean, injected:Array<{mixin:string,name:string,value:string}>}}
+   */
+  static healRootScopeMissingSlots(themeVarsPath, commonLessPath) {
+    const EMPTY = { fixed: false, injected: [] }
+    let tvContent
+    try {
+      tvContent = readFileSync(themeVarsPath, 'utf-8')
+    } catch (e) {
+      return EMPTY
+    }
+    let commonContent = ''
+    try {
+      commonContent = readFileSync(commonLessPath, 'utf-8')
+    } catch (e) {
+      return EMPTY
+    }
+
+    // 1. common.less 引用的 @slot 集合
+    const referenced = new Set()
+    const rr = /@([a-zA-Z0-9_-]+)/g
+    let x
+    while ((x = rr.exec(commonContent)) !== null) referenced.add(x[1])
+    if (referenced.size === 0) return EMPTY
+
+    // 2. 解析 theme-vars：各 mixin 的槽位集合（含 .common()）
+    const mixinRe = /\.([a-zA-Z0-9_-]+)\s*\(\s*\)\s*\{([^}]*)\}/g
+    const mixins = {} // name -> { body, vars:Set }
+    const order = []
+    let mm
+    while ((mm = mixinRe.exec(tvContent)) !== null) {
+      const vars = new Set()
+      const vr = /@([a-zA-Z0-9_-]+)\s*:/g
+      let vm
+      while ((vm = vr.exec(mm[2])) !== null) vars.add(vm[1])
+      mixins[mm[1]] = { body: mm[2], vars }
+      order.push(mm[1])
+    }
+    const commonVars = mixins['common']?.vars || new Set()
+
+    // 3. 逐主题补缺（跳过 .common()）
+    const injected = []
+    let next = tvContent
+    let changed = false
+    for (const mixinName of order) {
+      if (mixinName === 'common') continue
+      const vars = mixins[mixinName].vars
+      const missing = [...referenced].filter((n) => !vars.has(n) && !commonVars.has(n))
+      if (missing.length === 0) continue
+      // 明暗推断：theme-light→浅色值；theme-dark→深色值；
+      //   自定义 key（theme_N 等）按其 @color-primary 首个色值亮度
+      let background = 'light'
+      if (/-dark$|^dark$/.test(mixinName)) {
+        background = 'dark'
+      } else if (mixinName !== 'theme-light') {
+        const pm = mixins[mixinName].body.match(/@color-primary\s*:\s*#([0-9a-fA-F]{6})/)
+        if (pm) {
+          const v = parseInt(pm[1], 16)
+          const lum = 0.299 * ((v >> 16) & 255) + 0.587 * ((v >> 8) & 255) + 0.114 * (v & 255)
+          background = lum < 128 ? 'dark' : 'light'
+        } else {
+          background = 'dark'
+        }
+      }
+      const pairs = missing.map((n) => ({
+        name: n,
+        value: safeLessVarValue(n, { background }),
+      }))
+      next = this.appendVarsToMixin(next, mixinName, pairs)
+      injected.push(...pairs.map((p) => `@${p.name}→.${mixinName}()`))
+      changed = true
+    }
+    if (!changed) return EMPTY
+    try {
+      writeFileSync(themeVarsPath, next, 'utf-8')
+    } catch (e) {
+      logger.error('补齐根作用域缺失槽位失败', { themeVarsPath, error: e.message })
+      return EMPTY
+    }
+    return { fixed: true, injected }
+  }
+
+  /**
+   * 🔴 2026-10-13 确定性自愈：校验 theme-vars.less 的 `.theme-dark()` 三核心
+   * 是否为 M4-10 枚举值，不符则**直接改写**为枚举值。
+   *
+   * 根因（真机 fca166e8）：N 主题下 themeMeta 循环先 emit 的 `.theme-dark()` 用了
+   * themeSlots.dark 原始值（被 theme_2 顶掉），生成器已修（style-tokens）；
+   * 但**存量产物**不重跑生成就不会好 —— 在写盘自愈链路里补同口径校验，
+   * 让存量产物写盘时即收敛。M4-10 主门禁只查 css-vars.js（已知盲区），
+   * 此处补齐 theme-vars.less 侧。
+   *
+   * @param {string} themeVarsPath
+   * @returns {{fixed:boolean, changed:Array<{name:string,from:string,to:string}>}}
+   */
+  static healThemeVarsDarkCore(themeVarsPath) {
+    const EMPTY = { fixed: false, changed: [] }
+    let content
+    try {
+      content = readFileSync(themeVarsPath, 'utf-8')
+    } catch (e) {
+      return EMPTY
+    }
+    const re = /(\.theme-dark\s*\(\s*\)\s*\{)([^}]*)(\})/
+    const m = content.match(re)
+    if (!m) return EMPTY
+    // 槽位名映射：枚举 camelCase ↔ theme-vars kebab-case
+    const coreKebab = {
+      colorTextBase: 'color-text-base',
+      colorPrimary: 'color-primary',
+      colorPrimaryBg: 'color-primary-bg',
+    }
+    const changed = []
+    let body = m[2]
+    for (const [enumKey, kebab] of Object.entries(coreKebab)) {
+      const enumVal = MC_DARK_THEME_COLOR_ENUM_CORE[enumKey]
+      const lineRe = new RegExp(`(@${kebab}\s*:\s*)([^;]+);`)
+      const lm = body.match(lineRe)
+      if (!lm) continue // 槽位缺失不在此补（归 healCommonColorVars 管辖）
+      if (lm[2].trim().toLowerCase() === enumVal.toLowerCase()) continue
+      changed.push({ name: `@${kebab}`, from: lm[2].trim(), to: enumVal })
+      body = body.replace(lineRe, `$1${enumVal};`)
+    }
+    if (changed.length === 0) return EMPTY
+    const next = content.replace(re, `$1${body}$3`)
+    try {
+      writeFileSync(themeVarsPath, next, 'utf-8')
+    } catch (e) {
+      logger.error('校正 theme-vars.less dark 三核心失败', { themeVarsPath, error: e.message })
+      return EMPTY
+    }
+    return { fixed: true, changed }
+  }
+
   static healCommonColorVars(themeVarsPath) {
     const EMPTY = { removed: 0, names: [], injected: [] }
     let content

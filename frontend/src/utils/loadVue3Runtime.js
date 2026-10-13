@@ -450,9 +450,26 @@ export async function loadVue3FromWorkspace(
   if (app && !app.component('base-panel')) {
     app.component('base-panel', BasePanel.default || BasePanel)
   }
-  if (app && !app.config.globalProperties.__mvgoAntDesignVueInstalled) {
-    app.use(antDesignVue.default || antDesignVue)
-    app.config.globalProperties.__mvgoAntDesignVueInstalled = true
+  // 🔴 防重安装（Vue warn: "Plugin has already been applied to target app"）
+  //
+  //   实测更正（2026-10-13）：Vue 内部 `installedPlugins` 是 `app.use` 的**闭包变量**，
+  //   不是 `app._context` 上的属性（探针实测 `_context.installedPlugins === undefined`），
+  //   所以**外部无法读取、也无法据此判断**。曾误以为可读 `_context.installedPlugins`，
+  //   结果 `alreadyInstalled` 恒false ⇒ 防御形同虚设、警告照旧。
+  //
+  //   治本：自建 WeakSet（以 app 为键 ⇒ app 销毁自动回收，无需手动清理），
+  //   与 Vue 闭包语义等价 —— 同 app 只 use 一次，不同 app（不同预览实例）互不影响。
+  //   放 globalProperties 上以复用既有约定（那里已有 __mvgoAntDesignVueInstalled）。
+  if (app) {
+    const antd = antDesignVue.default || antDesignVue
+    if (!app.config.globalProperties.__mvgoInstalledPlugins) {
+      app.config.globalProperties.__mvgoInstalledPlugins = new WeakSet()
+    }
+    const installed = app.config.globalProperties.__mvgoInstalledPlugins
+    if (!installed.has(antd)) {
+      app.use(antd)
+      installed.add(antd)
+    }
   }
 
   // 入口统一：组件使用 package/index.vue；页面骨架使用根目录 index.vue

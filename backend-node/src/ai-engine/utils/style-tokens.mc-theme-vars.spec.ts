@@ -168,3 +168,58 @@ describe('splitCommonColorVars — 与门禁同源判据', () => {
     expect(splitCommonColorVars({})).toEqual({ kept: {}, moved: {} })
   })
 })
+
+/**
+ * 🔴 2026-10-13 回归（真机实锤 c-aiot-dpjh-bsjd-fca166e8）：
+ * N 主题 + 系统占位 dark 并存时，themeMeta 循环先 emit 的 `.theme-dark()`
+ * 用了 themeSlots.dark 的原始值（深色稿真值落 dark 槽位时 = theme_2 的值），
+ * 使 hasMixin('theme-dark') 为 true ⇒ 「补 darkFinal（M4-10 枚举三核心）」被跳过
+ * ⇒ theme-vars.less 的 dark ≠ css-vars.js 的 dark ⇒ 用户视觉「dark 和主题2 一样」。
+ */
+describe('renderMicrocodeThemeVarsLess — N 主题循环里系统占位 dark 强制枚举', () => {
+  const MC_ENUM_PRIMARY = '#44E4FF' // M4-10 枚举 colorPrimary（见 MC_DARK_THEME_COLOR_ENUM）
+
+  it('themeSlots.dark 的原始真值不得泄漏进 .theme-dark() 三核心', () => {
+    const styleTokens = {
+      themeMeta: [
+        { key: 'light', name: '浅色', brightness: 'light' },
+        { key: 'theme_2', name: '某主题', brightness: 'dark' },
+        { key: 'dark', name: '深色', brightness: 'dark' },
+      ],
+      themeSlots: {
+        light: { colorPrimary: '#a6ceff', colorTextBase: '#546881', colorBgDesign: '#a0c1ff' },
+        // 深色稿真值被错误落到 dark 槽位（= theme_2 值）——上游数据事故形态
+        dark: { colorPrimary: '#071f3d', colorTextBase: '#98c2f6', colorBgDesign: '#123259' },
+        theme_2: { colorPrimary: '#071f3d', colorTextBase: '#98c2f6', colorBgDesign: '#123259' },
+      },
+    }
+    const out = renderMicrocodeThemeVarsLess(styleTokens, '')
+    // 提取 .theme-dark() 块
+    const m = out.match(/\.theme-dark\(\)\s*\{([^}]*)\}/)
+    expect(m).toBeTruthy()
+    const body = m![1]
+    // 三核心必须是 M4-10 枚举值（dark 视觉不得被 theme_2 顶掉）
+    expect(body).toContain(`@colorPrimary: ${MC_ENUM_PRIMARY}`)
+    expect(body).not.toContain('@colorPrimary: #071f3d')
+  })
+
+  it('自定义深色 key（theme_2）真值照常保留（不受枚举约束）', () => {
+    const styleTokens = {
+      themeMeta: [
+        { key: 'light', name: '浅色', brightness: 'light' },
+        { key: 'theme_2', name: '某主题', brightness: 'dark' },
+        { key: 'dark', name: '深色', brightness: 'dark' },
+      ],
+      themeSlots: {
+        light: { colorPrimary: '#a6ceff' },
+        dark: { colorPrimary: '#071f3d' },
+        theme_2: { colorPrimary: '#071f3d', colorTextBase: '#98c2f6' },
+      },
+    }
+    const out = renderMicrocodeThemeVarsLess(styleTokens, '')
+    const m = out.match(/\.theme-theme_2\(\)\s*\{([^}]*)\}/)
+    expect(m).toBeTruthy()
+    // mcSlotsFromTokens 输出 kebab-case
+    expect(m![1]).toContain('@color-primary: #071f3d')
+  })
+})

@@ -1542,11 +1542,42 @@ function onGlobalMouseDown(e) {
 onMounted(() => {
   window.addEventListener('mousedown', onGlobalMouseDown)
   window.addEventListener('scroll', closeContextMenu, true)
+  // 🔴 预览页挂载握手（事故 2026-10-13「内容主题选 dark 预览仍浅色」）：
+  //   iframe 的 load 事件触发时，其内部 Vue 可能尚未 mounted —— 那时发出的
+  //   set-theme postMessage 会被丢弃。change('themeType') → init() 重建 iframe
+  //   后立即 postMessage，正中这个时序 ⇒ 主题永远到不了 preview 页
+  //   （日志表现：只有「已注入 cssVars(theme=light)」，无「父页面下发主题」）。
+  //   子页面 mounted 后会主动发 mvgo-preview-mounted 握手，此处收到即把当前
+  //   设置补发过去（与 TaskDetail.vue 的既有处理同款）。
+  window.addEventListener('message', onPreviewMountedHandshake)
 })
 onUnmounted(() => {
   window.removeEventListener('mousedown', onGlobalMouseDown)
   window.removeEventListener('scroll', closeContextMenu, true)
+  window.removeEventListener('message', onPreviewMountedHandshake)
 })
+
+/**
+ * 收到预览页挂载握手 → 补发当前面板类型与内容主题。
+ * 用 event.source 而非 previewFrame.value：握手到达时 ref 一定已绑定，
+ * 但以消息来源为准可避免多帧/重建期发错窗口。
+ */
+function onPreviewMountedHandshake(event) {
+  const data = event.data
+  if (!data || data.type !== 'mvgo-preview-mounted') return
+  const target = event.source
+  if (!target) return
+  try {
+    if (formState.panelType) {
+      target.postMessage({ type: 'set-panel-type', panelType: formState.panelType }, window.location.origin)
+    }
+    if (formState.themeType) {
+      target.postMessage({ type: 'set-theme', theme: formState.themeType }, window.location.origin)
+    }
+  } catch {
+    /* 源窗口已关闭：忽略 */
+  }
+}
 
 // 复制文本到剪贴板（兼容非安全上下文）
 async function copyText(text, successMsg = '已复制路径') {
@@ -2593,6 +2624,10 @@ const previewUrl = computed(() => {
     height: previewContainerHeight.value,
     cacheKey: previewCacheKey.value,
     snapshot: useWorkspaceSource ? '0' : undefined,
+    // 🔴 不传 theme（2026-10-13 二次定案）：formState.themeType 变化会改变 iframe
+    //   src ⇒ 切主题必重载 ⇒「闪两次」（postMessage 注入一次 + 重载恢复再注入一次）。
+    //   重载后的主题恢复由 mvgo-preview-mounted 握手补发（onPreviewMountedHandshake
+    //   会补发 formState.themeType），已实测工作；无需 URL 通道。
   }).replace(/^\//, '')
 })
 
@@ -2840,7 +2875,22 @@ const effectiveScale = computed(() => {
 })
 const canvasScale = computed(() => effectiveScale.value)
 
-/** 画布层样式：固定 1920×1080 + 整体缩放 + 缩放后占据的实际空间（负 margin 抵消） */
+/**
+ * 画布层样式：固定 1920×1080 + 整体缩放。
+ *
+ * 🔴 2026-10-13：transform+负margin → CSS zoom（修「自适应打开看不到组件」）。
+ *
+ *   旧实现 `transform: scale(s)` 不改变布局盒子，需再补右/下负 margin 让
+ *   wrapper 的 flex 居中按视觉尺寸排布。这套 hack 实测脆弱：
+ *   overflow:auto + flex 居中 + 负 margin 组合下，画布会被压成一条
+ *   窄白条（用户截图：badge 紧贴 ~25px 宽的白条，组件完全不可见），
+ *   手动选 100%（s=1，无 transform 无负 margin）才恢复正常 ——
+ *   精确证明问题就在这套组合本身。
+ *
+ *   zoom 让**布局尺寸真实变化**（Chrome/Edge 全支持，Firefox 126+ 已标准化）：
+ *   flex 居中按真实视觉尺寸计算，无需负 margin，badge/容器/手柄全部自然定位。
+ *   wrapper 宽度与 canvas 无关 ⇒ updateAutoFitScale 无反馈循环，安全。
+ */
 const canvasStyle = computed(() => {
   const s = canvasScale.value
   // ⚠️ 本页是纯 JS（<script setup> 无 lang="ts"），不能用 TS 类型注解
@@ -2849,12 +2899,7 @@ const canvasStyle = computed(() => {
     height: `${CANVAS_H}px`,
   }
   if (s !== 1) {
-    style.transform = `scale(${s})`
-    style.transformOrigin = 'top left'
-    // scale 不改变布局盒子：右下补负 margin，让 wrapper 的居中/排布
-    // 按缩放后的视觉尺寸计算，否则会多出一大块空白。
-    style.marginRight = `${CANVAS_W * (1 - s)}px`
-    style.marginBottom = `${CANVAS_H * (1 - s)}px`
+    style.zoom = String(s)
   }
   return style
 })
@@ -3204,11 +3249,13 @@ function change(type, val) {
     })
     .then((res) => {
       if (type === 'themeType') {
-        init()
-        // 2026-09-15：切主题走「规范路径」——立即按新主题刷新 cssVars 并注入 iframe
+        // 🔴 不调 init()（2026-10-13）：主题切换只是「:root 变量 + 组件主题类」
+        //   的运行时替换，cssVars 已随组件缓存（previewCssVars），无需重建 iframe。
+        //   原先 init() 显式重建 ⇒ 用户看到「闪两下」（postMessage 注入一次 +
+        //   重载后 URL 恢复再注入一次，中间隔一次白屏重载）。
+        //   保留 URL ?theme=（上方 buildPreviewUrl）兜底刷新/重载场景。
+        // 2026-09-15：立即按新主题刷新 cssVars 并注入 iframe
         // （不依赖 formState 的 1s 防抖，避免切换后短暂无变化）。
-        // getThemeConfig() 已按 common + cssVars[theme] 合并，styles.value 更新后
-        // watch 会触发 sendStyleToPreview() → 预览页 :root 注入 --colorX。
         styles.value = getStyleConfig()
         // 兜底路径：宿主未注入变量时，靠 .dark/.light 作用域下 var() 的 fallback 差异
         sendThemeToPreview(val)
@@ -3217,11 +3264,14 @@ function change(type, val) {
 }
 
 // 将主题类型推送到预览 iframe（通过 postMessage 桥接）
-function sendThemeToPreview(theme) {
+function sendThemeToPreview(theme, { persist = true } = {}) {
   const frame = previewFrame.value
   if (!frame || !frame.contentWindow) return
   try {
-    frame.contentWindow.postMessage({ type: 'set-theme', theme }, '*')
+    // 🔴 persist（2026-10-13）：demo 下拉是用户显式选择 ⇒ persist:true，
+    //   preview 页写入 localStorage 手动档 ⇒ formState 深度 watch 的 1s 防抖
+    //   重载后主题从 localStorage 恢复（否则重载丢回 declare default=light）。
+    frame.contentWindow.postMessage({ type: 'set-theme', theme, persist }, '*')
   } catch (e) {
     console.warn('[sendThemeToPreview] postMessage 失败:', e)
   }
@@ -4731,6 +4781,23 @@ watch(
           flex-direction: column;
           .ant-tabs-content{
             height: 100%;
+            /* 🔴 2026-10-13 补高度链最后一环：tabpane 不锁高时高度=内容
+               （canvas 1080×zoom）⇒ wrapper 的 flex:1 无基准
+               ⇒ zoom 反馈循环到 0（「由大到小的动画最后看不到组件」）。
+               对齐 5684 拆分视图分支的既有写法。 */
+            display: flex;
+            flex-direction: column;
+            .ant-tabs-tabpane {
+              /* 🔴 display:flex 必须有（2026-10-13 puppeteer 实测教训）：
+                 只给 flex:1/height:0 而漏 display 时 pane 是 block，
+                 wrapper 的 flex:1 在 block 父级里无效 ⇒ 高度塌回内容高
+                 （zoom 已棘轮到 1% ⇒ 画布 6px，「看不到组件」）。 */
+              display: flex;
+              flex-direction: column;
+              flex: 1;
+              min-height: 0;
+              height: 0; /* 关键：让 flex:1 在嵌套 flex 中正确收缩 */
+            }
           }
         }
 
@@ -4822,6 +4889,11 @@ watch(
       /* 预览容器 —— 默认居中，留 padding 给"画框"视觉 */
       .preview-wrapper {
         flex: 1;
+        /* 🔴 必须有 min-height:0（flex column 子项默认 min-height:auto）：
+           缺它时内容（canvas 高 = 1080×zoom）会撑破 flex 分配高度
+           ⇒ zoom 越小 wrapper 越矮 → fit 算出更小的 zoom → 反馈循环到 0
+           （用户实测：刷新后「由大到小的动画，最后看不到组件」）。 */
+        min-height: 0;
         /* 不再裁切：画布已固定 1920×1080 并整体缩放，
            万一用户选 100%/125% 超出空间时需可滚动查看 */
         overflow: auto;

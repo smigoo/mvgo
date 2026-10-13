@@ -1676,8 +1676,12 @@ import {
   buildPagePlaygroundLocation
 } from '@/utils/task-actions'
 import { buildPreviewUrl as buildResolvedPreviewUrl, resolvePreviewDescriptor } from '@/utils/preview-resolver'
+import { useTheme } from '@/composables/useTheme'
 import http from '@/core/http'
 import GitLabPushModal from '@/components/GitLabPushModal.vue'
+
+// 🆕 预览 iframe 主题透传用：跟随宿主全局暗色模式（见 buildPreviewUrl 内注释）
+const { currentTheme: hostTheme } = useTheme()
 
 // 代码预览语法高亮（VS Code Dark+ 风格，与 microcode-playground 一致）
 import hljs from 'highlight.js/lib/common'
@@ -2646,6 +2650,11 @@ function buildPreviewUrl(snapshot: TaskCodeSnapshotManifest | null = null, force
     cacheKey: previewReloadKey.value,
     // 2026-09-15：artifactReady 时强制走 workspace（Playground 编辑态 / 任务完成后用户可能已编辑）
     snapshot: forceWorkspace ? '0' : undefined,
+    // 🆕 主题透传（事故「选了 dark 预览还是浅色」）：iframe 是独立文档读不到宿主
+    //   data-theme，TaskDetail 也不发 set-theme postMessage ⇒ 必须走 URL。
+    //   ?theme= 在 preview 页 resolvedThemeClass 优先级链第 2 级（仅次于手动切换），
+    //   刷新/重载都不丢。
+    theme: hostTheme.value,
   })
 }
 
