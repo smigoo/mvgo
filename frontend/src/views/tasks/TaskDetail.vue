@@ -98,6 +98,53 @@
               <!-- Figma 来源：源设计缩略图 + URL -->
               <div class="source-value" v-if="taskSourceMode === 'figma'">
                 <div class="source-block-label">{{ sourceBlockLabel }}</div>
+                <!-- 🔴 2026-10-14：多主题任务 ⇒ 逐主题卡（缩略图/名称/深浅 chip/设计稿跳转） -->
+                <div v-if="themeList.length > 1" class="task-theme-list">
+                  <div
+                    v-for="item in themeList"
+                    :key="item.key"
+                    class="task-theme-card"
+                    :class="{ 'is-clickable': !!item.previewUrl }"
+                    @click="openThemePreview(item)"
+                    :title="item.previewUrl ? '点击查看大图' : ''"
+                  >
+                    <img
+                      v-if="item.previewUrl"
+                      :src="item.previewUrl"
+                      :alt="item.name"
+                      class="task-theme-card__thumb"
+                      loading="lazy"
+                    />
+                    <div v-else class="task-theme-card__thumb task-theme-card__thumb--empty">
+                      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z" /></svg>
+                    </div>
+                    <div class="task-theme-card__meta">
+                      <div class="task-theme-card__name-row">
+                        <span class="task-theme-card__name">{{ item.name }}</span>
+                        <span
+                          class="task-theme-card__tone"
+                          :class="item.brightness === 'dark' ? 'is-dark' : 'is-light'"
+                        >
+                          {{ item.brightness === 'dark' ? '深色' : '浅色' }}
+                        </span>
+                      </div>
+                      <div class="task-theme-card__sub">
+                        <span v-if="item.isBuiltin" class="task-theme-card__builtin">系统内置一体化 dark 主题</span>
+                        <a
+                          v-if="item.figmaUrl"
+                          :href="item.figmaUrl"
+                          target="_blank"
+                          rel="noopener"
+                          class="task-theme-card__figma"
+                          @click.stop
+                          title="打开该主题的设计稿"
+                        >设计稿 ↗</a>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <!-- 单主题：保持原有单图展示 -->
+                <template v-else>
                 <div class="source-thumb-row source-thumb-row--full">
                   <img
                     v-if="!sourceImageFailed"
@@ -127,6 +174,7 @@
                     </a>
                   </div>
                 </div>
+                </template>
               </div>
               <!-- 截图来源：截图原图 + 复制 -->
               <div class="source-value" v-else-if="taskSourceMode === 'screenshot'">
@@ -1579,14 +1627,14 @@
     <div v-if="sourceImagePreviewVisible" class="source-preview-modal" @click.self="sourceImagePreviewVisible = false">
       <div class="source-preview-modal__content">
         <div class="source-preview-modal__header">
-          <span class="source-preview-modal__title">{{ taskSourceMode === 'figma' ? 'Figma 源设计' : '截图原图' }}</span>
+          <span class="source-preview-modal__title">{{ previewModalTitle || (taskSourceMode === 'figma' ? 'Figma 源设计' : '截图原图') }}</span>
           <button type="button" class="source-preview-modal__close" @click="sourceImagePreviewVisible = false" title="关闭">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
         <img
-          :src="sourceDesignImageUrl"
-          :alt="task.componentName || 'Figma 源设计'"
+          :src="previewModalUrl || sourceDesignImageUrl"
+          :alt="previewModalTitle || task.componentName || 'Figma 源设计'"
           class="source-preview-modal__img"
         />
       </div>
@@ -1952,6 +2000,104 @@ const sourceDesignImageUrl = computed(() => {
 const sourceImageLoaded = ref(false)
 const sourceImageFailed = ref(false)
 const sourceImagePreviewVisible = ref(false)
+
+// 🔴 2026-10-14 多主题边栏：从产物 declare.json 读取 themeConfig.list，
+//   多主题任务（list>1）在边栏渲染逐主题卡（缩略图/名称/深浅 chip/设计稿跳转）。
+//   单主题任务 themeList 为空 ⇒ 完全走原有单图展示，零回归。
+interface TaskThemeItem {
+  key: string
+  name: string
+  brightness: string
+  isBuiltin: boolean
+  previewUrl: string
+  figmaUrl: string
+}
+const themeList = ref<TaskThemeItem[]>([])
+const previewModalUrl = ref('')
+const previewModalTitle = ref('')
+
+async function loadThemeMeta() {
+  const t = task.value
+  const cid = t?.componentId || t?.sessionId
+  if (!cid || pageTaskFlag.value) return
+  try {
+    const r = await fetch(`/api/component/${cid}/file?path=declare.json`)
+    if (!r.ok) return
+    let declare = await r.json()
+    // ⚠️ file API 返回信封 { success, content } —— content 可能是 JSON 字符串或已解析对象
+    if (declare && typeof declare.content === 'string') {
+      try {
+        declare = JSON.parse(declare.content)
+      } catch {
+        return
+      }
+    } else if (declare && declare.content && typeof declare.content === 'object') {
+      declare = declare.content
+    }
+    const list = declare?.themeConfig?.list
+    if (!Array.isArray(list) || list.length <= 1) return
+    themeList.value = list.map((item: any) => {
+      const previewName = String(item.previewName || '')
+      const previewUrl = previewName
+        ? `/api/component/${cid}/file?path=resources/images/${encodeURIComponent(previewName)}&raw=1`
+        : ''
+      const nodeId = String(item.figmaNodeId || '')
+      const fileKey = String(item.figmaFileKey || '')
+      const figmaUrl =
+        nodeId && fileKey
+          ? `https://www.figma.com/file/${fileKey}/?node-id=${nodeId.replace(/:/g, '-')}`
+          : ''
+      return {
+        key: String(item.key || ''),
+        name: String(item.name || item.key || ''),
+        brightness: String(item.brightness || (item.key === 'dark' ? 'dark' : 'light')),
+        isBuiltin: !!item.builtin || item.key === 'dark',
+        previewUrl,
+        figmaUrl,
+      }
+    })
+    // 🔴 2026-10-14：存量任务主题无落盘预览图 ⇒ 实时拉 Figma 缩略图兜底
+    //   （用户主题 each 并行拉，失败静默保留空态；系统内置 dark 不拉——用户要求
+    //   其不展示预览图，仅小字说明「系统内置一体化 dark 主题」）
+    for (const item of themeList.value) {
+      if (item.isBuiltin || item.previewUrl || !item.figmaUrl) continue
+      void fetch(`/api/phase2/figma-preview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ figmaUrl: item.figmaUrl }),
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          const url =
+            data?.data?.imageUrl || data?.imageUrl || data?.data?.previewImageUrl || data?.previewImageUrl || ''
+          if (!url) return
+          const target = themeList.value.find((x) => x.key === item.key)
+          if (target && !target.previewUrl) target.previewUrl = url
+        })
+        .catch(() => {})
+    }
+  } catch {
+    /* declare 读取失败 ⇒ 静默走单图展示 */
+  }
+}
+
+watch(
+  () => [task.value?.componentId, task.value?.sessionId, pageTaskFlag.value],
+  () => {
+    themeList.value = []
+    previewModalUrl.value = ''
+    previewModalTitle.value = ''
+    void loadThemeMeta()
+  },
+  { immediate: true },
+)
+
+function openThemePreview(item: TaskThemeItem) {
+  if (!item.previewUrl) return
+  previewModalUrl.value = item.previewUrl
+  previewModalTitle.value = `Figma 源设计 · ${item.name}`
+  sourceImagePreviewVisible.value = true
+}
 watch(sourceDesignImageUrl, () => {
   sourceImageLoaded.value = false
   sourceImageFailed.value = false
@@ -4320,7 +4466,13 @@ function handlePreviewFrameMessage(event: MessageEvent) {
   // 预览页挂载握手：把当前面板类型设置补发给刚起来的这一帧。
   // 不能只依赖 iframe 的 load 事件 —— 那时 iframe 内 Vue 可能尚未 mounted，消息会被丢弃。
   if (data.type === 'mvgo-preview-mounted') {
-    if (showPanelTypeSwitch.value) {
+    // 🔴 2026-10-14：多主题任务**跳过面板类型补发**——多主题的期望行为是
+    //   「预览内切主题时按深浅自动联动面板（深=aio/浅=default）」，
+    //   补发静态面板值会把预览页 userPickedPanel 置位 ⇒ 联动永久失效
+    //   （用户实测：切深色主题仍是浅色面板）。
+    if (themeList.value.length > 1) {
+      /* 多主题：跳过补发 */
+    } else if (showPanelTypeSwitch.value) {
       try {
         ;(event.source as Window | null)?.postMessage(
           { type: 'set-panel-type', panelType: previewPanelType.value },
@@ -5800,6 +5952,95 @@ watch(bindingWizardOpen, (open) => {
   margin-top: 8px;
 }
 
+/* 🔴 2026-10-14：多主题任务边栏 · 逐主题卡 */
+.task-theme-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.task-theme-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px;
+  border: 1px solid var(--border-default, #e5e7eb);
+  border-radius: 8px;
+  background: var(--bg-card, #fff);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.task-theme-card.is-clickable {
+  cursor: pointer;
+}
+.task-theme-card.is-clickable:hover {
+  border-color: var(--c-primary, #2563eb);
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.15);
+}
+.task-theme-card__thumb {
+  width: 64px;
+  height: 76px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--border-default, #e5e7eb);
+  flex-shrink: 0;
+  background: #fff;
+}
+.task-theme-card__thumb--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary, #9ca3af);
+}
+.task-theme-card__meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.task-theme-card__name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.task-theme-card__name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #111827);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.task-theme-card__tone {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+}
+.task-theme-card__tone.is-light {
+  background: #eaf2ff;
+  color: #2563eb;
+}
+.task-theme-card__tone.is-dark {
+  background: #1c2128;
+  color: #e6e6e6;
+}
+.task-theme-card__sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+.task-theme-card__builtin {
+  color: var(--text-tertiary, #9ca3af);
+}
+.task-theme-card__figma {
+  color: var(--c-primary, #2563eb);
+  text-decoration: none;
+}
+.task-theme-card__figma:hover {
+  text-decoration: underline;
+}
 .source-url-row {
   display: flex;
   align-items: center;

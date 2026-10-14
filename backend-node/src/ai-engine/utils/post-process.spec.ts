@@ -126,6 +126,77 @@ describe('stripHeaderChromeDecorations（T1\' header 装饰剥离）', () => {
     // 该用例记录现状：若未来加「含业务文本不剥」逻辑，改此断言。
     expect(typeof out).toBe('string');
   });
+
+  // P-14 首锚点前 chrome 区剥离（2026-10-14 · cd63d1c5 实锤）：
+  //   标题-线（无 inline 尺寸 img）+ Group_11（20×20 菱形）挂在标题区，
+  //   旧判据 img 免剥 + 无尺寸保守放行 ⇒ 漏剥。
+  const CD63_HEADER_VUE = `<template>
+  <div data-section-id="565:2" class="c-aiot-header" style="display:flex;flex-direction:row;align-items:center;" v-bind="$attrs">
+    <div class="c-aiot-header-title-img">
+      <img class="c-aiot-header-title-line" :src="icon3" alt="标题-线" />
+      <img class="c-aiot-group-11" :src="icon1" alt="Group 11" style="width:20px;height:20px;object-fit:contain" />
+    </div>
+<!-- 🎯 面板标题由 base-panel 外壳渲染，标题元素已程序化移除 -->
+    <div class="c-aiot-header-region">全国</div>
+    <img class="c-aiot-icon" :src="icon2" alt="icon-关闭" style="width:10px;height:10px;object-fit:contain" />
+  </div>
+</template>`;
+
+  it('P-14：首锚点前装饰 img 容器（标题线/菱形 icon）剥离，× 与业务文本保留', () => {
+    const out = stripHeaderChromeDecorations(CD63_HEADER_VUE, {
+      isHeaderSlotFile: true,
+      headerTexts: ['全国'],
+    });
+    expect(out).not.toMatch(/header-title-img/);
+    expect(out).not.toMatch(/标题-线/);
+    expect(out).not.toMatch(/Group 11/);
+    expect(out).toMatch(/全国/);
+    expect(out).toMatch(/icon-关闭/); // × 在锚点后，保留
+  });
+
+  it('P-14 幂等：剥离后二次调用零改动', () => {
+    const once = stripHeaderChromeDecorations(CD63_HEADER_VUE, {
+      isHeaderSlotFile: true,
+      headerTexts: ['全国'],
+    });
+    const twice = stripHeaderChromeDecorations(once, {
+      isHeaderSlotFile: true,
+      headerTexts: ['全国'],
+    });
+    expect(twice).toBe(once);
+  });
+
+  it('P-14 阴性：首锚点前的大尺寸 img（>24px inline，疑似业务 logo）保守保留', () => {
+    const withLogo = CD63_HEADER_VUE.replace(
+      '<img class="c-aiot-group-11" :src="icon1" alt="Group 11" style="width:20px;height:20px;object-fit:contain" />',
+      '<img class="c-aiot-logo" :src="icon1" alt="logo" style="width:40px;height:40px;object-fit:contain" />',
+    );
+    const out = stripHeaderChromeDecorations(withLogo, {
+      isHeaderSlotFile: true,
+      headerTexts: ['全国'],
+    });
+    // 40px 大图保留；但无尺寸的标题-线 img 所在容器仍按前导 chrome 剥（容器无锚点）
+    expect(out).toMatch(/c-aiot-logo/);
+    expect(out).toMatch(/全国/);
+  });
+
+  it('P-14 阴性：无 header 真值文本清单时不启用前导剥离', () => {
+    const out = stripHeaderChromeDecorations(CD63_HEADER_VUE, {
+      isHeaderSlotFile: true,
+      headerTexts: [],
+    });
+    expect(out).toMatch(/header-title-img/);
+  });
+
+  it('P-14 阴性：业务统计在前的 header（锚点即首元素）零前导剥离', () => {
+    const out = stripHeaderChromeDecorations(HEADER_SECTION_VUE, {
+      isHeaderSlotFile: true,
+      headerTexts: ['设备类型', '28', '设备总数', '68562'],
+    });
+    // 旧判据剥装饰 div；业务 stats 与其后的 icon/svg 处理同既有行为
+    expect(out).toMatch(/设备类型/);
+    expect(out).toMatch(/68562/);
+  });
 });
 
 describe('ensureHeaderSlotRowLayout（P-04B header 根容器 row 方向确定化）', () => {

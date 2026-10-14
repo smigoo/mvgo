@@ -3255,6 +3255,25 @@ export class MicrocodeEngineer extends BaseAgent {
         this.logger.warn('⚠️ 背景形态契约修复失败（非阻断）', {
           error: e.message,
         });
+        // 🔬 崩溃现场存档（2026-10-14，同「落盘前」处：中间态不持久化无法复现）
+        try {
+          const { mkdirSync, writeFileSync: _wf } = await import('node:fs');
+          const _dumpDir = join(
+            process.cwd(),
+            '.mc-gen-debug',
+            'bg-heal-crash',
+            String(Date.now()),
+          );
+          mkdirSync(_dumpDir, { recursive: true });
+          for (const [fp, fc] of Object.entries(allFiles)) {
+            if (typeof fc === 'string') {
+              _wf(join(_dumpDir, fp.replaceAll('/', '__')), fc, 'utf-8');
+            }
+          }
+          this.logger.warn('🔬 背景形态修复崩溃现场已存档（离线重放用）', {
+            dir: _dumpDir,
+          });
+        } catch (_) {}
       }
       try {
         const _absHealed = microcodeResources.healAbsoluteOverlayParents(
@@ -5472,8 +5491,21 @@ export class MicrocodeEngineer extends BaseAgent {
         ? opts.styleTokens.themeMeta
         : [];
       if (_themeMeta.length > 0) {
+        // 🛡️ R5 主题名 sanity（2026-10-14 · cd63d1c5 实锤）：主题名透传链
+        //   （用户输入/graph → themeMeta → declare themeConfig.list）会把无意义名
+        //   带进预览切换器（实锤「2222」——纯数字名显示在主题切换按钮上）。
+        //   缺失/纯数字/单字符 ⇒ 按 brightness 确定性兜底（带「设计稿」后缀，
+        //   与内置占位 dark「深色」区分——themeMeta 均为 Figma 真值轨）；
+        //   正常命名尊重透传。
+        const saneThemeName = (n, brightness) => {
+          const s = String(n || '').trim();
+          if (!s || s.length < 2 || /^\d+$/.test(s)) {
+            return brightness === 'dark' ? '深色（设计稿）' : '浅色（设计稿）';
+          }
+          return s;
+        };
         d.themeConfig.list = _themeMeta.map((t) => ({
-          name: t.name || t.key,
+          name: saneThemeName(t.name, t.brightness) || t.key,
           key: t.key,
           // 🔴 2026-10-13：记录每主题的 Figma 源（任务详情页「多稿缩略图/跳转设计稿」
           //   的数据前提；实测此前三主题该字段全 null）。缺省 null 不阻断。
@@ -6853,6 +6885,32 @@ export class MicrocodeEngineer extends BaseAgent {
                 `🎯 [mc] 面板标题元素已剥离（外壳渲染）：${fp} → 「${titleText}」`,
               );
             }
+          }
+
+          // 🛡️ R4 标题文案入链（2026-10-14 · cd63d1c5 实锤）：
+          //   declare.json attribute.title 此前恒为组件 ID（component-template 兜底
+          //   title: componentName），base-panel 外壳标题栏遂显示组件名
+          //   （aiot-dpjh-bsjd），Figma 标题文案从未入链。
+          //   titleText 已由上方判据（命名+层级+几何薄条）识别 ⇒ 确定性回写；
+          //   仅在 title 仍为组件名/缺失时回写（尊重 LLM 已写对的场景），fail-open。
+          const declareFp = Object.keys(codeResult.files || {}).find((p) =>
+            p.endsWith('declare.json'),
+          );
+          if (declareFp) {
+            try {
+              const dj = JSON.parse(codeResult.files[declareFp]);
+              if (
+                dj?.attribute &&
+                (!dj.attribute.title || dj.attribute.title === dj.componentName)
+              ) {
+                dj.attribute.title = titleText;
+                dj.attribute.description = titleText;
+                codeResult.files[declareFp] = JSON.stringify(dj, null, 2);
+                this.logger.info(
+                  `🎯 [mc] declare attribute.title 回写 Figma 标题（R4）：「${titleText}」`,
+                );
+              }
+            } catch {}
           }
         }
 
@@ -8288,6 +8346,27 @@ export default declareInfo
         this.logger.warn('⚠️ 落盘前背景形态修复失败（非阻断）', {
           error: _bgFormFinalErr?.message || String(_bgFormFinalErr),
         });
+        // 🔬 崩溃现场存档（2026-10-14）：「Maximum call stack size exceeded」的输入是
+        //   中间态产物（不持久化），事后无法离线复现（0397a327/cd63d1c5 连续两轮 6 次
+        //   失败均无现场）→ 把触发崩溃的文件集原样落盘，供重放定位。
+        try {
+          const { mkdirSync, writeFileSync: _wf } = await import('node:fs');
+          const _dumpDir = join(
+            process.cwd(),
+            '.mc-gen-debug',
+            'bg-heal-crash',
+            String(Date.now()),
+          );
+          mkdirSync(_dumpDir, { recursive: true });
+          for (const [fp, fc] of Object.entries(finalTruthFiles)) {
+            if (typeof fc === 'string') {
+              _wf(join(_dumpDir, fp.replaceAll('/', '__')), fc, 'utf-8');
+            }
+          }
+          this.logger.warn('🔬 背景形态修复崩溃现场已存档（离线重放用）', {
+            dir: _dumpDir,
+          });
+        } catch (_) {}
       }
       try {
         const _absFinal = microcodeResources.healAbsoluteOverlayParents(

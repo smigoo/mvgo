@@ -1,0 +1,71 @@
+// 微码组件主题变量文件（系统确定性生成；§3 核心槽位值由 buildStyleTokens 注入，勿手改）
+// 结构：3 个 mixin（.common() + 2 个主题）
+// 约束：mixin 内仅允许 @变量 定义，禁止任何 CSS 属性；禁止 CSS 变量
+
+.common() {
+  @fontSize: 14px;
+  @fontWeightStrong: 600;
+  @border-radius-base: 8px;
+  @border-radius-sm: 4px;
+}
+
+.theme-light() {
+  @color-text-base: #546881;
+  @color-text-secondary: #666666;
+  @color-primary: #a6ceff;
+  @color-primary-hover: #d9eaff;
+  @color-primary-active: #73b2ff;
+  @color-primary-bg: rgba(166, 206, 255, 0.12);
+  @color-primary-bg-hover: rgba(166, 206, 255, 0.16);
+  @color-bg-container: #ffffff;
+  @color-border: #e8e8e8;
+  @color-danger: #f5222d;
+  @color-warning: #faad14;
+  @color-success: #52c41a;
+  @color-text-primary: #333333;
+  @color-text-design: #0362a6;
+  @color-primary-light: rgba(136, 175, 223, 1);
+  @color-error: #ff4d4f;
+  @color-bg-page: #f0f5fb;
+  @color-bg-card: rgba(255, 255, 255, 0.85);
+  @color-bg-card-active: rgba(136, 175, 223, 0.18);
+  @color-border-base: rgba(136, 175, 223, 0.35);
+  @color-decor-line: rgba(55, 149, 221, 0.65);
+}
+
+.theme-dark() {
+  @color-text-base: #ffffff;
+  @color-text-secondary: rgba(255, 255, 255, 0.8);
+  @color-primary: #44E4FF;
+  @color-primary-hover: #78ECFF;
+  @color-primary-active: #00BBFF;
+  @color-primary-bg: #414141;
+  @color-primary-bg-hover: #4B4B4B;
+  @color-bg-container: #1f1f1f;
+  @color-border: #4b4b4b;
+  @color-danger: #ff5a50;
+  @color-warning: #ffb03c;
+  @color-success: #5cdb6b;
+  @color-text-primary: #e8f1fa;
+  @color-text-design: #3795dd;
+  @color-primary-light: #9cbde4;
+  @color-error: #ff6768;
+  @color-bg-page: #0b1622;
+  @color-bg-card: rgba(26, 35, 50, 0.85);
+  @color-bg-card-active: #141d29;
+  @color-border-base: #4e5d71;
+  @color-decor-line: #357aaf;
+  @colorTextBase: #ffffff;
+  @colorPrimary: #44E4FF;
+  @colorPrimaryBg: #414141;
+}
+
+// 写盘门禁自动补全缺失变量
+@fontWeightStrong: 400;
+
+// 自动添加：将各 mixin 中的 Less 变量暴露到全局作用域
+:root {
+  .common();
+  .theme-light();
+  .theme-dark();
+}

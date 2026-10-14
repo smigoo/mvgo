@@ -419,14 +419,24 @@ check('M3 收敛后 demo 页尺寸优先级未丢失（Figma 兜底仍在）', (
   )
 })
 
-console.log('▶ 11. demo 固定画布 + 内部容器拉伸（用户需求：1920×1080 画布）')
+console.log('▶ 11. demo 画布跟随设计稿 + 内部容器拉伸（2026-10-13 设计变更：修 fit 下组件过小）')
 
-check('demo 页画布固定 1920×1080', () => {
-  assert(/const CANVAS_W = 1920/.test(demoSrc), '未定义 1920 画布宽')
-  assert(/const CANVAS_H = 1080/.test(demoSrc), '未定义 1080 画布高')
+check('demo 页画布跟随设计稿（容器+留白），非固定 1920', () => {
+  // 设计变更（用户反馈「自适应下组件有点小」）：fit 按整张 1920 画布适配
+  // ⇒ 小组件（如 510×665）缩放后只占画布中间一小块。画布改为容器+留白。
+  assert(/const canvasW = computed\(/.test(demoSrc), '未定义动态画布宽 canvasW')
+  assert(/const canvasH = computed\(/.test(demoSrc), '未定义动态画布高 canvasH')
+  assert(
+    /previewContainerWidth\.value \+ CANVAS_MARGIN_X \* 2/.test(demoSrc),
+    '画布宽未按「容器 + 横向留白」计算'
+  )
+  assert(
+    /Math\.max\(previewContainerWidth\.value \+ CANVAS_MARGIN_X \* 2, CANVAS_MIN_W\)/.test(demoSrc),
+    '画布宽缺最小值兜底'
+  )
 })
 
-check('画布层与容器层是两层结构（canvas 包 box）', () => {
+check('画布层与容器层是两层结构（canvas 包 box，容器按动态画布居中）', () => {
   assert(demoSrc.includes('class="preview-canvas"'), '缺少 preview-canvas 层')
   assert(demoSrc.includes('class="preview-box"'), '缺少 preview-box 层')
   // 容器样式必须用 left/top 在画布内定位，而不是靠文档流
@@ -434,8 +444,8 @@ check('画布层与容器层是两层结构（canvas 包 box）', () => {
   const block = demoSrc.slice(idx, idx + 700)
   assert(/\bleft:/.test(block) && /\btop:/.test(block), '容器未用 left/top 在画布内定位')
   assert(
-    /CANVAS_W - previewContainerWidth\.value/.test(block),
-    '容器未按画布宽居中'
+    /canvasW\.value - previewContainerWidth\.value/.test(block),
+    '容器未按动态画布宽居中'
   )
 })
 

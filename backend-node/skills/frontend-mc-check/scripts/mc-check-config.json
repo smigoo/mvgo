@@ -1,5 +1,5 @@
 {
-  "specVersion": "v1.0.20",
+  "specVersion": "v1.0.22",
   "componentBaseDir": "src/workspace/custom-components",
   "panelBaseDir": "src/workspace/custom-panels",
   "reportOutputDir": "aidocs/output/reports",

@@ -32,6 +32,24 @@ const { naming, enums } = CFG
 
 // ─── CLI 参数解析 ─────────────────────────────────────────────────────────────
 const args = process.argv.slice(2)
+const KNOWN_FLAGS = ['--component-path', '--output-dir', '--format']
+
+// 校验未知参数：避免 --name=xxx 等无效参数被静默忽略后退化成全量检查
+for (let i = 0; i < args.length; i++) {
+  const a = args[i]
+  if (a.startsWith('--')) {
+    if (!KNOWN_FLAGS.includes(a)) {
+      console.error(`❌ 不支持的参数：${a}`)
+      console.error(
+        '用法：node mc-check.cjs [组件名] [--component-path <路径>] [--output-dir <路径>] [--format json|html|md|all]'
+      )
+      console.error('提示：单个组件检查使用位置参数，例如 node mc-check.cjs c-mc-micro-image')
+      process.exit(1)
+    }
+    i++ // 跳过选项值
+  }
+}
+
 const COMPONENT_PATH_IDX = args.indexOf('--component-path')
 const COMPONENT_PATH = COMPONENT_PATH_IDX !== -1 ? args[COMPONENT_PATH_IDX + 1] : null
 const OUTPUT_DIR_IDX = args.indexOf('--output-dir')
@@ -56,6 +74,15 @@ const COMPONENT_BASE = COMPONENT_PATH
 // ─── 工具函数 ─────────────────────────────────────────────────────────────────
 const isKebab = (s) => new RegExp(naming.kebabCasePattern).test(s)
 const isCamel = (s) => new RegExp(naming.camelCasePattern).test(s)
+
+/**
+ * 将任意命名风格的 key 转为小驼峰建议值，用于错误提示
+ * 如 '--breadcrumb-item-color' → 'breadcrumbItemColor'、'pie_font_size' → 'pieFontSize'
+ */
+const suggestCamel = (s) => {
+  const camel = s.replace(/^[-_]+/, '').replace(/[-_]+([a-zA-Z0-9])/g, (_, c) => c.toUpperCase())
+  return /^[a-z]/.test(camel) ? camel : camel.charAt(0).toLowerCase() + camel.slice(1)
+}
 
 // 计算文件相对于组件目录的相对路径，用于跨平台兼容
 const relPath = (dir, file) => path.relative(dir, file)
@@ -392,15 +419,27 @@ function checkM3(declare, dir, isBusiness) {
 
   if (declare.cssVariableConfig?.length > 0) {
     const typeErrors = []
+    const camelErrors = []
     declare.cssVariableConfig.forEach((item, i) => {
       if (!item.name) typeErrors.push(`[${i}] 缺少 name`)
-      if (!item.key) typeErrors.push(`[${i}] 缺少 key`)
+      if (!item.key) {
+        typeErrors.push(`[${i}] 缺少 key`)
+      } else if (!isCamel(item.key)) {
+        camelErrors.push(item.key)
+      }
       if (!item.type) typeErrors.push(`[${i}] 缺少 type`)
       else if (!enums.cssVariableTypes.includes(item.type))
         typeErrors.push(
           `[${i}].type "${item.type}" 不合法，允许：${enums.cssVariableTypes.join('/')}`
         )
     })
+    if (camelErrors.length > 0) {
+      const shown = camelErrors.slice(0, 8)
+      typeErrors.push(
+        `以下 ${camelErrors.length} 个 key 不符合小驼峰命名（camelCase）：${shown.join('、')}` +
+          (camelErrors.length > 8 ? `…等共${camelErrors.length}个` : '')
+      )
+    }
     results.push(
       issue(
         'M3-6',
@@ -414,7 +453,10 @@ function checkM3(declare, dir, isBusiness) {
     const cssVarsPath = path.join(dir, 'resources/config/css-vars.js')
     if (fs.existsSync(cssVarsPath)) {
       const cssVarsContent = readFile(cssVarsPath) || ''
-      const cssVarsKeys = extractCssVarsKeys(cssVarsContent)
+      const cssVarsKeys = extractCssVarsKeys(
+        cssVarsContent,
+        (declare.themeConfig?.list || []).map((t) => t.key)
+      )
       const frameworkVars = new Set(CFG.enums.frameworkPresetCssVars || [])
 
       // M3-4b: cssVariableConfig 中定义的变量必须在 css-vars.js 中存在
@@ -708,7 +750,10 @@ function checkM4(dir, declare, isBusiness) {
     const cleaned = stripComments(cssVarsContent)
 
     // 匹配所有赋值语句，查找字体大小相关变量
-    const assignmentRegex = /(\w+)\s*:\s*([^,\n]+)/g
+    // 值解析优先完整带引号字符串（含逗号，如 'rgba(255, 255, 255, 0.15)'），
+    // 其次函数调用（如 $mcCssBuilder.getCssSize(14)），兜底到逗号/换行前，避免值被逗号截断
+    const assignmentRegex =
+      /(\w+)\s*:\s*('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|[A-Za-z0-9_$.'"\s-]+\([^()]*\)|[^,\n]+)/g
     let match
     while ((match = assignmentRegex.exec(cleaned)) !== null) {
       const key = match[1]
@@ -768,7 +813,9 @@ function checkM4(dir, declare, isBusiness) {
 
   // M4-8~M4-11：dark 主题导出与变量（业务组件，存在 dark 主题时检查）
   if (isBusiness && hasDarkTheme) {
-    const hasDarkExport = /export\s+default\s*\{[\s\S]*dark[\s\S]*\}/.test(cssVarsContent)
+    // 对齐 M4-4 的键边界精确匹配：复用去注释内容，按「键名后跟 :（展开导出）或 , }（简写导出）」判断，
+    // 避免注释或子串（如 darkColor）被误判为已导出 dark 对象
+    const hasDarkExport = /(?:^|[^\w$])dark\s*(?::|[,}])/.test(cssVarsCleaned)
     results.push(
       issue(
         'M4-8',
@@ -997,26 +1044,60 @@ function hasInlineBackground(attrs) {
 }
 
 /**
+ * 平衡花括号扫描：读取 openIdx 处 '{' 到与之配对 '}' 之间的内部内容
+ * 相比 [^}]+ 正则，嵌套对象不会被提前截断（局限：字符串字面量内的花括号会干扰计数，css-vars.js 场景可接受）
+ * @param {string} s - 源代码
+ * @param {number} openIdx - '{' 的下标
+ * @returns {string|null} 花括号内部内容，未闭合返回 null
+ */
+function readBalancedBraces(s, openIdx) {
+  let depth = 0
+  for (let i = openIdx; i < s.length; i++) {
+    if (s[i] === '{') depth++
+    else if (s[i] === '}') {
+      depth--
+      if (depth === 0) return s.slice(openIdx + 1, i)
+    }
+  }
+  return null
+}
+
+/**
+ * 从已去注释的 JS 代码中提取指定对象的对象体内容，兼容两种声明形式：
+ * 1. const/let/var objectName = { ... }（规范三段式结构）
+ * 2. 对象属性内联（如 export default { dark: { ... } }）
+ * @param {string} cleaned - 已去注释的 JS 代码
+ * @param {string} objectName - 对象名称（如 'common', 'dark', 'light'）
+ * @returns {string|null} 对象体内容（花括号内部），未找到或未闭合返回 null
+ */
+function extractObjectBody(cleaned, objectName) {
+  // 形式一：const/let/var 声明
+  let match = cleaned.match(new RegExp(`(?:const|let|var)\\s+${objectName}\\s*=\\s*\\{`, 's'))
+  if (match) return readBalancedBraces(cleaned, match.index + match[0].length - 1)
+  // 形式二：对象属性内联（键名后跟冒号，且值为对象）
+  match = cleaned.match(new RegExp(`(?:^|[^\\w$])${objectName}\\s*:\\s*\\{`, 's'))
+  if (match) return readBalancedBraces(cleaned, match.index + match[0].length - 1)
+  return null
+}
+
+/**
  * 提取 JS 对象的 key（使用字符串匹配，无需外部依赖）
  * @param {string} jsCode - JS 文件内容
  * @param {string} objectName - 对象名称（如 'common', 'dark', 'light'）
- * @returns {string[]} 对象的 key 数组
+ * @returns {string[]} 对象的 key 数组（含嵌套对象的 key）
  */
 function extractObjectKeys(jsCode, objectName) {
   try {
     const cleaned = stripComments(jsCode)
-    // 匹配 const objectName = { ... }
-    const objRegex = new RegExp(`const\\s+${objectName}\\s*=\\s*\\{([^}]+)\\}`, 's')
-    const match = cleaned.match(objRegex)
-    if (!match) return []
+    const objContent = extractObjectBody(cleaned, objectName)
+    if (objContent === null) return []
 
-    const objContent = match[1]
-    // 提取 key: value 中的 key
-    const keyRegex = /(\w+)\s*:/g
+    // 提取 key: value 中的 key（兼容标识符、单引号、双引号三种形式，如 'pie-font-size'）
+    const keyRegex = /'((?:[^'\\]|\\.)*)'\s*:|"((?:[^"\\]|\\.)*)"\s*:|(\w+)\s*:/g
     const keys = []
     let keyMatch
     while ((keyMatch = keyRegex.exec(objContent)) !== null) {
-      keys.push(keyMatch[1])
+      keys.push(keyMatch[1] || keyMatch[2] || keyMatch[3])
     }
     return keys
   } catch (e) {
@@ -1026,12 +1107,15 @@ function extractObjectKeys(jsCode, objectName) {
 
 /**
  * 提取 css-vars.js 所有变量 key
+ * 主题对象名由 declare.themeConfig.list[].key 动态推导（含固定的 common），
+ * 避免新增主题时漏检 css-vars.js 中定义的变量
  * @param {string} jsCode - css-vars.js 内容
+ * @param {string[]} themeKeys - themeConfig.list 中的主题 key 列表
  * @returns {Set<string>} 所有变量 key 的集合
  */
-function extractCssVarsKeys(jsCode) {
+function extractCssVarsKeys(jsCode, themeKeys = []) {
   const keys = new Set()
-  const objectNames = ['common', 'dark', 'light']
+  const objectNames = ['common', ...themeKeys.filter(Boolean)]
   objectNames.forEach((name) => {
     const objKeys = extractObjectKeys(jsCode, name)
     objKeys.forEach((k) => keys.add(k))
@@ -1048,17 +1132,19 @@ function extractCssVarsKeys(jsCode) {
 function extractObjectKeyValues(jsCode, objectName) {
   try {
     const cleaned = stripComments(jsCode)
-    const objRegex = new RegExp(`const\\s+${objectName}\\s*=\\s*\\{([^}]+)\\}`, 's')
-    const match = cleaned.match(objRegex)
-    if (!match) return {}
+    const objContent = extractObjectBody(cleaned, objectName)
+    if (objContent === null) return {}
 
-    const objContent = match[1]
-    const kvRegex = /(\w+)\s*:\s*([^,\n]+)/g
+    // 值解析优先完整带引号字符串（含逗号，如 'rgba(255, 255, 255, 0.15)'），
+    // 其次函数调用（如 $mcCssBuilder.getCssSize(14)），兜底到逗号/换行前，避免 rgba 值被截断
+    // key 兼容标识符、单引号、双引号三种形式（如 'pie-font-size'）
+    const kvRegex =
+      /(?:'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)"|(\w+))\s*:\s*('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|[A-Za-z0-9_$.'"\s-]+\([^()]*\)|[^,\n]+)/g
     const kvMap = {}
     let kvMatch
     while ((kvMatch = kvRegex.exec(objContent)) !== null) {
-      const key = kvMatch[1]
-      const value = kvMatch[2].trim().replace(/['"]/g, '')
+      const key = kvMatch[1] || kvMatch[2] || kvMatch[3]
+      const value = kvMatch[4].trim().replace(/['"]/g, '')
       kvMap[key] = value
     }
     return kvMap

@@ -203,6 +203,89 @@ const nodeList = []
     });
     expect(r.changes).toHaveLength(0);
   });
+
+  // 2026-10-13 · mc-1791885185329-7e7fce94 实锤：容器块嵌 &::-webkit-scrollbar 装饰，
+  // 旧「含嵌套一律跳过」策略整块失明 → 掩码判据下应命中。
+  const decoratedLess = `.c-x-list {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: #123;
+    border-radius: 3px;
+  }
+}
+
+.c-x-card {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  min-height: 72px;
+}
+`;
+
+  test('阳性：容器嵌 scrollbar 装饰子规则仍命中（掩码判据）', () => {
+    const r = normalizeVForRowListDirection({
+      'package/index.vue': vue,
+      'package/resources/styles/common.less': decoratedLess,
+    });
+    expect(r.changes).toHaveLength(1);
+    const css = r.files['package/resources/styles/common.less'];
+    expect(css).toMatch(/\.c-x-list \{[\s\S]*?flex-direction: column/);
+    // 装饰子规则原样保留
+    expect(css).toMatch(/&::-webkit-scrollbar \{\n    width: 6px;\n  \}/);
+    expect(css).toMatch(/&::-webkit-scrollbar-thumb \{[\s\S]*?background: #123/);
+  });
+
+  test('幂等：装饰容器修复后二次调用零改动', () => {
+    const once = normalizeVForRowListDirection({
+      'package/index.vue': vue,
+      'package/resources/styles/common.less': decoratedLess,
+    });
+    const twice = normalizeVForRowListDirection(once.files);
+    expect(twice.changes).toHaveLength(0);
+  });
+
+  test('阴性：嵌套子规则 width:100% 不算满宽（c-8bb771-tab 误伤判据化）', () => {
+    const nestedWidthLess = `.c-x-list {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+}
+
+.c-x-card {
+  display: flex;
+  flex-direction: row;
+
+  .c-x-card-inner {
+    width: 100%;
+  }
+}
+`;
+    const r = normalizeVForRowListDirection({
+      'package/index.vue': vue,
+      'package/resources/styles/common.less': nestedWidthLess,
+    });
+    expect(r.changes).toHaveLength(0);
+  });
+
+  // 2026-10-14 · mc-max-1791942831818-0397a327 实锤：cssPaths 首个文件常是只含
+  // @import 的 index.less，旧 `break` 在此直接杀掉整条扫描 → 判据文件顺序依赖失明。
+  test('阳性：首个 css 无子项规则时继续看后续 css（break 疤疾回归）', () => {
+    const r = normalizeVForRowListDirection({
+      'package/index.vue': vue,
+      'package/resources/styles/index.less': '@import "./common.less";\n@fontSize: var(--fontSize);\n',
+      'package/resources/styles/common.less': less,
+    });
+    expect(r.changes).toHaveLength(1);
+    expect(r.changes[0]).toMatchObject({ file: 'package/resources/styles/common.less', cls: 'c-x-list' });
+  });
 });
 
 describe('healStyleFragments 组合入口（按扩展名分流）', () => {

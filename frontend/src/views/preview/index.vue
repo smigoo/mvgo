@@ -85,18 +85,29 @@
       </svg>
       当前为演示主题面板（{{ resolvedThemeClass === 'dark' ? '深色' : '浅色' }}），实际项目中可在面板配置中切换主题
     </div>
+    <!-- 🔴🔴 2026-10-14 修「任务详情/预览切主题不生效」根因：
+         主题覆盖层 CSS 选择器是 [data-preview-scope="..."] .theme_2 .组件类 ——
+         要求主题类是 scope 元素的后代。此前主题类与 data-preview-scope 同挂
+         stage 一身 ⇒ 覆盖规则全部不匹配（light「正常」只因它是根作用域默认值；
+         非 light 主题的视觉切换从未真正生效——puppeteer matches 实测 False）。
+         修法：display:contents 主题层包住 stage，主题类 + scope 属性迁移到该层；
+         display:contents 不产生盒子 ⇒ 布局零影响。 -->
+    <div
+      class="mc-theme-layer"
+      :data-preview-scope="previewStyleScopeId"
+      style="display: contents"
+    >
     <div
       class="mc-preview-stage"
       :class="[
         isVue3 ? 'preview-vue3' : 'preview-microcode',
-        // 预览环境默认注入暗色主题 class：微码组件样式全部挂在 .dark/.light 父选择器下，
-        // 不注入则所有样式规则匹配失败（预览样式失效的根本原因）。
+        // 主题类挂 stage（theme-layer 的后代）——覆盖规则 [scope] .theme_x .组件类
+        // 要求 scope 与主题类是不同层级（scope 在外、主题类在内）。
         resolvedThemeClass
       ]"
       :style="stageStyle"
       :data-preview-status="previewStatus"
       :data-preview-error-type="previewErrorType"
-      :data-preview-scope="previewStyleScopeId"
     >
       <div v-if="structurePreviewMode" class="mc-structure-preview-badge">
         无样式结构预览 · 不代表质量门禁通过
@@ -214,6 +225,7 @@
         </div>
       </ErrorBoundary>
     </div>
+    </div><!-- /mc-theme-layer -->
   </div>
 </template>
 
@@ -1791,9 +1803,12 @@ function onPreviewMessage(event) {
   // 🎨 面板类型下发：TaskDetail 预览区右上角下拉 → iframe 内实时生效
   if (data.type === 'set-panel-type') {
     const next = typeof data.panelType === 'string' ? data.panelType : ''
+    // 🔴 2026-10-14：空值忽略——TaskDetail 面板初值是 ''，握手补发空值会把
+    //   globalPanelType 打成 '' 并触发 userPickedPanel 置位 ⇒ 按主题自动联动失效
+    if (!next) return
     if (next !== globalPanelType.value) {
       globalPanelType.value = next
-      console.log('🎨 [Preview] 父页面下发面板类型:', next || '(使用默认)')
+      console.log('🎨 [Preview] 父页面下发面板类型:', next)
     }
     return
   }

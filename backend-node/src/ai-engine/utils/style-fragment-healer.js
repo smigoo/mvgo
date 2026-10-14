@@ -17,6 +17,8 @@
  * 使后续门禁看到的是修复后的形态）。
  */
 
+import { extractRootTemplate } from './layout-truth-healer.js';
+
 /**
  * 刀 25：连续相同的「压缩残片闭块行」归一。
  *
@@ -132,6 +134,11 @@ export function stripLoneCommaLines(source) {
  *   纵向拉开）、`align-items: center → stretch`（保证子卡满宽）。
  *   幂等：修后显式 row 不再存在。
  *
+ * 2026-10-13 增强（mc-1791885185329-7e7fce94 实锤）：容器块嵌 `&::-webkit-scrollbar`
+ *   等装饰性子规则时，旧「含嵌套一律跳过」策略导致整块失明 → 判据升级为**嵌套掩码**：
+ *   嵌套区域等长替换为空格，只对顶层声明做判定与替换——嵌套子规则的 width 不再误算
+ *   （从根上根治 c-8bb771-tab 误伤），装饰嵌套容器也能命中。
+ *
  * @param {Record<string,string>} files 产物文件集（path → content）
  * @returns {{ files: Record<string,string>, changes: Array<{file: string, cls: string}> }}
  */
@@ -144,9 +151,11 @@ export function normalizeVForRowListDirection(files) {
   const pairs = []; // { file, itemCls, parentCls }
   for (const [fp, fc] of Object.entries(out)) {
     if (!fp.endsWith('.vue') || typeof fc !== 'string') continue;
-    const tpl = fc.match(/<template>([\s\S]*?)<\/template>/i);
-    if (!tpl) continue;
-    const body = tpl[1];
+    // 🔒 深度感知提取根模板：lazy 正则被 `<template #slot>` 具名插槽截断
+    //   （2026-10-14 · base-panel 产物 index.vue 实锤，刀 28 同病灶已修）
+    const rt = extractRootTemplate(fc);
+    if (!rt) continue;
+    const body = rt.tpl;
     const stack = []; // 每层 { classes }
     for (const tag of body.matchAll(/<(\/?)([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>])*?)(\/?)>/g)) {
       const [, closing, tagName, attrs, selfClose] = tag;
@@ -186,8 +195,43 @@ export function normalizeVForRowListDirection(files) {
     (p) => /\.(less|css)$/i.test(p) && typeof out[p] === 'string',
   );
   // 大括号配对提取完整规则块。返回 null = 无该类规则。
-  // 🔒 只处理**无嵌套**的扁平块（LESS 嵌套子规则的 width/flex-direction 不属于父块，
-  //    含嵌套一律跳过 fail-open——c-8bb771-tab 误伤实锤：嵌套子规则 width:100% 被误算进父块）。
+  // 🔒 判据只看**顶层声明**：嵌套掩码把块内嵌套子规则区域替换为等长空格（长度保持 ⇒
+  //    索引不变），嵌套子规则的 width/flex-direction 不会误算进父块——从根上根治
+  //    c-8bb771-tab 误伤（取代旧「含嵌套一律跳过」的保守策略）。
+  //    同时容器块带 `&::-webkit-scrollbar` 等装饰嵌套不再失明（2026-10-13 ·
+  //    mc-1791885185329-7e7fce94 实锤：父容器嵌滚动条装饰 → 整块被跳过 → 刀 27 失效）。
+  const maskNested = (raw) => {
+    const arr = raw.split('');
+    let depth = 0;
+    for (let i = 0; i < raw.length; i++) {
+      const ch = raw[i];
+      if (ch === '{') {
+        depth++;
+        arr[i] = ' ';
+        continue;
+      }
+      if (ch === '}') {
+        depth--;
+        arr[i] = ' ';
+        continue;
+      }
+      if (depth > 0) arr[i] = ' ';
+    }
+    return arr.join('');
+  };
+  // 顶层区间内的定向替换：在 masked 上 matchAll（等长掩码 ⇒ 索引即 raw 索引），
+  // 再回写 raw 对应切片——嵌套子规则内容不受影响。
+  const replaceTopLevel = (raw, re, repl) => {
+    const masked = maskNested(raw);
+    const gre = new RegExp(re.source, re.flags.includes('g') ? re.flags : re.flags + 'g');
+    let outStr = '';
+    let last = 0;
+    for (const m of masked.matchAll(gre)) {
+      outStr += raw.slice(last, m.index) + repl;
+      last = m.index + m[0].length;
+    }
+    return outStr + raw.slice(last);
+  };
   const findBlock = (css, cls) => {
     const esc = cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const head = css.match(new RegExp(`(^|[^\\w-])\\.${esc}\\s*\\{`));
@@ -203,32 +247,46 @@ export function normalizeVForRowListDirection(files) {
     if (depth !== 0) return null; // 括号不平衡：交给下游门禁
     const close = i - 1;
     const raw = css.slice(start, close);
-    if (raw.includes('{')) return null; // 含嵌套子规则：跳过（保守）
-    return { start, close, block: raw };
+    return { start, close, block: raw, masked: maskNested(raw) };
   };
   for (const { itemCls, parentCls } of pairs) {
-    // 列表项满宽判据：v-for 元素任一类规则含 width ≥90%（absolute 脱流子项排除——
-    // 其布局与容器 flex-direction 无关，如 env-monitor 绝对定位 tab 滑块）
+    // 列表项满宽判据：v-for 元素任一类**顶层声明**含 width ≥90%（absolute 脱流子项排除
+    // ——其布局与容器 flex-direction 无关，如 env-monitor 绝对定位 tab 滑块；嵌套子规则
+    // 的 width 不参与判定——masked 已剔除）
     const itemFullWidth = (css) =>
       itemCls.some((c) => {
         const b = findBlock(css, c);
         if (!b) return false;
-        if (/position\s*:\s*absolute/i.test(b.block)) return false;
-        const wm = b.block.match(/width\s*:\s*([\d.]+)%/);
+        if (/position\s*:\s*absolute/i.test(b.masked)) return false;
+        const wm = b.masked.match(/width\s*:\s*([\d.]+)%/);
         return !!wm && parseFloat(wm[1]) >= 90;
       });
     for (const cp of cssPaths) {
       const css = out[cp];
-      if (!itemFullWidth(css)) break; // 列表项不满宽 → 整条判据不成立，无需看其它 css
+      // 🔒 该 css 无满宽子项 → 看下一个 css（2026-10-14 · mc-max-1791942831818-0397a327
+      //    实锤：cssPaths 首个文件常是只含 @import 的 index.less，旧 `break` 把整条
+      //    扫描杀掉，判据变成文件顺序依赖的掷骰子）
+      if (!itemFullWidth(css)) continue;
       for (const pc of parentCls) {
         const blk = findBlock(css, pc);
         if (!blk) continue;
-        if (!/display\s*:\s*flex/i.test(blk.block)) continue;
-        if (!/flex-direction\s*:\s*row/i.test(blk.block)) continue;
-        const next = blk.block
-          .replace(/flex-direction\s*:\s*row/i, 'flex-direction: column')
-          .replace(/justify-content\s*:\s*space-between/i, 'justify-content: flex-start')
-          .replace(/align-items\s*:\s*center/i, 'align-items: stretch');
+        if (!/display\s*:\s*flex/i.test(blk.masked)) continue;
+        if (!/flex-direction\s*:\s*row/i.test(blk.masked)) continue;
+        let next = replaceTopLevel(
+          blk.block,
+          /flex-direction\s*:\s*row/i,
+          'flex-direction: column',
+        );
+        next = replaceTopLevel(
+          next,
+          /justify-content\s*:\s*space-between/i,
+          'justify-content: flex-start',
+        );
+        next = replaceTopLevel(
+          next,
+          /align-items\s*:\s*center/i,
+          'align-items: stretch',
+        );
         if (next !== blk.block) {
           out[cp] = css.slice(0, blk.start) + next + css.slice(blk.close);
           changes.push({ file: cp, cls: pc });

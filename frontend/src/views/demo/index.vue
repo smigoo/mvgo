@@ -370,7 +370,7 @@
                 </div><!-- /.preview-box -->
                 <!-- 画布尺寸标注（1920×1080 设计尺寸 + 当前显示缩放比） -->
                 <div class="canvas-badge">
-                画布 1920 × 1080<span v-if="canvasScale !== 1"> · 显示 {{ Math.round(canvasScale * 100) }}%</span>
+                画布 {{ canvasW }} × {{ canvasH }}<span v-if="canvasScale !== 1"> · 显示 {{ Math.round(canvasScale * 100) }}%</span>
                 </div>
               </div><!-- /.preview-canvas -->
             </div><!-- /.preview-wrapper -->
@@ -2813,8 +2813,19 @@ function resetPreviewSize() {
  *      画布的显示比例，交互前后表现一致；
  *   ② 拖拽跟手——composable 通过 scaleFactor 把屏幕位移换算回画布坐标。
  */
-const CANVAS_W = 1920
-const CANVAS_H = 1080
+// 🔴 2026-10-13（用户反馈「自适应下组件有点小，选 100% 才正常」）：
+//   画布不再固定 1920×1080，改为**跟随设计稿尺寸 + 留白**。
+//   根因：fit 按整张 1920 画布适配 ⇒ 组件（如 510×665 卡片）缩放后只占
+//   画布中间一小块（~35%），视觉过小。
+//   画布跟随容器后（容器+留白≈画布），fit ≈ 容器适配 ⇒ 组件接近原尺寸。
+//   ⚠️ @media 语义不受影响：同文档下 CSS @media 匹配的是真实浏览器窗口，
+//   与画布尺寸无关（画布只是视觉底板 + 布局坐标系）。
+const CANVAS_MARGIN_X = 120
+const CANVAS_MARGIN_Y = 100
+const CANVAS_MIN_W = 640
+const CANVAS_MIN_H = 420
+const canvasW = computed(() => Math.max(previewContainerWidth.value + CANVAS_MARGIN_X * 2, CANVAS_MIN_W))
+const canvasH = computed(() => Math.max(previewContainerHeight.value + CANVAS_MARGIN_Y * 2, CANVAS_MIN_H))
 
 /**
  * 画布显示缩放比：按可用空间等比缩小，上限 1（不放大）。
@@ -2834,8 +2845,14 @@ function updateAutoFitScale() {
   const availW = cw - pad
   const availH = ch - pad
   if (availW <= 0 || availH <= 0) return false
-  // 画布固定 1920×1080 ⇒ 缩放比直接由画布尺寸与可用空间决定
-  const next = Math.min(availW / CANVAS_W, availH / CANVAS_H, 1)
+  // 🔴 2026-10-13（用户反馈「自适应下还是小，100% 才正常」三次修正·最终语义）：
+  //   自适应 = **按宽度适配**（宽装满可用区，上限 100%；高度超出由 wrapper
+  //   滚动）。510×665 卡片在常规视口下自适应 = 100% 原尺寸——正是用户要的
+  //   「100% 才正常」体感；1920 大屏组件按宽自动缩小。
+  //   历史演进：整画布适配（68%，留白摊薄）→ 容器宽高适配（54%，高瓶颈）→ 宽适配（100%）。
+  //   +32 = 组件左右最小呼吸边。
+  const fitW = previewContainerWidth.value + 32
+  const next = Math.min(availW / fitW, 1)
   autoFitScale.value = next
   return true
 }
@@ -2895,8 +2912,8 @@ const canvasStyle = computed(() => {
   const s = canvasScale.value
   // ⚠️ 本页是纯 JS（<script setup> 无 lang="ts"），不能用 TS 类型注解
   const style = {
-    width: `${CANVAS_W}px`,
-    height: `${CANVAS_H}px`,
+    width: `${canvasW.value}px`,
+    height: `${canvasH.value}px`,
   }
   if (s !== 1) {
     style.zoom = String(s)
@@ -2913,8 +2930,8 @@ const previewStyle = computed(() => {
   return {
     width: `${previewContainerWidth.value}px`,
     height: `${previewContainerHeight.value}px`,
-    left: `${Math.max(0, (CANVAS_W - previewContainerWidth.value) / 2)}px`,
-    top: `${Math.max(0, (CANVAS_H - previewContainerHeight.value) / 2)}px`,
+    left: `${Math.max(0, (canvasW.value - previewContainerWidth.value) / 2)}px`,
+    top: `${Math.max(0, (canvasH.value - previewContainerHeight.value) / 2)}px`,
   }
 })
 
@@ -4888,6 +4905,13 @@ watch(
 
       /* 预览容器 —— 默认居中，留 padding 给"画框"视觉 */
       .preview-wrapper {
+        /* 🔴 2026-10-14：隐藏预览区滚动条视觉（用户：不希望出现两条滚动条）。
+           滚动能力保留（滚轮/触摸正常），视觉上只余页面级一条。 */
+        &::-webkit-scrollbar {
+          width: 0;
+          height: 0;
+        }
+        scrollbar-width: none; /* Firefox */
         flex: 1;
         /* 🔴 必须有 min-height:0（flex column 子项默认 min-height:auto）：
            缺它时内容（canvas 高 = 1080×zoom）会撑破 flex 分配高度
@@ -4897,7 +4921,10 @@ watch(
         /* 不再裁切：画布已固定 1920×1080 并整体缩放，
            万一用户选 100%/125% 超出空间时需可滚动查看 */
         overflow: auto;
-        background: var(--bg-alt);
+        /* 🔴 2026-10-14（用户：白色画布要 100% 占用，不要蓝底中间白块）：
+           wrapper 底色从 --bg-alt（浅蓝）改为白色，与画布/组件容器融为一体——
+           整个可视区都是白，组件不再被蓝色底衬托成「中间一块白」。 */
+        background: #ffffff;
         display: flex;
         align-items: center;
         justify-content: center;

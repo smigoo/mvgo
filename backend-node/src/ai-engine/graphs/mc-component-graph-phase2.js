@@ -3613,7 +3613,15 @@ export function createPhase2Graph(config = {}) {
     //   （this._lastStyleTokens），graph 层拿不到 ⇒ state.styleTokens 恒 undefined
     //   （又一个「字段静默丢失」）。改从**产物 theme-vars.less 解析**各主题槽位
     //   （与 less-variable-checker#mixinVarNames 同款解析，值即编译真值）。
-    if (Array.isArray(state.themeNodes) && state.themeNodes.length >= 2 && state.outputPath) {
+    // 🔴 2026-10-13 修正数据源（真机 7e7fce94 实测 pairs:0 定案）：
+    //   state.themeNodes 是**用户原始输入**（fileKey/nodeId/name，无 nodeData）——
+    //   带 nodeData 的逐稿数据在 **state.dualTruth.themes**（fetchThemeNodes 节点
+    //   return 写回，themes[].nodeData = fetchNodeData 的完整树）。此前映射输入
+    //   被 `t?.nodeData` filter 滤光 ⇒ entries<2 ⇒ 静默空映射（pairs:0）。
+    const mappingEntries = Array.isArray(state.dualTruth?.themes)
+      ? state.dualTruth.themes
+      : []
+    if (mappingEntries.length >= 2 && state.outputPath) {
       try {
         const { readFileSync: _rf, existsSync: _ex } = await import('node:fs');
         const { join: _join } = await import('node:path');
@@ -3637,7 +3645,7 @@ export function createPhase2Graph(config = {}) {
           }
         }
         const mapping = buildColorSlotMapping({
-          themeEntries: state.themeNodes,
+          themeEntries: mappingEntries,
           themeSlots: themeSlotsFromArtifact,
           primaryKey: themeKeyOrder[0],
         });

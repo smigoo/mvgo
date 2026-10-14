@@ -970,6 +970,73 @@ export function stripHeaderChromeDecorations(code, options = {}) {
   };
   markDecor(root);
 
+  // ── 3b) P-14 首锚点前 chrome 区剥离（2026-10-14 · cd63d1c5 实锤）──
+  //   实锤：HeaderSection 生成「标题-线（470×2 装饰线，无 inline 尺寸）+ Group_11
+  //   （20×20 菱形 icon）」挂在标题区——标题 TEXT 已被程序化剥离，但装饰图形存活：
+  //   ① markDecor 的 selfclose 分支 img 一律 return（免剥）；② 标题-线 img 无 inline
+  //   尺寸 ⇒ isDecorImg 保守 false ⇒ 父容器 isHollow false ⇒ 整棵子树漏剥。
+  //   微码契约（prompt-loader）：面板标题区装饰由 base-panel 外壳渲染，组件只渲染
+  //   header 业务控件 ⇒ 位于**首个业务锚点之前**的兄弟子树（标题区装饰）应剥。
+  //   判据（保守 fail-open）：
+  //   - 仅 header 插槽文件 + header 真值文本清单非空（同 P-04A 启用条件）；
+  //   - 只处理「含业务锚点容器」的直接子序列：首锚点之前的无锚点兄弟 → 剥；
+  //   - img 特判：inline 尺寸 >24px 的大图保守保留（可能是业务 logo/图标）；
+  //     无尺寸或 ≤24px 的 img 才可随前导区剥（标题-线/菱形 icon 命中）；
+  //   - × 关闭等业务控件位于业务文本（全国/统计）之后 ⇒ 天然不受影响。
+  const isLargeImg = (node) => {
+    if (node.kind !== 'selfclose' || node.tag !== 'img') return false;
+    const styleM = (node.attrs || '').match(/\sstyle="([^"]*)"/);
+    const w = styleM ? Number((styleM[1].match(/width:\s*(\d+(?:\.\d+)?)px/) || [])[1]) : NaN;
+    const h = styleM ? Number((styleM[1].match(/height:\s*(\d+(?:\.\d+)?)px/) || [])[1]) : NaN;
+    const size = Number.isFinite(w) ? w : Number.isFinite(h) ? h : NaN;
+    return Number.isFinite(size) && size > DECOR_IMG_MAX_PX;
+  };
+  // 子树含 inline 大图（>24px）⇒ 保守保留（可能是业务 logo/功能图标）
+  const hasLargeImg = (node) => {
+    if (isLargeImg(node)) return true;
+    return (node.children || []).some((c) => hasLargeImg(c));
+  };
+  const stripLeadingChrome = (node) => {
+    if (!hasBusinessAnchor(node)) return;
+    let seenAnchor = false;
+    for (const c of node.children || []) {
+      if (seenAnchor) break;
+      if (c.kind === 'text' || c.kind === 'comment') continue;
+      if (hasBusinessAnchor(c)) {
+        seenAnchor = true;
+        continue;
+      }
+      if (c.dead) continue;
+      if (c.kind === 'selfclose') {
+        // img 单独节点：仅 ≤24px inline 小装饰图可剥；无尺寸 img 不单独剥
+        // （可能是 CSS 类尺寸的业务图标），留给父容器级判定
+        if (c.tag === 'img') {
+          if (!isDecorImg(c)) continue;
+        }
+        c.dead = true;
+        removed += 1;
+        continue;
+      }
+      if (c.kind === 'elem') {
+        if (hasLargeImg(c)) continue; // 整棵子树只挂大图 ⇒ 保守保留
+        c.dead = true;
+        removed += 1;
+      }
+    }
+    // 🔒 递归下钻：首版只处理模板根的直接子序列，但产物模板恒有
+    //   `<template> → 根 div → 业务内容` 两层，根 div 自身即锚点容器
+    //   ⇒ 必须对每个含锚点容器递归执行同样的「首锚点前」扫描（2026-10-14
+    //   离线复现 NO CHANGE 实锤）
+    for (const c of node.children || []) {
+      if (c.kind === 'elem' && !c.dead) stripLeadingChrome(c);
+    }
+  };
+  if (headerTextSet.size > 0) {
+    for (const c of root.children || []) {
+      if (c.kind === 'elem') stripLeadingChrome(c);
+    }
+  }
+
   // ── 4) 剥脑补内联 svg：模板无 <img> 时全剥；有 <img> 时保留（保守）──
   if (!hasImg(root)) {
     const isHollowChild = (c) =>

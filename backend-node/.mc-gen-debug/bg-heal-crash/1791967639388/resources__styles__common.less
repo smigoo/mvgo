@@ -1,0 +1,359 @@
+/* ============================================================
+   部署节点概览 · 业务样式（common.less）
+   class 前缀统一 .c-aiot-dpjh-bsjd-
+   颜色走 theme-vars.less 槽位变量；字体走 @fontSize 等比缩放
+   ============================================================ */
+
+/* ---------- 外层结构容器 ---------- */
+.c-aiot-dpjh-bsjd-slot-con {  display: flex;
+  flex-direction: column;
+
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+  font-size: @fontSize;
+  background: @color-bg-page;
+}
+
+.c-aiot-dpjh-bsjd-con-con {  display: flex;
+  flex-direction: column;
+
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+.c-aiot-dpjh-bsjd-list-con {  display: flex;
+  flex-direction: column;
+
+  width: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+.c-aiot-dpjh-bsjd-group-2136638416-con {  display: flex;
+  flex-direction: column;
+
+  width: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+}/* ============================================================
+   Header 区
+   ============================================================ */
+.c-aiot-dpjh-bsjd-header {
+  align-items: center;
+  height: 30px;
+  min-height: 0;
+  gap: 8px;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+}/* 标题装饰图（标题-线 470×2） */
+.c-aiot-dpjh-bsjd-header-title-img {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  
+  height: 2px;
+  flex: 0 0 auto;}.c-aiot-dpjh-bsjd-header-title-line {
+  display: block;
+  width: 100%;
+  height: 2px;
+  object-fit: fill;
+  flex: 0 0 auto;}/* 标题图标组（Group 11 20×20） */
+.c-aiot-dpjh-bsjd-group-11 {
+  display: flex;
+  flex-direction: column;
+  width: 20px;
+  height: 20px;
+  
+  object-fit: contain;
+  flex: 0 0 auto;}
+
+/* 标题文字「部署节点概览」 */
+.c-aiot-dpjh-bsjd-header-text {
+  display: inline-block;
+  font-size: calc(@fontSize * 1.286);
+  font-weight: 500;
+  color: @color-primary;
+  line-height: 1.2;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* 地区筛选（全国） */
+.c-aiot-dpjh-bsjd-header-region {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.c-aiot-dpjh-bsjd-header-region-text {
+  display: inline-block;
+  font-size: calc(@fontSize * 1.143);
+  font-weight: 400;
+  color: @color-text-base;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.c-aiot-dpjh-bsjd-header-region-arrow {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 4px solid @color-text-secondary;
+  flex-shrink: 0;
+}/* 关闭按钮 */
+.c-aiot-dpjh-bsjd-header-close {
+  display: block;
+  width: 10px;
+  height: 10px;
+  
+  margin-left: auto;
+  object-fit: contain;
+  cursor: pointer;
+  flex: 0 0 auto;}
+
+/* ============================================================
+   节点卡片列表（Group 2136638414）
+   ============================================================ */
+.c-aiot-dpjh-bsjd-group-con {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  align-items: stretch;}
+
+/* 单个节点卡片单元（470×72 → 行高 72） */
+.c-aiot-dpjh-bsjd-group-2136638414 {
+  min-height: 0;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* 卡片内部行：icon 左 + 文字列右 */
+.c-aiot-dpjh-bsjd-group-2136638414-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: @color-bg-card;
+}/* 左侧图标容器 40×40 */
+.c-aiot-dpjh-bsjd-icon {position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  
+  border-radius: 6px;
+  min-height: 0; /* VERT-004: 防 column flex 容器高度计算异常 */
+  flex: 0 0 auto;
+}.c-aiot-dpjh-bsjd-icon-img {
+  display: block;
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  flex: 0 0 auto;}/* 右上角离线红点 6×6 */
+.c-aiot-dpjh-bsjd-icon-dot {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: @color-error;
+  flex: 0 0 auto;}
+
+/* 右侧信息列（纵向：名称/地址 上，数值 下） */
+.c-aiot-dpjh-bsjd-info {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  flex: 1;
+  min-width: 0;
+  gap: 4px;
+  min-height: 0; /* VERT-004: 防 column flex 容器高度计算异常 */
+}
+
+.c-aiot-dpjh-bsjd-info-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+  min-height: 0; /* VERT-004: 防 column flex 容器高度计算异常 */
+}
+
+.c-aiot-dpjh-bsjd-node-name {
+  display: block;
+  font-size: calc(@fontSize * 1.286);
+  font-weight: 500;
+  color: @color-text-base;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.c-aiot-dpjh-bsjd-node-addr {
+  display: block;
+  font-size: @fontSize;
+  font-weight: 400;
+  color: @color-text-secondary;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 卡片内 在线/离线 数值行 */
+.c-aiot-dpjh-bsjd-info-value {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.c-aiot-dpjh-bsjd-value-online {
+  font-size: calc(@fontSize * 1.286);
+  font-weight: 500;
+  color: @color-success;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.c-aiot-dpjh-bsjd-value-offline {
+  font-size: calc(@fontSize * 1.286);
+  font-weight: 500;
+  color: @color-error;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.c-aiot-dpjh-bsjd-value-label {
+  font-size: @fontSize;
+  font-weight: 400;
+  color: @color-text-secondary;
+  line-height: 1.2;
+}
+
+/* ---------- ContentSection3 卡片内结构与统计 ---------- */
+.c-aiot-dpjh-bsjd-group-2136638414-info {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+  min-height: 0; /* VERT-004: 防 column flex 容器高度计算异常 */
+}
+
+.c-aiot-dpjh-bsjd-group-2136638414-title {
+  display: block;
+  font-size: calc(@fontSize * 1.286);
+  font-weight: 500;
+  color: @color-text-base;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.c-aiot-dpjh-bsjd-group-2136638414-addr {
+  display: block;
+  font-size: @fontSize;
+  font-weight: 400;
+  color: @color-text-secondary;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.c-aiot-dpjh-bsjd-group-2136638414-stats {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.c-aiot-dpjh-bsjd-stat-online-value {
+  font-size: calc(@fontSize * 1.286);
+  font-weight: 500;
+  color: @color-success;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.c-aiot-dpjh-bsjd-stat-offline-value {
+  font-size: calc(@fontSize * 1.286);
+  font-weight: 500;
+  color: @color-error;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.c-aiot-dpjh-bsjd-stat-label {
+  font-size: @fontSize;
+  font-weight: 400;
+  color: @color-text-secondary;
+  line-height: 1.2;
+}
+
+/* ============================================================
+   底部统计汇总
+   ============================================================ */
+.c-aiot-dpjh-bsjd-summary {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 4px 12px 0;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.c-aiot-dpjh-bsjd-summary-item {
+  display: inline-block;
+  font-size: @fontSize;
+  font-weight: 400;
+  color: @color-accent;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.c-aiot-dpjh-bsjd-value-online-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.c-aiot-dpjh-bsjd-stat-online-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}

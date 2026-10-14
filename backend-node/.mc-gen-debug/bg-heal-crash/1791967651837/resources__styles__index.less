@@ -1,0 +1,16 @@
+// 样式入口（系统自动生成，勿手改）
+@import './themes/theme-vars.less';
+
+// 默认主题：必须在**根作用域**生效，否则组件在无主题类祖先的真实 DOM 上样式全部失效
+.common();
+.theme-light();
+
+// 其余主题：仅为让其变量在根作用域可见（Less mixin 不泄漏变量），供common.less 引用
+.theme-theme_2();
+.theme-dark();
+
+@import (multiple) './common.less';
+
+@import './themes/light.less';
+@import './themes/theme_2.less';
+@import './themes/dark.less';

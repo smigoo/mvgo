@@ -42,6 +42,13 @@ import { enforceTechStackContractTags } from './techstack-tag-enforcer.js';
 //   （治 .c-cba840-form 被提前闭合获得 display:flex → 表单横向排列）+ script 独行逗号删除
 //   （治 [vue/compiler-sfc] Unexpected token：mc-max-1791779417789-cba8407d 实锤）。
 import { healStyleFragments, normalizeVForRowListDirection } from './style-fragment-healer.js';
+import {
+  normalizeSectionFlexTruth,
+  normalizeTextSlotOrder,
+  normalizeStatGroupLayout,
+  ensureSlotConBackground,
+  healZebraStripeMisread,
+} from './layout-truth-healer.js';
 
 /**
  * @param {Record<string,string>} files 产物文件集（path → content）
@@ -347,6 +354,131 @@ export function runPreWriteSelfHealing(files, ctx = {}, deps = {}) {
     }
   } catch (err) {
     logger?.warn?.('🛡️ 刀 27 v-for 方向纠偏异常（fail-open）', {
+      error: err?.message || String(err),
+    });
+  }
+
+  // ④-f 刀 28（2026-10-14 · mc-max-1791942831818-0397a327 / mc-max-1791944957047-cd63d1c5
+  //   连续两轮实锤）：兄弟 section 等分臆造比例（flex:0.5/0.5）→ Figma 真值「固定 px + 填充」。
+  //   固定卡撑满半屏成巨型卡的治本刀；无 figmaRoot 或判据不全时 fail-open。
+  try {
+    const d28 = normalizeSectionFlexTruth(result, { figmaRoot: ctx?.figmaRoot });
+    for (const [p, c] of Object.entries(d28.files)) {
+      if (typeof c === 'string' && result[p] !== c) result[p] = c;
+    }
+    if (d28.changes.length > 0) {
+      summary.sectionFlexTruthFixed = d28.changes.length;
+      for (const ch of d28.changes) {
+        logger?.warn?.(
+          '🛡️ 刀 28 修复：兄弟 section 等分臆造比例 → 真值固定 px + 填充 flex:1',
+          { file: ch.file, count: ch.count },
+        );
+      }
+    }
+  } catch (err) {
+    logger?.warn?.('🛡️ 刀 28 比例真值纠偏异常（fail-open）', {
+      error: err?.message || String(err),
+    });
+  }
+
+  // ④-g 刀 29（同上实锤）：同父相邻兄弟静态文本槽位对调（标题/地址、数值/标签互换）。
+  //   真值交叉（CSS 字号序 vs Figma 字号序矛盾）或形态交叉（大字槽纯 CJK + 小字槽纯数字）。
+  try {
+    const d29 = normalizeTextSlotOrder(result, { figmaRoot: ctx?.figmaRoot });
+    for (const [p, c] of Object.entries(d29.files)) {
+      if (typeof c === 'string' && result[p] !== c) result[p] = c;
+    }
+    if (d29.changes.length > 0) {
+      summary.textSlotSwapFixed = d29.changes.length;
+      for (const ch of d29.changes) {
+        logger?.warn?.('🛡️ 刀 29 修复：文案槽位互换已对调（Figma 字号真值交叉）', {
+          file: ch.file,
+          pairs: ch.pairs,
+        });
+      }
+    }
+  } catch (err) {
+    logger?.warn?.('🛡️ 刀 29 文案槽位纠偏异常（fail-open）', {
+      error: err?.message || String(err),
+    });
+  }
+
+  // ④-h 刀 30（2026-10-14 · cd63d1c5 实锤立项）：stat 组「数值+标签」横排兄弟叶子
+  //   → 契约结构（每组包裹容器、数值在上标签在下）。纯结构判据（交替 value/label ×N≥2），
+  //   无需 figmaRoot；单对（值+单位）不触发防误伤；组类 CSS 堆叠规则注入 common.less。
+  try {
+    const d30 = normalizeStatGroupLayout(result);
+    for (const [p, c] of Object.entries(d30.files)) {
+      if (typeof c === 'string' && result[p] !== c) result[p] = c;
+    }
+    if (d30.changes.length > 0) {
+      summary.statGroupLayoutFixed = d30.changes.length;
+      for (const ch of d30.changes) {
+        logger?.warn?.('🛡️ 刀 30 修复：stat 组横排 → 分组堆叠（数值上标签下）', {
+          file: ch.file,
+          pairs: ch.count,
+          groups: ch.groups,
+        });
+      }
+    }
+  } catch (err) {
+    logger?.warn?.('🛡️ 刀 30 stat 结构纠偏异常（fail-open）', {
+      error: err?.message || String(err),
+    });
+  }
+
+  // ④-i 刀 31（2026-10-14 · cd63d1c5 实锤立项，R8 容器底色契约）：
+  //   slot-con 内容根容器无显式 background → 注入产物既有页面底色变量
+  //   （color-bg-page/container/base/bg 优先级链，零臆造色值；全缺则跳过留痕）。
+  try {
+    const d31 = ensureSlotConBackground(result);
+    for (const [p, c] of Object.entries(d31.files)) {
+      if (typeof c === 'string' && result[p] !== c) result[p] = c;
+    }
+    if (d31.changes.length > 0) {
+      summary.slotConBackgroundFixed = d31.changes.length;
+      for (const ch of d31.changes) {
+        logger?.warn?.('🛡️ 刀 31 修复：slot-con 注入显式页面底色', {
+          file: ch.file,
+          selector: ch.selector,
+          variable: ch.variable,
+        });
+      }
+    }
+    if (d31.skipped?.length > 0) {
+      logger?.warn?.('🛡️ 刀 31 跳过：slot-con 缺底色但产物无可用页面底色变量', {
+        count: d31.skipped.length,
+      });
+    }
+  } catch (err) {
+    logger?.warn?.('🛡️ 刀 31 容器底色纠偏异常（fail-open）', {
+      error: err?.message || String(err),
+    });
+  }
+
+  // ④-j 刀 32（2026-10-14 · mc-max-1791965365126-2238359a 实锤立项）：
+  //   LLM 把列表卡「首卡激活态」（Figma 1 异 N 同）误泛化成 nth-child(odd) 斑马纹。
+  //   真值分布 active → 改写 :first-child, :hover（补 cursor/transition）；
+  //   uniform → 剥除；zebra（≥4 严格交替）→ 合法保留；无 figmaRoot → fail-open。
+  try {
+    const d32 = healZebraStripeMisread(result, { figmaRoot: ctx?.figmaRoot });
+    for (const [p, c] of Object.entries(d32.files)) {
+      if (typeof c === 'string' && result[p] !== c) result[p] = c;
+    }
+    if (d32.changes.length > 0) {
+      summary.zebraMisreadFixed = d32.changes.length;
+      for (const ch of d32.changes) {
+        logger?.warn?.('🛡️ 刀 32 修复：臆造斑马纹 → 激活态语义', {
+          file: ch.file,
+          action: ch.action,
+          selector: ch.selector,
+          to: ch.to,
+          truth: d32.truth?.kind,
+        });
+      }
+    }
+  } catch (err) {
+    logger?.warn?.('🛡️ 刀 32 斑马纹纠偏异常（fail-open）', {
       error: err?.message || String(err),
     });
   }

@@ -1,0 +1,127 @@
+{
+  "componentId": "c-dddd6-6dddd687",
+  "componentName": "产品新增",
+  "version": "v1.0.0",
+  "attribute": {
+    "imgUrl": null,
+    "aspectRatio": [
+      486,
+      1014
+    ],
+    "title": "产品新增",
+    "description": "产品新增"
+  },
+  "businessEvents": {
+    "c-dddd6-onload": {
+      "eventId": "c-dddd6-onload",
+      "eventName": "组件加载完成",
+      "eventDataSchema": {
+        "componentId": {
+          "key": "componentId",
+          "name": "组件ID",
+          "type": "string",
+          "required": true
+        },
+        "timestamp": {
+          "key": "timestamp",
+          "name": "时间戳",
+          "type": "number",
+          "required": true
+        }
+      }
+    },
+    "6dddd6-onload": {
+      "eventId": "6dddd6-onload",
+      "eventName": "6dddd6-onload",
+      "eventDataSchema": {
+        "componentId": {
+          "key": "componentId",
+          "name": "组件ID",
+          "type": "string",
+          "required": true
+        },
+        "timestamp": {
+          "key": "timestamp",
+          "name": "时间戳",
+          "type": "number",
+          "required": true
+        }
+      }
+    }
+  },
+  "businessStatuses": {},
+  "dataSources": null,
+  "formSources": null,
+  "layoutConfig": {
+    "default": "one",
+    "list": [
+      {
+        "name": "默认布局",
+        "key": "one",
+        "previewName": "mc-preview.png"
+      }
+    ]
+  },
+  "themeConfig": {
+    "default": "light",
+    "list": [
+      {
+        "name": "浅色主题",
+        "key": "light"
+      },
+      {
+        "name": "深色主题",
+        "key": "dark",
+        "readonly": true,
+        "builtin": true,
+        "notice": "builtin-dark-enum",
+        "coreColors": {
+          "colorTextBase": "#ffffff",
+          "colorPrimary": "#44E4FF",
+          "colorPrimaryBg": "#414141"
+        }
+      }
+    ],
+    "dualTruth": false
+  },
+  "cssVariableConfig": [
+    {
+      "name": "colorTextSecondary",
+      "key": "colorTextSecondary",
+      "type": "color"
+    },
+    {
+      "name": "colorDanger",
+      "key": "colorDanger",
+      "type": "color"
+    },
+    {
+      "name": "colorWarning",
+      "key": "colorWarning",
+      "type": "color"
+    },
+    {
+      "name": "colorSuccess",
+      "key": "colorSuccess",
+      "type": "color"
+    },
+    {
+      "name": "colorBorder",
+      "key": "colorBorder",
+      "type": "color"
+    }
+  ],
+  "panelKey": "",
+  "businessConfig": {},
+  "size": {
+    "width": 486,
+    "height": 1014
+  },
+  "meta": {
+    "checkpoint": {
+      "sessionId": "mc-max-1791955962494-6dddd687",
+      "componentId": "c-dddd6-6dddd687",
+      "classPrefix": "c-dddd6"
+    }
+  }
+}

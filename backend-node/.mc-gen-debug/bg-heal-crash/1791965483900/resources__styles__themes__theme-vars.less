@@ -1,0 +1,70 @@
+// 主题变量定义文件
+// 结构：三个 mixin（.common() / .theme-dark() / .theme-light()）
+// 约束：mixin 内只允许 Less 变量定义，禁止任何 CSS 属性
+// 约束：禁止 CSS 变量（var(--xxx)），只使用 Less 变量
+
+.common() {
+  // 字体缩放基准令牌（根容器通过 CSS 变量 --fontSize 驱动，默认 14px）
+  @fontSize: 14px;
+  @fontWeightStrong: 600;
+
+  // 圆角
+  @border-radius-base: 8px;
+  @border-radius-sm: 4px;
+}
+
+.theme-light() {
+  // 文本色
+  @color-text-primary: #333333;
+  @color-text-secondary: #999999;
+  @color-text-design: #0362a6;
+
+  // 主色
+  @color-primary: #0362a6;
+  @color-primary-active: #3795dd;
+  @color-primary-light: rgba(136, 175, 223, 1);
+  @color-primary-bg: rgba(136, 175, 223, 0.16);
+  @color-primary-bg-hover: rgba(136, 175, 223, 0.28);
+
+  // 语义色
+  @color-success: #52c41a;
+  @color-error: #ff4d4f;
+
+  // 背景色
+  @color-bg-page: #f0f5fb;
+  @color-bg-container: rgba(255, 255, 255, 0.92);
+  @color-bg-card: rgba(255, 255, 255, 0.85);
+  @color-bg-card-active: rgba(136, 175, 223, 0.18);
+
+  // 边框与装饰
+  @color-border-base: rgba(136, 175, 223, 0.35);
+  @color-decor-line: rgba(55, 149, 221, 0.65);
+}
+
+.theme-dark() {
+  // 文本色（深色面板禁止黑色系文字）
+  @color-text-primary: #e8f1fa;
+  @color-text-secondary: #8fa8c0;
+  @color-text-design: #3795dd;
+
+  // 主色
+  @color-primary: #3795dd;
+  @color-primary-active: #0362a6;
+  @color-primary-light: rgba(136, 175, 223, 1);
+  @color-primary-bg: rgba(136, 175, 223, 0.16);
+  @color-primary-bg-hover: rgba(136, 175, 223, 0.28);
+
+  // 语义色
+  @color-success: #52c41a;
+  @color-error: #ff4d4f;
+
+  // 背景色
+  @color-bg-page: #0b1622;
+  @color-bg-container: rgba(26, 35, 50, 0.92);
+  @color-bg-card: rgba(26, 35, 50, 0.85);
+  @color-bg-card-active: rgba(136, 175, 223, 0.18);
+
+  // 边框与装饰
+  @color-border-base: rgba(136, 175, 223, 0.35);
+  @color-decor-line: rgba(55, 149, 221, 0.65);
+}

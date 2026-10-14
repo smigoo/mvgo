@@ -1,0 +1,80 @@
+// 微码组件主题变量文件（系统确定性生成；§3 核心槽位值由 buildStyleTokens 注入，勿手改）
+// 结构：3 个 mixin（.common() + 2 个主题）
+// 约束：mixin 内仅允许 @变量 定义，禁止任何 CSS 属性；禁止 CSS 变量
+
+.common() {
+  @fontSize: 14px;
+  @radius-base: 8px;
+  @font-size-base: 14px;
+  @font-size-stat: 28px;
+  @font-weight-strong: 600;
+}
+
+// 浅色（浅色）
+.theme-light() {
+  @color-text-base: #546881;
+  @color-primary: #a6ceff;
+  @color-primary-bg: rgba(166, 206, 255, 0.12);
+  @color-primary-hover: #d9eaff;
+  @color-primary-active: #73b2ff;
+  @color-primary-bg-hover: rgba(166, 206, 255, 0.16);
+  @color-bg-design: #a0c1ff;
+  @color-text-design: #546881;
+  @color-primary-design: #a6ceff;
+  @color-accent-design: #ff4747;
+}
+
+// 深色（深色）
+.theme-theme_2() {
+  @color-text-base: #98c2f6;
+  @color-primary: #071f3d;
+  @color-primary-bg: #123259;
+  @color-primary-hover: #0c366b;
+  @color-primary-active: #02080f;
+  @color-primary-bg-hover: rgba(7, 31, 61, 0.16);
+  @color-bg-design: #123259;
+  @color-text-design: #98c2f6;
+  @color-primary-design: #071f3d;
+  @color-accent-design: #38fff5;
+}
+
+// 内置深色占位（宿主注入 .dark 时生效；三核心为 M4-10 枚举值）
+.theme-dark() {
+  @color-text-base: #98c2f6;
+  @color-text-secondary: rgba(255, 255, 255, 0.8);
+  @color-primary: #071f3d;
+  @color-primary-hover: #0c366b;
+  @color-primary-active: #02080f;
+  @color-primary-bg: #123259;
+  @color-primary-bg-hover: rgba(7, 31, 61, 0.16);
+  @color-bg-container: #1f1f1f;
+  @color-border: #4b4b4b;
+  @color-danger: #ff5a50;
+  @color-warning: #ffb03c;
+  @color-success: #5cdb6b;
+  @color-bg-design: #123259;
+  @color-text-design: #98c2f6;
+  @color-primary-design: #071f3d;
+  @color-accent-design: #38fff5;
+  @color-error: #ff6768;
+  @color-accent: #9cbde4;
+  @color-bg-page: linear-gradient(180deg, #0b1b2b 0%, #0a1522 100%);
+  @color-bg-card: #16324a;
+  @color-bg-card-active: #141d29;
+  @color-border-light: #4e5d71;
+  @color-title-decor: #038ff1;
+  @colorTextBase: #ffffff;
+  @colorPrimary: #44E4FF;
+  @colorPrimaryBg: #414141;
+}
+
+// 写盘门禁自动补全缺失变量
+@fontWeightStrong: 400;
+
+// 自动添加：将各 mixin 中的 Less 变量暴露到全局作用域
+:root {
+  .common();
+  .theme-light();
+  .theme-dark();
+  .theme-theme_2();
+}

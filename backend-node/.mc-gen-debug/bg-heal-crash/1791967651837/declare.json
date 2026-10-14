@@ -1,0 +1,143 @@
+{
+  "componentId": "c-aiot-dpjh-bsjd-a715fafc",
+  "componentName": "aiot-dpjh-bsjd",
+  "version": "v1.0.0",
+  "attribute": {
+    "imgUrl": null,
+    "aspectRatio": [
+      510,
+      665
+    ],
+    "title": "部署节点概览",
+    "description": "部署节点概览"
+  },
+  "businessEvents": {
+    "aiot-dpjh-bsjd-onload": {
+      "eventId": "aiot-dpjh-bsjd-onload",
+      "eventName": "组件加载完成",
+      "eventDataSchema": {
+        "componentId": {
+          "key": "componentId",
+          "name": "组件ID",
+          "type": "string",
+          "required": true
+        },
+        "timestamp": {
+          "key": "timestamp",
+          "name": "时间戳",
+          "type": "number",
+          "required": true
+        }
+      }
+    }
+  },
+  "businessStatuses": {},
+  "dataSources": null,
+  "formSources": null,
+  "layoutConfig": {
+    "default": "one",
+    "list": [
+      {
+        "name": "默认布局",
+        "key": "one",
+        "previewName": "mc-preview.png"
+      }
+    ]
+  },
+  "themeConfig": {
+    "default": "light",
+    "list": [
+      {
+        "name": "浅色",
+        "key": "light",
+        "figmaNodeId": "48-5796",
+        "figmaFileKey": "GTcJm0DKQvcJvcOZTh5n1l",
+        "brightness": "light"
+      },
+      {
+        "name": "深色",
+        "key": "theme_2",
+        "figmaNodeId": "30-1086",
+        "figmaFileKey": "GTcJm0DKQvcJvcOZTh5n1l",
+        "brightness": "dark"
+      },
+      {
+        "name": "深色",
+        "key": "dark",
+        "readonly": true,
+        "builtin": true,
+        "notice": "builtin-dark-enum",
+        "coreColors": {
+          "colorTextBase": "#ffffff",
+          "colorPrimary": "#44E4FF",
+          "colorPrimaryBg": "#414141"
+        }
+      }
+    ],
+    "dualTruth": true,
+    "primaryBrightness": "light",
+    "secondaryBrightness": "dark",
+    "multiTheme": true,
+    "themeCount": 2
+  },
+  "cssVariableConfig": [
+    {
+      "name": "设计稿背景色",
+      "key": "colorBgDesign",
+      "type": "color"
+    },
+    {
+      "name": "设计稿文字色",
+      "key": "colorTextDesign",
+      "type": "color"
+    },
+    {
+      "name": "设计稿主色",
+      "key": "colorPrimaryDesign",
+      "type": "color"
+    },
+    {
+      "name": "设计稿强调色",
+      "key": "colorAccentDesign",
+      "type": "color"
+    },
+    {
+      "name": "colorTextSecondary",
+      "key": "colorTextSecondary",
+      "type": "color"
+    },
+    {
+      "name": "colorDanger",
+      "key": "colorDanger",
+      "type": "color"
+    },
+    {
+      "name": "colorWarning",
+      "key": "colorWarning",
+      "type": "color"
+    },
+    {
+      "name": "colorSuccess",
+      "key": "colorSuccess",
+      "type": "color"
+    },
+    {
+      "name": "colorBorder",
+      "key": "colorBorder",
+      "type": "color"
+    }
+  ],
+  "panelKey": "",
+  "businessConfig": {},
+  "size": {
+    "width": 510,
+    "height": 665
+  },
+  "meta": {
+    "checkpoint": {
+      "sessionId": "mc-max-1791967522207-a715fafc",
+      "componentId": "c-aiot-dpjh-bsjd-a715fafc",
+      "classPrefix": "c-aiot-dpjh-bsjd"
+    }
+  }
+}

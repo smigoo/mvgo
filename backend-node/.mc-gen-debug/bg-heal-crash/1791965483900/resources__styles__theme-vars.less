@@ -1,0 +1,64 @@
+// ============================================================
+// 部署节点概览 —— 主题变量（模式 B：编译期差异化）
+// 只定义三个 mixin，根级禁止调用；颜色槽位只允许出现在 theme-* mixin 内
+// ============================================================
+
+.common() {
+  // 尺寸 / 字重：透传平台配置（禁止颜色槽位）
+  @fontSize: var(--fontSize);
+  @fontWeightStrong: var(--fontWeightStrong);
+}
+
+.theme-light() {
+  // 文字
+  @color-text-base: #333333;
+  @color-text-secondary: #546881;
+  @color-primary: #0362a6;
+  @color-primary-active: #3795dd;
+  @color-primary-light: #88afdf;
+  @color-primary-bg: rgba(136, 175, 223, 0.16);
+  @color-primary-bg-hover: rgba(136, 175, 223, 0.28);
+
+  // 状态
+  @color-success: #26ce3c;
+  @color-error: #ff4747;
+
+  // 容器 / 边框 / 装饰
+  @color-bg-page: #f0f5fb;
+  @color-bg-container: rgba(255, 255, 255, 0.92);
+  @color-bg-card: rgba(255, 255, 255, 0.85);
+  @color-bg-card-active: rgba(136, 175, 223, 0.18);
+  @color-border-base: rgba(136, 175, 223, 0.35);
+  @color-decor-line: rgba(55, 149, 221, 0.65);
+
+  // 工具
+  @border-radius-base: 8px;
+  @border-radius-sm: 4px;
+}
+
+.theme-dark() {
+  // 文字
+  @color-text-base: #ffffff;
+  @color-text-secondary: rgba(255, 255, 255, 0.8);
+  @color-primary: #44e4ff;
+  @color-primary-active: #78ecff;
+  @color-primary-light: rgba(68, 228, 255, 0.6);
+  @color-primary-bg: rgba(68, 228, 255, 0.12);
+  @color-primary-bg-hover: rgba(68, 228, 255, 0.2);
+
+  // 状态
+  @color-success: #52c41a;
+  @color-error: #ff4d4f;
+
+  // 容器 / 边框 / 装饰
+  @color-bg-page: #0b1a2a;
+  @color-bg-container: rgba(10, 30, 48, 0.92);
+  @color-bg-card: rgba(255, 255, 255, 0.06);
+  @color-bg-card-active: rgba(68, 228, 255, 0.18);
+  @color-border-base: rgba(68, 228, 255, 0.25);
+  @color-decor-line: rgba(68, 228, 255, 0.55);
+
+  // 工具
+  @border-radius-base: 8px;
+  @border-radius-sm: 4px;
+}

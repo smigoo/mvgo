@@ -1,0 +1,6 @@
+// 主题覆盖层：仅当宿主给组件根注入 .dark 类时生效（特异性高于根作用域默认主题）
+&.dark {
+  .common();
+  .theme-dark();
+  @import (multiple) '../common.less';
+}

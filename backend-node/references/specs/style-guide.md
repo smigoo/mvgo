@@ -288,6 +288,70 @@ const panelKey = computed(() => (theme.value === 'dark' ? 'dark-panel' : 'defaul
 }
 ```
 
+## 统计指标（stat）版式契约（2026-10-14 · cd63d1c5 实锤立项）
+
+Figma 中的「数值 + 标签」统计组（如 `3,792 在线`、`28 离线`）必须按以下契约生成，
+禁止自由发挥版式（实锤病灶：四 span 一行横排 `2,138 在线 12 离线`）：
+
+**结构契约**：
+- 每组 stat = **一个包裹容器**（如 `.xxx-stat`），内含**数值元素在上、标签元素在下**
+  （容器 `display:flex; flex-direction:column; align-items:center`）；
+- 多组 stat 之间横向排列（父容器 row + gap）；
+- ❌ 禁止把「数值 标签 数值 标签」写成同一容器内连续横排的兄弟 span（无分组容器）。
+
+**状态点契约**：
+- Figma 小圆点（≤8px，与数值/标签同行相邻）是**状态点**，必须挂在**对应数值旁**
+  （用数值元素的 `::before` 伪元素实现：6px 圆、`margin-right: 4px`）；
+- ❌ 禁止把状态点挂到卡片图标/头像上（badge 化是臆造，实锤：`icon-dot` 挂图标右上角）。
+
+**色值契约**：
+- 数值色：在线/正向指标走 `@color-success`；离线/异常数值本身**不写红色**，
+  红色只给状态点（数值走 `@color-text-design` 主题槽位）。
+
+## 容器底色与强调色契约（2026-10-14 · cd63d1c5 实锤立项，R7/R8）
+
+**容器底色契约（R8）**：
+- 组件内容根容器（`*-slot-con`）必须有**显式** `background`，走页面底色主题槽位
+  （按产物既有定义取：`@color-bg-page` / `@color-bg-container` / `@color-bg-base` / `@color-bg`）；
+- ❌ 禁止根容器透明、依赖预览环境底色——深色主题下卡/底亮度关系会失控
+  （实锤：dark 轨 slot-con 无 background，面板成灰底、卡比底还深）。
+
+**强调色使用契约（R7）**：
+- `@color-primary` 是品牌/交互**强调色**（按钮、链接、激活态文字、选中描边），
+  ❌ **禁止**直接作为卡片/容器的大面积背景——深色轨下亮青/亮蓝纯底 + 白字
+  是对比度灾难（实锤：首卡 `background: #44e4ff` 直挂 M4-10 colorPrimary 枚举色）；
+- 卡片底色走 bg 系槽位：`@color-bg-card` / `@color-bg-card-active` / `@color-bg-container`；
+  强调/激活卡可用 `@color-primary-bg` 或基于 `@color-primary` 的**渐变**槽位
+  （如 `linear-gradient(135deg, @color-primary, @color-primary-active)`），禁纯色直挂。
+
+## 列表卡激活态契约（2026-10-14 · 2238359a 实锤立项）
+
+Figma 同构列表卡的填充分布只有三种合法语义，必须严格区分
+（实锤病灶：首卡激活态 1 异 5 同被臆造成 `nth-child(odd)` 斑马纹）：
+
+| Figma fills 分布 | 语义 | 正确产物 |
+|------------------|------|----------|
+| 全部同色 | 无高亮 | 无任何高亮规则 |
+| **恰好 1 张异色**（通常首张） | **激活/选中态** | `:first-child`（或 `.active` 类） |
+| ≥4 张严格 ABAB 交替 | 斑马纹 | `nth-child(odd/even)` 仅此时合法 |
+
+**激活态生成契约**：
+- 首卡异色 ⇒ 激活态，必须生成 `:first-child` 并**同时配 `:hover` 同色** + `cursor: pointer`
+  + `transition: background 0.2s ease`（悬停即预览选中态）：
+  ```less
+  .x-card {
+    background: @color-bg-container;
+    &:first-child, &:hover {
+      background: @color-bg-card-active;   /* 真值色入槽位，禁直挂 @color-primary */
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+  }
+  ```
+- ❌ **禁止**把「1 异 N 同」写成 `:nth-child(odd/even/2n)`——单点激活证据不得泛化为交替模式；
+- 激活底色走 bg 系槽位（`@color-bg-card-active` 等，真值色入槽），遵守 R7 强调色契约；
+- 卡内子元素（icon 底等）首卡与其余卡不同色时，同样按 `:first-child` 激活语义处理。
+
 ## 多布局实现
 
 ```vue
