@@ -1,5 +1,25 @@
 # 微码组件检查脚本变更记录
 
+## v1.0.22 (2026-10-13)
+
+### 新增
+
+- **M3-6：cssVariableConfig.key 强制小驼峰（camelCase）**：kebab-case key 无法用 `props.cssVars.<key>` 点语法访问（被解析为减法表达式），已导致实际组件 bug；与 M3-9（businessConfig.key）及框架预设变量（fontSize、colorPrimary）命名体系对齐。存量 3 个组件（c-mc-css-demo-event、c-mc-custom-button、c-mc-bread-crumb）需改造，错误消息聚合展示。
+
+### 修复
+
+- **M3-7/M3-8 误报与漏检**：key 提取正则不支持带引号 key（如 `'pie-font-size'`），导致此类变量被误报"css-vars.js 中缺失"、未声明变量漏检；现兼容标识符/单引号/双引号三种形式。
+- **嵌套对象解析**：新增平衡花括号扫描与对象体提取函数，消除 `[^}]+` 遇嵌套对象提前截断的问题，兼容 `export default { dark: {...} }` 内联声明形式。
+- **M4-7/M4-10 变量值解析**：值优先解析完整带引号字符串（`rgba(255, 255, 255, 0.15)` 不再被逗号截断），其次函数调用（`$mcCssBuilder.getCssSize(14)`）。
+- **M4-8 dark 导出判断**：改为键边界精确匹配，`darkColor` 等子串不再被误判为已导出 dark 对象。
+
+### 改进
+
+- CLI 校验未知参数：`--name=xxx` 等无效参数不再被静默忽略后退化成全量检查，直接报错退出并提示用法。
+- 清理：移除重复的 stripComments 函数；删除过时的《MVP154-AI辅助微码前端组件规范检查指导书》。
+
+---
+
 ## v1.0.20 (2026-09-02)
 
 ### 检查体系重构（破坏性变更）

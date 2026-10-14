@@ -71,7 +71,7 @@
 | M3-3 | businessEvents 完整性 | `eventId`（kebab-case）、`eventName`、`eventDataSchema`（必须为 object 类型）字段完整 | all | `businessEvents` 非空 | error |
 | M3-4 | businessStatuses 完整性 | `statusId`（kebab-case）、`statusName`、`parameters` 字段完整 | all | `businessStatuses` 非空 | error |
 | M3-5 | layoutConfig 完整性 | `default`、`list[].name`、`list[].key` | all | 配置了 `layoutConfig` | error |
-| M3-6 | cssVariableConfig 规范 | `name`、`key`、`type`（枚举值合法） | all | 配置了 `cssVariableConfig` | error |
+| M3-6 | cssVariableConfig 规范 | `name`、`key`（camelCase）、`type`（枚举值合法） | all | 配置了 `cssVariableConfig` | error |
 | M3-7 | cssVariableConfig 与 css-vars.js 一致性 | `cssVariableConfig` 定义的变量必须在 `css-vars.js` 中存在 | all | 配置了 `cssVariableConfig` | error |
 | M3-8 | css-vars.js 自定义变量声明 | `css-vars.js` 自定义变量必须在 `cssVariableConfig` 中声明 | all | `css-vars.js` 有自定义变量 | error |
 | M3-9 | businessConfig 规范 | `name`、`key`（camelCase）、`type`（枚举值合法，不区分大小写） | all | `businessConfig` 非空 | error |
