@@ -255,6 +255,8 @@
 - `items`: **新增字段**（可选），当body包含多个结构相似的项时使用，替代children
   - 每个item包含详细的内部结构：icon、content等
   - 支持嵌套布局描述
+  - `repeatedFill`: **新增字段**（可选，重复卡必填），该项卡片的底色 hex（如 `#a6ceff`）。N 张重复卡必须逐一标注——「恰好 1 张异色 = 激活态」「≥4 张严格 ABAB 交替 = 斑马纹」「全同 = 无高亮」，漏标会被 Figma 真值交叉核对判缺
+- `repeatedCardTruth`: **系统注入字段**（生成端只读，vision 不需要输出），重复卡填充分布的 Figma 确定性真值：`{kind: 'active'|'uniform'|'zebra', size, activeHex?}`。下游代码生成以此为准：active → `:first-child, :hover` 激活态；uniform → 无高亮；zebra → 才允许 `nth-child(odd/even)`
 - `figmaNode`: **新增字段**（可选），对应的Figma节点ID
 - `styles`: **新增字段**（可选），元素的样式信息（fontSize、color、fontWeight等）
 - `placeholder`: **新增字段**（可选），资源占位符名称

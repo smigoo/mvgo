@@ -3740,13 +3740,19 @@ export function fixMisplacedContainerOpacity(files, nodeData, options = {}) {
 
   // 真值侧：收集所有 opacity<1 的节点值集合（命名无关；GROUP/其它类型均可）
   const lowOpacityVals = [];
-  const collect = (n) => {
+  // 🛡️ 2026-10-15（a715fafc 爆栈实锤）：循环引用防护。
+  //   线上 figmaNodeData 是内存对象图（可能带父指针/缓存回链），无 seen 集合的
+  //   递归遍历遇环即 Maximum call stack size exceeded（落盘前终验 catch 非阻断吞掉，
+  //   症状只有一条 warn）。数组 typeof 也是 object，统一走 Object.values 枚举，
+  //   原 `else if Array.isArray` 分支是不可达死代码，一并删除。
+  const collect = (n, seen = new WeakSet()) => {
     if (!n || typeof n !== 'object') return;
+    if (seen.has(n)) return;
+    seen.add(n);
     const op = n.opacity;
     if (typeof op === 'number' && op > 0 && op < 0.999) lowOpacityVals.push(op);
     for (const v of Object.values(n)) {
-      if (v && typeof v === 'object') collect(v);
-      else if (Array.isArray(v)) v.forEach(collect);
+      if (v && typeof v === 'object') collect(v, seen);
     }
   };
   if (nodeData && typeof nodeData === 'object') collect(nodeData);

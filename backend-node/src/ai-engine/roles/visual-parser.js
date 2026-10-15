@@ -23,6 +23,7 @@ import { collectFigmaNodes, applyFigmaElementHeightRatios } from '../utils/figma
 import { collectFigmaTextTruth, findClosestTruth } from '../utils/text-truth-guard.js'
 // 🛡️ 6-B（2026-09-15）：seriesColors 臆造色真值修正（VLM 红蓝对比先验 vs Figma 蓝系真值）
 import { collectFigmaChartColors, resolveSeriesColors } from '../utils/figma-color-truth.js'
+import { injectRepeatedCardTruth } from '../utils/layout-truth-healer.js'
 // 🛡️ 治本（2026-09-18）：fill → rgba 统一纯函数（fill.opacity 优先于 color.a），
 // 修复 mc-max-1789646258134-d21c0618 stat-card 半透明底被输出成不透明全饱和色。
 import { fillToRgba } from '../utils/section-tree.js'
@@ -444,7 +445,7 @@ ${(isMicrocode
 **禁止把多个独立元素合并、折叠、概括成一个 section 描述**。设计稿中的每一个独立 UI 元素都必须作为独立子元素输出，逐项列出：
 
 1. **统计指标组**：头部/内容区的「标签+数值」组合（如「设备类型 28」「设备总数 68562」「完好率 98%」）是**多个独立元素**，必须逐个输出为独立元素（各自带 name/label + value），禁止合并成一句「顶部有 3 个统计指标」。
-2. **重复卡片/列表项**：结构相似的 N 个卡片，必须用 \`items\` 数组逐个列出（每个都有独立 name/value），禁止用「N 个统计卡片」概括。
+2. **重复卡片/列表项**：结构相似的 N 个卡片，必须用 \`items\` 数组逐个列出（每个都有独立 name/value），禁止用「N 个统计卡片」概括。**且每项必须标注 \`repeatedFill\`（卡片底色 hex）**——N 张里哪一张底色不同是「激活态 vs 斑马纹」的唯一判据：恰好 1 张异色=激活态（写 :first-child/:hover），≥4 张严格 ABAB 交替=斑马纹（才允许 nth-child(odd/even)），全同=无高亮；漏标会被 Figma 真值交叉核对判缺。
 3. **每个 TEXT 文本节点**（标签、数值、单位、百分比、刻度）都要单独输出，即使字号 <14px 也不能遗漏或合并。
 4. **Tab/导航项**：每个 tab 都要独立输出为 child 元素，禁止合并成「3 个 tab」。
 5. **图标**：每个独立图标都要单独输出，禁止合并成「若干图标」。
@@ -1404,6 +1405,16 @@ ${analysisTask}`
       const analysisNormalization = this._normalizeAnalysisOutput(parsed, figmaData, resourceDomMapping)
       if (analysisNormalization?.applied > 0 || analysisNormalization?.hasDiagnostics) {
         logger.info('分析结果归一完成', analysisNormalization)
+      }
+
+      // 🛡️ 重复卡填充真值确定性注入（2026-10-15 · 2238359a 臆造斑马纹根因第三层）。
+      // vision LLM 只记「卡片背景装饰」不结构化「N 张重复卡哪张异色」→ 下游归纳偏误
+      // 把 1异N同（激活态）泛化成 nth-child 斑马纹。判据在 layout-truth-healer
+      // （刀 32 同款），parsed.repeatedCardTruth 随 layoutStructure 原样进 prompt
+      // （prompt-builder 另有权威行强约束）。
+      const repeatedCardTruth = figmaData ? injectRepeatedCardTruth(parsed, figmaData) : null
+      if (repeatedCardTruth) {
+        logger.info('重复卡填充真值已注入', { kind: repeatedCardTruth.kind, size: repeatedCardTruth.size, activeHex: repeatedCardTruth.activeHex })
       }
 
       logger.info('解析后处理完成', { layoutFixed, bgFixed, gridBgFixed, chromeStripped, chromeSectionsRemoved: chromeSectionsRemoved.length, bgSized, figmaTextCleaned, resourcesFiltered, figmaDimOverridden, figmaElemRatioApplied })

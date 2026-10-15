@@ -1,6 +1,14 @@
 import { fixSectionHeightsForResource, ensureHeaderSlots, injectFailedResourceFallbacks, stripEmptyShellBindings, ensureResourceImportInVue, mountSubStateBackground, findVForItemTag, dedupeBgMultiRefs, healAbsoluteOverlayParents, healStandaloneBgLayers, findTagByClassKeyword, collectMountCandidates, pickBestMountTarget, fixMisplacedContainerOpacity } from './resource-mounter.js'
 import { inferComponentPrefix, DETERMINISTIC_ANCHOR_SCORE } from '../../utils/mount-target-scoring.js'
 
+// backend-root.js 是 ESM 风格（const __filename = fileURLToPath(import.meta.url)），
+// ts-jest CJS 转换下与模块包装器参数撞名（SyntaxError），logger 链一经加载整个套件即 0 运行。
+// 既有惯例（less-compile-gate/section-content-guard 等 30+ spec 同款）：工厂 mock 绕过真实文件。
+jest.mock('../../../config/backend-root.js', () => ({
+  workspaceRoot: process.cwd(),
+  logsDir: '/tmp/mvgo-test-logs',
+}))
+
 /**
  * 🛡️ fix-section-heights 规则②：组件根 height:100% 不得改写（2026-09-02 实锤）。
  *
@@ -1846,5 +1854,31 @@ describe('透明度归属契约（d368e7d8）', () => {
     const report = fixMisplacedContainerOpacity(files, MULTI, {})
     expect(report.fixed).toHaveLength(0)
     expect(files['resources/styles/common.less']).not.toContain('c-x-group-4-bg')
+  })
+})
+
+describe("fixMisplacedContainerOpacity 遍历防护（2026-10-15 · a715fafc 爆栈实锤）", () => {
+  it("循环引用 nodeData 不再爆栈（WeakSet seen）", () => {
+    const a: any = { opacity: 0.5, children: [] }
+    const b: any = { children: [a], parent: null }
+    a.children.push(b)
+    b.parent = a // a ↔ b 循环
+    expect(() =>
+      fixMisplacedContainerOpacity({}, b, {}),
+    ).not.toThrow()
+  })
+
+  it("数组嵌套节点仍被枚举（原 else-if 死代码语义保持）", () => {
+    // opacity 藏在数组嵌套里：旧代码走不到（死代码），新代码统一 object 分支递归到
+    // 本用例只验证「不爆栈且正常返回」（枚举路径不炸）
+    const tree: any = { children: [{ opacity: 0.3 }, [{ opacity: 0.4 }]] }
+    expect(() => fixMisplacedContainerOpacity({}, tree, {})).not.toThrow()
+  })
+
+  it("正常 JSON 树行为不回归（真值 opacity 可收集）", () => {
+    const files = { "package/components/Card.vue": "<template><div>t</div></template>" }
+    const tree: any = { document: { opacity: 0.6, children: [{ opacity: 0.5 }] } }
+    const report = fixMisplacedContainerOpacity(files, tree, {})
+    expect(report.fixed).toHaveLength(0)
   })
 })

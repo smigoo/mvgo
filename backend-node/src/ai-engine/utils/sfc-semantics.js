@@ -16,18 +16,9 @@
  */
 
 // ── 可选依赖：acorn / acorn-walk（仅用于 <script> 内部自由变量检测）──
-import { createRequire } from 'node:module'
+// 加载逻辑收敛到 acorn-optional-loader.js（import.meta 隔离，jest CJS 可 mock；缺失降级 null）
+import { acornParser, acornWalker } from './acorn-optional-loader.js'
 import { extractSfcTemplate } from './sfc-template-extractor.js'
-const _require = createRequire(import.meta.url)
-let acornParser = null
-let acornWalker = null
-try {
-  acornParser = _require('acorn')
-  acornWalker = _require('acorn-walk')
-} catch {
-  acornParser = null
-  acornWalker = null
-}
 
 /**
  * <script> 内部「全局白名单」：这些标识符在 <script setup> 中无需 import 即可使用，

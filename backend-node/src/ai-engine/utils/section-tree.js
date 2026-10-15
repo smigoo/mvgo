@@ -1974,6 +1974,50 @@ export function reorganizeCenteredChartLayout(sections) {
  *        缺省 null ⇒ 所有 `layout` 为 null（**无事实则显式化，不臆造默认值**）。
  * @returns {{sections:Array, backgrounds:Array, rootName:string, rootId:string}|null}
  */
+/**
+ * 🛡️ 尾部孤儿文本子节点收集（2026-10-15 · 91544b38 footer 实锤）。
+ *
+ * 只收「父容器直接子级中、位于所有已提升兄弟之下、且未被任何兄弟覆盖的裸 TEXT」——
+ * 即设计稿里挂在容器尾部的汇总/统计行（footer）。三条判据见调用处注释。
+ *
+ * @param {object} parentNode Figma 父容器节点
+ * @param {Array<object>} promotedSections 已提升为 section 的兄弟（含 sourceNodeIds）
+ * @returns {Array<object>} 按 y 升序的 TEXT 节点数组（可能为空）
+ */
+function collectTailOrphanTextKids(parentNode, promotedSections) {
+  if (!parentNode || typeof parentNode !== 'object') return []
+  if (!Array.isArray(promotedSections) || promotedSections.length === 0) return []
+
+  const covered = new Set()
+  const promotedIds = new Set()
+  let maxBottom = -Infinity
+  for (const s of promotedSections) {
+    if (!s || typeof s !== 'object') continue
+    if (s.id != null) promotedIds.add(String(s.id))
+    for (const id of Array.isArray(s.sourceNodeIds) ? s.sourceNodeIds : []) {
+      if (id != null) covered.add(String(id))
+    }
+    const b = s.absoluteBoundingBox
+    if (b && Number.isFinite(b.y)) {
+      maxBottom = Math.max(maxBottom, (b.y || 0) + (b.height || 0))
+    }
+  }
+  if (!Number.isFinite(maxBottom)) return []
+
+  const kids = (parentNode.children || []).filter((c) => c && typeof c === 'object')
+  return kids
+    .filter((k) => {
+      if (String(k.type || '').toUpperCase() !== 'TEXT') return false
+      const id = String(k.id || '')
+      if (!id || promotedIds.has(id) || covered.has(id)) return false
+      if (!String(k.characters || '').trim()) return false
+      const box = k.absoluteBoundingBox
+      if (!box || !Number.isFinite(box.y)) return false
+      return box.y >= maxBottom - 1 // 容差 1px：与最后一个兄弟紧贴也算尾部
+    })
+    .sort((a, b) => (a.absoluteBoundingBox?.y || 0) - (b.absoluteBoundingBox?.y || 0))
+}
+
 export function deriveSectionsFromFigmaTree(figmaNodeData, layoutFacts = null) {
   const doc = figmaNodeData?.document ?? figmaNodeData
   if (!doc || typeof doc !== 'object') return null
@@ -2175,6 +2219,66 @@ export function deriveSectionsFromFigmaTree(figmaNodeData, layoutFacts = null) {
     nestedSections.sort(
       (a, b) => (a.absoluteBoundingBox?.y || 0) - (b.absoluteBoundingBox?.y || 0),
     )
+
+    // 🛡️ 尾部孤儿文本段补回（2026-10-15 · c-aiot-dpjh-bsjd-91544b38 实锤 · footer 全丢）
+    //   病灶：E1 替代 vision 后，footer「共 6 个节点 / 接入设备 10810」（48:5888/5889，
+    //   slot-con 的**直接子级裸 TEXT**）永远进不了 section 树——`shouldPromoteToSection`
+    //   只提升容器类型（FRAME/GROUP/INSTANCE/…），裸 TEXT 恒被跳过 ⇒ 整段文案随 vision
+    //   段被替换而消失（产物 index.vue 只有 header + 卡列表，footer 零渲染）。
+    //   判据（纯几何 + 内容，命名无关，且只在「尾部」补、绝不插中间）：
+    //     ① 位于所有已提升兄弟之下（y ≥ max(兄弟底边)）⇒ 只补尾部孤儿，不动既有布局顺序；
+    //     ② 未被任何已提升兄弟的 sourceNodeIds 覆盖 ⇒ 真孤儿（防与列表轨重复渲染）；
+    //     ③ TEXT 且 characters 非空 ⇒ 承载文案真值（装饰 VECTOR/RECTANGLE/滚动条不补）。
+    const tailOrphanTextKids = collectTailOrphanTextKids(parentNode, nestedSections)
+    if (tailOrphanTextKids.length > 0) {
+      const boxes = tailOrphanTextKids
+        .map((t) => t.absoluteBoundingBox)
+        .filter((b) => b && Number.isFinite(b.y))
+      const mergedBox = boxes.length
+        ? {
+            x: Math.min(...boxes.map((b) => b.x || 0)),
+            y: Math.min(...boxes.map((b) => b.y || 0)),
+            width:
+              Math.max(...boxes.map((b) => (b.x || 0) + (b.width || 0))) -
+              Math.min(...boxes.map((b) => b.x || 0)),
+            height:
+              Math.max(...boxes.map((b) => (b.y || 0) + (b.height || 0))) -
+              Math.min(...boxes.map((b) => b.y || 0)),
+          }
+        : null
+      // 同行（y 极差 ≤4px）⇒ 横排；否则纵排。纯几何自判定，不猜语义。
+      const sameRow = boxes.length > 1
+        ? Math.max(...boxes.map((b) => b.y || 0)) - Math.min(...boxes.map((b) => b.y || 0)) <= 4
+        : false
+      nestedSections.push({
+        id: `${String(parentNode.id || 'section')}-tail-text`,
+        name: tailOrphanTextKids
+          .map((t) => String(t.characters || t.name || '').trim())
+          .filter(Boolean)
+          .slice(0, 3)
+          .join(' / ')
+          .slice(0, 40),
+        type: 'footer',
+        // figmaNodeId 取首行文本节点：供 planner enrich 按 id 匹配（即便无 vision 对应段也不误配）
+        figmaNodeId: String(tailOrphanTextKids[0]?.id || ''),
+        sourceNodeIds: tailOrphanTextKids.map((t) => String(t.id || '')).filter(Boolean),
+        ...(mergedBox ? { absoluteBoundingBox: mergedBox } : {}),
+        layout: sameRow ? 'horizontal' : 'vertical',
+        children: tailOrphanTextKids.map((c) => mapChildNode(c)),
+        isNestedSection: depth > 0,
+        // 🛡️ 尾部孤儿标记：供下游/审计识别「推导补回段」（非 Figma 容器，纯文本行）
+        orphanTailText: true,
+        styles: {
+          flexGrow: 0,
+          flexShrink: 1,
+          flexBasis: 0,
+          ...(mergedBox && mergedBox.height ? { figmaHeightPx: mergedBox.height } : {}),
+        },
+      })
+      nestedSections.sort(
+        (a, b) => (a.absoluteBoundingBox?.y || 0) - (b.absoluteBoundingBox?.y || 0),
+      )
+    }
 
     // 🛡️ 图表居中 + 图例分两侧（2026-09-17 · 策略类型分布实锤）：识别
     //   [chart, stats] 两栏中 stats 内部按 x 聚成左右两列、chart 居中的几何关系，

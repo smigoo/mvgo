@@ -2,6 +2,28 @@
  * CODE-020/021/022 三个确定性检测器单测（2026-09-10，治 device-0quu3hqa 内联渲染/死代码）
  * 覆盖：子组件死代码 import / 资源变量未挂载 / 反向类名不命中。
  */
+// backend-root.js ESM 风格（const __filename）在 ts-jest CJS 下与模块包装器参数撞名，
+// logger 链一加载整套件 0 运行 ⇒ 工厂 mock 绕过（file-writer.diff-skip 等同款惯例）。
+jest.mock('../../../config/backend-root.js', () => {
+  const cwd = process.cwd()
+  return {
+    backendRoot: cwd,
+    projectRoot: cwd,
+    workspaceRoot: cwd,
+    customComponentsDir: cwd,
+    vue3ComponentsDir: cwd,
+    resolveFrontendWorkspacePath: () => cwd,
+    frontendCustomComponentsDir: () => cwd,
+    frontendVue3ComponentsDir: () => cwd,
+    tempComponentsDir: cwd,
+    dataDir: cwd,
+    logsDir: '/tmp/mvgo-test-logs',
+    configDir: cwd,
+    chatAttachmentsDir: cwd,
+    apifoxZipsDir: cwd,
+    apiCatalogsDir: cwd,
+  }
+}, { virtual: true })
 import {
   CodeStructureValidator,
   findDeadSubComponentImports,

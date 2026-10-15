@@ -15,6 +15,13 @@
  *   `options.fileExists(relPath)`，调用方传 `existsSync(join(outputPath, rel))`。
  *   检查器保持纯函数（不 import fs），且**真缺失时仍然 fail**（强度不降）。
  */
+// backend-root.js ESM 风格（const __filename）在 ts-jest CJS 下与模块包装器参数撞名，
+// logger 链一加载整套件 0 运行 ⇒ 工厂 mock 绕过（file-writer.diff-skip 等同款惯例）。
+jest.mock('../../../config/backend-root.js', () => ({
+  workspaceRoot: process.cwd(),
+  logsDir: '/tmp/mvgo-test-logs',
+}), { virtual: true })
+
 import { checkMcComponent } from './mc-health-validator.js'
 
 type Health = {

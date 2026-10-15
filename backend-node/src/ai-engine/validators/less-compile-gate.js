@@ -537,6 +537,48 @@ export function gateStandaloneLessWrite(source = '', filePath = '') {
   return { content, fixes, defects, ok: defects.length === 0, filePath }
 }
 
+/**
+ * 🛡️ 2026-10-15（mc-max-1791967522207-a715fafc 实锤，B 降级配套）：块注释配平。
+ *
+ * 背景：LESS 写盘门禁「跳过 = 保留磁盘 last-good」对新任务首次写盘不成立
+ * （无 last-good 时跳过 = 交付空兜底模板裸产物）。门禁降级路径调用本函数把
+ * 未闭合的注释开符号与孤立的注释闭符号替换为两个空格——牺牲被吞注释段
+ * （其内容降级为普通文本，CSS 解析容错忽略），保住其余样式规则，复检后再落盘。
+ *
+ * 迭代至稳定：抹掉未闭合的开符号后，原本被它吞进注释的闭符号/开符号会暴露为
+ * 新的孤立/未闭合符号，需多轮收敛（正常 ≤2 轮，上限 10 轮防死循环）。
+ *
+ * @param {string} source
+ * @returns {string} 注释配平后的文本
+ */
+export function rebalanceBlockComments(source = '') {
+  const cur = String(source || '')
+  // 配对栈模型（与门禁 scanStandaloneLessDefects 的简单计数严格等价）：
+  //   每个开符号入栈、每个闭符号弹栈（栈空则记孤立闭符号）；扫描结束栈内剩余
+  //   即未闭合开符号。抹掉「栈剩余 + 孤立闭」后开/闭计数必然相等。
+  //   ⚠️ 不能用「不嵌套状态机」：注释内容里出现开符号字样时状态机会将其忽略
+  //   （a715fafc 实锤：自动修复注释文本含开符号字面），计数依然失衡。
+  const stack = [] // 未配对开符号的字符索引
+  const blanks = [] // 待抹除的字符索引（每处 2 字符）
+  for (let i = 0; i < cur.length - 1; i++) {
+    const two = cur[i] + cur[i + 1]
+    if (two === '/*') { stack.push(i); i++; continue }
+    if (two === '*/') {
+      if (stack.length > 0) stack.pop()
+      else blanks.push(i) // 孤立闭符号
+      i++
+    }
+  }
+  for (const idx of stack) blanks.push(idx) // 未闭合开符号
+  if (blanks.length === 0) return cur
+  const chars = cur.split('')
+  for (const idx of blanks) {
+    chars[idx] = ' '
+    chars[idx + 1] = ' '
+  }
+  return chars.join('')
+}
+
 function readSnippet(source, line, radius = 2) {
   const lines = String(source || '').split('\n')
   const safeLine = Math.max(1, Number(line) || 1)

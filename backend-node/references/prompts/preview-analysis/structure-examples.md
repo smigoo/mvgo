@@ -70,6 +70,7 @@
     "items": [
       {
         "layout": "horizontal",
+        "repeatedFill": "#a6ceff",
         "icon": { "placeholder": "icon-mainline", "figmaNode": "1452:1955", "position": "left", "resource": "icon-1955.png" },
         "content": {
           "layout": "vertical",
@@ -100,3 +101,4 @@
 4. 每个文字/图标元素必须带 `styles`（fontSize/color 等）；`figmaNode` 仅在提供了 Figma 结构参考时必须携带（对应真实节点 ID），纯截图分析省略、禁止臆造
 5. 文字拆分：数值+单位必须拆为独立 `parts`（number/unit），各自独立 figmaNode/styles
 6. 无重复项组件可用简化 `children` 结构，无需 `items`
+7. **重复卡必须逐项标注 `repeatedFill`**（卡片底色 hex）：N 张中「恰好 1 张异色 = 激活态」「≥4 张严格 ABAB 交替 = 斑马纹」「全同 = 无高亮」——上例首卡 `#a6ceff` 异色即激活态；漏标会被 Figma 真值交叉核对判缺

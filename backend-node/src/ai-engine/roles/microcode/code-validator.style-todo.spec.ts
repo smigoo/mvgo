@@ -12,6 +12,13 @@
  *      `stripEmptyTodoRulesInSfc`（= `stripEmptyTodoRules` 的 SFC 适配器）接管，与 `common.less`
  *      侧共用同一套判定，消除「只取第一块 `<style>`、只认 `.class{}`、无文案护栏、计数虚增」四个缺陷。
  */
+// backend-root.js ESM 风格（const __filename）在 ts-jest CJS 下与模块包装器参数撞名，
+// logger 链一加载整套件 0 运行 ⇒ 工厂 mock 绕过（file-writer.diff-skip 等同款惯例）。
+jest.mock('../../../config/backend-root.js', () => ({
+  workspaceRoot: process.cwd(),
+  logsDir: '/tmp/mvgo-test-logs',
+}), { virtual: true })
+
 import { stripEmptyTodoRules, stripEmptyTodoRulesInSfc } from './code-validator.js';
 import * as codeValidatorModule from './code-validator.js';
 import { BUILTIN_RULE_IDS } from '../../validators/code-fix-rules.js';

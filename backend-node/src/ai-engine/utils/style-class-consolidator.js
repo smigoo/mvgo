@@ -536,9 +536,23 @@ function isValidLessRuleBlock(text = '') {
  * 若保留会直接污染最终样式文件。
  */
 function sanitizeCommonLessText(less = '') {
+  // 🛡️ 2026-10-15（mc-max-1791967522207-a715fafc 实锤）：跨行块注释感知。
+  //   旧实现逐行判「=== 分隔线」无注释上下文——多行块注释的收尾行
+  //   `   ============ */` trim 后以 ≥3 个 `=` 开头，被下方分隔线规则清成空行
+  //   → 注释头 `/*` 永远失配（/* ×24 vs */ ×23）→ LESS-WRITE-002 门禁拦截
+  //   → 新任务首写无 last-good → 空兜底模板裸产物。
+  //   修复：逐行跟踪块注释深度，注释内行（含收尾行）一律原样保留。
+  let commentDepth = 0;
   return String(less)
     .split('\n')
     .map((line) => {
+      const opens = (line.match(/\/\*/g) || []).length;
+      const closes = (line.match(/\*\//g) || []).length;
+      const inComment = commentDepth > 0;
+      commentDepth += opens - closes;
+      if (commentDepth < 0) commentDepth = 0;
+      // 注释内行 / 开启跨行注释的行：原样保留，不做分隔线清理
+      if (inComment || (opens > 0 && commentDepth > 0)) return line;
       const trimmed = line.trim();
       if (!trimmed) return line;
       if (/^\}\s*[=—-]{3,}.*$/.test(trimmed)) return '}';

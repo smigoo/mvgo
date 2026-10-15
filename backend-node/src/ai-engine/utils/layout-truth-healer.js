@@ -602,7 +602,7 @@ const ZEBRA_ARG_RE = /^(?:odd|even|2n(?:\s*[+-]\s*\d+)?)$/;
 /** 从 figmaRoot 提取最大重复节点组（≥3 同名同尺寸 SOLID 填充）的 fills 分布判定 */
 export function classifyRepeatedCardFills(figmaRoot) {
   if (!figmaRoot || typeof figmaRoot !== 'object') return null;
-  const groups = new Map(); // key → [{hex, y}]
+  const groups = new Map(); // key → [{hex, opacity, y}]
   (function walk(n) {
     if (!n || typeof n !== 'object') return;
     const bb = n.absoluteBoundingBox;
@@ -620,7 +620,13 @@ export function classifyRepeatedCardFills(figmaRoot) {
           .join('');
       const key = `${n.name}|${Math.round(bb.width)}x${Math.round(bb.height)}`;
       if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push({ hex, y: Math.round(bb.y || 0) });
+      groups.get(key).push({
+        hex,
+        // 🔴 2026-10-15：fill.opacity 必须随真值携带（91544b38 实锤：5 张卡
+        // #ffffff@0.43 被下游提为不透明 #ffffff → 浅蓝 tint 全丢）。
+        opacity: f.opacity == null ? 1 : Number(f.opacity),
+        y: Math.round(bb.y || 0),
+      });
     }
     (n.children || []).forEach(walk);
   })(figmaRoot.document || figmaRoot);
@@ -632,6 +638,10 @@ export function classifyRepeatedCardFills(figmaRoot) {
   if (!best) return null;
   best.sort((a, b) => a.y - b.y);
   const fills = best.map((x) => x.hex.toLowerCase());
+  const fillOf = (hex) => {
+    const hit = best.find((x) => x.hex.toLowerCase() === hex);
+    return hit ? { hex, opacity: hit.opacity } : { hex, opacity: 1 };
+  };
 
   // 严格交替（≥4 才承认斑马，3 张 AB 无法与「首卡激活」区分——保守归 active 候选）
   if (
@@ -639,18 +649,57 @@ export function classifyRepeatedCardFills(figmaRoot) {
     fills[0] !== fills[1] &&
     fills.every((h, i) => h === fills[i % 2])
   ) {
-    return { kind: 'zebra', size: fills.length };
+    return { kind: 'zebra', size: fills.length, fillA: fillOf(fills[0]), fillB: fillOf(fills[1]) };
   }
   const uniq = new Set(fills);
-  if (uniq.size === 1) return { kind: 'uniform', size: fills.length };
+  if (uniq.size === 1) return { kind: 'uniform', size: fills.length, fill: fillOf(fills[0]) };
   // 多数派统计：恰好 1 个少数派
   const count = new Map();
   for (const h of fills) count.set(h, (count.get(h) || 0) + 1);
   const minor = [...count.entries()].filter(([, c]) => c === 1);
   if (uniq.size === 2 && minor.length === 1) {
-    return { kind: 'active', size: fills.length, activeHex: minor[0][0] };
+    const minorHex = minor[0][0];
+    const majorHex = [...count.entries()].find(([, c]) => c !== 1)?.[0];
+    return {
+      kind: 'active',
+      size: fills.length,
+      activeHex: minorHex,
+      activeFill: fillOf(minorHex),
+      baseFill: majorHex ? fillOf(majorHex) : null,
+    };
   }
   return null; // 分布不明 → 不动
+}
+
+/**
+ * 重复卡 fill 描述符 → CSS 色值（2026-10-15 · 91544b38 实锤）。
+ * opacity < 1 必须输出 rgba(...) 保留透明度——提为不透明 hex 会把
+ * 「半透白叠蓝底页」的浅蓝 tint 卡底变成纯白（产物 @color-bg-card:#ffffff 病灶）。
+ */
+export function formatRepeatedFillCss(fill) {
+  if (!fill || !fill.hex) return null;
+  const op = fill.opacity == null ? 1 : Number(fill.opacity);
+  if (!(op < 0.999)) return fill.hex;
+  const r = parseInt(fill.hex.slice(1, 3), 16);
+  const g = parseInt(fill.hex.slice(3, 5), 16);
+  const b = parseInt(fill.hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${Number(op.toFixed(2))})`;
+}
+
+/**
+ * 重复卡填充真值注入（2026-10-15 · 2238359a 臆造斑马纹根因第三层 · 源头预防）。
+ *
+ * 挂点：visual-parser._postProcessAnalysis（视觉分析确定性后处理枢纽）。
+ * 真值判据复用刀 32 同款 classifyRepeatedCardFills；注入后 parsed.repeatedCardTruth
+ * 随 layoutStructure 原样进 prompt（prompt-builder 另有权威行强约束）。
+ * 无 figmaRoot / 分布不明（null）→ 不动（fail-open）。
+ */
+export function injectRepeatedCardTruth(parsed, figmaRoot) {
+  const truth = classifyRepeatedCardFills(figmaRoot);
+  if (truth && parsed && typeof parsed === 'object') {
+    parsed.repeatedCardTruth = truth;
+  }
+  return truth;
 }
 
 /** 交替型 nth-child 规则块扫描：返回 [{selStart, selEnd, bodyStart, bodyEnd, selector, body}] */

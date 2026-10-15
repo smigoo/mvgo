@@ -44,6 +44,7 @@ import { buildRetryPrompt as buildRetryPromptBase } from '../../utils/retry-prom
 import { buildChartSpecPromptRules } from '../../utils/chart-spec.js';
 // 🧩 WP2（2026-10-08）：资源绑定契约（RC1/RC3/RC5/RC7，两线共用单一来源）
 import { buildResourceBindingPromptBlock } from '../../utils/resource-item-contract.js';
+import { formatRepeatedFillCss } from '../../utils/layout-truth-healer.js';
 import { safeLogger } from '../../logger/safe-logger.js';
 // 🛡️ P0（2026-09-04）：注入 Figma 文字真值白名单，防止 LLM 臆造/OCR 误读文字
 import { collectFigmaTextTruth } from '../../utils/text-truth-guard.js';
@@ -210,7 +211,25 @@ ${runtimeRevisionSection}
 \`\`\`json
 ${JSON.stringify(layoutStructure)}
 \`\`\`
-
+${
+  layoutStructure?.repeatedCardTruth
+    ? (() => {
+        const t = layoutStructure.repeatedCardTruth
+        // 2026-10-15 91544b38 实锤：baseFill 含 opacity 时必须原样下发（rgba），
+        // 否则 LLM 提为不透明 hex → 「半透白叠蓝底页」的 tint 卡底变纯白。
+        const baseCss = formatRepeatedFillCss(t.baseFill || t.fill)
+        const baseLine = baseCss
+          ? `其余${t.kind === 'active' ? ` ${t.size - 1} 张` : ''}基础底色为 \`${baseCss}\`，**必须**作卡片基础 background（theme-vars 卡底槽位就取此值；${baseCss.startsWith('rgba') ? '含透明度，**禁提为不透明 hex**、' : ''}禁省略）。`
+          : ''
+        const lines = {
+          active: `> 🔴 **重复卡填充真值（Figma 确定性事实，最高优先级，禁止违背）**：${t.size} 张重复卡中**恰好 1 张异色（${t.activeHex}）**——这是「激活/选中态」。激活卡必须用 \`:first-child, :hover\`（同色）+ cursor:pointer + transition 实现，**严禁**写成 \`:nth-child(odd/even/2n)\` 斑马纹。${baseLine}`,
+          uniform: `> 🔴 **重复卡填充真值（Figma 确定性事实，最高优先级，禁止违背）**：${t.size} 张重复卡**全部同色**——无任何高亮态，**禁止**臆造 \`:nth-child(odd/even)\` 交替背景或首张高亮。${baseLine}`,
+          zebra: `> 🔴 **重复卡填充真值（Figma 确定性事实，最高优先级，禁止违背）**：${t.size} 张重复卡**严格 ABAB 交替**（\`${formatRepeatedFillCss(t.fillA) || ''}\` / \`${formatRepeatedFillCss(t.fillB) || ''}\`）——这是真斑马纹，用 \`:nth-child(odd/even)\` 实现；不得误改成激活态。`,
+        }
+        return `\n${lines[t.kind] || ''}\n`
+      })()
+    : ''
+}
 ${formatVisualStyle(visualElements)}
 
 ${
@@ -2370,6 +2389,26 @@ export function buildThemeVarsChunkPrompt(input, chunk, options = {}) {
 
     const themeVarsInjection = themeVarsBlock ? `\n${themeVarsBlock}\n` : '';
 
+    // 🆕 2026-10-15（91544b38 实锤）：重复卡基础底色确定性真值。
+    //   病灶：5 张卡 #ffffff@0.43（半透白叠浅蓝页底=tint 效果）被提为不透明
+    //   `#ffffff` 写进 @color-bg-card → 预览卡底纯白、设计稿浅蓝 tint 全丢。
+    //   真值由 visual-parser 注入 layoutStructure.repeatedCardTruth（含 opacity），
+    //   此处作为最高优先级硬约束下发——卡底槽位值不允许任何 LLM 环节改写。
+    const repeatedTruth = input.layoutStructure?.repeatedCardTruth;
+    const repeatedTruthInjection = (() => {
+      if (!repeatedTruth) return '';
+      const t = repeatedTruth;
+      const baseCss = formatRepeatedFillCss(t.baseFill || t.fill);
+      if (!baseCss) return '';
+      const distribution =
+        t.kind === 'active'
+          ? `恰好 1 张激活异色（\`${t.activeHex}\`），其余 ${t.size - 1} 张`
+          : t.kind === 'zebra'
+            ? `严格 ABAB 交替（\`${formatRepeatedFillCss(t.fillA)}\` / \`${formatRepeatedFillCss(t.fillB)}\`），`
+            : '全部';
+      return `\n## 重复卡底色真值（Figma 确定性事实，最高优先级）\n\n${t.size} 张重复卡：${distribution}基础底色为 \`${baseCss}\`。卡底槽位（如 @color-bg-card）**必须取此值**${baseCss.startsWith('rgba') ? '——含透明度，**禁止提为不透明 hex**（半透白叠浅蓝页底才是设计稿的 tint 效果）' : ''}${t.kind === 'active' ? `；激活卡底色槽位（如 @color-bg-card-active）取 \`${t.activeHex}\`` : ''}。\n`;
+    })();
+
     return `你是专业的微码组件主题工程师。你只负责生成主题变量文件（theme-vars.less）。
 
 ${revisionSection}
@@ -2402,6 +2441,7 @@ ${fileList}
 **Less 变量命名规范**：
 ${lessNaming}
 ${themeVarsInjection}
+${repeatedTruthInjection}
 ${factsBlock}
 ${styleOutputFormatTail(chunk)}`;
   }

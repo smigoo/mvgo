@@ -4,6 +4,13 @@
  * 具名插槽的 </template> 提前截断，插槽后（slot-con）的子组件标签不可见 → ensure 漏补 import
  * → 三要素不齐备（0ca84358 家族缺陷）。改为 extractSfcTemplate 边界法后必须能补齐。
  */
+// backend-root.js ESM 风格（const __filename）在 ts-jest CJS 下与模块包装器参数撞名，
+// logger 链一加载整套件 0 运行 ⇒ 工厂 mock 绕过（file-writer.diff-skip 等同款惯例）。
+jest.mock('../../../../config/backend-root.js', () => ({
+  workspaceRoot: process.cwd(),
+  logsDir: '/tmp/mvgo-test-logs',
+}), { virtual: true })
+
 import { ensureSubComponentImport } from '../resource-mounter.js';
 
 describe('ensureSubComponentImport（extractSfcTemplate 边界法）', () => {

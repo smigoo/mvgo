@@ -6,7 +6,7 @@ jest.mock('../../config/backend-root.js', () => ({
   workspaceRoot: process.cwd(),
 }), { virtual: true })
 
-import { LessCompileGate } from './less-compile-gate.js'
+import { LessCompileGate, rebalanceBlockComments, gateStandaloneLessWrite } from './less-compile-gate.js'
 
 describe('LessCompileGate.validateDirectory', () => {
   let root: string
@@ -207,3 +207,41 @@ describe('LessCompileGate.validateDirectory', () => {
     expect(blocks[0].importedFrom).toBeNull()
   })
 })
+
+describe("rebalanceBlockComments（2026-10-15 · a715fafc B 降级配套）", () => {
+  // a715fafc 事故形态：consolidator 误删多行块注释收尾行 → /* 失配
+  const broken = [
+    "/* ====",
+    "   头部注释",
+    "   ==== */",
+    ".a { color: red; }",
+    "}/* ====",      // 未闭合注释头（吞掉后面一个 */ 后错位）
+    "   Header 区",
+    "   ==== */",
+    ".b { color: blue; }",
+    "",
+  ].join("\n");
+
+  it("未闭合 /* 与孤立 */ 被抹除，输出注释配平", async () => {
+    const out = rebalanceBlockComments(broken);
+    const opens = (out.match(/\/\*/g) || []).length;
+    const closes = (out.match(/\*\//g) || []).length;
+    expect(opens).toBe(closes);
+    // 样式规则保留
+    expect(out).toContain(".a { color: red; }");
+    expect(out).toContain(".b { color: blue; }");
+  });
+
+  it("已配平文本零改动（幂等）", async () => {
+    const good = "/* x */\n.a { color: red; }\n/* y */\n";
+    expect(rebalanceBlockComments(good)).toBe(good);
+  });
+
+  it("配平后可过 gateStandaloneLessWrite 注释缺陷检查", async () => {
+    const retry = gateStandaloneLessWrite(rebalanceBlockComments(broken), "x.less");
+    const commentDefects = retry.defects.filter((d) =>
+      String(d.message || d).includes("注释")
+    );
+    expect(commentDefects).toHaveLength(0);
+  });
+});

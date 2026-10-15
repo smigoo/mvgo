@@ -10,6 +10,13 @@
  * 治本：计划层把「同 resourceFile」固化为单变量 + sharedBy，并按 sourceNodeIds（批次 1
  *   已锚定）+ figma 祖先链解析 owner 组件，下游挂载零猜测。
  */
+// backend-root.js ESM 风格（const __filename）在 ts-jest CJS 下与模块包装器参数撞名，
+// logger 链一加载整套件 0 运行 ⇒ 工厂 mock 绕过（file-writer.diff-skip 等同款惯例）。
+jest.mock('../../../config/backend-root.js', () => ({
+  workspaceRoot: process.cwd(),
+  logsDir: '/tmp/mvgo-test-logs',
+}), { virtual: true })
+
 import { buildResourceMountPlan, mountPlannedResources, ensureStateRootFlexLayout } from './resource-mount-plan.js'
 
 // ── 真实形态 fixture：c-device-monitor-485d724d（914 §11/§13 取证值）──

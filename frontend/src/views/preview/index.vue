@@ -494,6 +494,24 @@ const storedManualTheme = ref((() => {
 const isValidThemeKey = (key) =>
   !!key && typeof key === 'string' && selectableThemes.value.some((t) => t.key === key)
 
+/**
+ * 🆕 R6-c（2026-10-15）宿主明暗 → 真值轨映射。
+ *
+ *   TaskDetail 把宿主明暗以 `?theme=light|dark` 透传（c134c8f），它只携带**明暗语义**。
+ *   双真值组件里 `dark` 命中的是**内置占位轨**（M4-10 枚举色，无设计稿真值）——
+ *   宿主暗色时用户初始看到的是占位色而非副稿真值（「用户自然点错/看错」的结构性来源）。
+ *   收敛：query 命中 builtin 占位轨时，若存在同 brightness 的 Figma 真值轨 → 改看真值轨；
+ *   无同明暗真值轨（单稿组件）→ 保持原 key。手动切换（优先级 0/0.5）不受影响——
+ *   用户显式点占位轨是合法意图，不拦。
+ */
+const resolveHostThemeTrack = (key) => {
+  const tracks = selectableThemes.value
+  const hit = tracks.find((t) => t.key === key)
+  if (!hit || !hit.builtin) return key
+  const truth = tracks.find((t) => !t.builtin && t.brightness === hit.brightness)
+  return truth ? truth.key : key
+}
+
 const resolvedThemeClass = computed(() => {
   // 0. 手动切换（R12，最高优先级 —— 本次会话内的即时意图）
   if (manualTheme.value && isValidThemeKey(manualTheme.value)) return manualTheme.value
@@ -503,9 +521,9 @@ const resolvedThemeClass = computed(() => {
   if (storedManualTheme.value && isValidThemeKey(storedManualTheme.value)) {
     return storedManualTheme.value
   }
-  // 1. URL query 强制指定
+  // 1. URL query 强制指定（R6-c：命中内置占位轨时改映射同明暗真值轨）
   const themeQuery = route.query.theme
-  if (isValidThemeKey(themeQuery)) return themeQuery
+  if (isValidThemeKey(themeQuery)) return resolveHostThemeTrack(themeQuery)
   // 2. Playground 实时下发（postMessage 联动）
   if (isValidThemeKey(playgroundTheme.value)) return playgroundTheme.value
   // 3. 从 declare.json 读取默认主题（key 可能是用户自填名）
@@ -581,7 +599,7 @@ const safePreviewUrl = (name) => {
 const selectableThemes = computed(() => {
   const list = microcodeDeclare.value?.themeConfig?.list
   if (Array.isArray(list) && list.length > 0) {
-    return list
+    const mapped = list
       .filter((t: any) => t && t.key)
       .map((t: any) => ({
         key: String(t.key),
@@ -601,6 +619,24 @@ const selectableThemes = computed(() => {
           ? safePreviewUrl(String(t.previewName))
           : safePreviewUrl('mc-preview.png'),
       }))
+    // 🆕 R6（2026-10-15）主题轨语义收敛：
+    //   a) 排序——Figma 真值轨（非内置）保持 declare 原序在前（主稿轨恒首位），
+    //      内置占位轨恒沉底；此前 list 原序 light→theme_2→dark 让占位轨与副稿
+    //      真值轨平起平坐，用户无「主看哪轨」指引。
+    //   b) 命名消歧——真值轨与占位轨可同名（两轨都叫「深色」实锤）；内置轨恒加
+    //      「·内置」，与占位轨同名的真值轨加「·设计稿」，杜绝两个一模一样的按钮。
+    const nameCount = new Map<string, number>()
+    for (const t of mapped) nameCount.set(t.name, (nameCount.get(t.name) || 0) + 1)
+    const out = mapped.map((t: any) => ({
+      ...t,
+      name: t.builtin
+        ? `${t.name}·内置`
+        : (nameCount.get(t.name) || 0) > 1
+          ? `${t.name}·设计稿`
+          : t.name,
+    }))
+    out.sort((a: any, b: any) => Number(a.builtin) - Number(b.builtin))
+    return out
   }
   return [
     { key: 'light', name: '浅色', brightness: 'light', readonly: false, builtin: false, coreColors: null, previewUrl: safePreviewUrl('mc-preview.png') },
@@ -634,7 +670,12 @@ const componentProps = computed(() => {
   return {
     componentId,
     groupId,
-    componentName: microcodeDeclare.value?.componentName
+    // 🛡️ 2026-10-15（R4 闭环）：外壳标题优先读 declare attribute.title
+    //   （管线已把 Figma 标题文案回写该字段，如「部署节点概览」），
+    //   缺省回退 componentName（组件 ID 名）。
+    componentName: microcodeDeclare.value?.attribute?.title
+      || microcodeDeclare.value?.data?.attribute?.title
+      || microcodeDeclare.value?.componentName
   }
 })
 

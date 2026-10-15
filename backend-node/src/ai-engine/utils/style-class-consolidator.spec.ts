@@ -742,3 +742,71 @@ ${body}
     expect(css).toContain('52px') // 非图表真值像素仍受保护
   })
 })
+
+describe("🛡️ sanitizeCommonLessText 跨行块注释感知（2026-10-15 · a715fafc 实锤）", () => {
+  // 事故形态：common.less 多行块注释收尾行 `   ============ */` 被分隔线清理误杀
+  // → /* 失配 → LESS-WRITE-002 门禁拦截 → 新任务首写无 last-good → 空兜底模板裸产物
+  const child = (cls, body) => `<template><div class="${cls.slice(1)}">x</div></template>
+<style scoped lang="less">
+${cls} {
+${body}
+}
+</style>
+`;
+  const commentedCommon = `/* ============================================================
+   部署节点概览 · 业务样式（common.less）
+   ============================================================ */
+
+/* ---------- 外层结构容器 ---------- */
+.c-x-slot-con {
+  display: flex;
+}
+/* ============================================================
+   Header 区
+   ============================================================ */
+.c-x-header {
+  height: 30px;
+}
+`;
+
+  it("多行块注释收尾行（==== */）不再被分隔线规则误杀，注释保持配对", () => {
+    const files = {
+      "resources/styles/common.less": commentedCommon,
+      "package/components/HeaderBar.vue": child(".c-x-new-block", "  display: flex;"),
+    };
+    const out = consolidateSubComponentClasses(files, { logger });
+    const css = out["resources/styles/common.less"];
+    const opens = (css.match(/\/\*/g) || []).length;
+    const closes = (css.match(/\*\//g) || []).length;
+    expect(opens).toBe(closes);
+    expect(css).toContain("============ */");
+    // 子组件样式仍正常收敛
+    expect(css).toContain(".c-x-new-block");
+  });
+
+  it("回归：注释外的裸 ==== 分隔线仍被清理", () => {
+    const files = {
+      "resources/styles/common.less":
+        ".c-x-a {\n  display: flex;\n}\n============ 垃圾分隔线\n.c-x-b {\n  height: 10px;\n}\n",
+      "package/components/Bar.vue": child(".c-x-c", "  width: 100%;"),
+    };
+    const out = consolidateSubComponentClasses(files, { logger });
+    const css = out["resources/styles/common.less"];
+    expect(css).not.toContain("垃圾分隔线");
+    expect(css).toContain(".c-x-c");
+  });
+
+  it("单行注释 /* ==== */ 不受影响且配对保持", () => {
+    const files = {
+      "resources/styles/common.less":
+        "/* ==== 单行注释 ==== */\n.c-x-a {\n  display: flex;\n}\n",
+      "package/components/Baz.vue": child(".c-x-d", "  color: red;"),
+    };
+    const out = consolidateSubComponentClasses(files, { logger });
+    const css = out["resources/styles/common.less"];
+    expect(css).toContain("/* ==== 单行注释 ==== */");
+    const opens = (css.match(/\/\*/g) || []).length;
+    const closes = (css.match(/\*\//g) || []).length;
+    expect(opens).toBe(closes);
+  });
+});

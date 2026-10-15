@@ -7,6 +7,13 @@
  * 且 index.less @import common.less，一个污染点连锁成「几乎所有文件都报 LESS-COMPILE-001」。
  * 治本：sanitizeFileContent 是全文件写盘统一收口，样式文件里 SFC 标签永远不合法 → 剥离。
  */
+// backend-root.js ESM 风格（const __filename）在 ts-jest CJS 下与模块包装器参数撞名，
+// logger 链一加载整套件 0 运行 ⇒ 工厂 mock 绕过（file-writer.diff-skip 等同款惯例）。
+jest.mock('../../../config/backend-root.js', () => ({
+  workspaceRoot: process.cwd(),
+  logsDir: '/tmp/mvgo-test-logs',
+}), { virtual: true })
+
 import { sanitizeFileContent, safeLessVarValue, buildCssVarsFile } from './file-writer.js';
 
 describe('sanitizeFileContent · 样式文件 SFC 标签剥离（2026-09-14 治本）', () => {

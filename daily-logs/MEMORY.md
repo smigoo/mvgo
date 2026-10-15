@@ -26,9 +26,11 @@
   - 🔴 `microcode-engineer.js#generateCode(input)` 通篇用 `input.xxx` 口径，写裸变量恒 undefined（双真值会静默失效）。
   - 🔴🔴 **加新入参必查下游每一层是否显式解构 + 是否进 initialState**：`runPhase2Generation` 用 `const {...}=options` 白名单解构并手工构造 `initialState`，漏一层则字段**静默丢弃、零报错零日志**（2026-10-10 实测 `secondaryNode` 丢失导致副稿永不拉取）。
   - 🔴 `microcode-engineer.js` 有两个易混作用域：`generateCode(input)`（用 `input.xxx`）vs **`execute(params)`（L6149 把 params 解构成局部变量 ⇒ 应用裸变量）**。写错抛 `input is not defined`，被外层 catch 非阻断吞掉 ⇒ 症状是「一体化平台文件生成失败」+ `css-vars.js` 从不落盘。判断裸用对错**必须查作用域归属**，不能只 grep「有没有裸用」。
-  - 🔴 真机起后端**必须 `node start-node.js`**（L133-136 自补 NODE_ENV/MONGODB_URI/DEV_AUTO_LOGIN）；直接 `node dist/main.js` + `env -i` 会在 InstanceLoader 后静默退出（表现为 502）。真实日志在 `backend-node/server.log`（追加式、UTC），重定向到别处会看不到。
+  - 🔴 真机起后端**必须 `node /Users/smigoo/工作/mvgo/start-node.js`**（⚠️ 在**仓库根**、不在 backend-node/，误用后者路径 MODULE_NOT_FOUND；L133-136 自补 NODE_ENV/MONGODB_URI/DEV_AUTO_LOGIN，启动前自验 build-stamp 与源码一致）；直接 `node dist/main.js` + `env -i` 会在 InstanceLoader 后静默退出（表现为 502）。真实日志在 `backend-node/server.log`（追加式、UTC），重定向到别处会看不到。
   - 🔴 **接跨端字段前必须先读后端消费函数的真实语义**（谁恒定、谁可变），不能按字段名想当然：`resolvePrimarySecondary(firstInput=fileKey/nodeId, secondInput=secondaryNode)` 中 `firstInput` **恒为第一个框**，故 `secondaryNode` 须恒放第二稿；写反会让两稿同源、双真值**静默失效**（2026-10-10 实测）。
   - ⚠️ `frontend` 里 `ReturnType<typeof window.setTimeout>` 与 `ReturnType<typeof setTimeout>` 在 vue-tsc 下**结果不同**（前者 +1 错）。抄邻近代码前先看它是否已在报错区。
+  - 🔴 **E1 推导（`deriveSectionsFromFigmaTree`）只提升容器类型**（FRAME/GROUP/INSTANCE/COMPONENT），容器直接子级的**裸 TEXT 永不进 section 树**；又因 E1 **整体替代** vision sections ⇒ 这类文案（footer 汇总行等）**整段消失**（91544b38 footer 实锤）。补回判据见 `collectTailOrphanTextKids`（只补「尾部 + 未被兄弟覆盖 + TEXT 非空」）。
+  - 🔴 **做「Figma 覆盖/去重」判据的三条铁律**（`utils/figma-coverage-dedupe.js`，2026-10-15 首版全踩）：① 锚点必须**展开为后代闭包**（items 段只有卡组 id、折叠段只有卡内部 id，不展开零交集）；② **索引外的合成 id（如 `48:5813-list`）绝不能原样计入闭包**，否则子集恒差一个 id；③ **`removed` 必须跨层级聚合**，只统计顶层会静默留痕为空（真机删除发生在嵌套层，`console.error` 插桩才现形）。离线重放验证脚本：`npm run verify:coverage-dedupe`。
 
 - 技术栈接管 #78：`techstack-section-contract.js`；table 契约成功才吸收（fail-open）。
 - 10-03 治本三件：① 循环 import 门禁 `findEntrypointCircularImports`（子组件禁 import 父 index.vue，正解 `$mcComponentBuilder()`）；② `style-conflict-detector.js`（字号乘数 calc + 跨文件同名 class）挂 pre-write-self-healing 只报不改；③ `section-content-guard.js#checkTechStackContractTags`（techstack 契约 per-section 断言；全产物 0 个 data-section-id ⇒ fail-open；**corpus 级 ElementCoverageValidator 是死代码勿依赖**；违规进 meta.contentMappingIssues.techStackTagViolations 只留痕）。

@@ -47,6 +47,10 @@ import { enrichSectionsWithTechStack } from '../utils/techstack-section-contract
 //   `figma-node-layout-facts` → `section-tree`（用 `areBoxesSideBySide`），反向 import 会**成环**
 //   ⇒ 由本模块算好并作为第 2 参传入（见 `plan()` 内 layoutFacts）。
 import { buildNodeLayoutFacts } from '../utils/figma-node-layout-facts.js';
+// 🛡️ A 方案（2026-10-15 · c-aiot-dpjh-bsjd-91544b38 实锤）：Figma 覆盖去重（治「卡 2 双渲染」）。
+//   同一批卡节点被「vision items 轨」与「collapse 折叠轨」各解释一次 ⇒ 两段并存 ⇒ 重复渲染。
+//   判据与实现详见 utils/figma-coverage-dedupe.js（纯函数、单一事实源）。
+import { buildFigmaClosureIndex, dedupeSectionsByCoverage } from '../utils/figma-coverage-dedupe.js';
 
 export { isLayoutContainerSection, collectLeafSections };
 
@@ -1741,6 +1745,25 @@ export class SubcomponentPlanner {
         beforeDeep: beforeCollapseDeep,
         afterDeep: afterCollapseDeep,
       });
+    }
+
+    // 🛡️ A 方案（2026-10-15 · c-aiot-dpjh-bsjd-91544b38 实锤）：items 覆盖去重（治案①卡 2 双渲染）。
+    //   折叠结束后，「vision items 轨」段落（48:5798，body.items=6 张卡）与「折叠轨」段落
+    //   （48:5813-list，卡 2-6 折叠）覆盖同一批 Figma 节点 ⇒ 两条轨各出一个子组件 ⇒ 卡 2 双渲染。
+    //   判据：折叠段的 Figma 覆盖闭包 ⊆ items 段的覆盖闭包 ⇒ 折叠段是重复解释，移除（详见 util 注释）。
+    //   部分覆盖 / 无 Figma 归属 ⇒ 一律保留（宁可多渲染，不可漏渲染）。
+    const closureIndex = buildFigmaClosureIndex(opts.figmaNodeData);
+    if (closureIndex) {
+      const beforeCoverageDedupe = sections.length;
+      const coverageDeduped = dedupeSectionsByCoverage(sections, closureIndex);
+      sections = coverageDeduped.sections || sections;
+      if (coverageDeduped.removed.length > 0) {
+        logger.warn('🛡️ items 覆盖去重：被完全覆盖的重复段已移除（同一批 Figma 节点的第二条解释）', {
+          removed: coverageDeduped.removed,
+          beforeTop: beforeCoverageDedupe,
+          afterTop: sections.length,
+        });
+      }
     }
 
     // 🛡️ A′ Phase 5：保留 container-rebuild 嵌套。容器不 flatten、不占独立 .vue 槽。

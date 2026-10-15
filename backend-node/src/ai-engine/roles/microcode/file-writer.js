@@ -27,7 +27,7 @@ import { repairScopedThirdPartySelectors, ensureFlexDirectionInVueSfc, ensureFle
 import { normalizeFontSizeLiterals } from '../../utils/font-size-normalizer.js';
 import { fixSpuriousLineBreaks, injectMissingTabUi, healVueEmbeddedStyleBraces, healThemeMixinVarRefs, healThemeMixinVarRefsInVue, healLessResourceVarInterpolation, healPresetLiteralDecls, healSlotHexToVarRefs, healVarNameCase, applyHealToVueStyleBlocks, injectThemeVarDeclsForLess, healLessColorFnVarArgs } from './code-healer.js';
 import { collectThemeSlotNames, healBusinessStyleVarsInCss } from '../../utils/theme-color-guard.js';
-import { healRootFixedSize, gateStandaloneLessWrite } from '../../validators/less-compile-gate.js';
+import { healRootFixedSize, gateStandaloneLessWrite, rebalanceBlockComments } from '../../validators/less-compile-gate.js';
 import {
   isColorEvaluable,
   isColorFnConsumer,
@@ -892,14 +892,53 @@ export function writeFiles(files, outputPath, options = {}) {
             }
           }
           if (!_lessGate.ok) {
-            if (logger) {
-              logger.warn(
-                `🛡️ LESS 写盘门禁失败（已跳过，保留磁盘 last-good）: ${relativePath}`,
-                { defects: _lessGate.defects },
-              );
+            // 🛡️ 2026-10-15（a715fafc 实锤，B 降级）：「跳过 = 保留磁盘 last-good」只对
+            //   **已存在好版本**的文件成立。新任务首次写盘（或磁盘上本就是空兜底模板）时
+            //   跳过 = 交付空兜底模板裸样式产物，比带病落盘更糟。
+            //   ⇒ 无 last-good 时降级：块注释配平（未闭合 /* / 孤立 */ 抹空格）→ 复检
+            //   → 落盘 + WARN；配平后仍有缺陷才回退原跳过策略。
+            let _hasLastGood = false;
+            try {
+              const _absPath = join(outputPath, relativePath);
+              const _disk = existsSync(_absPath) ? readFileSync(_absPath, 'utf-8') : '';
+              _hasLastGood =
+                _disk.trim().length > 0 && !_disk.includes('模型输出为空时自动补齐');
+            } catch {
+              _hasLastGood = false;
             }
-            skippedFiles.push(relativePath);
-            continue;
+            if (!_hasLastGood) {
+              const _retry = gateStandaloneLessWrite(
+                rebalanceBlockComments(sanitizedContent),
+                relativePath,
+              );
+              if (_retry.ok) {
+                sanitizedContent = _retry.content;
+                if (logger) {
+                  logger.warn(
+                    `🛡️ LESS 写盘门禁降级落盘（无 last-good，块注释配平）: ${relativePath}`,
+                    { defects: _lessGate.defects, retryFixes: _retry.fixes },
+                  );
+                }
+              } else {
+                if (logger) {
+                  logger.warn(
+                    `🛡️ LESS 写盘门禁失败（无 last-good，配平后仍缺陷，已跳过）: ${relativePath}`,
+                    { defects: _retry.defects },
+                  );
+                }
+                skippedFiles.push(relativePath);
+                continue;
+              }
+            } else {
+              if (logger) {
+                logger.warn(
+                  `🛡️ LESS 写盘门禁失败（已跳过，保留磁盘 last-good）: ${relativePath}`,
+                  { defects: _lessGate.defects },
+                );
+              }
+              skippedFiles.push(relativePath);
+              continue;
+            }
           }
         } catch (healErr) {
           if (logger) {

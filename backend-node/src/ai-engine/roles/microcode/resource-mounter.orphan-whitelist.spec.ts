@@ -10,6 +10,13 @@
  *   引用的全部 less 变量在本轮产物（allFiles .less + 自身 style）有定义 → 白名单保留；
  *   存在未定义引用（陈旧产物）→ 照旧剔除（P1-2 回归保护）。
  */
+// backend-root.js ESM 风格（const __filename）在 ts-jest CJS 下与模块包装器参数撞名，
+// logger 链一加载整套件 0 运行 ⇒ 工厂 mock 绕过（file-writer.diff-skip 等同款惯例）。
+jest.mock('../../../config/backend-root.js', () => ({
+  workspaceRoot: process.cwd(),
+  logsDir: '/tmp/mvgo-test-logs',
+}), { virtual: true })
+
 import { describe, it, expect } from '@jest/globals';
 import { pruneOrphanSubComponents } from './resource-mounter.js';
 

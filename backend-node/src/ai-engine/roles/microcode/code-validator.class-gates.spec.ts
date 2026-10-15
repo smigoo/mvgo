@@ -7,6 +7,13 @@
  * 真机来源：c-vehicle-monitor-e6b2864e（bare `active` 与 `&--active` 零交集、卡片发白）、
  *          c-device-monitor-b75436da（`--active` 规则体只有 display/flex-direction）。
  */
+// backend-root.js ESM 风格（const __filename）在 ts-jest CJS 下与模块包装器参数撞名，
+// logger 链一加载整套件 0 运行 ⇒ 工厂 mock 绕过（file-writer.diff-skip 等同款惯例）。
+jest.mock('../../../config/backend-root.js', () => ({
+  workspaceRoot: process.cwd(),
+  logsDir: '/tmp/mvgo-test-logs',
+}), { virtual: true })
+
 import {
   extractTemplateClassNames,
   validateClassSelectorPairs,

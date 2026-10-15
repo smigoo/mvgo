@@ -11,6 +11,13 @@
  *   摘掉 index.vue 里的引用 → 切换区从两张卡变一张卡。
  * 契约：这类「机械可修」缺陷必须在校验前确定性修掉，**不得**走整文件降级。
  */
+// backend-root.js ESM 风格（const __filename）在 ts-jest CJS 下与模块包装器参数撞名，
+// logger 链一加载整套件 0 运行 ⇒ 工厂 mock 绕过（file-writer.diff-skip 等同款惯例）。
+jest.mock('../../../config/backend-root.js', () => ({
+  workspaceRoot: process.cwd(),
+  logsDir: '/tmp/mvgo-test-logs',
+}), { virtual: true })
+
 import { stripSurplusBlockClosers } from './file-writer.js';
 
 describe('stripSurplusBlockClosers：多余块闭合标签剔除', () => {
