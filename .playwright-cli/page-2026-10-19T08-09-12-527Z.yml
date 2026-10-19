@@ -1,0 +1,98 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]: 面板类型：
+    - combobox [ref=e6] [cursor=pointer]:
+      - option "使用默认"
+      - option "默认/浅色面板" [selected]
+      - option "弹窗面板"
+      - option "一体化/深色面板"
+      - option "无面板"
+  - generic [ref=e7]:
+    - radiogroup "主题切换" [ref=e8]:
+      - radio "浅色主题" [checked] [active] [ref=e23] [cursor=pointer]:
+        - img [ref=e10]
+        - generic [ref=e13]: 浅色主题
+      - radio "深色主题·内置" [ref=e24] [cursor=pointer]:
+        - img [ref=e15]
+        - generic [ref=e17]: 深色主题·内置
+    - generic [ref=e18]: 深色侧为派生值
+  - generic:
+    - img
+    - text: 当前为演示主题面板（浅色），实际项目中可在面板配置中切换主题
+  - generic [ref=e124]:
+    - generic [ref=e125]:
+      - generic [ref=e126]:
+        - generic [ref=e127]: 部署节点概览
+        - generic [ref=e130]: 全国
+      - img [ref=e133]
+    - generic [ref=e137]:
+      - generic [ref=e139]:
+        - generic [ref=e140]:
+          - generic [ref=e144]:
+            - generic [ref=e145]: 江苏联网节点
+            - generic [ref=e146]: 江苏省南京市建邺区江东中路
+          - generic [ref=e147]:
+            - generic [ref=e148]:
+              - generic [ref=e149]: 3,792
+              - generic [ref=e150]: 在线
+            - generic [ref=e151]:
+              - generic [ref=e152]: "28"
+              - generic [ref=e153]: 离线
+        - generic [ref=e154]:
+          - generic [ref=e158]:
+            - generic [ref=e159]: 江苏沿江公司节点
+            - generic [ref=e160]: 江苏省南京市建邺区江东中路
+          - generic [ref=e161]:
+            - generic [ref=e162]:
+              - generic [ref=e163]: 2,138
+              - generic [ref=e164]: 在线
+            - generic [ref=e165]:
+              - generic [ref=e166]: "12"
+              - generic [ref=e167]: 离线
+        - generic [ref=e168]:
+          - generic [ref=e172]:
+            - generic [ref=e173]: 湖南交通厅节点
+            - generic [ref=e174]: 湖南省长沙市芙蓉区五一大道
+          - generic [ref=e175]:
+            - generic [ref=e176]:
+              - generic [ref=e177]: 1,665
+              - generic [ref=e178]: 在线
+            - generic [ref=e179]:
+              - generic [ref=e180]: "15"
+              - generic [ref=e181]: 离线
+        - generic [ref=e182]:
+          - generic [ref=e186]:
+            - generic [ref=e187]: 湖南交建局节点
+            - generic [ref=e188]: 湖南省长沙市芙蓉区五一大道
+          - generic [ref=e189]:
+            - generic [ref=e190]:
+              - generic [ref=e191]: 1,415
+              - generic [ref=e192]: 在线
+            - generic [ref=e193]:
+              - generic [ref=e194]: "5"
+              - generic [ref=e195]: 离线
+        - generic [ref=e196]:
+          - generic [ref=e200]:
+            - generic [ref=e201]: 安徽交控节点
+            - generic [ref=e202]: 安徽省合肥市包河区徽州大道
+          - generic [ref=e203]:
+            - generic [ref=e204]:
+              - generic [ref=e205]: "965"
+              - generic [ref=e206]: 在线
+            - generic [ref=e207]:
+              - generic [ref=e208]: "15"
+              - generic [ref=e209]: 离线
+        - generic [ref=e210]:
+          - generic [ref=e214]:
+            - generic [ref=e215]: 平陆运河节点
+            - generic [ref=e216]: 广西壮族自治区南宁市青秀区
+          - generic [ref=e217]:
+            - generic [ref=e218]:
+              - generic [ref=e219]: "752"
+              - generic [ref=e220]: 在线
+            - generic [ref=e221]:
+              - generic [ref=e222]: "8"
+              - generic [ref=e223]: 离线
+      - generic [ref=e224]:
+        - generic [ref=e225]: 共 6 个节点
+        - generic [ref=e226]: 接入设备 10810
